@@ -410,7 +410,7 @@ footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-al
 @media(max-width:600px){ .live-bar{flex-direction:column;text-align:center} .cta-btn{margin:0} }
 </style>
 </head>
-<body>
+<body onselectstart="return false">
 
 <!-- ══════════ NAVBAR ══════════ -->
 <nav id="nav">
@@ -961,6 +961,62 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 //  INIT
 // ════════════════════════════════════════════════════════
 loadYT();
+</script>
+
+<!-- ══════════════════════════════════════════════════════
+     ЗАЩИТА ОТ КОПИРОВАНИЯ
+     • Правый клик отключён
+     • F12, Ctrl+Shift+I/C/J, Ctrl+U — заблокированы
+     • Выделение текста отключено (onselectstart на body)
+     • DevTools: при открытии показывает предупреждение
+     ═══════════════════════════════════════════════════ -->
+<script>
+  // 1. Правый клик
+  document.addEventListener('contextmenu', e => e.preventDefault());
+
+  // 2. Горячие клавиши DevTools и просмотра кода
+  document.addEventListener('keydown', function(e) {
+    // F12
+    if (e.keyCode === 123) { e.preventDefault(); return false; }
+    // Ctrl+Shift+I (DevTools)
+    if (e.ctrlKey && e.shiftKey && e.keyCode === 73) { e.preventDefault(); return false; }
+    // Ctrl+Shift+C (Инспектор)
+    if (e.ctrlKey && e.shiftKey && e.keyCode === 67) { e.preventDefault(); return false; }
+    // Ctrl+Shift+J (Консоль)
+    if (e.ctrlKey && e.shiftKey && e.keyCode === 74) { e.preventDefault(); return false; }
+    // Ctrl+U (Просмотр кода страницы)
+    if (e.ctrlKey && e.keyCode === 85) { e.preventDefault(); return false; }
+    // Ctrl+S (Сохранить страницу)
+    if (e.ctrlKey && e.keyCode === 83) { e.preventDefault(); return false; }
+    // Ctrl+A (Выделить всё)
+    if (e.ctrlKey && e.keyCode === 65) { e.preventDefault(); return false; }
+  });
+
+  // 3. Защита от перетаскивания картинок
+  document.addEventListener('dragstart', e => e.preventDefault());
+
+  // 4. Предупреждение в консоли DevTools
+  (function devtoolsWarning() {
+    const threshold = 160;
+    const check = setInterval(() => {
+      const before = new Date();
+      // eslint-disable-next-line no-debugger
+      debugger;
+      const after = new Date();
+      if (after - before > threshold) {
+        clearInterval(check);
+        console.clear();
+        console.log(
+          '%c⛔ СТОП!',
+          'color:#ff2d55;font-size:3rem;font-weight:900;'
+        );
+        console.log(
+          '%cЭтот сайт принадлежит dan4ik37.\nЕсли ты разработчик — уважай чужой труд.',
+          'color:#f0f0f8;font-size:1rem;line-height:1.6;'
+        );
+      }
+    }, 500);
+  })();
 </script>
 </body>
 </html>
