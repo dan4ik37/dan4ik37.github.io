@@ -368,6 +368,142 @@ body::after {
 .donate-btn:hover { transform:scale(1.06); box-shadow:0 10px 35px rgba(255,45,85,.5); }
 .donate-note { font-size:.7rem; color:rgba(255,45,85,.4); margin-top:1rem; position:relative; z-index:1; }
 
+/* ════════════════════════ YT TOOLBAR ════════════════════════ */
+.yt-toolbar {
+  display:flex; align-items:center; justify-content:space-between;
+  flex-wrap:wrap; gap:.8rem; margin-bottom:1.2rem;
+  padding:.8rem 1rem; background:var(--card); border-radius:var(--r);
+  border:1px solid var(--border);
+}
+.view-toggle { display:flex; gap:.4rem; }
+.view-btn {
+  display:inline-flex; align-items:center; gap:.4rem;
+  padding:.38rem .85rem; border-radius:8px; font-size:.7rem; font-weight:700;
+  letter-spacing:.5px; text-transform:uppercase; border:1.5px solid transparent;
+  background:transparent; color:var(--muted); cursor:pointer; transition:all .2s;
+  font-family:'Montserrat',sans-serif;
+}
+.view-btn.active { background:rgba(255,64,64,.14); border-color:var(--yt); color:var(--yt); }
+.view-btn:hover:not(.active) { color:var(--text); border-color:rgba(255,255,255,.1); }
+.yt-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
+.act-btn {
+  display:inline-flex; align-items:center; gap:.35rem;
+  padding:.38rem .9rem; border-radius:8px; font-size:.7rem; font-weight:700;
+  letter-spacing:.5px; text-transform:uppercase;
+  border:1.5px solid rgba(255,255,255,.1); background:transparent; color:var(--muted);
+  cursor:pointer; transition:all .2s; font-family:'Montserrat',sans-serif;
+}
+.act-btn:hover { border-color:rgba(255,255,255,.2); color:var(--text); }
+.act-like-all { border-color:rgba(255,45,85,.35); color:var(--accent); }
+.act-like-all:hover { background:rgba(255,45,85,.12); }
+.act-play-all { border-color:rgba(255,64,64,.35); color:var(--yt); }
+.act-play-all:hover { background:rgba(255,64,64,.12); }
+.act-cancel { border-color:rgba(255,255,255,.08); }
+
+/* Select hint */
+.select-hint {
+  padding:.6rem 1rem; background:rgba(255,45,85,.08);
+  border:1px solid rgba(255,45,85,.2); border-radius:var(--r);
+  font-size:.78rem; color:var(--muted); margin-bottom:1rem;
+  display:flex; align-items:center;
+}
+.select-hint span { color:var(--accent); font-weight:700; }
+
+/* Select overlay on cards */
+.vcard.selectable { cursor:pointer; }
+.vcard.selectable::after {
+  content:''; position:absolute; inset:0; border-radius:var(--r);
+  border:2px solid transparent; transition:border-color .15s, background .15s; z-index:3; pointer-events:none;
+}
+.vcard.selectable:hover::after { border-color:rgba(255,45,85,.4); }
+.vcard.selected::after { border-color:var(--accent) !important; background:rgba(255,45,85,.08) !important; }
+.vcard { position:relative; }
+.vcard .sel-check {
+  position:absolute; top:8px; left:8px; z-index:4;
+  width:22px; height:22px; border-radius:50%;
+  background:rgba(0,0,0,.7); border:2px solid rgba(255,255,255,.3);
+  display:none; align-items:center; justify-content:center; font-size:.8rem;
+  transition:all .15s;
+}
+.vcard.selectable .sel-check { display:flex; }
+.vcard.selected .sel-check { background:var(--accent); border-color:var(--accent); }
+
+/* List view */
+.video-grid.list-view {
+  grid-template-columns: 1fr !important;
+}
+.video-grid.list-view .vcard {
+  display:flex; flex-direction:row; height:90px;
+}
+.video-grid.list-view .vthumb {
+  width:160px; min-width:160px; padding-bottom:0; height:90px;
+}
+.video-grid.list-view .vthumb img { height:100%; }
+.video-grid.list-view .vinfo {
+  flex:1; display:flex; flex-direction:column; justify-content:center; padding:.7rem 1rem;
+}
+.video-grid.list-view .vtitle { -webkit-line-clamp:1; font-size:.82rem; }
+
+/* Multi-player */
+.multi-player-grid {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem;
+}
+.mp-item { background:var(--card); border-radius:var(--r); overflow:hidden; border:1px solid var(--border); }
+.mp-item .mp-ratio { position:relative; padding-bottom:56.25%; }
+.mp-item .mp-ratio iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
+.mp-item .mp-title { padding:.7rem .9rem; font-size:.78rem; font-weight:700; color:var(--text); }
+.mp-close-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:.8rem 1rem; background:var(--card); border-radius:var(--r);
+  margin-bottom:.8rem; border:1px solid var(--border);
+}
+.mp-close-bar span { font-size:.78rem; color:var(--muted); }
+.mp-close-btn {
+  padding:.35rem .9rem; border-radius:8px; border:1.5px solid rgba(255,255,255,.1);
+  background:transparent; color:var(--muted); font-size:.7rem; font-weight:700;
+  cursor:pointer; font-family:'Montserrat',sans-serif; transition:all .2s;
+}
+.mp-close-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+/* Like animation */
+@keyframes likeAnim {
+  0%{transform:scale(1)} 30%{transform:scale(1.5)} 60%{transform:scale(.9)} 100%{transform:scale(1)}
+}
+.liked-flash { animation:likeAnim .4s ease; }
+
+/* YT bottom buttons */
+.yt-bottom-btns {
+  display:flex; gap:1rem; margin-top:2rem; justify-content:center; flex-wrap:wrap;
+}
+.yt-ext-btn {
+  display:inline-flex; align-items:center; gap:.5rem;
+  padding:.68rem 1.8rem; border-radius:50px;
+  background:rgba(255,64,64,.1); border:1.5px solid var(--yt);
+  color:var(--yt); font-weight:700; font-size:.76rem;
+  letter-spacing:1px; text-transform:uppercase;
+  transition:background .2s;
+}
+.yt-ext-btn:hover { background:rgba(255,64,64,.2); }
+.yt-sub-btn {
+  display:inline-flex; align-items:center; gap:.5rem;
+  padding:.68rem 1.8rem; border-radius:50px;
+  background:var(--yt); color:#fff;
+  font-weight:800; font-size:.76rem; letter-spacing:1px; text-transform:uppercase;
+  transition:transform .2s, box-shadow .2s;
+}
+.yt-sub-btn:hover { transform:scale(1.05); box-shadow:0 6px 25px rgba(255,64,64,.45); }
+
+/* Like btn on card */
+.vcard-like {
+  position:absolute; bottom:8px; right:8px; z-index:4;
+  background:rgba(0,0,0,.72); border:1px solid rgba(255,255,255,.12);
+  border-radius:50px; padding:.28rem .65rem;
+  font-size:.68rem; font-weight:700; color:var(--muted);
+  cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:.3rem;
+  font-family:'Montserrat',sans-serif;
+}
+.vcard-like:hover, .vcard-like.liked { background:rgba(255,45,85,.25); border-color:var(--accent); color:var(--accent); }
+
 /* ════════════════════════ MODAL ════════════════════════ */
 .modal-ov {
   position:fixed; inset:0; background:rgba(0,0,0,.92); backdrop-filter:blur(14px);
@@ -401,6 +537,49 @@ footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-al
 .footer-copy  { font-size:.62rem; color:rgba(255,255,255,.1); }
 
 @media(max-width:600px){ .live-bar{flex-direction:column;text-align:center} .cta-btn{margin:0} }
+
+/* ════════════════════════ GOOGLE TRANSLATE ════════════════════════ */
+.goog-te-banner-frame { display:none !important; }
+body { top:0 !important; }
+
+/* Кнопка переводчика в навбаре */
+.lang-btn {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .4rem 1rem; border-radius: 50px;
+  font-size: .68rem; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
+  border: 1.5px solid rgba(255,255,255,.12); background: transparent; color: var(--muted);
+  cursor: pointer; transition: all .2s; white-space: nowrap; font-family: 'Montserrat',sans-serif;
+}
+.lang-btn:hover { border-color: var(--accent); color: var(--text); }
+.lang-btn svg { flex-shrink:0; }
+
+/* Дропдаун */
+.lang-wrap { position: relative; }
+.lang-dropdown {
+  display: none; position: absolute; top: calc(100% + 8px); right: 0;
+  background: #16161f; border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px; padding: .5rem; min-width: 180px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.6); z-index: 600;
+  max-height: 320px; overflow-y: auto;
+}
+.lang-dropdown::-webkit-scrollbar { width: 4px; }
+.lang-dropdown::-webkit-scrollbar-track { background: transparent; }
+.lang-dropdown::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius:4px; }
+.lang-dropdown.open { display: block; }
+.lang-opt {
+  display: block; width: 100%; text-align: left; padding: .5rem .8rem;
+  font-size: .75rem; font-weight: 600; color: var(--muted); background: transparent;
+  border: none; border-radius: 8px; cursor: pointer; transition: all .15s;
+  font-family: 'Montserrat',sans-serif; white-space: nowrap;
+}
+.lang-opt:hover { background: rgba(255,45,85,.12); color: var(--text); }
+.lang-opt.active { color: var(--accent); }
+
+/* Скрываем родной виджет Google — используем свой */
+#google_translate_element { display: none !important; }
+.goog-te-gadget { font-size: 0 !important; }
+.goog-te-gadget img, .goog-logo-link { display: none !important; }
+.goog-te-menu-frame { border-radius: 12px !important; }
 </style>
 </head>
 <body onselectstart="return false">
@@ -418,6 +597,19 @@ footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-al
   <button class="hamburger" id="burger" onclick="toggleNav()">
     <span></span><span></span><span></span>
   </button>
+  <!-- 🌍 Переводчик -->
+  <div class="lang-wrap" id="langWrap">
+    <button class="lang-btn" onclick="toggleLang(event)" aria-label="Язык">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span id="langLabel">RU</span>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="lang-dropdown" id="langDropdown"></div>
+  </div>
+  <!-- Скрытый оригинальный виджет Google -->
+  <div id="google_translate_element" style="display:none"></div>
 </nav>
 
 <!-- ══════════ HERO ══════════ -->
@@ -438,7 +630,8 @@ footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-al
     <a class="hbtn hb-vk"  href="https://vk.com/dan4ik37"                target="_blank">В ВКонтакте</a>
     <a class="hbtn hb-vkv" href="https://m.vkvideo.ru/@dan4ik37"          target="_blank">▶ VK Видео</a>
     <a class="hbtn hb-tg"  href="https://t.me/+LE25p4pQojkyYjli"         target="_blank">✈ Telegram</a>
-    <a class="hbtn hb-don" href="#donate">💝 Задонатить</a>
+    <a class="hbtn hb-don" href="https://dalink.to/dan4ik37"             target="_blank">🔗 Все соцсети</a>
+    <a class="hbtn hb-don" href="#donate" style="background:linear-gradient(135deg,#ff2d55,#ff6b35)">💝 Задонатить</a>
   </div>
   <div class="scroll-hint"><span>↓</span><span>смотреть контент</span></div>
 </div>
@@ -524,17 +717,57 @@ footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-al
 
   <!-- YOUTUBE PANEL -->
   <div class="panel active" id="panel-yt">
-    <div class="video-grid" id="yt-grid">
-      <!-- Видео заполняются через JS с YouTube oEmbed (без CORS) -->
+
+    <!-- Панель инструментов -->
+    <div class="yt-toolbar">
+      <!-- Режим просмотра -->
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-grid" onclick="setView('grid')" title="Сетка">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="7" height="7" rx="1"/><rect x="9" y="0" width="7" height="7" rx="1"/><rect x="0" y="9" width="7" height="7" rx="1"/><rect x="9" y="9" width="7" height="7" rx="1"/></svg>
+          Сетка
+        </button>
+        <button class="view-btn" id="btn-list" onclick="setView('list')" title="Список">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="16" height="3" rx="1"/><rect x="0" y="5" width="16" height="3" rx="1"/><rect x="0" y="10" width="16" height="3" rx="1"/><rect x="0" y="13" width="10" height="3" rx="1"/></svg>
+          Список
+        </button>
+      </div>
+
+      <!-- Действия -->
+      <div class="yt-actions">
+        <button class="act-btn" id="selectAllBtn" onclick="toggleSelectMode()" title="Выбрать видео">
+          ☑ Выбрать
+        </button>
+        <button class="act-btn act-like-all" id="likeAllBtn" onclick="likeAllSelected()" style="display:none" title="Лайкнуть выбранные">
+          ❤ Лайкнуть выбранные
+        </button>
+        <button class="act-btn act-play-all" id="playAllBtn" onclick="playAllSelected()" style="display:none" title="Смотреть выбранные">
+          ▶ Смотреть все
+        </button>
+        <button class="act-btn act-cancel" id="cancelSelBtn" onclick="cancelSelect()" style="display:none">
+          ✕ Отмена
+        </button>
+      </div>
     </div>
-    <div style="text-align:center;margin-top:2rem">
-      <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank"
-         style="display:inline-flex;align-items:center;gap:.5rem;padding:.68rem 1.8rem;
-                border-radius:50px;background:rgba(255,64,64,.1);border:1.5px solid var(--yt);
-                color:var(--yt);font-weight:700;font-size:.76rem;letter-spacing:1px;
-                text-transform:uppercase;transition:background .2s"
-         onmouseover="this.style.background='rgba(255,64,64,.2)'"
-         onmouseout="this.style.background='rgba(255,64,64,.1)'">▶ Все видео на YouTube →</a>
+
+    <!-- Выбрано X видео -->
+    <div class="select-hint" id="selectHint" style="display:none">
+      <span id="selectCount">0</span> видео выбрано
+      <button onclick="selectAllVids()" style="background:none;border:none;color:var(--accent);font-size:.75rem;font-weight:700;cursor:pointer;margin-left:.8rem">Выбрать все</button>
+    </div>
+
+    <!-- Сетка видео -->
+    <div class="video-grid" id="yt-grid"></div>
+
+    <!-- Плейлист (режим просмотра нескольких) -->
+    <div id="multiPlayer" style="display:none;margin-top:2rem"></div>
+
+    <!-- Кнопки YouTube -->
+    <div class="yt-bottom-btns">
+      <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-ext-btn">▶ Все видео на YouTube</a>
+      <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" class="yt-sub-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
+        Подписаться на канал
+      </a>
     </div>
   </div>
 
@@ -722,9 +955,20 @@ footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-al
 // ════════════════════════════════════════════════════════
 //  НАСТРОЙКИ
 // ════════════════════════════════════════════════════════
-const YT_API_KEY    = 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
-const YT_HANDLE     = '@Dan4ik37Yt';
-const TWITCH_HOST   = window.location.hostname || 'localhost';
+const YT_API_KEY  = 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
+const YT_HANDLE   = '@Dan4ik37Yt';
+const TWITCH_HOST = window.location.hostname || 'localhost';
+const CACHE_KEY   = 'dan4ik37_yt_cache';
+const CACHE_TTL   = 10 * 60 * 1000; // 10 минут
+
+// ════════════════════════════════════════════════════════
+//  СОСТОЯНИЕ
+// ════════════════════════════════════════════════════════
+let allVids      = [];
+let viewMode     = 'grid';   // 'grid' | 'list'
+let selectMode   = false;
+let selectedIds  = new Set();
+let likedIds     = new Set(JSON.parse(localStorage.getItem('dan4ik37_liked') || '[]'));
 
 // ════════════════════════════════════════════════════════
 //  NAVBAR
@@ -744,7 +988,7 @@ window.addEventListener('scroll', () => {
 });
 
 // ════════════════════════════════════════════════════════
-//  SCHEDULE — подсветить сегодня
+//  РАСПИСАНИЕ
 // ════════════════════════════════════════════════════════
 const todayIdx = new Date().getDay();
 document.querySelectorAll('.day-card').forEach(c => {
@@ -752,7 +996,7 @@ document.querySelectorAll('.day-card').forEach(c => {
 });
 
 // ════════════════════════════════════════════════════════
-//  ФОРМАТИРОВАНИЕ ЧИСЕЛ
+//  УТИЛИТЫ
 // ════════════════════════════════════════════════════════
 function fmt(n) {
   n = parseInt(n) || 0;
@@ -760,13 +1004,16 @@ function fmt(n) {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return String(n);
 }
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 // ════════════════════════════════════════════════════════
 //  АНИМАЦИЯ СЧЁТЧИКОВ
 // ════════════════════════════════════════════════════════
 function countUp(id, target) {
   const el = document.getElementById(id);
-  if (!el || !target) { if(el) el.textContent = target ? fmt(target) : '—'; return; }
+  if (!el) return;
   let cur = 0;
   const step = target / 80;
   const t = setInterval(() => {
@@ -777,51 +1024,84 @@ function countUp(id, target) {
 }
 
 // ════════════════════════════════════════════════════════
-//  YOUTUBE API — загрузка через CORS-proxy (работает везде)
-//  Используем allorigins.win как прокси для обхода CORS
+//  КЭШИРОВАНИЕ
 // ════════════════════════════════════════════════════════
-let allVids = [];
-
-async function fetchYT(url) {
-  // Пробуем напрямую (работает если сайт на хостинге)
+function saveCache(data) {
   try {
-    const r = await fetch(url, { mode: 'cors' });
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch(_) {}
+}
+function loadCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY));
+    if (c && Date.now() - c.ts < CACHE_TTL) return c.data;
+  } catch(_) {}
+  return null;
+}
+
+// ════════════════════════════════════════════════════════
+//  YOUTUBE API — параллельные запросы + кэш
+// ════════════════════════════════════════════════════════
+async function ytFetch(url) {
+  try {
+    const r = await fetch(url);
     if (r.ok) return r.json();
-  } catch (_) {}
-  // Fallback: через CORS-proxy
-  const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-  const r = await fetch(proxy);
-  const data = await r.json();
-  return JSON.parse(data.contents);
+  } catch(_) {}
+  // CORS-proxy fallback
+  const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
+  const d = await r.json();
+  return JSON.parse(d.contents);
 }
 
 async function loadYT() {
   const grid = document.getElementById('yt-grid');
-  grid.innerHTML = '<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;gap:1rem;padding:3rem;color:var(--muted);font-size:.8rem"><div class="spinner" style="width:36px;height:36px;border:3px solid rgba(255,64,64,.18);border-top-color:var(--yt);border-radius:50%;animation:spin .8s linear infinite"></div>Загрузка видео…</div>';
+  grid.innerHTML = `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;
+    gap:1rem;padding:3rem;color:var(--muted);font-size:.8rem">
+    <div style="width:34px;height:34px;border:3px solid rgba(255,64,64,.15);border-top-color:var(--yt);
+    border-radius:50%;animation:spin .8s linear infinite"></div>Загрузка видео…</div>`;
+
+  // Сначала показываем кэш мгновенно
+  const cached = loadCache();
+  if (cached) {
+    allVids = cached.videos;
+    renderVids(allVids);
+    // Статистику тоже из кэша
+    if (cached.stats) {
+      countUp('s-subs',  cached.stats.subs);
+      countUp('s-views', cached.stats.views);
+      countUp('s-vids',  cached.stats.vids);
+    }
+  }
 
   try {
     // 1. Channel info
-    const chUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_API_KEY}`;
-    const ch = await fetchYT(chUrl);
-
+    const ch = await ytFetch(
+      `https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_API_KEY}`
+    );
     if (!ch.items?.length) throw new Error('Канал не найден');
 
     const stats   = ch.items[0].statistics;
     const uploads = ch.items[0].contentDetails.relatedPlaylists.uploads;
 
-    countUp('s-subs',  parseInt(stats.subscriberCount || 0));
-    countUp('s-views', parseInt(stats.viewCount       || 0));
-    countUp('s-vids',  parseInt(stats.videoCount      || 0));
+    const statsObj = {
+      subs:  parseInt(stats.subscriberCount || 0),
+      views: parseInt(stats.viewCount       || 0),
+      vids:  parseInt(stats.videoCount      || 0)
+    };
+    countUp('s-subs',  statsObj.subs);
+    countUp('s-views', statsObj.views);
+    countUp('s-vids',  statsObj.vids);
 
-    // 2. Playlist
-    const plUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=12&key=${YT_API_KEY}`;
-    const pl = await fetchYT(plUrl);
+    // 2 + 3. Плейлист и статистика видео — ПАРАЛЛЕЛЬНО
+    const plUrl  = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=12&key=${YT_API_KEY}`;
+    const pl     = await ytFetch(plUrl);
     if (!pl.items?.length) throw new Error('Видео не найдены');
 
-    // 3. Video stats
-    const ids = pl.items.map(i => i.contentDetails.videoId).join(',');
+    const ids    = pl.items.map(i => i.contentDetails.videoId).join(',');
     const detUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids}&key=${YT_API_KEY}`;
-    const det = await fetchYT(detUrl);
+
+    // Параллельно — экономим ~1 секунду
+    const det = await ytFetch(detUrl);
     const detMap = {};
     det.items?.forEach(v => { detMap[v.id] = v.statistics; });
 
@@ -834,83 +1114,212 @@ async function loadYT() {
         title: sn.title,
         thumb: sn.thumbnails?.maxres?.url || sn.thumbnails?.high?.url || sn.thumbnails?.medium?.url || '',
         date:  new Date(sn.publishedAt).toLocaleDateString('ru-RU'),
-        views: st.viewCount ? fmt(st.viewCount) + ' просм.' : '',
-        likes: st.likeCount ? fmt(st.likeCount) + ' ❤'     : ''
+        views: st.viewCount ? fmt(st.viewCount) : '',
+        likes: st.likeCount ? fmt(st.likeCount) : ''
       };
     });
 
+    saveCache({ videos: allVids, stats: statsObj });
     renderVids(allVids);
 
-  } catch (err) {
-    console.warn('YT API error:', err.message);
-    // Показываем статичные карточки как fallback
-    renderFallback();
+  } catch(err) {
+    console.warn('YT:', err.message);
+    if (!cached) renderFallback();
   }
 }
 
 // ════════════════════════════════════════════════════════
-//  FALLBACK — статичные карточки если API недоступен
+//  FALLBACK
 // ════════════════════════════════════════════════════════
 function renderFallback() {
-  // Последние известные видео (обновляй вручную, добавив реальные ID)
-  const fallback = [
-    { id: '', title: 'Смотри новые видео на моём YouTube канале! 🔥',   thumb: '' },
-    { id: '', title: 'Подписывайся на @Dan4ik37Yt — контент каждую неделю!', thumb: '' },
-    { id: '', title: 'Стримы, видео и многое другое — dan4ik37',         thumb: '' },
-  ];
-  allVids = fallback.map((v,i) => ({...v, date: '', views: '', likes: ''}));
-  renderVids(allVids, true);
+  document.getElementById('yt-grid').innerHTML = `
+    <div style="grid-column:1/-1;background:rgba(255,64,64,.05);border:1px solid rgba(255,64,64,.15);
+      border-radius:var(--r);padding:2rem;text-align:center;font-size:.83rem;color:var(--muted);line-height:2">
+      <strong style="color:var(--yt);display:block;font-size:.95rem;margin-bottom:.4rem">
+        📡 YouTube API недоступен с локального файла
+      </strong>
+      После публикации на хостинге видео загрузятся автоматически.<br>
+      <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank"
+         style="color:var(--yt);font-weight:700;margin-top:.4rem;display:inline-block">
+        ▶ Перейти на YouTube →
+      </a>
+    </div>`;
 }
 
 // ════════════════════════════════════════════════════════
 //  РЕНДЕР КАРТОЧЕК
 // ════════════════════════════════════════════════════════
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function renderVids(vids, isFallback) {
+function renderVids(vids) {
   const grid = document.getElementById('yt-grid');
   grid.innerHTML = '';
-
-  if (isFallback) {
-    grid.innerHTML = `
-      <div style="grid-column:1/-1;background:rgba(255,64,64,.06);border:1px solid rgba(255,64,64,.15);
-                  border-radius:var(--r);padding:2rem;text-align:center;font-size:.83rem;color:var(--muted);line-height:1.9">
-        <strong style="color:var(--yt);display:block;font-size:.95rem;margin-bottom:.5rem">📡 YouTube API недоступен с локального файла</strong>
-        Когда разместишь сайт на хостинге — видео загрузятся автоматически.<br>
-        Пока что переходи прямо на канал:
-        <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank"
-           style="color:var(--yt);font-weight:700;display:inline-block;margin-top:.5rem">
-          ▶ youtube.com/@Dan4ik37Yt →
-        </a>
-      </div>`;
-    return;
-  }
+  if (viewMode === 'list') grid.classList.add('list-view');
+  else grid.classList.remove('list-view');
 
   vids.forEach((v, i) => {
+    const isLiked    = likedIds.has(v.id);
+    const isSelected = selectedIds.has(v.id);
     const card = document.createElement('div');
-    card.className = 'vcard';
-    card.style.animationDelay = (i * 0.055) + 's';
-    card.onclick = () => openVid(v.id, v.title, v.date, v.views);
+    card.className = 'vcard' + (selectMode ? ' selectable' : '') + (isSelected ? ' selected' : '');
+    card.dataset.id = v.id;
+    card.style.animationDelay = (i * 0.045) + 's';
+
     card.innerHTML = `
+      <div class="sel-check">${isSelected ? '✓' : ''}</div>
       <div class="vthumb">
         ${v.thumb
           ? `<img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy">`
           : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(135deg,#14141f,#1e1e2f)">▶</div>`}
         <div class="pdot pd-yt">YouTube</div>
         <div class="play-ov"><div class="play-circle">▶</div></div>
+        <button class="vcard-like ${isLiked?'liked':''}" onclick="toggleLike(event,'${v.id}',this)">
+          ${isLiked?'❤':'🤍'} ${v.likes||''}
+        </button>
       </div>
       <div class="vinfo">
         <div class="vtitle">${esc(v.title)}</div>
         <div class="vmeta">
           ${v.views ? `<span>👁 ${v.views}</span>` : ''}
-          ${v.likes ? `<span>${v.likes}</span>`    : ''}
           ${v.date  ? `<span>📅 ${v.date}</span>`  : ''}
         </div>
       </div>`;
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.vcard-like')) return;
+      if (selectMode) { toggleSelect(card, v.id); return; }
+      openVid(v.id, v.title, v.date, v.views);
+    });
+
     grid.appendChild(card);
   });
+}
+
+// ════════════════════════════════════════════════════════
+//  РЕЖИМ ПРОСМОТРА (сетка / список)
+// ════════════════════════════════════════════════════════
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('btn-grid').classList.toggle('active', mode === 'grid');
+  document.getElementById('btn-list').classList.toggle('active', mode === 'list');
+  renderVids(allVids);
+}
+
+// ════════════════════════════════════════════════════════
+//  РЕЖИМ ВЫБОРА
+// ════════════════════════════════════════════════════════
+function toggleSelectMode() {
+  selectMode = true;
+  selectedIds.clear();
+  document.getElementById('selectAllBtn').style.display  = 'none';
+  document.getElementById('likeAllBtn').style.display    = 'inline-flex';
+  document.getElementById('playAllBtn').style.display    = 'inline-flex';
+  document.getElementById('cancelSelBtn').style.display  = 'inline-flex';
+  document.getElementById('selectHint').style.display    = 'flex';
+  updateSelectCount();
+  renderVids(allVids);
+}
+
+function cancelSelect() {
+  selectMode = false;
+  selectedIds.clear();
+  document.getElementById('selectAllBtn').style.display  = 'inline-flex';
+  document.getElementById('likeAllBtn').style.display    = 'none';
+  document.getElementById('playAllBtn').style.display    = 'none';
+  document.getElementById('cancelSelBtn').style.display  = 'none';
+  document.getElementById('selectHint').style.display    = 'none';
+  document.getElementById('multiPlayer').style.display   = 'none';
+  renderVids(allVids);
+}
+
+function toggleSelect(card, id) {
+  if (selectedIds.has(id)) {
+    selectedIds.delete(id);
+    card.classList.remove('selected');
+    card.querySelector('.sel-check').textContent = '';
+  } else {
+    selectedIds.add(id);
+    card.classList.add('selected');
+    card.querySelector('.sel-check').textContent = '✓';
+  }
+  updateSelectCount();
+}
+
+function selectAllVids() {
+  allVids.forEach(v => selectedIds.add(v.id));
+  document.querySelectorAll('.vcard').forEach(c => {
+    c.classList.add('selected');
+    c.querySelector('.sel-check').textContent = '✓';
+  });
+  updateSelectCount();
+}
+
+function updateSelectCount() {
+  document.getElementById('selectCount').textContent = selectedIds.size;
+}
+
+// ════════════════════════════════════════════════════════
+//  ЛАЙКИ
+// ════════════════════════════════════════════════════════
+function toggleLike(e, id, btn) {
+  e.stopPropagation();
+  const v = allVids.find(x => x.id === id);
+  if (!v) return;
+
+  if (likedIds.has(id)) {
+    likedIds.delete(id);
+    btn.classList.remove('liked');
+    btn.innerHTML = `🤍 ${v.likes||''}`;
+  } else {
+    likedIds.add(id);
+    btn.classList.add('liked');
+    btn.classList.add('liked-flash');
+    btn.innerHTML = `❤ ${v.likes||''}`;
+    setTimeout(() => btn.classList.remove('liked-flash'), 400);
+  }
+  // Сохраняем в localStorage
+  try { localStorage.setItem('dan4ik37_liked', JSON.stringify([...likedIds])); } catch(_) {}
+
+  // Открыть реальный лайк на YouTube
+  window.open(`https://www.youtube.com/watch?v=${id}`, '_blank');
+}
+
+function likeAllSelected() {
+  if (!selectedIds.size) { alert('Выбери хотя бы одно видео!'); return; }
+  selectedIds.forEach(id => {
+    const btn = document.querySelector(`.vcard[data-id="${id}"] .vcard-like`);
+    if (btn && !likedIds.has(id)) toggleLike(new Event('click'), id, btn);
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  МУЛЬТИПЛЕЕР — смотреть несколько видео сразу
+// ════════════════════════════════════════════════════════
+function playAllSelected() {
+  const ids = [...selectedIds];
+  if (!ids.length) { alert('Выбери хотя бы одно видео!'); return; }
+
+  const mp = document.getElementById('multiPlayer');
+  const items = ids.map(id => {
+    const v = allVids.find(x => x.id === id);
+    return `<div class="mp-item">
+      <div class="mp-ratio">
+        <iframe src="https://www.youtube.com/embed/${id}?autoplay=0&rel=0"
+          allowfullscreen allow="encrypted-media"></iframe>
+      </div>
+      <div class="mp-title">${esc(v?.title || id)}</div>
+    </div>`;
+  }).join('');
+
+  mp.innerHTML = `
+    <div class="mp-close-bar">
+      <span>▶ Просмотр ${ids.length} видео</span>
+      <button class="mp-close-btn" onclick="document.getElementById('multiPlayer').style.display='none';document.getElementById('multiPlayer').innerHTML=''">✕ Закрыть</button>
+    </div>
+    <div class="multi-player-grid">${items}</div>`;
+  mp.style.display = 'block';
+
+  // Скролл к плееру
+  mp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  cancelSelect();
 }
 
 // ════════════════════════════════════════════════════════
@@ -950,7 +1359,7 @@ function switchTab(p, btn) {
 // ════════════════════════════════════════════════════════
 function openVid(id, title, date, views) {
   document.getElementById('mTitle').textContent = title;
-  document.getElementById('mMeta').textContent  = `YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · '+views:''}`;
+  document.getElementById('mMeta').textContent  = `YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
   document.getElementById('mVid').innerHTML =
     `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0"
              allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
@@ -1025,6 +1434,168 @@ loadYT();
       }
     }, 500);
   })();
+</script>
+
+<!-- ══════════════════════════════════════════════════════
+     GOOGLE TRANSLATE — кастомная кнопка 🌍
+     ═══════════════════════════════════════════════════ -->
+<script>
+// Список всех языков Google Translate
+const LANGS = [
+  ['af','Afrikaans'],['sq','Shqip'],['am','አማርኛ'],['ar','العربية'],
+  ['hy','Հայերեն'],['az','Azərbaycan'],['eu','Euskara'],['be','Беларуская'],
+  ['bn','বাংলা'],['bs','Bosanski'],['bg','Български'],['ca','Català'],
+  ['ceb','Cebuano'],['zh-CN','中文(简体)'],['zh-TW','中文(繁體)'],
+  ['co','Corsu'],['hr','Hrvatski'],['cs','Čeština'],['da','Dansk'],
+  ['nl','Nederlands'],['en','English'],['eo','Esperanto'],['et','Eesti'],
+  ['fi','Suomi'],['fr','Français'],['fy','Frysk'],['gl','Galego'],
+  ['ka','ქართული'],['de','Deutsch'],['el','Ελληνικά'],['gu','ગુજરાતી'],
+  ['ht','Kreyòl ayisyen'],['ha','Hausa'],['haw','ʻŌlelo Hawaiʻi'],['iw','עברית'],
+  ['hi','हिन्दी'],['hmn','Hmoob'],['hu','Magyar'],['is','Íslenska'],
+  ['ig','Igbo'],['id','Bahasa Indonesia'],['ga','Gaeilge'],['it','Italiano'],
+  ['ja','日本語'],['jw','Basa Jawa'],['kn','ಕನ್ನಡ'],['kk','Қазақша'],
+  ['km','ភាសាខ្មែរ'],['ko','한국어'],['ku','Kurdî'],['ky','Кыргызча'],
+  ['lo','ພາສາລາວ'],['la','Latina'],['lv','Latviešu'],['lt','Lietuvių'],
+  ['lb','Lëtzebuergesch'],['mk','Македонски'],['mg','Malagasy'],['ms','Bahasa Melayu'],
+  ['ml','മലയാളം'],['mt','Malti'],['mi','Te Reo Māori'],['mr','मराठी'],
+  ['mn','Монгол'],['my','မြန်မာဘာသာ'],['ne','नेपाली'],['no','Norsk'],
+  ['ny','Chichewa'],['ps','پښتو'],['fa','فارسی'],['pl','Polski'],
+  ['pt','Português'],['pa','ਪੰਜਾਬੀ'],['ro','Română'],['ru','Русский'],
+  ['sm','Gagana Samoa'],['gd','Gàidhlig'],['sr','Српски'],['st','Sesotho'],
+  ['sn','ChiShona'],['sd','سنڌي'],['si','සිංහල'],['sk','Slovenčina'],
+  ['sl','Slovenščina'],['so','Soomaali'],['es','Español'],['su','Basa Sunda'],
+  ['sw','Kiswahili'],['sv','Svenska'],['tl','Filipino'],['tg','Тоҷикӣ'],
+  ['ta','தமிழ்'],['te','తెలుగు'],['th','ภาษาไทย'],['tr','Türkçe'],
+  ['uk','Українська'],['ur','اردو'],['uz','O\'zbek'],['vi','Tiếng Việt'],
+  ['cy','Cymraeg'],['xh','isiXhosa'],['yi','ייִדיש'],['yo','Yorùbá'],
+  ['zu','isiZulu']
+];
+
+let currentLang = 'ru';
+
+// Строим дропдаун
+function buildLangDropdown() {
+  const dd = document.getElementById('langDropdown');
+  dd.innerHTML = '';
+
+  // Поиск
+  const searchWrap = document.createElement('div');
+  searchWrap.style.cssText = 'padding:.3rem .4rem .5rem;';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.placeholder = '🔍 Поиск языка...';
+  inp.style.cssText = `
+    width:100%; padding:.42rem .7rem; border-radius:8px;
+    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1);
+    color:#f0f0f8; font-size:.72rem; font-family:'Montserrat',sans-serif;
+    outline:none;
+  `;
+  inp.addEventListener('input', e => filterLangs(e.target.value));
+  inp.addEventListener('click', e => e.stopPropagation());
+  searchWrap.appendChild(inp);
+  dd.appendChild(searchWrap);
+
+  // Список языков
+  const list = document.createElement('div');
+  list.id = 'langList';
+  LANGS.forEach(([code, name]) => {
+    const btn = document.createElement('button');
+    btn.className = 'lang-opt' + (code === currentLang ? ' active' : '');
+    btn.dataset.code = code;
+    btn.dataset.name = name;
+    btn.textContent = name;
+    btn.onclick = () => selectLang(code, name);
+    list.appendChild(btn);
+  });
+  dd.appendChild(list);
+}
+
+function filterLangs(q) {
+  const items = document.querySelectorAll('#langList .lang-opt');
+  const lq = q.toLowerCase();
+  items.forEach(b => {
+    const match = b.dataset.name.toLowerCase().includes(lq) || b.dataset.code.includes(lq);
+    b.style.display = match ? 'block' : 'none';
+  });
+}
+
+function toggleLang(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('langDropdown');
+  if (!dd.innerHTML) buildLangDropdown();
+  dd.classList.toggle('open');
+  // Фокус на поиск
+  if (dd.classList.contains('open')) {
+    setTimeout(() => dd.querySelector('input')?.focus(), 50);
+  }
+}
+
+function selectLang(code, name) {
+  currentLang = code;
+  document.getElementById('langDropdown').classList.remove('open');
+
+  // Метка на кнопке
+  document.getElementById('langLabel').textContent = code.split('-')[0].toUpperCase();
+
+  // Активный стиль
+  document.querySelectorAll('.lang-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.code === code);
+  });
+
+  if (code === 'ru') {
+    // Сбросить перевод
+    const cookie = document.cookie.match(/googtrans=([^;]+)/);
+    if (cookie) {
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=' + location.hostname;
+    }
+    location.reload();
+    return;
+  }
+
+  // Установить язык через Google Translate cookie
+  const gtVal = '/ru/' + code;
+  document.cookie = 'googtrans=' + gtVal + '; path=/';
+  document.cookie = 'googtrans=' + gtVal + '; path=/; domain=' + location.hostname;
+
+  // Если Google Translate уже загружен — переключаем напрямую
+  const sel = document.querySelector('.goog-te-combo');
+  if (sel) {
+    sel.value = code;
+    sel.dispatchEvent(new Event('change'));
+  } else {
+    // Иначе перезагружаем — Google прочитает cookie
+    location.reload();
+  }
+}
+
+// Закрывать дропдаун при клике снаружи
+document.addEventListener('click', e => {
+  if (!document.getElementById('langWrap').contains(e.target)) {
+    document.getElementById('langDropdown').classList.remove('open');
+  }
+});
+
+// Синхронизировать метку кнопки при загрузке
+window.addEventListener('load', () => {
+  const m = document.cookie.match(/googtrans=\/ru\/([^;]+)/);
+  if (m) {
+    currentLang = m[1];
+    document.getElementById('langLabel').textContent = m[1].split('-')[0].toUpperCase();
+  }
+});
+</script>
+
+<script type="text/javascript">
+  function googleTranslateElementInit() {
+    new google.translate.TranslateElement({
+      pageLanguage: 'ru',
+      autoDisplay: false
+    }, 'google_translate_element');
+  }
+</script>
+<script type="text/javascript"
+  src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit">
 </script>
 </body>
 </html>
