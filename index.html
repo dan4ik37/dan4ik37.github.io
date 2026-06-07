@@ -4,929 +4,718 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dan4ik37 — Official</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
-<!-- Google AdSense — подтверждение и монетизация -->
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401"
-     crossorigin="anonymous"></script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>
 <style>
-/* ════════════════════════ VARIABLES ════════════════════════ */
-:root {
-  --bg:      #08080e;
-  --bg2:     #0f0f18;
-  --card:    #111119;
-  --card2:   #17172200;
-  --border:  rgba(255,255,255,0.06);
-  --accent:  #ff2d55;
-  --accent2: #ff6b35;
-  --yt:      #ff4040;
-  --tt:      #ee1d52;
-  --tw:      #9147ff;
-  --vk:      #0077ff;
-  --tg:      #29b6f6;
-  --text:    #f0f0f8;
-  --muted:   #64647e;
-  --r:       14px;
+:root{
+  --bg:#08080e;--bg2:#0f0f18;--card:#111119;--border:rgba(255,255,255,.06);
+  --accent:#ff2d55;--accent2:#ff6b35;--yt:#ff4040;--tt:#ee1d52;
+  --tw:#9147ff;--vk:#0077ff;--tg:#29b6f6;--text:#f0f0f8;--muted:#64647e;--r:14px;
 }
-*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-html { scroll-behavior: smooth; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Montserrat', sans-serif;
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-}
-a { text-decoration: none; color: inherit; }
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{text-decoration:none;color:inherit}
 
-/* ════════════════════════ NOISE ════════════════════════ */
-body::after {
-  content:''; position:fixed; inset:0; pointer-events:none; z-index:9000;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
-}
+/* ── FIX Google Translate bar pushing content ── */
+.goog-te-banner-frame{display:none!important}
+body{top:0!important;position:static!important}
+#goog-gt-tt,#goog-gt-{display:none!important}
+.skiptranslate{display:none!important}
 
-/* ════════════════════════ NAVBAR ════════════════════════ */
-#nav {
-  position: fixed; top:0; left:0; right:0; z-index:500;
-  padding: .85rem 2rem;
-  display: flex; align-items: center; justify-content: space-between;
-  background: rgba(8,8,14,.9);
-  backdrop-filter: blur(24px);
-  border-bottom: 1px solid var(--border);
-  transition: box-shadow .3s;
-}
-#nav.scrolled { box-shadow: 0 4px 40px rgba(0,0,0,.7); }
-.nav-logo {
-  font-family: 'Bebas Neue', sans-serif; font-size: 1.55rem; letter-spacing: 3px;
-  background: linear-gradient(135deg,#fff,var(--accent));
-  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-}
-.nav-links { display:flex; gap:1.8rem; align-items:center; }
-.nav-links a {
-  font-size: .7rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
-  color: var(--muted); transition: color .2s;
-}
-.nav-links a:hover { color: var(--text); }
-.nav-donate {
-  padding: .42rem 1.1rem; border-radius: 50px;
-  background: linear-gradient(135deg,var(--accent),var(--accent2));
-  color: #fff !important; font-size: .7rem !important;
-  transition: transform .2s, opacity .2s;
-}
-.nav-donate:hover { transform: scale(1.06); opacity: .9; }
-.hamburger {
-  display:none; flex-direction:column; gap:5px;
-  background:none; border:none; cursor:pointer; padding:4px;
-}
-.hamburger span { width:22px; height:2px; background:var(--text); border-radius:2px; transition:.3s; }
-.hamburger.open span:nth-child(1){ transform:translateY(7px) rotate(45deg); }
-.hamburger.open span:nth-child(2){ opacity:0; }
-.hamburger.open span:nth-child(3){ transform:translateY(-7px) rotate(-45deg); }
+/* ── NOISE ── */
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E")}
+
+/* ── NAV ── */
+#nav{position:fixed;top:0;left:0;right:0;z-index:500;padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between;background:rgba(8,8,14,.92);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);transition:box-shadow .3s}
+#nav.scrolled{box-shadow:0 4px 40px rgba(0,0,0,.7)}
+.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:3px;background:linear-gradient(135deg,#fff,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-links{display:flex;gap:1.8rem;align-items:center}
+.nav-links a{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);transition:color .2s}
+.nav-links a:hover{color:var(--text)}
+.nav-donate{padding:.42rem 1.1rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;font-size:.7rem!important;transition:transform .2s,opacity .2s}
+.nav-donate:hover{transform:scale(1.06);opacity:.9}
+.hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
+.hamburger span{width:22px;height:2px;background:var(--text);border-radius:2px;transition:.3s}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* Translate btn in nav */
+.lang-wrap{position:relative}
+.lang-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem 1rem;border-radius:50px;font-size:.68rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.12);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;font-family:'Montserrat',sans-serif}
+.lang-btn:hover{border-color:var(--accent);color:var(--text)}
+.lang-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;background:#16161f;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:.5rem;min-width:185px;box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:600;max-height:300px;overflow-y:auto}
+.lang-dropdown::-webkit-scrollbar{width:4px}.lang-dropdown::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+.lang-dropdown.open{display:block}
+.lang-search{width:100%;padding:.4rem .7rem;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:var(--text);font-size:.72rem;font-family:'Montserrat',sans-serif;outline:none;margin-bottom:.4rem}
+.lang-opt{display:block;width:100%;text-align:left;padding:.45rem .8rem;font-size:.74rem;font-weight:600;color:var(--muted);background:transparent;border:none;border-radius:8px;cursor:pointer;transition:all .15s;font-family:'Montserrat',sans-serif;white-space:nowrap}
+.lang-opt:hover{background:rgba(255,45,85,.1);color:var(--text)}
+.lang-opt.active{color:var(--accent)}
+#google_translate_element{display:none!important}
+.goog-te-gadget{font-size:0!important}
+
 @media(max-width:800px){
-  .nav-links {
-    display:none; position:absolute; top:100%; left:0; right:0;
-    flex-direction:column; gap:1.2rem;
-    background:rgba(8,8,14,.98); padding:1.5rem 2rem;
-    border-bottom:1px solid var(--border);
-  }
-  .nav-links.open { display:flex; }
-  .hamburger { display:flex; }
+  .nav-links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:1.2rem;background:rgba(8,8,14,.98);padding:1.5rem 2rem;border-bottom:1px solid var(--border)}
+  .nav-links.open{display:flex}
+  .hamburger{display:flex}
 }
 
-/* ════════════════════════ HERO ════════════════════════ */
-.hero {
-  position:relative; min-height:100vh;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
-  overflow:hidden; padding:2rem; padding-top:5rem; text-align:center;
+/* ── HERO ── */
+.hero{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:2rem;padding-top:5rem;padding-bottom:5rem;text-align:center}
+/* Статичный фон — убрана тяжёлая анимация scale/rotate */
+.hero-bg{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 70% 60% at 20% 50%,rgba(255,45,85,.2) 0%,transparent 60%),radial-gradient(ellipse 60% 70% at 80% 50%,rgba(145,71,255,.16) 0%,transparent 60%),radial-gradient(ellipse 50% 50% at 50% -10%,rgba(41,182,246,.1) 0%,transparent 55%)}
+.hero-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,45,85,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,45,85,.04) 1px,transparent 1px);background-size:55px 55px;mask-image:radial-gradient(ellipse 90% 90% at center,black 20%,transparent 100%)}
+/* Аватар — оставляем float но с will-change */
+.avatar{position:relative;width:140px;height:140px;margin-bottom:2rem;animation:float 5s ease-in-out infinite;z-index:1;will-change:transform}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.avatar-ring{position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent2),var(--tw),var(--tg),var(--vk),var(--accent));animation:spin 4s linear infinite;will-change:transform}
+@keyframes spin{to{transform:rotate(360deg)}}
+.avatar-inner{position:absolute;inset:5px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:1px;z-index:1}
+.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(4.5rem,14vw,11rem);line-height:.88;letter-spacing:5px;z-index:1;background:linear-gradient(135deg,#fff 0%,var(--accent) 50%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{margin-top:.9rem;font-size:.88rem;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--muted);z-index:1}
+.hero-desc{margin-top:1.1rem;font-size:.92rem;color:rgba(240,240,248,.55);max-width:460px;line-height:1.75;z-index:1}
+.hero-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:.7rem;margin-top:2.2rem;z-index:1;max-width:640px}
+.hbtn{display:inline-flex;align-items:center;gap:.45rem;padding:.58rem 1.25rem;border-radius:50px;font-size:.75rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1.5px solid;transition:transform .2s,box-shadow .2s,background .2s}
+.hbtn:hover{transform:translateY(-3px) scale(1.06)}
+.hb-yt{color:var(--yt);border-color:var(--yt)}.hb-yt:hover{background:rgba(255,64,64,.12);box-shadow:0 0 22px rgba(255,64,64,.35)}
+.hb-tt{color:var(--tt);border-color:var(--tt)}.hb-tt:hover{background:rgba(238,29,82,.12);box-shadow:0 0 22px rgba(238,29,82,.35)}
+.hb-tw{color:var(--tw);border-color:var(--tw)}.hb-tw:hover{background:rgba(145,71,255,.12);box-shadow:0 0 22px rgba(145,71,255,.35)}
+.hb-vk{color:var(--vk);border-color:var(--vk)}.hb-vk:hover{background:rgba(0,119,255,.12);box-shadow:0 0 22px rgba(0,119,255,.35)}
+.hb-vkv{color:#5bc4ff;border-color:#5bc4ff}.hb-vkv:hover{background:rgba(91,196,255,.12);box-shadow:0 0 22px rgba(91,196,255,.3)}
+.hb-tg{color:var(--tg);border-color:var(--tg)}.hb-tg:hover{background:rgba(41,182,246,.12);box-shadow:0 0 22px rgba(41,182,246,.35)}
+.hb-don{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;border-color:transparent!important}.hb-don:hover{box-shadow:0 6px 28px rgba(255,45,85,.5)!important}
+/* scroll-hint: скрыт на мобиле чтобы не наслаивался на кнопки */
+.scroll-hint{display:none}
+@media(min-height:700px) and (min-width:600px){
+  .scroll-hint{display:flex;position:absolute;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:1;flex-direction:column;align-items:center;gap:.3rem;font-size:.6rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);animation:pulse 2.5s ease-in-out infinite;pointer-events:none;white-space:nowrap}
 }
-.hero-bg {
-  position:absolute; inset:0; pointer-events:none;
-  background:
-    radial-gradient(ellipse 70% 60% at 20% 50%,  rgba(255,45,85,.22) 0%,  transparent 60%),
-    radial-gradient(ellipse 60% 70% at 80% 50%,  rgba(145,71,255,.18) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 50% at 50% -10%, rgba(41,182,246,.12) 0%, transparent 55%);
-  animation: heroBg 10s ease-in-out infinite alternate;
-}
-@keyframes heroBg { 0%{transform:scale(1)} 100%{transform:scale(1.12) rotate(2deg)} }
-.hero-grid {
-  position:absolute; inset:0; pointer-events:none;
-  background-image:
-    linear-gradient(rgba(255,45,85,.05) 1px, transparent 1px),
-    linear-gradient(90deg,rgba(255,45,85,.05) 1px, transparent 1px);
-  background-size: 55px 55px;
-  -webkit-mask-image: radial-gradient(ellipse 90% 90% at center,black 20%,transparent 100%);
-  mask-image: radial-gradient(ellipse 90% 90% at center,black 20%,transparent 100%);
-}
-.avatar {
-  position:relative; width:140px; height:140px; margin-bottom:2rem;
-  animation: float 4.5s ease-in-out infinite; z-index:1;
-}
-@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-13px)} }
-.avatar-ring {
-  position:absolute; inset:-5px; border-radius:50%;
-  background: conic-gradient(var(--accent),var(--accent2),var(--tw),var(--tg),var(--vk),var(--accent));
-  animation: spin 3.5s linear infinite;
-}
-@keyframes spin { to{transform:rotate(360deg)} }
-.avatar-inner {
-  position:absolute; inset:5px; border-radius:50%; background:var(--bg2);
-  display:flex; align-items:center; justify-content:center;
-  font-family:'Bebas Neue',sans-serif; font-size:2.8rem; letter-spacing:1px; z-index:1;
-}
-.hero h1 {
-  font-family:'Bebas Neue',sans-serif;
-  font-size:clamp(4.5rem,14vw,11rem); line-height:.88; letter-spacing:5px; z-index:1;
-  background:linear-gradient(135deg,#fff 0%,var(--accent) 50%,var(--accent2) 100%);
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
-}
-.hero-sub {
-  margin-top:.9rem; font-size:.88rem; font-weight:700;
-  letter-spacing:5px; text-transform:uppercase; color:var(--muted); z-index:1;
-}
-.hero-desc {
-  margin-top:1.1rem; font-size:.92rem; color:rgba(240,240,248,.55);
-  max-width:460px; line-height:1.75; z-index:1;
-}
-.hero-btns {
-  display:flex; flex-wrap:wrap; justify-content:center;
-  gap:.7rem; margin-top:2.2rem; z-index:1; max-width:640px;
-}
-.hbtn {
-  display:inline-flex; align-items:center; gap:.45rem;
-  padding:.58rem 1.25rem; border-radius:50px;
-  font-size:.75rem; font-weight:700; letter-spacing:1px; text-transform:uppercase;
-  border:1.5px solid; transition:transform .2s, box-shadow .2s, background .2s;
-}
-.hbtn:hover { transform:translateY(-3px) scale(1.06); }
-.hb-yt  { color:var(--yt);  border-color:var(--yt);  } .hb-yt:hover  { background:rgba(255,64,64,.12);   box-shadow:0 0 22px rgba(255,64,64,.35);  }
-.hb-tt  { color:var(--tt);  border-color:var(--tt);  } .hb-tt:hover  { background:rgba(238,29,82,.12);   box-shadow:0 0 22px rgba(238,29,82,.35);  }
-.hb-tw  { color:var(--tw);  border-color:var(--tw);  } .hb-tw:hover  { background:rgba(145,71,255,.12);  box-shadow:0 0 22px rgba(145,71,255,.35); }
-.hb-vk  { color:var(--vk);  border-color:var(--vk);  } .hb-vk:hover  { background:rgba(0,119,255,.12);   box-shadow:0 0 22px rgba(0,119,255,.35);  }
-.hb-vkv { color:#5bc4ff;    border-color:#5bc4ff;    } .hb-vkv:hover { background:rgba(91,196,255,.12);  box-shadow:0 0 22px rgba(91,196,255,.3);  }
-.hb-tg  { color:var(--tg);  border-color:var(--tg);  } .hb-tg:hover  { background:rgba(41,182,246,.12);  box-shadow:0 0 22px rgba(41,182,246,.35); }
-.hb-don { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff !important; border-color:transparent !important; }
-.hb-don:hover { box-shadow:0 6px 28px rgba(255,45,85,.5) !important; }
-.scroll-hint {
-  position:absolute; bottom:2rem; z-index:1;
-  display:flex; flex-direction:column; align-items:center; gap:.35rem;
-  font-size:.65rem; letter-spacing:2px; text-transform:uppercase; color:var(--muted);
-  animation:pulse 2s ease-in-out infinite;
-}
-@keyframes pulse { 0%,100%{opacity:.35} 50%{opacity:.9} }
-.hero>*{ animation:fadeUp .75s ease both; }
-.avatar{animation-delay:.05s!important} .hero h1{animation-delay:.2s} .hero-sub{animation-delay:.3s} .hero-desc{animation-delay:.4s} .hero-btns{animation-delay:.5s}
-@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.8}}
+/* Упрощённые входные анимации — только opacity */
+.hero>*{animation:fadeUp .6s ease both}
+.avatar{animation-delay:.05s!important}.hero h1{animation-delay:.15s}.hero-sub{animation-delay:.25s}.hero-desc{animation-delay:.32s}.hero-btns{animation-delay:.4s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 
-/* ════════════════════════ LAYOUT ════════════════════════ */
-.wrap    { max-width:1200px; margin:0 auto; padding:5rem 2rem; position:relative; z-index:1; }
-.wrap-sm { max-width:1200px; margin:0 auto; padding:1rem 2rem;  position:relative; z-index:1; }
-.divider { width:100%; height:1px; background:linear-gradient(90deg,transparent,rgba(255,45,85,.2),transparent); margin-bottom:4rem; }
-.eyebrow {
-  display:inline-flex; align-items:center; gap:.6rem;
-  font-size:.67rem; font-weight:800; letter-spacing:4px; text-transform:uppercase;
-  color:var(--accent); margin-bottom:.75rem;
-}
-.eyebrow::before { content:''; width:26px; height:2px; background:var(--accent); display:block; }
-.sec-title { font-family:'Bebas Neue',sans-serif; font-size:clamp(2.2rem,5vw,3.8rem); letter-spacing:2px; line-height:1; margin-bottom:2.5rem; }
-
-/* ════════════════════════ AD ZONES ════════════════════════ */
-.ad-zone {
-  display:flex; align-items:center; justify-content:center; flex-direction:column; gap:.4rem;
-  border:2px dashed rgba(255,255,255,.05); border-radius:var(--r);
-  min-height:90px; padding:1.5rem; background:rgba(255,255,255,.007); margin:.5rem 0;
-}
-.ad-zone span { font-size:.56rem; letter-spacing:3px; text-transform:uppercase; color:rgba(255,255,255,.1); }
-
-/* ════════════════════════ STATS ════════════════════════ */
-.stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; margin-bottom:3rem; }
-.stat-card {
-  background:var(--card); border:1px solid var(--border); border-radius:var(--r);
-  padding:1.4rem 1rem; text-align:center; position:relative; overflow:hidden; transition:transform .25s;
-}
-.stat-card:hover { transform:translateY(-5px); }
-.stat-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:3px; }
-.sc1::after { background:linear-gradient(90deg,var(--yt),transparent); }
-.sc2::after { background:linear-gradient(90deg,rgba(255,64,64,.5),transparent); }
-.sc3::after { background:linear-gradient(90deg,rgba(255,64,64,.25),transparent); }
-.sc4::after { background:linear-gradient(90deg,var(--tw),transparent); }
-.sc5::after { background:linear-gradient(90deg,var(--tg),transparent); }
-.stat-val { font-family:'Bebas Neue',sans-serif; font-size:2.3rem; letter-spacing:2px; line-height:1; }
-.stat-lbl { font-size:.62rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-top:.4rem; }
-
-/* ════════════════════════ TABS ════════════════════════ */
-.top-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:1rem; margin-bottom:1.8rem; }
-.tabs { display:flex; gap:.5rem; flex-wrap:wrap; }
-.tab {
-  padding:.48rem 1.15rem; border-radius:50px;
-  font-size:.72rem; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
-  border:1.5px solid rgba(255,255,255,.08); background:transparent; color:var(--muted);
-  cursor:pointer; transition:all .22s;
-}
-.tab:hover { border-color:rgba(255,255,255,.2); color:var(--text); }
-.tab.a-yt  { background:rgba(255,64,64,.13);  border-color:var(--yt);  color:var(--yt);  }
-.tab.a-tt  { background:rgba(238,29,82,.13);  border-color:var(--tt);  color:var(--tt);  }
-.tab.a-vkv { background:rgba(0,119,255,.13);  border-color:var(--vk);  color:#5bc4ff;    }
-.tab.a-tw  { background:rgba(145,71,255,.13); border-color:var(--tw);  color:var(--tw);  }
-.tab.a-tg  { background:rgba(41,182,246,.13); border-color:var(--tg);  color:var(--tg);  }
-.shuffle-btn {
-  display:inline-flex; align-items:center; gap:.4rem;
-  padding:.45rem 1.1rem; border-radius:50px;
-  font-size:.7rem; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
-  border:1.5px solid rgba(255,255,255,.1); background:transparent; color:var(--muted);
-  cursor:pointer; transition:all .2s;
-}
-.shuffle-btn:hover { border-color:var(--accent); color:var(--accent); }
-
-/* ════════════════════════ PANELS ════════════════════════ */
-.panel { display:none; }
-.panel.active { display:block; }
-
-/* ════════════════════════ VIDEO GRID ════════════════════════ */
-.video-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(265px,1fr)); gap:1.3rem; }
-.vcard {
-  background:var(--card); border-radius:var(--r); overflow:hidden;
-  cursor:pointer; border:1px solid var(--border);
-  transition:transform .25s, box-shadow .25s;
-  animation:fadeUp .45s ease both;
-}
-.vcard:hover {
-  transform:translateY(-7px) scale(1.015);
-  box-shadow:0 20px 50px rgba(0,0,0,.6), 0 0 30px rgba(255,45,85,.15);
-}
-.vthumb { position:relative; padding-bottom:56.25%; background:#0e0e16; overflow:hidden; }
-.vthumb img {
-  position:absolute; inset:0; width:100%; height:100%;
-  object-fit:cover; transition:transform .4s;
-  /* Preload trick — show immediately */
-  background: #1a1a28;
-}
-.vcard:hover .vthumb img { transform:scale(1.07); }
-.play-ov {
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  background:rgba(0,0,0,.35); opacity:0; transition:opacity .2s;
-}
-.vcard:hover .play-ov { opacity:1; }
-.play-circle {
-  width:52px; height:52px; border-radius:50%; background:rgba(255,255,255,.92);
-  display:flex; align-items:center; justify-content:center;
-  padding-left:4px; font-size:1.15rem; box-shadow:0 4px 20px rgba(0,0,0,.45);
-}
-.pdot { position:absolute; top:8px; right:8px; padding:3px 9px; border-radius:50px; font-size:.6rem; font-weight:800; z-index:2; }
-.pd-yt { background:rgba(0,0,0,.78); color:var(--yt); border:1px solid var(--yt); }
-.vinfo { padding:.85rem 1rem 1rem; }
-.vtitle { font-size:.83rem; font-weight:700; line-height:1.45; margin-bottom:.45rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.vmeta  { font-size:.66rem; color:var(--muted); display:flex; gap:.7rem; flex-wrap:wrap; }
-
-/* ════════════════════════ LIVE BANNER ════════════════════════ */
-.live-bar {
-  background:linear-gradient(135deg,rgba(145,71,255,.13),rgba(255,45,85,.09));
-  border:1.5px solid rgba(145,71,255,.32); border-radius:18px;
-  padding:1.7rem 2rem; display:flex; align-items:center; gap:1.4rem; margin-bottom:2.2rem; flex-wrap:wrap;
-}
-.live-dot { width:11px; height:11px; border-radius:50%; background:var(--accent); flex-shrink:0; animation:livePulse 1.5s ease-in-out infinite; }
-@keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(255,45,85,.6)} 70%{box-shadow:0 0 0 12px rgba(255,45,85,0)} 100%{box-shadow:0 0 0 0 rgba(255,45,85,0)} }
-.live-text h3 { font-family:'Bebas Neue',sans-serif; font-size:1.5rem; letter-spacing:2px; }
-.live-text p  { font-size:.8rem; color:var(--muted); margin-top:.2rem; }
-.cta-btn {
-  display:inline-flex; align-items:center; gap:.45rem;
-  padding:.68rem 1.7rem; border-radius:50px;
-  font-size:.76rem; font-weight:800; letter-spacing:1px; text-transform:uppercase;
-  border:none; cursor:pointer; transition:transform .2s, box-shadow .2s;
-}
-.cta-tw { background:var(--tw); color:#fff; }
-.cta-tw:hover { transform:scale(1.06); box-shadow:0 6px 28px rgba(145,71,255,.5); }
-
-/* ════════════════════════ ABOUT ════════════════════════ */
-.about-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1.2rem; }
-.about-card {
-  background:var(--card); border:1px solid var(--border); border-radius:var(--r);
-  padding:1.8rem; position:relative; overflow:hidden; transition:transform .25s;
-}
-.about-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
-.about-card:hover { transform:translateY(-5px); }
-.about-icon  { font-size:1.9rem; margin-bottom:.9rem; display:block; }
-.about-title { font-family:'Bebas Neue',sans-serif; font-size:1.35rem; letter-spacing:2px; margin-bottom:.6rem; }
-.about-text  { font-size:.82rem; color:var(--muted); line-height:1.8; }
-
-/* ════════════════════════ SCHEDULE ════════════════════════ */
-.sched-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:.55rem; }
-@media(max-width:580px){ .sched-grid { grid-template-columns:repeat(4,1fr); } }
-.day-card {
-  background:var(--card); border:1px solid var(--border); border-radius:10px;
-  padding:.85rem .4rem; text-align:center; transition:transform .2s;
-}
-.day-card.today { background:rgba(145,71,255,.14); border-color:var(--tw); }
-.day-name { font-size:.62rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--muted); margin-bottom:.4rem; }
-.day-live  { font-size:.75rem; font-weight:800; color:var(--tw); }
-.day-off   { font-size:.7rem; color:var(--muted); opacity:.4; }
-
-/* ════════════════════════ SOCIAL HUB ════════════════════════ */
-.hub-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:1rem; }
-.hub-card {
-  background:var(--card); border-radius:var(--r); border:1px solid var(--border);
-  padding:1.6rem 1.2rem; text-align:center; transition:transform .25s, box-shadow .25s;
-  position:relative; overflow:hidden;
-}
-.hub-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
-.hub-card:hover { transform:translateY(-6px); }
-.hc-yt::before{background:var(--yt)}   .hc-yt:hover{box-shadow:0 14px 40px rgba(255,64,64,.22)}
-.hc-tt::before{background:var(--tt)}   .hc-tt:hover{box-shadow:0 14px 40px rgba(238,29,82,.22)}
-.hc-tw::before{background:var(--tw)}   .hc-tw:hover{box-shadow:0 14px 40px rgba(145,71,255,.22)}
-.hc-vk::before{background:var(--vk)}   .hc-vk:hover{box-shadow:0 14px 40px rgba(0,119,255,.22)}
-.hc-vkv::before{background:#5bc4ff}    .hc-vkv:hover{box-shadow:0 14px 40px rgba(91,196,255,.2)}
-.hc-tg::before{background:var(--tg)}   .hc-tg:hover{box-shadow:0 14px 40px rgba(41,182,246,.22)}
-.hub-icon   { font-size:1.9rem; margin-bottom:.6rem; display:block; }
-.hub-name   { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:2px; margin-bottom:.25rem; }
-.hub-handle { font-size:.67rem; letter-spacing:1px; color:var(--muted); }
-.hub-desc   { font-size:.72rem; color:var(--muted); margin-top:.5rem; line-height:1.55; }
-.hc-yt .hub-name{color:var(--yt)} .hc-tt .hub-name{color:var(--tt)} .hc-tw .hub-name{color:var(--tw)}
-.hc-vk .hub-name{color:var(--vk)} .hc-vkv .hub-name{color:#5bc4ff}  .hc-tg .hub-name{color:var(--tg)}
-
-/* ════════════════════════ STREAM ════════════════════════ */
-.stream-box { background:var(--card); border-radius:var(--r); overflow:hidden; border:1px solid rgba(145,71,255,.22); }
-.stream-ratio { position:relative; padding-bottom:56.25%; }
-.stream-ratio iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
-.stream-footer { padding:1.3rem 1.6rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
-.stream-title  { font-family:'Bebas Neue',sans-serif; font-size:1.4rem; letter-spacing:2px; color:var(--tw); }
-
-/* ════════════════════════ DONATE ════════════════════════ */
-.donate-banner {
-  border-radius:20px; padding:3.5rem 2rem; text-align:center; position:relative; overflow:hidden;
-  background:linear-gradient(135deg,rgba(255,45,85,.1),rgba(255,107,53,.08));
-  border:1.5px solid rgba(255,45,85,.25);
-}
-.donate-banner::before { content:''; position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse 60% 60% at 50% 50%,rgba(255,45,85,.07) 0%,transparent 70%); }
-.donate-title { font-family:'Bebas Neue',sans-serif; font-size:clamp(2rem,5vw,3.5rem); letter-spacing:3px; margin-bottom:.8rem; }
-.donate-sub   { color:var(--muted); font-size:.88rem; line-height:1.8; margin-bottom:2rem; max-width:520px; margin-inline:auto; }
-.donate-btn {
-  display:inline-flex; align-items:center; gap:.55rem;
-  padding:1rem 2.6rem; border-radius:50px;
-  background:linear-gradient(135deg,var(--accent),var(--accent2));
-  color:#fff; font-weight:800; font-size:.9rem; letter-spacing:1px; text-transform:uppercase;
-  border:none; cursor:pointer; transition:transform .2s, box-shadow .2s; position:relative; z-index:1;
-}
-.donate-btn:hover { transform:scale(1.06); box-shadow:0 10px 35px rgba(255,45,85,.5); }
-.donate-note { font-size:.7rem; color:rgba(255,45,85,.4); margin-top:1rem; position:relative; z-index:1; }
-
-/* ════════════════════════ YT TOOLBAR ════════════════════════ */
-.yt-toolbar {
-  display:flex; align-items:center; justify-content:space-between;
-  flex-wrap:wrap; gap:.8rem; margin-bottom:1.2rem;
-  padding:.8rem 1rem; background:var(--card); border-radius:var(--r);
-  border:1px solid var(--border);
-}
-.view-toggle { display:flex; gap:.4rem; }
-.view-btn {
-  display:inline-flex; align-items:center; gap:.4rem;
-  padding:.38rem .85rem; border-radius:8px; font-size:.7rem; font-weight:700;
-  letter-spacing:.5px; text-transform:uppercase; border:1.5px solid transparent;
-  background:transparent; color:var(--muted); cursor:pointer; transition:all .2s;
-  font-family:'Montserrat',sans-serif;
-}
-.view-btn.active { background:rgba(255,64,64,.14); border-color:var(--yt); color:var(--yt); }
-.view-btn:hover:not(.active) { color:var(--text); border-color:rgba(255,255,255,.1); }
-.yt-actions { display:flex; gap:.5rem; flex-wrap:wrap; }
-.act-btn {
-  display:inline-flex; align-items:center; gap:.35rem;
-  padding:.38rem .9rem; border-radius:8px; font-size:.7rem; font-weight:700;
-  letter-spacing:.5px; text-transform:uppercase;
-  border:1.5px solid rgba(255,255,255,.1); background:transparent; color:var(--muted);
-  cursor:pointer; transition:all .2s; font-family:'Montserrat',sans-serif;
-}
-.act-btn:hover { border-color:rgba(255,255,255,.2); color:var(--text); }
-.act-like-all { border-color:rgba(255,45,85,.35); color:var(--accent); }
-.act-like-all:hover { background:rgba(255,45,85,.12); }
-.act-play-all { border-color:rgba(255,64,64,.35); color:var(--yt); }
-.act-play-all:hover { background:rgba(255,64,64,.12); }
-.act-cancel { border-color:rgba(255,255,255,.08); }
-
-/* Select hint */
-.select-hint {
-  padding:.6rem 1rem; background:rgba(255,45,85,.08);
-  border:1px solid rgba(255,45,85,.2); border-radius:var(--r);
-  font-size:.78rem; color:var(--muted); margin-bottom:1rem;
-  display:flex; align-items:center;
-}
-.select-hint span { color:var(--accent); font-weight:700; }
-
-/* Select overlay on cards */
-.vcard.selectable { cursor:pointer; }
-.vcard.selectable::after {
-  content:''; position:absolute; inset:0; border-radius:var(--r);
-  border:2px solid transparent; transition:border-color .15s, background .15s; z-index:3; pointer-events:none;
-}
-.vcard.selectable:hover::after { border-color:rgba(255,45,85,.4); }
-.vcard.selected::after { border-color:var(--accent) !important; background:rgba(255,45,85,.08) !important; }
-.vcard { position:relative; }
-.vcard .sel-check {
-  position:absolute; top:8px; left:8px; z-index:4;
-  width:22px; height:22px; border-radius:50%;
-  background:rgba(0,0,0,.7); border:2px solid rgba(255,255,255,.3);
-  display:none; align-items:center; justify-content:center; font-size:.8rem;
-  transition:all .15s;
-}
-.vcard.selectable .sel-check { display:flex; }
-.vcard.selected .sel-check { background:var(--accent); border-color:var(--accent); }
-
-/* List view */
-.video-grid.list-view {
-  grid-template-columns: 1fr !important;
-}
-.video-grid.list-view .vcard {
-  display:flex; flex-direction:row; height:90px;
-}
-.video-grid.list-view .vthumb {
-  width:160px; min-width:160px; padding-bottom:0; height:90px;
-}
-.video-grid.list-view .vthumb img { height:100%; }
-.video-grid.list-view .vinfo {
-  flex:1; display:flex; flex-direction:column; justify-content:center; padding:.7rem 1rem;
-}
-.video-grid.list-view .vtitle { -webkit-line-clamp:1; font-size:.82rem; }
-
-/* Multi-player */
-.multi-player-grid {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:1rem;
-}
-.mp-item { background:var(--card); border-radius:var(--r); overflow:hidden; border:1px solid var(--border); }
-.mp-item .mp-ratio { position:relative; padding-bottom:56.25%; }
-.mp-item .mp-ratio iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
-.mp-item .mp-title { padding:.7rem .9rem; font-size:.78rem; font-weight:700; color:var(--text); }
-.mp-close-bar {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:.8rem 1rem; background:var(--card); border-radius:var(--r);
-  margin-bottom:.8rem; border:1px solid var(--border);
-}
-.mp-close-bar span { font-size:.78rem; color:var(--muted); }
-.mp-close-btn {
-  padding:.35rem .9rem; border-radius:8px; border:1.5px solid rgba(255,255,255,.1);
-  background:transparent; color:var(--muted); font-size:.7rem; font-weight:700;
-  cursor:pointer; font-family:'Montserrat',sans-serif; transition:all .2s;
-}
-.mp-close-btn:hover { border-color:var(--accent); color:var(--accent); }
-
-/* Like animation */
-@keyframes likeAnim {
-  0%{transform:scale(1)} 30%{transform:scale(1.5)} 60%{transform:scale(.9)} 100%{transform:scale(1)}
-}
-.liked-flash { animation:likeAnim .4s ease; }
-
-/* YT bottom buttons */
-.yt-bottom-btns {
-  display:flex; gap:1rem; margin-top:2rem; justify-content:center; flex-wrap:wrap;
-}
-.yt-ext-btn {
-  display:inline-flex; align-items:center; gap:.5rem;
-  padding:.68rem 1.8rem; border-radius:50px;
-  background:rgba(255,64,64,.1); border:1.5px solid var(--yt);
-  color:var(--yt); font-weight:700; font-size:.76rem;
-  letter-spacing:1px; text-transform:uppercase;
+/* ══════════════════════════════════════
+   РЕЖИМ ПРОИЗВОДИТЕЛЬНОСТИ
+══════════════════════════════════════ */
+/* Кнопка переключения сбоку */
+#perfToggle{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);
+  z-index:490;background:var(--card);border:1px solid var(--border);
+  border-right:none;border-radius:10px 0 0 10px;
+  padding:.6rem .5rem;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:.3rem;
   transition:background .2s;
 }
-.yt-ext-btn:hover { background:rgba(255,64,64,.2); }
-.yt-sub-btn {
-  display:inline-flex; align-items:center; gap:.5rem;
-  padding:.68rem 1.8rem; border-radius:50px;
-  background:var(--yt); color:#fff;
-  font-weight:800; font-size:.76rem; letter-spacing:1px; text-transform:uppercase;
-  transition:transform .2s, box-shadow .2s;
-}
-.yt-sub-btn:hover { transform:scale(1.05); box-shadow:0 6px 25px rgba(255,64,64,.45); }
+#perfToggle:hover{background:#1e1e2a}
+#perfToggle .pt-icon{font-size:1rem;line-height:1}
+#perfToggle .pt-lbl{font-size:.5rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
 
-/* Like btn on card */
-.vcard-like {
-  position:absolute; bottom:8px; right:8px; z-index:4;
-  background:rgba(0,0,0,.72); border:1px solid rgba(255,255,255,.12);
-  border-radius:50px; padding:.28rem .65rem;
-  font-size:.68rem; font-weight:700; color:var(--muted);
-  cursor:pointer; transition:all .2s; display:flex; align-items:center; gap:.3rem;
-  font-family:'Montserrat',sans-serif;
+/* Попап выбора режима */
+#perfPopup{
+  position:fixed;inset:0;z-index:800;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.85);backdrop-filter:blur(16px);
+  padding:1.5rem;
 }
-.vcard-like:hover, .vcard-like.liked { background:rgba(255,45,85,.25); border-color:var(--accent); color:var(--accent); }
+#perfPopup.hidden{display:none}
+.pp-box{
+  background:#13131e;border:1px solid rgba(255,255,255,.1);
+  border-radius:24px;padding:2.5rem;max-width:520px;width:100%;
+  box-shadow:0 40px 80px rgba(0,0,0,.7);
+  animation:fadeUp .4s ease;
+}
+.pp-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.5rem}
+.pp-sub{font-size:.8rem;color:var(--muted);text-align:center;margin-bottom:2rem;line-height:1.7}
+.pp-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.pp-card{
+  border-radius:16px;padding:1.5rem 1.2rem;border:2px solid var(--border);
+  cursor:pointer;transition:all .2s;text-align:center;background:rgba(255,255,255,.03);
+}
+.pp-card:hover{border-color:var(--accent);background:rgba(255,45,85,.06);transform:translateY(-3px)}
+.pp-card.high:hover{border-color:#a855f7;background:rgba(168,85,247,.06)}
+.pp-card-icon{font-size:2.2rem;margin-bottom:.7rem}
+.pp-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:.4rem}
+.pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
+.pp-note{font-size:.65rem;color:var(--muted);text-align:center;margin-top:1.2rem;opacity:.6}
 
-/* ════════════════════════ MODAL ════════════════════════ */
-.modal-ov {
-  position:fixed; inset:0; background:rgba(0,0,0,.92); backdrop-filter:blur(14px);
-  z-index:600; display:none; align-items:center; justify-content:center; padding:1.5rem;
-}
-.modal-ov.open { display:flex; }
-.modal-box {
-  background:var(--card); border-radius:20px; width:100%; max-width:900px; overflow:hidden;
-  border:1px solid rgba(255,255,255,.07); box-shadow:0 50px 100px rgba(0,0,0,.7);
-}
-.modal-vid { position:relative; padding-bottom:56.25%; background:#000; }
-.modal-vid iframe { position:absolute; inset:0; width:100%; height:100%; border:none; }
-.modal-info { padding:1.2rem 1.5rem 1.5rem; position:relative; }
-.modal-close {
-  position:absolute; top:.9rem; right:1rem;
-  background:rgba(255,255,255,.08); border:none; color:var(--text);
-  width:30px; height:30px; border-radius:50%; cursor:pointer; font-size:.8rem;
-  transition:background .2s; display:flex; align-items:center; justify-content:center;
-}
-.modal-close:hover { background:rgba(255,45,85,.4); }
-.modal-title { font-size:.9rem; font-weight:700; margin-bottom:.3rem; padding-right:2.5rem; }
-.modal-meta  { font-size:.7rem; color:var(--muted); }
+/* ── РЕЖИМ: СЛАБОЕ УСТРОЙСТВО (LOW) ── */
+body.perf-low .hero-bg{display:none}
+body.perf-low .hero-grid{display:none}
+body.perf-low .avatar{animation:none}
+body.perf-low .avatar-ring{animation:spin 6s linear infinite}
+body.perf-low .live-dot{animation:none;opacity:.8}
+body.perf-low .vcard:hover{transform:none;box-shadow:none}
+body.perf-low .hub-card:hover{transform:none;box-shadow:none}
+body.perf-low .stat-card:hover{transform:none;box-shadow:none}
+body.perf-low .hbtn:hover{transform:none}
+body.perf-low .about-card:hover{transform:none}
+body.perf-low .dc:hover{transform:none;box-shadow:none}
+body.perf-low body::after{display:none}
+body.perf-low *{transition-duration:.05s!important}
+#perfToggle .pt-icon{content:'🐢'}
 
-/* ════════════════════════ DONATE NEW ════════════════════════ */
-.donate-grid {
-  display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.2rem;
+/* ── РЕЖИМ: МОЩНОЕ УСТРОЙСТВО (HIGH) ── */
+/* Частицы */
+#particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+body.perf-low #particles{display:none}
+.particle{
+  position:absolute;width:2px;height:2px;border-radius:50%;
+  background:var(--accent);opacity:0;
+  animation:particleFly var(--dur,8s) var(--delay,0s) ease-in infinite;
+  will-change:transform,opacity;
 }
-.donate-card {
-  background:var(--card); border:1px solid var(--border); border-radius:20px;
-  padding:2rem 1.6rem; display:flex; flex-direction:column; gap:1rem;
-  position:relative; overflow:hidden; transition:transform .25s, box-shadow .25s;
+@keyframes particleFly{
+  0%{transform:translateY(100vh) translateX(0);opacity:0}
+  10%{opacity:.6}
+  90%{opacity:.2}
+  100%{transform:translateY(-10vh) translateX(var(--drift,20px));opacity:0}
 }
-.donate-card:hover { transform:translateY(-5px); }
-.dc-simple  { border-top:3px solid var(--accent); }
-.dc-simple:hover  { box-shadow:0 16px 45px rgba(255,45,85,.2); }
-.dc-voice   { border-top:3px solid #f5a623; }
-.dc-voice:hover   { box-shadow:0 16px 45px rgba(245,166,35,.2); }
-.dc-links   { border-top:3px solid #fff; }
-.dc-links:hover   { box-shadow:0 16px 45px rgba(255,255,255,.1); }
-
-.dc-badge {
-  display:inline-flex; align-items:center;
-  padding:.25rem .75rem; border-radius:50px; font-size:.62rem; font-weight:800;
-  letter-spacing:1px; text-transform:uppercase; background:rgba(255,45,85,.15);
-  color:var(--accent); width:fit-content;
+/* Курсор-трейл */
+#cursorTrail{position:fixed;pointer-events:none;z-index:9998;width:20px;height:20px;border-radius:50%;background:radial-gradient(circle,rgba(255,45,85,.6),transparent);transform:translate(-50%,-50%);transition:transform .1s;mix-blend-mode:screen}
+body.perf-low #cursorTrail{display:none}
+/* Неоновое свечение на hover для карточек (HIGH only) */
+body.perf-high .vcard{transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s}
+body.perf-high .vcard:hover{transform:translateY(-8px) rotateX(2deg);box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 40px rgba(255,45,85,.18)}
+body.perf-high .hub-card:hover{transform:translateY(-8px) scale(1.02)}
+body.perf-high .stat-card:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 16px 40px rgba(0,0,0,.5)}
+/* Анимированный градиент на кнопках (HIGH only) */
+body.perf-high .hb-don{background-size:200% 200%;animation:gradShift 3s ease infinite}
+@keyframes gradShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+/* Шиммер на статистике */
+body.perf-high .stat-card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.04) 50%,transparent 60%);
+  background-size:200% 100%;
+  animation:shimmer 3s ease-in-out infinite;
 }
-.dc-badge-hot { background:rgba(245,166,35,.15); color:#f5a623; }
-.dc-icon  { font-size:2.2rem; }
-.dc-title { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:2px; }
-.dc-desc  { font-size:.82rem; color:var(--muted); line-height:1.75; flex:1; }
-.dc-note  { font-size:.68rem; color:var(--muted); opacity:.7; text-align:center; }
+@keyframes shimmer{0%{background-position:-100% 0}100%{background-position:200% 0}}
+/* Hero фон оживает в HIGH */
+body.perf-high .hero-bg{animation:heroBg 12s ease-in-out infinite alternate}
+@keyframes heroBg{0%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1.08) rotate(-1deg)}}
+/* Typing effect на subtitle */
+body.perf-high .hero-sub{overflow:hidden;border-right:2px solid var(--accent);white-space:nowrap;animation:typing 2s steps(30,end) .5s both,blink .8s step-end infinite .5s}
+@keyframes typing{from{max-width:0}to{max-width:100%}}
+@keyframes blink{0%,100%{border-color:var(--accent)}50%{border-color:transparent}}
+/* Glow на аватаре */
+body.perf-high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
+body.perf-high .avatar-ring{animation:spin 3s linear infinite}
+/* Скролл-ревил секций */
+body.perf-high .reveal{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
+body.perf-high .reveal.visible{opacity:1;transform:translateY(0)}
 
-.dc-btn {
-  display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
-  padding:.8rem 1.6rem; border-radius:50px; font-weight:800; font-size:.82rem;
-  letter-spacing:1px; text-transform:uppercase; transition:transform .2s, box-shadow .2s;
-  border:none; cursor:pointer; text-decoration:none; font-family:'Montserrat',sans-serif;
-}
-.dc-btn:hover { transform:scale(1.05); }
-.dc-btn-main { background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; }
-.dc-btn-main:hover { box-shadow:0 8px 28px rgba(255,45,85,.5); }
-.dc-btn-voice { background:linear-gradient(135deg,#f5a623,#f53d2d); color:#fff; }
-.dc-btn-voice:hover { box-shadow:0 8px 28px rgba(245,166,35,.45); }
-.dc-btn-link { background:rgba(255,255,255,.08); border:1.5px solid rgba(255,255,255,.2); color:var(--text); }
-.dc-btn-link:hover { background:rgba(255,255,255,.14); box-shadow:0 8px 28px rgba(255,255,255,.1); }
+/* Адаптивно скрываем перфтогл на очень маленьких экранах */
+@media(max-width:360px){#perfToggle{display:none}}
 
-/* Voice selector */
-.voice-list { display:flex; flex-direction:column; gap:.4rem; }
-.voice-opt {
-  display:flex; align-items:center; gap:.75rem;
-  padding:.6rem .8rem; border-radius:10px; background:rgba(255,255,255,.04);
-  border:1.5px solid transparent; cursor:pointer; transition:all .18s;
-  text-align:left; font-family:'Montserrat',sans-serif; width:100%;
-}
-.voice-opt:hover { background:rgba(245,166,35,.08); border-color:rgba(245,166,35,.25); }
-.voice-opt.selected { background:rgba(245,166,35,.12); border-color:#f5a623; }
-.voice-icon  { font-size:1.4rem; flex-shrink:0; }
-.voice-name  { font-size:.8rem; font-weight:700; color:var(--text); }
-.voice-hint  { font-size:.65rem; color:var(--muted); margin-top:.1rem; }
-.voice-check { margin-left:auto; font-size:.8rem; color:#f5a623; opacity:0; transition:opacity .15s; flex-shrink:0; }
-.voice-opt.selected .voice-check { opacity:1; }
+/* ── LAYOUT ── */
+.wrap{max-width:1200px;margin:0 auto;padding:5rem 2rem;position:relative;z-index:1}
+.wrap-sm{max-width:1200px;margin:0 auto;padding:1rem 2rem;position:relative;z-index:1}
+.divider{width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,45,85,.2),transparent);margin-bottom:4rem}
+.eyebrow{display:inline-flex;align-items:center;gap:.6rem;font-size:.67rem;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:var(--accent);margin-bottom:.75rem}
+.eyebrow::before{content:'';width:26px;height:2px;background:var(--accent);display:block}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.2rem,5vw,3.8rem);letter-spacing:2px;line-height:1;margin-bottom:2.5rem}
 
-/* Selected voice bar */
-.voice-selected-bar {
-  margin-top:1.5rem; padding:1rem 1.4rem;
-  background:rgba(245,166,35,.08); border:1.5px solid rgba(245,166,35,.25);
-  border-radius:var(--r); display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
-}
-.voice-selected-bar span { font-size:.82rem; color:var(--text); flex:1; }
+/* ── AD ── */
+.ad-zone{display:flex;align-items:center;justify-content:center;border:2px dashed rgba(255,255,255,.05);border-radius:var(--r);min-height:90px;padding:1rem;background:rgba(255,255,255,.007);margin:.5rem 0}
+.ad-zone span{font-size:.56rem;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.1)}
 
-/* ════════════════════════ FOOTER ════════════════════════ */
-footer { border-top:1px solid var(--border); padding:3.5rem 2rem 2.5rem; text-align:center; position:relative; z-index:1; }
-.footer-logo { font-family:'Bebas Neue',sans-serif; font-size:2.6rem; letter-spacing:5px; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-.footer-tag   { font-size:.72rem; letter-spacing:2.5px; color:var(--muted); margin:.5rem 0 1.6rem; }
-.footer-links { display:flex; justify-content:center; gap:1.3rem; flex-wrap:wrap; margin-bottom:1.5rem; }
-.footer-links a { font-size:.67rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); transition:color .2s; }
-.footer-links a:hover { color:var(--text); }
-.footer-copy  { font-size:.62rem; color:rgba(255,255,255,.1); }
+/* ── STATS ── */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:3rem}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.6rem 1rem 1.2rem;text-align:center;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s}
+.stat-card:hover{transform:translateY(-5px);box-shadow:0 12px 35px rgba(0,0,0,.4)}
+.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}
+.sc1::after{background:linear-gradient(90deg,var(--yt),transparent)}.sc2::after{background:linear-gradient(90deg,rgba(255,64,64,.5),transparent)}.sc3::after{background:linear-gradient(90deg,rgba(255,64,64,.25),transparent)}.sc4::after{background:linear-gradient(90deg,var(--tw),transparent)}.sc5::after{background:linear-gradient(90deg,var(--tg),transparent)}
+.stat-val{font-family:'Bebas Neue',sans-serif;font-size:2.3rem;letter-spacing:2px;line-height:1}
+.stat-lbl{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:.4rem}
 
-@media(max-width:600px){ .live-bar{flex-direction:column;text-align:center} .cta-btn{margin:0} }
+/* ── TABS ── */
+.top-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.8rem}
+.tabs{display:flex;gap:.5rem;flex-wrap:wrap}
+.tab{padding:.48rem 1.15rem;border-radius:50px;font-size:.72rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);cursor:pointer;transition:all .22s}
+.tab:hover{border-color:rgba(255,255,255,.2);color:var(--text)}
+.tab.a-yt{background:rgba(255,64,64,.13);border-color:var(--yt);color:var(--yt)}
+.tab.a-tt{background:rgba(238,29,82,.13);border-color:var(--tt);color:var(--tt)}
+.tab.a-vkv{background:rgba(0,119,255,.13);border-color:var(--vk);color:#5bc4ff}
+.tab.a-tw{background:rgba(145,71,255,.13);border-color:var(--tw);color:var(--tw)}
+.tab.a-tg{background:rgba(41,182,246,.13);border-color:var(--tg);color:var(--tg)}
+.shuffle-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1.1rem;border-radius:50px;font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
+.shuffle-btn:hover{border-color:var(--accent);color:var(--accent)}
+.panel{display:none}.panel.active{display:block}
 
-/* ════════════════════════ GOOGLE TRANSLATE ════════════════════════ */
-.goog-te-banner-frame { display:none !important; }
-body { top:0 !important; }
+/* ── VIDEO TOOLBAR ── */
+.yt-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;margin-bottom:1.2rem;padding:.8rem 1rem;background:var(--card);border-radius:var(--r);border:1px solid var(--border)}
+.view-toggle{display:flex;gap:.4rem}
+.view-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .85rem;border-radius:8px;font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1.5px solid transparent;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
+.view-btn.active{background:rgba(255,64,64,.14);border-color:var(--yt);color:var(--yt)}
+.view-btn:hover:not(.active){color:var(--text);border-color:rgba(255,255,255,.1)}
+.yt-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.act-btn{display:inline-flex;align-items:center;gap:.35rem;padding:.38rem .9rem;border-radius:8px;font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
+.act-btn:hover{border-color:rgba(255,255,255,.2);color:var(--text)}
+.act-like{border-color:rgba(255,45,85,.35);color:var(--accent)}.act-like:hover{background:rgba(255,45,85,.12)}
+.act-play{border-color:rgba(255,64,64,.35);color:var(--yt)}.act-play:hover{background:rgba(255,64,64,.12)}
+.sel-hint{padding:.6rem 1rem;background:rgba(255,45,85,.08);border:1px solid rgba(255,45,85,.2);border-radius:var(--r);font-size:.78rem;color:var(--muted);margin-bottom:1rem;display:flex;align-items:center}
+.sel-hint span{color:var(--accent);font-weight:700}
 
-/* Кнопка переводчика в навбаре */
-.lang-btn {
-  display: inline-flex; align-items: center; gap: .4rem;
-  padding: .4rem 1rem; border-radius: 50px;
-  font-size: .68rem; font-weight: 700; letter-spacing: .8px; text-transform: uppercase;
-  border: 1.5px solid rgba(255,255,255,.12); background: transparent; color: var(--muted);
-  cursor: pointer; transition: all .2s; white-space: nowrap; font-family: 'Montserrat',sans-serif;
-}
-.lang-btn:hover { border-color: var(--accent); color: var(--text); }
-.lang-btn svg { flex-shrink:0; }
+/* ── VIDEO GRID ── */
+.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:1.3rem}
+.video-grid.list-view{grid-template-columns:1fr!important}
+.video-grid.list-view .vcard{display:flex;flex-direction:row;height:90px}
+.video-grid.list-view .vthumb{width:160px;min-width:160px;padding-bottom:0;height:90px}
+.video-grid.list-view .vthumb img{height:100%}
+.video-grid.list-view .vinfo{flex:1;display:flex;flex-direction:column;justify-content:center;padding:.7rem 1rem}
+.video-grid.list-view .vtitle{-webkit-line-clamp:1}
+.vcard{background:var(--card);border-radius:var(--r);overflow:hidden;cursor:pointer;border:1px solid var(--border);transition:transform .25s,box-shadow .25s;animation:fadeUp .45s ease both;position:relative}
+.vcard:hover{transform:translateY(-5px);box-shadow:0 16px 40px rgba(0,0,0,.5),0 0 24px rgba(255,45,85,.12)}
+.vthumb{position:relative;padding-bottom:56.25%;background:#0e0e16;overflow:hidden}
+.vthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s}
+.vcard:hover .vthumb img{transform:scale(1.07)}
+.vthumb-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(135deg,#14141f,#1e1e2f)}
+.play-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.35);opacity:0;transition:opacity .2s}
+.vcard:hover .play-ov{opacity:1}
+.play-circle{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;padding-left:4px;font-size:1.15rem;box-shadow:0 4px 20px rgba(0,0,0,.45)}
+.pdot{position:absolute;top:8px;right:8px;padding:3px 9px;border-radius:50px;font-size:.6rem;font-weight:800;z-index:2}
+.pd-yt{background:rgba(0,0,0,.78);color:var(--yt);border:1px solid var(--yt)}
+.vinfo{padding:.85rem 1rem 1rem}
+.vtitle{font-size:.83rem;font-weight:700;line-height:1.45;margin-bottom:.45rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.vmeta{font-size:.66rem;color:var(--muted);display:flex;gap:.7rem;flex-wrap:wrap}
+.vcard .sel-check{position:absolute;top:8px;left:8px;z-index:4;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.7);border:2px solid rgba(255,255,255,.3);display:none;align-items:center;justify-content:center;font-size:.8rem;transition:all .15s}
+.vcard.selectable .sel-check{display:flex}
+.vcard.selected .sel-check{background:var(--accent);border-color:var(--accent)}
+.vcard.selectable::after{content:'';position:absolute;inset:0;border-radius:var(--r);border:2px solid transparent;transition:border-color .15s;z-index:3;pointer-events:none}
+.vcard.selectable:hover::after{border-color:rgba(255,45,85,.4)}
+.vcard.selected::after{border-color:var(--accent)!important;background:rgba(255,45,85,.06)!important}
+/* Like btn */
+.vlike{position:absolute;bottom:8px;right:8px;z-index:4;background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.12);border-radius:50px;padding:.28rem .65rem;font-size:.68rem;font-weight:700;color:var(--muted);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:.3rem;font-family:'Montserrat',sans-serif}
+.vlike:hover,.vlike.liked{background:rgba(255,45,85,.25);border-color:var(--accent);color:var(--accent)}
+@keyframes likeAnim{0%{transform:scale(1)}30%{transform:scale(1.5)}60%{transform:scale(.9)}100%{transform:scale(1)}}
+.like-pop{animation:likeAnim .4s ease}
+/* Recommended badge */
+.rec-badge{position:absolute;top:8px;left:8px;z-index:4;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;padding:2px 8px;border-radius:50px;font-size:.58rem;font-weight:800;letter-spacing:.5px}
 
-/* Дропдаун */
-.lang-wrap { position: relative; }
-.lang-dropdown {
-  display: none; position: absolute; top: calc(100% + 8px); right: 0;
-  background: #16161f; border: 1px solid rgba(255,255,255,.1);
-  border-radius: 12px; padding: .5rem; min-width: 180px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.6); z-index: 600;
-  max-height: 320px; overflow-y: auto;
-}
-.lang-dropdown::-webkit-scrollbar { width: 4px; }
-.lang-dropdown::-webkit-scrollbar-track { background: transparent; }
-.lang-dropdown::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius:4px; }
-.lang-dropdown.open { display: block; }
-.lang-opt {
-  display: block; width: 100%; text-align: left; padding: .5rem .8rem;
-  font-size: .75rem; font-weight: 600; color: var(--muted); background: transparent;
-  border: none; border-radius: 8px; cursor: pointer; transition: all .15s;
-  font-family: 'Montserrat',sans-serif; white-space: nowrap;
-}
-.lang-opt:hover { background: rgba(255,45,85,.12); color: var(--text); }
-.lang-opt.active { color: var(--accent); }
+/* Multi-player */
+.mp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem}
+.mp-item{background:var(--card);border-radius:var(--r);overflow:hidden;border:1px solid var(--border)}
+.mp-ratio{position:relative;padding-bottom:56.25%}
+.mp-ratio iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.mp-title{padding:.7rem .9rem;font-size:.78rem;font-weight:700}
+.mp-bar{display:flex;align-items:center;justify-content:space-between;padding:.8rem 1rem;background:var(--card);border-radius:var(--r);margin-bottom:.8rem;border:1px solid var(--border)}
+.mp-bar span{font-size:.78rem;color:var(--muted)}
+.mp-close{padding:.35rem .9rem;border-radius:8px;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);font-size:.7rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s}
+.mp-close:hover{border-color:var(--accent);color:var(--accent)}
 
-/* Скрываем родной виджет Google — используем свой */
-#google_translate_element { display: none !important; }
-.goog-te-gadget { font-size: 0 !important; }
-.goog-te-gadget img, .goog-logo-link { display: none !important; }
-.goog-te-menu-frame { border-radius: 12px !important; }
+/* Loader / err */
+.loader-cell{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;gap:1rem;padding:3.5rem;color:var(--muted);font-size:.8rem;letter-spacing:1px}
+.spinner{width:34px;height:34px;border:3px solid rgba(255,64,64,.18);border-top-color:var(--yt);border-radius:50%;animation:spin .8s linear infinite}
+.err-box{grid-column:1/-1;background:rgba(255,64,64,.05);border:1px solid rgba(255,64,64,.15);border-radius:var(--r);padding:2rem;text-align:center;font-size:.83rem;color:var(--muted);line-height:1.9}
+.err-box strong{color:var(--yt);display:block;font-size:.95rem;margin-bottom:.4rem}
+
+/* YT bottom btns */
+.yt-bottom{display:flex;gap:1rem;margin-top:2rem;justify-content:center;flex-wrap:wrap}
+.yt-ext{display:inline-flex;align-items:center;gap:.5rem;padding:.68rem 1.8rem;border-radius:50px;background:rgba(255,64,64,.1);border:1.5px solid var(--yt);color:var(--yt);font-weight:700;font-size:.76rem;letter-spacing:1px;text-transform:uppercase;transition:background .2s}
+.yt-ext:hover{background:rgba(255,64,64,.2)}
+.yt-sub{display:inline-flex;align-items:center;gap:.5rem;padding:.68rem 1.8rem;border-radius:50px;background:var(--yt);color:#fff;font-weight:800;font-size:.76rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s,box-shadow .2s}
+.yt-sub:hover{transform:scale(1.05);box-shadow:0 6px 25px rgba(255,64,64,.45)}
+
+/* ── LIVE BANNER ── */
+.live-bar{background:linear-gradient(135deg,rgba(145,71,255,.13),rgba(255,45,85,.09));border:1.5px solid rgba(145,71,255,.32);border-radius:18px;padding:1.7rem 2rem;display:flex;align-items:center;gap:1.4rem;margin-bottom:2.2rem;flex-wrap:wrap}
+.live-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex-shrink:0;will-change:box-shadow;animation:livePulse 2s ease-in-out infinite}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(255,45,85,.5)}70%{box-shadow:0 0 0 10px rgba(255,45,85,0)}100%{box-shadow:0 0 0 0 rgba(255,45,85,0)}}
+.live-text h3{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px}
+.live-text p{font-size:.8rem;color:var(--muted);margin-top:.2rem}
+.cta-tw{display:inline-flex;align-items:center;gap:.45rem;padding:.68rem 1.7rem;border-radius:50px;font-size:.76rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;background:var(--tw);color:#fff;margin-left:auto;transition:transform .2s,box-shadow .2s}
+.cta-tw:hover{transform:scale(1.06);box-shadow:0 6px 28px rgba(145,71,255,.5)}
+
+/* ── ABOUT ── */
+.about-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.2rem}
+.about-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.8rem;position:relative;overflow:hidden;transition:transform .25s}
+.about-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.about-card:hover{transform:translateY(-5px)}
+.about-icon{font-size:1.9rem;margin-bottom:.9rem;display:block}
+.about-title{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:2px;margin-bottom:.6rem}
+.about-text{font-size:.82rem;color:var(--muted);line-height:1.8}
+
+/* ── SCHEDULE ── */
+.sched-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.55rem}
+@media(max-width:580px){.sched-grid{grid-template-columns:repeat(4,1fr)}}
+.day-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.85rem .4rem;text-align:center;transition:transform .2s}
+.day-card.today{background:rgba(145,71,255,.14);border-color:var(--tw)}
+.day-name{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
+.day-live{font-size:.75rem;font-weight:800;color:var(--tw)}
+.day-off{font-size:.7rem;color:var(--muted);opacity:.4}
+
+/* ── SOCIALS HUB ── */
+.hub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:1rem}
+.hub-card{background:var(--card);border-radius:var(--r);border:1px solid var(--border);padding:1.6rem 1.2rem;text-align:center;transition:transform .25s,box-shadow .25s;position:relative;overflow:hidden}
+.hub-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.hub-card:hover{transform:translateY(-6px)}
+.hc-yt::before{background:var(--yt)}.hc-yt:hover{box-shadow:0 14px 40px rgba(255,64,64,.22)}
+.hc-tt::before{background:var(--tt)}.hc-tt:hover{box-shadow:0 14px 40px rgba(238,29,82,.22)}
+.hc-tw::before{background:var(--tw)}.hc-tw:hover{box-shadow:0 14px 40px rgba(145,71,255,.22)}
+.hc-vk::before{background:var(--vk)}.hc-vk:hover{box-shadow:0 14px 40px rgba(0,119,255,.22)}
+.hc-vkv::before{background:#5bc4ff}.hc-vkv:hover{box-shadow:0 14px 40px rgba(91,196,255,.2)}
+.hc-tg::before{background:var(--tg)}.hc-tg:hover{box-shadow:0 14px 40px rgba(41,182,246,.22)}
+.hub-icon{font-size:1.9rem;margin-bottom:.6rem;display:block}
+.hub-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;margin-bottom:.25rem}
+.hub-handle{font-size:.67rem;letter-spacing:1px;color:var(--muted)}
+.hub-desc{font-size:.72rem;color:var(--muted);margin-top:.5rem;line-height:1.55}
+.hc-yt .hub-name{color:var(--yt)}.hc-tt .hub-name{color:var(--tt)}.hc-tw .hub-name{color:var(--tw)}.hc-vk .hub-name{color:var(--vk)}.hc-vkv .hub-name{color:#5bc4ff}.hc-tg .hub-name{color:var(--tg)}
+
+/* ── STREAM ── */
+.stream-box{background:var(--card);border-radius:var(--r);overflow:hidden;border:1px solid rgba(145,71,255,.22)}
+.stream-ratio{position:relative;padding-bottom:56.25%}
+.stream-ratio iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.stream-footer{padding:1.3rem 1.6rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.stream-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--tw)}
+
+/* ── DONATE ── */
+.donate-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem}
+.dc{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2rem 1.6rem;display:flex;flex-direction:column;gap:1rem;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s}
+.dc:hover{transform:translateY(-5px)}
+.dc-simple{border-top:3px solid var(--accent)}.dc-simple:hover{box-shadow:0 16px 45px rgba(255,45,85,.2)}
+.dc-voice{border-top:3px solid #f5a623}.dc-voice:hover{box-shadow:0 16px 45px rgba(245,166,35,.2)}
+.dc-badge{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:50px;font-size:.62rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:rgba(255,45,85,.15);color:var(--accent);width:fit-content}
+.dc-badge.hot{background:rgba(245,166,35,.15);color:#f5a623}
+.dc-icon{font-size:2.2rem}
+.dc-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px}
+.dc-desc{font-size:.82rem;color:var(--muted);line-height:1.75;flex:1}
+.dc-note{font-size:.68rem;color:var(--muted);opacity:.7;text-align:center}
+.dc-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.8rem 1.6rem;border-radius:50px;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s,box-shadow .2s;border:none;cursor:pointer;text-decoration:none;font-family:'Montserrat',sans-serif}
+.dc-btn:hover{transform:scale(1.05)}
+.dc-main{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}.dc-main:hover{box-shadow:0 8px 28px rgba(255,45,85,.5)}
+.dc-voice-btn{background:linear-gradient(135deg,#f5a623,#f53d2d);color:#fff}.dc-voice-btn:hover{box-shadow:0 8px 28px rgba(245,166,35,.45)}
+/* Voice list */
+.voice-list{display:flex;flex-direction:column;gap:.4rem}
+.voice-opt{display:flex;align-items:center;gap:.75rem;padding:.6rem .8rem;border-radius:10px;background:rgba(255,255,255,.04);border:1.5px solid transparent;cursor:pointer;transition:all .18s;text-align:left;font-family:'Montserrat',sans-serif;width:100%}
+.voice-opt:hover{background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.25)}
+.voice-opt.selected{background:rgba(245,166,35,.12);border-color:#f5a623}
+.voice-icon{font-size:1.4rem;flex-shrink:0}
+.voice-name{font-size:.8rem;font-weight:700;color:var(--text)}
+.voice-hint{font-size:.65rem;color:var(--muted);margin-top:.1rem}
+.voice-check{margin-left:auto;font-size:.8rem;color:#f5a623;opacity:0;transition:opacity .15s;flex-shrink:0}
+.voice-opt.selected .voice-check{opacity:1}
+.voice-bar{margin-top:1rem;padding:1rem 1.2rem;background:rgba(245,166,35,.08);border:1.5px solid rgba(245,166,35,.25);border-radius:var(--r);display:none;align-items:center;gap:1rem;flex-wrap:wrap;font-size:.8rem}
+.voice-bar.show{display:flex}
+
+/* ── CHAT ── */
+.chat-wrap{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;height:480px}
+.chat-header{padding:1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-shrink:0}
+.chat-live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:livePulse 1.5s ease-in-out infinite}
+.chat-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px}
+.chat-subtitle{font-size:.7rem;color:var(--muted);margin-left:auto}
+.chat-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.chat-tab{flex:1;padding:.6rem;font-size:.7rem;font-weight:700;text-align:center;cursor:pointer;color:var(--muted);border:none;background:transparent;border-bottom:2px solid transparent;transition:all .2s;font-family:'Montserrat',sans-serif;letter-spacing:.5px;text-transform:uppercase}
+.chat-tab.active{color:var(--tw);border-bottom-color:var(--tw)}
+.chat-body{flex:1;overflow:hidden;position:relative}
+.chat-frame{width:100%;height:100%;border:none;display:none}
+.chat-frame.active{display:block}
+/* Локальный чат */
+.local-chat{display:none;flex-direction:column;height:100%}
+.local-chat.active{display:flex}
+.chat-msgs{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.6rem}
+.chat-msgs::-webkit-scrollbar{width:4px}.chat-msgs::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
+.chat-msg{display:flex;gap:.6rem;align-items:flex-start;animation:fadeUp .2s ease}
+.chat-msg.own-msg{flex-direction:row-reverse}
+.chat-msg.own-msg .chat-bubble{align-items:flex-end}
+.chat-msg.own-msg .chat-text{background:rgba(145,71,255,.18);border-radius:12px 12px 4px 12px;padding:.3rem .6rem}
+.chat-bubble{display:flex;flex-direction:column;gap:.1rem}
+.chat-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;flex-shrink:0}
+.chat-user{font-size:.72rem;font-weight:700;color:var(--accent);margin-bottom:.1rem}
+.chat-text{font-size:.78rem;color:var(--text);line-height:1.5;word-break:break-word}
+.chat-time{font-size:.6rem;color:var(--muted)}
+.chat-input-wrap{padding:.7rem 1rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-shrink:0;align-items:center}
+.chat-input{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem;color:var(--text);font-size:.78rem;font-family:'Montserrat',sans-serif;outline:none;transition:border-color .2s}
+.chat-input:focus{border-color:var(--tw)}
+.chat-send{padding:.5rem 1rem;border-radius:8px;background:var(--tw);color:#fff;border:none;font-size:.75rem;font-weight:700;cursor:pointer;transition:opacity .2s;font-family:'Montserrat',sans-serif;flex-shrink:0}
+.chat-send:hover{opacity:.85}
+
+/* ── MODAL ── */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(14px);z-index:600;display:none;align-items:center;justify-content:center;padding:1.5rem}
+.modal-ov.open{display:flex}
+.modal-box{background:var(--card);border-radius:20px;width:100%;max-width:900px;overflow:hidden;border:1px solid rgba(255,255,255,.07);box-shadow:0 50px 100px rgba(0,0,0,.7)}
+.modal-vid{position:relative;padding-bottom:56.25%;background:#000}
+.modal-vid iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.modal-info{padding:1.2rem 1.5rem 1.5rem;position:relative}
+.modal-close{position:absolute;top:.9rem;right:1rem;background:rgba(255,255,255,.08);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.8rem;transition:background .2s;display:flex;align-items:center;justify-content:center}
+.modal-close:hover{background:rgba(255,45,85,.4)}
+.modal-title{font-size:.9rem;font-weight:700;margin-bottom:.3rem;padding-right:2.5rem}
+.modal-meta{font-size:.7rem;color:var(--muted)}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:center;position:relative;z-index:1}
+.footer-logo{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.footer-tag{font-size:.72rem;letter-spacing:2.5px;color:var(--muted);margin:.5rem 0 1.6rem}
+.footer-links{display:flex;justify-content:center;gap:1.3rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.footer-links a{font-size:.67rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);transition:color .2s}
+.footer-links a:hover{color:var(--text)}
+.footer-copy{font-size:.62rem;color:rgba(255,255,255,.1)}
+@media(max-width:600px){.live-bar{flex-direction:column;text-align:center}.cta-tw{margin:0}}
 </style>
 </head>
 <body onselectstart="return false">
 
-<!-- ══════════ NAVBAR ══════════ -->
+<!-- ЧАСТИЦЫ (HIGH mode) -->
+<div id="particles"></div>
+
+<!-- КУРСОР (HIGH mode) -->
+<div id="cursorTrail"></div>
+
+<!-- КНОПКА РЕЖИМА (сбоку) -->
+<div id="perfToggle" onclick="openPerfPopup()" title="Режим производительности">
+  <span class="pt-icon" id="ptIcon">⚡</span>
+  <span class="pt-lbl" id="ptLbl">Режим</span>
+</div>
+
+<!-- ПОПАП ВЫБОРА РЕЖИМА -->
+<div id="perfPopup">
+  <div class="pp-box">
+    <div class="pp-title">⚡ Выбери режим</div>
+    <div class="pp-sub">Это поможет сайту работать комфортно на твоём устройстве.<br>Можно изменить в любой момент кнопкой сбоку.</div>
+    <div class="pp-cards">
+      <div class="pp-card" onclick="setPerf('low')">
+        <div class="pp-card-icon">🐢</div>
+        <div class="pp-card-name" style="color:var(--tg)">Слабое</div>
+        <div class="pp-card-desc">Телефон, планшет или старый ПК. Минимум анимаций — максимум скорости</div>
+      </div>
+      <div class="pp-card high" onclick="setPerf('high')">
+        <div class="pp-card-icon">🚀</div>
+        <div class="pp-card-name" style="color:#a855f7">Мощное</div>
+        <div class="pp-card-desc">ПК или флагманский телефон. Полные анимации, частицы, эффекты</div>
+      </div>
+    </div>
+    <div class="pp-note">Выбор сохраняется в браузере</div>
+  </div>
+</div>
+
+<!-- NAV -->
 <nav id="nav">
   <a class="nav-logo" href="#">dan4ik37</a>
   <div class="nav-links" id="navLinks">
-    <a href="#content">Контент</a>
+    <a href="#content">Видео</a>
     <a href="#about">Обо мне</a>
     <a href="#schedule">Расписание</a>
-    <a href="#socials">Соц сети</a>
-    <a href="#donate" class="nav-donate">💝 Донат</a>
+    <a href="#chat">Чат</a>
+    <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
-  <button class="hamburger" id="burger" onclick="toggleNav()">
-    <span></span><span></span><span></span>
-  </button>
-  <!-- 🌍 Переводчик -->
   <div class="lang-wrap" id="langWrap">
-    <button class="lang-btn" onclick="toggleLang(event)" aria-label="Язык">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-        <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-      </svg>
-      <span id="langLabel">RU</span>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+    <button class="lang-btn" onclick="toggleLang(event)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span id="langLabel">RU</span>▾
     </button>
-    <div class="lang-dropdown" id="langDropdown"></div>
+    <div class="lang-dropdown" id="langDropdown">
+      <input class="lang-search" type="text" placeholder="🔍 Поиск..." oninput="filterLangs(this.value)" onclick="event.stopPropagation()">
+      <div id="langList"></div>
+    </div>
   </div>
-  <!-- Скрытый оригинальный виджет Google -->
-  <div id="google_translate_element" style="display:none"></div>
+  <button class="hamburger" id="burger" onclick="toggleNav()"><span></span><span></span><span></span></button>
 </nav>
+<div id="google_translate_element" style="display:none"></div>
 
-<!-- ══════════ HERO ══════════ -->
+<!-- HERO -->
 <div class="hero">
-  <div class="hero-bg"></div>
-  <div class="hero-grid"></div>
-  <div class="avatar">
-    <div class="avatar-ring"></div>
-    <div class="avatar-inner">D37</div>
-  </div>
+  <div class="hero-bg"></div><div class="hero-grid"></div>
+  <div class="avatar"><div class="avatar-ring"></div><div class="avatar-inner">D37</div></div>
   <h1>dan4ik37</h1>
-  <p class="hero-sub">Контент · Стримы · Общение</p>
-  <p class="hero-desc">Привет! Я dan4ik37 — снимаю видео, стримлю и создаю контент. Подписывайся везде, чтобы не пропустить!</p>
+  <p class="hero-sub">YouTube · TikTok · Twitch · VK</p>
+  <p class="hero-desc">Привет! Я dan4ik37 — делаю видосы, стримлю и общаюсь с людьми. Подписывайся чтобы не пропустить!</p>
   <div class="hero-btns">
-    <a class="hbtn hb-yt"  href="https://www.youtube.com/@Dan4ik37Yt"    target="_blank">▶ YouTube</a>
-    <a class="hbtn hb-tt"  href="https://www.tiktok.com/@.dan4ik37"       target="_blank">♪ TikTok</a>
-    <a class="hbtn hb-tw"  href="https://www.twitch.tv/dan4ik37"          target="_blank">◉ Twitch</a>
-    <a class="hbtn hb-vk"  href="https://vk.com/dan4ik37"                target="_blank">В ВКонтакте</a>
-    <a class="hbtn hb-vkv" href="https://m.vkvideo.ru/@dan4ik37"          target="_blank">▶ VK Видео</a>
-    <a class="hbtn hb-tg"  href="https://t.me/+LE25p4pQojkyYjli"         target="_blank">✈ Telegram</a>
-    <a class="hbtn" href="https://dalink.to/dan4ik37" target="_blank" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.07)">🔗 Мои ссылки</a>
-    <a class="hbtn hb-don" href="https://www.donationalerts.com/r/dan4ik37" target="_blank">💝 Задонатить</a>
+    <a class="hbtn hb-yt"  href="https://www.youtube.com/@Dan4ik37Yt" target="_blank">▶ YouTube</a>
+    <a class="hbtn hb-tt"  href="https://www.tiktok.com/@.dan4ik37"   target="_blank">♪ TikTok</a>
+    <a class="hbtn hb-tw"  href="https://www.twitch.tv/dan4ik37"       target="_blank">◉ Twitch</a>
+    <a class="hbtn hb-vk"  href="https://vk.com/dan4ik37"             target="_blank">В ВКонтакте</a>
+    <a class="hbtn hb-vkv" href="https://m.vkvideo.ru/@dan4ik37"       target="_blank">▶ VK Видео</a>
+    <a class="hbtn hb-tg"  href="https://t.me/+LE25p4pQojkyYjli"      target="_blank">✈ Telegram</a>
+    <a class="hbtn hb-don" href="https://www.donationalerts.com/r/dan4ik37" target="_blank">💝 Донат</a>
   </div>
   <div class="scroll-hint"><span>↓</span><span>смотреть контент</span></div>
 </div>
 
-<!-- ══════════ AD TOP ══════════ -->
+<!-- AD TOP -->
 <div class="wrap-sm">
-  <!-- Google AdSense — верхний баннер -->
-  <ins class="adsbygoogle"
-       style="display:block"
-       data-ad-client="ca-pub-7940480593743401"
-       data-ad-slot="auto"
-       data-ad-format="auto"
-       data-full-width-responsive="true"></ins>
-  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-slot="auto" data-ad-format="auto" data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
 </div>
 
-<!-- ══════════ STATS ══════════ -->
-<div class="wrap" style="padding-bottom:2rem">
+<!-- STATS -->
+<div class="wrap reveal" style="padding-bottom:2rem">
   <div class="eyebrow">Статистика</div>
   <h2 class="sec-title">Мои платформы</h2>
   <div class="stats-row">
     <div class="stat-card sc1">
-      <div class="stat-val" id="s-subs"  style="color:var(--yt)">…</div>
-      <div class="stat-lbl">Подписчики YT</div>
+      <div style="font-size:1.4rem;margin-bottom:.4rem">▶</div>
+      <div class="stat-val" id="s-subs" style="color:var(--yt)">…</div>
+      <div class="stat-lbl">Подписчики</div>
+      <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
     </div>
     <div class="stat-card sc2">
+      <div style="font-size:1.4rem;margin-bottom:.4rem">👁</div>
       <div class="stat-val" id="s-views" style="color:var(--yt)">…</div>
-      <div class="stat-lbl">Просмотры YT</div>
+      <div class="stat-lbl">Просмотры</div>
+      <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
     </div>
     <div class="stat-card sc3">
-      <div class="stat-val" id="s-vids"  style="color:var(--yt)">…</div>
-      <div class="stat-lbl">Видео на YT</div>
+      <div style="font-size:1.4rem;margin-bottom:.4rem">🎬</div>
+      <div class="stat-val" id="s-vids" style="color:var(--yt)">…</div>
+      <div class="stat-lbl">Видео</div>
+      <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
     </div>
     <div class="stat-card sc4">
+      <div style="font-size:1.4rem;margin-bottom:.4rem">◉</div>
       <div class="stat-val" style="color:var(--tw)">LIVE</div>
-      <div class="stat-lbl">Twitch стримы</div>
+      <div class="stat-lbl">Стримы</div>
+      <div style="font-size:.58rem;color:rgba(145,71,255,.5);margin-top:.25rem;letter-spacing:1px">TWITCH</div>
     </div>
     <div class="stat-card sc5">
+      <div style="font-size:1.4rem;margin-bottom:.4rem">✈</div>
       <div class="stat-val" style="color:var(--tg)">TG</div>
-      <div class="stat-lbl">Telegram канал</div>
+      <div class="stat-lbl">Канал</div>
+      <div style="font-size:.58rem;color:rgba(41,182,246,.5);margin-top:.25rem;letter-spacing:1px">TELEGRAM</div>
     </div>
+  </div>
+  <!-- Статус загрузки -->
+  <div id="statsNote" style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:-.5rem;opacity:.6">
+    📡 Статистика загружается с YouTube API…
   </div>
 </div>
 
-<!-- ══════════ CONTENT ══════════ -->
+<!-- CONTENT -->
 <div class="wrap" id="content" style="padding-top:0">
   <div class="divider"></div>
-  <div class="eyebrow">Контент</div>
-  <h2 class="sec-title">Последние видео</h2>
+  <div class="eyebrow">Смотреть</div>
+  <h2 class="sec-title">Видео и стримы</h2>
 
   <div class="live-bar">
     <div class="live-dot"></div>
-    <div class="live-text">
-      <h3>🔴 Стримы на Twitch!</h3>
-      <p>Заходи — играем, общаемся, фан гарантирован</p>
-    </div>
-    <a class="cta-btn cta-tw" href="https://www.twitch.tv/dan4ik37" target="_blank" style="margin-left:auto">Смотреть стрим</a>
+    <div class="live-text"><h3>🔴 Стримы на Twitch!</h3><p>Заходи — играем, общаемся, фан гарантирован</p></div>
+    <a class="cta-tw" href="https://www.twitch.tv/dan4ik37" target="_blank">Смотреть стрим</a>
   </div>
 
   <!-- AD MID -->
   <div class="wrap-sm" style="padding:0 0 1.5rem">
-    <!-- Google AdSense — средний блок -->
-    <ins class="adsbygoogle"
-         style="display:block"
-         data-ad-client="ca-pub-7940480593743401"
-         data-ad-slot="auto"
-         data-ad-format="auto"
-         data-full-width-responsive="true"></ins>
-    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-slot="auto" data-ad-format="auto" data-full-width-responsive="true"></ins>
+    <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
   </div>
 
   <!-- TABS -->
   <div class="top-row">
     <div class="tabs">
       <button class="tab a-yt" onclick="switchTab('yt',this)">▶ YouTube</button>
-      <button class="tab"      onclick="switchTab('tt',this)">♪ TikTok</button>
-      <button class="tab"      onclick="switchTab('vkv',this)">▶ VK Видео</button>
-      <button class="tab"      onclick="switchTab('tw',this)">◉ Twitch</button>
-      <button class="tab"      onclick="switchTab('tg',this)">✈ Telegram</button>
+      <button class="tab" onclick="switchTab('ytlive',this)">🔴 YT Стримы</button>
+      <button class="tab" onclick="switchTab('tt',this)">♪ TikTok</button>
+      <button class="tab" onclick="switchTab('vkv',this)">▶ VK Видео</button>
+      <button class="tab" onclick="switchTab('tw',this)">◉ Twitch</button>
+      <button class="tab" onclick="switchTab('tg',this)">✈ Telegram</button>
     </div>
     <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleVids()">🔀 Перемешать</button>
   </div>
 
   <!-- YOUTUBE PANEL -->
   <div class="panel active" id="panel-yt">
-
-    <!-- Панель инструментов -->
+    <!-- Mode switcher -->
     <div class="yt-toolbar">
-      <!-- Режим просмотра -->
       <div class="view-toggle">
-        <button class="view-btn active" id="btn-grid" onclick="setView('grid')" title="Сетка">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="7" height="7" rx="1"/><rect x="9" y="0" width="7" height="7" rx="1"/><rect x="0" y="9" width="7" height="7" rx="1"/><rect x="9" y="9" width="7" height="7" rx="1"/></svg>
-          Сетка
-        </button>
-        <button class="view-btn" id="btn-list" onclick="setView('list')" title="Список">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><rect x="0" y="0" width="16" height="3" rx="1"/><rect x="0" y="5" width="16" height="3" rx="1"/><rect x="0" y="10" width="16" height="3" rx="1"/><rect x="0" y="13" width="10" height="3" rx="1"/></svg>
-          Список
-        </button>
+        <button class="view-btn active" id="btn-grid" onclick="setView('grid')">⊞ Сетка</button>
+        <button class="view-btn" id="btn-list" onclick="setView('list')">≡ Список</button>
+        <button class="view-btn" id="btn-noapi" onclick="setView('noapi')">📺 Без API</button>
       </div>
-
-      <!-- Действия -->
       <div class="yt-actions">
-        <button class="act-btn" id="selectAllBtn" onclick="toggleSelectMode()" title="Выбрать видео">
-          ☑ Выбрать
-        </button>
-        <button class="act-btn act-like-all" id="likeAllBtn" onclick="likeAllSelected()" style="display:none" title="Лайкнуть выбранные">
-          ❤ Лайкнуть выбранные
-        </button>
-        <button class="act-btn act-play-all" id="playAllBtn" onclick="playAllSelected()" style="display:none" title="Смотреть выбранные">
-          ▶ Смотреть все
-        </button>
-        <button class="act-btn act-cancel" id="cancelSelBtn" onclick="cancelSelect()" style="display:none">
-          ✕ Отмена
-        </button>
+        <button class="act-btn" id="selBtn" onclick="toggleSel()">☑ Выбрать</button>
+        <button class="act-btn act-like" id="likeSelBtn" style="display:none" onclick="likeSelected()">❤ Лайкнуть</button>
+        <button class="act-btn act-play" id="playSelBtn" style="display:none" onclick="playSelected()">▶ Смотреть</button>
+        <button class="act-btn" id="cancelSelBtn" style="display:none" onclick="cancelSel()">✕</button>
       </div>
     </div>
-
-    <!-- Выбрано X видео -->
-    <div class="select-hint" id="selectHint" style="display:none">
-      <span id="selectCount">0</span> видео выбрано
-      <button onclick="selectAllVids()" style="background:none;border:none;color:var(--accent);font-size:.75rem;font-weight:700;cursor:pointer;margin-left:.8rem">Выбрать все</button>
-    </div>
-
-    <!-- Сетка видео -->
+    <div class="sel-hint" id="selHint" style="display:none"><span id="selCount">0</span>&nbsp;выбрано&nbsp;<button onclick="selectAllVids()" style="background:none;border:none;color:var(--accent);font-size:.75rem;font-weight:700;cursor:pointer">Все</button></div>
     <div class="video-grid" id="yt-grid"></div>
-
-    <!-- Плейлист (режим просмотра нескольких) -->
     <div id="multiPlayer" style="display:none;margin-top:2rem"></div>
-
-    <!-- Кнопки YouTube -->
-    <div class="yt-bottom-btns">
-      <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-ext-btn">▶ Все видео на YouTube</a>
-      <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" class="yt-sub-btn">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>
-        Подписаться на канал
-      </a>
+    <div class="yt-bottom">
+      <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-ext">▶ Все видео на YouTube</a>
+      <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" class="yt-sub">❤ Подписаться</a>
     </div>
   </div>
 
-  <!-- TIKTOK PANEL -->
+  <!-- YOUTUBE LIVE STREAMS PANEL -->
+  <div class="panel" id="panel-ytlive">
+    <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(255,64,64,.18);overflow:hidden">
+      <!-- Встроенный поиск стримов канала -->
+      <div style="padding:1.2rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap">
+        <div class="live-dot"></div>
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--yt)">YouTube Стримы @Dan4ik37Yt</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem">Прямые трансляции и записи стримов</div>
+        </div>
+        <a href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" class="yt-sub" style="margin-left:auto;padding:.5rem 1.2rem;font-size:.72rem">▶ Все стримы</a>
+      </div>
+      <!-- Embed плейлиста стримов -->
+      <div id="ytStreamsEmbed" style="position:relative;padding-bottom:56.25%">
+        <iframe id="ytStreamsFrame" src=""
+          style="position:absolute;inset:0;width:100%;height:100%;border:none"
+          allowfullscreen allow="encrypted-media"></iframe>
+      </div>
+      <div style="padding:1rem 1.4rem;background:rgba(255,64,64,.04)">
+        <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
+          💡 Чтобы смотреть стримы в реальном времени — нажми <strong style="color:var(--yt)">«Все стримы»</strong> и выбери активную трансляцию.
+          Чат стрима доступен в разделе <a href="#chat" style="color:var(--tw)">Чат → YouTube</a>.
+        </div>
+      </div>
+    </div>
+  </div>
   <div class="panel" id="panel-tt">
     <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(238,29,82,.18);padding:3rem;text-align:center">
       <div style="font-size:3rem;margin-bottom:1.2rem">♪</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:var(--tt)">TikTok</div>
-      <div style="font-size:.85rem;color:var(--muted);margin:.4rem 0 .2rem">@.dan4ik37</div>
-      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">
-        Короткие видео, мемы и приколы каждый день.<br>TikTok не разрешает встраивание — жми кнопку!
-      </p>
-      <a href="https://www.tiktok.com/@.dan4ik37" target="_blank"
-         style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;
-                background:var(--tt);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;
-                text-transform:uppercase;transition:transform .2s,opacity .2s"
-         onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
-        Открыть TikTok ↗
-      </a>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:var(--tt)">TikTok @.dan4ik37</div>
+      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">Короткие видео, мемы и приколы каждый день.<br>TikTok не разрешает встраивание — жми кнопку!</p>
+      <a href="https://www.tiktok.com/@.dan4ik37" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;background:var(--tt);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">Открыть TikTok ↗</a>
     </div>
   </div>
 
-  <!-- VKVIDEO PANEL -->
+  <!-- VKVIDEO -->
   <div class="panel" id="panel-vkv">
     <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(0,119,255,.18);padding:3rem;text-align:center">
       <div style="font-size:3rem;margin-bottom:1.2rem">▶</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:#5bc4ff">VK Видео</div>
-      <div style="font-size:.85rem;color:var(--muted);margin:.4rem 0 .2rem">@dan4ik37</div>
-      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">
-        Весь видеоконтент dan4ik37 доступен на VK Видео!
-      </p>
-      <a href="https://m.vkvideo.ru/@dan4ik37" target="_blank"
-         style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;
-                background:var(--vk);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;
-                text-transform:uppercase;transition:transform .2s"
-         onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
-        Открыть VK Видео ↗
-      </a>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:#5bc4ff">VK Видео @dan4ik37</div>
+      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">Весь видеоконтент dan4ik37 на VK Видео!</p>
+      <a href="https://m.vkvideo.ru/@dan4ik37" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;background:var(--vk);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">Открыть VK Видео ↗</a>
     </div>
   </div>
 
-  <!-- TWITCH PANEL -->
+  <!-- TWITCH -->
   <div class="panel" id="panel-tw">
     <div class="stream-box">
-      <div class="stream-ratio">
-        <iframe id="twitchFrame" src="" allowfullscreen></iframe>
-      </div>
+      <div class="stream-ratio"><iframe id="twitchFrame" src="" allowfullscreen></iframe></div>
       <div class="stream-footer">
-        <div>
-          <div class="stream-title">🔴 DAN4IK37 LIVE</div>
-          <p style="font-size:.78rem;color:var(--muted);margin-top:.2rem">Прямые трансляции прямо здесь</p>
-        </div>
-        <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-btn cta-tw" style="margin-left:auto">Twitch ↗</a>
+        <div><div class="stream-title">🔴 DAN4IK37 LIVE</div><p style="font-size:.78rem;color:var(--muted);margin-top:.2rem">Прямые трансляции прямо здесь</p></div>
+        <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-tw" style="margin-left:auto">Twitch ↗</a>
       </div>
     </div>
   </div>
 
-  <!-- TELEGRAM PANEL -->
+  <!-- TELEGRAM -->
   <div class="panel" id="panel-tg">
     <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(41,182,246,.18);padding:3rem;text-align:center">
       <div style="font-size:3rem;margin-bottom:1.2rem">✈️</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:var(--tg)">Telegram</div>
-      <div style="font-size:.85rem;color:var(--muted);margin:.4rem 0 .2rem">Канал dan4ik37</div>
-      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">
-        Анонсы стримов, новости и эксклюзивный контент.<br>Вступай — общаемся вживую!
-      </p>
-      <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank"
-         style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;
-                background:var(--tg);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;
-                text-transform:uppercase;transition:transform .2s"
-         onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
-        Вступить в канал ↗
-      </a>
+      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">Анонсы стримов, новости и эксклюзивный контент. Вступай!</p>
+      <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;background:var(--tg);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">Вступить ↗</a>
     </div>
   </div>
 </div>
 
-<!-- ══════════ ABOUT ══════════ -->
-<div class="wrap" id="about">
+<!-- ABOUT -->
+<div class="wrap reveal" id="about">
   <div class="divider"></div>
   <div class="eyebrow">Обо мне</div>
   <h2 class="sec-title">Кто такой dan4ik37?</h2>
   <div class="about-grid">
-    <div class="about-card"><span class="about-icon">🎮</span><div class="about-title">Игровой контент</div><div class="about-text">Стримлю и снимаю видео с играми. Весёлая атмосфера, эпичные моменты и живое общение с чатом — всё это ждёт тебя!</div></div>
-    <div class="about-card"><span class="about-icon">📱</span><div class="about-title">TikTok & Shorts</div><div class="about-text">Короткие клипы, мемы и нарезки лучших моментов выходят регулярно. Подписывайся чтобы не пропустить!</div></div>
-    <div class="about-card"><span class="about-icon">🔴</span><div class="about-title">Прямые эфиры</div><div class="about-text">Стримлю на Twitch — играю, общаюсь, иногда устраиваю ивенты и конкурсы. Следи за расписанием!</div></div>
-    <div class="about-card"><span class="about-icon">💬</span><div class="about-title">Сообщество</div><div class="about-text">В Telegram и ВКонтакте — анонсы, опросы, мемы и общение. Тут тебе всегда рады!</div></div>
+    <div class="about-card"><span class="about-icon">🎮</span><div class="about-title">Игровой контент</div><div class="about-text">Стримлю и снимаю видео с играми. Весёлая атмосфера и живое общение с чатом!</div></div>
+    <div class="about-card"><span class="about-icon">📱</span><div class="about-title">TikTok & Shorts</div><div class="about-text">Короткие клипы, мемы и нарезки лучших моментов выходят регулярно.</div></div>
+    <div class="about-card"><span class="about-icon">🔴</span><div class="about-title">Прямые эфиры</div><div class="about-text">Стримлю на Twitch — играю, общаюсь, устраиваю ивенты и конкурсы.</div></div>
+    <div class="about-card"><span class="about-icon">💬</span><div class="about-title">Сообщество</div><div class="about-text">В Telegram и ВКонтакте — анонсы, опросы, мемы и живое общение!</div></div>
   </div>
 </div>
 
-<!-- ══════════ SCHEDULE ══════════ -->
-<div class="wrap" id="schedule">
+<!-- SCHEDULE -->
+<div class="wrap reveal" id="schedule">
   <div class="divider"></div>
   <div class="eyebrow">Расписание</div>
   <h2 class="sec-title">Когда стримим?</h2>
@@ -939,900 +728,732 @@ body { top:0 !important; }
     <div class="day-card" data-d="5"><div class="day-name">Пт</div><div class="day-live">21:00</div></div>
     <div class="day-card" data-d="6"><div class="day-name">Сб</div><div class="day-live">21:00</div></div>
   </div>
-  <p style="color:var(--muted);font-size:.76rem;margin-top:1.1rem;line-height:1.7">
-    ⚠️ Расписание примерное — актуальные анонсы в
-    <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" style="color:var(--tg)">Telegram</a> и
-    <a href="https://vk.com/dan4ik37" target="_blank" style="color:var(--vk)">ВКонтакте</a>
-  </p>
+  <p style="color:var(--muted);font-size:.76rem;margin-top:1.1rem">⚠️ Актуальные анонсы в <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" style="color:var(--tg)">Telegram</a> и <a href="https://vk.com/dan4ik37" target="_blank" style="color:var(--vk)">ВКонтакте</a></p>
 </div>
 
-<!-- ══════════ SOCIALS ══════════ -->
-<div class="wrap" id="socials">
+<!-- SOCIALS -->
+<div class="wrap reveal" id="socials">
   <div class="divider"></div>
-  <div class="eyebrow">Соц сети</div>
-  <h2 class="sec-title">Все платформы</h2>
+  <div class="eyebrow">Подписывайся</div>
+  <h2 class="sec-title">Я везде 🔥</h2>
   <div class="hub-grid">
-    <a class="hub-card hc-yt"  href="https://www.youtube.com/@Dan4ik37Yt"    target="_blank"><span class="hub-icon">▶</span><div class="hub-name">YouTube</div><div class="hub-handle">@Dan4ik37Yt</div><div class="hub-desc">Видео, нарезки со стримов, Shorts</div></a>
-    <a class="hub-card hc-tt"  href="https://www.tiktok.com/@.dan4ik37"       target="_blank"><span class="hub-icon">♪</span><div class="hub-name">TikTok</div><div class="hub-handle">@.dan4ik37</div><div class="hub-desc">Короткие видео и тренды</div></a>
-    <a class="hub-card hc-tw"  href="https://www.twitch.tv/dan4ik37"          target="_blank"><span class="hub-icon">◉</span><div class="hub-name">Twitch</div><div class="hub-handle">dan4ik37</div><div class="hub-desc">Прямые игровые трансляции</div></a>
-    <a class="hub-card hc-vk"  href="https://vk.com/dan4ik37"                target="_blank"><span class="hub-icon">В</span><div class="hub-name">ВКонтакте</div><div class="hub-handle">vk.com/dan4ik37</div><div class="hub-desc">Группа — новости и общение</div></a>
-    <a class="hub-card hc-vkv" href="https://m.vkvideo.ru/@dan4ik37"          target="_blank"><span class="hub-icon">▶</span><div class="hub-name">VK Видео</div><div class="hub-handle">@dan4ik37</div><div class="hub-desc">Видеоконтент на VK</div></a>
-    <a class="hub-card hc-tg"  href="https://t.me/+LE25p4pQojkyYjli"         target="_blank"><span class="hub-icon">✈</span><div class="hub-name">Telegram</div><div class="hub-handle">Канал dan4ik37</div><div class="hub-desc">Анонсы, эксклюзив, мемы</div></a>
-    <a class="hub-card" href="https://dalink.to/dan4ik37" target="_blank"
-       style="border-top:3px solid #fff;"
-       onmouseover="this.style.boxShadow='0 14px 40px rgba(255,255,255,.12)'" onmouseout="this.style.boxShadow=''">
-      <span class="hub-icon">🔗</span>
-      <div class="hub-name" style="color:#fff">Мои ссылки</div>
-      <div class="hub-handle">dalink.to/dan4ik37</div>
-      <div class="hub-desc">Все мои платформы в одном месте</div>
-    </a>
-    <a class="hub-card" href="https://www.donationalerts.com/r/dan4ik37" target="_blank"
-       style="border-top:3px solid var(--accent);"
-       onmouseover="this.style.boxShadow='0 14px 40px rgba(255,45,85,.22)'" onmouseout="this.style.boxShadow=''">
+    <a class="hub-card hc-yt"  href="https://www.youtube.com/@Dan4ik37Yt" target="_blank"><span class="hub-icon">▶</span><div class="hub-name">YouTube</div><div class="hub-handle">@Dan4ik37Yt</div><div class="hub-desc">Видео, нарезки, Shorts</div></a>
+    <a class="hub-card hc-tt"  href="https://www.tiktok.com/@.dan4ik37"   target="_blank"><span class="hub-icon">♪</span><div class="hub-name">TikTok</div><div class="hub-handle">@.dan4ik37</div><div class="hub-desc">Короткие видео и тренды</div></a>
+    <a class="hub-card hc-tw"  href="https://www.twitch.tv/dan4ik37"       target="_blank"><span class="hub-icon">◉</span><div class="hub-name">Twitch</div><div class="hub-handle">dan4ik37</div><div class="hub-desc">Прямые трансляции</div></a>
+    <a class="hub-card hc-vk"  href="https://vk.com/dan4ik37"             target="_blank"><span class="hub-icon">В</span><div class="hub-name">ВКонтакте</div><div class="hub-handle">vk.com/dan4ik37</div><div class="hub-desc">Группа — новости</div></a>
+    <a class="hub-card hc-vkv" href="https://m.vkvideo.ru/@dan4ik37"       target="_blank"><span class="hub-icon">▶</span><div class="hub-name">VK Видео</div><div class="hub-handle">@dan4ik37</div><div class="hub-desc">Видеоконтент на VK</div></a>
+    <a class="hub-card hc-tg"  href="https://t.me/+LE25p4pQojkyYjli"      target="_blank"><span class="hub-icon">✈</span><div class="hub-name">Telegram</div><div class="hub-handle">Канал dan4ik37</div><div class="hub-desc">Анонсы и мемы</div></a>
+    <a class="hub-card" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" style="border-top:3px solid var(--accent)" onmouseover="this.style.boxShadow='0 14px 40px rgba(255,45,85,.25)'" onmouseout="this.style.boxShadow=''">
       <span class="hub-icon">💝</span>
-      <div class="hub-name" style="color:var(--accent)">Поддержать</div>
+      <div class="hub-name" style="color:var(--accent)">Донат</div>
       <div class="hub-handle">DonationAlerts</div>
-      <div class="hub-desc">Задонатить dan4ik37 на стриме</div>
+      <div class="hub-desc">Поддержи dan4ik37 на стриме!</div>
     </a>
   </div>
 </div>
 
-<!-- ══════════ DONATE ══════════ -->
-<div class="wrap" id="donate">
+<!-- DONATE -->
+<div class="wrap reveal" id="donate">
   <div class="divider"></div>
   <div class="eyebrow">Поддержка</div>
   <h2 class="sec-title">Задонатить dan4ik37 💝</h2>
-
   <div class="donate-grid">
 
-    <!-- КАРТОЧКА 1 — Быстрый донат -->
-    <div class="donate-card dc-simple">
-      <div class="dc-badge">Быстро</div>
-      <div class="dc-icon">⚡</div>
-      <div class="dc-title">Простой донат</div>
-      <div class="dc-desc">Без лишних шагов — просто поддержи dan4ik37 напрямую через DonationAlerts</div>
-      <a class="dc-btn dc-btn-main" href="https://www.donationalerts.com/r/dan4ik37" target="_blank">
-        💝 Задонатить
+    <!-- Войс донат -->
+    <div class="dc dc-simple">
+      <div class="dc-badge">🎙️ Войс</div>
+      <div class="dc-icon">🎙️</div>
+      <div class="dc-title">Войс донат</div>
+      <div class="dc-desc">Задонать и напиши в сообщении какой голос хочешь — dan4ik37 озвучит его на стриме!</div>
+      <a class="dc-btn dc-main" href="https://www.donationalerts.com/r/dan4ik37" target="_blank">🎙️ Войс донат</a>
+    </div>
+
+    <!-- Быстрый донат 2 -->
+    <div class="dc" style="border-top:3px solid var(--accent2)">
+      <div class="dc-badge" style="background:rgba(255,107,53,.15);color:var(--accent2)">⚡ Быстрый донат</div>
+      <div class="dc-icon">🚀</div>
+      <div class="dc-title" style="color:var(--accent2)">Быстрый донат</div>
+      <div class="dc-desc">Все платформы dan4ik37 в одном месте — YouTube, TikTok, Twitch, VK и другие.</div>
+      <a class="dc-btn" href="https://www.donationalerts.com/r/dan4ik37" target="_blank"
+         style="background:linear-gradient(135deg,var(--accent2),#e84040);color:#fff;padding:.8rem 1.6rem;border-radius:50px;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:all .2s;border:none"
+         onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        🚀 Задонатить
       </a>
     </div>
 
-    <!-- КАРТОЧКА 2 — Донат с войсом -->
-    <div class="donate-card dc-voice">
-      <div class="dc-badge dc-badge-hot">🔥 Популярно</div>
-      <div class="dc-icon">🎙️</div>
-      <div class="dc-title">Донат с войсом</div>
-      <div class="dc-desc">Выбери голос — dan4ik37 озвучит твоё сообщение на стриме!</div>
+  </div>
+</div>
 
-      <!-- Выбор войса -->
-      <div class="voice-list" id="voiceList">
-        <button class="voice-opt selected" data-voice="default" onclick="selectVoice(this,'default')">
-          <span class="voice-icon">🤖</span>
-          <div>
-            <div class="voice-name">Стандартный</div>
-            <div class="voice-hint">Голос по умолчанию</div>
+<!-- CHAT -->
+<div class="wrap reveal" id="chat">
+  <div class="divider"></div>
+  <div class="eyebrow">Общение</div>
+  <h2 class="sec-title">Живой чат 💬</h2>
+  <div class="chat-wrap">
+    <div class="chat-header">
+      <div class="chat-live-dot"></div>
+      <div class="chat-title">ЧАТ dan4ik37</div>
+      <div class="chat-subtitle" id="chatSubtitle">Локальный чат сайта</div>
+    </div>
+    <div class="chat-tabs">
+      <button class="chat-tab active" onclick="switchChat('local',this)">💬 Сайт</button>
+      <button class="chat-tab" onclick="switchChat('twitch',this)">◉ Twitch</button>
+      <button class="chat-tab" onclick="switchChat('youtube',this)" title="Работает только во время активного YouTube стрима">▶ YT Live</button>
+    </div>
+    <div class="chat-body">
+
+      <!-- Локальный чат -->
+      <div class="local-chat active" id="chat-local" style="display:flex">
+
+        <!-- Сообщения -->
+        <div class="chat-msgs" id="chatMsgs"></div>
+
+        <!-- Экран выбора ника -->
+        <div id="chatNickScreen" style="padding:.9rem 1rem;border-top:1px solid var(--border);background:rgba(145,71,255,.05)">
+          <div style="font-size:.72rem;color:var(--muted);margin-bottom:.5rem;font-weight:600">👤 Введи ник чтобы написать в чат:</div>
+          <div style="display:flex;gap:.5rem">
+            <input id="chatNameField" class="chat-input" placeholder="Твой ник..." maxlength="20"
+              onkeydown="if(event.key==='Enter')setNick()"
+              style="flex:1;background:rgba(145,71,255,.08);border-color:rgba(145,71,255,.3)">
+            <button class="chat-send" onclick="setNick()" style="background:var(--tw);padding:.5rem 1.1rem">Войти</button>
           </div>
-          <span class="voice-check">✓</span>
-        </button>
-        <button class="voice-opt" data-voice="male" onclick="selectVoice(this,'male')">
-          <span class="voice-icon">👨</span>
-          <div>
-            <div class="voice-name">Мужской</div>
-            <div class="voice-hint">Низкий мужской голос</div>
+        </div>
+
+        <!-- Поле ввода (после входа) -->
+        <div id="chatMainInput" style="display:none;flex-direction:column;border-top:1px solid var(--border)">
+          <!-- Строка ника -->
+          <div style="padding:.4rem 1rem;display:flex;align-items:center;justify-content:space-between;background:rgba(145,71,255,.05);font-size:.7rem">
+            <span style="color:var(--muted)">Ты в чате как: <strong id="chatNickDisplay" style="color:var(--tw)"></strong></span>
+            <button onclick="changeNick()" style="background:none;border:none;color:var(--muted);font-size:.68rem;cursor:pointer;letter-spacing:.5px;font-family:'Montserrat',sans-serif;transition:color .2s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Сменить ник</button>
           </div>
-          <span class="voice-check">✓</span>
-        </button>
-        <button class="voice-opt" data-voice="female" onclick="selectVoice(this,'female')">
-          <span class="voice-icon">👩</span>
-          <div>
-            <div class="voice-name">Женский</div>
-            <div class="voice-hint">Нежный женский голос</div>
+          <!-- Эмодзи пикер -->
+          <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto">
+            <!-- заполняется JS -->
           </div>
-          <span class="voice-check">✓</span>
-        </button>
-        <button class="voice-opt" data-voice="robot" onclick="selectVoice(this,'robot')">
-          <span class="voice-icon">🦾</span>
-          <div>
-            <div class="voice-name">Робот</div>
-            <div class="voice-hint">Механический голос</div>
+          <!-- Строка отправки -->
+          <div class="chat-input-wrap">
+            <button onclick="toggleEmoji(event)" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--muted);cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Эмодзи">😀</button>
+            <input class="chat-input" id="chatInput" placeholder="Написать сообщение..." maxlength="200"
+              onkeydown="if(event.key==='Enter')sendMsg()" style="flex:1">
+            <button class="chat-send" onclick="sendMsg()">→</button>
           </div>
-          <span class="voice-check">✓</span>
-        </button>
-        <button class="voice-opt" data-voice="cat" onclick="selectVoice(this,'cat')">
-          <span class="voice-icon">🐱</span>
-          <div>
-            <div class="voice-name">Котик</div>
-            <div class="voice-hint">Мяукающий голосок</div>
-          </div>
-          <span class="voice-check">✓</span>
-        </button>
-        <button class="voice-opt" data-voice="epic" onclick="selectVoice(this,'epic')">
-          <span class="voice-icon">💪</span>
-          <div>
-            <div class="voice-name">Эпичный</div>
-            <div class="voice-hint">Драматичный голос</div>
-          </div>
-          <span class="voice-check">✓</span>
-        </button>
+        </div>
       </div>
 
-      <a class="dc-btn dc-btn-voice" id="voiceDonateBtn"
-         href="https://www.donationalerts.com/r/dan4ik37" target="_blank">
-        🎙️ Донат с войсом
-      </a>
-      <div class="dc-note">После выбора голоса — напиши его название в сообщении к донату</div>
+      <!-- Twitch чат -->
+      <iframe class="chat-frame" id="chat-twitch" src="" allowfullscreen></iframe>
+      <!-- YouTube чат -->
+      <iframe class="chat-frame" id="chat-youtube" src="" allowfullscreen></iframe>
     </div>
-
-    <!-- КАРТОЧКА 3 — Все ссылки -->
-    <div class="donate-card dc-links">
-      <div class="dc-icon">🔗</div>
-      <div class="dc-title">Все соцсети</div>
-      <div class="dc-desc">Один линк — все платформы dan4ik37 в одном месте</div>
-      <a class="dc-btn dc-btn-link" href="https://dalink.to/dan4ik37" target="_blank">
-        🔗 dalink.to/dan4ik37
-      </a>
-    </div>
-
-  </div>
-
-  <!-- Выбранный войс -->
-  <div class="voice-selected-bar" id="voiceBar" style="display:none">
-    <span id="voiceBarText"></span>
-    <a id="voiceBarBtn" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="dc-btn dc-btn-main" style="padding:.5rem 1.4rem;font-size:.75rem">Задонатить →</a>
   </div>
 </div>
 
-<!-- ══════════ AD BOTTOM ══════════ -->
+<!-- AD BOTTOM -->
 <div class="wrap-sm" style="padding-bottom:2rem">
-  <!-- Google AdSense — нижний баннер -->
-  <ins class="adsbygoogle"
-       style="display:block"
-       data-ad-client="ca-pub-7940480593743401"
-       data-ad-slot="auto"
-       data-ad-format="auto"
-       data-full-width-responsive="true"></ins>
-  <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-slot="auto" data-ad-format="auto" data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
 </div>
 
-<!-- ══════════ FOOTER ══════════ -->
+<!-- FOOTER -->
 <footer>
   <div class="footer-logo">dan4ik37</div>
   <div class="footer-tag">Контент · Стримы · Общение</div>
   <div class="footer-links">
-    <a href="https://www.youtube.com/@Dan4ik37Yt"   target="_blank">YouTube</a>
-    <a href="https://www.tiktok.com/@.dan4ik37"      target="_blank">TikTok</a>
-    <a href="https://www.twitch.tv/dan4ik37"         target="_blank">Twitch</a>
-    <a href="https://vk.com/dan4ik37"               target="_blank">ВКонтакте</a>
-    <a href="https://m.vkvideo.ru/@dan4ik37"         target="_blank">VK Видео</a>
-    <a href="https://t.me/+LE25p4pQojkyYjli"        target="_blank">Telegram</a>
+    <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank">YouTube</a>
+    <a href="https://www.tiktok.com/@.dan4ik37" target="_blank">TikTok</a>
+    <a href="https://www.twitch.tv/dan4ik37" target="_blank">Twitch</a>
+    <a href="https://vk.com/dan4ik37" target="_blank">ВКонтакте</a>
+    <a href="https://m.vkvideo.ru/@dan4ik37" target="_blank">VK Видео</a>
+    <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank">Telegram</a>
+    <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank">Донат</a>
   </div>
   <div class="footer-copy">© 2026 dan4ik37 · Все права защищены</div>
 </footer>
 
-<!-- ══════════ MODAL ══════════ -->
-<div class="modal-ov" id="modal" onclick="bgClose(event)">
+<!-- MODAL -->
+<div class="modal-ov" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal-box">
     <div class="modal-vid" id="mVid"></div>
     <div class="modal-info">
       <button class="modal-close" onclick="closeModal()">✕</button>
       <div class="modal-title" id="mTitle"></div>
-      <div class="modal-meta"  id="mMeta"></div>
+      <div class="modal-meta" id="mMeta"></div>
     </div>
   </div>
 </div>
 
 <script>
-// ════════════════════════════════════════════════════════
-//  НАСТРОЙКИ
-// ════════════════════════════════════════════════════════
-const YT_API_KEY  = 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
-const YT_HANDLE   = '@Dan4ik37Yt';
-const TWITCH_HOST = window.location.hostname || 'localhost';
-const CACHE_KEY   = 'dan4ik37_yt_cache';
-const CACHE_TTL   = 10 * 60 * 1000; // 10 минут
+// ═══════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════
+const YT_KEY    = 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
+const YT_HANDLE = '@Dan4ik37Yt';
+const YT_CH_ID  = 'UCXXXXXXXXXXXXXXXXXXXXXXXXX'; // заполнится автоматически
+const TWITCH    = 'dan4ik37';
+const CACHE_KEY = 'dan4ik37_cache_v2';
+const CACHE_TTL = 15 * 60 * 1000;
+const HOST      = location.hostname || 'localhost';
 
-// ════════════════════════════════════════════════════════
-//  СОСТОЯНИЕ
-// ════════════════════════════════════════════════════════
-let allVids      = [];
-let viewMode     = 'grid';   // 'grid' | 'list'
-let selectMode   = false;
-let selectedIds  = new Set();
-let likedIds     = new Set(JSON.parse(localStorage.getItem('dan4ik37_liked') || '[]'));
+// ═══════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════
+let allVids=[], recVids=[], viewMode='grid', selMode=false;
+let selectedIds=new Set();
+let likedIds=new Set(JSON.parse(localStorage.getItem('d37_liked')||'[]'));
+let chatNick=localStorage.getItem('d37_nick')||'';
+let channelId='';
 
-// ════════════════════════════════════════════════════════
-//  NAVBAR
-// ════════════════════════════════════════════════════════
-function toggleNav() {
-  document.getElementById('navLinks').classList.toggle('open');
-  document.getElementById('burger').classList.toggle('open');
+// ═══════════════════════════════════════
+//  NAV
+// ═══════════════════════════════════════
+function toggleNav(){document.getElementById('navLinks').classList.toggle('open');document.getElementById('burger').classList.toggle('open')}
+document.querySelectorAll('.nav-links a').forEach(a=>a.addEventListener('click',()=>{document.getElementById('navLinks').classList.remove('open');document.getElementById('burger').classList.remove('open')}));
+window.addEventListener('scroll',()=>document.getElementById('nav').classList.toggle('scrolled',scrollY>40));
+
+// ═══════════════════════════════════════
+//  SCHEDULE highlight today
+// ═══════════════════════════════════════
+document.querySelectorAll('.day-card').forEach(c=>{if(+c.dataset.d===new Date().getDay())c.classList.add('today')});
+
+// ═══════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmt=n=>{n=parseInt(n)||0;return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n)};
+function countUp(id,t){
+  const el=document.getElementById(id);if(!el)return;
+  let c=0,s=t/80;
+  const tm=setInterval(()=>{c=Math.min(c+s,t);el.textContent=fmt(Math.round(c));if(c>=t){clearInterval(tm)}},18);
 }
-document.querySelectorAll('.nav-links a').forEach(a =>
-  a.addEventListener('click', () => {
-    document.getElementById('navLinks').classList.remove('open');
-    document.getElementById('burger').classList.remove('open');
-  })
-);
-window.addEventListener('scroll', () => {
-  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 40);
-});
-
-// ════════════════════════════════════════════════════════
-//  РАСПИСАНИЕ
-// ════════════════════════════════════════════════════════
-const todayIdx = new Date().getDay();
-document.querySelectorAll('.day-card').forEach(c => {
-  if (parseInt(c.dataset.d) === todayIdx) c.classList.add('today');
-});
-
-// ════════════════════════════════════════════════════════
-//  УТИЛИТЫ
-// ════════════════════════════════════════════════════════
-function fmt(n) {
-  n = parseInt(n) || 0;
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(n);
+function statsLoaded(){
+  const note=document.getElementById('statsNote');
+  if(note) note.innerHTML='✅ Статистика обновлена с YouTube · <span style="opacity:.5">'+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';
 }
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function statsError(){
+  const note=document.getElementById('statsNote');
+  if(note) note.innerHTML='⚠️ Статистика недоступна — API работает только на хостинге. <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="color:var(--yt)">Смотреть канал →</a>';
 }
 
-// ════════════════════════════════════════════════════════
-//  АНИМАЦИЯ СЧЁТЧИКОВ
-// ════════════════════════════════════════════════════════
-function countUp(id, target) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  let cur = 0;
-  const step = target / 80;
-  const t = setInterval(() => {
-    cur = Math.min(cur + step, target);
-    el.textContent = fmt(Math.round(cur));
-    if (cur >= target) clearInterval(t);
-  }, 18);
-}
+// ═══════════════════════════════════════
+//  CACHE
+// ═══════════════════════════════════════
+function saveCache(d){try{localStorage.setItem(CACHE_KEY,JSON.stringify({ts:Date.now(),d}))}catch(e){}}
+function loadCache(){try{const c=JSON.parse(localStorage.getItem(CACHE_KEY));if(c&&Date.now()-c.ts<CACHE_TTL)return c.d}catch(e){}return null}
 
-// ════════════════════════════════════════════════════════
-//  КЭШИРОВАНИЕ
-// ════════════════════════════════════════════════════════
-function saveCache(data) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
-  } catch(_) {}
-}
-function loadCache() {
-  try {
-    const c = JSON.parse(localStorage.getItem(CACHE_KEY));
-    if (c && Date.now() - c.ts < CACHE_TTL) return c.data;
-  } catch(_) {}
+// ═══════════════════════════════════════
+//  YOUTUBE API — параллельные запросы
+// ═══════════════════════════════════════
+async function ytFetch(url){
+  try{const r=await fetch(url);if(r.ok)return r.json()}catch(e){}
+  try{const r=await fetch('https://api.allorigins.win/get?url='+encodeURIComponent(url));const d=await r.json();return JSON.parse(d.contents)}catch(e){}
   return null;
 }
 
-// ════════════════════════════════════════════════════════
-//  YOUTUBE API — параллельные запросы + кэш
-// ════════════════════════════════════════════════════════
-async function ytFetch(url) {
-  try {
-    const r = await fetch(url);
-    if (r.ok) return r.json();
-  } catch(_) {}
-  // CORS-proxy fallback
-  const r = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(url));
-  const d = await r.json();
-  return JSON.parse(d.contents);
-}
+async function loadYT(){
+  showLoader();
+  const cached=loadCache();
+  if(cached){allVids=cached.vids;recVids=cached.rec||[];if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}renderVids(allVids)}
+  try{
+    const ch=await ytFetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_KEY}`);
+    if(!ch?.items?.length)throw new Error('Канал не найден');
+    channelId=ch.items[0].id;
+    const stats=ch.items[0].statistics;
+    const uploads=ch.items[0].contentDetails.relatedPlaylists.uploads;
+    const st={subs:parseInt(stats.subscriberCount||0),views:parseInt(stats.viewCount||0),vids:parseInt(stats.videoCount||0)};
+    countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
+    statsLoaded();
 
-async function loadYT() {
-  const grid = document.getElementById('yt-grid');
-  grid.innerHTML = `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;
-    gap:1rem;padding:3rem;color:var(--muted);font-size:.8rem">
-    <div style="width:34px;height:34px;border:3px solid rgba(255,64,64,.15);border-top-color:var(--yt);
-    border-radius:50%;animation:spin .8s linear infinite"></div>Загрузка видео…</div>`;
+    // Параллельно: плейлист + рекомендации по популярности
+    const [pl,pop]=await Promise.all([
+      ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=24&key=${YT_KEY}`),
+      ytFetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=viewCount&maxResults=12&type=video&key=${YT_KEY}`)
+    ]);
+    if(!pl?.items?.length)throw new Error('Видео не найдены');
 
-  // Сначала показываем кэш мгновенно
-  const cached = loadCache();
-  if (cached) {
-    allVids = cached.videos;
-    renderVids(allVids);
-    // Статистику тоже из кэша
-    if (cached.stats) {
-      countUp('s-subs',  cached.stats.subs);
-      countUp('s-views', cached.stats.views);
-      countUp('s-vids',  cached.stats.vids);
-    }
-  }
+    const ids=pl.items.map(i=>i.contentDetails.videoId).join(',');
+    const det=await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids}&key=${YT_KEY}`);
+    const dm={};det?.items?.forEach(v=>{dm[v.id]=v.statistics});
 
-  try {
-    // 1. Channel info
-    const ch = await ytFetch(
-      `https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_API_KEY}`
-    );
-    if (!ch.items?.length) throw new Error('Канал не найден');
-
-    const stats   = ch.items[0].statistics;
-    const uploads = ch.items[0].contentDetails.relatedPlaylists.uploads;
-
-    const statsObj = {
-      subs:  parseInt(stats.subscriberCount || 0),
-      views: parseInt(stats.viewCount       || 0),
-      vids:  parseInt(stats.videoCount      || 0)
-    };
-    countUp('s-subs',  statsObj.subs);
-    countUp('s-views', statsObj.views);
-    countUp('s-vids',  statsObj.vids);
-
-    // 2 + 3. Плейлист и статистика видео — ПАРАЛЛЕЛЬНО
-    const plUrl  = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=12&key=${YT_API_KEY}`;
-    const pl     = await ytFetch(plUrl);
-    if (!pl.items?.length) throw new Error('Видео не найдены');
-
-    const ids    = pl.items.map(i => i.contentDetails.videoId).join(',');
-    const detUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids}&key=${YT_API_KEY}`;
-
-    // Параллельно — экономим ~1 секунду
-    const det = await ytFetch(detUrl);
-    const detMap = {};
-    det.items?.forEach(v => { detMap[v.id] = v.statistics; });
-
-    allVids = pl.items.map(item => {
-      const id = item.contentDetails.videoId;
-      const sn = item.snippet;
-      const st = detMap[id] || {};
-      return {
-        id,
-        title: sn.title,
-        thumb: sn.thumbnails?.maxres?.url || sn.thumbnails?.high?.url || sn.thumbnails?.medium?.url || '',
-        date:  new Date(sn.publishedAt).toLocaleDateString('ru-RU'),
-        views: st.viewCount ? fmt(st.viewCount) : '',
-        likes: st.likeCount ? fmt(st.likeCount) : ''
-      };
+    allVids=pl.items.map(item=>{
+      const id=item.contentDetails.videoId,sn=item.snippet,st=dm[id]||{};
+      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',likes:st.likeCount?fmt(st.likeCount):''};
     });
 
-    saveCache({ videos: allVids, stats: statsObj });
-    renderVids(allVids);
+    // Рекомендации = топ по просмотрам
+    recVids=pop?.items?.map(i=>({id:i.id.videoId,title:i.snippet.title,thumb:i.snippet.thumbnails?.high?.url||'',date:'',views:'',likes:'',rec:true}))||[];
 
-  } catch(err) {
-    console.warn('YT:', err.message);
-    if (!cached) renderFallback();
+    saveCache({vids:allVids,rec:recVids,stats:st});
+    renderVids(allVids);
+  }catch(err){
+    console.warn('YT:',err.message);
+    statsError();
+    if(!cached)showFallback();
   }
 }
 
-// ════════════════════════════════════════════════════════
-//  FALLBACK
-// ════════════════════════════════════════════════════════
-function renderFallback() {
-  document.getElementById('yt-grid').innerHTML = `
-    <div style="grid-column:1/-1;background:rgba(255,64,64,.05);border:1px solid rgba(255,64,64,.15);
-      border-radius:var(--r);padding:2rem;text-align:center;font-size:.83rem;color:var(--muted);line-height:2">
-      <strong style="color:var(--yt);display:block;font-size:.95rem;margin-bottom:.4rem">
-        📡 YouTube API недоступен с локального файла
-      </strong>
-      После публикации на хостинге видео загрузятся автоматически.<br>
-      <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank"
-         style="color:var(--yt);font-weight:700;margin-top:.4rem;display:inline-block">
-        ▶ Перейти на YouTube →
-      </a>
-    </div>`;
-}
+function showLoader(){document.getElementById('yt-grid').innerHTML=`<div class="loader-cell"><div class="spinner"></div>Загрузка…</div>`}
+function showFallback(){document.getElementById('yt-grid').innerHTML=`<div class="err-box"><strong>📡 API недоступен с локального файла</strong>Используй режим <b>📺 Без API</b> или <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="color:var(--yt)">смотри на YouTube →</a></div>`}
 
-// ════════════════════════════════════════════════════════
-//  РЕНДЕР КАРТОЧЕК
-// ════════════════════════════════════════════════════════
-function renderVids(vids) {
-  const grid = document.getElementById('yt-grid');
-  grid.innerHTML = '';
-  if (viewMode === 'list') grid.classList.add('list-view');
-  else grid.classList.remove('list-view');
-
-  vids.forEach((v, i) => {
-    const isLiked    = likedIds.has(v.id);
-    const isSelected = selectedIds.has(v.id);
-    const card = document.createElement('div');
-    card.className = 'vcard' + (selectMode ? ' selectable' : '') + (isSelected ? ' selected' : '');
-    card.dataset.id = v.id;
-    card.style.animationDelay = (i * 0.045) + 's';
-
-    card.innerHTML = `
-      <div class="sel-check">${isSelected ? '✓' : ''}</div>
+// ═══════════════════════════════════════
+//  RENDER VIDEOS
+// ═══════════════════════════════════════
+function renderVids(vids){
+  const grid=document.getElementById('yt-grid');
+  grid.innerHTML='';
+  grid.className='video-grid'+(viewMode==='list'?' list-view':'');
+  if(!vids.length){grid.innerHTML=`<div class="err-box"><strong>Видео не найдены</strong></div>`;return}
+  vids.forEach((v,i)=>{
+    if(!v.id)return;
+    const liked=likedIds.has(v.id),sel=selectedIds.has(v.id);
+    const card=document.createElement('div');
+    card.className='vcard'+(selMode?' selectable':'')+(sel?' selected':'');
+    card.dataset.id=v.id;card.style.animationDelay=(i*.04)+'s';
+    card.innerHTML=`
+      <div class="sel-check">${sel?'✓':''}</div>
+      ${v.rec?'<div class="rec-badge">🔥 Рекомендация</div>':''}
       <div class="vthumb">
-        ${v.thumb
-          ? `<img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy">`
-          : `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(135deg,#14141f,#1e1e2f)">▶</div>`}
-        <div class="pdot pd-yt">YouTube</div>
+        ${v.thumb?`<img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy">`:'<div class="vthumb-ph">▶</div>'}
+        <div class="pdot pd-yt">YT</div>
         <div class="play-ov"><div class="play-circle">▶</div></div>
-        <button class="vcard-like ${isLiked?'liked':''}" onclick="toggleLike(event,'${v.id}',this)">
-          ${isLiked?'❤':'🤍'} ${v.likes||''}
+        <button class="vlike${liked?' liked':''}" onclick="toggleLike(event,'${v.id}',this)" title="${liked?'Убрать лайк':'Лайкнуть на YouTube'}">
+          ${liked?'❤':'🤍'}${v.likes?' '+v.likes:''}
         </button>
       </div>
       <div class="vinfo">
         <div class="vtitle">${esc(v.title)}</div>
-        <div class="vmeta">
-          ${v.views ? `<span>👁 ${v.views}</span>` : ''}
-          ${v.date  ? `<span>📅 ${v.date}</span>`  : ''}
-        </div>
+        <div class="vmeta">${v.views?`<span>👁 ${v.views}</span>`:''}${v.date?`<span>📅 ${v.date}</span>`:''}</div>
       </div>`;
-
-    card.addEventListener('click', (e) => {
-      if (e.target.closest('.vcard-like')) return;
-      if (selectMode) { toggleSelect(card, v.id); return; }
-      openVid(v.id, v.title, v.date, v.views);
-    });
-
+    card.addEventListener('click',e=>{if(e.target.closest('.vlike'))return;if(selMode){toggleSel2(card,v.id)}else openVid(v.id,v.title,v.date,v.views)});
     grid.appendChild(card);
   });
 }
 
-// ════════════════════════════════════════════════════════
-//  РЕЖИМ ПРОСМОТРА (сетка / список)
-// ════════════════════════════════════════════════════════
-function setView(mode) {
-  viewMode = mode;
-  document.getElementById('btn-grid').classList.toggle('active', mode === 'grid');
-  document.getElementById('btn-list').classList.toggle('active', mode === 'list');
-  renderVids(allVids);
-}
+// ═══════════════════════════════════════
+//  VIEW MODES
+// ═══════════════════════════════════════
+function setView(mode){
+  viewMode=mode;
+  ['grid','list','noapi'].forEach(m=>document.getElementById('btn-'+m)?.classList.remove('active'));
+  document.getElementById('btn-'+mode)?.classList.add('active');
 
-// ════════════════════════════════════════════════════════
-//  РЕЖИМ ВЫБОРА
-// ════════════════════════════════════════════════════════
-function toggleSelectMode() {
-  selectMode = true;
-  selectedIds.clear();
-  document.getElementById('selectAllBtn').style.display  = 'none';
-  document.getElementById('likeAllBtn').style.display    = 'inline-flex';
-  document.getElementById('playAllBtn').style.display    = 'inline-flex';
-  document.getElementById('cancelSelBtn').style.display  = 'inline-flex';
-  document.getElementById('selectHint').style.display    = 'flex';
-  updateSelectCount();
-  renderVids(allVids);
-}
-
-function cancelSelect() {
-  selectMode = false;
-  selectedIds.clear();
-  document.getElementById('selectAllBtn').style.display  = 'inline-flex';
-  document.getElementById('likeAllBtn').style.display    = 'none';
-  document.getElementById('playAllBtn').style.display    = 'none';
-  document.getElementById('cancelSelBtn').style.display  = 'none';
-  document.getElementById('selectHint').style.display    = 'none';
-  document.getElementById('multiPlayer').style.display   = 'none';
-  renderVids(allVids);
-}
-
-function toggleSelect(card, id) {
-  if (selectedIds.has(id)) {
-    selectedIds.delete(id);
-    card.classList.remove('selected');
-    card.querySelector('.sel-check').textContent = '';
+  if(mode==='noapi'){
+    // Без API — плейлист через стандартный embed YouTube (uploads плейлист = UU + channelId без UC)
+    const plId = channelId ? 'UU'+channelId.slice(2) : null;
+    const noApiHTML = plId
+      ? `<div style="grid-column:1/-1">
+          <div style="position:relative;padding-bottom:56.25%;border-radius:var(--r);overflow:hidden;background:#000">
+            <iframe src="https://www.youtube.com/embed/videoseries?list=${plId}&rel=0"
+              style="position:absolute;inset:0;width:100%;height:100%;border:none"
+              allowfullscreen allow="encrypted-media"></iframe>
+          </div>
+          <div style="display:flex;gap:.8rem;margin-top:1rem;flex-wrap:wrap">
+            <div style="flex:1;background:var(--card);border-radius:var(--r);padding:1rem;border:1px solid var(--border)">
+              <div style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:.4rem">📺 Режим без API</div>
+              <div style="font-size:.82rem;color:var(--text)">Плейлист загружается напрямую с YouTube — без API ключа. Всегда актуален!</div>
+            </div>
+            <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:1rem 1.4rem;border-radius:var(--r);background:rgba(255,64,64,.1);border:1.5px solid var(--yt);color:var(--yt);font-weight:700;font-size:.78rem;white-space:nowrap;transition:background .2s" onmouseover="this.style.background='rgba(255,64,64,.2)'" onmouseout="this.style.background='rgba(255,64,64,.1)'">▶ Канал на YouTube</a>
+          </div>
+        </div>`
+      : `<div style="grid-column:1/-1;background:var(--card);border-radius:var(--r);padding:2rem;text-align:center">
+          <div style="font-size:2rem;margin-bottom:.8rem">📺</div>
+          <div style="font-size:.9rem;font-weight:700;margin-bottom:.5rem">Режим без API</div>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:1.2rem">Для плейлиста нужен ID канала — сначала загрузи сайт на хостинг чтобы API сработал хотя бы раз, или перейди напрямую:</div>
+          <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-sub" style="display:inline-flex">▶ Смотреть на YouTube</a>
+        </div>`;
+    document.getElementById('yt-grid').innerHTML = noApiHTML;
+    document.getElementById('multiPlayer').style.display='none';
   } else {
-    selectedIds.add(id);
-    card.classList.add('selected');
-    card.querySelector('.sel-check').textContent = '✓';
+    renderVids(viewMode==='list' ? allVids : allVids);
   }
-  updateSelectCount();
 }
 
-function selectAllVids() {
-  allVids.forEach(v => selectedIds.add(v.id));
-  document.querySelectorAll('.vcard').forEach(c => {
-    c.classList.add('selected');
-    c.querySelector('.sel-check').textContent = '✓';
-  });
-  updateSelectCount();
+// ═══════════════════════════════════════
+//  RECOMMENDATIONS + SHUFFLE
+// ═══════════════════════════════════════
+let showingRec=false;
+function shuffleVids(){
+  if(viewMode==='noapi')return;
+  const b=document.getElementById('shuffleBtn');
+  if(recVids.length && !showingRec){
+    // Показываем рекомендации (топ по просмотрам)
+    showingRec=true;
+    renderVids(recVids);
+    b.innerHTML='🔥 Рекомендации';b.style.color='var(--accent)';b.title='Нажми ещё раз чтобы перемешать';
+  } else {
+    showingRec=false;
+    const shuffled=[...allVids].sort(()=>Math.random()-.5);
+    renderVids(shuffled);
+    b.innerHTML='✓ Перемешано!';b.style.color='';b.title='';
+    setTimeout(()=>b.innerHTML='🔀 Перемешать',1500);
+  }
 }
 
-function updateSelectCount() {
-  document.getElementById('selectCount').textContent = selectedIds.size;
-}
-
-// ════════════════════════════════════════════════════════
-//  ЛАЙКИ
-// ════════════════════════════════════════════════════════
-function toggleLike(e, id, btn) {
+// ═══════════════════════════════════════
+//  LIKES — открывает реальный YouTube
+// ═══════════════════════════════════════
+function toggleLike(e,id,btn){
   e.stopPropagation();
-  const v = allVids.find(x => x.id === id);
-  if (!v) return;
-
-  if (likedIds.has(id)) {
-    likedIds.delete(id);
-    btn.classList.remove('liked');
-    btn.innerHTML = `🤍 ${v.likes||''}`;
-  } else {
-    likedIds.add(id);
-    btn.classList.add('liked');
-    btn.classList.add('liked-flash');
-    btn.innerHTML = `❤ ${v.likes||''}`;
-    setTimeout(() => btn.classList.remove('liked-flash'), 400);
+  const v=allVids.find(x=>x.id===id)||recVids.find(x=>x.id===id);
+  if(likedIds.has(id)){likedIds.delete(id);btn.classList.remove('liked');btn.innerHTML='🤍'+(v?.likes?' '+v.likes:'')}
+  else{likedIds.add(id);btn.classList.add('liked','like-pop');btn.innerHTML='❤'+(v?.likes?' '+v.likes:'');setTimeout(()=>btn.classList.remove('like-pop'),400);
+    // Открываем YouTube для реального лайка
+    window.open(`https://www.youtube.com/watch?v=${id}`,`_ytlike_${id}`,'width=900,height=600,scrollbars=yes');
   }
-  // Сохраняем в localStorage
-  try { localStorage.setItem('dan4ik37_liked', JSON.stringify([...likedIds])); } catch(_) {}
-
-  // Открыть реальный лайк на YouTube
-  window.open(`https://www.youtube.com/watch?v=${id}`, '_blank');
+  try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}
 }
 
-function likeAllSelected() {
-  if (!selectedIds.size) { alert('Выбери хотя бы одно видео!'); return; }
-  selectedIds.forEach(id => {
-    const btn = document.querySelector(`.vcard[data-id="${id}"] .vcard-like`);
-    if (btn && !likedIds.has(id)) toggleLike(new Event('click'), id, btn);
-  });
+// ═══════════════════════════════════════
+//  SELECT MODE
+// ═══════════════════════════════════════
+function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('likeSelBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';renderVids(allVids)}
+function cancelSel(){selMode=false;selectedIds.clear();document.getElementById('selBtn').style.display='inline-flex';document.getElementById('likeSelBtn').style.display='none';document.getElementById('playSelBtn').style.display='none';document.getElementById('cancelSelBtn').style.display='none';document.getElementById('selHint').style.display='none';document.getElementById('multiPlayer').style.display='none';renderVids(allVids)}
+function toggleSel2(card,id){if(selectedIds.has(id)){selectedIds.delete(id);card.classList.remove('selected');card.querySelector('.sel-check').textContent=''}else{selectedIds.add(id);card.classList.add('selected');card.querySelector('.sel-check').textContent='✓'}document.getElementById('selCount').textContent=selectedIds.size}
+function selectAllVids(){allVids.forEach(v=>selectedIds.add(v.id));renderVids(allVids);document.getElementById('selCount').textContent=selectedIds.size}
+function likeSelected(){if(!selectedIds.size)return;selectedIds.forEach(id=>{if(!likedIds.has(id)){likedIds.add(id);window.open(`https://www.youtube.com/watch?v=${id}`,`_ytlike_${id}`,'width=900,height=600')}});try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}}
+function playSelected(){
+  const ids=[...selectedIds];if(!ids.length)return;
+  const mp=document.getElementById('multiPlayer');
+  mp.innerHTML=`<div class="mp-bar"><span>▶ ${ids.length} видео</span><button class="mp-close" onclick="this.closest('#multiPlayer').style.display='none';this.closest('#multiPlayer').innerHTML=''">✕ Закрыть</button></div><div class="mp-grid">${ids.map(id=>{const v=allVids.find(x=>x.id===id);return`<div class="mp-item"><div class="mp-ratio"><iframe src="https://www.youtube.com/embed/${id}?rel=0" allowfullscreen allow="encrypted-media"></iframe></div><div class="mp-title">${esc(v?.title||id)}</div></div>`}).join('')}</div>`;
+  mp.style.display='block';mp.scrollIntoView({behavior:'smooth'});cancelSel();
 }
 
-// ════════════════════════════════════════════════════════
-//  МУЛЬТИПЛЕЕР — смотреть несколько видео сразу
-// ════════════════════════════════════════════════════════
-function playAllSelected() {
-  const ids = [...selectedIds];
-  if (!ids.length) { alert('Выбери хотя бы одно видео!'); return; }
-
-  const mp = document.getElementById('multiPlayer');
-  const items = ids.map(id => {
-    const v = allVids.find(x => x.id === id);
-    return `<div class="mp-item">
-      <div class="mp-ratio">
-        <iframe src="https://www.youtube.com/embed/${id}?autoplay=0&rel=0"
-          allowfullscreen allow="encrypted-media"></iframe>
-      </div>
-      <div class="mp-title">${esc(v?.title || id)}</div>
-    </div>`;
-  }).join('');
-
-  mp.innerHTML = `
-    <div class="mp-close-bar">
-      <span>▶ Просмотр ${ids.length} видео</span>
-      <button class="mp-close-btn" onclick="document.getElementById('multiPlayer').style.display='none';document.getElementById('multiPlayer').innerHTML=''">✕ Закрыть</button>
-    </div>
-    <div class="multi-player-grid">${items}</div>`;
-  mp.style.display = 'block';
-
-  // Скролл к плееру
-  mp.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  cancelSelect();
-}
-
-// ════════════════════════════════════════════════════════
-//  SHUFFLE
-// ════════════════════════════════════════════════════════
-function shuffleVids() {
-  if (!allVids.length) return;
-  renderVids([...allVids].sort(() => Math.random() - .5));
-  const b = document.getElementById('shuffleBtn');
-  b.innerHTML = '✓ Перемешано!';
-  setTimeout(() => b.innerHTML = '🔀 Перемешать', 1600);
-}
-
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════
 //  TABS
-// ════════════════════════════════════════════════════════
-const tabClass = { yt:'a-yt', tt:'a-tt', vkv:'a-vkv', tw:'a-tw', tg:'a-tg' };
-
-function switchTab(p, btn) {
-  document.querySelectorAll('.tab').forEach(t => t.className = 'tab');
-  btn.classList.add(tabClass[p]);
-  document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
-  document.getElementById('panel-' + p).classList.add('active');
-
-  const sb = document.getElementById('shuffleBtn');
-  sb.style.opacity       = p === 'yt' ? '1' : '0.3';
-  sb.style.pointerEvents = p === 'yt' ? 'auto' : 'none';
-
-  if (p === 'tw') {
-    const fr = document.getElementById('twitchFrame');
-    if (!fr.src) fr.src = `https://player.twitch.tv/?channel=dan4ik37&parent=${TWITCH_HOST}&autoplay=false`;
+// ═══════════════════════════════════════
+const tabMap={yt:'a-yt',ytlive:'a-yt',tt:'a-tt',vkv:'a-vkv',tw:'a-tw',tg:'a-tg'};
+function switchTab(p,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.className='tab');
+  btn.classList.add(tabMap[p]||'a-yt');
+  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
+  document.getElementById('panel-'+p).classList.add('active');
+  const sb=document.getElementById('shuffleBtn');
+  sb.style.opacity=p==='yt'?'1':'0.3';
+  sb.style.pointerEvents=p==='yt'?'auto':'none';
+  if(p==='tw'){
+    const fr=document.getElementById('twitchFrame');
+    if(!fr.src) fr.src=`https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
+  }
+  if(p==='ytlive'){
+    const fr=document.getElementById('ytStreamsFrame');
+    if(!fr.src){
+      // Плейлист стримов канала (если channelId известен) или прямая ссылка
+      const plId=channelId?'UU'+channelId.slice(2):'';
+      fr.src=plId
+        ? `https://www.youtube.com/embed/videoseries?list=${plId}&rel=0`
+        : `https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&rel=0`;
+    }
   }
 }
 
-// ════════════════════════════════════════════════════════
+// ═══════════════════════════════════════
 //  MODAL
-// ════════════════════════════════════════════════════════
-function openVid(id, title, date, views) {
-  document.getElementById('mTitle').textContent = title;
-  document.getElementById('mMeta').textContent  = `YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
-  document.getElementById('mVid').innerHTML =
-    `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0"
-             allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
-  document.getElementById('modal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+// ═══════════════════════════════════════
+function openVid(id,title,date,views){
+  document.getElementById('mTitle').textContent=title;
+  document.getElementById('mMeta').textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
+  document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
+  document.getElementById('modal').classList.add('open');document.body.style.overflow='hidden';
 }
-function closeModal() {
-  document.getElementById('modal').classList.remove('open');
-  document.getElementById('mVid').innerHTML = '';
-  document.body.style.overflow = '';
-}
-function bgClose(e) { if (e.target === document.getElementById('modal')) closeModal(); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+function closeModal(){document.getElementById('modal').classList.remove('open');document.getElementById('mVid').innerHTML='';document.body.style.overflow=''}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
-// ════════════════════════════════════════════════════════
-//  INIT
-// ════════════════════════════════════════════════════════
-loadYT();
-</script>
-
-<script>
-// ════════════════════════════════════════════════════════
-//  ВОЙС СЕЛЕКТОР — ДОНАТ
-// ════════════════════════════════════════════════════════
-const voiceNames = {
-  default: '🤖 Стандартный',
-  male:    '👨 Мужской',
-  female:  '👩 Женский',
-  robot:   '🦾 Робот',
-  cat:     '🐱 Котик',
-  epic:    '💪 Эпичный'
-};
-let selectedVoice = 'default';
-
-function selectVoice(btn, voice) {
-  selectedVoice = voice;
-  document.querySelectorAll('.voice-opt').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  const label = voiceNames[voice] || voice;
-  document.getElementById('voiceBarText').innerHTML =
-    `🎙️ Выбран: <strong style="color:#f5a623">${label}</strong> — напиши его в сообщении к донату!`;
-  document.getElementById('voiceBar').style.display = 'flex';
-  document.getElementById('voiceDonateBtn').textContent = `🎙️ Донат — ${label}`;
-}
-</script>
-
-<!-- ══════════════════════════════════════════════════════
-     ЗАЩИТА ОТ КОПИРОВАНИЯ
-// ════════════════════════════════════════════════════════
-const voiceNames = {
-  default: '🤖 Стандартный',
-  male:    '👨 Мужской',
-  female:  '👩 Женский',
-  robot:   '🦾 Робот',
-  cat:     '🐱 Котик',
-  epic:    '💪 Эпичный'
-};
-let selectedVoice = 'default';
-
-function selectVoice(btn, voice) {
-  selectedVoice = voice;
-  document.querySelectorAll('.voice-opt').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-
-  const label = voiceNames[voice] || voice;
-  const bar   = document.getElementById('voiceBar');
-  const donateBtn = document.getElementById('voiceDonateBtn');
-
-  document.getElementById('voiceBarText').innerHTML =
-    `🎙️ Выбран войс: <strong style="color:#f5a623">${label}</strong> — напиши его в сообщении к донату!`;
-  bar.style.display = 'flex';
-  donateBtn.textContent = `🎙️ Донат — ${label}`;
-}
-</script>
-     • Правый клик отключён
-     • F12, Ctrl+Shift+I/C/J, Ctrl+U — заблокированы
-     • Выделение текста отключено (onselectstart на body)
-     • DevTools: при открытии показывает предупреждение
-     ═══════════════════════════════════════════════════ -->
-<script>
-  // 1. Правый клик
-  document.addEventListener('contextmenu', e => e.preventDefault());
-
-  // 2. Горячие клавиши DevTools и просмотра кода
-  document.addEventListener('keydown', function(e) {
-    // F12
-    if (e.keyCode === 123) { e.preventDefault(); return false; }
-    // Ctrl+Shift+I (DevTools)
-    if (e.ctrlKey && e.shiftKey && e.keyCode === 73) { e.preventDefault(); return false; }
-    // Ctrl+Shift+C (Инспектор)
-    if (e.ctrlKey && e.shiftKey && e.keyCode === 67) { e.preventDefault(); return false; }
-    // Ctrl+Shift+J (Консоль)
-    if (e.ctrlKey && e.shiftKey && e.keyCode === 74) { e.preventDefault(); return false; }
-    // Ctrl+U (Просмотр кода страницы)
-    if (e.ctrlKey && e.keyCode === 85) { e.preventDefault(); return false; }
-    // Ctrl+S (Сохранить страницу)
-    if (e.ctrlKey && e.keyCode === 83) { e.preventDefault(); return false; }
-    // Ctrl+A (Выделить всё)
-    if (e.ctrlKey && e.keyCode === 65) { e.preventDefault(); return false; }
-  });
-
-  // 3. Защита от перетаскивания картинок
-  document.addEventListener('dragstart', e => e.preventDefault());
-
-  // 4. Предупреждение в консоли DevTools
-  (function devtoolsWarning() {
-    const threshold = 160;
-    const check = setInterval(() => {
-      const before = new Date();
-      // eslint-disable-next-line no-debugger
-      debugger;
-      const after = new Date();
-      if (after - before > threshold) {
-        clearInterval(check);
-        console.clear();
-        console.log(
-          '%c⛔ СТОП!',
-          'color:#ff2d55;font-size:3rem;font-weight:900;'
-        );
-        console.log(
-          '%cЭтот сайт принадлежит dan4ik37.\nЕсли ты разработчик — уважай чужой труд.',
-          'color:#f0f0f8;font-size:1rem;line-height:1.6;'
-        );
-      }
-    }, 500);
-  })();
-</script>
-
-<!-- ══════════════════════════════════════════════════════
-     GOOGLE TRANSLATE — кастомная кнопка 🌍
-     ═══════════════════════════════════════════════════ -->
-<script>
-// Список всех языков Google Translate
-const LANGS = [
-  ['af','Afrikaans'],['sq','Shqip'],['am','አማርኛ'],['ar','العربية'],
-  ['hy','Հայերեն'],['az','Azərbaycan'],['eu','Euskara'],['be','Беларуская'],
-  ['bn','বাংলা'],['bs','Bosanski'],['bg','Български'],['ca','Català'],
-  ['ceb','Cebuano'],['zh-CN','中文(简体)'],['zh-TW','中文(繁體)'],
-  ['co','Corsu'],['hr','Hrvatski'],['cs','Čeština'],['da','Dansk'],
-  ['nl','Nederlands'],['en','English'],['eo','Esperanto'],['et','Eesti'],
-  ['fi','Suomi'],['fr','Français'],['fy','Frysk'],['gl','Galego'],
-  ['ka','ქართული'],['de','Deutsch'],['el','Ελληνικά'],['gu','ગુજરાતી'],
-  ['ht','Kreyòl ayisyen'],['ha','Hausa'],['haw','ʻŌlelo Hawaiʻi'],['iw','עברית'],
-  ['hi','हिन्दी'],['hmn','Hmoob'],['hu','Magyar'],['is','Íslenska'],
-  ['ig','Igbo'],['id','Bahasa Indonesia'],['ga','Gaeilge'],['it','Italiano'],
-  ['ja','日本語'],['jw','Basa Jawa'],['kn','ಕನ್ನಡ'],['kk','Қазақша'],
-  ['km','ភាសាខ្មែរ'],['ko','한국어'],['ku','Kurdî'],['ky','Кыргызча'],
-  ['lo','ພາສາລາວ'],['la','Latina'],['lv','Latviešu'],['lt','Lietuvių'],
-  ['lb','Lëtzebuergesch'],['mk','Македонски'],['mg','Malagasy'],['ms','Bahasa Melayu'],
-  ['ml','മലയാളം'],['mt','Malti'],['mi','Te Reo Māori'],['mr','मराठी'],
-  ['mn','Монгол'],['my','မြန်မာဘာသာ'],['ne','नेपाली'],['no','Norsk'],
-  ['ny','Chichewa'],['ps','پښتو'],['fa','فارسی'],['pl','Polski'],
-  ['pt','Português'],['pa','ਪੰਜਾਬੀ'],['ro','Română'],['ru','Русский'],
-  ['sm','Gagana Samoa'],['gd','Gàidhlig'],['sr','Српски'],['st','Sesotho'],
-  ['sn','ChiShona'],['sd','سنڌي'],['si','සිංහල'],['sk','Slovenčina'],
-  ['sl','Slovenščina'],['so','Soomaali'],['es','Español'],['su','Basa Sunda'],
-  ['sw','Kiswahili'],['sv','Svenska'],['tl','Filipino'],['tg','Тоҷикӣ'],
-  ['ta','தமிழ்'],['te','తెలుగు'],['th','ภาษาไทย'],['tr','Türkçe'],
-  ['uk','Українська'],['ur','اردو'],['uz','O\'zbek'],['vi','Tiếng Việt'],
-  ['cy','Cymraeg'],['xh','isiXhosa'],['yi','ייִדיש'],['yo','Yorùbá'],
-  ['zu','isiZulu']
+// ═══════════════════════════════════════
+//  CHAT
+// ═══════════════════════════════════════
+const demoMsgs=[
+  {nick:'dan4ik37',text:'Привет всем! Добро пожаловать на сайт 👋',color:'var(--accent)'},
+  {nick:'Зритель',text:'Привет! Очень крутой сайт! 🔥',color:'#5bc4ff'},
+  {nick:'FanDan',text:'Когда следующий стрим? 🎮',color:'var(--tw)'},
+  {nick:'dan4ik37',text:'Скоро! Следите в Telegram 💪',color:'var(--accent)'},
+  {nick:'Гость',text:'Подписался на канал! Лайк поставил 👍',color:'#a0a0c0'},
 ];
 
-let currentLang = 'ru';
+const EMOJI=['😀','😂','🔥','❤','👍','🎮','💪','🤍','✨','😎','🙌','😍','👀','🤣','💯','🎉','😱','🥳','😤','💀','🤡','🫡','💝','⚡'];
 
-// Строим дропдаун
-function buildLangDropdown() {
-  const dd = document.getElementById('langDropdown');
-  dd.innerHTML = '';
+function switchChat(type,btn){
+  document.querySelectorAll('.chat-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  // Hide all
+  document.getElementById('chat-local').style.display='none';
+  document.getElementById('chat-twitch').classList.remove('active');
+  document.getElementById('chat-youtube').classList.remove('active');
 
-  // Поиск
-  const searchWrap = document.createElement('div');
-  searchWrap.style.cssText = 'padding:.3rem .4rem .5rem;';
-  const inp = document.createElement('input');
-  inp.type = 'text';
-  inp.placeholder = '🔍 Поиск языка...';
-  inp.style.cssText = `
-    width:100%; padding:.42rem .7rem; border-radius:8px;
-    background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.1);
-    color:#f0f0f8; font-size:.72rem; font-family:'Montserrat',sans-serif;
-    outline:none;
-  `;
-  inp.addEventListener('input', e => filterLangs(e.target.value));
-  inp.addEventListener('click', e => e.stopPropagation());
-  searchWrap.appendChild(inp);
-  dd.appendChild(searchWrap);
-
-  // Список языков
-  const list = document.createElement('div');
-  list.id = 'langList';
-  LANGS.forEach(([code, name]) => {
-    const btn = document.createElement('button');
-    btn.className = 'lang-opt' + (code === currentLang ? ' active' : '');
-    btn.dataset.code = code;
-    btn.dataset.name = name;
-    btn.textContent = name;
-    btn.onclick = () => selectLang(code, name);
-    list.appendChild(btn);
-  });
-  dd.appendChild(list);
-}
-
-function filterLangs(q) {
-  const items = document.querySelectorAll('#langList .lang-opt');
-  const lq = q.toLowerCase();
-  items.forEach(b => {
-    const match = b.dataset.name.toLowerCase().includes(lq) || b.dataset.code.includes(lq);
-    b.style.display = match ? 'block' : 'none';
-  });
-}
-
-function toggleLang(e) {
-  e.stopPropagation();
-  const dd = document.getElementById('langDropdown');
-  if (!dd.innerHTML) buildLangDropdown();
-  dd.classList.toggle('open');
-  // Фокус на поиск
-  if (dd.classList.contains('open')) {
-    setTimeout(() => dd.querySelector('input')?.focus(), 50);
+  if(type==='local'){
+    document.getElementById('chat-local').style.display='flex';
+    document.getElementById('chatSubtitle').textContent='Локальный чат сайта';
+  } else if(type==='twitch'){
+    const fr=document.getElementById('chat-twitch');
+    if(!fr.src) fr.src=`https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout`;
+    fr.classList.add('active');
+    document.getElementById('chatSubtitle').textContent='Twitch чат';
+  } else if(type==='youtube'){
+    const fr=document.getElementById('chat-youtube');
+    if(!fr.src){
+      if(channelId){
+        fr.src=`https://www.youtube.com/live_chat?channel=${channelId}&embed_domain=${HOST}`;
+      } else {
+        // Показываем сообщение вместо пустого iframe
+        fr.style.display='none';
+        const info=document.createElement('div');
+        info.style.cssText='height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:2rem;text-align:center';
+        info.innerHTML=`<div style="font-size:2rem">▶</div><div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--yt)">YouTube Live чат</div><div style="font-size:.8rem;color:var(--muted);line-height:1.7;max-width:300px">Чат работает только во время активного стрима.<br>Когда начнётся стрим — здесь появится живой чат.</div><a href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" class="yt-sub" style="display:inline-flex;margin-top:.5rem">▶ Стримы канала</a>`;
+        fr.parentNode.appendChild(info);
+      }
+    }
+    fr.classList.add('active');
+    document.getElementById('chatSubtitle').textContent='YouTube Live — только во время стрима';
   }
 }
 
-function selectLang(code, name) {
-  currentLang = code;
-  document.getElementById('langDropdown').classList.remove('open');
-
-  // Метка на кнопке
-  document.getElementById('langLabel').textContent = code.split('-')[0].toUpperCase();
-
-  // Активный стиль в дропдауне
-  document.querySelectorAll('.lang-opt').forEach(b => {
-    b.classList.toggle('active', b.dataset.code === code);
+function initChat(){
+  document.getElementById('chat-local').style.display='flex';
+  // Заполняем эмодзи пикер
+  const picker=document.getElementById('emojiPicker');
+  EMOJI.forEach(em=>{
+    const btn=document.createElement('button');
+    btn.textContent=em;
+    btn.onclick=()=>insertEmoji(em);
+    btn.style.cssText='background:none;border:none;font-size:1.2rem;cursor:pointer;padding:.2rem .25rem;border-radius:6px;transition:background .15s';
+    btn.onmouseover=()=>btn.style.background='rgba(255,255,255,.1)';
+    btn.onmouseout=()=>btn.style.background='none';
+    picker.appendChild(btn);
   });
+  // Если ник уже есть
+  if(chatNick) showChatInput();
+  // Демо сообщения
+  demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false),i*500));
+}
 
-  // ─── Главный метод: меняем select в виджете Google напрямую ───
-  // Это работает на GitHub Pages, localhost и любом хостинге
-  function doTranslate() {
-    // Способ 1: через скрытый select виджета
-    const sel = document.querySelector('.goog-te-combo');
-    if (sel) {
-      sel.value = code;
-      // Нужно два события чтобы Google среагировал
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
-    }
-    // Способ 2: через глобальную функцию если доступна
-    if (window.doGTranslate) {
-      window.doGTranslate('ru|' + code);
-      return true;
-    }
-    return false;
-  }
+function showChatInput(){
+  document.getElementById('chatNickScreen').style.display='none';
+  document.getElementById('chatMainInput').style.display='flex';
+  document.getElementById('chatNickDisplay').textContent=chatNick;
+}
 
-  if (code === 'ru') {
-    // Сброс — перезагрузка без cookie
-    document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
-    document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.' + location.hostname;
-    location.reload();
+function setNick(){
+  const n=document.getElementById('chatNameField').value.trim();
+  if(!n||n.length<2){
+    document.getElementById('chatNameField').style.borderColor='var(--accent)';
+    document.getElementById('chatNameField').placeholder='Минимум 2 символа!';
     return;
   }
+  chatNick=n;
+  try{localStorage.setItem('d37_nick',n)}catch(e){}
+  showChatInput();
+  addMsg('🔔 Система',`${n} присоединился к чату!`,'var(--muted)',false);
+}
 
-  // Устанавливаем cookie для сохранения языка
-  const val = '/ru/' + code;
-  document.cookie = 'googtrans=' + val + '; path=/';
-  document.cookie = 'googtrans=' + val + '; path=/; domain=.' + location.hostname;
+function changeNick(){
+  chatNick='';
+  try{localStorage.removeItem('d37_nick')}catch(e){}
+  document.getElementById('chatNickScreen').style.display='flex';
+  document.getElementById('chatMainInput').style.display='none';
+  document.getElementById('chatNameField').value='';
+  document.getElementById('chatNameField').style.borderColor='';
+  document.getElementById('chatNameField').placeholder='Твой ник...';
+}
 
-  // Пробуем сразу
-  if (!doTranslate()) {
-    // Если виджет ещё не загружен — ждём и пробуем снова
-    let tries = 0;
-    const interval = setInterval(() => {
-      tries++;
-      if (doTranslate() || tries > 20) clearInterval(interval);
-    }, 300);
+function addMsg(nick,text,color,isOwn){
+  const msgs=document.getElementById('chatMsgs');
+  const initials=(nick.replace(/[^a-zA-Zа-яА-Я]/g,'')||'?').substring(0,2).toUpperCase();
+  const time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  const div=document.createElement('div');
+  div.className='chat-msg'+(isOwn?' own-msg':'');
+  div.innerHTML=`
+    <div class="chat-avatar" style="background:${color||'var(--accent)'}">${initials}</div>
+    <div class="chat-bubble">
+      <div class="chat-user" style="color:${color||'var(--accent)'}">${esc(nick)}</div>
+      <div class="chat-text">${esc(text)}</div>
+      <div class="chat-time">${time}</div>
+    </div>`;
+  msgs.appendChild(div);
+  // Авто-скролл только если пользователь уже внизу
+  if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 80) msgs.scrollTop=msgs.scrollHeight;
+}
+
+function sendMsg(){
+  if(!chatNick){document.getElementById('chatNickScreen').style.display='flex';document.getElementById('chatMainInput').style.display='none';return}
+  const inp=document.getElementById('chatInput'),text=inp.value.trim();
+  if(!text)return;
+  inp.value='';
+  addMsg(chatNick,text,'var(--tw)',true);
+}
+
+function insertEmoji(em){
+  const inp=document.getElementById('chatInput');
+  inp.value+=em;inp.focus();
+  document.getElementById('emojiPicker').style.display='none';
+}
+
+function toggleEmoji(e){
+  e.stopPropagation();
+  const picker=document.getElementById('emojiPicker');
+  picker.style.display=picker.style.display==='flex'?'none':'flex';
+}
+document.addEventListener('click',()=>{const p=document.getElementById('emojiPicker');if(p)p.style.display='none'});
+
+// ═══════════════════════════════════════
+//  GOOGLE TRANSLATE
+// ═══════════════════════════════════════
+const LANGS=[['af','Afrikaans'],['sq','Shqip'],['am','አማርኛ'],['ar','العربية'],['hy','Հայերեն'],['az','Azərbaycan'],['eu','Euskara'],['be','Беларуская'],['bn','বাংলা'],['bs','Bosanski'],['bg','Български'],['ca','Català'],['ceb','Cebuano'],['zh-CN','中文(简体)'],['zh-TW','中文(繁體)'],['co','Corsu'],['hr','Hrvatski'],['cs','Čeština'],['da','Dansk'],['nl','Nederlands'],['en','English'],['eo','Esperanto'],['et','Eesti'],['fi','Suomi'],['fr','Français'],['fy','Frysk'],['gl','Galego'],['ka','ქართული'],['de','Deutsch'],['el','Ελληνικά'],['gu','ગુજરાતી'],['ht','Kreyòl ayisyen'],['ha','Hausa'],['haw','ʻŌlelo Hawaiʻi'],['iw','עברית'],['hi','हिन्दी'],['hmn','Hmoob'],['hu','Magyar'],['is','Íslenska'],['ig','Igbo'],['id','Bahasa Indonesia'],['ga','Gaeilge'],['it','Italiano'],['ja','日本語'],['jw','Basa Jawa'],['kn','ಕನ್ನಡ'],['kk','Қазақша'],['km','ភាសាខ្មែរ'],['ko','한국어'],['ku','Kurdî'],['ky','Кыргызча'],['lo','ພາສາລາວ'],['la','Latina'],['lv','Latviešu'],['lt','Lietuvių'],['lb','Lëtzebuergesch'],['mk','Македонски'],['mg','Malagasy'],['ms','Bahasa Melayu'],['ml','മലയാളം'],['mt','Malti'],['mi','Te Reo Māori'],['mr','मराठी'],['mn','Монгол'],['my','မြန်မာဘာသာ'],['ne','नेपाली'],['no','Norsk'],['ny','Chichewa'],['ps','پښتو'],['fa','فارسی'],['pl','Polski'],['pt','Português'],['pa','ਪੰਜਾਬੀ'],['ro','Română'],['ru','Русский'],['sm','Gagana Samoa'],['gd','Gàidhlig'],['sr','Српски'],['st','Sesotho'],['sn','ChiShona'],['sd','سنڌي'],['si','සිංහල'],['sk','Slovenčina'],['sl','Slovenščina'],['so','Soomaali'],['es','Español'],['su','Basa Sunda'],['sw','Kiswahili'],['sv','Svenska'],['tl','Filipino'],['tg','Тоҷикӣ'],['ta','தமிழ்'],['te','తెలుగు'],['th','ภาษาไทย'],['tr','Türkçe'],['uk','Українська'],['ur','اردو'],['uz','O\'zbek'],['vi','Tiếng Việt'],['cy','Cymraeg'],['xh','isiXhosa'],['yi','ייִדיש'],['yo','Yorùbá'],['zu','isiZulu']];
+let curLang='ru';
+
+function buildLangList(){
+  const list=document.getElementById('langList');list.innerHTML='';
+  LANGS.forEach(([code,name])=>{const b=document.createElement('button');b.className='lang-opt'+(code===curLang?' active':'');b.dataset.code=code;b.dataset.name=name;b.textContent=name;b.onclick=()=>selectLang(code);list.appendChild(b)});
+}
+function filterLangs(q){document.querySelectorAll('#langList .lang-opt').forEach(b=>{b.style.display=b.dataset.name.toLowerCase().includes(q.toLowerCase())||b.dataset.code.includes(q)?'block':'none'})}
+function toggleLang(e){e.stopPropagation();const dd=document.getElementById('langDropdown');if(!dd.querySelector('button'))buildLangList();dd.classList.toggle('open');if(dd.classList.contains('open'))setTimeout(()=>dd.querySelector('.lang-search')?.focus(),50)}
+document.addEventListener('click',e=>{if(!document.getElementById('langWrap').contains(e.target))document.getElementById('langDropdown').classList.remove('open')});
+
+function selectLang(code){
+  curLang=code;document.getElementById('langDropdown').classList.remove('open');
+  document.getElementById('langLabel').textContent=code.split('-')[0].toUpperCase();
+  document.querySelectorAll('#langList .lang-opt').forEach(b=>b.classList.toggle('active',b.dataset.code===code));
+  if(code==='ru'){document.cookie='googtrans=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/';document.cookie='googtrans=;expires=Thu,01 Jan 1970 00:00:00 UTC;path=/;domain=.'+HOST;location.reload();return}
+  const v='/ru/'+code;document.cookie='googtrans='+v+';path=/';document.cookie='googtrans='+v+';path=/;domain=.'+HOST;
+  function tryTranslate(){const sel=document.querySelector('.goog-te-combo');if(sel){sel.value=code;sel.dispatchEvent(new Event('change',{bubbles:true}));return true}if(window.doGTranslate){window.doGTranslate('ru|'+code);return true}return false}
+  if(!tryTranslate()){let n=0;const t=setInterval(()=>{n++;if(tryTranslate()||n>20)clearInterval(t)},300)}
+}
+window.addEventListener('load',()=>{const m=document.cookie.match(/googtrans=\/ru\/([^;]+)/);if(m){curLang=m[1];document.getElementById('langLabel').textContent=m[1].split('-')[0].toUpperCase()}});
+
+// ═══════════════════════════════════════
+//  PROTECTION
+// ═══════════════════════════════════════
+document.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('keydown',e=>{if(e.keyCode===123||(e.ctrlKey&&e.shiftKey&&[73,67,74].includes(e.keyCode))||(e.ctrlKey&&[85,83,65].includes(e.keyCode))){e.preventDefault();return false}});
+document.addEventListener('dragstart',e=>e.preventDefault());
+
+// ═══════════════════════════════════════
+//  РЕЖИМ ПРОИЗВОДИТЕЛЬНОСТИ
+// ═══════════════════════════════════════
+const PERF_KEY = 'd37_perf';
+let currentPerf = null;
+
+function setPerf(mode) {
+  currentPerf = mode;
+  try { localStorage.setItem(PERF_KEY, mode); } catch(e) {}
+
+  // Убираем старые классы
+  document.body.classList.remove('perf-low','perf-high');
+  document.body.classList.add('perf-' + mode);
+
+  // Обновляем кнопку сбоку
+  const icon = document.getElementById('ptIcon');
+  const lbl  = document.getElementById('ptLbl');
+  if (mode === 'low') {
+    icon.textContent = '🐢'; lbl.textContent = 'Low';
+  } else {
+    icon.textContent = '🚀'; lbl.textContent = 'High';
+  }
+
+  // Закрываем попап
+  document.getElementById('perfPopup').classList.add('hidden');
+
+  if (mode === 'high') {
+    initParticles();
+    initCursorTrail();
+    initScrollReveal();
+    // Запускаем typing после небольшой задержки
+    restartTyping();
+  } else {
+    // Убираем частицы
+    document.getElementById('particles').innerHTML = '';
+    // Убираем typing animation
+    const sub = document.querySelector('.hero-sub');
+    if (sub) { sub.style.animation = 'none'; sub.style.borderRight = 'none'; sub.style.maxWidth = '100%'; }
+    // Делаем все reveal visible
+    document.querySelectorAll('.reveal').forEach(el => {
+      el.style.opacity = '1'; el.style.transform = 'none';
+    });
   }
 }
 
-// Закрывать дропдаун при клике снаружи
-document.addEventListener('click', e => {
-  if (!document.getElementById('langWrap').contains(e.target)) {
-    document.getElementById('langDropdown').classList.remove('open');
-  }
-});
+function openPerfPopup() {
+  document.getElementById('perfPopup').classList.remove('hidden');
+}
 
-// Синхронизировать метку кнопки при загрузке
-window.addEventListener('load', () => {
-  const m = document.cookie.match(/googtrans=\/ru\/([^;]+)/);
-  if (m) {
-    currentLang = m[1];
-    document.getElementById('langLabel').textContent = m[1].split('-')[0].toUpperCase();
+function initPerfMode() {
+  let saved = null;
+  try { saved = localStorage.getItem(PERF_KEY); } catch(e) {}
+  if (saved) {
+    setPerf(saved);
+  } else {
+    // Показываем попап при первом заходе
+    document.getElementById('perfPopup').classList.remove('hidden');
   }
-});
+}
+
+// ── ЧАСТИЦЫ ──
+function initParticles() {
+  const container = document.getElementById('particles');
+  container.innerHTML = '';
+  const colors = ['var(--accent)','var(--tw)','var(--tg)','var(--accent2)','#a855f7'];
+  for (let i = 0; i < 35; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const size = Math.random() * 3 + 1;
+    p.style.cssText = `
+      left:${Math.random() * 100}%;
+      width:${size}px; height:${size}px;
+      background:${colors[Math.floor(Math.random() * colors.length)]};
+      --dur:${Math.random() * 12 + 6}s;
+      --delay:${Math.random() * 8}s;
+      --drift:${(Math.random() - 0.5) * 80}px;
+      border-radius:50%;
+    `;
+    container.appendChild(p);
+  }
+}
+
+// ── КУРСОР ТРЕЙЛ ──
+function initCursorTrail() {
+  const trail = document.getElementById('cursorTrail');
+  let mx = -100, my = -100;
+  let cx = -100, cy = -100;
+
+  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+
+  function animTrail() {
+    cx += (mx - cx) * 0.15;
+    cy += (my - cy) * 0.15;
+    trail.style.left = cx + 'px';
+    trail.style.top  = cy + 'px';
+    if (currentPerf === 'high') requestAnimationFrame(animTrail);
+  }
+  animTrail();
+}
+
+// ── SCROLL REVEAL ──
+function initScrollReveal() {
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+}
+
+// ── TYPING RESTART ──
+function restartTyping() {
+  const sub = document.querySelector('.hero-sub');
+  if (!sub) return;
+  sub.style.animation = 'none';
+  sub.offsetHeight; // reflow
+  sub.style.animation = '';
+}
+
+// ═══════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════
+loadYT();
+initChat();
+initPerfMode();
 </script>
 
 <script type="text/javascript">
-  function googleTranslateElementInit() {
-    new google.translate.TranslateElement({
-      pageLanguage: 'ru',
-      autoDisplay: false
-    }, 'google_translate_element');
-  }
+function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'ru',autoDisplay:false},'google_translate_element')}
 </script>
-<script type="text/javascript"
-  src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit">
-</script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>
