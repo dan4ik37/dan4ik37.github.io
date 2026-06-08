@@ -140,72 +140,36 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 .pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
 .pp-note{font-size:.65rem;color:var(--muted);text-align:center;margin-top:1.2rem;opacity:.6}
 
-/* ── РЕЖИМ: СЛАБОЕ УСТРОЙСТВО (LOW) ── */
-body.perf-low .hero-bg{display:none}
-body.perf-low .hero-grid{display:none}
-body.perf-low .avatar{animation:none}
-body.perf-low .avatar-ring{animation:spin 6s linear infinite}
-body.perf-low .live-dot{animation:none;opacity:.8}
-body.perf-low .vcard:hover{transform:none;box-shadow:none}
-body.perf-low .hub-card:hover{transform:none;box-shadow:none}
-body.perf-low .stat-card:hover{transform:none;box-shadow:none}
-body.perf-low .hbtn:hover{transform:none}
-body.perf-low .about-card:hover{transform:none}
-body.perf-low .dc:hover{transform:none;box-shadow:none}
-body.perf-low body::after{display:none}
-body.perf-low *{transition-duration:.05s!important}
-#perfToggle .pt-icon{content:'🐢'}
+/* ── LOW: слабое устройство ── */
+body.low .hero-bg{opacity:.5}
+body.low .hero-grid{display:none}
+body.low .avatar{animation:none}
+body.low .avatar-ring{animation:spin 6s linear infinite}
+body.low .live-dot{animation:none;opacity:.8}
+body.low .vcard:hover{transform:none;box-shadow:none}
+body.low .hub-card:hover{transform:none;box-shadow:none}
+body.low .stat-card:hover{transform:none;box-shadow:none}
+body.low .hbtn:hover{transform:none}
+body.low .about-card:hover{transform:none}
+body.low .dc:hover{transform:none;box-shadow:none}
+body.low *{animation-duration:.01ms!important;animation-iteration-count:1!important}
+body.low .avatar-ring{animation-duration:6s!important;animation-iteration-count:infinite!important}
+body.low .live-dot{animation:none!important}
 
-/* ── РЕЖИМ: МОЩНОЕ УСТРОЙСТВО (HIGH) ── */
-/* Частицы */
-#particles{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-body.perf-low #particles{display:none}
-.particle{
-  position:absolute;width:2px;height:2px;border-radius:50%;
-  background:var(--accent);opacity:0;
-  animation:particleFly var(--dur,8s) var(--delay,0s) ease-in infinite;
-  will-change:transform,opacity;
-}
-@keyframes particleFly{
-  0%{transform:translateY(100vh) translateX(0);opacity:0}
-  10%{opacity:.6}
-  90%{opacity:.2}
-  100%{transform:translateY(-10vh) translateX(var(--drift,20px));opacity:0}
-}
-/* Курсор-трейл */
-#cursorTrail{position:fixed;pointer-events:none;z-index:9998;width:20px;height:20px;border-radius:50%;background:radial-gradient(circle,rgba(255,45,85,.6),transparent);transform:translate(-50%,-50%);transition:transform .1s;mix-blend-mode:screen}
-body.perf-low #cursorTrail{display:none}
-/* Неоновое свечение на hover для карточек (HIGH only) */
-body.perf-high .vcard{transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s}
-body.perf-high .vcard:hover{transform:translateY(-8px) rotateX(2deg);box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 40px rgba(255,45,85,.18)}
-body.perf-high .hub-card:hover{transform:translateY(-8px) scale(1.02)}
-body.perf-high .stat-card:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 16px 40px rgba(0,0,0,.5)}
-/* Анимированный градиент на кнопках (HIGH only) */
-body.perf-high .hb-don{background-size:200% 200%;animation:gradShift 3s ease infinite}
+/* ── HIGH: мощное устройство ── */
+body.high .vcard{transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s}
+body.high .vcard:hover{transform:translateY(-8px) rotateX(2deg);box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 40px rgba(255,45,85,.18)}
+body.high .hub-card:hover{transform:translateY(-8px) scale(1.02)}
+body.high .stat-card:hover{transform:translateY(-6px) scale(1.02)}
+body.high .hb-don{background:linear-gradient(270deg,var(--accent),var(--accent2),var(--tw),var(--accent));background-size:400% 400%;animation:gradShift 4s ease infinite}
 @keyframes gradShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-/* Шиммер на статистике */
-body.perf-high .stat-card::before{
-  content:'';position:absolute;inset:0;
-  background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.04) 50%,transparent 60%);
-  background-size:200% 100%;
-  animation:shimmer 3s ease-in-out infinite;
-}
+body.high .stat-card{overflow:hidden}
+body.high .stat-card::before{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.04) 50%,transparent 60%);background-size:200% 100%;animation:shimmer 3s ease-in-out infinite;pointer-events:none}
 @keyframes shimmer{0%{background-position:-100% 0}100%{background-position:200% 0}}
-/* Hero фон оживает в HIGH */
-body.perf-high .hero-bg{animation:heroBg 12s ease-in-out infinite alternate}
-@keyframes heroBg{0%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1.08) rotate(-1deg)}}
-/* Typing effect на subtitle */
-body.perf-high .hero-sub{overflow:hidden;border-right:2px solid var(--accent);white-space:nowrap;animation:typing 2s steps(30,end) .5s both,blink .8s step-end infinite .5s}
-@keyframes typing{from{max-width:0}to{max-width:100%}}
-@keyframes blink{0%,100%{border-color:var(--accent)}50%{border-color:transparent}}
-/* Glow на аватаре */
-body.perf-high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
-body.perf-high .avatar-ring{animation:spin 3s linear infinite}
-/* Скролл-ревил секций */
-body.perf-high .reveal{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
-body.perf-high .reveal.visible{opacity:1;transform:translateY(0)}
+body.high .hero-bg{animation:heroBg 12s ease-in-out infinite alternate}
+@keyframes heroBg{0%{transform:scale(1)}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1.08) rotate(-1deg)}}
+body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 
-/* Адаптивно скрываем перфтогл на очень маленьких экранах */
 @media(max-width:360px){#perfToggle{display:none}}
 
 /* ── LAYOUT ── */
@@ -449,18 +413,177 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 .footer-links a{font-size:.67rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);transition:color .2s}
 .footer-links a:hover{color:var(--text)}
 .footer-copy{font-size:.62rem;color:rgba(255,255,255,.1)}
+/* ══════════════════════════════════════════
+   РЕЖИМЫ ПРОИЗВОДИТЕЛЬНОСТИ
+   body.low  — слабое устройство
+   body.high — мощное устройство
+   ══════════════════════════════════════════ */
+
+/* Кнопка сбоку */
+#perfToggle{
+  position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:490;
+  display:flex;flex-direction:column;align-items:center;gap:.25rem;
+  padding:.6rem .55rem .7rem;
+  background:rgba(8,8,14,.9);border:1px solid var(--border);
+  border-right:none;border-radius:12px 0 0 12px;
+  cursor:pointer;backdrop-filter:blur(12px);
+  transition:background .2s,border-color .2s;
+  user-select:none;
+}
+#perfToggle:hover{background:rgba(20,20,30,.95);border-color:var(--accent)}
+.pt-icon{font-size:1.1rem;line-height:1}
+.pt-lbl{font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
+
+/* Попап */
+#perfPopup{
+  position:fixed;inset:0;z-index:9100;
+  background:rgba(0,0,0,.88);backdrop-filter:blur(16px);
+  display:flex;align-items:center;justify-content:center;padding:1.5rem;
+  opacity:0;pointer-events:none;transition:opacity .3s;
+}
+#perfPopup.show{opacity:1;pointer-events:all}
+.pp-box{
+  background:#13131e;border:1px solid rgba(255,255,255,.1);border-radius:24px;
+  padding:2.5rem 2rem;max-width:480px;width:100%;
+  box-shadow:0 40px 80px rgba(0,0,0,.7);
+  transform:translateY(20px);transition:transform .3s;
+}
+#perfPopup.show .pp-box{transform:translateY(0)}
+.pp-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.6rem}
+.pp-sub{font-size:.78rem;color:var(--muted);text-align:center;line-height:1.7;margin-bottom:1.8rem}
+.pp-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem}
+.pp-card{
+  background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.08);
+  border-radius:16px;padding:1.5rem 1rem;text-align:center;cursor:pointer;
+  transition:all .2s;
+}
+.pp-card:hover{border-color:var(--tg);background:rgba(41,182,246,.08);transform:translateY(-3px)}
+.pp-card.high:hover{border-color:#a855f7;background:rgba(168,85,247,.08)}
+.pp-card.active-low{border-color:var(--tg)!important;background:rgba(41,182,246,.1)!important}
+.pp-card.active-high{border-color:#a855f7!important;background:rgba(168,85,247,.1)!important}
+.pp-card-icon{font-size:2.2rem;margin-bottom:.6rem}
+.pp-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;margin-bottom:.4rem}
+.pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
+.pp-note{font-size:.68rem;color:var(--muted);text-align:center;opacity:.6}
+.pp-skip{display:block;text-align:center;margin-top:1rem;font-size:.72rem;color:var(--muted);cursor:pointer;transition:color .2s}
+.pp-skip:hover{color:var(--text)}
+
+/* ── ЧАСТИЦЫ (только HIGH) ── */
+#particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+body.low #particles{display:none}
+.particle{
+  position:absolute;border-radius:50%;pointer-events:none;
+  background:var(--accent);opacity:0;
+  animation:particleFly linear infinite;
+  will-change:transform,opacity;
+}
+@keyframes particleFly{
+  0%{opacity:0;transform:translateY(0) scale(0)}
+  10%{opacity:.6}
+  90%{opacity:.2}
+  100%{opacity:0;transform:translateY(-120vh) scale(.5) rotate(360deg)}
+}
+
+/* ── КАСТОМНЫЙ КУРСОР (только HIGH, только desktop) ── */
+body.high { cursor: none; }
+body.high a, body.high button, body.high .vcard, body.high .hub-card { cursor: none; }
+
+#cursorTrail{
+  position:fixed;pointer-events:none;z-index:9999;
+  width:28px;height:28px;border-radius:50%;
+  border:1.5px solid rgba(255,45,85,.8);
+  top:0;left:0;
+  transform:translate(-200px,-200px);
+  transition:transform .12s ease,width .2s,height .2s,border-color .2s;
+  display:none;
+  mix-blend-mode:screen;
+  background:rgba(255,45,85,.05);
+}
+#cursorDot{
+  position:fixed;pointer-events:none;z-index:10000;
+  width:5px;height:5px;border-radius:50%;
+  background:var(--accent);
+  top:0;left:0;
+  transform:translate(-200px,-200px);
+  transition:transform .02s linear;
+  display:none;
+}
+body.high #cursorTrail,body.high #cursorDot{display:block}
+@media(max-width:768px){
+  body.high #cursorTrail,body.high #cursorDot{display:none}
+  body.high{cursor:auto}
+}
+
+/* ── AURORA (только HIGH) — плавный фон ── */
+.hero-aurora{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+  display:none;
+}
+body.high .hero-aurora{display:block}
+.aurora-orb{
+  position:absolute;border-radius:50%;filter:blur(80px);
+  animation:auroraFloat ease-in-out infinite alternate;
+  will-change:transform;
+}
+.ao1{width:500px;height:500px;background:radial-gradient(circle,rgba(255,45,85,.25),transparent 70%);left:-10%;top:-20%;animation-duration:8s}
+.ao2{width:400px;height:400px;background:radial-gradient(circle,rgba(145,71,255,.2),transparent 70%);right:-5%;bottom:-10%;animation-duration:10s;animation-delay:-3s}
+.ao3{width:300px;height:300px;background:radial-gradient(circle,rgba(41,182,246,.15),transparent 70%);left:40%;top:20%;animation-duration:7s;animation-delay:-5s}
+@keyframes auroraFloat{0%{transform:translate(0,0) scale(1)}100%{transform:translate(30px,20px) scale(1.15)}}
+
+/* ── GLITCH ЭФФЕКТ на заголовке (только HIGH) ── */
+body.high .hero h1{animation:glitchPulse 6s ease-in-out infinite}
+@keyframes glitchPulse{
+  0%,90%,100%{text-shadow:none}
+  91%{text-shadow:-2px 0 var(--tt),2px 0 var(--tg)}
+  92%{text-shadow:2px 0 var(--tt),-2px 0 var(--tg)}
+  93%{text-shadow:none}
+  95%{text-shadow:-1px 0 var(--tw),1px 0 var(--accent)}
+  96%{text-shadow:none}
+}
+
+/* ── CURSOR GLOW на кнопках (HIGH) ── */
+body.high .hbtn{position:relative;overflow:hidden}
+body.high .hbtn::after{
+  content:'';position:absolute;inset:0;border-radius:50px;
+  background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.15) 0%,transparent 60%);
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+body.high .hbtn:hover::after{opacity:1}
+
+/* ── REVEAL при скролле ── */
+.reveal{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:translateY(0)}
+body.low .reveal{opacity:1;transform:none;transition:none}
+
+/* ── TYPING эффект на hero-sub (HIGH) ── */
+body.high .hero-sub{overflow:hidden;border-right:2px solid var(--accent);white-space:nowrap;animation:typing 2s steps(30) .5s both,blink .7s step-end infinite .5s}
+@keyframes typing{from{width:0;opacity:1}to{width:100%;opacity:1}}
+@keyframes blink{0%,100%{border-color:var(--accent)}50%{border-color:transparent}}
+body.low .hero-sub{white-space:normal}
+
+/* ── NEON GLOW на stat cards (HIGH) ── */
+body.high .sc1:hover{box-shadow:0 0 30px rgba(255,64,64,.3),0 12px 35px rgba(0,0,0,.4)}
+body.high .sc4:hover{box-shadow:0 0 30px rgba(145,71,255,.3),0 12px 35px rgba(0,0,0,.4)}
+body.high .sc5:hover{box-shadow:0 0 30px rgba(41,182,246,.3),0 12px 35px rgba(0,0,0,.4)}
+
+/* ── AVATAR PULSE (HIGH) ── */
+body.high .avatar::before{
+  content:'';position:absolute;inset:-12px;border-radius:50%;
+  background:conic-gradient(var(--accent),var(--accent2),var(--tw),var(--tg),var(--accent));
+  opacity:.35;filter:blur(8px);animation:spin 4s linear infinite;z-index:-1;
+}
 @media(max-width:600px){.live-bar{flex-direction:column;text-align:center}.cta-tw{margin:0}}
 </style>
 </head>
 <body onselectstart="return false">
 
-<!-- ЧАСТИЦЫ (HIGH mode) -->
+<!-- ЧАСТИЦЫ -->
 <div id="particles"></div>
-
-<!-- КУРСОР (HIGH mode) -->
+<!-- КУРСОР -->
 <div id="cursorTrail"></div>
+<div id="cursorDot"></div>
 
-<!-- КНОПКА РЕЖИМА (сбоку) -->
+<!-- КНОПКА РЕЖИМА -->
 <div id="perfToggle" onclick="openPerfPopup()" title="Режим производительности">
   <span class="pt-icon" id="ptIcon">⚡</span>
   <span class="pt-lbl" id="ptLbl">Режим</span>
@@ -470,20 +593,21 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 <div id="perfPopup">
   <div class="pp-box">
     <div class="pp-title">⚡ Выбери режим</div>
-    <div class="pp-sub">Это поможет сайту работать комфортно на твоём устройстве.<br>Можно изменить в любой момент кнопкой сбоку.</div>
+    <div class="pp-sub">Это поможет сайту работать комфортно на твоём устройстве.<br>Можно изменить в любой момент — кнопка справа.</div>
     <div class="pp-cards">
-      <div class="pp-card" onclick="setPerf('low')">
+      <div class="pp-card" id="cardLow" onclick="setPerf('low')">
         <div class="pp-card-icon">🐢</div>
         <div class="pp-card-name" style="color:var(--tg)">Слабое</div>
-        <div class="pp-card-desc">Телефон, планшет или старый ПК. Минимум анимаций — максимум скорости</div>
+        <div class="pp-card-desc">Телефон или старый ПК. Минимум анимаций — максимум скорости</div>
       </div>
-      <div class="pp-card high" onclick="setPerf('high')">
+      <div class="pp-card high" id="cardHigh" onclick="setPerf('high')">
         <div class="pp-card-icon">🚀</div>
         <div class="pp-card-name" style="color:#a855f7">Мощное</div>
-        <div class="pp-card-desc">ПК или флагманский телефон. Полные анимации, частицы, эффекты</div>
+        <div class="pp-card-desc">ПК или флагман. Полные анимации, частицы, aurora, glitch</div>
       </div>
     </div>
     <div class="pp-note">Выбор сохраняется в браузере</div>
+    <span class="pp-skip" onclick="setPerf('low')">Пропустить (слабое)</span>
   </div>
 </div>
 
@@ -495,6 +619,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
     <a href="#about">Обо мне</a>
     <a href="#schedule">Расписание</a>
     <a href="#chat">Чат</a>
+    <a href="#ads">Реклама</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
   <div class="lang-wrap" id="langWrap">
@@ -513,7 +638,14 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 
 <!-- HERO -->
 <div class="hero">
-  <div class="hero-bg"></div><div class="hero-grid"></div>
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <!-- Aurora (HIGH only) -->
+  <div class="hero-aurora">
+    <div class="aurora-orb ao1"></div>
+    <div class="aurora-orb ao2"></div>
+    <div class="aurora-orb ao3"></div>
+  </div>
   <div class="avatar"><div class="avatar-ring"></div><div class="avatar-inner">D37</div></div>
   <h1>dan4ik37</h1>
   <p class="hero-sub">YouTube · TikTok · Twitch · VK</p>
@@ -854,6 +986,69 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
   <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
 </div>
 
+<!-- РЕКЛАМА СЕКЦИЯ -->
+<div class="wrap reveal" id="ads">
+  <div class="divider"></div>
+  <div class="eyebrow">Сотрудничество</div>
+  <h2 class="sec-title">Реклама 📢</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem">
+
+    <!-- Google AdSense блок -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--yt)">
+      <div style="font-size:1.8rem;margin-bottom:.8rem">📺</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--yt);margin-bottom:.6rem">Google AdSense</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1rem">
+        Автоматическая реклама Google отображается на сайте после одобрения аккаунта AdSense.
+        Рекламодатели платят за показы — ты зарабатываешь автоматически.
+      </div>
+      <div style="font-size:.72rem;color:rgba(255,64,64,.6);letter-spacing:1px">ID: ca-pub-7940480593743401</div>
+    </div>
+
+    <!-- Прямая реклама -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--accent)">
+      <div style="font-size:1.8rem;margin-bottom:.8rem">🤝</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:.6rem">Прямое сотрудничество</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1.2rem">
+        Хочешь разместить рекламу у dan4ik37 на стриме, в видео или соц сетях?
+        Пиши напрямую — обсудим условия!
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.6rem">
+        <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank"
+           style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(41,182,246,.1);border:1.5px solid var(--tg);color:var(--tg);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:background .2s"
+           onmouseover="this.style.background='rgba(41,182,246,.2)'" onmouseout="this.style.background='rgba(41,182,246,.1)'">
+          ✈ Написать в Telegram
+        </a>
+        <a href="https://vk.com/dan4ik37" target="_blank"
+           style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(0,119,255,.1);border:1.5px solid var(--vk);color:var(--vk);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:background .2s"
+           onmouseover="this.style.background='rgba(0,119,255,.2)'" onmouseout="this.style.background='rgba(0,119,255,.1)'">
+          В Написать в ВКонтакте
+        </a>
+      </div>
+    </div>
+
+    <!-- Статистика для рекламодателей -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--tw)">
+      <div style="font-size:1.8rem;margin-bottom:.8rem">📊</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--tw);margin-bottom:.6rem">Аудитория</div>
+      <div style="display:flex;flex-direction:column;gap:.7rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:rgba(255,255,255,.03);border-radius:8px">
+          <span style="font-size:.75rem;color:var(--muted)">▶ YouTube</span>
+          <span id="ads-subs" style="font-size:.82rem;font-weight:700;color:var(--yt)">…</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:rgba(255,255,255,.03);border-radius:8px">
+          <span style="font-size:.75rem;color:var(--muted)">◉ Twitch</span>
+          <span style="font-size:.82rem;font-weight:700;color:var(--tw)">LIVE</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:rgba(255,255,255,.03);border-radius:8px">
+          <span style="font-size:.75rem;color:var(--muted)">✈ Telegram</span>
+          <span style="font-size:.82rem;font-weight:700;color:var(--tg)">Канал</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- FOOTER -->
 <footer>
   <div class="footer-logo">dan4ik37</div>
@@ -927,7 +1122,11 @@ function countUp(id,t){
 }
 function statsLoaded(){
   const note=document.getElementById('statsNote');
-  if(note) note.innerHTML='✅ Статистика обновлена с YouTube · <span style="opacity:.5">'+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';
+  if(note) note.innerHTML='✅ Статистика обновлена · <span style="opacity:.5">'+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';
+  // Синхронизируем с рекламной секцией
+  const adsSubs=document.getElementById('ads-subs');
+  const subsEl=document.getElementById('s-subs');
+  if(adsSubs&&subsEl) adsSubs.textContent=subsEl.textContent+' подп.';
 }
 function statsError(){
   const note=document.getElementById('statsNote');
@@ -1334,43 +1533,46 @@ function setPerf(mode) {
   currentPerf = mode;
   try { localStorage.setItem(PERF_KEY, mode); } catch(e) {}
 
-  // Убираем старые классы
-  document.body.classList.remove('perf-low','perf-high');
-  document.body.classList.add('perf-' + mode);
+  document.body.classList.remove('low','high','perf-low','perf-high');
+  document.body.classList.add(mode);
 
-  // Обновляем кнопку сбоку
+  // Кнопка сбоку
   const icon = document.getElementById('ptIcon');
   const lbl  = document.getElementById('ptLbl');
   if (mode === 'low') {
     icon.textContent = '🐢'; lbl.textContent = 'Low';
+    document.getElementById('cardLow').classList.add('active-low');
+    document.getElementById('cardHigh').classList.remove('active-high');
   } else {
     icon.textContent = '🚀'; lbl.textContent = 'High';
+    document.getElementById('cardHigh').classList.add('active-high');
+    document.getElementById('cardLow').classList.remove('active-low');
   }
 
   // Закрываем попап
-  document.getElementById('perfPopup').classList.add('hidden');
+  const popup = document.getElementById('perfPopup');
+  popup.classList.remove('show');
 
   if (mode === 'high') {
     initParticles();
     initCursorTrail();
     initScrollReveal();
-    // Запускаем typing после небольшой задержки
-    restartTyping();
   } else {
-    // Убираем частицы
+    // Очищаем частицы
     document.getElementById('particles').innerHTML = '';
-    // Убираем typing animation
-    const sub = document.querySelector('.hero-sub');
-    if (sub) { sub.style.animation = 'none'; sub.style.borderRight = 'none'; sub.style.maxWidth = '100%'; }
-    // Делаем все reveal visible
+    // Все reveal сразу видимы
     document.querySelectorAll('.reveal').forEach(el => {
-      el.style.opacity = '1'; el.style.transform = 'none';
+      el.classList.add('visible');
     });
   }
 }
 
 function openPerfPopup() {
-  document.getElementById('perfPopup').classList.remove('hidden');
+  // Обновляем активные карточки
+  if (currentPerf) {
+    document.getElementById('card'+( currentPerf==='low'?'Low':'High')).classList.add('active-'+currentPerf);
+  }
+  document.getElementById('perfPopup').classList.add('show');
 }
 
 function initPerfMode() {
@@ -1379,8 +1581,16 @@ function initPerfMode() {
   if (saved) {
     setPerf(saved);
   } else {
-    // Показываем попап при первом заходе
-    document.getElementById('perfPopup').classList.remove('hidden');
+    // Первый заход — автоопределение
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+    const isLowRAM = navigator.deviceMemory && navigator.deviceMemory < 4;
+    if (isMobile || isLowRAM) {
+      // Показываем попап на мобиле — пусть выберут
+      document.getElementById('perfPopup').classList.add('show');
+    } else {
+      // Десктоп — показываем попап
+      document.getElementById('perfPopup').classList.add('show');
+    }
   }
 }
 
@@ -1388,59 +1598,82 @@ function initPerfMode() {
 function initParticles() {
   const container = document.getElementById('particles');
   container.innerHTML = '';
-  const colors = ['var(--accent)','var(--tw)','var(--tg)','var(--accent2)','#a855f7'];
-  for (let i = 0; i < 35; i++) {
+  const colors = ['rgba(255,45,85,.7)','rgba(145,71,255,.6)','rgba(41,182,246,.6)','rgba(255,107,53,.6)','rgba(168,85,247,.6)'];
+  const count = window.innerWidth < 768 ? 15 : 40;
+  for (let i = 0; i < count; i++) {
     const p = document.createElement('div');
     p.className = 'particle';
-    const size = Math.random() * 3 + 1;
+    const size = Math.random() * 4 + 1;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const dur   = (Math.random() * 14 + 7).toFixed(1);
+    const delay = (Math.random() * 10).toFixed(1);
     p.style.cssText = `
-      left:${Math.random() * 100}%;
-      width:${size}px; height:${size}px;
-      background:${colors[Math.floor(Math.random() * colors.length)]};
-      --dur:${Math.random() * 12 + 6}s;
-      --delay:${Math.random() * 8}s;
-      --drift:${(Math.random() - 0.5) * 80}px;
-      border-radius:50%;
+      left:${Math.random()*100}%;
+      bottom:${Math.random()*-20}%;
+      width:${size}px;height:${size}px;
+      background:${color};
+      animation-duration:${dur}s;
+      animation-delay:-${delay}s;
+      box-shadow:0 0 ${size*2}px ${color};
     `;
     container.appendChild(p);
   }
 }
 
-// ── КУРСОР ТРЕЙЛ ──
+// ── КУРСОР ──
 function initCursorTrail() {
+  if (window.innerWidth < 768) return;
   const trail = document.getElementById('cursorTrail');
-  let mx = -100, my = -100;
-  let cx = -100, cy = -100;
+  const dot   = document.getElementById('cursorDot');
+  let mx = -200, my = -200;
+  let cx = -200, cy = -200;
+  let started = false;
 
-  document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+  document.addEventListener('mousemove', e => {
+    mx = e.clientX; my = e.clientY;
+    // Точка — мгновенно через transform
+    dot.style.transform = `translate(${mx - 2.5}px, ${my - 2.5}px)`;
+    if (!started) { started = true; animCursor(); }
+  });
 
-  function animTrail() {
-    cx += (mx - cx) * 0.15;
-    cy += (my - cy) * 0.15;
-    trail.style.left = cx + 'px';
-    trail.style.top  = cy + 'px';
-    if (currentPerf === 'high') requestAnimationFrame(animTrail);
+  // Hover-эффект — увеличиваем кольцо на кликабельных
+  document.querySelectorAll('a,button,.vcard,.hub-card,.dc,.stat-card').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      trail.style.width = '44px';
+      trail.style.height = '44px';
+      trail.style.borderColor = 'rgba(255,107,53,.9)';
+      trail.style.background = 'rgba(255,107,53,.08)';
+    });
+    el.addEventListener('mouseleave', () => {
+      trail.style.width = '28px';
+      trail.style.height = '28px';
+      trail.style.borderColor = 'rgba(255,45,85,.8)';
+      trail.style.background = 'rgba(255,45,85,.05)';
+    });
+  });
+
+  function animCursor() {
+    if (currentPerf !== 'high') return;
+    // Кольцо — плавно догоняет через lerp
+    cx += (mx - cx) * 0.14;
+    cy += (my - cy) * 0.14;
+    // Используем translate чтобы центрировать кольцо на курсоре
+    trail.style.transform = `translate(${cx - 14}px, ${cy - 14}px)`;
+    requestAnimationFrame(animCursor);
   }
-  animTrail();
 }
 
 // ── SCROLL REVEAL ──
 function initScrollReveal() {
-  const obs = new IntersectionObserver((entries) => {
+  const obs = new IntersectionObserver(entries => {
     entries.forEach(e => {
-      if (e.isIntersecting) { e.target.classList.add('visible'); obs.unobserve(e.target); }
+      if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); }
     });
-  }, { threshold: 0.1 });
-  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
-}
-
-// ── TYPING RESTART ──
-function restartTyping() {
-  const sub = document.querySelector('.hero-sub');
-  if (!sub) return;
-  sub.style.animation = 'none';
-  sub.offsetHeight; // reflow
-  sub.style.animation = '';
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.reveal').forEach(el => {
+    el.classList.remove('visible');
+    obs.observe(el);
+  });
 }
 
 // ═══════════════════════════════════════
