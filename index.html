@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dan4ik37 — Official</title>
+<meta name="description" content="Официальный сайт стримера dan4ik37. Видео, стримы, донат и все соцсети в одном месте.">
+<meta name="theme-color" content="#ff2d55">
+<!-- Open Graph — красивое превью в Telegram, VK, Discord -->
+<meta property="og:title" content="dan4ik37 — Официальный сайт">
+<meta property="og:description" content="Смотри видео, стримы и поддержи dan4ik37. YouTube, TikTok, Twitch, VK, Telegram — всё здесь!">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dan4ik37.github.io/">
+<meta property="og:image" content="https://yt3.googleusercontent.com/ytc/AIf8zZTq6zyOdoKwpCH_XXXXXXXXXXX=s900-c-k-c0x00ffffff-no-rj">
+<meta property="og:site_name" content="dan4ik37">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="dan4ik37 — Официальный сайт">
+<meta name="twitter:description" content="Видео, стримы, донат и все соцсети dan4ik37">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>
 <style>
@@ -112,19 +124,19 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 #perfToggle .pt-icon{font-size:1rem;line-height:1}
 #perfToggle .pt-lbl{font-size:.5rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
 
-/* Попап выбора режима */
+/* Попап выбора режима — ЕДИНСТВЕННЫЙ блок */
 #perfPopup{
-  position:fixed;inset:0;z-index:800;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(0,0,0,.85);backdrop-filter:blur(16px);
+  position:fixed;inset:0;z-index:9200;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.88);backdrop-filter:blur(16px);
   padding:1.5rem;
 }
-#perfPopup.hidden{display:none}
+#perfPopup.show{display:flex}
 .pp-box{
   background:#13131e;border:1px solid rgba(255,255,255,.1);
   border-radius:24px;padding:2.5rem;max-width:520px;width:100%;
   box-shadow:0 40px 80px rgba(0,0,0,.7);
-  animation:fadeUp .4s ease;
+  animation:fadeUp .35s ease;
 }
 .pp-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.5rem}
 .pp-sub{font-size:.8rem;color:var(--muted);text-align:center;margin-bottom:2rem;line-height:1.7}
@@ -133,214 +145,46 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
   border-radius:16px;padding:1.5rem 1.2rem;border:2px solid var(--border);
   cursor:pointer;transition:all .2s;text-align:center;background:rgba(255,255,255,.03);
 }
-.pp-card:hover{border-color:var(--accent);background:rgba(255,45,85,.06);transform:translateY(-3px)}
+.pp-card:hover{border-color:var(--tg);background:rgba(41,182,246,.06);transform:translateY(-3px)}
 .pp-card.high:hover{border-color:#a855f7;background:rgba(168,85,247,.06)}
+.pp-card.active-low{border-color:var(--tg)!important;background:rgba(41,182,246,.1)!important}
+.pp-card.active-high{border-color:#a855f7!important;background:rgba(168,85,247,.1)!important}
 .pp-card-icon{font-size:2.2rem;margin-bottom:.7rem}
 .pp-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:.4rem}
 .pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
 .pp-note{font-size:.65rem;color:var(--muted);text-align:center;margin-top:1.2rem;opacity:.6}
+.pp-skip{display:block;text-align:center;margin-top:.8rem;font-size:.72rem;color:var(--muted);cursor:pointer;transition:color .2s}
+.pp-skip:hover{color:var(--text)}
 
-/* ── LOW: слабое устройство ── */
-body.low .hero-bg{opacity:.5}
-body.low .hero-grid{display:none}
-body.low .avatar{animation:none}
-body.low .avatar-ring{animation:spin 6s linear infinite}
-body.low .live-dot{animation:none;opacity:.8}
-body.low .vcard:hover{transform:none;box-shadow:none}
-body.low .hub-card:hover{transform:none;box-shadow:none}
-body.low .stat-card:hover{transform:none;box-shadow:none}
-body.low .hbtn:hover{transform:none}
-body.low .about-card:hover{transform:none}
-body.low .dc:hover{transform:none;box-shadow:none}
-body.low *{animation-duration:.01ms!important;animation-iteration-count:1!important}
-body.low .avatar-ring{animation-duration:6s!important;animation-iteration-count:infinite!important}
-body.low .live-dot{animation:none!important}
-
-/* ── HIGH: мощное устройство ── */
-body.high .vcard{transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s}
-body.high .vcard:hover{transform:translateY(-8px) rotateX(2deg);box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 40px rgba(255,45,85,.18)}
-body.high .hub-card:hover{transform:translateY(-8px) scale(1.02)}
-body.high .stat-card:hover{transform:translateY(-6px) scale(1.02)}
-body.high .hb-don{background:linear-gradient(270deg,var(--accent),var(--accent2),var(--tw),var(--accent));background-size:400% 400%;animation:gradShift 4s ease infinite}
-@keyframes gradShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-body.high .stat-card{overflow:hidden}
-body.high .stat-card::before{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.04) 50%,transparent 60%);background-size:200% 100%;animation:shimmer 3s ease-in-out infinite;pointer-events:none}
-@keyframes shimmer{0%{background-position:-100% 0}100%{background-position:200% 0}}
-body.high .hero-bg{animation:heroBg 12s ease-in-out infinite alternate}
-@keyframes heroBg{0%{transform:scale(1)}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1.08) rotate(-1deg)}}
-body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
-
-@media(max-width:360px){#perfToggle{display:none}}
-
-/* ── LAYOUT ── */
-.wrap{max-width:1200px;margin:0 auto;padding:5rem 2rem;position:relative;z-index:1}
-.wrap-sm{max-width:1200px;margin:0 auto;padding:1rem 2rem;position:relative;z-index:1}
-.divider{width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,45,85,.2),transparent);margin-bottom:4rem}
-.eyebrow{display:inline-flex;align-items:center;gap:.6rem;font-size:.67rem;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:var(--accent);margin-bottom:.75rem}
-.eyebrow::before{content:'';width:26px;height:2px;background:var(--accent);display:block}
-.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.2rem,5vw,3.8rem);letter-spacing:2px;line-height:1;margin-bottom:2.5rem}
-
-/* ── AD ── */
-.ad-zone{display:flex;align-items:center;justify-content:center;border:2px dashed rgba(255,255,255,.05);border-radius:var(--r);min-height:90px;padding:1rem;background:rgba(255,255,255,.007);margin:.5rem 0}
-.ad-zone span{font-size:.56rem;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,.1)}
-
-/* ── STATS ── */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-bottom:3rem}
-.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.6rem 1rem 1.2rem;text-align:center;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s}
-.stat-card:hover{transform:translateY(-5px);box-shadow:0 12px 35px rgba(0,0,0,.4)}
-.stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}
-.sc1::after{background:linear-gradient(90deg,var(--yt),transparent)}.sc2::after{background:linear-gradient(90deg,rgba(255,64,64,.5),transparent)}.sc3::after{background:linear-gradient(90deg,rgba(255,64,64,.25),transparent)}.sc4::after{background:linear-gradient(90deg,var(--tw),transparent)}.sc5::after{background:linear-gradient(90deg,var(--tg),transparent)}
-.stat-val{font-family:'Bebas Neue',sans-serif;font-size:2.3rem;letter-spacing:2px;line-height:1}
-.stat-lbl{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:.4rem}
-
-/* ── TABS ── */
-.top-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.8rem}
-.tabs{display:flex;gap:.5rem;flex-wrap:wrap}
-.tab{padding:.48rem 1.15rem;border-radius:50px;font-size:.72rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);cursor:pointer;transition:all .22s}
-.tab:hover{border-color:rgba(255,255,255,.2);color:var(--text)}
-.tab.a-yt{background:rgba(255,64,64,.13);border-color:var(--yt);color:var(--yt)}
-.tab.a-tt{background:rgba(238,29,82,.13);border-color:var(--tt);color:var(--tt)}
-.tab.a-vkv{background:rgba(0,119,255,.13);border-color:var(--vk);color:#5bc4ff}
-.tab.a-tw{background:rgba(145,71,255,.13);border-color:var(--tw);color:var(--tw)}
-.tab.a-tg{background:rgba(41,182,246,.13);border-color:var(--tg);color:var(--tg)}
-.shuffle-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1.1rem;border-radius:50px;font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
-.shuffle-btn:hover{border-color:var(--accent);color:var(--accent)}
-.panel{display:none}.panel.active{display:block}
-
-/* ── VIDEO TOOLBAR ── */
-.yt-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;margin-bottom:1.2rem;padding:.8rem 1rem;background:var(--card);border-radius:var(--r);border:1px solid var(--border)}
-.view-toggle{display:flex;gap:.4rem}
-.view-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .85rem;border-radius:8px;font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1.5px solid transparent;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
-.view-btn.active{background:rgba(255,64,64,.14);border-color:var(--yt);color:var(--yt)}
-.view-btn:hover:not(.active){color:var(--text);border-color:rgba(255,255,255,.1)}
-.yt-actions{display:flex;gap:.5rem;flex-wrap:wrap}
-.act-btn{display:inline-flex;align-items:center;gap:.35rem;padding:.38rem .9rem;border-radius:8px;font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
-.act-btn:hover{border-color:rgba(255,255,255,.2);color:var(--text)}
-.act-like{border-color:rgba(255,45,85,.35);color:var(--accent)}.act-like:hover{background:rgba(255,45,85,.12)}
-.act-play{border-color:rgba(255,64,64,.35);color:var(--yt)}.act-play:hover{background:rgba(255,64,64,.12)}
-.sel-hint{padding:.6rem 1rem;background:rgba(255,45,85,.08);border:1px solid rgba(255,45,85,.2);border-radius:var(--r);font-size:.78rem;color:var(--muted);margin-bottom:1rem;display:flex;align-items:center}
-.sel-hint span{color:var(--accent);font-weight:700}
-
-/* ── VIDEO GRID ── */
-.video-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:1.3rem}
-.video-grid.list-view{grid-template-columns:1fr!important}
-.video-grid.list-view .vcard{display:flex;flex-direction:row;height:90px}
-.video-grid.list-view .vthumb{width:160px;min-width:160px;padding-bottom:0;height:90px}
-.video-grid.list-view .vthumb img{height:100%}
-.video-grid.list-view .vinfo{flex:1;display:flex;flex-direction:column;justify-content:center;padding:.7rem 1rem}
-.video-grid.list-view .vtitle{-webkit-line-clamp:1}
-.vcard{background:var(--card);border-radius:var(--r);overflow:hidden;cursor:pointer;border:1px solid var(--border);transition:transform .25s,box-shadow .25s;animation:fadeUp .45s ease both;position:relative}
-.vcard:hover{transform:translateY(-5px);box-shadow:0 16px 40px rgba(0,0,0,.5),0 0 24px rgba(255,45,85,.12)}
-.vthumb{position:relative;padding-bottom:56.25%;background:#0e0e16;overflow:hidden}
-.vthumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .4s}
-.vcard:hover .vthumb img{transform:scale(1.07)}
-.vthumb-ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:2rem;background:linear-gradient(135deg,#14141f,#1e.nav-donate:hover{transform:scale(1.06);opacity:.9}
-.hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
-.hamburger span{width:22px;height:2px;background:var(--text);border-radius:2px;transition:.3s}
-.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
-.hamburger.open span:nth-child(2){opacity:0}
-.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-
-/* Translate btn in nav */
-.lang-wrap{position:relative}
-.lang-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem 1rem;border-radius:50px;font-size:.68rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.12);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;font-family:'Montserrat',sans-serif}
-.lang-btn:hover{border-color:var(--accent);color:var(--text)}
-.lang-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;background:#16161f;border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:.5rem;min-width:185px;box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:600;max-height:300px;overflow-y:auto}
-.lang-dropdown::-webkit-scrollbar{width:4px}.lang-dropdown::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:4px}
-.lang-dropdown.open{display:block}
-.lang-search{width:100%;padding:.4rem .7rem;border-radius:8px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);color:var(--text);font-size:.72rem;font-family:'Montserrat',sans-serif;outline:none;margin-bottom:.4rem}
-.lang-opt{display:block;width:100%;text-align:left;padding:.45rem .8rem;font-size:.74rem;font-weight:600;color:var(--muted);background:transparent;border:none;border-radius:8px;cursor:pointer;transition:all .15s;font-family:'Montserrat',sans-serif;white-space:nowrap}
-.lang-opt:hover{background:rgba(255,45,85,.1);color:var(--text)}
-.lang-opt.active{color:var(--accent)}
-#google_translate_element{display:none!important}
-.goog-te-gadget{font-size:0!important}
-
-@media(max-width:800px){
-  .nav-links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:1.2rem;background:rgba(8,8,14,.98);padding:1.5rem 2rem;border-bottom:1px solid var(--border)}
-  .nav-links.open{display:flex}
-  .hamburger{display:flex}
+/* ── LOW: убираем шум ── */
+body.low::after{display:none!important}
+/* ── Курсор только на pointer устройствах (не touch) ── */
+@media(pointer:coarse){
+  body.high #cursorTrail,body.high #cursorDot{display:none!important}
+  body.high{cursor:auto!important}
+  body.high a,body.high button,body.high .vcard,body.high .hub-card{cursor:auto!important}
 }
-
-/* ── HERO ── */
-.hero{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;padding:2rem;padding-top:5rem;padding-bottom:5rem;text-align:center}
-/* Статичный фон — убрана тяжёлая анимация scale/rotate */
-.hero-bg{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 70% 60% at 20% 50%,rgba(255,45,85,.2) 0%,transparent 60%),radial-gradient(ellipse 60% 70% at 80% 50%,rgba(145,71,255,.16) 0%,transparent 60%),radial-gradient(ellipse 50% 50% at 50% -10%,rgba(41,182,246,.1) 0%,transparent 55%)}
-.hero-grid{position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,45,85,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,45,85,.04) 1px,transparent 1px);background-size:55px 55px;mask-image:radial-gradient(ellipse 90% 90% at center,black 20%,transparent 100%)}
-/* Аватар — оставляем float но с will-change */
-.avatar{position:relative;width:140px;height:140px;margin-bottom:2rem;animation:float 5s ease-in-out infinite;z-index:1;will-change:transform}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
-.avatar-ring{position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent2),var(--tw),var(--tg),var(--vk),var(--accent));animation:spin 4s linear infinite;will-change:transform}
-@keyframes spin{to{transform:rotate(360deg)}}
-.avatar-inner{position:absolute;inset:5px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:1px;z-index:1}
-.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(4.5rem,14vw,11rem);line-height:.88;letter-spacing:5px;z-index:1;background:linear-gradient(135deg,#fff 0%,var(--accent) 50%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-sub{margin-top:.9rem;font-size:.88rem;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--muted);z-index:1}
-.hero-desc{margin-top:1.1rem;font-size:.92rem;color:rgba(240,240,248,.55);max-width:460px;line-height:1.75;z-index:1}
-.hero-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:.7rem;margin-top:2.2rem;z-index:1;max-width:640px}
-.hbtn{display:inline-flex;align-items:center;gap:.45rem;padding:.58rem 1.25rem;border-radius:50px;font-size:.75rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1.5px solid;transition:transform .2s,box-shadow .2s,background .2s}
-.hbtn:hover{transform:translateY(-3px) scale(1.06)}
-.hb-yt{color:var(--yt);border-color:var(--yt)}.hb-yt:hover{background:rgba(255,64,64,.12);box-shadow:0 0 22px rgba(255,64,64,.35)}
-.hb-tt{color:var(--tt);border-color:var(--tt)}.hb-tt:hover{background:rgba(238,29,82,.12);box-shadow:0 0 22px rgba(238,29,82,.35)}
-.hb-tw{color:var(--tw);border-color:var(--tw)}.hb-tw:hover{background:rgba(145,71,255,.12);box-shadow:0 0 22px rgba(145,71,255,.35)}
-.hb-vk{color:var(--vk);border-color:var(--vk)}.hb-vk:hover{background:rgba(0,119,255,.12);box-shadow:0 0 22px rgba(0,119,255,.35)}
-.hb-vkv{color:#5bc4ff;border-color:#5bc4ff}.hb-vkv:hover{background:rgba(91,196,255,.12);box-shadow:0 0 22px rgba(91,196,255,.3)}
-.hb-tg{color:var(--tg);border-color:var(--tg)}.hb-tg:hover{background:rgba(41,182,246,.12);box-shadow:0 0 22px rgba(41,182,246,.35)}
-.hb-don{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;border-color:transparent!important}.hb-don:hover{box-shadow:0 6px 28px rgba(255,45,85,.5)!important}
-/* scroll-hint: скрыт на мобиле чтобы не наслаивался на кнопки */
-.scroll-hint{display:none}
-@media(min-height:700px) and (min-width:600px){
-  .scroll-hint{display:flex;position:absolute;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:1;flex-direction:column;align-items:center;gap:.3rem;font-size:.6rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);animation:pulse 2.5s ease-in-out infinite;pointer-events:none;white-space:nowrap}
-}
-@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.8}}
-/* Упрощённые входные анимации — только opacity */
-.hero>*{animation:fadeUp .6s ease both}
-.avatar{animation-delay:.05s!important}.hero h1{animation-delay:.15s}.hero-sub{animation-delay:.25s}.hero-desc{animation-delay:.32s}.hero-btns{animation-delay:.4s}
-@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-
-/* ══════════════════════════════════════
-   РЕЖИМ ПРОИЗВОДИТЕЛЬНОСТИ
-══════════════════════════════════════ */
-/* Кнопка переключения сбоку */
-#perfToggle{
-  position:fixed;right:0;top:50%;transform:translateY(-50%);
-  z-index:490;background:var(--card);border:1px solid var(--border);
-  border-right:none;border-radius:10px 0 0 10px;
-  padding:.6rem .5rem;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:.3rem;
-  transition:background .2s;
-}
-#perfToggle:hover{background:#1e1e2a}
-#perfToggle .pt-icon{font-size:1rem;line-height:1}
-#perfToggle .pt-lbl{font-size:.5rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
-
-/* Попап выбора режима */
-#perfPopup{
-  position:fixed;inset:0;z-index:800;
+/* ── КНОПКА НАВЕРХ ── */
+#scrollTop{
+  position:fixed;bottom:1.5rem;right:1rem;z-index:490;
+  width:42px;height:42px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;cursor:pointer;color:#fff;font-size:1.1rem;
   display:flex;align-items:center;justify-content:center;
-  background:rgba(0,0,0,.85);backdrop-filter:blur(16px);
-  padding:1.5rem;
+  opacity:0;transform:translateY(10px);pointer-events:none;
+  transition:opacity .3s,transform .3s;
+  box-shadow:0 4px 16px rgba(255,45,85,.4);
 }
-#perfPopup.hidden{display:none}
-.pp-box{
-  background:#13131e;border:1px solid rgba(255,255,255,.1);
-  border-radius:24px;padding:2.5rem;max-width:520px;width:100%;
-  box-shadow:0 40px 80px rgba(0,0,0,.7);
-  animation:fadeUp .4s ease;
-}
-.pp-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.5rem}
-.pp-sub{font-size:.8rem;color:var(--muted);text-align:center;margin-bottom:2rem;line-height:1.7}
-.pp-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-.pp-card{
-  border-radius:16px;padding:1.5rem 1.2rem;border:2px solid var(--border);
-  cursor:pointer;transition:all .2s;text-align:center;background:rgba(255,255,255,.03);
-}
-.pp-card:hover{border-color:var(--accent);background:rgba(255,45,85,.06);transform:translateY(-3px)}
-.pp-card.high:hover{border-color:#a855f7;background:rgba(168,85,247,.06)}
-.pp-card-icon{font-size:2.2rem;margin-bottom:.7rem}
-.pp-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:.4rem}
-.pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
-.pp-note{font-size:.65rem;color:var(--muted);text-align:center;margin-top:1.2rem;opacity:.6}
+#scrollTop.show{opacity:1;transform:translateY(0);pointer-events:all}
+#scrollTop:hover{transform:scale(1.1);box-shadow:0 6px 24px rgba(255,45,85,.55)}
+@media(max-width:768px){#scrollTop{bottom:1rem;right:.7rem;width:38px;height:38px}}
 
-/* ── LOW: слабое устройство ── */
+/* ── PROGRESS BAR вверху страницы ── */
+#readProgress{
+  position:fixed;top:0;left:0;height:2px;z-index:9999;
+  background:linear-gradient(90deg,var(--accent),var(--accent2),var(--tw));
+  width:0%;transition:width .1s linear;pointer-events:none;
+}
 body.low .hero-bg{opacity:.5}
 body.low .hero-grid{display:none}
 body.low .avatar{animation:none}
@@ -634,40 +478,6 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 .pt-icon{font-size:1.1rem;line-height:1}
 .pt-lbl{font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
 
-/* Попап */
-#perfPopup{
-  position:fixed;inset:0;z-index:9100;
-  background:rgba(0,0,0,.88);backdrop-filter:blur(16px);
-  display:flex;align-items:center;justify-content:center;padding:1.5rem;
-  opacity:0;pointer-events:none;transition:opacity .3s;
-}
-#perfPopup.show{opacity:1;pointer-events:all}
-.pp-box{
-  background:#13131e;border:1px solid rgba(255,255,255,.1);border-radius:24px;
-  padding:2.5rem 2rem;max-width:480px;width:100%;
-  box-shadow:0 40px 80px rgba(0,0,0,.7);
-  transform:translateY(20px);transition:transform .3s;
-}
-#perfPopup.show .pp-box{transform:translateY(0)}
-.pp-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.6rem}
-.pp-sub{font-size:.78rem;color:var(--muted);text-align:center;line-height:1.7;margin-bottom:1.8rem}
-.pp-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem}
-.pp-card{
-  background:rgba(255,255,255,.04);border:2px solid rgba(255,255,255,.08);
-  border-radius:16px;padding:1.5rem 1rem;text-align:center;cursor:pointer;
-  transition:all .2s;
-}
-.pp-card:hover{border-color:var(--tg);background:rgba(41,182,246,.08);transform:translateY(-3px)}
-.pp-card.high:hover{border-color:#a855f7;background:rgba(168,85,247,.08)}
-.pp-card.active-low{border-color:var(--tg)!important;background:rgba(41,182,246,.1)!important}
-.pp-card.active-high{border-color:#a855f7!important;background:rgba(168,85,247,.1)!important}
-.pp-card-icon{font-size:2.2rem;margin-bottom:.6rem}
-.pp-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;margin-bottom:.4rem}
-.pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
-.pp-note{font-size:.68rem;color:var(--muted);text-align:center;opacity:.6}
-.pp-skip{display:block;text-align:center;margin-top:1rem;font-size:.72rem;color:var(--muted);cursor:pointer;transition:color .2s}
-.pp-skip:hover{color:var(--text)}
-
 /* ── ЧАСТИЦЫ (только HIGH) ── */
 #particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 body.low #particles{display:none}
@@ -835,6 +645,11 @@ body.high .avatar::before{
   <button class="hamburger" id="burger" onclick="toggleNav()"><span></span><span></span><span></span></button>
 </nav>
 <div id="google_translate_element" style="display:none"></div>
+
+<!-- PROGRESS BAR -->
+<div id="readProgress"></div>
+<!-- КНОПКА НАВЕРХ -->
+<button id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Наверх">↑</button>
 
 <!-- HERO -->
 <div class="hero">
@@ -1091,25 +906,30 @@ body.high .avatar::before{
   <h2 class="sec-title">Задонатить dan4ik37 💝</h2>
   <div class="donate-grid">
 
-    <!-- Войс донат -->
-    <div class="dc dc-simple">
-      <div class="dc-badge">🎙️ Войс</div>
-      <div class="dc-icon">🎙️</div>
-      <div class="dc-title">Войс донат</div>
-      <div class="dc-desc">Задонать и напиши в сообщении какой голос хочешь — dan4ik37 озвучит его на стриме!</div>
-      <a class="dc-btn dc-main" href="https://www.donationalerts.com/r/dan4ik37" target="_blank">🎙️ Войс донат</a>
+    <!-- ⚡ БЫСТРЫЙ ДОНАТ через dalink -->
+    <div class="dc" style="border-top:3px solid var(--accent);background:linear-gradient(135deg,rgba(255,45,85,.06),rgba(255,107,53,.04))">
+      <div class="dc-badge">⚡ Быстро</div>
+      <div class="dc-icon">🔗</div>
+      <div class="dc-title">Быстрый донат</div>
+      <div class="dc-desc">Все ссылки dan4ik37 в одном месте — выбери удобный способ задонатить!</div>
+      <a class="dc-btn dc-main" href="https://dalink.to/dan4ik37" target="_blank"
+         style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff">
+        🔗 dalink.to/dan4ik37
+      </a>
     </div>
 
-    <!-- Быстрый донат 2 -->
-    <div class="dc" style="border-top:3px solid var(--accent2)">
-      <div class="dc-badge" style="background:rgba(255,107,53,.15);color:var(--accent2)">⚡ Быстрый донат</div>
-      <div class="dc-icon">🚀</div>
-      <div class="dc-title" style="color:var(--accent2)">Быстрый донат</div>
-      <div class="dc-desc">Все платформы dan4ik37 в одном месте — YouTube, TikTok, Twitch, VK и другие.</div>
+    <!-- 🎙️ ВОЙС ДОНАТ — одна кнопка, без выбора -->
+    <div class="dc dc-voice" style="background:linear-gradient(135deg,rgba(245,166,35,.06),rgba(249,61,61,.04))">
+      <div class="dc-badge hot">🎙️ Войс</div>
+      <div class="dc-icon">🎙️</div>
+      <div class="dc-title">Войс донат</div>
+      <div class="dc-desc">Напиши в сообщении к донату какой голос хочешь — dan4ik37 озвучит твой текст этим голосом на стриме!</div>
+      <div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:.8rem 1rem;font-size:.78rem;color:var(--muted);line-height:1.7">
+        💡 Пример: напиши в сообщении <strong style="color:#f5a623">«Голос: Робот»</strong> или <strong style="color:#f5a623">«Голос: Котик»</strong>
+      </div>
       <a class="dc-btn" href="https://www.donationalerts.com/r/dan4ik37" target="_blank"
-         style="background:linear-gradient(135deg,var(--accent2),#e84040);color:#fff;padding:.8rem 1.6rem;border-radius:50px;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:all .2s;border:none"
-         onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-        🚀 Задонатить
+         style="background:linear-gradient(135deg,#f5a623,#f53d2d);color:#fff">
+        🎙️ Войс донат
       </a>
     </div>
 
@@ -1193,24 +1013,29 @@ body.high .avatar::before{
   <h2 class="sec-title">Реклама 📢</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem">
 
-    <!-- Google AdSense блок -->
+    <!-- Google AdSense -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--yt)">
       <div style="font-size:1.8rem;margin-bottom:.8rem">📺</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--yt);margin-bottom:.6rem">Google AdSense</div>
-      <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1rem">
-        Автоматическая реклама Google отображается на сайте после одобрения аккаунта AdSense.
-        Рекламодатели платят за показы — ты зарабатываешь автоматически.
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--yt);margin-bottom:.8rem">Google AdSense</div>
+      <!-- Реальный AdSense блок — покажет рекламу после одобрения -->
+      <ins class="adsbygoogle"
+           style="display:block;border-radius:8px;overflow:hidden;min-height:60px"
+           data-ad-client="ca-pub-7940480593743401"
+           data-ad-slot="auto"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
+      <div style="font-size:.72rem;color:var(--muted);margin-top:.8rem;line-height:1.7">
+        Реклама показывается автоматически после одобрения аккаунта в Google AdSense. Ты зарабатываешь за каждый просмотр и клик.
       </div>
-      <div style="font-size:.72rem;color:rgba(255,64,64,.6);letter-spacing:1px">ID: ca-pub-7940480593743401</div>
     </div>
 
-    <!-- Прямая реклама -->
+    <!-- Прямое сотрудничество -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--accent)">
       <div style="font-size:1.8rem;margin-bottom:.8rem">🤝</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:.6rem">Прямое сотрудничество</div>
       <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1.2rem">
-        Хочешь разместить рекламу у dan4ik37 на стриме, в видео или соц сетях?
-        Пиши напрямую — обсудим условия!
+        Хочешь разместить рекламу у dan4ik37 на стриме, в видео или в соц сетях? Пиши напрямую — обсудим условия!
       </div>
       <div style="display:flex;flex-direction:column;gap:.6rem">
         <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank"
@@ -1221,29 +1046,24 @@ body.high .avatar::before{
         <a href="https://vk.com/dan4ik37" target="_blank"
            style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(0,119,255,.1);border:1.5px solid var(--vk);color:var(--vk);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:background .2s"
            onmouseover="this.style.background='rgba(0,119,255,.2)'" onmouseout="this.style.background='rgba(0,119,255,.1)'">
-          В Написать в ВКонтакте
+          ВК Написать в ВКонтакте
         </a>
       </div>
     </div>
 
-    <!-- Статистика для рекламодателей -->
+    <!-- Аудитория -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--tw)">
       <div style="font-size:1.8rem;margin-bottom:.8rem">📊</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--tw);margin-bottom:.6rem">Аудитория</div>
-      <div style="display:flex;flex-direction:column;gap:.7rem">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:rgba(255,255,255,.03);border-radius:8px">
-          <span style="font-size:.75rem;color:var(--muted)">▶ YouTube</span>
-          <span id="ads-subs" style="font-size:.82rem;font-weight:700;color:var(--yt)">…</span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:rgba(255,255,255,.03);border-radius:8px">
-          <span style="font-size:.75rem;color:var(--muted)">◉ Twitch</span>
-          <span style="font-size:.82rem;font-weight:700;color:var(--tw)">LIVE</span>
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:.5rem .7rem;background:rgba(255,255,255,.03);border-radius:8px">
-          <span style="font-size:.75rem;color:var(--muted)">✈ Telegram</span>
-          <span style="font-size:.82rem;font-weight:700;color:var(--tg)">Канал</span>
-        </div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--tw);margin-bottom:.8rem">Аудитория</div>
+      <div style="font-size:.82rem;color:var(--muted);line-height:1.8">
+        YouTube, TikTok, Twitch, ВКонтакте, VK Видео, Telegram — dan4ik37 присутствует на всех популярных платформах.<br><br>
+        Для получения статистики и медиакита — пишите напрямую.
       </div>
+      <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank"
+         style="display:inline-flex;align-items:center;gap:.5rem;margin-top:1.2rem;padding:.6rem 1.2rem;border-radius:50px;background:rgba(41,182,246,.1);border:1.5px solid var(--tg);color:var(--tg);font-size:.75rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:background .2s"
+         onmouseover="this.style.background='rgba(41,182,246,.2)'" onmouseout="this.style.background='rgba(41,182,246,.1)'">
+        ✈ Запросить медиакит
+      </a>
     </div>
 
   </div>
@@ -1323,10 +1143,12 @@ function countUp(id,t){
 function statsLoaded(){
   const note=document.getElementById('statsNote');
   if(note) note.innerHTML='✅ Статистика обновлена · <span style="opacity:.5">'+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';
-  // Синхронизируем с рекламной секцией
-  const adsSubs=document.getElementById('ads-subs');
   const subsEl=document.getElementById('s-subs');
-  if(adsSubs&&subsEl) adsSubs.textContent=subsEl.textContent+' подп.';
+  const viewsEl=document.getElementById('s-views');
+  const adsSubs=document.getElementById('ads-subs');
+  const adsViews=document.getElementById('ads-views');
+  if(adsSubs&&subsEl) adsSubs.textContent=subsEl.textContent;
+  if(adsViews&&viewsEl) adsViews.textContent=viewsEl.textContent;
 }
 function statsError(){
   const note=document.getElementById('statsNote');
@@ -1351,7 +1173,12 @@ async function ytFetch(url){
 async function loadYT(){
   showLoader();
   const cached=loadCache();
-  if(cached){allVids=cached.vids;recVids=cached.rec||[];if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}renderVids(allVids)}
+  if(cached){
+    allVids=cached.vids.sort(()=>Math.random()-.5); // рандомный порядок из кэша
+    recVids=cached.rec||[];
+    if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}
+    renderVids(allVids)
+  }
   try{
     const ch=await ytFetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_KEY}`);
     if(!ch?.items?.length)throw new Error('Канал не найден');
@@ -1362,26 +1189,28 @@ async function loadYT(){
     countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
     statsLoaded();
 
-    // Параллельно: плейлист + рекомендации по популярности
-    const [pl,pop]=await Promise.all([
-      ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=24&key=${YT_KEY}`),
+    // Параллельно: все загруженные видео (50) + топ по просмотрам для рекомендаций
+    const [pl, pop] = await Promise.all([
+      ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=50&key=${YT_KEY}`),
       ytFetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=viewCount&maxResults=12&type=video&key=${YT_KEY}`)
     ]);
-    if(!pl?.items?.length)throw new Error('Видео не найдены');
+    if(!pl?.items?.length) throw new Error('Видео не найдены');
 
     const ids=pl.items.map(i=>i.contentDetails.videoId).join(',');
     const det=await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids}&key=${YT_KEY}`);
     const dm={};det?.items?.forEach(v=>{dm[v.id]=v.statistics});
 
-    allVids=pl.items.map(item=>{
+    const rawVids=pl.items.map(item=>{
       const id=item.contentDetails.videoId,sn=item.snippet,st=dm[id]||{};
       return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',likes:st.likeCount?fmt(st.likeCount):''};
     });
 
-    // Рекомендации = топ по просмотрам
+    // Перемешиваем сразу — каждый раз разный порядок
+    allVids = rawVids.sort(() => Math.random() - 0.5);
+
     recVids=pop?.items?.map(i=>({id:i.id.videoId,title:i.snippet.title,thumb:i.snippet.thumbnails?.high?.url||'',date:'',views:'',likes:'',rec:true}))||[];
 
-    saveCache({vids:allVids,rec:recVids,stats:st});
+    saveCache({vids:rawVids,rec:recVids,stats:st});
     renderVids(allVids);
   }catch(err){
     console.warn('YT:',err.message);
@@ -1436,33 +1265,28 @@ function setView(mode){
   document.getElementById('btn-'+mode)?.classList.add('active');
 
   if(mode==='noapi'){
-    // Без API — плейлист через стандартный embed YouTube (uploads плейлист = UU + channelId без UC)
-    const plId = channelId ? 'UU'+channelId.slice(2) : null;
-    const noApiHTML = plId
-      ? `<div style="grid-column:1/-1">
-          <div style="position:relative;padding-bottom:56.25%;border-radius:var(--r);overflow:hidden;background:#000">
-            <iframe src="https://www.youtube.com/embed/videoseries?list=${plId}&rel=0"
-              style="position:absolute;inset:0;width:100%;height:100%;border:none"
-              allowfullscreen allow="encrypted-media"></iframe>
-          </div>
-          <div style="display:flex;gap:.8rem;margin-top:1rem;flex-wrap:wrap">
-            <div style="flex:1;background:var(--card);border-radius:var(--r);padding:1rem;border:1px solid var(--border)">
-              <div style="font-size:.7rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:.4rem">📺 Режим без API</div>
-              <div style="font-size:.82rem;color:var(--text)">Плейлист загружается напрямую с YouTube — без API ключа. Всегда актуален!</div>
-            </div>
-            <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:1rem 1.4rem;border-radius:var(--r);background:rgba(255,64,64,.1);border:1.5px solid var(--yt);color:var(--yt);font-weight:700;font-size:.78rem;white-space:nowrap;transition:background .2s" onmouseover="this.style.background='rgba(255,64,64,.2)'" onmouseout="this.style.background='rgba(255,64,64,.1)'">▶ Канал на YouTube</a>
-          </div>
-        </div>`
-      : `<div style="grid-column:1/-1;background:var(--card);border-radius:var(--r);padding:2rem;text-align:center">
-          <div style="font-size:2rem;margin-bottom:.8rem">📺</div>
-          <div style="font-size:.9rem;font-weight:700;margin-bottom:.5rem">Режим без API</div>
-          <div style="font-size:.82rem;color:var(--muted);margin-bottom:1.2rem">Для плейлиста нужен ID канала — сначала загрузи сайт на хостинг чтобы API сработал хотя бы раз, или перейди напрямую:</div>
-          <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-sub" style="display:inline-flex">▶ Смотреть на YouTube</a>
-        </div>`;
-    document.getElementById('yt-grid').innerHTML = noApiHTML;
+    const grid=document.getElementById('yt-grid');
+    grid.className='video-grid';
+    grid.innerHTML=`
+      <div style="grid-column:1/-1;background:rgba(255,64,64,.06);border:1px solid rgba(255,64,64,.15);border-radius:var(--r);padding:1rem 1.4rem;font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap">
+        <span>📺 Режим без API — переходи напрямую на YouTube</span>
+        <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="color:var(--yt);font-weight:700;margin-left:auto">Открыть канал →</a>
+      </div>
+      <a class="vcard" href="https://www.youtube.com/@Dan4ik37Yt/videos" target="_blank" style="text-decoration:none">
+        <div class="vthumb"><div class="vthumb-ph">🎬</div><div class="pdot pd-yt">YT</div><div class="play-ov"><div class="play-circle">▶</div></div></div>
+        <div class="vinfo"><div class="vtitle">Все видео — @Dan4ik37Yt</div><div class="vmeta"><span>Последние загрузки</span></div></div>
+      </a>
+      <a class="vcard" href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" style="text-decoration:none">
+        <div class="vthumb"><div class="vthumb-ph">🔴</div><div class="pdot pd-yt">YT</div><div class="play-ov"><div class="play-circle">▶</div></div></div>
+        <div class="vinfo"><div class="vtitle">Стримы — @Dan4ik37Yt</div><div class="vmeta"><span>Записи трансляций</span></div></div>
+      </a>
+      <a class="vcard" href="https://www.youtube.com/@Dan4ik37Yt/shorts" target="_blank" style="text-decoration:none">
+        <div class="vthumb"><div class="vthumb-ph">📱</div><div class="pdot pd-yt">YT</div><div class="play-ov"><div class="play-circle">▶</div></div></div>
+        <div class="vinfo"><div class="vtitle">Shorts — @Dan4ik37Yt</div><div class="vmeta"><span>Короткие видео</span></div></div>
+      </a>`;
     document.getElementById('multiPlayer').style.display='none';
   } else {
-    renderVids(viewMode==='list' ? allVids : allVids);
+    renderVids(allVids);
   }
 }
 
@@ -1471,19 +1295,19 @@ function setView(mode){
 // ═══════════════════════════════════════
 let showingRec=false;
 function shuffleVids(){
-  if(viewMode==='noapi')return;
+  if(viewMode==='noapi') return;
   const b=document.getElementById('shuffleBtn');
   if(recVids.length && !showingRec){
-    // Показываем рекомендации (топ по просмотрам)
     showingRec=true;
     renderVids(recVids);
-    b.innerHTML='🔥 Рекомендации';b.style.color='var(--accent)';b.title='Нажми ещё раз чтобы перемешать';
+    b.innerHTML='🔥 Топ видео';b.style.color='var(--accent)';b.title='Нажми ещё раз чтобы рандом';
   } else {
     showingRec=false;
+    // Каждый раз новый случайный порядок из всех видео
     const shuffled=[...allVids].sort(()=>Math.random()-.5);
     renderVids(shuffled);
     b.innerHTML='✓ Перемешано!';b.style.color='';b.title='';
-    setTimeout(()=>b.innerHTML='🔀 Перемешать',1500);
+    setTimeout(()=>b.innerHTML='🔀 Перемешать',1400);
   }
 }
 
@@ -1724,6 +1548,16 @@ document.addEventListener('keydown',e=>{if(e.keyCode===123||(e.ctrlKey&&e.shiftK
 document.addEventListener('dragstart',e=>e.preventDefault());
 
 // ═══════════════════════════════════════
+//  ВОЙС ДОНАТ
+// ═══════════════════════════════════════
+function pickVoice(btn, name) {
+  document.querySelectorAll('.voice-opt').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('voiceName').textContent = btn.querySelector('.voice-icon').textContent + ' ' + name;
+  document.getElementById('voiceBtn').textContent = '🎙️ Войс донат — ' + name;
+}
+
+// ═══════════════════════════════════════
 //  РЕЖИМ ПРОИЗВОДИТЕЛЬНОСТИ
 // ═══════════════════════════════════════
 const PERF_KEY = 'd37_perf';
@@ -1882,6 +1716,18 @@ function initScrollReveal() {
 loadYT();
 initChat();
 initPerfMode();
+
+// ── КНОПКА НАВЕРХ + ПРОГРЕСС ──
+const scrollTopBtn = document.getElementById('scrollTop');
+const progressBar  = document.getElementById('readProgress');
+window.addEventListener('scroll', () => {
+  const scrolled = window.scrollY;
+  const total    = document.body.scrollHeight - window.innerHeight;
+  // Кнопка
+  scrollTopBtn.classList.toggle('show', scrolled > 400);
+  // Прогресс бар
+  if(progressBar) progressBar.style.width = (total > 0 ? (scrolled/total*100) : 0) + '%';
+}, {passive:true});
 </script>
 
 <script type="text/javascript">
