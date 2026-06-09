@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dan4ik37 — Official</title>
+<meta name="google-adsense-account" content="ca-pub-7940480593743401">
 <meta name="description" content="Официальный сайт стримера dan4ik37. Видео, стримы, донат и все соцсети в одном месте.">
 <meta name="theme-color" content="#ff2d55">
 <!-- Open Graph — красивое превью в Telegram, VK, Discord -->
@@ -25,7 +26,7 @@
   --tw:#9147ff;--vk:#0077ff;--tg:#29b6f6;--text:#f0f0f8;--muted:#64647e;--r:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;overflow-x:hidden}
 body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 a{text-decoration:none;color:inherit}
 
@@ -582,7 +583,86 @@ body.high .avatar::before{
   background:conic-gradient(var(--accent),var(--accent2),var(--tw),var(--tg),var(--accent));
   opacity:.35;filter:blur(8px);animation:spin 4s linear infinite;z-index:-1;
 }
-@media(max-width:600px){.live-bar{flex-direction:column;text-align:center}.cta-tw{margin:0}}
+/* ══════════ АВТО-СТРИМ ПЛЕЕР ══════════ */
+#autoStreamWrap{display:none;margin-bottom:2rem}
+#autoStreamWrap.live{display:block}
+.stream-live-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .9rem;background:var(--accent);color:#fff;border-radius:50px;font-size:.7rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:1rem;animation:livePulse2 1.5s ease-in-out infinite}
+@keyframes livePulse2{0%,100%{box-shadow:0 0 0 0 rgba(255,45,85,.5)}70%{box-shadow:0 0 0 8px rgba(255,45,85,0)}}
+.auto-stream-grid{display:grid;grid-template-columns:2fr 1fr;gap:1rem}
+@media(max-width:768px){.auto-stream-grid{grid-template-columns:1fr}}
+.auto-stream-player{position:relative;padding-bottom:56.25%;background:#000;border-radius:var(--r);overflow:hidden}
+.auto-stream-player iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
+.auto-stream-chat{border-radius:var(--r);overflow:hidden;min-height:300px}
+.auto-stream-chat iframe{width:100%;height:100%;border:none;min-height:300px}
+
+/* ══════════ САУНДБОРД ══════════ */
+.soundboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.8rem}
+.sound-btn{
+  background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);
+  padding:1rem .8rem;cursor:pointer;transition:all .2s;text-align:center;
+  font-family:'Montserrat',sans-serif;color:var(--text);
+  display:flex;flex-direction:column;align-items:center;gap:.5rem;
+  position:relative;overflow:hidden;
+}
+.sound-btn:hover{border-color:var(--accent);background:rgba(255,45,85,.08);transform:translateY(-3px)}
+.sound-btn.playing{border-color:var(--tw);background:rgba(145,71,255,.12);animation:soundPulse .4s ease}
+@keyframes soundPulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+.sound-btn .s-icon{font-size:1.8rem}
+.sound-btn .s-name{font-size:.72rem;font-weight:700;letter-spacing:.5px}
+.sound-btn .s-bar{
+  position:absolute;bottom:0;left:0;height:2px;background:var(--tw);width:0%;
+  transition:width linear;
+}
+.sound-vol{display:flex;align-items:center;gap:.8rem;margin-bottom:1.2rem}
+.sound-vol label{font-size:.72rem;color:var(--muted);font-weight:600;white-space:nowrap}
+.sound-vol input{flex:1;accent-color:var(--accent);cursor:pointer}
+
+/* ══════════ ПАСХАЛКА ══════════ */
+#easterOverlay{
+  position:fixed;inset:0;z-index:9500;pointer-events:none;
+  opacity:0;transition:opacity .5s;
+}
+#easterOverlay.active{opacity:1}
+#easterMsg{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9501;
+  font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,8vw,5rem);letter-spacing:4px;
+  color:#fff;text-shadow:0 0 40px var(--accent),0 0 80px var(--accent2);
+  text-align:center;opacity:0;transition:opacity .4s;pointer-events:none;
+}
+#easterMsg.show{opacity:1}
+
+/* ══════════ КЛИКЕР ИГРА ══════════ */
+.clicker-wrap{background:var(--card);border-radius:20px;border:1px solid var(--border);padding:2rem;text-align:center;position:relative;overflow:hidden}
+.clicker-score{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;letter-spacing:3px;color:var(--accent);line-height:1;margin-bottom:.3rem}
+.clicker-sub{font-size:.78rem;color:var(--muted);margin-bottom:1.5rem}
+.clicker-target{
+  font-size:4rem;cursor:pointer;display:inline-block;
+  transition:transform .1s;user-select:none;
+  filter:drop-shadow(0 0 12px rgba(255,45,85,.4));
+  animation:clickerFloat 2s ease-in-out infinite;
+}
+@keyframes clickerFloat{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-8px) rotate(5deg)}}
+.clicker-target:active{transform:scale(.85)!important;filter:drop-shadow(0 0 20px rgba(255,45,85,.8))}
+.clicker-combo{font-size:.82rem;font-weight:800;color:var(--accent2);min-height:1.4rem}
+.click-pop{
+  position:absolute;pointer-events:none;font-size:.9rem;font-weight:800;
+  color:var(--accent);animation:clickPop .7s ease forwards;z-index:10;
+}
+@keyframes clickPop{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-50px) scale(.6)}}
+.clicker-stats{display:flex;justify-content:center;gap:2rem;margin-top:1.2rem;flex-wrap:wrap}
+.clicker-stat{font-size:.75rem;color:var(--muted);text-align:center}
+.clicker-stat strong{display:block;font-size:1.2rem;font-weight:800;color:var(--text)}
+.clicker-reset{margin-top:1rem;padding:.4rem 1rem;border-radius:50px;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);font-size:.7rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s}
+.clicker-reset:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ══════════ ШКАЛА ЦЕЛИ ══════════ */
+.goal-bar-wrap{background:var(--card);border-radius:var(--r);border:1px solid var(--border);padding:1.4rem 1.6rem}
+.goal-bar-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem}
+.goal-bar-title{font-size:.88rem;font-weight:700}
+.goal-bar-amount{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:1px;color:var(--accent)}
+.goal-bar-track{height:10px;background:rgba(255,255,255,.06);border-radius:50px;overflow:hidden}
+.goal-bar-fill{height:100%;border-radius:50px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 1.5s cubic-bezier(.22,1,.36,1);width:0%}
+.goal-bar-footer{display:flex;justify-content:space-between;margin-top:.5rem;font-size:.68rem;color:var(--muted)}
 </style>
 </head>
 <body onselectstart="return false">
@@ -627,7 +707,8 @@ body.high .avatar::before{
   <div class="nav-links" id="navLinks">
     <a href="#content">Видео</a>
     <a href="#about">Обо мне</a>
-    <a href="#schedule">Расписание</a>
+    <a href="#soundboard">Саундборд</a>
+    <a href="#clicker">Игра</a>
     <a href="#chat">Чат</a>
     <a href="#ads">Реклама</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
@@ -646,10 +727,13 @@ body.high .avatar::before{
 </nav>
 <div id="google_translate_element" style="display:none"></div>
 
-<!-- PROGRESS BAR -->
+<!-- ПРОГРЕСС БАР -->
 <div id="readProgress"></div>
 <!-- КНОПКА НАВЕРХ -->
 <button id="scrollTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Наверх">↑</button>
+<!-- ПАСХАЛКА -->
+<div id="easterOverlay"></div>
+<div id="easterMsg"></div>
 
 <!-- HERO -->
 <div class="hero">
@@ -661,7 +745,10 @@ body.high .avatar::before{
     <div class="aurora-orb ao2"></div>
     <div class="aurora-orb ao3"></div>
   </div>
-  <div class="avatar"><div class="avatar-ring"></div><div class="avatar-inner">D37</div></div>
+  <div class="avatar" id="easterAvatar" onclick="easterClick()" title="Попробуй нажать несколько раз... 👀" style="cursor:pointer">
+    <div class="avatar-ring"></div>
+    <div class="avatar-inner">D37</div>
+  </div>
   <h1>dan4ik37</h1>
   <p class="hero-sub">YouTube · TikTok · Twitch · VK</p>
   <p class="hero-desc">Привет! Я dan4ik37 — делаю видосы, стримлю и общаюсь с людьми. Подписывайся чтобы не пропустить!</p>
@@ -731,7 +818,24 @@ body.high .avatar::before{
   <div class="eyebrow">Смотреть</div>
   <h2 class="sec-title">Видео и стримы</h2>
 
-  <div class="live-bar">
+  <!-- АВТО-СТРИМ ПЛЕЕР (показывается если стрим идёт) -->
+  <div id="autoStreamWrap">
+    <div class="stream-live-badge">🔴 Стрим идёт прямо сейчас!</div>
+    <div class="auto-stream-grid">
+      <div class="auto-stream-player">
+        <iframe id="autoStreamPlayer" src="" allowfullscreen allow="autoplay"></iframe>
+      </div>
+      <div class="auto-stream-chat">
+        <iframe id="autoStreamChat" src="" allowfullscreen></iframe>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:.8rem">
+      <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-tw" style="display:inline-flex">Открыть на Twitch ↗</a>
+    </div>
+  </div>
+
+  <!-- STATIC LIVE BAR (когда стрима нет) -->
+  <div class="live-bar" id="staticLiveBar">
     <div class="live-dot"></div>
     <div class="live-text"><h3>🔴 Стримы на Twitch!</h3><p>Заходи — играем, общаемся, фан гарантирован</p></div>
     <a class="cta-tw" href="https://www.twitch.tv/dan4ik37" target="_blank">Смотреть стрим</a>
@@ -998,6 +1102,86 @@ body.high .avatar::before{
       <iframe class="chat-frame" id="chat-youtube" src="" allowfullscreen></iframe>
     </div>
   </div>
+</div>
+
+<!-- ══════════ САУНДБОРД ══════════ -->
+<div class="wrap reveal" id="soundboard">
+  <div class="divider"></div>
+  <div class="eyebrow">Интерактив</div>
+  <h2 class="sec-title">Саундборд 🎵</h2>
+  <div class="sound-vol">
+    <label>🔊 Громкость:</label>
+    <input type="range" id="soundVol" min="0" max="1" step="0.05" value="0.7">
+  </div>
+  <div class="soundboard">
+    <button class="sound-btn" onclick="playSound(this,'clap')">
+      <span class="s-icon">👏</span><span class="s-name">Аплодисменты</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'airhorn')">
+      <span class="s-icon">📯</span><span class="s-name">Аирхорн</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'tada')">
+      <span class="s-icon">🎉</span><span class="s-name">Та-да!</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'sad')">
+      <span class="s-icon">😢</span><span class="s-name">Грустно</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'wow')">
+      <span class="s-icon">😱</span><span class="s-name">Вау!</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'gg')">
+      <span class="s-icon">🏆</span><span class="s-name">GG!</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'fail')">
+      <span class="s-icon">💀</span><span class="s-name">Фейл</span><div class="s-bar"></div>
+    </button>
+    <button class="sound-btn" onclick="playSound(this,'bruh')">
+      <span class="s-icon">😐</span><span class="s-name">Бруух</span><div class="s-bar"></div>
+    </button>
+  </div>
+  <p style="font-size:.7rem;color:var(--muted);margin-top:1rem;opacity:.6">💡 Звуки генерируются через Web Audio API — без внешних файлов</p>
+</div>
+
+<!-- ══════════ МИНИ-ИГРА КЛИКЕР ══════════ -->
+<div class="wrap reveal" id="clicker">
+  <div class="divider"></div>
+  <div class="eyebrow">Мини-игра</div>
+  <h2 class="sec-title">Кликер 🎮</h2>
+  <div style="max-width:500px;margin:0 auto">
+    <div class="clicker-wrap" id="clickerWrap">
+      <div class="clicker-score" id="clickScore">0</div>
+      <div class="clicker-sub">кликов</div>
+      <div class="clicker-combo" id="clickCombo"></div>
+      <div style="margin:1rem 0">
+        <span class="clicker-target" id="clickTarget" onclick="doClick(event)">▶</span>
+      </div>
+      <div class="clicker-stats">
+        <div class="clicker-stat"><strong id="clickBest">0</strong>Рекорд</div>
+        <div class="clicker-stat"><strong id="clickCps">0</strong>Кл/сек</div>
+        <div class="clicker-stat"><strong id="clickMulti">×1</strong>Множитель</div>
+      </div>
+      <button class="clicker-reset" onclick="resetClicker()">↺ Сброс</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ШКАЛА ЦЕЛИ ══════════ -->
+<div class="wrap reveal" id="goalbar">
+  <div class="divider"></div>
+  <div class="eyebrow">Цель доната</div>
+  <h2 class="sec-title">Сбор 💝</h2>
+  <div class="goal-bar-wrap">
+    <div class="goal-bar-header">
+      <div class="goal-bar-title" id="goalTitle">🎯 Цель: Новое оборудование для стрима</div>
+      <div class="goal-bar-amount"><span id="goalCurrent">0</span> / <span id="goalMax">10000</span> ₽</div>
+    </div>
+    <div class="goal-bar-track"><div class="goal-bar-fill" id="goalFill"></div></div>
+    <div class="goal-bar-footer">
+      <span id="goalPercent">0%</span>
+      <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" style="color:var(--accent);font-weight:700;font-size:.72rem">Поддержать →</a>
+    </div>
+  </div>
+  <p style="font-size:.7rem;color:var(--muted);margin-top:.8rem;opacity:.6">💡 Обновляй цифры вручную в коде (goalCurrentVal / goalMaxVal) по мере получения донатов</p>
 </div>
 
 <!-- AD BOTTOM -->
@@ -1516,6 +1700,217 @@ function toggleEmoji(e){
 document.addEventListener('click',()=>{const p=document.getElementById('emojiPicker');if(p)p.style.display='none'});
 
 // ═══════════════════════════════════════
+//  АВТО-СТРИМ ДЕТЕКТОР (Twitch)
+// ═══════════════════════════════════════
+async function checkLiveStream(){
+  try{
+    // Twitch встраиваем напрямую — проверяем наличие через embed
+    const host=location.hostname||'localhost';
+    // Показываем плеер и проверяем через oEmbed
+    const res=await fetch(`https://api.twitch.tv/helix/streams?user_login=dan4ik37`,{
+      headers:{'Client-ID':'kimne78kx3ncx6brgo4mv6wki5h1ko'} // публичный client-id
+    });
+    const data=await res.json();
+    const isLive=data.data&&data.data.length>0;
+    if(isLive){
+      document.getElementById('autoStreamWrap').classList.add('live');
+      document.getElementById('staticLiveBar').style.display='none';
+      document.getElementById('autoStreamPlayer').src=`https://player.twitch.tv/?channel=dan4ik37&parent=${host}&autoplay=true`;
+      document.getElementById('autoStreamChat').src=`https://www.twitch.tv/embed/dan4ik37/chat?parent=${host}&darkpopout`;
+    }
+  }catch(e){/* Показываем статичный баннер */}
+}
+checkLiveStream();
+// Проверяем каждые 3 минуты
+setInterval(checkLiveStream, 3*60*1000);
+
+// ═══════════════════════════════════════
+//  САУНДБОРД — Web Audio API (без файлов)
+// ═══════════════════════════════════════
+let audioCtx=null;
+function getCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+
+const SOUNDS={
+  clap:   ()=>synthClap(),
+  airhorn:()=>synthAirhorn(),
+  tada:   ()=>synthTada(),
+  sad:    ()=>synthSad(),
+  wow:    ()=>synthWow(),
+  gg:     ()=>synthGG(),
+  fail:   ()=>synthFail(),
+  bruh:   ()=>synthBruh(),
+};
+
+function getVol(){return parseFloat(document.getElementById('soundVol')?.value||0.7)}
+
+function makeOsc(type,freq,start,dur,vol=0.4){
+  const ctx=getCtx(),o=ctx.createOscillator(),g=ctx.createGain();
+  o.type=type;o.frequency.setValueAtTime(freq,ctx.currentTime+start);
+  g.gain.setValueAtTime(0,ctx.currentTime+start);
+  g.gain.linearRampToValueAtTime(vol*getVol(),ctx.currentTime+start+0.01);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+  o.connect(g);g.connect(ctx.destination);
+  o.start(ctx.currentTime+start);o.stop(ctx.currentTime+start+dur+0.05);
+}
+function makeNoise(start,dur,vol=0.3){
+  const ctx=getCtx(),buf=ctx.createBuffer(1,ctx.sampleRate*dur,ctx.sampleRate);
+  const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1);
+  const src=ctx.createBufferSource(),g=ctx.createGain(),f=ctx.createBiquadFilter();
+  src.buffer=buf;f.type='bandpass';f.frequency.value=1000;
+  g.gain.setValueAtTime(vol*getVol(),ctx.currentTime+start);
+  g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+  src.connect(f);f.connect(g);g.connect(ctx.destination);
+  src.start(ctx.currentTime+start);
+}
+function synthClap(){makeNoise(0,.08,.5);makeNoise(0.1,.1,.4);makeNoise(0.2,.12,.3)}
+function synthAirhorn(){[0,.1,.2,.3].forEach(t=>makeOsc('sawtooth',440+t*20,t,.4,.6));makeOsc('sawtooth',660,0,.8,.5)}
+function synthTada(){[0,.15,.3].forEach((t,i)=>{makeOsc('sine',[523,659,784][i],t,.4,.4)});makeOsc('sine',1047,.45,.6,.5)}
+function synthSad(){makeOsc('sine',392,0,.6,.3);makeOsc('sine',349,.3,.6,.3);makeOsc('sine',330,.6,.8,.3)}
+function synthWow(){const ctx=getCtx(),o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.setValueAtTime(200,ctx.currentTime);o.frequency.linearRampToValueAtTime(800,ctx.currentTime+.3);o.frequency.linearRampToValueAtTime(400,ctx.currentTime+.6);g.gain.setValueAtTime(.4*getVol(),ctx.currentTime);g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+.7);o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.75)}
+function synthGG(){[0,.1,.2,.35].forEach((t,i)=>makeOsc('square',[523,659,784,1047][i],t,.25,.35))}
+function synthFail(){makeOsc('sawtooth',400,0,.15,.4);makeOsc('sawtooth',300,.15,.2,.4);makeOsc('sawtooth',200,.35,.3,.4);makeOsc('sawtooth',150,.65,.4,.3)}
+function synthBruh(){makeOsc('sine',180,0,.8,.5);makeOsc('sine',160,.1,.9,.3)}
+
+function playSound(btn,type){
+  SOUNDS[type]&&SOUNDS[type]();
+  btn.classList.add('playing');
+  setTimeout(()=>btn.classList.remove('playing'),600);
+}
+
+// ═══════════════════════════════════════
+//  ПАСХАЛКА (5 кликов на аватарку)
+// ═══════════════════════════════════════
+let easterCount=0,easterTimer=null;
+const EASTER_MSGS=['👀 ТЫ НАШЁЛ ПАСХАЛКУ!','🔥 DAN4IK37 FOREVER!','💀 ГГ НАЙДЕНО!','🎉 СЕКРЕТ РАСКРЫТ!'];
+
+function easterClick(){
+  easterCount++;
+  clearTimeout(easterTimer);
+  easterTimer=setTimeout(()=>easterCount=0,2000);
+  // Лёгкая вибрация на телефоне
+  navigator.vibrate&&navigator.vibrate(30);
+  if(easterCount>=5){
+    easterCount=0;
+    triggerEaster();
+  }
+}
+
+function triggerEaster(){
+  const overlay=document.getElementById('easterOverlay');
+  const msg=document.getElementById('easterMsg');
+  // Случайные цвета
+  const colors=['rgba(255,45,85,.25)','rgba(145,71,255,.25)','rgba(41,182,246,.2)','rgba(255,107,53,.22)'];
+  overlay.style.background=colors[Math.floor(Math.random()*colors.length)];
+  overlay.style.boxShadow='inset 0 0 200px rgba(255,45,85,.3)';
+  overlay.classList.add('active');
+  msg.textContent=EASTER_MSGS[Math.floor(Math.random()*EASTER_MSGS.length)];
+  msg.classList.add('show');
+  // Взрыв частиц
+  if(currentPerf==='high')spawnEasterParticles();
+  // Звук
+  synthTada();
+  // Вибрация паттерн
+  navigator.vibrate&&navigator.vibrate([100,50,100,50,200]);
+  setTimeout(()=>{overlay.classList.remove('active');msg.classList.remove('show')},3000);
+}
+
+function spawnEasterParticles(){
+  const container=document.getElementById('particles');
+  const av=document.getElementById('easterAvatar');
+  const rect=av.getBoundingClientRect();
+  for(let i=0;i<30;i++){
+    const p=document.createElement('div');
+    const angle=Math.random()*Math.PI*2,speed=Math.random()*200+80;
+    const colors=['#ff2d55','#ff6b35','#9147ff','#29b6f6','#f5a623'];
+    p.style.cssText=`position:fixed;left:${rect.left+rect.width/2}px;top:${rect.top+rect.height/2}px;width:${Math.random()*8+4}px;height:${Math.random()*8+4}px;border-radius:50%;background:${colors[Math.floor(Math.random()*colors.length)]};pointer-events:none;z-index:9502;transition:all ${Math.random()*.8+.4}s ease-out;`;
+    document.body.appendChild(p);
+    setTimeout(()=>{p.style.left=(rect.left+rect.width/2+Math.cos(angle)*speed)+'px';p.style.top=(rect.top+rect.height/2+Math.sin(angle)*speed)+'px';p.style.opacity='0';p.style.transform='scale(0)'},10);
+    setTimeout(()=>p.remove(),1200);
+  }
+}
+
+// ═══════════════════════════════════════
+//  КЛИКЕР ИГРА
+// ═══════════════════════════════════════
+let clickScore=parseInt(localStorage.getItem('d37_click_score')||0);
+let clickBest=parseInt(localStorage.getItem('d37_click_best')||0);
+let clickMulti=1,clickComboCount=0,lastClickTime=0,cpsClicks=[],clickIcons=['▶','🎮','🔥','💥','⭐','🏆'];
+
+function doClick(e){
+  const now=Date.now();
+  // Комбо
+  if(now-lastClickTime<300){clickComboCount++;if(clickComboCount>4){clickMulti=Math.min(Math.floor(clickComboCount/5)+1,8)}}else{clickComboCount=0;clickMulti=1}
+  lastClickTime=now;
+  clickScore+=clickMulti;
+  cpsClicks.push(now);
+  if(clickScore>clickBest){clickBest=clickScore;localStorage.setItem('d37_click_best',clickBest)}
+  localStorage.setItem('d37_click_score',clickScore);
+  // Обновляем UI
+  document.getElementById('clickScore').textContent=fmt(clickScore);
+  document.getElementById('clickBest').textContent=fmt(clickBest);
+  document.getElementById('clickMulti').textContent='×'+clickMulti;
+  if(clickMulti>1){document.getElementById('clickCombo').textContent='🔥 КОМБО ×'+clickMulti+'!'}
+  else{document.getElementById('clickCombo').textContent=''}
+  // Меняем иконку случайно
+  if(Math.random()<.15){document.getElementById('clickTarget').textContent=clickIcons[Math.floor(Math.random()*clickIcons.length)]}
+  // Поп-текст
+  spawnClickPop(e,'+'+clickMulti);
+  // Звук (тихий)
+  try{makeOsc('sine',440+clickScore%200,0,.08,.15)}catch(e){}
+  // CPS обновляем каждые 500мс
+}
+setInterval(()=>{
+  const now=Date.now();
+  cpsClicks=cpsClicks.filter(t=>now-t<1000);
+  document.getElementById('clickCps').textContent=cpsClicks.length;
+},500);
+
+function spawnClickPop(e,text){
+  const pop=document.createElement('div');
+  pop.className='click-pop';pop.textContent=text;
+  const wrap=document.getElementById('clickerWrap');
+  const rect=wrap.getBoundingClientRect();
+  pop.style.left=(e.clientX-rect.left)+'px';
+  pop.style.top=(e.clientY-rect.top)+'px';
+  wrap.appendChild(pop);
+  setTimeout(()=>pop.remove(),700);
+}
+function resetClicker(){
+  clickScore=0;clickMulti=1;clickComboCount=0;
+  localStorage.removeItem('d37_click_score');
+  document.getElementById('clickScore').textContent='0';
+  document.getElementById('clickCombo').textContent='';
+  document.getElementById('clickMulti').textContent='×1';
+  document.getElementById('clickCps').textContent='0';
+  document.getElementById('clickTarget').textContent='▶';
+}
+
+// ═══════════════════════════════════════
+//  ШКАЛА ЦЕЛИ — ОБНОВЛЯЙ ЭТИ ЦИФРЫ
+// ═══════════════════════════════════════
+const goalCurrentVal = 0;     // ← сколько собрано (меняй вручную)
+const goalMaxVal     = 10000; // ← цель в рублях
+const goalTitleText  = '🎯 Новое оборудование для стрима';
+
+function initGoalBar(){
+  document.getElementById('goalTitle').textContent=goalTitleText;
+  document.getElementById('goalCurrent').textContent=goalCurrentVal.toLocaleString('ru');
+  document.getElementById('goalMax').textContent=goalMaxVal.toLocaleString('ru');
+  const pct=Math.min(Math.round(goalCurrentVal/goalMaxVal*100),100);
+  document.getElementById('goalPercent').textContent=pct+'%';
+  // Анимированное заполнение при попадании в viewport
+  const obs=new IntersectionObserver(entries=>{
+    if(entries[0].isIntersecting){
+      document.getElementById('goalFill').style.width=pct+'%';
+      obs.disconnect();
+    }
+  },{threshold:0.3});
+  const el=document.getElementById('goalbar');
+  if(el)obs.observe(el);
+}
+initGoalBar();
+
+// ═══════════════════════════════════════
 //  GOOGLE TRANSLATE
 // ═══════════════════════════════════════
 const LANGS=[['af','Afrikaans'],['sq','Shqip'],['am','አማርኛ'],['ar','العربية'],['hy','Հայերեն'],['az','Azərbaycan'],['eu','Euskara'],['be','Беларуская'],['bn','বাংলা'],['bs','Bosanski'],['bg','Български'],['ca','Català'],['ceb','Cebuano'],['zh-CN','中文(简体)'],['zh-TW','中文(繁體)'],['co','Corsu'],['hr','Hrvatski'],['cs','Čeština'],['da','Dansk'],['nl','Nederlands'],['en','English'],['eo','Esperanto'],['et','Eesti'],['fi','Suomi'],['fr','Français'],['fy','Frysk'],['gl','Galego'],['ka','ქართული'],['de','Deutsch'],['el','Ελληνικά'],['gu','ગુજરાતી'],['ht','Kreyòl ayisyen'],['ha','Hausa'],['haw','ʻŌlelo Hawaiʻi'],['iw','עברית'],['hi','हिन्दी'],['hmn','Hmoob'],['hu','Magyar'],['is','Íslenska'],['ig','Igbo'],['id','Bahasa Indonesia'],['ga','Gaeilge'],['it','Italiano'],['ja','日本語'],['jw','Basa Jawa'],['kn','ಕನ್ನಡ'],['kk','Қазақша'],['km','ភាសាខ្មែរ'],['ko','한국어'],['ku','Kurdî'],['ky','Кыргызча'],['lo','ພາສາລາວ'],['la','Latina'],['lv','Latviešu'],['lt','Lietuvių'],['lb','Lëtzebuergesch'],['mk','Македонски'],['mg','Malagasy'],['ms','Bahasa Melayu'],['ml','മലയാളം'],['mt','Malti'],['mi','Te Reo Māori'],['mr','मराठी'],['mn','Монгол'],['my','မြန်မာဘာသာ'],['ne','नेपाली'],['no','Norsk'],['ny','Chichewa'],['ps','پښتو'],['fa','فارسی'],['pl','Polski'],['pt','Português'],['pa','ਪੰਜਾਬੀ'],['ro','Română'],['ru','Русский'],['sm','Gagana Samoa'],['gd','Gàidhlig'],['sr','Српски'],['st','Sesotho'],['sn','ChiShona'],['sd','سنڌي'],['si','සිංහල'],['sk','Slovenčina'],['sl','Slovenščina'],['so','Soomaali'],['es','Español'],['su','Basa Sunda'],['sw','Kiswahili'],['sv','Svenska'],['tl','Filipino'],['tg','Тоҷикӣ'],['ta','தமிழ்'],['te','తెలుగు'],['th','ภาษาไทย'],['tr','Türkçe'],['uk','Українська'],['ur','اردو'],['uz','O\'zbek'],['vi','Tiếng Việt'],['cy','Cymraeg'],['xh','isiXhosa'],['yi','ייִדיש'],['yo','Yorùbá'],['zu','isiZulu']];
@@ -1589,7 +1984,16 @@ function setPerf(mode) {
 
   if (mode === 'high') {
     initParticles();
-    initCursorTrail();
+    if (!window.cursorInitialized) {
+      initCursorTrail();
+      window.cursorInitialized = true;
+    } else {
+      // Вернулись в High — просто показываем курсор
+      const trail = document.getElementById('cursorTrail');
+      const dot   = document.getElementById('cursorDot');
+      if (trail) trail.style.display = 'block';
+      if (dot)   dot.style.display   = 'block';
+    }
     initScrollReveal();
   } else {
     // Очищаем частицы
@@ -1703,7 +2107,7 @@ function initScrollReveal() {
     entries.forEach(e => {
       if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); }
     });
-  }, { threshold: 0.08 });
+  }, { threshold: 0.01 });
   document.querySelectorAll('.reveal').forEach(el => {
     el.classList.remove('visible');
     obs.observe(el);
