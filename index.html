@@ -411,7 +411,7 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .voice-bar.show{display:flex}
 
 /* ── CHAT ── */
-.chat-wrap{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:visible;display:flex;flex-direction:column;height:520px;position:relative;clip-path:none}
+.chat-wrap{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;height:520px;position:relative;z-index:2}
 .chat-header{padding:1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-shrink:0}
 .chat-live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:livePulse 1.5s ease-in-out infinite}
 .chat-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px}
@@ -419,9 +419,9 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .chat-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
 .chat-tab{flex:1;padding:.6rem;font-size:.7rem;font-weight:700;text-align:center;cursor:pointer;color:var(--muted);border:none;background:transparent;border-bottom:2px solid transparent;transition:all .2s;font-family:'Montserrat',sans-serif;letter-spacing:.5px;text-transform:uppercase}
 .chat-tab.active{color:var(--tw);border-bottom-color:var(--tw)}
-.chat-body{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column}
-.chat-frame{width:100%;height:100%;border:none;display:none;flex:1;min-height:320px;position:relative;z-index:1}
-.chat-frame.active{display:flex}
+.chat-body{flex:1;overflow:hidden;position:relative;display:flex;flex-direction:column;z-index:2}
+.chat-frame{width:100%;height:100%;border:none;display:none;flex:1;min-height:320px}
+.chat-frame.active{display:block;width:100%;height:100%;min-height:320px}
 /* Локальный чат */
 .local-chat{display:none;flex-direction:column;height:100%}
 .local-chat.active{display:flex}
@@ -1263,13 +1263,36 @@ body.high .avatar::before{
         <!-- Сообщения -->
         <div class="chat-msgs" id="chatMsgs"></div>
 
-        <!-- Экран выбора ника -->
-        <div id="chatNickScreen" style="padding:.9rem 1rem;border-top:1px solid var(--border);background:rgba(145,71,255,.05)">
-          <div style="font-size:.72rem;color:var(--muted);margin-bottom:.5rem;font-weight:600">👤 Введи ник чтобы написать в чат:</div>
-          <div style="display:flex;gap:.5rem">
-            <input id="chatNameField" class="chat-input" placeholder="Твой ник..." maxlength="20"
-              onkeydown="if(event.key==='Enter')setNick()"
-              style="flex:1;background:rgba(145,71,255,.08);border-color:rgba(145,71,255,.3)">
+        <!-- Экран авторизации чата -->
+        <div id="chatNickScreen" style="border-top:1px solid var(--border);background:rgba(145,71,255,.04)">
+          <!-- Табы: войти / зарегистрироваться -->
+          <div style="display:flex;border-bottom:1px solid var(--border)">
+            <button id="chatAuthTabLogin" onclick="switchChatAuthTab('login')" style="flex:1;padding:.55rem;font-size:.7rem;font-weight:700;border:none;background:transparent;color:var(--tw);border-bottom:2px solid var(--tw);cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s">Войти</button>
+            <button id="chatAuthTabReg" onclick="switchChatAuthTab('reg')" style="flex:1;padding:.55rem;font-size:.7rem;font-weight:700;border:none;background:transparent;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s">Регистрация</button>
+            <button onclick="useChatAsGuest()" style="flex:1;padding:.55rem;font-size:.68rem;font-weight:700;border:none;background:transparent;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" title="Без аккаунта — только ник">Гостем</button>
+          </div>
+          <!-- Форма входа -->
+          <div id="chatLoginForm" style="padding:.7rem 1rem;display:flex;flex-direction:column;gap:.45rem">
+            <input id="chatLoginEmail" class="chat-input" type="email" placeholder="Email" autocomplete="email" style="width:100%">
+            <div style="display:flex;gap:.5rem">
+              <input id="chatLoginPass" class="chat-input" type="password" placeholder="Пароль" autocomplete="current-password" onkeydown="if(event.key==='Enter')chatLogin()" style="flex:1">
+              <button class="chat-send" onclick="chatLogin()" style="background:var(--tw);padding:.5rem 1rem">→</button>
+            </div>
+            <div id="chatLoginErr" style="font-size:.65rem;color:var(--accent);min-height:.9rem"></div>
+          </div>
+          <!-- Форма регистрации -->
+          <div id="chatRegForm" style="padding:.7rem 1rem;display:none;flex-direction:column;gap:.45rem">
+            <input id="chatRegNick" class="chat-input" placeholder="Ник (от 2 символов)" maxlength="20" style="width:100%">
+            <input id="chatRegEmail" class="chat-input" type="email" placeholder="Email" autocomplete="email" style="width:100%">
+            <div style="display:flex;gap:.5rem">
+              <input id="chatRegPass" class="chat-input" type="password" placeholder="Пароль (мин. 6 символов)" autocomplete="new-password" onkeydown="if(event.key==='Enter')chatRegister()" style="flex:1">
+              <button class="chat-send" onclick="chatRegister()" style="background:var(--tw);padding:.5rem 1rem">→</button>
+            </div>
+            <div id="chatRegErr" style="font-size:.65rem;color:var(--accent);min-height:.9rem"></div>
+          </div>
+          <!-- Гостевой ввод -->
+          <div id="chatGuestForm" style="padding:.7rem 1rem;display:none;gap:.5rem">
+            <input id="chatNameField" class="chat-input" placeholder="Твой ник..." maxlength="20" onkeydown="if(event.key==='Enter')setNick()" style="flex:1;background:rgba(145,71,255,.08);border-color:rgba(145,71,255,.3)">
             <button class="chat-send" onclick="setNick()" style="background:var(--tw);padding:.5rem 1.1rem">Войти</button>
           </div>
         </div>
@@ -1277,19 +1300,16 @@ body.high .avatar::before{
         <!-- Поле ввода (после входа) -->
         <div id="chatMainInput" style="display:none;flex-direction:column;border-top:1px solid var(--border)">
           <!-- Строка ника -->
-          <div style="padding:.4rem 1rem;display:flex;align-items:center;justify-content:space-between;background:rgba(145,71,255,.05);font-size:.7rem">
-            <span style="color:var(--muted)">Ты в чате как: <strong id="chatNickDisplay" style="color:var(--tw)"></strong></span>
-            <button onclick="changeNick()" style="background:none;border:none;color:var(--muted);font-size:.68rem;cursor:pointer;letter-spacing:.5px;font-family:'Montserrat',sans-serif;transition:color .2s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">Сменить ник</button>
+          <div style="padding:.35rem 1rem;display:flex;align-items:center;justify-content:space-between;background:rgba(145,71,255,.05);font-size:.68rem">
+            <span style="color:var(--muted)">Ты в чате как: <strong id="chatNickDisplay" style="color:var(--tw)"></strong> <span id="chatNickRole" style="font-size:.58rem;opacity:.7"></span></span>
+            <button onclick="chatLogout()" style="background:none;border:none;color:var(--muted);font-size:.62rem;cursor:pointer;font-family:'Montserrat',sans-serif;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Выйти</button>
           </div>
           <!-- Эмодзи пикер -->
-          <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto">
-            <!-- заполняется JS -->
-          </div>
+          <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto"></div>
           <!-- Строка отправки -->
           <div class="chat-input-wrap">
             <button onclick="toggleEmoji(event)" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--muted);cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Эмодзи">😀</button>
-            <input class="chat-input" id="chatInput" placeholder="Написать сообщение..." maxlength="200"
-              onkeydown="if(event.key==='Enter')sendMsg()" style="flex:1">
+            <input class="chat-input" id="chatInput" placeholder="Написать сообщение..." maxlength="200" onkeydown="if(event.key==='Enter')sendMsg()" style="flex:1">
             <button class="chat-send" onclick="sendMsg()">→</button>
           </div>
           <!-- Быстрые реакции снизу -->
@@ -1306,9 +1326,9 @@ body.high .avatar::before{
       </div>
 
       <!-- Twitch чат -->
-      <iframe class="chat-frame" id="chat-twitch" src="" allowfullscreen></iframe>
+      <iframe class="chat-frame" id="chat-twitch" src="" allowfullscreen allow="autoplay; encrypted-media; clipboard-write" sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"></iframe>
       <!-- YouTube чат -->
-      <iframe class="chat-frame" id="chat-youtube" src="" allowfullscreen></iframe>
+      <iframe class="chat-frame" id="chat-youtube" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
     </div>
   </div>
 </div>
@@ -2098,25 +2118,36 @@ async function loadBans() {
 
 async function banNick(nick, msgEl) {
   if (!sbClient || currentRole === 'user') return;
+  // Нельзя банить себя
+  const myNick = currentProfile?.nick || '';
+  if (nick.toLowerCase() === myNick.toLowerCase() || nick.toLowerCase() === chatNick.toLowerCase()) {
+    showChatStatus('⚠ Нельзя забанить себя', false);
+    setTimeout(()=>document.getElementById('chatStatusBar').style.display='none',2000);
+    return;
+  }
+  // Нельзя банить других модераторов/админов
   if (!confirm(`Забанить «${nick}»? Все его сообщения будут удалены.`)) return;
   try {
     await sbClient.from('banned_nicks').insert([{ nick, banned_by: currentUser.id }]);
     bannedNicks.add(nick.toLowerCase());
-    // Удаляем все сообщения этого ника
     await sbClient.from('messages').update({ deleted: true }).eq('nick', nick);
     document.querySelectorAll('.chat-msg').forEach(el => {
       if (el.dataset.nick === nick) el.classList.add('deleted');
     });
-    addMsg('🔨 Система', `«${nick}» заблокирован`, 'var(--accent)', false, false);
+    addMsg('🔨 Система', `«${nick}» заблокирован`, 'var(--accent)', false, false, null, 'system');
   } catch(e) { console.warn('ban error:', e); }
 }
 
 async function deleteMsg(id, msgEl) {
   if (!sbClient || currentRole === 'user') return;
+  if (!id) { msgEl?.classList.add('deleted'); return; }
   try {
     await sbClient.from('messages').update({ deleted: true }).eq('id', id);
     msgEl.classList.add('deleted');
-  } catch(e) { console.warn('delete error:', e); }
+  } catch(e) {
+    console.warn('delete error:', e);
+    msgEl?.classList.add('deleted'); // fallback локально
+  }
 }
 
 // ─── RATE LIMIT & SPAM ───
@@ -2227,8 +2258,12 @@ function switchChat(type,btn){
     document.getElementById('chat-local').style.display='flex';
     document.getElementById('chatSubtitle').textContent='Сайт';
   } else if(type==='twitch'){
-    if(!twFr.src) twFr.src=`https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout`;
-    twFr.style.display='block';twFr.classList.add('active');
+    if(!twFr.src){
+      const isMob = /Mobi|Android/i.test(navigator.userAgent);
+      twFr.src=`https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}${isMob?'':'&darkpopout'}&migration=true`;
+    }
+    twFr.style.cssText='display:block;width:100%;height:100%;border:none;min-height:320px;flex:1';
+    twFr.classList.add('active');
     document.getElementById('chatSubtitle').textContent='Twitch';
   } else if(type==='youtube'){
     if(!ytFr.src){
@@ -2251,6 +2286,20 @@ function switchChat(type,btn){
   }
 }
 
+function showChatInput() {
+  document.getElementById('chatNickScreen').style.display = 'none';
+  document.getElementById('chatMainInput').style.display  = 'flex';
+  document.getElementById('chatNickDisplay').textContent  = chatNick;
+  const roleEl = document.getElementById('chatNickRole');
+  if (roleEl) {
+    if (currentRole === 'admin') roleEl.textContent = '👑';
+    else if (currentRole === 'moderator') roleEl.textContent = '🛡';
+    else if (currentUser) roleEl.textContent = '✅';
+    else roleEl.textContent = '👤 гость';
+  }
+  if (onlineChannel) onlineChannel.track({ nick: chatNick, ts: Date.now() });
+}
+
 function initChat(){
   document.getElementById('chat-local').style.display='flex';
   const picker=document.getElementById('emojiPicker');
@@ -2263,64 +2312,161 @@ function initChat(){
     btn.onmouseout=()=>btn.style.background='none';
     picker.appendChild(btn);
   });
-  if(chatNick) showChatInput();
+
+  // Инициализируем табы авторизации
+  switchChatAuthTab('login');
 
   const sbReady = initSupabase();
   if (sbReady) {
     sbClient.auth.getSession().then(({ data }) => {
-      if (data?.session?.user) onAuthStateChange(data.session.user);
+      if (data?.session?.user) {
+        onAuthStateChange(data.session.user).then(() => {
+          // Если уже авторизован — сразу показываем поле ввода
+          if (chatNick || currentProfile?.nick) {
+            chatNick = chatNick || currentProfile.nick;
+            showChatInput();
+          }
+        });
+      } else if (chatNick) {
+        // Гость с сохранённым ником
+        showChatInput();
+      }
     });
     Promise.all([loadBans(), loadRecentMessages()]).then(() => {
       subscribeRealtime();
-      // Если после загрузки сообщений чат пустой — показываем демо
       const msgs = document.getElementById('chatMsgs');
       if (!msgs.children.length) {
         demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
       }
-      showChatStatus('🟢 Чат подключён — сообщения видят все посетители');
-      setTimeout(()=>document.getElementById('chatStatusBar').style.display='none', 4000);
+      showChatStatus('🟢 Чат подключён');
+      setTimeout(()=>document.getElementById('chatStatusBar').style.display='none', 3000);
     }).catch(()=>{
       demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
     });
   } else {
+    if (chatNick) showChatInput();
     demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
   }
 }
 
-function showChatInput(){
-  document.getElementById('chatNickScreen').style.display='none';
-  document.getElementById('chatMainInput').style.display='flex';
-  document.getElementById('chatNickDisplay').textContent=chatNick;
-  if(onlineChannel) onlineChannel.track({ nick: chatNick, ts: Date.now() });
+// ─── ЧАТ АВТОРИЗАЦИЯ ───
+function switchChatAuthTab(tab) {
+  const isLogin = tab === 'login';
+  const isReg   = tab === 'reg';
+  document.getElementById('chatLoginForm').style.display  = isLogin ? 'flex' : 'none';
+  document.getElementById('chatRegForm').style.display    = isReg   ? 'flex' : 'none';
+  document.getElementById('chatGuestForm').style.display  = (!isLogin && !isReg) ? 'flex' : 'none';
+  const tabLogin = document.getElementById('chatAuthTabLogin');
+  const tabReg   = document.getElementById('chatAuthTabReg');
+  tabLogin.style.color        = isLogin ? 'var(--tw)' : 'var(--muted)';
+  tabLogin.style.borderBottomColor = isLogin ? 'var(--tw)' : 'transparent';
+  tabReg.style.color          = isReg   ? 'var(--tw)' : 'var(--muted)';
+  tabReg.style.borderBottomColor   = isReg   ? 'var(--tw)' : 'transparent';
 }
 
-function setNick(){
-  const n=document.getElementById('chatNameField').value.trim();
-  if(!n||n.length<2){
-    document.getElementById('chatNameField').style.borderColor='var(--accent)';
-    document.getElementById('chatNameField').placeholder='Минимум 2 символа!';
+function useChatAsGuest() {
+  document.getElementById('chatLoginForm').style.display = 'none';
+  document.getElementById('chatRegForm').style.display   = 'none';
+  document.getElementById('chatGuestForm').style.display = 'flex';
+}
+
+async function chatLogin() {
+  if (!sbClient) { chatLoginError('Нет подключения к БД'); return; }
+  const email = document.getElementById('chatLoginEmail').value.trim();
+  const pass  = document.getElementById('chatLoginPass').value;
+  if (!email || !pass) { chatLoginError('Введи email и пароль'); return; }
+  document.getElementById('chatLoginErr').textContent = '⏳ Входим...';
+  try {
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
+    if (error) throw error;
+    await onAuthStateChange(data.user);
+    // Берём ник из профиля
+    const nick = currentProfile?.nick || email.split('@')[0];
+    chatNick = nick;
+    try { localStorage.setItem('d37_nick', nick); } catch(e) {}
+    showChatInput();
+  } catch(e) {
+    chatLoginError(e.message === 'Invalid login credentials' ? 'Неверный email или пароль' : e.message);
+  }
+}
+
+function chatLoginError(msg) {
+  document.getElementById('chatLoginErr').textContent = msg;
+  setTimeout(() => { const el = document.getElementById('chatLoginErr'); if(el) el.textContent=''; }, 3000);
+}
+
+async function chatRegister() {
+  if (!sbClient) { chatRegError('Нет подключения к БД'); return; }
+  const nick  = document.getElementById('chatRegNick').value.trim();
+  const email = document.getElementById('chatRegEmail').value.trim();
+  const pass  = document.getElementById('chatRegPass').value;
+  if (nick.length < 2) { chatRegError('Ник минимум 2 символа'); return; }
+  if (!email || !pass)  { chatRegError('Заполни все поля'); return; }
+  if (pass.length < 6)  { chatRegError('Пароль минимум 6 символов'); return; }
+  if (bannedNicks.has(nick.toLowerCase())) { chatRegError('Этот ник заблокирован'); return; }
+  document.getElementById('chatRegErr').textContent = '⏳ Регистрируем...';
+  try {
+    const { data, error } = await sbClient.auth.signUp({
+      email, password: pass,
+      options: { data: { nick } }
+    });
+    if (error) throw error;
+    // Обновляем профиль с ником
+    if (data.user) {
+      await sbClient.from('profiles').upsert([{ id: data.user.id, nick, role: 'user' }]);
+      currentUser = data.user;
+      currentProfile = { nick, role: 'user' };
+      currentRole = 'user';
+      updateGlobalAuthBtn();
+    }
+    chatNick = nick;
+    try { localStorage.setItem('d37_nick', nick); } catch(e) {}
+    document.getElementById('chatRegErr').textContent = '✅ Аккаунт создан!';
+    setTimeout(() => showChatInput(), 800);
+  } catch(e) {
+    chatRegError(e.message.includes('already registered') ? 'Email уже зарегистрирован' : e.message);
+  }
+}
+
+function chatRegError(msg) {
+  document.getElementById('chatRegErr').textContent = msg;
+  setTimeout(() => { const el = document.getElementById('chatRegErr'); if(el) el.textContent=''; }, 3000);
+}
+
+function chatLogout() {
+  chatNick = '';
+  try { localStorage.removeItem('d37_nick'); } catch(e) {}
+  // Выходим из аккаунта только если это не admin/mod (они используют глобальный выход)
+  if (currentRole === 'user' && sbClient) {
+    sbClient.auth.signOut().catch(()=>{});
+    currentUser = null; currentProfile = null; currentRole = 'user';
+    updateGlobalAuthBtn();
+  }
+  document.getElementById('chatNickScreen').style.display = 'block';
+  document.getElementById('chatMainInput').style.display  = 'none';
+  switchChatAuthTab('login');
+}
+
+function setNick() {
+  // Гостевой вход
+  const n = document.getElementById('chatNameField').value.trim();
+  if (!n || n.length < 2) {
+    document.getElementById('chatNameField').style.borderColor = 'var(--accent)';
+    document.getElementById('chatNameField').placeholder = 'Минимум 2 символа!';
     return;
   }
-  if(bannedNicks.has(n.toLowerCase())){
-    document.getElementById('chatNameField').style.borderColor='var(--accent)';
-    document.getElementById('chatNameField').placeholder='Этот ник заблокирован';
+  if (bannedNicks.has(n.toLowerCase())) {
+    document.getElementById('chatNameField').style.borderColor = 'var(--accent)';
+    document.getElementById('chatNameField').placeholder = 'Этот ник заблокирован';
     return;
   }
-  chatNick=n;
-  try{localStorage.setItem('d37_nick',n)}catch(e){}
+  chatNick = n;
+  try { localStorage.setItem('d37_nick', n); } catch(e) {}
   showChatInput();
-  addMsg('🔔 Система',`${n} присоединился к чату!`,'var(--muted)',false,false);
+  addMsg('🔔 Система', `${n} присоединился как гость`, 'var(--muted)', false, false);
 }
 
-function changeNick(){
-  chatNick='';
-  try{localStorage.removeItem('d37_nick')}catch(e){}
-  document.getElementById('chatNickScreen').style.display='flex';
-  document.getElementById('chatMainInput').style.display='none';
-  document.getElementById('chatNameField').value='';
-  document.getElementById('chatNameField').style.borderColor='';
-  document.getElementById('chatNameField').placeholder='Твой ник...';
-}
+function changeNick() { chatLogout(); }
 
 function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole){
   const msgs=document.getElementById('chatMsgs');
