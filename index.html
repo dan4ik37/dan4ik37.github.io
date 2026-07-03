@@ -110,22 +110,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 .avatar{animation-delay:.05s!important}.hero h1{animation-delay:.15s}.hero-sub{animation-delay:.25s}.hero-desc{animation-delay:.32s}.hero-btns{animation-delay:.4s}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 
-/* ══════════════════════════════════════
-   РЕЖИМ ПРОИЗВОДИТЕЛЬНОСТИ
-══════════════════════════════════════ */
-/* Кнопка переключения сбоку */
-#perfToggle{
-  position:fixed;right:0;top:50%;transform:translateY(-50%);
-  z-index:490;background:var(--card);border:1px solid var(--border);
-  border-right:none;border-radius:10px 0 0 10px;
-  padding:.6rem .5rem;cursor:pointer;
-  display:flex;flex-direction:column;align-items:center;gap:.3rem;
-  transition:background .2s;
-}
-#perfToggle:hover{background:#1e1e2a}
-#perfToggle .pt-icon{font-size:1rem;line-height:1}
-#perfToggle .pt-lbl{font-size:.5rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
-
 /* Попап выбора режима — ЕДИНСТВЕННЫЙ блок */
 #perfPopup{
   position:fixed;inset:0;z-index:9200;
@@ -396,19 +380,6 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .dc-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.8rem 1.6rem;border-radius:50px;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s,box-shadow .2s;border:none;cursor:pointer;text-decoration:none;font-family:'Montserrat',sans-serif}
 .dc-btn:hover{transform:scale(1.05)}
 .dc-main{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}.dc-main:hover{box-shadow:0 8px 28px rgba(255,45,85,.5)}
-.dc-voice-btn{background:linear-gradient(135deg,#f5a623,#f53d2d);color:#fff}.dc-voice-btn:hover{box-shadow:0 8px 28px rgba(245,166,35,.45)}
-/* Voice list */
-.voice-list{display:flex;flex-direction:column;gap:.4rem}
-.voice-opt{display:flex;align-items:center;gap:.75rem;padding:.6rem .8rem;border-radius:10px;background:rgba(255,255,255,.04);border:1.5px solid transparent;cursor:pointer;transition:all .18s;text-align:left;font-family:'Montserrat',sans-serif;width:100%}
-.voice-opt:hover{background:rgba(245,166,35,.08);border-color:rgba(245,166,35,.25)}
-.voice-opt.selected{background:rgba(245,166,35,.12);border-color:#f5a623}
-.voice-icon{font-size:1.4rem;flex-shrink:0}
-.voice-name{font-size:.8rem;font-weight:700;color:var(--text)}
-.voice-hint{font-size:.65rem;color:var(--muted);margin-top:.1rem}
-.voice-check{margin-left:auto;font-size:.8rem;color:#f5a623;opacity:0;transition:opacity .15s;flex-shrink:0}
-.voice-opt.selected .voice-check{opacity:1}
-.voice-bar{margin-top:1rem;padding:1rem 1.2rem;background:rgba(245,166,35,.08);border:1.5px solid rgba(245,166,35,.25);border-radius:var(--r);display:none;align-items:center;gap:1rem;flex-wrap:wrap;font-size:.8rem}
-.voice-bar.show{display:flex}
 
 /* ── CHAT ── */
 .chat-wrap{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;height:520px;position:relative;z-index:2}
@@ -532,8 +503,8 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
   user-select:none;
 }
 #perfToggle:hover{background:rgba(20,20,30,.95);border-color:var(--accent)}
-.pt-icon{font-size:1.1rem;line-height:1}
-.pt-lbl{font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
+#perfToggle .pt-icon{font-size:1rem;line-height:1}
+#perfToggle .pt-lbl{font-size:.5rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg)}
 
 /* ── ЧАСТИЦЫ (только HIGH) ── */
 #particles{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
@@ -1264,37 +1235,8 @@ body.high .avatar::before{
         <div class="chat-msgs" id="chatMsgs"></div>
 
         <!-- Экран авторизации чата -->
-        <div id="chatNickScreen" style="border-top:1px solid var(--border);background:rgba(145,71,255,.04)">
-          <!-- Табы: войти / зарегистрироваться -->
-          <div style="display:flex;border-bottom:1px solid var(--border)">
-            <button id="chatAuthTabLogin" onclick="switchChatAuthTab('login')" style="flex:1;padding:.55rem;font-size:.7rem;font-weight:700;border:none;background:transparent;color:var(--tw);border-bottom:2px solid var(--tw);cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s">Войти</button>
-            <button id="chatAuthTabReg" onclick="switchChatAuthTab('reg')" style="flex:1;padding:.55rem;font-size:.7rem;font-weight:700;border:none;background:transparent;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s">Регистрация</button>
-            <button onclick="useChatAsGuest()" style="flex:1;padding:.55rem;font-size:.68rem;font-weight:700;border:none;background:transparent;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" title="Без аккаунта — только ник">Гостем</button>
-          </div>
-          <!-- Форма входа -->
-          <div id="chatLoginForm" style="padding:.7rem 1rem;display:flex;flex-direction:column;gap:.45rem">
-            <input id="chatLoginEmail" class="chat-input" type="email" placeholder="Email" autocomplete="email" style="width:100%">
-            <div style="display:flex;gap:.5rem">
-              <input id="chatLoginPass" class="chat-input" type="password" placeholder="Пароль" autocomplete="current-password" onkeydown="if(event.key==='Enter')chatLogin()" style="flex:1">
-              <button class="chat-send" onclick="chatLogin()" style="background:var(--tw);padding:.5rem 1rem">→</button>
-            </div>
-            <div id="chatLoginErr" style="font-size:.65rem;color:var(--accent);min-height:.9rem"></div>
-          </div>
-          <!-- Форма регистрации -->
-          <div id="chatRegForm" style="padding:.7rem 1rem;display:none;flex-direction:column;gap:.45rem">
-            <input id="chatRegNick" class="chat-input" placeholder="Ник (от 2 символов)" maxlength="20" style="width:100%">
-            <input id="chatRegEmail" class="chat-input" type="email" placeholder="Email" autocomplete="email" style="width:100%">
-            <div style="display:flex;gap:.5rem">
-              <input id="chatRegPass" class="chat-input" type="password" placeholder="Пароль (мин. 6 символов)" autocomplete="new-password" onkeydown="if(event.key==='Enter')chatRegister()" style="flex:1">
-              <button class="chat-send" onclick="chatRegister()" style="background:var(--tw);padding:.5rem 1rem">→</button>
-            </div>
-            <div id="chatRegErr" style="font-size:.65rem;color:var(--accent);min-height:.9rem"></div>
-          </div>
-          <!-- Гостевой ввод -->
-          <div id="chatGuestForm" style="padding:.7rem 1rem;display:none;gap:.5rem">
-            <input id="chatNameField" class="chat-input" placeholder="Твой ник..." maxlength="20" onkeydown="if(event.key==='Enter')setNick()" style="flex:1;background:rgba(145,71,255,.08);border-color:rgba(145,71,255,.3)">
-            <button class="chat-send" onclick="setNick()" style="background:var(--tw);padding:.5rem 1.1rem">Войти</button>
-          </div>
+        <div id="chatNickScreen" style="padding:.8rem 1rem;border-top:1px solid var(--border);background:rgba(145,71,255,.04);display:flex;align-items:center;justify-content:center">
+          <button onclick="enterAsGuest()" style="padding:.7rem 2rem;border-radius:50px;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;transition:opacity .2s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">👤 Войти как гость</button>
         </div>
 
         <!-- Поле ввода (после входа) -->
@@ -1744,12 +1686,6 @@ function countUp(id,t){
 function statsLoaded(){
   const note=document.getElementById('statsNote');
   if(note) note.innerHTML='✅ Статистика обновлена · <span style="opacity:.5">'+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';
-  const subsEl=document.getElementById('s-subs');
-  const viewsEl=document.getElementById('s-views');
-  const adsSubs=document.getElementById('ads-subs');
-  const adsViews=document.getElementById('ads-views');
-  if(adsSubs&&subsEl) adsSubs.textContent=subsEl.textContent;
-  if(adsViews&&viewsEl) adsViews.textContent=viewsEl.textContent;
 }
 function statsError(){
   const note=document.getElementById('statsNote');
@@ -1838,30 +1774,32 @@ async function loadYT(){
 
 function showLoader(){document.getElementById('yt-grid').innerHTML=`<div class="loader-cell"><div class="spinner"></div>Загрузка…</div>`}
 function showFallback(){
-  // Показываем реальные видео через embed когда API недоступен
-  document.getElementById('yt-grid').innerHTML=`
-    <div class="err-box" style="margin-bottom:1rem">
-      <strong>📡 YouTube API недоступен</strong> — показываем последние видео напрямую.
-      Нажми <b>📺 Без API</b> для полного списка.
+  const grid = document.getElementById('yt-grid');
+  grid.className = 'video-grid';
+  // Получаем channelId из кеша (если он уже был определён ранее) или используем общую ссылку
+  const chId = channelId || '';
+  const playlistSrc = chId
+    ? `https://www.youtube.com/embed/videoseries?list=UU${chId.slice(2)}&rel=0&modestbranding=1`
+    : `https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&rel=0&modestbranding=1`;
+  grid.innerHTML = `
+    <div class="err-box" style="grid-column:1/-1">
+      <strong>📡 YouTube API — превышена суточная квота</strong>
+      Видео загружаются напрямую. Квота обновляется каждые 24 часа.
+      <br><a href="https://www.youtube.com/@Dan4ik37Yt/videos" target="_blank" style="color:var(--yt)">Все видео на YouTube →</a>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem">
-      <div style="border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--border)">
-        <div style="position:relative;padding-bottom:56.25%">
-          <iframe src="https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&index=1" style="position:absolute;inset:0;width:100%;height:100%;border:none" allowfullscreen></iframe>
-        </div>
+    <div style="grid-column:1/-1;border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--border)">
+      <div style="position:relative;padding-bottom:56.25%">
+        <iframe src="${playlistSrc}"
+          style="position:absolute;inset:0;width:100%;height:100%;border:none" allowfullscreen
+          allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"></iframe>
       </div>
-      <div style="border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--border)">
-        <div style="position:relative;padding-bottom:56.25%">
-          <iframe src="https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&index=2" style="position:absolute;inset:0;width:100%;height:100%;border:none" allowfullscreen></iframe>
-        </div>
-      </div>
-      <div style="border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--border)">
-        <div style="position:relative;padding-bottom:56.25%">
-          <iframe src="https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&index=3" style="position:absolute;inset:0;width:100%;height:100%;border:none" allowfullscreen></iframe>
-        </div>
+      <div style="padding:.8rem 1rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+        <span style="font-size:.74rem;color:var(--muted)">Последние видео @Dan4ik37Yt</span>
+        <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-sub" style="font-size:.72rem;padding:.45rem 1rem">▶ Открыть канал</a>
       </div>
     </div>`;
 }
+
 
 // ═══════════════════════════════════════
 //  RENDER VIDEOS
@@ -2313,24 +2251,13 @@ function initChat(){
     picker.appendChild(btn);
   });
 
-  // Инициализируем табы авторизации
-  switchChatAuthTab('login');
+  // Если ник уже сохранён — сразу показываем поле ввода
+  if (chatNick) showChatInput();
 
   const sbReady = initSupabase();
   if (sbReady) {
     sbClient.auth.getSession().then(({ data }) => {
-      if (data?.session?.user) {
-        onAuthStateChange(data.session.user).then(() => {
-          // Если уже авторизован — сразу показываем поле ввода
-          if (chatNick || currentProfile?.nick) {
-            chatNick = chatNick || currentProfile.nick;
-            showChatInput();
-          }
-        });
-      } else if (chatNick) {
-        // Гость с сохранённым ником
-        showChatInput();
-      }
+      if (data?.session?.user) onAuthStateChange(data.session.user);
     });
     Promise.all([loadBans(), loadRecentMessages()]).then(() => {
       subscribeRealtime();
@@ -2339,134 +2266,38 @@ function initChat(){
         demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
       }
       showChatStatus('🟢 Чат подключён');
-      setTimeout(()=>document.getElementById('chatStatusBar').style.display='none', 3000);
+      setTimeout(()=>{ const b=document.getElementById('chatStatusBar'); if(b) b.style.display='none'; }, 3000);
     }).catch(()=>{
       demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
     });
   } else {
-    if (chatNick) showChatInput();
     demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
   }
 }
 
-// ─── ЧАТ АВТОРИЗАЦИЯ ───
-function switchChatAuthTab(tab) {
-  const isLogin = tab === 'login';
-  const isReg   = tab === 'reg';
-  document.getElementById('chatLoginForm').style.display  = isLogin ? 'flex' : 'none';
-  document.getElementById('chatRegForm').style.display    = isReg   ? 'flex' : 'none';
-  document.getElementById('chatGuestForm').style.display  = (!isLogin && !isReg) ? 'flex' : 'none';
-  const tabLogin = document.getElementById('chatAuthTabLogin');
-  const tabReg   = document.getElementById('chatAuthTabReg');
-  tabLogin.style.color        = isLogin ? 'var(--tw)' : 'var(--muted)';
-  tabLogin.style.borderBottomColor = isLogin ? 'var(--tw)' : 'transparent';
-  tabReg.style.color          = isReg   ? 'var(--tw)' : 'var(--muted)';
-  tabReg.style.borderBottomColor   = isReg   ? 'var(--tw)' : 'transparent';
-}
-
-function useChatAsGuest() {
-  document.getElementById('chatLoginForm').style.display = 'none';
-  document.getElementById('chatRegForm').style.display   = 'none';
-  document.getElementById('chatGuestForm').style.display = 'flex';
-}
-
-async function chatLogin() {
-  if (!sbClient) { chatLoginError('Нет подключения к БД'); return; }
-  const email = document.getElementById('chatLoginEmail').value.trim();
-  const pass  = document.getElementById('chatLoginPass').value;
-  if (!email || !pass) { chatLoginError('Введи email и пароль'); return; }
-  document.getElementById('chatLoginErr').textContent = '⏳ Входим...';
-  try {
-    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
-    await onAuthStateChange(data.user);
-    // Берём ник из профиля
-    const nick = currentProfile?.nick || email.split('@')[0];
-    chatNick = nick;
-    try { localStorage.setItem('d37_nick', nick); } catch(e) {}
-    showChatInput();
-  } catch(e) {
-    chatLoginError(e.message === 'Invalid login credentials' ? 'Неверный email или пароль' : e.message);
+// ─── ЧАТ: ВХОД ───
+function enterAsGuest() {
+  // Генерируем случайный гостевой ник
+  const saved = localStorage.getItem('d37_nick');
+  if (saved) {
+    chatNick = saved;
+  } else {
+    chatNick = 'Гость' + Math.floor(Math.random() * 9000 + 1000);
+    try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
   }
-}
-
-function chatLoginError(msg) {
-  document.getElementById('chatLoginErr').textContent = msg;
-  setTimeout(() => { const el = document.getElementById('chatLoginErr'); if(el) el.textContent=''; }, 3000);
-}
-
-async function chatRegister() {
-  if (!sbClient) { chatRegError('Нет подключения к БД'); return; }
-  const nick  = document.getElementById('chatRegNick').value.trim();
-  const email = document.getElementById('chatRegEmail').value.trim();
-  const pass  = document.getElementById('chatRegPass').value;
-  if (nick.length < 2) { chatRegError('Ник минимум 2 символа'); return; }
-  if (!email || !pass)  { chatRegError('Заполни все поля'); return; }
-  if (pass.length < 6)  { chatRegError('Пароль минимум 6 символов'); return; }
-  if (bannedNicks.has(nick.toLowerCase())) { chatRegError('Этот ник заблокирован'); return; }
-  document.getElementById('chatRegErr').textContent = '⏳ Регистрируем...';
-  try {
-    const { data, error } = await sbClient.auth.signUp({
-      email, password: pass,
-      options: { data: { nick } }
-    });
-    if (error) throw error;
-    // Обновляем профиль с ником
-    if (data.user) {
-      await sbClient.from('profiles').upsert([{ id: data.user.id, nick, role: 'user' }]);
-      currentUser = data.user;
-      currentProfile = { nick, role: 'user' };
-      currentRole = 'user';
-      updateGlobalAuthBtn();
-    }
-    chatNick = nick;
-    try { localStorage.setItem('d37_nick', nick); } catch(e) {}
-    document.getElementById('chatRegErr').textContent = '✅ Аккаунт создан!';
-    setTimeout(() => showChatInput(), 800);
-  } catch(e) {
-    chatRegError(e.message.includes('already registered') ? 'Email уже зарегистрирован' : e.message);
+  if (bannedNicks.has(chatNick.toLowerCase())) {
+    chatNick = 'Гость' + Math.floor(Math.random() * 9000 + 1000);
+    try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
   }
-}
-
-function chatRegError(msg) {
-  document.getElementById('chatRegErr').textContent = msg;
-  setTimeout(() => { const el = document.getElementById('chatRegErr'); if(el) el.textContent=''; }, 3000);
+  showChatInput();
 }
 
 function chatLogout() {
   chatNick = '';
   try { localStorage.removeItem('d37_nick'); } catch(e) {}
-  // Выходим из аккаунта только если это не admin/mod (они используют глобальный выход)
-  if (currentRole === 'user' && sbClient) {
-    sbClient.auth.signOut().catch(()=>{});
-    currentUser = null; currentProfile = null; currentRole = 'user';
-    updateGlobalAuthBtn();
-  }
-  document.getElementById('chatNickScreen').style.display = 'block';
-  document.getElementById('chatMainInput').style.display  = 'none';
-  switchChatAuthTab('login');
+  document.getElementById('chatNickScreen').style.display = 'flex';
+  document.getElementById('chatMainInput').style.display = 'none';
 }
-
-function setNick() {
-  // Гостевой вход
-  const n = document.getElementById('chatNameField').value.trim();
-  if (!n || n.length < 2) {
-    document.getElementById('chatNameField').style.borderColor = 'var(--accent)';
-    document.getElementById('chatNameField').placeholder = 'Минимум 2 символа!';
-    return;
-  }
-  if (bannedNicks.has(n.toLowerCase())) {
-    document.getElementById('chatNameField').style.borderColor = 'var(--accent)';
-    document.getElementById('chatNameField').placeholder = 'Этот ник заблокирован';
-    return;
-  }
-  chatNick = n;
-  try { localStorage.setItem('d37_nick', n); } catch(e) {}
-  showChatInput();
-  addMsg('🔔 Система', `${n} присоединился как гость`, 'var(--muted)', false, false);
-}
-
-function changeNick() { chatLogout(); }
 
 function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole){
   const msgs=document.getElementById('chatMsgs');
@@ -2541,26 +2372,17 @@ function toggleEmoji(e){
 document.addEventListener('click',()=>{const p=document.getElementById('emojiPicker');if(p)p.style.display='none'});
 
 // ═══════════════════════════════════════
-//  АВТО-СТРИМ ДЕТЕКТОР (Twitch)
+//  TWITCH LIVE — статичный баннер
 // ═══════════════════════════════════════
-async function checkLiveStream(){
-  try{
-    const host=location.hostname||'localhost';
-    // Twitch oEmbed — не требует API ключа, возвращает данные если канал существует
-    const res=await fetch(`https://www.twitch.tv/dan4ik37`,{method:'HEAD',mode:'no-cors'});
-    // Всегда показываем плеер — Twitch сам покажет "offline" если стрима нет
-    // Это лучше чем скрывать плеер из-за сломанного API
-    document.getElementById('autoStreamWrap').classList.add('live');
-    document.getElementById('staticLiveBar').style.display='none';
-    document.getElementById('autoStreamPlayer').src=`https://player.twitch.tv/?channel=dan4ik37&parent=${host}&autoplay=false`;
-    document.getElementById('autoStreamChat').src=`https://www.twitch.tv/embed/dan4ik37/chat?parent=${host}&darkpopout`;
-  }catch(e){
-    // Показываем статичный баннер
-  }
-}
-checkLiveStream();
-// Проверяем каждые 3 минуты
-setInterval(checkLiveStream, 3*60*1000);
+// БАГ ИСПРАВЛЕН: раньше здесь был fetch(...,{mode:'no-cors'}) для проверки
+// live-статуса. В no-cors режиме JS не видит код ответа — promise почти
+// всегда резолвится, даже если стрим НЕ идёт. Из-за этого сайт ВСЕГДА
+// показывал "🔴 Стрим идёт прямо сейчас!" и включал плеер, даже когда
+// dan4ik37 офлайн. Настоящая проверка требует Twitch Helix API через
+// серверную функцию (по аналогии с /api/donations для DonationAlerts) —
+// с client_id/secret с dev.twitch.tv, которых сейчас нет в проекте.
+// Пока честный вариант — показывать статичный баннер «Стримы на Twitch!»
+// (он выводится по умолчанию, autoStreamWrap скрыт в CSS до .live).
 
 // ═══════════════════════════════════════
 //  САУНДБОРД — Web Audio API (без файлов)
@@ -2779,16 +2601,6 @@ window.addEventListener('load',()=>{const m=document.cookie.match(/googtrans=\/r
 document.addEventListener('dragstart',e=>e.preventDefault());
 
 // ═══════════════════════════════════════
-//  ВОЙС ДОНАТ
-// ═══════════════════════════════════════
-function pickVoice(btn, name) {
-  document.querySelectorAll('.voice-opt').forEach(b => b.classList.remove('selected'));
-  btn.classList.add('selected');
-  document.getElementById('voiceName').textContent = btn.querySelector('.voice-icon').textContent + ' ' + name;
-  document.getElementById('voiceBtn').textContent = '🎙️ Войс донат — ' + name;
-}
-
-// ═══════════════════════════════════════
 //  РЕЖИМ ПРОИЗВОДИТЕЛЬНОСТИ
 // ═══════════════════════════════════════
 const PERF_KEY = 'd37_perf';
@@ -2798,7 +2610,7 @@ function setPerf(mode) {
   currentPerf = mode;
   try { localStorage.setItem(PERF_KEY, mode); } catch(e) {}
 
-  document.body.classList.remove('low','high','perf-low','perf-high');
+  document.body.classList.remove('low','high');
   document.body.classList.add(mode);
 
   // Кнопка сбоку
@@ -2855,16 +2667,8 @@ function initPerfMode() {
   if (saved) {
     setPerf(saved);
   } else {
-    // Первый заход — автоопределение
-    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
-    const isLowRAM = navigator.deviceMemory && navigator.deviceMemory < 4;
-    if (isMobile || isLowRAM) {
-      // Показываем попап на мобиле — пусть выберут
-      document.getElementById('perfPopup').classList.add('show');
-    } else {
-      // Десктоп — показываем попап
-      document.getElementById('perfPopup').classList.add('show');
-    }
+    // Первый заход — даём выбрать режим самому
+    document.getElementById('perfPopup').classList.add('show');
   }
 }
 
