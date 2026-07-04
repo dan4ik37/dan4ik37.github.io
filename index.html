@@ -44,8 +44,8 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 #nav{position:fixed;top:0;left:0;right:0;z-index:500;padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between;background:rgba(8,8,14,.92);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);transition:box-shadow .3s}
 #nav.scrolled{box-shadow:0 4px 40px rgba(0,0,0,.7)}
 .nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:3px;background:linear-gradient(135deg,#fff,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.nav-links{display:flex;gap:1.8rem;align-items:center}
-.nav-links a{font-size:.7rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);transition:color .2s}
+.nav-links{display:flex;gap:1.3rem;align-items:center}
+.nav-links a{font-size:.68rem;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);transition:color .2s;white-space:nowrap}
 .nav-links a:hover{color:var(--text)}
 .nav-donate{padding:.42rem 1.1rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;font-size:.7rem!important;transition:transform .2s,opacity .2s}
 .nav-donate:hover{transform:scale(1.06);opacity:.9}
@@ -69,7 +69,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 #google_translate_element{display:none!important}
 .goog-te-gadget{font-size:0!important}
 
-@media(max-width:800px){
+@media(max-width:1180px){
   .nav-links{display:none;position:absolute;top:100%;left:0;right:0;flex-direction:column;gap:1.2rem;background:rgba(8,8,14,.98);padding:1.5rem 2rem;border-bottom:1px solid var(--border)}
   .nav-links.open{display:flex}
   .hamburger{display:flex}
@@ -175,7 +175,6 @@ body.low .hero-bg{opacity:.5}
 body.low .hero-grid{display:none}
 body.low .avatar{animation:none}
 body.low .avatar-ring{animation:spin 6s linear infinite}
-body.low .live-dot{animation:none;opacity:.8}
 body.low .vcard:hover{transform:none;box-shadow:none}
 body.low .hub-card:hover{transform:none;box-shadow:none}
 body.low .stat-card:hover{transform:none;box-shadow:none}
@@ -184,7 +183,6 @@ body.low .about-card:hover{transform:none}
 body.low .dc:hover{transform:none;box-shadow:none}
 body.low *{animation-duration:.01ms!important;animation-iteration-count:1!important}
 body.low .avatar-ring{animation-duration:6s!important;animation-iteration-count:infinite!important}
-body.low .live-dot{animation:none!important}
 
 /* ── HIGH: мощное устройство ── */
 body.high .vcard{transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s}
@@ -229,10 +227,7 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .tab{padding:.48rem 1.15rem;border-radius:50px;font-size:.72rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.08);background:transparent;color:var(--muted);cursor:pointer;transition:all .22s}
 .tab:hover{border-color:rgba(255,255,255,.2);color:var(--text)}
 .tab.a-yt{background:rgba(255,64,64,.13);border-color:var(--yt);color:var(--yt)}
-.tab.a-tt{background:rgba(238,29,82,.13);border-color:var(--tt);color:var(--tt)}
-.tab.a-vkv{background:rgba(0,119,255,.13);border-color:var(--vk);color:#5bc4ff}
 .tab.a-tw{background:rgba(145,71,255,.13);border-color:var(--tw);color:var(--tw)}
-.tab.a-tg{background:rgba(41,182,246,.13);border-color:var(--tg);color:var(--tg)}
 .shuffle-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem 1.1rem;border-radius:50px;font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.1);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s}
 .shuffle-btn:hover{border-color:var(--accent);color:var(--accent)}
 .panel{display:none}.panel.active{display:block}
@@ -312,11 +307,7 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .yt-sub:hover{transform:scale(1.05);box-shadow:0 6px 25px rgba(255,64,64,.45)}
 
 /* ── LIVE BANNER ── */
-.live-bar{background:linear-gradient(135deg,rgba(145,71,255,.13),rgba(255,45,85,.09));border:1.5px solid rgba(145,71,255,.32);border-radius:18px;padding:1.7rem 2rem;display:flex;align-items:center;gap:1.4rem;margin-bottom:2.2rem;flex-wrap:wrap}
-.live-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex-shrink:0;will-change:box-shadow;animation:livePulse 2s ease-in-out infinite}
 @keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(255,45,85,.5)}70%{box-shadow:0 0 0 10px rgba(255,45,85,0)}100%{box-shadow:0 0 0 0 rgba(255,45,85,0)}}
-.live-text h3{font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:2px}
-.live-text p{font-size:.8rem;color:var(--muted);margin-top:.2rem}
 .cta-tw{display:inline-flex;align-items:center;gap:.45rem;padding:.68rem 1.7rem;border-radius:50px;font-size:.76rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;background:var(--tw);color:#fff;margin-left:auto;transition:transform .2s,box-shadow .2s}
 .cta-tw:hover{transform:scale(1.06);box-shadow:0 6px 28px rgba(145,71,255,.5)}
 
@@ -605,8 +596,7 @@ body.high .avatar::before{
   opacity:.35;filter:blur(8px);animation:spin 4s linear infinite;z-index:-1;
 }
 /* ══════════ АВТО-СТРИМ ПЛЕЕР ══════════ */
-#autoStreamWrap{display:none;margin-bottom:2rem}
-#autoStreamWrap.live{display:block}
+#autoStreamWrap{display:block;margin-bottom:2rem}
 .stream-live-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .9rem;background:var(--accent);color:#fff;border-radius:50px;font-size:.7rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:1rem;animation:livePulse2 1.5s ease-in-out infinite}
 @keyframes livePulse2{0%,100%{box-shadow:0 0 0 0 rgba(255,45,85,.5)}70%{box-shadow:0 0 0 8px rgba(255,45,85,0)}}
 .auto-stream-grid{display:grid;grid-template-columns:2fr 1fr;gap:1rem}
@@ -953,9 +943,9 @@ body.high .avatar::before{
   <div class="eyebrow">Смотреть</div>
   <h2 class="sec-title">Видео и стримы</h2>
 
-  <!-- АВТО-СТРИМ ПЛЕЕР (показывается если стрим идёт) -->
+  <!-- TWITCH — плеер + чат всегда на странице; онлайн/офлайн статус показывает сам виджет Twitch -->
   <div id="autoStreamWrap">
-    <div class="stream-live-badge">🔴 Стрим идёт прямо сейчас!</div>
+    <div class="stream-live-badge">◉ Twitch — dan4ik37</div>
     <div class="auto-stream-grid">
       <div class="auto-stream-player">
         <iframe id="autoStreamPlayer" src="" allowfullscreen allow="autoplay"></iframe>
@@ -969,13 +959,6 @@ body.high .avatar::before{
     </div>
   </div>
 
-  <!-- STATIC LIVE BAR (когда стрима нет) -->
-  <div class="live-bar" id="staticLiveBar">
-    <div class="live-dot"></div>
-    <div class="live-text"><h3>🔴 Стримы на Twitch!</h3><p>Заходи — играем, общаемся, фан гарантирован</p></div>
-    <a class="cta-tw" href="https://www.twitch.tv/dan4ik37" target="_blank">Смотреть стрим</a>
-  </div>
-
   <!-- AD MID — показывается между секциями -->
   <div style="max-width:1200px;margin:0 auto;padding:0 2rem 1.5rem">
     <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
@@ -986,11 +969,7 @@ body.high .avatar::before{
   <div class="top-row">
     <div class="tabs">
       <button class="tab a-yt" onclick="switchTab('yt',this)">▶ YouTube</button>
-      <button class="tab" onclick="switchTab('ytlive',this)">🔴 YT Стримы</button>
-      <button class="tab" onclick="switchTab('tt',this)">♪ TikTok</button>
-      <button class="tab" onclick="switchTab('vkv',this)">▶ VK Видео</button>
       <button class="tab" onclick="switchTab('tw',this)">◉ Twitch</button>
-      <button class="tab" onclick="switchTab('tg',this)">✈ Telegram</button>
     </div>
     <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleVids()">🔀 Перемешать</button>
   </div>
@@ -1024,6 +1003,7 @@ body.high .avatar::before{
     <div id="multiPlayer" style="display:none;margin-top:2rem"></div>
     <div class="yt-bottom">
       <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-ext">▶ Все видео на YouTube</a>
+      <a href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" class="yt-ext">🔴 Стримы и записи</a>
       <a href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" class="yt-sub">❤ Подписаться</a>
     </div>
     <!-- Баннер подписки — появляется после просмотра видео -->
@@ -1039,51 +1019,6 @@ body.high .avatar::before{
     </div>
   </div>
 
-  <!-- YOUTUBE LIVE STREAMS PANEL -->
-  <div class="panel" id="panel-ytlive">
-    <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(255,64,64,.18);overflow:hidden">
-      <!-- Встроенный поиск стримов канала -->
-      <div style="padding:1.2rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap">
-        <div class="live-dot"></div>
-        <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--yt)">YouTube Стримы @Dan4ik37Yt</div>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:.15rem">Прямые трансляции и записи стримов</div>
-        </div>
-        <a href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" class="yt-sub" style="margin-left:auto;padding:.5rem 1.2rem;font-size:.72rem">▶ Все стримы</a>
-      </div>
-      <!-- Embed плейлиста стримов -->
-      <div id="ytStreamsEmbed" style="position:relative;padding-bottom:56.25%">
-        <iframe id="ytStreamsFrame" src=""
-          style="position:absolute;inset:0;width:100%;height:100%;border:none"
-          allowfullscreen allow="encrypted-media"></iframe>
-      </div>
-      <div style="padding:1rem 1.4rem;background:rgba(255,64,64,.04)">
-        <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
-          💡 Чтобы смотреть стримы в реальном времени — нажми <strong style="color:var(--yt)">«Все стримы»</strong> и выбери активную трансляцию.
-          Чат стрима доступен в разделе <a href="#chat" style="color:var(--tw)">Чат → YouTube</a>.
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="panel" id="panel-tt">
-    <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(238,29,82,.18);padding:3rem;text-align:center">
-      <div style="font-size:3rem;margin-bottom:1.2rem">♪</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:var(--tt)">TikTok @.dan4ik37</div>
-      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">Короткие видео, мемы и приколы каждый день.<br>TikTok не разрешает встраивание — жми кнопку!</p>
-      <a href="https://www.tiktok.com/@.dan4ik37" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;background:var(--tt);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">Открыть TikTok ↗</a>
-    </div>
-  </div>
-
-  <!-- VKVIDEO -->
-  <div class="panel" id="panel-vkv">
-    <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(0,119,255,.18);padding:3rem;text-align:center">
-      <div style="font-size:3rem;margin-bottom:1.2rem">▶</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:#5bc4ff">VK Видео @dan4ik37</div>
-      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">Весь видеоконтент dan4ik37 на VK Видео!</p>
-      <a href="https://m.vkvideo.ru/@dan4ik37" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;background:var(--vk);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">Открыть VK Видео ↗</a>
-    </div>
-  </div>
-
   <!-- TWITCH -->
   <div class="panel" id="panel-tw">
     <div class="stream-box">
@@ -1092,16 +1027,6 @@ body.high .avatar::before{
         <div><div class="stream-title">🔴 DAN4IK37 LIVE</div><p style="font-size:.78rem;color:var(--muted);margin-top:.2rem">Прямые трансляции прямо здесь</p></div>
         <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-tw" style="margin-left:auto">Twitch ↗</a>
       </div>
-    </div>
-  </div>
-
-  <!-- TELEGRAM -->
-  <div class="panel" id="panel-tg">
-    <div style="background:var(--card);border-radius:var(--r);border:1px solid rgba(41,182,246,.18);padding:3rem;text-align:center">
-      <div style="font-size:3rem;margin-bottom:1.2rem">✈️</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:3px;color:var(--tg)">Telegram</div>
-      <p style="color:var(--muted);font-size:.83rem;margin:1rem 0 2rem;line-height:1.75;max-width:420px;margin-inline:auto">Анонсы стримов, новости и эксклюзивный контент. Вступай!</p>
-      <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" style="display:inline-flex;align-items:center;gap:.5rem;padding:.8rem 2.2rem;border-radius:50px;background:var(--tg);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s" onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform=''">Вступить ↗</a>
     </div>
   </div>
 </div>
@@ -1218,7 +1143,6 @@ body.high .avatar::before{
     <div class="chat-tabs">
       <button class="chat-tab active" onclick="switchChat('local',this)">💬 Сайт</button>
       <button class="chat-tab" onclick="switchChat('twitch',this)">◉ Twitch</button>
-      <button class="chat-tab" onclick="switchChat('youtube',this)" title="Работает только во время активного YouTube стрима">▶ YT Live</button>
     </div>
     <div class="chat-body">
 
@@ -1263,8 +1187,6 @@ body.high .avatar::before{
 
       <!-- Twitch чат -->
       <iframe class="chat-frame" id="chat-twitch" src="" allowfullscreen allow="autoplay; encrypted-media; clipboard-write" sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"></iframe>
-      <!-- YouTube чат -->
-      <iframe class="chat-frame" id="chat-youtube" src="" allowfullscreen allow="autoplay; encrypted-media"></iframe>
     </div>
   </div>
 </div>
@@ -1879,7 +1801,7 @@ function playSelected(){
 // ═══════════════════════════════════════
 //  TABS
 // ═══════════════════════════════════════
-const tabMap={yt:'a-yt',ytlive:'a-yt',tt:'a-tt',vkv:'a-vkv',tw:'a-tw',tg:'a-tg'};
+const tabMap={yt:'a-yt',tw:'a-tw'};
 function switchTab(p,btn){
   document.querySelectorAll('.tab').forEach(t=>t.className='tab');
   btn.classList.add(tabMap[p]||'a-yt');
@@ -1891,16 +1813,6 @@ function switchTab(p,btn){
   if(p==='tw'){
     const fr=document.getElementById('twitchFrame');
     if(!fr.src) fr.src=`https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
-  }
-  if(p==='ytlive'){
-    const fr=document.getElementById('ytStreamsFrame');
-    if(!fr.src){
-      // Плейлист стримов канала (если channelId известен) или прямая ссылка
-      const plId=channelId?'UU'+channelId.slice(2):'';
-      fr.src=plId
-        ? `https://www.youtube.com/embed/videoseries?list=${plId}&rel=0`
-        : `https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&rel=0`;
-    }
   }
 }
 
@@ -1988,6 +1900,12 @@ async function onAuthStateChange(user) {
       const editBtn = document.getElementById('pollEditBtn');
       if (editBtn) editBtn.style.display = 'inline-flex';
     }
+    // Раньше здесь chatNick не менялся, и в чат уходило "Гость1234 [ADMIN]" —
+    // логин никак не влиял на то, под каким именем реально пишешь сообщения.
+    // Теперь при входе как admin/mod ник в чате = реальный ник профиля.
+    chatNick = data?.nick || user.email.split('@')[0];
+    try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
+    showChatInput();
   }
 }
 
@@ -2134,9 +2052,7 @@ function switchChat(type,btn){
   btn.classList.add('active');
   document.getElementById('chat-local').style.display='none';
   const twFr=document.getElementById('chat-twitch');
-  const ytFr=document.getElementById('chat-youtube');
   twFr.classList.remove('active');twFr.style.display='none';
-  ytFr.classList.remove('active');ytFr.style.display='none';
 
   if(type==='local'){
     document.getElementById('chat-local').style.display='flex';
@@ -2149,24 +2065,6 @@ function switchChat(type,btn){
     twFr.style.cssText='display:block;width:100%;height:100%;border:none;min-height:320px;flex:1';
     twFr.classList.add('active');
     document.getElementById('chatSubtitle').textContent='Twitch';
-  } else if(type==='youtube'){
-    if(!ytFr.src){
-      if(channelId){
-        ytFr.src=`https://www.youtube.com/live_chat?channel=${channelId}&embed_domain=${HOST}`;
-        ytFr.style.display='block';ytFr.classList.add('active');
-      } else {
-        ytFr.style.display='none';
-        const existing=document.getElementById('ytChatInfo');
-        if(!existing){
-          const info=document.createElement('div');
-          info.id='ytChatInfo';
-          info.style.cssText='flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:2rem;text-align:center';
-          info.innerHTML=`<div style="font-size:2rem">▶</div><div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--yt)">YouTube Live чат</div><div style="font-size:.8rem;color:var(--muted);line-height:1.7;max-width:300px">Работает только во время активного стрима на YouTube.</div><a href="https://www.youtube.com/@Dan4ik37Yt/streams" target="_blank" class="yt-sub" style="display:inline-flex;margin-top:.5rem">▶ Стримы канала</a>`;
-          ytFr.parentNode.appendChild(info);
-        } else { existing.style.display='flex'; }
-      }
-    } else { ytFr.style.display='block';ytFr.classList.add('active'); }
-    document.getElementById('chatSubtitle').textContent='YT Live';
   }
 }
 
@@ -2318,17 +2216,26 @@ function toggleEmoji(e){
 document.addEventListener('click',()=>{const p=document.getElementById('emojiPicker');if(p)p.style.display='none'});
 
 // ═══════════════════════════════════════
-//  TWITCH LIVE — статичный баннер
+//  TWITCH — плеер + чат в шапке страницы
 // ═══════════════════════════════════════
 // БАГ ИСПРАВЛЕН: раньше здесь был fetch(...,{mode:'no-cors'}) для проверки
 // live-статуса. В no-cors режиме JS не видит код ответа — promise почти
 // всегда резолвится, даже если стрим НЕ идёт. Из-за этого сайт ВСЕГДА
-// показывал "🔴 Стрим идёт прямо сейчас!" и включал плеер, даже когда
-// dan4ik37 офлайн. Настоящая проверка требует Twitch Helix API через
+// показывал "🔴 Стрим идёт прямо сейчас!" и, что хуже, каждые 3 минуты
+// (setInterval) переприсваивал src у чата — а это форсит полную
+// перезагрузку iframe. Поэтому твич-чат постоянно сбрасывался сам по себе.
+//
+// Настоящая проверка live-статуса требует Twitch Helix API через
 // серверную функцию (по аналогии с /api/donations для DonationAlerts) —
-// с client_id/secret с dev.twitch.tv, которых сейчас нет в проекте.
-// Пока честный вариант — показывать статичный баннер «Стримы на Twitch!»
-// (он выводится по умолчанию, autoStreamWrap скрыт в CSS до .live).
+// нужны client_id/secret с dev.twitch.tv, которых пока нет в проекте.
+// Сделать можно отдельно, если нужно показывать бейдж "точно в эфире".
+//
+// Пока — честный вариант: плеер и чат Twitch встроены на странице
+// ВСЕГДА (без надписи "идёт прямо сейчас"), src ставится один раз при
+// загрузке. Сам виджет Twitch показывает офлайн-заглушку, если эфира нет —
+// это уже встроено в сам плеер/чат Twitch, ничего изобретать не нужно.
+document.getElementById('autoStreamPlayer').src = `https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
+document.getElementById('autoStreamChat').src = `https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout`;
 
 // ═══════════════════════════════════════
 //  САУНДБОРД — Web Audio API (без файлов)
