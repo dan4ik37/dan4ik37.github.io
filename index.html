@@ -468,17 +468,11 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 .chat-mod-panel span{color:var(--tw);font-weight:700}
 .chat-mod-logout{background:rgba(255,45,85,.12);border:1px solid rgba(255,45,85,.2);color:var(--accent);border-radius:8px;padding:.3rem .7rem;font-size:.65rem;cursor:pointer;font-weight:700;transition:background .2s}
 .chat-mod-logout:hover{background:rgba(255,45,85,.3)}
-#chatAuthModal{position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);z-index:9400;display:none;align-items:center;justify-content:center;padding:1.5rem}
-#chatAuthModal.open{display:flex}
-.auth-box{background:var(--card);border:1px solid rgba(145,71,255,.25);border-radius:20px;padding:2rem;width:100%;max-width:360px;text-align:center;position:relative}
-.auth-box h3{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;margin-bottom:.4rem}
-.auth-box p{font-size:.75rem;color:var(--muted);margin-bottom:1.5rem}
 .auth-inp{width:100%;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.7rem 1rem;color:var(--text);font-family:inherit;font-size:.82rem;margin-bottom:.8rem;transition:border .2s}
 .auth-inp:focus{outline:none;border-color:var(--tw)}
 .auth-submit{width:100%;padding:.75rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:800;font-size:.85rem;cursor:pointer;letter-spacing:1px;transition:opacity .2s;margin-top:.3rem}
 .auth-submit:hover{opacity:.85}
 .auth-err{color:var(--accent);font-size:.72rem;margin-top:.5rem;min-height:1rem}
-.auth-close{position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.08);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center}
 .footer-logo{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .footer-tag{font-size:.72rem;letter-spacing:2.5px;color:var(--muted);margin:.5rem 0 1.6rem}
 .footer-links{display:flex;justify-content:center;gap:1.3rem;flex-wrap:wrap;margin-bottom:1.5rem}
@@ -1219,7 +1213,7 @@ body.high .avatar::before{
     <div class="chat-mod-panel" id="chatModPanel" style="display:none">
       <span id="modPanelRole">🛡 Модератор</span>
       <span id="modPanelNick" style="color:var(--text);font-weight:600"></span>
-      <button class="chat-mod-logout" onclick="doLogout()">Выйти</button>
+      <button class="chat-mod-logout" onclick="doGlobalLogout()">Выйти</button>
     </div>
     <div class="chat-tabs">
       <button class="chat-tab active" onclick="switchChat('local',this)">💬 Сайт</button>
@@ -1500,19 +1494,6 @@ body.high .avatar::before{
   </div>
   <div class="footer-copy">© 2026 dan4ik37 · Все права защищены · <a href="mailto:dan4ik37@gmail.com" style="color:inherit;opacity:.6">Контакты</a></div>
 </footer>
-
-<!-- CHAT AUTH MODAL -->
-<div id="chatAuthModal" onclick="if(event.target===this)closeChatAuth()">
-  <div class="auth-box">
-    <button class="auth-close" onclick="closeChatAuth()">✕</button>
-    <h3>🔐 Вход</h3>
-    <p>Только для администратора и модераторов</p>
-    <input class="auth-inp" type="email" id="authEmail" placeholder="Email" autocomplete="email">
-    <input class="auth-inp" type="password" id="authPassword" placeholder="Пароль" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-    <button class="auth-submit" onclick="doLogin()">ВОЙТИ</button>
-    <div class="auth-err" id="authErr"></div>
-  </div>
-</div>
 
 <!-- GLOBAL AUTH MODAL -->
 <div id="globalAuthModal" onclick="if(event.target===this)closeGlobalAuth()">
@@ -1949,7 +1930,7 @@ const SB_URL = 'https://zdisuowyjgqirhvcyjfq.supabase.co';
 const SB_KEY = 'sb_publishable_55GhvJbDxDQA1JEawZRQ6g_ozx_cgMV';
 
 let sbClient = null, sbChannel = null, onlineChannel = null;
-let currentUser = null, currentRole = 'user', currentProfile = null;
+let currentUser = null, currentRole = null, currentProfile = null;
 let bannedNicks = new Set();
 let msgTimestamps = []; // rate limit
 const PRESENCE_KEY = 'user_' + Math.random().toString(36).slice(2,8);
@@ -1977,46 +1958,11 @@ function initSupabase() {
 }
 
 // ─── AUTH ───
-function openChatAuth() {
-  document.getElementById('chatAuthModal').classList.add('open');
-  setTimeout(()=>document.getElementById('authEmail').focus(), 100);
-}
-function closeChatAuth() {
-  document.getElementById('chatAuthModal').classList.remove('open');
-  document.getElementById('authErr').textContent = '';
-}
+// Единая точка входа/выхода — doGlobalLogin()/doGlobalLogout() ниже.
+// (Раньше здесь был второй, независимый логин-модал (#chatAuthModal,
+// doLogin/openChatAuth/closeChatAuth) — он никогда не открывался ни из
+// одной кнопки и полностью дублировал глобальный вход. Удалён.)
 
-async function doLogin() {
-  const email = document.getElementById('authEmail').value.trim();
-  const pass  = document.getElementById('authPassword').value;
-  const errEl = document.getElementById('authErr');
-  errEl.textContent = '';
-  if (!email || !pass) { errEl.textContent = 'Введи email и пароль'; return; }
-
-  const btn = document.querySelector('.auth-submit');
-  btn.textContent = 'ВХОД...'; btn.disabled = true;
-
-  try {
-    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
-    if (error) throw error;
-    await onAuthStateChange(data.user);
-    closeChatAuth();
-  } catch(e) {
-    errEl.textContent = e.message === 'Invalid login credentials' ? 'Неверный email или пароль' : e.message;
-  } finally {
-    btn.textContent = 'ВОЙТИ'; btn.disabled = false;
-  }
-}
-
-async function doLogout() {
-  await sbClient.auth.signOut();
-  currentUser = null; currentRole = 'user'; currentProfile = null;
-  document.getElementById('chatModPanel').style.display = 'none';
-  document.getElementById('chatAuthBtn').style.display = '';
-  document.getElementById('chatMsgs').classList.remove('is-mod');
-  showChatStatus('👋 Выход выполнен', true);
-  setTimeout(()=>document.getElementById('chatStatusBar').style.display='none', 2000);
-}
 
 async function onAuthStateChange(user) {
   if (!user) return;
@@ -2055,7 +2001,7 @@ async function loadBans() {
 }
 
 async function banNick(nick, msgEl) {
-  if (!sbClient || currentRole === 'user') return;
+  if (!sbClient || (currentRole !== 'admin' && currentRole !== 'moderator')) return;
   // Нельзя банить себя
   const myNick = currentProfile?.nick || '';
   if (nick.toLowerCase() === myNick.toLowerCase() || nick.toLowerCase() === chatNick.toLowerCase()) {
@@ -2077,7 +2023,7 @@ async function banNick(nick, msgEl) {
 }
 
 async function deleteMsg(id, msgEl) {
-  if (!sbClient || currentRole === 'user') return;
+  if (!sbClient || (currentRole !== 'admin' && currentRole !== 'moderator')) return;
   if (!id) { msgEl?.classList.add('deleted'); return; }
   try {
     await sbClient.from('messages').update({ deleted: true }).eq('id', id);
@@ -2349,7 +2295,7 @@ async function sendMsg(){
   inp.value='';
   const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
   const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
-  const role = currentRole !== 'user' ? currentRole : 'user';
+  const role = currentRole || 'guest';
 
   if (sbClient) {
     const ok = await sendMsgToSupabase(chatNick, text, col, role);
@@ -3133,7 +3079,7 @@ async function doGlobalLogin() {
 
 async function doGlobalLogout() {
   if (sbClient) await sbClient.auth.signOut();
-  currentUser = null; currentRole = 'user'; currentProfile = null;
+  currentUser = null; currentRole = null; currentProfile = null;
 
   // Сбрасываем UI
   updateGlobalAuthBtn();
