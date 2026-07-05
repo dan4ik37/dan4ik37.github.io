@@ -47,6 +47,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 .nav-links{display:flex;gap:1.3rem;align-items:center}
 .nav-links a{font-size:.68rem;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);transition:color .2s;white-space:nowrap}
 .nav-links a:hover{color:var(--text)}
+.nav-links a.active-route{color:var(--accent)}
 .nav-donate{padding:.42rem 1.1rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;font-size:.7rem!important;transition:transform .2s,opacity .2s}
 .nav-donate:hover{transform:scale(1.06);opacity:.9}
 .hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
@@ -599,12 +600,9 @@ body.high .avatar::before{
 #autoStreamWrap{display:block;margin-bottom:2rem}
 .stream-live-badge{display:inline-flex;align-items:center;gap:.5rem;padding:.35rem .9rem;background:var(--accent);color:#fff;border-radius:50px;font-size:.7rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;margin-bottom:1rem;animation:livePulse2 1.5s ease-in-out infinite}
 @keyframes livePulse2{0%,100%{box-shadow:0 0 0 0 rgba(255,45,85,.5)}70%{box-shadow:0 0 0 8px rgba(255,45,85,0)}}
-.auto-stream-grid{display:grid;grid-template-columns:2fr 1fr;gap:1rem}
-@media(max-width:768px){.auto-stream-grid{grid-template-columns:1fr}}
-.auto-stream-player{position:relative;padding-bottom:56.25%;background:#000;border-radius:var(--r);overflow:hidden}
+.auto-stream-player{position:relative;padding-bottom:42%;background:#000;border-radius:var(--r);overflow:hidden}
+@media(max-width:768px){.auto-stream-player{padding-bottom:56.25%}}
 .auto-stream-player iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
-.auto-stream-chat{border-radius:var(--r);overflow:hidden;min-height:300px}
-.auto-stream-chat iframe{width:100%;height:100%;border:none;min-height:300px}
 
 /* ══════════ САУНДБОРД ══════════ */
 .soundboard{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.8rem}
@@ -821,16 +819,16 @@ body.high .avatar::before{
 
 <!-- NAV -->
 <nav id="nav">
-  <a class="nav-logo" href="#">dan4ik37</a>
+  <a class="nav-logo" href="#/home">dan4ik37</a>
   <div class="nav-links" id="navLinks">
-    <a href="#content">Видео</a>
-    <a href="#about">Обо мне</a>
-    <a href="#leaderboard">Топ донатеров</a>
-    <a href="#poll">Опрос</a>
-    <a href="#soundboard">Саундборд</a>
-    <a href="#clicker">Игра</a>
-    <a href="#chat">Чат</a>
-    <a href="#ads">Реклама</a>
+    <a href="#/home" data-route="home">Видео</a>
+    <a href="#/about" data-route="about">Обо мне</a>
+    <a href="#/donate" data-route="donate">Топ донатеров</a>
+    <a href="#/poll" data-route="poll">Опрос</a>
+    <a href="#/soundboard" data-route="soundboard">Саундборд</a>
+    <a href="#/clicker" data-route="clicker">Игра</a>
+    <a href="#/chat" data-route="chat">Чат</a>
+    <a href="#/ads" data-route="ads">Реклама</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
   <div class="lang-wrap" id="langWrap">
@@ -861,7 +859,7 @@ body.high .avatar::before{
 <div id="easterMsg"></div>
 
 <!-- HERO -->
-<div class="hero">
+<div class="hero" id="hero">
   <div class="hero-bg"></div>
   <div class="hero-grid"></div>
   <!-- Aurora (HIGH only) -->
@@ -890,13 +888,13 @@ body.high .avatar::before{
 </div>
 
 <!-- AD TOP -->
-<div class="wrap-sm">
+<div class="wrap-sm" id="ad-top">
   <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
   <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
 </div>
 
 <!-- STATS -->
-<div class="wrap reveal" style="padding-bottom:2rem">
+<div class="wrap reveal" id="stats" style="padding-bottom:2rem">
   <div class="eyebrow">Статистика</div>
   <h2 class="sec-title">Мои платформы</h2>
   <div class="stats-row">
@@ -943,24 +941,21 @@ body.high .avatar::before{
   <div class="eyebrow">Смотреть</div>
   <h2 class="sec-title">Видео и стримы</h2>
 
-  <!-- TWITCH — плеер + чат всегда на странице; онлайн/офлайн статус показывает сам виджет Twitch -->
+  <!-- TWITCH — плеер всегда на странице; онлайн/офлайн статус показывает сам виджет Twitch.
+       Чат живёт только в разделе "Живой чат" ниже — раньше он дублировался и тут тоже. -->
   <div id="autoStreamWrap">
     <div class="stream-live-badge">◉ Twitch — dan4ik37</div>
-    <div class="auto-stream-grid">
-      <div class="auto-stream-player">
-        <iframe id="autoStreamPlayer" src="" allowfullscreen allow="autoplay"></iframe>
-      </div>
-      <div class="auto-stream-chat">
-        <iframe id="autoStreamChat" src="" allowfullscreen></iframe>
-      </div>
+    <div class="auto-stream-player">
+      <iframe id="autoStreamPlayer" src="" allowfullscreen allow="autoplay"></iframe>
     </div>
-    <div style="text-align:center;margin-top:.8rem">
+    <div style="text-align:center;margin-top:.8rem;display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap">
       <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-tw" style="display:inline-flex">Открыть на Twitch ↗</a>
+      <a href="#/chat" class="cta-tw" style="display:inline-flex;background:var(--card);border:1.5px solid var(--border)">💬 Перейти в чат</a>
     </div>
   </div>
 
   <!-- AD MID — показывается между секциями -->
-  <div style="max-width:1200px;margin:0 auto;padding:0 2rem 1.5rem">
+  <div id="ad-mid" style="max-width:1200px;margin:0 auto;padding:0 2rem 1.5rem">
     <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
     <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
   </div>
@@ -1333,7 +1328,7 @@ body.high .avatar::before{
 </div>
 
 <!-- AD BOTTOM -->
-<div class="wrap-sm" style="padding-bottom:2rem">
+<div class="wrap-sm" id="ad-bottom" style="padding-bottom:2rem">
   <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
   <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
 </div>
@@ -1452,7 +1447,7 @@ body.high .avatar::before{
         <!-- Доступные функции -->
         <div class="gauth-perms" id="gauthPerms"></div>
         <div style="display:flex;flex-direction:column;gap:.6rem">
-          <a href="#chat" onclick="closeGlobalAuth()" style="display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1rem;border-radius:10px;background:rgba(145,71,255,.1);border:1.5px solid rgba(145,71,255,.25);color:var(--tw);font-size:.76rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;transition:background .2s" onmouseover="this.style.background='rgba(145,71,255,.2)'" onmouseout="this.style.background='rgba(145,71,255,.1)'">💬 Перейти в чат</a>
+          <a href="#/chat" onclick="closeGlobalAuth()" style="display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1rem;border-radius:10px;background:rgba(145,71,255,.1);border:1.5px solid rgba(145,71,255,.25);color:var(--tw);font-size:.76rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;transition:background .2s" onmouseover="this.style.background='rgba(145,71,255,.2)'" onmouseout="this.style.background='rgba(145,71,255,.1)'">💬 Перейти в чат</a>
           <button onclick="doGlobalLogout()" style="width:100%;padding:.6rem;border-radius:10px;border:1.5px solid rgba(255,45,85,.25);background:rgba(255,45,85,.07);color:var(--accent);font-size:.76rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.background='rgba(255,45,85,.18)'" onmouseout="this.style.background='rgba(255,45,85,.07)'">Выйти из аккаунта</button>
         </div>
       </div>
@@ -1745,7 +1740,7 @@ function setView(mode){
   viewMode=mode;
   ['grid','list'].forEach(m=>document.getElementById('btn-'+m)?.classList.remove('active'));
   document.getElementById('btn-'+mode)?.classList.add('active');
-  renderVids(allVids.slice(0,vidCountLimit));
+  if (allVids.length) renderVids(allVids.slice(0,vidCountLimit));
 }
 
 // ═══════════════════════════════════════
@@ -2235,7 +2230,6 @@ document.addEventListener('click',()=>{const p=document.getElementById('emojiPic
 // загрузке. Сам виджет Twitch показывает офлайн-заглушку, если эфира нет —
 // это уже встроено в сам плеер/чат Twitch, ничего изобретать не нужно.
 document.getElementById('autoStreamPlayer').src = `https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
-document.getElementById('autoStreamChat').src = `https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout`;
 
 // ═══════════════════════════════════════
 //  САУНДБОРД — Web Audio API (без файлов)
@@ -3181,6 +3175,9 @@ loadGoalFromDA();
 setTimeout(loadPollsFromDB, 2000);
 initChat();
 initPerfMode();
+loadYT(); // БАГ: эта функция никогда не вызывалась — грид видео был пустым всегда,
+          // до любых правок. Раньше "Видео не найдены" просто не показывалось,
+          // пока кто-то не трогал сетку/список — теперь видео реально грузятся.
 
 // ── КНОПКА НАВЕРХ + ПРОГРЕСС ──
 const scrollTopBtn = document.getElementById('scrollTop');
@@ -3193,6 +3190,56 @@ window.addEventListener('scroll', () => {
   // Прогресс бар
   if(progressBar) progressBar.style.width = (total > 0 ? (scrolled/total*100) : 0) + '%';
 }, {passive:true});
+
+// ═══════════════════════════════════════
+//  РОУТЕР — переключение "страниц" БЕЗ перезагрузки
+// ═══════════════════════════════════════
+// Вся страница как была одним HTML-документом, так и остаётся — просто
+// показываем один блок секций и прячем остальные через display:none.
+// Ничего не перезагружается => чат на Supabase, вход, perf-режим и все
+// JS-переменные не сбрасываются при переходах, а в адресной строке при
+// этом появляется свой #/route на каждый раздел (можно скинуть ссылкой).
+const PAGES = {
+  home:       ['hero','ad-top','stats','ad-mid','content'],
+  about:      ['about','schedule','socials'],
+  donate:     ['donate','goalbar','leaderboard'],
+  poll:       ['poll'],
+  soundboard: ['soundboard'],
+  clicker:    ['clicker'],
+  chat:       ['chat'],
+  ads:        ['ad-bottom','ads']
+};
+const ALL_PAGE_IDS = Object.values(PAGES).flat();
+
+function showPage(route){
+  if(!PAGES[route]) route='home';
+  const activeIds = PAGES[route];
+  ALL_PAGE_IDS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = activeIds.includes(id) ? '' : 'none';
+  });
+  // Подстраховка: если IntersectionObserver ещё не успел отреагировать
+  // на то, что блок только что стал видимым — не оставляем его прозрачным
+  activeIds.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    if(el.classList.contains('reveal')) el.classList.add('visible');
+    el.querySelectorAll('.reveal').forEach(r=>r.classList.add('visible'));
+  });
+  document.querySelectorAll('.nav-links a[data-route]').forEach(a=>{
+    a.classList.toggle('active-route', a.dataset.route===route);
+  });
+  document.getElementById('navLinks')?.classList.remove('open');
+  document.getElementById('burger')?.classList.remove('open');
+  window.scrollTo(0,0);
+}
+
+function currentRoute(){
+  return (location.hash||'').replace(/^#\/?/,'') || 'home';
+}
+window.addEventListener('hashchange', ()=>showPage(currentRoute()));
+showPage(currentRoute());
+
 </script>
 
 <script type="text/javascript">
