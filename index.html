@@ -1204,7 +1204,7 @@ body.high .avatar::before{
           <!-- Строка ника -->
           <div style="padding:.35rem 1rem;display:flex;align-items:center;justify-content:space-between;background:rgba(145,71,255,.05);font-size:.68rem">
             <span style="color:var(--muted)">Ты в чате как: <strong id="chatNickDisplay" style="color:var(--tw)"></strong> <span id="chatNickRole" style="font-size:.58rem;opacity:.7"></span></span>
-            <button onclick="chatLogout()" style="background:none;border:none;color:var(--muted);font-size:.62rem;cursor:pointer;font-family:'Montserrat',sans-serif;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Выйти</button>
+            <button id="chatLocalLogoutBtn" onclick="chatLogout()" style="background:none;border:none;color:var(--muted);font-size:.62rem;cursor:pointer;font-family:'Montserrat',sans-serif;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Выйти</button>
           </div>
           <!-- Эмодзи пикер -->
           <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto"></div>
@@ -2132,12 +2132,18 @@ function showChatInput() {
   document.getElementById('chatMainInput').style.display  = 'flex';
   document.getElementById('chatNickDisplay').textContent  = chatNick;
   const roleEl = document.getElementById('chatNickRole');
+  const isElevated = currentRole === 'admin' || currentRole === 'moderator';
   if (roleEl) {
     if (currentRole === 'admin') roleEl.textContent = '👑';
     else if (currentRole === 'moderator') roleEl.textContent = '🛡';
     else if (currentUser) roleEl.textContent = '✅';
     else roleEl.textContent = '👤 гость';
   }
+  // Admin/модератор выходят только через кнопку в шапке (доGlobalLogout) —
+  // локальный "Выйти" тут для них скрыт, чтобы не улетать в гостя со
+  // старой ролью в currentRole (баг: "Гость1234 [ADMIN]" в сообщениях).
+  const localLogoutBtn = document.getElementById('chatLocalLogoutBtn');
+  if (localLogoutBtn) localLogoutBtn.style.display = isElevated ? 'none' : '';
   if (onlineChannel) onlineChannel.track({ nick: chatNick, ts: Date.now() });
 }
 
@@ -2196,6 +2202,14 @@ function enterAsGuest() {
 }
 
 function chatLogout() {
+  // Вход один — через шапку. Админ/модератор не может "выйти из чата" отдельно
+  // от сайта: раньше это молча превращало его в Гость#### с ролью currentRole,
+  // ещё оставшейся 'admin' — и в чат уходили сообщения вида "Гость1234 [ADMIN]".
+  if (currentRole === 'admin' || currentRole === 'moderator') {
+    showChatStatus('Это выход из чата. Чтобы выйти из аккаунта — кнопка "Выйти" в шапке сайта', false);
+    setTimeout(()=>{ const b=document.getElementById('chatStatusBar'); if(b) b.style.display='none'; }, 3500);
+    return;
+  }
   chatNick = '';
   try { localStorage.removeItem('d37_nick'); } catch(e) {}
   document.getElementById('chatNickScreen').style.display = 'flex';
@@ -2252,7 +2266,7 @@ async function sendMsg(){
   inp.value='';
   const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
   const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
-  const role = currentRole || 'guest';
+  const role = (currentUser && currentRole) ? currentRole : 'guest';
 
   if (sbClient) {
     const ok = await sendMsgToSupabase(chatNick, text, col, role);
@@ -3045,6 +3059,13 @@ async function doGlobalLogin() {
 async function doGlobalLogout() {
   if (sbClient) await sbClient.auth.signOut();
   currentUser = null; currentRole = null; currentProfile = null;
+
+  // Сбрасываем и чат-идентичность — иначе в чате остаётся старый ник
+  // администратора, но уже без роли, и сообщения пойдут от его имени как "guest".
+  chatNick = '';
+  try { localStorage.removeItem('d37_nick'); } catch(e) {}
+  document.getElementById('chatNickScreen').style.display = 'flex';
+  document.getElementById('chatMainInput').style.display = 'none';
 
   // Сбрасываем UI
   updateGlobalAuthBtn();
