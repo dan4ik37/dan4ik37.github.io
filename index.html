@@ -164,7 +164,7 @@ body.low::after{display:none!important}
 }
 #scrollTop.show{opacity:1;transform:translateY(0);pointer-events:all}
 #scrollTop:hover{transform:scale(1.1);box-shadow:0 6px 24px rgba(255,45,85,.55)}
-@media(max-width:768px){#scrollTop{bottom:1rem;right:.7rem;width:38px;height:38px}}
+@media(max-width:768px){#scrollTop{bottom:calc(58px + env(safe-area-inset-bottom) + .7rem);right:.7rem;width:38px;height:38px}}
 
 /* ── PROGRESS BAR вверху страницы ── */
 #readProgress{
@@ -768,6 +768,40 @@ body.high .avatar::before{
 .push-btn{display:inline-flex;align-items:center;gap:.5rem;padding:.55rem 1.2rem;border-radius:50px;border:1.5px solid rgba(145,71,255,.35);background:rgba(145,71,255,.08);color:var(--tw);font-size:.74rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
 .push-btn:hover{background:rgba(145,71,255,.18);border-color:var(--tw)}
 .push-btn.subscribed{border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.08);color:#22c55e}
+
+/* ── СЧЁТЧИК ВИДЕО — сегментированный контрол вместо <select> ── */
+.count-seg{display:inline-flex;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.1);border-radius:8px;padding:2px;gap:2px}
+.count-opt{background:transparent;border:none;color:var(--muted);font-size:.7rem;font-weight:700;font-family:'Montserrat',sans-serif;padding:.34rem .65rem;border-radius:6px;cursor:pointer;transition:all .2s;letter-spacing:.3px}
+.count-opt:hover:not(.active){color:var(--text)}
+.count-opt.active{background:rgba(255,64,64,.16);color:var(--yt)}
+
+/* ── "ВЫБРАТЬ" — на мобиле уходит в меню "⋯" (редко используется, всегда занимало место) ── */
+.yt-overflow{position:relative;display:inline-flex}
+.overflow-dots{display:none}
+.overflow-menu{display:contents}
+@media(max-width:768px){
+  .overflow-dots{display:inline-flex}
+  .overflow-menu{display:none;position:absolute;top:calc(100% + 8px);right:0;background:#16161f;border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:.5rem;z-index:50;min-width:150px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  .overflow-menu.open{display:flex}
+  .overflow-menu #selBtn{width:100%}
+}
+
+/* ── НИЖНИЙ ТАБ-БАР (мобиле) ── */
+.bottom-tabbar{display:none}
+@media(max-width:768px){
+  body{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+  .bottom-tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:490;background:rgba(8,8,14,.96);backdrop-filter:blur(24px);border-top:1px solid var(--border);padding:.35rem .3rem calc(.35rem + env(safe-area-inset-bottom))}
+  .bt-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;padding:.35rem 0;background:none;border:none;color:var(--muted);font-family:'Montserrat',sans-serif;cursor:pointer;transition:color .2s}
+  .bt-icon{font-size:1.2rem;line-height:1}
+  .bt-label{font-size:.58rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
+  .bt-item.active-route{color:var(--accent)}
+  #pwaBanner{bottom:calc(58px + env(safe-area-inset-bottom) + .8rem)}
+}
+
+/* ── ЧАТ-ТОСТ (новое сообщение, если открыта другая страница) ── */
+.chat-toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%) translateY(20px);display:flex;align-items:center;gap:.6rem;background:#16161f;border:1px solid rgba(145,71,255,.35);padding:.7rem 1.2rem;border-radius:50px;box-shadow:0 12px 40px rgba(0,0,0,.6);font-size:.78rem;font-weight:700;color:var(--text);cursor:pointer;z-index:700;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s}
+.chat-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+@media(max-width:768px){.chat-toast{bottom:calc(58px + env(safe-area-inset-bottom) + .8rem)}}
 </style>
 </head>
 <body onselectstart="return false">
@@ -849,6 +883,18 @@ body.high .avatar::before{
   <button class="hamburger" id="burger" onclick="toggleNav()"><span></span><span></span><span></span></button>
 </nav>
 <div id="google_translate_element" style="display:none"></div>
+
+<!-- НИЖНИЙ ТАБ-БАР (мобиле) -->
+<nav class="bottom-tabbar" id="bottomTabbar">
+  <a href="#/home" class="bt-item" data-route="home"><span class="bt-icon">▶</span><span class="bt-label">Видео</span></a>
+  <a href="#/chat" class="bt-item" data-route="chat"><span class="bt-icon">💬</span><span class="bt-label">Чат</span></a>
+  <a href="#/donate" class="bt-item" data-route="donate"><span class="bt-icon">💝</span><span class="bt-label">Донат</span></a>
+  <button type="button" class="bt-item" id="btMore" onclick="toggleNav()"><span class="bt-icon">☰</span><span class="bt-label">Ещё</span></button>
+</nav>
+<!-- ЧАТ-ТОСТ -->
+<div class="chat-toast" id="chatToast" onclick="location.hash='#/chat'">
+  <span>💬</span><span>Новое сообщение в чате</span>
+</div>
 
 <!-- ПРОГРЕСС БАР -->
 <div id="readProgress"></div>
@@ -974,20 +1020,21 @@ body.high .avatar::before{
     <!-- Mode switcher -->
     <div class="yt-toolbar">
       <div class="view-toggle">
-        <button class="view-btn active" id="btn-grid" onclick="setView('grid')">⊞ Сетка</button>
-        <button class="view-btn" id="btn-list" onclick="setView('list')">≡ Список</button>
-        <select id="vidCount" onchange="changeVidCount(this.value)" style="background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:8px;color:var(--muted);font-size:.7rem;font-weight:700;padding:.38rem .7rem;cursor:pointer;font-family:'Montserrat',sans-serif;letter-spacing:.5px;outline:none;transition:border .2s" onmouseover="this.style.borderColor='rgba(255,64,64,.4)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">
-          <option value="6">6 видео</option>
-          <option value="9">9 видео</option>
-          <option value="12" selected>12 видео</option>
-          <option value="18">18 видео</option>
-          <option value="24">24 видео</option>
-          <option value="30">30 видео</option>
-          <option value="50">50 видео</option>
-        </select>
+        <button class="view-btn active" id="viewToggleBtn" onclick="toggleViewMode()" title="Переключить вид">⊞ Сетка</button>
+        <div class="count-seg" role="group" aria-label="Количество видео">
+          <button class="count-opt" data-count="6" onclick="changeVidCount(6,this)">6</button>
+          <button class="count-opt active" data-count="12" onclick="changeVidCount(12,this)">12</button>
+          <button class="count-opt" data-count="24" onclick="changeVidCount(24,this)">24</button>
+          <button class="count-opt" data-count="50" onclick="changeVidCount(50,this)">50</button>
+        </div>
       </div>
       <div class="yt-actions">
-        <button class="act-btn" id="selBtn" onclick="toggleSel()">☑ Выбрать</button>
+        <div class="yt-overflow" id="ytOverflow">
+          <button class="act-btn overflow-dots" id="ytOverflowBtn" onclick="toggleYtOverflow(event)" title="Ещё">⋯</button>
+          <div class="overflow-menu" id="ytOverflowMenu">
+            <button class="act-btn" id="selBtn" onclick="toggleSel()">☑ Выбрать</button>
+          </div>
+        </div>
         <button class="act-btn act-like" id="likeSelBtn" style="display:none" onclick="likeSelected()">❤ Лайкнуть</button>
         <button class="act-btn act-play" id="playSelBtn" style="display:none" onclick="playSelected()">▶ Смотреть</button>
         <button class="act-btn" id="cancelSelBtn" style="display:none" onclick="cancelSel()">✕</button>
@@ -1164,7 +1211,7 @@ body.high .avatar::before{
           <!-- Строка отправки -->
           <div class="chat-input-wrap">
             <button onclick="toggleEmoji(event)" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--muted);cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Эмодзи">😀</button>
-            <input class="chat-input" id="chatInput" placeholder="Написать сообщение..." maxlength="200" onkeydown="if(event.key==='Enter')sendMsg()" style="flex:1">
+            <input class="chat-input" id="chatInput" placeholder="Написать сообщение..." maxlength="200" onkeydown="if(event.key==='Enter')sendMsg()" onfocus="setTimeout(()=>this.scrollIntoView({block:'center',behavior:'smooth'}),300)" style="flex:1">
             <button class="chat-send" onclick="sendMsg()">→</button>
           </div>
           <!-- Быстрые реакции снизу -->
@@ -1607,8 +1654,10 @@ async function ytFetch(url){
 
 let vidCountLimit = 12; // текущий лимит отображения
 
-function changeVidCount(val) {
+function changeVidCount(val, btn) {
   vidCountLimit = parseInt(val);
+  document.querySelectorAll('.count-opt').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
   if (allVids.length) {
     // Перемешиваем и показываем нужное кол-во
     const shuffled = [...allVids].sort(() => Math.random() - 0.5);
@@ -1738,10 +1787,11 @@ function renderVids(vids){
 // ═══════════════════════════════════════
 function setView(mode){
   viewMode=mode;
-  ['grid','list'].forEach(m=>document.getElementById('btn-'+m)?.classList.remove('active'));
-  document.getElementById('btn-'+mode)?.classList.add('active');
+  const btn=document.getElementById('viewToggleBtn');
+  if(btn) btn.innerHTML = mode==='grid' ? '⊞ Сетка' : '≡ Список';
   if (allVids.length) renderVids(allVids.slice(0,vidCountLimit));
 }
+function toggleViewMode(){ setView(viewMode==='grid' ? 'list' : 'grid'); }
 
 // ═══════════════════════════════════════
 //  RECOMMENDATIONS + SHUFFLE
@@ -1781,8 +1831,10 @@ function toggleLike(e,id,btn){
 // ═══════════════════════════════════════
 //  SELECT MODE
 // ═══════════════════════════════════════
-function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('likeSelBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';renderVids(allVids)}
+function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('likeSelBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';document.getElementById('ytOverflowMenu')?.classList.remove('open');renderVids(allVids)}
 function cancelSel(){selMode=false;selectedIds.clear();document.getElementById('selBtn').style.display='inline-flex';document.getElementById('likeSelBtn').style.display='none';document.getElementById('playSelBtn').style.display='none';document.getElementById('cancelSelBtn').style.display='none';document.getElementById('selHint').style.display='none';document.getElementById('multiPlayer').style.display='none';renderVids(allVids)}
+function toggleYtOverflow(e){e.stopPropagation();document.getElementById('ytOverflowMenu')?.classList.toggle('open')}
+document.addEventListener('click',e=>{const m=document.getElementById('ytOverflowMenu');if(m&&m.classList.contains('open')&&!e.target.closest('#ytOverflow'))m.classList.remove('open')});
 function toggleSel2(card,id){if(selectedIds.has(id)){selectedIds.delete(id);card.classList.remove('selected');card.querySelector('.sel-check').textContent=''}else{selectedIds.add(id);card.classList.add('selected');card.querySelector('.sel-check').textContent='✓'}document.getElementById('selCount').textContent=selectedIds.size}
 function selectAllVids(){allVids.forEach(v=>selectedIds.add(v.id));renderVids(allVids);document.getElementById('selCount').textContent=selectedIds.size}
 function likeSelected(){if(!selectedIds.size)return;selectedIds.forEach(id=>{if(!likedIds.has(id)){likedIds.add(id);window.open(`https://www.youtube.com/watch?v=${id}`,`_ytlike_${id}`,'width=900,height=600')}});try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}}
@@ -1983,6 +2035,17 @@ async function loadRecentMessages() {
   } catch(e) { console.warn('loadMessages:', e); }
 }
 
+// Тост "новое сообщение в чате" — только если пользователь сейчас не на странице чата
+let chatToastTimer=null;
+function showChatToast(){
+  if(currentRoute()==='chat') return;
+  const t=document.getElementById('chatToast');
+  if(!t) return;
+  t.classList.add('show');
+  clearTimeout(chatToastTimer);
+  chatToastTimer=setTimeout(()=>t.classList.remove('show'),4000);
+}
+
 function subscribeRealtime() {
   if (!sbClient) return;
   sbChannel = sbClient
@@ -1993,6 +2056,7 @@ function subscribeRealtime() {
       if (bannedNicks.has(m.nick.toLowerCase())) return;
       const isOwn = m.nick === chatNick;
       addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role);
+      if (!isOwn && m.role !== 'reaction') showChatToast();
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
       if (payload.new.deleted) {
@@ -3229,8 +3293,16 @@ function showPage(route){
   document.querySelectorAll('.nav-links a[data-route]').forEach(a=>{
     a.classList.toggle('active-route', a.dataset.route===route);
   });
+  // Нижний таб-бар (мобиле): подсвечиваем Видео/Чат/Донат, либо "Ещё" для остальных страниц
+  const tabRoutes = ['home','chat','donate'];
+  document.querySelectorAll('.bt-item[data-route]').forEach(a=>{
+    a.classList.toggle('active-route', a.dataset.route===route);
+  });
+  document.getElementById('btMore')?.classList.toggle('active-route', !tabRoutes.includes(route));
   document.getElementById('navLinks')?.classList.remove('open');
   document.getElementById('burger')?.classList.remove('open');
+  // Если перешли в чат — прячем тост о новом сообщении, он тут больше не нужен
+  if(route==='chat') document.getElementById('chatToast')?.classList.remove('show');
   window.scrollTo(0,0);
 }
 
@@ -3239,6 +3311,40 @@ function currentRoute(){
 }
 window.addEventListener('hashchange', ()=>showPage(currentRoute()));
 showPage(currentRoute());
+
+// ═══════════════════════════════════════
+//  ГОРЯЧИЕ КЛАВИШИ (десктоп) — переключение страниц без перезагрузки
+//  Цифры 1–8 = прямой переход, стрелки ← → = соседняя страница по порядку PAGES
+// ═══════════════════════════════════════
+function isTypingContext(){
+  const el = document.activeElement;
+  if(!el) return false;
+  if(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.tagName==='SELECT'||el.isContentEditable) return true;
+  return false;
+}
+function isModalOpen(){
+  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal'].some(id=>{
+    const el=document.getElementById(id);
+    return el && getComputedStyle(el).display!=='none';
+  });
+}
+document.addEventListener('keydown', e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(isTypingContext()||isModalOpen()) return;
+  const routes = Object.keys(PAGES);
+  if(e.key>='1' && e.key<='8'){
+    const route = routes[+e.key-1];
+    if(route){ e.preventDefault(); location.hash='#/'+route; }
+    return;
+  }
+  if(e.key==='ArrowRight' || e.key==='ArrowLeft'){
+    const cur = routes.indexOf(currentRoute());
+    if(cur===-1) return;
+    e.preventDefault();
+    const dir = e.key==='ArrowRight' ? 1 : -1;
+    location.hash = '#/'+routes[(cur+dir+routes.length)%routes.length];
+  }
+});
 
 </script>
 
