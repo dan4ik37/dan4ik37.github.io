@@ -7,6 +7,10 @@
 <meta name="google-adsense-account" content="ca-pub-7940480593743401">
 <meta name="description" content="Официальный сайт стримера dan4ik37. Видео, стримы, донат и все соцсети в одном месте.">
 <meta name="theme-color" content="#ff2d55">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <!-- Open Graph — красивое превью в Telegram, VK, Discord -->
 <meta property="og:title" content="dan4ik37 — Официальный сайт">
 <meta property="og:description" content="Смотри видео, стримы и поддержи dan4ik37. YouTube, TikTok, Twitch, VK, Telegram — всё здесь!">
@@ -31,6 +35,13 @@ html{scroll-behavior:smooth;overflow-x:hidden}
 body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 a{text-decoration:none;color:inherit}
 
+/* ── КАСТОМНЫЙ СКРОЛЛБАР ПОД ТЕМУ (был системный) ── */
+html{scrollbar-width:thin;scrollbar-color:var(--accent) var(--bg2)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:linear-gradient(var(--accent),var(--accent2));border-radius:6px;border:2px solid var(--bg2)}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(var(--accent2),var(--accent))}
+
 /* ── FIX Google Translate bar pushing content ── */
 .goog-te-banner-frame{display:none!important}
 body{top:0!important;position:static!important}
@@ -45,7 +56,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 #nav.scrolled{box-shadow:0 4px 40px rgba(0,0,0,.7)}
 .nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:3px;background:linear-gradient(135deg,#fff,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .nav-links{display:flex;gap:1.3rem;align-items:center}
-.nav-links a{font-size:.68rem;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);transition:color .2s;white-space:nowrap}
+.nav-links a{position:relative;font-size:.68rem;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);transition:color .2s;white-space:nowrap}
+/* ── БЕЙДЖ "НОВОЕ СООБЩЕНИЕ" НА ПУНКТЕ ЧАТ ── */
+.chat-badge{display:none;position:absolute;top:-3px;right:-9px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg),0 0 6px var(--accent)}
+.chat-badge.show{display:block;animation:chatBadgePulse 1.6s ease-in-out infinite}
+@keyframes chatBadgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
+body.low .chat-badge.show{animation:none}
 .nav-links a:hover{color:var(--text)}
 .nav-links a.active-route{color:var(--accent)}
 .nav-donate{padding:.42rem 1.1rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;font-size:.7rem!important;transition:transform .2s,opacity .2s}
@@ -220,6 +236,10 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}
 .sc1::after{background:linear-gradient(90deg,var(--yt),transparent)}.sc2::after{background:linear-gradient(90deg,rgba(255,64,64,.5),transparent)}.sc3::after{background:linear-gradient(90deg,rgba(255,64,64,.25),transparent)}.sc4::after{background:linear-gradient(90deg,var(--tw),transparent)}.sc5::after{background:linear-gradient(90deg,var(--tg),transparent)}
 .stat-val{font-family:'Bebas Neue',sans-serif;font-size:2.3rem;letter-spacing:2px;line-height:1}
+/* ── SKELETON: плейсхолдер статистики, пока не пришли данные с YouTube API ── */
+.stat-val.skeleton{color:transparent!important;display:inline-block;width:68px;height:1.7rem;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.14) 37%,rgba(255,255,255,.05) 63%);background-size:400% 100%;animation:skeletonShimmer 1.4s ease infinite;vertical-align:middle}
+@keyframes skeletonShimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
+body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .stat-lbl{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:.4rem}
 
 /* ── TABS ── */
@@ -235,6 +255,14 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 
 /* ── VIDEO TOOLBAR ── */
 .yt-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem;margin-bottom:1.2rem;padding:.8rem 1rem;background:var(--card);border-radius:var(--r);border:1px solid var(--border)}
+/* ── ПОИСК ПО ВИДЕО ── */
+.video-search-wrap{position:relative;display:flex;align-items:center;margin-bottom:1rem}
+.video-search-icon{position:absolute;left:.9rem;font-size:.8rem;opacity:.45;pointer-events:none}
+.video-search-input{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r);padding:.75rem 2.6rem;color:var(--text);font-size:.82rem;font-family:'Montserrat',sans-serif;outline:none;transition:border-color .2s}
+.video-search-input:focus{border-color:var(--accent)}
+.video-search-input::placeholder{color:var(--muted)}
+.video-search-clear{position:absolute;right:.6rem;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.8rem;padding:.4rem;line-height:1;display:flex}
+.video-search-clear:hover{color:var(--accent)}
 .view-toggle{display:flex;gap:.4rem}
 .view-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .85rem;border-radius:8px;font-size:.7rem;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border:1.5px solid transparent;background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;font-family:'Montserrat',sans-serif}
 .view-btn.active{background:rgba(255,64,64,.14);border-color:var(--yt);color:var(--yt)}
@@ -299,6 +327,15 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .spinner{width:34px;height:34px;border:3px solid rgba(255,64,64,.18);border-top-color:var(--yt);border-radius:50%;animation:spin .8s linear infinite}
 .err-box{grid-column:1/-1;background:rgba(255,64,64,.05);border:1px solid rgba(255,64,64,.15);border-radius:var(--r);padding:2rem;text-align:center;font-size:.83rem;color:var(--muted);line-height:1.9}
 .err-box strong{color:var(--yt);display:block;font-size:.95rem;margin-bottom:.4rem}
+/* ── EMPTY STATE: для по-настоящему пустых (не ошибочных) состояний —
+   "видео не найдены", "донатов пока нет" и т.п. Раньше это был голый текст
+   в рамке (.lb-login-msg/.err-box без иконки); .err-box специально красный,
+   как будто что-то сломалось, что не подходит для нейтрального "тут пока
+   пусто". ── */
+.empty-state{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:3rem 2rem;text-align:center}
+.empty-state-icon{font-size:2.6rem;margin-bottom:.9rem;display:block;opacity:.75}
+.empty-state-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:1.5px;margin-bottom:.5rem;color:var(--text)}
+.empty-state-text{font-size:.8rem;color:var(--muted);line-height:1.7;max-width:340px;margin:0 auto}
 
 /* YT bottom btns */
 .yt-bottom{display:flex;gap:1rem;margin-top:2rem;justify-content:center;flex-wrap:wrap}
@@ -324,6 +361,10 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 /* ── SCHEDULE ── */
 .sched-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:.55rem}
 @media(max-width:580px){.sched-grid{grid-template-columns:repeat(4,1fr)}}
+/* ── COUNTDOWN ДО СЛЕДУЮЩЕГО ЭФИРА ── */
+.stream-countdown{display:inline-flex;align-items:center;gap:.5rem;background:rgba(255,45,85,.07);border:1px solid rgba(255,45,85,.2);border-radius:50px;padding:.55rem 1.2rem;font-size:.78rem;color:var(--text);margin-bottom:1.4rem}
+.stream-countdown:empty{display:none}
+.stream-countdown strong{color:var(--accent)}
 .day-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.85rem .4rem;text-align:center;transition:transform .2s}
 .day-card.today{background:rgba(145,71,255,.14);border-color:var(--tw)}
 .day-name{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
@@ -577,6 +618,12 @@ body.high .hbtn:hover::after{opacity:1}
 /* ── REVEAL при скролле ── */
 .reveal{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
 .reveal.visible{opacity:1;transform:translateY(0)}
+/* ── ЛЁГКИЙ FADE МЕЖДУ "СТРАНИЦАМИ" (роутинг) ──
+   Раньше смена страницы была мгновенной (display:none/''). !important тут
+   осознанно — нужно на короткое время перебить .reveal.visible{opacity:1}
+   тем же классовым механизмом, а не инлайн-стилями, чтобы не сломать
+   scroll-reveal анимацию карточек после переключения. */
+.route-fading{opacity:0!important;transition:opacity .15s ease!important}
 body.low .reveal{opacity:1;transform:none;transition:none}
 
 /* ── TYPING эффект на hero-sub (HIGH) ── */
@@ -802,9 +849,30 @@ body.high .avatar::before{
 .chat-toast{position:fixed;left:50%;bottom:1.5rem;transform:translateX(-50%) translateY(20px);display:flex;align-items:center;gap:.6rem;background:#16161f;border:1px solid rgba(145,71,255,.35);padding:.7rem 1.2rem;border-radius:50px;box-shadow:0 12px 40px rgba(0,0,0,.6);font-size:.78rem;font-weight:700;color:var(--text);cursor:pointer;z-index:700;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s}
 .chat-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
 @media(max-width:768px){.chat-toast{bottom:calc(58px + env(safe-area-inset-bottom) + .8rem)}}
+
+/* ── ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (напр. выход) ── */
+.confirm-box{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:1.8rem;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.confirm-msg{font-size:.88rem;color:var(--text);line-height:1.5;margin-bottom:1.3rem}
+.confirm-actions{display:flex;gap:.7rem}
+.confirm-cancel,.confirm-ok{flex:1;padding:.65rem;border-radius:10px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s}
+.confirm-cancel{background:rgba(255,255,255,.06);border:1.5px solid var(--border);color:var(--text)}
+.confirm-cancel:hover{background:rgba(255,255,255,.12)}
+.confirm-ok{background:var(--accent);border:1.5px solid var(--accent);color:#fff}
+.confirm-ok:hover{background:#e0244a}
 </style>
 </head>
 <body onselectstart="return false">
+
+<!-- ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (напр. выход из аккаунта) -->
+<div class="modal-ov" id="confirmModal">
+  <div class="confirm-box">
+    <p class="confirm-msg" id="confirmMsg"></p>
+    <div class="confirm-actions">
+      <button class="confirm-cancel" onclick="closeConfirm()">Отмена</button>
+      <button class="confirm-ok" id="confirmOkBtn">Подтвердить</button>
+    </div>
+  </div>
+</div>
 
 <!-- PWA INSTALL BANNER -->
 <div id="pwaBanner">
@@ -861,7 +929,7 @@ body.high .avatar::before{
     <a href="#/poll" data-route="poll">Опрос</a>
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
     <a href="#/clicker" data-route="clicker">Игра</a>
-    <a href="#/chat" data-route="chat">Чат</a>
+    <a href="#/chat" data-route="chat">Чат<span class="chat-badge" id="navChatBadge"></span></a>
     <a href="#/ads" data-route="ads">Реклама</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
@@ -887,7 +955,7 @@ body.high .avatar::before{
 <!-- НИЖНИЙ ТАБ-БАР (мобиле) -->
 <nav class="bottom-tabbar" id="bottomTabbar">
   <a href="#/home" class="bt-item" data-route="home"><span class="bt-icon">▶</span><span class="bt-label">Видео</span></a>
-  <a href="#/chat" class="bt-item" data-route="chat"><span class="bt-icon">💬</span><span class="bt-label">Чат</span></a>
+  <a href="#/chat" class="bt-item" data-route="chat"><span class="bt-icon" style="position:relative">💬<span class="chat-badge" id="btChatBadge"></span></span><span class="bt-label">Чат</span></a>
   <a href="#/donate" class="bt-item" data-route="donate"><span class="bt-icon">💝</span><span class="bt-label">Донат</span></a>
   <button type="button" class="bt-item" id="btMore" onclick="toggleNav()"><span class="bt-icon">☰</span><span class="bt-label">Ещё</span></button>
 </nav>
@@ -946,19 +1014,19 @@ body.high .avatar::before{
   <div class="stats-row">
     <div class="stat-card sc1">
       <div style="font-size:1.4rem;margin-bottom:.4rem">▶</div>
-      <div class="stat-val" id="s-subs" style="color:var(--yt)">…</div>
+      <div class="stat-val skeleton" id="s-subs" style="color:var(--yt)">…</div>
       <div class="stat-lbl">Подписчики</div>
       <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
     </div>
     <div class="stat-card sc2">
       <div style="font-size:1.4rem;margin-bottom:.4rem">👁</div>
-      <div class="stat-val" id="s-views" style="color:var(--yt)">…</div>
+      <div class="stat-val skeleton" id="s-views" style="color:var(--yt)">…</div>
       <div class="stat-lbl">Просмотры</div>
       <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
     </div>
     <div class="stat-card sc3">
       <div style="font-size:1.4rem;margin-bottom:.4rem">🎬</div>
-      <div class="stat-val" id="s-vids" style="color:var(--yt)">…</div>
+      <div class="stat-val skeleton" id="s-vids" style="color:var(--yt)">…</div>
       <div class="stat-lbl">Видео</div>
       <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
     </div>
@@ -1017,6 +1085,11 @@ body.high .avatar::before{
 
   <!-- YOUTUBE PANEL -->
   <div class="panel active" id="panel-yt">
+    <div class="video-search-wrap">
+      <span class="video-search-icon">🔍</span>
+      <input type="text" id="videoSearchInput" class="video-search-input" placeholder="Поиск по названию..." oninput="filterVids(this.value)">
+      <button class="video-search-clear" id="videoSearchClear" onclick="clearVideoSearch()" style="display:none">✕</button>
+    </div>
     <!-- Mode switcher -->
     <div class="yt-toolbar">
       <div class="view-toggle">
@@ -1091,6 +1164,7 @@ body.high .avatar::before{
   <div class="divider"></div>
   <div class="eyebrow">Расписание</div>
   <h2 class="sec-title">Когда стримим?</h2>
+  <div class="stream-countdown" id="streamCountdown"></div>
   <div class="sched-grid">
     <div class="day-card" data-d="0"><div class="day-name">Вс</div><div class="day-off">—</div></div>
     <div class="day-card" data-d="1"><div class="day-name">Пн</div><div class="day-live">20:00</div></div>
@@ -1180,7 +1254,7 @@ body.high .avatar::before{
     <div class="chat-mod-panel" id="chatModPanel" style="display:none">
       <span id="modPanelRole">🛡 Модератор</span>
       <span id="modPanelNick" style="color:var(--text);font-weight:600"></span>
-      <button class="chat-mod-logout" onclick="doGlobalLogout()">Выйти</button>
+      <button class="chat-mod-logout" onclick="confirmLogout()">Выйти</button>
     </div>
     <div class="chat-tabs">
       <button class="chat-tab active" onclick="switchChat('local',this)">💬 Сайт</button>
@@ -1495,7 +1569,7 @@ body.high .avatar::before{
         <div class="gauth-perms" id="gauthPerms"></div>
         <div style="display:flex;flex-direction:column;gap:.6rem">
           <a href="#/chat" onclick="closeGlobalAuth()" style="display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1rem;border-radius:10px;background:rgba(145,71,255,.1);border:1.5px solid rgba(145,71,255,.25);color:var(--tw);font-size:.76rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;transition:background .2s" onmouseover="this.style.background='rgba(145,71,255,.2)'" onmouseout="this.style.background='rgba(145,71,255,.1)'">💬 Перейти в чат</a>
-          <button onclick="doGlobalLogout()" style="width:100%;padding:.6rem;border-radius:10px;border:1.5px solid rgba(255,45,85,.25);background:rgba(255,45,85,.07);color:var(--accent);font-size:.76rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.background='rgba(255,45,85,.18)'" onmouseout="this.style.background='rgba(255,45,85,.07)'">Выйти из аккаунта</button>
+          <button onclick="confirmLogout()" style="width:100%;padding:.6rem;border-radius:10px;border:1.5px solid rgba(255,45,85,.25);background:rgba(255,45,85,.07);color:var(--accent);font-size:.76rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.background='rgba(255,45,85,.18)'" onmouseout="this.style.background='rgba(255,45,85,.07)'">Выйти из аккаунта</button>
         </div>
       </div>
     </div>
@@ -1619,12 +1693,60 @@ window.addEventListener('scroll',()=>document.getElementById('nav').classList.to
 document.querySelectorAll('.day-card').forEach(c=>{if(+c.dataset.d===new Date().getDay())c.classList.add('today')});
 
 // ═══════════════════════════════════════
+//  COUNTDOWN ДО СЛЕДУЮЩЕГО ЭФИРА (на основе расписания выше)
+//  Показывает ближайший будущий слот, а не "идёт ли стрим прямо сейчас" —
+//  это отдельный вопрос, за него отвечает сам плеер Twitch.
+// ═══════════════════════════════════════
+function computeNextStream(){
+  const schedule = [...document.querySelectorAll('.day-card')].map(c=>{
+    const liveEl = c.querySelector('.day-live');
+    if (!liveEl) return null;
+    const [h,m] = liveEl.textContent.trim().split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return null;
+    return { day: +c.dataset.d, hour: h, minute: m };
+  }).filter(Boolean);
+  if (!schedule.length) return null;
+  const now = new Date();
+  for (let addDays = 0; addDays < 8; addDays++){
+    const checkDay = (now.getDay() + addDays) % 7;
+    const slot = schedule.find(s => s.day === checkDay);
+    if (!slot) continue;
+    const candidate = new Date(now);
+    candidate.setDate(now.getDate() + addDays);
+    candidate.setHours(slot.hour, slot.minute, 0, 0);
+    if (candidate > now) return candidate;
+  }
+  return null;
+}
+function updateStreamCountdown(){
+  const el = document.getElementById('streamCountdown');
+  if (!el) return;
+  const next = computeNextStream();
+  if (!next){ el.textContent=''; return; }
+  const diff = next - Date.now();
+  if (diff <= 0){ el.textContent=''; return; }
+  const days = Math.floor(diff/86400000);
+  const hours = Math.floor((diff%86400000)/3600000);
+  const mins = Math.floor((diff%3600000)/60000);
+  const dayNames=['воскресенье','понедельник','вторник','среду','четверг','пятницу','субботу'];
+  const parts=[];
+  if(days) parts.push(`${days} дн.`);
+  if(days||hours) parts.push(`${hours} ч.`);
+  parts.push(`${mins} мин.`);
+  const hh=String(next.getHours()).padStart(2,'0'), mm=String(next.getMinutes()).padStart(2,'0');
+  el.innerHTML = `🔴 Ближайший эфир — <strong>${dayNames[next.getDay()]} в ${hh}:${mm}</strong> (через ${parts.join(' ')})`;
+}
+updateStreamCountdown();
+setInterval(updateStreamCountdown, 60000);
+
+// ═══════════════════════════════════════
 //  UTILS
 // ═══════════════════════════════════════
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const fmt=n=>{n=parseInt(n)||0;return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n)};
 function countUp(id,t){
   const el=document.getElementById(id);if(!el)return;
+  el.classList.remove('skeleton');
   let c=0,s=t/80;
   const tm=setInterval(()=>{c=Math.min(c+s,t);el.textContent=fmt(Math.round(c));if(c>=t){clearInterval(tm)}},18);
 }
@@ -1635,6 +1757,11 @@ function statsLoaded(){
 function statsError(){
   const note=document.getElementById('statsNote');
   if(note) note.innerHTML='⚠️ Статистика недоступна — API работает только на хостинге. <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="color:var(--yt)">Смотреть канал →</a>';
+  // Иначе skeleton-шиммер крутился бы бесконечно, раз countUp() так и не вызовется
+  ['s-subs','s-views','s-vids'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.classList.remove('skeleton'); el.textContent='—'; }
+  });
 }
 
 // ═══════════════════════════════════════
@@ -1653,12 +1780,39 @@ async function ytFetch(url){
 }
 
 let vidCountLimit = 12; // текущий лимит отображения
+let videoSearchQuery = ''; // поиск по названию видео
+
+// Что реально должно быть отрисовано прямо сейчас — с учётом активного
+// поиска. Используется везде, где раньше было allVids.slice(0,vidCountLimit)
+// или голый allVids, чтобы поиск не "терялся" при смене вида/кол-ва/выборе.
+function getVisibleVids(){
+  if (videoSearchQuery) return allVids.filter(v => (v.title||'').toLowerCase().includes(videoSearchQuery));
+  return allVids.slice(0, vidCountLimit);
+}
+function filterVids(query){
+  videoSearchQuery = query.trim().toLowerCase();
+  const clearBtn = document.getElementById('videoSearchClear');
+  if (clearBtn) clearBtn.style.display = videoSearchQuery ? 'flex' : 'none';
+  if (!allVids.length) return;
+  const vids = getVisibleVids();
+  if (videoSearchQuery && !vids.length) {
+    document.getElementById('yt-grid').innerHTML = `<div class="empty-state"><span class="empty-state-icon">🔍</span><div class="empty-state-title">Ничего не найдено</div><div class="empty-state-text">По запросу «${esc(query.trim())}» видео не нашлось — попробуй другое слово</div></div>`;
+    return;
+  }
+  renderVids(vids);
+}
+function clearVideoSearch(){
+  const inp = document.getElementById('videoSearchInput');
+  if (inp) inp.value = '';
+  filterVids('');
+}
 
 function changeVidCount(val, btn) {
   vidCountLimit = parseInt(val);
   document.querySelectorAll('.count-opt').forEach(b=>b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (allVids.length) {
+    if (videoSearchQuery) { filterVids(document.getElementById('videoSearchInput')?.value || ''); return; }
     // Перемешиваем и показываем нужное кол-во
     const shuffled = [...allVids].sort(() => Math.random() - 0.5);
     renderVids(shuffled.slice(0, vidCountLimit));
@@ -1755,7 +1909,7 @@ function renderVids(vids){
   const grid=document.getElementById('yt-grid');
   grid.innerHTML='';
   grid.className='video-grid'+(viewMode==='list'?' list-view':'');
-  if(!vids.length){grid.innerHTML=`<div class="err-box"><strong>Видео не найдены</strong></div>`;return}
+  if(!vids.length){grid.innerHTML=`<div class="empty-state"><span class="empty-state-icon">🎬</span><div class="empty-state-title">Видео не найдены</div><div class="empty-state-text">Пока ничего не загрузилось — возможно, YouTube временно недоступен. Попробуй обновить страницу.</div></div>`;return}
   vids.forEach((v,i)=>{
     if(!v.id)return;
     const liked=likedIds.has(v.id),sel=selectedIds.has(v.id);
@@ -1789,7 +1943,7 @@ function setView(mode){
   viewMode=mode;
   const btn=document.getElementById('viewToggleBtn');
   if(btn) btn.innerHTML = mode==='grid' ? '⊞ Сетка' : '≡ Список';
-  if (allVids.length) renderVids(allVids.slice(0,vidCountLimit));
+  if (allVids.length) renderVids(getVisibleVids());
 }
 function toggleViewMode(){ setView(viewMode==='grid' ? 'list' : 'grid'); }
 
@@ -1799,6 +1953,7 @@ function toggleViewMode(){ setView(viewMode==='grid' ? 'list' : 'grid'); }
 let showingRec=false;
 function shuffleVids(){
   const b=document.getElementById('shuffleBtn');
+  clearVideoSearch(); // шафл переключает между recVids/allVids — с активным поиском комбинация неоднозначна
   if(recVids.length && !showingRec){
     showingRec=true;
     renderVids(recVids.slice(0,vidCountLimit));
@@ -1831,12 +1986,12 @@ function toggleLike(e,id,btn){
 // ═══════════════════════════════════════
 //  SELECT MODE
 // ═══════════════════════════════════════
-function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('likeSelBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';document.getElementById('ytOverflowMenu')?.classList.remove('open');renderVids(allVids)}
-function cancelSel(){selMode=false;selectedIds.clear();document.getElementById('selBtn').style.display='inline-flex';document.getElementById('likeSelBtn').style.display='none';document.getElementById('playSelBtn').style.display='none';document.getElementById('cancelSelBtn').style.display='none';document.getElementById('selHint').style.display='none';document.getElementById('multiPlayer').style.display='none';renderVids(allVids)}
+function toggleSel(){selMode=true;selectedIds.clear();document.getElementById('selBtn').style.display='none';document.getElementById('likeSelBtn').style.display='inline-flex';document.getElementById('playSelBtn').style.display='inline-flex';document.getElementById('cancelSelBtn').style.display='inline-flex';document.getElementById('selHint').style.display='flex';document.getElementById('ytOverflowMenu')?.classList.remove('open');renderVids(getVisibleVids())}
+function cancelSel(){selMode=false;selectedIds.clear();document.getElementById('selBtn').style.display='inline-flex';document.getElementById('likeSelBtn').style.display='none';document.getElementById('playSelBtn').style.display='none';document.getElementById('cancelSelBtn').style.display='none';document.getElementById('selHint').style.display='none';document.getElementById('multiPlayer').style.display='none';renderVids(getVisibleVids())}
 function toggleYtOverflow(e){e.stopPropagation();document.getElementById('ytOverflowMenu')?.classList.toggle('open')}
 document.addEventListener('click',e=>{const m=document.getElementById('ytOverflowMenu');if(m&&m.classList.contains('open')&&!e.target.closest('#ytOverflow'))m.classList.remove('open')});
 function toggleSel2(card,id){if(selectedIds.has(id)){selectedIds.delete(id);card.classList.remove('selected');card.querySelector('.sel-check').textContent=''}else{selectedIds.add(id);card.classList.add('selected');card.querySelector('.sel-check').textContent='✓'}document.getElementById('selCount').textContent=selectedIds.size}
-function selectAllVids(){allVids.forEach(v=>selectedIds.add(v.id));renderVids(allVids);document.getElementById('selCount').textContent=selectedIds.size}
+function selectAllVids(){getVisibleVids().forEach(v=>selectedIds.add(v.id));renderVids(getVisibleVids());document.getElementById('selCount').textContent=selectedIds.size}
 function likeSelected(){if(!selectedIds.size)return;selectedIds.forEach(id=>{if(!likedIds.has(id)){likedIds.add(id);window.open(`https://www.youtube.com/watch?v=${id}`,`_ytlike_${id}`,'width=900,height=600')}});try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}}
 function playSelected(){
   const ids=[...selectedIds];if(!ids.length)return;
@@ -1883,6 +2038,29 @@ function closeModal(){
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
 // ═══════════════════════════════════════
+//  ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (общий диалог, напр. для выхода из аккаунта)
+// ═══════════════════════════════════════
+let confirmCallback = null;
+function askConfirm(msg, onConfirm, okLabel){
+  document.getElementById('confirmMsg').textContent = msg;
+  document.getElementById('confirmOkBtn').textContent = okLabel || 'Подтвердить';
+  confirmCallback = onConfirm;
+  document.getElementById('confirmModal').classList.add('open');
+}
+function closeConfirm(){
+  document.getElementById('confirmModal').classList.remove('open');
+  confirmCallback = null;
+}
+document.getElementById('confirmOkBtn').addEventListener('click', ()=>{
+  const cb = confirmCallback;
+  closeConfirm();
+  if (cb) cb();
+});
+function confirmLogout(){
+  askConfirm('Выйти из аккаунта? Ты перестанешь быть админом/модератором в чате и на сайте.', doGlobalLogout, 'Выйти');
+}
+
+// ═══════════════════════════════════════
 //  SUPABASE REALTIME CHAT + AUTH + MOD
 // ═══════════════════════════════════════
 const SB_URL = 'https://zdisuowyjgqirhvcyjfq.supabase.co';
@@ -1892,6 +2070,27 @@ let sbClient = null, sbChannel = null, onlineChannel = null;
 let currentUser = null, currentRole = null, currentProfile = null;
 let bannedNicks = new Set();
 let msgTimestamps = []; // rate limit
+let lastSentText = ''; // для детекта повтора одного и того же сообщения подряд
+// Эскалация наказания за спам: N нарушений подряд -> временный локальный мут
+// с растущей длительностью. Переживает перезагрузку страницы (localStorage),
+// иначе спамер просто обновлял бы вкладку и сбрасывал счётчик.
+let rateStrikes = parseInt(localStorage.getItem('d37_strikes') || '0', 10) || 0;
+let muteUntil = parseInt(localStorage.getItem('d37_mute_until') || '0', 10) || 0;
+function saveStrikeState(){
+  try { localStorage.setItem('d37_strikes', String(rateStrikes)); localStorage.setItem('d37_mute_until', String(muteUntil)); } catch(e) {}
+}
+function registerStrike(){
+  rateStrikes++;
+  if (rateStrikes >= 3) {
+    const muteMin = Math.min(30 * Math.pow(2, rateStrikes - 3), 300); // 30с → 60с → 120с → ... максимум 5 мин
+    muteUntil = Date.now() + muteMin * 1000;
+  }
+  saveStrikeState();
+}
+function registerGoodMsg(){
+  rateStrikes = Math.max(0, rateStrikes - 1);
+  saveStrikeState();
+}
 const PRESENCE_KEY = 'user_' + Math.random().toString(36).slice(2,8);
 
 // Фильтр спама — базовые стоп-слова (расширяй по необходимости)
@@ -1904,14 +2103,14 @@ function initSupabase() {
   try {
     if (typeof supabase === 'undefined' || typeof supabase.createClient !== 'function') {
       console.warn('Supabase SDK не загружен');
-      showChatStatus('💡 Чат работает локально', false);
+      showChatStatus('💡 Чат работает локально', false, 0);
       return false;
     }
     sbClient = supabase.createClient(SB_URL, SB_KEY);
     return true;
   } catch(e) {
     console.warn('Supabase init error:', e);
-    showChatStatus('⚠ Ошибка подключения к чату', false);
+    showChatStatus('⚠ Ошибка подключения к чату', false, 0);
     return false;
   }
 }
@@ -2040,10 +2239,18 @@ let chatToastTimer=null;
 function showChatToast(){
   if(currentRoute()==='chat') return;
   const t=document.getElementById('chatToast');
-  if(!t) return;
-  t.classList.add('show');
-  clearTimeout(chatToastTimer);
-  chatToastTimer=setTimeout(()=>t.classList.remove('show'),4000);
+  if(t){
+    t.classList.add('show');
+    clearTimeout(chatToastTimer);
+    chatToastTimer=setTimeout(()=>t.classList.remove('show'),4000);
+  }
+  // Бейдж, в отличие от тоста, не гаснет сам — висит, пока не зайдёшь в чат
+  document.getElementById('navChatBadge')?.classList.add('show');
+  document.getElementById('btChatBadge')?.classList.add('show');
+}
+function hideChatBadge(){
+  document.getElementById('navChatBadge')?.classList.remove('show');
+  document.getElementById('btChatBadge')?.classList.remove('show');
 }
 
 function subscribeRealtime() {
@@ -2087,7 +2294,7 @@ async function sendMsgToSupabase(nick, text, color, role) {
   } catch(e) { return false; }
 }
 
-function showChatStatus(msg, good = true) {
+function showChatStatus(msg, good = true, autoHideMs = 3000) {
   const bar = document.getElementById('chatStatusBar');
   if (!bar) return;
   bar.textContent = msg;
@@ -2095,6 +2302,13 @@ function showChatStatus(msg, good = true) {
   bar.style.background = good ? 'rgba(34,197,94,.06)' : 'rgba(255,200,0,.06)';
   bar.style.color = good ? 'rgba(34,197,94,.8)' : 'rgba(255,200,0,.8)';
   bar.style.borderColor = good ? 'rgba(34,197,94,.1)' : 'rgba(255,200,0,.1)';
+  // БАГ: раньше бар никогда не прятался сам — "режим модерации активен"
+  // (и другие транзитные сообщения) висели до перезагрузки страницы или
+  // выхода. Теперь по умолчанию прячется через autoHideMs; для по-настоящему
+  // постоянных статусов (демо-режим, ошибка подключения) вызывающий код
+  // явно передаёт autoHideMs=0.
+  clearTimeout(bar._hideTimer);
+  if (autoHideMs) bar._hideTimer = setTimeout(()=>{ bar.style.display='none'; }, autoHideMs);
 }
 
 const demoMsgs=[
@@ -2243,18 +2457,13 @@ async function sendMsg(){
   if(!chatNick){document.getElementById('chatNickScreen').style.display='flex';document.getElementById('chatMainInput').style.display='none';return}
   const inp=document.getElementById('chatInput'),text=inp.value.trim();
   if(!text) return;
+  const isStaff = currentRole === 'admin' || currentRole === 'moderator';
 
-  // Rate limit
-  if(!checkRateLimit()){
-    showChatStatus(`⏱ Не так быстро — максимум ${RATE_LIMIT} сообщений в минуту`, false);
-    setTimeout(()=>document.getElementById('chatStatusBar').style.display='none',3000);
-    return;
-  }
-  // Spam check
-  const spamErr = checkSpam(text);
-  if(spamErr){
-    showChatStatus(`🚫 ${spamErr}`, false);
-    setTimeout(()=>document.getElementById('chatStatusBar').style.display='none',3000);
+  // Временный мут — за накопленные подряд нарушения (см. registerStrike).
+  // Не применяется к admin/mod, чтобы не мешать модерации.
+  if (!isStaff && Date.now() < muteUntil) {
+    const secLeft = Math.ceil((muteUntil - Date.now()) / 1000);
+    showChatStatus(`🔇 Мут за спам — ещё ${secLeft} сек`, false);
     return;
   }
   // Ban check
@@ -2262,7 +2471,30 @@ async function sendMsg(){
     showChatStatus('🔨 Ты заблокирован в чате', false);
     return;
   }
+  // Rate limit
+  if(!checkRateLimit()){
+    if (!isStaff) registerStrike();
+    showChatStatus(Date.now() < muteUntil
+      ? `🔇 Слишком много попыток — мут на ${Math.ceil((muteUntil-Date.now())/1000)} сек`
+      : `⏱ Не так быстро — максимум ${RATE_LIMIT} сообщений в минуту`, false);
+    return;
+  }
+  // Spam check
+  const spamErr = checkSpam(text);
+  if(spamErr){
+    if (!isStaff) registerStrike();
+    showChatStatus(`🚫 ${spamErr}`, false);
+    return;
+  }
+  // Повтор той же реплики подряд — частый паттерн спама, checkSpam() его не ловит
+  if (!isStaff && text.toLowerCase() === lastSentText.toLowerCase()) {
+    registerStrike();
+    showChatStatus('🚫 Не повторяй одно и то же', false);
+    return;
+  }
 
+  if (!isStaff) registerGoodMsg();
+  lastSentText = text;
   inp.value='';
   const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
   const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
@@ -2307,7 +2539,17 @@ document.addEventListener('click',()=>{const p=document.getElementById('emojiPic
 // ВСЕГДА (без надписи "идёт прямо сейчас"), src ставится один раз при
 // загрузке. Сам виджет Twitch показывает офлайн-заглушку, если эфира нет —
 // это уже встроено в сам плеер/чат Twitch, ничего изобретать не нужно.
-document.getElementById('autoStreamPlayer').src = `https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
+//
+// ОПТИМИЗАЦИЯ: src ставим не всегда сразу, а только когда реально открыта
+// #/home — см. initHomeMedia() и хук в showPage() ниже. Если открыли сайт
+// сразу по ссылке на #/chat или #/poll, твич-плеер грузиться не будет.
+let homeMediaLoaded = false;
+function initHomeMedia(){
+  if (homeMediaLoaded) return;
+  homeMediaLoaded = true;
+  document.getElementById('autoStreamPlayer').src = `https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
+  loadYT();
+}
 
 // ═══════════════════════════════════════
 //  САУНДБОРД — Web Audio API (без файлов)
@@ -2749,7 +2991,7 @@ function renderLb(data, tab) {
 function renderLbHtml(data, tab) {
   const colors = ['#ff2d55','#9147ff','#29b6f6','#22c55e','#f59e0b','#ec4899','#ff6b35'];
   if (tab === 'top') {
-    if (!data.leaderboard?.length) return `<div class="lb-login-msg">Донатов пока нет 💔</div>`;
+    if (!data.leaderboard?.length) return `<div class="empty-state"><span class="empty-state-icon">🏆</span><div class="empty-state-title">Донатов пока нет</div><div class="empty-state-text">Будь первым в списке — самый щедрый попадёт на самый верх 💝</div></div>`;
     return `<div class="lb-list">${data.leaderboard.map((d,i)=>{
       const ini=(d.username||'?').slice(0,2).toUpperCase();
       const col=colors[i%colors.length];
@@ -2762,7 +3004,7 @@ function renderLbHtml(data, tab) {
       </div>`;
     }).join('')}</div>`;
   } else if (tab === 'recent') {
-    if (!data.donations?.length) return `<div class="lb-login-msg">Донатов пока нет 💔</div>`;
+    if (!data.donations?.length) return `<div class="empty-state"><span class="empty-state-icon">💌</span><div class="empty-state-title">Донатов пока нет</div><div class="empty-state-text">Последние донаты появятся здесь сразу после первого доната</div></div>`;
     return `<div class="lb-list">${data.donations.slice(0,10).map((d,i)=>{
       const ini=(d.username||'?').slice(0,2).toUpperCase();
       const col=colors[i%colors.length];
@@ -2989,6 +3231,15 @@ async function togglePush() {
 // ═══════════════════════════════════════
 let deferredPrompt = null;
 
+// Раньше не было ни manifest.json, ни Service Worker — beforeinstallprompt
+// в реальном браузере физически не мог сработать (это требование спеки),
+// баннер установки был мёртвым кодом. Теперь оба на месте.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   deferredPrompt = e;
@@ -3072,8 +3323,17 @@ async function doGlobalLogout() {
   document.getElementById('chatModPanel').style.display = 'none';
   document.getElementById('chatAuthBtn').style.display = '';
   document.getElementById('chatMsgs').classList.remove('is-mod');
+  // БАГ: кнопки 🔨/✕ у уже отрисованных сообщений включались через
+  // b.style.display='flex' (инлайн-стиль) при входе — снятие класса .is-mod
+  // само по себе их не прячет, инлайн-стиль всегда сильнее правила из CSS.
+  // Поэтому раньше они оставались висеть на старых сообщениях после выхода.
+  document.querySelectorAll('.msg-del-btn,.msg-ban-btn').forEach(b=>b.style.display='');
   const pollBtn = document.getElementById('pollEditBtn');
   if (pollBtn) pollBtn.style.display = 'none';
+  // Статус-бар ("режим модерации активен" и т.п.) не скрывался сам —
+  // висел до перезагрузки страницы. Прячем при выходе явно.
+  const statusBar = document.getElementById('chatStatusBar');
+  if (statusBar) statusBar.style.display = 'none';
 
   closeGlobalAuth();
   document.getElementById('gauthLogin').style.display = 'block';
@@ -3260,9 +3520,10 @@ loadGoalFromDA();
 setTimeout(loadPollsFromDB, 2000);
 initChat();
 initPerfMode();
-loadYT(); // БАГ: эта функция никогда не вызывалась — грид видео был пустым всегда,
-          // до любых правок. Раньше "Видео не найдены" просто не показывалось,
-          // пока кто-то не трогал сетку/список — теперь видео реально грузятся.
+// loadYT() и Twitch-плеер теперь грузятся только при реальном заходе на
+// #/home — см. initHomeMedia(), вызывается из showPage(). Раньше грузились
+// всегда, даже если открыли сайт сразу на #/chat — тратили квоту YouTube API
+// и грузили Twitch-плеер зря.
 
 // ── КНОПКА НАВЕРХ + ПРОГРЕСС ──
 const scrollTopBtn = document.getElementById('scrollTop');
@@ -3299,10 +3560,31 @@ const ALL_PAGE_IDS = Object.values(PAGES).flat();
 function showPage(route){
   if(!PAGES[route]) route='home';
   const activeIds = PAGES[route];
-  ALL_PAGE_IDS.forEach(id=>{
+  const isLowPerf = document.body.classList.contains('low');
+  const currentlyVisible = ALL_PAGE_IDS.filter(id=>{
     const el=document.getElementById(id);
-    if(el) el.style.display = activeIds.includes(id) ? '' : 'none';
+    return el && el.style.display !== 'none';
   });
+  const doSwap = () => {
+    ALL_PAGE_IDS.forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display = activeIds.includes(id) ? '' : 'none';
+    });
+    activeIds.forEach(id=>document.getElementById(id)?.classList.remove('route-fading'));
+    finishShowPage(route, activeIds);
+  };
+  if (isLowPerf || currentlyVisible.length === 0) {
+    // Первая загрузка или слабый режим — без анимации, сразу
+    doSwap();
+  } else {
+    currentlyVisible.forEach(id=>document.getElementById(id)?.classList.add('route-fading'));
+    setTimeout(doSwap, 150);
+  }
+}
+
+function finishShowPage(route, activeIds){
+  // Твич-плеер и loadYT() — только когда реально открыта #/home (см. initHomeMedia)
+  if (route==='home') initHomeMedia();
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{
@@ -3323,7 +3605,7 @@ function showPage(route){
   document.getElementById('navLinks')?.classList.remove('open');
   document.getElementById('burger')?.classList.remove('open');
   // Если перешли в чат — прячем тост о новом сообщении, он тут больше не нужен
-  if(route==='chat') document.getElementById('chatToast')?.classList.remove('show');
+  if(route==='chat'){ document.getElementById('chatToast')?.classList.remove('show'); hideChatBadge(); }
   window.scrollTo(0,0);
 }
 
@@ -3344,7 +3626,7 @@ function isTypingContext(){
   return false;
 }
 function isModalOpen(){
-  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal'].some(id=>{
+  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal'].some(id=>{
     const el=document.getElementById(id);
     return el && getComputedStyle(el).display!=='none';
   });
