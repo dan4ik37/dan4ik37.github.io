@@ -365,6 +365,14 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .stream-countdown{display:inline-flex;align-items:center;gap:.5rem;background:rgba(255,45,85,.07);border:1px solid rgba(255,45,85,.2);border-radius:50px;padding:.55rem 1.2rem;font-size:.78rem;color:var(--text);margin-bottom:1.4rem}
 .stream-countdown:empty{display:none}
 .stream-countdown strong{color:var(--accent)}
+/* ── РЕДАКТОР РАСПИСАНИЯ (админка) ── */
+.sched-admin-row{display:flex;align-items:center;gap:.7rem;padding:.5rem 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.sched-admin-row:last-child{border-bottom:none}
+.sched-admin-dayname{flex:1;font-size:.78rem;color:var(--text)}
+.sched-admin-toggle{display:flex;align-items:center;gap:.4rem;font-size:.7rem;color:var(--muted);cursor:pointer;user-select:none}
+.sched-admin-toggle input{accent-color:var(--accent);width:15px;height:15px;cursor:pointer}
+.sched-admin-time{background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:8px;padding:.35rem .5rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.75rem;outline:none;width:90px}
+.sched-admin-time:focus{border-color:var(--accent)}
 .day-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.85rem .4rem;text-align:center;transition:transform .2s}
 .day-card.today{background:rgba(145,71,255,.14);border-color:var(--tw)}
 .day-name{font-size:.62rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:.4rem}
@@ -1163,7 +1171,7 @@ body.high .avatar::before{
 <div class="wrap reveal" id="schedule">
   <div class="divider"></div>
   <div class="eyebrow">Расписание</div>
-  <h2 class="sec-title">Когда стримим?</h2>
+  <h2 class="sec-title">Когда стримим? <button id="schedEditBtn" onclick="openSettingsAdmin()" style="display:none;font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:.3rem .8rem;border-radius:8px;border:1.5px solid rgba(255,45,85,.35);background:rgba(255,45,85,.08);color:var(--accent);cursor:pointer;vertical-align:middle;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.background='rgba(255,45,85,.2)'" onmouseout="this.style.background='rgba(255,45,85,.08)'">✏️ Редактировать</button></h2>
   <div class="stream-countdown" id="streamCountdown"></div>
   <div class="sched-grid">
     <div class="day-card" data-d="0"><div class="day-name">Вс</div><div class="day-off">—</div></div>
@@ -1372,7 +1380,7 @@ body.high .avatar::before{
 <div class="wrap reveal" id="goalbar">
   <div class="divider"></div>
   <div class="eyebrow">Цель доната</div>
-  <h2 class="sec-title">Сбор 💝</h2>
+  <h2 class="sec-title">Сбор 💝 <button id="goalEditBtn" onclick="openSettingsAdmin()" style="display:none;font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:.3rem .8rem;border-radius:8px;border:1.5px solid rgba(255,45,85,.35);background:rgba(255,45,85,.08);color:var(--accent);cursor:pointer;vertical-align:middle;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.background='rgba(255,45,85,.2)'" onmouseout="this.style.background='rgba(255,45,85,.08)'">✏️ Редактировать</button></h2>
   <div class="goal-bar-wrap">
     <div class="goal-bar-header">
       <div>
@@ -1606,6 +1614,33 @@ body.high .avatar::before{
   </div>
 </div>
 
+<!-- НАСТРОЙКИ САЙТА (расписание + цель доната) — только для администратора -->
+<div id="settingsAdminModal" onclick="if(event.target===this)this.style.display='none'" style="position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);z-index:9500;display:none;align-items:center;justify-content:center;padding:1.5rem">
+  <div style="background:var(--card);border:1px solid rgba(255,45,85,.25);border-radius:20px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:2rem;position:relative">
+    <button onclick="document.getElementById('settingsAdminModal').style.display='none'" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.08);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center">✕</button>
+    <h3 style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;margin-bottom:.4rem;color:var(--accent)">⚙️ Настройки сайта</h3>
+    <p style="font-size:.75rem;color:var(--muted);margin-bottom:1.5rem">Только для администратора — меняется без правки кода и редеплоя</p>
+
+    <!-- Расписание -->
+    <div style="background:rgba(255,45,85,.06);border:1px solid rgba(255,45,85,.15);border-radius:14px;padding:1.2rem;margin-bottom:1.2rem">
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem">📅 Расписание стримов</div>
+      <div id="schedAdminRows"></div>
+      <button onclick="saveScheduleAdmin()" style="width:100%;margin-top:.8rem;padding:.65rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800;font-size:.8rem;cursor:pointer;font-family:'Montserrat',sans-serif;transition:opacity .2s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">💾 Сохранить расписание</button>
+      <div id="schedSaveStatus" style="font-size:.72rem;margin-top:.5rem;min-height:1rem;text-align:center"></div>
+    </div>
+
+    <!-- Цель доната -->
+    <div style="background:rgba(255,45,85,.06);border:1px solid rgba(255,45,85,.15);border-radius:14px;padding:1.2rem">
+      <div style="font-size:.72rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem">🎯 Цель доната</div>
+      <input id="goalAdminTitle" placeholder="Название цели, напр. 🎯 Новая камера" style="width:100%;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.6rem .9rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;margin-bottom:.7rem;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      <input id="goalAdminTarget" type="number" min="1" placeholder="Сумма цели, ₽" style="width:100%;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.6rem .9rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;margin-bottom:.7rem;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      <div style="font-size:.68rem;color:var(--muted);margin-bottom:.8rem;line-height:1.6">Сколько уже собрано — считается само по донатам, руками менять не нужно.</div>
+      <button onclick="saveGoalAdmin()" style="width:100%;padding:.65rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800;font-size:.8rem;cursor:pointer;font-family:'Montserrat',sans-serif;transition:opacity .2s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">💾 Сохранить цель</button>
+      <div id="goalSaveStatus" style="font-size:.72rem;margin-top:.5rem;min-height:1rem;text-align:center"></div>
+    </div>
+  </div>
+</div>
+
 <!-- PRIVACY POLICY MODAL -->
 <div id="privacyModal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="privacy-box">
@@ -1738,6 +1773,88 @@ function updateStreamCountdown(){
 }
 updateStreamCountdown();
 setInterval(updateStreamCountdown, 60000);
+
+// ═══════════════════════════════════════
+//  РЕДАКТОР РАСПИСАНИЯ (админка "⚙️ Настройки сайта")
+//  Хранится в site_config (key='schedule') — та же таблица и паттерн,
+//  что уже использует редактор опросов. localStorage — быстрый кэш,
+//  чтобы расписание применялось мгновенно, не дожидаясь ответа Supabase.
+// ═══════════════════════════════════════
+const DAY_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const DAY_FULL  = ['воскресенье','понедельник','вторник','среду','четверг','пятницу','субботу'];
+
+function applyScheduleToDOM(schedule){
+  schedule.forEach(day=>{
+    const card = document.querySelector(`.day-card[data-d="${day.d}"]`);
+    if (!card) return;
+    card.innerHTML = day.live
+      ? `<div class="day-name">${DAY_SHORT[day.d]}</div><div class="day-live">${day.time}</div>`
+      : `<div class="day-name">${DAY_SHORT[day.d]}</div><div class="day-off">—</div>`;
+    card.classList.toggle('today', day.d === new Date().getDay());
+  });
+  updateStreamCountdown();
+}
+
+async function loadScheduleFromDB(){
+  // Локальный кэш применяется сразу при определении функции (см. ниже),
+  // тут только сетевой поход в Supabase — он может подождать общую очередь,
+  // а вот из localStorage лучше не заставлять секундами мелькать дефолт.
+  if (!sbClient) return;
+  try {
+    const { data } = await sbClient.from('site_config').select('value').eq('key','schedule').single();
+    if (data?.value) {
+      const schedule = JSON.parse(data.value);
+      applyScheduleToDOM(schedule);
+      try { localStorage.setItem('d37_schedule', JSON.stringify(schedule)); } catch(e) {}
+    }
+  } catch(e) {}
+}
+// Мгновенно, без задержки — иначе на секунду-две видно дефолтное расписание
+try {
+  const cachedSchedule = localStorage.getItem('d37_schedule');
+  if (cachedSchedule) applyScheduleToDOM(JSON.parse(cachedSchedule));
+} catch(e) {}
+
+function renderScheduleAdminRows(){
+  const container = document.getElementById('schedAdminRows');
+  if (!container) return;
+  const rows = [...document.querySelectorAll('.day-card')]
+    .map(c=>({ d:+c.dataset.d, live: !!c.querySelector('.day-live'), time: c.querySelector('.day-live')?.textContent.trim() || '20:00' }))
+    .sort((a,b)=>a.d-b.d);
+  container.innerHTML = rows.map(day=>`
+    <div class="sched-admin-row" data-day="${day.d}">
+      <span class="sched-admin-dayname">${DAY_FULL[day.d][0].toUpperCase()+DAY_FULL[day.d].slice(1)}</span>
+      <label class="sched-admin-toggle">
+        <input type="checkbox" class="sched-admin-live" ${day.live?'checked':''} onchange="this.closest('.sched-admin-row').querySelector('.sched-admin-time').style.display=this.checked?'inline-block':'none'">
+        Стрим
+      </label>
+      <input type="time" class="sched-admin-time" value="${day.time}" style="display:${day.live?'inline-block':'none'}">
+    </div>
+  `).join('');
+}
+
+async function saveScheduleAdmin(){
+  const statusEl = document.getElementById('schedSaveStatus');
+  const schedule = [...document.querySelectorAll('.sched-admin-row')].map(r=>{
+    const d = +r.dataset.day;
+    const live = r.querySelector('.sched-admin-live').checked;
+    const time = r.querySelector('.sched-admin-time').value || '20:00';
+    return live ? {d, live:true, time} : {d, live:false};
+  });
+  applyScheduleToDOM(schedule);
+  try { localStorage.setItem('d37_schedule', JSON.stringify(schedule)); } catch(e) {}
+  if (sbClient && currentRole === 'admin') {
+    try {
+      await sbClient.from('site_config').upsert([{ key: 'schedule', value: JSON.stringify(schedule) }]);
+      statusEl.textContent = '✅ Сохранено!';
+    } catch(e) {
+      statusEl.textContent = '⚠ Применено локально, но не сохранилось на сервер';
+    }
+  } else {
+    statusEl.textContent = '✅ Применено (локально)';
+  }
+  setTimeout(()=>statusEl.textContent='', 3000);
+}
 
 // ═══════════════════════════════════════
 //  UTILS
@@ -2145,6 +2262,8 @@ async function onAuthStateChange(user) {
     if (currentRole === 'admin') {
       const editBtn = document.getElementById('pollEditBtn');
       if (editBtn) editBtn.style.display = 'inline-flex';
+      document.getElementById('schedEditBtn')?.style.setProperty('display','inline-flex');
+      document.getElementById('goalEditBtn')?.style.setProperty('display','inline-flex');
     }
     // Раньше здесь chatNick не менялся, и в чат уходило "Гость1234 [ADMIN]" —
     // логин никак не влиял на то, под каким именем реально пишешь сообщения.
@@ -2715,9 +2834,9 @@ function resetClicker(){
 // ═══════════════════════════════════════
 //  ШКАЛА ЦЕЛИ — ОБНОВЛЯЙ ЭТИ ЦИФРЫ
 // ═══════════════════════════════════════
-const goalCurrentVal = 0;     // ← сколько собрано (меняй вручную)
-const goalMaxVal     = 10000; // ← цель в рублях
-const goalTitleText  = '🎯 Новое оборудование для стрима';
+let goalCurrentVal = 0;     // ← сколько собрано (считается само из /api/donations, руками не трогать)
+let goalMaxVal     = 10000; // ← цель в рублях — теперь меняется через "⚙️ Настройки сайта", это лишь дефолт
+let goalTitleText  = '🎯 Новое оборудование для стрима'; // ← тоже через настройки, это дефолт
 
 function initGoalBar(currentVal){
   const cur = (currentVal !== undefined) ? currentVal : goalCurrentVal;
@@ -2736,6 +2855,68 @@ function initGoalBar(currentVal){
   if(el)obs.observe(el);
 }
 initGoalBar();
+
+// ═══════════════════════════════════════
+//  РЕДАКТОР ЦЕЛИ ДОНАТА (админка "⚙️ Настройки сайта")
+//  Название и сумма цели — в site_config (key='goal'). Сколько уже собрано
+//  трогать не нужно, это отдельно и всегда считается из /api/donations.
+// ═══════════════════════════════════════
+function applyGoalConfig(cfg){
+  if (cfg?.title) goalTitleText = cfg.title;
+  if (cfg?.target) goalMaxVal = cfg.target;
+  const curText = document.getElementById('goalCurrent')?.textContent || '0';
+  const cur = parseInt(curText.replace(/\D/g,''), 10) || 0;
+  initGoalBar(cur);
+}
+
+async function loadGoalConfigFromDB(){
+  if (!sbClient) return;
+  try {
+    const { data } = await sbClient.from('site_config').select('value').eq('key','goal').single();
+    if (data?.value) {
+      const cfg = JSON.parse(data.value);
+      applyGoalConfig(cfg);
+      try { localStorage.setItem('d37_goal', JSON.stringify(cfg)); } catch(e) {}
+    }
+  } catch(e) {}
+}
+// Мгновенно, без задержки — та же причина, что и с расписанием выше
+try {
+  const cachedGoal = localStorage.getItem('d37_goal');
+  if (cachedGoal) applyGoalConfig(JSON.parse(cachedGoal));
+} catch(e) {}
+
+async function saveGoalAdmin(){
+  const statusEl = document.getElementById('goalSaveStatus');
+  const title = document.getElementById('goalAdminTitle').value.trim();
+  const target = parseInt(document.getElementById('goalAdminTarget').value, 10);
+  if (!title) { statusEl.textContent = '⚠ Введи название цели'; return; }
+  if (!target || target <= 0) { statusEl.textContent = '⚠ Укажи сумму цели больше нуля'; return; }
+  const cfg = { title, target };
+  applyGoalConfig(cfg);
+  try { localStorage.setItem('d37_goal', JSON.stringify(cfg)); } catch(e) {}
+  if (sbClient && currentRole === 'admin') {
+    try {
+      await sbClient.from('site_config').upsert([{ key: 'goal', value: JSON.stringify(cfg) }]);
+      statusEl.textContent = '✅ Сохранено!';
+    } catch(e) {
+      statusEl.textContent = '⚠ Применено локально, но не сохранилось на сервер';
+    }
+  } else {
+    statusEl.textContent = '✅ Применено (локально)';
+  }
+  setTimeout(()=>statusEl.textContent='', 3000);
+}
+
+// ═══════════════════════════════════════
+//  ОБЩИЕ ФУНКЦИИ ОТКРЫТИЯ/ЗАКРЫТИЯ ПАНЕЛИ "⚙️ НАСТРОЙКИ САЙТА"
+// ═══════════════════════════════════════
+function openSettingsAdmin(){
+  renderScheduleAdminRows();
+  document.getElementById('goalAdminTitle').value = goalTitleText;
+  document.getElementById('goalAdminTarget').value = goalMaxVal;
+  document.getElementById('settingsAdminModal').style.display = 'flex';
+}
 
 // ═══════════════════════════════════════
 //  GOOGLE TRANSLATE
@@ -2930,6 +3111,20 @@ const DA_AUTH_URL = `/api/donations`; // Vercel serverless
 async function loadLeaderboard() {
   const el = document.getElementById('lbContent');
   el.innerHTML = `<div class="lb-loading"><div class="spinner"></div>Загрузка...</div>`;
+
+  // "Топ чата" считается из Supabase (сообщения) и к DonationAlerts вообще
+  // не относится. БАГ: раньше эта вкладка всё равно шла через тот же путь,
+  // что "Топ донатов"/"Последние" — если DonationAlerts не авторизован или
+  // API упало, вместо топа чата показывался логин-промпт DA или демо-донаты.
+  // Обрываем здесь, до всякого fetch('/api/donations').
+  if (lbTab === 'chat') {
+    document.getElementById('lbAuthStatus').textContent = '';
+    document.getElementById('lbAuthBtn').style.display = 'none';
+    document.getElementById('lbRefreshBtn').style.display = 'inline-flex';
+    el.innerHTML = renderChatTop();
+    return;
+  }
+
   try {
     const r = await fetch('/api/donations');
     if (r.status === 401) {
@@ -2937,14 +3132,18 @@ async function loadLeaderboard() {
       showLbLogin(d.auth_url);
       return;
     }
+    if (r.status !== 200) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     document.getElementById('lbAuthStatus').textContent = '✅ Подключено';
     document.getElementById('lbRefreshBtn').style.display = 'inline-flex';
     document.getElementById('lbAuthBtn').style.display = 'none';
     renderLb(data, lbTab);
   } catch(e) {
-    // Локально — показываем демо
-    renderLbDemo();
+    // БАГ: тут раньше был renderLbDemo() — показывал ВЫДУМАННЫХ донатеров
+    // (SuperFan, GamerPro...) на любую ошибку API, не только когда не
+    // авторизован. С маленькой жёлтой подписью "демо" — легко принять за
+    // настоящих донатеров. Теперь честная ошибка вместо выдумки.
+    renderLbError();
   }
 }
 
@@ -2961,27 +3160,28 @@ function showLbLogin(authUrl) {
   </div>`;
 }
 
-function lbLogin() {
-  window.location.href = `https://www.donationalerts.com/oauth/authorize?client_id=19389&redirect_uri=https://dan4ik37.vercel.app/api/auth&response_type=code&scope=oauth-donation-index+oauth-user-show`;
+async function lbLogin() {
+  // БАГ: тут был жёстко зашитый client_id=19389 — а api/auth.js обменивает
+  // код на токен под client_id из DA_CLIENT_ID (=19366, см. api/donations.js).
+  // DonationAlerts выдаёт code под ОДНО приложение, обмен шёл под ДРУГОЕ —
+  // это почти всегда падает как invalid_client. Теперь просто спрашиваем
+  // актуальную ссылку у бэкенда (он — единственный источник правды про
+  // client_id), а не собираем её тут по памяти.
+  try {
+    const r = await fetch('/api/donations');
+    if (r.status === 401) {
+      const d = await r.json();
+      if (d.auth_url) { window.location.href = d.auth_url; return; }
+    }
+  } catch(e) {}
+  document.getElementById('lbAuthStatus').textContent = '⚠ Не удалось получить ссылку авторизации';
 }
 
-function renderLbDemo() {
-  // Демо данные пока нет авторизации
-  const demo = {
-    leaderboard: [
-      {username:'SuperFan',total:2500,count:5,currency:'RUB'},
-      {username:'Аноним',total:1000,count:3,currency:'RUB'},
-      {username:'GamerPro',total:750,count:2,currency:'RUB'},
-      {username:'Друг',total:500,count:1,currency:'RUB'},
-      {username:'Зритель',total:200,count:4,currency:'RUB'},
-    ],
-    donations: [
-      {username:'SuperFan',amount:500,currency:'RUB',message:'Удачи на стриме!',created:'2026-06-30'},
-      {username:'GamerPro',amount:250,currency:'RUB',message:'Лучший стример!',created:'2026-06-29'},
-      {username:'Аноним',amount:100,currency:'RUB',message:'',created:'2026-06-28'},
-    ]
-  };
-  document.getElementById('lbContent').innerHTML = `<div style="padding:.6rem 1rem;font-size:.68rem;color:rgba(255,200,0,.7);background:rgba(255,200,0,.05);border-bottom:1px solid rgba(255,200,0,.1)">⚠ Демо-данные · <a href="#" onclick="lbLogin()" style="color:inherit;text-decoration:underline">Войти через DA</a> для реального топа</div>` + renderLbHtml(demo, lbTab);
+function renderLbError() {
+  document.getElementById('lbAuthStatus').textContent = '⚠ Ошибка';
+  document.getElementById('lbAuthBtn').style.display = 'none';
+  document.getElementById('lbRefreshBtn').style.display = 'inline-flex';
+  document.getElementById('lbContent').innerHTML = `<div class="empty-state"><span class="empty-state-icon">⚠️</span><div class="empty-state-title">Не удалось загрузить донаты</div><div class="empty-state-text">Проблема с API DonationAlerts или сервером. Попробуй нажать «↻ Обновить» через минуту.</div></div>`;
 }
 
 function renderLb(data, tab) {
@@ -3056,7 +3256,13 @@ function switchLbTab(tab, btn) {
 async function loadGoalFromDA() {
   try {
     const r = await fetch('/api/donations');
-    if (r.status !== 200) { initGoalBar(0); return; }
+    if (r.status !== 200) {
+      // БАГ: раньше молча показывал 0 — от "донатов правда пока нет"
+      // не отличить, что вообще-то сломан /api/donations (напр. 401/500).
+      initGoalBar(0);
+      document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge" style="background:rgba(255,200,0,.1);color:rgba(255,200,0,.8);border-color:rgba(255,200,0,.2)">⚠ Нет связи с DonationAlerts (HTTP ${r.status})</span>`;
+      return;
+    }
     const data = await r.json();
     if (!data.donations?.length) { initGoalBar(0); return; }
     // Считаем общую сумму рублёвых донатов
@@ -3074,6 +3280,7 @@ async function loadGoalFromDA() {
     }
   } catch(e) {
     initGoalBar(0);
+    document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge" style="background:rgba(255,200,0,.1);color:rgba(255,200,0,.8);border-color:rgba(255,200,0,.2)">⚠ Нет связи с DonationAlerts</span>`;
   }
 }
 
@@ -3330,6 +3537,8 @@ async function doGlobalLogout() {
   document.querySelectorAll('.msg-del-btn,.msg-ban-btn').forEach(b=>b.style.display='');
   const pollBtn = document.getElementById('pollEditBtn');
   if (pollBtn) pollBtn.style.display = 'none';
+  document.getElementById('schedEditBtn')?.style.setProperty('display','none');
+  document.getElementById('goalEditBtn')?.style.setProperty('display','none');
   // Статус-бар ("режим модерации активен" и т.п.) не скрывался сам —
   // висел до перезагрузки страницы. Прячем при выходе явно.
   const statusBar = document.getElementById('chatStatusBar');
@@ -3365,11 +3574,11 @@ function showGlobalProfile() {
     { icon: '💬', label: 'Просмотр чата', active: true },
     { icon: '🗑', label: 'Удаление сообщений', active: role === 'admin' || role === 'moderator' },
     { icon: '🔨', label: 'Бан пользователей', active: role === 'admin' || role === 'moderator' },
-    { icon: '🗳️', label: 'Редактор опросов', active: role === 'admin' },
-    { icon: '⚙', label: 'Настройки сайта', active: role === 'admin' },
+    { icon: '🗳️', label: 'Редактор опросов', active: role === 'admin', action: 'openPollAdmin()' },
+    { icon: '⚙', label: 'Настройки сайта', active: role === 'admin', action: 'openSettingsAdmin()' },
   ];
   document.getElementById('gauthPerms').innerHTML = perms.map(p =>
-    `<div class="gauth-perm${p.active?' active':''}">
+    `<div class="gauth-perm${p.active?' active':''}"${p.active&&p.action?` onclick="${p.action};closeGlobalAuth()" style="cursor:pointer"`:''}>
       <span class="gauth-perm-icon">${p.active ? '✅' : '🔒'}</span>
       <span>${p.label}</span>
     </div>`
@@ -3518,6 +3727,8 @@ renderPoll();
 loadLeaderboard();
 loadGoalFromDA();
 setTimeout(loadPollsFromDB, 2000);
+setTimeout(loadScheduleFromDB, 2000);
+setTimeout(loadGoalConfigFromDB, 2000);
 initChat();
 initPerfMode();
 // loadYT() и Twitch-плеер теперь грузятся только при реальном заходе на
@@ -3616,6 +3827,30 @@ window.addEventListener('hashchange', ()=>showPage(currentRoute()));
 showPage(currentRoute());
 
 // ═══════════════════════════════════════
+//  РЕЗУЛЬТАТ OAuth DonationAlerts (?da_auth=success / ?da_error=...)
+//  БАГ: api/auth.js редиректил сюда, но фронтенд эти параметры вообще не
+//  читал — человек молча оказывался на главной без единого слова о том,
+//  получилось подключение или нет (а если не получилось — почему).
+// ═══════════════════════════════════════
+(function handleDAAuthRedirect(){
+  const params = new URLSearchParams(location.search);
+  const daAuth = params.get('da_auth');
+  const daError = params.get('da_error');
+  if (!daAuth && !daError) return;
+  history.replaceState({}, '', location.pathname + location.search.replace(/[?&]da_(auth|error)=[^&]*/g,'').replace(/^&/,'?') + location.hash);
+  location.hash = '#/donate';
+  setTimeout(() => {
+    const statusEl = document.getElementById('lbAuthStatus');
+    if (daAuth === 'success') {
+      if (statusEl) statusEl.textContent = '✅ Подключено';
+    } else if (daError) {
+      if (statusEl) statusEl.textContent = '⚠ Ошибка входа';
+      document.getElementById('lbContent').innerHTML = `<div class="empty-state"><span class="empty-state-icon">⚠️</span><div class="empty-state-title">Не удалось подключить DonationAlerts</div><div class="empty-state-text">Код ошибки: ${esc(daError)}. Попробуй ещё раз через «Войти через DonationAlerts».</div></div>`;
+    }
+  }, 300);
+})();
+
+// ═══════════════════════════════════════
 //  ГОРЯЧИЕ КЛАВИШИ (десктоп) — переключение страниц без перезагрузки
 //  Цифры 1–8 = прямой переход, стрелки ← → = соседняя страница по порядку PAGES
 // ═══════════════════════════════════════
@@ -3626,7 +3861,7 @@ function isTypingContext(){
   return false;
 }
 function isModalOpen(){
-  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal'].some(id=>{
+  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal','settingsAdminModal'].some(id=>{
     const el=document.getElementById(id);
     return el && getComputedStyle(el).display!=='none';
   });
