@@ -5,9 +5,14 @@ export default async function handler(req, res) {
   const token = (req.headers.cookie||'').match(/da_token=([^;]+)/)?.[1];
 
   if (!token) {
-    // Даём URL для авторизации
+    // Даём URL для авторизации.
+    // БАГ (найден и исправлен): раньше client_id был захардкожен здесь как
+    // '19366', а фронтенд (lbLogin()) отдельно хардкодил '19389' — два
+    // разных значения в двух местах, легко разъехаться. Теперь оба места
+    // (тут и в api/auth.js) читают ОДНУ и ту же переменную окружения —
+    // единственный источник правды.
     const p = new URLSearchParams({
-      client_id:     '19366',
+      client_id:     process.env.DA_CLIENT_ID,
       redirect_uri:  'https://dan4ik37.vercel.app/api/auth',
       response_type: 'code',
       scope:         'oauth-donation-index oauth-user-show',
