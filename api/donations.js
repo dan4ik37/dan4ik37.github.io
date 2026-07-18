@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       client_id:     process.env.DA_CLIENT_ID,
       redirect_uri:  'https://dan4ik37.vercel.app/api/auth',
       response_type: 'code',
-      scope:         'oauth-donation-index oauth-user-show',
+      scope:         'oauth-donation-index oauth-user-show oauth-donation-subscribe',
     });
     return res.status(401).json({
       error: 'not_authorized',
