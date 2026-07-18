@@ -858,6 +858,16 @@ body.high .avatar::before{
 .chat-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
 @media(max-width:768px){.chat-toast{bottom:calc(58px + env(safe-area-inset-bottom) + .8rem)}}
 
+/* ── ЖИВОЙ АЛЕРТ О ДОНАТЕ (Centrifugo, только сессия админа) ── */
+.donation-alert{position:fixed;top:1.2rem;left:50%;transform:translateX(-50%) translateY(-30px) scale(.95);display:flex;align-items:center;gap:.9rem;background:linear-gradient(135deg,#1a1024,#16161f);border:1.5px solid rgba(255,45,85,.4);padding:1rem 1.6rem;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.7),0 0 40px rgba(255,45,85,.15);z-index:9600;opacity:0;pointer-events:none;transition:opacity .35s ease,transform .35s ease;max-width:90vw}
+.donation-alert.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
+.donation-alert-icon{font-size:2rem;flex-shrink:0;animation:donationBounce 1s ease infinite}
+@keyframes donationBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.donation-alert-title{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;letter-spacing:1px;color:#fff;margin-bottom:.15rem}
+.donation-alert-title strong{color:var(--accent)}
+.donation-alert-msg{font-size:.76rem;color:var(--muted);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.low .donation-alert-icon{animation:none}
+
 /* ── ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (напр. выход) ── */
 .confirm-box{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:1.8rem;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.6)}
 .confirm-msg{font-size:.88rem;color:var(--text);line-height:1.5;margin-bottom:1.3rem}
@@ -970,6 +980,15 @@ body.high .avatar::before{
 <!-- ЧАТ-ТОСТ -->
 <div class="chat-toast" id="chatToast" onclick="location.hash='#/chat'">
   <span>💬</span><span>Новое сообщение в чате</span>
+</div>
+
+<!-- ЖИВОЙ АЛЕРТ О ДОНАТЕ (только для админа, пока открыт DonationAlerts) -->
+<div class="donation-alert" id="donationAlert">
+  <div class="donation-alert-icon">🎉</div>
+  <div class="donation-alert-body">
+    <div class="donation-alert-title" id="donationAlertTitle"></div>
+    <div class="donation-alert-msg" id="donationAlertMsg"></div>
+  </div>
 </div>
 
 <!-- ПРОГРЕСС БАР -->
@@ -2264,6 +2283,7 @@ async function onAuthStateChange(user) {
       if (editBtn) editBtn.style.display = 'inline-flex';
       document.getElementById('schedEditBtn')?.style.setProperty('display','inline-flex');
       document.getElementById('goalEditBtn')?.style.setProperty('display','inline-flex');
+      initDonationAlerts();
     }
     // Раньше здесь chatNick не менялся, и в чат уходило "Гость1234 [ADMIN]" —
     // логин никак не влиял на то, под каким именем реально пишешь сообщения.
@@ -2919,6 +2939,118 @@ function openSettingsAdmin(){
 }
 
 // ═══════════════════════════════════════
+//  ЖИВЫЕ АЛЕРТЫ О ДОНАТЕ — Centrifugo WebSocket
+//  api/socket-token.js существовал, но нигде не вызывался — мёртвый код.
+//  Протокол подключения (donationalerts.com/apidoc#introduction__centrifugo):
+//   1. GET /api/socket-token            -> socket_token
+//   2. WS wss://centrifugo.donationalerts.com/connection/websocket
+//      -> отправить {params:{token:socket_token}, id:1}
+//      <- получить {result:{client:<uuid>}}
+//   3. GET /api/socket-token?client=<uuid> -> channels:[{channel,token}]
+//   4. Для каждого канала: {params:{channel,token}, method:1, id:2}
+//   5. Слушать входящие сообщения с donation-данными
+//
+//  Работает ТОЛЬКО в сессии самого админа (нужна da_token-кука, которая
+//  появляется только после его собственного входа через DonationAlerts) —
+//  это личное уведомление "на второй монитор", а не алерт для всех
+//  посетителей сайта: у serverless-функций Vercel нет способа держать
+//  постоянное соединение и транслировать события всем разом без отдельного
+//  постоянно работающего бэкенда.
+// ═══════════════════════════════════════
+let donationWS = null;
+let donationWSReconnectTimer = null;
+let donationMsgId = 1;
+let donationBroadcastChannel = null;
+
+function showDonationAlert(username, amount, currency, message){
+  const el = document.getElementById('donationAlert');
+  if (!el) return;
+  document.getElementById('donationAlertTitle').innerHTML = `<strong>${esc(username||'Аноним')}</strong> задонатил ${Math.round(amount)} ${esc(currency||'RUB')}`;
+  document.getElementById('donationAlertMsg').textContent = message || '';
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), 6000);
+  // Обновляем цифры на странице, раз уж знаем, что появился новый донат
+  if (typeof loadGoalFromDA === 'function') loadGoalFromDA();
+  if (document.getElementById('leaderboard')?.style.display !== 'none' && typeof loadLeaderboard === 'function') loadLeaderboard();
+}
+
+// ═══════════════════════════════════════
+//  ПУБЛИЧНАЯ ТРАНСЛЯЦИЯ ВСЕМ ПОСЕТИТЕЛЯМ (Supabase Broadcast)
+//  У serverless-функций Vercel нет способа держать одно соединение и
+//  разослать событие разом всем — поэтому ретранслятором служит открытая
+//  вкладка самого админа: когда ЕЙ приходит донат по Centrifugo, она
+//  публикует его в Supabase (уже подключён для чата, тот же sbClient),
+//  а оттуда его в реальном времени получают все остальные посетители.
+//  Ограничение: работает, только пока у админа открыт сайт — например,
+//  во время стрима. Постоянно живущего сервера для 24/7-ретрансляции нет.
+// ═══════════════════════════════════════
+function initPublicDonationBroadcastListener(){
+  if (!sbClient || donationBroadcastChannel) return;
+  donationBroadcastChannel = sbClient
+    .channel('donation-alerts', { config: { broadcast: { self: false } } })
+    .on('broadcast', { event: 'donation' }, (payload) => {
+      const d = payload.payload || {};
+      showDonationAlert(d.username, d.amount, d.currency, d.message);
+    })
+    .subscribe();
+}
+function broadcastDonationToVisitors(username, amount, currency, message){
+  if (!donationBroadcastChannel) return;
+  donationBroadcastChannel.send({ type: 'broadcast', event: 'donation', payload: { username, amount, currency, message } });
+}
+
+async function initDonationAlerts(){
+  if (currentRole !== 'admin' || donationWS) return;
+  try {
+    const r = await fetch('/api/socket-token');
+    if (r.status !== 200) return; // не DA-авторизован в этой сессии — тихо выходим
+    const { socket_token } = await r.json();
+    if (!socket_token) return;
+
+    const ws = new WebSocket('wss://centrifugo.donationalerts.com/connection/websocket');
+    donationWS = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ params: { token: socket_token }, id: donationMsgId++ }));
+    };
+
+    ws.onmessage = async (evt) => {
+      let msg;
+      try { msg = JSON.parse(evt.data); } catch(e) { return; }
+
+      // Шаг 2 ответа: получили client UUID — просим бэкенд подписать нас на канал
+      if (msg.result?.client && !msg.result?.channel) {
+        try {
+          const r2 = await fetch('/api/socket-token?client=' + encodeURIComponent(msg.result.client));
+          const d2 = await r2.json();
+          (d2.channels || []).forEach(ch => {
+            ws.send(JSON.stringify({ params: { channel: ch.channel, token: ch.token }, method: 1, id: donationMsgId++ }));
+          });
+        } catch(e) {}
+        return;
+      }
+
+      // Входящее событие доната — показываем себе И транслируем остальным
+      const donation = msg.result?.data?.data || msg.result?.data;
+      if (donation && msg.result?.channel?.startsWith('$alerts:donation_')) {
+        showDonationAlert(donation.username, donation.amount, donation.currency, donation.message);
+        broadcastDonationToVisitors(donation.username, donation.amount, donation.currency, donation.message);
+      }
+    };
+
+    ws.onclose = () => {
+      donationWS = null;
+      // Переподключение с задержкой — админ может держать сайт открытым часами на стриме
+      clearTimeout(donationWSReconnectTimer);
+      donationWSReconnectTimer = setTimeout(initDonationAlerts, 10000);
+    };
+    ws.onerror = () => { try { ws.close(); } catch(e) {} };
+  } catch(e) {
+    // Нет сети/DA недоступен — просто не показываем живые алерты, это не критично
+  }
+}
+
+// ═══════════════════════════════════════
 //  GOOGLE TRANSLATE
 // ═══════════════════════════════════════
 const LANGS=[['af','Afrikaans'],['sq','Shqip'],['am','አማርኛ'],['ar','العربية'],['hy','Հայերեն'],['az','Azərbaycan'],['eu','Euskara'],['be','Беларуская'],['bn','বাংলা'],['bs','Bosanski'],['bg','Български'],['ca','Català'],['ceb','Cebuano'],['zh-CN','中文(简体)'],['zh-TW','中文(繁體)'],['co','Corsu'],['hr','Hrvatski'],['cs','Čeština'],['da','Dansk'],['nl','Nederlands'],['en','English'],['eo','Esperanto'],['et','Eesti'],['fi','Suomi'],['fr','Français'],['fy','Frysk'],['gl','Galego'],['ka','ქართული'],['de','Deutsch'],['el','Ελληνικά'],['gu','ગુજરાતી'],['ht','Kreyòl ayisyen'],['ha','Hausa'],['haw','ʻŌlelo Hawaiʻi'],['iw','עברית'],['hi','हिन्दी'],['hmn','Hmoob'],['hu','Magyar'],['is','Íslenska'],['ig','Igbo'],['id','Bahasa Indonesia'],['ga','Gaeilge'],['it','Italiano'],['ja','日本語'],['jw','Basa Jawa'],['kn','ಕನ್ನಡ'],['kk','Қазақша'],['km','ភាសាខ្មែរ'],['ko','한국어'],['ku','Kurdî'],['ky','Кыргызча'],['lo','ພາສາລາວ'],['la','Latina'],['lv','Latviešu'],['lt','Lietuvių'],['lb','Lëtzebuergesch'],['mk','Македонски'],['mg','Malagasy'],['ms','Bahasa Melayu'],['ml','മലയാളം'],['mt','Malti'],['mi','Te Reo Māori'],['mr','मराठी'],['mn','Монгол'],['my','မြန်မာဘာသာ'],['ne','नेपाली'],['no','Norsk'],['ny','Chichewa'],['ps','پښتو'],['fa','فارسی'],['pl','Polski'],['pt','Português'],['pa','ਪੰਜਾਬੀ'],['ro','Română'],['ru','Русский'],['sm','Gagana Samoa'],['gd','Gàidhlig'],['sr','Српски'],['st','Sesotho'],['sn','ChiShona'],['sd','سنڌي'],['si','සිංහල'],['sk','Slovenčina'],['sl','Slovenščina'],['so','Soomaali'],['es','Español'],['su','Basa Sunda'],['sw','Kiswahili'],['sv','Svenska'],['tl','Filipino'],['tg','Тоҷикӣ'],['ta','தமிழ்'],['te','తెలుగు'],['th','ภาษาไทย'],['tr','Türkçe'],['uk','Українська'],['ur','اردو'],['uz','O\'zbek'],['vi','Tiếng Việt'],['cy','Cymraeg'],['xh','isiXhosa'],['yi','ייִדיש'],['yo','Yorùbá'],['zu','isiZulu']];
@@ -3518,6 +3650,11 @@ async function doGlobalLogout() {
   if (sbClient) await sbClient.auth.signOut();
   currentUser = null; currentRole = null; currentProfile = null;
 
+  // Живые алерты о донате имеют смысл только в сессии админа — закрываем
+  // сокет и перестаём переподключаться
+  clearTimeout(donationWSReconnectTimer);
+  if (donationWS) { try { donationWS.close(); } catch(e) {} donationWS = null; }
+
   // Сбрасываем и чат-идентичность — иначе в чате остаётся старый ник
   // администратора, но уже без роли, и сообщения пойдут от его имени как "guest".
   chatNick = '';
@@ -3731,6 +3868,9 @@ setTimeout(loadScheduleFromDB, 2000);
 setTimeout(loadGoalConfigFromDB, 2000);
 initChat();
 initPerfMode();
+// Слушатель публичных алертов о донате — для ВСЕХ посетителей, не только
+// админа (сама трансляция события идёт из сессии админа, см. выше)
+initPublicDonationBroadcastListener();
 // loadYT() и Twitch-плеер теперь грузятся только при реальном заходе на
 // #/home — см. initHomeMedia(), вызывается из showPage(). Раньше грузились
 // всегда, даже если открыли сайт сразу на #/chat — тратили квоту YouTube API
