@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://dan4ik37.vercel.app/sitemap.xml
