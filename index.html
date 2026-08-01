@@ -518,8 +518,27 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 .chat-auth-btn{font-size:.8rem;color:var(--muted);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;cursor:pointer;opacity:.7;transition:opacity .2s,background .2s;padding:.3rem .45rem;line-height:1;flex-shrink:0}
 .chat-auth-btn:hover{opacity:1;color:var(--text);background:rgba(255,255,255,.14)}
 .chat-msg{position:relative}
+.chat-bubble-col{display:flex;flex-direction:column;gap:.3rem;min-width:0;flex:1}
 .msg-del-btn{position:absolute;top:.4rem;right:.4rem;background:rgba(255,45,85,.15);border:1px solid rgba(255,45,85,.3);color:var(--accent);border-radius:6px;width:22px;height:22px;font-size:.65rem;cursor:pointer;display:none;align-items:center;justify-content:center;transition:background .2s;line-height:1}
 .msg-ban-btn{position:absolute;top:.4rem;right:1.8rem;background:rgba(255,150,0,.1);border:1px solid rgba(255,150,0,.3);color:#ffa500;border-radius:6px;width:22px;height:22px;font-size:.65rem;cursor:pointer;display:none;align-items:center;justify-content:center;transition:background .2s;line-height:1}
+/* ── РЕАКЦИИ НА КОНКРЕТНОЕ СООБЩЕНИЕ (как в Discord) ──
+   Раньше реакции были общими на весь чат и уходили отдельными
+   "сообщениями" в ленту — теперь привязаны к конкретному сообщению,
+   показываются бейджами под ним, с группировкой по эмодзи и счётчиком. */
+.msg-react-btn{position:absolute;top:.4rem;right:3.2rem;background:rgba(255,255,255,.06);border:1px solid var(--border);color:var(--muted);border-radius:6px;width:22px;height:22px;font-size:.7rem;cursor:pointer;align-items:center;justify-content:center;line-height:1;opacity:0;transition:opacity .15s,background .15s}
+.chat-msg:hover .msg-react-btn{opacity:1;display:flex}
+.msg-react-btn:hover{background:rgba(255,255,255,.14);color:var(--text)}
+@media(hover:none){.msg-react-btn{opacity:1;display:flex}}
+.msg-reactions{display:flex;flex-wrap:wrap;gap:.3rem}
+.msg-reactions:empty{display:none}
+.react-badge{display:inline-flex;align-items:center;gap:.3rem;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:50px;padding:.15rem .55rem;font-size:.7rem;color:var(--text);cursor:pointer;transition:all .15s}
+.react-badge:hover{background:rgba(255,255,255,.12)}
+.react-badge.mine{background:rgba(145,71,255,.16);border-color:rgba(145,71,255,.4)}
+.custom-emoji-img{width:16px;height:16px;object-fit:contain;vertical-align:middle}
+.react-picker-pop{position:fixed;display:none;grid-template-columns:repeat(4,1fr);gap:.2rem;background:#16161f;border:1px solid var(--border);border-radius:14px;padding:.5rem;box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:800}
+.react-picker-pop.open{display:grid}
+.react-picker-pop button{background:none;border:none;font-size:1.2rem;padding:.4rem;border-radius:8px;cursor:pointer;transition:background .15s;line-height:1}
+.react-picker-pop button:hover{background:rgba(255,255,255,.1)}
 .is-mod .msg-del-btn,.is-mod .msg-ban-btn{display:flex}
 .msg-del-btn:hover{background:rgba(255,45,85,.4)}
 .msg-ban-btn:hover{background:rgba(255,150,0,.3)}
@@ -793,15 +812,6 @@ body.high .avatar::before{
 .poll-new-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── CHAT REACTIONS ── */
-.chat-reactions{display:flex;align-items:center;gap:.25rem;padding:.35rem .8rem .45rem;background:rgba(255,255,255,.012);border-top:1px solid rgba(255,255,255,.04);flex-wrap:nowrap;overflow-x:auto;flex-shrink:0}
-.chat-reactions::-webkit-scrollbar{display:none}
-.react-btn{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:50px;padding:.18rem .5rem;font-size:.78rem;cursor:pointer;transition:all .18s;display:inline-flex;align-items:center;gap:.2rem;flex-shrink:0}
-.react-btn:hover{background:rgba(255,45,85,.1);border-color:rgba(255,45,85,.25);transform:scale(1.1)}
-.react-btn .react-count{font-size:.58rem;color:var(--muted);font-weight:700;min-width:.8rem}
-.react-btn.reacted{background:rgba(255,45,85,.12);border-color:rgba(255,45,85,.35)}
-.react-pop{position:fixed;pointer-events:none;font-size:1.6rem;animation:reactFly .9s ease forwards;z-index:9999}
-@keyframes reactFly{0%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-90px) scale(1.6)}}
-
 /* ── PWA BANNER ── */
 #pwaBanner{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);z-index:8000;background:var(--card);border:1px solid rgba(255,45,85,.25);border-radius:16px;padding:1rem 1.4rem;display:none;align-items:center;gap:1rem;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:380px;width:calc(100% - 2rem)}
 #pwaBanner.show{display:flex}
@@ -1338,15 +1348,6 @@ body.low .donation-alert-icon{animation:none}
             <button class="chat-send" aria-label="Отправить сообщение" onclick="sendMsg()">→</button>
           </div>
           <!-- Быстрые реакции снизу -->
-          <div class="chat-reactions" id="chatReactions">
-            <span style="font-size:.6rem;color:var(--muted);letter-spacing:.5px;align-self:center;margin-right:.2rem">Реакции:</span>
-            <button class="react-btn" data-emoji="🔥" aria-label="Реакция огонь" onclick="sendReaction('🔥',this)">🔥<span class="react-count" id="rc-fire">0</span></button>
-            <button class="react-btn" data-emoji="❤" aria-label="Реакция сердце" onclick="sendReaction('❤',this)">❤<span class="react-count" id="rc-heart">0</span></button>
-            <button class="react-btn" data-emoji="😂" aria-label="Реакция смех" onclick="sendReaction('😂',this)">😂<span class="react-count" id="rc-lol">0</span></button>
-            <button class="react-btn" data-emoji="👍" aria-label="Реакция лайк" onclick="sendReaction('👍',this)">👍<span class="react-count" id="rc-like">0</span></button>
-            <button class="react-btn" data-emoji="💀" aria-label="Реакция скелет" onclick="sendReaction('💀',this)">💀<span class="react-count" id="rc-dead">0</span></button>
-            <button class="react-btn" data-emoji="🎮" aria-label="Реакция геймпад" onclick="sendReaction('🎮',this)">🎮<span class="react-count" id="rc-game">0</span></button>
-          </div>
         </div>
       </div>
 
@@ -2248,7 +2249,7 @@ function closeModal(){
   const banner = document.getElementById('subBanner');
   if (banner) banner.classList.add('show');
 }
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAnyOpenModal()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeReactionPicker();closeAnyOpenModal();}});
 
 // ═══════════════════════════════════════
 //  ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (общий диалог, напр. для выхода из аккаунта)
@@ -2448,6 +2449,7 @@ async function loadRecentMessages() {
     if (data && data.length) {
       document.getElementById('chatMsgs').innerHTML = '';
       data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role));
+      loadReactionsFor(data.map(m => m.id));
     }
   } catch(e) { console.warn('loadMessages:', e); }
 }
@@ -2603,6 +2605,7 @@ function initChat(){
     });
     Promise.all([loadBans(), loadRecentMessages()]).then(() => {
       subscribeRealtime();
+      subscribeReactionsRealtime();
       const msgs = document.getElementById('chatMsgs');
       if (!msgs.children.length) {
         demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
@@ -2661,12 +2664,16 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole){
   div.dataset.nick=nick;
   div.innerHTML=`
     <div class="chat-avatar" style="background:${color||'var(--accent)'}">${initials}</div>
-    <div class="chat-bubble">
-      <div class="chat-user" style="color:${color||'var(--accent)'}">${esc(nick)}${badge}</div>
-      <div class="chat-text">${esc(text)}</div>
-      <div class="chat-time">${time}</div>
+    <div class="chat-bubble-col">
+      <div class="chat-bubble">
+        <div class="chat-user" style="color:${color||'var(--accent)'}">${esc(nick)}${badge}</div>
+        <div class="chat-text">${esc(text)}</div>
+        <div class="chat-time">${time}</div>
+      </div>
+      ${msgId?`<div class="msg-reactions" id="mr-${msgId}"></div>`:''}
     </div>
-    ${msgId?`<button class="msg-ban-btn" aria-label="Забанить пользователя" onclick="banNick(this.closest('.chat-msg').dataset.nick,this.closest('.chat-msg'))" title="Забанить">🔨</button>
+    ${msgId?`<button class="msg-react-btn" aria-label="Поставить реакцию" onclick="openReactionPicker(${msgId},this)" title="Реакция">😊</button>
+    <button class="msg-ban-btn" aria-label="Забанить пользователя" onclick="banNick(this.closest('.chat-msg').dataset.nick,this.closest('.chat-msg'))" title="Забанить">🔨</button>
     <button class="msg-del-btn" aria-label="Удалить сообщение" onclick="deleteMsg(${msgId},this.closest('.chat-msg'))" title="Удалить">✕</button>`:''}`;
   msgs.appendChild(div);
   if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100) msgs.scrollTop=msgs.scrollHeight;
@@ -3605,46 +3612,134 @@ async function votePoll(pollId, option, btn) {
 }
 
 // ═══════════════════════════════════════
-//  РЕАКЦИИ В ЧАТЕ
-// ═══════════════════════════════════════
-const REACT_IDS = { '🔥':'fire','❤':'heart','😂':'lol','👍':'like','💀':'dead','🎮':'game' };
-let reactions = JSON.parse(localStorage.getItem('d37_reactions')||'{}');
-let myReacts = new Set(JSON.parse(localStorage.getItem('d37_myreacts')||'[]'));
+//  РЕАКЦИИ НА СООБЩЕНИЯ (как в Discord)
+//  Раньше реакция была общей на весь чат и уходила отдельным "сообщением"
+//  в ленту — засоряло чат и не было понятно, на что именно реагируют.
+//  Теперь реакция привязана к конкретному сообщению (таблица
+//  message_reactions в Supabase), показывается бейджиком под ним с
+//  счётчиком, повторный клик по своей же реакции снимает её.
+//
+//  ЗАДЕЛ ПОД КАСТОМНЫЕ ЭМОДЗИ: каждый элемент REACTION_SET — это
+//  { id, char } для обычных эмодзи. Когда появятся кастомные (картинкой),
+//  для них тот же элемент будет { id, img: 'https://...' } — рендерится
+//  той же функцией renderEmoji(), остальной код (тоггл, бейджи, синхронизация)
+//  трогать не придётся.
+const REACTION_SET = [
+  {id:'fire',char:'🔥'}, {id:'heart',char:'❤️'}, {id:'lol',char:'😂'},
+  {id:'like',char:'👍'}, {id:'dead',char:'💀'}, {id:'game',char:'🎮'},
+  {id:'clap',char:'👏'}, {id:'eyes',char:'👀'},
+];
+function renderEmoji(e){
+  return e.img ? `<img src="${esc(e.img)}" alt=":${esc(e.id)}:" class="custom-emoji-img">` : e.char;
+}
 
-function sendReaction(emoji, btn) {
-  // Анимация
-  const rect = btn.getBoundingClientRect();
-  const pop = document.createElement('div');
-  pop.className = 'react-pop';
-  pop.textContent = emoji;
-  pop.style.left = (rect.left + rect.width/2 - 15) + 'px';
-  pop.style.top = (rect.top - 10) + 'px';
-  document.body.appendChild(pop);
-  setTimeout(() => pop.remove(), 900);
+let messageReactions = {}; // { msgId: { emoji: Set(nick) } }
+let reactionsChannel = null;
+let reactPickerTargetMsg = null;
 
-  // Счётчик
-  const id = REACT_IDS[emoji];
-  reactions[emoji] = (reactions[emoji]||0) + 1;
-  const already = myReacts.has(emoji);
-  if (!already) { myReacts.add(emoji); btn.classList.add('reacted'); }
-  try { localStorage.setItem('d37_reactions', JSON.stringify(reactions)); localStorage.setItem('d37_myreacts', JSON.stringify([...myReacts])); } catch(e) {}
-  updateReactionCounts();
+function addReactionToState(msgId, emoji, nick){
+  if (!messageReactions[msgId]) messageReactions[msgId] = {};
+  if (!messageReactions[msgId][emoji]) messageReactions[msgId][emoji] = new Set();
+  messageReactions[msgId][emoji].add(nick);
+}
+function removeReactionFromState(msgId, emoji, nick){
+  messageReactions[msgId]?.[emoji]?.delete(nick);
+}
 
-  // Отправляем в Supabase как сообщение-реакцию
-  if (sbClient && chatNick) {
-    sendMsgToSupabase(chatNick || 'Гость', emoji, 'var(--tw)', 'reaction').catch(()=>{});
+function renderReactionsFor(msgId){
+  const el = document.getElementById(`mr-${msgId}`);
+  if (!el) return;
+  const byEmoji = messageReactions[msgId] || {};
+  const entries = Object.entries(byEmoji).filter(([,nicks]) => nicks.size > 0);
+  el.innerHTML = entries.map(([emoji,nicks]) => {
+    const mine = chatNick && nicks.has(chatNick);
+    const def = REACTION_SET.find(e=>e.char===emoji) || {char:emoji};
+    return `<button class="react-badge${mine?' mine':''}" onclick="toggleReaction(${msgId},'${emoji}')" aria-label="Реакция ${def.id||emoji}, ${nicks.size}${mine?', твоя':''}">${renderEmoji(def)}<span>${nicks.size}</span></button>`;
+  }).join('');
+}
+
+async function loadReactionsFor(msgIds){
+  if (!sbClient || !msgIds.length) return;
+  try {
+    const { data } = await sbClient.from('message_reactions').select('*').in('message_id', msgIds);
+    (data||[]).forEach(r => addReactionToState(r.message_id, r.emoji, r.nick));
+    msgIds.forEach(id => renderReactionsFor(id));
+  } catch(e) {}
+}
+
+async function toggleReaction(msgId, emoji){
+  if (!chatNick) { document.getElementById('chatNickScreen').style.display='flex'; document.getElementById('chatMainInput').style.display='none'; closeReactionPicker(); return; }
+  const already = !!messageReactions[msgId]?.[emoji]?.has(chatNick);
+  // Оптимистично — не ждём ответа сервера, чтобы не было задержки на клик
+  if (already) removeReactionFromState(msgId, emoji, chatNick);
+  else addReactionToState(msgId, emoji, chatNick);
+  renderReactionsFor(msgId);
+  closeReactionPicker();
+  try {
+    if (already) await sbClient.from('message_reactions').delete().match({ message_id: msgId, emoji, nick: chatNick });
+    else await sbClient.from('message_reactions').insert({ message_id: msgId, emoji, nick: chatNick });
+  } catch(e) {
+    // не получилось сохранить на сервере — откатываем локально
+    if (already) addReactionToState(msgId, emoji, chatNick); else removeReactionFromState(msgId, emoji, chatNick);
+    renderReactionsFor(msgId);
   }
 }
 
-function updateReactionCounts() {
-  Object.entries(REACT_IDS).forEach(([emoji, id]) => {
-    const el = document.getElementById(`rc-${id}`);
-    if (el) el.textContent = reactions[emoji]||0;
-    if (myReacts.has(emoji)) {
-      const btn = document.querySelector(`[data-emoji="${emoji}"]`);
-      if (btn) btn.classList.add('reacted');
-    }
-  });
+function buildReactionPicker(){
+  let picker = document.getElementById('reactPickerPop');
+  if (picker) return picker;
+  picker = document.createElement('div');
+  picker.id = 'reactPickerPop';
+  picker.className = 'react-picker-pop';
+  picker.setAttribute('role','menu');
+  picker.setAttribute('aria-label','Выбор реакции');
+  picker.innerHTML = REACTION_SET.map(e =>
+    `<button role="menuitem" aria-label="Поставить реакцию ${e.id}" onclick="toggleReaction(reactPickerTargetMsg,'${e.char}')">${renderEmoji(e)}</button>`
+  ).join('');
+  document.body.appendChild(picker);
+  return picker;
+}
+function openReactionPicker(msgId, triggerBtn){
+  const picker = buildReactionPicker();
+  reactPickerTargetMsg = msgId;
+  const rect = triggerBtn.getBoundingClientRect();
+  const pickerWidth = 168, pickerHeight = 90;
+  // position:fixed — координаты уже относительно вьюпорта, scrollY тут
+  // добавлять НЕ нужно (это правило для position:absolute) — раньше из-за
+  // этого пикер на некоторых страницах уезжал за пределы экрана.
+  let top = rect.bottom + 4;
+  if (top + pickerHeight > window.innerHeight) top = rect.top - pickerHeight - 4;
+  picker.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - pickerWidth - 8)) + 'px';
+  picker.style.top = Math.max(8, top) + 'px';
+  picker.classList.add('open');
+}
+function closeReactionPicker(){
+  document.getElementById('reactPickerPop')?.classList.remove('open');
+  reactPickerTargetMsg = null;
+}
+document.addEventListener('click', (e) => {
+  const picker = document.getElementById('reactPickerPop');
+  if (picker && picker.classList.contains('open') && !picker.contains(e.target) && !e.target.closest('.msg-react-btn')) {
+    closeReactionPicker();
+  }
+});
+
+// Живая синхронизация реакций между всеми, кто сейчас смотрит чат
+function subscribeReactionsRealtime(){
+  if (!sbClient || reactionsChannel) return;
+  reactionsChannel = sbClient
+    .channel('message_reactions_live')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'message_reactions' }, (payload) => {
+      const r = payload.new;
+      addReactionToState(r.message_id, r.emoji, r.nick);
+      renderReactionsFor(r.message_id);
+    })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'message_reactions' }, (payload) => {
+      const r = payload.old;
+      removeReactionFromState(r.message_id, r.emoji, r.nick);
+      renderReactionsFor(r.message_id);
+    })
+    .subscribe();
 }
 
 // ═══════════════════════════════════════
@@ -3985,7 +4080,6 @@ async function loadPollsFromDB() {
 // ═══════════════════════════════════════
 //  INIT новых фич
 // ═══════════════════════════════════════
-updateReactionCounts();
 updatePushBtn();
 updateGlobalAuthBtn();
 renderPoll();
