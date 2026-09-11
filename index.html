@@ -56,6 +56,7 @@
 html{scroll-behavior:smooth;overflow-x:hidden}
 body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
 a{text-decoration:none;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
 
 /* ── КАСТОМНЫЙ СКРОЛЛБАР ПОД ТЕМУ (был системный) ── */
 html{scrollbar-width:thin;scrollbar-color:var(--accent) var(--bg2)}
@@ -63,6 +64,19 @@ html{scrollbar-width:thin;scrollbar-color:var(--accent) var(--bg2)}
 ::-webkit-scrollbar-track{background:var(--bg2)}
 ::-webkit-scrollbar-thumb{background:linear-gradient(var(--accent),var(--accent2));border-radius:6px;border:2px solid var(--bg2)}
 ::-webkit-scrollbar-thumb:hover{background:linear-gradient(var(--accent2),var(--accent))}
+
+/* ── СИСТЕМНАЯ НАСТРОЙКА "УМЕНЬШИТЬ АНИМАЦИЮ" ──
+   Отдельно от внутреннего performance-режима (low/mid/high, который про
+   слабые устройства) — это про людей, которым движение физически мешает
+   (вестибулярная чувствительность). ОС-настройка, наш JS её не трогает и
+   не умеет опрашивать — чистый CSS media query. */
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  .reveal{opacity:1!important;transform:none!important}
+  .avatar{animation:none!important}
+  .avatar-ring{animation:none!important}
+  #particles{display:none!important}
+}
 
 /* ── FIX Google Translate bar pushing content ── */
 .goog-te-banner-frame{display:none!important}
@@ -243,9 +257,8 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .wrap{max-width:1200px;margin:0 auto;padding:5rem 2rem;position:relative;z-index:1}
 .wrap-sm{max-width:1200px;margin:0 auto;padding:1rem 2rem;position:relative;z-index:1}
 .divider{width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,45,85,.2),transparent);margin-bottom:4rem}
-.eyebrow{display:inline-flex;align-items:center;gap:.6rem;font-size:.67rem;font-weight:800;letter-spacing:4px;text-transform:uppercase;color:var(--accent);margin-bottom:.75rem}
-.eyebrow::before{content:'';width:26px;height:2px;background:var(--accent);display:block}
-.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.2rem,5vw,3.8rem);letter-spacing:2px;line-height:1;margin-bottom:2.5rem}
+.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.2rem,5vw,3.8rem);letter-spacing:2px;line-height:1;margin-bottom:2.5rem;position:relative;padding-left:1.1rem}
+.sec-title::before{content:'';position:absolute;left:0;top:.18em;bottom:.14em;width:4px;border-radius:3px;background:linear-gradient(var(--accent),var(--accent2))}
 .sec-title-row{display:flex;align-items:center;flex-wrap:wrap;gap:.8rem;margin-bottom:2.5rem}
 .sec-title-row .sec-title{margin-bottom:0}
 .sec-edit-btn{font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;padding:.4rem 1rem;border-radius:8px;border:1.5px solid rgba(255,45,85,.35);background:rgba(255,45,85,.08);color:var(--accent);cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s;white-space:nowrap}
@@ -698,7 +711,7 @@ body.high .hbtn::after{
 body.high .hbtn:hover::after{opacity:1}
 
 /* ── REVEAL при скролле ── */
-.reveal{opacity:0;transform:translateY(30px);transition:opacity .6s ease,transform .6s ease}
+.reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
 .reveal.visible{opacity:1;transform:translateY(0)}
 /* ── ЛЁГКИЙ FADE МЕЖДУ "СТРАНИЦАМИ" (роутинг) ──
    Раньше смена страницы была мгновенной (display:none/''). !important тут
@@ -1103,7 +1116,6 @@ body.low .donation-alert-icon{animation:none}
 
 <!-- STATS -->
 <div class="wrap reveal" id="stats" style="padding-bottom:2rem">
-  <div class="eyebrow">Статистика</div>
   <h2 class="sec-title">Мои платформы</h2>
   <div class="stats-row">
     <div class="stat-card sc1">
@@ -1146,7 +1158,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- CONTENT -->
 <div class="wrap" id="content" style="padding-top:0">
   <div class="divider"></div>
-  <div class="eyebrow">Смотреть</div>
   <h2 class="sec-title">Видео и стримы</h2>
 
   <!-- TWITCH — плеер всегда на странице; онлайн/офлайн статус показывает сам виджет Twitch.
@@ -1243,7 +1254,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- ABOUT -->
 <div class="wrap reveal" id="about">
   <div class="divider"></div>
-  <div class="eyebrow">Обо мне</div>
   <h2 class="sec-title">Кто такой dan4ik37?</h2>
   <div class="about-grid">
     <div class="about-card"><span class="about-icon">🎮</span><div class="about-title">Игровой контент</div><div class="about-text">Стримлю и снимаю видео с играми. Весёлая атмосфера и живое общение с чатом!</div></div>
@@ -1256,7 +1266,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- SCHEDULE -->
 <div class="wrap reveal" id="schedule">
   <div class="divider"></div>
-  <div class="eyebrow">Расписание</div>
   <div class="sec-title-row">
     <h2 class="sec-title">Когда стримим?</h2>
     <button id="schedEditBtn" class="sec-edit-btn" onclick="openSettingsAdmin()" style="display:none">✏️ Редактировать</button>
@@ -1277,7 +1286,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- SOCIALS -->
 <div class="wrap reveal" id="socials">
   <div class="divider"></div>
-  <div class="eyebrow">Подписывайся</div>
   <h2 class="sec-title">Я везде 🔥</h2>
   <div class="hub-grid">
     <a class="hub-card hc-yt"  href="https://www.youtube.com/@Dan4ik37Yt" target="_blank"><span class="hub-icon">▶</span><div class="hub-name">YouTube</div><div class="hub-handle">@Dan4ik37Yt</div><div class="hub-desc">Видео, нарезки, Shorts</div></a>
@@ -1298,7 +1306,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- DONATE -->
 <div class="wrap reveal" id="donate">
   <div class="divider"></div>
-  <div class="eyebrow">Поддержка</div>
   <h2 class="sec-title">Задонатить dan4ik37 💝</h2>
   <div class="donate-grid">
 
@@ -1335,7 +1342,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- CHAT -->
 <div class="wrap reveal" id="chat" style="padding-top:2rem">
   <div class="divider"></div>
-  <div class="eyebrow">Общение</div>
   <h2 class="sec-title">Живой чат 💬</h2>
   <div class="chat-wrap">
     <div class="chat-header">
@@ -1398,7 +1404,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- ══════════ САУНДБОРД ══════════ -->
 <div class="wrap reveal" id="soundboard">
   <div class="divider"></div>
-  <div class="eyebrow">Интерактив</div>
   <h2 class="sec-title">Саундборд 🎵</h2>
   <div class="sound-vol">
     <label>🔊 Громкость:</label>
@@ -1436,7 +1441,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- ══════════ МИНИ-ИГРА КЛИКЕР ══════════ -->
 <div class="wrap reveal" id="clicker">
   <div class="divider"></div>
-  <div class="eyebrow">Мини-игра</div>
   <h2 class="sec-title">Кликер 🎮</h2>
   <div style="max-width:500px;margin:0 auto">
     <div class="clicker-wrap" id="clickerWrap">
@@ -1459,7 +1463,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- ══════════ ШКАЛА ЦЕЛИ ══════════ -->
 <div class="wrap reveal" id="goalbar">
   <div class="divider"></div>
-  <div class="eyebrow">Цель доната</div>
   <div class="sec-title-row">
     <h2 class="sec-title">Сбор 💝</h2>
     <button id="goalEditBtn" class="sec-edit-btn" onclick="openSettingsAdmin()" style="display:none">✏️ Редактировать</button>
@@ -1487,7 +1490,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- ══════════ ЗАЛ СЛАВЫ ДОНАТЕРОВ ══════════ -->
 <div class="wrap reveal" id="leaderboard">
   <div class="divider"></div>
-  <div class="eyebrow">Поддержка</div>
   <h2 class="sec-title">Зал славы 🏆</h2>
   <div class="lb-wrap">
     <div class="lb-head">
@@ -1517,7 +1519,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- ══════════ ОПРОС ══════════ -->
 <div class="wrap reveal" id="poll">
   <div class="divider"></div>
-  <div class="eyebrow">Голосование</div>
   <div class="sec-title-row">
     <h2 class="sec-title">Опрос 🗳️</h2>
     <button id="pollEditBtn" class="sec-edit-btn tw" onclick="openPollAdmin()" style="display:none">✏️ Редактировать</button>
@@ -1551,7 +1552,6 @@ body.low .donation-alert-icon{animation:none}
 <!-- РЕКЛАМА СЕКЦИЯ -->
 <div class="wrap reveal" id="ads">
   <div class="divider"></div>
-  <div class="eyebrow">Сотрудничество</div>
   <h2 class="sec-title">Реклама 📢</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem">
 
