@@ -201,7 +201,7 @@ async function loadRecentMessages() {
       .limit(50);
     if (data && data.length) {
       document.getElementById('chatMsgs').innerHTML = '';
-      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role));
+      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role, m.user_id));
       loadReactionsFor(data.map(m => m.id));
     }
   } catch(e) { console.warn('loadMessages:', e); }
@@ -235,7 +235,7 @@ function subscribeRealtime() {
       if (m.deleted) return;
       if (bannedNicks.has(m.nick.toLowerCase())) return;
       const isOwn = m.nick === chatNick;
-      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role);
+      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id);
       if (!isOwn && m.role !== 'reaction') showChatToast();
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
@@ -262,7 +262,7 @@ function subscribeRealtime() {
 async function sendMsgToSupabase(nick, text, color, role) {
   if (!sbClient) return false;
   try {
-    const { error } = await sbClient.from('messages').insert([{ nick, text, color, role }]);
+    const { error } = await sbClient.from('messages').insert([{ nick, text, color, role, user_id: currentUser?.id || null }]);
     return !error;
   } catch(e) { return false; }
 }
@@ -422,7 +422,7 @@ function chatLogout() {
   document.getElementById('chatMainInput').style.display = 'none';
 }
 
-function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole){
+function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId){
   const msgs=document.getElementById('chatMsgs');
   const initials=(nick.replace(/[^a-zA-Zа-яА-Я0-9]/g,'')||'?').substring(0,2).toUpperCase();
   const time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
@@ -433,11 +433,14 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole){
   div.className='chat-msg'+(isOwn?' own-msg':'');
   if(msgId) div.dataset.msgid=msgId;
   div.dataset.nick=nick;
+  // Клик по нику/аватарке открывает мини-профиль — только если у автора
+  // есть аккаунт (userId не пустой). У гостей аккаунта нет, смотреть нечего.
+  const profileClick = userId ? `onclick="openMiniProfile('${userId}','${nick.replace(/'/g,"\\'")}',this)" style="cursor:pointer"` : '';
   div.innerHTML=`
-    <div class="chat-avatar" style="background:${color||'var(--accent)'}">${initials}</div>
+    <div class="chat-avatar" style="background:${color||'var(--accent)'}" ${profileClick}>${initials}</div>
     <div class="chat-bubble-col">
       <div class="chat-bubble">
-        <div class="chat-user" style="color:${color||'var(--accent)'}">${esc(nick)}${badge}</div>
+        <div class="chat-user" style="color:${color||'var(--accent)'}" ${profileClick}>${esc(nick)}${badge}</div>
         <div class="chat-text">${renderMessageText(esc(text))}</div>
         <div class="chat-time">${time}</div>
       </div>

@@ -5,14 +5,10 @@ let pushSubscribed = localStorage.getItem('d37_push') === '1';
 
 function updatePushBtn() {
   const btn = document.getElementById('pushBtn');
-  if (!btn) return;
-  if (pushSubscribed) {
-    btn.textContent = '✅ Уведомления включены';
-    btn.classList.add('subscribed');
-  } else {
-    btn.textContent = '🔔 Подписаться на стримы';
-    btn.classList.remove('subscribed');
-  }
+  const profileBtn = document.getElementById('profilePushBtn');
+  const label = pushSubscribed ? '✅ Уведомления включены' : '🔔 Подписаться на стримы';
+  if (btn) { btn.textContent = label; btn.classList.toggle('subscribed', pushSubscribed); }
+  if (profileBtn) profileBtn.textContent = label;
 }
 
 async function togglePush() {

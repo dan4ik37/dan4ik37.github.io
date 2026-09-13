@@ -30,6 +30,7 @@ async function loadLeaderboard() {
     }
     if (r.status !== 200) throw new Error('HTTP ' + r.status);
     const data = await r.json();
+    if (typeof processRecentDonationsForVip === 'function') processRecentDonationsForVip(data.donations);
     document.getElementById('lbAuthStatus').textContent = '✅ Подключено';
     document.getElementById('lbRefreshBtn').style.display = 'inline-flex';
     document.getElementById('lbAuthBtn').style.display = 'none';

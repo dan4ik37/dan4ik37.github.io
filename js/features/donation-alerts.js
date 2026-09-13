@@ -127,6 +127,7 @@ async function initDonationAlerts(){
 
       showDonationAlert(donation.username, amount, donation.currency, donation.message);
       broadcastDonationToVisitors(donation.username, amount, donation.currency, donation.message);
+      if (typeof processDonationForVip === 'function') processDonationForVip(donation);
     };
 
     ws.onclose = () => {

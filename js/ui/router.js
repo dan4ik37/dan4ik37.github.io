@@ -14,6 +14,8 @@ const PAGES = {
   soundboard: ['soundboard'],
   clicker:    ['clicker'],
   chat:       ['chat'],
+  profile:    ['profile-page'],
+  forum:      ['forum-page'],
   ads:        ['ad-bottom','ads']
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
@@ -46,6 +48,8 @@ function showPage(route){
 function finishShowPage(route, activeIds){
   // Твич-плеер и loadYT() — только когда реально открыта #/home (см. initHomeMedia)
   if (route==='home') initHomeMedia();
+  if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
+  if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{
