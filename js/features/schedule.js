@@ -77,7 +77,7 @@ async function loadScheduleFromDB(){
   // а вот из localStorage лучше не заставлять секундами мелькать дефолт.
   if (!sbClient) return;
   try {
-    const { data } = await sbClient.from('site_config').select('value').eq('key','schedule').single();
+    const { data } = await sbClient.from('site_config').select('value').eq('key','schedule').maybeSingle();
     if (data?.value) {
       const schedule = JSON.parse(data.value);
       applyScheduleToDOM(schedule);

@@ -187,7 +187,7 @@ function savePollsToStorage() {
 async function loadPollsFromDB() {
   if (!sbClient) return;
   try {
-    const { data } = await sbClient.from('site_config').select('value').eq('key','polls').single();
+    const { data } = await sbClient.from('site_config').select('value').eq('key','polls').maybeSingle();
     if (data?.value) {
       const polls = JSON.parse(data.value);
       POLLS.splice(0, POLLS.length, ...polls);

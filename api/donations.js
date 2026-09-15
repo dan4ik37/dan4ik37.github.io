@@ -46,7 +46,11 @@ export default async function handler(req, res) {
   const refreshTok = cookies.match(/da_refresh=([^;]+)/)?.[1];
 
   if (!token && !refreshTok) {
-    return res.status(401).json({ error: 'not_authorized', auth_url: authUrl() });
+    return res.status(401).json({ error: 'not_authorized', reason: 'no_session', auth_url: authUrl() });
+  }
+
+  if (!process.env.DA_CLIENT_ID || !process.env.DA_CLIENT_SECRET) {
+    return res.status(500).json({ error: 'env_missing', reason: 'Задай DA_CLIENT_ID и DA_CLIENT_SECRET в настройках Vercel' });
   }
 
   try {
@@ -63,7 +67,7 @@ export default async function handler(req, res) {
       const t = await refreshToken(refreshTok);
       if (!t) {
         // refresh_token тоже не сработал (например, отозван) — только руками
-        return res.status(401).json({ error: 'not_authorized', auth_url: authUrl() });
+        return res.status(401).json({ error: 'not_authorized', reason: 'session_expired', auth_url: authUrl() });
       }
       setAuthCookies(res, t, refreshTok);
       token = t.access_token;

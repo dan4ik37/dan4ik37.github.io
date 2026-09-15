@@ -17,6 +17,14 @@ export default async function handler(req, res) {
   if (error) return res.redirect('/?da_error=' + encodeURIComponent(error));
   if (!code)  return res.status(400).json({ error: 'No code' });
 
+  // Самая частая причина «вход не работает»: переменные окружения не
+  // заданы в Vercel (Settings → Environment Variables). Без них обмен
+  // кода на токен уходит с пустым client_id и DA отвечает ошибкой —
+  // раньше это выглядело как общее "auth_failed" без объяснений.
+  if (!process.env.DA_CLIENT_ID || !process.env.DA_CLIENT_SECRET) {
+    return res.redirect('/?da_error=' + encodeURIComponent('env_missing: задай DA_CLIENT_ID и DA_CLIENT_SECRET в настройках Vercel'));
+  }
+
   try {
     const body = new URLSearchParams({
       grant_type:    'authorization_code',
@@ -31,7 +39,12 @@ export default async function handler(req, res) {
       body,
     });
     const t = await r.json();
-    if (!t.access_token) throw new Error(JSON.stringify(t));
+    if (!t.access_token) {
+      // Показываем настоящую причину от DA (invalid_client, invalid_grant
+      // и т.п.), а не общее "auth_failed" — иначе непонятно, что чинить.
+      const reason = t.error_description || t.error || t.message || 'no_token';
+      return res.redirect('/?da_error=' + encodeURIComponent(String(reason).slice(0, 200)));
+    }
 
     res.setHeader('Set-Cookie', [
       `da_token=${t.access_token}; HttpOnly; Secure; SameSite=Lax; Max-Age=86400; Path=/`,
@@ -40,7 +53,7 @@ export default async function handler(req, res) {
     res.redirect('/?da_auth=success');
   } catch(e) {
     console.error(e);
-    res.redirect('/?da_error=auth_failed');
+    res.redirect('/?da_error=' + encodeURIComponent('network: ' + String(e.message || e).slice(0, 150)));
   }
 }
  

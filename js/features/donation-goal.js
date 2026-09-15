@@ -39,7 +39,7 @@ function applyGoalConfig(cfg){
 async function loadGoalConfigFromDB(){
   if (!sbClient) return;
   try {
-    const { data } = await sbClient.from('site_config').select('value').eq('key','goal').single();
+    const { data } = await sbClient.from('site_config').select('value').eq('key','goal').maybeSingle();
     if (data?.value) {
       const cfg = JSON.parse(data.value);
       applyGoalConfig(cfg);
