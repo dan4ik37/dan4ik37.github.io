@@ -9,6 +9,27 @@ const ROLE_BADGE_HTML = {
 };
 
 let profileViewedId = null; // чей профиль сейчас открыт (может быть не наш)
+let profileEmailRaw = '';
+let profileEmailVisible = false;
+
+// dan.ivanov@mail.ru → da••••••@mail.ru — стример может показывать
+// профиль на стриме, почта по умолчанию скрыта даже от него самого.
+function maskEmail(email){
+  const at = email.indexOf('@');
+  if (at < 2) return email;
+  return email.slice(0, 2) + '•'.repeat(Math.max(at - 2, 3)) + email.slice(at);
+}
+function renderProfileEmailMask(){
+  const el = document.getElementById('profileEmail');
+  const btn = document.getElementById('profileEmailToggle');
+  if (!profileEmailRaw) { el.textContent = ''; return; }
+  el.textContent = profileEmailVisible ? profileEmailRaw : maskEmail(profileEmailRaw);
+  if (btn) btn.textContent = profileEmailVisible ? '🙈' : '👁';
+}
+function toggleProfileEmailVisibility(){
+  profileEmailVisible = !profileEmailVisible;
+  renderProfileEmailMask();
+}
 
 function isVipActive(p){
   if (!p?.is_vip) return false;
@@ -48,7 +69,10 @@ async function renderProfilePage(viewUserId){
   }
 
   document.getElementById('profileNick').textContent = profile.nick || 'Без ника';
-  document.getElementById('profileEmail').textContent = isOwn ? (currentUser?.email || '') : '';
+  profileEmailRaw = isOwn ? (currentUser?.email || '') : '';
+  profileEmailVisible = false;
+  document.getElementById('profileEmailToggle').style.display = (isOwn && profileEmailRaw) ? 'inline' : 'none';
+  renderProfileEmailMask();
   document.getElementById('profileRoleBadge').innerHTML = ROLE_BADGE_HTML[profile.role] || '';
   document.getElementById('profileVipBadge').style.display = isVipActive(profile) ? 'inline-block' : 'none';
   document.getElementById('profileBioText').textContent = profile.bio || (isOwn ? 'Расскажи о себе...' : '');
@@ -65,6 +89,26 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileNickEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileBioEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileAccountSettings').style.display = isOwn ? 'block' : 'none';
+  document.getElementById('profileFriendsPanel').style.display = isOwn ? 'block' : 'none';
+  if (isOwn) {
+    renderFriendsPanel();
+    subscribeDmRealtime();
+  }
+
+  const addFriendWrap = document.getElementById('profileAddFriendWrap');
+  if (!isOwn && currentUser) {
+    const status = await getFriendshipStatus(targetId);
+    const buttons = {
+      none: `<button onclick="sendFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">➕ Добавить в друзья</button>`,
+      pending_sent: `<span style="color:var(--muted);font-size:.8rem">⏳ Заявка отправлена</span>`,
+      pending_received: `<button onclick="acceptFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✅ Принять заявку в друзья</button>`,
+      friends: `<button onclick="openDmWith('${targetId}','${esc(profile.nick||'?').replace(/'/g,"\\'")}')" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
+    };
+    addFriendWrap.innerHTML = buttons[status] || '';
+    addFriendWrap.style.display = 'block';
+  } else {
+    addFriendWrap.style.display = 'none';
+  }
   document.getElementById('profileVipPromo').style.display = (isOwn && !canUseAnimatedAvatar(profile.role, profile)) ? 'block' : 'none';
   document.getElementById('profileAdminPanel').style.display = (isOwn && profile.role === 'admin') ? 'block' : 'none';
 
@@ -359,6 +403,21 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     document.getElementById('miniProfileVip').style.display = isVipActive(p) ? 'inline' : 'none';
     if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${p.avatar_url}')`;
     if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${p.banner_url}')`;
+
+    const actionEl = document.getElementById('miniProfileFriendAction');
+    if (currentUser && currentUser.id !== userId) {
+      const status = await getFriendshipStatus(userId);
+      const small = 'padding:.4rem .8rem;border-radius:8px;font-size:.72rem;cursor:pointer;font-family:\'Montserrat\',sans-serif;border:none;width:100%';
+      const buttons = {
+        none: `<button onclick="sendFriendRequest('${userId}')" style="${small};background:var(--tw);color:#fff">➕ В друзья</button>`,
+        pending_sent: `<span style="font-size:.72rem;color:var(--muted)">⏳ Заявка отправлена</span>`,
+        pending_received: `<button onclick="acceptFriendRequest('${userId}')" style="${small};background:var(--accent);color:#fff">✅ Принять заявку</button>`,
+        friends: `<button onclick="openDmWith('${userId}','${(p.nick||fallbackNick).replace(/'/g,"\\'")}')" style="${small};background:rgba(255,255,255,.1);color:var(--text)">✉ Написать</button>`,
+      };
+      actionEl.innerHTML = buttons[status] || '';
+    } else {
+      actionEl.innerHTML = '';
+    }
   } catch(e) {}
 }
 document.addEventListener('click', e => {

@@ -51,7 +51,7 @@ function initSupabase() {
     // Открываем форму "новый пароль" вместо обычного логина.
     sbClient.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
-        openGlobalAuth();
+        openLoginModal();
         switchAuthTab('reset');
       }
     });
@@ -78,6 +78,9 @@ async function onAuthStateChange(user) {
     currentProfile = data;
     currentRole = data.role || 'user';
   }
+
+  if (typeof subscribeDmRealtime === 'function') subscribeDmRealtime();
+  if (typeof updateDmUnreadBadge === 'function') updateDmUnreadBadge();
 
   // Ник, который человек ввёл при регистрации, но который не успел
   // попасть в профиль, если Supabase потребовал подтверждение email
@@ -209,13 +212,15 @@ async function loadRecentMessages() {
 
 // Тост "новое сообщение в чате" — только если пользователь сейчас не на странице чата
 let chatToastTimer=null;
-function showChatToast(){
+const CHAT_TOAST_DEFAULT_HTML = '<span>💬</span><span>Новое сообщение в чате</span>';
+function showChatToast(customText){
   if(currentRoute()==='chat') return;
   const t=document.getElementById('chatToast');
   if(t){
+    t.innerHTML = customText ? `<span>✨</span><span>${customText}</span>` : CHAT_TOAST_DEFAULT_HTML;
     t.classList.add('show');
     clearTimeout(chatToastTimer);
-    chatToastTimer=setTimeout(()=>t.classList.remove('show'),4000);
+    chatToastTimer=setTimeout(()=>{t.classList.remove('show'); t.innerHTML=CHAT_TOAST_DEFAULT_HTML;},customText?6000:4000);
   }
   // Бейдж, в отличие от тоста, не гаснет сам — висит, пока не зайдёшь в чат
   document.getElementById('navChatBadge')?.classList.add('show');
@@ -236,7 +241,10 @@ function subscribeRealtime() {
       if (bannedNicks.has(m.nick.toLowerCase())) return;
       const isOwn = m.nick === chatNick;
       addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id);
-      if (!isOwn && m.role !== 'reaction') showChatToast();
+      if (!isOwn && m.role !== 'reaction') {
+        const isMention = chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(m.text);
+        showChatToast(isMention ? `${esc(m.nick)} упомянул(а) тебя в чате` : null);
+      }
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
       if (payload.new.deleted) {
@@ -430,7 +438,8 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId){
               : msgRole==='moderator' ? '<span class="role-badge moderator">MOD</span>'
               : msgRole==='helper' ? '<span class="role-badge helper">HELPER</span>' : '';
   const div=document.createElement('div');
-  div.className='chat-msg'+(isOwn?' own-msg':'');
+  const mentionsMe = !isOwn && chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(text);
+  div.className='chat-msg'+(isOwn?' own-msg':'')+(mentionsMe?' mentioned-me':'');
   if(msgId) div.dataset.msgid=msgId;
   div.dataset.nick=nick;
   // Клик по нику/аватарке открывает мини-профиль — только если у автора
@@ -518,5 +527,167 @@ function toggleEmoji(e){
   const picker=document.getElementById('emojiPicker');
   picker.style.display=picker.style.display==='flex'?'none':'flex';
 }
-document.addEventListener('click',()=>{const p=document.getElementById('emojiPicker');if(p)p.style.display='none'});
+document.addEventListener('click',(e)=>{
+  const p=document.getElementById('emojiPicker');if(p)p.style.display='none';
+  if(!e.target.closest('#chatMentionAutocomplete,#chatInput')) closeMentionAutocomplete();
+});
+
+// ═══════════════════════════════════════
+//  АВТОДОПОЛНЕНИЕ @УПОМИНАНИЙ
+// ═══════════════════════════════════════
+let mentionDebounce = null;
+let mentionActiveIndex = 0;
+let mentionCurrentMatches = [];
+
+function getMentionQueryAtCursor(){
+  const inp = document.getElementById('chatInput');
+  const pos = inp.selectionStart;
+  const before = inp.value.slice(0, pos);
+  const m = before.match(/(?:^|\s)@([a-zA-Zа-яА-Я0-9_]{1,24})$/);
+  return m ? { query: m[1], start: pos - m[1].length } : null;
+}
+
+function handleMentionInput(){
+  clearTimeout(mentionDebounce);
+  const ctx = getMentionQueryAtCursor();
+  if (!ctx) { closeMentionAutocomplete(); return; }
+  mentionDebounce = setTimeout(() => searchMentionCandidates(ctx.query), 200);
+}
+
+async function searchMentionCandidates(query){
+  const box = document.getElementById('chatMentionAutocomplete');
+  if (!sbClient) { closeMentionAutocomplete(); return; }
+  try {
+    const { data } = await sbClient.from('profiles').select('nick').ilike('nick', `${query}%`).not('nick','is',null).limit(6);
+    mentionCurrentMatches = (data || []).map(r => r.nick).filter(Boolean);
+    mentionActiveIndex = 0;
+    if (!mentionCurrentMatches.length) { closeMentionAutocomplete(); return; }
+    box.innerHTML = mentionCurrentMatches.map((nick, i) => `
+      <div class="chat-mention-option${i===0?' active':''}" data-nick="${esc(nick)}" onclick="selectMention('${nick.replace(/'/g,"\\'")}')"
+           style="padding:.5rem .8rem;cursor:pointer;font-size:.82rem;${i===0?'background:rgba(145,71,255,.15)':''}">@${esc(nick)}</div>
+    `).join('');
+    box.style.cssText = 'display:block;position:absolute;bottom:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.3rem;box-shadow:0 -8px 24px rgba(0,0,0,.4);z-index:20';
+  } catch(e) { closeMentionAutocomplete(); }
+}
+
+function closeMentionAutocomplete(){
+  const box = document.getElementById('chatMentionAutocomplete');
+  box.style.display = 'none';
+  box.innerHTML = '';
+  mentionCurrentMatches = [];
+}
+
+function selectMention(nick){
+  const inp = document.getElementById('chatInput');
+  const ctx = getMentionQueryAtCursor();
+  if (ctx) {
+    inp.value = inp.value.slice(0, ctx.start) + nick + ' ' + inp.value.slice(inp.selectionStart);
+  } else {
+    inp.value += nick + ' ';
+  }
+  closeMentionAutocomplete();
+  inp.focus();
+}
+
+function handleChatInputKeydown(event){
+  if (mentionCurrentMatches.length && document.getElementById('chatMentionAutocomplete').style.display === 'block') {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      mentionActiveIndex = (mentionActiveIndex + 1) % mentionCurrentMatches.length;
+      updateMentionActiveOption();
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      mentionActiveIndex = (mentionActiveIndex - 1 + mentionCurrentMatches.length) % mentionCurrentMatches.length;
+      updateMentionActiveOption();
+      return;
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault();
+      selectMention(mentionCurrentMatches[mentionActiveIndex]);
+      return;
+    }
+    if (event.key === 'Escape') {
+      closeMentionAutocomplete();
+      return;
+    }
+  }
+  if (event.key === 'Enter') sendMsg();
+}
+
+function updateMentionActiveOption(){
+  document.querySelectorAll('#chatMentionAutocomplete .chat-mention-option').forEach((el, i) => {
+    el.style.background = i === mentionActiveIndex ? 'rgba(145,71,255,.15)' : '';
+  });
+}
+
+
+
+// ═══════════════════════════════════════
+//  ПОИСК ПО ЧАТУ
+//  Ищет по ВСЕЙ истории в БД, а не только по тому, что сейчас
+//  прогружено на экране (в DOM держится лишь последние ~50 сообщений).
+//  Результаты — отдельным списком (ник, отрывок, время), не пытаемся
+//  прокручивать к сообщению в живой ленте — оно там может и не быть
+//  загружено, а перестройка ленты ради этого только всё усложнит.
+// ═══════════════════════════════════════
+let chatSearchDebounce = null;
+
+function toggleChatSearch(){
+  const bar = document.getElementById('chatSearchBar');
+  const opening = bar.style.display === 'none';
+  bar.style.display = opening ? 'block' : 'none';
+  if (opening) {
+    document.getElementById('chatSearchInput').focus();
+  } else {
+    document.getElementById('chatSearchInput').value = '';
+    document.getElementById('chatSearchResults').innerHTML = '';
+  }
+}
+
+function debouncedChatSearch(){
+  clearTimeout(chatSearchDebounce);
+  chatSearchDebounce = setTimeout(searchChatMessages, 350);
+}
+
+async function searchChatMessages(){
+  const q = document.getElementById('chatSearchInput').value.trim();
+  const resultsEl = document.getElementById('chatSearchResults');
+  if (!q) { resultsEl.innerHTML = ''; return; }
+  if (!sbClient) { resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Поиск недоступен offline</div>'; return; }
+
+  resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Ищем...</div>';
+  try {
+    const { data, error } = await sbClient
+      .from('messages')
+      .select('id, nick, text, color, role, created_at')
+      .eq('deleted', false)
+      .or(`text.ilike.%${q}%,nick.ilike.%${q}%`)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (error) throw error;
+
+    if (!data || !data.length) {
+      resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Ничего не нашли</div>';
+      return;
+    }
+    // Подсветка совпадения — экранируем текст ДО подсветки, чтобы не
+    // открыть XSS через regex-замену уже безопасной строки.
+    const reQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const highlight = s => esc(s).replace(new RegExp(reQ, 'gi'), m => `<mark style="background:rgba(145,71,255,.35);color:inherit;border-radius:3px;padding:0 .15rem">${m}</mark>`);
+
+    resultsEl.innerHTML = data.map(m => `
+      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:.5rem .7rem">
+        <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted)">
+          <span style="color:${m.color||'var(--tw)'};font-weight:700">${highlight(m.nick)}</span>
+          <span>${new Date(m.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div style="font-size:.8rem;margin-top:.25rem;word-break:break-word">${highlight(m.text)}</div>
+      </div>`).join('');
+  } catch(e) {
+    resultsEl.innerHTML = `<div style="color:var(--accent);font-size:.78rem;text-align:center;padding:.5rem">Ошибка поиска: ${esc(e.message||String(e))}</div>`;
+  }
+}
+
 

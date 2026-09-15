@@ -1,16 +1,33 @@
 //  ГЛОБАЛЬНАЯ АВТОРИЗАЦИЯ
 // ═══════════════════════════════════════
-function openGlobalAuth() {
+// Модалка входа/регистрации/сброса пароля — всегда, независимо от
+// текущего состояния логина. Нужна отдельно от openGlobalAuth() ниже
+// из-за сброса пароля (chat.js): если человек уже залогинен в этом же
+// браузере и переходит по ссылке "забыл пароль", всё равно должна
+// открыться форма нового пароля, а не увести его на страницу профиля.
+function openLoginModal() {
   const modal = document.getElementById('globalAuthModal');
   modal.classList.add('open');
-  if (currentUser) {
-    showGlobalProfile();
-  } else {
-    switchAuthTab('login');
-    document.getElementById('gauthLogin').style.display = 'block';
-    document.getElementById('gauthProfile').style.display = 'none';
-  }
+  switchAuthTab('login');
+  document.getElementById('gauthLogin').style.display = 'block';
   trapModalFocus(modal);
+}
+
+function openGlobalAuth() {
+  // Уже залогинен — открываем полноценную страницу профиля, а не
+  // дублирующую мини-модалку. Модалка теперь только для входа/регистрации.
+  if (currentUser) {
+    location.hash = '#/profile';
+    return;
+  }
+  openLoginModal();
+}
+
+// После успешного входа/регистрации/сброса пароля — закрыть модалку и
+// сразу показать полноценную страницу профиля вместо старой мини-карточки.
+function goToOwnProfile() {
+  closeGlobalAuth();
+  location.hash = '#/profile';
 }
 
 function closeGlobalAuth() {
@@ -82,7 +99,7 @@ async function doPasswordReset() {
     // логинит человека) — просто освежаем профиль и показываем его.
     const { data: { user } } = await sbClient.auth.getUser();
     if (user) await onAuthStateChange(user);
-    setTimeout(() => { errEl.style.color=''; showGlobalProfile(); }, 1200);
+    setTimeout(() => { errEl.style.color=''; goToOwnProfile(); }, 1200);
   } catch(e) {
     errEl.style.color = '';
     errEl.textContent = e.message || 'Не удалось сохранить пароль';
@@ -106,7 +123,7 @@ async function doGlobalLogin() {
     const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     await onAuthStateChange(data.user);
-    showGlobalProfile();
+    goToOwnProfile();
   } catch(e) {
     errEl.textContent = e.message === 'Invalid login credentials' ? 'Неверный email или пароль' : e.message;
   } finally {
@@ -148,7 +165,7 @@ async function doGlobalRegister() {
       chatNick = nick;
       try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
       document.getElementById('chatNickDisplay').textContent = chatNick;
-      showGlobalProfile();
+      goToOwnProfile();
     } else {
       // Email-подтверждение включено — сессии пока нет, нужно перейти
       // по ссылке из письма. Ник в этом случае профиль получит только
@@ -203,43 +220,8 @@ async function doGlobalLogout() {
 
   closeGlobalAuth();
   document.getElementById('gauthLogin').style.display = 'block';
-  document.getElementById('gauthProfile').style.display = 'none';
   document.getElementById('gauthEmail').value = '';
   document.getElementById('gauthPassword').value = '';
-}
-
-function showGlobalProfile() {
-  document.getElementById('gauthLogin').style.display = 'none';
-  document.getElementById('gauthProfile').style.display = 'block';
-
-  const nick = currentProfile?.nick || currentUser?.email?.split('@')[0] || 'User';
-  const role = currentRole;
-  const ini = nick.slice(0,2).toUpperCase();
-  const colors = { admin: 'var(--accent)', moderator: 'var(--tw)', helper: '#22c55e', user: 'var(--muted)' };
-
-  document.getElementById('gauthProfileEmail').textContent = currentUser?.email || '';
-  document.getElementById('gauthAvatarEl').textContent = ini;
-  document.getElementById('gauthAvatarEl').style.background = colors[role] || 'var(--muted)';
-  document.getElementById('gauthNickEl').textContent = nick;
-
-  const badge = document.getElementById('gauthRoleBadge');
-  badge.className = `gauth-role-badge ${role}`;
-  badge.textContent = role === 'admin' ? '👑 Администратор' : role === 'moderator' ? '🛡 Модератор' : role === 'helper' ? '🧹 Хелпер' : '👤 Пользователь';
-
-  // Доступные функции
-  const perms = [
-    { icon: '💬', label: 'Просмотр чата', active: true },
-    { icon: '🗑', label: 'Удаление сообщений', active: role === 'admin' || role === 'moderator' || role === 'helper' },
-    { icon: '🔨', label: 'Бан пользователей', active: role === 'admin' || role === 'moderator' },
-    { icon: '🗳️', label: 'Редактор опросов', active: role === 'admin', action: 'openPollAdmin()' },
-    { icon: '⚙', label: 'Настройки сайта', active: role === 'admin', action: 'openSettingsAdmin()' },
-  ];
-  document.getElementById('gauthPerms').innerHTML = perms.map(p =>
-    `<div class="gauth-perm${p.active?' active':''}"${p.active&&p.action?` onclick="${p.action};closeGlobalAuth()" style="cursor:pointer"`:''}>
-      <span class="gauth-perm-icon">${p.active ? '✅' : '🔒'}</span>
-      <span>${p.label}</span>
-    </div>`
-  ).join('');
 }
 
 function updateGlobalAuthBtn() {

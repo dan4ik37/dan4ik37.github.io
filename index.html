@@ -95,6 +95,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 .nav-links a{position:relative;font-size:.68rem;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);transition:color .2s;white-space:nowrap}
 /* ── БЕЙДЖ "НОВОЕ СООБЩЕНИЕ" НА ПУНКТЕ ЧАТ ── */
 .chat-badge{display:none;position:absolute;top:-3px;right:-9px;width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg),0 0 6px var(--accent)}
+.dm-unread-badge{width:auto;height:auto;min-width:15px;padding:0 3px;border-radius:8px;font-size:.6rem;font-weight:800;color:#fff;align-items:center;justify-content:center;line-height:15px}
 .chat-badge.show{display:block;animation:chatBadgePulse 1.6s ease-in-out infinite}
 @keyframes chatBadgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.3)}}
 body.low .chat-badge.show{animation:none}
@@ -505,6 +506,8 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .chat-msg.own-msg .chat-bubble{align-items:flex-end}
 .chat-msg.own-msg .chat-text{background:rgba(145,71,255,.18);border-radius:12px 12px 4px 12px;padding:.3rem .6rem}
 .chat-bubble{display:flex;flex-direction:column;gap:.1rem}
+.chat-mention{background:rgba(145,71,255,.2);color:var(--tw);font-weight:700;border-radius:4px;padding:0 .3rem}
+.chat-msg.mentioned-me .chat-bubble{background:rgba(255,215,0,.08);border-radius:12px;outline:1px solid rgba(255,215,0,.25)}
 .chat-avatar{width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;flex-shrink:0}
 .chat-user{font-size:.72rem;font-weight:700;color:var(--accent);margin-bottom:.1rem}
 .chat-text{font-size:.78rem;color:var(--text);line-height:1.5;word-break:break-word}
@@ -1026,7 +1029,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/home" data-route="home">Видео</a>
     <a href="#/about" data-route="about">Обо мне</a>
     <a href="#/donate" data-route="donate">Топ донатеров</a>
-    <a href="#/profile" data-route="profile">Профиль</a>
+    <a href="#/profile" data-route="profile">Профиль<span class="chat-badge dm-unread-badge" style="display:none"></span></a>
     <a href="#/forum" data-route="forum">Форум</a>
     <a href="#/poll" data-route="poll">Опрос</a>
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
@@ -1388,7 +1391,10 @@ body.low .donation-alert-icon{animation:none}
           <button onclick="toggleNickEdit(false)" style="padding:.4rem .7rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">✕</button>
         </div>
         <div id="profileNickError" style="font-size:.68rem;color:var(--accent);margin-top:.2rem"></div>
-        <div id="profileEmail" style="font-size:.75rem;color:var(--muted)"></div>
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <span id="profileEmail" style="font-size:.75rem;color:var(--muted)"></span>
+          <button id="profileEmailToggle" onclick="toggleProfileEmailVisibility()" style="display:none;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem;padding:0" title="Показать/скрыть почту">👁</button>
+        </div>
       </div>
     </div>
 
@@ -1417,6 +1423,17 @@ body.low .donation-alert-icon{animation:none}
         <button onclick="confirmLogout()" style="padding:.55rem 1rem;border-radius:8px;border:1.5px solid rgba(255,45,85,.3);background:rgba(255,45,85,.08);color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">🚪 Выйти из аккаунта</button>
       </div>
     </div>
+
+    <!-- Друзья — только на своём профиле -->
+    <div id="profileFriendsPanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.2rem">
+      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">👥 Заявки в друзья</div>
+      <div id="friendRequestsList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem"></div>
+      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">Друзья</div>
+      <div id="friendsList" style="display:flex;flex-direction:column;gap:.5rem"></div>
+    </div>
+
+    <!-- Кнопка "Добавить в друзья" — только на ЧУЖОМ профиле -->
+    <div id="profileAddFriendWrap" style="display:none;margin-top:1rem"></div>
 
     <!-- VIP / анимация — только на своём профиле, только не-staff -->
     <div id="profileVipPromo" style="display:none;margin-top:1rem;background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:var(--r);padding:1.1rem">
@@ -1466,6 +1483,21 @@ body.low .donation-alert-icon{animation:none}
       </div>
     </div>
 
+    <!-- Личные сообщения -->
+    <div id="dmModal" onclick="if(event.target===this)closeDmModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);z-index:9560;align-items:center;justify-content:center;padding:1.2rem">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;max-width:440px;width:100%;height:min(600px,80vh);display:flex;flex-direction:column;position:relative">
+        <div style="padding:1.1rem 1.3rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:800">✉ <span id="dmModalNick"></span></div>
+          <button onclick="closeDmModal()" aria-label="Закрыть" style="width:28px;height:28px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);cursor:pointer">✕</button>
+        </div>
+        <div id="dmMessages" style="flex:1;overflow-y:auto;padding:1rem 1.2rem"></div>
+        <div style="padding:.8rem 1rem;border-top:1px solid var(--border);display:flex;gap:.5rem">
+          <input id="dmInput" maxlength="500" placeholder="Сообщение..." onkeydown="if(event.key==='Enter')sendDm()" style="flex:1;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.6rem .8rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.82rem;outline:none">
+          <button onclick="sendDm()" style="padding:.6rem 1rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif">→</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Панель админа — только на своём профиле -->
     <div id="profileAdminPanel" style="display:none;margin-top:1rem;background:rgba(255,45,85,.06);border:1px solid rgba(255,45,85,.15);border-radius:var(--r);padding:1.2rem">
       <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem">👑 Панель администратора</div>
@@ -1498,6 +1530,7 @@ body.low .donation-alert-icon{animation:none}
     </div>
     <div id="miniProfileRoleBadge" style="margin-top:.2rem"></div>
     <p id="miniProfileBio" style="font-size:.75rem;color:var(--muted);margin-top:.5rem;line-height:1.5"></p>
+    <div id="miniProfileFriendAction" style="margin-top:.6rem"></div>
     <a id="miniProfileLink" href="#" style="display:block;margin-top:.6rem;font-size:.72rem;color:var(--tw);text-decoration:underline">Открыть профиль →</a>
   </div>
 </div>
@@ -1554,8 +1587,16 @@ body.low .donation-alert-icon{animation:none}
       <div style="display:flex;align-items:center;gap:.6rem;margin-left:auto">
         <div class="chat-subtitle" id="chatSubtitle">Сайт</div>
         <div class="chat-online"><div class="chat-online-dot"></div><span id="chatOnlineCount">0</span> онлайн</div>
+        <button class="chat-auth-btn" aria-label="Поиск по чату" onclick="toggleChatSearch()" title="Поиск по чату" style="background:none;border:1px solid var(--border);border-radius:8px;width:28px;height:28px;color:var(--muted);cursor:pointer;font-size:.8rem">🔍</button>
         <button class="chat-auth-btn" id="chatAuthBtn" aria-label="Вход для модераторов" onclick="openGlobalAuth()" title="Вход для модераторов" style="display:none">⚙</button>
       </div>
+    </div>
+    <div id="chatSearchBar" style="display:none;padding:.6rem 1rem;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
+      <div style="display:flex;gap:.5rem">
+        <input id="chatSearchInput" placeholder="Поиск по сообщениям..." oninput="debouncedChatSearch()" onkeydown="if(event.key==='Escape')toggleChatSearch()" style="flex:1;background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
+        <button onclick="toggleChatSearch()" aria-label="Закрыть поиск" style="background:none;border:1px solid var(--border);border-radius:8px;width:34px;color:var(--muted);cursor:pointer">✕</button>
+      </div>
+      <div id="chatSearchResults" style="max-height:280px;overflow-y:auto;margin-top:.6rem;display:flex;flex-direction:column;gap:.4rem"></div>
     </div>
     <div class="chat-status-bar" id="chatStatusBar" role="status" aria-live="polite" style="display:none"></div>
     <div class="chat-mod-panel" id="chatModPanel" style="display:none">
@@ -1589,10 +1630,12 @@ body.low .donation-alert-icon{animation:none}
           </div>
           <!-- Эмодзи пикер -->
           <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto"></div>
+          <!-- Автодополнение @упоминаний -->
+          <div id="chatMentionAutocomplete" style="display:none;position:relative"></div>
           <!-- Строка отправки -->
           <div class="chat-input-wrap">
             <button onclick="toggleEmoji(event)" aria-label="Открыть эмодзи" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--muted);cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Эмодзи">😀</button>
-            <input class="chat-input" id="chatInput" aria-label="Написать сообщение" placeholder="Написать сообщение..." maxlength="200" onkeydown="if(event.key==='Enter')sendMsg()" onfocus="setTimeout(()=>this.scrollIntoView({block:'center',behavior:'smooth'}),300)" style="flex:1">
+            <input class="chat-input" id="chatInput" aria-label="Написать сообщение" placeholder="Написать сообщение..." maxlength="200" oninput="handleMentionInput()" onkeydown="handleChatInputKeydown(event)" onfocus="setTimeout(()=>this.scrollIntoView({block:'center',behavior:'smooth'}),300)" style="flex:1">
             <button class="chat-send" aria-label="Отправить сообщение" onclick="sendMsg()">→</button>
           </div>
           <!-- Быстрые реакции снизу -->
@@ -1871,26 +1914,6 @@ body.low .donation-alert-icon{animation:none}
         </div>
       </div>
     </div>
-    <!-- Профиль (после входа) -->
-    <div id="gauthProfile" style="display:none">
-      <div class="gauth-head">
-        <h3>👤 Профиль</h3>
-        <p id="gauthProfileEmail" style="color:var(--tw)"></p>
-      </div>
-      <div class="gauth-body">
-        <div class="gauth-profile">
-          <div class="gauth-avatar" id="gauthAvatarEl"></div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:.4rem" id="gauthNickEl"></div>
-          <div class="gauth-role-badge" id="gauthRoleBadge"></div>
-        </div>
-        <!-- Доступные функции -->
-        <div class="gauth-perms" id="gauthPerms"></div>
-        <div style="display:flex;flex-direction:column;gap:.6rem">
-          <a href="#/chat" onclick="closeGlobalAuth()" style="display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1rem;border-radius:10px;background:rgba(145,71,255,.1);border:1.5px solid rgba(145,71,255,.25);color:var(--tw);font-size:.76rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;transition:background .2s" onmouseover="this.style.background='rgba(145,71,255,.2)'" onmouseout="this.style.background='rgba(145,71,255,.1)'">💬 Перейти в чат</a>
-          <button onclick="confirmLogout()" style="width:100%;padding:.6rem;border-radius:10px;border:1.5px solid rgba(255,45,85,.25);background:rgba(255,45,85,.07);color:var(--accent);font-size:.76rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.background='rgba(255,45,85,.18)'" onmouseout="this.style.background='rgba(255,45,85,.07)'">Выйти из аккаунта</button>
-        </div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -2038,6 +2061,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/global-auth.js"></script>
 <script src="js/features/profile.js"></script>
 <script src="js/features/forum.js"></script>
+<script src="js/features/friends.js"></script>
 <script src="js/features/twitch.js"></script>
 <script src="js/features/soundboard.js"></script>
 <script src="js/features/easter-egg.js"></script>

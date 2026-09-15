@@ -107,6 +107,12 @@ function renderMessageText(escapedText){
       out = out.split(code).join(`<img src="${esc(e.image_url)}" alt="${code}" title="${code}" class="custom-emoji-img inline-emoji">`);
     }
   });
+  // @упоминания — текст уже экранирован esc()'ом ДО вызова этой функции,
+  // regex работает по уже безопасной строке и оборачивает только в свои
+  // же теги, новой дыры для инъекции нет (тот же принцип, что у эмодзи выше).
+  out = out.replace(/@([a-zA-Zа-яА-Я0-9_]{1,24})/g, (m, nick) =>
+    `<span class="chat-mention" data-mention-nick="${nick}">@${nick}</span>`
+  );
   return out;
 }
 
