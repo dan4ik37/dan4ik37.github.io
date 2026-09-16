@@ -28,7 +28,7 @@ export default async function handler(req, res) {
   try {
     const body = new URLSearchParams({
       grant_type:    'authorization_code',
-      client_id:     process.env.DA_CLIENT_ID,     // 19366
+      client_id:     process.env.DA_CLIENT_ID,     // 19389
       client_secret: process.env.DA_CLIENT_SECRET, // из страницы «Изменить»
       redirect_uri:  'https://dan4ik37.vercel.app/api/auth',
       code,
