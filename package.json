@@ -1,0 +1,41 @@
+{
+  "name": "vtuber-vrm-player",
+  "version": "0.1.0",
+  "description": "VRM avatar player/animator (Electron + three.js + @pixiv/three-vrm)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "postinstall": "node tools/sync-vendor.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "@pixiv/three-vrm": "^3.1.2",
+    "@pixiv/three-vrm-animation": "^3.1.2",
+    "three": "^0.165.0"
+  },
+  "build": {
+    "appId": "com.example.vtuber-vrm-player",
+    "productName": "VTuber VRM Player",
+    "asar": false,
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "renderer.js",
+      "config.js",
+      "assets/**/*",
+      "tools/**/*",
+      "vendor/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "dir"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+# Обязательно для --quality fast (по умолчанию, без GPU):
+librosa
+soundfile
+numpy
+
+# Дополнительно для --quality high (реальное разделение на стемы, GPU/RTX):
+#   pip install demucs torch --index-url https://download.pytorch.org/whl/cu121
+# (URL зависит от версии CUDA на твоей видеокарте — см. https://pytorch.org/get-started/locally/)
