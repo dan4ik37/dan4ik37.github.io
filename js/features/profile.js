@@ -175,7 +175,7 @@ async function saveProfileNick(){
   }
 }
 
-// bucket: 'avatars' | 'profile-covers' — сброс к дефолту (без файла)
+// bucket: 'avatars' | 'profile-bg' — сброс к дефолту (без файла)
 async function removeProfileImage(bucket){
   if (!confirm('Удалить ' + (bucket === 'avatars' ? 'аватарку' : 'фон') + '?')) return;
   const col = bucket === 'avatars' ? 'avatar_url' : 'banner_url';
@@ -191,7 +191,7 @@ async function removeProfileImage(bucket){
   }
 }
 
-// bucket: 'avatars' | 'profile-covers'
+// bucket: 'avatars' | 'profile-bg'
 async function uploadProfileImage(bucket, file){
   const statusEl = document.getElementById('profileUploadStatus');
   if (!file) return;
