@@ -334,7 +334,7 @@ async function renderProfileGuests(profile){
       const ago = timeAgoRu(v.viewed_at);
       const avatarStyle = v.profiles?.avatar_url ? `background-image:url('${v.profiles.avatar_url}')` : '';
       return `
-        <div onclick="openMiniProfile('${v.viewer_id}','${nick.replace(/'/g,"\\'")}',this)" style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.4rem 0">
+        <div onclick="openMiniProfile('${v.viewer_id}','${nick.replace(/'/g,"\\'")}',this)" class="card-fade-in" style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.4rem 0">
           <div style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;flex-shrink:0;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff">${v.profiles?.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
           <div style="min-width:0;flex:1">
             <div style="font-size:.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nick)}</div>
@@ -708,6 +708,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
   document.getElementById('miniProfileStatus').textContent = '';
   document.getElementById('miniProfileGames').innerHTML = '';
   document.getElementById('miniProfileRoleBadge').innerHTML = '';
+  document.getElementById('miniProfileAvatar').classList.remove('profile-avatar-glow');
   document.getElementById('miniProfileVip').style.display = 'none';
   document.getElementById('miniProfileAvatar').textContent = (fallbackNick||'?').substring(0,2).toUpperCase();
   document.getElementById('miniProfileAvatar').style.backgroundImage = '';
@@ -737,6 +738,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     document.getElementById('miniProfileVip').style.display = isVipActive(p) ? 'inline' : 'none';
     if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${p.avatar_url}')`;
     if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${p.banner_url}')`;
+    applyProfileGlow(document.getElementById('miniProfileAvatar'), p);
 
     const actionEl = document.getElementById('miniProfileFriendAction');
     if (currentUser && currentUser.id !== userId) {

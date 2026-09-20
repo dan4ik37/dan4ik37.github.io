@@ -58,7 +58,7 @@ async function loadForumThreads(){
       const postsCount = t.forum_posts?.[0]?.count ?? 0;
       const date = new Date(t.created_at).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' });
       return `
-        <a href="#/forum/${t.id}" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;text-decoration:none;color:inherit;transition:border-color .2s" onmouseover="this.style.borderColor='var(--tw)'" onmouseout="this.style.borderColor='var(--border)'">
+        <a href="#/forum/${t.id}" class="card-fade-in" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem;text-decoration:none;color:inherit;transition:border-color .2s" onmouseover="this.style.borderColor='var(--tw)'" onmouseout="this.style.borderColor='var(--border)'">
           <div style="min-width:0">
             <div style="font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
               ${t.pinned ? '📌 ' : ''}${t.locked ? '🔒 ' : ''}${esc(t.title)}

@@ -260,13 +260,22 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .profile-stat-card{opacity:0;animation:profileStatIn .5s ease both;transition:transform .25s ease,border-color .25s ease}
 .profile-stat-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.18)}
 .profile-badge-pop{animation:badgePopIn .45s cubic-bezier(.34,1.56,.64,1) both;display:inline-block}
+/* Плавное появление карточек в списках (форум, тиммейты) — та же
+   анимация, что у статистики профиля, с небольшим сдвигом по порядку */
+.card-fade-in{opacity:0;animation:profileStatIn .4s ease both}
+.card-fade-in:nth-child(1){animation-delay:.02s}
+.card-fade-in:nth-child(2){animation-delay:.06s}
+.card-fade-in:nth-child(3){animation-delay:.1s}
+.card-fade-in:nth-child(4){animation-delay:.14s}
+.card-fade-in:nth-child(5){animation-delay:.18s}
+.card-fade-in:nth-child(n+6){animation-delay:.2s}
 /* Непрерывные декоративные анимации — только в High-режиме (см. performance-mode.js),
    чтобы не грузить слабые устройства лишним рендером.
    --ring-rgb задаётся в JS (profile.js) в зависимости от роли/VIP. */
 @keyframes ringGlow{0%,100%{box-shadow:0 0 0 0 rgba(var(--ring-rgb),.45),0 0 16px 2px rgba(var(--ring-rgb),.25)}50%{box-shadow:0 0 0 4px rgba(var(--ring-rgb),.12),0 0 26px 6px rgba(var(--ring-rgb),.4)}}
 body.high #profileBanner.profile-banner-empty{background-size:200% 200%!important;animation:gradShift 8s ease infinite}
-body.high #profileAvatarImg.profile-avatar-glow{animation:ringGlow 2.4s ease-in-out infinite}
-body.low #profileAvatarImg.profile-avatar-glow{box-shadow:0 0 0 3px rgba(var(--ring-rgb),.35)}
+body.high .profile-avatar-glow{animation:ringGlow 2.4s ease-in-out infinite}
+body.low .profile-avatar-glow{box-shadow:0 0 0 3px rgba(var(--ring-rgb),.35)}
 
 @media(max-width:360px){#perfToggle{display:none}}
 
@@ -1775,11 +1784,14 @@ body.low .donation-alert-icon{animation:none}
           </div>
           <!-- Эмодзи пикер -->
           <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto"></div>
+          <!-- Стикеры (VIP/стафф) -->
+          <div id="stickerPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.4rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:140px;overflow-y:auto"></div>
           <!-- Автодополнение @упоминаний -->
           <div id="chatMentionAutocomplete" style="display:none;position:relative"></div>
           <!-- Строка отправки -->
           <div class="chat-input-wrap">
             <button onclick="toggleEmoji(event)" aria-label="Открыть эмодзи" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--muted);cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Эмодзи">😀</button>
+            <button onclick="toggleStickerPicker(event)" aria-label="Открыть стикеры" style="background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.25);border-radius:8px;padding:.5rem .7rem;color:#ffd700;cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Стикеры (VIP)">🎉</button>
             <input class="chat-input" id="chatInput" aria-label="Написать сообщение" placeholder="Написать сообщение..." maxlength="200" oninput="handleMentionInput()" onkeydown="handleChatInputKeydown(event)" onfocus="setTimeout(()=>this.scrollIntoView({block:'center',behavior:'smooth'}),300)" style="flex:1">
             <button class="chat-send" aria-label="Отправить сообщение" onclick="sendMsg()">→</button>
           </div>

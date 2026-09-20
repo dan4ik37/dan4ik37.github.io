@@ -42,7 +42,7 @@ function renderLfgCard(p){
   const avatarStyle = p.profiles?.avatar_url ? `background-image:url('${p.profiles.avatar_url}')` : '';
   const ago = (typeof timeAgoRu === 'function') ? timeAgoRu(p.created_at) : new Date(p.created_at).toLocaleDateString('ru-RU');
   return `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem" data-lfg-id="${p.id}">
+    <div class="card-fade-in" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem" data-lfg-id="${p.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem">
         <div style="min-width:0">
           <div style="font-weight:800;font-size:.92rem">🎮 ${esc(p.game)}</div>

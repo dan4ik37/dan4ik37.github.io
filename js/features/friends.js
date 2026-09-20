@@ -57,12 +57,15 @@ async function renderFriendsPanel(){
   const reqEl = document.getElementById('friendRequestsList');
   if (!currentUser || !listEl) return;
   try {
-    const { data: rows } = await sbClient.from('friendships').select('*, requester:requester_id(nick), addressee:addressee_id(nick)')
+    const { data: rows } = await sbClient.from('friendships').select(`*,
+      requester:requester_id(nick, avatar_url, role, is_vip, vip_until, total_donated),
+      addressee:addressee_id(nick, avatar_url, role, is_vip, vip_until, total_donated)`)
       .or(`requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`);
 
     const friends = (rows||[]).filter(r => r.status === 'accepted').map(r => {
       const isMe = r.requester_id === currentUser.id;
-      return { id: isMe ? r.addressee_id : r.requester_id, nick: (isMe ? r.addressee : r.requester)?.nick || '?' };
+      const p = isMe ? r.addressee : r.requester;
+      return { id: isMe ? r.addressee_id : r.requester_id, profile: p || {} };
     });
     const incoming = (rows||[]).filter(r => r.status === 'pending' && r.addressee_id === currentUser.id)
       .map(r => ({ id: r.requester_id, nick: r.requester?.nick || '?' }));
@@ -74,12 +77,31 @@ async function renderFriendsPanel(){
         <button onclick="removeFriendship('${f.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;cursor:pointer">✕</button>
       </div>`).join('') : '<div style="color:var(--muted);font-size:.78rem">Заявок нет</div>';
 
-    listEl.innerHTML = friends.length ? friends.map(f => `
-      <div class="role-result-row">
-        <span class="role-result-nick" style="cursor:pointer" onclick="location.hash='#/profile/${f.id}'">${esc(f.nick)}</span>
-        <button class="role-result-save" onclick="openDmWith('${f.id}','${esc(f.nick).replace(/'/g,"\\'")}')">✉ Написать</button>
+    // VIP и стафф — наверх списка (роль важнее уровня VIP, оба важнее
+    // обычных друзей), дальше по алфавиту — самое ценное видно сразу,
+    // не листая весь список.
+    const ROLE_RANK = { admin: 3, moderator: 2, helper: 1 };
+    const rank = (p) => {
+      if (ROLE_RANK[p.role]) return 10 + ROLE_RANK[p.role];
+      const tier = typeof getVipTier === 'function' ? getVipTier(p) : null;
+      if (tier) return tier.key === 'gold' ? 9 : tier.key === 'silver' ? 8 : 7;
+      return 0;
+    };
+    friends.sort((a, b) => rank(b.profile) - rank(a.profile) || (a.profile.nick||'').localeCompare(b.profile.nick||''));
+
+    listEl.innerHTML = friends.length ? friends.map(f => {
+      const p = f.profile;
+      const nick = p.nick || '?';
+      const nickHtml = (typeof renderNickWithVip === 'function') ? renderNickWithVip(nick, p, ROLE_BADGE_HTML[p.role] || '') : esc(nick);
+      const avatarStyle = p.avatar_url ? `background-image:url('${p.avatar_url}')` : '';
+      return `
+      <div class="role-result-row card-fade-in" style="display:flex;align-items:center;gap:.6rem">
+        <div onclick="location.hash='#/profile/${f.id}'" style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0">${p.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
+        <span class="role-result-nick" style="cursor:pointer;flex:1;min-width:0" onclick="location.hash='#/profile/${f.id}'">${nickHtml}</span>
+        <button class="role-result-save" onclick="openDmWith('${f.id}','${nick.replace(/'/g,"\\'")}')">✉</button>
         <button onclick="removeFriendship('${f.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;cursor:pointer">✕</button>
-      </div>`).join('') : '<div style="color:var(--muted);font-size:.78rem">Пока нет друзей — найди кого-нибудь через мини-профиль в чате или на странице профиля</div>';
+      </div>`;
+    }).join('') : '<div style="color:var(--muted);font-size:.78rem">Пока нет друзей — найди кого-нибудь через мини-профиль в чате или на странице профиля</div>';
   } catch(e) {
     listEl.innerHTML = '<div style="color:var(--accent);font-size:.78rem">Ошибка загрузки</div>';
   }

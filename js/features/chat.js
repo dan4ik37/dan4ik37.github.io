@@ -205,7 +205,7 @@ async function loadRecentMessages() {
       .limit(50);
     if (data && data.length) {
       document.getElementById('chatMsgs').innerHTML = '';
-      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role, m.user_id, m.vip_tier));
+      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role, m.user_id, m.vip_tier, m.is_sticker));
       loadReactionsFor(data.map(m => m.id));
     }
     loadPinnedMessage();
@@ -242,7 +242,7 @@ function subscribeRealtime() {
       if (m.deleted) return;
       if (bannedNicks.has(m.nick.toLowerCase())) return;
       const isOwn = m.nick === chatNick;
-      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id, m.vip_tier);
+      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id, m.vip_tier, m.is_sticker);
       if (!isOwn && m.role !== 'reaction') {
         const isMention = chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(m.text);
         showChatToast(isMention ? `${esc(m.nick)} упомянул(а) тебя в чате` : null);
@@ -436,7 +436,7 @@ function chatLogout() {
   document.getElementById('chatMainInput').style.display = 'none';
 }
 
-function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTier){
+function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTier, isSticker){
   const msgs=document.getElementById('chatMsgs');
   const initials=(nick.replace(/[^a-zA-Zа-яА-Я0-9]/g,'')||'?').substring(0,2).toUpperCase();
   const time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
@@ -464,12 +464,15 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
   // есть аккаунт (userId не пустой). У гостей аккаунта нет, смотреть нечего.
   const profileClick = userId ? `onclick="openMiniProfile('${userId}','${nick.replace(/'/g,"\\'")}',this)" style="cursor:pointer"` : '';
   const canPin = isOwn && msgId && ((typeof getVipTier === 'function' && currentProfile && getVipTier(currentProfile)) || currentRole === 'admin' || currentRole === 'moderator');
+  const textBlock = isSticker
+    ? `<div class="chat-text" style="background:none;padding:.2rem 0;font-size:2.4rem;line-height:1">${esc(text)}</div>`
+    : `<div class="chat-text" style="${stripeStyle}${stripeStyle?';padding-left:.5rem':''}">${renderMessageText(esc(text))}</div>`;
   div.innerHTML=`
     <div class="chat-avatar" style="background:${avatarBg}" ${profileClick}>${initials}</div>
     <div class="chat-bubble-col">
-      <div class="chat-bubble">
+      <div class="chat-bubble" style="${isSticker?'background:none;border:none;box-shadow:none;padding:.2rem 0':''}">
         <div class="chat-user" style="color:${nickColor}" ${profileClick}>${esc(nick)}${badge}${vipBadge}</div>
-        <div class="chat-text" style="${stripeStyle}${stripeStyle?';padding-left:.5rem':''}">${renderMessageText(esc(text))}</div>
+        ${textBlock}
         <div class="chat-time">${time}</div>
       </div>
       ${msgId?`<div class="msg-reactions" id="mr-${msgId}"></div>`:''}
@@ -612,12 +615,69 @@ function insertEmoji(em){
 function toggleEmoji(e){
   e.stopPropagation();
   const picker=document.getElementById('emojiPicker');
+  document.getElementById('stickerPicker').style.display='none';
   picker.style.display=picker.style.display==='flex'?'none':'flex';
 }
 document.addEventListener('click',(e)=>{
   const p=document.getElementById('emojiPicker');if(p)p.style.display='none';
   if(!e.target.closest('#chatMentionAutocomplete,#chatInput')) closeMentionAutocomplete();
 });
+
+// ═══════════════════════════════════════
+//  СТИКЕРЫ (VIP/стафф) — см. chat-stickers.sql
+// ═══════════════════════════════════════
+// Обычные emoji-реакции есть у всех, стикеры — крупные, на всё сообщение,
+// заметны в общей ленте издалека. Это и плюшка для VIP, и небольшая
+// витрина: не-VIP видит грид, но клик по стикеру ведёт на страницу
+// покупки вместо отправки — показываем чего лишаемся, а не прячем совсем.
+const STICKERS = ['🔥','💯','😂','😭','🎉','👑','💀','🤝','🎮','❤️','😎','🍿','🫡','🥶','👀','⚡'];
+
+function toggleStickerPicker(e){
+  e.stopPropagation();
+  document.getElementById('emojiPicker').style.display='none';
+  const picker=document.getElementById('stickerPicker');
+  const show = picker.style.display!=='flex';
+  if (show) renderStickerPicker();
+  picker.style.display = show ? 'flex' : 'none';
+}
+document.addEventListener('click',(e)=>{
+  if (!e.target.closest('#stickerPicker,[onclick^="toggleStickerPicker"]')) {
+    const sp=document.getElementById('stickerPicker'); if(sp) sp.style.display='none';
+  }
+});
+function renderStickerPicker(){
+  const box = document.getElementById('stickerPicker');
+  const canSticker = (typeof getVipTier === 'function' && currentProfile && getVipTier(currentProfile))
+    || currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
+  box.innerHTML = STICKERS.map(s => `
+    <button onclick="${canSticker ? `sendSticker('${s}')` : `lockedStickerClick()`}"
+      style="font-size:1.8rem;line-height:1;background:none;border:1px solid ${canSticker?'transparent':'rgba(255,255,255,.06)'};border-radius:8px;padding:.35rem;cursor:pointer;opacity:${canSticker?'1':'.45'};transition:transform .15s,background .15s"
+      onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'"
+      title="${canSticker ? 'Отправить стикер' : 'Стикеры — для VIP и модерации'}">${s}</button>`).join('');
+  if (!canSticker) {
+    box.innerHTML += `<div style="width:100%;font-size:.68rem;color:var(--muted);margin-top:.4rem">🔒 Стикеры доступны с VIP — <a href="#" onclick="location.hash='#/profile';return false" style="color:#ffd700">оформить</a></div>`;
+  }
+}
+function lockedStickerClick(){
+  document.getElementById('stickerPicker').style.display = 'none';
+  location.hash = '#/profile';
+}
+async function sendSticker(emoji){
+  document.getElementById('stickerPicker').style.display = 'none';
+  if (!chatNick) { document.getElementById('chatNickScreen').style.display='flex'; return; }
+  const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
+  const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
+  const role = (currentUser && currentRole) ? currentRole : 'guest';
+  const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
+  if (sbClient) {
+    try {
+      const { error } = await sbClient.from('messages').insert([{ nick: chatNick, text: emoji, color: col, role, vip_tier: vipTierKey, is_sticker: true, user_id: currentUser?.id || null }]);
+      if (error) throw error;
+    } catch(e) { addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true); }
+  } else {
+    addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true);
+  }
+}
 
 // ═══════════════════════════════════════
 //  АВТОДОПОЛНЕНИЕ @УПОМИНАНИЙ
