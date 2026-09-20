@@ -78,6 +78,7 @@ async function onAuthStateChange(user) {
     currentProfile = data;
     currentRole = data.role || 'user';
   }
+  if (typeof applyThemeAccent === 'function') applyThemeAccent(currentProfile);
 
   if (typeof subscribeDmRealtime === 'function') subscribeDmRealtime();
   if (typeof updateDmUnreadBadge === 'function') updateDmUnreadBadge();
@@ -204,9 +205,10 @@ async function loadRecentMessages() {
       .limit(50);
     if (data && data.length) {
       document.getElementById('chatMsgs').innerHTML = '';
-      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role, m.user_id));
+      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role, m.user_id, m.vip_tier));
       loadReactionsFor(data.map(m => m.id));
     }
+    loadPinnedMessage();
   } catch(e) { console.warn('loadMessages:', e); }
 }
 
@@ -240,7 +242,7 @@ function subscribeRealtime() {
       if (m.deleted) return;
       if (bannedNicks.has(m.nick.toLowerCase())) return;
       const isOwn = m.nick === chatNick;
-      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id);
+      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id, m.vip_tier);
       if (!isOwn && m.role !== 'reaction') {
         const isMention = chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(m.text);
         showChatToast(isMention ? `${esc(m.nick)} упомянул(а) тебя в чате` : null);
@@ -250,6 +252,10 @@ function subscribeRealtime() {
       if (payload.new.deleted) {
         const el = document.querySelector(`[data-msgid="${payload.new.id}"]`);
         if (el) el.classList.add('deleted');
+      }
+      // Пин/анпин своего или чужого сообщения — обновляем бар у всех
+      if (payload.new.id === chatPinnedId || (payload.new.pinned_until && new Date(payload.new.pinned_until) > new Date())) {
+        loadPinnedMessage();
       }
     })
     .subscribe();
@@ -267,10 +273,10 @@ function subscribeRealtime() {
     });
 }
 
-async function sendMsgToSupabase(nick, text, color, role) {
+async function sendMsgToSupabase(nick, text, color, role, vipTier) {
   if (!sbClient) return false;
   try {
-    const { error } = await sbClient.from('messages').insert([{ nick, text, color, role, user_id: currentUser?.id || null }]);
+    const { error } = await sbClient.from('messages').insert([{ nick, text, color, role, vip_tier: vipTier || null, user_id: currentUser?.id || null }]);
     return !error;
   } catch(e) { return false; }
 }
@@ -430,13 +436,25 @@ function chatLogout() {
   document.getElementById('chatMainInput').style.display = 'none';
 }
 
-function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId){
+function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTier){
   const msgs=document.getElementById('chatMsgs');
   const initials=(nick.replace(/[^a-zA-Zа-яА-Я0-9]/g,'')||'?').substring(0,2).toUpperCase();
   const time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
   const badge = msgRole==='admin' ? '<span class="role-badge admin">ADMIN</span>'
               : msgRole==='moderator' ? '<span class="role-badge moderator">MOD</span>'
               : msgRole==='helper' ? '<span class="role-badge helper">HELPER</span>' : '';
+  // Единый цвет для роли/VIP — те же RGB, что и в профиле (GLOW_RGB/
+  // VIP_TIERS из profile.js), чтобы человек выглядел одинаково везде:
+  // им подсвечивается бейдж, ник, полоска слева у сообщения и аватарка.
+  // Роль важнее VIP — как и везде на сайте.
+  const ROLE_RGB_CHAT = { admin: '255,45,85', moderator: '145,71,255', helper: '34,197,94' };
+  const roleRgb = msgRole && ROLE_RGB_CHAT[msgRole] ? ROLE_RGB_CHAT[msgRole] : null;
+  const vipMeta = !roleRgb && vipTier && typeof VIP_TIERS !== 'undefined' ? VIP_TIERS.find(t => t.key === vipTier) : null;
+  const highlightRgb = roleRgb || vipMeta?.rgb || null;
+  const vipBadge = (!badge && vipMeta) ? `<span class="role-badge" style="background:rgba(${vipMeta.rgb},.22);color:rgb(${vipMeta.rgb})">${vipMeta.key==='gold'?'✨':vipMeta.key==='silver'?'⭐':'🔸'} ${vipMeta.key.toUpperCase()}</span>` : '';
+  const nickColor = highlightRgb ? `rgb(${highlightRgb})` : (color||'var(--accent)');
+  const avatarBg = highlightRgb ? `linear-gradient(135deg, rgb(${highlightRgb}), rgba(${highlightRgb},.6))` : (color||'var(--accent)');
+  const stripeStyle = highlightRgb ? `border-left:3px solid rgb(${highlightRgb})` : '';
   const div=document.createElement('div');
   const mentionsMe = !isOwn && chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(text);
   div.className='chat-msg'+(isOwn?' own-msg':'')+(mentionsMe?' mentioned-me':'');
@@ -445,21 +463,86 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId){
   // Клик по нику/аватарке открывает мини-профиль — только если у автора
   // есть аккаунт (userId не пустой). У гостей аккаунта нет, смотреть нечего.
   const profileClick = userId ? `onclick="openMiniProfile('${userId}','${nick.replace(/'/g,"\\'")}',this)" style="cursor:pointer"` : '';
+  const canPin = isOwn && msgId && ((typeof getVipTier === 'function' && currentProfile && getVipTier(currentProfile)) || currentRole === 'admin' || currentRole === 'moderator');
   div.innerHTML=`
-    <div class="chat-avatar" style="background:${color||'var(--accent)'}" ${profileClick}>${initials}</div>
+    <div class="chat-avatar" style="background:${avatarBg}" ${profileClick}>${initials}</div>
     <div class="chat-bubble-col">
       <div class="chat-bubble">
-        <div class="chat-user" style="color:${color||'var(--accent)'}" ${profileClick}>${esc(nick)}${badge}</div>
-        <div class="chat-text">${renderMessageText(esc(text))}</div>
+        <div class="chat-user" style="color:${nickColor}" ${profileClick}>${esc(nick)}${badge}${vipBadge}</div>
+        <div class="chat-text" style="${stripeStyle}${stripeStyle?';padding-left:.5rem':''}">${renderMessageText(esc(text))}</div>
         <div class="chat-time">${time}</div>
       </div>
       ${msgId?`<div class="msg-reactions" id="mr-${msgId}"></div>`:''}
     </div>
     ${msgId?`<button class="msg-react-btn" aria-label="Поставить реакцию" onclick="openReactionPicker(${msgId},this)" title="Реакция">😊</button>
     <button class="msg-ban-btn" aria-label="Забанить пользователя" onclick="banNick(this.closest('.chat-msg').dataset.nick,this.closest('.chat-msg'))" title="Забанить">🔨</button>
-    <button class="msg-del-btn" aria-label="Удалить сообщение" onclick="deleteMsg(${msgId},this.closest('.chat-msg'))" title="Удалить">✕</button>`:''}`;
+    <button class="msg-del-btn" aria-label="Удалить сообщение" onclick="deleteMsg(${msgId},this.closest('.chat-msg'))" title="Удалить">✕</button>`:''}
+    ${canPin?`<button class="msg-pin-btn" aria-label="Закрепить на 15 минут" onclick="pinMessage(${msgId})" title="Закрепить на 15 минут (VIP)">📌</button>`:''}`;
   msgs.appendChild(div);
   if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100) msgs.scrollTop=msgs.scrollHeight;
+}
+
+// ─── ЗАКРЕП СООБЩЕНИЯ (VIP/модерация) ───
+// Право проверяется ещё раз на сервере внутри RPC-функции (см.
+// chat-pin.sql) — фронтенд лишь не показывает кнопку тем, кому нельзя,
+// это не единственная защита.
+let chatPinnedId = null;
+let chatPinnedUntil = null;
+setInterval(() => {
+  if (chatPinnedId && chatPinnedUntil && new Date(chatPinnedUntil) <= new Date()) {
+    document.getElementById('chatPinBar').style.display = 'none';
+    chatPinnedId = null; chatPinnedUntil = null;
+  }
+}, 20000);
+async function pinMessage(msgId){
+  if (!sbClient || !msgId) return;
+  try {
+    const { error } = await sbClient.rpc('pin_own_message', { msg_id: msgId });
+    if (error) throw error;
+    showChatStatus('📌 Закреплено на 15 минут', true);
+  } catch(e) {
+    showChatStatus('Не удалось закрепить: ' + (e.message || e), false);
+  }
+}
+async function unpinMessage(msgId){
+  if (!sbClient || !msgId) return;
+  try {
+    const { error } = await sbClient.rpc('unpin_message', { msg_id: msgId });
+    if (error) throw error;
+  } catch(e) {
+    showChatStatus('Не удалось открепить: ' + (e.message || e), false);
+  }
+}
+function renderPinBar(msg){
+  const bar = document.getElementById('chatPinBar');
+  if (!bar) return;
+  const active = msg && msg.pinned_until && new Date(msg.pinned_until) > new Date();
+  if (!active) {
+    bar.style.display = 'none';
+    chatPinnedId = null; chatPinnedUntil = null;
+    return;
+  }
+  chatPinnedId = msg.id;
+  chatPinnedUntil = msg.pinned_until;
+  document.getElementById('chatPinNick').textContent = msg.nick;
+  document.getElementById('chatPinText').textContent = msg.text;
+  const canUnpin = currentUser && (currentUser.id === msg.user_id || currentRole === 'admin' || currentRole === 'moderator');
+  document.getElementById('chatPinUnpinBtn').style.display = canUnpin ? 'inline-block' : 'none';
+  bar.style.display = 'flex';
+}
+async function loadPinnedMessage(){
+  if (!sbClient) return;
+  try {
+    const { data } = await sbClient
+      .from('messages')
+      .select('id,nick,text,user_id,pinned_until')
+      .not('pinned_until', 'is', null)
+      .gt('pinned_until', new Date().toISOString())
+      .order('pinned_until', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    renderPinBar(data);
+  } catch(e) { /* тихо — пин-бар не критичен для работы чата */ }
 }
 
 async function sendMsg(){
@@ -508,12 +591,16 @@ async function sendMsg(){
   const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
   const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
   const role = (currentUser && currentRole) ? currentRole : 'guest';
+  // Уровень VIP — снимок на момент отправки (как и role выше), чат живёт
+  // через realtime-поток, дешевле хранить, чем джойнить profiles на
+  // каждое сообщение. См. getVipTier() в profile.js.
+  const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
 
   if (sbClient) {
-    const ok = await sendMsgToSupabase(chatNick, text, col, role);
-    if (!ok) addMsg(chatNick, text, col, true, false, null, role);
+    const ok = await sendMsgToSupabase(chatNick, text, col, role, vipTierKey);
+    if (!ok) addMsg(chatNick, text, col, true, false, null, role, currentUser?.id, vipTierKey);
   } else {
-    addMsg(chatNick, text, col, true, false, null, role);
+    addMsg(chatNick, text, col, true, false, null, role, currentUser?.id, vipTierKey);
   }
 }
 

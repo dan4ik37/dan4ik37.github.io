@@ -6,6 +6,18 @@
 //  см. forum.sql, не только фронтендом).
 // ═══════════════════════════════════════
 
+// Форматирование в постах форума (жирный/курсив/спойлер) — та же
+// планка доступа, что и у анимированных аватарок: VIP или стафф.
+// Применяется ПОСЛЕ esc() — текст уже безопасно экранирован, теги
+// добавляются поверх, инъекция невозможна.
+function formatForumBody(escapedText, allowFormatting){
+  if (!allowFormatting) return escapedText;
+  return escapedText
+    .replace(/\|\|([^|]+)\|\|/g, '<span class="forum-spoiler" onclick="this.classList.toggle(\'revealed\')" title="Нажми, чтобы открыть">$1</span>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<i>$1</i>');
+}
+
 let forumCurrentThreadId = null;
 
 async function renderForumPage(threadId){
@@ -33,7 +45,7 @@ async function loadForumThreads(){
   try {
     const { data: threads, error } = await sbClient
       .from('forum_threads')
-      .select('*, profiles(nick), forum_posts(count)')
+      .select('*, profiles(nick, role, is_vip, vip_until, total_donated), forum_posts(count)')
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50);
@@ -42,6 +54,7 @@ async function loadForumThreads(){
     statusEl.textContent = '';
     listEl.innerHTML = threads.map(t => {
       const nick = t.profiles?.nick || '?';
+      const nickHtml = renderNickWithVip(nick, t.profiles, ROLE_BADGE_HTML[t.profiles?.role] || '');
       const postsCount = t.forum_posts?.[0]?.count ?? 0;
       const date = new Date(t.created_at).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' });
       return `
@@ -50,7 +63,7 @@ async function loadForumThreads(){
             <div style="font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
               ${t.pinned ? '📌 ' : ''}${t.locked ? '🔒 ' : ''}${esc(t.title)}
             </div>
-            <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem">${esc(nick)} · ${date}</div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem">${nickHtml} · ${date}</div>
           </div>
           <div style="flex-shrink:0;font-size:.75rem;color:var(--muted);white-space:nowrap">💬 ${postsCount}</div>
         </a>`;
@@ -66,7 +79,7 @@ async function loadForumThread(id){
   headerEl.innerHTML = 'Загружаем...'; postsEl.innerHTML = '';
   try {
     const { data: thread, error: tErr } = await sbClient
-      .from('forum_threads').select('*, profiles(nick)').eq('id', id).single();
+      .from('forum_threads').select('*, profiles(nick, role, is_vip, vip_until, total_donated)').eq('id', id).single();
     if (tErr || !thread) throw tErr || new Error('Тема не найдена');
 
     const isAdmin = currentRole === 'admin';
@@ -77,7 +90,7 @@ async function loadForumThread(id){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap">
         <div>
           <div style="font-size:1.15rem;font-weight:800">${thread.pinned?'📌 ':''}${thread.locked?'🔒 ':''}${esc(thread.title)}</div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">${esc(thread.profiles?.nick||'?')} · ${new Date(thread.created_at).toLocaleString('ru-RU')}</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">${renderNickWithVip(thread.profiles?.nick||'?', thread.profiles, ROLE_BADGE_HTML[thread.profiles?.role]||'')} · ${new Date(thread.created_at).toLocaleString('ru-RU')}</div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
           ${isAdmin ? `<button onclick="toggleForumPin(${thread.id}, ${!thread.pinned})" class="profile-admin-btn" style="padding:.4rem .7rem;font-size:.7rem">${thread.pinned?'Открепить':'📌 Закрепить'}</button>` : ''}
@@ -87,26 +100,28 @@ async function loadForumThread(id){
       </div>`;
 
     const { data: posts, error: pErr } = await sbClient
-      .from('forum_posts').select('*, profiles(nick, role)').eq('thread_id', id).order('created_at', { ascending: true });
+      .from('forum_posts').select('*, profiles(nick, role, is_vip, vip_until, total_donated)').eq('thread_id', id).order('created_at', { ascending: true });
     if (pErr) throw pErr;
 
     postsEl.innerHTML = (posts || []).map(p => {
-      const nick = p.profiles?.nick || '?';
-      const role = p.profiles?.role;
-      const badge = ROLE_BADGE_HTML[role] || '';
+      const nickHtml = renderNickWithVip(p.profiles?.nick || '?', p.profiles, ROLE_BADGE_HTML[p.profiles?.role] || '');
       const canDelete = canModerate || currentUser?.id === p.author_id;
+      const canFmt = canUseAnimatedAvatar(p.profiles?.role, p.profiles);
       return `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem" data-post-id="${p.id}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">
-            <div style="font-weight:700;font-size:.82rem">${esc(nick)} ${badge}</div>
+            <div style="font-weight:700;font-size:.82rem">${nickHtml}</div>
             <div style="display:flex;align-items:center;gap:.6rem">
               <span style="font-size:.7rem;color:var(--muted)">${new Date(p.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
               ${canDelete ? `<button onclick="deleteForumPost(${p.id})" aria-label="Удалить ответ" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem">🗑</button>` : ''}
             </div>
           </div>
-          <div style="font-size:.85rem;margin-top:.5rem;white-space:pre-wrap;word-break:break-word;line-height:1.6">${esc(p.body)}</div>
+          <div style="font-size:.85rem;margin-top:.5rem;white-space:pre-wrap;word-break:break-word;line-height:1.6">${formatForumBody(esc(p.body), canFmt)}</div>
         </div>`;
     }).join('');
+
+    const fmtHint = document.getElementById('forumFormatHint');
+    if (fmtHint) fmtHint.style.display = canUseAnimatedAvatar(currentRole, currentProfile) ? 'block' : 'none';
 
     const canReply = currentUser && !thread.locked;
     document.getElementById('forumReplyBox').style.display = canReply ? 'block' : 'none';

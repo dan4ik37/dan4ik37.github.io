@@ -158,13 +158,24 @@ async function doGlobalRegister() {
       // приходит сразу. Профиль (id, nick, role='user') создаётся
       // автоматически триггером на стороне БД (см. SQL ниже) — здесь
       // только дописываем ник, который человек ввёл в форме, поверх
-      // дефолтного (по умолчанию триггер берёт часть email до @).
-      try { await sbClient.from('profiles').update({ nick }).eq('id', data.user.id); } catch(e) {}
+      // дефолтного (уникального, построенного из id — см. vip-secure.sql).
+      // Ник может быть занят (в т.ч. кем-то, кто раньше его носил) —
+      // тогда аккаунт всё равно создаётся, просто с временным ником,
+      // и явно предупреждаем об этом, а не тихо расходимся с БД.
+      let nickApplied = true;
+      try {
+        const { error: nickErr } = await sbClient.from('profiles').update({ nick }).eq('id', data.user.id);
+        if (nickErr) nickApplied = false;
+      } catch(e) { nickApplied = false; }
       await onAuthStateChange(data.user);
-      if (currentProfile) currentProfile.nick = nick;
-      chatNick = nick;
+      // currentProfile.nick уже актуален из БД (onAuthStateChange его
+      // перезагрузил) — не перетираем его вручную желаемым ником.
+      chatNick = currentProfile?.nick || nick;
       try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
       document.getElementById('chatNickDisplay').textContent = chatNick;
+      if (!nickApplied) {
+        alert(`Ник «${nick}» уже занят — аккаунт создан с временным ником «${chatNick}». Смени его на странице профиля.`);
+      }
       goToOwnProfile();
     } else {
       // Email-подтверждение включено — сессии пока нет, нужно перейти
@@ -186,6 +197,7 @@ async function doGlobalRegister() {
 async function doGlobalLogout() {
   if (sbClient) await sbClient.auth.signOut();
   currentUser = null; currentRole = null; currentProfile = null;
+  if (typeof applyThemeAccent === 'function') applyThemeAccent(null);
 
   // Живые алерты о донате имеют смысл только в сессии админа — закрываем
   // сокет и перестаём переподключаться

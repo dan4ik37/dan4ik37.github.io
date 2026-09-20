@@ -3,9 +3,9 @@
 // ═══════════════════════════════════════
 
 const ROLE_BADGE_HTML = {
-  admin: '<span class="role-badge admin">ADMIN</span>',
-  moderator: '<span class="role-badge moderator">MOD</span>',
-  helper: '<span class="role-badge helper">HELPER</span>',
+  admin: '<span class="role-badge admin profile-badge-pop">ADMIN</span>',
+  moderator: '<span class="role-badge moderator profile-badge-pop">MOD</span>',
+  helper: '<span class="role-badge helper profile-badge-pop">HELPER</span>',
 };
 
 let profileViewedId = null; // чей профиль сейчас открыт (может быть не наш)
@@ -41,6 +41,20 @@ function canUseAnimatedAvatar(role, profile){
   return role === 'admin' || role === 'moderator' || role === 'helper' || isVipActive(profile);
 }
 
+// Уровни VIP по сумме донатов за всё время (profiles.total_donated,
+// см. vip-tiers.sql). Порядок по убыванию min — первое совпадение
+// побеждает. Пороги можно смело менять здесь, миграция не нужна.
+const VIP_TIERS = [
+  { key: 'gold',   min: 1500, label: 'GOLD VIP',   rgb: '255,195,40'  },
+  { key: 'silver', min: 500,  label: 'SILVER VIP',  rgb: '200,210,225' },
+  { key: 'bronze', min: 0,    label: 'VIP',         rgb: '205,140,60'  },
+];
+function getVipTier(profile){
+  if (!isVipActive(profile)) return null;
+  const total = Number(profile?.total_donated) || 0;
+  return VIP_TIERS.find(t => total >= t.min) || VIP_TIERS[VIP_TIERS.length - 1];
+}
+
 async function renderProfilePage(viewUserId){
   const loggedOutEl = document.getElementById('profileLoggedOut');
   const contentEl = document.getElementById('profileContent');
@@ -73,13 +87,50 @@ async function renderProfilePage(viewUserId){
   profileEmailVisible = false;
   document.getElementById('profileEmailToggle').style.display = (isOwn && profileEmailRaw) ? 'inline' : 'none';
   renderProfileEmailMask();
+
+  // Гости профиля: чужой профиль — тихо фиксируем визит (не блокируем
+  // рендер, ошибка не критична); свой профиль — если VIP, показываем,
+  // кто заходил.
+  if (!isOwn && currentUser?.id) recordProfileView(targetId);
+  if (isOwn) renderProfileGuests(profile);
+  if (isOwn) renderDonateLoginBlock(profile.donate_login);
+  else { const p = document.getElementById('donateLoginPanel'); if (p) p.style.display = 'none'; }
+  renderStaffVipPanel(profile, isOwn);
+
   document.getElementById('profileRoleBadge').innerHTML = ROLE_BADGE_HTML[profile.role] || '';
-  document.getElementById('profileVipBadge').style.display = isVipActive(profile) ? 'inline-block' : 'none';
+  {
+    const tier = getVipTier(profile);
+    const vipBadgeEl = document.getElementById('profileVipBadge');
+    vipBadgeEl.style.display = tier ? 'inline-block' : 'none';
+    vipBadgeEl.classList.toggle('profile-badge-pop', !!tier);
+    if (tier) {
+      vipBadgeEl.textContent = tier.key === 'gold' ? '✨ ' + tier.label : tier.key === 'silver' ? '⭐ ' + tier.label : '🔸 ' + tier.label;
+      vipBadgeEl.style.background = `linear-gradient(135deg, rgb(${tier.rgb}), rgba(${tier.rgb},.6))`;
+    }
+    // Напоминание о скором окончании — только себе, чтобы не потерять
+    // уровень: без нового доната минимум 100₽ VIP не продлится.
+    const expireEl = document.getElementById('profileVipExpireWarn');
+    if (expireEl) {
+      const daysLeft = (isOwn && tier && profile.vip_until) ? Math.ceil((new Date(profile.vip_until) - Date.now()) / 86400000) : null;
+      if (daysLeft !== null && daysLeft <= 7) {
+        expireEl.style.display = 'block';
+        expireEl.textContent = daysLeft <= 0 ? '⚠️ VIP истекает сегодня — задонать ещё, чтобы не потерять уровень' : `⚠️ VIP закончится через ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'} — задонать 100₽+, чтобы продлить`;
+      } else {
+        expireEl.style.display = 'none';
+      }
+    }
+  }
   document.getElementById('profileBioText').textContent = profile.bio || (isOwn ? 'Расскажи о себе...' : '');
+  document.getElementById('profileStatusView').textContent = profile.status_text || '';
+  if (typeof renderProfileGamesView === 'function') renderProfileGamesView(profile.favorite_games);
   document.getElementById('profileBanner').style.backgroundImage = profile.banner_url ? `url('${profile.banner_url}')` : '';
+  document.getElementById('profileBanner').classList.toggle('profile-banner-empty', !profile.banner_url);
   const avatarEl = document.getElementById('profileAvatarImg');
   if (profile.avatar_url) { avatarEl.style.backgroundImage = `url('${profile.avatar_url}')`; avatarEl.textContent=''; }
   else { avatarEl.style.backgroundImage=''; avatarEl.textContent = (profile.nick||'?').substring(0,2).toUpperCase(); }
+  applyProfileGlow(avatarEl, profile);
+
+  renderProfileStats(profile, targetId);
 
   // Редактирование — только на своём профиле
   document.getElementById('profileBannerEditBtn').style.display = isOwn ? 'flex' : 'none';
@@ -88,6 +139,8 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileAvatarRemoveBtn').style.display = (isOwn && profile.avatar_url) ? 'block' : 'none';
   document.getElementById('profileNickEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileBioEditBtn').style.display = isOwn ? 'inline' : 'none';
+  document.getElementById('profileStatusEditBtn').style.display = isOwn ? 'inline' : 'none';
+  document.getElementById('profileGamesEditBtn').style.display = isOwn ? 'inline' : 'none';
   document.getElementById('profileAccountSettings').style.display = isOwn ? 'block' : 'none';
   document.getElementById('profileFriendsPanel').style.display = isOwn ? 'block' : 'none';
   if (isOwn) {
@@ -110,6 +163,11 @@ async function renderProfilePage(viewUserId){
     addFriendWrap.style.display = 'none';
   }
   document.getElementById('profileVipPromo').style.display = (isOwn && !canUseAnimatedAvatar(profile.role, profile)) ? 'block' : 'none';
+  const themePanel = document.getElementById('profileThemePanel');
+  if (themePanel) {
+    themePanel.style.display = (isOwn && isVipActive(profile)) ? 'block' : 'none';
+    if (isOwn) renderThemePresets(profile.theme_accent);
+  }
   document.getElementById('profileAdminPanel').style.display = (isOwn && profile.role === 'admin') ? 'block' : 'none';
 
   const staffPanel = document.getElementById('profileStaffPanel');
@@ -123,6 +181,206 @@ async function renderProfilePage(viewUserId){
   } else {
     staffPanel.style.display = 'none';
   }
+}
+
+// Цвет свечения вокруг аватарки: роль важнее VIP (видно, кто модерирует
+// сайт, даже если админ/модератор ещё и донатер). Цвета — те же RGB,
+// что у .role-badge в CSS, чтобы бейдж и свечение совпадали. Для VIP
+// цвет берётся из уровня (VIP_TIERS выше) — золото/серебро/бронза.
+const GLOW_RGB = {
+  admin: '255,45,85',      // var(--accent)
+  moderator: '145,71,255', // var(--tw)
+  helper: '34,197,94',     // #22c55e
+};
+function applyProfileGlow(avatarEl, profile){
+  let rgb = null;
+  if (profile.role && GLOW_RGB[profile.role]) rgb = GLOW_RGB[profile.role];
+  else { const tier = getVipTier(profile); if (tier) rgb = tier.rgb; }
+
+  if (rgb) {
+    avatarEl.style.setProperty('--ring-rgb', rgb);
+    avatarEl.classList.add('profile-avatar-glow');
+  } else {
+    avatarEl.classList.remove('profile-avatar-glow');
+  }
+}
+
+// Статистика профиля: дата регистрации + пара лёгких count-запросов.
+// Не трогает донаты/VIP — только новое поле profiles.created_at
+// (profile-stats.sql) и уже существующие таблицы friendships/forum_threads.
+async function renderProfileStats(profile, targetId){
+  const regDateEl = document.getElementById('profileStatRegDate');
+  const daysEl = document.getElementById('profileStatDays');
+  const friendsEl = document.getElementById('profileStatFriends');
+  const threadsEl = document.getElementById('profileStatThreads');
+  if (!regDateEl) return;
+
+  if (profile.created_at) {
+    const regDate = new Date(profile.created_at);
+    regDateEl.textContent = regDate.toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit', year:'numeric' });
+    daysEl.textContent = Math.max(0, Math.floor((Date.now() - regDate.getTime()) / 86400000));
+  } else {
+    // Значит profile-stats.sql ещё не выполнен на базе — не ломаем страницу
+    regDateEl.textContent = '—';
+    daysEl.textContent = '—';
+  }
+
+  friendsEl.textContent = '…';
+  threadsEl.textContent = '…';
+  try {
+    const [friendsRes, threadsRes] = await Promise.all([
+      sbClient.from('friendships')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'accepted')
+        .or(`requester_id.eq.${targetId},addressee_id.eq.${targetId}`),
+      sbClient.from('forum_threads')
+        .select('id', { count: 'exact', head: true })
+        .eq('author_id', targetId),
+    ]);
+    friendsEl.textContent = friendsRes.count ?? '0';
+    threadsEl.textContent = threadsRes.count ?? '0';
+  } catch(e) {
+    friendsEl.textContent = '—';
+    threadsEl.textContent = '—';
+  }
+}
+
+// Свой акцентный цвет интерфейса — только для активных VIP, видно
+// только самому пользователю (личная тема, никак не влияет на других).
+// Готовые пары цветов, а не произвольный пикер — чтобы не было
+// нечитаемых сочетаний. Хранится как "accent,accent2" в profiles.theme_accent.
+const THEME_PRESETS = [
+  { key: 'default', label: 'Розовый (по умолчанию)', a1: '#ff2d55', a2: '#ff6b35' },
+  { key: 'purple',  label: 'Фиолетовый',              a1: '#9147ff', a2: '#c77dff' },
+  { key: 'blue',    label: 'Синий',                   a1: '#2979ff', a2: '#29b6f6' },
+  { key: 'green',   label: 'Зелёный',                 a1: '#16a34a', a2: '#4ade80' },
+  { key: 'gold',    label: 'Золотой',                 a1: '#ffd700', a2: '#ff9500' },
+];
+function applyThemeAccent(profile){
+  if (!profile || !isVipActive(profile) || !profile.theme_accent) {
+    document.documentElement.style.removeProperty('--accent');
+    document.documentElement.style.removeProperty('--accent2');
+    return;
+  }
+  const [a1, a2] = String(profile.theme_accent).split(',');
+  if (a1) document.documentElement.style.setProperty('--accent', a1.trim());
+  if (a2) document.documentElement.style.setProperty('--accent2', a2.trim());
+}
+function renderThemePresets(currentValue){
+  const wrap = document.getElementById('profileThemeSwatches');
+  if (!wrap) return;
+  wrap.innerHTML = THEME_PRESETS.map(p => {
+    const active = currentValue === `${p.a1},${p.a2}` || (!currentValue && p.key === 'default');
+    return `<button onclick="saveThemeAccent('${p.key === 'default' ? '' : p.a1}','${p.key === 'default' ? '' : p.a2}')" title="${p.label}"
+      style="width:34px;height:34px;border-radius:50%;cursor:pointer;background:linear-gradient(135deg,${p.a1},${p.a2});border:2px solid ${active ? '#fff' : 'transparent'};box-shadow:${active ? '0 0 0 2px rgba(255,255,255,.3)' : 'none'}"></button>`;
+  }).join('');
+}
+async function saveThemeAccent(a1, a2){
+  if (!currentUser) return;
+  const value = (a1 && a2) ? `${a1},${a2}` : null;
+  try {
+    await sbClient.from('profiles').update({ theme_accent: value }).eq('id', currentUser.id);
+    if (currentProfile) currentProfile.theme_accent = value;
+    applyThemeAccent(currentProfile || { is_vip: true, vip_until: null, theme_accent: value });
+    renderThemePresets(value);
+  } catch(e) {
+    alert('Не удалось сохранить тему: ' + (e.message || e));
+  }
+}
+
+// Ник + бейдж роли/VIP + цвет по уровню — используется на форуме (и
+// где угодно ещё, где рендерится чужой профиль по join'у profiles).
+// Роль важнее VIP: если есть roleBadgeHtml, отдельный VIP-бейдж не
+// дублируем — тот же принцип, что и в applyProfileGlow().
+function renderNickWithVip(nick, profile, roleBadgeHtml){
+  const tier = !roleBadgeHtml ? getVipTier(profile) : null;
+  const color = tier ? `color:rgb(${tier.rgb})` : '';
+  const vipBadge = tier ? ` <span class="role-badge" style="background:rgba(${tier.rgb},.22);color:rgb(${tier.rgb})">${tier.key==='gold'?'✨':tier.key==='silver'?'⭐':'🔸'} ${tier.key.toUpperCase()}</span>` : '';
+  return `<span style="${color}">${esc(nick)}</span>${roleBadgeHtml||''}${vipBadge}`;
+}
+
+// Гости профиля — VIP-плюшка. Запись визита делает КАЖДЫЙ залогиненный
+// посетитель чужого профиля (не только к VIP), потому что узнать, что
+// у тебя есть гости, ты сможешь, только когда сам купишь VIP — так и
+// задумано: история визитов не теряется, пока ты не VIP.
+async function recordProfileView(viewedId){
+  if (!sbClient || !currentUser?.id || currentUser.id === viewedId) return;
+  try {
+    await sbClient.from('profile_views')
+      .upsert([{ viewer_id: currentUser.id, viewed_id: viewedId, viewed_at: new Date().toISOString() }], { onConflict: 'viewer_id,viewed_id' });
+  } catch(e) { /* не критично — просто не покажется в списке гостей */ }
+}
+async function renderProfileGuests(profile){
+  const panel = document.getElementById('profileGuestsPanel');
+  if (!panel) return;
+  if (!isVipActive(profile)) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const listEl = document.getElementById('profileGuestsList');
+  listEl.innerHTML = '<div style="font-size:.75rem;color:var(--muted);text-align:center;padding:.5rem 0">Загружаем...</div>';
+  try {
+    const { data, error } = await sbClient
+      .from('profile_views')
+      .select('viewer_id, viewed_at, profiles!profile_views_viewer_id_fkey(nick, avatar_url)')
+      .eq('viewed_id', currentUser.id)
+      .order('viewed_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    if (!data || !data.length) {
+      listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem 0">Пока никто не заходил</div>';
+      return;
+    }
+    listEl.innerHTML = data.map(v => {
+      const nick = v.profiles?.nick || '?';
+      const ago = timeAgoRu(v.viewed_at);
+      const avatarStyle = v.profiles?.avatar_url ? `background-image:url('${v.profiles.avatar_url}')` : '';
+      return `
+        <div onclick="openMiniProfile('${v.viewer_id}','${nick.replace(/'/g,"\\'")}',this)" style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.4rem 0">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;flex-shrink:0;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff">${v.profiles?.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-size:.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nick)}</div>
+            <div style="font-size:.68rem;color:var(--muted)">${ago}</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem 0">Не удалось загрузить</div>';
+  }
+}
+function timeAgoRu(iso){
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'только что';
+  if (min < 60) return `${min} мин назад`;
+  const hrs = Math.floor(min / 60);
+  if (hrs < 24) return `${hrs} ч назад`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days} дн назад`;
+  return new Date(iso).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
+}
+
+// Личная шкала VIP-прогресса — сколько накоплено к следующему месяцу
+// (vip_pending_rub из 100₽, см. vip-secure.sql). Видно ТОЛЬКО
+// модераторам и выше, и только когда они смотрят чужой профиль — это
+// инструмент присмотра за донатами, а не публичная информация.
+function renderStaffVipPanel(profile, isOwn){
+  const panel = document.getElementById('profileStaffVipPanel');
+  if (!panel) return;
+  const isStaffViewer = currentRole === 'admin' || currentRole === 'moderator';
+  if (isOwn || !isStaffViewer || !profile.is_vip) { panel.style.display = 'none'; return; }
+
+  const pending = Number(profile.vip_pending_rub) || 0;
+  const missing = Math.max(0, VIP_RUB_PER_MONTH - pending);
+  const pct = Math.min(100, Math.round((pending / VIP_RUB_PER_MONTH) * 100));
+  const tier = getVipTier(profile);
+  const untilStr = profile.vip_until ? new Date(profile.vip_until).toLocaleDateString('ru-RU') : 'бессрочно';
+
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">🔒 Только для модерации: шкала VIP</div>
+    <div style="font-size:.78rem;margin-bottom:.4rem">Уровень: <b>${tier ? tier.label : 'не активен'}</b> · всего задонатил: <b>${(Number(profile.total_donated)||0).toFixed(0)}₽</b></div>
+    <div style="font-size:.78rem;margin-bottom:.4rem">До следующего месяца: <b>${pending.toFixed(0)}/${VIP_RUB_PER_MONTH}₽</b>${missing > 0 ? ` (не хватает ${missing.toFixed(0)}₽)` : ' — набрано!'}</div>
+    <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.5rem 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px"></div></div>
+    <div style="font-size:.72rem;color:var(--muted)">VIP активен до: ${untilStr}</div>`;
 }
 
 function toggleBioEdit(show){
@@ -158,13 +416,11 @@ async function saveProfileNick(){
   if (nick.length > 24) { errEl.textContent = 'Максимум 24 символа'; return; }
 
   try {
-    // Мягкое предупреждение о занятом нике — не блокирует (уникальности
-    // на уровне БД нет и специально, см. ИНСТРУКЦИЮ, раздел 8), просто
-    // подсказка, чтобы не путаться с кем-то ещё в поиске ролей/донатах.
-    const { data: existing } = await sbClient.from('profiles').select('id').ilike('nick', nick).neq('id', currentUser.id).maybeSingle();
-    if (existing && !confirm(`Ник «${nick}» уже занят кем-то другим. Использовать всё равно? (может запутать при выдаче ролей/VIP по нику)`)) return;
-
-    await sbClient.from('profiles').update({ nick }).eq('id', currentUser.id);
+    // Ник больше не участвует в матчинге доната (см. vip-donate-login.sql)
+    // — для этого есть отдельный "логин для доната". Поэтому ник снова
+    // свободный, без проверок на уникальность.
+    const { error } = await sbClient.from('profiles').update({ nick }).eq('id', currentUser.id);
+    if (error) { errEl.textContent = 'Не удалось сохранить: ' + error.message; return; }
     if (currentProfile) currentProfile.nick = nick;
     chatNick = nick;
     try { localStorage.setItem('d37_nick', nick); } catch(e) {}
@@ -215,7 +471,12 @@ async function uploadProfileImage(bucket, file){
   statusEl.textContent = 'Загружаем...';
   try {
     const ext = file.name.split('.').pop();
-    const path = `${currentUser.id}/${bucket === 'avatars' ? 'avatar' : 'banner'}.${ext}`;
+    // ВАЖНО: имя файла тоже не должно содержать слово "banner" — оно
+    // остаётся в итоговом URL (.../object/public/<bucket>/<uid>/<имя>.<ext>)
+    // независимо от имени бакета, и именно это ловилось генерик-фильтрами
+    // блокировщиков рекламы (см. раздел 8 инструкции). Два переименования
+    // бакета не помогали ровно поэтому — дело было не в бакете.
+    const path = `${currentUser.id}/${bucket === 'avatars' ? 'avatar' : 'bg'}.${ext}`;
     const { error: upErr } = await sbClient.storage.from(bucket).upload(path, file, { upsert: true, cacheControl: '3600' });
     if (upErr) throw upErr;
     const { data: urlData } = sbClient.storage.from(bucket).getPublicUrl(path);
@@ -258,23 +519,38 @@ async function processDonationForVip(d){
       await sbClient.from('vip_donation_log').insert([{ ...logBase, matched: false }]);
       return;
     }
-    const months = Math.floor((Number(d.amount) || 0) / VIP_RUB_PER_MONTH);
-    if (months < 1) {
-      await sbClient.from('vip_donation_log').insert([{ ...logBase, matched: false }]);
-      return;
-    }
 
-    const { data: profile } = await sbClient.from('profiles').select('id, nick, is_vip, vip_until').ilike('nick', d.username).maybeSingle();
+    const { data: profile } = await sbClient.from('profiles').select('id, nick, is_vip, vip_until, total_donated, vip_pending_rub').ilike('donate_login', d.username).maybeSingle();
     if (!profile) {
       await sbClient.from('vip_donation_log').insert([{ ...logBase, matched: false }]);
       return;
     }
 
-    const activeUntil = (profile.is_vip && profile.vip_until && new Date(profile.vip_until) > new Date())
-      ? new Date(profile.vip_until) : new Date();
-    activeUntil.setMonth(activeUntil.getMonth() + months);
+    // total_donated копим ВСЕГДА, если ник найден — даже если сумма
+    // меньше 100₽ и месяц VIP не положен. Именно от неё считается
+    // уровень (Bronze/Silver/Gold, см. VIP_TIERS выше и vip-tiers.sql).
+    const newTotal = (Number(profile.total_donated) || 0) + (Number(d.amount) || 0);
 
-    await sbClient.from('profiles').update({ is_vip: true, vip_until: activeUntil.toISOString() }).eq('id', profile.id);
+    // Месяц VIP теперь можно набирать ЧАСТЯМИ — остаток не сгорает, а
+    // копится в vip_pending_rub и участвует в следующем донате (см.
+    // vip-secure.sql). Донатнул 30₽ сегодня, 40₽ завтра, 30₽ послезавтра
+    // — только тогда закрылся месяц, а не потерялись 30+40=70₽ впустую.
+    const pendingTotal = (Number(profile.vip_pending_rub) || 0) + (Number(d.amount) || 0);
+    const months = Math.floor(pendingTotal / VIP_RUB_PER_MONTH);
+    const remainder = pendingTotal - months * VIP_RUB_PER_MONTH;
+    const patch = { total_donated: newTotal, vip_pending_rub: remainder };
+
+    if (months >= 1) {
+      const activeUntil = (profile.is_vip && profile.vip_until && new Date(profile.vip_until) > new Date())
+        ? new Date(profile.vip_until) : new Date();
+      activeUntil.setMonth(activeUntil.getMonth() + months);
+      patch.is_vip = true;
+      patch.vip_until = activeUntil.toISOString();
+    }
+
+    await sbClient.from('profiles').update(patch).eq('id', profile.id);
+    // matched:true теперь значит "нашли ник и учли сумму", а не только
+    // "выдали месяц" — months_granted может быть и 0, это нормально.
     await sbClient.from('vip_donation_log').insert([{ ...logBase, profile_id: profile.id, matched: true, months_granted: months }]);
   } catch(e) {
     // Гонка (два вызова обработали один donation_id одновременно) или
@@ -303,12 +579,54 @@ function processRecentDonationsForVip(donations){
 // ═══════════════════════════════════════
 const DA_DONATE_URL = 'https://www.donationalerts.com/r/dan4ik37';
 
+async function saveDonateLogin(){
+  if (!currentUser) return;
+  const input = document.getElementById('donateLoginInput');
+  const errEl = document.getElementById('donateLoginErr');
+  const login = input.value.trim();
+  errEl.textContent = '';
+  if (!login) { errEl.textContent = 'Введи логин'; return; }
+  if (login.length > 32) { errEl.textContent = 'Слишком длинный (макс. 32 символа)'; return; }
+  try {
+    const { error } = await sbClient.from('profiles').update({ donate_login: login }).eq('id', currentUser.id);
+    if (error) {
+      errEl.textContent = error.code === '23505' || /уже занят/i.test(error.message || '')
+        ? `Логин «${login}» уже занят — в том числе кем-то, кто раньше его использовал`
+        : 'Не удалось сохранить: ' + error.message;
+      return;
+    }
+    if (currentProfile) currentProfile.donate_login = login;
+    renderDonateLoginBlock(login);
+  } catch(e) {
+    errEl.textContent = 'Не удалось сохранить: ' + (e.message || e);
+  }
+}
+function renderDonateLoginBlock(login){
+  const panel = document.getElementById('donateLoginPanel');
+  if (panel) panel.style.display = 'block';
+  const displayEl = document.getElementById('donateLoginCurrent');
+  const editWrap = document.getElementById('donateLoginEditWrap');
+  if (!displayEl) return;
+  if (login) {
+    displayEl.style.display = 'flex';
+    document.getElementById('donateLoginValue').textContent = login;
+    editWrap.style.display = 'none';
+  } else {
+    displayEl.style.display = 'none';
+    editWrap.style.display = 'flex';
+  }
+}
+
 function openVipBuyGuide(){
   if (!currentUser) { openGlobalAuth(); return; }
+  if (!currentProfile?.donate_login) {
+    alert('Сначала укажи логин для доната — он выше, в блоке VIP. Без него донат не поймёт, кому начислять VIP.');
+    document.getElementById('donateLoginInput')?.focus();
+    return;
+  }
   const months = parseInt(document.getElementById('vipBuyMonths').value, 10);
   const amount = months * VIP_RUB_PER_MONTH;
-  const nick = currentProfile?.nick || currentUser.email.split('@')[0];
-  document.getElementById('vipGuideNick').textContent = nick;
+  document.getElementById('vipGuideNick').textContent = currentProfile.donate_login;
   document.getElementById('vipGuideAmount').textContent = amount + '₽';
   document.getElementById('vipBuyModal').style.display = 'flex';
 }
@@ -316,11 +634,11 @@ function closeVipBuyGuide(){
   document.getElementById('vipBuyModal').style.display = 'none';
 }
 async function proceedToVipDonate(){
-  const nick = document.getElementById('vipGuideNick').textContent;
+  const login = document.getElementById('vipGuideNick').textContent;
   const amount = document.getElementById('vipGuideAmount').textContent.replace('₽','');
-  try { await navigator.clipboard.writeText(nick); } catch(e) {
+  try { await navigator.clipboard.writeText(login); } catch(e) {
     // Буфер обмена может быть недоступен (напр. без HTTPS или разрешения) —
-    // не критично, ник всё равно есть текстом в гайде, можно ввести руками.
+    // не критично, логин всё равно есть текстом в гайде, можно ввести руками.
   }
   // best-effort — см. комментарий выше, не гарантировано
   window.open(`${DA_DONATE_URL}?amount=${amount}`, '_blank');
@@ -387,6 +705,8 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
 
   document.getElementById('miniProfileNick').textContent = fallbackNick;
   document.getElementById('miniProfileBio').textContent = '';
+  document.getElementById('miniProfileStatus').textContent = '';
+  document.getElementById('miniProfileGames').innerHTML = '';
   document.getElementById('miniProfileRoleBadge').innerHTML = '';
   document.getElementById('miniProfileVip').style.display = 'none';
   document.getElementById('miniProfileAvatar').textContent = (fallbackNick||'?').substring(0,2).toUpperCase();
@@ -399,6 +719,20 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     if (!p) return;
     document.getElementById('miniProfileNick').textContent = p.nick || fallbackNick;
     document.getElementById('miniProfileBio').textContent = p.bio || '';
+    document.getElementById('miniProfileStatus').textContent = p.status_text || '';
+    {
+      const games = p.favorite_games || [];
+      const myGames = new Set((currentProfile?.favorite_games) || []);
+      const gamesEl = document.getElementById('miniProfileGames');
+      if (games.length) {
+        gamesEl.innerHTML = games.map(g => {
+          const shared = currentUser && currentUser.id !== userId && myGames.has(g);
+          return `<span style="display:inline-block;background:${shared ? 'rgba(34,197,94,.18)' : 'rgba(145,71,255,.15)'};color:${shared ? '#22c55e' : 'var(--tw)'};border-radius:6px;padding:.15rem .5rem;font-size:.66rem;margin:0 .25rem .25rem 0">${shared ? '✓ ' : ''}🎮 ${esc(g)}</span>`;
+        }).join('');
+      } else {
+        gamesEl.innerHTML = '';
+      }
+    }
     document.getElementById('miniProfileRoleBadge').innerHTML = ROLE_BADGE_HTML[p.role] || '';
     document.getElementById('miniProfileVip').style.display = isVipActive(p) ? 'inline' : 'none';
     if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${p.avatar_url}')`;
