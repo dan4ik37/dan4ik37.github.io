@@ -1384,10 +1384,10 @@ body.low .donation-alert-icon{animation:none}
   <h2 class="sec-title">Профиль</h2>
 
   <!-- Не залогинен -->
-  <div id="profileLoggedOut" style="display:none;text-align:center;padding:3rem 1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r)">
+  <div id="profileLoggedOut" style="display:none;text-align:center;padding:3rem 1rem">
     <div style="font-size:2.5rem;margin-bottom:1rem">👤</div>
     <p style="color:var(--muted);margin-bottom:1.2rem">Чтобы завести профиль — войди или зарегистрируйся</p>
-    <button onclick="openGlobalAuth()" style="padding:.8rem 2rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800;border:none;cursor:pointer;font-family:'Montserrat',sans-serif">Войти / Зарегистрироваться</button>
+    <button onclick="openGlobalAuth()" class="pf-btn pf-btn-primary" style="padding:.8rem 2rem;border-radius:50px">Войти / Зарегистрироваться</button>
   </div>
 
   <!-- Сам профиль -->
@@ -1418,7 +1418,7 @@ body.low .donation-alert-icon{animation:none}
           <span id="profileVipBadge" style="display:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:.62rem;font-weight:800;padding:.15rem .5rem;border-radius:5px;letter-spacing:.5px">✨ VIP</span>
           <button id="profileNickEditBtn" onclick="toggleNickEdit(true)" style="display:none;background:none;border:none;color:var(--tw);cursor:pointer;font-size:.7rem;font-weight:700">✎ Сменить ник</button>
         </div>
-        <div id="profileNickEditWrap" style="display:none;margin-top:.4rem;display:flex;gap:.4rem;max-width:260px">
+        <div id="profileNickEditWrap" style="display:none;margin-top:.4rem;gap:.4rem;max-width:260px">
           <input id="profileNickInput" maxlength="24" style="flex:1;background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.4rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
           <button onclick="saveProfileNick()" style="padding:.4rem .7rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.75rem;cursor:pointer">✓</button>
           <button onclick="toggleNickEdit(false)" style="padding:.4rem .7rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">✕</button>
@@ -1449,46 +1449,46 @@ body.low .donation-alert-icon{animation:none}
 
     <!-- Статистика профиля -->
     <div id="profileStatsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin-top:1.2rem">
-      <div class="profile-stat-card" style="animation-delay:.04s;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:.85rem .7rem;text-align:center">
+      <div class="profile-stat-card" style="animation-delay:.04s">
         <div style="font-size:1.25rem">📅</div>
         <div id="profileStatRegDate" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
         <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">На сайте с</div>
       </div>
-      <div class="profile-stat-card" style="animation-delay:.11s;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:.85rem .7rem;text-align:center">
+      <div class="profile-stat-card" style="animation-delay:.11s">
         <div style="font-size:1.25rem">⏳</div>
         <div id="profileStatDays" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
         <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Дней с нами</div>
       </div>
-      <div class="profile-stat-card" style="animation-delay:.18s;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:.85rem .7rem;text-align:center">
+      <div class="profile-stat-card" style="animation-delay:.18s">
         <div style="font-size:1.25rem">👥</div>
         <div id="profileStatFriends" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
         <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Друзей</div>
       </div>
-      <div class="profile-stat-card" style="animation-delay:.25s;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:.85rem .7rem;text-align:center">
+      <div class="profile-stat-card" style="animation-delay:.25s">
         <div style="font-size:1.25rem">📝</div>
         <div id="profileStatThreads" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
         <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Тем на форуме</div>
       </div>
     </div>
 
-    <div style="margin-top:1.5rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.2rem">
+    <div id="profileAboutCard" class="pf-card pf-card-accent" style="margin-top:1.5rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
-        <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">О себе</div>
+        <div class="pf-kicker">О себе</div>
         <button id="profileBioEditBtn" onclick="toggleBioEdit(true)" style="display:none;background:none;border:none;color:var(--tw);cursor:pointer;font-size:.72rem;font-weight:700">✎ Редактировать</button>
       </div>
       <p id="profileBioText" style="color:var(--text);font-size:.85rem;line-height:1.6"></p>
       <div id="profileBioEditWrap" style="display:none">
         <textarea id="profileBioInput" maxlength="280" rows="3" placeholder="Пара слов о себе..." style="width:100%;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.7rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.85rem;outline:none;resize:vertical"></textarea>
         <div style="display:flex;gap:.5rem;margin-top:.5rem">
-          <button onclick="saveProfileBio()" style="padding:.5rem 1.1rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.75rem;cursor:pointer">Сохранить</button>
-          <button onclick="toggleBioEdit(false)" style="padding:.5rem 1.1rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">Отмена</button>
+          <button onclick="saveProfileBio()" class="pf-btn pf-btn-primary pf-btn-sm">Сохранить</button>
+          <button onclick="toggleBioEdit(false)" class="pf-btn pf-btn-ghost pf-btn-sm">Отмена</button>
         </div>
       </div>
     </div>
 
-    <div style="margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.2rem">
+    <div id="profileGamesCard" class="pf-card pf-card-accent" style="margin-top:1rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
-        <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">🎮 Любимые игры</div>
+        <div class="pf-kicker">🎮 Любимые игры</div>
         <button id="profileGamesEditBtn" onclick="toggleGamesEdit(true)" style="display:none;background:none;border:none;color:var(--tw);cursor:pointer;font-size:.72rem;font-weight:700">✎ Редактировать</button>
       </div>
       <div id="profileGamesView"></div>
@@ -1496,26 +1496,26 @@ body.low .donation-alert-icon{animation:none}
         <input id="profileGamesInput" placeholder="Valorant, CS2, Minecraft..." style="width:100%;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.6rem .8rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.82rem;outline:none">
         <div style="font-size:.66rem;color:var(--muted);margin-top:.35rem">Через запятую, до 10 игр — покажутся в мини-профиле и помогут найти тиммейтов на странице «Тиммейты»</div>
         <div style="display:flex;gap:.5rem;margin-top:.6rem">
-          <button onclick="saveProfileGames()" style="padding:.5rem 1.1rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.75rem;cursor:pointer">Сохранить</button>
-          <button onclick="toggleGamesEdit(false)" style="padding:.5rem 1.1rem;border-radius:8px;border:1px solid var(--border);background:none;color:var(--muted);font-size:.75rem;cursor:pointer">Отмена</button>
+          <button onclick="saveProfileGames()" class="pf-btn pf-btn-primary pf-btn-sm">Сохранить</button>
+          <button onclick="toggleGamesEdit(false)" class="pf-btn pf-btn-ghost pf-btn-sm">Отмена</button>
         </div>
       </div>
     </div>
 
     <!-- Настройки аккаунта — только на своём профиле -->
-    <div id="profileAccountSettings" style="display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.2rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.8rem">Настройки аккаунта</div>
+    <div id="profileAccountSettings" class="pf-card pf-card-muted" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.8rem">Настройки аккаунта</div>
       <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-        <button id="profilePushBtn" onclick="togglePush()" style="padding:.55rem 1rem;border-radius:8px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">🔔 Подписаться на стримы</button>
-        <button onclick="confirmLogout()" style="padding:.55rem 1rem;border-radius:8px;border:1.5px solid rgba(255,45,85,.3);background:rgba(255,45,85,.08);color:var(--accent);font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">🚪 Выйти из аккаунта</button>
+        <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на стримы</button>
+        <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
       </div>
     </div>
 
     <!-- Друзья — только на своём профиле -->
-    <div id="profileFriendsPanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.2rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">👥 Заявки в друзья</div>
+    <div id="profileFriendsPanel" class="pf-card pf-card-tw" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.6rem">👥 Заявки в друзья</div>
       <div id="friendRequestsList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem"></div>
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">Друзья</div>
+      <div class="pf-kicker" style="margin-bottom:.6rem">Друзья</div>
       <div id="friendsList" style="display:flex;flex-direction:column;gap:.5rem"></div>
     </div>
 
@@ -1530,8 +1530,8 @@ body.low .donation-alert-icon{animation:none}
          ник можно менять свободно, логин — служебный, вводится один раз
          в форму доната, чтобы донат нашёл владельца. Виден всегда, а не
          только пока нет VIP — нужен и чтобы продлевать. -->
-    <div id="donateLoginPanel" style="display:none;margin-top:1rem;background:rgba(255,215,0,.05);border:1px solid rgba(255,215,0,.15);border-radius:var(--r);padding:1.1rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem">🔑 Логин для доната</div>
+    <div id="donateLoginPanel" class="pf-card pf-card-gold" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.5rem">🔑 Логин для доната</div>
       <div id="donateLoginCurrent" style="display:none;align-items:center;gap:.6rem;flex-wrap:wrap">
         <span style="font-size:.85rem;font-weight:700;color:#ffd700" id="donateLoginValue"></span>
         <button onclick="document.getElementById('donateLoginCurrent').style.display='none';document.getElementById('donateLoginEditWrap').style.display='flex';document.getElementById('donateLoginInput').value=currentProfile?.donate_login||''" style="background:none;border:none;color:var(--tw);cursor:pointer;font-size:.7rem;font-weight:700">✎ Сменить</button>
@@ -1544,7 +1544,7 @@ body.low .donation-alert-icon{animation:none}
       <div style="font-size:.68rem;color:var(--muted);margin-top:.5rem;line-height:1.5">Это НЕ ник — отдельный служебный логин, вводится один раз, потом просто вставляешь его в форму доната. Нужен и новым, и уже действующим VIP (чтобы продлевать).</div>
     </div>
 
-    <div id="profileVipPromo" style="display:none;margin-top:1rem;background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:var(--r);padding:1.1rem">
+    <div id="profileVipPromo" class="pf-card pf-card-gold" style="display:none;margin-top:1rem">
       <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.6rem">
         ✨ <b style="color:var(--text)">VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится).
         Всем VIP: анимированные аватар и фон, цветной ник в чате и на форуме, своя тема сайта,
@@ -1561,23 +1561,23 @@ body.low .donation-alert-icon{animation:none}
           <option value="6">6 месяцев — 600₽</option>
           <option value="12">12 месяцев — 1200₽</option>
         </select>
-        <button onclick="openVipBuyGuide()" style="padding:.55rem 1.1rem;border-radius:8px;border:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-weight:800;font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">✨ Хочу купить VIP</button>
+        <button onclick="openVipBuyGuide()" class="pf-btn pf-btn-gold">✨ Хочу купить VIP</button>
       </div>
     </div>
 
     <!-- Мой VIP-уровень: что даёт и сколько до следующего -->
-    <div id="profileVipPerksPanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid rgba(255,215,0,.22);border-radius:var(--r);padding:1.1rem"></div>
+    <div id="profileVipPerksPanel" class="pf-card pf-card-gold" style="display:none;margin-top:1rem"></div>
 
     <!-- Своя тема оформления — только для активных VIP -->
-    <div id="profileThemePanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.1rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.7rem">🎨 Своя тема оформления</div>
+    <div id="profileThemePanel" class="pf-card pf-card-gold" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.7rem">🎨 Своя тема оформления</div>
       <div style="font-size:.74rem;color:var(--muted);margin-bottom:.8rem">Перекрашивает акценты сайта лично для тебя — на других не влияет.</div>
       <div id="profileThemeSwatches" style="display:flex;gap:.6rem;flex-wrap:wrap"></div>
     </div>
 
     <!-- Гости профиля — только для активных VIP -->
-    <div id="profileGuestsPanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.1rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.7rem">👀 Кто заходил</div>
+    <div id="profileGuestsPanel" class="pf-card pf-card-accent" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.7rem">👀 Кто заходил</div>
       <div id="profileGuestsList"></div>
     </div>
 
@@ -1628,8 +1628,8 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <!-- Панель админа — только на своём профиле -->
-    <div id="profileAdminPanel" style="display:none;margin-top:1rem;background:rgba(255,45,85,.06);border:1px solid rgba(255,45,85,.15);border-radius:var(--r);padding:1.2rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem">👑 Панель администратора</div>
+    <div id="profileAdminPanel" class="pf-card pf-card-danger" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="color:var(--accent);margin-bottom:.9rem">👑 Панель администратора</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.6rem">
         <button onclick="openSettingsAdmin()" class="profile-admin-btn">⚙ Настройки сайта</button>
         <button onclick="openPollAdmin()" class="profile-admin-btn">🗳️ Опросы</button>
@@ -1640,8 +1640,8 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <!-- Панель модератора/хелпера — только на своём профиле -->
-    <div id="profileStaffPanel" style="display:none;margin-top:1rem;background:rgba(145,71,255,.06);border:1px solid rgba(145,71,255,.15);border-radius:var(--r);padding:1.2rem">
-      <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--tw);margin-bottom:.7rem">🛡 Твои права модерации</div>
+    <div id="profileStaffPanel" class="pf-card pf-card-tw" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="color:var(--tw);margin-bottom:.7rem">🛡 Твои права модерации</div>
       <div id="profileStaffPerms" style="display:flex;flex-direction:column;gap:.4rem;font-size:.78rem"></div>
       <a href="#/chat" style="display:inline-block;margin-top:.8rem;font-size:.75rem;color:var(--tw);text-decoration:underline">Перейти в чат →</a>
     </div>

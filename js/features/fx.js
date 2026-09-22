@@ -295,9 +295,11 @@
 
   // ── Свет под курсором на карточках + наклон + магнит на кнопках ──
   function initPointerFx() {
-    const GLOW  = '.stat-card,.hub-card,.about-card,.dc,.vcard,.sound-btn,.day-card,.goal-bar-wrap,.lb-wrap,.poll-wrap,.clicker-wrap,.chat-wrap,.stream-box';
+    const GLOW  = '.stat-card,.hub-card,.about-card,.dc,.vcard,.sound-btn,.day-card,.goal-bar-wrap,.lb-wrap,.poll-wrap,.clicker-wrap,.chat-wrap,.stream-box,.pf-card,.profile-stat-card,#miniProfilePopover,#profileLoggedOut,#profileStaffVipPanel,#profileStaffPanel,#donateLoginPanel,#profileVipPromo,#profileVipPerksPanel,#profileAdminPanel';
     const TILT  = '.stat-card,.hub-card,.about-card,.dc';
-    const MAGNET = '.hero-btn,.chip';
+    // Профильные кнопки — тоже магнитятся к курсору, как кнопки героя,
+    // но без tilt (карточки с текстом/формами не должны «качаться»)
+    const MAGNET = '.hero-btn,.chip,.pf-btn';
     let raf = 0, pend = null;
 
     document.addEventListener('pointermove', e => {

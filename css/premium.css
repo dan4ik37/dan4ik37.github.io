@@ -753,3 +753,163 @@ body.low .orbit,body.low .sat-i{animation:none!important}
   .orbit,.sat-i,.mq-track{animation:none!important}
   :is(.stat-card,.hub-card,.about-card,.dc):hover{transform:none!important}
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   13. ПРОФИЛЬ И МИНИ-ПРОФИЛЬ
+   ───────────────────────────────────────────────────────────────────
+   Раньше все панели профиля были плоскими прямоугольниками var(--card) —
+   единственная часть сайта, не получившая стеклянный слой из разделов
+   выше. Структуру/JS не трогаем: только фон, свечение, кнопки и вход
+   элементов. Цветовой акцент — через --pfc (задаётся классом
+   .pf-card-gold/-tw/-accent/-danger/-muted или напрямую по #id ниже),
+   его же читает общий "прожектор" из блока 4 (--cc:var(--pfc,...)).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Разлогинен — тот же стеклянный язык, что и у остальных карточек сайта */
+#profileLoggedOut{
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0)) padding-box,var(--card) padding-box;
+  border:1px solid var(--line-hi);border-radius:22px;
+  box-shadow:0 30px 70px -30px rgba(0,0,0,.6);
+}
+
+/* ---- Баннер и аватар ---- */
+#profileBanner{
+  border-radius:22px;border:1px solid var(--line-hi);
+  box-shadow:0 30px 70px -28px rgba(0,0,0,.65),inset 0 0 0 1px rgba(255,255,255,.03);
+}
+#profileBanner::after{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(8,8,14,0) 45%,rgba(8,8,14,.55) 100%);
+}
+body.high #profileBanner.profile-banner-empty{
+  background-image:
+    radial-gradient(60% 90% at 15% 20%,var(--ac-30),transparent 60%),
+    radial-gradient(60% 90% at 85% 90%,var(--tw-30),transparent 60%),
+    linear-gradient(135deg,rgba(255,45,85,.22),rgba(145,71,255,.22))!important;
+}
+
+#profileAvatarImg{
+  box-shadow:0 18px 40px -14px rgba(0,0,0,.7),inset 0 0 0 1px rgba(255,255,255,.06);
+  transition:transform .35s var(--ease-spring);
+}
+body.high #profileAvatarImg:hover{transform:scale(1.04) rotate(-2deg)}
+/* Свечение по роли/уровню (цвет прилетает из JS через --ring-rgb) —
+   было статичным box-shadow, теперь ещё и дышит в HIGH */
+.profile-avatar-glow{box-shadow:0 0 0 3px rgb(var(--ring-rgb)),0 0 30px -4px rgb(var(--ring-rgb)),0 18px 40px -14px rgba(0,0,0,.7)!important}
+body.high .profile-avatar-glow{animation:ringGlow 2.4s ease-in-out infinite}
+@keyframes ringGlow{
+  0%,100%{box-shadow:0 0 0 3px rgb(var(--ring-rgb)),0 0 20px -2px rgb(var(--ring-rgb)),0 18px 40px -14px rgba(0,0,0,.7)}
+  50%{box-shadow:0 0 0 3px rgb(var(--ring-rgb)),0 0 38px 2px rgb(var(--ring-rgb)),0 18px 40px -14px rgba(0,0,0,.7)}
+}
+
+#profileAvatarEditBtn{transition:transform .25s var(--ease-spring)}
+#profileAvatarEditBtn:hover{transform:scale(1.12)}
+#profileBannerEditBtn label,#profileBannerEditBtn button{transition:background .2s,transform .2s var(--ease-spring)}
+#profileBannerEditBtn label:hover,#profileBannerEditBtn button:hover{background:rgba(0,0,0,.7)!important;transform:translateY(-1px)}
+
+.role-badge{box-shadow:0 2px 10px -3px rgba(0,0,0,.5)}
+#profileVipBadge{box-shadow:0 4px 16px -4px rgba(255,180,0,.55)}
+body.high #profileVipBadge{animation:badgePopIn .45s var(--ease-spring) both,badgeShimmer 3s 1s ease-in-out infinite}
+@keyframes badgeShimmer{0%,100%{filter:brightness(1)}50%{filter:brightness(1.2)}}
+
+/* ---- Общая стеклянная карточка разделов профиля ---- */
+.pf-card{position:relative;padding:1.2rem;border-radius:18px;box-shadow:0 22px 50px -30px rgba(0,0,0,.6)}
+.pf-card::before{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--pfc,var(--accent));opacity:.85;z-index:1}
+.pf-card-gold{--pfc:#ffd36a}
+.pf-card-tw{--pfc:var(--tw)}
+.pf-card-accent{--pfc:var(--accent)}
+.pf-card-danger{--pfc:#ff2d55}
+.pf-card-muted{--pfc:rgba(255,255,255,.3)}
+
+.pf-kicker{font-size:.66rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* Панели с готовым #id и своим акцентом (структуру/inline display:none не трогаем) */
+#profileStaffVipPanel,#profileStaffPanel{--pfc:var(--tw)}
+#donateLoginPanel,#profileVipPromo,#profileVipPerksPanel{--pfc:#ffd36a}
+#profileAdminPanel{--pfc:#ff2d55}
+#profileStaffVipPanel,#profileStaffPanel,#donateLoginPanel,#profileVipPromo,#profileVipPerksPanel,#profileAdminPanel{
+  position:relative;border-radius:18px;box-shadow:0 22px 50px -30px rgba(0,0,0,.6);
+}
+#profileStaffVipPanel::before,#profileStaffPanel::before,#donateLoginPanel::before,#profileVipPromo::before,#profileVipPerksPanel::before,#profileAdminPanel::before{
+  content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--pfc);opacity:.85;z-index:1
+}
+/* Прогресс-бар до следующего уровня (див рисуется в JS инлайново, цепляемся по стилю) */
+#profileVipPerksPanel div[style*="height:8px"]{box-shadow:0 0 16px -2px #ffd700}
+
+/* ---- Статы профиля: лёгкие стеклянные плитки ---- */
+.profile-stat-card{
+  border-radius:16px;padding:.9rem .7rem;text-align:center;
+  box-shadow:0 14px 30px -18px rgba(0,0,0,.55);
+}
+
+/* ---- Единый стиль кнопок профиля ---- */
+.pf-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
+  padding:.6rem 1.2rem;border-radius:10px;border:none;cursor:pointer;
+  font-family:'Montserrat',sans-serif;font-weight:700;font-size:.8rem;color:#fff;
+  transition:transform .25s var(--ease-spring),box-shadow .25s,background .2s;
+  translate:var(--tx,0px) var(--ty,0px);
+}
+.pf-btn:hover{transform:translateY(-2px)}
+.pf-btn:active{transform:translateY(0) scale(.97)}
+.pf-btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 26px -10px var(--ac-55)}
+.pf-btn-gold{background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;box-shadow:0 10px 26px -10px rgba(255,180,0,.6)}
+.pf-btn-tw{background:linear-gradient(135deg,var(--tw),#6d28d9);box-shadow:0 10px 26px -10px var(--tw-30)}
+.pf-btn-ghost{background:rgba(255,255,255,.05);border:1.5px solid var(--line-hi);color:var(--text);box-shadow:none}
+.pf-btn-ghost:hover{background:rgba(255,255,255,.09)}
+.pf-btn-danger{background:rgba(255,45,85,.1);border:1.5px solid rgba(255,45,85,.32);color:var(--accent);box-shadow:none}
+.pf-btn-danger:hover{background:rgba(255,45,85,.18)}
+.pf-btn-sm{padding:.5rem .95rem;font-size:.75rem;border-radius:8px}
+
+.profile-admin-btn{
+  border-radius:12px;
+  background:linear-gradient(180deg,rgba(255,45,85,.14),rgba(255,45,85,.05));
+  border:1.5px solid rgba(255,45,85,.3)!important;
+  transition:transform .25s var(--ease-spring),background .2s,box-shadow .25s;
+}
+.profile-admin-btn:hover{transform:translateY(-2px);background:rgba(255,45,85,.22);box-shadow:0 12px 26px -12px rgba(255,45,85,.6)}
+
+/* ---- Мини-профиль: стекло + мягкое появление вместо мгновенного display:block ---- */
+#miniProfilePopover{
+  border-radius:18px;
+  background:rgba(16,16,26,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--line-hi);
+  box-shadow:0 30px 70px -20px rgba(0,0,0,.7),0 0 0 1px rgba(0,0,0,.4);
+  transform-origin:top left;
+}
+body.high #miniProfilePopover{animation:miniPopIn .3s var(--ease-spring) both}
+@keyframes miniPopIn{from{opacity:0;transform:translateY(-8px) scale(.93)}}
+#miniProfileBanner{position:relative}
+#miniProfileBanner::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(8,8,14,0),rgba(8,8,14,.5))}
+#miniProfileAvatar{box-shadow:0 10px 24px -10px rgba(0,0,0,.7)}
+#miniProfileNick{font-family:var(--font-display);letter-spacing:.02em;font-size:1.05rem!important;font-weight:500!important;text-transform:none}
+#miniProfileVip{transition:color .2s}
+#miniProfileLink{transition:color .2s}
+#miniProfileLink:hover{color:#fff}
+
+/* ---- Курсор-прожектор и магнит теперь и на профиле ---- */
+:is(.pf-card,.profile-stat-card,#miniProfilePopover,#profileLoggedOut){
+  --mx:-400px;--my:-400px;--cc:var(--pfc,var(--accent));
+  border:1px solid transparent;
+  background:
+    radial-gradient(240px circle at var(--mx) var(--my),rgba(255,255,255,.06),transparent 70%) padding-box,
+    linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,0)),var(--card) padding-box,
+    radial-gradient(200px circle at var(--mx) var(--my),color-mix(in srgb,var(--cc) 70%,transparent),transparent 65%) border-box,
+    linear-gradient(var(--line-hi),var(--line-hi)) border-box;
+  background-origin:border-box;
+}
+#profileStaffVipPanel,#profileStaffPanel,#donateLoginPanel,#profileVipPromo,#profileVipPerksPanel,#profileAdminPanel{
+  --mx:-400px;--my:-400px;
+  border:1px solid transparent;
+  background:
+    radial-gradient(240px circle at var(--mx) var(--my),rgba(255,255,255,.06),transparent 70%) padding-box,
+    var(--card) padding-box,
+    radial-gradient(200px circle at var(--mx) var(--my),color-mix(in srgb,var(--pfc) 65%,transparent),transparent 65%) border-box,
+    linear-gradient(var(--line-hi),var(--line-hi)) border-box;
+  background-origin:border-box;
+}
+
+@media(max-width:768px){
+  #profileBanner{height:150px!important}
+  .pf-card{padding:1rem}
+}

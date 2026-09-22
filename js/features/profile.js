@@ -937,7 +937,21 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
       }
     }
     document.getElementById('miniProfileRoleBadge').innerHTML = ROLE_BADGE_HTML[p.role] || '';
-    document.getElementById('miniProfileVip').style.display = isVipActive(p) ? 'inline' : 'none';
+    // Раньше тут была одна ✨ на все уровни VIP — на самой странице профиля
+    // Bronze/Silver/Gold уже различаются иконкой и цветом (см. profileVipBadge
+    // выше), мини-профиль теперь показывает то же самое, а не «просто VIP».
+    {
+      const vipEl = document.getElementById('miniProfileVip');
+      const tier = getVipTier(p);
+      if (tier) {
+        vipEl.textContent = tier.key === 'gold' ? '✨' : tier.key === 'silver' ? '⭐' : '🔸';
+        vipEl.style.color = `rgb(${tier.rgb})`;
+        vipEl.title = tier.label;
+        vipEl.style.display = 'inline';
+      } else {
+        vipEl.style.display = 'none';
+      }
+    }
     if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${safeImgUrl(p.avatar_url)}')`;
     if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${safeImgUrl(p.banner_url)}')`;
     applyProfileGlow(document.getElementById('miniProfileAvatar'), p);
