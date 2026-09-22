@@ -93,12 +93,12 @@ async function renderFriendsPanel(){
       const p = f.profile;
       const nick = p.nick || '?';
       const nickHtml = (typeof renderNickWithVip === 'function') ? renderNickWithVip(nick, p, ROLE_BADGE_HTML[p.role] || '') : esc(nick);
-      const avatarStyle = p.avatar_url ? `background-image:url('${p.avatar_url}')` : '';
+      const avatarStyle = p.avatar_url ? `background-image:url('${safeImgUrl(p.avatar_url)}')` : '';
       return `
       <div class="role-result-row card-fade-in" style="display:flex;align-items:center;gap:.6rem">
         <div onclick="location.hash='#/profile/${f.id}'" style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0">${p.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
         <span class="role-result-nick" style="cursor:pointer;flex:1;min-width:0" onclick="location.hash='#/profile/${f.id}'">${nickHtml}</span>
-        <button class="role-result-save" onclick="openDmWith('${f.id}','${nick.replace(/'/g,"\\'")}')">✉</button>
+        <button class="role-result-save" onclick="openDmWith('${f.id}',${jsAttr(nick)})">✉</button>
         <button onclick="removeFriendship('${f.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;cursor:pointer">✕</button>
       </div>`;
     }).join('') : '<div style="color:var(--muted);font-size:.78rem">Пока нет друзей — найди кого-нибудь через мини-профиль в чате или на странице профиля</div>';

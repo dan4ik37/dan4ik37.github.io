@@ -462,8 +462,11 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
   div.dataset.nick=nick;
   // Клик по нику/аватарке открывает мини-профиль — только если у автора
   // есть аккаунт (userId не пустой). У гостей аккаунта нет, смотреть нечего.
-  const profileClick = userId ? `onclick="openMiniProfile('${userId}','${nick.replace(/'/g,"\\'")}',this)" style="cursor:pointer"` : '';
-  const canPin = isOwn && msgId && ((typeof getVipTier === 'function' && currentProfile && getVipTier(currentProfile)) || currentRole === 'admin' || currentRole === 'moderator');
+  const profileClick = userId ? `onclick="openMiniProfile('${userId}',${jsAttr(nick)},this)" style="cursor:pointer"` : '';
+  // Права и длительность закрепа — из единого конфига баланса (getPinPerks в profile.js)
+  const myPin = (isOwn && msgId && typeof getPinPerks === 'function') ? getPinPerks(currentRole, currentProfile) : null;
+  const canPin = !!myPin;
+  const pinDurationHint = myPin ? myPin.minutes + ' мин' : '';
   const textBlock = isSticker
     ? `<div class="chat-text" style="background:none;padding:.2rem 0;font-size:2.4rem;line-height:1">${esc(text)}</div>`
     : `<div class="chat-text" style="${stripeStyle}${stripeStyle?';padding-left:.5rem':''}">${renderMessageText(esc(text))}</div>`;
@@ -480,7 +483,7 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
     ${msgId?`<button class="msg-react-btn" aria-label="Поставить реакцию" onclick="openReactionPicker(${msgId},this)" title="Реакция">😊</button>
     <button class="msg-ban-btn" aria-label="Забанить пользователя" onclick="banNick(this.closest('.chat-msg').dataset.nick,this.closest('.chat-msg'))" title="Забанить">🔨</button>
     <button class="msg-del-btn" aria-label="Удалить сообщение" onclick="deleteMsg(${msgId},this.closest('.chat-msg'))" title="Удалить">✕</button>`:''}
-    ${canPin?`<button class="msg-pin-btn" aria-label="Закрепить на 15 минут" onclick="pinMessage(${msgId})" title="Закрепить на 15 минут (VIP)">📌</button>`:''}`;
+    ${canPin?`<button class="msg-pin-btn" aria-label="Закрепить" onclick="pinMessage(${msgId})" title="Закрепить на ${pinDurationHint} (по твоей роли/уровню)">📌</button>`:''}`;
   msgs.appendChild(div);
   if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100) msgs.scrollTop=msgs.scrollHeight;
 }
@@ -502,7 +505,8 @@ async function pinMessage(msgId){
   try {
     const { error } = await sbClient.rpc('pin_own_message', { msg_id: msgId });
     if (error) throw error;
-    showChatStatus('📌 Закреплено на 15 минут', true);
+    const perks = (typeof getPinPerks === 'function') ? getPinPerks(currentRole, currentProfile) : null;
+    showChatStatus('📌 Закреплено' + (perks ? ' на ' + perks.minutes + ' мин' : ''), true);
   } catch(e) {
     showChatStatus('Не удалось закрепить: ' + (e.message || e), false);
   }
@@ -630,7 +634,19 @@ document.addEventListener('click',(e)=>{
 // заметны в общей ленте издалека. Это и плюшка для VIP, и небольшая
 // витрина: не-VIP видит грид, но клик по стикеру ведёт на страницу
 // покупки вместо отправки — показываем чего лишаемся, а не прячем совсем.
-const STICKERS = ['🔥','💯','😂','😭','🎉','👑','💀','🤝','🎮','❤️','😎','🍿','🫡','🥶','👀','⚡'];
+// Наборы открываются с уровнем VIP (какие доступны — VIP_TIERS[].stickerSets в profile.js).
+// Стафф видит все. Сервер проверяет только «стикер может слать VIP/стафф» (vip-balance.sql) —
+// какой именно набор, не проверяет: это эмодзи, подделывать тут нечего.
+const STICKER_SETS = {
+  base:   ['🔥','💯','😂','😭','🎉','👑','💀','🤝','🎮','❤️','😎','🍿','🫡','🥶','👀','⚡'],
+  silver: ['🌟','🚀','😈','🤯','🥳','💎','🧠','🫶'],
+  gold:   ['🏆','🦄','☄️','🐉','🪩','🎯','💫','🔱'],
+};
+const STICKER_SET_META = {
+  base:   { label: '',           need: 'VIP' },
+  silver: { label: '⭐ Silver',  need: 'Silver VIP (от 500₽)' },
+  gold:   { label: '✨ Gold',    need: 'Gold VIP (от 1500₽)' },
+};
 
 function toggleStickerPicker(e){
   e.stopPropagation();
@@ -647,16 +663,27 @@ document.addEventListener('click',(e)=>{
 });
 function renderStickerPicker(){
   const box = document.getElementById('stickerPicker');
-  const canSticker = (typeof getVipTier === 'function' && currentProfile && getVipTier(currentProfile))
-    || currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
-  box.innerHTML = STICKERS.map(s => `
-    <button onclick="${canSticker ? `sendSticker('${s}')` : `lockedStickerClick()`}"
-      style="font-size:1.8rem;line-height:1;background:none;border:1px solid ${canSticker?'transparent':'rgba(255,255,255,.06)'};border-radius:8px;padding:.35rem;cursor:pointer;opacity:${canSticker?'1':'.45'};transition:transform .15s,background .15s"
+  const prof = (typeof currentProfile !== 'undefined') ? currentProfile : null;
+  const open = (typeof allowedStickerSets === 'function') ? allowedStickerSets(currentRole, prof) : [];
+  const anyOpen = open.length > 0;
+  const btn = (s, unlocked, needText) => `
+    <button onclick="${unlocked ? `sendSticker('${s}')` : `lockedStickerClick()`}"
+      style="font-size:1.8rem;line-height:1;background:none;border:1px solid ${unlocked?'transparent':'rgba(255,255,255,.06)'};border-radius:8px;padding:.35rem;cursor:pointer;opacity:${unlocked?'1':'.4'};transition:transform .15s,background .15s"
       onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'"
-      title="${canSticker ? 'Отправить стикер' : 'Стикеры — для VIP и модерации'}">${s}</button>`).join('');
-  if (!canSticker) {
-    box.innerHTML += `<div style="width:100%;font-size:.68rem;color:var(--muted);margin-top:.4rem">🔒 Стикеры доступны с VIP — <a href="#" onclick="location.hash='#/profile';return false" style="color:#ffd700">оформить</a></div>`;
+      title="${unlocked ? 'Отправить стикер' : 'Стикеры — ' + needText}">${s}</button>`;
+  let html = '';
+  Object.keys(STICKER_SETS).forEach(key => {
+    const meta = STICKER_SET_META[key];
+    const unlocked = open.includes(key);
+    // Не-VIP видят только базовый набор (закрытым) — как витрину, не весь каталог
+    if (!anyOpen && key !== 'base') return;
+    if (meta.label) html += `<div style="width:100%;font-size:.66rem;font-weight:800;letter-spacing:.5px;color:${unlocked?'var(--muted)':'#ffd700'};margin-top:.3rem">${meta.label}${unlocked ? '' : ' — 🔒 ' + meta.need}</div>`;
+    html += STICKER_SETS[key].map(s => btn(s, unlocked, meta.need)).join('');
+  });
+  if (!anyOpen) {
+    html += `<div style="width:100%;font-size:.68rem;color:var(--muted);margin-top:.4rem">🔒 Стикеры доступны с VIP (а с Silver и Gold — ещё больше наборов) — <a href="#" onclick="location.hash='#/profile';return false" style="color:#ffd700">оформить</a></div>`;
   }
+  box.innerHTML = html;
 }
 function lockedStickerClick(){
   document.getElementById('stickerPicker').style.display = 'none';
@@ -673,7 +700,12 @@ async function sendSticker(emoji){
     try {
       const { error } = await sbClient.from('messages').insert([{ nick: chatNick, text: emoji, color: col, role, vip_tier: vipTierKey, is_sticker: true, user_id: currentUser?.id || null }]);
       if (error) throw error;
-    } catch(e) { addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true); }
+    } catch(e) {
+      // Сервер (vip-balance.sql) отказал: стикеры — только VIP/стафф. Раньше тут рисовалось
+      // «фантомное» сообщение, которого на самом деле в чате нет.
+      if (/VIP|стикер/i.test(e?.message || '')) { showChatStatus('🔒 Стикеры — только для VIP и команды сайта', false); return; }
+      addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true);
+    }
   } else {
     addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true);
   }
@@ -710,7 +742,7 @@ async function searchMentionCandidates(query){
     mentionActiveIndex = 0;
     if (!mentionCurrentMatches.length) { closeMentionAutocomplete(); return; }
     box.innerHTML = mentionCurrentMatches.map((nick, i) => `
-      <div class="chat-mention-option${i===0?' active':''}" data-nick="${esc(nick)}" onclick="selectMention('${nick.replace(/'/g,"\\'")}')"
+      <div class="chat-mention-option${i===0?' active':''}" data-nick="${esc(nick)}" onclick="selectMention(${jsAttr(nick)})"
            style="padding:.5rem .8rem;cursor:pointer;font-size:.82rem;${i===0?'background:rgba(145,71,255,.15)':''}">@${esc(nick)}</div>
     `).join('');
     box.style.cssText = 'display:block;position:absolute;bottom:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.3rem;box-shadow:0 -8px 24px rgba(0,0,0,.4);z-index:20';

@@ -39,7 +39,9 @@
   ]
 }
 </script>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>
 <!-- Vercel Web Analytics — без cookie, без баннера согласия. Требует ОДИН
      раз включить в дашборде: Vercel → проект → вкладка Analytics → Enable -->
@@ -48,9 +50,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
+  --font-display:'Oswald','Bebas Neue','Arial Narrow',sans-serif;
   --bg:#08080e;--bg2:#0f0f18;--card:#111119;--border:rgba(255,255,255,.06);
   --accent:#ff2d55;--accent2:#ff6b35;--yt:#ff4040;--tt:#ee1d52;
-  --tw:#9147ff;--vk:#0077ff;--tg:#29b6f6;--text:#f0f0f8;--muted:#64647e;--r:14px;
+  --tw:#9147ff;--vk:#0077ff;--tg:#29b6f6;--text:#f0f0f8;--muted:#8d8daa;--r:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth;overflow-x:hidden}
@@ -90,7 +93,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9000;b
 /* ── NAV ── */
 #nav{position:fixed;top:0;left:0;right:0;z-index:500;padding:.85rem 2rem;display:flex;align-items:center;justify-content:space-between;background:rgba(8,8,14,.92);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);transition:box-shadow .3s}
 #nav.scrolled{box-shadow:0 4px 40px rgba(0,0,0,.7)}
-.nav-logo{font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:3px;background:linear-gradient(135deg,#fff,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.nav-logo{font-family:var(--font-display);font-size:1.55rem;letter-spacing:3px;background:linear-gradient(135deg,#fff,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .nav-links{display:flex;gap:1.3rem;align-items:center}
 .nav-links a{position:relative;font-size:.68rem;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);transition:color .2s;white-space:nowrap}
 /* ── БЕЙДЖ "НОВОЕ СООБЩЕНИЕ" НА ПУНКТЕ ЧАТ ── */
@@ -139,29 +142,7 @@ body.low .chat-badge.show{animation:none}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
 .avatar-ring{position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(var(--accent),var(--accent2),var(--tw),var(--tg),var(--vk),var(--accent));animation:spin 4s linear infinite;will-change:transform}
 @keyframes spin{to{transform:rotate(360deg)}}
-.avatar-inner{position:absolute;inset:5px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue',sans-serif;font-size:2.8rem;letter-spacing:1px;z-index:1}
-.hero h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(4.5rem,14vw,11rem);line-height:.88;letter-spacing:5px;z-index:1;background:linear-gradient(135deg,#fff 0%,var(--accent) 50%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-sub{margin-top:.9rem;font-size:.88rem;font-weight:700;letter-spacing:5px;text-transform:uppercase;color:var(--muted);z-index:1}
-.hero-desc{margin-top:1.1rem;font-size:.92rem;color:rgba(240,240,248,.55);max-width:460px;line-height:1.75;z-index:1}
-.hero-btns{display:flex;flex-wrap:wrap;justify-content:center;gap:.7rem;margin-top:2.2rem;z-index:1;max-width:640px}
-.hbtn{display:inline-flex;align-items:center;gap:.45rem;padding:.58rem 1.25rem;border-radius:50px;font-size:.75rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:1.5px solid;transition:transform .2s,box-shadow .2s,background .2s}
-.hbtn:hover{transform:translateY(-3px) scale(1.06)}
-.hb-yt{color:var(--yt);border-color:var(--yt)}.hb-yt:hover{background:rgba(255,64,64,.12);box-shadow:0 0 22px rgba(255,64,64,.35)}
-.hb-tt{color:var(--tt);border-color:var(--tt)}.hb-tt:hover{background:rgba(238,29,82,.12);box-shadow:0 0 22px rgba(238,29,82,.35)}
-.hb-tw{color:var(--tw);border-color:var(--tw)}.hb-tw:hover{background:rgba(145,71,255,.12);box-shadow:0 0 22px rgba(145,71,255,.35)}
-.hb-vk{color:var(--vk);border-color:var(--vk)}.hb-vk:hover{background:rgba(0,119,255,.12);box-shadow:0 0 22px rgba(0,119,255,.35)}
-.hb-vkv{color:#5bc4ff;border-color:#5bc4ff}.hb-vkv:hover{background:rgba(91,196,255,.12);box-shadow:0 0 22px rgba(91,196,255,.3)}
-.hb-tg{color:var(--tg);border-color:var(--tg)}.hb-tg:hover{background:rgba(41,182,246,.12);box-shadow:0 0 22px rgba(41,182,246,.35)}
-.hb-don{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff!important;border-color:transparent!important}.hb-don:hover{box-shadow:0 6px 28px rgba(255,45,85,.5)!important}
-/* scroll-hint: скрыт на мобиле чтобы не наслаивался на кнопки */
-.scroll-hint{display:none}
-@media(min-height:700px) and (min-width:600px){
-  .scroll-hint{display:flex;position:absolute;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:1;flex-direction:column;align-items:center;gap:.3rem;font-size:.6rem;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);animation:pulse 2.5s ease-in-out infinite;pointer-events:none;white-space:nowrap}
-}
-@keyframes pulse{0%,100%{opacity:.3}50%{opacity:.8}}
-/* Упрощённые входные анимации — только opacity */
-.hero>*{animation:fadeUp .6s ease both}
-.avatar{animation-delay:.05s!important}.hero h1{animation-delay:.15s}.hero-sub{animation-delay:.25s}.hero-desc{animation-delay:.32s}.hero-btns{animation-delay:.4s}
+.avatar-inner{position:absolute;inset:5px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:2.8rem;letter-spacing:1px;z-index:1}
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 
 /* Попап выбора режима — ЕДИНСТВЕННЫЙ блок */
@@ -178,7 +159,7 @@ body.low .chat-badge.show{animation:none}
   box-shadow:0 40px 80px rgba(0,0,0,.7);
   animation:fadeUp .35s ease;
 }
-.pp-title{font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.5rem}
+.pp-title{font-family:var(--font-display);font-size:2rem;letter-spacing:3px;text-align:center;margin-bottom:.5rem}
 .pp-sub{font-size:.8rem;color:var(--muted);text-align:center;margin-bottom:2rem;line-height:1.7}
 .pp-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
 .pp-card{
@@ -190,7 +171,7 @@ body.low .chat-badge.show{animation:none}
 .pp-card.active-low{border-color:var(--tg)!important;background:rgba(41,182,246,.1)!important}
 .pp-card.active-high{border-color:#a855f7!important;background:rgba(168,85,247,.1)!important}
 .pp-card-icon{font-size:2.2rem;margin-bottom:.7rem}
-.pp-card-name{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:.4rem}
+.pp-card-name{font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;margin-bottom:.4rem}
 .pp-card-desc{font-size:.72rem;color:var(--muted);line-height:1.6}
 .pp-note{font-size:.65rem;color:var(--muted);text-align:center;margin-top:1.2rem;opacity:.6}
 .pp-skip{display:block;text-align:center;margin-top:.8rem;font-size:.72rem;color:var(--muted);cursor:pointer;transition:color .2s}
@@ -232,7 +213,6 @@ body.low .avatar-ring{animation:spin 6s linear infinite}
 body.low .vcard:hover{transform:none;box-shadow:none}
 body.low .hub-card:hover{transform:none;box-shadow:none}
 body.low .stat-card:hover{transform:none;box-shadow:none}
-body.low .hbtn:hover{transform:none}
 body.low .about-card:hover{transform:none}
 body.low .dc:hover{transform:none;box-shadow:none}
 body.low *{animation-duration:.01ms!important;animation-iteration-count:1!important}
@@ -243,7 +223,6 @@ body.high .vcard{transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shado
 body.high .vcard:hover{transform:translateY(-8px) rotateX(2deg);box-shadow:0 24px 60px rgba(0,0,0,.6),0 0 40px rgba(255,45,85,.18)}
 body.high .hub-card:hover{transform:translateY(-8px) scale(1.02)}
 body.high .stat-card:hover{transform:translateY(-6px) scale(1.02)}
-body.high .hb-don{background:linear-gradient(270deg,var(--accent),var(--accent2),var(--tw),var(--accent));background-size:400% 400%;animation:gradShift 4s ease infinite}
 @keyframes gradShift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
 body.high .stat-card{overflow:hidden}
 body.high .stat-card::before{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,.04) 50%,transparent 60%);background-size:200% 100%;animation:shimmer 3s ease-in-out infinite;pointer-events:none}
@@ -283,7 +262,7 @@ body.low .profile-avatar-glow{box-shadow:0 0 0 3px rgba(var(--ring-rgb),.35)}
 .wrap{max-width:1200px;margin:0 auto;padding:5rem 2rem;position:relative;z-index:1}
 .wrap-sm{max-width:1200px;margin:0 auto;padding:1rem 2rem;position:relative;z-index:1}
 .divider{width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,45,85,.2),transparent);margin-bottom:4rem}
-.sec-title{font-family:'Bebas Neue',sans-serif;font-size:clamp(2.2rem,5vw,3.8rem);letter-spacing:2px;line-height:1;margin-bottom:2.5rem;position:relative;padding-left:1.1rem}
+.sec-title{font-family:var(--font-display);font-size:clamp(2.2rem,5vw,3.8rem);letter-spacing:2px;line-height:1;margin-bottom:2.5rem;position:relative;padding-left:1.1rem}
 .sec-title::before{content:'';position:absolute;left:0;top:.18em;bottom:.14em;width:4px;border-radius:3px;background:linear-gradient(var(--accent),var(--accent2))}
 .sec-title-row{display:flex;align-items:center;flex-wrap:wrap;gap:.8rem;margin-bottom:2.5rem}
 .sec-title-row .sec-title{margin-bottom:0}
@@ -305,7 +284,7 @@ body.low .profile-avatar-glow{box-shadow:0 0 0 3px rgba(var(--ring-rgb),.35)}
 .stat-card:hover{transform:translateY(-5px);box-shadow:0 12px 35px rgba(0,0,0,.4)}
 .stat-card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}
 .sc1::after{background:linear-gradient(90deg,var(--yt),transparent)}.sc2::after{background:linear-gradient(90deg,rgba(255,64,64,.5),transparent)}.sc3::after{background:linear-gradient(90deg,rgba(255,64,64,.25),transparent)}.sc4::after{background:linear-gradient(90deg,var(--tw),transparent)}.sc5::after{background:linear-gradient(90deg,var(--tg),transparent)}
-.stat-val{font-family:'Bebas Neue',sans-serif;font-size:2.3rem;letter-spacing:2px;line-height:1}
+.stat-val{font-family:var(--font-display);font-size:2.3rem;letter-spacing:2px;line-height:1}
 /* ── SKELETON: плейсхолдер статистики, пока не пришли данные с YouTube API ── */
 .stat-val.skeleton{color:transparent!important;display:inline-block;width:68px;height:1.7rem;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.14) 37%,rgba(255,255,255,.05) 63%);background-size:400% 100%;animation:skeletonShimmer 1.4s ease infinite;vertical-align:middle}
 @keyframes skeletonShimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
@@ -404,7 +383,7 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
    пусто". ── */
 .empty-state{grid-column:1/-1;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:3rem 2rem;text-align:center}
 .empty-state-icon{font-size:2.6rem;margin-bottom:.9rem;display:block;opacity:.75}
-.empty-state-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:1.5px;margin-bottom:.5rem;color:var(--text)}
+.empty-state-title{font-family:var(--font-display);font-size:1.4rem;letter-spacing:1.5px;margin-bottom:.5rem;color:var(--text)}
 .empty-state-text{font-size:.8rem;color:var(--muted);line-height:1.7;max-width:340px;margin:0 auto}
 
 /* YT bottom btns */
@@ -425,7 +404,7 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .about-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .about-card:hover{transform:translateY(-5px)}
 .about-icon{font-size:1.9rem;margin-bottom:.9rem;display:block}
-.about-title{font-family:'Bebas Neue',sans-serif;font-size:1.35rem;letter-spacing:2px;margin-bottom:.6rem}
+.about-title{font-family:var(--font-display);font-size:1.35rem;letter-spacing:2px;margin-bottom:.6rem}
 .about-text{font-size:.82rem;color:var(--muted);line-height:1.8}
 
 /* ── SCHEDULE ── */
@@ -478,7 +457,7 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .hc-vkv::before{background:#5bc4ff}.hc-vkv:hover{box-shadow:0 14px 40px rgba(91,196,255,.2)}
 .hc-tg::before{background:var(--tg)}.hc-tg:hover{box-shadow:0 14px 40px rgba(41,182,246,.22)}
 .hub-icon{font-size:1.9rem;margin-bottom:.6rem;display:block}
-.hub-name{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;margin-bottom:.25rem}
+.hub-name{font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;margin-bottom:.25rem}
 .hub-handle{font-size:.67rem;letter-spacing:1px;color:var(--muted)}
 .hub-desc{font-size:.72rem;color:var(--muted);margin-top:.5rem;line-height:1.55}
 .hc-yt .hub-name{color:var(--yt)}.hc-tt .hub-name{color:var(--tt)}.hc-tw .hub-name{color:var(--tw)}.hc-vk .hub-name{color:var(--vk)}.hc-vkv .hub-name{color:#5bc4ff}.hc-tg .hub-name{color:var(--tg)}
@@ -491,7 +470,7 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .stream-ratio{position:relative;padding-bottom:56.25%}
 .stream-ratio iframe{position:absolute;inset:0;width:100%;height:100%;border:none}
 .stream-footer{padding:1.3rem 1.6rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
-.stream-title{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--tw)}
+.stream-title{font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--tw)}
 
 /* ── DONATE ── */
 .donate-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem}
@@ -502,7 +481,7 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .dc-badge{display:inline-flex;align-items:center;padding:.25rem .75rem;border-radius:50px;font-size:.62rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;background:rgba(255,45,85,.15);color:var(--accent);width:fit-content}
 .dc-badge.hot{background:rgba(245,166,35,.15);color:#f5a623}
 .dc-icon{font-size:2.2rem}
-.dc-title{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px}
+.dc-title{font-family:var(--font-display);font-size:1.6rem;letter-spacing:2px}
 .dc-desc{font-size:.82rem;color:var(--muted);line-height:1.75;flex:1}
 .dc-note{font-size:.68rem;color:var(--muted);opacity:.7;text-align:center}
 .dc-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.8rem 1.6rem;border-radius:50px;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;transition:transform .2s,box-shadow .2s;border:none;cursor:pointer;text-decoration:none;font-family:'Montserrat',sans-serif}
@@ -513,7 +492,7 @@ body.low .stat-val.skeleton{animation:none;background:rgba(255,255,255,.08)}
 .chat-wrap{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;height:520px;position:relative;z-index:2}
 .chat-header{padding:1rem 1.4rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-shrink:0}
 .chat-live-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:livePulse 1.5s ease-in-out infinite}
-.chat-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px}
+.chat-title{font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px}
 .chat-subtitle{font-size:.7rem;color:var(--muted);margin-left:auto}
 .chat-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
 .chat-tab{flex:1;padding:.6rem;font-size:.7rem;font-weight:700;text-align:center;cursor:pointer;color:var(--muted);border:none;background:transparent;border-bottom:2px solid transparent;transition:all .2s;font-family:'Montserrat',sans-serif;letter-spacing:.5px;text-transform:uppercase}
@@ -563,7 +542,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 #privacyModal.open{display:flex}
 .privacy-box{background:var(--card);border-radius:20px;width:100%;max-width:680px;max-height:85vh;overflow:hidden;border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column}
 .privacy-head{padding:1.4rem 1.8rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.privacy-head h2{font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:2px}
+.privacy-head h2{font-family:var(--font-display);font-size:1.6rem;letter-spacing:2px}
 .privacy-body{padding:1.8rem;overflow-y:auto;font-size:.82rem;color:rgba(240,240,248,.7);line-height:1.85}
 .privacy-body h3{font-size:.9rem;font-weight:800;color:var(--text);margin:1.2rem 0 .4rem;letter-spacing:.5px}
 .privacy-body p{margin-bottom:.7rem}
@@ -577,7 +556,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 .sub-banner{display:none;background:linear-gradient(135deg,rgba(255,45,85,.08),rgba(145,71,255,.06));border:1px solid rgba(255,45,85,.15);border-radius:var(--r);padding:1.2rem 1.5rem;margin-top:1.5rem;align-items:center;gap:1rem;flex-wrap:wrap}
 .sub-banner.show{display:flex}
 .sub-banner-text{flex:1;min-width:200px}
-.sub-banner-title{font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:2px;margin-bottom:.2rem}
+.sub-banner-title{font-family:var(--font-display);font-size:1.2rem;letter-spacing:2px;margin-bottom:.2rem}
 .sub-banner-desc{font-size:.75rem;color:var(--muted)}
 .sub-banner-btns{display:flex;gap:.6rem;flex-wrap:wrap}
 
@@ -635,7 +614,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 2rem 2.5rem;text-align:
 .auth-submit{width:100%;padding:.75rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:800;font-size:.85rem;cursor:pointer;letter-spacing:1px;transition:opacity .2s;margin-top:.3rem}
 .auth-submit:hover{opacity:.85}
 .auth-err{color:var(--accent);font-size:.72rem;margin-top:.5rem;min-height:1rem}
-.footer-logo{font-family:'Bebas Neue',sans-serif;font-size:2.6rem;letter-spacing:5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.footer-logo{font-family:var(--font-display);font-size:2.6rem;letter-spacing:5px;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 .footer-tag{font-size:.72rem;letter-spacing:2.5px;color:var(--muted);margin:.5rem 0 1.6rem}
 .footer-links{display:flex;justify-content:center;gap:1.3rem;flex-wrap:wrap;margin-bottom:1.5rem}
 .footer-links a{font-size:.67rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);transition:color .2s}
@@ -724,25 +703,6 @@ body.high .hero-aurora{display:block}
 .ao3{width:300px;height:300px;background:radial-gradient(circle,rgba(41,182,246,.15),transparent 70%);left:40%;top:20%;animation-duration:7s;animation-delay:-5s}
 @keyframes auroraFloat{0%{transform:translate(0,0) scale(1)}100%{transform:translate(30px,20px) scale(1.15)}}
 
-/* ── GLITCH ЭФФЕКТ на заголовке (только HIGH) ── */
-body.high .hero h1{animation:glitchPulse 6s ease-in-out infinite}
-@keyframes glitchPulse{
-  0%,90%,100%{text-shadow:none}
-  91%{text-shadow:-2px 0 var(--tt),2px 0 var(--tg)}
-  92%{text-shadow:2px 0 var(--tt),-2px 0 var(--tg)}
-  93%{text-shadow:none}
-  95%{text-shadow:-1px 0 var(--tw),1px 0 var(--accent)}
-  96%{text-shadow:none}
-}
-
-/* ── CURSOR GLOW на кнопках (HIGH) ── */
-body.high .hbtn{position:relative;overflow:hidden}
-body.high .hbtn::after{
-  content:'';position:absolute;inset:0;border-radius:50px;
-  background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.15) 0%,transparent 60%);
-  opacity:0;transition:opacity .3s;pointer-events:none;
-}
-body.high .hbtn:hover::after{opacity:1}
 
 /* ── REVEAL при скролле ── */
 .reveal{opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease}
@@ -755,11 +715,6 @@ body.high .hbtn:hover::after{opacity:1}
 .route-fading{opacity:0!important;transition:opacity .15s ease!important}
 body.low .reveal{opacity:1;transform:none;transition:none}
 
-/* ── TYPING эффект на hero-sub (HIGH) ── */
-body.high .hero-sub{overflow:hidden;border-right:2px solid var(--accent);white-space:nowrap;animation:typing 2s steps(30) .5s both,blink .7s step-end infinite .5s}
-@keyframes typing{from{width:0;opacity:1}to{width:100%;opacity:1}}
-@keyframes blink{0%,100%{border-color:var(--accent)}50%{border-color:transparent}}
-body.low .hero-sub{white-space:normal}
 
 /* ── NEON GLOW на stat cards (HIGH) ── */
 body.high .sc1:hover{box-shadow:0 0 30px rgba(255,64,64,.3),0 12px 35px rgba(0,0,0,.4)}
@@ -810,7 +765,7 @@ body.high .avatar::before{
 #easterOverlay.active{opacity:1}
 #easterMsg{
   position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9501;
-  font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,8vw,5rem);letter-spacing:4px;
+  font-family:var(--font-display);font-size:clamp(2rem,8vw,5rem);letter-spacing:4px;
   color:#fff;text-shadow:0 0 40px var(--accent),0 0 80px var(--accent2);
   text-align:center;opacity:0;transition:opacity .4s;pointer-events:none;
 }
@@ -818,7 +773,7 @@ body.high .avatar::before{
 
 /* ══════════ КЛИКЕР ИГРА ══════════ */
 .clicker-wrap{background:var(--card);border-radius:20px;border:1px solid var(--border);padding:2rem;text-align:center;position:relative;overflow:hidden}
-.clicker-score{font-family:'Bebas Neue',sans-serif;font-size:3.5rem;letter-spacing:3px;color:var(--accent);line-height:1;margin-bottom:.3rem}
+.clicker-score{font-family:var(--font-display);font-size:3.5rem;letter-spacing:3px;color:var(--accent);line-height:1;margin-bottom:.3rem}
 .clicker-sub{font-size:.78rem;color:var(--muted);margin-bottom:1.5rem}
 .clicker-target{
   font-size:4rem;cursor:pointer;display:inline-block;
@@ -844,7 +799,7 @@ body.high .avatar::before{
 .goal-bar-wrap{background:var(--card);border-radius:var(--r);border:1px solid var(--border);padding:1.4rem 1.6rem}
 .goal-bar-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:.8rem;flex-wrap:wrap;gap:.5rem}
 .goal-bar-title{font-size:.88rem;font-weight:700}
-.goal-bar-amount{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:1px;color:var(--accent)}
+.goal-bar-amount{font-family:var(--font-display);font-size:1.4rem;letter-spacing:1px;color:var(--accent)}
 .goal-bar-track{height:10px;background:rgba(255,255,255,.06);border-radius:50px;overflow:hidden}
 .goal-bar-fill{height:100%;border-radius:50px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 1.5s cubic-bezier(.22,1,.36,1);width:0%}
 .goal-bar-footer{display:flex;justify-content:space-between;margin-top:.5rem;font-size:.68rem;color:var(--muted)}
@@ -855,20 +810,20 @@ body.high .avatar::before{
 /* ── LEADERBOARD ── */
 .lb-wrap{background:var(--card);border-radius:20px;border:1px solid var(--border);overflow:hidden}
 .lb-head{padding:1.2rem 1.6rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
-.lb-head-title{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px}
+.lb-head-title{font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px}
 .lb-tabs{display:flex;border-bottom:1px solid var(--border)}
 .lb-tab{flex:1;padding:.6rem;font-size:.7rem;font-weight:700;text-align:center;cursor:pointer;color:var(--muted);border:none;background:transparent;border-bottom:2px solid transparent;transition:all .2s;font-family:'Montserrat',sans-serif;letter-spacing:.5px;text-transform:uppercase}
 .lb-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
 .lb-list{padding:.8rem}
 .lb-item{display:flex;align-items:center;gap:.9rem;padding:.7rem .8rem;border-radius:10px;transition:background .15s;margin-bottom:.3rem}
 .lb-item:hover{background:rgba(255,255,255,.04)}
-.lb-rank{font-family:'Bebas Neue',sans-serif;font-size:1.3rem;min-width:2rem;text-align:center;color:var(--muted)}
+.lb-rank{font-family:var(--font-display);font-size:1.3rem;min-width:2rem;text-align:center;color:var(--muted)}
 .lb-rank.r1{color:#FFD700}.lb-rank.r2{color:#C0C0C0}.lb-rank.r3{color:#CD7F32}
 .lb-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0}
 .lb-info{flex:1;min-width:0}
 .lb-name{font-size:.82rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lb-sub{font-size:.65rem;color:var(--muted);margin-top:.1rem}
-.lb-amount{font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--accent);letter-spacing:1px;white-space:nowrap}
+.lb-amount{font-family:var(--font-display);font-size:1.1rem;color:var(--accent);letter-spacing:1px;white-space:nowrap}
 .lb-login-msg{padding:2rem;text-align:center;color:var(--muted);font-size:.82rem;line-height:1.8}
 .lb-login-btn{display:inline-flex;align-items:center;gap:.5rem;margin-top:1rem;padding:.65rem 1.4rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800;font-size:.78rem;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;transition:transform .2s;font-family:'Montserrat',sans-serif}
 .lb-login-btn:hover{transform:scale(1.05)}
@@ -876,7 +831,7 @@ body.high .avatar::before{
 
 /* ── POLL ── */
 .poll-wrap{background:var(--card);border-radius:20px;border:1px solid var(--border);padding:1.8rem}
-.poll-question{font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;margin-bottom:1.2rem;line-height:1.2}
+.poll-question{font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;margin-bottom:1.2rem;line-height:1.2}
 .poll-options{display:flex;flex-direction:column;gap:.6rem}
 .poll-opt{position:relative;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);cursor:pointer;transition:border-color .2s;background:transparent;width:100%;text-align:left;font-family:'Montserrat',sans-serif}
 .poll-opt:hover{border-color:var(--accent)}
@@ -916,7 +871,7 @@ body.high .avatar::before{
 #globalAuthModal.open{display:flex}
 .gauth-box{background:var(--card);border:1px solid rgba(145,71,255,.2);border-radius:20px;width:100%;max-width:360px;position:relative;overflow:hidden}
 .gauth-head{padding:1.5rem 1.8rem 1rem;border-bottom:1px solid var(--border)}
-.gauth-head h3{font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;margin-bottom:.2rem}
+.gauth-head h3{font-family:var(--font-display);font-size:1.8rem;letter-spacing:3px;margin-bottom:.2rem}
 .gauth-head p{font-size:.74rem;color:var(--muted)}
 .gauth-body{padding:1.5rem 1.8rem}
 .gauth-close{position:absolute;top:.9rem;right:1rem;background:rgba(255,255,255,.07);border:none;color:var(--text);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;transition:background .2s}
@@ -977,7 +932,7 @@ body.high .avatar::before{
 .donation-alert.show{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
 .donation-alert-icon{font-size:2rem;flex-shrink:0;animation:donationBounce 1s ease infinite}
 @keyframes donationBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-.donation-alert-title{font-family:'Bebas Neue',sans-serif;font-size:1.15rem;letter-spacing:1px;color:#fff;margin-bottom:.15rem}
+.donation-alert-title{font-family:var(--font-display);font-size:1.15rem;letter-spacing:1px;color:#fff;margin-bottom:.15rem}
 .donation-alert-title strong{color:var(--accent)}
 .donation-alert-msg{font-size:.76rem;color:var(--muted);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 body.low .donation-alert-icon{animation:none}
@@ -992,6 +947,7 @@ body.low .donation-alert-icon{animation:none}
 .confirm-ok{background:var(--accent);border:1.5px solid var(--accent);color:#fff}
 .confirm-ok:hover{background:#e0244a}
 </style>
+<link rel="stylesheet" href="css/premium.css">
 </head>
 <body onselectstart="return false">
 
@@ -1018,6 +974,7 @@ body.low .donation-alert-icon{animation:none}
 </div>
 
 <!-- ЧАСТИЦЫ -->
+<div id="ambient" aria-hidden="true"><i class="amb a1"></i><i class="amb a2"></i><i class="amb a3"></i></div>
 <div id="particles"></div>
 <!-- КУРСОР -->
 <div id="cursorTrail"></div>
@@ -1126,23 +1083,69 @@ body.low .donation-alert-icon{animation:none}
     <div class="aurora-orb ao2"></div>
     <div class="aurora-orb ao3"></div>
   </div>
-  <div class="avatar" id="easterAvatar" onclick="easterClick()" title="Попробуй нажать несколько раз... 👀" style="cursor:pointer">
+  <canvas class="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="hero-spot" aria-hidden="true"></div>
+  <div class="hero-floor" aria-hidden="true"><div class="hero-floor-plane"><div class="hero-floor-grid"></div></div></div>
+
+  <!-- Ближайший эфир (считается из блока «Когда стримим?», см. fx.js) -->
+  <a class="hero-pill hx" id="heroPill" href="#/about" style="--d:.05s" hidden>
+    <span class="pill-dot" aria-hidden="true"></span>
+    <span id="heroPillText">Расписание эфиров</span>
+  </a>
+
+  <div class="avatar hx" id="easterAvatar" onclick="easterClick()" title="Попробуй нажать несколько раз... 👀" style="cursor:pointer">
     <div class="avatar-ring"></div>
     <div class="avatar-inner">D37</div>
+    <!-- Платформы летают по орбите вокруг аватарки; по клику — переход -->
+    <div class="orbit">
+      <a class="sat" style="--a:0deg;--sc:var(--yt)"   href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener" aria-label="YouTube"  onclick="event.stopPropagation()"><span class="sat-i">▶</span></a>
+      <a class="sat" style="--a:90deg;--sc:var(--tw)"  href="https://www.twitch.tv/dan4ik37"      target="_blank" rel="noopener" aria-label="Twitch"   onclick="event.stopPropagation()"><span class="sat-i">◉</span></a>
+      <a class="sat" style="--a:180deg;--sc:var(--tg)" href="https://t.me/+LE25p4pQojkyYjli"      target="_blank" rel="noopener" aria-label="Telegram" onclick="event.stopPropagation()"><span class="sat-i">✈&#xFE0E;</span></a>
+      <a class="sat" style="--a:270deg;--sc:var(--tt)" href="https://www.tiktok.com/@.dan4ik37"   target="_blank" rel="noopener" aria-label="TikTok"   onclick="event.stopPropagation()"><span class="sat-i">♪</span></a>
+    </div>
   </div>
-  <h1>dan4ik37</h1>
-  <p class="hero-sub">YouTube · TikTok · Twitch · VK</p>
-  <p class="hero-desc">Привет! Я dan4ik37 — делаю видосы, стримлю и общаюсь с людьми. Подписывайся чтобы не пропустить!</p>
-  <div class="hero-btns">
-    <a class="hbtn hb-yt"  href="https://www.youtube.com/@Dan4ik37Yt" target="_blank">▶ YouTube</a>
-    <a class="hbtn hb-tt"  href="https://www.tiktok.com/@.dan4ik37"   target="_blank">♪ TikTok</a>
-    <a class="hbtn hb-tw"  href="https://www.twitch.tv/dan4ik37"       target="_blank">◉ Twitch</a>
-    <a class="hbtn hb-vk"  href="https://vk.com/dan4ik37"             target="_blank">В ВКонтакте</a>
-    <a class="hbtn hb-vkv" href="https://m.vkvideo.ru/@dan4ik37"       target="_blank">▶ VK Видео</a>
-    <a class="hbtn hb-tg"  href="https://t.me/+LE25p4pQojkyYjli"      target="_blank">✈ Telegram</a>
-    <a class="hbtn hb-don" href="https://www.donationalerts.com/r/dan4ik37" target="_blank">💝 Донат</a>
+
+  <h1 class="wordmark hx" data-text="dan4ik37" style="--d:.1s"><span class="wm">dan4ik37</span></h1>
+
+  <p class="hero-sub hx" style="--d:.55s" aria-label="Игровые видео, прямые эфиры на Twitch, клипы и нарезки, мемы и общение в чате">
+    <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span class="role-rot" aria-hidden="true">
+      <span>Игровые видео</span>
+      <span>Прямые эфиры на Twitch</span>
+      <span>Клипы и нарезки</span>
+      <span>Мемы и общение в чате</span>
+    </span>
+  </p>
+  <p class="hero-desc hx" style="--d:.65s">Привет! Я dan4ik37 — делаю видосы, стримлю и общаюсь с людьми. Подписывайся, чтобы не пропустить!</p>
+
+  <div class="hero-cta hx" style="--d:.75s">
+    <a class="hero-btn is-yt magnetic"  href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener"><span class="hb-ic">▶</span>Смотреть на YouTube</a>
+    <a class="hero-btn is-tw magnetic"  href="https://www.twitch.tv/dan4ik37"      target="_blank" rel="noopener"><span class="hb-ic">◉</span>Twitch</a>
+    <a class="hero-btn is-don magnetic" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" rel="noopener"><span class="hb-ic">💝</span>Донат</a>
   </div>
-  <div class="scroll-hint"><span>↓</span><span>смотреть контент</span></div>
+  <div class="hero-chips hx" style="--d:.85s">
+    <a class="chip" style="--cc:var(--tt)"  href="https://www.tiktok.com/@.dan4ik37"    target="_blank" rel="noopener"><span class="ic">♪</span>TikTok</a>
+    <a class="chip" style="--cc:var(--vk)"  href="https://vk.com/dan4ik37"              target="_blank" rel="noopener"><span class="ic">В</span>ВКонтакте</a>
+    <a class="chip" style="--cc:#5bc4ff"    href="https://m.vkvideo.ru/@dan4ik37"       target="_blank" rel="noopener"><span class="ic">▶</span>VK Видео</a>
+    <a class="chip" style="--cc:var(--tg)"  href="https://t.me/+LE25p4pQojkyYjli"       target="_blank" rel="noopener"><span class="ic">✈&#xFE0E;</span>Telegram</a>
+  </div>
+
+  <button type="button" class="scroll-hint" aria-label="Прокрутить к контенту"><span class="mouse" aria-hidden="true"></span><span>смотреть контент</span></button>
+
+  <!-- Бегущая строка = навигация по разделам сайта (fx.js клонирует группу для бесшовной ленты) -->
+  <nav class="hero-marquee hx" style="--d:1s" aria-label="Разделы сайта">
+    <div class="mq-track">
+      <div class="mq-group">
+        <a class="mq-item" href="#/chat">Живой чат</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/forum">Форум</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/lfg">Тиммейты</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/soundboard">Саундборд</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/clicker">Кликер</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/poll">Опросы</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/donate">Зал славы</a><i class="mq-sep"></i>
+      </div>
+    </div>
+  </nav>
 </div>
 
 <!-- AD TOP -->
@@ -1393,7 +1396,7 @@ body.low .donation-alert-icon{animation:none}
       <div id="profileBannerEditBtn" style="display:none;position:absolute;top:.8rem;right:.8rem;gap:.4rem">
         <label style="background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:.5rem .9rem;font-size:.72rem;cursor:pointer;font-weight:700">
           🖼 Сменить фон
-          <input type="file" id="profileBannerInput" accept="image/png,image/jpeg,image/webp" onchange="uploadProfileImage('profile-bg', this.files[0])" style="display:none">
+          <input type="file" id="profileBannerInput" accept="image/png,image/jpeg,image/webp,image/gif" onchange="uploadProfileImage('profile-bg', this.files[0])" style="display:none">
         </label>
         <button id="profileBannerRemoveBtn" onclick="removeProfileImage('profile-bg')" style="display:none;background:rgba(0,0,0,.5);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;padding:.5rem .7rem;font-size:.72rem;cursor:pointer" aria-label="Удалить фон">🗑</button>
       </div>
@@ -1439,6 +1442,10 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <div id="profileUploadStatus" style="font-size:.72rem;text-align:center;min-height:1rem;margin-top:.5rem"></div>
+    <div id="profileUploadHint" style="display:none;font-size:.68rem;line-height:1.6;text-align:center;color:var(--muted);opacity:.85;max-width:560px;margin:.2rem auto 0">
+      🖼 Аватарка и фон: <b>PNG, JPEG или WEBP</b> — любой размер до 25 МБ, мы сами сожмём. Анимированный GIF — для VIP.<br>
+      Не загружается? Скорее всего, мешает <b>блокировщик рекламы</b> (AdBlock, uBlock, AdGuard, Kaspersky «Анти-Баннер») — отключи его для этого сайта. Фон при этом всё равно сохранится в облегчённом виде.
+    </div>
 
     <!-- Статистика профиля -->
     <div id="profileStatsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin-top:1.2rem">
@@ -1538,13 +1545,13 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <div id="profileVipPromo" style="display:none;margin-top:1rem;background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.2);border-radius:var(--r);padding:1.1rem">
-      <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.8rem">
-        ✨ Анимированные аватарки/фон, цветной ник в чате и на форуме, своя тема
-        оформления сайта, форматирование постов на форуме и список гостей
-        профиля (кто заходил) — для участников с VIP. 100₽ = 1 месяц, донат
-        больше — месяцев больше пропорционально. Чем больше донатишь за всё
-        время — тем выше уровень: 🔸 VIP → ⭐ Silver (от 500₽) → ✨ Gold (от 1500₽).
+      <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.6rem">
+        ✨ <b style="color:var(--text)">VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится).
+        Всем VIP: анимированные аватар и фон, цветной ник в чате и на форуме, своя тема сайта,
+        форматирование постов, стикеры, закреп сообщения и список гостей профиля.
+        Уровень растёт с суммой донатов за всё время:
       </div>
+      <div id="vipPromoTiers" style="margin-bottom:.9rem"></div>
 
       <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
         <select id="vipBuyMonths" style="background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.5rem .6rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem">
@@ -1557,6 +1564,9 @@ body.low .donation-alert-icon{animation:none}
         <button onclick="openVipBuyGuide()" style="padding:.55rem 1.1rem;border-radius:8px;border:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-weight:800;font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">✨ Хочу купить VIP</button>
       </div>
     </div>
+
+    <!-- Мой VIP-уровень: что даёт и сколько до следующего -->
+    <div id="profileVipPerksPanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid rgba(255,215,0,.22);border-radius:var(--r);padding:1.1rem"></div>
 
     <!-- Своя тема оформления — только для активных VIP -->
     <div id="profileThemePanel" style="display:none;margin-top:1rem;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:1.1rem">
@@ -1904,6 +1914,7 @@ body.low .donation-alert-icon{animation:none}
         <button id="lbRefreshBtn" onclick="loadLeaderboard()" style="display:none;background:none;border:1.5px solid rgba(255,255,255,.1);color:var(--muted);border-radius:8px;padding:.3rem .7rem;font-size:.68rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='rgba(255,255,255,.1)'">↻ Обновить</button>
       </div>
     </div>
+    <div id="vipSyncStatus" style="display:none;font-size:.72rem;color:var(--muted);line-height:1.6;padding:.6rem 1rem;border-bottom:1px solid var(--border)"></div>
     <div class="lb-tabs">
       <button class="lb-tab active" onclick="switchLbTab('top',this)">🏆 Топ донатов</button>
       <button class="lb-tab" onclick="switchLbTab('recent',this)">🕐 Последние</button>
@@ -1939,7 +1950,7 @@ body.low .donation-alert-icon{animation:none}
     <!-- Push уведомления -->
     <div style="background:var(--card);border-radius:20px;border:1px solid rgba(145,71,255,.18);padding:1.8rem">
       <div style="font-size:1.8rem;margin-bottom:.8rem">🔔</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:2px;color:var(--tw);margin-bottom:.6rem">Уведомления о стримах</div>
+      <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--tw);margin-bottom:.6rem">Уведомления о стримах</div>
       <div style="font-size:.8rem;color:var(--muted);line-height:1.75;margin-bottom:1.2rem">Получай уведомление в браузере когда dan4ik37 начинает стрим — не пропускай ни одного!</div>
       <button class="push-btn" id="pushBtn" onclick="togglePush()">🔔 Подписаться на стримы</button>
       <div style="font-size:.65rem;color:var(--muted);margin-top:.8rem;opacity:.6">Работает в Chrome, Firefox, Edge · Только для Vercel</div>
@@ -1962,7 +1973,7 @@ body.low .donation-alert-icon{animation:none}
     <!-- Google AdSense -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--yt)">
       <div style="font-size:1.8rem;margin-bottom:.8rem">📺</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--yt);margin-bottom:.8rem">Google AdSense</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--yt);margin-bottom:.8rem">Google AdSense</div>
       <!-- Реальный AdSense блок — покажет рекламу после одобрения -->
       <ins class="adsbygoogle"
            style="display:block;border-radius:8px;overflow:hidden;min-height:60px"
@@ -1978,7 +1989,7 @@ body.low .donation-alert-icon{animation:none}
     <!-- Прямое сотрудничество -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--accent)">
       <div style="font-size:1.8rem;margin-bottom:.8rem">🤝</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:.6rem">Прямое сотрудничество</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--accent);margin-bottom:.6rem">Прямое сотрудничество</div>
       <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1.2rem">
         Хочешь разместить рекламу у dan4ik37 на стриме, в видео или в соц сетях? Пиши напрямую — обсудим условия!
       </div>
@@ -1999,7 +2010,7 @@ body.low .donation-alert-icon{animation:none}
     <!-- Аудитория -->
     <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--tw)">
       <div style="font-size:1.8rem;margin-bottom:.8rem">📊</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:2px;color:var(--tw);margin-bottom:.8rem">Аудитория</div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--tw);margin-bottom:.8rem">Аудитория</div>
       <div style="font-size:.82rem;color:var(--muted);line-height:1.8">
         YouTube, TikTok, Twitch, ВКонтакте, VK Видео, Telegram — dan4ik37 присутствует на всех популярных платформах.<br><br>
         Для получения статистики и медиакита — пишите напрямую.
@@ -2078,7 +2089,7 @@ body.low .donation-alert-icon{animation:none}
 <div id="pollAdminModal" onclick="if(event.target===this)closePollAdmin()" style="position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);z-index:9500;display:none;align-items:center;justify-content:center;padding:1.5rem">
   <div style="background:var(--card);border:1px solid rgba(145,71,255,.25);border-radius:20px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;padding:2rem;position:relative">
     <button onclick="closePollAdmin()" aria-label="Закрыть редактор опросов" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.08);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center">✕</button>
-    <h3 style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;margin-bottom:.4rem;color:var(--tw)">🗳️ Редактор опросов</h3>
+    <h3 style="font-family:var(--font-display);font-size:1.8rem;letter-spacing:3px;margin-bottom:.4rem;color:var(--tw)">🗳️ Редактор опросов</h3>
     <p style="font-size:.75rem;color:var(--muted);margin-bottom:1.5rem">Только для администратора</p>
 
     <!-- Список опросов -->
@@ -2108,7 +2119,7 @@ body.low .donation-alert-icon{animation:none}
 <div id="settingsAdminModal" onclick="if(event.target===this)closeSettingsAdmin()" style="position:fixed;inset:0;background:rgba(0,0,0,.9);backdrop-filter:blur(16px);z-index:9500;display:none;align-items:center;justify-content:center;padding:1.5rem">
   <div style="background:var(--card);border:1px solid rgba(255,45,85,.25);border-radius:20px;width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:2rem;position:relative">
     <button onclick="closeSettingsAdmin()" aria-label="Закрыть настройки сайта" style="position:absolute;top:1rem;right:1rem;background:rgba(255,255,255,.08);border:none;color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center">✕</button>
-    <h3 style="font-family:'Bebas Neue',sans-serif;font-size:1.8rem;letter-spacing:3px;margin-bottom:.4rem;color:var(--accent)">⚙️ Настройки сайта</h3>
+    <h3 style="font-family:var(--font-display);font-size:1.8rem;letter-spacing:3px;margin-bottom:.4rem;color:var(--accent)">⚙️ Настройки сайта</h3>
     <p style="font-size:.75rem;color:var(--muted);margin-bottom:1.5rem">Только для администратора — меняется без правки кода и редеплоя</p>
 
     <!-- Расписание -->
@@ -2238,6 +2249,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
 <script src="js/ui/hotkeys.js"></script>
+<script src="js/features/fx.js"></script>
+<script src="js/features/vip-sync-ping.js"></script>
 
 <script type="text/javascript">
 function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'ru',autoDisplay:false},'google_translate_element')}

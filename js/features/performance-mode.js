@@ -4,9 +4,15 @@
 const PERF_KEY = 'd37_perf';
 let currentPerf = null;
 
-function setPerf(mode) {
+// persist=false — режим подобран автоматически (см. autoDetectPerf), в localStorage
+// не пишем: при следующем заходе определим заново. Явный выбор пользователя
+// (кнопка справа / попап) всегда сохраняется.
+function setPerf(mode, persist = true) {
   currentPerf = mode;
-  try { localStorage.setItem(PERF_KEY, mode); } catch(e) {}
+  if (persist) {
+    window.__perfAuto = false;
+    try { localStorage.setItem(PERF_KEY, mode); } catch(e) {}
+  }
 
   document.body.classList.remove('low','high');
   document.body.classList.add(mode);
@@ -65,9 +71,25 @@ function initPerfMode() {
   if (saved) {
     setPerf(saved);
   } else {
-    // Первый заход — даём выбрать режим самому
-    document.getElementById('perfPopup').classList.add('show');
+    // Первый заход. Раньше здесь висел блокирующий попап «Выбери режим» —
+    // человек ещё ничего не увидел, а сайт уже просит настроек (и большинство
+    // жмёт «Пропустить (слабое)» → видит самую плоскую версию сайта).
+    // Теперь режим подбирается сам, а попап остаётся по кнопке справа.
+    window.__perfAuto = true;
+    setPerf(autoDetectPerf(), false);
   }
+}
+
+function autoDetectPerf() {
+  try {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return 'low';
+    if (navigator.connection && navigator.connection.saveData) return 'low';
+    const cores  = navigator.hardwareConcurrency || 4;
+    const mem    = navigator.deviceMemory || 4;   // есть только в Chromium; иначе считаем 4 ГБ
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (mobile) return (cores >= 6 && mem >= 4) ? 'high' : 'low';
+    return (cores >= 4 && mem >= 4) ? 'high' : 'low';
+  } catch(e) { return 'low'; }
 }
 
 // ── ЧАСТИЦЫ ──

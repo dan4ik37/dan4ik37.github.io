@@ -41,18 +41,56 @@ function canUseAnimatedAvatar(role, profile){
   return role === 'admin' || role === 'moderator' || role === 'helper' || isVipActive(profile);
 }
 
-// Уровни VIP по сумме донатов за всё время (profiles.total_donated,
-// см. vip-tiers.sql). Порядок по убыванию min — первое совпадение
-// побеждает. Пороги можно смело менять здесь, миграция не нужна.
+// ═══════════════════════════════════════
+//  БАЛАНС VIP — ВСЕ ЦИФРЫ В ОДНОМ МЕСТЕ
+// ═══════════════════════════════════════
+// Уровень считается по сумме донатов за всё время (profiles.total_donated,
+// см. vip-tiers.sql); пока VIP не активен — уровня нет вообще. Порядок по
+// убыванию min — первое совпадение побеждает.
+//
+// Что даёт каждый уровень (перки суммируются вверх):
+//   • ВСЕМ VIP: анимированные аватар/фон, цветной ник, своя тема, форматирование
+//     форума, стикеры (базовый набор), закреп сообщения, список гостей
+//   • pinMin / pinCooldownMult — длительность закрепа и пауза до следующего
+//     (пауза = pinMin × mult). Скважность растёт с уровнем: 25% → 33% → 40%,
+//     то есть высокий уровень закрепляет не только дольше, но и чаще.
+//   • stickerSets — какие наборы стикеров открыты (см. STICKER_SETS в chat.js)
+//   • guestsLimit — сколько последних гостей профиля показывать
+//
+// ВАЖНО: pinMin/pinCooldownMult и пороги min ДУБЛИРУЮТСЯ на сервере в
+// vip-balance.sql (функции vip_tier_of и pin_own_message) — сервер не верит
+// клиенту. Поменял цифру тут — поменяй и там.
 const VIP_TIERS = [
-  { key: 'gold',   min: 1500, label: 'GOLD VIP',   rgb: '255,195,40'  },
-  { key: 'silver', min: 500,  label: 'SILVER VIP',  rgb: '200,210,225' },
-  { key: 'bronze', min: 0,    label: 'VIP',         rgb: '205,140,60'  },
+  { key: 'gold',   min: 1500, label: 'GOLD VIP',   rgb: '255,195,40',  icon: '✨', pinMin: 40, pinCooldownMult: 1.5, stickerSets: ['base','silver','gold'], guestsLimit: 100 },
+  { key: 'silver', min: 500,  label: 'SILVER VIP', rgb: '200,210,225', icon: '⭐', pinMin: 20, pinCooldownMult: 2,   stickerSets: ['base','silver'],        guestsLimit: 30  },
+  { key: 'bronze', min: 0,    label: 'VIP',        rgb: '205,140,60',  icon: '🔸', pinMin: 10, pinCooldownMult: 3,   stickerSets: ['base'],                 guestsLimit: 10  },
 ];
+// Стафф получает перки бесплатно: стикеры и анимацию — как у Gold, гостей — как у Silver.
+const STAFF_PIN = { admin: { minutes: 60, cooldownMin: 0 }, moderator: { minutes: 30, cooldownMin: 0 }, helper: { minutes: 15, cooldownMin: 30 } };
+const STAFF_ROLES = ['admin', 'moderator', 'helper'];
+const isStaffRole = r => STAFF_ROLES.includes(r);
+
 function getVipTier(profile){
   if (!isVipActive(profile)) return null;
   const total = Number(profile?.total_donated) || 0;
   return VIP_TIERS.find(t => total >= t.min) || VIP_TIERS[VIP_TIERS.length - 1];
+}
+// { minutes, cooldownMin } — сколько держится закреп и пауза до следующего; null — закрепа нет
+function getPinPerks(role, profile){
+  if (STAFF_PIN[role]) return STAFF_PIN[role];
+  const t = getVipTier(profile);
+  return t ? { minutes: t.pinMin, cooldownMin: Math.round(t.pinMin * t.pinCooldownMult) } : null;
+}
+// Есть ли у человека какие-либо платные/стаффовые перки (стикеры, гости, анимация)
+function hasPerks(role, profile){ return isStaffRole(role) || isVipActive(profile); }
+function allowedStickerSets(role, profile){
+  if (isStaffRole(role)) return ['base', 'silver', 'gold'];
+  return getVipTier(profile)?.stickerSets || [];
+}
+function guestsLimitFor(role, profile){
+  const t = getVipTier(profile);
+  if (t) return t.guestsLimit;
+  return isStaffRole(role) ? 30 : 0;
 }
 
 async function renderProfilePage(viewUserId){
@@ -93,6 +131,8 @@ async function renderProfilePage(viewUserId){
   // кто заходил.
   if (!isOwn && currentUser?.id) recordProfileView(targetId);
   if (isOwn) renderProfileGuests(profile);
+  renderVipPerksPanel(profile, isOwn);
+  if (isOwn) renderVipPromoTiers();
   if (isOwn) renderDonateLoginBlock(profile.donate_login);
   else { const p = document.getElementById('donateLoginPanel'); if (p) p.style.display = 'none'; }
   renderStaffVipPanel(profile, isOwn);
@@ -123,10 +163,10 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileBioText').textContent = profile.bio || (isOwn ? 'Расскажи о себе...' : '');
   document.getElementById('profileStatusView').textContent = profile.status_text || '';
   if (typeof renderProfileGamesView === 'function') renderProfileGamesView(profile.favorite_games);
-  document.getElementById('profileBanner').style.backgroundImage = profile.banner_url ? `url('${profile.banner_url}')` : '';
+  document.getElementById('profileBanner').style.backgroundImage = profile.banner_url ? `url('${safeImgUrl(profile.banner_url)}')` : '';
   document.getElementById('profileBanner').classList.toggle('profile-banner-empty', !profile.banner_url);
   const avatarEl = document.getElementById('profileAvatarImg');
-  if (profile.avatar_url) { avatarEl.style.backgroundImage = `url('${profile.avatar_url}')`; avatarEl.textContent=''; }
+  if (profile.avatar_url) { avatarEl.style.backgroundImage = `url('${safeImgUrl(profile.avatar_url)}')`; avatarEl.textContent=''; }
   else { avatarEl.style.backgroundImage=''; avatarEl.textContent = (profile.nick||'?').substring(0,2).toUpperCase(); }
   applyProfileGlow(avatarEl, profile);
 
@@ -134,6 +174,7 @@ async function renderProfilePage(viewUserId){
 
   // Редактирование — только на своём профиле
   document.getElementById('profileBannerEditBtn').style.display = isOwn ? 'flex' : 'none';
+  const upHint = document.getElementById('profileUploadHint'); if (upHint) upHint.style.display = isOwn ? 'block' : 'none';
   document.getElementById('profileBannerRemoveBtn').style.display = (isOwn && profile.banner_url) ? 'block' : 'none';
   document.getElementById('profileAvatarEditBtn').style.display = isOwn ? 'flex' : 'none';
   document.getElementById('profileAvatarRemoveBtn').style.display = (isOwn && profile.avatar_url) ? 'block' : 'none';
@@ -155,7 +196,7 @@ async function renderProfilePage(viewUserId){
       none: `<button onclick="sendFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">➕ Добавить в друзья</button>`,
       pending_sent: `<span style="color:var(--muted);font-size:.8rem">⏳ Заявка отправлена</span>`,
       pending_received: `<button onclick="acceptFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✅ Принять заявку в друзья</button>`,
-      friends: `<button onclick="openDmWith('${targetId}','${esc(profile.nick||'?').replace(/'/g,"\\'")}')" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
+      friends: `<button onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
     };
     addFriendWrap.innerHTML = buttons[status] || '';
     addFriendWrap.style.display = 'block';
@@ -313,9 +354,32 @@ async function recordProfileView(viewedId){
 async function renderProfileGuests(profile){
   const panel = document.getElementById('profileGuestsPanel');
   if (!panel) return;
-  if (!isVipActive(profile)) { panel.style.display = 'none'; return; }
-  panel.style.display = 'block';
   const listEl = document.getElementById('profileGuestsList');
+  panel.style.display = 'block';
+
+  // Нет перков → не прячем блок совсем, а показываем ЧИСЛО заходивших за 30
+  // дней и замок на имена. Число мы и так вправе знать (это записи о визитах
+  // на СВОЙ профиль, RLS их отдаёт владельцу), а вот «кто именно» — плюшка.
+  if (!hasPerks(profile.role, profile)) {
+    listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem 0">Считаем...</div>';
+    try {
+      const since = new Date(Date.now() - 30 * 86400000).toISOString();
+      const { count, error } = await sbClient.from('profile_views')
+        .select('viewer_id', { count: 'exact', head: true })
+        .eq('viewed_id', currentUser.id).gte('viewed_at', since);
+      if (error) throw error;
+      listEl.innerHTML = count > 0
+        ? `<div style="text-align:center;padding:.4rem 0"><div style="font-size:1.6rem;font-weight:800;color:#ffd700">${count}</div>
+             <div style="font-size:.78rem;color:var(--muted);margin-bottom:.5rem">${pluralRu(count, 'человек заходил', 'человека заходило', 'человек заходило')} на твой профиль за 30 дней</div>
+             <div style="font-size:.72rem;color:var(--muted)">🔒 Кто именно — с VIP</div></div>`
+        : '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem 0">За 30 дней никто не заходил. Расскажи о себе в «О себе» — и загляни на форум 😉</div>';
+    } catch(e) {
+      panel.style.display = 'none';
+    }
+    return;
+  }
+
+  const limit = guestsLimitFor(profile.role, profile);
   listEl.innerHTML = '<div style="font-size:.75rem;color:var(--muted);text-align:center;padding:.5rem 0">Загружаем...</div>';
   try {
     const { data, error } = await sbClient
@@ -323,7 +387,7 @@ async function renderProfileGuests(profile){
       .select('viewer_id, viewed_at, profiles!profile_views_viewer_id_fkey(nick, avatar_url)')
       .eq('viewed_id', currentUser.id)
       .order('viewed_at', { ascending: false })
-      .limit(20);
+      .limit(limit);
     if (error) throw error;
     if (!data || !data.length) {
       listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem 0">Пока никто не заходил</div>';
@@ -332,19 +396,26 @@ async function renderProfileGuests(profile){
     listEl.innerHTML = data.map(v => {
       const nick = v.profiles?.nick || '?';
       const ago = timeAgoRu(v.viewed_at);
-      const avatarStyle = v.profiles?.avatar_url ? `background-image:url('${v.profiles.avatar_url}')` : '';
+      const avatarStyle = v.profiles?.avatar_url ? `background-image:url('${safeImgUrl(v.profiles.avatar_url)}')` : '';
       return `
-        <div onclick="openMiniProfile('${v.viewer_id}','${nick.replace(/'/g,"\\'")}',this)" class="card-fade-in" style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.4rem 0">
-          <div style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;flex-shrink:0;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff">${v.profiles?.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
+        <div onclick="openMiniProfile('${v.viewer_id}',${jsAttr(nick)},this)" class="card-fade-in" style="display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.4rem 0">
+          <div style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;flex-shrink:0;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff">${v.profiles?.avatar_url ? '' : esc(nick.slice(0,2).toUpperCase())}</div>
           <div style="min-width:0;flex:1">
             <div style="font-size:.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nick)}</div>
             <div style="font-size:.68rem;color:var(--muted)">${ago}</div>
           </div>
         </div>`;
-    }).join('');
+    }).join('') + `<div style="font-size:.66rem;color:var(--muted);margin-top:.5rem;opacity:.7">Показаны последние ${limit} заходов</div>`;
   } catch(e) {
     listEl.innerHTML = '<div style="font-size:.78rem;color:var(--muted);text-align:center;padding:.5rem 0">Не удалось загрузить</div>';
   }
+}
+// Склонение: 1 человек / 2-4 человека / 5+ человек
+function pluralRu(n, one, few, many){
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 }
 function timeAgoRu(iso){
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -356,6 +427,49 @@ function timeAgoRu(iso){
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days} дн назад`;
   return new Date(iso).toLocaleDateString('ru-RU', { day:'2-digit', month:'2-digit' });
+}
+
+// Сколько стикеров открыто у уровня (наборы — STICKER_SETS в chat.js)
+function stickerCountFor(sets){
+  return typeof STICKER_SETS === 'undefined' ? '' : sets.reduce((n, k) => n + (STICKER_SETS[k]?.length || 0), 0);
+}
+function tierPerkLine(t){
+  return `закреп ${t.pinMin} мин (повтор через ${Math.round(t.pinMin * t.pinCooldownMult)}) · стикеров: ${stickerCountFor(t.stickerSets)} · гостей: ${t.guestsLimit}`;
+}
+// Таблица уровней для не-VIP («что я получу») — генерируется из VIP_TIERS, чтобы
+// цифры в тексте никогда не разъезжались с реальными
+function renderVipPromoTiers(){
+  const box = document.getElementById('vipPromoTiers');
+  if (!box) return;
+  box.innerHTML = [...VIP_TIERS].reverse().map(t => `
+    <div style="display:flex;gap:.5rem;align-items:baseline;padding:.3rem 0;border-top:1px solid rgba(255,255,255,.06)">
+      <span style="flex:0 0 5.6rem;font-weight:800;color:rgb(${t.rgb})">${t.icon} ${t.key === 'bronze' ? 'VIP' : t.key === 'silver' ? 'Silver' : 'Gold'}</span>
+      <span style="flex:1;font-size:.72rem;color:var(--muted)">${t.min ? 'от ' + t.min + '₽ за всё время — ' : 'с первого месяца — '}${tierPerkLine(t)}</span>
+    </div>`).join('');
+}
+// Панель «мой уровень» у активного VIP: что даёт сейчас и сколько до следующего
+function renderVipPerksPanel(profile, isOwn){
+  const panel = document.getElementById('profileVipPerksPanel');
+  if (!panel) return;
+  const tier = getVipTier(profile);
+  if (!isOwn || !tier) { panel.style.display = 'none'; return; }
+  const total = Number(profile.total_donated) || 0;
+  const idx = VIP_TIERS.indexOf(tier);
+  const next = idx > 0 ? VIP_TIERS[idx - 1] : null;
+  const pct = next ? Math.max(0, Math.min(100, Math.round((total - tier.min) / (next.min - tier.min) * 100))) : 100;
+  panel.style.display = 'block';
+  panel.innerHTML = `
+    <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">${tier.icon} Твой уровень</div>
+    <div style="font-size:1.05rem;font-weight:800;color:rgb(${tier.rgb});margin-bottom:.5rem">${tier.label}</div>
+    <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
+      📌 Закреп в чате: <b style="color:var(--text)">${tier.pinMin} мин</b>, повтор через ${Math.round(tier.pinMin * tier.pinCooldownMult)} мин<br>
+      🎉 Стикеров: <b style="color:var(--text)">${stickerCountFor(tier.stickerSets)}</b> · 👀 Гостей в списке: <b style="color:var(--text)">${tier.guestsLimit}</b><br>
+      ✨ Анимированные аватар и фон, цветной ник, своя тема, форматирование на форуме
+    </div>
+    ${next ? `
+      <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.8rem 0 .4rem"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,rgb(${tier.rgb}),rgb(${next.rgb}));border-radius:6px"></div></div>
+      <div style="font-size:.72rem;color:var(--muted)">До ${next.icon} ${next.label} ещё <b style="color:var(--text)">${Math.max(0, next.min - total).toFixed(0)}₽</b> донатов — ${tierPerkLine(next)}</div>`
+    : '<div style="font-size:.74rem;color:var(--muted);margin-top:.7rem">Максимальный уровень — спасибо, что с нами 💛</div>'}`;
 }
 
 // Личная шкала VIP-прогресса — сколько накоплено к следующему месяцу
@@ -447,51 +561,180 @@ async function removeProfileImage(bucket){
   }
 }
 
-// bucket: 'avatars' | 'profile-bg'
+// ═══════════════════════════════════════
+//  ЗАГРУЗКА АВАТАРКИ И ФОНА
+// ═══════════════════════════════════════
+// Почему фон не грузился: браузерные блокировщики рекламы (AdBlock, uBlock,
+// AdGuard, Brave Shields, «Анти-Баннер» Касперского) режут запросы «про
+// баннеры». Два переименования бакета (banners → profile-covers → profile-bg)
+// не помогли — значит, дело не в слове. Гадать дальше не надо: загрузка теперь
+// НЕ ЗАВИСИТ от блокировщика.
+//
+//  1. Фон идёт по ТОЧНО такому же пути, как аватарка, которая у всех грузится:
+//     бакет avatars, папка <uid>, имя начинается с «avatar-» (отдельный бакет
+//     profile-bg больше не нужен и SQL для него запускать не надо).
+//  2. Картинка перед отправкой пережимается в WebP: PNG-скриншот на 8 МБ
+//     превращается в ~300 КБ (раньше «файл больше 5 МБ» → отказ).
+//  3. Если Storage всё равно недоступен (сеть режет запрос) — фон сохраняется
+//     сжатым (≤140 КБ) прямо в профиль обычным запросом к базе — тем же, что
+//     сохраняет ник и «О себе», а он блокировщикам не мешает.
+//  4. Если не вышло совсем — человек видит понятную причину, а не «Failed to fetch».
+const UPLOAD_MAX_SRC_BYTES = 25 * 1024 * 1024;   // что можно выбрать (сожмём сами)
+const UPLOAD_MAX_OUT_BYTES = 5 * 1024 * 1024;    // что реально уходит в Storage
+const BANNER_INLINE_MAX_BYTES = 140 * 1024;      // запасной вариант без Storage
+const UPLOAD_BLOCK_HINT = '🛡 Загрузке мешает блокировщик рекламы или защита браузера (AdBlock, uBlock, AdGuard, Brave Shields, «Анти-Баннер» Касперского). Отключи его для этого сайта и повтори.';
+
+function isNetworkBlockError(err){
+  const m = String(err?.message || err?.originalError?.message || err || '');
+  return /failed to fetch|networkerror|load failed|network request failed|err_blocked/i.test(m);
+}
+
+function loadImageFile(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload  = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Не удалось прочитать картинку — возможно, файл повреждён')); };
+    img.src = url;
+  });
+}
+function blobToDataUrl(blob){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    r.readAsDataURL(blob);
+  });
+}
+// Перекодирует в WebP (JPEG — если браузер не умеет кодировать WebP, напр. Safari до 17).
+// cropAspect — обрезка по центру до нужного соотношения сторон (ширина/высота).
+async function reencodeImage(file, { maxW, maxH, quality, cropAspect }){
+  const img = await loadImageFile(file);
+  let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
+  if (cropAspect) {
+    if (sw / sh > cropAspect) { const nw = sh * cropAspect; sx = (sw - nw) / 2; sw = nw; }
+    else { const nh = sw / cropAspect; sy = (sh - nh) / 2; sh = nh; }
+  }
+  const k = Math.min(1, maxW / sw, maxH / sh);
+  const w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+  const draw = (fill) => {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d');
+    if (fill) { ctx.fillStyle = fill; ctx.fillRect(0, 0, w, h); }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    return cv;
+  };
+  let blob = await new Promise(r => draw().toBlob(r, 'image/webp', quality));
+  if (!blob || blob.type !== 'image/webp') {
+    // JPEG не хранит прозрачность — заливаем фоном сайта, чтобы не было чёрных дыр
+    blob = await new Promise(r => draw('#0f0f18').toBlob(r, 'image/jpeg', quality));
+  }
+  if (!blob) throw new Error('Не удалось сжать картинку');
+  return blob;
+}
+// Запасной вариант для фона: сжатая картинка (≤140 КБ) как data: URL прямо в профиле
+async function bannerAsInlineDataUrl(file){
+  for (const [w, q] of [[1200, .8], [960, .7], [720, .6], [560, .5]]) {
+    const blob = await reencodeImage(file, { maxW: w, maxH: Math.round(w / 3), quality: q, cropAspect: 3 });
+    if (blob.size <= BANNER_INLINE_MAX_BYTES) return blobToDataUrl(blob);
+  }
+  throw new Error('картинка слишком детальная для облегчённого режима — попробуй другую или отключи блокировщик');
+}
+// Путь файла внутри бакета avatars из публичного URL (или null)
+function avatarsPathFromUrl(url){
+  const m = /\/object\/public\/avatars\/([^?]+)/.exec(url || '');
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// bucket: 'avatars' | 'profile-bg' (второе — метка «это фон», физически оба идут в бакет avatars)
 async function uploadProfileImage(bucket, file){
   const statusEl = document.getElementById('profileUploadStatus');
   if (!file) return;
   statusEl.style.color = '';
+  const isBanner = bucket === 'profile-bg';
+  const col = isBanner ? 'banner_url' : 'avatar_url';
+  const say = (msg, color) => { statusEl.style.color = color || ''; statusEl.textContent = msg; };
+  // input.value = '' — чтобы повторный выбор ТОГО ЖЕ файла снова вызвал onchange
+  const resetInput = () => { const i = document.getElementById(isBanner ? 'profileBannerInput' : 'profileAvatarInput'); if (i) i.value = ''; };
 
   const isGif = file.type === 'image/gif';
-  const okTypes = ['image/png','image/jpeg','image/webp','image/gif'];
-  if (!okTypes.includes(file.type)) {
-    statusEl.textContent = '⚠ Только PNG, JPEG, WEBP или GIF'; return;
+  if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+    say('⚠ Только PNG, JPEG, WEBP или GIF'); resetInput(); return;
   }
-  if (isGif) {
-    let profile;
-    try { const { data } = await sbClient.from('profiles').select('role,is_vip,vip_until').eq('id', currentUser.id).single(); profile = data; } catch(e) {}
-    if (!canUseAnimatedAvatar(profile?.role, profile)) {
-      statusEl.textContent = '✨ Анимированные картинки — только для VIP или команды сайта. Обычное фото (PNG/JPEG) можно грузить всем.';
-      return;
+  if (file.size > UPLOAD_MAX_SRC_BYTES) { say('⚠ Файл больше 25 МБ'); resetInput(); return; }
+
+  let prev = null;
+  try {
+    const { data } = await sbClient.from('profiles').select('role,is_vip,vip_until,total_donated,avatar_url,banner_url').eq('id', currentUser.id).single();
+    prev = data;
+  } catch(e) {}
+  if (isGif && !hasPerks(prev?.role, prev)) {
+    say('✨ Анимированные картинки — только для VIP или команды сайта. Обычное фото (PNG/JPEG/WEBP) можно грузить всем.');
+    resetInput(); return;
+  }
+  if (isGif && file.size > UPLOAD_MAX_OUT_BYTES) { say('⚠ GIF больше 5 МБ — сожми его или выбери другой'); resetInput(); return; }
+
+  say('Готовим картинку...');
+  let body = file, ext = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
+  if (!isGif) {
+    try {
+      const blob = await reencodeImage(file, isBanner
+        ? { maxW: 1600, maxH: 900, quality: .85 }
+        : { maxW: 512,  maxH: 512, quality: .88 });
+      if (blob.size < file.size || file.size > UPLOAD_MAX_OUT_BYTES) { body = blob; ext = blob.type === 'image/webp' ? 'webp' : 'jpg'; }
+    } catch(e) {
+      if (file.size > UPLOAD_MAX_OUT_BYTES) { say('⚠ ' + (e.message || 'Не удалось сжать картинку')); resetInput(); return; }
+      // маленький файл, который не удалось перекодировать — грузим как есть
     }
   }
-  if (file.size > 5 * 1024 * 1024) { statusEl.textContent = '⚠ Файл больше 5 МБ'; return; }
+  if (body.size > UPLOAD_MAX_OUT_BYTES) { say('⚠ Даже после сжатия больше 5 МБ — выбери другую картинку'); resetInput(); return; }
 
-  statusEl.textContent = 'Загружаем...';
+  say('Загружаем...');
+  const uid = currentUser.id;
+  // Фон: уникальное имя (заодно решает кэш); аватарка: одно имя на пользователя, как и раньше
+  const path = isBanner ? `${uid}/avatar-x${Date.now().toString(36)}.${ext}` : `${uid}/avatar.${ext}`;
+
+  let upErr = null;
   try {
-    const ext = file.name.split('.').pop();
-    // ВАЖНО: имя файла тоже не должно содержать слово "banner" — оно
-    // остаётся в итоговом URL (.../object/public/<bucket>/<uid>/<имя>.<ext>)
-    // независимо от имени бакета, и именно это ловилось генерик-фильтрами
-    // блокировщиков рекламы (см. раздел 8 инструкции). Два переименования
-    // бакета не помогали ровно поэтому — дело было не в бакете.
-    const path = `${currentUser.id}/${bucket === 'avatars' ? 'avatar' : 'bg'}.${ext}`;
-    const { error: upErr } = await sbClient.storage.from(bucket).upload(path, file, { upsert: true, cacheControl: '3600' });
-    if (upErr) throw upErr;
-    const { data: urlData } = sbClient.storage.from(bucket).getPublicUrl(path);
+    const res = await sbClient.storage.from('avatars').upload(path, body, {
+      upsert: !isBanner, cacheControl: '3600', contentType: body.type || file.type
+    });
+    upErr = res.error;
+  } catch(e) { upErr = e; }
+
+  try {
+    if (upErr) {
+      if (!isNetworkBlockError(upErr)) throw upErr;
+      // Запрос к Storage не дошёл (блокировщик/сеть). Для фона есть запасной путь.
+      if (!isBanner) { say(UPLOAD_BLOCK_HINT); resetInput(); return; }
+      say('Хранилище недоступно — сохраняем облегчённую версию...');
+      const dataUrl = await bannerAsInlineDataUrl(file);
+      const { error: dbErr } = await sbClient.from('profiles').update({ banner_url: dataUrl }).eq('id', uid);
+      if (dbErr) throw dbErr;
+      say('✅ Фон сохранён в облегчённом виде: браузер не пустил загрузку в хранилище. Чтобы грузить в полном качестве — отключи блокировщик рекламы для этого сайта.', 'var(--tw)');
+      renderProfilePage(uid);
+      resetInput();
+      return;
+    }
+
+    const { data: urlData } = sbClient.storage.from('avatars').getPublicUrl(path);
     // ?t= — чтобы браузер не показывал старую картинку из кэша при замене
     const publicUrl = urlData.publicUrl + '?t=' + Date.now();
-    const col = bucket === 'avatars' ? 'avatar_url' : 'banner_url';
-    await sbClient.from('profiles').update({ [col]: publicUrl }).eq('id', currentUser.id);
-    statusEl.style.color = 'var(--tw)';
-    statusEl.textContent = '✅ Обновлено!';
-    renderProfilePage(currentUser.id);
-    setTimeout(()=>{ if(statusEl) statusEl.textContent=''; }, 2500);
+    const { error: dbErr } = await sbClient.from('profiles').update({ [col]: publicUrl }).eq('id', uid);
+    if (dbErr) throw dbErr;
+
+    // Старый файл больше не нужен — убираем, чтобы Storage не разрастался (не критично, если не выйдет)
+    const oldPath = avatarsPathFromUrl(prev?.[col]);
+    if (oldPath && oldPath !== path && oldPath.startsWith(uid + '/')) {
+      sbClient.storage.from('avatars').remove([oldPath]).catch(() => {});
+    }
+    say('✅ Обновлено!', 'var(--tw)');
+    renderProfilePage(uid);
+    setTimeout(() => { if (statusEl && statusEl.textContent === '✅ Обновлено!') statusEl.textContent = ''; }, 2500);
   } catch(e) {
-    statusEl.style.color = '';
-    statusEl.textContent = '⚠ Не получилось: ' + (e.message || e);
+    say(isNetworkBlockError(e) ? UPLOAD_BLOCK_HINT : '⚠ Не получилось: ' + (e.message || e));
   }
+  resetInput();
 }
 
 // ═══════════════════════════════════════
@@ -506,57 +749,16 @@ const VIP_RUB_PER_MONTH = 100;
 
 async function processDonationForVip(d){
   if (!sbClient || currentRole !== 'admin' || !d?.id) return;
-
+  // Вся логика начисления — в SQL-функции credit_donation (server-hardening.sql):
+  // она атомарная, повторный вызов с тем же id безопасен, а тот же путь использует и
+  // серверная синхронизация api/vip-sync.js. Раньше здесь было «прочитать → посчитать →
+  // записать» из браузера: при одновременной работе двух вкладок (или сервера) донат
+  // мог начислиться дважды, а ник с символами % и _ работал как маска в ilike.
   try {
-    const { data: already } = await sbClient.from('vip_donation_log').select('donation_id').eq('donation_id', d.id).maybeSingle();
-    if (already) return; // уже обработан раньше
-
-    const logBase = { donation_id: d.id, donor_username: d.username, amount: d.amount, currency: d.currency || 'RUB' };
-
-    // Конвертация валют не реализована — см. vip-auto.sql. Логируем как
-    // "не сопоставлен", чтобы админ видел донат целиком, а не тишину.
-    if (d.currency && d.currency !== 'RUB') {
-      await sbClient.from('vip_donation_log').insert([{ ...logBase, matched: false }]);
-      return;
-    }
-
-    const { data: profile } = await sbClient.from('profiles').select('id, nick, is_vip, vip_until, total_donated, vip_pending_rub').ilike('donate_login', d.username).maybeSingle();
-    if (!profile) {
-      await sbClient.from('vip_donation_log').insert([{ ...logBase, matched: false }]);
-      return;
-    }
-
-    // total_donated копим ВСЕГДА, если ник найден — даже если сумма
-    // меньше 100₽ и месяц VIP не положен. Именно от неё считается
-    // уровень (Bronze/Silver/Gold, см. VIP_TIERS выше и vip-tiers.sql).
-    const newTotal = (Number(profile.total_donated) || 0) + (Number(d.amount) || 0);
-
-    // Месяц VIP теперь можно набирать ЧАСТЯМИ — остаток не сгорает, а
-    // копится в vip_pending_rub и участвует в следующем донате (см.
-    // vip-secure.sql). Донатнул 30₽ сегодня, 40₽ завтра, 30₽ послезавтра
-    // — только тогда закрылся месяц, а не потерялись 30+40=70₽ впустую.
-    const pendingTotal = (Number(profile.vip_pending_rub) || 0) + (Number(d.amount) || 0);
-    const months = Math.floor(pendingTotal / VIP_RUB_PER_MONTH);
-    const remainder = pendingTotal - months * VIP_RUB_PER_MONTH;
-    const patch = { total_donated: newTotal, vip_pending_rub: remainder };
-
-    if (months >= 1) {
-      const activeUntil = (profile.is_vip && profile.vip_until && new Date(profile.vip_until) > new Date())
-        ? new Date(profile.vip_until) : new Date();
-      activeUntil.setMonth(activeUntil.getMonth() + months);
-      patch.is_vip = true;
-      patch.vip_until = activeUntil.toISOString();
-    }
-
-    await sbClient.from('profiles').update(patch).eq('id', profile.id);
-    // matched:true теперь значит "нашли ник и учли сумму", а не только
-    // "выдали месяц" — months_granted может быть и 0, это нормально.
-    await sbClient.from('vip_donation_log').insert([{ ...logBase, profile_id: profile.id, matched: true, months_granted: months }]);
-  } catch(e) {
-    // Гонка (два вызова обработали один donation_id одновременно) или
-    // сетевая ошибка — не критично, при следующей загрузке списка
-    // донатов donation_id либо уже будет в логе, либо попробуется снова.
-  }
+    await sbClient.rpc('credit_donation', {
+      p_id: d.id, p_username: d.username, p_amount: d.amount, p_currency: d.currency || 'RUB'
+    });
+  } catch(e) { /* сетевой сбой — донат не отмечен в логе, следующая синхронизация повторит */ }
 }
 
 // Прогоняет весь список последних донатов (из /api/donations) через
@@ -736,8 +938,8 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     }
     document.getElementById('miniProfileRoleBadge').innerHTML = ROLE_BADGE_HTML[p.role] || '';
     document.getElementById('miniProfileVip').style.display = isVipActive(p) ? 'inline' : 'none';
-    if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${p.avatar_url}')`;
-    if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${p.banner_url}')`;
+    if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${safeImgUrl(p.avatar_url)}')`;
+    if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${safeImgUrl(p.banner_url)}')`;
     applyProfileGlow(document.getElementById('miniProfileAvatar'), p);
 
     const actionEl = document.getElementById('miniProfileFriendAction');
@@ -748,7 +950,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
         none: `<button onclick="sendFriendRequest('${userId}')" style="${small};background:var(--tw);color:#fff">➕ В друзья</button>`,
         pending_sent: `<span style="font-size:.72rem;color:var(--muted)">⏳ Заявка отправлена</span>`,
         pending_received: `<button onclick="acceptFriendRequest('${userId}')" style="${small};background:var(--accent);color:#fff">✅ Принять заявку</button>`,
-        friends: `<button onclick="openDmWith('${userId}','${(p.nick||fallbackNick).replace(/'/g,"\\'")}')" style="${small};background:rgba(255,255,255,.1);color:var(--text)">✉ Написать</button>`,
+        friends: `<button onclick="openDmWith('${userId}',${jsAttr(p.nick||fallbackNick)})" style="${small};background:rgba(255,255,255,.1);color:var(--text)">✉ Написать</button>`,
       };
       actionEl.innerHTML = buttons[status] || '';
     } else {

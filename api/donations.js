@@ -5,6 +5,25 @@
 // заново проходить весь OAuth руками. Теперь при протухшем токене сначала
 // пробуем обновиться по refresh_token и только если это тоже не выйдет —
 // просим войти заново.
+import { storeConfigured, sbSelect } from './_lib/store.js';
+
+// Снимок, который раз в несколько минут обновляет api/vip-sync.js. Отдаём его,
+// когда у посетителя нет своей сессии DonationAlerts — то есть ВСЕМ, кроме владельца.
+// Раньше публичный «Топ донатеров» требовал, чтобы каждый посетитель сам вошёл в
+// DonationAlerts (и увидел бы там уже свои, а не стримера, данные).
+async function readSnapshot() {
+  if (!storeConfigured()) return null;
+  try {
+    const rows = await sbSelect('vip_sync_state', 'id=eq.1&select=snapshot,snapshot_at');
+    return rows[0]?.snapshot ? { data: rows[0].snapshot, at: rows[0].snapshot_at } : null;
+  } catch (e) { return null; }
+}
+function sendSnapshot(res, snap) {
+  const ageMin = (Date.now() - Date.parse(snap.at)) / 60000;
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
+  return res.status(200).json({ ...snap.data, source: 'server', updated_at: snap.at, stale: ageMin > 30 });
+}
+
 function authUrl() {
   const p = new URLSearchParams({
     client_id:     process.env.DA_CLIENT_ID,
@@ -40,12 +59,21 @@ function setAuthCookies(res, t, fallbackRefresh) {
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', 'https://dan4ik37.vercel.app');
+  res.setHeader('Cache-Control', 'private, no-store');   // ответы по cookie владельца не кэшируем
+
+  // Ссылка для входа владельца (кнопка в админ-статусе синхронизации) — без данных
+  if (req.query?.login === '1') {
+    if (!process.env.DA_CLIENT_ID) return res.status(500).json({ error: 'env_missing' });
+    return res.status(200).json({ auth_url: authUrl() });
+  }
 
   const cookies = req.headers.cookie || '';
   let token = cookies.match(/da_token=([^;]+)/)?.[1];
   const refreshTok = cookies.match(/da_refresh=([^;]+)/)?.[1];
 
   if (!token && !refreshTok) {
+    const snap = await readSnapshot();
+    if (snap) return sendSnapshot(res, snap);
     return res.status(401).json({ error: 'not_authorized', reason: 'no_session', auth_url: authUrl() });
   }
 
@@ -62,11 +90,15 @@ export default async function handler(req, res) {
 
     if (r.status === 401) {
       if (!refreshTok) {
+        const snap = await readSnapshot();
+        if (snap) return sendSnapshot(res, snap);
         return res.status(401).json({ error: 'not_authorized', auth_url: authUrl() });
       }
       const t = await refreshToken(refreshTok);
       if (!t) {
-        // refresh_token тоже не сработал (например, отозван) — только руками
+        // refresh_token тоже не сработал (например, отозван) — сначала пробуем снимок
+        const snap = await readSnapshot();
+        if (snap) return sendSnapshot(res, snap);
         return res.status(401).json({ error: 'not_authorized', reason: 'session_expired', auth_url: authUrl() });
       }
       setAuthCookies(res, t, refreshTok);
@@ -75,6 +107,8 @@ export default async function handler(req, res) {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (r.status === 401) {
+        const snap = await readSnapshot();
+        if (snap) return sendSnapshot(res, snap);
         return res.status(401).json({ error: 'not_authorized', auth_url: authUrl() });
       }
     }
@@ -101,6 +135,9 @@ export default async function handler(req, res) {
 
     res.status(200).json({ donations: donations.slice(0, 20), leaderboard });
   } catch(e) {
+    // DonationAlerts недоступен — лучше показать последний снимок, чем ошибку
+    const snap = await readSnapshot();
+    if (snap) return sendSnapshot(res, snap);
     res.status(500).json({ error: 'server_error' });
   }
 }

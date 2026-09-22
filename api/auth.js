@@ -12,6 +12,8 @@
 //    DonationAlerts (donationalerts.com/apidoc, "Getting Access Token")
 //    этот эндпоинт ждёт application/x-www-form-urlencoded. Поменял на
 //    URLSearchParams, как в примере curl из их же доков.
+import { adoptSession } from './_lib/da.js';
+
 export default async function handler(req, res) {
   const { code, error } = req.query;
   if (error) return res.redirect('/?da_error=' + encodeURIComponent(error));
@@ -50,7 +52,11 @@ export default async function handler(req, res) {
       `da_token=${t.access_token}; HttpOnly; Secure; SameSite=Lax; Max-Age=86400; Path=/`,
       `da_refresh=${t.refresh_token||''}; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/`,
     ]);
-    res.redirect('/?da_auth=success');
+    // Серверная копия сессии — для автоначисления VIP и публичного «Топа донатеров»
+    // (см. api/vip-sync.js). Любая ошибка здесь не должна ломать сам вход.
+    let sync = 'error';
+    try { sync = await adoptSession(t); } catch (e) { console.error('[adoptSession]', e); }
+    res.redirect('/?da_auth=success&sync=' + encodeURIComponent(sync));
   } catch(e) {
     console.error(e);
     res.redirect('/?da_error=' + encodeURIComponent('network: ' + String(e.message || e).slice(0, 150)));

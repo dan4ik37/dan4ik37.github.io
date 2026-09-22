@@ -39,7 +39,7 @@ function renderLfgCard(p){
     : esc(nick);
   const isOwn = currentUser?.id === p.author_id;
   const canModerate = currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
-  const avatarStyle = p.profiles?.avatar_url ? `background-image:url('${p.profiles.avatar_url}')` : '';
+  const avatarStyle = p.profiles?.avatar_url ? `background-image:url('${safeImgUrl(p.profiles.avatar_url)}')` : '';
   const ago = (typeof timeAgoRu === 'function') ? timeAgoRu(p.created_at) : new Date(p.created_at).toLocaleDateString('ru-RU');
   return `
     <div class="card-fade-in" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem" data-lfg-id="${p.id}">
@@ -47,8 +47,8 @@ function renderLfgCard(p){
         <div style="min-width:0">
           <div style="font-weight:800;font-size:.92rem">🎮 ${esc(p.game)}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
-            <div style="width:20px;height:20px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:800;color:#fff;flex-shrink:0;cursor:pointer" onclick="openMiniProfile('${p.author_id}','${nick.replace(/'/g,"\\'")}',this)">${p.profiles?.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
-            <span onclick="openMiniProfile('${p.author_id}','${nick.replace(/'/g,"\\'")}',this)" style="cursor:pointer">${nickHtml}</span>
+            <div style="width:20px;height:20px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:800;color:#fff;flex-shrink:0;cursor:pointer" onclick="openMiniProfile('${p.author_id}',${jsAttr(nick)},this)">${p.profiles?.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
+            <span onclick="openMiniProfile('${p.author_id}',${jsAttr(nick)},this)" style="cursor:pointer">${nickHtml}</span>
             · нужно ещё ${p.players_needed} · ${ago}
           </div>
         </div>
@@ -58,7 +58,7 @@ function renderLfgCard(p){
         </div>
       </div>
       ${p.description ? `<div style="font-size:.8rem;margin-top:.6rem;line-height:1.5;white-space:pre-wrap;word-break:break-word">${esc(p.description)}</div>` : ''}
-      ${!isOwn ? `<button onclick="respondToLfg('${p.author_id}','${nick.replace(/'/g,"\\'")}')" style="margin-top:.7rem;padding:.5rem 1rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">🤝 Откликнуться</button>` : ''}
+      ${!isOwn ? `<button onclick="respondToLfg('${p.author_id}',${jsAttr(nick)})" style="margin-top:.7rem;padding:.5rem 1rem;border-radius:8px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">🤝 Откликнуться</button>` : ''}
     </div>`;
 }
 
@@ -140,8 +140,8 @@ async function findGameMatches(game){
     if (!data || !data.length) { box.innerHTML = '<div style="font-size:.72rem;color:var(--muted);margin-top:.4rem">Пока никто не указал эту игру в любимых — но заявку всё равно увидят все</div>'; return; }
     box.innerHTML = `<div style="font-size:.7rem;color:var(--muted);margin-top:.5rem;margin-bottom:.3rem">🎯 Уже играют в это:</div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">${data.map(u => {
-        const avatarStyle = u.avatar_url ? `background-image:url('${u.avatar_url}')` : '';
-        return `<div onclick="openMiniProfile('${u.id}','${(u.nick||'?').replace(/'/g,"\\'")}',this)" title="${esc(u.nick||'?')}" style="width:28px;height:28px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#fff;cursor:pointer">${u.avatar_url ? '' : (u.nick||'?').substring(0,2).toUpperCase()}</div>`;
+        const avatarStyle = u.avatar_url ? `background-image:url('${safeImgUrl(u.avatar_url)}')` : '';
+        return `<div onclick="openMiniProfile('${u.id}',${jsAttr((u.nick||'?'))},this)" title="${esc(u.nick||'?')}" style="width:28px;height:28px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#fff;cursor:pointer">${u.avatar_url ? '' : (u.nick||'?').substring(0,2).toUpperCase()}</div>`;
       }).join('')}</div>`;
   } catch(e) { box.innerHTML = ''; }
 }

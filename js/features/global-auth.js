@@ -261,8 +261,20 @@ function updateGlobalAuthBtn() {
   const params = new URLSearchParams(location.search);
   const daAuth = params.get('da_auth');
   const daError = params.get('da_error');
+  const daSync = params.get('sync');
   if (!daAuth && !daError) return;
-  history.replaceState({}, '', location.pathname + location.search.replace(/[?&]da_(auth|error)=[^&]*/g,'').replace(/^&/,'?') + location.hash);
+  history.replaceState({}, '', location.pathname + location.search.replace(/[?&](da_auth|da_error|sync)=[^&]*/g,'').replace(/^&/,'?') + location.hash);
+  // Итог сохранения СЕРВЕРНОЙ сессии (автоначисление VIP) — покажем админу в блоке статуса
+  const SYNC_MSG = {
+    stored:          '✅ Серверная сессия сохранена — VIP теперь начисляется автоматически, даже когда тебя нет на сайте.',
+    store_off:       'ℹ Автоначисление VIP выключено: задай SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY в Vercel.',
+    other_account:   '⚠ Вход выполнен, но серверная сессия уже принадлежит ДРУГОМУ аккаунту DonationAlerts — она не изменена.',
+    not_owner:       '⚠ Это не тот аккаунт DonationAlerts (не совпадает с DA_OWNER_ID) — серверная сессия не изменена.',
+    no_refresh_token:'⚠ DonationAlerts не вернул refresh-токен — серверную сессию сохранить не удалось.',
+    user_check_failed:'⚠ Не удалось проверить аккаунт DonationAlerts — повтори вход.',
+    error:           '⚠ Серверную сессию сохранить не удалось — повтори вход.',
+  };
+  if (daSync && SYNC_MSG[daSync]) { try { sessionStorage.setItem('d37_da_sync_msg', SYNC_MSG[daSync]); } catch(e) {} }
   location.hash = '#/donate';
   setTimeout(() => {
     const statusEl = document.getElementById('lbAuthStatus');

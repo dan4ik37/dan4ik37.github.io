@@ -21,21 +21,34 @@ async function loadLeaderboard() {
     return;
   }
 
+  // Таймаут: раньше зависший запрос оставлял «Загрузка...» навсегда
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
   try {
-    const r = await fetch('/api/donations');
+    const r = await fetch('/api/donations', { signal: ctl.signal });
+    clearTimeout(timer);
     if (r.status === 401) {
       const d = await r.json();
       showLbLogin(d.auth_url);
+      renderVipSyncStatus();
       return;
     }
     if (r.status !== 200) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     if (typeof processRecentDonationsForVip === 'function') processRecentDonationsForVip(data.donations);
-    document.getElementById('lbAuthStatus').textContent = '✅ Подключено';
+    // Данные с сервера (снимок api/vip-sync.js) видят все; свои «живые» — только владелец с сессией DA
+    let status = '✅ Подключено';
+    if (data.source === 'server' && data.updated_at) {
+      const t = new Date(data.updated_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+      status = data.stale ? `⏳ Данные на ${t} — обновляются с задержкой` : `✅ Обновлено в ${t}`;
+    }
+    document.getElementById('lbAuthStatus').textContent = status;
+    renderVipSyncStatus();
     document.getElementById('lbRefreshBtn').style.display = 'inline-flex';
     document.getElementById('lbAuthBtn').style.display = 'none';
     renderLb(data, lbTab);
   } catch(e) {
+    clearTimeout(timer);
     // БАГ: тут раньше был renderLbDemo() — показывал ВЫДУМАННЫХ донатеров
     // (SuperFan, GamerPro...) на любую ошибку API, не только когда не
     // авторизован. С маленькой жёлтой подписью "демо" — легко принять за
@@ -123,7 +136,9 @@ function renderLbHtml(data, tab) {
 function renderChatTop() {
   // Топ активных в чате — берём из Supabase
   if (!sbClient) return `<div class="lb-login-msg">Чат не подключён</div>`;
-  sbClient.from('messages').select('nick').eq('deleted',false).then(({data})=>{
+  // Берём последние 1000 сообщений: раньше тянулась ВСЯ история чата при каждом открытии
+  // (а PostgREST всё равно отдавал максимум 1000 — «топ» считался по случайному куску)
+  sbClient.from('messages').select('nick').eq('deleted',false).order('id',{ascending:false}).limit(1000).then(({data})=>{
     if (!data) return;
     const counts = {};
     data.forEach(m => { counts[m.nick] = (counts[m.nick]||0)+1; });
@@ -134,7 +149,7 @@ function renderChatTop() {
       return `<div class="lb-item">
         <div class="lb-rank r${i+1}">${i+1}</div>
         <div class="lb-avatar" style="background:${colors[i%colors.length]}">${ini}</div>
-        <div class="lb-info"><div class="lb-name">${esc(nick)}</div><div class="lb-sub">сообщений</div></div>
+        <div class="lb-info"><div class="lb-name">${esc(nick)}</div><div class="lb-sub">сообщений (из последних 1000)</div></div>
         <div class="lb-amount" style="color:var(--tw)">${cnt}</div>
       </div>`;
     }).join('')}</div>` || `<div class="lb-login-msg">Пока нет активности</div>`;
@@ -181,3 +196,49 @@ async function loadGoalFromDA() {
   }
 }
 
+
+
+// ═══════════════════════════════════════
+//  Статус серверного начисления VIP — только админу
+// ═══════════════════════════════════════
+const VIP_SYNC_HELP = {
+  no_stored_session: 'сервер ещё не получил доступ к DonationAlerts — войди через кнопку ниже',
+  no_refresh_token:  'сервер потерял доступ к DonationAlerts — войди заново',
+  da_unauthorized:   'DonationAlerts отклонил токен — войди заново',
+  env_missing_da:    'в Vercel не заданы DA_CLIENT_ID / DA_CLIENT_SECRET',
+  db_unavailable:    'база данных недоступна',
+};
+function timeAgoShort(iso){
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return 'только что';
+  if (min < 60) return min + ' мин назад';
+  if (min < 1440) return Math.round(min / 60) + ' ч назад';
+  return Math.round(min / 1440) + ' дн назад';
+}
+async function renderVipSyncStatus(){
+  const box = document.getElementById('vipSyncStatus');
+  if (!box) return;
+  if (typeof currentRole === 'undefined' || currentRole !== 'admin' || !sbClient) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  let html = '';
+  try {
+    const { data: st, error } = await sbClient.from('vip_sync_state')
+      .select('last_run_at,last_ok_at,last_error,last_error_at,last_credited,total_credited').eq('id', 1).maybeSingle();
+    if (error) throw error;
+    if (!st || !st.last_run_at) {
+      html = '⚪ <b>Автоначисление VIP:</b> ещё не запускалось. Проверь переменные <code>SUPABASE_URL</code> и <code>SUPABASE_SERVICE_ROLE_KEY</code> в Vercel и войди через DonationAlerts.';
+    } else if (st.last_error && (!st.last_ok_at || new Date(st.last_error_at) >= new Date(st.last_ok_at))) {
+      const key = Object.keys(VIP_SYNC_HELP).find(k => st.last_error.includes(k)) || (/refresh_failed/.test(st.last_error) ? 'da_unauthorized' : null);
+      html = `🔴 <b>Автоначисление VIP: сбой</b> (${timeAgoShort(st.last_error_at)}) — ${esc(key ? VIP_SYNC_HELP[key] : st.last_error)}` +
+             (key && key !== 'env_missing_da' && key !== 'db_unavailable' ? ' <button class="lb-login-btn" onclick="lbLogin()" style="margin-left:.4rem">💝 Войти через DonationAlerts</button>' : '');
+    } else {
+      html = `🟢 <b>Автоначисление VIP работает</b> · последняя успешная проверка ${timeAgoShort(st.last_ok_at)} · начислено донатов за всё время: ${st.total_credited || 0}`;
+    }
+  } catch(e) {
+    html = '⚪ <b>Автоначисление VIP:</b> таблицы ещё нет — выполни <code>server-hardening.sql</code> в Supabase.';
+  }
+  let last = null;
+  try { last = sessionStorage.getItem('d37_da_sync_msg'); } catch(e) {}
+  if (last) html += `<div style="margin-top:.3rem;opacity:.85">${esc(last)}</div>`;
+  box.innerHTML = html;
+}
