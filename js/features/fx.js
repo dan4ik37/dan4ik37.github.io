@@ -15,7 +15,15 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const mqReduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   const mqFine   = window.matchMedia('(hover: hover) and (pointer: fine)');
-  const isHigh   = () => document.body.classList.contains('high') && !mqReduce.matches;
+  // Раньше isHigh() требовал И body.high, И !mqReduce.matches одновременно —
+  // то есть даже осознанный клик по 🚀 High не мог победить системный
+  // prefers-reduced-motion (многие браузеры/расширения/инструменты
+  // скриншотов включают его по умолчанию). Теперь дефолт по-прежнему
+  // «уважать системную настройку», но явный body.high — это и есть тот
+  // самый явный выбор, который должен её перебивать (см. тот же принцип
+  // в CSS: body:not(.high) в блоке @media(prefers-reduced-motion)).
+  const isHigh   = () => document.body.classList.contains('high');
+  const reducedNotOverridden = () => mqReduce.matches && !isHigh();
   const safe = (name, fn) => { try { fn(); } catch (e) { console.warn('[fx] ' + name + ':', e); } };
 
   // ── Шапка: редкие разделы → «Ещё ▾», скользящая пилюля активного пункта ──
@@ -151,7 +159,7 @@
     const box = $('.role-rot');
     if (!box) return;
     const items = $$('span', box);
-    if (items.length < 2 || mqReduce.matches) return;   // при reduce-motion — одна фраза
+    if (items.length < 2 || reducedNotOverridden()) return;   // при reduce-motion (и без ручного High) — одна фраза
     box.classList.add('js');
     let i = 0;
     items[0].classList.add('on');
@@ -410,7 +418,7 @@
   function initScrollHint() {
     const b = $('.scroll-hint');
     if (b) b.addEventListener('click', () => {
-      const t = $('#stats'); if (t) t.scrollIntoView({ behavior: mqReduce.matches ? 'auto' : 'smooth' });
+      const t = $('#stats'); if (t) t.scrollIntoView({ behavior: reducedNotOverridden() ? 'auto' : 'smooth' });
     });
   }
 

@@ -746,12 +746,15 @@ body.low .hero-spot,body.low .hero-canvas{display:none}
 body.low .wordmark .wm{background-position:0 0,160% 0,0 0}
 body.low :is(.stat-card,.hub-card,.about-card,.dc):hover{transform:none}
 body.low .orbit,body.low .sat-i{animation:none!important}
+/* body:not(.high) — см. подробное объяснение в index.html рядом с первым
+   таким блоком: явный выбор 🚀 High в переключателе теперь важнее
+   системного prefers-reduced-motion, а не блокируется им намертво. */
 @media (prefers-reduced-motion:reduce){
-  *{animation-delay:0s!important}
-  .hero-spot,.hero-canvas,#fxSparks{display:none!important}
-  .wordmark .wm{background-position:0 0,160% 0,0 0!important}
-  .orbit,.sat-i,.mq-track{animation:none!important}
-  :is(.stat-card,.hub-card,.about-card,.dc):hover{transform:none!important}
+  body:not(.high) *{animation-delay:0s!important}
+  body:not(.high) .hero-spot,body:not(.high) .hero-canvas,body:not(.high) #fxSparks{display:none!important}
+  body:not(.high) .wordmark .wm{background-position:0 0,160% 0,0 0!important}
+  body:not(.high) .orbit,body:not(.high) .sat-i,body:not(.high) .mq-track{animation:none!important}
+  body:not(.high) :is(.stat-card,.hub-card,.about-card,.dc):hover{transform:none!important}
 }
 
 /* ═══════════════════════════════════════════════════════════════════

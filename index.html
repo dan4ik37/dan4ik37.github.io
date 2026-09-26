@@ -72,13 +72,25 @@ html{scrollbar-width:thin;scrollbar-color:var(--accent) var(--bg2)}
    Отдельно от внутреннего performance-режима (low/mid/high, который про
    слабые устройства) — это про людей, которым движение физически мешает
    (вестибулярная чувствительность). ОС-настройка, наш JS её не трогает и
-   не умеет опрашивать — чистый CSS media query. */
+   не умеет опрашивать — чистый CSS media query.
+   ВАЖНО: раньше это правило било через !important ВСЕГДА, даже если
+   человек сам, осознанно, нажал 🚀 High в переключателе режима (правый
+   край экрана) — то есть его явный выбор в интерфейсе сайта физически
+   не мог победить настройку ОС/браузера. Со стороны выглядело как
+   «анимации сломаны на ПК»: авто-детект на входе честно выставляет
+   High, кнопка показывает «HIGH», а сам CSS всё равно всё гасит — потому
+   что у многих браузеров/расширений/инструментов скриншотов
+   prefers-reduced-motion включён по умолчанию, независимо от реальной
+   ОС. Теперь: по умолчанию (body БЕЗ класса .high) уважаем системную
+   настройку как раньше — это дефолт, а не то, что можно тихо обойти.
+   Но если человек сам переключился в 🚀 High — его осознанный выбор
+   внутри сайта важнее общего браузерного дефолта. */
 @media (prefers-reduced-motion: reduce){
-  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
-  .reveal{opacity:1!important;transform:none!important}
-  .avatar{animation:none!important}
-  .avatar-ring{animation:none!important}
-  #particles{display:none!important}
+  body:not(.high) *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  body:not(.high) .reveal{opacity:1!important;transform:none!important}
+  body:not(.high) .avatar{animation:none!important}
+  body:not(.high) .avatar-ring{animation:none!important}
+  body:not(.high) #particles{display:none!important}
 }
 
 /* ── FIX Google Translate bar pushing content ── */
