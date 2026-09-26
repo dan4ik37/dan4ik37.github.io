@@ -132,7 +132,7 @@ async function renderProfilePage(viewUserId){
   if (!isOwn && currentUser?.id) recordProfileView(targetId);
   if (isOwn) renderProfileGuests(profile);
   renderVipPerksPanel(profile, isOwn);
-  if (isOwn) renderVipPromoTiers();
+  if (isOwn) { renderVipPromoTiers(); renderVipMonthButtons(); }
   if (isOwn) renderDonateLoginBlock(profile.donate_login);
   else { const p = document.getElementById('donateLoginPanel'); if (p) p.style.display = 'none'; }
   renderStaffVipPanel(profile, isOwn);
@@ -171,6 +171,7 @@ async function renderProfilePage(viewUserId){
   applyProfileGlow(avatarEl, profile);
 
   renderProfileStats(profile, targetId);
+  renderReferralPanel(profile, isOwn);
 
   // Редактирование — только на своём профиле
   document.getElementById('profileBannerEditBtn').style.display = isOwn ? 'flex' : 'none';
@@ -254,6 +255,7 @@ async function renderProfileStats(profile, targetId){
   const daysEl = document.getElementById('profileStatDays');
   const friendsEl = document.getElementById('profileStatFriends');
   const threadsEl = document.getElementById('profileStatThreads');
+  const referralsEl = document.getElementById('profileStatReferrals');
   if (!regDateEl) return;
 
   if (profile.created_at) {
@@ -268,8 +270,9 @@ async function renderProfileStats(profile, targetId){
 
   friendsEl.textContent = '…';
   threadsEl.textContent = '…';
+  if (referralsEl) referralsEl.textContent = '…';
   try {
-    const [friendsRes, threadsRes] = await Promise.all([
+    const [friendsRes, threadsRes, referralsRes] = await Promise.all([
       sbClient.from('friendships')
         .select('id', { count: 'exact', head: true })
         .eq('status', 'accepted')
@@ -277,12 +280,42 @@ async function renderProfileStats(profile, targetId){
       sbClient.from('forum_threads')
         .select('id', { count: 'exact', head: true })
         .eq('author_id', targetId),
+      // Отдельный слот статистики, не путать с друзьями (friendships) —
+      // это две разные вещи, см. referrals.sql. RPC — функция referral_count(uid)
+      // из той же миграции; если она ещё не выполнена на базе, просто '—'.
+      sbClient.rpc('referral_count', { uid: targetId }),
     ]);
     friendsEl.textContent = friendsRes.count ?? '0';
     threadsEl.textContent = threadsRes.count ?? '0';
+    if (referralsEl) referralsEl.textContent = (referralsRes.error ? '—' : (referralsRes.data ?? 0));
   } catch(e) {
     friendsEl.textContent = '—';
     threadsEl.textContent = '—';
+    if (referralsEl) referralsEl.textContent = '—';
+  }
+}
+
+// Реферальная ссылка на своём профиле — используем собственный уникальный
+// nick как код приглашения (?ref=<nick>), без отдельной колонки-кода.
+function renderReferralPanel(profile, isOwn){
+  const panel = document.getElementById('profileReferralPanel');
+  if (!panel) return;
+  if (!isOwn || !profile?.nick) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+  const link = `${location.origin}${location.pathname}?ref=${encodeURIComponent(profile.nick)}`;
+  const input = document.getElementById('profileReferralLink');
+  if (input) input.value = link;
+}
+function copyReferralLink(){
+  const input = document.getElementById('profileReferralLink');
+  const note = document.getElementById('profileReferralCopied');
+  if (!input) return;
+  input.select();
+  const done = () => { if (note) { note.textContent = '✅ Скопировано!'; setTimeout(()=>note.textContent='', 2500); } };
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(input.value).then(done).catch(()=>{ document.execCommand('copy'); done(); });
+  } else {
+    document.execCommand('copy'); done();
   }
 }
 
@@ -447,6 +480,40 @@ function renderVipPromoTiers(){
       <span style="flex:1;font-size:.72rem;color:var(--muted)">${t.min ? 'от ' + t.min + '₽ за всё время — ' : 'с первого месяца — '}${tierPerkLine(t)}</span>
     </div>`).join('');
 }
+// Калькулятор стоимости VIP — чистый фронтенд поверх уже существующей
+// покупки: openVipBuyGuide() как и раньше читает #vipBuyMonths напрямую,
+// поэтому его id сохранён (теперь это скрытый input, который обновляют кнопки).
+const VIP_MONTH_OPTIONS = [1, 3, 6, 12];
+function renderVipMonthButtons(){
+  const box = document.getElementById('vipMonthBtns');
+  if (!box) return;
+  const current = parseInt(document.getElementById('vipBuyMonths')?.value, 10) || 3;
+  box.innerHTML = VIP_MONTH_OPTIONS.map(m => `
+    <button type="button" class="vip-month-btn${m === current ? ' active' : ''}" data-months="${m}"
+      style="padding:.5rem .9rem;border-radius:8px;border:1.5px solid ${m === current ? 'var(--vip-gold,#ffd93d)' : 'var(--border)'};background:${m === current ? 'rgba(255,217,61,.14)' : 'rgba(255,255,255,.04)'};color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s">
+      ${m} мес${m===1?'':m<5?'яца':'яцев'}<br><span style="font-size:.66rem;font-weight:600;color:var(--muted)">${(m*VIP_RUB_PER_MONTH).toLocaleString('ru')}₽</span>
+    </button>`).join('');
+  box.querySelectorAll('.vip-month-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>selectVipMonths(parseInt(btn.dataset.months,10)));
+  });
+  updateVipCalcTotal(current);
+}
+function selectVipMonths(months){
+  const input = document.getElementById('vipBuyMonths');
+  if (input) input.value = String(months);
+  document.querySelectorAll('#vipMonthBtns .vip-month-btn').forEach(b=>{
+    const active = parseInt(b.dataset.months,10) === months;
+    b.classList.toggle('active', active);
+    b.style.borderColor = active ? 'var(--vip-gold,#ffd93d)' : 'var(--border)';
+    b.style.background = active ? 'rgba(255,217,61,.14)' : 'rgba(255,255,255,.04)';
+  });
+  updateVipCalcTotal(months);
+}
+function updateVipCalcTotal(months){
+  const el = document.getElementById('vipCalcTotal');
+  if (el) el.textContent = `Итого: ${(months * VIP_RUB_PER_MONTH).toLocaleString('ru')}₽ за ${months} мес.`;
+}
+
 // Панель «мой уровень» у активного VIP: что даёт сейчас и сколько до следующего
 function renderVipPerksPanel(profile, isOwn){
   const panel = document.getElementById('profileVipPerksPanel');

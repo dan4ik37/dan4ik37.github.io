@@ -6,6 +6,7 @@ document.addEventListener('dragstart',e=>e.preventDefault());
 // ═══════════════════════════════════════
 //  INIT новых фич
 // ═══════════════════════════════════════
+captureReferralCode();
 updatePushBtn();
 updateGlobalAuthBtn();
 renderPoll();

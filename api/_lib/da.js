@@ -114,11 +114,16 @@ export function normalizeDonation(d) {
   };
 }
 
-// Забирает страницы списка донатов (от новых к старым), идя по links.next.
-// Возвращает { donations, pages, complete }: complete=false, если упёрлись в лимит/дедлайн.
-export async function fetchDonationPages(token, { maxPages = 8, deadline = Infinity } = {}) {
+// Забирает страницы списка донатов (от новых к старым), идя по links.next,
+// НАЧИНАЯ С ЛЮБОГО МЕСТА — обычная синхронизация всегда начинает с 1-й
+// страницы (startUrl не передан), а разовый полный импорт истории
+// (см. server-hardening.sql, backfill_cursor) продолжает с того курсора,
+// на котором остановился прошлый вызов serverless-функции.
+// Возвращает { donations, pages, nextUrl }: nextUrl=null, когда страницы
+// закончились по-настоящему (не только уткнулись в maxPages/deadline).
+export async function fetchDonationPagesFrom(token, startUrl, { maxPages = 8, deadline = Infinity } = {}) {
   const out = [];
-  let url = `${DA}/api/v1/alerts/donations?page=1`;
+  let url = startUrl || `${DA}/api/v1/alerts/donations?page=1`;
   let pages = 0;
   while (url && pages < maxPages && Date.now() < deadline) {
     const r = await timedFetch(url, { headers: { Authorization: `Bearer ${token}` } }, { timeoutMs: 9000, retries: 1 });
@@ -129,7 +134,14 @@ export async function fetchDonationPages(token, { maxPages = 8, deadline = Infin
     (j.data || []).forEach(d => out.push(normalizeDonation(d)));
     url = j.links?.next || null;
   }
-  return { donations: out, pages, complete: !url };
+  return { donations: out, pages, nextUrl: url };
+}
+
+// Обычная (быстрая, последние N дней) синхронизация — тонкая обёртка над
+// fetchDonationPagesFrom для полной обратной совместимости со старым кодом.
+export async function fetchDonationPages(token, { maxPages = 8, deadline = Infinity } = {}) {
+  const { donations, pages, nextUrl } = await fetchDonationPagesFrom(token, null, { maxPages, deadline });
+  return { donations, pages, complete: !nextUrl };
 }
 
 // Публичный снимок для «Топа донатеров»: никаких сообщений донатеров и почт — только

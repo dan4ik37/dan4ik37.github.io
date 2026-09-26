@@ -28,6 +28,8 @@ function closeAnyOpenModal(){
   const pollM = document.getElementById('pollAdminModal');
   const privacyM = document.getElementById('privacyModal');
   const authM = document.getElementById('globalAuthModal');
+  const cmdM = document.getElementById('cmdPalette');
+  if (cmdM?.classList.contains('open')) { closeCmdPalette(); return true; }
   if (modal?.classList.contains('open')) { closeModal(); return true; }
   if (confirmM?.classList.contains('open')) { closeConfirm(); return true; }
   if (settingsM && getComputedStyle(settingsM).display !== 'none') { closeSettingsAdmin(); return true; }
@@ -49,6 +51,7 @@ function closePrivacy(){
 //  MODAL
 // ═══════════════════════════════════════
 function openVid(id,title,date,views){
+  if(typeof markVidWatched==='function') markVidWatched(id);
   document.getElementById('mTitle').textContent=title;
   document.getElementById('mMeta').textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
   document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;

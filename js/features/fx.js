@@ -461,3 +461,85 @@
   safe('scrollHint', initScrollHint);
   safe('perfGuard', initPerfGuard);
 })();
+
+// ═══════════════════════════════════════════════════════════════════
+//  FAB-ДОНАТ (кольцо прогресса) — глобальные функции, синхронизируются
+//  из initGoalBar() в js/features/donation-goal.js, одна точка входа.
+// ═══════════════════════════════════════════════════════════════════
+const DONATE_FAB_CIRC = 2 * Math.PI * 24; // r=24 в разметке #donateFab
+function updateDonateFab(pct, cur){
+  const ring = document.getElementById('donateFabRing');
+  const lbl  = document.getElementById('donateFabPct');
+  if (ring) ring.style.strokeDashoffset = String(DONATE_FAB_CIRC * (1 - Math.max(0, Math.min(pct, 100)) / 100));
+  if (lbl) lbl.textContent = pct + '%';
+  const fab = document.getElementById('donateFab');
+  if (fab) fab.title = pct >= 100 ? 'Цель доната достигнута! 🎉' : `До цели доната: ${pct}%`;
+}
+
+// ── Конфетти по клику по канвасу — тот же паттерн, что искры в initSparks ──
+function fireConfetti(){
+  const cv = document.createElement('canvas');
+  cv.id = 'fxConfetti';
+  cv.setAttribute('aria-hidden', 'true');
+  cv.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:9998;pointer-events:none';
+  document.body.appendChild(cv);
+  const ctx = cv.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const COLORS = ['#ff2d55', '#ff6b35', '#9147ff', '#29b6f6', '#ffd93d', '#ffffff'];
+  let parts = [];
+  for (let i = 0; i < 140; i++) {
+    parts.push({
+      x: Math.random() * innerWidth, y: -20 - Math.random() * innerHeight * .3,
+      vx: (Math.random() - .5) * 3, vy: Math.random() * 2 + 2,
+      rot: Math.random() * 6.2832, vr: (Math.random() - .5) * .3,
+      w: Math.random() * 6 + 4, h: Math.random() * 10 + 6,
+      c: COLORS[(Math.random() * COLORS.length) | 0], life: 1
+    });
+  }
+  let raf = 0, t0 = 0;
+  function tick(t){
+    if (!t0) t0 = t;
+    const dt = Math.min((t - t0) / 16.6, 2); t0 = t;
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    parts = parts.filter(p => p.y < innerHeight + 40 && p.life > 0);
+    for (const p of parts) {
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += .04 * dt; p.rot += p.vr * dt;
+      if (p.y > innerHeight * .75) p.life -= .012 * dt;
+      ctx.save();
+      ctx.globalAlpha = Math.max(p.life, 0);
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+    if (parts.length) raf = requestAnimationFrame(tick);
+    else { cv.remove(); }
+  }
+  raf = requestAnimationFrame(tick);
+  setTimeout(() => { if (cv.isConnected) cv.remove(); }, 6000); // страховка, даже если tick не долетел до 0
+}
+
+function showGoalToast(){
+  const el = document.createElement('div');
+  el.className = 'fx-toast'; el.setAttribute('role', 'status');
+  el.textContent = `🎉 Цель «${(typeof goalTitleText !== 'undefined' && goalTitleText) || 'доната'}» достигнута — спасибо всем, кто донатил!`;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 500); }, 7000);
+}
+
+// Салютуем только один раз для КОНКРЕТНОЙ комбинации цели (анти-спам),
+// а не при каждой загрузке страницы, если цель уже давно выполнена.
+function checkGoalCelebration(pct){
+  if (pct < 100) return;
+  const key = 'd37_goal_celebrated';
+  const sig = `${(typeof goalTitleText !== 'undefined' ? goalTitleText : '')}|${(typeof goalMaxVal !== 'undefined' ? goalMaxVal : '')}|${(typeof goalSinceISO !== 'undefined' ? goalSinceISO : '')}`;
+  let already = '';
+  try { already = localStorage.getItem(key) || ''; } catch(e) {}
+  if (already === sig) return;
+  try { localStorage.setItem(key, sig); } catch(e) {}
+  fireConfetti();
+  showGoalToast();
+}

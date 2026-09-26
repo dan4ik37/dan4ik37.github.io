@@ -68,3 +68,34 @@ export async function sbUpsert(table, row, onConflict) {
   });
   if (!r.ok) throw new Error(`upsert ${table}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
 }
+
+// Проверяет: "Authorization: Bearer <токен>" в запросе — это токен ЗАЛОГИНЕННОГО
+// в браузере администратора (не сервисный ключ!). Используется там, где
+// действие должен запускать именно человек из админки, а не любой посетитель
+// или скрипт с CRON_SECRET (например — разовый полный импорт истории донатов,
+// см. api/vip-sync.js?backfill=1).
+//
+// Шаг 1: спрашиваем у Supabase Auth, чей это токен (сам сервис проверяет
+// подпись/срок — нам этого делать вручную не надо и небезопасно пытаться).
+// Шаг 2: сервисным ключом (минуя RLS) смотрим role в profiles для этого id.
+// Возвращает id пользователя, если он admin, иначе null — НИКОГДА не бросает
+// исключение на «просто не админ», чтобы вызывающий код не путал это со
+// сбоем самого Supabase.
+export async function verifyAdmin(req) {
+  if (!storeConfigured()) return null;
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return null;
+  try {
+    const ru = await timedFetch(`${baseUrl()}/auth/v1/user`, {
+      headers: { apikey: key(), Authorization: `Bearer ${token}` },
+    }, { timeoutMs: 6000, retries: 0 });
+    if (!ru.ok) return null;
+    const user = await ru.json();
+    if (!user?.id) return null;
+    const rows = await sbSelect('profiles', `id=eq.${user.id}&select=role`);
+    return rows[0]?.role === 'admin' ? user.id : null;
+  } catch (e) {
+    return null;
+  }
+}

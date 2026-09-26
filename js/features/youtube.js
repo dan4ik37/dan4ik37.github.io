@@ -34,6 +34,37 @@ async function ytFetch(url){
   return null;
 }
 
+// ═══════════════════════════════════════
+//  ДЛИТЕЛЬНОСТЬ ВИДЕО (PT18M24S → 18:24)
+// ═══════════════════════════════════════
+function formatYtDuration(iso){
+  if(!iso) return '';
+  const m=/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso);
+  if(!m) return '';
+  const h=parseInt(m[1]||0),mi=parseInt(m[2]||0),s=parseInt(m[3]||0);
+  if(h) return h+':'+String(mi).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  return mi+':'+String(s).padStart(2,'0');
+}
+
+// ═══════════════════════════════════════
+//  «ПРОСМОТРЕНО» — честная бинарная отметка (открывал/не открывал),
+//  без выдуманных процентов: реального API прогресса воспроизведения
+//  на сайте нет.
+// ═══════════════════════════════════════
+let watchedIds = new Set();
+try{ watchedIds = new Set(JSON.parse(localStorage.getItem('d37_watched')||'[]')); }catch(e){}
+function markVidWatched(id){
+  if(watchedIds.has(id)) return;
+  watchedIds.add(id);
+  try{ localStorage.setItem('d37_watched', JSON.stringify([...watchedIds])); }catch(e){}
+  const card=document.querySelector(`.vcard[data-id="${id}"]`);
+  if(card && !card.querySelector('.vwatched')){
+    const b=document.createElement('div');
+    b.className='vwatched';b.title='Просмотрено';b.textContent='✓ Просмотрено';
+    card.querySelector('.vthumb')?.appendChild(b);
+  }
+}
+
 let vidCountLimit = 12; // текущий лимит отображения
 let videoSearchQuery = ''; // поиск по названию видео
 
@@ -105,12 +136,12 @@ async function loadYT(){
     if(!pl?.items?.length) throw new Error('Видео не найдены');
 
     const ids=pl.items.map(i=>i.contentDetails.videoId).join(',');
-    const det=await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids}&key=${YT_KEY}`);
-    const dm={};det?.items?.forEach(v=>{dm[v.id]=v.statistics});
+    const det=await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${ids}&key=${YT_KEY}`);
+    const dm={};det?.items?.forEach(v=>{dm[v.id]={stats:v.statistics,duration:v.contentDetails?.duration}});
 
     const rawVids=pl.items.map(item=>{
-      const id=item.contentDetails.videoId,sn=item.snippet,st=dm[id]||{};
-      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',likes:st.likeCount?fmt(st.likeCount):''};
+      const id=item.contentDetails.videoId,sn=item.snippet,d=dm[id]||{},st=d.stats||{};
+      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',likes:st.likeCount?fmt(st.likeCount):'',duration:formatYtDuration(d.duration)};
     });
 
     // Сохраняем все 50, перемешиваем по-настоящему (Fisher-Yates)
@@ -167,7 +198,7 @@ function renderVids(vids){
   if(!vids.length){grid.innerHTML=`<div class="empty-state"><span class="empty-state-icon">🎬</span><div class="empty-state-title">Видео не найдены</div><div class="empty-state-text">Пока ничего не загрузилось — возможно, YouTube временно недоступен. Попробуй обновить страницу.</div></div>`;return}
   vids.forEach((v,i)=>{
     if(!v.id)return;
-    const liked=likedIds.has(v.id),sel=selectedIds.has(v.id);
+    const liked=likedIds.has(v.id),sel=selectedIds.has(v.id),watched=watchedIds.has(v.id);
     const card=document.createElement('div');
     card.className='vcard'+(selMode?' selectable':'')+(sel?' selected':'');
     card.dataset.id=v.id;card.style.animationDelay=(i*.04)+'s';
@@ -177,6 +208,8 @@ function renderVids(vids){
       <div class="vthumb">
         ${v.thumb?`<img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy">`:'<div class="vthumb-ph">▶</div>'}
         <div class="pdot pd-yt">YT</div>
+        ${v.duration?`<div class="vduration">${v.duration}</div>`:''}
+        ${watched?'<div class="vwatched" title="Просмотрено">✓ Просмотрено</div>':''}
         <div class="play-ov"><div class="play-circle">▶</div></div>
         <button class="vlike${liked?' liked':''}" onclick="toggleLike(event,'${v.id}',this)" title="${liked?'Убрать лайк':'Лайкнуть на YouTube'}">
           ${liked?'❤':'🤍'}${v.likes?' '+v.likes:''}

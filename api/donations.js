@@ -5,12 +5,38 @@
 // заново проходить весь OAuth руками. Теперь при протухшем токене сначала
 // пробуем обновиться по refresh_token и только если это тоже не выйдет —
 // просим войти заново.
-import { storeConfigured, sbSelect } from './_lib/store.js';
+import { storeConfigured, sbSelect, sbRpc } from './_lib/store.js';
 
 // Снимок, который раз в несколько минут обновляет api/vip-sync.js. Отдаём его,
 // когда у посетителя нет своей сессии DonationAlerts — то есть ВСЕМ, кроме владельца.
 // Раньше публичный «Топ донатеров» требовал, чтобы каждый посетитель сам вошёл в
 // DonationAlerts (и увидел бы там уже свои, а не стримера, данные).
+// "С какой даты копится шкала цели" — из site_config (key='goal', поле since).
+// Без настроенного Supabase или пока admin ничего не сохранял — считаем всю
+// историю донатов (goal_progress сам подставит свой дефолт).
+async function goalSince() {
+  if (!storeConfigured()) return null;
+  try {
+    const rows = await sbSelect('site_config', `key=eq.goal&select=value`);
+    const cfg = rows[0]?.value ? JSON.parse(rows[0].value) : null;
+    return cfg?.since || null;
+  } catch (e) { return null; }
+}
+
+// Сколько реально собрано на цель — ВСЕГДА из постоянного журнала vip_donation_log
+// (api/vip-sync.js), а не из того, что случайно попало в текущий ответ DA.
+// БАГ (найден и исправлен): раньше это на клиенте суммировалось из последних
+// ≤20 донатов, показанных на странице — после 20-го доната сумма переставала
+// расти и даже уменьшалась, когда старые донаты вымывались из окна новыми.
+async function goalData() {
+  if (!storeConfigured()) return null;
+  try {
+    const since = await goalSince();
+    const g = await sbRpc('goal_progress', since ? { p_since: since } : {});
+    return g ? { raised: Number(g.raised) || 0, since: g.since } : null;
+  } catch (e) { return null; }
+}
+
 async function readSnapshot() {
   if (!storeConfigured()) return null;
   try {
@@ -18,10 +44,14 @@ async function readSnapshot() {
     return rows[0]?.snapshot ? { data: rows[0].snapshot, at: rows[0].snapshot_at } : null;
   } catch (e) { return null; }
 }
-function sendSnapshot(res, snap) {
+async function sendSnapshot(res, snap) {
   const ageMin = (Date.now() - Date.parse(snap.at)) / 60000;
   res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
-  return res.status(200).json({ ...snap.data, source: 'server', updated_at: snap.at, stale: ageMin > 30 });
+  // Снимок (donations/leaderboard) обновляется раз в несколько минут, а цель
+  // считаем прямо сейчас отдельным запросом — она "легче" (один select с
+  // фильтром) и не обязана ждать следующего прогона синхронизации.
+  const goal = await goalData();
+  return res.status(200).json({ ...snap.data, source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
 }
 
 function authUrl() {
@@ -73,7 +103,7 @@ export default async function handler(req, res) {
 
   if (!token && !refreshTok) {
     const snap = await readSnapshot();
-    if (snap) return sendSnapshot(res, snap);
+    if (snap) return await sendSnapshot(res, snap);
     return res.status(401).json({ error: 'not_authorized', reason: 'no_session', auth_url: authUrl() });
   }
 
@@ -91,14 +121,14 @@ export default async function handler(req, res) {
     if (r.status === 401) {
       if (!refreshTok) {
         const snap = await readSnapshot();
-        if (snap) return sendSnapshot(res, snap);
+        if (snap) return await sendSnapshot(res, snap);
         return res.status(401).json({ error: 'not_authorized', auth_url: authUrl() });
       }
       const t = await refreshToken(refreshTok);
       if (!t) {
         // refresh_token тоже не сработал (например, отозван) — сначала пробуем снимок
         const snap = await readSnapshot();
-        if (snap) return sendSnapshot(res, snap);
+        if (snap) return await sendSnapshot(res, snap);
         return res.status(401).json({ error: 'not_authorized', reason: 'session_expired', auth_url: authUrl() });
       }
       setAuthCookies(res, t, refreshTok);
@@ -108,7 +138,7 @@ export default async function handler(req, res) {
       });
       if (r.status === 401) {
         const snap = await readSnapshot();
-        if (snap) return sendSnapshot(res, snap);
+        if (snap) return await sendSnapshot(res, snap);
         return res.status(401).json({ error: 'not_authorized', auth_url: authUrl() });
       }
     }
@@ -133,11 +163,16 @@ export default async function handler(req, res) {
     });
     const leaderboard = Object.values(map).sort((a,b) => b.total - a.total).slice(0, 20);
 
-    res.status(200).json({ donations: donations.slice(0, 20), leaderboard });
+    // Цель — тем же способом, что и для остальных посетителей (из постоянного
+    // журнала), а не пересчётом по этой единственной странице выдачи DA —
+    // иначе у владельца (у него как раз есть cookie, он идёт этой веткой)
+    // цель считалась бы иначе, чем у всех прочих, и число бы "прыгало".
+    const goal = await goalData();
+    res.status(200).json({ donations: donations.slice(0, 20), leaderboard, ...(goal ? { goal } : {}) });
   } catch(e) {
     // DonationAlerts недоступен — лучше показать последний снимок, чем ошибку
     const snap = await readSnapshot();
-    if (snap) return sendSnapshot(res, snap);
+    if (snap) return await sendSnapshot(res, snap);
     res.status(500).json({ error: 'server_error' });
   }
 }

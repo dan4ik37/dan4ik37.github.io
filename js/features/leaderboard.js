@@ -4,7 +4,39 @@
 let lbTab = 'top';
 const DA_AUTH_URL = `/api/donations`; // Vercel serverless
 
-async function loadLeaderboard() {
+// ═══════════════════════════════════════
+//  Общий кэш /api/donations — БАГ (найден и исправлен): js/init.js на каждой
+//  загрузке страницы вызывает loadLeaderboard() и loadGoalFromDA() подряд,
+//  каждая тянула /api/donations САМА, то есть при заходе на сайт улетало
+//  ДВА одновременных запроса с одним и тем же токеном к живому DonationAlerts
+//  (а на алерте о донате — ещё раз). Если апстрим чуть притормозил, один из
+//  двух почти гарантированно ловил таймаут/429 — "Топ донатеров" падал с
+//  ошибкой ровно в те моменты, когда шкала цели рядом уже отрисовалась
+//  нормально. Теперь оба потребителя ждут ОДИН и тот же запрос.
+// ═══════════════════════════════════════
+let _donCache = null, _donCacheAt = 0, _donInflight = null;
+async function fetchDonationsShared(force) {
+  const FRESH_MS = 8000;
+  if (!force && _donCache && Date.now() - _donCacheAt < FRESH_MS) return _donCache;
+  if (!force && _donInflight) return _donInflight;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10000);
+  _donInflight = (async () => {
+    try {
+      const r = await fetch('/api/donations', { signal: ctl.signal });
+      clearTimeout(timer);
+      const body = (r.status === 200 || r.status === 401) ? await r.json() : null;
+      const res = { status: r.status, body };
+      _donCache = res; _donCacheAt = Date.now();
+      return res;
+    } finally {
+      _donInflight = null;
+    }
+  })();
+  return _donInflight;
+}
+
+async function loadLeaderboard(force) {
   const el = document.getElementById('lbContent');
   el.innerHTML = `<div class="lb-loading"><div class="spinner"></div>Загрузка...</div>`;
 
@@ -22,19 +54,15 @@ async function loadLeaderboard() {
   }
 
   // Таймаут: раньше зависший запрос оставлял «Загрузка...» навсегда
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 10000);
   try {
-    const r = await fetch('/api/donations', { signal: ctl.signal });
-    clearTimeout(timer);
-    if (r.status === 401) {
-      const d = await r.json();
-      showLbLogin(d.auth_url);
+    const { status: httpStatus, body } = await fetchDonationsShared(force);
+    if (httpStatus === 401) {
+      showLbLogin(body?.auth_url);
       renderVipSyncStatus();
       return;
     }
-    if (r.status !== 200) throw new Error('HTTP ' + r.status);
-    const data = await r.json();
+    if (httpStatus !== 200) throw new Error('HTTP ' + httpStatus);
+    const data = body;
     if (typeof processRecentDonationsForVip === 'function') processRecentDonationsForVip(data.donations);
     // Данные с сервера (снимок api/vip-sync.js) видят все; свои «живые» — только владелец с сессией DA
     let status = '✅ Подключено';
@@ -48,7 +76,6 @@ async function loadLeaderboard() {
     document.getElementById('lbAuthBtn').style.display = 'none';
     renderLb(data, lbTab);
   } catch(e) {
-    clearTimeout(timer);
     // БАГ: тут раньше был renderLbDemo() — показывал ВЫДУМАННЫХ донатеров
     // (SuperFan, GamerPro...) на любую ошибку API, не только когда не
     // авторизован. С маленькой жёлтой подписью "демо" — легко принять за
@@ -78,11 +105,8 @@ async function lbLogin() {
   // актуальную ссылку у бэкенда (он — единственный источник правды про
   // client_id), а не собираем её тут по памяти.
   try {
-    const r = await fetch('/api/donations');
-    if (r.status === 401) {
-      const d = await r.json();
-      if (d.auth_url) { window.location.href = d.auth_url; return; }
-    }
+    const { status, body } = await fetchDonationsShared();
+    if (status === 401 && body?.auth_url) { window.location.href = body.auth_url; return; }
   } catch(e) {}
   document.getElementById('lbAuthStatus').textContent = '⚠ Не удалось получить ссылку авторизации';
 }
@@ -164,28 +188,42 @@ function switchLbTab(tab, btn) {
   loadLeaderboard();
 }
 
-// ─── Живая шкала цели из DA ───
+// ─── Шкала цели ───
+// БАГ (найден и исправлен): "собрано" считалось на клиенте как сумма
+// последних ≤20 донатов из этого же ответа — не "сколько собрано на цель",
+// а "сколько было в последних 20 алертах". Как только донатов набегало
+// больше 20, число переставало расти и даже падало (старые донаты
+// вымывались из окна новыми). Теперь сервер (goal_progress в
+// server-hardening.sql, читает ПОСТОЯННЫЙ журнал vip_donation_log) сам
+// присылает готовую сумму в data.goal — используем её. Старый способ
+// оставлен как запасной вариант — на сайтах, где ещё не выполнили
+// server-hardening.sql, data.goal просто не придёт и всё продолжит
+// работать как раньше, просто с той же неточностью, что и была.
 async function loadGoalFromDA() {
   try {
-    const r = await fetch('/api/donations');
-    if (r.status !== 200) {
+    const { status, body: data } = await fetchDonationsShared();
+    if (status !== 200) {
       // БАГ: раньше молча показывал 0 — от "донатов правда пока нет"
       // не отличить, что вообще-то сломан /api/donations (напр. 401/500).
       initGoalBar(0);
-      document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge" style="background:rgba(255,200,0,.1);color:rgba(255,200,0,.8);border-color:rgba(255,200,0,.2)">⚠ Нет связи с DonationAlerts (HTTP ${r.status})</span>`;
+      document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge" style="background:rgba(255,200,0,.1);color:rgba(255,200,0,.8);border-color:rgba(255,200,0,.2)">⚠ Нет связи с DonationAlerts (HTTP ${status})</span>`;
       return;
     }
-    const data = await r.json();
-    if (!data.donations?.length) { initGoalBar(0); return; }
-    // Считаем общую сумму рублёвых донатов
-    const total = data.donations
-      .filter(d => d.currency === 'RUB')
-      .reduce((s,d) => s + d.amount, 0);
-    initGoalBar(Math.round(total));
-    // Бейдж "живые данные"
-    document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge">🟢 Обновлено только что</span>`;
-    // Последний донат
-    const last = data.donations[0];
+    if (data.goal) {
+      initGoalBar(Math.round(data.goal.raised));
+      document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge">🟢 Обновлено только что</span>`;
+    } else if (data.donations?.length) {
+      // Запасной путь (сервер не прислал goal — SQL ещё не обновлён)
+      const total = data.donations
+        .filter(d => d.currency === 'RUB')
+        .reduce((s,d) => s + d.amount, 0);
+      initGoalBar(Math.round(total));
+      document.getElementById('goalLiveBadge').innerHTML = `<span class="goal-live-badge" title="Точная сумма появится после server-hardening.sql">🟡 Обновлено (по последним донатам)</span>`;
+    } else {
+      initGoalBar(0);
+    }
+    // Последний донат — всегда из живого списка, тут "последние ≤20" уместны
+    const last = data.donations?.[0];
     if (last) {
       document.getElementById('goalLastDonText').textContent = `Последний: ${last.username} — ${Math.round(last.amount)} ${last.currency}${last.message?' · "'+last.message.slice(0,40)+'"':''}`;
       document.getElementById('goalLastDon').classList.add('show');
