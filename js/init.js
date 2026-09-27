@@ -9,10 +9,9 @@ document.addEventListener('dragstart',e=>e.preventDefault());
 captureReferralCode();
 updatePushBtn();
 updateGlobalAuthBtn();
-renderPoll();
+// Опрос грузится при открытии #/poll (router.js) — раньше 2–3 запроса в базу на каждой странице
 loadLeaderboard();
 loadGoalFromDA();
-setTimeout(loadPollsFromDB, 2000);
 setTimeout(loadScheduleFromDB, 2000);
 setTimeout(loadGoalConfigFromDB, 2000);
 initChat();

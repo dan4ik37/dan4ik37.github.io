@@ -213,8 +213,14 @@ async function loadPollsFromDB() {
       const polls = JSON.parse(data.value);
       POLLS.splice(0, POLLS.length, ...polls);
       savePollsToStorage();
-      renderPoll();
     }
   } catch(e) {}
+}
+
+// Вход в раздел «Опрос»: список опросов из базы — один раз за визит, затем отрисовка
+let pollsLoadedOnce = false;
+async function openPollPage() {
+  if (!pollsLoadedOnce) { pollsLoadedOnce = true; await loadPollsFromDB(); }
+  renderPoll();
 }
 

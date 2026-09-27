@@ -58,6 +58,7 @@ function finishShowPage(route, activeIds){
   if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
   if (route==='lfg' && typeof renderLfgPage==='function') renderLfgPage();
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
+  if (route==='poll' && typeof openPollPage==='function') openPollPage();
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{

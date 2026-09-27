@@ -48,6 +48,10 @@
   ]
 }
 </script>
+<link rel="preconnect" href="https://zdisuowyjgqirhvcyjfq.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://www.googleapis.com">
+<link rel="dns-prefetch" href="https://i.ytimg.com">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
@@ -56,7 +60,6 @@
      раз включить в дашборде: Vercel → проект → вкладка Analytics → Enable -->
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
   --font-display:'Oswald','Bebas Neue','Arial Narrow',sans-serif;
@@ -2449,6 +2452,9 @@ body.low .donation-alert-icon{animation:none}
   </div>
 </div>
 
+<!-- Supabase — здесь, а не в <head>: в <head> синхронный скрипт задерживал первую отрисовку.
+     Версия закреплена: «@2» грузил каждый раз последнюю — хуже кэш и риск сломаться от чужого обновления. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="js/core/config.js"></script>
 <script src="js/core/state.js"></script>
 <script src="js/ui/tabs-nav.js"></script>
@@ -2492,6 +2498,6 @@ body.low .donation-alert-icon{animation:none}
 <script type="text/javascript">
 function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'ru',autoDisplay:false},'google_translate_element')}
 </script>
-<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<!-- Google Translate грузится лениво: google-translate.js → loadGoogleTranslate() -->
 </body>
 </html>
