@@ -1334,3 +1334,73 @@ body.no-ideas [data-route="ideas"]{display:none!important}
   .id-vote{width:46px;height:56px}
   .id-tools .vid-sort{width:100%}
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   XP И УРОВНИ (js/features/xp.js)
+   ═══════════════════════════════════════════════════════════════════ */
+body.no-xp .lv-badge,body.no-xp #profileXpCard,body.no-xp #xpTopWeek{display:none!important}
+
+/* Бейдж Lv N рядом с ником; рамки по порогам 5/10/20/30 */
+.lv-badge:empty{display:none}
+.lv-badge{
+  display:inline-flex;align-items:center;margin-left:.35rem;padding:.05rem .38rem;border-radius:6px;vertical-align:middle;
+  font-size:.6rem;font-weight:800;letter-spacing:.02em;line-height:1.35;color:#cfcfe6;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);
+}
+.lv-badge.lv-t5{color:#7ee3ff;border-color:rgba(41,182,246,.5);background:rgba(41,182,246,.12)}
+.lv-badge.lv-t10{color:#c9a8ff;border-color:rgba(145,71,255,.6);background:rgba(145,71,255,.15)}
+.lv-badge.lv-t20{color:#ffd166;border-color:rgba(255,209,102,.6);background:rgba(255,209,102,.12)}
+.lv-badge.lv-t30{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 12px -2px var(--ac-55)}
+
+/* Карточка на профиле */
+.pf-xp .xp-row{display:flex;align-items:center;gap:1.1rem}
+.xp-lvl{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;width:84px;height:84px;border-radius:22px;
+  background:linear-gradient(160deg,var(--ac-18),rgba(145,71,255,.14));border:1px solid var(--ac-30)}
+.xp-lvl span{font-size:.58rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.xp-lvl b{font-family:var(--font-display);font-size:2.3rem;line-height:1;color:#fff}
+.xp-lvl b.lv-t10{color:#c9a8ff}.xp-lvl b.lv-t20{color:#ffd166}
+.xp-lvl b.lv-t30{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.xp-bar-wrap{flex:1;min-width:0}
+.xp-bar-top{display:flex;justify-content:space-between;gap:.6rem;font-size:.78rem;color:var(--muted);margin-bottom:.4rem}
+.xp-bar-top b{color:#fff;font-size:.95rem}
+.xp-bar{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+.xp-bar i{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--accent2));
+  box-shadow:0 0 14px var(--ac-55);transition:width 1s var(--ease-out)}
+.xp-today{margin-top:.4rem;font-size:.72rem;color:#7ee3a0}
+.xp-week{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;margin-top:.9rem}
+.xp-week:empty{display:none}
+.xp-week-t{font-size:.72rem;color:var(--muted);margin-right:.2rem}
+.xp-chip{padding:.2rem .55rem;border-radius:999px;font-size:.7rem;color:rgba(240,240,248,.8);background:rgba(255,255,255,.05);border:1px solid var(--line)}
+.xp-chip b{color:#7ee3a0}
+.xp-help{margin-top:.9rem}
+.xp-help summary{cursor:pointer;font-size:.76rem;font-weight:700;color:var(--muted)}
+.xp-help summary:hover{color:#fff}
+.xp-rules{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.5rem;margin-top:.7rem}
+.xp-rule{display:flex;gap:.6rem;align-items:flex-start;padding:.6rem .7rem;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+.xp-rule>span{font-size:1.1rem}
+.xp-rule b{display:block;font-size:.78rem;color:#fff}
+.xp-rule small{font-size:.7rem;color:var(--muted);line-height:1.5}
+
+/* Топ недели на главной */
+.xp-top{margin-top:1.3rem;padding:1.1rem 1.3rem;border-radius:18px;background:rgba(255,255,255,.025);border:1px solid var(--line)}
+.xp-top[hidden]{display:none}
+.xp-top-head{display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;margin-bottom:.7rem}
+.xp-top-head b{font-size:1rem;color:#fff}
+.xp-top-head span{font-size:.74rem;color:var(--muted)}
+.xp-top-list{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.5rem}
+.xp-top-item{display:flex;align-items:center;gap:.5rem;padding:.55rem .75rem;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+.xp-top-place{width:1.6rem;text-align:center;font-weight:800;color:var(--muted)}
+.xp-top-nick{flex:1;min-width:0;font-size:.84rem;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.xp-top-item .lv-badge{margin-left:0}
+.xp-top-xp{font-size:.74rem;font-weight:800;color:#7ee3a0;white-space:nowrap}
+
+/* Всплывашка «+5 XP» */
+.xp-toast{
+  position:fixed;left:50%;bottom:1.5rem;z-index:9800;display:flex;align-items:center;gap:.6rem;
+  padding:.7rem 1.1rem;border-radius:14px;font-size:.84rem;font-weight:800;color:#fff;
+  background:rgba(18,16,30,.96);border:1px solid var(--ac-55);box-shadow:0 18px 40px -12px var(--ac-55);
+  transform:translate(-50%,160%);opacity:0;transition:transform .45s var(--ease-spring),opacity .3s;pointer-events:none;
+}
+.xp-toast.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+.xp-toast button{padding:.35rem .7rem;border-radius:9px;border:0;cursor:pointer;font:inherit;font-size:.74rem;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2))}
+@media(max-width:640px){.xp-toast{bottom:5rem;max-width:calc(100% - 2rem)}.pf-xp .xp-row{gap:.8rem}.xp-lvl{width:70px;height:70px}.xp-lvl b{font-size:1.9rem}}

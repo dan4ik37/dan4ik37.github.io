@@ -77,11 +77,12 @@ async function loadForumThreads(){
             <div style="font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
               ${t.pinned ? '📌 ' : ''}${t.locked ? '🔒 ' : ''}${esc(t.title)}
             </div>
-            <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem">${nickHtml} · ${date}</div>
+            <div style="font-size:.72rem;color:var(--muted);margin-top:.3rem">${nickHtml}<span class="lv-badge" data-lv-uid="${esc(t.author_id)}"></span> · ${date}</div>
           </div>
           <div style="flex-shrink:0;font-size:.75rem;color:var(--muted);white-space:nowrap">💬 ${postsCount}</div>
         </a>`;
     }).join('');
+    if (typeof xpQueueBadges === 'function') xpQueueBadges();
   } catch(e) {
     statusEl.textContent = 'Ошибка загрузки: ' + (e.message || e);
   }
@@ -105,7 +106,7 @@ async function loadForumThread(id){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap">
         <div>
           <div style="font-size:1.15rem;font-weight:800">${thread.pinned?'📌 ':''}${thread.locked?'🔒 ':''}${esc(thread.title)}</div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">${renderNickWithVip(thread.profiles?.nick||'?', thread.profiles, ROLE_BADGE_HTML[thread.profiles?.role]||'')} · ${new Date(thread.created_at).toLocaleString('ru-RU')}</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">${renderNickWithVip(thread.profiles?.nick||'?', thread.profiles, ROLE_BADGE_HTML[thread.profiles?.role]||'')}<span class="lv-badge" data-lv-uid="${esc(thread.author_id)}"></span> · ${new Date(thread.created_at).toLocaleString('ru-RU')}</div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
           ${isAdmin ? `<button onclick="toggleForumPin(${thread.id}, ${!thread.pinned})" class="profile-admin-btn" style="padding:.4rem .7rem;font-size:.7rem">${thread.pinned?'Открепить':'📌 Закрепить'}</button>` : ''}
@@ -126,7 +127,7 @@ async function loadForumThread(id){
       return `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem" data-post-id="${p.id}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">
-            <div style="font-weight:700;font-size:.82rem">${nickHtml}</div>
+            <div style="font-weight:700;font-size:.82rem">${nickHtml}<span class="lv-badge" data-lv-uid="${esc(p.author_id)}"></span></div>
             <div style="display:flex;align-items:center;gap:.6rem">
               <span style="font-size:.7rem;color:var(--muted)">${new Date(p.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
               ${canDelete ? `<button onclick="deleteForumPost(${p.id})" aria-label="Удалить ответ" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem">🗑</button>` : ''}
@@ -135,6 +136,7 @@ async function loadForumThread(id){
           <div style="font-size:.85rem;margin-top:.5rem;white-space:pre-wrap;word-break:break-word;line-height:1.6">${formatForumBody(esc(p.body), canFmt)}</div>
         </div>`;
     }).join('');
+    if (typeof xpQueueBadges === 'function') xpQueueBadges();
 
     const fmtHint = document.getElementById('forumFormatHint');
     if (fmtHint) fmtHint.style.display = canUseAnimatedAvatar(currentRole, currentProfile) ? 'block' : 'none';

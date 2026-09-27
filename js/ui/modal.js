@@ -69,7 +69,9 @@ function openVid(id,title,date,views){
   const pageLink = document.getElementById('mPage'); if (pageLink) pageLink.href = '/v/' + id;
   document.getElementById('mTitle').textContent=title;
   document.getElementById('mMeta').textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
-  document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
+  // enablejsapi+origin — чтобы xp.js видел реальное время воспроизведения (XP за просмотр)
+  document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
+  if (typeof xpTrackIframe === 'function') xpTrackIframe(document.querySelector('#mVid iframe'), id, 60);
   document.getElementById('modal').classList.add('open');document.body.style.overflow='hidden';
   trapModalFocus(document.getElementById('modal'));
 }

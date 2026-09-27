@@ -484,7 +484,7 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
     <div class="chat-avatar" style="background:${avatarBg}" ${profileClick}>${initials}</div>
     <div class="chat-bubble-col">
       <div class="chat-bubble" style="${isSticker?'background:none;border:none;box-shadow:none;padding:.2rem 0':''}">
-        <div class="chat-user" style="color:${nickColor}" ${profileClick}>${esc(nick)}${badge}${vipBadge}</div>
+        <div class="chat-user" style="color:${nickColor}" ${profileClick}>${esc(nick)}${badge}${vipBadge}${userId ? `<span class="lv-badge" data-lv-uid="${esc(userId)}"></span>` : ''}</div>
         ${textBlock}
         <div class="chat-time">${time}</div>
       </div>
@@ -495,6 +495,7 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
     <button class="msg-del-btn" aria-label="Удалить сообщение" onclick="deleteMsg(${msgId},this.closest('.chat-msg'))" title="Удалить">✕</button>`:''}
     ${canPin?`<button class="msg-pin-btn" aria-label="Закрепить" onclick="pinMessage(${msgId})" title="Закрепить на ${pinDurationHint} (по твоей роли/уровню)">📌</button>`:''}`;
   msgs.appendChild(div);
+  if (userId && typeof xpQueueBadges === 'function') xpQueueBadges();
   if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100) msgs.scrollTop=msgs.scrollHeight;
 }
 

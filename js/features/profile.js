@@ -172,6 +172,7 @@ async function renderProfilePage(viewUserId){
   renderProfileStats(profile, targetId);
   renderReferralPanel(profile, isOwn);
   if (typeof renderAchievements === 'function') renderAchievements(targetId, isOwn);
+  if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
 
   // Редактирование — только на своём профиле
   document.getElementById('profileBannerEditBtn').style.display = isOwn ? 'flex' : 'none';

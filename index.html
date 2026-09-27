@@ -1357,6 +1357,11 @@ body.low .donation-alert-icon{animation:none}
       <span class="cm-go">Играть →</span>
     </a>
   </div>
+  <!-- Топ недели по XP (js/features/xp.js) — скрыт без xp.sql или пока пусто -->
+  <div class="xp-top" id="xpTopWeek" hidden>
+    <div class="xp-top-head"><b>🏆 Топ недели</b><span>XP за 7 дней · смотри видео на сайте, общайся в чате, предлагай идеи</span></div>
+    <ol class="xp-top-list" id="xpTopList"></ol>
+  </div>
   <div class="cm-join">
     <div class="cm-join-text">
       <b>Заведи профиль — это бесплатно</b>
@@ -1599,6 +1604,20 @@ body.low .donation-alert-icon{animation:none}
         <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на стримы</button>
         <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
       </div>
+    </div>
+
+    <!-- Уровень и XP (js/features/xp.js, xp.sql) — скрыт, пока xp.sql не выполнен -->
+    <div id="profileXpCard" class="pf-card pf-xp" style="margin-top:1rem" hidden>
+      <div class="xp-row">
+        <div class="xp-lvl"><span>Уровень</span><b id="pxLevel">1</b></div>
+        <div class="xp-bar-wrap">
+          <div class="xp-bar-top"><b id="pxXp">0 XP</b><span id="pxNext"></span></div>
+          <div class="xp-bar"><i id="pxBar"></i></div>
+          <div class="xp-today" id="pxToday"></div>
+        </div>
+      </div>
+      <div class="xp-week" id="pxWeek"></div>
+      <details class="xp-help"><summary>Как получать XP</summary><div class="xp-rules" id="pxRules"></div></details>
     </div>
 
     <!-- Ачивки — видны и на своём, и на чужом профиле -->
@@ -2432,6 +2451,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/ads.js"></script>
 <script src="js/features/shorts.js"></script>
 <script src="js/features/ideas.js"></script>
+<script src="js/features/xp.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
 <script src="js/ui/hotkeys.js"></script>

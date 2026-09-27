@@ -169,6 +169,7 @@ function activateShort(item){
   const box = item.querySelector('.sh-player');
   box.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&mute=${shortsMuted ? 1 : 0}&playsinline=1&loop=1&playlist=${id}&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}"
     title="Short" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen></iframe>`;
+  if (typeof xpTrackIframe === 'function') xpTrackIframe(box.querySelector('iframe'), id, 15);
   // Адрес без перезагрузки — ссылку можно скопировать из строки браузера
   if (location.hash !== '#/shorts/' + id) history.replaceState(null, '', '#/shorts/' + id);
   if (typeof markVidWatched === 'function') markVidWatched(id);
