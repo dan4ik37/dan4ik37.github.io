@@ -2,6 +2,8 @@
 //  LEADERBOARD — DonationAlerts API
 // ═══════════════════════════════════════
 let lbTab = 'top';
+let lbPeriod = 'month';   // топ донатов: 'month' — последние 30 дней, 'all' — всё время
+let lbLastData = null;
 const DA_AUTH_URL = `/api/donations`; // Vercel serverless
 
 // ═══════════════════════════════════════
@@ -104,9 +106,13 @@ async function lbLogin() {
   // это почти всегда падает как invalid_client. Теперь просто спрашиваем
   // актуальную ссылку у бэкенда (он — единственный источник правды про
   // client_id), а не собираем её тут по памяти.
+  // БАГ 2: ссылку брали из обычного ответа /api/donations — но посетителю без сессии
+  // DA сервер отдаёт снимок (200), а не 401 со ссылкой, и кнопка писала «не удалось».
+  // У сервера для этого есть отдельный режим ?login=1.
   try {
-    const { status, body } = await fetchDonationsShared();
-    if (status === 401 && body?.auth_url) { window.location.href = body.auth_url; return; }
+    const r = await fetch('/api/donations?login=1', { cache: 'no-store' });
+    const body = await r.json();
+    if (body?.auth_url) { window.location.href = body.auth_url; return; }
   } catch(e) {}
   document.getElementById('lbAuthStatus').textContent = '⚠ Не удалось получить ссылку авторизации';
 }
@@ -119,21 +125,33 @@ function renderLbError() {
 }
 
 function renderLb(data, tab) {
+  lbLastData = data;
   document.getElementById('lbContent').innerHTML = renderLbHtml(data, tab);
+}
+function setLbPeriod(p){
+  lbPeriod = p;
+  if (lbLastData) renderLb(lbLastData, lbTab);
 }
 
 function renderLbHtml(data, tab) {
   const colors = ['#ff2d55','#9147ff','#29b6f6','#22c55e','#f59e0b','#ec4899','#ff6b35'];
   if (tab === 'top') {
-    if (!data.leaderboard?.length) return `<div class="empty-state"><span class="empty-state-icon">🏆</span><div class="empty-state-title">Донатов пока нет</div><div class="empty-state-text">Будь первым в списке — самый щедрый попадёт на самый верх 💝</div></div>`;
-    return `<div class="lb-list">${data.leaderboard.map((d,i)=>{
+    const hasMonth = Array.isArray(data.leaderboard_month);
+    const period = hasMonth ? lbPeriod : 'all';
+    const list = period === 'month' ? data.leaderboard_month : data.leaderboard;
+    const toggle = hasMonth ? `<div class="lb-period">
+        <button class="${period === 'month' ? 'active' : ''}" onclick="setLbPeriod('month')">За 30 дней</button>
+        <button class="${period === 'all' ? 'active' : ''}" onclick="setLbPeriod('all')">За всё время</button>
+      </div>` : '';
+    if (!list?.length) return toggle + `<div class="empty-state"><span class="empty-state-icon">🏆</span><div class="empty-state-title">${period === 'month' ? 'За 30 дней донатов не было' : 'Донатов пока нет'}</div><div class="empty-state-text">Будь первым в списке — самый щедрый попадёт на самый верх 💝</div></div>`;
+    return toggle + `<div class="lb-list">${list.map((d,i)=>{
       const ini=esc((d.username||'?').slice(0,2).toUpperCase());
       const col=colors[i%colors.length];
       const rank=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
       return `<div class="lb-item">
         <div class="lb-rank r${i+1}">${rank}</div>
         <div class="lb-avatar" style="background:${col}">${ini}</div>
-        <div class="lb-info"><div class="lb-name">${esc(d.username)}</div><div class="lb-sub">${d.count} донат${d.count===1?'':'а'}</div></div>
+        <div class="lb-info"><div class="lb-name">${esc(d.username)}</div><div class="lb-sub">${d.count} ${typeof pluralRu === 'function' ? pluralRu(d.count, 'донат', 'доната', 'донатов') : 'дон.'}</div></div>
         <div class="lb-amount">${Math.round(d.total).toLocaleString('ru')} ${d.currency}</div>
       </div>`;
     }).join('')}</div>`;

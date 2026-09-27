@@ -1607,3 +1607,9 @@ body.high .lv-frame-30::after{animation:lvFrameSpin 6s linear infinite}
 .xp-reward.got b{color:#22c55e}
 .pv-lock{font-size:.66rem;color:#ffd166;font-weight:700;white-space:nowrap}
 
+/* Топ донатов: период (js/features/leaderboard.js → setLbPeriod) */
+.lb-period{display:flex;gap:.4rem;justify-content:center;padding:.8rem 1rem .2rem}
+.lb-period button{border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--muted);border-radius:999px;
+  padding:.3rem .8rem;font-size:.68rem;font-weight:700;cursor:pointer;font-family:'Montserrat',sans-serif}
+.lb-period button.active{color:#fff;border-color:var(--accent);background:var(--ac-18)}
+

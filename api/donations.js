@@ -63,7 +63,38 @@ async function hiddenDonors() {
 function maskDonors(data, hidden) {
   if (!hidden.size) return data;
   const mask = d => hidden.has(String(d.username || '').toLowerCase()) ? { ...d, username: 'Аноним' } : d;
-  return { ...data, donations: (data.donations || []).map(mask), leaderboard: (data.leaderboard || []).map(mask) };
+  return {
+    ...data,
+    donations: (data.donations || []).map(mask),
+    leaderboard: (data.leaderboard || []).map(mask),
+    ...(data.leaderboard_month ? { leaderboard_month: data.leaderboard_month.map(mask) } : {}),
+  };
+}
+
+// Топ за последние 30 дней — из постоянного журнала vip_donation_log (его пополняет
+// api/vip-sync.js), а не из последних страниц DonationAlerts: там за раз видно лишь
+// часть истории, и «топ» получался за год-полтора. null — журнал недоступен.
+const MONTH_MS = 30 * 86400000;
+async function monthLeaderboard() {
+  if (!storeConfigured()) return null;
+  try {
+    const since = new Date(Date.now() - MONTH_MS).toISOString();
+    const rows = await sbSelect('vip_donation_log',
+      `select=donor_username,amount,currency,donated_at,processed_at` +
+      `&or=(donated_at.gte.${since},and(donated_at.is.null,processed_at.gte.${since}))&limit=5000`);
+    return aggregateTop(rows.map(r => ({ username: r.donor_username, amount: Number(r.amount) || 0, currency: r.currency || 'RUB' })));
+  } catch (e) { return null; }
+}
+function aggregateTop(list) {
+  const map = {};
+  for (const d of list) {
+    const name = String(d.username || '').trim() || 'Аноним';
+    const k = name.toLowerCase();
+    (map[k] ||= { username: name, total: 0, count: 0, currency: d.currency || 'RUB' });
+    map[k].total += d.amount;
+    map[k].count++;
+  }
+  return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 20);
 }
 
 async function sendSnapshot(res, snap) {
@@ -72,8 +103,10 @@ async function sendSnapshot(res, snap) {
   // Снимок (donations/leaderboard) обновляется раз в несколько минут, а цель
   // считаем прямо сейчас отдельным запросом — она "легче" (один select с
   // фильтром) и не обязана ждать следующего прогона синхронизации.
-  const [goal, hidden] = await Promise.all([goalData(), hiddenDonors()]);
-  return res.status(200).json({ ...maskDonors(snap.data, hidden), source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
+  const [goal, hidden, month] = await Promise.all([goalData(), hiddenDonors(), monthLeaderboard()]);
+  const data = { ...snap.data, leaderboard_month: month || aggregateTop((snap.data.donations || [])
+    .filter(d => Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS)) };
+  return res.status(200).json({ ...maskDonors(data, hidden), source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
 }
 
 function authUrl() {
@@ -189,8 +222,10 @@ export default async function handler(req, res) {
     // журнала), а не пересчётом по этой единственной странице выдачи DA —
     // иначе у владельца (у него как раз есть cookie, он идёт этой веткой)
     // цель считалась бы иначе, чем у всех прочих, и число бы "прыгало".
-    const goal = await goalData();
-    res.status(200).json({ donations: donations.slice(0, 20), leaderboard, ...(goal ? { goal } : {}) });
+    const [goal, month] = await Promise.all([goalData(), monthLeaderboard()]);
+    const leaderboard_month = month || aggregateTop(donations.filter(d =>
+      Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS));
+    res.status(200).json({ donations: donations.slice(0, 20), leaderboard, leaderboard_month, ...(goal ? { goal } : {}) });
   } catch(e) {
     // DonationAlerts недоступен — лучше показать последний снимок, чем ошибку
     const snap = await readSnapshot();

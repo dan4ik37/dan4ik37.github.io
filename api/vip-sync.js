@@ -58,11 +58,20 @@ export default async function handler(req, res) {
 
   let seen = 0, credited = 0;
   try {
-    const tok = await getAccessToken();
+    let tok = await getAccessToken();
     if (!tok.token) throw new Error(tok.reason || 'no_token');
 
     const maxPages = Number(process.env.VIP_SYNC_MAX_PAGES) || 8;
-    const { donations } = await fetchDonationPages(tok.token, { maxPages, deadline });
+    let donations;
+    try {
+      ({ donations } = await fetchDonationPages(tok.token, { maxPages, deadline }));
+    } catch (e) {
+      if (String(e?.message) !== 'da_unauthorized') throw e;
+      // Токен отозван раньше срока — один раз обновляем по refresh_token и повторяем
+      tok = await getAccessToken({ force: true });
+      if (!tok.token) throw new Error('da_unauthorized');
+      ({ donations } = await fetchDonationPages(tok.token, { maxPages, deadline }));
+    }
     seen = donations.length;
 
     // Начисляем только свежие: старше окна не трогаем — иначе при первом запуске

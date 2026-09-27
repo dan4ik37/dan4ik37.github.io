@@ -182,6 +182,12 @@ create trigger xp_ledger_level_check after insert on public.xp_ledger
   for each row execute function public.xp_ledger_level_check();
 
 -- ═══ 3. XP за донаты: 1 ₽ = 1 XP (до 1000 за донат) ═══
+-- Колонки журнала из server-hardening.sql / vip-log-upgrade.sql — на случай, если их части не запускались
+alter table public.vip_donation_log
+  add column if not exists donor_username text,
+  add column if not exists amount numeric,
+  add column if not exists currency text,
+  add column if not exists donated_at timestamptz;
 create or replace function public.xp_on_donation()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin

@@ -68,11 +68,13 @@ async function refreshWith(refreshToken) {
 }
 
 // Живой access-токен для сервера. { token } либо { token: null, reason }
-export async function getAccessToken() {
+// force — обновить, даже если по нашим часам токен ещё живой: DonationAlerts иногда
+// отзывает access_token раньше срока (тогда список донатов отвечает 401).
+export async function getAccessToken({ force = false } = {}) {
   if (!process.env.DA_CLIENT_ID || !process.env.DA_CLIENT_SECRET) return { token: null, reason: 'env_missing_da' };
   const row = await getStoredToken();
   if (!row) return { token: null, reason: 'no_stored_session' };
-  if (row.access_token && row.access_expires_at && new Date(row.access_expires_at).getTime() > Date.now() + 120000) {
+  if (!force && row.access_token && row.access_expires_at && new Date(row.access_expires_at).getTime() > Date.now() + 120000) {
     return { token: row.access_token };
   }
   if (!row.refresh_token) return { token: null, reason: 'no_refresh_token' };
