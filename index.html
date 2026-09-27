@@ -1629,7 +1629,7 @@ body.low .donation-alert-icon{animation:none}
     <div id="profileAccountSettings" class="pf-card pf-card-muted" style="display:none;margin-top:1rem">
       <div class="pf-kicker" style="margin-bottom:.8rem">Настройки аккаунта</div>
       <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-        <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на стримы</button>
+        <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на уведомления</button>
         <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
       </div>
     </div>
@@ -2102,10 +2102,10 @@ body.low .donation-alert-icon{animation:none}
     <!-- Push уведомления -->
     <div style="background:var(--card);border-radius:20px;border:1px solid rgba(145,71,255,.18);padding:1.8rem">
       <div style="font-size:1.8rem;margin-bottom:.8rem">🔔</div>
-      <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--tw);margin-bottom:.6rem">Уведомления о стримах</div>
-      <div style="font-size:.8rem;color:var(--muted);line-height:1.75;margin-bottom:1.2rem">Получай уведомление в браузере когда dan4ik37 начинает стрим — не пропускай ни одного!</div>
-      <button class="push-btn" id="pushBtn" onclick="togglePush()">🔔 Подписаться на стримы</button>
-      <div style="font-size:.65rem;color:var(--muted);margin-top:.8rem;opacity:.6">Работает в Chrome, Firefox, Edge · Только для Vercel</div>
+      <div style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:2px;color:var(--tw);margin-bottom:.6rem">Уведомления о стримах и видео</div>
+      <div style="font-size:.8rem;color:var(--muted);line-height:1.75;margin-bottom:1.2rem">Уведомление придёт, когда dan4ik37 начнёт стрим или выложит новое видео — даже если сайт закрыт.</div>
+      <button class="push-btn" id="pushBtn" onclick="togglePush()">🔔 Подписаться на уведомления</button>
+      <div style="font-size:.65rem;color:var(--muted);margin-top:.8rem;opacity:.6">Chrome, Edge, Firefox, Яндекс · на iPhone — после «На экран Домой»</div>
     </div>
   </div>
 </div>

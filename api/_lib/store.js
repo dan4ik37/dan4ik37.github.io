@@ -69,6 +69,15 @@ export async function sbUpsert(table, row, onConflict) {
   if (!r.ok) throw new Error(`upsert ${table}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
 }
 
+// query — фильтр PostgREST, например endpoint=in.("a","b"). Без фильтра не зовём.
+export async function sbDelete(table, query) {
+  if (!query) throw new Error('sbDelete без фильтра');
+  const r = await timedFetch(`${baseUrl()}/rest/v1/${table}?${query}`, {
+    method: 'DELETE', headers: headers({ Prefer: 'return=minimal' }),
+  });
+  if (!r.ok) throw new Error(`delete ${table}: HTTP ${r.status} ${(await r.text()).slice(0, 200)}`);
+}
+
 // Проверяет: "Authorization: Bearer <токен>" в запросе — это токен ЗАЛОГИНЕННОГО
 // в браузере администратора (не сервисный ключ!). Используется там, где
 // действие должен запускать именно человек из админки, а не любой посетитель

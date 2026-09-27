@@ -35,6 +35,37 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Web Push: сервер (api/push-check.js) присылает JSON { title, body, url, icon, tag }
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data && event.data.text() }; }
+  event.waitUntil(
+    self.registration.showNotification(d.title || 'dan4ik37', {
+      body: d.body || '',
+      icon: d.icon || '/icon-192.png',
+      badge: '/icon-192.png',
+      image: d.image || undefined,
+      tag: d.tag || undefined,
+      data: { url: d.url || '/#/home' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || '/#/home', self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (c.url.startsWith(self.location.origin) && 'focus' in c) {
+          return c.navigate(url).then((w) => (w || c).focus()).catch(() => c.focus());
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);

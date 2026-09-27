@@ -2,12 +2,19 @@
   "functions": {
     "api/vip-sync.js": {
       "maxDuration": 30
+    },
+    "api/push-check.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
     {
       "path": "/api/vip-sync",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/push-check",
+      "schedule": "0 16 * * *"
     }
   ],
   "headers": [

@@ -53,9 +53,10 @@ export function getVideo(id) {
   });
 }
 
-// Последние загрузки: [{ id, title, thumb, publishedAt }]. max — до 1000 (по 50 за запрос)
-export function getUploads(max = 50) {
-  return cached('uploads:' + max, 3600e3, async () => {
+// Последние загрузки: [{ id, title, thumb, publishedAt }]. max — до 1000 (по 50 за запрос).
+// ttlMs — сколько держать в памяти инстанса; api/push-check.js берёт свежие (0).
+export function getUploads(max = 50, ttlMs = 3600e3) {
+  return cached('uploads:' + max, ttlMs, async () => {
     const { uploads } = await getChannel();
     const out = [];
     let page = '';

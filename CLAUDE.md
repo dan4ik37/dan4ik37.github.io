@@ -51,26 +51,20 @@
 В корне репозитория лежит ещё отдельный Electron-проект «VTuber VRM Player» (`main.js`, `preload.js`,
 `renderer.js`, корневой `config.js`, `package.json`, `assets/`, `tools/`, `README.md`) — к сайту не относится.
 
-## Следующая задача: настоящие push-уведомления (владелец согласовал, делать в новой сессии)
-Сейчас кнопка «🔔 Подписаться на стримы» (`js/features/push-pwa.js` → `togglePush`) — пустышка: только
-`Notification.requestPermission()` и одно локальное уведомление, подписки и сервера нет — подписчики ничего не получают.
-Нужно: уведомления о **новом видео** и **начале стрима** даже при закрытом сайте.
-- Клиент: `pushManager.subscribe` с VAPID public key → сохранить подписку в Supabase (таблица, напр. `push_subscriptions`:
-  endpoint unique, keys p256dh/auth, user_id nullable, какие темы — видео/стримы). Отписка = удаление строки.
-- `sw.js`: обработчики `push` (показать уведомление) и `notificationclick` (открыть /v/<id> или #/home).
-- Сервер: `api/push-check.js` — проверяет новые видео (`api/_lib/yt.js` → `getUploads`) и эфир Twitch
-  (decapi.me, как в `js/features/twitch.js`), помнит «что уже разослано» в Supabase (`site_config` или своя таблица),
-  шлёт Web Push всем подписчикам; мёртвые подписки (404/410) удалять.
-- Web Push без npm-зависимостей: корневой `package.json` принадлежит Electron-проекту, трогать его нельзя →
-  VAPID (ES256 JWT) и шифрование aes128gcm (RFC 8291) на `node:crypto`. Либо обсудить с владельцем отдельный package.json для api.
-- Доступ к БД с сервера — `api/_lib/store.js` (env `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` уже заданы).
-  Защита вызова — как в `api/vip-sync.js`: `Authorization: Bearer ${CRON_SECRET}`.
-- Новые env в Vercel: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (mailto:). Сгенерировать ключи и дать
-  владельцу пошагово, куда вставить.
-- Расписание: Vercel Hobby cron — только раз в сутки. Для стримов нужен внешний бесплатный будильник (cron-job.org,
-  каждые 5–10 мин, с заголовком Authorization) — расписать владельцу по шагам. Суточный cron Vercel — как запасной.
-- SQL — отдельный идемпотентный файл (напр. `push.sql`), RLS: вставлять/удалять свою подписку может любой посетитель
-  (гости тоже), читать все подписки — только сервер (service role).
+## Push-уведомления (новое видео / начало стрима, даже при закрытом сайте)
+- Клиент: `js/features/push-pwa.js` (`togglePush`, `syncPush`) — `pushManager.subscribe` с ключом из
+  `GET /api/push-check?pubkey=1`, сохранение через RPC `push_subscribe` / `push_unsubscribe` (обычный fetch, без SDK).
+  После подписки `POST /api/push-check?test=1 {endpoint}` шлёт приветствие (только подписке моложе 10 мин).
+- `sw.js`: обработчики `push` (JSON `{title, body, url, image, tag}`) и `notificationclick`.
+- Сервер: `api/push-check.js` (проверка + рассылка, только с `Bearer ${CRON_SECRET}`), `api/_lib/webpush.js`
+  (VAPID ES256 + aes128gcm на `node:crypto`, без npm). Что уже разослано — таблица `push_state`.
+  Первый запуск только запоминает состояние; повтор эфира в течение 3 ч не рассылается; 404/410 → подписка удаляется.
+- SQL: `push.sql` (таблицу подписок читает только service role).
+- Env в Vercel: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (+ уже заданные SUPABASE_*, CRON_SECRET).
+- Расписание: cron-job.org каждые 5 мин → `https://dan4ik37.vercel.app/api/push-check` с заголовком
+  `Authorization: Bearer <CRON_SECRET>`; Vercel cron раз в сутки (vercel.json) — запасной.
+- Встроенный браузер не регистрирует service worker («unknown error when fetching the script», даже для старого sw.js) —
+  push проверять на проде в обычном Chrome. Серверную часть — вызовом handler'а из node с подменённым fetch.
 
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —
