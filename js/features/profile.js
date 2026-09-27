@@ -165,7 +165,7 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileGamesCard').style.display = hidden ? 'none' : '';
   document.getElementById('profileAchievementsCard').style.display = hidden ? 'none' : '';
   // Статистику на скрытом профиле видит только персонал (служебный просмотр)
-  document.getElementById('profileStatsRow').style.display = (hidden && !profile.staff_view) ? 'none' : '';
+  document.getElementById('profileStatsRow').style.display = (hidden && !profile.staff_view) ? 'none' : 'grid';
   document.getElementById('profileBioText').textContent = profile.bio || (isOwn ? 'Расскажи о себе...' : '');
   document.getElementById('profileStatusView').textContent = profile.status_text || '';
   if (typeof renderProfileGamesView === 'function') renderProfileGamesView(profile.favorite_games);
