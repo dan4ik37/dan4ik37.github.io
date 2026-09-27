@@ -1475,3 +1475,8 @@ body.high .vnew{animation:pillPulse 2.4s ease-out infinite;color:#fff}
 /* Подвал: вторая строка — разделы сайта */
 .footer-site{margin-top:.6rem;opacity:.75}
 .footer-site a{font-size:.72rem}
+
+/* Опрос: подсказка гостю */
+.poll-hint{margin-top:.8rem;font-size:.78rem;color:var(--muted)}
+.poll-hint:empty{display:none}
+.poll-hint button{margin-left:.4rem;padding:.3rem .7rem;border-radius:8px;border:0;cursor:pointer;font:inherit;font-size:.74rem;font-weight:800;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2))}

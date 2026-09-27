@@ -61,23 +61,38 @@ async function loadReactionsFor(msgIds){
   } catch(e) {}
 }
 
+// Реакции привязаны к аккаунту (polls-reactions-secure.sql): вошедший ставит/снимает свои,
+// гость может только ставить — снять гостевую реакцию нельзя (иначе любой снимал бы чужие).
 async function toggleReaction(msgId, emoji){
   if (!chatNick) { document.getElementById('chatNickScreen').style.display='flex'; document.getElementById('chatMainInput').style.display='none'; closeReactionPicker(); return; }
   const already = !!messageReactions[msgId]?.[emoji]?.has(chatNick);
+  if (already && !currentUser) { closeReactionPicker(); return; }
   // Оптимистично — не ждём ответа сервера, чтобы не было задержки на клик
   if (already) removeReactionFromState(msgId, emoji, chatNick);
   else addReactionToState(msgId, emoji, chatNick);
   renderReactionsFor(msgId);
   closeReactionPicker();
+  let error = null;
   try {
-    if (already) await sbClient.from('message_reactions').delete().match({ message_id: msgId, emoji, nick: chatNick });
-    else await sbClient.from('message_reactions').insert({ message_id: msgId, emoji, nick: chatNick });
-  } catch(e) {
-    // не получилось сохранить на сервере — откатываем локально
+    if (already) {
+      ({ error } = await sbClient.from('message_reactions').delete().match({ message_id: msgId, emoji, user_id: currentUser.id }));
+      // SQL ещё не выполнен — удаляем по-старому, по нику
+      if (reactionsNoUserId(error)) ({ error } = await sbClient.from('message_reactions').delete().match({ message_id: msgId, emoji, nick: chatNick }));
+    } else {
+      const row = { message_id: msgId, emoji, nick: chatNick };
+      if (currentUser) row.user_id = currentUser.id;
+      ({ error } = await sbClient.from('message_reactions').insert(row));
+      if (reactionsNoUserId(error)) ({ error } = await sbClient.from('message_reactions').insert({ message_id: msgId, emoji, nick: chatNick }));
+      if (error?.code === '23505') error = null; // уже стоит — это не ошибка
+    }
+  } catch(e) { error = e; }
+  if (error) {
+    // Supabase не бросает исключение, а возвращает { error } — раньше откат из catch не срабатывал никогда
     if (already) addReactionToState(msgId, emoji, chatNick); else removeReactionFromState(msgId, emoji, chatNick);
     renderReactionsFor(msgId);
   }
 }
+function reactionsNoUserId(err){ return err && (err.code === 'PGRST204' || err.code === '42703' || /user_id/.test(err.message || '')); }
 
 function buildReactionPicker(){
   let picker = document.getElementById('reactPickerPop');

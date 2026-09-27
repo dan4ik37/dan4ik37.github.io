@@ -9,6 +9,9 @@ const POLLS = [
 let pollIdx = 0;
 
 let votedPolls = new Set(JSON.parse(localStorage.getItem('d37_polls')||'[]'));
+// Колонка user_id в poll_votes появляется после polls-reactions-secure.sql. До этого — старое поведение.
+function missingUserIdColumn(err){ return err && (err.code === 'PGRST204' || err.code === '42703' || /user_id/.test(err.message || '')); }
+window.addEventListener('d37:auth', () => { if (document.body.dataset.route === 'poll') renderPoll(); });
 
 function nextPoll() {
   pollIdx = (pollIdx + 1) % POLLS.length;
@@ -19,7 +22,7 @@ async function renderPoll() {
   const poll = POLLS[pollIdx];
   document.getElementById('pollQuestion').textContent = poll.q;
   const pollKey = `poll_${pollIdx}`;
-  const voted = votedPolls.has(pollKey);
+  let voted = votedPolls.has(pollKey);
 
   // Грузим голоса из Supabase
   let votes = {};
@@ -27,6 +30,11 @@ async function renderPoll() {
     try {
       const { data } = await sbClient.from('poll_votes').select('option').eq('poll_id', pollIdx);
       data?.forEach(r => { votes[r.option] = (votes[r.option]||0)+1; });
+      // Вошедший: «голосовал ли» — по базе (а не по памяти браузера)
+      if (currentUser && !voted) {
+        const { data: mine, error } = await sbClient.from('poll_votes').select('id').eq('poll_id', pollIdx).eq('user_id', currentUser.id).limit(1);
+        if (!error && mine?.length) { voted = true; votedPolls.add(pollKey); }
+      }
     } catch(e) {}
   }
   const total = Object.values(votes).reduce((s,v)=>s+v,0);
@@ -53,20 +61,33 @@ async function renderPoll() {
       </div>
     </button>`;
   }).join('');
-  document.getElementById('pollVotes').textContent = total + ' голос' + (total===1?'':total<5?'а':'ов');
+  document.getElementById('pollVotes').textContent = total + ' ' + (total%10===1&&total%100!==11?'голос':(total%10>=2&&total%10<=4&&(total%100<12||total%100>14))?'голоса':'голосов');
+  let hint = document.getElementById('pollHint');
+  if (!hint) {
+    hint = document.createElement('div');
+    hint.id = 'pollHint'; hint.className = 'poll-hint';
+    document.getElementById('pollOptions').after(hint);
+  }
+  hint.innerHTML = (!currentUser && !voted)
+    ? 'Голосовать могут вошедшие — один голос на аккаунт. <button type="button" onclick="openGlobalAuth()">Войти</button>'
+    : '';
 }
 
 async function votePoll(pollId, option, btn) {
   const pollKey = `poll_${pollId}`;
   if (votedPolls.has(pollKey)) return;
-  votedPolls.add(pollKey);
-  try { localStorage.setItem('d37_polls', JSON.stringify([...votedPolls])); } catch(e) {}
+  // Один голос на аккаунт проверяет база (polls-reactions-secure.sql) — гостям голосовать нельзя
+  if (!currentUser) { openGlobalAuth(); return; }
 
   if (sbClient) {
-    try {
-      await sbClient.from('poll_votes').insert([{ poll_id: pollId, option, nick: chatNick||'Аноним' }]);
-    } catch(e) {}
+    let { error } = await sbClient.from('poll_votes').insert([{ poll_id: pollId, option, nick: chatNick||'user', user_id: currentUser.id }]);
+    // SQL ещё не выполнен (нет колонки user_id) — голосуем по-старому
+    if (missingUserIdColumn(error)) ({ error } = await sbClient.from('poll_votes').insert([{ poll_id: pollId, option, nick: chatNick||'Аноним' }]));
+    // 23505 — уже голосовал (например, с другого устройства): просто показываем результаты
+    if (error && error.code !== '23505') { alert('Не удалось проголосовать: ' + error.message); return; }
   }
+  votedPolls.add(pollKey);
+  try { localStorage.setItem('d37_polls', JSON.stringify([...votedPolls])); } catch(e) {}
   renderPoll();
 }
 
