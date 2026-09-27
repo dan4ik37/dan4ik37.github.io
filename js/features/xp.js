@@ -17,12 +17,27 @@ const XP_RULES = [
   ['🗂️', 'Форум', '+15 за тему, +3 за ответ'],
   ['💡', 'Идеи для видео', '+5 за идею, +100 если её сняли'],
   ['🔗', 'Позвать друга', '+100 за каждого по твоей ссылке'],
+  ['🏆', 'Ачивки', 'от +10 до +500 за каждую, один раз'],
+  ['💖', 'Донат', '+1 XP за каждый рубль (до 1000 за донат)'],
 ];
-const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья' };
+// Что открывает уровень — цифры синхронизированы с progression.sql (friend_limit, check_level_rewards)
+const LEVEL_REWARDS = [
+  [5,   '🖼️', 'Рамка аватара · заявки в друзья (до 15)'],
+  [10,  '🏷️', 'Титул из своих ачивок рядом с ником'],
+  [15,  '👥', 'До 20 друзей'],
+  [20,  '👥', 'До 25 друзей'],
+  [25,  '👥', 'До 30 друзей'],
+  [30,  '🌈', 'Красивая рамка · до 35 друзей · Bronze VIP на месяц'],
+  [50,  '⭐', 'Silver VIP на 3 месяца'],
+  [100, '✨', 'Gold VIP на год'],
+];
+const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты' };
 const XP_TIERS = [30, 20, 10, 5]; // рамки ника по порогам уровня
 
 let xpAvailable = null; // null — ещё не проверяли
 const xpLevelCache = new Map();
+const xpTitleCache = new Map();   // uid → код ачивки-титула (progression.sql → nick_extras) или null
+let xpExtrasOk = null;            // есть ли nick_extras (progression.sql выполнен)
 
 function xpTierClass(level){
   const t = XP_TIERS.find(n => level >= n);
@@ -52,19 +67,48 @@ async function xpFillBadges(){
   if (!(await xpCheck())) return;
   const els = [...document.querySelectorAll('.lv-badge[data-lv-uid]:not([data-lv])')];
   if (!els.length) return;
-  const need = [...new Set(els.map(e => e.dataset.lvUid).filter(u => u && !xpLevelCache.has(u)))];
-  for (let i = 0; i < need.length; i += 200) {
-    const { data } = await sbClient.rpc('xp_levels', { uids: need.slice(i, i + 200) });
-    (data || []).forEach(r => xpLevelCache.set(r.user_id, r.level));
-  }
+  const need = [...new Set(els.map(e => e.dataset.lvUid).filter(u => u && !(xpLevelCache.has(u) && xpTitleCache.has(u))))];
+  await xpLoadExtras(need);
   els.forEach(el => {
-    const lv = xpLevelCache.get(el.dataset.lvUid);
+    const uid = el.dataset.lvUid;
+    const lv = xpLevelCache.get(uid);
     if (!lv) return;
     el.dataset.lv = lv;
     el.textContent = 'Lv ' + lv;
     el.className = 'lv-badge' + xpTierClass(lv);
     el.title = 'Уровень ' + lv;
+    const d = typeof ACH_BY_CODE !== 'undefined' && ACH_BY_CODE[xpTitleCache.get(uid)];
+    if (d) el.insertAdjacentHTML('afterend', `<span class="nick-title" title="Титул">${d.icon} ${esc(d.title)}</span>`);
   });
+}
+
+// Уровень + титул пачкой; без progression.sql — только уровень (xp_levels)
+async function xpLoadExtras(uids){
+  for (let i = 0; i < uids.length; i += 200) {
+    const part = uids.slice(i, i + 200);
+    let rows = null;
+    if (xpExtrasOk !== false) {
+      const { data, error } = await sbClient.rpc('nick_extras', { uids: part });
+      if (error) xpExtrasOk = false; else { xpExtrasOk = true; rows = data; }
+    }
+    if (!rows) rows = (await sbClient.rpc('xp_levels', { uids: part })).data;
+    (rows || []).forEach(r => { xpLevelCache.set(r.user_id, r.level); xpTitleCache.set(r.user_id, r.title || null); });
+  }
+}
+async function xpGetExtras(uid){
+  if (!uid || !(await xpCheck())) return null;
+  if (!xpLevelCache.has(uid) || !xpTitleCache.has(uid)) await xpLoadExtras([uid]);
+  return { level: xpLevelCache.get(uid) || 1, title: xpTitleCache.get(uid) || null };
+}
+
+// Рамка аватара по уровню: с 5 — простая, с 30 — красивая (анимируется только в body.high)
+function avatarFrameClass(level){ return level >= 30 ? 'lv-frame-30' : level >= 5 ? 'lv-frame-5' : ''; }
+async function applyLevelFrame(el, uid){
+  if (!el) return;
+  el.classList.remove('lv-frame-5', 'lv-frame-30');
+  const ex = await xpGetExtras(uid);
+  const cls = ex && avatarFrameClass(ex.level);
+  if (cls) el.classList.add(cls);
 }
 
 // ── Топ недели на главной ──
@@ -106,7 +150,12 @@ async function renderProfileXp(uid, isOwn){
     : '';
   const rules = document.getElementById('pxRules');
   if (rules && !rules.innerHTML) rules.innerHTML = XP_RULES.map(([i, t, d]) => `<div class="xp-rule"><span>${i}</span><div><b>${t}</b><small>${d}</small></div></div>`).join('');
-  card.querySelector('.xp-help').hidden = !isOwn;
+  card.querySelectorAll('.xp-help').forEach(d => { d.hidden = !isOwn; });
+  const rw = document.getElementById('pxRewards');
+  if (rw) rw.innerHTML = LEVEL_REWARDS.map(([lv, icon, text]) => `
+    <div class="xp-reward${data.level >= lv ? ' got' : ''}">
+      <span class="xp-reward-lv">${lv}</span><span>${icon}</span><span>${text}</span>${data.level >= lv ? '<b>✓</b>' : ''}
+    </div>`).join('');
   xpLevelCache.set(uid, data.level);
 }
 

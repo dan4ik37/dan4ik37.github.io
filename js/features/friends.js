@@ -16,7 +16,15 @@ async function sendFriendRequest(targetId){
   if (targetId === currentUser.id) return;
   try {
     const { error } = await sbClient.from('friendships').insert([{ requester_id: currentUser.id, addressee_id: targetId }]);
-    if (error) throw error;
+    if (error) {
+      // Отказ базы (progression.sql): уровень, лимит друзей или человек не принимает заявки
+      if (/row-level security/i.test(error.message || '') && typeof friendBlockReason === 'function') {
+        const why = await friendBlockReason();
+        alert(why || '🚫 Этот человек не принимает заявки в друзья');
+        return;
+      }
+      throw error;
+    }
     alert('Заявка в друзья отправлена');
     if (typeof openMiniProfile === 'function' && profileViewedId === targetId) renderProfilePage(targetId);
   } catch(e) {
@@ -27,7 +35,13 @@ async function sendFriendRequest(targetId){
 
 async function acceptFriendRequest(requesterId){
   try {
-    await sbClient.from('friendships').update({ status: 'accepted' }).eq('requester_id', requesterId).eq('addressee_id', currentUser.id);
+    const { error } = await sbClient.from('friendships').update({ status: 'accepted' }).eq('requester_id', requesterId).eq('addressee_id', currentUser.id);
+    if (error) {
+      alert(/row-level security/i.test(error.message || '')
+        ? '👥 Не получилось: у тебя или у него уже максимум друзей. Лимит растёт с уровнем и VIP'
+        : 'Не получилось: ' + error.message);
+    }
+    if (typeof myFriendStatusCache !== 'undefined') myFriendStatusCache = null;
     renderFriendsPanel();
   } catch(e) { alert('Не получилось: ' + (e.message || e)); }
 }
@@ -69,6 +83,10 @@ async function renderFriendsPanel(){
       for (const r of rows) { r.requester = byId.get(r.requester_id); r.addressee = byId.get(r.addressee_id); }
     }
 
+    const limitEl = document.getElementById('friendsLimitNote');
+    if (limitEl && typeof myFriendStatus === 'function') myFriendStatus(true).then(st => {
+      limitEl.textContent = st ? `${st.count} / ${st.limit ?? '∞'}` : '';
+    });
     const friends = (rows||[]).filter(r => r.status === 'accepted').map(r => {
       const isMe = r.requester_id === currentUser.id;
       const p = isMe ? r.addressee : r.requester;

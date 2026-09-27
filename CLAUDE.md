@@ -79,6 +79,21 @@
 - `donate_login`, `vip_pending_rub`, `referred_by` раньше читались всеми — теперь только сам человек / админ (персонал).
 - SQL проверялся на PGlite с ролями anon/authenticated и заглушкой `auth.uid()` — так же можно проверять новые правки.
 
+## Прогрессия (progression.sql): уровни, ачивки, награды
+- Цифры в двух местах: сервер (`friend_limit`, `check_level_rewards`, `achievement_xp`, `my_achievements`) и клиент
+  (`LEVEL_REWARDS` в xp.js, `ACHIEVEMENT_DEFS` в achievements.js). Меняешь одно — меняй другое.
+- Уровень 5: рамка аватара + заявки в друзья (как ограниченный аккаунт Steam: иначе 5 рефералов или донат; персонал
+  всегда). Лимит друзей 15 → +5 каждые 5 уровней с 15-го до 35 (30 ур.); VIP 50/70/100; персонал без лимита.
+  Проверка — RLS на `friendships` (insert и accept). Уровень 10: титул (`user_titles`, RPC `set_title`), титул роли/VIP
+  показывается только пока роль/VIP есть (`nick_extras`). 30/50/100: Bronze 1 мес / Silver 3 мес / Gold 1 год
+  (`vip_grants`, прибавляется после текущего VIP). Уведомления о порогах — `level_progress` + `notify()`.
+- VIP-уровень теперь = max(донатный, за уровень): `vip_tier_of()` (её зовут has_perks, закреп, messages.vip_tier);
+  `profiles_public` отдаёт эффективные `is_vip`/`vip_until` и `vip_tier` — клиент `getVipTier()` берёт `vip_tier`.
+  VIP за уровень нельзя писать в profiles: триггер `protect_profile_columns` откатывает is_vip в клиентской сессии.
+- XP: ачивки — разово (`claim_achievements()` при входе и на своём профиле, source `ach`), донаты — 1 XP/₽ до 1000
+  (триггер на `vip_donation_log.matched`, source `donation`). Невидимка — с Silver VIP (`can_be_invisible`).
+- Рамки: `.lv-frame-5` / `.lv-frame-30` (xp.js → `applyLevelFrame`), анимация кольца только в `body.high`.
+
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —
   dan4ik37.vercel.app (github.io перенаправляет туда). Нужны ID блоков в `AD_SLOTS`.

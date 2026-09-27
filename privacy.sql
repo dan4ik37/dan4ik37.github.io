@@ -71,6 +71,8 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 -- ── Представление: то, что видит конкретный читающий ──
+-- (progression.sql переопределяет его — добавляет VIP за уровень; после перезапуска
+--  этого файла перезапустить и progression.sql)
 drop view if exists public.profiles_public;
 create view public.profiles_public as
 select

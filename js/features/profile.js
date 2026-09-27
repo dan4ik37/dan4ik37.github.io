@@ -70,6 +70,8 @@ const STAFF_ROLES = ['admin', 'moderator', 'helper'];
 const isStaffRole = r => STAFF_ROLES.includes(r);
 
 function getVipTier(profile){
+  // profiles_public (progression.sql) отдаёт готовый уровень — с учётом VIP за уровень
+  if (profile && profile.vip_tier !== undefined) return VIP_TIERS.find(t => t.key === profile.vip_tier) || null;
   if (!isVipActive(profile)) return null;
   const total = Number(profile?.total_donated) || 0;
   return VIP_TIERS.find(t => total >= t.min) || VIP_TIERS[VIP_TIERS.length - 1];
@@ -175,6 +177,8 @@ async function renderProfilePage(viewUserId){
   if (profile.avatar_url) { avatarEl.style.backgroundImage = `url('${safeImgUrl(profile.avatar_url)}')`; avatarEl.textContent=''; }
   else { avatarEl.style.backgroundImage=''; avatarEl.textContent = (profile.nick||'?').substring(0,2).toUpperCase(); }
   applyProfileGlow(avatarEl, profile);
+  if (typeof applyLevelFrame === 'function') applyLevelFrame(avatarEl, targetId);
+  if (typeof renderProfileTitle === 'function') renderProfileTitle(targetId);
 
   if (!hidden || profile.staff_view) renderProfileStats(profile, targetId);
   renderReferralPanel(profile, isOwn);
@@ -211,6 +215,9 @@ async function renderProfilePage(viewUserId){
     };
     if (status === 'none' && profile.accepts_friend_requests === false) {
       buttons.none = `<span style="color:var(--muted);font-size:.8rem">🚫 Не принимает заявки в друзья</span>`;
+    } else if (status === 'none') {
+      const why = await friendBlockReason();
+      if (why) buttons.none = `<span style="color:var(--muted);font-size:.8rem">${why}</span>`;
     }
     addFriendWrap.innerHTML = buttons[status] || '';
     addFriendWrap.style.display = 'block';
@@ -312,6 +319,25 @@ async function renderProfileStats(profile, targetId){
 //  ПРИВАТНОСТЬ (privacy.sql) — прятать данные обязана база (profiles_public),
 //  здесь только показ и настройки
 // ═══════════════════════════════════════
+// Почему я не могу отправить заявку (null — могу). Как в Steam: с 5 уровня,
+// за 5 приглашённых друзей или после доната; плюс лимит друзей (progression.sql)
+let myFriendStatusCache = null;
+async function myFriendStatus(force){
+  if (!currentUser) return null;
+  if (myFriendStatusCache && !force && Date.now() - myFriendStatusCache.at < 60000) return myFriendStatusCache.data;
+  const { data, error } = await sbClient.rpc('my_friend_status');
+  if (error) return null;   // progression.sql ещё не выполнен — ограничений нет
+  myFriendStatusCache = { at: Date.now(), data };
+  return data;
+}
+async function friendBlockReason(){
+  const st = await myFriendStatus();
+  if (!st) return null;
+  if (!st.can_add) return `🔒 Заявки в друзья — с 5 уровня (у тебя ${st.level}), за 5 приглашённых друзей или после доната`;
+  if (st.limit != null && st.count >= st.limit) return `👥 У тебя максимум друзей (${st.limit}). Лимит растёт с уровнем и VIP`;
+  return null;
+}
+
 function renderProfileHiddenNote(profile, hidden){
   const el = document.getElementById('profileHiddenNote');
   if (!el) return;
@@ -333,7 +359,11 @@ function renderPrivacySettings(profile){
   if (box.hidden) return;
   document.getElementById('pvProfile').value = profile.profile_visibility || 'all';
   document.getElementById('pvRequests').value = profile.accepts_friend_requests === false ? 'nobody' : 'all';
-  document.getElementById('pvInvisible').checked = !!profile.privacy_invisible;
+  const inv = document.getElementById('pvInvisible');
+  const canInv = profile.can_be_invisible !== false;   // undefined — progression.sql ещё не выполнен
+  inv.checked = !!profile.privacy_invisible && canInv;
+  inv.disabled = !canInv;
+  document.getElementById('pvInvisibleLock').hidden = canInv;
   document.getElementById('pvDonations').checked = !!profile.privacy_hide_donations;
   document.getElementById('pvStatus').textContent = '';
 }
@@ -446,7 +476,8 @@ function renderNickWithVip(nick, profile, roleBadgeHtml){
 // задумано: история визитов не теряется, пока ты не VIP.
 async function recordProfileView(viewedId){
   if (!sbClient || !currentUser?.id || currentUser.id === viewedId) return;
-  if (currentProfile?.privacy_invisible) return; // режим невидимки (privacy.sql проверяет и сам)
+  // Невидимка (с Silver VIP) — база проверяет и сама, тут просто не шлём лишний запрос
+  if (currentProfile?.privacy_invisible && currentProfile?.can_be_invisible !== false) return;
   try {
     await sbClient.from('profile_views')
       .upsert([{ viewer_id: currentUser.id, viewed_id: viewedId, viewed_at: new Date().toISOString() }], { onConflict: 'viewer_id,viewed_id' });
@@ -1092,6 +1123,15 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${safeImgUrl(p.avatar_url)}')`;
     if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${safeImgUrl(p.banner_url)}')`;
     applyProfileGlow(document.getElementById('miniProfileAvatar'), p);
+    if (typeof applyLevelFrame === 'function') applyLevelFrame(document.getElementById('miniProfileAvatar'), userId);
+    {
+      const tEl = document.getElementById('miniProfileTitle');
+      tEl.hidden = true;
+      if (typeof xpGetExtras === 'function') xpGetExtras(userId).then(ex => {
+        const d = ex?.title && typeof ACH_BY_CODE !== 'undefined' && ACH_BY_CODE[ex.title];
+        if (d) { tEl.textContent = `${d.icon} ${d.title}`; tEl.hidden = false; }
+      });
+    }
 
     const actionEl = document.getElementById('miniProfileFriendAction');
     if (currentUser && currentUser.id !== userId) {
@@ -1105,6 +1145,9 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
       };
       if (status === 'none' && p.accepts_friend_requests === false) {
         buttons.none = `<span style="font-size:.72rem;color:var(--muted)">🚫 Не принимает заявки</span>`;
+      } else if (status === 'none') {
+        const why = await friendBlockReason();
+        if (why) buttons.none = `<span style="font-size:.68rem;color:var(--muted);line-height:1.4;display:block">${why}</span>`;
       }
       actionEl.innerHTML = buttons[status] || '';
     } else {

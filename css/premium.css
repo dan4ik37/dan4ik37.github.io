@@ -1568,3 +1568,42 @@ body.high .vnew{animation:pillPulse 2.4s ease-out infinite;color:#fff}
 .pv-check input{width:16px;height:16px;flex-shrink:0;margin-top:.1rem;accent-color:var(--accent)}
 .pv-status{font-size:.72rem;min-height:1rem;color:var(--muted)}
 .pv-note{font-size:.68rem;line-height:1.55;color:var(--muted);opacity:.85;margin-top:.3rem}
+
+/* ── Прогрессия (progression.sql): рамки по уровню, титулы, ачивки, награды ── */
+/* Рамка с 5 уровня — outline, не спорит со свечением роли/VIP (box-shadow) */
+.lv-frame-5{outline:3px solid rgba(126,227,255,.85);outline-offset:5px}
+/* С 30 уровня — радужное кольцо; крутится только в «Мощном» режиме */
+.lv-frame-30{position:relative}
+.lv-frame-30::after{content:'';position:absolute;inset:-13px;border-radius:50%;padding:5px;pointer-events:none;filter:drop-shadow(0 0 6px rgba(255,209,102,.45));
+  background:conic-gradient(from 0deg,#ffd166,#7ee3ff,#c9a8ff,#ff9ecf,#ffd166);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude}
+body.high .lv-frame-30::after{animation:lvFrameSpin 6s linear infinite}
+@keyframes lvFrameSpin{to{transform:rotate(360deg)}}
+
+.nick-title{display:inline-block;margin-left:.35rem;padding:.05rem .45rem;border-radius:6px;font-size:.62rem;font-weight:700;
+  color:#ffd166;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.3);white-space:nowrap;vertical-align:middle}
+.nick-title[hidden]{display:none}
+.nick-title-lg{font-size:.7rem;margin-left:0}
+#miniProfileTitle{margin-left:0}
+
+.ach-summary{font-size:.66rem;font-weight:700;color:var(--muted);letter-spacing:0;text-transform:none}
+.ach-badge .ach-xp{font-size:.52rem;font-weight:800;color:#ffd166;opacity:.85}
+.ach-badge.locked .ach-xp{color:var(--muted)}
+.ach-badge.special{background:linear-gradient(160deg,var(--ac-18),rgba(145,71,255,.14));border:1px solid var(--ac-30)}
+.ach-badge.special .ach-title{color:#fff}
+
+.title-picker{margin-top:.9rem;padding-top:.8rem;border-top:1px solid var(--line);font-size:.78rem}
+.title-picker .tp-row{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap}
+.title-picker select{background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.35rem .5rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;max-width:100%}
+.title-picker .tp-lock{color:var(--muted);font-size:.74rem}
+.title-picker .tp-status{display:block;font-size:.7rem;min-height:1rem;margin-top:.3rem}
+
+.xp-rewards{display:flex;flex-direction:column;gap:.35rem;margin-top:.5rem}
+.xp-reward{display:grid;grid-template-columns:2.2rem 1.4rem 1fr auto;align-items:center;gap:.3rem;font-size:.74rem;color:var(--muted);
+  padding:.35rem .5rem;border-radius:8px;background:rgba(255,255,255,.03)}
+.xp-reward-lv{font-weight:800;color:var(--text);font-size:.72rem}
+.xp-reward.got{color:var(--text);background:rgba(34,197,94,.08)}
+.xp-reward.got b{color:#22c55e}
+.pv-lock{font-size:.66rem;color:#ffd166;font-weight:700;white-space:nowrap}
+

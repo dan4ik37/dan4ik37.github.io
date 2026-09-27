@@ -1529,6 +1529,7 @@ body.low .donation-alert-icon{animation:none}
           <span id="profileNick" style="font-size:1.3rem;font-weight:800"></span>
           <span id="profileRoleBadge"></span>
           <span id="profileVipBadge" style="display:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-size:.62rem;font-weight:800;padding:.15rem .5rem;border-radius:5px;letter-spacing:.5px">✨ VIP</span>
+          <span id="profileTitle" class="nick-title nick-title-lg" hidden></span>
           <button id="profileNickEditBtn" onclick="toggleNickEdit(true)" style="display:none;background:none;border:none;color:var(--tw);cursor:pointer;font-size:.7rem;font-weight:700">✎ Сменить ник</button>
         </div>
         <div id="profileNickEditWrap" style="display:none;margin-top:.4rem;gap:.4rem;max-width:260px">
@@ -1647,7 +1648,7 @@ body.low .donation-alert-icon{animation:none}
             <option value="all">От всех</option><option value="nobody">Ни от кого</option>
           </select></label>
         <label class="pv-row pv-check"><input type="checkbox" id="pvInvisible" onchange="savePrivacy('privacy_invisible', this.checked)">
-          <span>👻 Невидимка — не показывать меня в «Гостях профиля» у других</span></label>
+          <span>👻 Невидимка — не показывать меня в «Гостях профиля» у других <b id="pvInvisibleLock" class="pv-lock" hidden>🔒 с Silver VIP</b></span></label>
         <label class="pv-row pv-check"><input type="checkbox" id="pvDonations" onchange="savePrivacy('privacy_hide_donations', this.checked)">
           <span>💸 Скрыть сумму моих донатов — в профиле и в топе донатеров (значок VIP останется)</span></label>
         <div id="pvStatus" class="pv-status"></div>
@@ -1667,12 +1668,14 @@ body.low .donation-alert-icon{animation:none}
       </div>
       <div class="xp-week" id="pxWeek"></div>
       <details class="xp-help"><summary>Как получать XP</summary><div class="xp-rules" id="pxRules"></div></details>
+      <details class="xp-help"><summary>Что даёт уровень</summary><div class="xp-rewards" id="pxRewards"></div></details>
     </div>
 
     <!-- Ачивки — видны и на своём, и на чужом профиле -->
     <div id="profileAchievementsCard" class="pf-card pf-card-tw" style="margin-top:1rem">
-      <div class="pf-kicker" style="margin-bottom:.6rem">🏆 Ачивки</div>
+      <div class="pf-kicker" style="margin-bottom:.6rem;display:flex;justify-content:space-between;gap:.5rem">🏆 Ачивки <span id="profileAchSummary" class="ach-summary"></span></div>
       <div id="profileAchievements" class="ach-grid"></div>
+      <div id="profileTitlePicker" class="title-picker" hidden></div>
     </div>
 
     <!-- Реферальная ссылка — только на своём профиле -->
@@ -1690,7 +1693,7 @@ body.low .donation-alert-icon{animation:none}
     <div id="profileFriendsPanel" class="pf-card pf-card-tw" style="display:none;margin-top:1rem">
       <div class="pf-kicker" style="margin-bottom:.6rem">👥 Заявки в друзья</div>
       <div id="friendRequestsList" style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem"></div>
-      <div class="pf-kicker" style="margin-bottom:.6rem">Друзья</div>
+      <div class="pf-kicker" style="margin-bottom:.6rem;display:flex;justify-content:space-between;gap:.5rem">Друзья <span id="friendsLimitNote" class="ach-summary"></span></div>
       <div id="friendsList" style="display:flex;flex-direction:column;gap:.5rem"></div>
     </div>
 
@@ -1830,6 +1833,7 @@ body.low .donation-alert-icon{animation:none}
       <span id="miniProfileNick" style="font-weight:800;font-size:.9rem"></span>
       <span id="miniProfileVip" style="display:none">✨</span>
     </div>
+    <div id="miniProfileTitle" class="nick-title" hidden style="margin-top:.25rem"></div>
     <div id="miniProfileRoleBadge" style="margin-top:.2rem"></div>
     <div id="miniProfileStatus" style="font-size:.72rem;color:var(--muted);font-style:italic;margin-top:.3rem"></div>
     <p id="miniProfileBio" style="font-size:.75rem;color:var(--muted);margin-top:.5rem;line-height:1.5"></p>
