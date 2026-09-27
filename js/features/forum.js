@@ -37,6 +37,19 @@ async function renderForumPage(threadId){
   }
 }
 
+// author_id в forum_threads/forum_posts ссылается на auth.users, а не на profiles
+// (см. forum.sql) — поэтому встроенный select('*, profiles(...)') падает с
+// «Could not find a relationship». Профили авторов подтягиваем вторым запросом.
+const FORUM_PROFILE_COLS = 'id, nick, role, is_vip, vip_until, total_donated';
+async function attachForumProfiles(rows){
+  const ids = [...new Set((rows || []).map(r => r.author_id).filter(Boolean))];
+  if (!ids.length) return rows || [];
+  const { data } = await sbClient.from('profiles').select(FORUM_PROFILE_COLS).in('id', ids);
+  const byId = Object.fromEntries((data || []).map(p => [p.id, p]));
+  (rows || []).forEach(r => { r.profiles = byId[r.author_id] || null; });
+  return rows;
+}
+
 async function loadForumThreads(){
   const statusEl = document.getElementById('forumThreadsStatus');
   const listEl = document.getElementById('forumThreadsList');
@@ -45,12 +58,13 @@ async function loadForumThreads(){
   try {
     const { data: threads, error } = await sbClient
       .from('forum_threads')
-      .select('*, profiles(nick, role, is_vip, vip_until, total_donated), forum_posts(count)')
+      .select('*, forum_posts(count)')
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
     if (!threads || !threads.length) { statusEl.textContent = 'Пока нет ни одной темы — стань первым!'; return; }
+    await attachForumProfiles(threads);
     statusEl.textContent = '';
     listEl.innerHTML = threads.map(t => {
       const nick = t.profiles?.nick || '?';
@@ -79,8 +93,9 @@ async function loadForumThread(id){
   headerEl.innerHTML = 'Загружаем...'; postsEl.innerHTML = '';
   try {
     const { data: thread, error: tErr } = await sbClient
-      .from('forum_threads').select('*, profiles(nick, role, is_vip, vip_until, total_donated)').eq('id', id).single();
+      .from('forum_threads').select('*').eq('id', id).single();
     if (tErr || !thread) throw tErr || new Error('Тема не найдена');
+    await attachForumProfiles([thread]);
 
     const isAdmin = currentRole === 'admin';
     const canModerate = currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
@@ -100,8 +115,9 @@ async function loadForumThread(id){
       </div>`;
 
     const { data: posts, error: pErr } = await sbClient
-      .from('forum_posts').select('*, profiles(nick, role, is_vip, vip_until, total_donated)').eq('thread_id', id).order('created_at', { ascending: true });
+      .from('forum_posts').select('*').eq('thread_id', id).order('created_at', { ascending: true });
     if (pErr) throw pErr;
+    await attachForumProfiles(posts);
 
     postsEl.innerHTML = (posts || []).map(p => {
       const nickHtml = renderNickWithVip(p.profiles?.nick || '?', p.profiles, ROLE_BADGE_HTML[p.profiles?.role] || '');
