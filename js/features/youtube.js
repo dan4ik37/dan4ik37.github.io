@@ -167,6 +167,10 @@ function changeVidCount(val, btn) {
   if (allVids.length) renderCurrentVids();
 }
 
+let ytLoadPromise = null;
+// Один запуск на страницу: и главная, и Shorts ждут одни и те же данные
+function ensureYT(){ return ytLoadPromise || (ytLoadPromise = loadYT()); }
+
 async function loadYT(){
   showLoader();
   let cached=loadCache();
@@ -180,6 +184,7 @@ async function loadYT(){
       renderFeatured(newestVids[0]);
       renderCurrentVids();
       statsLoaded();
+      if(typeof onVideosLoaded==='function') onVideosLoaded();
       // Кэш свежий (< CACHE_TTL) — не тратим квоту YouTube API повторно
       return;
     }
@@ -215,10 +220,12 @@ async function loadYT(){
     saveCache({vids:rawVids,stats:st});
     renderFeatured(newestVids[0]);
     renderCurrentVids();
+    if(typeof onVideosLoaded==='function') onVideosLoaded();
   }catch(err){
     console.warn('YT:',err.message);
     statsError();
     if(!cached)showFallback();
+    if(typeof onVideosLoaded==='function') onVideosLoaded();
   }
 }
 

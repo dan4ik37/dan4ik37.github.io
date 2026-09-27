@@ -1174,3 +1174,94 @@ a.vtitle:hover{color:#fff;text-decoration:underline;text-decoration-color:rgba(2
 .modal-act:hover{background:rgba(255,255,255,.1)}
 .modal-act-yt{background:linear-gradient(135deg,#ff4040,#d90429);border-color:transparent}
 .modal-act-yt:hover{background:linear-gradient(135deg,#ff5555,#e0102f)}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SHORTS — ряд на главной и вертикальная лента (js/features/shorts.js)
+   ═══════════════════════════════════════════════════════════════════ */
+body.no-shorts [data-route="shorts"]{display:none!important}
+
+/* ── Ряд превью на главной ── */
+.sh-row{margin-bottom:3rem}
+.sh-row[hidden]{display:none}
+.sh-row-head{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1.2rem}
+.sh-row-head .sec-title{margin-bottom:0}
+.sh-row-all{font-size:.78rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--accent);white-space:nowrap}
+.sh-row-track{
+  display:grid;grid-auto-flow:column;grid-auto-columns:minmax(150px,170px);gap:.9rem;
+  overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:.6rem;scrollbar-width:thin;
+}
+.sh-card{
+  position:relative;display:block;aspect-ratio:9/16;border-radius:16px;overflow:hidden;scroll-snap-align:start;
+  background:#0b0b12;border:1px solid var(--line);transition:transform .35s var(--ease-out),border-color .3s,box-shadow .35s;
+}
+.sh-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.sh-card::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.85))}
+.sh-card:hover{transform:translateY(-4px);border-color:rgba(255,64,64,.55);box-shadow:0 20px 40px -20px rgba(255,64,64,.7)}
+.sh-card-title{
+  position:absolute;left:.7rem;right:.7rem;bottom:1.9rem;z-index:1;font-size:.76rem;font-weight:800;line-height:1.3;color:#fff;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+}
+.sh-card-views{position:absolute;left:.7rem;bottom:.6rem;z-index:1;font-size:.68rem;font-weight:700;color:rgba(255,255,255,.75)}
+
+/* ── Лента ── */
+.shorts-page{position:relative;z-index:1;padding-top:var(--sh-top,64px)}
+body[data-route="shorts"] footer,body[data-route="shorts"] #donateFab,body[data-route="shorts"] #scrollTop{display:none!important}
+.sh-feed{
+  height:calc(100vh - 64px);overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain;
+  scrollbar-width:none;outline:none;
+}
+.sh-feed::-webkit-scrollbar{display:none}
+.sh-item{
+  position:relative;height:100%;scroll-snap-align:start;scroll-snap-stop:always;
+  display:flex;align-items:center;justify-content:center;gap:1rem;padding:.8rem 0;
+}
+.sh-frame{
+  position:relative;height:100%;aspect-ratio:9/16;max-width:100%;border-radius:18px;overflow:hidden;
+  background:#000;border:1px solid var(--line);box-shadow:0 30px 70px -30px rgba(0,0,0,.95);
+}
+.sh-thumb{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:brightness(.8)}
+.sh-player{position:absolute;inset:0;z-index:1}
+.sh-player iframe{width:100%;height:100%;border:0}
+.sh-info{
+  position:absolute;left:0;right:0;bottom:0;z-index:2;padding:3rem 1rem 1rem;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.8));
+}
+/* Пока играет — информация не перекрывает нижние контролы YouTube */
+.sh-item.is-active .sh-info{opacity:0;transition:opacity .4s 2.5s}
+.sh-item.is-active .sh-frame:hover .sh-info{opacity:1;transition-delay:0s}
+.sh-title{font-size:.9rem;font-weight:800;line-height:1.35;color:#fff;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.sh-meta{margin-top:.3rem;font-size:.72rem;color:rgba(255,255,255,.7)}
+.sh-sub{
+  pointer-events:auto;display:inline-flex;margin-top:.7rem;padding:.5rem .9rem;border-radius:10px;
+  font-size:.72rem;font-weight:800;color:#fff;background:linear-gradient(135deg,#ff4040,#d90429);
+}
+.sh-side{display:flex;flex-direction:column;gap:.8rem;align-self:flex-end;margin-bottom:1rem}
+.sh-btn{
+  display:flex;flex-direction:column;align-items:center;gap:.2rem;width:54px;padding:.55rem 0;border-radius:16px;cursor:pointer;
+  font:inherit;color:#fff;text-decoration:none;background:rgba(255,255,255,.07);border:1px solid var(--line-hi);
+  transition:background .2s,transform .2s;
+}
+.sh-btn span{font-size:1.3rem;line-height:1}
+.sh-btn small{font-size:.6rem;font-weight:700;color:rgba(255,255,255,.75)}
+.sh-btn:hover{background:rgba(255,255,255,.14);transform:scale(1.06)}
+/* Звук выключен — кнопка звука заметная, это главное действие */
+.sh-feed.is-muted .sh-sound{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+body.high .sh-feed.is-muted .sh-item.is-active .sh-sound{animation:pillPulse 2s ease-out infinite;color:var(--ac-55)}
+
+.sh-end-box,.sh-empty{
+  display:flex;flex-direction:column;align-items:center;gap:.8rem;text-align:center;max-width:360px;padding:2rem;
+}
+.sh-end-box span{font-size:.85rem;color:var(--muted)}
+.sh-empty{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%)}
+.sh-empty[hidden]{display:none}
+.sh-empty-ic{font-size:2.6rem}
+
+/* Телефон: ролик на всю ширину, кнопки поверх справа */
+@media(max-width:640px){
+  .sh-item{padding:0;gap:0}
+  .sh-frame{width:100%;height:100%;aspect-ratio:auto;border-radius:0;border:0}
+  .sh-side{position:absolute;right:.6rem;bottom:5.5rem;z-index:3;margin:0}
+  .sh-btn{width:48px;background:rgba(0,0,0,.45);backdrop-filter:blur(6px)}
+  .sh-info{padding-right:4.5rem}
+  .sh-row-track{grid-auto-columns:minmax(130px,42vw)}
+}

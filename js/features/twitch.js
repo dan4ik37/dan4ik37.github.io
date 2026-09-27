@@ -18,7 +18,7 @@ let twLive = null; // true / false / null (неизвестно)
 function initHomeMedia(){
   if (homeMediaLoaded) return;
   homeMediaLoaded = true;
-  loadYT();
+  ensureYT();
   checkTwitchLive();
   // Эфир мог начаться, пока вкладка открыта
   setInterval(checkTwitchLive, 3 * 60 * 1000);

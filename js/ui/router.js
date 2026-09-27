@@ -15,6 +15,7 @@ const PAGES = {
   clicker:    ['clicker'],
   chat:       ['chat'],
   profile:    ['profile-page'],
+  shorts:     ['shorts-page'],
   forum:      ['forum-page'],
   lfg:        ['lfg-page'],
   ads:        ['ad-bottom','ads']
@@ -48,7 +49,9 @@ function showPage(route){
 
 function finishShowPage(route, activeIds){
   // Твич-плеер и loadYT() — только когда реально открыта #/home (см. initHomeMedia)
+  document.body.dataset.route = route;
   if (route==='home') initHomeMedia();
+  if (typeof onShortsRoute==='function') onShortsRoute(route==='shorts');
   if (typeof fillVisibleAds==='function') fillVisibleAds();
   if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
   if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
@@ -65,7 +68,7 @@ function finishShowPage(route, activeIds){
     a.classList.toggle('active-route', a.dataset.route===route);
   });
   // Нижний таб-бар (мобиле): подсвечиваем Видео/Чат/Донат, либо "Ещё" для остальных страниц
-  const tabRoutes = ['home','chat','donate'];
+  const tabRoutes = ['home','chat','shorts'];
   document.querySelectorAll('.bt-item[data-route]').forEach(a=>{
     a.classList.toggle('active-route', a.dataset.route===route);
   });
