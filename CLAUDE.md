@@ -30,6 +30,9 @@
   общий код — `api/_lib/yt.js`). Локально проверять вызовом handler'а из node.
 - AdSense: ID блоков — `AD_SLOTS` в `config.js`, загрузка — `js/features/ads.js` (только видимые блоки).
 - Событие `d37:auth` — после входа (роль уже загружена) и выхода.
+- Уведомления 🔔: `notifications.sql` (создают только триггеры, `notify()`), `js/features/notifications.js`
+  (Realtime по `user_id`, опрос раз в 90 с, счётчик в заголовке вкладки). Скрыты, пока SQL не выполнен.
+- Защита опросов/реакций: `polls-reactions-secure.sql` (user_id; до запуска — фолбэк на старое поведение).
 - `body[data-route]` — текущий раздел (для CSS).
 - YouTube API: ключ в `js/core/config.js`, кэш 15 мин в localStorage (`dan4ik37_cache_v2`) — при свежем кэше
   запросов к API нет. Квота 10 000/сутки; `search` стоит 100 единиц — не использовать его на каждом заходе.
@@ -42,7 +45,7 @@
 `message_reactions` (message_id, emoji, nick; unique по тройке), `custom_emoji` + бакет `emoji`.
 Изначально insert в messages/poll_votes/message_reactions открыт всем (`with check (true)`); роль/ник в messages потом
 закрыты триггером `messages_enforce_status` (vip-balance.sql), роль в profiles — `prevent_self_role_escalation`.
-Голоса в опросах и удаление реакций до сих пор защищены только на клиенте.
+Голоса в опросах и реакции закрыты в polls-reactions-secure.sql.
 
 ## Не путать
 В корне репозитория лежит ещё отдельный Electron-проект «VTuber VRM Player» (`main.js`, `preload.js`,
