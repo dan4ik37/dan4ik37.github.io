@@ -79,6 +79,7 @@ async function onAuthStateChange(user) {
     currentRole = data.role || 'user';
   }
   if (typeof applyThemeAccent === 'function') applyThemeAccent(currentProfile);
+  if (typeof recordTodayVisit === 'function') recordTodayVisit();
 
   if (typeof subscribeDmRealtime === 'function') subscribeDmRealtime();
   if (typeof updateDmUnreadBadge === 'function') updateDmUnreadBadge();

@@ -267,6 +267,15 @@ body.high .avatar{filter:drop-shadow(0 0 20px rgba(255,45,85,.4))}
 .profile-stat-card{opacity:0;animation:profileStatIn .5s ease both;transition:transform .25s ease,border-color .25s ease}
 .profile-stat-card:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.18)}
 .profile-badge-pop{animation:badgePopIn .45s cubic-bezier(.34,1.56,.64,1) both;display:inline-block}
+/* ── Сетка ачивок ── */
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:.6rem}
+.ach-badge{display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.6rem .3rem;border-radius:12px;text-align:center;transition:transform .2s}
+.ach-badge.earned{background:rgba(255,217,61,.08);border:1px solid rgba(255,217,61,.25)}
+.ach-badge.earned:hover{transform:translateY(-3px)}
+.ach-badge.locked{opacity:.32;filter:grayscale(1)}
+.ach-badge .ach-icon{font-size:1.5rem;line-height:1}
+.ach-badge .ach-title{font-size:.58rem;font-weight:700;color:var(--muted);line-height:1.2}
+.ach-badge.earned .ach-title{color:var(--text)}
 /* Плавное появление карточек в списках (форум, тиммейты) — та же
    анимация, что у статистики профиля, с небольшим сдвигом по порядку */
 .card-fade-in{opacity:0;animation:profileStatIn .4s ease both}
@@ -1516,6 +1525,11 @@ body.low .donation-alert-icon{animation:none}
         <div id="profileStatReferrals" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
         <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Рефералов</div>
       </div>
+      <div class="profile-stat-card" style="animation-delay:.38s">
+        <div style="font-size:1.25rem">🔥</div>
+        <div id="profileStatStreak" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
+        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Дней подряд</div>
+      </div>
     </div>
 
     <div id="profileAboutCard" class="pf-card pf-card-accent" style="margin-top:1.5rem">
@@ -1556,6 +1570,12 @@ body.low .donation-alert-icon{animation:none}
         <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на стримы</button>
         <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
       </div>
+    </div>
+
+    <!-- Ачивки — видны и на своём, и на чужом профиле -->
+    <div class="pf-card pf-card-tw" style="margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.6rem">🏆 Ачивки</div>
+      <div id="profileAchievements" class="ach-grid"></div>
     </div>
 
     <!-- Реферальная ссылка — только на своём профиле -->
@@ -2300,6 +2320,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/youtube.js"></script>
 <script src="js/ui/modal.js"></script>
 <script src="js/features/chat.js"></script>
+<script src="js/features/achievements.js"></script>
 <script src="js/features/global-auth.js"></script>
 <script src="js/features/profile.js"></script>
 <script src="js/features/forum.js"></script>
