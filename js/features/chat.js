@@ -70,6 +70,12 @@ function initSupabase() {
 // одной кнопки и полностью дублировал глобальный вход. Удалён.)
 
 
+// Запасной ник, если в профиле ника нет. НЕ из email: раньше тут было
+// user.email.split('@')[0] — и начало почты светилось всем в чате и в шапке.
+function fallbackNick(user){
+  return 'user_' + String(user?.id || '').replace(/-/g, '').slice(0, 6);
+}
+
 async function onAuthStateChange(user) {
   if (!user) return;
   currentUser = user;
@@ -104,14 +110,14 @@ async function onAuthStateChange(user) {
   // Ник в чате = ник профиля для ЛЮБОГО вошедшего аккаунта (не только
   // admin/moderator) — иначе зарегистрированный обычный пользователь
   // видел бы экран "придумай ник гостя", хотя уже вошёл в аккаунт.
-  chatNick = data?.nick || user.email.split('@')[0];
+  chatNick = data?.nick || fallbackNick(user);
   try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
   showChatInput();
 
   if (currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper') {
     const roleLabel = currentRole === 'admin' ? '👑 Администратор' : currentRole === 'moderator' ? '🛡 Модератор' : '🧹 Хелпер';
     document.getElementById('modPanelRole').textContent = roleLabel;
-    document.getElementById('modPanelNick').textContent = data?.nick || user.email;
+    document.getElementById('modPanelNick').textContent = data?.nick || fallbackNick(user);
     document.getElementById('chatModPanel').style.display = 'flex';
     document.getElementById('chatAuthBtn').style.display = 'none';
     // helper видит только кнопку удаления (см. CSS .is-helper), у

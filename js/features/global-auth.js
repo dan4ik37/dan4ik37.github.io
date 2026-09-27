@@ -167,7 +167,11 @@ async function doGlobalRegister() {
 
   try {
     if (!sbClient) throw new Error('Нет подключения к БД');
-    const { data, error } = await sbClient.auth.signUp({ email, password: pass });
+    // Код пригласившего (?ref=, см. captureReferralCode) — в raw_user_meta_data,
+    // его читает handle_new_user() из referrals.sql. Раньше не передавался вовсе.
+    let ref = '';
+    try { ref = localStorage.getItem('d37_ref') || ''; } catch(e) {}
+    const { data, error } = await sbClient.auth.signUp({ email, password: pass, options: ref ? { data: { ref } } : undefined });
     if (error) throw error;
 
     if (data.session && data.user) {
@@ -264,7 +268,7 @@ function updateGlobalAuthBtn() {
     label.textContent = 'Войти';
     return;
   }
-  const nick = currentProfile?.nick || currentUser.email?.split('@')[0] || 'User';
+  const nick = currentProfile?.nick || fallbackNick(currentUser);
   icon.textContent = currentRole === 'admin' ? '👑' : currentRole === 'moderator' ? '🛡' : currentRole === 'helper' ? '🧹' : '👤';
   label.textContent = nick;
   btn.className = `global-auth-btn ${currentRole === 'admin' ? 'is-admin' : currentRole === 'moderator' ? 'is-mod' : currentRole === 'helper' ? 'is-helper' : 'logged-in'}`;

@@ -1137,3 +1137,27 @@ body.is-authed .cm-join{display:none}
 
 /* Рекламный блок без ID из AD_SLOTS (config.js) — не показываем пустое место */
 .ad-empty{display:none!important}
+
+/* «Кто такой dan4ik37»: 4 карточки — 4 → 2 → 1, без «сироты» 3+1 */
+.about-grid{grid-template-columns:repeat(2,1fr)}
+@media(min-width:1000px){.about-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:480px){.about-grid{grid-template-columns:1fr}}
+
+/* Панель администратора в профиле: свёрнута по умолчанию и не кричит.
+   Стили только внутри #profileAdminPanel — .profile-admin-btn ещё и на форуме. */
+.pf-admin{padding:0!important;background:rgba(255,255,255,.02)!important;border:1px solid var(--line)!important}
+.pf-admin-summary{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.95rem 1.2rem;cursor:pointer;
+  list-style:none;font-size:.82rem;font-weight:800;color:rgba(240,240,248,.8);user-select:none;
+}
+.pf-admin-summary::-webkit-details-marker{display:none}
+.pf-admin-summary::after{content:'▾';font-size:.8rem;color:var(--muted);transition:transform .25s}
+.pf-admin-details[open] .pf-admin-summary::after{transform:rotate(180deg)}
+.pf-admin-hint{margin-left:auto;font-size:.7rem;font-weight:600;color:var(--muted)}
+.pf-admin-summary:hover{color:#fff}
+.pf-admin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem;padding:0 1.2rem 1.2rem}
+#profileAdminPanel .profile-admin-btn{
+  border:1px solid var(--line-hi);background:transparent;color:rgba(240,240,248,.82);
+  box-shadow:none;font-weight:600;
+}
+#profileAdminPanel .profile-admin-btn:hover{border-color:var(--ac-55);background:var(--ac-10);color:#fff;transform:none;box-shadow:none}

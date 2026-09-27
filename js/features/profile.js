@@ -12,12 +12,11 @@ let profileViewedId = null; // чей профиль сейчас открыт (
 let profileEmailRaw = '';
 let profileEmailVisible = false;
 
-// dan.ivanov@mail.ru → da••••••@mail.ru — стример может показывать
-// профиль на стриме, почта по умолчанию скрыта даже от него самого.
+// Стример может показывать профиль на стриме — почта по умолчанию скрыта
+// ПОЛНОСТЬЮ (даже первые буквы и домен помогают угадать адрес).
+// Показать целиком — кнопкой 👁.
 function maskEmail(email){
-  const at = email.indexOf('@');
-  if (at < 2) return email;
-  return email.slice(0, 2) + '•'.repeat(Math.max(at - 2, 3)) + email.slice(at);
+  return '•••••••• (скрыта)';
 }
 function renderProfileEmailMask(){
   const el = document.getElementById('profileEmail');

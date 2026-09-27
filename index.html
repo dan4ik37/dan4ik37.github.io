@@ -1711,15 +1711,17 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <!-- Панель админа — только на своём профиле -->
-    <div id="profileAdminPanel" class="pf-card pf-card-danger" style="display:none;margin-top:1rem">
-      <div class="pf-kicker" style="color:var(--accent);margin-bottom:.9rem">👑 Панель администратора</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.6rem">
+    <div id="profileAdminPanel" class="pf-card pf-admin" style="display:none;margin-top:1rem">
+      <details class="pf-admin-details">
+      <summary class="pf-admin-summary"><span>👑 Панель администратора</span><span class="pf-admin-hint">инструменты сайта</span></summary>
+      <div class="pf-admin-grid">
         <button onclick="openSettingsAdmin()" class="profile-admin-btn">⚙ Настройки сайта</button>
         <button onclick="openPollAdmin()" class="profile-admin-btn">🗳️ Опросы</button>
         <button onclick="document.getElementById('roleSearchInput')?.focus();openSettingsAdmin()" class="profile-admin-btn">👥 Роли и VIP</button>
         <a href="#/donate" class="profile-admin-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center">💝 Донаты и цель</a>
         <button onclick="openDonationLog()" class="profile-admin-btn">📋 Лог донатов/VIP</button>
       </div>
+      </details>
     </div>
 
     <!-- Панель модератора/хелпера — только на своём профиле -->
