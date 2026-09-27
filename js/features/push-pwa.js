@@ -87,7 +87,7 @@ async function togglePush() {
     // Приветствие приходит с сервера — заодно проверка, что вся цепочка работает
     fetch('/api/push-check?test=1', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint })
-    }).catch(() => {});
+    }).then(r => r.text()).then(t => console.info('push welcome:', t)).catch(e => console.warn('push welcome:', e));
   } catch (e) {
     console.warn('push:', e);
     alert('Не получилось включить уведомления. Попробуй ещё раз чуть позже.');

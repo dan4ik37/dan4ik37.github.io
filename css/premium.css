@@ -37,6 +37,9 @@
   --tg-18:color-mix(in srgb,var(--tg) 18%,transparent);
 }
 ::selection{background:var(--ac-55);color:#fff}
+/* Раскрытый список <select> рисует система — без этого на Windows он белый */
+select{color-scheme:dark}
+select option,select optgroup{background:var(--bg2);color:var(--text)}
 html{scroll-padding-top:5rem}
 
 /* Единый вид всех display-заголовков: Bebas для латиницы, Oswald для
