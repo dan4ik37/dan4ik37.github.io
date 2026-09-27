@@ -51,6 +51,37 @@ function formatYtDuration(iso){
 //  без выдуманных процентов: реального API прогресса воспроизведения
 //  на сайте нет.
 // ═══════════════════════════════════════
+// ═══════════════════════════════════════
+//  «НОВОЕ С ПРОШЛОГО ВИЗИТА»
+//  lastSeenTs — время публикации самого свежего ролика, который человек уже видел
+//  в прошлый раз. Всё, что новее, — NEW (метки держатся весь текущий визит).
+//  Первый визит — меток нет (иначе «новым» было бы всё).
+// ═══════════════════════════════════════
+let lastSeenTs = null;
+try { const v = localStorage.getItem('d37_seen_ts'); if (v) lastSeenTs = +v; } catch(e){}
+function isNewVid(v){ return lastSeenTs != null && (v.ts || 0) > lastSeenTs; }
+function updateNewBadges(){
+  const n = lastSeenTs == null ? 0 : newestVids.filter(isNewVid).length;
+  const c = document.getElementById('navNewCount'), d = document.getElementById('btNewDot');
+  if (c) { c.hidden = !n; c.textContent = n > 9 ? '9+' : n; c.title = n ? `Новых видео с прошлого визита: ${n}` : ''; }
+  if (d) d.hidden = !n;
+}
+// Запоминаем «видел всё до этого момента» — но только когда реально открыта главная
+function markVideosSeen(){
+  if (!newestVids.length) return;
+  const maxTs = Math.max(...newestVids.map(v => v.ts || 0));
+  try { localStorage.setItem('d37_seen_ts', String(maxTs)); } catch(e){}
+  // Главную открыли — счётчик в меню больше не нужен (метки NEW на карточках остаются до конца визита)
+  const c = document.getElementById('navNewCount'), d = document.getElementById('btNewDot');
+  if (c) c.hidden = true;
+  if (d) d.hidden = true;
+}
+window.addEventListener('d37:videos', () => {
+  updateNewBadges();
+  if (document.body.dataset.route === 'home') markVideosSeen();
+});
+window.addEventListener('hashchange', () => { if ((location.hash || '#/home').startsWith('#/home')) markVideosSeen(); });
+
 let watchedIds = new Set();
 try{ watchedIds = new Set(JSON.parse(localStorage.getItem('d37_watched')||'[]')); }catch(e){}
 function markVidWatched(id){
@@ -192,6 +223,7 @@ async function loadYT(){
       renderCurrentVids();
       statsLoaded();
       if(typeof onVideosLoaded==='function') onVideosLoaded();
+      window.dispatchEvent(new Event('d37:videos'));
       // Кэш свежий (< CACHE_TTL) — не тратим квоту YouTube API повторно
       return;
     }
@@ -241,6 +273,7 @@ async function loadYT(){
     renderFeatured(longVids()[0]);
     renderCurrentVids();
     if(typeof onVideosLoaded==='function') onVideosLoaded();
+    window.dispatchEvent(new Event('d37:videos'));
   }catch(err){
     console.warn('YT:',err.message);
     statsError();
@@ -299,6 +332,7 @@ function renderVids(vids){
       <div class="vthumb">
         ${v.thumb?`<img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy">`:'<div class="vthumb-ph">▶</div>'}
         <div class="pdot pd-yt">YT</div>
+        ${isNewVid(v)&&!watched?'<div class="vnew">NEW</div>':''}
         ${v.duration?`<div class="vduration">${v.duration}</div>`:''}
         ${watched?'<div class="vwatched" title="Просмотрено">✓ Просмотрено</div>':''}
         <div class="play-ov"><div class="play-circle">▶</div></div>
@@ -350,3 +384,7 @@ function toggleLike(e,id,btn){
   }
   try{localStorage.setItem('d37_liked',JSON.stringify([...likedIds]))}catch(e){}
 }
+
+// Зашли сразу в чат/форум — через пару секунд тихо подгружаем ролики (обычно из кэша),
+// чтобы на «Видео» появился счётчик новых с прошлого визита
+setTimeout(() => { if (typeof ensureYT === 'function' && !newestVids.length) ensureYT(); }, 6000);

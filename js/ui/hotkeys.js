@@ -55,7 +55,10 @@ function collectCmdPaletteItems(){
     const route = a.dataset.route;
     if(seen.has(route)) return;
     seen.add(route);
-    const label = a.textContent.trim().replace(/\s+/g,' ');
+    // Без счётчиков-значков внутри ссылки (новые видео, непрочитанные) — иначе «Видео9+»
+    const c = a.cloneNode(true);
+    c.querySelectorAll('.chat-badge,.new-count').forEach(b=>b.remove());
+    const label = c.textContent.trim().replace(/\s+/g,' ');
     if(label) items.push({route, label});
   });
   return items;

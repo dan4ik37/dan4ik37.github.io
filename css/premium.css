@@ -1457,3 +1457,21 @@ body.no-xp .lv-badge,body.no-xp #profileXpCard,body.no-xp #xpTopWeek{display:non
   .sh-row-play{margin-left:0;flex:1;text-align:center}
   .sh-row-track{grid-auto-columns:minmax(120px,36vw)}
 }
+
+/* «Новое с прошлого визита»: счётчик на «Видео», точка в таб-баре, метка NEW на карточках */
+.new-count{
+  display:inline-grid;place-items:center;min-width:17px;height:17px;margin-left:.35rem;padding:0 .3rem;border-radius:999px;
+  font-size:.6rem;font-weight:800;line-height:1;color:#fff;background:var(--yt);vertical-align:1px;box-shadow:0 0 10px rgba(255,64,64,.6);
+}
+.new-count[hidden],.new-dot[hidden]{display:none}
+.new-dot{position:absolute;top:-2px;right:-7px;width:8px;height:8px;border-radius:50%;background:var(--yt);box-shadow:0 0 8px var(--yt)}
+.vnew{
+  position:absolute;left:.55rem;top:.55rem;z-index:3;padding:.15rem .45rem;border-radius:6px;
+  font-size:.6rem;font-weight:900;letter-spacing:.08em;color:#fff;background:linear-gradient(135deg,#ff4040,#d90429);
+  box-shadow:0 4px 14px -4px rgba(255,64,64,.9);
+}
+body.high .vnew{animation:pillPulse 2.4s ease-out infinite;color:#fff}
+
+/* Подвал: вторая строка — разделы сайта */
+.footer-site{margin-top:.6rem;opacity:.75}
+.footer-site a{font-size:.72rem}

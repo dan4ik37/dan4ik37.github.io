@@ -8,6 +8,7 @@ export default async function handler(req, res) {
 
   const urls = [
     `<url><loc>${SITE}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+    `<url><loc>${SITE}/privacy</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>`,
     ...vids.map(v => `<url><loc>${SITE}/v/${esc(v.id)}</loc><lastmod>${esc(String(v.publishedAt).slice(0, 10))}</lastmod><priority>0.7</priority></url>`)
   ];
 

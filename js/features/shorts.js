@@ -56,6 +56,7 @@ function renderShortsRow(){
   track.innerHTML = shortsList.slice(0, 16).map(v => `
     <a class="sh-card" href="#/shorts/${v.id}">
       <span class="sh-card-play" aria-hidden="true">▶</span>
+      ${typeof isNewVid === 'function' && isNewVid(v) ? '<span class="vnew">NEW</span>' : ''}
       <img src="https://i.ytimg.com/vi/${v.id}/oardefault.jpg" alt="${esc(v.title)}" loading="lazy"
            onload="shThumbCheck(this,'${v.id}')" onerror="shThumbFallback(this,'${v.id}')">
       <span class="sh-card-title">${esc(v.title.replace(/#\S+/g, '').trim() || v.title)}</span>
