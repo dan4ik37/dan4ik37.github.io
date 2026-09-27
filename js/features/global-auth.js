@@ -214,6 +214,7 @@ async function doGlobalRegister() {
 async function doGlobalLogout() {
   if (sbClient) await sbClient.auth.signOut();
   currentUser = null; currentRole = null; currentProfile = null;
+  document.body.classList.remove('is-authed');
   if (typeof applyThemeAccent === 'function') applyThemeAccent(null);
 
   // Живые алерты о донате имеют смысл только в сессии админа — закрываем

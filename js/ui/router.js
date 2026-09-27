@@ -7,7 +7,7 @@
 // JS-переменные не сбрасываются при переходах, а в адресной строке при
 // этом появляется свой #/route на каждый раздел (можно скинуть ссылкой).
 const PAGES = {
-  home:       ['hero','ad-top','stats','ad-mid','content'],
+  home:       ['hero','content','ad-mid','community','ad-top'],
   about:      ['about','schedule','socials'],
   donate:     ['donate','goalbar','leaderboard'],
   poll:       ['poll'],

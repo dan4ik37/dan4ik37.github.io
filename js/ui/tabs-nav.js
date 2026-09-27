@@ -21,21 +21,3 @@ function playSelected(){
   mp.innerHTML=`<div class="mp-bar"><span>▶ ${ids.length} видео</span><button class="mp-close" onclick="this.closest('#multiPlayer').style.display='none';this.closest('#multiPlayer').innerHTML=''">✕ Закрыть</button></div><div class="mp-grid">${ids.map(id=>{const v=allVids.find(x=>x.id===id);return`<div class="mp-item"><div class="mp-ratio"><iframe src="https://www.youtube.com/embed/${id}?rel=0" allowfullscreen allow="encrypted-media"></iframe></div><div class="mp-title">${esc(v?.title||id)}</div></div>`}).join('')}</div>`;
   mp.style.display='block';mp.scrollIntoView({behavior:'smooth'});cancelSel();
 }
-
-// ═══════════════════════════════════════
-//  TABS
-// ═══════════════════════════════════════
-const tabMap={yt:'a-yt',tw:'a-tw'};
-function switchTab(p,btn){
-  document.querySelectorAll('.tab').forEach(t=>t.className='tab');
-  btn.classList.add(tabMap[p]||'a-yt');
-  document.querySelectorAll('.panel').forEach(el=>el.classList.remove('active'));
-  document.getElementById('panel-'+p).classList.add('active');
-  const sb=document.getElementById('shuffleBtn');
-  sb.style.opacity=p==='yt'?'1':'0.3';
-  sb.style.pointerEvents=p==='yt'?'auto':'none';
-  if(p==='tw'){
-    const fr=document.getElementById('twitchFrame');
-    if(!fr.src) fr.src=`https://player.twitch.tv/?channel=${TWITCH}&parent=${HOST}&autoplay=false`;
-  }
-}

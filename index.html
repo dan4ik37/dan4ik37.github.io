@@ -1138,6 +1138,10 @@ body.low .donation-alert-icon{animation:none}
   <div class="hero-spot" aria-hidden="true"></div>
   <div class="hero-floor" aria-hidden="true"><div class="hero-floor-plane"><div class="hero-floor-grid"></div></div></div>
 
+  <!-- Две колонки на широких экранах: слева бренд + кнопки, справа свежее видео и цифры канала.
+       На узких — одна колонка, видео идёт сразу под кнопками. -->
+  <div class="hero-inner">
+  <div class="hero-main">
   <!-- Ближайший эфир (считается из блока «Когда стримим?», см. fx.js) -->
   <a class="hero-pill hx" id="heroPill" href="#/about" style="--d:.05s" hidden>
     <span class="pill-dot" aria-hidden="true"></span>
@@ -1170,7 +1174,7 @@ body.low .donation-alert-icon{animation:none}
   <p class="hero-desc hx" style="--d:.65s">Привет! Я dan4ik37 — делаю видосы, стримлю и общаюсь с людьми. Подписывайся, чтобы не пропустить!</p>
 
   <div class="hero-cta hx" style="--d:.75s">
-    <a class="hero-btn is-yt magnetic"  href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener"><span class="hb-ic">▶</span>Смотреть на YouTube</a>
+    <a class="hero-btn is-yt magnetic"  href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener"><span class="hb-ic">▶</span>Подписаться на YouTube</a>
     <a class="hero-btn is-tw magnetic"  href="https://www.twitch.tv/dan4ik37"      target="_blank" rel="noopener"><span class="hb-ic">◉</span>Twitch</a>
     <a class="hero-btn is-don magnetic" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" rel="noopener"><span class="hb-ic">💝</span>Донат</a>
   </div>
@@ -1180,6 +1184,31 @@ body.low .donation-alert-icon{animation:none}
     <a class="chip" style="--cc:#5bc4ff"    href="https://m.vkvideo.ru/@dan4ik37"       target="_blank" rel="noopener"><span class="ic">▶</span>VK Видео</a>
     <a class="chip" style="--cc:var(--tg)"  href="https://t.me/+LE25p4pQojkyYjli"       target="_blank" rel="noopener"><span class="ic">✈&#xFE0E;</span>Telegram</a>
   </div>
+  </div><!-- /.hero-main -->
+
+  <!-- Свежее видео + живые цифры канала (заполняет youtube.js → renderFeatured / countUp) -->
+  <aside class="hero-feature hx" style="--d:.95s" aria-label="Новое видео на канале">
+    <div class="hf-label"><span class="hf-dot" aria-hidden="true"></span><span id="heroFeatureLabel">Новое видео</span></div>
+    <button type="button" class="hf-card" id="heroFeature" onclick="openFeaturedVid()" aria-label="Смотреть новое видео">
+      <span class="hf-thumb">
+        <img id="heroFeatureImg" alt="" hidden>
+        <span class="hf-ph" id="heroFeaturePh" aria-hidden="true"></span>
+        <span class="hf-play" aria-hidden="true">▶</span>
+        <span class="hf-dur" id="heroFeatureDur" hidden></span>
+      </span>
+      <span class="hf-info">
+        <span class="hf-title" id="heroFeatureTitle">Загружаем свежий ролик…</span>
+        <span class="hf-meta" id="heroFeatureMeta"></span>
+      </span>
+    </button>
+    <div class="hf-stats">
+      <div class="hf-stat"><b class="stat-val skeleton" id="s-subs">…</b><span>подписчиков</span></div>
+      <div class="hf-stat"><b class="stat-val skeleton" id="s-views">…</b><span>просмотров</span></div>
+      <div class="hf-stat"><b class="stat-val skeleton" id="s-vids">…</b><span>видео</span></div>
+    </div>
+    <div class="hf-note" id="statsNote" hidden></div>
+  </aside>
+  </div><!-- /.hero-inner -->
 
   <button type="button" class="scroll-hint" aria-label="Прокрутить к контенту"><span class="mouse" aria-hidden="true"></span><span>смотреть контент</span></button>
 
@@ -1199,118 +1228,64 @@ body.low .donation-alert-icon{animation:none}
   </nav>
 </div>
 
-<!-- AD TOP -->
-<div class="wrap-sm" id="ad-top">
-  <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
-  <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
-</div>
+<!-- CONTENT: Twitch + лента видео -->
+<div class="wrap" id="content">
 
-<!-- STATS -->
-<div class="wrap reveal" id="stats" style="padding-bottom:2rem">
-  <h2 class="sec-title">Мои платформы</h2>
-  <div class="stats-row">
-    <div class="stat-card sc1">
-      <div style="font-size:1.4rem;margin-bottom:.4rem">▶</div>
-      <div class="stat-val skeleton" id="s-subs" style="color:var(--yt)">…</div>
-      <div class="stat-lbl">Подписчики</div>
-      <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
-    </div>
-    <div class="stat-card sc2">
-      <div style="font-size:1.4rem;margin-bottom:.4rem">👁</div>
-      <div class="stat-val skeleton" id="s-views" style="color:var(--yt)">…</div>
-      <div class="stat-lbl">Просмотры</div>
-      <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
-    </div>
-    <div class="stat-card sc3">
-      <div style="font-size:1.4rem;margin-bottom:.4rem">🎬</div>
-      <div class="stat-val skeleton" id="s-vids" style="color:var(--yt)">…</div>
-      <div class="stat-lbl">Видео</div>
-      <div style="font-size:.58rem;color:rgba(255,64,64,.5);margin-top:.25rem;letter-spacing:1px">YOUTUBE</div>
-    </div>
-    <div class="stat-card sc4">
-      <div style="font-size:1.4rem;margin-bottom:.4rem">◉</div>
-      <div class="stat-val" style="color:var(--tw)">LIVE</div>
-      <div class="stat-lbl">Стримы</div>
-      <div style="font-size:.58rem;color:rgba(145,71,255,.5);margin-top:.25rem;letter-spacing:1px">TWITCH</div>
-    </div>
-    <div class="stat-card sc5">
-      <div style="font-size:1.4rem;margin-bottom:.4rem">✈</div>
-      <div class="stat-val" style="color:var(--tg)">TG</div>
-      <div class="stat-lbl">Канал</div>
-      <div style="font-size:.58rem;color:rgba(41,182,246,.5);margin-top:.25rem;letter-spacing:1px">TELEGRAM</div>
-    </div>
-  </div>
-  <!-- Статус загрузки -->
-  <div id="statsNote" style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:-.5rem;opacity:.6">
-    📡 Статистика загружается с YouTube API… <button onclick="localStorage.removeItem('dan4ik37_cache_v2');location.reload()" aria-label="Обновить данные статистики" style="background:none;border:none;color:rgba(255,64,64,.5);font-size:.65rem;cursor:pointer;font-family:'Montserrat',sans-serif;margin-left:.5rem" title="Обновить данные">↺</button>
-  </div>
-</div>
-
-<!-- CONTENT -->
-<div class="wrap" id="content" style="padding-top:0">
-  <div class="divider"></div>
-  <h2 class="sec-title">Видео и стримы</h2>
-
-  <!-- TWITCH — плеер всегда на странице; онлайн/офлайн статус показывает сам виджет Twitch.
-       Чат живёт только в разделе "Живой чат" ниже — раньше он дублировался и тут тоже. -->
-  <div id="autoStreamWrap">
-    <div class="stream-live-badge">◉ Twitch — dan4ik37</div>
-    <div class="auto-stream-player">
-      <iframe id="autoStreamPlayer" src="" allowfullscreen allow="autoplay"></iframe>
-    </div>
-    <div style="text-align:center;margin-top:.8rem;display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap">
-      <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-tw" style="display:inline-flex">Открыть на Twitch ↗</a>
-      <a href="#/chat" class="cta-tw" style="display:inline-flex;background:var(--card);border:1.5px solid var(--border)">💬 Перейти в чат</a>
-    </div>
-  </div>
-
-  <!-- AD MID — показывается между секциями -->
-  <div id="ad-mid" style="max-width:1200px;margin:0 auto;padding:0 2rem 1.5rem">
-    <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
-    <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
-  </div>
-
-  <!-- TABS -->
-  <div class="top-row">
-    <div class="tabs">
-      <button class="tab a-yt" onclick="switchTab('yt',this)">▶ YouTube</button>
-      <button class="tab" onclick="switchTab('tw',this)">◉ Twitch</button>
-    </div>
-    <button class="shuffle-btn" id="shuffleBtn" onclick="shuffleVids()">🔀 Перемешать</button>
-  </div>
-
-  <!-- YOUTUBE PANEL -->
-  <div class="panel active" id="panel-yt">
-    <div class="video-search-wrap">
-      <span class="video-search-icon">🔍</span>
-      <input type="text" id="videoSearchInput" class="video-search-input" aria-label="Поиск видео по названию" placeholder="Поиск по названию..." oninput="filterVids(this.value)">
-      <button class="video-search-clear" id="videoSearchClear" aria-label="Очистить поиск" onclick="clearVideoSearch()" style="display:none">✕</button>
-    </div>
-    <!-- Mode switcher -->
-    <div class="yt-toolbar">
-      <div class="view-toggle">
-        <button class="view-btn active" id="viewToggleBtn" onclick="toggleViewMode()" title="Переключить вид">⊞ Сетка</button>
-        <div class="count-seg" role="group" aria-label="Количество видео">
-          <button class="count-opt" data-count="6" aria-label="Показать 6 видео" onclick="changeVidCount(6,this)">6</button>
-          <button class="count-opt active" data-count="12" aria-label="Показать 12 видео" onclick="changeVidCount(12,this)">12</button>
-          <button class="count-opt" data-count="24" aria-label="Показать 24 видео" onclick="changeVidCount(24,this)">24</button>
-          <button class="count-opt" data-count="50" aria-label="Показать 50 видео" onclick="changeVidCount(50,this)">50</button>
-        </div>
+  <!-- TWITCH. Статус эфира проверяет twitch.js (checkTwitchLive). Идёт эфир — плеер
+       раскрыт и подсвечен; нет эфира — компактная плашка с ближайшим стримом,
+       тяжёлый плеер грузится только по кнопке. -->
+  <section class="tw-block" id="autoStreamWrap" aria-label="Twitch">
+    <div class="tw-head">
+      <span class="tw-status"><span class="tw-dot" aria-hidden="true"></span><span id="twStatusText">Twitch · проверяем эфир…</span></span>
+      <span class="tw-next" id="twNext"></span>
+      <div class="tw-actions">
+        <button type="button" class="tw-btn" id="twToggle" onclick="toggleTwitchPlayer()" aria-expanded="false">Показать плеер</button>
+        <a class="tw-btn tw-btn-ghost" href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch ↗</a>
+        <a class="tw-btn tw-btn-ghost tw-chat" href="#/chat">💬 Чат</a>
       </div>
-      <div class="yt-actions">
-        <div class="yt-overflow" id="ytOverflow">
-          <button class="act-btn overflow-dots" id="ytOverflowBtn" aria-label="Ещё действия" onclick="toggleYtOverflow(event)" title="Ещё">⋯</button>
-          <div class="overflow-menu" id="ytOverflowMenu">
-            <button class="act-btn" id="selBtn" onclick="toggleSel()">☑ Выбрать</button>
-          </div>
+    </div>
+    <div class="tw-player" id="twPlayer">
+      <div class="auto-stream-player"><iframe id="autoStreamPlayer" title="Twitch-плеер dan4ik37" allowfullscreen allow="autoplay"></iframe></div>
+    </div>
+  </section>
+
+  <!-- ВИДЕО -->
+  <div class="vid-head">
+    <h2 class="sec-title">Видео</h2>
+    <div class="vid-sort" role="group" aria-label="Порядок видео">
+      <button type="button" class="vs-opt active" data-sort="new"  onclick="setVidSort('new',this)">🆕 Новые</button>
+      <button type="button" class="vs-opt"        data-sort="top"  onclick="setVidSort('top',this)">🔥 Популярные</button>
+      <button type="button" class="vs-opt"        data-sort="rand" onclick="setVidSort('rand',this)">🎲 Случайные</button>
+    </div>
+  </div>
+
+  <div class="panel active" id="panel-yt">
+    <div class="vid-tools">
+      <div class="video-search-wrap">
+        <span class="video-search-icon">🔍</span>
+        <input type="text" id="videoSearchInput" class="video-search-input" aria-label="Поиск видео по названию" placeholder="Поиск по названию..." oninput="filterVids(this.value)">
+        <button class="video-search-clear" id="videoSearchClear" aria-label="Очистить поиск" onclick="clearVideoSearch()" style="display:none">✕</button>
+      </div>
+      <div class="yt-toolbar">
+        <div class="view-toggle">
+          <button class="view-btn active" id="viewToggleBtn" onclick="toggleViewMode()" title="Переключить вид">⊞ Сетка</button>
         </div>
-        <button class="act-btn act-like" id="likeSelBtn" style="display:none" onclick="likeSelected()">❤ Лайкнуть</button>
-        <button class="act-btn act-play" id="playSelBtn" style="display:none" onclick="playSelected()">▶ Смотреть</button>
-        <button class="act-btn" id="cancelSelBtn" aria-label="Отменить выбор видео" style="display:none" onclick="cancelSel()">✕</button>
+        <div class="yt-actions">
+          <div class="yt-overflow" id="ytOverflow">
+            <button class="act-btn overflow-dots" id="ytOverflowBtn" aria-label="Ещё действия" onclick="toggleYtOverflow(event)" title="Ещё">⋯</button>
+            <div class="overflow-menu" id="ytOverflowMenu">
+              <button class="act-btn" id="selBtn" onclick="toggleSel()">☑ Выбрать несколько</button>
+            </div>
+          </div>
+          <button class="act-btn act-like" id="likeSelBtn" style="display:none" onclick="likeSelected()">❤ Лайкнуть</button>
+          <button class="act-btn act-play" id="playSelBtn" style="display:none" onclick="playSelected()">▶ Смотреть</button>
+          <button class="act-btn" id="cancelSelBtn" aria-label="Отменить выбор видео" style="display:none" onclick="cancelSel()">✕</button>
+        </div>
       </div>
     </div>
     <div class="sel-hint" id="selHint" style="display:none"><span id="selCount">0</span>&nbsp;выбрано&nbsp;<button onclick="selectAllVids()" style="background:none;border:none;color:var(--accent);font-size:.75rem;font-weight:700;cursor:pointer">Все</button></div>
     <div class="video-grid" id="yt-grid"></div>
+    <div class="vid-more-wrap"><button type="button" class="vid-more" id="vidMore" onclick="showMoreVids()" hidden>Показать ещё видео</button></div>
     <div id="multiPlayer" style="display:none;margin-top:2rem"></div>
     <div class="yt-bottom">
       <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" class="yt-ext">▶ Все видео на YouTube</a>
@@ -1329,17 +1304,53 @@ body.low .donation-alert-icon{animation:none}
       </div>
     </div>
   </div>
+</div>
 
-  <!-- TWITCH -->
-  <div class="panel" id="panel-tw">
-    <div class="stream-box">
-      <div class="stream-ratio"><iframe id="twitchFrame" src="" allowfullscreen></iframe></div>
-      <div class="stream-footer">
-        <div><div class="stream-title">🔴 DAN4IK37 LIVE</div><p style="font-size:.78rem;color:var(--muted);margin-top:.2rem">Прямые трансляции прямо здесь</p></div>
-        <a href="https://www.twitch.tv/dan4ik37" target="_blank" class="cta-tw" style="margin-left:auto">Twitch ↗</a>
-      </div>
-    </div>
+<!-- AD MID — после ленты видео, а не перед ней -->
+<div class="wrap-sm" id="ad-mid">
+  <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
+</div>
+
+<!-- СООБЩЕСТВО — повод остаться на сайте и вернуться завтра -->
+<div class="wrap reveal" id="community">
+  <div class="divider"></div>
+  <h2 class="sec-title">Тусуемся тут</h2>
+  <div class="cm-grid">
+    <a class="cm-card" href="#/chat" style="--cc:var(--accent)">
+      <span class="cm-ic">💬</span><span class="cm-title">Живой чат</span>
+      <span class="cm-text">Болтаем во время стримов и между ними. Стикеры, реакции, VIP-ники.</span>
+      <span class="cm-go">Зайти →</span>
+    </a>
+    <a class="cm-card" href="#/forum" style="--cc:var(--tg)">
+      <span class="cm-ic">🗂️</span><span class="cm-title">Форум</span>
+      <span class="cm-text">Идеи для видео, гайды, обсуждения игр — всё, что не уместилось в чат.</span>
+      <span class="cm-go">Читать →</span>
+    </a>
+    <a class="cm-card" href="#/lfg" style="--cc:var(--tw)">
+      <span class="cm-ic">🎮</span><span class="cm-title">Тиммейты</span>
+      <span class="cm-text">Найди, с кем поиграть: создай заявку или откликнись на чужую.</span>
+      <span class="cm-go">Найти →</span>
+    </a>
+    <a class="cm-card" href="#/clicker" style="--cc:var(--accent2)">
+      <span class="cm-ic">🕹️</span><span class="cm-title">Кликер</span>
+      <span class="cm-text">Мини-игра прямо на сайте. Собирай комбо до ×8 и бей свой рекорд.</span>
+      <span class="cm-go">Играть →</span>
+    </a>
   </div>
+  <div class="cm-join">
+    <div class="cm-join-text">
+      <b>Заведи профиль — это бесплатно</b>
+      <span>Стрик посещений, 16 ачивок, друзья и личка и голосование в опросах.</span>
+    </div>
+    <button type="button" class="cm-join-btn" onclick="openGlobalAuth()">Создать профиль</button>
+  </div>
+</div>
+
+<!-- AD TOP (исторический id; теперь стоит в конце главной) -->
+<div class="wrap-sm" id="ad-top">
+  <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-7940480593743401" data-ad-format="auto" data-full-width-responsive="true"></ins>
+  <script>(adsbygoogle=window.adsbygoogle||[]).push({})</script>
 </div>
 
 <!-- ABOUT -->

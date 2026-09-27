@@ -73,6 +73,7 @@ function initSupabase() {
 async function onAuthStateChange(user) {
   if (!user) return;
   currentUser = user;
+  document.body.classList.add('is-authed');
   const { data } = await sbClient.from('profiles').select('*').eq('id', user.id).single();
   if (data) {
     currentProfile = data;

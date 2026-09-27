@@ -113,9 +113,19 @@
       if (!list.length) { pill.hidden = true; return; }
       const now = new Date();
 
+      // Реальный статус с Twitch (twitch.js → checkTwitchLive) важнее расписания
+      if (window.__twLive) {
+        pill.classList.add('is-live');
+        pill.href = '#/home'; pill.removeAttribute('target'); pill.removeAttribute('rel');
+        txt.innerHTML = 'Стрим идёт прямо сейчас — <b>смотреть</b>';
+        pill.hidden = false;
+        return;
+      }
+
       // Слот начался не более 3 часов назад → «по расписанию сейчас эфир».
-      // Это оценка по расписанию, а не проверка Twitch (её на сайте нет).
+      // Если Twitch уже точно сказал «офлайн» — не обманываем, показываем следующий слот.
       for (const s of list) {
+        if (window.__twOffline) break;
         if (s.day !== now.getDay()) continue;
         const start = new Date(now); start.setHours(s.h, s.m, 0, 0);
         const d = now - start;
@@ -149,7 +159,15 @@
       pill.hidden = true;
     }
     render();
+    window.__renderHeroPill = render;
     setInterval(render, 30000);
+    // Во время эфира плашка ведёт к плееру на этой же странице (просмотры остаются на сайте)
+    pill.addEventListener('click', e => {
+      if (!window.__twLive) return;
+      e.preventDefault();
+      const w = $('#autoStreamWrap');
+      if (w) w.scrollIntoView({ behavior: reducedNotOverridden() ? 'auto' : 'smooth', block: 'center' });
+    });
     const grid = $('.sched-grid');
     if (grid) new MutationObserver(render).observe(grid, { childList: true, subtree: true });
   }
@@ -418,7 +436,7 @@
   function initScrollHint() {
     const b = $('.scroll-hint');
     if (b) b.addEventListener('click', () => {
-      const t = $('#stats'); if (t) t.scrollIntoView({ behavior: reducedNotOverridden() ? 'auto' : 'smooth' });
+      const t = $('#content'); if (t) t.scrollIntoView({ behavior: reducedNotOverridden() ? 'auto' : 'smooth' });
     });
   }
 

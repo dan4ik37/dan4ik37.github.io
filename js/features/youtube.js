@@ -7,11 +7,11 @@ function countUp(id,t){
 }
 function statsLoaded(){
   const note=document.getElementById('statsNote');
-  if(note) note.innerHTML='✅ Статистика обновлена · <span style="opacity:.5">'+new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+'</span>';
+  if(note) note.hidden=true;
 }
 function statsError(){
   const note=document.getElementById('statsNote');
-  if(note) note.innerHTML='⚠️ Статистика недоступна — API работает только на хостинге. <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" style="color:var(--yt)">Смотреть канал →</a>';
+  if(note){ note.hidden=false; note.innerHTML='Цифры канала сейчас недоступны · <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank" rel="noopener">открыть канал →</a>'; }
   // Иначе skeleton-шиммер крутился бы бесконечно, раз countUp() так и не вызовется
   ['s-subs','s-views','s-vids'].forEach(id=>{
     const el=document.getElementById(id);
@@ -73,12 +73,79 @@ let videoSearchQuery = ''; // поиск по названию видео
 // или голый allVids, чтобы поиск не "терялся" при смене вида/кол-ва/выборе.
 function getVisibleVids(){
   if (videoSearchQuery) return allVids.filter(v => (v.title||'').toLowerCase().includes(videoSearchQuery));
-  return allVids.slice(0, vidCountLimit);
+  return feedVids().slice(0, vidCountLimit);
+}
+// В режиме «Новые» самый свежий ролик уже крупно показан в первом экране — не дублируем его в ленте
+function feedVids(){
+  return (vidSort==='new' && featuredVid) ? allVids.filter(v => v.id !== featuredVid.id) : allVids;
+}
+
+// ═══════════════════════════════════════
+//  ПОРЯДОК ВИДЕО: новые / популярные / случайные
+//  newestVids — исходный порядок плейлиста загрузок (он и есть «от новых к старым»),
+//  allVids — то, что сейчас показано в выбранном порядке.
+// ═══════════════════════════════════════
+let newestVids = [];
+let vidSort = 'new';
+function sortedVids(mode){
+  const list=[...newestVids];
+  if(mode==='top') return list.sort((a,b)=>(b.viewsN||0)-(a.viewsN||0));
+  if(mode==='rand'){
+    for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
+  }
+  return list;
+}
+function setVidSort(mode){
+  vidSort=mode;
+  document.querySelectorAll('.vs-opt').forEach(b=>b.classList.toggle('active', b.dataset.sort===mode));
+  if(!newestVids.length) return;
+  allVids=sortedVids(mode);
+  vidCountLimit=12;
+  renderCurrentVids();
+}
+function showMoreVids(){
+  vidCountLimit+=12;
+  renderCurrentVids();
+}
+function renderCurrentVids(){
+  if (videoSearchQuery) { filterVids(document.getElementById('videoSearchInput')?.value || ''); return; }
+  renderVids(getVisibleVids());
+}
+function updateMoreBtn(){
+  const b=document.getElementById('vidMore');
+  if(b) b.hidden = !!videoSearchQuery || selMode || vidCountLimit>=feedVids().length;
+}
+
+// ═══════════════════════════════════════
+//  НОВОЕ ВИДЕО в первом экране
+// ═══════════════════════════════════════
+let featuredVid = null;
+function renderFeatured(v){
+  if(!v || !v.id) return;
+  featuredVid=v;
+  const img=document.getElementById('heroFeatureImg');
+  if(img){
+    img.alt=v.title||'';
+    img.onload=()=>{img.hidden=false;document.getElementById('heroFeaturePh')?.remove();};
+    img.src=v.thumb||`https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
+  }
+  const t=document.getElementById('heroFeatureTitle'); if(t) t.textContent=v.title||'';
+  const m=document.getElementById('heroFeatureMeta');
+  if(m) m.textContent=[v.views?'👁 '+v.views:'', v.date?'📅 '+v.date:''].filter(Boolean).join('   ');
+  const d=document.getElementById('heroFeatureDur');
+  if(d){ d.textContent=v.duration||''; d.hidden=!v.duration; }
+  const lbl=document.getElementById('heroFeatureLabel');
+  if(lbl) lbl.textContent=watchedIds.has(v.id)?'Последнее видео':'Новое видео';
+}
+function openFeaturedVid(){
+  if(featuredVid) openVid(featuredVid.id,featuredVid.title,featuredVid.date,featuredVid.views);
+  else window.open('https://www.youtube.com/@Dan4ik37Yt/videos','_blank','noopener');
 }
 function filterVids(query){
   videoSearchQuery = query.trim().toLowerCase();
   const clearBtn = document.getElementById('videoSearchClear');
   if (clearBtn) clearBtn.style.display = videoSearchQuery ? 'flex' : 'none';
+  updateMoreBtn();
   if (!allVids.length) return;
   const vids = getVisibleVids();
   if (videoSearchQuery && !vids.length) {
@@ -97,26 +164,24 @@ function changeVidCount(val, btn) {
   vidCountLimit = parseInt(val);
   document.querySelectorAll('.count-opt').forEach(b=>b.classList.remove('active'));
   if (btn) btn.classList.add('active');
-  if (allVids.length) {
-    if (videoSearchQuery) { filterVids(document.getElementById('videoSearchInput')?.value || ''); return; }
-    // Перемешиваем и показываем нужное кол-во
-    const shuffled = [...allVids].sort(() => Math.random() - 0.5);
-    renderVids(shuffled.slice(0, vidCountLimit));
-  }
+  if (allVids.length) renderCurrentVids();
 }
 
 async function loadYT(){
   showLoader();
   const cached=loadCache();
   if(cached){
-    allVids=cached.vids||[];
-    recVids=cached.rec||[];
+    newestVids=cached.vids||[];
+    allVids=sortedVids(vidSort);
     if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}
     if(allVids.length){
-      const shuffled=[...allVids];
-      for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
-      renderVids(shuffled.slice(0,vidCountLimit));
-    } else { showFallback(); }
+      renderFeatured(newestVids[0]);
+      renderCurrentVids();
+      statsLoaded();
+      // Кэш свежий (< CACHE_TTL) — не тратим квоту YouTube API повторно
+      return;
+    }
+    showFallback();
   }
   try{
     const ch=await ytFetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_KEY}`);
@@ -128,11 +193,9 @@ async function loadYT(){
     countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
     statsLoaded();
 
-    // Грузим ВСЕ 50 видео сразу + топ по просмотрам
-    const [pl, pop] = await Promise.all([
-      ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=50&key=${YT_KEY}`),
-      ytFetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=viewCount&maxResults=12&type=video&key=${YT_KEY}`)
-    ]);
+    // Последние 50 загрузок. «Популярные» сортируем по просмотрам локально:
+    // search?order=viewCount стоил 100 единиц квоты из 10 000 в сутки на КАЖДЫЙ заход.
+    const pl = await ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=50&key=${YT_KEY}`);
     if(!pl?.items?.length) throw new Error('Видео не найдены');
 
     const ids=pl.items.map(i=>i.contentDetails.videoId).join(',');
@@ -141,17 +204,14 @@ async function loadYT(){
 
     const rawVids=pl.items.map(item=>{
       const id=item.contentDetails.videoId,sn=item.snippet,d=dm[id]||{},st=d.stats||{};
-      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',likes:st.likeCount?fmt(st.likeCount):'',duration:formatYtDuration(d.duration)};
-    });
+      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',viewsN:parseInt(st.viewCount||0),likes:st.likeCount?fmt(st.likeCount):'',duration:formatYtDuration(d.duration)};
+    }).filter(v=>v.title!=='Private video'&&v.title!=='Deleted video');
 
-    // Сохраняем все 50, перемешиваем по-настоящему (Fisher-Yates)
-    allVids = rawVids;
-    for(let i=allVids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[allVids[i],allVids[j]]=[allVids[j],allVids[i]];}
-
-    recVids=pop?.items?.map(i=>({id:i.id.videoId,title:i.snippet.title,thumb:i.snippet.thumbnails?.high?.url||'',date:'',views:'',likes:'',rec:true}))||[];
-
-    saveCache({vids:rawVids,rec:recVids,stats:st});
-    renderVids(allVids.slice(0,vidCountLimit));
+    newestVids = rawVids;
+    allVids = sortedVids(vidSort);
+    saveCache({vids:rawVids,stats:st});
+    renderFeatured(newestVids[0]);
+    renderCurrentVids();
   }catch(err){
     console.warn('YT:',err.message);
     statsError();
@@ -195,6 +255,7 @@ function renderVids(vids){
   const grid=document.getElementById('yt-grid');
   grid.innerHTML='';
   grid.className='video-grid'+(viewMode==='list'?' list-view':'');
+  updateMoreBtn();
   if(!vids.length){grid.innerHTML=`<div class="empty-state"><span class="empty-state-icon">🎬</span><div class="empty-state-title">Видео не найдены</div><div class="empty-state-text">Пока ничего не загрузилось — возможно, YouTube временно недоступен. Попробуй обновить страницу.</div></div>`;return}
   vids.forEach((v,i)=>{
     if(!v.id)return;
@@ -235,34 +296,15 @@ function setView(mode){
 }
 function toggleViewMode(){ setView(viewMode==='grid' ? 'list' : 'grid'); }
 
-// ═══════════════════════════════════════
-//  RECOMMENDATIONS + SHUFFLE
-// ═══════════════════════════════════════
-let showingRec=false;
-function shuffleVids(){
-  const b=document.getElementById('shuffleBtn');
-  clearVideoSearch(); // шафл переключает между recVids/allVids — с активным поиском комбинация неоднозначна
-  if(recVids.length && !showingRec){
-    showingRec=true;
-    renderVids(recVids.slice(0,vidCountLimit));
-    b.innerHTML='🔥 Топ видео';b.style.color='var(--accent)';
-  } else {
-    showingRec=false;
-    // Fisher-Yates shuffle
-    const shuffled=[...allVids];
-    for(let i=shuffled.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];}
-    renderVids(shuffled.slice(0,vidCountLimit));
-    b.innerHTML='✓ Перемешано!';b.style.color='';
-    setTimeout(()=>b.innerHTML='🔀 Перемешать',1400);
-  }
-}
+// Старое имя — на случай внешних вызовов (хоткеи, консоль)
+function shuffleVids(){ setVidSort('rand'); }
 
 // ═══════════════════════════════════════
 //  LIKES — открывает реальный YouTube
 // ═══════════════════════════════════════
 function toggleLike(e,id,btn){
   e.stopPropagation();
-  const v=allVids.find(x=>x.id===id)||recVids.find(x=>x.id===id);
+  const v=allVids.find(x=>x.id===id);
   if(likedIds.has(id)){likedIds.delete(id);btn.classList.remove('liked');btn.innerHTML='🤍'+(v?.likes?' '+v.likes:'')}
   else{likedIds.add(id);btn.classList.add('liked','like-pop');btn.innerHTML='❤'+(v?.likes?' '+v.likes:'');setTimeout(()=>btn.classList.remove('like-pop'),400);
     // Открываем YouTube для реального лайка
