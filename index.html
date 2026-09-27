@@ -1067,6 +1067,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/donate" data-route="donate">Топ донатеров</a>
     <a href="#/profile" data-route="profile">Профиль<span class="chat-badge dm-unread-badge" style="display:none"></span></a>
     <a href="#/forum" data-route="forum">Форум</a>
+    <a href="#/ideas" data-route="ideas">💡 Идеи</a>
     <a href="#/lfg" data-route="lfg">🎮 Тиммейты</a>
     <a href="#/poll" data-route="poll">Опрос</a>
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
@@ -2128,6 +2129,50 @@ body.low .donation-alert-icon{animation:none}
 </div>
 
 <!-- FOOTER -->
+<!-- ИДЕИ ДЛЯ ВИДЕО (js/features/ideas.js, ideas.sql) -->
+<div class="wrap reveal" id="ideas-page">
+  <div class="id-head">
+    <div>
+      <h2 class="sec-title">Идеи для видео</h2>
+      <p class="id-lead">Предлагай, что снять или во что сыграть на стриме, и голосуй за чужие идеи. Лучшие уходят в работу — а готовый ролик появится прямо здесь.</p>
+    </div>
+  </div>
+
+  <div class="id-setup" id="ideasSetup" hidden>
+    Раздел ещё не подключён к базе. <span id="ideasSetupAdmin" hidden>Админ: выполни <b>ideas.sql</b> в Supabase → SQL Editor.</span>
+  </div>
+
+  <form class="id-form" id="ideasForm" onsubmit="submitIdea(event)" hidden>
+    <input id="ideaTitle" class="id-input" maxlength="120" minlength="5" required placeholder="Идея коротко — например: «Пройти Silksong без урона»" autocomplete="off">
+    <textarea id="ideaBody" class="id-input id-textarea" maxlength="500" rows="2" placeholder="Подробнее (необязательно)"></textarea>
+    <div class="id-form-row">
+      <span class="id-count" id="ideaCount">0 / 500</span>
+      <span class="id-form-msg" id="ideaMsg" role="status"></span>
+      <button type="submit" class="id-submit" id="ideaSubmit">💡 Предложить</button>
+    </div>
+  </form>
+  <div class="id-guest" id="ideasGuest" hidden>
+    <span>Чтобы предложить идею и голосовать — войди или создай профиль.</span>
+    <button type="button" class="id-submit" onclick="openGlobalAuth()">Войти</button>
+  </div>
+
+  <div class="id-tools" id="ideasTools">
+    <div class="vid-sort" role="group" aria-label="Сортировка идей">
+      <button type="button" class="vs-opt active" data-isort="top" onclick="setIdeasSort('top')">🔥 Топ</button>
+      <button type="button" class="vs-opt" data-isort="new" onclick="setIdeasSort('new')">🆕 Новые</button>
+    </div>
+    <div class="id-filters" role="group" aria-label="Статус">
+      <button type="button" class="id-chip active" data-ifilter="" onclick="setIdeasFilter('')">Все</button>
+      <button type="button" class="id-chip" data-ifilter="new" onclick="setIdeasFilter('new')">Новые</button>
+      <button type="button" class="id-chip" data-ifilter="planned" onclick="setIdeasFilter('planned')">В планах</button>
+      <button type="button" class="id-chip" data-ifilter="done" onclick="setIdeasFilter('done')">Сделано</button>
+      <button type="button" class="id-chip" data-ifilter="rejected" onclick="setIdeasFilter('rejected')">Отклонено</button>
+    </div>
+  </div>
+  <div class="id-status" id="ideasStatus"></div>
+  <div class="id-list" id="ideasList"></div>
+</div>
+
 <!-- SHORTS — вертикальная лента (js/features/shorts.js) -->
 <div id="shorts-page" class="shorts-page" style="display:none">
   <div class="sh-feed" id="shFeed" tabindex="-1" aria-label="Лента Shorts"></div>
@@ -2386,6 +2431,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/google-translate.js"></script>
 <script src="js/features/ads.js"></script>
 <script src="js/features/shorts.js"></script>
+<script src="js/features/ideas.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
 <script src="js/ui/hotkeys.js"></script>

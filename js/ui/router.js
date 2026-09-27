@@ -16,6 +16,7 @@ const PAGES = {
   chat:       ['chat'],
   profile:    ['profile-page'],
   shorts:     ['shorts-page'],
+  ideas:      ['ideas-page'],
   forum:      ['forum-page'],
   lfg:        ['lfg-page'],
   ads:        ['ad-bottom','ads']
@@ -56,6 +57,7 @@ function finishShowPage(route, activeIds){
   if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
   if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
   if (route==='lfg' && typeof renderLfgPage==='function') renderLfgPage();
+  if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{

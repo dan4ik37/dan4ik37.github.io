@@ -85,6 +85,8 @@ async function onAuthStateChange(user) {
     currentProfile = data;
     currentRole = data.role || 'user';
   }
+  // Для страниц, открытых до входа (идеи и т.п.) — роль уже известна
+  window.dispatchEvent(new Event('d37:auth'));
   if (typeof applyThemeAccent === 'function') applyThemeAccent(currentProfile);
   if (typeof recordTodayVisit === 'function') recordTodayVisit();
 
