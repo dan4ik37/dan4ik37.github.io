@@ -169,7 +169,9 @@ function changeVidCount(val, btn) {
 
 async function loadYT(){
   showLoader();
-  const cached=loadCache();
+  let cached=loadCache();
+  // Кэш старого формата (без ts) мог сохраниться перемешанным — не доверяем ему
+  if(cached && !cached.vids?.[0]?.ts) cached=null;
   if(cached){
     newestVids=cached.vids||[];
     allVids=sortedVids(vidSort);
@@ -204,10 +206,11 @@ async function loadYT(){
 
     const rawVids=pl.items.map(item=>{
       const id=item.contentDetails.videoId,sn=item.snippet,d=dm[id]||{},st=d.stats||{};
-      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',viewsN:parseInt(st.viewCount||0),likes:st.likeCount?fmt(st.likeCount):'',duration:formatYtDuration(d.duration)};
+      return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',viewsN:parseInt(st.viewCount||0),ts:Date.parse(sn.publishedAt)||0,likes:st.likeCount?fmt(st.likeCount):'',duration:formatYtDuration(d.duration)};
     }).filter(v=>v.title!=='Private video'&&v.title!=='Deleted video');
 
-    newestVids = rawVids;
+    // Плейлист загрузок почти всегда идёт от новых к старым, но не гарантированно — сортируем явно
+    newestVids = rawVids.sort((a,b)=>b.ts-a.ts);
     allVids = sortedVids(vidSort);
     saveCache({vids:rawVids,stats:st});
     renderFeatured(newestVids[0]);
