@@ -51,13 +51,28 @@ function renderShortsRow(){
   if (!row || !track) return;
   if (!shortsList.length) { row.hidden = true; return; }
   row.hidden = false;
-  track.innerHTML = shortsList.slice(0, 14).map(v => `
+  const sub = document.getElementById('shortsRowSub');
+  if (sub) sub.textContent = `${shortsList.length} ${plural(shortsList.length, 'ролик', 'ролика', 'роликов')} · листай подряд, как в TikTok`;
+  track.innerHTML = shortsList.slice(0, 16).map(v => `
     <a class="sh-card" href="#/shorts/${v.id}">
+      <span class="sh-card-play" aria-hidden="true">▶</span>
       <img src="https://i.ytimg.com/vi/${v.id}/oardefault.jpg" alt="${esc(v.title)}" loading="lazy"
            onload="shThumbCheck(this,'${v.id}')" onerror="shThumbFallback(this,'${v.id}')">
       <span class="sh-card-title">${esc(v.title.replace(/#\S+/g, '').trim() || v.title)}</span>
       ${v.views ? `<span class="sh-card-views">👁 ${v.views}</span>` : ''}
     </a>`).join('');
+}
+
+function plural(n, one, few, many){
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+// Стрелки у ряда: прокрутка на ширину видимой части
+function scrollShortsRow(dir){
+  const t = document.getElementById('shortsRowTrack');
+  if (t) t.scrollBy({ left: dir * t.clientWidth * 0.85, behavior: 'smooth' });
 }
 
 // ── Роутер: вход/выход из раздела ──

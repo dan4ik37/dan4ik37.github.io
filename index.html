@@ -1263,8 +1263,18 @@ body.low .donation-alert-icon{animation:none}
   <!-- SHORTS — ряд превью, заполняет shorts.js (renderShortsRow); без Shorts скрыт -->
   <section class="sh-row" id="shortsRow" hidden aria-label="Shorts">
     <div class="sh-row-head">
-      <h2 class="sec-title">Shorts</h2>
-      <a class="sh-row-all" href="#/shorts">Смотреть подряд →</a>
+      <div class="sh-row-title">
+        <span class="sh-bolt" aria-hidden="true">⚡</span>
+        <div>
+          <h2 class="sh-row-h">Shorts</h2>
+          <span class="sh-row-sub" id="shortsRowSub">короткие ролики — листай подряд</span>
+        </div>
+      </div>
+      <div class="sh-row-nav">
+        <button type="button" class="sh-arrow" onclick="scrollShortsRow(-1)" aria-label="Назад">‹</button>
+        <button type="button" class="sh-arrow" onclick="scrollShortsRow(1)" aria-label="Вперёд">›</button>
+        <a class="sh-row-play" href="#/shorts">▶ Смотреть подряд</a>
+      </div>
     </div>
     <div class="sh-row-track" id="shortsRowTrack"></div>
   </section>

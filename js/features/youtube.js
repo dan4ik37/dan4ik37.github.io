@@ -87,8 +87,15 @@ function feedVids(){
 // ═══════════════════════════════════════
 let newestVids = [];
 let vidSort = 'new';
+// Shorts живут в своём ряду и ленте (shorts.js) — в сетке «Видео» только обычные ролики.
+// Если обычных нет совсем — показываем всё, чтобы сетка не была пустой.
+function longVids(){
+  const isShort = typeof isShortVid === 'function' ? isShortVid : () => false;
+  const list = newestVids.filter(v => !isShort(v));
+  return list.length ? list : [...newestVids];
+}
 function sortedVids(mode){
-  const list=[...newestVids];
+  const list=longVids();
   if(mode==='top') return list.sort((a,b)=>(b.viewsN||0)-(a.viewsN||0));
   if(mode==='rand'){
     for(let i=list.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[list[i],list[j]]=[list[j],list[i]];}
@@ -181,7 +188,7 @@ async function loadYT(){
     allVids=sortedVids(vidSort);
     if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}
     if(allVids.length){
-      renderFeatured(newestVids[0]);
+      renderFeatured(longVids()[0]);
       renderCurrentVids();
       statsLoaded();
       if(typeof onVideosLoaded==='function') onVideosLoaded();
@@ -200,16 +207,29 @@ async function loadYT(){
     countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
     statsLoaded();
 
-    // Последние 50 загрузок. «Популярные» сортируем по просмотрам локально:
+    // Последние 150 загрузок (3 страницы по 50): больше половины — Shorts, а обычным роликам
+    // в сетке тоже нужен запас. «Популярные» сортируем по просмотрам локально:
     // search?order=viewCount стоил 100 единиц квоты из 10 000 в сутки на КАЖДЫЙ заход.
-    const pl = await ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=50&key=${YT_KEY}`);
-    if(!pl?.items?.length) throw new Error('Видео не найдены');
+    // Итого ~7 единиц за загрузку, и та — не чаще раза в 15 минут на посетителя (кэш).
+    const items=[];
+    let page='';
+    for(let i=0;i<3;i++){
+      const pl = await ytFetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploads}&maxResults=50${page?'&pageToken='+page:''}&key=${YT_KEY}`);
+      if(!pl?.items?.length) break;
+      items.push(...pl.items);
+      page=pl.nextPageToken;
+      if(!page) break;
+    }
+    if(!items.length) throw new Error('Видео не найдены');
 
-    const ids=pl.items.map(i=>i.contentDetails.videoId).join(',');
-    const det=await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${ids}&key=${YT_KEY}`);
-    const dm={};det?.items?.forEach(v=>{dm[v.id]={stats:v.statistics,duration:v.contentDetails?.duration}});
+    const dm={};
+    for(let i=0;i<items.length;i+=50){
+      const ids=items.slice(i,i+50).map(it=>it.contentDetails.videoId).join(',');
+      const det=await ytFetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${ids}&key=${YT_KEY}`);
+      det?.items?.forEach(v=>{dm[v.id]={stats:v.statistics,duration:v.contentDetails?.duration}});
+    }
 
-    const rawVids=pl.items.map(item=>{
+    const rawVids=items.map(item=>{
       const id=item.contentDetails.videoId,sn=item.snippet,d=dm[id]||{},st=d.stats||{};
       return{id,title:sn.title,thumb:sn.thumbnails?.high?.url||'',date:new Date(sn.publishedAt).toLocaleDateString('ru-RU'),views:st.viewCount?fmt(st.viewCount):'',viewsN:parseInt(st.viewCount||0),ts:Date.parse(sn.publishedAt)||0,likes:st.likeCount?fmt(st.likeCount):'',duration:formatYtDuration(d.duration)};
     }).filter(v=>v.title!=='Private video'&&v.title!=='Deleted video');
@@ -218,7 +238,7 @@ async function loadYT(){
     newestVids = rawVids.sort((a,b)=>b.ts-a.ts);
     allVids = sortedVids(vidSort);
     saveCache({vids:rawVids,stats:st});
-    renderFeatured(newestVids[0]);
+    renderFeatured(longVids()[0]);
     renderCurrentVids();
     if(typeof onVideosLoaded==='function') onVideosLoaded();
   }catch(err){
