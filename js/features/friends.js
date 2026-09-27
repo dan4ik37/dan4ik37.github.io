@@ -57,10 +57,17 @@ async function renderFriendsPanel(){
   const reqEl = document.getElementById('friendRequestsList');
   if (!currentUser || !listEl) return;
   try {
-    const { data: rows } = await sbClient.from('friendships').select(`*,
-      requester:requester_id(nick, avatar_url, role, is_vip, vip_until, total_donated),
-      addressee:addressee_id(nick, avatar_url, role, is_vip, vip_until, total_donated)`)
+    // requester_id/addressee_id ссылаются на auth.users, а не на profiles, поэтому
+    // встроенный select профилей PostgREST отвергает (400) — профили берём вторым запросом.
+    const { data: rows } = await sbClient.from('friendships').select('*')
       .or(`requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`);
+    const ids = [...new Set((rows||[]).flatMap(r => [r.requester_id, r.addressee_id]))];
+    if (ids.length) {
+      const { data: profs } = await sbClient.from('profiles')
+        .select('id, nick, avatar_url, role, is_vip, vip_until, total_donated').in('id', ids);
+      const byId = new Map((profs||[]).map(p => [p.id, p]));
+      for (const r of rows) { r.requester = byId.get(r.requester_id); r.addressee = byId.get(r.addressee_id); }
+    }
 
     const friends = (rows||[]).filter(r => r.status === 'accepted').map(r => {
       const isMe = r.requester_id === currentUser.id;

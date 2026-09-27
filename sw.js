@@ -45,7 +45,10 @@ self.addEventListener('push', (event) => {
       icon: d.icon || '/icon-192.png',
       badge: '/icon-192.png',
       image: d.image || undefined,
+      // С тем же tag новое уведомление тихо заменяет старое в центре уведомлений,
+      // не всплывая, — renotify заставляет показать его заново
       tag: d.tag || undefined,
+      renotify: !!d.tag,
       data: { url: d.url || '/#/home' },
     })
   );

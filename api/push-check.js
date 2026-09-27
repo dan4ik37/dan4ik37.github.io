@@ -107,7 +107,7 @@ async function checkStream(prev, deadline) {
     title: '🔴 dan4ik37 в эфире!',
     body: title || 'Стрим начался — залетай!',
     url: '/#/home',
-    tag: 'stream',
+    tag: 'stream-' + new Date().toISOString().slice(0, 10),
   }, deadline);
   return { status: 'sent', ...sent };
 }
