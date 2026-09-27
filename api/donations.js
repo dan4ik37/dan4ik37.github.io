@@ -81,7 +81,9 @@ async function monthLeaderboard() {
     const since = new Date(Date.now() - MONTH_MS).toISOString();
     const rows = await sbSelect('vip_donation_log',
       `select=donor_username,amount,currency,donated_at,processed_at` +
-      `&or=(donated_at.gte.${since},and(donated_at.is.null,processed_at.gte.${since}))&limit=5000`);
+      `&donated_at=gte.${since}&limit=5000`);
+    // Только с настоящей датой доната: у старых записей её нет, а время обработки у них
+    // недавнее (импорт истории) — по нему в «30 дней» попадали донаты полугодовой давности
     return aggregateTop(rows.map(r => ({ username: r.donor_username, amount: Number(r.amount) || 0, currency: r.currency || 'RUB' })));
   } catch (e) { return null; }
 }
