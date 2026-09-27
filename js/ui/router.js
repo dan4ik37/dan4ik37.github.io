@@ -75,6 +75,17 @@ function finishShowPage(route, activeIds){
   // Если перешли в чат — прячем тост о новом сообщении, он тут больше не нужен
   if(route==='chat'){ document.getElementById('chatToast')?.classList.remove('show'); hideChatBadge(); }
   window.scrollTo(0,0);
+  trackRouteView(route);
+}
+
+// Vercel Web Analytics сама видит только первую загрузку и pushState, а разделы
+// переключаются через #/хэш — без этого все просмотры записались бы как «/».
+// Первую загрузку скрипт аналитики считает сам, поэтому её пропускаем.
+let analyticsFirstView = true;
+function trackRouteView(route){
+  if (analyticsFirstView) { analyticsFirstView = false; return; }
+  const param = currentRouteParam();
+  try { window.va && window.va('pageview', { route: '/' + route, path: '/' + route + (param ? '/' + param : '') }); } catch(e) {}
 }
 
 function currentRoute(){
