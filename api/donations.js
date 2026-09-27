@@ -44,14 +44,36 @@ async function readSnapshot() {
     return rows[0]?.snapshot ? { data: rows[0].snapshot, at: rows[0].snapshot_at } : null;
   } catch (e) { return null; }
 }
+// Приватность (privacy.sql): кто скрыл сумму донатов — в публичном топе и ленте
+// становится «Анонимом». Донат в DonationAlerts сопоставляется с профилем так же,
+// как при начислении VIP: по логину DA или по нику. Маскируем при отдаче, а не в
+// снимке — чтобы настройка действовала сразу, без ожидания следующей синхронизации.
+async function hiddenDonors() {
+  if (!storeConfigured()) return new Set();
+  try {
+    const rows = await sbSelect('profiles', 'privacy_hide_donations=eq.true&select=nick,donate_login');
+    const set = new Set();
+    for (const r of rows) {
+      if (r.nick) set.add(r.nick.toLowerCase());
+      if (r.donate_login) set.add(r.donate_login.toLowerCase());
+    }
+    return set;
+  } catch (e) { return new Set(); }   // privacy.sql ещё не выполнен — колонки нет
+}
+function maskDonors(data, hidden) {
+  if (!hidden.size) return data;
+  const mask = d => hidden.has(String(d.username || '').toLowerCase()) ? { ...d, username: 'Аноним' } : d;
+  return { ...data, donations: (data.donations || []).map(mask), leaderboard: (data.leaderboard || []).map(mask) };
+}
+
 async function sendSnapshot(res, snap) {
   const ageMin = (Date.now() - Date.parse(snap.at)) / 60000;
   res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300');
   // Снимок (donations/leaderboard) обновляется раз в несколько минут, а цель
   // считаем прямо сейчас отдельным запросом — она "легче" (один select с
   // фильтром) и не обязана ждать следующего прогона синхронизации.
-  const goal = await goalData();
-  return res.status(200).json({ ...snap.data, source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
+  const [goal, hidden] = await Promise.all([goalData(), hiddenDonors()]);
+  return res.status(200).json({ ...maskDonors(snap.data, hidden), source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
 }
 
 function authUrl() {

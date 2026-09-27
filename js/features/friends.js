@@ -63,7 +63,7 @@ async function renderFriendsPanel(){
       .or(`requester_id.eq.${currentUser.id},addressee_id.eq.${currentUser.id}`);
     const ids = [...new Set((rows||[]).flatMap(r => [r.requester_id, r.addressee_id]))];
     if (ids.length) {
-      const { data: profs } = await sbClient.from('profiles')
+      const { data: profs } = await (await sbProfiles())
         .select('id, nick, avatar_url, role, is_vip, vip_until, total_donated').in('id', ids);
       const byId = new Map((profs||[]).map(p => [p.id, p]));
       for (const r of rows) { r.requester = byId.get(r.requester_id); r.addressee = byId.get(r.addressee_id); }

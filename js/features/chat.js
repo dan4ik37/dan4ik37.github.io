@@ -63,6 +63,24 @@ function initSupabase() {
   }
 }
 
+// Чтение профилей — через представление profiles_public (privacy.sql): оно само
+// прячет закрытые поля (о себе, игры, сумма донатов, логин DA...) по настройкам
+// приватности. Пока privacy.sql не выполнен, представления нет — читаем таблицу.
+// Использование: (await sbProfiles()).select(...)
+let PROFILES_SRC = null;
+let profilesSrcCheck = null;
+function profilesSource(){
+  if (PROFILES_SRC) return Promise.resolve(PROFILES_SRC);
+  if (!profilesSrcCheck) {
+    profilesSrcCheck = sbClient.from('profiles_public').select('id').limit(1)
+      .then(({ error }) => (PROFILES_SRC = error ? 'profiles' : 'profiles_public'),
+            () => (PROFILES_SRC = 'profiles'));
+  }
+  return profilesSrcCheck;
+}
+async function sbProfiles(){ return sbClient.from(await profilesSource()); }
+const privacyAvailable = () => PROFILES_SRC === 'profiles_public';
+
 // ─── AUTH ───
 // Единая точка входа/выхода — doGlobalLogin()/doGlobalLogout() ниже.
 // (Раньше здесь был второй, независимый логин-модал (#chatAuthModal,
@@ -80,7 +98,7 @@ async function onAuthStateChange(user) {
   if (!user) return;
   currentUser = user;
   document.body.classList.add('is-authed');
-  const { data } = await sbClient.from('profiles').select('*').eq('id', user.id).single();
+  const { data } = await (await sbProfiles()).select('*').eq('id', user.id).single();
   if (data) {
     currentProfile = data;
     currentRole = data.role || 'user';

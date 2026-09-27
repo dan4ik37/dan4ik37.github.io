@@ -1559,3 +1559,12 @@ body.high .vnew{animation:pillPulse 2.4s ease-out infinite;color:#fff}
   body.is-authed #globalAuthLabel{display:none}
   body.is-authed .global-auth-btn{padding:.38rem .6rem}
 }
+
+/* ── Приватность профиля (js/features/profile.js → renderPrivacySettings) ── */
+.pv-box{margin-top:1.1rem;padding-top:1rem;border-top:1px solid var(--line)}
+.pv-row{display:flex;align-items:center;justify-content:space-between;gap:.8rem;font-size:.8rem;margin-bottom:.6rem;cursor:pointer}
+.pv-row select{background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.35rem .5rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;cursor:pointer}
+.pv-check{justify-content:flex-start;align-items:flex-start;line-height:1.45}
+.pv-check input{width:16px;height:16px;flex-shrink:0;margin-top:.1rem;accent-color:var(--accent)}
+.pv-status{font-size:.72rem;min-height:1rem;color:var(--muted)}
+.pv-note{font-size:.68rem;line-height:1.55;color:var(--muted);opacity:.85;margin-top:.3rem}

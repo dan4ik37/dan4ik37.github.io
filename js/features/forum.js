@@ -44,7 +44,7 @@ const FORUM_PROFILE_COLS = 'id, nick, role, is_vip, vip_until, total_donated';
 async function attachForumProfiles(rows){
   const ids = [...new Set((rows || []).map(r => r.author_id).filter(Boolean))];
   if (!ids.length) return rows || [];
-  const { data } = await sbClient.from('profiles').select(FORUM_PROFILE_COLS).in('id', ids);
+  const { data } = await (await sbProfiles()).select(FORUM_PROFILE_COLS).in('id', ids);
   const byId = Object.fromEntries((data || []).map(p => [p.id, p]));
   (rows || []).forEach(r => { r.profiles = byId[r.author_id] || null; });
   return rows;

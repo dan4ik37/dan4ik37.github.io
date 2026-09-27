@@ -1560,6 +1560,9 @@ body.low .donation-alert-icon{animation:none}
       Не загружается? Скорее всего, мешает <b>блокировщик рекламы</b> (AdBlock, uBlock, AdGuard, Kaspersky «Анти-Баннер») — отключи его для этого сайта. Фон при этом всё равно сохранится в облегчённом виде.
     </div>
 
+    <!-- Профиль скрыт настройками приватности (privacy.sql) -->
+    <div id="profileHiddenNote" class="pf-card pf-card-muted" style="display:none;margin-top:1.2rem;text-align:center"></div>
+
     <!-- Статистика профиля -->
     <div id="profileStatsRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem;margin-top:1.2rem">
       <div class="profile-stat-card" style="animation-delay:.04s">
@@ -1632,6 +1635,24 @@ body.low .donation-alert-icon{animation:none}
         <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на уведомления</button>
         <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
       </div>
+      <!-- Приватность (privacy.sql) — скрыта, пока скрипт не выполнен -->
+      <div id="profilePrivacy" class="pv-box" hidden>
+        <div class="pf-kicker" style="margin-bottom:.7rem">🔒 Приватность</div>
+        <label class="pv-row"><span>Кто видит мой профиль</span>
+          <select id="pvProfile" onchange="savePrivacy('privacy_profile', this.value)">
+            <option value="all">Все</option><option value="friends">Только друзья</option><option value="nobody">Только я</option>
+          </select></label>
+        <label class="pv-row"><span>Заявки в друзья</span>
+          <select id="pvRequests" onchange="savePrivacy('privacy_friend_requests', this.value)">
+            <option value="all">От всех</option><option value="nobody">Ни от кого</option>
+          </select></label>
+        <label class="pv-row pv-check"><input type="checkbox" id="pvInvisible" onchange="savePrivacy('privacy_invisible', this.checked)">
+          <span>👻 Невидимка — не показывать меня в «Гостях профиля» у других</span></label>
+        <label class="pv-row pv-check"><input type="checkbox" id="pvDonations" onchange="savePrivacy('privacy_hide_donations', this.checked)">
+          <span>💸 Скрыть сумму моих донатов — в профиле и в топе донатеров (значок VIP останется)</span></label>
+        <div id="pvStatus" class="pv-status"></div>
+        <div class="pv-note">Скрытый профиль: остальные видят только ник, аватар, роль и значок VIP. Модераторы тоже не видят скрытое — им доступны лишь служебные данные (дата регистрации, роль, VIP), чтобы разбираться с жалобами.</div>
+      </div>
     </div>
 
     <!-- Уровень и XP (js/features/xp.js, xp.sql) — скрыт, пока xp.sql не выполнен -->
@@ -1649,7 +1670,7 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <!-- Ачивки — видны и на своём, и на чужом профиле -->
-    <div class="pf-card pf-card-tw" style="margin-top:1rem">
+    <div id="profileAchievementsCard" class="pf-card pf-card-tw" style="margin-top:1rem">
       <div class="pf-kicker" style="margin-bottom:.6rem">🏆 Ачивки</div>
       <div id="profileAchievements" class="ach-grid"></div>
     </div>

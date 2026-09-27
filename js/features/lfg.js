@@ -19,11 +19,20 @@ async function renderLfgPage(){
   try {
     const { data: posts, error } = await sbClient
       .from('lfg_posts')
-      .select('*, profiles(nick, avatar_url, role, is_vip, vip_until, total_donated)')
+      .select('*')
       .eq('active', true)
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
+    // Профили авторов — вторым запросом через profiles_public (privacy.sql):
+    // встроенный select не может прочитать total_donated из самой таблицы
+    const ids = [...new Set((posts || []).map(p => p.author_id).filter(Boolean))];
+    if (ids.length) {
+      const { data: profs } = await (await sbProfiles())
+        .select('id, nick, avatar_url, role, is_vip, vip_until, total_donated').in('id', ids);
+      const byId = new Map((profs || []).map(p => [p.id, p]));
+      (posts || []).forEach(p => { p.profiles = byId.get(p.author_id) || null; });
+    }
     if (!posts || !posts.length) { statusEl.textContent = 'Пока нет открытых заявок — стань первым!'; return; }
     statusEl.textContent = '';
     listEl.innerHTML = posts.map(p => renderLfgCard(p)).join('');
@@ -131,8 +140,7 @@ async function findGameMatches(game){
   const box = document.getElementById('lfgGameMatches');
   if (!sbClient || !game) { box.innerHTML = ''; return; }
   try {
-    const { data } = await sbClient
-      .from('profiles')
+    const { data } = await (await sbProfiles())
       .select('id, nick, avatar_url')
       .contains('favorite_games', [game.toLowerCase()])
       .neq('id', currentUser?.id || '00000000-0000-0000-0000-000000000000')

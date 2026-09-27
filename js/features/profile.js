@@ -111,7 +111,7 @@ async function renderProfilePage(viewUserId){
 
   let profile;
   try {
-    const { data } = await sbClient.from('profiles').select('*').eq('id', targetId).single();
+    const { data } = await (await sbProfiles()).select('*').eq('id', targetId).single();
     profile = data;
   } catch(e) { profile = null; }
   if (!profile) {
@@ -159,6 +159,13 @@ async function renderProfilePage(viewUserId){
       }
     }
   }
+  const hidden = !isOwn && !!profile.profile_hidden;
+  renderProfileHiddenNote(profile, hidden);
+  document.getElementById('profileAboutCard').style.display = hidden ? 'none' : '';
+  document.getElementById('profileGamesCard').style.display = hidden ? 'none' : '';
+  document.getElementById('profileAchievementsCard').style.display = hidden ? 'none' : '';
+  // Статистику на скрытом профиле видит только персонал (служебный просмотр)
+  document.getElementById('profileStatsRow').style.display = (hidden && !profile.staff_view) ? 'none' : '';
   document.getElementById('profileBioText').textContent = profile.bio || (isOwn ? 'Расскажи о себе...' : '');
   document.getElementById('profileStatusView').textContent = profile.status_text || '';
   if (typeof renderProfileGamesView === 'function') renderProfileGamesView(profile.favorite_games);
@@ -169,10 +176,12 @@ async function renderProfilePage(viewUserId){
   else { avatarEl.style.backgroundImage=''; avatarEl.textContent = (profile.nick||'?').substring(0,2).toUpperCase(); }
   applyProfileGlow(avatarEl, profile);
 
-  renderProfileStats(profile, targetId);
+  if (!hidden || profile.staff_view) renderProfileStats(profile, targetId);
   renderReferralPanel(profile, isOwn);
-  if (typeof renderAchievements === 'function') renderAchievements(targetId, isOwn);
-  if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
+  if (!hidden && typeof renderAchievements === 'function') renderAchievements(targetId, isOwn);
+  if (hidden) document.getElementById('profileXpCard').hidden = true;
+  else if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
+  if (isOwn) renderPrivacySettings(profile);
 
   // Редактирование — только на своём профиле
   document.getElementById('profileBannerEditBtn').style.display = isOwn ? 'flex' : 'none';
@@ -200,6 +209,9 @@ async function renderProfilePage(viewUserId){
       pending_received: `<button onclick="acceptFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✅ Принять заявку в друзья</button>`,
       friends: `<button onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
     };
+    if (status === 'none' && profile.accepts_friend_requests === false) {
+      buttons.none = `<span style="color:var(--muted);font-size:.8rem">🚫 Не принимает заявки в друзья</span>`;
+    }
     addFriendWrap.innerHTML = buttons[status] || '';
     addFriendWrap.style.display = 'block';
   } else {
@@ -296,6 +308,60 @@ async function renderProfileStats(profile, targetId){
   }
 }
 
+// ═══════════════════════════════════════
+//  ПРИВАТНОСТЬ (privacy.sql) — прятать данные обязана база (profiles_public),
+//  здесь только показ и настройки
+// ═══════════════════════════════════════
+function renderProfileHiddenNote(profile, hidden){
+  const el = document.getElementById('profileHiddenNote');
+  if (!el) return;
+  if (!hidden) { el.style.display = 'none'; return; }
+  const friendsOnly = profile.profile_visibility === 'friends';
+  let sub = '';
+  if (profile.staff_view) sub = '🛡 Служебный просмотр: вам как модератору видны только дата регистрации, роль и VIP';
+  else if (friendsOnly && currentUser && profile.accepts_friend_requests !== false) sub = 'Добавь в друзья, чтобы увидеть больше';
+  el.innerHTML = `<div style="font-size:1.6rem">🔒</div>
+    <div style="font-weight:800;margin-top:.3rem">${friendsOnly ? 'Профиль видят только друзья' : 'Пользователь скрыл профиль'}</div>
+    ${sub ? `<div style="font-size:.74rem;color:var(--muted);margin-top:.4rem">${sub}</div>` : ''}`;
+  el.style.display = 'block';
+}
+
+function renderPrivacySettings(profile){
+  const box = document.getElementById('profilePrivacy');
+  if (!box) return;
+  box.hidden = typeof privacyAvailable !== 'function' || !privacyAvailable();
+  if (box.hidden) return;
+  document.getElementById('pvProfile').value = profile.profile_visibility || 'all';
+  document.getElementById('pvRequests').value = profile.accepts_friend_requests === false ? 'nobody' : 'all';
+  document.getElementById('pvInvisible').checked = !!profile.privacy_invisible;
+  document.getElementById('pvDonations').checked = !!profile.privacy_hide_donations;
+  document.getElementById('pvStatus').textContent = '';
+}
+
+async function savePrivacy(col, value){
+  const st = document.getElementById('pvStatus');
+  if (!sbClient || !currentUser) return;
+  st.style.color = 'var(--muted)'; st.textContent = 'Сохраняем...';
+  const { error } = await sbClient.from('profiles').update({ [col]: value }).eq('id', currentUser.id);
+  if (error) {
+    st.style.color = '#f87171'; st.textContent = '⚠ Не сохранилось: ' + error.message;
+    renderPrivacySettings(currentProfile || {});
+    return;
+  }
+  // В profiles_public настройки называются чуть иначе — держим currentProfile в том же виде
+  if (currentProfile) {
+    if (col === 'privacy_profile') currentProfile.profile_visibility = value;
+    else if (col === 'privacy_friend_requests') currentProfile.accepts_friend_requests = value === 'all';
+    else currentProfile[col] = value;
+  }
+  // Невидимка стирает и уже записанные свои заходы в чужие «Гости профиля»
+  if (col === 'privacy_invisible' && value) {
+    try { await sbClient.from('profile_views').delete().eq('viewer_id', currentUser.id); } catch (e) {}
+  }
+  st.style.color = '#22c55e';
+  st.textContent = col === 'privacy_hide_donations' ? '✅ Сохранено — топ донатеров обновится в течение нескольких минут' : '✅ Сохранено';
+}
+
 // Реферальная ссылка на своём профиле — используем собственный уникальный
 // nick как код приглашения (?ref=<nick>), без отдельной колонки-кода.
 function renderReferralPanel(profile, isOwn){
@@ -380,6 +446,7 @@ function renderNickWithVip(nick, profile, roleBadgeHtml){
 // задумано: история визитов не теряется, пока ты не VIP.
 async function recordProfileView(viewedId){
   if (!sbClient || !currentUser?.id || currentUser.id === viewedId) return;
+  if (currentProfile?.privacy_invisible) return; // режим невидимки (privacy.sql проверяет и сам)
   try {
     await sbClient.from('profile_views')
       .upsert([{ viewer_id: currentUser.id, viewed_id: viewedId, viewed_at: new Date().toISOString() }], { onConflict: 'viewer_id,viewed_id' });
@@ -559,7 +626,7 @@ function renderStaffVipPanel(profile, isOwn){
   panel.style.display = 'block';
   panel.innerHTML = `
     <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">🔒 Только для модерации: шкала VIP</div>
-    <div style="font-size:.78rem;margin-bottom:.4rem">Уровень: <b>${tier ? tier.label : 'не активен'}</b> · всего задонатил: <b>${(Number(profile.total_donated)||0).toFixed(0)}₽</b></div>
+    <div style="font-size:.78rem;margin-bottom:.4rem">Уровень: <b>${tier ? tier.label : 'не активен'}</b> · всего задонатил: <b>${profile.donations_hidden ? '🔒 скрыто' : (Number(profile.total_donated)||0).toFixed(0) + '₽'}</b></div>
     <div style="font-size:.78rem;margin-bottom:.4rem">До следующего месяца: <b>${pending.toFixed(0)}/${VIP_RUB_PER_MONTH}₽</b>${missing > 0 ? ` (не хватает ${missing.toFixed(0)}₽)` : ' — набрано!'}</div>
     <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.5rem 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px"></div></div>
     <div style="font-size:.72rem;color:var(--muted)">VIP активен до: ${untilStr}</div>`;
@@ -733,7 +800,7 @@ async function uploadProfileImage(bucket, file){
 
   let prev = null;
   try {
-    const { data } = await sbClient.from('profiles').select('role,is_vip,vip_until,total_donated,avatar_url,banner_url').eq('id', currentUser.id).single();
+    const { data } = await (await sbProfiles()).select('role,is_vip,vip_until,total_donated,avatar_url,banner_url').eq('id', currentUser.id).single();
     prev = data;
   } catch(e) {}
   if (isGif && !hasPerks(prev?.role, prev)) {
@@ -986,10 +1053,12 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
   document.getElementById('miniProfileLink').href = `#/profile/${userId}`;
 
   try {
-    const { data: p } = await sbClient.from('profiles').select('*').eq('id', userId).single();
+    const { data: p } = await (await sbProfiles()).select('*').eq('id', userId).single();
     if (!p) return;
     document.getElementById('miniProfileNick').textContent = p.nick || fallbackNick;
-    document.getElementById('miniProfileBio').textContent = p.bio || '';
+    document.getElementById('miniProfileBio').textContent = p.profile_hidden && currentUser?.id !== userId
+      ? (p.profile_visibility === 'friends' ? '🔒 Профиль видят только друзья' : '🔒 Профиль скрыт')
+      : (p.bio || '');
     document.getElementById('miniProfileStatus').textContent = p.status_text || '';
     {
       const games = p.favorite_games || [];
@@ -1034,6 +1103,9 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
         pending_received: `<button onclick="acceptFriendRequest('${userId}')" style="${small};background:var(--accent);color:#fff">✅ Принять заявку</button>`,
         friends: `<button onclick="openDmWith('${userId}',${jsAttr(p.nick||fallbackNick)})" style="${small};background:rgba(255,255,255,.1);color:var(--text)">✉ Написать</button>`,
       };
+      if (status === 'none' && p.accepts_friend_requests === false) {
+        buttons.none = `<span style="font-size:.72rem;color:var(--muted)">🚫 Не принимает заявки</span>`;
+      }
       actionEl.innerHTML = buttons[status] || '';
     } else {
       actionEl.innerHTML = '';
