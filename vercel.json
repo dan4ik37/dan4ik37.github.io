@@ -1,18 +1,42 @@
 {
   "functions": {
-    "api/vip-sync.js": { "maxDuration": 30 }
+    "api/vip-sync.js": {
+      "maxDuration": 30
+    }
   },
   "crons": [
-    { "path": "/api/vip-sync", "schedule": "0 4 * * *" }
+    {
+      "path": "/api/vip-sync",
+      "schedule": "0 4 * * *"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        }
       ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/v/:id",
+      "destination": "/api/video?id=:id"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
     }
   ]
 }

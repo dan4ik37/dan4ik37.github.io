@@ -50,8 +50,23 @@ function closePrivacy(){
 // ═══════════════════════════════════════
 //  MODAL
 // ═══════════════════════════════════════
+// Ссылка «поделиться» ведёт на страницу ролика на сайте (/v/<id>, api/video.js),
+// а не на YouTube: у неё красивое превью, и пришедший остаётся на сайте.
+let modalVidId = '';
+function vidPageUrl(id){ return 'https://dan4ik37.vercel.app/v/' + id; }
+function shareCurrentVid(){
+  const url = vidPageUrl(modalVidId), btn = document.getElementById('mShare');
+  const title = document.getElementById('mTitle').textContent;
+  if (navigator.share) { navigator.share({ title, url }).catch(()=>{}); return; }
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(()=>{
+    if (btn) { btn.textContent = '✓ Скопировано'; setTimeout(()=>btn.textContent='🔗 Поделиться', 1800); }
+  }, ()=>prompt('Скопируй ссылку:', url));
+}
+
 function openVid(id,title,date,views){
   if(typeof markVidWatched==='function') markVidWatched(id);
+  modalVidId = id;
+  const pageLink = document.getElementById('mPage'); if (pageLink) pageLink.href = '/v/' + id;
   document.getElementById('mTitle').textContent=title;
   document.getElementById('mMeta').textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
   document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;

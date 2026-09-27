@@ -7,6 +7,10 @@
 <meta name="google-adsense-account" content="ca-pub-7940480593743401">
 <meta name="description" content="Официальный сайт стримера dan4ik37. Видео, стримы, донат и все соцсети в одном месте.">
 <meta name="theme-color" content="#ff2d55">
+<link rel="canonical" href="https://dan4ik37.vercel.app/">
+<!-- Главный адрес — dan4ik37.vercel.app. Копия на GitHub Pages (тот же репозиторий)
+     без серверных функций и дублирует контент для поисковиков — уводим оттуда. -->
+<script>if(/\.github\.io$/.test(location.hostname))location.replace('https://dan4ik37.vercel.app/'+location.hash);</script>
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/icon-192.png" type="image/png">
@@ -2322,6 +2326,11 @@ body.low .donation-alert-icon{animation:none}
       <button class="modal-close" aria-label="Закрыть видео" onclick="closeModal()">✕</button>
       <div class="modal-title" id="mTitle"></div>
       <div class="modal-meta" id="mMeta"></div>
+      <div class="modal-actions">
+        <a class="modal-act modal-act-yt" href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться</a>
+        <button type="button" class="modal-act" id="mShare" onclick="shareCurrentVid()">🔗 Поделиться</button>
+        <a class="modal-act" id="mPage" href="#" target="_blank" rel="noopener">Страница видео ↗</a>
+      </div>
     </div>
   </div>
 </div>

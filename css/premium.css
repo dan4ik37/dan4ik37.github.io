@@ -1161,3 +1161,16 @@ body.is-authed .cm-join{display:none}
   box-shadow:none;font-weight:600;
 }
 #profileAdminPanel .profile-admin-btn:hover{border-color:var(--ac-55);background:var(--ac-10);color:#fff;transform:none;box-shadow:none}
+
+/* Название в карточке — ссылка на /v/<id>, внешне как раньше */
+a.vtitle{color:inherit;text-decoration:none}
+a.vtitle:hover{color:#fff;text-decoration:underline;text-decoration-color:rgba(255,64,64,.6);text-underline-offset:3px}
+
+/* Кнопки под видео в окне: подписка, поделиться, страница ролика */
+.modal-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.9rem}
+.modal-act{display:inline-flex;align-items:center;gap:.35rem;padding:.55rem .95rem;border-radius:10px;cursor:pointer;
+  font:inherit;font-size:.74rem;font-weight:800;color:#fff;text-decoration:none;
+  background:rgba(255,255,255,.05);border:1px solid var(--line-hi);transition:background .2s,border-color .2s}
+.modal-act:hover{background:rgba(255,255,255,.1)}
+.modal-act-yt{background:linear-gradient(135deg,#ff4040,#d90429);border-color:transparent}
+.modal-act-yt:hover{background:linear-gradient(135deg,#ff5555,#e0102f)}

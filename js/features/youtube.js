@@ -280,10 +280,18 @@ function renderVids(vids){
         </button>
       </div>
       <div class="vinfo">
-        <div class="vtitle">${esc(v.title)}</div>
+        <a class="vtitle" href="/v/${v.id}">${esc(v.title)}</a>
         <div class="vmeta">${v.views?`<span>👁 ${v.views}</span>`:''}${v.date?`<span>📅 ${v.date}</span>`:''}</div>
       </div>`;
-    card.addEventListener('click',e=>{if(e.target.closest('.vlike'))return;if(selMode){toggleSel2(card,v.id)}else openVid(v.id,v.title,v.date,v.views)});
+    card.addEventListener('click',e=>{
+      if(e.target.closest('.vlike'))return;
+      // Название — настоящая ссылка на /v/<id> (для поисковиков и «открыть в новой вкладке»);
+      // обычный клик по-прежнему открывает видео в окне на месте
+      const a=e.target.closest('a.vtitle');
+      if(a&&(e.ctrlKey||e.metaKey||e.shiftKey||e.button===1))return;
+      e.preventDefault();
+      if(selMode){toggleSel2(card,v.id)}else openVid(v.id,v.title,v.date,v.views)
+    });
     grid.appendChild(card);
   });
 }
