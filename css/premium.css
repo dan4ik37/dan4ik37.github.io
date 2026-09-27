@@ -1134,3 +1134,6 @@ body.is-authed .cm-join{display:none}
 
 /* Рекламные блоки на главной — без лишних отступов, если AdSense ничего не отдал */
 #ad-mid,#ad-top{padding-top:0;padding-bottom:0}
+
+/* Рекламный блок без ID из AD_SLOTS (config.js) — не показываем пустое место */
+.ad-empty{display:none!important}

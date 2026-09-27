@@ -49,6 +49,7 @@ function showPage(route){
 function finishShowPage(route, activeIds){
   // Твич-плеер и loadYT() — только когда реально открыта #/home (см. initHomeMedia)
   if (route==='home') initHomeMedia();
+  if (typeof fillVisibleAds==='function') fillVisibleAds();
   if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
   if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
   if (route==='lfg' && typeof renderLfgPage==='function') renderLfgPage();
