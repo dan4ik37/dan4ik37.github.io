@@ -2,7 +2,7 @@
 //  LEADERBOARD — DonationAlerts API
 // ═══════════════════════════════════════
 let lbTab = 'top';
-let lbPeriod = 'month';   // топ донатов: 'month' — последние 30 дней, 'all' — всё время
+let lbPeriod = null;      // топ донатов: 'month' — последние 30 дней, 'all' — всё время; null — сам выбор по данным
 let lbLastData = null;
 const DA_AUTH_URL = `/api/donations`; // Vercel serverless
 
@@ -137,7 +137,8 @@ function renderLbHtml(data, tab) {
   const colors = ['#ff2d55','#9147ff','#29b6f6','#22c55e','#f59e0b','#ec4899','#ff6b35'];
   if (tab === 'top') {
     const hasMonth = Array.isArray(data.leaderboard_month);
-    const period = hasMonth ? lbPeriod : 'all';
+    // Пока человек сам не выбрал: за 30 дней, а если там пусто — за всё время
+    const period = !hasMonth ? 'all' : (lbPeriod || (data.leaderboard_month.length ? 'month' : 'all'));
     const list = period === 'month' ? data.leaderboard_month : data.leaderboard;
     const toggle = hasMonth ? `<div class="lb-period">
         <button class="${period === 'month' ? 'active' : ''}" onclick="setLbPeriod('month')">За 30 дней</button>
