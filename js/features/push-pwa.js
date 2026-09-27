@@ -49,6 +49,22 @@ function saveSub(sub) {
   return pushRpc('push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
 }
 
+// Старый sw.js (без обработчика push) мог остаться активным — тогда приветствие
+// приходит, но не показывается. Перед подпиской просим браузер проверить обновление
+// и ждём (до 5 с), пока новая версия встанет.
+async function freshServiceWorker() {
+  const reg = await navigator.serviceWorker.ready;
+  try { await reg.update(); } catch (e) {}
+  const w = reg.installing || reg.waiting;
+  if (w) {
+    await new Promise(res => {
+      const t = setTimeout(res, 5000);
+      w.addEventListener('statechange', () => { if (w.state === 'activated') { clearTimeout(t); res(); } });
+    });
+  }
+  return reg;
+}
+
 async function togglePush() {
   if (pushBusy) return;
   if (!PUSH_OK) {
@@ -59,7 +75,7 @@ async function togglePush() {
   }
   pushBusy = true; updatePushBtn();
   try {
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await freshServiceWorker();
     let sub = await reg.pushManager.getSubscription();
 
     if (pushSubscribed && sub) {
