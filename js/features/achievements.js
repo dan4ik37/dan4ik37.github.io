@@ -53,6 +53,8 @@ const ACHIEVEMENT_DEFS = [
   { code: 'tile_2048',     icon: '🧩', title: '2048!',           desc: 'Собрал плитку 2048',                 xp: 150 },
   { code: 'ttt_unbeaten',  icon: '❌', title: 'Непробиваемый',   desc: 'Не проиграл непобедимому боту в крестики-нолики', xp: 50 },
   { code: 'lightning',     icon: '⚡', title: 'Молния',          desc: 'Средняя реакция быстрее 200 мс',     xp: 50 },
+  { code: 'checkers_master', icon: '♟️', title: 'Гроссмейстер',  desc: 'Обыграл бота в шашки на «Сложном»',  xp: 150 },
+  { code: 'big_catch',     icon: '🤑', title: 'Щедрый стрим',    desc: '1000+ очков в «Лови донаты»',        xp: 50 },
   { code: 'level_10',      icon: '🥉', title: 'Опытный',         desc: 'Достиг 10 уровня' },
   { code: 'level_30',      icon: '🥈', title: 'Ветеран',         desc: 'Достиг 30 уровня' },
   { code: 'level_50',      icon: '🥇', title: 'Легенда',         desc: 'Достиг 50 уровня' },

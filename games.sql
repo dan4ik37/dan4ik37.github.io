@@ -32,6 +32,8 @@ returns int language sql immutable as $$
     when p_game = 'guess' then 10
     when p_game = '2048' then 1000000
     when p_game like 'ttt\_%' then 2
+    when p_game like 'checkers\_%' then 12
+    when p_game = 'catch' then 100000
     when p_game = 'reaction' then 1000
     else null end;
 $$;
@@ -44,6 +46,9 @@ returns int language sql immutable as $$
     when 'guess' then 15 when '2048' then 30
     when 'ttt_easy' then 3 when 'ttt_normal' then 10 when 'ttt_hard' then 10
     when 'reaction' then 5
+    when 'ttt_online' then 5
+    when 'checkers_easy' then 5 when 'checkers_normal' then 15 when 'checkers_hard' then 30 when 'checkers_online' then 10
+    when 'catch' then 10
     else 0 end;
 $$;
 

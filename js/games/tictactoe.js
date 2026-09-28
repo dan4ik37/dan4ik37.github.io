@@ -1,11 +1,12 @@
 // ═══════════════════════════════════════
-//  ИГРА «КРЕСТИКИ-НОЛИКИ» — против бота (3 уровня) или вдвоём
+//  ИГРА «КРЕСТИКИ-НОЛИКИ» — против бота (3 уровня), вдвоём на экране или онлайн по ссылке
 // ═══════════════════════════════════════
 // «Непобедимый» — полный перебор (minimax): выиграть нельзя, ничья = успех.
+// Онлайн — js/games/room.js: #/games/ttt/<код>. Кто ходит первым, тот ❌.
 (() => {
   const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
   const LEVELS = { easy: 'Лёгкий', normal: 'Средний', hard: 'Непобедимый', duo: 'Вдвоём' };
-  let root, api, T, timers = [];
+  let root, api, T, R = null, timers = [];
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); };
 
   const winner = b => {
@@ -42,6 +43,7 @@
     root.innerHTML = `<div class="ct-setup">
         <div class="ct-row"><span>Соперник</span><div class="ct-opts">${Object.entries(LEVELS).map(([k, l]) => `<button class="ct-opt${k === lvl ? ' active' : ''}" data-l="${k}">${l}</button>`).join('')}</div></div>
         <button class="ct-start" id="tStart">▶ Играть</button>
+        <button class="ct-duel-btn" id="tOnline">👥 Играть с другом онлайн</button>
         <div class="ct-stats">Побед над ботом: <b>${st.wins || 0}</b> · Игр: <b>${st.plays || 0}</b></div>
       </div>`;
     root.querySelectorAll('.ct-opt').forEach(b => b.onclick = () => {
@@ -50,33 +52,38 @@
       root.querySelectorAll('.ct-opt').forEach(x => x.classList.toggle('active', x === b));
     });
     root.querySelector('#tStart').onclick = () => start(lvl);
+    root.querySelector('#tOnline').onclick = () => { location.hash = '#/games/ttt/' + GameRoom.newCode(); };
   }
 
-  function start(level){
-    T = { level, board: Array(9).fill(null), turn: 'X', over: false, first: T?.first === 'X' ? 'O' : 'X' };
-    // Против бота первым ходят по очереди: одну партию ты, следующую бот
-    if (level !== 'duo') T.turn = T.first === 'X' ? 'X' : 'O';
-    else T.turn = 'X';
+  // online: { mark: 'X'|'O' } — какой знак мой
+  function start(level, online){
+    T = { level, board: Array(9).fill(null), turn: 'X', over: false, first: T?.first === 'X' ? 'O' : 'X', online: online || null, n: 0 };
+    if (level !== 'duo' && level !== 'online') T.turn = T.first === 'X' ? 'X' : 'O';   // с ботом первый ход по очереди
+    const badge = online ? `👥 против ${esc(R?.opp?.nick || 'соперника')} · ты ${online.mark === 'X' ? '❌' : '⭕'}` : LEVELS[level];
     root.innerHTML = `<div class="tt">
-        <div class="ct-top"><span class="ct-badge">${LEVELS[level]}</span><span class="ct-status" id="tStatus"></span></div>
+        <div class="ct-top"><span class="ct-badge">${badge}</span><span class="ct-status" id="tStatus"></span></div>
         <div class="tt-board" id="tBoard">${Array.from({ length: 9 }, (_, i) => `<button class="tt-cell" data-i="${i}" aria-label="Клетка ${i + 1}"></button>`).join('')}</div>
-        <div class="ct-actions"><button id="tAgain">↻ Заново</button><button id="tSetup">⚙ Соперник</button></div>
+        <div class="ct-actions" id="tActions">${online ? '' : '<button id="tAgain">↻ Заново</button><button id="tSetup">⚙ Соперник</button>'}</div>
       </div>`;
     root.querySelectorAll('.tt-cell').forEach(c => c.onclick = () => humanMove(+c.dataset.i));
-    root.querySelector('#tAgain').onclick = () => start(level);
-    root.querySelector('#tSetup').onclick = renderSetup;
+    if (!online) {
+      root.querySelector('#tAgain').onclick = () => start(level);
+      root.querySelector('#tSetup').onclick = renderSetup;
+    }
     status();
-    if (level !== 'duo' && T.turn === 'O') later(botMove, 450);
+    if (!online && level !== 'duo' && T.turn === 'O') later(botMove, 450);
   }
 
   function status(text){
     const el = root.querySelector('#tStatus');
     if (text) { el.innerHTML = text; return; }
-    el.textContent = T.level === 'duo' ? `Ходит ${T.turn === 'X' ? '❌' : '⭕'}` : T.turn === 'X' ? 'Твой ход ❌' : '🤖 думает…';
+    if (T.online) el.textContent = T.turn === T.online.mark ? `Твой ход ${T.online.mark === 'X' ? '❌' : '⭕'}` : `Ход ${R?.opp?.nick || 'соперника'}…`;
+    else el.textContent = T.level === 'duo' ? `Ходит ${T.turn === 'X' ? '❌' : '⭕'}` : T.turn === 'X' ? 'Твой ход ❌' : '🤖 думает…';
   }
 
   function place(i, who){
     T.board[i] = who;
+    T.n++;
     const cell = root.querySelectorAll('.tt-cell')[i];
     cell.textContent = who === 'X' ? '❌' : '⭕';
     cell.disabled = true;
@@ -89,16 +96,34 @@
 
   function humanMove(i){
     if (T.over || T.board[i]) return;
+    if (T.online) {
+      if (T.turn !== T.online.mark) return;
+      place(i, T.online.mark);
+      R?.send({ type: 'move', i, n: T.n });
+      return;
+    }
     if (T.level !== 'duo' && T.turn !== 'X') return;
     place(i, T.turn);
     if (!T.over && T.level !== 'duo') later(botMove, 350 + Math.random() * 350);
   }
   function botMove(){ if (T && !T.over && root) place(botPick(), 'O'); }
 
-  function end(w){
+  function end(w, note){
     T.over = true;
     root.querySelectorAll('.tt-cell').forEach(c => { c.disabled = true; });
     if (w.line) w.line.forEach(i => root.querySelectorAll('.tt-cell')[i].classList.add('win'));
+    if (T.online) {
+      const mine = w.who === T.online.mark, draw = w.who === 'draw';
+      status(note || (draw ? '🤝 Ничья' : mine ? '🎉 Ты победил!' : `😔 Победил ${esc(R?.opp?.nick || 'соперник')}`));
+      api.sfx(mine ? 'win' : draw ? 'ok' : 'bad');
+      const acts = root.querySelector('#tActions');
+      acts.innerHTML = '<button class="ct-start" id="tRematch">↻ Реванш</button><button id="tLeave">🚪 Выйти</button>';
+      acts.querySelector('#tRematch').onclick = rematch;
+      acts.querySelector('#tLeave').onclick = () => { location.hash = '#/games/ttt'; };
+      // Короткую «победу» (соперник вышел на 1–2 ходу) не засчитываем — защита от накрутки
+      if (T.n >= 5 || w.line) api.report('ttt_online', mine, mine ? 2 : draw ? 1 : 0, 0);
+      return;
+    }
     if (T.level === 'duo') { status(w.who === 'draw' ? '🤝 Ничья' : `🎉 Победил ${w.who === 'X' ? '❌' : '⭕'}`); api.sfx('win'); return; }
     const res = w.who === 'X' ? 2 : w.who === 'draw' ? 1 : 0;
     status(res === 2 ? '🎉 Ты победил!' : res === 1 ? (T.level === 'hard' ? '🤝 Ничья с непобедимым — это успех!' : '🤝 Ничья') : '🤖 Бот победил');
@@ -108,8 +133,66 @@
     api.report('ttt_' + T.level, win, res, T.level === 'hard' ? res : 0);
   }
 
+  // ═══ Онлайн ═══
+  const O = { round: 0, rematch: { me: false, opp: false }, started: false };
+  function online(code){
+    GameRoom.lobby(root, 'ttt', code);
+    O.round = 0; O.started = false;
+    R = GameRoom.join('ttt', code, {
+      onError: () => { if (root) root.innerHTML = GameRoom.errorHtml; },
+      onFull: () => { if (root) root.innerHTML = GameRoom.fullHtml('ttt'); },
+      onPeer: (opp, room) => {
+        if (!root) return;
+        if (!opp) {
+          if (T?.online && !T.over) end({ who: T.online.mark }, `🎉 ${esc(R?.lastOpp || 'Соперник')} вышел — победа`);
+          else if (!O.started) GameRoom.lobbyText(root, 'Ты в комнате. <b>Ждём друга…</b>');
+          return;
+        }
+        R.lastOpp = opp.nick;
+        if (!O.started) {
+          if (room.isHost) hostStart();
+          else GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`);
+        }
+      },
+      onMessage: m => {
+        if (m.type === 'start' && R && !R.isHost) return begin(m);
+        if (!T?.online) return;
+        if (m.type === 'move') {
+          const oppMark = T.online.mark === 'X' ? 'O' : 'X';
+          if (T.over || T.turn !== oppMark || m.n !== T.n + 1 || T.board[m.i] || !(m.i >= 0 && m.i < 9)) return;
+          place(m.i, oppMark);
+        } else if (m.type === 'rematch') {
+          O.rematch.opp = true;
+          if (R.isHost && O.rematch.me) hostStart();
+          else if (T.over) status(`${esc(R.opp?.nick || 'Соперник')} хочет реванш — жми «↻ Реванш»!`);
+        }
+      },
+    });
+    if (!R) root.innerHTML = GameRoom.errorHtml;
+  }
+  function hostStart(){
+    O.round++;
+    const first = O.round % 2 === 1 ? R.opp.id : R.myId;   // первую партию начинает гость
+    const msg = { type: 'start', first, round: O.round };
+    R.send(msg);
+    begin(msg);
+  }
+  function begin(m){
+    O.started = true; O.round = m.round; O.rematch = { me: false, opp: false };
+    start('online', { mark: m.first === R.myId ? 'X' : 'O' });
+  }
+  function rematch(){
+    O.rematch.me = true;
+    R?.send({ type: 'rematch' });
+    if (R?.isHost && O.rematch.opp) hostStart();
+    else status(`Ждём ${esc(R?.opp?.nick || 'соперника')}…`);
+  }
+
   window.GAME_IMPL.ttt = {
-    mount(el, gameApi){ root = el; api = gameApi; T = null; renderSetup(); },
-    unmount(){ timers.forEach(clearTimeout); timers = []; if (T) T.over = true; root = null; },
+    mount(el, gameApi){
+      root = el; api = gameApi; T = null;
+      if (GameRoom.validCode(gameApi.param)) online(gameApi.param); else renderSetup();
+    },
+    unmount(){ timers.forEach(clearTimeout); timers = []; if (T) T.over = true; R?.leave(); R = null; root = null; },
   };
 })();
