@@ -6,15 +6,15 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '7';
+const GAMES_VER = '8';
 const GAMES = [
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
-  { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков.', scripts: ['js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
-  { id: '2048',     icon: '🧩', title: '2048',            desc: 'Складывай плитки — стрелки, WASD или свайпы. Дойдёшь до 2048?', scripts: ['js/games/g2048.js'], top: '2048', topLabel: 'очков', color: '#ffd166' },
+  { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков. Можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
+  { id: '2048',     icon: '🧩', title: '2048',            desc: 'Складывай плитки — стрелки, WASD или свайпы. Дойдёшь до 2048? Или кто больше за 3 минуты — с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/g2048.js'], top: '2048', topLabel: 'очков', color: '#ffd166' },
   { id: 'checkers', icon: '⚫', title: 'Шашки',           desc: 'Русские шашки: против бота трёх уровней, вдвоём на экране или онлайн с другом по ссылке.', scripts: ['js/games/room.js', 'js/games/checkers.js'], top: 'checkers_hard', topLabel: 'шашек сохранено в победе на «Сложном»', color: '#e5e7eb' },
-  { id: 'catch',    icon: '💰', title: 'Лови донаты',     desc: 'Аркада: лови падающие донаты, уворачивайся от банов и бомб. Чем дольше — тем быстрее.', scripts: ['js/games/catch.js'], top: 'catch', topLabel: 'очков', color: '#ffd166' },
+  { id: 'catch',    icon: '💰', title: 'Лови донаты',     desc: 'Аркада: лови падающие донаты, уворачивайся от банов и бомб. С другом — одинаковый дождь донатов у обоих.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/catch.js'], top: 'catch', topLabel: 'очков', color: '#ffd166' },
   { id: 'ttt',      icon: '❌', title: 'Крестики-нолики', desc: 'Против бота (последний уровень не проигрывает), вдвоём на экране или онлайн с другом.', scripts: ['js/games/room.js', 'js/games/tictactoe.js'], top: 'ttt_hard', topLabel: 'ничьих/побед у непобедимого', color: '#9147ff' },
-  { id: 'reaction', icon: '⚡', title: 'Реакция',          desc: 'Жми, как только экран станет зелёным. 5 попыток — узнай свою скорость.', scripts: ['js/games/reaction.js'], top: 'reaction', topLabel: 'очков (1000 − мс)', color: '#22c55e' },
+  { id: 'reaction', icon: '⚡', title: 'Реакция',          desc: 'Жми, как только экран станет зелёным. 5 попыток — узнай свою скорость и сравни с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/reaction.js'], top: 'reaction', topLabel: 'очков (1000 − мс)', color: '#22c55e' },
   { id: 'clicker',  icon: '👆', title: 'Кликер',          desc: 'Кликай на скорость и собирай комбо. Старая добрая классика сайта.', href: '#/clicker', color: '#ff9f43' },
 ];
 const GAME_IMPL = window.GAME_IMPL = window.GAME_IMPL || {};
@@ -32,6 +32,7 @@ const DAILY_QUESTS = {
 
 let gamesActive = null;        // id открытой игры
 let gamesTopKey = 'cities_hard';
+let gamesTopWeek = true;       // рекорды за 7 дней (иначе — за всё время)
 const gamesScriptCache = new Map();
 
 function gamesLoadScript(src){
@@ -69,8 +70,10 @@ function renderGamesHub(){
     </a>`;
   }).join('');
   const tabs = document.getElementById('gamesTopTabs');
-  tabs.innerHTML = GAMES.filter(g => g.top).map(g =>
+  tabs.innerHTML = `<button class="gm-tab duel${gamesTopKey === 'duels' ? ' active' : ''}" data-key="duels" onclick="setGamesTop('duels')">⚔️ Чемпионы дуэлей</button>` +
+    GAMES.filter(g => g.top).map(g =>
     `<button class="gm-tab${g.top === gamesTopKey ? ' active' : ''}" data-key="${g.top}" onclick="setGamesTop('${g.top}')">${g.icon} ${esc(g.title)}</button>`).join('');
+  document.querySelectorAll('#gamesTopPeriod button').forEach(b => b.classList.toggle('active', (b.dataset.week === '1') === gamesTopWeek));
   renderGamesTop();
   renderDailyQuest();
 }
@@ -240,22 +243,46 @@ function toggleGamesMute(btn){
   btn.textContent = muted ? '🔊' : '🔇';
 }
 
+// Побед в дуэлях с живыми соперниками (все игры) — за 7 дней или за всё время
+async function renderDuelTop(list){
+  const { data, error } = await sbClient.rpc('duel_top', { p_week: gamesTopWeek, lim: 10 });
+  if (error) { list.innerHTML = '<div class="gm-top-empty">Появится после обновления games.sql</div>'; return; }
+  document.getElementById('gamesTopBox').hidden = false;
+  if (!data?.length) { list.innerHTML = '<div class="gm-top-empty">Ещё никто не побеждал в дуэлях — позови друга по ссылке из любой игры!</div>'; return; }
+  list.innerHTML = data.map((r, i) => `
+    <li class="gm-top-item">
+      <span class="gm-top-place">${['🥇', '🥈', '🥉'][i] || i + 1}</span>
+      <a class="gm-top-nick" href="#/profile/${esc(r.user_id)}">${esc(r.nick || 'user')}</a><span class="lv-badge" data-lv-uid="${esc(r.user_id)}"></span>
+      <span class="gm-top-score">${r.wins} ${r.wins % 10 === 1 && r.wins % 100 !== 11 ? 'победа' : [2, 3, 4].includes(r.wins % 10) && ![12, 13, 14].includes(r.wins % 100) ? 'победы' : 'побед'} из ${r.played}</span>
+    </li>`).join('') + '<div class="gm-top-note">Дуэли: «Города», шашки и крестики-нолики онлайн, соревнования в остальных играх</div>';
+  if (typeof xpQueueBadges === 'function') xpQueueBadges();
+}
+
 // ── Таблица рекордов ──
 function setGamesTop(key){
   gamesTopKey = key;
   document.querySelectorAll('#gamesTopTabs .gm-tab').forEach(b => b.classList.toggle('active', b.dataset.key === key));
   renderGamesTop();
 }
+function setGamesTopPeriod(week){
+  gamesTopWeek = week;
+  document.querySelectorAll('#gamesTopPeriod button').forEach(b => b.classList.toggle('active', (b.dataset.week === '1') === week));
+  renderGamesTop();
+}
 async function renderGamesTop(){
   const list = document.getElementById('gamesTopList');
   if (!list) return;
-  const g = GAMES.find(x => x.top === gamesTopKey);
   if (!sbClient) { list.innerHTML = ''; return; }
   list.innerHTML = '<div class="gm-top-empty">Загрузка…</div>';
-  const { data, error } = await sbClient.rpc('game_top', { p_game: gamesTopKey, lim: 10 });
+  if (gamesTopKey === 'duels') return renderDuelTop(list);
+  const g = GAMES.find(x => x.top === gamesTopKey);
+  let { data, error } = gamesTopWeek
+    ? await sbClient.rpc('game_top_week', { p_game: gamesTopKey, lim: 10 })
+    : await sbClient.rpc('game_top', { p_game: gamesTopKey, lim: 10 });
+  if (error && gamesTopWeek) ({ data, error } = await sbClient.rpc('game_top', { p_game: gamesTopKey, lim: 10 }));   // старый games.sql без недельных
   if (error) { document.getElementById('gamesTopBox').hidden = true; return; }   // games.sql ещё не выполнен
   document.getElementById('gamesTopBox').hidden = false;
-  if (!data?.length) { list.innerHTML = '<div class="gm-top-empty">Пока никто не сыграл — стань первым!</div>'; return; }
+  if (!data?.length) { list.innerHTML = `<div class="gm-top-empty">${gamesTopWeek ? 'На этой неделе ещё никто не сыграл' : 'Пока никто не сыграл'} — стань первым!</div>`; return; }
   list.innerHTML = data.map((r, i) => `
     <li class="gm-top-item">
       <span class="gm-top-place">${['🥇', '🥈', '🥉'][i] || i + 1}</span>

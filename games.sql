@@ -47,6 +47,10 @@ returns int language sql immutable as $$
     when p_game like 'ttt\_%' then 2
     when p_game like 'checkers\_%' then 12
     when p_game = 'catch' then 100000
+    when p_game = 'guess_duel' then 1000
+    when p_game = '2048_duel' then 1000000
+    when p_game = 'catch_duel' then 100000
+    when p_game = 'reaction_duel' then 1000
     when p_game = 'reaction' then 1000
     else null end;
 $$;
@@ -62,6 +66,7 @@ returns int language sql immutable as $$
     when 'ttt_online' then 5
     when 'checkers_easy' then 5 when 'checkers_normal' then 15 when 'checkers_hard' then 30 when 'checkers_online' then 10
     when 'catch' then 10
+    when 'guess_duel' then 10 when '2048_duel' then 10 when 'catch_duel' then 10 when 'reaction_duel' then 10
     else 0 end;
 $$;
 
@@ -166,3 +171,43 @@ begin
   return jsonb_build_object('ok', got > 0, 'xp', got);
 end; $$;
 grant execute on function public.claim_daily_quest() to authenticated;
+
+-- ═══ Рекорды недели: лучший счёт за 7 дней по журналу партий ═══
+create or replace function public.game_top_week(p_game text, lim int default 10)
+returns table(user_id uuid, nick text, best_score int, wins int, plays int)
+language sql stable security definer set search_path = public as $$
+  select l.user_id, p.nick, max(l.score)::int, count(*) filter (where l.win)::int, count(*)::int
+  from public.game_log l
+  join public.profiles p on p.id = l.user_id
+  where l.game = p_game and l.day >= (now() at time zone 'Europe/Moscow')::date - 6
+  group by l.user_id, p.nick
+  having max(l.score) > 0 or count(*) filter (where l.win) > 0
+  order by max(l.score) desc, count(*) filter (where l.win) desc
+  limit least(greatest(coalesce(lim, 10), 1), 50);
+$$;
+grant execute on function public.game_top_week(text, int) to anon, authenticated;
+
+-- ═══ Чемпионы дуэлей: победы над живыми соперниками во всех играх ═══
+-- Неделя — по журналу партий (он хранит 14 дней), всё время — по game_stats.
+create or replace function public.duel_top(p_week boolean default true, lim int default 10)
+returns table(user_id uuid, nick text, wins int, played int)
+language sql stable security definer set search_path = public as $$
+  with src as (
+    select l.user_id, count(*) filter (where l.win)::int as wins, count(*)::int as played
+    from public.game_log l
+    where p_week and (l.game like '%\_duel' or l.game like '%\_online')
+      and l.day >= (now() at time zone 'Europe/Moscow')::date - 6
+    group by l.user_id
+    union all
+    select s.user_id, sum(s.wins)::int, sum(s.plays)::int
+    from public.game_stats s
+    where not p_week and (s.game like '%\_duel' or s.game like '%\_online')
+    group by s.user_id
+  )
+  select src.user_id, p.nick, src.wins, src.played
+  from src join public.profiles p on p.id = src.user_id
+  where src.wins > 0
+  order by src.wins desc, src.played asc
+  limit least(greatest(coalesce(lim, 10), 1), 50);
+$$;
+grant execute on function public.duel_top(boolean, int) to anon, authenticated;

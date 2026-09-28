@@ -1889,7 +1889,8 @@ body.low .donation-alert-icon{animation:none}
     <div class="dq" id="gamesDaily" hidden></div>
     <div class="gm-grid" id="gamesGrid"></div>
     <div class="gm-top" id="gamesTopBox" hidden>
-      <div class="gm-top-head"><b>🏆 Рекорды</b></div>
+      <div class="gm-top-head"><b>🏆 Рекорды</b>
+        <span class="gm-period" id="gamesTopPeriod"><button data-week="1" class="active" onclick="setGamesTopPeriod(true)">За неделю</button><button data-week="0" onclick="setGamesTopPeriod(false)">За всё время</button></span></div>
       <div class="gm-tabs" id="gamesTopTabs"></div>
       <ol class="gm-top-list" id="gamesTopList"></ol>
     </div>
