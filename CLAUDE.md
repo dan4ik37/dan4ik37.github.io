@@ -40,8 +40,6 @@
   переключить режим разрешений; после 10 сбоев подряд ход обрывается сам.
 
 ## Идеи на следующую сессию (с прицелом на деньги)
-- **SEO-страницы игр**: серверные `/games/<id>` (как `/v/<id>` в `api/video.js`) с текстом, правилами и мета-тегами
-  под запросы «играть в города онлайн», «русские шашки с другом» + в `sitemap.xml` — бесплатный трафик из поиска.
 - **AdSense**: переподать сайт как dan4ik37.vercel.app (github.io отклонён за «бесполезный контент» — теперь контента
   много), получить ID блоков в `AD_SLOTS`; рекламный блок между партиями/раундами игр (не во время игры).
 - Шаринг результатов: карточка «я набрал N в 2048 — побей» с картинкой (og-image через api) → новые игроки.
@@ -70,8 +68,11 @@
 - Данные роликов грузит `ensureYT()` один раз; по готовности зовётся `onVideosLoaded()` (shorts.js).
 - Разделы: `#/shorts` (shorts.js), `#/ideas` (ideas.js + `ideas.sql`), XP/уровни (xp.js + `xp.sql`).
   Пока SQL-файл не выполнен, раздел прячется (`body.no-ideas`, `body.no-xp`), без ошибок.
-- Серверные страницы: `/v/<id>` → `api/video.js`, `/sitemap.xml` → `api/sitemap.js` (rewrites в `vercel.json`,
-  общий код — `api/_lib/yt.js`). Локально проверять вызовом handler'а из node.
+- Серверные страницы: `/v/<id>` → `api/video.js`, `/games` и `/games/<id>` → `api/game.js` (SEO-страницы игр: правила,
+  советы, FAQ + JSON-LD; тексты — `api/_lib/games-seo.js`, кнопка «Играть» ведёт в SPA `/#/games/<id>`),
+  `/sitemap.xml` → `api/sitemap.js` (rewrites в `vercel.json`). Общий HTML-шаблон и стили — `api/_lib/page.js`,
+  YouTube — `api/_lib/yt.js`. Локально проверять вызовом handler'а из node (копия api/ во временной папке с
+  `package.json` `{"type":"module"}`). Новая игра → добавить и в `GAME_PAGES`.
 - AdSense: ID блоков — `AD_SLOTS` в `config.js`, загрузка — `js/features/ads.js` (только видимые блоки).
 - Событие `d37:auth` — после входа (роль уже загружена) и выхода.
 - Уведомления 🔔: `notifications.sql` (создают только триггеры, `notify()`), `js/features/notifications.js`
