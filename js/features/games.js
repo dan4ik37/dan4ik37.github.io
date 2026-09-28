@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '8';
+const GAMES_VER = '10';
 const GAMES = [
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков. Можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },

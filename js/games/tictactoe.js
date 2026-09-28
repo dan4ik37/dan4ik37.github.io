@@ -148,10 +148,12 @@
           else if (!O.started) GameRoom.lobbyText(root, 'Ты в комнате. <b>Ждём друга…</b>');
           return;
         }
-        R.lastOpp = opp.nick;
-        if (!O.started) {
+        // Другой человек или соперник обновил страницу — хозяин начинает новую партию
+        const newcomer = R.lastOppId && R.lastOppId !== opp.id;
+        R.lastOpp = opp.nick; R.lastOppId = opp.id;
+        if (!O.started || newcomer) {
           if (room.isHost) hostStart();
-          else GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`);
+          else if (!O.started) GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`);
         }
       },
       onMessage: m => {

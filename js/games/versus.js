@@ -36,8 +36,11 @@
           else GameRoom.lobbyText(root, 'Ты в комнате. <b>Ждём соперника…</b>');
           return;
         }
-        V.oppNick = opp.nick; V.oppGone = false;
-        if (!V.started) { if (room.isHost) hostStart(); else GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`); }
+        // Пришёл другой человек (или соперник обновил страницу) — у него нет текущей партии,
+        // поэтому хозяин начинает новую
+        const newcomer = V.oppId && V.oppId !== opp.id;
+        V.oppId = opp.id; V.oppNick = opp.nick; V.oppGone = false;
+        if (!V.started || newcomer) { if (room.isHost) hostStart(); else if (!V.started) GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`); }
       },
       onMessage: m => {
         if (m.type === 'start' && !V.room.isHost) return begin(m);
@@ -79,8 +82,10 @@
         progress(score){
           if (!V.me || V.me.done) return;
           V.me.score = score; setMe();
-          const now = Date.now();
-          if (now - V.lastSent > 400) { V.lastSent = now; V.room.send({ type: 'score', score, round: V.round }); }
+          // Не чаще раза в 0,4 с, но последнее значение серии всё равно досылаем
+          const send = () => { V.lastSent = Date.now(); clearTimeout(V.pending); V.pending = 0; if (!V.me.done) V.room.send({ type: 'score', score: V.me.score, round: V.round }); };
+          if (Date.now() - V.lastSent > 400) send();
+          else if (!V.pending) V.pending = setTimeout(send, 400);
         },
         done(score){
           if (!V.me || V.me.done) return;

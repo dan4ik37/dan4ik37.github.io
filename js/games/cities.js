@@ -350,10 +350,13 @@
       if (!D.started || (S && S.over)) duelLobbyWaiting();
       return;
     }
+    // Другой человек или соперник обновил страницу — у него нет текущей партии, хозяин начинает новую
+    const newcomer = D.lastOppId && D.lastOppId !== opp.id;
+    D.lastOppId = opp.id;
     D.oppId = opp.id; D.oppNick = opp.nick || 'соперник';
-    if (!D.started) {
+    if (!D.started || newcomer) {
       if (D.host) duelHostStart();
-      else { const el = root.querySelector('#ctLobbyText'); if (el) el.innerHTML = `Соперник <b>${esc(D.oppNick)}</b> на месте — ждём, пока он запустит игру…`; }
+      else if (!D.started) { const el = root.querySelector('#ctLobbyText'); if (el) el.innerHTML = `Соперник <b>${esc(D.oppNick)}</b> на месте — ждём, пока он запустит игру…`; }
     }
   }
 
