@@ -222,7 +222,7 @@
     if (G.online) {
       G.pending = true;
       G.n = (G.n || 0) + 1;
-      R?.send({ type: 'shot', r, c, n: G.n });
+      R?.send({ type: 'shot', r, c, n: G.n, round: O.round });
       paintCell('sEnemy', r, c, 0);
       cellEl('sEnemy', r, c)?.classList.add('aim');
       return;
