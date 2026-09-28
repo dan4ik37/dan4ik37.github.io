@@ -1766,3 +1766,16 @@ body.low .ct-city{animation:none}
 .ca-title{font-family:var(--font-display);font-size:1.6rem;letter-spacing:1px}
 .ca-score{font-size:.8rem;color:var(--muted);max-width:340px;line-height:1.5}
 .ca-score b{color:#ffd166}
+
+/* Задание дня (js/features/games.js → renderDailyQuest) */
+.dq{display:flex;align-items:center;gap:.9rem;padding:1rem 1.1rem;margin-bottom:1.2rem;border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,209,102,.12),rgba(255,45,85,.08));border:1px solid rgba(255,209,102,.35)}
+.dq[hidden]{display:none}
+.dq-ic{font-size:1.8rem}
+.dq-body{display:flex;flex-direction:column;gap:.15rem;flex:1;min-width:0;font-size:.8rem}
+.dq-body b{font-size:.68rem;letter-spacing:1px;text-transform:uppercase;color:#ffd166}
+.dq-body small{font-size:.66rem;color:var(--muted)}
+.dq-btn{border:none;border-radius:10px;padding:.5rem .9rem;font-weight:800;font-size:.74rem;cursor:pointer;color:#1a1020;background:#ffd166;font-family:'Montserrat',sans-serif;text-decoration:none;white-space:nowrap}
+.dq-btn.ghost{background:transparent;color:#ffd166;border:1px solid rgba(255,209,102,.5)}
+.dq-done{font-size:.74rem;color:#22c55e;font-weight:700;white-space:nowrap}
+@media(max-width:560px){.dq{flex-wrap:wrap}.dq-btn,.dq-done{margin-left:auto}}

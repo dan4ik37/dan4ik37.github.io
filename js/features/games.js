@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '6';
+const GAMES_VER = '7';
 const GAMES = [
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков.', scripts: ['js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
@@ -18,6 +18,17 @@ const GAMES = [
   { id: 'clicker',  icon: '👆', title: 'Кликер',          desc: 'Кликай на скорость и собирай комбо. Старая добрая классика сайта.', href: '#/clicker', color: '#ff9f43' },
 ];
 const GAME_IMPL = window.GAME_IMPL = window.GAME_IMPL || {};
+// Задание дня — коды и порядок совпадают с daily_quest_code()/daily_quest_done() в games.sql
+const DAILY_QUESTS = {
+  win_cities:   { text: 'Победи бота в «Города» (любая сложность)', game: 'cities' },
+  play3:        { text: 'Сыграй 3 партии в любые игры', game: null },
+  guess7:       { text: 'Угадай 7+ роликов из 10 в «Угадай видео»', game: 'guess' },
+  catch500:     { text: 'Набери 500+ очков в «Лови донаты»', game: 'catch' },
+  win_checkers: { text: 'Выиграй партию в шашки', game: 'checkers' },
+  reaction:     { text: 'Средняя реакция 300 мс или быстрее', game: 'reaction' },
+  score2048:    { text: 'Набери 2000+ очков в «2048»', game: '2048' },
+  win_ttt:      { text: 'Выиграй в крестики-нолики (Средний, Непобедимый или онлайн)', game: 'ttt' },
+};
 
 let gamesActive = null;        // id открытой игры
 let gamesTopKey = 'cities_hard';
@@ -61,6 +72,30 @@ function renderGamesHub(){
   tabs.innerHTML = GAMES.filter(g => g.top).map(g =>
     `<button class="gm-tab${g.top === gamesTopKey ? ' active' : ''}" data-key="${g.top}" onclick="setGamesTop('${g.top}')">${g.icon} ${esc(g.title)}</button>`).join('');
   renderGamesTop();
+  renderDailyQuest();
+}
+
+async function renderDailyQuest(){
+  const box = document.getElementById('gamesDaily');
+  if (!box || !sbClient) return;
+  const { data, error } = await sbClient.rpc('daily_quest');
+  if (error || !data?.code || !DAILY_QUESTS[data.code]) { box.hidden = true; return; }   // games.sql ещё не выполнен
+  const q = DAILY_QUESTS[data.code];
+  box.hidden = false;
+  let right;
+  if (!currentUser) right = `<button class="dq-btn ghost" onclick="openGlobalAuth()">Войти</button>`;
+  else if (data.claimed) right = `<span class="dq-done">✅ Награда получена</span>`;
+  else if (data.done) right = `<button class="dq-btn" onclick="claimDailyQuest(this)">🎁 Забрать +50 XP</button>`;
+  else right = q.game ? `<a class="dq-btn ghost" href="#/games/${q.game}">Играть →</a>` : '';
+  box.innerHTML = `<span class="dq-ic">🎯</span>
+    <div class="dq-body"><b>Задание дня</b><span>${esc(q.text)}</span><small>${currentUser ? (data.done ? 'Выполнено!' : 'Новое задание — каждый день в полночь по МСК') : 'Войди, чтобы получить награду'}</small></div>
+    ${right}`;
+}
+async function claimDailyQuest(btn){
+  btn.disabled = true;
+  const { data } = await sbClient.rpc('claim_daily_quest');
+  if (data?.ok) { gameToast(`🎯 Задание дня выполнено: +${data.xp} XP`); if (typeof xpLevelCache !== 'undefined') xpLevelCache.delete(currentUser.id); }
+  renderDailyQuest();
 }
 
 let gamesParam = null;
@@ -157,6 +192,7 @@ function gamesApi(id){
         if (parts.length) gameToast(parts.join(' · '));
         if (data.xp > 0 && typeof xpLevelCache !== 'undefined') xpLevelCache.delete(currentUser.id);
         if (typeof claimAchievements === 'function') setTimeout(claimAchievements, 800);   // игровые ачивки
+        dailyQuestHint();
         return data;
       } catch (e) { return null; }
     },
@@ -165,6 +201,14 @@ function gamesApi(id){
     saveLocal: patch => gameSaveLocal(id, patch),
     sfx: gameSfx,
   };
+}
+
+// После партии: если задание дня выполнено и не забрано — напомнить
+async function dailyQuestHint(){
+  try {
+    const { data } = await sbClient.rpc('daily_quest');
+    if (data?.done && !data.claimed) setTimeout(() => gameToast('🎯 Задание дня выполнено — забери +50 XP в «Играх»'), 1800);
+  } catch (e) {}
 }
 
 function gameToast(text){

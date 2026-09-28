@@ -32,7 +32,7 @@ const LEVEL_REWARDS = [
   [50,  '⭐', 'Silver VIP на 3 месяца'],
   [100, '✨', 'Gold VIP на год'],
 ];
-const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры' };
+const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры', daily: 'Задание дня' };
 const XP_TIERS = [30, 20, 10, 5]; // рамки ника по порогам уровня
 
 let xpAvailable = null; // null — ещё не проверяли
