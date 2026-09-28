@@ -40,7 +40,7 @@ $$;
 create or replace function public.game_win_xp(p_game text)
 returns int language sql immutable as $$
   select case p_game
-    when 'cities_easy' then 8 when 'cities_normal' then 15 when 'cities_hard' then 25
+    when 'cities_easy' then 8 when 'cities_normal' then 15 when 'cities_hard' then 25 when 'cities_duel' then 10
     when 'guess' then 15 when '2048' then 30
     when 'ttt_easy' then 3 when 'ttt_normal' then 10 when 'ttt_hard' then 10
     when 'reaction' then 5

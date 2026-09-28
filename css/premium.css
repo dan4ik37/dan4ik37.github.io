@@ -1704,7 +1704,7 @@ body.low .ct-city{animation:none}
 .g2{max-width:420px;margin:0 auto}
 .g2-new{margin-left:auto;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);border-radius:10px;padding:.35rem .7rem;font-size:.72rem;cursor:pointer}
 .g2-wrap{position:relative;touch-action:none}
-.g2-board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px;border-radius:14px;background:rgba(255,255,255,.05);aspect-ratio:1}
+.g2-board{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:8px;padding:8px;border-radius:14px;background:rgba(255,255,255,.05);aspect-ratio:1}
 .g2-cell{border-radius:10px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:clamp(1rem,6vw,1.7rem);color:#fff;font-variant-numeric:tabular-nums}
 .g2-cell.fresh{animation:g2Pop .18s var(--ease-out)}
 @keyframes g2Pop{from{transform:scale(.6)}}
@@ -1720,7 +1720,7 @@ body.low .ct-city{animation:none}
 /* Крестики-нолики */
 .tt{max-width:360px;margin:0 auto}
 .tt .ct-status{margin:0}
-.tt-board{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;aspect-ratio:1}
+.tt-board{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:8px;aspect-ratio:1}
 .tt-cell{border-radius:14px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);font-size:clamp(1.8rem,10vw,2.8rem);cursor:pointer;display:flex;align-items:center;justify-content:center;color:inherit}
 .tt-cell:hover:not(:disabled){border-color:var(--accent)}
 .tt-cell:disabled{cursor:default}
@@ -1733,3 +1733,9 @@ body.low .ct-city{animation:none}
 .rx-pad small{font-family:'Montserrat',sans-serif;font-size:.74rem;letter-spacing:0;opacity:.8}
 .rx-pad.wait{background:#b91c3c}.rx-pad.go{background:#16a34a}.rx-pad.early{background:#7c2d12}.rx-pad.shown,.rx-pad.done{background:#4b3f6b}
 .rx-tries{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;font-size:.74rem;color:var(--muted)}
+/* «Города» онлайн */
+.ct-duel-btn{align-self:center;border:1.5px solid var(--tw);background:var(--tw-18);color:#fff;border-radius:12px;padding:.6rem 1.3rem;font-weight:800;font-size:.8rem;cursor:pointer;font-family:'Montserrat',sans-serif}
+.ct-lobby{text-align:center;display:flex;flex-direction:column;align-items:center;gap:.8rem;max-width:520px;margin:0 auto;font-size:.84rem;line-height:1.6}
+.ct-link{display:flex;gap:.4rem;width:100%}
+.ct-link input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:10px;padding:.55rem .7rem;color:var(--text);font-size:.74rem;font-family:monospace}
+.ct-link button{border:none;border-radius:10px;padding:0 .9rem;font-weight:700;font-size:.74rem;cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));white-space:nowrap}

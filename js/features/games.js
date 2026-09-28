@@ -6,9 +6,9 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '1';
+const GAMES_VER = '3';
 const GAMES = [
-  { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Классика: называй город на последнюю букву. Бот трёх уровней, таймер, подсказки, 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
+  { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков.', scripts: ['js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
   { id: '2048',     icon: '🧩', title: '2048',            desc: 'Складывай плитки — стрелки, WASD или свайпы. Дойдёшь до 2048?', scripts: ['js/games/g2048.js'], top: '2048', topLabel: 'очков', color: '#ffd166' },
   { id: 'ttt',      icon: '❌', title: 'Крестики-нолики', desc: 'Против бота (3 уровня — последний не проигрывает) или вдвоём на одном экране.', scripts: ['js/games/tictactoe.js'], top: 'ttt_hard', topLabel: 'ничьих/побед у непобедимого', color: '#9147ff' },
@@ -36,8 +36,9 @@ function gamesLoadScript(src){
 
 // Роутер зовёт при каждом заходе на #/games[/id]
 function renderGamesPage(param){
-  const id = GAMES.some(g => g.id === param && !g.href) ? param : null;
-  if (id) openGame(id); else closeGame(true);
+  const [first, ...rest] = String(param || '').split('/');
+  const id = GAMES.some(g => g.id === first && !g.href) ? first : null;
+  if (id) openGame(id, rest.join('/') || null); else closeGame(true);
 }
 
 function renderGamesHub(){
@@ -60,15 +61,17 @@ function renderGamesHub(){
   renderGamesTop();
 }
 
-async function openGame(id){
+let gamesParam = null;
+async function openGame(id, param){
   const g = GAMES.find(x => x.id === id);
   const hub = document.getElementById('gamesHub');
   const stage = document.getElementById('gamesStage');
   const box = document.getElementById('gamesStageBox');
   if (!g || !stage) return;
-  if (gamesActive === id && box.childElementCount) return;
+  if (gamesActive === id && gamesParam === (param || null) && box.childElementCount) return;
   unmountActiveGame();
   gamesActive = id;
+  gamesParam = param || null;
   hub.hidden = true; stage.hidden = false;
   document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
@@ -76,7 +79,7 @@ async function openGame(id){
     for (const s of g.scripts) await gamesLoadScript(s);
     if (gamesActive !== id) return;   // пока грузилось, ушли на другую игру
     box.innerHTML = '';
-    GAME_IMPL[id].mount(box, gamesApi(id));
+    GAME_IMPL[id].mount(box, { ...gamesApi(id), param: gamesParam });
     window.scrollTo({ top: document.getElementById('games-page').offsetTop - 70, behavior: 'smooth' });
   } catch (e) {
     box.innerHTML = `<div class="empty-state"><span class="empty-state-icon">😵</span><div class="empty-state-title">Игра не загрузилась</div><div class="empty-state-text">Проверь интернет и обнови страницу.</div></div>`;
