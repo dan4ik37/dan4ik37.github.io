@@ -94,6 +94,16 @@
   (триггер на `vip_donation_log.matched`, source `donation`). Невидимка — с Silver VIP (`can_be_invisible`).
 - Рамки: `.lv-frame-5` / `.lv-frame-30` (xp.js → `applyLevelFrame`), анимация кольца только в `body.high`.
 
+## Игры (#/games, games.sql)
+- Витрина и общее API — `js/features/games.js` (`GAMES`, `gamesApi(id).report(key, win, score, localBest)`).
+  Сами игры — `js/games/*.js`, грузятся лениво при открытии; регистрируются в `GAME_IMPL[id] = { mount, unmount }`.
+  Новая игра = запись в `GAMES` + файл + ключ в `game_score_cap`/`game_win_xp` (games.sql) + подпись в `gameBestLabel`.
+- «Города»: словарь `js/games/cities-data.js` (города России — пакет russia-cities-data, ISC, уведомление в файле;
+  мир — свой список). Пересобрать: скрипт из сессии не сохранён — формат строки `название|страна|население|шир|долг`.
+- Сервер: `game_result()` (ключ игры из белого списка, очки ≤ потолка, не чаще раза в 5 с, XP за победу — до 15 в день,
+  source `game`), `game_top()`. Ачивки игр — в `my_achievements` (progression.sql) по `game_stats`.
+- Пока открыта игра, горячие клавиши страниц (`hotkeys.js`) отключены — стрелки/цифры принадлежат игре.
+
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —
   dan4ik37.vercel.app (github.io перенаправляет туда). Нужны ID блоков в `AD_SLOTS`.

@@ -1076,7 +1076,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/donate" data-route="donate">Топ донатеров</a>
     <a href="#/poll" data-route="poll">Опрос</a>
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
-    <a href="#/clicker" data-route="clicker">Игра</a>
+    <a href="#/games" data-route="games">🎮 Игры</a>
     <a href="#/ads" data-route="ads">Реклама</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
@@ -1249,7 +1249,7 @@ body.low .donation-alert-icon{animation:none}
         <a class="mq-item" href="#/forum">Форум</a><i class="mq-sep"></i>
         <a class="mq-item" href="#/lfg">Тиммейты</a><i class="mq-sep"></i>
         <a class="mq-item" href="#/soundboard">Саундборд</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/clicker">Кликер</a><i class="mq-sep"></i>
+        <a class="mq-item" href="#/games">Мини-игры</a><i class="mq-sep"></i>
         <a class="mq-item" href="#/poll">Опросы</a><i class="mq-sep"></i>
         <a class="mq-item" href="#/donate">Зал славы</a><i class="mq-sep"></i>
       </div>
@@ -1383,6 +1383,11 @@ body.low .donation-alert-icon{animation:none}
       <span class="cm-ic">🎮</span><span class="cm-title">Тиммейты</span>
       <span class="cm-text">Найди, с кем поиграть: создай заявку или откликнись на чужую.</span>
       <span class="cm-go">Найти →</span>
+    </a>
+    <a class="cm-card" href="#/games" style="--cc:#22c55e">
+      <span class="cm-ic">🕹️</span><span class="cm-title">Мини-игры</span>
+      <span class="cm-text">Города против бота, «Угадай видео», 2048, реакция — с рекордами и XP за победы.</span>
+      <span class="cm-go">Играть →</span>
     </a>
   </div>
   <!-- Топ недели по XP (js/features/xp.js) — скрыт без xp.sql или пока пусто -->
@@ -1874,6 +1879,30 @@ body.low .donation-alert-icon{animation:none}
 </div>
 
 <!-- ПОИСК ТИММЕЙТОВ -->
+<!-- ИГРЫ (js/features/games.js, сами игры — js/games/*.js, грузятся по клику) -->
+<div class="wrap reveal" id="games-page">
+  <div class="sec-title-row">
+    <h2 class="sec-title">🎮 Игры</h2>
+  </div>
+  <div id="gamesHub">
+    <p class="gm-lead">Мини-игры прямо на сайте. За победы — XP (если войти в аккаунт), рекорды попадают в таблицу.</p>
+    <div class="gm-grid" id="gamesGrid"></div>
+    <div class="gm-top" id="gamesTopBox" hidden>
+      <div class="gm-top-head"><b>🏆 Рекорды</b></div>
+      <div class="gm-tabs" id="gamesTopTabs"></div>
+      <ol class="gm-top-list" id="gamesTopList"></ol>
+    </div>
+  </div>
+  <div id="gamesStage" class="gm-stage" hidden>
+    <div class="gm-stage-bar">
+      <button class="gm-back" onclick="closeGame()">← Все игры</button>
+      <b id="gamesStageTitle"></b>
+      <button class="gm-mute" onclick="toggleGamesMute(this)" title="Звук">🔊</button>
+    </div>
+    <div id="gamesStageBox"></div>
+  </div>
+</div>
+
 <div class="wrap reveal" id="lfg-page">
   <div class="sec-title-row">
     <h2 class="sec-title">🎮 Поиск тиммейтов</h2>
@@ -2514,6 +2543,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/ideas.js"></script>
 <script src="js/features/xp.js"></script>
 <script src="js/features/notifications.js"></script>
+<script src="js/features/games.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
 <script src="js/ui/hotkeys.js"></script>

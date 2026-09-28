@@ -19,6 +19,7 @@ const XP_RULES = [
   ['🔗', 'Позвать друга', '+100 за каждого по твоей ссылке'],
   ['🏆', 'Ачивки', 'от +10 до +500 за каждую, один раз'],
   ['💖', 'Донат', '+1 XP за каждый рубль (до 1000 за донат)'],
+  ['🎮', 'Игры', 'от +3 до +30 за победу в разделе «Игры», до 15 наград в день'],
 ];
 // Что открывает уровень — цифры синхронизированы с progression.sql (friend_limit, check_level_rewards)
 const LEVEL_REWARDS = [
@@ -31,7 +32,7 @@ const LEVEL_REWARDS = [
   [50,  '⭐', 'Silver VIP на 3 месяца'],
   [100, '✨', 'Gold VIP на год'],
 ];
-const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты' };
+const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры' };
 const XP_TIERS = [30, 20, 10, 5]; // рамки ника по порогам уровня
 
 let xpAvailable = null; // null — ещё не проверяли

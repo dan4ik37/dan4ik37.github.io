@@ -19,6 +19,7 @@ const PAGES = {
   ideas:      ['ideas-page'],
   forum:      ['forum-page'],
   lfg:        ['lfg-page'],
+  games:      ['games-page'],
   ads:        ['ad-bottom','ads']
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
@@ -57,6 +58,7 @@ function finishShowPage(route, activeIds){
   if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
   if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
   if (route==='lfg' && typeof renderLfgPage==='function') renderLfgPage();
+  if (route==='games' && typeof renderGamesPage==='function') renderGamesPage(currentRouteParam());
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать

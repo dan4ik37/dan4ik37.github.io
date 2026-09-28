@@ -315,6 +315,7 @@ declare
   idea_count int := 0;
   idea_done int := 0;
   lfg_count int := 0;
+  g_plays int := 0; g_cities_hard int := 0; g_guess_best int := 0; g_2048 int := 0; g_ttt_hard int := 0; g_reaction int := 0;
 begin
   select * into p from public.profiles where id = uid;
   if not found then return; end if;
@@ -344,6 +345,17 @@ begin
   exception when others then idea_count := 0; idea_done := 0; end;
   begin select count(*) into lfg_count from public.lfg_posts l where l.author_id = uid;
   exception when others then lfg_count := 0; end;
+  -- Игры (games.sql); пока таблицы нет — нули
+  begin
+    select coalesce(sum(gs.plays), 0),
+           coalesce(max(gs.wins) filter (where gs.game = 'cities_hard'), 0),
+           coalesce(max(gs.best_score) filter (where gs.game = 'guess'), 0),
+           coalesce(max(gs.wins) filter (where gs.game = '2048'), 0),
+           coalesce(max(gs.best_score) filter (where gs.game = 'ttt_hard'), 0),
+           coalesce(max(gs.best_score) filter (where gs.game = 'reaction'), 0)
+      into g_plays, g_cities_hard, g_guess_best, g_2048, g_ttt_hard, g_reaction
+      from public.game_stats gs where gs.user_id = uid;
+  exception when others then null; end;
 
   return query values
     -- особые
@@ -390,6 +402,13 @@ begin
     ('watcher_100',    watch_count >= 100),
     ('styled',         p.avatar_url is not null and p.banner_url is not null and coalesce(btrim(p.bio), '') <> ''),
     ('supporter',      coalesce(p.total_donated, 0) > 0),
+    -- игры
+    ('gamer',          g_plays >= 10),
+    ('cities_master',  g_cities_hard >= 1),
+    ('quiz_expert',    g_guess_best >= 10),
+    ('tile_2048',      g_2048 >= 1),
+    ('ttt_unbeaten',   g_ttt_hard >= 1),
+    ('lightning',      g_reaction >= 800),
     -- уровни (без XP, иначе уровень поднимал бы сам себя)
     ('level_10',       lvl >= 10),
     ('level_30',       lvl >= 30),
@@ -415,6 +434,8 @@ returns int language sql immutable as $$
     when 'referrer_1' then 50 when 'referrer_5' then 200
     when 'watcher_10' then 30 when 'watcher_100' then 150
     when 'styled' then 30 when 'supporter' then 100
+    when 'gamer' then 30 when 'cities_master' then 150 when 'quiz_expert' then 100
+    when 'tile_2048' then 150 when 'ttt_unbeaten' then 50 when 'lightning' then 50
     else 0 end;
 $$;
 grant execute on function public.achievement_xp(text) to anon, authenticated;

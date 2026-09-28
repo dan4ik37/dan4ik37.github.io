@@ -27,6 +27,8 @@ document.addEventListener('keydown', e=>{
   }
   if(e.ctrlKey||e.metaKey||e.altKey) return;
   if(isTypingContext()||isModalOpen()) return;
+  // Открыта мини-игра (#/games/<id>) — стрелки и цифры её, не переключаем страницы
+  if(typeof gamesActive!=='undefined' && gamesActive) return;
   const routes = Object.keys(PAGES);
   if(e.key>='1' && e.key<='8'){
     const route = routes[+e.key-1];
