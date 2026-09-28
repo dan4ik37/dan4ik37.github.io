@@ -6,13 +6,16 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '10';
+const GAMES_VER = '11';
 const GAMES = [
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков. Можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
   { id: '2048',     icon: '🧩', title: '2048',            desc: 'Складывай плитки — стрелки, WASD или свайпы. Дойдёшь до 2048? Или кто больше за 3 минуты — с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/g2048.js'], top: '2048', topLabel: 'очков', color: '#ffd166' },
   { id: 'checkers', icon: '⚫', title: 'Шашки',           desc: 'Русские шашки: против бота трёх уровней, вдвоём на экране или онлайн с другом по ссылке.', scripts: ['js/games/room.js', 'js/games/checkers.js'], top: 'checkers_hard', topLabel: 'шашек сохранено в победе на «Сложном»', color: '#e5e7eb' },
   { id: 'catch',    icon: '💰', title: 'Лови донаты',     desc: 'Аркада: лови падающие донаты, уворачивайся от банов и бомб. С другом — одинаковый дождь донатов у обоих.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/catch.js'], top: 'catch', topLabel: 'очков', color: '#ffd166' },
+  { id: 'sea',      icon: '🚢', title: 'Морской бой',     desc: 'Классика 10×10: против бота трёх уровней или онлайн с другом по ссылке. Расставь флот и топи корабли.', scripts: ['js/games/room.js', 'js/games/sea.js'], top: 'sea_hard', topLabel: 'палуб уцелело в победе на «Сложном»', color: '#38bdf8' },
+  { id: 'snake',    icon: '🐍', title: 'Змейка',          desc: 'Ешь яблоки, расти и не врезайся в стены и хвост. Стрелки, WASD или свайпы. Можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/snake.js'], top: 'snake', topLabel: 'яблок', color: '#22c55e' },
+  { id: 'memory',   icon: '🃏', title: 'Найди пару',      desc: 'Игра на память: открывай карточки и находи пары за минимум ходов. С другом — одинаковая раскладка.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/memory.js'], top: 'memory', topLabel: 'очков', color: '#f472b6' },
   { id: 'ttt',      icon: '❌', title: 'Крестики-нолики', desc: 'Против бота (последний уровень не проигрывает), вдвоём на экране или онлайн с другом.', scripts: ['js/games/room.js', 'js/games/tictactoe.js'], top: 'ttt_hard', topLabel: 'ничьих/побед у непобедимого', color: '#9147ff' },
   { id: 'reaction', icon: '⚡', title: 'Реакция',          desc: 'Жми, как только экран станет зелёным. 5 попыток — узнай свою скорость и сравни с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/reaction.js'], top: 'reaction', topLabel: 'очков (1000 − мс)', color: '#22c55e' },
   { id: 'clicker',  icon: '👆', title: 'Кликер',          desc: 'Кликай на скорость и собирай комбо. Старая добрая классика сайта.', href: '#/clicker', color: '#ff9f43' },
@@ -28,6 +31,9 @@ const DAILY_QUESTS = {
   reaction:     { text: 'Средняя реакция 300 мс или быстрее', game: 'reaction' },
   score2048:    { text: 'Набери 2000+ очков в «2048»', game: '2048' },
   win_ttt:      { text: 'Выиграй в крестики-нолики (Средний, Непобедимый или онлайн)', game: 'ttt' },
+  win_sea:      { text: 'Выиграй в «Морской бой» (Средний, Сложный или онлайн)', game: 'sea' },
+  snake20:      { text: 'Съешь 20+ яблок в «Змейке»', game: 'snake' },
+  memory:       { text: 'Найди все пары в «Найди пару» за 20 ходов или меньше', game: 'memory' },
 };
 
 let gamesActive = null;        // id открытой игры
@@ -167,6 +173,9 @@ function gameBestLabel(id, best){
   if (id === 'ttt') return best >= 2 ? 'победа над непобедимым' : best >= 1 ? 'ничья с непобедимым' : '—';
   if (id === 'checkers') return `${best} ${best === 1 ? 'шашка' : best < 5 ? 'шашки' : 'шашек'} в победе`;
   if (id === 'catch') return `${Number(best).toLocaleString('ru')} очков`;
+  if (id === 'sea') return `${best} из 20 палуб`;
+  if (id === 'snake') return `${best} ${best % 10 === 1 && best % 100 !== 11 ? 'яблоко' : [2, 3, 4].includes(best % 10) && ![12, 13, 14].includes(best % 100) ? 'яблока' : 'яблок'}`;
+  if (id === 'memory') return `${best} очков`;
   return String(best);
 }
 
@@ -180,6 +189,7 @@ function gamesApi(id){
       const prev = gameLocalStats(id);
       const lb = localBest ?? score;
       const isRecord = lb > (prev.best || 0);
+      if (win || (isRecord && lb > 0)) gamesSupport(id, isRecord && lb > 0);
       gameSaveLocal(id, { plays: (prev.plays || 0) + 1, wins: (prev.wins || 0) + (win ? 1 : 0), best: Math.max(prev.best || 0, lb) });
       if (!currentUser || !sbClient) {
         if (!gamesGuestHint) { gamesGuestHint = true; gameToast('🔑 Войди — и за победы будут XP, а рекорды попадут в таблицу'); }
@@ -205,6 +215,35 @@ function gamesApi(id){
     sfx: gameSfx,
   };
 }
+
+// ── «Поддержать стрим» / «Позвать друга» — в моменты радости (победа, рекорд) ──
+// Не чаще раза в 10 минут и не больше 3 раз за визит; крестик скрывает до конца визита.
+let gamesSupportShown = 0, gamesSupportAt = 0, gamesSupportOff = false;
+function gamesSupport(id, record){
+  if (gamesSupportOff || gamesSupportShown >= 3 || Date.now() - gamesSupportAt < 10 * 60 * 1000) return;
+  const stage = document.getElementById('gamesStage');
+  if (!stage || stage.hidden) return;
+  gamesSupportShown++; gamesSupportAt = Date.now();
+  let box = document.getElementById('gamesSupport');
+  if (!box) { box = document.createElement('div'); box.id = 'gamesSupport'; box.className = 'gm-support'; stage.appendChild(box); }
+  const g = GAMES.find(x => x.id === id);
+  box.hidden = false;
+  box.innerHTML = `<div>${record ? '🏆 <b>Новый рекорд!</b>' : '🎉 <b>Победа!</b>'} Нравятся игры? Их делает стример dan4ik37 —
+      поддержи стрим донатом (за донаты на сайте даётся VIP) или позови друга сыграть.</div>
+    <a class="sp-don" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" rel="noopener">💜 Поддержать</a>
+    <button class="sp-share" type="button">🔗 Позвать друга</button>
+    <button class="sp-x" type="button" aria-label="Скрыть">✕</button>`;
+  box.querySelector('.sp-x').onclick = () => { box.hidden = true; gamesSupportOff = true; };
+  box.querySelector('.sp-share').onclick = async e => {
+    const url = location.origin + '/games/' + id;
+    const text = `Сыграй в «${g ? g.title : 'игру'}» на сайте dan4ik37 — побьёшь мой результат?`;
+    if (navigator.share) { navigator.share({ title: g ? g.title : 'Игры', text, url }).catch(() => {}); return; }
+    try { await navigator.clipboard.writeText(text + ' ' + url); e.target.textContent = '✅ Ссылка скопирована'; } catch (err) { prompt('Скопируй ссылку:', url); }
+  };
+  if (typeof window.va === 'function') window.va('event', { name: 'game_support_shown', data: { game: id } });
+}
+// Уходим из игры — плашку прячем
+window.addEventListener('hashchange', () => { const b = document.getElementById('gamesSupport'); if (b) b.hidden = true; });
 
 // После партии: если задание дня выполнено и не забрано — напомнить
 async function dailyQuestHint(){

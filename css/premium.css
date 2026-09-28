@@ -1757,6 +1757,63 @@ body.low .ct-city{animation:none}
 .ck-p.b{background:radial-gradient(circle at 35% 30%,#555,#161616)}
 .ck-p.k::after{content:'♛';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(.8rem,4.5vw,1.3rem);color:#e0a800}
 
+/* Морской бой */
+.sb{max-width:820px;margin:0 auto}
+.sb .ct-status{margin:0}
+.sb-boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;align-items:start}
+.sb-wrap{max-width:400px;width:100%;margin:0 auto}
+.sb-label{font-size:.74rem;font-weight:800;color:var(--muted);text-align:center;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.06em}
+.sb-board{display:grid;grid-template-columns:repeat(11,1fr);gap:2px;aspect-ratio:1;user-select:none}
+.sb-hd{display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--muted);font-weight:700}
+.sb-cell{border:0;border-radius:3px;background:rgba(56,189,248,.1);padding:0;cursor:default;position:relative;color:inherit;font-size:0}
+.sb-board.active .sb-cell:not(:disabled){cursor:crosshair}
+.sb-board.active .sb-cell:not(:disabled):hover{background:rgba(56,189,248,.35)}
+.sb-board.active{outline:2px solid var(--ac-55);outline-offset:4px;border-radius:4px}
+.sb-cell.ship{background:#64748b}
+.sb-cell.ship.rest{background:rgba(100,116,139,.55)}
+.sb-cell.miss::after{content:'';position:absolute;left:50%;top:50%;width:22%;height:22%;margin:-11% 0 0 -11%;border-radius:50%;background:rgba(240,240,248,.45)}
+.sb-cell.hit{background:#f97316}
+.sb-cell.hit::after,.sb-cell.sunk::after{content:'✕';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:clamp(.55rem,2.4vw,.9rem);font-weight:900;color:#fff}
+.sb-cell.sunk{background:#b91c1c}
+.sb-cell.aim{background:rgba(255,209,102,.5)}
+.sb-cell.last{box-shadow:inset 0 0 0 2px #ffd166}
+/* Змейка */
+.sn{max-width:420px;margin:0 auto}
+.sn-wrap{position:relative;touch-action:none}
+.sn-canvas{display:block;width:100%;aspect-ratio:1;border-radius:14px;border:1px solid var(--border)}
+.sn-over{position:absolute;inset:0;border-radius:14px;background:rgba(8,8,14,.78);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7rem;text-align:center;padding:1rem}
+.sn-over[hidden]{display:none}
+.sn-over b{font-family:var(--font-display);font-size:1.8rem;letter-spacing:1px}
+.sn-over span{font-size:.78rem;color:var(--muted)}
+.sn-over .ct-start[hidden]{display:none}
+.sn-pad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,48px);gap:6px;justify-content:center;margin-top:.8rem}
+.sn-pad button{border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);border-radius:12px;font-size:1rem;cursor:pointer;touch-action:manipulation}
+.sn-pad button:first-child{grid-column:2}
+.sn-pad button:active{background:var(--ac-18)}
+@media(hover:hover) and (pointer:fine){.sn-pad{display:none}}
+/* Найди пару */
+.mm{max-width:520px;margin:0 auto}
+.mm-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+@media(max-width:480px){.mm-grid{grid-template-columns:repeat(4,1fr)}}
+.mm-card{aspect-ratio:3/4;border-radius:12px;border:1.5px solid var(--border);background:linear-gradient(135deg,var(--ac-18),rgba(255,255,255,.03));cursor:pointer;position:relative;padding:0;color:inherit;transition:transform .25s,background .25s}
+.mm-card span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:opacity .2s}
+.mm-back{font-family:var(--font-display);font-size:1.5rem;color:rgba(255,255,255,.35)}
+.mm-face{font-size:clamp(1.5rem,7vw,2.2rem);opacity:0}
+.mm-card.up{background:rgba(255,255,255,.08)}
+.mm-card.up .mm-face{opacity:1}.mm-card.up .mm-back{opacity:0}
+.mm-card.got{border-color:#22c55e;background:rgba(34,197,94,.14);cursor:default}
+body.low .mm-card{transition:none}
+.mm .ct-status{text-align:center}
+/* «Поддержать стрим» после победы/рекорда */
+.gm-support{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-top:1rem;padding:.8rem 1rem;border-radius:14px;
+  background:linear-gradient(90deg,var(--ac-18),rgba(255,209,102,.08));border:1px solid var(--ac-30);font-size:.8rem;line-height:1.45}
+.gm-support[hidden]{display:none}
+.gm-support div{flex:1;min-width:200px}
+.gm-support a,.gm-support button{border:none;border-radius:10px;padding:.55rem .9rem;font-weight:800;font-size:.76rem;cursor:pointer;text-decoration:none;color:#fff;font-family:'Montserrat',sans-serif;white-space:nowrap}
+.gm-support .sp-don{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.gm-support .sp-share{background:rgba(255,255,255,.07);border:1px solid var(--border)}
+.gm-support .sp-x{background:none;color:var(--muted);padding:.3rem .5rem}
+
 /* Лови донаты */
 .ca{display:flex;flex-direction:column;gap:.6rem;align-items:center}
 .ca-wrap{position:relative;width:100%;max-width:560px;display:flex;justify-content:center}
