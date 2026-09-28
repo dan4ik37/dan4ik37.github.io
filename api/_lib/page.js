@@ -54,6 +54,8 @@ ${body}
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
 </footer>
 ${script ? `<script>${script}</script>` : ''}
+<script src="/js/core/ads-core.js"></script>
+<script>window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>
 </html>`;
 }
@@ -106,6 +108,9 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .all{margin-top:1rem;text-align:center;font-size:.85rem;font-weight:700}
 .all a{color:var(--accent)}
 .muted{color:var(--muted)}
+.d37-ad{display:block;margin:1.6rem auto 0;min-height:90px;text-align:center}
+.d37-ad[hidden]{display:none}
+.d37-ad-label{display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem;opacity:.7}
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{text-decoration:none}
 @media(max-width:600px){.top nav a:not(.sub){display:none}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}

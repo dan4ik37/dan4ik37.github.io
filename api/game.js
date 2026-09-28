@@ -64,6 +64,7 @@ function hubPage() {
   <p class="lead">${esc(HUB.lead)}</p>
   <div class="cta"><a class="btn btn-acc big" href="/#/games">▶ Открыть игры</a></div>
   <section class="more"><h2>Во что поиграть</h2><div class="ggrid">${GAME_PAGES.map(card).join('')}</div></section>
+  <div data-ad="seo_game" hidden></div>
   <section class="box">
     <h2>Как играть с другом</h2>
     <ol>
@@ -124,6 +125,7 @@ function gamePage(g) {
   <section class="box"><h2>Что есть в игре</h2><ul class="feat">${g.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul></section>
   <section class="box"><h2>Правила</h2><ol>${g.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol></section>
   <section class="box"><h2>Советы</h2><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>
+  <div data-ad="seo_game" hidden></div>
   <section class="box faq"><h2>Частые вопросы</h2>
     ${g.faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}
   </section>

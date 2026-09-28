@@ -77,6 +77,7 @@ export default async function handler(req, res) {
       <button type="button" class="btn btn-ghost" id="share">🔗 Поделиться</button>
     </div>
     ${desc ? `<section class="desc"><h2>Описание</h2><p>${linkify(desc)}</p></section>` : ''}
+    <div data-ad="video_page" hidden></div>
     ${tags.length ? `<ul class="tags">${tags.map(t => `<li>#${esc(t)}</li>`).join('')}</ul>` : ''}
   </article>
 

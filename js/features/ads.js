@@ -16,6 +16,15 @@ function fillVisibleAds(){
     const slotId = (typeof AD_SLOTS === 'object' && AD_SLOTS[ins.dataset.slotKey]) || '';
     // Обёртка на главной/в «Рекламе» — .wrap-sm; в карточке прячем только сам <ins>
     const box = ins.parentElement?.classList.contains('wrap-sm') ? ins.parentElement : ins;
+    // Для этого места задан блок Яндекса — показываем его вместо AdSense (js/core/ads-core.js)
+    if (window.ADS_IDS?.yandex?.[ins.dataset.slotKey] && box !== ins) {
+      box.classList.remove('ad-empty');
+      if (!box.offsetWidth) return;
+      const holder = document.createElement('div');
+      ins.replaceWith(holder);
+      window.D37Ads.render(holder, ins.dataset.slotKey);
+      return;
+    }
     if (!slotId) { box.classList.add('ad-empty'); return; }
     box.classList.remove('ad-empty');
     if (!ins.offsetWidth) return; // скрыт роутером — заполним, когда откроют этот раздел
@@ -24,3 +33,9 @@ function fillVisibleAds(){
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
   });
 }
+
+// Полоска рекламы внизу экрана на телефоне (Floor Ad РСЯ) — через 25 с на сайте, не поверх игры
+setTimeout(function tryFloor(){
+  if (/^#\/games\//.test(location.hash)) { setTimeout(tryFloor, 30000); return; }
+  window.D37Ads?.floor();
+}, 25000);

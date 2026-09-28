@@ -82,6 +82,18 @@ function renderGamesHub(){
   document.querySelectorAll('#gamesTopPeriod button').forEach(b => b.classList.toggle('active', (b.dataset.week === '1') === gamesTopWeek));
   renderGamesTop();
   renderDailyQuest();
+  const hubAd = document.getElementById('gamesHubAd');
+  if (hubAd && !hubAd.dataset.adDone) { hubAd.dataset.adDone = '1'; window.D37Ads?.render(hubAd, 'games_hub'); }
+}
+
+// Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с
+let gamesAdAt = 0;
+function gamesAdAfterRound(){
+  const stage = document.getElementById('gamesStage');
+  if (!stage || stage.hidden || !window.D37Ads || Date.now() - gamesAdAt < 90000) return;
+  let box = document.getElementById('gamesAd');
+  if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }
+  if (window.D37Ads.render(box, 'game_over')) gamesAdAt = Date.now();
 }
 
 async function renderDailyQuest(){
@@ -190,6 +202,7 @@ function gamesApi(id){
       const lb = localBest ?? score;
       const isRecord = lb > (prev.best || 0);
       if (win || (isRecord && lb > 0)) gamesSupport(id, isRecord && lb > 0);
+      gamesAdAfterRound();
       gameSaveLocal(id, { plays: (prev.plays || 0) + 1, wins: (prev.wins || 0) + (win ? 1 : 0), best: Math.max(prev.best || 0, lb) });
       if (!currentUser || !sbClient) {
         if (!gamesGuestHint) { gamesGuestHint = true; gameToast('🔑 Войди — и за победы будут XP, а рекорды попадут в таблицу'); }
@@ -243,7 +256,7 @@ function gamesSupport(id, record){
   if (typeof window.va === 'function') window.va('event', { name: 'game_support_shown', data: { game: id } });
 }
 // Уходим из игры — плашку прячем
-window.addEventListener('hashchange', () => { const b = document.getElementById('gamesSupport'); if (b) b.hidden = true; });
+window.addEventListener('hashchange', () => { ['gamesSupport', 'gamesAd'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; }); gamesAdAt = 0; });
 
 // После партии: если задание дня выполнено и не забрано — напомнить
 async function dailyQuestHint(){
