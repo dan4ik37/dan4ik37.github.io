@@ -6,9 +6,10 @@
 // Тексты — api/_lib/games-seo.js.
 import { SITE, esc } from './_lib/yt.js';
 import { page } from './_lib/page.js';
-import { GAME_PAGES, HUB } from './_lib/games-seo.js';
+import { GAME_PAGES, HUB, scoreLabel } from './_lib/games-seo.js';
 
-const IMAGE = SITE + '/og-image.jpg';
+// Картинки-превью — img/games/<id>.png (рисует img/games/_make-cards.py)
+const cardImage = id => `${SITE}/img/games/${id}.png`;
 
 export default function handler(req, res) {
   const id = String(req.query.id || '');
@@ -26,7 +27,12 @@ export default function handler(req, res) {
       noindex: true, css: GAME_CSS
     }));
   }
-  return sendPage(res, gamePage(g));
+  // Ссылка-вызов: /games/<id>?s=<очки>&n=<ник> — в превью мессенджера «Ник набрал N — побьёшь?»
+  const s = Number(req.query.s);
+  const ch = Number.isInteger(s) && s > 0 && s <= 1000000
+    ? { score: s, nick: String(req.query.n || '').replace(/[<>"'\u0000-\u001f]/g, '').trim().slice(0, 24) || 'Друг' }
+    : null;
+  return sendPage(res, gamePage(g, ch));
 }
 
 function sendPage(res, html) {
@@ -75,10 +81,10 @@ function hubPage() {
   </section>
   ${joinBlock()}
 </main>`;
-  return page({ title: HUB.title, description: HUB.description, url, image: IMAGE, ld, body, css: GAME_CSS });
+  return page({ title: HUB.title, description: HUB.description, url, image: cardImage('games'), ld, body, css: GAME_CSS });
 }
 
-function gamePage(g) {
+function gamePage(g, ch) {
   const url = `${SITE}/games/${g.id}`;
   const play = `/#/games/${g.id}`;
   const others = GAME_PAGES.filter(x => x.id !== g.id);
@@ -86,7 +92,7 @@ function gamePage(g) {
     '@context': 'https://schema.org',
     '@graph': [
       {
-        '@type': 'VideoGame', name: g.name, description: g.description, url, image: IMAGE, inLanguage: 'ru',
+        '@type': 'VideoGame', name: g.name, description: g.description, url, image: cardImage(g.id), inLanguage: 'ru',
         genre: 'Browser game', gamePlatform: 'Web browser', applicationCategory: 'Game', operatingSystem: 'Any',
         playMode: ['SinglePlayer', 'MultiPlayer'],
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'RUB' },
@@ -109,6 +115,7 @@ function gamePage(g) {
   const body = `
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>${esc(g.name)}</span></nav>
+  ${ch ? `<div class="challenge">⚔️ <b>${esc(ch.nick)}</b> набрал ${esc(scoreLabel(g.id, ch.score))} в «${esc(g.name)}». <span>Сможешь лучше?</span></div>` : ''}
   <div class="ghero">
     <span class="gbig">${g.icon}</span>
     <div>
@@ -135,7 +142,10 @@ function gamePage(g) {
     <p class="all"><a href="/games">Все игры →</a></p></section>
   ${joinBlock()}
 </main>`;
-  return page({ title: `${g.title} | dan4ik37`, description: g.description, url, image: IMAGE, ld, body, css: GAME_CSS, script: SHARE_JS });
+  // canonical — всегда чистый /games/<id>, чтобы вызовы не плодили дубли в поиске
+  const title = ch ? `${ch.nick} набрал ${scoreLabel(g.id, ch.score)} в «${g.name}» — побьёшь?` : `${g.title} | dan4ik37`;
+  const description = ch ? `Сыграй в «${g.name}» бесплатно и без регистрации и побей результат. ${g.description}` : g.description;
+  return page({ title, description, url, image: cardImage(g.id), ld, body, css: GAME_CSS, script: SHARE_JS });
 }
 
 function joinBlock() {
@@ -159,6 +169,8 @@ const SHARE_JS = `
 })();`;
 
 const GAME_CSS = `
+.challenge{margin-bottom:1.2rem;padding:.9rem 1.1rem;border-radius:14px;background:linear-gradient(90deg,rgba(255,45,85,.22),rgba(255,107,53,.12));border:1px solid rgba(255,45,85,.45);font-size:.95rem}
+.challenge span{color:#ffd166;font-weight:800}
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
 .crumbs a:hover{color:#fff}

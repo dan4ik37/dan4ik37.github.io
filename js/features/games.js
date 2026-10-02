@@ -247,14 +247,24 @@ function gamesSupport(id, record){
     <button class="sp-share" type="button">🔗 Позвать друга</button>
     <button class="sp-x" type="button" aria-label="Скрыть">✕</button>`;
   box.querySelector('.sp-x').onclick = () => { box.hidden = true; gamesSupportOff = true; };
-  box.querySelector('.sp-share').onclick = async e => {
-    const url = location.origin + '/games/' + id;
-    const text = `Сыграй в «${g ? g.title : 'игру'}» на сайте dan4ik37 — побьёшь мой результат?`;
-    if (navigator.share) { navigator.share({ title: g ? g.title : 'Игры', text, url }).catch(() => {}); return; }
-    try { await navigator.clipboard.writeText(text + ' ' + url); e.target.textContent = '✅ Ссылка скопирована'; } catch (err) { prompt('Скопируй ссылку:', url); }
-  };
+  box.querySelector('.sp-share').onclick = e => gamesChallenge(e.target, id);
   if (typeof window.va === 'function') window.va('event', { name: 'game_support_shown', data: { game: id } });
 }
+// «📣 Вызов» — ссылка на страницу игры с лучшим результатом: в Telegram/ВК превью «Ник набрал N — побьёшь?»
+async function gamesChallenge(btn, id = gamesActive){
+  if (!id) return;
+  const g = GAMES.find(x => x.id === id);
+  const best = gameLocalStats(id).best || 0;
+  const nick = (typeof currentProfile !== 'undefined' && currentProfile?.nick) || '';
+  const url = location.origin + '/games/' + id + (best > 0 ? `?s=${best}&n=${encodeURIComponent(nick || 'Друг')}` : '');
+  const text = best > 0 ? `Мой рекорд в «${g?.title || 'игре'}» — ${gameBestLabel(id, best)}. Побьёшь?` : `Сыграй со мной в «${g?.title || 'игру'}» на сайте dan4ik37!`;
+  if (typeof window.va === 'function') window.va('event', { name: 'game_challenge', data: { game: id } });
+  if (navigator.share) { navigator.share({ title: g?.title || 'Игры', text, url }).catch(() => {}); return; }
+  const old = btn.textContent;
+  try { await navigator.clipboard.writeText(text + ' ' + url); btn.textContent = '✅ Скопировано'; setTimeout(() => { btn.textContent = old; }, 1800); }
+  catch (e) { prompt('Скопируй ссылку и отправь другу:', url); }
+}
+
 // Уходим из игры — плашку прячем
 window.addEventListener('hashchange', () => { ['gamesSupport', 'gamesAd'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; }); gamesAdAt = 0; });
 
