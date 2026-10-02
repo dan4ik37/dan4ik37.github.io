@@ -1641,7 +1641,9 @@ body.high .lv-frame-30::after{animation:lvFrameSpin 6s linear infinite}
 .gm-stage{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1rem 1.1rem 1.3rem}
 .gm-stage[hidden],#gamesHub[hidden]{display:none}
 .gm-stage-bar{display:flex;align-items:center;gap:.8rem;margin-bottom:1rem}
-.gm-stage-bar b{font-family:var(--font-display);letter-spacing:1px;font-size:1.1rem;flex:1}
+.gm-stage-bar b{font-family:var(--font-display);letter-spacing:1px;font-size:1.1rem;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gm-stage-bar button{flex:none;white-space:nowrap}
+@media(max-width:520px){.gm-stage-bar{gap:.5rem}.gm-stage-bar button span{display:none}.gm-stage-bar b{font-size:1rem}}
 .gm-back,.gm-mute{border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);border-radius:10px;padding:.4rem .7rem;font-size:.74rem;cursor:pointer;font-family:'Montserrat',sans-serif}
 .gm-loading{display:flex;flex-direction:column;align-items:center;gap:.6rem;padding:2.5rem 0;color:var(--muted);font-size:.8rem}
 
@@ -1766,6 +1768,8 @@ body.low .ct-city{animation:none}
 .sb .ct-status{margin:0}
 .sb-boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;align-items:start}
 .sb-wrap{max-width:400px;width:100%;margin:0 auto}
+/* Телефон: поле соперника (куда стреляешь) — сверху, своё — меньше под ним */
+@media(max-width:640px){.sb-boards{display:flex;flex-direction:column}.sb-boards .sb-wrap:nth-child(2){order:-1}.sb-boards .sb-wrap:first-child:not(:only-child){max-width:240px}}
 .sb-label{font-size:.74rem;font-weight:800;color:var(--muted);text-align:center;margin-bottom:.35rem;text-transform:uppercase;letter-spacing:.06em}
 .sb-board{display:grid;grid-template-columns:repeat(11,1fr);gap:2px;aspect-ratio:1;user-select:none}
 .sb-hd{display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--muted);font-weight:700}
@@ -1798,7 +1802,9 @@ body.low .ct-city{animation:none}
 /* Найди пару */
 .mm{max-width:520px;margin:0 auto}
 .mm-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
-@media(max-width:480px){.mm-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:480px){.mm-grid{grid-template-columns:repeat(4,1fr);gap:6px}.mm-card{aspect-ratio:1}}
+/* Открыта игра на телефоне — большой заголовок раздела не нужен, место под игру */
+@media(max-width:640px){#games-page:has(#gamesStage:not([hidden])) .sec-title-row{display:none}}
 .mm-card{aspect-ratio:3/4;border-radius:12px;border:1.5px solid var(--border);background:linear-gradient(135deg,var(--ac-18),rgba(255,255,255,.03));cursor:pointer;position:relative;padding:0;color:inherit;transition:transform .25s,background .25s}
 .mm-card span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:opacity .2s}
 .mm-back{font-family:var(--font-display);font-size:1.5rem;color:rgba(255,255,255,.35)}

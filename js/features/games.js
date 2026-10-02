@@ -260,8 +260,8 @@ async function gamesChallenge(btn, id = gamesActive){
   const text = best > 0 ? `Мой рекорд в «${g?.title || 'игре'}» — ${gameBestLabel(id, best)}. Побьёшь?` : `Сыграй со мной в «${g?.title || 'игру'}» на сайте dan4ik37!`;
   if (typeof window.va === 'function') window.va('event', { name: 'game_challenge', data: { game: id } });
   if (navigator.share) { navigator.share({ title: g?.title || 'Игры', text, url }).catch(() => {}); return; }
-  const old = btn.textContent;
-  try { await navigator.clipboard.writeText(text + ' ' + url); btn.textContent = '✅ Скопировано'; setTimeout(() => { btn.textContent = old; }, 1800); }
+  const old = btn.innerHTML;
+  try { await navigator.clipboard.writeText(text + ' ' + url); btn.textContent = '✅ Скопировано'; setTimeout(() => { btn.innerHTML = old; }, 1800); }
   catch (e) { prompt('Скопируй ссылку и отправь другу:', url); }
 }
 
