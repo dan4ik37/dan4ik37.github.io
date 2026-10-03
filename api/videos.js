@@ -6,6 +6,7 @@
 // На канале ~6000 роликов — страницы по PER штук: /videos, /videos?p=2 …; годы ведут на страницу, где год начинается.
 import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
+import { TOPICS } from './_lib/topics.js';
 
 const PER = 240;
 
@@ -59,6 +60,7 @@ export default async function handler(req, res) {
     <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
     <a class="btn btn-ghost" href="/games">🎮 Игры на сайте</a>
   </div>
+  <nav class="topics"><b>По играм:</b> ${TOPICS.map(t => [t, vids.filter(v => t.re.test(v.title)).length]).filter(([, c]) => c >= 30).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, c]) => `<a href="/topic/${t.slug}">${esc(t.name)}<small>${c.toLocaleString('ru')}</small></a>`).join('')}<a href="/topics">все игры →</a></nav>
   <nav class="years">${[...yearInfo].map(([y, info]) => `<a href="${href(info.page)}#y${y}"${byYear.has(y) ? ' class="on"' : ''}>${y}<small>${info.count.toLocaleString('ru')}</small></a>`).join('')}</nav>
   ${years.map((y, i) => `
   <section class="more" id="y${y}">
@@ -84,6 +86,11 @@ const CSS = `
 .years a{padding:.35rem .8rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:800;font-size:.8rem}
 .years a:hover{border-color:var(--accent)}
 .years small{margin-left:.35rem;color:var(--muted);font-weight:600}
+.topics{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;margin-top:1.2rem;font-size:.8rem}
+.topics b{margin-right:.3rem;color:var(--muted)}
+.topics a{padding:.3rem .75rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:700}
+.topics a:hover{border-color:var(--accent)}
+.topics small{margin-left:.3rem;color:var(--muted);font-weight:600}
 .years a.on{border-color:var(--accent);background:rgba(255,45,85,.12)}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:2rem;font-size:.85rem}
 .pager a{padding:.6rem 1.1rem;border-radius:12px;border:1px solid var(--line);text-decoration:none;font-weight:800}

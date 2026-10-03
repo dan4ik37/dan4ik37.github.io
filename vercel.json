@@ -42,6 +42,14 @@
       "destination": "/api/video?id=:id"
     },
     {
+      "source": "/topics",
+      "destination": "/api/topic"
+    },
+    {
+      "source": "/topic/:slug",
+      "destination": "/api/topic?slug=:slug"
+    },
+    {
       "source": "/videos",
       "destination": "/api/videos"
     },

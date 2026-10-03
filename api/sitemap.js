@@ -2,6 +2,7 @@
 // Раньше был статический sitemap.xml с одной главной — поисковик не знал ни об одном ролике.
 import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
 import { GAME_PAGES } from './_lib/games-seo.js';
+import { TOPICS } from './_lib/topics.js';
 
 export default async function handler(req, res) {
   let vids = [];
@@ -11,6 +12,12 @@ export default async function handler(req, res) {
     `<url><loc>${SITE}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
     `<url><loc>${SITE}/videos</loc><changefreq>daily</changefreq><priority>0.9</priority></url>`,
     ...Array.from({ length: Math.max(0, Math.ceil(vids.length / 240) - 1) }, (_, i) => `<url><loc>${SITE}/videos?p=${i + 2}</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>`),
+    `<url><loc>${SITE}/topics</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
+    ...TOPICS.flatMap(t => {
+      const n = vids.filter(v => t.re.test(v.title)).length;
+      if (n < 30) return [];
+      return Array.from({ length: Math.ceil(n / 120) }, (_, i) => `<url><loc>${SITE}/topic/${t.slug}${i ? '?p=' + (i + 1) : ''}</loc><changefreq>weekly</changefreq><priority>${i ? 0.5 : 0.8}</priority></url>`);
+    }),
     `<url><loc>${SITE}/games</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>`,
     ...GAME_PAGES.map(g => `<url><loc>${SITE}/games/${g.id}</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>`),
     `<url><loc>${SITE}/privacy</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>`,

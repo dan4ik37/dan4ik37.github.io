@@ -48,7 +48,7 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 </header>
 ${body}
 <footer class="foot">
-  <a href="/#/home">dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/games">Игры онлайн</a> · <a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
+  <a href="/#/home">dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/topics">Игры канала</a> · <a href="/games">Игры онлайн</a> · <a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
@@ -111,6 +111,9 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .d37-ad{display:block;margin:1.6rem auto 0;min-height:90px;text-align:center}
 .d37-ad[hidden]{display:none}
 .d37-ad-label{display:block;font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:.3rem;opacity:.7}
+.topics{margin-top:1.2rem;font-size:.85rem;color:var(--muted)}
+.topics a{display:inline-block;margin:.2rem .3rem 0 0;padding:.3rem .75rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:700;color:var(--text)}
+.topics a:hover{border-color:var(--accent)}
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{text-decoration:none}
 @media(max-width:600px){.top nav a:not(.sub){display:none}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}
