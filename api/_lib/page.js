@@ -55,6 +55,7 @@ ${body}
 </footer>
 ${script ? `<script>${script}</script>` : ''}
 <script src="/js/core/ads-core.js"></script>
+<script src="/js/core/surprise.js" defer></script>
 <script>window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>
 </html>`;

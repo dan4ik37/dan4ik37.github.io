@@ -73,6 +73,8 @@ my_achievements владельца = 53 кода). Проверка примен
   `getUploads(200)` (квота YouTube API!). Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
   Темы (игры канала): `/topics`, `/topic/<slug>` → `api/topic.js`; список и правила подбора по названию — `api/_lib/topics.js`
   (тема ≥ 30 роликов; новая игра на канале → новая запись). Страница ролика показывает «Ещё по теме».
+- «🎲 Удиви меня» — `js/core/surprise.js` (`d37Surprise(btn)`, и в SPA, и на серверных страницах): случайный /v/<id> из всего
+  архива по `/api/ids` (api/ids.js, кэш CDN 6 ч). Кнопки: «Сегодня» на главной, /videos, /v/<id>, /topic/…, поиск Ctrl+K.
 - Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы, игры (GAMES), видео (allVids → /v/<id>). Общий HTML-шаблон и стили — `api/_lib/page.js`,
   YouTube — `api/_lib/yt.js`. Локально проверять вызовом handler'а из node (копия api/ во временной папке с
   `package.json` `{"type":"module"}`). Новая игра → добавить и в `GAME_PAGES`.

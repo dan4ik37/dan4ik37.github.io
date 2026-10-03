@@ -294,6 +294,7 @@ function renderToday(){
       <a class="today-card${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
       <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
       <a class="today-card" href="/videos"><span class="ti">📼</span><span class="tt"><b>Все видео</b><small>Весь архив канала по годам</small></span></a>
+      <button type="button" class="today-card" onclick="d37Surprise(this)"><span class="ti">🎲</span><span class="tt"><b>Удиви меня</b><small>Случайное видео из почти 6000</small></span></button>
     </div>`;
   gamesDailyDot();
 }

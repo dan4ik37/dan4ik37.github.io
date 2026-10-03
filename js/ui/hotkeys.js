@@ -145,7 +145,7 @@ function renderCmdPaletteList(query){
   let groups;
   if(!q){
     const rnd = [];
-    if(vids.length) rnd.push({ kind:'random', label:'Случайное видео', sub:'Открыть что-нибудь из архива канала', href:pick(vids).href });
+    if(vids.length) rnd.push({ kind:'random', label:'Случайное видео', sub:'Любое из почти 6000 роликов канала', href:'#surprise' });
     const playable = games.filter(g=>g.href.startsWith('#/games/'));
     if(playable.length) rnd.push({ kind:'random', label:'Случайная игра', sub:'Не знаешь, во что сыграть?', href:pick(playable).href });
     groups = [['Новые видео', vids.slice(0,4)], ['Игры', games.slice(0,6)], ['Наугад', rnd], ['Разделы', pages]];
@@ -161,7 +161,8 @@ function renderCmdPaletteList(query){
   }
   let first = true;
   list.innerHTML = groups.map(([title, arr])=>`<div class="cmdp-group">${title}</div>` + arr.map(it=>{ const h = itemHtml(it, first); first = false; return h; }).join('')).join('');
-  list.querySelectorAll('.cmdp-item').forEach(a=>a.addEventListener('click', ()=>{
+  list.querySelectorAll('.cmdp-item').forEach(a=>a.addEventListener('click', e=>{
+    if(a.getAttribute('href')==='#surprise' && typeof d37Surprise==='function'){ e.preventDefault(); d37Surprise(); }
     if(typeof window.va==='function') window.va('event', { name:'site_search_go', data:{ kind:a.dataset.kind } });
     closeCmdPalette();
   }));

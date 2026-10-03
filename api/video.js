@@ -78,6 +78,7 @@ export default async function handler(req, res) {
       <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
       <a class="btn btn-ghost" href="https://www.youtube.com/watch?v=${esc(id)}" target="_blank" rel="noopener">Открыть на YouTube</a>
       <button type="button" class="btn btn-ghost" id="share">🔗 Поделиться</button>
+      <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Случайное видео</button>
     </div>
     ${desc ? `<section class="desc"><h2>Описание</h2><p>${linkify(desc)}</p></section>` : ''}
     <div data-ad="video_page" hidden></div>

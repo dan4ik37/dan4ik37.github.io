@@ -1934,7 +1934,9 @@ body.low .wd-tile.rev,body.low .wd-row.shake{animation:none}
 /* ═══ «Сегодня на сайте» на главной (renderToday в games.js) ═══ */
 .today{padding-top:1.2rem;padding-bottom:0}
 .today:empty{display:none}
-.today-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:.8rem}
+.today-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr;gap:.8rem}
+button.today-card{font:inherit;text-align:left;cursor:pointer;width:100%}
+@media(max-width:1100px) and (min-width:769px){.today-grid{grid-template-columns:1fr 1fr}}
 .today-card{display:flex;align-items:center;gap:.8rem;padding:.85rem 1rem;border-radius:16px;background:var(--card);border:1px solid var(--border);text-decoration:none;color:var(--text);transition:border-color .2s,transform .2s;min-width:0}
 .today-card:hover{border-color:var(--ac-55);transform:translateY(-2px)}
 .today-card.hot{border-color:rgba(34,197,94,.55);background:linear-gradient(135deg,rgba(34,197,94,.14),var(--card) 70%)}

@@ -87,6 +87,7 @@ function topicPage(t, all, counts, req){
   <p class="lead">${esc(t.about)} На канале — ${vids(n)}${first && first !== last ? `, с ${first} по ${last} год` : ''}. От новых к старым.</p>
   <div class="cta">
     <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
+    <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button>
     <a class="btn btn-ghost" href="/games">🎮 Поиграть на сайте</a>
   </div>
   <section class="more"><div class="grid">${slice.map(card).join('')}</div></section>
