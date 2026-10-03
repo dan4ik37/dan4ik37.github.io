@@ -6,7 +6,7 @@
 export const TOPICS = [
   { slug: 'roblox', name: 'Roblox', re: /roblox|роблокс/i,
     about: 'Roblox — платформа с тысячами режимов от игроков. На канале — режимы с подписчиками, ивенты, хорроры и смешные моменты.' },
-  { slug: 'cs2', name: 'Counter-Strike 2', re: /\bcs\s?2\b|кс\s?2|counter[\s-]?strike|#кс\b|csgo|cs:go|#cs\b/i,
+  { slug: 'cs2', name: 'Counter-Strike (CS2 и CS:GO)', re: /\bcs\s?2\b|кс\s?2|counter[\s-]?strike|#кс\b|csgo|cs:go|#cs\b/i,
     about: 'Counter-Strike 2 (раньше CS:GO) — командный шутер от Valve. Здесь — катки, моменты, клатчи и тесты железа.' },
   { slug: 'minecraft', name: 'Minecraft', re: /minecraft|майнкрафт/i,
     about: 'Minecraft — песочница про кубический мир: выживание, постройки, моды и сервера.' },

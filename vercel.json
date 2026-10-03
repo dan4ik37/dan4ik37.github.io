@@ -42,6 +42,10 @@
       "destination": "/api/video?id=:id"
     },
     {
+      "source": "/history",
+      "destination": "/api/history"
+    },
+    {
       "source": "/tools/nick",
       "destination": "/api/tool-nick"
     },

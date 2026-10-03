@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button>
     <a class="btn btn-ghost" href="/games">🎮 Игры на сайте</a>
   </div>
-  <nav class="topics"><b>По играм:</b> ${TOPICS.map(t => [t, vids.filter(v => t.re.test(v.title)).length]).filter(([, c]) => c >= 30).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, c]) => `<a href="/topic/${t.slug}">${esc(t.name)}<small>${c.toLocaleString('ru')}</small></a>`).join('')}<a href="/topics">все игры →</a></nav>
+  <nav class="topics"><b>По играм:</b> ${TOPICS.map(t => [t, vids.filter(v => t.re.test(v.title)).length]).filter(([, c]) => c >= 30).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t, c]) => `<a href="/topic/${t.slug}">${esc(t.name)}<small>${c.toLocaleString('ru')}</small></a>`).join('')}<a href="/topics">все игры →</a> <a href="/history">📜 история канала</a></nav>
   <nav class="years">${[...yearInfo].map(([y, info]) => `<a href="${href(info.page)}#y${y}"${byYear.has(y) ? ' class="on"' : ''}>${y}<small>${info.count.toLocaleString('ru')}</small></a>`).join('')}</nav>
   ${years.map((y, i) => `
   <section class="more" id="y${y}">
