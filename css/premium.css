@@ -1948,3 +1948,23 @@ body.low .today-card{transition:none}
 
 /* Узкий телефон: шапка с кнопкой поиска 🔍 — «Войти» только значком, иначе ☰ уезжает за край */
 @media(max-width:420px){#globalAuthLabel{display:none}.global-auth-btn{padding:.38rem .6rem}}
+
+/* Телефон, раздел «Игры»: плавающие кнопки (режим производительности, «наверх») закрывали край поля
+   «Морского боя» и клавишу ⌫ в «5 букв» — в играх их прячем */
+@media(max-width:768px){body[data-route="games"] #perfToggle,body[data-route="games"] #scrollTop{display:none!important}}
+
+/* Плашка «НОВОЕ» в герое главной — ведёт в игры (первый экран был только про YouTube) */
+.hero-new{display:inline-flex;align-items:center;gap:.6rem;max-width:100%;margin:0 0 1.1rem;padding:.38rem .5rem .38rem .4rem;border-radius:999px;border:1px solid rgba(34,197,94,.45);background:rgba(34,197,94,.08);color:var(--text);text-decoration:none;font-size:.78rem;font-weight:600;transition:border-color .2s,background .2s}
+.hero-new:hover{border-color:rgba(34,197,94,.8);background:rgba(34,197,94,.14)}
+.hero-new b{flex:none;padding:.18rem .5rem;border-radius:999px;background:#16a34a;color:#fff;font-size:.6rem;letter-spacing:.08em}
+.hero-new span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-new i{font-style:normal;color:#22c55e;font-weight:800;padding-right:.3rem}
+@media(max-width:768px){.hero-new{font-size:.72rem;margin-bottom:.9rem}}
+
+/* Телефон: колонка героя была шире экрана (логотип 25vw ≈ 400px на 375px) — описание обрезалось по краям.
+   Колонка — ровно по ширине, логотип 21vw (влезает в 343px), плашка «НОВОЕ» сжимается с многоточием */
+@media(max-width:640px){.hero-main{width:100%}.wordmark{font-size:min(21vw,6.9rem)}.hero-new{max-width:100%}}
+.hero-new .hn-s{display:none}
+@media(max-width:640px){.hero-new .hn-l{display:none}.hero-new .hn-s{display:inline}}
+/* Телефон: вкладка режима производительности — только значок, уже (заходила на текст героя) */
+@media(max-width:768px){#perfToggle{padding:.45rem .25rem;opacity:.75}#perfToggle .pt-lbl{display:none}}
