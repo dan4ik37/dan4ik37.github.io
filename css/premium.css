@@ -1925,3 +1925,21 @@ body.low .wd-tile.rev,body.low .wd-row.shake{animation:none}
 .cmdp-item.active .cmdp-item-go{opacity:1}
 .cmdp-empty{padding:1.6rem;text-align:center;color:var(--muted);font-size:.84rem}
 @media(max-width:640px){.cmdp-box{margin:0;max-width:none;border-radius:0 0 18px 18px;max-height:85vh}.site-search-btn{width:34px;height:34px}}
+
+/* ═══ «Сегодня на сайте» на главной (renderToday в games.js) ═══ */
+.today{padding-top:1.2rem;padding-bottom:0}
+.today:empty{display:none}
+.today-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:.8rem}
+.today-card{display:flex;align-items:center;gap:.8rem;padding:.85rem 1rem;border-radius:16px;background:var(--card);border:1px solid var(--border);text-decoration:none;color:var(--text);transition:border-color .2s,transform .2s;min-width:0}
+.today-card:hover{border-color:var(--ac-55);transform:translateY(-2px)}
+.today-card.hot{border-color:rgba(34,197,94,.55);background:linear-gradient(135deg,rgba(34,197,94,.14),var(--card) 70%)}
+.today-card .ti{font-size:1.6rem;flex:none}
+.today-card .tt{display:flex;flex-direction:column;gap:.15rem;min-width:0}
+.today-card b{font-size:.9rem}
+.today-card small{font-size:.72rem;color:var(--muted);line-height:1.35}
+body.low .today-card{transition:none}
+@media(max-width:768px){.today-grid{grid-template-columns:1fr;gap:.5rem}.today-card{padding:.7rem .9rem}.today-card:not(.hot) small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+@media(max-width:768px){.bt-label{letter-spacing:.2px}}
+
+/* Узкий телефон: шапка с кнопкой поиска 🔍 — «Войти» только значком, иначе ☰ уезжает за край */
+@media(max-width:420px){#globalAuthLabel{display:none}.global-auth-btn{padding:.38rem .6rem}}

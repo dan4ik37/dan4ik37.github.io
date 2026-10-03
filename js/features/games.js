@@ -271,6 +271,37 @@ async function gamesChallenge(btn, id = gamesActive){
 // Уходим из игры — плашку прячем
 window.addEventListener('hashchange', () => { ['gamesSupport', 'gamesAd'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; }); gamesAdAt = 0; });
 
+// ── «Сегодня на сайте» (главная) и точка на «Игры» в нижнем меню ──
+// Слово дня «5 букв»: номер дня — как в js/games/words.js (день №1 = 03.10.2026, смена в полночь МСК).
+// Прогресс дня words.js пишет в localStorage d37_words_day — отсюда видно, сыграно ли сегодня.
+function wordsDayNo(){ return Math.floor((Date.now() + 3 * 3600e3) / 864e5) - Math.floor(Date.UTC(2026, 9, 3) / 864e5) + 1; }
+function wordsToday(){
+  try { const s = JSON.parse(localStorage.getItem('d37_words_day')); return s && s.n === wordsDayNo() ? s : null; } catch (e) { return null; }
+}
+function gamesDailyDot(){
+  const dot = document.getElementById('btGamesDot');
+  if (dot) dot.hidden = !!wordsToday()?.done;
+}
+function renderToday(){
+  const box = document.getElementById('today');
+  if (!box) return;
+  const s = wordsToday();
+  const state = !s ? 'Угадай слово из 5 букв — новое каждый день'
+    : s.done ? (s.win ? `✅ Угадано с ${s.rows.length}-й попытки · завтра новое` : '❌ Не угадано · завтра новое слово')
+    : `Попытка ${s.rows.length + 1} из 6 — доиграй!`;
+  const n = GAMES.length;
+  box.innerHTML = `<div class="today-grid">
+      <a class="today-card${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
+      <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
+      <a class="today-card" href="/videos"><span class="ti">📼</span><span class="tt"><b>Все видео</b><small>Весь архив канала по годам</small></span></a>
+    </div>`;
+  gamesDailyDot();
+}
+window.gamesDailyDot = gamesDailyDot;
+gamesDailyDot();
+// Полночь по МСК: обновить точку и карточку, если сайт открыт долго
+setInterval(() => { gamesDailyDot(); if (document.body.dataset.route === 'home') renderToday(); }, 5 * 60e3);
+
 // После партии: если задание дня выполнено и не забрано — напомнить
 async function dailyQuestHint(){
   try {

@@ -97,7 +97,7 @@
     }
     if (restoring) return;
     const win = guess === W.word;
-    if (W.opt.mode === 'daily') save('d37_words_day', { n: dayNo(), word: W.word, rows: W.rows, done: win || W.rows.length >= ROWS, win });
+    if (W.opt.mode === 'daily') { save('d37_words_day', { n: dayNo(), word: W.word, rows: W.rows, done: win || W.rows.length >= ROWS, win }); window.gamesDailyDot?.(); }
     if (win || W.rows.length >= ROWS) {
       W.over = true;
       setTimeout(() => showEnd(win, false), 140 * LEN + 250);

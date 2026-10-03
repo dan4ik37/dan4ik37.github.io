@@ -7,7 +7,7 @@
 // JS-переменные не сбрасываются при переходах, а в адресной строке при
 // этом появляется свой #/route на каждый раздел (можно скинуть ссылкой).
 const PAGES = {
-  home:       ['hero','content','ad-mid','community','ad-top'],
+  home:       ['hero','today','content','ad-mid','community','ad-top'],
   about:      ['about','schedule','socials'],
   donate:     ['donate','goalbar','leaderboard'],
   poll:       ['poll'],
@@ -52,7 +52,7 @@ function showPage(route){
 function finishShowPage(route, activeIds){
   // Твич-плеер и loadYT() — только когда реально открыта #/home (см. initHomeMedia)
   document.body.dataset.route = route;
-  if (route==='home') initHomeMedia();
+  if (route==='home') { initHomeMedia(); if (typeof renderToday==='function') renderToday(); }
   if (typeof onShortsRoute==='function') onShortsRoute(route==='shorts');
   if (typeof fillVisibleAds==='function') fillVisibleAds();
   if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
@@ -73,7 +73,7 @@ function finishShowPage(route, activeIds){
     a.classList.toggle('active-route', a.dataset.route===route);
   });
   // Нижний таб-бар (мобиле): подсвечиваем Видео/Чат/Донат, либо "Ещё" для остальных страниц
-  const tabRoutes = ['home','chat','shorts'];
+  const tabRoutes = ['home','chat','shorts','games'];
   document.querySelectorAll('.bt-item[data-route]').forEach(a=>{
     a.classList.toggle('active-route', a.dataset.route===route);
   });

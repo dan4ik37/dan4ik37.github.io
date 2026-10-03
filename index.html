@@ -1120,6 +1120,7 @@ body.low .donation-alert-icon{animation:none}
   <a href="#/home" class="bt-item" data-route="home"><span class="bt-icon" style="position:relative">▶<span class="new-dot" id="btNewDot" hidden></span></span><span class="bt-label">Видео</span></a>
   <a href="#/chat" class="bt-item" data-route="chat"><span class="bt-icon" style="position:relative">💬<span class="chat-badge" id="btChatBadge"></span></span><span class="bt-label">Чат</span></a>
   <a href="#/shorts" class="bt-item" data-route="shorts"><span class="bt-icon">⚡</span><span class="bt-label">Shorts</span></a>
+  <a href="#/games" class="bt-item" data-route="games"><span class="bt-icon" style="position:relative">🎮<span class="new-dot" id="btGamesDot" hidden></span></span><span class="bt-label">Игры</span></a>
   <button type="button" class="bt-item" id="btMore" onclick="toggleNav()"><span class="bt-icon">☰</span><span class="bt-label">Ещё</span></button>
 </nav>
 <!-- ЧАТ-ТОСТ -->
@@ -1258,6 +1259,9 @@ body.low .donation-alert-icon{animation:none}
     </div>
   </nav>
 </div>
+
+<!-- СЕГОДНЯ НА САЙТЕ — слово дня, игры, архив (renderToday в games.js) -->
+<div class="wrap today" id="today"></div>
 
 <!-- CONTENT: Twitch + лента видео -->
 <div class="wrap" id="content">
