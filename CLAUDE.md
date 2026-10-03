@@ -13,7 +13,9 @@
 - Коммитить и пушить в `main` можно без отдельного вопроса — так договорились, это и есть выкладка.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
-Сейчас ничего. games.sql и progression.sql применены 03.10.2026 (проверено с сервера: game_top, daily_quest,
+1. `secrets.sql` — охота за секретами (таблица secret_hunt, secret_found/secret_status/nick_fx_users). Ещё НЕ выполнен.
+   Проверить: `/rpc/nick_fx_users` → [] (PGRST202 = нет). Без него находки копятся локально и уйдут на сервер потом.
+games.sql и progression.sql применены 03.10.2026 (проверено с сервера: game_top, daily_quest,
 my_achievements владельца = 53 кода). Проверка применения: `/rpc/<функция>` → PGRST202 = нет функции.
 
 ## Грабли этой истории — не наступать повторно
@@ -145,7 +147,8 @@ my_achievements владельца = 53 кода). Проверка примен
   VIP за уровень нельзя писать в profiles: триггер `protect_profile_columns` откатывает is_vip в клиентской сессии.
 - XP: ачивки — разово (`claim_achievements()` при входе и на своём профиле, source `ach`), донаты — 1 XP/₽ до 1000
   (триггер на `vip_donation_log.matched`, source `donation`). Невидимка — с Silver VIP (`can_be_invisible`).
-- Рамки: `.lv-frame-5` / `.lv-frame-30` (xp.js → `applyLevelFrame`), анимация кольца только в `body.high`.
+- Рамки (лесенка): 5 неон · 15 золото · 30 радуга · 50 пламя · 100 бриллиант — `FRAME_LEVELS`/`avatarFrameClass` в xp.js,
+  стили `.lv-frame-*` в premium.css (только CSS, без SQL), анимация — только в `body.high`. Подписи — LEVEL_REWARDS.
 
 ## Игры (#/games, games.sql)
 - Витрина и общее API — `js/features/games.js` (`GAMES`, `gamesApi(id).report(key, win, score, localBest)`).
@@ -185,6 +188,12 @@ my_achievements владельца = 53 кода). Проверка примен
   в «Поделиться» помечается 💡. Подсказка дня сохраняется в d37_words_day сразу (иначе перезагрузкой берут вторую).
 - «Сегодня на сайте» на главной (блок `#today`, `renderToday()` в games.js): слово дня, игры, архив видео. Пункт «🎮 Игры»
   в нижнем меню телефона с красной точкой, пока слово дня не сыграно (`gamesDailyDot()`, по localStorage d37_words_day).
+- Охота за секретами: `js/features/secrets.js` (+ `secrets.sql`). 7 знаков ✦ (`data-secret="код"`): avatar (5 кликов по
+  аватарке, easter-egg.js), footer, games (под рекордами), archive (последняя страница /videos), horror (/topic/horror),
+  levels («Что даёт уровень»), words (итог слова дня). Находки — localStorage, при входе уходят в secret_found().
+  Все 7 → радужный ник на 30 дней (`.nick-rainbow`, в чате `.cu-nick`, в профиле #profileNick) + 100 XP. Панель — #secretHunt в «Играх».
+- Профиль: настройки аккаунта — внизу; «О себе» на чужом профиле без текста скрыт; ачивки — полученные + 8 закрытых,
+  остальные по кнопке; карточка «🎮 Игры на сайте» (`renderProfileGameStats` в games.js, по game_stats).
 - Пока открыта игра, горячие клавиши страниц (`hotkeys.js`) отключены — стрелки/цифры принадлежат игре.
 
 ## Известные хвосты

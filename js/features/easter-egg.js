@@ -17,6 +17,7 @@ function easterClick(){
 }
 
 function triggerEaster(){
+  window.d37Secret?.find('avatar');   // один из 7 секретов охоты (secrets.js)
   const overlay=document.getElementById('easterOverlay');
   const msg=document.getElementById('easterMsg');
   // Случайные цвета

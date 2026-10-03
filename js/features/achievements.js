@@ -153,7 +153,18 @@ async function renderAchievements(targetId, isOwn){
     if (achRes.error) { box.innerHTML = ''; return; }
     const earned = new Set((achRes.data || []).filter(r => r.earned).map(r => r.code));
     const { special, regular } = achVisibleDefs(earned);
-    box.innerHTML = special.map(d => achBadgeHtml(d, true)).join('') + regular.map(d => achBadgeHtml(d, earned.has(d.code))).join('');
+    // Закрытых много (50+) — на телефоне это лента на 15 экранов. Показываем полученные + 8 следующих, остальные — по кнопке
+    const SHOW_LOCKED = 8;
+    let lockedShown = 0;
+    box.innerHTML = special.map(d => achBadgeHtml(d, true)).join('') + regular.map(d => {
+      const got = earned.has(d.code);
+      const extra = !got && ++lockedShown > SHOW_LOCKED;
+      return achBadgeHtml(d, got).replace('class="ach-badge', extra ? 'class="ach-more ach-badge' : 'class="ach-badge');
+    }).join('');
+    box.classList.remove('all');
+    const rest = Math.max(0, lockedShown - SHOW_LOCKED);
+    box.nextElementSibling?.classList?.contains('ach-toggle') && box.nextElementSibling.remove();
+    if (rest) box.insertAdjacentHTML('afterend', `<button type="button" class="ach-toggle" onclick="const g=this.previousElementSibling;g.classList.toggle('all');this.textContent=g.classList.contains('all')?'Свернуть':'Показать все ачивки (ещё ${rest})'">Показать все ачивки (ещё ${rest})</button>`);
     if (sumEl) {
       const got = regular.filter(d => earned.has(d.code)).length;
       const xp = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code)).reduce((s, d) => s + (d.xp || 0), 0);

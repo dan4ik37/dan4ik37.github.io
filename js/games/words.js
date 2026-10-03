@@ -166,7 +166,8 @@
         <button class="wdFree">♾️ ${daily ? 'Играть ещё' : 'Новое слово'}</button>
         <button class="ct-duel-btn wdDuel">⚔️ С другом</button>
       </div>
-      ${daily ? '<div class="ct-note wd-next">Новое слово дня через <b class="wdLeft"></b></div>' : ''}`;
+      ${daily ? '<div class="ct-note wd-next">Новое слово дня через <b class="wdLeft"></b> <button type="button" class="d37-secret" data-secret="words" aria-label="Секретный знак">✦</button></div>' : ''}`;
+    window.d37Secret?.paint();
     end.querySelector('.wdShare').onclick = e => share(e.target, win);
     end.querySelector('.wdFree').onclick = () => start('free');
     end.querySelector('.wdDuel').onclick = () => { location.hash = '#/games/words/' + GameRoom.newCode(); };

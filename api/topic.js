@@ -94,6 +94,7 @@ function topicPage(t, all, counts, req){
   ${pager}
   <div data-ad="video_page" hidden></div>
   <section class="more"><h2>Другие игры канала</h2>${chips(counts, t.slug)}</section>
+  ${t.slug === 'horror' ? '<div class="secret-spot"><button type="button" class="d37-secret" data-secret="horror" aria-label="Секретный знак">✦</button></div>' : ''}
 </main>`;
   const title = p > 1 ? `${t.name} — видео dan4ik37, страница ${p}` : `${t.name} — все видео dan4ik37 (${n.toLocaleString('ru')})`;
   return page({ title, description: `${t.name}: ${vids(n)} dan4ik37 — ${t.about}`.slice(0, 300), url, image: list[0]?.thumb || SITE + '/og-image.jpg', ld, body, css: CSS });

@@ -68,6 +68,7 @@ export default async function handler(req, res) {
     <h2>${y}</h2>
     <div class="grid">${byYear.get(y).map(v => `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${esc(day(v))}</small></a>`).join('')}</div>
   </section>${i === 0 ? '\n  <div data-ad="video_page" hidden></div>' : ''}`).join('')}
+  ${p === pages ? `<div class="secret-spot" title="Здесь всё началось"><button type="button" class="d37-secret" data-secret="archive" aria-label="Секретный знак">✦</button></div>` : ''}
   ${pager}
 </main>`;
 

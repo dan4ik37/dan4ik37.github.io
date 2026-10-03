@@ -56,6 +56,7 @@ ${body}
 ${script ? `<script>${script}</script>` : ''}
 <script src="/js/core/ads-core.js"></script>
 <script src="/js/core/surprise.js" defer></script>
+<script src="/js/features/secrets.js" defer></script>
 <script>window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>
 </html>`;
@@ -115,6 +116,12 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .topics{margin-top:1.2rem;font-size:.85rem;color:var(--muted)}
 .topics a{display:inline-block;margin:.2rem .3rem 0 0;padding:.3rem .75rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:700;color:var(--text)}
 .topics a:hover{border-color:var(--accent)}
+.d37-secret{border:0;background:none;padding:.2rem .35rem;font-size:.9rem;line-height:1;color:rgba(255,209,102,.4);cursor:pointer;vertical-align:middle}
+.d37-secret:hover{color:#ffd166}
+.d37-secret.found{display:none}
+.secret-spot{text-align:center;margin-top:1.4rem}
+#d37SecretToast{position:fixed;left:50%;bottom:1.4rem;transform:translate(-50%,20px);padding:.75rem 1.2rem;border-radius:14px;background:#16161f;border:1px solid rgba(255,209,102,.45);color:#fff;font-size:.85rem;font-weight:700;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;z-index:50;max-width:90vw;text-align:center}
+#d37SecretToast.show{opacity:1;transform:translate(-50%,0)}
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{text-decoration:none}
 @media(max-width:600px){.top nav a:not(.sub){display:none}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}

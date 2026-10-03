@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '14';
+const GAMES_VER = '15';
 const GAMES = [
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'words',    icon: '🔤', title: '5 букв',          desc: 'Угадай слово из 5 букв за 6 попыток. Новое слово дня каждый день, свободная игра и соревнование с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/words-data.js', 'js/games/words.js'], top: 'words', topLabel: 'лучшая попытка в слове дня', color: '#22c55e' },
@@ -302,6 +302,36 @@ window.gamesDailyDot = gamesDailyDot;
 gamesDailyDot();
 // Полночь по МСК: обновить точку и карточку, если сайт открыт долго
 setInterval(() => { gamesDailyDot(); if (document.body.dataset.route === 'home') renderToday(); }, 5 * 60e3);
+
+// ── Игровая статистика в профиле (#profileGameStatsCard) ──
+// game_stats читают все (games.sql). Ключи вида cities_hard / words_duel → игра по префиксу из GAMES.
+// Лучший результат — по ключу рекордов игры (GAMES[].top), как в таблице рекордов.
+async function renderProfileGameStats(uid, isOwn){
+  const card = document.getElementById('profileGameStatsCard');
+  if (!card) return;
+  card.hidden = true;
+  if (!uid || !sbClient) return;
+  const { data, error } = await sbClient.from('game_stats').select('game,plays,wins,best_score').eq('user_id', uid);
+  if (error || !data) return;
+  const rows = [];
+  let plays = 0, wins = 0;
+  for (const g of GAMES.filter(x => !x.href)) {
+    const mine = data.filter(r => r.game === g.id || r.game.startsWith(g.id + '_'));
+    if (!mine.length) continue;
+    const p = mine.reduce((s, r) => s + (r.plays || 0), 0), w = mine.reduce((s, r) => s + (r.wins || 0), 0);
+    plays += p; wins += w;
+    const top = mine.find(r => r.game === g.top);
+    rows.push({ g, p, w, best: top && top.best_score > 0 ? gameBestLabel(g.id, top.best_score) : '' });
+  }
+  if (!rows.length && !isOwn) return;
+  card.hidden = false;
+  const box = document.getElementById('profileGameStats');
+  document.getElementById('profileGameStatsSum').textContent = plays ? `${plays} ${plays % 10 === 1 && plays % 100 !== 11 ? 'партия' : [2, 3, 4].includes(plays % 10) && ![12, 13, 14].includes(plays % 100) ? 'партии' : 'партий'} · ${wins} побед` : '';
+  box.innerHTML = rows.length ? rows.sort((a, b) => b.p - a.p).map(r => `<a class="pgs-item" href="#/games/${r.g.id}" style="--gc:${r.g.color}">
+      <span class="pgs-ic">${r.g.icon}</span>
+      <span class="pgs-txt"><b>${esc(r.g.title)}</b><small>${r.p} игр · ${r.w} побед${r.best ? ' · 🏆 ' + esc(r.best) : ''}</small></span></a>`).join('')
+    : '<div class="pgs-empty">Ещё не играл. <a href="#/games">Сыграй во что-нибудь</a> — за победы дают XP, а рекорды попадут сюда.</div>';
+}
 
 // После партии: если задание дня выполнено и не забрано — напомнить
 async function dailyQuestHint(){

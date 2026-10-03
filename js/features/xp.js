@@ -23,16 +23,16 @@ const XP_RULES = [
 ];
 // Что открывает уровень — цифры синхронизированы с progression.sql (friend_limit, check_level_rewards)
 const LEVEL_REWARDS = [
-  [5,   '🖼️', 'Рамка аватара · заявки в друзья (до 15)'],
+  [5,   '🖼️', 'Неоновая рамка аватара · заявки в друзья (до 15)'],
   [10,  '🏷️', 'Титул из своих ачивок рядом с ником'],
-  [15,  '👥', 'До 20 друзей'],
+  [15,  '🥇', 'Золотая рамка · до 20 друзей'],
   [20,  '👥', 'До 25 друзей'],
   [25,  '👥', 'До 30 друзей'],
-  [30,  '🌈', 'Красивая рамка · до 35 друзей · Bronze VIP на месяц'],
-  [50,  '⭐', 'Silver VIP на 3 месяца'],
-  [100, '✨', 'Gold VIP на год'],
+  [30,  '🌈', 'Радужная рамка · до 35 друзей · Bronze VIP на месяц'],
+  [50,  '🔥', 'Огненная рамка · Silver VIP на 3 месяца'],
+  [100, '💎', 'Бриллиантовая рамка · Gold VIP на год'],
 ];
-const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры', daily: 'Задание дня' };
+const XP_SOURCE_LABEL = { visit: 'Визиты', streak: 'Стрик', watch: 'Просмотры', chat: 'Чат', forum_thread: 'Темы', forum_post: 'Ответы', idea: 'Идеи', idea_done: 'Идея снята', referral: 'Друзья', ach: 'Ачивки', donation: 'Донаты', game: 'Игры', daily: 'Задание дня', secret: 'Секреты' };
 const XP_TIERS = [30, 20, 10, 5]; // рамки ника по порогам уровня
 
 let xpAvailable = null; // null — ещё не проверяли
@@ -102,11 +102,13 @@ async function xpGetExtras(uid){
   return { level: xpLevelCache.get(uid) || 1, title: xpTitleCache.get(uid) || null };
 }
 
-// Рамка аватара по уровню: с 5 — простая, с 30 — красивая (анимируется только в body.high)
-function avatarFrameClass(level){ return level >= 30 ? 'lv-frame-30' : level >= 5 ? 'lv-frame-5' : ''; }
+// Рамка аватара по уровню (лесенка): 5 неон, 15 золото, 30 радуга, 50 пламя, 100 бриллиант.
+// Анимация — только в body.high. Стили — css/premium.css (.lv-frame-*), подписи — LEVEL_REWARDS выше.
+const FRAME_LEVELS = [100, 50, 30, 15, 5];
+function avatarFrameClass(level){ const lv = FRAME_LEVELS.find(x => level >= x); return lv ? 'lv-frame-' + lv : ''; }
 async function applyLevelFrame(el, uid){
   if (!el) return;
-  el.classList.remove('lv-frame-5', 'lv-frame-30');
+  el.classList.remove(...FRAME_LEVELS.map(x => 'lv-frame-' + x));
   const ex = await xpGetExtras(uid);
   const cls = ex && avatarFrameClass(ex.level);
   if (cls) el.classList.add(cls);

@@ -1568,9 +1568,11 @@ body.low .donation-alert-icon{animation:none}
     </div>
 
     <div id="profileUploadStatus" style="font-size:.72rem;text-align:center;min-height:1rem;margin-top:.5rem"></div>
-    <div id="profileUploadHint" style="display:none;font-size:.68rem;line-height:1.6;text-align:center;color:var(--muted);opacity:.85;max-width:560px;margin:.2rem auto 0">
-      🖼 Аватарка и фон: <b>PNG, JPEG или WEBP</b> — любой размер до 25 МБ, мы сами сожмём. Анимированный GIF — для VIP.<br>
+    <div id="profileUploadHint" style="display:none;font-size:.68rem;line-height:1.6;text-align:center;color:var(--muted);max-width:560px;margin:.2rem auto 0">
+      <details class="pf-upload-help"><summary>🖼 Какие картинки подходят и что делать, если не загружается</summary>
+      Аватарка и фон: <b>PNG, JPEG или WEBP</b> — любой размер до 25 МБ, мы сами сожмём. Анимированный GIF — для VIP.<br>
       Не загружается? Скорее всего, мешает <b>блокировщик рекламы</b> (AdBlock, uBlock, AdGuard, Kaspersky «Анти-Баннер») — отключи его для этого сайта. Фон при этом всё равно сохранится в облегчённом виде.
+      </details>
     </div>
 
     <!-- Профиль скрыт настройками приватности (privacy.sql) -->
@@ -1641,33 +1643,6 @@ body.low .donation-alert-icon{animation:none}
       </div>
     </div>
 
-    <!-- Настройки аккаунта — только на своём профиле -->
-    <div id="profileAccountSettings" class="pf-card pf-card-muted" style="display:none;margin-top:1rem">
-      <div class="pf-kicker" style="margin-bottom:.8rem">Настройки аккаунта</div>
-      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
-        <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на уведомления</button>
-        <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
-      </div>
-      <!-- Приватность (privacy.sql) — скрыта, пока скрипт не выполнен -->
-      <div id="profilePrivacy" class="pv-box" hidden>
-        <div class="pf-kicker" style="margin-bottom:.7rem">🔒 Приватность</div>
-        <label class="pv-row"><span>Кто видит мой профиль</span>
-          <select id="pvProfile" onchange="savePrivacy('privacy_profile', this.value)">
-            <option value="all">Все</option><option value="friends">Только друзья</option><option value="nobody">Только я</option>
-          </select></label>
-        <label class="pv-row"><span>Заявки в друзья</span>
-          <select id="pvRequests" onchange="savePrivacy('privacy_friend_requests', this.value)">
-            <option value="all">От всех</option><option value="nobody">Ни от кого</option>
-          </select></label>
-        <label class="pv-row pv-check"><input type="checkbox" id="pvInvisible" onchange="savePrivacy('privacy_invisible', this.checked)">
-          <span>👻 Невидимка — не показывать меня в «Гостях профиля» у других <b id="pvInvisibleLock" class="pv-lock" hidden>🔒 с Silver VIP</b></span></label>
-        <label class="pv-row pv-check"><input type="checkbox" id="pvDonations" onchange="savePrivacy('privacy_hide_donations', this.checked)">
-          <span>💸 Скрыть сумму моих донатов — в профиле и в топе донатеров (значок VIP останется)</span></label>
-        <div id="pvStatus" class="pv-status"></div>
-        <div class="pv-note">Скрытый профиль: остальные видят только ник, аватар, роль и значок VIP. Модераторы тоже не видят скрытое — им доступны лишь служебные данные (дата регистрации, роль, VIP), чтобы разбираться с жалобами.</div>
-      </div>
-    </div>
-
     <!-- Уровень и XP (js/features/xp.js, xp.sql) — скрыт, пока xp.sql не выполнен -->
     <div id="profileXpCard" class="pf-card pf-xp" style="margin-top:1rem" hidden>
       <div class="xp-row">
@@ -1680,7 +1655,7 @@ body.low .donation-alert-icon{animation:none}
       </div>
       <div class="xp-week" id="pxWeek"></div>
       <details class="xp-help"><summary>Как получать XP</summary><div class="xp-rules" id="pxRules"></div></details>
-      <details class="xp-help"><summary>Что даёт уровень</summary><div class="xp-rewards" id="pxRewards"></div></details>
+      <details class="xp-help"><summary>Что даёт уровень</summary><div class="xp-rewards" id="pxRewards"></div><div class="xp-secret-spot"><button type="button" class="d37-secret" data-secret="levels" aria-label="Секретный знак">✦</button></div></details>
     </div>
 
     <!-- Ачивки — видны и на своём, и на чужом профиле -->
@@ -1688,6 +1663,12 @@ body.low .donation-alert-icon{animation:none}
       <div class="pf-kicker" style="margin-bottom:.6rem;display:flex;justify-content:space-between;gap:.5rem">🏆 Ачивки <span id="profileAchSummary" class="ach-summary"></span></div>
       <div id="profileAchievements" class="ach-grid"></div>
       <div id="profileTitlePicker" class="title-picker" hidden></div>
+    </div>
+
+    <!-- Игровая статистика (games.sql, renderProfileGameStats в games.js) — скрыта, если не играл -->
+    <div id="profileGameStatsCard" class="pf-card pf-card-accent" style="margin-top:1rem" hidden>
+      <div class="pf-kicker" style="margin-bottom:.7rem;display:flex;justify-content:space-between;gap:.5rem">🎮 Игры на сайте <span id="profileGameStatsSum" class="ach-summary"></span></div>
+      <div id="profileGameStats" class="pgs-grid"></div>
     </div>
 
     <!-- Реферальная ссылка — только на своём профиле -->
@@ -1833,6 +1814,33 @@ body.low .donation-alert-icon{animation:none}
       <div id="profileStaffPerms" style="display:flex;flex-direction:column;gap:.4rem;font-size:.78rem"></div>
       <a href="#/chat" style="display:inline-block;margin-top:.8rem;font-size:.75rem;color:var(--tw);text-decoration:underline">Перейти в чат →</a>
     </div>
+
+    <!-- Настройки аккаунта — только на своём профиле -->
+    <div id="profileAccountSettings" class="pf-card pf-card-muted" style="display:none;margin-top:1rem">
+      <div class="pf-kicker" style="margin-bottom:.8rem">Настройки аккаунта</div>
+      <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+        <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на уведомления</button>
+        <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
+      </div>
+      <!-- Приватность (privacy.sql) — скрыта, пока скрипт не выполнен -->
+      <div id="profilePrivacy" class="pv-box" hidden>
+        <div class="pf-kicker" style="margin-bottom:.7rem">🔒 Приватность</div>
+        <label class="pv-row"><span>Кто видит мой профиль</span>
+          <select id="pvProfile" onchange="savePrivacy('privacy_profile', this.value)">
+            <option value="all">Все</option><option value="friends">Только друзья</option><option value="nobody">Только я</option>
+          </select></label>
+        <label class="pv-row"><span>Заявки в друзья</span>
+          <select id="pvRequests" onchange="savePrivacy('privacy_friend_requests', this.value)">
+            <option value="all">От всех</option><option value="nobody">Ни от кого</option>
+          </select></label>
+        <label class="pv-row pv-check"><input type="checkbox" id="pvInvisible" onchange="savePrivacy('privacy_invisible', this.checked)">
+          <span>👻 Невидимка — не показывать меня в «Гостях профиля» у других <b id="pvInvisibleLock" class="pv-lock" hidden>🔒 с Silver VIP</b></span></label>
+        <label class="pv-row pv-check"><input type="checkbox" id="pvDonations" onchange="savePrivacy('privacy_hide_donations', this.checked)">
+          <span>💸 Скрыть сумму моих донатов — в профиле и в топе донатеров (значок VIP останется)</span></label>
+        <div id="pvStatus" class="pv-status"></div>
+        <div class="pv-note">Скрытый профиль: остальные видят только ник, аватар, роль и значок VIP. Модераторы тоже не видят скрытое — им доступны лишь служебные данные (дата регистрации, роль, VIP), чтобы разбираться с жалобами.</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1894,6 +1902,7 @@ body.low .donation-alert-icon{animation:none}
   <div id="gamesHub">
     <p class="gm-lead">Мини-игры прямо на сайте. За победы — XP (если войти в аккаунт), рекорды попадают в таблицу.</p>
     <div class="dq" id="gamesDaily" hidden></div>
+    <div class="sh" id="secretHunt" hidden></div>
     <div class="gm-grid" id="gamesGrid"></div>
     <div id="gamesHubAd" hidden></div>
     <div class="gm-top" id="gamesTopBox" hidden>
@@ -1902,6 +1911,7 @@ body.low .donation-alert-icon{animation:none}
       <div class="gm-tabs" id="gamesTopTabs"></div>
       <ol class="gm-top-list" id="gamesTopList"></ol>
     </div>
+    <div class="gm-secret-spot"><button type="button" class="d37-secret" data-secret="games" aria-label="Секретный знак">✦</button></div>
   </div>
   <div id="gamesStage" class="gm-stage" hidden>
     <div class="gm-stage-bar">
@@ -2297,7 +2307,7 @@ body.low .donation-alert-icon{animation:none}
 
 <footer>
   <div class="footer-logo">dan4ik37</div>
-  <div class="footer-tag">Контент · Стримы · Общение</div>
+  <div class="footer-tag">Контент · Стримы · Общение <button type="button" class="d37-secret" data-secret="footer" aria-label="Секретный знак">✦</button></div>
   <div class="footer-links">
     <a href="https://www.youtube.com/@Dan4ik37Yt" target="_blank">YouTube</a>
     <a href="https://www.tiktok.com/@.dan4ik37" target="_blank">TikTok</a>
@@ -2562,6 +2572,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/games.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
+<script src="js/features/secrets.js"></script>
 <script src="js/ui/hotkeys.js"></script>
 <script src="js/features/fx.js"></script>
 <script src="js/features/vip-sync-ping.js"></script>

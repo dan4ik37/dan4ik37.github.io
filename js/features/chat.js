@@ -502,7 +502,7 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
     <div class="chat-avatar" style="background:${avatarBg}" ${profileClick}>${initials}</div>
     <div class="chat-bubble-col">
       <div class="chat-bubble" style="${isSticker?'background:none;border:none;box-shadow:none;padding:.2rem 0':''}">
-        <div class="chat-user" style="color:${nickColor}" ${profileClick}>${esc(nick)}${badge}${vipBadge}${userId ? `<span class="lv-badge" data-lv-uid="${esc(userId)}"></span>` : ''}</div>
+        <div class="chat-user" style="color:${nickColor}" ${profileClick}><span class="cu-nick">${esc(nick)}</span>${badge}${vipBadge}${userId ? `<span class="lv-badge" data-lv-uid="${esc(userId)}"></span>` : ''}</div>
         ${textBlock}
         <div class="chat-time">${time}</div>
       </div>
@@ -514,6 +514,7 @@ function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTie
     ${canPin?`<button class="msg-pin-btn" aria-label="Закрепить" onclick="pinMessage(${msgId})" title="Закрепить на ${pinDurationHint} (по твоей роли/уровню)">📌</button>`:''}`;
   msgs.appendChild(div);
   if (userId && typeof xpQueueBadges === 'function') xpQueueBadges();
+  if (userId) window.d37NickFx?.mark(div);   // радужный ник за охоту за секретами (secrets.js)
   if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100) msgs.scrollTop=msgs.scrollHeight;
 }
 

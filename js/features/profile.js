@@ -122,6 +122,7 @@ async function renderProfilePage(viewUserId){
   }
 
   document.getElementById('profileNick').textContent = profile.nick || 'Без ника';
+  window.d37NickFx?.markEl(document.getElementById('profileNick'), targetId);
   profileEmailRaw = isOwn ? (currentUser?.email || '') : '';
   profileEmailVisible = false;
   document.getElementById('profileEmailToggle').style.display = (isOwn && profileEmailRaw) ? 'inline' : 'none';
@@ -163,7 +164,7 @@ async function renderProfilePage(viewUserId){
   }
   const hidden = !isOwn && !!profile.profile_hidden;
   renderProfileHiddenNote(profile, hidden);
-  document.getElementById('profileAboutCard').style.display = hidden ? 'none' : '';
+  document.getElementById('profileAboutCard').style.display = (hidden || (!isOwn && !String(profile.bio || '').trim())) ? 'none' : '';
   document.getElementById('profileGamesCard').style.display = hidden ? 'none' : '';
   document.getElementById('profileAchievementsCard').style.display = hidden ? 'none' : '';
   // Статистику на скрытом профиле видит только персонал (служебный просмотр)
@@ -183,6 +184,7 @@ async function renderProfilePage(viewUserId){
   if (!hidden || profile.staff_view) renderProfileStats(profile, targetId);
   renderReferralPanel(profile, isOwn);
   if (!hidden && typeof renderAchievements === 'function') renderAchievements(targetId, isOwn);
+  if (typeof renderProfileGameStats === 'function') renderProfileGameStats(hidden ? null : targetId, isOwn);
   if (hidden) document.getElementById('profileXpCard').hidden = true;
   else if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
   if (isOwn) renderPrivacySettings(profile);
