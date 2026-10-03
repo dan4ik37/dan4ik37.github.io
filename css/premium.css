@@ -1856,6 +1856,11 @@ body.low .wd-tile.rev,body.low .wd-row.shake{animation:none}
 .wd-dist i{font-style:normal;font-weight:800;background:#3f3f46;width:var(--w);text-align:right;padding:.1rem .4rem;border-radius:4px}
 .wd-dist i.me{background:#16a34a}
 .wd-next{text-align:center}
+.wd-hintbar{display:flex;align-items:center;justify-content:center;gap:.6rem;flex-wrap:wrap;font-size:.76rem;color:var(--muted);min-height:1.8rem}
+.wd-hint{border:1px solid rgba(255,209,102,.45);background:rgba(255,209,102,.08);color:#ffd166;border-radius:999px;padding:.3rem .8rem;font:700 .72rem 'Montserrat',sans-serif;cursor:pointer}
+.wd-hint:disabled{opacity:.5;cursor:default}
+.wd-hinttext b{color:#ffd166}
+.wd-hinttext a{color:var(--accent)}
 @media(max-width:480px){.gm-stage .wd{margin:0 -.85rem}.wd-kb div{gap:3px}.wd-kb button{height:46px;font-size:.88rem}}
 /* Лови донаты */
 .ca{display:flex;flex-direction:column;gap:.6rem;align-items:center}

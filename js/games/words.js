@@ -48,10 +48,13 @@
           <button data-m="free" class="${opt.mode === 'free' ? 'on' : ''}">♾️ Свободная игра</button></div>`}
         <div class="wd-grid">${Array.from({ length: ROWS }, () => `<div class="wd-row">${'<span class="wd-tile"></span>'.repeat(LEN)}</div>`).join('')}</div>
         <div class="ct-status wd-status">${opt.mode === 'duel' ? 'Одно слово на двоих: меньше попыток и быстрее — больше очков' : 'Угадай слово из 5 букв за 6 попыток'}</div>
+        ${opt.mode === 'duel' ? '' : '<div class="wd-hintbar"><button type="button" class="wd-hint">💡 Подсказка</button><span class="wd-hinttext"></span></div>'}
         <div class="wd-kb">${KB.map(r => `<div>${[...r].map(k => `<button type="button" data-k="${k}"${k === '⏎' || k === '⌫' ? ' class="wide"' : ''} aria-label="${k === '⏎' ? 'Ввод' : k === '⌫' ? 'Стереть' : k}">${k === '⏎' ? 'ВВОД' : k}</button>`).join('')}</div>`).join('')}</div>
         <div class="wd-end" hidden></div>
       </div>`;
     el.querySelectorAll('.wd-modes button').forEach(b => b.onclick = () => start(b.dataset.m));
+    el.querySelector('.wd-hint')?.addEventListener('click', hint);
+    if (opt.saved?.hint) showHint(opt.saved.hint);
     el.querySelectorAll('.wd-kb button').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); press(b.dataset.k); }));
     // Восстановить сохранённые ходы (слово дня после перезагрузки)
     for (const g of opt.saved?.rows || []) { W.cur = g; commit(true); }
@@ -97,7 +100,7 @@
     }
     if (restoring) return;
     const win = guess === W.word;
-    if (W.opt.mode === 'daily') { save('d37_words_day', { n: dayNo(), word: W.word, rows: W.rows, done: win || W.rows.length >= ROWS, win }); window.gamesDailyDot?.(); }
+    if (W.opt.mode === 'daily') { save('d37_words_day', { n: dayNo(), word: W.word, rows: W.rows, done: win || W.rows.length >= ROWS, win, hint: W.hint || null }); window.gamesDailyDot?.(); }
     if (win || W.rows.length >= ROWS) {
       W.over = true;
       setTimeout(() => showEnd(win, false), 140 * LEN + 250);
@@ -105,6 +108,37 @@
       api.sfx('move');
       status(`Попытка ${W.rows.length + 1} из ${ROWS}`);
     }
+  }
+
+  // ── Подсказка для VIP (и персонала): одна буква на слово. Остальным — как получить VIP ──
+  // VIP даётся за донат или за 30-й уровень (progression.sql) — повод поддержать стрим, игра при этом бесплатна.
+  function hasHintPerk(){
+    try { return typeof currentProfile !== 'undefined' && !!currentProfile && typeof hasPerks === 'function' && hasPerks(currentProfile.role, currentProfile); }
+    catch (e) { return false; }
+  }
+  function showHint(h){
+    W.hint = h;
+    const t = W.el.querySelector('.wd-hinttext');
+    if (t) t.innerHTML = `Буква №${h.i + 1} — <b>«${h.ch.toUpperCase()}»</b>`;
+    const b = W.el.querySelector('.wd-hint'); if (b) b.disabled = true;
+  }
+  function hint(){
+    if (!W || W.over) return;
+    const t = W.el.querySelector('.wd-hinttext');
+    if (!hasHintPerk()) {
+      t.innerHTML = 'Подсказки — для VIP: VIP даётся за <a href="#/donate">донат</a> или за 30-й уровень на сайте';
+      if (typeof window.va === 'function') window.va('event', { name: 'words_hint_locked' });
+      return;
+    }
+    if (W.hint) return;
+    const green = new Set();
+    for (const g of W.rows) evaluate(g, W.word).forEach((r, i) => { if (r === 'g') green.add(i); });
+    const free = [...Array(LEN).keys()].filter(i => !green.has(i));
+    if (!free.length) return;
+    const i = free[Math.floor(Math.random() * free.length)];
+    showHint({ i, ch: W.word[i] });
+    // Сохраняем сразу, даже до первого хода — иначе после перезагрузки можно взять вторую букву
+    if (W.opt.mode === 'daily') { const s = load('d37_words_day', null); const base = s && s.n === dayNo() && s.word === W.word ? s : { n: dayNo(), word: W.word, rows: W.rows, done: false, win: false }; save('d37_words_day', { ...base, hint: W.hint }); }
   }
 
   function grid(){ return W.rows.map(g => evaluate(g, W.word).map(r => r === 'g' ? '🟩' : r === 'y' ? '🟨' : '⬜').join('')).join('\n'); }
@@ -162,7 +196,7 @@
 
   async function share(btn, win){
     const daily = W.opt.mode === 'daily';
-    const text = `5 букв${daily ? ' #' + dayNo() : ''} ${win ? W.rows.length : 'X'}/6\n${grid()}`;
+    const text = `5 букв${daily ? ' #' + dayNo() : ''} ${win ? W.rows.length : 'X'}/6${W.hint ? ' 💡' : ''}\n${grid()}`;
     const url = location.origin + '/games/words';
     if (typeof window.va === 'function') window.va('event', { name: 'words_share' });
     if (navigator.share) { navigator.share({ text: text + '\n', url }).catch(() => {}); return; }
