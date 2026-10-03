@@ -10,6 +10,7 @@ reg = lambda s: ImageFont.truetype(os.path.join(F, 'segoeui.ttf'), s)
 emoji = ImageFont.truetype(os.path.join(F, 'seguiemj.ttf'), 320)
 
 GAMES = [
+    ('words', '🔤', '5 букв', '#22c55e'),
     ('cities', '🌍', 'Города', '#29b6f6'),
     ('sea', '🚢', 'Морской бой', '#38bdf8'),
     ('checkers', '⚫', 'Шашки', '#e5e7eb'),

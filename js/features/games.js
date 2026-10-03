@@ -6,9 +6,10 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '12';
+const GAMES_VER = '13';
 const GAMES = [
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
+  { id: 'words',    icon: '🔤', title: '5 букв',          desc: 'Угадай слово из 5 букв за 6 попыток. Новое слово дня каждый день, свободная игра и соревнование с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/words-data.js', 'js/games/words.js'], top: 'words', topLabel: 'лучшая попытка в слове дня', color: '#22c55e' },
   { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков. Можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
   { id: '2048',     icon: '🧩', title: '2048',            desc: 'Складывай плитки — стрелки, WASD или свайпы. Дойдёшь до 2048? Или кто больше за 3 минуты — с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/g2048.js'], top: '2048', topLabel: 'очков', color: '#ffd166' },
   { id: 'checkers', icon: '⚫', title: 'Шашки',           desc: 'Русские шашки: против бота трёх уровней, вдвоём на экране или онлайн с другом по ссылке.', scripts: ['js/games/room.js', 'js/games/checkers.js'], top: 'checkers_hard', topLabel: 'шашек сохранено в победе на «Сложном»', color: '#e5e7eb' },
@@ -34,6 +35,7 @@ const DAILY_QUESTS = {
   win_sea:      { text: 'Выиграй в «Морской бой» (Средний, Сложный или онлайн)', game: 'sea' },
   snake20:      { text: 'Съешь 20+ яблок в «Змейке»', game: 'snake' },
   memory:       { text: 'Найди все пары в «Найди пару» за 20 ходов или меньше', game: 'memory' },
+  words:        { text: 'Угадай слово дня в «5 букв»', game: 'words' },
 };
 
 let gamesActive = null;        // id открытой игры
@@ -188,6 +190,7 @@ function gameBestLabel(id, best){
   if (id === 'sea') return `${best} из 20 палуб`;
   if (id === 'snake') return `${best} ${best % 10 === 1 && best % 100 !== 11 ? 'яблоко' : [2, 3, 4].includes(best % 10) && ![12, 13, 14].includes(best % 100) ? 'яблока' : 'яблок'}`;
   if (id === 'memory') return `${best} очков`;
+  if (id === 'words') return `с ${7 - best}-й попытки`;
   return String(best);
 }
 

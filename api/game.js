@@ -115,7 +115,7 @@ function gamePage(g, ch) {
   const body = `
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>${esc(g.name)}</span></nav>
-  ${ch ? `<div class="challenge">⚔️ <b>${esc(ch.nick)}</b> набрал ${esc(scoreLabel(g.id, ch.score))} в «${esc(g.name)}». <span>Сможешь лучше?</span></div>` : ''}
+  ${ch ? `<div class="challenge">⚔️ <b>${esc(ch.nick)}</b> ${g.id === 'words' ? 'угадал слово' : 'набрал'} ${esc(scoreLabel(g.id, ch.score))} в «${esc(g.name)}». <span>Сможешь лучше?</span></div>` : ''}
   <div class="ghero">
     <span class="gbig">${g.icon}</span>
     <div>
@@ -143,7 +143,8 @@ function gamePage(g, ch) {
   ${joinBlock()}
 </main>`;
   // canonical — всегда чистый /games/<id>, чтобы вызовы не плодили дубли в поиске
-  const title = ch ? `${ch.nick} набрал ${scoreLabel(g.id, ch.score)} в «${g.name}» — побьёшь?` : `${g.title} | dan4ik37`;
+  const verb = g.id === 'words' ? 'угадал слово' : 'набрал';
+  const title = ch ? `${ch.nick} ${verb} ${scoreLabel(g.id, ch.score)} в «${g.name}» — побьёшь?` : `${g.title} | dan4ik37`;
   const description = ch ? `Сыграй в «${g.name}» бесплатно и без регистрации и побей результат. ${g.description}` : g.description;
   return page({ title, description, url, image: cardImage(g.id), ld, body, css: GAME_CSS, script: SHARE_JS });
 }

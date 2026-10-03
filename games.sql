@@ -55,6 +55,8 @@ returns int language sql immutable as $$
     when p_game like 'sea\_%' then 20
     when p_game in ('snake', 'snake_duel') then 289
     when p_game in ('memory', 'memory_duel') then 1000
+    when p_game in ('words', 'words_free') then 6
+    when p_game = 'words_duel' then 699
     else null end;
 $$;
 
@@ -73,6 +75,7 @@ returns int language sql immutable as $$
     when 'sea_easy' then 5 when 'sea_normal' then 15 when 'sea_hard' then 25 when 'sea_online' then 10
     when 'snake' then 10 when 'snake_duel' then 10
     when 'memory' then 10 when 'memory_duel' then 10
+    when 'words' then 15 when 'words_free' then 3 when 'words_duel' then 10
     else 0 end;
 $$;
 
@@ -135,8 +138,8 @@ grant execute on function public.game_top(text, int) to anon, authenticated;
 -- Список синхронизирован с DAILY_QUESTS в js/features/games.js (там тексты и ссылки на игры).
 create or replace function public.daily_quest_code(p_day date default (now() at time zone 'Europe/Moscow')::date)
 returns text language sql immutable as $$
-  select (array['win_cities','play3','guess7','catch500','win_checkers','reaction','score2048','win_ttt','win_sea','snake20','memory'])
-         [1 + ((p_day - date '2026-01-01') % 11)];
+  select (array['win_cities','play3','guess7','catch500','win_checkers','reaction','score2048','win_ttt','win_sea','snake20','memory','words'])
+         [1 + ((p_day - date '2026-01-01') % 12)];
 $$;
 
 create or replace function public.daily_quest_done(uid uuid, p_code text, p_day date)
@@ -153,6 +156,7 @@ returns boolean language sql stable security definer set search_path = public as
     when 'win_sea'      then exists (select 1 from public.game_log where user_id = uid and day = p_day and win and game in ('sea_normal', 'sea_hard', 'sea_online'))
     when 'snake20'      then exists (select 1 from public.game_log where user_id = uid and day = p_day and game in ('snake', 'snake_duel') and score >= 20)
     when 'memory'       then exists (select 1 from public.game_log where user_id = uid and day = p_day and win and game = 'memory')
+    when 'words'        then exists (select 1 from public.game_log where user_id = uid and day = p_day and win and game = 'words')
     else false end;
 $$;
 
