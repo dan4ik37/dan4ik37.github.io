@@ -35,6 +35,9 @@ my_achievements владельца = 53 кода). Проверка примен
   новый человек в комнате → хозяин начинает новую партию; «победа» при уходе соперника на 1–2 ходу — без XP.
 - Встроенный браузер: service worker не работает, rAF/анимации стоят, пока панель не видна (игровой цикл проверять
   в node с подменённым requestAnimationFrame), старые js берутся из кэша — `fetch(url, {cache:'reload'})` + reload.
+- **Vercel Hobby: не больше 12 серверных функций** (каждый файл `api/*.js` = функция; `api/_lib/` — не функции). На 13-й
+  выкладка падает молча — сайт остаётся старым. Новые серверные страницы — в `api/_lib/routes/` + строка в `api/pages.js`
+  + rewrite `?page=…`. Статус выкладки: `curl https://api.github.com/repos/dan4ik37/dan4ik37.github.io/commits/<sha>/statuses`.
 - Если проверка действий (auto mode) не отвечает несколько раз подряд — остановиться и сказать владельцу
   переключить режим разрешений; после 10 сбоев подряд ход обрывается сам.
 
@@ -69,7 +72,7 @@ my_achievements владельца = 53 кода). Проверка примен
   Пока SQL-файл не выполнен, раздел прячется (`body.no-ideas`, `body.no-xp`), без ошибок.
 - Серверные страницы: `/v/<id>` → `api/video.js`, `/games` и `/games/<id>` → `api/game.js` (SEO-страницы игр: правила,
   советы, FAQ + JSON-LD; тексты — `api/_lib/games-seo.js`, кнопка «Играть» ведёт в SPA `/#/games/<id>`),
-  `/videos` → `api/videos.js` (архив всех роликов, 240 на страницу, `?p=N`), `/sitemap.xml` → `api/sitemap.js` (rewrites в
+  `/videos` → `api/pages.js?page=videos` (`api/_lib/routes/videos.js`) (архив всех роликов, 240 на страницу, `?p=N`), `/sitemap.xml` → `api/sitemap.js` (rewrites в
   `vercel.json`). Весь архив (~6000 роликов) — `getUploads(ALL_UPLOADS)` только в sitemap и /videos; страница ролика —
   `getUploads(200)` (квота YouTube API!). Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
   Темы (игры канала): `/topics`, `/topic/<slug>` → `api/topic.js`; список и правила подбора по названию — `api/_lib/topics.js`

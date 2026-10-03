@@ -4,9 +4,9 @@
 // её почти не видит) и блок «Похожие». Здесь — одна обычная страница со ссылками на все ролики:
 // поисковик находит и связывает их, человек может пролистать архив, старые видео не теряются.
 // На канале ~6000 роликов — страницы по PER штук: /videos, /videos?p=2 …; годы ведут на страницу, где год начинается.
-import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
-import { page, YT_CHANNEL } from './_lib/page.js';
-import { TOPICS } from './_lib/topics.js';
+import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+import { page, YT_CHANNEL } from '../page.js';
+import { TOPICS } from '../topics.js';
 
 const PER = 240;
 

@@ -2,9 +2,9 @@
 // Зачем: «генератор ников», «ник для роблокс/стандофф/майнкрафт» ищут постоянно — страница приводит
 // людей из поиска независимо от канала. Примеры в HTML (их видит поисковик) + живой генератор в браузере.
 // Словари и генерация — api/_lib/nicks.js (тот же код уходит в страницу через toString()).
-import { SITE, esc } from './_lib/yt.js';
-import { page } from './_lib/page.js';
-import { STYLES, DECOR, generate, seeded } from './_lib/nicks.js';
+import { SITE, esc } from '../yt.js';
+import { page } from '../page.js';
+import { STYLES, DECOR, generate, seeded } from '../nicks.js';
 
 export default function handler(req, res) {
   const url = `${SITE}/tools/nick`;

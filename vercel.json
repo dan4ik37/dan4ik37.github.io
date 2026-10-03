@@ -42,24 +42,28 @@
       "destination": "/api/video?id=:id"
     },
     {
+      "source": "/api/ids",
+      "destination": "/api/pages?page=ids"
+    },
+    {
       "source": "/history",
-      "destination": "/api/history"
+      "destination": "/api/pages?page=history"
     },
     {
       "source": "/tools/nick",
-      "destination": "/api/tool-nick"
+      "destination": "/api/pages?page=nick"
     },
     {
       "source": "/topics",
-      "destination": "/api/topic"
+      "destination": "/api/pages?page=topic"
     },
     {
       "source": "/topic/:slug",
-      "destination": "/api/topic?slug=:slug"
+      "destination": "/api/pages?page=topic&slug=:slug"
     },
     {
       "source": "/videos",
-      "destination": "/api/videos"
+      "destination": "/api/pages?page=videos"
     },
     {
       "source": "/games",

@@ -1,9 +1,9 @@
 // api/history.js — /history: «История канала» по годам — только из настоящих данных YouTube:
 // сколько роликов вышло за год, во что больше всего играл (темы из api/_lib/topics.js), первое видео
 // года. Ничего не выдумываем: текста «от автора» тут нет — только цифры и ссылки на ролики.
-import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
-import { page, YT_CHANNEL } from './_lib/page.js';
-import { TOPICS } from './_lib/topics.js';
+import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+import { page, YT_CHANNEL } from '../page.js';
+import { TOPICS } from '../topics.js';
 
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
 

@@ -2,9 +2,9 @@
 // rewrites в vercel.json. Темы и правила подбора — api/_lib/topics.js (по названиям роликов).
 // Зачем: люди ищут «roblox dead rails», «silksong прохождение», а не имя канала — у каждой игры
 // своя страница со всеми роликами, ссылками на /v/<id> и на соседние темы.
-import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
-import { page, YT_CHANNEL } from './_lib/page.js';
-import { TOPICS, topicOf } from './_lib/topics.js';
+import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+import { page, YT_CHANNEL } from '../page.js';
+import { TOPICS, topicOf } from '../topics.js';
 
 const PER = 120;
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
