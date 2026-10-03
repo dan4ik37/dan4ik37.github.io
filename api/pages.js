@@ -7,8 +7,9 @@ import topic from './_lib/routes/topic.js';
 import history from './_lib/routes/history.js';
 import nick from './_lib/routes/nick.js';
 import ids from './_lib/routes/ids.js';
+import reklama from './_lib/routes/reklama.js';
 
-const ROUTES = { videos, topic, history, nick, ids };
+const ROUTES = { videos, topic, history, nick, ids, reklama };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

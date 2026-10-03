@@ -120,3 +120,22 @@ export function relatedVideos(cur, list, n = 8) {
   for (const x of scored) { if (top.length >= n) break; if (!seen.has(x.v.id)) { top.push(x.v); seen.add(x.v.id); } }
   return { list: top, similar: scored.some(x => x.s > 0) };
 }
+
+// Статистика канала для медиакита: { subscriberCount, viewCount, videoCount, publishedAt, thumb }
+export function getChannelStats() {
+  return cached('chstats', 6 * 3600e3, async () => {
+    const d = await api(`channels?part=statistics,snippet&forHandle=${encodeURIComponent(HANDLE)}`);
+    const it = d.items?.[0];
+    if (!it) throw new Error('Канал не найден');
+    return { ...it.statistics, publishedAt: it.snippet.publishedAt, thumb: it.snippet.thumbnails?.high?.url || '' };
+  });
+}
+// Просмотры роликов (до 50 id за запрос): [{ id, viewCount, likeCount }]
+export function getVideoStats(ids) {
+  const list = ids.slice(0, 50);
+  return cached('vstats:' + list.join(','), 6 * 3600e3, async () => {
+    if (!list.length) return [];
+    const d = await api(`videos?part=statistics&id=${list.join(',')}`);
+    return (d.items || []).map(v => ({ id: v.id, ...v.statistics }));
+  });
+}
