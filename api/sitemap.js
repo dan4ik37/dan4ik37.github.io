@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     `<url><loc>${SITE}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
     `<url><loc>${SITE}/videos</loc><changefreq>daily</changefreq><priority>0.9</priority></url>`,
     ...Array.from({ length: Math.max(0, Math.ceil(vids.length / 240) - 1) }, (_, i) => `<url><loc>${SITE}/videos?p=${i + 2}</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>`),
+    `<url><loc>${SITE}/tools/nick</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>`,
     `<url><loc>${SITE}/topics</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
     ...TOPICS.flatMap(t => {
       const n = vids.filter(v => t.re.test(v.title)).length;
