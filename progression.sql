@@ -317,6 +317,7 @@ declare
   lfg_count int := 0;
   g_plays int := 0; g_cities_hard int := 0; g_guess_best int := 0; g_2048 int := 0; g_ttt_hard int := 0; g_reaction int := 0;
   g_checkers_hard int := 0; g_catch int := 0;
+  g_sea_hard int := 0; g_snake int := 0; g_memory int := 0; g_duel_wins int := 0;
 begin
   select * into p from public.profiles where id = uid;
   if not found then return; end if;
@@ -355,8 +356,13 @@ begin
            coalesce(max(gs.best_score) filter (where gs.game = 'ttt_hard'), 0),
            coalesce(max(gs.best_score) filter (where gs.game = 'reaction'), 0),
            coalesce(max(gs.wins) filter (where gs.game = 'checkers_hard'), 0),
-           coalesce(max(gs.best_score) filter (where gs.game = 'catch'), 0)
-      into g_plays, g_cities_hard, g_guess_best, g_2048, g_ttt_hard, g_reaction, g_checkers_hard, g_catch
+           coalesce(max(gs.best_score) filter (where gs.game = 'catch'), 0),
+           coalesce(max(gs.wins) filter (where gs.game = 'sea_hard'), 0),
+           coalesce(max(gs.best_score) filter (where gs.game in ('snake', 'snake_duel')), 0),
+           coalesce(max(gs.best_score) filter (where gs.game = 'memory'), 0),
+           coalesce(sum(gs.wins) filter (where gs.game like '%\_duel' or gs.game like '%\_online'), 0)
+      into g_plays, g_cities_hard, g_guess_best, g_2048, g_ttt_hard, g_reaction, g_checkers_hard, g_catch,
+           g_sea_hard, g_snake, g_memory, g_duel_wins
       from public.game_stats gs where gs.user_id = uid;
   exception when others then null; end;
 
@@ -414,6 +420,10 @@ begin
     ('lightning',      g_reaction >= 800),
     ('checkers_master', g_checkers_hard >= 1),
     ('big_catch',      g_catch >= 1000),
+    ('admiral',        g_sea_hard >= 1),
+    ('snake_charmer',  g_snake >= 30),
+    ('sharp_memory',   g_memory >= 900),
+    ('duelist',        g_duel_wins >= 10),
     -- уровни (без XP, иначе уровень поднимал бы сам себя)
     ('level_10',       lvl >= 10),
     ('level_30',       lvl >= 30),
@@ -442,6 +452,7 @@ returns int language sql immutable as $$
     when 'gamer' then 30 when 'cities_master' then 150 when 'quiz_expert' then 100
     when 'tile_2048' then 150 when 'ttt_unbeaten' then 50 when 'lightning' then 50
     when 'checkers_master' then 150 when 'big_catch' then 50
+    when 'admiral' then 150 when 'snake_charmer' then 50 when 'sharp_memory' then 50 when 'duelist' then 100
     else 0 end;
 $$;
 grant execute on function public.achievement_xp(text) to anon, authenticated;
