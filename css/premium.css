@@ -2038,3 +2038,5 @@ body.high .nick-rainbow{animation:nickRainbow 4s linear infinite}
 @keyframes nickRainbow{to{background-position:200% center}}
 #d37SecretToast{position:fixed;left:50%;bottom:5rem;transform:translate(-50%,20px);padding:.75rem 1.2rem;border-radius:14px;background:#16161f;border:1px solid rgba(255,209,102,.45);color:#fff;font-size:.85rem;font-weight:700;opacity:0;pointer-events:none;transition:opacity .3s,transform .3s;z-index:9700;max-width:90vw;text-align:center}
 #d37SecretToast.show{opacity:1;transform:translate(-50%,0)}
+
+.gm-support div a{color:#ffd166;padding:0;background:none;font-weight:800}

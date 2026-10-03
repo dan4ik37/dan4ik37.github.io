@@ -126,7 +126,7 @@
     if (!W || W.over) return;
     const t = W.el.querySelector('.wd-hinttext');
     if (!hasHintPerk()) {
-      t.innerHTML = 'Подсказки — для VIP: VIP даётся за <a href="#/donate">донат</a> или за 30-й уровень на сайте';
+      t.innerHTML = 'Подсказки — для VIP: VIP даётся за донат или бесплатно за 30-й уровень — <a href="/vip">что ещё даёт VIP</a>';
       if (typeof window.va === 'function') window.va('event', { name: 'words_hint_locked' });
       return;
     }

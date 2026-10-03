@@ -42,6 +42,10 @@
       "destination": "/api/video?id=:id"
     },
     {
+      "source": "/vip",
+      "destination": "/api/pages?page=vip"
+    },
+    {
       "source": "/reklama",
       "destination": "/api/pages?page=reklama"
     },
