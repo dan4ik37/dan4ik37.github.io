@@ -48,7 +48,7 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 </header>
 ${body}
 <footer class="foot">
-  <a href="/#/home">dan4ik37</a> · <a href="/games">Игры онлайн</a> · <a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
+  <a href="/#/home">dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/games">Игры онлайн</a> · <a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>

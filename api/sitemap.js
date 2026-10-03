@@ -1,14 +1,16 @@
 // api/sitemap.js — /sitemap.xml (rewrite в vercel.json): главная, страницы игр (/games) + /v/<id> для роликов канала.
 // Раньше был статический sitemap.xml с одной главной — поисковик не знал ни об одном ролике.
-import { SITE, getUploads, esc } from './_lib/yt.js';
+import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
 import { GAME_PAGES } from './_lib/games-seo.js';
 
 export default async function handler(req, res) {
   let vids = [];
-  try { vids = await getUploads(1000); } catch (e) { /* без роликов — хотя бы главная */ }
+  try { vids = await getUploads(ALL_UPLOADS); } catch (e) { /* без роликов — хотя бы главная */ }
 
   const urls = [
     `<url><loc>${SITE}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,
+    `<url><loc>${SITE}/videos</loc><changefreq>daily</changefreq><priority>0.9</priority></url>`,
+    ...Array.from({ length: Math.max(0, Math.ceil(vids.length / 240) - 1) }, (_, i) => `<url><loc>${SITE}/videos?p=${i + 2}</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>`),
     `<url><loc>${SITE}/games</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>`,
     ...GAME_PAGES.map(g => `<url><loc>${SITE}/games/${g.id}</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>`),
     `<url><loc>${SITE}/privacy</loc><changefreq>yearly</changefreq><priority>0.2</priority></url>`,

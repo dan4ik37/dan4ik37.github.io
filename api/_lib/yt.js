@@ -11,6 +11,9 @@ const API = 'https://www.googleapis.com/youtube/v3/';
 
 export const SITE = 'https://dan4ik37.vercel.app';
 export const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+// Весь архив (~6000 роликов на 2026 — это 120 запросов по 50, ≈120 ед. квоты из 10 000/сутки).
+// Берут только /sitemap.xml и /videos (их ответы кэширует CDN), страница ролика — getUploads(200).
+export const ALL_UPLOADS = 10000;
 
 const mem = new Map();
 async function cached(key, ttlMs, fn) {
@@ -53,7 +56,7 @@ export function getVideo(id) {
   });
 }
 
-// Последние загрузки: [{ id, title, thumb, publishedAt }]. max — до 1000 (по 50 за запрос).
+// Последние загрузки: [{ id, title, thumb, publishedAt }]. max — до ALL_UPLOADS (по 50 за запрос).
 // ttlMs — сколько держать в памяти инстанса; api/push-check.js берёт свежие (0).
 export function getUploads(max = 50, ttlMs = 3600e3) {
   return cached('uploads:' + max, ttlMs, async () => {
@@ -98,4 +101,22 @@ export function fmtCount(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1).replace('.', ',').replace(',0', '') + ' млн';
   if (n >= 1e3) return (n / 1e3).toFixed(1).replace('.', ',').replace(',0', '') + ' тыс.';
   return String(n);
+}
+
+// Похожие ролики: общие слова в названии (и теги текущего ролика), затем — свежие.
+// Без внешних сервисов: на канале игровые ролики, игра в названии — главный признак темы.
+const STOP = new Set('и в во на с со по за из к ко у о об от до не но а я ты мы он она это как что то же ли бы или для the a an of in on to and for with my is it'.split(' '));
+const words = t => String(t || '').toLowerCase().replace(/ё/g, 'е').split(/[^a-zа-я0-9]+/i).filter(w => w.length >= 3 && !STOP.has(w) && !/^(shorts|short|video|видео)$/.test(w));
+export function relatedVideos(cur, list, n = 8) {
+  const mine = new Set([...words(cur.title), ...(cur.tags || []).flatMap(words)]);
+  const scored = list.filter(v => v.id !== cur.id).map((v, i) => {
+    const ws = new Set(words(v.title));
+    let s = 0;
+    for (const w of ws) if (mine.has(w)) s++;
+    return { v, s, i };
+  });
+  const top = scored.filter(x => x.s > 0).sort((a, b) => b.s - a.s || a.i - b.i).slice(0, n).map(x => x.v);
+  const seen = new Set(top.map(v => v.id));
+  for (const x of scored) { if (top.length >= n) break; if (!seen.has(x.v.id)) { top.push(x.v); seen.add(x.v.id); } }
+  return { list: top, similar: scored.some(x => x.s > 0) };
 }

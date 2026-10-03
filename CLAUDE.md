@@ -73,7 +73,10 @@
   Пока SQL-файл не выполнен, раздел прячется (`body.no-ideas`, `body.no-xp`), без ошибок.
 - Серверные страницы: `/v/<id>` → `api/video.js`, `/games` и `/games/<id>` → `api/game.js` (SEO-страницы игр: правила,
   советы, FAQ + JSON-LD; тексты — `api/_lib/games-seo.js`, кнопка «Играть» ведёт в SPA `/#/games/<id>`),
-  `/sitemap.xml` → `api/sitemap.js` (rewrites в `vercel.json`). Общий HTML-шаблон и стили — `api/_lib/page.js`,
+  `/videos` → `api/videos.js` (архив всех роликов, 240 на страницу, `?p=N`), `/sitemap.xml` → `api/sitemap.js` (rewrites в
+  `vercel.json`). Весь архив (~6000 роликов) — `getUploads(ALL_UPLOADS)` только в sitemap и /videos; страница ролика —
+  `getUploads(200)` (квота YouTube API!). Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
+- Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы, игры (GAMES), видео (allVids → /v/<id>). Общий HTML-шаблон и стили — `api/_lib/page.js`,
   YouTube — `api/_lib/yt.js`. Локально проверять вызовом handler'а из node (копия api/ во временной папке с
   `package.json` `{"type":"module"}`). Новая игра → добавить и в `GAME_PAGES`.
 - Реклама: номера блоков — `window.ADS_IDS` в `js/core/ads-core.js` (Яндекс РСЯ `R-A-…` и/или Google; Яндекс главнее —

@@ -6,7 +6,7 @@
 // перелинковкой, который видят и Google/Яндекс, и превью мессенджеров.
 // Плеер — «фасад»: сначала превью, iframe YouTube грузится по клику
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
-import { SITE, VIDEO_ID_RE, getVideo, getUploads, esc, fmtDuration, fmtCount } from './_lib/yt.js';
+import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, esc, fmtDuration, fmtCount } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
 
 export default async function handler(req, res) {
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
   let v, more;
   try {
-    [v, more] = await Promise.all([getVideo(id), getUploads(50).catch(() => [])]);
+    [v, more] = await Promise.all([getVideo(id), getUploads(200).catch(() => [])]);
   } catch (e) {
     // YouTube API недоступен/квота — не кэшируем надолго, отдаём ссылку на ролик
     res.setHeader('Cache-Control', 'public, s-maxage=300');
@@ -39,7 +39,8 @@ export default async function handler(req, res) {
   const date = new Date(sn.publishedAt);
   const dateRu = date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Moscow' });
   const dur = fmtDuration(v.contentDetails?.duration);
-  const related = (more || []).filter(x => x.id !== id).slice(0, 8);
+  const rel = relatedVideos({ id, title: sn.title, tags: sn.tags }, more || [], 8);
+  const related = rel.list;
   const tags = (sn.tags || []).slice(0, 12);
 
   const ld = {
@@ -89,9 +90,9 @@ export default async function handler(req, res) {
     <a class="btn btn-acc" href="/#/home">На сайт →</a>
   </aside>
 
-  ${related.length ? `<section class="more"><h2>Ещё видео</h2><div class="grid">
-    ${related.map(r => `<a class="card" href="/v/${esc(r.id)}"><img src="${esc(r.thumb)}" alt="" loading="lazy" width="320" height="180"><span>${esc(r.title)}</span></a>`).join('')}
-  </div><p class="all"><a href="/#/home">Все видео на сайте →</a></p></section>` : ''}
+  ${related.length ? `<section class="more"><h2>${rel.similar ? 'Похожие видео' : 'Ещё видео'}</h2><div class="grid">
+    ${related.map(r => `<a class="card" href="/v/${esc(r.id)}"><img src="${esc(r.thumb)}" alt="${esc(r.title)}" loading="lazy" width="320" height="180"><span>${esc(r.title)}</span></a>`).join('')}
+  </div><p class="all"><a href="/videos">Все видео канала →</a> · <a href="/games">🎮 Игры на сайте</a></p></section>` : ''}
 </main>`;
 
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');

@@ -42,6 +42,10 @@
       "destination": "/api/video?id=:id"
     },
     {
+      "source": "/videos",
+      "destination": "/api/videos"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },

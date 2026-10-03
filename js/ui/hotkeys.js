@@ -29,6 +29,8 @@ document.addEventListener('keydown', e=>{
   if(isTypingContext()||isModalOpen()) return;
   // Открыта мини-игра (#/games/<id>) — стрелки и цифры её, не переключаем страницы
   if(typeof gamesActive!=='undefined' && gamesActive) return;
+  // «/» — поиск по сайту (как на YouTube/GitHub)
+  if(e.key==='/'){ e.preventDefault(); openCmdPalette(); return; }
   const routes = Object.keys(PAGES);
   if(e.key>='1' && e.key<='8'){
     const route = routes[+e.key-1];
@@ -45,14 +47,14 @@ document.addEventListener('keydown', e=>{
 });
 
 // ═══════════════════════════════════════
-//  КОМАНДНАЯ ПАЛИТРА Ctrl/Cmd+K
-//  Пункты берём напрямую из [data-route] в DOM (те же маршруты, что бегущая
-//  строка героя и меню «Ещё») — одна точка правды, не дублируем список.
+//  ПОИСК ПО САЙТУ — Ctrl/Cmd+K, «/» или кнопка 🔍 в шапке
+//  Ищет разделы (ссылки [data-route] в DOM — одна точка правды с меню), игры (GAMES
+//  из games.js) и видео (allVids из youtube.js; не загружены — подгружаем ensureYT()).
+//  Видео ведут на /v/<id> — отдельную страницу ролика.
 // ═══════════════════════════════════════
-let cmdPaletteItems = null;
-function collectCmdPaletteItems(){
-  const seen = new Set();
-  const items = [];
+const norm = t => String(t||'').toLowerCase().replace(/ё/g,'е');
+function collectRoutes(){
+  const seen = new Set(), items = [];
   document.querySelectorAll('a[data-route]').forEach(a=>{
     const route = a.dataset.route;
     if(seen.has(route)) return;
@@ -61,10 +63,32 @@ function collectCmdPaletteItems(){
     const c = a.cloneNode(true);
     c.querySelectorAll('.chat-badge,.new-count').forEach(b=>b.remove());
     const label = c.textContent.trim().replace(/\s+/g,' ');
-    if(label) items.push({route, label});
+    if(label) items.push({ kind:'page', label, href:'#/'+route });
   });
   return items;
 }
+function collectGames(){
+  if(typeof GAMES==='undefined') return [];
+  return GAMES.map(g=>({ kind:'game', label:g.icon+' '+g.title, sub:g.desc, href:g.href || '#/games/'+g.id }));
+}
+function collectVideos(){
+  const list = typeof allVids!=='undefined' && Array.isArray(allVids) ? allVids : [];
+  return list.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).map(v=>({ kind:'video', label:v.title, sub:[v.date, v.views && v.views+' просм.'].filter(Boolean).join(' · '), href:'/v/'+v.id, thumb:v.thumb }));
+}
+function scoreItem(it, words){
+  const t = norm(it.label), sub = norm(it.sub);
+  let score = 0;
+  for(const w of words){
+    if(t.startsWith(w)) score += 3;
+    else if(t.includes(' '+w)) score += 2;
+    else if(t.includes(w)) score += 1;
+    else if(sub.includes(w)) score += .5;
+    else return 0;          // каждое слово должно найтись
+  }
+  return score;
+}
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
 function ensureCmdPaletteEl(){
   let el = document.getElementById('cmdPalette');
   if(el) return el;
@@ -72,12 +96,15 @@ function ensureCmdPaletteEl(){
   el.id = 'cmdPalette';
   el.innerHTML = `
     <div class="cmdp-backdrop"></div>
-    <div class="cmdp-box" role="dialog" aria-modal="true" aria-label="Командная палитра">
-      <input id="cmdPaletteInput" type="text" placeholder="Куда перейти? (Ctrl+K)" autocomplete="off">
-      <div id="cmdPaletteList" class="cmdp-list"></div>
+    <div class="cmdp-box" role="dialog" aria-modal="true" aria-label="Поиск по сайту">
+      <div class="cmdp-field"><span aria-hidden="true">🔍</span>
+        <input id="cmdPaletteInput" type="search" placeholder="Видео, игры, разделы…" autocomplete="off" enterkeyhint="go">
+        <kbd>Esc</kbd></div>
+      <div id="cmdPaletteList" class="cmdp-list" role="listbox"></div>
     </div>`;
   document.body.appendChild(el);
   el.querySelector('.cmdp-backdrop').addEventListener('click', closeCmdPalette);
+  el.querySelector('kbd').addEventListener('click', closeCmdPalette);
   const input = el.querySelector('#cmdPaletteInput');
   input.addEventListener('input', ()=>renderCmdPaletteList(input.value));
   input.addEventListener('keydown', e=>{
@@ -102,36 +129,56 @@ function ensureCmdPaletteEl(){
   });
   return el;
 }
+
+function itemHtml(it, active){
+  const ic = it.kind==='video' ? (it.thumb ? `<img src="${esc(it.thumb)}" alt="" loading="lazy">` : '▶') : it.kind==='page' ? '↪' : it.kind==='random' ? '🎲' : '';
+  return `<a class="cmdp-item${active?' active':''}" href="${esc(it.href)}" data-kind="${it.kind}">
+      ${ic ? `<span class="cmdp-ic">${ic}</span>` : ''}
+      <span class="cmdp-txt"><span class="cmdp-item-label">${esc(it.label)}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>
+      <span class="cmdp-item-go">↵</span></a>`;
+}
+
 function renderCmdPaletteList(query){
   const list = document.getElementById('cmdPaletteList');
-  if(!cmdPaletteItems) cmdPaletteItems = collectCmdPaletteItems();
-  const q = (query||'').trim().toLowerCase();
-  const filtered = q ? cmdPaletteItems.filter(i=>i.label.toLowerCase().includes(q)) : cmdPaletteItems;
-  if(!filtered.length){
-    list.innerHTML = `<div class="cmdp-empty">Ничего не нашлось</div>`;
+  const q = norm(query).trim();
+  const pages = collectRoutes(), games = collectGames(), vids = collectVideos();
+  let groups;
+  if(!q){
+    const rnd = [];
+    if(vids.length) rnd.push({ kind:'random', label:'Случайное видео', sub:'Открыть что-нибудь из архива канала', href:pick(vids).href });
+    const playable = games.filter(g=>g.href.startsWith('#/games/'));
+    if(playable.length) rnd.push({ kind:'random', label:'Случайная игра', sub:'Не знаешь, во что сыграть?', href:pick(playable).href });
+    groups = [['Новые видео', vids.slice(0,4)], ['Игры', games.slice(0,6)], ['Наугад', rnd], ['Разделы', pages]];
+  } else {
+    const words = q.split(/\s+/).filter(Boolean);
+    const find = (arr, lim) => arr.map(it=>({it, s:scoreItem(it, words)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,lim).map(x=>x.it);
+    groups = [['Разделы', find(pages,5)], ['Игры', find(games,5)], ['Видео', find(vids,10)]];
+  }
+  groups = groups.filter(([,arr])=>arr.length);
+  if(!groups.length){
+    list.innerHTML = `<div class="cmdp-empty">Ничего не нашлось по «${esc(query.trim())}»${vids.length ? '' : '<br><small>Видео ещё загружаются…</small>'}</div>`;
     return;
   }
-  list.innerHTML = filtered.map((i,idx)=>`
-    <div class="cmdp-item${idx===0?' active':''}" data-route="${i.route}">
-      <span class="cmdp-item-label">${i.label}</span>
-      <span class="cmdp-item-go">↵</span>
-    </div>`).join('');
-  list.querySelectorAll('.cmdp-item').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      location.hash = '#/'+el.dataset.route;
-      closeCmdPalette();
-    });
-  });
+  let first = true;
+  list.innerHTML = groups.map(([title, arr])=>`<div class="cmdp-group">${title}</div>` + arr.map(it=>{ const h = itemHtml(it, first); first = false; return h; }).join('')).join('');
+  list.querySelectorAll('.cmdp-item').forEach(a=>a.addEventListener('click', ()=>{
+    if(typeof window.va==='function') window.va('event', { name:'site_search_go', data:{ kind:a.dataset.kind } });
+    closeCmdPalette();
+  }));
 }
+
 function openCmdPalette(){
   const el = ensureCmdPaletteEl();
-  cmdPaletteItems = collectCmdPaletteItems();
   el.classList.add('open');
   document.body.style.overflow = 'hidden';
   const input = document.getElementById('cmdPaletteInput');
   input.value = '';
   renderCmdPaletteList('');
-  requestAnimationFrame(()=>input.focus());
+  setTimeout(()=>input.focus(), 30);
+  // Видео ещё не грузились (открыли сразу игры/чат) — подгружаем и перерисовываем
+  if((typeof allVids==='undefined' || !allVids?.length) && typeof ensureYT==='function'){
+    ensureYT().then(()=>{ if(el.classList.contains('open')) renderCmdPaletteList(input.value); }).catch(()=>{});
+  }
 }
 function closeCmdPalette(){
   const el = document.getElementById('cmdPalette');
