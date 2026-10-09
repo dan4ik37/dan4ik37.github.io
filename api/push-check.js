@@ -53,6 +53,8 @@ export default async function handler(req, res) {
   catch (e) { out.video = { error: String(e?.message || e) }; console.error('[push video]', e); }
   try { out.stream = await checkStream(state.stream, deadline); }
   catch (e) { out.stream = { error: String(e?.message || e) }; console.error('[push stream]', e); }
+  try { out.words = await checkWords(state.words, deadline); }
+  catch (e) { out.words = { error: String(e?.message || e) }; console.error('[push words]', e); }   // push-words.sql не выполнен — ошибка только здесь
   return res.status(200).json(out);
 }
 
@@ -135,7 +137,24 @@ async function twitchTitle() {
   } catch (e) { return ''; }
 }
 
-// ── Рассылка всем подписчикам темы (want_videos / want_streams) ──
+// ── «Новое слово дня» («5 букв», push-words.sql): раз в день после 12:00 по МСК — тем, кто включил (want_words) ──
+// Слово меняется в полночь МСК; днём — самое время напомнить. Сначала запоминаем день — повторный запуск не задвоит.
+async function checkWords(prev, deadline) {
+  const msk = new Date(Date.now() + 3 * HOUR);
+  const day = msk.toISOString().slice(0, 10);
+  if (msk.getUTCHours() < 12) return { status: 'early' };
+  if (prev?.day === day) return { status: 'sent_today' };
+  await saveState('words', { day });
+  const sent = await broadcast('want_words', {
+    title: '🔤 Новое слово дня',
+    body: 'Угадай слово из 5 букв за 6 попыток — пока друзья не опередили!',
+    url: '/#/games/words',
+    tag: 'words-day',
+  }, deadline);
+  return { status: 'sent', day, ...sent };
+}
+
+// ── Рассылка всем подписчикам темы (want_videos / want_streams / want_words) ──
 async function broadcast(column, data, deadline) {
   let sent = 0, failed = 0, removed = 0, offset = 0;
   const PAGE = 500, PARALLEL = 25;

@@ -127,6 +127,35 @@ function syncPush() {
 }
 syncPush();
 window.addEventListener('d37:auth', () => { if (pushSubscribed) syncPush(); });
+
+// ── Напоминание «Новое слово дня» («5 букв», push-words.sql) ──
+// Есть ли функция на сервере (SQL выполнен): пробный вызов с несуществующей подпиской отвечает null
+let wordsPushProbe = null;
+function wordsPushAvailable() {
+  if (!PUSH_OK) return Promise.resolve(false);
+  return wordsPushProbe || (wordsPushProbe = fetch(`${SB_URL}/rest/v1/rpc/push_set_words`, {
+    method: 'POST', headers: { apikey: SB_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_endpoint: 'https://probe.invalid/', p_on: false }),
+  }).then(r => r.ok).catch(() => false));
+}
+// Включает push (если ещё не включён) и отмечает подписку: раз в день придёт «Новое слово дня»
+async function pushWordsReminder(btn) {
+  btn.disabled = true;
+  try {
+    if (!pushSubscribed) { await togglePush(); if (!pushSubscribed) { btn.disabled = false; return; } }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) throw new Error('нет подписки');
+    await pushRpc('push_set_words', { p_endpoint: sub.endpoint, p_on: true });
+    try { localStorage.setItem('d37_words_push', '1'); } catch (e) {}
+    btn.textContent = '✅ Напомню, когда будет новое слово';
+    if (typeof window.va === 'function') window.va('event', { name: 'words_push_on' });
+  } catch (e) {
+    console.warn('words push:', e);
+    btn.textContent = '⚠ Не получилось — попробуй позже';
+    btn.disabled = false;
+  }
+}
 updatePushBtn();
 
 // ═══════════════════════════════════════

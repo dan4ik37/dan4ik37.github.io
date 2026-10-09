@@ -166,12 +166,16 @@
         <button class="wdFree">♾️ ${daily ? 'Играть ещё' : 'Новое слово'}</button>
         <button class="ct-duel-btn wdDuel">⚔️ С другом</button>
       </div>
-      ${daily ? '<div class="ct-note wd-next">Новое слово дня через <b class="wdLeft"></b> <button type="button" class="d37-secret" data-secret="words" aria-label="Секретный знак">✦</button></div>' : ''}`;
+      ${daily ? '<div class="ct-note wd-next">Новое слово дня через <b class="wdLeft"></b> <button type="button" class="d37-secret" data-secret="words" aria-label="Секретный знак">✦</button></div><button type="button" class="wd-remind" hidden>🔔 Напоминать о новом слове</button>' : ''}`;
     window.d37Secret?.paint();
     end.querySelector('.wdShare').onclick = e => share(e.target, win);
     end.querySelector('.wdFree').onclick = () => start('free');
     end.querySelector('.wdDuel').onclick = () => { location.hash = '#/games/words/' + GameRoom.newCode(); };
     if (daily) tickLeft();
+    // Напоминание о завтрашнем слове (push-pwa.js) — если ещё не включено и сервер умеет (push-words.sql)
+    const remind = end.querySelector('.wd-remind');
+    let on = false; try { on = localStorage.getItem('d37_words_push') === '1'; } catch (e) {}
+    if (remind && !on && typeof wordsPushAvailable === 'function') wordsPushAvailable().then(ok => { if (ok) { remind.hidden = false; remind.onclick = () => pushWordsReminder(remind); } });
   }
 
   function tickLeft(){
