@@ -29,7 +29,7 @@ create table if not exists public.donation_claims (
   name_typed text,
   amount numeric,
   claim_date date,
-  status text not null,          -- auto | review | approved | denied | not_found
+  status text not null,          -- auto | review | approved | denied | manual | not_found
   created_at timestamptz not null default now(),
   resolved_at timestamptz,
   resolved_by uuid
@@ -210,3 +210,20 @@ begin
   return jsonb_build_object('status', case when p_approve then 'approved' else 'denied' end, 'months', r->'months');
 end; $$;
 grant execute on function public.admin_resolve_claim(bigint, boolean) to authenticated;
+
+-- Закрыть заявку, когда VIP выдан вручную (несколько похожих донатов — система не угадывает, какой из них)
+create or replace function public.admin_close_claim_manual(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare c public.donation_claims%rowtype;
+begin
+  if not public.is_admin_user(auth.uid()) then raise exception 'Только для админа'; end if;
+  select * into c from public.donation_claims where id = p_id for update;
+  if not found or c.status <> 'review' then return jsonb_build_object('status', 'gone'); end if;
+  update public.donation_claims set status = 'manual', resolved_at = now(), resolved_by = auth.uid() where id = p_id;
+  begin
+    perform public.notify(c.user_id, 'vip_claim', null, '✨ Заявку по донату рассмотрели',
+      'VIP выдан вручную — загляни в профиль. Спасибо за поддержку!', '#/profile', null);
+  exception when others then null; end;
+  return jsonb_build_object('status', 'manual');
+end; $$;
+grant execute on function public.admin_close_claim_manual(bigint) to authenticated;

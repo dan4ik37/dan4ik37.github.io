@@ -135,7 +135,7 @@ async function renderProfilePage(viewUserId){
   if (isOwn) renderProfileGuests(profile);
   renderVipPerksPanel(profile, isOwn);
   if (isOwn) { renderVipPromoTiers(); renderVipMonthButtons(); }
-  if (isOwn) renderDonateLoginBlock(profile.donate_login);
+  if (isOwn) { renderDonateLoginBlock(profile.donate_login); if (typeof renderDonationClaimBox === 'function') renderDonationClaimBox(); }
   else { const p = document.getElementById('donateLoginPanel'); if (p) p.style.display = 'none'; }
   renderStaffVipPanel(profile, isOwn);
 
@@ -233,6 +233,7 @@ async function renderProfilePage(viewUserId){
     if (isOwn) renderThemePresets(profile.theme_accent);
   }
   document.getElementById('profileAdminPanel').style.display = (isOwn && profile.role === 'admin') ? 'block' : 'none';
+  if (isOwn && profile.role === 'admin' && typeof renderAdminDonationClaims === 'function') renderAdminDonationClaims();
 
   const staffPanel = document.getElementById('profileStaffPanel');
   if (isOwn && (profile.role === 'moderator' || profile.role === 'helper')) {

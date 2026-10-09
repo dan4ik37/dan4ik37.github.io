@@ -2040,3 +2040,25 @@ body.high .nick-rainbow{animation:nickRainbow 4s linear infinite}
 #d37SecretToast.show{opacity:1;transform:translate(-50%,0)}
 
 .gm-support div a{color:#ffd166;padding:0;background:none;font-weight:800}
+
+/* ═══ «Задонатил, а VIP не пришёл?» (js/features/donation-claims.js) ═══ */
+.dc-box{margin-top:.9rem;border-top:1px solid var(--border);padding-top:.7rem}
+.dc-box summary{cursor:pointer;font-size:.78rem;font-weight:700;color:#ffd700}
+.dc-hint{font-size:.72rem;color:var(--muted);line-height:1.55;margin:.5rem 0 .6rem}
+.dc-form{display:flex;flex-direction:column;gap:.55rem}
+.dc-form label{display:flex;flex-direction:column;gap:.25rem;font-size:.7rem;color:var(--muted);font-weight:700;flex:1;min-width:130px}
+.dc-form input{background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.55rem .7rem;color:var(--text);font:600 .85rem 'Montserrat',sans-serif;outline:none;color-scheme:dark}
+.dc-form input:focus{border-color:#ffd700}
+.dc-row{display:flex;gap:.5rem;flex-wrap:wrap}
+.dc-form button{align-self:flex-start}
+.dc-result{font-size:.76rem;line-height:1.5;min-height:1rem}
+.dc-result.ok{color:#22c55e}.dc-result.wait{color:#ffd166}.dc-result.err{color:#f87171}
+.dc-admin-empty{font-size:.74rem;color:var(--muted);margin-top:.8rem}
+.dc-claim{display:flex;gap:.7rem;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:.6rem .7rem;margin-top:.45rem;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.dc-claim-body{display:flex;flex-direction:column;gap:.15rem;font-size:.74rem;min-width:0}
+.dc-claim-body a{color:var(--text)}
+.dc-claim-body small,.dc-claim-body span{color:var(--muted)}
+.dc-warn{color:#ffb020!important}
+.dc-claim-act{display:flex;gap:.4rem}
+.dc-claim-act button{border:none;border-radius:8px;padding:.45rem .75rem;font:700 .72rem 'Montserrat',sans-serif;cursor:pointer;color:#fff}
+.dc-ok{background:#16a34a}.dc-no{background:rgba(255,255,255,.08)}
