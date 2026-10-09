@@ -429,7 +429,7 @@ async function savePrivacy(col, value){
   st.style.color = 'var(--muted)'; st.textContent = 'Сохраняем...';
   const { error } = await sbClient.from('profiles').update({ [col]: value }).eq('id', currentUser.id);
   if (error) {
-    st.style.color = '#f87171'; st.textContent = '⚠ Не сохранилось: ' + error.message;
+    st.style.color = '#f87171'; st.textContent = '⚠ Не сохранилось: ' + humanErr(error);
     renderPrivacySettings(currentProfile || {});
     return;
   }
@@ -505,12 +505,12 @@ async function saveThemeAccent(a1, a2){
   if (!currentUser) return;
   const value = (a1 && a2) ? `${a1},${a2}` : null;
   try {
-    await sbClient.from('profiles').update({ theme_accent: value }).eq('id', currentUser.id);
+    await sbOk(sbClient.from('profiles').update({ theme_accent: value }).eq('id', currentUser.id));
     if (currentProfile) currentProfile.theme_accent = value;
     applyThemeAccent(currentProfile || { is_vip: true, vip_until: null, theme_accent: value });
     renderThemePresets(value);
   } catch(e) {
-    alert('Не удалось сохранить тему: ' + (e.message || e));
+    alert('Не удалось сохранить тему: ' + humanErr(e));
   }
 }
 
@@ -727,11 +727,12 @@ function toggleBioEdit(show){
 async function saveProfileBio(){
   const bio = document.getElementById('profileBioInput').value.trim().slice(0, 280);
   try {
-    await sbClient.from('profiles').update({ bio }).eq('id', currentUser.id);
+    const { error } = await sbClient.from('profiles').update({ bio }).eq('id', currentUser.id);
+    if (error) throw error;
     document.getElementById('profileBioText').textContent = bio || 'Расскажи о себе...';
     toggleBioEdit(false);
   } catch(e) {
-    alert('Не удалось сохранить: ' + (e.message || e));
+    alert('Не удалось сохранить: ' + humanErr(e));
   }
 }
 
@@ -755,14 +756,14 @@ async function saveProfileNick(){
     // — для этого есть отдельный "логин для доната". Поэтому ник снова
     // свободный, без проверок на уникальность.
     const { error } = await sbClient.from('profiles').update({ nick }).eq('id', currentUser.id);
-    if (error) { errEl.textContent = 'Не удалось сохранить: ' + error.message; return; }
+    if (error) { errEl.textContent = 'Не удалось сохранить: ' + humanErr(error); return; }
     if (currentProfile) currentProfile.nick = nick;
     chatNick = nick;
     try { localStorage.setItem('d37_nick', nick); } catch(e) {}
     document.getElementById('profileNick').textContent = nick;
     toggleNickEdit(false);
   } catch(e) {
-    errEl.textContent = 'Не удалось сохранить: ' + (e.message || e);
+    errEl.textContent = 'Не удалось сохранить: ' + humanErr(e);
   }
 }
 
@@ -772,13 +773,13 @@ async function removeProfileImage(bucket){
   const col = bucket === 'avatars' ? 'avatar_url' : 'banner_url';
   const statusEl = document.getElementById('profileUploadStatus');
   try {
-    await sbClient.from('profiles').update({ [col]: null }).eq('id', currentUser.id);
+    await sbOk(sbClient.from('profiles').update({ [col]: null }).eq('id', currentUser.id));
     // Файл из Storage не трогаем намеренно — просто отвязываем ссылку в
     // профиле, это и быстрее, и безопаснее (без риска задеть чужой путь
     // случайным несовпадением расширения файла).
     renderProfilePage(currentUser.id);
   } catch(e) {
-    statusEl.textContent = '⚠ Не удалось удалить: ' + (e.message || e);
+    statusEl.textContent = '⚠ Не удалось удалить: ' + humanErr(e);
   }
 }
 
@@ -953,7 +954,7 @@ async function uploadProfileImage(bucket, file){
     renderProfilePage(uid);
     setTimeout(() => { if (statusEl && statusEl.textContent === '✅ Обновлено!') statusEl.textContent = ''; }, 2500);
   } catch(e) {
-    say(isNetworkBlockError(e) ? UPLOAD_BLOCK_HINT : '⚠ Не получилось: ' + (e.message || e));
+    say(isNetworkBlockError(e) ? UPLOAD_BLOCK_HINT : '⚠ Не получилось: ' + humanErr(e));
   }
   resetInput();
 }
@@ -1015,13 +1016,13 @@ async function saveDonateLogin(){
     if (error) {
       errEl.textContent = error.code === '23505' || /уже занят/i.test(error.message || '')
         ? `Логин «${login}» уже занят — в том числе кем-то, кто раньше его использовал`
-        : 'Не удалось сохранить: ' + error.message;
+        : 'Не удалось сохранить: ' + humanErr(error);
       return;
     }
     if (currentProfile) currentProfile.donate_login = login;
     renderDonateLoginBlock(login);
   } catch(e) {
-    errEl.textContent = 'Не удалось сохранить: ' + (e.message || e);
+    errEl.textContent = 'Не удалось сохранить: ' + humanErr(e);
   }
 }
 function renderDonateLoginBlock(login){
@@ -1102,7 +1103,7 @@ async function openDonationLog(){
         </div>`;
     }).join('');
   } catch(e) {
-    statusEl.textContent = 'Ошибка загрузки: ' + (e.message || e);
+    statusEl.textContent = 'Ошибка загрузки: ' + humanErr(e);
   }
 }
 function closeDonationLog(){
@@ -1123,8 +1124,15 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
   let left = rect.left;
   if (left + popW > window.innerWidth - 16) left = window.innerWidth - popW - 16;
   pop.style.left = Math.max(16, left) + 'px';
-  pop.style.top = (rect.bottom + 8) + 'px';
   pop.style.display = 'block';
+  // По вертикали: не помещается под ником — над ним, и всегда целиком в экране (раньше у нижних сообщений
+  // чата карточка уезжала за край, и до «Открыть профиль →» было не достать). Повторяем, когда данные догрузились.
+  const placeMini = () => {
+    const h = pop.offsetHeight, vh = window.innerHeight;
+    let top = rect.bottom + 8;
+    if (top + h > vh - 12) top = rect.top - h - 8;
+    pop.style.top = Math.max(12, Math.min(top, vh - h - 12)) + 'px';
+  };
 
   document.getElementById('miniProfileNick').textContent = fallbackNick;
   document.getElementById('miniProfileBio').textContent = '';
@@ -1137,6 +1145,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
   document.getElementById('miniProfileAvatar').style.backgroundImage = '';
   document.getElementById('miniProfileBanner').style.backgroundImage = '';
   document.getElementById('miniProfileLink').href = `#/profile/${userId}`;
+  placeMini();
 
   try {
     const { data: p } = await (await sbProfiles()).select('*').eq('id', userId).single();
@@ -1175,7 +1184,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
         vipEl.style.display = 'none';
       }
     }
-    if (p.avatar_url) document.getElementById('miniProfileAvatar').style.backgroundImage = `url('${safeImgUrl(p.avatar_url)}')`;
+    if (p.avatar_url && safeImgUrl(p.avatar_url)) { const av = document.getElementById('miniProfileAvatar'); av.style.backgroundImage = `url('${safeImgUrl(p.avatar_url)}')`; av.textContent = ''; }
     if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${safeImgUrl(p.banner_url)}')`;
     applyProfileGlow(document.getElementById('miniProfileAvatar'), p);
     if (typeof applyLevelFrame === 'function') applyLevelFrame(document.getElementById('miniProfileAvatar'), userId);
@@ -1208,6 +1217,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     } else {
       actionEl.innerHTML = '';
     }
+    placeMini();
   } catch(e) {}
 }
 document.addEventListener('click', e => {

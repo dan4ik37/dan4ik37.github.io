@@ -1002,7 +1002,7 @@ body.low .donation-alert-icon{animation:none}
 </style>
 <link rel="stylesheet" href="css/premium.css">
 </head>
-<body onselectstart="return false">
+<body>
 
 <!-- ПОДТВЕРЖДЕНИЕ ДЕЙСТВИЯ (напр. выход из аккаунта) -->
 <div class="modal-ov" id="confirmModal">
@@ -1034,10 +1034,10 @@ body.low .donation-alert-icon{animation:none}
 <div id="cursorDot"></div>
 
 <!-- КНОПКА РЕЖИМА -->
-<div id="perfToggle" onclick="openPerfPopup()" title="Режим производительности">
+<button type="button" id="perfToggle" onclick="openPerfPopup()" title="Режим производительности" aria-label="Режим производительности">
   <span class="pt-icon" id="ptIcon">⚡</span>
   <span class="pt-lbl" id="ptLbl">Режим</span>
-</div>
+</button>
 
 <!-- ПОПАП ВЫБОРА РЕЖИМА -->
 <div id="perfPopup">
@@ -1923,10 +1923,10 @@ body.low .donation-alert-icon{animation:none}
   </div>
   <div id="gamesStage" class="gm-stage" hidden>
     <div class="gm-stage-bar">
-      <button class="gm-back" onclick="closeGame()" title="Все игры">←<span> Все игры</span></button>
+      <button class="gm-back" onclick="closeGame()" title="Все игры" aria-label="Все игры">←<span> Все игры</span></button>
       <b id="gamesStageTitle"></b>
-      <button class="gm-mute" onclick="gamesChallenge(this)" title="Бросить вызов другу: ссылка с твоим рекордом">📣<span> Вызов</span></button>
-      <button class="gm-mute" onclick="toggleGamesMute(this)" title="Звук">🔊</button>
+      <button class="gm-mute gm-chal" onclick="gamesChallenge(this)" title="Бросить вызов другу: ссылка с твоим рекордом" aria-label="Бросить вызов другу">📣<span> Вызов</span></button>
+      <button class="gm-mute" onclick="toggleGamesMute(this)" title="Звук" aria-label="Звук вкл/выкл">🔊</button>
     </div>
     <div id="gamesStageBox"></div>
   </div>
@@ -2211,7 +2211,7 @@ body.low .donation-alert-icon{animation:none}
         <div style="font-size:1.8rem;margin-bottom:.8rem">📊</div>
         <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--yt);margin-bottom:.8rem">Медиакит</div>
         <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1.2rem">
-          Подписчики, просмотры, сколько роликов выходит в месяц и во что играю — живые цифры канала на одной странице. Удобно отправить бренду.
+          Подписчики, просмотры, сколько роликов вышло за год и во что играю — живые цифры канала на одной странице. Удобно отправить бренду.
         </div>
         <a href="/reklama" style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(255,64,64,.12);border:1.5px solid var(--yt);color:#fff;font-size:.8rem;font-weight:700;text-decoration:none">📊 Открыть медиакит →</a>
       </div>
@@ -2232,7 +2232,11 @@ body.low .donation-alert-icon{animation:none}
         <a href="https://vk.com/dan4ik37" target="_blank"
            style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(0,119,255,.1);border:1.5px solid var(--vk);color:var(--vk);font-size:.76rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:background .2s"
            onmouseover="this.style.background='rgba(0,119,255,.2)'" onmouseout="this.style.background='rgba(0,119,255,.1)'">
-          ВК Написать в ВКонтакте
+          ✉ Написать в ВКонтакте
+        </a>
+        <a href="mailto:dan4ik37@gmail.com?subject=%D0%A0%D0%B5%D0%BA%D0%BB%D0%B0%D0%BC%D0%B0"
+           style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(255,255,255,.05);border:1.5px solid var(--border);color:var(--text);font-size:.76rem;font-weight:700;letter-spacing:1px;transition:background .2s">
+          📧 dan4ik37@gmail.com
         </a>
       </div>
     </div>
@@ -2243,12 +2247,12 @@ body.low .donation-alert-icon{animation:none}
       <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:var(--tw);margin-bottom:.8rem">Аудитория</div>
       <div style="font-size:.82rem;color:var(--muted);line-height:1.8">
         YouTube, TikTok, Twitch, ВКонтакте, VK Видео, Telegram — dan4ik37 присутствует на всех популярных платформах.<br><br>
-        Для получения статистики и медиакита — пишите напрямую.
+        Живые цифры YouTube — в медиаките, статистику остальных площадок пришлём по запросу.
       </div>
-      <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank"
+      <a href="/reklama"
          style="display:inline-flex;align-items:center;gap:.5rem;margin-top:1.2rem;padding:.6rem 1.2rem;border-radius:50px;background:rgba(41,182,246,.1);border:1.5px solid var(--tg);color:var(--tg);font-size:.75rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;transition:background .2s"
          onmouseover="this.style.background='rgba(41,182,246,.2)'" onmouseout="this.style.background='rgba(41,182,246,.1)'">
-        ✈ Запросить медиакит
+        📊 Статистика в медиаките →
       </a>
     </div>
 

@@ -89,7 +89,7 @@ async function deleteCustomEmoji(id){
   try {
     const path = emoji.image_url.split('/emoji/').pop();
     if (path) await sbClient.storage.from('emoji').remove([path]);
-    await sbClient.from('custom_emoji').delete().eq('id', id);
+    await sbOk(sbClient.from('custom_emoji').delete().eq('id', id));
   } catch(e) {}
   await loadCustomEmoji();
   renderCustomEmojiList();

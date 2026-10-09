@@ -293,8 +293,8 @@ function showFallback(){
     : `https://www.youtube.com/embed?listType=user_uploads&list=Dan4ik37Yt&rel=0&modestbranding=1`;
   grid.innerHTML = `
     <div class="err-box" style="grid-column:1/-1">
-      <strong>📡 YouTube API — превышена суточная квота</strong>
-      Видео загружаются напрямую. Квота обновляется каждые 24 часа.
+      <strong>📡 Список видео сейчас не загрузился</strong>
+      Ниже — плеер со всеми роликами канала прямо с YouTube.
       <br><a href="https://www.youtube.com/@Dan4ik37Yt/videos" target="_blank" style="color:var(--yt)">Все видео на YouTube →</a>
     </div>
     <div style="grid-column:1/-1;border-radius:var(--r);overflow:hidden;background:var(--card);border:1px solid var(--border)">
@@ -336,7 +336,7 @@ function renderVids(vids){
         ${v.duration?`<div class="vduration">${v.duration}</div>`:''}
         ${watched?'<div class="vwatched" title="Просмотрено">✓ Просмотрено</div>':''}
         <div class="play-ov"><div class="play-circle">▶</div></div>
-        <button class="vlike${liked?' liked':''}" onclick="toggleLike(event,'${v.id}',this)" title="${liked?'Убрать лайк':'Лайкнуть на YouTube'}">
+        <button class="vlike${liked?' liked':''}" onclick="toggleLike(event,'${v.id}',this)" title="${liked?'Ты отметил этот ролик':'Поставить лайк на YouTube — откроется ролик'}" aria-label="Лайк на YouTube">
           ${liked?'❤':'🤍'}${v.likes?' '+v.likes:''}
         </button>
       </div>

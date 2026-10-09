@@ -189,8 +189,8 @@ async function savePollAdmin() {
   // Сохраняем в Supabase если есть подключение
   if (sbClient && currentRole === 'admin') {
     try {
-      await sbClient.from('site_config').upsert([{ key: 'polls', value: JSON.stringify(POLLS) }]);
-    } catch(e) {}
+      await sbOk(sbClient.from('site_config').upsert([{ key: 'polls', value: JSON.stringify(POLLS) }]));
+    } catch(e) { alert('Опрос не сохранился на сервер (виден только тебе): ' + humanErr(e)); }
   }
   savePollsToStorage();
   renderPollAdminList();

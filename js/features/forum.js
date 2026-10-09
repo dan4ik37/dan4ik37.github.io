@@ -53,7 +53,7 @@ async function attachForumProfiles(rows){
 async function loadForumThreads(){
   const statusEl = document.getElementById('forumThreadsStatus');
   const listEl = document.getElementById('forumThreadsList');
-  if (!sbClient) { statusEl.textContent = 'Форум недоступен offline'; return; }
+  if (!sbClient) { statusEl.textContent = 'Форум недоступен без связи с сервером'; return; }
   statusEl.textContent = 'Загружаем...'; listEl.innerHTML = '';
   try {
     const { data: threads, error } = await sbClient
@@ -84,7 +84,7 @@ async function loadForumThreads(){
     }).join('');
     if (typeof xpQueueBadges === 'function') xpQueueBadges();
   } catch(e) {
-    statusEl.textContent = 'Ошибка загрузки: ' + (e.message || e);
+    statusEl.textContent = 'Ошибка загрузки: ' + humanErr(e);
   }
 }
 
@@ -145,7 +145,7 @@ async function loadForumThread(id){
     document.getElementById('forumReplyBox').style.display = canReply ? 'block' : 'none';
     document.getElementById('forumThreadLockedHint').style.display = thread.locked ? 'block' : 'none';
   } catch(e) {
-    headerEl.innerHTML = `<p style="color:var(--muted)">Не удалось загрузить тему: ${esc(e.message || String(e))}</p>`;
+    headerEl.innerHTML = `<p style="color:var(--muted)">Не удалось загрузить тему: ${eschumanErr(e)}</p>`;
   }
 }
 
@@ -180,7 +180,7 @@ async function submitForumThread(){
     closeForumCreate();
     location.hash = `#/forum/${thread.id}`;
   } catch(e) {
-    errEl.textContent = 'Не удалось создать тему: ' + (e.message || e);
+    errEl.textContent = 'Не удалось создать тему: ' + humanErr(e);
   }
 }
 
@@ -194,33 +194,33 @@ async function submitForumReply(){
     input.value = '';
     loadForumThread(forumCurrentThreadId);
   } catch(e) {
-    alert('Не удалось отправить ответ: ' + (e.message || e));
+    alert('Не удалось отправить ответ: ' + humanErr(e));
   }
 }
 
 async function deleteForumThread(id){
   if (!confirm('Удалить тему целиком, со всеми ответами?')) return;
   try {
-    await sbClient.from('forum_threads').delete().eq('id', id);
+    await sbOk(sbClient.from('forum_threads').delete().eq('id', id));
     location.hash = '#/forum';
   } catch(e) {
-    alert('Не удалось удалить: ' + (e.message || e));
+    alert('Не удалось удалить: ' + humanErr(e));
   }
 }
 async function deleteForumPost(id){
   if (!confirm('Удалить ответ?')) return;
   try {
-    await sbClient.from('forum_posts').delete().eq('id', id);
+    await sbOk(sbClient.from('forum_posts').delete().eq('id', id));
     if (forumCurrentThreadId) loadForumThread(forumCurrentThreadId);
   } catch(e) {
-    alert('Не удалось удалить: ' + (e.message || e));
+    alert('Не удалось удалить: ' + humanErr(e));
   }
 }
 async function toggleForumPin(id, pinned){
-  try { await sbClient.from('forum_threads').update({ pinned }).eq('id', id); loadForumThread(id); }
-  catch(e) { alert('Не получилось: ' + (e.message || e)); }
+  try { await sbOk(sbClient.from('forum_threads').update({ pinned }).eq('id', id)); loadForumThread(id); }
+  catch(e) { alert('Не получилось: ' + humanErr(e)); }
 }
 async function toggleForumLock(id, locked){
-  try { await sbClient.from('forum_threads').update({ locked }).eq('id', id); loadForumThread(id); }
-  catch(e) { alert('Не получилось: ' + (e.message || e)); }
+  try { await sbOk(sbClient.from('forum_threads').update({ locked }).eq('id', id)); loadForumThread(id); }
+  catch(e) { alert('Не получилось: ' + humanErr(e)); }
 }

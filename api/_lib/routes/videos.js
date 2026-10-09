@@ -84,7 +84,7 @@ const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
 .lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:720px}
-.years{position:sticky;top:58px;z-index:4;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:1.6rem;padding:.5rem 0;background:rgba(8,8,14,.85);backdrop-filter:blur(8px)}
+.years{position:sticky;top:69px;z-index:4;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:1.6rem;padding:.5rem 0;background:rgba(8,8,14,.85);backdrop-filter:blur(8px)}
 .years a{padding:.35rem .8rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:800;font-size:.8rem}
 .years a:hover{border-color:var(--accent)}
 .years small{margin-left:.35rem;color:var(--muted);font-weight:600}
@@ -94,6 +94,8 @@ const CSS = `
 .topics a:hover{border-color:var(--accent)}
 .topics small{margin-left:.3rem;color:var(--muted);font-weight:600}
 .years a.on{border-color:var(--accent);background:rgba(255,45,85,.12)}
+/* Телефон: годы одной строкой с прокруткой вбок — в 4 строки панель закрывала четверть экрана */
+@media(max-width:600px){.years{top:63px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:1.6rem -1.2rem 0;padding:.5rem 1.2rem}.years::-webkit-scrollbar{display:none}.years a{flex:none}}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:2rem;font-size:.85rem}
 .pager a{padding:.6rem 1.1rem;border-radius:12px;border:1px solid var(--line);text-decoration:none;font-weight:800}
 .pager a:hover{border-color:var(--accent)}

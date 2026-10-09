@@ -121,7 +121,7 @@ async function saveScheduleAdmin(){
   try { localStorage.setItem('d37_schedule', JSON.stringify(schedule)); } catch(e) {}
   if (sbClient && currentRole === 'admin') {
     try {
-      await sbClient.from('site_config').upsert([{ key: 'schedule', value: JSON.stringify(schedule) }]);
+      await sbOk(sbClient.from('site_config').upsert([{ key: 'schedule', value: JSON.stringify(schedule) }]));
       statusEl.textContent = '✅ Сохранено!';
     } catch(e) {
       statusEl.textContent = '⚠ Применено локально, но не сохранилось на сервер';

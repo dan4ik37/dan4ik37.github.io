@@ -21,11 +21,11 @@ function setPerf(mode, persist = true) {
   const icon = document.getElementById('ptIcon');
   const lbl  = document.getElementById('ptLbl');
   if (mode === 'low') {
-    icon.textContent = '🐢'; lbl.textContent = 'Low';
+    icon.textContent = '🐢'; lbl.textContent = 'Слабое';
     document.getElementById('cardLow').classList.add('active-low');
     document.getElementById('cardHigh').classList.remove('active-high');
   } else {
-    icon.textContent = '🚀'; lbl.textContent = 'High';
+    icon.textContent = '🚀'; lbl.textContent = 'Мощное';
     document.getElementById('cardHigh').classList.add('active-high');
     document.getElementById('cardLow').classList.remove('active-low');
   }

@@ -83,7 +83,7 @@ async function doForgotPassword() {
   const email = document.getElementById('gauthEmail').value.trim();
   const errEl = document.getElementById('gauthErr');
   if (!email) { errEl.textContent = 'Сначала введи email в поле выше'; return; }
-  if (!sbClient) { errEl.textContent = 'Нет подключения к БД'; return; }
+  if (!sbClient) { errEl.textContent = 'Нет связи с сервером — обнови страницу'; return; }
   errEl.style.color = '';
   errEl.textContent = 'Отправляем письмо...';
   try {
@@ -95,7 +95,7 @@ async function doForgotPassword() {
     errEl.textContent = '✅ Письмо отправлено. Перейди по ссылке в нём, чтобы задать новый пароль.';
   } catch(e) {
     errEl.style.color = '';
-    errEl.textContent = e.message || 'Не удалось отправить письмо';
+    errEl.textContent = humanErrCap(e);
   }
 }
 
@@ -123,7 +123,7 @@ async function doPasswordReset() {
     setTimeout(() => { errEl.style.color=''; goToOwnProfile(); }, 1200);
   } catch(e) {
     errEl.style.color = '';
-    errEl.textContent = e.message || 'Не удалось сохранить пароль';
+    errEl.textContent = humanErrCap(e);
   } finally {
     btn.textContent = 'СОХРАНИТЬ ПАРОЛЬ'; btn.disabled = false;
   }
@@ -140,13 +140,13 @@ async function doGlobalLogin() {
   btn.textContent = 'ВХОД...'; btn.disabled = true;
 
   try {
-    if (!sbClient) throw new Error('Нет подключения к БД');
+    if (!sbClient) throw new Error('Нет связи с сервером — обнови страницу');
     const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
     if (error) throw error;
     await onAuthStateChange(data.user);
     goToOwnProfile();
   } catch(e) {
-    errEl.textContent = e.message === 'Invalid login credentials' ? 'Неверный email или пароль' : e.message;
+    errEl.textContent = humanErrCap(e);
   } finally {
     btn.textContent = 'ВОЙТИ'; btn.disabled = false;
   }
@@ -170,7 +170,7 @@ async function doGlobalRegister() {
   btn.textContent = 'СОЗДАЁМ АККАУНТ...'; btn.disabled = true;
 
   try {
-    if (!sbClient) throw new Error('Нет подключения к БД');
+    if (!sbClient) throw new Error('Нет связи с сервером — обнови страницу');
     // Код пригласившего (?ref=, см. captureReferralCode) — в raw_user_meta_data,
     // его читает handle_new_user() из referrals.sql. Раньше не передавался вовсе.
     let ref = '';
@@ -213,7 +213,7 @@ async function doGlobalRegister() {
     }
   } catch(e) {
     errEl.style.color = '';
-    errEl.textContent = e.message === 'User already registered' ? 'Этот email уже зарегистрирован' : e.message;
+    errEl.textContent = humanErrCap(e);
   } finally {
     btn.textContent = 'ЗАРЕГИСТРИРОВАТЬСЯ'; btn.disabled = false;
   }

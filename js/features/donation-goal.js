@@ -76,7 +76,7 @@ async function saveGoalAdmin(){
   try { localStorage.setItem('d37_goal', JSON.stringify(cfg)); } catch(e) {}
   if (sbClient && currentRole === 'admin') {
     try {
-      await sbClient.from('site_config').upsert([{ key: 'goal', value: JSON.stringify(cfg) }]);
+      await sbOk(sbClient.from('site_config').upsert([{ key: 'goal', value: JSON.stringify(cfg) }]));
       statusEl.textContent = '✅ Сохранено!';
       if (typeof loadGoalFromDA === 'function') loadGoalFromDA();   // пересчитать сумму по новой дате сразу
     } catch(e) {
@@ -151,7 +151,7 @@ async function runDonationBackfill(reset) {
     }
     say('⚠ Остановлено — слишком много шагов подряд. Нажми ещё раз, импорт продолжится с той же точки.');
   } catch (e) {
-    say('⚠ ' + (e.message || 'Сеть недоступна'));
+    say('⚠ ' + humanErr(e));
   } finally {
     backfillRunning = false;
     if (btn) btn.disabled = false;

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Страница не найдена — dan4ik37</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#ff2d55">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<script>
+// Разделы сайта открываются через #/… (/chat → /#/chat): кто ввёл адрес без решётки — сразу туда.
+// Vercel отдаёт эту страницу на любой несуществующий адрес (404.html в корне).
+(function () {
+  var p = location.pathname.replace(/\/+$/, '');
+  var m = /^\/(home|chat|profile|shorts|forum|donate|ideas|lfg|about|poll|soundboard|ads)(\/.*)?$/i.exec(p);
+  if (m) location.replace('/#/' + m[1].toLowerCase() + (m[2] || '') + location.search);
+})();
+</script>
+<style>
+:root{--bg:#08080e;--card:#111119;--line:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8d8daa;--accent:#ff2d55;--accent2:#ff6b35}
+*{box-sizing:border-box;margin:0;padding:0}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.2rem;padding:2rem 16px;text-align:center;
+  background:var(--bg);color:var(--text);font-family:Montserrat,system-ui,sans-serif;line-height:1.6;
+  background-image:radial-gradient(60% 40% at 10% 0%,rgba(255,45,85,.14),transparent 70%),radial-gradient(50% 40% at 95% 10%,rgba(145,71,255,.12),transparent 70%);background-repeat:no-repeat}
+.code{font-size:clamp(4rem,18vw,7rem);font-weight:800;line-height:1;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+h1{font-size:1.3rem}
+p{color:var(--muted);max-width:420px}
+.links{display:flex;flex-wrap:wrap;gap:.6rem;justify-content:center;max-width:520px}
+.links a{display:inline-flex;align-items:center;min-height:44px;padding:.55rem 1.1rem;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);
+  color:var(--text);text-decoration:none;font-weight:700;font-size:.85rem}
+.links a:hover{border-color:var(--accent)}
+.links a.main{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:#fff}
+</style>
+</head>
+<body>
+  <div class="code">404</div>
+  <h1>Такой страницы нет</h1>
+  <p>Возможно, ссылка с опечаткой или страницу убрали. Вот куда можно пойти:</p>
+  <div class="links">
+    <a class="main" href="/">🏠 На главную</a>
+    <a href="/videos">🎬 Все видео</a>
+    <a href="/games">🎮 Игры онлайн</a>
+    <a href="/#/chat">💬 Чат</a>
+    <a href="/vip">✨ VIP</a>
+  </div>
+</body>
+</html>

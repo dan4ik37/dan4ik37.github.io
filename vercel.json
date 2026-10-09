@@ -1,4 +1,5 @@
 {
+  "trailingSlash": false,
   "functions": {
     "api/vip-sync.js": {
       "maxDuration": 30

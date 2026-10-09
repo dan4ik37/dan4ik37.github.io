@@ -37,7 +37,7 @@ async function renderLfgPage(){
     statusEl.textContent = '';
     listEl.innerHTML = posts.map(p => renderLfgCard(p)).join('');
   } catch(e) {
-    statusEl.textContent = 'Не удалось загрузить: ' + (e.message || e);
+    statusEl.textContent = 'Не удалось загрузить: ' + humanErr(e);
   }
 }
 
@@ -93,22 +93,22 @@ async function createLfgPost(){
     document.getElementById('lfgGameMatches').innerHTML = '';
     renderLfgPage();
   } catch(e) {
-    errEl.textContent = 'Не удалось создать заявку: ' + (e.message || e);
+    errEl.textContent = 'Не удалось создать заявку: ' + humanErr(e);
   }
 }
 
 async function closeLfgPost(id){
   try {
-    await sbClient.from('lfg_posts').update({ active: false }).eq('id', id);
+    await sbOk(sbClient.from('lfg_posts').update({ active: false }).eq('id', id));
     document.querySelector(`[data-lfg-id="${id}"]`)?.remove();
-  } catch(e) { alert('Не удалось закрыть заявку: ' + (e.message || e)); }
+  } catch(e) { alert('Не удалось закрыть заявку: ' + humanErr(e)); }
 }
 async function deleteLfgPost(id){
   if (!confirm('Удалить заявку?')) return;
   try {
-    await sbClient.from('lfg_posts').delete().eq('id', id);
+    await sbOk(sbClient.from('lfg_posts').delete().eq('id', id));
     document.querySelector(`[data-lfg-id="${id}"]`)?.remove();
-  } catch(e) { alert('Не удалось удалить: ' + (e.message || e)); }
+  } catch(e) { alert('Не удалось удалить: ' + humanErr(e)); }
 }
 
 // Заявка от незнакомца не может сразу написать в ЛС (это разрешено
@@ -123,7 +123,7 @@ async function respondToLfg(authorId, nick){
     if (status === 'pending_sent') { alert('Заявка в друзья уже отправлена — как примут, сможешь написать в ЛС.'); return; }
     if (status === 'pending_received') { await acceptFriendRequest(authorId); openDmWith(authorId, nick); return; }
     await sendFriendRequest(authorId);
-  } catch(e) { alert('Не получилось: ' + (e.message || e)); }
+  } catch(e) { alert('Не получилось: ' + humanErr(e)); }
 }
 
 // Подсказка при создании заявки: кто ещё на сайте указал эту игру в
@@ -164,11 +164,12 @@ async function saveProfileGames(){
   const raw = document.getElementById('profileGamesInput').value;
   const games = [...new Set(raw.split(',').map(g => g.trim().toLowerCase()).filter(Boolean))].slice(0, 10);
   try {
-    await sbClient.from('profiles').update({ favorite_games: games }).eq('id', currentUser.id);
+    const { error } = await sbClient.from('profiles').update({ favorite_games: games }).eq('id', currentUser.id);
+    if (error) throw error;
     if (currentProfile) currentProfile.favorite_games = games;
     renderProfileGamesView(games);
     toggleGamesEdit(false);
-  } catch(e) { alert('Не удалось сохранить: ' + (e.message || e)); }
+  } catch(e) { alert('Не удалось сохранить: ' + humanErr(e)); }
 }
 function renderProfileGamesView(games){
   const el = document.getElementById('profileGamesView');
@@ -185,9 +186,10 @@ function toggleStatusEdit(show){
 async function saveProfileStatus(){
   const status = document.getElementById('profileStatusInput').value.trim().slice(0, 60);
   try {
-    await sbClient.from('profiles').update({ status_text: status || null }).eq('id', currentUser.id);
+    const { error } = await sbClient.from('profiles').update({ status_text: status || null }).eq('id', currentUser.id);
+    if (error) throw error;
     if (currentProfile) currentProfile.status_text = status;
     document.getElementById('profileStatusView').textContent = status || '';
     toggleStatusEdit(false);
-  } catch(e) { alert('Не удалось сохранить: ' + (e.message || e)); }
+  } catch(e) { alert('Не удалось сохранить: ' + humanErr(e)); }
 }

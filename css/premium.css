@@ -2178,3 +2178,18 @@ body.low .profile-avatar-glow[class*="lv-frame-"]{box-shadow:0 0 22px -4px rgba(
 .cmdp-empty-act a{display:inline-flex;align-items:center;min-height:40px;padding:.45rem .9rem;border-radius:10px;border:1px solid var(--border);
   background:rgba(255,255,255,.04);color:var(--text);text-decoration:none;font-weight:700;font-size:.78rem}
 .cmdp-empty-act a:hover{border-color:var(--accent)}
+
+/* Текст на сайте снова можно выделять и копировать (было onselectstart="return false" на всё: ник, логин для
+   доната, сообщения). Не выделяются только кнопки — чтобы частые нажатия не подсвечивали их текст */
+button,.bt-item,.dc-btn,.hub-card{-webkit-user-select:none;user-select:none}
+
+/* Шапка игры на телефоне: «📣 Вызов» — с подписью (главная кнопка «позвать друга»), кнопки — не меньше 40px */
+@media(max-width:520px){
+  .gm-stage-bar .gm-chal span{display:inline}
+  .gm-back,.gm-mute{min-height:40px;min-width:40px}
+}
+
+/* Переключатель режима — теперь <button> (доступен с клавиатуры): сброс стилей кнопки.
+   На телефоне в Shorts он закрывал кнопки ролика справа — там прячем, как в играх и чате */
+#perfToggle{font:inherit;color:inherit;margin:0}
+@media(max-width:768px){body[data-route="shorts"] #perfToggle{display:none!important}}

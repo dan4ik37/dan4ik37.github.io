@@ -82,7 +82,7 @@ async function loadIdeas(){
       statusEl.textContent = '';
       listEl.innerHTML = '';
     } else {
-      statusEl.textContent = 'Не удалось загрузить: ' + (e.message || e);
+      statusEl.textContent = 'Не удалось загрузить: ' + humanErr(e);
     }
   } finally {
     ideasLoading = false;
@@ -160,7 +160,7 @@ async function submitIdea(e){
   btn.disabled = true; msg.textContent = '';
   const { error } = await sbClient.from('ideas').insert([{ author_id: currentUser.id, title, body }]);
   btn.disabled = false;
-  if (error) { msg.textContent = /3 идей/.test(error.message) ? error.message : 'Не получилось: ' + error.message; return; }
+  if (error) { msg.textContent = /3 идей/.test(error.message) ? error.message : 'Не получилось: ' + humanErr(error); return; }
   titleEl.value = ''; bodyEl.value = '';
   document.getElementById('ideaCount').textContent = '0 / 500';
   msg.textContent = '✓ Идея добавлена!';
@@ -181,7 +181,7 @@ document.getElementById('ideaBody')?.addEventListener('input', e => {
 
 async function deleteIdea(id){
   const go = () => sbClient.from('ideas').delete().eq('id', id).then(({ error }) => {
-    if (error) alert('Не удалось удалить: ' + error.message); else loadIdeas();
+    if (error) alert('Не удалось удалить: ' + humanErr(error)); else loadIdeas();
   });
   if (typeof askConfirm === 'function') askConfirm('Удалить эту идею?', go, 'Удалить'); else if (confirm('Удалить эту идею?')) go();
 }
@@ -194,5 +194,5 @@ async function setIdeaStatus(id, status){
     patch.video_id = m ? m[1] : null;
   }
   const { error } = await sbClient.from('ideas').update(patch).eq('id', id);
-  if (error) alert('Не удалось: ' + error.message); else loadIdeas();
+  if (error) alert('Не удалось: ' + humanErr(error)); else loadIdeas();
 }

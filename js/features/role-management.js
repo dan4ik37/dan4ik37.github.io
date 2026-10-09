@@ -24,7 +24,7 @@ async function searchUsersByNick() {
   statusEl.textContent = '';
 
   if (!q) { statusEl.textContent = 'Введи хотя бы часть ника'; return; }
-  if (!sbClient) { statusEl.textContent = 'Нет подключения к БД'; return; }
+  if (!sbClient) { statusEl.textContent = 'Нет связи с сервером — обнови страницу'; return; }
   if (currentRole !== 'admin') { statusEl.textContent = 'Только для администратора'; return; }
 
   statusEl.textContent = 'Ищем...';
@@ -70,7 +70,7 @@ async function searchUsersByNick() {
     `;
     }).join('');
   } catch(e) {
-    statusEl.textContent = 'Ошибка поиска: ' + (e.message || e);
+    statusEl.textContent = 'Ошибка поиска: ' + humanErr(e);
   }
 }
 
@@ -92,7 +92,7 @@ async function setUserVip(userId, btn) {
     btn.textContent = '✅';
     setTimeout(() => { btn.textContent = oldText; btn.disabled = false; }, 1500);
   } catch(e) {
-    alert('Не удалось сохранить VIP: ' + (e.message || e));
+    alert('Не удалось сохранить VIP: ' + humanErr(e));
     btn.textContent = oldText; btn.disabled = false;
   }
 }
@@ -117,7 +117,7 @@ async function setUserRole(userId, btn) {
     btn.textContent = '✅';
     setTimeout(() => { btn.textContent = oldText; btn.disabled = false; }, 1500);
   } catch(e) {
-    alert('Не удалось сохранить роль: ' + (e.message || e));
+    alert('Не удалось сохранить роль: ' + humanErr(e));
     btn.textContent = oldText; btn.disabled = false;
   }
 }

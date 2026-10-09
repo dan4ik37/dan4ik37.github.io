@@ -180,25 +180,26 @@ async function banNick(nick, msgEl) {
   // Нельзя банить других модераторов/админов
   if (!confirm(`Забанить «${nick}»? Все его сообщения будут удалены.`)) return;
   try {
-    await sbClient.from('banned_nicks').insert([{ nick, banned_by: currentUser.id }]);
+    await sbOk(sbClient.from('banned_nicks').insert([{ nick, banned_by: currentUser.id }]));
     bannedNicks.add(nick.toLowerCase());
-    await sbClient.from('messages').update({ deleted: true }).eq('nick', nick);
+    await sbOk(sbClient.from('messages').update({ deleted: true }).eq('nick', nick));
     document.querySelectorAll('.chat-msg').forEach(el => {
       if (el.dataset.nick === nick) el.classList.add('deleted');
     });
     addMsg('🔨 Система', `«${nick}» заблокирован`, 'var(--accent)', false, false, null, 'system');
-  } catch(e) { console.warn('ban error:', e); }
+  } catch(e) { console.warn('ban error:', e); showChatStatus('⚠ Бан не прошёл: ' + humanErr(e), false, 6000); }
 }
 
 async function deleteMsg(id, msgEl) {
   if (!sbClient || !(currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper')) return;
   if (!id) { msgEl?.classList.add('deleted'); return; }
   try {
-    await sbClient.from('messages').update({ deleted: true }).eq('id', id);
+    await sbOk(sbClient.from('messages').update({ deleted: true }).eq('id', id));
     msgEl.classList.add('deleted');
   } catch(e) {
+    // Раньше сообщение гасилось у модератора «локально», хотя у всех оставалось — теперь честно
     console.warn('delete error:', e);
-    msgEl?.classList.add('deleted'); // fallback локально
+    showChatStatus('⚠ Не удалилось: ' + humanErr(e), false, 6000);
   }
 }
 
@@ -574,7 +575,7 @@ async function pinMessage(msgId){
     const perks = (typeof getPinPerks === 'function') ? getPinPerks(currentRole, currentProfile) : null;
     showChatStatus('📌 Закреплено' + (perks ? ' на ' + perks.minutes + ' мин' : ''), true);
   } catch(e) {
-    showChatStatus('Не удалось закрепить: ' + (e.message || e), false);
+    showChatStatus('Не удалось закрепить: ' + humanErr(e), false);
   }
 }
 async function unpinMessage(msgId){
@@ -583,7 +584,7 @@ async function unpinMessage(msgId){
     const { error } = await sbClient.rpc('unpin_message', { msg_id: msgId });
     if (error) throw error;
   } catch(e) {
-    showChatStatus('Не удалось открепить: ' + (e.message || e), false);
+    showChatStatus('Не удалось открепить: ' + humanErr(e), false);
   }
 }
 function renderPinBar(msg){
@@ -903,7 +904,7 @@ async function searchChatMessages(){
   const q = document.getElementById('chatSearchInput').value.trim();
   const resultsEl = document.getElementById('chatSearchResults');
   if (!q) { resultsEl.innerHTML = ''; return; }
-  if (!sbClient) { resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Поиск недоступен offline</div>'; return; }
+  if (!sbClient) { resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Поиск недоступен без связи с сервером</div>'; return; }
 
   resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Ищем...</div>';
   try {
@@ -934,7 +935,7 @@ async function searchChatMessages(){
         <div style="font-size:.8rem;margin-top:.25rem;word-break:break-word">${highlight(m.text)}</div>
       </div>`).join('');
   } catch(e) {
-    resultsEl.innerHTML = `<div style="color:var(--accent);font-size:.78rem;text-align:center;padding:.5rem">Ошибка поиска: ${esc(e.message||String(e))}</div>`;
+    resultsEl.innerHTML = `<div style="color:var(--accent);font-size:.78rem;text-align:center;padding:.5rem">Ошибка поиска: ${eschumanErr(e)}</div>`;
   }
 }
 

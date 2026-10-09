@@ -376,7 +376,7 @@ function toggleGamesMute(btn){
 // Побед в дуэлях с живыми соперниками (все игры) — за 7 дней или за всё время
 async function renderDuelTop(list){
   const { data, error } = await sbClient.rpc('duel_top', { p_week: gamesTopWeek, lim: 10 });
-  if (error) { list.innerHTML = '<div class="gm-top-empty">Появится после обновления games.sql</div>'; return; }
+  if (error) { list.innerHTML = '<div class="gm-top-empty">Таблица чемпионов скоро появится</div>'; return; }
   document.getElementById('gamesTopBox').hidden = false;
   if (!data?.length) { list.innerHTML = '<div class="gm-top-empty">Ещё никто не побеждал в дуэлях — позови друга по ссылке из любой игры!</div>'; return; }
   list.innerHTML = data.map((r, i) => `

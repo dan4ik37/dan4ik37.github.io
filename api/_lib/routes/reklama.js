@@ -7,6 +7,7 @@ import { TOPICS } from '../topics.js';
 
 const TG = 'https://t.me/+LE25p4pQojkyYjli';
 const VK = 'https://vk.com/dan4ik37';
+const MAIL = 'dan4ik37@gmail.com';
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
 
 export default async function handler(req, res) {
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
   </section>
 
   <aside class="join"><div><b>Обсудить сотрудничество</b><span>Напишите, что хотите прорекламировать и в каком формате — ответим с условиями.</span></div>
-    <div class="mk-cta"><a class="btn btn-acc" href="${TG}" target="_blank" rel="noopener">✈ Telegram</a><a class="btn btn-ghost" href="${VK}" target="_blank" rel="noopener">ВКонтакте</a></div></aside>
+    <div class="mk-cta"><a class="btn btn-acc" href="${TG}" target="_blank" rel="noopener">✈ Telegram</a><a class="btn btn-ghost" href="${VK}" target="_blank" rel="noopener">ВКонтакте</a><a class="btn btn-ghost" href="mailto:${MAIL}?subject=%D0%A0%D0%B5%D0%BA%D0%BB%D0%B0%D0%BC%D0%B0">📧 ${MAIL}</a></div></aside>
   <p class="all"><a href="${YT_CHANNEL}" target="_blank" rel="noopener">Канал на YouTube →</a> · <a href="/history">История канала</a> · <a href="/videos">Все видео</a></p>
 </main>`;
   res.setHeader('Cache-Control', ch ? 'public, s-maxage=21600, stale-while-revalidate=604800' : 'public, s-maxage=300');

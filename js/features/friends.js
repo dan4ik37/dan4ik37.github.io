@@ -29,7 +29,7 @@ async function sendFriendRequest(targetId){
     if (typeof openMiniProfile === 'function' && profileViewedId === targetId) renderProfilePage(targetId);
   } catch(e) {
     if (String(e.message||'').includes('duplicate')) alert('Заявка уже отправлена или вы уже друзья');
-    else alert('Не удалось отправить заявку: ' + (e.message || e));
+    else alert('Не удалось отправить заявку: ' + humanErr(e));
   }
 }
 
@@ -39,19 +39,19 @@ async function acceptFriendRequest(requesterId){
     if (error) {
       alert(/row-level security/i.test(error.message || '')
         ? '👥 Не получилось: у тебя или у него уже максимум друзей. Лимит растёт с уровнем и VIP'
-        : 'Не получилось: ' + error.message);
+        : 'Не получилось: ' + humanErr(error));
     }
     if (typeof myFriendStatusCache !== 'undefined') myFriendStatusCache = null;
     renderFriendsPanel();
-  } catch(e) { alert('Не получилось: ' + (e.message || e)); }
+  } catch(e) { alert('Не получилось: ' + humanErr(e)); }
 }
 
 async function removeFriendship(otherId){
   if (!confirm('Удалить из друзей / отменить заявку?')) return;
   try {
-    await sbClient.from('friendships').delete().or(`and(requester_id.eq.${currentUser.id},addressee_id.eq.${otherId}),and(requester_id.eq.${otherId},addressee_id.eq.${currentUser.id})`);
+    await sbOk(sbClient.from('friendships').delete().or(`and(requester_id.eq.${currentUser.id},addressee_id.eq.${otherId}),and(requester_id.eq.${otherId},addressee_id.eq.${currentUser.id})`));
     renderFriendsPanel();
-  } catch(e) { alert('Не получилось: ' + (e.message || e)); }
+  } catch(e) { alert('Не получилось: ' + humanErr(e)); }
 }
 
 async function getFriendshipStatus(otherId){
@@ -190,7 +190,7 @@ async function sendDm(){
     input.value = '';
     loadDmConversation(dmCurrentFriendId);
   } catch(e) {
-    alert('Не удалось отправить — возможно, вы больше не друзья: ' + (e.message || e));
+    alert('Не удалось отправить — возможно, вы больше не друзья: ' + humanErr(e));
   }
 }
 
