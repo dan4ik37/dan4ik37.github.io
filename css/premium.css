@@ -2172,3 +2172,9 @@ body.chat-full .chat-full-btn{border-color:var(--accent);color:#fff}
    без своего сплошного кольца (раньше было два кольца подряд: красное роли + голубое рамки) */
 .profile-avatar-glow[class*="lv-frame-"]{box-shadow:0 0 34px -6px rgb(var(--ring-rgb)),0 18px 40px -14px rgba(0,0,0,.7)!important}
 body.low .profile-avatar-glow[class*="lv-frame-"]{box-shadow:0 0 22px -4px rgba(var(--ring-rgb),.55)!important}
+
+/* Поиск: «ничего не нашлось» — куда идти дальше */
+.cmdp-empty-act{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-top:.9rem}
+.cmdp-empty-act a{display:inline-flex;align-items:center;min-height:40px;padding:.45rem .9rem;border-radius:10px;border:1px solid var(--border);
+  background:rgba(255,255,255,.04);color:var(--text);text-decoration:none;font-weight:700;font-size:.78rem}
+.cmdp-empty-act a:hover{border-color:var(--accent)}

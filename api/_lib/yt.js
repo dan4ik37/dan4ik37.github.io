@@ -5,14 +5,16 @@
 // Ответы кэшируются на CDN Vercel (заголовки в самих функциях), плюс здесь —
 // в памяти «тёплого» инстанса функции, чтобы соседние запросы не тратили квоту.
 
+import { SNAPSHOT } from './uploads-snapshot.js';
+
 const KEY = process.env.YT_API_KEY || 'AIzaSyA0dK2a1YG_s54zG-zapYgjycIempCvHp0';
 const HANDLE = '@Dan4ik37Yt';
 const API = 'https://www.googleapis.com/youtube/v3/';
 
 export const SITE = 'https://dan4ik37.vercel.app';
 export const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
-// Весь архив (~6000 роликов на 2026 — это 120 запросов по 50, ≈120 ед. квоты из 10 000/сутки).
-// Берут только /sitemap.xml и /videos (их ответы кэширует CDN), страница ролика — getUploads(200).
+// Весь архив (~6000 роликов на 2026). Через API это 120 запросов по 50 подряд — поэтому берётся из снимка
+// (uploads-snapshot.js, scripts/snapshot-uploads.mjs) плюс свежие ролики сверху. Страница ролика — getUploads(200).
 export const ALL_UPLOADS = 10000;
 
 const mem = new Map();
@@ -58,28 +60,53 @@ export function getVideo(id) {
 
 // Последние загрузки: [{ id, title, thumb, publishedAt }]. max — до ALL_UPLOADS (по 50 за запрос).
 // ttlMs — сколько держать в памяти инстанса; api/push-check.js берёт свежие (0).
+// Больше 200 — снимок архива + только новые ролики сверху (обычно 1 запрос вместо ~120; холодная загрузка
+// /videos была 25–35 с). YouTube API недоступен (квота кончилась) — отдаём снимок как есть, страницы не падают.
 export function getUploads(max = 50, ttlMs = 3600e3) {
   return cached('uploads:' + max, ttlMs, async () => {
-    const { uploads } = await getChannel();
-    const out = [];
-    let page = '';
-    while (out.length < max) {
-      const d = await api(`playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${uploads}${page ? '&pageToken=' + page : ''}`);
-      for (const it of d.items || []) {
-        const sn = it.snippet;
-        if (sn.title === 'Private video' || sn.title === 'Deleted video') continue;
-        out.push({
-          id: it.contentDetails.videoId,
-          title: sn.title,
-          thumb: sn.thumbnails?.medium?.url || sn.thumbnails?.default?.url || '',
-          publishedAt: it.contentDetails.videoPublishedAt || sn.publishedAt
-        });
-      }
-      page = d.nextPageToken;
-      if (!page) break;
-    }
-    return out.slice(0, max).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    const snap = max > 200 ? snapshotList() : [];
+    if (!snap.length) return fetchUploads(max);
+    const known = new Set(snap.map(v => v.id));
+    let head = [];
+    try { head = await fetchUploads(200, id => known.has(id)); } catch (e) { /* без свежих — только снимок */ }
+    const seen = new Set(), all = [];
+    for (const v of [...head, ...snap]) if (!seen.has(v.id)) { seen.add(v.id); all.push(v); }
+    return all.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)).slice(0, max);
   });
+}
+
+// Загрузки канала через API, от новых к старым; stopAt(id) → true — дальше не идём (уже есть в снимке)
+async function fetchUploads(max, stopAt = null) {
+  const { uploads } = await getChannel();
+  const out = [];
+  let page = '';
+  while (out.length < max) {
+    const d = await api(`playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${uploads}${page ? '&pageToken=' + page : ''}`);
+    let stop = false;
+    for (const it of d.items || []) {
+      const sn = it.snippet;
+      if (stopAt && stopAt(it.contentDetails.videoId)) { stop = true; break; }
+      if (sn.title === 'Private video' || sn.title === 'Deleted video') continue;
+      out.push({
+        id: it.contentDetails.videoId,
+        title: sn.title,
+        thumb: sn.thumbnails?.medium?.url || sn.thumbnails?.default?.url || '',
+        publishedAt: it.contentDetails.videoPublishedAt || sn.publishedAt
+      });
+    }
+    page = d.nextPageToken;
+    if (stop || !page) break;
+  }
+  return out.slice(0, max).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+}
+
+let snapCache = null;
+function snapshotList() {
+  if (!snapCache) snapCache = SNAPSHOT ? SNAPSHOT.split('\n').map(line => {
+    const [id, publishedAt, title] = line.split('\t');
+    return { id, title, thumb: `https://i.ytimg.com/vi/${id}/mqdefault.jpg`, publishedAt };
+  }) : [];
+  return snapCache;
 }
 
 export function esc(s) {

@@ -67,6 +67,26 @@ function collectRoutes(){
   });
   return items;
 }
+// Отдельные страницы сайта (серверные, не #/разделы) — раньше поиск их не знал: «VIP», «ник», «архив» не находились
+const SITE_PAGES = [
+  { kind:'page', label:'✨ VIP — что даёт и как получить', sub:'вип донат подписка цветной ник стикеры', href:'/vip' },
+  { kind:'page', label:'🎬 Все видео канала — архив', sub:'архив все ролики по годам старые видео', href:'/videos' },
+  { kind:'page', label:'🗂 Игры канала — ролики по играм', sub:'темы майнкрафт роблокс хоррор гта', href:'/topics' },
+  { kind:'page', label:'📜 История канала по годам', sub:'история первое видео годы', href:'/history' },
+  { kind:'page', label:'🏷 Генератор ников для игр', sub:'ник никнейм придумать роблокс стандофф', href:'/tools/nick' },
+  { kind:'page', label:'📣 Реклама на канале — медиакит', sub:'реклама сотрудничество интеграция медиакит', href:'/reklama' },
+];
+// Поиск по всему архиву (~6000 роликов, /api/ids?t=1): allVids — только последние ~150, старые ролики не находились.
+// Грузим один раз, когда человек начал что-то искать (ответ кэширует CDN).
+let archiveVids = null, archiveLoading = null;
+function loadArchive(){
+  if (archiveVids || archiveLoading) return archiveLoading;
+  archiveLoading = fetch('/api/ids?t=1').then(r => r.ok ? r.json() : null).then(d => {
+    archiveVids = (d && Array.isArray(d.v) ? d.v : []).map(([id, title, date]) => ({ kind:'video', label:title,
+      sub: date ? date.split('-').reverse().join('.') : '', href:'/v/'+id, thumb:'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg' }));
+  }).catch(() => { archiveVids = []; });
+  return archiveLoading;
+}
 function collectGames(){
   if(typeof GAMES==='undefined') return [];
   return GAMES.map(g=>({ kind:'game', label:g.icon+' '+g.title, sub:g.desc, href:g.href || '#/games/'+g.id }));
@@ -141,7 +161,7 @@ function itemHtml(it, active){
 function renderCmdPaletteList(query){
   const list = document.getElementById('cmdPaletteList');
   const q = norm(query).trim();
-  const pages = collectRoutes(), games = collectGames(), vids = collectVideos();
+  const pages = [...collectRoutes(), ...SITE_PAGES], games = collectGames(), vids = collectVideos();
   let groups;
   if(!q){
     const rnd = [];
@@ -152,11 +172,21 @@ function renderCmdPaletteList(query){
   } else {
     const words = q.split(/\s+/).filter(Boolean);
     const find = (arr, lim) => arr.map(it=>({it, s:scoreItem(it, words)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,lim).map(x=>x.it);
-    groups = [['Разделы', find(pages,5)], ['Игры', find(games,5)], ['Видео', find(vids,10)]];
+    // Видео: сначала свежие (с просмотрами), потом весь архив
+    let vidsFound = find(vids, 10);
+    if (archiveVids && vidsFound.length < 10) {
+      const have = new Set(vidsFound.map(v => v.href));
+      vidsFound = vidsFound.concat(find(archiveVids.filter(v => !have.has(v.href)), 10 - vidsFound.length));
+    } else if (!archiveVids) {
+      loadArchive()?.then(() => { const inp = document.getElementById('cmdPaletteInput'); if (inp && document.getElementById('cmdPalette')?.classList.contains('open') && norm(inp.value).trim() === q) renderCmdPaletteList(inp.value); });
+    }
+    groups = [['Разделы', find(pages,5)], ['Игры', find(games,5)], ['Видео', vidsFound]];
   }
   groups = groups.filter(([,arr])=>arr.length);
   if(!groups.length){
-    list.innerHTML = `<div class="cmdp-empty">Ничего не нашлось по «${esc(query.trim())}»${vids.length ? '' : '<br><small>Видео ещё загружаются…</small>'}</div>`;
+    const waiting = !vids.length || (!archiveVids && archiveLoading);
+    list.innerHTML = `<div class="cmdp-empty">Ничего не нашлось по «${esc(query.trim())}»${waiting ? '<br><small>Ищем во всём архиве…</small>' : ''}
+      <div class="cmdp-empty-act"><a href="/videos">🎬 Все видео по годам</a><a href="/topics">🗂 Ролики по играм</a></div></div>`;
     return;
   }
   let first = true;

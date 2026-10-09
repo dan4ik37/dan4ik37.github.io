@@ -72,8 +72,9 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 - Серверные страницы: `/v/<id>` → `api/video.js`, `/games` и `/games/<id>` → `api/game.js` (SEO-страницы игр: правила,
   советы, FAQ + JSON-LD; тексты — `api/_lib/games-seo.js`, кнопка «Играть» ведёт в SPA `/#/games/<id>`),
   `/videos` → `api/pages.js?page=videos` (`api/_lib/routes/videos.js`) (архив всех роликов, 240 на страницу, `?p=N`), `/sitemap.xml` → `api/sitemap.js` (rewrites в
-  `vercel.json`). Весь архив (~6000 роликов) — `getUploads(ALL_UPLOADS)` только в sitemap и /videos; страница ролика —
-  `getUploads(200)` (квота YouTube API!). Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
+  `vercel.json`). Весь архив (~6000 роликов) — `getUploads(ALL_UPLOADS)`: СНИМОК `api/_lib/uploads-snapshot.js` + только новые
+  ролики сверху через API (было ~120 запросов и 25–35 с на холодную). Снимок пересобрать: `node scripts/snapshot-uploads.mjs`
+  (если на канале удалили/скрыли много роликов или вышло больше 200 новых). Страница ролика — `getUploads(200)` (квота YouTube API!). Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
   Темы (игры канала): `/topics`, `/topic/<slug>` → `api/topic.js`; список и правила подбора по названию — `api/_lib/topics.js`
   (тема ≥ 30 роликов; новая игра на канале → новая запись). Страница ролика показывает «Ещё по теме».
 - «🎲 Удиви меня» — `js/core/surprise.js` (`d37Surprise(btn)`, и в SPA, и на серверных страницах): случайный /v/<id> из всего
@@ -87,7 +88,8 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   первое видео года), ничего не выдумывать.
 - «Генератор ников для игр»: `/tools/nick` → `api/tool-nick.js` (SEO: «генератор ников», «ник для роблокс»), словари и
   генерация — `api/_lib/nicks.js` (тот же код уходит в браузер через toString(); примеры в HTML — с зерном, не меняются).
-- Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы, игры (GAMES), видео (allVids → /v/<id>). Общий HTML-шаблон и стили — `api/_lib/page.js`,
+- Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы + `SITE_PAGES` (серверные страницы: /vip,
+  /videos, /tools/nick…), игры (GAMES), видео (allVids → /v/<id>) и весь архив по `/api/ids?t=1` (грузится при первом поиске). Общий HTML-шаблон и стили — `api/_lib/page.js`,
   YouTube — `api/_lib/yt.js`. Локально проверять вызовом handler'а из node (копия api/ во временной папке с
   `package.json` `{"type":"module"}`). Новая игра → добавить и в `GAME_PAGES`.
 - Ролики про кейсы/промокоды на депозит (GGDROP, CaseBattle…, ~490 из 6000): `isGambling()` в yt.js → `/v/<id>` рендерится
