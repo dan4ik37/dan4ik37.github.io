@@ -139,3 +139,8 @@ export function getVideoStats(ids) {
     return (d.items || []).map(v => ({ id: v.id, ...v.statistics }));
   });
 }
+
+// Ролики про открытие кейсов / промокоды на депозит (GGDROP, CaseBattle…): у AdSense это «азартные игры» —
+// рекламу Google рядом показывать нельзя, иначе могут отклонить сайт или отключить показы.
+const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|\bдеп\b|депозит|рулетк|ставк[аиу]/i;
+export const isGambling = (...texts) => texts.some(t => GAMBLING_RE.test(String(t || '')));

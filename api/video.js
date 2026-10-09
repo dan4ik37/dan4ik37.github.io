@@ -6,7 +6,7 @@
 // перелинковкой, который видят и Google/Яндекс, и превью мессенджеров.
 // Плеер — «фасад»: сначала превью, iframe YouTube грузится по клику
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
-import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, esc, fmtDuration, fmtCount } from './_lib/yt.js';
+import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, esc, fmtDuration, fmtCount } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
 import { topicsFor } from './_lib/topics.js';
 
@@ -43,6 +43,7 @@ export default async function handler(req, res) {
   const rel = relatedVideos({ id, title: sn.title, tags: sn.tags }, more || [], 8);
   const related = rel.list;
   const topics = topicsFor(sn.title);
+  const noAds = isGambling(sn.title, desc);
   const tags = (sn.tags || []).slice(0, 12);
 
   const ld = {
@@ -81,7 +82,7 @@ export default async function handler(req, res) {
       <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Случайное видео</button>
     </div>
     ${desc ? `<section class="desc"><h2>Описание</h2><p>${linkify(desc)}</p></section>` : ''}
-    <div data-ad="video_page" hidden></div>
+    ${noAds ? '' : '<div data-ad="video_page" hidden></div>'}
     ${topics.length ? `<p class="topics">Ещё по теме: ${topics.map(t => `<a href="/topic/${t.slug}">${esc(t.name)} →</a>`).join(' ')}</p>` : ''}
     ${tags.length ? `<ul class="tags">${tags.map(t => `<li>#${esc(t)}</li>`).join('')}</ul>` : ''}
   </article>
@@ -103,7 +104,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: `${sn.title} — dan4ik37`,
     description: metaDesc,
-    url, image: thumb, ld, body, script: playerJs(id), ogType: 'video.other'
+    url, image: thumb, ld, body, script: playerJs(id), ogType: 'video.other', noAds
   }));
 }
 

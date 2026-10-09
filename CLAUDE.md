@@ -91,6 +91,8 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 - Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы, игры (GAMES), видео (allVids → /v/<id>). Общий HTML-шаблон и стили — `api/_lib/page.js`,
   YouTube — `api/_lib/yt.js`. Локально проверять вызовом handler'а из node (копия api/ во временной папке с
   `package.json` `{"type":"module"}`). Новая игра → добавить и в `GAME_PAGES`.
+- Ролики про кейсы/промокоды на депозит (GGDROP, CaseBattle…, ~490 из 6000): `isGambling()` в yt.js → `/v/<id>` рендерится
+  с `noAds` (без скрипта AdSense и без места рекламы) — AdSense запрещает рекламу рядом с азартными играми.
 - Реклама: номера блоков — `window.ADS_IDS` в `js/core/ads-core.js` (Яндекс РСЯ `R-A-…` и/или Google; Яндекс главнее —
   Google в РФ рекламу не показывает). Один файл и для SPA, и для серверных страниц (`<div data-ad="ключ">` + `D37Ads.fillAll()`).
   Места: game_over (под игрой после партии, не чаще 90 с), games_hub, seo_game, video_page, home_mid, floor (полоска на
