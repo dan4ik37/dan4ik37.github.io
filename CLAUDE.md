@@ -97,6 +97,10 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Google в РФ рекламу не показывает). Один файл и для SPA, и для серверных страниц (`<div data-ad="ключ">` + `D37Ads.fillAll()`).
   Места: game_over (под игрой после партии, не чаще 90 с), games_hub, seo_game, video_page, home_mid, floor (полоска на
   телефоне, не поверх игры). Пустой номер = места не видно. Старые AdSense-блоки — `AD_SLOTS` в config.js + `js/features/ads.js`.
+- Чат (`#/chat`, chat.js): на телефоне окно от шапки до нижнего меню (premium.css, `body[data-route="chat"]`); кнопка ⛶ —
+  `toggleChatFull()` (body.chat-full, Wake Lock — экран не гаснет; у #chat свой слой z-index:1 — в полноэкранном его поднимаем).
+  Вкладка Twitch грузится по `dataset.loaded`, НЕ по `iframe.src` (у пустого iframe src = адрес страницы — так Twitch не грузился годами).
+  Ярлыки на иконке установленного сайта — `shortcuts` в manifest.json.
 - Событие `d37:auth` — после входа (роль уже загружена) и выхода.
 - Уведомления 🔔: `notifications.sql` (создают только триггеры, `notify()`), `js/features/notifications.js`
   (Realtime по `user_id`, опрос раз в 90 с, счётчик в заголовке вкладки). Скрыты, пока SQL не выполнен.
