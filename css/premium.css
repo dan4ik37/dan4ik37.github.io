@@ -2193,3 +2193,10 @@ button,.bt-item,.dc-btn,.hub-card{-webkit-user-select:none;user-select:none}
    На телефоне в Shorts он закрывал кнопки ролика справа — там прячем, как в играх и чате */
 #perfToggle{font:inherit;color:inherit;margin:0}
 @media(max-width:768px){body[data-route="shorts"] #perfToggle{display:none!important}}
+
+/* Подвал на телефоне: ссылки были 16px в высоту при шрифте 10,7px — а через них идут в архив, игры канала, VIP */
+@media(max-width:768px){
+  .footer-links{gap:.4rem .5rem}
+  .footer-links a{display:inline-flex;align-items:center;min-height:36px;padding:.35rem .7rem;border-radius:10px;background:rgba(255,255,255,.03);font-size:.7rem}
+  .footer-links a::after{display:none}
+}
