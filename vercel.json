@@ -59,6 +59,10 @@
       "destination": "/api/pages?page=ids"
     },
     {
+      "source": "/api/feed",
+      "destination": "/api/pages?page=feed"
+    },
+    {
       "source": "/history",
       "destination": "/api/pages?page=history"
     },

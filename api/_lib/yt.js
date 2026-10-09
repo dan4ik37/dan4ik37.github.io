@@ -18,12 +18,14 @@ export const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 export const ALL_UPLOADS = 10000;
 
 const mem = new Map();
+// Кладём в память сразу обещание: одновременные запросы ждут один и тот же поход в API, а не делают свой
+// (на холодном старте /api/feed спрашивал канал трижды). Ошибка — забываем, чтобы следующий запрос попробовал снова.
 async function cached(key, ttlMs, fn) {
   const hit = mem.get(key);
   if (hit && Date.now() - hit.t < ttlMs) return hit.v;
-  const v = await fn();
-  mem.set(key, { t: Date.now(), v });
-  return v;
+  const p = fn();
+  mem.set(key, { t: Date.now(), v: p });
+  try { return await p; } catch (e) { mem.delete(key); throw e; }
 }
 
 async function api(path) {
@@ -164,13 +166,13 @@ export function getChannelStats() {
     return { ...it.statistics, publishedAt: it.snippet.publishedAt, thumb: it.snippet.thumbnails?.high?.url || '', title: it.snippet.title || 'Dan4ik37', handle: it.snippet.customUrl || '@dan4ik37yt' };
   });
 }
-// Просмотры роликов (до 50 id за запрос): [{ id, viewCount, likeCount }]
+// Просмотры и длительность роликов (до 50 id за запрос, 1 ед. квоты): [{ id, viewCount, likeCount, duration }]
 export function getVideoStats(ids) {
   const list = ids.slice(0, 50);
   return cached('vstats:' + list.join(','), 6 * 3600e3, async () => {
     if (!list.length) return [];
-    const d = await api(`videos?part=statistics&id=${list.join(',')}`);
-    return (d.items || []).map(v => ({ id: v.id, ...v.statistics }));
+    const d = await api(`videos?part=statistics,contentDetails&id=${list.join(',')}`);
+    return (d.items || []).map(v => ({ id: v.id, ...v.statistics, duration: v.contentDetails?.duration || '' }));
   });
 }
 

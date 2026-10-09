@@ -229,6 +229,27 @@ async function loadYT(){
     }
     showFallback();
   }
+  // Сначала — /api/feed: список собирает сервер и раздаёт всем из кэша CDN, квота YouTube не тратится на каждого
+  // посетителя (раньше ~7 единиц на человека — при росте трафика квоты не хватило бы). Не ответил — как раньше, напрямую.
+  try{
+    const r=await fetch('/api/feed');
+    const d=r.ok?await r.json():null;
+    if(d?.vids?.length){
+      if(d.channelId) channelId=d.channelId;
+      const st=d.stats||{subs:0,views:0,vids:0};
+      countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
+      statsLoaded();
+      const rawVids=d.vids.map(v=>({id:v.id,title:v.title,thumb:v.thumb,date:new Date(v.ts).toLocaleDateString('ru-RU'),views:v.views?fmt(v.views):'',viewsN:v.views||0,ts:v.ts,likes:v.likes?fmt(v.likes):'',duration:formatYtDuration(v.duration)}));
+      newestVids=rawVids.sort((a,b)=>b.ts-a.ts);
+      allVids=sortedVids(vidSort);
+      saveCache({vids:rawVids,stats:st});
+      renderFeatured(longVids()[0]);
+      renderCurrentVids();
+      if(typeof onVideosLoaded==='function') onVideosLoaded();
+      window.dispatchEvent(new Event('d37:videos'));
+      return;
+    }
+  }catch(e){ /* сервер недоступен — ниже напрямую из YouTube API */ }
   try{
     const ch=await ytFetch(`https://www.googleapis.com/youtube/v3/channels?part=contentDetails,statistics&forHandle=${YT_HANDLE}&key=${YT_KEY}`);
     if(!ch?.items?.length)throw new Error('Канал не найден');

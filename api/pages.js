@@ -12,8 +12,9 @@ import vip from './_lib/routes/vip.js';
 import fonts from './_lib/routes/fonts.js';
 import cps from './_lib/routes/cps.js';
 import about from './_lib/routes/about.js';
+import feed from './_lib/routes/feed.js';
 
-const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about };
+const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];
