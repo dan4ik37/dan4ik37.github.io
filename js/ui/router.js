@@ -61,6 +61,7 @@ function finishShowPage(route, activeIds){
   if (route==='games' && typeof renderGamesPage==='function') renderGamesPage(currentRouteParam());
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
+  if (route==='donate' && typeof renderDonateVipHint==='function') renderDonateVipHint();
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{

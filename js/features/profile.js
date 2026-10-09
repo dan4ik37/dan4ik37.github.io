@@ -97,6 +97,11 @@ function guestsLimitFor(role, profile){
 async function renderProfilePage(viewUserId){
   const loggedOutEl = document.getElementById('profileLoggedOut');
   const contentEl = document.getElementById('profileContent');
+  // #/profile/vip — свой профиль сразу на блоках «Логин для доната» и «Хочу купить VIP» (кнопка со страницы /vip)
+  const focusVip = viewUserId === 'vip';
+  if (focusVip) viewUserId = null;
+  const loHint = loggedOutEl?.querySelector('p');
+  if (loHint) loHint.textContent = focusVip ? 'VIP привязывается к аккаунту — войди или зарегистрируйся, и откроется, как его получить' : 'Чтобы завести профиль — войди или зарегистрируйся';
 
   const targetId = viewUserId || currentUser?.id;
   if (!targetId) {
@@ -258,7 +263,42 @@ async function renderProfilePage(viewUserId){
   } else {
     staffPanel.style.display = 'none';
   }
+  if (focusVip && isOwn) setTimeout(() => {
+    const blocks = ['donateLoginPanel', 'profileVipPromo'].map(id => document.getElementById(id)).filter(el => el && el.style.display !== 'none');
+    if (!blocks.length) return;
+    blocks[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    blocks.forEach(el => { el.classList.add('pf-focus'); setTimeout(() => el.classList.remove('pf-focus'), 2600); });
+  }, 350);
 }
+
+// Логин для доната — в буфер (его вписывают в поле «Ваше имя» на DonationAlerts)
+async function copyDonateLogin(btn){
+  const v = currentProfile?.donate_login || document.getElementById('donateLoginValue')?.textContent || '';
+  if (!v) return;
+  try { await navigator.clipboard.writeText(v); }
+  catch (e) { const t = document.createElement('textarea'); t.value = v; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); } catch (e2) {} t.remove(); }
+  const old = btn.textContent; btn.textContent = '✅ Скопировано'; setTimeout(() => { btn.textContent = old; }, 1600);
+}
+
+// Плашка «VIP за донат» на странице #/donate: свой логин для доната с кнопкой «Скопировать», иначе — как его получить.
+// Без логина донат не находит владельца — VIP не приходит, и человек пишет заявку «задонатил, а VIP нет».
+function renderDonateVipHint(){
+  const txt = document.getElementById('donateVipText'), act = document.getElementById('donateVipAct');
+  if (!txt || !act) return;
+  const login = currentUser && currentProfile?.donate_login;
+  const more = '<a class="dv-btn ghost" href="/vip">Что даёт VIP</a>';
+  if (login) {
+    txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — VIP включится сам.`;
+    act.innerHTML = '<button type="button" class="dv-btn" onclick="copyDonateLogin(this)">📋 Скопировать логин</button>' + more;
+  } else if (currentUser) {
+    txt.innerHTML = 'Сначала придумай <b>логин для доната</b> в профиле (один раз), потом впиши его в поле «Ваше имя» на DonationAlerts — VIP включится сам.';
+    act.innerHTML = '<a class="dv-btn" href="#/profile/vip">🔑 Задать логин</a>' + more;
+  } else {
+    txt.innerHTML = 'VIP привязывается к аккаунту: заведи профиль, задай <b>логин для доната</b> и впиши его в поле «Ваше имя» на DonationAlerts — VIP включится сам.';
+    act.innerHTML = '<button type="button" class="dv-btn" onclick="openGlobalAuth(\'register\')">Создать профиль</button>' + more;
+  }
+}
+window.addEventListener('d37:auth', () => { if (document.body.dataset.route === 'donate') renderDonateVipHint(); });
 
 // Цвет свечения вокруг аватарки: роль важнее VIP (видно, кто модерирует
 // сайт, даже если админ/модератор ещё и донатер). Цвета — те же RGB,

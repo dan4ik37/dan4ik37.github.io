@@ -22,29 +22,33 @@ function captureReferralCode(){
 // из-за сброса пароля (chat.js): если человек уже залогинен в этом же
 // браузере и переходит по ссылке "забыл пароль", всё равно должна
 // открыться форма нового пароля, а не увести его на страницу профиля.
-function openLoginModal() {
+function openLoginModal(mode) {
   const modal = document.getElementById('globalAuthModal');
   modal.classList.add('open');
-  switchAuthTab('login');
+  switchAuthTab(mode === 'register' ? 'register' : 'login');
   document.getElementById('gauthLogin').style.display = 'block';
   trapModalFocus(modal);
 }
 
-function openGlobalAuth() {
+// mode = 'register' — сразу вкладка регистрации (кнопки «Создать профиль»)
+function openGlobalAuth(mode) {
   // Уже залогинен — открываем полноценную страницу профиля, а не
   // дублирующую мини-модалку. Модалка теперь только для входа/регистрации.
   if (currentUser) {
     location.hash = '#/profile';
     return;
   }
-  openLoginModal();
+  openLoginModal(mode);
 }
 
 // После успешного входа/регистрации/сброса пароля — закрыть модалку и
 // сразу показать полноценную страницу профиля вместо старой мини-карточки.
 function goToOwnProfile() {
   closeGlobalAuth();
-  location.hash = '#/profile';
+  // Уже на своём профиле (вход с плашки «Войди…» или по ссылке #/profile/vip со страницы /vip):
+  // хэш не меняется — hashchange не придёт, перерисовываем сами
+  if (/^#\/profile(\/vip)?$/.test(location.hash) && typeof renderProfilePage === 'function') renderProfilePage(location.hash.endsWith('/vip') ? 'vip' : undefined);
+  else location.hash = '#/profile';
 }
 
 function closeGlobalAuth() {

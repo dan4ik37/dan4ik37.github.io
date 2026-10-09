@@ -1079,6 +1079,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
     <a href="#/games" data-route="games">🎮 Игры</a>
     <a href="#/ads" data-route="ads">Реклама</a>
+    <a href="/vip" class="nav-vip">✨ VIP</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
   <button class="site-search-btn" onclick="openCmdPalette()" aria-label="Поиск по сайту" title="Поиск по сайту (Ctrl+K или /)">🔍</button>
@@ -1405,9 +1406,9 @@ body.low .donation-alert-icon{animation:none}
   <div class="cm-join">
     <div class="cm-join-text">
       <b>Заведи профиль — это бесплатно</b>
-      <span>Уровни и XP за активность, стрик посещений, 16 ачивок, друзья и личка, голоса за идеи.</span>
+      <span>Уровни и XP за активность, стрик посещений, 50+ ачивок, друзья и личка, голоса за идеи.</span>
     </div>
-    <button type="button" class="cm-join-btn" onclick="openGlobalAuth()">Создать профиль</button>
+    <button type="button" class="cm-join-btn" onclick="openGlobalAuth('register')">Создать профиль</button>
   </div>
 </div>
 
@@ -1501,6 +1502,11 @@ body.low .donation-alert-icon{animation:none}
       </a>
     </div>
 
+  </div>
+  <div class="donate-vip" id="donateVipHint">
+    <div class="dv-ic">✨</div>
+    <div class="dv-body"><b>VIP за донат — 100 ₽ = месяц</b><span id="donateVipText">Впиши свой <b>логин для доната</b> в поле «Ваше имя» на DonationAlerts — VIP включится сам. Логин задаётся в профиле.</span></div>
+    <div class="dv-act" id="donateVipAct"><a class="dv-btn ghost" href="/vip">Что даёт VIP</a></div>
   </div>
 </div>
 
@@ -1705,6 +1711,8 @@ body.low .donation-alert-icon{animation:none}
       <div class="pf-kicker" style="margin-bottom:.5rem">🔑 Логин для доната</div>
       <div id="donateLoginCurrent" style="display:none;align-items:center;gap:.6rem;flex-wrap:wrap">
         <span style="font-size:.85rem;font-weight:700;color:#ffd700" id="donateLoginValue"></span>
+        <button type="button" class="dl-copy" onclick="copyDonateLogin(this)">📋 Скопировать</button>
+        <a class="dl-copy dl-go" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" rel="noopener">💝 К донату</a>
         <button onclick="document.getElementById('donateLoginCurrent').style.display='none';document.getElementById('donateLoginEditWrap').style.display='flex';document.getElementById('donateLoginInput').value=currentProfile?.donate_login||''" style="background:none;border:none;color:var(--tw);cursor:pointer;font-size:.7rem;font-weight:700">✎ Сменить</button>
       </div>
       <div id="donateLoginEditWrap" style="display:none;gap:.4rem;flex-wrap:wrap">
@@ -2009,8 +2017,9 @@ body.low .donation-alert-icon{animation:none}
         <div class="chat-msgs" id="chatMsgs"></div>
 
         <!-- Экран авторизации чата -->
-        <div id="chatNickScreen" style="padding:.8rem 1rem;border-top:1px solid var(--border);background:rgba(145,71,255,.04);display:flex;align-items:center;justify-content:center">
+        <div id="chatNickScreen" style="padding:.8rem 1rem;border-top:1px solid var(--border);background:rgba(145,71,255,.04);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.45rem">
           <button onclick="enterAsGuest()" style="padding:.7rem 2rem;border-radius:50px;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;transition:opacity .2s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">👤 Войти как гость</button>
+          <div class="chat-auth-alt"><button type="button" onclick="openGlobalAuth()">Войти в аккаунт</button> · <button type="button" onclick="openGlobalAuth('register')">Создать профиль</button><span> — с уровнями и XP</span></div>
         </div>
 
         <!-- Поле ввода (после входа) -->
@@ -2364,7 +2373,7 @@ body.low .donation-alert-icon{animation:none}
           <div class="auth-err" id="gauthResetErr"></div>
         </div>
         <div style="font-size:.72rem;color:var(--muted);margin-top:1rem;text-align:center;line-height:1.6">
-          <a href="#" id="gauthSwitchLink" onclick="switchAuthTab(event.target.dataset.to);return false" data-to="register" style="color:var(--tw);text-decoration:underline;cursor:pointer">Нет аккаунта? Зарегистрироваться</a>
+          <a href="#" id="gauthSwitchLink" class="auth-switch" onclick="switchAuthTab(event.target.dataset.to);return false" data-to="register">Нет аккаунта? Зарегистрироваться</a>
         </div>
       </div>
     </div>

@@ -44,8 +44,20 @@ ${noAds ? '' : '<script async src="https://pagead2.googlesyndication.com/pagead/
     <a href="/games">Игры</a>
     <a href="/#/chat">Чат</a>
     <a href="/#/forum">Форум</a>
+    <a class="vip" href="/vip">✨ VIP</a>
     <a class="sub" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">Подписаться</a>
   </nav>
+  <details class="mmenu"><summary aria-label="Меню">☰</summary><div class="mm">
+    <a href="/#/home">🏠 Главная</a>
+    <a href="/videos">🎬 Все видео</a>
+    <a href="/topics">🗂 Игры канала</a>
+    <a href="/games">🎮 Игры онлайн</a>
+    <a href="/#/games/words">🔤 Слово дня</a>
+    <a href="/#/chat">💬 Чат</a>
+    <a href="/#/forum">📋 Форум</a>
+    <a href="/vip">✨ VIP</a>
+    <a href="/#/profile">👤 Профиль / Войти</a>
+  </div></details>
 </header>
 ${body}
 <footer class="foot">
@@ -55,6 +67,7 @@ ${body}
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
 </footer>
 ${script ? `<script>${script}</script>` : ''}
+<script>document.addEventListener('click',function(e){var d=document.querySelector('details.mmenu[open]');if(d&&!d.contains(e.target))d.open=false});</script>
 <script src="/js/core/ads-core.js"></script>
 <script src="/js/core/surprise.js" defer></script>
 <script src="/js/features/secrets.js" defer></script>
@@ -76,6 +89,15 @@ a{color:inherit}
 .top nav a{text-decoration:none;color:rgba(240,240,248,.75)}
 .top nav a:hover{color:#fff}
 .top nav .sub{padding:.45rem .9rem;border-radius:10px;background:var(--yt);color:#fff}
+.top nav .vip{color:#ffd166}
+.top nav{margin-left:auto}
+.mmenu{display:none;position:relative;margin-left:.5rem}
+.mmenu summary{list-style:none;cursor:pointer;width:42px;height:42px;display:flex;align-items:center;justify-content:center;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.04);font-size:1.15rem;user-select:none}
+.mmenu summary::-webkit-details-marker{display:none}
+.mmenu[open] summary{border-color:var(--accent)}
+.mm{position:absolute;right:0;top:calc(100% + 8px);min-width:230px;display:flex;flex-direction:column;padding:.4rem;border-radius:16px;background:#16161f;border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.65)}
+.mm a{display:flex;align-items:center;min-height:44px;padding:.5rem .9rem;border-radius:10px;font-size:.9rem;font-weight:700;text-decoration:none;color:var(--text)}
+.mm a:hover{background:rgba(255,255,255,.06)}
 .wrap{max-width:1000px;margin:0 auto;padding:1.6rem 1.2rem 3rem}
 .narrow{max-width:640px;text-align:center;padding-top:5rem}
 .narrow h1{margin-bottom:.8rem}
@@ -125,5 +147,5 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 #d37SecretToast.show{opacity:1;transform:translate(-50%,0)}
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{text-decoration:none}
-@media(max-width:600px){.top nav a:not(.sub){display:none}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}
+@media(max-width:600px){.top nav a:not(.sub){display:none}.mmenu{display:block}.top{gap:.5rem;padding:.6rem .9rem}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}
 `;

@@ -46,7 +46,7 @@
       const a = $('a[data-route="' + r + '"]', links);
       if (a) panel.appendChild(a);
     });
-    links.insertBefore(wrap, $('.nav-donate', links));
+    links.insertBefore(wrap, $('.nav-vip', links) || $('.nav-donate', links));
 
     const ind = document.createElement('span');
     ind.className = 'nav-ind';
