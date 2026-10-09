@@ -2200,3 +2200,7 @@ button,.bt-item,.dc-btn,.hub-card{-webkit-user-select:none;user-select:none}
   .footer-links a{display:inline-flex;align-items:center;min-height:36px;padding:.35rem .7rem;border-radius:10px;background:rgba(255,255,255,.03);font-size:.7rem}
   .footer-links a::after{display:none}
 }
+
+/* Аватар с рамкой за уровень — ровно одно кольцо: без цветного свечения роли/VIP вокруг картинки
+   (мягкое красное свечение у админа читалось как второе тонкое кольцо). Роль видна по значку у ника */
+.profile-avatar-glow[class*="lv-frame-"],body.low .profile-avatar-glow[class*="lv-frame-"]{box-shadow:0 18px 40px -14px rgba(0,0,0,.7)!important}

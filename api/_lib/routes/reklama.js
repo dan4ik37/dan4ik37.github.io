@@ -7,7 +7,7 @@ import { TOPICS } from '../topics.js';
 
 const TG = 'https://t.me/+LE25p4pQojkyYjli';
 const VK = 'https://vk.com/dan4ik37';
-const MAIL = 'dan4ik37@gmail.com';
+const MAIL = 'dan4ik37k@gmail.com';
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
 
 export default async function handler(req, res) {

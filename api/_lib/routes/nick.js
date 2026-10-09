@@ -30,7 +30,7 @@ export default function handler(req, res) {
     <div class="nk-row"><span>Стиль</span><div>${opt('style', STYLES, 'cool')}</div></div>
     <div class="nk-row"><span>Украшение</span><div>${opt('decor', DECOR, 'none')}</div></div>
     <div class="nk-list" id="nkList">${examples[0].list.concat(examples[1].list).map(n => `<button type="button" class="nk-nick">${esc(n)}</button>`).join('')}</div>
-    <div class="nk-act"><button type="button" class="btn btn-acc" id="nkMore">🎲 Ещё варианты</button><span class="muted" id="nkCopied"></span></div>
+    <div class="nk-act"><button type="button" class="btn btn-acc" id="nkMore">🎲 Ещё варианты</button><a class="btn btn-ghost" id="nkFonts" href="/tools/fonts">✒️ Красивым шрифтом</a><span class="muted" id="nkCopied"></span></div>
   </section>
   <div data-ad="seo_game" hidden></div>
   <section class="box"><h2>Примеры ников по стилям</h2>
@@ -54,7 +54,7 @@ export default function handler(req, res) {
   document.querySelectorAll('[data-decor]').forEach(function(b){ b.onclick=function(){ decor=b.dataset.decor; document.querySelectorAll('[data-decor]').forEach(function(x){x.classList.toggle('on',x===b)}); draw(); }; });
   document.getElementById('nkMore').onclick=draw;
   list.addEventListener('click',function(e){ var b=e.target.closest('.nk-nick'); if(!b) return; var t=b.textContent;
-    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ info.textContent='✓ «'+t+'» скопирован'; b.classList.add('ok'); setTimeout(function(){b.classList.remove('ok')},900); },function(){ prompt('Скопируй ник:',t); });
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ info.textContent='✓ «'+t+'» скопирован'; var fl=document.getElementById('nkFonts'); if(fl) fl.href='/tools/fonts?t='+encodeURIComponent(t); b.classList.add('ok'); setTimeout(function(){b.classList.remove('ok')},900); },function(){ prompt('Скопируй ник:',t); });
     if(window.va) window.va('event',{name:'nick_copy',data:{style:style}}); });
 })();`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');

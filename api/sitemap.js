@@ -37,6 +37,7 @@ export default async function handler(req, res) {
       url(`${SITE}/games`, 'weekly', '0.9'),
       ...GAME_PAGES.map(g => url(`${SITE}/games/${g.id}`, 'monthly', '0.9')),
       url(`${SITE}/tools/nick`, 'monthly', '0.8'),
+      url(`${SITE}/tools/fonts`, 'monthly', '0.8'),
       url(`${SITE}/videos`, 'daily', '0.8'),
       url(`${SITE}/topics`, 'weekly', '0.8'),
       ...TOPICS.flatMap(t => {

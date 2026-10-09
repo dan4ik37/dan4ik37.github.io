@@ -16,7 +16,8 @@
 // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (см. api/_lib/webpush.js).
 import { storeConfigured, sbSelect, sbUpsert, sbDelete, timedFetch } from './_lib/store.js';
 import { vapidConfigured, sendPush } from './_lib/webpush.js';
-import { getUploads } from './_lib/yt.js';
+import { getUploads, SITE } from './_lib/yt.js';
+import { indexNow } from './_lib/indexnow.js';
 
 const TWITCH = 'dan4ik37';
 const HOUR = 3600e3;
@@ -72,7 +73,10 @@ async function checkVideo(prev, deadline) {
   }
 
   await saveState('last_video', cur);   // сначала запоминаем — повторный запуск не задвоит рассылку
-  if (now - Date.parse(latest.publishedAt) > VIDEO_MAX_AGE_MS) return { status: 'too_old', id: latest.id };
+  // Новый ролик — сразу в Яндекс и Bing (IndexNow), не ждём, пока робот сам дойдёт до страницы
+  let indexed = null;
+  try { indexed = await indexNow([`${SITE}/v/${latest.id}`, `${SITE}/videos`, `${SITE}/`]); } catch (e) { indexed = 'error'; }
+  if (now - Date.parse(latest.publishedAt) > VIDEO_MAX_AGE_MS) return { status: 'too_old', id: latest.id, indexed };
 
   const sent = await broadcast('want_videos', {
     title: '🎬 Новое видео на канале dan4ik37',
@@ -81,7 +85,7 @@ async function checkVideo(prev, deadline) {
     image: latest.thumb || undefined,
     tag: 'video-' + latest.id,
   }, deadline);
-  return { status: 'sent', id: latest.id, ...sent };
+  return { status: 'sent', id: latest.id, indexed, ...sent };
 }
 
 // ── Начало стрима ──
