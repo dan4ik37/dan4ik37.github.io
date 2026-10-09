@@ -79,6 +79,10 @@
       "destination": "/api/pages?page=cps"
     },
     {
+      "source": "/tools/wheel",
+      "destination": "/api/pages?page=wheel"
+    },
+    {
       "source": "/quiz",
       "destination": "/api/pages?page=quiz"
     },
