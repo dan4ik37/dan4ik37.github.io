@@ -354,15 +354,42 @@ function switchChat(type,btn){
     document.getElementById('chat-local').style.display='flex';
     document.getElementById('chatSubtitle').textContent='Сайт';
   } else if(type==='twitch'){
-    if(!twFr.src){
-      const isMob = /Mobi|Android/i.test(navigator.userAgent);
-      twFr.src=`https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}${isMob?'':'&darkpopout'}&migration=true`;
+    // Не по twFr.src: у iframe без адреса свойство src — это адрес самой страницы (не пустая строка),
+    // из-за этого раньше Twitch не загружался никогда, а внутри открывалась копия сайта
+    if(!twFr.dataset.loaded){
+      // darkpopout — тёмная тема, как у сайта (на телефоне тоже работает)
+      twFr.src=`https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout&migration=true`;
+      twFr.dataset.loaded='1';
     }
     twFr.style.cssText='display:block;width:100%;height:100%;border:none;min-height:320px;flex:1';
     twFr.classList.add('active');
     document.getElementById('chatSubtitle').textContent='Twitch';
   }
 }
+
+// ── Чат на весь экран (кнопка ⛶ в шапке чата): удобно держать телефон рядом во время стрима ──
+// Экран не гаснет (Wake Lock API, где поддерживается), Esc или ✕ — выйти.
+let chatWakeLock = null;
+async function toggleChatFull(force){
+  const on = typeof force === 'boolean' ? force : !document.body.classList.contains('chat-full');
+  if (on && !/^#\/chat/.test(location.hash)) location.hash = '#/chat';
+  document.body.classList.toggle('chat-full', on);
+  const btn = document.getElementById('chatFullBtn');
+  if (btn) { btn.textContent = on ? '✕' : '⛶'; btn.title = on ? 'Выйти из полноэкранного чата' : 'Чат на весь экран (экран не будет гаснуть)'; btn.setAttribute('aria-label', btn.title); }
+  try {
+    if (on && 'wakeLock' in navigator) chatWakeLock = await navigator.wakeLock.request('screen');
+    else if (!on && chatWakeLock) { await chatWakeLock.release(); chatWakeLock = null; }
+  } catch (e) { chatWakeLock = null; }
+  const m = document.getElementById('chatMsgs'); if (m) m.scrollTop = m.scrollHeight;
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('chat-full')) toggleChatFull(false); });
+// Ушли из чата — выйти из полноэкранного режима; вернулись на вкладку — снова не гасить экран
+window.addEventListener('hashchange', () => { if (!/^#\/chat/.test(location.hash) && document.body.classList.contains('chat-full')) toggleChatFull(false); });
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && document.body.classList.contains('chat-full') && 'wakeLock' in navigator) {
+    try { chatWakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+});
 
 function showChatInput() {
   document.getElementById('chatNickScreen').style.display = 'none';

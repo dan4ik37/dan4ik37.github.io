@@ -1971,6 +1971,7 @@ body.low .donation-alert-icon{animation:none}
       <div style="display:flex;align-items:center;gap:.6rem;margin-left:auto">
         <div class="chat-subtitle" id="chatSubtitle">Сайт</div>
         <div class="chat-online"><div class="chat-online-dot"></div><span id="chatOnlineCount">0</span> онлайн</div>
+        <button class="chat-auth-btn chat-full-btn" id="chatFullBtn" aria-label="Чат на весь экран" onclick="toggleChatFull()" title="Чат на весь экран (экран не будет гаснуть)">⛶</button>
         <button class="chat-auth-btn" aria-label="Поиск по чату" onclick="toggleChatSearch()" title="Поиск по чату" style="background:none;border:1px solid var(--border);border-radius:8px;width:28px;height:28px;color:var(--muted);cursor:pointer;font-size:.8rem">🔍</button>
         <button class="chat-auth-btn" id="chatAuthBtn" aria-label="Вход для модераторов" onclick="openGlobalAuth()" title="Вход для модераторов" style="display:none">⚙</button>
       </div>
@@ -2037,7 +2038,7 @@ body.low .donation-alert-icon{animation:none}
       </div>
 
       <!-- Twitch чат -->
-      <iframe class="chat-frame" id="chat-twitch" src="" allowfullscreen allow="autoplay; encrypted-media; clipboard-write" sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"></iframe>
+      <iframe class="chat-frame" id="chat-twitch" title="Чат Twitch" allowfullscreen allow="autoplay; encrypted-media; clipboard-write" sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"></iframe>
     </div>
   </div>
 </div>

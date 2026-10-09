@@ -2062,3 +2062,23 @@ body.high .nick-rainbow{animation:nickRainbow 4s linear infinite}
 .dc-claim-act{display:flex;gap:.4rem}
 .dc-claim-act button{border:none;border-radius:8px;padding:.45rem .75rem;font:700 .72rem 'Montserrat',sans-serif;cursor:pointer;color:#fff}
 .dc-ok{background:#16a34a}.dc-no{background:rgba(255,255,255,.08)}
+
+/* ═══ Чат на телефоне: на весь экран между шапкой и нижним меню (было окошко 420px, видно ~5 сообщений) ═══ */
+@media(max-width:768px){
+  /* шапка сайта на телефоне закреплена поверх страницы (54px) — отступаем под неё */
+  body[data-route="chat"] #chat{padding-top:62px!important;padding-bottom:0}
+  body[data-route="chat"] #chat .sec-title,body[data-route="chat"] #chat .divider{display:none}
+  body[data-route="chat"] #chat .chat-wrap{height:calc(100dvh - 62px - 58px - .7rem - env(safe-area-inset-bottom));min-height:380px}
+  body[data-route="chat"] .chat-frame{min-height:0}
+  body[data-route="chat"] #perfToggle{display:none!important}
+}
+/* Шапка чата на телефоне: название в одну строку, «Сайт/Twitch» не дублируем (есть вкладки) — иначе 🔍 обрезалась */
+@media(max-width:480px){.chat-header{padding:.7rem .8rem;gap:.5rem}.chat-title{font-size:1rem;letter-spacing:1px;white-space:nowrap}#chatSubtitle{display:none}.chat-header .chat-auth-btn{flex:none}}
+/* Кнопка ⛶ и полноэкранный чат (toggleChatFull в chat.js) */
+.chat-full-btn{background:none;border:1px solid var(--border);border-radius:8px;width:30px;height:30px;color:var(--text);cursor:pointer;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center}
+body.chat-full{overflow:hidden}
+/* у #chat свой слой (.wrap: position:relative; z-index:1) — без этого шапка сайта и подвал рисуются поверх чата */
+body.chat-full #chat{z-index:9500!important}
+body.chat-full #chat .chat-wrap{position:fixed;inset:0;height:100dvh!important;min-height:0;border-radius:0;z-index:9500;border:0;padding-bottom:env(safe-area-inset-bottom)}
+body.chat-full #bottomTabbar,body.chat-full #perfToggle,body.chat-full #scrollTop,body.chat-full .chat-toast{display:none!important}
+body.chat-full .chat-full-btn{border-color:var(--accent);color:#fff}
