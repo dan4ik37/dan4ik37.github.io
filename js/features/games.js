@@ -290,7 +290,7 @@ function gamesDailyDot(){
   if (dot) dot.hidden = !!wordsToday()?.done;
 }
 // «Тест дня» на главной — по кругу от номера дня (тесты — api/_lib/quizzes.js, страницы /quiz/<slug>)
-const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
+const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['game', '🕹', 'Какая ты игра?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['poppy', '🧸', 'Кто ты из Poppy Playtime?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
 
 function renderToday(){
   const box = document.getElementById('today');

@@ -86,7 +86,7 @@ function hub(res) {
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Тесты</span></nav>
   <h1>Тесты: кто ты из игр?</h1>
-  <p class="lead">Короткие тесты по играм с канала dan4ik37 — Майнкрафт, FNAF, Роблокс — и тест для зрителей. 8 вопросов, минута времени, результатом можно поделиться с друзьями.</p>
+  <p class="lead">Короткие тесты по играм с канала dan4ik37 — Майнкрафт, FNAF, Роблокс, Poppy Playtime, — «Какая ты игра?» для всех и тест для зрителей. 8 вопросов, минута времени, результатом можно поделиться с друзьями.</p>
   <div class="qz-cards">${QUIZZES.map(card).join('')}</div>
   <div data-ad="seo_game" hidden></div>
   <aside class="join"><div><b>Хочешь поиграть с друзьями?</b><span>«5 букв» со словом дня, морской бой, города, шашки — бесплатно, по ссылке.</span></div><a class="btn btn-acc" href="/games">🎮 Игры</a></aside>
@@ -95,8 +95,8 @@ function hub(res) {
     itemListElement: QUIZZES.map((q, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/quiz/${q.slug}`, name: q.title })) };
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
   return res.status(200).send(page({
-    title: 'Тесты: какой ты моб из Майнкрафта, кто ты из FNAF и Роблокса | dan4ik37',
-    description: 'Бесплатные тесты по играм: какой ты моб из Майнкрафта, кто ты из FNAF, кто ты в Роблоксе и какой ты зритель dan4ik37. 8 вопросов — и результат, которым можно поделиться.',
+    title: 'Тесты: какой ты моб из Майнкрафта, кто ты из FNAF, Роблокса и Poppy Playtime | dan4ik37',
+    description: 'Бесплатные тесты по играм: какой ты моб из Майнкрафта, кто ты из FNAF и Poppy Playtime, кто ты в Роблоксе, какая ты игра. 8 вопросов — и результат, которым можно поделиться.',
     url, image: SITE + '/img/games/games.png', ld, body, css: CSS
   }));
 }
