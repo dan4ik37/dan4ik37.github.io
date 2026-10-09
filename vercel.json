@@ -47,6 +47,10 @@
       "destination": "/api/pages?page=vip"
     },
     {
+      "source": "/about",
+      "destination": "/api/pages?page=about"
+    },
+    {
       "source": "/reklama",
       "destination": "/api/pages?page=reklama"
     },

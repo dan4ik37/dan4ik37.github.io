@@ -154,7 +154,7 @@ export function getChannelStats() {
     const d = await api(`channels?part=statistics,snippet&forHandle=${encodeURIComponent(HANDLE)}`);
     const it = d.items?.[0];
     if (!it) throw new Error('Канал не найден');
-    return { ...it.statistics, publishedAt: it.snippet.publishedAt, thumb: it.snippet.thumbnails?.high?.url || '' };
+    return { ...it.statistics, publishedAt: it.snippet.publishedAt, thumb: it.snippet.thumbnails?.high?.url || '', title: it.snippet.title || 'Dan4ik37', handle: it.snippet.customUrl || '@dan4ik37yt' };
   });
 }
 // Просмотры роликов (до 50 id за запрос): [{ id, viewCount, likeCount }]

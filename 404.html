@@ -12,7 +12,7 @@
 // Vercel отдаёт эту страницу на любой несуществующий адрес (404.html в корне).
 (function () {
   var p = location.pathname.replace(/\/+$/, '');
-  var m = /^\/(home|chat|profile|shorts|forum|donate|ideas|lfg|about|poll|soundboard|ads)(\/.*)?$/i.exec(p);
+  var m = /^\/(home|chat|profile|shorts|forum|donate|ideas|lfg|poll|soundboard|ads)(\/.*)?$/i.exec(p);
   if (m) location.replace('/#/' + m[1].toLowerCase() + (m[2] || '') + location.search);
 })();
 </script>

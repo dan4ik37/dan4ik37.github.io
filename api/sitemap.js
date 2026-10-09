@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     ? vids.map(v => url(`${SITE}/v/${esc(v.id)}`, '', '0.4', esc(String(v.publishedAt).slice(0, 10))))
     : [
       url(`${SITE}/`, 'daily', '1.0'),
+      url(`${SITE}/about`, 'weekly', '0.9'),
       url(`${SITE}/games`, 'weekly', '0.9'),
       ...GAME_PAGES.map(g => url(`${SITE}/games/${g.id}`, 'monthly', '0.9')),
       url(`${SITE}/tools/nick`, 'monthly', '0.8'),
