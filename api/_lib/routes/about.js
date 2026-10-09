@@ -70,6 +70,7 @@ export default async function handler(req, res) {
   <section class="box"><h2>Сайт dan4ik37</h2><ul>
     <li><a href="/#/chat">Живой чат</a> — общий чат сайта и чат Twitch, уровни и XP за активность.</li>
     <li><a href="/games">Онлайн-игры с друзьями</a> — «5 букв» со словом дня, морской бой, города, шашки и другие, по ссылке без регистрации.</li>
+    <li><a href="/quiz">Тесты</a> — какой ты моб из Майнкрафта, кто ты из FNAF и Роблокса, какой ты зритель.</li>
     <li>Полезное для игроков — <a href="/tools/nick">генератор ников</a>, <a href="/tools/fonts">шрифты для ника</a>, <a href="/tools/cps">CPS тест</a>.</li>
     <li><a href="/vip">VIP</a> за поддержку — цветной ник, стикеры, своя тема сайта.</li>
   </ul></section>

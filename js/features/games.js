@@ -20,6 +20,7 @@ const GAMES = [
   { id: 'ttt',      icon: '❌', title: 'Крестики-нолики', desc: 'Против бота (последний уровень не проигрывает), вдвоём на экране или онлайн с другом.', scripts: ['js/games/room.js', 'js/games/tictactoe.js'], top: 'ttt_hard', topLabel: 'ничьих/побед у непобедимого', color: '#9147ff' },
   { id: 'reaction', icon: '⚡', title: 'Реакция',          desc: 'Жми, как только экран станет зелёным. 5 попыток — узнай свою скорость и сравни с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/reaction.js'], top: 'reaction', topLabel: 'очков (1000 − мс)', color: '#22c55e' },
   { id: 'clicker',  icon: '👆', title: 'Кликер',          desc: 'Кликай на скорость и собирай комбо. Старая добрая классика сайта.', href: '#/clicker', color: '#ff9f43' },
+  { id: 'quiz',     icon: '🧩', title: 'Тесты',           desc: 'Какой ты моб из Майнкрафта? Кто ты из FNAF и Роблокса? 8 вопросов — и результат, которым можно поделиться.', href: '/quiz', color: '#38bdf8' },
   { id: 'cps',      icon: '🖱', title: 'CPS тест',        desc: 'Сколько кликов в секунду ты успеешь? 1, 5 или 10 секунд, звание и рекорд — и вызов другу.', href: '/tools/cps', color: '#f59e0b' },
   { id: 'fonts',    icon: '✒️', title: 'Шрифты для ника', desc: 'Сделай ник красивым: 𝓓𝓪𝓷, 𝕯𝖆𝖓, Ⓓⓐⓝ, ꧁ник꧂ и 70+ символов. Нажал — скопировано.', href: '/tools/fonts', color: '#c084fc' },
 ];

@@ -79,6 +79,14 @@
       "destination": "/api/pages?page=cps"
     },
     {
+      "source": "/quiz",
+      "destination": "/api/pages?page=quiz"
+    },
+    {
+      "source": "/quiz/:slug",
+      "destination": "/api/pages?page=quiz&slug=:slug"
+    },
+    {
       "source": "/topics",
       "destination": "/api/pages?page=topic"
     },

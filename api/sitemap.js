@@ -8,6 +8,7 @@
 import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
 import { GAME_PAGES } from './_lib/games-seo.js';
 import { TOPICS } from './_lib/topics.js';
+import { QUIZZES } from './_lib/quizzes.js';
 
 const url = (loc, freq, prio, lastmod) =>
   `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}${freq ? `<changefreq>${freq}</changefreq>` : ''}<priority>${prio}</priority></url>`;
@@ -40,6 +41,8 @@ export default async function handler(req, res) {
       url(`${SITE}/tools/nick`, 'monthly', '0.8'),
       url(`${SITE}/tools/fonts`, 'monthly', '0.8'),
       url(`${SITE}/tools/cps`, 'monthly', '0.8'),
+      url(`${SITE}/quiz`, 'monthly', '0.8'),
+      ...QUIZZES.map(q => url(`${SITE}/quiz/${q.slug}`, 'monthly', '0.8')),
       url(`${SITE}/videos`, 'daily', '0.8'),
       url(`${SITE}/top`, 'weekly', '0.8'),
       url(`${SITE}/topics`, 'weekly', '0.8'),

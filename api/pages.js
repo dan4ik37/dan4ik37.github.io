@@ -14,8 +14,9 @@ import cps from './_lib/routes/cps.js';
 import about from './_lib/routes/about.js';
 import feed from './_lib/routes/feed.js';
 import top from './_lib/routes/top.js';
+import quiz from './_lib/routes/quiz.js';
 
-const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top };
+const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];
