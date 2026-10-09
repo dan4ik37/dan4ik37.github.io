@@ -301,12 +301,21 @@ function subscribeRealtime() {
     });
 }
 
+// Возвращает null, если сообщение принято, иначе — текст ошибки для человека
 async function sendMsgToSupabase(nick, text, color, role, vipTier) {
-  if (!sbClient) return false;
+  if (!sbClient) return chatSendError(null);
   try {
     const { error } = await sbClient.from('messages').insert([{ nick, text, color, role, vip_tier: vipTier || null, user_id: currentUser?.id || null }]);
-    return !error;
-  } catch(e) { return false; }
+    return error ? chatSendError(error) : null;
+  } catch(e) { return chatSendError(e); }
+}
+// Ошибки сервера про флуд/длину/стикеры уже по-русски (server-hardening.sql, vip-balance.sql) — их показываем как есть
+function chatSendError(err){
+  const m = String(err?.message || err || '');
+  if (!navigator.onLine || !sbClient || /fetch|network|timeout|load failed/i.test(m)) return 'нет связи с сервером — проверь интернет';
+  if (/[а-яё]/i.test(m)) return m;
+  if (/row-level security|permission denied|42501/i.test(m)) return 'нет прав писать в чат (бан или нужно войти заново)';
+  return 'сервер не принял сообщение — попробуй ещё раз';
 }
 
 function showChatStatus(msg, good = true, autoHideMs = 3000) {
@@ -650,6 +659,7 @@ async function sendMsg(){
   }
 
   if (!isStaff) registerGoodMsg();
+  const prevSent = lastSentText;
   lastSentText = text;
   inp.value='';
   const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
@@ -660,11 +670,13 @@ async function sendMsg(){
   // каждое сообщение. См. getVipTier() в profile.js.
   const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
 
-  if (sbClient) {
-    const ok = await sendMsgToSupabase(chatNick, text, col, role, vipTierKey);
-    if (!ok) addMsg(chatNick, text, col, true, false, null, role, currentUser?.id, vipTierKey);
-  } else {
-    addMsg(chatNick, text, col, true, false, null, role, currentUser?.id, vipTierKey);
+  // Раньше при отказе сервера (флуд, бан, нет связи) сообщение рисовалось у себя как отправленное — его никто
+  // не видел, а человек думал, что написал. Теперь: текст возвращается в поле и видно, почему не ушло.
+  const err = await sendMsgToSupabase(chatNick, text, col, role, vipTierKey);
+  if (err) {
+    lastSentText = prevSent;                 // иначе повторная отправка того же текста упрётся в «не повторяй»
+    if (!inp.value) inp.value = text;
+    showChatStatus('⚠️ Не отправлено: ' + err, false, 6000);
   }
 }
 

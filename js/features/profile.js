@@ -111,15 +111,27 @@ async function renderProfilePage(viewUserId){
   profileViewedId = targetId;
   const isOwn = targetId === currentUser?.id;
 
-  let profile;
+  let profile, loadErr = null;
   try {
-    const { data } = await (await sbProfiles()).select('*').eq('id', targetId).single();
-    profile = data;
-  } catch(e) { profile = null; }
+    const { data, error } = await (await sbProfiles()).select('*').eq('id', targetId).single();
+    profile = data; loadErr = error;
+  } catch(e) { profile = null; loadErr = e; }
+  // Раньше здесь затирался весь contentEl.innerHTML — пропадали #profileNick и остальные блоки, и после одного
+  // «не найден» ни один профиль не открывался до перезагрузки страницы. Теперь — отдельная плашка поверх.
+  let nf = document.getElementById('profileNotFound');
   if (!profile) {
-    contentEl.innerHTML = '<p style="text-align:center;color:var(--muted);padding:3rem 0">Профиль не найден</p>';
+    if (!nf) { nf = document.createElement('div'); nf.id = 'profileNotFound'; nf.className = 'profile-not-found'; contentEl.before(nf); }
+    // PGRST116 — такой строки нет, 22P02 — в ссылке не id; остальное — сеть/сервер
+    const missing = !loadErr || ['PGRST116', '22P02'].includes(loadErr.code);
+    const safeId = String(targetId).replace(/[^0-9a-f-]/gi, '');
+    nf.innerHTML = missing
+      ? '<div class="pnf-ico">👤</div><b>Профиль не найден</b><p>Аккаунт удалён или в ссылке ошибка.</p><a href="#/home" class="pf-btn pf-btn-sm" onclick="if(history.length>1){event.preventDefault();history.back()}">← Назад</a>'
+      : `<div class="pnf-ico">📡</div><b>Не удалось загрузить профиль</b><p>Проверь интернет и попробуй ещё раз.</p><button class="pf-btn pf-btn-sm" onclick="renderProfilePage('${safeId}')">↻ Повторить</button>`;
+    nf.style.display = 'block';
+    contentEl.style.display = 'none';
     return;
   }
+  if (nf) nf.style.display = 'none';
 
   document.getElementById('profileNick').textContent = profile.nick || 'Без ника';
   window.d37NickFx?.markEl(document.getElementById('profileNick'), targetId);

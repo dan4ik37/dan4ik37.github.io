@@ -133,6 +133,7 @@ async function openGame(id, param){
   gamesActive = id;
   gamesParam = param || null;
   hub.hidden = true; stage.hidden = false;
+  document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
   document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
   try {
@@ -149,6 +150,7 @@ async function openGame(id, param){
 function closeGame(fromRouter){
   unmountActiveGame();
   gamesActive = null;
+  document.body.classList.remove('game-on');
   const hub = document.getElementById('gamesHub');
   const stage = document.getElementById('gamesStage');
   if (hub) hub.hidden = false;
@@ -169,6 +171,7 @@ function unmountActiveGame(){
 // Ушли со страницы игр — останавливаем таймеры/анимации игры
 window.addEventListener('hashchange', () => {
   if (gamesActive && !/^#\/games/.test(location.hash)) { unmountActiveGame(); gamesActive = null; }
+  if (!/^#\/games\/./.test(location.hash)) document.body.classList.remove('game-on');
 });
 
 // ── Локальная статистика (работает и без входа) ──

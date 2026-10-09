@@ -2082,3 +2082,45 @@ body.chat-full #chat{z-index:9500!important}
 body.chat-full #chat .chat-wrap{position:fixed;inset:0;height:100dvh!important;min-height:0;border-radius:0;z-index:9500;border:0;padding-bottom:env(safe-area-inset-bottom)}
 body.chat-full #bottomTabbar,body.chat-full #perfToggle,body.chat-full #scrollTop,body.chat-full .chat-toast{display:none!important}
 body.chat-full .chat-full-btn{border-color:var(--accent);color:#fff}
+
+/* «Профиль не найден / не загрузился» (renderProfilePage) — отдельная плашка, разметку профиля не трогаем */
+.profile-not-found{text-align:center;color:var(--muted);padding:3rem 1rem;display:none}
+.profile-not-found .pnf-ico{font-size:2.4rem;margin-bottom:.6rem}
+.profile-not-found b{display:block;color:var(--text);font-size:1.1rem;margin-bottom:.3rem}
+.profile-not-found p{margin:0 0 1rem;font-size:.85rem}
+
+/* Телефон, открыта игра (body.game-on, games.js): нижнее меню прячем — оно закрывало низ поля, а промах
+   мимо «ВВОД» в «5 букв» уводил из игры. Выйти — кнопка ← в шапке игры или меню ☰ */
+@media(max-width:768px){
+  body.game-on #bottomTabbar{display:none!important}
+  body.game-on{padding-bottom:env(safe-area-inset-bottom)}
+  body.game-on #games-page{padding-top:64px}
+  body.game-on .gm-stage{padding-top:.6rem}
+  /* «5 букв»: поле по высоте экрана — чтобы клавиатура целиком помещалась без прокрутки.
+     --wd-chrome — всё, что выше и ниже поля (шапка сайта, шапка игры, режимы, подсказка, клавиатура);
+     высота поля ≈ 1,2 × ширины */
+  .wd{--wd-chrome:404px}
+  .wd-grid{width:min(100%,330px,max(200px,calc((100dvh - var(--wd-chrome)) / 1.2)))}
+}
+/* Низкий экран (360×640 и т.п.): клавиатура и отступы плотнее */
+@media(max-width:768px) and (max-height:700px){
+  .wd{--wd-chrome:384px;gap:.45rem}
+  .wd-kb{gap:5px}
+  .wd-kb button{height:40px}
+}
+
+/* iPhone увеличивает страницу при фокусе на поле с шрифтом мельче 16px и не возвращает обратно
+   (чат, вход, личные сообщения, «Города»…) — на телефоне все поля 16px */
+@media(max-width:768px){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),textarea,select{font-size:16px!important}
+}
+
+/* Чат на сенсорном экране: кнопки сообщения (😊 📌 🔨 ✕) висели поверх строки с ником и значками (Lv, VIP).
+   Ставим их в общий ряд справа — пузырь сообщения сам сужается, ничего не перекрыто */
+@media(hover:none){
+  .chat-msg .msg-react-btn,.chat-msg .msg-del-btn,.chat-msg .msg-ban-btn,.chat-msg .msg-pin-btn{position:static;flex:none;align-self:flex-start;margin-left:-.3rem}
+  .chat-msg .msg-pin-btn{opacity:1;display:flex;order:1}
+  .chat-msg .msg-react-btn{order:2}
+  .chat-msg .msg-ban-btn{order:3}
+  .chat-msg .msg-del-btn{order:4}
+}
