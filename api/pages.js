@@ -10,8 +10,9 @@ import ids from './_lib/routes/ids.js';
 import reklama from './_lib/routes/reklama.js';
 import vip from './_lib/routes/vip.js';
 import fonts from './_lib/routes/fonts.js';
+import cps from './_lib/routes/cps.js';
 
-const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts };
+const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

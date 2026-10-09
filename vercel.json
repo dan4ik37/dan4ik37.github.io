@@ -67,6 +67,10 @@
       "destination": "/api/pages?page=fonts"
     },
     {
+      "source": "/tools/cps",
+      "destination": "/api/pages?page=cps"
+    },
+    {
       "source": "/topics",
       "destination": "/api/pages?page=topic"
     },
