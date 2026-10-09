@@ -71,6 +71,7 @@ function collectRoutes(){
 const SITE_PAGES = [
   { kind:'page', label:'👤 Кто такой dan4ik37', sub:'о авторе денчик ютубер стример канал подписчики', href:'/about' },
   { kind:'page', label:'✨ VIP — что даёт и как получить', sub:'вип донат подписка цветной ник стикеры', href:'/vip' },
+  { kind:'page', label:'🏆 Самые популярные видео', sub:'топ лучшие популярные просмотры шортсы', href:'/top' },
   { kind:'page', label:'🎬 Все видео канала — архив', sub:'архив все ролики по годам старые видео', href:'/videos' },
   { kind:'page', label:'🗂 Игры канала — ролики по играм', sub:'темы майнкрафт роблокс хоррор гта', href:'/topics' },
   { kind:'page', label:'📜 История канала по годам', sub:'история первое видео годы', href:'/history' },

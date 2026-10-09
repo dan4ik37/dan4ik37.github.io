@@ -65,7 +65,7 @@ export default async function handler(req, res) {
   ${first && last ? `<section class="box"><h2>Первое и последнее видео</h2><ul class="ab-vids">
     <li><small>Самое раннее в списке загрузок · ${esc(ruDate(first.publishedAt))}</small><a href="/v/${esc(first.id)}">${esc(first.title)}</a></li>
     <li><small>Самое новое · ${esc(ruDate(last.publishedAt))}</small><a href="/v/${esc(last.id)}">${esc(last.title)}</a></li>
-  </ul><p class="muted"><a href="/videos">Все видео по годам →</a></p></section>` : ''}
+  </ul><p class="muted"><a href="/top">Самые популярные видео →</a> · <a href="/videos">Все видео по годам →</a></p></section>` : ''}
   <section class="box"><h2>Где найти dan4ik37</h2><div class="ab-soc">${SOCIAL.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}</div></section>
   <section class="box"><h2>Сайт dan4ik37</h2><ul>
     <li><a href="/#/chat">Живой чат</a> — общий чат сайта и чат Twitch, уровни и XP за активность.</li>

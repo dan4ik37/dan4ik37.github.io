@@ -41,6 +41,7 @@ export default async function handler(req, res) {
       url(`${SITE}/tools/fonts`, 'monthly', '0.8'),
       url(`${SITE}/tools/cps`, 'monthly', '0.8'),
       url(`${SITE}/videos`, 'daily', '0.8'),
+      url(`${SITE}/top`, 'weekly', '0.8'),
       url(`${SITE}/topics`, 'weekly', '0.8'),
       ...TOPICS.flatMap(t => {
         const n = vids.filter(v => t.re.test(v.title)).length;

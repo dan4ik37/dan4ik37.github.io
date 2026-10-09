@@ -91,6 +91,10 @@
       "destination": "/api/pages?page=videos"
     },
     {
+      "source": "/top",
+      "destination": "/api/pages?page=top"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },
