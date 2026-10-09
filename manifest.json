@@ -1,7 +1,8 @@
 {
+  "id": "/",
   "name": "dan4ik37 — официальный сайт",
   "short_name": "dan4ik37",
-  "description": "Видео, стримы и донаты dan4ik37 — YouTube, TikTok, Twitch, VK, Telegram",
+  "description": "Видео, стримы, чат и онлайн-игры dan4ik37 — YouTube, TikTok, Twitch, VK, Telegram",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -12,5 +13,10 @@
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Чат", "short_name": "Чат", "description": "Живой чат сайта и Twitch", "url": "/#/chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Слово дня — 5 букв", "short_name": "5 букв", "url": "/#/games/words", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Игры", "short_name": "Игры", "description": "Онлайн-игры с друзьями", "url": "/#/games", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
   ]
 }
