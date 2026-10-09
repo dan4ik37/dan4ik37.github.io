@@ -2221,3 +2221,16 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
   background:rgba(255,209,102,.08);color:#ffd166;font:800 .8rem 'Montserrat',sans-serif;cursor:pointer}
 .wd-remind[hidden]{display:none}
 .wd-remind:disabled{opacity:.8;cursor:default}
+
+/* «Сегодня на сайте» — 6 карточек: ПК 3×2, планшет 2×3; телефон — слово дня во всю ширину, остальные в 2 столбца
+   (высота блока как была при 4 карточках в столбик) */
+.today-grid{grid-template-columns:1.2fr 1fr 1fr}
+@media(max-width:768px){
+  .today-grid{grid-template-columns:1fr 1fr}
+  .today-card.hot-slot{grid-column:1/-1}
+  .today-card:not(.hot-slot){padding:.6rem .7rem;gap:.5rem}
+  .today-card:not(.hot-slot) .ti{font-size:1.3rem}
+  .today-card:not(.hot-slot) b{font-size:.8rem}
+}
+@media(max-width:1100px) and (min-width:769px){.today-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){.today-grid>.today-card:last-child{grid-column:1/-1}}

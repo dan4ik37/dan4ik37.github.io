@@ -289,6 +289,9 @@ function gamesDailyDot(){
   const dot = document.getElementById('btGamesDot');
   if (dot) dot.hidden = !!wordsToday()?.done;
 }
+// «Тест дня» на главной — по кругу от номера дня (тесты — api/_lib/quizzes.js, страницы /quiz/<slug>)
+const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
+
 function renderToday(){
   const box = document.getElementById('today');
   if (!box) return;
@@ -296,11 +299,15 @@ function renderToday(){
   const state = !s ? 'Угадай слово из 5 букв — новое каждый день'
     : s.done ? (s.win ? `✅ Угадано с ${s.rows.length}-й попытки · завтра новое` : '❌ Не угадано · завтра новое слово')
     : `Попытка ${s.rows.length + 1} из 6 — доиграй!`;
-  const n = GAMES.length;
+  // Игры — без инструментов (колесо, тесты, шрифты, CPS ведут на свои страницы)
+  const n = GAMES.filter(g => !g.href || g.href[0] === '#').length;
+  const qz = QUIZ_DAY[wordsDayNo() % QUIZ_DAY.length];
   box.innerHTML = `<div class="today-grid">
-      <a class="today-card${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
+      <a class="today-card hot-slot${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
+      <a class="today-card" href="/quiz/${qz[0]}"><span class="ti">${qz[1]}</span><span class="tt"><b>Тест дня</b><small>${esc(qz[2])}</small></span></a>
       <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
-      <a class="today-card" href="/videos"><span class="ti">📼</span><span class="tt"><b>Все видео</b><small>Весь архив канала по годам</small></span></a>
+      <a class="today-card" href="/tools/wheel"><span class="ti">🎡</span><span class="tt"><b>Колесо фортуны</b><small>Во что поиграть? Кто моет посуду? Крути!</small></span></a>
+      <a class="today-card" href="/top"><span class="ti">🏆</span><span class="tt"><b>Лучшие видео</b><small>Самые популярные ролики канала</small></span></a>
       <button type="button" class="today-card" onclick="d37Surprise(this)"><span class="ti">🎲</span><span class="tt"><b>Удиви меня</b><small>Случайное видео из почти 6000</small></span></button>
     </div>`;
   gamesDailyDot();
