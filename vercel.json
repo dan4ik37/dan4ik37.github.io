@@ -86,6 +86,14 @@
       "destination": "/api/sitemap"
     },
     {
+      "source": "/sitemap-videos.xml",
+      "destination": "/api/sitemap?part=videos"
+    },
+    {
+      "source": "/sitemap-pages.xml",
+      "destination": "/api/sitemap?part=pages"
+    },
+    {
       "source": "/privacy",
       "destination": "/privacy.html"
     }
