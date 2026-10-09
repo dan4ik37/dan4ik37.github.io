@@ -105,6 +105,13 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 - «Шрифты для ника»: `/tools/fonts` → api/_lib/routes/fonts.js, стили — `makeFonts()` в api/_lib/fonts.js (тот же код в браузер
   через toString(); `?t=ник` — открыть со своим ником). «CPS тест»: `/tools/cps` → routes/cps.js (`?s=&n=` — вызов, noindex).
   Обе — карточками в «Играх» (GAMES с href), в поиске (SITE_PAGES), подвале и карте сайта.
+- «Тесты» `/quiz`, `/quiz/<slug>` → routes/quiz.js, данные — api/_lib/quizzes.js (8 вопросов × 4 ответа, 6 результатов, очки
+  поровну; новый тест = объект в QUIZZES). Результат — ссылка `?r=<id>` («Твой друг получил…», noindex).
+- «Колесо фортуны» `/tools/wheel` → routes/wheel.js (crypto-рандом заранее, колесо доворачивается; `?o=a|b|c` — свои варианты, noindex).
+- «Самые популярные видео» `/top` → routes/top.js (просмотры из снимка, шортсы — #shorts или ≤3 мин с 15.10.2024; без isGambling).
+- Главная берёт ролики с `/api/feed` (routes/feed.js, CDN 15 мин) — квота YouTube не зависит от числа посетителей;
+  не ответил — loadYT() по-старому идёт в YouTube API сам (так и локально, где /api нет).
+- Все серверные страницы — одна функция api/pages.js (ROUTES) + rewrite в vercel.json. Функций сейчас 10 из 12.
 - «Генератор ников для игр»: `/tools/nick` → `api/tool-nick.js` (SEO: «генератор ников», «ник для роблокс»), словари и
   генерация — `api/_lib/nicks.js` (тот же код уходит в браузер через toString(); примеры в HTML — с зерном, не меняются).
 - Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы + `SITE_PAGES` (серверные страницы: /vip,
