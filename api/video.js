@@ -8,6 +8,7 @@
 // (страница лёгкая, просмотр при воспроизведении засчитывается каналу).
 import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, esc, fmtDuration, fmtCount } from './_lib/yt.js';
 import { page, YT_CHANNEL } from './_lib/page.js';
+import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
 
 export default async function handler(req, res) {
@@ -18,7 +19,9 @@ export default async function handler(req, res) {
 
   let v, more;
   try {
-    [v, more] = await Promise.all([getVideo(id), getUploads(200).catch(() => [])]);
+    // Сначала снимок (без квоты YouTube API), API — только для роликов новее снимка
+    const snap = videoFromSnapshot(id);
+    [v, more] = await Promise.all([snap || getVideo(id), getUploads(200).catch(() => [])]);
   } catch (e) {
     // YouTube API недоступен/квота — не кэшируем надолго, отдаём ссылку на ролик
     res.setHeader('Cache-Control', 'public, s-maxage=300');

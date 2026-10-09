@@ -25,11 +25,11 @@ export default async function handler(req, res) {
   const first = vids[vids.length - 1], last = vids[0];
   const subs = ch ? num(ch.subscriberCount) : '', views = ch ? fmtCount(ch.viewCount) : '', count = ch ? num(ch.videoCount) : num(vids.length);
 
-  const lead = `dan4ik37 (читается «Данчик37») — русскоязычный ютубер и стример, автор игрового YouTube-канала ${ch?.title || 'Dan4ik37'} (${ch?.handle || '@dan4ik37yt'}).`
+  const lead = `dan4ik37 (читается «Денчик37») — русскоязычный ютубер и стример, автор игрового YouTube-канала ${ch?.title || 'Dan4ik37'} (${ch?.handle || '@dan4ik37yt'}).`
     + (since ? ` Канал ведётся с ${since}: ${count} видео, ${subs} подписчиков и ${views} просмотров (данные YouTube на ${today}).` : '');
   const faq = [
     ['Кто такой dan4ik37?', lead],
-    ['Как читается ник dan4ik37?', '«Данчик37»: цифра 4 заменяет букву «ч», как часто делают в никах.'],
+    ['Как читается ник dan4ik37?', '«Денчик37»: цифра 4 заменяет букву «ч», как часто делают в никах.'],
     ...(ch ? [['Сколько подписчиков у dan4ik37?', `На YouTube-канале ${ch.title} — ${subs} подписчиков и ${views} просмотров (на ${today}).`]] : []),
     ...(top.length ? [['Во что играет dan4ik37?', `Больше всего роликов на канале по играм: ${top.join(', ')}. Ещё — хорроры, инди и шортсы с моментами со стримов.`]] : []),
     ['Где стримит dan4ik37?', 'Прямые эфиры — на Twitch (twitch.tv/dan4ik37), ролики и шортсы — на YouTube, клипы — в TikTok. Анонсы — в Telegram и ВКонтакте.'],
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
   ];
   const ld = { '@context': 'https://schema.org', '@graph': [
     { '@type': 'ProfilePage', url, name: 'Кто такой dan4ik37', inLanguage: 'ru', dateModified: new Date().toISOString().slice(0, 10), mainEntity: { '@id': SITE + '/#person' } },
-    { '@type': 'Person', '@id': SITE + '/#person', name: 'dan4ik37', alternateName: ['Данчик37', 'Dan4ik37', ch?.handle || '@dan4ik37yt'], url: SITE + '/',
+    { '@type': 'Person', '@id': SITE + '/#person', name: 'dan4ik37', alternateName: ['Денчик37', 'Dan4ik37', ch?.handle || '@dan4ik37yt'], url: SITE + '/',
       image: ch?.thumb || SITE + '/icon-512.png', description: lead, jobTitle: 'Ютубер и стример', knowsLanguage: 'ru',
       sameAs: SOCIAL.map(s => s[1]),
       ...(ch ? { agentInteractionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/FollowAction', userInteractionCount: +ch.subscriberCount } } : {}) },
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   const body = `
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Кто такой dan4ik37</span></nav>
-  <h1>Кто такой dan4ik37 (Данчик37)</h1>
+  <h1>Кто такой dan4ik37 (Денчик37)</h1>
   <p class="lead">${esc(lead)}</p>
   <dl class="ab-facts">
     ${fact('YouTube-канал', `<a href="${YT_CHANNEL}" target="_blank" rel="noopener">${esc(ch?.title || 'Dan4ik37')} · ${esc(ch?.handle || '@dan4ik37yt')}</a>`)}
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', ch ? 'public, s-maxage=21600, stale-while-revalidate=604800' : 'public, s-maxage=600');
   res.status(200).send(page({
-    title: 'Кто такой dan4ik37 (Данчик37) — ютубер и стример | dan4ik37',
+    title: 'Кто такой dan4ik37 (Денчик37) — ютубер и стример | dan4ik37',
     description: lead.slice(0, 300),
     url, image: ch?.thumb || SITE + '/icon-512.png', ld, body, css: CSS, ogType: 'profile'
   }));

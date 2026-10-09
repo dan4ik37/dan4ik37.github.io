@@ -60,11 +60,11 @@ export function getVideo(id) {
 
 // Последние загрузки: [{ id, title, thumb, publishedAt }]. max — до ALL_UPLOADS (по 50 за запрос).
 // ttlMs — сколько держать в памяти инстанса; api/push-check.js берёт свежие (0).
-// Больше 200 — снимок архива + только новые ролики сверху (обычно 1 запрос вместо ~120; холодная загрузка
+// Больше 50 — снимок архива + только новые ролики сверху (обычно 1 запрос вместо ~120; холодная загрузка
 // /videos была 25–35 с). YouTube API недоступен (квота кончилась) — отдаём снимок как есть, страницы не падают.
 export function getUploads(max = 50, ttlMs = 3600e3) {
   return cached('uploads:' + max, ttlMs, async () => {
-    const snap = max > 200 ? snapshotList() : [];
+    const snap = max > 50 ? snapshotList() : [];
     if (!snap.length) return fetchUploads(max);
     const known = new Set(snap.map(v => v.id));
     let head = [];
@@ -98,6 +98,13 @@ async function fetchUploads(max, stopAt = null) {
     if (stop || !page) break;
   }
   return out.slice(0, max).sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+}
+
+// Ролик из снимка по id: { id, title, thumb, publishedAt } или null (новый ролик — его в снимке нет)
+let snapById = null;
+export function snapshotById(id) {
+  if (!snapById) snapById = new Map(snapshotList().map(v => [v.id, v]));
+  return snapById.get(id) || null;
 }
 
 let snapCache = null;

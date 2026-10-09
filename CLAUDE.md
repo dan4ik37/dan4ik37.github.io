@@ -47,6 +47,7 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 - IndexNow (Яндекс, Bing → и поиск ChatGPT): ключ — файл `/351f920e862a819020eb7eb5ea035ac2.txt` (НЕ удалять),
   `api/_lib/indexnow.js`; новые ролики — автоматически из push-check; все страницы — `node scripts/indexnow.mjs [pages|videos|all]`
   (09.10 отправлены все 6073). Не чаще раза в несколько дней целиком.
+- Ник по-русски — «Денчик37» (так хочет владелец), не «Данчик37».
 - «Кто такой dan4ik37» — `/about` (api/_lib/routes/about.js): только настоящие данные (YouTube + список роликов). Личных фактов
   (имя, возраст, город) нет — добавлять, только если владелец сам даст. `/llms.txt` — справка для ИИ.
 - Главное для выхода в поиск — внешние ссылки: владельцу добавить dan4ik37.vercel.app в описание YouTube, Twitch, ВК, Telegram.
@@ -85,7 +86,9 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   `/videos` → `api/pages.js?page=videos` (`api/_lib/routes/videos.js`) (архив всех роликов, 240 на страницу, `?p=N`), `/sitemap.xml` → `api/sitemap.js` (rewrites в
   `vercel.json`). Весь архив (~6000 роликов) — `getUploads(ALL_UPLOADS)`: СНИМОК `api/_lib/uploads-snapshot.js` + только новые
   ролики сверху через API (было ~120 запросов и 25–35 с на холодную). Снимок пересобрать: `node scripts/snapshot-uploads.mjs`
-  (если на канале удалили/скрыли много роликов или вышло больше 200 новых). Страница ролика — `getUploads(200)` (квота YouTube API!). Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
+  (если на канале удалили/скрыли много роликов или вышло больше 200 новых). Страница ролика /v/<id> — из снимка
+  `api/_lib/video-details.js` (описание, длительность, просмотры, теги; `videoFromSnapshot` в video-snap.js) без квоты API;
+  в API — только ролики новее снимка. Тот же скрипт пересобирает оба файла. Квота YouTube общая с главной сайта (тот же ключ)! Похожие ролики — `relatedVideos()` в yt.js. Аудит и план — `docs/SITE_AUDIT.md`.
   Темы (игры канала): `/topics`, `/topic/<slug>` → `api/topic.js`; список и правила подбора по названию — `api/_lib/topics.js`
   (тема ≥ 30 роликов; новая игра на канале → новая запись). Страница ролика показывает «Ещё по теме».
 - «🎲 Удиви меня» — `js/core/surprise.js` (`d37Surprise(btn)`, и в SPA, и на серверных страницах): случайный /v/<id> из всего
