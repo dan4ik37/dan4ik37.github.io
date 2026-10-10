@@ -1,8 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════
---  ИГРА «УГАДАЙ ИГРУ ПО ЭМОДЗИ» — ключи emoji / emoji_duel для game_result (рекорды, XP за победу)
+--  НОВЫЕ ИГРЫ — ключи для game_result (рекорды, XP за победу): «Угадай игру по эмодзи» (emoji, emoji_duel),
+--  «Орда» (horde, horde_duel, horde_coop).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
---  Функции целиком скопированы из games.sql + новые ключи. До запуска игра работает, просто без XP и таблицы рекордов.
---  Проверка: select public.game_score_cap('emoji'); → 2000
+--  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
+--  До запуска игры работают, просто без XP и таблицы рекордов.
+--  Проверка: select public.game_score_cap('horde'); → 30000
 -- ═══════════════════════════════════════════════════════════════════
 
 create or replace function public.game_score_cap(p_game text)
@@ -25,6 +27,7 @@ returns int language sql immutable as $$
     when p_game in ('words', 'words_free') then 6
     when p_game = 'words_duel' then 699
     when p_game in ('emoji', 'emoji_duel') then 2000
+    when p_game in ('horde', 'horde_duel', 'horde_coop') then 30000
     else null end;
 $$;
 
@@ -44,5 +47,6 @@ returns int language sql immutable as $$
     when 'memory' then 10 when 'memory_duel' then 10
     when 'words' then 15 when 'words_free' then 3 when 'words_duel' then 10
     when 'emoji' then 10 when 'emoji_duel' then 10
+    when 'horde' then 20 when 'horde_duel' then 15 when 'horde_coop' then 20
     else 0 end;
 $$;

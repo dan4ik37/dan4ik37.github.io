@@ -2305,3 +2305,121 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .em-marks{font-size:1.2rem;letter-spacing:.1em}
 @media(max-width:400px){.em-opts button{font-size:.82rem}}
 .em-q.done{font-size:clamp(1.4rem,6vw,2rem);letter-spacing:0}
+
+/* ── Мой персонаж и гардероб (js/core/avatar.js, js/games/wardrobe.js) ── */
+.gm-me{display:flex;align-items:center;gap:.8rem;margin:0 0 1rem;padding:.6rem .9rem;border-radius:16px;background:linear-gradient(135deg,rgba(155,109,255,.16),rgba(255,111,181,.1));border:1px solid rgba(155,109,255,.35)}
+.gm-me[hidden]{display:none}
+.gm-me-char{flex:none;width:56px;height:56px;display:block}
+.gm-me-char canvas{width:56px;height:56px;display:block}
+.gm-me-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:.1rem;font-size:.8rem;color:var(--muted)}
+.gm-me-body>b{color:var(--text);font-size:.92rem}
+.gm-me-body .js-coins{color:#ffd166}
+.gm-me-btn{flex:none;border:none;border-radius:11px;padding:.55rem .85rem;font:800 .76rem 'Montserrat',sans-serif;cursor:pointer;color:#1b1626;background:linear-gradient(135deg,#ffd166,#ff9f43);text-decoration:none;white-space:nowrap}
+.gm-me-btn.ghost{color:var(--text);background:rgba(255,255,255,.08);border:1px solid var(--border)}
+@media(max-width:480px){.gm-me{flex-wrap:wrap}.gm-me-body{flex-basis:calc(100% - 70px)}.gm-me-btn{flex:1;text-align:center}}
+
+.wr{display:flex;flex-direction:column;gap:.9rem}
+.wr-top{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:1rem;align-items:start}
+.wr-stage{border-radius:18px;overflow:hidden;background:radial-gradient(circle at 50% 30%,#2a2140,#120e1c);border:1px solid var(--border)}
+.wr-cv{display:block;width:100%;height:220px}
+.wr-side{display:flex;flex-direction:column;gap:.6rem}
+.wr-wallet{font-size:1.5rem;font-weight:900;color:#ffd166}
+.wr-wallet span{font-size:.8rem;color:var(--muted);font-weight:700}
+.wr-earn,.wr-acts,.wr-try-row{display:flex;flex-wrap:wrap;gap:.45rem}
+.wr-btn{border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);border-radius:11px;padding:.5rem .8rem;font:800 .75rem 'Montserrat',sans-serif;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:.3rem}
+.wr-btn:hover:not(:disabled){border-color:var(--accent)}
+.wr-btn.gold{border:none;color:#1b1626;background:linear-gradient(135deg,#ffd166,#ff9f43)}
+.wr-btn:disabled{opacity:.5;cursor:default}
+.wr-done{font-size:.75rem;color:var(--muted);align-self:center}
+.wr-try{padding:.7rem .8rem;border-radius:14px;background:rgba(255,209,102,.08);border:1px dashed rgba(255,209,102,.5);display:flex;flex-direction:column;gap:.45rem;font-size:.8rem}
+.wr-try[hidden]{display:none}
+.wr-try-vip,.wr-try-need{font-size:.72rem;color:var(--muted)}
+.wr-try-vip a{color:#ffd166}
+.wr-tabs{display:flex;gap:.35rem;overflow-x:auto;scrollbar-width:none;padding-bottom:.1rem}
+.wr-tabs::-webkit-scrollbar{display:none}
+.wr-tabs button{flex:none;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);border-radius:999px;padding:.45rem .8rem;font:800 .74rem 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
+.wr-tabs button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.wr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:.5rem}
+.wr-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.45rem .3rem .5rem;border-radius:14px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);cursor:pointer;font-family:'Montserrat',sans-serif}
+.wr-card canvas{width:66px;height:66px}
+.wr-card b{font-size:.7rem;line-height:1.2;text-align:center}
+.wr-card:hover{border-color:rgba(255,255,255,.3)}
+.wr-card.on{border-color:#4ade80;background:rgba(74,222,128,.1)}
+.wr-card.trying{border-color:#ffd166;background:rgba(255,209,102,.1)}
+.wr-card.locked canvas{opacity:.85}
+.wr-tag{font-size:.62rem;font-weight:800;color:var(--muted)}
+.wr-tag.on{color:#4ade80}
+.wr-tag.price{color:#ffd166}
+@media(max-width:640px){.wr-top{grid-template-columns:1fr}.wr-tabs button span{display:none}.wr-tabs button{font-size:1rem;padding:.4rem .7rem}.wr-grid{grid-template-columns:repeat(auto-fill,minmax(84px,1fr))}}
+
+/* ── «Орда» (js/games/horde.js) ── */
+.hd{display:flex;flex-direction:column;gap:.6rem}
+.hd-wrap{position:relative;border-radius:16px;overflow:hidden;background:#16111f;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.hd-cv{display:block;width:100%;touch-action:none;cursor:crosshair}
+.hd-hud{position:absolute;top:16px;right:8px;display:flex;gap:6px;z-index:2}
+.hd-hud[hidden]{display:none}
+.hd-btn{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(10,8,16,.55);color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.hd-ov{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;gap:.7rem;padding:1.1rem 1rem;background:rgba(12,8,20,.86);overflow-y:auto;text-align:center;color:#fff}
+.hd-ov>:first-child{margin-top:auto}
+.hd-ov>:last-child{margin-bottom:auto}
+.hd-ov[hidden]{display:none}
+.hd-full{position:fixed!important;inset:0;z-index:10050;border-radius:0}
+.hd-lock,.hd-lock body{overflow:hidden!important}
+.hd-head{display:flex;align-items:center;gap:.8rem;text-align:left;max-width:520px}
+.hd-me{flex:none;display:flex;flex-direction:column;align-items:center;gap:.1rem;text-decoration:none;color:#ffd166;font-size:.62rem;font-weight:800}
+.hd-me img{width:72px;height:auto}
+.hd-title{font-family:var(--font-display,inherit);font-size:1.45rem;font-weight:900;letter-spacing:.5px}
+.hd-sub{font-size:.82rem;color:#d4cde4;line-height:1.45;max-width:460px}
+.hd-label{font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#a99fc0}
+.hd-big{font-size:3rem;line-height:1}
+.hd-hint{font-size:.72rem;color:#b9b0cc;max-width:420px;line-height:1.45}
+.hd-hint a{color:#ffd166}
+.hd-best{font-size:.78rem;color:#d4cde4}
+.hd-best b{color:#ffd166}
+.hd-heroes{display:grid;grid-template-columns:repeat(3,1fr);gap:.45rem;width:min(100%,520px)}
+.hd-hero{position:relative;display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.55rem .35rem;border-radius:14px;border:1.5px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;font-family:'Montserrat',sans-serif}
+.hd-hero .ic{font-size:1.7rem;line-height:1.1}
+.hd-hero b{font-size:.78rem}
+.hd-hero small{font-size:.62rem;color:#bdb6cf}
+.hd-hero.sel{border-color:#4ade80;background:rgba(74,222,128,.12)}
+.hd-hero.locked .ic{filter:grayscale(1);opacity:.6}
+.hd-price{font-size:.64rem;font-weight:800;color:#ffd166}
+.hd-tag{font-size:.6rem;font-weight:800;color:#4ade80}
+.hd-wallet{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.45rem;font-size:.9rem;font-weight:800;color:#ffd166}
+.hd-mini{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;border-radius:10px;padding:.45rem .75rem;font:800 .72rem 'Montserrat',sans-serif;cursor:pointer}
+.hd-mini.gold{border:none;color:#1b1626;background:linear-gradient(135deg,#ffd166,#ff9f43)}
+.hd-lv{display:grid;gap:.5rem;width:min(100%,460px)}
+.hd-card{display:flex;align-items:center;gap:.75rem;text-align:left;padding:.7rem .8rem;border-radius:14px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;cursor:pointer;font-family:'Montserrat',sans-serif;touch-action:manipulation}
+.hd-card:hover,.hd-card:focus-visible{border-color:var(--accent);background:rgba(255,255,255,.12)}
+.hd-card .ic{font-size:1.8rem;flex:none;width:2.3rem;text-align:center}
+.hd-card-b{flex:1;min-width:0}
+.hd-card b{display:block;font-size:.9rem}
+.hd-card small{display:block;color:#cfc8de;font-size:.74rem;line-height:1.35;margin-top:.1rem}
+.hd-card .tag{font-size:.64rem;font-weight:800;color:#ffd166;white-space:nowrap}
+.hd-card kbd{flex:none;font:800 .65rem 'Montserrat',sans-serif;color:#a99fc0;border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:.1rem .35rem}
+.hd-card.evo{border-color:#ffd166;background:linear-gradient(135deg,rgba(255,209,102,.18),rgba(255,159,67,.1))}
+@media(pointer:coarse){.hd-card kbd{display:none}}
+.hd-col{display:flex;flex-direction:column;gap:.5rem;width:min(100%,360px)}
+.hd-col button{width:100%}
+.hd-alt{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;border-radius:12px;padding:.7rem 1rem;font:800 .82rem 'Montserrat',sans-serif;cursor:pointer}
+.hd-alt:disabled,.hd-ov button:disabled{opacity:.45;cursor:default}
+.hd-stats{display:flex;gap:1rem;font-size:.85rem;color:#d4cde4}
+.hd-stats b{color:#fff;font-size:1.05rem}
+.hd-score{font-size:1.5rem;font-weight:900;color:#ffd166}
+.hd-coins{font-size:.9rem;font-weight:800;color:#ffd166}
+.hd-vip{font-size:.65rem;padding:.1rem .4rem;border-radius:6px;background:rgba(255,209,102,.2);margin-left:.3rem}
+.hd-x2{border:none;border-radius:12px;padding:.65rem 1rem;font:800 .8rem 'Montserrat',sans-serif;cursor:pointer;color:#1b1626;background:linear-gradient(135deg,#ffd166,#ff9f43)}
+.hd-build{display:flex;flex-wrap:wrap;justify-content:center;gap:.3rem;max-width:420px}
+.hd-build span{position:relative;font-size:1.25rem;padding:.2rem .3rem;border-radius:8px;background:rgba(255,255,255,.07)}
+.hd-build i{position:absolute;right:-2px;bottom:-4px;font-style:normal;font-size:.55rem;font-weight:900;color:#ffd166}
+.hd-shop{display:grid;gap:.45rem;width:min(100%,440px)}
+.hd-up{display:flex;align-items:center;gap:.6rem;text-align:left;padding:.55rem .7rem;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
+.hd-up .ic{font-size:1.5rem;flex:none}
+.hd-up-b{flex:1;min-width:0;display:flex;flex-direction:column}
+.hd-up-b b{font-size:.84rem}
+.hd-up-b small{font-size:.68rem;color:#bdb6cf}
+.hd-pips{font-size:.7rem;letter-spacing:2px;color:#ffd166}
+.hd-buy{flex:none;border:none;border-radius:10px;padding:.5rem .7rem;font:800 .74rem 'Montserrat',sans-serif;cursor:pointer;color:#1b1626;background:linear-gradient(135deg,#ffd166,#ff9f43)}
+.hd-max{font-size:.72rem;font-weight:900;color:#4ade80}
+.hd-note{text-align:center}
+@media(max-width:420px){.hd-heroes{grid-template-columns:repeat(2,1fr)}.hd-title{font-size:1.25rem}.hd-head{flex-direction:column;text-align:center}}

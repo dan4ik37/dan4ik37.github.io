@@ -6,8 +6,10 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '16';
+const GAMES_VER = '17';
 const GAMES = [
+  { id: 'horde',    icon: '🧟', title: 'Орда',            desc: 'Выживи 10 минут против орды монстров, как в Vampire Survivors: оружие бьёт само, ты выбираешь улучшения. Герои, боссы, монеты — и дуэль с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/horde.js'], top: 'horde', topLabel: 'очков за забег', color: '#a855f7' },
+  { id: 'wardrobe', icon: '🎭', title: 'Мой персонаж',   desc: 'Собери своего героя для игр сайта: цвет, глаза, шапки, питомцы и следы. Части — за монеты из игр.', scripts: ['js/games/wardrobe.js'], color: '#ff6fb5' },
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'words',    icon: '🔤', title: '5 букв',          desc: 'Угадай слово из 5 букв за 6 попыток. Новое слово дня каждый день, свободная игра и соревнование с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/words-data.js', 'js/games/words.js'], top: 'words', topLabel: 'лучшая попытка в слове дня', color: '#22c55e' },
   { id: 'guess',    icon: '🎬', title: 'Угадай видео',    desc: 'По кусочку превью угадай ролик dan4ik37. 10 раундов, чем быстрее — тем больше очков. Можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/guess-video.js'], top: 'guess', topLabel: 'из 10', color: '#ff2d55' },
@@ -91,9 +93,30 @@ function renderGamesHub(){
   document.querySelectorAll('#gamesTopPeriod button').forEach(b => b.classList.toggle('active', (b.dataset.week === '1') === gamesTopWeek));
   renderGamesTop();
   renderDailyQuest();
+  renderGamesMe();
   const hubAd = document.getElementById('gamesHubAd');
   if (hubAd && !hubAd.dataset.adDone) { hubAd.dataset.adDone = '1'; window.D37Ads?.render(hubAd, 'games_hub'); }
 }
+
+// «Мой персонаж» над карточками: персонаж, монеты, бонус дня, вход в гардероб (js/core/avatar.js, coins.js)
+function renderGamesMe(){
+  const box = document.getElementById('gamesMe');
+  if (!box || !window.D37Char || !window.D37Coins) return;
+  box.hidden = false;
+  box.innerHTML = `<a class="gm-me-char" href="#/games/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
+    <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет</span></div>
+    ${D37Coins.canDaily() ? '<button type="button" class="gm-me-btn" onclick="gamesDailyBonus(this)">🎁 Бонус дня</button>' : ''}
+    <a class="gm-me-btn ghost" href="#/games/wardrobe">🎭 Гардероб</a>`;
+  D37Char.draw(box.querySelector('canvas').getContext('2d'), D37Char.look(), 56, 106, 88, { t: 0 });
+}
+async function gamesDailyBonus(btn){
+  btn.disabled = true;
+  const r = await D37Coins.daily();
+  if (r?.ok) { gameToast(`🎁 Бонус дня: +${r.got} 🪙`); gameSfx('win'); }
+  renderGamesMe();
+}
+window.addEventListener('d37:auth', () => { setTimeout(() => { if (document.getElementById('gamesMe') && !document.getElementById('gamesHub')?.hidden) renderGamesMe(); }, 600); });
+window.D37Char?.on(() => { if (!document.getElementById('gamesHub')?.hidden) renderGamesMe(); });
 
 // Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с
 let gamesAdAt = 0;
@@ -199,7 +222,7 @@ function gameBestLabel(id, best){
   if (id === 'catch') return `${Number(best).toLocaleString('ru')} очков`;
   if (id === 'sea') return `${best} из 20 палуб`;
   if (id === 'snake') return `${best} ${best % 10 === 1 && best % 100 !== 11 ? 'яблоко' : [2, 3, 4].includes(best % 10) && ![12, 13, 14].includes(best % 100) ? 'яблока' : 'яблок'}`;
-  if (id === 'memory' || id === 'emoji') return `${best} очков`;
+  if (id === 'memory' || id === 'emoji' || id === 'horde') return `${Number(best).toLocaleString('ru')} очков`;
   if (id === 'words') return `с ${7 - best}-й попытки`;
   return String(best);
 }
@@ -294,8 +317,8 @@ function gamesDailyDot(){
 }
 // «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
 // Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
-const WHATSNEW_VER = '2026-10-10';
-const WHATSNEW = [['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+const WHATSNEW_VER = '2026-10-10b';
+const WHATSNEW = [['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/wardrobe', '🎭', 'Свой персонаж'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
