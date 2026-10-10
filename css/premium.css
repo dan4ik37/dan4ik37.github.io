@@ -2603,3 +2603,24 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .dk-hand .dk+.dk{margin-left:-12px}
 .dk-hand.many .dk+.dk{margin-left:-22px}
 @media(max-width:480px){.dk{width:50px;height:74px}.dk.sm{width:42px;height:62px}.dk-pair{width:54px;height:74px}.dk-on{left:11px;top:10px}.dk-deck{width:76px}}
+
+/* ── «Бильярд» (js/games/pool.js) ── */
+.pl-menu{display:flex;flex-direction:column;align-items:center;gap:.75rem;text-align:center;padding:.4rem 0}
+.pl-logo{font-size:3.4rem;line-height:1}
+.pl-levels{display:flex;gap:.35rem}
+.un-n.wide{width:auto;padding:0 .8rem}
+.pl{display:flex;flex-direction:column;gap:.5rem}
+.pl-top{display:flex;align-items:stretch;gap:.5rem}
+.pl-pl{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem;padding:.45rem .6rem;border-radius:12px;background:rgba(255,255,255,.05);border:1.5px solid transparent;font-size:.78rem}
+.pl-pl.right{text-align:right;align-items:flex-end}
+.pl-pl.turn{border-color:var(--accent);box-shadow:0 0 12px var(--ac-30)}
+.pl-g{display:flex;flex-wrap:wrap;gap:.15rem;align-items:center;color:var(--muted);font-size:.7rem}
+.pl-g i{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--bc);color:#fff;font:800 .55rem 'Montserrat',sans-serif;font-style:normal;text-shadow:0 0 2px #000}
+.pl-g i.st{background:linear-gradient(180deg,#f8f8f2 0 28%,var(--bc) 28% 72%,#f8f8f2 72%)}
+.pl-vs{align-self:center;font-size:1.3rem}
+.pl-wrap{display:flex;justify-content:center;align-items:flex-start;gap:.5rem}
+.pl-cv{display:block;border-radius:14px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:crosshair}
+.pl-power{position:relative;flex:none;width:34px;align-self:stretch;min-height:200px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid var(--border);overflow:hidden;touch-action:none;cursor:ns-resize}
+.pl-power-in{position:absolute;left:0;right:0;top:0;height:0;background:linear-gradient(180deg,#22c55e,#facc15,#ef4444)}
+.pl-power span{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:.55rem;font-weight:800;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto}
+.pl-msg{font-weight:600;font-size:.8rem;line-height:1.45}
