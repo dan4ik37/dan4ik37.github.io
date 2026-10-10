@@ -1,0 +1,18 @@
+{
+    "name": "Dan4ik37.SDK.Editor",
+    "rootNamespace": "",
+    "references": [
+        "Dan4ik37.SDK"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

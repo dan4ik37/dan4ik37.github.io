@@ -1,0 +1,18 @@
+{
+  "name": "ru.dan4ik37.sdk",
+  "version": "1.0.0",
+  "displayName": "SDK Денчика (dan4ik37)",
+  "description": "Игра из Unity (WebGL) на сайте dan4ik37.vercel.app: ник игрока, очки, XP и монеты сайта, комнаты с друзьями по ссылке — кто вошёл первым, тот хост. В редакторе работает без сайта (игрок и комнаты понарошку).",
+  "unity": "2021.3",
+  "author": {
+    "name": "dan4ik37",
+    "url": "https://dan4ik37.vercel.app/#/games/unity/help"
+  },
+  "documentationUrl": "https://github.com/dan4ik37/dan4ik37.github.io/tree/main/sdk/unity",
+  "keywords": [
+    "webgl",
+    "multiplayer",
+    "dan4ik37",
+    "sdk"
+  ]
+}

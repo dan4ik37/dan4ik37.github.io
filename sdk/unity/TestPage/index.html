@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Тест SDK Денчика (без Unity)</title>
+<!-- Притворяется Unity-сборкой с SDK Денчика: говорит с сайтом по тому же протоколу, что Plugins/WebGL/D37Bridge.jslib
+     (тот же список адресов сайта, hello → init, очередь до init, только родительское окно). Нужна, чтобы проверить мост
+     сайта целиком в браузере, не собирая Unity.
+     Как проверить у себя: в корне сайта `python -m http.server 5500`, в этой папке `python -m http.server 5600`;
+     открыть http://localhost:5500/#/games/unity/new, ссылка — http://localhost:5600/index.html, «▶ Проверить».
+     Две вкладки с одной игрой (черновик в браузере: #/games/unity/play/<id>) — комната на двоих: хост, сообщения, смена хоста. -->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 12px; font: 14px/1.45 "Segoe UI", Roboto, Arial, sans-serif; background: #12101f; color: #e8e6f5; }
+  h1 { font-size: 16px; margin: 0 0 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+  button { background: #7c5cff; color: #fff; border: 0; border-radius: 8px; padding: 6px 10px; font: 600 13px inherit; font-family: inherit; cursor: pointer; }
+  button.g { background: #2a2740; }
+  input, select { background: #0b0a14; color: #fff; border: 1px solid #3a3655; border-radius: 8px; padding: 5px 8px; font: 13px inherit; font-family: inherit; }
+  .st { padding: 6px 10px; border-radius: 8px; background: #1d1a30; }
+  .ok { color: #86efac; } .bad { color: #fca5a5; } .mute { color: #9a96b8; }
+  #log { height: 170px; overflow: auto; background: #0b0a14; border-radius: 8px; padding: 6px 8px; font: 12px/1.4 Consolas, monospace; white-space: pre-wrap; }
+  #players li.host::before { content: "👑 "; }
+  img#ava { width: 40px; height: 40px; image-rendering: pixelated; vertical-align: middle; }
+</style>
+</head>
+<body>
+<h1>🧪 Тест SDK Денчика — «игра» без Unity</h1>
+<div class="st" id="status">Запуск…</div>
+<div class="row"><img id="ava" alt=""><span id="me" class="mute">игрок появится после init</span></div>
+<div class="row">
+  <button id="bScore">+10 очков</button> <span id="score">0</span>
+  <label class="mute">монеты раунда <input id="coins" type="number" min="0" max="50" value="10" style="width:60px"></label>
+  <button id="bOver">Конец раунда</button><button id="bWin">Победа</button><button class="g" id="bToast">Тост</button>
+</div>
+<div class="row">
+  <button id="bCreate">Создать комнату</button>
+  <input id="code" placeholder="код" maxlength="12" style="width:90px"><button class="g" id="bJoin">Войти</button>
+  <button class="g" id="bLeave">Выйти</button>
+  <span id="room" class="mute">не в комнате</span>
+</div>
+<ol id="players"></ol>
+<div class="row">
+  <select id="to"><option value="">всем</option></select>
+  <input id="type" value="chat" style="width:80px"><input id="data" value='{"text":"привет"}' style="flex:1;min-width:140px">
+  <label class="mute"><input type="checkbox" id="rel" checked> надёжно</label>
+  <button id="bSend">Отправить</button>
+</div>
+<div class="row">
+  <span class="mute">Проверка защиты:</span>
+  <button class="g" id="bFlood">100 сообщений сразу</button>
+  <button class="g" id="bBig">сообщение 9 КБ</button>
+  <button class="g" id="bNoMark">без d37u</button>
+  <button class="g" id="bBadType">кривой тип</button>
+</div>
+<div id="log"></div>
+<script>
+(function () {
+  'use strict';
+  // ═══ То же, что D37Bridge.jslib (менять вместе!) ═══
+  var SITES = ['https://dan4ik37.vercel.app', 'https://dan4ik37.github.io'];
+  var B = { site: '', queue: [] };
+  function allowed(o) { return typeof o === 'string' && (SITES.indexOf(o) >= 0 || /^https?:\/\/(localhost|127\.0\.0\.1)(:[0-9]{1,5})?$/.test(o)); }
+  function parentWin() { try { return window.parent && window.parent !== window ? window.parent : null; } catch (e) { return null; } }
+  function targets() {
+    var t = [], o, i;
+    try { o = window.location.ancestorOrigins; if (o && o.length && allowed(o[0])) t.push(o[0]); } catch (e) {}
+    try { o = document.referrer ? new URL(document.referrer).origin : ''; if (allowed(o) && t.indexOf(o) < 0) t.push(o); } catch (e) {}
+    for (i = 0; i < SITES.length; i++) if (t.indexOf(SITES[i]) < 0) t.push(SITES[i]);
+    return t;
+  }
+  function post(msg, raw) {
+    var p = parentWin(), t, i;
+    if (!p) return false;
+    if (!raw) msg.d37u = 1;
+    log('→ ' + JSON.stringify(msg).slice(0, 160));
+    if (B.site) { p.postMessage(msg, B.site); return true; }
+    if (msg.t === 'hello') { t = targets(); for (i = 0; i < t.length; i++) p.postMessage(msg, t[i]); return true; }
+    if (B.queue.length < 64) B.queue.push(msg);
+    return true;
+  }
+  window.addEventListener('message', function (e) {
+    var p = parentWin(), d, q, i;
+    if (!p || e.source !== p || !allowed(e.origin)) return;
+    d = e.data;
+    if (!d || typeof d !== 'object' || d.d37u !== 1 || typeof d.t !== 'string') return;
+    if (B.site && e.origin !== B.site) return;
+    if (!B.site) {
+      if (d.t !== 'init') return;
+      B.site = e.origin;
+      q = B.queue; B.queue = [];
+      for (i = 0; i < q.length; i++) p.postMessage(q[i], B.site);
+    }
+    receive(d);   // в Unity здесь SendMessage('D37Bridge', 'D37Receive', JSON.stringify(d))
+  });
+
+  // ═══ «Игра»: то, что делает D37.cs ═══
+  var $ = function (id) { return document.getElementById(id); };
+  var score = 0, room = { code: '', me: '', host: '', players: [] };
+  function log(s) { var el = $('log'); el.textContent += s + String.fromCharCode(10); el.scrollTop = el.scrollHeight; }
+  function status(html, cls) { $('status').innerHTML = html; $('status').className = 'st ' + (cls || ''); }
+  function txt(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  function receive(d) {
+    log('← ' + JSON.stringify(d).slice(0, 220));
+    if (d.t === 'init' || d.t === 'player') {
+      var p = d.player || {};
+      $('me').innerHTML = '<b>' + txt(p.nick) + '</b> · id ' + txt(p.id) + (p.guest ? ' · гость' : ' · вошёл') + (p.vip ? ' · VIP' : '');
+      $('me').className = '';
+      if (p.avatar && /^data:image\/png;base64,/.test(p.avatar)) $('ava').src = p.avatar;
+      if (d.t === 'init') status('✅ Подключено к сайту ' + txt(B.site) + (d.preview ? ' (проверка автора)' : '') + ' · игра «' + txt(d.game && d.game.title) + '», игроков до ' + txt(d.game && d.game.players), 'ok');
+    } else if (d.t === 'room.state') {
+      var old = room;
+      room = { code: d.code || '', me: d.me || '', host: d.host || '', players: d.players || [] };
+      // то же, что события D37.Room: кто пришёл, кто ушёл, новый хост
+      if (room.code && room.code !== old.code) log('   ✦ OnJoined ' + room.code);
+      if (!room.code && old.code) log('   ✦ OnLeft');
+      room.players.forEach(function (p) { if (!p.me && room.code === old.code && !old.players.some(function (o) { return o.id === p.id; })) log('   ✦ OnPlayerJoined ' + p.nick); });
+      old.players.forEach(function (o) { if (room.code === old.code && !room.players.some(function (p) { return p.id === o.id; })) log('   ✦ OnPlayerLeft ' + o.nick); });
+      if (room.host !== old.host && room.code) log('   ✦ OnHostChanged → ' + (room.host === room.me ? 'я' : room.host));
+      drawRoom();
+    } else if (d.t === 'room.msg') {
+      log('   ✦ OnMessage от ' + nickOf(d.from) + ': ' + d.type + ' ' + String(d.data).slice(0, 100));
+    } else if (d.t === 'room.error') {
+      log('   ✦ OnError ' + d.reason);
+    } else if (d.t === 'result') {
+      log('   ✦ OnResult ' + (d.ok ? '+' + d.xp + ' XP, +' + d.coins + ' монет' + (d.record ? ', рекорд' : '') : 'не засчитано: ' + d.reason) + ' · лучший ' + d.best);
+    }
+  }
+  function nickOf(id) { for (var i = 0; i < room.players.length; i++) if (room.players[i].id === id) return room.players[i].nick; return id; }
+  function drawRoom() {
+    $('room').textContent = room.code ? 'комната ' + room.code + (room.host === room.me ? ' · я хост' : ' · хост ' + nickOf(room.host)) : 'не в комнате';
+    $('players').innerHTML = room.players.map(function (p) { return '<li class="' + (p.host ? 'host' : '') + '">' + txt(p.nick) + (p.me ? ' (я)' : '') + ' <span class="mute">' + txt(p.id) + '</span></li>'; }).join('');
+    $('to').innerHTML = '<option value="">всем</option>' + room.players.filter(function (p) { return !p.me; }).map(function (p) { return '<option value="' + txt(p.id) + '">' + txt(p.nick) + (p.host ? ' (хост)' : '') + '</option>'; }).join('');
+  }
+
+  $('bScore').onclick = function () { score += 10; $('score').textContent = score; post({ t: 'score', n: score }); };
+  $('bOver').onclick = function () { post({ t: 'over', n: score, win: false, coins: +$('coins').value || 0 }); score = 0; $('score').textContent = 0; };
+  $('bWin').onclick = function () { post({ t: 'over', n: score, win: true, coins: +$('coins').value || 0 }); score = 0; $('score').textContent = 0; };
+  $('bToast').onclick = function () { post({ t: 'toast', text: 'Привет из тестовой игры! <b>теги не должны сработать</b>' }); };
+  $('bCreate').onclick = function () { post({ t: 'room.create' }); };
+  $('bJoin').onclick = function () { post({ t: 'room.join', code: $('code').value.trim().toLowerCase() }); };
+  $('bLeave').onclick = function () { post({ t: 'room.leave' }); };
+  $('bSend').onclick = function () { post({ t: 'room.send', to: $('to').value, type: $('type').value, data: $('data').value, rel: $('rel').checked }); };
+  $('bFlood').onclick = function () { for (var i = 0; i < 100; i++) post({ t: 'room.send', to: '', type: 'flood', data: String(i), rel: false }); };
+  $('bBig').onclick = function () { post({ t: 'room.send', to: '', type: 'big', data: new Array(9 * 1024 + 1).join('x'), rel: true }); };
+  $('bNoMark').onclick = function () { post({ t: 'toast', text: 'Это сообщение без d37u — сайт должен его проигнорировать' }, true); };
+  $('bBadType').onclick = function () { post({ t: 'room.send', to: '', type: 'плохой тип!', data: '{}', rel: true }); };
+
+  if (!parentWin()) {
+    status('⚠️ Страница открыта отдельно. Открой её через сайт: «➕ Добавить свою игру» → ссылка на эту страницу → «▶ Проверить».', 'bad');
+  } else {
+    status('Ждём ответ сайта… (hello отправлен на: ' + txt(targets().join(', ')) + ')');
+    post({ t: 'hello', sdk: 'test-page', unity: 'нет (тест)' });
+    setTimeout(function () { if (!B.site) status('❌ Сайт не ответил за 5 с. Адрес этой страницы должен совпадать со ссылкой игры, а сайт — быть dan4ik37.vercel.app или localhost.', 'bad'); }, 5000);
+  }
+})();
+</script>
+</body>
+</html>

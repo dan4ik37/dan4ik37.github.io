@@ -3288,3 +3288,57 @@ html.s3-open,html.s3-open body{overflow:hidden}
 body.high .s3,body.high .s3 *,body.high .wld-edit,body.high .wld-edit *{cursor:auto}
 body.high .s3 button,body.high .s3 a,body.high .s3 select,body.high .s3 label,body.high .s3 .s3-row,body.high .wld-edit button,body.high .wld-edit a{cursor:pointer}
 html.s3-open #cursorTrail,html.s3-open #cursorDot,body:has(.wld-edit) #cursorTrail,body:has(.wld-edit) #cursorDot{display:none!important}
+
+/* ── Unity-игры (js/games/unity-host.js): окно сборки нужной формы (--ar, --arn — из «формы окна»), полоса под игрой,
+   комната (код, ссылка, игроки, хост 👑), рекорды игры, страница «Как сделать». Остальное — классы «Студии игр» (st-*) ── */
+.un-hero-a{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.un-box{position:relative;width:min(100%,calc(var(--arn,1.7778) * min(76vh,720px)));aspect-ratio:var(--ar,16 / 9);margin:0 auto;border-radius:16px;overflow:hidden;background:#0d0b1a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.un-box.un-full{width:100%;aspect-ratio:auto;height:min(78vh,760px);min-height:320px}
+.un-box:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0}
+.un-box:-webkit-full-screen{width:100vw;height:100vh;aspect-ratio:auto;border-radius:0}
+.un-frame{position:absolute;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
+.un-load{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:16px;text-align:center;color:#e2e8f0;font:700 .95rem 'Montserrat',sans-serif;background:#0d0b1a}
+.un-load small{color:#94a3b8;font:600 .78rem 'Montserrat',sans-serif}
+.un-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.un-bar .un-score{margin-left:auto}
+.un-sdk{color:#94a3b8;font:700 .74rem 'Montserrat',sans-serif}
+.un-sdk.ok{color:#86efac}
+.un-sdk.warn{color:#fde68a}
+.un-note{padding:10px 12px;border-radius:12px;background:rgba(250,204,21,.1);border:1px solid rgba(250,204,21,.3);color:#fde68a;font:600 .8rem/1.45 'Montserrat',sans-serif}
+.un-note a{color:#fff}
+.un-note[hidden],.un-room[hidden],.un-top[hidden],.un-mod-link[hidden]{display:none}
+.un-room{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:14px;background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.22)}
+.un-room-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font:800 .9rem 'Montserrat',sans-serif}
+.un-room-h small{color:#94a3b8;font:600 .76rem 'Montserrat',sans-serif}
+.un-room-h code{padding:.05rem .45rem;border-radius:6px;background:rgba(255,255,255,.1);font:700 .85rem ui-monospace,Consolas,monospace;letter-spacing:.06em}
+.un-room-a{display:flex;flex-wrap:wrap;gap:6px}
+.un-seats{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px}
+.un-seats li{padding:.3rem .65rem;border-radius:999px;background:rgba(255,255,255,.07);font:600 .8rem 'Montserrat',sans-serif}
+.un-seats li.me{background:rgba(155,109,255,.25)}
+.un-seats small{color:#94a3b8}
+.un-badge{color:#7dd3fc !important}
+.un-url-hint{margin-top:-4px;font:600 .76rem/1.4 'Montserrat',sans-serif}
+.un-url-hint.ok{color:#86efac}
+.un-url-hint.bad{color:#fca5a5}
+.un-ed .st-f select{width:100%;box-sizing:border-box;padding:.55rem .7rem;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.25);color:#fff;font:600 .9rem 'Montserrat',sans-serif}
+.un-ed .st-f select option{background:#16122e}
+.un-ed .un-f2 .st-f:first-child{width:auto;flex:1}
+.un-top-list{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.un-top-list li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.04);font:600 .85rem 'Montserrat',sans-serif}
+.un-top-list li a{color:inherit;text-decoration:none}
+.un-top-list li b{margin-left:auto;color:#fde68a}
+.un-top-pl{width:26px;text-align:center}
+.un-got{font-style:normal;color:#86efac}
+.un-mod-url{word-break:break-all;color:#7dd3fc !important}
+.un-steps{margin:0;padding-left:1.3rem;display:flex;flex-direction:column;gap:12px;color:#e2e8f0;font:500 .9rem/1.55 'Montserrat',sans-serif}
+.un-steps b{font-weight:800}
+.un-steps .st-btn{margin:4px 6px 4px 0}
+.un-pre{margin:6px 0;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.35);overflow:auto;color:#c4b5fd;font:500 .78rem/1.5 ui-monospace,Consolas,monospace;white-space:pre}
+.un-help code,.un-p code{padding:0 .3rem;border-radius:5px;background:rgba(255,255,255,.08);font:600 .82em ui-monospace,Consolas,monospace}
+.un-p{margin:0;color:#cbd5e1;font:500 .88rem/1.55 'Montserrat',sans-serif}
+ul.un-p{padding-left:1.2rem;display:flex;flex-direction:column;gap:4px}
+.un-help a,.un-steps a{color:var(--accent,#a78bfa)}
+@media(max-width:640px){
+  .un-box.un-full{height:calc(100dvh - 240px);min-height:320px}
+  .un-bar .un-score{margin-left:0}
+}
