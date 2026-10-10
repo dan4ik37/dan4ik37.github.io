@@ -63,6 +63,7 @@
   const CLS = ['Part', 'Spawn', 'Light', 'Prefab', 'Model', 'Mesh', 'Script', 'Folder'];
   const MATS = ['plastic', 'smooth', 'neon', 'glass', 'metal', 'diamond', 'wood', 'planks', 'brick', 'concrete', 'cobble', 'asphalt', 'grass', 'sand', 'rock', 'dirt', 'snow', 'ice', 'marble', 'fabric', 'tiles'];
   const SHAPES = ['block', 'ball', 'cyl', 'wedge'];
+  // только булевы значения: строковое свойство с тем же именем (touch у детали студии: kill | coin | …) — не флаг, оно идёт в _extra
   const FLAGS = ['collide', 'anchored', 'shadow', 'enabled', 'click', 'touch'];
   // [ключ, вид]; номер в списке — бит маски. _flags — все да/нет одним полем, _extra — свои свойства (opts.extra) JSON
   const PROPS = [['pos', 'v3s'], ['rot', 'ang'], ['size', 'v3u'], ['color', 'col'], ['alpha', 'u8f'], ['mat', 'enum', MATS], ['shape', 'enum', SHAPES],
@@ -79,7 +80,7 @@
   // Квантованное значение свойства i у объекта (undefined — свойства нет). ctx: nidOf(sid), extra — список своих ключей
   function quant(i, o, ctx){
     const [k, kind] = PROPS[i];
-    if (kind === 'flags') { let has = 0, val = 0; FLAGS.forEach((f, j) => { if (o[f] !== undefined) { has |= 1 << j; if (o[f]) val |= 1 << j; } }); return has ? has << 8 | val : undefined; }
+    if (kind === 'flags') { let has = 0, val = 0; FLAGS.forEach((f, j) => { if (typeof o[f] === 'boolean') { has |= 1 << j; if (o[f]) val |= 1 << j; } }); return has ? has << 8 | val : undefined; }
     if (k === '_extra') { if (!ctx.extra.length) return undefined; const x = {}; let any = false; for (const e of ctx.extra) if (o[e] !== undefined) { x[e] = o[e]; any = true; } return any ? jsonOf(x) : undefined; }
     const v = o[k];
     if (k === 'parent') return v ? ctx.nidOf(v) : 0;
@@ -477,7 +478,7 @@
       for (let i = 0; i < NP; i++) {
         const k = PROPS[i][0], c = rp.raw[i];
         let v;
-        if (k === '_flags') { v = 0; for (let j = 0; j < FLAGS.length; j++) { const f = obj[FLAGS[j]]; v = v * 3 + (f === undefined ? 0 : f ? 2 : 1); } if (c === v) continue; rp.raw[i] = v; }
+        if (k === '_flags') { v = 0; for (let j = 0; j < FLAGS.length; j++) { const f = obj[FLAGS[j]]; v = v * 3 + (typeof f !== 'boolean' ? 0 : f ? 2 : 1); } if (c === v) continue; rp.raw[i] = v; }
         else if (k === '_extra') { if (!extra.length) continue; v = extra.map(e => obj[e]); if (c && v.every((x, j) => x === c[j])) continue; rp.raw[i] = v; }
         else {
           v = obj[k];
@@ -719,7 +720,8 @@
       links.set(id, L); ensurePlayer(id);
       return L;
     }
-    const plMsg = () => ({ k: 'pl', e: S.epoch, l: [...players.values()].map(p => [p.id, p.slot, p.nick, p.info]) });
+    // данные игроков (очки) — тоже в списке: новичок не получал то, что записали до его входа
+    const plMsg = () => ({ k: 'pl', e: S.epoch, l: [...players.values()].map(p => [p.id, p.slot, p.nick, p.info, p.data ?? null]) });
     function hostTick(t){
       if (t - lastScan >= SCAN_MS || scanAll) { scanAll = false; scan(t); }
       else if (dirtyNow.size || hintRm.size) scanHints(t);
@@ -912,13 +914,16 @@
       if (m.k === 'pl' && Array.isArray(m.l)) {
         const seen = new Set();
         bySlot.clear();
-        for (const [id, slot, nick, info] of m.l.slice(0, 250)) {
+        for (const [id, slot, nick, info, data] of m.l.slice(0, 250)) {
           if (typeof id !== 'string' || !(slot > 0 && slot < 256)) continue;
           seen.add(id); bySlot.set(slot, id);
           let p = players.get(id), isNew = !p;
           if (!p) players.set(id, p = { id, slot, nick: '', info: null, data: null, lim: null, strikes: 0, fixAt: 0, expect: null, last: null, ev: [] });
           p.slot = slot; p.nick = String(nick || ''); p.info = info || null;
+          const dch = data !== undefined && JSON.stringify(p.data ?? null) !== JSON.stringify(data ?? null);
+          if (dch) p.data = data ?? null;
           if (isNew && id !== S.myId) call(o.onPlayer, 'join', pubP(p));
+          else if (dch) call(o.onPlayer, 'data', pubP(p));
         }
         for (const [id, p] of players) if (!seen.has(id)) { players.delete(id); remotes.delete(id); if (id !== S.myId) call(o.onPlayer, 'leave', pubP(p)); }
       } else if (m.k === 'pd') { const p = players.get(m.id); if (p) { p.data = m.d; call(o.onPlayer, 'data', pubP(p)); } }
