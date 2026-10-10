@@ -9,7 +9,8 @@
 // Классы: Part (деталь: shape block | ball | cyl | wedge), Spawn (точка появления), Light (свет), Prefab (готовый предмет:
 // дерево, фонарь, скамейка…), Model (группа), Script (скрипт — код в песочнице, см. script.js), Mesh (своя 3D-модель —
 // как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; тело — fit: 'precise' —
-// коробки по поверхности модели (M.colliders), 'box' — одна коробка size).
+// коробки по поверхности модели (M.colliders), 'box' — одна коробка size), Effect (частицы fx.js: kind — огонь, дым, искры…;
+// внутри детали — летят из неё, сам по себе — из pos; rate и scale — множители; нужен SC.fx = D37E.fx(R)).
 // Свойства детали: pos [x,y,z], rot [x,y,z] (градусы, порядок YXZ как в Roblox), size [x,y,z], color '#rrggbb',
 // mat (материал — SC.MATS), alpha (прозрачность 0…1), collide (сталкивается), anchored (закреплена; нет — падает),
 // shadow (отбрасывает тень), attrs (свои значения для скриптов). Физика: блок/клин/цилиндр — точно при поворотах на 90°
@@ -41,8 +42,9 @@
     Model: { name: 'Модель' },
     Mesh: { name: 'Своя модель', model: '', pos: [0, 2, 0], rot: [0, 0, 0], size: [4, 4, 4], alpha: 0, collide: true, anchored: true, shadow: true, fit: 'precise' },
     Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
+    Effect: { name: 'Эффект', kind: 'fire', pos: [0, 1, 0], rate: 1, scale: 1, color: '', color2: '', enabled: true },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
@@ -170,6 +172,7 @@
     function unbuild(obj){
       if (obj._mesh) { R.scene.remove(obj._mesh); obj._mesh.traverse(c => { if (c.isMesh && c.userData.ownGeo) c.geometry.dispose(); if (c.isMesh && c.userData.ownMat) c.material.dispose(); }); obj._mesh = null; }
       if (obj._light) { R.scene.remove(obj._light); obj._light = null; }
+      if (obj._em) { obj._em.dispose(); obj._em = null; }
       for (const c of obj._cols || []) ph.remove(c);
       obj._cols = [];
     }
@@ -207,6 +210,15 @@
         place(holder, obj);
         tag(holder, obj); R.scene.add(holder); obj._mesh = holder;
         colliders(obj);
+      } else if (obj.cls === 'Effect') {
+        const host = () => { const p = obj.parent && objects.get(obj.parent); return p && p.pos && p.cls !== 'Model' ? p : null; };
+        const at = [0, 0, 0];   // из детали — с её верхней грани
+        if (SC.fx) obj._em = SC.fx.emitter({ kind: obj.kind, rate: obj.rate, size: obj.scale, color: obj.color || undefined, color2: obj.color2 || undefined, enabled: obj.enabled !== false,
+          at: () => { const h = host(); if (!h) return obj.pos; at[0] = h.pos[0]; at[1] = h.pos[1] + (Array.isArray(h.size) ? h.size[1] / 2 : 0); at[2] = h.pos[2]; return at; } });
+        if (SC.edit) {   // значок, за который можно взять
+          const s = new T.Mesh(new T.OctahedronGeometry(.32), fxMark());
+          s.userData.ownGeo = true; s.position.set(...(host() || obj).pos); tag(s, obj); R.scene.add(s); obj._mesh = s;
+        }
       } else if (obj.cls === 'Light') {
         const L = new T.PointLight(obj.color, obj.power, obj.range, 1.6);
         L.position.set(...obj.pos); R.scene.add(L); obj._light = L;
@@ -227,6 +239,8 @@
         tag(holder, obj); R.scene.add(holder); obj._mesh = holder; obj._cols = cols;
       }
     }
+    let fxM = null;
+    const fxMark = () => fxM || (fxM = new T.MeshBasicMaterial({ color: '#ffd23f', wireframe: true, toneMapped: false }));
     let stubM = null;
     const meshStub = () => stubM || (stubM = new T.MeshBasicMaterial({ color: '#9aa3b5', wireframe: true, transparent: true, opacity: .55, toneMapped: false }));
     let spawnM = null;
@@ -278,7 +292,7 @@
       if (!obj) return;
       if (obj.cls === 'Model' && (key === 'pos' || key === 'rot')) { SC.transformModel(obj, key, val); return; }
       obj[key] = copy(val);
-      if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model'].includes(key)) build(obj);
+      if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model', 'rate', 'color2'].includes(key) || (key === 'enabled' && obj.cls === 'Effect')) build(obj);
       else if (key === 'pos' || key === 'rot') {
         if (obj._mesh && obj.cls !== 'Prefab') place(obj._mesh, obj);
         if (obj._light) obj._light.position.set(...obj.pos);

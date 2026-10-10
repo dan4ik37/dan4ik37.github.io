@@ -239,6 +239,7 @@ Players.PlayerAdded.Connect(player => {
     const TR = ed.TR = E.terrain(R, ph, { size: 192, n: 129 });
     const SC = ed.SC = E.scene(R, ph, { edit: true });
     SC.terrain = TR;
+    ed.FX = SC.fx = E.fx(R);
     R.clouds(10, 4);
     // плоская земля, когда ландшафт выключен
     ed.ground = new R.T.Mesh(new R.T.PlaneGeometry(600, 600), R.texMat('s3ground', R.proc('grass'), { tile: 3, flatColor: '#6cbf58' }));
@@ -357,7 +358,7 @@ Players.PlayerAdded.Connect(player => {
     }
     const SC = ed.SC, box = SC.box(o);
     const center = o.cls === 'Model' ? (() => { const c = box.getCenter(new ed.R.T.Vector3()); return [c.x, c.y, c.z]; })() : o.pos.slice();
-    ed.G.attach({ pos: o.cls === 'Model' ? SC.pivot(o) : o.pos, rot: o.rot || [0, 0, 0], size: o.size, center, model: o.cls === 'Model' || o.cls === 'Prefab' || o.cls === 'Light' });
+    ed.G.attach({ pos: o.cls === 'Model' ? SC.pivot(o) : o.pos, rot: o.rot || [0, 0, 0], size: o.size, center, model: o.cls === 'Model' || o.cls === 'Prefab' || o.cls === 'Light' || o.cls === 'Effect' });
     if (!box.isEmpty()) { ed.boxHelper.box.copy(box); ed.boxHelper.visible = true; } else ed.boxHelper.visible = false;
   }
   function setTool(t){
@@ -625,6 +626,7 @@ Players.PlayerAdded.Connect(player => {
     cam.position.set(c.x, c.y, c.z);
     cam.rotation.set(-c.pitch, c.yaw, 0, 'YXZ');
     ed.G.update();
+    ed.FX.update(dt);
     ed.R.update(dt); ed.R.follow(c.x - Math.sin(c.yaw) * 20, c.z - Math.cos(c.yaw) * 20, 0);
     ed.R.render();
   }
@@ -641,7 +643,7 @@ Players.PlayerAdded.Connect(player => {
   function openMenu(kind, btn){
     const ed = ED, m = ed.q('.s3-menu'), SC = ed.SC;
     let html = '';
-    if (kind === 'part') html = SC.SHAPES.map(([k, n, i]) => `<button type="button" data-m="part:${k}">${i} ${n}</button>`).join('') + '<hr><button type="button" data-m="spawn">📍 Точка появления</button><button type="button" data-m="light">💡 Свет (лампа)</button><button type="button" data-m="model">📦 Модель (группа)</button>';
+    if (kind === 'part') html = SC.SHAPES.map(([k, n, i]) => `<button type="button" data-m="part:${k}">${i} ${n}</button>`).join('') + '<hr><button type="button" data-m="spawn">📍 Точка появления</button><button type="button" data-m="light">💡 Свет (лампа)</button><button type="button" data-m="model">📦 Модель (группа)</button><div class="s3-mh">✨ Эффекты (в выбранную деталь)</div>' + Object.entries(window.D37E.fx.KINDS).map(([k, K]) => `<button type="button" data-m="fx:${k}">${K.icon} ${K.name}</button>`).join('');
     else if (kind === 'prefab') html = SC.PREFABS.map(([k, n, i]) => `<button type="button" data-m="prefab:${k}">${i} ${n}</button>`).join('');
     else if (kind === 'mod') {
       html = '<div class="s3-mh">🛡 Модели на проверке</div><div class="s3-mlist"><small class="s3-mh">Загрузка…</small></div><p class="s3-note s3-mnote">👁 — вставить в этот мир и посмотреть. ✅ — видят все. ⛔ — заблокировать.</p>';
@@ -835,6 +837,13 @@ Players.PlayerAdded.Connect(player => {
     const [k, v, w] = a.split(':');
     if (k === 'part') insert('Part', { shape: v, size: v === 'ball' ? [2, 2, 2] : v === 'cyl' ? [2, 2, 2] : v === 'wedge' ? [4, 2, 4] : [4, 1, 2], name: { block: 'Деталь', ball: 'Шар', cyl: 'Цилиндр', wedge: 'Клин' }[v] });
     else if (k === 'spawn') insert('Spawn');
+    else if (k === 'fx') {
+      const K = window.D37E.fx.KINDS[v]; if (!K) return;
+      const par = ed.sel && ['Part', 'Mesh', 'Spawn', 'Prefab'].includes(ed.sel.cls) ? ed.sel : null, p = insertPoint();
+      pushHist();
+      const o = ed.SC.add('Effect', { kind: v, name: K.name, pos: par ? par.pos.slice() : [p[0], +(p[1] + .5).toFixed(3), p[2]] }, par);
+      renderTree(); select(o);
+    }
     else if (k === 'light') insert('Light');
     else if (k === 'model') insert('Model');
     else if (k === 'prefab') insert('Prefab', { kind: v, name: ed.SC.PREFABS.find(p => p[0] === v)?.[1] || 'Предмет' });
@@ -971,7 +980,7 @@ Players.PlayerAdded.Connect(player => {
   }
 
   // ═══ Проводник ═══
-  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
+  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', Effect: (window.D37E.fx.KINDS[o.kind] || {}).icon || '✨', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
   function renderTree(){
     const ed = ED, SC = ed.SC, tree = ed.q('.s3-tree');
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
@@ -1057,6 +1066,14 @@ Players.PlayerAdded.Connect(player => {
         h += `<label class="s3-lbl">Поворот (°)<input type="number" step="${ed.G.rsnap || 1}" value="${o.rot[1]}" data-p="rot:1"></label>`;
         if (['tree', 'pine', 'bush', 'rock'].includes(o.kind)) h += `<label class="s3-lbl">Размер <b>${o.scale}</b><input type="range" min="0.4" max="3" step="0.1" value="${o.scale}" data-p="scale"></label>`;
         if (o.kind === 'sign') h += `<label class="s3-lbl">Текст<input type="text" maxlength="40" value="${esc(o.text)}" data-p="text"></label><label class="s3-lbl">Цвет таблички<input type="color" value="${o.color}" data-p="color"></label>`;
+      } else if (o.cls === 'Effect') {
+        const KS = window.D37E.fx.KINDS, K = KS[o.kind] || KS.fire, inPart = o.parent && SC.get(o.parent)?.pos && SC.get(o.parent).cls !== 'Model';
+        h += `<label class="s3-lbl">Вид<select data-p="kind">${Object.entries(KS).map(([k, x]) => `<option value="${k}"${o.kind === k ? ' selected' : ''}>${x.icon} ${x.name}</option>`).join('')}</select></label>`;
+        h += inPart ? '<p class="s3-note">Летит из детали, в которой лежит (перетащи в Проводнике в другую — или в Workspace).</p>' : v3('pos', 'Позиция', ed.G.snap || .1);
+        h += `<label class="s3-lbl">Сколько частиц <b>×${(+o.rate).toFixed(1)}</b><input type="range" min="0.1" max="4" step="0.1" value="${o.rate}" data-p="rate"></label>`;
+        h += `<label class="s3-lbl">Размер <b>×${(+o.scale).toFixed(1)}</b><input type="range" min="0.2" max="5" step="0.1" value="${o.scale}" data-p="scale"></label>`;
+        if (!K.palette) h += `<div class="s3-grid2"><label class="s3-lbl">Цвет<input type="color" value="${o.color || K.color}" data-p="color"></label><label class="s3-lbl">Цвет к концу<input type="color" value="${o.color2 || K.color2 || K.color}" data-p="color2"></label></div>`;
+        h += `<label class="s3-chk"><input type="checkbox" data-p="enabled"${o.enabled !== false ? ' checked' : ''}> Включён</label>`;
       } else if (o.cls === 'Mesh') {
         const md = window.D37E.models.cached(o.model);
         h += `<p class="s3-note">${md ? `🧩 <b>${esc(md.name)}</b> · ${md.tris.toLocaleString('ru')} треугольников<br>🔒 Видно только тебе (модель в этом браузере)` : '⚠️ Модели нет в этом браузере — видна пустая коробка. Загрузи её снова или открой мир из файла.'}</p>`;
@@ -1116,7 +1133,7 @@ Players.PlayerAdded.Connect(player => {
     ed.TR.cursor(null); ed.G.attach(null); ed.boxHelper.visible = false; closeMenu();
     const snap = SC.toJSON().objects;
     // свет-лампочки и невидимые детали — как в игре
-    for (const o of SC.all()) { if (o.cls === 'Light' && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh && !ed.player) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
+    for (const o of SC.all()) { if ((o.cls === 'Light' || o.cls === 'Effect') && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh && !ed.player) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
     const spawn = SC.all().find(o => o.cls === 'Spawn');
     const sp = spawn ? [spawn.pos[0], spawn.pos[1] + spawn.size[1] / 2 + .05, spawn.pos[2]] : [0, ed.ph.groundAt(0, 0) + .05, 0];
     // на точке появления что-то стоит — появляемся сверху, а не внутри
@@ -1325,6 +1342,7 @@ Players.PlayerAdded.Connect(player => {
     // клик/тап по детали со скриптом «Clicked»
     for (const tp of I.taps) { const b = R.r.domElement.getBoundingClientRect(); ed.ray.setFromCamera(new R.T.Vector2((tp.x - b.left) / b.width * 2 - 1, -((tp.y - b.top) / b.height) * 2 + 1), R.camera); const h = ed.SC.pick(ed.ray); if (h && pl.clicks.has(h.obj.id)) pl.SH.event('clicked', { id: h.obj.id, player: 'me' }); }
     I.frameEnd(); C.frameEnd();
+    ed.FX.update(dt);
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);
     R.render();
     H.prompt(I.touch ? (pl.X.raw && pl.X.cur ? '✋ ' + pl.X.raw : null) : pl.X.text, pl.X.progress);
