@@ -12,6 +12,8 @@
 // регистрирует globalThis.D37Lang[id] = { run(code, env, ctx) }, examples: [[название, код]], ai: «задание для ИИ», placeholder }).
 // env — те же имена, что у JavaScript (script, game, workspace, Instance, Vector3, …); ctx — служебное: name, error(msg, line),
 // err(e), signal, proxyOf, playerOf, objs, players, send. Код языка уходит в песочницу текстом (worker.toString()).
+// Двоичный язык может уметь собираться прямо на сайте: compile(src, { name, onStep }) → Promise<Uint8Array | { wasm, log }>
+// (кнопка «⚙️ Собрать» в студии; исходник — obj.src, результат — base64 в obj.code; ошибка — throw с .log).
 (() => {
   const E = window.D37E = window.D37E || {};
 

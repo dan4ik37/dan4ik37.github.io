@@ -199,7 +199,7 @@ Players.PlayerAdded.Connect(player => {
       </div>
       <div class="s3-bottom"><div class="s3-btabs"><button type="button" data-b="out" class="on">🖨 Вывод</button><button type="button" data-b="code">📜 Скрипт</button><span class="s3-grow"></span><button type="button" data-a="toggleLeft" class="s3-mob">🌲</button><button type="button" data-a="toggleRight" class="s3-mob">⚙</button><button type="button" data-a="toggleBottom" title="Свернуть">▾</button></div>
         <div class="s3-out"></div>
-        <div class="s3-code" hidden><div class="s3-codebar"><select class="s3-lang" title="Язык скрипта"></select><select class="s3-ex"><option value="">📚 Примеры…</option></select><button type="button" data-a="wasm" class="s3-wasm" hidden>📦 Загрузить .wasm</button><span class="s3-wasminfo"></span><button type="button" data-a="ai">🤖 Задание для ИИ</button><span class="s3-ai" hidden>${AI_LINKS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</span><span class="s3-grow"></span><span class="s3-cname"></span></div><textarea class="s3-ta" spellcheck="false" placeholder="// Код скрипта. script.Parent — объект, в котором лежит скрипт.&#10;// Нажми «📚 Примеры», чтобы вставить готовый."></textarea></div>
+        <div class="s3-code" hidden><div class="s3-codebar"><select class="s3-lang" title="Язык скрипта"></select><select class="s3-ex"><option value="">📚 Примеры…</option></select><button type="button" data-a="compile" class="s3-wasm s3-build" hidden>⚙️ Собрать</button><button type="button" data-a="wasm" class="s3-wasm" hidden>📦 Загрузить .wasm</button><span class="s3-wasminfo"></span><button type="button" data-a="ai">🤖 Задание для ИИ</button><span class="s3-ai" hidden>${AI_LINKS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</span><span class="s3-grow"></span><span class="s3-cname"></span></div><textarea class="s3-ta" spellcheck="false" placeholder="// Код скрипта. script.Parent — объект, в котором лежит скрипт.&#10;// Нажми «📚 Примеры», чтобы вставить готовый."></textarea></div>
       </div>
       <div class="s3-menu" hidden></div>
       <div class="s3-loading">🧱 Загружаем студию…</div>`;
@@ -578,6 +578,7 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'toggleBottom') ed.box.classList.toggle('s3-minB');
     else if (a === 'ai') { const ta = ed.q('.s3-ta'), L = langOf(ed.codeFor), what = prompt('Что должен делать скрипт? (например: «дверь открывается, когда у игрока 5 монет»)'); if (!what) return; const task = (L.ai || AI_TASK) + what + '\nОтвет — только код скрипта.'; navigator.clipboard?.writeText(task).then(() => { msg('Задание скопировано — вставь в ИИ, а его ответ — сюда', true); ed.q('.s3-ai').hidden = false; }, () => prompt('Скопируй задание:', task)); ta.focus(); }
     else if (a === 'wasm') pickWasm();
+    else if (a === 'compile') compileScript();
     else if (a === 'dup') duplicate(); else if (a === 'del') remove(); else if (a === 'focus') focusSel();
     else if (a === 'terrain:gen') { if (!confirm('Создать новые холмы? Текущий ландшафт пропадёт.')) return; generateHills(ed.TR, Math.random() * 1e9 | 0); markDirty(); }
     else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, 1, 0, 0); markDirty(); }
@@ -606,7 +607,8 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, q = ed.q, L = langOf(obj), bin = L.kind === 'binary';
     q('.s3-lang').innerHTML = Object.values(window.D37E.langs).map(l => `<option value="${l.id}"${l.id === L.id ? ' selected' : ''}>${l.icon} ${esc(l.label)}</option>`).join('');
     q('.s3-ex').innerHTML = '<option value="">📚 Примеры…</option>' + (L.examples || []).map((e, i) => `<option value="${i}">${esc(e[0])}</option>`).join('');
-    q('.s3-wasm').hidden = !bin;
+    q('.s3-wasm:not(.s3-build)').hidden = !bin;
+    q('.s3-build').hidden = !(bin && typeof L.compile === 'function');
     q('.s3-wasminfo').textContent = bin ? (obj?.code ? `файл: ${Math.max(1, Math.round(obj.code.length * .75 / 1024))} КБ` : 'файл не загружен') : '';
     const ta = q('.s3-ta');
     ta.placeholder = L.placeholder || (bin ? '// Исходник — для себя и для ИИ. Запускается загруженный файл .wasm' : '// Код скрипта');
@@ -632,6 +634,27 @@ Players.PlayerAdded.Connect(player => {
       pushHist(); o.code = btoa(s); markDirty(); fillLangUI(o); msg(`📦 ${f.name} загружен (${Math.round(f.size / 1024)} КБ)`, true);
     };
     inp.click();
+  }
+  async function compileScript(){
+    const ed = ED, o = ed.codeFor && ed.SC.get(ed.codeFor.id), L = langOf(o);
+    if (!o || typeof L.compile !== 'function' || ed.building) return;
+    clearTimeout(codeT); o.src = ed.q('.s3-ta').value;
+    if (!o.src.trim()) { msg('Сначала напиши код', false); return; }
+    ed.building = true; const btn = ed.q('.s3-build'); btn.disabled = true;
+    print(`⚙️ Сборка «${o.name}» (${L.label})…`, 'sys');
+    try {
+      const r = await L.compile(o.src, { name: o.name, onStep: t => { btn.textContent = '⚙️ ' + t; } });
+      const u8 = r instanceof Uint8Array ? r : r.wasm;
+      if (r.log) for (const line of String(r.log).split('\n').filter(Boolean).slice(0, 40)) print(line, 'warn');
+      let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+      if (ED !== ed || !ed.SC.get(o.id)) return;
+      pushHist(); o.code = btoa(s); markDirty();
+      print(`✅ Собрано: ${Math.max(1, Math.round(u8.length / 1024))} КБ`, 'sys'); msg('✅ Собрано — жми ▶ Играть', true);
+    } catch (e) {
+      const log = String(e && (e.log || e.message) || e);
+      for (const line of log.split('\n').filter(Boolean).slice(0, 60)) print(line, 'err');
+      setBottom('out'); msg('❌ Не собралось — ошибки во «Выводе»', false);
+    } finally { ed.building = false; btn.disabled = false; btn.textContent = '⚙️ Собрать'; if (ED === ed && ed.codeFor === o) fillLangUI(o); }
   }
   function showCode(obj){
     const ed = ED;
@@ -801,6 +824,7 @@ Players.PlayerAdded.Connect(player => {
       error: (s, line, m) => { print(`❌ ${s || 'скрипт'}${line > 0 ? ', строка ' + line : ''}: ${m}`, 'err'); setBottom('out'); },
       hang: () => { print('⛔ Скрипт завис (бесконечный цикл?) — остановлен. Используй await task.wait() в циклах.', 'err'); setBottom('out'); },
     });
+    for (const o of SC.all()) if (o.cls === 'Script' && o.enabled !== false && langOf(o).kind === 'binary' && !o.code) print(`⚠️ Скрипт «${o.name}» не собран — ${typeof langOf(o).compile === 'function' ? 'нажми ⚙️ Собрать' : 'загрузи .wasm'}`, 'warn');
     const any = pl.SH.start(SC, [{ id: 'me', name: nick, pos: sp }]);
     if (any) print('▶ Скрипты запущены', 'sys');
     ed.box.classList.add('s3-playing');
