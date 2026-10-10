@@ -1047,7 +1047,229 @@ Debug.LogError("плохо");`);
     ok(miss.length === 0, 'каждое имя библиотеки есть в песочнице', miss);
   }
 
-  //@@MORE4@@
+  // ═══ Ещё из C#: virtual-свойства, расширения, Nullable, new string(char[]) ═══
+  await out('abstract / virtual автосвойства и override', `Shape s = new Square();
+Debug.Log(s.Sides + " " + s.Name + " " + new Shape2().Sides);
+abstract class Shape { public abstract int Sides { get; } public virtual string Name { get; set; } = "фигура"; }
+class Square : Shape { public override int Sides => 4; public override string Name => "квадрат"; }
+class Shape2 : Shape { public override int Sides { get; } = 3; }`, ['4 квадрат 3']);
+  await out('методы-расширения', `Debug.Log(5.Twice() + " " + "abc".Shout() + " " + new List<int> { 1, 2 }.Total());
+static class Ext
+{
+    public static int Twice(this int x) => x * 2;
+    public static string Shout(this string s) => s.ToUpper() + "!";
+    public static int Total(this List<int> xs) { int t = 0; foreach (var x in xs) t += x; return t; }
+}`, ['10 ABC! 3']);
+  await out('Nullable: HasValue / Value / GetValueOrDefault', `int? a = null;
+int? b = 5;
+Debug.Log(a.HasValue + " " + b.HasValue + " " + b.Value + " " + a.GetValueOrDefault() + " " + a.GetValueOrDefault(7));`, ['False True 5 0 7']);
+  await out('new string(char[]), new string(c, n), ToCharArray, Array.Reverse', `char[] cs = "абв".ToCharArray();
+Array.Reverse(cs);
+Debug.Log(new string(cs) + " " + new string('*', 3));`, ['вба ***']);
+  {   // foreach по детям transform; GetComponent<неизвестный компонент> — null
+    const W = world(`public class S : MonoBehaviour
+{
+    void Start()
+    {
+        foreach (Transform child in transform) Debug.Log("ребёнок " + child.name);
+        Debug.Log(GetComponent<Collider>() == null);
+    }
+}`, { parent: 'm' });
+    await sleep(2);
+    ok(JSON.stringify(W.prints()) === '["ребёнок Окно","True"]' && !W.errors().length, 'foreach (Transform t in transform), GetComponent<Collider>() == null', [W.prints(), W.errors()]);
+  }
+
+  // ═══ Типичные скрипты (как пишут в Unity и как отвечает ИИ) ═══
+  {
+    const W = world(`using UnityEngine;
+
+public class Bobbing : MonoBehaviour
+{
+    [Header("Настройки")]
+    [SerializeField] private float amplitude = 0.5f;
+    [SerializeField] private float frequency = 1f;
+    [Range(0, 10)] public float speed = 2f;
+
+    private Vector3 startPos;
+
+    void Start()
+    {
+        startPos = transform.position;
+    }
+
+    void Update()
+    {
+        Vector3 pos = startPos;
+        pos.y += Mathf.Sin(Time.time * frequency * Mathf.PI * 2) * amplitude;
+        transform.position = pos;
+        transform.Rotate(Vector3.up * speed * Time.deltaTime * 30f);
+    }
+}`);
+    W.tick(0.05, 4);
+    await sleep(2);
+    const pos = W.of('set').filter(m => m.k === 'pos'), rot = W.of('set').filter(m => m.k === 'rot');
+    ok(pos.length === 4 && rot.length === 4 && Math.abs(rot[3].v[1] - 12) < 1e-6 && pos.every(m => Math.abs(m.v[1] - 1) <= 0.5 + 1e-9) && !W.errors().length, 'Unity: качание (атрибуты, transform, Time)', [pos.map(m => m.v), rot.map(m => m.v), W.errors()]);
+  }
+  {
+    const W = world(`using System.Collections.Generic;
+using UnityEngine;
+
+// Счётчик монет: монеты — детали с именем «Монета …»
+public class CoinCounter : MonoBehaviour
+{
+    private Dictionary<string, int> collected = new Dictionary<string, int>();
+    private List<Part> coins = new List<Part>();
+
+    void Start()
+    {
+        foreach (var p in workspace.GetChildren())
+        {
+            if (p.Name.StartsWith("Монета")) coins.Add(p);
+        }
+        Debug.Log($"Монет на карте: {coins.Count}");
+        foreach (var c in coins)
+        {
+            var coin = c;
+            coin.Touched += (hit, player) => Collect(coin, player);
+        }
+    }
+
+    void Collect(Part coin, Player player)
+    {
+        if (player == null) return;
+        if (!collected.ContainsKey(player.Name)) collected[player.Name] = 0;
+        collected[player.Name]++;
+        coin.Destroy();
+        coins.Remove(coin);
+        player.SetStat("Монеты", collected[player.Name]);
+        if (coins.Count == 0) gui.message($"🏆 {player.Name} собрал всё!", 5);
+    }
+}`, { objs: [part('a', 'Сборщик'), part('c1', 'Монета 1'), part('c2', 'Монета 2'), part('x', 'Пол')] });
+    W.ev('touched', { id: 'c1' }); W.ev('touched', { id: 'c2' });
+    ok(W.prints()[0] === 'Монет на карте: 2' && W.of('destroy').length === 2 && W.of('player').filter(m => m.cmd === 'stat').map(m => m.v.v).join() === '1,2' &&
+      W.of('gui').some(m => /собрал всё/.test(m.text)) && !W.errors().length, 'ИИ-стиль: монеты, Dictionary, замыкания, gui', [W.prints(), W.errors()]);
+  }
+  {
+    const W = world(`// Таймер раунда и рекорд (верхний уровень, async/await)
+int seconds = 0;
+bool running = true;
+var best = new List<float>();
+
+async Task Countdown(int from)
+{
+    for (int i = from; i > 0; i--)
+    {
+        gui.text("timer", $"⏱ {i}");
+        await Task.Delay(5);
+    }
+    gui.clear("timer");
+    running = false;
+}
+
+script.Parent.Touched += (hit, player) =>
+{
+    if (!running) return;
+    best.Add(Time.time);
+    best.Sort();
+    player.Message("Время: " + best[0].ToString("F2"), 2);
+};
+
+await Countdown(3);
+Debug.Log("раунд окончен, касаний: " + best.Count);`);
+    W.ev('touched', { id: 'a' });
+    await sleep(60);
+    ok(W.of('gui').filter(m => m.cmd === 'text').length === 3 && W.of('gui').some(m => m.cmd === 'clear') && W.prints().includes('раунд окончен, касаний: 1') && !W.errors().length,
+      'ИИ-стиль: таймер async Task, gui.text / gui.clear', [W.prints(), W.errors()]);
+  }
+  {
+    const W = world(`public enum DoorState { Closed, Opening, Open }
+
+public class Door : Script
+{
+    public float openHeight = 4f;
+    public float time = 0.5f;
+    private DoorState state = DoorState.Closed;
+    private Vector3 closedPos;
+
+    void Start()
+    {
+        closedPos = Parent.Position;
+        Parent.Prompt("Открыть дверь", 0.5f).Triggered += OnUse;
+    }
+
+    void OnUse(Player player)
+    {
+        switch (state)
+        {
+            case DoorState.Closed:
+                StartCoroutine(Move(closedPos + Vector3.up * openHeight, DoorState.Open));
+                break;
+            case DoorState.Open:
+                StartCoroutine(Move(closedPos, DoorState.Closed));
+                break;
+            default:
+                player.Message("Подожди…", 1);
+                break;
+        }
+    }
+
+    IEnumerator Move(Vector3 target, DoorState end)
+    {
+        state = DoorState.Opening;
+        TweenService.Create(Parent, new TweenInfo(time), new { Position = target }).Play();
+        yield return new WaitForSeconds(0.02f);
+        state = end;
+        Debug.Log("дверь: " + state);
+    }
+}`);
+    W.ev('prompt', { id: 'a' }); W.ev('prompt', { id: 'a' });
+    await sleep(40);
+    W.ev('prompt', { id: 'a' });
+    await sleep(40);
+    ok(W.of('prompt').some(m => m.hold === 0.5) && W.of('tween').length === 2 && W.of('tween')[0].goals.pos.join() === '0,5,0' && W.of('tween')[1].goals.pos.join() === '0,1,0' &&
+      JSON.stringify(W.prints()) === '["дверь: Open","дверь: Closed"]' && W.of('player').some(m => m.cmd === 'message' && m.v.text === 'Подожди…') && !W.errors().length,
+      'Unity-стиль: дверь — enum, switch, корутина, Prompt с удержанием', [W.prints(), W.errors()]);
+  }
+
+  await out('struct — копия при передаче и присваивании; static-конструктор; const в методе', `var p = new P2 { X = 1 };
+Bump(p);
+var q = p;
+q.X = 7;
+Debug.Log(p.X + " " + q.X + " " + Cfg.Ready);
+void Bump(P2 v) { v.X = 100; }
+int Area() { const int side = 3; return side * side; }
+Debug.Log(Area());
+struct P2 { public int X; }
+static class Cfg { public static bool Ready; static Cfg() { Ready = true; } }`, ['1 7 True', '9']);
+  await out('using + Dispose, lock, do/continue, вложенные ?:', `using (var r = new Res()) { Debug.Log("внутри"); }
+var o = new object();
+lock (o) { Debug.Log("lock"); }
+int i = 0, odd = 0;
+do { i++; if (i % 2 == 0) continue; odd++; } while (i < 5);
+Debug.Log(odd);
+int n = 15;
+Debug.Log(n % 15 == 0 ? "FizzBuzz" : n % 3 == 0 ? "Fizz" : n % 5 == 0 ? "Buzz" : n.ToString());
+class Res : IDisposable { public void Dispose() { Debug.Log("Dispose"); } }`, ['внутри', 'Dispose', 'lock', '3', 'FizzBuzz']);
+  await out('свой delegate-тип, поле с методом, русские имена, $ и { в строках', `Удар удар = сила => Debug.Log("удар " + сила);
+удар += сила => Debug.Log("ещё " + сила * 2);
+удар(5);
+int очки = 10;
+Debug.Log("Цена: $" + очки + " \${x} {y}");
+var k = new Кнопка();
+k.Нажать();
+delegate void Удар(int сила);
+class Кнопка
+{
+    Action действие;
+    public Кнопка() { действие = Сказать; }
+    void Сказать() => Debug.Log("нажали");
+    public void Нажать() => действие?.Invoke();
+}`, ['удар 5', 'ещё 10', 'Цена: $10 ${x} {y}', 'нажали']);
+  cerr('goto case — понятная ошибка', 'int a = 1;\nswitch (a) { case 1: goto case 2; case 2: break; }', 2, /goto/);
+  cerr('record — подсказка', 'int a = 1;\nrecord P(int X);', 2, /record/);
+  cerr('указатели', 'int a = 1;\nint* p = &a;', 2, /Указатели|указатели|&/);
+
+  //@@MORE5@@
   await sleep(50);
   console.log(`\n${pass} ок, ${fail} ошибок`);
   process.exit(fail ? 1 : 0);   // в примерах бесконечные корутины и таймеры — ждать их не нужно

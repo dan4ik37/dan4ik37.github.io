@@ -1318,6 +1318,7 @@
           if (uc.exc && (name === 'Message' || name === 'StackTrace')) return { c: rc + '.' + name, t: St };
           throw CsErr('У ' + uc.name + ' нет «' + name + '»', n.line);
         }
+        if (t && /\?$/.test(t)) { if (name === 'HasValue') return { c: '(' + rc + ' != null)', t: Bo }; if (name === 'Value') return { c: '$.val(' + rc + ')', t: bt }; }
         if (bt === St && name === 'Length') return { c: rc + '.length', t: In };
         if (bt && (isArrT(bt) || genName(bt) === 'List') && (name === 'Count' || name === 'Length')) return rankOf(bt) > 1 && name === 'Length' ? { c: '$.len2(' + rc + ')', t: In } : { c: rc + '.length', t: In };
         if (bt && isDictT(bt)) { const a = genArgs(bt); if (name === 'Keys') return { c: rc + '.Keys', t: 'List<' + a[0] + '>' }; if (name === 'Values') return { c: rc + '.Values', t: 'List<' + a[1] + '>' }; }
@@ -1695,6 +1696,9 @@
           }
           if (scriptCls(uc) && SM[name] && SM[name].endsWith('()')) return callMG({ script: name, recv: rc }, n, f.targs);
         }
+        const ex1 = extOf(name, bt);
+        if (ex1) return { c: ex1.owner.js + '.' + ex1.ov.js + '(' + [rc].concat(userArgs(ex1.ov.params.slice(1), A, n.line)).join(', ') + ')', t: ex1.ov.ret };
+        if (t && /\?$/.test(t) && name === 'GetValueOrDefault') return { c: '(' + rc + ' ?? ' + (A.length ? argR(A[0]).c : defCode(bt)) + ')', t: bt };
         const all = () => A.map(a => argR(a).c);
         switch (name) {
           case 'ToString':
@@ -1761,6 +1765,21 @@
           return { c: mg.recv + '.' + name + '(' + A.map(a => argR(a).c).join(', ') + ')', t: sigRet(SM[name]) };
         }
         return callUser(mg.owner, mg.m, mg.recv, n);
+      }
+      function extOf(name, bt){   // метод-расширение для типа bt (из своих static-классов и классов других скриптов)
+        const pools = [...CL.values()].concat(XC ? [...XC.values()].filter(o => !CL.has(o.name)).map(imp) : []);
+        for (const c of pools) {
+          if (c.kind !== 'class') continue;
+          const m = c.mem.get(name);
+          if (!m || m.kind !== 'method' || !m.static) continue;
+          for (const ov of m.ovs) {
+            const p0 = ov.params[0];
+            if (!p0 || p0.mod !== 'this') continue;
+            const pt = bare(p0.ty);
+            if (!bt || pt === 'object' || pt === bt || genName(pt) === genName(bt) || TPS.has(pt) || (isNumT(pt) && isNumT(bt))) return { owner: c, ov };
+          }
+        }
+        return null;
       }
       function callUser(owner, m, recv, n){
         const ov = pickOv(m, n.args, n.line);
@@ -2288,7 +2307,12 @@
       function propCode(c, m){
         checkType(m.ty, m.line);
         const st = m.mods.has('static'), js = c.mem.get(m.name).js, pre = st ? 'static ' : '', g = m.acc.get, s = m.acc.set;
-        if ((g && g.auto) || (!g && s && s.auto)) return pre + js + ' = ' + (m.init ? initCode(c, m.ty, m.init, st, m.line) : defCode(m.ty)) + ';';
+        if ((g && g.auto) || (!g && s && s.auto)) {
+          if (m.mods.has('abstract')) return '';
+          const init = m.init ? initCode(c, m.ty, m.init, st, m.line) : defCode(m.ty);
+          if (!st && (m.mods.has('virtual') || m.mods.has('override'))) return '$$' + js + ' = ' + init + '; get ' + js + '() { return this.$$' + js + '; } set ' + js + '(v) { this.$$' + js + ' = v; }';
+          return pre + js + ' = ' + init + ';';
+        }
         let out = '';
         if (g) {
           const fd = { params: [], body: g.body || null, ex: g.ex || null, line: g.line, mods: new Set() }, gen = !!(g.body && hasYield(g.body));
@@ -2617,7 +2641,8 @@
         s: S, sf: v => typeof v === 'number' ? gS(v, 7) : S(v), fmt: fmtAny,
         al(s, n){ n = n | 0; s = S(s); return n < 0 ? s.padEnd(-n) : s.padStart(n); },
         str(v, f){ if (v == null) throw nre('ToString'); if (typeof v === 'number' && typeof f === 'number') return (v >>> 0).toString(f); return f === undefined ? S(v) : fmtAny(v, f); },
-        srep: (c, n) => S(c).repeat(Math.max(0, n | 0)),
+        srep: (c, n) => Array.isArray(c) ? c.join('') : S(c).repeat(Math.max(0, n | 0)),
+        val(v){ if (v == null) throw new EX.InvalidOperationException('у Nullable нет значения (null)'); return v; },
         en(E, v){
           if (E) {
             for (const k of Object.keys(E)) if (E[k] === v) return k;
@@ -2875,6 +2900,7 @@
             get childCount(){ return p.GetChildren ? p.GetChildren().length : 0; },
             GetChild(i){ return H.tf(H.ix(p.GetChildren(), i)); },
             Find(n){ const c = p.FindFirstChild(n); return c ? H.tf(c) : null; },
+            *[Symbol.iterator](){ for (const c of p.GetChildren ? p.GetChildren() : []) yield H.tf(c); },
             SetParent(q){ p.Parent = q && (q.$tf || q.$go) ? q.$p : q; },
             Translate(x, y, z, sp){ let v = x; if (!isV(x)) v = new V3(x, y, z); else sp = y; const w = sp === 1 ? v : rotv(p.Orientation || V3.zero, v.X, v.Y, v.Z); p.Position = H.add(p.Position, w); },
             Rotate(x, y, z){ const v = isV(x) ? x : new V3(x, y, z), r = p.Orientation; p.Orientation = new V3(((r.X + v.X) % 360 + 360) % 360, ((r.Y + v.Y) % 360 + 360) % 360, ((r.Z + v.Z) % 360 + 360) % 360); },
@@ -3223,7 +3249,7 @@
       }
       const T0 = Date.now();
       const Time = {
-        get time(){ return (Date.now() - T0) / 1000; }, deltaTime: 1 / 60, fixedDeltaTime: 0.02, frameCount: 0, timeScale: 1,
+        get time(){ return (Date.now() - T0) / 1000; }, deltaTime: 1 / 60, get fixedDeltaTime(){ return this.deltaTime; }, frameCount: 0, timeScale: 1,
         get smoothDeltaTime(){ return this.deltaTime; }, get unscaledDeltaTime(){ return this.deltaTime; }, get unscaledTime(){ return this.time; },
         get timeSinceLevelLoad(){ return this.time; }, get realtimeSinceStartup(){ return this.time; }, get fixedTime(){ return this.time; },
       };
@@ -3292,7 +3318,7 @@
         GetInt: (k, d = 0) => PP.has(S(k)) ? PP.get(S(k)) : d, GetFloat: (k, d = 0) => PP.has(S(k)) ? PP.get(S(k)) : d, GetString: (k, d = '') => PP.has(S(k)) ? PP.get(S(k)) : d,
         HasKey: k => PP.has(S(k)), DeleteKey: k => { PP.delete(S(k)); }, DeleteAll: () => { PP.clear(); }, Save(){} };
       const Debug = {
-        Log: m => env.print(S(m)), LogWarning: m => env.warn(S(m)), LogError: m => ctx0.send('print', { text: S(m).slice(0, 500), kind: 'err' }),
+        Log: m => env.print(S(m)), LogWarning: m => env.warn(S(m)), LogError: m => { if (typeof ctx0.send === 'function') ctx0.send('print', { text: S(m).slice(0, 500), kind: 'err' }); else env.warn('❌ ' + S(m)); },
         LogFormat: (f, ...a) => env.print(Str.Format(f, ...a)), LogWarningFormat: (f, ...a) => env.warn(Str.Format(f, ...a)), LogErrorFormat: (f, ...a) => Debug.LogError(Str.Format(f, ...a)),
         LogException: e => Debug.LogError(csMsg(e)), Assert: (c, m) => { if (!c) Debug.LogError('Assert не прошёл' + (m !== undefined ? ': ' + S(m) : '')); },
         DrawLine(){}, DrawRay(){}, Break(){},
@@ -3332,10 +3358,11 @@
         if (T === 'Transform') return many ? [H.tf(p)] : H.tf(p);
         if (T === 'GameObject') return many ? [H.go(p)] : H.go(p);
         if (typeof T === 'string' && NOPE[T]) throw new EX.NotSupportedException(T + ': ' + NOPE[T]);
-        const r = ALLI.filter(o => !o.$dead && o.$par === p && (typeof T !== 'function' || o instanceof T));
+        if (typeof T !== 'function') return many ? [] : null;   // компонентов Unity (Collider, Renderer …) у деталей нет
+        const r = ALLI.filter(o => !o.$dead && o.$par === p && o instanceof T);
         return many ? r : r[0] || null;
       }
-      function findObj(T, many){ const r = ALLI.filter(o => !o.$dead && (typeof T !== 'function' || o instanceof T)); return many ? r : r[0] || null; }
+      function findObj(T, many){ const r = typeof T === 'function' ? ALLI.filter(o => !o.$dead && o instanceof T) : []; return many ? r : r[0] || null; }
       const ObjectCs = { Destroy: destroyAny, Instantiate: instantiate, Equals: (a, b) => H.eq(a, b), ReferenceEquals: (a, b) => a === b, FindObjectOfType: T => findObj(T, false), FindObjectsOfType: T => findObj(T, true) };
 
       // ── кадры, корутины (IEnumerator + yield return), Update ──
@@ -3444,7 +3471,8 @@
       }
       function alive(o){
         if (o.$dead) return false;
-        if (o.$pid && !o.$rt.ctx.objs.has(o.$pid)) { kill(o); return false; }
+        const objs = o.$rt.ctx.objs;   // деталь удалена? (если среда не дала objs — по прокси: у удалённой нет ClassName)
+        if (o.$pid && (objs && typeof objs.has === 'function' ? !objs.has(o.$pid) : o.$par.ClassName === undefined)) { kill(o); return false; }
         return true;
       }
       function kill(o){
@@ -3481,12 +3509,16 @@
         if (m.OnPlayerRemoving) env.Players.PlayerRemoving.Connect(pl => { if (alive(o)) callMsg(o, 'OnPlayerRemoving', [pl]); });
       }
       // ── ошибки: строка C# по стеку (//# sourceURL=d37cs-N.js) и понятный текст ──
-      let LB = 0, CB = 0;
-      try { const o = {}; new Function('$', '$.e = new Error("p");\n//# sourceURL=d37cs-0.js')(o); const mm = /d37cs-0\.js:(\d+):(\d+)/.exec(String(o.e.stack)); if (mm) { LB = +mm[1]; CB = +mm[2] - 7; } } catch (e) {}
+      let LB = 0, CB = 0, FF = false;   // FF — стек без sourceURL (Firefox: «… > Function:строка:столбец»)
+      try {
+        const o = {}; new Function('$', '$.e = new Error("p");\n//# sourceURL=d37cs-0.js')(o);
+        const st = String(o.e.stack), mm = /d37cs-0\.js:(\d+):(\d+)/.exec(st) || ((FF = true) && /> Function:(\d+):(\d+)/.exec(st));
+        if (mm) { LB = +mm[1]; CB = +mm[2] - 7; } else FF = false;
+      } catch (e) {}
       if (Error.stackTraceLimit < 50) Error.stackTraceLimit = 50;
       function lineOf(rt, e){
         if (!LB) return 0;
-        const mm = new RegExp('d37cs-' + rt.id + '\\.js:(\\d+):(\\d+)').exec(String(e && e.stack || ''));
+        const st = String(e && e.stack || ''), mm = FF ? /> Function:(\d+):(\d+)/.exec(st) : new RegExp('d37cs-' + rt.id + '\\.js:(\\d+):(\\d+)').exec(st);
         return mm ? mapLine(rt.map, +mm[1] - LB + 1, +mm[2] - CB) : 0;
       }
       function report(rt, e){
@@ -3503,7 +3535,7 @@
         if (e instanceof Exception) return short ? m : e.$type + ': ' + m;
         let t = null, msg = m, r;
         if ((r = /Cannot read propert(?:y|ies) of (?:null|undefined)(?: \(reading '([^']*)'\))?/.exec(m)) || (r = /can't access property "([^"]*)",? .* is (?:null|undefined)/.exec(m)) ||
-          (r = /(?:null|undefined) is not an object \(evaluating '[^']*?\.?([^'.]*)'\)/.exec(m))) { t = 'NullReferenceException'; msg = 'обращение к «' + (r[1] || '?') + '» у пустого значения (null)'; }
+          (r = /(?:null|undefined) is not an object \(evaluating '[^']*?\.?([^'.]*)'\)/.exec(m))) { t = 'NullReferenceException'; msg = 'обращение к «' + (r[1] === 'length' ? 'Length' : r[1] || '?') + '» у пустого значения (null)'; }
         else if ((r = /Cannot set propert(?:y|ies) of (?:null|undefined)(?: \(setting '([^']*)'\))?/.exec(m))) { t = 'NullReferenceException'; msg = 'запись «' + (r[1] || '?') + '» в пустое значение (null)'; }
         else if ((r = /([\w$.\]\[]+) is not a function/.exec(m))) msg = 'нет метода «' + r[1].split('.').pop() + '» (или это не метод)';
         else if (/is not iterable/.test(m)) msg = 'foreach: это нельзя перебрать';
