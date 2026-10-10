@@ -1265,9 +1265,44 @@ class Кнопка
     void Сказать() => Debug.Log("нажали");
     public void Нажать() => действие?.Invoke();
 }`, ['удар 5', 'ещё 10', 'Цена: $10 ${x} {y}', 'нажали']);
+  cerr('типографские кавычки — подсказка', 'int a = 1;\nDebug.Log(“привет”);', 2, /обычные/);
+  cerr('длинный минус — подсказка', 'int a = 5 − 2;', 1, /минус/);
   cerr('goto case — понятная ошибка', 'int a = 1;\nswitch (a) { case 1: goto case 2; case 2: break; }', 2, /goto/);
   cerr('record — подсказка', 'int a = 1;\nrecord P(int X);', 2, /record/);
   cerr('указатели', 'int a = 1;\nint* p = &a;', 2, /Указатели|указатели|&/);
+
+  await out('локальная функция и корутина внутри метода видят поля (this)', `new Holder().Run();
+class Holder
+{
+    int n = 5;
+    public void Run()
+    {
+        void Show() { Debug.Log("n=" + n); }
+        IEnumerable<int> Twice() { yield return n; yield return n * 2; }
+        Show();
+        foreach (var v in Twice()) Debug.Log(v);
+        System.Action a = () => Show();
+        a();
+    }
+}`, ['n=5', '5', '10', 'n=5']);
+  await out('несколько конструкторов + base(…) с аргументами', `Debug.Log(new B().v + " " + new B(5).v + " " + new B("x").v);
+class A { public int v; public A(int x) { v = x; } }
+class B : A
+{
+    public B() : base(1) { }
+    public B(int y) : base(y * 2) { }
+    public B(string s) : this(50) { v++; }
+}`, ['1 10 101']);
+  await out('out var в условии while, шаблон в условии while', `var q = new Queue<int>(new[] { 1, 2, 3 });
+int sum = 0;
+while (q.TryDequeue(out var item)) sum += item;
+Debug.Log(sum);
+object[] things = { 1, "a", 2 };
+int k = 0;
+while (k < things.Length && things[k] is int num) { Debug.Log("int " + num); k++; }
+var d = new Dictionary<string, int> { ["x"] = 1 };
+if (d.TryGetValue("x", out var got)) { }
+Debug.Log(got);`, ['6', 'int 1', '1']);
 
   //@@MORE5@@
   await sleep(50);

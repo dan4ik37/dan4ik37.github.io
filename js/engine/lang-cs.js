@@ -8,9 +8,13 @@
 // Два стиля: инструкции верхнего уровня (C# 9) с API как в Roblox (part.Touched += …) и классы как в Unity:
 // class X : Script (или MonoBehaviour) { Start, Update(dt), OnTouched(hit, player), OnClicked(player), корутины IEnumerator +
 // yield return new WaitForSeconds(…), async/await Task.Delay }. List = массив JS, методы C# (Add, Count, Where…) — на прототипах
-// внутри песочницы. Vector3: + − * / == — через помощников $.add/$.sub/… (у чисел — обычные операторы JS).
+// внутри песочницы (видны и JS-скриптам — только добавляются). Vector3: + − * / == — через помощников $.add/$.sub/… (у чисел —
+// обычные операторы JS); Vector3 неизменяемый: v.x = 5 переводится в v = новый вектор (как копия struct). Классы общие для всех
+// C#-скриптов запуска (GameManager.Instance, GetComponent<T>()): скрипт со ссылкой на класс из скрипта ниже переводится после всех.
+// int-деление — когда оба типа известны как целые (литералы, объявленные переменные/поля/свойства, int[]/List<int>, Count,
+// Mathf.*ToInt …); у значений мира без типа (player.GetStat, GetAttribute, object/dynamic) деление обычное.
 // Не поддерживается: LINQ-запросы from…select, goto, unsafe/указатели, record, операторы приведения, переполнение int,
-// ref-локальные; struct — как class (копия при присваивании). Тесты: node scripts/lang-cs-test.cjs
+// ref-локальные; struct — как class (копия при присваивании и передаче). Тесты: node scripts/lang-cs-test.cjs
 (() => {
   const E = window.D37E = window.D37E || {};
 
@@ -196,6 +200,8 @@
           continue;
         }
         if (c === '`') throw CsErr('Символ ` в C# не используется (строки — в кавычках "…", $"…{x}…")', line);
+        if ('“”„«»‘’'.includes(c)) throw CsErr('Кавычки «' + c + '» — типографские (из текста или мессенджера): в коде пиши обычные "…" и \'…\'', line);
+        if (cc === 0x2212 || cc === 0x2013 || cc === 0x2014) throw CsErr('Символ «' + c + '» — это не минус: в коде пиши обычный -', line);
         throw CsErr('Непонятный символ «' + c + '»', line);
       }
       T.push({ k: 'eof', v: '', line, s: i, e: i, ws: true });
