@@ -15,7 +15,7 @@
 ## Ожидает запуска владельцем (обновлять этот список!)
 1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
    и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_* (функции целиком из
+2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_* (функции целиком из
    games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
@@ -342,6 +342,10 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   «заборчика» из 6, обязательный максимум кубиков и «больший кубик» (`maxRem` с запоминанием — иначе дубли считаются
   слишком долго), марс. Позиции у каждого свои (0 — голова), на доске abs = pos (белые) / pos+12 (чёрные). Бот — все
   итоговые позиции хода + оценка. Онлайн — стол table.js на 2, кубики бросает хозяин. Ключи: nardy_easy / nardy_hard / nardy_online.
+- «Арена» (#/games/arena, js/games/arena.js) — перестрелка 1 на 1 в реальном времени: два «джойстика» пальцами, кусты,
+  аптечки, «супер»; до 5 побед или 2,5 мин. Бот (3 уровня, упреждение, объезд стен) — бот против бота в node, все партии
+  кончаются. Онлайн — netplay.js: хозяин считает пули/урон и не шлёт гостю соперника из кустов; свой бег каждый считает сам.
+  Ключи: arena_easy / arena_normal / arena_hard / arena_online.
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —
