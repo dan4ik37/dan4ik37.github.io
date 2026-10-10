@@ -467,7 +467,17 @@ void start();
 #else
 void start(void);
 #endif
+#ifndef __wasi__
+#ifdef __cplusplus
+extern "C" void __wasm_call_ctors(void);
+#else
+void __wasm_call_ctors(void);
+#endif
+#endif
 D37_EXPORT(d37_start) __attribute__((weak)) void d37_export_start(void) {
+#ifndef __wasi__
+  __wasm_call_ctors();   /* без libc глобальные конструкторы зовём сами (в WASI это делает _initialize) */
+#endif
 #if D37_HOSTED
   std::setvbuf(stdout, nullptr, _IONBF, 0);   /* printf — сразу в «Вывод», даже без перевода строки */
   std::setvbuf(stderr, nullptr, _IONBF, 0);

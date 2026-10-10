@@ -14,6 +14,7 @@ delete globalThis.window;
 const E = globalThis.D37E;
 let pass = 0, fail = 0;
 const notes = [];
+const SKIP = String(process.env.D37_SKIP || '').split(',');   // D37_SKIP=cpp,rust — без компиляторов
 const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : typeof extra === 'string' ? extra : JSON.stringify(extra)); } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const read = p => fs.readFileSync(path.join(SITE, p), 'utf8').replace(/\r\n/g, '\n');
@@ -140,8 +141,9 @@ async function main(){
       ],
     });
     ok(new WebAssembly.Module(wasm) instanceof WebAssembly.Module, 'ручной модуль собран');
-    const S = sandbox({ objs: [part('a', 'Кнопка'), part('b', 'Другая')], scripts: [wasmScript(wasm, 'cpp', 'a', 'ручной')] });
+    const S = sandbox({ objs: [part('a', 'Кнопка'), part('b', 'Другая')], scripts: [{ name: 'js', parent: 'b', code: "print('js рядом', script.Parent.Name);" }, wasmScript(wasm, 'cpp', 'a', 'ручной')] });
     ok(S.prints().includes(S1), 'print из d37_start', S.prints());
+    ok(S.prints().includes('js рядом Другая'), 'JS-скрипт в том же мире работает рядом');
     ok(S.sets('a', 'pos').some(m => m.v.join() === '1,2,3'), 'set3: положение', S.sets('a'));
     ok(S.of('want').some(m => m.ev === 'touched' && m.id === 'a' && m.on), 'on_touched: подписка у хозяина');
     ok(S.of('prompt').some(m => m.id === 'a' && m.text === S3 && m.hold === 0.5), 'prompt: текст и удержание', S.of('prompt'));
@@ -218,7 +220,8 @@ async function main(){
   // ═══ 2. C++: настоящий clang (@yowasp/clang) ═══
   const clangDir = process.env.D37_CLANG || path.join(os.tmpdir(), 'd37-wasm', 'clang', 'node_modules', '@yowasp', 'clang');
   // ── «⚙️ Собрать» целиком, как в студии: compile() → module Worker из Blob (тут — подменный, в этом же процессе) → clang ──
-  if (fs.existsSync(path.join(clangDir, 'gen', 'bundle.js'))) {
+  const haveClang = !SKIP.includes('cpp') && fs.existsSync(path.join(clangDir, 'gen', 'bundle.js'));
+  if (haveClang) {
     const localCdn = pathToFileURL(clangDir).href + '/';
     const saved = { Worker: globalThis.Worker, Blob: globalThis.Blob, fetch: globalThis.fetch, cou: URL.createObjectURL };
     const blobs = new Map(), types = [];
@@ -247,10 +250,10 @@ async function main(){
     } catch (e) { ok(false, '«⚙️ Собрать» не упал', e && e.stack); }
     finally { Object.assign(globalThis, { Worker: saved.Worker, Blob: saved.Blob, fetch: saved.fetch }); URL.createObjectURL = saved.cou; }
   }
-  let runClang = null;
-  if (fs.existsSync(path.join(clangDir, 'gen', 'bundle.js'))) {
+  let runClang = null, cppCoin = null;
+  if (haveClang) {
     try { ({ runClang } = await import(pathToFileURL(path.join(clangDir, 'gen', 'bundle.js')).href)); } catch (e) { notes.push('C++: @yowasp/clang не загрузился — ' + e.message); }
-  } else notes.push('C++ пропущен: нет ' + clangDir + ' (npm i @yowasp/clang@22.0.0-git20542-10 в %TEMP%/d37-wasm/clang)');
+  } else notes.push(SKIP.includes('cpp') ? 'C++ пропущен (D37_SKIP)' : 'C++ пропущен: нет ' + clangDir + ' (npm i @yowasp/clang@22.0.0-git20542-10 в %TEMP%/d37-wasm/clang)');
   if (runClang) {
     const header = read('sdk/d37.h');
     let ms = 0, builds = 0;
@@ -270,6 +273,7 @@ async function main(){
     const ex = E.langs.cpp.examples, built = [];
     for (const [title, src] of ex) { try { built.push(await cpp(src)); } catch (e) { built.push(null); ok(false, 'C++ пример собирается: ' + title, e.log); } }
     ok(built.every(Boolean), 'C++: все ' + ex.length + ' примеров собрались', built.map(b => b && b.wasm.length));
+    cppCoin = built[0];
     ok(built.every(b => b && !b.log), 'C++: примеры и d37.h — без предупреждений (-Wall)', built.map(b => b && b.log).filter(Boolean));
     if (built[0]) { const S = await run(built[0], [part('a', 'Монетка')]); S.ev('touched', { id: 'a' }); ok(S.player('stat').some(m => m.v.k === 'Монеты' && m.v.v === 1) && S.of('sound').some(m => m.name === 'coin') && S.of('destroy').some(m => m.id === 'a') && !S.errors().length, 'C++ монетка: очко, звук, исчезла', S.msgs); }
     if (built[1]) { const S = await run(built[1], [part('a', 'Лава')]); S.ev('touched', { id: 'a' }); ok(S.player('health').some(m => m.v === 0), 'C++ лава: здоровье 0', S.msgs); }
@@ -295,12 +299,13 @@ async function main(){
 #include <cstdio>
 using namespace d37;
 static std::vector<std::string> log_;
+static std::string g_str = std::string("глоб") + "альная";
 static int touches = 0;
 Part self_;
 __attribute__((noinline)) int crash(int k) { volatile int z = 0; return k / z; }
 void start() {
   self_ = script_parent();
-  print("имя: " + std::string(self_.name()));
+  print("имя: " + std::string(self_.name()) + " " + g_str);
   printf("printf %d %s\\n", 42, "ok");
   printf("без перевода строки");
   Part box = find("Ящик");
@@ -333,7 +338,7 @@ void start() {
     if (bigR) {
       const S = await run(bigR, [part('a', 'Я'), part('b', 'Ящик', { pos: [3, 1, 0] }), { id: 'm', cls: 'Model', parent: null, p: { name: 'Дом' } }, { ...part('c', 'Окно'), parent: 'm' }]);
       const P = S.prints();
-      ok(P.includes('имя: Я') && P.includes('printf 42 ok') && P.includes('без перевода строки'), 'C++: std::string, printf построчно и хвост без \\n', P);
+      ok(P.includes('имя: Я глобальная') && P.includes('printf 42 ok') && P.includes('без перевода строки'), 'C++: std::string, глобальный конструктор, printf построчно и хвост без \\n', P);
       ok(P.includes('ящик: есть x=3 детей у модели: 1'), 'C++: find, position, child_count, Text с числами', P);
       ok(S.of('clone').length === 1 && S.of('new').some(m => m.parent === 'm'), 'C++: clone и new_part в модель', S.msgs.filter(m => m.t === 'clone' || m.t === 'new'));
       ok(P.includes('новая в доме: 1 материал neon'), 'C++: parent(), set_material/material()', P);
@@ -345,7 +350,7 @@ void start() {
       S.ev('touched', { id: 'a' }); S.ev('touched', { id: 'a' });
       ok(S.prints().includes('касаний 2 игрок Тест') && S.player('stat').length === 2, 'C++: лямбда со счётчиком', S.prints());
       S.clear(); S.ev('touchEnded', { id: 'a' });
-      ok(S.errors().some(m => /границы памяти/.test(m.msg)), 'C++: чтение по плохому адресу → trap → ошибка', S.errors());
+      ok(S.errors().some(m => /границы памяти/.test(m.msg) && /в функции start\(\) → лямбда/.test(m.msg)), 'C++: чтение по плохому адресу → trap → ошибка «в функции start() → лямбда»', S.errors());
       S.clear(); S.ev('prompt', { id: 'a' });
       ok(S.errors().some(m => /деление на ноль/.test(m.msg) && /crash/.test(m.msg)), 'C++: деление на ноль → ошибка с именем функции', S.errors());
       await sleep(400);
@@ -391,8 +396,9 @@ void start(void) { self_ = d37_script(); d37_on_touched(self_, D37_CB(on_touch))
     }
     const freeCpp = `using namespace d37;
 Part self_;
+int g_players = d37_players();   // динамическая инициализация — её зовёт __wasm_call_ctors из d37.h
 void touched(Player p) { p.add_stat("Очки", 3); p.message(Text() << "привет " << p.name()); }
-void start() { self_ = script_parent(); self_.on_touched(touched); delay(0.01, [] { print("лямбда без захвата"); }); on_update([](double dt) { self_.set_rotation(0, 45, 0); }); }
+void start() { print(Text() << "игроков при старте " << g_players); self_ = script_parent(); self_.on_touched(touched); delay(0.01, [] { print("лямбда без захвата"); }); on_update([](double dt) { self_.set_rotation(0, 45, 0); }); }
 `;
     let fR = null;
     try { fR = await cpp(freeCpp, ['clang++', '--target=wasm32', '-std=c++20', '-O2', '-nostdlib', '-fno-exceptions', '-Wl,--no-entry', '-include', 'd37.h', 'script.cpp', '-o', 'script.wasm']); } catch (e) { ok(false, 'C++ без libc собирается', e.log); }
@@ -401,14 +407,15 @@ void start() { self_ = script_parent(); self_.on_touched(touched); delay(0.01, [
       S.ev('touched', { id: 'a' }); S.tick(0.1);
       await sleep(60);
       ok(S.player('stat').some(m => m.v.v === 3) && S.player('message').some(m => m.v.text === 'привет Тест') && S.prints().includes('лямбда без захвата') && S.sets('a', 'rot').length === 1, 'C++ без libc: обработчик-функция, лямбда, кадр', S.msgs);
+      ok(S.prints().includes('игроков при старте 1'), 'C++ без libc: глобальные конструкторы выполнены', S.prints());
     }
     notes.push(`C++: собрано ${builds} модулей настоящим clang (@yowasp/clang), в среднем ${Math.round(ms / Math.max(1, builds))} мс` + (built[0] ? `, монетка — ${built[0].wasm.length} байт` : ''));
   }
 
   // ═══ 3. Rust: настоящий cargo ═══
   const home = os.homedir(), exe = process.platform === 'win32' ? '.exe' : '';
-  const cargo = process.env.D37_CARGO || [path.join(home, '.cargo', 'bin', 'cargo' + exe)].find(p => fs.existsSync(p)) || (() => { try { cp.execFileSync('cargo', ['--version'], { stdio: 'ignore' }); return 'cargo'; } catch (e) { return null; } })();
-  if (!cargo) notes.push('Rust пропущен: нет cargo (rustup: https://rustup.rs, rustup target add wasm32-unknown-unknown)');
+  const cargo = SKIP.includes('rust') ? null : [process.env.D37_CARGO, path.join(home, '.cargo', 'bin', 'cargo' + exe)].find(p => p && fs.existsSync(p)) || (() => { try { cp.execFileSync('cargo', ['--version'], { stdio: 'ignore' }); return 'cargo'; } catch (e) { return null; } })();
+  if (!cargo) notes.push(SKIP.includes('rust') ? 'Rust пропущен (D37_SKIP)' : 'Rust пропущен: нет cargo (rustup: https://rustup.rs, rustup target add wasm32-unknown-unknown)');
   else {
     const work = path.join(os.tmpdir(), 'd37-wasm', 'rust-test'), target = path.join(os.tmpdir(), 'd37-wasm', 'rust-target');
     fs.rmSync(work, { recursive: true, force: true });
@@ -421,10 +428,11 @@ void start() { self_ = script_parent(); self_.on_touched(touched); delay(0.01, [
       const r = cp.spawnSync(cargo, ['build', '--release', '--target', 'wasm32-unknown-unknown', '--quiet'], { cwd: work, env: { ...process.env, CARGO_TARGET_DIR: target }, encoding: 'utf8' });
       ms += Date.now() - t0; builds++;
       if (r.status !== 0) return { err: (r.stderr || '') + (r.error ? r.error.message : '') };
-      return { wasm: new Uint8Array(fs.readFileSync(path.join(target, 'wasm32-unknown-unknown', 'release', 'd37_script.wasm'))) };
+      return { wasm: new Uint8Array(fs.readFileSync(path.join(target, 'wasm32-unknown-unknown', 'release', 'd37_script.wasm'))), warn: String(r.stderr || '').trim() };
     };
     const tpl = rust(read('sdk/rust-template/src/lib.rs'));
     ok(tpl.wasm, 'Rust: шаблон собрался', tpl.err);
+    ok(tpl.wasm && !tpl.warn, 'Rust: шаблон и d37.rs — без предупреждений', tpl.warn);
     if (tpl.wasm) {
       const S = sandbox({ objs: [part('a', 'Кубик', { pos: [0, 2, 0] })], scripts: [wasmScript(tpl.wasm, 'rust')] });
       ok(S.prints().includes('Привет из Rust! Я в детали «Кубик»') && !S.errors().length, 'Rust шаблон: log! и name()', S.msgs);
@@ -450,6 +458,12 @@ void start() { self_ = script_parent(); self_.on_touched(touched); delay(0.01, [
     if (built[3]) { const S = run(built[3], [part('a', 'Крутилка')]); S.tick(0.5); S.tick(0.5); const r = S.sets('a', 'rot'); ok(r.length === 2 && Math.abs(r[1].v[1] - 90) < 1e-6, 'Rust крутилка', r); }
     if (built[4]) { const S = run(built[4], [part('a', 'Платформа', { pos: [0, 1, 0] })]); ok(S.of('tween').some(m => m.goals.pos.join() === '0,1,12' && m.repeat === -1 && m.ease === 'sine'), 'Rust платформа', S.msgs); }
     if (built[5]) { const S = run(built[5], [part('a', 'X')], null); ok(S.player('message').some(m => m.v.text === 'Привет, Тест! Собери все монетки 🪙') && S.prints().includes('Вошёл Тест'), 'Rust при входе', S.msgs); }
+    // свой проект на edition 2024 (так создаёт cargo new) — d37.rs собирается и там
+    const toml = fs.readFileSync(path.join(work, 'Cargo.toml'), 'utf8');
+    fs.writeFileSync(path.join(work, 'Cargo.toml'), toml.replace('edition = "2021"', () => 'edition = "2024"'));
+    const e24 = rust(read('sdk/rust-template/src/lib.rs'));
+    ok(e24.wasm && !e24.warn, 'Rust: d37.rs собирается и в edition 2024, без предупреждений', e24.err || e24.warn);
+    fs.writeFileSync(path.join(work, 'Cargo.toml'), toml);
     // паника: сообщение с номером строки lib.rs, без второй ошибки «аварийная остановка»; остальные обработчики живы
     const pan = rust(`#[macro_use]
 mod d37;
@@ -478,6 +492,12 @@ fn start() {
       S.ev('clicked', { id: 'a' });
       await sleep(80);
       ok(S.player('stat').some(m => m.v.k === 'Клики') && S.prints().includes('every 2') && !S.prints().includes('не должно'), 'Rust: после паники другие обработчики живы, cancel работает', S.msgs);
+    }
+    // C++ и Rust в одном мире: у каждого модуля свои номера и состояние
+    if (cppCoin && built[0]) {
+      const S = sandbox({ objs: [part('a', 'Монетка C++'), part('b', 'Монетка Rust')], scripts: [wasmScript(cppCoin.wasm, 'cpp', 'a', 'c'), wasmScript(built[0].wasm, 'rust', 'b', 'r')] });
+      S.ev('touched', { id: 'b' }); S.ev('touched', { id: 'a' });
+      ok(S.of('destroy').map(m => m.id).join() === 'b,a' && S.player('stat').length === 2 && !S.errors().length, 'C++ и Rust в одном мире', S.msgs);
     }
     notes.push(`Rust: собрано ${builds} модулей настоящим cargo (${cp.execFileSync(cargo, ['--version'], { encoding: 'utf8' }).trim()}), в среднем ${Math.round(ms / Math.max(1, builds))} мс` + (tpl.wasm ? `, шаблон — ${tpl.wasm.length} байт` : ''));
   }

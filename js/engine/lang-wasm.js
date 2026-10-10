@@ -47,16 +47,25 @@
       [/out of memory|allocation failed|could not allocate/i, 'не хватило памяти'],
     ];
     const trapText = m => { for (const [re, t] of TRAPS) if (re.test(m)) return t; return m; };
-    // где упало: первая «своя» функция модуля из стека (имена — из секции name)
-    const SKIP = /^(d37_|d37::detail|d37::|std::|core::|alloc::|__|_initialize|rust_|panic_abort|dlmalloc|abort$|<)/;
+    // где упало: первая «своя» функция модуля из стека (имена — из секции name; лямбда, встроенная в std::function, —
+    // по аргументу шаблона: …player_box<start()::$_0>…)
+    const INTERNAL = /(^|[\s<(,:&*])(std|core|alloc|d37)::|^(__|_initialize|rust_|panic_abort|dlmalloc|abort$|exit$|d37_(event|start|update|export_\w+)\b)/;
+    const LAMBDA = /((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*\([^()]*\))::\$_\d+/, CLOSURE = /((?:[A-Za-z_]\w*::)*[A-Za-z_]\w*)::\{\{closure\}\}/;
+    const mine = p => !/(^|::)(d37|std|core|alloc)(::|$)/.test(p);
     function whereOf(st){
       for (const line of String(st || '').split('\n')) {
         if (!/wasm-function|wasm:\/\//.test(line)) continue;
         const m = /^\s*at\s+(?:async\s+)?(.+?)\s+\(wasm:\/\//.exec(line) || /^\s*([^@\s][^@]*)@.*wasm-function/.exec(line);
         let n = m ? m[1].trim() : '';
         if (!n || /^(wasm-function|\$?func\d+$)/.test(n)) continue;
-        n = n.replace(/^\$/, '').replace(/::h[0-9a-f]{16}$/, '').replace(/^d37_script::/, '').replace(/\{\{closure\}\}/g, 'замыкание').replace(/::\$_\d+::operator\(\)\(.*$/, ' → лямбда');
-        if (SKIP.test(n)) continue;
+        n = n.replace(/^\$/, '').replace(/^[^\s:<>()]+\.wasm\./, '').replace(/::h[0-9a-f]{16}$/, '');   // «script.wasm.» — имя модуля у V8
+        const l = LAMBDA.exec(n), c = CLOSURE.exec(n);
+        if (INTERNAL.test(n)) {
+          if (l && mine(l[1])) return ' (в функции ' + l[1] + ' → лямбда)';
+          if (c && mine(c[1])) return ' (в функции ' + c[1].replace(/^[a-z_][a-z0-9_]*::/, '') + ' → замыкание)';
+          continue;
+        }
+        n = n.replace(/^d37_script::/, '').replace(/::\{\{closure\}\}/g, ' → замыкание').replace(/::\$_\d+::operator\(\)\(.*$/, ' → лямбда');
         return ' (в функции ' + n.slice(0, 80) + ')';
       }
       return '';
@@ -116,7 +125,11 @@
         catch (e) { fail(e); }
         finally {
           depth--;
-          if (top) { try { flush(); } catch (e) {} if (mem && mem.buffer.byteLength > MAX_MEM) stop('модуль занял больше 256 МБ памяти — скрипт остановлен'); }
+          if (top) {
+            try { flush(); } catch (e) {}
+            if (mem && mem.buffer.byteLength > MAX_MEM) stop('модуль занял больше 256 МБ памяти — скрипт остановлен');
+            if (ctx.setCurrent) ctx.setCurrent('');   // ошибки чужих task.delay не припишутся этому скрипту (из событий runtime вернёт своё)
+          }
         }
       }
       function fail(e){
@@ -449,7 +462,7 @@
     CW.onmessage = e => {
       const d = e.data || {}, j = cwJobs.get(d.id); if (!j) return;
       if (d.progress) { j.step('progress', d.progress); return; }
-      if (d.phase) { j.step(d.phase); return; }
+      if (d.phase) { j.arm(120e3, 'Сборка идёт дольше 2 минут — остановлена'); j.step(d.phase); return; }   // скачано — дальше только сборка
       cwJobs.delete(d.id); clearTimeout(j.timer); j.done(d);
       clearTimeout(cwIdle); cwIdle = setTimeout(() => { if (!cwJobs.size) killCW(); }, 5 * 60e3);   // 5 минут без сборок — освободить память
     };
@@ -463,11 +476,12 @@
   }
   function runJob(job, step){
     return new Promise(res => {
-      const id = ++cwSeq;
-      const timer = setTimeout(() => { cwJobs.delete(id); killCW(); res({ ok: false, log: 'Сборка идёт дольше 3 минут — остановлена' }); }, 180e3);
-      cwJobs.set(id, { done: res, step, timer });
+      const id = ++cwSeq, j = { done: res, step, timer: 0 };
+      j.arm = (ms, why) => { clearTimeout(j.timer); j.timer = setTimeout(() => { cwJobs.delete(id); killCW(); res({ ok: false, log: why }); }, ms); };
+      j.arm(15 * 60e3, 'Компилятор не скачался за 15 минут — проверь интернет и нажми «⚙️ Собрать» ещё раз');   // медленный интернет: 23 МБ
+      cwJobs.set(id, j);
       try { clangWorker().postMessage({ id, args: job.args, files: job.files, out: job.out }); }
-      catch (e) { cwJobs.delete(id); clearTimeout(timer); res({ ok: false, log: 'ERR ' + String(e && e.message || e) }); }
+      catch (e) { cwJobs.delete(id); clearTimeout(j.timer); res({ ok: false, log: 'ERR ' + String(e && e.message || e) }); }
     });
   }
   let header = null;
@@ -482,7 +496,7 @@
     const job = cppJob(src, await sdkHeader());
     let shown = -1;
     const r = await runJob(job, (phase, p) => {
-      if (phase === 'progress') { const pc = p[1] ? Math.min(100, Math.floor(p[0] / p[1] * 100)) : 0; if (pc !== shown) { shown = pc; step(pc < 100 ? 'загрузка компилятора ' + pc + '% (~23 МБ, один раз)' : 'запуск компилятора…'); } }
+      if (phase === 'progress') { const pc = p[1] ? Math.min(100, Math.floor(p[0] / p[1] * 100)) : 0; if (pc !== shown) { shown = pc; step(pc === 0 ? 'загрузка компилятора (~23 МБ, один раз)…' : pc < 100 ? 'загрузка компилятора ' + pc + '%' : 'запуск компилятора…'); } }
       else if (phase === 'build') step('сборка…');
     });
     return cppResult(r.ok, r.wasm, r.log);
