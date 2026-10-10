@@ -153,7 +153,7 @@
       ch: ph.character({ x: o.x || 0, y: o.y, z: o.z || 0, r: o.r || .42, h: o.h || 2.1, step: o.step ?? .62 }),
       yaw: o.yaw || 0, mode: 'move', stamina: 100, exhausted: false, crouch: false, crouchW: 0,
       running: false, moving: false, speed: 0, climbing: false, now: 0,
-      roll: null, pk: null, hang: null, ladder: null, seat: null, stepOff: 0, _lastY: 0, _wasG: true,
+      roll: null, pk: null, hang: null, ladder: null, seat: null, stepOff: 0, _lastY: 0, _wasG: true, swim: false, dive: false, _swimCD: 0, _strokeT: 0,
       _lastGround: 0, _buf: 0, _jumped: false, _regenAt: 0, _stepT: 0, _drainAt: 0, _sway: 0, _toastAt: 0, _sprint: false, _climbPh: 0,
     };
     const ch = P.ch;
@@ -230,6 +230,16 @@
       // бег: держать «бег», не присев, есть силы, руки свободны
       P.running = !!C?.held('run') && !P.crouch && P.canRun && !P.exhausted && !P.armsFull && wl > .1;
       const speed = (P.crouch ? P.crouchSpeed : P.running ? P.runSpeed : P.walk) * P.speedMul;
+      // плавание: вода глубже ~1,1 м — держимся у поверхности (уровень даёт игра: ph.waterLevel(x, z) → высота или −∞)
+      const lvl = ph.waterLevel ? ph.waterLevel(ch.x, ch.z) : -Infinity;
+      if (lvl > -Infinity && P.now >= P._swimCD) {
+        const bottom = ph.supportAt(ch.x, ch.z, ch.r * .5, lvl).y;
+        if (lvl - bottom > 1.1 * U && (P.swim || ch.y < lvl - .25 * U)) {
+          if (!P.swim) { P.swim = true; emit('splash', { v: Math.max(0, -ch.vy), x: ch.x, y: lvl, z: ch.z }); }
+          swimMove(dt, C, w, wl, lvl, bottom, jumpDown, cam); return;
+        }
+        if (P.swim) { P.swim = P.dive = false; if (bottom > ch.y) ch.y = bottom; }   // вышли на мель — встаём на дно
+      } else if (P.swim && P.now >= P._swimCD) P.swim = P.dive = false;
       // прыжок: с «запасом» после края и «заранее» до земли; присев — не прыгает
       if (ch.grounded) { P._lastGround = P.now; P._jumped = false; }
       if (jumpDown) P._buf = P.jumpBuffer; else P._buf = Math.max(0, P._buf - dt);
@@ -251,6 +261,33 @@
         P._stepT -= dt;
         if (P._stepT <= 0) { emit('step', { floor: floorOf(), run: P.running, x: ch.x, y: ch.y, z: ch.z }); P._stepT = .4 / (P.running ? 1.5 : 1); }
       } else P._stepT = 0;
+    }
+
+    // ── Плавание: у поверхности; бег — быстрее (тратит силы); «присесть» — нырнуть (до дна или 3 м); Пробел у берега — вылезти ──
+    function swimMove(dt, C, w, wl, lvl, bottom, jumpDown, cam){
+      P.crouch = false; ch.h = P.standH; P.crouchW = 0;
+      P.dive = !!C?.held('crouch');
+      P.running = !!C?.held('run') && P.canRun && !P.exhausted && wl > .1;
+      const speed = (P.running ? P.runSpeed * .6 : P.walk * .7) * P.speedMul;
+      if (jumpDown) {
+        const fx = Math.sin(P.yaw), fz = Math.cos(P.yaw), shore = ph.supportAt(ch.x + fx * .9 * U, ch.z + fz * .9 * U, ch.r * .5, lvl + 1.3 * U).y;
+        if (shore >= lvl - .35 * U) {   // берег рядом — выпрыгнуть на него
+          ch.vy = Math.sqrt(2 * ch.g * Math.max(.6 * U, shore - ch.y + .45 * U)); ch.grounded = false; ch.airT = 0;
+          P.swim = P.dive = false; P._swimCD = P.now + .5;
+          emit('jump', { x: ch.x, y: ch.y, z: ch.z });
+          ph.move(ch, dt, wl > 1e-3 ? w : { x: 0, z: 0 }, P.walk, false); ch.impact = 0;
+          return;
+        }
+      }
+      const target = P.dive ? Math.max(bottom + .05, lvl - 3 * U) : lvl - .55 * U, maxV = 2.6 * U;
+      ch.vy = Math.max(-maxV, Math.min(maxV, (target - ch.y) * 3.5)) + ch.g * dt;   // + тяжесть шага: её снимет fall()
+      ch.grounded = false; ch.airT = 0;
+      ph.move(ch, dt, wl > 1e-3 ? w : { x: 0, z: 0 }, speed, false);
+      ch.impact = 0;
+      P.speed = Math.hypot(ch.vx, ch.vz); P.moving = P.speed > .3; P._sprint = P.running && P.speed > .5;
+      if (P.first && cam) P.yaw = cam.yaw + Math.PI;
+      else if (wl > .1 && P.speed > .3) P.yaw = angTo(P.yaw, Math.atan2(w.x, w.z), P.turn * .7, dt);
+      if (P.moving) { P._strokeT -= dt; if (P._strokeT <= 0) { emit('swim', { x: ch.x, y: lvl, z: ch.z, run: P.running }); P._strokeT = P.running ? .5 : .75; } } else P._strokeT = 0;
     }
 
     // ── Кувырок (RollRoutine) ──
@@ -483,7 +520,7 @@
       ch.vx = ch.vy = ch.vz = 0; ch.grounded = true; ch.h = P.standH;
       if (yaw != null) P.yaw = yaw;
       P.mode = 'move'; P.pk = P.hang = P.roll = P.seat = P.ladder = null; P.crouch = false; P.crouchW = 0;
-      P.stepOff = 0; P._lastY = ch.y; P._wasG = true;
+      P.stepOff = 0; P._lastY = ch.y; P._wasG = true; P.swim = P.dive = false;
       ph.triggers(ch);
     };
     P.push = (vx = 0, vy = 0, vz = 0) => {
@@ -496,7 +533,7 @@
       x: ch.x, y: ch.y + P.stepOff, z: ch.z, yaw: P.yaw,
       moving: P.mode === 'move' ? P.moving : P.climbing,
       speed: P.mode === 'move' ? P.speed : 0,
-      air: P.mode === 'move' && !ch.grounded && ch.airT > .12,
+      air: P.mode === 'move' && !P.swim && !ch.grounded && ch.airT > .12, swim: P.swim, dive: P.dive,
       crouch: P.mode === 'move' || P.mode === 'roll' ? P.crouchW : 0,
       sit: P.mode === 'sit' && !P.seat?.stand, seatY: P.seat && !P.seat.stand ? P.seat.y : null,
       roll: P.mode === 'roll' ? P.roll.t / ROLL_T : -1, rollBack: P.mode === 'roll' && P.roll.back,

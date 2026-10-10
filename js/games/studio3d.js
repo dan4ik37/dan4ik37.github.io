@@ -280,6 +280,8 @@ Players.PlayerAdded.Connect(player => {
     const SC = ed.SC = E.scene(R, ph, { edit: true });
     SC.terrain = TR;
     ed.FX = SC.fx = E.fx(R);
+    // вода ландшафта: в ней плавают (player.js)
+    ph.waterLevel = (x, z) => TR.enabled && TR.water.on && Math.abs(x) < TR.size / 2 && Math.abs(z) < TR.size / 2 ? TR.water.level : -Infinity;
     R.clouds(10, 4);
     // плоская земля, когда ландшафт выключен
     ed.ground = new R.T.Mesh(new R.T.PlaneGeometry(600, 600), R.texMat('s3ground', R.proc('grass'), { tile: 3, flatColor: '#6cbf58' }));
@@ -1208,6 +1210,8 @@ Players.PlayerAdded.Connect(player => {
     if (I.touch) H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
     const AU = E.audio();
     P.on('step', e => AU.step(e.floor, e.run, e.x, e.y, e.z)); P.on('jump', e => AU.play('jump', e)); P.on('land', e => AU.play('land', { ...e, vol: .35 + e.k * .65 }));
+    P.on('splash', e => AU.play('step_water' + ((Math.random() * 3) | 0), { x: e.x, y: e.y, z: e.z, vol: Math.min(1, .55 + e.v * .06), rate: .85 }));
+    P.on('swim', e => AU.play('step_water' + ((Math.random() * 3) | 0), { x: e.x, y: e.y, z: e.z, vol: e.run ? .55 : .4, rate: .78 }));
     const nick = (typeof currentProfile !== 'undefined' && currentProfile?.nick) || window.GameRoom?.nick?.() || 'Игрок';
     // HUD: очки, здоровье, надписи
     const hud = document.createElement('div'); hud.className = 's3-hud';
@@ -1235,6 +1239,7 @@ Players.PlayerAdded.Connect(player => {
   function stopPlay(){
     const ed = ED, pl = ed.playing; if (!pl) return;
     pl.loop.stop(); pl.SH.stop(); pl.unf?.(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); pl.hud.remove();
+    for (const l of pl.amb || []) l.h.stop();
     ed.playing = null;
     const sel = ed.sel?.id;
     ed.SC.fromJSON({ objects: pl.snap });
@@ -1335,6 +1340,25 @@ Players.PlayerAdded.Connect(player => {
     pl.health = pl.maxHealth; drawHealth();
     pl.SH.event('respawned', { player: 'me' });
   }
+  // Звуки окружения в игре: у огня — треск, дождь и снег — со всех сторон, у воды — плеск (synth.js, A.loop)
+  const AMB = { fire: ['amb_fire', .75], rain: ['amb_rain', .55], snow: ['amb_wind', .35], magic: ['amb_magic', .35], sparkles: ['amb_magic', .25] };
+  function ambTick(pl){
+    const ed = ED, SC = ed.SC;
+    if (!pl.amb) {
+      pl.amb = [];
+      for (const o of SC.all()) if (o.cls === 'Effect' && AMB[o.kind]) pl.amb.push({ id: o.id, area: o.kind === 'rain' || o.kind === 'snow', vol: AMB[o.kind][1], h: pl.AU.loop(AMB[o.kind][0], { vol: 0 }) });
+      if (ed.TR.enabled && ed.TR.water.on) pl.amb.push({ water: true, vol: .3, h: pl.AU.loop('amb_water', { vol: 0 }) });
+    }
+    const cam = ed.R.camera.position;
+    for (const l of pl.amb) {
+      if (l.water) { l.h.set({ x: cam.x, y: ed.TR.water.level, z: cam.z, vol: l.vol }); continue; }
+      const o = SC.get(l.id);
+      if (!o || o.enabled === false) { l.h.set({ vol: 0 }); continue; }
+      if (l.area) { l.h.set({ x: null, vol: l.vol }); continue; }
+      const host = o.parent && SC.get(o.parent), p = host?.pos && host.cls !== 'Model' ? host.pos : o.pos;
+      l.h.set({ x: p[0], y: p[1], z: p[2], vol: l.vol });
+    }
+  }
   function drawHealth(){ const pl = ED.playing; if (!pl) return; const i = pl.hud.querySelector('.s3-health i'); i.style.width = (pl.health / pl.maxHealth * 100) + '%'; i.parentElement.classList.toggle('low', pl.health < pl.maxHealth * .35); }
   function drawStats(){ const pl = ED.playing; const box = pl.hud.querySelector('.s3-stats'), e = Object.entries(pl.stats); box.hidden = !e.length; box.innerHTML = `<b>${esc(pl.nick)}</b>` + e.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join(''); }
   function drawLabels(){ const pl = ED.playing; pl.hud.querySelector('.s3-labels').innerHTML = Object.values(pl.labels).map(t => `<div>${esc(t)}</div>`).join(''); }
@@ -1396,6 +1420,7 @@ Players.PlayerAdded.Connect(player => {
     A.pose('me', P.pose());
     rig.update(dt, P, { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom }, ed.ph, C);
     A.update(dt, t, R.camera.position);
+    ambTick(pl);
     pl.AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
     // клик/тап по детали со скриптом «Clicked»
     for (const tp of I.taps) { const b = R.r.domElement.getBoundingClientRect(); ed.ray.setFromCamera(new R.T.Vector2((tp.x - b.left) / b.width * 2 - 1, -((tp.y - b.top) / b.height) * 2 + 1), R.camera); const h = ed.SC.pick(ed.ray); if (h && pl.clicks.has(h.obj.id)) pl.SH.event('clicked', { id: h.obj.id, player: 'me' }); }
@@ -1418,7 +1443,7 @@ Players.PlayerAdded.Connect(player => {
   function unmount(){
     const ed = ED; if (!ed) return;
     ED = null;
-    try { if (ed.playing) { const pl = ed.playing; pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); } } catch (e) {}
+    try { if (ed.playing) { const pl = ed.playing; pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();

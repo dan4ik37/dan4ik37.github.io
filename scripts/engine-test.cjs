@@ -415,6 +415,34 @@ function pk(boxes, opts = {}){
   P.place(0, 0, -5); ok(P.stepOff === 0, 'телепорт — без хвоста сглаживания');
 }
 
+// ═══ Плавание: у поверхности, нырнуть, вылезти на берег ═══
+{
+  const ph = new E.Phys({ ground: 0 });
+  const LV = 2.4;   // вода 2,4 над дном (глубоко)
+  ph.waterLevel = (x, z) => x < 6 ? LV : -Infinity;
+  ph.addBox({ x: 10, y: (LV - .1) / 2, z: 0, hx: 4, hy: (LV - .1) / 2, hz: 6 });   // берег: верх чуть ниже воды
+  const P = E.player(ph, { x: -6, z: 0 });
+  P.place(-6, 0, 0, Math.PI / 2);
+  const { C, hold, tap } = mkC();
+  let splash = 0, strokes = 0; P.on('splash', () => splash++); P.on('swim', () => strokes++);
+  run(P, C, 1.5);
+  ok(P.swim && splash === 1 && near(P.ch.y, LV - .55 * U, .08), 'глубоко — плывём у поверхности', [P.swim, P.ch.y]);
+  ok(P.pose().swim && !P.pose().air, 'поза: плавание, не «в воздухе»');
+  hold('KeyC'); run(P, C, 1.5);
+  ok(P.dive && P.ch.y < .3, 'присесть — нырнуть до дна', P.ch.y);
+  hold('KeyC', false); run(P, C, 1.5);
+  ok(near(P.ch.y, LV - .55 * U, .1), 'отпустил — всплыл', P.ch.y);
+  // плыть к берегу (+x: камера сзади — вперёд = +z, поэтому повернём руками: вправо)
+  const camX = { yaw: -Math.PI / 2 };
+  const runX = sec => { const n = Math.round(sec / DT); for (let i = 0; i < n; i++) { C.step(DT); P.update(DT, C, camX); } };
+  hold('KeyW'); runX(2);
+  const swimSpeed = P.speed;
+  ok(swimSpeed > 2 * .5 && swimSpeed < 4 * U * .75 && strokes > 1, 'плывём медленнее ходьбы, слышно гребки', [swimSpeed, strokes]);
+  runX(1.2);
+  tap('Space'); runX(1.2); hold('KeyW', false); runX(.5);
+  ok(!P.swim && P.ch.grounded && near(P.ch.y, LV - .1, .05), 'Пробел у берега — вылез', [P.swim, P.ch.y, P.ch.x]);
+}
+
 // ═══ Скрипты (песочница): API как в Roblox, проверка без браузера ═══
 {
   globalThis.window = globalThis;

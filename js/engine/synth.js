@@ -158,7 +158,38 @@
     coin(){ return make(.32, 63, t => (Math.sin(PI2 * 1320 * t) * (t < .08 ? 1 : 0) + Math.sin(PI2 * 1760 * t) * (t >= .07 ? 1 : 0)) * exp(-Math.max(0, t - .07) * 9) * Math.min(1, t / .003), .08, .05); },
     click(){ let hp = 0; return make(.03, 64, (t, r) => { const w = N(r); hp += (w - hp) * .5; return (w - hp) * exp(-t * 400); }, .05, .005); },
   };
-  const NAMES = [...Object.keys(FX), ...FLOORS.flatMap(f => [0, 1, 2].map(v => `step_${f}${v}`))];
+  // ── Звуки-петли окружения (A.loop): тот же шум через резонаторы; края сшиты наплывом — петля без щелчка ──
+  function loopMake(sec, seed, fn, rms){
+    const X = Math.round(.6 * RATE), n = Math.round(sec * RATE), d = render(sec + .6, fn, seed), out = new Float32Array(n);
+    for (let i = 0; i < n; i++) out[i] = i < X ? d[i] * (i / X) + d[n + i] * (1 - i / X) : d[i];
+    return normalizeSafe(out, rms, .85);
+  }
+  const LOOPS = {
+    amb_fire(){   // костёр: тёмный гул, шипение, редкие щелчки углей
+      const crack = new Bp(2400, 1.3), body = new Bp(260, .8), hiss = new Bp(5200, .6); let lp = 0, ev = 0, evF = 0;
+      return loopMake(4, 71, (t, r) => { const w = N(r); lp += (w - lp) * .035; if (r() < .0011) { ev = .5 + r() * .8; evF = r(); } ev *= .9925;
+        return lp * .8 + body.do(w) * .3 + hiss.do(w) * .08 + crack.do(w) * ev * (1.2 + evF); }, .07);
+    },
+    amb_rain(){   // дождь: ровный высокий шум и капли
+      const hi = new Bp(5600, .5), mid = new Bp(2100, .7), drop = new Bp(3300, 6); let ev = 0;
+      return loopMake(3, 72, (t, r) => { const w = N(r); if (r() < .004) ev = .4 + r() * .6; ev *= .985; return hi.do(w) * .9 + mid.do(w) * .4 + drop.do(w) * ev * 1.4; }, .07);
+    },
+    amb_wind(){   // ветер: низкий шум, медленно дышит
+      const b = new Bp(300, .5), w2 = new Bp(900, 2.2); let lp = 0;
+      return loopMake(6, 73, (t, r) => { const w = N(r); lp += (w - lp) * .018; const m = .55 + .45 * Math.sin(t * PI2 / 6) * Math.sin(t * PI2 / 3 + 1);
+        return (b.do(w) * .5 + lp * 1.3 + w2.do(w) * .12 * m) * m; }, .05);
+    },
+    amb_water(){   // вода у берега: плеск волнами
+      const s = new Bp(700, .8), sp = new Bp(2600, 3); let lp = 0;
+      return loopMake(4, 74, (t, r) => { const w = N(r); lp += (w - lp) * .06; const wave = Math.pow(Math.max(0, Math.sin(t * PI2 / 2)), 3);
+        return (lp * .9 + s.do(w) * .5) * (.25 + wave) + sp.do(w) * wave * .2; }, .05);
+    },
+    amb_magic(){   // волшебство: тихий звон-переливы (полосы шума, не чистые тоны)
+      const bells = [1900, 2530, 3170, 3800].map(f => new Bp(f, 40)); let ev = 0, k = 0;
+      return loopMake(4, 75, (t, r) => { const w = N(r); if (r() < .0016) { ev = 1; k = (r() * 4) | 0; } ev *= .9993; let s = 0; for (let i = 0; i < 4; i++) s += bells[i].do(w * (i === k ? ev : ev * .15)); return s * 3; }, .04);
+    },
+  };
+  const NAMES = [...Object.keys(FX), ...Object.keys(LOOPS), ...FLOORS.flatMap(f => [0, 1, 2].map(v => `step_${f}${v}`))];
   const cache = new Map();
   const synthRender = name => {
     if (cache.has(name)) return cache.get(name);
@@ -166,6 +197,7 @@
     const m = /^step_(\w+?)(\d)$/.exec(name);
     if (m) d = step(m[1], +m[2]);
     else if (FX[name]) d = FX[name]();
+    else if (LOOPS[name]) d = LOOPS[name]();
     else return null;
     cache.set(name, d);
     return d;
@@ -195,7 +227,38 @@
       const b = A.ctx.createBuffer(1, d.length, RATE); b.copyToChannel ? b.copyToChannel(d, 0) : b.getChannelData(0).set(d);
       A.bufs.set(name, b); return b;
     };
-    A.listener = (x, y, z, yaw) => { A.lx = x; A.ly = y; A.lz = z; A.lyaw = yaw || 0; };
+    // громкость и сторона по месту (как у A.play): полностью — до 3 м, не слышно — дальше 40 м
+    const place = (o, g) => {
+      if (o.x == null) return [g, 0];
+      const U = E.UNIT || 1, dx = o.x - A.lx, dy = (o.y ?? A.ly) - A.ly, dz = o.z - A.lz, d = Math.hypot(dx, dy, dz) / U;
+      const k = d <= 3 ? 1 : Math.max(0, 1 - (d - 3) / 37), rx = Math.cos(A.lyaw), rz = -Math.sin(A.lyaw), dl = Math.hypot(dx, dz) || 1;
+      return [g * k * k, Math.max(-1, Math.min(1, (dx * rx + dz * rz) / dl)) * Math.min(1, d / 2) * .8];
+    };
+    // Петли окружения: h = A.loop('amb_fire', { x, y, z, vol }) → h.set({ x, y, z, vol }), h.stop(). Без x — со всех сторон.
+    // Звук разрешён только после первого нажатия — петля ждёт и включается сама; громкость пересчитывается в A.listener.
+    const loops = new Set();
+    A.loop = (name, o = {}) => {
+      const h = { name, o: { ...o }, src: null, gain: null, pan: null, dead: false };
+      h.set = p => { Object.assign(h.o, p); };
+      h.stop = () => { h.dead = true; loops.delete(h); try { h.src?.stop(); } catch (e) {} h.src?.disconnect(); h.gain?.disconnect(); h.pan?.disconnect(); };
+      loops.add(h); tick(h);
+      return h;
+    };
+    function tick(h){
+      const ctx = A.ctx; if (!ctx || ctx.state !== 'running') return;
+      if (!h.src) {
+        const b = buf(h.name); if (!b) return;
+        h.src = ctx.createBufferSource(); h.src.buffer = b; h.src.loop = true;
+        h.gain = ctx.createGain(); h.gain.gain.value = 0; h.src.connect(h.gain);
+        if (ctx.createStereoPanner) { h.pan = ctx.createStereoPanner(); h.gain.connect(h.pan); h.pan.connect(A.master); } else h.gain.connect(A.master);
+        h.src.start(0, Math.random() * b.duration);   // с разного места — две одинаковые петли не звучат в унисон
+      }
+      const [g, p] = place(h.o, muted() ? 0 : h.o.vol ?? .6), t = ctx.currentTime;
+      h.gain.gain.setTargetAtTime(g, t, .08);
+      if (h.pan) h.pan.pan.setTargetAtTime(p, t, .08);
+    }
+    A.listener = (x, y, z, yaw) => { A.lx = x; A.ly = y; A.lz = z; A.lyaw = yaw || 0; for (const h of loops) tick(h); };
+    A.stopLoops = () => { for (const h of [...loops]) h.stop(); };
     A.volume = v => { A.vol = Math.max(0, Math.min(1, v)); if (A.master) A.master.gain.value = A.vol; };
     A.play = (name, o = {}) => {
       if (muted() || A.vol <= 0) return;

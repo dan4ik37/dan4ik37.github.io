@@ -663,7 +663,7 @@
       ch.headP.rotation.set(0, 0, mv ? -s * .035 : Math.sin(t * .9 + ch.phase) * .035);
       ch.body.position.z = 0; ch.body.scale.set(1, 1, 1);
       // позы движка (js/engine/player.js): кувырок, вис на краю, лестница, паркур, присед
-      const special = o && (o.roll >= 0 || o.hang || o.ladder || o.pk);
+      const special = o && (o.roll >= 0 || o.hang || o.ladder || o.pk || o.swim);
       if (o?.roll >= 0) {   // кувырок клубком через голову (назад — в обратную сторону)
         const k = o.roll, curl = Math.sin(Math.min(1, k * 1.08) * PI), a = (o.rollBack ? -1 : 1) * TAU * k * k * (3 - 2 * k), hc = (ch.top || 2.3) * .45;
         ch.body.scale.setScalar(1 - .28 * curl);
@@ -697,6 +697,13 @@
           else if (k < .65) { const p = (k - .4) / .25; ch.armL.rotation.set(-2.9 + p * 1.6, 0, -.3); ch.armR.rotation.set(-2.9 + p * 1.6, 0, .3); ch.legL.rotation.x = -.5 * p; ch.torso.rotation.x = .3 * p; }
           else { ch.armL.rotation.set(-.45, 0, -.35); ch.armR.rotation.set(-.45, 0, .35); ch.legL.rotation.x = -1.35; ch.legR.rotation.x = .2; ch.torso.rotation.x = .45; }
         }
+      } else if (o?.swim) {   // плывёт: корпус вперёд (на ходу почти лёжа), руки гребут по очереди, ноги — «ножницы»; на месте — держится на воде
+        const q = Math.sin(t * (mv ? 5.5 : 2.6) + ch.phase), lie = mv ? 1.15 : .3;
+        ch.body.rotation.set(o.dive ? 1.4 : lie, 0, 0);
+        ch.body.position.y = mv || o.dive ? 0 : -.75 + Math.sin(t * 1.7) * .05;
+        ch.armL.rotation.set(mv ? -1.6 - q * 1.25 : -.9 + q * .35, 0, mv ? -.25 : -.9); ch.armR.rotation.set(mv ? -1.6 + q * 1.25 : -.9 - q * .35, 0, mv ? .25 : .9);
+        ch.legL.rotation.x = q * (mv ? .55 : .25); ch.legR.rotation.x = -q * (mv ? .55 : .25);
+        ch.headP.rotation.x = mv && !o.dive ? -.85 : -.15; ch.torso.rotation.x = 0;
       } else if (o?.air) {   // в воздухе: ноги врозь, руки чуть вверх
         ch.legL.rotation.x = -.55; ch.legR.rotation.x = .45; ch.body.position.y = 0;
         ch.armL.rotation.set(-.5, 0, -.75); ch.armR.rotation.set(-.5, 0, .75); ch.torso.rotation.x = .05;
