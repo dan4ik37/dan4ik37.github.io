@@ -1,0 +1,9 @@
+Текстуры: ambientCG (https://ambientcg.com) и Poly Haven (https://polyhaven.com) — CC0 (общественное достояние).
+asphalt: Asphalt031
+plaza: Tiles139
+sidewalk: Concrete034
+parquet: WoodFloor051
+plaster: PaintedPlaster017
+planks: Planks037A
+carpet: Carpet012
+tiles: Tiles040

@@ -20,6 +20,7 @@
       else ch.yaw = a.yaw;
       if (ch.pet) ch.pet.position.set(a.x, a.y + .5, a.z);
       a.ch = ch; a.sig = sig; a.look = look;
+      R.shadowsOn?.(ch.root);   // человечек отбрасывает тень
     }
     function add(key, look, o = {}){
       remove(key);

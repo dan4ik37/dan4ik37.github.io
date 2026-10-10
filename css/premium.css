@@ -3144,3 +3144,4 @@ html.wld-editing,html.wld-editing body{overflow:hidden}
 .mir .wld-gl{cursor:grab}
 .mir .wld-gl:active{cursor:grabbing}
 @media (max-width:640px){.mir .mir-tb{font-size:.76rem}.mir .wld-hint{top:auto;bottom:118px}}
+.mir .wld-wrap::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(ellipse at 50% 45%,rgba(0,0,0,0) 58%,rgba(10,8,30,.28) 100%)}

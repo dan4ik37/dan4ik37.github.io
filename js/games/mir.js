@@ -98,6 +98,36 @@
   function buildWorld(R, ph, X, S){
     const E = window.D37E, T = R.T, K = R.K, U = E.UNIT, low = R.q === 'low';
     const st = R.static, P = (g, o) => R.part(g || st, o);
+    // ── Материалы: текстуры из Unity-проекта (CC0, img/tex) и кодом (трава, черепица); на «низком» — просто цвета ──
+    const grassMap = R.canvasTex('grass', 256, (g, n, rnd) => {
+      g.fillStyle = '#56a845'; g.fillRect(0, 0, n, n);
+      for (let i = 0; i < 70; i++) { const x = rnd() * n, y = rnd() * n, r = 10 + rnd() * 40, l = rnd() < .5; const gr = g.createRadialGradient(x, y, 1, x, y, r); gr.addColorStop(0, l ? 'rgba(150,215,95,.42)' : 'rgba(38,105,40,.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; for (const dx of [-n, 0, n]) for (const dy of [-n, 0, n]) { g.save(); g.translate(dx, dy); g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.restore(); } }
+      for (let i = 0; i < 1600; i++) { const x = rnd() * n, y = rnd() * n, h = 3 + rnd() * 5; g.strokeStyle = rnd() < .5 ? 'rgba(45,110,40,.55)' : 'rgba(170,225,120,.5)'; g.lineWidth = 1; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - .5) * 2, y - h); g.stroke(); }
+      for (let i = 0; i < 26; i++) { g.fillStyle = ['#fde68a', '#fff', '#f9a8d4'][i % 3]; g.fillRect(rnd() * n, rnd() * n, 2, 2); }
+    });
+    const grassN = R.normalFrom('grassN', 128, n => { const H = new Float32Array(n * n), rnd = rng(5); for (let i = 0; i < n * n; i++) H[i] = rnd() * .35; return H; }, 1.2);
+    const shingles = (key, vert) => R.canvasTex(key, 128, (g, n) => {
+      g.fillStyle = '#d9d9d9'; g.fillRect(0, 0, n, n);
+      for (let row = 0; row < 8; row++) for (let i = -1; i < 9; i++) {
+        const x = i * 16 + (row % 2) * 8, y = row * 16;
+        const gr = g.createLinearGradient(0, y, 0, y + 16); gr.addColorStop(0, '#f5f5f5'); gr.addColorStop(1, '#a8a8a8');
+        g.fillStyle = gr;
+        g.beginPath(); if (vert) { g.moveTo(y, x); g.lineTo(y + 16, x); g.quadraticCurveTo(y + 18, x + 8, y + 16, x + 16); g.lineTo(y, x + 16); }
+        else { g.moveTo(x, y); g.lineTo(x, y + 16); g.quadraticCurveTo(x + 8, y + 18, x + 16, y + 16); g.lineTo(x + 16, y); }
+        g.fill(); g.strokeStyle = 'rgba(0,0,0,.25)'; g.stroke();
+      }
+    });
+    const M = {
+      grass: R.texMat('grass', grassMap, { tile: 2.4, normalMap: grassN, ns: .6, flatColor: '#6cbf58', rough: .95 }),
+      plaza: R.tex('plaza', { tile: 2.6, flatColor: '#ece2cb' }), border: R.tex('sidewalk', { tint: '#d3c8b0', tile: 2, flatColor: '#cdbf9f' }),
+      path: R.tex('sidewalk', { tint: '#f3e8d0', tile: 2.2, flatColor: '#e3d4b2' }), asphalt: R.tex('asphalt', { tile: 4, tint: '#a9afba', flatColor: '#5b6270', rough: .95 }),
+      walk: R.tex('tiles', { tint: '#e2dccf', tile: 1.4, flatColor: '#c9c3b5' }), parquet: R.tex('parquet', { tile: 1.8, flatColor: '#c8956a', rough: .6 }),
+      planks: R.tex('planks', { tint: '#e0b088', tile: 1.2, flatColor: '#a0673a', rough: .7 }), dark: R.tex('planks', { tint: '#8e6544', tile: 1.2, flatColor: '#6b4426', rough: .7 }),
+      stone: R.tex('sidewalk', { tint: '#ece6da', tile: 1.5, flatColor: '#d6cfc0' }), carpet: R.tex('carpet', { tint: '#8f7cf0', tile: 2, flatColor: '#3b2f8a' }),
+      water: R.water('#3aa6dc'),
+    };
+    const wallMat = c => R.tex('plaster', { tint: c, tile: 2.6, flatColor: c, rough: .92, ns: .7 });
+    const roofMat = (c, vert) => R.texMat('roof' + c + (vert ? 'v' : ''), shingles('sh' + (vert ? 'v' : 'h'), vert), { tint: c, tile: 1.6, flatColor: c, rough: .7 });
     const rooms = [], screens = {}, seats = new Map();
     // коробка в мире (+ тело): x, z — центр, y0 — низ
     const box = (x, y0, z, w, h, d, c, o = {}) => {
@@ -115,7 +145,7 @@
     const texMat = (key, w, h, draw) => {
       const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
       const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4;
-      return new T.MeshBasicMaterial({ map: t });
+      return new T.MeshBasicMaterial({ map: t, toneMapped: false });
     };
     const label = (text, bg = '#7c3aed', fg = '#fff', w = 512, h = 128) => texMat('lbl' + text, w, h, (g) => {
       g.fillStyle = bg; g.fillRect(0, 0, w, h);
@@ -127,31 +157,30 @@
     const plaque = (x, y, z, w, h, mat, yaw = 0) => { const m = new T.Mesh(K.geo(`pl${w}_${h}`, () => new T.PlaneGeometry(w, h)), mat); m.position.set(x, y, z); m.rotation.y = yaw; st.add(m); return m; };
 
     // ── Земля, площадь, дорожки ──
-    flat(0, 0, 320, 320, '#86cf72', 0);
-    disc(0, 0, 18.2, '#cdbf9f', .015); disc(0, 0, 17.6, '#ece2cb', .02);
-    for (let i = 0; i < 24; i++) { const a = i / 24 * PI * 2; P(null, { s: 'box', x: Math.cos(a) * 12.5, y: .025, z: Math.sin(a) * 12.5, w: .12, h: .01, d: 9.4, yaw: -a + PI / 2, c: '#d9ccb0' }); }
-    const path = (x1, z1, x2, z2, w, c = '#e3d4b2') => { const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz); P(null, { s: 'box', x: (x1 + x2) / 2, y: .018, z: (z1 + z2) / 2, w, h: .02, d: L, yaw: Math.atan2(dx, dz), c }); };
+    flat(0, 0, 320, 320, '#86cf72', 0, { m: M.grass });
+    disc(0, 0, 18.4, '#cdbf9f', .015, M.border); disc(0, 0, 17.6, '#ece2cb', .02, M.plaza);
+    const path = (x1, z1, x2, z2, w, m = M.path) => { const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz); P(null, { s: 'box', x: (x1 + x2) / 2, y: .018, z: (z1 + z2) / 2, w, h: .02, d: L, yaw: Math.atan2(dx, dz), m }); };
     path(0, -17, 0, -29, 4.2);              // к кафе
     path(17, -1, 28, -1, 4.2);              // к клубу
     path(-17, -1, -27, -1, 4.2);            // к сцене
     path(-12, 12, -19, 19, 3);              // к гардеробу
     path(13, 12, 28, 28, 3.4);              // в парк
     // улица на юг: асфальт и тротуары
-    P(null, { s: 'box', x: 0, y: .02, z: 46, w: 7, h: .02, d: 58, c: '#5b6270' });
-    for (const s of [-1, 1]) { box(s * 4.6, 0, 46, 2.2, .14, 58, '#c9c3b5'); }
+    P(null, { s: 'box', x: 0, y: .02, z: 46, w: 7, h: .02, d: 58, m: M.asphalt });
+    for (const s of [-1, 1]) { box(s * 4.6, 0, 46, 2.2, .14, 58, '#c9c3b5', { m: M.walk }); box(s * 3.55, 0, 46, .12, .16, 58, '#b9b2a4'); }
     for (let z = 20; z < 75; z += 4) P(null, { s: 'box', x: 0, y: .035, z, w: .25, h: .01, d: 1.8, c: '#f1f5f9' });
 
     // ── Фонтан ──
-    cyl(0, 0, 0, 3.3, .7, '#d6cfc0', { solid: true, seg: 28 });
-    cyl(0, .02, 0, 2.95, .64, '#5ec8f2', { seg: 28 });
-    cyl(0, .6, 0, .38, 1.5, '#cfc6b4', { seg: 12 });
-    cyl(0, 2.05, 0, 1.15, .22, '#d6cfc0', { seg: 20 });
+    cyl(0, 0, 0, 3.3, .7, '#d6cfc0', { solid: true, seg: 32, m: M.stone });
+    cyl(0, .02, 0, 2.95, .64, '#5ec8f2', { seg: 32, m: M.water });
+    cyl(0, .6, 0, .38, 1.5, '#cfc6b4', { seg: 14, m: M.stone });
+    cyl(0, 2.05, 0, 1.15, .22, '#d6cfc0', { seg: 24, m: M.stone });
     P(null, { s: 'ball', x: 0, y: 2.5, z: 0, r: .42, c: '#bdeeff', m: 'glow', seg: 14 });
     for (let i = 0; i < 6; i++) { const a = i / 6 * PI * 2; P(null, { s: 'ball', x: Math.cos(a) * 1.4, y: 1.25, z: Math.sin(a) * 1.4, r: .18, c: '#bdeeff', m: 'glow', seg: 8 }); }
 
     // ── Скамейки вокруг фонтана (сесть) ──
     const bench = (x, z, yaw, name = 'Скамейка') => {
-      R.prefab('bench', { x, z, yaw }, ph);
+      R.prefab('bench', { x, z, yaw, m: M.planks }, ph);
       for (const s of [-1, 1]) {
         const sx = x + Math.cos(yaw) * .55 * s, sz = z - Math.sin(yaw) * .55 * s;
         seatSpot({ id: `b${Math.round(x * 10)}_${Math.round(z * 10)}_${s}`, x: sx, z: sz, y: .62, yaw, bench: name });
@@ -165,8 +194,8 @@
     // ── Здания: пол, стены с проёмами (двери, окна), крыша, зона «внутри» (крыша прячется, камера ближе) ──
     function building(o){
       const H = o.h || 3.6, t = .35, x0 = o.x, z0 = o.z, hw = o.w / 2, hd = o.d / 2, floors = o.floors || 1;
-      const wallM = o.wall || '#f4e3c3', trimM = o.trim || '#8b5a2b';
-      box(x0, 0, z0, o.w, .12, o.d, o.floor || '#c79a6b', { solid: true, floor: o.floorType || 'wood' });
+      const wallM = o.wall || '#f4e3c3', trimM = o.trim || '#8b5a2b', wm = wallMat(wallM), fm = o.floorM || M.parquet;
+      box(x0, 0, z0, o.w, .12, o.d, o.floor || '#c79a6b', { solid: true, floor: o.floorType || 'wood', m: fm });
       const walls = side => {
         const horiz = side === 'n' || side === 's', L = horiz ? o.w : o.d;
         const ops = [...(o.doors || []).filter(d => d.side === side).map(d => ({ at: d.at || 0, w: d.w || 2.4, y0: 0, y1: d.h || 2.8, door: true })),
@@ -177,7 +206,7 @@
           const wx = horiz ? x0 + c : x0 + (side === 'e' ? hw : -hw), wz = horiz ? z0 + (side === 's' ? hd : -hd) : z0 + c;
           const w = horiz ? len : t, d = horiz ? t : len;
           if (glass) { P(null, { s: 'box', x: wx, y: (y0 + y1) / 2, z: wz, w: horiz ? len : .06, h: y1 - y0, d: horiz ? .06 : len, c: '#bfe8ff', m: glassM }); ph.addBox({ x: wx, y: (y0 + y1) / 2, z: wz, hx: w / 2, hy: (y1 - y0) / 2, hz: d / 2, tag: 'glass', data: { cam: false } }); return; }
-          box(wx, y0, wz, w, y1 - y0, d, wallM, { solid: true, cam: true });
+          box(wx, y0, wz, w, y1 - y0, d, wallM, { solid: true, cam: true, m: wm });
         };
         let a = -L / 2;
         for (let f = 0; f < floors; f++) {
@@ -205,28 +234,33 @@
         const sw = o.stair;   // { x, w } — проём над лестницей вдоль восточной стены
         const yb = f * H;
         if (sw) {
-          box(x0 - (hw - (o.w - sw.w) / 2) + 0, yb - .15, z0, o.w - sw.w, .15, o.d, o.floor || '#c79a6b', { solid: true, floor: 'wood' });
-          box(x0 + hw - sw.w / 2, yb - .15, z0 - hd + sw.d / 2 + (o.d - sw.d) / 2 + sw.d / 2, sw.w, .15, o.d - sw.d, o.floor || '#c79a6b', { solid: true, floor: 'wood' });
-        } else box(x0, yb - .15, z0, o.w, .15, o.d, o.floor || '#c79a6b', { solid: true, floor: 'wood' });
+          box(x0 - (hw - (o.w - sw.w) / 2) + 0, yb - .15, z0, o.w - sw.w, .15, o.d, o.floor || '#c79a6b', { solid: true, floor: 'wood', m: fm });
+          box(x0 + hw - sw.w / 2, yb - .15, z0 - hd + sw.d / 2 + (o.d - sw.d) / 2 + sw.d / 2, sw.w, .15, o.d - sw.d, o.floor || '#c79a6b', { solid: true, floor: 'wood', m: fm });
+        } else box(x0, yb - .15, z0, o.w, .15, o.d, o.floor || '#c79a6b', { solid: true, floor: 'wood', m: fm });
       }
       if (o.stair) {   // лестница: ступени-столбики до пола (физика ведёт по ступенькам)
         const n = 12, s = o.stair, sx = x0 + hw - s.w / 2 - .2, len = s.d, z1 = z0 - hd + .4;
-        for (let i = 0; i < n; i++) { const h = (i + 1) * H / n, zz = z1 + (i + .5) * len / n; box(sx, 0, zz, s.w - .2, h, len / n, i % 2 ? '#a87b4f' : '#b58658', { solid: true, floor: 'wood' }); }
+        for (let i = 0; i < n; i++) { const h = (i + 1) * H / n, zz = z1 + (i + .5) * len / n; box(sx, 0, zz, s.w - .2, h, len / n, '#b58658', { solid: true, floor: 'wood', m: M.planks }); }
       }
       // крыша (группа — прячется, когда ты внутри)
       const roof = R.group(R.scene, x0, 0, z0);
       roof.userData.dyn = true;
       const HT = H * floors;
       if (o.roof === 'flat') {
-        R.part(roof, { s: 'box', y: HT + .12, w: o.w + .7, h: .25, d: o.d + .7, c: o.roofC || '#7a5236' });
-        for (const [w, d, x, z] of [[o.w + .7, .3, 0, -(o.d + .7) / 2], [o.w + .7, .3, 0, (o.d + .7) / 2], [.3, o.d + .7, -(o.w + .7) / 2, 0], [.3, o.d + .7, (o.w + .7) / 2, 0]]) R.part(roof, { s: 'box', x, z, y: HT + .5, w, h: .5, d, c: o.roofC2 || '#e8d2a8' });
+        const rm = R.tex('sidewalk', { tint: o.roofC || '#7a5236', tile: 2.5, flatColor: o.roofC || '#7a5236' }), pm = wallMat(o.roofC2 || '#e8d2a8');
+        R.part(roof, { s: 'box', y: HT + .12, w: o.w + .7, h: .25, d: o.d + .7, m: rm });
+        for (const [w, d, x, z] of [[o.w + .7, .3, 0, -(o.d + .7) / 2], [o.w + .7, .3, 0, (o.d + .7) / 2], [.3, o.d + .7, -(o.w + .7) / 2, 0], [.3, o.d + .7, (o.w + .7) / 2, 0]]) R.part(roof, { s: 'box', x, z, y: HT + .5, w, h: .5, d, m: pm });
       } else {   // двускатная: треугольная призма (цилиндр с 3 гранями)
         const g = R.group(roof, 0, 0, 0, o.ridge === 'z' ? 0 : PI / 2);
         const base = (o.ridge === 'z' ? o.w : o.d) + 1, len = (o.ridge === 'z' ? o.d : o.w) + .9, r = base / 1.732, rise = o.rise || 2.2, sz = rise / (1.5 * r);
-        const m = R.part(g, { s: 'cyl', r, h: len, seg: 3, rx: -PI / 2, c: o.roofC || '#c2410c' });
+        const m = R.part(g, { s: 'cyl', r, h: len, seg: 3, rx: -PI / 2, m: roofMat(o.roofC || '#c2410c', o.ridge === 'z') });
         m.scale.set(1, 1, sz); m.position.y = HT + .5 * r * sz;
         R.part(roof, { s: 'box', y: HT + .06, w: o.w + .3, h: .12, d: o.d + .3, c: trimM });
       }
+      // UV «по миру» у крыши (она не склеивается — прячется, когда ты внутри) и тени
+      roof.updateWorldMatrix(true, true);
+      roof.traverse(c => { if (c.isMesh && c.material.userData?.tile) R.worldUV(c, c.material.userData.tile); });
+      R.shadowsOn(roof);
       // зона «внутри»
       const zone = ph.addBox({ x: x0, z: z0, y: HT / 2, hx: hw - .3, hy: HT / 2 + .3, hz: hd - .3, trigger: true, tag: 'room', data: { room: o.id, roof } });
       rooms.push({ id: o.id, roof, zone, name: o.name });
@@ -299,7 +333,7 @@
       const round = t.n === 4, r = round ? .85 : .7;
       cyl(t.x, 0, t.z, .09, .76, '#3b2a1c');
       cyl(t.x, 0, t.z, .45, .05, '#3b2a1c');
-      if (round) cyl(t.x, .76, t.z, r, .07, '#8b5a2b', { seg: 24 }); else P(null, { s: 'box', x: t.x, y: .795, z: t.z, w: 1.5, h: .07, d: 1.3, c: '#8b5a2b' });
+      if (round) cyl(t.x, .76, t.z, r, .07, '#8b5a2b', { seg: 28, m: M.dark }); else P(null, { s: 'box', x: t.x, y: .795, z: t.z, w: 1.5, h: .07, d: 1.3, m: M.dark });
       ph.addCyl({ x: t.x, z: t.z, y: .42, r: round ? r : .78, hy: .42, tag: 'table' });
       const top = new T.Mesh(K.geo(round ? 'tbdisc' : 'tbplane', () => round ? new T.CircleGeometry(r * .9, 28) : new T.PlaneGeometry(1.2, 1.2)), boardTex(t.kind));
       top.rotation.x = -PI / 2; top.position.set(t.x, .835, t.z); st.add(top);
@@ -333,7 +367,7 @@
     function infoSpot(x, z, title, text){ X.add({ x, y: 1.5, z, r: .8, prompt: () => 'Прочитать', act: () => S.showInfo?.(title, text) }); }
 
     // ── Кафе «У Денчика» ──
-    building({ id: 'cafe', name: 'Кафе «У Денчика»', x: 0, z: -36, w: 22, d: 14, h: 3.8, wall: '#fde7c7', trim: '#9a3412', floor: '#c8956a', roof: 'flat', roofC: '#9a3412', roofC2: '#fed7aa',
+    building({ id: 'cafe', name: 'Кафе «У Денчика»', x: 0, z: -36, w: 22, d: 14, h: 3.8, wall: '#ffd9a8', trim: '#9a3412', floor: '#c8956a', roof: 'flat', roofC: '#9a3412', roofC2: '#fed7aa',
       doors: [{ side: 's', at: 0, w: 2.6, h: 2.9 }], windows: [{ side: 's', at: -6.5, w: 3 }, { side: 's', at: 6.5, w: 3 }, { side: 'e', at: 0, w: 2.4 }, { side: 'w', at: 0, w: 2.4 }],
       sign: 'Кафе «У Денчика»', signBg: '#9a3412' });
     // маркиза над входом
@@ -350,7 +384,7 @@
     infoSpot(9.5, -43, '☕ Кафе', 'Садись за столик: шахматы, шашки, нарды — на двоих; «Дурак» и «Одна!» — до 4 человек. Сел второй игрок — партия начинается сама. Один? Можно «С ботом» или позвать друга.');
 
     // ── Игровой клуб: автоматы, бильярд, морской бой, крестики-нолики ──
-    building({ id: 'club', name: 'Игровой клуб', x: 36, z: -2, w: 16, d: 20, h: 3.8, wall: '#312e81', trim: '#a78bfa', floor: '#1e1b4b', floorType: 'tile', roof: 'flat', roofC: '#1e1b4b', roofC2: '#7c3aed',
+    building({ id: 'club', name: 'Игровой клуб', x: 36, z: -2, w: 16, d: 20, h: 3.8, wall: '#312e81', trim: '#a78bfa', floor: '#1e1b4b', floorType: 'tile', roof: 'flat', roofC: '#1e1b4b', roofC2: '#7c3aed', floorM: M.carpet,
       doors: [{ side: 'w', at: 0, w: 2.6, h: 2.9 }], windows: [{ side: 'w', at: -6, w: 2.4 }, { side: 'w', at: 6, w: 2.4 }],
       sign: 'Игровой клуб', signBg: '#5b21b6' });
     for (const a of ARCADE) {
@@ -372,7 +406,7 @@
     rug(37, -2, 7.5, 5, '#4c1d95');
 
     // ── Сцена Денчика: помост, большой экран (эфир или ролики), зрительские скамейки ──
-    box(-38, 0, -1, 7, .8, 13, '#3b2a5a', { solid: true, floor: 'wood' });
+    box(-38, 0, -1, 7, .8, 13, '#3b2a5a', { solid: true, floor: 'wood', m: R.tex('planks', { tint: '#6b5a8c', tile: 1.2, flatColor: '#3b2a5a', rough: .65 }) });
     box(-41.3, .8, -1, .4, 6.5, 13, '#1f1636', { solid: true, cam: true });
     const scrMat = texMat('stage', 512, 288, () => {});
     const scr = plaque(-41.05, 4, -1, 11, 6.2, scrMat, PI / 2); scr.userData.dyn = true;
@@ -382,7 +416,7 @@
     X.add({ x: -34.4, y: 1.2, z: -1, r: 2.6, prompt: () => S.live ? '🔴 Денчик в эфире — смотреть' : '📺 Сцена: ролики Денчика', act: () => S.openStage?.() });
 
     // ── Гардероб ──
-    building({ id: 'wardrobe', name: 'Гардероб', x: -22, z: 24, w: 9, d: 8, h: 3.4, wall: '#fce7f3', trim: '#db2777', floor: '#fbcfe8', roof: 'gable', roofC: '#db2777',
+    building({ id: 'wardrobe', name: 'Гардероб', x: -22, z: 24, w: 9, d: 8, h: 3.4, wall: '#ffc2dd', trim: '#db2777', floor: '#fbcfe8', roof: 'gable', roofC: '#db2777',
       doors: [{ side: 'n', at: 0, w: 2.2, h: 2.7 }], windows: [{ side: 'e', at: 0, w: 2 }, { side: 'w', at: 0, w: 2 }], sign: 'Гардероб', signBg: '#db2777' });
     box(-22, .12, 27.6, 2.4, 2.4, .12, '#e5e7eb', { solid: true });
     plaque(-22, 1.4, 27.5, 2.1, 2.1, new T.MeshBasicMaterial({ color: '#dbeafe' }), PI).userData.dyn = true;
@@ -391,10 +425,10 @@
 
     // ── Улица с домиками (заходи внутрь) ──
     const houses = [
-      { id: 'h1', name: 'Домик', x: -12, z: 30, w: 9, d: 9, wall: '#fef3c7', roofC: '#b91c1c', side: 'e' },
-      { id: 'h2', name: 'Домик', x: 12, z: 30, w: 9, d: 9, wall: '#dbeafe', roofC: '#1d4ed8', side: 'w' },
-      { id: 'h3', name: 'Двухэтажный дом', x: -12.5, z: 52, w: 10, d: 11, wall: '#dcfce7', roofC: '#15803d', side: 'e', floors: 2 },
-      { id: 'h4', name: 'Домик', x: 12, z: 52, w: 9, d: 9, wall: '#fae8ff', roofC: '#7e22ce', side: 'w' },
+      { id: 'h1', name: 'Домик', x: -12, z: 30, w: 9, d: 9, wall: '#ffe08a', roofC: '#b91c1c', side: 'e' },
+      { id: 'h2', name: 'Домик', x: 12, z: 30, w: 9, d: 9, wall: '#a9d2ff', roofC: '#1d4ed8', side: 'w' },
+      { id: 'h3', name: 'Двухэтажный дом', x: -12.5, z: 52, w: 10, d: 11, wall: '#a7efc0', roofC: '#15803d', side: 'e', floors: 2 },
+      { id: 'h4', name: 'Домик', x: 12, z: 52, w: 9, d: 9, wall: '#f3c4ff', roofC: '#7e22ce', side: 'w' },
     ];
     for (const h of houses) {
       building({ id: h.id, name: h.name, x: h.x, z: h.z, w: h.w, d: h.d, h: 3.3, floors: h.floors || 1, wall: h.wall, trim: '#7c2d12', floor: '#d6a77a', roof: 'gable', ridge: 'z', roofC: h.roofC,
@@ -416,7 +450,7 @@
     for (const h of houses) { const fx = h.side === 'e' ? h.x + h.w / 2 + 1.1 : h.x - h.w / 2 - 1.1; for (const s of [-1, 1]) R.prefab('fence', { x1: fx, z1: h.z + s * 1.6, x2: fx, z2: h.z + s * (h.d / 2 + .4) }, ph); }
 
     // ── Парк: пруд, деревья, скамейки, ворота в игры ──
-    disc(32, 34, 7.4, '#8fd17f', .021); disc(32, 34, 6.6, '#38bdf8', .025, 'basic');
+    disc(32, 34, 7.4, '#8fd17f', .021, M.border); disc(32, 34, 6.6, '#38bdf8', .03, M.water);
     for (let i = 0; i < 26; i++) { const a = i / 26 * PI * 2; P(null, { s: 'ico', x: 32 + Math.cos(a) * 6.9, y: .12, z: 34 + Math.sin(a) * 6.9, r: .38, c: '#94a3b8', det: 0, sy: .5 }); }
     for (const [x, z] of [[23, 31], [41, 31], [32, 24.5]]) bench(x, z, Math.atan2(32 - x, 34 - z), 'Скамейка у пруда');
     for (const gt of GATES) {
@@ -453,12 +487,47 @@
       if (R0() < .3) R.prefab('pine', { x, z, k: .9 + R0() * .5 }, ph); else R.prefab('tree', { x, z, v: Math.floor(R0() * 4), k: .9 + R0() * .5, yaw: R0() * 6 }, ph);
     }
     for (let k = 0; k < (low ? 30 : 70); k++) { const x = (R0() - .5) * 150, z = (R0() - .5) * 150 + 6; if (free(x, z, 2)) R.prefab(R0() < .5 ? 'bush' : 'flowers', { x, z, seed: k, c: ['#f472b6', '#facc15', '#a78bfa', '#fb7185'][k % 4] }); }
+    // где какой пол (для шагов): плитка площади, асфальт улицы, вода пруда
+    const floorAt = (x, z) => Math.hypot(x, z) < 17.6 ? 'tile' : Math.abs(x) < 3.6 && z > 17 && z < 75 ? 'concrete' : Math.hypot(x - 32, z - 34) < 6.6 ? 'water' : 'grass';
+    // ── Кустики травы: тысячи травинок одним вызовом отрисовки (только среднее и высокое качество) ──
+    if (!low) {
+      const tuftMap = R.canvasTex('tuft', 128, (g, n, rnd) => {
+        g.clearRect(0, 0, n, n);
+        for (let i = 0; i < 26; i++) {
+          const x = 14 + rnd() * 100, h = 50 + rnd() * 70, bend = (rnd() - .5) * 30, w = 4 + rnd() * 5;
+          const gr = g.createLinearGradient(0, n, 0, n - h); gr.addColorStop(0, '#4c9a3c'); gr.addColorStop(1, rnd() < .5 ? '#b4e886' : '#8fd86a');
+          g.fillStyle = gr; g.beginPath(); g.moveTo(x - w / 2, n); g.quadraticCurveTo(x + bend * .4, n - h * .55, x + bend, n - h); g.quadraticCurveTo(x + bend * .4 + 1, n - h * .5, x + w / 2, n); g.fill();
+        }
+      }, { seed: 4 });
+      const tm = new T.MeshStandardMaterial({ map: tuftMap, alphaTest: .45, side: T.DoubleSide, roughness: .9, envMapIntensity: .5 });
+      const tg = new T.BufferGeometry(), pos = [], uv = [], nor = [];
+      for (let i = 0; i < 3; i++) {   // три скрещенные плоскости
+        const a = i / 3 * PI, cx = Math.cos(a) * .32, cz = Math.sin(a) * .32, h = .5;
+        const v = [[-cx, 0, -cz, 0, 0], [cx, 0, cz, 1, 0], [cx, h, cz, 1, 1], [-cx, 0, -cz, 0, 0], [cx, h, cz, 1, 1], [-cx, h, -cz, 0, 1]];
+        for (const [x, y, z, u, w] of v) { pos.push(x, y, z); uv.push(u, w); nor.push(0, 1, 0); }   // нормаль вверх — светятся как земля
+      }
+      tg.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); tg.setAttribute('uv', new T.Float32BufferAttribute(uv, 2)); tg.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+      const N = R.q === 'high' ? 4200 : 1600, inst = new T.InstancedMesh(tg, tm, N), m4 = new T.Matrix4(), q4 = new T.Quaternion(), e4 = new T.Euler(), s4 = new T.Vector3(), p4 = new T.Vector3(), col = new T.Color();
+      let k = 0;
+      for (let tries = 0; tries < N * 6 && k < N; tries++) {
+        const a = R0() * PI * 2, rr = 19 + Math.sqrt(R0()) * 62, x = Math.cos(a) * rr, z = Math.sin(a) * rr + 8;
+        if (!free(x, z, 0) || floorAt(x, z) !== 'grass' || Math.abs(x) > 80) continue;
+        const sc = .7 + R0() * .8;
+        e4.set(0, R0() * PI, 0); q4.setFromEuler(e4); s4.set(sc, sc * (.8 + R0() * .5), sc); p4.set(x, 0, z);
+        m4.compose(p4, q4, s4); inst.setMatrixAt(k, m4);
+        col.setHSL(.25 + R0() * .06, .45 + R0() * .2, .8 + R0() * .15); inst.setColorAt(k, col);
+        k++;
+      }
+      inst.count = k; inst.receiveShadow = true; inst.userData.dyn = true;
+      R.scene.add(inst);
+    }
     for (let k = 0; k < 10; k++) { const x = (R0() - .5) * 140, z = (R0() - .5) * 140 + 6; if (free(x, z, 3)) R.prefab('rock', { x, z, k: .7 + R0() * .6, yaw: R0() * 6 }, ph); }
+    // облака и холмы на горизонте (в дымке)
+    R.clouds(low ? 8 : 16, 9);
+    for (let i = 0; i < 14; i++) { const a = i / 14 * PI * 2 + R0() * .3, d = 190 + R0() * 60, k = 28 + R0() * 30; P(null, { s: 'ico', x: Math.cos(a) * d, y: -k * .35, z: Math.sin(a) * d + 6, r: k, det: 1, sy: .55, c: ['#6fae62', '#7bbb6a', '#5f9d58'][i % 3] }); }
     // край мира: невидимые стены
     for (const [x, z, hx, hz] of [[0, -72, 90, 1], [0, 92, 90, 1], [-84, 10, 1, 90], [84, 10, 1, 90]]) ph.addBox({ x, z, y: 5, hx, hz, hy: 5, tag: 'edge' });
 
-    // где какой пол (для шагов): плитка площади, асфальт улицы, вода пруда
-    const floorAt = (x, z) => Math.hypot(x, z) < 17.6 ? 'tile' : Math.abs(x) < 3.6 && z > 17 && z < 75 ? 'concrete' : Math.hypot(x - 32, z - 34) < 6.6 ? 'water' : 'grass';
     return { rooms, seats, screens, floorAt };
   }
 
@@ -470,7 +539,7 @@
     const E = window.D37E;
     el.innerHTML = `<div class="wld mir">
         <div class="wld-top"><b>🌍 Мир Денчика</b><span class="wldShard"></span><span class="wldOnline">подключаемся…</span>
-          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="view" title="Вид от 1-го / 3-го лица (V)">👁<span> Вид</span></button><button type="button" data-act="mode" title="Плоский мир — для слабых телефонов">🗺️<span> 2D</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
+          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="view" title="Вид от 1-го / 3-го лица (V)">👁<span> Вид</span></button><button type="button" data-act="gfx" title="Качество графики: тени, текстуры">🖥<span class="mirGfx"> Графика</span></button><button type="button" data-act="mode" title="Плоский мир — для слабых телефонов">🗺️<span> 2D</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
         <div class="wld-wrap is3d">
           <div class="wld-tags"></div>
           <div class="wld-log" aria-live="polite"></div>
@@ -609,6 +678,7 @@
     // нажали на игрока — его карточка
     for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); }
     I.frameEnd(); C.frameEnd();
+    R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
     R.render();
     drawTags();
     // на телефоне вместо «[E]» — значок кнопки ✋
@@ -1115,6 +1185,13 @@
     else if (a === 'accept') acceptInvite(S.q('.wld-inv:not(.mir-tb)'));
     else if (a === 'decline') S.q('.wld-inv:not(.mir-tb)').hidden = true;
     else if (a === 'mode') switch2d(true);
+    else if (a === 'gfx') {   // качество: низкое → среднее → высокое (сохраняется), мир пересобирается
+      const L = ['low', 'mid', 'high'], cur = S.R?.q || window.D37E.gfxQuality(), next = L[(L.indexOf(cur) + 1) % 3];
+      try { localStorage.setItem('d37_gfx', next); } catch (e) {}
+      const el = root, ga = api;
+      unmount(); IMPL.mount(el, ga); current = IMPL;
+      ga?.toast?.({ low: '🖥 Графика: низкая — быстро, без теней', mid: '🖥 Графика: средняя — тени', high: '🖥 Графика: высокая — мягкие тени и рельеф текстур' }[next]);
+    }
     else if (a === 'rejoin') { S.q('.wld-status').hidden = true; S.stopped = false; S.idleAt = Date.now(); S.loop?.pause(false); join(1); }
   }
   function switch2d(on){
