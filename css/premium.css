@@ -2792,3 +2792,29 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .mc.boom{background:#991b1b}
 .mc.n1{color:#60a5fa}.mc.n2{color:#4ade80}.mc.n3{color:#f87171}.mc.n4{color:#a78bfa}.mc.n5{color:#fb923c}.mc.n6{color:#22d3ee}.mc.n7{color:#f472b6}.mc.n8{color:#e5e7eb}
 .mn-note{text-align:center;max-width:520px}
+
+/* ── «Маджонг Коннект» (js/games/mahjong.js) ── */
+.mj{display:flex;flex-direction:column;align-items:center;gap:.45rem}
+.mj-bar{display:flex;align-items:center;gap:.4rem .9rem;flex-wrap:wrap;width:100%;max-width:760px;font-size:.8rem;color:var(--muted)}
+.mj-st b{color:var(--text);font-variant-numeric:tabular-nums}
+.mj-btns{margin-left:auto;display:flex;gap:.35rem}
+.mj-btns button{border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);border-radius:10px;padding:.35rem .6rem;font:700 .8rem 'Montserrat',sans-serif;cursor:pointer}
+.mj-time{position:relative;width:100%;max-width:760px;height:14px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+.mj-time i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#22c55e,#a3e635);border-radius:999px;transition:width .25s linear}
+.mj-time i.low{background:linear-gradient(90deg,#ef4444,#f97316)}
+.mj-time span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:800 .62rem 'Montserrat',sans-serif;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.mj-note{font-size:.72rem;color:var(--muted)}
+.mj-wrap{position:relative;width:fit-content;max-width:100%;margin:0 auto}
+.mj-board{position:relative;border-radius:14px;background:radial-gradient(ellipse at 50% 0%,#1e3a5f,#0f1f36 80%);box-shadow:inset 0 0 30px rgba(0,0,0,.4);touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.mj-path{position:absolute;left:0;top:0;pointer-events:none;z-index:5}
+.mj-path polyline{fill:none;stroke:#facc15;stroke-width:4;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 0 4px #facc15)}
+.mj-t{position:absolute;left:0;top:0;width:calc(var(--tw) - 3px);height:calc(var(--th) - 4px);padding:0;border:none;border-radius:8px;background:linear-gradient(180deg,#fffdf5,#ebe2c8);box-shadow:0 3px 0 #b9a57a,0 4px 6px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .22s ease,opacity .25s,scale .25s}
+.mj-t span{font-size:calc(var(--tw) * .58);line-height:1;pointer-events:none}
+.mj-t.noanim{transition:none}
+.mj-t.sel{background:linear-gradient(180deg,#fff7c2,#fde68a);box-shadow:0 3px 0 #d97706,0 0 0 3px #facc15}
+.mj-t.hint{animation:mjHint .5s ease-in-out 3}
+@keyframes mjHint{50%{box-shadow:0 3px 0 #b9a57a,0 0 0 4px #22c55e,0 0 14px #22c55e}}
+.mj-t.no{animation:slShake .3s}
+.mj-t.gone{opacity:0;scale:.6;pointer-events:none}
+.mj-float{position:absolute;left:50%;top:40%;transform:translateX(-50%);font:900 1.1rem 'Montserrat',sans-serif;color:#facc15;text-shadow:0 2px 6px rgba(0,0,0,.7);pointer-events:none;animation:mjFloat .9s ease-out forwards;z-index:6;white-space:nowrap}
+@keyframes mjFloat{to{transform:translate(-50%,-40px);opacity:0}}

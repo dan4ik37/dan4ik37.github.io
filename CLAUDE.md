@@ -15,7 +15,7 @@
 ## Ожидает запуска владельцем (обновлять этот список!)
 1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
    и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk*, freecell*, miner* (функции целиком из
+2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk*, freecell*, miner*, mahjong* (функции целиком из
    games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
@@ -373,6 +373,13 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Профи на узком экране — 16×30. Очки за победу: база 100/400/1000 × min(3, эталон/сек) — ключи miner1/2/3; рекорды — miner2.
   Соревнование: одинаковое поле «Любитель» + общая открытая стартовая клетка (из seed), очки = открытые + 1000 за победу.
   Монеты за победу 10/30/60 (только если партия ≥ 20 с — сервер всё равно не даёт монеты чаще раза в 20 с).
+- «Маджонг Коннект» (#/games/mahjong, js/games/mahjong.js) — как Onet: пара соединяется путём ≤ 2 поворотов по пустым клеткам,
+  можно за краем поля (findPath: прямо → 1 угол → 2 угла, кратчайший). Уровни LV (+бесконечные), со 2-го — гравитация
+  (applyGravity), на узком экране строки/столбцы меняются местами (≤ 8 столбцов). Ходов нет → само перемешивается (ensureMove).
+  Время, 3 подсказки, 2 перемешивания на уровень; ещё — за рекламу или 30 монет (coins_revive 'mahjong'), «+60 с» — раз за уровень.
+  Фишки — DOM (.mj-t, transform), путь — SVG. Сохранение d37_mahjong_save (+ _lv/_sc между уровнями). Бот проходит 60/60 уровней.
+  Соревнование — поле 8×8 из seed. Ключи mahjong (каждый пройденный уровень — победа) / mahjong_duel.
+- Статистика в профиле (renderProfileGameStats) считает ключи id, id_* и id<цифра> (pauk1, miner2, kosynka3).
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —
