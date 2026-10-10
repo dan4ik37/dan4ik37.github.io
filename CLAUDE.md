@@ -25,6 +25,9 @@
    {"ok":false,"reason":"not_found"} и `/rpc/ugc_model_save` гостем {"p_id":"abcdef","p_name":"x","p_tris":1,"p_bytes":1} → reason auth
    (PGRST202 = не применён). До запуска игры и миры хранятся только в браузере, каталог пуст («сайт обновляется»), /g/<id> — 404,
    «📤 Выложить» в «Студии 3D» пишет «Публикация откроется, когда сайт обновится». Тест PGlite: 37 + 39 проверок (миры, модели, хранилище).
+4. `unity.sql` — «Unity-игры» (unity_games, unity_likes, unity_reports, unity_plays, unity_scores; unity_save / unity_status /
+   unity_review / unity_play / unity_like / unity_report / unity_result / unity_top). Проверка: `/rpc/unity_play` гостем {"p_id":"x"} →
+   {"ok":false,"reason":"not_found"} (PGRST202 = не применён). До запуска игры хранятся только в браузере, каталог «сайт обновляется».
 Новые ключи игр / цены монет — дописывать в games-more.sql / coins.sql (оба идемпотентны) и выдать владельцу «запусти ещё раз».
 coins.sql и games-more.sql применены 10.10.2026 (проверено с сервера: coins_state гостем → auth, daily_top → [],
 game_score_cap('sudoku_daily') = 1200, coin_run_cap('sudoku') = 60 — то есть самая свежая версия обоих файлов).
@@ -619,6 +622,30 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 - Серверные страницы (api/_lib/routes/ugc.js в pages.js): /studio — «Конструктор игр онлайн» (SEO, FAQ, шаблоны, популярные и новые
   игры); /g/<id> — ссылка на игру (OG-превью img/share/studio.png, автор, «▶ Играть» → SPA). index и реклама — только у public.
   Карта сайта — /studio и все public-игры. Поиск по сайту и подвал — «Студия игр».
+
+## «Unity-игры» (#/games/unity, js/games/unity-host.js + sdk/unity + unity.sql) — игры игроков из Unity (агент 13.10.2026)
+- Автор собирает игру в Unity (2021.3+) под WebGL с «SDK Денчика» (sdk/unity: Plugins/WebGL/D37Bridge.jslib + Runtime/D37.cs; меню
+  «SDK Денчика → Настроить сборку для сайта» — Gzip + Decompression Fallback, без потоков, шаблон D37), выкладывает сборку у себя
+  (GitHub Pages, itch.io — файлы игр сайт не хранит) и добавляет ссылку на index.html. Маршруты: unity, unity/new, unity/edit/<id>,
+  unity/play/<id>[/<код>], unity/mod, unity/help («📦 Скачать SDK (zip)» — zip из /sdk/unity прямо в браузере). SEO — /games/unity
+  (games-seo.js), картинка img/games/unity.png.
+- Песочница: iframe с адресом сборки, sandbox="allow-scripts allow-same-origin allow-pointer-lock", allow="fullscreen; autoplay; gamepad".
+  allow-same-origin безопасен ТОЛЬКО потому, что сборка всегда на чужом адресе: свой адрес не принимается (unity_url / normUrl), не
+  встраивается и ловится после загрузки (sameOriginFrame). allow-top-navigation / popups / forms / modals не давать.
+- Протокол postMessage { d37u: 1, t }: игра → сайт hello, score, over, toast, log, room.create / join / leave, room.send; сайт → игра init,
+  player, room.state, room.msg, room.error, result. Сайт берёт только от своего iframe и с origin сборки, поля — по белому списку
+  (cleanIn), частота — LIMITS; jslib шлёт только на адреса сайта (vercel.app, github.io, localhost), никогда на '*'. Новый тип — менять
+  сразу в jslib, D37.cs, unity-host.js (IN / OUT_TYPES), TestPage и README.
+- Комнаты: канал Supabase unity-<игра>-<код>; хост — первый по времени входа, ушёл — хост следующий; 2–8 игроков. Быстрые данные —
+  netplay.js «звездой» (хост ↔ каждый гость), без прямой связи — через Supabase не чаще 5/с; от одного игрока игре — не больше 60/с.
+  Игре отдаём хэши номеров, не id аккаунтов. Сообщения через Supabase можно подделать (как в room.js) — подписи нет.
+- Очки: unity_result — рекорды игры (unity_scores, unity_top) + общая статистика под ОДНИМ ключом 'unity' (game_stats / game_log),
+  XP 10 за победу в общем лимите игр, монеты раунда до 50 по правилам coins_run, не чаще раза в 10 с; за свою игру — без наград.
+  Отдельная таблица unity_games, а не ugc_games: «Студия игр» показала бы Unity-игру пустой, а повторный ugc.sql упал бы на kind.
+- Проверка: node scripts/unity-test.cjs (208) + PGlite test-unity.mjs (157; путь к сайту — первым аргументом). В браузере (13.10):
+  сайт на :5500, sdk/unity/TestPage на :5600 (launch.json «unity-test») → «➕ Добавить свою игру из Unity» →
+  http://localhost:5600/index.html → «▶ Проверить»: «✅ SDK test-page», «+10 очков» → на сайте «⭐ 10». Комнату двумя вкладками
+  ещё не проверяли (в node — да).
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —
