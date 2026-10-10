@@ -1746,8 +1746,8 @@ Players.PlayerAdded.Connect(player => {
       if (prev === 'guest') { pl.H.toast('👑 Теперь ты хозяин мира', true); print('👑 Хозяин вышел — теперь мир считает этот браузер (скрипты запущены заново)', 'sys'); }
     } else {
       if (prev === 'guest') { mpPanel(); return; }
-      if (pl.running) stopWorld(pl);   // вошли почти одновременно, а хозяин — другой: мир считает он
-      pl.role = 'guest';
+      if (pl.running) stopWorld(pl);   // вошли почти одновременно или «уснули», а хозяин — другой: мир считает он
+      pl.role = 'guest'; mp.peers.clear(); mp.dirty.clear();
       clearTimeout(mp.orphanT);
       if (!mp.spawned) mpWait('🌍 Загружаем мир хозяина…', `Код комнаты: ${mp.code}`);
       mpReadyCheck();
