@@ -43,7 +43,7 @@ export default function handler(req, res) {
     <li>Один ник во всех играх и соцсетях — так тебя легче найти друзьям.</li>
   </ul></section>
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
-  <aside class="join"><div><b>Придумал ник? Проверь его в деле</b><span>На сайте dan4ik37 — 12 бесплатных игр с друзьями: морской бой, «5 букв», города, шашки.</span></div><a class="btn btn-acc" href="/games">🎮 Играть</a></aside>
+  <aside class="join"><div><b>Придумал ник? Проверь его в деле</b><span>На сайте dan4ik37 — больше десятка бесплатных игр с друзьями: морской бой, «5 букв», города, шашки.</span></div><a class="btn btn-acc" href="/games">🎮 Играть</a></aside>
 </main>`;
   const script = `
 (function(){
