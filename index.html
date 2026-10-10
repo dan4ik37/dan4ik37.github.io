@@ -73,6 +73,14 @@
      раз включить в дашборде: Vercel → проект → вкладка Analytics → Enable -->
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
+<!-- Яндекс Метрика: счётчик 113596397 (данные принимает только с dan4ik37.vercel.app, Вебвизор выключен).
+     trackHash — разделы SPA (#/games, #/chat…) считаются отдельными страницами. Нужна и для модерации РСЯ. -->
+<script>
+(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();
+for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
+k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})(window,document,'script','https://mc.yandex.ru/metrika/tag.js?id=113596397','ym');
+ym(113596397,'init',{ssr:true,clickmap:true,referrer:document.referrer,url:location.href,accurateTrackBounce:true,trackLinks:true,trackHash:true});
+</script>
 <style>
 :root{
   --font-display:'Oswald','Bebas Neue','Arial Narrow',sans-serif;
@@ -2525,10 +2533,11 @@ body.low .donation-alert-icon{animation:none}
       <h3>1. Какие данные собираются</h3>
       <p><strong style="color:var(--text)">Автоматически:</strong> IP-адрес, тип браузера, страницы сайта, время посещения — через стандартные веб-технологии.</p>
       <p><strong style="color:var(--text)">Вводимые вами:</strong> никнейм в чате (хранится локально в браузере), сообщения в чате сайта (хранятся в базе Supabase).</p>
-      <p><strong style="color:var(--text)">Cookies:</strong> используются для Google Translate, Google AdSense и запоминания настроек сайта (режим отображения, ник).</p>
+      <p><strong style="color:var(--text)">Cookies:</strong> используются для Google Translate, Google AdSense, Яндекс Метрики и запоминания настроек сайта (режим отображения, ник).</p>
 
       <h3>2. Google AdSense</h3>
       <p>Сайт использует Google AdSense для показа рекламы. Google может использовать cookies для персонализации рекламы. Подробнее: <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--accent)">Политика конфиденциальности Google</a>. Вы можете отключить персонализированную рекламу в <a href="https://adssettings.google.com" target="_blank" style="color:var(--accent)">настройках рекламы Google</a>.</p>
+      <p><strong style="color:var(--text)">Яндекс Метрика:</strong> сайт использует счётчик посещаемости Яндекс Метрики — он собирает обезличенные данные о визитах (какие страницы открыты, откуда пришёл посетитель, тип устройства) с помощью cookies. Запись действий на экране (Вебвизор) выключена. Подробнее: <a href="https://yandex.ru/legal/confidential/" target="_blank" style="color:var(--accent)">Политика конфиденциальности Яндекса</a>.</p>
 
       <h3>3. YouTube API</h3>
       <p>Сайт использует YouTube Data API v3 для отображения видео и статистики канала. Данные предоставляются Google LLC. Подробнее: <a href="https://www.youtube.com/t/terms" target="_blank" style="color:var(--accent)">Условия использования YouTube</a>.</p>
