@@ -3136,3 +3136,11 @@ html.wld-editing,html.wld-editing body{overflow:hidden}
 .st-card-au{display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap}
 .st-play-t small a{color:#c4b5fd;text-decoration:none;font-weight:800}
 .st-play-t small a:hover{text-decoration:underline}
+
+/* «Мир Денчика» 3D (js/games/mir.js): панель стола — сверху, приглашение — пониже, чтобы не накрывали друг друга */
+.mir .mir-tb{top:10px;border-color:#22c55e;z-index:4}
+.mir .wld-inv:not(.mir-tb){top:auto;bottom:34%}
+.mir .wld-wrap{background:#9fd6ff}
+.mir .wld-gl{cursor:grab}
+.mir .wld-gl:active{cursor:grabbing}
+@media (max-width:640px){.mir .mir-tb{font-size:.76rem}.mir .wld-hint{top:auto;bottom:118px}}

@@ -337,6 +337,7 @@
     else if (a === 'bot') { const c = menu.col || 'w'; start('bot', c === 'r' ? (Math.random() < .5 ? 'w' : 'b') : c); }
     else if (a === 'duo') start('duo', 'w');
     else if (a === 'online') location.hash = '#/games/chess/' + GameRoom.newCode();
+    else if (a === 'go') hostStart();   // «▶ Начать» за онлайн-столом (хозяин)
     else if (a.startsWith('promo:')) { const { f, t } = pendingPromo || {}; if (f != null) tryMove(f, t, a.slice(6)); }
     else if (a === 'again') { if (vs === 'online') hostStart(); else start(vs, vs === 'bot' ? myCol : 'w'); }
     else if (a === 'leave') { if (vs === 'online') location.hash = '#/games/chess'; else menu(); }
@@ -380,6 +381,7 @@
     names = { w: 'Ты', b: g.nick };
     render();
     syncOnline();
+    setTimeout(() => { if (vs === 'online' && room?.isHost) syncOnline(); }, 2000);   // повтор: первое сообщение новичку могло не дойти
   }
   function joinTable(c){
     code = c;

@@ -78,9 +78,23 @@
       room.seats = seats;
       room.synced = true;
       clearTimeout(room.seatT);
-      if (!was || removed || !added) h.onSeats?.(seats, room);
-      else room.seatT = setTimeout(() => { if (!room.closed) h.onSeats?.(room.seats, room); }, 800);
+      if (!was || removed || !added) { h.onSeats?.(seats, room); autoGo(); }
+      else room.seatT = setTimeout(() => { if (!room.closed) { h.onSeats?.(room.seats, room); autoGo(); } }, 800);
     });
+    // Пришли из «Мира Денчика» (сели за стол): хозяин сам жмёт «Начать», когда все, кто сидел за столом, на месте
+    let auto = 0;
+    try { const a = JSON.parse(sessionStorage.getItem('d37_autostart') || 'null'); if (a && a.g === game && a.c === code && Date.now() - a.t < 120e3) auto = Math.max(2, Math.min(room.max, a.n | 0)); } catch (e) {}
+    function autoGo(){
+      if (!auto || room.closed || !room.isHost || room.seats.length < auto) return;
+      setTimeout(() => {
+        if (!auto || room.closed || !room.isHost || room.seats.length < auto) return;
+        const b = document.querySelector('.ct-start[data-act="go"]:not([disabled])');
+        if (!b) return;
+        auto = 0;
+        try { sessionStorage.removeItem('d37_autostart'); } catch (e) {}
+        b.click();
+      }, 1600);   // новичку сервер первые доли секунды ничего не доставляет — начало партии потерялось бы
+    }
     ch.subscribe(async st => {
       if (st === 'SUBSCRIBED') {
         try { if (subtle) { kp = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveKey']); myPub = await subtle.exportKey('jwk', kp.publicKey); } } catch (e) { kp = null; myPub = null; }

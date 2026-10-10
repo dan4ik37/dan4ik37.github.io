@@ -649,16 +649,69 @@
       return true;
     }
     // ── Анимация: шаг, дыхание, моргание, эмоции, аксессуары ──
-    function animate(ch, moving, dt, t){
-      if (moving) ch.phase += dt * 10.5;
-      const s = Math.sin(ch.phase), mv = moving ? 1 : 0;
-      ch.legL.rotation.x = s * .7 * mv; ch.legR.rotation.x = -s * .7 * mv;
-      ch.armL.rotation.set(-s * .65 * mv, 0, -.16); ch.armR.rotation.set(s * .65 * mv, 0, .16);
-      ch.body.position.y = mv ? Math.abs(Math.cos(ch.phase)) * .06 : 0;
+    // o (движок): rate — частота шага (бег быстрее), air — в прыжке/падении, sit — сидит
+    function animate(ch, moving, dt, t, o){
+      const rate = o?.rate || 10.5, run = rate > 13;
+      if (moving) ch.phase += dt * rate;
+      const s = Math.sin(ch.phase), mv = moving ? 1 : 0, sw = run ? .95 : .7;
+      ch.legL.rotation.x = s * sw * mv; ch.legR.rotation.x = -s * sw * mv;
+      ch.armL.rotation.set(-s * (sw - .05) * mv, 0, -.16); ch.armR.rotation.set(s * (sw - .05) * mv, 0, .16);
+      ch.body.position.y = mv ? Math.abs(Math.cos(ch.phase)) * (run ? .09 : .06) : 0;
       ch.body.rotation.set(0, 0, mv ? s * .04 : 0);
-      ch.torso.rotation.set(mv ? .06 : 0, 0, 0);
+      ch.torso.rotation.set(mv ? (run ? .16 : .06) : 0, 0, 0);
       ch.torso.scale.y = mv ? 1 : 1 + Math.sin(t * 2.4 + ch.phase) * .012;
       ch.headP.rotation.set(0, 0, mv ? -s * .035 : Math.sin(t * .9 + ch.phase) * .035);
+      ch.body.position.z = 0; ch.body.scale.set(1, 1, 1);
+      // позы движка (js/engine/player.js): кувырок, вис на краю, лестница, паркур, присед
+      const special = o && (o.roll >= 0 || o.hang || o.ladder || o.pk);
+      if (o?.roll >= 0) {   // кувырок клубком через голову (назад — в обратную сторону)
+        const k = o.roll, curl = Math.sin(Math.min(1, k * 1.08) * PI), a = (o.rollBack ? -1 : 1) * TAU * k * k * (3 - 2 * k), hc = (ch.top || 2.3) * .45;
+        ch.body.scale.setScalar(1 - .28 * curl);
+        ch.body.rotation.set(a, 0, 0);
+        ch.body.position.y = hc * (1 - Math.cos(a)); ch.body.position.z = -hc * Math.sin(a);
+        ch.legL.rotation.x = ch.legR.rotation.x = -1.7 * curl;
+        ch.armL.rotation.set(-1.3 * curl, 0, -.3); ch.armR.rotation.set(-1.3 * curl, 0, .3);
+        ch.headP.rotation.x = .45 * curl; ch.torso.rotation.x = .5 * curl;
+      } else if (o?.hang) {   // вис: руки на краю, ноги болтаются; по краю — перехват руками
+        const q = Math.sin(t * 2.1);
+        ch.body.position.y = 0;
+        ch.armL.rotation.set(-2.95, 0, -.14 - (mv ? Math.max(0, s) * .3 : 0)); ch.armR.rotation.set(-2.95, 0, .14 + (mv ? Math.max(0, -s) * .3 : 0));
+        ch.legL.rotation.x = q * .12 + (mv ? s * .2 : 0); ch.legR.rotation.x = -q * .1 - (mv ? s * .2 : 0);
+        ch.torso.rotation.x = -.06; ch.headP.rotation.x = -.18;
+      } else if (o?.ladder) {   // лестница: руки и ноги по очереди
+        const q = Math.sin(o.climbPh || 0);
+        ch.body.position.y = 0;
+        ch.armL.rotation.set(-2.5 - q * .45, 0, -.1); ch.armR.rotation.set(-2.5 + q * .45, 0, .1);
+        ch.legL.rotation.x = -.35 - Math.max(0, q) * .7; ch.legR.rotation.x = -.35 - Math.max(0, -q) * .7;
+        ch.torso.rotation.x = -.05; ch.headP.rotation.x = -.2;
+      } else if (o?.pk) {   // паркур: прогресс 0…1
+        const k = o.pkK || 0;
+        ch.body.position.y = 0;
+        if (o.pk === 'vault') {   // ладонь на край → ноги вбок над препятствием → приземление
+          if (k < .35) { ch.armR.rotation.set(-1.0, 0, .2); ch.armL.rotation.set(-.6, 0, -.5); ch.legL.rotation.x = ch.legR.rotation.x = -.5; ch.torso.rotation.x = .35; }
+          else if (k < .68) { ch.armR.rotation.set(-.35, 0, .45); ch.armL.rotation.set(-1.4, 0, -.9); ch.legL.rotation.x = -1.3; ch.legR.rotation.x = -1.1; ch.body.rotation.z = .3; ch.torso.rotation.x = .2; }
+          else { ch.armL.rotation.set(-.8, 0, -.8); ch.armR.rotation.set(-.8, 0, .8); ch.legL.rotation.x = -.35; ch.legR.rotation.x = .3; ch.torso.rotation.x = .15; }
+        } else if (o.pk === 'hang') { ch.armL.rotation.set(-2.9, 0, -.15); ch.armR.rotation.set(-2.9, 0, .15); ch.legL.rotation.x = -.2; ch.legR.rotation.x = .1; }
+        else {   // подтянуться: руки на край → тянут → упор, колено на край
+          if (k < .4) { ch.armL.rotation.set(-2.9, 0, -.15); ch.armR.rotation.set(-2.9, 0, .15); ch.legL.rotation.x = -.15; ch.legR.rotation.x = .1; }
+          else if (k < .65) { const p = (k - .4) / .25; ch.armL.rotation.set(-2.9 + p * 1.6, 0, -.3); ch.armR.rotation.set(-2.9 + p * 1.6, 0, .3); ch.legL.rotation.x = -.5 * p; ch.torso.rotation.x = .3 * p; }
+          else { ch.armL.rotation.set(-.45, 0, -.35); ch.armR.rotation.set(-.45, 0, .35); ch.legL.rotation.x = -1.35; ch.legR.rotation.x = .2; ch.torso.rotation.x = .45; }
+        }
+      } else if (o?.air) {   // в воздухе: ноги врозь, руки чуть вверх
+        ch.legL.rotation.x = -.55; ch.legR.rotation.x = .45; ch.body.position.y = 0;
+        ch.armL.rotation.set(-.5, 0, -.75); ch.armR.rotation.set(-.5, 0, .75); ch.torso.rotation.x = .05;
+      } else if (o?.sit) {   // сидит: ноги вперёд, руки на коленях
+        ch.legL.rotation.x = -1.42; ch.legR.rotation.x = -1.42; ch.body.position.y = 0;
+        ch.armL.rotation.set(-.55, 0, -.12); ch.armR.rotation.set(-.55, 0, .12); ch.torso.rotation.x = -.04;
+      }
+      const cw = !special && !o?.air && !o?.sit ? o?.crouch || 0 : 0;
+      if (cw > .01) {   // присед: по-мультяшному сжимается, корпус вперёд, ноги шире
+        ch.body.scale.set(1 + .08 * cw, 1 - .36 * cw, 1 + .08 * cw);
+        ch.torso.rotation.x += .25 * cw;
+        if (!mv) { ch.legL.rotation.x = -.35 * cw; ch.legR.rotation.x = .3 * cw; }
+        ch.armL.rotation.x -= .3 * cw; ch.armR.rotation.x -= .3 * cw;
+      }
+      if (special) ch.emote = null;
       // эмоции: 👋 машет, 🎉 руки вверх и прыжок, 🔥 прыжок, 👍 палец вперёд, 😂 трясётся, ❤️/😎 кивает, 😭 плачет, 💃 танец
       const e = ch.emote, k = (t - ch.emoteT) * 10;
       if (e && t - ch.emoteT < (e === '💃' ? 3.2 : 1.6)) {
@@ -720,7 +773,7 @@
       scene.add(sun);
       return sun;
     }
-    return { T, toon, basic, geo, sph, cyl, tor, box, cone, emojiSprite, build, recolor, animate, dispose, trails, lights, cloth, mats, geos, texs };
+    return { T, grad, toon, basic, geo, sph, cyl, tor, box, cone, emojiSprite, build, recolor, animate, dispose, trails, lights, cloth, mats, geos, texs };
   }
 
   // ═══ Мир ═══
