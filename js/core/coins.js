@@ -14,7 +14,7 @@
 //   on(fn) — подписка на изменения; элементы .js-coins обновляются сами
 (() => {
   const RULES = { daily: 30, ad: 40, adPerDay: 8, adGap: 45, doublePerDay: 5, runDay: 1500, runGap: 20, revive: 30 };
-  const RUN_CAP = { horde: 300, td: 300, blocks: 150, kosynka: 40, pauk: 100 };
+  const RUN_CAP = { horde: 300, td: 300, blocks: 150, kosynka: 40, pauk: 100, freecell: 30 };
   const HERO_PRICES = { ninja: 400, knight: 400, vampire: 800, robot: 1200, streamer: 2500 };
   const UP_PRICES = [100, 200, 400, 700, 1000], ARMOR_PRICES = [150, 400, 800];
   const LS = 'd37_coins';

@@ -5,7 +5,7 @@
 --  «Бильярд» (pool_easy, pool_normal, pool_hard, pool_online), «Лудо» (ludo, ludo_online),
 --  «Нарды» (nardy_easy, nardy_hard, nardy_online), «Арена» (arena_easy, arena_normal, arena_hard, arena_online),
 --  «Шахматы» (chess_easy, chess_normal, chess_hard, chess_online), «Блоки» (blocks, blocks_duel),
---  «Косынка» (kosynka, kosynka3, kosynka_duel), «Паук» (pauk1, pauk2, pauk4).
+--  «Косынка» (kosynka, kosynka3, kosynka_duel), «Паук» (pauk1, pauk2, pauk4), «Свободная ячейка» (freecell, freecell_duel).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
@@ -45,6 +45,7 @@ returns int language sql immutable as $$
     when p_game = 'blocks_duel' then 300000
     when p_game in ('kosynka', 'kosynka3', 'kosynka_duel') then 30000
     when p_game in ('pauk1', 'pauk2', 'pauk4') then 1300
+    when p_game in ('freecell', 'freecell_duel') then 30000
     else null end;
 $$;
 
@@ -76,5 +77,6 @@ returns int language sql immutable as $$
     when 'blocks' then 10 when 'blocks_duel' then 10
     when 'kosynka' then 10 when 'kosynka3' then 15 when 'kosynka_duel' then 10
     when 'pauk1' then 10 when 'pauk2' then 20 when 'pauk4' then 40
+    when 'freecell' then 15 when 'freecell_duel' then 10
     else 0 end;
 $$;

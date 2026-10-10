@@ -15,7 +15,7 @@
 ## Ожидает запуска владельцем (обновлять этот список!)
 1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
    и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk* (функции целиком из
+2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk*, freecell* (функции целиком из
    games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
@@ -364,7 +364,10 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Очки косынки как в Windows + бонус 700000/сек за победу; паук: 500 − ходы + 100 за масть. Соревнование — только косынка по 1.
   Ключи: kosynka / kosynka3 / kosynka_duel, pauk1 / pauk2 / pauk4. Монеты за победу: косынка 25/40, паук 30/60/100.
   Бот (node) раскладывает косынку по 1 в ~30%; паука перебор решает редко — люди играют лучше, правила проверены тестами.
-  Классы стола: sl-kos / sl-spd (не sl-s — это подпись в окне итога, у неё max-width).
+  Классы стола: sl-kos / sl-spd / sl-fc (не sl-s — это подпись в окне итога, у неё max-width).
+- «Свободная ячейка» (#/games/freecell) — там же, kind 'f': раздачи №1–32000 генератором Windows (msDeal; №1 сверена с
+  эталоном), ячейки c0..c3, перенос (ячейки+1)×2^(пустые ряды) (maxMove), «безопасные» карты сами уходят в дом (autoFound).
+  Соревнование — одинаковый номер раздачи. Ключи freecell / freecell_duel, монеты 30 за победу.
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —

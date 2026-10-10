@@ -2773,3 +2773,4 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .sl-col .ct-start{align-self:stretch}
 .sl-coins{font-size:.85rem;font-weight:700}
 @media(max-width:560px){.sl-wrap{padding:5px;margin:0 -6px}}
+.sl-num{font-size:.74rem;color:var(--muted);align-self:center;margin-right:.2rem}.sl-num b{color:var(--text)}

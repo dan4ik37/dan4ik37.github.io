@@ -1,13 +1,15 @@
 // ═══════════════════════════════════════
-//  ПАСЬЯНСЫ: «КОСЫНКА» (Klondike, по 1 или по 3 карты) и «ПАУК» (1, 2 или 4 масти)
+//  ПАСЬЯНСЫ: «КОСЫНКА» (Klondike, по 1 или по 3 карты), «ПАУК» (1, 2 или 4 масти), «СВОБОДНАЯ ЯЧЕЙКА» (FreeCell)
 // ═══════════════════════════════════════
-// Один файл на оба: GAME_IMPL.kosynka и GAME_IMPL.pauk. Карты — DOM-элементы, едут CSS-переходом.
+// Один файл на все: GAME_IMPL.kosynka, .pauk, .freecell. Карты — DOM-элементы, едут CSS-переходом.
 // Управление: перетащить (палец/мышь) или просто нажать — карта сама уйдёт на лучшее место (сначала в «дом»).
 // Отмена ходов, подсказка, автосбор в конце «Косынки». Партия сохраняется (localStorage d37_sol_<игра>).
 // Очки «Косынки» как в Windows: из колоды в ряд +5, в дом +10, открыл карту +5, из дома назад −15,
 // новый круг колоды −100 (по 3 карты — −20); за победу бонус 700 000 / секунд игры.
 // «Паук»: 500 − ходы + 100 за каждую собранную масть (Король→Туз одной масти уходит сама).
-// «⚔️ Соревнование» — только «Косынка» по 1 карте: одинаковая раздача у обоих, 5 минут, у кого больше очков.
+// «Свободная ячейка»: раздачи №1–32000 как в Windows (тот же генератор msDeal), +10 за карту в доме и бонус за время;
+// ненужные в рядах карты сами уходят в дом (autoFound). Переносить разом можно (ячейки+1)×2^(пустые ряды) карт.
+// «⚔️ Соревнование» — «Косынка» по 1 карте и «Ячейка»: одинаковая раздача у обоих, 5 минут, у кого больше очков.
 // Движок без DOM — GAME_IMPL.kosynka._test (проверять в node).
 (() => {
   const RANKS = ['Т', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'В', 'Д', 'К'];
@@ -34,20 +36,36 @@
     tab.forEach(p => { p[p.length - 1].up = true; });
     return { kind: 's', suits: ss.length, stock: cards, tab, done: [], score: 500, moves: 0, won: false };
   }
-  // Стопки: st — колода, w — сброс, f0..f3 — «дом», t0.. — ряды
+  // Раздача «Свободной ячейки» №n — тот же генератор, что в Windows (номера раздач совпадают)
+  function msDeal(n){
+    let seed = n >>> 0;
+    const rnd = () => (seed = (seed * 214013 + 2531011) & 0x7fffffff) >> 16;
+    const t = Array.from({ length: 52 }, (_, i) => 51 - i);
+    for (let i = 0; i < 51; i++) { const j = 51 - rnd() % (52 - i); [t[i], t[j]] = [t[j], t[i]]; }
+    return t;   // v: ранг v >> 2 (0 — туз), масть v & 3 — трефы, бубны, червы, пики
+  }
+  const MS_SUIT = [2, 3, 1, 0];
+  function dealFreecell(n){
+    const num = Math.min(32000, Math.max(1, Math.floor(n) || 1)), tab = Array.from({ length: 8 }, () => []);
+    msDeal(num).forEach((v, i) => { const s = MS_SUIT[v & 3], r = v >> 2; tab[i % 8].push({ id: s * 13 + r, s, r, up: true }); });
+    return { kind: 'f', num, cells: [[], [], [], []], found: [[], [], [], []], tab, stock: [], score: 0, moves: 0, won: false };
+  }
+  // «Ячейка»: сколько карт можно перенести разом
+  const maxMove = (S, toEmpty) => (S.cells.filter(c => !c.length).length + 1) * 2 ** Math.max(0, S.tab.filter(p => !p.length).length - (toEmpty ? 1 : 0));
+  // Стопки: st — колода, w — сброс, f0..f3 — «дом», c0..c3 — свободные ячейки, t0.. — ряды
   function pile(S, id){
     if (id === 'st') return S.stock;
     if (id === 'w') return S.waste;
     const n = +id.slice(1);
-    return id[0] === 'f' ? S.found?.[n] : id[0] === 't' ? S.tab[n] : null;
+    return id[0] === 'f' ? S.found?.[n] : id[0] === 't' ? S.tab[n] : id[0] === 'c' ? S.cells?.[n] : null;
   }
   function canPick(S, id, idx){
     const p = pile(S, id);
     if (!p || id === 'st' || idx < 0 || idx >= p.length || !p[idx].up) return false;
-    if (id === 'w' || id[0] === 'f') return idx === p.length - 1;
+    if (id === 'w' || id[0] === 'f' || id[0] === 'c') return idx === p.length - 1;
     for (let i = idx; i < p.length - 1; i++) {
       const a = p[i], b = p[i + 1];
-      if (a.r !== b.r + 1 || (S.kind === 'k' ? red(a) === red(b) : a.s !== b.s)) return false;
+      if (a.r !== b.r + 1 || (S.kind === 's' ? a.s !== b.s : red(a) === red(b))) return false;
     }
     return true;
   }
@@ -55,9 +73,11 @@
     const p = pile(S, id);
     if (!p || !cards.length) return false;
     const c = cards[0], top = p[p.length - 1];
-    if (id[0] === 'f') return S.kind === 'k' && cards.length === 1 && (top ? top.s === c.s && c.r === top.r + 1 : c.r === 0);
+    if (id[0] === 'c') return S.kind === 'f' && cards.length === 1 && !p.length;
+    if (id[0] === 'f') return S.kind !== 's' && cards.length === 1 && (top ? top.s === c.s && c.r === top.r + 1 : c.r === 0);
     if (id[0] !== 't') return false;
     if (S.kind === 'k') return top ? top.up && red(top) !== red(c) && top.r === c.r + 1 : c.r === 12;
+    if (S.kind === 'f') return cards.length <= maxMove(S, !top) && (!top || (red(top) !== red(c) && top.r === c.r + 1));
     return !top || (top.up && top.r === c.r + 1);
   }
   // «Паук»: собранная масть Король→Туз в конце ряда уходит
@@ -90,12 +110,31 @@
       if (from[0] === 't' && top && !top.up) { top.up = true; pts += 5; }
       S.score = Math.max(0, S.score + pts);
       S.won = S.found.every(f => f.length === 13);
+    } else if (S.kind === 'f') {
+      if (to[0] === 'f' && from[0] !== 'f') S.score += 10;
+      else if (from[0] === 'f') S.score = Math.max(0, S.score - 10);
+      autoFound(S);
+      S.won = S.found.every(f => f.length === 13);
     } else {
       S.score = Math.max(0, S.score - 1);
       if (top && !top.up) top.up = true;
       collect(S, +to.slice(1));
     }
     return true;
+  }
+  // «Ячейка»: карты, которые в рядах уже точно не понадобятся (обе масти другого цвета дома до ранга−1), уходят в дом сами
+  function autoFound(S){
+    const cnt = s => S.found.find(x => x.length && x[0].s === s)?.length || 0;
+    for (let again = true; again;) {
+      again = false;
+      for (const id of [...S.cells.map((_, i) => 'c' + i), ...S.tab.map((_, i) => 't' + i)]) {
+        const p = pile(S, id), c = p[p.length - 1];
+        if (!c) continue;
+        const opp = red(c) ? [0, 2] : [1, 3];
+        if (c.r > 1 && Math.min(cnt(opp[0]), cnt(opp[1])) < c.r) continue;
+        for (let f = 0; f < 4; f++) if (canDrop(S, [c], 'f' + f)) { S.found[f].push(p.pop()); S.score += 10; again = true; break; }
+      }
+    }
   }
   // Колода. «Косынка»: взять 1 или 3 карты, пустая — новый круг. «Паук»: по карте в каждый ряд (если нет пустых)
   function drawStock(S){
@@ -124,7 +163,7 @@
   function bestTarget(S, from, idx){
     if (!canPick(S, from, idx)) return null;
     const cards = pile(S, from).slice(idx), c = cards[0];
-    if (S.kind === 'k' && cards.length === 1 && from[0] !== 'f') for (let f = 0; f < 4; f++) if (canDrop(S, cards, 'f' + f)) return 'f' + f;
+    if (S.kind !== 's' && cards.length === 1 && from[0] !== 'f') for (let f = 0; f < 4; f++) if (canDrop(S, cards, 'f' + f)) return 'f' + f;
     let best = null, bv = 0;
     S.tab.forEach((p, ti) => {
       const id = 't' + ti, top = p[p.length - 1];
@@ -133,12 +172,14 @@
       const v = !top ? 1 : S.kind === 's' && top.s === c.s ? 3 : 2;
       if (v > bv) { bv = v; best = id; }
     });
+    // «Ячейка»: одну карту лучше в свободную ячейку, чем на пустой ряд
+    if (S.kind === 'f' && cards.length === 1 && from[0] !== 'c' && bv <= 1) { const e = S.cells.findIndex(x => !x.length); if (e >= 0) best = 'c' + e; }
     return best;
   }
   // Подсказка: самый полезный ход или колода. null — ходов нет
   function hint(S){
-    const tabs = S.tab.map((_, i) => 't' + i), fs = S.kind === 'k' ? ['f0', 'f1', 'f2', 'f3'] : [];
-    const froms = S.kind === 'k' ? ['w', ...tabs] : tabs, tos = [...fs, ...tabs];
+    const tabs = S.tab.map((_, i) => 't' + i), fs = S.kind !== 's' ? ['f0', 'f1', 'f2', 'f3'] : [];
+    const froms = S.kind === 'k' ? ['w', ...tabs] : S.kind === 'f' ? ['c0', 'c1', 'c2', 'c3', ...tabs] : tabs, tos = [...fs, ...tabs];
     let best = null;
     for (const from of froms) {
       const p = pile(S, from);
@@ -158,6 +199,14 @@
   function hintValue(S, from, idx, to){
     const p = pile(S, from), under = p[idx - 1], dest = pile(S, to), top = dest[dest.length - 1];
     const reveal = from[0] === 't' && under && !under.up, empties = from[0] === 't' && idx === 0;
+    if (S.kind === 'f') {
+      if (to[0] === 'f') return 50;
+      if (from[0] === 'c') return top ? 35 : 0;                      // из ячейки в ряд — ячейка освобождается
+      if (!top) return 0;
+      if (under && red(under) !== red(p[idx]) && under.r === p[idx].r + 1) return 0;   // цепочка и так на месте
+      if (!under) return 25;                                         // освобождает ряд
+      return 15 + (S.found.some((_, f) => canDrop(S, [under], 'f' + f)) ? 25 : 0);
+    }
     if (S.kind === 'k') {
       if (to[0] === 'f') return 50 + (reveal ? 10 : 0);
       if (from === 'w') return 30;
@@ -170,21 +219,25 @@
     return (top ? (top.s === p[idx].s ? 30 : 10) : 5) + (reveal ? 20 : 0) + (empties && top ? 15 : 0);
   }
   // Автосбор «Косынки»: всё открыто, колода пуста — карты по одной уходят в «дом»
-  const canAuto = S => S.kind === 'k' && !S.won && !S.stock.length && !S.waste.length && S.tab.every(p => p.every(c => c.up));
+  // «Ячейка»: все ряды — готовые цепочки по убыванию, значит, пасьянс точно сойдётся
+  const canAuto = S => !S.won && (S.kind === 'k' ? !S.stock.length && !S.waste.length && S.tab.every(p => p.every(c => c.up))
+    : S.kind === 'f' && S.tab.every(p => p.every((c, i) => !i || (p[i - 1].r === c.r + 1 && red(p[i - 1]) !== red(c)))));
   function autoMove(S){
     let best = null;
-    S.tab.forEach((p, ti) => {
-      const c = p[p.length - 1];
-      if (c) for (let f = 0; f < 4; f++) if (canDrop(S, [c], 'f' + f) && (!best || c.r < best.r)) best = { from: 't' + ti, idx: p.length - 1, to: 'f' + f, r: c.r };
-    });
+    for (const id of [...(S.cells || []).map((_, i) => 'c' + i), ...S.tab.map((_, i) => 't' + i)]) {
+      const p = pile(S, id), c = p[p.length - 1];
+      if (c) for (let f = 0; f < 4; f++) if (canDrop(S, [c], 'f' + f) && (!best || c.r < best.r)) best = { from: id, idx: p.length - 1, to: 'f' + f, r: c.r };
+    }
     return best;
   }
-  const finalScore = (S, sec) => S.kind === 'k' ? S.score + (S.won ? Math.round(700000 / Math.max(30, sec)) : 0) : S.score;
+  const finalScore = (S, sec) => S.kind !== 's' ? S.score + (S.won ? Math.round(700000 / Math.max(30, sec)) : 0) : S.score;
   function validState(S, kind){
     if (!S || S.kind !== kind || !Array.isArray(S.tab) || !Array.isArray(S.stock)) return false;
     if (kind === 'k' && (!Array.isArray(S.waste) || !Array.isArray(S.found) || S.found.length !== 4 || S.tab.length !== 7)) return false;
     if (kind === 's' && (!Array.isArray(S.done) || S.tab.length !== 10)) return false;
-    const all = [...S.stock, ...S.tab.flat(), ...(kind === 'k' ? [...S.waste, ...S.found.flat()] : S.done.flat())], n = kind === 'k' ? 52 : 104;
+    if (kind === 'f' && (!Array.isArray(S.cells) || S.cells.length !== 4 || S.cells.some(c => !Array.isArray(c) || c.length > 1) || !Array.isArray(S.found) || S.found.length !== 4 || S.tab.length !== 8)) return false;
+    const rest = kind === 'k' ? [...S.waste, ...S.found.flat()] : kind === 'f' ? [...S.cells.flat(), ...S.found.flat()] : S.done.flat();
+    const all = [...S.stock, ...S.tab.flat(), ...rest], n = kind === 's' ? 104 : 52;
     if (all.length !== n || new Set(all.map(c => c?.id)).size !== n) return false;
     return all.every(c => c && Number.isInteger(c.r) && c.r >= 0 && c.r < 13 && Number.isInteger(c.s) && c.s >= 0 && c.s < 4);
   }
@@ -193,10 +246,12 @@
   const CFG = {
     kosynka: { kind: 'k', save: 'd37_sol_kosynka', optKey: 'd37_sol_kosynka_draw', opts: [[1, 'По 1 карте'], [3, 'По 3 карты']], name: 'Косынка' },
     pauk:    { kind: 's', save: 'd37_sol_pauk', optKey: 'd37_sol_pauk_suits', opts: [[1, '1 масть'], [2, '2 масти'], [4, '4 масти']], name: 'Паук' },
+    freecell: { kind: 'f', save: 'd37_sol_freecell', optKey: '', opts: [], name: 'Свободная ячейка' },
   };
-  const optOf = S => S.kind === 'k' ? S.draw : S.suits;
-  const keyOf = S => S.kind === 'k' ? (S.draw === 3 ? 'kosynka3' : 'kosynka') : 'pauk' + S.suits;
-  const coinsFor = S => S.kind === 'k' ? (S.draw === 3 ? 40 : 25) : ({ 1: 30, 2: 60, 4: 100 })[S.suits] || 30;
+  const optOf = S => S.kind === 'k' ? S.draw : S.kind === 'f' ? S.num : S.suits;
+  const keyOf = S => S.kind === 'k' ? (S.draw === 3 ? 'kosynka3' : 'kosynka') : S.kind === 'f' ? 'freecell' : 'pauk' + S.suits;
+  const coinsFor = S => S.kind === 'k' ? (S.draw === 3 ? 40 : 25) : S.kind === 'f' ? 30 : ({ 1: 30, 2: 60, 4: 100 })[S.suits] || 30;
+  const randDeal = () => 1 + Math.floor(Math.random() * 32000);
   const C = () => window.D37Coins;
   const num = n => Number(n || 0).toLocaleString('ru');
   const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -208,26 +263,26 @@
     let S = o.S, hist = o.hist || [], elapsed = o.elapsed || 0, runAt = 0, tick = 0, ended = false, stopped = false, auto = 0, hintT = 0;
     let W = 0, cw = 60, ch = 85, gap = 6, topH = 100, pos = new Map(), loc = new Map(), drag = null;
     const els = new Map(), slots = new Map();
-    el.innerHTML = `<div class="sl ${S.kind === 'k' ? 'sl-kos' : 'sl-spd'}">
+    el.innerHTML = `<div class="sl ${S.kind === 'k' ? 'sl-kos' : S.kind === 'f' ? 'sl-fc' : 'sl-spd'}">
         <div class="sl-bar">
           <span class="sl-st">⏱ <b class="slTime">0:00</b></span><span class="sl-st">Ходов <b class="slMoves">0</b></span><span class="sl-st">Очки <b class="slScore">0</b></span>
           <span class="sl-btns"><button type="button" data-act="undo" title="Отменить ход (Ctrl+Z)">↶<span> Отменить</span></button><button type="button" data-act="hint" title="Подсказка">💡<span> Подсказка</span></button>${o.duel ? '<button type="button" data-act="giveup">🏁<span> Хватит</span></button>' : '<button type="button" data-act="new">↻<span> Новая</span></button>'}</span>
         </div>
-        ${o.duel ? '' : `<div class="sl-opts">${cfg.opts.map(([v, t]) => `<button type="button" data-act="opt:${v}"${optOf(S) === v ? ' class="on"' : ''}>${t}</button>`).join('')}</div>`}
+        ${o.duel ? '' : S.kind === 'f' ? `<div class="sl-opts"><span class="sl-num">Раздача №<b>${S.num}</b></span><button type="button" data-act="pick">🔢 По номеру</button><button type="button" data-act="rand">🎲 Случайная</button></div>` : `<div class="sl-opts">${cfg.opts.map(([v, t]) => `<button type="button" data-act="opt:${v}"${optOf(S) === v ? ' class="on"' : ''}>${t}</button>`).join('')}</div>`}
         <div class="sl-wrap"><div class="sl-board"></div><div class="sl-over" hidden></div></div>
-        ${o.duel || S.kind !== 'k' ? '' : '<div class="ct-actions"><button type="button" class="ct-duel-btn" data-act="duel">⚔️ Наперегонки с другом</button></div>'}
+        ${o.duel || S.kind === 's' ? '' : '<div class="ct-actions"><button type="button" class="ct-duel-btn" data-act="duel">⚔️ Наперегонки с другом</button></div>'}
       </div>`;
     const q = s => el.querySelector(s);
     const board = q('.sl-board'), ov = q('.sl-over');
     const colX = i => i * (cw + gap);
-    const byId = () => { const m = new Map(); [S.stock, S.waste || [], ...(S.found || []), ...S.tab, ...(S.done || [])].forEach(p => p.forEach(c => m.set(c.id, c))); return m; };
+    const byId = () => { const m = new Map(); [S.stock, S.waste || [], ...(S.found || []), ...(S.cells || []), ...S.tab, ...(S.done || [])].forEach(p => p.forEach(c => m.set(c.id, c))); return m; };
 
     function layout(){
       const w = Math.round(board.clientWidth);
       if (!w || w === W) return;
       W = w;
-      const cols = S.kind === 'k' ? 7 : 10;
-      gap = Math.max(3, Math.round(w * (S.kind === 'k' ? .014 : .009)));
+      const cols = S.kind === 'k' ? 7 : S.kind === 'f' ? 8 : 10;
+      gap = Math.max(3, Math.round(w * (S.kind === 's' ? .009 : .013)));
       cw = Math.floor((w - gap * (cols - 1)) / cols);
       ch = Math.round(cw * 1.42);
       topH = ch + Math.max(10, gap * 2);
@@ -267,6 +322,10 @@
         const n = S.waste.length, fan = S.draw === 3 ? Math.min(3, n) : 1, step = Math.round(cw * .3);
         S.waste.forEach((c, i) => put(c, colX(1) + Math.max(0, i - (n - fan)) * step, 0, 100 + i, 'w', i));
         S.found.forEach((f, fi) => f.forEach((c, i) => put(c, colX(3 + fi), 0, 200 + i, 'f' + fi, i)));
+      } else if (S.kind === 'f') {
+        for (let k = 0; k < 4; k++) { setSlot('c' + k, colX(k), 0, ''); setSlot('f' + k, colX(4 + k), 0, 'Т'); }
+        S.cells.forEach((cell, k) => cell.forEach(c => put(c, colX(k), 0, 50, 'c' + k, 0)));
+        S.found.forEach((f, fi) => f.forEach((c, i) => put(c, colX(4 + fi), 0, 200 + i, 'f' + fi, i)));
       } else {
         setSlot('st', colX(9), 0, S.stock.length ? '' : '·');
         const step = Math.round(cw * .2);
@@ -279,7 +338,7 @@
       S.tab.forEach((p, ti) => {
         setSlot('t' + ti, colX(ti), topH, S.kind === 'k' ? 'К' : '');
         const downs = p.filter(c => !c.up).length, ups = p.length - downs;
-        let dO = Math.max(4, Math.round(ch * .11)), uO = Math.max(11, Math.round(ch * (S.kind === 'k' ? .28 : .26)));
+        let dO = Math.max(4, Math.round(ch * .11)), uO = Math.max(11, Math.round(ch * (S.kind === 's' ? .26 : .28)));
         const need = () => downs * dO + Math.max(0, ups - 1) * uO + ch;
         if (need() > avail && ups > 1) uO = Math.max(Math.round(ch * .17), Math.floor((avail - ch - downs * dO) / (ups - 1)));
         if (need() > avail && downs) dO = Math.max(3, Math.floor((avail - ch - Math.max(0, ups - 1) * uO) / downs));
@@ -352,7 +411,7 @@
     function showHint(){
       const h = hint(S);
       clearTimeout(hintT);
-      if (!h) { api.toast(S.kind === 'k' ? 'Ходов больше нет — отмени несколько ходов или начни новую раздачу' : 'Ходов нет — отмени ходы или начни заново'); return; }
+      if (!h) { api.toast(S.kind === 'k' ? 'Ходов больше нет — отмени несколько ходов или начни новую раздачу' : S.kind === 'f' ? 'Хороших ходов не видно — положи карту в свободную ячейку или отмени ходы' : 'Ходов нет — отмени ходы или начни заново'); return; }
       if (h.stock) {
         const st = S.stock[S.stock.length - 1];
         flash(st ? [st.id] : ['st'], 'hint');
@@ -413,12 +472,13 @@
     board.addEventListener('pointercancel', e => drop(e, true));
     // Ближайшая подходящая стопка к центру перетаскиваемой карты
     function target(from, idx, cx, cy){
-      const cards = pile(S, from).slice(idx), ids = [...(S.kind === 'k' ? ['f0', 'f1', 'f2', 'f3'] : []), ...S.tab.map((_, i) => 't' + i)];
+      const cards = pile(S, from).slice(idx), ids = [...(S.kind !== 's' ? ['f0', 'f1', 'f2', 'f3'] : []), ...(S.kind === 'f' ? ['c0', 'c1', 'c2', 'c3'] : []), ...S.tab.map((_, i) => 't' + i)];
       let best = null, bd = Infinity;
       for (const id of ids) {
         if (id === from || !canDrop(S, cards, id)) continue;
         let r;
-        if (id[0] === 'f') r = { x: colX(3 + +id.slice(1)), y: 0, w: cw, h: ch };
+        if (id[0] === 'f') r = { x: colX((S.kind === 'f' ? 4 : 3) + +id.slice(1)), y: 0, w: cw, h: ch };
+        else if (id[0] === 'c') r = { x: colX(+id.slice(1)), y: 0, w: cw, h: ch };
         else { const p = pile(S, id), last = p[p.length - 1]; r = { x: colX(+id.slice(1)), y: topH, w: cw, h: (last ? pos.get(last.id).y : topH) + ch - topH }; }
         const dx = Math.max(r.x - cx, 0, cx - r.x - r.w), dy = Math.max(r.y - cy, 0, cy - r.y - r.h), dd = Math.hypot(dx, dy);
         if (dd < bd) { bd = dd; best = id; }
@@ -455,7 +515,7 @@
         <div class="sl-big">${num(sc)}</div>
         <div class="sl-s">⏱ ${mmss(sec)} · ходов: ${S.moves}${sc > prevBest ? ' · 🏆 рекорд!' : ''}</div>
         <div class="sl-coins">${C() ? `🪙 +${coins} монет…` : ''}</div>
-        <div class="ct-actions"><button type="button" class="ct-start" data-act="again">↻ Новая раздача</button>${S.kind === 'k' ? '<button type="button" class="ct-duel-btn" data-act="duel">⚔️ С другом</button>' : ''}<button type="button" data-act="share">📤 Поделиться</button></div>`);
+        <div class="ct-actions"><button type="button" class="ct-start" data-act="again">↻ Новая раздача</button>${S.kind !== 's' ? '<button type="button" class="ct-duel-btn" data-act="duel">⚔️ С другом</button>' : ''}<button type="button" data-act="share">📤 Поделиться</button></div>`);
       if (!C()) return;
       const r = await C().run(game, coins, runId);
       const box = ov.querySelector('.sl-coins');
@@ -466,14 +526,14 @@
     }
     // Новая раздача: незаконченная партия засчитывается как проигрыш
     function askNew(opt){
-      const go = opt ?? optOf(S);
+      const go = opt ?? (S.kind === 'f' ? randDeal() : optOf(S));
       if (ended || !S.moves) { newDeal(go, false); return; }
       showOv(`<div class="sl-t">Начать новую раздачу?</div><div class="sl-s">Эта партия засчитается как несыгранная.</div>
         <div class="sl-col"><button type="button" class="ct-start" data-act="newyes:${go}">↻ Новая раздача</button><button type="button" class="hd-alt" data-act="resume">↩ Играть дальше</button></div>`);
     }
     async function newDeal(opt, lost){
       if (lost && !ended) { ended = true; stopClock(); api.report(keyOf(S), false, 0, 0); }
-      try { localStorage.removeItem(cfg.save); localStorage.setItem(cfg.optKey, String(opt)); } catch (e) {}
+      try { localStorage.removeItem(cfg.save); if (cfg.optKey) localStorage.setItem(cfg.optKey, String(opt)); } catch (e) {}
       if (ended) { try { await window.D37Ads?.interstitial?.(game); } catch (e) {} }
       if (!stopped) o.onNew?.(opt);
     }
@@ -499,7 +559,9 @@
       else if (a.startsWith('opt:')) { if (+a.slice(4) !== optOf(S) || ended) askNew(+a.slice(4)); }
       else if (a.startsWith('newyes:')) newDeal(+a.slice(7), true);
       else if (a === 'resume') hideOv();
-      else if (a === 'again') { b.disabled = true; newDeal(optOf(S), false); }
+      else if (a === 'again') { b.disabled = true; newDeal(S.kind === 'f' ? randDeal() : optOf(S), false); }
+      else if (a === 'rand') askNew(randDeal());
+      else if (a === 'pick') { const n = parseInt(prompt('Номер раздачи (от 1 до 32000):', String(S.num)) || '', 10); if (n >= 1 && n <= 32000) askNew(n); }
       else if (a === 'giveup') finish('🏁 Готово');
       else if (a === 'duel') location.hash = '#/games/' + game + '/' + GameRoom.newCode();
       else if (a === 'share') share(b);
@@ -543,8 +605,8 @@
     const g = games[game];
     g.T?.stop();
     const saved = !fresh && load(game);
-    const o2 = opt || prefOpt(game);
-    const S = saved ? saved.S : CFG[game].kind === 'k' ? dealKlondike(Math.random, o2) : dealSpider(Math.random, o2);
+    const kind = CFG[game].kind, o2 = opt || (kind === 'f' ? randDeal() : prefOpt(game));
+    const S = saved ? saved.S : kind === 'k' ? dealKlondike(Math.random, o2) : kind === 'f' ? dealFreecell(o2) : dealSpider(Math.random, o2);
     g.T = createTable(g.root, game, g.api, { S, hist: saved?.hist, elapsed: saved?.elapsed, onNew: v => solo(game, true, v) });
     if (saved && saved.S.moves) g.api.toast('▶ Продолжаем прошлую партию');
   }
@@ -552,14 +614,14 @@
     window.GAME_IMPL[game] = {
       mount(el, api){
         const g = games[game] = { root: el, api, T: null, stopDuel: null };
-        if (game === 'kosynka' && window.GameRoom?.validCode(api.param)) {
+        if ((game === 'kosynka' || game === 'freecell') && window.GameRoom?.validCode(api.param)) {
           g.stopDuel = Versus.start(el, api, game, api.param, {
             run(stage, rand, hooks){
               g.T?.stop();
               stage.insertAdjacentHTML('afterbegin', `<div class="ct-note" style="text-align:center">⏱ ${DUEL_SEC / 60} минут · одинаковая раздача у обоих · у кого больше очков (сошёлся пасьянс — бонус за время)</div>`);
               const host = document.createElement('div');
               stage.appendChild(host);
-              g.T = createTable(host, game, api, { S: dealKlondike(rand, 1), duel: true, timeLimit: DUEL_SEC, onScore: hooks.progress, onEnd: score => hooks.done(score) });
+              g.T = createTable(host, game, api, { S: game === 'kosynka' ? dealKlondike(rand, 1) : dealFreecell(1 + Math.floor(rand() * 32000)), duel: true, timeLimit: DUEL_SEC, onScore: hooks.progress, onEnd: score => hooks.done(score) });
             },
             stop(){ g.T?.stop(); g.T = null; },
           });
@@ -567,9 +629,10 @@
       },
       unmount(){ const g = games[game]; if (!g) return; g.T?.stop(); g.T = null; g.stopDuel?.(); delete games[game]; },
       get table(){ return games[game]?.T; },
-      _test: { dealKlondike, dealSpider, pile, canPick, canDrop, move, drawStock, collect, bestTarget, hint, canAuto, autoMove, finalScore, validState, RANKS, SUITS },
+      _test: { dealKlondike, dealSpider, dealFreecell, msDeal, maxMove, autoFound, pile, canPick, canDrop, move, drawStock, collect, bestTarget, hint, canAuto, autoMove, finalScore, validState, RANKS, SUITS },
     };
   }
   register('kosynka');
   register('pauk');
+  register('freecell');
 })();
