@@ -1037,6 +1037,7 @@
         return yield* hostCall(f, o, args);
       }
       if (f === undefined || f === null) { const e = rtErr("попытка вызвать метод '" + k + "' — у " + (o instanceof LT ? 'таблицы' : typeof o === 'string' ? 'строки' : tnr(o)) + ' его нет'); e.site = sd; throw e; }
+      if (!(f instanceof LT) || metaOf(f, '__call') === undefined) { const e = rtErr("попытка вызвать '" + k + "' через двоеточие — это " + tnr(f) + ', а не функция' + (tyof(f) === 'RBXScriptSignal' ? " (событие: " + k + ':Connect(function … end))' : '')); e.site = sd; throw e; }
       return yield* $C(f, [o, ...args], sd);
     }
     function* $CD(o, f, args, sd){   // o.k(…): у объектов мира this = o
@@ -1129,6 +1130,7 @@
       if (r.value instanceof Sus) { co.sus = r.value; r.value.arm(co); return { ok: true, v: X }; }
       return { ok: true, v: r.value };
     }
+    const SEEN = new Map();   // одна и та же ошибка (например, в Heartbeat каждый кадр) — не больше 3 раз
     function report(e, co){
       e = jsErr(e);
       const ctx = e.pctx || e.ctx || (co && co.ctx);
@@ -1138,7 +1140,10 @@
       if (typeof m === 'string') { const pre = ctx.name + ':' + line + ': '; if (m.startsWith(pre)) m = m.slice(pre.length); }
       else if (typeof m === 'number') m = numStr(m);
       else { try { m = metaOf(m, '__tostring') !== undefined ? tostr(m) : '(ошибка — значение типа ' + tn(m) + ')'; } catch (e2) { m = '(ошибка)'; } }
-      ctx.error(m, line);
+      const key = ctx.name + '|' + line + '|' + m, n = (SEEN.get(key) || 0) + 1;
+      SEEN.set(key, n);
+      if (n > 3) return;
+      ctx.error(n === 3 ? m + ' (повторяется — дальше не показываю)' : m, line);
     }
     function drive(co, args){ const r = resume(co, args); if (!r.ok) report(r.e, co); return r; }
     function wake(co, sus, vals){ if (co.status === 'suspended' && co.sus === sus) drive(co, vals); }
@@ -2185,7 +2190,9 @@ end)`],
 - язык Luau: local, function, if/elseif/else, for i = 1, 10 do, for k, v in pairs(t) do, while, repeat … until, +=, continue, строки \`Привет {name}\`, string.format, table.insert, pcall, coroutine
 Нельзя: сеть, HttpService, RemoteEvent, require, LocalScript, ScreenGui и другие GUI-объекты, DataStore. Скрипт работает «на сервере».
 Задача: `;
-  if (E.lang) E.lang('lua', { label: 'Lua (как в Roblox)', short: 'Lua', icon: '🌙', kind: 'text', worker, examples: EXAMPLES, ai: AI,
-    placeholder: '-- Код на Lua (как в Roblox). script.Parent — объект, в котором лежит скрипт.\n-- Нажми «📚 Примеры», чтобы вставить готовый.' });
+  const DEF = { label: 'Lua (как в Roblox)', short: 'Lua', icon: '🌙', kind: 'text', worker, examples: EXAMPLES, ai: AI,
+    placeholder: '-- Код на Lua (как в Roblox). script.Parent — объект, в котором лежит скрипт.\n-- Нажми «📚 Примеры», чтобы вставить готовый.' };
+  if (E.lang) E.lang('lua', DEF);
+  else (E.langs = E.langs || {}).lua = Object.assign({ id: 'lua' }, DEF);   // script.js подключат позже — он дополнит реестр
 
 })();

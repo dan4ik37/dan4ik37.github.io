@@ -130,6 +130,19 @@ same('utf8 и bit32', 'print(utf8.char(72, 1087), utf8.len("привет"), #"п
 same('os', 'print(type(os.time()), os.date("%Y") == tostring(os.date("*t").year), os.time({year = 2020, month = 1, day = 1, hour = 0}) < os.time(), type(os.clock()), type(tick()))', 'number true true number number');
 same('loadstring', 'local f = loadstring("return 1 + 2") print(f())\nlocal g, err = loadstring("return +") print(g, (err:gsub("^%[string%]:1: .*", "ok")))', '3\nnil ok');
 same('_G общий, globals — свои', '_G.shared1 = 7 print(_G.shared1, shared1)', '7 nil');
+// ── тонкости ──
+same('приоритет операций', 'local a, b = false, true print(not a == b, -2^2, 2^3^2, 1 .. 2 .. 3, nil or false and 1, 1 < 2 == true, -5.5 % 2, 7 - 2 - 1, 2 * 3 % 4, "a" .. 1 + 2)', 'true -4 512 123 false true 0.5 4 2 a3');
+same('много значений во вложенных вызовах', 'local function f() return 1, 2, 3 end\nprint(select(2, f()))\nprint(({f(), f()})[4], #{f(), 10}, #{..., f()})\nlocal function g(...) return ..., "end" end print(g(1, 2))\nprint((f()))\nlocal function h() return f(), f() end print(h())', '2 3\n3 2 4\n1 end\n1\n1 1 2 3');
+same('замыкания в repeat с continue', 'local fs, i = {}, 0\nrepeat\n  i += 1\n  local j = i * 10\n  fs[i] = function() return j end\n  if i == 2 then continue end\nuntil i >= 3\nprint(fs[1](), fs[2](), fs[3]())', '10 20 30');
+same('изменение внешней переменной из замыкания', 'local n = 0 local function inc() n += 1 end inc() inc() print(n) local t = {} for i = 1, 3 do t[i] = function() n = n + i end end t[3]() print(n)', '2\n5');
+same('#, нули и экранирование', 'print(#"\\0abc", #"", ("x"):rep(3, ","), "a\\0b" == "a\\0b")', '4 0 x,x,x true');
+same('метод у таблицы без метода', 'local t = {} print(pcall(function() t:nope() end))', "false T:1: попытка вызвать метод 'nope' — у таблицы его нет (локальная переменная 't')");
+same('цепочки вызовов и индексов', 'local o = {a = {b = function(self, x) return {c = x * 2} end}} print(o.a:b(21).c, ("%d"):format(7):rep(2), #("x"):rep(3))', '42 77 3');
+same('строки: сравнение и длинные', 'print("abc" <= "abd", "b" > "abc", ("a"):rep(3) == "aaa", #[[\nx]])', 'true true true 1');
+same('тело функции после return в do', 'local function f(x) if x then return "a" end do return "b" end end print(f(true), f(false))', 'a b');
+same('вложенные функции и рекурсия с несколькими значениями', 'local function mm(t, i) i = i or 1 if i > #t then return end return t[i], mm(t, i + 1) end print(mm({1, 2, 3}))', '1 2 3');
+same('pcall с методом и self', 'local obj = {v = 5} function obj:get() return self.v end print(pcall(obj.get, obj))', 'true 5');
+same('числа как ключи и float', 'local t = {} t[1e0] = "a" t[2^1] = "b" print(#t, t[1], t[2]) t[0.5] = "h" local n = 0 for _ in pairs(t) do n += 1 end print(n)', '2 a b\n3');
 // ── скорость ──
 {
   let t0 = Date.now();
@@ -279,9 +292,96 @@ async function e2e(){
   console.log(`  Heartbeat (крутилка с CFrame): ${(per * 1000).toFixed(0)} мкс на кадр`);
 }
 
+// ═══ JavaScript-скрипты «Студии 3D» в той же песочнице — работают как раньше (+ новые leaderstats) ═══
+async function jsCompat(){
+  const src = fs.readFileSync(path.join(SITE, 'js/games/studio3d.js'), 'utf8');
+  const m = /const EXAMPLES = (\[[\s\S]*?\n {2}\]);/.exec(src);
+  ok(!!m, 'примеры JavaScript найдены в studio3d.js');
+  if (!m) return;
+  const JSEX = vm.runInNewContext(m[1]);
+  const msgs = [];
+  const ctx = vm.createContext({ postMessage: x => msgs.push(JSON.parse(JSON.stringify(x))), onmessage: null, setTimeout, clearTimeout, console });
+  vm.runInContext('(' + E.scripts.runtime.toString() + ')()', ctx);
+  const send = d => ctx.onmessage({ data: d });
+  const of = t => msgs.filter(x => x.t === t);
+  const part = (id, name, extra = {}) => ({ id, cls: 'Part', parent: null, p: { name, pos: [0, 1, 0], size: [4, 1, 2], rot: [0, 0, 0], color: '#a3a2a5', mat: 'plastic', alpha: 0, ...extra } });
+  const ids = ['coin', 'lava', 'door', 'plat', 'spin', 'jump', 'tele', 'btn', 'fin', null];
+  const players = [{ id: 'me', name: 'Тест', pos: [0, 0, 0] }];
+  send({ t: 'init', players,
+    objs: ids.filter(Boolean).map(id => part(id, id)).concat([part('exit', 'Выход', { pos: [5, 0, 5] })]),
+    scripts: JSEX.map((e, i) => ({ name: 'js' + i, parent: ids[i], code: e[1] })).concat([{ name: 'jsls', parent: null,
+      code: "Players.PlayerAdded.Connect(player => {\n  const ls = Instance.new('Folder'); ls.Name = 'leaderstats'; ls.Parent = player;\n  const c = Instance.new('IntValue', ls); c.Name = 'Очки'; c.Value = 7;\n  print(player.leaderstats.Очки.Value, player.FindFirstChild('leaderstats').Name);\n});" }]) });
+  await sleep(10);
+  ok(of('error').length === 0, 'JS-примеры студии — без ошибок', JSON.stringify(of('error')));
+  const stat = (k, v) => of('player').some(x => x.cmd === 'stat' && x.v.k === k && x.v.v === v);
+  ok(stat('Монеты', 0) && stat('Очки', 7) && of('print').some(x => x.text === '7 leaderstats'), 'JS: SetStat и папка leaderstats', JSON.stringify(of('player')));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'coin', player: 'me' }); send({ t: 'ev', ev: 'touched', id: 'lava', player: 'me' });
+  send({ t: 'ev', ev: 'prompt', id: 'door', player: 'me' }); send({ t: 'ev', ev: 'touched', id: 'jump', player: 'me' });
+  send({ t: 'ev', ev: 'touched', id: 'tele', player: 'me' }); send({ t: 'ev', ev: 'prompt', id: 'btn', player: 'me' });
+  send({ t: 'ev', ev: 'touched', id: 'fin', player: 'me' }); send({ t: 'tick', dt: 0.5, players });
+  await sleep(10);
+  ok(stat('Монеты', 1) && of('destroy').some(x => x.id === 'coin'), 'JS: монетка');
+  ok(of('player').some(x => x.cmd === 'health' && x.v === 0), 'JS: лава');
+  ok(of('tween').some(x => x.id === 'door'), 'JS: дверь (Prompt + TweenService)');
+  ok(of('player').some(x => x.cmd === 'jump' && x.v === 140), 'JS: батут');
+  ok(of('player').some(x => x.cmd === 'teleport' && x.v.join() === '5,3,5'), 'JS: телепорт');
+  ok(of('set').some(x => x.id === 'btn' && x.k === 'color'), 'JS: кнопка');
+  ok(of('gui').some(x => /Тест прошёл/.test(x.text)), 'JS: финиш');
+  ok(of('set').some(x => x.id === 'spin' && x.k === 'rot' && x.v[1] === 45), 'JS: крутилка (Heartbeat)');
+  ok(of('tween').length >= 1 && of('want').length >= 0, 'JS: события дошли');
+}
+
+// ═══ Ожидания и мелочи Roblox: WaitForChild, Completed:Wait(), повтор ошибок, значения в детали, порядок подключения ═══
+async function e2e2(){
+  const msgs = [];
+  const ctx = vm.createContext({ postMessage: x => msgs.push(JSON.parse(JSON.stringify(x))), onmessage: null, setTimeout, clearTimeout, console });
+  vm.runInContext('(' + E.scripts.runtime.toString() + ')()', ctx);
+  const send = d => ctx.onmessage({ data: d });
+  const of = t => msgs.filter(x => x.t === t);
+  const printed = () => of('print').map(x => x.text);
+  const players = [{ id: 'me', name: 'Тест', pos: [1, 2, 3] }];
+  const part = (id, name, extra = {}) => ({ id, cls: 'Part', parent: null, p: { name, pos: [0, 1, 0], size: [4, 1, 2], rot: [0, 0, 0], color: '#a3a2a5', mat: 'plastic', alpha: 0, ...extra } });
+  const lua = (name, parent, code) => ({ name, parent, lang: 'lua', code });
+  send({ t: 'init', players, libs: { lua: LIB }, objs: [part('a', 'А'), part('b', 'Б')],
+    scripts: [
+      lua('Ждёт', null, 'local later = workspace:WaitForChild("Позже")\nprint("дождался", later.Name, later.Parent == workspace)'),
+      lua('Создаёт', null, 'workspace.ChildAdded:Connect(function(c) print("добавлен", c.Name) end)\ntask.wait(0.02)\nlocal p = Instance.new("Part") p.Name = "Позже" p.Parent = workspace'),
+      lua('Твин', 'a', 'local TS = game:GetService("TweenService")\nlocal tw = TS:Create(script.Parent, TweenInfo.new(0.1), {Transparency = 1})\ntw:Play()\nlocal st = tw.Completed:Wait()\nprint("твин готов", st)'),
+      lua('Каждый кадр', null, 'game:GetService("RunService").Heartbeat:Connect(function(dt)\n\tlocal broken = nil\n\tbroken.x = dt\nend)'),
+      lua('Значение', 'b', 'local cfg = Instance.new("NumberValue")\ncfg.Name = "Скорость"\ncfg.Value = 2.5\ncfg.Parent = script.Parent\nprint(script.Parent.Скорость.Value, script.Parent:FindFirstChild("Скорость"):GetFullName(), cfg.Parent.Name)\nlocal pp = Instance.new("ProximityPrompt", script.Parent)\npp.ActionText = "Взять" pp.HoldDuration = 1.5\nprint(pp.ActionText, pp.HoldDuration, pp.Enabled)'),
+      lua('Игрок', null, 'game.Players.PlayerAdded:Connect(function(player)\n\tlocal f = Instance.new("Folder") f.Parent = player f.Name = "leaderstats"\n\tlocal v = Instance.new("IntValue", f) v.Name = "Очки" v.Value = 3\n\tlocal ls = player:WaitForChild("leaderstats")\n\tprint("ls", ls.Name, ls.Очки.Value, player.Character.HumanoidRootPart.Position, typeof(player))\n\tplayer.leaderstats.Очки.Value += 10\nend)'),
+    ] });
+  await sleep(10);
+  ok(of('error').length === 0, 'второй набор — без ошибок при запуске', JSON.stringify(of('error')));
+  ok(printed().includes('ls leaderstats 3 1, 3, 3 Instance'), 'player:WaitForChild("leaderstats") и HumanoidRootPart', printed().join(' | '));
+  ok(of('player').some(x => x.cmd === 'stat' && x.v.k === 'Очки' && x.v.v === 13) && !of('player').some(x => x.cmd === 'stat' && x.v.k === 'Value'), 'leaderstats: Name после Parent — в таблице сразу верное имя', JSON.stringify(of('player')));
+  ok(printed().includes('2.5 Workspace.Б.Скорость Б') && printed().includes('Взять 1.5 true'), 'значение в детали, GetFullName, свойства ProximityPrompt', printed().join(' | '));
+  ok(of('prompt').some(x => x.id === 'b' && x.text === 'Взять' && x.hold === 1.5), 'ProximityPrompt: HoldDuration уходит хозяину', JSON.stringify(of('prompt')));
+  await sleep(60);
+  ok(printed().includes('добавлен Позже') && printed().includes('дождался Позже true'), 'workspace:WaitForChild ждёт объект, созданный позже; ChildAdded', printed().join(' | '));
+  const tw = of('tween').find(x => x.id === 'a');
+  send({ t: 'ev', ev: 'tweenDone', tid: tw && tw.tid });
+  await sleep(5);
+  ok(printed().includes('твин готов Completed'), 'tween.Completed:Wait()', printed().join(' | '));
+  msgs.length = 0;
+  for (let i = 0; i < 6; i++) send({ t: 'tick', dt: 1 / 60, players });
+  const he = of('error').filter(x => x.script === 'Каждый кадр');
+  ok(he.length === 3 && he[0].line === 3 && /повторяется/.test(he[2].msg), 'одинаковая ошибка каждый кадр — показана 3 раза', JSON.stringify(he));
+  // порядок подключения файлов: lang-lua.js раньше script.js — язык всё равно в реестре
+  const w = { console };
+  w.window = w;
+  const c2 = vm.createContext(w);
+  vm.runInContext(fs.readFileSync(path.join(SITE, 'js/engine/lang-lua.js'), 'utf8'), c2);
+  vm.runInContext(fs.readFileSync(path.join(SITE, 'js/engine/script.js'), 'utf8'), c2);
+  ok(w.D37E.langs.lua && w.D37E.langs.lua.label === 'Lua (как в Roblox)' && typeof w.D37E.langs.lua.worker === 'function' && w.D37E.langs.js, 'lang-lua.js можно подключить и до script.js');
+}
+
 (async () => {
   await timers();
   if (typeof e2e === 'function') await e2e();
+  await jsCompat();
+  await e2e2();
   console.log(`\n${pass} ок, ${fail} ошибок`);
   process.exitCode = fail ? 1 : 0;
 })();

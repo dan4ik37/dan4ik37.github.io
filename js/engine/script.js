@@ -378,7 +378,7 @@
     // ── WaitForChild: ждём, пока объект появится (как в Roblox; через 5 с — предупреждение) ──
     const waiters = [];
     function waitChild(find, t, name){
-      const r = find(); if (r) return r;
+      const r = find(); if (r) return Promise.resolve(r);
       return new Promise(res => {
         const w = { find, res };
         waiters.push(w);
@@ -477,7 +477,7 @@
         get Humanoid(){ return pl.Humanoid; }, HumanoidRootPart: root, Head: head, PrimaryPart: root,
         get Position(){ return V(P.pos || [0, 0, 0]); }, set Position(v){ tp(v); },
         FindFirstChild(n){ return n === 'Humanoid' ? pl.Humanoid : n === 'HumanoidRootPart' ? root : n === 'Head' ? head : null; },
-        WaitForChild(n){ return this.FindFirstChild(n); },
+        WaitForChild(n){ return Promise.resolve(this.FindFirstChild(n)); },
         FindFirstChildOfClass(c){ return c === 'Humanoid' ? pl.Humanoid : null; },
         FindFirstChildWhichIsA(c){ return c === 'Humanoid' ? pl.Humanoid : c === 'BasePart' || c === 'Part' ? root : null; },
         GetChildren(){ return [root, head, pl.Humanoid]; }, GetDescendants(){ return [root, head, pl.Humanoid]; },
