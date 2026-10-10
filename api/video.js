@@ -92,13 +92,12 @@ export default async function handler(req, res) {
     ${tags.length ? `<ul class="tags">${tags.map(t => `<li>#${esc(t)}</li>`).join('')}</ul>` : ''}
   </article>
 
-  <aside class="join">
-    <div>
-      <b>Это сайт dan4ik37</b>
-      <span>Новые видео, стримы на Twitch, живой чат, форум и мини-игры — всё в одном месте.</span>
-    </div>
-    <a class="btn btn-acc" href="/#/home">На сайт →</a>
-  </aside>
+  <nav class="next3" aria-label="Что ещё на сайте">
+    <a href="/#/games/words"><span>🔤</span><b>Слово дня</b><small>Угадай слово из 5 букв за 6 попыток</small></a>
+    ${quiz ? `<a href="/quiz/${quiz.slug}"><span>${quiz.icon}</span><b>${esc(quiz.title)}</b><small>Тест: 8 вопросов — поделись результатом</small></a>`
+      : '<a href="/quiz/game"><span>🕹</span><b>Какая ты игра?</b><small>Тест: 8 вопросов — поделись результатом</small></a>'}
+    <a href="/#/home"><span>💬</span><b>Сайт dan4ik37</b><small>Чат, стримы, игры с друзьями и все видео</small></a>
+  </nav>
 
   ${related.length ? `<section class="more"><h2>${rel.similar ? 'Похожие видео' : 'Ещё видео'}</h2><div class="grid">
     ${related.map(r => `<a class="card" href="/v/${esc(r.id)}"><img src="${esc(r.thumb)}" alt="${esc(r.title)}" loading="lazy" width="320" height="180"><span>${esc(r.title)}</span></a>`).join('')}

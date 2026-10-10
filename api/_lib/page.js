@@ -124,6 +124,13 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .desc a{color:#7cc4ff}
 .tags{display:flex;flex-wrap:wrap;gap:.4rem;list-style:none;margin-top:1rem}
 .tags li{padding:.25rem .6rem;border-radius:999px;background:rgba(255,255,255,.05);font-size:.72rem;color:var(--muted)}
+.next3{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;margin-top:2rem}
+.next3 a{display:flex;flex-direction:column;gap:.2rem;padding:1rem 1.1rem;border-radius:16px;background:var(--card);border:1px solid var(--line);text-decoration:none;transition:border-color .2s,transform .2s}
+.next3 a:hover{border-color:rgba(255,45,85,.5);transform:translateY(-2px)}
+.next3 span{font-size:1.6rem;line-height:1.2}
+.next3 b{font-size:.95rem}
+.next3 small{color:var(--muted);font-size:.78rem;line-height:1.4}
+@media(max-width:700px){.next3{grid-template-columns:1fr}.next3 a{flex-direction:row;align-items:center;gap:.7rem}.next3 a b{min-width:0}.next3 a small{display:none}}
 .join{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-top:2rem;padding:1.2rem 1.4rem;border-radius:16px;background:linear-gradient(90deg,rgba(255,45,85,.16),rgba(255,107,53,.1));border:1px solid rgba(255,45,85,.3)}
 .join div{display:flex;flex-direction:column;gap:.2rem}
 .join span{font-size:.85rem;color:rgba(240,240,248,.75)}
