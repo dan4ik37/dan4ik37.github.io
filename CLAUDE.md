@@ -528,6 +528,17 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Folder/IntValue/…Value, ClickDetector, ProximityPrompt (→ события clicked/prompt детали), leaderstats в игроке → таблица очков,
   CFrame, BrickColor, Rotation, CharacterAdded; TopSurface/Locked и т. п. принимаются и ничего не делают (старый код не падает).
   Тест: node scripts/lang-lua-test.cjs (166). Меняешь script.js — прогони и его, и engine-test.cjs. Проверено в браузере 13.10.
+- C# (js/engine/lang-cs.js, агент 13.10.2026) — язык cs «C# (как в Unity)»: свой переводчик C# → JavaScript внутри песочницы
+  (worker() уходит туда текстом): лексер → парсер → генератор со статическими типами (int-деление, (int) к нулю, float — 7 знаков,
+  True/False). Части JS помечены строками C# (карта строк + //# sourceURL=d37cs-N.js) — ошибки перевода и игры с номером строки C#.
+  Два стиля: код верхнего уровня (C# 9) с API как в Roblox (part.Touched += (hit, player) => …, Prompt("…").Triggered += …) и классы
+  : Script / : MonoBehaviour (Start, Update(dt), OnTouched/OnTriggerEnter, OnClicked, OnPlayerAdded, корутины IEnumerator +
+  yield return new WaitForSeconds, Invoke, async/await Task.Delay); transform / gameObject / Destroy / Instantiate / GetComponent<T>()
+  своих скриптов; LINQ (методами), HashSet/Queue/Stack, StringBuilder, switch-выражения, кортежи. List<T> = массив JS; методы C#
+  (Add, Count, Where, ToUpper…) — на прототипах Array/String внутри песочницы (видны и JS-скриптам). Классы общие для всех C#-скриптов
+  запуска (GameManager.Instance). Не поддерживается: from…select, goto, unsafe, record, операторы приведения; Rigidbody/Input/Physics/UI
+  Unity — подсказка при переводе. Тест: node scripts/lang-cs-test.cjs (173). Новый член библиотеки — и в таблицу API (тип для
+  перевода), и в объект A в boot() (тест сверяет). Проверено в браузере 13.10: MonoBehaviour, корутина, 7/2 = 3, вращение в Update.
 - Сеть для миров игроков (js/engine/net.js + net-transport.js, агент 13.10.2026; в студию ещё НЕ подключена):
   D37E.net.session({ transport, scene, nick, info, onHost, onPlayer, onGuestEvent, onEvent, onCharacter, onBlob, onReady, onTeleport,
   onCheat }) — хозяин (самый ранний в комнате) считает мир и скрипты, гости рисуют копию и сами ведут своего персонажа. Транспорт —
