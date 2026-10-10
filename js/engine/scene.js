@@ -134,9 +134,9 @@
     const q = new T.Quaternion(), eu = new T.Euler(), m4 = new T.Matrix4(), m4b = new T.Matrix4();
     const is90 = v => { const r = ((v % 90) + 90) % 90; return r < .01 || r > 89.99; };
     function colliders(obj){
-      for (const c of obj._cols || []) ph.remove(c);
+      ph.reuse(obj._cols);   // те же тела Phys двигаются на месте (без remove + add): add* ниже берут их по порядку, лишние — в reuseEnd
       obj._cols = [];
-      if (obj.cls !== 'Part' && obj.cls !== 'Spawn' && obj.cls !== 'Mesh') return;
+      if (obj.cls !== 'Part' && obj.cls !== 'Spawn' && obj.cls !== 'Mesh') { ph.reuseEnd(); return; }
       const [x, y, z] = obj.pos, [rx, ry, rz] = obj.rot, h = [obj.size[0] / 2, obj.size[1] / 2, obj.size[2] / 2];
       let yaw = 0, ex, ey, ez;
       eu.set(rx * DEG, ry * DEG, rz * DEG, 'YXZ'); m4.makeRotationFromEuler(eu);
@@ -158,13 +158,15 @@
           obj._cols.push(ph.addBox({ x: x + v.x, y: y + v.y, z: z + v.z, yaw, solid, tag: 'part', data: d2,
             hx: Math.abs(e[0]) * hb[0] + Math.abs(e[4]) * hb[1] + Math.abs(e[8]) * hb[2], hy: Math.abs(e[1]) * hb[0] + Math.abs(e[5]) * hb[1] + Math.abs(e[9]) * hb[2], hz: Math.abs(e[2]) * hb[0] + Math.abs(e[6]) * hb[1] + Math.abs(e[10]) * hb[2] }));
         }
-        return;
+        ph.reuseEnd(); return;
       }
       const plain = !rx && !rz;
       if (obj.shape === 'wedge' && plain) obj._cols.push(ph.addWedge({ x, y, z, hx: h[0], hy: h[1], hz: h[2], yaw, solid, tag: 'part', data }));
       else if ((obj.shape === 'cyl' || obj.shape === 'ball') && plain) obj._cols.push(ph.addCyl({ x, y, z, r: Math.max(h[0], h[2]), hy: h[1], solid, tag: 'part', data }));
       else obj._cols.push(ph.addBox({ x, y, z, hx: ex, hy: ey, hz: ez, yaw, solid, tag: 'part', data }));
+      ph.reuseEnd();
     }
+    SC.colliders = colliders;
 
     // ── Построить/перестроить картинку и тела объекта ──
     function place(mesh, obj){
@@ -309,6 +311,7 @@
         if (obj._light) obj._light.position.set(...obj.pos);
         if (obj.cls === 'Prefab') build(obj); else colliders(obj);
       } else if (key === 'collide' || key === 'fit') colliders(obj);
+      if (SC.rigid) SC.rigid.changed(obj, key);   // незакреплённые детали: телепорт, форма, материал, закрепили/открепили
       if (!silent) emit('change', { obj, key });
     };
     // Модель: центр (pivot) — середина её коробки; сдвиг и поворот вокруг Y — для всех потомков
@@ -355,6 +358,7 @@
     SC.clear = () => { for (const o of order.slice()) if (!o.parent) SC.remove(o); };
     SC.toJSON = () => ({ v: 1, objects: SC.serialize(order), lighting: { ...R.lighting } });   // ландшафт — отдельно (TR.toJSON, сжатие асинхронное)
     SC.fromJSON = data => {
+      if (SC.rigid) { SC.rigid.dispose(); SC.rigid = null; }   // новый мир — новая физика деталей (создастся в SC.step, если нужна)
       SC.clear();
       const list = Array.isArray(data?.objects) ? data.objects : [];
       for (const d of list) if (d && DEF[d.cls]) { try { SC.add(d.cls, d, d.parent && objects.get(d.parent) ? d.parent : null, typeof d.id === 'string' ? d.id.slice(0, 24) : null); } catch (e) { console.warn('объект пропущен:', e.message); } }
@@ -381,10 +385,17 @@
       }
       return out;
     };
-    // Незакреплённые детали падают (без вращения): шаг игры
+    // Шаг игры: незакреплённые детали — настоящая физика (rigid.js + Rapier; грузится, только если такие детали есть).
+    // Пока Rapier грузится (или нет rigid.js) — просто падают вниз, без вращения
+    SC.rigid = null;
     SC.step = dt => {
+      if (SC.rigid) { SC.rigid.step(dt); return; }
+      let dyn = false;
       for (const o of order) {
-        if (o.anchored !== false || (o.cls !== 'Part') || o._held) continue;
+        if (o.anchored !== false || !(o.cls === 'Part' || o.cls === 'Spawn' || o.cls === 'Mesh') || o._held) continue;
+        dyn = true;
+        if (E.rigid?.ready) break;
+        if (o.cls !== 'Part') continue;
         o._vy = (o._vy || 0) - 40 * dt;
         const hy = (o._cols[0]?.hy) || o.size[1] / 2, x = o.pos[0], z = o.pos[2];
         const skip = new Set(o._cols);
@@ -394,8 +405,9 @@
         if (ny - hy <= sup) { ny = sup + hy; o._vy = 0; }
         if (Math.abs(ny - o.pos[1]) > 1e-4) SC.set(o, 'pos', [x, ny, z], true);
       }
+      if (dyn && E.rigid) { if (E.rigid.ready) { SC.rigid = E.rigid(ph, { scene: SC }); SC.rigid.step(dt); } else E.rigid.load(); }
     };
-    SC.dispose = () => { for (const o of order.slice()) unbuild(o); objects.clear(); order.length = 0; ev.clear(); };
+    SC.dispose = () => { if (SC.rigid) { SC.rigid.dispose(); SC.rigid = null; } for (const o of order.slice()) unbuild(o); objects.clear(); order.length = 0; ev.clear(); };
     SC.material = material;
     return SC;
   };
