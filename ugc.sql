@@ -9,6 +9,7 @@
 --  Писать в таблицу напрямую нельзя — только функциями ниже (проверка длины, лимиты, статусы).
 --  Изменил игру из каталога — она снова уходит на проверку. 3 жалобы — игра уходит из каталога до проверки.
 --  Монеты автору: каждые 10 засчитанных запусков (чужих, не чаще раза в 30 мин с одного человека) — 1 🪙, до 100 в день.
+--  3D-миры «Студии 3D» — тоже здесь (kind = 'place', data — мир). Свои 3D-модели — ugc_models + хранилище ugc3d (в конце файла).
 --  Проверка после запуска: /rpc/ugc_play гостем с {"p_id":"x"} → {"ok":false,"reason":"not_found"}
 -- ═══════════════════════════════════════════════════════════════════
 
@@ -31,9 +32,9 @@ alter table public.ugc_games add column if not exists reports int not null defau
 alter table public.ugc_games add column if not exists updated_at timestamptz not null default now();
 alter table public.ugc_games add column if not exists reviewed_by uuid;
 alter table public.ugc_games add column if not exists reviewed_at timestamptz;
-do $$ begin
-  alter table public.ugc_games add constraint ugc_games_kind check (kind in ('tpl', 'html'));
-exception when duplicate_object then null; end $$;
+-- виды: tpl — шаблон, html — свой код, place — 3D-мир из «Студии 3D» (data — мир: объекты, свет, ландшафт)
+alter table public.ugc_games drop constraint if exists ugc_games_kind;
+alter table public.ugc_games add constraint ugc_games_kind check (kind in ('tpl', 'html', 'place'));
 do $$ begin
   alter table public.ugc_games add constraint ugc_games_status check (status in ('draft', 'link', 'review', 'public', 'hidden', 'banned'));
 exception when duplicate_object then null; end $$;
@@ -112,6 +113,13 @@ begin
   elsif p_kind = 'html' then
     if p_html is null or char_length(p_html) < 20 or char_length(p_html) > 200000 then return jsonb_build_object('ok', false, 'reason', 'html'); end if;
     v_tpl := null; v_data := '{}'::jsonb; v_html := p_html;
+  elsif p_kind = 'place' then
+    -- 3D-мир: объекты (массив), свет, ландшафт (сжатый), список моделей; до 900 000 знаков
+    if p_data is null or jsonb_typeof(p_data) <> 'object' or jsonb_typeof(p_data -> 'objects') is distinct from 'array'
+       or jsonb_array_length(p_data -> 'objects') > 3000 or char_length(p_data::text) > 900000 then
+      return jsonb_build_object('ok', false, 'reason', 'data');
+    end if;
+    v_tpl := null; v_data := p_data; v_html := null;
   else
     return jsonb_build_object('ok', false, 'reason', 'kind');
   end if;
@@ -238,3 +246,101 @@ begin
   return jsonb_build_object('ok', true, 'reports', n);
 end $$;
 grant execute on function public.ugc_report(text, text) to authenticated;
+
+-- ═══════════════════════════════════════════════════════════════════
+--  СВОИ 3D-МОДЕЛИ «СТУДИИ 3D» (js/engine/model.js, js/games/studio3d.js)
+--  Файл модели — в закрытом хранилище ugc3d: models/<автор>/<номер>.json (не меняется: изменённая модель = новый номер).
+--  Строка — в ugc_models. Новая модель — на проверке: видят только автор и модераторы, в чужих мирах на её месте пустая
+--  коробка. Одобрил модератор — видят все. Заблокированная — не видна никому, кроме автора и модераторов.
+--  Проверка после запуска: /rpc/ugc_model_save гостем {"p_id":"abcdef","p_name":"x","p_tris":1,"p_bytes":1} → reason auth
+-- ═══════════════════════════════════════════════════════════════════
+create table if not exists public.ugc_models (
+  id text primary key,
+  author uuid not null references public.profiles(id) on delete cascade,
+  name text not null default 'Модель',
+  created_at timestamptz not null default now()
+);
+alter table public.ugc_models add column if not exists tris int not null default 0;
+alter table public.ugc_models add column if not exists bytes int not null default 0;
+alter table public.ugc_models add column if not exists status text not null default 'review';
+alter table public.ugc_models add column if not exists updated_at timestamptz not null default now();
+alter table public.ugc_models add column if not exists reviewed_by uuid;
+alter table public.ugc_models add column if not exists reviewed_at timestamptz;
+alter table public.ugc_models drop constraint if exists ugc_models_check;
+alter table public.ugc_models add constraint ugc_models_check check (status in ('review', 'public', 'banned')
+  and char_length(name) between 1 and 40 and id ~ '^[a-z0-9]{6,24}$' and tris between 0 and 100000 and bytes between 0 and 20000000);
+create index if not exists ugc_models_review on public.ugc_models (status, updated_at desc);
+create index if not exists ugc_models_author on public.ugc_models (author, created_at desc);
+alter table public.ugc_models enable row level security;
+drop policy if exists ugc_models_read on public.ugc_models;
+create policy ugc_models_read on public.ugc_models for select using (status = 'public' or author = auth.uid() or public.ugc_is_staff());
+grant select on public.ugc_models to anon, authenticated;
+revoke insert, update, delete on public.ugc_models from anon, authenticated;
+
+-- ── Автор: записать модель после загрузки файла (новая — на проверку; уже есть — только имя) ──
+create or replace function public.ugc_model_save(p_id text, p_name text, p_tris int, p_bytes int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); m public.ugc_models%rowtype; nm text := left(btrim(coalesce(p_name, '')), 40);
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if coalesce(p_id, '') !~ '^[a-z0-9]{6,24}$' then return jsonb_build_object('ok', false, 'reason', 'id'); end if;
+  if nm = '' then nm := 'Модель'; end if;
+  if p_tris is null or p_tris < 0 or p_tris > 100000 or p_bytes is null or p_bytes < 0 or p_bytes > 20000000 then
+    return jsonb_build_object('ok', false, 'reason', 'size');
+  end if;
+  select * into m from public.ugc_models where id = p_id for update;
+  if found then
+    if m.author <> uid then return jsonb_build_object('ok', false, 'reason', 'taken'); end if;
+    if m.name <> nm and m.status <> 'banned' then update public.ugc_models set name = nm, updated_at = now() where id = p_id; end if;
+    return jsonb_build_object('ok', true, 'status', m.status, 'same', true);
+  end if;
+  if (select count(*) from public.ugc_models where author = uid) >= 60 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+  if exists (select 1 from public.ugc_models where author = uid and created_at > now() - interval '2 seconds') then
+    return jsonb_build_object('ok', false, 'reason', 'too_fast');
+  end if;
+  insert into public.ugc_models (id, author, name, tris, bytes, status) values (p_id, uid, nm, p_tris, p_bytes, 'review');
+  return jsonb_build_object('ok', true, 'status', 'review');
+end $$;
+grant execute on function public.ugc_model_save(text, text, int, int) to authenticated;
+
+-- ── Модератор: одобрить / вернуть на проверку / заблокировать ──
+create or replace function public.ugc_model_review(p_id text, p_status text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if not public.ugc_is_staff() then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if p_status not in ('public', 'review', 'banned') then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  update public.ugc_models set status = p_status, reviewed_by = auth.uid(), reviewed_at = now() where id = p_id;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true, 'status', p_status);
+end $$;
+grant execute on function public.ugc_model_review(text, text) to authenticated;
+
+-- ── Автор: удалить свою модель (заблокированная остаётся — для истории) ──
+create or replace function public.ugc_model_delete(p_id text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  delete from public.ugc_models where id = p_id and author = auth.uid() and status <> 'banned';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+grant execute on function public.ugc_model_delete(text) to authenticated;
+
+-- ── Хранилище файлов моделей: закрытое; писать — только в свою папку, файл не перезаписывается ──
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('ugc3d', 'ugc3d', false, 20971520, array['application/json'])
+on conflict (id) do update set public = false, file_size_limit = 20971520, allowed_mime_types = array['application/json'];
+
+drop policy if exists "ugc3d: загрузить свою модель" on storage.objects;
+create policy "ugc3d: загрузить свою модель" on storage.objects for insert to authenticated
+  with check (bucket_id = 'ugc3d' and (storage.foldername(name))[1] = 'models' and (storage.foldername(name))[2] = auth.uid()::text
+    and name ~ '^models/[0-9a-f-]{36}/[a-z0-9]{6,24}\.json$');
+drop policy if exists "ugc3d: удалить свою модель" on storage.objects;
+create policy "ugc3d: удалить свою модель" on storage.objects for delete to authenticated
+  using (bucket_id = 'ugc3d' and (storage.foldername(name))[1] = 'models' and (storage.foldername(name))[2] = auth.uid()::text);
+drop policy if exists "ugc3d: читать свои, проверенные, модераторам" on storage.objects;
+create policy "ugc3d: читать свои, проверенные, модераторам" on storage.objects for select to anon, authenticated
+  using (bucket_id = 'ugc3d' and (
+    (storage.foldername(name))[2] = auth.uid()::text
+    or public.ugc_is_staff()
+    or exists (select 1 from public.ugc_models m where m.status = 'public' and storage.objects.name = 'models/' || m.author::text || '/' || m.id || '.json')));

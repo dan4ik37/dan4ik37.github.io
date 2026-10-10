@@ -42,7 +42,7 @@ async function gamePage(req, res, id){
   const authorGames = (await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&select=plays`)) || [];
   const totalPlays = authorGames.reduce((a, x) => a + (x.plays || 0), 0);
   const pub = g.status === 'public';
-  const url = `${SITE}/g/${id}`, playUrl = `/#/games/studio/play/${id}`;
+  const url = `${SITE}/g/${id}`, playUrl = g.kind === 'place' ? `/#/games/studio3d/play/${id}` : `/#/games/studio/play/${id}`;
   const title = `${g.title} — игра от ${nick}`;
   const description = (g.descr ? g.descr + ' ' : '') + `Играй онлайн бесплатно: «${g.title}» — игру сделал ${nick} в Студии игр на сайте dan4ik37. Сделай и свою — без кода!`;
   const since = new Date(g.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -57,7 +57,7 @@ async function gamePage(req, res, id){
     <span class="ug-big">${esc(g.icon || '🎮')}</span>
     <div class="ug-hero-b">
       <h1>${esc(g.title)}</h1>
-      <p class="ug-meta">👁 ${num(g.plays)} ${plural(g.plays, 'запуск', 'запуска', 'запусков')} · ❤️ ${num(g.likes)} · ${g.kind === 'tpl' ? 'сделана на шаблоне' : 'своим кодом'} · ${esc(since)}</p>
+      <p class="ug-meta">👁 ${num(g.plays)} ${plural(g.plays, 'запуск', 'запуска', 'запусков')} · ❤️ ${num(g.likes)} · ${g.kind === 'tpl' ? 'сделана на шаблоне' : g.kind === 'place' ? '3D-мир из «Студии 3D»' : 'своим кодом'} · ${esc(since)}</p>
       ${g.descr ? `<p class="lead">${esc(g.descr)}</p>` : ''}
       <a class="btn btn-acc ug-play" href="${playUrl}">▶ Играть</a>
     </div>

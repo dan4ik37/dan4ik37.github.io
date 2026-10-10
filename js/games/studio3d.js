@@ -7,6 +7,9 @@
 // Миры хранятся в браузере (d37_s3_index + d37_s3_<id>), можно выгрузить/загрузить файлом. Окно — поверх всего сайта.
 // Свои модели (🧩: .glb/.gltf/.obj, model.js) — «компилируются» при загрузке и лежат только в этом браузере (видно только
 // автору); в файл мира они вкладываются целиком.
+// «📤 Выложить» (ugc.sql: ugc_games kind 'place' + ugc_models + хранилище ugc3d): мир — по ссылке /g/<id> или в каталог после
+// проверки; свои модели уходят на проверку (до одобрения у других — пустая коробка). #/games/studio3d/play/<id> — режим игрока
+// (без редактора). Модераторам — «🛡»: модели на проверке (посмотреть, одобрить, заблокировать).
 // Управление в редакторе: ПКМ + мышь — осмотреться, WASD/QE — лететь (Shift — быстрее), колесо — вперёд/назад, F — к
 // выбранному, Ctrl+Z/Y — отменить/вернуть, Ctrl+D — копия, Delete — удалить, 1–4 — выбор/двигать/размер/вращать.
 (() => {
@@ -193,6 +196,9 @@ Players.PlayerAdded.Connect(player => {
         <span class="s3-sep"></span>
         <button type="button" data-panel="terrain" title="Ландшафт">⛰<span> Земля</span></button><button type="button" data-panel="light" title="Освещение">☀<span> Свет</span></button>
         <span class="s3-grow"></span>
+        <span class="s3-pinfo" hidden></span>
+        <div class="s3-dd s3-staff" hidden><button type="button" data-a="menu:mod" title="Модели на проверке">🛡</button></div>
+        <button type="button" data-a="publish" class="s3-pubbtn" title="Выложить мир — по ссылке или в каталог">📤<span> Выложить</span></button>
         <button type="button" class="s3-play" data-a="play">▶ Играть</button>
       </div>
       <div class="s3-main">
@@ -209,7 +215,9 @@ Players.PlayerAdded.Connect(player => {
     document.body.appendChild(box);
     document.documentElement.classList.add('s3-open');
     const q = s => box.querySelector(s);
-    ED = { box, q, tool: 'move', sel: null, panel: 'props', hist: [], fut: [], placeId: null, dirty: false, keys: new Set(), cam: { x: 18, y: 14, z: 22, yaw: .7, pitch: .45 }, brush: { tool: 'raise', r: 7, s: 1.2, ch: 0 }, out: [], playing: null };
+    ED = { box, q, tool: 'move', sel: null, panel: 'props', hist: [], fut: [], placeId: null, dirty: false, keys: new Set(), cam: { x: 18, y: 14, z: 22, yaw: .7, pitch: .45 }, brush: { tool: 'raise', r: 7, s: 1.2, ch: 0 }, out: [], playing: null, player: null, pubId: null, remoteAuthors: new Map() };
+    const pm = /^play\/([a-z0-9]{4,16})$/i.exec(String(gapi?.param || ''));
+    if (pm) { ED.playId = pm[1]; box.classList.add('s3-player'); }
     const st = ED;
     E.load().then(ok => {
       if (ED !== st) return;
@@ -236,10 +244,15 @@ Players.PlayerAdded.Connect(player => {
     const G = ed.G = E.gizmo(R);
     ed.boxHelper = new R.T.Box3Helper(new R.T.Box3(), new R.T.Color('#38bdf8')); ed.boxHelper.visible = false; ed.boxHelper.renderOrder = 997; ed.boxHelper.material.depthTest = false; ed.boxHelper.material.toneMapped = false; R.scene.add(ed.boxHelper);
     ed.ray = new R.T.Raycaster();
-    // мир: последний открытый или новый «площадка»
-    const list = store.index();
-    const last = list[0] && store.load(list[0].id);
-    if (last) openPlace(list[0].id, last); else { template(SC, TR, 'grass'); ed.placeId = newId(); q('.s3-name').value = 'Мой мир'; save(true); }
+    E.models.remote = fetchRemoteModel;
+    // мир: выложенный (режим игрока) или последний свой, или новый «площадка»
+    if (ed.playId) openPublished(ed.playId);
+    else {
+      const list = store.index();
+      const last = list[0] && store.load(list[0].id);
+      if (last) openPlace(list[0].id, last); else { template(SC, TR, 'grass'); ed.placeId = newId(); q('.s3-name').value = 'Мой мир'; save(true); }
+    }
+    q('.s3-staff').hidden = !isStaff();
     SC.on('add', () => markDirty()); SC.on('remove', () => markDirty()); SC.on('change', () => markDirty());
     TR.setEnabled(TR.enabled);
     ed.ground.visible = !TR.enabled;
@@ -267,13 +280,13 @@ Players.PlayerAdded.Connect(player => {
     o.appendChild(d); while (o.children.length > 200) o.firstChild.remove();
     o.scrollTop = o.scrollHeight;
   }
-  function markDirty(){ if (!ED) return; ED.dirty = true; }
+  function markDirty(){ if (!ED || ED.player) return; ED.dirty = true; }
 
   // ── Сохранение ──
   // ed — явно: при выходе из студии ED уже пуст, а мир дописывается после (ландшафт сжимается асинхронно)
-  async function snapshot(ed = ED){ const name = ed.q('.s3-name').value.trim() || 'Мой мир', d = ed.SC.toJSON(); d.terrain = await ed.TR.toJSON(); d.name = name; d.cam = { ...ed.cam }; return d; }
+  async function snapshot(ed = ED){ const name = ed.q('.s3-name').value.trim() || 'Мой мир', d = ed.SC.toJSON(); d.terrain = await ed.TR.toJSON(); d.name = name; d.cam = { ...ed.cam }; if (ed.pubId) d.pub = ed.pubId; return d; }
   async function save(quiet, ed = ED){
-    if (!ed?.SC) return;
+    if (!ed?.SC || ed.player) return;
     const d = await snapshot(ed);
     const r = store.save(ed.placeId, d.name, d);
     ed.dirty = false;
@@ -281,7 +294,7 @@ Players.PlayerAdded.Connect(player => {
   }
   async function openPlace(id, data){
     const ed = ED;
-    ed.placeId = id;
+    ed.placeId = id; ed.pubId = typeof data.pub === 'string' ? data.pub : null;
     ed.q('.s3-name').value = data.name || 'Мой мир';
     ed.SC.fromJSON(data);
     if (data.terrain) { const ok = await ed.TR.fromJSON(data.terrain); if (!ok) ed.TR.setEnabled(data.terrain.enabled !== false); } else ed.TR.setEnabled(false);
@@ -541,6 +554,13 @@ Players.PlayerAdded.Connect(player => {
     let html = '';
     if (kind === 'part') html = SC.SHAPES.map(([k, n, i]) => `<button type="button" data-m="part:${k}">${i} ${n}</button>`).join('') + '<hr><button type="button" data-m="spawn">📍 Точка появления</button><button type="button" data-m="light">💡 Свет (лампа)</button><button type="button" data-m="model">📦 Модель (группа)</button>';
     else if (kind === 'prefab') html = SC.PREFABS.map(([k, n, i]) => `<button type="button" data-m="prefab:${k}">${i} ${n}</button>`).join('');
+    else if (kind === 'mod') {
+      html = '<div class="s3-mh">🛡 Модели на проверке</div><div class="s3-mlist"><small class="s3-mh">Загрузка…</small></div><p class="s3-note s3-mnote">👁 — вставить в этот мир и посмотреть. ✅ — видят все. ⛔ — заблокировать.</p>';
+      sb()?.from('ugc_models').select('id,name,tris,bytes,author,created_at,profiles(nick)').eq('status', 'review').order('created_at').limit(40).then(({ data }) => {
+        const box = m.querySelector('.s3-mlist'); if (!box) return;
+        box.innerHTML = data?.length ? data.map(x => `<div class="s3-mrow" data-mid="${esc(x.id)}"><button type="button" data-m="mview:${esc(x.id)}:${esc(x.author)}">👁 ${esc(x.name)} <small>👤 ${esc(x.profiles?.nick || '?')} · ${(x.tris || 0).toLocaleString('ru')} тр.</small></button><button type="button" data-m="mok:${esc(x.id)}" title="Одобрить">✅</button><button type="button" data-m="mban:${esc(x.id)}" title="Заблокировать">⛔</button></div>`).join('') : '<small class="s3-mh">Очередь пуста 🎉</small>';
+      }, () => {});
+    }
     else if (kind === 'models') {
       html = '<button type="button" data-m="mupload">⬆ Загрузить модель (.glb, .gltf, .obj)</button><div class="s3-mh">🔒 Мои модели — видно только тебе</div><div class="s3-mlist"><small class="s3-mh">Загрузка…</small></div>'
         + '<p class="s3-note s3-mnote">Модель хранится в этом браузере. Можно перетащить файл прямо в окно. Из Blender — File → Export → glTF 2.0 (.glb).</p>';
@@ -561,6 +581,129 @@ Players.PlayerAdded.Connect(player => {
     m.hidden = false;
   }
   function closeMenu(){ const m = ED?.q('.s3-menu'); if (m) m.hidden = true; }
+
+  // ═══ Сервер (ugc.sql): выложить мир и свои модели, открыть чужой мир ═══
+  const sb = () => (typeof sbClient !== 'undefined' && sbClient) || null;
+  const me = () => { try { return (typeof currentUser !== 'undefined' && currentUser) || null; } catch (e) { return null; } };
+  const isStaff = () => { try { return typeof currentProfile !== 'undefined' && ['admin', 'moderator'].includes(currentProfile?.role); } catch (e) { return false; } };
+  const modelPath = (author, id) => `models/${author}/${id}.json`;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  async function rpc(name, args){
+    const c = sb(); if (!c) return null;
+    try { const { data, error } = await c.rpc(name, args || {}); if (error) return { ok: false, reason: /PGRST202|Could not find the function/i.test((error.code || '') + ' ' + (error.message || '')) ? 'missing' : 'error', message: error.message }; return data; }
+    catch (e) { return null; }
+  }
+  const WHY = { auth: 'Войди в аккаунт', title: 'Название — от 2 до 60 знаков', data: 'Мир слишком большой для публикации', limit: 'У тебя уже 30 игр и миров — удали ненужные в «Студии игр»',
+    too_fast: 'Подожди пару секунд и нажми ещё раз', banned: 'Этот мир заблокирован модератором', not_found: 'Мир не найден', missing: 'Публикация откроется, когда сайт обновится (нужен ugc.sql)' };
+  // чужая модель из выложенного мира: только одобренные (или свои/модератору — так решает хранилище)
+  async function fetchRemoteModel(id){
+    const author = ED?.remoteAuthors?.get(id), c = sb();
+    if (!c || !author || !/^[0-9a-f-]{36}$/i.test(author) || !/^[a-z0-9]{6,24}$/.test(id)) return null;
+    try { const { data, error } = await c.storage.from('ugc3d').download(modelPath(author, id)); if (error || !data || data.size > 21e6) return null; return JSON.parse(await data.text()); }
+    catch (e) { return null; }
+  }
+  // мои модели в мире (не скачанные чужие)
+  async function ownModelsUsed(){
+    const out = [];
+    for (const id of new Set(ED.SC.all().filter(o => o.cls === 'Mesh' && o.model).map(o => o.model))) { const m = await window.D37E.models.load(id); if (m && !m.foreign) out.push(m); }
+    return out;
+  }
+  async function openPublish(){
+    const ed = ED; if (!ed || ed.player) return;
+    if (ed.playing) stopPlay();
+    if (!me()) { msg('Войди в аккаунт, чтобы выложить мир', false); if (typeof openGlobalAuth === 'function') openGlobalAuth(); return; }
+    const own = await ownModelsUsed();
+    ed.dlg?.remove();
+    const dlg = ed.dlg = document.createElement('div'); dlg.className = 's3-dlg';
+    dlg.innerHTML = `<div class="s3-dlg-in"><b>📤 Выложить мир</b>
+      <label class="s3-lbl">Название<input type="text" class="s3p-t" maxlength="60" value="${esc(ed.q('.s3-name').value.trim() || 'Мой мир')}"></label>
+      <label class="s3-lbl">Описание — что делать в мире<textarea class="s3p-d" maxlength="300" rows="3"></textarea></label>
+      <label class="s3-lbl">Значок<input type="text" class="s3p-i" maxlength="4" value="🧱"></label>
+      <label class="s3-chk"><input type="radio" name="s3p-v" value="link" checked> 🔗 По ссылке — играют те, кому дашь ссылку</label>
+      <label class="s3-chk"><input type="radio" name="s3p-v" value="review"> 🌍 В каталог — после проверки модератором</label>
+      ${own.length ? `<p class="s3-note">🧩 Своих моделей: ${own.length}. Они уйдут на проверку — пока модератор не одобрит, у других на их месте будет пустая коробка.</p>` : ''}
+      ${ed.pubId ? '<p class="s3-note">Мир уже выложен — обновим его по той же ссылке.</p>' : ''}
+      <div class="s3-grid2"><button type="button" data-a="pub:go" class="s3-play">📤 Выложить</button><button type="button" data-a="pub:close">Закрыть</button></div>
+      <div class="s3-pubres"></div></div>`;
+    ed.box.appendChild(dlg);
+  }
+  async function doPublish(){
+    const ed = ED, dlg = ed?.dlg, c = sb(), u = me(), E = window.D37E;
+    if (!dlg || !c || !u || ed.publishing) return;
+    const res = dlg.querySelector('.s3-pubres'), say = t => { res.innerHTML = t; };
+    const title = dlg.querySelector('.s3p-t').value.trim(), descr = dlg.querySelector('.s3p-d').value.trim(), icon = dlg.querySelector('.s3p-i').value.trim() || '🧱';
+    const vis = dlg.querySelector('[name="s3p-v"]:checked')?.value === 'review' ? 'review' : 'link';
+    if (title.length < 2) { say('Название — от 2 букв'); return; }
+    ed.publishing = true; dlg.querySelector('[data-a="pub:go"]').disabled = true;
+    try {
+      // 1) свои модели — в хранилище (каждая один раз; дальше — проверка модератором)
+      const ids = [...new Set(ed.SC.all().filter(o => o.cls === 'Mesh' && o.model).map(o => o.model))], authors = {};
+      const known = new Map();
+      if (ids.length) { const { data } = await c.from('ugc_models').select('id,author,status').in('id', ids); for (const r of data || []) known.set(r.id, r); }
+      let n = 0, uploaded = 0;
+      for (const id of ids) {
+        const r = known.get(id);
+        if (r) { authors[id] = r.author; continue; }
+        const m = await E.models.load(id);
+        if (!m || m.foreign) { const au = ed.remoteAuthors.get(id); if (au) authors[id] = au; continue; }
+        if (uploaded) await sleep(2100);   // сервер: не чаще раза в 2 с
+        say(`🧩 Загружаю модели: ${++n}…`);
+        const blob = new Blob([JSON.stringify(await E.models.pack(m))], { type: 'application/json' });
+        if (blob.size > 20e6) throw new Error(`Модель «${m.name}» слишком большая для сайта (до 20 МБ)`);
+        const up = await c.storage.from('ugc3d').upload(modelPath(u.id, id), blob, { contentType: 'application/json', upsert: false });
+        if (up.error && !/exist|duplicate/i.test(up.error.message || '')) throw new Error('Модель не загрузилась: ' + (up.error.message || 'ошибка'));
+        const s = await rpc('ugc_model_save', { p_id: id, p_name: m.name, p_tris: m.tris, p_bytes: blob.size });
+        if (!s?.ok) throw new Error(s?.reason === 'limit' ? 'Слишком много моделей (до 60)' : WHY[s?.reason] || 'Модель не записалась');
+        authors[id] = u.id; uploaded++;
+      }
+      // 2) мир
+      say('🧱 Сохраняю мир…');
+      const d = await snapshot(); delete d.cam; delete d.pub; d.models = authors;
+      if (JSON.stringify(d).length > 880000) throw new Error('Мир слишком большой для публикации — убери лишние детали или выключи ландшафт');
+      const r = await rpc('ugc_save', { p_id: ed.pubId || null, p_title: title, p_descr: descr, p_icon: icon, p_kind: 'place', p_tpl: null, p_data: d, p_html: null });
+      if (!r?.ok) { if (r?.reason === 'not_found' && ed.pubId) { ed.pubId = null; throw new Error('Старый выложенный мир удалён — нажми ещё раз, выложим заново'); } throw new Error(WHY[r?.reason] || 'Не получилось сохранить мир'); }
+      if (ED !== ed) return;
+      ed.pubId = r.id; ed.dirty = true; save(true);
+      const st = await rpc('ugc_status', { p_id: r.id, p_status: vis });
+      ed.pubLink = `${location.origin}/g/${r.id}`;
+      say(`✅ Выложено!${st?.status === 'review' ? ' В каталог попадёт после проверки модератором.' : ''}${uploaded ? ` Моделей на проверке: ${uploaded}.` : ''}<br><a href="${esc(ed.pubLink)}" target="_blank" rel="noopener">${esc(ed.pubLink)}</a> <button type="button" data-a="pub:copy">📋 Скопировать</button>`);
+      print(`📤 Мир выложен: ${ed.pubLink}`, 'sys');
+    } catch (e) { say('❌ ' + esc(e.message || e)); }
+    finally { ed.publishing = false; const b = dlg.querySelector('[data-a="pub:go"]'); if (b) b.disabled = false; }
+  }
+  // ═══ Режим игрока: чужой мир по ссылке (#/games/studio3d/play/<id>) ═══
+  async function openPublished(id){
+    const ed = ED, c = sb();
+    ed.player = { id, row: null };
+    const fail = t => { const L = document.createElement('div'); L.className = 's3-loading'; L.innerHTML = t; ed.box.appendChild(L); };
+    if (!c) { fail('Не получилось открыть мир — обнови страницу'); return; }
+    let row = null;
+    try { ({ data: row } = await c.from('ugc_games').select('id,title,icon,descr,kind,data,status,author,plays,likes,profiles(nick)').eq('id', id).maybeSingle()); } catch (e) {}
+    if (ED !== ed) return;
+    if (!row || row.kind !== 'place' || !Array.isArray(row.data?.objects)) { fail('Мир не найден или скрыт автором.<br><a href="#/games/studio">Другие миры и игры</a>'); return; }
+    ed.player.row = row;
+    const d = row.data;
+    for (const [mid, au] of Object.entries(d.models || {}).slice(0, 200)) if (typeof au === 'string') ed.remoteAuthors.set(mid, au);
+    // больше 40 ламп — дальше без света (иначе слабые компьютеры не потянут)
+    let lights = 0; d.objects = d.objects.filter(o => o && (o.cls !== 'Light' || ++lights <= 40));
+    await openPlace('pub-' + id, d);
+    if (ED !== ed) return;
+    const nm = ed.q('.s3-name'); nm.value = row.title; nm.readOnly = true;
+    renderPInfo();
+    rpc('ugc_play', { p_id: id });
+    startPlay();
+  }
+  function renderPInfo(){
+    const ed = ED, row = ed?.player?.row, box = ed?.q('.s3-pinfo'); if (!row || !box) return;
+    box.hidden = false;
+    box.innerHTML = `<a href="#/profile/${esc(row.author)}" target="_blank">👤 ${esc(row.profiles?.nick || 'игрок')}</a><button type="button" data-a="like" title="Нравится">❤️ <b>${row.likes || 0}</b></button>`;
+  }
+  async function likePlace(){
+    const ed = ED, row = ed?.player?.row; if (!row) return;
+    if (!me()) { msg('Войди, чтобы ставить ❤️', false); if (typeof openGlobalAuth === 'function') openGlobalAuth(); return; }
+    const r = await rpc('ugc_like', { p_id: row.id });
+    if (r?.ok) { row.likes = r.likes; renderPInfo(); msg(r.liked ? '❤️ Нравится' : 'Убрал ❤️', true); }
+  }
 
   // ═══ Свои модели: загрузка → «компиляция» (model.js) → хранилище браузера → в мир ═══
   function pickModel(){
@@ -600,13 +743,15 @@ Players.PlayerAdded.Connect(player => {
   }
   async function menuAct(a){
     const ed = ED; closeMenu();
-    const [k, v] = a.split(':');
+    const [k, v, w] = a.split(':');
     if (k === 'part') insert('Part', { shape: v, size: v === 'ball' ? [2, 2, 2] : v === 'cyl' ? [2, 2, 2] : v === 'wedge' ? [4, 2, 4] : [4, 1, 2], name: { block: 'Деталь', ball: 'Шар', cyl: 'Цилиндр', wedge: 'Клин' }[v] });
     else if (k === 'spawn') insert('Spawn');
     else if (k === 'light') insert('Light');
     else if (k === 'model') insert('Model');
     else if (k === 'prefab') insert('Prefab', { kind: v, name: ed.SC.PREFABS.find(p => p[0] === v)?.[1] || 'Предмет' });
     else if (k === 'mupload') pickModel();
+    else if (k === 'mview') { if (w) ed.remoteAuthors.set(v, w); const m = await window.D37E.models.load(v); if (m) insertModel(v); else msg('Модель не загрузилась', false); }
+    else if (k === 'mok' || k === 'mban') { const r = await rpc('ugc_model_review', { p_id: v, p_status: k === 'mok' ? 'public' : 'banned' }); msg(r?.ok ? (k === 'mok' ? '✅ Модель одобрена' : '⛔ Модель заблокирована') : 'Не получилось', !!r?.ok); }
     else if (k === 'minsert') insertModel(v);
     else if (k === 'mdel') {
       const used = ed.SC.all().filter(o => o.cls === 'Mesh' && o.model === v).length;
@@ -630,7 +775,12 @@ Players.PlayerAdded.Connect(player => {
     if (a === 'exit') { exitStudio(); return; }
     if (a === 'undo') undo(false); else if (a === 'redo') undo(true);
     else if (a === 'add:Script') insert('Script');
-    else if (a === 'play') { if (ed.playing) stopPlay(); else startPlay(); }
+    else if (a === 'play') { if (ed.player) { if (ed.playing) stopPlay(); if (ed.player.row) startPlay(); } else if (ed.playing) stopPlay(); else startPlay(); }
+    else if (a === 'publish') openPublish();
+    else if (a === 'pub:close') { ed.dlg?.remove(); ed.dlg = null; }
+    else if (a === 'pub:go') doPublish();
+    else if (a === 'pub:copy') { navigator.clipboard?.writeText(ed.pubLink || '').then(() => msg('Ссылка скопирована', true), () => prompt('Скопируй ссылку:', ed.pubLink)); }
+    else if (a === 'like') likePlace();
     else if (a === 'toggleLeft') ed.box.classList.toggle('s3-showL');
     else if (a === 'toggleRight') ed.box.classList.toggle('s3-showR');
     else if (a === 'toggleBottom') ed.box.classList.toggle('s3-minB');
@@ -860,7 +1010,7 @@ Players.PlayerAdded.Connect(player => {
     ed.TR.cursor(null); ed.G.attach(null); ed.boxHelper.visible = false; closeMenu();
     const snap = SC.toJSON().objects;
     // свет-лампочки и невидимые детали — как в игре
-    for (const o of SC.all()) { if (o.cls === 'Light' && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
+    for (const o of SC.all()) { if (o.cls === 'Light' && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh && !ed.player) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
     const spawn = SC.all().find(o => o.cls === 'Spawn');
     const sp = spawn ? [spawn.pos[0], spawn.pos[1] + spawn.size[1] / 2 + .05, spawn.pos[2]] : [0, ed.ph.groundAt(0, 0) + .05, 0];
     const P = E.player(ed.ph, { x: sp[0], z: sp[2], yaw: 0 });
@@ -896,7 +1046,7 @@ Players.PlayerAdded.Connect(player => {
     const any = pl.SH.start(SC, [{ id: 'me', name: nick, pos: sp }]);
     if (any) print('▶ Скрипты запущены', 'sys');
     ed.box.classList.add('s3-playing');
-    ed.q('.s3-play').textContent = '■ Стоп';
+    ed.q('.s3-play').textContent = ed.player ? '🔁 Заново' : '■ Стоп';
     ed.q('.s3-hint').hidden = true;
     pl.loop = E.loop(playStep, playFrame);
     ed.loop.pause(true);
@@ -1075,10 +1225,11 @@ Players.PlayerAdded.Connect(player => {
 
   // ═══ Выход ═══
   async function exitStudio(){
+    const wasPlayer = !!ED?.player;
     if (ED?.playing) stopPlay();
     if (ED?.dirty) await save(true);
     unmount();
-    location.hash = '#/games';
+    location.hash = wasPlayer ? '#/games/studio' : '#/games';
   }
   function unmount(){
     const ed = ED; if (!ed) return;

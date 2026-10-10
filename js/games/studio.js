@@ -48,6 +48,7 @@
     } catch (e) { return null; }
   }
   const LIGHT = 'id,title,icon,descr,kind,tpl,status,plays,likes,created_at,updated_at,author,profiles(nick)';
+  const playHref = g => g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`;
 
   // ── Песочница ──
   let hostHtml = null;
@@ -152,7 +153,7 @@
       const [si, sn] = STATUS[g.status] || STATUS.draft;
       return `<div class="st-row"><span class="st-row-ic">${esc(g.icon || '🎮')}</span>
         <div class="st-row-b"><b>${esc(g.title || 'Без названия')}</b><small><span class="st-chip st-${esc(g.status)}">${si} ${sn}</span>${g.srv ? ` · 👁 ${num(g.plays)} · ❤️ ${num(g.likes)}` : g.local ? ' · только в этом браузере' : ''}</small></div>
-        <span class="st-row-a"><a class="st-btn" href="#/games/studio/play/${esc(g.id)}">▶</a><a class="st-btn ghost" href="#/games/studio/edit/${esc(g.id)}">✏️</a></span></div>`;
+        <span class="st-row-a"><a class="st-btn" href="${playHref(g)}">▶</a><a class="st-btn ghost" href="${g.kind === 'place' ? '#/games/studio3d' : `#/games/studio/edit/${esc(g.id)}`}">✏️</a></span></div>`;
     }).join('')}</div>`;
   }
   async function catalog(sort){
@@ -167,7 +168,7 @@
     if (typeof xpQueueBadges === 'function') xpQueueBadges();
   }
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
-  const cardHtml = g => `<a class="st-card" href="#/games/studio/play/${esc(g.id)}"><span class="st-card-ic">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}</b>
+  const cardHtml = g => `<a class="st-card" href="${playHref(g)}"><span class="st-card-ic">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}</b>${g.kind === 'place' ? '<small class="st-card-3d">🧱 3D-мир</small>' : ''}
     <small class="st-card-au">👤 ${esc(g.profiles?.nick || 'Игрок')}${g.author ? `<span class="lv-badge" data-lv-uid="${esc(g.author)}"></span>` : ''}</small>
     <small>👁 ${num(g.plays)} · ❤️ ${num(g.likes)}</small></a>`;
 
@@ -472,6 +473,7 @@ let last = performance.now();
     let g = null;
     const row = await select(q => q.select('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles(nick)').eq('id', id).maybeSingle());
     if (S !== st) return;
+    if (row?.kind === 'place') { location.replace('#/games/studio3d/play/' + id); return; }   // 3D-мир — в «Студии 3D»
     if (row) g = { ...row, srv: true };
     else if (drafts()[id]) g = { ...drafts()[id], status: 'draft', local: true };
     if (!g) { root.innerHTML = '<div class="st"><div class="st-empty">Игра не найдена или скрыта автором. <a href="#/games/studio">Другие игры</a></div></div>'; return; }
@@ -597,8 +599,8 @@ let last = performance.now();
     if (!rows) { box.innerHTML = '<div class="st-empty">Нет доступа или сайт обновляется</div>'; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Очередь пуста 🎉</div>'; return; }
     box.innerHTML = rows.map(g => `<div class="st-row" data-id="${esc(g.id)}"><span class="st-row-ic">${esc(g.icon || '🎮')}</span>
-      <div class="st-row-b"><b>${esc(g.title)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')} · ${g.kind === 'tpl' ? 'шаблон ' + esc(g.tpl) : 'свой код'}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small><small>${esc(g.descr || '')}</small></div>
-      <span class="st-row-a"><a class="st-btn ghost" href="#/games/studio/play/${esc(g.id)}" target="_blank">▶</a>
+      <div class="st-row-b"><b>${esc(g.title)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')} · ${g.kind === 'tpl' ? 'шаблон ' + esc(g.tpl) : g.kind === 'place' ? '🧱 3D-мир (модели в нём — проверка в «Студии 3D» → 🛡)' : 'свой код'}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small><small>${esc(g.descr || '')}</small></div>
+      <span class="st-row-a"><a class="st-btn ghost" href="${playHref(g)}" target="_blank">▶</a>
         <button type="button" class="st-btn" data-mod="public">✅ В каталог</button><button type="button" class="st-btn ghost" data-mod="link">🔗 Только ссылка</button><button type="button" class="st-btn ghost danger" data-mod="banned">⛔</button></span></div>`).join('');
     box.addEventListener('click', async e => {
       const b = e.target.closest('[data-mod]');

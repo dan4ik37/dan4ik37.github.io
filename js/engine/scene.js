@@ -318,7 +318,7 @@
     SC.fromJSON = data => {
       SC.clear();
       const list = Array.isArray(data?.objects) ? data.objects : [];
-      for (const d of list) if (DEF[d.cls]) SC.add(d.cls, d, d.parent && objects.get(d.parent) ? d.parent : null, typeof d.id === 'string' ? d.id.slice(0, 24) : null);
+      for (const d of list) if (d && DEF[d.cls]) { try { SC.add(d.cls, d, d.parent && objects.get(d.parent) ? d.parent : null, typeof d.id === 'string' ? d.id.slice(0, 24) : null); } catch (e) { console.warn('объект пропущен:', e.message); } }
       if (data?.lighting && R.setLighting) R.setLighting(data.lighting);
       return SC;
     };

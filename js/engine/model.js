@@ -358,7 +358,7 @@
     r.onsuccess = () => res(r.result); r.onerror = () => { dbp = null; rej(r.error); };
   }));
   const tx = async (mode, fn) => { const d = await db(); return new Promise((res, rej) => { const t = d.transaction('models', mode), s = t.objectStore('models'), r = fn(s); t.oncomplete = () => res(r?.result); t.onerror = () => rej(t.error); t.onabort = () => rej(t.error || new Error('Не хватило места в браузере')); }); };
-  const cache = new Map();
+  const cache = new Map(), pending = new Map();
   const M = E.models = {
     LIMIT, compile, _test: { parseGLB, gltfToRaw, objToRaw, bake, m4 },
     cached: id => cache.get(id) || null,
@@ -366,9 +366,20 @@
     async load(id){
       if (!id) return null;
       if (cache.has(id)) return cache.get(id);
-      try { const m = await tx('readonly', s => s.get(id)); if (m) cache.set(id, m); return m || null; } catch (e) { return null; }
+      if (pending.has(id)) return pending.get(id);
+      const p = (async () => {
+        let m = null;
+        try { m = await tx('readonly', s => s.get(id)); } catch (e) {}
+        // нет в браузере — чужая модель из выложенного мира (M.remote даёт студия: хранилище сайта, только проверенные)
+        if (!m && M.remote) { try { const pm = await M.remote(id); const u = pm && M.unpack(pm); if (u && u.id === id) { u.foreign = true; m = u; await M.save(u).catch(() => { cache.set(id, u); }); } } catch (e) {} }
+        if (m) cache.set(id, m);
+        return m || null;
+      })();
+      pending.set(id, p); p.finally(() => pending.delete(id));
+      return p;
     },
-    async list(){ try { const all = await tx('readonly', s => s.getAll()); return (all || []).map(m => ({ id: m.id, name: m.name, tris: m.tris, bytes: m.bytes, t: m.t, size: m.size })).sort((a, b) => b.t - a.t); } catch (e) { return []; } },
+    remote: null,   // (id) → Promise<упакованная модель | null>
+    async list(){ try { const all = await tx('readonly', s => s.getAll()); return (all || []).filter(m => !m.foreign).map(m => ({ id: m.id, name: m.name, tris: m.tris, bytes: m.bytes, t: m.t, size: m.size, pub: m.pub || null })).sort((a, b) => b.t - a.t); } catch (e) { return []; } },
     async remove(id){ cache.delete(id); disposeShared(id); try { await tx('readwrite', s => s.delete(id)); } catch (e) {} },
     async rename(id, name){ const m = await M.load(id); if (!m) return; m.name = String(name).slice(0, 40); await M.save(m); },
   };

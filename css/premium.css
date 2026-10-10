@@ -3169,7 +3169,7 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-dd{position:relative}
 .s3 .s3-play{background:#16a34a;border-color:#22c55e;color:#fff;font-weight:800;padding:6px 14px}
 .s3.s3-playing .s3-play{background:#dc2626;border-color:#f87171}
-.s3-playing .s3-top>*:not(.s3-play):not(.s3-grow):not([data-a="exit"]){display:none}
+.s3-playing .s3-top>*:not(.s3-play):not(.s3-grow):not([data-a="exit"]):not(.s3-pinfo){display:none}
 .s3-main{position:relative;display:grid;grid-template-columns:220px minmax(0,1fr) 290px;min-height:0}
 .s3-playing .s3-main{grid-template-columns:minmax(0,1fr)}
 .s3-playing .s3-left,.s3-playing .s3-right{display:none}
@@ -3215,6 +3215,19 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-mrow{display:flex;gap:2px}
 .s3-menu .s3-mnote{max-width:280px;padding:4px 8px;font-size:11px}
 .s3-mlist{display:flex;flex-direction:column;gap:2px}
+.s3-dlg{position:absolute;inset:0;z-index:9;display:grid;place-items:center;padding:12px;background:rgba(9,8,20,.6)}
+.s3-dlg-in{width:min(440px,100%);max-height:100%;overflow:auto;display:grid;gap:10px;padding:16px 18px;border-radius:14px;background:#23252d;border:1px solid #3a3d48;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+.s3-dlg-in>b{font-size:16px}
+.s3-dlg-in textarea{background:#16171d;color:#e6e8ee;border:1px solid #4a4e5c;border-radius:7px;padding:6px 8px;font:inherit;resize:vertical;-webkit-user-select:text;user-select:text}
+.s3-pubres{font-size:13px;line-height:1.5;word-break:break-all}
+.s3-pubres a{color:#93c5fd}
+.s3-pinfo{display:flex;align-items:center;gap:8px;font-size:13px;white-space:nowrap}
+.s3-pinfo[hidden]{display:none}
+.s3-pinfo a{color:#cbd5e1;text-decoration:none;font-weight:700}
+.s3-player .s3-left,.s3-player .s3-right,.s3-player .s3-bottom{display:none!important}
+.s3-player .s3-main{grid-template-columns:minmax(0,1fr)!important}
+.s3-player .s3-top>*:not(.s3-play):not(.s3-grow):not([data-a="exit"]):not(.s3-name):not(.s3-pinfo){display:none!important}
+.s3-player .s3-top>.s3-name{display:inline-block!important;border-color:transparent;background:transparent;font-size:15px}
 .s3-busy{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;display:grid;gap:6px;padding:16px 22px;border-radius:14px;background:rgba(12,10,24,.88);color:#fff;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .s3-busy b{font-size:15px}
 .s3-busy span{font-size:13px;color:#cbd5e1}
