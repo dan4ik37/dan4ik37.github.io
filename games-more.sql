@@ -6,7 +6,8 @@
 --  «Нарды» (nardy_easy, nardy_hard, nardy_online), «Арена» (arena_easy, arena_normal, arena_hard, arena_online),
 --  «Шахматы» (chess_easy, chess_normal, chess_hard, chess_online), «Блоки» (blocks, blocks_duel),
 --  «Косынка» (kosynka, kosynka3, kosynka_duel), «Паук» (pauk1, pauk2, pauk4), «Свободная ячейка» (freecell, freecell_duel),
---  «Сапёр» (miner1, miner2, miner3, miner_duel), «Маджонг Коннект» (mahjong, mahjong_duel).
+--  «Сапёр» (miner1, miner2, miner3, miner_duel), «Маджонг Коннект» (mahjong, mahjong_duel),
+--  «Судоку» (sudoku1..4, sudoku_daily, sudoku_duel) + рекорды дня daily_top().
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
@@ -53,6 +54,11 @@ returns int language sql immutable as $$
     when p_game = 'miner_duel' then 2000
     when p_game = 'mahjong' then 5000000
     when p_game = 'mahjong_duel' then 50000
+    when p_game = 'sudoku1' then 300
+    when p_game = 'sudoku2' then 600
+    when p_game in ('sudoku3', 'sudoku_daily') then 1200
+    when p_game = 'sudoku4' then 2400
+    when p_game = 'sudoku_duel' then 2500
     else null end;
 $$;
 
@@ -87,5 +93,26 @@ returns int language sql immutable as $$
     when 'freecell' then 15 when 'freecell_duel' then 10
     when 'miner1' then 5 when 'miner2' then 15 when 'miner3' then 30 when 'miner_duel' then 10
     when 'mahjong' then 10 when 'mahjong_duel' then 10
+    when 'sudoku1' then 3 when 'sudoku2' then 8 when 'sudoku3' then 15 when 'sudoku4' then 25 when 'sudoku_daily' then 20 when 'sudoku_duel' then 10
     else 0 end;
 $$;
+
+-- ═══ Рекорды за сегодня (по МСК) для ежедневных игр («Судоку дня»): засчитывается ПЕРВАЯ попытка дня ═══
+-- (решение уже известно — повторная попытка была бы нечестной). Журнал game_log хранит 14 дней.
+create or replace function public.daily_top(p_game text, lim int default 10)
+returns table(user_id uuid, nick text, best_score int, wins int, plays int)
+language sql stable security definer set search_path = public as $$
+  select f.user_id, p.nick, f.score, f.wins, f.plays
+  from (
+    select l.user_id, (array_agg(l.score order by l.created_at))[1]::int as score,
+           count(*) filter (where l.win)::int as wins, count(*)::int as plays
+    from public.game_log l
+    where l.game = p_game and l.day = (now() at time zone 'Europe/Moscow')::date
+    group by l.user_id
+  ) f
+  join public.profiles p on p.id = f.user_id
+  where f.score > 0
+  order by f.score desc
+  limit least(greatest(coalesce(lim, 10), 1), 50);
+$$;
+grant execute on function public.daily_top(text, int) to anon, authenticated;

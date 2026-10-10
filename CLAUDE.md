@@ -13,10 +13,10 @@
 - Коммитить и пушить в `main` можно без отдельного вопроса — так договорились, это и есть выкладка.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
-1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
-   и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk*, freecell*, miner*, mahjong* (функции целиком из
-   games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
+Сейчас ничего не ждёт. Новые ключи игр / цены монет — дописывать в games-more.sql / coins.sql (оба идемпотентны) и выдать
+владельцу «запусти ещё раз файл целиком».
+coins.sql и games-more.sql применены 10.10.2026 (проверено с сервера: coins_state гостем → auth, daily_top → [],
+game_score_cap('sudoku_daily') = 1200, coin_run_cap('sudoku') = 60 — то есть самая свежая версия обоих файлов).
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
 secrets.sql, games.sql, progression.sql применены (03.10.2026, проверено с сервера).
@@ -380,6 +380,13 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Фишки — DOM (.mj-t, transform), путь — SVG. Сохранение d37_mahjong_save (+ _lv/_sc между уровнями). Бот проходит 60/60 уровней.
   Соревнование — поле 8×8 из seed. Ключи mahjong (каждый пройденный уровень — победа) / mahjong_duel.
 - Статистика в профиле (renderProfileGameStats) считает ключи id, id_* и id<цифра> (pauk1, miner2, kosynka3).
+- «Судоку» (#/games/sudoku, js/games/sudoku.js) — генератор: случайное решение (search с перемешиванием ЧЕРЕЗ shuffle, не
+  sort со случайным сравнением — в разных браузерах был бы разный порядок) → убираем симметрично, пока решение единственное;
+  Лёгкий/Средний — только если решается «одиночками» (singlesSolve); Сложный/Эксперт — лучший из 3/6 вариантов. До 0,5 с.
+  «Судоку дня»: зерно от даты (день №1 = 10.10.2026 по МСК, sudokuDayNo в games.js — та же формула), уровень «Сложный»,
+  один раз в день (localStorage d37_sudoku_daily), рекорды дня — RPC daily_top (первая попытка дня). Карточка в «Сегодня на сайте»
+  (вместо колеса фортуны). 3 ошибки → вторая попытка за рекламу/30 монет (coins_revive 'sudoku'); подсказки: 3, ещё — так же.
+  Ключи sudoku1..4, sudoku_daily, sudoku_duel (10 мин, очки за верные цифры + 1000 за решение).
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —

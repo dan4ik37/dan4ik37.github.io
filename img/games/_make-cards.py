@@ -35,6 +35,7 @@ GAMES = [
     ('freecell', '♣️', 'Свободная ячейка', '#38bdf8'),
     ('miner', '💣', 'Сапёр', '#ef4444'),
     ('mahjong', '🀄', 'Маджонг Коннект', '#f59e0b'),
+    ('sudoku', 'draw:sudoku', 'Судоку', '#60a5fa'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
     ('games', '🎮', 'Игры онлайн', '#ff2d55'),
@@ -63,6 +64,31 @@ def draw_blocks():
             d.rounded_rectangle((x + 3, y + cs // 2 - 6, x + cs - 3, y + cs - 3), 12, fill=base)
             d.rounded_rectangle((x + 3, y + cs - 16, x + cs - 3, y + cs - 3), 10, fill=tuple(int(v * .72) for v in base))
             d.rounded_rectangle((x + 18, y + 16, x + cs - 18, y + cs - 22), 8, fill=tuple(min(255, int(v * .8 + 60)) for v in base))
+    return im
+
+# «Судоку»: поле 9×9 с цифрами
+def draw_sudoku():
+    cs, pad = 52, 12
+    im = Image.new('RGBA', (cs * 9 + pad * 2, cs * 9 + pad * 2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, im.width - 1, im.height - 1), 24, fill=(248, 250, 252, 255))
+    grid = ['53..7....', '6..195...', '.98....6.', '8...6...3', '4..8.3..1', '7...2...6', '.6....28.', '...419..5', '....8..79']
+    mine = {(0, 2): '4', (1, 1): '7', (2, 0): '1', (4, 4): '5', (6, 4): '3'}
+    f = bold(34)
+    for r in range(9):
+        for c in range(9):
+            x, y = pad + c * cs, pad + r * cs
+            if (r // 3 + c // 3) % 2 == 0:
+                d.rectangle((x, y, x + cs, y + cs), fill=(226, 236, 250, 255))
+            ch = grid[r][c]
+            if ch != '.':
+                d.text((x + cs / 2, y + cs / 2 + 1), ch, font=f, fill=(30, 41, 59), anchor='mm')
+            elif (r, c) in mine:
+                d.text((x + cs / 2, y + cs / 2 + 1), mine[(r, c)], font=f, fill=(37, 99, 235), anchor='mm')
+    for k in range(10):
+        w = 4 if k % 3 == 0 else 1
+        d.line((pad + k * cs, pad, pad + k * cs, pad + 9 * cs), fill=(51, 65, 85), width=w)
+        d.line((pad, pad + k * cs, pad + 9 * cs, pad + k * cs), fill=(51, 65, 85), width=w)
     return im
 
 # «Косынка»: веер из трёх карт
@@ -95,6 +121,9 @@ for gid, ic, title, color in GAMES:
     if ic == 'draw:blocks':
         em = draw_blocks()
         em.thumbnail((370, 370), Image.LANCZOS)
+    elif ic == 'draw:sudoku':
+        em = draw_sudoku()
+        em.thumbnail((380, 380), Image.LANCZOS)
     elif ic == 'draw:cards':
         em = draw_cards()
         em.thumbnail((400, 400), Image.LANCZOS)
