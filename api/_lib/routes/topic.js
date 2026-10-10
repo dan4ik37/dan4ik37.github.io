@@ -6,7 +6,7 @@ import { SITE, ALL_UPLOADS, getUploads, isGambling, esc, fmtCount } from '../yt.
 import { videoFromSnapshot } from '../video-snap.js';
 import { QUIZZES } from '../quizzes.js';
 import { page, YT_CHANNEL } from '../page.js';
-import { TOPICS, topicOf } from '../topics.js';
+import { TOPICS, TOPIC_INTRO, topicOf } from '../topics.js';
 
 const PER = 120;
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
@@ -95,6 +95,7 @@ function topicPage(t, all, counts, req){
   <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/topics">Игры канала</a> › <span>${esc(t.name)}</span></nav>
   <h1>${esc(t.name)} — видео dan4ik37</h1>
   <p class="lead">${esc(t.about)} На канале — ${vids(n)}${first && first !== last ? `, с ${first} по ${last} год` : ''}. От новых к старым.</p>
+  ${p === 1 && TOPIC_INTRO[t.slug] ? `<p class="intro">${esc(TOPIC_INTRO[t.slug])}</p>` : ''}
   <div class="cta">
     <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
     <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button>
@@ -128,6 +129,7 @@ const CSS = `
 .tcard span{font-size:.78rem;color:var(--muted);line-height:1.45}
 .card small{padding:0 .8rem .8rem;margin-top:-.4rem;font-size:.7rem;color:var(--muted)}
 .all-h{margin-top:2.2rem}
+.intro{margin-top:.7rem;max-width:820px;color:rgba(240,240,248,.75);font-size:.92rem;line-height:1.65}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:2rem;font-size:.85rem}
 .pager a{padding:.6rem 1.1rem;border-radius:12px;border:1px solid var(--line);text-decoration:none;font-weight:800}
 .pager a:hover{border-color:var(--accent)}
