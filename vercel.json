@@ -87,6 +87,10 @@
       "destination": "/api/pages?page=random"
     },
     {
+      "source": "/tools/typing",
+      "destination": "/api/pages?page=typing"
+    },
+    {
       "source": "/quiz",
       "destination": "/api/pages?page=quiz"
     },

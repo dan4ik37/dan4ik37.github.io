@@ -46,7 +46,7 @@ export default function handler(req, res) {
   <div data-ad="seo_game" hidden></div>
   <section class="box"><h2>Звания по CPS</h2><ul class="cp-ranks">${RANKS.map((r, i) => `<li><b>${esc(r[1])}</b><span>${i < RANKS.length - 1 ? `${r[0]}–${RANKS[i + 1][0]}` : `${r[0]}+`} CPS</span></li>`).join('')}</ul></section>
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
-  <aside class="join"><div><b>Быстрые пальцы? Проверь реакцию</b><span>На сайте dan4ik37 — бесплатные игры: «Реакция», «Лови донаты», морской бой и «5 букв» с друзьями.</span></div><a class="btn btn-acc" href="/games">🎮 Играть</a></aside>
+  <aside class="join"><div><b>Быстрые пальцы? А печатаешь как?</b><span>Тест скорости печати: сколько знаков в минуту — с рекордом и вызовом другу. А на реакцию — игры на сайте.</span></div><a class="btn btn-acc" href="/tools/typing">⌨️ Тест печати</a></aside>
 </main>`;
   const script = `
 (function(){

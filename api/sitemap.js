@@ -43,6 +43,7 @@ export default async function handler(req, res) {
       url(`${SITE}/tools/cps`, 'monthly', '0.8'),
       url(`${SITE}/tools/wheel`, 'monthly', '0.8'),
       url(`${SITE}/tools/random`, 'monthly', '0.8'),
+      url(`${SITE}/tools/typing`, 'monthly', '0.8'),
       url(`${SITE}/quiz`, 'monthly', '0.8'),
       ...QUIZZES.map(q => url(`${SITE}/quiz/${q.slug}`, 'monthly', '0.8')),
       url(`${SITE}/videos`, 'daily', '0.8'),
