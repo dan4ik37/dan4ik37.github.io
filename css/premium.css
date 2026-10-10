@@ -2630,3 +2630,17 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
   body.game-on #games-page{padding-left:.45rem;padding-right:.45rem}
   body.game-on .gm-stage{padding-left:.45rem;padding-right:.45rem;border-radius:14px}
 }
+
+/* ── «Лудо» (js/games/ludo.js) ── */
+.ld{display:flex;flex-direction:column;gap:.5rem}
+.ld-players{display:flex;flex-wrap:wrap;gap:.35rem;justify-content:center}
+.ld-pl{display:flex;align-items:center;gap:.35rem;padding:.35rem .6rem;border-radius:10px;background:rgba(255,255,255,.05);border:1.5px solid transparent;font-size:.74rem}
+.ld-pl.turn{border-color:var(--pc);box-shadow:0 0 10px var(--pc)}
+.ld-pl small{color:var(--muted)}
+.ld-dot{width:12px;height:12px;border-radius:50%;background:var(--pc);border:2px solid #fff}
+.ld-wrap{display:flex;justify-content:center}
+.ld-cv{display:block;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.4);touch-action:manipulation;cursor:pointer}
+.ld-ctl{display:flex;align-items:center;justify-content:center;gap:.8rem}
+.ld-die{width:64px;height:64px;border-radius:16px;border:2px solid var(--border);background:#fff;color:#111;font-size:2.6rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ld-die.go{border-color:var(--accent);box-shadow:0 0 0 3px var(--ac-30);animation:unPulse .7s ease-in-out infinite alternate}
+.ld-die:disabled{opacity:.6;cursor:default;animation:none}
