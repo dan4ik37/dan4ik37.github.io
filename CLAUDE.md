@@ -69,7 +69,8 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   цветокоррекция, мягкие тени, панель «🎨 Графика» (расширение студии). Файлы: render.js, post.js, (terrain.js — шейдер), новые.
 - `worktree-agent-adc286a9d0b5bce38` — инструменты студии: ставить на поверхность, Union/Negate (three-bvh-csg), массив,
   кисть-покраска, выравнивание, кисти ландшафта, линейка. Файлы: gizmo.js, terrain.js (кисти), scene.js (CSG), новые.
-- `worktree-agent-a6a92221f616aa21a` — «🧰 Набор»: 60+ готовых предметов из деталей (D37E.toolbox: list/get/build/describe)
+- «🧰 Набор» (агент остановился до кода — веток с работой нет; его разбор кода и план — docs/TOOLBOX_PLAN.md): 60+ готовых
+  предметов из деталей (D37E.toolbox: list/get/build/describe)
   и заготовки игр (обби, симулятор, гонки, арена, хоррор, тайкун). Файл js/engine/toolbox.js.
 - `worktree-agent-a59fb745bc5bc3969` — ИИ-помощник студии: «✨ ИИ» (построить по описанию — формат d37build, скрипт на любом
   языке, исправить, объяснить), api/ai.js (Anthropic или OpenAI-совместимый ключ из env Vercel), ai.sql (квоты, монеты),
