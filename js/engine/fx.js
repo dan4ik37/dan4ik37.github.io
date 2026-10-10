@@ -18,6 +18,7 @@
     snow: { name: 'Снег', icon: '❄️', rate: 70, life: [6, 9], size: [.18, .4], color: '#ffffff', speed: [-.9, -.4], spread: 0, gravity: 0, area: 18, top: 14, shape: 0, blend: 'normal', alpha: .9, drift: .8 },
     rain: { name: 'Дождь', icon: '🌧️', rate: 320, life: [.9, 1.3], size: [.1, .16], color: '#b8d4ff', speed: [-16, -12], spread: 0, gravity: 0, area: 18, top: 16, shape: 0, blend: 'normal', alpha: .6 },
     magic: { name: 'Магия', icon: '🔮', rate: 32, life: [1, 2], size: [.3, .65], color: '#d08cff', color2: '#5aa7ff', speed: [.3, .9], spread: 1, gravity: -.6, area: .9, shape: 3, blend: 'add', orbit: 1.6, twinkle: 1 },
+    fountain: { name: 'Фонтан', icon: '⛲', rate: 90, life: [1, 1.25], size: [.12, .22], color: '#eefaff', color2: '#8fd3f5', speed: [3.6, 4.4], spread: .32, gravity: 9.8, area: .1, shape: 0, blend: 'normal', alpha: .8 },
     bubbles: { name: 'Пузыри', icon: '🫧', rate: 7, life: [2, 3.6], size: [.35, .8], color: '#c8f0ff', speed: [.6, 1.2], spread: .25, gravity: -.4, area: .5, shape: 2, blend: 'normal', alpha: .75, drift: .4 },
   };
   const MAX = 900;   // частиц в одном эмиттере

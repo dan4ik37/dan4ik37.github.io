@@ -50,6 +50,22 @@
     { g: 'td', x: 30, z: 52, yaw: PI, name: 'Башни', e: '🏰', c: '#eab308' },
   ];
   const SPAWN = { x: 0, z: 11, yaw: PI };
+  // Пруд в парке — чаша (ph.terrain) с водой (ph.waterLevel): в середине глубже 1,1 м — плывёшь (player.js), «присесть» — нырнуть.
+  // flat — радиус ровного дна, wl — уровень воды (чуть ниже берега).
+  const POND = { x: 32, z: 34, r: 6.6, deep: 2.4, flat: 3, wl: -.12 };
+  const pondH = (x, z) => {
+    const d = Math.hypot(x - POND.x, z - POND.z); if (d >= POND.r) return 0;
+    const t = Math.max(0, Math.min(1, (d - POND.flat) / (POND.r - POND.flat)));
+    return -POND.deep * (1 - t * t * (3 - 2 * t));
+  };
+  const CAMP = { x: 40, z: 50 };   // костёр в парке: огонь, дым, искры, тёплый свет, треск; брёвна — сесть
+  // Жители (NPC): стоят на своём месте у всех игроков, поворачиваются к подошедшему и говорят по очереди; [E] — поговорить.
+  const FOLK = [
+    { id: 'guide', name: '🧭 Гид', x: -5.6, z: 12.4, yaw: 156, seed: 'gid37', info: true, say: ['Привет! Я гид Мира Денчика 👋 Нажми E — расскажу, что тут есть', 'Кафе — на севере: сядь за столик, кто сядет напротив — с тем и сыграешь ♟️', 'В парке пруд — в нём можно плавать! 🏊 «Присесть» — нырнуть', 'Свой участок и дом — в районе за кафе 🏡', 'Игровой клуб с автоматами — на востоке 🕹️'] },
+    { id: 'barista', name: '☕ Бариста', x: 7.4, z: -41.4, yaw: 0, seed: 'kofe5', say: ['☕ Привет! Садись за столик — сыграем', 'Партия начнётся, когда напротив сядет второй 🎲', '«Дурак» и «Одна!» — за дальними столиками, до 4 игроков 🃏'] },
+    { id: 'dj', name: '🎧 Диджей', x: -36.4, y: .8, z: -4.5, yaw: 90, seed: 'dj777', say: ['🎧 На большом экране — ролики Денчика', 'Когда Денчик в эфире — здесь прямая трансляция 🔴', 'Подойди к экрану и нажми E — смотреть 📺'] },
+    { id: 'fisher', name: '🎣 Рыбак', x: 35, z: 41, yaw: -157, seed: 'ryba1', say: ['🎣 Тсс… рыба пугается', 'Пруд глубокий — можно плавать. Присядь, чтобы нырнуть 🐟', 'Вечером у костра в парке тепло 🔥 Садись на бревно'] },
+  ];
 
   function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
@@ -125,7 +141,9 @@
       planks: R.tex('planks', { tint: '#e0b088', tile: 1.2, flatColor: '#a0673a', rough: .7 }), dark: R.tex('planks', { tint: '#8e6544', tile: 1.2, flatColor: '#6b4426', rough: .7 }),
       stone: R.tex('sidewalk', { tint: '#ece6da', tile: 1.5, flatColor: '#d6cfc0' }), carpet: R.tex('carpet', { tint: '#8f7cf0', tile: 2, flatColor: '#3b2f8a' }),
       water: R.water('#3aa6dc'),
+      sand: R.texMat('pondsand', R.proc('sand'), { tile: 1.6, tint: '#bba27a', flatColor: '#a8936a', rough: .95 }),
     };
+    M.water.side = T.DoubleSide;   // из-под воды видно поверхность
     const wallMat = c => R.tex('plaster', { tint: c, tile: 2.6, flatColor: c, rough: .92, ns: .7 });
     const roofMat = (c, vert) => R.texMat('roof' + c + (vert ? 'v' : ''), shingles('sh' + (vert ? 'v' : 'h'), vert), { tint: c, tile: 1.6, flatColor: c, rough: .7 });
     const rooms = [], screens = {}, seats = new Map();
@@ -157,7 +175,12 @@
     const plaque = (x, y, z, w, h, mat, yaw = 0, parent) => { const m = new T.Mesh(K.geo(`pl${w}_${h}`, () => new T.PlaneGeometry(w, h)), mat); m.position.set(x, y, z); m.rotation.y = yaw; (parent || st).add(m); if (parent) m.userData.dyn = true; return m; };
 
     // ── Земля, площадь, дорожки ──
-    flat(0, 0, 320, 320, '#86cf72', 0, { m: M.grass });
+    // земля — с дыркой под чашей пруда (сама чаша — в парке)
+    {
+      const gs = new T.Shape([new T.Vector2(-160, -160), new T.Vector2(160, -160), new T.Vector2(160, 160), new T.Vector2(-160, 160)]);
+      const hole = new T.Path(); hole.absarc(POND.x, -POND.z, POND.r, 0, PI * 2, true); gs.holes.push(hole);
+      const gm = new T.Mesh(new T.ShapeGeometry(gs, 48), M.grass); gm.rotation.x = -PI / 2; st.add(gm);
+    }
     disc(0, 0, 18.4, '#cdbf9f', .015, M.border); disc(0, 0, 17.6, '#ece2cb', .02, M.plaza);
     const path = (x1, z1, x2, z2, w, m = M.path) => { const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz); P(null, { s: 'box', x: (x1 + x2) / 2, y: .018, z: (z1 + z2) / 2, w, h: .02, d: L, yaw: Math.atan2(dx, dz), m }); };
     path(0, -17, 0, -29, 4.2);              // к кафе
@@ -449,8 +472,41 @@
     // заборчики и почтовые ящики у домов
     for (const h of houses) { const fx = h.side === 'e' ? h.x + h.w / 2 + 1.1 : h.x - h.w / 2 - 1.1; for (const s of [-1, 1]) R.prefab('fence', { x1: fx, z1: h.z + s * 1.6, x2: fx, z2: h.z + s * (h.d / 2 + .4) }, ph); }
 
-    // ── Парк: пруд, деревья, скамейки, ворота в игры ──
-    disc(32, 34, 7.4, '#8fd17f', .021, M.border); disc(32, 34, 6.6, '#38bdf8', .03, M.water);
+    // ── Парк: пруд (чаша — можно плавать), деревья, скамейки, ворота в игры ──
+    {
+      const NR = 14, NS = 40, pos = [], idx = [];   // дно: кольца от середины к берегу, высота — pondH (та же, что у физики)
+      for (let i = 0; i <= NR; i++) for (let j = 0; j < NS; j++) {
+        const r = POND.r * i / NR, a = j / NS * PI * 2, x = POND.x + Math.cos(a) * r, z = POND.z + Math.sin(a) * r;
+        pos.push(x, pondH(x, z), z);
+      }
+      for (let i = 0; i < NR; i++) for (let j = 0; j < NS; j++) {
+        const a = i * NS + j, b = i * NS + (j + 1) % NS, c = a + NS, d = b + NS;
+        idx.push(a, b, c, b, d, c);   // лицом вверх
+      }
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+      st.add(new T.Mesh(g, M.sand));
+    }
+    P(null, { s: 'ring', x: POND.x, y: .021, z: POND.z, r: 7.4, r2: POND.r - .05, rx: -PI / 2, c: '#8fd17f', m: M.border });
+    disc(POND.x, POND.z, POND.r - .2, '#38bdf8', POND.wl, M.water);
+    // удочка рыбака: стоит на берегу, леска — в воду
+    {
+      const f = FOLK.find(f => f.id === 'fisher'), bx = f.x + .45, bz = f.z - .35, yaw = Math.atan2(POND.x - bx, POND.z - bz), tilt = .96, L = 3;
+      const g = R.group(null, bx, 0, bz, yaw), tipY = Math.cos(tilt) * L, tipZ = Math.sin(tilt) * L;
+      R.part(g, { s: 'cyl', y: tipY / 2, z: tipZ / 2, r: .035, r2: .015, h: L, rx: tilt, c: '#3f2a14' });
+      R.part(g, { s: 'cyl', y: (tipY + POND.wl) / 2, z: tipZ, r: .008, h: tipY - POND.wl, c: '#e5e7eb' });
+      R.part(g, { s: 'ball', y: POND.wl + .05, z: tipZ, r: .07, c: '#ef4444', seg: 8 });
+    }
+    // ── Костёр: камни, поленья, зола, брёвна вокруг (огонь, дым, свет и треск — в start3d) ──
+    for (let i = 0; i < 10; i++) { const a = i / 10 * PI * 2; P(null, { s: 'ico', x: CAMP.x + Math.cos(a) * .95, y: .14, z: CAMP.z + Math.sin(a) * .95, r: .26, c: '#8b8f96', det: 0, sy: .65 }); }
+    for (let i = 0; i < 3; i++) P(null, { s: 'cyl', x: CAMP.x, y: .16, z: CAMP.z, r: .09, h: 1.15, rz: PI / 2, yaw: i / 3 * PI, c: '#5b3a1e' });
+    disc(CAMP.x, CAMP.z, .75, '#2b2118', .025);
+    ph.addCyl({ x: CAMP.x, z: CAMP.z, y: .35, r: .95, hy: .35, tag: 'world', data: {} });   // в огонь не войти
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * PI * 2 + PI / 4, x = CAMP.x + Math.cos(a) * 3.1, z = CAMP.z + Math.sin(a) * 3.1, yaw = Math.atan2(CAMP.x - x, CAMP.z - z);
+      P(null, { s: 'cyl', x, y: .26, z, r: .26, h: 2, rz: PI / 2, yaw, c: '#7a4a24' });
+      ph.addBox({ x, y: .26, z, hx: 1, hy: .26, hz: .26, yaw, tag: 'world', data: {} });
+      for (const s of [-1, 1]) seatSpot({ id: `camp${i}_${s}`, x: x + Math.cos(yaw) * .5 * s, z: z - Math.sin(yaw) * .5 * s, y: .55, yaw, bench: 'Бревно у костра' });
+    }
     for (let i = 0; i < 26; i++) { const a = i / 26 * PI * 2; P(null, { s: 'ico', x: 32 + Math.cos(a) * 6.9, y: .12, z: 34 + Math.sin(a) * 6.9, r: .38, c: '#94a3b8', det: 0, sy: .5 }); }
     for (const [x, z] of [[23, 31], [41, 31], [32, 24.5]]) bench(x, z, Math.atan2(32 - x, 34 - z), 'Скамейка у пруда');
     for (const gt of GATES) {
@@ -474,6 +530,7 @@
       if (x > -46 && x < -21 && z > -10 && z < 8) return false;   // сцена
       if (x > -29 && x < -15 && z > 17 && z < 31) return false;   // гардероб
       if (Math.hypot(x - 32, z - 34) < 9.5) return false;   // пруд
+      if (Math.hypot(x - CAMP.x, z - CAMP.z) < 6) return false;   // костёр
       if (GATES.some(g => Math.hypot(x - g.x, z - g.z) < 5)) return false;
       if (Math.abs(z + 1) < 3 && Math.abs(x) < 30) return false;   // дорожки
       if (Math.abs(x) < 3 && z < -15 && z > -30) return false;
@@ -593,6 +650,8 @@
     const X = S.X = E.interact(ph, { who: S.key });
     S.world = buildWorld(R, ph, X, S);
     S.calls = R.bakeStatic();
+    ph.terrain = { sample: pondH };   // чаша пруда (вне пруда — ровно 0)
+    ph.waterLevel = (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r ? POND.wl : -Infinity;
     // свой персонаж
     let pos = null;
     try { pos = JSON.parse(localStorage.getItem('d37_mir_pos') || 'null'); } catch (e) {}
@@ -614,6 +673,8 @@
     P.on('land', e => AU.play(e.floor === 'water' ? 'step_water1' : 'land', { ...e, vol: .35 + e.k * .65 }));
     P.on('roll', e => { AU.play('roll', e); S.forceSend = true; });
     P.on('parkour', e => { AU.play(e.move === 'vault' ? 'scuff' : e.move === 'letgo' ? 'land' : 'grip', e); S.forceSend = true; });
+    P.on('splash', e => AU.play('step_water' + ((Math.random() * 3) | 0), { x: e.x, y: e.y, z: e.z, vol: Math.min(1, .55 + e.v * .06), rate: .85 }));
+    P.on('swim', e => AU.play('step_water' + ((Math.random() * 3) | 0), { x: e.x, y: e.y, z: e.z, vol: e.run ? .55 : .4, rate: .78 }));
     P.on('blocked', e => H.toast(e.text, false));
     P.on('stand', () => { if (S.mySeat) leaveSeat(); });
     // камера в домах ближе, крыша прячется
@@ -625,6 +686,7 @@
     S.cleanup3d = () => { ro?.disconnect(); };
     // экран сцены
     drawStageScreen();
+    startLife();
     S.sitAt = sitAt; S.go = go; S.openEditor = openEditor; S.openStage = openStage; S.openGate = openGate; S.showInfo = showInfo;
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
@@ -657,6 +719,12 @@
     netTick(dt);
     tableTick(dt);
     S.base?.update(dt);   // район участков: стройка, подгрузка соседей
+    if (S.NPC) {   // жители смотрят на ближайшего (свой + чужие)
+      const near = S.folkNear || (S.folkNear = []); near.length = 0;
+      near.push(P.ch);
+      for (const p of S.players.values()) near.push(p.ch);
+      S.NPC.step(dt, near);
+    }
   }
 
   // ── Кадр: человечки, камера, подписи, подсказки ──
@@ -685,9 +753,10 @@
     // нажали на игрока — его карточка
     for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); }
     I.frameEnd(); C.frameEnd();
+    lifeFrame(dt, t);
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
     R.render();
-    drawTags();
+    drawTags(); drawFolk();
     // на телефоне вместо «[E]» — значок кнопки ✋
     H.prompt(I.touch ? (P.mode === 'sit' ? '✋ Встать' : S.X.raw && S.X.cur ? '✋ ' + S.X.raw : null) : S.X.text, S.X.progress);
     H.stamina(P.stamina / P.maxStamina, P.exhausted);
@@ -741,11 +810,14 @@
       p.err.x *= 1 - k; p.err.y *= 1 - k; p.err.z *= 1 - k;
       const v = Math.hypot(ch.vx, ch.vz);
       if (v > .4) p.yaw = E.dampAngle(p.yaw, Math.atan2(ch.vx, ch.vz), 12, dt);
-      Object.assign(ps, { x: ch.x, y: ch.y, z: ch.z, yaw: p.yaw, moving: v > .35, speed: v, air: !ch.grounded && ch.airT > .12, crouch: p.spd > 0 && p.spd < 3 ? 1 : 0, sit: false, roll: -1, hang: false, ladder: false, pk: '' });
+      const U = E.UNIT, wl = S.ph.waterLevel ? S.ph.waterLevel(ch.x, ch.z) : -Infinity;
+      const swim = wl > -Infinity && wl - S.ph.groundAt(ch.x, ch.z) > 1.1 * U && ch.y < wl - .2 * U;
+      if (swim) { ch.y += (wl - .55 * U - ch.y) * Math.min(1, dt * 4); ch.vy = 0; }
+      Object.assign(ps, { x: ch.x, y: ch.y, z: ch.z, yaw: p.yaw, moving: v > .35, speed: v, air: !swim && !ch.grounded && ch.airT > .12, crouch: !swim && p.spd > 0 && p.spd < 3 ? 1 : 0, sit: false, roll: -1, hang: false, ladder: false, pk: '', swim, dive: false });
     } else {
       // особые режимы: стоит, где сказали, поза — из режима
       ch.x += p.err.x; ch.y += p.err.y; ch.z += p.err.z; p.err.x = p.err.y = p.err.z = 0;
-      Object.assign(ps, { x: ch.x, y: ch.y, z: ch.z, yaw: p.yaw, moving: false, speed: 0, air: false, crouch: 0, sit: false,
+      Object.assign(ps, { x: ch.x, y: ch.y, z: ch.z, yaw: p.yaw, moving: false, speed: 0, air: false, crouch: 0, sit: false, swim: false, dive: false,
         roll: p.mode === 'roll' ? Math.min(1, p.modeT / .8) : -1, hang: p.mode === 'hang', ladder: p.mode === 'ladder', climbPh: p.modeT * 6, pk: p.mode === 'pk' ? 'mantle' : '', pkK: Math.min(1, p.modeT / .6) });
       if (p.mode === 'roll' && p.modeT > .8) p.mode = 'move';
     }
@@ -1121,6 +1193,75 @@
     box.innerHTML = `<div class="wld-ph">${head}<button type="button" class="wld-x" data-act="close" aria-label="Закрыть">✕</button></div>${body}`;
     box.hidden = false;
   }
+  // ═══ Оживление мира: брызги фонтана, костёр, звуки, жители (FOLK) ═══
+  function startLife(){
+    const E = window.D37E, { R, AU, X } = S, T = R.T;
+    const FX = S.FX = E.fx ? E.fx(R) : null;
+    if (FX) {
+      FX.emitter({ kind: 'fountain', at: [0, 2.35, 0] });
+      FX.emitter({ kind: 'fire', at: [CAMP.x, .2, CAMP.z], size: .8 });
+      FX.emitter({ kind: 'smoke', at: [CAMP.x, 1.3, CAMP.z], rate: .7, size: .8 });
+      FX.emitter({ kind: 'sparkles', at: [CAMP.x, .7, CAMP.z], rate: .35, size: .7, color: '#ffcf70', color2: '#ff6a00' });
+    }
+    if (R.lights?.add) S.campLight = R.lights.add({ position: new T.Vector3(CAMP.x, 1.2, CAMP.z), color: new T.Color('#ff9a3c'), intensity: 1.8, distance: 11, decay: 2 });
+    if (AU.loop) S.amb = [AU.loop('amb_water', { x: 0, y: 1.2, z: 0, vol: .45 }), AU.loop('amb_water', { x: POND.x, y: 0, z: POND.z, vol: .22 }), AU.loop('amb_fire', { x: CAMP.x, y: .5, z: CAMP.z, vol: .65 })];
+    // жители
+    const NPC = S.NPC = E.npcs ? E.npcs(R, S.ph) : null;
+    if (!NPC) return;
+    S.folk = new Map();
+    for (const f of FOLK) {
+      const o = { id: f.id, cls: 'NPC', name: f.name, pos: [f.x, f.y || 0, f.z], rot: [0, f.yaw, 0], look: 'random', seed: f.seed, act: 'idle', speed: 1, radius: 0, damage: 0, text: f.say[0] };
+      NPC.add(o);
+      S.folk.set(f.id, { f, o, i: 0, bubble: null, tag: null });
+      X.add({ x: f.x, y: (f.y || 0) + 1.2, z: f.z, r: 1.5, prompt: () => `💬 ${f.name}: поговорить`, act: () => folkTalk(f.id) });
+    }
+    NPC.start({ onSay: (e, text) => { const k = S.folk.get(e.o.id); if (k) folkSay(k, text); } });
+  }
+  // сказать фразу; в следующий раз — следующую по кругу
+  function folkSay(k, text){
+    k.bubble = { text, t: now() };
+    k.i = (k.i + 1) % k.f.say.length; k.o.text = k.f.say[k.i];
+  }
+  function folkTalk(id){
+    const k = S?.folk?.get(id); if (!k) return;
+    if (k.f.info) S.showInfo?.('🧭 Гид Мира Денчика', 'Площадь с фонтаном — в центре. Кафе «У Денчика» — на севере: сядь за столик, и кто сядет напротив — с тем сыграешь (шахматы, шашки, нарды, «Дурак», «Одна!»). Игровой клуб с автоматами и бильярдом — на востоке. Сцена с роликами и эфиром Денчика — на западе. Улица с домиками — на юге, район участков (свой дом и база) — за кафе. В парке — пруд (можно плавать, «присесть» — нырнуть), костёр и ворота в «Орду», «Арену», «Башни».');
+    folkSay(k, k.f.say[k.i]);
+  }
+  // кадр: частицы, жители, огонь мигает, под водой — синий туман
+  function lifeFrame(dt, t){
+    const { R, FX, NPC } = S;
+    FX?.update(dt);
+    NPC?.frame(dt, t, R.camera.position);
+    if (S.campLight) S.campLight.src.intensity = 1.65 + Math.sin(t * 13.1) * .14 + Math.sin(t * 7.3 + 1) * .12 + Math.sin(t * 29) * .06;
+    const c = R.camera.position, under = c.y < POND.wl && Math.hypot(c.x - POND.x, c.z - POND.z) < POND.r - .1, fog = R.scene.fog;
+    if (fog && under !== !!S.under) {
+      if (under) { S.under = { c: fog.color.clone(), n: fog.near, f: fog.far }; fog.color.set('#1d6f96'); fog.near = 0; fog.far = 9; }
+      else { fog.color.copy(S.under.c); fog.near = S.under.n; fog.far = S.under.f; S.under = null; }
+      S.wrap.classList.toggle('mir-under', under);
+    }
+  }
+  // подписи и облачка жителей (как у игроков)
+  function drawFolk(){
+    if (!S?.folk) return;
+    let tags = S.folkBox;   // свой слой: drawTags убирает из .wld-tags всё, что не игроки
+    if (!tags) { tags = S.folkBox = document.createElement('div'); tags.className = 'wld-tags wld-folk'; S.q('.wld-tags').after(tags); }
+    for (const k of S.folk.values()) {
+      let el = k.tag;
+      if (!el) {
+        el = k.tag = document.createElement('div'); el.className = 'wld-tag wld-npc';
+        el.innerHTML = '<div class="wld-tbub" hidden></div><b class="wld-tname"></b>';
+        el.lastChild.textContent = k.f.name; tags.appendChild(el);
+      }
+      const e = S.NPC.list.get(k.f.id), h = e && S.NPC.head(e);
+      const [sx, sy, vis] = h ? S.R.project(h[0], h[1] + .15, h[2]) : [0, 0, false];
+      const far = !h || Math.hypot(h[0] - S.P.ch.x, h[2] - S.P.ch.z) > 26;
+      if (!vis || far) { el.style.display = 'none'; continue; }
+      el.style.display = '';
+      el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+      const bub = el.firstChild, show = k.bubble && now() - k.bubble.t < 6000;
+      if (show) { if (bub.textContent !== k.bubble.text) bub.textContent = k.bubble.text; bub.hidden = false; } else bub.hidden = true;
+    }
+  }
   function showInfo(title, text){ panel(`<b>${esc(title)}</b>`, `<p>${esc(text)}</p>`); }
   function openStage(){
     const live = S.live;
@@ -1327,6 +1468,7 @@
     try { s.unfollow?.(); } catch (e) {}
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
     try { s.base?.dispose(); } catch (e) {}   // район участков
+    try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
     if (!s.leavingTo) savePos();

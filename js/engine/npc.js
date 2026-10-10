@@ -44,7 +44,7 @@
         e.P = E.player(ph, { x: e.home[0], z: e.home[2], yaw: (e.o.rot?.[1] || 0) * Math.PI / 180 });
         e.P.place(e.home[0], null, e.home[2], e.P.yaw);
         if (e.home[1] > e.P.ch.y + .3) e.P.place(e.home[0], e.home[1], e.home[2], e.P.yaw);   // стоит на чём-то — не на земле
-        e.P.canRun = true; e.waitT = Math.random() * 2;
+        e.P.canRun = true; e.waitT = Math.random() * 2; e.homeYaw = e.P.yaw;
       }
     };
     N.stop = () => {
@@ -79,6 +79,7 @@
         P.update(dt, C, CAM);
         // стоит — поворачивается к игроку рядом
         if (l < 1e-3 && best && bd < 6 * U) P.yaw = E.dampAngle(P.yaw, Math.atan2(best.x - ch.x, best.z - ch.z), 6, dt);
+        else if (l < 1e-3 && o.act === 'idle') P.yaw = E.dampAngle(P.yaw, e.homeYaw, 2.5, dt);   // никого — снова как стоял
         // урон при касании (зомби): раз в секунду
         if ((o.damage || 0) > 0 && best && bd < 1.5 * U && Math.abs(best.y - ch.y) < 2 * U) { if ((e.hitT -= dt) <= 0) { e.hitT = 1; N.cb?.onHit?.(e, o.damage, best); } }
         else e.hitT = Math.min(e.hitT, .3);
