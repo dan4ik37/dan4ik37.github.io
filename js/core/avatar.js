@@ -142,6 +142,7 @@
     if (rot) ctx.rotate(rot);
     ctx.font = `${Math.round(size)}px ${EF}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#000';   // цветной эмодзи берёт прозрачность от fillStyle (после тени было бы .25)
     ctx.fillText(e, 0, 0);
     ctx.restore();
   }
@@ -382,6 +383,101 @@
   // Картинка для <img>
   function img(look, px){ try { return sprite(look, px, { noPet: false }).c.toDataURL('image/png'); } catch (e) { return ''; } }
 
+  // ── Шагающий персонаж (мир): ножки и ручки, 4 стороны, анимация шага ──
+  // face: 0 — лицом к нам, 1 — вправо, 2 — спиной, 3 — влево; moving — идёт; phase — сдвиг шага (чтобы все шли не в ногу)
+  function drawWalker(ctx, look, x, y, S, o = {}){
+    const L = norm(look), t = o.t || 0, face = ((o.face || 0) % 4 + 4) % 4, side = face === 1 || face === 3, sgn = face === 3 ? -1 : 1;
+    const col = part('color', L.color), dark = col.id === 'galaxy' ? '#1e1b4b' : shade(col.v === '' ? '#888888' : col.v, -.45);
+    const limb = col.id === 'galaxy' ? '#3b2a8f' : col.id === 'rainbow' ? '#a855f7' : col.id === 'gold' ? '#e09b12' : shade(col.v, -.12);
+    const wt = o.wt !== undefined ? o.wt : t;   // время шага/дыхания (t — время анимации образа: радуга, пропеллер…)
+    const ph = (o.phase || 0) + wt * 11, mv = o.moving ? 1 : 0, s1 = Math.sin(ph);
+    const bob = mv ? Math.abs(Math.cos(ph)) * .045 * S : Math.sin(wt * 2.5) * .008 * S;
+    const tilt = mv && !side ? s1 * .07 : mv ? .06 * sgn : 0;
+    const pet = !o.noPet && L.pet !== 'none' ? part('pet', L.pet).v : '';
+    const petAt = face === 0 ? [-.62, -.22] : face === 2 ? [.6, -.12] : [-.7 * sgn, -.2];
+    const petBob = Math.abs(Math.sin(ph * .9 + 1)) * .06 * S * (mv || .3);
+    ctx.save();
+    ctx.translate(x, y);
+    // тень
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(0, -.01 * S, .32 * S, .06 * S, 0, 0, TAU); ctx.fill();
+    if (pet && face !== 2) emoji(ctx, pet, petAt[0] * S, petAt[1] * S - petBob, .3 * S, 0);
+    // ножки
+    ctx.fillStyle = dark;
+    if (side) {
+      for (const k of [-1, 1]) {
+        const sw = mv ? s1 * k * .13 * S : k * .05 * S, lift = mv ? Math.max(0, Math.cos(ph) * k) * .06 * S : 0;
+        ctx.globalAlpha = k < 0 ? .75 : 1;
+        ctx.beginPath(); ctx.ellipse(sw * sgn, -.055 * S - lift, .12 * S, .065 * S, 0, 0, TAU); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      for (const k of [-1, 1]) {
+        const lift = mv ? Math.max(0, s1 * k) * .075 * S : 0;
+        ctx.beginPath(); ctx.ellipse(k * .14 * S, -.055 * S - lift, .1 * S, .066 * S, 0, 0, TAU); ctx.fill();
+      }
+    }
+    ctx.translate(0, -bob);
+    ctx.rotate(tilt);
+    const hand = (hx, hy) => { ctx.fillStyle = limb; ctx.strokeStyle = 'rgba(15,10,25,.45)'; ctx.lineWidth = .025 * S; ctx.beginPath(); ctx.ellipse(hx, hy, .075 * S, .085 * S, 0, 0, TAU); ctx.fill(); ctx.stroke(); };
+    // дальняя рука (сбоку — за телом)
+    const armSw = mv ? s1 * .11 * S : Math.sin(wt * 2.5) * .01 * S;
+    if (side) hand(-armSw * sgn - .02 * S * sgn, -.36 * S);
+    // тело
+    ctx.save();
+    if (side) ctx.scale(.86, 1);
+    ctx.fillStyle = bodyFill(ctx, col, S, t);
+    ctx.strokeStyle = 'rgba(15,10,25,.55)'; ctx.lineWidth = .032 * S;
+    ctx.beginPath(); ctx.ellipse(0, -.47 * S, .36 * S, .42 * S, 0, 0, TAU); ctx.fill(); ctx.stroke();
+    if (col.id === 'galaxy') {
+      ctx.fillStyle = '#fff';
+      for (let i = 0; i < 9; i++) { const a = i * 2.39996, r = (.08 + (i * 37 % 23) / 23 * .25) * S; ctx.globalAlpha = .45 + (i % 3) * .2; ctx.beginPath(); ctx.arc(Math.cos(a) * r * .9, -.47 * S + Math.sin(a) * r, (.008 + (i % 3) * .005) * S, 0, TAU); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.ellipse((face === 2 ? .15 : -.15) * S, -.69 * S, .07 * S, .11 * S, face === 2 ? .5 : -.5, 0, TAU); ctx.fill();
+    if (face !== 2) { ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.ellipse(.02 * S, -.27 * S, .2 * S, .14 * S, 0, 0, TAU); ctx.fill(); }
+    ctx.restore();
+    // лицо: спереди как обычно, сбоку — сдвинуто и сжато (профиль), сзади — нет
+    if (face === 0) { drawEyes(ctx, L.eyes, S, t); drawMouth(ctx, L.mouth, S); }
+    else if (side) { ctx.save(); ctx.translate(.17 * S * sgn, 0); ctx.scale(.6, 1); drawEyes(ctx, L.eyes, S, t); drawMouth(ctx, L.mouth, S); ctx.restore(); }
+    // шапка
+    ctx.save();
+    if (side) { ctx.translate(.03 * S * sgn, 0); if (sgn < 0) ctx.scale(-1, 1); }
+    drawHat(ctx, part('hat', L.hat), S, t, col.v || '#888888');
+    ctx.restore();
+    // руки (спереди/сзади — по бокам, сбоку — ближняя) и предмет в руке
+    const it = o.item !== undefined ? o.item : L.item !== 'none' ? part('item', L.item).v : '';
+    if (side) {
+      hand(armSw * sgn + .04 * S * sgn, -.34 * S);
+      if (it) emoji(ctx, it, armSw * sgn + .13 * S * sgn, -.42 * S, .32 * S, -.3 * sgn);
+    } else {
+      for (const k of [-1, 1]) hand(k * .37 * S, -.36 * S + (mv ? s1 * k * .05 * S : 0));
+      if (it && face === 0) emoji(ctx, it, .45 * S, -.44 * S + (mv ? s1 * .05 * S : 0), .32 * S, -.3);
+    }
+    ctx.rotate(-tilt);
+    ctx.translate(0, bob);
+    if (pet && face === 2) emoji(ctx, pet, petAt[0] * S, petAt[1] * S - petBob, .3 * S, 0);
+    ctx.restore();
+  }
+  // Кэш кадров шагающего персонажа: шаг — 10 кадров на цикл, на месте — 4 кадра «дыхания»
+  const wcache = new Map();
+  function walker(look, px, o = {}){
+    const L = norm(look), face = ((o.face || 0) % 4 + 4) % 4, t = o.t || 0;
+    const frame = o.moving ? Math.floor((((o.phase || 0) + t * 11) % TAU + TAU) % TAU / TAU * 10) : 10 + Math.floor((t * 2.5 / TAU % 1) * 4);
+    const anim = animated(L) ? Math.floor(t * 8) % 8 : 0;
+    const key = JSON.stringify(L) + '|' + Math.round(px) + '|' + face + '|' + frame + '|' + anim + '|' + (o.noPet ? 1 : 0);
+    let s = wcache.get(key);
+    if (s) return s;
+    if (wcache.size > 400) wcache.clear();
+    const S = Math.max(8, Math.round(px)), c = document.createElement('canvas');
+    c.width = Math.ceil(S * 1.8); c.height = Math.ceil(S * 1.45);
+    const ax = Math.round(c.width / 2), ay = Math.round(S * 1.32);
+    const ft = o.moving ? (frame / 10) * TAU / 11 : (frame - 10) / 4 * TAU / 2.5;
+    drawWalker(c.getContext('2d'), L, ax, ay, S, { face, moving: !!o.moving, t: anim / 8, wt: ft, phase: 0, noPet: o.noPet });
+    s = { c, ax, ay };
+    wcache.set(key, s);
+    return s;
+  }
+
   // Эмодзи следа (частицы за персонажем при беге) или '' — радуга рисуется полосой ('rainbow')
   function trail(look){ const L = norm(look); return L.trail === 'none' ? '' : L.trail === 'rainbow' ? 'rainbow' : part('trail', L.trail).v; }
   function petEmoji(look){ const L = norm(look); return L.pet === 'none' ? '' : part('pet', L.pet).v; }
@@ -404,7 +500,7 @@
   window.D37Char = {
     PARTS, SLOTS, DEFAULT, part, price, norm, owns, wearable,
     look: () => wearable(current()), set, fromServer,
-    draw, sprite, img, trail, petEmoji, looksOf,
+    draw, sprite, img, trail, petEmoji, looksOf, drawWalker, walker,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();

@@ -394,7 +394,7 @@
   }
 
   function mkPlayer(o){
-    return { key: o.key, uid: o.uid || null, nick: o.nick || 'Игрок', look: o.look || {}, x: o.x, y: o.y, path: [], dir: 1, moving: false, bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, at: o.at || 0, born: now(), leaving: 0, rate: [], phase: Math.random() * 6 };
+    return { key: o.key, uid: o.uid || null, nick: o.nick || 'Игрок', look: o.look || {}, x: o.x, y: o.y, path: [], dir: 1, face: 0, moving: false, bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, at: o.at || 0, born: now(), leaving: 0, rate: [], phase: Math.random() * 6 };
   }
   const toast = t => api?.toast?.(t);
   const activity = () => { S.idleAt = Date.now(); };
@@ -726,10 +726,12 @@
     while (left > 0 && p.path.length) {
       const [tx, ty] = p.path[0], d = dist(p.x, p.y, tx, ty);
       if (d <= left) { p.x = tx; p.y = ty; p.path.shift(); left -= d; }
-      else { p.dir = tx < p.x ? -1 : tx > p.x ? 1 : p.dir; p.x += (tx - p.x) / d * left; p.y += (ty - p.y) / d * left; left = 0; }
+      else { p.dir = tx < p.x ? -1 : tx > p.x ? 1 : p.dir; p.face = faceOf(tx - p.x, ty - p.y, p.face); p.x += (tx - p.x) / d * left; p.y += (ty - p.y) / d * left; left = 0; }
     }
     p.moving = p.path.length > 0;
   }
+  // Куда смотрит: 0 — к нам (вниз), 1 — вправо, 2 — от нас (вверх), 3 — влево
+  const faceOf = (dx, dy, cur) => Math.abs(dx) < .01 && Math.abs(dy) < .01 ? cur : Math.abs(dx) > Math.abs(dy) * 1.15 ? (dx > 0 ? 1 : 3) : (dy > 0 ? 0 : 2);
   function stepKeys(dt){
     if (!S.keysDown.size) return;
     let dx = 0, dy = 0;
@@ -742,6 +744,7 @@
     if (free(me.x + vx, me.y)) me.x = clampX(me.x + vx);
     if (free(me.x, me.y + vy)) me.y = clampY(me.y + vy);
     if (dx) me.dir = dx < 0 ? -1 : 1;
+    me.face = faceOf(dx, dy, me.face);
     me.moving = true;
     if (Date.now() - S.kbAt > 500) { S.kbAt = Date.now(); sendMove(me.x + dx / l * 140, me.y + dy / l * 140); }
   }
@@ -837,9 +840,10 @@
     if (!window.D37Char) return;
     const fade = p.leaving ? Math.max(0, 1 - (now() - p.leaving) / 600) : Math.min(1, (now() - p.born) / 400);
     const bob = p.moving ? -Math.abs(Math.sin(time * 12 + p.phase)) * 4 : 0;
-    const s = window.D37Char.sprite(p.look, 54, { t: time, dir: p.dir });
+    // шагающий персонаж (avatar.js: walker — 4 стороны и анимация шага); старый кэш скрипта — обычный спрайт
+    const C = window.D37Char, s = C.walker ? C.walker(p.look, 54, { face: p.face, moving: p.moving, t: time + p.phase }) : C.sprite(p.look, 54, { t: time, dir: p.dir });
     ctx.globalAlpha = fade;
-    ctx.drawImage(s.c, p.x - s.ax, p.y - s.ay + bob);
+    ctx.drawImage(s.c, p.x - s.ax, p.y - s.ay + (C.walker ? 0 : bob));
     ctx.globalAlpha = 1;
   }
   function drawTag(ctx, p, time){
