@@ -63,6 +63,7 @@
     let acc = 0, last = performance.now(), raf = 0, on = true, paused = false;
     const f = now => {
       if (!on) return;
+      E.frameT0 = performance.now();   // начало кадра — render.js считает ЦП всего кадра (логика + отрисовка)
       raf = requestAnimationFrame(f);
       const dt = Math.min(.1, Math.max(0, (now - last) / 1000)); last = now;
       if (paused || document.hidden) return;
