@@ -93,14 +93,12 @@
     } else if (o.shape === 'wedge') d = hullDesc(RA, wedgePts(hx, hy, hz));
     return d || RA.ColliderDesc.cuboid(hx, hy, hz);
   }
-  const partKey = o => (o.shape || 'block') + '|' + (o.size || []).join(',') + '|' + o.mat + '|' + JSON.stringify(o.phys || 0);
   function physDesc(RA, c){
     const hx = Math.max(.01, c.hx), hy = Math.max(.01, c.hy), hz = Math.max(.01, c.hz);
     if (c.type === 'cyl') return RA.ColliderDesc.cylinder(hy, Math.max(.01, c.r));
     if (c.type === 'wedge') return hullDesc(RA, wedgePts(hx, hy, hz)) || RA.ColliderDesc.cuboid(hx, hy, hz);
     return RA.ColliderDesc.cuboid(hx, hy, hz);
   }
-  const physKey = c => c.type + '|' + c.hx + ',' + c.hy + ',' + c.hz + ',' + c.r;
   // плотность / трение / упругость детали
   function matOf(o){
     const m = MAT[o.mat] || MAT.plastic, p = o.phys;
@@ -109,14 +107,24 @@
     return [n(p.density, m[0], .01, 100), n(p.friction, m[1], 0, 2), n(p.elasticity, m[2], 0, 1)];
   }
 
+  // Не создался (сбой внутри Rapier) — пустышка: детали просто стоят, игра живёт, каждый кадр не падает
   E.rigid = function (ph, o = {}){
+    if (!E.rigid.R) throw new Error('D37E.rigid: Rapier ещё не загружен — сначала D37E.rigid.load()');
+    try { return create(ph, o); }
+    catch (e) {
+      console.error('D37E.rigid: мир твёрдых тел не создался —', e);
+      const no = () => false;
+      return { ok: false, error: e, active: 0, ms: 0, moved: new Set(), step(){}, changed(){}, dispose(){}, on: () => () => {}, joint: () => null, isDynamic: no, applyImpulse: no, setVelocity: no, getVelocity: () => [0, 0, 0], stats: () => ({}) };
+    }
+  };
+  function create(ph, o){
     const RA = E.rigid.R;
-    if (!RA) throw new Error('D37E.rigid: Rapier ещё не загружен — сначала D37E.rigid.load()');
     const U = E.UNIT || 2.1 / 1.8, scene = o.scene || null, ev = E.emitter ? E.emitter() : null;
     const RG = { ok: true, ph, scene, RA, gravity: o.gravity ?? 20 * U, killY: o.killY ?? -200, pushForce: o.pushForce ?? 700, charMass: o.charMass ?? 15,
       stepNo: 0, ms: 0, active: 0, moved: new Set() };
     const world = RG.world = new RA.World(v3(0, -RG.gravity, 0));
     world.timestep = 1 / 60;
+    world.lengthUnit = U;   // 1 м = U единиц движка: пороги сна и допуски Rapier — в настоящих метрах (куча засыпает вдвое быстрее)
     const parts = new Map();        // id объекта → деталь P { obj, asm, col, proxy: [тела Phys], lp, lq, welds }
     const stat = new Map();         // тело Phys → неподвижное St { c, obj, owner, col, body, key, x, y, z, q }
     const chars = new Map();        // персонаж Phys → C { body, col, seen, … }
@@ -165,11 +173,23 @@
     const exactOf = ob => ob && (ob.cls === 'Part' || ob.cls === 'Spawn') && ob.pos && ob.size ? ob : null;
     function poseOfStatic(St){
       const ob = St.obj, c = St.c;
-      if (ob) { St.nx = +ob.pos[0] || 0; St.ny = +ob.pos[1] || 0; St.nz = +ob.pos[2] || 0; rotOf(ob, St.nq); St.nkey = partKey(ob); }
-      else { St.nx = c.x; St.ny = c.y; St.nz = c.z; const h = (c.type === 'cyl' ? 0 : c.yaw) / 2; St.nq.x = 0; St.nq.y = Math.sin(h); St.nq.z = 0; St.nq.w = Math.cos(h); St.nkey = physKey(c); }
+      if (ob) { St.nx = +ob.pos[0] || 0; St.ny = +ob.pos[1] || 0; St.nz = +ob.pos[2] || 0; rotOf(ob, St.nq); }
+      else { St.nx = c.x; St.ny = c.y; St.nz = c.z; const h = (c.type === 'cyl' ? 0 : c.yaw) / 2; St.nq.x = 0; St.nq.y = Math.sin(h); St.nq.z = 0; St.nq.w = Math.cos(h); }
     }
-    function takePose(St){ St.x = St.nx; St.y = St.ny; St.z = St.nz; St.q.x = St.nq.x; St.q.y = St.nq.y; St.q.z = St.nq.z; St.q.w = St.nq.w; St.key = St.nkey; }
+    function takePose(St){ St.x = St.nx; St.y = St.ny; St.z = St.nz; St.q.x = St.nq.x; St.q.y = St.nq.y; St.q.z = St.nq.z; St.q.w = St.nq.w; }
+    // форма та же? (числами, без строк: у двигающихся каждый шаг деталей это горячий путь)
+    function sameShape(St){
+      const ob = St.obj, c = St.c, k = St.k;
+      if (ob) { const s = ob.size || k; return k[0] === s[0] && k[1] === s[1] && k[2] === s[2] && k[3] === ob.shape && k[4] === ob.mat && k[5] === ob.phys; }
+      return k[0] === c.hx && k[1] === c.hy && k[2] === c.hz && k[3] === c.type && k[4] === c.r;
+    }
+    function keepShape(St){
+      const ob = St.obj, c = St.c, k = St.k;
+      if (ob) { const s = ob.size || [1, 1, 1]; k[0] = s[0]; k[1] = s[1]; k[2] = s[2]; k[3] = ob.shape; k[4] = ob.mat; k[5] = ob.phys; }
+      else { k[0] = c.hx; k[1] = c.hy; k[2] = c.hz; k[3] = c.type; k[4] = c.r; k[5] = null; }
+    }
     function staticCollider(St){
+      keepShape(St);
       const ob = St.obj, d = ob ? partDesc(RA, ob) : physDesc(RA, St.c), m = ob ? matOf(ob) : PLAIN;
       d.setFriction(m[1]).setRestitution(m[2]);
       if (touchOn) d.setActiveEvents(RA.ActiveEvents.COLLISION_EVENTS);
@@ -180,7 +200,7 @@
     }
     function addStatic(c){
       const owner = ownerOf(c);
-      const St = { c, obj: exactOf(owner), owner, col: null, body: null, key: '', x: 0, y: 0, z: 0, q: q(), nx: 0, ny: 0, nz: 0, nq: q(), nkey: '' };
+      const St = { c, obj: exactOf(owner), owner, col: null, body: null, k: [0, 0, 0, '', '', null], x: 0, y: 0, z: 0, q: q(), nx: 0, ny: 0, nz: 0, nq: q() };
       stat.set(c, St);
       if (c.solid && !c.trigger) { poseOfStatic(St); takePose(St); staticCollider(St); }
       return St;
@@ -211,7 +231,7 @@
         return;
       }
       const moved = Math.abs(St.nx - St.x) + Math.abs(St.ny - St.y) + Math.abs(St.nz - St.z) > 1e-6 || !qSame(St.nq, St.q, 1e-7);
-      const reshaped = St.nkey !== St.key;
+      const reshaped = !sameShape(St);
       if (moved) {
         const jump = Math.hypot(St.nx - St.x, St.ny - St.y, St.nz - St.z) > 3;   // телепорт — без скорости
         promote(St);
@@ -221,7 +241,7 @@
         else { St.body.setNextKinematicTranslation(TV); St.body.setNextKinematicRotation(St.q); }
         kick = true;
       }
-      if (reshaped) { St.key = St.nkey; dropStaticCol(St); staticCollider(St); }
+      if (reshaped) { dropStaticCol(St); staticCollider(St); }
     }
     const staticOf = ob => { if (!ob || !ob._cols) return null; for (const c of ob._cols) { const St = stat.get(c); if (St && St.col) return St; } return null; };
 
@@ -730,8 +750,10 @@
       for (const J of joints) J.dirty = J.dirty || (!J.compound && J.asms.includes(A));
       A.body.wakeUp(); wake(A);
     }
-    RG.joint = (kind, a, b, opt = {}) => {
-      if (!{ weld: 1, hinge: 1, ball: 1, rope: 1, spring: 1, slider: 1 }[kind]) throw new Error('RG.joint: вид ' + kind + ' — есть weld, hinge, ball, rope, spring, slider');
+    const KINDS = { weld: 'weld', hinge: 'hinge', ball: 'ball', ballsocket: 'ball', rope: 'rope', spring: 'spring', slider: 'slider', prismatic: 'slider' };
+    RG.joint = (kind0, a, b, opt = {}) => {
+      const kind = KINDS[String(kind0).toLowerCase()];
+      if (!kind) throw new Error('RG.joint: вид ' + kind0 + ' — есть weld, hinge, ball (ballsocket), rope, spring, slider (prismatic)');
       const obOf = x => !x ? null : typeof x === 'object' ? x : scene ? scene.get(x) : null;
       let oa = obOf(a), ob = obOf(b);
       if (!oa) return null;
@@ -828,11 +850,13 @@
     const unwatch = ph.watch((type, c) => { if (type === 'move') onMove(c); else if (type === 'add') onAdd(c); else if (type === 'remove') onRemove(c); });
     ph.onPush = onPush; ph.onChar = onChar;
     // то, что уже есть
-    buildGround();
-    for (const c of ph.cols) onAdd(c);
-    if (scene) for (const ob of scene.all()) if (wants(ob) && !parts.has(ob.id)) makePart(ob);
+    try {
+      buildGround();
+      for (const c of ph.cols) onAdd(c);
+      if (scene) for (const ob of scene.all()) if (wants(ob) && !parts.has(ob.id)) makePart(ob);
+    } catch (e) { RG.dispose(); throw e; }
     return RG;
-  };
+  }
 
   // ═══ Загрузка Rapier (один раз на страницу) ═══
   let loading = null;
