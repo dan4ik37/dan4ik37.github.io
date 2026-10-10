@@ -88,5 +88,5 @@
   const fullHtml = game => `<div class="empty-state"><span class="empty-state-icon">🚪</span><div class="empty-state-title">Комната занята</div><div class="empty-state-text">Здесь уже играют двое. <a href="#/games/${game}">Создай свою комнату</a>.</div></div>`;
   const errorHtml = '<div class="empty-state"><span class="empty-state-icon">📡</span><div class="empty-state-title">Нет связи</div><div class="empty-state-text">Не удалось подключиться к комнате. Обнови страницу.</div></div>';
 
-  window.GameRoom = { join, newCode, validCode, lobby, lobbyText, fullHtml, errorHtml, nick };
+  window.GameRoom = { join, newCode, validCode, lobby, lobbyText, fullHtml, errorHtml, nick, guestId };
 })();
