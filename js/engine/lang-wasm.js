@@ -71,10 +71,14 @@
       return '';
     }
 
+    const MODS = new Map();   // одинаковые скрипты (копии монеток) — модуль собирается один раз, экземпляры свои
     function run(code, env, ctx){
-      let bytes;
-      try { bytes = fromB64(String(code || '')); } catch (e) { ctx.error('wasm: файл повреждён (не base64) — собери или загрузи заново', 0); return; }
-      if (bytes.length < 8 || bytes[0] !== 0 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) { ctx.error('wasm: это не WebAssembly — собери или загрузи заново', 0); return; }
+      code = String(code || '');
+      let bytes = null;
+      if (!MODS.has(code)) {
+        try { bytes = fromB64(code); } catch (e) { ctx.error('wasm: файл повреждён (не base64) — собери или загрузи заново', 0); return; }
+        if (bytes.length < 8 || bytes[0] !== 0 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) { ctx.error('wasm: это не WebAssembly — собери или загрузи заново', 0); return; }
+      }
       const W = env.workspace, Vec = env.Vector3, P = env.Players;
       const H = [null], byObj = new Map(), byPl = new Map(), conns = new Set(), timers = new Set();
       const dec = { 1: new TextDecoder(), 2: new TextDecoder() }, out = { 1: '', 2: '' }, TE = new TextEncoder(), TD = new TextDecoder();
@@ -348,12 +352,15 @@
         }
         go(inst);
       }
-      let mod;
-      try { mod = new WebAssembly.Module(bytes); }
-      catch (e) {
-        if (e instanceof WebAssembly.CompileError) { ctx.error('wasm: файл повреждён или собран не в WebAssembly: ' + String(e.message).slice(0, 150), 0); return; }
-        late = true;   // большой модуль: синхронно нельзя — собираем асинхронно, старт — после остальных скриптов
-        return WebAssembly.compile(bytes).then(boot, e2 => ctx.error('wasm: ' + String(e2 && e2.message || e2).slice(0, 200), 0));
+      let mod = MODS.get(code);
+      if (!mod) {
+        try { mod = new WebAssembly.Module(bytes); }
+        catch (e) {
+          if (e instanceof WebAssembly.CompileError) { ctx.error('wasm: файл повреждён или собран не в WebAssembly: ' + String(e.message).slice(0, 150), 0); return; }
+          late = true;   // большой модуль: синхронно нельзя — собираем асинхронно, старт — после остальных скриптов
+          return WebAssembly.compile(bytes).then(m => { if (MODS.size < 32) MODS.set(code, m); return boot(m); }, e2 => ctx.error('wasm: ' + String(e2 && e2.message || e2).slice(0, 200), 0));
+        }
+        if (MODS.size < 32) MODS.set(code, mod);
       }
       return boot(mod);
     }

@@ -4,7 +4,8 @@
 // 3) Rust — настоящим cargo (шаблон sdk/rust-template и примеры).
 // Запуск из корня сайта: node scripts/lang-wasm-test.cjs
 // Где искать компиляторы: D37_CLANG (папка пакета @yowasp/clang) — иначе %TEMP%/d37-wasm/clang/node_modules/@yowasp/clang;
-// D37_CARGO — иначе ~/.cargo/bin/cargo. Нет компилятора — эта часть пропускается (сказано в итоге). Сборки — во временной папке.
+// D37_CARGO — иначе ~/.cargo/bin/cargo. Нет компилятора (или D37_SKIP=cpp,rust) — эта часть пропускается (сказано в итоге).
+// Сборки Rust — во временной папке (%TEMP%/d37-wasm/rust-test, rust-target), в репозиторий ничего не пишется.
 const fs = require('fs'), path = require('path'), vm = require('vm'), os = require('os'), cp = require('child_process');
 const { pathToFileURL } = require('url');
 const SITE = path.join(__dirname, '..');
@@ -276,6 +277,11 @@ async function main(){
     cppCoin = built[0];
     ok(built.every(b => b && !b.log), 'C++: примеры и d37.h — без предупреждений (-Wall)', built.map(b => b && b.log).filter(Boolean));
     if (built[0]) { const S = await run(built[0], [part('a', 'Монетка')]); S.ev('touched', { id: 'a' }); ok(S.player('stat').some(m => m.v.k === 'Монеты' && m.v.v === 1) && S.of('sound').some(m => m.name === 'coin') && S.of('destroy').some(m => m.id === 'a') && !S.errors().length, 'C++ монетка: очко, звук, исчезла', S.msgs); }
+    if (built[0]) {   // копии одного скрипта: модуль общий, экземпляры (и номера) свои
+      const S = sandbox({ objs: [part('a', 'Монетка 1'), part('b', 'Монетка 2')], scripts: [wasmScript(built[0].wasm, 'cpp', 'a', 'c1'), wasmScript(built[0].wasm, 'cpp', 'b', 'c2')] });
+      S.ev('touched', { id: 'b' }); S.ev('touched', { id: 'a' }); S.ev('touched', { id: 'b' });
+      ok(S.of('destroy').map(m => m.id).join() === 'b,a' && S.player('stat').length === 2, 'C++: две копии монетки — каждая своя', S.msgs);
+    }
     if (built[1]) { const S = await run(built[1], [part('a', 'Лава')]); S.ev('touched', { id: 'a' }); ok(S.player('health').some(m => m.v === 0), 'C++ лава: здоровье 0', S.msgs); }
     if (built[2]) {
       const S = await run(built[2], [part('a', 'Дверь', { pos: [2, 3, 4], size: [4, 6, 1] })]);
