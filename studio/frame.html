@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<!-- Песочница «Студии игр»: здесь запускаются игры игроков. Сеть, формы, переходы и вложенные окна запрещены —
+     чужой код не видит сайт, аккаунт и localStorage и не может ничего отправить наружу (CSP ниже действует и на игру). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js; style-src 'unsafe-inline'; img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; form-action 'none'; base-uri 'none'; manifest-src 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="robots" content="noindex">
+<title>Игра</title>
+<style>html,body{margin:0;height:100%;background:#0d0b1a;overflow:hidden}iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}</style>
+</head>
+<body>
+<script>
+(() => {
+  'use strict';
+  // ═══ Внутри игры: объект D37 (счёт, конец игры, звуки, мини-движок 2D) — код ниже уходит в игру текстом ═══
+  function harness(RUN, STORE){
+    'use strict';
+    var send = function (t, v, x) {
+      try { var m = { __d37: RUN, t: t, v: v }; if (x) for (var k in x) m[k] = x[k]; parent.postMessage(m, '*'); } catch (e) {}
+    };
+    ['RTCPeerConnection', 'webkitRTCPeerConnection', 'RTCDataChannel', 'WebTransport'].forEach(function (k) { try { window[k] = undefined; } catch (e) {} });
+    // localStorage в песочнице нет — своя память; сайт хранит её для этой игры (рекорды и сохранения игры не пропадают)
+    var mem = {}, saveT = 0;
+    if (STORE && typeof STORE === 'object') for (var sk in STORE) if (typeof STORE[sk] === 'string') mem[sk] = STORE[sk];
+    var later = function () { if (!saveT) saveT = setTimeout(function () { saveT = 0; send('save', mem); }, 700); };
+    var ls = {
+      getItem: function (k) { k = String(k); return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+      setItem: function (k, v) { mem[String(k)] = String(v).slice(0, 20000); later(); },
+      removeItem: function (k) { delete mem[String(k)]; later(); },
+      clear: function () { mem = {}; later(); },
+      key: function (i) { return Object.keys(mem)[i] || null; },
+    };
+    Object.defineProperty(ls, 'length', { get: function () { return Object.keys(mem).length; } });
+    try { Object.defineProperty(window, 'localStorage', { value: ls, configurable: true }); } catch (e) {}
+    try { Object.defineProperty(window, 'sessionStorage', { value: ls, configurable: true }); } catch (e) {}
+    window.addEventListener('error', function (e) { send('error', String(e.message || 'Ошибка').slice(0, 300), { line: e.lineno || 0 }); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; send('error', String((r && r.message) || r || 'Ошибка').slice(0, 300)); });
+
+    var ended = false, lastScore = -1;
+    var D37 = window.D37 = {
+      score: function (n) { n = Math.round(+n) || 0; if (n !== lastScore) { lastScore = n; send('score', n); } },
+      over: function (n, win) { if (ended) return; ended = true; send('over', Math.round(+n) || 0, { win: !!win }); },
+      win: function (n) { D37.over(n, true); },
+      again: function () { ended = false; lastScore = -1; send('again'); },
+      log: function () { send('log', [].slice.call(arguments).join(' ').slice(0, 300)); },
+      rnd: function (a, b) { return a + Math.random() * (b - a); },
+      int: function (a, b) { return Math.floor(a + Math.random() * (b - a + 1)); },
+      pick: function (a) { return a[Math.floor(Math.random() * a.length)]; },
+      dist: function (ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); },
+    };
+
+    // ── Звуки (WebAudio, без файлов) ──
+    var AC = null;
+    D37.unlock = function () {
+      if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+      if (AC && AC.state === 'suspended') AC.resume();
+    };
+    D37.muted = false;
+    D37.beep = function (f, d, type, vol, slide) {
+      if (!AC || D37.muted) return;
+      try {
+        var o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+        o.type = type || 'square'; o.frequency.setValueAtTime(f, t);
+        if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d);
+        g.gain.setValueAtTime(vol || .07, t); g.gain.exponentialRampToValueAtTime(.0001, t + d);
+        o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + d + .02);
+      } catch (e) {}
+    };
+    var B = D37.beep;
+    var SFX = {
+      jump: function () { B(380, .16, 'square', .05, 760); },
+      coin: function () { B(880, .07, 'square', .045); setTimeout(function () { B(1320, .1, 'square', .045); }, 65); },
+      hit: function () { B(170, .28, 'sawtooth', .07, 55); },
+      shoot: function () { B(950, .07, 'square', .025, 320); },
+      boom: function () { B(120, .35, 'sawtooth', .08, 40); },
+      click: function () { B(620, .05, 'square', .035); },
+      good: function () { B(660, .08, 'triangle', .07); setTimeout(function () { B(990, .12, 'triangle', .07); }, 70); },
+      bad: function () { B(220, .22, 'square', .05, 140); },
+      over: function () { B(392, .18, 'triangle', .08); setTimeout(function () { B(294, .2, 'triangle', .08); }, 170); setTimeout(function () { B(196, .4, 'triangle', .08, 150); }, 360); },
+      win: function () { [523, 659, 784, 1047].forEach(function (f, i) { setTimeout(function () { B(f, .16, 'triangle', .08); }, i * 110); }); },
+    };
+    D37.sfx = function (k) { (SFX[k] || SFX.click)(); };
+    window.addEventListener('pointerdown', D37.unlock, true);
+    window.addEventListener('keydown', D37.unlock, true);
+
+    // ── Мини-движок 2D: холст на всё окно, высота мира h (по умолчанию 600), ширина — по форме экрана ──
+    var EMO = {};
+    D37.game = function (opt) {
+      opt = opt || {};
+      document.documentElement.style.cssText = 'height:100%;margin:0;overflow:hidden;touch-action:none';
+      document.body.style.cssText = 'height:100%;margin:0;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;background:#000';
+      var cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+      cv.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;display:block;touch-action:none';
+      document.body.appendChild(cv);
+      var WH = opt.h || 600, scale = 1, ox = 0, oy = 0, dpr = 1;
+      var G = { ctx: ctx, canvas: cv, w: 400, h: WH, t: 0, pointer: { x: 0, y: 0, down: false }, tap: false, keys: {}, pressed: {}, paused: false };
+      function fit() {
+        dpr = Math.min(2, window.devicePixelRatio || 1);
+        var W = window.innerWidth || 400, H = window.innerHeight || 600;
+        cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+        G.w = Math.max(opt.minW || 340, Math.min(opt.maxW || 1000, WH * W / H));
+        scale = Math.min(W / G.w, H / WH); ox = (W - G.w * scale) / 2; oy = (H - WH * scale) / 2;
+        if (opt.onResize) opt.onResize(G);
+      }
+      fit();
+      window.addEventListener('resize', fit);
+      var pos = function (e) { G.pointer.x = (e.clientX - ox) / scale; G.pointer.y = (e.clientY - oy) / scale; };
+      cv.addEventListener('pointerdown', function (e) { pos(e); G.pointer.down = true; G.tap = true; e.preventDefault(); });
+      window.addEventListener('pointermove', function (e) { pos(e); });
+      window.addEventListener('pointerup', function () { G.pointer.down = false; });
+      window.addEventListener('pointercancel', function () { G.pointer.down = false; });
+      var KN = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', KeyA: 'left', KeyD: 'right', KeyW: 'up', KeyS: 'down', Space: 'space', Enter: 'enter', Escape: 'esc' };
+      window.addEventListener('keydown', function (e) {
+        var k = KN[e.code] || (e.key || '').toLowerCase();
+        if (!G.keys[k]) G.pressed[k] = true;
+        G.keys[k] = true;
+        if (KN[e.code]) e.preventDefault();
+      });
+      window.addEventListener('keyup', function (e) { G.keys[KN[e.code] || (e.key || '').toLowerCase()] = false; });
+      window.addEventListener('blur', function () { G.keys = {}; G.pointer.down = false; });
+      G.held = function (k) { return !!G.keys[k]; };
+      G.hit = function () { return G.tap || G.pressed.space || G.pressed.up || G.pressed.enter; };
+      // рисование (координаты мира)
+      G.bg = function (c) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+        ctx.fillStyle = c || '#000'; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.setTransform(scale * dpr, 0, 0, scale * dpr, ox * dpr, oy * dpr);
+      };
+      G.rect = function (x, y, w, h, c, r) {
+        ctx.fillStyle = c;
+        if (r && ctx.roundRect) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); } else ctx.fillRect(x, y, w, h);
+      };
+      G.circle = function (x, y, r, c) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, Math.max(0, r), 0, Math.PI * 2); ctx.fill(); };
+      G.text = function (s, x, y, size, c, align, stroke) {
+        ctx.font = '800 ' + (size || 24) + 'px Montserrat, "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+        if (stroke !== false) { ctx.lineWidth = Math.max(3, (size || 24) / 6); ctx.strokeStyle = stroke || 'rgba(0,0,0,.55)'; ctx.strokeText(String(s), x, y); }
+        ctx.fillStyle = c || '#fff'; ctx.fillText(String(s), x, y);
+      };
+      // эмодзи — один раз в картинку (fillText эмодзи каждый кадр медленный)
+      G.emoji = function (e, x, y, size, rot, alpha) {
+        var px = Math.max(8, Math.round(size * scale * dpr / 8) * 8), key = e + '|' + px, c = EMO[key];
+        if (!c) {
+          c = document.createElement('canvas'); c.width = c.height = Math.ceil(px * 1.25);
+          var g = c.getContext('2d'); g.font = px + 'px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+          g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#000'; g.fillText(e, c.width / 2, c.width / 2 + px * .06);
+          EMO[key] = c;
+        }
+        var s = size * 1.25;
+        if (rot || alpha != null) { ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); if (alpha != null) ctx.globalAlpha = alpha; ctx.drawImage(c, -s / 2, -s / 2, s, s); ctx.restore(); }
+        else ctx.drawImage(c, x - s / 2, y - s / 2, s, s);
+      };
+      // кадр: update(dt) — логика, draw() — рисование; нажатия «этого кадра» сбрасываются сами
+      G.loop = function (update, draw) {
+        var last = performance.now();
+        (function f(now) {
+          var dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
+          if (!G.paused) { G.t += dt; update(dt); }
+          draw();
+          G.tap = false; G.pressed = {};
+          requestAnimationFrame(f);
+        })(last);
+      };
+      return G;
+    };
+    send('ready');
+  }
+
+  // ═══ Хозяин песочницы: принимает игру от сайта, запускает во вложенном окне без доступа к сайту, передаёт события ═══
+  const HOST = location.origin === 'null' ? '*' : location.origin;
+  let frame = null, run = 0, lineOff = 0;
+  const RELAY = { ready: 1, score: 1, over: 1, error: 1, log: 1, save: 1, again: 1 };
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (!d || typeof d !== 'object') return;
+    if (e.source === parent) {
+      if (d.type === 'run') start(d);
+      else if (d.type === 'stop') stop();
+      else if (d.type === 'focus') frame?.focus();
+      return;
+    }
+    if (frame && e.source === frame.contentWindow && d.__d37 === run && RELAY[d.t]) {
+      const out = { type: 'game', run, t: d.t };
+      if (d.t === 'save') out.v = JSON.stringify(d.v || {}).slice(0, 60000);
+      else if (typeof d.v === 'number') out.v = d.v;
+      else if (d.v != null) out.v = String(d.v).slice(0, 300);
+      if (d.win) out.win = true;
+      if (d.line) out.line = Math.max(1, (+d.line || 0) - lineOff);
+      parent.postMessage(out, '*');
+    }
+  });
+  function stop(){ if (frame) { frame.remove(); frame = null; } }
+  function start(d){
+    stop();
+    run = +d.run || run + 1;
+    frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts allow-pointer-lock');
+    frame.setAttribute('allow', 'autoplay; gamepad');
+    frame.setAttribute('title', 'Игра');
+    let store = {};
+    try { store = JSON.parse(d.store || '{}') || {}; } catch (er) {}
+    const head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">' +
+      '<meta http-equiv="Content-Security-Policy" content="frame-src \'none\'; child-src \'none\'; worker-src \'none\'; form-action \'none\'">' +
+      '<style>html,body{margin:0;padding:0;height:100%;overscroll-behavior:none}</style>' +
+      '<script>(' + harness.toString() + ')(' + run + ', ' + JSON.stringify(store).replace(/</g, '\\u003c') + ');<\/script>';
+    let html;
+    if (d.kind === 'tpl') {
+      html = '<!doctype html><html lang="ru"><head>' + head + '</head><body><script>(' + String(d.code) + ')(' +
+        JSON.stringify(d.params || {}).replace(/</g, '\\u003c') + ', D37);<\/script></body></html>';
+    } else {
+      const src = String(d.html || '');
+      const m = /^\s*<!doctype[^>]*>/i.exec(src);
+      html = m ? m[0] + head + src.slice(m[0].length) : '<!doctype html>' + head + src;
+    }
+    lineOff = head.split(String.fromCharCode(10)).length - 1;   // строки служебного кода — чтобы номер строки ошибки совпал с кодом игрока
+    frame.srcdoc = html;
+    document.body.appendChild(frame);
+    setTimeout(() => frame?.focus(), 50);
+  }
+  parent.postMessage({ type: 'host' }, '*');
+})();
+</script>
+</body>
+</html>

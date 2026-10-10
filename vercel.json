@@ -115,6 +115,14 @@
       "destination": "/api/pages?page=top"
     },
     {
+      "source": "/studio",
+      "destination": "/api/pages?page=ugc"
+    },
+    {
+      "source": "/g/:id",
+      "destination": "/api/pages?page=ugc&id=:id"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },

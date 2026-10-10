@@ -9,6 +9,7 @@ import { SITE, ALL_UPLOADS, getUploads, esc } from './_lib/yt.js';
 import { GAME_PAGES } from './_lib/games-seo.js';
 import { TOPICS } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
+import { sbSelect, storeConfigured } from './_lib/store.js';
 
 const url = (loc, freq, prio, lastmod) =>
   `<url><loc>${loc}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}${freq ? `<changefreq>${freq}</changefreq>` : ''}<priority>${prio}</priority></url>`;
@@ -30,6 +31,9 @@ export default async function handler(req, res) {
 
   let vids = [];
   try { vids = await getUploads(ALL_UPLOADS); } catch (e) { /* без роликов — основные страницы всё равно отдаём */ }
+  // игры игроков из каталога (прошли модерацию) — ugc.sql
+  let ugc = [];
+  if (part === 'pages' && storeConfigured()) { try { ugc = await sbSelect('ugc_games', 'status=eq.public&select=id,updated_at&order=plays.desc&limit=500'); } catch (e) { ugc = []; } }
 
   const urls = part === 'videos'
     ? vids.map(v => url(`${SITE}/v/${esc(v.id)}`, '', '0.4', esc(String(v.publishedAt).slice(0, 10))))
@@ -42,6 +46,8 @@ export default async function handler(req, res) {
       url(`${SITE}/tools/fonts`, 'monthly', '0.8'),
       url(`${SITE}/tools/cps`, 'monthly', '0.8'),
       url(`${SITE}/tools/wheel`, 'monthly', '0.8'),
+      url(`${SITE}/studio`, 'weekly', '0.8'),
+      ...ugc.map(g => url(`${SITE}/g/${esc(g.id)}`, 'weekly', '0.5', esc(String(g.updated_at).slice(0, 10)))),
       url(`${SITE}/tools/random`, 'monthly', '0.8'),
       url(`${SITE}/tools/typing`, 'monthly', '0.8'),
       url(`${SITE}/quiz`, 'monthly', '0.8'),
