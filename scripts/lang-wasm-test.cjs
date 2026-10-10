@@ -206,7 +206,7 @@ async function main(){
     let thrown = null;
     try { E.langs.cpp._result(false, null, "script.cpp:1:1: error: unknown type name 'Foo'"); } catch (e) { thrown = e; }
     ok(thrown && /неизвестный тип «Foo»/.test(thrown.log), 'не собралось — throw с .log');
-    ok(E.langs.cpp.kind === 'binary' && typeof E.langs.cpp.compile === 'function' && E.langs.rust.kind === 'binary' && !E.langs.rust.compile, 'языки зарегистрированы: cpp с компилятором, rust — файлом');
+    ok(E.langs.cpp.kind === 'binary' && typeof E.langs.cpp.compile === 'function' && E.langs.rust.kind === 'binary' && typeof E.langs.rust.compile === 'function' && /^studio\/rust\.html/.test(E.langs.rust._rustPage), 'языки зарегистрированы: cpp и rust — с компилятором на сайте');
     ok(E.langs.cpp.examples.length >= 4 && E.langs.rust.examples.length >= 4 && /Задача: $/.test(E.langs.cpp.ai) && /Задача: $/.test(E.langs.rust.ai), 'примеры и задание для ИИ');
   }
   // ── SDK: файлы примеров = примеры в студии; шаблон Rust = sdk/d37.rs ──

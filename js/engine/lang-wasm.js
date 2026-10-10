@@ -8,7 +8,9 @@
 // C++ собирается прямо на сайте («⚙️ Собрать»): Clang/LLD, собранные в WebAssembly — YoWASP, npm @yowasp/clang (ISC;
 // LLVM — Apache-2.0 с исключением LLVM), с jsDelivr при первой сборке (~23 МБ brotli, дальше — кэш браузера), в своём
 // module Worker (страница не замирает); флаги — CPP_ARGS (wasm32-wasip1 + libc++: std::string, std::vector, printf).
-// Rust собирается у себя (cargo, wasm32-unknown-unknown) и загружается кнопкой «📦 Загрузить .wasm».
+// Rust тоже собирается на сайте («⚙️ Собрать»): настоящий rustc (LLVM + lld) в WebAssembly — studio/rust.html в невидимой
+// рамке (compileRust, нужен Chrome / Edge / Яндекс 137+ на компьютере: Document-Isolation-Policy даёт рамке общую память
+// для потоков rustc); 38 МБ один раз, дальше кэш. Или у себя: cargo, wasm32-unknown-unknown → «📦 Загрузить .wasm».
 // Проверка без браузера: node scripts/lang-wasm-test.cjs (настоящие модули: clang из npm, cargo — если установлены).
 (() => {
   const E = window.D37E = window.D37E || {};
@@ -514,6 +516,61 @@
     return cppResult(r.ok, r.wasm, r.log);
   }
 
+  // ═══ Rust прямо на сайте: studio/rust.html (rustc в WebAssembly) в невидимой рамке ═══
+  // Рамка изолирована заголовком Document-Isolation-Policy (её потокам нужен SharedArrayBuffer), студия — нет. Разговор —
+  // postMessage своего origin: → { d37rust: 'build', id, src }, ← hello (isolated?) / progress / done { ok, wasm, log, reset }.
+  // Живёт, пока собираем, и 5 минут после: rustc с библиотеками держит до ~1 ГБ памяти.
+  const RUST_PAGE = 'studio/rust.html?v=1';
+  const RUST_NO = 'Сборка Rust на сайте работает в Chrome, Edge или Яндекс Браузере (версия 137 и новее) на компьютере. ' +
+    'В этом браузере — собери у себя: шаблон sdk/rust-template, cargo build --release --target wasm32-unknown-unknown → «📦 Загрузить .wasm».';
+  let RF = null, rfSeq = 0, rfIdle = 0;
+  const rfJobs = new Map();
+  function killRF(why){
+    clearTimeout(rfIdle);
+    const rf = RF; RF = null;
+    if (rf) { clearTimeout(rf.to); try { rf.el.remove(); } catch (e) {} }
+    for (const j of rfJobs.values()) j.done({ ok: false, log: why || 'Сборщик Rust закрыт — нажми «⚙️ Собрать» ещё раз' });
+    rfJobs.clear();
+  }
+  function rustFrame(){
+    if (RF) return RF.ready;
+    const el = document.createElement('iframe'), rf = RF = { el };
+    el.src = ROOT + RUST_PAGE; el.title = 'Сборка Rust'; el.tabIndex = -1; el.setAttribute('aria-hidden', 'true');
+    el.style.cssText = 'position:fixed;left:-10px;top:-10px;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+    rf.ready = new Promise((res, rej) => { rf.res = res; rf.rej = rej; rf.to = setTimeout(() => rej(new Error('Сборщик Rust не открылся — проверь интернет')), 30e3); });
+    rf.ready.catch(() => { if (RF === rf) killRF(); });
+    document.body.appendChild(el);
+    return rf.ready;
+  }
+  if (typeof addEventListener === 'function') addEventListener('message', e => {
+    const rf = RF;
+    if (!rf || e.source !== rf.el.contentWindow || e.origin !== location.origin) return;
+    const d = e.data || {};
+    if (d.d37rust === 'hello') { clearTimeout(rf.to); if (d.isolated) rf.res(rf); else rf.rej(new Error(RUST_NO)); return; }
+    const j = rfJobs.get(d.id); if (!j) return;
+    if (d.d37rust === 'progress') j.step(String(d.text || ''));
+    else if (d.d37rust === 'done') {
+      rfJobs.delete(d.id); j.done(d);
+      if (d.reset) killRF();
+      else { clearTimeout(rfIdle); rfIdle = setTimeout(() => { if (!rfJobs.size) killRF(); }, 5 * 60e3); }
+    }
+  });
+  async function compileRust(src, o = {}){
+    const step = typeof o.onStep === 'function' ? o.onStep : () => {};
+    step('подготовка…');
+    let rf;
+    try { rf = await rustFrame(); }
+    catch (e) { const er = new Error(e.message || String(e)); er.log = er.message; throw er; }
+    const d = await new Promise(res => {
+      const id = ++rfSeq, timer = setTimeout(() => { rfJobs.delete(id); killRF(); res({ ok: false, log: 'Компилятор Rust не скачался за 15 минут — проверь интернет и нажми «⚙️ Собрать» ещё раз' }); }, 15 * 60e3);
+      rfJobs.set(id, { step, done: r => { clearTimeout(timer); res(r); } });
+      rf.el.contentWindow.postMessage({ d37rust: 'build', id, src: String(src) }, location.origin);
+    });
+    const log = String(d.log || '');
+    if (!d.ok || !d.wasm) { const e = new Error(log.split('\n')[0] || 'Не собралось'); e.log = log || 'Не собралось'; throw e; }
+    return { wasm: d.wasm instanceof Uint8Array ? d.wasm : new Uint8Array(d.wasm), log };
+  }
+
   // ═══ Примеры (те же файлы — в sdk/examples, тест сверяет) ═══
   const CPP_EXAMPLES = [
     ['Монетка: +1 очко и исчезает', `// Монетка: +1 очко и исчезает. Положи скрипт в деталь-монетку
@@ -782,7 +839,7 @@ use d37::*;
   reg('cpp', { label: 'C++ (WebAssembly)', short: 'C++', icon: '⚙️', kind: 'binary', worker: wasmRuntime, compile: compileCpp, examples: CPP_EXAMPLES, ai: CPP_AI,
     placeholder: '// C++: напиши функцию void start() { … } — она запускается при «▶ Играть», потом «⚙️ Собрать».\n// Нажми «📚 Примеры», чтобы вставить готовый. SDK (d37.h) подключается сам.',
     abi: ABI, cdn: CLANG_CDN, _job: cppJob, _result: cppResult, _russify: russify, _args: CPP_ARGS });
-  reg('rust', { label: 'Rust (WebAssembly)', short: 'Rust', icon: '🦀', kind: 'binary', worker: wasmRuntime, examples: RUST_EXAMPLES, ai: RUST_AI,
-    placeholder: '// Rust: этот текст — для себя и для ИИ. Собери у себя (sdk/README.md, шаблон sdk/rust-template):\n// cargo build --release --target wasm32-unknown-unknown → «📦 Загрузить .wasm»',
-    abi: ABI });
+  reg('rust', { label: 'Rust (WebAssembly)', short: 'Rust', icon: '🦀', kind: 'binary', worker: wasmRuntime, compile: compileRust, examples: RUST_EXAMPLES, ai: RUST_AI,
+    placeholder: '// Rust: напиши fn start() { … } — она запускается при «▶ Играть», потом «⚙️ Собрать» (прямо на сайте: Chrome / Edge /\n// Яндекс на компьютере, первый раз скачается 38 МБ). SDK (d37.rs) подключается сам. Или у себя: cargo → «📦 Загрузить .wasm»',
+    abi: ABI, _rustPage: RUST_PAGE });
 })();

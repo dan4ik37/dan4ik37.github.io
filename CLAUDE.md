@@ -118,7 +118,8 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   файлами (как `referrals.sql`, `streaks-achievements.sql`), идемпотентными (`create or replace`, `if not exists`).
 
 ## Локальный запуск
-`python -m http.server 5500` в корне → `http://localhost:5500/#/home`.
+`python scripts/serve.py 5500` в корне → `http://localhost:5500/#/home` (как `python -m http.server`, но с заголовками
+из vercel.json — без них не работает сборка Rust в студии).
 `/api/*` локально отдают 404 — это нормально (это Vercel-функции).
 
 ## Как устроено
@@ -502,8 +503,20 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   5000 команд, 200 строк; 2000 таймеров; 30 ошибок или 256 МБ — скрипт остановлен.
   C++ собирается на сайте («⚙️ Собрать»): @yowasp/clang 22 (ISC; LLVM — Apache-2.0) с jsDelivr, 23,1 МБ brotli один раз (дальше кэш),
   в module Worker; wasm32-wasip1 + libc++ (std::string, vector, printf → «Вывод»), -fno-exceptions, sdk/d37.h через -include; ошибки clang —
-  по-русски со строкой. Rust — у себя: sdk/rust-template, cargo build --release --target wasm32-unknown-unknown → «📦 Загрузить .wasm»;
-  для людей — sdk/README.md. Тест: node scripts/lang-wasm-test.cjs (110; настоящие clang из %TEMP%/d37-wasm/clang и cargo в профиле;
+  по-русски со строкой. Rust тоже собирается на сайте (владелец 13.10: «чтобы через сайт работал на компе у того кто делает»):
+  studio/rust.html + studio/rust-build.js — невидимая рамка (compileRust в lang-wasm.js). Настоящий rustc с LLVM и встроенным
+  lld, собранный в wasm32-wasip1-threads (github.com/oligamiq/rust_wasm v0.2.1, MIT/Apache; файлы с его GitHub Pages:
+  rustc_opt.wasm.br 19,8 МБ + wasm32-unknown-unknown.tar.br 18,1 МБ → Cache Storage d37-rust-<версия>); потоки и файлы WASI —
+  @oligami/browser_wasi_shim-threads 0.5.0 + @bjorn3/browser_wasi_shim 0.4.2, brotli — brotli-dec-wasm (всё с jsDelivr).
+  Потокам нужен SharedArrayBuffer → рамке заголовок Document-Isolation-Policy: isolate-and-require-corp (vercel.json; только
+  Chrome/Edge/Яндекс 137+ на компьютере, иначе — понятный отказ и «📦 Загрузить .wasm»), студия при этом НЕ изолирована.
+  Файлы — один корень «/» (sysroot, work, tmp: rustc заводит /rustcXXXX в корне), SDK sdk/d37.rs подкладывается рядом
+  (нет «mod d37» — дописываем в строку 1, номера строк не сдвигаются). Каждая сборка — СВОЙ поток rustc (второй запуск в
+  том же библиотека не умеет: «worker request failed: Protocol»), модуль и ферма общие. rustc собран с panic=abort: после
+  ошибок в коде он «падает» unreachable — это обычный отказ (ошибки уже в stderr, JSON → по-русски, DICT). Локально
+  заголовки ставит scripts/serve.py (launch.json «site»). Проверено 13.10 в браузере: первый раз ~7 с (38 МБ из кэша
+  ~1 с), дальше 1–3 с; 6 примеров — 25–30 КБ; ошибки по-русски со строкой и подсказкой; «Монетка» в игре крутится.
+  Rust у себя (cargo, sdk/rust-template → «📦 Загрузить .wasm») по-прежнему можно; для людей — sdk/README.md. Тест: node scripts/lang-wasm-test.cjs (110; настоящие clang из %TEMP%/d37-wasm/clang и cargo в профиле;
   D37_SKIP=cpp,rust — без них). Проверено в браузере: «Монетка» на C++ собралась за 6 с (42 КБ) и в игре дала +1.
 - Lua (js/engine/lang-lua.js, агент 13.10.2026) — как Luau в Roblox: свой Lua 5.1 + синтаксис Luau (+=, continue, типы, `строки {x}`,
   if-выражения, //, 0b, 1_000) без библиотек: лексер → разбор → перевод в JS, каждая функция Lua — function* (генератор), поэтому

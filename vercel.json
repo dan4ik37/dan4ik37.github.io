@@ -20,6 +20,15 @@
   ],
   "headers": [
     {
+      "source": "/studio/rust.html",
+      "headers": [
+        {
+          "key": "Document-Isolation-Policy",
+          "value": "isolate-and-require-corp"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         {
