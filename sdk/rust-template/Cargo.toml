@@ -1,0 +1,17 @@
+# Скрипт на Rust для «Студии 3D» сайта dan4ik37.
+# Собрать:  cargo build --release --target wasm32-unknown-unknown
+# Готовый файл: target/wasm32-unknown-unknown/release/d37_script.wasm → в студии «📦 Загрузить .wasm»
+[package]
+name = "d37_script"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = "s"      # поменьше файл
+lto = true
+codegen-units = 1
+panic = "abort"      # паника → красная строка в «Вывод» (через d37.rs), без размотки стека
