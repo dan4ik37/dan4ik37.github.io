@@ -19,6 +19,7 @@ const GAMES = [
   { id: 'memory',   icon: '🃏', title: 'Найди пару',      desc: 'Игра на память: открывай карточки и находи пары за минимум ходов. С другом — одинаковая раскладка.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/memory.js'], top: 'memory', topLabel: 'очков', color: '#f472b6' },
   { id: 'ttt',      icon: '❌', title: 'Крестики-нолики', desc: 'Против бота (последний уровень не проигрывает), вдвоём на экране или онлайн с другом.', scripts: ['js/games/room.js', 'js/games/tictactoe.js'], top: 'ttt_hard', topLabel: 'ничьих/побед у непобедимого', color: '#9147ff' },
   { id: 'reaction', icon: '⚡', title: 'Реакция',          desc: 'Жми, как только экран станет зелёным. 5 попыток — узнай свою скорость и сравни с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/reaction.js'], top: 'reaction', topLabel: 'очков (1000 − мс)', color: '#22c55e' },
+  { id: 'emoji',    icon: '🤔', title: 'Угадай игру по эмодзи', desc: 'По четырём эмодзи угадай игру: Майнкрафт, FNAF, GTA… 10 раундов на скорость — и можно наперегонки с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/emoji.js'], top: 'emoji', topLabel: 'очков за 10 раундов', color: '#f59e0b' },
   { id: 'clicker',  icon: '👆', title: 'Кликер',          desc: 'Кликай на скорость и собирай комбо. Старая добрая классика сайта.', href: '#/clicker', color: '#ff9f43' },
   { id: 'quiz',     icon: '🧩', title: 'Тесты',           desc: 'Какой ты моб из Майнкрафта? Кто ты из FNAF и Роблокса? 8 вопросов — и результат, которым можно поделиться.', href: '/quiz', color: '#38bdf8' },
   { id: 'wheel',    icon: '🎡', title: 'Колесо фортуны',  desc: 'Впиши варианты и крути: во что поиграть, кто моет посуду, кто выиграл приз. Честный рандом и ссылка для друзей.', href: '/tools/wheel', color: '#f472b6' },
@@ -198,7 +199,7 @@ function gameBestLabel(id, best){
   if (id === 'catch') return `${Number(best).toLocaleString('ru')} очков`;
   if (id === 'sea') return `${best} из 20 палуб`;
   if (id === 'snake') return `${best} ${best % 10 === 1 && best % 100 !== 11 ? 'яблоко' : [2, 3, 4].includes(best % 10) && ![12, 13, 14].includes(best % 100) ? 'яблока' : 'яблок'}`;
-  if (id === 'memory') return `${best} очков`;
+  if (id === 'memory' || id === 'emoji') return `${best} очков`;
   if (id === 'words') return `с ${7 - best}-й попытки`;
   return String(best);
 }
@@ -294,7 +295,7 @@ function gamesDailyDot(){
 // «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
 // Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
 const WHATSNEW_VER = '2026-10-10';
-const WHATSNEW = [['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+const WHATSNEW = [['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
