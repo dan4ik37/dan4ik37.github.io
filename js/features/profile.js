@@ -137,6 +137,14 @@ async function renderProfilePage(viewUserId){
     return;
   }
   if (nf) nf.style.display = 'none';
+  // Ник по умолчанию (user_<id> — так база называет новые аккаунты, например после входа через Google) — предложить свой
+  let np = document.getElementById('profileNickPrompt');
+  const defaultNick = isOwn && /^user_[0-9a-f]{6,32}$/.test(profile.nick || '');
+  if (defaultNick && !np) { np = document.createElement('div'); np.id = 'profileNickPrompt'; np.className = 'pf-nick-prompt'; contentEl.prepend(np); }
+  if (np) {
+    np.hidden = !defaultNick;
+    if (defaultNick) np.innerHTML = '<span>👋 Придумай ник — так тебя увидят в чате, играх и рекордах. Сейчас ты «' + esc(String(profile.nick).slice(0, 12)) + '…»</span><button type="button" class="pf-btn pf-btn-primary pf-btn-sm" onclick="toggleNickEdit(true);var i=document.getElementById(\'profileNickInput\');i.value=\'\';i.focus()">✏️ Придумать ник</button>';
+  }
 
   document.getElementById('profileNick').textContent = profile.nick || 'Без ника';
   window.d37NickFx?.markEl(document.getElementById('profileNick'), targetId);
@@ -762,6 +770,7 @@ async function saveProfileNick(){
     try { localStorage.setItem('d37_nick', nick); } catch(e) {}
     document.getElementById('profileNick').textContent = nick;
     toggleNickEdit(false);
+    const np = document.getElementById('profileNickPrompt'); if (np) np.hidden = true;   // «Придумай ник» больше не нужен
   } catch(e) {
     errEl.textContent = 'Не удалось сохранить: ' + humanErr(e);
   }

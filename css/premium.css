@@ -2278,3 +2278,8 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
   color:#fff;background:conic-gradient(#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0)}
 .auth-or{display:flex;align-items:center;gap:.6rem;margin:.9rem 0 .8rem;color:var(--muted);font-size:.72rem}
 .auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* Профиль: «Придумай ник» для ника по умолчанию user_… (renderProfilePage) */
+.pf-nick-prompt{display:flex;align-items:center;justify-content:space-between;gap:.8rem;flex-wrap:wrap;margin-bottom:1rem;padding:.8rem 1rem;border-radius:14px;
+  background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.4);font-size:.85rem}
+.pf-nick-prompt[hidden]{display:none}
