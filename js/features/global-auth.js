@@ -22,9 +22,27 @@ function captureReferralCode(){
 // из-за сброса пароля (chat.js): если человек уже залогинен в этом же
 // браузере и переходит по ссылке "забыл пароль", всё равно должна
 // открыться форма нового пароля, а не увести его на страницу профиля.
+// Вход через Google (и др.) — кнопка видна, только если провайдер включён в Supabase: /auth/v1/settings → external.
+// Включить: docs/GOOGLE_LOGIN.md. Поток implicit, как у сброса пароля: токены приходят в #хэше на корень сайта,
+// supabase-js их забирает (detectSessionInUrl), роутер на непонятном хэше показывает главную — затем onAuthStateChange.
+let oauthProvidersPromise = null;
+function oauthProviders() {
+  if (!oauthProvidersPromise) oauthProvidersPromise = fetch(`${SB_URL}/auth/v1/settings`, { headers: { apikey: SB_KEY } })
+    .then(r => r.ok ? r.json() : {}).then(j => j.external || {}).catch(() => ({}));
+  return oauthProvidersPromise;
+}
+async function signInWithProvider(provider) {
+  if (!sbClient) return;
+  try { localStorage.setItem('d37_after_login', '#/profile'); } catch (e) {}
+  if (typeof window.va === 'function') window.va('event', { name: 'oauth_click', data: { provider } });
+  const { error } = await sbClient.auth.signInWithOAuth({ provider, options: { redirectTo: location.origin + '/' } });
+  if (error) { const el = document.getElementById('gauthErr'); if (el) el.textContent = humanErrCap(error); }
+}
+
 function openLoginModal(mode) {
   const modal = document.getElementById('globalAuthModal');
   modal.classList.add('open');
+  oauthProviders().then(p => { const box = document.getElementById('gauthOauth'); if (box) box.hidden = !p.google; });
   switchAuthTab(mode === 'register' ? 'register' : 'login');
   document.getElementById('gauthLogin').style.display = 'block';
   trapModalFocus(modal);

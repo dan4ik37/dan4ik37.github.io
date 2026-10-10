@@ -105,6 +105,8 @@ async function onAuthStateChange(user) {
   }
   // Для страниц, открытых до входа (идеи и т.п.) — роль уже известна
   window.dispatchEvent(new Event('d37:auth'));
+  // Вернулись со входа через Google (global-auth.js → signInWithProvider) — открыть свой профиль, как после обычного входа
+  try { const go = localStorage.getItem('d37_after_login'); if (go && user) { localStorage.removeItem('d37_after_login'); setTimeout(() => { location.hash = go; }, 300); } } catch (e) {}
   if (typeof applyThemeAccent === 'function') applyThemeAccent(currentProfile);
   if (typeof recordTodayVisit === 'function') recordTodayVisit();
 

@@ -27,6 +27,8 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 3. По желанию: Bing Webmaster Tools → «Импорт из Google Search Console» (аккаунт заводит сам владелец).
 4. По желанию: факты о себе для /about (имя, с какого года стримит, откуда) — сейчас там только данные канала.
 5. AdSense: сайт на проверке; платёжные данные — когда одобрят.
+6. **Включить «Войти через Google»** — пошагово в `docs/GOOGLE_LOGIN.md` (Google Cloud → OAuth-клиент, Supabase → Providers → Google,
+   URL Configuration). Кнопка в окне входа уже есть и появится сама (`/auth/v1/settings` → external.google). Проверка: там же google: true.
 
 ## Грабли этой истории — не наступать повторно
 - **Скрипт в SQL Editor выполняется целиком или откатывается целиком.** Одна ошибка = ничего не применилось.

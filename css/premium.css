@@ -2268,3 +2268,13 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .wd-arch button.lose{border-color:rgba(255,45,85,.45);background:rgba(255,45,85,.08)}
 .wd-arch button.part{border-color:rgba(255,209,102,.5)}
 .wd-arch button:hover{border-color:var(--accent)}
+
+/* Вход через Google (виден, когда провайдер включён в Supabase) */
+#gauthOauth[hidden]{display:none}
+.auth-google{display:flex;align-items:center;justify-content:center;gap:.6rem;width:100%;min-height:46px;padding:.65rem 1rem;border-radius:12px;border:1px solid rgba(255,255,255,.18);
+  background:#fff;color:#1f1f1f;font:700 .9rem 'Montserrat',sans-serif;cursor:pointer}
+.auth-google:hover{background:#f1f1f1}
+.auth-google .g-ic{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font:800 .9rem Arial,sans-serif;
+  color:#fff;background:conic-gradient(#ea4335 0 25%,#fbbc05 0 50%,#34a853 0 75%,#4285f4 0)}
+.auth-or{display:flex;align-items:center;gap:.6rem;margin:.9rem 0 .8rem;color:var(--muted);font-size:.72rem}
+.auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--border)}

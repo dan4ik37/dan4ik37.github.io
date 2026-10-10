@@ -2373,6 +2373,11 @@ body.low .donation-alert-icon{animation:none}
         <p id="gauthFormSubtitle">Войди в свой аккаунт</p>
       </div>
       <div class="gauth-body">
+        <!-- «Войти через Google» — видно, только когда провайдер включён в Supabase (global-auth.js → oauthProviders) -->
+        <div id="gauthOauth" hidden>
+          <button type="button" class="auth-google" onclick="signInWithProvider('google')"><span class="g-ic" aria-hidden="true">G</span>Войти через Google</button>
+          <div class="auth-or"><span>или по почте</span></div>
+        </div>
         <div id="gauthLoginFields">
           <input class="auth-inp" type="email" id="gauthEmail" aria-label="Email" placeholder="Email" autocomplete="email">
           <input class="auth-inp" type="password" id="gauthPassword" aria-label="Пароль" placeholder="Пароль" autocomplete="current-password" onkeydown="if(event.key==='Enter')doGlobalLogin()">
