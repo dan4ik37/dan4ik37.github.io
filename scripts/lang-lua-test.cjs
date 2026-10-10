@@ -142,6 +142,8 @@ same('строки: сравнение и длинные', 'print("abc" <= "abd"
 same('тело функции после return в do', 'local function f(x) if x then return "a" end do return "b" end end print(f(true), f(false))', 'a b');
 same('вложенные функции и рекурсия с несколькими значениями', 'local function mm(t, i) i = i or 1 if i > #t then return end return t[i], mm(t, i + 1) end print(mm({1, 2, 3}))', '1 2 3');
 same('pcall с методом и self', 'local obj = {v = 5} function obj:get() return self.v end print(pcall(obj.get, obj))', 'true 5');
+same('остальные метаметоды и raw*', 'local M = {__sub = function(a, b) return "sub" end, __div = function() return "div" end, __mod = function() return "mod" end, __pow = function() return "pow" end, __idiv = function() return "idiv" end}\nlocal a = setmetatable({}, M) print(a - 1, 1 / a, a % 2, a ^ 2, a // 2)\nlocal t = setmetatable({1, 2}, {__len = function() return 99 end, __eq = function() return true end}) print(#t, rawlen(t), rawequal(t, t), rawequal(t, {}), t == setmetatable({}, getmetatable(t)))', 'sub div mod pow idiv\n99 2 true false true');
+same('coroutine.close и time()', 'local co = coroutine.create(function() coroutine.yield(1) end) coroutine.resume(co) print(coroutine.close(co), coroutine.status(co), type(time()), type(elapsedTime()))', 'true dead number number');
 same('числа как ключи и float', 'local t = {} t[1e0] = "a" t[2^1] = "b" print(#t, t[1], t[2]) t[0.5] = "h" local n = 0 for _ in pairs(t) do n += 1 end print(n)', '2 a b\n3');
 // ── скорость ──
 {
@@ -350,6 +352,7 @@ async function e2e2(){
       lua('Твин', 'a', 'local TS = game:GetService("TweenService")\nlocal tw = TS:Create(script.Parent, TweenInfo.new(0.1), {Transparency = 1})\ntw:Play()\nlocal st = tw.Completed:Wait()\nprint("твин готов", st)'),
       lua('Каждый кадр', null, 'game:GetService("RunService").Heartbeat:Connect(function(dt)\n\tlocal broken = nil\n\tbroken.x = dt\nend)'),
       lua('Значение', 'b', 'local cfg = Instance.new("NumberValue")\ncfg.Name = "Скорость"\ncfg.Value = 2.5\ncfg.Parent = script.Parent\nprint(script.Parent.Скорость.Value, script.Parent:FindFirstChild("Скорость"):GetFullName(), cfg.Parent.Name)\nlocal pp = Instance.new("ProximityPrompt", script.Parent)\npp.ActionText = "Взять" pp.HoldDuration = 1.5\nprint(pp.ActionText, pp.HoldDuration, pp.Enabled)'),
+      lua('Классика', null, 'local part = Instance.new("Part")\npart.Anchored = true\npart.TopSurface = Enum.SurfaceType.Smooth\npart.BottomSurface = Enum.SurfaceType.Smooth\npart.Locked = true\npart.Position = Vector3.new(0, 10, 0)\npart.Parent = workspace\nprint(part.TopSurface, part.Locked, pcall(function() part.Velocity = Vector3.new() end))\nprint(pcall(Instance.new, "Sound"))'),
       lua('Игрок', null, 'game.Players.PlayerAdded:Connect(function(player)\n\tlocal f = Instance.new("Folder") f.Parent = player f.Name = "leaderstats"\n\tlocal v = Instance.new("IntValue", f) v.Name = "Очки" v.Value = 3\n\tlocal ls = player:WaitForChild("leaderstats")\n\tprint("ls", ls.Name, ls.Очки.Value, player.Character.HumanoidRootPart.Position, typeof(player))\n\tplayer.leaderstats.Очки.Value += 10\nend)'),
     ] });
   await sleep(10);
@@ -358,6 +361,7 @@ async function e2e2(){
   ok(of('player').some(x => x.cmd === 'stat' && x.v.k === 'Очки' && x.v.v === 13) && !of('player').some(x => x.cmd === 'stat' && x.v.k === 'Value'), 'leaderstats: Name после Parent — в таблице сразу верное имя', JSON.stringify(of('player')));
   ok(printed().includes('2.5 Workspace.Б.Скорость Б') && printed().includes('Взять 1.5 true'), 'значение в детали, GetFullName, свойства ProximityPrompt', printed().join(' | '));
   ok(of('prompt').some(x => x.id === 'b' && x.text === 'Взять' && x.hold === 1.5), 'ProximityPrompt: HoldDuration уходит хозяину', JSON.stringify(of('prompt')));
+  ok(printed().includes('smooth true false Классика:8: Нельзя менять свойство Velocity') && printed().some(t => /^false Instance\.new\("Sound"\) — есть Part.*звук — sound\.play\("coin"\)$/.test(t)), 'старый код Roblox: TopSurface/Locked не мешают, понятные ошибки', printed().filter(t => /smooth|Sound/.test(t)).join(' | '));
   await sleep(60);
   ok(printed().includes('добавлен Позже') && printed().includes('дождался Позже true'), 'workspace:WaitForChild ждёт объект, созданный позже; ChildAdded', printed().join(' | '));
   const tw = of('tween').find(x => x.id === 'a');

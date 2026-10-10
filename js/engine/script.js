@@ -159,7 +159,7 @@
     };
     const Enum = { Material: { Plastic: 'plastic', SmoothPlastic: 'smooth', Neon: 'neon', Glass: 'glass', Metal: 'metal', DiamondPlate: 'diamond', Wood: 'wood', WoodPlanks: 'planks', Brick: 'brick', Concrete: 'concrete', Cobblestone: 'cobble', Asphalt: 'asphalt', Grass: 'grass', Sand: 'sand', Rock: 'rock', Ground: 'dirt', Snow: 'snow', Ice: 'ice', Marble: 'marble', Fabric: 'fabric', Tiles: 'tiles' },
       PartType: { Block: 'block', Ball: 'ball', Cylinder: 'cyl', Wedge: 'wedge' }, EasingStyle: { Linear: 'linear', Quad: 'quad', Sine: 'sine', Back: 'back', Bounce: 'bounce', Elastic: 'elastic', Cubic: 'quad', Quart: 'quad', Quint: 'quad', Exponential: 'quad', Circular: 'sine' },
-      EasingDirection: { In: 'in', Out: 'out', InOut: 'inout' } };
+      EasingDirection: { In: 'in', Out: 'out', InOut: 'inout' }, SurfaceType: { Smooth: 'smooth', Studs: 'studs', Inlet: 'inlet', Universal: 'universal', Weld: 'weld', Glue: 'glue', SmoothNoOutlines: 'smooth' } };
     // ── События ──
     function signal(reg){
       const list = new Set();
@@ -180,6 +180,7 @@
     const VEC = new Set(['pos', 'size', 'rot']);
     const VALUE_DEF = { IntValue: () => 0, NumberValue: () => 0, StringValue: () => '', BoolValue: () => false, ObjectValue: () => null, Vector3Value: () => new Vector3(), Color3Value: () => '#000000', CFrameValue: () => new CFrame() };
     const RT_CLS = new Set(['Folder', 'ClickDetector', 'ProximityPrompt', ...Object.keys(VALUE_DEF)]);
+    const SOFT = new Set(['TopSurface', 'BottomSurface', 'LeftSurface', 'RightSurface', 'FrontSurface', 'BackSurface', 'Locked', 'Archivable', 'Massless', 'CanTouch', 'CanQuery', 'Reflectance', 'CollisionGroup', 'CustomPhysicalProperties', 'RootPriority']);   // свойства Roblox, которых в мире нет: запоминаем, но не применяем
     const PP = { ActionText: 'action', ObjectText: 'object', HoldDuration: 'hold', Enabled: 'enabled', MaxActivationDistance: 'dist', KeyboardKeyCode: 'key', GamepadKeyCode: 'gkey', RequiresLineOfSight: 'los', Style: 'style', ClickablePrompt: 'click', Exclusivity: 'excl', UIOffset: 'uioff' };
     const ISA = { Part: ['BasePart', 'PVInstance'], Spawn: ['SpawnLocation', 'Part', 'BasePart', 'PVInstance'], Light: ['PointLight'], Model: ['PVInstance'], Prefab: ['Model', 'PVInstance'] };
     for (const k of Object.keys(VALUE_DEF)) ISA[k] = ['ValueBase'];
@@ -237,6 +238,7 @@
           if (k in t) return t[k];
           const o = objs.get(id), key = PROPS[k];
           if (key && o && !o.rt) { const v = o.p[key]; return VEC.has(key) && v ? V(v) : v; }
+          if (o && o.soft && typeof k === 'string' && k in o.soft) return o.soft[k];
           if (o && o.rt && typeof k === 'string') { if (o.cls === 'ProximityPrompt' && PP[k]) return o.p[PP[k]]; if (o.cls === 'ClickDetector' && k === 'MaxActivationDistance') return o.p.dist; }
           if (typeof k === 'string') {
             const c = (o?.children || []).find(cid => objs.get(cid)?.p.name === k); if (c) return proxyOf(c);
@@ -249,6 +251,7 @@
           const o = objs.get(id); if (!o) return true;
           if (o.rt) { rtSet(o, k, v); return true; }
           if (k === 'BrickColor') { const h = brickHex(v); if (!h) throw new Error('BrickColor: нужен BrickColor.new("Bright red")'); set(id, 'color', h); return true; }
+          if (SOFT.has(k)) { (o.soft = o.soft || {})[k] = v; return true; }
           if (k === 'CFrame') { if (!(v instanceof CFrame)) throw new Error('CFrame: нужен CFrame.new(x, y, z)'); set(id, 'pos', [v.X, v.Y, v.Z]); set(id, 'rot', rotOf(v)); return true; }
           const key = PROPS[k];
           if (!key) throw new Error('Нельзя менять свойство ' + String(k));
@@ -429,7 +432,7 @@
           return proxyOf(id);
         }
         const C = { Part: 'Part', WedgePart: 'Part', SpawnLocation: 'Spawn', PointLight: 'Light', Model: 'Model' }[cls];
-        if (!C) throw new Error('Instance.new("' + cls + '") — есть Part, WedgePart, SpawnLocation, PointLight, Model, Folder, IntValue, NumberValue, StringValue, BoolValue, ObjectValue, Vector3Value, ClickDetector, ProximityPrompt');
+        if (!C) throw new Error('Instance.new("' + cls + '") — есть Part, WedgePart, SpawnLocation, PointLight, Model, Folder, IntValue, NumberValue, StringValue, BoolValue, ObjectValue, Vector3Value, ClickDetector, ProximityPrompt' + (/Sound/.test(cls) ? '; звук — sound.play("coin")' : /Gui|Label|Button|Frame/.test(cls) ? '; надписи — gui.text(ключ, текст) и gui.message(текст, сек)' : ''));
         const w = where(parent);
         if (w.pl) throw new Error('Деталь нельзя положить в игрока — в игрока кладут папку leaderstats');
         const pid = w.pid || null;
