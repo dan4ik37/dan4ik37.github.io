@@ -86,7 +86,7 @@ function hub(res) {
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Тесты</span></nav>
   <h1>Тесты: кто ты из игр?</h1>
-  <p class="lead">Короткие тесты по играм с канала dan4ik37 — Майнкрафт, FNAF, Роблокс, CS2, Poppy Playtime и хорроры, «Какая ты игра?» для всех и тест для зрителей. 8 вопросов, минута времени, результатом можно поделиться с друзьями.</p>
+  <p class="lead">Короткие тесты по играм с канала dan4ik37 — Майнкрафт, FNAF, Роблокс, CS2, Hollow Knight, Poppy Playtime и хорроры, «Какая ты игра?» и «Какой ты стример?» для всех и тест для зрителей. 8 вопросов, минута времени, результатом можно поделиться с друзьями.</p>
   <div class="qz-cards">${QUIZZES.map(card).join('')}</div>
   <div data-ad="seo_game" hidden></div>
   <aside class="join"><div><b>Хочешь поиграть с друзьями?</b><span>«5 букв» со словом дня, морской бой, города, шашки — бесплатно, по ссылке.</span></div><a class="btn btn-acc" href="/games">🎮 Игры</a></aside>

@@ -2,7 +2,8 @@
 // отвечают по тому, что нашли в поиске). Только настоящие данные: цифры YouTube (getChannelStats), игры — по названиям
 // всех роликов (TOPICS), первое/последнее видео — из списка загрузок. Ничего не выдумывать: личных фактов (имя,
 // возраст, город) здесь нет, пока их не даст сам владелец.
-import { SITE, ALL_UPLOADS, getUploads, getChannelStats, esc, fmtCount } from '../yt.js';
+import { SITE, ALL_UPLOADS, getUploads, getChannelStats, isGambling, esc, fmtCount } from '../yt.js';
+import { videoFromSnapshot } from '../video-snap.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS } from '../topics.js';
 
@@ -23,6 +24,9 @@ export default async function handler(req, res) {
   const games = TOPICS.map(t => ({ t, n: vids.filter(v => t.re.test(v.title)).length })).filter(x => x.n >= 30).sort((a, b) => b.n - a.n);
   const top = games.slice(0, 6).map(x => x.t.name);
   const first = vids[vids.length - 1], last = vids[0];
+  // Самые просматриваемые ролики (просмотры — из снимка, без кейсов/депозита): кто ищет автора, хочет увидеть лучшее
+  const best = vids.map(v => ({ v, views: +(videoFromSnapshot(v.id)?.statistics?.viewCount || 0) }))
+    .filter(x => x.views && !isGambling(x.v.title)).sort((a, b) => b.views - a.views).slice(0, 5);
   const subs = ch ? num(ch.subscriberCount) : '', views = ch ? fmtCount(ch.viewCount) : '', count = ch ? num(ch.videoCount) : num(vids.length);
 
   const lead = `dan4ik37 (читается «Денчик37») — русскоязычный ютубер и стример, автор игрового YouTube-канала ${ch?.title || 'Dan4ik37'} (${ch?.handle || '@dan4ik37yt'}).`
@@ -62,6 +66,8 @@ export default async function handler(req, res) {
   ${games.length ? `<section class="box"><h2>Во что играет</h2><p>Темы по названиям всех ${esc(num(vids.length))} роликов канала:</p>
     <ul class="ab-games">${games.slice(0, 12).map(x => `<li><a href="/topic/${x.t.slug}">${esc(x.t.name)}</a><span>${esc(num(x.n))} видео</span></li>`).join('')}</ul>
     <p class="muted">Все темы — <a href="/topics">«Игры канала»</a>, по годам — <a href="/history">«История канала»</a>.</p></section>` : ''}
+  ${best.length ? `<section class="box"><h2>Самые популярные ролики</h2><ol class="ab-best">${best.map(x => `<li><a href="/v/${esc(x.v.id)}">${esc(x.v.title)}</a><span>👁 ${esc(fmtCount(x.views))}</span></li>`).join('')}</ol>
+    <p class="muted"><a href="/top">Весь топ видео и шортсов →</a></p></section>` : ''}
   ${first && last ? `<section class="box"><h2>Первое и последнее видео</h2><ul class="ab-vids">
     <li><small>Самое раннее в списке загрузок · ${esc(ruDate(first.publishedAt))}</small><a href="/v/${esc(first.id)}">${esc(first.title)}</a></li>
     <li><small>Самое новое · ${esc(ruDate(last.publishedAt))}</small><a href="/v/${esc(last.id)}">${esc(last.title)}</a></li>
@@ -103,6 +109,9 @@ const CSS = `
 .ab-vids{list-style:none;padding:0!important;margin-top:.6rem}
 .ab-vids li{display:flex;flex-direction:column;gap:.15rem;padding:.6rem .8rem;border-radius:10px;background:rgba(255,255,255,.04)}
 .ab-vids small{color:var(--muted);font-size:.72rem}
+.ab-best{padding-left:1.4rem!important;gap:.5rem!important}
+.ab-best li{display:flex;justify-content:space-between;gap:.8rem;align-items:baseline}
+.ab-best li span{color:var(--muted);white-space:nowrap;font-size:.8rem}
 .ab-soc{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.6rem}
 .ab-soc a{display:inline-flex;align-items:center;min-height:40px;padding:.45rem .9rem;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text)!important;text-decoration:none;font-weight:700;font-size:.85rem}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}

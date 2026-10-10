@@ -304,7 +304,7 @@ function whatsNewHtml(){
 function hideWhatsNew(){ try { localStorage.setItem('d37_whatsnew', WHATSNEW_VER); } catch (e) {} document.getElementById('whatsNew')?.remove(); }
 
 // «Тест дня» на главной — по кругу от номера дня (тесты — api/_lib/quizzes.js, страницы /quiz/<slug>)
-const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['game', '🕹', 'Какая ты игра?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['poppy', '🧸', 'Кто ты из Poppy Playtime?'], ['cs2', '🎯', 'Какая ты роль в CS2?'], ['horror', '👻', 'Кто ты в хоррор-игре?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
+const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['game', '🕹', 'Какая ты игра?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['poppy', '🧸', 'Кто ты из Poppy Playtime?'], ['cs2', '🎯', 'Какая ты роль в CS2?'], ['horror', '👻', 'Кто ты в хоррор-игре?'], ['hollow-knight', '🗡', 'Кто ты из Hollow Knight?'], ['streamer', '🎙', 'Какой ты стример?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
 
 function renderToday(){
   const box = document.getElementById('today');
