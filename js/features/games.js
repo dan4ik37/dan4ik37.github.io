@@ -36,6 +36,27 @@ const GAMES = [
   { id: 'cps',      icon: '🖱', title: 'CPS тест',        desc: 'Сколько кликов в секунду ты успеешь? 1, 5 или 10 секунд, звание и рекорд — и вызов другу.', href: '/tools/cps', color: '#f59e0b' },
   { id: 'fonts',    icon: '✒️', title: 'Шрифты для ника', desc: 'Сделай ник красивым: 𝓓𝓪𝓷, 𝕯𝖆𝖓, Ⓓⓐⓝ, ꧁ник꧂ и 70+ символов. Нажал — скопировано.', href: '/tools/fonts', color: '#c084fc' },
 ];
+// Разделы витрины: у игры может быть несколько. «С друзьями» — есть игра вдвоём/компанией онлайн или на одном экране
+const GAME_CATS = [
+  ['all', '🎮', 'Все'], ['new', '🆕', 'Новые'], ['friends', '👥', 'С друзьями'], ['cards', '🃏', 'Карты и настолки'],
+  ['action', '⚔️', 'Экшен'], ['brain', '🧠', 'Головоломки'], ['tools', '🛠', 'Тесты и инструменты'],
+];
+const GAME_TAGS = {
+  horde: 'new friends action', td: 'new friends action', uno: 'new friends cards', durak: 'new friends cards', pool: 'new friends cards',
+  ludo: 'new friends cards', nardy: 'new friends cards', wardrobe: 'new', cities: 'friends brain', words: 'friends brain',
+  guess: 'friends brain', '2048': 'friends brain', checkers: 'friends cards', catch: 'friends action', sea: 'friends cards',
+  snake: 'friends action', memory: 'friends brain', ttt: 'friends cards', reaction: 'friends action', emoji: 'new friends brain',
+  clicker: 'action', quiz: 'tools', wheel: 'tools', random: 'tools', typing: 'tools', cps: 'tools action', fonts: 'tools',
+};
+let gamesCat = 'all';
+try { gamesCat = localStorage.getItem('d37_games_cat') || 'all'; } catch (e) {}
+function setGamesCat(c){
+  gamesCat = c;
+  try { localStorage.setItem('d37_games_cat', c); } catch (e) {}
+  const grid = document.getElementById('gamesGrid');
+  if (grid) delete grid.dataset.ready;
+  renderGamesHub();
+}
 const GAME_IMPL = window.GAME_IMPL = window.GAME_IMPL || {};
 // Задание дня — коды и порядок совпадают с daily_quest_code()/daily_quest_done() в games.sql
 const DAILY_QUESTS = {
@@ -82,7 +103,15 @@ function renderGamesHub(){
   const grid = document.getElementById('gamesGrid');
   if (!grid || grid.dataset.ready) return;
   grid.dataset.ready = '1';
-  grid.innerHTML = GAMES.map(g => {
+  let cats = document.getElementById('gamesCats');
+  if (!cats) { cats = document.createElement('div'); cats.id = 'gamesCats'; cats.className = 'gm-cats'; cats.setAttribute('role', 'tablist'); grid.before(cats); }
+  if (!GAME_CATS.some(c => c[0] === gamesCat)) gamesCat = 'all';
+  cats.innerHTML = GAME_CATS.map(([k, ic, name]) => {
+    const n = k === 'all' ? GAMES.length : GAMES.filter(g => (GAME_TAGS[g.id] || '').split(' ').includes(k)).length;
+    return `<button type="button" role="tab" class="gm-cat${k === gamesCat ? ' active' : ''}" aria-selected="${k === gamesCat}" onclick="setGamesCat('${k}')">${ic} ${name} <i>${n}</i></button>`;
+  }).join('');
+  const list = gamesCat === 'all' ? GAMES : GAMES.filter(g => (GAME_TAGS[g.id] || '').split(' ').includes(gamesCat));
+  grid.innerHTML = list.map(g => {
     const st = gameLocalStats(g.id);
     const rec = st.best ? `<span class="gm-rec">🏆 ${esc(gameBestLabel(g.id, st.best))}</span>` : '';
     return `<a class="gm-card" href="${g.href || '#/games/' + g.id}" style="--gc:${g.color}">
