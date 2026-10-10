@@ -218,6 +218,7 @@ async function loadYT(){
     newestVids=cached.vids||[];
     allVids=sortedVids(vidSort);
     if(cached.stats){countUp('s-subs',cached.stats.subs);countUp('s-views',cached.stats.views);countUp('s-vids',cached.stats.vids)}
+    if(cached.daily){ window.__d37Daily=cached.daily; window.dispatchEvent(new Event('d37:daily')); }
     if(allVids.length){
       renderFeatured(longVids()[0]);
       renderCurrentVids();
@@ -236,13 +237,14 @@ async function loadYT(){
     const d=r.ok?await r.json():null;
     if(d?.vids?.length){
       if(d.channelId) channelId=d.channelId;
+      if(d.daily){ window.__d37Daily=d.daily; window.dispatchEvent(new Event('d37:daily')); }
       const st=d.stats||{subs:0,views:0,vids:0};
       countUp('s-subs',st.subs);countUp('s-views',st.views);countUp('s-vids',st.vids);
       statsLoaded();
       const rawVids=d.vids.map(v=>({id:v.id,title:v.title,thumb:v.thumb,date:new Date(v.ts).toLocaleDateString('ru-RU'),views:v.views?fmt(v.views):'',viewsN:v.views||0,ts:v.ts,likes:v.likes?fmt(v.likes):'',duration:formatYtDuration(v.duration)}));
       newestVids=rawVids.sort((a,b)=>b.ts-a.ts);
       allVids=sortedVids(vidSort);
-      saveCache({vids:rawVids,stats:st});
+      saveCache({vids:rawVids,stats:st,daily:d.daily||null});
       renderFeatured(longVids()[0]);
       renderCurrentVids();
       if(typeof onVideosLoaded==='function') onVideosLoaded();

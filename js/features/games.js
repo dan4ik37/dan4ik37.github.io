@@ -290,7 +290,7 @@ function gamesDailyDot(){
   if (dot) dot.hidden = !!wordsToday()?.done;
 }
 // «Тест дня» на главной — по кругу от номера дня (тесты — api/_lib/quizzes.js, страницы /quiz/<slug>)
-const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['game', '🕹', 'Какая ты игра?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['poppy', '🧸', 'Кто ты из Poppy Playtime?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
+const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['game', '🕹', 'Какая ты игра?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['poppy', '🧸', 'Кто ты из Poppy Playtime?'], ['cs2', '🎯', 'Какая ты роль в CS2?'], ['horror', '👻', 'Кто ты в хоррор-игре?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
 
 function renderToday(){
   const box = document.getElementById('today');
@@ -307,7 +307,8 @@ function renderToday(){
       <a class="today-card" href="/quiz/${qz[0]}"><span class="ti">${qz[1]}</span><span class="tt"><b>Тест дня</b><small>${esc(qz[2])}</small></span></a>
       <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
       <a class="today-card" href="/tools/wheel"><span class="ti">🎡</span><span class="tt"><b>Колесо фортуны</b><small>Во что поиграть? Кто моет посуду? Крути!</small></span></a>
-      <a class="today-card" href="/top"><span class="ti">🏆</span><span class="tt"><b>Лучшие видео</b><small>Самые популярные ролики канала</small></span></a>
+      ${window.__d37Daily ? `<a class="today-card today-vid" href="/v/${esc(window.__d37Daily.id)}"><span class="ti">🎬</span><span class="tt"><b>Видео дня</b><small>${esc(window.__d37Daily.title)}</small></span></a>`
+        : '<a class="today-card" href="/top"><span class="ti">🏆</span><span class="tt"><b>Лучшие видео</b><small>Самые популярные ролики канала</small></span></a>'}
       <button type="button" class="today-card" onclick="d37Surprise(this)"><span class="ti">🎲</span><span class="tt"><b>Удиви меня</b><small>Случайное видео из почти 6000</small></span></button>
     </div>`;
   gamesDailyDot();
@@ -322,6 +323,7 @@ function renderTodayOnline(){
   el.innerHTML = `<i></i>Сейчас на сайте: <b>${n}</b> — заходи в чат →`;
 }
 window.addEventListener('d37:online', renderTodayOnline);
+window.addEventListener('d37:daily', () => { if (document.body.dataset.route === 'home') renderToday(); });
 window.gamesDailyDot = gamesDailyDot;
 gamesDailyDot();
 // Полночь по МСК: обновить точку и карточку, если сайт открыт долго

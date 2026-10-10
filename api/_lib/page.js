@@ -57,12 +57,13 @@ ${noAds ? '' : '<script async src="https://pagead2.googlesyndication.com/pagead/
     <a href="/#/chat">💬 Чат</a>
     <a href="/#/forum">📋 Форум</a>
     <a href="/vip">✨ VIP</a>
+    <a href="/#/donate">💝 Поддержать dan4ik37</a>
     <a href="/#/profile">👤 Профиль / Войти</a>
   </div></details>
 </header>
 ${body}
 <footer class="foot">
-  <a href="/#/home">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/vip">VIP</a> · <a href="/reklama">Реклама</a> · <a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
+  <a href="/#/home">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/vip">VIP</a> · <a href="/#/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
