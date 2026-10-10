@@ -363,7 +363,7 @@ const WHATSNEW = [['#/games/arena', '🔫', 'Арена 1 на 1'], ['#/games/na
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
-  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.map(([h, ic, t]) => `<a href="${h}">${ic} ${esc(t)}</a>`).join('')}</div>
+  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.slice(0, 10).map(([h, ic, t]) => `<a href="${h}">${ic} ${esc(t)}</a>`).join('')}<a href="#/games">🎮 Все игры →</a></div>
     <button type="button" class="wn-x" aria-label="Скрыть" onclick="hideWhatsNew()">✕</button></div>`;
 }
 function hideWhatsNew(){ try { localStorage.setItem('d37_whatsnew', WHATSNEW_VER); } catch (e) {} document.getElementById('whatsNew')?.remove(); }
