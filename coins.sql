@@ -9,9 +9,10 @@
 --  «×2 за забег» до 5 раз в день). VIP и персонал получают за забеги и бонус дня вдвое больше.
 --  На что: возрождение (30), герои и улучшения «Орды», части своего персонажа (coins_buy, цены — coin_price).
 --  Персонаж: надетое — coin_wallet.look, сохраняет char_save (только своё, бесплатное или VIP-часть у VIP),
---  чужих показывает char_looks (рекорды, профиль, игры вдвоём).
+--  чужих показывает char_looks (рекорды, профиль, игры вдвоём). В look — и части 3D-человечка «Мира Денчика»
+--  (фигура, кожа, рост, причёска, одежда, аксессуары…) и цвета из палитры: «x» + 6 hex-цифр (xff8800), бесплатно.
 --  Цены и лимиты продублированы в js/core/coins.js (RULES, PRICES) и js/core/avatar.js (PARTS):
---  поменял тут — поменяй там.
+--  поменял тут — поменяй там. Цены частей и слоты char_save генерирует скрипт из PARTS (тест PGlite сверяет все).
 --
 --  Как и с очками игр, сервер верит клиенту только в пределах лимитов: монеты тратятся только на
 --  игровое, поэтому накрутка в рамках лимитов ничего не ломает.
@@ -80,29 +81,72 @@ create or replace function public.coin_price(p_item text) returns int language s
     when p_item ~ '^up:(might|hp|speed|magnet|greed):[1-5]$' then (array[100, 200, 400, 700, 1000])[split_part(p_item, ':', 3)::int]
     when p_item ~ '^up:armor:[1-3]$' then (array[150, 400, 800])[split_part(p_item, ':', 3)::int]
     when p_item like 'skin:%' then (select v.p from (values
-      ('skin:color:blue', 0), ('skin:color:red', 0), ('skin:color:green', 0), ('skin:color:yellow', 60), ('skin:color:orange', 60),
-      ('skin:color:purple', 60), ('skin:color:pink', 60), ('skin:color:teal', 60), ('skin:color:white', 100), ('skin:color:black', 100),
-      ('skin:color:galaxy', 350), ('skin:color:gold', 800), ('skin:color:rainbow', 3000),
-      ('skin:eyes:normal', 0), ('skin:eyes:happy', 0), ('skin:eyes:angry', 50), ('skin:eyes:sleepy', 50), ('skin:eyes:dizzy', 80),
-      ('skin:eyes:heart', 100), ('skin:eyes:star', 100), ('skin:eyes:cool', 120), ('skin:eyes:cyclops', 150), ('skin:eyes:robot', 200),
-      ('skin:mouth:smile', 0), ('skin:mouth:cat', 0), ('skin:mouth:grin', 40), ('skin:mouth:o', 40), ('skin:mouth:tongue', 60),
-      ('skin:mouth:fangs', 80), ('skin:mouth:mustache', 120),
+      ('skin:color:blue', 0), ('skin:color:red', 0), ('skin:color:green', 0), ('skin:color:yellow', 0), ('skin:color:orange', 0),
+      ('skin:color:purple', 0), ('skin:color:pink', 0), ('skin:color:teal', 0), ('skin:color:white', 0), ('skin:color:black', 0),
+      ('skin:color:galaxy', 350), ('skin:color:gold', 800), ('skin:color:rainbow', 3000), ('skin:eyes:normal', 0), ('skin:eyes:happy', 0),
+      ('skin:eyes:angry', 50), ('skin:eyes:sleepy', 50), ('skin:eyes:dizzy', 80), ('skin:eyes:heart', 100), ('skin:eyes:star', 100),
+      ('skin:eyes:cool', 120), ('skin:eyes:cyclops', 150), ('skin:eyes:robot', 200), ('skin:mouth:smile', 0), ('skin:mouth:cat', 0),
+      ('skin:mouth:grin', 40), ('skin:mouth:o', 40), ('skin:mouth:tongue', 60), ('skin:mouth:fangs', 80), ('skin:mouth:mustache', 120),
       ('skin:hat:none', 0), ('skin:hat:bow', 100), ('skin:hat:cap', 100), ('skin:hat:party', 120), ('skin:hat:grad', 150),
       ('skin:hat:helmet', 150), ('skin:hat:army', 150), ('skin:hat:top', 200), ('skin:hat:ears', 200), ('skin:hat:horns', 250),
-      ('skin:hat:propeller', 250), ('skin:hat:halo', 300), ('skin:hat:crown', 800), ('skin:hat:headphones', 3000),
-      ('skin:item:none', 0), ('skin:item:rose', 80), ('skin:item:pizza', 80), ('skin:item:balloon', 100), ('skin:item:mic', 100),
-      ('skin:item:gamepad', 120), ('skin:item:flashlight', 120), ('skin:item:sword', 150), ('skin:item:trophy', 300),
-      ('skin:pet:none', 0), ('skin:pet:dog', 300), ('skin:pet:cat', 300), ('skin:pet:frog', 300), ('skin:pet:fox', 400),
-      ('skin:pet:ghost', 400), ('skin:pet:robot', 500), ('skin:pet:unicorn', 700), ('skin:pet:dragon', 900),
-      ('skin:trail:none', 0), ('skin:trail:dust', 100), ('skin:trail:sparks', 250), ('skin:trail:hearts', 250), ('skin:trail:notes', 300),
-      ('skin:trail:stars', 300), ('skin:trail:fire', 350), ('skin:trail:rainbow', 3000)
+      ('skin:hat:propeller', 250), ('skin:hat:halo', 300), ('skin:hat:crown', 800), ('skin:hat:headphones', 3000), ('skin:item:none', 0),
+      ('skin:item:rose', 80), ('skin:item:pizza', 80), ('skin:item:balloon', 100), ('skin:item:mic', 100), ('skin:item:gamepad', 120),
+      ('skin:item:flashlight', 120), ('skin:item:sword', 150), ('skin:item:trophy', 300), ('skin:pet:none', 0), ('skin:pet:dog', 300),
+      ('skin:pet:cat', 300), ('skin:pet:frog', 300), ('skin:pet:fox', 400), ('skin:pet:ghost', 400), ('skin:pet:robot', 500),
+      ('skin:pet:unicorn', 700), ('skin:pet:dragon', 900), ('skin:trail:none', 0), ('skin:trail:dust', 100), ('skin:trail:sparks', 250),
+      ('skin:trail:hearts', 250), ('skin:trail:notes', 300), ('skin:trail:stars', 300), ('skin:trail:fire', 350), ('skin:trail:rainbow', 3000),
+      ('skin:body:boy', 0), ('skin:body:girl', 0), ('skin:tone:t1', 0), ('skin:tone:t2', 0), ('skin:tone:t3', 0),
+      ('skin:tone:t4', 0), ('skin:tone:t5', 0), ('skin:tone:t6', 0), ('skin:tone:t7', 0), ('skin:tone:t8', 0),
+      ('skin:tone:zombie', 0), ('skin:tone:alien', 0), ('skin:tone:fairy', 0), ('skin:tone:robot', 0), ('skin:tone:goldskin', 1000),
+      ('skin:hgt:0', 0), ('skin:hgt:1', 0), ('skin:hgt:2', 0), ('skin:hgt:3', 0), ('skin:hgt:4', 0),
+      ('skin:wid:0', 0), ('skin:wid:1', 0), ('skin:wid:2', 0), ('skin:wid:3', 0), ('skin:wid:4', 0),
+      ('skin:head:0', 0), ('skin:head:1', 0), ('skin:head:2', 0), ('skin:head:3', 0), ('skin:head:4', 0),
+      ('skin:eyec:brown', 0), ('skin:eyec:dark', 0), ('skin:eyec:blue', 0), ('skin:eyec:green', 0), ('skin:eyec:gray', 0),
+      ('skin:eyec:amber', 0), ('skin:eyec:violet', 0), ('skin:eyec:pink', 0), ('skin:eyec:red', 0), ('skin:eyec:gold', 0),
+      ('skin:eyec:glow', 300), ('skin:eyec:fire', 300), ('skin:brows:soft', 0), ('skin:brows:thin', 0), ('skin:brows:thick', 0),
+      ('skin:brows:angry', 0), ('skin:brows:none', 0), ('skin:lash:no', 0), ('skin:lash:yes', 0), ('skin:lash:long', 40),
+      ('skin:cheek:blush', 0), ('skin:cheek:none', 0), ('skin:cheek:freckles', 0), ('skin:cheek:both', 0), ('skin:cheek:stars', 80),
+      ('skin:cheek:hearts', 80), ('skin:hair:short', 0), ('skin:hair:side', 0), ('skin:hair:spiky', 0), ('skin:hair:curly', 0),
+      ('skin:hair:buzz', 0), ('skin:hair:bob', 0), ('skin:hair:ponytail', 0), ('skin:hair:long', 0), ('skin:hair:buns', 0),
+      ('skin:hair:bald', 0), ('skin:hair:twintails', 100), ('skin:hair:braid', 100), ('skin:hair:mohawk', 150), ('skin:hair:afro', 150),
+      ('skin:hair:wavy', 200), ('skin:hair:anime', 250), ('skin:hairc:black', 0), ('skin:hairc:dark', 0), ('skin:hairc:brown', 0),
+      ('skin:hairc:caramel', 0), ('skin:hairc:blond', 0), ('skin:hairc:ginger', 0), ('skin:hairc:platinum', 0), ('skin:hairc:pink', 0),
+      ('skin:hairc:blue', 0), ('skin:hairc:mint', 0), ('skin:hairc:purple', 0), ('skin:hairc:red', 0), ('skin:hairc:white', 0),
+      ('skin:hairc:neon', 600), ('skin:hairc:rainbow', 2000), ('skin:top:hoodie', 0), ('skin:top:tshirt', 0), ('skin:top:sweater', 0),
+      ('skin:top:dress', 0), ('skin:top:jacket', 100), ('skin:top:jersey', 300), ('skin:top:suit', 400), ('skin:trim:auto', 0),
+      ('skin:trim:white', 0), ('skin:trim:silver', 0), ('skin:trim:gray', 0), ('skin:trim:black', 0), ('skin:trim:red', 0),
+      ('skin:trim:orange', 0), ('skin:trim:yellow', 0), ('skin:trim:lime', 0), ('skin:trim:green', 0), ('skin:trim:teal', 0),
+      ('skin:trim:sky', 0), ('skin:trim:blue', 0), ('skin:trim:purple', 0), ('skin:trim:pink', 0), ('skin:trim:brown', 0),
+      ('skin:trim:beige', 0), ('skin:bottom:pants', 0), ('skin:bottom:jeans', 0), ('skin:bottom:shorts', 0), ('skin:bottom:skirt', 0),
+      ('skin:bottom:cargo', 80), ('skin:botc:graphite', 0), ('skin:botc:denim', 0), ('skin:botc:black', 0), ('skin:botc:khaki', 0),
+      ('skin:botc:beige', 0), ('skin:botc:white', 0), ('skin:botc:red', 0), ('skin:botc:pink', 0), ('skin:botc:purple', 0),
+      ('skin:botc:green', 0), ('skin:shoes:sneakers', 0), ('skin:shoes:kedy', 0), ('skin:shoes:boots', 60), ('skin:shoes:bunny', 200),
+      ('skin:shoec:white', 0), ('skin:shoec:black', 0), ('skin:shoec:red', 0), ('skin:shoec:blue', 0), ('skin:shoec:brown', 0),
+      ('skin:shoec:yellow', 0), ('skin:shoec:pink', 0), ('skin:shoec:green', 0), ('skin:hatc:auto', 0), ('skin:hatc:white', 0),
+      ('skin:hatc:silver', 0), ('skin:hatc:gray', 0), ('skin:hatc:black', 0), ('skin:hatc:red', 0), ('skin:hatc:orange', 0),
+      ('skin:hatc:yellow', 0), ('skin:hatc:lime', 0), ('skin:hatc:green', 0), ('skin:hatc:teal', 0), ('skin:hatc:sky', 0),
+      ('skin:hatc:blue', 0), ('skin:hatc:purple', 0), ('skin:hatc:pink', 0), ('skin:hatc:brown', 0), ('skin:hatc:beige', 0),
+      ('skin:glasses:none', 0), ('skin:glasses:round', 60), ('skin:glasses:square', 60), ('skin:glasses:heart', 120), ('skin:glasses:star', 150),
+      ('skin:glasses:monocle', 200), ('skin:glassc:auto', 0), ('skin:glassc:white', 0), ('skin:glassc:silver', 0), ('skin:glassc:gray', 0),
+      ('skin:glassc:black', 0), ('skin:glassc:red', 0), ('skin:glassc:orange', 0), ('skin:glassc:yellow', 0), ('skin:glassc:lime', 0),
+      ('skin:glassc:green', 0), ('skin:glassc:teal', 0), ('skin:glassc:sky', 0), ('skin:glassc:blue', 0), ('skin:glassc:purple', 0),
+      ('skin:glassc:pink', 0), ('skin:glassc:brown', 0), ('skin:glassc:beige', 0), ('skin:neck:none', 0), ('skin:neck:bowtie', 60),
+      ('skin:neck:tie', 60), ('skin:neck:scarf', 80), ('skin:neck:chain', 250), ('skin:neckc:auto', 0), ('skin:neckc:white', 0),
+      ('skin:neckc:silver', 0), ('skin:neckc:gray', 0), ('skin:neckc:black', 0), ('skin:neckc:red', 0), ('skin:neckc:orange', 0),
+      ('skin:neckc:yellow', 0), ('skin:neckc:lime', 0), ('skin:neckc:green', 0), ('skin:neckc:teal', 0), ('skin:neckc:sky', 0),
+      ('skin:neckc:blue', 0), ('skin:neckc:purple', 0), ('skin:neckc:pink', 0), ('skin:neckc:brown', 0), ('skin:neckc:beige', 0),
+      ('skin:back:none', 0), ('skin:back:backpack', 100), ('skin:back:tail', 150), ('skin:back:guitar', 250), ('skin:back:cape', 300),
+      ('skin:back:wings', 600), ('skin:back:batwings', 600), ('skin:back:dragon', 3000), ('skin:backc:auto', 0), ('skin:backc:white', 0),
+      ('skin:backc:silver', 0), ('skin:backc:gray', 0), ('skin:backc:black', 0), ('skin:backc:red', 0), ('skin:backc:orange', 0),
+      ('skin:backc:yellow', 0), ('skin:backc:lime', 0), ('skin:backc:green', 0), ('skin:backc:teal', 0), ('skin:backc:sky', 0),
+      ('skin:backc:blue', 0), ('skin:backc:purple', 0), ('skin:backc:pink', 0), ('skin:backc:brown', 0), ('skin:backc:beige', 0)
     ) v(i, p) where v.i = p_item)
   end
 $$;
 
 -- Части персонажа, бесплатные для VIP/персонала (остальным — за монеты по цене выше)
 create or replace function public.coin_vip_item(p_item text) returns boolean language sql immutable as $$
-  select p_item in ('skin:color:rainbow', 'skin:hat:headphones', 'skin:trail:rainbow')
+  select p_item in ('skin:color:rainbow', 'skin:hat:headphones', 'skin:trail:rainbow', 'skin:hairc:rainbow', 'skin:back:dragon')
 $$;
 
 -- Сколько монет можно принести из одного забега (как RUN_CAP в coins.js)
@@ -270,10 +314,12 @@ begin
   if p_look is null or jsonb_typeof(p_look) <> 'object' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
   select items into owned from public.coin_wallet where user_id = uid;
   perks := coalesce(public.has_perks(uid), false);
-  foreach slot in array array['color', 'eyes', 'mouth', 'hat', 'item', 'pet', 'trail'] loop
+  foreach slot in array array['color', 'eyes', 'mouth', 'hat', 'item', 'pet', 'trail', 'body', 'tone', 'hgt', 'wid', 'head', 'eyec', 'brows', 'lash', 'cheek', 'hair', 'hairc', 'top', 'trim', 'bottom', 'botc', 'shoes', 'shoec', 'hatc', 'glasses', 'glassc', 'neck', 'neckc', 'back', 'backc'] loop
     val := p_look ->> slot;
     if val is null or val = '' then continue; end if;
     if val !~ '^[a-z0-9]{1,20}$' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+    -- свой цвет из палитры («x» + 6 hex-цифр) — бесплатно, только у частей с палитрой
+    if val ~ '^x[0-9a-f]{6}$' and slot = any(array['color', 'tone', 'eyec', 'hairc', 'trim', 'botc', 'shoec', 'hatc', 'glassc', 'neckc', 'backc']) then clean := clean || jsonb_build_object(slot, val); continue; end if;
     item := 'skin:' || slot || ':' || val;
     pr := public.coin_price(item);
     if pr is null then return jsonb_build_object('ok', false, 'reason', 'item', 'item', item); end if;

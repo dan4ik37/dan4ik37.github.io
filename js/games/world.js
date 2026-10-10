@@ -13,7 +13,7 @@
 (() => {
   const W = 2400, H = 1600, CELL = 20, GW = W / CELL, GH = H / CELL, CX = 1200, CY = 800, PLAZA = 300;
   const SPEED = 230, MAX_ROOM = 20, SHARDS = 6, IDLE_MS = 15 * 60e3, HIDDEN_MS = 10 * 60e3;
-  const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍'];
+  const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃'];
   const PORTALS = [
     { id: 'games', e: '🎮', name: 'Все игры', color: '#ff2d55', a: -90 },
     { id: 'horde', e: '🧟', name: 'Орда', color: '#a855f7', a: -45 },
@@ -277,7 +277,7 @@
     const D = mapCanvas(), M = D.m;
     el.innerHTML = `<div class="wld">
         <div class="wld-top"><b>🌍 Мир Денчика</b><span class="wldShard"></span><span class="wldOnline">подключаемся…</span>
-          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
+          <span class="wld-topbtns"><button type="button" data-act="mode" class="wldMode" title="Объёмный или плоский мир">🧊<span> 3D</span></button><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
         <div class="wld-wrap">
           <canvas class="wld-cv" aria-label="Мир Денчика: нажми, куда идти"></canvas>
           <div class="wld-log" aria-live="polite"></div>
@@ -328,9 +328,33 @@
 
     // ── Ввод ──
     const toWorld = (cx, cy) => { const b = cv.getBoundingClientRect(); return [S.camX + (cx - b.left) / S.z, S.camY + (cy - b.top) / S.z]; };
-    cv.addEventListener('pointerdown', e => {
+    // 3D: игрок под пальцем — по экранной точке груди (ближе 40 px)
+    const pick3d = (cx, cy) => {
+      const b = wrap.getBoundingClientRect();
+      let hit = null, best = 40;
+      for (const p of [S.me, ...S.players.values()]) {
+        if (p.leaving) continue;
+        const [sx, sy, vis] = S.g3.project(p.x, p.y, 1.1), d = Math.hypot(cx - b.left - sx, cy - b.top - sy);
+        if (vis && d < best) { best = d; hit = p; }
+      }
+      return hit;
+    };
+    const touches = new Map();
+    wrap.addEventListener('pointerdown', e => {
+      if (e.target.closest('.wld-pop, .wld-inv, .wld-status, button, a, input')) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       activity();
+      if (e.pointerType === 'touch') { touches.set(e.pointerId, [e.clientX, e.clientY]); if (touches.size > 1) { S.pinch = null; return; } }
+      if (S.g3) {
+        const hit = pick3d(e.clientX, e.clientY);
+        if (hit) { openCard(hit); return; }
+        const pt = S.g3.pickGround(e.clientX, e.clientY);
+        if (!pt) return;
+        const portal = PORTALS.find(p => dist(pt[0], pt[1], p.x, p.y) < 90);
+        walkTo(portal ? portal.x : pt[0], portal ? portal.y : pt[1]);
+        closePops();
+        return;
+      }
       const [wx, wy] = toWorld(e.clientX, e.clientY);
       // игрок под пальцем?
       let hit = null, best = 1e9;
@@ -344,8 +368,21 @@
       walkTo(portal ? portal.x : wx, portal ? portal.y : wy);
       closePops();
     });
+    // приближение: колесо мыши и два пальца
+    wrap.addEventListener('wheel', e => { if (!S.g3 || e.target.closest('.wld-pop')) return; e.preventDefault(); S.g3.setZoom(S.g3.zoom * (e.deltaY > 0 ? 1.1 : .9)); }, { passive: false });
+    wrap.addEventListener('pointermove', e => {
+      if (!touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, [e.clientX, e.clientY]);
+      if (touches.size !== 2 || !S.g3) return;
+      const [a, b] = [...touches.values()], d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+      if (S.pinch) S.g3.setZoom(S.g3.zoom * S.pinch / d);
+      S.pinch = d;
+    });
+    const untouch = e => { touches.delete(e.pointerId); if (touches.size < 2) S.pinch = null; };
+    wrap.addEventListener('pointerup', untouch);
+    wrap.addEventListener('pointercancel', untouch);
     function onKey(e, down){
-      if (S.stopped || e.target?.closest?.('input,textarea,[contenteditable]')) return;
+      if (S.stopped || S.editing || e.target?.closest?.('input,textarea,[contenteditable]')) return;
       const k = { ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' }[e.code];
       if (!k) { if (down && e.key === 'Enter') { const i = q('.wld-say input'); if (!i.readOnly) i.focus(); } return; }
       e.preventDefault();
@@ -389,6 +426,12 @@
     join();
     loadFriends();
     checkLive();
+    // Объёмный мир (Three.js), если браузер умеет WebGL и игрок не выбрал 2D; пока грузится — 2D
+    let force2d = false;
+    try { force2d = localStorage.getItem('d37_world_2d') === '1'; } catch (e) {}
+    q('.wldMode').innerHTML = force2d ? '🗺️<span> 2D</span>' : '🧊<span> 3D</span>';
+    const st0 = S;
+    if (!force2d && window.World3D?.supported()) window.World3D.load().then(ok => { if (ok && S === st0 && !S.stopped && !S.g3) enable3D(); });
     clearInterval(S.tick);
     S.tick = setInterval(housekeeping, 1000);
   }
@@ -419,10 +462,11 @@
       if (S.ch !== ch || S.stopped) return;
       if (st === 'SUBSCRIBED') {
         status('');
-        await ch.track({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.me.x), y: Math.round(S.me.y), at: S.joinedAt });
+        await ch.track(presenceMeta());
       } else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') status('Связь с миром потерялась — переподключаемся…');
     });
   }
+  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.me.x), y: Math.round(S.me.y), at: S.joinedAt });
   function leaveChannel(){
     const ch = S?.ch;
     if (!ch) return;
@@ -448,9 +492,14 @@
       let p = S.players.get(key);
       if (!p || p.leaving) {
         p = mkPlayer({ key, uid: typeof m.uid === 'string' ? m.uid : null, nick: String(m.nick || 'Гость').slice(0, 24), look: freeLook(m.look), x: Math.max(30, Math.min(W - 30, +m.x || CX)), y: Math.max(60, Math.min(H - 30, +m.y || CY + 200)), at: +m.at || 0 });
+        p.lookRaw = JSON.stringify(m.look || {});
         S.players.set(key, p);
         if (typeof m.pub === 'string' && m.pub.length < 200) { p.pubRaw = m.pub; importPub(m.pub).then(k => { p.pub = k; flushPending(); }).catch(() => {}); }
         identify(p, m);
+      } else {
+        // переоделся — новый образ (у проверенного платное берём из базы)
+        const lk = JSON.stringify(m.look || {});
+        if (p.lookRaw !== lk) { p.lookRaw = lk; p.look = freeLook(m.look); p._sig = null; if (p.v) serverLook(p, m, true); }
       }
     }
     for (const [key, p] of S.players) if (!seen.has(key) && !p.leaving) p.leaving = now();
@@ -471,7 +520,14 @@
     if (!v || v.uid !== p.uid) { p.v = null; return; }
     p.v = v; p.nick = v.nick || p.nick;
     if (v.banned) st.muted.add(p.key);
-    try { const looks = await window.D37Char?.looksOf?.([p.uid]); if (looks && looks[p.uid]) p.look = looks[p.uid]; } catch (e) {}
+    await serverLook(p, m, false);
+  }
+  // Образ проверенного игрока: платное — из базы (char_looks), бесплатные части человечка и свои цвета — из присутствия
+  async function serverLook(p, m, fresh){
+    try {
+      const looks = await window.D37Char?.looksOf?.([p.uid], fresh);
+      if (looks && looks[p.uid] && S && S.players.get(p.key) === p) { p.look = Object.assign(freeLook(m.look), looks[p.uid]); p._sig = null; }
+    } catch (e) {}
   }
   async function loadFriends(){
     const st = S;
@@ -667,7 +723,7 @@
     activity();
     const p = S.players.get(S.cardFor);
     if (a === 'close') closePops();
-    else if (a === 'look') location.hash = '#/games/wardrobe';
+    else if (a === 'look') openEditor();
     else if (a === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
     else if (a === 'help') { addLog(null, '👋 Нажимай на землю — персонаж идёт туда (или WASD/стрелки). Порталы ведут в игры. Нажми на игрока: профиль, дружба, позвать в игру. Писать в чат могут вошедшие.'); }
     else if (a.startsWith('profile:')) location.hash = '#/profile/' + a.slice(8);
@@ -688,6 +744,14 @@
     else if (a === 'mute' && p) { if (confirm(`Заглушить ${p.nick} для всех в этом мире до конца визита?`)) { send({ t: 'mute', to: p.key }); S.muted.add(p.key); p.bubble = null; closePops(); } }
     else if (a === 'accept') { const box = S.q('.wld-inv'); box.hidden = true; if (box.dataset.url) location.hash = box.dataset.url; }
     else if (a === 'decline') S.q('.wld-inv').hidden = true;
+    else if (a === 'mode') {
+      let f = false;
+      try { f = localStorage.getItem('d37_world_2d') === '1'; localStorage.setItem('d37_world_2d', f ? '0' : '1'); } catch (e) {}
+      const el = root, ga = api;
+      unmount(); mount(el);
+      api = ga;
+      toast(f ? '🧊 Включаем объёмный мир…' : '🗺️ Плоский мир — легче для слабых телефонов');
+    }
     else if (a === 'rejoin') { S.q('.wld-status').hidden = true; S.stopped = false; S.idleAt = Date.now(); join(1); S.last = now(); S.raf = requestAnimationFrame(frame); }
   }
   const newCode = () => window.GameRoom?.newCode?.() || Math.random().toString(36).slice(2, 8);
@@ -761,7 +825,95 @@
     if (pt && S.portalIn !== pt.id) { S.portalIn = pt.id; S.me.path = []; S.keysDown.clear(); openPortal(pt); api?.sfx?.('ok'); }
     else if (!pt) S.portalIn = null;
     if (t - (S.posSaved || 0) > 3000) { S.posSaved = t; try { localStorage.setItem('d37_world_pos', JSON.stringify({ x: Math.round(S.me.x), y: Math.round(S.me.y) })); } catch (e) {} }
-    draw(t / 1000);
+    if (S.g3) draw3d(t / 1000, dt); else if (!S.editing) draw(t / 1000);
+  }
+  // ── Свой персонаж прямо в мире: окно редактора (js/games/charedit.js) поверх мира, мир на паузе ──
+  async function openEditor(){
+    if (!window.D37Editor || !window.World3D?.supported()) { location.hash = '#/games/wardrobe'; return; }
+    if (S.editing) return;
+    const st0 = S, box = document.createElement('div');
+    box.className = 'wld-edit';
+    document.body.appendChild(box);   // поверх всего сайта (шапка, нижнее меню)
+    document.documentElement.classList.add('wld-editing');
+    S.editing = box;
+    S.keysDown.clear(); S.me.path = [];
+    S.g3?.setPaused(true);
+    closePops();
+    const ok = await window.D37Editor.mount(box, { api, key: S.key, onClose: closeEditor });
+    if (!ok && S === st0) { closeEditor(); location.hash = '#/games/wardrobe'; }
+  }
+  function closeEditor(){
+    if (!S?.editing) return;
+    window.D37Editor?.unmount();
+    S.editing.remove(); S.editing = null;
+    document.documentElement.classList.remove('wld-editing');
+    S.g3?.setPaused(false);
+    const L = window.D37Char ? window.D37Char.look() : {};
+    if (JSON.stringify(L) !== JSON.stringify(S.me.look)) {
+      S.me.look = L; S.me._sig = null;
+      if (S.ch && S.keys) S.ch.track(presenceMeta()).catch(() => {});
+      toast('🎭 Новый образ — его видят все в мире');
+    }
+  }
+  // ── Объёмный мир: World3D (js/games/world3d.js) + подписи и пузыри — HTML поверх ──
+  function enable3D(){
+    try { S.g3 = window.World3D.create(S.wrap, { M: S.M, PORTALS, ground: S.D.canvas, STAGE, CX, CY, W, H }); }
+    catch (e) { S.g3 = null; return; }
+    S.cv.style.visibility = 'hidden';
+    S.tags = document.createElement('div');
+    S.tags.className = 'wld-tags';
+    S.wrap.appendChild(S.tags);
+    S.wrap.classList.add('is3d');
+    const ro3 = window.ResizeObserver ? new ResizeObserver(() => S?.g3?.resize()) : null;
+    ro3?.observe(S.wrap);
+    const prev = S.cleanup;
+    S.cleanup = () => { prev?.(); ro3?.disconnect(); };
+  }
+  function draw3d(time, dt){
+    const g = S.g3;
+    for (const p of [S.me, ...S.players.values()]) {
+      const sig = p._sig || (p._sig = JSON.stringify(p.look || {}));
+      if (sig !== p._sigDone) { g.setPlayer(p.key, p.look); p._sigDone = sig; }
+      g.updatePlayer(p.key, p.x, p.y, p.moving, dt, time, p.leaving ? Math.max(0, 1 - (now() - p.leaving) / 600) : 1);
+      if (p.emo && p.emo.t !== p._emo3) { p._emo3 = p.emo.t; g.emote(p.key, p.emo.e, time); }
+    }
+    for (const k of g.keys()) if (k !== S.key && !S.players.has(k)) g.removePlayer(k);
+    g.setLive(!!S.live);
+    g.render(time, dt, S.me.x, S.me.y);
+    drawTags();
+  }
+  function drawTags(){
+    const all = [S.me, ...S.players.values()], seen = new Set();
+    for (const p of all) {
+      let el = p._tag;
+      if (!el) {
+        el = p._tag = document.createElement('div');
+        el.className = 'wld-tag';
+        el.innerHTML = '<div class="wld-tbub" hidden></div><div class="wld-temo" hidden></div><b class="wld-tname"></b>';
+        S.tags.appendChild(el);
+      }
+      seen.add(el);
+      const [sx, sy, vis] = S.g3.project(p.x, p.y, S.g3.tagY(p.key));
+      if (!vis || (p.leaving && now() - p.leaving > 500)) { el.style.display = 'none'; continue; }
+      el.style.display = '';
+      el.style.transform = `translate(${Math.round(sx)}px,${Math.round(sy)}px) translate(-50%,-100%)`;
+      // имя: роль, VIP, друг, уровень
+      let col = '#ffffff', pre = '';
+      if (p === S.me) col = '#93c5fd'; else if (!p.uid) col = '#cbd5e1';
+      if (p.v?.vip) col = VIPC[p.v.vip] || col;
+      if (p.v?.role && ROLE[p.v.role]) { col = ROLE[p.v.role][1]; pre = ROLE[p.v.role][0] + ' '; }
+      if (p.uid && S.friends.has(p.uid)) pre = '💚 ' + pre;
+      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '');
+      const nm = el.lastChild;
+      if (nm.textContent !== name) nm.textContent = name;
+      if (nm.style.color !== col) nm.style.color = col;
+      const bub = el.firstChild, showB = p.bubble && now() - p.bubble.t < 7000 && !S.muted.has(p.key);
+      if (showB) { if (bub.textContent !== p.bubble.text) bub.textContent = p.bubble.text; bub.hidden = false; } else { bub.hidden = true; if (p.bubble && now() - p.bubble.t >= 7000) p.bubble = null; }
+      const em = el.children[1], k = p.emo ? (now() - p.emo.t) / 2200 : 1;
+      if (k < 1) { if (em.textContent !== p.emo.e) em.textContent = p.emo.e; em.hidden = false; em.style.opacity = Math.min(1, (1 - k) * 2); em.style.transform = `translateY(${-k * 30}px)`; }
+      else { em.hidden = true; if (p.emo) p.emo = null; }
+    }
+    for (const el of [...S.tags.children]) if (!seen.has(el)) el.remove();
   }
   function draw(time){
     const { ctx, z, dpr, cw, ch_ } = S, D = S.D, M = S.M;
@@ -897,8 +1049,10 @@
     cancelAnimationFrame(S.raf);
     clearInterval(S.tick); clearTimeout(S.sendQ); clearTimeout(S.invT);
     try { localStorage.setItem('d37_world_pos', JSON.stringify({ x: Math.round(S.me.x), y: Math.round(S.me.y) })); } catch (e) {}
+    if (S.editing) { window.D37Editor?.unmount(); S.editing.remove(); S.editing = null; document.documentElement.classList.remove('wld-editing'); }
     leaveChannel();
     S.cleanup?.();
+    try { S.g3?.dispose(); } catch (e) {}
     S = null;
   }
 

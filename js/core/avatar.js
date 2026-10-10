@@ -12,12 +12,21 @@
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   const TAU = Math.PI * 2;
   // [id, название, цена, значение (цвет / эмодзи), vip]
+  // Палитра (pal: 1): кроме готовых цветов — любой свой, id «x» + 6 hex-цифр (xff8800), бесплатно. Обычные цвета бесплатны,
+  // за монеты — особые материалы (радуга, космос, золото, светящиеся глаза, неоновые и переливающиеся волосы).
+  const CUSTOM = /^x[0-9a-f]{6}$/;
+  const BASE = [
+    ['white', 'Белый', '#f4f5f7'], ['silver', 'Светло-серый', '#c9ced8'], ['gray', 'Серый', '#7d8696'], ['black', 'Чёрный', '#25252d'],
+    ['red', 'Красный', '#e23b4e'], ['orange', 'Оранжевый', '#ff8c2e'], ['yellow', 'Жёлтый', '#facc15'], ['lime', 'Салатовый', '#9be15d'],
+    ['green', 'Зелёный', '#22a35a'], ['teal', 'Бирюзовый', '#22c7b8'], ['sky', 'Голубой', '#5ab8ff'], ['blue', 'Синий', '#3b6fe0'],
+    ['purple', 'Фиолетовый', '#8b5cf6'], ['pink', 'Розовый', '#ff6fb5'], ['brown', 'Коричневый', '#7a4f2c'], ['beige', 'Бежевый', '#d9c4a0'],
+  ].map(([id, n, c]) => [id, n, 0, c]);
   const PARTS = {
-    color: { name: 'Цвет', icon: '🎨', list: [
+    color: { name: 'Цвет', icon: '🎨', pal: 1, list: [
       ['blue', 'Синий', 0, '#4f8df7'], ['red', 'Красный', 0, '#ff4d6d'], ['green', 'Зелёный', 0, '#34c759'],
-      ['yellow', 'Жёлтый', 60, '#ffcc33'], ['orange', 'Оранжевый', 60, '#ff8c2e'], ['purple', 'Фиолетовый', 60, '#9b6dff'],
-      ['pink', 'Розовый', 60, '#ff6fb5'], ['teal', 'Бирюзовый', 60, '#22c7b8'], ['white', 'Белый', 100, '#eef0f4'],
-      ['black', 'Чёрный', 100, '#3a3a46'], ['galaxy', 'Космос', 350, '#2b2366'], ['gold', 'Золото', 800, '#f5b81c'],
+      ['yellow', 'Жёлтый', 0, '#ffcc33'], ['orange', 'Оранжевый', 0, '#ff8c2e'], ['purple', 'Фиолетовый', 0, '#9b6dff'],
+      ['pink', 'Розовый', 0, '#ff6fb5'], ['teal', 'Бирюзовый', 0, '#22c7b8'], ['white', 'Белый', 0, '#eef0f4'],
+      ['black', 'Чёрный', 0, '#3a3a46'], ['galaxy', 'Космос', 350, '#2b2366'], ['gold', 'Золото', 800, '#f5b81c'],
       ['rainbow', 'Радуга', 3000, '#ff4d6d', 1],
     ] },
     eyes: { name: 'Глаза', icon: '👀', list: [
@@ -49,25 +58,107 @@
       ['none', 'Без следа', 0], ['dust', 'Пыль', 100, '💨'], ['sparks', 'Искры', 250, '✨'], ['hearts', 'Сердечки', 250, '💕'],
       ['notes', 'Ноты', 300, '🎵'], ['stars', 'Звёзды', 300, '⭐'], ['fire', 'Огонь', 350, '🔥'], ['rainbow', 'Радуга', 3000, '🌈', 1],
     ] },
+    // ── 3D-человечек («Мир Денчика», гардероб): тело, лицо, волосы, одежда, аксессуары и их цвета. В 2D-играх не рисуются
+    //    (body: 1). Не выбрано (нет в look) — мир берёт по «отпечатку» игрока, чтобы толпа была разной (world3d.js → resolve)
+    body: { name: 'Фигура', icon: '🧍', body: 1, list: [['boy', 'Мальчик', 0], ['girl', 'Девочка', 0]] },
+    tone: { name: 'Кожа', icon: '🖐️', body: 1, pal: 1, list: [
+      ['t1', 'Фарфор', 0, '#fff0e4'], ['t2', 'Светлая', 0, '#ffe0c7'], ['t3', 'Персик', 0, '#f7cba5'], ['t4', 'Бежевая', 0, '#e9b48a'],
+      ['t5', 'Загар', 0, '#d39a69'], ['t6', 'Смуглая', 0, '#ad744c'], ['t7', 'Тёмная', 0, '#82573a'], ['t8', 'Шоколад', 0, '#5c3b27'],
+      ['zombie', 'Зомби', 0, '#a4d17f'], ['alien', 'Пришелец', 0, '#93d5ff'], ['fairy', 'Фея', 0, '#dcc2ff'], ['robot', 'Робот', 0, '#b9c3cd'],
+      ['goldskin', 'Золотая статуя', 1000, '#f2b91e'],
+    ] },
+    hgt: { name: 'Рост', icon: '📏', body: 1, list: [['0', 'Малыш', 0], ['1', 'Пониже', 0], ['2', 'Средний', 0], ['3', 'Повыше', 0], ['4', 'Высокий', 0]] },
+    wid: { name: 'Телосложение', icon: '💪', body: 1, list: [['0', 'Тонкий', 0], ['1', 'Стройный', 0], ['2', 'Обычный', 0], ['3', 'Крепкий', 0], ['4', 'Пухлый', 0]] },
+    head: { name: 'Голова', icon: '🙂', body: 1, list: [['0', 'Маленькая', 0], ['1', 'Поменьше', 0], ['2', 'Обычная', 0], ['3', 'Побольше', 0], ['4', 'Огромная', 0]] },
+    eyec: { name: 'Цвет глаз', icon: '👁️', body: 1, pal: 1, list: [
+      ['brown', 'Карие', 0, '#7a4a25'], ['dark', 'Тёмные', 0, '#3a2c26'], ['blue', 'Голубые', 0, '#3d8bfd'], ['green', 'Зелёные', 0, '#2fae62'],
+      ['gray', 'Серые', 0, '#7d8a9a'], ['amber', 'Янтарные', 0, '#d98c1f'], ['violet', 'Фиолетовые', 0, '#8b5cf6'], ['pink', 'Розовые', 0, '#ec5fa8'],
+      ['red', 'Красные', 0, '#e11d48'], ['gold', 'Золотые', 0, '#f5c518'], ['glow', 'Светящиеся', 300, '#5ef2ff'], ['fire', 'Огненные', 300, '#ff7a1a'],
+    ] },
+    brows: { name: 'Брови', icon: '〰️', body: 1, list: [['soft', 'Мягкие', 0], ['thin', 'Тонкие', 0], ['thick', 'Густые', 0], ['angry', 'Хмурые', 0], ['none', 'Без бровей', 0]] },
+    lash: { name: 'Ресницы', icon: '😉', body: 1, list: [['no', 'Без ресниц', 0], ['yes', 'Ресницы', 0], ['long', 'Длинные', 40]] },
+    cheek: { name: 'Щёчки', icon: '😊', body: 1, list: [
+      ['blush', 'Румянец', 0], ['none', 'Без румянца', 0], ['freckles', 'Веснушки', 0], ['both', 'Румянец и веснушки', 0],
+      ['stars', 'Звёздочки', 80], ['hearts', 'Сердечки', 80],
+    ] },
+    hair: { name: 'Причёска', icon: '💇', body: 1, list: [
+      ['short', 'Короткая', 0], ['side', 'Набок', 0], ['spiky', 'Ёжик', 0], ['curly', 'Кудряшки', 0], ['buzz', 'Под машинку', 0],
+      ['bob', 'Каре', 0], ['ponytail', 'Хвостик', 0], ['long', 'Длинные', 0], ['buns', 'Пучки', 0], ['bald', 'Лысый', 0],
+      ['twintails', 'Два хвостика', 100], ['braid', 'Коса', 100], ['mohawk', 'Ирокез', 150], ['afro', 'Афро', 150],
+      ['wavy', 'Локоны', 200], ['anime', 'Аниме', 250],
+    ] },
+    hairc: { name: 'Цвет волос', icon: '🎨', body: 1, pal: 1, list: [
+      ['black', 'Чёрные', 0, '#24212b'], ['dark', 'Тёмные', 0, '#3e2819'], ['brown', 'Каштан', 0, '#71431f'], ['caramel', 'Карамель', 0, '#a8692f'],
+      ['blond', 'Блонд', 0, '#ecc66f'], ['ginger', 'Рыжие', 0, '#cc5a2a'], ['platinum', 'Платина', 0, '#f3ecdc'], ['pink', 'Розовые', 0, '#f6a3c8'],
+      ['blue', 'Синие', 0, '#5aa6ff'], ['mint', 'Мятные', 0, '#7fe0c4'], ['purple', 'Сиреневые', 0, '#b49cf0'], ['red', 'Алые', 0, '#e0313f'],
+      ['white', 'Белые', 0, '#f6f6f8'], ['neon', 'Неоновые', 600, '#ff4fd8'], ['rainbow', 'Переливаются', 2000, '#ff4d6d', 1],
+    ] },
+    top: { name: 'Верх', icon: '👕', body: 1, list: [
+      ['hoodie', 'Худи', 0], ['tshirt', 'Футболка', 0], ['sweater', 'Свитер', 0], ['dress', 'Платье', 0], ['jacket', 'Куртка', 100],
+      ['jersey', 'Форма «37»', 300], ['suit', 'Костюм', 400],
+    ] },
+    trim: { name: 'Отделка', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
+    bottom: { name: 'Низ', icon: '👖', body: 1, list: [['pants', 'Брюки', 0], ['jeans', 'Джинсы', 0], ['shorts', 'Шорты', 0], ['skirt', 'Юбка', 0], ['cargo', 'Карго', 80]] },
+    botc: { name: 'Цвет низа', icon: '🎨', body: 1, pal: 1, list: [
+      ['graphite', 'Графит', 0, '#3b4252'], ['denim', 'Деним', 0, '#3e5f95'], ['black', 'Чёрный', 0, '#25252d'], ['khaki', 'Хаки', 0, '#7f7a4c'],
+      ['beige', 'Бежевый', 0, '#d9c4a0'], ['white', 'Белый', 0, '#eceef2'], ['red', 'Красный', 0, '#d43a4b'], ['pink', 'Розовый', 0, '#f28dbb'],
+      ['purple', 'Фиолетовый', 0, '#7c5cd6'], ['green', 'Зелёный', 0, '#2f9e57'],
+    ] },
+    shoes: { name: 'Обувь', icon: '👟', body: 1, list: [['sneakers', 'Кроссовки', 0], ['kedy', 'Кеды', 0], ['boots', 'Ботинки', 60], ['bunny', 'Тапки-зайки', 200]] },
+    shoec: { name: 'Цвет обуви', icon: '🎨', body: 1, pal: 1, list: [
+      ['white', 'Белые', 0, '#f4f4f6'], ['black', 'Чёрные', 0, '#2a2a32'], ['red', 'Красные', 0, '#e23b4e'], ['blue', 'Синие', 0, '#3b82f6'],
+      ['brown', 'Коричневые', 0, '#7a4f2c'], ['yellow', 'Жёлтые', 0, '#facc15'], ['pink', 'Розовые', 0, '#f9a8d4'], ['green', 'Зелёные', 0, '#22c55e'],
+    ] },
+    hatc: { name: 'Цвет шапки', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
+    glasses: { name: 'Очки', icon: '👓', body: 1, list: [
+      ['none', 'Без очков', 0], ['round', 'Круглые', 60], ['square', 'Квадратные', 60], ['heart', 'Сердечки', 120], ['star', 'Звёзды', 150],
+      ['monocle', 'Монокль', 200],
+    ] },
+    glassc: { name: 'Цвет очков', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
+    neck: { name: 'На шее', icon: '🧣', body: 1, list: [['none', 'Ничего', 0], ['bowtie', 'Бабочка', 60], ['tie', 'Галстук', 60], ['scarf', 'Шарф', 80], ['chain', 'Цепь', 250]] },
+    neckc: { name: 'Цвет на шее', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
+    back: { name: 'На спине', icon: '🎒', body: 1, list: [
+      ['none', 'Ничего', 0], ['backpack', 'Рюкзак', 100], ['tail', 'Хвостик', 150], ['guitar', 'Гитара', 250], ['cape', 'Плащ', 300],
+      ['wings', 'Крылья ангела', 600], ['batwings', 'Крылья мыши', 600], ['dragon', 'Крылья дракона', 3000, '', 1],
+    ] },
+    backc: { name: 'Цвет на спине', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
   };
   const SLOTS = Object.keys(PARTS);
+  const BODY_SLOTS = SLOTS.filter(s => PARTS[s].body), SLOTS2D = SLOTS.filter(s => !PARTS[s].body);
   const DEFAULT = { color: 'blue', eyes: 'normal', mouth: 'smile', hat: 'none', item: 'none', pet: 'none', trail: 'none' };
   const LS = 'd37_char';
 
+  const custom = (slot, id) => !!PARTS[slot]?.pal && CUSTOM.test(id || '');
   const part = (slot, id) => {
+    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true };
     const p = PARTS[slot]?.list.find(x => x[0] === id) || PARTS[slot]?.list[0];
     return p && { id: p[0], name: p[1], price: p[2], v: p[3] || '', vip: !!p[4] };
   };
   function price(item){
     const m = /^skin:(\w+):(\w+)$/.exec(item || '');
     if (!m || !PARTS[m[1]]) return null;
+    if (custom(m[1], m[2])) return 0;
     const p = PARTS[m[1]].list.find(x => x[0] === m[2]);
     return p ? p[2] : null;
   }
   function norm(look){
     const L = { ...DEFAULT };
-    if (look && typeof look === 'object') for (const s of SLOTS) if (PARTS[s].list.some(x => x[0] === look[s])) L[s] = look[s];
+    if (look && typeof look === 'object') for (const s of SLOTS) if (PARTS[s].list.some(x => x[0] === look[s]) || custom(s, look[s])) L[s] = look[s];
     return L;
+  }
+
+  // Ближайший готовый бесплатный цвет к своему (для старого char_save, который своих цветов не знает)
+  function nearest(slot, id){
+    if (!custom(slot, id)) return id;
+    const hx = h => { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+    const [r, g, b] = hx('#' + id.slice(1));
+    let best = PARTS[slot].list[0][0], bd = Infinity;
+    for (const [pid, , pr, v, vip] of PARTS[slot].list) {
+      if (pr || vip || !v || v[0] !== '#') continue;
+      const [r2, g2, b2] = hx(v), d = (r - r2) * (r - r2) + (g - g2) * (g - g2) + (b - b2) * (b - b2);
+      if (d < bd) { bd = d; best = pid; }
+    }
+    return best;
   }
 
   // ── Владение: бесплатное, купленное, VIP-часть у VIP/персонала ──
@@ -90,7 +181,7 @@
   // Снять то, чем больше не владеешь (кончился VIP, вышел из аккаунта) — вместо этого бесплатное
   function wearable(look){
     const L = norm(look);
-    for (const s of SLOTS) if (!owns(s, L[s])) L[s] = DEFAULT[s];
+    for (const s of SLOTS) if (!owns(s, L[s])) { if (DEFAULT[s] === undefined) delete L[s]; else L[s] = DEFAULT[s]; }
     return L;
   }
   async function set(look){
@@ -103,7 +194,12 @@
   // Кошелёк узнал надетое из базы (coins_state) — берём его; если в базе пусто, а в браузере есть — сохраним туда
   function fromServer(look){
     if (look && Object.keys(look).length) {
-      mine = norm(look);
+      const loc = current(), srv = norm(look);
+      // Части 3D-человечка и свои цвета: старый char_save (до обновления coins.sql) их не хранит — берём из браузера
+      const keep = !BODY_SLOTS.some(s => s in look) && BODY_SLOTS.some(s => loc[s] !== undefined);
+      if (keep) for (const s of SLOTS) if (loc[s] !== undefined && (PARTS[s].body || custom(s, loc[s]))) srv[s] = loc[s];
+      mine = srv;
+      if (keep) window.D37Coins?.saveLook?.(mine);
       try { localStorage.setItem(LS, JSON.stringify(mine)); } catch (e) {}
       listeners.forEach(fn => { try { fn(mine); } catch (e) {} });
     } else if (JSON.stringify(current()) !== JSON.stringify(DEFAULT)) window.D37Coins?.saveLook?.(current());
@@ -484,8 +580,8 @@
 
   // Чужие персонажи (рекорды, профиль, кооп) — из базы, с кэшем на визит
   const others = new Map();
-  async function looksOf(ids){
-    const need = [...new Set(ids)].filter(id => id && !others.has(id)).slice(0, 100);
+  async function looksOf(ids, fresh){
+    const need = [...new Set(ids)].filter(id => id && (fresh || !others.has(id))).slice(0, 100);
     if (need.length && typeof sbClient !== 'undefined' && sbClient) {
       try {
         const { data, error } = await sbClient.rpc('char_looks', { p_ids: need });
@@ -498,7 +594,7 @@
   }
 
   window.D37Char = {
-    PARTS, SLOTS, DEFAULT, part, price, norm, owns, wearable,
+    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, part, price, norm, owns, wearable, custom, nearest,
     look: () => wearable(current()), set, fromServer,
     draw, sprite, img, trail, petEmoji, looksOf, drawWalker, walker,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },

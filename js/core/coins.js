@@ -192,7 +192,16 @@
   // Надетый персонаж — в базу (сервер сам проверит, что всё своё); без входа avatar.js хранит его в браузере
   async function saveLook(look){
     if (!server) return { ok: true, local: true };
-    return (await rpc('char_save', { p_look: look })) || { ok: false };
+    let r = await rpc('char_save', { p_look: look });
+    // старый char_save (до нового coins.sql) не знает частей 3D-человечка и своих цветов — сохраним то, что он понимает
+    const C = window.D37Char;
+    if (r && r.ok === false && r.reason === 'item' && C?.nearest) {
+      const L = {};
+      for (const s of C.SLOTS2D) if (look[s] != null) L[s] = C.nearest(s, look[s]);
+      r = await rpc('char_save', { p_look: L });
+      if (r?.ok) r.partial = true;
+    }
+    return r || { ok: false };
   }
 
   // Улучшение: сколько уровней куплено (up:might:1..5)

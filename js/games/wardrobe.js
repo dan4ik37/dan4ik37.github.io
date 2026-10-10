@@ -1,16 +1,18 @@
 // ═══════════════════════════════════════
 //  ГАРДЕРОБ 🎭 — #/games/wardrobe: собрать своего персонажа (js/core/avatar.js), части — за монеты (js/core/coins.js)
 // ═══════════════════════════════════════
+// Есть WebGL — открывается 3D-редактор (js/games/charedit.js: тело, лицо, волосы, одежда, аксессуары, палитра).
+// Нет — этот 2D-гардероб (только то, что видно в 2D-играх: цвет, глаза, рот, шапка, предмет, питомец, след).
 // Нажал на купленную/бесплатную часть — сразу надета. На чужую — примерка: персонаж показывает её, снизу
 // «Купить и надеть». Превью живое: персонаж ходит, за ним бегает питомец и тянется след.
 (() => {
-  let root, api, raf = 0, slot = 'color', trying = null, cv, ctx, offCoins = null, offLook = null, t0 = 0;
+  let root, api, raf = 0, slot = 'color', trying = null, cv, ctx, offCoins = null, offLook = null, t0 = 0, mode3d = false;
   let parts = [], petX = 0, petY = 0, lastEmit = 0;
   const C = () => window.D37Char, W = () => window.D37Coins;
   const num = n => Number(n || 0).toLocaleString('ru');
 
   function wearing(){ return C().look(); }
-  function same(a, b){ return C().SLOTS.every(s => a[s] === b[s]); }
+  function same(a, b){ return C().SLOTS2D.every(s => a[s] === b[s]); }
 
   function render(){
     if (!root) return;
@@ -31,7 +33,7 @@
             <div class="ct-note">Персонаж — твой герой в «Орде» и других играх сайта. Монеты дают за забеги, победы в любых играх, бонус дня и задание дня.${authed ? '' : ' <b>Войди</b> — персонаж и покупки сохранятся в аккаунте на всех устройствах.'}</div>
           </div>
         </div>
-        <div class="wr-tabs" role="tablist">${C().SLOTS.map(s => `<button type="button" role="tab" data-tab="${s}" class="${s === slot ? 'active' : ''}">${C().PARTS[s].icon}<span> ${C().PARTS[s].name}</span></button>`).join('')}</div>
+        <div class="wr-tabs" role="tablist">${C().SLOTS2D.map(s => `<button type="button" role="tab" data-tab="${s}" class="${s === slot ? 'active' : ''}">${C().PARTS[s].icon}<span> ${C().PARTS[s].name}</span></button>`).join('')}</div>
         <div class="wr-grid"></div>
       </div>`;
     cv = root.querySelector('.wr-cv'); ctx = cv.getContext('2d');
@@ -75,7 +77,7 @@
     const bar = root?.querySelector('.wr-try');
     if (!bar) return;
     const wear = wearing();
-    const diff = C().SLOTS.filter(s => trying[s] !== wear[s] && !C().owns(s, trying[s]));
+    const diff = C().SLOTS2D.filter(s => trying[s] !== wear[s] && !C().owns(s, trying[s]));
     if (!diff.length) { bar.hidden = !msg; bar.innerHTML = msg || ''; return; }
     const s = diff[0], p = C().part(s, trying[s]), have = W().coins();
     const vipFree = p.vip && W().perks();
@@ -119,8 +121,8 @@
       } else api.toast(r?.reason === 'coins' ? 'Не хватает монет' : r?.reason === 'auth' ? 'Войди в аккаунт' : 'Не получилось — попробуй ещё раз');
       grid(); tryBar();
     } else if (act === 'random') {
-      const L = {};
-      for (const s of C().SLOTS) { const own = C().PARTS[s].list.filter(p => C().owns(s, p[0])); L[s] = own[Math.floor(Math.random() * own.length)][0]; }
+      const L = { ...wearing() };
+      for (const s of C().SLOTS2D) { const own = C().PARTS[s].list.filter(p => C().owns(s, p[0])); L[s] = own[Math.floor(Math.random() * own.length)][0]; }
       await C().set(L); trying = { ...wearing() }; api.sfx('ok'); grid(); tryBar();
     } else if (act === 'daily') {
       b.disabled = true;
@@ -173,17 +175,29 @@
   window.GAME_IMPL.wardrobe = {
     mount(el, gameApi){
       root = el; api = gameApi; trying = null; parts = [];
-      render();
-      offCoins = W().on(() => { const w = root?.querySelector('.wr-wallet .js-coins'); if (w) w.textContent = num(W().coins()); });
-      offLook = C().on(() => { if (root) { trying = { ...wearing() }; grid(); tryBar(); } });
-      W().sync().then(() => { if (root) { trying = { ...wearing() }; render(); } });
-      window.addEventListener('resize', size);
+      if (window.D37Editor && window.World3D?.supported()) {
+        mode3d = true;
+        window.D37Editor.mount(el, { api: gameApi }).then(ok => { if (!ok && root === el) { mode3d = false; start2d(); } });
+        return;
+      }
+      start2d();
     },
     unmount(){
-      cancelAnimationFrame(raf); raf = 0;
-      offCoins?.(); offLook?.(); offCoins = offLook = null;
-      window.removeEventListener('resize', size);
-      root = null; cv = null; ctx = null;
+      if (mode3d) { window.D37Editor?.unmount(); mode3d = false; root = null; return; }
+      stop2d();
     },
   };
+  function start2d(){
+    render();
+    offCoins = W().on(() => { const w = root?.querySelector('.wr-wallet .js-coins'); if (w) w.textContent = num(W().coins()); });
+    offLook = C().on(() => { if (root) { trying = { ...wearing() }; grid(); tryBar(); } });
+    W().sync().then(() => { if (root) { trying = { ...wearing() }; render(); } });
+    window.addEventListener('resize', size);
+  }
+  function stop2d(){
+    cancelAnimationFrame(raf); raf = 0;
+    offCoins?.(); offLook?.(); offCoins = offLook = null;
+    window.removeEventListener('resize', size);
+    root = null; cv = null; ctx = null;
+  }
 })();
