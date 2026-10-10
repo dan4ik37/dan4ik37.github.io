@@ -202,6 +202,7 @@ async function main(){
     const r = E.langs.cpp._russify("script.cpp:5:3: error: use of undeclared identifier 'coins'\n    5 |   coins++;\n      |   ^\nscript.cpp:7:1: warning: unused variable 'x' [-Wunused-variable]\nwasm-ld: error: /tmp/script-1a2b.o: undefined symbol: start()\n1 error generated.");
     ok(/^Строка 5: ошибка: неизвестное имя «coins»/m.test(r), 'ошибка clang по-русски', r);
     ok(/Строка 7: предупреждение: переменная «x» не используется/.test(r) && /нет функции start\(\)/.test(r) && /Ошибок: 1/.test(r), 'предупреждение, компоновщик, итог', r);
+    ok(/^Не удалось скачать компилятор \(нужен интернет\)/.test(E.langs.cpp._russify('ERR Failed to fetch dynamically imported module: https://cdn')) && /не хватило памяти/.test(E.langs.cpp._russify('ERR RangeError: WebAssembly.Memory(): could not allocate memory')), 'сбой загрузки компилятора — понятная причина');
     let thrown = null;
     try { E.langs.cpp._result(false, null, "script.cpp:1:1: error: unknown type name 'Foo'"); } catch (e) { thrown = e; }
     ok(thrown && /неизвестный тип «Foo»/.test(thrown.log), 'не собралось — throw с .log');

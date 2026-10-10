@@ -426,7 +426,12 @@
       if (m) { const where = m[1] === 'script.cpp' ? 'Строка ' + m[2] : m[1] === 'd37.h' ? 'd37.h, строка ' + m[2] : m[1] + ':' + m[2]; outl.push(where + ': ' + KIND[m[4]] + ': ' + ru(m[5])); continue; }
       m = /^wasm-ld: (error|warning): (?:\S+\.o: )?(.*)$/.exec(line);
       if (m) { outl.push('Сборка: ' + KIND[m[1]] + ': ' + ru(m[2])); continue; }
-      if (/^ERR /.test(line)) { outl.push('Не удалось загрузить компилятор (нужен интернет): ' + line.slice(4)); continue; }
+      if (/^ERR /.test(line)) {
+        const why = line.slice(4);
+        outl.push((/memory|allocat/i.test(why) ? 'Компилятору не хватило памяти (закрой лишние вкладки или собери на компьютере): '
+          : /fetch|network|load|import|cors/i.test(why) ? 'Не удалось скачать компилятор (нужен интернет): ' : 'Компилятор не запустился: ') + why);
+        continue;
+      }
       outl.push(line.length > 160 ? line.slice(0, 160) + '…' : line);
     }
     return outl.join('\n');
@@ -475,7 +480,7 @@
     };
     CW.onerror = e => {
       if (e && e.preventDefault) e.preventDefault();
-      const log = 'ERR ' + (e && e.message || 'поток компилятора не запустился');
+      const log = 'ERR ' + (e && e.message || 'поток компилятора упал (браузер без module Worker или не хватило памяти)');
       for (const j of cwJobs.values()) { clearTimeout(j.timer); j.done({ ok: false, log }); }
       cwJobs.clear(); killCW();
     };
