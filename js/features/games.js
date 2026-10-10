@@ -302,7 +302,7 @@ function renderToday(){
   // Игры — без инструментов (колесо, тесты, шрифты, CPS ведут на свои страницы)
   const n = GAMES.filter(g => !g.href || g.href[0] === '#').length;
   const qz = QUIZ_DAY[wordsDayNo() % QUIZ_DAY.length];
-  box.innerHTML = `<div class="today-grid">
+  box.innerHTML = `<a class="today-online" id="todayOnline" href="#/chat" hidden></a><div class="today-grid">
       <a class="today-card hot-slot${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
       <a class="today-card" href="/quiz/${qz[0]}"><span class="ti">${qz[1]}</span><span class="tt"><b>Тест дня</b><small>${esc(qz[2])}</small></span></a>
       <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
@@ -311,7 +311,17 @@ function renderToday(){
       <button type="button" class="today-card" onclick="d37Surprise(this)"><span class="ti">🎲</span><span class="tt"><b>Удиви меня</b><small>Случайное видео из почти 6000</small></span></button>
     </div>`;
   gamesDailyDot();
+  renderTodayOnline();
 }
+// «🟢 Сейчас на сайте: N» — только если кроме тебя есть кто-то ещё (иначе «1 на сайте» выглядит пусто)
+function renderTodayOnline(){
+  const el = document.getElementById('todayOnline');
+  if (!el) return;
+  const n = window.__d37Online || 0;
+  el.hidden = n < 2;
+  el.innerHTML = `<i></i>Сейчас на сайте: <b>${n}</b> — заходи в чат →`;
+}
+window.addEventListener('d37:online', renderTodayOnline);
 window.gamesDailyDot = gamesDailyDot;
 gamesDailyDot();
 // Полночь по МСК: обновить точку и карточку, если сайт открыт долго

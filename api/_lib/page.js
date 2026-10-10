@@ -71,6 +71,7 @@ ${script ? `<script>${script}</script>` : ''}
 <script>document.addEventListener('click',function(e){var d=document.querySelector('details.mmenu[open]');if(d&&!d.contains(e.target))d.open=false});</script>
 <script src="/js/core/ads-core.js"></script>
 <script src="/js/core/surprise.js" defer></script>
+<script src="/js/core/live-badge.js" defer></script>
 <script src="/js/features/secrets.js" defer></script>
 <script>window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>

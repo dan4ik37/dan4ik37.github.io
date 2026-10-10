@@ -293,7 +293,10 @@ function subscribeRealtime() {
   onlineChannel
     .on('presence', { event: 'sync' }, () => {
       const state = onlineChannel.presenceState();
-      document.getElementById('chatOnlineCount').textContent = Object.keys(state).length;
+      const online = Object.keys(state).length;
+      document.getElementById('chatOnlineCount').textContent = online;
+      window.__d37Online = online;
+      window.dispatchEvent(new CustomEvent('d37:online', { detail: online }));   // «Сейчас на сайте» на главной (games.js)
     })
     .subscribe(async status => {
       if (status === 'SUBSCRIBED') {
