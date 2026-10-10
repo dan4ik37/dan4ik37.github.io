@@ -2854,3 +2854,62 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .sd-top li{display:flex;justify-content:space-between;gap:.5rem;padding:.12rem 0}
 .sd-top li b{font-variant-numeric:tabular-nums}
 .sd-done{display:flex;flex-direction:column;align-items:center;gap:.6rem;text-align:center;padding:1.2rem .5rem}
+
+/* ── «Мир Денчика» (js/games/world.js) ── */
+.wld{display:flex;flex-direction:column;gap:.45rem;width:100%}
+.wld-top{display:flex;align-items:center;gap:.4rem .8rem;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.wld-top b{color:var(--text);font-size:.95rem}
+.wld-topbtns{margin-left:auto;display:flex;gap:.35rem}
+.wld-topbtns button{border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);border-radius:10px;padding:.35rem .6rem;font:700 .74rem 'Montserrat',sans-serif;cursor:pointer}
+.wld-wrap{position:relative;height:min(68vh,640px);min-height:340px;border-radius:14px;overflow:hidden;background:#1d4428;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.wld-cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer}
+.wld-log{position:absolute;left:8px;bottom:8px;max-width:min(72%,400px);font-size:.74rem;line-height:1.35;pointer-events:none;z-index:2}
+.wld-log div{background:rgba(10,8,24,.66);padding:.18rem .55rem;border-radius:9px;margin-top:3px;color:#e5e7eb;word-break:break-word}
+.wld-log b{color:#fde68a}.wld-log .me b{color:#93c5fd}.wld-log .sys{color:#fde68a}
+.wld-pop{position:absolute;right:8px;top:8px;width:min(94%,350px);max-height:calc(100% - 16px);overflow:auto;background:rgba(17,14,32,.96);border:1px solid var(--border);border-radius:14px;padding:.7rem;z-index:3;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.wld-ch{display:flex;gap:.6rem;align-items:center}
+.wld-ch img{width:58px;height:58px;flex:none}
+.wld-ch b{font-size:.95rem}
+.wld-bs{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.25rem}
+.wld-b{font-size:.64rem;font-weight:800;background:rgba(255,255,255,.08);border-radius:999px;padding:.1rem .45rem}
+.wld-b.dim{color:var(--muted)}
+.wld-x{margin-left:auto;align-self:flex-start;background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:.1rem .3rem}
+.wld-acts{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.6rem}
+.wld-acts button,.wld-acts a{border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);border-radius:10px;padding:.45rem .7rem;font:700 .74rem 'Montserrat',sans-serif;cursor:pointer;text-decoration:none}
+.wld-acts .ct-start{border:none}
+.wld-acts .warn{border-color:#ef4444;color:#fca5a5}
+.wld-sub{margin-top:.6rem}
+.wld-sublbl{font-size:.72rem;color:var(--muted);margin-bottom:.35rem}
+.wld-chips{display:flex;flex-wrap:wrap;gap:.3rem}
+.wld-chips button{border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);border-radius:999px;padding:.3rem .6rem;font:700 .7rem 'Montserrat',sans-serif;cursor:pointer}
+.wld-ph{display:flex;align-items:center;gap:.5rem;font-size:1rem}
+.wld-pe{font-size:1.7rem}
+.wld-panel p{font-size:.8rem;color:#d1d5db;margin:.5rem 0 0;line-height:1.5}
+.wld-live{color:#f87171}
+.wld-modes{display:flex;flex-direction:column;gap:.45rem;margin-top:.55rem}
+.wld-mode{display:grid;grid-template-columns:auto 1fr;gap:.25rem .6rem;align-items:center;background:rgba(255,255,255,.04);border-radius:12px;padding:.5rem}
+.wld-mi{font-size:1.6rem;grid-row:span 2}
+.wld-mt b{font-size:.82rem}
+.wld-mt small{display:block;color:var(--muted);font-size:.66rem;line-height:1.35}
+.wld-mb{grid-column:2;display:flex;flex-wrap:wrap;gap:.3rem}
+.wld-mb button{border:1px solid var(--border);background:rgba(255,255,255,.06);color:var(--text);border-radius:9px;padding:.3rem .55rem;font:700 .68rem 'Montserrat',sans-serif;cursor:pointer}
+.wld-mb .ct-start{padding:.32rem .7rem;font-size:.7rem;border:none}
+.wld-inv{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(17,14,32,.97);border:2px solid #facc15;border-radius:14px;padding:.6rem .8rem;z-index:4;font-size:.82rem;text-align:center;width:min(92%,360px);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.wld-inv .wld-acts{justify-content:center}
+.wld-status{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7rem;background:rgba(10,8,24,.74);color:#fff;text-align:center;padding:1rem;z-index:5;font-weight:700;line-height:1.5}
+.wld-status[hidden]{display:none}
+.wld-hint{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:max-content;max-width:min(92%,520px);background:rgba(10,8,24,.72);color:#e5e7eb;font-size:.72rem;padding:.35rem .7rem;border-radius:10px;pointer-events:none;z-index:1;text-align:center;animation:wldHint 12s forwards}
+@keyframes wldHint{0%,85%{opacity:1}100%{opacity:0}}
+.wld-bar{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap}
+.wld-emos{display:flex;gap:.2rem;flex-wrap:wrap}
+.wld-emos button{font-size:1.1rem;line-height:1;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;padding:.3rem .38rem;cursor:pointer}
+.wld-say{flex:1;display:flex;gap:.3rem;min-width:200px}
+.wld-say input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:10px;padding:.55rem .7rem;color:var(--text);font:600 .82rem 'Montserrat',sans-serif}
+.wld-say button{background:var(--accent);border:none;color:#fff;border-radius:10px;padding:0 .95rem;font-size:1rem;cursor:pointer}
+@media(max-width:560px){
+  body.game-on .wld-wrap{height:calc(100dvh - 250px);min-height:300px}
+  .wld-emos button{font-size:.98rem;padding:.24rem .3rem}
+  .wld-topbtns button span{display:none}
+  .wld-log{font-size:.68rem;max-width:84%}
+  .wld-say{min-width:100%}
+}

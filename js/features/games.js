@@ -6,8 +6,9 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '32';
+const GAMES_VER = '33';
 const GAMES = [
+  { id: 'world',    icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта: гуляй своим персонажем, общайся с игроками, добавляй в друзья и заходи через порталы в игры — как в Роблоксе.', scripts: ['js/games/room.js', 'js/games/world.js'], color: '#22c55e' },
   { id: 'horde',    icon: '🧟', title: 'Орда',            desc: 'Выживи 10 минут против орды монстров, как в Vampire Survivors: оружие бьёт само, ты выбираешь улучшения. Герои, боссы, монеты — и дуэль с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/netplay.js', 'js/games/horde.js'], top: 'horde', topLabel: 'очков за забег', color: '#a855f7' },
   { id: 'arena',    icon: '🔫', title: 'Арена',           desc: 'Перестрелка 1 на 1 в реальном времени: бегай, прячься в кустах, копи «супер». Против бота или с другом онлайн — двумя пальцами на телефоне.', scripts: ['js/games/room.js', 'js/games/netplay.js', 'js/games/arena.js'], top: 'arena_hard', topLabel: 'побед над сложным ботом', color: '#f97316' },
   { id: 'td',       icon: '🏰', title: 'Башни',           desc: 'Защита замка: ставь башни у дороги, улучшай и не пускай монстров. 20 волн и боссы. Битва с отправкой монстров другу или вдвоём на одной карте.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/netplay.js', 'js/games/td.js'], top: 'td', topLabel: 'очков за игру', color: '#f97316' },
@@ -51,7 +52,7 @@ const GAME_CATS = [
   ['action', '⚔️', 'Экшен'], ['brain', '🧠', 'Головоломки'], ['tools', '🛠', 'Тесты и инструменты'],
 ];
 const GAME_TAGS = {
-  sudoku: 'new friends brain', mahjong: 'new friends brain', miner: 'new friends brain', kosynka: 'new friends cards brain', pauk: 'new cards brain', freecell: 'new friends cards brain', blocks: 'new friends brain', chess: 'new friends cards', arena: 'new friends action', horde: 'new friends action', td: 'new friends action', uno: 'new friends cards', durak: 'new friends cards', pool: 'new friends cards',
+  world: 'new friends', sudoku: 'new friends brain', mahjong: 'new friends brain', miner: 'new friends brain', kosynka: 'new friends cards brain', pauk: 'new cards brain', freecell: 'new friends cards brain', blocks: 'new friends brain', chess: 'new friends cards', arena: 'new friends action', horde: 'new friends action', td: 'new friends action', uno: 'new friends cards', durak: 'new friends cards', pool: 'new friends cards',
   ludo: 'new friends cards', nardy: 'new friends cards', wardrobe: 'new', cities: 'friends brain', words: 'friends brain',
   guess: 'friends brain', '2048': 'friends brain', checkers: 'friends cards', catch: 'friends action', sea: 'friends cards',
   snake: 'friends action', memory: 'friends brain', ttt: 'friends cards', reaction: 'friends action', emoji: 'new friends brain',
@@ -372,8 +373,8 @@ function gamesDailyDot(){
 }
 // «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
 // Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
-const WHATSNEW_VER = '2026-10-11b';
-const WHATSNEW = [['#/games/sudoku', '🔢', 'Судоку дня'], ['#/games/mahjong', '🀄', 'Маджонг Коннект'], ['#/games/miner', '💣', 'Сапёр'], ['#/games/kosynka', '♥️', 'Косынка'], ['#/games/pauk', '🕷️', 'Паук'], ['#/games/freecell', '♣️', 'Свободная ячейка'], ['#/games/blocks', '🟦', 'Блоки — как Block Blast'], ['#/games/chess', '♟️', 'Шахматы'], ['#/games/arena', '🔫', 'Арена 1 на 1'], ['#/games/nardy', '🎯', 'Нарды'], ['#/games/ludo', '🎲', 'Лудо'], ['#/games/pool', '🎱', 'Бильярд'], ['#/games/durak', '♠️', 'Дурак онлайн'], ['#/games/uno', '🃏', 'Одна! — карты как Уно'], ['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/td', '🏰', 'Башни — защита замка'], ['#/games/wardrobe', '🎭', 'Свой персонаж'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+const WHATSNEW_VER = '2026-10-11c';
+const WHATSNEW = [['#/games/world', '🌍', 'Мир Денчика — онлайн с игроками'], ['#/games/sudoku', '🔢', 'Судоку дня'], ['#/games/mahjong', '🀄', 'Маджонг Коннект'], ['#/games/miner', '💣', 'Сапёр'], ['#/games/kosynka', '♥️', 'Косынка'], ['#/games/pauk', '🕷️', 'Паук'], ['#/games/freecell', '♣️', 'Свободная ячейка'], ['#/games/blocks', '🟦', 'Блоки — как Block Blast'], ['#/games/chess', '♟️', 'Шахматы'], ['#/games/arena', '🔫', 'Арена 1 на 1'], ['#/games/nardy', '🎯', 'Нарды'], ['#/games/ludo', '🎲', 'Лудо'], ['#/games/pool', '🎱', 'Бильярд'], ['#/games/durak', '♠️', 'Дурак онлайн'], ['#/games/uno', '🃏', 'Одна! — карты как Уно'], ['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/td', '🏰', 'Башни — защита замка'], ['#/games/wardrobe', '🎭', 'Свой персонаж'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
