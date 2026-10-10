@@ -106,6 +106,8 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Обе — карточками в «Играх» (GAMES с href), в поиске (SITE_PAGES), подвале и карте сайта.
 - «Тесты» `/quiz`, `/quiz/<slug>` → routes/quiz.js, данные — api/_lib/quizzes.js (8 вопросов × 4 ответа, 6 результатов, очки
   поровну; новый тест = объект в QUIZZES). Результат — ссылка `?r=<id>` («Твой друг получил…», noindex).
+- Картинки-превью ссылок (Telegram/ВК) для тестов и инструментов — img/share/<id>.png, рисует `python -X utf8 img/share/_make-cards.py`
+  (Segoe UI без символов ★ 亗 ꧁꧂ — в подписях их не писать, будут квадратики).
 - «Колесо фортуны» `/tools/wheel` → routes/wheel.js (crypto-рандом заранее, колесо доворачивается; `?o=a|b|c` — свои варианты, noindex).
 - «Самые популярные видео» `/top` → routes/top.js (просмотры из снимка, шортсы — #shorts или ≤3 мин с 15.10.2024; без isGambling).
 - Главная берёт ролики с `/api/feed` (routes/feed.js, CDN 15 мин) — квота YouTube не зависит от числа посетителей;
