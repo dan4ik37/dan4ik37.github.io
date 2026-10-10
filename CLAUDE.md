@@ -509,6 +509,15 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   Folder/IntValue/…Value, ClickDetector, ProximityPrompt (→ события clicked/prompt детали), leaderstats в игроке → таблица очков,
   CFrame, BrickColor, Rotation, CharacterAdded; TopSurface/Locked и т. п. принимаются и ничего не делают (старый код не падает).
   Тест: node scripts/lang-lua-test.cjs (166). Меняешь script.js — прогони и его, и engine-test.cjs. Проверено в браузере 13.10.
+- Сеть для миров игроков (js/engine/net.js + net-transport.js, агент 13.10.2026; в студию ещё НЕ подключена):
+  D37E.net.session({ transport, scene, nick, info, onHost, onPlayer, onGuestEvent, onEvent, onCharacter, onBlob, onReady, onTeleport,
+  onCheat }) — хозяин (самый ранний в комнате) считает мир и скрипты, гости рисуют копию и сами ведут своего персонажа. Транспорт —
+  D37E.net.room('s3', code, { nick, max }) (канал s3-net-<код>, NetPlay на пару «хозяин — гость», через Supabase — пачкой раз
+  в 200 мс) или D37E.net.duel(room, np) для двоих. Объекты: обёртка SC.set/add/remove/reparent + обход раз в секунду, шлются только
+  изменившиеся свойства с подтверждениями; рядом — в каждом пакете, далеко — до раза в 2 с; сводка 64 хешей раз в 5 с чинит
+  расхождения. Персонажи 15/с напрямую, 5/с через Supabase; хозяин режет скорость (бег × 1,25 + запас), телепорт — только
+  разрешённый. Смена хозяина: ушёл — ~0,5 с, завис — 5 с. Гостю нельзя менять реплицируемые объекты (SC.step, скрипты);
+  net.close() обязателен. Тест: node scripts/net-test.cjs (161 проверка, ~5 с).
 - Графика движка (batch.js, post.js, perf.js + render.js, агент 13.10.2026): batch.js (E.batcher(SC), в студии ed.B) — детали и
   предметы сливаются по материалу в чанках 48 м (цвет — в вершинах/экземплярах), шары/цилиндры и повторяющиеся сетки — InstancedMesh
   (UV «по метрам» считает шейдер); склеенные вынуты из сцены, матрицы свежие — SC.pick, рамка, стрелки как раньше. Правка → сразу
