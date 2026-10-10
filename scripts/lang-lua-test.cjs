@@ -164,7 +164,120 @@ async function timers(){
   ok(out.join('|') === 'false после ожидания', 'wait внутри pcall', out.join('|'));
 }
 
-// @@E2E@@
+// ═══ Скрипты как в Roblox — через runtime() песочницы (сообщения хозяину проверяем) ═══
+async function e2e(){
+  const msgs = [], allPrints = [];
+  const ctx = vm.createContext({ postMessage: m => { const c = JSON.parse(JSON.stringify(m)); msgs.push(c); if (c.t === 'print') allPrints.push(c.text); }, onmessage: null, setTimeout, clearTimeout, console });
+  vm.runInContext('(' + E.scripts.runtime.toString() + ')()', ctx);
+  const send = d => ctx.onmessage({ data: d });
+  const of = t => msgs.filter(m => m.t === t);
+  const errsOf = s => of('error').filter(m => m.script === s);
+  const printed = () => of('print').map(m => m.text);
+  const part = (id, name, extra = {}) => ({ id, cls: 'Part', parent: null, p: { name, pos: [0, 1, 0], size: [4, 1, 2], rot: [0, 0, 0], color: '#a3a2a5', mat: 'plastic', alpha: 0, ...extra } });
+  const EX = {}; for (const [title, code] of E.langs.lua.examples) EX[title.split(':')[0].split(' ')[0]] = code;
+  const lua = (name, parent, code) => ({ name, parent, lang: 'lua', code });
+  const players = [{ id: 'me', name: 'Тест', pos: [0, 0, 0] }];
+  send({ t: 'init', players, libs: { lua: LIB },
+    objs: [part('lava', 'Лава'), part('coin', 'Монетка'), part('door', 'Дверь', { pos: [0, 2, 5], size: [4, 6, 1] }), part('btn', 'Кнопка'), part('plat', 'Платформа', { pos: [0, 3, 0] }),
+      part('spin', 'Крутилка'), part('tele', 'Телепорт'), part('exit', 'Выход', { pos: [10, 0, 10] }), part('fin', 'Финиш'), part('fast', 'Ускоритель'), part('bad', 'Сломанная'), part('w8', 'Ждун'), part('cd2', 'Кнопка2')],
+    scripts: [
+      lua('Лава', 'lava', EX['Лава']), lua('Очки', null, EX['Таблица']), lua('Монетка', 'coin', EX['Монетка']), lua('Дверь', 'door', EX['Дверь']),
+      lua('Платформа', 'plat', EX['Движущаяся']), lua('Крутилка', 'spin', EX['Крутилка']), lua('Телепорт', 'tele', EX['Телепорт']), lua('Кнопка', 'btn', EX['Кнопка']),
+      lua('Финиш', 'fin', EX['Финиш']), lua('Ускорение', 'fast', EX['Ускорение']),
+      lua('Ошибка', 'bad', 'local p = script.Parent\np.Touched:Connect(function(hit)\n\tlocal t = nil\n\tprint(t.field)\nend)'),
+      lua('Наверху', null, 'print("ok")\nlocal x = nil\nx.y = 1'),
+      lua('Синтаксис', null, 'local a = 1\nif a then\n  print(a)\n'),
+      lua('Ждун', 'w8', 'script.Parent.Touched:Connect(function(hit)\n\tlocal h = hit.Parent:FindFirstChild("Humanoid")\n\ttask.wait(0.05)\n\tprint("подождал", hit.Parent.Name, h.ClassName)\nend)'),
+      lua('Кнопка2', 'cd2', 'script.Parent.ClickDetector.MouseClick:Connect(function(player) print("клик", player.Name) end)'),
+      lua('Значения', null, 'local v = Instance.new("IntValue")\nv.Changed:Connect(function(x) print("changed", x) end)\nv.Value = 5\nv.Value = 5\nlocal s = Instance.new("StringValue") s.Value = 12 print(s.Value, typeof(s.Value), v.ClassName, v:IsA("ValueBase"))'),
+      lua('Персонаж', null, 'game.Players.PlayerAdded:Connect(function(p)\n\tp.CharacterAdded:Connect(function(c) print("char", c.Name, c:FindFirstChild("Humanoid").ClassName, c.Humanoid.Parent == c) end)\nend)'),
+      lua('Векторы', null, 'local a = Vector3.new(1, 2, 3)\nlocal b = a + Vector3.new(1, 1, 1)\nprint(b, a * 2, 2 * a, a / 2, -a, a == Vector3.new(1, 2, 3), a ~= b, a:Dot(b), (b - a).Magnitude, typeof(a), a.Unit.Magnitude, a:Cross(Vector3.new(0, 0, 1)), Vector3.zero, Vector3.new())'),
+      lua('CFrame', null, 'local cf = CFrame.new(1, 2, 3) * CFrame.Angles(0, math.rad(90), 0)\nprint(cf.Position, math.round(cf.LookVector.X), typeof(cf))\nlocal rx, ry, rz = cf:ToOrientation() print(math.round(math.deg(ry)))\nlocal p = (CFrame.new(0, 0, -5) * CFrame.new(0, 0, -5)).Position print(p)\nprint((cf * Vector3.new(0, 0, -1)), cf:Inverse() * cf == CFrame.new(), (cf + Vector3.new(1, 0, 0)).X)'),
+      lua('Детали', null, 'local p = Instance.new("Part")\np.Name = "Новая"\np.BrickColor = BrickColor.new("Bright red")\np.Rotation = Vector3.new(0, 30, 0)\np.Parent = workspace\nprint(p.Color, p.BrickColor.Name, BrickColor.new("Really red").Color, p.Orientation.Y, typeof(p), tostring(p), p:IsA("BasePart"))\np.CFrame = CFrame.new(5, 6, 7) * CFrame.Angles(0, math.rad(45), 0)\nprint(p.Position, math.round(p.Orientation.Y))\nlocal kids = workspace:GetChildren() print(type(kids), #kids > 5, kids[1] ~= nil)\nlocal f = Instance.new("Folder") f.Name = "Папка" f.Parent = workspace\nlocal q = Instance.new("Part", f) q.Name = "ВПапке"\nprint(workspace:FindFirstChild("ВПапке", true).Parent.Name, f.ClassName)'),
+      lua('Песочница', null, 'local p = script.Parent\nprint(p.constructor, game.__proto__, workspace.prototype, game._fire)\nprint(pcall(function() return print.constructor end))\nprint(pcall(function() return (function() end).constructor end))\nprint(getmetatable(game), type(game), typeof(game), typeof(workspace.Лава), typeof(workspace.Лава.Touched))'),
+    ] });
+  ok(of('ready').length === 1, 'Lua: runtime готов');
+  // ошибки при запуске: синтаксис и строка
+  const se = errsOf('Синтаксис')[0];
+  ok(se && se.line === 4 && /ожидалось "end"/.test(se.msg), 'синтаксическая ошибка — строка и «ожидалось end»', JSON.stringify(se));
+  const te = errsOf('Наверху')[0];
+  ok(te && te.line === 3 && te.msg === "попытка записать поле 'y' в nil (локальная переменная 'x')", 'ошибка наверху — строка 3', JSON.stringify(te));
+  const otherErr = of('error').filter(m => m.script !== 'Синтаксис' && m.script !== 'Наверху');
+  ok(otherErr.length === 0, 'примеры запускаются без ошибок', JSON.stringify(otherErr));
+  // подписки
+  const want = ev => new Set(of('want').filter(m => m.ev === ev && m.on).map(m => m.id));
+  ok(['lava', 'coin', 'tele', 'fin', 'fast', 'bad', 'w8'].every(id => want('touched').has(id)), 'Touched → подписки хозяину', [...want('touched')].join());
+  ok(want('clicked').has('btn') && want('clicked').has('cd2'), 'ClickDetector (новый и «найденный») → clicked', [...want('clicked')].join());
+  ok(of('want').some(m => m.ev === 'heartbeat' && m.on), 'Heartbeat → подписка');
+  ok(of('prompt').some(m => m.id === 'door' && m.text === 'Открыть' && m.hold === 0), 'ProximityPrompt → подсказка «[E] Открыть»', JSON.stringify(of('prompt')));
+  const tw = of('tween').find(m => m.id === 'plat');
+  ok(tw && tw.goals.pos.join() === '0,3,12' && tw.time === 3 && tw.ease === 'sine' && tw.reverses && tw.repeat === -1, 'TweenInfo + TweenService:Create(...):Play()', JSON.stringify(tw));
+  const pv = printed();
+  ok(pv.includes('changed 5') && pv.filter(t => t === 'changed 5').length === 1 && pv.includes('12 string IntValue true'), 'IntValue.Changed (без повтора) и StringValue', pv.join(' | '));
+  ok(pv.includes('2, 3, 4 2, 4, 6 2, 4, 6 0.5, 1, 1.5 -1, -2, -3 true true 20 1.7320508075689 Vector3 1 2, -1, 0 0, 0, 0 0, 0, 0'), 'Vector3: + − * / ==, Dot, Cross, Magnitude, typeof', pv.find(t => t.startsWith('2, 3, 4')));
+  ok(pv.includes('1, 2, 3 -1 CFrame') && pv.includes('90') && pv.includes('0, 0, -10') && pv.some(t => /^0, 2, 3 true 2$/.test(t)), 'CFrame: *, Angles, LookVector, ToOrientation, Inverse', pv.filter(t => /CFrame|^90$|-10|true 2$/.test(t)).join(' | '));
+  ok(pv.includes('#c4281c Bright red #ff0000 30 Instance Новая true') && pv.includes('5, 6, 7 45') && pv.includes('table true true') && pv.includes('Папка Folder'), 'BrickColor, Rotation, part.CFrame, GetChildren → таблица, Folder → модель', pv.filter(t => /Bright|45|table|Папка/.test(t)).join(' | '));
+  const fm = of('new').find(m => m.cls === 'Model' && m.props.name === 'Папка'), fp = of('new').find(m => m.props.name === 'Part' && m.parent === fm?.id);
+  ok(fm && (fp || of('set').some(m => m.k === 'name' && m.v === 'ВПапке')), 'Folder в workspace — модель мира у хозяина', JSON.stringify(fm));
+  ok(pv.includes('nil nil nil nil') && pv.some(t => t.startsWith('false ') && t.includes('function')) && pv.includes('The metatable is locked userdata Instance Instance RBXScriptSignal'), 'песочница: constructor/__proto__/prototype не видны', pv.filter(t => /nil nil|false|locked/.test(t)).join(' | '));
+  // вход игрока: leaderstats из PlayerAdded
+  await sleep(5);
+  const stat = (k, v) => of('player').some(m => m.cmd === 'stat' && m.v.k === k && m.v.v === v);
+  ok(stat('Монеты', 0), 'leaderstats: папка + IntValue в PlayerAdded → таблица очков', JSON.stringify(of('player')));
+  ok(of('player').some(m => m.cmd === 'message' && /Привет, Тест/.test(m.v.text)), 'player:Message');
+  // события
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'lava', player: 'me' });
+  ok(of('player').some(m => m.cmd === 'health' && m.v === 0), 'лава: hit.Parent:FindFirstChild("Humanoid").Health = 0', JSON.stringify(of('player')));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'coin', player: 'me' });
+  await sleep(5);
+  ok(stat('Монеты', 1) && of('destroy').some(m => m.id === 'coin') && of('sound').some(m => m.name === 'coin'), 'монетка: GetPlayerFromCharacter + leaderstats.Value += 1 + Destroy', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'coin', player: 'me' });
+  ok(msgs.length === 0, 'удалённая монетка больше не срабатывает');
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'prompt', id: 'door', player: 'me' });
+  const dt = of('tween').find(m => m.id === 'door');
+  ok(dt && dt.goals.pos.join() === '0,8,5' && dt.time === 0.6 && of('prompt').some(m => m.id === 'door' && m.text === 'Закрыть') && of('sound').some(m => m.name === 'door_wood_open'), 'дверь: ProximityPrompt.Triggered → твин, ActionText меняется', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'clicked', id: 'btn', player: 'me' });
+  ok(of('set').some(m => m.id === 'btn' && m.k === 'color' && /^#[0-9a-f]{6}$/.test(m.v)) && printed().includes('Тест нажал кнопку'), 'кнопка: ClickDetector.MouseClick → цвет', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'clicked', id: 'cd2', player: 'me' });
+  ok(printed().includes('клик Тест'), 'part.ClickDetector (как вставленный в Studio)', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'tick', dt: 0.5, players });
+  const rs = of('set').find(m => m.id === 'spin' && m.k === 'rot');
+  ok(rs && Math.abs(rs.v[1] - 45) < 1e-6 && Math.abs(rs.v[0]) < 1e-6, 'крутилка: Heartbeat + part.CFrame * CFrame.Angles', JSON.stringify(rs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'tele', player: 'me' });
+  const tp = of('player').find(m => m.cmd === 'teleport');
+  ok(tp && tp.v.join() === '10,3,10', 'телепорт: character:PivotTo(exit.CFrame + Vector3)', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'fin', player: 'me' });
+  await sleep(5);
+  ok(of('gui').some(m => m.cmd === 'message' && /🏁 Тест прошёл за \d+\.\d с!/.test(m.text)) && of('player').some(m => m.cmd === 'stat' && m.v.k === 'Время'), 'финиш: string.format + SetStat', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'fast', player: 'me' });
+  ok(of('player').some(m => m.cmd === 'walk' && m.v === 32), 'ускоритель: WalkSpeed = 32 (потом task.wait(3))', JSON.stringify(msgs));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'bad', player: 'me' });
+  const be = errsOf('Ошибка')[0];
+  ok(be && be.line === 4 && be.msg === "попытка взять поле 'field' у nil (локальная переменная 't')", 'ошибка в обработчике — строка 4', JSON.stringify(be));
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'w8', player: 'me' });
+  ok(!printed().length, 'task.wait в обработчике: сразу не печатает');
+  await sleep(80);
+  ok(printed().includes('подождал Тест Humanoid'), 'task.wait в обработчике касания — потом продолжает', printed().join(' | '));
+  ok(allPrints.some(t => t === 'char Тест Humanoid true'), 'CharacterAdded → персонаж с Humanoid', allPrints.join(' | '));
+  // скорость обработчика Heartbeat
+  const t0 = Date.now();
+  for (let i = 0; i < 2000; i++) send({ t: 'tick', dt: 1 / 60, players });
+  const per = (Date.now() - t0) / 2000;
+  ok(per < 0.5, 'Heartbeat-обработчик Lua дешевле 0,5 мс', per.toFixed(4) + ' мс');
+  console.log(`  Heartbeat (крутилка с CFrame): ${(per * 1000).toFixed(0)} мкс на кадр`);
+}
 
 (async () => {
   await timers();

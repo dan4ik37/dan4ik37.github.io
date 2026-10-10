@@ -1021,6 +1021,7 @@
       if (r === undefined) return X;
       if (r === null) return [undefined];
       if (r instanceof Promise) return yield new Sus(1, r);   // WaitForChild, Event:Wait() — ждём сопрограммой
+      if (Array.isArray(r) && r.__multi === true) return r.map(fromJS);   // несколько значений: local x, y, z = cf:ToOrientation()
       return [fromJS(r)];
     }
     function* $C(f, args, sd){
