@@ -48,6 +48,15 @@ function card(g) {
   </a>`;
 }
 
+// Не игры, но то же настроение: тесты и инструменты (серверные страницы) — перелинковка с сильной страницы /games
+const MORE = [
+  ['/quiz', '🧩', 'Тесты: кто ты из игр?', 'Какой ты моб из Майнкрафта, кто ты из FNAF и Роблокса — делись результатом'],
+  ['/tools/wheel', '🎡', 'Колесо фортуны', 'Во что поиграть, кто первый ходит, розыгрыш среди друзей'],
+  ['/tools/cps', '🖱', 'CPS тест', 'Сколько кликов в секунду ты успеешь?'],
+  ['/tools/fonts', '✒️', 'Шрифты для ника', 'Красивые буквы и символы для ника в игре'],
+  ['/tools/nick', '🏷', 'Генератор ников', 'Крутые, милые, аниме и русские ники'],
+];
+
 function hubPage() {
   const url = `${SITE}/games`;
   const ld = {
@@ -71,6 +80,8 @@ function hubPage() {
   <div class="cta"><a class="btn btn-acc big" href="/#/games">▶ Открыть игры</a></div>
   <section class="more"><h2>Во что поиграть</h2><div class="ggrid">${GAME_PAGES.map(card).join('')}</div></section>
   <div data-ad="seo_game" hidden></div>
+  <section class="more"><h2>Ещё на сайте</h2><div class="ggrid">${MORE.map(([href, ic, name, about]) =>
+    `<a class="gcard" href="${href}"><span class="gic">${ic}</span><b>${esc(name)}</b><span>${esc(about)}</span></a>`).join('')}</div></section>
   <section class="box">
     <h2>Как играть с другом</h2>
     <ol>
