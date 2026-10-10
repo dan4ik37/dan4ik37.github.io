@@ -412,6 +412,15 @@ async function rapierTests(){
       const w = mkWorld(); const s = box(w.SC, [0, 1, 0], [2, 2, 2], { mat }); w.SC.step(DT); w.SC.rigid.setVelocity(s, [10, 0, 0]); steps(w.SC, 2); far.push(s.pos[0]);
     }
     ok(far[0] > far[1] * 2, 'лёд скользит дальше бетона', far);
+    // свои трение/упругость у закреплённой детали (пол без трения — коробка скользит дальше)
+    const far2 = [];
+    for (const fr of [null, 0]) {
+      const w = mkWorld(); const fl = w.SC.add('Part', { pos: [0, .5, 0], size: [60, 1, 10], mat: 'concrete' });
+      const s = box(w.SC, [-20, 2, 0], [2, 2, 2], { mat: 'ice' }); w.SC.step(DT);
+      if (fr !== null) { w.SC.set(fl, 'phys', { friction: fr }, true); w.SC.set(s, 'phys', { friction: 0 }, true); }
+      w.SC.rigid.setVelocity(s, [8, 0, 0]); steps(w.SC, 2); far2.push(s.pos[0] + 20);
+    }
+    ok(far2[1] > far2[0] + 3, 'CustomPhysicalProperties (трение 0) у закреплённой и незакреплённой — скользит дальше', far2);
     RG.setAnchored(b, true); SC.step(DT);
     ok(!RG.isDynamic(b) && b.anchored === true, 'setAnchored(true)');
   }

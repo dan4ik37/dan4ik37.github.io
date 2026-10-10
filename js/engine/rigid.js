@@ -14,12 +14,14 @@
 // свои — obj.phys = { density, friction, elasticity }, obj.massless). Позы пишутся в obj.pos / obj.rot (градусы, YXZ) и в меш.
 // Тело Rapier создаётся без поворота (поворот детали — у коллайдера): тогда оси шарниров у свежих тел совпадают всегда.
 // Игрок (player.js как был): каждая движущаяся деталь — тело Phys, которое двигается на месте (c.rb — её запись): на ней
-// стоят и едут, упёрся — толкает (импульс по массе, ph.onPush), стоит — давит весом, падающая деталь ложится на голову
-// (кинематический цилиндр персонажа; персонажей rigid находит сам через ph.onChar). Спящие тела не стоят ничего: каждый шаг —
-// только активные (forEachActiveRigidBody).
+// стоят и едут, упёрся — толкает (импульс по массе, «сила рук» pushForce, ph.onPush), мелочь ниже ступеньки (c.kick) — пинает,
+// стоит — давит весом (charMass), падающая деталь ложится на голову (кинематический цилиндр персонажа; персонажей rigid
+// находит сам через ph.onChar; RG.addCharacter(ch, { carry: true }) — ещё и возить с деталью, в студии это делает studio3d).
+// Спящие тела не стоят ничего: позы пишутся только у активных (forEachActiveRigidBody), а если всё спит, никого не будили и
+// рядом с персонажами нет незакреплённых деталей — шаг Rapier пропускается целиком. RG.moved — кто сдвинулся за шаг.
 // Для скриптов (хозяин мира): RG.applyImpulse(obj, [x,y,z], at?), RG.applyAngularImpulse, RG.setVelocity / getVelocity,
 // RG.setAngularVelocity / getAngularVelocity (рад/с), RG.setAnchored(obj, bool), RG.setMassless, RG.setDensity, RG.setPhysical,
-// RG.mass(obj), RG.sleeping(obj), RG.wake(obj). Соединения: J = RG.joint('weld' | 'hinge' | 'ball' | 'rope' | 'spring' | 'slider',
+// RG.mass(obj) (сборка), RG.partMass(obj), RG.sleeping(obj), RG.wake(obj), RG.setGravity(g). Соединения: J = RG.joint('weld' | 'hinge' | 'ball' | 'rope' | 'spring' | 'slider',
 // a, b | null (мир), { at, at1, axis, length, stiffness, damping, limits: [min, max], motor: { speed, torque }, collide }) →
 // J.remove(), J.setMotor(скорость, момент), J.setServo(угол), J.setLimits(min, max), J.angle(). Сварка двух незакреплённых — одно
 // тело (сборка, как в Roblox). События: RG.on('fallen', obj) — упала за край мира (тело выключено), RG.on('touch', { a, b, started })
@@ -541,7 +543,10 @@
       if (!ob || !RG.ok) return;
       const P = parts.get(ob.id);
       if (key === 'anchored') { if (wants(ob)) { if (!P) makeDynamic(ob); } else if (P) makeStatic(P); return; }
-      if (!P) return;
+      if (!P) {   // закреплённая: свои трение/упругость (CustomPhysicalProperties) — у её неподвижного тела
+        if (key === 'phys') for (const c of ob._cols || []) { const St = stat.get(c); if (St && St.col) { const m = St.obj ? matOf(St.obj) : PLAIN; St.col.setFriction(m[1]); St.col.setRestitution(m[2]); keepShape(St); } }
+        return;
+      }
       if (key === 'pos' || key === 'rot') teleport(P);
       else if (key === 'size' || key === 'shape' || key === 'mat' || key === 'phys' || key === 'massless') refreshCollider(P);
       else if (key === 'collide') { if (P.col) P.col.setCollisionGroups(ob.collide === false ? NONE : ALL); if (P.asm) { P.asm.body.wakeUp(); wake(P.asm); } }
