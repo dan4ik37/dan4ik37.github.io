@@ -2,7 +2,9 @@
 // rewrites в vercel.json. Темы и правила подбора — api/_lib/topics.js (по названиям роликов).
 // Зачем: люди ищут «roblox dead rails», «silksong прохождение», а не имя канала — у каждой игры
 // своя страница со всеми роликами, ссылками на /v/<id> и на соседние темы.
-import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+import { SITE, ALL_UPLOADS, getUploads, isGambling, esc, fmtCount } from '../yt.js';
+import { videoFromSnapshot } from '../video-snap.js';
+import { QUIZZES } from '../quizzes.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS, topicOf } from '../topics.js';
 
@@ -38,9 +40,9 @@ function chips(counts, cur){
     `<a href="/topic/${x.slug}"${x.slug === cur ? ' class="on"' : ''}>${esc(x.name)}<small>${counts.get(x.slug).toLocaleString('ru')}</small></a>`).join('')}</nav>`;
 }
 
-function card(v){
+function card(v, views){
   const d = new Date(v.publishedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Moscow' });
-  return `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${esc(d)}</small></a>`;
+  return `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${views ? '👁 ' + esc(fmtCount(views)) + ' · ' : ''}${esc(d)}</small></a>`;
 }
 
 function hubPage(counts){
@@ -61,8 +63,15 @@ function hubPage(counts){
     url, image: SITE + '/og-image.jpg', ld, body, css: CSS });
 }
 
+// «Самые популярные» по теме — просмотры из снимка (video-details.js), без роликов про кейсы/депозит (на странице реклама)
+function popularOf(list, n){
+  return list.map(v => ({ v, views: +(videoFromSnapshot(v.id)?.statistics?.viewCount || 0) }))
+    .filter(x => x.views && !isGambling(x.v.title)).sort((a, b) => b.views - a.views).slice(0, n);
+}
+
 function topicPage(t, all, counts, req){
   const list = all.filter(v => t.re.test(v.title));
+  const quiz = QUIZZES.find(q => q.topic === t.slug);
   const n = list.length;
   const pages = Math.max(1, Math.ceil(n / PER));
   const p = Math.min(Math.max(parseInt(req.query.p, 10) || 1, 1), pages);
@@ -88,9 +97,10 @@ function topicPage(t, all, counts, req){
   <div class="cta">
     <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>
     <button type="button" class="btn btn-ghost" onclick="d37Surprise(this)">🎲 Удиви меня</button>
-    <a class="btn btn-ghost" href="/games">🎮 Поиграть на сайте</a>
+    ${quiz ? `<a class="btn btn-ghost" href="/quiz/${quiz.slug}">🧩 Тест: ${esc(quiz.title)}</a>` : '<a class="btn btn-ghost" href="/games">🎮 Поиграть на сайте</a>'}
   </div>
-  <section class="more"><div class="grid">${slice.map(card).join('')}</div></section>
+  ${p === 1 && list.length >= 16 ? (() => { const pop = popularOf(list, 8); return pop.length >= 4 ? `<section class="more"><h2>🔥 Самые популярные</h2><div class="grid">${pop.map(x => card(x.v, x.views)).join('')}</div></section><h2 class="all-h">Все видео — от новых к старым</h2>` : ''; })() : ''}
+  <section class="more"><div class="grid">${slice.map(v => card(v)).join('')}</div></section>
   ${pager}
   <div data-ad="video_page" hidden></div>
   <section class="more"><h2>Другие игры канала</h2>${chips(counts, t.slug)}</section>
@@ -116,6 +126,7 @@ const CSS = `
 .tcard small{color:var(--accent);font-weight:800;font-size:.75rem}
 .tcard span{font-size:.78rem;color:var(--muted);line-height:1.45}
 .card small{padding:0 .8rem .8rem;margin-top:-.4rem;font-size:.7rem;color:var(--muted)}
+.all-h{margin-top:2.2rem}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:2rem;font-size:.85rem}
 .pager a{padding:.6rem 1.1rem;border-radius:12px;border:1px solid var(--line);text-decoration:none;font-weight:800}
 .pager a:hover{border-color:var(--accent)}

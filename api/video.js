@@ -10,6 +10,7 @@ import { SITE, VIDEO_ID_RE, getVideo, getUploads, relatedVideos, isGambling, esc
 import { page, YT_CHANNEL } from './_lib/page.js';
 import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
+import { QUIZZES } from './_lib/quizzes.js';
 
 export default async function handler(req, res) {
   const id = String(req.query.id || '');
@@ -46,6 +47,7 @@ export default async function handler(req, res) {
   const rel = relatedVideos({ id, title: sn.title, tags: sn.tags }, more || [], 8);
   const related = rel.list;
   const topics = topicsFor(sn.title);
+  const quiz = QUIZZES.find(q => q.topic && topics.some(t => t.slug === q.topic));
   const noAds = isGambling(sn.title, desc);
   const tags = (sn.tags || []).slice(0, 12);
 
@@ -86,7 +88,7 @@ export default async function handler(req, res) {
     </div>
     ${desc ? `<section class="desc"><h2>Описание</h2><p>${linkify(desc)}</p></section>` : ''}
     ${noAds ? '' : '<div data-ad="video_page" hidden></div>'}
-    ${topics.length ? `<p class="topics">Ещё по теме: ${topics.map(t => `<a href="/topic/${t.slug}">${esc(t.name)} →</a>`).join(' ')}</p>` : ''}
+    ${topics.length ? `<p class="topics">Ещё по теме: ${topics.map(t => `<a href="/topic/${t.slug}">${esc(t.name)} →</a>`).join(' ')}${quiz ? ` <a href="/quiz/${quiz.slug}">🧩 Тест: ${esc(quiz.title)}</a>` : ''}</p>` : ''}
     ${tags.length ? `<ul class="tags">${tags.map(t => `<li>#${esc(t)}</li>`).join('')}</ul>` : ''}
   </article>
 
