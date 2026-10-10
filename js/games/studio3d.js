@@ -1292,11 +1292,11 @@ Players.PlayerAdded.Connect(player => {
     if (pl.role === 'solo') msg('▶ Играешь! WASD — идти, Пробел — прыжок, E — действие. ■ Стоп — назад в редактор', true);
   }
   // Мир «живёт» (скрипты, NPC, физика деталей) только у того, кто его считает: один или хозяин комнаты
-  function runWorld(pl){
+  function runWorld(pl, restore){   // restore — новый хозяин комнаты: очки игроков скрипты не обнулят
     const ed = ED, SC = ed.SC;
     if (pl.running) return;
     for (const o of SC.all()) if (o.cls === 'Script' && o.enabled !== false && langOf(o).kind === 'binary' && !o.code) print(`⚠️ Скрипт «${o.name}» не собран — ${typeof langOf(o).compile === 'function' ? 'нажми ⚙️ Собрать' : 'загрузи .wasm'}`, 'warn');
-    pl.hasScripts = pl.SH.start(SC, scriptPlayers());
+    pl.hasScripts = pl.SH.start(SC, scriptPlayers(), { restore: !!restore });
     if (pl.hasScripts) print('▶ Скрипты запущены', 'sys');
     if (SC.all().some(o => o.anchored === false)) window.D37E.rigid?.load();
     ed.NPC.start({ onHit: (e, dmg, who) => npcHit(dmg, who), onSay: (e, text) => npcSay(e, text) });
@@ -1745,7 +1745,7 @@ Players.PlayerAdded.Connect(player => {
         pl.prompts = new Map(); pl.clicks = new Map(); syncItems();
         mpRestoreScripts();
       }
-      runWorld(pl);
+      runWorld(pl, prev === 'guest');
       mpHostSetup();
       if (!mp.spawned) mpSpawn(prev === 'wait');
       if (prev === 'guest') { pl.H.toast('👑 Теперь ты хозяин мира', true); print('👑 Хозяин вышел — теперь мир считает этот браузер (скрипты запущены заново)', 'sys'); }

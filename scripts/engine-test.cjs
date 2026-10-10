@@ -481,4 +481,19 @@ function pk(boxes, opts = {}){
   ok(of('player').length === 0, 'удалённая деталь больше не срабатывает');
 }
 
-setTimeout(() => { console.log(`\n${pass} ок, ${fail} ошибок`); process.exitCode = fail ? 1 : 0; }, 40);   // после проверок в async
+// ═══ Перезапуск скриптов у нового хозяина комнаты (restore): «очки = 0 при входе» не обнуляет сохранённые ═══
+{
+  const msgs = [];
+  const ctx = vm.createContext({ postMessage: m => msgs.push(JSON.parse(JSON.stringify(m))), onmessage: null, setTimeout, clearTimeout, console });
+  vm.runInContext('(' + E.scripts.runtime.toString() + ')()', ctx);
+  ctx.onmessage({ data: { t: 'init', restore: true, objs: [],
+    players: [{ id: 'me', name: 'Тест', pos: [0, 0, 0], stats: { 'Монеты': 7 } }, { id: 'p2', name: 'Друг', pos: [0, 0, 0], stats: {} }],
+    scripts: [{ name: 'очки', parent: null, code: "Players.PlayerAdded.Connect(p => { const ls = Instance.new('Folder'); ls.Name = 'leaderstats'; ls.Parent = p; const c = Instance.new('IntValue'); c.Name = 'Монеты'; c.Value = 0; c.Parent = ls; });" }] } });
+  setTimeout(() => {
+    const last = pid => msgs.filter(m => m.t === 'player' && m.pid === pid && m.cmd === 'stat' && m.v.k === 'Монеты').pop();
+    ok(last('me')?.v.v === 7, 'новый хозяин: очки вернулись после «очки = 0 при входе»', last('me'));
+    ok(last('p2')?.v.v === 0, 'у кого очков не было — так и 0', last('p2'));
+  }, 950);
+}
+
+setTimeout(() => { console.log(`\n${pass} ок, ${fail} ошибок`); process.exitCode = fail ? 1 : 0; }, 1000);   // после проверок в async (restore — до 0,8 с)

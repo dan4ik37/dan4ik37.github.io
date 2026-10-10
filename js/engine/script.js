@@ -619,7 +619,27 @@
           } catch (e4) { err(s.name, e4); }
         }
         curScript = '';
+        // перезапуск у нового хозяина: очки до PlayerAdded — запомнить (обработчик «очки = 0 при входе» их обнулит)
+        const saved = new Map();
+        if (d.restore) for (const [pid, P] of players) if (P.stats && typeof P.stats === 'object' && Object.keys(P.stats).length) saved.set(pid, { ...P.stats });
         for (const p of players.keys()) Players.PlayerAdded._fire(playerOf(p));
+        if (saved.size) {
+          // вернуть то, что обнулили (0, пусто, нет): дважды — и после медленных обработчиков с task.wait
+          const back = () => {
+            for (const [pid, st] of saved) {
+              const P = players.get(pid); if (!P) continue;
+              P.stats = P.stats || {};
+              for (const [k, v] of Object.entries(st)) {
+                const o = lsChild(pid, k), cur = o ? o.p.value : P.stats[k];
+                if (cur === v || !(cur == null || cur === 0 || cur === '' || cur === false)) continue;
+                if (o) o.p.value = v;
+                P.stats[k] = v; send('player', { pid, cmd: 'stat', v: { k, v } });
+              }
+            }
+            markStats();
+          };
+          setTimeout(back, 60); setTimeout(back, 800);
+        }
         setTimeout(() => { for (const p of players.keys()) charAdded(p); }, 30);   // персонаж появляется чуть позже входа (CharacterAdded)
         postMessage({ t: 'ready' });
         return;
@@ -671,9 +691,12 @@ up({ t: 'frame' });
   E.scripts = function (host){
     const SH = { running: false, wantBeat: false, want: { touched: new Set(), touchEnded: new Set(), clicked: new Set() } };
     let frame = null, onMsg = null, queue = [], ready = false, posT = 0;
-    const post = m => { if (frame?.contentWindow && ready) frame.contentWindow.postMessage(m, '*'); else queue.push(m); };
-    SH.start = (scene, players) => {
+    // нет песочницы (скриптов нет) — сообщения не копим; ждём, пока она загрузится, — не больше 5000
+    const post = m => { if (!frame) return; if (frame.contentWindow && ready) frame.contentWindow.postMessage(m, '*'); else if (queue.length < 5000) queue.push(m); };
+    // opt.restore — перезапуск у нового хозяина комнаты: PlayerAdded сработает снова, но очки игроков (players[i].stats) вернутся
+    SH.start = (scene, players, opt = {}) => {
       SH.stop();
+      const restore = !!opt.restore;
       const scripts = scene.all().filter(o => o.cls === 'Script' && o.enabled !== false && String(o.code || '').trim()).map(o => {
         const lang = o.lang && E.langs[o.lang] ? o.lang : 'js', bin = E.langs[lang].kind === 'binary';
         return { id: o.id, name: o.name, parent: o.parent, lang, code: String(o.code).slice(0, bin ? 3e6 : 200000) };
@@ -693,7 +716,7 @@ up({ t: 'frame' });
       onMsg = e => {
         if (e.source !== frame?.contentWindow) return;
         const d = e.data || {};
-        if (d.t === 'frame') { ready = true; frame.contentWindow.postMessage({ t: 'boot', code: runtime.toString() }, '*'); frame.contentWindow.postMessage({ t: 'init', objs, scripts, players, libs }, '*'); for (const m of queue) frame.contentWindow.postMessage(m, '*'); queue = []; return; }
+        if (d.t === 'frame') { ready = true; frame.contentWindow.postMessage({ t: 'boot', code: runtime.toString() }, '*'); frame.contentWindow.postMessage({ t: 'init', objs, scripts, players, libs, restore }, '*'); for (const m of queue) frame.contentWindow.postMessage(m, '*'); queue = []; return; }
         if (d.t === 'want') { if (d.ev === 'heartbeat') SH.wantBeat = !!d.on; else if (SH.want[d.ev]) { if (d.on) SH.want[d.ev].add(d.id); else SH.want[d.ev].delete(d.id); } if (d.ev === 'clicked' || d.ev === 'prompt') host.apply?.(d); return; }
         if (d.t === 'print') { host.print?.(String(d.text || ''), d.kind); return; }
         if (d.t === 'error') { host.error?.(String(d.script || ''), +d.line || 0, String(d.msg || '')); return; }
