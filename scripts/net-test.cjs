@@ -623,6 +623,37 @@ const R6 = {};
   R6.links = linkStats(sim, 16000, 30000);
 }
 
+// ═══ 8. Для игр на двоих: D37E.net.duel поверх готовых GameRoom + NetPlay (здесь — их модель: комната и канал в памяти) ═══
+const R8 = {};
+{
+  const sim = mkWorld({ seed: 71, warm: 1e9 });
+  const mkSide = (id, t, k, world) => {
+    const P = { id, k, offs: [], off: 5000 + sim.rnd() * 1e5, scene: fakeScene(), readyAt: 0, pending: [], cheats: [], lastTp: undefined };
+    P.now = () => sim.t + P.off;
+    if (world) buildWorld(P.scene);
+    P.room = { myId: id, joinedAt: t, opp: null };
+    P.np = { mode: () => 'p2p', sendBin: buf => { if (sim.rnd() < .03) return; const u = buf.slice(0); sim.at(sim.t + 60 + sim.rnd() * 30, () => P.other && P.other.tr.binary(u)); } };
+    P.tr = E.net.duel(P.room, P.np);
+    P.S = E.net.session({ transport: P.tr, scene: P.scene, now: P.now, nick: 'Игрок ' + k,
+      onHost: is => { P.script = is ? mkScript(sim, P) : null; }, onReady: () => { if (!P.readyAt) P.readyAt = sim.t; }, onCheat: (w, i) => P.cheats.push([w, i.why]) });
+    const step = () => { const c = charOf(P, sim.t); if (P.lastTp !== undefined && c.tp !== P.lastTp) P.S.teleported(); P.lastTp = c.tp; P.S.setMyCharacter(c); if (P.S.isHost && P.script) P.script(sim.t); P.S.tick(1 / 60); sim.at(sim.t + 1000 / 60, step); };
+    sim.at(sim.t + 3, step);
+    sim.peers.set(id, P);
+    return P;
+  };
+  const H = mkSide('u1~1000', 1000, 0, true), G = mkSide('g-x~2000', 2000, 1, false);
+  H.other = G; G.other = H;
+  // GameRoom сообщает соперника (onPeer) — здесь сразу у обоих
+  H.room.opp = { id: G.id, nick: 'Игрок 1' }; G.room.opp = { id: H.id, nick: 'Игрок 0' };
+  H.tr.peer(); G.tr.peer();
+  sim.run(25000); sim.frozen = true; sim.run(30000);
+  const c = compareScenes(H.scene, G.scene);
+  ok(H.S.isHost && !G.S.isHost && G.S.hostId === H.id, 'на двоих (duel): хозяин — кто раньше вошёл в GameRoom');
+  ok(c.ok && G.readyAt, 'на двоих (duel): копия сошлась, мир готов', c);
+  const r = G.S.remotes().find(x => x.id === H.id);
+  ok(r && Math.hypot(r.pose.x - charOf(H, r.rt - H.off).x, r.pose.z - charOf(H, r.rt - H.off).z) < .5 && H.cheats.length === 0, 'на двоих (duel): персонаж хозяина виден точно, без ложных «читеров»');
+}
+
 // ═══ 7. Настоящий транспорт с WebRTC: модель RTCPeerConnection (предложение/ответ/ICE, два канала: быстрый без повторов
 //  и надёжный), js/games/netplay.js как есть. Старший (хозяин) предлагает, гости отвечают; гости между собой не соединяются;
 //  после соединения Supabase почти не тратится ═══
