@@ -48,7 +48,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: 'Самые популярные видео dan4ik37 — топ по просмотрам',
     description: `Топ-${N} видео и шортсов dan4ik37 по просмотрам: ${longs.slice(0, 3).map(v => v.title).join(' · ').slice(0, 200)}`,
-    url, image: longs[0] ? `https://i.ytimg.com/vi/${longs[0].id}/hqdefault.jpg` : '', ld, body, css: CSS
+    url, image: SITE + '/img/share/top.png', ld, body, css: CSS
   }));
 }
 

@@ -81,7 +81,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: 'Шрифты для ника — красивые буквы и символы для ника онлайн | dan4ik37',
     description: 'Красивый шрифт для ника онлайн: 24 стиля — каллиграфия, готика, буквы в кружках, маленькие заглавные — и 70+ символов ★ 亗 ꧁꧂ для ника в играх, Telegram и Discord. Нажми — и скопировано.',
-    url, image: SITE + '/img/games/games.png', ld, body, script, css: CSS
+    url, image: SITE + '/img/share/fonts.png', ld, body, script, css: CSS
   }));
 }
 

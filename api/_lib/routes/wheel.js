@@ -93,7 +93,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: custom.length >= 2 ? `Колесо фортуны: ${custom.slice(0, 4).join(', ')}${custom.length > 4 ? '…' : ''}` : 'Колесо фортуны онлайн — крутить рандом с вариантами | dan4ik37',
     description: 'Бесплатное колесо фортуны онлайн: впиши свои варианты и крути. Честный рандом, розыгрыши без повторов, ссылка на колесо для друзей.',
-    url, image: SITE + '/img/games/games.png', ld, body, script, css: CSS, noindex: custom.length >= 2
+    url, image: SITE + '/img/share/wheel.png', ld, body, script, css: CSS, noindex: custom.length >= 2
   }));
 }
 

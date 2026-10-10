@@ -81,7 +81,7 @@ export default async function handler(req, res) {
   res.status(200).send(page({
     title: 'Кто такой dan4ik37 (Денчик37) — ютубер и стример | dan4ik37',
     description: lead.slice(0, 300),
-    url, image: ch?.thumb || SITE + '/icon-512.png', ld, body, css: CSS, ogType: 'profile'
+    url, image: SITE + '/img/share/about.png', ld, body, css: CSS, ogType: 'profile'
   }));
 }
 

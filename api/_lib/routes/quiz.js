@@ -74,7 +74,7 @@ export default function handler(req, res) {
   return res.status(200).send(page({
     title: friend ? `Я — ${friend.name}! ${Q.title} Пройди тест` : `${Q.title} Тест — пройди и узнай | dan4ik37`,
     description: friend ? friend.text : `${Q.lead} Бесплатно, без регистрации — поделись результатом с друзьями.`,
-    url, image: SITE + '/img/games/games.png', ld, body, script, css: CSS, noindex: !!friend
+    url, image: `${SITE}/img/share/quiz-${Q.slug}.png`, ld, body, script, css: CSS, noindex: !!friend
   }));
 }
 
@@ -97,7 +97,7 @@ function hub(res) {
   return res.status(200).send(page({
     title: 'Тесты: какой ты моб из Майнкрафта, кто ты из FNAF, Роблокса и Poppy Playtime | dan4ik37',
     description: 'Бесплатные тесты по играм: какой ты моб из Майнкрафта, кто ты из FNAF и Poppy Playtime, кто ты в Роблоксе, какая ты игра. 8 вопросов — и результат, которым можно поделиться.',
-    url, image: SITE + '/img/games/games.png', ld, body, css: CSS
+    url, image: SITE + '/img/share/quiz.png', ld, body, css: CSS
   }));
 }
 

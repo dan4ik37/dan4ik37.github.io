@@ -87,7 +87,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: challenge ? `${challenge} | CPS тест` : 'CPS тест — проверить скорость кликов в секунду онлайн | dan4ik37',
     description: 'Бесплатный CPS тест: сколько кликов в секунду ты делаешь за 1, 5 или 10 секунд. Звание, рекорд и вызов другу. Работает с мышкой и на телефоне.',
-    url, image: SITE + '/img/games/games.png', ld, body, script, css: CSS, noindex: !!challenge
+    url, image: SITE + '/img/share/cps.png', ld, body, script, css: CSS, noindex: !!challenge
   }));
 }
 

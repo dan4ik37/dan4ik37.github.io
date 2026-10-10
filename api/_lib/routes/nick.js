@@ -62,7 +62,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: 'Генератор ников для игр — крутые, милые, аниме и русские ники | dan4ik37',
     description: 'Бесплатный генератор ников для Roblox, Standoff 2, Minecraft, CS2 и Discord: крутые, милые, страшные, аниме и русские ники. Нажми — и ник скопирован.',
-    url, image: SITE + '/img/games/games.png', ld, body, script, css: CSS
+    url, image: SITE + '/img/share/nick.png', ld, body, script, css: CSS
   }));
 }
 
