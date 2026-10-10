@@ -80,11 +80,12 @@ void main(){
 
     P.setSize = (w, h, pr = 1) => {
       P.w = w; P.h = h; P.pr = pr;
-      const ms = gl2 && q === 'high' && o.msaa !== false && pr <= 1.25 ? 4 : 0;
+      const scaled = pr < (R.pr0 || 1) - .001;   // динамическое разрешение опустило — кадр растягиваем
+      const ms = gl2 && q === 'high' && o.msaa !== false && pr <= 1.25 && !scaled ? 4 : 0;
       if (ms !== rtScene.samples) { rtScene.dispose(); rtScene = new T.WebGLRenderTarget(w, h, { ...sceneOpt, samples: ms }); }
       else rtScene.setSize(w, h);
       P.msaa = ms;
-      P.fxaa = !ms || pr < (R.pr0 || 1) - .001;   // нет MSAA или кадр растягиваем — сглаживаем FXAA
+      P.fxaa = !ms;   // нет MSAA (mid, «ретина», уменьшенный кадр) — сглаживает FXAA
       rtLdr.setSize(w, h);
       let bw = Math.max(1, w >> (q === 'high' ? 1 : 2)), bh = Math.max(1, h >> (q === 'high' ? 1 : 2));
       for (let i = 0; i < P.bloom.levels; i++) {

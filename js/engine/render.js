@@ -727,22 +727,35 @@ gl_FragColor = vec4(c, 1.0);
     }
     R.textTex = textTex;
 
-    // ═══ Склейка статичного мира: детали R.static → по одной сетке на материал; UV по миру; тень у земли; тени ═══
-    R.bakeStatic = () => {
+    // ═══ Склейка статичного мира: детали R.static → по одной сетке на материал (в участке мира, если задан R.bakeChunk);
+    //     UV по миру; тень у земли; тени. Участки (м) отсекаются по видимости и в карте теней по отдельности, но вызовов
+    //     больше: «Мир Денчика» (≈110 материалов, 190 тыс. треуг.) с участками 64 м — 305 сеток вместо 111 и дороже по ЦП,
+    //     поэтому по умолчанию 0 — одна сетка на материал на весь мир (как раньше). Огромные мира с тяжёлой геометрией — 64 ═══
+    R.bakeChunk = o.bakeChunk ?? 0;
+    R.bakeStatic = (opt = {}) => {
+      const CH = opt.chunk ?? R.bakeChunk;
       R.static.updateMatrixWorld(true);
-      const by = new Map(), drop = [];
+      const by = new Map(), drop = [], sph = new T.Sphere();
       R.static.traverse(m => {
         if (!m.isMesh || m.userData.dyn || m.isInstancedMesh) return;
         let p = m.parent, dyn = false;
         while (p && p !== R.static) { if (p.userData.dyn) { dyn = true; break; } p = p.parent; }
         if (dyn) return;
-        if (!by.has(m.material)) by.set(m.material, []);
-        by.get(m.material).push(m);
+        let key = '', cx = 0, cz = 0;
+        if (CH > 0) {   // огромное (земля, небосвод холмов) — в общий участок
+          if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+          sph.copy(m.geometry.boundingSphere).applyMatrix4(m.matrixWorld);
+          if (sph.radius <= CH * .75) { const ix = Math.floor(sph.center.x / CH), iz = Math.floor(sph.center.z / CH); key = ix + ',' + iz; cx = (ix + .5) * CH; cz = (iz + .5) * CH; }
+        }
+        const gk = m.material.uuid + '|' + key;
+        let G = by.get(gk);
+        if (!G) by.set(gk, (G = { mat: m.material, list: [], cx, cz }));
+        G.list.push(m);
         drop.push(m);
       });
       let calls = 0;
-      const p = new T.Vector3(), n = new T.Vector3();
-      for (const [mat, list] of by) {
+      const p = new T.Vector3(), n = new T.Vector3(), aoMats = new Map();
+      for (const { mat, list, cx, cz } of by.values()) {
         let cnt = 0;
         const parts = list.map(m => { const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone(); g.applyMatrix4(m.matrixWorld); cnt += g.attributes.position.count; return g; });
         const pos = new Float32Array(cnt * 3), nor = new Float32Array(cnt * 3), uv = new Float32Array(cnt * 2);
@@ -761,6 +774,7 @@ gl_FragColor = vec4(c, 1.0);
               const vert = Math.abs(n.y) < .6, a = vert ? .58 + .42 * Math.min(1, Math.max(0, p.y / 1.4)) : 1;
               col[(k + i) * 3] = col[(k + i) * 3 + 1] = col[(k + i) * 3 + 2] = a;
             }
+            pos[(k + i) * 3] -= cx; pos[(k + i) * 3 + 2] -= cz;   // вершины — от середины участка (сортировка «ближе — раньше»)
           }
           k += gp.count; g.dispose();
         }
@@ -768,11 +782,16 @@ gl_FragColor = vec4(c, 1.0);
         mg.setAttribute('position', new T.BufferAttribute(pos, 3)); mg.setAttribute('normal', new T.BufferAttribute(nor, 3)); mg.setAttribute('uv', new T.BufferAttribute(uv, 2));
         let useMat = mat;
         if (col) {
-          mg.setAttribute('color', new T.BufferAttribute(col, 3)); useMat = mat.clone(); useMat.vertexColors = true; R.own.push(useMat);
-          if (mat.userData.bloom) R.bloom(useMat, mat.userData.bloom);   // копия метку свечения не наследует
+          mg.setAttribute('color', new T.BufferAttribute(col, 3));
+          useMat = aoMats.get(mat);
+          if (!useMat) {
+            useMat = mat.clone(); useMat.vertexColors = true; R.own.push(useMat); aoMats.set(mat, useMat);
+            if (mat.userData.bloom) R.bloom(useMat, mat.userData.bloom);   // копия метку свечения не наследует
+          }
         }
         mg.computeBoundingSphere();
-        const mesh = new T.Mesh(mg, useMat); mesh.userData.own = true; mesh.matrixAutoUpdate = false;
+        const mesh = new T.Mesh(mg, useMat); mesh.userData.own = true;
+        mesh.position.set(cx, 0, cz); mesh.updateMatrix(); mesh.matrixAutoUpdate = false;
         if (shadows) { mesh.castShadow = !mat.userData?.noCast && !mat.isMeshBasicMaterial; mesh.receiveShadow = !mat.isMeshBasicMaterial; }
         scene.add(mesh); calls++;
       }
