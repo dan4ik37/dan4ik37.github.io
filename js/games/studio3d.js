@@ -1178,6 +1178,7 @@ Players.PlayerAdded.Connect(player => {
         if (key === 't:water') { ed2.TR.setWater(val); markDirty(); return; }
         if (key === 't:level') { ed2.TR.setWater(ed2.TR.water.on, val); const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(1); markDirty(); return; }
         if (!o2) return;
+        if ((key === 'anchored' || key === 'm:anchored') && val === false) window.D37E.rigid?.load();
         if (key.startsWith('m:')) { const k = key.slice(2); pushHist(); for (const x of selList()) if (x[k] !== undefined) SC2.set(x, k, val); return; }
         if (key === 'lang') { setLang(o2, val); return; }
         if (!commit && (el.type === 'text' || el.type === 'number')) return;   // текст и числа — по Enter/уходу
@@ -1212,6 +1213,7 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, E = window.D37E, SC = ed.SC, R = ed.R, T = R.T;
     if (ed.playing) return;
     if (ed.dirty) save(true);   // снимок берётся сразу, до первого шага игры
+    if (SC.all().some(o => o.anchored === false)) E.rigid?.load();   // физика деталей (Rapier) — заранее, без паузы в игре
     tutStep('play');
     ed.TR.cursor(null); ed.G.attach(null); ed.boxHelper.visible = false; closeMenu();
     const snap = SC.toJSON().objects;
@@ -1473,6 +1475,11 @@ Players.PlayerAdded.Connect(player => {
     // подсказки едут за своими деталями
     if (pl.items) for (const it of pl.items.values()) { const o = SC.get(it.oid); if (o?.pos) { it.x = o.pos[0]; it.y = o.pos[1]; it.z = o.pos[2]; } }
     SC.step(dt);
+    if (SC.rigid) {
+      if (pl.rg !== SC.rigid) { pl.rg = SC.rigid; pl.rmoved = new Set(); SC.rigid.on('fallen', o => { if (SC.get(o.id)) SC.remove(o); }); }
+      for (const o of SC.rigid.moved) pl.rmoved.add(o);
+      if ((pl.rsyncT = (pl.rsyncT || 0) + dt) >= .1) { pl.rsyncT = 0; for (const o of pl.rmoved) if (SC.get(o.id)) pl.SH.sync(o.id, { pos: o.pos, rot: o.rot }); pl.rmoved.clear(); }
+    }
     if (!pl.dead) ed.NPC.step(dt, [{ x: P.ch.x, y: P.ch.y, z: P.ch.z }]);
     SH.tick(dt, [{ id: 'me', pos: [P.ch.x, P.ch.y, P.ch.z] }]);
     // упал с мира или смерть
