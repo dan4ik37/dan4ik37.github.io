@@ -499,6 +499,16 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   по-русски со строкой. Rust — у себя: sdk/rust-template, cargo build --release --target wasm32-unknown-unknown → «📦 Загрузить .wasm»;
   для людей — sdk/README.md. Тест: node scripts/lang-wasm-test.cjs (110; настоящие clang из %TEMP%/d37-wasm/clang и cargo в профиле;
   D37_SKIP=cpp,rust — без них). Проверено в браузере: «Монетка» на C++ собралась за 6 с (42 КБ) и в игре дала +1.
+- Lua (js/engine/lang-lua.js, агент 13.10.2026) — как Luau в Roblox: свой Lua 5.1 + синтаксис Luau (+=, continue, типы, `строки {x}`,
+  if-выражения, //, 0b, 1_000) без библиотек: лексер → разбор → перевод в JS, каждая функция Lua — function* (генератор), поэтому
+  wait()/task.wait()/coroutine.yield останавливают код сквозь вложенные вызовы. D37E.lang('lua', …), код уходит в песочницу текстом.
+  Мост: obj.X — свойство, obj:Метод(a) → obj.Метод(a); массивы JS ↔ таблицы с 1; функция Lua → функция JS (каждый вызов — новая
+  сопрограмма); Promise мира (WaitForChild, Event:Wait()) — ожидание. Скрыты constructor/__proto__/prototype и всё на «_». Ошибки
+  по-русски со строкой Lua, одинаковая — в «Вывод» не больше 3 раз. Строки — UTF-16 (#"привет" = 6), %a — только латиница.
+  Общая песочница runtime() (и для JS): hit.Parent в Touched — персонаж (FindFirstChild("Humanoid"), GetPlayerFromCharacter),
+  Folder/IntValue/…Value, ClickDetector, ProximityPrompt (→ события clicked/prompt детали), leaderstats в игроке → таблица очков,
+  CFrame, BrickColor, Rotation, CharacterAdded; TopSurface/Locked и т. п. принимаются и ничего не делают (старый код не падает).
+  Тест: node scripts/lang-lua-test.cjs (166). Меняешь script.js — прогони и его, и engine-test.cjs. Проверено в браузере 13.10.
 - Графика движка (batch.js, post.js, perf.js + render.js, агент 13.10.2026): batch.js (E.batcher(SC), в студии ed.B) — детали и
   предметы сливаются по материалу в чанках 48 м (цвет — в вершинах/экземплярах), шары/цилиндры и повторяющиеся сетки — InstancedMesh
   (UV «по метрам» считает шейдер); склеенные вынуты из сцены, матрицы свежие — SC.pick, рамка, стрелки как раньше. Правка → сразу
