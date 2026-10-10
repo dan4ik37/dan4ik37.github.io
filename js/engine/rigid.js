@@ -294,7 +294,7 @@
     }
     function destroyPart(P){
       detach(P);
-      for (const c of P.proxy) c.rb = null;
+      for (const c of P.proxy) { c.rb = null; c.kick = false; }
       P.proxy.length = 0;
       parts.delete(P.obj.id);
       orphans.delete(P);
@@ -363,6 +363,7 @@
       }
       if (type === 'cyl') { SPEC.yaw = 0; SPEC.hx = SPEC.hz = SPEC.r; }
       ph.update(c, SPEC, type, true);
+      c.kick = SPEC.hy < .3 && SPEC.hx < .6 && SPEC.hz < .6;   // мелочь ниже ступеньки — игрок её пинает, а не залезает
     }
     function writePart(P, A){
       let px = A.tx, py = A.ty, pz = A.tz;
@@ -817,7 +818,7 @@
       unwatch();
       if (ph.onPush === onPush) ph.onPush = null;
       if (ph.onChar === onChar) ph.onChar = null;
-      for (const P of parts.values()) { for (const c of P.proxy) c.rb = null; if (P.free) for (const c of P.proxy.slice()) ph.remove(c); }
+      for (const P of parts.values()) { for (const c of P.proxy) { c.rb = null; c.kick = false; } if (P.free) for (const c of P.proxy.slice()) ph.remove(c); }
       parts.clear(); stat.clear(); chars.clear(); joints.clear(); byCol.clear(); orphans.clear();
       try { eq?.free(); world.free(); } catch (e) { /* уже освобождён */ }
       ev?.clear();
@@ -844,7 +845,7 @@
     }
     function onRemove(c){
       const P = c.rb;
-      if (P) { c.rb = null; const i = P.proxy.indexOf(c); if (i >= 0) P.proxy.splice(i, 1); if (!P.proxy.length) orphans.add(P); return; }
+      if (P) { c.rb = null; c.kick = false; const i = P.proxy.indexOf(c); if (i >= 0) P.proxy.splice(i, 1); if (!P.proxy.length) orphans.add(P); return; }
       removeStatic(c);
     }
     const unwatch = ph.watch((type, c) => { if (type === 'move') onMove(c); else if (type === 'add') onAdd(c); else if (type === 'remove') onRemove(c); });

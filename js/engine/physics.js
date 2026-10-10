@@ -53,7 +53,7 @@
       if (this._reusing && !this._emitting && this._pi < this._pool.length) return this.update(this._pool[this._pi++], o, type, false, true);
       // все тела одного вида (одни и те же поля) — быстрее для V8
       const c = { type, x: 0, y: 0, z: 0, hx: 0, hy: 0, hz: 0, r: 0, yaw: 0, cos: 1, sin: 0, minx: 0, maxx: 0, minz: 0, maxz: 0, bottom: 0, top: 0,
-        trigger: false, tag: '', data: null, solid: true, id: ++this.seq, mark: 0, gx0: 0, gx1: -1, gz0: 0, gz1: -1, rb: null };
+        trigger: false, tag: '', data: null, solid: true, id: ++this.seq, mark: 0, gx0: 0, gx1: -1, gz0: 0, gz1: -1, rb: null, kick: false };
       fill(c, o, type, true);
       this.cols.add(c);
       this._cells(c);
@@ -198,7 +198,7 @@
       const list = this._q(0, x - r, z - r, x + r, z + r);
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
-        if (c.trigger || !c.solid || c === skip) continue;
+        if (c.trigger || !c.solid || c === skip || c.kick) continue;   // мелочь (c.kick) — не опора, её пинают
         const top = c.type === 'wedge' ? Phys.topAt(c, x, z) : c.top;
         if (top > yMax + 1e-4 || top <= best) continue;
         if (Phys.circleHit(c, x, z, r * .7) || Phys.inside(c, x, z)) { best = top; col = c; }
@@ -285,7 +285,11 @@
           if (c.bottom >= ch.y + ch.h - .02) continue;   // над головой
           if (c.rb && c.bottom > ch.y + ch.h - .35) continue;   // движущаяся деталь легла на голову — её держит «голова» в Rapier (rigid.js)
           // ниже ступеньки (на клине — скат у ног; клин круче ~55° — стена, как крутой склон земли)
-          if ((c.type === 'wedge' && c.hy < c.hz * 1.43 ? Phys.topAt(c, ch.x, ch.z) : c.top) <= ch.y + ch.step + 1e-4) continue;
+          if ((c.type === 'wedge' && c.hy < c.hz * 1.43 ? Phys.topAt(c, ch.x, ch.z) : c.top) <= ch.y + ch.step + 1e-4) {
+            // мелкая движущаяся деталь под ногами (камешек, банка) — не ступенька: пнуть её и идти дальше
+            if (c.kick && this.onPush && it === 0) { const k = Phys.circleHit(c, ch.x, ch.z, ch.r); if (k) { const kx = k.nx, kz = k.nz, into = Math.max(-(ch.vx * kx + ch.vz * kz), -(ch.tvx * kx + ch.tvz * kz)); if (into > 0) this.onPush(ch, c, kx, kz, into); } }
+            continue;
+          }
           const hit = Phys.circleHit(c, ch.x, ch.z, ch.r);
           if (!hit) continue;
           const d = hit.d, nx = hit.nx, nz = hit.nz;
