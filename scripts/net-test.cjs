@@ -83,8 +83,8 @@ function compareScenes(host, guest, skip){
 // ═══ Модель сети ═══
 // Канал в одну сторону: задержка ± разброс (равномерно), потери, иногда «перестановка» (+20–60 мс), полоса (байт/с)
 const NET = {
-  p2p: { lat: 75, jit: 30, loss: .03, reorder: .03, bw: 250000 },     // RTT 150 ± 30 мс, 3 % потерь
-  relay: { lat: 100, jit: 40, loss: .01, reorder: .02, bw: 60000 },  // через Supabase: RTT 200 ± 40 мс
+  p2p: { lat: 75, jit: 30, loss: .03, reorder: .03, dup: .01, bw: 250000 },     // RTT 150 ± 30 мс, 3 % потерь, 1 % двойных
+  relay: { lat: 100, jit: 40, loss: .01, reorder: .02, dup: .005, bw: 60000 },  // через Supabase: RTT 200 ± 40 мс
 };
 function makeSim(cfg){
   const rnd = E.rng(cfg.seed || 1);
@@ -109,6 +109,7 @@ function makeSim(cfg){
     if (rnd() < net.reorder) d += 20 + rnd() * 40;
     const copyU = u8.slice();
     sim.at(done + Math.max(1, d), () => { if (Q && !Q.crashed && !Q.left && Q.h.message) Q.h.message(from, copyU); });
+    if (rnd() < (net.dup || 0)) { sim.dups = (sim.dups || 0) + 1; sim.at(done + Math.max(1, d) + 5 + rnd() * 80, () => { if (Q && !Q.crashed && !Q.left && Q.h.message) Q.h.message(from, copyU.slice()); }); }
   };
   // Присутствие (как Supabase presence): каждый узнаёт о входе/выходе с задержкой 150–500 мс
   sim.presenceChanged = () => {
@@ -172,7 +173,7 @@ const hex = n => '#' + (n >>> 0 & 0xffffff).toString(16).padStart(6, '0');
 function buildWorld(sc){
   const R = E.rng(37);
   sc.add('Part', { name: 'Основание', pos: [0, -.5, 0], size: [300, 1, 300], color: '#6b7a8f', mat: 'concrete' }, null, 'base');
-  for (let k = 0; k < 4; k++) for (let c = 0; c < 6; c++) { const C = centerOf(k, c); sc.add('Spawn', { pos: [C[0] + RAD, .2, C[2]] }, null, `sp${k}_${c}`); }
+  for (let k = 0; k < 5; k++) for (let c = 0; c < 6; c++) { const C = centerOf(k, c); sc.add('Spawn', { pos: [C[0] + RAD, .2, C[2]] }, null, `sp${k}_${c}`); }
   for (let i = 0; i < 400; i++) sc.add('Part', { name: 'Камень ' + i, pos: [(R() * 2 - 1) * 150, R() * 5, (R() * 2 - 1) * 150], size: [1 + R() * 4, 1 + R() * 3, 1 + R() * 4], rot: [0, Math.round(R() * 360), 0], color: hex(R() * 0xffffff), mat: MATS[i % 21] }, null, 's' + i);
   for (let i = 0; i < 20; i++) sc.add('Part', { name: 'Платформа ' + i, pos: [0, 2, 0], size: [4, .5, 4], color: '#f5cd30', mat: 'neon' }, null, 'm' + i);
   for (let i = 0; i < 10; i++) sc.add('Part', { name: 'Вертушка ' + i, pos: [i * 8 - 40, 1, 30], size: [6, .4, .6], color: '#ff0000' }, null, 'r' + i);
@@ -223,17 +224,18 @@ function mkScript(sim, P){
 
 // ═══ Игрок модели ═══
 function addPeer(sim, id, k, opts = {}){
-  const P = { id, k, offs: [], off: 1000 + sim.rnd() * 5e6, scene: fakeScene(), crashed: false, left: false, hostLog: [], events: [], tele: [], cheats: [], plog: [], readyAt: 0, joinAt: sim.t, script: null, charFn: opts.charFn || null, lastTp: undefined, pending: [] };
+  const P = { id, k, offs: [], blobs: new Map(), cpu: 0, off: 1000 + sim.rnd() * 5e6, scene: fakeScene(), crashed: false, left: false, hostLog: [], events: [], tele: [], cheats: [], plog: [], readyAt: 0, joinAt: sim.t, script: null, charFn: opts.charFn || null, lastTp: undefined, pending: [] };
   P.now = () => sim.t + P.off;
-  if (opts.world) buildWorld(P.scene);
+  if (opts.world) (opts.build || buildWorld)(P.scene);
   const tr = simTransport(sim, P);
   P.S = E.net.session({ transport: tr, scene: P.scene, now: P.now, nick: 'Игрок ' + k, info: { k }, hostTimeout: opts.hostTimeout,
-    onHost: (isHost, info) => { P.hostLog.push([sim.t, isHost, info]); P.script = isHost ? mkScript(sim, P) : null; },
+    onHost: (isHost, info) => { P.hostLog.push([sim.t, isHost, info]); P.script = isHost ? (opts.script || mkScript)(sim, P) : null; },
     onReady: () => { if (!P.readyAt) P.readyAt = sim.t; },
     onEvent: (ty, d, from) => P.events.push([sim.t, ty, d, from]),
     onTeleport: (p, kind) => { P.tele.push([sim.t, p, kind]); const c = (P.charFn || truthAt)(P.k, sim.t); P.offs.push([sim.t, p[0] - c.x, p[1] - c.y, p[2] - c.z, cycleOf(P.k, sim.t)]); },
     onCheat: (who, info) => { P.cheats.push([sim.t, who, info.why]); if (process.env.NET_DEBUG) console.log('cheat?', P.id, '→', who, Math.round(sim.t), JSON.stringify(info)); },
     onPlayer: (ev, p) => P.plog.push([sim.t, ev, p.id]),
+    onBlob: (name, u, text) => P.blobs.set(name, text()),
   });
   sim.peers.set(id, P);
   sim.presence.push({ id, t: sim.t });
@@ -245,7 +247,7 @@ function addPeer(sim, id, k, opts = {}){
     P.lastTp = c.tp;
     P.S.setMyCharacter(c);
     if (P.S.isHost && P.script) P.script(sim.t);
-    P.S.tick(1 / 60);
+    const c0 = process.hrtime.bigint(); P.S.tick(1 / 60); P.cpu += Number(process.hrtime.bigint() - c0) / 1e6;
     measure(sim, P);
     sim.at(sim.t + 1000 / 60, step);
   };
@@ -353,7 +355,12 @@ const R1 = {};
   const H = addPeer(sim, 'H', 0, { world: true });
   sim.run(500); const A = addPeer(sim, 'A', 1);
   sim.run(1000); const B = addPeer(sim, 'B', 2);
+  sim.run(3000);
+  const WORLD = 'Ландшафт и скрипты: ' + 'холм '.repeat(9000);   // ~55 КБ — 10 кусков
+  H.S.setBlob('world', WORLD); H.S.setPlayerData('A', { coins: 5, title: 'Строитель' });
   sim.run(60000);
+  ok(A.blobs.get('world') === WORLD && B.blobs.get('world') === WORLD, 'большие данные (55 КБ) дошли до гостей (B — через Supabase)', [A.blobs.get('world')?.length, B.blobs.get('world')?.length]);
+  ok(B.S.playerData('A')?.coins === 5, 'данные игрока (очки) видны гостям');
   const hostCount0 = H.scene.all().filter(o => o.cls !== 'Script').length;
   const C = addPeer(sim, 'C', 3);
   let fullAt = 0;
@@ -362,6 +369,7 @@ const R1 = {};
   R1.join = { ready: C.readyAt - 60000, full: fullAt - 60000, objs: hostCount0, rx: sim.links.get('H>C')?.bytes || 0 };
   ok(C.readyAt > 0 && C.readyAt - 60000 < 6000, 'новичок: весь мир за < 6 с', C.readyAt - 60000);
   ok(fullAt > 0, 'новичок: все объекты на месте', fullAt);
+  ok(C.blobs.get('world') === WORLD, 'новичку — большие данные тоже');
   // порча копии у C: объект удалён мимо сети, цвет испорчен, лишняя запись
   sim.run(100000);
   const dg = C.S._dbg;
@@ -372,6 +380,19 @@ const R1 = {};
   const hs6 = H.scene.get('s6');
   ok(C.scene.get('s5') && hs6 && C.scene.get('s6')?.color === hs6.color && !C.scene.get('zz1') && !dg.reps.get('zz1'), 'сводка: копия у C починилась за 16 с (вернули, перекрасили, убрали лишнее)', [!!C.scene.get('s5'), C.scene.get('s6')?.color, hs6?.color, !!C.scene.get('zz1')]);
   R1.repair = { digests: C.S.digests || 0, bad: C.S.digestBad || 0, resyncs: H.S.resyncs || 0 };
+  // часы хозяина у гостей
+  sim.run(140000);
+  R1.clock = [A, B, C].map(P => P.S.hostNow() - H.now());
+  ok(R1.clock.every(e => Math.abs(e) < 25), 'часы хозяина у гостей точнее 25 мс', R1.clock.map(Math.round));
+  // подделка: C шлёт B пакет «я хозяин, эпоха новее» с телепортом — B не верит
+  {
+    const w = new NT.W(), msg = new TextEncoder().encode(JSON.stringify({ k: 'tp', p: [999, 0, 999] }));
+    w.u8(0xD1); w.u8(1 | 4); w.u8((B.S.epoch + 1) & 255); w.u16(7); w.u16(0); w.u32(0); w.u32(Math.round(C.now())); w.u16(0); w.u16(0);
+    w.u8(4); w.vu(1); w.u16(0); w.u8(1); w.vu(msg.length); w.bytes(msg);
+    const tele0 = B.tele.length;
+    sim.send('C', 'B', w.out()); sim.run(141000);
+    ok(B.S.hostId === 'H' && B.tele.length === tele0 && B.S.epoch === H.S.epoch, 'подделка «я хозяин» от гостя не принята', [B.S.hostId, B.tele.length - tele0]);
+  }
   // хозяин уходит
   sim.run(150000);
   R1.links = linkStats(sim, 10000, 145000);
@@ -389,14 +410,20 @@ const R1 = {};
   }
   R1.migr = { a: tA - t0, b: tB - t0, c: tC - t0 };
   ok(tA && tB && tC && Math.max(tA, tB, tC) - t0 < 2500, 'хозяин ушёл: A — хозяин, B и C с ним < 2,5 с', R1.migr);
+  ok(A.blobs.get('world') === WORLD && A.S.blob('world') && A.S.playerData('A')?.coins === 5, 'у нового хозяина есть большие данные и очки игроков');
+  sim.run(170000);
+  const D = addPeer(sim, 'D', 4);
   sim.run(205000);
+  ok(D.readyAt > 0 && D.blobs.get('world') === WORLD, 'новичок после смены хозяина: мир и большие данные — от A', [D.readyAt, D.blobs.get('world')?.length]);
   sim.frozen = true;
   sim.run(215000);
   const cB = compareScenes(A.scene, B.scene), cC = compareScenes(A.scene, C.scene);
   ok(cB.ok, 'после смены хозяина: копия B = миру A', cB);
   ok(cC.ok, 'после смены хозяина: копия C = миру A', cC);
+  const cD = compareScenes(A.scene, D.scene); ok(cD.ok, 'новичок D: копия = миру A', cD);
   ok(A.S.isHost && !B.S.isHost && !C.S.isHost && B.S.hostId === 'A' && C.S.hostId === 'A' && B.S.epoch === A.S.epoch, 'все согласны: хозяин A, одна эпоха');
-  ok(A.S.players().length === 3 && B.S.players().length === 3, 'игроки: A, B, C (H ушёл)', A.S.players().map(p => p.id));
+  ok(A.S.players().length === 4 && B.S.players().length === 4 && D.S.players().length === 4, 'игроки: A, B, C, D (H ушёл)', A.S.players().map(p => p.id));
+  R1.dups = sim.dups || 0;
   ok(sim.peers.get('A').cheats.length === 0 && H.cheats.length === 0, 'честных не считает читерами (потери и разброс)', [H.cheats.slice(0, 3), A.cheats.slice(0, 3)]);
   R1.cm = sim.cm; R1.lat = sim.lat; R1.limiter2 = sim.limiterDrops; R1.sim = sim;
   const nu = ids => mean(ids.map(id => (C.S._dbg.reps.get(id)?.nUpd || 0) / ((sim.t - 60000) / 1000)));
@@ -496,6 +523,106 @@ const R4 = {};
   ok(H.cheats.every(c => c[1] === 'X') && A.cheats.length === 0, 'замечания только читеру');
 }
 
+// ═══ 5. Настоящий транспорт (net-transport.js + js/games/netplay.js) поверх модели Supabase: presence и broadcast с
+//  задержкой; WebRTC в node нет — всё «через комнату» пачками. 3 игрока, 60 с: копии сошлись, сообщений Supabase ≤ бюджета ═══
+const R5 = {};
+{
+  globalThis.window = globalThis;
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/games/netplay.js'), 'utf8'), { filename: 'netplay.js' });
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/net-transport.js'), 'utf8'), { filename: 'net-transport.js' });
+  delete globalThis.window;
+  const sim = mkWorld({ seed: 41 });
+  const hub = new Map(), cnt = { sent: 0, recv: 0, bytes: 0 };
+  const client = {
+    channel(name, cfg){
+      const c = { name, key: cfg.config.presence.key, hb: [], hp: [], meta: null };
+      c.on = (type, f, fn) => { (type === 'broadcast' ? c.hb : c.hp).push(fn); return c; };
+      c.subscribe = cb => { let h = hub.get(name); if (!h) hub.set(name, h = new Set()); h.add(c); sim.at(sim.t + 80, () => cb('SUBSCRIBED')); return c; };
+      const sync = () => { for (const x of hub.get(name) || []) sim.at(sim.t + 120 + sim.rnd() * 200, () => x.hp.forEach(f => f())); };
+      c.track = meta => { c.meta = meta; sync(); return Promise.resolve(); };
+      c.untrack = () => { c.meta = null; sync(); };
+      c.presenceState = () => { const st = {}; for (const x of hub.get(name) || []) if (x.meta) (st[x.key] = st[x.key] || []).push(x.meta); return st; };
+      c.send = ({ payload }) => {
+        const s = JSON.stringify(payload); cnt.sent++; cnt.bytes += s.length;
+        for (const x of hub.get(name) || []) if (x !== c) { cnt.recv++; if (sim.rnd() < .005) continue; sim.at(sim.t + 90 + sim.rnd() * 60, () => x.hb.forEach(f => f({ payload: JSON.parse(s) }))); }
+        return Promise.resolve();
+      };
+      return c;
+    },
+    removeChannel(c){ const h = hub.get(c.name); if (h) { h.delete(c); for (const x of h) sim.at(sim.t + 150, () => x.hp.forEach(f => f())); } },
+  };
+  const peers = [];
+  const mk = (id, k, world) => {
+    const P = { id, k, offs: [], off: 1000 + sim.rnd() * 1e6, scene: fakeScene(), hostLog: [], readyAt: 0, pending: [], cheats: [] };
+    P.now = () => sim.t + P.off;
+    if (world) buildWorld(P.scene);
+    const tr = E.net.room('s3test', 'abc123', { client, NetPlay: globalThis.NetPlay, key: id, joinedAt: 1e6 + sim.t, now: P.now, nick: 'Игрок ' + k });
+    P.tr = tr;
+    P.S = E.net.session({ transport: tr, scene: P.scene, now: P.now, nick: 'Игрок ' + k,
+      onHost: is => { P.script = is ? mkScript(sim, P) : null; }, onReady: () => { if (!P.readyAt) P.readyAt = sim.t; }, onCheat: (w, i) => P.cheats.push([w, i.why]),
+      onTeleport: p => { const c = (P.charFn || truthAt)(P.k, sim.t); P.offs.push([sim.t, p[0] - c.x, p[1] - c.y, p[2] - c.z, cycleOf(P.k, sim.t)]); } });
+    P.id = tr.myId;
+    const step = () => { const c = charOf(P, sim.t); if (P.lastTp !== undefined && c.tp !== P.lastTp) P.S.teleported(); P.lastTp = c.tp; P.S.setMyCharacter(c); if (P.S.isHost && P.script) P.script(sim.t); P.S.tick(1 / 60); sim.at(sim.t + 1000 / 60, step); };
+    sim.at(sim.t + 5, step);
+    peers.push(P); sim.peers.set(P.id, P);
+    return P;
+  };
+  const H = mk('h', 0, true); sim.run(400);
+  const A = mk('a', 1); sim.run(900);
+  const B = mk('b', 2);
+  sim.run(10000); const c0 = { ...cnt };
+  sim.run(70000); const c1 = { ...cnt };
+  sim.frozen = true; sim.run(80000);
+  const ca = compareScenes(H.scene, A.scene), cb = compareScenes(H.scene, B.scene);
+  ok(H.S.isHost && A.S.hostId === H.id && B.S.hostId === H.id, 'транспорт: хозяин — первый вошедший');
+  ok(ca.ok && cb.ok, 'транспорт: копии сошлись (через комнату, пачками)', [ca, cb]);
+  ok(A.readyAt && B.readyAt, 'транспорт: мир у гостей готов', [A.readyAt, B.readyAt]);
+  ok(H.cheats.length === 0, 'транспорт: без ложных «читеров»', H.cheats.slice(0, 2));
+  const rA = A.S.remotes().find(r => r.id === H.id);
+  ok(rA && Math.hypot(rA.pose.x - charOf(H, rA.rt - H.off).x, rA.pose.z - charOf(H, rA.rt - H.off).z) < 1.5, 'транспорт: гость видит хозяина там, где он был', rA && rA.pose);
+  R5.perMin = (c1.recv - c0.recv) / 1; R5.sentPerMin = c1.sent - c0.sent; R5.kbps = (c1.bytes - c0.bytes) / 60 / 1024;
+  const sH = H.tr.stats();
+  ok(R5.sentPerMin <= 3 * 5 * 60 && R5.perMin <= 3 * 5 * 60 * 2, 'транспорт: ≤ 5 broadcast в секунду с каждого', [R5.sentPerMin, R5.perMin]);
+  R5.sig = sH.sigMsgs;
+  for (const P of peers) P.tr.close();
+  sim.run(81000);
+  ok(!hub.get('s3test-net-abc123')?.size, 'транспорт: после выхода канал пуст');
+}
+
+// ═══ 6. Большой мир: 3000 деталей + 150 движущихся, хозяин + 2 гостя, новичок на 15-й с — время процессора на сеть ═══
+const R6 = {};
+{
+  const sim = mkWorld({ seed: 53, mode: () => 'p2p', warm: 1e9 });
+  const build = sc => {
+    const R = E.rng(5);
+    sc.add('Part', { name: 'Основание', pos: [0, -.5, 0], size: [400, 1, 400] }, null, 'base');
+    for (let k = 0; k < 5; k++) for (let c = 0; c < 6; c++) { const C = centerOf(k, c); sc.add('Spawn', { pos: [C[0] + RAD, .2, C[2]] }, null, `sp${k}_${c}`); }
+    for (let i = 0; i < 3000; i++) sc.add('Part', { name: 'Блок ' + i, pos: [(R() * 2 - 1) * 200, R() * 8, (R() * 2 - 1) * 200], size: [1 + R() * 3, 1 + R() * 3, 1 + R() * 3], rot: [0, Math.round(R() * 360), 0], color: hex(R() * 0xffffff), mat: MATS[i % 21] }, null, 'b' + i);
+    for (let i = 0; i < 150; i++) sc.add('Part', { name: 'Ездит ' + i, pos: [0, 2, 0], size: [3, .5, 3], mat: 'neon' }, null, 'v' + i);
+  };
+  const script = (sim2, P) => { const R = E.rng(9); let next = 0; return t => {
+    if (sim.frozen) return;
+    for (let i = 0; i < 150; i++) { const o = P.scene.get('v' + i); if (!o) continue; const k = t / 1000 * .7 + i, cx = (i % 15) * 26 - 182, cz = Math.floor(i / 15) * 40 - 180; P.scene.set(o, 'pos', [cx + Math.cos(k) * 6, 2, cz + Math.sin(k) * 6]); }
+    if (t >= next) { next = t + 100; const o = P.scene.get('b' + (R() * 3000 | 0)); if (o) P.scene.set(o, 'color', hex(R() * 0xffffff)); }
+  }; };
+  const H = addPeer(sim, 'H', 0, { world: true, build, script });
+  sim.run(300); const A = addPeer(sim, 'A', 1);
+  sim.run(600); const B = addPeer(sim, 'B', 2);
+  sim.run(15000);
+  const cpu0 = [H.cpu, A.cpu, B.cpu];
+  const C = addPeer(sim, 'C', 3);
+  sim.run(30000);
+  const cpu1 = [H.cpu, A.cpu, B.cpu];
+  sim.frozen = true; sim.run(36000);
+  R6.ready = C.readyAt - 15000; R6.joinKB = (sim.links.get('H>C')?.bytes || 0) / 1024;
+  R6.cpuH = (cpu1[0] - cpu0[0]) / 15; R6.cpuG = ((cpu1[1] - cpu0[1]) + (cpu1[2] - cpu0[2])) / 2 / 15;
+  ok(C.readyAt && R6.ready < 8000, 'большой мир: новичок получил 3150 объектов < 8 с', R6.ready);
+  const c = compareScenes(H.scene, C.scene), a = compareScenes(H.scene, A.scene);
+  ok(c.ok && a.ok, 'большой мир: копии сошлись', [c, a]);
+  ok(R6.cpuH < 150, 'большой мир: хозяину сеть стоит < 150 мс процессора в секунду (node)', f1(R6.cpuH));
+  R6.links = linkStats(sim, 16000, 30000);
+}
+
 // ═══ Сводка ═══
 function charSummary(cm, filter){
   const rows = [];
@@ -533,6 +660,7 @@ console.log(`   Изменения до гостя: цвет рядом ${Math.r
 ok(pct(latNear, .95) < 1500 && pct(latFar, .95) < 4000, 'изменения доходят: рядом 95% < 1,5 с, далеко < 4 с', [pct(latNear, .95), pct(latFar, .95)]);
 console.log(`   Обновления движущихся платформ у C (с 60-й по 215-ю с, 10 с из них — заморозка): рядом ${f1(R1.rate.near)}/с, далеко (~80 ед.) ${f1(R1.rate.far)}/с`);
 console.log(`   Новичок C: мир готов через ${R1.join.ready} мс, все объекты (${R1.join.objs}) — через ${R1.join.full} мс; сводок ${R1.repair.digests}, несовпавших корзин ${R1.repair.bad}, перепослано ${R1.repair.resyncs}`);
+console.log(`   Часы хозяина у гостей A/B/C: ошибка ${R1.clock.map(e => Math.round(e)).join(' / ')} мс; пакетов-двойников в модели ${R1.dups} (отброшены)`);
 console.log(`   Хозяин H ушёл: A стал хозяином через ${R1.migr.a} мс, B принял через ${R1.migr.b} мс, C — через ${R1.migr.c} мс`);
 const r2 = charSummary(R2.cm);
 printChars('2) Только через Supabase (RTT 200±40 мс, 1% потерь, 5 пакетов/с):', r2);
@@ -545,6 +673,11 @@ const r3 = charSummary(R3.cm);
 printChars('3) Хозяин завис на 40-й с:', r3);
 console.log(`   A перехватил через ${R3.a} мс, B переключился через ${R3.b} мс`);
 console.log(`\n4) Читеры: замечаний ${R4.cheats}, «вернись» ${R4.fix}; бег ×3 у других — ${f2(R4.speed)} ед./с, часы ×2 и бег ×1,8 — ${f2(R4.clock)} ед./с (честный бег ${f2(RUN)}, допуск ×1,25 = ${f2(RUN * 1.25)}); прыжок на 50 ед. — у других сдвиг ${f2(R4.blink)}`);
+
+console.log(`\n6) Большой мир (3150 объектов, 150 движутся): новичку — за ${R6.ready} мс (${f1(R6.joinKB)} КБ за всё время); процессор на сеть: хозяин ${f1(R6.cpuH)} мс/с, гость ${f1(R6.cpuG)} мс/с (node)`);
+for (const l of R6.links) console.log(`   ${l.k.padEnd(6)} ${f1(l.ps)} пак/с, ${f1(l.Bs / 1024)} КБ/с`);
+console.log(`\n5) Транспорт через модель Supabase (3 игрока, всё «через комнату»): ${R5.sentPerMin} broadcast/мин, ${R5.perMin} получений/мин (так считает лимит Supabase), ${f1(R5.kbps)} КБ/с; знакомство WebRTC — ${R5.sig} сигналов`);
+console.log(`   Лимит 2 млн/мес: ≈ ${Math.round(2e6 / R5.perMin / 60)} ч такой игры втроём в месяц, если WebRTC не соединится ни у кого (напрямую Supabase не тратится)`);
 
 console.log(`\n${pass} ок, ${fail} ошибок`);
 process.exitCode = fail ? 1 : 0;

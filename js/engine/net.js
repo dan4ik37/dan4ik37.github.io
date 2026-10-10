@@ -292,7 +292,7 @@
     const repl = o.replicate || (obj => obj.cls !== 'Script');
     const IN = Object.assign({ near: 48, farMax: 2000, charFar: 160 }, o.interest || {});
     const U = E.UNIT || 2.1 / 1.8, GRAV = o.gravity || 20 * U;
-    const HOST_TIMEOUT = o.hostTimeout || 5000, SCAN_MS = o.scanMs || 50;
+    const HOST_TIMEOUT = o.hostTimeout || 5000, HOOK = o.hook !== false, SCAN_MS = o.scanMs || (HOOK ? 1000 : 50);
     const S = { myId: tr.myId, isHost: false, hostId: null, epoch: 0, ready: false, closed: false };
     const links = new Map();                     // хозяин: гости; гость: один — хозяин
     const reps = new Map(), byNid = new Map();   // копия мира: sid → запись, nid → запись
@@ -487,13 +487,34 @@
         for (const L of links.values()) { const G = L.objs.get(rp.nid); if (G && G.sp) { G.d |= m; L.objPend = true; L.objNext = 0; } }
       }
     }
+    let scanNo = 0;
+    function ensureRep(obj){ let rp = reps.get(obj.id); if (!rp) { rp = newRep(obj.id, obj.cls); for (const L of links.values()) { L.objs.set(rp.nid, newG(0)); L.objPend = true; L.objNext = 0; } } return rp; }
+    // Полный обход — раз в секунду (страховка: свойства, записанные мимо scene.set); каждый шаг — только то, что трогали
     function scan(t){
-      lastScan = t;
-      const all = scene.all(), seen = new Set();
-      for (const obj of all) if (repl(obj) && !reps.has(obj.id)) { const rp = newRep(obj.id, obj.cls); for (const L of links.values()) { L.objs.set(rp.nid, newG(0)); L.objPend = true; } }
-      for (const obj of all) { if (!repl(obj)) continue; seen.add(obj.id); scanObj(reps.get(obj.id), obj, t); }
-      for (const rp of [...reps.values()]) if (!seen.has(rp.sid)) dropRep(rp);
+      lastScan = t; scanNo++;
+      const all = scene.all();
+      for (const obj of all) if (repl(obj)) ensureRep(obj).sn = scanNo;
+      for (const obj of all) if (repl(obj)) scanObj(reps.get(obj.id), obj, t);
+      for (const rp of reps.values()) if (rp.sn !== scanNo) dropRep(rp);
+      dirtyNow.clear(); hintRm.clear();
+    }
+    function scanHints(t){
+      for (const obj of dirtyNow) if (repl(obj) && scene.get(obj.id) === obj) ensureRep(obj);
+      for (const obj of dirtyNow) { const rp = reps.get(obj.id); if (rp && scene.get(obj.id) === obj) scanObj(rp, obj, t); }
       dirtyNow.clear();
+      for (const id of hintRm) { const rp = reps.get(id); if (rp && !scene.get(id)) dropRep(rp); }
+      hintRm.clear();
+    }
+    // Подсказки от сцены: оборачиваем set/add/remove/reparent этой сцены (на время сессии; S.close() возвращает как было)
+    const hintRm = new Set(), orig = {};
+    if (HOOK) for (const f of ['set', 'add', 'remove', 'reparent']) {
+      const fn = scene[f]; if (typeof fn !== 'function') continue;
+      orig[f] = fn;
+      scene[f] = function (obj, ...a){
+        const r = fn.call(this, obj, ...a);
+        if (S.isHost && !S.closed) { if (f === 'add') { if (r) dirtyNow.add(r); } else if (f === 'remove') { if (obj) hintRm.add(obj.id); } else if (obj) dirtyNow.add(obj); }
+        return r;
+      };
     }
     function dropRep(rp){
       for (const L of links.values()) { const G = L.objs.get(rp.nid); if (G) { L.objs.delete(rp.nid); if (G.sp) L.dest.set(rp.nid, { b: rp.b, inf: -1 }); } }
@@ -654,6 +675,9 @@
       if (!why) {
         if (c.tp !== prev.tp) { p.cred = 3; p.credY = 2.5; }
         else { p.cred = Math.min(3, p.cred) + run * 1.25 * dt - Math.max(0, h); p.credY = Math.min(2.5, p.credY) + Math.max(jv, run) * 1.25 * dt - up; }
+        // скорость в снимке — не больше разрешённой: другие «угадывают» вперёд по ней
+        const vh = Math.hypot(c.vx, c.vz), vm = run * 1.3; if (vh > vm) { c.vx *= vm / vh; c.vz *= vm / vh; }
+        if (c.vy > Math.max(jv, run) * 1.3) c.vy = Math.max(jv, run) * 1.3;
         return true;
       }
       p.strikes++;
@@ -693,7 +717,7 @@
     const plMsg = () => ({ k: 'pl', e: S.epoch, l: [...players.values()].map(p => [p.id, p.slot, p.nick, p.info]) });
     function hostTick(t){
       if (t - lastScan >= SCAN_MS || scanAll) { scanAll = false; scan(t); }
-      else if (dirtyNow.size) { for (const obj of dirtyNow) { const rp = reps.get(obj.id); if (rp && scene.get(obj.id)) scanObj(rp, obj, t); } dirtyNow.clear(); }
+      else if (dirtyNow.size || hintRm.size) scanHints(t);
       if (plDirty) { plDirty = false; const m = plMsg(); for (const L of links.values()) relJson(L, m); }
       for (const L of links.values()) {
         lossCheck(L, t);
@@ -998,16 +1022,26 @@
       call(o.onHost, false, { hostId: hid, epoch: S.epoch });
     }
     function newEpoch(ep){ if (ep !== S.epoch) { S.epoch = ep; tomb.clear(); } }
+    // Перехват хозяйства: только от следующего по очереди и только когда прежний хозяин ушёл или молчит — иначе любой
+    // мог бы объявить себя хозяином. Сам хозяин уступает, только если гости его давно не слышат (его отрезало) или
+    // тот же «номер» у старшего (оба решили, что хозяева, пока не увидели друг друга)
+    const successor = () => { const c = members.filter(m => !dead.has(m.id) && m.id !== S.hostId); return c.length ? c[0].id : null; };
+    function hostGone(){
+      if (!S.hostId || dead.has(S.hostId) || !members.some(m => m.id === S.hostId)) return true;
+      const L = links.get(S.hostId); return !!L && now() - (L.lastRx || L.born) > HOST_TIMEOUT / 2;
+    }
     function acceptHost(from, ep){
       if (from === S.hostId) { if (epNewer(ep, S.epoch)) newEpoch(ep); else if (ep !== S.epoch) return false; return true; }
-      if (!epNewer(ep, S.epoch) || !members.some(m => m.id === from)) return false;
+      if (!epNewer(ep, S.epoch) || !hostGone() || from !== successor()) return false;
       for (const m of members) { if (m.id === from) break; dead.add(m.id); }   // все, кто раньше, выбыли
       setHost(from); newEpoch(ep);
       return true;
     }
     function yieldTo(from, ep){
       const iMe = members.findIndex(m => m.id === S.myId), iHe = members.findIndex(m => m.id === from);
-      if (iHe < 0 || !(epNewer(ep, S.epoch) || (ep === S.epoch && iHe < iMe))) return false;
+      if (iHe < 0) return false;
+      let quiet = true; for (const L of links.values()) if (L.lastRx && now() - L.lastRx < HOST_TIMEOUT) { quiet = false; break; }
+      if (!((epNewer(ep, S.epoch) && quiet) || (ep === S.epoch && iHe < iMe))) return false;
       for (const m of members) { if (m.id === from) break; dead.add(m.id); }
       setHost(from); newEpoch(ep);
       return true;
@@ -1080,7 +1114,7 @@
       return out;
     };
     S.clockOffset = () => clock.off;
-    S.close = () => { if (S.closed) return; S.closed = true; try { tr.close && tr.close(); } catch (e) {} };
+    S.close = () => { if (S.closed) return; S.closed = true; for (const f of Object.keys(orig)) scene[f] = orig[f]; try { tr.close && tr.close(); } catch (e) {} };
     S._dbg = { reps, byNid, links, players, remotes, chars, clock, members: () => members, dead, ipActive, newRep };
     tr.listen({ message: onPacket, members: onMembers });
     return S;
