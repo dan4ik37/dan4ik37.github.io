@@ -482,7 +482,7 @@ async function renderDuelTop(list){
   document.getElementById('gamesTopBox').hidden = false;
   if (!data?.length) { list.innerHTML = '<div class="gm-top-empty">Ещё никто не побеждал в дуэлях — позови друга по ссылке из любой игры!</div>'; return; }
   list.innerHTML = data.map((r, i) => `
-    <li class="gm-top-item">
+    <li class="gm-top-item" data-uid="${esc(r.user_id)}">
       <span class="gm-top-place">${['🥇', '🥈', '🥉'][i] || i + 1}</span>
       <a class="gm-top-nick" href="#/profile/${esc(r.user_id)}">${esc(r.nick || 'user')}</a><span class="lv-badge" data-lv-uid="${esc(r.user_id)}"></span>
       <span class="gm-top-score">${r.wins} ${r.wins % 10 === 1 && r.wins % 100 !== 11 ? 'победа' : [2, 3, 4].includes(r.wins % 10) && ![12, 13, 14].includes(r.wins % 100) ? 'победы' : 'побед'} из ${r.played}</span>
@@ -522,4 +522,9 @@ async function renderGamesTop(){
       <span class="gm-top-score">${esc(gameBestLabel(g.id, r.best_score))}</span>
     </li>`).join('') + `<div class="gm-top-note">${esc(g.title)}: ${esc(g.topLabel)}</div>`;
   if (typeof xpQueueBadges === 'function') xpQueueBadges();
+  // персонажи из гардероба — рядом с ником (у кого собран)
+  window.D37Char?.looksOf(data.map(r => r.user_id)).then(m => list.querySelectorAll('li[data-uid]').forEach(li => {
+    const look = m[li.dataset.uid];
+    if (look && !li.querySelector('.gm-top-char')) li.querySelector('.gm-top-nick')?.insertAdjacentHTML('beforebegin', `<img class="gm-top-char" alt="" src="${D37Char.img(look, 40)}">`);
+  }));
 }

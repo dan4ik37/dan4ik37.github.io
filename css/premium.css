@@ -2675,3 +2675,10 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .ar-sup.ready{border-color:#fff;box-shadow:0 0 18px #facc15;animation:unPulse .5s ease-in-out infinite alternate}
 .ar-ov{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7rem;border-radius:14px;background:rgba(12,8,20,.82);text-align:center;color:#fff}
 .ar-ov[hidden]{display:none}
+
+/* Персонаж из гардероба: в профиле рядом с аватаркой и в рекордах */
+.pf-char{position:absolute;right:-40px;bottom:-6px;width:50px;display:block;filter:drop-shadow(0 3px 6px rgba(0,0,0,.45));transition:transform .2s}
+.pf-char[hidden]{display:none}
+.pf-char img{width:100%;height:auto;display:block}
+.pf-char:hover{transform:translateY(-3px) scale(1.06)}
+.gm-top-char{width:22px;height:auto;vertical-align:middle;margin-right:.25rem}

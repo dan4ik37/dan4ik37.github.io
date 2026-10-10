@@ -94,6 +94,24 @@ function guestsLimitFor(role, profile){
   return isStaffRole(role) ? 30 : 0;
 }
 
+// Персонаж из гардероба (js/core/avatar.js) — стоит рядом с аватаркой. Свой — всегда (ведёт в гардероб),
+// чужой — если он его собрал (char_looks в coins.sql; до запуска SQL чужих не видно)
+async function renderProfileChar(uid, isOwn){
+  const holder = document.getElementById('profileAvatarImg')?.parentElement;
+  if (!holder || !window.D37Char) return;
+  let el = document.getElementById('profileChar');
+  if (!el) { el = document.createElement('a'); el.id = 'profileChar'; el.className = 'pf-char'; el.innerHTML = '<img alt="Персонаж">'; holder.appendChild(el); }
+  el.hidden = true;
+  let look = null;
+  if (isOwn) look = D37Char.look();
+  else { const m = await D37Char.looksOf([uid]); look = m[uid] || null; }
+  if (!look || document.getElementById('profileChar') !== el) return;
+  el.querySelector('img').src = D37Char.img(look, 96);
+  el.href = isOwn ? '#/games/wardrobe' : '#/games/wardrobe';
+  el.title = isOwn ? 'Мой персонаж — открыть гардероб' : 'Персонаж игрока — собери своего в гардеробе';
+  el.hidden = false;
+}
+
 async function renderProfilePage(viewUserId){
   const loggedOutEl = document.getElementById('profileLoggedOut');
   const contentEl = document.getElementById('profileContent');
@@ -148,6 +166,7 @@ async function renderProfilePage(viewUserId){
 
   document.getElementById('profileNick').textContent = profile.nick || 'Без ника';
   window.d37NickFx?.markEl(document.getElementById('profileNick'), targetId);
+  renderProfileChar(targetId, isOwn);
   profileEmailRaw = isOwn ? (currentUser?.email || '') : '';
   profileEmailVisible = false;
   document.getElementById('profileEmailToggle').style.display = (isOwn && profileEmailRaw) ? 'inline' : 'none';
