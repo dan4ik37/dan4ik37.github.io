@@ -28,12 +28,13 @@ void main(){ vec2 d = uTexel; vec3 c = texture2D(tSrc, vUv).rgb * 4.0;
   c += texture2D(tSrc, vUv + d).rgb + texture2D(tSrc, vUv - d).rgb + texture2D(tSrc, vUv + vec2(d.x, -d.y)).rgb + texture2D(tSrc, vUv + vec2(-d.x, d.y)).rgb;
   gl_FragColor = vec4(c * 0.0625, 1.0); }`;
   // сборка: сцена + свечение (как «экран»: на ярком почти не добавляет; на самом светящемся — четверть, ореол — вокруг:
-  // неон не выгорает в белое и не меняет цвет) → sRGB; яркость (luma) — в альфу для FXAA
-  const FS_COMP = `uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; varying vec2 vUv;
+  // неон не выгорает в белое и не меняет цвет) → sRGB; яркость (luma) — в альфу для FXAA. Сразу на экран (MSAA, uLuma = 0) —
+  // альфа строго 1: холст прозрачный, и тёмное просвечивало светлым фоном страницы (картинка «в белой дымке» на high)
+  const FS_COMP = `uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; uniform float uLuma; varying vec2 vUv;
 void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0));
   if (uBloom > 0.0) { vec3 b = texture2D(tBloom, vUv).rgb * uBloom * (1.0 - 0.75 * clamp(s.a - 1.0, 0.0, 1.0)); c += b * clamp(1.0 - c, 0.0, 1.0); }
   c = LinearTosRGB(vec4(c, 1.0)).rgb;
-  gl_FragColor = vec4(c, dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114))); }`;
+  gl_FragColor = vec4(c, uLuma > 0.5 ? dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114)) : 1.0); }`;
   // FXAA (Лоттес, «лёгкий»): 5 выборок яркости, на ровном — сразу выход, на краю — размытие вдоль края (ещё 4)
   const FS_FXAA = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
 void main(){
@@ -68,7 +69,7 @@ void main(){
     const tx = () => ({ tSrc: { value: null }, uTexel: { value: new T.Vector2() } });
     const M = {
       pre: mk(FS_PRE, tx()), down: mk(FS_DOWN, tx()), up: mk(FS_UP, tx(), true),
-      comp: mk(FS_COMP, { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 } }), fxaa: mk(FS_FXAA, tx()),
+      comp: mk(FS_COMP, { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uLuma: { value: 1 } }), fxaa: mk(FS_FXAA, tx()),
     };
     // один треугольник на весь экран; матрицы не нужны
     const tri = new T.BufferGeometry();
@@ -109,7 +110,7 @@ void main(){
       st.scene = r.info.render.calls;
       r.autoClear = false;   // проходы закрашивают весь кадр — чистить нечего
       const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
-      const U = M.comp.uniforms; U.tScene.value = rtScene.texture; U.tBloom.value = B[0]?.texture || null; U.uBloom.value = k;
+      const U = M.comp.uniforms; U.tScene.value = rtScene.texture; U.tBloom.value = B[0]?.texture || null; U.uBloom.value = k; U.uLuma.value = P.fxaa ? 1 : 0;
       if (P.fxaa) { pass(M.comp, rtLdr); M.fxaa.uniforms.tSrc.value = rtLdr.texture; M.fxaa.uniforms.uTexel.value.set(1 / P.w, 1 / P.h); pass(M.fxaa, null); }
       else pass(M.comp, null);
       r.autoClear = ac;
