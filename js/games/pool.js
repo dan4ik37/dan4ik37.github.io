@@ -110,7 +110,7 @@
   function hashB(B){ let h = 0; for (const b of B) h = (h * 31 + (b.in ? Math.round(b.x * 10) * 7 + Math.round(b.y * 10) : -1)) | 0; return h; }
 
   // ═══ ПРАВИЛА ═══
-  function newState(seed){ return { balls: rack(seed), turn: 0, groups: [null, null], breakShot: true, inHand: true, kitchen: true, over: false, winner: -1, msg: 'Разбой: поставь биток в левой четверти и бей', shots: 0 }; }
+  function newState(seed){ return { balls: rack(seed), turn: 0, groups: [null, null], breakShot: true, inHand: true, kitchen: true, over: false, winner: -1, msg: 'Разбой: поставь биток за линию и бей', shots: 0 }; }
   const cleared = (S, p) => !!S.groups[p] && S.balls.every(b => !b.in || !ofGroup(b.n, S.groups[p]));
   // Применить удар игрока S.turn (биток уже на месте). Вернёт ev
   function play(S, shot){
@@ -347,7 +347,7 @@
       el.innerHTML = `<b>${esc(names[p])}</b><span class="pl-g">${g ? `${GNAME[g]}: ${left.length ? left.map(n => `<i style="--bc:${COL[n]}" class="${isStripe(n) ? 'st' : ''}">${n}</i>`).join('') : '<i style="--bc:#111">8</i>'}` : 'группа не выбрана'}</span>`;
     }
     const msg = root.querySelector('.pl-msg');
-    if (msg && !S.over) msg.innerHTML = `${esc(S.msg)}${S.inHand && myTurn() ? '<br>✋ <b>Шар в руке:</b> перетащи белый биток' + (S.kitchen ? ' (в левой четверти стола)' : '') : ''}<br>${myTurn() ? '🟢 Твой удар: целься и тяни полоску силы' : `⏳ Бьёт ${esc(names[S.turn])}…`}`;
+    if (msg && !S.over) msg.innerHTML = `${esc(S.msg)}${S.inHand && myTurn() ? '<br>✋ <b>Шар в руке:</b> перетащи белый биток' + (S.kitchen ? (rot ? ' (в верхней четверти стола, до линии)' : ' (в левой четверти стола, до линии)') : '') : ''}<br>${myTurn() ? '🟢 Твой удар: целься и тяни полоску силы' : `⏳ Бьёт ${esc(names[S.turn])}…`}`;
     root.querySelector('.pl-acts').innerHTML = '';
     draw();
   }

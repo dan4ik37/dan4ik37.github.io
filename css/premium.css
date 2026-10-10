@@ -2624,3 +2624,9 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .pl-power-in{position:absolute;left:0;right:0;top:0;height:0;background:linear-gradient(180deg,#22c55e,#facc15,#ef4444)}
 .pl-power span{position:absolute;left:0;right:0;bottom:6px;text-align:center;font-size:.55rem;font-weight:800;color:var(--muted);writing-mode:vertical-rl;transform:rotate(180deg);margin:0 auto}
 .pl-msg{font-weight:600;font-size:.8rem;line-height:1.45}
+
+/* Телефон, открыта игра: поле — почти во всю ширину (у страницы и у рамки игры — по узкому отступу) */
+@media(max-width:520px){
+  body.game-on #games-page{padding-left:.45rem;padding-right:.45rem}
+  body.game-on .gm-stage{padding-left:.45rem;padding-right:.45rem;border-radius:14px}
+}
