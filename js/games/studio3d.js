@@ -280,6 +280,7 @@ Players.PlayerAdded.Connect(player => {
     const SC = ed.SC = E.scene(R, ph, { edit: true });
     SC.terrain = TR;
     ed.FX = SC.fx = E.fx(R);
+    ed.NPC = SC.npc = E.npcs(R, ph);
     // вода ландшафта: в ней плавают (player.js)
     ph.waterLevel = (x, z) => TR.enabled && TR.water.on && Math.abs(x) < TR.size / 2 && Math.abs(z) < TR.size / 2 ? TR.water.level : -Infinity;
     R.clouds(10, 4);
@@ -409,7 +410,7 @@ Players.PlayerAdded.Connect(player => {
     }
     const SC = ed.SC, box = SC.box(o);
     const center = o.cls === 'Model' ? (() => { const c = box.getCenter(new ed.R.T.Vector3()); return [c.x, c.y, c.z]; })() : o.pos.slice();
-    ed.G.attach({ pos: o.cls === 'Model' ? SC.pivot(o) : o.pos, rot: o.rot || [0, 0, 0], size: o.size, center, model: o.cls === 'Model' || o.cls === 'Prefab' || o.cls === 'Light' || o.cls === 'Effect' });
+    ed.G.attach({ pos: o.cls === 'Model' ? SC.pivot(o) : o.pos, rot: o.rot || [0, 0, 0], size: o.size, center, model: o.cls === 'Model' || o.cls === 'Prefab' || o.cls === 'Light' || o.cls === 'Effect' || o.cls === 'NPC' });
     if (!box.isEmpty()) { ed.boxHelper.box.copy(box); ed.boxHelper.visible = true; } else ed.boxHelper.visible = false;
   }
   function setTool(t){
@@ -678,6 +679,7 @@ Players.PlayerAdded.Connect(player => {
     cam.rotation.set(-c.pitch, c.yaw, 0, 'YXZ');
     ed.G.update();
     ed.FX.update(dt);
+    ed.NPC.frame(dt, performance.now() / 1000, cam.position);
     ed.R.update(dt); ed.R.follow(c.x - Math.sin(c.yaw) * 20, c.z - Math.cos(c.yaw) * 20, 0);
     ed.R.render();
   }
@@ -694,7 +696,8 @@ Players.PlayerAdded.Connect(player => {
   function openMenu(kind, btn){
     const ed = ED, m = ed.q('.s3-menu'), SC = ed.SC;
     let html = '';
-    if (kind === 'part') html = SC.SHAPES.map(([k, n, i]) => `<button type="button" data-m="part:${k}">${i} ${n}</button>`).join('') + '<hr><button type="button" data-m="spawn">📍 Точка появления</button><button type="button" data-m="light">💡 Свет (лампа)</button><button type="button" data-m="model">📦 Модель (группа)</button><div class="s3-mh">✨ Эффекты (в выбранную деталь)</div>' + Object.entries(window.D37E.fx.KINDS).map(([k, K]) => `<button type="button" data-m="fx:${k}">${K.icon} ${K.name}</button>`).join('');
+    if (kind === 'part') html = SC.SHAPES.map(([k, n, i]) => `<button type="button" data-m="part:${k}">${i} ${n}</button>`).join('') + '<hr><button type="button" data-m="spawn">📍 Точка появления</button><button type="button" data-m="light">💡 Свет (лампа)</button><button type="button" data-m="model">📦 Модель (группа)</button><div class="s3-mh">✨ Эффекты (в выбранную деталь)</div>' + Object.entries(window.D37E.fx.KINDS).map(([k, K]) => `<button type="button" data-m="fx:${k}">${K.icon} ${K.name}</button>`).join('')
+      + '<div class="s3-mh">🧍 Персонажи (NPC)</div>' + Object.entries(NPC_PRESETS).map(([k, p]) => `<button type="button" data-m="npc:${k}">${p.icon} ${p.name}</button>`).join('');
     else if (kind === 'prefab') html = SC.PREFABS.map(([k, n, i]) => `<button type="button" data-m="prefab:${k}">${i} ${n}</button>`).join('');
     else if (kind === 'mod') {
       html = '<div class="s3-mh">🛡 Модели на проверке</div><div class="s3-mlist"><small class="s3-mh">Загрузка…</small></div><p class="s3-note s3-mnote">👁 — вставить в этот мир и посмотреть. ✅ — видят все. ⛔ — заблокировать.</p>';
@@ -888,6 +891,7 @@ Players.PlayerAdded.Connect(player => {
     const [k, v, w] = a.split(':');
     if (k === 'part') insert('Part', { shape: v, size: v === 'ball' ? [2, 2, 2] : v === 'cyl' ? [2, 2, 2] : v === 'wedge' ? [4, 2, 4] : [4, 1, 2], name: { block: 'Деталь', ball: 'Шар', cyl: 'Цилиндр', wedge: 'Клин' }[v] });
     else if (k === 'spawn') insert('Spawn');
+    else if (k === 'npc') { const p = NPC_PRESETS[v]; if (!p) return; const { icon, ...props } = p; insert('NPC', { ...props, seed: Math.random().toString(36).slice(2, 8) }); }
     else if (k === 'fx') {
       const K = window.D37E.fx.KINDS[v]; if (!K) return;
       const par = ed.sel && ['Part', 'Mesh', 'Spawn', 'Prefab'].includes(ed.sel.cls) ? ed.sel : null, p = insertPoint();
@@ -939,6 +943,7 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'compile') compileScript();
     else if (a.startsWith('msize:')) { const o = ed.sel, md = o && window.D37E.models.cached(o.model); if (md) { pushHist(); ed.SC.set(o, 'size', a === 'msize:1' ? md.size.slice() : o.size.map(v => +(v * 2).toFixed(3))); updateGizmo(); renderProps(); } }
     else if (a === 'group') groupSel(); else if (a === 'ungroup') ungroupSel();
+    else if (a === 'npc:reroll') { if (ed.sel?.cls === 'NPC') { pushHist(); ed.SC.set(ed.sel, 'seed', Math.random().toString(36).slice(2, 8)); if (ed.sel.look !== 'random' && ed.sel.look !== 'me') ed.SC.set(ed.sel, 'look', 'random'); renderProps(); renderTree(); } }
     else if (a === 'dup') duplicate(); else if (a === 'del') remove(); else if (a === 'focus') focusSel();
     else if (a === 'terrain:gen') { if (!confirm('Создать новые холмы? Текущий ландшафт пропадёт.')) return; generateHills(ed.TR, Math.random() * 1e9 | 0); markDirty(); }
     else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, ed.TR.size, 0, 0); markDirty(); }
@@ -1032,7 +1037,7 @@ Players.PlayerAdded.Connect(player => {
   }
 
   // ═══ Проводник ═══
-  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', Effect: (window.D37E.fx.KINDS[o.kind] || {}).icon || '✨', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
+  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', NPC: (window.D37E.npcs.LOOKS[o.look] || ['🧍'])[0] === '🎲' ? '🧍' : (window.D37E.npcs.LOOKS[o.look] || ['🧍'])[0], Effect: (window.D37E.fx.KINDS[o.kind] || {}).icon || '✨', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
   function renderTree(){
     const ed = ED, SC = ed.SC, tree = ed.q('.s3-tree');
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
@@ -1121,6 +1126,15 @@ Players.PlayerAdded.Connect(player => {
         h += `<label class="s3-lbl">Поворот (°)<input type="number" step="${ed.G.rsnap || 1}" value="${o.rot[1]}" data-p="rot:1"></label>`;
         if (['tree', 'pine', 'bush', 'rock'].includes(o.kind)) h += `<label class="s3-lbl">Размер <b>${o.scale}</b><input type="range" min="0.4" max="3" step="0.1" value="${o.scale}" data-p="scale"></label>`;
         if (o.kind === 'sign') h += `<label class="s3-lbl">Текст<input type="text" maxlength="40" value="${esc(o.text)}" data-p="text"></label><label class="s3-lbl">Цвет таблички<input type="color" value="${o.color}" data-p="color"></label>`;
+      } else if (o.cls === 'NPC') {
+        const NP = window.D37E.npcs;
+        h += `<div class="s3-lbl">Внешность</div><div class="s3-grid2"><select data-p="look">${Object.entries(NP.LOOKS).map(([k, [i, n]]) => `<option value="${k}"${o.look === k ? ' selected' : ''}>${i} ${n}</option>`).join('')}</select><button type="button" data-a="npc:reroll" title="Другой человечек">🎲 Другой</button></div>`;
+        h += `<label class="s3-lbl">Что делает<select data-p="act">${Object.entries(NP.ACTS).map(([k, [i, n]]) => `<option value="${k}"${o.act === k ? ' selected' : ''}>${i} ${n}</option>`).join('')}</select></label>`;
+        if (o.act === 'wander') h += `<label class="s3-lbl">Бродит в радиусе <b>${o.radius}</b><input type="range" min="2" max="40" step="1" value="${o.radius}" data-p="radius"></label>`;
+        h += `<label class="s3-lbl">Скорость <b>×${(+o.speed).toFixed(1)}</b><input type="range" min="0.3" max="2.5" step="0.1" value="${o.speed}" data-p="speed"></label>`;
+        h += `<label class="s3-lbl">Урон при касании, в секунду <b>${o.damage}</b><input type="range" min="0" max="50" step="5" value="${o.damage}" data-p="damage"></label>`;
+        h += `<label class="s3-lbl">Говорит, когда подходишь<input type="text" maxlength="80" value="${esc(o.text || '')}" data-p="text" placeholder="Привет! 👋"></label>`;
+        h += v3('pos', 'Позиция', ed.G.snap || .1) + `<label class="s3-lbl">Смотрит (°)<input type="number" step="${ed.G.rsnap || 1}" value="${o.rot[1]}" data-p="rot:1"></label>`;
       } else if (o.cls === 'Effect') {
         const KS = window.D37E.fx.KINDS, K = KS[o.kind] || KS.fire, inPart = o.parent && SC.get(o.parent)?.pos && SC.get(o.parent).cls !== 'Model';
         h += `<label class="s3-lbl">Вид<select data-p="kind">${Object.entries(KS).map(([k, x]) => `<option value="${k}"${o.kind === k ? ' selected' : ''}>${x.icon} ${x.name}</option>`).join('')}</select></label>`;
@@ -1174,7 +1188,8 @@ Players.PlayerAdded.Connect(player => {
         if (el.type === 'range') { const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(key === 'alpha' ? 2 : 1); }
         updateGizmo();
         if (key === 'shape' || key === 'kind' || key === 'enabled') renderProps();
-        if (key === 'kind' || key === 'locked') renderTree();
+        if (key === 'kind' || key === 'locked' || key === 'look') renderTree();
+        if (key === 'act') renderProps();
       };
       P.addEventListener('input', e => onIn(e, false));
       P.addEventListener('change', e => onIn(e, true));
@@ -1183,6 +1198,13 @@ Players.PlayerAdded.Connect(player => {
   // Касание без кода: выбрал — работает в игре (playStep → touchAct)
   const TOUCH = [['', 'ничего'], ['kill', '💀 Убивает'], ['bounce', '🦘 Батут — подбрасывает'], ['speed', '⚡ Ускорение на 3 с'], ['coin', '💰 Монетка: +1 и исчезает'], ['finish', '🏁 Финиш: время и салют']];
   const touchSel = o => `<label class="s3-lbl">Касание — без кода<select data-p="touch">${TOUCH.map(([k, n]) => `<option value="${k}"${(o.touch || '') === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>`;
+  const NPC_PRESETS = {
+    walker: { icon: '🚶', name: 'Прохожий (бродит)', act: 'wander', look: 'random' },
+    trader: { icon: '🧑‍🍳', name: 'Торговец (говорит)', act: 'idle', look: 'random', text: 'Привет! У меня лучшие товары в округе 🛒' },
+    zombie: { icon: '🧟', name: 'Зомби (догоняет, кусает)', act: 'follow', look: 'zombie', damage: 20, speed: .75, text: 'Ммм… мозги… 🧠' },
+    shy: { icon: '🐔', name: 'Пугливый (убегает)', act: 'flee', look: 'fairy', speed: 1.1 },
+    robot: { icon: '🤖', name: 'Робот-спутник (идёт за тобой)', act: 'follow', look: 'robot', speed: 1.2, text: 'Бип-буп! Я с тобой 🤖' },
+  };
   const fmtTime = t => { const h = Math.floor(t) % 24, m = Math.round((t - Math.floor(t)) * 60); return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 
   // ═══ Игра: ▶ Играть / ■ Стоп ═══
@@ -1236,12 +1258,17 @@ Players.PlayerAdded.Connect(player => {
     ed.box.classList.add('s3-playing');
     ed.q('.s3-play').textContent = ed.player ? '🔁 Заново' : '■ Стоп';
     ed.q('.s3-hint').hidden = true;
+    ed.NPC.start({
+      onHit: (e, dmg) => { if (pl.dead) return; pl.health = Math.max(0, pl.health - dmg); drawHealth(); AU.play('hit', { x: P.ch.x, y: P.ch.y, z: P.ch.z }); pl.rig.shake?.(1.2, .25); if (pl.health <= 0) die(); },
+      onSay: (e, text) => sayBubble(pl, e, text),
+    });
     pl.loop = E.loop(playStep, playFrame);
     ed.loop.pause(true);
     msg('▶ Играешь! WASD — идти, Пробел — прыжок, E — действие. ■ Стоп — назад в редактор', true);
   }
   function stopPlay(){
     const ed = ED, pl = ed.playing; if (!pl) return;
+    ed.NPC.stop();
     pl.loop.stop(); pl.SH.stop(); pl.unf?.(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); pl.hud.remove();
     for (const l of pl.amb || []) l.h.stop();
     ed.playing = null;
@@ -1385,6 +1412,16 @@ Players.PlayerAdded.Connect(player => {
       l.h.set({ x: p[0], y: p[1], z: p[2], vol: l.vol });
     }
   }
+  function sayBubble(pl, e, text){
+    const d = document.createElement('div'); d.className = 's3-bub'; d.textContent = text;
+    pl.hud.appendChild(d); (pl.bubs = pl.bubs || []).push({ e, d, until: performance.now() + 4200 });
+  }
+  function drawBubbles(pl){
+    if (!pl.bubs?.length) return;
+    const now = performance.now(), R = ED.R;
+    pl.bubs = pl.bubs.filter(b => { if (now > b.until) { b.d.remove(); return false; } return true; });
+    for (const b of pl.bubs) { const h = ED.NPC.head(b.e); if (!h) continue; const [x, y, ok] = R.project(h[0], h[1], h[2]); b.d.hidden = !ok; b.d.style.transform = `translate(${x}px, ${y}px) translate(-50%, -100%)`; }
+  }
   function drawHealth(){ const pl = ED.playing; if (!pl) return; const i = pl.hud.querySelector('.s3-health i'); i.style.width = (pl.health / pl.maxHealth * 100) + '%'; i.parentElement.classList.toggle('low', pl.health < pl.maxHealth * .35); }
   function drawStats(){ const pl = ED.playing; const box = pl.hud.querySelector('.s3-stats'), e = Object.entries(pl.stats); box.hidden = !e.length; box.innerHTML = `<b>${esc(pl.nick)}</b>` + e.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join(''); }
   function drawLabels(){ const pl = ED.playing; pl.hud.querySelector('.s3-labels').innerHTML = Object.values(pl.labels).map(t => `<div>${esc(t)}</div>`).join(''); }
@@ -1436,6 +1473,7 @@ Players.PlayerAdded.Connect(player => {
     // подсказки едут за своими деталями
     if (pl.items) for (const it of pl.items.values()) { const o = SC.get(it.oid); if (o?.pos) { it.x = o.pos[0]; it.y = o.pos[1]; it.z = o.pos[2]; } }
     SC.step(dt);
+    if (!pl.dead) ed.NPC.step(dt, [{ x: P.ch.x, y: P.ch.y, z: P.ch.z }]);
     SH.tick(dt, [{ id: 'me', pos: [P.ch.x, P.ch.y, P.ch.z] }]);
     // упал с мира или смерть
     if (P.ch.y < -60) { pl.health = 0; die(); }
@@ -1448,6 +1486,8 @@ Players.PlayerAdded.Connect(player => {
     rig.update(dt, P, { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom }, ed.ph, C);
     A.update(dt, t, R.camera.position);
     ambTick(pl);
+    ed.NPC.frame(dt, t, R.camera.position);
+    drawBubbles(pl);
     pl.AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
     // клик/тап по детали со скриптом «Clicked»
     for (const tp of I.taps) { const b = R.r.domElement.getBoundingClientRect(); ed.ray.setFromCamera(new R.T.Vector2((tp.x - b.left) / b.width * 2 - 1, -((tp.y - b.top) / b.height) * 2 + 1), R.camera); const h = ed.SC.pick(ed.ray); if (h && pl.clicks.has(h.obj.id)) pl.SH.event('clicked', { id: h.obj.id, player: 'me' }); }
@@ -1475,7 +1515,7 @@ Players.PlayerAdded.Connect(player => {
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();
     window.removeEventListener('keydown', ed.kd, true); window.removeEventListener('keyup', ed.ku, true); window.removeEventListener('blur', ed.blur); window.removeEventListener('pagehide', ed.onHide);
-    try { ed.SC?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); ed.R?.dispose(); } catch (e) {}
+    try { ed.SC?.dispose(); ed.NPC?.dispose(); ed.FX?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); ed.R?.dispose(); } catch (e) {}
     ed.box.remove();
     document.documentElement.classList.remove('s3-open');
   }

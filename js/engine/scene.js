@@ -10,7 +10,8 @@
 // дерево, фонарь, скамейка…), Model (группа), Script (скрипт — код в песочнице, см. script.js), Mesh (своя 3D-модель —
 // как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; тело — fit: 'precise' —
 // коробки по поверхности модели (M.colliders), 'box' — одна коробка size), Effect (частицы fx.js: kind — огонь, дым, искры…;
-// внутри детали — летят из неё, сам по себе — из pos; rate и scale — множители; нужен SC.fx = D37E.fx(R)).
+// внутри детали — летят из неё, сам по себе — из pos; rate и scale — множители; нужен SC.fx = D37E.fx(R)), NPC (персонаж npc.js:
+// look, seed, act — idle | wander | follow | flee, speed, radius, damage, text; рисует и водит SC.npc = D37E.npcs(R, phys)).
 // Свойства детали: pos [x,y,z], rot [x,y,z] (градусы, порядок YXZ как в Roblox), size [x,y,z], color '#rrggbb',
 // mat (материал — SC.MATS), alpha (прозрачность 0…1), collide (сталкивается), anchored (закреплена; нет — падает), touch (что
 // делает касание без скриптов: kill | bounce | speed | coin | finish — выполняет игра, например studio3d),
@@ -44,8 +45,9 @@
     Mesh: { name: 'Своя модель', model: '', pos: [0, 2, 0], rot: [0, 0, 0], size: [4, 4, 4], alpha: 0, collide: true, anchored: true, shadow: true, fit: 'precise' },
     Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
     Effect: { name: 'Эффект', kind: 'fire', pos: [0, 1, 0], rate: 1, scale: 1, color: '', color2: '', enabled: true },
+    NPC: { name: 'Персонаж', pos: [0, 0, 0], rot: [0, 0, 0], look: 'random', seed: '', act: 'idle', speed: 1, radius: 8, damage: 0, text: '' },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch', 'look', 'seed', 'act', 'speed', 'radius', 'damage'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
@@ -174,6 +176,7 @@
       if (obj._mesh) { R.scene.remove(obj._mesh); obj._mesh.traverse(c => { if (c.isMesh && c.userData.ownGeo) c.geometry.dispose(); if (c.isMesh && c.userData.ownMat) c.material.dispose(); }); obj._mesh = null; }
       if (obj._light) { R.scene.remove(obj._light); obj._light = null; }
       if (obj._em) { obj._em.dispose(); obj._em = null; }
+      if (obj.cls === 'NPC') SC.npc?.remove(obj);
       for (const c of obj._cols || []) ph.remove(c);
       obj._cols = [];
     }
@@ -211,6 +214,10 @@
         place(holder, obj);
         tag(holder, obj); R.scene.add(holder); obj._mesh = holder;
         colliders(obj);
+      } else if (obj.cls === 'NPC') {   // человечек — у SC.npc (npc.js); здесь — невидимая коробка, чтобы выбирать мышью
+        const box = new T.Mesh(new T.BoxGeometry(1.1, 2.3, 1.1), npcPick()); box.position.y = 1.15; box.userData.ownGeo = true;
+        const holder = new T.Group(); holder.add(box); place(holder, obj); tag(holder, obj); R.scene.add(holder); obj._mesh = holder;
+        SC.npc?.add(obj);
       } else if (obj.cls === 'Effect') {
         const host = () => { const p = obj.parent && objects.get(obj.parent); return p && p.pos && p.cls !== 'Model' ? p : null; };
         const at = [0, 0, 0];   // из детали — с её верхней грани
@@ -240,6 +247,8 @@
         tag(holder, obj); R.scene.add(holder); obj._mesh = holder; obj._cols = cols;
       }
     }
+    let npcM = null;
+    const npcPick = () => npcM || (npcM = new T.MeshBasicMaterial({ visible: false }));
     let fxM = null;
     const fxMark = () => fxM || (fxM = new T.MeshBasicMaterial({ color: '#ffd23f', wireframe: true, toneMapped: false }));
     let stubM = null;
@@ -293,7 +302,8 @@
       if (!obj) return;
       if (obj.cls === 'Model' && (key === 'pos' || key === 'rot')) { SC.transformModel(obj, key, val); return; }
       obj[key] = copy(val);
-      if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model', 'rate', 'color2'].includes(key) || (key === 'enabled' && obj.cls === 'Effect')) build(obj);
+      if (obj.cls === 'NPC') { if (key === 'pos' || key === 'rot') place(obj._mesh, obj); SC.npc?.sync(obj); }
+      else if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model', 'rate', 'color2'].includes(key) || (key === 'enabled' && obj.cls === 'Effect')) build(obj);
       else if (key === 'pos' || key === 'rot') {
         if (obj._mesh && obj.cls !== 'Prefab') place(obj._mesh, obj);
         if (obj._light) obj._light.position.set(...obj.pos);

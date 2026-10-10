@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 // A = D37E.actors(R). Свой персонаж: A.pose(key, P.pose()) каждый кадр (из player.js); чужие — то же из сети с плавным
 // догоном. Поля позы: x, y, z, yaw, moving, speed (м/с), air, crouch (0…1), sit + seatY (верх сиденья), roll (0…1 или −1),
-// rollBack, hang, ladder, climbPh, pk ('vault' | 'mantle' | 'climb' | 'hang' | 'pullup') + pkK (0…1). hidden — не рисовать
+// rollBack, hang, ladder, climbPh, pk ('vault' | 'mantle' | 'climb' | 'hang' | 'pullup') + pkK (0…1), swim / dive. hidden — не рисовать
 // (вид от 1-го лица). A.update(dt, t, cam) — каждый кадр.
 (() => {
   const E = window.D37E = window.D37E || {};
@@ -25,7 +25,7 @@
     function add(key, look, o = {}){
       remove(key);
       const a = { key, x: o.x || 0, y: o.y || 0, z: o.z || 0, yaw: o.yaw || 0, moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, sitY: 0,
-        roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '' };
+        roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '' };
       setLook(a, look);
       list.set(key, a);
       return a;
@@ -41,7 +41,7 @@
         const far = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) > 42 : false;
         if (!far || (t * 20 | 0) % 3 === 0) K.animate(ch, a.moving && !a.sit, far ? dt * 3 : dt, t, {
           rate: a.speed < .3 ? 10.5 : 5 + a.speed, air: a.air, sit: a.sit, crouch: a.crouch,
-          roll: a.roll, rollBack: a.rollBack, hang: a.hang, ladder: a.ladder, climbPh: a.climbPh, pk: a.pk, pkK: a.pkK,
+          roll: a.roll, rollBack: a.rollBack, hang: a.hang, ladder: a.ladder, climbPh: a.climbPh, pk: a.pk, pkK: a.pkK, swim: a.swim, dive: a.dive,
         });
         if (a.moving && !a.air && !a.hang && !a.ladder && ch.R.trail !== 'none' && t - a.lastTrail > .09) {
           a.lastTrail = t;
