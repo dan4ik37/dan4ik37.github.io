@@ -6,18 +6,23 @@
 // по отдельности. Всё остальное — здесь: номера пакетов и подтверждения (32 последних битами), повтор потерянного,
 // часы хозяина (RTT, сдвиг), надёжные события по порядку, репликация объектов сцены, персонажи, смена хозяина.
 //
-// S = D37E.net.session({ transport, scene, now, info, onHost, onPlayer, onEvent, onBlob, onReady, onTeleport, onCheat, … })
+// S = D37E.net.session({ transport, scene, now, nick, info, extra, replicate, interest, hostTimeout, onHost(isHost, info),
+//   onPlayer('join' | 'leave' | 'data', p), onEvent(type, data, from), onGuestEvent (у хозяина — события гостей), onCharacter(id,
+//   pose), onBlob(name, bytes, text), onReady, onTeleport([x, y, z], 'tp' | 'fix' | 'script'), onCheat(id, info), validate, validTeleport })
 //   S.tick(dt) — каждый шаг игры: приём, отправка, плавные позиции; S.setMyCharacter(state) — свой персонаж (поза player.js
 //   + vx, vy, vz, on: id детали под ногами); S.teleported() — прыгнул сам (возрождение); S.remotes() — чужие для рисования;
 //   S.sendEvent(type, data, to) — надёжно: гость → хозяину ('host') или всем ('all' — хозяин разошлёт), хозяин → id | 'all';
 //   S.teleport(id, [x, y, z]) / S.setLimits(id, { walk, jump }) — хозяин двигает/настраивает чужого; S.setPlayerData(id, d);
-//   S.setBlob(name, bytes | text) — большие данные всем (ландшафт, скрипты для нового хозяина); S.markDirty(obj); S.stats().
+//   S.setBlob(name, bytes | text) — большие данные всем (ландшафт, скрипты для нового хозяина); S.latest(id) — последний
+//   проверенный снимок (хозяину, для скриптов); S.players(); S.hostNow() — часы хозяина; S.markDirty(obj); S.stats(); S.close().
 // Сцена — как D37E.scene: all(), get(id), add(cls, props, parent, id), set(obj, k, v, silent), remove(obj), reparent(obj, p).
-// Хозяин сам находит изменения (сравнивает квантованные свойства ≤ 20 раз в секунду: скрипты меняют детали «тихо»).
+// Хозяин находит изменения сам: set/add/remove/reparent этой сцены обёрнуты (на время сессии) — каждый шаг проверяются
+// только тронутые объекты; полный обход — раз в секунду (свойства, записанные мимо set). Гость сцену сам не меняет.
 // Пакет: заголовок 18 байт (seq, ack + 32 бита, время, эхо времени) + разделы: персонажи, объекты (id, маска, поля),
 // удаления, надёжные сообщения, сводка (хеши корзин). Позиции — см (varint), углы — 0,1°, цвет — 3 байта.
 // Интерес: близкие объекты — в каждом пакете, дальние — реже (до 2 с), по накопленному приоритету, в пределах бюджета
-// пакета; персонажи — 15 раз/с напрямую, 5 — через Supabase; чужие рисуются с задержкой 80–150 мс + путь до нас.
+// пакета; персонажи — 15 раз/с напрямую, 5 — через Supabase; чужие рисуются с запасом 80–150 мс сверх самого быстрого пути.
+// Тест: node scripts/net-test.cjs (модель сети: задержка, потери, перестановка, двойники; смена хозяина; читеры; WebRTC).
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const E = root.D37E = root.D37E || {};
