@@ -279,6 +279,7 @@ Players.PlayerAdded.Connect(player => {
     const TR = ed.TR = E.terrain(R, ph, { size: 192, n: 129 });
     const SC = ed.SC = E.scene(R, ph, { edit: true });
     SC.terrain = TR;
+    ed.B = E.batcher?.(SC);   // склейка деталей в пачки (batch.js), лампы — в постоянный набор
     ed.FX = SC.fx = E.fx(R);
     ed.NPC = SC.npc = E.npcs(R, ph);
     // вода ландшафта: в ней плавают (player.js)
@@ -1219,6 +1220,7 @@ Players.PlayerAdded.Connect(player => {
     const snap = SC.toJSON().objects;
     // свет-лампочки и невидимые детали — как в игре
     for (const o of SC.all()) { if ((o.cls === 'Light' || o.cls === 'Effect') && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh && !ed.player) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
+    ed.B?.play();   // в игре меняющееся и незакреплённое — отдельно, остальное — пачками
     const spawn = SC.all().find(o => o.cls === 'Spawn');
     const sp = spawn ? [spawn.pos[0], spawn.pos[1] + spawn.size[1] / 2 + .05, spawn.pos[2]] : [0, ed.ph.groundAt(0, 0) + .05, 0];
     // на точке появления что-то стоит — появляемся сверху, а не внутри
@@ -1276,6 +1278,7 @@ Players.PlayerAdded.Connect(player => {
     ed.playing = null;
     const sel = ed.sel?.id;
     ed.SC.fromJSON({ objects: pl.snap });
+    ed.B?.edit();
     if (pl.light0.time !== ed.R.lighting.time) ed.R.setLighting(pl.light0);
     select(sel ? ed.SC.get(sel) : null); renderTree();
     ed.box.classList.remove('s3-playing');
@@ -1522,7 +1525,7 @@ Players.PlayerAdded.Connect(player => {
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();
     window.removeEventListener('keydown', ed.kd, true); window.removeEventListener('keyup', ed.ku, true); window.removeEventListener('blur', ed.blur); window.removeEventListener('pagehide', ed.onHide);
-    try { ed.SC?.dispose(); ed.NPC?.dispose(); ed.FX?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); ed.R?.dispose(); } catch (e) {}
+    try { ed.B?.dispose(); ed.SC?.dispose(); ed.NPC?.dispose(); ed.FX?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); ed.R?.dispose(); } catch (e) {}
     ed.box.remove();
     document.documentElement.classList.remove('s3-open');
   }

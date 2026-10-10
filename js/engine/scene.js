@@ -208,6 +208,7 @@
           if (!R.r.shadowMap.enabled || obj.shadow === false || a >= .5) g.traverse(c => { if (c.isMesh) c.castShadow = false; });
           if (a >= .999 && !SC.edit) g.visible = false;
           holder.add(g);
+          holder.userData.batchable = !a;   // одинаковые модели — экземплярами (batch.js)
         } else {   // модель ещё грузится или её нет в этом браузере — каркас коробки
           const box = new T.Mesh(new T.BoxGeometry(obj.size[0], obj.size[1], obj.size[2]), meshStub());
           box.userData.ownGeo = true; box.userData.stub = true; holder.add(box);
