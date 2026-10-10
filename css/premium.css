@@ -3276,6 +3276,27 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-health.low i{background:linear-gradient(90deg,#dc2626,#f87171)}
 .s3-labels{position:absolute;left:50%;top:34px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px}
 .s3-labels div{padding:4px 12px;border-radius:9px;background:rgba(12,10,24,.66);color:#fff;font-weight:800;font-size:14px}
+/* Студия 3D по сети: комната (ссылка, сколько игроков), ожидание мира, подписи над игроками, таблица игроков */
+.s3-mp{position:absolute;left:10px;top:28px;z-index:4;display:grid;gap:5px;max-width:min(250px,62%);padding:8px 10px;border-radius:12px;background:rgba(12,10,24,.8);color:#fff;font-size:12px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.s3-mph{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.s3-mph b{font-size:13px}
+.s3-mph span{color:#fbbf24;font-weight:800}
+.s3-mps{color:#cbd5e1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s3-mpr{display:flex;gap:4px;flex-wrap:wrap}
+.s3 .s3-mpr button{padding:3px 9px;font-size:12px}
+.s3-mpwait{position:absolute;inset:0;z-index:7;display:grid;place-items:center;align-content:center;gap:10px;padding:20px;text-align:center;background:rgba(15,16,24,.88);color:#fff;font-size:17px;font-weight:800;line-height:1.4}
+.s3-mpwait small{font-size:12.5px;font-weight:600;color:#9aa3b5}
+.s3-mpwait .s3-mpr{justify-content:center}
+.s3 .s3-mpwait .s3-mpr button{padding:6px 14px;font-size:13px}
+.s3-tags{position:absolute;inset:0;overflow:hidden}
+.s3-tag{position:absolute;left:0;top:0;padding:2px 8px;border-radius:8px;background:rgba(12,10,24,.55);color:#fff;font-weight:800;font-size:12px;white-space:nowrap}
+.s3-tag[hidden]{display:none}
+.s3-lb{border-collapse:collapse;font-size:12.5px}
+.s3-lb th{padding:0 0 3px 12px;color:#fbbf24;font-weight:800;text-align:right;white-space:nowrap}
+.s3-lb td{padding:1px 0 1px 12px;text-align:right;white-space:nowrap}
+.s3-lb th:first-child,.s3-lb td:first-child{padding-left:0;text-align:left}
+.s3-lb td:first-child{max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.s3-lb tr.me td{color:#93c5fd}
 @media (max-width:760px){
   .s3-top button span{display:none}
   .s3-name{width:96px}
