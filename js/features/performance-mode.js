@@ -36,16 +36,8 @@ function setPerf(mode, persist = true) {
 
   if (mode === 'high') {
     initParticles();
-    if (!window.cursorInitialized) {
-      initCursorTrail();
-      window.cursorInitialized = true;
-    } else {
-      // Вернулись в High — просто показываем курсор
-      const trail = document.getElementById('cursorTrail');
-      const dot   = document.getElementById('cursorDot');
-      if (trail) trail.style.display = 'block';
-      if (dot)   dot.style.display   = 'block';
-    }
+    // кольцо показывает CSS (body.high); узкое окно — попробуем при следующем включении
+    if (!window.cursorInitialized) window.cursorInitialized = initCursorTrail() !== false;
     initScrollReveal();
   } else {
     // Очищаем частицы
@@ -118,47 +110,40 @@ function initParticles() {
   }
 }
 
-// ── КУРСОР ──
+// ── КУРСОР: кольцо плавно догоняет обычную стрелку (только HIGH и широкое окно; стрелку не прячем) ──
 function initCursorTrail() {
-  if (window.innerWidth < 768) return;
+  if (window.innerWidth < 768) return false;
   const trail = document.getElementById('cursorTrail');
-  const dot   = document.getElementById('cursorDot');
-  let mx = -200, my = -200;
-  let cx = -200, cy = -200;
-  let started = false;
+  if (!trail) return false;
+  let mx = -200, my = -200, cx = -200, cy = -200, running = false;
 
   document.addEventListener('mousemove', e => {
     mx = e.clientX; my = e.clientY;
-    // Точка — мгновенно через transform
-    dot.style.transform = `translate(${mx - 2.5}px, ${my - 2.5}px)`;
-    if (!started) { started = true; animCursor(); }
+    if (!running && currentPerf === 'high') { running = true; requestAnimationFrame(animCursor); }
   });
 
-  // Hover-эффект — увеличиваем кольцо на кликабельных
-  document.querySelectorAll('a,button,.vcard,.hub-card,.dc,.stat-card').forEach(el => {
-    el.addEventListener('mouseenter', () => {
-      trail.style.width = '44px';
-      trail.style.height = '44px';
-      trail.style.borderColor = 'rgba(255,107,53,.9)';
-      trail.style.background = 'rgba(255,107,53,.08)';
-    });
-    el.addEventListener('mouseleave', () => {
-      trail.style.width = '28px';
-      trail.style.height = '28px';
-      trail.style.borderColor = 'rgba(255,45,85,.8)';
-      trail.style.background = 'rgba(255,45,85,.05)';
-    });
+  // На кликабельном кольцо больше и оранжевое — делегированием, чтобы работало и на кнопках, появившихся позже
+  const HOT = 'a,button,.vcard,.hub-card,.dc,.stat-card';
+  let hot = false;
+  document.addEventListener('mouseover', e => {
+    const on = !!(e.target.closest && e.target.closest(HOT));
+    if (on === hot) return;
+    hot = on;
+    trail.style.width = trail.style.height = on ? '44px' : '28px';
+    trail.style.borderColor = on ? 'rgba(255,107,53,.9)' : 'rgba(255,45,85,.8)';
+    trail.style.background = on ? 'rgba(255,107,53,.08)' : 'rgba(255,45,85,.05)';
   });
 
   function animCursor() {
-    if (currentPerf !== 'high') return;
-    // Кольцо — плавно догоняет через lerp
+    if (currentPerf !== 'high') { running = false; return; }
     cx += (mx - cx) * 0.14;
     cy += (my - cy) * 0.14;
-    // Используем translate чтобы центрировать кольцо на курсоре
-    trail.style.transform = `translate(${cx - 14}px, ${cy - 14}px)`;
+    // центр кольца — на стрелке при любом размере кольца
+    trail.style.transform = `translate(${cx}px, ${cy}px) translate(-50%, -50%)`;
+    if (Math.abs(mx - cx) + Math.abs(my - cy) < 0.3) { running = false; return; }   // догнал — ждём движения мыши
     requestAnimationFrame(animCursor);
   }
+  return true;
 }
 
 // ── SCROLL REVEAL ──

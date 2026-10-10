@@ -730,9 +730,8 @@ body.low #particles{display:none}
   100%{opacity:0;transform:translateY(-120vh) scale(.5) rotate(360deg)}
 }
 
-/* ── КАСТОМНЫЙ КУРСОР (только HIGH, только desktop) ── */
-body.high { cursor: none; }
-body.high a, body.high button, body.high .vcard, body.high .hub-card { cursor: none; }
+/* ── КОЛЬЦО ЗА КУРСОРОМ (только HIGH, только desktop). Обычную стрелку НЕ прячем (cursor:none): над кнопками
+   и в играх «мышка пропадала» (владелец, студия 3D и судоку) — кольцо теперь только украшение. Точку не показываем. ── */
 
 #cursorTrail{
   position:fixed;pointer-events:none;z-index:9999;
@@ -754,7 +753,7 @@ body.high a, body.high button, body.high .vcard, body.high .hub-card { cursor: n
   transition:transform .02s linear;
   display:none;
 }
-body.high #cursorTrail,body.high #cursorDot{display:block}
+body.high #cursorTrail{display:block}
 @media(max-width:768px){
   body.high #cursorTrail,body.high #cursorDot{display:none}
   body.high{cursor:auto}
