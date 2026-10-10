@@ -12,6 +12,9 @@
 // (без редактора). Модераторам — «🛡»: модели на проверке (посмотреть, одобрить, заблокировать).
 // Управление в редакторе: ПКМ + мышь — осмотреться, WASD/QE — лететь (Shift — быстрее), колесо — вперёд/назад, F — к
 // выбранному, Ctrl+Z/Y — отменить/вернуть, Ctrl+D — копия, Delete — удалить, 1–4 — выбор/двигать/размер/вращать.
+// Несколько объектов: Ctrl/Shift + клик (стрелки двигают и крутят всё вместе), Ctrl+A — все; Ctrl+C/X/V — копировать/вырезать/
+// вставить (и в другой мир), Ctrl+G — сгруппировать в модель, Ctrl+U — разгруппировать. Клик по детали модели выбирает всю
+// модель (Alt + клик — саму деталь). 🔒 «Заблокирован» — не выбирается кликом в мире. Поиск по имени — над Проводником.
 (() => {
   const PI = Math.PI, DEG = PI / 180;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -202,7 +205,7 @@ Players.PlayerAdded.Connect(player => {
         <button type="button" class="s3-play" data-a="play">▶ Играть</button>
       </div>
       <div class="s3-main">
-        <div class="s3-left"><div class="s3-ph">🌲 Проводник</div><div class="s3-tree"></div></div>
+        <div class="s3-left"><div class="s3-ph">🌲 Проводник<input type="search" class="s3-find" placeholder="🔍 Найти" aria-label="Найти объект"></div><div class="s3-tree"></div></div>
         <div class="s3-view"><div class="s3-hint"></div><div class="s3-msg" hidden></div></div>
         <div class="s3-right"><div class="s3-ph s3-rtitle">⚙ Свойства</div><div class="s3-props"></div></div>
       </div>
@@ -215,7 +218,7 @@ Players.PlayerAdded.Connect(player => {
     document.body.appendChild(box);
     document.documentElement.classList.add('s3-open');
     const q = s => box.querySelector(s);
-    ED = { box, q, tool: 'move', sel: null, panel: 'props', hist: [], fut: [], placeId: null, dirty: false, keys: new Set(), cam: { x: 18, y: 14, z: 22, yaw: .7, pitch: .45 }, brush: { tool: 'raise', r: 7, s: 1.2, ch: 0 }, out: [], playing: null, player: null, pubId: null, remoteAuthors: new Map() };
+    ED = { box, q, tool: 'move', sel: null, panel: 'props', hist: [], fut: [], placeId: null, dirty: false, keys: new Set(), cam: { x: 18, y: 14, z: 22, yaw: .7, pitch: .45 }, brush: { tool: 'raise', r: 7, s: 1.2, ch: 0 }, out: [], playing: null, player: null, pubId: null, remoteAuthors: new Map(), selSet: new Set() };
     const pm = /^play\/([a-z0-9]{4,16})$/i.exec(String(gapi?.param || ''));
     if (pm) { ED.playId = pm[1]; box.classList.add('s3-player'); }
     const st = ED;
@@ -315,17 +318,43 @@ Players.PlayerAdded.Connect(player => {
   }
 
   // ── Выбор ──
-  function select(obj){
+  // ed.sel — главный выбранный (его свойства и стрелки), ed.selSet — все выбранные
+  const selList = () => [...ED.selSet].filter(o => ED.SC.get(o.id));
+  const selTop = () => { const L = selList(); return L.filter(o => !L.some(p => p !== o && ED.SC.isAncestor(p, o))); };   // родитель и потомок → только родитель
+  function select(obj, add){
     const ed = ED;
+    if (add && obj) { if (ed.selSet.has(obj)) { ed.selSet.delete(obj); obj = ed.sel === obj ? selList()[0] || null : ed.sel; } else ed.selSet.add(obj); }
+    else { ed.selSet.clear(); if (obj) ed.selSet.add(obj); }
     ed.sel = obj || null;
     updateGizmo();
     renderProps(); highlightTree();
     // скрипт — в редактор кода
-    if (obj?.cls === 'Script') showCode(obj);
+    if (obj?.cls === 'Script' && ed.selSet.size === 1) showCode(obj);
+  }
+  function setSel(list){ const ed = ED; ed.selSet = new Set(list); ed.sel = list[list.length - 1] || null; updateGizmo(); renderProps(); highlightTree(); }
+  // объект для клика в мире: деталь модели → вся модель (Alt — сама деталь); заблокированные пропускаем
+  function pickAt(ray, alt){
+    const ed = ED, SC = ed.SC;
+    let hit = SC.pick(ray);
+    if (hit?.obj.locked) {
+      hit = null;
+      const meshes = []; for (const o of SC.all()) if (o._mesh && !o.locked && o._mesh.visible !== false) meshes.push(o._mesh);
+      for (const h of ray.intersectObjects(meshes, true)) { let n = h.object; while (n && !n.userData.oid) n = n.parent; const o = n && SC.get(n.userData.oid); if (o && !o.locked) { hit = { obj: o, point: h.point }; break; } }
+    }
+    if (hit && !alt) { let o = hit.obj; for (let p = SC.get(o.parent); p; p = SC.get(p.parent)) if (p.cls === 'Model' && !p.locked) o = p; hit = { ...hit, obj: o }; }
+    return hit;
   }
   function updateGizmo(){
     const ed = ED, o = ed.sel;
     if (!o || o.cls === 'Script' || ed.playing) { ed.G.attach(null); ed.boxHelper.visible = false; return; }
+    const many = selTop().filter(x => x.cls !== 'Script');
+    if (many.length > 1) {
+      const T = ed.R.T, box = new T.Box3(); for (const x of many) box.union(ed.SC.box(x));
+      const c = box.getCenter(new T.Vector3());
+      ed.G.attach({ pos: [c.x, box.min.y, c.z], rot: [0, 0, 0], size: null, center: [c.x, c.y, c.z], model: true, group: true });
+      ed.boxHelper.box.copy(box); ed.boxHelper.visible = !box.isEmpty();
+      return;
+    }
     const SC = ed.SC, box = SC.box(o);
     const center = o.cls === 'Model' ? (() => { const c = box.getCenter(new ed.R.T.Vector3()); return [c.x, c.y, c.z]; })() : o.pos.slice();
     ed.G.attach({ pos: o.cls === 'Model' ? SC.pivot(o) : o.pos, rot: o.rot || [0, 0, 0], size: o.size, center, model: o.cls === 'Model' || o.cls === 'Prefab' || o.cls === 'Light' });
@@ -367,14 +396,49 @@ Players.PlayerAdded.Connect(player => {
     return obj;
   }
   function duplicate(){
-    const ed = ED, o = ed.sel; if (!o) return;
+    const ed = ED, top = selTop(); if (!top.length) return;
     pushHist();
-    const c = ed.SC.clone(o);
-    if (c.pos) ed.SC.set(c, 'pos', [c.pos[0] + (ed.G.snap || 1) * 2, c.pos[1], c.pos[2]]);
-    else if (c.cls === 'Model') { const pv = ed.SC.pivot(c); ed.SC.set(c, 'pos', [pv[0] + 4, pv[1], pv[2]]); }
-    renderTree(); select(c);
+    const off = (ed.G.snap || 1) * 2, made = top.map(o => { const c = ed.SC.clone(o); moveBy(c, [off, 0, 0]); return c; });
+    renderTree(); setSel(made);
   }
-  function remove(){ const ed = ED, o = ed.sel; if (!o) return; pushHist(); ed.SC.remove(o); select(null); renderTree(); }
+  function remove(){ const ed = ED, top = selTop(); if (!top.length) return; pushHist(); for (const o of top) ed.SC.remove(o); select(null); renderTree(); }
+  // буфер — в браузере (вставить можно и в другой мир)
+  function copySel(cut){
+    const ed = ED, top = selTop(); if (!top.length) return;
+    const list = ed.SC.serialize(top.flatMap(o => [o, ...ed.SC.descendants(o)]));
+    try { localStorage.setItem('d37_s3_clip', JSON.stringify({ t: Date.now(), roots: top.map(o => o.id), list })); } catch (e) { msg('Не хватило места для копии', false); return; }
+    if (cut) { pushHist(); for (const o of top) ed.SC.remove(o); select(null); renderTree(); msg(`✂ Вырезано: ${top.length}`); }
+    else msg(`📋 Скопировано: ${top.length}`);
+  }
+  function paste(){
+    const ed = ED; let clip = null;
+    try { clip = JSON.parse(localStorage.getItem('d37_s3_clip') || 'null'); } catch (e) {}
+    if (!Array.isArray(clip?.list) || !clip.list.length) { msg('Буфер пуст — сначала Ctrl+C', false); return; }
+    pushHist();
+    const map = new Map(), made = [], off = (ed.G.snap || 1) * 2;
+    for (const d of clip.list.slice(0, 3000)) {
+      if (!d || !ed.SC.DEF[d.cls]) continue;
+      const props = { ...d }; if (Array.isArray(props.pos)) props.pos = [props.pos[0] + off, props.pos[1], props.pos[2]];
+      let o; try { o = ed.SC.add(d.cls, props, d.parent && map.get(d.parent) ? map.get(d.parent) : null); } catch (e) { continue; }
+      map.set(d.id, o); if (clip.roots?.includes(d.id)) made.push(o);
+    }
+    renderTree(); setSel(made); msg(`📋 Вставлено: ${made.length}`);
+  }
+  function groupSel(){
+    const ed = ED, top = selTop(); if (!top.length) return;
+    pushHist();
+    const par = top[0].parent ? ed.SC.get(top[0].parent) : null, m = ed.SC.add('Model', { name: 'Модель' }, par);
+    for (const o of top) ed.SC.reparent(o, m);
+    renderTree(); select(m); msg('📦 Сгруппировано (Ctrl+U — разгруппировать)');
+  }
+  function ungroupSel(){
+    const ed = ED, m = ed.sel; if (m?.cls !== 'Model') return;
+    pushHist();
+    const par = m.parent ? ed.SC.get(m.parent) : null, kids = ed.SC.children(m);
+    for (const k of kids) ed.SC.reparent(k, par);
+    ed.SC.remove(m);
+    renderTree(); setSel(kids.filter(k => k.cls !== 'Script'));
+  }
 
   // ═══ Ввод в редакторе ═══
   function wire(){
@@ -404,6 +468,12 @@ Players.PlayerAdded.Connect(player => {
       if (ctrl && k === 'KeyZ') { e.preventDefault(); undo(e.shiftKey); return; }
       if (ctrl && k === 'KeyY') { e.preventDefault(); undo(true); return; }
       if (ctrl && k === 'KeyD') { e.preventDefault(); duplicate(); return; }
+      if (ctrl && k === 'KeyC') { e.preventDefault(); copySel(false); return; }
+      if (ctrl && k === 'KeyX') { e.preventDefault(); copySel(true); return; }
+      if (ctrl && k === 'KeyV') { e.preventDefault(); paste(); return; }
+      if (ctrl && k === 'KeyG') { e.preventDefault(); if (e.shiftKey) ungroupSel(); else groupSel(); return; }
+      if (ctrl && k === 'KeyU') { e.preventDefault(); ungroupSel(); return; }
+      if (ctrl && k === 'KeyA') { e.preventDefault(); setSel(ed.SC.children(null).filter(o => o.cls !== 'Script' && !o.locked)); return; }
       if (ctrl && k === 'KeyS') { e.preventDefault(); save(); return; }
       if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); remove(); return; }
       if (k === 'Digit1') setTool('select'); else if (k === 'Digit2') setTool('move'); else if (k === 'Digit3') setTool('scale'); else if (k === 'Digit4') setTool('rotate');
@@ -432,9 +502,9 @@ Players.PlayerAdded.Connect(player => {
       const ray = rayAt(e.clientX, e.clientY);
       if (ed.panel === 'terrain' && ed.TR.enabled) { p.mode = 'brush'; ed.brushOn = true; ed.brushStart = true; return; }
       if (ed.G.down(ray)) { p.mode = 'gizmo'; pushHist(); return; }
-      const hit = ed.SC.pick(ray);
-      p.hit = hit;
-      p.mode = hit && hit.obj === ed.sel && ed.tool === 'move' && ed.sel.cls !== 'Model' ? 'dragPart' : e.pointerType === 'touch' ? 'look' : 'click';
+      const hit = pickAt(ray, e.altKey);
+      p.hit = hit; p.add = e.ctrlKey || e.shiftKey || e.metaKey;
+      p.mode = hit && hit.obj === ed.sel && ed.selSet.size <= 1 && !p.add && ed.tool === 'move' && ed.sel.cls !== 'Model' ? 'dragPart' : e.pointerType === 'touch' ? 'look' : 'click';
     });
     canvas.addEventListener('pointermove', e => {
       const p = ptrs.get(e.pointerId);
@@ -463,7 +533,7 @@ Players.PlayerAdded.Connect(player => {
       if (p.mode === 'gizmo') { if (!ed.G.up()) ed.hist.pop(); renderProps(); updateGizmo(); return; }
       if (p.mode === 'brush') { ed.brushOn = false; markDirty(); return; }
       if (p.mode === 'dragPart') { if (p.moved) { renderProps(); updateGizmo(); } else select(p.hit.obj); return; }
-      if ((p.mode === 'click' || (p.mode === 'look' && p.type === 'touch')) && !p.moved && e.type === 'pointerup') { select(p.hit ? p.hit.obj : null); renderTree(); }
+      if ((p.mode === 'click' || (p.mode === 'look' && p.type === 'touch')) && !p.moved && e.type === 'pointerup') { if (p.hit || !p.add) select(p.hit ? p.hit.obj : null, p.add); renderTree(); }
     };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('wheel', e => { if (ed.playing) return; e.preventDefault(); if (ed.panel === 'terrain' && e.shiftKey) { ed.brush.r = Math.max(2, Math.min(30, ed.brush.r * (e.deltaY > 0 ? .9 : 1.1))); renderProps(); return; } flyMove(0, 0, e.deltaY > 0 ? -2.5 : 2.5); }, { passive: false });
@@ -488,8 +558,27 @@ Players.PlayerAdded.Connect(player => {
       updateGizmo();
     }
   }
+  // сдвиг и поворот вокруг вертикали — для группы выбранных
+  function moveBy(o, d){
+    const SC = ED.SC;
+    if (o.cls === 'Model') { const pv = SC.pivot(o); SC.set(o, 'pos', [pv[0] + d[0], pv[1] + d[1], pv[2] + d[2]]); }
+    else if (o.pos) SC.set(o, 'pos', [o.pos[0] + d[0], o.pos[1] + d[1], o.pos[2] + d[2]].map(v => +v.toFixed(4)));
+  }
+  function turnAround(o, c, dy){
+    const SC = ED.SC, a = dy * DEG, ca = Math.cos(a), sa = Math.sin(a);
+    const turn = p => [c[0] + (p[0] - c[0]) * ca + (p[2] - c[2]) * sa, p[1], c[2] - (p[0] - c[0]) * sa + (p[2] - c[2]) * ca];
+    if (o.cls === 'Model') { const pv = SC.pivot(o), np = turn(pv); SC.set(o, 'rot', [0, (((o._yaw || 0) + dy) % 360 + 360) % 360, 0]); const pv2 = SC.pivot(o); SC.set(o, 'pos', [pv2[0] + np[0] - pv[0], pv2[1], pv2[2] + np[2] - pv[2]]); }
+    else if (o.pos) { SC.set(o, 'pos', turn(o.pos).map(v => +v.toFixed(4))); if (o.rot) SC.set(o, 'rot', [o.rot[0], ((o.rot[1] + dy) % 360 + 360) % 360, o.rot[2]]); }
+  }
   function applyTransform(r){
     const ed = ED, o = ed.sel, SC = ed.SC;
+    if (ed.G.target?.group) {
+      const t = ed.G.target, list = selTop();
+      if (r.pos) { const d = [0, 1, 2].map(i => r.pos[i] - t.pos[i]); if (d.some(v => Math.abs(v) > 1e-6)) { for (const x of list) moveBy(x, d); t.pos = r.pos.slice(); t.center = t.center.map((v, i) => v + d[i]); } }
+      if (r.rot) { let dy = r.rot[1] - (t.rot[1] || 0); dy = ((dy % 360) + 540) % 360 - 180; if (Math.abs(dy) > 1e-6) { for (const x of list) turnAround(x, t.center, dy); t.rot = r.rot.slice(); } }
+      const box = new ed.R.T.Box3(); for (const x of list) box.union(SC.box(x)); if (!box.isEmpty()) ed.boxHelper.box.copy(box);
+      ed.G.update(); throttleProps(); return;
+    }
     if (o.cls === 'Model') { if (r.pos) { const pv = SC.pivot(o), c = ed.G.target.center; SC.set(o, 'pos', [pv[0] + r.pos[0] - ed.G.target.pos[0], pv[1] + r.pos[1] - ed.G.target.pos[1], pv[2] + r.pos[2] - ed.G.target.pos[2]]); ed.G.target.pos = r.pos; ed.G.target.center = [c[0] + r.pos[0] - ed.G.target.pos[0], c[1], c[2]]; }
       if (r.rot) SC.set(o, 'rot', r.rot); }
     else {
@@ -788,14 +877,15 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'wasm') pickWasm();
     else if (a === 'compile') compileScript();
     else if (a.startsWith('msize:')) { const o = ed.sel, md = o && window.D37E.models.cached(o.model); if (md) { pushHist(); ed.SC.set(o, 'size', a === 'msize:1' ? md.size.slice() : o.size.map(v => +(v * 2).toFixed(3))); updateGizmo(); renderProps(); } }
+    else if (a === 'group') groupSel(); else if (a === 'ungroup') ungroupSel();
     else if (a === 'dup') duplicate(); else if (a === 'del') remove(); else if (a === 'focus') focusSel();
     else if (a === 'terrain:gen') { if (!confirm('Создать новые холмы? Текущий ландшафт пропадёт.')) return; generateHills(ed.TR, Math.random() * 1e9 | 0); markDirty(); }
     else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, 1, 0, 0); markDirty(); }
     else if (a.startsWith('time:')) { ed.R.setLighting({ time: +a.slice(5) }); renderProps(); markDirty(); }
     else if (a.startsWith('btool:')) { ed.brush.tool = a.slice(6); renderProps(); }
     else if (a.startsWith('bch:')) { ed.brush.tool = 'paint'; ed.brush.ch = +a.slice(4); renderProps(); }
-    else if (a.startsWith('color:')) { if (ed.sel) { pushHist(); ed.SC.set(ed.sel, 'color', a.slice(6)); renderProps(); } }
-    else if (a.startsWith('mat:')) { if (ed.sel) { pushHist(); ed.SC.set(ed.sel, 'mat', a.slice(4)); renderProps(); } }
+    else if (a.startsWith('color:')) { const L = selList().filter(o => o.color !== undefined); if (L.length) { pushHist(); for (const o of L) ed.SC.set(o, 'color', a.slice(6)); renderProps(); } }
+    else if (a.startsWith('mat:')) { const L = selList().filter(o => o.mat !== undefined); if (L.length) { pushHist(); for (const o of L) ed.SC.set(o, 'mat', a.slice(4)); renderProps(); } }
   }
   function setPanel(p){
     const ed = ED; ed.panel = p;
@@ -885,12 +975,15 @@ Players.PlayerAdded.Connect(player => {
   function renderTree(){
     const ed = ED, SC = ed.SC, tree = ed.q('.s3-tree');
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
-    const walk = (list, depth) => { for (const o of list) { rows.push(`<div class="s3-row${o === ed.sel ? ' sel' : ''}" data-id="${o.id}" draggable="true" style="padding-left:${8 + depth * 14}px">${ICON(o)} ${esc(o.name)}</div>`); walk(SC.children(o), depth + 1); } };
+    const find = (ed.q('.s3-find')?.value || '').trim().toLowerCase(), show = find ? new Set() : null;
+    if (show) for (const o of SC.all()) if (o.name.toLowerCase().includes(find)) for (let p = o; p; p = SC.get(p.parent)) show.add(p);
+    const walk = (list, depth) => { for (const o of list) { if (show && !show.has(o)) continue; rows.push(`<div class="s3-row${ed.selSet.has(o) ? ' sel' : ''}" data-id="${o.id}" draggable="true" style="padding-left:${8 + depth * 14}px">${ICON(o)} ${esc(o.name)}${o.locked ? ' 🔒' : ''}</div>`); walk(SC.children(o), depth + 1); } };
     walk(SC.children(null), 1);
     tree.innerHTML = rows.join('');
     if (!tree.dataset.wired) {
       tree.dataset.wired = 1;
-      tree.addEventListener('click', e => { const r = e.target.closest('.s3-row'); if (!r) return; select(r.dataset.id ? ED.SC.get(r.dataset.id) : null); });
+      tree.addEventListener('click', e => { const r = e.target.closest('.s3-row'); if (!r) return; select(r.dataset.id ? ED.SC.get(r.dataset.id) : null, e.ctrlKey || e.shiftKey || e.metaKey); });
+      ED.q('.s3-find').addEventListener('input', () => renderTree());
       tree.addEventListener('dblclick', e => { const r = e.target.closest('.s3-row'); const o = r?.dataset.id && ED.SC.get(r.dataset.id); if (!o) return; const n = prompt('Имя:', o.name); if (n && n.trim()) { pushHist(); o.name = n.trim().slice(0, 40); markDirty(); renderTree(); renderProps(); } });
       tree.addEventListener('dragstart', e => { const r = e.target.closest('.s3-row'); if (r?.dataset.id) e.dataTransfer.setData('text/plain', r.dataset.id); });
       tree.addEventListener('dragover', e => { if (e.target.closest('.s3-row')) e.preventDefault(); });
@@ -904,7 +997,7 @@ Players.PlayerAdded.Connect(player => {
       });
     }
   }
-  function highlightTree(){ const ed = ED; ed.q('.s3-tree').querySelectorAll('.s3-row').forEach(r => r.classList.toggle('sel', !!ed.sel && r.dataset.id === ed.sel.id)); }
+  function highlightTree(){ const ed = ED, ids = new Set(selList().map(o => o.id)); ed.q('.s3-tree').querySelectorAll('.s3-row').forEach(r => r.classList.toggle('sel', ids.has(r.dataset.id))); }
 
   // ═══ Панель справа: свойства / земля / свет ═══
   function renderProps(){
@@ -930,6 +1023,15 @@ Players.PlayerAdded.Connect(player => {
         <label class="s3-lbl">Туман: видно на <b>${L.fogEnd | 0}</b><input type="range" min="40" max="800" step="10" value="${L.fogEnd}" data-p="l:fogEnd"></label>
         <label class="s3-chk"><input type="checkbox" data-p="l:shadows"${L.shadows !== false ? ' checked' : ''}> Тени</label>
         <p class="s3-note">Ночью включай 💡 Свет (лампы) — они светятся.</p>`;
+    } else if (o && ed.selSet.size > 1) {
+      const list = selList(), tinted = list.filter(x => x.color !== undefined), matd = list.filter(x => x.mat !== undefined), has = k => list.filter(x => x[k] !== undefined);
+      const allOn = k => has(k).length && has(k).every(x => x[k] !== false);
+      let h = `<p class="s3-note">Выбрано: <b>${list.length}</b>. Стрелки двигают и крутят всё вместе. Ctrl + клик — добавить или убрать.</p>`;
+      if (tinted.length) h += `<div class="s3-lbl">Цвет (${tinted.length})</div><div class="s3-pal">${COLORS.map(c => `<button type="button" data-a="color:${c}" style="background:${c}" title="${c}"></button>`).join('')}</div>`;
+      if (matd.length) h += `<div class="s3-lbl">Материал (${matd.length})</div><div class="s3-mats">${SC.MATS.map(([k, n, i]) => `<button type="button" data-a="mat:${k}" title="${n}">${i}<small>${n}</small></button>`).join('')}</div>`;
+      for (const [k, n] of [['anchored', 'Закреплены'], ['collide', 'Сталкиваются'], ['shadow', 'Тень']]) if (has(k).length) h += `<label class="s3-chk"><input type="checkbox" data-p="m:${k}"${allOn(k) ? ' checked' : ''}> ${n}</label>`;
+      h += `<div class="s3-grid3"><button type="button" data-a="group">📦 Группа</button><button type="button" data-a="dup">⧉ Копия</button><button type="button" data-a="del" class="warn">🗑 Удалить</button></div>`;
+      P.innerHTML = h;
     } else if (!o) {
       P.innerHTML = `<p class="s3-note">Ничего не выбрано. Нажми на деталь в мире или в Проводнике.<br><br>➕ <b>Деталь</b> — блок, шар, цилиндр, клин.<br>🌳 <b>Предметы</b> — дерево, фонарь, скамейка…<br>📜 <b>Скрипт</b> — оживить деталь.<br>▶ <b>Играть</b> — пройтись по миру.</p>`;
     } else {
@@ -971,6 +1073,8 @@ Players.PlayerAdded.Connect(player => {
         h += `<label class="s3-lbl">Язык<select data-p="lang">${Object.values(window.D37E.langs).map(l => `<option value="${l.id}"${l.id === langOf(o).id ? ' selected' : ''}>${l.icon} ${esc(l.label)}</option>`).join('')}</select></label>`;
         h += `<label class="s3-chk"><input type="checkbox" data-p="enabled"${o.enabled !== false ? ' checked' : ''}> Включён</label><p class="s3-note">Код — внизу во вкладке «📜 Скрипт». Скрипт работает, когда нажмёшь ▶ Играть.</p>`;
       }
+      if (o.cls !== 'Script') h += `<label class="s3-chk"><input type="checkbox" data-p="locked"${o.locked ? ' checked' : ''}> 🔒 Заблокирован — не выбирается кликом в мире</label>`;
+      if (o.cls === 'Model') h += `<button type="button" data-a="ungroup">📤 Разгруппировать (Ctrl+U)</button>`;
       h += `<div class="s3-grid3"><button type="button" data-a="dup">⧉ Копия</button><button type="button" data-a="focus">🎯 К нему</button><button type="button" data-a="del" class="warn">🗑 Удалить</button></div>`;
       P.innerHTML = h;
     }
@@ -986,6 +1090,7 @@ Players.PlayerAdded.Connect(player => {
         if (key === 't:water') { ed2.TR.setWater(val); markDirty(); return; }
         if (key === 't:level') { ed2.TR.setWater(ed2.TR.water.on, val); const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(1); markDirty(); return; }
         if (!o2) return;
+        if (key.startsWith('m:')) { const k = key.slice(2); pushHist(); for (const x of selList()) if (x[k] !== undefined) SC2.set(x, k, val); return; }
         if (key === 'lang') { setLang(o2, val); return; }
         if (!commit && (el.type === 'text' || el.type === 'number')) return;   // текст и числа — по Enter/уходу
         if (!ed2.histOpen) { pushHist(); ed2.histOpen = true; setTimeout(() => { if (ED) ED.histOpen = false; }, 600); }
@@ -995,7 +1100,7 @@ Players.PlayerAdded.Connect(player => {
         if (el.type === 'range') { const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(key === 'alpha' ? 2 : 1); }
         updateGizmo();
         if (key === 'shape' || key === 'kind' || key === 'enabled') renderProps();
-        if (key === 'kind') renderTree();
+        if (key === 'kind' || key === 'locked') renderTree();
       };
       P.addEventListener('input', e => onIn(e, false));
       P.addEventListener('change', e => onIn(e, true));

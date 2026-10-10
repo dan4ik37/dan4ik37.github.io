@@ -3181,6 +3181,8 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-row:hover{background:rgba(255,255,255,.06)}
 .s3-row.sel{background:rgba(37,99,235,.35);border-left-color:#60a5fa}
 .s3-root{font-weight:700;color:#9fc4ff}
+.s3-ph{display:flex;align-items:center;gap:6px}
+.s3 .s3-find{flex:1;min-width:0;padding:3px 7px;font-size:12px;border-radius:6px}
 .s3-view{position:relative;min-width:0;min-height:0;overflow:hidden;background:#9fd6ff}
 .s3-gl{display:block;width:100%;height:100%;touch-action:none;cursor:default}
 .s3-hint,.s3-msg{position:absolute;left:50%;transform:translateX(-50%);z-index:3;padding:6px 12px;border-radius:10px;background:rgba(12,10,24,.72);color:#fff;font-size:12.5px;font-weight:600;text-align:center;max-width:min(92%,640px);pointer-events:none}
