@@ -29,6 +29,7 @@ GAMES = [
     ('nardy', '🎯', 'Нарды', '#8b1d2c'),
     ('arena', '🔫', 'Арена', '#f97316'),
     ('chess', '♟️', 'Шахматы', '#94a3b8'),
+    ('blocks', 'draw:blocks', 'Блоки', '#3b82f6'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
     ('games', '🎮', 'Игры онлайн', '#ff2d55'),
@@ -36,6 +37,28 @@ GAMES = [
 
 def hex2rgb(h):
     h = h.lstrip('#'); return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+# «Блоки»: мини-поле с цветными кубиками вместо эмодзи
+def draw_blocks():
+    cols = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7', '#ec4899']
+    pic = ['..2.6', '.1126', '00.66', '3.444', '33.47', '..5.7']
+    cs, pad = 66, 14
+    im = Image.new('RGBA', (cs * 5 + pad * 2, cs * 6 + pad * 2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, im.width - 1, im.height - 1), 26, fill=(20, 24, 56, 255))
+    for r, row in enumerate(pic):
+        for c, ch in enumerate(row):
+            x, y = pad + c * cs, pad + r * cs
+            if ch == '.':
+                d.rounded_rectangle((x + 3, y + 3, x + cs - 3, y + cs - 3), 10, fill=(32, 38, 79, 255))
+                continue
+            base = hex2rgb(cols[int(ch)])
+            d.rounded_rectangle((x + 3, y + 3, x + cs - 3, y + cs - 3), 12, fill=base)
+            d.rounded_rectangle((x + 3, y + 3, x + cs - 3, y + cs // 2), 12, fill=tuple(min(255, int(v * .55 + 115)) for v in base))
+            d.rounded_rectangle((x + 3, y + cs // 2 - 6, x + cs - 3, y + cs - 3), 12, fill=base)
+            d.rounded_rectangle((x + 3, y + cs - 16, x + cs - 3, y + cs - 3), 10, fill=tuple(int(v * .72) for v in base))
+            d.rounded_rectangle((x + 18, y + 16, x + cs - 18, y + cs - 22), 8, fill=tuple(min(255, int(v * .8 + 60)) for v in base))
+    return im
 
 W, H = 1200, 630
 for gid, ic, title, color in GAMES:
@@ -48,11 +71,16 @@ for gid, ic, title, color in GAMES:
     img = glow.filter(ImageFilter.GaussianBlur(140))
     d = ImageDraw.Draw(img)
     # эмодзи крупно справа
-    em = Image.new('RGBA', (700, 700), (0, 0, 0, 0))
-    ImageDraw.Draw(em).text((120, 120), ic, font=emoji, embedded_color=True)
-    em = em.crop(em.getbbox()) if em.getbbox() else em
-    em.thumbnail((380, 380), Image.LANCZOS)
-    img.paste(em, (950 - em.width // 2, 315 - em.height // 2), em)
+    if ic == 'draw:blocks':
+        em = draw_blocks()
+        em.thumbnail((370, 370), Image.LANCZOS)
+    else:
+        em = Image.new('RGBA', (700, 700), (0, 0, 0, 0))
+        ImageDraw.Draw(em).text((120, 120), ic, font=emoji, embedded_color=True)
+        em = em.crop(em.getbbox()) if em.getbbox() else em
+        em.thumbnail((380, 380), Image.LANCZOS)
+    cx = 990 if ic.startswith('draw:') else 950
+    img.paste(em, (cx - em.width // 2, 315 - em.height // 2), em)
     d.text((80, 70), 'DAN4IK', font=bold(44), fill=(240, 240, 248))
     d.text((80 + d.textlength('DAN4IK', font=bold(44)), 70), '37', font=bold(44), fill=(255, 45, 85))
     size = 96

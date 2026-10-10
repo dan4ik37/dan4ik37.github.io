@@ -15,7 +15,7 @@
 ## Ожидает запуска владельцем (обновлять этот список!)
 1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
    и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_* (функции целиком из
+2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks / blocks_duel (функции целиком из
    games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
@@ -350,6 +350,13 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   (начальная, Kiwipete, №3, №4 — числа сошлись). Компьютер: постепенное углубление + альфа-бета + лимит позиций по уровню
   (Мастер — глубина 4, до ~0,6 с), штраф за повтор позиции. Фигуры — свои SVG (PATHS): символ ♟ в Windows — цветной эмодзи.
   Онлайн — стол table.js на 2 (хозяин белыми и проверяет ходы). Ключи: chess_easy / chess_normal / chess_hard / chess_online.
+- «Блоки» (#/games/blocks, js/games/blocks.js) — как Block Blast: поле 8×8, 3 фигуры (DEFS, 37 штук с весами), canvas.
+  Перетаскивание (палец — фигура поднята над пальцем) или «нажми фигуру → нажми клетку». Очки: клетка +1, линии 40·L·(L+1),
+  × комбо (линии хотя бы раз за 3 хода, множитель до ×5), чистое поле +300. Одиночная партия — localStorage d37_blocks_save.
+  Не помещается → раз за игру новые фигуры за рекламу / 30 монет (rescue). Монеты: счёт/50, до 150 (RUN_CAP и coin_run_cap).
+  Соревнование — versus.js, без «подсказки» в раздаче (иначе фигуры у соперников разойдутся). Победа (XP) — от 2000 очков.
+  Движок — GAME_IMPL.blocks._test; бот с планом на 3 фигуры живёт 600+ ходов, жадный — ~35 (сложность нормальная).
+  Ключи: blocks / blocks_duel. Превью — своя картинка в _make-cards.py ('draw:blocks').
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —

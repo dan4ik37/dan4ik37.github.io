@@ -2712,3 +2712,21 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .ch-svg.b .ch-dt{stroke:#e8e8e8}
 .ch-svg.mini{width:16px;height:16px;margin-right:-3px}
 .ch-promo button .ch-svg{width:80%;height:80%}
+
+/* ── «Блоки» (js/games/blocks.js) ── */
+.bl{display:flex;flex-direction:column;align-items:center}
+.bl .ct-top{width:min(100%,440px);margin-bottom:.4rem}
+.bl-combo{color:#facc15;font-weight:800}
+.bl-wrap{position:relative;width:min(100%,440px)}
+.bl-cv{display:block;width:100%;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:pointer}
+.bl-over{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;padding:1rem;text-align:center;background:rgba(10,8,24,.84);border-radius:14px}
+.bl-over[hidden]{display:none}
+.bl-t{font-size:1.2rem;font-weight:900}
+.bl-big{font-size:2.2rem;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.bl-s{font-size:.78rem;color:var(--muted);max-width:320px;line-height:1.45}
+.bl-s b{color:var(--text)}
+.bl-col{display:flex;flex-direction:column;gap:.45rem;width:min(100%,290px)}
+.bl-col .ct-start{align-self:stretch}
+.bl-col button:disabled{opacity:.45;cursor:default}
+.bl-coins{font-size:.85rem;font-weight:700}
+.bl-note{text-align:center;margin-top:.5rem;max-width:440px}
