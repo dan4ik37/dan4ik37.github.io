@@ -165,6 +165,7 @@ function addPeer(sim, id, opts = {}){
   sim.peers.set(id, P); sim.presence.push({ id, t: sim.t }); sim.presenceChanged();
   const step = () => {
     if (P.left) return;
+    if (P.frozen) { sim.at(sim.t + 1000 / 60, step); return; }   // вкладка «спит»: шагов нет, пакеты приходят
     const a = sim.t / 1000 + P.k;
     P.S.setMyCharacter({ x: Math.cos(a) * 3, y: 0, z: Math.sin(a) * 3, yaw: a, vx: -Math.sin(a) * 3, vy: 0, vz: Math.cos(a) * 3, moving: true, speed: 3 });
     P.S.tick(1 / 60);
@@ -268,6 +269,29 @@ const leave = (sim, P) => { P.left = true; P.S.close(); sim.presence = sim.prese
   ok(G.readyAt > 0 && c.ok, 'гость с загруженным миром: после «sync» копия = миру хозяина', c);
   ok(!G.scene.get('coin1') && G.scene.get('w1')?.touch === 'speed' && G.scene.get('plat').color === '#ff00ff' && G.scene.get('npc1').pos[2] === 7, 'взятая монетка убрана, новая деталь пришла, платформа и NPC — как у хозяина');
   ok(G.scene.get('scr2') && !G.scene.get('scr1'), 'скрипты из своей загрузки остались (для смены хозяина), а скрипт в убранной монетке — ушёл с ней');
+}
+
+// ═══ 6. Хозяин «уснул» (вкладка скрыта) дольше 5 с и проснулся: хозяин один — новый, прежний стал гостем, копии сошлись ═══
+{
+  const sim = makeSim(17);
+  const H = addPeer(sim, 'H', { world: true });
+  sim.run(300); const A = addPeer(sim, 'A');
+  sim.run(600); const B = addPeer(sim, 'B');
+  sim.run(6000);
+  ok(H.S.isHost && A.S.hostId === 'H' && B.S.hostId === 'H', 'до сна: хозяин H');
+  H.frozen = true;
+  sim.run(15000);
+  ok(A.S.isHost && B.S.hostId === 'A', 'H молчит — хозяин A', [A.S.isHost, B.S.hostId]);
+  H.frozen = false;
+  // проснулся: пока не уступил — мир у него свой; новый хозяин тем временем двигает платформу
+  A.scene.set(A.scene.get('plat'), 'pos', [9, 4, -9]); A.S.markDirty(A.scene.get('plat'));
+  sim.run(30000);
+  const hosts = [H, A, B].filter(P => P.S.isHost).map(P => P.id);
+  ok(hosts.length === 1 && hosts[0] === 'A' && H.S.hostId === 'A', 'проснулся: хозяин один (A), H — его гость', [hosts, H.S.hostId]);
+  ok(H.hostLog.some(e => e[1] === false), 'H уступил (onHost false — студия остановит у него скрипты)');
+  const c = compareScenes(A.scene, H.scene);
+  ok(c.ok && H.scene.get('plat').pos[0] === 9, 'копия у H — как мир A', c);
+  ok(A.S.players().length === 3 && B.S.players().length === 3, 'игроки: H, A, B', A.S.players().map(p => p.id));
 }
 
 console.log(`\n${pass} ок, ${fail} ошибок`);

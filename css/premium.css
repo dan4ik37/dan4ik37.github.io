@@ -3297,6 +3297,7 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-lb th:first-child,.s3-lb td:first-child{padding-left:0;text-align:left}
 .s3-lb td:first-child{max-width:130px;overflow:hidden;text-overflow:ellipsis}
 .s3-lb tr.me td{color:#93c5fd}
+@media (max-width:760px){.s3-mp .s3-mps{display:none}.s3-view:has(.s3-mp) .s3-labels{top:96px}}
 @media (max-width:760px){
   .s3-top button span{display:none}
   .s3-name{width:96px}

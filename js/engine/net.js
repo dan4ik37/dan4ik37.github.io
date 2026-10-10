@@ -432,7 +432,12 @@
       try { if (r.u8() !== VER) return; fl = r.u8(); ep = r.u8(); seq = r.u16(); ack = r.u16(); bits = r.u32(); time = r.u32(); echo = r.u16(); hold = r.u16(); } catch (e) { return; }
       const fromHost = !!(fl & 1);
       if (fromHost) {
-        if (S.isHost ? !yieldTo(from, ep) : !acceptHost(from, ep)) return;
+        if (S.isHost ? !yieldTo(from, ep) : !acceptHost(from, ep)) {
+          // прежний хозяин ожил (вкладка «спала» дольше HOST_TIMEOUT, хозяин уже мы): шлём ему свои пакеты — он увидит эпоху
+          // новее и уступит, когда его гости замолчат (иначе хозяев так и осталось бы двое). Кандидатом он не становится (dead)
+          if (S.isHost && dead.has(from) && !links.has(from) && members.some(m => m.id === from)) addGuest(from);
+          return;
+        }
       } else {
         if (!S.isHost || !members.some(m => m.id === from)) return;
         if (!links.has(from)) addGuest(from);
