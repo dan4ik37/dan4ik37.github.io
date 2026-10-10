@@ -153,7 +153,7 @@
       ch: ph.character({ x: o.x || 0, y: o.y, z: o.z || 0, r: o.r || .42, h: o.h || 2.1, step: o.step ?? .62 }),
       yaw: o.yaw || 0, mode: 'move', stamina: 100, exhausted: false, crouch: false, crouchW: 0,
       running: false, moving: false, speed: 0, climbing: false, now: 0,
-      roll: null, pk: null, hang: null, ladder: null, seat: null,
+      roll: null, pk: null, hang: null, ladder: null, seat: null, stepOff: 0, _lastY: 0, _wasG: true,
       _lastGround: 0, _buf: 0, _jumped: false, _regenAt: 0, _stepT: 0, _drainAt: 0, _sway: 0, _toastAt: 0, _sprint: false, _climbPh: 0,
     };
     const ch = P.ch;
@@ -197,6 +197,12 @@
         default: tickMove(dt, C, w, cam);
       }
       stamTick(dt);
+      // плавно по ступенькам (как в Unity/Source): тело встаёт на ступеньку сразу, а картинка и камера догоняют за ~0,1 с —
+      // на лестницах и скатах крыш из коробок нет тряски. P.stepOff — сколько картинка ещё отстаёт (pose().y, камера)
+      const dy = ch.y - P._lastY;
+      if (P.mode === 'move' && ch.grounded && P._wasG && dy && Math.abs(dy) <= ch.step + .02) P.stepOff = Math.max(-1.2 * ch.step, Math.min(1.2 * ch.step, P.stepOff - dy));
+      P.stepOff *= Math.exp(-dt / .09); if (Math.abs(P.stepOff) < 1e-4) P.stepOff = 0;
+      P._lastY = ch.y; P._wasG = ch.grounded;
     };
 
     function tickMove(dt, C, w, cam){
@@ -477,6 +483,7 @@
       ch.vx = ch.vy = ch.vz = 0; ch.grounded = true; ch.h = P.standH;
       if (yaw != null) P.yaw = yaw;
       P.mode = 'move'; P.pk = P.hang = P.roll = P.seat = P.ladder = null; P.crouch = false; P.crouchW = 0;
+      P.stepOff = 0; P._lastY = ch.y; P._wasG = true;
       ph.triggers(ch);
     };
     P.push = (vx = 0, vy = 0, vz = 0) => {
@@ -486,7 +493,7 @@
     };
     // Для человечка (actors) и сети: поза одним объектом
     P.pose = () => ({
-      x: ch.x, y: ch.y, z: ch.z, yaw: P.yaw,
+      x: ch.x, y: ch.y + P.stepOff, z: ch.z, yaw: P.yaw,
       moving: P.mode === 'move' ? P.moving : P.climbing,
       speed: P.mode === 'move' ? P.speed : 0,
       air: P.mode === 'move' && !ch.grounded && ch.airT > .12,

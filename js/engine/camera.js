@@ -48,7 +48,7 @@
 
     rig.update = (dt, P, look, phys, C) => {
       F.t += dt;
-      const ch = P?.ch || P || { x: 0, y: 0, z: 0 }, isP = !!P?.ch, first = rig.mode === 'first';
+      const ch = P?.ch || P || { x: 0, y: 0, z: 0 }, isP = !!P?.ch, first = rig.mode === 'first', sy = isP ? P.stepOff || 0 : 0;   // sy — плавная ступенька
       // поворот: мышь/палец + правый стик
       if (look) {
         if (first) {
@@ -80,7 +80,7 @@
 
       if (!first) {
         const lift = rig.lift - (isP ? (P.crouchW || 0) * .6 : 0);
-        rig.tx = E.damp(rig.tx, ch.x, 12, dt); rig.ty = E.damp(rig.ty, ch.y + lift, 8, dt); rig.tz = E.damp(rig.tz, ch.z, 12, dt);
+        rig.tx = E.damp(rig.tx, ch.x, 12, dt); rig.ty = E.damp(rig.ty, ch.y + sy + lift, 8, dt); rig.tz = E.damp(rig.tz, ch.z, 12, dt);
         const cp = Math.cos(rig.pitch), dx = Math.sin(rig.yaw) * cp, dy = Math.sin(rig.pitch), dz = Math.cos(rig.yaw) * cp;
         let d = rig.dist;
         if (phys) {
@@ -98,7 +98,7 @@
       }
       // ── от 1-го лица: глаза = рост капсулы − 0,2 м (ниже, присев и в кувырке) ──
       const eye = (ch.h ?? 2.1) - .2 * U, rx = Math.cos(rig.yaw), rz = -Math.sin(rig.yaw);
-      camera.position.set(ch.x + rx * bobX, ch.y + eye + bobY + breath + F.dip, ch.z + rz * bobX);
+      camera.position.set(ch.x + rx * bobX, ch.y + sy + eye + bobY + breath + F.dip, ch.z + rz * bobX);
       rig.tx = ch.x; rig.ty = ch.y + rig.lift; rig.tz = ch.z;
       // кувырок: быстро вниз (группировка), плавнее обратно; вперёд — нырок и завал на плечо, вбок — крен, назад — вверх
       let flip = 0, shoulder = 0, rollYaw = 0;

@@ -396,6 +396,25 @@ function pk(boxes, opts = {}){
   ok(near(ph.groundAt(8, 0), 2, 1e-6) && near(ph.groundAt(8, 0, 2), 2.25, 1e-6), 'groundAt: точка и с радиусом');
 }
 
+// ═══ Плавно по ступенькам: тело — сразу, картинка — догоняет (скат крыши из коробок, лестница) ═══
+{
+  const ph = new E.Phys({ ground: 0 });
+  for (let i = 0; i < 12; i++) ph.addBox({ x: 0, y: (i + 1) * .3 / 2, z: 2 + i * .35, hx: 2, hy: (i + 1) * .3 / 2, hz: .175 });   // ступени по 0,3
+  const P = E.player(ph, { x: 0, z: 0 });
+  const { C, hold } = mkC();
+  let maxRaw = 0, maxVis = 0, prevRaw = P.ch.y, prevVis = P.pose().y;
+  hold('KeyW'); run(P, C, 1.4, () => {
+    const raw = P.ch.y, vis = P.pose().y;
+    maxRaw = Math.max(maxRaw, Math.abs(raw - prevRaw)); maxVis = Math.max(maxVis, Math.abs(vis - prevVis));
+    prevRaw = raw; prevVis = vis;
+  });
+  hold('KeyW', false);
+  ok(maxRaw > .25 && maxVis < .12, 'ступеньки: тело прыгает на 0,3, картинка — плавно', [maxRaw, maxVis]);
+  run(P, C, .5);
+  ok(Math.abs(P.pose().y - P.ch.y) < .01, 'постоял — картинка догнала тело', P.stepOff);
+  P.place(0, 0, -5); ok(P.stepOff === 0, 'телепорт — без хвоста сглаживания');
+}
+
 // ═══ Скрипты (песочница): API как в Roblox, проверка без браузера ═══
 {
   globalThis.window = globalThis;

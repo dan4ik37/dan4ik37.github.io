@@ -151,7 +151,7 @@
         for (const [cx, cy, cz, bx, by, bz] of E.models.colliders(md)) {
           v.set(cx * k[0], cy * k[1] - h[1], cz * k[2]).applyMatrix4(m4);
           const hb = [bx * k[0], by * k[1], bz * k[2]];
-          const d2 = { part: obj.id, floor: 'concrete', cam: solid && Math.max(hb[0], hb[1], hb[2]) > 1.5 && obj.alpha < .6 };
+          const d2 = { part: obj.id, floor: 'concrete', cam: solid && hb[1] > .8 && obj.alpha < .6 };   // камеру держат только стены, не ступеньки крыши
           obj._cols.push(ph.addBox({ x: x + v.x, y: y + v.y, z: z + v.z, yaw, solid, tag: 'part', data: d2,
             hx: Math.abs(e[0]) * hb[0] + Math.abs(e[4]) * hb[1] + Math.abs(e[8]) * hb[2], hy: Math.abs(e[1]) * hb[0] + Math.abs(e[5]) * hb[1] + Math.abs(e[9]) * hb[2], hz: Math.abs(e[2]) * hb[0] + Math.abs(e[6]) * hb[1] + Math.abs(e[10]) * hb[2] }));
         }
