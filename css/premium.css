@@ -2423,3 +2423,14 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .hd-max{font-size:.72rem;font-weight:900;color:#4ade80}
 .hd-note{text-align:center}
 @media(max-width:420px){.hd-heroes{grid-template-columns:repeat(2,1fr)}.hd-title{font-size:1.25rem}.hd-head{flex-direction:column;text-align:center}}
+
+/* «Орда» вдвоём: ссылка в лобби, плашка «ты упал» */
+.hd-link{width:min(100%,440px);display:flex;gap:.4rem}
+.hd-link input{flex:1;min-width:0;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;padding:.55rem .7rem;font:600 .75rem 'Montserrat',sans-serif}
+.hd-link button{flex:none;border:none;border-radius:10px;padding:.5rem .8rem;font:800 .74rem 'Montserrat',sans-serif;cursor:pointer;background:var(--accent);color:#fff}
+.hd-dead{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:.6rem .9rem;border-radius:14px;background:rgba(12,8,20,.85);border:1px solid rgba(255,77,109,.5);color:#fff;font-size:.75rem;text-align:center;width:max-content;max-width:calc(100% - 24px)}
+.hd-dead[hidden]{display:none}
+.hd-dead b{font-size:.9rem}
+.hd-dead-btns{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center}
+.hd-dead-btns button{border:none;border-radius:10px;padding:.45rem .7rem;font:800 .72rem 'Montserrat',sans-serif;cursor:pointer;color:#1b1626;background:linear-gradient(135deg,#ffd166,#ff9f43)}
+.hd-dead-btns button:disabled{opacity:.45;cursor:default}

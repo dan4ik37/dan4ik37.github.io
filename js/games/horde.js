@@ -148,17 +148,21 @@
       en: [], pr: [], eb: [], gems: [], items: [], zones: [], waves: [], later: [], fx: [], nums: [],
       grid: new Map(), gridUsed: [], eid: 0, pid: 0, gemI: 0, kills: 0, coins: 0, level: 1, xp: 0, next: xpNeed(1), pend: 0,
       boss: null, banner: null, vacuum: 0, shake: 0, evI: 0, spawnT: .5, over: false, won: false, luck: 1,
-      viewW: VIEW, viewH: VIEW * 1.4, spawnR: 0, maxEnemies: o.low ? 170 : 260,
+      viewW: VIEW, viewH: VIEW * 1.4, spawnR: 0, maxEnemies: Math.round((o.low ? 170 : 260) * (o.coop ? 1.25 : 1)),
       players: [], me: 0, revived: false, duel: !!o.duel, numsOn: !o.low,
+      coop: !!o.coop, nMul: o.coop ? 1.6 : 1, hpMul: o.coop ? 1.35 : 1, fxLog: o.coop ? [] : null, pwVer: 0,
     };
     setView(G, G.viewW, G.viewH);
-    G.players.push(newPlayer(0, o.hero, o.up));
+    if (o.coop) {
+      for (let i = 0; i < 2; i++) G.players.push(newPlayer(i, o.heroes[i], o.ups[i]));
+      G.players[0].x = -36; G.players[1].x = 36;
+    } else G.players.push(newPlayer(0, o.hero, o.up));
     return G;
   }
   function setView(G, w, h){ G.viewW = w; G.viewH = h; G.spawnR = Math.hypot(w / 2, h / 2) + 50; }
   function newPlayer(idx, hero, up){
     const h = HEROES.find(x => x.id === hero) || HEROES[0];
-    const p = { idx, hero: h.id, hand: h.hand, x: 0, y: 0, r: 13, in: { x: 0, y: 0 }, fx: 1, fy: 0, hx: 1, inv: 0, dead: false, kills: 0, weapons: [], pass: {}, up: up || {}, hp: 0, maxHp: 0, moving: false };
+    const p = { idx, hero: h.id, hand: h.hand, look: null, nick: '', rez: 0, gone: false, x: 0, y: 0, r: 13, in: { x: 0, y: 0 }, fx: 1, fy: 0, hx: 1, inv: 0, dead: false, kills: 0, weapons: [], pass: {}, up: up || {}, hp: 0, maxHp: 0, moving: false };
     p.weapons.push(newWeapon(p, h.weapon));
     calcStats(p);
     p.hp = p.maxHp;
@@ -184,6 +188,7 @@
   function step(G){
     G.t += DT; G.tick++;
     for (const p of G.players) updPlayer(G, p);
+    if (G.coop) partnerRevive(G);
     director(G);
     updEnemies(G);
     gridBuild(G);
@@ -211,6 +216,18 @@
     if (p.regen && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.regen * DT);
   }
 
+  // Кооп: упавшего поднимает напарник — постоять рядом 2,5 с
+  function partnerRevive(G){
+    for (const p of G.players) {
+      if (!p.dead || p.gone) continue;
+      const q = G.players.find(x => x !== p && !x.dead);
+      if (q && (q.x - p.x) ** 2 + (q.y - p.y) ** 2 < 56 * 56) {
+        p.rez += DT;
+        if (p.rez >= 2.5) { p.dead = false; p.rez = 0; p.hp = Math.round(p.maxHp * .5); p.inv = 2; G.banner = { text: `✨ ${q.nick || 'Напарник'} поднял ${p.nick || 'напарника'}!`, t: 2.2 }; }
+      } else if (p.rez > 0) p.rez = Math.max(0, p.rez - DT * 2);
+    }
+  }
+
   // ── Кто и когда появляется ──
   function director(G){
     while (G.evI < EVENTS.length && G.t >= EVENTS[G.evI].t) event(G, EVENTS[G.evI++]);
@@ -218,7 +235,7 @@
     for (const x of WAVES) if (G.t >= x.t) w = x;
     if ((G.spawnT -= DT) > 0) return;
     G.spawnT = w.every;
-    const n = Math.min(w.n, w.max - G.en.length);
+    const n = Math.min(Math.ceil(w.n * G.nMul), Math.floor(w.max * G.nMul) - G.en.length);
     for (let i = 0; i < n; i++) { const s = spawnAround(G); spawnEnemy(G, pickW(G.rs, w.ty), s.x, s.y); }
   }
   function pickW(r, ty){
@@ -235,17 +252,17 @@
     if (ev.k === 'swarm') {
       const a = G.rs() * TAU, ca = Math.cos(a), sa = Math.sin(a);
       const cx = p.x - ca * G.spawnR, cy = p.y - sa * G.spawnR;
-      for (let i = 0; i < ev.n; i++) {
+      for (let i = 0; i < Math.round(ev.n * G.nMul); i++) {
         const off = (G.rs() - .5) * 280, back = G.rs() * 140;
         spawnEnemy(G, ev.ty, cx - sa * off - ca * back, cy + ca * off - sa * back, { swarm: true, vx: ca * 175, vy: sa * 175, life: 10 }, true);
       }
       G.banner = { text: '🦇 Летит стая!', t: 2 };
     } else if (ev.k === 'ring') {
-      const R = G.spawnR * .85;
-      for (let i = 0; i < ev.n; i++) spawnEnemy(G, ev.ty, p.x + Math.cos(i / ev.n * TAU) * R, p.y + Math.sin(i / ev.n * TAU) * R, null, true);
+      const R = G.spawnR * .85, n = Math.round(ev.n * G.nMul);
+      for (let i = 0; i < n; i++) spawnEnemy(G, ev.ty, p.x + Math.cos(i / n * TAU) * R, p.y + Math.sin(i / n * TAU) * R, null, true);
       G.banner = { text: '⭕ Тебя окружают!', t: 2 };
     } else if (ev.k === 'elite') {
-      for (let i = 0; i < ev.n; i++) { const s = spawnAround(G); spawnEnemy(G, ev.ty, s.x, s.y, { elite: true }, true); }
+      for (let i = 0; i < ev.n * (G.coop ? 2 : 1); i++) { const s = spawnAround(G); spawnEnemy(G, ev.ty, s.x, s.y, { elite: true }, true); }
       G.banner = { text: '👺 Демон! С него — сундук', t: 2.5 };
     } else if (ev.k === 'boss') {
       const s = spawnAround(G);
@@ -256,7 +273,7 @@
   function spawnEnemy(G, type, x, y, extra, force){
     if (!force && G.en.length >= G.maxEnemies) return null;
     const d = EN[type], t = G.t;
-    const hp = d.hp * (d.boss ? 1 + t / 600 : 1 + t / HPK);
+    const hp = d.hp * G.hpMul * (d.boss ? 1 + t / 600 : 1 + t / HPK);
     const e = { id: ++G.eid, ty: type, d, x, y, hp, max: hp, r: d.r, spd: d.spd * (1 + Math.min(.15, t / 4000)), dmg: d.dmg * (1 + t / 600),
       kx: 0, ky: 0, flash: 0, cd: null, shoot: 1.5 + G.rs() * 2, dead: false, elite: false, swarm: false, vx: 0, vy: 0, life: 0, slow: 0, face: 1, n: 0 };
     if (extra) Object.assign(e, extra);
@@ -669,7 +686,17 @@
       }
     }
   }
-  function fx(G, k, x, y, T, o){ if (G.fx.length < 150) G.fx.push(Object.assign({ k, x, y, t: T, T, dead: false }, o)); }
+  function fx(G, k, x, y, T, o){
+    if (G.fx.length < 150) G.fx.push(Object.assign({ k, x, y, t: T, T, dead: false }, o));
+    // кооп: напарнику — тот же эффект (кроме дымков: их много, а пользы мало)
+    if (G.fxLog && k !== 'puff' && G.fxLog.length < 80) {
+      const X = Math.round(x), Y = Math.round(y);
+      if (k === 'slash') G.fxLog.push([1, X, Y, Math.round(o.w), Math.round(o.h), o.dir * (o.red ? 2 : 1)]);
+      else if (k === 'zap' || k === 'boom') G.fxLog.push([k === 'zap' ? 2 : 3, X, Y, Math.round(o.R)]);
+      else if (k === 'text') G.fxLog.push([4, X, Y, o.text, o.color]);
+      else if (k === 'flash') G.fxLog.push([5, X, Y]);
+    }
+  }
   function updFx(G){
     for (const f of G.fx) if ((f.t -= DT) <= 0) f.dead = true;
     for (const n of G.nums) if ((n.t -= DT) <= 0) n.dead = true;
@@ -706,6 +733,7 @@
     calcStats(p);
     if (p.maxHp > before) p.hp += p.maxHp - before;
     G.luck = Math.max(...G.players.map(x => x.luck));
+    G.pwVer = (G.pwVer || 0) + 1;
   }
   function optInfo(p, o){
     if (o.k === 'evo') { const W = WEAPONS[o.id]; return { e: W.evoE, name: W.evoName, tag: '⭐ эволюция', text: `«${W.name}» становится намного сильнее`, evo: true }; }
@@ -836,7 +864,7 @@
     input.jx = m < 6 ? 0 : dx / R; input.jy = m < 6 ? 0 : dy / R;
   }
   function onUp(e){ if (e.pointerId !== input.id) return; input.on = false; input.id = null; input.jx = input.jy = 0; }
-  function onVis(){ if (document.hidden && mode === 'run') pause(); }
+  function onVis(){ if (document.hidden && mode === 'run' && !G?.coop) pause(); }
   function applyInput(){
     const p = G.players[G.me];
     let x = (input.keys.r ? 1 : 0) - (input.keys.l ? 1 : 0), y = (input.keys.d ? 1 : 0) - (input.keys.u ? 1 : 0);
@@ -854,18 +882,27 @@
     let dt = (now - last) / 1000;
     last = now;
     if (dt > .1) dt = .1;
+    if (G.viewOnly) {   // напарник в коопе: мира не считает
+      if (mode === 'run' || mode === 'choose') guestTick(dt);
+      draw(); coopDeadBar();
+      if (mode === 'run' || mode === 'choose') raf = requestAnimationFrame(frame);
+      return;
+    }
     if (mode === 'run') {
       acc += dt;
       let n = 0;
       while (acc >= DT && n < 6) {
         applyInput();
+        if (G.coop) coopHostBeforeStep();
         step(G);
         acc -= DT; n++;
+        if (G.coop) coopHostAfterStep();
         if (afterStep()) break;
       }
       if (n >= 6) acc = 0;
     }
     draw();
+    if (G.coop) coopDeadBar();
     if (mode === 'run') raf = requestAnimationFrame(frame);
   }
   function afterStep(){
@@ -875,6 +912,11 @@
     if (G.sfxChest) { G.sfxChest = false; api.sfx('win'); }
     if (G.sfxCoin) { G.sfxCoin = false; api.sfx('tick'); }
     if (hooks && G.t - lastProg >= 1) { lastProg = G.t; hooks.progress(score(G)); }
+    if (G.coop) {
+      if (G.over || G.players.every(x => x.dead)) { coopFinish(); return true; }
+      if (G.pend > 0) { coopLevel(); return true; }
+      return false;
+    }
     if (G.over) { finish(); return true; }
     if (p.dead) { death(); return true; }
     if (G.pend > 0) { levelUp(); return true; }
@@ -990,19 +1032,28 @@
     }
   }
   function drawPlayer(p){
-    if (p.dead) { drawSpr('🪦', 30, p.x, p.y); return; }
-    const X = ox + p.x * k, Y = oy + p.y * k;
+    const X = ox + p.x * k, Y = oy + p.y * k, pl = p.look || (p.idx === G.me ? look : null);
+    if (p.gone) return;
+    if (G.coop && p.idx !== G.me && p.nick) {
+      ctx.font = `800 ${Math.round(10 * dpr)}px Montserrat,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(p.nick, X, Y - 26 * k); ctx.fillStyle = '#7dd3fc'; ctx.fillText(p.nick, X, Y - 26 * k);
+    }
+    if (p.dead) {
+      drawSpr('🪦', 30, p.x, p.y);
+      if (G.coop && p.rez > 0) { ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 4 * dpr; ctx.beginPath(); ctx.arc(X, Y, 26 * k, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, p.rez / 2.5)); ctx.stroke(); }
+      return;
+    }
     // питомец бежит следом
-    const pet = look ? CH()?.petEmoji(look) : '';
+    const pet = pl && p.idx === G.me ? CH()?.petEmoji(pl) : '';
     if (pet && p.idx === G.me) {
       const tx = p.x - p.hx * 34, ty = p.y + 6 + Math.sin(G.t * 7) * 3;
       petX += (tx - petX) * .08; petY += (ty - petY) * .12;
       drawSpr(pet, 22, petX, petY);
     }
     if (p.inv > 0 && Math.floor(G.t * 16) % 2) ctx.globalAlpha = .45;
-    if (CH() && look) {
+    if (CH() && pl) {
       const S = 40 * k, sq = p.moving ? Math.sin(G.t * 18) * .04 : Math.sin(G.t * 3) * .015;
-      const sp = CH().sprite(look, S, { dir: p.hx, item: p.hand, noPet: true, t: G.t });
+      const sp = CH().sprite(pl, S, { dir: p.hx, item: p.hand, noPet: true, t: G.t });
       const w = sp.c.width * (1 + sq), h = sp.c.height * (1 - sq);
       ctx.drawImage(sp.c, X - sp.ax * (1 + sq), Y + S * .5 - sp.ay * (1 - sq), w, h);
     } else drawSpr('🧙', 34, p.x, p.y);
@@ -1109,7 +1160,7 @@
         <div class="hd-sub">Продержись 10 минут против орды монстров. Оружие бьёт само — ты выбираешь улучшения.</div></div></div>
       <div class="hd-label">Герой</div>
       <div class="hd-heroes">${HEROES.map(h => heroCard(h, 'hero')).join('')}</div>
-      <div class="ct-actions"><button type="button" class="ct-start" data-act="play">▶ Играть</button><button type="button" class="ct-duel-btn" data-act="duel">⚔️ С другом</button></div>
+      <div class="ct-actions"><button type="button" class="ct-start" data-act="play">▶ Играть</button><button type="button" class="ct-duel-btn" data-act="coop">🤝 Вместе</button><button type="button" class="ct-duel-btn" data-act="duel">⚔️ Кто дольше</button></div>
       <div class="hd-wallet">🪙 <b class="js-coins">${num(C().coins())}</b> монет
         ${C().canDaily() ? '<button type="button" class="hd-mini gold" data-act="daily">🎁 Бонус дня</button>' : ''}
         <button type="button" class="hd-mini" data-act="shop">🛒 Улучшения</button></div>
@@ -1154,6 +1205,7 @@
     trail = [];
     runId = 'h' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
     hideOv(); hud.hidden = false;
+    hud.querySelector('[data-act=pause]').hidden = false;
     mode = 'run'; acc = 0; lastProg = 0;
     startLoop();
   }
@@ -1168,13 +1220,17 @@
   }
   function pick(i){
     if (mode !== 'choose' || !choosing?.[i] || Date.now() < ovLock) return;
+    if (G.coop) {
+      if (G.viewOnly) { CO.np.send({ type: 'pick', i }); choosing = null; showOv('<div class="hd-title">⏳</div><div class="hd-sub">Ждём напарника…</div>'); return; }
+      apply(G, G.players[0], choosing[i]); choosing = null; CO.pickMe = true; coopPickDone(); return;
+    }
     apply(G, G.players[G.me], choosing[i]);
     choosing = null; G.pend--;
     if (G.pend > 0) { levelUp(); return; }
     resume();
   }
   function pause(){
-    if (mode !== 'run') return;
+    if (mode !== 'run' || G?.coop) return;
     mode = 'pause';
     const p = G.players[G.me];
     showOv(`<div class="hd-title">⏸ Пауза</div><div class="hd-sub">${mmss(G.t)} · ${num(G.kills)} монстров · ур. ${G.level}</div>
@@ -1222,6 +1278,7 @@
   }
   async function finish(){
     if (mode === 'end' || !G) return;
+    if (G.coop) { coopFinish(); return; }
     mode = 'end'; hud.hidden = true;
     const p = G.players[G.me], sc = score(G);
     const coins = Math.round(G.coins * p.greed) + Math.floor(G.t / 60) * 6 + (G.won ? 50 : 0);
@@ -1275,6 +1332,11 @@
     const a = btn.dataset.act;
     if (a === 'play') play({});
     else if (a === 'duel') location.hash = '#/games/horde/' + GameRoom.newCode();
+    else if (a === 'coop') location.hash = '#/games/horde/coop/' + GameRoom.newCode();
+    else if (a === 'co-go') coopGo();
+    else if (a === 'co-again') { if (CO?.host && CO.peer) coopGo(); }
+    else if (a === 'co-lobby') { if (CO) { coopReset(); coopLobby(); } }
+    else if (a === 'co-copy') { const inp = ov.querySelector('.hd-link input'); navigator.clipboard?.writeText(inp.value).then(() => { btn.textContent = '✅ Скопировано'; }, () => inp.select()); }
     else if (a === 'duel-go') play({ seed: duelSeed, duel: true });
     else if (a === 'shop') shop();
     else if (a === 'menu') menu();
@@ -1292,6 +1354,411 @@
     else if (a === 'x2') doubleCoins(btn);
   }
 
+  // ═══ КООП: вдвоём на одном поле (#/games/horde/coop/<код>) ═══
+  // Хозяин (кто раньше в комнате) считает весь мир и шлёт напарнику снимки: двоичные позиции 15 раз в секунду
+  // напрямую (WebRTC, js/games/netplay.js) или 5 раз через Supabase, если напрямую не соединилось; сводка
+  // (уровень, предметы, лужи, сборка) — 4 раза в секунду. Напарник сам двигает своего героя и шлёт позицию.
+  // Уровень общий: при повышении выбирают оба (игра ждёт обоих, но не дольше 25 с). Упал — напарник
+  // поднимает (постоять рядом 2,5 с) или сам встаёт за рекламу / 30 монет. Упали оба — конец.
+  let CO = null;
+  const ENK = Object.keys(EN), ENI = Object.fromEntries(ENK.map((x, i) => [x, i]));
+  const PJK = ['bolt', 'knife', 'fire', 'axe', 'boom'], ITK = ['coin', 'heal', 'magnet', 'bomb', 'chest'];
+  const FXK = ['puff', 'slash', 'zap', 'boom', 'text', 'flash'];
+  const c16 = v => Math.max(-32767, Math.min(32767, Math.round(v)));
+  const upsNow = () => Object.fromEntries(UPS.map(([id]) => [id, C().upLevel(id)]));
+
+  function coopLink(){ return location.origin + location.pathname + '#/games/horde/coop/' + CO.code; }
+  function coopLobby(){
+    if (!CO || CO.state !== 'lobby') return;
+    const hero = HEROES.find(x => x.id === selHero());
+    const peer = CO.peer, net = CO.np?.mode();
+    const netTxt = !peer ? '' : net === 'p2p' ? '⚡ Связь напрямую — без задержек' : net === 'relay' ? '🐢 Связь через сервер — будет чуть дёргаться' : '🔌 Соединяемся напрямую…';
+    let status, btn = '';
+    if (!CO.room?.synced) status = 'Подключаемся к комнате…';
+    else if (!CO.peerId) status = '<b>Ждём напарника.</b> Отправь ему ссылку — игра начнётся, как только он её откроет.';
+    else if (!peer) status = `<b>${esc(CO.peerNick || 'Напарник')}</b> заходит…`;
+    else if (CO.host) { const h = HEROES.find(x => x.id === peer.hero) || HEROES[0]; status = `Напарник: <b>${esc(peer.nick)}</b> — ${h.e} ${h.name}`; btn = '<button type="button" class="ct-start" data-act="co-go">▶ Начать вместе</button>'; }
+    else status = `Ждём, пока <b>${esc(peer.nick)}</b> начнёт игру…`;
+    showOv(`<div class="hd-title">🤝 Орда вдвоём</div>
+      <div class="hd-sub">Вместе против орды на одном поле. Уровень общий, упавшего напарника можно поднять — постой рядом.</div>
+      <div class="ct-link hd-link"><input readonly value="${esc(coopLink())}"><button type="button" data-act="co-copy">📋 Копировать</button></div>
+      <div class="hd-sub">${status}</div>${netTxt ? `<div class="hd-hint">${netTxt}</div>` : ''}
+      ${btn}
+      <div class="hd-hint">Твой герой: ${hero.e} ${hero.name} (сменить — <a href="#/games/horde">в меню игры</a>)</div>`);
+  }
+  function coopSay(html, btns){ showOv(`<div class="hd-title">🤝 Орда вдвоём</div><div class="hd-sub">${html}</div>${btns || ''}`); }
+
+  function coopMount(code){
+    build(root);
+    hud.hidden = true;
+    CO = { code, host: false, peer: null, peerId: null, peerNick: '', state: 'lobby', A: null, B: null, gemsAt: 0, st: null, sentAt: 0, stAt: 0, inAt: 0, gin: null,
+      pickMe: false, pickPeer: false, lvlAt: 0, myRevive: false, pwVer: 0, pwSent: -1, room: null, np: null };
+    coopLobby();
+    CO.room = GameRoom.join('horde-coop', code, {
+      onError: () => { if (CO) showOv(GameRoom.errorHtml); },
+      onFull: () => { if (CO) showOv(GameRoom.fullHtml('horde')); },
+      onPeer: (opp, room) => {
+        if (!CO) return;
+        CO.host = room.isHost;
+        if (!opp) {
+          const was = CO.peerId;
+          CO.peer = null; CO.peerId = null;
+          if (was && (CO.state === 'run' || CO.state === 'choose')) coopPeerGone();
+          else if (CO.state !== 'end') { CO.state = 'lobby'; coopLobby(); }
+          return;
+        }
+        const newcomer = CO.peerId && CO.peerId !== opp.id;
+        CO.peerId = opp.id; CO.peerNick = opp.nick;
+        if (newcomer || CO.state !== 'lobby') coopReset();
+        coopHello();
+        if (room.isHost) CO.np.offer();
+        coopLobby();
+      },
+      onMessage: m => { if (CO && !CO.np.handle(m)) coopMsg(m); },
+    });
+    if (!CO.room) { showOv(GameRoom.errorHtml); return; }
+    CO.np = NetPlay.start(CO.room, { onMessage: coopMsg, onBinary: coopBin, onMode: () => coopLobby() });
+  }
+  function coopHello(){ CO.np.send({ type: 'hello', hero: selHero(), look: CH()?.look() || null, up: upsNow(), nick: GameRoom.nick() }); }
+  function coopReset(){ cancelAnimationFrame(raf); raf = 0; G = null; mode = 'menu'; CO.state = 'lobby'; CO.A = CO.B = CO.st = null; hud.hidden = true; }
+  function coopPeerGone(){
+    if (CO.host && G) {
+      const q = G.players[1];
+      q.dead = true; q.gone = true;
+      G.banner = { text: '🚪 Напарник вышел — держись один!', t: 3 };
+    } else {
+      coopReset(); CO.state = 'end';
+      coopSay('Напарник вышел из игры.', '<div class="ct-actions"><button type="button" class="ct-start" data-act="co-lobby">↻ Ждать нового</button><a class="hd-mini" href="#/games/horde">🚪 Выйти</a></div>');
+    }
+  }
+
+  function coopGo(){
+    if (!CO?.host || !CO.peer) return;
+    const m = { type: 'cstart', seed: Math.floor(Math.random() * 2 ** 31), h: [selHero(), CO.peer.hero], u: [upsNow(), CO.peer.up || {}], l: [CH()?.look() || null, CO.peer.look], n: [GameRoom.nick(), CO.peer.nick] };
+    CO.np.send(m);
+    coopBegin(m);
+  }
+  function coopBegin(m){
+    CO.state = 'run'; CO.pickMe = CO.pickPeer = false; CO.myRevive = false; CO.A = CO.B = CO.st = null; CO.pwSent = -1;
+    runId = 'h' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    look = CH()?.look() || null;
+    trail = [];
+    if (CO.host) {
+      G = newGame({ seed: m.seed, coop: true, heroes: m.h, ups: m.u, low: document.body.classList.contains('low') });
+      G.players.forEach((p, i) => { p.look = m.l[i]; p.nick = m.n[i]; });
+      G.me = 0;
+      setView(G, cssW / scale, cssH / scale);
+      G.spawnR = Math.max(G.spawnR, Math.hypot(VIEW * .9, VIEW * .9 * 1.6) / 2 + 50);   // напарник может видеть больше — спавн за краем у обоих
+      CO.gin = { x: G.players[1].x, y: G.players[1].y, hx: 1, mv: 0 };
+    } else {
+      // Мир напарника — по снимкам. Свой герой — свой (двигается сразу, без задержки)
+      G = newGame({ seed: 1, coop: true, heroes: m.h, ups: m.u });
+      G.players.forEach((p, i) => { p.look = m.l[i]; p.nick = m.n[i]; });
+      G.me = 1; G.viewOnly = true; G.numsOn = false;
+      setView(G, cssW / scale, cssH / scale);
+    }
+    petX = G.players[G.me].x - 30; petY = G.players[G.me].y;
+    hideOv(); hud.hidden = false;
+    hud.querySelector('[data-act=pause]').hidden = true;   // вдвоём паузы нет
+    mode = 'run'; acc = 0;
+    startLoop();
+  }
+
+  // ── Хозяин: позиция напарника, снимки, сводка ──
+  function coopHostBeforeStep(){
+    const q = G.players[1], i = CO.gin;
+    if (!q || q.gone || !i) return;
+    if (!q.dead) {
+      const dx = i.x - q.x, dy = i.y - q.y, d = Math.hypot(dx, dy);
+      q.moving = !!i.mv;
+      if (d > .5) { q.fx = dx / d; q.fy = dy / d; }
+      q.x = i.x; q.y = i.y; q.hx = i.hx;
+    }
+  }
+  function coopHostAfterStep(){
+    const now = performance.now();
+    if (now - CO.sentAt >= 1000 / CO.np.hz()) {
+      CO.sentAt = now;
+      const gems = now - CO.gemsAt > 250;
+      if (gems) CO.gemsAt = now;
+      CO.np.sendBin(encodeSnap(G, gems));
+      if (G.fxLog.length) CO.np.send({ type: 'fx', l: G.fxLog.splice(0, 60) }, true);
+      G.fxLog.length = 0;
+    }
+    if (now - CO.stAt >= 250) { CO.stAt = now; CO.np.send(stateMsg(G), true); }
+  }
+  function stateMsg(G){
+    const pw = G.pwVer !== CO.pwSent ? G.players.map(p => [p.weapons.map(w => [w.id, w.lvl, w.evo ? 1 : 0]), Object.entries(p.pass)]) : undefined;
+    if (pw) CO.pwSent = G.pwVer;
+    const items = [];
+    for (const it of G.items) items.push(ITK.indexOf(it.k), Math.round(it.x), Math.round(it.y));
+    const z = [];
+    for (const zz of G.zones) z.push(Math.round(zz.x), Math.round(zz.y), Math.round(zz.r), zz.evo ? 1 : 0, Math.round(zz.t * 10));
+    return { type: 'st', t: Math.round(G.t * 100), lv: G.level, xp: G.xp, nx: G.next, k: G.kills, c: G.coins, pw, items, z,
+      B: G.boss && !G.boss.dead ? [ENI[G.boss.ty], Math.round(G.boss.hp / G.boss.max * 1000)] : 0,
+      bn: G.banner ? G.banner.text : '',
+      P: G.players.map(p => { const ob = p.weapons.find(w => w.id === 'orbit'); return [Math.round(p.hp), p.maxHp, Math.round((p.rez || 0) * 40), Math.round(p.area * 100), p.amount, Math.round(p.speed), ob && ob.on > 0 ? 1 : 0, ob ? Math.round(ob.ang * 100) : 0, p.gone ? 1 : 0]; }) };
+  }
+  function encodeSnap(G, withGems){
+    const me = G.players[1], ox = Math.round(me.x), oy = Math.round(me.y), R = 1150;
+    const near = o => Math.abs(o.x - ox) < R && Math.abs(o.y - oy) < R;
+    const en = G.en.filter(e => !e.dead && near(e)), pr = G.pr.filter(s => !s.dead && near(s)), eb = G.eb.filter(s => !s.dead && near(s));
+    const gems = withGems ? G.gems.filter(near).slice(0, 320) : [];
+    const buf = new ArrayBuffer(14 + G.players.length * 6 + 2 + en.length * 7 + 2 + pr.length * 11 + 2 + eb.length * 9 + 1 + G.waves.length * 8 + 2 + gems.length * 5);
+    const v = new DataView(buf);
+    let o = 0;
+    v.setUint8(o++, withGems ? 3 : 1);
+    v.setFloat32(o, G.t, true); o += 4;
+    v.setInt32(o, ox, true); v.setInt32(o + 4, oy, true); o += 8;
+    v.setUint8(o++, G.players.length);
+    for (const p of G.players) {
+      v.setInt16(o, c16(p.x - ox), true); v.setInt16(o + 2, c16(p.y - oy), true);
+      v.setUint8(o + 4, (p.dead ? 1 : 0) | (p.inv > 0 ? 2 : 0) | (p.moving ? 4 : 0) | (p.hx < 0 ? 8 : 0));
+      v.setUint8(o + 5, Math.round(Math.max(0, Math.min(1, p.hp / p.maxHp)) * 255)); o += 6;
+    }
+    v.setUint16(o, en.length, true); o += 2;
+    for (const e of en) {
+      v.setUint16(o, e.id & 0xffff, true); v.setUint8(o + 2, ENI[e.ty] | (e.elite ? 0x40 : 0) | (e.flash > 0 ? 0x80 : 0));
+      v.setInt16(o + 3, c16(e.x - ox), true); v.setInt16(o + 5, c16(e.y - oy), true); o += 7;
+    }
+    v.setUint16(o, pr.length, true); o += 2;
+    for (const s of pr) {
+      v.setUint8(o, PJK.indexOf(s.k) | (s.evo ? 0x80 : 0));
+      v.setInt16(o + 1, c16(s.x - ox), true); v.setInt16(o + 3, c16(s.y - oy), true);
+      v.setInt16(o + 5, c16(s.vx), true); v.setInt16(o + 7, c16(s.vy), true);
+      v.setUint8(o + 9, Math.round((((s.rot % TAU) + TAU) % TAU) / TAU * 255) & 255); v.setUint8(o + 10, Math.min(255, Math.round(s.r))); o += 11;
+    }
+    v.setUint16(o, eb.length, true); o += 2;
+    for (const s of eb) {
+      v.setInt16(o, c16(s.x - ox), true); v.setInt16(o + 2, c16(s.y - oy), true);
+      v.setInt16(o + 4, c16(s.vx), true); v.setInt16(o + 6, c16(s.vy), true); v.setUint8(o + 8, s.big ? 1 : 0); o += 9;
+    }
+    v.setUint8(o++, Math.min(255, G.waves.length));
+    for (const w of G.waves.slice(0, 255)) { v.setInt16(o, c16(w.x - ox), true); v.setInt16(o + 2, c16(w.y - oy), true); v.setUint16(o + 4, Math.round(w.r), true); v.setUint16(o + 6, Math.round(w.R), true); o += 8; }
+    v.setUint16(o, gems.length, true); o += 2;
+    for (const g of gems) { v.setInt16(o, c16(g.x - ox), true); v.setInt16(o + 2, c16(g.y - oy), true); v.setUint8(o + 4, g.v >= 20 ? 20 : g.v >= 5 ? 5 : 1); o += 5; }
+    return buf;
+  }
+  function decodeSnap(buf){
+    const v = new DataView(buf);
+    let o = 0;
+    const flags = v.getUint8(o++), S = { at: performance.now(), gems: null };
+    S.t = v.getFloat32(o, true); o += 4;
+    const ox = v.getInt32(o, true), oy = v.getInt32(o + 4, true); o += 8;
+    const np = v.getUint8(o++);
+    S.p = [];
+    for (let i = 0; i < np; i++) { const f = v.getUint8(o + 4); S.p.push({ x: ox + v.getInt16(o, true), y: oy + v.getInt16(o + 2, true), dead: !!(f & 1), inv: !!(f & 2), moving: !!(f & 4), hx: f & 8 ? -1 : 1, hp: v.getUint8(o + 5) / 255 }); o += 6; }
+    let n = v.getUint16(o, true); o += 2;
+    S.en = new Map();
+    for (let i = 0; i < n; i++) { const id = v.getUint16(o, true), b = v.getUint8(o + 2); S.en.set(id, { id, ty: ENK[b & 0x3f], elite: !!(b & 0x40), flash: b & 0x80 ? .08 : 0, x: ox + v.getInt16(o + 3, true), y: oy + v.getInt16(o + 5, true) }); o += 7; }
+    n = v.getUint16(o, true); o += 2;
+    S.pr = [];
+    for (let i = 0; i < n; i++) { const b = v.getUint8(o); S.pr.push({ k: PJK[b & 0x7f], evo: !!(b & 0x80), x: ox + v.getInt16(o + 1, true), y: oy + v.getInt16(o + 3, true), vx: v.getInt16(o + 5, true), vy: v.getInt16(o + 7, true), rot: v.getUint8(o + 9) / 255 * TAU, r: v.getUint8(o + 10) }); o += 11; }
+    n = v.getUint16(o, true); o += 2;
+    S.eb = [];
+    for (let i = 0; i < n; i++) { S.eb.push({ x: ox + v.getInt16(o, true), y: oy + v.getInt16(o + 2, true), vx: v.getInt16(o + 4, true), vy: v.getInt16(o + 6, true), big: !!v.getUint8(o + 8), r: v.getUint8(o + 8) ? 8 : 6 }); o += 9; }
+    n = v.getUint8(o++);
+    S.waves = [];
+    for (let i = 0; i < n; i++) { S.waves.push({ x: ox + v.getInt16(o, true), y: oy + v.getInt16(o + 2, true), r: v.getUint16(o + 4, true), R: v.getUint16(o + 6, true) }); o += 8; }
+    n = v.getUint16(o, true); o += 2;
+    if (flags & 2) { S.gems = []; for (let i = 0; i < n; i++) { S.gems.push({ x: ox + v.getInt16(o, true), y: oy + v.getInt16(o + 2, true), v: v.getUint8(o + 4) }); o += 5; } }
+    return S;
+  }
+
+  // ── Напарник: принимает снимки и сводку, собирает из них мир для рисования ──
+  function coopBin(buf){
+    if (!CO || CO.host || !G?.viewOnly) return;
+    let S;
+    try { S = decodeSnap(buf); } catch (e) { return; }
+    if (CO.B && S.t < CO.B.t) return;   // опоздавший снимок (быстрый канал без порядка)
+    CO.A = CO.B; CO.B = S;
+    if (S.gems) G.gems = S.gems;
+    const me = G.players[1], sp = S.p[1];
+    if (sp) {
+      if (sp.dead && !me.dead) { me.dead = true; api.sfx('bad'); }
+      if (!sp.dead && me.dead) { me.dead = false; me.x = sp.x; me.y = sp.y; }
+      if (sp.inv && !me.inv) G.shake = .15;
+      me.inv = sp.inv ? .2 : 0;
+      me.hp = sp.hp * me.maxHp;
+      // разошлись сильно (телепорт при возрождении и т.п.) — встаём туда, где нас видит хозяин
+      if (Math.hypot(sp.x - me.x, sp.y - me.y) > 260) { me.x = sp.x; me.y = sp.y; }
+    }
+    G.t = Math.max(G.t, S.t);
+  }
+  function guestState(m){
+    G.level = m.lv; G.xp = m.xp; G.next = m.nx; G.kills = m.k; G.coins = m.c;
+    if (m.bn && (!G.banner || G.banner.text !== m.bn)) G.banner = { text: m.bn, t: 2.4 };
+    G.boss = m.B ? { d: EN[ENK[m.B[0]]], hp: m.B[1], max: 1000, dead: false } : null;
+    G.items = [];
+    for (let i = 0; i < m.items.length; i += 3) G.items.push({ k: ITK[m.items[i]], x: m.items[i + 1], y: m.items[i + 2] });
+    G.zones = [];
+    for (let i = 0; i < m.z.length; i += 5) G.zones.push({ x: m.z[i], y: m.z[i + 1], r: m.z[i + 2], evo: !!m.z[i + 3], t: m.z[i + 4] / 10 });
+    if (m.pw) m.pw.forEach((pw, i) => {
+      const p = G.players[i];
+      if (!p) return;
+      p.weapons = pw[0].map(([id, lvl, evo]) => { const old = p.weapons.find(w => w.id === id); return { id, lvl, evo: !!evo, on: old?.on || 0, ang: old?.ang || 0, s: WEAPONS[id].st(lvl, !!evo) }; });
+      p.pass = Object.fromEntries(pw[1]);
+    });
+    m.P.forEach((a, i) => {
+      const p = G.players[i];
+      if (!p) return;
+      p.maxHp = a[1]; if (i !== 1) p.hp = a[0]; p.rez = a[2] / 40; p.area = a[3] / 100; p.amount = a[4]; p.speed = a[5]; p.gone = !!a[8];
+      const ob = p.weapons.find(w => w.id === 'orbit');
+      if (ob) { ob.on = a[6] ? 1 : 0; if (Math.abs(ob.ang - a[7] / 100) > .5) ob.ang = a[7] / 100; }
+    });
+  }
+  // Кадр напарника: свой герой — сразу, остальное — между двумя последними снимками
+  function guestTick(dt){
+    const me = G.players[1];
+    applyInput();
+    if (!me.dead) {
+      let mx = me.in.x, my = me.in.y;
+      const m = Math.hypot(mx, my);
+      if (m > 1) { mx /= m; my /= m; }
+      me.moving = m > .08;
+      me.x += mx * me.speed * dt; me.y += my * me.speed * dt;
+      if (me.moving) { me.fx = mx / (m || 1); me.fy = my / (m || 1); if (Math.abs(mx) > .08) me.hx = mx > 0 ? 1 : -1; }
+    } else me.moving = false;
+    const now = performance.now();
+    if (now - CO.inAt >= 1000 / CO.np.hz()) { CO.inAt = now; CO.np.send({ type: 'in', x: Math.round(me.x), y: Math.round(me.y), hx: me.hx, mv: me.moving ? 1 : 0 }, true); }
+    const A = CO.A, B = CO.B;
+    if (!B) return;
+    const span = A ? Math.max(30, B.at - A.at) : 100, a = Math.min(1, (now - B.at) / span), ext = Math.min(.3, (now - B.at) / 1000);
+    const lerp = (p, q) => A && p ? p + (q - p) * a : q;
+    G.en = [];
+    for (const e of B.en.values()) {
+      const pe = A?.en.get(e.id);
+      G.en.push({ id: e.id, ty: e.ty, d: EN[e.ty], elite: e.elite, flash: e.flash, x: pe ? pe.x + (e.x - pe.x) * a : e.x, y: pe ? pe.y + (e.y - pe.y) * a : e.y, r: EN[e.ty].r });
+    }
+    G.pr = B.pr.map(s => ({ ...s, x: s.x + s.vx * ext, y: s.y + s.vy * ext }));
+    G.eb = B.eb.map(s => ({ ...s, x: s.x + s.vx * ext, y: s.y + s.vy * ext }));
+    G.waves = B.waves;
+    const P0 = G.players[0], b0 = B.p[0], a0 = A?.p[0];
+    if (b0) { P0.x = lerp(a0?.x, b0.x); P0.y = lerp(a0?.y, b0.y); P0.dead = b0.dead; P0.inv = b0.inv ? .2 : 0; P0.moving = b0.moving; P0.hx = b0.hx; }
+    for (const p of G.players) { const ob = p.weapons.find(w => w.id === 'orbit'); if (ob && ob.on) ob.ang += ob.s.spd * dt; }
+    for (const f of G.fx) f.t -= dt;
+    G.fx = G.fx.filter(f => f.t > 0);
+    if (G.banner && (G.banner.t -= dt) <= 0) G.banner = null;
+    if (G.shake > 0) G.shake -= dt;
+  }
+
+  function coopMsg(m){
+    if (!CO || !m || typeof m.type !== 'string') return;
+    if (m.type === 'hello') { CO.peer = { hero: HEROES.some(h => h.id === m.hero) ? m.hero : 'mage', look: m.look, up: m.up || {}, nick: String(m.nick || 'Напарник').slice(0, 24) }; if (CO.state === 'lobby') coopLobby(); return; }
+    if (CO.host) {
+      if (!G || !G.coop) return;
+      if (m.type === 'in') CO.gin = { x: +m.x || 0, y: +m.y || 0, hx: m.hx < 0 ? -1 : 1, mv: m.mv ? 1 : 0 };
+      else if (m.type === 'pick') { if (G.pend > 0 && CO.guestOpts && !CO.pickPeer) { apply(G, G.players[1], CO.guestOpts[m.i] || CO.guestOpts[0]); G.pwVer++; CO.pickPeer = true; coopPickDone(); } }
+      else if (m.type === 'rev') { const q = G.players[1]; if (q.dead && !q.gone) { q.dead = false; q.hp = Math.round(q.maxHp * .6); q.inv = 2.5; G.banner = { text: `✨ ${q.nick} снова в бою!`, t: 2 }; } }
+      return;
+    }
+    // напарник
+    if (m.type === 'cstart') coopBegin(m);
+    else if (!G?.viewOnly) return;
+    else if (m.type === 'st') guestState(m);
+    else if (m.type === 'fx') for (const f of m.l) guestFx(f);
+    else if (m.type === 'lvl') coopGuestLevel(m);
+    else if (m.type === 'go') { if (mode === 'choose') { hideOv(); mode = 'run'; startLoop(); } }
+    else if (m.type === 'over') coopFinish(m);
+  }
+  function guestFx(f){
+    const k = FXK[f[0]], o = { k, x: f[1], y: f[2], t: 0, T: 0 };
+    if (k === 'puff') { o.r = f[3]; o.T = .3; }
+    else if (k === 'slash') { o.w = f[3]; o.h = f[4]; o.dir = f[5] < 0 ? -1 : 1; o.red = Math.abs(f[5]) > 1; o.T = .2; }
+    else if (k === 'zap' || k === 'boom') { o.R = f[3]; o.T = k === 'zap' ? .25 : .35; }
+    else if (k === 'text') { o.text = String(f[3]).slice(0, 20); o.color = f[4] || '#fff'; o.T = .7; }
+    else o.T = .4;
+    o.t = o.T;
+    if (G.fx.length < 150) G.fx.push(o);
+  }
+
+  // ── Повышение уровня вдвоём ──
+  function coopLevel(){
+    mode = 'choose';
+    const me = G.players[0], q = G.players[1];
+    choosing = lvOptions(G, me, 3);
+    CO.guestOpts = q.gone ? null : lvOptions(G, q, 3);
+    CO.pickMe = false; CO.pickPeer = !CO.guestOpts; CO.lvlAt = performance.now();
+    if (CO.guestOpts) CO.np.send({ type: 'lvl', n: G.level - G.pend + 1, o: CO.guestOpts.map(o => ({ k: o.k, id: o.id })) });
+    showLevelCards(me, choosing, G.level - G.pend + 1);
+    clearTimeout(CO.lvlTimer);
+    CO.lvlTimer = setTimeout(() => { if (G && mode === 'choose' && !CO.pickPeer && CO.guestOpts) { apply(G, G.players[1], CO.guestOpts[0]); G.pwVer++; CO.pickPeer = true; coopPickDone(); } }, 25000);
+  }
+  function coopPickDone(){
+    if (!CO.pickMe || !CO.pickPeer) { if (CO.pickMe) showOv('<div class="hd-title">⏳</div><div class="hd-sub">Ждём, пока напарник выберет улучшение…</div>'); return; }
+    clearTimeout(CO.lvlTimer);
+    G.pend--;
+    if (G.pend > 0) { coopLevel(); return; }
+    CO.np.send({ type: 'go' });
+    resume();
+  }
+  function coopGuestLevel(m){
+    const me = G.players[1];
+    choosing = m.o;
+    mode = 'choose';
+    showLevelCards(me, choosing, m.n);
+  }
+  function showLevelCards(p, opts, n){
+    api.sfx('ok');
+    showOv(`<div class="hd-title">⭐ Уровень ${n}!</div><div class="hd-sub">Выбери улучшение</div>
+      <div class="hd-lv">${opts.map((o, i) => { const f = optInfo(p, o); return `<button type="button" class="hd-card${f.evo ? ' evo' : ''}" data-act="pick:${i}"><span class="ic">${f.e}</span><span class="hd-card-b"><b>${f.name}${f.tag ? ` <span class="tag">${f.tag}</span>` : ''}</b><small>${f.text}</small></span><kbd>${i + 1}</kbd></button>`; }).join('')}</div>
+      ${G.k4 ? '<div class="hd-hint">👑 VIP: 4 варианта на выбор</div>' : ''}`);
+  }
+
+  // ── Упал в коопе: встать самому (реклама / монеты) — игра у напарника идёт дальше ──
+  async function coopSelfRevive(how){
+    if (!G?.coop || CO.myRevive) return;
+    const me = G.players[G.me];
+    if (!me.dead) return;
+    if (how === 'ad') { if (!await window.D37Ads.showReward('horde_revive')) { toast('Реклама не досмотрена — возрождения нет'); return; } }
+    else { const r = await C().revive('horde'); if (!r?.ok) { toast(r?.reason === 'coins' ? 'Не хватает монет' : 'Не получилось — попробуй ещё раз'); return; } }
+    CO.myRevive = true;
+    if (CO.host) { me.dead = false; me.hp = Math.round(me.maxHp * .6); me.inv = 2.5; G.banner = { text: `✨ ${me.nick || 'Хозяин'} снова в бою!`, t: 2 }; }
+    else CO.np.send({ type: 'rev' });
+    api.sfx('win');
+  }
+  function coopDeadBar(){
+    let bar = wrap?.querySelector('.hd-dead');
+    const me = G?.coop && G.players[G.me];
+    const show = me && me.dead && !me.gone && (mode === 'run');
+    if (!show) { if (bar) bar.hidden = true; return; }
+    if (!bar) { bar = document.createElement('div'); bar.className = 'hd-dead'; wrap.appendChild(bar); bar.addEventListener('click', e => { const a = e.target.closest('[data-act]')?.dataset.act; if (a === 'co-rev-ad') coopSelfRevive('ad'); else if (a === 'co-rev-coins') coopSelfRevive('coins'); }); }
+    const key = `${CO.myRevive}|${C().coins() >= C().RULES.revive}|${!!window.D37Ads?.rewardReady?.()}`;
+    if (bar.dataset.key !== key || bar.hidden) {
+      bar.dataset.key = key;
+      bar.innerHTML = `<b>💀 Ты упал</b><span>Напарник поднимет, если постоит рядом 2,5 с.</span>${CO.myRevive ? '' : `<span class="hd-dead-btns">${window.D37Ads?.rewardReady?.() ? '<button type="button" data-act="co-rev-ad">📺 Встать за рекламу</button>' : ''}<button type="button" data-act="co-rev-coins"${C().coins() >= C().RULES.revive ? '' : ' disabled'}>🪙 Встать за ${C().RULES.revive}</button></span>`}`;
+    }
+    bar.hidden = false;
+  }
+
+  // ── Конец игры вдвоём ──
+  function coopFinish(m){
+    if (!CO || CO.state === 'end') return;
+    CO.state = 'end';
+    clearTimeout(CO.lvlTimer);
+    const sc = m ? m.sc : score(G), t = m ? m.t : G.t, kills = m ? m.k : G.kills, lv = m ? m.lv : G.level, won = m ? m.won : G.won, teamCoins = m ? m.c : G.coins;
+    if (CO.host) CO.np.send({ type: 'over', sc, t, k: kills, lv, c: teamCoins, won });
+    mode = 'end'; hud.hidden = true;
+    cancelAnimationFrame(raf); raf = 0;
+    const me = G?.players[G.me];
+    const coins = Math.round(teamCoins * (me?.greed || 1)) + Math.floor(t / 60) * 6 + (won ? 50 : 0);
+    api.report('horde_coop', t >= WIN_TIME, sc, 0);
+    api.sfx(won ? 'win' : 'bad');
+    const dead = wrap?.querySelector('.hd-dead'); if (dead) dead.hidden = true;
+    showOv(`<div class="hd-title">${won ? '🏆 Вы выжили вдвоём!' : '💀 Орда победила'}</div>
+      <div class="hd-stats"><span>⏱ <b>${mmss(t)}</b></span><span>💀 <b>${num(kills)}</b></span><span>⭐ ур. <b>${lv}</b></span></div>
+      <div class="hd-score">${num(sc)} очков команды</div>
+      <div class="hd-coins" id="hdCoins">${coins ? `🪙 +${num(coins)} монет…` : ''}</div>
+      <div class="ct-actions">${CO.host ? '<button type="button" class="ct-start" data-act="co-again">↻ Ещё раз вместе</button>' : '<span class="hd-hint">Ждём, пока напарник начнёт снова…</span>'}<a class="hd-mini" href="#/games/horde">🚪 Выйти</a></div>`);
+    if (coins) C().run('horde', coins, runId).then(r => { const box = ov?.querySelector('#hdCoins'); if (box && CO?.state === 'end') box.innerHTML = r?.ok ? `🪙 <b>+${num(r.got)}</b> монет` : '🪙 Монеты не начислились'; });
+  }
+  function coopUnmount(){
+    if (!CO) return;
+    clearTimeout(CO.lvlTimer);
+    CO.np?.close(); CO.room?.leave();
+    CO = null;
+  }
+
   function on(t, ev, fn, o){ t.addEventListener(ev, fn, o); listeners.push([t, ev, fn, o]); }
   function stopRun(){ cancelAnimationFrame(raf); raf = 0; G = null; mode = 'menu'; }
 
@@ -1303,7 +1770,9 @@
       on(document, 'fullscreenchange', onFs);
       const tick = setInterval(trailTick, 30);
       listeners.push([{ removeEventListener: () => clearInterval(tick) }, '', null]);
-      if (GameRoom.validCode(gameApi.param)) {
+      const coop = /^coop\/([a-z0-9]{4,12})$/.exec(gameApi.param || '');
+      if (coop) coopMount(coop[1]);
+      else if (GameRoom.validCode(gameApi.param)) {
         stopDuel = Versus.start(root, api, 'horde', gameApi.param, {
           run(stage, rand, h){
             stopRun(); hooks = h;
@@ -1325,6 +1794,7 @@
       C().sync().then(() => { if (mode === 'menu' && !hooks && ov && !ov.hidden && ov.querySelector('.hd-heroes')) menu(); });
     },
     unmount(){
+      coopUnmount();
       stopRun();
       if (full) { full = false; document.documentElement.classList.remove('hd-lock'); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
       for (const [t, ev, fn, o] of listeners.splice(0)) t.removeEventListener(ev, fn, o);
@@ -1332,6 +1802,6 @@
       input.keys = {}; input.on = false;
       root = null; cv = null; ctx = null; ov = null; hud = null; wrap = null;
     },
-    _test: { newGame, step, lvOptions, apply, optInfo, score, setView, xpNeed, WEAPONS, PASSIVES, HEROES, EN, WAVES, EVENTS },
+    _test: { newGame, step, lvOptions, apply, optInfo, score, setView, xpNeed, encodeSnap, decodeSnap, WEAPONS, PASSIVES, HEROES, EN, WAVES, EVENTS },
   };
 })();
