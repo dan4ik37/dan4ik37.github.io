@@ -105,6 +105,50 @@ gl_FragColor = vec4(c, 1.0);
     }
     R.setSky('#4f9cf5', '#bfe3ff', '#e8f5ff');
 
+    // ═══ Время суток (как Lighting в Roblox): time 0–24, brightness, ambient, fogEnd, shadows ═══
+    const stars = (() => {
+      const n = 1100, g = new T.BufferGeometry(), p = new Float32Array(n * 3), rnd = E.rng(77);
+      for (let i = 0; i < n; i++) { const u = rnd(), a = rnd() * TAU, el = Math.asin(u * .98 + .02), cr = Math.cos(el); p.set([Math.cos(a) * cr * 400, Math.sin(el) * 400, Math.sin(a) * cr * 400], i * 3); }
+      g.setAttribute('position', new T.BufferAttribute(p, 3));
+      const m = new T.PointsMaterial({ color: '#ffffff', size: 1.7, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false });
+      const s = new T.Points(g, m); s.frustumCulled = false; s.renderOrder = -1; s.visible = false; scene.add(s); R.own.push(g, m);
+      return s;
+    })();
+    const UP = new T.Vector3(0, 1, 0), cA = new T.Color(), cB = new T.Color();
+    const mix3 = (day, dusk, night, wd, wn, out) => out.set(day).lerp(cA.set(dusk), wd).lerp(cB.set(night), wn);
+    const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+    let envT = 0;
+    R.lighting = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, shadows: true };
+    R.setLighting = (L = {}) => {
+      Object.assign(R.lighting, L);
+      const Lg = R.lighting, t = ((+Lg.time % 24) + 24) % 24;
+      const el = Math.sin((t - 6) / 12 * PI);            // высота солнца: 6 ч — восход, 12 — зенит, 18 — закат
+      const az = PI * .25 + (t - 12) / 12 * PI * .9;     // с востока на запад
+      const day = el > -.04, e = day ? Math.max(.07, el) : Math.max(.25, -el), ce = Math.cos(Math.asin(e)), sgn = day ? 1 : -1;
+      SUN_DIR.set(Math.cos(az) * ce * sgn, e, Math.sin(az) * ce * sgn).normalize();   // ночью светит луна с другой стороны
+      lr.crossVectors(UP, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
+      const wd = clamp01(1 - Math.abs(el) / .3), wn = clamp01(-el / .22);   // закат/рассвет, ночь
+      const U = skyMat.uniforms;
+      mix3('#4f9cf5', '#4b5fa8', '#050a1c', wd, wn, U.top.value);
+      mix3('#bfe3ff', '#ffb27a', '#0f1a3a', wd, wn, U.mid.value);
+      mix3('#e8f5ff', '#ffd3a3', '#0a1330', wd, wn, U.bot.value);
+      mix3('#fff4d6', '#ffb070', '#dfe8ff', wd, wn, U.sunC.value);
+      const num = (v, d) => Number.isFinite(+v) ? +v : d, b = Math.max(0, num(Lg.brightness, 1)), amb = Math.max(0, num(Lg.ambient, 1));
+      mix3('#ffeccf', '#ff9b5c', '#8fa8ff', wd, wn, sun.color);
+      sun.intensity = (day ? (q === 'low' ? 1.25 : 2.6) * clamp01(el * 3.2 + .3) : .4) * b;
+      mix3('#d4eaff', '#ffcfa8', '#3a4d8a', wd, wn, hemi.color);
+      hemi.intensity = (q === 'low' ? 1 : .42) * (1 - .55 * wn) * amb;
+      stars.visible = wn > .02; stars.material.opacity = wn * .95;
+      const fe = Math.max(40, +Lg.fogEnd || 320);
+      scene.fog = new T.Fog(U.mid.value.clone(), fe * .34, fe);
+      scene.background = U.mid.value.clone();
+      sun.castShadow = shadows && Lg.shadows !== false;
+      r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * wn);
+      clearTimeout(envT); envT = setTimeout(() => { if (!R.dead) makeEnv(); }, 250);   // отражения неба — когда перестали крутить ползунок
+      for (const f of R.onLight) f(Lg, { day, night: wn, dusk: wd });
+    };
+    R.onLight = [];
+
     // ═══ Облака: мягкие спрайты кодом, медленно плывут ═══
     const clouds = [];
     R.clouds = (n = 14, seed = 7) => {
@@ -141,7 +185,7 @@ gl_FragColor = vec4(c, 1.0);
       for (const s of clouds) { s.position.x += s.userData.v * dt; if (s.position.x > 300) s.position.x = -300; }
       for (const f of R.anims) f(dt);
     };
-    R.render = () => { sky.position.copy(camera.position); r.render(scene, camera); };
+    R.render = () => { sky.position.copy(camera.position); stars.position.copy(camera.position); r.render(scene, camera); };
     const v3 = new T.Vector3();
     // Точка мира → экран (для подписей): [x, y, видна ли]
     R.project = (x, y, z) => { v3.set(x, y, z).project(camera); return [(v3.x + 1) / 2 * R.w, (1 - v3.y) / 2 * R.h, v3.z < 1 && Math.abs(v3.x) < 1.25 && Math.abs(v3.y) < 1.25]; };
@@ -211,6 +255,52 @@ gl_FragColor = vec4(c, 1.0);
       }
       g.putImageData(img, 0, 0);
     }, { srgb: false });
+    // Готовые текстуры кодом (для материалов как в Roblox): трава, песок, камень, кирпич, снег, рифлёный металл, черепица
+    R.proc = name => {
+      const P = {
+        grass: () => R.canvasTex('p:grass', 256, (g, n, rnd) => {
+          g.fillStyle = '#56a845'; g.fillRect(0, 0, n, n);
+          for (let i = 0; i < 70; i++) { const x = rnd() * n, y = rnd() * n, r = 10 + rnd() * 40, l = rnd() < .5; const gr = g.createRadialGradient(x, y, 1, x, y, r); gr.addColorStop(0, l ? 'rgba(150,215,95,.42)' : 'rgba(38,105,40,.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; for (const dx of [-n, 0, n]) for (const dy of [-n, 0, n]) { g.save(); g.translate(dx, dy); g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.restore(); } }
+          for (let i = 0; i < 1600; i++) { const x = rnd() * n, y = rnd() * n, h = 3 + rnd() * 5; g.strokeStyle = rnd() < .5 ? 'rgba(45,110,40,.55)' : 'rgba(170,225,120,.5)'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (rnd() - .5) * 2, y - h); g.stroke(); }
+        }),
+        sand: () => R.canvasTex('p:sand', 256, (g, n, rnd) => {
+          g.fillStyle = '#e6d3a3'; g.fillRect(0, 0, n, n);
+          for (let i = 0; i < 9000; i++) { const v = rnd(); g.fillStyle = v < .5 ? `rgba(160,130,80,${.1 + rnd() * .25})` : `rgba(255,248,220,${.1 + rnd() * .3})`; g.fillRect(rnd() * n, rnd() * n, 1 + (rnd() < .1), 1); }
+          for (let i = 0; i < 6; i++) { g.strokeStyle = 'rgba(170,140,90,.18)'; g.lineWidth = 3; g.beginPath(); const y = rnd() * n; g.moveTo(0, y); g.bezierCurveTo(n * .3, y + 12, n * .6, y - 12, n, y); g.stroke(); }
+        }),
+        rock: () => R.canvasTex('p:rock', 256, (g, n, rnd) => {
+          g.fillStyle = '#8d8f94'; g.fillRect(0, 0, n, n);
+          for (let i = 0; i < 260; i++) { const x = rnd() * n, y = rnd() * n, r = 4 + rnd() * 26, s = 90 + rnd() * 70 | 0; g.fillStyle = `rgba(${s},${s},${s + 6},.35)`; g.beginPath(); g.ellipse(x, y, r, r * (.5 + rnd() * .5), rnd() * 3, 0, 7); g.fill(); }
+          for (let i = 0; i < 40; i++) { g.strokeStyle = 'rgba(40,40,45,.35)'; g.lineWidth = 1; g.beginPath(); let x = rnd() * n, y = rnd() * n; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (rnd() - .5) * 40; y += (rnd() - .5) * 40; g.lineTo(x, y); } g.stroke(); }
+        }),
+        brick: () => R.canvasTex('p:brick', 256, (g, n, rnd) => {
+          g.fillStyle = '#d8d2c8'; g.fillRect(0, 0, n, n);
+          const bh = n / 8, bw = n / 4;
+          for (let row = 0; row < 8; row++) for (let i = -1; i < 5; i++) {
+            const x = i * bw + (row % 2) * bw / 2, y = row * bh, v = 150 + rnd() * 60 | 0;
+            g.fillStyle = `rgb(${v},${v * .45 | 0},${v * .32 | 0})`; g.fillRect(x + 2, y + 2, bw - 4, bh - 4);
+            g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(x + 2, y + bh - 6, bw - 4, 4);
+          }
+        }),
+        snow: () => R.canvasTex('p:snow', 128, (g, n, rnd) => {
+          g.fillStyle = '#f3f7fb'; g.fillRect(0, 0, n, n);
+          for (let i = 0; i < 1500; i++) { g.fillStyle = rnd() < .5 ? 'rgba(200,215,235,.35)' : 'rgba(255,255,255,.8)'; g.fillRect(rnd() * n, rnd() * n, 1, 1); }
+        }),
+        diamond: () => R.canvasTex('p:diamond', 128, (g, n) => {
+          g.fillStyle = '#9aa1a8'; g.fillRect(0, 0, n, n);
+          for (let y = 0; y < n; y += 16) for (let x = 0; x < n; x += 16) {
+            g.save(); g.translate(x + 8, y + 8); g.rotate(((x + y) / 16) % 2 ? .6 : -.6);
+            const gr = g.createLinearGradient(-6, 0, 6, 0); gr.addColorStop(0, '#d5dade'); gr.addColorStop(1, '#6b7178');
+            g.fillStyle = gr; g.fillRect(-6, -1.6, 12, 3.2); g.restore();
+          }
+        }),
+        dirt: () => R.canvasTex('p:dirt', 256, (g, n, rnd) => {
+          g.fillStyle = '#7a5a3c'; g.fillRect(0, 0, n, n);
+          for (let i = 0; i < 4000; i++) { g.fillStyle = rnd() < .5 ? 'rgba(60,40,25,.35)' : 'rgba(150,115,80,.3)'; g.fillRect(rnd() * n, rnd() * n, 2, 2); }
+        }),
+      };
+      return (P[name] || P.grass)();
+    };
     R.texMat = (key, map, o = {}) => cache('cm' + key + (o.tint || ''), () => {
       if (q === 'low') return new T.MeshLambertMaterial({ color: o.flatColor || o.tint || '#ffffff', map: o.lowMap ? map : null });
       const m = new T.MeshStandardMaterial({ color: o.tint || '#ffffff', map, roughness: o.rough ?? .9, metalness: 0, envMapIntensity: .8 });

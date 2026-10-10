@@ -1,5 +1,6 @@
 // Тесты движка D37E (js/engine) в node: управление, физика, игрок (бег, выносливость, прыжок, кувырок, паркур, лестница, сесть),
-// взаимодействие, вещи, стройка, звуки. Запуск из корня сайта: node scripts/engine-test.cjs
+// взаимодействие, вещи, стройка, звуки, клин и ландшафт, скрипты «Студии 3D» (без браузера).
+// Запуск из корня сайта: node scripts/engine-test.cjs
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 const store = {};
@@ -359,5 +360,78 @@ function pk(boxes, opts = {}){
   ok(E.synth.NAMES.length >= 30, 'звуков ' + E.synth.NAMES.length);
 }
 
-console.log(`\n${pass} ок, ${fail} ошибок`);
-process.exitCode = fail ? 1 : 0;
+// ═══ Клин (пандус) и ландшафт — для «Студии 3D» ═══
+{
+  const ph = new E.Phys({ ground: 0 });
+  // клин 8 в длину, 2 в высоту; низ у локальной +z — повёрнут на 180°: низ у мира −z, верх у +z
+  const w = ph.addWedge({ x: 0, y: 1, z: 0, hx: 2, hy: 1, hz: 4, yaw: Math.PI });
+  ok(near(E.Phys.topAt(w, 0, -4), 0, .01) && near(E.Phys.topAt(w, 0, 0), 1, .01) && near(E.Phys.topAt(w, 0, 4), 2, .01), 'клин: высота по длине');
+  const P = E.player(ph, { x: 0, z: -8 });
+  const { C, hold } = mkC();
+  let mid = null, top = 0;
+  hold('KeyW'); run(P, C, 3, () => { if (mid === null && P.ch.z > -.15 && P.ch.z < .15) mid = P.ch.y; top = Math.max(top, P.ch.y); });
+  ok(mid !== null && near(mid, 1, .15), 'по клину вверх: на середине — половина высоты', mid);
+  ok(near(top, 2, .1), 'по клину до верха', top);
+  hold('KeyW', false);
+  const h1 = ph.raycast(0, 10, 0, 0, -1, 0), h2 = ph.raycast(0, 10, -3, 0, -1, 0);
+  ok(h1 && near(h1.y ?? (10 - h1.t), 1, .05) && h2 && near(h2.y ?? (10 - h2.t), .25, .05), 'луч сверху попадает в скат клина', [h1?.t, h2?.t]);
+  // крутой клин (71°) — не забраться
+  const ph2 = new E.Phys({ ground: 0 });
+  ph2.addWedge({ x: 0, y: 3, z: 0, hx: 2, hy: 3, hz: 1, yaw: Math.PI });
+  const P2 = E.player(ph2, { x: 0, z: -4 }), k2 = mkC();
+  k2.hold('KeyW'); let top2 = 0; run(P2, k2.C, 2, () => { top2 = Math.max(top2, P2.ch.y); });
+  ok(top2 < 1, 'на крутой клин не зайти', top2);
+}
+{
+  const ph = new E.Phys({ ground: 0 });
+  ph.terrain = { sample: (x, z) => Math.max(0, x * .25) };   // склон вдоль +x
+  const P = E.player(ph, { x: 8, z: 0 });
+  P.place(8, null, 0);
+  ok(P.ch.y >= 2 && P.ch.y < 2.08, 'ландшафт: стоим на склоне (опора — выше точки под ногами в круге тела)', P.ch.y);
+  const { C, hold } = mkC();
+  hold('KeyW'); run(P, C, 1); hold('KeyW', false); run(P, C, .5);
+  ok(P.ch.y >= 2 && P.ch.y < 2.08 && P.ch.grounded, 'идём поперёк склона — та же высота', P.ch.y);
+  const h = ph.raycast(8, 10, 0, 0, -1, 0);
+  ok(h && near(h.t, 8, .1), 'луч сверху попадает в ландшафт', h?.t);
+  ok(near(ph.groundAt(8, 0), 2, 1e-6) && near(ph.groundAt(8, 0, 2), 2.25, 1e-6), 'groundAt: точка и с радиусом');
+}
+
+// ═══ Скрипты (песочница): API как в Roblox, проверка без браузера ═══
+{
+  globalThis.window = globalThis;
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/script.js'), 'utf8'), { filename: 'script.js' });
+  delete globalThis.window;
+  const msgs = [], msgsAll = [];
+  const ctx = vm.createContext({ postMessage: m => { const c = JSON.parse(JSON.stringify(m)); msgs.push(c); msgsAll.push(c); }, onmessage: null, setTimeout, clearTimeout, console });
+  vm.runInContext('(' + E.scripts.runtime.toString() + ')()', ctx);
+  const send = d => ctx.onmessage({ data: d });
+  const part = (id, name, extra = {}) => ({ id, cls: 'Part', parent: null, p: { name, pos: [0, 1, 0], size: [4, 1, 2], rot: [0, 0, 0], color: '#a3a2a5', mat: 'plastic', alpha: 0, ...extra } });
+  send({ t: 'init', players: [{ id: 'me', name: 'Тест', pos: [0, 0, 0] }],
+    objs: [part('a', 'Кнопка'), part('b', 'Монетка'), { id: 'm', cls: 'Model', parent: null, p: { name: 'Дом' } }, { ...part('c', 'Окно'), parent: 'm' }],
+    scripts: [
+      { name: 'цвет', parent: 'a', code: "script.Parent.Color = Color3.fromRGB(255, 0, 0);\nprint('привет', script.Parent.Name);" },
+      { name: 'монета', parent: 'b', code: "script.Parent.Touched.Connect((hit, player) => { player.AddStat('Монеты', 1); script.Parent.Destroy(); });" },
+      { name: 'ошибка', parent: null, code: "const x = 1;\nnosuch.call();" },
+      { name: 'поиск', parent: null, code: "const w = workspace.FindFirstChild('Окно', true); print(w ? 'нашёл ' + w.Name + ' в ' + w.Parent.Name : 'нет');\nconst p = Instance.new('Part', workspace); p.Position = new Vector3(1, 2, 3);\nTweenService.Create(script.Parent === workspace ? p : p, { Time: 2 }, { Position: new Vector3(1, 5, 3) }).Play();" },
+    ] });
+  const of = t => msgs.filter(m => m.t === t);
+  ok(of('set').some(m => m.id === 'a' && m.k === 'color' && m.v === '#ff0000'), 'скрипт меняет цвет детали');
+  ok(of('print').some(m => m.text === 'привет Кнопка'), 'print');
+  // ошибка в async-коде приходит следующей микрозадачей
+  setTimeout(() => { const er = msgsAll.find(m => m.t === 'error' && m.script === 'ошибка'); ok(er && er.line === 2 && /nosuch/.test(er.msg), 'ошибка с номером строки', er); }, 5);
+  ok(of('want').some(m => m.ev === 'touched' && m.id === 'b' && m.on), 'Touched подписка уходит хозяину');
+  ok(of('print').some(m => m.text === 'нашёл Окно в Дом'), 'FindFirstChild вглубь и Parent');
+  const nw = of('new')[0];
+  ok(nw && nw.cls === 'Part' && of('set').some(m => m.id === nw.id && m.k === 'pos' && m.v.join() === '1,2,3'), 'Instance.new + Position');
+  ok(of('tween').some(m => m.id === nw?.id && m.goals.pos.join() === '1,5,3' && m.time === 2), 'TweenService');
+  ok(of('ready').length === 1, 'готово');
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'b', player: 'me' });
+  ok(of('player').some(m => m.cmd === 'stat' && m.v.k === 'Монеты' && m.v.v === 1), 'касание: очко игроку');
+  ok(of('destroy').some(m => m.id === 'b'), 'касание: монетка исчезла');
+  msgs.length = 0;
+  send({ t: 'ev', ev: 'touched', id: 'b', player: 'me' });
+  ok(of('player').length === 0, 'удалённая деталь больше не срабатывает');
+}
+
+setTimeout(() => { console.log(`\n${pass} ок, ${fail} ошибок`); process.exitCode = fail ? 1 : 0; }, 40);   // после проверок в async

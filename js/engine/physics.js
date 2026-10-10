@@ -29,6 +29,14 @@
       c.bottom = c.y - c.hy; c.top = c.y + c.hy;
       return this._add(c);
     }
+    // Клин (пандус): как коробка, но крыша — скат от низа у +z (спереди) до верха у −z (сзади)
+    addWedge(o){ const c = this.addBox(o); c.type = 'wedge'; return c; }
+    // Высота крыши тела в точке (x, z) (для клина — на скате; точка прижимается к следу)
+    static topAt(c, x, z){
+      if (c.type !== 'wedge') return c.top;
+      const px = x - c.x, pz = z - c.z, lz = Math.max(-c.hz, Math.min(c.hz, c.sin * px + c.cos * pz));
+      return c.bottom + 2 * c.hy * (c.hz - lz) / (2 * c.hz);
+    }
     addCyl(o){
       const c = { type: 'cyl', x: +o.x || 0, y: +o.y || 0, z: +o.z || 0, r: Math.abs(o.r), hy: Math.abs(o.hy), trigger: !!o.trigger, tag: o.tag || '',
         data: o.data ?? null, solid: o.solid !== false, id: ++this.seq, mark: 0 };
@@ -56,6 +64,14 @@
         }
     }
     clear(){ this.grid.clear(); this.cols.clear(); }
+    // Земля под точкой: рельеф (terrain.sample) или плоскость; r — радиус (на склоне берём самое высокое из 5 точек)
+    groundAt(x, z, r = 0){
+      const T = this.terrain;
+      if (!T) return this.ground == null ? -Infinity : this.ground;
+      let h = T.sample(x, z);
+      if (r > 0) { const k = r * .5; h = Math.max(h, T.sample(x + k, z), T.sample(x - k, z), T.sample(x, z + k), T.sample(x, z - k)); }
+      return h;
+    }
     // Все тела, чей прямоугольник в плане задевает область (без повторов)
     query(minx, minz, maxx, maxz, out = []){
       const mark = ++this.qmark;
@@ -110,12 +126,13 @@
     }
     // Высота опоры под кругом (x, z, r): самая высокая крыша не выше yMax (и земля)
     supportAt(x, z, r, yMax, skip){
-      let best = this.ground == null ? -Infinity : this.ground, col = null;
+      let best = this.groundAt(x, z, r), col = null;
       const list = this.query(x - r, z - r, x + r, z + r, this._tmp || (this._tmp = []));
       for (const c of list) {
-        if (c.trigger || !c.solid || c === skip || c.top > yMax + 1e-4) continue;
-        if (c.top <= best) continue;
-        if (Phys.circleHit(c, x, z, r * .7) || Phys.inside(c, x, z)) { best = c.top; col = c; }
+        if (c.trigger || !c.solid || c === skip) continue;
+        const top = c.type === 'wedge' ? Phys.topAt(c, x, z) : c.top;
+        if (top > yMax + 1e-4 || top <= best) continue;
+        if (Phys.circleHit(c, x, z, r * .7) || Phys.inside(c, x, z)) { best = top; col = c; }
       }
       list.length = 0;
       return { y: best, col };
@@ -134,8 +151,16 @@
     }
     // По горизонтали на (mx, mz) — короткими шажками, чтобы не проскочить тонкую стену; упёрся — скользит вдоль
     slide(ch, mx, mz){
-      const n = Math.max(1, Math.ceil(Math.hypot(mx, mz) / (ch.r * .5)));
-      for (let i = 0; i < n; i++) { ch.x += mx / n; ch.z += mz / n; this.pushOut(ch); }
+      const n = Math.max(1, Math.ceil(Math.hypot(mx, mz) / (ch.r * .5))), seg = Math.hypot(mx, mz) / n;
+      for (let i = 0; i < n; i++) {
+        const ox = ch.x, oz = ch.z;
+        ch.x += mx / n; ch.z += mz / n;
+        if (this.terrain && ch.grounded) {   // склон круче ~55° — упор (как обрыв)
+          const g = this.groundAt(ch.x, ch.z), rise = g - Math.max(ch.y, this.groundAt(ox, oz));
+          if (rise > seg * 1.43 + .05 && g > ch.y + .05) { ch.x = ox; ch.z = oz; ch.vx *= .3; ch.vz *= .3; continue; }
+        }
+        this.pushOut(ch);
+      }
     }
     // По вертикали: стоит — держится опоры (ступеньки вверх/вниз), в воздухе — тяжесть, потолок, приземление.
     // ch.impact — скорость удара о землю в момент приземления (для «жёсткого приземления» и камеры)
@@ -160,7 +185,7 @@
         const s = this.supportAt(ch.x, ch.z, ch.r, Math.max(ch.y, ny) + (ch.vy <= 0 ? .05 : 0));
         if (ch.vy <= 0 && ny <= s.y) { ch.impact = -ch.vy; ch.landed = Math.min(1, -ch.vy / 25); ny = s.y; ch.vy = 0; ch.grounded = true; ch.onCol = s.col; }
         ch.y = ny;
-        if (this.ground != null && ch.y < this.ground - 60) { ch.y = this.ground; ch.vy = 0; ch.grounded = true; }   // упал за край мира — обратно
+        if (this.ground != null && ch.y < this.groundAt(ch.x, ch.z) - 60) { ch.y = this.groundAt(ch.x, ch.z, ch.r); ch.vy = 0; ch.grounded = true; }   // упал за край мира — обратно
       }
     }
     // Есть ли твёрдое тело в вертикальном цилиндре (x, z, r) от y0 до y1 (влезет ли тело: присесть, встать, залезть)
@@ -179,7 +204,9 @@
         const list = this.query(ch.x - ch.r, ch.z - ch.r, ch.x + ch.r, ch.z + ch.r, this._tmp2 || (this._tmp2 = []));
         for (const c of list) {
           if (c.trigger || !c.solid) continue;
-          if (c.top <= ch.y + ch.step + 1e-4 || c.bottom >= ch.y + ch.h - .02) continue;   // ниже ступеньки или над головой
+          if (c.bottom >= ch.y + ch.h - .02) continue;   // над головой
+          // ниже ступеньки (на клине — скат у ног; клин круче ~55° — стена, как крутой склон земли)
+          if ((c.type === 'wedge' && c.hy < c.hz * 1.43 ? Phys.topAt(c, ch.x, ch.z) : c.top) <= ch.y + ch.step + 1e-4) continue;
           const hit = Phys.circleHit(c, ch.x, ch.z, ch.r);
           if (!hit) continue;
           ch.x += hit.nx * hit.d; ch.z += hit.nz * hit.d;
@@ -207,13 +234,14 @@
     // ── Луч: от (ox, oy, oz) по (dx, dy, dz) (нормирован), ближайшее твёрдое тело или земля ──
     raycast(ox, oy, oz, dx, dy, dz, maxT = 500, filter){
       let best = { t: maxT, col: null, nx: 0, ny: 1, nz: 0 };
-      if (this.ground != null && dy < -1e-6) { const t = (this.ground - oy) / dy; if (t >= 0 && t < best.t) best = { t, col: null, nx: 0, ny: 1, nz: 0 }; }
+      if (this.terrain) { const h = rayTerrain(this.terrain, ox, oy, oz, dx, dy, dz, maxT); if (h && h.t < best.t) best = h; }
+      else if (this.ground != null && dy < -1e-6) { const t = (this.ground - oy) / dy; if (t >= 0 && t < best.t) best = { t, col: null, nx: 0, ny: 1, nz: 0 }; }
       // по ячейкам сетки вдоль луча (грубо: прямоугольник проекции отрезка)
       const ex = ox + dx * Math.min(maxT, best.t), ez = oz + dz * Math.min(maxT, best.t);
       const list = this.query(Math.min(ox, ex), Math.min(oz, ez), Math.max(ox, ex), Math.max(oz, ez), []);
       for (const c of list) {
         if (c.trigger || (filter && !filter(c))) continue;
-        const h = c.type === 'cyl' ? rayCyl(c, ox, oy, oz, dx, dy, dz) : rayBox(c, ox, oy, oz, dx, dy, dz);
+        const h = c.type === 'cyl' ? rayCyl(c, ox, oy, oz, dx, dy, dz) : c.type === 'wedge' ? rayWedge(c, ox, oy, oz, dx, dy, dz) : rayBox(c, ox, oy, oz, dx, dy, dz);
         if (h && h.t >= 0 && h.t < best.t) best = { ...h, col: c };
       }
       if (best.t >= maxT) return null;
@@ -257,6 +285,49 @@
     if (Math.abs(ax) === 2) ny = Math.sign(ax);
     else { const lnx = Math.abs(ax) === 1 ? Math.sign(ax) : 0, lnz = Math.abs(ax) === 3 ? Math.sign(ax) : 0; nx = c.cos * lnx + c.sin * lnz; nz = -c.sin * lnx + c.cos * lnz; }
     return { t, nx, ny, nz };
+  }
+  // Луч против клина: коробка, обрезанная скатом y ≤ −z·(hy/hz) (в его системе)
+  function rayWedge(c, ox, oy, oz, dx, dy, dz){
+    const px = ox - c.x, pz = oz - c.z;
+    const lo = [c.cos * px - c.sin * pz, oy - c.y, c.sin * px + c.cos * pz], ld = [c.cos * dx - c.sin * dz, dy, c.sin * dx + c.cos * dz], h = [c.hx, c.hy, c.hz];
+    let t0 = -Infinity, t1 = Infinity, n0 = null;
+    for (let i = 0; i < 3; i++) {
+      if (Math.abs(ld[i]) < 1e-9) { if (Math.abs(lo[i]) > h[i]) return null; continue; }
+      let a = (-h[i] - lo[i]) / ld[i], b = (h[i] - lo[i]) / ld[i], s = -1;
+      if (a > b) { const t = a; a = b; b = t; s = 1; }
+      if (a > t0) { t0 = a; n0 = [0, 0, 0]; n0[i] = ld[i] > 0 ? -1 : 1; }
+      if (b < t1) t1 = b;
+    }
+    // скат: f = y + k·z ≤ 0
+    const k = c.hy / c.hz, fo = lo[1] + k * lo[2], fd = ld[1] + k * ld[2];
+    if (Math.abs(fd) < 1e-9) { if (fo > 0) return null; }
+    else {
+      const tp = -fo / fd;
+      if (fd < 0) { if (tp > t0) { t0 = tp; const l = Math.hypot(1, k); n0 = [0, 1 / l, k / l]; } }
+      else if (tp < t1) t1 = tp;
+    }
+    if (t0 > t1 || t0 < 0 || !n0) return null;
+    return { t: t0, nx: c.cos * n0[0] + c.sin * n0[2], ny: n0[1], nz: -c.sin * n0[0] + c.cos * n0[2] };
+  }
+  // Луч против рельефа: шагами по 0,5 до пересечения, потом уточнение делением пополам
+  function rayTerrain(T, ox, oy, oz, dx, dy, dz, maxT){
+    const f = t => oy + dy * t - T.sample(ox + dx * t, oz + dz * t);
+    let a = 0, fa = f(0);
+    if (fa < 0) return null;
+    const stepL = .5, n = Math.min(4000, Math.ceil(maxT / stepL));
+    for (let i = 1; i <= n; i++) {
+      const b = Math.min(maxT, i * stepL), fb = f(b);
+      if (fb < 0) {
+        let lo = a, hi = b;
+        for (let k = 0; k < 10; k++) { const m = (lo + hi) / 2; if (f(m) < 0) hi = m; else lo = m; }
+        const t = hi, x = ox + dx * t, z = oz + dz * t, e = .25;
+        const gx = T.sample(x + e, z) - T.sample(x - e, z), gz = T.sample(x, z + e) - T.sample(x, z - e), l = Math.hypot(gx, 2 * e, gz);
+        return { t, col: null, nx: -gx / l, ny: 2 * e / l, nz: -gz / l };
+      }
+      a = b; fa = fb;
+      if (b >= maxT) break;
+    }
+    return null;
   }
   // Луч против вертикального цилиндра (бок + крышка сверху/снизу)
   function rayCyl(c, ox, oy, oz, dx, dy, dz){
