@@ -467,6 +467,7 @@
     const segD = (px, pz, x1, z1, x2, z2) => { const dx = x2 - x1, dz = z2 - z1, l = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((px - x1) * dx + (pz - z1) * dz) / l)); return Math.hypot(px - x1 - t * dx, pz - z1 - t * dz); };
     const free = (x, z, m) => {
       if (Math.hypot(x, z) < 22) return false;
+      if (window.MirBase?.zone(x, z)) return false;   // район участков (mir-base.js)
       if (Math.abs(x) < 13 && z > 15 && z < 80) return false;   // улица
       if (x > -13 && x < 13 && z < -26 && z > -46) return false;   // кафе
       if (x > 26 && x < 47 && z > -15 && z < 11) return false;   // клуб
@@ -527,8 +528,10 @@
     for (let i = 0; i < 14; i++) { const a = i / 14 * PI * 2 + R0() * .3, d = 190 + R0() * 60, k = 28 + R0() * 30; P(null, { s: 'ico', x: Math.cos(a) * d, y: -k * .35, z: Math.sin(a) * d + 6, r: k, det: 1, sy: .55, c: ['#6fae62', '#7bbb6a', '#5f9d58'][i % 3] }); }
     // край мира: невидимые стены
     for (const [x, z, hx, hz] of [[0, -72, 90, 1], [0, 92, 90, 1], [-84, 10, 1, 90], [84, 10, 1, 90]]) ph.addBox({ x, z, y: 5, hx, hz, hy: 5, tag: 'edge' });
+    // ── Район участков: улица, земля участков, таблички (сами базы — S.base, после склейки) — mir-base.js ──
+    const district = window.MirBase?.build?.({ R, ph, X, S, P, M, box, plaque, label, path, seatSpot }) || null;
 
-    return { rooms, seats, screens, floorAt };
+    return { rooms, seats, screens, floorAt, district };
   }
 
   // ═══ Экран ═══
@@ -623,6 +626,8 @@
     // экран сцены
     drawStageScreen();
     S.sitAt = sitAt; S.go = go; S.openEditor = openEditor; S.openStage = openStage; S.openGate = openGate; S.showInfo = showInfo;
+    // район участков: свой участок, чужие базы, стройка (mir-base.js)
+    try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
   }
 
   // ── Шаг логики (1/60 с) ──
@@ -651,6 +656,7 @@
     }
     netTick(dt);
     tableTick(dt);
+    S.base?.update(dt);   // район участков: стройка, подгрузка соседей
   }
 
   // ── Кадр: человечки, камера, подписи, подсказки ──
@@ -671,7 +677,8 @@
     if (S.me.emo && S.me.emo.t !== S.me._emoA) { S.me._emoA = S.me.emo.t; A.emote(S.key, S.me.emo.e, t); }
     for (const k of [...A.list.keys()]) if (k !== S.key && !S.players.has(k)) A.remove(k);
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
-    rig.update(dt, P, look, S.ph, C);
+    rig.update(dt, S.base?.cam || P, look, S.ph, C);   // в стройке камера смотрит на участок
+    S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
     I.wantLock = rig.mode === 'first' && !I.touch;
     A.update(dt, t, R.camera.position);
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
@@ -763,7 +770,7 @@
       else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') status('Связь с миром потерялась — переподключаемся…');
     });
   }
-  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null });
+  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0 });
   const retrack = () => { if (S?.ch && S.keys) S.ch.track(presenceMeta()).catch(() => {}); };
   function leaveChannel(){ const ch = S?.ch; if (!ch) return; S.ch = null; try { ch.untrack(); } catch (e) {} try { sbClient.removeChannel(ch); } catch (e) {} }
   function onSync(){
@@ -885,6 +892,8 @@
       // «Начать» за карточным столом: все, кто сидит за этим столом с тем же кодом, — в игру
       if (!S.mySeat || typeof d.tb !== 'string' || S.mySeat.tb?.id !== d.tb || d.c !== S.mySeat.c) return;
       if (p.seat && S.world.seats.get(p.seat.id)?.tb?.id === d.tb) startGame(S.mySeat.tb, S.mySeat.c);
+    } else if (d.t === 'base') {
+      S.base?.onMsg(p, d);   // кто-то перестроил участок — перечитать (mir-base.js)
     } else if (d.t === 'mute') {
       if (!p.v || !['admin', 'moderator'].includes(p.v.role) || typeof d.to !== 'string') return;
       S.muted.add(d.to);
@@ -1259,7 +1268,7 @@
       }
       seen.add(el);
       const a = S.A.get(p.key);
-      if (!a || (p === S.me && S.rig.mode === 'first')) { el.style.display = 'none'; continue; }
+      if (!a || a.hidden || (p === S.me && S.rig.mode === 'first')) { el.style.display = 'none'; continue; }
       const top = a.sit ? (a.seatY ?? 0) - (a.ch.hipY || .52) + a.ch.top : a.y + a.ch.top * (1 - .3 * (a.crouch || 0));
       const [sx, sy, vis] = S.R.project(a.x, top + .45, a.z);
       if (!vis || (p.leaving && now() - p.leaving > 500)) { el.style.display = 'none'; continue; }
@@ -1317,6 +1326,7 @@
     try { s.loop?.stop(); } catch (e) {}
     try { s.unfollow?.(); } catch (e) {}
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
+    try { s.base?.dispose(); } catch (e) {}   // район участков
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
     if (!s.leavingTo) savePos();
