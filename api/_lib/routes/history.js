@@ -1,7 +1,7 @@
 // api/history.js — /history: «История канала» по годам — только из настоящих данных YouTube:
 // сколько роликов вышло за год, во что больше всего играл (темы из api/_lib/topics.js), первое видео
 // года. Ничего не выдумываем: текста «от автора» тут нет — только цифры и ссылки на ролики.
-import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+import { SITE, ALL_UPLOADS, getUploads, isGambling, esc } from '../yt.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS } from '../topics.js';
 
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const topics = TOPICS.filter(t => t.slug !== 'horror').map(t => [t, list.filter(v => t.re.test(v.title)).length])
       .filter(([, c]) => c >= 3).sort((a, b) => b[1] - a[1]).slice(0, 4);
     const horror = list.filter(v => TOPICS.find(t => t.slug === 'horror').re.test(v.title)).length;
-    const firstOfYear = list[list.length - 1];
+    const firstOfYear = [...list].reverse().find(v => !isGambling(v.title)) || list[list.length - 1];
     const idx = vids.indexOf(firstOfYear);
     return `<section class="hy">
       <div class="hy-year"><b>${y}</b><small>${n.toLocaleString('ru')} ${ru(n, 'ролик', 'ролика', 'роликов')}</small></div>

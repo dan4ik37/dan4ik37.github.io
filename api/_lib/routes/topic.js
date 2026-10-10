@@ -30,6 +30,7 @@ export default async function handler(req, res) {
       body: `<main class="wrap narrow"><h1>Не удалось загрузить видео</h1><p class="muted">Попробуй чуть позже.</p>
         <p><a class="btn btn-yt" href="${YT_CHANNEL}">▶ Канал на YouTube</a></p></main>` }));
   }
+  all = all.filter(v => !isGambling(v.title));   // кейсы/депозит — не на страницах игр (реклама, правила AdSense)
   const counts = new Map(TOPICS.map(x => [x.slug, all.filter(v => x.re.test(v.title)).length]));
   res.setHeader('Cache-Control', 'public, s-maxage=21600, stale-while-revalidate=604800');
   return res.status(200).send(t ? topicPage(t, all, counts, req) : hubPage(counts));

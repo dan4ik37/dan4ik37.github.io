@@ -4,7 +4,7 @@
 // её почти не видит) и блок «Похожие». Здесь — одна обычная страница со ссылками на все ролики:
 // поисковик находит и связывает их, человек может пролистать архив, старые видео не теряются.
 // На канале ~6000 роликов — страницы по PER штук: /videos, /videos?p=2 …; годы ведут на страницу, где год начинается.
-import { SITE, ALL_UPLOADS, getUploads, esc } from '../yt.js';
+import { SITE, ALL_UPLOADS, getUploads, isGambling, esc } from '../yt.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS } from '../topics.js';
 
@@ -36,6 +36,8 @@ export default async function handler(req, res) {
   const yearInfo = new Map();
   vids.forEach((v, i) => { const y = year(v); if (!yearInfo.has(y)) yearInfo.set(y, { count: 0, page: Math.floor(i / PER) + 1 }); yearInfo.get(y).count++; });
   const slice = vids.slice((p - 1) * PER, p * PER);
+  // На странице есть ролики про кейсы/промокоды на депозит — рекламы Google на ней не будет (ни места, ни скрипта)
+  const noAds = slice.some(v => isGambling(v.title));
   const byYear = new Map();
   for (const v of slice) { const y = year(v); if (!byYear.has(y)) byYear.set(y, []); byYear.get(y).push(v); }
   const years = [...byYear.keys()];
@@ -67,7 +69,7 @@ export default async function handler(req, res) {
   <section class="more" id="y${y}">
     <h2>${y}</h2>
     <div class="grid">${byYear.get(y).map(v => `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${esc(day(v))}</small></a>`).join('')}</div>
-  </section>${i === 0 ? '\n  <div data-ad="video_page" hidden></div>' : ''}`).join('')}
+  </section>${i === 0 && !noAds ? '\n  <div data-ad="video_page" hidden></div>' : ''}`).join('')}
   ${p === pages ? `<div class="secret-spot" title="Здесь всё началось"><button type="button" class="d37-secret" data-secret="archive" aria-label="Секретный знак">✦</button></div>` : ''}
   ${pager}
 </main>`;
@@ -76,7 +78,7 @@ export default async function handler(req, res) {
   return res.status(200).send(page({
     title: p > 1 ? `Все видео dan4ik37 — страница ${p} из ${pages}` : `Все видео dan4ik37 — архив роликов (${n.toLocaleString('ru')})`,
     description: `Все ${n} ${plural} YouTube-канала dan4ik37 по годам: игры, стримы, шортсы. Смотри прямо на сайте.`,
-    url, image: SITE + '/og-image.jpg', ld, body, css: CSS
+    url, image: SITE + '/og-image.jpg', ld, body, css: CSS, noAds
   }));
 }
 
