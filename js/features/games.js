@@ -293,7 +293,7 @@ function gamesDailyDot(){
 // «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
 // Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
 const WHATSNEW_VER = '2026-10-10';
-const WHATSNEW = [['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+const WHATSNEW = [['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
