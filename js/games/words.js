@@ -269,7 +269,9 @@
     mount(el, gameApi){
       root = el; api = gameApi;
       document.addEventListener('keydown', onKey);
-      if (GameRoom.validCode(gameApi.param)) {
+      // «archive» подходит под формат кода комнаты — проверяем раньше дуэли
+      if (gameApi.param === 'archive') start('archive');
+      else if (GameRoom.validCode(gameApi.param)) {
         stopDuel = Versus.start(root, api, 'words', gameApi.param, {
           run(stage, rng, hooks){
             const host = document.createElement('div');
@@ -281,7 +283,7 @@
           },
           stop(){ W = null; },
         });
-      } else start(gameApi.param === 'archive' ? 'archive' : 'daily');   // #/games/words/archive — сразу архив
+      } else start('daily');
     },
     unmount(){ clearTimeout(timer); W = null; stopDuel?.(); stopDuel = null; document.removeEventListener('keydown', onKey); root = null; },
     _test: { evaluate, dailyWord, dayNo },
