@@ -17,7 +17,8 @@
    ошибка. Строки наружу: (буфер, ёмкость) → сколько байт записано (по границе символа). Обработчик — число cb: сайт зовёт
    экспорт d37_event(cb, arg), что значит cb — решает SDK (тут: номер функции в таблице × 8 + вид, см. d37_export_event).
    Экспорты модуля: d37_start() — обязательно; d37_event(i32 cb, i32 arg) — если есть обработчики; d37_update(f64 dt) — если
-   включён want_update(1); memory; _initialize (WASI) или __wasm_call_ctors — их сайт зовёт до d37_start.
+   включён want_update(1); memory; _initialize (WASI) или __wasm_call_ctors — если экспортированы, сайт зовёт их до d37_start
+   (без WASI этот файл зовёт __wasm_call_ctors сам — глобальные конструкторы C++ работают и так).
    За один вызов модуля — не больше 200 000 обращений к сайту и 5000 команд миру (иначе ошибка); упал (trap) — ошибка во
    «Вывод», модуль работает дальше; 30 ошибок или память больше 256 МБ — скрипт остановлен.
    Вывод:      print(s,n) · warn(s,n) · error(s,n,строка) — красным, строка 0 = неизвестна
@@ -199,8 +200,11 @@ struct Text {
   __attribute__((no_builtin)) Text &operator<<(Str s) { for (int i = 0; i < s.n && n < 511; i++) b[n++] = s.p[i]; b[n] = 0; return *this; }
   Text &operator<<(double v) { n += d37_fmt(b + n, 512 - n, v); return *this; }
   Text &operator<<(int v) { return *this << (double)v; }
-  Text &operator<<(long long v) { return *this << (double)v; }
   Text &operator<<(unsigned v) { return *this << (double)v; }
+  Text &operator<<(long v) { return *this << (double)v; }
+  Text &operator<<(unsigned long v) { return *this << (double)v; }   /* size() у std::vector */
+  Text &operator<<(long long v) { return *this << (double)v; }
+  Text &operator<<(unsigned long long v) { return *this << (double)v; }
   Text &operator<<(char c) { if (n < 511) { b[n++] = c; b[n] = 0; } return *this; }
   const char *c_str() const { return b; }
   int size() const { return n; }
@@ -423,6 +427,7 @@ inline Part new_model(Part parent = Part()) { return Part(d37_create(D37_NEW_MOD
 inline Part event_target() { return Part(d37_event_target()); }        /* чьё событие сейчас обрабатывается */
 /* ── Вывод, экран, звук ── */
 inline void print(Str s) { d37_print(s.p, s.n); }
+inline void print(double v) { print(num(v)); }                          /* print(5), print(score) */
 inline void warn(Str s) { d37_warn(s.p, s.n); }
 inline void error(Str s) { d37_error(s.p, s.n, 0); }
 inline void gui_message(Str s, double sec = 3) { d37_gui_message(s.p, s.n, sec); }

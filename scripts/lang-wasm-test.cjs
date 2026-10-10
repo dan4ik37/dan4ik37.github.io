@@ -306,6 +306,9 @@ __attribute__((noinline)) int crash(int k) { volatile int z = 0; return k / z; }
 void start() {
   self_ = script_parent();
   print("имя: " + std::string(self_.name()) + " " + g_str);
+  print(Text() << "размер " << log_.size() << " " << 5L << " " << 7ULL << " " << 2.5f << " " << true);
+  print(42);
+  print(2.5);
   printf("printf %d %s\\n", 42, "ok");
   printf("без перевода строки");
   Part box = find("Ящик");
@@ -340,6 +343,7 @@ void start() {
       const P = S.prints();
       ok(P.includes('имя: Я глобальная') && P.includes('printf 42 ok') && P.includes('без перевода строки'), 'C++: std::string, глобальный конструктор, printf построчно и хвост без \\n', P);
       ok(P.includes('ящик: есть x=3 детей у модели: 1'), 'C++: find, position, child_count, Text с числами', P);
+      ok(P.includes('размер 0 5 7 2.5 1') && P.includes('42') && P.includes('2.5'), 'C++: Text << size_t/long/float/bool, print(число)', P);
       ok(S.of('clone').length === 1 && S.of('new').some(m => m.parent === 'm'), 'C++: clone и new_part в модель', S.msgs.filter(m => m.t === 'clone' || m.t === 'new'));
       ok(P.includes('новая в доме: 1 материал neon'), 'C++: parent(), set_material/material()', P);
       ok(P.includes('r ok t ok') && P.includes('игрок Тест здоровье 100'), 'C++: random_int, game_time, players()', P);
