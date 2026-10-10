@@ -28,6 +28,9 @@
     const user = (typeof currentUser !== 'undefined' && currentUser) || root.currentUser;
     const key = o.key || user?.id || root.GameRoom?.guestId?.() || 'g-' + Math.random().toString(36).slice(2, 10);
     const joinedAt = o.joinedAt || Date.now(), myId = key + '~' + joinedAt, max = o.max || 8;
+    // у клиента Supabase один канал на имя: прежняя комната с этим кодом ещё закрывается — sb.channel вернул бы её же
+    // (и .on бросил бы ошибку) — тогда сразу «занято»
+    if (sb.getChannels?.()?.some(c => c.topic === `realtime:${game}-net-${code}`)) { o.onError?.('busy'); return null; }
     const ch = sb.channel(`${game}-net-${code}`, { config: { broadcast: { self: false }, presence: { key } } });
     const pairs = new Map(), rq = new Map(), st = { relayMsgs: 0, relayBytes: 0, sigMsgs: 0, p2pPkts: 0 };
     let H = {}, members = [], synced = false, closed = false, relayAt = -1e9;

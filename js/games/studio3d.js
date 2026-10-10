@@ -1693,8 +1693,10 @@ Players.PlayerAdded.Connect(player => {
       spawned: pl.role === 'solo', hasWorld: kind !== 'join', t0: performance.now(), warnAt: 0, fixAt: 0 };
     const look = window.D37Char ? window.D37Char.look() : {};
     // ключ — свой на каждую вкладку: две вкладки одного аккаунта («Тест вдвоём») — два игрока, а не один
-    const tr = mp.tr = E.net.room('s3', code, { client: c, key: 's3' + Math.random().toString(36).slice(2, 10), nick: pl.nick, max: MP_MAX,
-      onFull: () => mpFull(mp), onError: s => mpNetError(mp, s) });
+    let tr = null;
+    try { tr = mp.tr = E.net.room('s3', code, { client: c, key: 's3' + Math.random().toString(36).slice(2, 10), nick: pl.nick, max: MP_MAX,
+      onFull: () => mpFull(mp), onError: s => mpNetError(mp, s) }); } catch (e) { console.error(e); }
+    if (ED !== ed || ed.mp !== mp) return false;   // ошибку уже показали (onError)
     if (!tr) { ed.mp = null; mpFail(kind, '📡 Нет связи с комнатой — обнови страницу'); return false; }
     const live = f => (...a) => { if (ED?.mp === mp && ED.playing) f(...a); };
     mp.S = E.net.session({ transport: tr, scene: ed.SC, nick: pl.nick, info: { look }, extra: NET_EXTRA,
@@ -1898,12 +1900,13 @@ Players.PlayerAdded.Connect(player => {
       if (mp.pre) mpSolo('📡 Не получилось подключиться к комнате — играешь один'); else mpFail(kind, '📡 Не получилось подключиться к комнате. Обнови страницу.');
     } else if (pl && performance.now() - mp.warnAt > 10000) { mp.warnAt = performance.now(); pl.H.toast('📡 Связь с комнатой прервалась — переподключаемся…', false); }
   }
-  // Сеть не вышла, а мир есть — играем одни
+  // Сеть не вышла, а мир есть — играем одни (и адрес — без кода комнаты)
   function mpSolo(text){
-    const pl = ED?.playing; if (!pl) return;
-    pl.role = 'solo'; ED.q('.s3-mpwait')?.remove();
+    const ed = ED, pl = ed?.playing; if (!pl) return;
+    pl.role = 'solo'; ed.q('.s3-mpwait')?.remove();
     runWorld(pl); pl.P.enabled = true; pl.t0 = performance.now();
-    pl.H.toast(text, false);
+    if (ed.playId) { ed.roomCode = null; try { history.replaceState(null, '', '#/games/studio3d/play/' + ed.playId); if (typeof gamesParam !== 'undefined') gamesParam = 'play/' + ed.playId; } catch (e) {} }
+    msg(text, false);
   }
   function mpFail(kind, text){
     const ed = ED; if (!ed) return;
