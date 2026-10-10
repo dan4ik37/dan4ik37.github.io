@@ -16,8 +16,9 @@ import feed from './_lib/routes/feed.js';
 import top from './_lib/routes/top.js';
 import quiz from './_lib/routes/quiz.js';
 import wheel from './_lib/routes/wheel.js';
+import random from './_lib/routes/random.js';
 
-const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel };
+const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel, random };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

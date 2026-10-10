@@ -71,7 +71,7 @@ export default async function handler(req, res) {
     <li><a href="/#/chat">Живой чат</a> — общий чат сайта и чат Twitch, уровни и XP за активность.</li>
     <li><a href="/games">Онлайн-игры с друзьями</a> — «5 букв» со словом дня, морской бой, города, шашки и другие, по ссылке без регистрации.</li>
     <li><a href="/quiz">Тесты</a> — какой ты моб из Майнкрафта, кто ты из FNAF и Роблокса, какой ты зритель.</li>
-    <li>Полезное для игроков — <a href="/tools/nick">генератор ников</a>, <a href="/tools/fonts">шрифты для ника</a>, <a href="/tools/cps">CPS тест</a>, <a href="/tools/wheel">колесо фортуны</a>.</li>
+    <li>Полезное для игроков — <a href="/tools/nick">генератор ников</a>, <a href="/tools/fonts">шрифты для ника</a>, <a href="/tools/cps">CPS тест</a>, <a href="/tools/wheel">колесо фортуны</a>, <a href="/tools/random">генератор случайных чисел</a>.</li>
     <li><a href="/vip">VIP</a> за поддержку — цветной ник, стикеры, своя тема сайта.</li>
   </ul></section>
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details${q.startsWith('Кто') ? ' open' : ''}><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>

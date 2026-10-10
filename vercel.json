@@ -83,6 +83,10 @@
       "destination": "/api/pages?page=wheel"
     },
     {
+      "source": "/tools/random",
+      "destination": "/api/pages?page=random"
+    },
+    {
       "source": "/quiz",
       "destination": "/api/pages?page=quiz"
     },
