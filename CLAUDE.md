@@ -15,7 +15,7 @@
 ## Ожидает запуска владельцем (обновлять этот список!)
 1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
    и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk*, freecell* (функции целиком из
+2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_*, blocks*, kosynka*, pauk*, freecell*, miner* (функции целиком из
    games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
@@ -368,6 +368,11 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 - «Свободная ячейка» (#/games/freecell) — там же, kind 'f': раздачи №1–32000 генератором Windows (msDeal; №1 сверена с
   эталоном), ячейки c0..c3, перенос (ячейки+1)×2^(пустые ряды) (maxMove), «безопасные» карты сами уходят в дом (autoFound).
   Соревнование — одинаковый номер раздачи. Ключи freecell / freecell_duel, монеты 30 за победу.
+- «Сапёр» (#/games/miner, js/games/miner.js) — DOM-сетка .mc; мины ставятся после первого хода (не рядом с ним), «аккорд»
+  по цифре, флажок — правый клик / долгое нажатие 0,45 с / режим 🚩 (палец сдвинулся > 12 px — это прокрутка, не ход).
+  Профи на узком экране — 16×30. Очки за победу: база 100/400/1000 × min(3, эталон/сек) — ключи miner1/2/3; рекорды — miner2.
+  Соревнование: одинаковое поле «Любитель» + общая открытая стартовая клетка (из seed), очки = открытые + 1000 за победу.
+  Монеты за победу 10/30/60 (только если партия ≥ 20 с — сервер всё равно не даёт монеты чаще раза в 20 с).
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —

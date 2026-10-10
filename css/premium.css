@@ -2774,3 +2774,21 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .sl-coins{font-size:.85rem;font-weight:700}
 @media(max-width:560px){.sl-wrap{padding:5px;margin:0 -6px}}
 .sl-num{font-size:.74rem;color:var(--muted);align-self:center;margin-right:.2rem}.sl-num b{color:var(--text)}
+
+/* ── «Сапёр» (js/games/miner.js) ── */
+.mn{display:flex;flex-direction:column;align-items:center;gap:.5rem}
+.mn-lv{justify-content:center}
+.mn-bar{display:flex;align-items:center;justify-content:center;gap:.8rem;font-size:.85rem;color:var(--muted)}
+.mn-cnt b{color:var(--text);font-variant-numeric:tabular-nums;display:inline-block;min-width:2.4ch}
+.mn-face{font-size:1.5rem;line-height:1;background:rgba(255,255,255,.07);border:1px solid var(--border);border-radius:12px;padding:.25rem .45rem;cursor:pointer}
+.mn-flag{font-size:1rem;background:transparent;border:1px solid var(--border);border-radius:10px;padding:.3rem .5rem;cursor:pointer;opacity:.55}
+.mn-flag.on{opacity:1;background:rgba(239,68,68,.2);border-color:#ef4444}
+.mn-wrap{position:relative;max-width:100%;overflow-x:auto}
+.mn-grid{--cs:24px;display:grid;grid-template-columns:repeat(var(--w),var(--cs));gap:2px;padding:6px;background:#1b2140;border-radius:12px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.mc{width:var(--cs);height:var(--cs);border-radius:5px;background:linear-gradient(180deg,#5463a6,#3c4880);box-shadow:inset 0 1px 0 rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font:900 calc(var(--cs)*.6)/1 'Montserrat',sans-serif;cursor:pointer}
+.mc:not(.op):hover{filter:brightness(1.15)}
+.mc.op{background:#10142a;box-shadow:none;cursor:default}
+.mc.fl,.mc.mine,.mc.boom{font-size:calc(var(--cs)*.56)}
+.mc.boom{background:#991b1b}
+.mc.n1{color:#60a5fa}.mc.n2{color:#4ade80}.mc.n3{color:#f87171}.mc.n4{color:#a78bfa}.mc.n5{color:#fb923c}.mc.n6{color:#22d3ee}.mc.n7{color:#f472b6}.mc.n8{color:#e5e7eb}
+.mn-note{text-align:center;max-width:520px}
