@@ -119,7 +119,9 @@ Players.PlayerAdded.Connect(player => {
   // ── Шаблоны новых миров ──
   function template(SC, TR, kind){
     SC.clear();
+    if (TR) flatTerrain(TR, kind === 'winter' ? 3 : 0);
     const A = (cls, p, parent) => SC.add(cls, p, parent);
+    let light = { time: 14, brightness: 1, ambient: 1, fogEnd: 360, shadows: true, cycle: 0 };
     if (kind === 'empty') {
       TR?.setEnabled(false);
       A('Part', { name: 'Основание', pos: [0, -.5, 0], size: [128, 1, 128], color: '#6b7a8f', mat: 'concrete' });
@@ -144,13 +146,51 @@ Players.PlayerAdded.Connect(player => {
       A('Spawn', { pos: [0, (TR?.sample(0, 0) || 0) + .2, 0] });
       A('Prefab', { kind: 'tree', pos: [6, TR?.sample(6, 4) || 0, 4] });
       A('Prefab', { kind: 'pine', pos: [-8, TR?.sample(-8, -6) || 0, -6] });
+    } else if (kind === 'camp') {   // ночь, костёр, палатки, светлячки
+      TR?.setEnabled(true);
+      A('Spawn', { pos: [0, .2, 8] });
+      const fire = A('Part', { name: 'Костёр', pos: [0, .25, 0], size: [1.6, .5, 1.6], color: '#4a3426', mat: 'rock' });
+      A('Effect', { name: 'Огонь', kind: 'fire' }, fire); A('Effect', { name: 'Дым', kind: 'smoke' }, fire);
+      A('Light', { name: 'Свет костра', pos: [0, 1.8, 0], color: '#ff9a3c', range: 20, power: 3.2 });
+      for (const [x, z, rot] of [[3.2, 0, [90, 0, 0]], [-3.2, 0, [90, 0, 0]], [0, 3.2, [0, 0, 90]], [0, -3.2, [0, 0, 90]]]) A('Part', { name: 'Бревно', shape: 'cyl', pos: [x, .35, z], rot, size: [.7, 2.6, .7], color: '#7c5c46', mat: 'wood' });
+      for (const [x, z, r, c] of [[8, -5, 30, '#e76f51'], [-8, -4, -30, '#2a9d8f']]) {
+        const a = r * DEG, dx = Math.sin(a) * .8, dz = Math.cos(a) * .8;
+        A('Part', { name: 'Палатка', shape: 'wedge', pos: [x + dx, 1, z + dz], rot: [0, r, 0], size: [3, 2, 1.6], color: c, mat: 'fabric' });
+        A('Part', { name: 'Палатка', shape: 'wedge', pos: [x - dx, 1, z - dz], rot: [0, r + 180, 0], size: [3, 2, 1.6], color: c, mat: 'fabric' });
+      }
+      const rnd = window.D37E.rng(37);
+      for (let i = 0; i < 22; i++) { const a = i / 22 * PI * 2 + rnd() * .2, d = 15 + rnd() * 9; A('Prefab', { kind: rnd() < .6 ? 'pine' : 'tree', pos: [Math.cos(a) * d, 0, Math.sin(a) * d], scale: .8 + rnd() * .7 }); }
+      A('Effect', { name: 'Светлячки', kind: 'magic', pos: [5, 1.4, 5], rate: .5, scale: .6, color: '#d9ff8a', color2: '#ffe66d' });
+      A('Prefab', { kind: 'lamp', pos: [5, 0, 9] });
+      A('Script', { name: 'Приветствие', code: "Players.PlayerAdded.Connect(player => {\n  player.Message('Добро пожаловать в лагерь! Посиди у костра 🔥', 4);\n});" });
+      light = { time: 21.5, brightness: 1, ambient: 1.3, fogEnd: 240, shadows: true, cycle: 0 };
+    } else if (kind === 'winter') {   // снег, ёлки, каток, снеговик
+      TR?.setEnabled(true);
+      if (TR) { for (const [x, z, r] of [[34, -30, 20], [-38, 24, 24], [40, 36, 18], [-30, -40, 22]]) for (let k = 0; k < 6; k++) TR.brush('raise', x, z, r, .12, 1); TR.brush('smooth', 0, 0, TR.size, .001, 1); }
+      A('Spawn', { pos: [0, .2, 0] });
+      A('Effect', { name: 'Снегопад', kind: 'snow', pos: [0, 0, 0], scale: 1.5 });
+      A('Part', { name: 'Каток', pos: [12, .1, -8], size: [14, .2, 10], color: '#bfe9ff', mat: 'ice' });
+      const sm = A('Model', { name: 'Снеговик' });
+      for (const [y, s] of [[.9, 1.8], [2.3, 1.3], [3.35, .9]]) A('Part', { name: 'Ком', shape: 'ball', pos: [-6, y, 4], size: [s, s, s], color: '#ffffff', mat: 'snow' }, sm);
+      A('Part', { name: 'Нос', shape: 'cyl', pos: [-6, 3.35, 4.6], rot: [90, 0, 0], size: [.18, .5, .18], color: '#ff8c42', mat: 'smooth' }, sm);
+      A('Part', { name: 'Шапка', shape: 'cyl', pos: [-6, 3.95, 4], size: [.7, .5, .7], color: '#1b2a35', mat: 'fabric' }, sm);
+      const rnd = window.D37E.rng(73);
+      for (let i = 0; i < 30; i++) { const a = rnd() * PI * 2, d = 14 + rnd() * 30, x = Math.cos(a) * d, z = Math.sin(a) * d; A('Prefab', { kind: 'pine', pos: [x, TR ? TR.sample(x, z) : 0, z], scale: .8 + rnd() * .9 }); }
+      light = { time: 12.5, brightness: 1.1, ambient: 1.15, fogEnd: 260, shadows: true, cycle: 0 };
     } else {   // площадка с травой
       TR?.setEnabled(true);
       A('Spawn', { pos: [0, .2, 0] });
       A('Prefab', { kind: 'tree', pos: [10, 0, -6] }); A('Prefab', { kind: 'bench', pos: [-6, 0, 4], rot: [0, 90, 0] }); A('Prefab', { kind: 'lamp', pos: [-4, 0, -4] });
       A('Part', { name: 'Дом-стена', pos: [0, 2, -14], size: [12, 4, 1], color: '#c4281c', mat: 'brick' });
     }
-    SC.R.setLighting({ time: 14, brightness: 1, ambient: 1, fogEnd: 360, shadows: true });
+    SC.R.setLighting(light);
+  }
+  // ровная земля одного материала (0 трава, 1 песок, 2 камень, 3 снег), без воды
+  function flatTerrain(TR, ch){
+    TR.H.fill(0);
+    for (let i = 0; i < TR.n * TR.n; i++) for (let k = 0; k < 4; k++) TR.W[i * 4 + k] = k === ch ? 255 : 0;
+    TR.setWater(false); TR.dirty = ch !== 0;
+    TR.brush('smooth', 0, 0, TR.size, 0, 0);   // пересчитать всю сетку
   }
   // Холмы: сумма синусов + остров к центру; низины — песок, высоко — снег
   function generateHills(TR, seed){
@@ -268,6 +308,8 @@ Players.PlayerAdded.Connect(player => {
     ed.loop = E.loop(editStep, editFrame);
     q('.s3-loading').remove();
     hint('ПКМ + мышь — осмотреться, WASD — лететь, колесо — ближе/дальше. ➕ Деталь — добавить, тяни стрелки. ▶ Играть — проверить мир.');
+    let seen = '1'; try { seen = localStorage.getItem('d37_s3_tut') || ''; } catch (e) {}
+    if (!seen && !ed.player) { ed.tut = new Set(); const t = document.createElement('div'); t.className = 's3-tut'; view.appendChild(t); renderTut(); }
     ed.autosave = setInterval(() => { if (ed.dirty && !ed.playing) save(true); }, 15000);
     // закрыли/обновили вкладку — сохраняем сразу, без сжатия ландшафта
     window.addEventListener('pagehide', ed.onHide = () => {
@@ -275,6 +317,13 @@ Players.PlayerAdded.Connect(player => {
       const d = ed.SC.toJSON(); d.terrain = ed.TR.toJSONSync(); d.name = ed.q('.s3-name').value.trim() || 'Мой мир'; d.cam = { ...ed.cam };
       store.save(ed.placeId, d.name, d); ed.dirty = false;
     });
+  }
+  const TUT = [['add', '➕ Добавь деталь: «➕ Деталь» → «Блок»'], ['move', '✥ Потяни цветную стрелку — деталь поедет'], ['script', '📜 Оживи её: «📜 Скрипт» → «📚 Примеры»'], ['play', '▶ Нажми «Играть» и пройдись по миру']];
+  function tutStep(k){ const ed = ED; if (!ed?.tut || ed.tut.has(k)) return; ed.tut.add(k); renderTut(); }
+  function renderTut(){
+    const ed = ED, box = ed?.q('.s3-tut'); if (!box || !ed.tut) return;
+    if (TUT.every(([k]) => ed.tut.has(k))) { box.remove(); ed.tut = null; try { localStorage.setItem('d37_s3_tut', '1'); } catch (e) {} msg('🎉 Студия освоена! Дальше — 🧩 модели, ✨ эффекты и 📤 Выложить', true); return; }
+    box.innerHTML = `<b>🧭 Первые шаги</b>${TUT.map(([k, t]) => `<div class="${ed.tut.has(k) ? 'ok' : ''}">${ed.tut.has(k) ? '✅' : '⬜'} ${t}</div>`).join('')}<button type="button" data-a="tut:x">Скрыть</button>`;
   }
   function hint(t){ const h = ED.q('.s3-hint'); h.textContent = t; h.hidden = !t; clearTimeout(ED.hintT); ED.hintT = setTimeout(() => { h.hidden = true; }, 12000); }
   function msg(t, ok){ const m = ED.q('.s3-msg'); m.textContent = t; m.className = 's3-msg' + (ok === false ? ' bad' : ok ? ' ok' : ''); m.hidden = false; clearTimeout(ED.msgT); ED.msgT = setTimeout(() => { m.hidden = true; }, 2600); }
@@ -393,7 +442,7 @@ Players.PlayerAdded.Connect(player => {
     }
     const obj = SC.add(cls, props, parent);
     renderTree(); select(obj);
-    if (cls === 'Script') { setBottom('code'); ED.q('.s3-ta').focus(); }
+    if (cls === 'Script') { setBottom('code'); ED.q('.s3-ta').focus(); tutStep('script'); } else if (cls === 'Part') tutStep('add');
     return obj;
   }
   function duplicate(){
@@ -531,7 +580,7 @@ Players.PlayerAdded.Connect(player => {
       const p = ptrs.get(e.pointerId); if (!p) return;
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) ed.pinch = 0;
-      if (p.mode === 'gizmo') { if (!ed.G.up()) ed.hist.pop(); renderProps(); updateGizmo(); return; }
+      if (p.mode === 'gizmo') { if (!ed.G.up()) ed.hist.pop(); else tutStep('move'); renderProps(); updateGizmo(); return; }
       if (p.mode === 'brush') { ed.brushOn = false; markDirty(); return; }
       if (p.mode === 'dragPart') { if (p.moved) { renderProps(); updateGizmo(); } else select(p.hit.obj); return; }
       if ((p.mode === 'click' || (p.mode === 'look' && p.type === 'touch')) && !p.moved && e.type === 'pointerup') { if (p.hit || !p.add) select(p.hit ? p.hit.obj : null, p.add); renderTree(); }
@@ -662,7 +711,7 @@ Players.PlayerAdded.Connect(player => {
     }
     else if (kind === 'file') {
       const list = store.index();
-      html = `<button type="button" data-m="save">💾 Сохранить (Ctrl+S)</button><div class="s3-mh">Новый мир</div><button type="button" data-m="new:grass">🌿 Площадка с травой</button><button type="button" data-m="new:empty">⬜ Пустой (основание)</button><button type="button" data-m="new:obby">🏃 Обби (паркур) со скриптами</button><button type="button" data-m="new:island">🏝 Остров (холмы и вода)</button>`
+      html = `<button type="button" data-m="save">💾 Сохранить (Ctrl+S)</button><div class="s3-mh">Новый мир</div><button type="button" data-m="new:grass">🌿 Площадка с травой</button><button type="button" data-m="new:empty">⬜ Пустой (основание)</button><button type="button" data-m="new:obby">🏃 Обби (паркур) со скриптами</button><button type="button" data-m="new:island">🏝 Остров (холмы и вода)</button><button type="button" data-m="new:camp">🏕 Лагерь у костра (ночь)</button><button type="button" data-m="new:winter">❄️ Зимний лес</button>`
         + (list.length ? `<div class="s3-mh">Мои миры</div>${list.slice(0, 12).map(x => `<div class="s3-mrow"><button type="button" data-m="open:${esc(x.id)}">${x.id === ed.placeId ? '▸ ' : ''}${esc(x.name)} <small>${x.n} об.</small></button><button type="button" data-m="del:${esc(x.id)}" title="Удалить">🗑</button></div>`).join('')}` : '')
         + '<div class="s3-mh">Файл</div><button type="button" data-m="export">⬇ Выгрузить в файл</button><button type="button" data-m="import">⬆ Загрузить из файла</button>';
     }
@@ -857,7 +906,7 @@ Players.PlayerAdded.Connect(player => {
       await window.D37E.models.remove(v); for (const o of ed.SC.all()) if (o.cls === 'Mesh' && o.model === v) ed.SC.set(o, 'model', v, true); msg('Модель удалена');
     }
     else if (k === 'save') save();
-    else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров' }[v]; ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
+    else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров', camp: 'Лагерь у костра', winter: 'Зимний лес' }[v] || 'Мой мир'; ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
     else if (k === 'open') { if (ed.dirty) await save(true); const d = store.load(v); if (d) { await openPlace(v, d); msg('Открыт: ' + (d.name || 'мир'), true); } }
     else if (k === 'del') { if (v === ed.placeId) { msg('Сначала открой другой мир', false); return; } if (confirm('Удалить мир из браузера навсегда?')) { store.remove(v); msg('Удалено'); } }
     else if (k === 'export') { const d = await snapshot(); d.models = await packModels(); const blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = (d.name || 'мир').replace(/[^\p{L}\p{N} _-]/gu, '') + '.d37world.json'; a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 4000); }
@@ -875,6 +924,7 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'add:Script') insert('Script');
     else if (a === 'play') { if (ed.player) { if (ed.playing) stopPlay(); if (ed.player.row) startPlay(); } else if (ed.playing) stopPlay(); else startPlay(); }
     else if (a === 'publish') openPublish();
+    else if (a === 'tut:x') { ed.q('.s3-tut')?.remove(); ed.tut = null; try { localStorage.setItem('d37_s3_tut', '1'); } catch (e) {} }
     else if (a === 'pub:close') { ed.dlg?.remove(); ed.dlg = null; }
     else if (a === 'pub:go') doPublish();
     else if (a === 'pub:copy') { navigator.clipboard?.writeText(ed.pubLink || '').then(() => msg('Ссылка скопирована', true), () => prompt('Скопируй ссылку:', ed.pubLink)); }
@@ -889,7 +939,7 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'group') groupSel(); else if (a === 'ungroup') ungroupSel();
     else if (a === 'dup') duplicate(); else if (a === 'del') remove(); else if (a === 'focus') focusSel();
     else if (a === 'terrain:gen') { if (!confirm('Создать новые холмы? Текущий ландшафт пропадёт.')) return; generateHills(ed.TR, Math.random() * 1e9 | 0); markDirty(); }
-    else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, 1, 0, 0); markDirty(); }
+    else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, ed.TR.size, 0, 0); markDirty(); }
     else if (a.startsWith('time:')) { ed.R.setLighting({ time: +a.slice(5) }); renderProps(); markDirty(); }
     else if (a.startsWith('btool:')) { ed.brush.tool = a.slice(6); renderProps(); }
     else if (a.startsWith('bch:')) { ed.brush.tool = 'paint'; ed.brush.ch = +a.slice(4); renderProps(); }
@@ -1031,6 +1081,8 @@ Players.PlayerAdded.Connect(player => {
         <label class="s3-lbl">Свет неба <b>${(+L.ambient).toFixed(1)}</b><input type="range" min="0" max="2.5" step="0.05" value="${L.ambient}" data-p="l:ambient"></label>
         <label class="s3-lbl">Туман: видно на <b>${L.fogEnd | 0}</b><input type="range" min="40" max="800" step="10" value="${L.fogEnd}" data-p="l:fogEnd"></label>
         <label class="s3-chk"><input type="checkbox" data-p="l:shadows"${L.shadows !== false ? ' checked' : ''}> Тени</label>
+        <label class="s3-chk"><input type="checkbox" data-p="cycle:on"${L.cycle > 0 ? ' checked' : ''}> 🔁 Смена дня и ночи в игре</label>
+        ${L.cycle > 0 ? `<label class="s3-lbl">Сутки длятся <b>${L.cycle} мин</b><input type="range" min="1" max="60" step="1" value="${L.cycle}" data-p="cycle:min"></label>` : ''}
         <p class="s3-note">Ночью включай 💡 Свет (лампы) — они светятся.</p>`;
     } else if (o && ed.selSet.size > 1) {
       const list = selList(), tinted = list.filter(x => x.color !== undefined), matd = list.filter(x => x.mat !== undefined), has = k => list.filter(x => x[k] !== undefined);
@@ -1102,6 +1154,8 @@ Players.PlayerAdded.Connect(player => {
         const ed2 = ED, o2 = ed2.sel, SC2 = ed2.SC;
         const val = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? +el.value : el.value;
         if (key.startsWith('b:')) { ed2.brush[key.slice(2)] = val; const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(key === 'b:r' ? 0 : 1); return; }
+        if (key === 'cycle:on') { ed2.R.lighting.cycle = val ? 10 : 0; markDirty(); renderProps(); return; }
+        if (key === 'cycle:min') { ed2.R.lighting.cycle = Math.max(1, Math.min(60, val | 0)); const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = ed2.R.lighting.cycle + ' мин'; markDirty(); return; }
         if (key.startsWith('l:')) { ed2.R.setLighting({ [key.slice(2)]: val }); const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = key === 'l:time' ? fmtTime(val) : key === 'l:fogEnd' ? (val | 0) : (+val).toFixed(1); markDirty(); return; }
         if (key === 't:on') { ed2.TR.setEnabled(val); ed2.ground.visible = !val; markDirty(); return; }
         if (key === 't:water') { ed2.TR.setWater(val); markDirty(); return; }
@@ -1130,6 +1184,7 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, E = window.D37E, SC = ed.SC, R = ed.R, T = R.T;
     if (ed.playing) return;
     if (ed.dirty) save(true);   // снимок берётся сразу, до первого шага игры
+    tutStep('play');
     ed.TR.cursor(null); ed.G.attach(null); ed.boxHelper.visible = false; closeMenu();
     const snap = SC.toJSON().objects;
     // свет-лампочки и невидимые детали — как в игре
@@ -1158,7 +1213,7 @@ Players.PlayerAdded.Connect(player => {
     const hud = document.createElement('div'); hud.className = 's3-hud';
     hud.innerHTML = '<div class="s3-stats" hidden></div><div class="s3-health"><i></i></div><div class="s3-labels"></div>';
     R.r.domElement.parentElement.appendChild(hud);
-    const pl = { P, C, I, X, A, rig, H, AU, hud, snap, sp, stats: {}, labels: {}, health: 100, maxHealth: 100, touching: new Set(), tweens: [], clicks: new Map(), prompts: new Map(), dead: 0, nick, unf };
+    const pl = { light0: { ...R.lighting }, P, C, I, X, A, rig, H, AU, hud, snap, sp, stats: {}, labels: {}, health: 100, maxHealth: 100, touching: new Set(), tweens: [], clicks: new Map(), prompts: new Map(), dead: 0, nick, unf };
     ed.playing = pl;
     // скрипты
     pl.SH = E.scripts({
@@ -1183,6 +1238,7 @@ Players.PlayerAdded.Connect(player => {
     ed.playing = null;
     const sel = ed.sel?.id;
     ed.SC.fromJSON({ objects: pl.snap });
+    if (pl.light0.time !== ed.R.lighting.time) ed.R.setLighting(pl.light0);
     select(sel ? ed.SC.get(sel) : null); renderTree();
     ed.box.classList.remove('s3-playing');
     ed.q('.s3-play').textContent = '▶ Играть';
@@ -1293,6 +1349,8 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, pl = ed?.playing; if (!pl) return;
     const { P, C, X, rig, SC = ed.SC } = { ...pl, SC: ed.SC };
     pl.cmds = 0;
+    const Lg = ed.R.lighting;
+    if (Lg.cycle > 0) { pl.cycT = (pl.cycT || 0) + dt; if (pl.cycT >= 1.5) { ed.R.setLighting({ time: (Lg.time + pl.cycT * 24 / (Lg.cycle * 60)) % 24 }); pl.cycT = 0; } }
     C.step(dt);
     if (C.down('pause')) { stopPlay(); return; }
     // едем на движущейся детали

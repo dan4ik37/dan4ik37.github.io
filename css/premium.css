@@ -3230,6 +3230,11 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-player .s3-main{grid-template-columns:minmax(0,1fr)!important}
 .s3-player .s3-top>*:not(.s3-play):not(.s3-grow):not([data-a="exit"]):not(.s3-name):not(.s3-pinfo){display:none!important}
 .s3-player .s3-top>.s3-name{display:inline-block!important;border-color:transparent;background:transparent;font-size:15px}
+.s3-tut{position:absolute;left:10px;bottom:10px;z-index:3;display:grid;gap:4px;max-width:min(300px,80%);padding:10px 12px;border-radius:12px;background:rgba(12,10,24,.84);color:#fff;font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.s3-tut b{font-size:13.5px}
+.s3-tut .ok{color:#86efac}
+.s3 .s3-tut button{justify-self:start;margin-top:2px;padding:3px 8px;font-size:11px}
+.s3-playing .s3-tut{display:none}
 .s3-busy{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;display:grid;gap:6px;padding:16px 22px;border-radius:14px;background:rgba(12,10,24,.88);color:#fff;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.45)}
 .s3-busy b{font-size:15px}
 .s3-busy span{font-size:13px;color:#cbd5e1}
