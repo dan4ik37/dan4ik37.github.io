@@ -126,13 +126,15 @@
     let groundCols = [], groundSrc, groundBody = null, touchOn = false, eq = null;
     const pushes = [], pushed = [];
     let check = [], awakeNow = [], listId = 1;   // awakeNow — кого проверить после следующего шага (уснул — записать позу последний раз)
+    let kick = true;                             // что-то поменялось (разбудили, сдвинули статичное, убрали тело) — шаг Rapier нужен
+    RG.skipped = 0;
     // общие объекты для вызовов Rapier (без new на каждый шаг)
     const TV = v3(), TV2 = v3(), TQ = q(), TQ2 = q(), SPEC = { x: 0, y: 0, z: 0, hx: 0, hy: 0, hz: 0, r: 0, yaw: 0 }, EU = [0, 0, 0];
 
     // ═══ Земля: карта высот рельефа или плита ═══
     function buildGround(){
       for (const c of groundCols) world.removeCollider(c, false);
-      groundCols = [];
+      groundCols = []; kick = true;
       const T = ph.terrain;
       groundSrc = T || ph.ground;
       const add = d => { groundCols.push(world.createCollider(d.setFriction(GROUND[1]).setRestitution(GROUND[2]))); };
@@ -174,6 +176,7 @@
       if (!St.body) d.setTranslation(St.x, St.y, St.z).setRotation(St.q);
       St.col = world.createCollider(d, St.body || undefined);
       byCol.set(St.col.handle, St);
+      kick = true;
     }
     function addStatic(c){
       const owner = ownerOf(c);
@@ -182,12 +185,12 @@
       if (c.solid && !c.trigger) { poseOfStatic(St); takePose(St); staticCollider(St); }
       return St;
     }
-    function dropStaticCol(St){ if (St.col) { byCol.delete(St.col.handle); world.removeCollider(St.col, true); St.col = null; } }
+    function dropStaticCol(St){ if (St.col) { byCol.delete(St.col.handle); world.removeCollider(St.col, true); St.col = null; kick = true; } }
     function removeStatic(c){
       const St = stat.get(c); if (!St) return;
       stat.delete(c);
       dropStaticCol(St);
-      if (St.body) { world.removeRigidBody(St.body); St.body = null; }
+      if (St.body) { world.removeRigidBody(St.body); St.body = null; kick = true; }
       if (St.owner) for (const J of joints) if (J.ob === St.owner || J.oa === St.owner) J.dirty = true;
     }
     // закреплённая деталь двинулась (или к ней прицепили соединение): кинематическое тело — везёт то, что на ней лежит
@@ -216,6 +219,7 @@
         TV.x = St.x; TV.y = St.y; TV.z = St.z;
         if (jump) { St.body.setTranslation(TV, true); St.body.setRotation(St.q, true); }
         else { St.body.setNextKinematicTranslation(TV); St.body.setNextKinematicRotation(St.q); }
+        kick = true;
       }
       if (reshaped) { St.key = St.nkey; dropStaticCol(St); staticCollider(St); }
     }
@@ -258,7 +262,7 @@
       orphans.delete(P);
       writeProxy(P, c);
     }
-    function dropCol(P){ if (P.col) { byCol.delete(P.col.handle); world.removeCollider(P.col, true); P.col = null; } }
+    function dropCol(P){ if (P.col) { byCol.delete(P.col.handle); world.removeCollider(P.col, true); P.col = null; kick = true; } }
     // убрать деталь из её тела (тело без деталей — удаляется)
     function detach(P){
       const A = P.asm; if (!A) return;
@@ -308,7 +312,7 @@
       P.col = partCollider(P, A.body);
       A.body.wakeUp(); wake(A);
     }
-    function wake(A){ if (A && A.listed !== listId) { A.listed = listId; awakeNow.push(A); } }
+    function wake(A){ kick = true; if (A && A.listed !== listId) { A.listed = listId; awakeNow.push(A); } }
 
     // ── Тело Phys для игрока: коробка с поворотом вокруг Y (наклонённая — описанная коробка), клин, цилиндр ──
     function writeProxy(P, c, px, py, pz, qq){
@@ -377,26 +381,39 @@
       if (!C) { C = { ch, body: null, col: null, seen: RG.stepNo, perm: false, hh: 0, r: 0, mass: RG.charMass, carry: false, onP: null, rel: v3(), onDone: false }; chars.set(ch, C); }
       return C;
     }
-    function charBody(C){
+    // jump — перенести без скорости (шаг Rapier пропущен или телепорт)
+    function charBody(C, jump){
       const ch = C.ch, bot = Math.min((ch.step ?? .62) + .05, ch.h * .45), hh = Math.max(.1, (ch.h - bot) / 2), r = ch.r * .9;
       TV.x = ch.x; TV.y = ch.y + bot + hh; TV.z = ch.z;
       if (!C.body) {
         C.body = world.createRigidBody(RA.RigidBodyDesc.kinematicPositionBased().setTranslation(TV.x, TV.y, TV.z));
         C.col = world.createCollider(RA.ColliderDesc.cylinder(hh, r).setFriction(.6).setRestitution(0), C.body);
-        C.hh = hh; C.r = r;
+        C.hh = hh; C.r = r; C.x = TV.x; C.y = TV.y; C.z = TV.z;
         return;
       }
       if (Math.abs(hh - C.hh) > .02 || Math.abs(r - C.r) > .01) { C.col.setHalfHeight(hh); C.col.setRadius(r); C.hh = hh; C.r = r; }
-      const t = C.body.translation();
-      if (Math.abs(t.x - TV.x) + Math.abs(t.y - TV.y) + Math.abs(t.z - TV.z) > 3) C.body.setTranslation(TV, true);
-      else C.body.setNextKinematicTranslation(TV);
+      const d = Math.abs(C.x - TV.x) + Math.abs(C.y - TV.y) + Math.abs(C.z - TV.z);
+      if (d < 1e-7) return;
+      if (jump || d > 3) C.body.setTranslation(TV, false); else C.body.setNextKinematicTranslation(TV);
+      C.x = TV.x; C.y = TV.y; C.z = TV.z;
+    }
+    // рядом с персонажем есть незакреплённая деталь (тогда шаг Rapier нужен, даже если всё спит)
+    const NEAR = [];
+    function nearDyn(ch){
+      const R = ch.r + 1, list = ph.query(ch.x - R, ch.z - R, ch.x + R, ch.z + R, NEAR);
+      let hit = false;
+      for (let i = 0; i < list.length; i++) { const c = list[i]; if (c.rb && c.rb.asm && c.top > ch.y - 1 && c.bottom < ch.y + ch.h + 1) { hit = true; break; } }
+      list.length = 0;
+      return hit;
     }
     function dropChar(C){ if (C.body) world.removeRigidBody(C.body); C.body = C.col = null; chars.delete(C.ch); }
     const onChar = ch => { charOf(ch).seen = RG.stepNo; };
     const onPush = (ch, c, nx, nz, into) => { pushes.push(ch, c, nx, nz, into); };
     RG.addCharacter = (ch, opt = {}) => { const C = charOf(ch); C.perm = true; C.seen = RG.stepNo; if (opt.mass != null) C.mass = +opt.mass || 0; if (opt.carry != null) C.carry = !!opt.carry; return C; };
     RG.removeCharacter = ch => { const C = chars.get(ch); if (C) dropChar(C); };
+    // толчки и вес персонажей; вернёт, есть ли рядом с кем-то незакреплённая деталь
     function stepChars(dt){
+      let near = false;
       // толчки: на тело — самый сильный за шаг; импульс — чтобы догнать скорость персонажа, но не больше «силы рук» × dt
       for (let i = 0; i < pushes.length; i += 5) {
         const c = pushes[i + 1], P = c.rb, A = P && P.asm;
@@ -419,7 +436,7 @@
       for (const C of chars.values()) {
         const ch = C.ch;
         if (!C.perm && RG.stepNo - C.seen > 90) { dropChar(C); continue; }   // 1,5 с без шагов — персонажа нет
-        charBody(C);
+        if (!near && C.body && nearDyn(ch)) near = true;
         // стоит на движущейся детали — давит весом (качели опускаются); спящую будим, только когда встал на неё
         const P = ch.grounded && ch.onCol && ch.onCol.rb, A = P && P.asm;
         if (A && !A.dead && !A.fallen && C.mass > 0) {
@@ -440,6 +457,7 @@
           C.onDone = true;
         }
       }
+      return near;
     }
     function carryChars(){
       for (const C of chars.values()) {
@@ -450,10 +468,15 @@
     }
 
     // ═══ Шаг ═══
+    // ошибка внутри шага (не должна, но) — физика деталей останавливается, игра живёт дальше (детали просто замирают)
     RG.step = (dt = 1 / 60) => {
       if (!RG.ok) return;
+      try { step(dt); } catch (e) { RG.ok = false; RG.error = e; console.error('D37E.rigid: физика деталей остановлена —', e); ev?.emit('error', e); }
+    };
+    function step(dt){
       const t0 = now();
       RG.stepNo++;
+      RG.moved.clear();
       // убрали деталь из сцены — убрать и тело (перестройка меша/тел Phys не считается: тело Phys вернулось в том же шаге)
       if (orphans.size) {
         for (const P of orphans) {
@@ -469,7 +492,13 @@
       for (let pass = 0; pass < 3; pass++) { let any = false; for (const J of joints) if (J.dirty) { any = true; build(J); } if (!any) break; }
       // кого проверить после шага: кто был активен в прошлый раз + кого будили между шагами
       const list = check; check = awakeNow; awakeNow = list; awakeNow.length = 0; listId++;
-      stepChars(dt);
+      const near = stepChars(dt);
+      // всё спит, никого не будили, статичный мир не менялся, рядом с персонажами нет деталей — шаг Rapier не нужен вовсе
+      // (даже спящий мир Rapier стоит ~0,05 мс на 1000 коллайдеров за шаг)
+      const need = kick || RG.active > 0 || near || check.length > 0;
+      kick = false;
+      for (const C of chars.values()) charBody(C, !need);
+      if (!need) { RG.skipped++; RG.msWorld = 0; RG.ms = now() - t0; return; }
       world.timestep = Math.min(1 / 30, Math.max(1 / 240, dt));
       const tw = now();
       if (touchOn) { world.step(eq); eq.drainCollisionEvents(onContact); } else world.step();
@@ -483,7 +512,7 @@
       carryChars();
       RG.active = n;
       RG.ms = now() - t0;
-    };
+    }
     const now = () => (root.performance ? root.performance.now() : Date.now());
 
     // ═══ Сцена сообщает: свойство поменялось (SC.set → RG.changed) ═══
@@ -574,6 +603,7 @@
     }
     function dropRaw(J){
       for (const r of J.raw) if (r.isValid()) world.removeImpulseJoint(r, true);
+      if (J.raw.length) kick = true;
       J.raw.length = 0;
       for (const A of J.asms) A.joints.delete(J);
       J.asms.length = 0;
@@ -756,9 +786,9 @@
       return ev ? ev.on(e, f) : () => {};
     };
 
-    RG.stats = () => { const s = new Set(); for (const P of parts.values()) if (P.asm) s.add(P.asm); return { bodies: s.size, parts: parts.size, active: RG.active, statics: stat.size, chars: chars.size, joints: joints.size, ms: RG.ms }; };
+    RG.stats = () => { const s = new Set(); for (const P of parts.values()) if (P.asm) s.add(P.asm); return { bodies: s.size, parts: parts.size, active: RG.active, statics: stat.size, chars: chars.size, joints: joints.size, ms: RG.ms, skipped: RG.skipped }; };
     RG.part = partOf;
-    RG.takeMoved = () => { const out = [...RG.moved]; RG.moved.clear(); return out; };
+    // RG.moved — детали, сдвинутые за последний шаг (Set, очищается в начале шага): скриптам/сети — кого синхронизировать
     RG.dispose = () => {
       if (!RG.ok) return;
       RG.ok = false;

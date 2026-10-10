@@ -479,6 +479,103 @@ async function rapierTests(){
     ok(H3.soft === true && gap3 < .15 && [u1, u2].every(o => o.pos.every(Number.isFinite)), 'обе стороны уже держат шарнир/ползунок — запасной шарнир из двух шаровых держит точку', [H3.soft, gap3]);
   }
 
+  // ── пока Rapier грузится — деталь падает «по-простому», потом её подхватывает Rapier с той же скоростью ──
+  {
+    const { SC } = mkWorld();
+    const R0 = E.rigid.R, load0 = E.rigid.load;
+    E.rigid.R = null; E.rigid.ready = false; let asked = 0; E.rigid.load = () => { asked++; return Promise.resolve(false); };
+    const b = box(SC, [0, 30, 0], [1, 1, 1]);
+    steps(SC, .5);
+    const y1 = b.pos[1], vy = b._vy;
+    E.rigid.R = R0; E.rigid.ready = true; E.rigid.load = load0;
+    SC.step(DT);
+    const v = SC.rigid.getVelocity(b)[1];
+    ok(asked > 0 && y1 < 29 && SC.rigid && near(v, vy - SC.rigid.gravity * DT, .5), 'пока Rapier грузится — простое падение, потом Rapier с той же скоростью', [asked, y1, vy, v]);
+    steps(SC, 3);
+    ok(near(b.pos[1], .5, .05), 'и долетела до земли', b.pos[1]);
+    // «Стоп» в студии: SC.fromJSON(снимок) — физика деталей уходит, тела Phys чистые
+    const snap = SC.toJSON().objects;
+    const rg = SC.rigid;
+    SC.fromJSON({ objects: snap });
+    ok(SC.rigid === null && !rg.ok && SC.all().every(o => !o._cols?.[0]?.rb), 'fromJSON (стоп игры) — мир Rapier закрыт, тела Phys без rb');
+    SC.step(DT);
+    ok(SC.rigid && SC.rigid.ok && SC.rigid.isDynamic(SC.all()[0]), 'снова «Играть» — новый мир Rapier');
+  }
+
+  // ── неподвижные тела Phys без детали сцены (стройка, предметы, мир): цилиндр, коробка с поворотом, клин ──
+  {
+    const { ph, SC } = mkWorld();
+    ph.addCyl({ x: 0, y: 1, z: 0, r: 1.5, hy: 1 });
+    ph.addBox({ x: 10, y: 1.5, z: 0, hx: 2, hy: 1.5, hz: 1, yaw: .7 });
+    ph.addWedge({ x: 20, y: 1, z: 0, hx: 2, hy: 1, hz: 4 });
+    const a = box(SC, [0, 6, 0], [1, 1, 1]), b = box(SC, [10, 6, 0], [1, 1, 1]), c = box(SC, [20, 6, -3.5], [1, 1, 1]);
+    steps(SC, 2);
+    ok(near(a.pos[1], 2.5, .05) && near(b.pos[1], 3.5, .05), 'на неподвижных цилиндре и коробке Phys коробки лежат сверху', [a.pos[1], b.pos[1]]);
+    ok(c.pos[2] > -3.5 && c.pos[1] < 2.6, 'с клина Phys коробка съехала', c.pos);
+  }
+
+  // ── сварка к закреплённой детали: та двигается — приваренная за ней; закрепили деталь в сборке — сборка распалась ──
+  {
+    const { SC } = mkWorld();
+    const post = SC.add('Part', { pos: [0, 5, 0], size: [1, 1, 1] });
+    const hanging = box(SC, [0, 3.5, 0], [1, 2, 1]);
+    SC.step(DT);
+    const RG = SC.rigid;
+    RG.joint('weld', hanging, post);
+    steps(SC, 1);
+    ok(near(hanging.pos[1], 3.5, .05), 'приварена к закреплённой — висит', hanging.pos[1]);
+    steps(SC, 2, i => SC.set(post, 'pos', [(i + 1) * 3 / 60, 5, 0], true));
+    ok(near(hanging.pos[0], post.pos[0], .1) && near(hanging.pos[1], 3.5, .1), 'закреплённая уехала — приваренная за ней', [hanging.pos, post.pos]);
+    // сборка из трёх: среднюю закрепили — остальные остались на ней (жёстко), сборка распалась на тела
+    const p1 = box(SC, [10, 6, 0], [1, 1, 1]), p2 = box(SC, [11, 6, 0], [1, 1, 1]), p3 = box(SC, [12, 6, 0], [1, 1, 1]);
+    RG.joint('weld', p1, p2); RG.joint('weld', p2, p3);
+    const nb = RG.stats().bodies;
+    SC.set(p2, 'anchored', true, true);
+    steps(SC, 1);
+    ok(RG.stats().bodies === nb + 1 && near(p1.pos[1], 6, .05) && near(p3.pos[1], 6, .05), 'среднюю закрепили — сборка распалась на 2 тела, края держатся на ней', [RG.stats().bodies, nb, p1.pos[1], p3.pos[1]]);
+  }
+
+  // ── много закреплённых деталей и одна незакреплённая: создание мира и шаг (спящие/неподвижные — бесплатно) ──
+  {
+    const { SC } = mkWorld();
+    const R = E.rng(7);
+    for (let i = 0; i < 2000; i++) SC.add('Part', { pos: [(R() - .5) * 400, R() * 6, (R() - .5) * 400], size: [1 + R() * 6, 1 + R() * 3, 1 + R() * 6], rot: [0, R() * 360, i % 5 ? 0 : R() * 30] });
+    const one = box(SC, [0, 40, 0], [1, 1, 1]);
+    const t0 = hr(); SC.step(DT); const create = hr() - t0;
+    let fallT = hr(), fallN = 0; steps(SC, 8, () => { if (SC.rigid.active) fallN++; }); fallT = (hr() - fallT) / 480;
+    const sk = SC.rigid.skipped;
+    const t1 = hr(); steps(SC, 2); const idle = (hr() - t1) / 120;
+    info(`2000 закреплённых + 1 незакреплённая: создание мира Rapier ${ms(create)}, шаг пока падает ${ms(fallT)}, уснула (${!SC.rigid.active}, y=${one.pos[1].toFixed(2)}) — шаг ${ms(idle)}, пропущено шагов Rapier ${SC.rigid.skipped - sk}/120`);
+    ok(create < 250 && idle < .02 && SC.rigid.skipped - sk === 120, 'много закреплённых: создание < 250 мс; всё спит — шаг Rapier пропускается (< 0,02 мс)', [create, idle]);
+  }
+
+  // ── персонаж пропал (не двигается 1,5 с) — его цилиндр убран; свободные тела без сцены ──
+  {
+    const { ph, SC } = mkWorld();
+    box(SC, [30, 1, 30], [1, 1, 1]); SC.step(DT);
+    const P = E.player(ph, { x: 0, z: 0 }); const { C } = mkC();
+    for (let i = 0; i < 10; i++) { C.step(DT); P.update(DT, C, cam); SC.step(DT); }
+    ok(SC.rigid.stats().chars === 1, 'персонаж найден сам (ph.onChar)');
+    steps(SC, 2);
+    ok(SC.rigid.stats().chars === 0, 'персонаж 1,5 с без шагов — его тело убрано');
+    const ball = { id: 'free1', shape: 'ball', size: [1, 1, 1], pos: [0, 5, 5], mat: 'rubber' };
+    const n0 = ph.cols.size;
+    SC.rigid.add(ball, { vel: [4, 0, 0] });
+    ok(ph.cols.size === n0 + 1 && [...ph.cols].some(c => c.rb?.obj === ball), 'свободное тело: своё тело Phys для игрока');
+    steps(SC, 1);
+    ok(ball.pos[0] > 2 && near(ball.pos[1], .5, .05), 'свободное тело падает и катится', ball.pos);
+    SC.rigid.remove(ball);
+    ok(ph.cols.size === n0 && !SC.rigid.isDynamic(ball), 'свободное тело убрано вместе с телом Phys');
+  }
+
+  // ── CanCollide = false: незакреплённая проваливается сквозь всё (как в Roblox), игрок проходит сквозь неё ──
+  {
+    const { SC } = mkWorld();
+    const ghost = box(SC, [0, 3, 0], [1, 1, 1], { collide: false });
+    steps(SC, 1);
+    ok(ghost.pos[1] < -2 && ghost._cols[0].solid === false, 'CanCollide=false — проваливается, тело Phys не твёрдое', ghost.pos[1]);
+  }
+
   // ── касания деталь–деталь ──
   {
     const { SC } = mkWorld();
