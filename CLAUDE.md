@@ -15,7 +15,7 @@
 ## Ожидает запуска владельцем (обновлять этот список!)
 1. `coins.sql` — монеты 🪙 и свой персонаж 🎭 (кошелёк coin_wallet/coin_log, coins_* , char_save/char_looks, триггеры +5 за победу
    и +50 за задание дня). Проверка: `/rpc/coins_state` гостем → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
-2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_* (функции целиком из
+2. `games-more.sql` — ключи новых игр для game_result: emoji / emoji_duel, horde / horde_duel / horde_coop, td / td_duel / td_coop, uno / uno_online, durak / durak_online, pool_*, ludo / ludo_online, nardy_*, arena_*, chess_* (функции целиком из
    games.sql + новые ключи; заменил games-emoji.sql). Проверка: сыграть вошедшим — пришёл ли XP / game_top('horde').
 push-words.sql применён 10.10.2026 (проверено: push_set_words → 200 null, подписки гостю — []).
 vip-claims.sql применён 09.10.2026 (проверено: claim_donation гостю → 42501, admin_* → «Только для админа»).
@@ -346,6 +346,10 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   аптечки, «супер»; до 5 побед или 2,5 мин. Бот (3 уровня, упреждение, объезд стен) — бот против бота в node, все партии
   кончаются. Онлайн — netplay.js: хозяин считает пули/урон и не шлёт гостю соперника из кустов; свой бег каждый считает сам.
   Ключи: arena_easy / arena_normal / arena_hard / arena_online.
+- «Шахматы» (#/games/chess, js/games/chess.js) — все правила; генерация ходов проверена perft на 4 эталонных позициях
+  (начальная, Kiwipete, №3, №4 — числа сошлись). Компьютер: постепенное углубление + альфа-бета + лимит позиций по уровню
+  (Мастер — глубина 4, до ~0,6 с), штраф за повтор позиции. Фигуры — свои SVG (PATHS): символ ♟ в Windows — цветной эмодзи.
+  Онлайн — стол table.js на 2 (хозяин белыми и проверяет ходы). Ключи: chess_easy / chess_normal / chess_hard / chess_online.
 
 ## Комнаты для игр вдвоём (js/games/room.js) — важные мелочи
 - Номер игрока = ключ присутствия (аккаунт или гость вкладки, sessionStorage d37_room_gid) + «~» + время входа. Обновил страницу —

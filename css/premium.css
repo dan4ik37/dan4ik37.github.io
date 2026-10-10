@@ -2682,3 +2682,33 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .pf-char img{width:100%;height:auto;display:block}
 .pf-char:hover{transform:translateY(-3px) scale(1.06)}
 .gm-top-char{width:22px;height:auto;vertical-align:middle;margin-right:.25rem}
+
+/* ── «Шахматы» (js/games/chess.js) ── */
+.ch{position:relative;display:flex;flex-direction:column;gap:.45rem;align-items:center}
+.ch-pl{display:flex;align-items:center;gap:.5rem;width:min(100%,480px);font-size:.8rem}
+.ch-lost{font-size:1rem;color:var(--muted);letter-spacing:-2px}
+.ch-board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:min(100%,480px);aspect-ratio:1;border-radius:8px;overflow:hidden;box-shadow:0 4px 18px rgba(0,0,0,.45);border:3px solid #5b3417}
+.ch-sq{position:relative;min-width:0;min-height:0;overflow:hidden;border:none;padding:0;margin:0;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.ch-sq.light{background:#f0d9b5}.ch-sq.dark{background:#b58863}
+.ch-sq.last.light{background:#f6eb72}.ch-sq.last.dark{background:#dcc34b}
+.ch-sq.sel{box-shadow:inset 0 0 0 3px #22c55e}
+.ch-sq.check{background:radial-gradient(circle,#ff4d4d 20%,transparent 75%),#b58863}
+.ch-sq.dot::after{content:'';width:26%;height:26%;border-radius:50%;background:rgba(0,0,0,.25)}
+.ch-sq.cap::after{content:'';position:absolute;inset:4%;border-radius:50%;border:4px solid rgba(0,0,0,.28)}
+.ch-p{font-size:clamp(1.6rem,8.5vw,2.9rem);line-height:1;user-select:none;font-family:'Segoe UI Symbol','DejaVu Sans','Noto Sans Symbols2',serif}
+.ch-p.w{color:#fff;text-shadow:0 0 2px #000,0 0 1px #000,1px 1px 0 #333}
+.ch-p.b{color:#1b1b1b;text-shadow:0 0 1px #fff}
+.ch-f,.ch-r{position:absolute;font-style:normal;font-size:.55rem;font-weight:800;opacity:.6;color:#3b2a1a}
+.ch-f{right:3px;bottom:1px}.ch-r{left:3px;top:1px}
+.ch-moves{width:min(100%,480px);max-height:4.5em;overflow-y:auto;font-size:.74rem;color:var(--muted);line-height:1.6}
+.ch-promo{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;background:rgba(10,8,16,.8);border-radius:12px;font-weight:800}
+.ch-promo button{width:64px;height:64px;margin:0 .2rem;border-radius:12px;border:2px solid #fff;background:#f0d9b5;cursor:pointer}
+
+.ch-svg{width:86%;height:86%;pointer-events:none;stroke-linejoin:round;stroke-linecap:round}
+.ch-svg.w{fill:#fbfbfb;stroke:#1d1d1d;stroke-width:1.6}
+.ch-svg.b{fill:#2a2a2e;stroke:#0b0b0d;stroke-width:1.6}
+.ch-svg .ch-dt{fill:none;stroke-width:1.6}
+.ch-svg.w .ch-dt{stroke:#1d1d1d}
+.ch-svg.b .ch-dt{stroke:#e8e8e8}
+.ch-svg.mini{width:16px;height:16px;margin-right:-3px}
+.ch-promo button .ch-svg{width:80%;height:80%}
