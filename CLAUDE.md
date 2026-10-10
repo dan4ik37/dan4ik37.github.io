@@ -489,6 +489,16 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   отдаёт ОБЩИЙ объект (копировать, если хранить). Studio: упавшие ниже −200 удаляются (fallen), сдвинутые — скриптам 10 раз/с
   (SH.sync). Тесты: node scripts/physics-test.cjs (85; Rapier: npm install --prefix "%TEMP%/d37-rapier" --ignore-scripts
   @dimforge/rapier3d-compat@0.19.3 или RAPIER_PATH). Проверено в браузере: 24 ящика и мяч падают, кувыркаются, игрок толкает.
+- Скрипты на C++ и Rust (js/engine/lang-wasm.js + sdk/, агент 13.10.2026): языки cpp (⚙️) и rust (🦀), kind binary — .wasm (base64)
+  в obj.code, исходник в obj.src; исполняет wasmRuntime() в той же песочнице. ABI «d37»: номера i32 (0 — нет/Workspace), строки (адрес,
+  длина) UTF-8 с проверкой границ, обработчики — экспорт d37_event(cb, arg), кадр — d37_update(dt) после want_update(1), старт — d37_start().
+  Список функций — шапка sdk/d37.h (то же в sdk/d37.rs, тест сверяет); ABI менять только добавлением. Лимиты за вызов: 200 000 обращений,
+  5000 команд, 200 строк; 2000 таймеров; 30 ошибок или 256 МБ — скрипт остановлен.
+  C++ собирается на сайте («⚙️ Собрать»): @yowasp/clang 22 (ISC; LLVM — Apache-2.0) с jsDelivr, 23,1 МБ brotli один раз (дальше кэш),
+  в module Worker; wasm32-wasip1 + libc++ (std::string, vector, printf → «Вывод»), -fno-exceptions, sdk/d37.h через -include; ошибки clang —
+  по-русски со строкой. Rust — у себя: sdk/rust-template, cargo build --release --target wasm32-unknown-unknown → «📦 Загрузить .wasm»;
+  для людей — sdk/README.md. Тест: node scripts/lang-wasm-test.cjs (110; настоящие clang из %TEMP%/d37-wasm/clang и cargo в профиле;
+  D37_SKIP=cpp,rust — без них). Проверено в браузере: «Монетка» на C++ собралась за 6 с (42 КБ) и в игре дала +1.
 - Частицы (js/engine/fx.js, объект Effect): огонь, дым, искры, конфетти, снег, дождь, магия, пузыри — пресеты KINDS; один
   эмиттер = один Points (свой шейдер: размер в мире, форма — круг/квадрат/кольцо/звёздочка), до 900 частиц, без мусора на кадр.
   Внутри детали — летит с её верхней грани (at), сам по себе — из pos; rate/scale — множители, свои цвета. Светящиеся (add)
