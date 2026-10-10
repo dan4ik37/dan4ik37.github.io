@@ -623,6 +623,109 @@ const R6 = {};
   R6.links = linkStats(sim, 16000, 30000);
 }
 
+// ═══ 7. Настоящий транспорт с WebRTC: модель RTCPeerConnection (предложение/ответ/ICE, два канала: быстрый без повторов
+//  и надёжный), js/games/netplay.js как есть. Старший (хозяин) предлагает, гости отвечают; гости между собой не соединяются;
+//  после соединения Supabase почти не тратится ═══
+const R7 = {};
+function fakeSupabase(sim, cnt){
+  const hub = new Map();
+  return { hub,
+    channel(name, cfg){
+      const c = { name, key: cfg.config.presence.key, hb: [], hp: [], meta: null };
+      c.on = (type, f, fn) => { (type === 'broadcast' ? c.hb : c.hp).push(fn); return c; };
+      c.subscribe = cb => { let h = hub.get(name); if (!h) hub.set(name, h = new Set()); h.add(c); sim.at(sim.t + 80, () => cb('SUBSCRIBED')); return c; };
+      const sync = () => { for (const x of hub.get(name) || []) sim.at(sim.t + 120 + sim.rnd() * 200, () => x.hp.forEach(f => f())); };
+      c.track = meta => { c.meta = meta; sync(); return Promise.resolve(); };
+      c.untrack = () => { c.meta = null; sync(); };
+      c.presenceState = () => { const st = {}; for (const x of hub.get(name) || []) if (x.meta) (st[x.key] = st[x.key] || []).push(x.meta); return st; };
+      c.send = ({ payload }) => {
+        const s = JSON.stringify(payload); cnt.sent++; if (payload.type === 'ns') cnt.sig++;
+        for (const x of hub.get(name) || []) if (x !== c) { cnt.recv++; sim.at(sim.t + 90 + sim.rnd() * 60, () => x.hb.forEach(f => f({ payload: JSON.parse(s) }))); }
+        return Promise.resolve();
+      };
+      return c;
+    },
+    removeChannel(c){ const h = hub.get(c.name); if (h) { h.delete(c); for (const x of h) sim.at(sim.t + 150, () => x.hp.forEach(f => f())); } },
+  };
+}
+function installFakeRTC(sim){
+  const pcs = new Map(); let ids = 0;
+  class DC {
+    constructor(pc, label, opt){ this.pc = pc; this.label = label; this.unrel = !!opt && opt.maxRetransmits === 0; this.readyState = 'connecting'; this.bufferedAmount = 0; this.peer = null; }
+    send(data){
+      if (this.readyState !== 'open') throw new Error('closed');
+      sim.p2pMsgs = (sim.p2pMsgs || 0) + 1;
+      if (this.unrel && sim.rnd() < .03) return;   // быстрый канал без повторов теряет
+      const peer = this.peer, copy = typeof data === 'string' ? data : data.slice(0), d = 40 + (this.unrel ? (sim.rnd() * 2 - 1) * 15 : 0);
+      sim.at(sim.t + d, () => { if (peer.readyState === 'open' && peer.onmessage) peer.onmessage({ data: copy }); });
+    }
+    close(){ if (this.readyState === 'closed') return; this.readyState = 'closed'; this.onclose && this.onclose(); const p = this.peer; if (p && p.readyState !== 'closed') { p.readyState = 'closed'; p.onclose && p.onclose(); } }
+  }
+  globalThis.RTCPeerConnection = class {
+    constructor(){ this.id = ++ids; pcs.set(this.id, this); this.dcs = []; this.connectionState = 'new'; this.remoteDescription = null; this.localDescription = null; sim.pcs = (sim.pcs || 0) + 1; }
+    createDataChannel(label, opt){ const d = new DC(this, label, opt); this.dcs.push(d); return d; }
+    async createOffer(){ return { type: 'offer', sdp: 'o:' + this.id }; }
+    async createAnswer(){ return { type: 'answer', sdp: 'a:' + this.id + ':' + this.remoteDescription.sdp }; }
+    async setLocalDescription(d){ this.localDescription = { type: d.type, sdp: d.sdp, toJSON(){ return { type: d.type, sdp: d.sdp }; } }; sim.at(sim.t + 10, () => { if (this.onicecandidate && this.connectionState !== 'closed') this.onicecandidate({ candidate: { toJSON: () => ({ candidate: 'c' + this.id }) } }); }); }
+    async setRemoteDescription(d){
+      this.remoteDescription = d;
+      if (d.type !== 'answer') return;
+      const other = pcs.get(+String(d.sdp).split(':')[1]); if (!other) return;
+      sim.at(sim.t + 150, () => {   // соединились: у ответившего — те же каналы
+        if (this.connectionState === 'closed' || other.connectionState === 'closed') return;
+        for (const a of this.dcs) { const b = new DC(other, a.label, a.unrel ? { maxRetransmits: 0 } : {}); a.peer = b; b.peer = a; other.dcs.push(b); other.ondatachannel && other.ondatachannel({ channel: b }); }
+        this.connectionState = other.connectionState = 'connected';
+        for (const a of this.dcs) { a.readyState = 'open'; a.peer.readyState = 'open'; a.onopen && a.onopen(); a.peer.onopen && a.peer.onopen(); }
+      });
+    }
+    addIceCandidate(){ return Promise.resolve(); }
+    close(){ this.connectionState = 'closed'; for (const d of this.dcs) d.close(); }
+  };
+  return () => { delete globalThis.RTCPeerConnection; };
+}
+async function scenario7(){
+  const sim = mkWorld({ seed: 61, warm: 1e9 });
+  const restore = installFakeRTC(sim), cnt = { sent: 0, recv: 0, sig: 0 }, client = fakeSupabase(sim, cnt);
+  const peers = [];
+  const mk = (id, k, world) => {
+    const P = { id, k, offs: [], off: 1000 + sim.rnd() * 1e6, scene: fakeScene(), readyAt: 0, pending: [], cheats: [], lastTp: undefined };
+    P.now = () => sim.t + P.off;
+    if (world) buildWorld(P.scene);
+    const tr = E.net.room('s3rtc', 'xyz789', { client, NetPlay: globalThis.NetPlay, key: id, joinedAt: 1e6 + sim.t, now: P.now, nick: 'Игрок ' + k });
+    P.tr = tr;
+    P.S = E.net.session({ transport: tr, scene: P.scene, now: P.now, nick: 'Игрок ' + k,
+      onHost: is => { P.script = is ? mkScript(sim, P) : null; }, onReady: () => { if (!P.readyAt) P.readyAt = sim.t; }, onCheat: (w, i) => P.cheats.push([w, i.why]),
+      onTeleport: p => { const c = truthAt(P.k, sim.t); P.offs.push([sim.t, p[0] - c.x, p[1] - c.y, p[2] - c.z, cycleOf(P.k, sim.t)]); } });
+    P.id = tr.myId;
+    const step = () => { const c = charOf(P, sim.t); if (P.lastTp !== undefined && c.tp !== P.lastTp) P.S.teleported(); P.lastTp = c.tp; P.S.setMyCharacter(c); if (P.S.isHost && P.script) P.script(sim.t); P.S.tick(1 / 60); sim.at(sim.t + 1000 / 60, step); };
+    sim.at(sim.t + 5, step);
+    peers.push(P); sim.peers.set(P.id, P);
+    return P;
+  };
+  const go = async until => { while (sim.t < until) { sim.run(Math.min(until, sim.t + 20)); await new Promise(r => setImmediate(r)); } };
+  const H = mk('h', 0, true); await go(400);
+  const A = mk('a', 1); await go(900);
+  const B = mk('b', 2); await go(6000);
+  const st = P => P.tr.stats().pairs.map(p => p.mode).join(',');
+  R7.modes = { H: st(H), A: st(A), B: st(B) };
+  ok(H.tr.mode(A.id) === 'p2p' && H.tr.mode(B.id) === 'p2p', 'WebRTC: хозяин соединился напрямую с обоими гостями', R7.modes);
+  ok(A.tr.stats().pairs.length === 1 && B.tr.stats().pairs.length === 1, 'WebRTC: гости между собой не соединяются (только с хозяином)', R7.modes);
+  const c0 = { ...cnt }, p0 = sim.p2pMsgs || 0;
+  await go(36000);
+  const c1 = { ...cnt }, p1 = sim.p2pMsgs || 0;
+  R7.supaPerMin = (c1.sent - c0.sent) * 2; R7.p2pPerSec = (p1 - p0) / 30; R7.sig = c1.sig; R7.pcs = sim.pcs;
+  ok(R7.supaPerMin <= 6, 'WebRTC: после соединения Supabase почти не тратится (≤ 6 broadcast/мин)', R7.supaPerMin);
+  sim.frozen = true; await go(42000);
+  const ca = compareScenes(H.scene, A.scene), cb = compareScenes(H.scene, B.scene);
+  ok(ca.ok && cb.ok, 'WebRTC: копии сошлись', [ca, cb]);
+  ok(H.cheats.length === 0 && A.readyAt && B.readyAt, 'WebRTC: мир готов, без ложных «читеров»', [A.readyAt, B.readyAt, H.cheats.slice(0, 2)]);
+  const rB = B.S.remotes().find(r => r.id === A.id);
+  ok(rB && Math.hypot(rB.pose.x - charOf(A, rB.rt - A.off).x, rB.pose.z - charOf(A, rB.rt - A.off).z) < .5, 'WebRTC: гость видит другого гостя (через хозяина) там, где тот был', rB && [rB.pose.x, rB.pose.z]);
+  for (const P of peers) P.tr.close();
+  await go(43000);
+  restore();
+}
+
 // ═══ Сводка ═══
 function charSummary(cm, filter){
   const rows = [];
@@ -679,5 +782,9 @@ for (const l of R6.links) console.log(`   ${l.k.padEnd(6)} ${f1(l.ps)} пак/с
 console.log(`\n5) Транспорт через модель Supabase (3 игрока, всё «через комнату»): ${R5.sentPerMin} broadcast/мин, ${R5.perMin} получений/мин (так считает лимит Supabase), ${f1(R5.kbps)} КБ/с; знакомство WebRTC — ${R5.sig} сигналов`);
 console.log(`   Лимит 2 млн/мес: ≈ ${Math.round(2e6 / R5.perMin / 60)} ч такой игры втроём в месяц, если WebRTC не соединится ни у кого (напрямую Supabase не тратится)`);
 
-console.log(`\n${pass} ок, ${fail} ошибок`);
-process.exitCode = fail ? 1 : 0;
+// сценарий 7 — асинхронный (NetPlay ждёт обещаний): итог после него
+scenario7().then(() => {
+  console.log(`\n7) WebRTC (модель): режимы пар хозяин ${R7.modes.H}, гость A ${R7.modes.A}, гость B ${R7.modes.B}; соединений ${R7.pcs}, сигналов знакомства ${R7.sig}; потом через Supabase — ${R7.supaPerMin} broadcast/мин, напрямую — ${f1(R7.p2pPerSec)} пакетов/с на всех`);
+  console.log(`\n${pass} ок, ${fail} ошибок`);
+  process.exitCode = fail ? 1 : 0;
+}, e => { console.log('FAIL сценарий 7:', e && e.stack || e); process.exitCode = 1; });
