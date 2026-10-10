@@ -2,6 +2,7 @@
 //  ИГРА «5 БУКВ» (русский вордл) — слово дня, свободная игра, «⚔️ Соревнование»
 // ═══════════════════════════════════════
 // 6 попыток угадать слово из 5 букв. 🟩 буква на месте, 🟨 есть в слове, ⬜ нет. Ё = Е.
+// «📚 Архив» — слова прошлых дней (d37_words_arch), на серию и статистику слова дня не влияют, XP — как за свободную игру.
 // Слово дня одно на всех, меняется в полночь по МСК (номер дня — от 03.10.2026). Прогресс дня и
 // статистика — в localStorage; «Поделиться» — квадратики без самого слова (механика Wordle).
 // Словари — js/games/words-data.js (собирает scripts/make-words.py).
@@ -38,16 +39,36 @@
     return res;
   }
 
-  // ── Экран игры. opt: { mode: 'daily'|'free'|'duel', word, saved, onEnd(win, tries, sec) } ──
+  function modesHtml(active){
+    return `<div class="wd-modes">
+          <button data-m="daily" class="${active === 'daily' ? 'on' : ''}">📅 Слово дня #${dayNo()}</button>
+          <button data-m="free" class="${active === 'free' ? 'on' : ''}">♾️ Свободная</button>
+          ${dayNo() > 1 ? `<button data-m="archive" class="${active === 'archive' ? 'on' : ''}">📚 Архив</button>` : ''}</div>`;
+  }
+  const dayDate = n => new Date(START + (n - 1) * 864e5).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+  // ── Архив: слова прошлых дней (сыграть пропущенные) ──
+  function renderArchive(){
+    W = null;
+    const today = dayNo(), arch = load('d37_words_arch', {});
+    const days = []; for (let n = today - 1; n >= 1; n--) days.push(n);
+    root.innerHTML = `<div class="wd">${modesHtml('archive')}
+        <p class="wd-arch-note">Слова прошлых дней — сыграй те, что пропустил. На серию и статистику слова дня не влияют.</p>
+        <div class="wd-arch">${days.map(n => { const a = arch[n] && arch[n].word === dailyWord(n) ? arch[n] : null;
+          const cls = a?.done ? (a.win ? 'win' : 'lose') : a?.rows?.length ? 'part' : '';
+          return `<button type="button" data-n="${n}" class="${cls}"><b>#${n}</b><small>${a?.done ? (a.win ? '✅ ' + a.rows.length + '/6' : '❌') : a?.rows?.length ? '▶ доиграть' : dayDate(n)}</small></button>`; }).join('')}</div>
+      </div>`;
+    root.querySelectorAll('.wd-modes button').forEach(b => b.onclick = () => start(b.dataset.m));
+    root.querySelectorAll('.wd-arch [data-n]').forEach(b => b.onclick = () => start('archive', +b.dataset.n));
+  }
+
+  // ── Экран игры. opt: { mode: 'daily'|'free'|'archive'|'duel', word, n (архив), saved, onEnd(win, tries, sec) } ──
   function render(el, opt){
     W = { el, opt, word: opt.word, rows: [], cur: '', over: false, t0: Date.now(), keys: {} };
-    const n = dayNo();
     el.innerHTML = `<div class="wd">
-        ${opt.mode === 'duel' ? '' : `<div class="wd-modes">
-          <button data-m="daily" class="${opt.mode === 'daily' ? 'on' : ''}">📅 Слово дня #${n}</button>
-          <button data-m="free" class="${opt.mode === 'free' ? 'on' : ''}">♾️ Свободная игра</button></div>`}
+        ${opt.mode === 'duel' ? '' : modesHtml(opt.mode)}
         <div class="wd-grid">${Array.from({ length: ROWS }, () => `<div class="wd-row">${'<span class="wd-tile"></span>'.repeat(LEN)}</div>`).join('')}</div>
-        <div class="ct-status wd-status">${opt.mode === 'duel' ? 'Одно слово на двоих: меньше попыток и быстрее — больше очков' : 'Угадай слово из 5 букв за 6 попыток'}</div>
+        <div class="ct-status wd-status">${opt.mode === 'duel' ? 'Одно слово на двоих: меньше попыток и быстрее — больше очков' : opt.mode === 'archive' ? `Слово дня #${opt.n} из архива (${dayDate(opt.n)})` : 'Угадай слово из 5 букв за 6 попыток'}</div>
         ${opt.mode === 'duel' ? '' : '<div class="wd-hintbar"><button type="button" class="wd-hint">💡 Подсказка</button><span class="wd-hinttext"></span></div>'}
         <div class="wd-kb">${KB.map(r => `<div>${[...r].map(k => `<button type="button" data-k="${k}"${k === '⏎' || k === '⌫' ? ' class="wide"' : ''} aria-label="${k === '⏎' ? 'Ввод' : k === '⌫' ? 'Стереть' : k}">${k === '⏎' ? 'ВВОД' : k}</button>`).join('')}</div>`).join('')}</div>
         <div class="wd-end" hidden></div>
@@ -101,6 +122,7 @@
     if (restoring) return;
     const win = guess === W.word;
     if (W.opt.mode === 'daily') { save('d37_words_day', { n: dayNo(), word: W.word, rows: W.rows, done: win || W.rows.length >= ROWS, win, hint: W.hint || null }); window.gamesDailyDot?.(); }
+    if (W.opt.mode === 'archive') { const arch = load('d37_words_arch', {}); arch[W.opt.n] = { word: W.word, rows: W.rows, done: win || W.rows.length >= ROWS, win }; save('d37_words_arch', arch); }
     if (win || W.rows.length >= ROWS) {
       W.over = true;
       setTimeout(() => showEnd(win, false), 140 * LEN + 250);
@@ -163,13 +185,13 @@
         <div class="wd-dist">${st.dist.map((c, i) => `<div><span>${i + 1}</span><i style="--w:${Math.max(8, 100 * c / Math.max(1, ...st.dist))}%"${win && tries === i + 1 ? ' class="me"' : ''}>${c}</i></div>`).join('')}</div>` : ''}
       <div class="ct-actions">
         <button class="ct-start wdShare">📤 Поделиться результатом</button>
-        <button class="wdFree">♾️ ${daily ? 'Играть ещё' : 'Новое слово'}</button>
+        <button class="wdFree">${W.opt.mode === 'archive' ? '📚 К архиву' : '♾️ ' + (daily ? 'Играть ещё' : 'Новое слово')}</button>
         <button class="ct-duel-btn wdDuel">⚔️ С другом</button>
       </div>
       ${daily ? '<div class="ct-note wd-next">Новое слово дня через <b class="wdLeft"></b> <button type="button" class="d37-secret" data-secret="words" aria-label="Секретный знак">✦</button></div><button type="button" class="wd-remind" hidden>🔔 Напоминать о новом слове</button>' : ''}`;
     window.d37Secret?.paint();
     end.querySelector('.wdShare').onclick = e => share(e.target, win);
-    end.querySelector('.wdFree').onclick = () => start('free');
+    end.querySelector('.wdFree').onclick = () => start(W.opt.mode === 'archive' ? 'archive' : 'free');
     end.querySelector('.wdDuel').onclick = () => { location.hash = '#/games/words/' + GameRoom.newCode(); };
     if (daily) tickLeft();
     // Напоминание о завтрашнем слове (push-pwa.js) — если ещё не включено и сервер умеет (push-words.sql)
@@ -201,7 +223,8 @@
 
   async function share(btn, win){
     const daily = W.opt.mode === 'daily';
-    const text = `5 букв${daily ? ' #' + dayNo() : ''} ${win ? W.rows.length : 'X'}/6${W.hint ? ' 💡' : ''}\n${grid()}`;
+    const num = daily ? dayNo() : W.opt.mode === 'archive' ? W.opt.n : 0;
+    const text = `5 букв${num ? ' #' + num : ''}${W.opt.mode === 'archive' ? ' (архив)' : ''} ${win ? W.rows.length : 'X'}/6${W.hint ? ' 💡' : ''}\n${grid()}`;
     const url = location.origin + '/games/words';
     if (typeof window.va === 'function') window.va('event', { name: 'words_share' });
     if (navigator.share) { navigator.share({ text: text + '\n', url }).catch(() => {}); return; }
@@ -210,8 +233,13 @@
   }
 
   // ── Режимы ──
-  function start(mode){
-    if (mode === 'daily') {
+  function start(mode, n){
+    if (mode === 'archive') {
+      if (!n) return renderArchive();
+      const arch = load('d37_words_arch', {}), word = dailyWord(n);
+      const s = arch[n], saved = s && s.word === word ? s : null;
+      render(root, { mode: 'archive', n, word, saved, onEnd: (win, tries) => api.report('words_free', win, win ? 7 - tries : 0, 0) });
+    } else if (mode === 'daily') {
       const n = dayNo(), word = dailyWord(n);
       const s = load('d37_words_day', null);
       const saved = s && s.n === n && s.word === word ? s : null;
@@ -253,7 +281,7 @@
           },
           stop(){ W = null; },
         });
-      } else start('daily');
+      } else start(gameApi.param === 'archive' ? 'archive' : 'daily');   // #/games/words/archive — сразу архив
     },
     unmount(){ clearTimeout(timer); W = null; stopDuel?.(); stopDuel = null; document.removeEventListener('keydown', onKey); root = null; },
     _test: { evaluate, dailyWord, dayNo },
