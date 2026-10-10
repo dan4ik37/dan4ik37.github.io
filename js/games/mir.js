@@ -154,7 +154,7 @@
       while (g.measureText(text).width > w * .92 && size > 14) { size -= 3; g.font = `900 ${size}px Montserrat, Arial, sans-serif`; }
       g.fillText(text, w / 2, h / 2 + 2);
     });
-    const plaque = (x, y, z, w, h, mat, yaw = 0) => { const m = new T.Mesh(K.geo(`pl${w}_${h}`, () => new T.PlaneGeometry(w, h)), mat); m.position.set(x, y, z); m.rotation.y = yaw; st.add(m); return m; };
+    const plaque = (x, y, z, w, h, mat, yaw = 0, parent) => { const m = new T.Mesh(K.geo(`pl${w}_${h}`, () => new T.PlaneGeometry(w, h)), mat); m.position.set(x, y, z); m.rotation.y = yaw; (parent || st).add(m); if (parent) m.userData.dyn = true; return m; };
 
     // ── Земля, площадь, дорожки ──
     flat(0, 0, 320, 320, '#86cf72', 0, { m: M.grass });
@@ -270,9 +270,9 @@
         const sw = Math.min(o.w - 1, 6.5);
         const px = side === 'e' ? x0 + hw + .22 : side === 'w' ? x0 - hw - .22 : x0 + (d?.at || 0), pz = side === 's' ? z0 + hd + .22 : side === 'n' ? z0 - hd - .22 : z0 + (d?.at || 0);
         const yaw = side === 's' ? 0 : side === 'n' ? PI : side === 'e' ? PI / 2 : -PI / 2;
-        plaque(px, Math.min(H * floors - .55, (d?.h || 2.8) + .55), pz, sw, sw / 4, mat, yaw);
+        plaque(px - x0, Math.min(H * floors - .55, (d?.h || 2.8) + .55), pz - z0, sw, sw / 4, mat, yaw, roof);
       }
-      return { x0, z0, hw, hd, H };
+      return { x0, z0, hw, hd, H, roof };
     }
     const glassM = new T.MeshBasicMaterial({ color: '#cfeeff', transparent: true, opacity: .32, depthWrite: false });
 
@@ -367,11 +367,11 @@
     function infoSpot(x, z, title, text){ X.add({ x, y: 1.5, z, r: .8, prompt: () => 'Прочитать', act: () => S.showInfo?.(title, text) }); }
 
     // ── Кафе «У Денчика» ──
-    building({ id: 'cafe', name: 'Кафе «У Денчика»', x: 0, z: -36, w: 22, d: 14, h: 3.8, wall: '#ffd9a8', trim: '#9a3412', floor: '#c8956a', roof: 'flat', roofC: '#9a3412', roofC2: '#fed7aa',
+    const cafe = building({ id: 'cafe', name: 'Кафе «У Денчика»', x: 0, z: -36, w: 22, d: 14, h: 3.8, wall: '#ffd9a8', trim: '#9a3412', floor: '#c8956a', roof: 'flat', roofC: '#9a3412', roofC2: '#fed7aa',
       doors: [{ side: 's', at: 0, w: 2.6, h: 2.9 }], windows: [{ side: 's', at: -6.5, w: 3 }, { side: 's', at: 6.5, w: 3 }, { side: 'e', at: 0, w: 2.4 }, { side: 'w', at: 0, w: 2.4 }],
       sign: 'Кафе «У Денчика»', signBg: '#9a3412' });
     // маркиза над входом
-    for (let i = 0; i < 7; i++) P(null, { s: 'box', x: -2.1 + i * .7, y: 3.3, z: -28.4, w: .7, h: .08, d: 1.4, rx: .35, c: i % 2 ? '#fff7ed' : '#ea580c' });
+    for (let i = 0; i < 7; i++) R.part(cafe.roof, { s: 'box', x: -2.1 + i * .7, y: 3.3, z: -28.4 + 36, w: .7, h: .08, d: 1.4, rx: .35, c: i % 2 ? '#fff7ed' : '#ea580c', dyn: true });
     box(0, .12, -42.2, 12, 1.15, 1, '#7c2d12', { solid: true });   // стойка
     P(null, { s: 'box', x: 0, y: 1.3, z: -42.2, w: 12.2, h: .08, d: 1.2, c: '#fed7aa' });
     for (let i = 0; i < 5; i++) { const x = -4.8 + i * 2.4; cyl(x, 0, -40.9, .28, .72, '#9a3412', { solid: true, pr: .3 }); P(null, { s: 'cyl', x, y: .75, z: -40.9, r: .3, h: .06, c: '#fdba74' }); }
