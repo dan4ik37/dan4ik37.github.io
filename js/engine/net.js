@@ -731,7 +731,7 @@
 
     // ═══ Гость: копия мира ═══
     const ipActive = new Set(), bSeq = new Array(NB).fill(null), bySlot = new Map();
-    let pktT = 0, pktL = null;   // время пакета хозяина (местные мс) — метка для плавного движения
+    let pktT = 0;   // время пакета хозяина (местные мс) — метка для плавного движения
     function touchB(b, seq){ const x = bSeq[b]; if (!x || x.e !== S.epoch || newer(seq, x.s)) bSeq[b] = { s: seq, e: S.epoch }; }
     function readObjs(L, r, seq){
       const n = r.u16();
@@ -891,24 +891,24 @@
           if (first) call(o.onPlayer, 'join', pubP(p));
         } else if (m.k === 'ev') {
           if (typeof m.ty !== 'string' || !evRate(p)) return;
-          call(o.onEvent, m.ty, m.d, from);
+          call(o.onGuestEvent || o.onEvent, m.ty, m.d, from);
           if (m.to === 'all') for (const L2 of links.values()) if (L2.id !== from) relJson(L2, { k: 'ev', ty: m.ty, d: m.d, fr: from });
         } else if (m.k === 'dq' && Array.isArray(m.b)) {
           S.resyncs = (S.resyncs || 0) + m.b.length;
           for (const b0 of m.b.slice(0, NB)) {
             const b = b0 & (NB - 1), list = [];
             for (const rp of reps.values()) if (rp.b === b) { list.push(rp.nid); const G = L.objs.get(rp.nid); if (G) { G.sp = 0; G.d = 0; } }
-            L.objPend = true; L.objNext = 0; L.synced = true;
+            L.objPend = true; L.objNext = 0;
             relJson(L, { k: 'bk', b, a: L.seq, n: list });
           }
         }
         return;
       }
       if (m.k === 'pl' && Array.isArray(m.l)) {
-        const ids = new Set(members.map(x => x.id)), seen = new Set();
+        const seen = new Set();
         bySlot.clear();
-        for (const [id, slot, nick, info] of m.l) {
-          if (typeof id !== 'string' || !ids.has(id)) continue;
+        for (const [id, slot, nick, info] of m.l.slice(0, 250)) {
+          if (typeof id !== 'string' || !(slot > 0 && slot < 256)) continue;
           seen.add(id); bySlot.set(slot, id);
           let p = players.get(id), isNew = !p;
           if (!p) players.set(id, p = { id, slot, nick: '', info: null, data: null, lim: null, strikes: 0, fixAt: 0, expect: null, last: null, ev: [] });
@@ -963,7 +963,7 @@
         const ch = !prev || myChanged(prev);
         const big = prev && (flagsOf(my) !== flagsOf(prev) || myTp !== L.myTp || Math.hypot((my.vx || 0) - (prev.vx || 0), (my.vy || 0) - (prev.vy || 0), (my.vz || 0) - (prev.vz || 0)) > 3);
         chDue = (ch && since >= iv) || (big && since >= 30) || since >= 1000 || (L.chs.get(S.myId) === undefined && since >= iv) || (L.redund > 0 && since >= iv);
-        if (big) L.redund = 2;
+        L.big = big;
       }
       const ackDue = L.owe && t - L.oweAt >= (l.mode === 'p2p' ? 40 : 200);
       if (!(relDue || chDue || ackDue || t - L.lastTx >= 1000)) return;
@@ -974,7 +974,7 @@
       header(w, L, false);
       if (chDue || (my && clock.ok && L.myLast && myChanged(L.myLast))) {   // пакет всё равно идёт — свежий снимок с ним
         const c = mySample(now()); w.u8(7); writeChar(w, c); L.chs.set(S.myId, c.t); L.chAt.set(S.myId, t); L.myLast = Object.assign({}, my); L.myTp = myTp; rec.ch.push(S.myId, c.t);
-        if (!chDue || !(L.redund > 0)) {} else L.redund--;
+        if (L.big) L.redund = 2; else if (L.redund > 0) L.redund--;   // важное (стоп, прыжок, телепорт) — ещё в двух пакетах
       }
       writeRel(w, L, rec, budget - 8);
       ship(L, w, rec);
@@ -1065,7 +1065,7 @@
       if (S.closed) return;
       const t = now();
       if (S.isHost) hostTick(t); else { guestTick(t); stepObjects(t); }
-      for (const rc of remotes.values()) stepRemote(rc, t, dt || 1 / 60, posOfNid, GRAV);
+      for (const rc of remotes.values()) { const ps = stepRemote(rc, t, dt || 1 / 60, posOfNid, GRAV); if (ps && o.onCharacter && players.has(rc.id)) call(o.onCharacter, rc.id, ps, rc); }
       if (tr.flush) tr.flush();
     };
     S.setMyCharacter = st => {
@@ -1084,7 +1084,7 @@
       const m = { k: 'ev', ty: String(type).slice(0, 40), d: data === undefined ? null : data, to };
       if (JSON.stringify(m).length > 8000) return false;
       if (!S.isHost) { const L = links.get(S.hostId); if (!L) return false; relJson(L, m); return true; }
-      if (to === S.myId || to === 'host') { call(o.onEvent, m.ty, m.d, S.myId); return true; }
+      if (to === S.myId || to === 'host') { call(o.onGuestEvent || o.onEvent, m.ty, m.d, S.myId); return true; }
       for (const L of links.values()) if (to === 'all' || to === L.id) relJson(L, { k: 'ev', ty: m.ty, d: m.d, fr: S.myId });
       return true;
     };

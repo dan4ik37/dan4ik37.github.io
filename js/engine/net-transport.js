@@ -58,15 +58,14 @@
       let q = rq.get(to); if (!q) rq.set(to, q = []);
       if (q.length < 32) q.push(toB64(u8));
     };
-    // «Через комнату» — пачкой раз в 200 мс: один broadcast на всех адресатов
+    // «Через комнату» — пачкой раз в 200 мс: один broadcast на всех адресатов (больше ~48 КБ — несколькими)
     T.flush = () => {
       if (closed || !rq.size || now() - relayAt < RELAY_MS) return;
-      const p = {}; let n = 0;
-      for (const [id, q] of rq) if (q.length) { p[id] = q; n += q.reduce((a, b) => a + b.length, 0); }
+      let p = {}, n = 0;
+      const out = () => { if (!n) return; st.relayMsgs++; st.relayBytes += n; bcast({ type: 'nr', by: myId, p }); p = {}; n = 0; };
+      for (const [id, q] of rq) for (const b of q) { if (n && n + b.length > 48000) out(); (p[id] = p[id] || []).push(b); n += b.length; }
       rq.clear(); relayAt = now();
-      if (!n) return;
-      st.relayMsgs++; st.relayBytes += n;
-      bcast({ type: 'nr', by: myId, p });
+      out();
     };
     T.listen = h => { H = h || {}; if (synced && H.members) H.members(members.slice()); };
     T.members = () => members.slice();
