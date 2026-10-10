@@ -8,7 +8,8 @@
 //   SC.touching(ch) — каких деталей касается персонаж (для события «коснулся»); SC.on('add'|'remove'|'change', f).
 // Классы: Part (деталь: shape block | ball | cyl | wedge), Spawn (точка появления), Light (свет), Prefab (готовый предмет:
 // дерево, фонарь, скамейка…), Model (группа), Script (скрипт — код в песочнице, см. script.js), Mesh (своя 3D-модель —
-// как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; тело — коробка size).
+// как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; тело — fit: 'precise' —
+// коробки по поверхности модели (M.colliders), 'box' — одна коробка size).
 // Свойства детали: pos [x,y,z], rot [x,y,z] (градусы, порядок YXZ как в Roblox), size [x,y,z], color '#rrggbb',
 // mat (материал — SC.MATS), alpha (прозрачность 0…1), collide (сталкивается), anchored (закреплена; нет — падает),
 // shadow (отбрасывает тень), attrs (свои значения для скриптов). Физика: блок/клин/цилиндр — точно при поворотах на 90°
@@ -38,10 +39,10 @@
     Light: { name: 'Свет', pos: [0, 4, 0], color: '#fff1c4', range: 18, power: 2 },
     Prefab: { name: 'Предмет', kind: 'tree', pos: [0, 0, 0], rot: [0, 0, 0], scale: 1, text: 'Привет!', color: '#7c3aed' },
     Model: { name: 'Модель' },
-    Mesh: { name: 'Своя модель', model: '', pos: [0, 2, 0], rot: [0, 0, 0], size: [4, 4, 4], alpha: 0, collide: true, anchored: true, shadow: true },
+    Mesh: { name: 'Своя модель', model: '', pos: [0, 2, 0], rot: [0, 0, 0], size: [4, 4, 4], alpha: 0, collide: true, anchored: true, shadow: true, fit: 'precise' },
     Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
@@ -141,6 +142,19 @@
       ez = Math.abs(e[2]) * h[0] + Math.abs(e[6]) * h[1] + Math.abs(e[10]) * h[2];
       const solid = obj.collide !== false, big = Math.max(obj.size[0], obj.size[1], obj.size[2]) > 3;
       const data = { part: obj.id, floor: FLOOR[obj.mat] || 'concrete', cam: solid && big && obj.alpha < .6 };
+      // своя модель, «точно»: коробки по поверхности (model.js → M.colliders), растянутые и повёрнутые вместе с моделью
+      const md = obj.cls === 'Mesh' && obj.fit !== 'box' ? E.models?.cached(obj.model) : null;
+      if (md && E.models.colliders) {
+        const k = [obj.size[0] / (md.size[0] || 1), obj.size[1] / (md.size[1] || 1), obj.size[2] / (md.size[2] || 1)], v = new T.Vector3();
+        for (const [cx, cy, cz, bx, by, bz] of E.models.colliders(md)) {
+          v.set(cx * k[0], cy * k[1] - h[1], cz * k[2]).applyMatrix4(m4);
+          const hb = [bx * k[0], by * k[1], bz * k[2]];
+          const d2 = { part: obj.id, floor: 'concrete', cam: solid && Math.max(hb[0], hb[1], hb[2]) > 1.5 && obj.alpha < .6 };
+          obj._cols.push(ph.addBox({ x: x + v.x, y: y + v.y, z: z + v.z, yaw, solid, tag: 'part', data: d2,
+            hx: Math.abs(e[0]) * hb[0] + Math.abs(e[4]) * hb[1] + Math.abs(e[8]) * hb[2], hy: Math.abs(e[1]) * hb[0] + Math.abs(e[5]) * hb[1] + Math.abs(e[9]) * hb[2], hz: Math.abs(e[2]) * hb[0] + Math.abs(e[6]) * hb[1] + Math.abs(e[10]) * hb[2] }));
+        }
+        return;
+      }
       const plain = !rx && !rz;
       if (obj.shape === 'wedge' && plain) obj._cols.push(ph.addWedge({ x, y, z, hx: h[0], hy: h[1], hz: h[2], yaw, solid, tag: 'part', data }));
       else if ((obj.shape === 'cyl' || obj.shape === 'ball') && plain) obj._cols.push(ph.addCyl({ x, y, z, r: Math.max(h[0], h[2]), hy: h[1], solid, tag: 'part', data }));
@@ -269,7 +283,7 @@
         if (obj._mesh && obj.cls !== 'Prefab') place(obj._mesh, obj);
         if (obj._light) obj._light.position.set(...obj.pos);
         if (obj.cls === 'Prefab') build(obj); else colliders(obj);
-      } else if (key === 'collide') colliders(obj);
+      } else if (key === 'collide' || key === 'fit') colliders(obj);
       if (!silent) emit('change', { obj, key });
     };
     // Модель: центр (pivot) — середина её коробки; сдвиг и поворот вокруг Y — для всех потомков

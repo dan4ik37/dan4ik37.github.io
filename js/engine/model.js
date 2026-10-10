@@ -434,6 +434,64 @@
     return g;
   };
 
+  // ═══ Точные столкновения (как CollisionFidelity в Roblox): кубики по поверхности модели → склейка в коробки ═══
+  // Кубик твёрдый, если в нём есть точка какого-нибудь треугольника; внутри закрытой модели пусто (в дом с проёмом можно
+  // зайти). Коробки ужимаются до настоящих точек: пол не «поднимается» на высоту кубика, стена — своей толщины (не тоньше 0,1).
+  // M.colliders(model) → [[cx, cy, cz, hx, hy, hz], …] в единицах модели (низ — y = 0, центр по x/z); считается раз за сеанс.
+  M.colliders = model => {
+    if (model._col) return model._col;
+    const S = model.size;
+    let cell = Math.max(.3, Math.min(2, Math.max(...S) / 32)), boxes = null;
+    for (let t = 0; t < 4 && !boxes; t++, cell *= 1.5) boxes = voxelBoxes(model, cell, 900);
+    model._col = boxes || [[0, S[1] / 2, 0, S[0] / 2, S[1] / 2, S[2] / 2]];
+    return model._col;
+  };
+  function voxelBoxes(model, cell, maxBoxes){
+    const S = model.size, n = [0, 1, 2].map(i => Math.max(1, Math.min(96, Math.ceil(S[i] / cell))));
+    const c = [S[0] / n[0] || 1, S[1] / n[1] || 1, S[2] / n[2] || 1], o = [-S[0] / 2, 0, -S[2] / 2];
+    const N = n[0] * n[1] * n[2], fill = new Uint8Array(N), lo = new Float32Array(N * 3).fill(Infinity), hi = new Float32Array(N * 3).fill(-Infinity);
+    const idx = (i, j, k) => (k * n[1] + j) * n[0] + i;
+    const cl = (v, m) => v < 0 ? 0 : v >= m ? m - 1 : v;
+    const mark = (x, y, z) => {
+      const v = idx(cl(Math.floor((x - o[0]) / c[0]), n[0]), cl(Math.floor((y - o[1]) / c[1]), n[1]), cl(Math.floor((z - o[2]) / c[2]), n[2])), b = v * 3;
+      fill[v] = 1;
+      if (x < lo[b]) lo[b] = x; if (y < lo[b + 1]) lo[b + 1] = y; if (z < lo[b + 2]) lo[b + 2] = z;
+      if (x > hi[b]) hi[b] = x; if (y > hi[b + 1]) hi[b + 1] = y; if (z > hi[b + 2]) hi[b + 2] = z;
+    };
+    const step = Math.min(c[0], c[1], c[2]) * .5;
+    for (const p of model.parts) {
+      const P = p.p, I = p.i;
+      for (let t = 0; t < I.length; t += 3) {
+        const a = I[t] * 3, b = I[t + 1] * 3, d = I[t + 2] * 3;
+        const ax = P[a], ay = P[a + 1], az = P[a + 2], bx = P[b] - ax, by = P[b + 1] - ay, bz = P[b + 2] - az, cx = P[d] - ax, cy = P[d + 1] - ay, cz = P[d + 2] - az;
+        const L = Math.max(Math.hypot(bx, by, bz), Math.hypot(cx, cy, cz), Math.hypot(bx - cx, by - cy, bz - cz));
+        const m = Math.min(300, Math.max(1, Math.ceil(L / step)));
+        for (let s = 0; s <= m; s++) for (let u = 0; u <= m - s; u++) { const fs = s / m, fu = u / m; mark(ax + bx * fs + cx * fu, ay + by * fs + cy * fu, az + bz * fs + cz * fu); }
+      }
+    }
+    // жадная склейка кубиков: вдоль x, потом y, потом z
+    const used = new Uint8Array(N), out = [];
+    const free = v => fill[v] && !used[v];
+    for (let k = 0; k < n[2]; k++) for (let j = 0; j < n[1]; j++) for (let i = 0; i < n[0]; i++) {
+      if (!free(idx(i, j, k))) continue;
+      let i1 = i; while (i1 + 1 < n[0] && free(idx(i1 + 1, j, k))) i1++;
+      let j1 = j;
+      growY: while (j1 + 1 < n[1]) { for (let ii = i; ii <= i1; ii++) if (!free(idx(ii, j1 + 1, k))) break growY; j1++; }
+      let k1 = k;
+      growZ: while (k1 + 1 < n[2]) { for (let jj = j; jj <= j1; jj++) for (let ii = i; ii <= i1; ii++) if (!free(idx(ii, jj, k1 + 1))) break growZ; k1++; }
+      const mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      for (let kk = k; kk <= k1; kk++) for (let jj = j; jj <= j1; jj++) for (let ii = i; ii <= i1; ii++) {
+        const v = idx(ii, jj, kk), b = v * 3; used[v] = 1;
+        for (let q = 0; q < 3; q++) { if (lo[b + q] < mn[q]) mn[q] = lo[b + q]; if (hi[b + q] > mx[q]) mx[q] = hi[b + q]; }
+      }
+      const box = [];
+      for (let q = 0; q < 3; q++) { let a = mn[q], b = mx[q]; if (b - a < .1) { const m = (a + b) / 2; a = m - .05; b = m + .05; } box[q] = +((a + b) / 2).toFixed(3); box[q + 3] = +((b - a) / 2).toFixed(3); }
+      out.push(box);
+      if (out.length > maxBoxes) return null;
+    }
+    return out;
+  }
+
   // ═══ Для файла мира: модель ↔ base64 ═══
   const toB64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
   const arr = (a, kind) => a ? { k: kind, d: toB64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength)) } : null;

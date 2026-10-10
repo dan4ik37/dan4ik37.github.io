@@ -120,6 +120,28 @@ function cube(){
     const bad4 = JSON.parse(JSON.stringify(packed)); bad4.mats[0].c = ['x', 1e9, -5]; bad4.mats[0].tex = 99;
     const b4 = M.unpack(bad4); ok(b4 && b4.mats[0].c[0] === 1 && b4.mats[0].c[1] === 10 && b4.mats[0].c[2] === 0 && b4.mats[0].tex === 7, 'unpack: значения материалов зажаты', b4?.mats[0]);
   }
+  // ═══ Точные столкновения: коробки по поверхности (пустой внутри куб, пол без «подъёма») ═══
+  {
+    const g = gltfBuilder(), J = g.J, c = cube();
+    J.meshes.push({ primitives: [{ attributes: { POSITION: g.acc(c.P, 'VEC3', 5126) }, indices: g.acc(c.I, 'SCALAR', 5123) }] });
+    J.nodes.push({ mesh: 0, scale: [4, 4, 4] }); J.scenes[0].nodes = [0];
+    const m = await M.compile([{ name: 'куб.glb', data: g.glb() }]);
+    const boxes = M.colliders(m), S = m.size;
+    ok(boxes.length >= 6 && boxes.length < 200, 'коробки по поверхности куба', boxes.length);
+    const inside = (p, b) => Math.abs(p[0] - b[0]) <= b[3] && Math.abs(p[1] - b[1]) <= b[4] && Math.abs(p[2] - b[2]) <= b[5];
+    ok(!boxes.some(b => inside([0, S[1] / 2, 0], b)), 'внутри закрытой модели пусто');
+    ok(boxes.some(b => inside([0, S[1] - .01, 0], b)) && boxes.some(b => inside([S[0] / 2 - .01, S[1] / 2, 0], b)), 'крыша и стены — твёрдые');
+    const top = Math.max(...boxes.map(b => b[1] + b[4])), bottom = Math.min(...boxes.map(b => b[1] - b[4]));
+    ok(near(top, S[1] + .05, .06) && near(bottom, -.05, .06), 'коробки не выше и не ниже модели', [top, bottom]);
+    ok(boxes.every(b => Math.abs(b[0]) - b[3] <= S[0] / 2 + .06 && Math.abs(b[2]) - b[5] <= S[2] / 2 + .06), 'не шире модели');
+    ok(M.colliders(m) === boxes, 'считается один раз');
+    // плоский пол 6 × 6 м: верх коробок — у самого пола, а не на высоте кубика
+    const g2 = gltfBuilder(), J2 = g2.J;
+    J2.meshes.push({ primitives: [{ attributes: { POSITION: g2.acc(Float32Array.from([-3, 0, -3, 3, 0, -3, 3, 0, 3, -3, 0, 3]), 'VEC3', 5126) }, indices: g2.acc(Uint16Array.from([0, 2, 1, 0, 3, 2]), 'SCALAR', 5123) }] });
+    J2.nodes.push({ mesh: 0 }); J2.scenes[0].nodes = [0];
+    const f = await M.compile([{ name: 'пол.glb', data: g2.glb() }]), fb = M.colliders(f);
+    ok(fb.length >= 1 && fb.every(b => near(b[1] + b[4], .05, .02)), 'пол: верх коробок — у пола (0,05)', fb.slice(0, 2));
+  }
   // ═══ Отрицательный масштаб (зеркало) разворачивает треугольники ═══
   {
     const g = gltfBuilder(), J = g.J;

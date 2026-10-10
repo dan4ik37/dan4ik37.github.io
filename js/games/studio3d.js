@@ -961,7 +961,8 @@ Players.PlayerAdded.Connect(player => {
         h += v3('pos', 'Позиция', ed.G.snap || .1) + v3('size', 'Размер', ed.G.snap || .1) + v3('rot', 'Поворот (°)', ed.G.rsnap || 1);
         if (md) h += `<div class="s3-grid2"><button type="button" data-a="msize:1">↺ Исходный размер</button><button type="button" data-a="msize:2">× 2</button></div>`;
         h += `<label class="s3-lbl">Прозрачность <b>${(+o.alpha).toFixed(2)}</b><input type="range" min="0" max="1" step="0.05" value="${o.alpha}" data-p="alpha"></label>`;
-        h += `<label class="s3-chk"><input type="checkbox" data-p="collide"${o.collide !== false ? ' checked' : ''}> Сталкивается (CanCollide) — коробкой</label>
+        h += `<label class="s3-chk"><input type="checkbox" data-p="collide"${o.collide !== false ? ' checked' : ''}> Сталкивается (CanCollide)</label>
+          <label class="s3-lbl">Форма столкновений<select data-p="fit"><option value="precise"${o.fit !== 'box' ? ' selected' : ''}>🎯 Точно — по поверхности модели</option><option value="box"${o.fit === 'box' ? ' selected' : ''}>📦 Коробкой — быстрее</option></select></label>
           <label class="s3-chk"><input type="checkbox" data-p="anchored"${o.anchored !== false ? ' checked' : ''}> Закреплена (Anchored)</label>
           <label class="s3-chk"><input type="checkbox" data-p="shadow"${o.shadow !== false ? ' checked' : ''}> Тень</label>`;
       } else if (o.cls === 'Model') {
@@ -1013,6 +1014,8 @@ Players.PlayerAdded.Connect(player => {
     for (const o of SC.all()) { if (o.cls === 'Light' && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh && !ed.player) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
     const spawn = SC.all().find(o => o.cls === 'Spawn');
     const sp = spawn ? [spawn.pos[0], spawn.pos[1] + spawn.size[1] / 2 + .05, spawn.pos[2]] : [0, ed.ph.groundAt(0, 0) + .05, 0];
+    // на точке появления что-то стоит — появляемся сверху, а не внутри
+    if (ed.ph.blocked(sp[0], sp[2], sp[1] + .05, sp[1] + 2, .42)) sp[1] = ed.ph.supportAt(sp[0], sp[2], .42, 1e6).y + .02;
     const P = E.player(ed.ph, { x: sp[0], z: sp[2], yaw: 0 });
     P.place(sp[0], sp[1], sp[2], 0);
     const C = E.controls({});
