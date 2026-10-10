@@ -1,0 +1,16 @@
+{
+    "name": "Dan4ik37.SDK.Samples",
+    "rootNamespace": "",
+    "references": [
+        "Dan4ik37.SDK"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
