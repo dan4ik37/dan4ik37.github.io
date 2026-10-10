@@ -3265,3 +3265,11 @@ html.s3-open,html.s3-open body{overflow:hidden}
   .s3 .s3-mob{display:inline-block}
   .s3-bottom{height:150px;padding-bottom:env(safe-area-inset-bottom)}
 }
+
+/* ── Свой курсор («Мощное»): поверх всех окон сайта (студия, редактор персонажа, поиск — выше 10000), а в 3D-редакторах —
+   обычная стрелка: свой курсор там отстаёт и мешает целиться ── */
+#cursorTrail{z-index:2147483646}
+#cursorDot{z-index:2147483647}
+body.high .s3,body.high .s3 *,body.high .wld-edit,body.high .wld-edit *{cursor:auto}
+body.high .s3 button,body.high .s3 a,body.high .s3 select,body.high .s3 label,body.high .s3 .s3-row,body.high .wld-edit button,body.high .wld-edit a{cursor:pointer}
+html.s3-open #cursorTrail,html.s3-open #cursorDot,body:has(.wld-edit) #cursorTrail,body:has(.wld-edit) #cursorDot{display:none!important}
