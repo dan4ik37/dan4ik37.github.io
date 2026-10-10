@@ -683,9 +683,11 @@ gl_FragColor = vec4(c, 1.0);
       sign(o, ph){
         const g = R.group(o.parent, o.x, 0, o.z, o.yaw || 0);
         R.part(g, { s: 'box', w: .14, h: 1.6, d: .14, y: .8, c: '#6b4426' });
-        const tex = textTex(o.text || '', o.c || '#7c3aed');
-        const m = new T.Mesh(K.geo('signplane', () => new T.PlaneGeometry(1.8, .7)), new T.MeshBasicMaterial({ map: tex, toneMapped: false }));
-        m.position.set(0, 1.75, .08); m.userData.dyn = true; g.add(m); R.own.push(m.material, tex);
+        // надпись: текстура и материал общие для одинаковых табличек (раньше — новые на каждую и до закрытия мира)
+        const key = 'sign:' + (o.c || '#7c3aed') + '|' + (o.text || '');
+        const mat = cache(key, () => { const t = textTex(o.text || '', o.c || '#7c3aed'); texCache.set(key, t); return new T.MeshBasicMaterial({ map: t, toneMapped: false }); });
+        const m = new T.Mesh(K.geo('signplane', () => new T.PlaneGeometry(1.8, .7)), mat);
+        m.position.set(0, 1.75, .08); m.userData.dyn = true; g.add(m);
         R.part(g, { s: 'box', w: 1.9, h: .8, d: .1, y: 1.75, c: '#3b2a1c' });
         ph?.addBox({ x: o.x, z: o.z, y: .8, hx: .1, hy: .8, hz: .1, tag: 'sign' });
         return g;

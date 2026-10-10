@@ -19,7 +19,7 @@
     if (el) return el;
     el = document.createElement('div');
     el.className = 'd37-perf';
-    el.style.cssText = 'position:fixed;left:8px;top:8px;z-index:2147483000;pointer-events:none;font:12px/1.35 ui-monospace,Consolas,monospace;'
+    el.style.cssText = 'position:fixed;left:8px;top:64px;z-index:2147483000;pointer-events:none;font:12px/1.35 ui-monospace,Consolas,monospace;'   // ниже верхних панелей студии и мира
       + 'color:#e5f6ff;background:rgba(8,10,20,.78);padding:6px 9px;border-radius:8px;white-space:pre;box-shadow:0 2px 10px rgba(0,0,0,.4)';
     el.textContent = 'F3 · ждём кадр 3D…';
     document.body.appendChild(el);

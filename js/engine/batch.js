@@ -447,8 +447,11 @@ vUv = ( uvTransform * vec3( uv, 1 ) ).xy;
     };
     B.chunksOf = () => chunks;   // для тестов
     B.recOf = id => recs.get(id) || null;
+    // строка в табличке F3 (perf.js): сколько пачек и что рисуется отдельно
+    const offStat = E.perf?.stat?.('Склейка', () => { const s = B.stats(); return `${s.groups} пачек (${s.chunks} чанков, экземпляров ${s.inst}) · в пачках ${s.batched} · отдельно ${s.single + s.dyn}${s.dyn ? ' (в игре ' + s.dyn + ')' : ''} · сборка ${s.lastMs.toFixed(1)} мс`; });
     B.dispose = () => {
       if (B.dead) return; B.dead = true;
+      offStat?.();
       const i = R.preRender.indexOf(pre); if (i >= 0) R.preRender.splice(i, 1);
       SC.set = set0; for (const f of offs) f();
       for (const ch of chunks.values()) { for (const rec of ch.recs) { if (rec.state === 'batched' && !R.dead) attach(rec); removeLoose(rec); } for (const g of ch.groups) disposeGroup(g); }
