@@ -7,6 +7,11 @@
 // С миром скрипт общается сообщениями: читает копию свойств, а меняет командами (set/new/destroy/tween…), которые
 // хозяин мира проверяет и применяет. SH = D37E.scripts(host) → SH.start(scene, players) / SH.event(…) / SH.tick(dt) / SH.stop().
 // host: { apply(cmd) — команда из скрипта, print(text, kind), error(script, line, msg), hang() }.
+// Языки: у скрипта obj.lang ('js' по умолчанию). Другие языки — файлы js/engine/lang-*.js: D37E.lang(id, { label, short,
+// icon, kind: 'text' | 'binary' (код — base64, например .wasm), worker() — функция, которая работает ВНУТРИ песочницы и
+// регистрирует globalThis.D37Lang[id] = { run(code, env, ctx) }, examples: [[название, код]], ai: «задание для ИИ», placeholder }).
+// env — те же имена, что у JavaScript (script, game, workspace, Instance, Vector3, …); ctx — служебное: name, error(msg, line),
+// err(e), signal, proxyOf, playerOf, objs, players, send. Код языка уходит в песочницу текстом (worker.toString()).
 (() => {
   const E = window.D37E = window.D37E || {};
 
@@ -224,8 +229,21 @@
         for (const p of d.players || []) players.set(p.id, p);
         // смещение строк: первая строка кода игрока
         try { new Function('throw new Error("x")')(); } catch (e2) { LINE0 = lineOf(e2.stack); }
+        // библиотеки языков (lang-*.js) приходят текстом — регистрируются в globalThis.D37Lang
+        globalThis.D37Lang = globalThis.D37Lang || {};
+        for (const id of Object.keys(d.libs || {})) { try { (0, eval)(d.libs[id]); } catch (e5) { send('error', { script: '', line: 0, msg: 'Язык ' + id + ': ' + String(e5 && e5.message || e5).slice(0, 200) }); } }
+        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random };
         for (const s of d.scripts) {
           curScript = s.name;
+          if (s.lang && s.lang !== 'js') {
+            const L = globalThis.D37Lang[s.lang], nm = s.name;
+            if (!L || typeof L.run !== 'function') { err(nm, new Error('Язык «' + s.lang + '» не загрузился')); continue; }
+            const scr = { Name: s.name, Parent: s.parent ? proxyOf(s.parent) : workspace, ClassName: 'Script' };
+            const ctx = { name: nm, error: (msg, line) => send('error', { script: nm, line: Math.max(0, line | 0), msg: String(msg).slice(0, 300) }), err: e => err(nm, e),
+              signal, proxyOf, playerOf, objs, players, send, setCurrent: n => { curScript = n; } };
+            try { const r = L.run(s.code, Object.assign({ script: scr }, API), ctx); if (r && r.catch) r.catch(e6 => err(nm, e6)); } catch (e7) { err(nm, e7); }
+            continue;
+          }
           try {
             const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random',
               'return (async () => {\n' + s.code + '\n})();');
@@ -288,7 +306,12 @@ up({ t: 'frame' });
     const post = m => { if (frame?.contentWindow && ready) frame.contentWindow.postMessage(m, '*'); else queue.push(m); };
     SH.start = (scene, players) => {
       SH.stop();
-      const scripts = scene.all().filter(o => o.cls === 'Script' && o.enabled !== false && String(o.code || '').trim()).map(o => ({ id: o.id, name: o.name, parent: o.parent, code: String(o.code).slice(0, 100000) }));
+      const scripts = scene.all().filter(o => o.cls === 'Script' && o.enabled !== false && String(o.code || '').trim()).map(o => {
+        const lang = o.lang && E.langs[o.lang] ? o.lang : 'js', bin = E.langs[lang].kind === 'binary';
+        return { id: o.id, name: o.name, parent: o.parent, lang, code: String(o.code).slice(0, bin ? 3e6 : 200000) };
+      });
+      const libs = {};
+      for (const s of scripts) if (s.lang !== 'js' && !libs[s.lang] && E.langs[s.lang].worker) libs[s.lang] = '(' + E.langs[s.lang].worker.toString() + ')();';
       SH.running = true;
       if (!scripts.length) return false;
       const objs = scene.all().filter(o => o.cls !== 'Script').map(o => {
@@ -302,7 +325,7 @@ up({ t: 'frame' });
       onMsg = e => {
         if (e.source !== frame?.contentWindow) return;
         const d = e.data || {};
-        if (d.t === 'frame') { ready = true; frame.contentWindow.postMessage({ t: 'boot', code: runtime.toString() }, '*'); frame.contentWindow.postMessage({ t: 'init', objs, scripts, players }, '*'); for (const m of queue) frame.contentWindow.postMessage(m, '*'); queue = []; return; }
+        if (d.t === 'frame') { ready = true; frame.contentWindow.postMessage({ t: 'boot', code: runtime.toString() }, '*'); frame.contentWindow.postMessage({ t: 'init', objs, scripts, players, libs }, '*'); for (const m of queue) frame.contentWindow.postMessage(m, '*'); queue = []; return; }
         if (d.t === 'want') { if (d.ev === 'heartbeat') SH.wantBeat = !!d.on; else if (SH.want[d.ev]) { if (d.on) SH.want[d.ev].add(d.id); else SH.want[d.ev].delete(d.id); } if (d.ev === 'clicked' || d.ev === 'prompt') host.apply?.(d); return; }
         if (d.t === 'print') { host.print?.(String(d.text || ''), d.kind); return; }
         if (d.t === 'error') { host.error?.(String(d.script || ''), +d.line || 0, String(d.msg || '')); return; }
@@ -330,4 +353,9 @@ up({ t: 'frame' });
     return SH;
   };
   E.scripts.runtime = runtime;
+
+  // ═══ Реестр языков скриптов (JavaScript — встроенный) ═══
+  E.langs = E.langs || {};
+  E.lang = (id, def) => { E.langs[id] = Object.assign({ id, label: id, short: id, icon: '📜', kind: 'text', examples: [], ai: '', placeholder: '' }, E.langs[id], def); return E.langs[id]; };
+  E.lang('js', { label: 'JavaScript', short: 'JS', icon: '📜', kind: 'text' });
 })();

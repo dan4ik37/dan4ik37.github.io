@@ -199,7 +199,7 @@ Players.PlayerAdded.Connect(player => {
       </div>
       <div class="s3-bottom"><div class="s3-btabs"><button type="button" data-b="out" class="on">🖨 Вывод</button><button type="button" data-b="code">📜 Скрипт</button><span class="s3-grow"></span><button type="button" data-a="toggleLeft" class="s3-mob">🌲</button><button type="button" data-a="toggleRight" class="s3-mob">⚙</button><button type="button" data-a="toggleBottom" title="Свернуть">▾</button></div>
         <div class="s3-out"></div>
-        <div class="s3-code" hidden><div class="s3-codebar"><select class="s3-ex"><option value="">📚 Примеры…</option>${EXAMPLES.map((e, i) => `<option value="${i}">${esc(e[0])}</option>`).join('')}</select><button type="button" data-a="ai">🤖 Задание для ИИ</button><span class="s3-ai" hidden>${AI_LINKS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</span><span class="s3-grow"></span><span class="s3-cname"></span></div><textarea class="s3-ta" spellcheck="false" placeholder="// Код скрипта. script.Parent — объект, в котором лежит скрипт.&#10;// Нажми «📚 Примеры», чтобы вставить готовый."></textarea></div>
+        <div class="s3-code" hidden><div class="s3-codebar"><select class="s3-lang" title="Язык скрипта"></select><select class="s3-ex"><option value="">📚 Примеры…</option></select><button type="button" data-a="wasm" class="s3-wasm" hidden>📦 Загрузить .wasm</button><span class="s3-wasminfo"></span><button type="button" data-a="ai">🤖 Задание для ИИ</button><span class="s3-ai" hidden>${AI_LINKS.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join(' · ')}</span><span class="s3-grow"></span><span class="s3-cname"></span></div><textarea class="s3-ta" spellcheck="false" placeholder="// Код скрипта. script.Parent — объект, в котором лежит скрипт.&#10;// Нажми «📚 Примеры», чтобы вставить готовый."></textarea></div>
       </div>
       <div class="s3-menu" hidden></div>
       <div class="s3-loading">🧱 Загружаем студию…</div>`;
@@ -218,6 +218,7 @@ Players.PlayerAdded.Connect(player => {
   // ═══ Запуск редактора ═══
   function start(){
     const E = window.D37E, ed = ED, q = ed.q, view = q('.s3-view');
+    E.lang('js', { examples: EXAMPLES, ai: AI_TASK, placeholder: '// Код скрипта. script.Parent — объект, в котором лежит скрипт.\n// Нажми «📚 Примеры», чтобы вставить готовый.' });
     const R = ed.R = E.renderer(view);
     R.r.domElement.classList.add('s3-gl');
     const ph = ed.ph = new E.Phys({ ground: 0 });
@@ -337,7 +338,7 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, SC = ed.SC;
     pushHist();
     let parent = null;
-    if (cls === 'Script') { parent = ed.sel && ed.sel.cls !== 'Script' ? ed.sel : null; }
+    if (cls === 'Script') { parent = ed.sel && ed.sel.cls !== 'Script' ? ed.sel : null; let l = 'js'; try { l = localStorage.getItem('d37_s3_lang') || 'js'; } catch (e) {} if (!props.lang && window.D37E.langs[l]) props.lang = l; }
     else {
       const p = insertPoint(), def = SC.DEF[cls];
       const h = cls === 'Part' ? (props.size || def.size)[1] / 2 : cls === 'Spawn' ? def.size[1] / 2 : cls === 'Light' ? 3 : 0;
@@ -374,7 +375,8 @@ Players.PlayerAdded.Connect(player => {
     q('.s3-snap').onchange = e => { ed.G.snap = +e.target.value; };
     q('.s3-rsnap').onchange = e => { ed.G.rsnap = +e.target.value; };
     q('.s3-name').onchange = () => markDirty();
-    q('.s3-ex').onchange = e => { const i = e.target.value; e.target.value = ''; if (i === '') return; const ta = q('.s3-ta'); if (ta.value.trim() && !confirm('Заменить код примером?')) return; ta.value = EXAMPLES[+i][1]; codeChanged(); };
+    q('.s3-ex').onchange = e => { const i = e.target.value; e.target.value = ''; if (i === '') return; const ex = langOf(ed.codeFor).examples?.[+i]; if (!ex) return; const ta = q('.s3-ta'); if (ta.value.trim() && !confirm('Заменить код примером?')) return; ta.value = ex[1]; codeChanged(); };
+    q('.s3-lang').onchange = e => { const o = ed.codeFor && ed.SC.get(ed.codeFor.id); if (o) setLang(o, e.target.value); };
     const ta = q('.s3-ta');
     ta.addEventListener('input', () => codeChanged());
     ta.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end'); codeChanged(); } e.stopPropagation(); });
@@ -574,7 +576,8 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'toggleLeft') ed.box.classList.toggle('s3-showL');
     else if (a === 'toggleRight') ed.box.classList.toggle('s3-showR');
     else if (a === 'toggleBottom') ed.box.classList.toggle('s3-minB');
-    else if (a === 'ai') { const ta = ed.q('.s3-ta'), what = prompt('Что должен делать скрипт? (например: «дверь открывается, когда у игрока 5 монет»)'); if (!what) return; navigator.clipboard?.writeText(AI_TASK + what + '\nОтвет — только код скрипта.').then(() => { msg('Задание скопировано — вставь в ИИ, а его ответ — сюда', true); ed.q('.s3-ai').hidden = false; }, () => prompt('Скопируй задание:', AI_TASK + what)); ta.focus(); }
+    else if (a === 'ai') { const ta = ed.q('.s3-ta'), L = langOf(ed.codeFor), what = prompt('Что должен делать скрипт? (например: «дверь открывается, когда у игрока 5 монет»)'); if (!what) return; const task = (L.ai || AI_TASK) + what + '\nОтвет — только код скрипта.'; navigator.clipboard?.writeText(task).then(() => { msg('Задание скопировано — вставь в ИИ, а его ответ — сюда', true); ed.q('.s3-ai').hidden = false; }, () => prompt('Скопируй задание:', task)); ta.focus(); }
+    else if (a === 'wasm') pickWasm();
     else if (a === 'dup') duplicate(); else if (a === 'del') remove(); else if (a === 'focus') focusSel();
     else if (a === 'terrain:gen') { if (!confirm('Создать новые холмы? Текущий ландшафт пропадёт.')) return; generateHills(ed.TR, Math.random() * 1e9 | 0); markDirty(); }
     else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, 1, 0, 0); markDirty(); }
@@ -598,11 +601,43 @@ Players.PlayerAdded.Connect(player => {
     ed.q('.s3-out').hidden = b !== 'out'; ed.q('.s3-code').hidden = b !== 'code';
     ed.box.classList.remove('s3-minB');
   }
+  const langOf = o => { const L = window.D37E.langs || {}; return L[o?.lang] || L.js; };
+  function fillLangUI(obj){
+    const ed = ED, q = ed.q, L = langOf(obj), bin = L.kind === 'binary';
+    q('.s3-lang').innerHTML = Object.values(window.D37E.langs).map(l => `<option value="${l.id}"${l.id === L.id ? ' selected' : ''}>${l.icon} ${esc(l.label)}</option>`).join('');
+    q('.s3-ex').innerHTML = '<option value="">📚 Примеры…</option>' + (L.examples || []).map((e, i) => `<option value="${i}">${esc(e[0])}</option>`).join('');
+    q('.s3-wasm').hidden = !bin;
+    q('.s3-wasminfo').textContent = bin ? (obj?.code ? `файл: ${Math.max(1, Math.round(obj.code.length * .75 / 1024))} КБ` : 'файл не загружен') : '';
+    const ta = q('.s3-ta');
+    ta.placeholder = L.placeholder || (bin ? '// Исходник — для себя и для ИИ. Запускается загруженный файл .wasm' : '// Код скрипта');
+    ta.value = (bin ? obj?.src : obj?.code) || '';
+  }
+  function setLang(o, id){
+    const ed = ED, was = langOf(o), L = window.D37E.langs[id]; if (!L || L === was) return;
+    pushHist();
+    if (L.kind !== was.kind) { if (L.kind === 'binary') { o.src = o.code || ''; o.code = ''; } else { o.code = o.src || ''; delete o.src; } }
+    o.lang = id; try { localStorage.setItem('d37_s3_lang', id); } catch (e) {}
+    markDirty(); if (ed.codeFor === o) fillLangUI(o); renderTree(); renderProps();
+  }
+  // .wasm (Rust, C++ и т. п. — собраны у себя на компьютере): проверка заголовка, до 2 МБ, хранится base64 в code
+  function pickWasm(){
+    const ed = ED, o = ed.codeFor && ed.SC.get(ed.codeFor.id); if (!o) return;
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.wasm,application/wasm';
+    inp.onchange = async () => {
+      const f = inp.files?.[0]; if (!f) return;
+      if (f.size > 2e6) { msg('Файл .wasm больше 2 МБ — собери с оптимизацией (release, -O2, strip)', false); return; }
+      const u8 = new Uint8Array(await f.arrayBuffer());
+      if (u8[0] !== 0 || u8[1] !== 0x61 || u8[2] !== 0x73 || u8[3] !== 0x6d) { msg('Это не WebAssembly (.wasm)', false); return; }
+      let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+      pushHist(); o.code = btoa(s); markDirty(); fillLangUI(o); msg(`📦 ${f.name} загружен (${Math.round(f.size / 1024)} КБ)`, true);
+    };
+    inp.click();
+  }
   function showCode(obj){
     const ed = ED;
     ed.codeFor = obj;
-    ed.q('.s3-ta').value = obj.code || '';
-    ed.q('.s3-cname').textContent = '📜 ' + obj.name;
+    fillLangUI(obj);
+    ed.q('.s3-cname').textContent = langOf(obj).icon + ' ' + obj.name;
     setBottom('code');
   }
   let codeT = 0;
@@ -610,11 +645,11 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, o = ed.codeFor;
     if (!o || !ed.SC.get(o.id)) { const s = ed.sel?.cls === 'Script' ? ed.sel : null; if (!s) { msg('Сначала выбери скрипт (📜 Скрипт — новый)', false); return; } ed.codeFor = s; }
     clearTimeout(codeT);
-    codeT = setTimeout(() => { if (ed.codeFor) { ed.codeFor.code = ed.q('.s3-ta').value; markDirty(); } }, 300);
+    codeT = setTimeout(() => { if (ed.codeFor) { ed.codeFor[langOf(ed.codeFor).kind === 'binary' ? 'src' : 'code'] = ed.q('.s3-ta').value; markDirty(); } }, 300);
   }
 
   // ═══ Проводник ═══
-  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Script: '📜', Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
+  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
   function renderTree(){
     const ed = ED, SC = ed.SC, tree = ed.q('.s3-tree');
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
@@ -691,6 +726,7 @@ Players.PlayerAdded.Connect(player => {
       } else if (o.cls === 'Model') {
         h += `<p class="s3-note">Модель — группа. Перетащи детали на неё в Проводнике. Двигай и крути её стрелками целиком.</p>`;
       } else if (o.cls === 'Script') {
+        h += `<label class="s3-lbl">Язык<select data-p="lang">${Object.values(window.D37E.langs).map(l => `<option value="${l.id}"${l.id === langOf(o).id ? ' selected' : ''}>${l.icon} ${esc(l.label)}</option>`).join('')}</select></label>`;
         h += `<label class="s3-chk"><input type="checkbox" data-p="enabled"${o.enabled !== false ? ' checked' : ''}> Включён</label><p class="s3-note">Код — внизу во вкладке «📜 Скрипт». Скрипт работает, когда нажмёшь ▶ Играть.</p>`;
       }
       h += `<div class="s3-grid3"><button type="button" data-a="dup">⧉ Копия</button><button type="button" data-a="focus">🎯 К нему</button><button type="button" data-a="del" class="warn">🗑 Удалить</button></div>`;
@@ -708,6 +744,7 @@ Players.PlayerAdded.Connect(player => {
         if (key === 't:water') { ed2.TR.setWater(val); markDirty(); return; }
         if (key === 't:level') { ed2.TR.setWater(ed2.TR.water.on, val); const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(1); markDirty(); return; }
         if (!o2) return;
+        if (key === 'lang') { setLang(o2, val); return; }
         if (!commit && (el.type === 'text' || el.type === 'number')) return;   // текст и числа — по Enter/уходу
         if (!ed2.histOpen) { pushHist(); ed2.histOpen = true; setTimeout(() => { if (ED) ED.histOpen = false; }, 600); }
         if (key.includes(':')) { const [k, i] = key.split(':'); if (!Number.isFinite(val)) return; const arr = o2[k].slice(); arr[+i] = k === 'size' ? Math.max(.05, val) : val; SC2.set(o2, k, arr); }

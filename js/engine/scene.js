@@ -37,9 +37,9 @@
     Light: { name: 'Свет', pos: [0, 4, 0], color: '#fff1c4', range: 18, power: 2 },
     Prefab: { name: 'Предмет', kind: 'tree', pos: [0, 0, 0], rot: [0, 0, 0], scale: 1, text: 'Привет!', color: '#7c3aed' },
     Model: { name: 'Модель' },
-    Script: { name: 'Скрипт', code: '', enabled: true },
+    Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'enabled', 'attrs', 'locked'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
