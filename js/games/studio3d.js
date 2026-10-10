@@ -5,6 +5,8 @@
 // ═══════════════════════════════════════
 // Движок: js/engine/* (scene — объекты, gizmo — стрелки, terrain — ландшафт, script — скрипты, player/camera/… — игра).
 // Миры хранятся в браузере (d37_s3_index + d37_s3_<id>), можно выгрузить/загрузить файлом. Окно — поверх всего сайта.
+// Свои модели (🧩: .glb/.gltf/.obj, model.js) — «компилируются» при загрузке и лежат только в этом браузере (видно только
+// автору); в файл мира они вкладываются целиком.
 // Управление в редакторе: ПКМ + мышь — осмотреться, WASD/QE — лететь (Shift — быстрее), колесо — вперёд/назад, F — к
 // выбранному, Ctrl+Z/Y — отменить/вернуть, Ctrl+D — копия, Delete — удалить, 1–4 — выбор/двигать/размер/вращать.
 (() => {
@@ -186,6 +188,7 @@ Players.PlayerAdded.Connect(player => {
         <span class="s3-sep"></span>
         <div class="s3-dd"><button type="button" data-a="menu:part">➕<span> Деталь</span></button></div>
         <div class="s3-dd"><button type="button" data-a="menu:prefab">🌳<span> Предметы</span></button></div>
+        <div class="s3-dd"><button type="button" data-a="menu:models" title="Свои 3D-модели (.glb, .gltf, .obj)">🧩<span> Модели</span></button></div>
         <button type="button" data-a="add:Script" title="Скрипт в выбранный объект">📜<span> Скрипт</span></button>
         <span class="s3-sep"></span>
         <button type="button" data-panel="terrain" title="Ландшафт">⛰<span> Земля</span></button><button type="button" data-panel="light" title="Освещение">☀<span> Свет</span></button>
@@ -341,7 +344,7 @@ Players.PlayerAdded.Connect(player => {
     if (cls === 'Script') { parent = ed.sel && ed.sel.cls !== 'Script' ? ed.sel : null; let l = 'js'; try { l = localStorage.getItem('d37_s3_lang') || 'js'; } catch (e) {} if (!props.lang && window.D37E.langs[l]) props.lang = l; }
     else {
       const p = insertPoint(), def = SC.DEF[cls];
-      const h = cls === 'Part' ? (props.size || def.size)[1] / 2 : cls === 'Spawn' ? def.size[1] / 2 : cls === 'Light' ? 3 : 0;
+      const h = cls === 'Part' || cls === 'Mesh' ? (props.size || def.size)[1] / 2 : cls === 'Spawn' ? def.size[1] / 2 : cls === 'Light' ? 3 : 0;
       props.pos = [p[0], +(p[1] + h).toFixed(3), p[2]];
       if (ed.sel?.cls === 'Model') parent = ed.sel;
     }
@@ -402,6 +405,9 @@ Players.PlayerAdded.Connect(player => {
     const ptrs = new Map();
     const rayAt = (x, y) => { const b = canvas.getBoundingClientRect(); ed.ray.setFromCamera(new T.Vector2((x - b.left) / b.width * 2 - 1, -((y - b.top) / b.height) * 2 + 1), ed.R.camera); return ed.ray; };
     canvas.addEventListener('contextmenu', e => e.preventDefault());
+    // файл модели перетащили в окно — загрузить
+    view.addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    view.addEventListener('drop', e => { const fs = [...(e.dataTransfer?.files || [])]; if (!fs.length) return; e.preventDefault(); if (fs.some(f => /\.(glb|gltf|obj|fbx)$/i.test(f.name))) uploadModel(fs); else msg('Перетащи файл модели: .glb, .gltf или .obj', false); });
     canvas.addEventListener('pointerdown', e => {
       if (ed.playing) return;
       closeMenu();
@@ -535,6 +541,14 @@ Players.PlayerAdded.Connect(player => {
     let html = '';
     if (kind === 'part') html = SC.SHAPES.map(([k, n, i]) => `<button type="button" data-m="part:${k}">${i} ${n}</button>`).join('') + '<hr><button type="button" data-m="spawn">📍 Точка появления</button><button type="button" data-m="light">💡 Свет (лампа)</button><button type="button" data-m="model">📦 Модель (группа)</button>';
     else if (kind === 'prefab') html = SC.PREFABS.map(([k, n, i]) => `<button type="button" data-m="prefab:${k}">${i} ${n}</button>`).join('');
+    else if (kind === 'models') {
+      html = '<button type="button" data-m="mupload">⬆ Загрузить модель (.glb, .gltf, .obj)</button><div class="s3-mh">🔒 Мои модели — видно только тебе</div><div class="s3-mlist"><small class="s3-mh">Загрузка…</small></div>'
+        + '<p class="s3-note s3-mnote">Модель хранится в этом браузере. Можно перетащить файл прямо в окно. Из Blender — File → Export → glTF 2.0 (.glb).</p>';
+      window.D37E.models.list().then(list => {
+        const box = m.querySelector('.s3-mlist'); if (!box) return;
+        box.innerHTML = list.length ? list.slice(0, 40).map(x => `<div class="s3-mrow"><button type="button" data-m="minsert:${esc(x.id)}">🧩 ${esc(x.name)} <small>${x.tris.toLocaleString('ru')} тр. · ${Math.max(1, Math.round(x.bytes / 1024))} КБ</small></button><button type="button" data-m="mdel:${esc(x.id)}" title="Удалить">🗑</button></div>`).join('') : '<small class="s3-mh">Пока нет — загрузи первую</small>';
+      });
+    }
     else if (kind === 'file') {
       const list = store.index();
       html = `<button type="button" data-m="save">💾 Сохранить (Ctrl+S)</button><div class="s3-mh">Новый мир</div><button type="button" data-m="new:grass">🌿 Площадка с травой</button><button type="button" data-m="new:empty">⬜ Пустой (основание)</button><button type="button" data-m="new:obby">🏃 Обби (паркур) со скриптами</button><button type="button" data-m="new:island">🏝 Остров (холмы и вода)</button>`
@@ -547,6 +561,43 @@ Players.PlayerAdded.Connect(player => {
     m.hidden = false;
   }
   function closeMenu(){ const m = ED?.q('.s3-menu'); if (m) m.hidden = true; }
+
+  // ═══ Свои модели: загрузка → «компиляция» (model.js) → хранилище браузера → в мир ═══
+  function pickModel(){
+    const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true;
+    inp.accept = '.glb,.gltf,.obj,.mtl,.bin,.png,.jpg,.jpeg,.webp,.fbx';
+    inp.onchange = () => { if (inp.files?.length) uploadModel([...inp.files]); };
+    inp.click();
+  }
+  const STEP = { read: '📖 Читаю файл…', check: '🔍 Проверяю и собираю модель…', tex: '🖼 Сжимаю текстуры…', done: '✅ Готово' };
+  async function uploadModel(files){
+    const ed = ED; if (!ed || ed.playing || ed.busy) return;
+    const busy = document.createElement('div'); busy.className = 's3-busy'; busy.innerHTML = '<b>⚙️ Компиляция модели</b><span>📖 Читаю файл…</span>';
+    ed.q('.s3-view').appendChild(busy); ed.busy = true;
+    try {
+      const model = await window.D37E.models.compile(files, { onStep: s => { busy.querySelector('span').textContent = STEP[s] || s; } });
+      await window.D37E.models.save(model);
+      print(`🧩 «${model.name}»: ${model.tris.toLocaleString('ru')} треугольников, текстур: ${model.tex.filter(Boolean).length}, ${Math.max(1, Math.round(model.bytes / 1024))} КБ${model.fitted ? ' — размер подогнан' : ''}. Видно только тебе`, 'sys');
+      if (ED === ed) insertModel(model.id);
+    } catch (e) {
+      const t = e && e.user ? e.message : 'Не получилось открыть модель: ' + (e && e.message || e);
+      print('❌ ' + t, 'err'); if (ED === ed) { setBottom('out'); msg('❌ ' + t, false); }
+    } finally { busy.remove(); ed.busy = false; }
+  }
+  async function insertModel(id){
+    const m = await window.D37E.models.load(id); if (!m || !ED) return;
+    insert('Mesh', { model: id, name: m.name, size: m.size.slice() });
+  }
+  // в файл мира — все модели, что стоят в мире
+  async function packModels(){
+    const out = {}, ids = new Set(ED.SC.all().filter(o => o.cls === 'Mesh' && o.model).map(o => o.model));
+    for (const id of ids) { const m = await window.D37E.models.load(id); if (m) out[id] = await window.D37E.models.pack(m); }
+    return out;
+  }
+  async function unpackModels(list){
+    if (!list || typeof list !== 'object') return;
+    for (const pm of Object.values(list).slice(0, 50)) { const m = window.D37E.models.unpack(pm); if (m && !(await window.D37E.models.load(m.id))) await window.D37E.models.save(m).catch(() => {}); }
+  }
   async function menuAct(a){
     const ed = ED; closeMenu();
     const [k, v] = a.split(':');
@@ -555,14 +606,21 @@ Players.PlayerAdded.Connect(player => {
     else if (k === 'light') insert('Light');
     else if (k === 'model') insert('Model');
     else if (k === 'prefab') insert('Prefab', { kind: v, name: ed.SC.PREFABS.find(p => p[0] === v)?.[1] || 'Предмет' });
+    else if (k === 'mupload') pickModel();
+    else if (k === 'minsert') insertModel(v);
+    else if (k === 'mdel') {
+      const used = ed.SC.all().filter(o => o.cls === 'Mesh' && o.model === v).length;
+      if (!confirm(used ? `Модель стоит в этом мире ${used} раз. Удалить её из браузера? В мире останутся пустые коробки.` : 'Удалить модель из браузера?')) return;
+      await window.D37E.models.remove(v); for (const o of ed.SC.all()) if (o.cls === 'Mesh' && o.model === v) ed.SC.set(o, 'model', v, true); msg('Модель удалена');
+    }
     else if (k === 'save') save();
     else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров' }[v]; ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
     else if (k === 'open') { if (ed.dirty) await save(true); const d = store.load(v); if (d) { await openPlace(v, d); msg('Открыт: ' + (d.name || 'мир'), true); } }
     else if (k === 'del') { if (v === ed.placeId) { msg('Сначала открой другой мир', false); return; } if (confirm('Удалить мир из браузера навсегда?')) { store.remove(v); msg('Удалено'); } }
-    else if (k === 'export') { const d = await snapshot(); const blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = (d.name || 'мир').replace(/[^\p{L}\p{N} _-]/gu, '') + '.d37world.json'; a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 4000); }
+    else if (k === 'export') { const d = await snapshot(); d.models = await packModels(); const blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = (d.name || 'мир').replace(/[^\p{L}\p{N} _-]/gu, '') + '.d37world.json'; a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 4000); }
     else if (k === 'import') {
       const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
-      inp.onchange = async () => { const f = inp.files?.[0]; if (!f) return; if (f.size > 8e6) { msg('Файл слишком большой', false); return; } try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.objects)) throw 0; if (ed.dirty) await save(true); await openPlace(newId(), d); await save(true); msg('Мир загружен', true); } catch (e) { msg('Это не файл мира', false); } };
+      inp.onchange = async () => { const f = inp.files?.[0]; if (!f) return; if (f.size > 40e6) { msg('Файл слишком большой', false); return; } try { const d = JSON.parse(await f.text()); if (!Array.isArray(d.objects)) throw 0; if (ed.dirty) await save(true); await unpackModels(d.models); delete d.models; await openPlace(newId(), d); await save(true); msg('Мир загружен', true); } catch (e) { msg('Это не файл мира', false); } };
       inp.click();
     }
   }
@@ -579,6 +637,7 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'ai') { const ta = ed.q('.s3-ta'), L = langOf(ed.codeFor), what = prompt('Что должен делать скрипт? (например: «дверь открывается, когда у игрока 5 монет»)'); if (!what) return; const task = (L.ai || AI_TASK) + what + '\nОтвет — только код скрипта.'; navigator.clipboard?.writeText(task).then(() => { msg('Задание скопировано — вставь в ИИ, а его ответ — сюда', true); ed.q('.s3-ai').hidden = false; }, () => prompt('Скопируй задание:', task)); ta.focus(); }
     else if (a === 'wasm') pickWasm();
     else if (a === 'compile') compileScript();
+    else if (a.startsWith('msize:')) { const o = ed.sel, md = o && window.D37E.models.cached(o.model); if (md) { pushHist(); ed.SC.set(o, 'size', a === 'msize:1' ? md.size.slice() : o.size.map(v => +(v * 2).toFixed(3))); updateGizmo(); renderProps(); } }
     else if (a === 'dup') duplicate(); else if (a === 'del') remove(); else if (a === 'focus') focusSel();
     else if (a === 'terrain:gen') { if (!confirm('Создать новые холмы? Текущий ландшафт пропадёт.')) return; generateHills(ed.TR, Math.random() * 1e9 | 0); markDirty(); }
     else if (a === 'terrain:flat') { if (!confirm('Сделать землю ровной?')) return; ed.TR.H.fill(0); for (let i = 0; i < ed.TR.n * ed.TR.n; i++) ed.TR.W.set([255, 0, 0, 0], i * 4); ed.TR.brush('smooth', 0, 0, 1, 0, 0); markDirty(); }
@@ -672,7 +731,7 @@ Players.PlayerAdded.Connect(player => {
   }
 
   // ═══ Проводник ═══
-  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
+  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
   function renderTree(){
     const ed = ED, SC = ed.SC, tree = ed.q('.s3-tree');
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
@@ -746,6 +805,15 @@ Players.PlayerAdded.Connect(player => {
         h += `<label class="s3-lbl">Поворот (°)<input type="number" step="${ed.G.rsnap || 1}" value="${o.rot[1]}" data-p="rot:1"></label>`;
         if (['tree', 'pine', 'bush', 'rock'].includes(o.kind)) h += `<label class="s3-lbl">Размер <b>${o.scale}</b><input type="range" min="0.4" max="3" step="0.1" value="${o.scale}" data-p="scale"></label>`;
         if (o.kind === 'sign') h += `<label class="s3-lbl">Текст<input type="text" maxlength="40" value="${esc(o.text)}" data-p="text"></label><label class="s3-lbl">Цвет таблички<input type="color" value="${o.color}" data-p="color"></label>`;
+      } else if (o.cls === 'Mesh') {
+        const md = window.D37E.models.cached(o.model);
+        h += `<p class="s3-note">${md ? `🧩 <b>${esc(md.name)}</b> · ${md.tris.toLocaleString('ru')} треугольников<br>🔒 Видно только тебе (модель в этом браузере)` : '⚠️ Модели нет в этом браузере — видна пустая коробка. Загрузи её снова или открой мир из файла.'}</p>`;
+        h += v3('pos', 'Позиция', ed.G.snap || .1) + v3('size', 'Размер', ed.G.snap || .1) + v3('rot', 'Поворот (°)', ed.G.rsnap || 1);
+        if (md) h += `<div class="s3-grid2"><button type="button" data-a="msize:1">↺ Исходный размер</button><button type="button" data-a="msize:2">× 2</button></div>`;
+        h += `<label class="s3-lbl">Прозрачность <b>${(+o.alpha).toFixed(2)}</b><input type="range" min="0" max="1" step="0.05" value="${o.alpha}" data-p="alpha"></label>`;
+        h += `<label class="s3-chk"><input type="checkbox" data-p="collide"${o.collide !== false ? ' checked' : ''}> Сталкивается (CanCollide) — коробкой</label>
+          <label class="s3-chk"><input type="checkbox" data-p="anchored"${o.anchored !== false ? ' checked' : ''}> Закреплена (Anchored)</label>
+          <label class="s3-chk"><input type="checkbox" data-p="shadow"${o.shadow !== false ? ' checked' : ''}> Тень</label>`;
       } else if (o.cls === 'Model') {
         h += `<p class="s3-note">Модель — группа. Перетащи детали на неё в Проводнике. Двигай и крути её стрелками целиком.</p>`;
       } else if (o.cls === 'Script') {
@@ -792,7 +860,7 @@ Players.PlayerAdded.Connect(player => {
     ed.TR.cursor(null); ed.G.attach(null); ed.boxHelper.visible = false; closeMenu();
     const snap = SC.toJSON().objects;
     // свет-лампочки и невидимые детали — как в игре
-    for (const o of SC.all()) { if (o.cls === 'Light' && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; }
+    for (const o of SC.all()) { if (o.cls === 'Light' && o._mesh) o._mesh.visible = false; if ((o.alpha || 0) >= .999 && o._mesh) o._mesh.visible = false; if (o.cls === 'Mesh' && o._mesh) o._mesh.traverse(c => { if (c.userData.stub) c.visible = false; }); }
     const spawn = SC.all().find(o => o.cls === 'Spawn');
     const sp = spawn ? [spawn.pos[0], spawn.pos[1] + spawn.size[1] / 2 + .05, spawn.pos[2]] : [0, ed.ph.groundAt(0, 0) + .05, 0];
     const P = E.player(ed.ph, { x: sp[0], z: sp[2], yaw: 0 });

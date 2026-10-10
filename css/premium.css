@@ -3213,6 +3213,11 @@ html.s3-open,html.s3-open body{overflow:hidden}
 .s3-menu small{color:#9aa3b5;font-weight:500}
 .s3-mh{padding:6px 8px 2px;font-size:11px;font-weight:800;color:#9aa3b5}
 .s3-mrow{display:flex;gap:2px}
+.s3-menu .s3-mnote{max-width:280px;padding:4px 8px;font-size:11px}
+.s3-mlist{display:flex;flex-direction:column;gap:2px}
+.s3-busy{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:5;display:grid;gap:6px;padding:16px 22px;border-radius:14px;background:rgba(12,10,24,.88);color:#fff;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.s3-busy b{font-size:15px}
+.s3-busy span{font-size:13px;color:#cbd5e1}
 .s3-mrow button:first-child{flex:1;overflow:hidden;text-overflow:ellipsis}
 .s3-mrow button:last-child{width:auto;flex:none}
 .s3-props{display:flex;flex-direction:column;gap:9px;padding:9px 10px 16px}

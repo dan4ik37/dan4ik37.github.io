@@ -7,7 +7,8 @@
 //   SC.clone(obj); SC.pick(raycaster) → объект под мышью; SC.box(obj) → THREE.Box3; SC.toJSON() / SC.fromJSON(data);
 //   SC.touching(ch) — каких деталей касается персонаж (для события «коснулся»); SC.on('add'|'remove'|'change', f).
 // Классы: Part (деталь: shape block | ball | cyl | wedge), Spawn (точка появления), Light (свет), Prefab (готовый предмет:
-// дерево, фонарь, скамейка…), Model (группа), Script (скрипт — код в песочнице, см. script.js).
+// дерево, фонарь, скамейка…), Model (группа), Script (скрипт — код в песочнице, см. script.js), Mesh (своя 3D-модель —
+// как MeshPart: model — номер в D37E.models (model.js), pos — центр, size — растягивает модель; тело — коробка size).
 // Свойства детали: pos [x,y,z], rot [x,y,z] (градусы, порядок YXZ как в Roblox), size [x,y,z], color '#rrggbb',
 // mat (материал — SC.MATS), alpha (прозрачность 0…1), collide (сталкивается), anchored (закреплена; нет — падает),
 // shadow (отбрасывает тень), attrs (свои значения для скриптов). Физика: блок/клин/цилиндр — точно при поворотах на 90°
@@ -37,9 +38,10 @@
     Light: { name: 'Свет', pos: [0, 4, 0], color: '#fff1c4', range: 18, power: 2 },
     Prefab: { name: 'Предмет', kind: 'tree', pos: [0, 0, 0], rot: [0, 0, 0], scale: 1, text: 'Привет!', color: '#7c3aed' },
     Model: { name: 'Модель' },
+    Mesh: { name: 'Своя модель', model: '', pos: [0, 2, 0], rot: [0, 0, 0], size: [4, 4, 4], alpha: 0, collide: true, anchored: true, shadow: true },
     Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
@@ -128,7 +130,7 @@
     function colliders(obj){
       for (const c of obj._cols || []) ph.remove(c);
       obj._cols = [];
-      if (obj.cls !== 'Part' && obj.cls !== 'Spawn') return;
+      if (obj.cls !== 'Part' && obj.cls !== 'Spawn' && obj.cls !== 'Mesh') return;
       const [x, y, z] = obj.pos, [rx, ry, rz] = obj.rot, h = [obj.size[0] / 2, obj.size[1] / 2, obj.size[2] / 2];
       let yaw = 0, ex, ey, ez;
       eu.set(rx * DEG, ry * DEG, rz * DEG, 'YXZ'); m4.makeRotationFromEuler(eu);
@@ -152,7 +154,7 @@
     }
     function tag(o3, obj){ o3.traverse(c => { c.userData.oid = obj.id; }); }
     function unbuild(obj){
-      if (obj._mesh) { R.scene.remove(obj._mesh); obj._mesh.traverse(c => { if (c.isMesh && c.userData.ownGeo) c.geometry.dispose(); }); obj._mesh = null; }
+      if (obj._mesh) { R.scene.remove(obj._mesh); obj._mesh.traverse(c => { if (c.isMesh && c.userData.ownGeo) c.geometry.dispose(); if (c.isMesh && c.userData.ownMat) c.material.dispose(); }); obj._mesh = null; }
       if (obj._light) { R.scene.remove(obj._light); obj._light = null; }
       for (const c of obj._cols || []) ph.remove(c);
       obj._cols = [];
@@ -172,6 +174,24 @@
         }
         if ((obj.alpha || 0) >= .999 && !SC.edit) mesh.visible = false;
         tag(mesh, obj); R.scene.add(mesh); obj._mesh = mesh;
+        colliders(obj);
+      } else if (obj.cls === 'Mesh') {
+        const holder = new T.Group(), md = E.models?.cached(obj.model);
+        if (md) {
+          const g = E.models.instance(R, md), a = obj.alpha || 0;
+          g.scale.set(obj.size[0] / (md.size[0] || 1), obj.size[1] / (md.size[1] || 1), obj.size[2] / (md.size[2] || 1));
+          g.position.y = -obj.size[1] / 2;   // у модели низ в нуле, а pos — центр (как у детали)
+          if (a > 0) g.traverse(c => { if (!c.isMesh) return; c.material = c.material.clone(); c.material.transparent = true; c.material.opacity *= Math.max(SC.edit && a >= .999 ? .12 : 0, 1 - a); c.material.depthWrite = a < .5; c.userData.ownMat = true; });
+          if (!R.r.shadowMap.enabled || obj.shadow === false || a >= .5) g.traverse(c => { if (c.isMesh) c.castShadow = false; });
+          if (a >= .999 && !SC.edit) g.visible = false;
+          holder.add(g);
+        } else {   // модель ещё грузится или её нет в этом браузере — каркас коробки
+          const box = new T.Mesh(new T.BoxGeometry(obj.size[0], obj.size[1], obj.size[2]), meshStub());
+          box.userData.ownGeo = true; box.userData.stub = true; holder.add(box);
+          if (obj.model && E.models) E.models.load(obj.model).then(m => { if (m && objects.get(obj.id) === obj && obj._mesh === holder) build(obj); });
+        }
+        place(holder, obj);
+        tag(holder, obj); R.scene.add(holder); obj._mesh = holder;
         colliders(obj);
       } else if (obj.cls === 'Light') {
         const L = new T.PointLight(obj.color, obj.power, obj.range, 1.6);
@@ -193,6 +213,8 @@
         tag(holder, obj); R.scene.add(holder); obj._mesh = holder; obj._cols = cols;
       }
     }
+    let stubM = null;
+    const meshStub = () => stubM || (stubM = new T.MeshBasicMaterial({ color: '#9aa3b5', wireframe: true, transparent: true, opacity: .55, toneMapped: false }));
     let spawnM = null;
     function spawnMat(){
       if (spawnM) return spawnM;
@@ -242,7 +264,7 @@
       if (!obj) return;
       if (obj.cls === 'Model' && (key === 'pos' || key === 'rot')) { SC.transformModel(obj, key, val); return; }
       obj[key] = copy(val);
-      if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow'].includes(key)) build(obj);
+      if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model'].includes(key)) build(obj);
       else if (key === 'pos' || key === 'rot') {
         if (obj._mesh && obj.cls !== 'Prefab') place(obj._mesh, obj);
         if (obj._light) obj._light.position.set(...obj.pos);
