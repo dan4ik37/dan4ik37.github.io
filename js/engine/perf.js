@@ -83,22 +83,32 @@
   }
   const pct = (a, p) => { const s = a.slice().sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(s.length * p))] || 0; };
   const r2 = v => Math.round(v * 100) / 100;
-  // Кадры подряд: мс ЦП на R.render (+ видеокарта), вызовы/треугольники последнего кадра; shadows: true — тени каждый кадр
+  // Кадры подряд: мс ЦП на R.render (+ видеокарта), вызовы отрисовки последнего кадра: всего = сцена + тени + постобработка.
+  // shadows: true — тени каждый кадр (старый движок так и рисовал). Работает и на старом движке (без R.stats) — для «до».
   async function measure(R, label, frames = 60, shadows = false){
+    const inf = R.r.info, auto0 = inf.autoReset;
     for (let i = 0; i < 8; i++) { R.shadowDirty?.(); R.render(); }   // прогрев: шейдеры, загрузка буферов
     await sleep(30);
+    let main = 0;
+    if (!R.stats) { inf.autoReset = true; R.render(); main = inf.render.calls; }   // старый движок: сцена без теней
+    else { if (R.shadow) R.shadow.last = performance.now(); R.shadow && (R.shadow.dirty = false); R.render(); }   // кадр без теней — запомнить «сцену»
     const cpu = [], G = gpuTimer(R);
-    let calls = 0, tris = 0, sh = 0;
+    let calls = 0, tris = 0, post = 0;
+    inf.autoReset = false;
     for (let i = 0; i < frames; i++) {
       if (shadows) R.shadowDirty?.(); else if (R.shadow) R.shadow.last = performance.now();   // без страховки: тени только «по делу»
+      inf.reset();
       G?.begin();
       const t0 = performance.now(); R.render(); cpu.push(performance.now() - t0);
       G?.end();
-      const S = R.stats; calls = S ? S.calls : R.r.info.render.calls; tris = S ? S.tris : R.r.info.render.triangles; sh = S ? S.shadow : 0;
+      calls = inf.render.calls; tris = inf.render.triangles;
+      if (R.stats) { post = R.stats.post; main = R.stats.sceneNoSh || R.stats.scene; }
     }
+    inf.autoReset = auto0;
     const gpu = G ? await G.read() : [];
     const avg = cpu.reduce((a, b) => a + b, 0) / cpu.length;
-    return { 'замер': label, 'вызовы': calls, 'из них тени': shadows ? sh : 0, 'треуг.': tris, 'ЦП мс': r2(avg), 'ЦП 95%': r2(pct(cpu, .95)), 'ЦП макс': r2(Math.max(...cpu)), 'видеокарта мс': gpu.length ? r2(gpu.reduce((a, b) => a + b, 0) / gpu.length) : '—' };
+    return { 'замер': label, 'вызовы всего': calls, 'сцена': main, 'тени': Math.max(0, calls - main - post), 'пост': post, 'треуг.': tris,
+      'ЦП мс': r2(avg), 'ЦП 95%': r2(pct(cpu, .95)), 'ЦП макс': r2(Math.max(...cpu)), 'видеокарта мс': gpu.length ? r2(gpu.reduce((a, b) => a + b, 0) / gpu.length) : '—' };
   }
   // Наполнение: детали разных форм и материалов, предметы, лампы — по кругу ~90 м
   const MATS = ['plastic', 'plastic', 'smooth', 'wood', 'brick', 'concrete', 'metal', 'neon', 'grass', 'marble', 'cobble', 'planks'];

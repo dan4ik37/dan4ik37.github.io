@@ -28,6 +28,8 @@
     const B = { on: true, mode: 'edit', chunk: CH, delay: o.delay ?? 400, budget: o.budget ?? 4, rebuilds: 0, lastMs: 0, maxMs: 0 };
     const recs = new Map(), chunks = new Map(), bmats = new Map(), lights = new Map(), units = {};
     const hot = new Set(), pending = new Set(), dirty = new Set();
+    const live = [];   // объекты в чанках — для проверки каждый кадр без итераторов (пересобирается, когда состав меняется)
+    let liveDirty = true;
     const OBC0 = T.Material.prototype.onBeforeCompile;
     const _v = new T.Vector3(), _c = new T.Vector3(), _box = new T.Box3(), _sph = new T.Sphere(), _n3 = new T.Matrix3(), _m4 = new T.Matrix4();
     SC.batch = B;
@@ -129,7 +131,7 @@ vUv = ( uvTransform * vec3( uv, 1 ) ).xy;
       unwatchVisible(rec);
       rec.state = 'gone';
     }
-    function leaveChunk(rec, due){ const ch = rec.chunk; if (!ch) return; ch.recs.delete(rec); rec.chunk = null; markDirty(ch, due); }
+    function leaveChunk(rec, due){ const ch = rec.chunk; if (!ch) return; ch.recs.delete(rec); rec.chunk = null; markDirty(ch, due); liveDirty = true; }
     function changed(obj, key){
       if (obj.cls === 'Light') { const l = lights.get(obj.id); if (!l || l.L !== obj._light) adoptLight(obj); return; }
       let rec = recs.get(obj.id);
@@ -262,7 +264,7 @@ vUv = ( uvTransform * vec3( uv, 1 ) ).xy;
       for (const rec of ch.recs) { removeLoose(rec); if (rec.looseSrc?.length) addLoose(rec); rec.looseSrc = null; }
       detachAll(newly);
       for (const rec of newly) rec.state = 'batched';
-      ch.dirty = false; ch.due = 0; dirty.delete(ch);
+      ch.dirty = false; ch.due = 0; dirty.delete(ch); liveDirty = true;
       if (!ch.recs.size && !ch.groups.length) chunks.delete(ch.key);
       R.shadowDirty?.();
       const ms = performance.now() - t0;
@@ -384,14 +386,15 @@ vUv = ( uvTransform * vec3( uv, 1 ) ).xy;
     function update(force){
       if (!B.on) return;
       const t = now();
-      for (const ch of chunks.values()) for (const rec of ch.recs) if (rec.obj._mesh !== rec.root) changed(rec.obj, 'refresh');   // меш заменили без SC.set
+      if (liveDirty) { live.length = 0; for (const ch of chunks.values()) for (const rec of ch.recs) live.push(rec); liveDirty = false; }
+      for (let i = 0; i < live.length; i++) { const rec = live[i]; if (rec.state !== 'gone' && rec.chunk && rec.obj._mesh !== rec.root) changed(rec.obj, 'refresh'); }   // меш заменили без SC.set
       if (hot.size) for (const rec of hot) if (force || rec.hotUntil <= t) { hot.delete(rec); if (rec.state === 'single') toPending(rec); }
       let moved = 0;
       if (pending.size) for (const rec of pending) {
         if (!force && rec.settleAt > t) continue;
         pending.delete(rec);
         if (!canBatch(rec)) { rec.state = rec.state === 'gone' ? 'gone' : 'single'; continue; }
-        const ch = chunkFor(rec); ch.recs.add(rec); rec.chunk = ch; markDirty(ch, t); moved++;
+        const ch = chunkFor(rec); ch.recs.add(rec); rec.chunk = ch; markDirty(ch, t); moved++; liveDirty = true;
       }
       if (!dirty.size) return;
       // много сразу (загрузка, отмена, «Стоп») — пересобрать всё в этом кадре: один долгий кадр лучше десятка медленных
@@ -428,7 +431,7 @@ vUv = ( uvTransform * vec3( uv, 1 ) ).xy;
           removeLoose(rec); rec.slots.length = 0; rec.chunk = null;
           if (rec.state !== 'gone' && rec.state !== 'dyn') rec.state = 'single';
         }
-        chunks.clear(); dirty.clear(); pending.clear(); hot.clear();
+        chunks.clear(); dirty.clear(); pending.clear(); hot.clear(); liveDirty = true;
         B.on = false; R.shadowDirty?.();
       } else {
         B.on = true;

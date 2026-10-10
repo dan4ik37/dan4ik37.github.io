@@ -27,11 +27,12 @@ void main(){ vec2 d = uTexel; vec3 c = texture2D(tSrc, vUv).rgb * 4.0;
   c += (texture2D(tSrc, vUv + vec2(d.x, 0.0)).rgb + texture2D(tSrc, vUv - vec2(d.x, 0.0)).rgb + texture2D(tSrc, vUv + vec2(0.0, d.y)).rgb + texture2D(tSrc, vUv - vec2(0.0, d.y)).rgb) * 2.0;
   c += texture2D(tSrc, vUv + d).rgb + texture2D(tSrc, vUv - d).rgb + texture2D(tSrc, vUv + vec2(d.x, -d.y)).rgb + texture2D(tSrc, vUv + vec2(-d.x, d.y)).rgb;
   gl_FragColor = vec4(c * 0.0625, 1.0); }`;
-  // сборка: сцена + свечение → sRGB; яркость (luma) — в альфу для FXAA
+  // сборка: сцена + свечение (как «экран»: на ярком почти не добавляет; на самом светящемся — четверть, ореол — вокруг:
+  // неон не выгорает в белое и не меняет цвет) → sRGB; яркость (luma) — в альфу для FXAA
   const FS_COMP = `uniform sampler2D tScene; uniform sampler2D tBloom; uniform float uBloom; varying vec2 vUv;
-void main(){ vec3 c = texture2D(tScene, vUv).rgb;
-  if (uBloom > 0.0) c += texture2D(tBloom, vUv).rgb * uBloom;
-  c = LinearTosRGB(vec4(max(c, vec3(0.0)), 1.0)).rgb;
+void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0));
+  if (uBloom > 0.0) { vec3 b = texture2D(tBloom, vUv).rgb * uBloom * (1.0 - 0.75 * clamp(s.a - 1.0, 0.0, 1.0)); c += b * clamp(1.0 - c, 0.0, 1.0); }
+  c = LinearTosRGB(vec4(c, 1.0)).rgb;
   gl_FragColor = vec4(c, dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114))); }`;
   // FXAA (Лоттес, «лёгкий»): 5 выборок яркости, на ровном — сразу выход, на краю — размытие вдоль края (ещё 4)
   const FS_FXAA = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
@@ -97,7 +98,7 @@ void main(){
       pass(M.pre, B[0]);
       for (let i = 0; i < n - 1; i++) { M.down.uniforms.tSrc.value = B[i].texture; M.down.uniforms.uTexel.value.set(1 / B[i].width, 1 / B[i].height); pass(M.down, B[i + 1]); }
       for (let i = n - 2; i >= 0; i--) { M.up.uniforms.tSrc.value = B[i + 1].texture; M.up.uniforms.uTexel.value.set(1 / B[i + 1].width, 1 / B[i + 1].height); pass(M.up, B[i]); }
-      return 2 * P.bloom.strength / (n + 1);
+      return P.bloom.strength * 1.5 / n;   // сумма уровней ≈ n × исходное — к «одному исходному» × сила
     }
     P.render = (scene, camera) => {
       const st = R.stats, ac = r.autoClear;

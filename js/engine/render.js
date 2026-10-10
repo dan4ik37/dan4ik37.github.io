@@ -222,6 +222,7 @@ gl_FragColor = vec4(c, 1.0);
       SUN_DIR.set(Math.cos(az) * ce * sgn, e, Math.sin(az) * ce * sgn).normalize();   // ночью светит луна с другой стороны
       lr.crossVectors(UP, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
       const wd = clamp01(1 - Math.abs(el) / .3), wn = clamp01(-el / .22);   // закат/рассвет, ночь
+      R.night = wn;   // для ореолов ламп
       const U = skyMat.uniforms;
       mix3('#4f9cf5', '#4b5fa8', '#050a1c', wd, wn, U.top.value);
       mix3('#bfe3ff', '#ffb27a', '#0f1a3a', wd, wn, U.mid.value);
@@ -353,8 +354,9 @@ gl_FragColor = vec4(c, 1.0);
       if (!list.length) { if (halo) halo.visible = false; return; }
       if (!halo || halo.userData.cap < list.length) haloInit(Math.max(16, (halo?.userData.cap || 8) * 2, list.length));
       const g = halo.geometry, P = g.attributes.position.array, C = g.attributes.hcol.array, S = g.attributes.hsize.array;
+      const day = .3 + .7 * (R.night || 0);   // днём ореол еле виден, ночью — в полную силу
       for (let i = 0; i < list.length; i++) {
-        const rec = list[i], s = rec.src, p = posOf(s), k = s.visible === false ? 0 : Math.min(1.4, (s.intensity || 0) / 2.5) * (1 - .55 * rec.w);
+        const rec = list[i], s = rec.src, p = posOf(s), k = s.visible === false ? 0 : Math.min(1.4, (s.intensity || 0) / 2.5) * (1 - .55 * rec.w) * day;
         P[i * 3] = p.x; P[i * 3 + 1] = p.y; P[i * 3 + 2] = p.z;
         C[i * 3] = s.color.r * k; C[i * 3 + 1] = s.color.g * k; C[i * 3 + 2] = s.color.b * k;
         S[i] = 1.1 + Math.sqrt(Math.max(0, s.distance || 16)) * .16;
