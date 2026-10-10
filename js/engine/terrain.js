@@ -80,6 +80,7 @@ diffuseColor.rgb *= tc;`);
         g.attributes.color.needsUpdate = true;
       }
       g.computeBoundingSphere();
+      R.shadowDirty?.();   // земля отбрасывает тень — карту теней перерисовать
     }
     refresh();
 
@@ -123,6 +124,7 @@ diffuseColor.rgb *= tc;`);
     TR.setEnabled = on => {
       TR.enabled = !!on; mesh.visible = TR.enabled; wmesh.visible = TR.enabled && TR.water.on;
       ph.terrain = TR.enabled ? TR : null;
+      R.shadowDirty?.();
     };
     // кольцо кисти
     let ring = null;

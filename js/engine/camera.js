@@ -23,8 +23,11 @@
     // «Ощущение тела»
     const F = { t: 0, bobPh: 0, bobW: 0, dip: 0, dipV: 0, roll: 0, kick: 0, kickRoll: 0, shUntil: 0, shDur: 0, shStr: 0, shSeed: 0 };
     rig.feel = F;
-    rig.fwd = () => ({ x: -Math.sin(rig.yaw), z: -Math.cos(rig.yaw) });
-    rig.right = () => ({ x: Math.cos(rig.yaw), z: -Math.sin(rig.yaw) });
+    // fwd/right — один и тот же объект (без мусора каждый шаг): читать сразу
+    const FW = { x: 0, z: -1 }, RT = { x: 1, z: 0 }, SHK = { x: 0, y: 0, z: 0 }, CH0 = { x: 0, y: 0, z: 0 };
+    const camOnly = c => !!c.data?.cam;
+    rig.fwd = () => { FW.x = -Math.sin(rig.yaw); FW.z = -Math.cos(rig.yaw); return FW; };
+    rig.right = () => { RT.x = Math.cos(rig.yaw); RT.z = -Math.sin(rig.yaw); return RT; };
     rig.snap = (x, y, z) => { rig.tx = x; rig.ty = y + rig.lift; rig.tz = z; };
     rig.setMotion = v => { rig.motion = E.clamp(+v || 0, 0, 1); try { localStorage.setItem('d37_cam_motion', String(rig.motion)); } catch (e) {} };
     // Приземление: пружина, толчок по скорости падения (CameraFeel: > 3 м/с)
@@ -41,14 +44,15 @@
 
     function shakeNow(){
       const left = F.shUntil - F.t;
-      if (left <= 0) return null;
+      if (left <= 0) { SHK.x = SHK.y = SHK.z = 0; return SHK; }
       const k = F.shStr * E.clamp(left / Math.min(1.2, F.shDur), 0, 1) * E.lerp(.35, 1, rig.motion), t = F.t * 18 + F.shSeed;
-      return { x: (E.noise(t, 1) - .5) * 2 * k, y: (E.noise(t, 2) - .5) * 2 * k * .6, z: (E.noise(t, 3) - .5) * 2 * k * .8 };
+      SHK.x = (E.noise(t, 1) - .5) * 2 * k; SHK.y = (E.noise(t, 2) - .5) * 2 * k * .6; SHK.z = (E.noise(t, 3) - .5) * 2 * k * .8;
+      return SHK;
     }
 
     rig.update = (dt, P, look, phys, C) => {
       F.t += dt;
-      const ch = P?.ch || P || { x: 0, y: 0, z: 0 }, isP = !!P?.ch, first = rig.mode === 'first';
+      const ch = P?.ch || P || CH0, isP = !!P?.ch, first = rig.mode === 'first';
       // поворот: мышь/палец + правый стик
       if (look) {
         if (first) {
@@ -72,7 +76,7 @@
       const strafe = C && isP && P.mode === 'move' ? C.move.x : 0;
       F.roll = E.lerp(F.roll, -strafe * .8 * rig.motion, Math.min(1, dt * 6));
       F.kick = E.moveTo(F.kick, 0, dt * 12); F.kickRoll = E.moveTo(F.kickRoll, 0, dt * 8);
-      const sh = shakeNow() || { x: 0, y: 0, z: 0 };
+      const sh = shakeNow();
       // угол обзора: на бегу шире на 8°
       const base = first ? (camera.aspect < 1 ? rig.fovFirst + 12 : rig.fovFirst) : camera.userData.fov0 || 50;
       const tf = base + (running ? 8 * rig.motion : 0);
@@ -84,7 +88,7 @@
         const cp = Math.cos(rig.pitch), dx = Math.sin(rig.yaw) * cp, dy = Math.sin(rig.pitch), dz = Math.cos(rig.yaw) * cp;
         let d = rig.dist;
         if (phys) {
-          const hit = phys.raycast(rig.tx, rig.ty, rig.tz, dx, dy, dz, d + .4, c => !!c.data?.cam);
+          const hit = phys.raycast(rig.tx, rig.ty, rig.tz, dx, dy, dz, d + .4, camOnly);
           if (hit) d = Math.max(1.4, hit.t - .4);
         }
         rig.cur = d < rig.cur ? E.damp(rig.cur, d, 30, dt) : E.damp(rig.cur, d, 5, dt);
