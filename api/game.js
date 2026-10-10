@@ -143,8 +143,8 @@ function gamePage(g, ch) {
   </div>
 
   <section class="box"><h2>Что есть в игре</h2><ul class="feat">${g.features.map(f => `<li>${esc(f)}</li>`).join('')}</ul></section>
-  <section class="box"><h2>Правила</h2><ol>${g.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol></section>
-  <section class="box"><h2>Советы</h2><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>
+  <section class="box"><h2>${esc(g.rulesTitle || 'Правила')}</h2><ol>${g.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol></section>
+  <section class="box"><h2>${esc(g.tipsTitle || 'Советы')}</h2><ul>${g.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>
   <div data-ad="seo_game" hidden></div>
   <section class="box faq"><h2>Частые вопросы</h2>
     ${g.faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}

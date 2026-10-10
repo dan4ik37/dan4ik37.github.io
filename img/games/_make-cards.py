@@ -38,6 +38,7 @@ GAMES = [
     ('sudoku', 'draw:sudoku', 'Судоку', '#60a5fa'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
+    ('studio3d', '🧱', 'Студия 3D', '#f59e0b'),
     ('games', '🎮', 'Игры онлайн', '#ff2d55'),
 ]
 
@@ -139,7 +140,7 @@ for gid, ic, title, color in GAMES:
     size = 96
     while d.textlength(title, font=bold(size)) > 660: size -= 4
     d.text((80, 190), title, font=bold(size), fill=(255, 255, 255))
-    sub = 'Побьёшь мой рекорд?' if gid != 'games' else 'С ботом или с другом по ссылке'
+    sub = {'games': 'С ботом или с другом по ссылке', 'studio3d': 'Построй свой мир, как в Roblox'}.get(gid, 'Побьёшь мой рекорд?')
     d.text((84, 200 + size + 20), sub, font=reg(48), fill=c if sum(c) > 300 else (200, 200, 220))
     # кнопка
     bx, by = 84, 470
