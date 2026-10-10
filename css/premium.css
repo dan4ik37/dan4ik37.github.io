@@ -2644,3 +2644,13 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .ld-die{width:64px;height:64px;border-radius:16px;border:2px solid var(--border);background:#fff;color:#111;font-size:2.6rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .ld-die.go{border-color:var(--accent);box-shadow:0 0 0 3px var(--ac-30);animation:unPulse .7s ease-in-out infinite alternate}
 .ld-die:disabled{opacity:.6;cursor:default;animation:none}
+
+/* ── «Нарды» (js/games/nardy.js) ── */
+.nd{display:flex;flex-direction:column;gap:.45rem}
+.nd-top{display:flex;justify-content:center}
+.nd-pl{display:flex;align-items:center;gap:.4rem;padding:.35rem .7rem;border-radius:10px;background:rgba(255,255,255,.05);border:1.5px solid transparent;font-size:.76rem}
+.nd-pl.turn{border-color:var(--accent);box-shadow:0 0 10px var(--ac-30)}
+.nd-pl small{color:var(--muted)}
+.nd-chip{width:14px;height:14px;border-radius:50%;border:2px solid #9ca3af}
+.nd-chip.w{background:#f5f5f4}.nd-chip.b{background:#1f2937}
+.nd-cv{display:block;border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.4);touch-action:manipulation;cursor:pointer}
