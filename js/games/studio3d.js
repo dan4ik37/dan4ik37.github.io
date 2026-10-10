@@ -1109,6 +1109,7 @@ Players.PlayerAdded.Connect(player => {
         h += `<label class="s3-chk"><input type="checkbox" data-p="collide"${o.collide !== false ? ' checked' : ''}> Сталкивается (CanCollide)</label>
           <label class="s3-chk"><input type="checkbox" data-p="anchored"${o.anchored !== false ? ' checked' : ''}> Закреплена (Anchored) — иначе падает</label>
           <label class="s3-chk"><input type="checkbox" data-p="shadow"${o.shadow !== false ? ' checked' : ''}> Тень</label>`;
+        h += o.cls === 'Spawn' ? '<p class="s3-note">📍 Несколько точек появления — это чекпоинты: коснулся — дальше появляешься на ней.</p>' : touchSel(o);
       } else if (o.cls === 'Light') {
         h += v3('pos', 'Позиция', ed.G.snap || .1);
         h += `<label class="s3-lbl">Цвет<input type="color" value="${o.color}" data-p="color"></label>
@@ -1179,6 +1180,9 @@ Players.PlayerAdded.Connect(player => {
       P.addEventListener('change', e => onIn(e, true));
     }
   }
+  // Касание без кода: выбрал — работает в игре (playStep → touchAct)
+  const TOUCH = [['', 'ничего'], ['kill', '💀 Убивает'], ['bounce', '🦘 Батут — подбрасывает'], ['speed', '⚡ Ускорение на 3 с'], ['coin', '💰 Монетка: +1 и исчезает'], ['finish', '🏁 Финиш: время и салют']];
+  const touchSel = o => `<label class="s3-lbl">Касание — без кода<select data-p="touch">${TOUCH.map(([k, n]) => `<option value="${k}"${(o.touch || '') === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>`;
   const fmtTime = t => { const h = Math.floor(t) % 24, m = Math.round((t - Math.floor(t)) * 60); return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 
   // ═══ Игра: ▶ Играть / ■ Стоп ═══
@@ -1217,7 +1221,7 @@ Players.PlayerAdded.Connect(player => {
     const hud = document.createElement('div'); hud.className = 's3-hud';
     hud.innerHTML = '<div class="s3-stats" hidden></div><div class="s3-health"><i></i></div><div class="s3-labels"></div>';
     R.r.domElement.parentElement.appendChild(hud);
-    const pl = { light0: { ...R.lighting }, P, C, I, X, A, rig, H, AU, hud, snap, sp, stats: {}, labels: {}, health: 100, maxHealth: 100, touching: new Set(), tweens: [], clicks: new Map(), prompts: new Map(), dead: 0, nick, unf };
+    const pl = { t0: performance.now(), light0: { ...R.lighting }, P, C, I, X, A, rig, H, AU, hud, snap, sp, stats: {}, labels: {}, health: 100, maxHealth: 100, touching: new Set(), tweens: [], clicks: new Map(), prompts: new Map(), dead: 0, nick, unf };
     ed.playing = pl;
     // скрипты
     pl.SH = E.scripts({
@@ -1333,6 +1337,28 @@ Players.PlayerAdded.Connect(player => {
     pl.H.toast('💀 Ты погиб — сейчас вернёшься', false);
     pl.AU.play('hit'); pl.SH.event('died', { player: 'me' });
   }
+  // Касание без кода (свойство touch) и чекпоинты (точки появления)
+  function touchAct(pl, o){
+    if (!o || pl.dead) return;
+    const P = pl.P, U = window.D37E.UNIT;
+    if (o.cls === 'Spawn') {
+      const sp = [o.pos[0], o.pos[1] + o.size[1] / 2 + .05, o.pos[2]];
+      if (pl.sp[0] !== sp[0] || pl.sp[1] !== sp[1] || pl.sp[2] !== sp[2]) { pl.sp = sp; if (pl.checkOn) { pl.H.toast('✅ Чекпоинт', true); pl.AU.play('pickup'); } }
+      pl.checkOn = true;
+      return;
+    }
+    const t = o.touch; if (!t) return;
+    if (t === 'kill') { pl.health = 0; drawHealth(); die(); }
+    else if (t === 'bounce') { P.push(0, Math.sqrt(2 * P.gravity * 5 * U), 0); pl.AU.play('jump', { x: P.ch.x, y: P.ch.y, z: P.ch.z }); }
+    else if (t === 'speed') { P.speedMul = 1.8; pl.speedT = 3; pl.H.toast('⚡ Ускорение!', true); }
+    else if (t === 'coin') { ED.SC.remove(o); pl.stats['Монеты'] = (+pl.stats['Монеты'] || 0) + 1; drawStats(); pl.AU.play('coin'); }
+    else if (t === 'finish' && !pl.finished) {
+      pl.finished = true;
+      const sec = ((performance.now() - pl.t0) / 1000).toFixed(1);
+      pl.stats['Время'] = sec; drawStats(); pl.H.toast(`🏁 Финиш! Время: ${sec} с`, true); pl.AU.play('coin');
+      const em = ED.FX.emitter({ kind: 'confetti', at: [o.pos[0], o.pos[1] + 1, o.pos[2]], rate: 0 }); em.burst(160); setTimeout(() => em.dispose(), 4000);
+    }
+  }
   function respawn(){
     const pl = ED.playing; if (!pl) return;
     const sp = pl.sp;
@@ -1385,7 +1411,8 @@ Players.PlayerAdded.Connect(player => {
     X.update(dt, P, C, rig.fwd(), false);
     // касания (Touched / TouchEnded)
     const now = SC.touching(P.ch), SH = pl.SH;
-    for (const id of now) if (!pl.touching.has(id) && SH.want.touched.has(id)) SH.event('touched', { id, player: 'me' });
+    for (const id of now) if (!pl.touching.has(id)) { touchAct(pl, SC.get(id)); if (SH.want.touched.has(id)) SH.event('touched', { id, player: 'me' }); }
+    if (pl.speedT > 0 && (pl.speedT -= dt) <= 0) P.speedMul = 1;
     for (const id of pl.touching) if (!now.has(id) && SH.want.touchEnded.has(id)) SH.event('touchEnded', { id, player: 'me' });
     pl.touching = now;
     // плавные изменения (TweenService)

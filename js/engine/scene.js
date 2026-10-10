@@ -12,7 +12,8 @@
 // коробки по поверхности модели (M.colliders), 'box' — одна коробка size), Effect (частицы fx.js: kind — огонь, дым, искры…;
 // внутри детали — летят из неё, сам по себе — из pos; rate и scale — множители; нужен SC.fx = D37E.fx(R)).
 // Свойства детали: pos [x,y,z], rot [x,y,z] (градусы, порядок YXZ как в Roblox), size [x,y,z], color '#rrggbb',
-// mat (материал — SC.MATS), alpha (прозрачность 0…1), collide (сталкивается), anchored (закреплена; нет — падает),
+// mat (материал — SC.MATS), alpha (прозрачность 0…1), collide (сталкивается), anchored (закреплена; нет — падает), touch (что
+// делает касание без скриптов: kill | bounce | speed | coin | finish — выполняет игра, например studio3d),
 // shadow (отбрасывает тень), attrs (свои значения для скриптов). Физика: блок/клин/цилиндр — точно при поворотах на 90°
 // по X и Z (любой поворот по Y); при наклонах — описанная коробка.
 (() => {
@@ -44,7 +45,7 @@
     Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
     Effect: { name: 'Эффект', kind: 'fire', pos: [0, 1, 0], rate: 1, scale: 1, color: '', color2: '', enabled: true },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
