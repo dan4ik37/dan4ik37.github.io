@@ -2569,3 +2569,37 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .un-wt{font-weight:900;font-size:1.1rem}
 .un-wc{display:flex;gap:.8rem}
 @media(max-width:480px){.uc{width:50px;height:76px}.uc.big,.un-deck{width:64px;height:96px}.un-hand .uc+.uc{margin-left:-18px}.un-hand.many .uc+.uc{margin-left:-28px}}
+
+/* ── «Дурак» (js/games/durak.js) — разметка стола общая с «Одна!» (.un-*) ── */
+.dk-menu{display:flex;flex-direction:column;align-items:center;gap:.75rem;text-align:center;padding:.4rem 0}
+.dk-logo{display:flex;gap:.2rem;padding-top:.6rem}
+.dk-logo .dk{cursor:default}
+.dk-logo .dk:nth-child(1){transform:rotate(-10deg) translateY(6px)}
+.dk-logo .dk:nth-child(3){transform:rotate(10deg) translateY(6px)}
+.dk{position:relative;flex:none;width:56px;height:82px;border-radius:9px;border:1px solid #cfd2da;background:linear-gradient(180deg,#fff,#eef0f5);color:#1b1d26;font-family:Georgia,'Times New Roman',serif;box-shadow:0 3px 8px rgba(0,0,0,.35);cursor:pointer;padding:0;transition:transform .15s,filter .15s;touch-action:manipulation}
+.dk.red{color:#d42a3b}
+.dk-t{position:absolute;top:4px;left:5px;display:flex;flex-direction:column;align-items:center;font-weight:700;font-size:.9rem;line-height:1}
+.dk-t i{font-style:normal;font-size:.8rem}
+.dk-m{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:1.9rem}
+.dk.sm{width:48px;height:70px}
+.dk.sm .dk-m{font-size:1.5rem}
+.dk:disabled{cursor:default}
+.dk.dim{filter:brightness(.6)}
+.dk.ok{transform:translateY(-10px);box-shadow:0 0 0 2px #ffd166,0 6px 16px rgba(255,209,102,.35)}
+.dk-mid{display:flex;align-items:center;gap:.9rem;margin:.4rem 0;min-height:112px}
+.dk-deck{position:relative;flex:none;width:96px;height:112px}
+.dk-trump{position:absolute;left:34px;top:10px;transform:rotate(90deg)}
+.dk-back{position:absolute;left:0;top:10px;width:50px;height:72px;border-radius:9px;border:2px solid #fff;background:repeating-linear-gradient(45deg,#7f1d1d 0 5px,#991b1b 5px 10px);display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.4)}
+.dk-back b{font:900 .85rem 'Montserrat',sans-serif;color:#fff;background:rgba(0,0,0,.45);padding:.1rem .35rem;border-radius:6px}
+.dk-tr{position:absolute;left:0;right:0;bottom:-4px;font-size:.7rem;font-weight:800;color:var(--muted);text-align:center}
+.dk-tr b{font-size:1.1rem;color:var(--text)}
+.dk-tr b.redt{color:#ef4444}
+.dk-table{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:.6rem .9rem;justify-content:center;align-items:flex-start}
+.dk-pair{position:relative;width:62px;height:84px}
+.dk-on{position:absolute;left:14px;top:12px}
+.dk-empty{color:var(--muted);font-size:.8rem}
+.dk-role{position:absolute;top:-6px;left:-6px;font-style:normal;font-size:.95rem}
+.un-opp.out{opacity:.55}
+.dk-hand .dk+.dk{margin-left:-12px}
+.dk-hand.many .dk+.dk{margin-left:-22px}
+@media(max-width:480px){.dk{width:50px;height:74px}.dk.sm{width:42px;height:62px}.dk-pair{width:54px;height:74px}.dk-on{left:11px;top:10px}.dk-deck{width:76px}}

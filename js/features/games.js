@@ -6,11 +6,12 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '20';
+const GAMES_VER = '21';
 const GAMES = [
   { id: 'horde',    icon: '🧟', title: 'Орда',            desc: 'Выживи 10 минут против орды монстров, как в Vampire Survivors: оружие бьёт само, ты выбираешь улучшения. Герои, боссы, монеты — и дуэль с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/netplay.js', 'js/games/horde.js'], top: 'horde', topLabel: 'очков за забег', color: '#a855f7' },
   { id: 'td',       icon: '🏰', title: 'Башни',           desc: 'Защита замка: ставь башни у дороги, улучшай и не пускай монстров. 20 волн и боссы. Битва с отправкой монстров другу или вдвоём на одной карте.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/netplay.js', 'js/games/td.js'], top: 'td', topLabel: 'очков за игру', color: '#f97316' },
   { id: 'uno',      icon: '🃏', title: 'Одна!',           desc: 'Карточная игра по правилам Уно: с ботами или онлайн с друзьями до 4 человек. Сбрось все карты первым и не забудь крикнуть «Одна!».', scripts: ['js/games/room.js', 'js/games/table.js', 'js/games/uno.js'], top: 'uno', topLabel: 'очков за победу', color: '#e5383b' },
+  { id: 'durak',    icon: '♠️', title: 'Дурак',           desc: 'Подкидной дурак на 36 карт: с ботами или онлайн с друзьями до 4 человек. Отбивайся, подкидывай и не останься дураком!', scripts: ['js/games/room.js', 'js/games/table.js', 'js/games/durak.js'], top: 'durak', topLabel: 'побед', color: '#d42a3b' },
   { id: 'wardrobe', icon: '🎭', title: 'Мой персонаж',   desc: 'Собери своего героя для игр сайта: цвет, глаза, шапки, питомцы и следы. Части — за монеты из игр.', scripts: ['js/games/wardrobe.js'], color: '#ff6fb5' },
   { id: 'cities',   icon: '🌍', title: 'Города',          desc: 'Называй город на последнюю букву — против бота трёх уровней или онлайн с другом по ссылке. 2 700+ городов.', scripts: ['js/games/cities-data.js', 'js/games/cities.js'], top: 'cities_hard', topLabel: 'цепочка на «Сложном»', color: '#29b6f6' },
   { id: 'words',    icon: '🔤', title: '5 букв',          desc: 'Угадай слово из 5 букв за 6 попыток. Новое слово дня каждый день, свободная игра и соревнование с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/words-data.js', 'js/games/words.js'], top: 'words', topLabel: 'лучшая попытка в слове дня', color: '#22c55e' },
@@ -225,6 +226,7 @@ function gameBestLabel(id, best){
   if (id === 'sea') return `${best} из 20 палуб`;
   if (id === 'snake') return `${best} ${best % 10 === 1 && best % 100 !== 11 ? 'яблоко' : [2, 3, 4].includes(best % 10) && ![12, 13, 14].includes(best % 100) ? 'яблока' : 'яблок'}`;
   if (id === 'memory' || id === 'emoji' || id === 'horde' || id === 'td' || id === 'uno') return `${Number(best).toLocaleString('ru')} очков`;
+  if (id === 'durak') return `${best} ${best % 10 === 1 && best % 100 !== 11 ? 'победа' : [2, 3, 4].includes(best % 10) && ![12, 13, 14].includes(best % 100) ? 'победы' : 'побед'}`;
   if (id === 'words') return `с ${7 - best}-й попытки`;
   return String(best);
 }
@@ -319,8 +321,8 @@ function gamesDailyDot(){
 }
 // «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
 // Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
-const WHATSNEW_VER = '2026-10-10d';
-const WHATSNEW = [['#/games/uno', '🃏', 'Одна! — карты как Уно'], ['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/td', '🏰', 'Башни — защита замка'], ['#/games/wardrobe', '🎭', 'Свой персонаж'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+const WHATSNEW_VER = '2026-10-10e';
+const WHATSNEW = [['#/games/durak', '♠️', 'Дурак онлайн'], ['#/games/uno', '🃏', 'Одна! — карты как Уно'], ['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/td', '🏰', 'Башни — защита замка'], ['#/games/wardrobe', '🎭', 'Свой персонаж'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
