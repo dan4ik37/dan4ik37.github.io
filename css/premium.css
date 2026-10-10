@@ -2241,3 +2241,14 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .today-online[hidden]{display:none}
 .today-online i{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e}
 .today-online b{color:#4ade80}
+
+/* «🆕 Новое на сайте» (whatsNewHtml в games.js) */
+.whatsnew{position:relative;display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin:0 0 .8rem;padding:.7rem 2.6rem .7rem 1rem;border-radius:16px;
+  background:linear-gradient(90deg,rgba(56,189,248,.12),rgba(145,71,255,.1));border:1px solid rgba(56,189,248,.35)}
+.whatsnew b{font-size:.85rem;white-space:nowrap}
+.wn-links{display:flex;gap:.4rem;flex-wrap:wrap}
+.wn-links a{display:inline-flex;align-items:center;min-height:34px;padding:.3rem .7rem;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--border);
+  color:var(--text);text-decoration:none;font-size:.76rem;font-weight:700;white-space:nowrap}
+.wn-links a:hover{border-color:rgba(56,189,248,.6)}
+.wn-x{position:absolute;top:.45rem;right:.5rem;border:0;background:none;color:var(--muted);font-size:.95rem;cursor:pointer;padding:.35rem .45rem}
+@media(max-width:768px){.wn-links{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;width:100%}.wn-links::-webkit-scrollbar{display:none}}

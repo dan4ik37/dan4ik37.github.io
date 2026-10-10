@@ -289,6 +289,18 @@ function gamesDailyDot(){
   const dot = document.getElementById('btGamesDot');
   if (dot) dot.hidden = !!wordsToday()?.done;
 }
+// «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
+// Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
+const WHATSNEW_VER = '2026-10-10';
+const WHATSNEW = [['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+function whatsNewHtml(){
+  let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
+  if (seen === WHATSNEW_VER) return '';
+  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.map(([h, ic, t]) => `<a href="${h}">${ic} ${esc(t)}</a>`).join('')}</div>
+    <button type="button" class="wn-x" aria-label="Скрыть" onclick="hideWhatsNew()">✕</button></div>`;
+}
+function hideWhatsNew(){ try { localStorage.setItem('d37_whatsnew', WHATSNEW_VER); } catch (e) {} document.getElementById('whatsNew')?.remove(); }
+
 // «Тест дня» на главной — по кругу от номера дня (тесты — api/_lib/quizzes.js, страницы /quiz/<slug>)
 const QUIZ_DAY = [['minecraft', '⛏', 'Какой ты моб из Майнкрафта?'], ['fnaf', '🐻', 'Кто ты из FNAF?'], ['game', '🕹', 'Какая ты игра?'], ['roblox', '🟨', 'Кто ты в Роблоксе?'], ['poppy', '🧸', 'Кто ты из Poppy Playtime?'], ['cs2', '🎯', 'Какая ты роль в CS2?'], ['horror', '👻', 'Кто ты в хоррор-игре?'], ['viewer', '📺', 'Какой ты зритель dan4ik37?']];
 
@@ -302,7 +314,7 @@ function renderToday(){
   // Игры — без инструментов (колесо, тесты, шрифты, CPS ведут на свои страницы)
   const n = GAMES.filter(g => !g.href || g.href[0] === '#').length;
   const qz = QUIZ_DAY[wordsDayNo() % QUIZ_DAY.length];
-  box.innerHTML = `<a class="today-online" id="todayOnline" href="#/chat" hidden></a><div class="today-grid">
+  box.innerHTML = whatsNewHtml() + `<a class="today-online" id="todayOnline" href="#/chat" hidden></a><div class="today-grid">
       <a class="today-card hot-slot${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
       <a class="today-card" href="/quiz/${qz[0]}"><span class="ti">${qz[1]}</span><span class="tt"><b>Тест дня</b><small>${esc(qz[2])}</small></span></a>
       <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
