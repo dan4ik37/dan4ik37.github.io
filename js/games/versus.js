@@ -9,6 +9,7 @@
 // Игра подключается так:
 //   Versus.start(root, api, 'catch', code, { run(stage, rng, hooks), stop() })
 //   hooks.progress(score) — по ходу, hooks.done(score) — партия окончена (больше — лучше).
+//   hooks.send(data) — своё сообщение сопернику (например, «Башни» отправляют монстров) → у него opts.onMsg(data).
 (() => {
   // Детерминированный генератор (mulberry32)
   function rng(seed){
@@ -40,11 +41,14 @@
         // поэтому хозяин начинает новую
         const newcomer = V.oppId && V.oppId !== opp.id;
         V.oppId = opp.id; V.oppNick = opp.nick; V.oppGone = false;
-        if (!V.started || newcomer) { if (room.isHost) hostStart(); else if (!V.started) GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`); }
+        if (!V.started || newcomer) { if (room.isHost) hostStart(); else if (!V.started) { GameRoom.lobbyText(root, `<b>${esc(opp.nick)}</b> на месте — начинаем…`); askStart(0); } }
       },
       onMessage: m => {
-        if (m.type === 'start' && !V.room.isHost) return begin(m);
+        if (m.type === 'start' && !V.room.isHost) { if (V.started && m.round === V.round) return; return begin(m); }
+        // Напарник не дождался «старта» (потерялся, пока он входил в комнату) — шлём ещё раз тот же
+        if (m.type === 'want') { if (V.room.isHost) { if (V.lastStart) V.room.send(V.lastStart); else hostStart(); } return; }
         if (m.round !== V.round) return;
+        if (m.type === 'x') { opts.onMsg?.(m.d); return; }
         if (m.type === 'score') { V.opp.score = m.score; setOpp(); }
         else if (m.type === 'done') { V.opp = { score: m.score, done: true }; setOpp(); if (V.me.done) decide(); }
         else if (m.type === 'rematch') {
@@ -56,9 +60,16 @@
     });
     if (!V.room) { root.innerHTML = GameRoom.errorHtml; return () => {}; }
 
+    // Гость: «старт» не пришёл за 2,5 с — переспросить (до 3 раз)
+    function askStart(n){
+      clearTimeout(V.askT);
+      V.askT = setTimeout(() => { if (!V.started && V.room && !V.room.closed && !V.room.isHost && V.room.opp && n < 3) { V.room.send({ type: 'want' }); askStart(n + 1); } }, 2500);
+    }
+
     function hostStart(){
       V.round++;
       const msg = { type: 'start', seed: Math.floor(Math.random() * 2 ** 31), round: V.round, hostNick: V.room.nick };
+      V.lastStart = msg;
       V.room.send(msg);
       begin(msg);
     }
@@ -87,6 +98,8 @@
           if (Date.now() - V.lastSent > 400) send();
           else if (!V.pending) V.pending = setTimeout(send, 400);
         },
+        send(d){ if (V.room && V.started) V.room.send({ type: 'x', d, round: V.round }); },
+        oppNick: () => V.oppNick || 'Соперник',
         done(score){
           if (!V.me || V.me.done) return;
           V.me = { score, done: true }; setMe();

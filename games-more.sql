@@ -1,6 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════
 --  НОВЫЕ ИГРЫ — ключи для game_result (рекорды, XP за победу): «Угадай игру по эмодзи» (emoji, emoji_duel),
---  «Орда» (horde, horde_duel, horde_coop).
+--  «Орда» (horde, horde_duel, horde_coop), «Башни» (td, td_duel, td_coop).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
@@ -28,6 +28,7 @@ returns int language sql immutable as $$
     when p_game = 'words_duel' then 699
     when p_game in ('emoji', 'emoji_duel') then 2000
     when p_game in ('horde', 'horde_duel', 'horde_coop') then 30000
+    when p_game in ('td', 'td_duel', 'td_coop') then 4200
     else null end;
 $$;
 
@@ -48,5 +49,6 @@ returns int language sql immutable as $$
     when 'words' then 15 when 'words_free' then 3 when 'words_duel' then 10
     when 'emoji' then 10 when 'emoji_duel' then 10
     when 'horde' then 20 when 'horde_duel' then 15 when 'horde_coop' then 20
+    when 'td' then 20 when 'td_duel' then 15 when 'td_coop' then 20
     else 0 end;
 $$;

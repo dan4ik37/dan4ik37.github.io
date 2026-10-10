@@ -18,16 +18,25 @@
   // handlers: onPeer(opp|null, room) — соперник пришёл/ушёл; onMessage(msg, room); onFull(); onError()
   function join(game, code, handlers){
     if (typeof sbClient === 'undefined' || !sbClient) { handlers.onError?.(); return null; }
-    const myId = (typeof currentUser !== 'undefined' && currentUser?.id) || 'g-' + Math.random().toString(36).slice(2, 10);
-    const room = { game, code, myId, nick: nick(), joinedAt: Date.now(), isHost: false, opp: null, closed: false };
-    const ch = sbClient.channel(`${game}-duel-${code}`, { config: { broadcast: { self: false }, presence: { key: myId } } });
+    // Ключ присутствия — кто (аккаунт или гость этой вкладки); номер игрока — кто + когда вошёл. Обновил страницу —
+    // старое и новое присутствие одного человека склеиваются (берётся самое свежее), а номер новый: игры видят
+    // «новичка» и начинают партию заново
+    const key = (typeof currentUser !== 'undefined' && currentUser?.id) || guestId();
+    const joinedAt = Date.now(), myId = key + '~' + joinedAt;
+    const room = { game, code, myId, nick: nick(), joinedAt, isHost: false, opp: null, closed: false };
+    const ch = sbClient.channel(`${game}-duel-${code}`, { config: { broadcast: { self: false }, presence: { key } } });
     // Служебное поле отправителя — _by (не from: у ходов шашек from — это клетка)
     room.send = payload => { if (!room.closed) ch.send({ type: 'broadcast', event: 'm', payload: { ...payload, _by: myId } }).catch(() => {}); };
-    room.leave = () => { if (room.closed) return; room.closed = true; try { ch.untrack(); sbClient.removeChannel(ch); } catch (e) {} };
+    room.leave = () => { if (room.closed) return; room.closed = true; window.removeEventListener('pagehide', room.leave); try { ch.untrack(); sbClient.removeChannel(ch); } catch (e) {} };
+    // Закрыл/обновил страницу — сразу уходим из комнаты (иначе старое «присутствие» висит и комната кажется занятой)
+    window.addEventListener('pagehide', room.leave);
     ch.on('broadcast', { event: 'm' }, ({ payload }) => { if (!room.closed && payload?._by !== myId) handlers.onMessage?.(payload, room); });
     ch.on('presence', { event: 'sync' }, () => {
       if (room.closed) return;
-      const players = Object.entries(ch.presenceState()).map(([id, metas]) => ({ id, ...(metas[0] || {}) })).sort((a, b) => (a.t || 0) - (b.t || 0));
+      const players = Object.entries(ch.presenceState()).map(([k, metas]) => {
+        const m = (metas || []).reduce((a, b) => ((b?.t || 0) > (a?.t || 0) ? b : a), (metas || [])[0] || {});
+        return { id: k + '~' + (m.t || 0), nick: m.nick, t: m.t || 0 };
+      }).sort((a, b) => a.t - b.t);
       const me = players.findIndex(p => p.id === myId);
       if (me === -1) return;
       if (me > 1) { room.leave(); handlers.onFull?.(); return; }
@@ -35,15 +44,29 @@
       const opp = players[me === 0 ? 1 : 0] || null;
       // Первый sync сообщаем всегда — чтобы экран ожидания сменил «Подключаемся…» на «Ждём друга»
       const changed = !room.synced || (opp?.id || null) !== (room.opp?.id || null);
+      const was = room.synced;
       room.synced = true;
       room.opp = opp ? { id: opp.id, nick: opp.nick || 'соперник' } : null;
-      if (changed) handlers.onPeer?.(room.opp, room);
+      if (!changed) return;
+      clearTimeout(room.peerTimer);
+      // Соперник вошёл после нас — сообщаем через 0,8 с: сервер ещё подписывает его на сообщения комнаты, и отправленное
+      // ему в первую долю секунды (например, «старт» партии) до него не доходит. Ушёл или мы сами вошли — сразу.
+      if (opp && was) room.peerTimer = setTimeout(() => { if (!room.closed && room.opp?.id === opp.id) handlers.onPeer?.(room.opp, room); }, 800);
+      else handlers.onPeer?.(room.opp, room);
     });
     ch.subscribe(async status => {
       if (status === 'SUBSCRIBED') await ch.track({ nick: room.nick, t: room.joinedAt });
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') handlers.onError?.();
     });
     return room;
+  }
+
+  // Гость — один и тот же номер, пока открыта вкладка: обновил страницу — вернулся на своё место, а не «третий лишний»
+  function guestId(){
+    let id = '';
+    try { id = sessionStorage.getItem('d37_room_gid') || ''; } catch (e) {}
+    if (!id) { id = 'g-' + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem('d37_room_gid', id); } catch (e) {} }
+    return id;
   }
 
   function newCode(){ let c = ''; for (let i = 0; i < 6; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; }

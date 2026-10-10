@@ -3,7 +3,8 @@
 // ═══════════════════════════════════════
 // Комната — GameRoom (room.js, Supabase Realtime): через неё игроки «знакомятся» (предложение/ответ WebRTC
 // и ICE-кандидаты), дальше данные идут напрямую между браузерами — быстро и не тратит лимит сообщений
-// Supabase. Не соединилось за 7 с (строгий NAT мобильного оператора) — те же данные идут через комнату
+// Supabase. Хозяин предлагает соединение до 3 раз (раз в 3,5 с: первое предложение может потеряться, пока
+// напарник только входит в комнату). Не соединилось за 10 с (строгий NAT мобильного оператора) — данные идут через комнату
 // Supabase («relay»), но быстрые сообщения — не чаще 5 раз в секунду.
 //
 // const np = NetPlay.start(room, { onMessage(msg), onBinary(arrayBuffer), onMode(mode) })
@@ -18,7 +19,7 @@
   const fromB64 = b => { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; };
 
   function start(room, hooks){
-    const N = { pc: null, fast: null, rel: null, mode: 'connecting', sid: '', closed: false, queue: [], relayAt: 0, timer: 0 };
+    const N = { pc: null, fast: null, rel: null, mode: 'connecting', sid: '', closed: false, queue: [], relayAt: 0, timer: 0, retry: 0, tries: 0 };
     const setMode = m => { if (N.mode !== m && !N.closed) { N.mode = m; hooks.onMode?.(m); } };
     const deliver = m => { try { hooks.onMessage(m); } catch (e) { console.error(e); } };
     const deliverBin = b => { try { hooks.onBinary?.(b); } catch (e) { console.error(e); } };
@@ -48,19 +49,22 @@
         deliver(m);
       };
     }
-    function armTimer(){ clearTimeout(N.timer); N.timer = setTimeout(() => { if (N.mode !== 'p2p') setMode('relay'); }, 7000); }
+    function armTimer(){ clearTimeout(N.timer); N.timer = setTimeout(() => { if (N.mode !== 'p2p') setMode('relay'); }, 10000); }
     function flushIce(){ const pc = N.pc; if (pc) for (const c of N.queue.splice(0)) pc.addIceCandidate(c).catch(() => {}); }
 
-    // Хозяин: новое соединение (и при каждом новом напарнике)
-    async function offer(){
+    // Хозяин: новое соединение (и при каждом новом напарнике); не открылось за 3,5 с — ещё раз (всего 3 попытки)
+    function offer(){ N.tries = 0; clearTimeout(N.retry); armTimer(); return attempt(); }
+    async function attempt(){
       if (N.closed) return;
+      N.tries++;
+      clearTimeout(N.retry);
+      N.retry = setTimeout(() => { if (N.mode !== 'p2p' && !N.closed && N.tries < 3) attempt(); }, 3500);
       N.sid = Math.random().toString(36).slice(2, 10);
-      setMode('connecting');
+      if (N.mode !== 'relay') setMode('connecting');
       const pc = newPc();
       if (!pc) return;
       bind(pc.createDataChannel('fast', { ordered: false, maxRetransmits: 0 }));
       bind(pc.createDataChannel('rel', { ordered: true }));
-      armTimer();
       try {
         await pc.setLocalDescription(await pc.createOffer());
         room.send({ type: 'np-offer', sid: N.sid, sdp: pc.localDescription.toJSON() });
@@ -117,7 +121,7 @@
       if (!relayOk()) return;
       room.send({ type: 'np-bin', b: toB64(buf) });
     }
-    function close(){ N.closed = true; clearTimeout(N.timer); dropPc(); }
+    function close(){ N.closed = true; clearTimeout(N.timer); clearTimeout(N.retry); dropPc(); }
 
     return { send, sendBin, handle, offer, close, mode: () => N.mode, hz: () => N.mode === 'p2p' ? 15 : 5 };
   }
