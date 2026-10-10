@@ -539,6 +539,11 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
   запуска (GameManager.Instance). Не поддерживается: from…select, goto, unsafe, record, операторы приведения; Rigidbody/Input/Physics/UI
   Unity — подсказка при переводе. Тест: node scripts/lang-cs-test.cjs (173). Новый член библиотеки — и в таблицу API (тип для
   перевода), и в объект A в boot() (тест сверяет). Проверено в браузере 13.10: MonoBehaviour, корутина, 7/2 = 3, вращение в Update.
+- Расширения студии (13.10): новые инструменты, набор предметов, ИИ-помощник — своими файлами, studio3d.js не трогая:
+  window.D37E.studioExt.push({ id, mount(api), unmount(), select(sel, selSet), play(), stop() }) — можно и после открытия студии
+  (сразу mount). api: ed (состояние, ed.SC — сцена), slot (место для кнопок в верхней панели .s3-ext), insert, select, setSel,
+  selected, pushHist (ДО правки — для «Отменить»), markDirty, refresh, msg, print, setBottom, showCode, playing. В режиме игрока
+  (чужой мир по ссылке) расширения не подключаются. Ошибка в расширении студию не роняет (ext() ловит).
 - Сеть для миров игроков (js/engine/net.js + net-transport.js, агент 13.10.2026; в студию ещё НЕ подключена):
   D37E.net.session({ transport, scene, nick, info, onHost, onPlayer, onGuestEvent, onEvent, onCharacter, onBlob, onReady, onTeleport,
   onCheat }) — хозяин (самый ранний в комнате) считает мир и скрипты, гости рисуют копию и сами ведут своего персонажа. Транспорт —

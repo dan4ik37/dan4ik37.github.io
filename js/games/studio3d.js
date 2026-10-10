@@ -238,6 +238,7 @@ Players.PlayerAdded.Connect(player => {
         <button type="button" data-a="add:Script" title="Скрипт в выбранный объект">📜<span> Скрипт</span></button>
         <span class="s3-sep"></span>
         <button type="button" data-panel="terrain" title="Ландшафт">⛰<span> Земля</span></button><button type="button" data-panel="light" title="Освещение">☀<span> Свет</span></button>
+        <span class="s3-ext"></span>
         <span class="s3-grow"></span>
         <span class="s3-pinfo" hidden></span>
         <div class="s3-dd s3-staff" hidden><button type="button" data-a="menu:mod" title="Модели на проверке">🛡</button></div>
@@ -315,6 +316,7 @@ Players.PlayerAdded.Connect(player => {
     let seen = '1'; try { seen = localStorage.getItem('d37_s3_tut') || ''; } catch (e) {}
     if (!seen && !ed.player) { ed.tut = new Set(); const t = document.createElement('div'); t.className = 's3-tut'; view.appendChild(t); renderTut(); }
     ed.autosave = setInterval(() => { if (ed.dirty && !ed.playing) save(true); }, 15000);
+    if (!ed.playId) ext('mount', STUDIO_API);   // в режиме игрока (чужой мир) расширения редактора не нужны
     // закрыли/обновили вкладку — сохраняем сразу, без сжатия ландшафта
     window.addEventListener('pagehide', ed.onHide = () => {
       if (!ed.dirty || ed.playing || !ed.SC) return;
@@ -384,8 +386,9 @@ Players.PlayerAdded.Connect(player => {
     renderProps(); highlightTree();
     // скрипт — в редактор кода
     if (obj?.cls === 'Script' && ed.selSet.size === 1) showCode(obj);
+    ext('select', ed.sel, ed.selSet);
   }
-  function setSel(list){ const ed = ED; ed.selSet = new Set(list); ed.sel = list[list.length - 1] || null; updateGizmo(); renderProps(); highlightTree(); }
+  function setSel(list){ const ed = ED; ed.selSet = new Set(list); ed.sel = list[list.length - 1] || null; updateGizmo(); renderProps(); highlightTree(); ext('select', ed.sel, ed.selSet); }
   // объект для клика в мире: деталь модели → вся модель (Alt — сама деталь); заблокированные пропускаем
   function pickAt(ray, alt){
     const ed = ED, SC = ed.SC;
@@ -1213,6 +1216,7 @@ Players.PlayerAdded.Connect(player => {
   function startPlay(){
     const ed = ED, E = window.D37E, SC = ed.SC, R = ed.R, T = R.T;
     if (ed.playing) return;
+    ext('play');
     if (ed.dirty) save(true);   // снимок берётся сразу, до первого шага игры
     if (SC.all().some(o => o.anchored === false)) E.rigid?.load();   // физика деталей (Rapier) — заранее, без паузы в игре
     tutStep('play');
@@ -1272,6 +1276,7 @@ Players.PlayerAdded.Connect(player => {
   }
   function stopPlay(){
     const ed = ED, pl = ed.playing; if (!pl) return;
+    ext('stop');
     ed.NPC.stop();
     pl.loop.stop(); pl.SH.stop(); pl.unf?.(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); pl.hud.remove();
     for (const l of pl.amb || []) l.h.stop();
@@ -1519,6 +1524,7 @@ Players.PlayerAdded.Connect(player => {
   }
   function unmount(){
     const ed = ED; if (!ed) return;
+    ext('unmount');
     ED = null;
     try { if (ed.playing) { const pl = ed.playing; pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
@@ -1528,6 +1534,26 @@ Players.PlayerAdded.Connect(player => {
     try { ed.B?.dispose(); ed.SC?.dispose(); ed.NPC?.dispose(); ed.FX?.dispose(); ed.TR?.dispose(); ed.G?.dispose(); ed.R?.dispose(); } catch (e) {}
     ed.box.remove();
     document.documentElement.classList.remove('s3-open');
+  }
+
+  // ═══ Расширения студии (инструменты, набор предметов, ИИ-помощник — каждый своим файлом, без правок здесь) ═══
+  // window.D37E.studioExt.push({ id, mount(api), unmount(), select(sel, selSet), play(), stop() }) — до или после загрузки
+  // студии (подключённое позже получит mount сразу, если студия открыта). api.slot — место для кнопок в верхней панели.
+  // Мир меняй через api: insert / pushHist (до правки — для «Отменить») / markDirty / refresh; SC = api.ed.SC.
+  const STUDIO_API = {
+    get ed(){ return ED; }, q: s => ED?.q(s), get slot(){ return ED?.q('.s3-ext') || null; },
+    insert: (cls, props) => insert(cls, props), select: (o, add) => select(o, add), setSel: list => setSel(list), selected: () => ED ? selList() : [],
+    pushHist: () => pushHist(), markDirty: () => markDirty(), refresh: () => { renderTree(); renderProps(); updateGizmo(); },
+    msg: (t, ok) => msg(t, ok), print: (t, kind) => print(t, kind), setBottom: b => setBottom(b), showCode: o => showCode(o),
+    playing: () => !!ED?.playing,
+  };
+  function ext(fn, ...a){
+    for (const x of window.D37E?.studioExt || []) { try { x[fn]?.(...a); } catch (e) { console.error('студия, расширение ' + (x.id || '?'), e); } }
+  }
+  {   // список расширений: push после загрузки студии — сразу mount
+    const E = window.D37E = window.D37E || {}, list = E.studioExt = E.studioExt || [];
+    const push = list.push;
+    list.push = (...xs) => { const n = push.apply(list, xs); if (ED?.SC && !ED.playId) for (const x of xs) { try { x.mount?.(STUDIO_API); } catch (e) { console.error(e); } } return n; };
   }
 
   window.GAME_IMPL = window.GAME_IMPL || {};
