@@ -2730,3 +2730,46 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .bl-col button:disabled{opacity:.45;cursor:default}
 .bl-coins{font-size:.85rem;font-weight:700}
 .bl-note{text-align:center;margin-top:.5rem;max-width:440px}
+
+/* ── Пасьянсы «Косынка» и «Паук» (js/games/solitaire.js) ── */
+.sl{display:flex;flex-direction:column;gap:.5rem}
+.sl-bar{display:flex;align-items:center;gap:.35rem .8rem;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.sl-st b{color:var(--text);font-variant-numeric:tabular-nums}
+.sl-st.low b{color:#f87171}
+.sl-btns{margin-left:auto;display:flex;gap:.35rem}
+.sl-btns button{border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);border-radius:10px;padding:.38rem .6rem;font:700 .74rem 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
+.sl-btns button:disabled{opacity:.4;cursor:default}
+@media(max-width:560px){.sl-btns button span{display:none}.sl-btns button{font-size:.95rem;padding:.3rem .6rem}}
+.sl-opts{display:flex;gap:.3rem;flex-wrap:wrap}
+.sl-opts button{border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:999px;padding:.28rem .75rem;font:700 .7rem 'Montserrat',sans-serif;cursor:pointer}
+.sl-opts button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sl-wrap{position:relative;border-radius:14px;padding:8px;background:radial-gradient(ellipse at 50% 0%,#1f7a4d,#0e3b26 78%);box-shadow:inset 0 0 40px rgba(0,0,0,.35)}
+.sl-board{position:relative;isolation:isolate;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;min-height:180px}
+.ssl{position:absolute;left:0;top:0;width:var(--cw);height:var(--ch);box-sizing:border-box;border-radius:calc(var(--cw)*.1);border:2px dashed rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);font:800 calc(var(--cw)*.36) 'Montserrat',sans-serif}
+.ssl[data-pile="st"]{cursor:pointer}
+.scd{position:absolute;left:0;top:0;width:var(--cw);height:var(--ch);box-sizing:border-box;border-radius:calc(var(--cw)*.1);transition:transform .2s ease;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.45)}
+.scd:not(.up){background:#4c1d95 repeating-linear-gradient(45deg,#4c1d95 0 4px,#6d28d9 4px 8px);border:2px solid #f5f3ff}
+.scd.up{background:#fdfdfb;border:1px solid #bdc1cb}
+.scd.noanim,.scd.drag{transition:none}
+.scd.drag{box-shadow:0 10px 24px rgba(0,0,0,.5)}
+.scd-f{display:none;position:absolute;inset:0;color:#17171f;overflow:hidden;border-radius:inherit}
+.scd.up .scd-f{display:block}
+.scd-f.red{color:#d0202f}
+.scd-f b{position:absolute;left:6%;top:3%;font:800 calc(var(--cw)*.33)/1 'Montserrat',sans-serif;letter-spacing:-.06em}
+.scd-f i,.scd-f u{font-style:normal;text-decoration:none;line-height:1;font-family:'Segoe UI Symbol','Noto Sans Symbols2','DejaVu Sans',sans-serif}
+.scd-f i{position:absolute;right:7%;top:5%;font-size:calc(var(--cw)*.27)}
+.scd-f u{position:absolute;left:0;right:0;bottom:8%;text-align:center;font-size:calc(var(--cw)*.56)}
+.scd-f u.fc{font:900 calc(var(--cw)*.46)/1 'Montserrat',sans-serif;bottom:12%}
+.scd.hint,.ssl.hint{animation:slHint .5s ease-in-out 3}
+@keyframes slHint{50%{box-shadow:0 0 0 3px #facc15,0 0 16px #facc15}}
+.scd.shake{animation:slShake .3s}
+@keyframes slShake{25%{margin-left:-4px}75%{margin-left:4px}}
+.sl-over{position:absolute;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.6rem;padding:1rem;text-align:center;background:rgba(5,22,13,.84);border-radius:14px}
+.sl-over[hidden]{display:none}
+.sl-t{font-size:1.2rem;font-weight:900}
+.sl-big{font-size:2.1rem;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.sl-s{font-size:.78rem;color:#cbd5e1;max-width:330px;line-height:1.45}
+.sl-col{display:flex;flex-direction:column;gap:.45rem;width:min(100%,280px)}
+.sl-col .ct-start{align-self:stretch}
+.sl-coins{font-size:.85rem;font-weight:700}
+@media(max-width:560px){.sl-wrap{padding:5px;margin:0 -6px}}

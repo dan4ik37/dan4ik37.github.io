@@ -30,6 +30,8 @@ GAMES = [
     ('arena', '🔫', 'Арена', '#f97316'),
     ('chess', '♟️', 'Шахматы', '#94a3b8'),
     ('blocks', 'draw:blocks', 'Блоки', '#3b82f6'),
+    ('kosynka', 'draw:cards', 'Косынка', '#22c55e'),
+    ('pauk', '🕷️', 'Паук', '#a855f7'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
     ('games', '🎮', 'Игры онлайн', '#ff2d55'),
@@ -60,6 +62,22 @@ def draw_blocks():
             d.rounded_rectangle((x + 18, y + 16, x + cs - 18, y + cs - 22), 8, fill=tuple(min(255, int(v * .8 + 60)) for v in base))
     return im
 
+# «Косынка»: веер из трёх карт
+def draw_cards():
+    im = Image.new('RGBA', (620, 560), (0, 0, 0, 0))
+    sym = ImageFont.truetype(os.path.join(F, 'seguisym.ttf'), 120)
+    cards = [('Т', '♠', (25, 25, 32), -16), ('К', '♥', (214, 32, 47), 0), ('Д', '♦', (214, 32, 47), 16)]
+    for i, (rank, suit, col, ang) in enumerate(cards):
+        c = Image.new('RGBA', (250, 350), (0, 0, 0, 0))
+        d = ImageDraw.Draw(c)
+        d.rounded_rectangle((0, 0, 249, 349), 26, fill=(253, 253, 251, 255), outline=(190, 194, 204, 255), width=3)
+        d.text((22, 12), rank, font=bold(84), fill=col)
+        d.text((150, 26), suit, font=ImageFont.truetype(os.path.join(F, 'seguisym.ttf'), 64), fill=col)
+        d.text((125, 230), suit, font=sym, fill=col, anchor='mm')
+        c = c.rotate(-ang, expand=True, resample=Image.BICUBIC)
+        im.alpha_composite(c, (60 + i * 130 - c.width // 2 + 125, 280 - c.height // 2 + (0 if i == 1 else 30)))
+    return im.crop(im.getbbox())
+
 W, H = 1200, 630
 for gid, ic, title, color in GAMES:
     c = hex2rgb(color)
@@ -74,6 +92,9 @@ for gid, ic, title, color in GAMES:
     if ic == 'draw:blocks':
         em = draw_blocks()
         em.thumbnail((370, 370), Image.LANCZOS)
+    elif ic == 'draw:cards':
+        em = draw_cards()
+        em.thumbnail((400, 400), Image.LANCZOS)
     else:
         em = Image.new('RGBA', (700, 700), (0, 0, 0, 0))
         ImageDraw.Draw(em).text((120, 120), ic, font=emoji, embedded_color=True)

@@ -107,7 +107,7 @@ $$;
 
 -- Сколько монет можно принести из одного забега (как RUN_CAP в coins.js)
 create or replace function public.coin_run_cap(p_game text) returns int language sql immutable as $$
-  select case p_game when 'horde' then 300 when 'td' then 300 when 'blocks' then 150 end
+  select case p_game when 'horde' then 300 when 'td' then 300 when 'blocks' then 150 when 'kosynka' then 40 when 'pauk' then 100 end
 $$;
 
 -- ── Состояние кошелька (для витрины) ──
