@@ -353,7 +353,7 @@ function renderVids(vids){
       <div class="sel-check">${sel?'✓':''}</div>
       ${v.rec?'<div class="rec-badge">🔥 Рекомендация</div>':''}
       <div class="vthumb">
-        ${v.thumb?`<img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy">`:'<div class="vthumb-ph">▶</div>'}
+        ${v.thumb?`<img src="${esc(cardThumb(v.thumb))}" alt="${esc(v.title)}" loading="lazy" decoding="async" width="320" height="180">`:'<div class="vthumb-ph">▶</div>'}
         <div class="pdot pd-yt">YT</div>
         ${isNewVid(v)&&!watched?'<div class="vnew">NEW</div>':''}
         ${v.duration?`<div class="vduration">${v.duration}</div>`:''}
@@ -392,6 +392,10 @@ function setView(mode){
 function toggleViewMode(){ setView(viewMode==='grid' ? 'list' : 'grid'); }
 
 // Старое имя — на случай внешних вызовов (хоткеи, консоль)
+// Карточкам сетки хватает mqdefault (320×180, 16:9, ~10 КБ) вместо hqdefault (480×360 с чёрными полосами, ~25 КБ):
+// вдвое меньше трафика на мобильном интернете. Главный ролик (герой) по-прежнему берёт крупную картинку.
+const cardThumb = u => String(u || '').replace(/\/(hq|sd)default\.jpg$/, '/mqdefault.jpg');
+
 function shuffleVids(){ setVidSort('rand'); }
 
 // ═══════════════════════════════════════
