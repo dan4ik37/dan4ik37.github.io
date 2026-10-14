@@ -13,24 +13,13 @@
 - Коммитить и пушить в `main` можно без отдельного вопроса — так договорились, это и есть выкладка.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
-1. `world.sql` — пропуска «Мира Денчика» (world_secret, world_pass, world_check; pgcrypto в схеме extensions). Проверка:
-   `/rpc/world_check` гостем с {"p_pass":"x","p_pub":"y"} → null (PGRST202 = не применён). До запуска мир работает, но все
-   игроки «не проверены» (ник со знаком «?», без значков ролей/VIP).
-2. `coins.sql` — ЗАПУСТИТЬ ЕЩЁ РАЗ (11.10.2026): цены 295 частей 3D-персонажа, свои цвета палитры, новые VIP-части, char_save
-   со всеми слотами. Проверка: `/rpc/coin_price` {"p_item":"skin:hair:afro"} → 150 (null = старая версия). До запуска сервер
-   отвергает новые части — coins.js сохраняет то, что он понимает (2D-части, свой цвет → ближайший готовый), остальное — в браузере.
-3. `ugc.sql` — «Студия игр» (ugc_games, ugc_likes, ugc_reports, ugc_plays; ugc_save / ugc_status / ugc_review / ugc_play / ugc_like /
-   ugc_report) + 3D-миры «Студии 3D» (kind 'place') + свои модели (ugc_models, ugc_model_save / ugc_model_review / ugc_model_delete,
-   хранилище ugc3d — закрытое, файл модели виден другим только после одобрения). Проверка: `/rpc/ugc_play` гостем {"p_id":"x"} →
-   {"ok":false,"reason":"not_found"} и `/rpc/ugc_model_save` гостем {"p_id":"abcdef","p_name":"x","p_tris":1,"p_bytes":1} → reason auth
-   (PGRST202 = не применён). До запуска игры и миры хранятся только в браузере, каталог пуст («сайт обновляется»), /g/<id> — 404,
-   «📤 Выложить» в «Студии 3D» пишет «Публикация откроется, когда сайт обновится». Тест PGlite: 37 + 39 проверок (миры, модели, хранилище).
-4. `unity.sql` — «Unity-игры» (unity_games, unity_likes, unity_reports, unity_plays, unity_scores; unity_save / unity_status /
-   unity_review / unity_play / unity_like / unity_report / unity_result / unity_top). Проверка: `/rpc/unity_play` гостем {"p_id":"x"} →
-   {"ok":false,"reason":"not_found"} (PGRST202 = не применён). До запуска игры хранятся только в браузере, каталог «сайт обновляется».
-5. `bases.sql` — «Район участков» в «Мире Денчика» (bases, base_rooms, base_likes; base_state / base_street / base_room / base_claim /
-   base_act). Проверка: `/rpc/base_street` гостем {"p_street":0} → {"ok":true,…} (PGRST202 = не применён). До запуска участки
-   пробные, в браузере (d37_base), с пометкой «сохранится, когда сайт обновится».
+Сейчас — НИЧЕГО (проверено с сервера 15.10.2026). Появятся после слияния агентов: premium.sql (💎 валюта), community.sql
+(сообщества, чат), coins.sql ещё раз (новые части тела) — дописать сюда с проверками и напомнить владельцу.
+Применены (проверено с сервера 15.10.2026, самые свежие версии): world.sql (`/rpc/world_check` гостем {"p_pass":"x","p_pub":"y"}
+→ null), coins.sql (`/rpc/coin_price` {"p_item":"skin:hair:afro"} → 150), ugc.sql (`/rpc/ugc_play` {"p_id":"x"} → not_found,
+`/rpc/ugc_model_save` гостем {"p_id":"abcdef","p_name":"x","p_tris":1,"p_bytes":1} → reason auth), unity.sql (`/rpc/unity_play`
+{"p_id":"x"} → not_found), bases.sql (`/rpc/base_street` {"p_street":0} → ok; участок №1 уже занял владелец).
+PGRST202 в ответе = функции нет, файл не применён.
 Новые ключи игр / цены монет — дописывать в games-more.sql / coins.sql (оба идемпотентны) и выдать владельцу «запусти ещё раз».
 coins.sql и games-more.sql применены 10.10.2026 (проверено с сервера: coins_state гостем → auth, daily_top → [],
 game_score_cap('sudoku_daily') = 1200, coin_run_cap('sudoku') = 60 — то есть самая свежая версия обоих файлов).
