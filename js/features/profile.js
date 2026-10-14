@@ -179,7 +179,7 @@ async function renderProfilePage(viewUserId){
   if (isOwn) renderProfileGuests(profile);
   renderVipPerksPanel(profile, isOwn);
   if (isOwn) { renderVipPromoTiers(); renderVipMonthButtons(); }
-  if (isOwn) { renderDonateLoginBlock(profile.donate_login); if (typeof renderDonationClaimBox === 'function') renderDonationClaimBox(); }
+  if (isOwn) { renderDonateLoginBlock(profile.donate_login); renderProfileGems(); if (typeof renderDonationClaimBox === 'function') renderDonationClaimBox(); }
   else { const p = document.getElementById('donateLoginPanel'); if (p) p.style.display = 'none'; }
   renderStaffVipPanel(profile, isOwn);
 
@@ -200,7 +200,7 @@ async function renderProfilePage(viewUserId){
       const daysLeft = (isOwn && tier && profile.vip_until) ? Math.ceil((new Date(profile.vip_until) - Date.now()) / 86400000) : null;
       if (daysLeft !== null && daysLeft <= 7) {
         expireEl.style.display = 'block';
-        expireEl.textContent = daysLeft <= 0 ? '⚠️ VIP истекает сегодня — задонать ещё, чтобы не потерять уровень' : `⚠️ VIP закончится через ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'} — задонать 100₽+, чтобы продлить`;
+        expireEl.textContent = daysLeft <= 0 ? '⚠️ VIP истекает сегодня — задонать ещё или продли за 💎 в магазине, чтобы не потерять уровень' : `⚠️ VIP закончится через ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'} — задонать 100₽+ или продли за 💎 в магазине`;
       } else {
         expireEl.style.display = 'none';
       }
@@ -313,9 +313,11 @@ function renderDonateVipHint(){
   const txt = document.getElementById('donateVipText'), act = document.getElementById('donateVipAct');
   if (!txt || !act) return;
   const login = currentUser && currentProfile?.donate_login;
-  const more = '<a class="dv-btn ghost" href="/vip">Что даёт VIP</a>';
+  const more = '<a class="dv-btn ghost" href="/vip">Что даёт VIP</a><a class="dv-btn ghost" href="#/shop">💎 Магазин</a>';
+  // Выбрал в магазине «донат → кристаллы» (premium.sql) — донат даст 💎, а не VIP
+  const gems = !!window.D37Gems?.isOn() && D37Gems.state().mode === 'gems';
   if (login) {
-    txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — VIP включится сам.`;
+    txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — ${gems ? 'придут кристаллы 💎 (VIP за них — в магазине)' : 'VIP включится сам'}.`;
     act.innerHTML = '<button type="button" class="dv-btn" onclick="copyDonateLogin(this)">📋 Скопировать логин</button>' + more;
   } else if (currentUser) {
     txt.innerHTML = 'Сначала придумай <b>логин для доната</b> в профиле (один раз), потом впиши его в поле «Ваше имя» на DonationAlerts — VIP включится сам.';
@@ -716,7 +718,7 @@ function renderVipPerksPanel(profile, isOwn){
     </div>
     ${next ? `
       <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.8rem 0 .4rem"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,rgb(${tier.rgb}),rgb(${next.rgb}));border-radius:6px"></div></div>
-      <div style="font-size:.72rem;color:var(--muted)">До ${next.icon} ${next.label} ещё <b style="color:var(--text)">${Math.max(0, next.min - total).toFixed(0)}₽</b> донатов — ${tierPerkLine(next)}</div>`
+      <div style="font-size:.72rem;color:var(--muted)">До ${next.icon} ${next.label} ещё <b style="color:var(--text)">${Math.max(0, next.min - total).toFixed(0)}₽</b> поддержки (донаты или 💎) — ${tierPerkLine(next)}</div>`
     : '<div style="font-size:.74rem;color:var(--muted);margin-top:.7rem">Максимальный уровень — спасибо, что с нами 💛</div>'}`;
 }
 
@@ -1069,6 +1071,26 @@ function renderDonateLoginBlock(login){
   }
 }
 
+// 💎 Кристаллы в своём профиле (js/core/premium.js, магазин #/shop): баланс и что даёт донат — VIP сразу или кристаллы.
+// Пока premium.sql не выполнен — только ссылка на магазин.
+async function renderProfileGems(){
+  const panel = document.getElementById('donateLoginPanel');
+  if (!panel || !window.D37Gems) return;
+  let box = panel.querySelector('.pg-box');
+  if (!box) { box = document.createElement('div'); box.className = 'pg-box'; panel.appendChild(box); }
+  const S = await D37Gems.sync(), C = D37Gems.CFG;
+  if (!S.ok) { box.innerHTML = `<a class="dl-copy dl-go" href="#/shop">${C.icon} Магазин кристаллов</a>`; return; }
+  box.innerHTML = `<div class="pg-row"><span>${C.icon} <b class="js-gems">${D37Gems.num(S.balance)}</b> ${D37Gems.word(S.balance)}</span><a class="dl-copy dl-go" href="#/shop">Магазин →</a></div>
+    <div class="pg-mode" role="radiogroup" aria-label="Что даёт донат"><span>Донат даёт:</span>
+      <button type="button" role="radio" aria-checked="${S.mode === 'vip'}" class="${S.mode === 'vip' ? 'on' : ''}" onclick="profileGemsMode('vip')">✨ VIP сразу</button>
+      <button type="button" role="radio" aria-checked="${S.mode === 'gems'}" class="${S.mode === 'gems' ? 'on' : ''}" onclick="profileGemsMode('gems')">${C.icon} Кристаллы</button></div>`;
+}
+async function profileGemsMode(mode){
+  if (typeof shopSetMode !== 'function') return;
+  await shopSetMode(mode);
+  renderProfileGems();
+}
+
 function openVipBuyGuide(){
   if (!currentUser) { openGlobalAuth(); return; }
   if (!currentProfile?.donate_login) {
@@ -1118,8 +1140,9 @@ async function openDonationLog(){
     statusEl.textContent = '';
     tableEl.innerHTML = data.map(row => {
       const date = new Date(row.processed_at).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+      // В режиме «донат → 💎» (premium.sql) донат даёт кристаллы, а не месяцы
       const status = row.matched
-        ? `✅ +${row.months_granted} мес. → <b>${esc(row.profiles?.nick || '?')}</b>`
+        ? (row.gems_granted ? `✅ +${row.gems_granted} 💎` : `✅ +${row.months_granted} мес.`) + ` → <b>${esc(row.profiles?.nick || '?')}</b>`
         : `⚠ Не сопоставлен`;
       return `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(255,255,255,.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">

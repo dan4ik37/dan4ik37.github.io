@@ -1100,9 +1100,12 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/games" data-route="games">🎮 Игры</a>
     <a href="#/ads" data-route="ads">Реклама</a>
     <a href="/vip" class="nav-vip">✨ VIP</a>
+    <a href="#/shop" data-route="shop" class="nav-shop">💎 Магазин</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
   <button class="site-search-btn" onclick="openCmdPalette()" aria-label="Поиск по сайту" title="Поиск по сайту (Ctrl+K или /)">🔍</button>
+  <!-- 💎 Кристаллы: баланс и вход в магазин (js/core/premium.js, js/features/shop.js) -->
+  <a id="navGems" class="nav-gems" href="#/shop" hidden title="Магазин: 💎 кристаллы" aria-label="Магазин кристаллов">💎<b class="js-gems"></b></a>
   <div class="lang-wrap" id="langWrap">
     <button class="lang-btn" onclick="toggleLang(event)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -1746,10 +1749,10 @@ body.low .donation-alert-icon{animation:none}
 
     <div id="profileVipPromo" class="pf-card pf-card-gold" style="display:none;margin-top:1rem">
       <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.6rem">
-        ✨ <b style="color:var(--text)">VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится).
+        ✨ <b style="color:var(--text)">VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится) или за 💎 кристаллы в <a href="#/shop" style="color:#ffd166">магазине</a>.
         Всем VIP: анимированные аватар и фон, цветной ник в чате и на форуме, своя тема сайта,
         форматирование постов, стикеры, закреп сообщения и список гостей профиля.
-        Уровень растёт с суммой донатов за всё время:
+        Уровень растёт с суммой поддержки (донаты и кристаллы) за всё время:
       </div>
       <div id="vipPromoTiers" style="margin-bottom:.9rem"></div>
 
@@ -1952,6 +1955,14 @@ body.low .donation-alert-icon{animation:none}
     </div>
     <div id="gamesStageBox"></div>
   </div>
+</div>
+
+<!-- 💎 МАГАЗИН КРИСТАЛЛОВ (js/features/shop.js, premium.sql, api/pay.js) -->
+<div class="wrap reveal" id="shop-page">
+  <div class="sec-title-row">
+    <h2 class="sec-title">💎 Магазин</h2>
+  </div>
+  <div id="shopRoot"></div>
 </div>
 
 <div class="wrap reveal" id="lfg-page">
@@ -2361,7 +2372,11 @@ body.low .donation-alert-icon{animation:none}
     <a href="/top">Самые популярные видео</a>
     <a href="/vip">✨ VIP</a>
     <a href="/games">Игры онлайн</a>
+    <a href="#/shop">💎 Магазин</a>
     <a href="/privacy" style="opacity:.6">Политика конфиденциальности</a>
+    <a href="/terms" style="opacity:.6">Пользовательское соглашение</a>
+    <a href="/refund" style="opacity:.6">Возврат</a>
+    <a href="/contacts" style="opacity:.6">Реквизиты и контакты</a>
   </div>
   <!-- Ссылки на разделы сайта: удобно внизу страницы и помогают поисковикам обходить сайт -->
   <nav class="footer-links footer-site" aria-label="Разделы сайта">
@@ -2584,6 +2599,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/core/config.js"></script>
 <script src="js/core/ads-core.js"></script>
 <script src="js/core/coins.js"></script>
+<script src="js/core/premium.js"></script>
 <script src="js/core/avatar.js"></script>
 <script src="js/core/surprise.js"></script>
 <script src="js/core/live-badge.js" defer></script>
@@ -2621,6 +2637,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/xp.js"></script>
 <script src="js/features/notifications.js"></script>
 <script src="js/features/games.js"></script>
+<script src="js/features/shop.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
 <script src="js/features/secrets.js"></script>

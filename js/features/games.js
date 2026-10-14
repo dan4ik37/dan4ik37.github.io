@@ -152,7 +152,7 @@ function renderGamesMe(){
   if (!box || !window.D37Char || !window.D37Coins) return;
   box.hidden = false;
   box.innerHTML = `<a class="gm-me-char" href="#/games/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
-    <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет</span></div>
+    <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет${window.D37Gems?.isOn() ? ` · <a class="gm-gems" href="#/shop" title="Магазин кристаллов">💎 <b class="js-gems">${D37Gems.num(D37Gems.balance())}</b></a>` : ''}</span></div>
     ${D37Coins.canDaily() ? '<button type="button" class="gm-me-btn" onclick="gamesDailyBonus(this)">🎁 Бонус дня</button>' : ''}
     <a class="gm-me-btn ghost" href="#/games/wardrobe">🎭 Гардероб</a>`;
   D37Char.draw(box.querySelector('canvas').getContext('2d'), D37Char.look(), 56, 106, 88, { t: 0 });
@@ -165,6 +165,8 @@ async function gamesDailyBonus(btn){
 }
 window.addEventListener('d37:auth', () => { setTimeout(() => { if (document.getElementById('gamesMe') && !document.getElementById('gamesHub')?.hidden) renderGamesMe(); }, 600); });
 window.D37Char?.on(() => { if (!document.getElementById('gamesHub')?.hidden) renderGamesMe(); });
+// 💎 баланс на плашке — когда кошелёк кристаллов загрузился (js/core/premium.js)
+window.D37Gems?.on(() => { if (D37Gems.isOn() && !document.getElementById('gamesHub')?.hidden && document.getElementById('gamesMe') && !document.querySelector('#gamesMe .gm-gems')) renderGamesMe(); });
 
 // Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с
 let gamesAdAt = 0;

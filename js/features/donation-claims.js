@@ -24,7 +24,7 @@ async function renderDonationClaimBox(){
   if (!(await claimsCheck())) return;
   const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);   // по МСК, как у DonationAlerts на сайте
   panel.insertAdjacentHTML('beforeend', `<details class="dc-box">
-      <summary>Задонатил, а VIP не пришёл?</summary>
+      <summary>Задонатил, а VIP или 💎 не пришли?</summary>
       <p class="dc-hint">Чаще всего — опечатка в имени на DonationAlerts. Укажи донат как он был — найдём и привяжем к тебе.
         Если имя совсем не похоже на твой логин или ник, заявку проверит админ.</p>
       <form class="dc-form" onsubmit="submitDonationClaim(event)">
@@ -46,13 +46,17 @@ async function submitDonationClaim(e){
   const el = f.elements, name = el.dcName.value.trim(), amount = parseFloat(String(el.dcAmount.value).replace(',', '.')), date = el.dcDate.value;
   if (!name || !(amount > 0) || !date) { out.className = 'dc-result err'; out.textContent = 'Заполни все три поля.'; return; }
   btn.disabled = true; out.className = 'dc-result'; out.textContent = 'Ищем…';
+  const gems0 = window.D37Gems?.isOn() ? D37Gems.balance() : null;
   let data = null, error = null;
   try { ({ data, error } = await sbClient.rpc('claim_donation', { p_name: name, p_amount: amount, p_date: date })); }
   catch (err) { error = err; }
   btn.disabled = false;
   if (error || !data) { out.className = 'dc-result err'; out.textContent = 'Не получилось проверить — попробуй позже или напиши админу.'; return; }
+  // Режим «донат → 💎» (premium.sql): донат дал кристаллы, а не месяцы — считаем, сколько пришло
+  let gemsGot = 0;
+  if (data.status === 'credited' && !data.months && gems0 !== null) gemsGot = Math.max(0, (await D37Gems.sync()).balance - gems0);
   const MSG = {
-    credited:  ['ok',   `✅ Нашли! ${amount} ₽ привязаны к тебе${data.months ? ` — VIP на ${data.months} мес.` : ' — остаток копится до следующего месяца VIP'}. Спасибо за поддержку!`],
+    credited:  ['ok',   `✅ Нашли! ${amount} ₽ привязаны к тебе${data.months ? ` — VIP на ${data.months} мес.` : gemsGot ? ` — +${gemsGot} 💎 на балансе` : ' — остаток копится до следующего месяца VIP'}. Спасибо за поддержку!`],
     review:    ['wait', '📨 Донат есть, но имя в нём не похоже на твой логин — отправили админу на проверку. Решение придёт в уведомления 🔔.'],
     already:   ['wait', '⏳ Заявка по этому донату уже на проверке у админа.'],
     not_found: ['err',  'Такой донат не нашёлся. Проверь сумму, день и имя — ровно как на DonationAlerts. Донаты подтягиваются раз в несколько минут: если донатил только что, подожди минут 10.'],
