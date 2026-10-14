@@ -161,6 +161,7 @@
   }
 
   async function buy(item){
+    if (window.D37Char?.gemsOf?.(item)) return { ok: false, reason: 'gems' };   // вещь только за 💎 — в магазине #/shop
     const p = price(item);
     if (p == null || item === 'revive') return { ok: false, reason: 'item' };
     if (owns(item)) return { ok: false, reason: 'owned' };

@@ -6,13 +6,16 @@ import vm from 'vm';
 const win = {};
 vm.runInNewContext(fs.readFileSync('js/core/avatar.js', 'utf8'), { window: win, document: {}, localStorage: { getItem: () => null }, console });
 const C = win.D37Char, P = C.PARTS;
-const rows = [], vip = [];
-for (const slot of C.SLOTS) for (const [id, , price, , isVip] of P[slot].list) {
+const rows = [], vip = [], gems = [];
+for (const slot of C.SLOTS) for (const [id, , price, , isVip, gemPrice] of P[slot].list) {
+  // только за 💎 — цены в монетах нет (coins_buy откажет), char_save наденет купленное в магазине
+  if (gemPrice) { gems.push(`'skin:${slot}:${id}'`); continue; }
   rows.push(`('skin:${slot}:${id}', ${price})`);
   if (isVip) vip.push(`'skin:${slot}:${id}'`);
 }
 // пакеты частей тела: купил пакет — все его части (char_save сверяет владение по пакету)
-for (const [id, [, price, isVip]] of Object.entries(C.PACKS)) {
+for (const [id, [, price, isVip, gemPrice]] of Object.entries(C.PACKS)) {
+  if (gemPrice) { gems.push(`'skin:pack:${id}'`); continue; }
   rows.push(`('skin:pack:${id}', ${price})`);
   if (isVip) vip.push(`'skin:pack:${id}'`);
 }
@@ -26,7 +29,11 @@ const a = sql.indexOf("    when p_item like 'skin:%' then (select v.p from (valu
 const b = sql.indexOf('    ) v(i, p) where v.i = p_item)');
 if (a < 0 || b < 0) throw new Error('coin_price: не нашёл список цен');
 sql = sql.slice(0, a) + "    when p_item like 'skin:%' then (select v.p from (values\n" + lines.join('\n') + '\n' + sql.slice(b);
-sql = sql.replace(/  select p_item in \([^)]*\)\n\$\$;/, () => `  select p_item in (${vip.join(', ')})\n$$;`);
+const vipRe = /(coin_vip_item\(p_item text\) returns boolean language sql immutable as \$\$\n  select p_item in \()[^)]*(\)\n\$\$;)/;
+const gemsRe = /(coin_gems_item\(p_item text\) returns boolean language sql immutable as \$\$\n  select p_item in \()[^)]*(\)\n\$\$;)/;
+if (!vipRe.test(sql) || !gemsRe.test(sql)) throw new Error('не нашёл coin_vip_item / coin_gems_item');
+sql = sql.replace(vipRe, (m, a, b) => a + vip.join(', ') + b);
+sql = sql.replace(gemsRe, (m, a, b) => a + (gems.length ? gems.join(', ') : "''") + b);
 const loop = /  foreach slot in array array\[[^\]]*\] loop\n/;
 if (!loop.test(sql)) throw new Error('char_save: не нашёл цикл по слотам');
 sql = sql.replace(loop, () => `  foreach slot in array array[${C.SLOTS.map(s => `'${s}'`).join(', ')}] loop\n`);
@@ -35,4 +42,4 @@ const packRe = /if slot = any\(array\[[^\]]*\]\) and public\.coin_price\('skin:p
 if (!packRe.test(sql)) throw new Error('char_save: не нашёл строку пакетов');
 sql = sql.replace(packRe, () => `if slot = any(array[${packSlots.map(s => `'${s}'`).join(', ')}]) and public.coin_price('skin:pack:' || val) is not null then`);
 fs.writeFileSync('coins.sql', crlf ? sql.replace(/\n/g, '\r\n') : sql);
-console.log(`${rows.length} цен (частей и пакетов), ${C.SLOTS.length} слотов, палитра: ${pal.length}, части из пакетов: ${packSlots.length}; VIP: ${vip.join(', ')}`);
+console.log(`${rows.length} цен (частей и пакетов), ${C.SLOTS.length} слотов, палитра: ${pal.length}, части из пакетов: ${packSlots.length}; VIP: ${vip.join(', ')}; только за 💎: ${gems.join(', ')}`);

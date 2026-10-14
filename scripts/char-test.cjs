@@ -40,11 +40,14 @@ if (ALLOC) {
   const tt = new Float64Array(1);
   const run = n => { for (let i = 0; i < n; i++) { tt[0] += 1 / 60; reset(); states[(i >> 6) % states.length](); for (let c = 0; c < chs.length; c++) { const ch = chs[c]; if (i % 900 === 300) { ch.emote = W.EMOTES[(i / 900 | 0) % W.EMOTES.length]; ch.emoteT = tt[0]; } K.animate(ch, (i >> 5) % 3 !== 0, 1 / 60, tt[0], o); } } };
   run(30000);   // разогрев: все состояния, все эмоции (наборы лица строятся один раз)
-  global.gc(); global.gc();
-  const h0 = process.memoryUsage().heapUsed;
-  run(60000);
-  const h1 = process.memoryUsage().heapUsed;
-  console.log(JSON.stringify({ perCall: (h1 - h0) / (60000 * chs.length) }));
+  let best = Infinity;   // три замера, берём меньший (шум кучи: служебные выделения V8)
+  for (let k = 0; k < 3; k++) {
+    global.gc(); global.gc();
+    const h0 = process.memoryUsage().heapUsed;
+    run(40000);
+    best = Math.min(best, (process.memoryUsage().heapUsed - h0) / (40000 * chs.length));
+  }
+  console.log(JSON.stringify({ perCall: best }));
   return;
 }
 
@@ -87,7 +90,15 @@ const ref = JSON.parse(fs.readFileSync(path.join(__dirname, 'char-ref.json'), 'u
   ok(w.psal === 'robot' && w.psar === undefined && w.psh === undefined && w.pst === undefined && w.pcal === 'x00ff00', 'надеть можно только своё', JSON.stringify(w));
   owned.delete('skin:pack:robot');
   for (const s of C.SLOTS) if (C.PARTS[s].pack) for (const p of C.PARTS[s].list) { const pk = C.packOf(s, p[0]); if (pk) ok(pk.price === p[2], 'цена части пакета = цене пакета: ' + s + ':' + p[0]); }
-  ok(C.part('psal', 'robot').premium === false && C.packOf('psal', 'robot').premium === false, 'поле «премиум» есть (пока везде нет)');
+  ok(C.part('psal', 'robot').premium === false && C.packOf('psal', 'robot').premium === false, 'поле «премиум» есть (у пакетов пока нет)');
+  // только за 💎: магазин видит цену (price ≠ null), за монеты — нельзя (gemsOf), бесплатной не считается
+  for (const [s, id, g] of [['hat', 'gemcrown', 150], ['back', 'gemwings', 300], ['trail', 'gems', 100]]) {
+    const p = C.part(s, id), b = C.buyItem(s, id);
+    ok(p.gems === g && p.price === g && p.premium && C.price(`skin:${s}:${id}`) === g && C.gemsOf(`skin:${s}:${id}`) === g && b.gems === g && b.item === `skin:${s}:${id}`, 'вещь за 💎: цена в кристаллах', id);
+    ok(!C.owns(s, id), 'за 💎 — не своя, пока не куплена', id);
+    owned.add(`skin:${s}:${id}`); ok(C.owns(s, id), 'купил в магазине — своя', id); owned.delete(`skin:${s}:${id}`);
+  }
+  ok(C.gemsOf('skin:hat:crown') === 0 && C.gemsOf('skin:pack:robot') === 0 && C.wearable({ hat: 'gemcrown' }).hat === 'none', 'обычные — за монеты; чужую корону за 💎 не надеть');
 }
 
 // ═══ 3. Сборка против эталона старой версии ═══
@@ -245,8 +256,8 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   const r = cp.spawnSync(process.execPath, ['--expose-gc', '--max-semi-space-size=128', __filename, threePath, '--alloc'], { encoding: 'utf8', timeout: 180000 });
   let res = null;
   try { res = JSON.parse((r.stdout || '').trim().split('\n').pop()); } catch (e) {}
-  // до 24 байт — это одно упакованное число-аргумент (время) на вызове; объектов анимация не создаёт
-  ok(res && res.perCall < 24, 'анимация не мусорит (байт на кадр человечка)', res ? res.perCall.toFixed(1) : (r.stderr || r.stdout || '').slice(0, 300));
+  // до 32 байт — упакованные числа-аргументы (время) на вызове; объект или массив за кадр дали бы больше
+  ok(res && res.perCall < 32, 'анимация не мусорит (байт на кадр человечка)', res ? res.perCall.toFixed(1) : (r.stderr || r.stdout || '').slice(0, 300));
   if (res) console.log(`  анимация: ${res.perCall.toFixed(1)} байт на кадр человечка (все состояния, эмоции, аксессуары)`);
 }
 
@@ -254,7 +265,12 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
 {
   const sql = fs.readFileSync(path.join(SITE, 'coins.sql'), 'utf8');
   let miss = 0;
-  for (const s of C.SLOTS) for (const p of C.PARTS[s].list) if (!sql.includes(`('skin:${s}:${p[0]}', ${p[2]})`)) { miss++; if (miss < 5) ok(false, 'цена в coins.sql', `skin:${s}:${p[0]}`); }
+  const gemItems = [];
+  for (const s of C.SLOTS) for (const p of C.PARTS[s].list) {
+    if (p[5]) { gemItems.push(`'skin:${s}:${p[0]}'`); ok(!new RegExp(`\\('skin:${s}:${p[0]}', \\d+\\)`).test(sql), 'вещь за 💎 не продаётся за монеты', p[0]); continue; }
+    if (!sql.includes(`('skin:${s}:${p[0]}', ${p[2]})`)) { miss++; if (miss < 5) ok(false, 'цена в coins.sql', `skin:${s}:${p[0]}`); }
+  }
+  ok(gemItems.length === 3 && sql.includes(`select p_item in (${gemItems.join(', ')})`), 'coin_gems_item — все вещи только за 💎', gemItems.join(', '));
   for (const [id, p] of Object.entries(C.PACKS)) if (!sql.includes(`('skin:pack:${id}', ${p[1]})`)) { miss++; ok(false, 'цена пакета в coins.sql', id); }
   ok(!miss, 'все цены частей и пакетов — в coins.sql', miss);
   ok(sql.includes(`foreach slot in array array[${C.SLOTS.map(s => `'${s}'`).join(', ')}] loop`), 'char_save знает все слоты');

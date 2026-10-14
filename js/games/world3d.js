@@ -258,8 +258,10 @@
       return s;
     }
     // «Краски»: цвет — в вершинах, материал общий на всех: t — мультяшный, d — он же с двух сторон, m — металл, b — без света
+    // g — кристалл (грани, блик, лёгкое свечение)
     const vcMat = cls => cache(mats, 'vc' + cls, () => {
       const m = cls === 'm' ? new T.MeshPhongMaterial({ vertexColors: true, specular: '#8d96a3', shininess: 48 })
+        : cls === 'g' ? new T.MeshPhongMaterial({ vertexColors: true, flatShading: true, specular: '#ffffff', shininess: 120, emissive: new T.Color('#3a1a7a'), emissiveIntensity: .55 })
         : cls === 'b' ? new T.MeshBasicMaterial({ vertexColors: true })
         : new T.MeshToonMaterial({ vertexColors: true, gradientMap: grad, side: cls === 'd' ? T.DoubleSide : T.FrontSide });
       m.userData.vc = cls;
@@ -688,6 +690,19 @@
           return g;
         });
         anims.push((t, dt, mv) => { const f = Math.sin(t * (mv ? 7 : 2.2)) * (mv ? .32 : .14); wings[0].rotation.y = -.55 - f; wings[1].rotation.y = .55 + f; });
+      } else if (R.back === 'gemwings') {   // кристальные крылья (только за 💎): веер граней-кристаллов, машут
+        const gemG = geo('gemcut', () => new T.OctahedronGeometry(.5, 0)), GC = ['#7ef0ff', '#8cc8ff', '#b98cff', '#ff8ce6', '#c8a2ff'];
+        const wings = [-1, 1].map(s => {
+          const g = B(torso, s * .1, yAt(.66), backZ + .02);
+          for (let i = 0; i < 5; i++) {
+            const a = 1.1 - i * .38, len = (.62 - Math.abs(i - 1.2) * .07) * 1.35, cx = Math.cos(a) * len * .5, cy = Math.sin(a) * len * .5;
+            M(g, gemG, R.backc === 'auto' ? P(GC[i], 'g') : PS('backc', c => shade(c, i * .08 - .1), 'g'), s * (.12 + cx), .08 + cy, -.03 * i, .12, len, .07, 0, 0, s * -(PI / 2 - a));
+          }
+          M(g, gemG, P('#ffffff', 'g'), s * .1, .06, .02, .09, .09, .09);
+          g.rotation.y = s * .55;
+          return g;
+        });
+        anims.push((t, dt, mv) => { const f = Math.sin(t * (mv ? 6 : 2)) * (mv ? .28 : .12); wings[0].rotation.y = -.55 - f; wings[1].rotation.y = .55 + f; });
       }
 
       // ── голова (кость шеи → центр головы; всё лицо — в единицах головы радиусом .56)
@@ -1058,6 +1073,15 @@
           M(hg, sph(.045, 10, 8), tn('#3a3a46'), -.28, -.36, .48);
           anims.push(t => { led.color.setHSL((t * .25) % 1, .95, .55); });
           hatTop = .66;
+        } else if (hat === 'gemcrown') {   // кристальная корона (только за 💎): серебряный обруч, кристаллы-зубцы, камень спереди
+          const band = R.hatc === 'auto' ? P('#e4e9ff', 'm') : PS('hatc', null, 'm'), gemG = geo('gemcut', () => new T.OctahedronGeometry(.5, 0));
+          M(hg, tor(.3, .045, 8, 32), band, 0, .58, -.02, 1, 1, 1, PI / 2);
+          M(hg, tor(.295, .028, 8, 32), band, 0, .69, -.02, 1, 1, 1, PI / 2);
+          const GC = ['#7ef0ff', '#b98cff', '#ff8ce6', '#8cc8ff', '#c8a2ff', '#7ef0ff', '#ff8ce6'];
+          for (let i = 0; i < 7; i++) { const a = i / 7 * TAU, hh = i % 2 ? .2 : .3; M(hg, gemG, P(GC[i], 'g'), Math.sin(a) * .3, .69 + hh * .45, Math.cos(a) * .3 - .02, .13, hh, .13, 0, a, 0); }
+          M(hg, gemG, P('#ff7ce6', 'g'), 0, .635, .3, .13, .15, .08);
+          for (let i = 0; i < 6; i++) { const a = (i + .5) / 6 * TAU; M(hg, gemG, P(i % 2 ? '#7ef0ff' : '#b98cff', 'g'), Math.sin(a) * .31, .635, Math.cos(a) * .31 - .02, .05, .06, .05); }
+          hatTop = 1.02;
         }
       }
       // ── очки (на лице любой формы; у робота и рыцаря — нет)
@@ -1334,6 +1358,10 @@
         if (!s) { s = new T.Sprite(new T.SpriteMaterial({ map: dot, transparent: true, depthWrite: false })); scene.add(s); }
         s.visible = true;
         if (trail === 'rainbow') { s.material.map = dot; s.material.color.setHSL((t * .6) % 1, .9, .6); s.scale.setScalar(.32); }
+        else if (trail === 'gems') {   // кристаллы (только за 💎): камешки и искорки голубого, сиреневого, розового
+          if (Math.random() < .5) { s.material.map = emojiTex('💎'); s.material.color.set('#ffffff'); s.scale.setScalar(.3); }
+          else { s.material.map = dot; s.material.color.setHSL(.5 + Math.random() * .4, .9, .72); s.scale.setScalar(.24); }
+        }
         else { const e = partV('trail', trail, ''); if (!e) { pool.push(s); s.visible = false; return; } s.material.map = emojiTex(e); s.material.color.set('#ffffff'); s.scale.setScalar(.34); }
         s.position.set(x + (Math.random() - .5) * .3, y + .15 + Math.random() * .5, z + (Math.random() - .5) * .3);
         live.push({ s, life: .9, vy: .5 + Math.random() * .4 });

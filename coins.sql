@@ -193,6 +193,12 @@ create or replace function public.coin_vip_item(p_item text) returns boolean lan
   select p_item in ('skin:color:rainbow', 'skin:hat:headphones', 'skin:trail:rainbow', 'skin:hairc:rainbow', 'skin:back:dragon')
 $$;
 
+-- Части персонажа только за 💎 (магазин #/shop, premium.sql: premium_spend кладёт их в coin_wallet.items).
+-- Цены в монетах у них нет (coin_price → null, coins_buy откажет); char_save надевает, если вещь куплена
+create or replace function public.coin_gems_item(p_item text) returns boolean language sql immutable as $$
+  select p_item in ('skin:hat:gemcrown', 'skin:trail:gems', 'skin:back:gemwings')
+$$;
+
 -- Сколько монет можно принести из одного забега (как RUN_CAP в coins.js)
 create or replace function public.coin_run_cap(p_game text) returns int language sql immutable as $$
   select case p_game when 'horde' then 300 when 'td' then 300 when 'blocks' then 150 when 'kosynka' then 40 when 'pauk' then 100 when 'freecell' then 30 when 'miner' then 60 when 'mahjong' then 40 when 'sudoku' then 60 end
@@ -368,7 +374,11 @@ begin
     -- части тела из пакетов (робот, рыцарь, силач…): купил пакет — носишь любую его часть
     if slot = any(array['psh', 'pst', 'psal', 'psar', 'psll', 'pslr']) and public.coin_price('skin:pack:' || val) is not null then item := 'skin:pack:' || val; end if;
     pr := public.coin_price(item);
-    if pr is null then return jsonb_build_object('ok', false, 'reason', 'item', 'item', item); end if;
+    -- цены в монетах нет: куплено за 💎 (или снято с продажи) — надеть можно, если вещь есть в кошельке
+    if pr is null then
+      if item = any(coalesce(owned, '{}'::text[])) then clean := clean || jsonb_build_object(slot, val); continue; end if;
+      return jsonb_build_object('ok', false, 'reason', case when public.coin_gems_item(item) then 'not_owned' else 'item' end, 'item', item);
+    end if;
     if pr > 0 and not (item = any(coalesce(owned, '{}'::text[]))) and not (perks and public.coin_vip_item(item)) then
       return jsonb_build_object('ok', false, 'reason', 'not_owned', 'item', item);
     end if;

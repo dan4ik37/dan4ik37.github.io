@@ -11,10 +11,11 @@
 (() => {
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   const TAU = Math.PI * 2;
-  // [id, название, цена, значение (цвет / эмодзи), vip, премиум]
+  // [id, название, цена, значение (цвет / эмодзи), vip, 💎]
   // Палитра (pal: 1): кроме готовых цветов — любой свой, id «x» + 6 hex-цифр (xff8800), бесплатно. Обычные цвета бесплатны,
   // за монеты — особые материалы (радуга, космос, золото, светящиеся глаза, неоновые и переливающиеся волосы).
-  // Премиум (6-е поле) — задел под премиум-валюту: пометить вещь, которую потом будут продавать за неё. Пока всё за монеты 🪙.
+  // 💎 (6-е поле) — цена в кристаллах: вещь только из магазина #/shop (js/core/premium.js, premium_spend кладёт её в
+  // coin_wallet.items), за монеты не продаётся (D37Coins.buy откажет, coin_price в базе — null).
   const CUSTOM = /^x[0-9a-f]{6}$/;
   const BASE = [
     ['white', 'Белый', '#f4f5f7'], ['silver', 'Светло-серый', '#c9ced8'], ['gray', 'Серый', '#7d8696'], ['black', 'Чёрный', '#25252d'],
@@ -24,7 +25,7 @@
   ].map(([id, n, c]) => [id, n, 0, c]);
   // ── Части тела, как в Роблоксе: у головы, туловища, каждой руки и ноги — своя форма и свой цвет ──
   // Пакет — набор форм туловища, рук и ног (у робота и рыцаря — и головы): купил пакет ('skin:pack:<id>') — носишь любые его
-  // части вперемешку (рука робота + обычная рука). [название, цена, vip, премиум]
+  // части вперемешку (рука робота + обычная рука). [название, цена, vip, 💎]
   const PACKS = {
     base: ['Обычный', 0], block: ['Классика', 0], slim: ['Стройный', 0], chunky: ['Силач', 250], robot: ['Робот', 700], knight: ['Рыцарь', 900],
   };
@@ -60,6 +61,7 @@
       ['grad', 'Выпускник', 150, '🎓'], ['helmet', 'Каска', 150, '⛑️'], ['army', 'Шлем', 150, '🪖'], ['top', 'Цилиндр', 200, '🎩'],
       ['ears', 'Ушки', 200], ['horns', 'Рожки', 250], ['propeller', 'Пропеллер', 250], ['halo', 'Нимб', 300],
       ['crown', 'Корона', 800, '👑'], ['headphones', 'Наушники стримера', 3000, '', 1],
+      ['gemcrown', 'Кристальная корона', 0, '', 0, 150],
     ] },
     item: { name: 'В руке', icon: '✋', list: [
       ['none', 'Ничего', 0], ['rose', 'Роза', 80, '🌹'], ['pizza', 'Пицца', 80, '🍕'], ['balloon', 'Шарик', 100, '🎈'],
@@ -74,6 +76,7 @@
     trail: { name: 'След', icon: '✨', list: [
       ['none', 'Без следа', 0], ['dust', 'Пыль', 100, '💨'], ['sparks', 'Искры', 250, '✨'], ['hearts', 'Сердечки', 250, '💕'],
       ['notes', 'Ноты', 300, '🎵'], ['stars', 'Звёзды', 300, '⭐'], ['fire', 'Огонь', 350, '🔥'], ['rainbow', 'Радуга', 3000, '🌈', 1],
+      ['gems', 'След из кристаллов', 0, '💎', 0, 100],
     ] },
     // ── 3D-человечек («Мир Денчика», гардероб): тело, лицо, волосы, одежда, аксессуары и их цвета. В 2D-играх не рисуются
     //    (body: 1). Не выбрано (нет в look) — мир берёт по «отпечатку» игрока, чтобы толпа была разной (world3d.js → resolve)
@@ -137,6 +140,7 @@
     back: { name: 'На спине', icon: '🎒', body: 1, list: [
       ['none', 'Ничего', 0], ['backpack', 'Рюкзак', 100], ['tail', 'Хвостик', 150], ['guitar', 'Гитара', 250], ['cape', 'Плащ', 300],
       ['wings', 'Крылья ангела', 600], ['batwings', 'Крылья мыши', 600], ['dragon', 'Крылья дракона', 3000, '', 1],
+      ['gemwings', 'Кристальные крылья', 0, '', 0, 300],
     ] },
     backc: { name: 'Цвет на спине', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
     // ── Части тела (ps* — форма, pc* — цвет): голова, туловище, левая/правая рука, левая/правая нога. pack: 1 — формы из пакетов
@@ -172,31 +176,42 @@
   const LS = 'd37_char';
 
   const custom = (slot, id) => !!PARTS[slot]?.pal && CUSTOM.test(id || '');
+  // gems — цена в 💎 (вещь только из магазина); у таких price = gems, чтобы нигде не сойти за бесплатную
   const part = (slot, id) => {
-    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true };
+    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true, gems: 0, premium: false };
     const p = PARTS[slot]?.list.find(x => x[0] === id) || PARTS[slot]?.list[0];
-    return p && { id: p[0], name: p[1], price: p[2], v: p[3] || '', vip: !!p[4], premium: !!p[5] };
+    return p && { id: p[0], name: p[1], price: p[5] || p[2], v: p[3] || '', vip: !!p[4], gems: p[5] || 0, premium: !!p[5] };
   };
-  // Часть из пакета (форма туловища/рук/ног, голова робота…) → сам пакет: { id, name, price, vip, premium } или null
+  // Часть из пакета (форма туловища/рук/ног, голова робота…) → сам пакет: { id, name, price, vip, gems } или null
   function packOf(slot, id){
     const pk = PARTS[slot]?.pack && Object.prototype.hasOwnProperty.call(PACKS, id) ? PACKS[id] : null;
-    return pk ? { id, name: pk[0], price: pk[1], vip: !!pk[2], premium: !!pk[3] } : null;
+    return pk ? { id, name: pk[0], price: pk[3] || pk[1], vip: !!pk[2], gems: pk[3] || 0, premium: !!pk[3] } : null;
   }
-  // Что купить, чтобы надеть часть: сама часть ('skin:<слот>:<id>') или её пакет ('skin:pack:<id>')
+  // Что купить, чтобы надеть часть: сама часть ('skin:<слот>:<id>') или её пакет ('skin:pack:<id>'); gems > 0 — только за 💎
   function buyItem(slot, id){
     const pk = packOf(slot, id);
-    if (pk) return { item: 'skin:pack:' + id, name: `Пакет «${pk.name}»`, price: pk.price, vip: pk.vip, premium: pk.premium, pack: id };
+    if (pk) return { item: 'skin:pack:' + id, name: `Пакет «${pk.name}»`, price: pk.price, vip: pk.vip, gems: pk.gems, premium: pk.premium, pack: id };
     const p = part(slot, id);
-    return p && { item: `skin:${slot}:${p.id}`, name: p.name, price: p.price, vip: p.vip, premium: p.premium };
+    return p && { item: `skin:${slot}:${p.id}`, name: p.name, price: p.price, vip: p.vip, gems: p.gems, premium: p.premium };
   }
+  // Цена вещи: монеты, а у вещей только за 💎 — цена в кристаллах (магазин так узнаёт, что вещь есть в гардеробе;
+  // за монеты её не продают — см. gemsOf)
   function price(item){
     const m = /^skin:(\w+):(\w+)$/.exec(item || '');
     if (!m) return null;
-    if (m[1] === 'pack') return Object.prototype.hasOwnProperty.call(PACKS, m[2]) ? PACKS[m[2]][1] : null;
+    if (m[1] === 'pack') return Object.prototype.hasOwnProperty.call(PACKS, m[2]) ? PACKS[m[2]][3] || PACKS[m[2]][1] : null;
     if (!PARTS[m[1]]) return null;
     if (custom(m[1], m[2])) return 0;
     const p = PARTS[m[1]].list.find(x => x[0] === m[2]);
-    return p ? p[2] : null;
+    return p ? p[5] || p[2] : null;
+  }
+  // Сколько 💎 стоит вещь, которую продают только за кристаллы (0 — обычная, за монеты)
+  function gemsOf(item){
+    const m = /^skin:(\w+):(\w+)$/.exec(item || '');
+    if (!m) return 0;
+    if (m[1] === 'pack') return Object.prototype.hasOwnProperty.call(PACKS, m[2]) ? PACKS[m[2]][3] || 0 : 0;
+    const p = PARTS[m[1]]?.list.find(x => x[0] === m[2]);
+    return p ? p[5] || 0 : 0;
   }
   function norm(look){
     const L = { ...DEFAULT };
@@ -465,6 +480,18 @@
         ctx.fillStyle = '#ff4d6d'; ctx.beginPath(); ctx.ellipse(0, top - .14 * S, .24 * S * Math.abs(a) + .015 * S, .04 * S, 0, 0, TAU); ctx.fill();
         return;
       }
+      case 'gemcrown': {   // кристальная корона: зубцы-кристаллы, переливается
+        const y0 = top + .08 * S, g = ctx.createLinearGradient(0, y0 - .3 * S, 0, y0);
+        g.addColorStop(0, '#e0fbff'); g.addColorStop(.45, '#8ee8ff'); g.addColorStop(1, '#a78bfa');
+        ctx.fillStyle = g; ctx.strokeStyle = 'rgba(70,40,140,.7)'; ctx.lineWidth = .02 * S;
+        ctx.beginPath(); ctx.moveTo(-.25 * S, y0);
+        [[-.25, -.18], [-.15, -.08], [-.08, -.3], [0, -.12], [.08, -.3], [.15, -.08], [.25, -.18], [.25, 0]].forEach(([x, y]) => ctx.lineTo(x * S, y0 + y * S));
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        const gem = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x * S, y0 + (y - r) * S); ctx.lineTo((x + r * .8) * S, y0 + y * S); ctx.lineTo(x * S, y0 + (y + r) * S); ctx.lineTo((x - r * .8) * S, y0 + y * S); ctx.closePath(); ctx.fill(); };
+        gem(0, -.06, .045, '#ff7ce6'); gem(-.16, -.05, .03, '#7cf2ff'); gem(.16, -.05, .03, '#7cf2ff');
+        ctx.fillStyle = 'rgba(255,255,255,.9)'; star(ctx, .1 * S, y0 - .24 * S, .025 * S * (1 + Math.sin(t * 5) * .4));
+        return;
+      }
       case 'headphones':
         ctx.strokeStyle = '#2b2b33'; ctx.lineWidth = .055 * S;
         ctx.beginPath(); ctx.arc(0, -.6 * S, .35 * S, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
@@ -526,7 +553,7 @@
   // ── Готовые картинки для игр (кэш) ──
   // Анимированные части (радуга, пропеллер, глаза-визор) — 8 кадров по времени
   const cache = new Map();
-  function animated(L){ return L.color === 'rainbow' || L.hat === 'propeller' || L.hat === 'halo' || ['robot', 'dizzy', 'heart'].includes(L.eyes) || L.color === 'gold'; }
+  function animated(L){ return L.color === 'rainbow' || L.hat === 'propeller' || L.hat === 'halo' || L.hat === 'gemcrown' || ['robot', 'dizzy', 'heart'].includes(L.eyes) || L.color === 'gold'; }
   // → { c: canvas, ax, ay } — точка (ax, ay) в пикселях canvas: ноги персонажа
   function sprite(look, px, o = {}){
     const L = norm(look);
@@ -661,7 +688,7 @@
   }
 
   window.D37Char = {
-    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
+    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, gemsOf, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
     look: () => wearable(current()), set, fromServer,
     draw, sprite, img, trail, petEmoji, looksOf, drawWalker, walker,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },
