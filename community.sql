@@ -15,7 +15,10 @@
 --   • блокировка человека: не напишет в ЛС, не позвонит, не пришлёт заявку в друзья; дружба удаляется
 --   • звонки 1 на 1 между друзьями: история, пропущенные (🔔), «занято», «кто может звонить» (друзья / никто)
 --   • «кто из друзей онлайн и где» (на сайте / в мире, сервер N) — видят только друзья, невидимку — никто
---   • фото с камеры телефона (снимок 3D-мира): хранилище shots, до 40 снимков в сутки
+--   • общий чат сайта = сервер «Денчик37»: каналы #общий (как раньше), #игры, #поиск-тиммейтов, #мемы, голосовой;
+--     ответы, «изменено», удалить своё, жалобы (3 — сообщение скрыто), мут на N минут, медленный режим, @ и ответы → 🔔
+--   • закреп сообщений в сообществах (модераторы)
+--  Картинки игроки не загружают (детская аудитория, место в бесплатном тарифе) — только эмодзи и стикеры.
 --  Писать в таблицы напрямую нельзя — только функциями ниже (они всё проверяют).
 --  Проверка после запуска: /rpc/cm_invite_info гостем {"p_code":"x"} → null (PGRST202 = не применён).
 -- ═══════════════════════════════════════════════════════════════════
@@ -205,11 +208,10 @@ create or replace function public.comm_bad(p text)
 returns boolean language sql immutable as $$
   select public.comm_norm(p) ~ '(ху[йеёяюи]|п[иеё]зд|(^|[^а-яё])бля|(^|[^а-яё])(за|на|вы|у|от|по|до|про|раз|рас|съ|подъ|из|изъ|при|пере|недо)?[её]б(а|ал|ан|ат|ут|ну|ло|ли|л|ы|ош|уч|ен|ис|ыв|ыр|ет|ёт)|(^|[^а-яё])сук(а|и|е|у|ой|ин|ам)([^а-яё]|$)|муда[кч]|мудил|пид[ао]р|педик|г[ао]нд[ао]н|шлюх|залуп|дроч)';
 $$;
--- Ссылки запрещены (кроме самого сайта и снимков камеры телефона)
+-- Ссылки запрещены (кроме самого сайта)
 create or replace function public.comm_has_link(p text)
 returns boolean language sql immutable as $$
-  select regexp_replace(coalesce(p, ''),
-      '(https://dan4ik37\.vercel\.app(/[^[:space:]]*)?|https://[a-z0-9]+\.supabase\.co/storage/v1/object/public/shots/[0-9a-f-]{36}/[a-z0-9]{8,24}\.jpg)', '', 'gi')
+  select regexp_replace(coalesce(p, ''), 'https://dan4ik37\.vercel\.app(/[^[:space:]]*)?', '', 'gi')
     ~* '(https?:|www\.|t\.me/|discord\.(gg|com)|bit\.ly|vk\.cc|clck\.ru|[a-z0-9-]{2,}\.(ru|com|net|org|рф|io|gg|me|xyz|su|ly|cc|top|link|site|online|tk|ml)([/[:space:]]|$))';
 $$;
 
@@ -850,22 +852,33 @@ end $$;
 
 -- ═══ Голосовые каналы: пропуск (сам звук — напрямую между браузерами, WebRTC) ═══
 -- Комната в Supabase Realtime — «cv-» + подпись номера канала: тему знают только участники сообщества.
+-- Канал 0 — голосовой канал сайта (сервер «Денчик37»): вошедшим, аккаунт старше суток, без бана и мута в чате.
 -- Пропуск «uid.срок.подпись» покрывает канал и открытый ключ — соседи проверяют cv_check и знают, кто есть кто.
 create or replace function public.cv_pass(p_channel bigint, p_pub text)
 returns jsonb language plpgsql security definer set search_path = public, extensions as $$
-declare uid uuid := auth.uid(); ch record; s text; exp bigint; body text;
+declare uid uuid := auth.uid(); ch record; s text; exp bigint; body text; p record; v_topic text;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if p_pub is null or length(p_pub) < 40 or length(p_pub) > 200 then return jsonb_build_object('ok', false, 'reason', 'key'); end if;
-  select * into ch from public.community_channels where id = p_channel;
-  if not found or ch.kind <> 'voice' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
-  if not exists (select 1 from public.communities where id = ch.community_id and status = 'active') then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
-  if public.comm_role(ch.community_id, uid) is null and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
   select k into s from public.comm_secret where id = 1;
+  if p_channel = 0 then
+    -- голосовой канал сайта (сервер «Денчик37»): аккаунт старше суток (команда — сразу), без бана и мута в чате
+    select nick, role, created_at into p from public.profiles where id = uid;
+    if not found then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+    if exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(p.nick)) then return jsonb_build_object('ok', false, 'reason', 'banned'); end if;
+    if exists (select 1 from public.chat_mutes where user_id = uid and until > now()) then return jsonb_build_object('ok', false, 'reason', 'muted'); end if;
+    if public.chat_staff_role(uid) is null and coalesce(p.created_at, now()) > now() - interval '1 day' then return jsonb_build_object('ok', false, 'reason', 'new'); end if;
+    v_topic := 'cv-' || substr(encode(extensions.hmac('topic:official', s, 'sha256'), 'hex'), 1, 24);
+  else
+    select * into ch from public.community_channels where id = p_channel;
+    if not found or ch.kind <> 'voice' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if not exists (select 1 from public.communities where id = ch.community_id and status = 'active') then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+    if public.comm_role(ch.community_id, uid) is null and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
+    v_topic := 'cv-' || substr(encode(extensions.hmac('topic:' || p_channel, s, 'sha256'), 'hex'), 1, 24);
+  end if;
   exp := extract(epoch from now())::bigint + 6 * 3600;
   body := uid::text || '.' || exp || '.' || p_channel || '.' || encode(extensions.digest(p_pub, 'sha256'), 'hex');
-  return jsonb_build_object('ok', true, 'max', 6,
-    'topic', 'cv-' || substr(encode(extensions.hmac('topic:' || p_channel, s, 'sha256'), 'hex'), 1, 24),
+  return jsonb_build_object('ok', true, 'max', 6, 'topic', v_topic,
     'pass', uid::text || '.' || exp || '.' || encode(extensions.hmac(body, s, 'sha256'), 'hex'));
 end $$;
 
@@ -873,8 +886,11 @@ create or replace function public.cv_check(p_channel bigint, p_pass text, p_pub 
 returns jsonb language plpgsql stable security definer set search_path = public, extensions as $$
 declare parts text[]; v_uid uuid; exp bigint; s text; body text; cid bigint; p record;
 begin
-  select community_id into cid from public.community_channels where id = p_channel and kind = 'voice';
-  if cid is null or (public.comm_role(cid) is null and not public.comm_is_staff()) then return null; end if;   -- проверяет только свой
+  if auth.uid() is null then return null; end if;
+  if p_channel <> 0 then
+    select community_id into cid from public.community_channels where id = p_channel and kind = 'voice';
+    if cid is null or (public.comm_role(cid) is null and not public.comm_is_staff()) then return null; end if;   -- проверяет только свой
+  end if;
   parts := string_to_array(coalesce(p_pass, ''), '.');
   if coalesce(array_length(parts, 1), 0) <> 3 or p_pub is null or length(p_pub) > 200 then return null; end if;
   begin
@@ -886,9 +902,13 @@ begin
   select k into s from public.comm_secret where id = 1;
   body := parts[1] || '.' || parts[2] || '.' || p_channel || '.' || encode(extensions.digest(p_pub, 'sha256'), 'hex');
   if encode(extensions.hmac(body, s, 'sha256'), 'hex') <> parts[3] then return null; end if;
-  if public.comm_banned(cid, v_uid) or (public.comm_role(cid, v_uid) is null and not public.comm_is_staff(v_uid)) then return null; end if;
   select id, nick, role into p from public.profiles where id = v_uid;
   if not found then return null; end if;
+  if p_channel = 0 then
+    if exists (select 1 from public.banned_nicks b where lower(b.nick) = lower(p.nick)) then return null; end if;
+    return jsonb_build_object('uid', p.id, 'nick', p.nick, 'role', coalesce(p.role, 'user'), 'staff', coalesce(p.role in ('admin', 'moderator', 'helper'), false));
+  end if;
+  if public.comm_banned(cid, v_uid) or (public.comm_role(cid, v_uid) is null and not public.comm_is_staff(v_uid)) then return null; end if;
   return jsonb_build_object('uid', p.id, 'nick', p.nick, 'role', coalesce(public.comm_role(cid, v_uid), 'guest'),
     'staff', coalesce(p.role in ('admin', 'moderator'), false));
 end $$;
@@ -1013,6 +1033,248 @@ returns jsonb language sql stable security definer set search_path = public as $
     and public.comm_friends(auth.uid(), o.user_id) and not public.comm_blocked(auth.uid(), o.user_id);
 $$;
 
+-- ═══ Общий чат сайта = сервер «Денчик37»: таблица messages (как раньше) + каналы chat_channels ═══
+-- Старые вкладки пишут без channel — это #общий. Новые колонки добавляются, только если их ещё нет.
+alter table public.messages add column if not exists channel text;
+alter table public.messages add column if not exists reply_to bigint;
+alter table public.messages add column if not exists edited_at timestamptz;
+create index if not exists idx_messages_channel on public.messages (channel, id desc);
+
+create table if not exists public.chat_channels (
+  id text primary key check (id ~ '^[a-z]{2,16}$'),
+  name text not null check (char_length(name) between 1 and 32),
+  kind text not null default 'text' check (kind in ('text', 'voice')),
+  position int not null default 0,
+  slow_sec int not null default 0 check (slow_sec between 0 and 3600),
+  mods_only boolean not null default false,
+  about text not null default '' check (char_length(about) <= 200)
+);
+alter table public.chat_channels enable row level security;
+drop policy if exists chat_channels_read on public.chat_channels;
+create policy chat_channels_read on public.chat_channels for select using (true);
+insert into public.chat_channels (id, name, kind, position, about) values
+  ('general', 'общий', 'text', 0, 'Общий чат сайта — здесь всё, что писали раньше'),
+  ('games', 'игры', 'text', 1, 'Во что поиграть, рекорды, вопросы по играм сайта'),
+  ('lfg', 'поиск-тиммейтов', 'text', 2, 'Ищешь, с кем сыграть? Напиши игру и время'),
+  ('memes', 'мемы', 'text', 3, 'Смешное — без жести и оскорблений'),
+  ('voice', 'Голосовой', 'voice', 4, 'Голосовой канал сайта: до 6 человек')
+on conflict (id) do nothing;
+
+create table if not exists public.chat_mutes (
+  id bigint generated always as identity primary key,
+  user_id uuid references public.profiles(id) on delete cascade,
+  nick text not null default '',
+  until timestamptz not null,
+  by_id uuid references public.profiles(id) on delete set null,
+  reason text not null default '' check (char_length(reason) <= 200),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_chat_mutes_user on public.chat_mutes (user_id, until desc);
+create index if not exists idx_chat_mutes_nick on public.chat_mutes (lower(nick), until desc);
+alter table public.chat_mutes enable row level security;
+drop policy if exists chat_mutes_read on public.chat_mutes;
+create policy chat_mutes_read on public.chat_mutes for select using (user_id = auth.uid() or public.comm_is_staff());
+
+create table if not exists public.chat_reports (
+  id bigint generated always as identity primary key,
+  message_id bigint not null,                          -- messages.id (старую таблицу ссылками не трогаем)
+  reporter_id uuid not null references public.profiles(id) on delete cascade,
+  reason text not null default '' check (char_length(reason) <= 200),
+  status text not null default 'open' check (status in ('open', 'done')),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists chat_report_once on public.chat_reports (message_id, reporter_id) where status = 'open';
+create index if not exists idx_chat_reports_reporter on public.chat_reports (reporter_id, created_at desc);
+alter table public.chat_reports enable row level security;
+drop policy if exists chat_reports_read on public.chat_reports;
+create policy chat_reports_read on public.chat_reports for select using (reporter_id = auth.uid() or public.comm_is_staff());
+
+-- Команда сайта в чате: admin / moderator / helper (хелпер — удалять и глушить до часа)
+create or replace function public.chat_staff_role(p_uid uuid default auth.uid())
+returns text language sql stable security definer set search_path = public as $$
+  select role from public.profiles where id = p_uid and role in ('admin', 'moderator', 'helper');
+$$;
+
+-- Перед каждым сообщением: канал есть и текстовый, мут, «пишут только модераторы», медленный режим, ответ — в этом же канале
+create or replace function public.chat_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_ch text; c record; v_until timestamptz; v_last timestamptz; v_staff boolean := false;
+begin
+  if new.channel = 'general' then new.channel := null; end if;
+  v_ch := coalesce(new.channel, 'general');
+  new.edited_at := null;
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then return new; end if;
+  select * into c from public.chat_channels where id = v_ch;
+  if not found or c.kind <> 'text' then raise exception 'Такого канала в чате нет'; end if;
+  if new.user_id is not null then v_staff := public.chat_staff_role(new.user_id) is not null; end if;
+  if not v_staff then
+    select max(until) into v_until from public.chat_mutes
+      where until > now() and ((new.user_id is not null and user_id = new.user_id) or (nick <> '' and lower(nick) = lower(coalesce(new.nick, ''))));
+    if v_until is not null then
+      raise exception 'Тебя заглушили в чате — ещё % мин', greatest(1, ceil(extract(epoch from (v_until - now())) / 60)::int);
+    end if;
+    if c.mods_only then raise exception 'В этом канале пишут только модераторы'; end if;
+    if c.slow_sec > 0 then
+      select max(created_at) into v_last from public.messages
+        where coalesce(channel, 'general') = v_ch and created_at > now() - make_interval(secs => c.slow_sec)
+          and ((new.user_id is not null and user_id = new.user_id) or (new.user_id is null and user_id is null and nick = new.nick));
+      if v_last is not null then
+        raise exception 'Медленный режим — подожди ещё % с', greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => c.slow_sec) - now())))::int);
+      end if;
+    end if;
+  end if;
+  if new.reply_to is not null and not exists (select 1 from public.messages m where m.id = new.reply_to and coalesce(m.channel, 'general') = v_ch) then
+    new.reply_to := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists chat_guard on public.messages;
+create trigger chat_guard before insert on public.messages for each row execute function public.chat_guard();
+
+-- Ответ на твоё сообщение в чате → 🔔 (упоминания @ник — уже в notifications.sql)
+create or replace function public.chat_reply_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare target uuid;
+begin
+  begin
+    if new.reply_to is null or new.user_id is null then return null; end if;
+    select user_id into target from public.messages where id = new.reply_to;
+    if target is not null and target <> new.user_id then
+      perform public.comm_notify(target, 'chat_reply', new.user_id, 'ответил(а) тебе в чате', left(coalesce(new.text, ''), 140),
+        '#/chat/' || coalesce(new.channel, 'general'), 'chr:' || new.user_id || ':' || public.comm_bucket(5));
+    end if;
+  exception when others then null;
+  end;
+  return null;
+end $$;
+drop trigger if exists chat_reply_notify on public.messages;
+create trigger chat_reply_notify after insert on public.messages for each row execute function public.chat_reply_notify();
+
+-- Что есть в чате для меня: каналы, мой мут, могу ли модерировать (заодно — проверка «SQL выполнен»)
+create or replace function public.chat_info()
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'channels', (select coalesce(jsonb_agg(jsonb_build_object('id', id, 'name', name, 'kind', kind, 'slow', slow_sec, 'mods_only', mods_only, 'about', about) order by position, id), '[]'::jsonb) from public.chat_channels),
+    'muted_until', (select max(until) from public.chat_mutes where until > now() and auth.uid() is not null and user_id = auth.uid()),
+    'staff', public.chat_staff_role());
+$$;
+
+create or replace function public.chat_edit(p_id bigint, p_text text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v record; v_text text := btrim(coalesce(p_text, ''));
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select id, user_id, deleted, created_at, coalesce(is_sticker, false) as st into v from public.messages where id = p_id;
+  if not found or v.deleted or v.st or v.user_id is distinct from auth.uid() then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if v.created_at < now() - interval '48 hours' then return jsonb_build_object('ok', false, 'reason', 'old'); end if;
+  if char_length(v_text) < 1 or char_length(v_text) > 500 then return jsonb_build_object('ok', false, 'reason', 'len'); end if;
+  update public.messages set text = v_text, edited_at = now() where id = p_id;
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.chat_delete_own(p_id bigint)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  update public.messages set deleted = true where id = p_id and user_id = auth.uid() and not deleted;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Жалоба на сообщение чата: 3 разных — сообщение скрыто, пока команда не посмотрит
+create or replace function public.chat_report(p_id bigint, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); v record; n int; r record;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if (select count(*) from public.chat_reports where reporter_id = uid and created_at > now() - interval '1 hour') >= 10 then
+    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
+  select id, user_id, deleted, text into v from public.messages where id = p_id;
+  if not found or v.deleted then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if v.user_id = uid then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+  insert into public.chat_reports (message_id, reporter_id, reason) values (p_id, uid, left(btrim(coalesce(p_reason, '')), 200)) on conflict do nothing;
+  select count(distinct reporter_id) into n from public.chat_reports where message_id = p_id and status = 'open';
+  if n >= 3 then update public.messages set deleted = true where id = p_id; end if;
+  if n = 1 then
+    for r in select id from public.profiles where role in ('admin', 'moderator') limit 20 loop
+      perform public.comm_notify(r.id, 'cm_report', null, '🚩 Жалоба в общем чате', left(coalesce(v.text, ''), 140), '#/chat/reports', 'chrep:' || p_id);
+    end loop;
+  end if;
+  return jsonb_build_object('ok', true, 'hidden', n >= 3);
+end $$;
+
+create or replace function public.chat_reports_list()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if coalesce(public.chat_staff_role(), '') not in ('admin', 'moderator') then return null; end if;
+  return (select coalesce(jsonb_agg(x order by x.n desc, x.at desc), '[]'::jsonb) from (
+    select r.message_id as mid, count(*) as n, max(r.created_at) as at, string_agg(distinct nullif(r.reason, ''), ' · ') as reasons,
+      max(m.text) as text, max(m.nick) as author, (array_agg(m.user_id))[1] as target, bool_or(coalesce(m.deleted, false)) as hidden,
+      max(coalesce(m.channel, 'general')) as channel
+    from public.chat_reports r left join public.messages m on m.id = r.message_id
+    where r.status = 'open' group by r.message_id order by count(*) desc limit 100) x);
+end $$;
+
+create or replace function public.chat_report_resolve(p_id bigint, p_action text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(public.chat_staff_role(), '') not in ('admin', 'moderator') then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if p_action = 'restore' then update public.messages set deleted = false where id = p_id;
+  elsif p_action = 'delete' then update public.messages set deleted = true where id = p_id;
+  else return jsonb_build_object('ok', false, 'reason', 'action'); end if;
+  update public.chat_reports set status = 'done' where message_id = p_id and status = 'open';
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Мут в общем чате на N минут (0 — снять). Гостя — по нику. Хелпер — до часа; команду сайта глушит только админ
+create or replace function public.chat_mute(p_user uuid, p_nick text, p_minutes int, p_reason text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me text := public.chat_staff_role(); tr text; v_nick text := left(btrim(coalesce(p_nick, '')), 24);
+begin
+  if me is null then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if coalesce(p_minutes, -1) < 0 or p_minutes > 10080 or (me = 'helper' and p_minutes > 60) then return jsonb_build_object('ok', false, 'reason', 'minutes'); end if;
+  if p_user is not null then
+    if p_user = auth.uid() then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
+    tr := public.chat_staff_role(p_user);
+    if tr is not null and me <> 'admin' then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+    select nick into v_nick from public.profiles where id = p_user;
+  elsif v_nick = '' then return jsonb_build_object('ok', false, 'reason', 'not_found');
+  end if;
+  update public.chat_mutes set until = now() where until > now() and ((p_user is not null and user_id = p_user) or (p_user is null and lower(nick) = lower(v_nick)));
+  if p_minutes > 0 then
+    insert into public.chat_mutes (user_id, nick, until, by_id, reason)
+      values (p_user, coalesce(v_nick, ''), now() + make_interval(mins => p_minutes), auth.uid(), left(btrim(coalesce(p_reason, '')), 200));
+    perform public.comm_notify(p_user, 'cm_mod', auth.uid(), 'заглушил(а) тебя в чате на ' || p_minutes || ' мин', coalesce(p_reason, ''), '#/chat', 'chmute:' || public.comm_bucket(5));
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Настройки канала чата (медленный режим, «пишут только модераторы») — админ и модераторы
+create or replace function public.chat_channel_set(p_id text, p_slow int, p_mods_only boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if coalesce(public.chat_staff_role(), '') not in ('admin', 'moderator') then return jsonb_build_object('ok', false, 'reason', 'staff'); end if;
+  if coalesce(p_slow, 0) < 0 or p_slow > 3600 then return jsonb_build_object('ok', false, 'reason', 'slow'); end if;
+  update public.chat_channels set slow_sec = coalesce(p_slow, slow_sec), mods_only = coalesce(p_mods_only, mods_only) where id = p_id and kind = 'text';
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ═══ Закреп сообщений в сообществах (модераторы, до 25 на канал) ═══
+alter table public.community_messages add column if not exists pinned_at timestamptz;
+create or replace function public.cm_pin(p_id bigint, p_on boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v record;
+begin
+  select * into v from public.community_messages where id = p_id;
+  if not found or v.deleted then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if not public.comm_is_mod(v.community_id) and not public.comm_is_staff() then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if p_on and v.pinned_at is null and (select count(*) from public.community_messages where channel_id = v.channel_id and pinned_at is not null and not deleted) >= 25 then
+    return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
+  update public.community_messages set pinned_at = case when p_on then now() end where id = p_id;
+  return jsonb_build_object('ok', true);
+end $$;
+
 -- ═══ Права на функции ═══
 do $$
 declare f text;
@@ -1025,12 +1287,15 @@ begin
     'cm_kick(bigint,uuid)', 'cm_ban(bigint,uuid,text,integer,boolean)', 'cm_unban(bigint,uuid)', 'cm_set_role(bigint,uuid,text)',
     'cm_report(bigint,text,bigint)', 'cm_reports(bigint)', 'cm_report_resolve(bigint,text)', 'cv_pass(bigint,text)', 'cv_check(bigint,text,text)',
     'call_start(uuid)', 'call_answer(uuid)', 'call_end(uuid,text)', 'call_ping(uuid)', 'call_state()', 'call_seen()', 'call_settings(text)',
-    'comm_ping(text)', 'friends_online()'] loop
+    'comm_ping(text)', 'friends_online()', 'chat_edit(bigint,text)', 'chat_delete_own(bigint)', 'chat_report(bigint,text)',
+    'chat_reports_list()', 'chat_report_resolve(bigint,text)', 'chat_mute(uuid,text,integer,text)', 'chat_channel_set(text,integer,boolean)',
+    'cm_pin(bigint,boolean)'] loop
     execute format('revoke all on function public.%s from public, anon', f);
     execute format('grant execute on function public.%s to authenticated', f);
   end loop;
   execute 'grant execute on function public.cm_invite_info(text) to anon, authenticated';
   execute 'grant execute on function public.cm_list_public(text) to anon, authenticated';
+  execute 'grant execute on function public.chat_info() to anon, authenticated';
 end $$;
 revoke all on function public.comm_members_count() from public, anon, authenticated;
 -- помощники с чужим id (кто в каком сообществе, кто с кем дружит) — только для функций выше
@@ -1038,6 +1303,8 @@ revoke all on function public.comm_role(bigint, uuid) from public, anon, authent
 revoke all on function public.comm_banned(bigint, uuid) from public, anon, authenticated;
 revoke all on function public.comm_can_mod(bigint, uuid, uuid) from public, anon, authenticated;
 revoke all on function public.comm_friends(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.chat_reply_notify() from public, anon, authenticated;
+revoke all on function public.chat_guard() from public, anon, authenticated;
 
 -- ═══ Realtime: новые сообщения канала и звонки — сразу (RLS решает, кому что придёт) ═══
 do $$
@@ -1051,22 +1318,3 @@ begin
     end if;
   end if;
 end $$;
-
--- ═══ Камера телефона: снимки (только jpeg до 600 КБ, своя папка, до 40 в сутки; ссылки знает только тот, кому отправили) ═══
-create or replace function public.shots_quota_ok()
-returns boolean language sql stable security definer set search_path = public as $$
-  select (select count(*) from storage.objects where bucket_id = 'shots' and owner = auth.uid() and created_at > now() - interval '1 day') < 40;
-$$;
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('shots', 'shots', true, 614400, array['image/jpeg'])
-on conflict (id) do update set public = true, file_size_limit = 614400, allowed_mime_types = array['image/jpeg'];
-drop policy if exists "shots: загрузить в свою папку" on storage.objects;
-create policy "shots: загрузить в свою папку" on storage.objects for insert to authenticated
-  with check (bucket_id = 'shots' and (storage.foldername(name))[1] = auth.uid()::text
-    and name ~ '^[0-9a-f-]{36}/[a-z0-9]{8,24}\.jpg$' and public.shots_quota_ok());
-drop policy if exists "shots: свои видно" on storage.objects;
-create policy "shots: свои видно" on storage.objects for select to authenticated
-  using (bucket_id = 'shots' and (storage.foldername(name))[1] = auth.uid()::text);
-drop policy if exists "shots: удалить свои" on storage.objects;
-create policy "shots: удалить свои" on storage.objects for delete to authenticated
-  using (bucket_id = 'shots' and (storage.foldername(name))[1] = auth.uid()::text);
