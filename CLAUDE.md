@@ -13,8 +13,14 @@
 - Коммитить и пушить в `main` можно без отдельного вопроса — так договорились, это и есть выкладка.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
-Сейчас — НИЧЕГО (проверено с сервера 15.10.2026). Появятся после слияния агентов: premium.sql (💎 валюта), community.sql
-(сообщества, чат), coins.sql ещё раз (новые части тела) — дописать сюда с проверками и напомнить владельцу.
+1. `premium.sql` (15.10.2026) — 💎 кристаллы: premium_wallet, premium_ledger, premium_orders, premium_payments, premium_settings;
+   premium_state / premium_spend / premium_set_mode / premium_order_status, для сервера premium_order_create / premium_credit /
+   premium_refund, админ premium_admin_*. Переопределяет credit_donation (5 аргументов, из server-hardening.sql) и
+   apply_unmatched_donation (vip-claims.sql) — режим «донат → кристаллы» (по умолчанию донат даёт VIP, как раньше).
+   Проверка: `/rpc/premium_state` гостем {} → {"ok":false,"reason":"auth",…} (PGRST202 = не применён). До запуска магазин
+   #/shop — витрина и «скоро», донат даёт VIP как раньше, заказы картой не создаются. Перезапустил server-hardening.sql или
+   vip-claims.sql → перезапустить premium.sql. Тест PGlite: 127 + 14 сквозных (api/pay.js на настоящем premium.sql).
+Ещё появятся после слияния агентов: community.sql (сообщества, чат), coins.sql ещё раз (новые части тела) — дописать сюда.
 Применены (проверено с сервера 15.10.2026, самые свежие версии): world.sql (`/rpc/world_check` гостем {"p_pass":"x","p_pub":"y"}
 → null), coins.sql (`/rpc/coin_price` {"p_item":"skin:hair:afro"} → 150), ugc.sql (`/rpc/ugc_play` {"p_id":"x"} → not_found,
 `/rpc/ugc_model_save` гостем {"p_id":"abcdef","p_name":"x","p_tris":1,"p_bytes":1} → reason auth), unity.sql (`/rpc/unity_play`
@@ -50,6 +56,9 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
    (чат/почта), затем 2 блока: телефон и компьютер → `ADS_IDS.yandex.rewarded / rewarded_desktop` (js/core/ads-core.js).
    Тогда появятся «📺 Возродиться за рекламу», «+40 🪙 за рекламу», «×2 монеты». Правила Rewarded: только по кнопке с согласием,
    награду выдавать реально, не деньги/не цифровая валюта (игровые монеты — норм), интерфейс блока не менять.
+8. **Оплата 💎 картой** (владелец 15.10: «узнай, как делать, потом подскажешь»): ИП на упрощёнке → счёт → касса/ОФД (уточнить у
+   бухгалтера) → TipTop Pay / Freedom Pay / Kaspi → ключи в Vercel → реквизиты в api/_lib/seller.js — пошагово в
+   docs/PAYMENTS_SETUP.md. Ключи и реквизиты вводит ТОЛЬКО владелец.
 
 ## Пауза 11.10.2026 — продолжить с этого («ладно сохраняй и другим скажи, потом продолжим»)
 Владелец: «лучше над графикой движка подумай и созданием и инструментами и интеграции ии для создания». Четыре агента
@@ -383,6 +392,36 @@ js/features/games.js и хвост css/premium.css.
   за награду показывать НЕЛЬЗЯ (бан). `D37Ads.rewardReady()/showReward(name)` → true только если досмотрел; кнопку «за рекламу»
   показывать, только когда rewardReady(); текст кнопки обязан говорить, что будет реклама и что дадут. `D37Ads.interstitial()` —
   полноэкранная между партиями (только телефон, не чаще 3 мин, не после первой партии).
+
+## 💎 Кристаллы, магазин #/shop, оплата картой (premium.sql, api/pay.js; агент 15.10.2026)
+- Кристаллы — отдельно от монет 🪙: только за деньги (карта Казахстана / Kaspi или донат DonationAlerts), тратятся только на
+  сервере (premium_spend): VIP 1/3/12 мес — 100/270/960 💎, VIP в подарок по нику (100 💎, до 5 в сутки), обмен 💎→🪙 (10→100,
+  50→550, 100→1200; обратно нельзя), эксклюзивы персонажа skin:hat:gemcrown 150 / skin:back:gemwings 300 / skin:trail:gems 100
+  (в магазине видны, только когда avatar.js знает часть). Без лутбоксов. Пакеты 100/300/550/1200/2600 💎 = 100/300/500/1000/2000 ₽
+  донатом = 590/1770/2950/5900/11800 ₸ картой (≈5,9 ₸ за ₽).
+- Цифры в трёх местах: premium.sql (premium_packs, premium_items, premium_settings), js/core/premium.js (CFG — название и цены,
+  D37Gems), api/_lib/premium.js (серверные страницы); scripts/pay-test.cjs и PGlite-тест сверяют.
+- База: premium_wallet (баланс ≥ 0 + долг после возврата), premium_ledger (каждое изменение — строка), premium_orders,
+  premium_payments ((провайдер, номер) — одно начисление), premium_settings (курс доната, бонус, лимиты 3000 ₽/сутки и
+  10 000 ₽/30 дней, выключатель — меняет админ в магазине). Оплата → premium_credit (только service_role, после проверки подписи,
+  сумма и валюта сверяются с заказом); возврат → premium_refund (потратил — долг). Покупки за деньги растят total_donated
+  (уровень VIP) и XP, тестовые — нет. Заказ — только с галочкой «платит взрослый или разрешил» (дата первого согласия хранится).
+- Донат: premium_wallet.donate_mode 'vip' (по умолчанию, как раньше: 100 ₽ = месяц) или 'gems' (1 ₽ = 1 💎, от 500/1000/2000 ₽
+  +10/20/30 %); при переходе на 💎 остаток vip_pending_rub становится 💎.
+- api/pay.js (одна функция; функций 10 из 12): ?a=config; ?a=order (Bearer-токен Supabase → /auth/v1/user, согласие взрослого);
+  ?a=tiptop&n=check|pay|fail|refund — TipTop Pay (бывший CloudPayments Kazakhstan): HMAC-SHA256 base64 ключом API Secret, Vercel
+  сам разбирает форму → проверка по X-Content-HMAC; формат уведомлений в кабинете — «TipTop Pay», не JSON; ?a=freedom — Freedom Pay:
+  init_payment.php → переход, pg_sig = md5(«pay;значения по алфавиту;ключ»), ответ — подписанный XML. У Kaspi API для сайтов нет:
+  KASPI_PAY_LINK + номер заказа D37-…, админ сверяет сумму/время и жмёт «✓ Оплачено». Адаптеры — api/_lib/pay.js.
+- Env в Vercel: TIPTOP_PUBLIC_ID, TIPTOP_API_SECRET, FREEDOM_MERCHANT_ID, FREEDOM_SECRET_KEY, FREEDOM_TEST=1, KASPI_PAY_LINK,
+  PAY_CURRENCY (KZT), PAY_DISABLED=1 (+ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Нет ключей — способа нет; нет premium.sql — «скоро».
+- Магазин js/features/shop.js (#shop-page, PAGES.shop; shop.js грузится ДО router.js, иначе прямая ссылка /#/shop пустая): пакеты,
+  «из России — донатом» (российские карты казахстанские эквайеры не принимают), что даёт донат, траты, история, блок для родителей,
+  админ (найти, ±💎 с причиной, история, Kaspi «Оплачено», проблемные платежи, «Вернул деньги», настройки). #/shop/o/<заказ> —
+  возврат со страницы оплаты. Баланс — #navGems в шапке (вошедшим, ≥641px), в профиле, на плашке «Мой персонаж».
+- Страницы /shop, /terms, /refund, /contacts — api/pages.js (routes/shop.js, routes/legal.js; без рекламы). Реквизиты продавца —
+  одно место api/_lib/seller.js ([…] — заглушка, на страницах «уточняется»). Тексты — шаблон, показать юристу. Пошагово владельцу
+  (ИП на упрощёнке 910, счёт, касса/ОФД, провайдер, ключи, проверка, возвраты) — docs/PAYMENTS_SETUP.md.
 
 ## «Орда» (#/games/horde, js/games/horde.js) — выживание в духе Vampire Survivors
 - Симуляция (step, шаг 1/60 с) отдельно от рисования; проверка в node: `GAME_IMPL.horde._test` + бот (скрипт в сессии: бот
