@@ -11,11 +11,22 @@
 // Есть — push() делается только когда блок реально виден (router.js вызывает
 // fillVisibleAds() после каждой смены раздела).
 function fillVisibleAds(){
+  const M = window.D37AdPlaces;
   document.querySelectorAll('ins.adsbygoogle[data-slot-key]').forEach(ins => {
     if (ins.dataset.adFilled) return;
     const slotId = (typeof AD_SLOTS === 'object' && AD_SLOTS[ins.dataset.slotKey]) || '';
     // Обёртка на главной/в «Рекламе» — .wrap-sm; в карточке прячем только сам <ins>
     const box = ins.parentElement?.classList.contains('wrap-sm') ? ins.parentElement : ins;
+    // VIP / персонал / «рядом нельзя» (ad-places.js) — места нет совсем
+    if (M && M.why(ins.dataset.slotKey, { ignoreId: true })) { box.classList.add('ad-empty'); return; }
+    // Отладка: пустое место видно рамкой
+    if (M && M.debug() && !slotId && !window.ADS_IDS?.yandex?.[ins.dataset.slotKey] && box !== ins) {
+      box.classList.remove('ad-empty');
+      const holder = document.createElement('div');
+      ins.replaceWith(holder);
+      M.placeholder(holder, ins.dataset.slotKey);
+      return;
+    }
     // Для этого места задан блок Яндекса — показываем его вместо AdSense (js/core/ads-core.js)
     if (window.ADS_IDS?.yandex?.[ins.dataset.slotKey] && box !== ins) {
       box.classList.remove('ad-empty');
@@ -29,7 +40,9 @@ function fillVisibleAds(){
     box.classList.remove('ad-empty');
     if (!ins.offsetWidth) return; // скрыт роутером — заполним, когда откроют этот раздел
     ins.setAttribute('data-ad-slot', slotId);
+    if (window.ADS_IDS?.kids) ins.setAttribute('data-tag-for-age-treatment', String(window.ADS_IDS.kids));
     ins.dataset.adFilled = '1';
+    M?.mark(ins.dataset.slotKey);
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
   });
 }
