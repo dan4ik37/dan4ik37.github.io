@@ -44,7 +44,7 @@ function shopRender(S){
     <div class="shp-gem" aria-hidden="true">${C.icon}</div>
     <div class="shp-head-body">
       <h3>${C.name} — валюта сайта</h3>
-      <p>На ${C.name.toLowerCase()} покупают VIP (себе или в подарок другу), монеты 🪙 и вещи для персонажа. Кристаллы бывают только за реальные деньги — картой или донатом — и поддерживают стримы Денчика37. Обратно в деньги они не меняются.</p>
+      <p>На ${C.name.toLowerCase()} покупают VIP (себе или в подарок другу), монеты 🪙 и вещи для персонажа. Кристаллы покупают за реальные деньги — картой или донатом, — и это поддерживает стримы Денчика37. Обратно в деньги они не меняются.</p>
       ${!on ? `<div class="shp-note">⏳ Магазин кристаллов скоро откроется. А VIP за донат работает уже сейчас — <a href="#/shop/donate" onclick="event.preventDefault();document.getElementById('shp-donate').scrollIntoView({behavior:'smooth'})">как получить ↓</a></div>` : ''}
     </div>
     <div class="shp-wallet">
