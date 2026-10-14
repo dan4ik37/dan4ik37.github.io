@@ -134,6 +134,7 @@ function renderGamesHub(){
       <span class="gm-foot"><span class="gm-play">Играть →</span>${rec}</span>
     </a>`;
   }).join('');
+  window.D37AdPlaces?.feed(grid, { place: 'feed_games', every: 10, max: 2 });   // карточка «Реклама» после каждой 10-й (ad-places.js)
   const tabs = document.getElementById('gamesTopTabs');
   tabs.innerHTML = `<button class="gm-tab duel${gamesTopKey === 'duels' ? ' active' : ''}" data-key="duels" onclick="setGamesTop('duels')">⚔️ Чемпионы дуэлей</button>` +
     GAMES.filter(g => g.top).map(g =>

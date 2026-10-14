@@ -208,8 +208,8 @@ const IO = { list: new Map() };
 globalThis.IntersectionObserver = class { constructor(cb, o){ this.cb = cb; this.o = o; IO.obs = this; } observe(el){ IO.list.set(el, this); } unobserve(el){ IO.list.delete(el); } disconnect(){} };
 const showIO = el => { const o = IO.list.get(el); if (o) o.cb([{ target: el, isIntersecting: true }]); };
 globalThis.console = console;
-const yaCalls = [];
-globalThis.Ya = { Context: { AdvManager: { render: (p, alt) => { yaCalls.push({ p, alt }); } } } };
+const yaCalls = [], YA = { fill: false };
+globalThis.Ya = { Context: { AdvManager: { render: (p, alt) => { yaCalls.push({ p, alt }); if (YA.fill && p.renderTo) doc.getElementById(p.renderTo)?.appendChild(new El('iframe')); } } } };
 const flushYa = () => { const q = window.yaContextCb || []; while (q.length) q.shift()(); };
 const setHash = h => { location.hash = h; (winListeners.hashchange || []).forEach(fn => fn({ type: 'hashchange' })); };
 
@@ -539,6 +539,66 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   advance(100e3);
   ok(M.afterRound(stage) === false && !!box.querySelector('[id^="yandex_rtb"]'), 'лимит визита — новое не показываем, показанное не стираем');
   stage.remove();
+}
+
+// ═══ 5. Карточки «Реклама» в списках ═══
+{
+  fresh(); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.feed = 'R-A-5-1';
+  const grid = new El('div'); body.appendChild(grid);
+  const fill = (n, t) => { grid.innerHTML = Array.from({ length: n }, (_, i) => `<a class="gm-card">${t ? t(i) : 'Игра ' + (i + 1)}</a>`).join(''); };
+  fill(40);
+  ok(M.feed(grid, { place: 'feed_games', every: 10, max: 2 }) === 2, 'витрина из 40 игр — 2 карточки');
+  let kids = grid.children;
+  ok(kids[10].classList.contains('d37-feed') && kids[21].classList.contains('d37-feed') && kids.filter(k => k.classList.contains('d37-feed')).length === 2, 'после 10-й и 20-й игры', kids.map(k => k.className).join(','));
+  ok(!kids[10].querySelector('.d37-ad-label') && !T.st().p.feed, 'реклама не грузится, пока карточка далеко от экрана');
+  showIO(kids[10]); flushYa();
+  ok(kids[10].classList.contains('d37-ad') && /Реклама/.test(kids[10].textContent) && yaCalls.some(c => c.p.blockId === 'R-A-5-1' && c.p.statId === 21), 'подъехала — реклама с подписью «Реклама», statId 21');
+  ok(T.st().p.feed?.n === 1, 'засчитана одна (вторая ещё не видна)');
+  M.feed(grid, { place: 'feed_games', every: 10, max: 2 });
+  ok(grid.children.filter(k => k.classList.contains('d37-feed')).length === 2, 'перерисовка списка — карточки не копятся');
+  fill(20);
+  ok(M.feed(grid, { place: 'feed_games', every: 10, max: 3 }) === 1 && !grid.lastElementChild.classList.contains('d37-feed'), 'не последней в списке (после 20-й из 20 — нет)');
+  fill(8);
+  ok(M.feed(grid, { place: 'feed_games', every: 10 }) === 0, 'короткий список — без рекламы');
+  fill(40, i => i === 33 ? 'Открываю кейсы GGDROP' : 'Ролик ' + i);
+  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, titles: grid.children.map(c => c.textContent) }) === 0, 'в списке есть ролик про кейсы — в нём рекламы нет совсем');
+  fill(40);
+  ok(M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 }) === 2 && grid.children[16].classList.contains('d37-feed'), 'видео: после 16-й и 28-й', grid.children.map(k => k.className).join(','));
+  // нет рекламы у сети — своя подсказка (место не пустует и не прыгает)
+  showIO(grid.children[16]); flushYa(); yaCalls.pop().alt();
+  const hc = grid.children[16];
+  ok(hc.classList.contains('d37-house') && hc.querySelector('a') && !/Реклама/.test(hc.textContent), 'у сети нет рекламы — своя подсказка без пометки «Реклама»', hc.outerHTML);
+  // блокировщик рекламы: скрипт РСЯ не пришёл — через 8 с своя подсказка; пришла реклама — остаётся
+  fill(40);
+  M.feed(grid, { place: 'feed_videos', every: 12, start: 16, max: 3 });
+  const a1 = grid.children[16], a2 = grid.children[29];
+  showIO(a1); advance(8100);
+  ok(a1.classList.contains('d37-house'), 'блокировщик: через 8 с пустая карточка «Реклама» → своя подсказка');
+  YA.fill = true; showIO(a2); flushYa(); advance(8100); YA.fill = false;
+  ok(a2.classList.contains('d37-ad') && !a2.classList.contains('d37-house') && a2.querySelector('iframe'), 'реклама пришла — карточка остаётся рекламой');
+  // строка на всю ширину (мелкие карточки «Студии игр»)
+  fill(30);
+  M.feed(grid, { place: 'feed_ugc', every: 8, row: true, max: 2 });
+  ok(grid.children[8].classList.contains('row'), 'каталог игр игроков — карточка на всю строку');
+  // VIP вошёл, пока листал — карточка исчезает до загрузки
+  currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
+  const c8 = grid.children[8]; showIO(c8);
+  ok(!c8.isConnected, 'VIP вошёл, пока листал — карточка убрана');
+  ok(M.feed(grid, { place: 'feed_ugc', every: 8, row: true }) === 0, 'VIP — карточек нет');
+  currentUser = null; currentProfile = null;
+  // лимит за визит (16)
+  fresh(); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.feed = 'R-A-5-1';
+  for (let i = 0; i < 15; i++) M.mark('feed_games');
+  fill(40);
+  ok(M.feed(grid, { place: 'feed_games', every: 10, max: 3 }) === 1, 'за визит не больше 16 — осталась одна');
+  // отладка: рамки, даже без номера блока
+  fresh(); window.ADS_IDS.google = {}; T.dbg.on = T.dbg.frames = true;
+  fill(40);
+  ok(M.feed(grid, { place: 'feed_games', every: 10, max: 2 }) === 2, 'отладка: места видны и без номера блока');
+  showIO(grid.children[10]);
+  ok(/feed_games/.test(grid.children[10].textContent) && grid.children[10].querySelector('.d37-ad-ph'), 'отладка: рамка с названием места');
+  T.dbg.on = T.dbg.frames = false;
+  grid.remove();
 }
 
 console.log(`\nads-test: ${pass} ok, ${fail} fail`);

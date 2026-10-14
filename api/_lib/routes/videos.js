@@ -53,6 +53,9 @@ export default async function handler(req, res) {
     ]
   };
 
+  // Карточка «Реклама» после каждой 30-й (кроме последней): js/core/ad-places.js грузит её, когда подъедет к экрану
+  let k = 0;
+  const feed = () => !noAds && ++k % 30 === 0 && k < slice.length ? '<div class="d37-feed" data-ad="feed_videos" data-ad-lazy hidden></div>' : '';
   const body = `
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Все видео</span></nav>
@@ -68,7 +71,7 @@ export default async function handler(req, res) {
   ${years.map((y, i) => `
   <section class="more" id="y${y}">
     <h2>${y}</h2>
-    <div class="grid">${byYear.get(y).map(v => `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${esc(day(v))}</small></a>`).join('')}</div>
+    <div class="grid">${byYear.get(y).map(v => `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${esc(day(v))}</small></a>${feed()}`).join('')}</div>
   </section>${i === 0 && !noAds ? '\n  <div data-ad="video_page" hidden></div>' : ''}`).join('')}
   ${p === pages ? `<div class="secret-spot" title="Здесь всё началось"><button type="button" class="d37-secret" data-secret="archive" aria-label="Секретный знак">✦</button></div>` : ''}
   ${pager}

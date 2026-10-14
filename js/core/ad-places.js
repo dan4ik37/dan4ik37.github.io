@@ -169,9 +169,21 @@
     if (r) { log(key, r); return false; }
     if (dbg.frames) { placeholder(el, key); mark(key); return true; }
     if (!hasId(key)) { log(key, 'id'); return false; }
-    const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: o.onEmpty, format: FORMAT[base(key)] });
-    if (ok) mark(key);
+    const empty = o.onEmpty && (() => { if (el.dataset.adEmpty) return; el.dataset.adEmpty = '1'; log(key, 'unfilled'); o.onEmpty(el); });
+    const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: empty, format: FORMAT[base(key)] });
+    if (ok) {
+      mark(key);
+      // блокировщик рекламы или сеть молчит: через 8 с пустое место с подписью «Реклама» — убрать (или своя подсказка)
+      if (empty) setTimeout(() => { if (el.isConnected && !filled(el)) empty(); }, 8000);
+    }
     return ok;
+  }
+  // Сеть что-то нарисовала: у РСЯ — содержимое в контейнере, у Google — ins с data-ad-status="filled"
+  function filled(el){
+    const ya = el.querySelector('[id^="yandex_rtb"]');
+    if (ya) return ya.childElementCount > 0;
+    const ins = el.querySelector('ins.adsbygoogle');
+    return !!ins && (ins.getAttribute('data-ad-status') === 'filled' || (!ins.hasAttribute('data-ad-status') && ins.childElementCount > 0));
   }
 
   // ═══ Экран загрузки ═══
@@ -538,8 +550,10 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-break-t b{color:var(--text,#f0f0f8)}
 .d37-break .d37-ad{margin:0 auto}
 .d37-feed{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:250px;padding:.55rem .6rem .7rem;border-radius:18px;border:1px dashed var(--border,var(--line,rgba(255,255,255,.14)));background:rgba(255,255,255,.025);overflow:hidden;text-align:center}
+.d37-feed[hidden]{display:none!important}
 .d37-feed.d37-ad{margin:0;max-width:none}
 .d37-feed.row{grid-column:1/-1;min-height:110px}
+.list-view .d37-feed{min-height:120px}
 .d37-feed .d37-ad-label{text-align:left;margin:0 0 .35rem .15rem}
 .d37-feed .d37-ad-ph{flex:1}
 .d37-house{display:flex;border-style:solid;padding:0}
