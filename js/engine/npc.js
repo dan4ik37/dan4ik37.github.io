@@ -7,13 +7,18 @@
 // Игра: N.start({ onHit(npc, урон), onSay(npc, текст) }) → каждый шаг N.step(dt, игроки [{ x, y, z }]) → кадр N.frame(dt, t, cam)
 // → N.stop(). Поведение (obj.act): idle — стоит, wander — бродит в радиусе obj.radius, follow — идёт к ближайшему игроку,
 // flee — убегает. obj.speed — множитель скорости, obj.damage — урон в секунду при касании, obj.text — фраза при подходе.
-// Внешность (obj.look): random — своя по obj.seed, me — как у игрока, zombie / robot / alien / fairy — кожа такого цвета.
+// Внешность (obj.look): random — своя по obj.seed, me — как у игрока, zombie / alien / fairy — кожа такого цвета,
+// robot / knight — весь из частей тела робота / рыцаря.
 (() => {
   const E = window.D37E = window.D37E || {};
   const U = E.UNIT || 2.1 / 1.8;
   const LOOKS = { random: ['🎲', 'Случайная'], me: ['🪞', 'Как у меня'], zombie: ['🧟', 'Зомби'], robot: ['🤖', 'Робот'], alien: ['👽', 'Пришелец'], fairy: ['🧚', 'Фея'] };
   const ACTS = { idle: ['🧍', 'Стоит, смотрит на игрока'], wander: ['🚶', 'Бродит рядом'], follow: ['🏃', 'Идёт за игроком'], flee: ['🐔', 'Убегает от игрока'] };
-  const lookOf = o => o.look === 'me' ? (window.D37Char?.look?.() || {}) : LOOKS[o.look] && o.look !== 'random' ? { tone: o.look } : {};
+  LOOKS.knight = ['🛡️', 'Рыцарь'];
+  // робот и рыцарь — целиком из частей тела своего пакета (голова, туловище, руки, ноги)
+  const pack = p => ({ psh: p, pst: p, psal: p, psar: p, psll: p, pslr: p });
+  const lookOf = o => o.look === 'me' ? (window.D37Char?.look?.() || {}) : o.look === 'robot' ? { tone: 'robot', ...pack('robot') } : o.look === 'knight' ? pack('knight')
+    : LOOKS[o.look] && o.look !== 'random' ? { tone: o.look } : {};
   const keyOf = o => 'npc:' + (o.seed || o.id);
 
   E.npcs = function (R, ph){

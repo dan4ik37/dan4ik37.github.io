@@ -177,16 +177,16 @@
     const cache = (m, k, f) => { let v = m.get(k); if (!v) { v = f(); m.set(k, v); } return v; };
     const Q = ['low', 'mid', 'high'].includes(ko.q) ? ko.q : autoQ(), QF = { low: .72, mid: 1, high: 1.35 }[Q] || 1;
     let DQ = QF;   // подробность сборки (дальний человечек — грубее)
-    const sg = (n, min = 3) => Math.max(min, Math.round(n * DQ));
+    const sg = (n, min = 3, r = 1) => Math.max(min, Math.round(n * (r < .1 ? Math.min(DQ, 1) : DQ)));   // мелочь — не дробнее «среднего»
     const toon = (c, ds) => cache(mats, 't' + c + (ds ? 'd' : ''), () => new T.MeshToonMaterial({ color: c, gradientMap: grad, side: ds ? T.DoubleSide : T.FrontSide }));
     const basic = (c, op) => cache(mats, 'b' + c + (op || ''), () => new T.MeshBasicMaterial(op ? { color: c, transparent: true, opacity: op, depthWrite: false } : { color: c }));
     const geo = (k, f) => cache(geos, k, f);
     const f3 = v => (+v).toFixed(3);
-    const sph = (r, w = 16, h = 12) => { const W = sg(w, 6), H = sg(h, 4); return geo(`s${f3(r)}_${W}_${H}`, () => new T.SphereGeometry(r, W, H)); };
-    const cap = (r, l, rs = 12) => { const S = sg(rs, 5), C = Math.max(2, Math.round(4 * DQ)); return geo(`c${f3(r)}_${f3(l)}_${S}_${C}`, () => new T.CapsuleGeometry(r, Math.max(.001, l), C, S)); };
-    const cone = (r, h, s = 12) => { const S = sg(s, 4); return geo(`k${f3(r)}_${f3(h)}_${S}`, () => new T.ConeGeometry(r, h, S)); };
-    const cyl = (r1, r2, h, s = 16, open) => { const S = sg(s, 5); return geo(`y${f3(r1)}_${f3(r2)}_${f3(h)}_${S}_${open ? 1 : 0}`, () => new T.CylinderGeometry(r1, r2, h, S, 1, !!open)); };
-    const tor = (r, t, rs, ts, arc = TAU) => { const A = sg(rs, 3), B2 = sg(ts, 4); return geo(`o${f3(r)}_${f3(t)}_${A}_${B2}_${f3(arc)}`, () => new T.TorusGeometry(r, t, A, B2, arc)); };
+    const sph = (r, w = 16, h = 12) => { const W = sg(w, 6, r), H = sg(h, 4, r); return geo(`s${f3(r)}_${W}_${H}`, () => new T.SphereGeometry(r, W, H)); };
+    const cap = (r, l, rs = 12) => { const S = sg(rs, 5, r), C = Math.max(2, Math.round(4 * Math.min(DQ, r < .1 ? 1 : DQ))); return geo(`c${f3(r)}_${f3(l)}_${S}_${C}`, () => new T.CapsuleGeometry(r, Math.max(.001, l), C, S)); };
+    const cone = (r, h, s = 12) => { const S = sg(s, 4, r); return geo(`k${f3(r)}_${f3(h)}_${S}`, () => new T.ConeGeometry(r, h, S)); };
+    const cyl = (r1, r2, h, s = 16, open) => { const S = sg(s, 5, Math.max(r1, r2)); return geo(`y${f3(r1)}_${f3(r2)}_${f3(h)}_${S}_${open ? 1 : 0}`, () => new T.CylinderGeometry(r1, r2, h, S, 1, !!open)); };
+    const tor = (r, t, rs, ts, arc = TAU) => { const A = sg(rs, 3, t * 3), B2 = sg(ts, 4, r); return geo(`o${f3(r)}_${f3(t)}_${A}_${B2}_${f3(arc)}`, () => new T.TorusGeometry(r, t, A, B2, arc)); };
     const box = (x, y, z) => geo(`x${f3(x)}_${f3(y)}_${f3(z)}`, () => new T.BoxGeometry(x, y, z));
     // Тело по сечениям: rows [[полуширина, полуглубина, y], …] снизу вверх, сечение — суперэллипс степени p (2 — эллипс,
     // 5…8 — скруглённый квадрат); a0…a1 — дуга (вся — замкнутый шов с общей нормалью). Полюса (ширина ≈ 0) — нормаль вверх/вниз
@@ -721,7 +721,7 @@
       }
       const EX = .2 * HD.ex, EY = -.08, MY = -.215;
       // ── лицо: наборы (обычное + выражения при эмоциях, строятся при первой эмоции)
-      const face = B(head);
+      const face = lod ? G(head) : B(head);   // вдали лицо склеивается с головой
       const lidK = R.face === 'dots' ? .55 : R.face === 'classic' ? .75 : R.face === 'toon' ? .95 : 1;
       const robotEye = () => ['brown', 'dark', 'gray', 'amber'].includes(R.eyec) ? '#3ee8ff' : colorOf(R, 'eyec');
       function eyeArc(g, up, w = .068){ M(g, tor(w, .021, 6, 16, PI), eyeDark, 0, up ? -.035 : .02, .02, 1, 1, 1, 0, 0, up ? 0 : PI); }
@@ -842,11 +842,11 @@
         else M(set, tor(.07, .014, 4, 12, PI), led, 0, MY + .06, z, 1, .8, 1, 0, 0, PI);
       }
       function mkSet(name){
-        const ex = EXPR[name] || EXPR.base, set = B(face);
+        const ex = EXPR[name] || EXPR.base, set = lod ? G(face) : B(face);
         set.visible = false; set.userData.blink = false;
         if (robotH) ledFace(set, ex);
         else if (!knightH) { eyes(set, ex); brows(set, ex); mouth(set, ex.mouth || R.mouth); if (ex.tears) tears(set, ex.tears); }
-        bake(set, ch);
+        if (!lod) bake(set, ch);   // вдали — склеится вместе с головой
         ch.sets.set(name, set);
         return set;
       }
@@ -864,6 +864,7 @@
       }
       const base = mkSet('base');
       base.visible = true;
+      if (lod) { base.userData.blink = false; if (base.userData.eyes) base.userData.eyes.userData.bone = false; }
       ch.face = face; ch.faceSet = base; ch.expr = 'base';
       ch.mkSet = lod ? null : name => { const dd = DQ; DQ = QF; try { return mkSet(name); } finally { DQ = dd; } };
       // щёчки
