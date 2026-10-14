@@ -4,10 +4,12 @@
 // Рисуется кодом на canvas (без картинок): D37Char.draw(ctx, look, x, y, size) — ноги в точке (x, y),
 // size — рост. Для игр быстрее D37Char.sprite(look, px) — готовый canvas, рисовать drawImage.
 // Части покупаются за монеты (js/core/coins.js, предмет 'skin:<слот>:<id>'); цена 0 — доступна всем;
-// vip — бесплатно для VIP/персонала или за монеты. Цены — как coin_price() в coins.sql (раздел «Персонаж»):
-// поменял тут — поменяй там (scripts в сессии генерировали SQL из этого списка).
+// vip — бесплатно для VIP/персонала или за монеты; 💎 — только за кристаллы в магазине #/shop. Части тела (формы ps*)
+// из пакетов PACKS покупаются пакетом ('skin:pack:<id>') — buyItem() говорит, что купить. Цены — coin_price() в
+// coins.sql: после правки PARTS/PACKS — node scripts/gen-skin-sql.mjs и node scripts/char-test.cjs.
 // Надетое (look) — в базе (char_save / char_looks в coins.sql) или в браузере (d37_char), пока не вошёл.
-// Где виден: «Орда» (герой), гардероб #/games/wardrobe (js/games/wardrobe.js), витрина игр, профиль.
+// Старые образы: upgrade(look) — новые слоты «как было» (PART_DEFAULT), внешность не меняется.
+// Где виден: «Орда» (герой), гардероб #/games/wardrobe (3D — js/games/charedit.js, 2D — wardrobe.js), мир, профиль.
 (() => {
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   const TAU = Math.PI * 2;

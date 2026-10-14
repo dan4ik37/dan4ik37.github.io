@@ -1081,7 +1081,7 @@
           for (let i = 0; i < 7; i++) { const a = i / 7 * TAU, hh = i % 2 ? .2 : .3; M(hg, gemG, P(GC[i], 'g'), Math.sin(a) * .3, .69 + hh * .45, Math.cos(a) * .3 - .02, .13, hh, .13, 0, a, 0); }
           M(hg, gemG, P('#ff7ce6', 'g'), 0, .635, .3, .13, .15, .08);
           for (let i = 0; i < 6; i++) { const a = (i + .5) / 6 * TAU; M(hg, gemG, P(i % 2 ? '#7ef0ff' : '#b98cff', 'g'), Math.sin(a) * .31, .635, Math.cos(a) * .31 - .02, .05, .06, .05); }
-          hatTop = 1.02;
+          hatTop = .97;
         }
       }
       // ── очки (на лице любой формы; у робота и рыцаря — нет)
@@ -1124,7 +1124,7 @@
       const pet = petE ? emojiSprite(petE, .75) : null;
 
       bake(body, ch);
-      const ht = robotH ? HD.top + .4 : knightH ? HD.top + .3 : H === 'afro' ? 1.35 : HD.top;
+      const ht = robotH ? HD.top + .4 : knightH ? HD.top + .3 : H === 'afro' ? 1.35 * (HD.hair ? HD.hair[1] : 1) : HD.top;
       const top = hipY + yT - .06 + hr * .86 + hr * ht + ({ spiky: .2, anime: .24, mohawk: .26, buns: .16, curly: .08 }[H] || 0) * (cover ? 0 : hs) + (hat !== 'none' ? (hatTop - .56 + HD.hat[1]) * hs * hatK + lift * hs : 0);
       ch.root = root; ch.body = body; ch.torso = torso; ch.headP = headP; ch.head = head;
       ch.legL = legsLR[0].L; ch.legR = legsLR[1].L; ch.kneeL = legsLR[0].K; ch.kneeR = legsLR[1].K;
