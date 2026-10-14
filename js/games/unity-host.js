@@ -566,6 +566,7 @@
     if (!rows) { box.innerHTML = `<div class="st-empty">${srvMissing ? 'Каталог откроется совсем скоро — сайт обновляется.' : 'Не получилось загрузить — обнови страницу.'}</div>`; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Здесь будут игры игроков из Unity. Сделай свою — может, она будет первой!</div>'; return; }
     box.innerHTML = `<div class="st-grid">${rows.map(cardHtml).join('')}</div>`;
+    window.D37AdPlaces?.feed(box.firstChild, { place: 'feed_ugc', every: 8, row: true, max: 2 });   // реклама — только в каталоге (игры прошли проверку)
     if (typeof xpQueueBadges === 'function') xpQueueBadges();
   }
 

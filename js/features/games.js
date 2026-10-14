@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '53';
+const GAMES_VER = '54';
 const GAMES = [
   { id: 'world',    icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -134,6 +134,7 @@ function renderGamesHub(){
       <span class="gm-foot"><span class="gm-play">Играть →</span>${rec}</span>
     </a>`;
   }).join('');
+  window.D37AdPlaces?.feed(grid, { place: 'feed_games', every: 10, max: 2 });   // карточка «Реклама» после каждой 10-й (ad-places.js)
   const tabs = document.getElementById('gamesTopTabs');
   tabs.innerHTML = `<button class="gm-tab duel${gamesTopKey === 'duels' ? ' active' : ''}" data-key="duels" onclick="setGamesTop('duels')">⚔️ Чемпионы дуэлей</button>` +
     GAMES.filter(g => g.top).map(g =>
@@ -154,6 +155,7 @@ function renderGamesMe(){
   box.innerHTML = `<a class="gm-me-char" href="#/games/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
     <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет${window.D37Gems?.isOn() ? ` · <a class="gm-gems" href="#/shop" title="Магазин кристаллов">💎 <b class="js-gems">${D37Gems.num(D37Gems.balance())}</b></a>` : ''}</span></div>
     ${D37Coins.canDaily() ? '<button type="button" class="gm-me-btn" onclick="gamesDailyBonus(this)">🎁 Бонус дня</button>' : ''}
+    ${window.D37AdPlaces?.coinOffer?.('hub') || ''}
     <a class="gm-me-btn ghost" href="#/games/wardrobe">🎭 Гардероб</a>`;
   D37Char.draw(box.querySelector('canvas').getContext('2d'), D37Char.look(), 56, 106, 88, { t: 0 });
 }
@@ -168,10 +170,12 @@ window.D37Char?.on(() => { if (!document.getElementById('gamesHub')?.hidden) ren
 // 💎 баланс на плашке — когда кошелёк кристаллов загрузился (js/core/premium.js)
 window.D37Gems?.on(() => { if (D37Gems.isOn() && !document.getElementById('gamesHub')?.hidden && document.getElementById('gamesMe') && !document.querySelector('#gamesMe .gm-gems')) renderGamesMe(); });
 
-// Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с
+// Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с.
+// Есть диспетчер (ad-places.js) — он: на компьютере каждая 3-я партия — «☕ Перерыв», Google без обновлений, VIP без рекламы
 let gamesAdAt = 0;
 function gamesAdAfterRound(){
   const stage = document.getElementById('gamesStage');
+  if (window.D37AdPlaces) { window.D37AdPlaces.afterRound(stage); return; }
   if (!stage || stage.hidden || !window.D37Ads || Date.now() - gamesAdAt < 90000) return;
   let box = document.getElementById('gamesAd');
   if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }
@@ -216,6 +220,7 @@ async function openGame(id, param){
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
   document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
+  const adL = window.D37AdPlaces?.loading({ anchor: box.firstChild, game: id, param: gamesParam });   // реклама, если грузится дольше 1,5 с (ad-places.js)
   try {
     for (const s of g.scripts) await gamesLoadScript(s);
     if (gamesActive !== id) return;   // пока грузилось, ушли на другую игру
@@ -224,7 +229,7 @@ async function openGame(id, param){
     window.scrollTo({ top: document.getElementById('games-page').offsetTop - 70, behavior: 'smooth' });
   } catch (e) {
     box.innerHTML = `<div class="empty-state"><span class="empty-state-icon">😵</span><div class="empty-state-title">Игра не загрузилась</div><div class="empty-state-text">Проверь интернет и обнови страницу.</div></div>`;
-  }
+  } finally { adL?.done(); }
 }
 
 function closeGame(fromRouter){

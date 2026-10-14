@@ -4,7 +4,8 @@ import { esc } from './yt.js';
 
 export const YT_CHANNEL = 'https://www.youtube.com/@Dan4ik37Yt';
 
-// noAds — без рекламы Google на странице (ролики про кейсы/промокоды на депозит — AdSense запрещает рекламу рядом с азартными играми)
+// noAds — без рекламы на странице: ни скрипта AdSense, ни мест, ни полоски РСЯ (ролики про кейсы/промокоды на депозит —
+// AdSense запрещает рекламу рядом с азартными играми; ad-places.js получает контекст «gambling»)
 export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false }) {
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -31,7 +32,8 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
-${noAds ? '' : '<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>'}
+${noAds ? '' : `<script>try{var d37n=JSON.parse(localStorage.getItem('d37_noads')||'null');if(d37n&&d37n.until>Date.now())(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>`}
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
 <script defer src="/_vercel/insights/script.js"></script>
 <script>(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})(window,document,'script','https://mc.yandex.ru/metrika/tag.js?id=113596397','ym');ym(113596397,'init',{ssr:true,clickmap:true,referrer:document.referrer,url:location.href,accurateTrackBounce:true,trackLinks:true});</script>
@@ -74,10 +76,11 @@ ${body}
 ${script ? `<script>${script}</script>` : ''}
 <script>document.addEventListener('click',function(e){var d=document.querySelector('details.mmenu[open]');if(d&&!d.contains(e.target))d.open=false});</script>
 <script src="/js/core/ads-core.js"></script>
+<script src="/js/core/ad-places.js"></script>
 <script src="/js/core/surprise.js" defer></script>
 <script src="/js/core/live-badge.js" defer></script>
 <script src="/js/features/secrets.js" defer></script>
-<script>window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
+<script>${noAds ? 'window.D37AdPlaces&&D37AdPlaces.ctx("gambling",true);' : ''}window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>
 </html>`;
 }

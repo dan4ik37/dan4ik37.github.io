@@ -269,7 +269,9 @@ Players.PlayerAdded.Connect(player => {
     if (pm.playId) { ED.playId = pm.playId; ED.roomCode = pm.room; box.classList.add('s3-player'); }
     else if (pm.join) { ED.joinCode = pm.join; box.classList.add('s3-player'); }
     const st = ED;
+    const adL = window.D37AdPlaces?.loading({ anchor: q('.s3-loading'), tip: 'studio', ugc: !!(ED.playId || ED.joinCode) });   // реклама на экране загрузки (ad-places.js); чужой мир — без неё
     E.load().then(ok => {
+      adL?.done();
       if (ED !== st) return;
       if (!ok || !E.supported?.()) { q('.s3-loading').textContent = 'Нужен браузер с WebGL (3D) — открой на компьютере или в Chrome'; return; }
       try { start(); } catch (e) { console.error(e); q('.s3-loading').textContent = 'Ошибка: ' + (e.message || e); }
@@ -1034,8 +1036,9 @@ Players.PlayerAdded.Connect(player => {
     if (!o.src.trim()) { msg('Сначала напиши код', false); return; }
     ed.building = true; const btn = ed.q('.s3-build'); btn.disabled = true;
     print(`⚙️ Сборка «${o.name}» (${L.label})…`, 'sys');
+    const adL = window.D37AdPlaces?.loading({ host: ed.q('.s3-view'), card: `⚙️ Сборка ${L.label}`, tip: 'compile' });   // компилятор качается долго — карточка с рекламой в углу (ad-places.js)
     try {
-      const r = await L.compile(o.src, { name: o.name, onStep: t => { btn.textContent = '⚙️ ' + t; } });
+      const r = await L.compile(o.src, { name: o.name, onStep: t => { btn.textContent = '⚙️ ' + t; adL?.step(t); } });
       const u8 = r instanceof Uint8Array ? r : r.wasm;
       if (r.log) for (const line of String(r.log).split('\n').filter(Boolean).slice(0, 40)) print(line, 'warn');
       let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
@@ -1046,7 +1049,7 @@ Players.PlayerAdded.Connect(player => {
       const log = String(e && (e.log || e.message) || e);
       for (const line of log.split('\n').filter(Boolean).slice(0, 60)) print(line, 'err');
       setBottom('out'); msg('❌ Не собралось — ошибки во «Выводе»', false);
-    } finally { ed.building = false; btn.disabled = false; btn.textContent = '⚙️ Собрать'; if (ED === ed && ed.codeFor === o) fillLangUI(o); }
+    } finally { adL?.done(); ed.building = false; btn.disabled = false; btn.textContent = '⚙️ Собрать'; if (ED === ed && ed.codeFor === o) fillLangUI(o); }
   }
   function showCode(obj){
     const ed = ED;

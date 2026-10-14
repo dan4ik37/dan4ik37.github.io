@@ -165,6 +165,7 @@
     if (!rows) { box.innerHTML = `<div class="st-empty">${srvMissing ? 'Каталог откроется совсем скоро — сайт обновляется.' : 'Не получилось загрузить — обнови страницу.'}</div>`; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Здесь будут лучшие игры игроков. Сделай свою — может, она будет первой!</div>'; return; }
     box.innerHTML = `<div class="st-grid">${rows.map(cardHtml).join('')}</div>`;
+    window.D37AdPlaces?.feed(box.firstChild, { place: 'feed_ugc', every: 8, row: true, max: 2 });   // реклама — только в каталоге (игры прошли проверку)
     if (typeof xpQueueBadges === 'function') xpQueueBadges();
   }
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
