@@ -141,7 +141,9 @@
     de().classList.remove('gs-full', 'gs-compact'); fit(false);
     rotHint(false);
     if (!o.keepApi) { if (apiEl()) exitApi(); unlockOrient(); wakeOff(); }
-    if (F.hist && !o.fromPop && root.history?.state?.gsFull === F.hist) { F.ignorePop++; try { root.history.back(); } catch (e) { F.ignorePop--; } }
+    // своя запись истории: вышли сами (кнопка, Esc) — убрать её «назад»; игру закрывают переходом (release) — не трогать,
+    // иначе «назад» отменит этот переход
+    if (F.hist && !o.fromPop && !o.noHist && root.history?.state?.gsFull === F.hist) { F.ignorePop++; try { root.history.back(); } catch (e) { F.ignorePop--; } }
     F.hist = 0;
     if (o.user && wasAuto && landscape()) F.autoOff = true;   // сам вышел из «повернул — на весь экран»: не возвращать до поворота
     emit(el);
@@ -235,9 +237,9 @@
   root.D37Full = {
     enter, exit: () => exit({ user: true }), toggle, rotate,
     // Открыта игра el (или null — закрыта): включает «повернул телефон — во весь экран»
-    auto(el){ F.autoEl = el || null; F.autoOff = false; if (!el && F.auto) exit(); check(); },
-    // Игру закрывают: если она (или что-то в ней) во весь экран — выйти
-    release(el){ if (F.autoEl && el && (F.autoEl === el || el.contains?.(F.autoEl))) F.autoEl = null; if (F.el && el && (F.el === el || el.contains?.(F.el))) exit(); },
+    auto(el){ F.autoEl = el || null; F.autoOff = false; if (!el && F.auto) exit({ noHist: true }); check(); },
+    // Игру закрывают (обычно переходом на другой адрес): если она (или что-то в ней) во весь экран — выйти, историю не трогая
+    release(el){ if (F.autoEl && el && (F.autoEl === el || el.contains?.(F.autoEl))) F.autoEl = null; if (F.el && el && (F.el === el || el.contains?.(F.el))) exit({ noHist: true }); },
     active: () => F.el,
     contains: el => !!(F.el && el && (F.el === el || F.el.contains?.(el))),
     state: () => ({ el: F.el, mode: F.mode, auto: F.auto, hist: F.hist, locked: F.locked, autoOff: F.autoOff, autoEl: F.autoEl, compact: de().classList.contains('gs-compact') }),

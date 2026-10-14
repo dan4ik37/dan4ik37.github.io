@@ -455,7 +455,12 @@
     const panel = doc.getElementById('navMorePanel') || doc.getElementById('navLinks');
     if (!panel || panel.querySelector('.gs-navset')) return;
     const a = doc.createElement('a'); a.href = '#'; a.className = 'gs-navset'; a.setAttribute('role', 'button'); a.textContent = '⚙️ Настройки';
-    a.addEventListener('click', e => { e.preventDefault(); open({ ctx: 'site' }); });
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      // меню ☰ закрыть (как при переходе — router.js), окно — поверх страницы
+      doc.getElementById('navLinks')?.classList.remove('open'); doc.getElementById('burger')?.classList.remove('open');
+      open({ ctx: 'site' });
+    });
     panel.appendChild(a);
   }
   if (doc?.addEventListener) {

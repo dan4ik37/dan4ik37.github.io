@@ -374,6 +374,13 @@ const ST = globalThis.D37Settings;
   ok(!F.state().el && !html.classList.contains('gs-full'), 'игру закрыли (release по сцене) — выход, даже если во весь экран её часть');
   await F.enter(stage); F.release(other); ok(F.state().el === stage, 'release чужого элемента не трогает');
   F.exit(); await tick(10);
+  // игру закрывают переходом (студия: ← → #/games) — «назад» звать нельзя: он отменил бы переход
+  await F.enter(stage); await tick(5);
+  const backs0 = H.backs, depth0 = H.i;
+  F.release(stage); globalThis.history.pushState(null, '', '#/games'); await tick(10);
+  ok(H.backs === backs0 && H.i === depth0 + 1 && !F.state().el, 'release — без «назад» (переход игры не отменяется)');
+  globalThis.history.back(); await tick(10);
+  ok(!F.state().el, '«Назад» на старую запись полного экрана — ничего не включает');
   ok(F.contains(stage) === false, 'contains — после выхода нет');
 
   // 9. html кнопки ⛶

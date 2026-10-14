@@ -3444,6 +3444,9 @@ html.gs-full #gamesSupport,html.gs-full #gamesAd{display:none!important}
 #gamesStage.gs-fs[hidden]{display:none}
 #gamesStage.gs-fs>.gm-stage-bar{margin:0;flex:none}
 #gamesStage.gs-fs #gamesStageBox{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+/* телефон лёжа: игра выше экрана — уменьшена целиком (games.js gamesFit) */
+#gamesStage.gs-fs #gamesStageBox.gm-fit{transform-origin:50% 0;overflow:visible}
+html.gs-compact #gamesStage.gs-fs #gamesStageBox:not(.gm-fit){overflow-x:hidden}
 /* «Мир Денчика»: своя панель — шапка игры не нужна; панель мира — полоской сверху, чат — снизу, 3D — всё между */
 #gamesStage.gs-fs.gm-own-bar{padding:0;gap:0}
 #gamesStage.gs-fs.gm-own-bar>.gm-stage-bar{display:none}

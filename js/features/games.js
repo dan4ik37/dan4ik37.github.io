@@ -223,6 +223,7 @@ async function openGame(id, param){
     if (gamesActive !== id) return;   // пока грузилось, ушли на другую игру
     box.innerHTML = '';
     GAME_IMPL[id].mount(box, { ...gamesApi(id), param: gamesParam });
+    gamesFitSoon();   // телефон лёжа во весь экран — игру подогнать по высоте
     window.scrollTo({ top: document.getElementById('games-page').offsetTop - 70, behavior: 'smooth' });
   } catch (e) {
     box.innerHTML = `<div class="empty-state"><span class="empty-state-icon">😵</span><div class="empty-state-title">Игра не загрузилась</div><div class="empty-state-text">Проверь интернет и обнови страницу.</div></div>`;
@@ -262,6 +263,42 @@ function gamesFullOff(stage){
   window.D37Full?.auto(null);
   if (stage) { window.D37Full?.release(stage); delete stage.dataset.game; }
 }
+// Полный экран на телефоне лёжа (html.gs-compact): игра выше экрана — уменьшаем её целиком (transform: на нажатия не
+// влияет — игры считают их по getBoundingClientRect), чтобы влезла без прокрутки. У 3D-мира, Студии, «Орды» и Unity размер свой.
+const GAMES_NOFIT = new Set(['world', 'studio3d', 'horde', 'unity']);
+let gamesFitT = 0, gamesFitRO = null, gamesFitMO = null;
+function gamesFit(){
+  const box = document.getElementById('gamesStageBox'), stage = document.getElementById('gamesStage');
+  if (!box || !stage) return;
+  box.style.transform = ''; box.classList.remove('gm-fit');
+  if (!document.documentElement.classList.contains('gs-compact') || !stage.classList.contains('gs-fs') || !gamesActive || GAMES_NOFIT.has(gamesActive)) return;
+  // размер игры — по её верхним блокам (scrollHeight врёт из-за спрятанных окошек внутри), место — по рамке (без полос прокрутки)
+  const r0 = box.getBoundingClientRect(), st = box.scrollTop, sl = box.scrollLeft;
+  let bottom = 0, right = 0;
+  for (const c of box.children) {
+    const r = c.getBoundingClientRect(); if (!r.width && !r.height) continue;
+    bottom = Math.max(bottom, r.bottom - r0.top + st + (parseFloat(getComputedStyle(c).marginBottom) || 0));
+    right = Math.max(right, r.right - r0.left + sl);
+  }
+  if (!bottom || !r0.height) return;
+  const s = Math.min(1, r0.height / bottom, r0.width / Math.max(right, 1));
+  if (s > .985) return;
+  if (s < .45) return;   // совсем не влезает — пусть прокручивается, мелко не делаем
+  box.scrollTop = 0; box.scrollLeft = 0;
+  box.style.transform = `scale(${s.toFixed(4)})`; box.classList.add('gm-fit');
+}
+function gamesFitSoon(){
+  clearTimeout(gamesFitT); gamesFitT = setTimeout(gamesFit, 90);
+  // игра перерисовалась (другой уровень, раздача) — подогнать заново; следим за размерами верхних блоков игры
+  const box = document.getElementById('gamesStageBox');
+  if (!box || !window.ResizeObserver) return;
+  if (!gamesFitRO) gamesFitRO = new ResizeObserver(() => { clearTimeout(gamesFitT); gamesFitT = setTimeout(gamesFit, 90); });
+  gamesFitRO.disconnect();
+  if (document.documentElement.classList.contains('gs-compact')) for (const c of box.children) gamesFitRO.observe(c);
+  if (!gamesFitMO && window.MutationObserver) { gamesFitMO = new MutationObserver(() => { if (document.documentElement.classList.contains('gs-compact')) gamesFitSoon(); }); gamesFitMO.observe(box, { childList: true }); }
+}
+window.addEventListener('d37:fullscreen', gamesFitSoon);
+window.addEventListener('resize', () => { if (document.documentElement.classList.contains('gs-compact') || document.getElementById('gamesStageBox')?.classList.contains('gm-fit')) gamesFitSoon(); });
 
 // ── Локальная статистика (работает и без входа) ──
 function gameLocalStats(id){

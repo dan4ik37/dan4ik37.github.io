@@ -280,8 +280,8 @@
     draw();
   }
   function cellAt(e){
-    const r = cv.getBoundingClientRect();
-    const x = Math.floor((e.clientX - r.left) / cell), y = Math.floor((e.clientY - r.top) / cell);
+    const r = cv.getBoundingClientRect(), k = cv.clientWidth / (r.width || cv.clientWidth || 1);   // игра может быть уменьшена целиком (games.js gamesFit)
+    const x = Math.floor((e.clientX - r.left) * k / cell), y = Math.floor((e.clientY - r.top) * k / cell);
     return x >= 0 && x < COLS && y >= 0 && y < ROWS ? { x, y } : null;
   }
   function showOv(html){ ov.innerHTML = html; ov.hidden = false; }
