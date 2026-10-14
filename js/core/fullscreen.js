@@ -179,7 +179,7 @@
     h.innerHTML = `<div class="gs-rothint-box"><span class="gs-rothint-ph" aria-hidden="true">📱</span><b>Поверни телефон горизонтально</b><small>${ios()
       ? 'Если экран не поворачивается — в Пункте управления выключи «Блокировку ориентации» (замок со стрелкой). Совсем без панелей Safari игра откроется с экрана «Домой»: «Поделиться» → «На экран «Домой»».'
       : 'Если экран не поворачивается — включи автоповорот в шторке телефона.'}</small><button type="button" class="gs-rothint-x">Понятно</button></div>`;
-    h.querySelector('button').onclick = () => rotHint(false);
+    const x = h.querySelector?.('button'); if (x) x.onclick = () => rotHint(false);
     (F.el || doc.body).appendChild(h);
   }
 
