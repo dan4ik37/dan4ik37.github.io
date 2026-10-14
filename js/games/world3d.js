@@ -1393,11 +1393,11 @@
         let p = o.parent; while (p && !p.userData.part) p = p.parent;
         if (!p || p.userData.part !== part || !o.material.isMaterial || o.material.isMeshBasicMaterial || o.material.transparent) return;
         let h = hlMats.get(o.material);
-        if (!h) { h = o.material.clone(); h.emissive = new T.Color('#6d4cff'); h.emissiveIntensity = .55; hlMats.set(o.material, h); }
+        if (!h) { h = o.material.clone(); h.emissive = new T.Color('#8f6bff'); h.emissiveIntensity = .7; hlMats.set(o.material, h); }
         o.userData.hl0 = o.material; o.material = h;
       });
     }
-    const pulseHL = t => { const k = .35 + .25 * Math.sin(t * 5); for (const h of hlMats.values()) h.emissiveIntensity = k; };
+    const pulseHL = t => { const k = .62 + .25 * Math.sin(t * 5); for (const h of hlMats.values()) h.emissiveIntensity = k; };
     return { T, Q, grad, toon, basic, geo, sph, cyl, tor, box, cone, rbox, emojiSprite, build, recolor, animate, dispose, trails, lights, cloth, mats, geos, texs, highlight, pulseHL, setExpr, EMOTES };
   }
 
@@ -1620,9 +1620,9 @@
     if (v === 'head') return { ty: hy + .03, rh: .8 * hs + .1, rw: .9 * hs + .15, up: .2 };
     if (v === 'hat') { const ty = (hy - .25 + top) / 2; return { ty, rh: (top - hy + .75) / 2 + .12, rw: .85 * hs, up: .2 }; }
     if (v === 'top' || v === 'torso') { const lo = hip - .15, hi = hy + .62 * hs; return { ty: (lo + hi) / 2, rh: (hi - lo) / 2 + .1, rw: .85, up: .25 }; }
-    if (v === 'armL' || v === 'armR') { const lo = hip - .25, hi = hy + .3 * hs; return { ty: (lo + hi) / 2, rh: (hi - lo) / 2 + .1, rw: .8, up: .25, rot: v === 'armL' ? -.75 : .75 }; }
+    if (v === 'armL' || v === 'armR') { const lo = hip - .35, hi = hy + .45 * hs; return { ty: (lo + hi) / 2, rh: (hi - lo) / 2 + .15, rw: .95, up: .25, rot: v === 'armL' ? -.75 : .75 }; }
     if (v === 'legs') return { ty: hip * .58, rh: hip * .58 + .16, rw: .6, up: .35 };
-    if (v === 'legL' || v === 'legR') return { ty: hip * .6, rh: hip * .6 + .2, rw: .55, up: .35, rot: v === 'legL' ? -.6 : .6 };
+    if (v === 'legL' || v === 'legR') return { ty: hip * .62, rh: hip * .78 + .28, rw: .8, up: .35, rot: v === 'legL' ? -.6 : .6 };
     if (v === 'feet') return { ty: .13, rh: .3, rw: .48, up: .35 };
     if (v === 'back') return { ty: top / 2, rh: top / 2 + .22, rw: 1.15, up: .3, yaw: PI };
     return { ty: top / 2, rh: top / 2 + .22, rw: .85, up: .3 };
