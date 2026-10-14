@@ -264,8 +264,8 @@ function shopKaspi(res){
   shopModal(`<h4>Оплата через Kaspi</h4>
     <ol class="shp-steps">
       <li>Нажми «Открыть Kaspi» и оплати ровно <b>${shopMoney(res.amount, res.currency)}</b>.</li>
-      <li>В комментарии к оплате напиши номер заказа: <b class="shp-login">${esc(res.order)}</b> <button type="button" class="dl-copy" onclick="shopCopy('${esc(res.order)}', this)">📋 Скопировать</button></li>
-      <li>${C.icon} ${shopNum(res.gems)} придут после проверки оплаты — обычно в течение дня. Заказ виден в «Истории».</li>
+      <li>Номер заказа: <b class="shp-login">${esc(res.order)}</b> <button type="button" class="dl-copy" onclick="shopCopy('${esc(res.order)}', this)">📋 Скопировать</button> — если Kaspi предложит комментарий, впиши его туда.</li>
+      <li>${C.icon} ${shopNum(res.gems)} придут после проверки оплаты (сверяем сумму и время) — обычно в течение дня. Заказ виден в «Истории». Не пришло за сутки — напиши нам номер заказа: <a href="/contacts" target="_blank">контакты</a>.</li>
     </ol>
     <div class="shp-modal-act"><button type="button" class="pf-btn pf-btn-ghost" onclick="shopModalClose()">Готово</button>
       <a class="pf-btn pf-btn-gold" href="${esc(res.pay.link)}" target="_blank" rel="noopener">Открыть Kaspi</a></div>`);
@@ -297,8 +297,11 @@ async function shopWaitPaid(orderId, gems){
 function shopAfterRedirect(orderId, failed){
   history.replaceState(null, '', '#/shop');
   if (failed) { shopToast('Оплата не прошла — деньги не списаны'); return; }
-  if (!currentUser) { shopToast('Войди, чтобы увидеть кристаллы'); return; }
-  shopWaitPaid(orderId, 0);
+  if (currentUser) { shopWaitPaid(orderId, 0); return; }
+  // Вернулись со страницы оплаты — вход ещё поднимается (Supabase восстанавливает сессию после загрузки)
+  const done = () => { clearTimeout(t); window.removeEventListener('d37:auth', done); if (currentUser) shopWaitPaid(orderId, 0); };
+  const t = setTimeout(() => { window.removeEventListener('d37:auth', done); if (!currentUser) shopToast('Войди, чтобы увидеть кристаллы'); }, 8000);
+  window.addEventListener('d37:auth', done);
 }
 
 // ── Траты ──
@@ -382,7 +385,7 @@ async function shopAdminLoad(){
       <div id="shpAdmFound"></div></div>
     <div class="shp-adm-sec"><b>Kaspi — ждут проверки (${data.kaspi.length})</b>
       ${data.kaspi.map(o => row(o, `<button class="dc-ok" onclick="shopAdminPaid('${esc(o.id)}', this)">✓ Оплачено</button>`)).join('') || '<p class="shp-small">Нет.</p>'}
-      <p class="shp-small">Увидел оплату в Kaspi Pay с этим номером заказа в комментарии и на эту сумму — жми «Оплачено».</p></div>
+      <p class="shp-small">Увидел в Kaspi Pay оплату ровно на эту сумму примерно в это время (или с номером заказа в комментарии) — жми «Оплачено». Сомневаешься — спроси покупателя.</p></div>
     <div class="shp-adm-sec"><b>Проблемные платежи (${data.problems.length})</b>
       ${data.problems.map(p => row({ ...p, id: p.order_id || p.payment_id }, `<small>${p.status === 'mismatch' ? 'сумма/валюта не сошлись' : 'нет заказа'}</small>`)).join('') || '<p class="shp-small">Нет.</p>'}
       <p class="shp-small">Деньги пришли, но не совпали с заказом — проверь в кабинете провайдера и начисли вручную или верни деньги.</p></div>
