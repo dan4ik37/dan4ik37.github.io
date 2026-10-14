@@ -9,8 +9,10 @@
 // та же физика: стены его держат), hi/snap — новичку всех сразу, say, emo, inv (позвать в игру или за столик), go (начать
 // партию за столом), mute. Лимит Supabase — 2 млн сообщений в месяц по числу получателей, поэтому шагов не шлём.
 // Столы: место — в presence (seat: id, код комнаты, время); код стола = код того, кто сел первым. Все места заняты (или
-// «Начать» за карточным столом) — отсчёт и все уходят в #/games/<игра>/<код>: это обычная онлайн-игра сайта. Вернулся —
-// стоишь у того же стола. Нет WebGL или выбран плоский мир — старый мир (world.js, GAME_IMPL.world до этого файла).
+// «Начать» за карточным столом) — отсчёт, и у всех за столом партия #/games/<игра>/<код> открывается ОКНОМ ПОВЕРХ МИРА
+// (js/games/mir-play.js): мир не выгружается, связь и место за столом остаются, в presence — pl { g, c } («играет»).
+// Партия кончилась / «↩ В мир» — стоишь у того же стола. Автоматы, ворота, приглашения — так же. Окно не открылось —
+// по-старому, на страницу игры (там «↩ В мир»). Нет WebGL или выбран плоский мир — старый мир (world.js, GAME_IMPL.world до этого файла).
 (() => {
   const OLD = window.GAME_IMPL?.world;
   const MAX_ROOM = 20, SHARDS = 6, IDLE_MS = 15 * 60e3, HIDDEN_MS = 10 * 60e3, CHAN = 'mir-';
@@ -392,7 +394,7 @@
         prompt: () => {
           if (S.mySeat?.id === sp.id) return null;
           const who = S.occ?.get(sp.id);
-          if (who && who !== S.me) return 'Занято: ' + who.nick;
+          if (who && who !== S.me) return 'Занято: ' + who.nick + (who.playing ? ' (играет)' : '');
           if (sp.tb) { const gi = gameInfo(sp.tb.game); return `${sp.stand ? 'Встать к столу' : 'Сесть'}: ${gi.icon} ${gi.title}`; }
           return 'Сесть';
         },
@@ -658,7 +660,7 @@
     R.setSky('#5aa7ff', '#cfeaff', '#eaf6ff', 90, 230);
     const ph = S.ph = new E.Phys({ ground: 0 });
     const C = S.C = E.controls({ onKey: () => activity() });
-    const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb' });
+    const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb, .mp' });
     const X = S.X = E.interact(ph, { who: S.key });
     S.world = buildWorld(R, ph, X, S);
     S.calls = R.bakeStatic();
@@ -692,7 +694,8 @@
     // камера в домах ближе, крыша прячется
     S.inside = null;
     S.loop = E.loop(update, frame);
-    const ro = window.ResizeObserver ? new ResizeObserver(() => R.resize()) : null;
+    // игра поверх мира: цикл стоит — после смены размера один кадр, чтобы мир за окном не пропал
+    const ro = window.ResizeObserver ? new ResizeObserver(() => { R.resize(); if (S?.playing && !S.stopped) { try { R.render(); } catch (e) {} } }) : null;
     ro?.observe(wrap);
     R.resize();
     S.cleanup3d = () => { ro?.disconnect(); };
@@ -854,7 +857,7 @@
       else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') status('Связь с миром потерялась — переподключаемся…');
     });
   }
-  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0 });
+  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0, pl: S.playing ? { g: S.playing.g, c: S.playing.c } : null });
   const retrack = () => { if (S?.ch && S.keys) S.ch.track(presenceMeta()).catch(() => {}); };
   function leaveChannel(){ const ch = S?.ch; if (!ch) return; S.ch = null; try { ch.untrack(); } catch (e) {} try { sbClient.removeChannel(ch); } catch (e) {} }
   function onSync(){
@@ -883,6 +886,9 @@
       // место за столом/на скамейке
       const s = m.seat && typeof m.seat.id === 'string' && S.world.seats.has(m.seat.id) ? { id: m.seat.id, c: /^[a-z0-9]{4,12}$/.test(m.seat.c || '') ? m.seat.c : null, t: +m.seat.t || 0 } : null;
       p.seat = s;
+      // играет поверх мира (js/games/mir-play.js): какая игра и код комнаты; plAt — когда мы это увидели
+      const pl = m.pl && typeof m.pl.g === 'string' && /^[a-z0-9_]{1,16}$/.test(m.pl.g) ? { g: m.pl.g, c: /^[a-z0-9]{4,12}$/.test(m.pl.c || '') ? m.pl.c : null } : null;
+      if ((pl?.g || '') + '|' + (pl?.c || '') !== (p.playing?.g || '') + '|' + (p.playing?.c || '')) { p.playing = pl; p.plAt = pl ? Date.now() : 0; }
     }
     for (const [key, p] of S.players) if (!seen.has(key) && !p.leaving) p.leaving = now();
     recomputeSeats();
@@ -1042,9 +1048,9 @@
       if (sp?.tb) { if (!byTable.has(sp.tb.id)) byTable.set(sp.tb.id, []); byTable.get(sp.tb.id).push(it); }
     }
     S.occ = occ; S.byTable = byTable;
-    // код стола — у того, кто сел первым
-    if (S.mySeat?.tb) {
-      const list = byTable.get(S.mySeat.tb.id) || [], host = list.find(it => it.c);
+    // код стола — у того, кто сел первым (кто сейчас играет поверх мира — не в счёт: его партия уже идёт, новым — новый код)
+    if (S.mySeat?.tb && !S.playing) {
+      const list = byTable.get(S.mySeat.tb.id) || [], host = list.find(it => it.c && !it.p.playing);
       if (host && host.c !== S.mySeat.c && host.p !== S.me) { S.mySeat.c = host.c; retrack(); }
     }
     renderTablePanel();
@@ -1056,10 +1062,21 @@
     if (!P.sitOn({ x: sp.x, y: sp.y, z: sp.z, yaw: sp.yaw, stand: sp.stand })) return;
     S.AU.play('click');
     if (!sp.tb) { S.mySeat = { id: sp.id, t: Date.now(), c: null }; retrack(); recomputeSeats(); return; }
-    const list = S.byTable?.get(sp.tb.id) || [], host = list.find(it => it.c && it.p !== S.me);
+    const list = S.byTable?.get(sp.tb.id) || [], host = list.find(it => it.c && it.p !== S.me && !it.p.playing);
     S.mySeat = { id: sp.id, tb: sp.tb, s: sp.s, t: Date.now(), c: host ? host.c : newCode() };
     S.countdown = 0;
     retrack(); recomputeSeats();
+  }
+  // За столом уже играют поверх мира: busy — партия идёт без меня (началась до того, как я сел), join — началась после и с
+  // кодом моего стола (это и моя партия: «go» могло не дойти — догоняем сами)
+  function tableState(list, me, my){
+    let busy = false, join = false;
+    for (const it of list) {
+      const pl = it.p.playing;
+      if (it.p === me || !pl) continue;
+      if (pl.c && pl.c === my.c && it.p.plAt >= my.t) join = true; else busy = true;
+    }
+    return { busy, join };
   }
   function leaveSeat(){
     if (!S.mySeat) return;
@@ -1070,7 +1087,9 @@
   function tableTick(dt){
     const my = S.mySeat;
     if (!my?.tb) { S.countdown = 0; return; }
-    const list = S.byTable?.get(my.tb.id) || [], full = list.length >= my.tb.n;
+    const list = S.byTable?.get(my.tb.id) || [], ts = tableState(list, S.me, my);
+    if (ts.join) { S.countdown = 0; startGame(my.tb, my.c); return; }
+    const full = !ts.busy && list.length >= my.tb.n;
     if (full) {
       if (!S.countdown) { S.countdown = 3.2; S.AU.play('coin'); }
       const prev = Math.ceil(S.countdown);
@@ -1079,17 +1098,20 @@
       if (S.countdown <= 0) { S.countdown = 0; startGame(my.tb, my.c); }
     } else if (S.countdown) { S.countdown = 0; renderTablePanel(); }
   }
-  // В игру: сначала «начали» всем за столом (кто досчитал первым — уводит остальных: иначе его уход отменит их отсчёт)
+  // В игру: сначала «начали» всем за столом (кто досчитал первым — зовёт остальных), потом партия — окном поверх мира
+  // (js/games/mir-play.js; все за столом входят в одну комнату по коду стола). Окно не открылось — по-старому, на страницу игры.
   async function startGame(tb, code){
-    if (!S || S.leavingTo) return;
+    if (!S || S.leavingTo || S.playing) return;
     const st = S, sp = S.world.seats.get(S.mySeat?.id);
-    // вернуться — к этому же столу (стоя рядом)
+    // перезагрузил страницу / ушёл на страницу игры — вернёшься к этому же столу (стоя рядом)
     if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw);
-    st.leavingTo = `#/games/${tb.game}/${code}`;
     const n = (st.byTable?.get(tb.id) || []).length || 2;
     try { sessionStorage.setItem('d37_autostart', JSON.stringify({ g: tb.game, c: code, n, t: Date.now() })); } catch (e) {}
-    try { await Promise.race([send({ t: 'go', tb: tb.id, c: code }), new Promise(r => setTimeout(r, 600))]); } catch (e) {}
-    location.hash = st.leavingTo;
+    const sent = send({ t: 'go', tb: tb.id, c: code }).catch(() => {});
+    if (playOver(tb.game, code, { tb, auto: { g: tb.game, c: code, n } })) return;
+    st.leavingTo = `#/games/${tb.game}/${code}`;
+    try { await Promise.race([sent, new Promise(r => setTimeout(r, 600))]); } catch (e) {}   // уходим из мира — пусть «начали» успеет уйти
+    if (S === st) location.hash = st.leavingTo;
   }
   function renderTablePanel(){
     let box = S.q('.mir-tb');
@@ -1098,6 +1120,11 @@
     if (!box) { box = document.createElement('div'); box.className = 'wld-inv mir-tb'; S.wrap.appendChild(box); box.addEventListener('click', e => { const b = e.target.closest('[data-tb]'); if (b) tableAct(b.dataset.tb); }); }
     const tb = my.tb, gi = gameInfo(tb.game), list = S.byTable?.get(tb.id) || [], n = list.length, others = list.filter(it => it.p !== S.me).map(it => esc(it.p.nick));
     let msg;
+    if (tableState(list, S.me, my).busy) {   // за столом ещё доигрывают свою партию (поверх мира)
+      box.innerHTML = `<div><b>${gi.icon} ${esc(gi.title)}</b>: здесь идёт партия — ${list.filter(it => it.p !== S.me && it.p.playing).map(it => esc(it.p.nick)).join(', ')} ${list.filter(it => it.p !== S.me && it.p.playing).length > 1 ? 'играют' : 'играет'}. Подожди или садись за другой стол.</div><div class="wld-acts"><button type="button" data-tb="up">Встать</button></div>`;
+      box.hidden = false;
+      return;
+    }
     if (S.countdown > 0) msg = `<b>${gi.icon} ${esc(gi.title)}</b>: все на месте — начинаем через <b>${Math.ceil(S.countdown)}</b>…`;
     else if (n < 2) msg = `<b>${gi.icon} ${esc(gi.title)}</b> · ${n}/${tb.n}. Ждём соперника — или позови друга.`;
     else msg = `<b>${gi.icon} ${esc(gi.title)}</b> · ${n}/${tb.n}: ${others.join(', ')}`;
@@ -1114,7 +1141,10 @@
     const tb = my.tb;
     activity();
     if (a === 'up') S.P.standUp();
-    else if (a === 'bot') { const sp = S.world.seats.get(my.id); if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw); S.leavingTo = `#/games/${tb.game}`; location.hash = S.leavingTo; }
+    else if (a === 'bot') {   // с ботом — меню игры поверх мира (сидишь за столом, пока играешь)
+      const sp = S.world.seats.get(my.id); if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw);
+      if (!playOver(tb.game, null, { tb })) { S.leavingTo = `#/games/${tb.game}`; location.hash = S.leavingTo; }
+    }
     else if (a === 'go') startGame(tb, my.c);
     else if (a === 'link') {
       const url = `${location.origin}/#/games/${tb.game}/${my.c}`;
@@ -1147,7 +1177,7 @@
     });
     q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly && typeof openGlobalAuth === 'function') openGlobalAuth(); });
     q('.wld-say input').addEventListener('keydown', e => { if (e.key === 'Escape') e.target.blur(); });
-    el.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b)) onAct(b.dataset.act, b); });
+    el.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b) && !b.closest('.mp')) onAct(b.dataset.act, b); });   // .mp — игра поверх мира: её data-act не наши
     const onVis = () => { if (document.hidden) S.hiddenAt = Date.now(); else S.hiddenAt = 0; };
     document.addEventListener('visibilitychange', onVis);
     S.cleanupUi = () => document.removeEventListener('visibilitychange', onVis);
@@ -1285,7 +1315,61 @@
     const gi = gameInfo(gt.g);
     panel(`<span class="wld-pe">${gt.e}</span><b>${esc(gt.name)}</b>`, `<p>${esc(gi.desc || '')}</p><div class="wld-acts"><button type="button" class="ct-start" data-act="go:#/games/${gt.g}">▶ Играть</button>${NO_ROOM.has(gt.g) ? '' : `<button type="button" data-act="room:${gt.g}">👥 С другом</button>`}${COOP.has(gt.g) ? `<button type="button" data-act="coop:${gt.g}">🤝 Вместе</button>` : ''}</div>`);
   }
-  function go(hash){ savePos(); S.leavingTo = hash; location.hash = hash; }
+  // Перейти: игру (автомат, ворота, приглашение, «С другом») — окном поверх мира; остальное — как раньше, со страницы мира
+  function go(hash){
+    savePos();
+    const r = /^#\/games\/([a-z0-9_]+)(?:\/(.+))?$/.exec(hash || '');
+    if (r && r[1] !== 'world' && playOver(r[1], r[2] || null)) return;
+    S.leavingTo = hash; location.hash = hash;
+  }
+
+  // ═══ Игра поверх мира (js/games/mir-play.js): мир не выгружается — цикл на паузе (физика, жители, отрисовка стоят),
+  // клавиатура и мышь — игре, звуки мира — тише; связь, presence и место за столом остаются, в presence — pl («играет»).
+  // false — окно не открыть (нет mir-play.js, игра не умеет) — тогда по-старому, на страницу игры.
+  function playOver(g, param, o = {}){
+    const MP = window.MirPlay, st = S;
+    if (!st?.wrap || !st.loop || !MP?.can?.(g)) return false;
+    if (st.playing) return true;
+    if (st.editing) closeEditor();
+    const c = /^[a-z0-9]{4,12}$/.test(param || '') ? param : null;
+    st.playing = { g, c, tb: o.tb || null, t: Date.now() };
+    playPause(true);
+    retrack();
+    MP.open(g, param || null, {
+      wrap: st.wrap, auto: o.auto || null,
+      where: o.tb ? '🌍 Мир Денчика · за столом' : '🌍 Мир Денчика',
+      onRoute: (g2, p2) => { if (S === st && st.playing) { st.playing.g = g2; st.playing.c = /^[a-z0-9]{4,12}$/.test(p2 || '') ? p2 : null; retrack(); } },
+      onClose: why => { if (S === st) playClosed(why); },
+      onFail: () => { if (S === st && !st.leavingTo) { st.leavingTo = `#/games/${g}${param ? '/' + param : ''}`; location.hash = st.leavingTo; } },
+    });
+    return true;
+  }
+  function playPause(on){
+    const st = S; if (!st) return;
+    if (on) {
+      closePops();
+      st.loop?.pause(true);
+      if (st.C) { st.C.reset_state(); st.C.off = true; }
+      if (st.I) { st.I.unlock?.(); st.I.reset?.(); st.I.enabled = false; }
+      if (st.AU?.volume) { st.vol0 = st.AU.vol; st.AU.volume(0); }
+    } else {
+      if (st.C) { st.C.off = false; st.C.reset_state(); }
+      if (st.I) { st.I.reset?.(); st.I.enabled = true; }
+      if (st.AU?.volume && st.vol0 != null) { st.AU.volume(st.vol0); st.vol0 = null; }
+      st.idleAt = Date.now();
+      if (!st.stopped && !st.editing) st.loop?.pause(false);
+    }
+  }
+  // Окно закрылось: мир дальше; сидел за столом — встаёшь рядом (место свободно — новая партия только по новому «сели»)
+  function playClosed(why){
+    const st = S; if (!st?.playing) return;
+    st.playing = null;
+    if (why === 'unmount') return;   // мир и так закрывается
+    playPause(false);
+    if (st.mySeat?.tb) { st.P?.standUp(); if (st.mySeat) leaveSeat(); }   // встаёшь у стола (P.on('stand') → leaveSeat → retrack)
+    else retrack();
+    if (why === 'editor') openEditor();
+  }
   function inviteMenu(p){
     const sub = S.q('.wld-card .wld-sub'); if (!sub) return;
     sub.hidden = false;
@@ -1397,9 +1481,15 @@
     map.needsUpdate = true;
   }
 
+  // Вывести из мира за бездействие? Пока играешь поверх мира — нет (вкладка спрятана — только через 3 × HIDDEN_MS)
+  function afkDue(st, t){
+    if (st.playing) return !!st.hiddenAt && t - st.hiddenAt > HIDDEN_MS * 3;
+    return t - st.idleAt > IDLE_MS || (!!st.hiddenAt && t - st.hiddenAt > HIDDEN_MS);
+  }
   function housekeeping(){
     if (!S || S.stopped) return;
-    if (Date.now() - S.idleAt > IDLE_MS || (S.hiddenAt && Date.now() - S.hiddenAt > HIDDEN_MS)) {
+    if (S.playing) S.idleAt = Date.now();   // игра поверх мира — это не «стоит на месте»
+    if (afkDue(S, Date.now())) {
       S.stopped = true;
       leaveChannel();
       S.loop?.pause(true);
@@ -1439,7 +1529,7 @@
       if (p.v?.vip) col = VIPC[p.v.vip] || col;
       if (p.v?.role && ROLE[p.v.role]) { col = ROLE[p.v.role][1]; pre = ROLE[p.v.role][0] + ' '; }
       if (p.uid && S.friends.has(p.uid)) pre = '💚 ' + pre;
-      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '');
+      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '') + (p.playing ? ` · ${gameInfo(p.playing.g).icon} играет` : '');
       const nm = el.lastChild;
       if (nm.textContent !== name) nm.textContent = name;
       if (nm.style.color !== col) nm.style.color = col;
@@ -1479,6 +1569,9 @@
   function unmount(){
     if (!S) return;
     const s = S;
+    // игра поверх мира — закрыть вместе с миром; сидел за столом — место «рядом со столом» уже сохранено в startGame
+    const seatedPlay = !!(s.playing && s.mySeat);
+    if (s.playing) { try { window.MirPlay?.close('unmount'); } catch (e) { console.error(e); } s.playing = null; }
     s.stopped = true;
     clearInterval(s.tick); clearTimeout(s.invT);
     if (s.mySeat) { s.mySeat = null; }
@@ -1490,7 +1583,7 @@
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
-    if (!s.leavingTo) savePos();
+    if (!s.leavingTo && !seatedPlay) savePos();
     S = null;
   }
 
@@ -1511,6 +1604,6 @@
       }, 0);
     },
     unmount(){ current?.unmount(); current = null; },
-    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S },
+    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S, afkDue, tableState },
   };
 })();
