@@ -12,6 +12,7 @@
 //   chordDown(a, b) — нажали вместе (≤ 0,12 с между нажатиями); move {x, z} — ходьба (клавиши −1/0/1, стик — плавно);
 //   look {dx, dy} — поворот камеры правым стиком (в пикселях, как мышь), забирает камера.
 // blocked = true (открыто окно) — игровые чтения молчат, кроме «запертых» (pause); downRaw/heldRaw — мимо замка.
+// off = true — клавиатура совсем мимо (не запоминаем и не гасим preventDefault): поверх мира открыта игра (js/games/mir-play.js).
 // Подсказки: label(a) «Пробел», hint(a) «[E]», fmt('Открыть {interact}') → «Открыть E», title(a) — название.
 // Переназначение: get(a, slot), set(a, slot, code), reset(a), resetAll(), capture(cb) — ждёт клавишу (Esc — отмена),
 // conflicts() — клавиша у двух действий. Новое действие — строка в ACTIONS; id не переименовывать (сбросит клавишу игрока).
@@ -57,7 +58,7 @@
   const typing = t => !!t?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
 
   E.controls = function (o = {}){
-    const C = { blocked: false, now: 0, move: { x: 0, z: 0 }, look: { dx: 0, dy: 0 }, capturing: false, pad: false, actions: ACTIONS.map(a => a[0]) };
+    const C = { blocked: false, off: false, now: 0, move: { x: 0, z: 0 }, look: { dx: 0, dy: 0 }, capturing: false, pad: false, actions: ACTIONS.map(a => a[0]) };
     const binds = new Map();                 // action → [code0, code1]
     const down = new Set();                  // клавиши, нажатые сейчас
     const edgeDown = new Set(), edgeUp = new Set();   // нажали/отпустили с прошлого шага
@@ -118,7 +119,7 @@
           cb(e.code === 'Escape' ? null : e.code);
           return;
         }
-        if (typing(e.target) || e.ctrlKey || e.metaKey) return;
+        if (C.off || typing(e.target) || e.ctrlKey || e.metaKey) return;   // off — игра поверх мира
         if (e.repeat) { if (isBound(e.code)) e.preventDefault(); return; }
         C.key(e.code, true);
         if (isBound(e.code) && !(e.code === 'Escape')) e.preventDefault();
