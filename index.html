@@ -1020,6 +1020,9 @@ body.low .donation-alert-icon{animation:none}
 .confirm-ok:hover{background:#e0244a}
 </style>
 <link rel="stylesheet" href="css/premium.css">
+<!-- Чат «как Дискорд» + лента сообщений (community.js, msgview.js) и телефон 📱 (phone.js, calls.js) -->
+<link rel="stylesheet" href="css/ds.css">
+<link rel="stylesheet" href="css/phone.css">
 </head>
 <body>
 
@@ -1102,6 +1105,8 @@ body.low .donation-alert-icon{animation:none}
     <a href="/vip" class="nav-vip">✨ VIP</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
+  <!-- ТЕЛЕФОН 📱 (js/features/phone.js): сообщения, звонки, сообщества, друзья, камера, карта -->
+  <button type="button" class="phone-btn" id="phoneBtn" onclick="window.D37Phone&&D37Phone.toggle()" aria-label="Телефон" title="Телефон: сообщения, звонки, друзья, сообщества">📱<em class="ph-bdg" data-ph-badge="total" hidden></em></button>
   <button class="site-search-btn" onclick="openCmdPalette()" aria-label="Поиск по сайту" title="Поиск по сайту (Ctrl+K или /)">🔍</button>
   <div class="lang-wrap" id="langWrap">
     <button class="lang-btn" onclick="toggleLang(event)">
@@ -1990,88 +1995,29 @@ body.low .donation-alert-icon{animation:none}
   </div>
 </div>
 
-<!-- CHAT -->
+<!-- CHAT: «как Дискорд» — сервер сайта «Денчик37» (общий чат, js/features/chat.js) + сообщества игроков
+     (js/features/community.js, лента — js/features/msgview.js). Разметку рисует community.js в #dsHost. -->
 <div class="wrap reveal" id="chat" style="padding-top:2rem">
   <div class="divider"></div>
-  <h2 class="sec-title">Живой чат 💬</h2>
-  <div class="chat-wrap">
-    <div class="chat-header">
-      <div class="chat-live-dot"></div>
-      <div class="chat-title">ЧАТ dan4ik37</div>
-      <div style="display:flex;align-items:center;gap:.6rem;margin-left:auto">
-        <div class="chat-subtitle" id="chatSubtitle">Сайт</div>
-        <div class="chat-online"><div class="chat-online-dot"></div><span id="chatOnlineCount">0</span> онлайн</div>
-        <button class="chat-auth-btn chat-full-btn" id="chatFullBtn" aria-label="Чат на весь экран" onclick="toggleChatFull()" title="Чат на весь экран (экран не будет гаснуть)">⛶</button>
-        <button class="chat-auth-btn" aria-label="Поиск по чату" onclick="toggleChatSearch()" title="Поиск по чату" style="background:none;border:1px solid var(--border);border-radius:8px;width:28px;height:28px;color:var(--muted);cursor:pointer;font-size:.8rem">🔍</button>
-        <button class="chat-auth-btn" id="chatAuthBtn" aria-label="Вход для модераторов" onclick="openGlobalAuth()" title="Вход для модераторов" style="display:none">⚙</button>
-      </div>
-    </div>
-    <div id="chatSearchBar" style="display:none;padding:.6rem 1rem;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02)">
-      <div style="display:flex;gap:.5rem">
-        <input id="chatSearchInput" placeholder="Поиск по сообщениям..." oninput="debouncedChatSearch()" onkeydown="if(event.key==='Escape')toggleChatSearch()" style="flex:1;background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.8rem;outline:none">
-        <button onclick="toggleChatSearch()" aria-label="Закрыть поиск" style="background:none;border:1px solid var(--border);border-radius:8px;width:34px;color:var(--muted);cursor:pointer">✕</button>
-      </div>
-      <div id="chatSearchResults" style="max-height:280px;overflow-y:auto;margin-top:.6rem;display:flex;flex-direction:column;gap:.4rem"></div>
-    </div>
-    <div class="chat-status-bar" id="chatStatusBar" role="status" aria-live="polite" style="display:none"></div>
-    <div class="chat-mod-panel" id="chatModPanel" style="display:none">
-      <span id="modPanelRole">🛡 Модератор</span>
-      <span id="modPanelNick" style="color:var(--text);font-weight:600"></span>
-      <button class="chat-mod-logout" onclick="confirmLogout()">Выйти</button>
-    </div>
-    <div class="chat-tabs">
-      <button class="chat-tab active" onclick="switchChat('local',this)">💬 Сайт</button>
-      <button class="chat-tab" onclick="switchChat('twitch',this)">◉ Twitch</button>
-    </div>
-    <div class="chat-body">
-
-      <!-- Локальный чат -->
-      <div class="local-chat active" id="chat-local" style="display:flex">
-
-        <!-- Закреплённое сообщение (VIP/модерация) -->
-        <div id="chatPinBar" style="display:none;align-items:center;gap:.6rem;padding:.6rem .9rem;background:rgba(255,215,0,.08);border-bottom:1px solid rgba(255,215,0,.2);font-size:.78rem">
-          <span style="flex-shrink:0">📌</span>
-          <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b id="chatPinNick"></b>: <span id="chatPinText"></span></div>
-          <button id="chatPinUnpinBtn" onclick="unpinMessage(chatPinnedId)" style="display:none;flex-shrink:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:.85rem" title="Открепить">✕</button>
-        </div>
-
-        <!-- Сообщения -->
-        <div class="chat-msgs" id="chatMsgs"></div>
-
-        <!-- Экран авторизации чата -->
-        <div id="chatNickScreen" style="padding:.8rem 1rem;border-top:1px solid var(--border);background:rgba(145,71,255,.04);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.45rem">
-          <button onclick="enterAsGuest()" style="padding:.7rem 2rem;border-radius:50px;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:800;font-size:.82rem;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;font-family:'Montserrat',sans-serif;transition:opacity .2s" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">👤 Войти как гость</button>
-          <div class="chat-auth-alt"><button type="button" onclick="openGlobalAuth()">Войти в аккаунт</button> · <button type="button" onclick="openGlobalAuth('register')">Создать профиль</button><span> — с уровнями и XP</span></div>
-        </div>
-
-        <!-- Поле ввода (после входа) -->
-        <div id="chatMainInput" style="display:none;flex-direction:column;border-top:1px solid var(--border)">
-          <!-- Строка ника -->
-          <div style="padding:.35rem 1rem;display:flex;align-items:center;justify-content:space-between;background:rgba(145,71,255,.05);font-size:.68rem">
-            <span style="color:var(--muted)">Ты в чате как: <strong id="chatNickDisplay" style="color:var(--tw)"></strong> <span id="chatNickRole" style="font-size:.58rem;opacity:.7"></span></span>
-            <button id="chatLocalLogoutBtn" onclick="chatLogout()" style="background:none;border:none;color:var(--muted);font-size:.68rem;padding:.45rem .5rem;margin:-.45rem -.5rem;cursor:pointer;font-family:'Montserrat',sans-serif;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--muted)'">Выйти</button>
-          </div>
-          <!-- Эмодзи пикер -->
-          <div id="emojiPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.3rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:100px;overflow-y:auto"></div>
-          <!-- Стикеры (VIP/стафф) -->
-          <div id="stickerPicker" onclick="event.stopPropagation()" style="display:none;flex-wrap:wrap;gap:.4rem;padding:.7rem 1rem;border-bottom:1px solid var(--border);background:var(--bg2);max-height:140px;overflow-y:auto"></div>
-          <!-- Автодополнение @упоминаний -->
-          <div id="chatMentionAutocomplete" style="display:none;position:relative"></div>
-          <!-- Строка отправки -->
-          <div class="chat-input-wrap">
-            <button onclick="toggleEmoji(event)" aria-label="Открыть эмодзи" style="background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:8px;padding:.5rem .7rem;color:var(--muted);cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Эмодзи">😀</button>
-            <button onclick="toggleStickerPicker(event)" aria-label="Открыть стикеры" style="background:rgba(255,215,0,.08);border:1px solid rgba(255,215,0,.25);border-radius:8px;padding:.5rem .7rem;color:#ffd700;cursor:pointer;font-size:1rem;transition:all .2s;flex-shrink:0" title="Стикеры (VIP)">🎉</button>
-            <input class="chat-input" id="chatInput" aria-label="Написать сообщение" placeholder="Написать сообщение..." maxlength="200" oninput="handleMentionInput()" onkeydown="handleChatInputKeydown(event)" onfocus="setTimeout(()=>this.scrollIntoView({block:'center',behavior:'smooth'}),300)" style="flex:1">
-            <button class="chat-send" aria-label="Отправить сообщение" onclick="sendMsg()">→</button>
-          </div>
-          <!-- Быстрые реакции снизу -->
-        </div>
-      </div>
-
-      <!-- Twitch чат -->
-      <iframe class="chat-frame" id="chat-twitch" title="Чат Twitch" allowfullscreen allow="autoplay; encrypted-media; clipboard-write" sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"></iframe>
-    </div>
+  <h2 class="sec-title">Чат и сообщества 💬</h2>
+  <div class="chat-status-bar" id="chatStatusBar" role="status" aria-live="polite" style="display:none"></div>
+  <div class="chat-wrap ds-wrap" id="dsHost"><div class="mv-load"><i></i>Загружаем чат…</div></div>
+  <!-- Старые узлы чата: их трогают global-auth.js и др. — оставлены скрытыми -->
+  <div hidden style="display:none" aria-hidden="true">
+    <span id="chatOnlineCount">0</span><span id="chatSubtitle"></span>
+    <div id="chatModPanel"><span id="modPanelRole"></span><span id="modPanelNick"></span></div>
+    <button id="chatAuthBtn" type="button" tabindex="-1"></button>
+    <div id="chatMsgs"></div><div id="chatNickScreen"></div><div id="chatMainInput"></div><strong id="chatNickDisplay"></strong>
+    <div id="chatTwitchHome"><iframe class="chat-frame" id="chat-twitch" title="Чат Twitch" allowfullscreen allow="autoplay; encrypted-media; clipboard-write" sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms"></iframe></div>
   </div>
+</div>
+
+<!-- ТЕЛЕФОН 📱 на странице (#/phone): тот же телефон, что открывается кнопкой в шапке -->
+<div class="wrap reveal" id="phone-page" style="padding-top:2rem">
+  <div class="divider"></div>
+  <h2 class="sec-title">Телефон 📱</h2>
+  <p class="gm-lead" style="text-align:center;margin:-.4rem auto 1rem;max-width:560px">Личные сообщения, звонки друзьям, сообщества, камера и карта «Мира Денчика». Тот же телефон открывается кнопкой 📱 вверху и клавишей P в мире.</p>
+  <div id="phoneDock"></div>
 </div>
 
 <!-- ══════════ САУНДБОРД ══════════ -->
@@ -2620,6 +2566,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/ideas.js"></script>
 <script src="js/features/xp.js"></script>
 <script src="js/features/notifications.js"></script>
+<!-- телефон 📱: корпус, значки, входящий звонок; приложения, звонки, сообщества и лента — грузятся сами при открытии -->
+<script src="js/features/phone.js"></script>
 <script src="js/features/games.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>

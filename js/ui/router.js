@@ -20,14 +20,19 @@ const PAGES = {
   forum:      ['forum-page'],
   lfg:        ['lfg-page'],
   games:      ['games-page'],
-  ads:        ['ad-bottom','ads']
+  ads:        ['ad-bottom','ads'],
+  phone:      ['phone-page']     // телефон 📱 на странице (js/features/phone.js)
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
 
 function showPage(route){
+  // Приглашение в сообщество /c/<код> → экран вступления в чате «как Дискорд» (community.js)
+  if(route==='c'){ location.replace('#/chat/join/' + String(currentRouteParam()||'').replace(/[^a-z0-9]/gi,'').toLowerCase()); return; }
   if(!PAGES[route]) route='home';
   const activeIds = PAGES[route];
   const isLowPerf = document.body.classList.contains('low');
+  // Тот же раздел (другой канал чата, другая игра) — без затухания: иначе каждый переход мигал
+  const sameRoute = document.body.dataset.route === route;
   const currentlyVisible = ALL_PAGE_IDS.filter(id=>{
     const el=document.getElementById(id);
     return el && el.style.display !== 'none';
@@ -40,7 +45,7 @@ function showPage(route){
     activeIds.forEach(id=>document.getElementById(id)?.classList.remove('route-fading'));
     finishShowPage(route, activeIds);
   };
-  if (isLowPerf || currentlyVisible.length === 0) {
+  if (isLowPerf || currentlyVisible.length === 0 || sameRoute) {
     // Первая загрузка или слабый режим — без анимации, сразу
     doSwap();
   } else {
@@ -62,6 +67,8 @@ function finishShowPage(route, activeIds){
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
   if (route==='donate' && typeof renderDonateVipHint==='function') renderDonateVipHint();
+  if (route==='chat' && typeof renderChatPage==='function') renderChatPage(currentRouteParam());     // чат «как Дискорд»
+  if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, currentRouteParam());      // телефон 📱 на странице
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{

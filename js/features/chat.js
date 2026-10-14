@@ -1,6 +1,13 @@
 // ═══════════════════════════════════════
 //  SUPABASE REALTIME CHAT + AUTH + MOD
 // ═══════════════════════════════════════
+// Общий чат сайта = официальный сервер «Денчик37» в разделе #/chat (как Дискорд: серверы слева, каналы, участники справа).
+// Канал #общий — та же таблица messages, что и раньше (старые вкладки пишут туда же); #игры, #поиск-тиммейтов, #мемы и
+// голосовой — после community.sql (колонки channel / reply_to / edited_at, таблица chat_channels). Пока он не выполнен —
+// только #общий, без ответов и правки (как было). Сама лента и поле ввода — общий компонент MsgView (msgview.js), раскладка
+// «как Дискорд» и сообщества — community.js (оба грузятся при первом заходе в чат или в телефон).
+// Здесь: вход/роль, баны, анти-спам, «кто онлайн» (presence: ник, а у вошедших — id, роль, VIP; невидимку — без id),
+// живая лента (одна подписка на messages — и для тоста «новое сообщение» на других страницах), адаптер канала для MsgView.
 const SB_URL = 'https://zdisuowyjgqirhvcyjfq.supabase.co';
 const SB_KEY = 'sb_publishable_55GhvJbDxDQA1JEawZRQ6g_ozx_cgMV';
 
@@ -31,11 +38,12 @@ function registerGoodMsg(){
 }
 const PRESENCE_KEY = 'user_' + Math.random().toString(36).slice(2,8);
 
-// Фильтр спама — базовые стоп-слова (расширяй по необходимости)
+// Фильтр спама — базовые стоп-слова (расширяй по необходимости). Ссылки на сам сайт можно (из них — карточки игр и видео)
 const SPAM_WORDS = ['http://','https://','discord.gg','t.me/joinchat','bit.ly','cutt.ly'];
 const MAX_MSG_LEN = 300;
 const RATE_LIMIT = 5; // сообщений
 const RATE_WINDOW = 60000; // за 60 секунд
+const isChatStaff = () => currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
 
 function initSupabase() {
   try {
@@ -82,11 +90,7 @@ async function sbProfiles(){ return sbClient.from(await profilesSource()); }
 const privacyAvailable = () => PROFILES_SRC === 'profiles_public';
 
 // ─── AUTH ───
-// Единая точка входа/выхода — doGlobalLogin()/doGlobalLogout() ниже.
-// (Раньше здесь был второй, независимый логин-модал (#chatAuthModal,
-// doLogin/openChatAuth/closeChatAuth) — он никогда не открывался ни из
-// одной кнопки и полностью дублировал глобальный вход. Удалён.)
-
+// Единая точка входа/выхода — doGlobalLogin()/doGlobalLogout() (global-auth.js).
 
 // Запасной ник, если в профиле ника нет. НЕ из email: раньше тут было
 // user.email.split('@')[0] — и начало почты светилось всем в чате и в шапке.
@@ -129,28 +133,18 @@ async function onAuthStateChange(user) {
   // Обновляем глобальную кнопку
   updateGlobalAuthBtn();
 
-  // Ник в чате = ник профиля для ЛЮБОГО вошедшего аккаунта (не только
-  // admin/moderator) — иначе зарегистрированный обычный пользователь
-  // видел бы экран "придумай ник гостя", хотя уже вошёл в аккаунт.
+  // Ник в чате = ник профиля для ЛЮБОГО вошедшего аккаунта
   chatNick = data?.nick || fallbackNick(user);
   try { localStorage.setItem('d37_nick', chatNick); } catch(e) {}
   showChatInput();
+  chatInfo(true);
 
-  if (currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper') {
+  if (isChatStaff()) {
     const roleLabel = currentRole === 'admin' ? '👑 Администратор' : currentRole === 'moderator' ? '🛡 Модератор' : '🧹 Хелпер';
-    document.getElementById('modPanelRole').textContent = roleLabel;
-    document.getElementById('modPanelNick').textContent = data?.nick || fallbackNick(user);
-    document.getElementById('chatModPanel').style.display = 'flex';
-    document.getElementById('chatAuthBtn').style.display = 'none';
-    // helper видит только кнопку удаления (см. CSS .is-helper), у
-    // admin/moderator — ещё и бан (.is-mod)
-    document.getElementById('chatMsgs').classList.add(currentRole === 'helper' ? 'is-helper' : 'is-mod');
+    const mr = document.getElementById('modPanelRole'); if (mr) mr.textContent = roleLabel;
+    const mn = document.getElementById('modPanelNick'); if (mn) mn.textContent = data?.nick || fallbackNick(user);
+    document.getElementById('chatMsgs')?.classList.add(currentRole === 'helper' ? 'is-helper' : 'is-mod');
     showChatStatus(`${roleLabel} — режим модерации активен`, true);
-    if (currentRole === 'helper') {
-      document.querySelectorAll('.msg-del-btn').forEach(b=>b.style.display='flex');
-    } else {
-      document.querySelectorAll('.msg-del-btn,.msg-ban-btn').forEach(b=>b.style.display='flex');
-    }
     if (currentRole === 'admin') {
       const editBtn = document.getElementById('pollEditBtn');
       if (editBtn) editBtn.style.display = 'inline-flex';
@@ -160,6 +154,8 @@ async function onAuthStateChange(user) {
     }
   }
 }
+// Выход (global-auth.js шлёт d37:auth) — у ленты пересчитать «можно ли писать»
+window.addEventListener('d37:auth', () => { if (!currentUser) { OFF.info = OFF.info ? Object.assign({}, OFF.info, { staff: null, muted_until: null }) : null; } chatRefresh(); trackOnline(); });
 
 // ─── BANS ───
 async function loadBans() {
@@ -170,38 +166,33 @@ async function loadBans() {
   } catch(e) {}
 }
 
-async function banNick(nick, msgEl) {
-  if (!sbClient || (currentRole !== 'admin' && currentRole !== 'moderator')) return;
-  // Нельзя банить себя
+// Бан по нику (как раньше): сообщения убираются у всех. → { ok, msg }
+async function banNickOfficial(nick) {
+  if (!sbClient || (currentRole !== 'admin' && currentRole !== 'moderator')) return { ok: false, msg: 'Банить могут админ и модераторы' };
   const myNick = currentProfile?.nick || '';
-  if (nick.toLowerCase() === myNick.toLowerCase() || nick.toLowerCase() === chatNick.toLowerCase()) {
-    showChatStatus('⚠ Нельзя забанить себя', false);
-    setTimeout(()=>document.getElementById('chatStatusBar').style.display='none',2000);
-    return;
-  }
-  // Нельзя банить других модераторов/админов
-  if (!confirm(`Забанить «${nick}»? Все его сообщения будут удалены.`)) return;
+  if (nick.toLowerCase() === myNick.toLowerCase() || nick.toLowerCase() === (chatNick || '').toLowerCase()) return { ok: false, msg: '⚠ Нельзя забанить себя' };
   try {
     await sbOk(sbClient.from('banned_nicks').insert([{ nick, banned_by: currentUser.id }]));
     bannedNicks.add(nick.toLowerCase());
     await sbOk(sbClient.from('messages').update({ deleted: true }).eq('nick', nick));
-    document.querySelectorAll('.chat-msg').forEach(el => {
-      if (el.dataset.nick === nick) el.classList.add('deleted');
-    });
-    addMsg('🔨 Система', `«${nick}» заблокирован`, 'var(--accent)', false, false, null, 'system');
-  } catch(e) { console.warn('ban error:', e); showChatStatus('⚠ Бан не прошёл: ' + humanErr(e), false, 6000); }
+    chatPushSys(`🔨 «${nick}» заблокирован`);
+    return { ok: true, msg: `🔨 «${nick}» заблокирован — его сообщения удалены` };
+  } catch(e) { console.warn('ban error:', e); return { ok: false, msg: '⚠ Бан не прошёл: ' + humanErr(e) }; }
+}
+async function banNick(nick) {
+  if (!confirm(`Забанить «${nick}»? Все его сообщения будут удалены.`)) return;
+  const r = await banNickOfficial(nick);
+  showChatStatus(r.msg, r.ok, 5000);
 }
 
-async function deleteMsg(id, msgEl) {
-  if (!sbClient || !(currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper')) return;
-  if (!id) { msgEl?.classList.add('deleted'); return; }
+async function deleteMsg(id) {
+  if (!sbClient || !isChatStaff() || !id) return { ok: false, err: 'нет прав' };
   try {
     await sbOk(sbClient.from('messages').update({ deleted: true }).eq('id', id));
-    msgEl.classList.add('deleted');
+    return { ok: true };
   } catch(e) {
-    // Раньше сообщение гасилось у модератора «локально», хотя у всех оставалось — теперь честно
     console.warn('delete error:', e);
-    showChatStatus('⚠ Не удалилось: ' + humanErr(e), false, 6000);
+    return { ok: false, err: humanErr(e) };
   }
 }
 
@@ -216,31 +207,13 @@ function checkRateLimit() {
 
 function checkSpam(text) {
   if (text.length > MAX_MSG_LEN) return `Сообщение слишком длинное (макс. ${MAX_MSG_LEN} символов)`;
+  const rest = text.replace(/https?:\/\/dan4ik37\.vercel\.app\S*/gi, '');   // ссылки на сам сайт — можно
   for (const w of SPAM_WORDS) {
-    if (text.toLowerCase().includes(w)) return 'Ссылки в чате запрещены';
+    if (rest.toLowerCase().includes(w)) return 'Ссылки в чате запрещены (кроме ссылок на этот сайт)';
   }
   // Повтор символов (флуд типа "ааааааааа")
   if (/(.)\1{9,}/.test(text)) return 'Флуд запрещён';
   return null;
-}
-
-// ─── MESSAGES ───
-async function loadRecentMessages() {
-  if (!sbClient) return;
-  try {
-    const { data } = await sbClient
-      .from('messages')
-      .select('*')
-      .eq('deleted', false)
-      .order('created_at', { ascending: true })
-      .limit(50);
-    if (data && data.length) {
-      document.getElementById('chatMsgs').innerHTML = '';
-      data.forEach(m => addMsg(m.nick, m.text, m.color || 'var(--tw)', false, true, m.id, m.role, m.user_id, m.vip_tier, m.is_sticker));
-      loadReactionsFor(data.map(m => m.id));
-    }
-    loadPinnedMessage();
-  } catch(e) { console.warn('loadMessages:', e); }
 }
 
 // Тост "новое сообщение в чате" — только если пользователь сейчас не на странице чата
@@ -264,58 +237,244 @@ function hideChatBadge(){
   document.getElementById('btChatBadge')?.classList.remove('show');
 }
 
-function subscribeRealtime() {
-  if (!sbClient) return;
-  sbChannel = sbClient
-    .channel('public:messages')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
-      const m = payload.new;
-      if (m.deleted) return;
-      if (bannedNicks.has(m.nick.toLowerCase())) return;
-      const isOwn = m.nick === chatNick;
-      addMsg(m.nick, m.text, m.color || 'var(--tw)', isOwn, true, m.id, m.role, m.user_id, m.vip_tier, m.is_sticker);
-      if (!isOwn && m.role !== 'reaction') {
-        const isMention = chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(m.text);
-        showChatToast(isMention ? `${esc(m.nick)} упомянул(а) тебя в чате` : null);
+// ═══════════════════════════════════════
+//  СЕРВЕР «ДЕНЧИК37»: каналы общего чата и адаптер для MsgView
+// ═══════════════════════════════════════
+const OFF = {
+  info: null,            // chat_info() — каналы, мой мут, роль в команде; null — community.sql ещё не выполнен
+  infoP: null,
+  channels: [{ id: 'general', name: 'общий', kind: 'text', slow: 0, mods_only: false, about: 'Общий чат сайта' }],
+  lastId: {},            // канал → последний известный id сообщения
+  mentions: {},          // канал → сколько раз меня упомянули, пока не смотрел
+  subs: new Map(),       // канал → Set(функций ленты)
+  authors: new Map(),    // id → { id, nick, role, vip, at } — кто писал (для «не в сети»)
+};
+const TWITCH_CH = { id: 'twitch', name: 'twitch-чат', kind: 'twitch', about: 'Чат трансляции на Twitch' };
+function chatInfo(fresh){
+  if (!sbClient) return Promise.resolve(null);
+  if (OFF.infoP && !fresh) return OFF.infoP;
+  OFF.infoP = sbClient.rpc('chat_info').then(({ data, error }) => {
+    if (error || !data?.channels) { OFF.info = null; return null; }
+    OFF.info = data;
+    OFF.channels = data.channels.filter(c => c.kind === 'text' || c.kind === 'voice');
+    if (!OFF.channels.some(c => c.id === 'general')) OFF.channels.unshift({ id: 'general', name: 'общий', kind: 'text', slow: 0, mods_only: false });
+    window.dispatchEvent(new Event('d37:chatinfo'));
+    chatRefresh();
+    return data;
+  }, () => null);
+  return OFF.infoP;
+}
+const chatHasNew = () => !!OFF.info;   // каналы, ответы, правка, жалобы — после community.sql
+function offChannels(){ return [...OFF.channels, TWITCH_CH]; }
+// Последние id каналов — для точек «есть новое» в списке каналов (по одному запросу на канал)
+async function chatLastIds(){
+  if (!sbClient || !chatHasNew()) return OFF.lastId;
+  await Promise.all(OFF.channels.filter(c => c.kind === 'text').map(async c => {
+    let qy = sbClient.from('messages').select('id').eq('deleted', false).order('id', { ascending: false }).limit(1);
+    qy = c.id === 'general' ? qy.is('channel', null) : qy.eq('channel', c.id);
+    try { const { data } = await qy; if (data?.[0]) OFF.lastId[c.id] = Math.max(OFF.lastId[c.id] || 0, data[0].id); } catch (e) {}
+  }));
+  return OFF.lastId;
+}
+// Строка messages → сообщение ленты
+function offMsg(r){
+  return { id: r.id, uid: r.user_id || null, nick: r.nick || 'гость', text: r.text || '', at: r.created_at || new Date().toISOString(),
+    reply: r.reply_to || null, edited: r.edited_at || null, deleted: !!r.deleted, sticker: !!r.is_sticker, role: r.role, vip: r.vip_tier || null,
+    color: r.color, pinned: !!(r.pinned_until && Date.parse(r.pinned_until) > Date.now()), pinnedUntil: r.pinned_until || null, pinnedBy: r.user_id, ch: r.channel || 'general' };
+}
+function rememberAuthor(m){
+  if (!m.uid || m.role === 'guest') return;
+  const a = OFF.authors.get(m.uid);
+  if (!a || a.at < m.at) OFF.authors.set(m.uid, { id: m.uid, nick: m.nick, role: m.role, vip: m.vip, at: m.at });
+}
+function chanQuery(q, chId){
+  if (!chatHasNew()) return q;
+  return chId === 'general' ? q.is('channel', null) : q.eq('channel', chId);
+}
+const DEMO_MSGS = [
+  { nick: 'dan4ik37', text: 'Привет всем! Добро пожаловать на сайт 👋', role: 'admin' },
+  { nick: 'Зритель', text: 'Привет! Очень крутой сайт! 🔥', role: 'user' },
+  { nick: 'FanDan', text: 'Когда следующий стрим? 🎮', role: 'user' },
+  { nick: 'dan4ik37', text: 'Скоро! Следите в Telegram 💪', role: 'admin' },
+];
+// Адаптер канала сервера «Денчик37» для MsgView (msgview.js)
+function chatAdapter(chId){
+  const ch = OFF.channels.find(c => c.id === chId) || OFF.channels[0];
+  const id = ch.id, staffRole = () => OFF.info?.staff || (isChatStaff() ? currentRole : null);
+  const mine = m => m.uid ? m.uid === currentUser?.id : (!currentUser && m.nick === chatNick);
+  const A = {
+    key: 'o:' + id, title: '#' + ch.name, maxLen: MAX_MSG_LEN, official: true, ch,
+    placeholder: `Написать в #${ch.name}`,
+    startText: id === 'general' ? 'Это начало общего чата сайта dan4ik37 👋' : `Это начало канала #${ch.name}. ${ch.about || ''}`,
+    emptyText: 'Пока тихо — напиши первым! 👋',
+    pinsEmpty: 'Закреплённых сообщений нет. VIP и команда сайта могут закреплять свои сообщения (кнопка «⋯» → 📌)',
+    get caps(){ const nw = chatHasNew(); return { reply: nw, edit: nw && !!currentUser, del: nw && !!currentUser, react: 'site', pin: true, report: nw && !!currentUser, typing: true, search: true, stickers: true }; },
+    async load({ before }){
+      if (!sbClient) return { list: DEMO_MSGS.map((m, i) => ({ id: 'demo' + i, uid: null, nick: m.nick, text: m.text, role: m.role, at: new Date().toISOString() })), more: false };
+      let qy = chanQuery(sbClient.from('messages').select('*').eq('deleted', false), id).order('id', { ascending: false }).limit(50);
+      if (before) qy = qy.lt('id', before);
+      const { data, error } = await qy;
+      if (error) return { list: [], err: error, errText: humanErr(error) };
+      const list = (data || []).filter(r => !bannedNicks.has(String(r.nick || '').toLowerCase())).map(offMsg).reverse();
+      list.forEach(rememberAuthor);
+      if (list.length) OFF.lastId[id] = Math.max(OFF.lastId[id] || 0, list[list.length - 1].id);
+      return { list, more: (data || []).length === 50 };
+    },
+    sub(fn){
+      if (!OFF.subs.has(id)) OFF.subs.set(id, new Set());
+      OFF.subs.get(id).add(fn);
+      return () => OFF.subs.get(id)?.delete(fn);
+    },
+    send: (text, reply) => sendOfficial(id, text, reply),
+    sendSticker: emoji => sendStickerOfficial(id, emoji),
+    async edit(m, text){
+      const err = checkSpam(text); if (err) return { ok: false, err };
+      const { data, error } = await sbClient.rpc('chat_edit', { p_id: m.id, p_text: text });
+      return error ? { ok: false, err: humanErr(error) } : data?.ok ? { ok: true } : { ok: false, err: data?.reason === 'old' ? 'изменять можно 48 часов' : 'не получилось' };
+    },
+    async del(m){
+      if (mine(m) && currentUser && chatHasNew()) {
+        const { data, error } = await sbClient.rpc('chat_delete_own', { p_id: m.id });
+        return error ? { ok: false, err: humanErr(error) } : { ok: !!data?.ok, err: 'не получилось' };
       }
-    })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
-      if (payload.new.deleted) {
-        const el = document.querySelector(`[data-msgid="${payload.new.id}"]`);
-        if (el) el.classList.add('deleted');
-      }
-      // Пин/анпин своего или чужого сообщения — обновляем бар у всех
-      if (payload.new.id === chatPinnedId || (payload.new.pinned_until && new Date(payload.new.pinned_until) > new Date())) {
-        loadPinnedMessage();
-      }
-    })
-    .subscribe();
-
-  onlineChannel = sbClient.channel('online-users', { config: { presence: { key: PRESENCE_KEY } } });
-  onlineChannel
-    .on('presence', { event: 'sync' }, () => {
-      const state = onlineChannel.presenceState();
-      const online = Object.keys(state).length;
-      document.getElementById('chatOnlineCount').textContent = online;
-      window.__d37Online = online;
-      window.dispatchEvent(new CustomEvent('d37:online', { detail: online }));   // «Сейчас на сайте» на главной (games.js)
-    })
-    .subscribe(async status => {
-      if (status === 'SUBSCRIBED') {
-        await onlineChannel.track({ nick: chatNick || 'Гость', ts: Date.now() });
-      }
-    });
+      return deleteMsg(m.id);
+    },
+    canDel: m => !!staffRole() && !mine(m),
+    react: async () => ({ ok: true }),   // реакции общего чата — reactions.js (message_reactions)
+    canPin: m => (mine(m) && !!currentUser && typeof getPinPerks === 'function' && !!getPinPerks(currentRole, currentProfile)) || (m.pinned && (currentRole === 'admin' || currentRole === 'moderator')),
+    async pin(m, on){
+      const { error } = await sbClient.rpc(on ? 'pin_own_message' : 'unpin_message', { msg_id: m.id });
+      if (error) return { ok: false, err: humanErr(error) };
+      loadPinnedMessage();
+      return { ok: true };
+    },
+    async report(m, why){
+      const { data, error } = await sbClient.rpc('chat_report', { p_id: m.id, p_reason: why });
+      if (error) return { ok: false, err: humanErr(error) };
+      return data?.ok ? { ok: true, hidden: data.hidden } : { ok: false, err: { rate: 'слишком много жалоб — попробуй позже', self: 'на себя нельзя' }[data?.reason] || 'не получилось' };
+    },
+    async fetch(ids){
+      const { data } = await sbClient.from('messages').select('*').in('id', ids.filter(x => typeof x === 'number'));
+      return (data || []).map(offMsg);
+    },
+    async search(q){
+      const s = q.replace(/[%_,()]/g, ' ').trim(); if (!s) return [];
+      const { data } = await chanQuery(sbClient.from('messages').select('*').eq('deleted', false), id).or(`text.ilike.%${s}%,nick.ilike.%${s}%`).order('id', { ascending: false }).limit(40);
+      return (data || []).map(offMsg);
+    },
+    async pins(){
+      const { data } = await chanQuery(sbClient.from('messages').select('*').eq('deleted', false), id).gt('pinned_until', new Date().toISOString()).order('pinned_until', { ascending: false }).limit(20);
+      return (data || []).map(offMsg);
+    },
+    typing: chatTyping(id),
+    async members(q){
+      const { data } = await sbClient.from('profiles').select('id, nick').ilike('nick', `${q.replace(/[%_]/g, '')}%`).not('nick', 'is', null).limit(7);
+      return data || [];
+    },
+    state(){
+      if (!sbClient) return { mode: 'readonly', note: 'Нет связи с сервером — чат только для чтения' };
+      if (!chatNick) return { mode: 'guest' };
+      if (bannedNicks.has(chatNick.toLowerCase())) return { mode: 'muted', note: '🔨 Ты заблокирован в чате' };
+      const until = OFF.info?.muted_until;
+      if (until && Date.parse(until) > Date.now() && !isChatStaff()) return { mode: 'muted', note: `🔇 Тебя заглушили до ${new Date(until).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` };
+      if (ch.mods_only && !isChatStaff()) return { mode: 'readonly', note: '📢 Здесь пишут только админ и модераторы' };
+      return { mode: 'write', slow: !isChatStaff() && ch.slow ? ch.slow : 0 };
+    },
+    guest: async () => { enterAsGuest(); },
+    me: () => ({ uid: currentUser?.id || null, nick: chatNick, staff: !!staffRole() }),
+    roleOf: () => null,
+    modActions(m){
+      const r = staffRole(); if (!r || mine(m)) return [];
+      const out = [];
+      if (chatHasNew() && (m.uid || m.nick)) out.push(['mute10', '🔇 Мут 10 мин'], ['mute60', '🔇 Мут 1 час']);
+      if (chatHasNew() && r !== 'helper') out.push(['mute1440', '🔇 Мут 1 день']);
+      if (r === 'admin' || r === 'moderator') out.push(['ban', '🔨 Бан (по нику, навсегда)']);
+      return out;
+    },
+    mod: (k, m) => chatMod(k, m.uid, m.nick),
+    userMod(uid){ return this.modActions({ uid, nick: '' }).filter(([k]) => k !== 'ban' || true); },
+    userModDo: (k, uid, nick) => chatMod(k, uid, nick),
+  };
+  return A;
+}
+async function chatMod(k, uid, nick){
+  if (k.startsWith('mute')) {
+    const min = +k.slice(4);
+    const { data, error } = await sbClient.rpc('chat_mute', { p_user: uid || null, p_nick: uid ? null : nick, p_minutes: min, p_reason: '' });
+    if (error) return { ok: false, msg: '⚠ ' + humanErr(error) };
+    return data?.ok ? { ok: true, msg: `🔇 ${nick || 'игрок'} заглушён на ${min >= 1440 ? min / 1440 + ' дн' : min >= 60 ? min / 60 + ' ч' : min + ' мин'}` } : { ok: false, msg: '⚠ ' + ({ rights: 'команду сайта глушит только админ', minutes: 'хелпер — не больше часа', staff: 'нет прав' }[data?.reason] || 'не получилось') };
+  }
+  if (k === 'ban') {
+    if (!nick) { const p = uid ? (await (await sbProfiles()).select('nick').eq('id', uid).maybeSingle()).data : null; nick = p?.nick || ''; }
+    if (!nick || !confirm(`Забанить «${nick}»? Все его сообщения будут удалены.`)) return { ok: false };
+    const r = await banNickOfficial(nick);
+    return { ok: r.ok, msg: r.msg, removed: r.ok };
+  }
+  return { ok: false };
 }
 
+// «Печатает…»: свой маленький канал на каждый канал чата (подписка — только пока канал открыт), не чаще раза в 3 с
+const chatTypingChans = new Map();
+function chatTyping(chId){
+  return {
+    send(){ const t = chatTypingChans.get(chId); if (t?.ready && chatNick) t.chan.send({ type: 'broadcast', event: 't', payload: { u: currentUser?.id || null, n: String(chatNick).slice(0, 24) } }).catch(() => {}); },
+    on(fn){
+      if (!sbClient) return () => {};
+      let t = chatTypingChans.get(chId);
+      if (!t) {
+        t = { fns: new Set(), ready: false };
+        t.chan = sbClient.channel('typing-o-' + chId, { config: { broadcast: { self: false } } })
+          .on('broadcast', { event: 't' }, ({ payload }) => { if (payload && typeof payload.n === 'string' && !bannedNicks.has(payload.n.toLowerCase())) t.fns.forEach(f => f({ uid: typeof payload.u === 'string' ? payload.u : null, nick: payload.n.slice(0, 24) })); })
+          .subscribe(s => { t.ready = s === 'SUBSCRIBED'; });
+        chatTypingChans.set(chId, t);
+      }
+      t.fns.add(fn);
+      return () => { t.fns.delete(fn); if (!t.fns.size) { try { sbClient.removeChannel(t.chan); } catch (e) {} chatTypingChans.delete(chId); } };
+    },
+  };
+}
+
+// Отправить в канал сервера «Денчик37» (анти-спам, мут, бан — как раньше) → { ok, err }
+async function sendOfficial(chId, text, reply){
+  if (!chatNick) return { ok: false, err: 'сначала войди — гостем или в аккаунт' };
+  const isStaff = isChatStaff();
+  // Временный мут — за накопленные подряд нарушения (см. registerStrike). Не применяется к команде.
+  if (!isStaff && Date.now() < muteUntil) return { ok: false, err: `🔇 мут за спам — ещё ${Math.ceil((muteUntil - Date.now()) / 1000)} сек` };
+  if (bannedNicks.has(chatNick.toLowerCase())) return { ok: false, err: '🔨 ты заблокирован в чате' };
+  if (!checkRateLimit()) {
+    if (!isStaff) registerStrike();
+    return { ok: false, err: Date.now() < muteUntil ? `🔇 слишком много попыток — мут на ${Math.ceil((muteUntil - Date.now()) / 1000)} сек` : `⏱ не так быстро — максимум ${RATE_LIMIT} сообщений в минуту` };
+  }
+  const spamErr = checkSpam(text);
+  if (spamErr) { if (!isStaff) registerStrike(); return { ok: false, err: '🚫 ' + spamErr }; }
+  // Повтор той же реплики подряд — частый паттерн спама
+  if (!isStaff && text.toLowerCase() === lastSentText.toLowerCase()) { registerStrike(); return { ok: false, err: '🚫 не повторяй одно и то же' }; }
+  if (!isStaff) registerGoodMsg();
+  const prevSent = lastSentText;
+  lastSentText = text;
+  const row = chatRow(text);
+  if (chatHasNew()) { if (chId !== 'general') row.channel = chId; if (reply && typeof reply === 'number') row.reply_to = reply; }
+  const err = await sendMsgToSupabase(row);
+  if (err) { lastSentText = prevSent; return { ok: false, err }; }
+  return { ok: true };
+}
+const CHAT_COLORS = ['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
+function chatRow(text, extra){
+  const col = CHAT_COLORS[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % CHAT_COLORS.length];
+  const role = (currentUser && currentRole) ? currentRole : 'guest';
+  // Уровень VIP — снимок на момент отправки (сервер всё равно пересчитает, vip-balance.sql)
+  const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
+  return Object.assign({ nick: chatNick, text, color: col, role, vip_tier: vipTierKey, user_id: currentUser?.id || null }, extra || {});
+}
 // Возвращает null, если сообщение принято, иначе — текст ошибки для человека
-async function sendMsgToSupabase(nick, text, color, role, vipTier) {
+async function sendMsgToSupabase(row) {
   if (!sbClient) return chatSendError(null);
   try {
-    const { error } = await sbClient.from('messages').insert([{ nick, text, color, role, vip_tier: vipTier || null, user_id: currentUser?.id || null }]);
+    const { error } = await sbClient.from('messages').insert([row]);
     return error ? chatSendError(error) : null;
   } catch(e) { return chatSendError(e); }
 }
-// Ошибки сервера про флуд/длину/стикеры уже по-русски (server-hardening.sql, vip-balance.sql) — их показываем как есть
+// Ошибки сервера про флуд/длину/стикеры/мут уже по-русски (server-hardening.sql, vip-balance.sql, community.sql) — их показываем как есть
 function chatSendError(err){
   const m = String(err?.message || err || '');
   if (!navigator.onLine || !sbClient || /fetch|network|timeout|load failed/i.test(m)) return 'нет связи с сервером — проверь интернет';
@@ -332,25 +491,109 @@ function showChatStatus(msg, good = true, autoHideMs = 3000) {
   bar.style.background = good ? 'rgba(34,197,94,.06)' : 'rgba(255,200,0,.06)';
   bar.style.color = good ? 'rgba(34,197,94,.8)' : 'rgba(255,200,0,.8)';
   bar.style.borderColor = good ? 'rgba(34,197,94,.1)' : 'rgba(255,200,0,.1)';
-  // БАГ: раньше бар никогда не прятался сам — "режим модерации активен"
-  // (и другие транзитные сообщения) висели до перезагрузки страницы или
-  // выхода. Теперь по умолчанию прячется через autoHideMs; для по-настоящему
-  // постоянных статусов (демо-режим, ошибка подключения) вызывающий код
-  // явно передаёт autoHideMs=0.
+  // По умолчанию прячется через autoHideMs; постоянные статусы (нет связи) — autoHideMs=0.
   clearTimeout(bar._hideTimer);
   if (autoHideMs) bar._hideTimer = setTimeout(()=>{ bar.style.display='none'; }, autoHideMs);
 }
 
-const demoMsgs=[
-  {nick:'dan4ik37',text:'Привет всем! Добро пожаловать на сайт 👋',color:'var(--accent)',role:'admin'},
-  {nick:'Зритель',text:'Привет! Очень крутой сайт! 🔥',color:'#5bc4ff',role:'user'},
-  {nick:'FanDan',text:'Когда следующий стрим? 🎮',color:'var(--tw)',role:'user'},
-  {nick:'dan4ik37',text:'Скоро! Следите в Telegram 💪',color:'var(--accent)',role:'admin'},
-];
+// ─── Живая лента: одна подписка на messages на весь сайт ───
+function subscribeRealtime() {
+  if (!sbClient || sbChannel) return;
+  sbChannel = sbClient
+    .channel('public:messages')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+      const r = payload.new;
+      if (!r || r.deleted) return;
+      if (bannedNicks.has(String(r.nick || '').toLowerCase())) return;
+      const m = offMsg(r), ch = chatHasNew() ? m.ch : 'general';
+      OFF.lastId[ch] = Math.max(OFF.lastId[ch] || 0, m.id);
+      rememberAuthor(m);
+      OFF.subs.get(ch)?.forEach(fn => { try { fn({ t: 'ins', m }); } catch (e) { console.error(e); } });
+      const isOwn = currentUser ? m.uid === currentUser.id : m.nick === chatNick;
+      const viewing = window.D37Chat.viewing === 'o:' + ch && !document.hidden && currentRoute() === 'chat';
+      if (!isOwn && m.role !== 'reaction') {
+        const isMention = chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(?![\\p{L}0-9_])`, 'iu').test(m.text);
+        if (isMention && !viewing) OFF.mentions[ch] = (OFF.mentions[ch] || 0) + 1;
+        const chName = OFF.channels.find(c => c.id === ch)?.name || ch;
+        showChatToast(isMention ? `${esc(m.nick)} упомянул(а) тебя${ch !== 'general' ? ' в #' + esc(chName) : ' в чате'}` : (ch !== 'general' ? `Новое в #${esc(chName)}` : null));
+      }
+      window.dispatchEvent(new CustomEvent('d37:chatmsg', { detail: m }));
+    })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
+      const m = offMsg(payload.new), ch = chatHasNew() ? m.ch : 'general';
+      OFF.subs.get(ch)?.forEach(fn => { try { fn({ t: 'upd', m }); } catch (e) { console.error(e); } });
+      // Пин/анпин своего или чужого сообщения — обновляем полоску у всех
+      if (payload.new.id === chatPinnedId || (payload.new.pinned_until && new Date(payload.new.pinned_until) > new Date())) loadPinnedMessage();
+    })
+    .subscribe();
+  subscribeOnline();
+}
 
-// Общий набор для пикера в сообщениях И в реакциях — раньше было 24 штуки
-// только для сообщений, а реакции вообще были на 8 своих. Теперь один
-// большой список (~70), оба пикера прокручиваемые.
+// ─── «Кто онлайн»: ник; у вошедших — id, роль, VIP (список участников); невидимка — только ник ───
+// Чем занят (мир и сервер, игра и комната — для «📍 К другу», phone.js) — только у профилей «видят все» (privacy.sql)
+function onlineMeta(){
+  const meta = { nick: chatNick || 'Гость', ts: Date.now() };
+  if (currentUser && !currentProfile?.privacy_invisible) {
+    meta.u = currentUser.id;
+    if (currentRole && currentRole !== 'user') meta.r = currentRole;
+    const t = typeof getVipTier === 'function' && currentProfile ? getVipTier(currentProfile) : null;
+    if (t) meta.v = t.key;
+    if ((currentProfile?.profile_visibility || 'all') === 'all' && window.D37Phone?.activity) {
+      const a = window.D37Phone.actCode(window.D37Phone.activity());
+      if (a) meta.a = a.slice(0, 160);
+    }
+  }
+  return meta;
+}
+// Обновить своё «кто онлайн»: каждое обновление получают все на сайте — поэтому не чаще раза в 15 с (и лимит presence 5 за 30 с)
+let onlineTrackT = 0, onlineTrackAt = 0;
+function trackOnline(){
+  if (!onlineChannel) return;
+  clearTimeout(onlineTrackT);
+  const wait = Math.max(400, 15000 - (Date.now() - onlineTrackAt));
+  onlineTrackT = setTimeout(() => { onlineTrackAt = Date.now(); onlineChannel?.track(onlineMeta()).catch(() => {}); }, wait);
+}
+function subscribeOnline(){
+  if (!sbClient || onlineChannel) return;
+  onlineChannel = sbClient.channel('online-users', { config: { presence: { key: PRESENCE_KEY } } });
+  let syncT = 0;
+  onlineChannel
+    .on('presence', { event: 'sync' }, () => {
+      const state = onlineChannel.presenceState();
+      const online = Object.keys(state).length;
+      const cnt = document.getElementById('chatOnlineCount'); if (cnt) cnt.textContent = online;
+      window.__d37Online = online;
+      window.dispatchEvent(new CustomEvent('d37:online', { detail: online }));   // «Сейчас на сайте» на главной (games.js)
+      clearTimeout(syncT); syncT = setTimeout(() => window.dispatchEvent(new Event('d37:presence')), 300);
+    })
+    .subscribe(async status => {
+      if (status === 'SUBSCRIBED') { onlineTrackAt = Date.now(); await onlineChannel.track(onlineMeta()); }
+    });
+}
+// Онлайн сейчас: вошедшие (по id, без повторов) и сколько гостей
+function chatOnline(){
+  const st = onlineChannel?.presenceState?.() || {};
+  const users = new Map(); let guests = 0;
+  for (const metas of Object.values(st)) {
+    const m = (metas || [])[metas.length - 1]; if (!m) continue;
+    if (typeof m.u === 'string' && /^[0-9a-f-]{36}$/.test(m.u)) { if (!users.has(m.u)) users.set(m.u, { id: m.u, nick: String(m.nick || 'игрок').slice(0, 24), role: ['admin', 'moderator', 'helper'].includes(m.r) ? m.r : null, vip: ['gold', 'silver', 'bronze'].includes(m.v) ? m.v : null, a: typeof m.a === 'string' ? m.a.slice(0, 200) : '' }); }
+    else guests++;
+  }
+  return { users: [...users.values()], guests, total: Object.keys(st).length };
+}
+// Кто писал недавно (для «не в сети») — один запрос за визит
+let chatAuthorsLoaded = false;
+async function chatRecentAuthors(){
+  if (!chatAuthorsLoaded && sbClient) {
+    chatAuthorsLoaded = true;
+    try {
+      const { data } = await sbClient.from('messages').select('user_id, nick, role, vip_tier, created_at').not('user_id', 'is', null).eq('deleted', false).order('id', { ascending: false }).limit(200);
+      (data || []).forEach(r => rememberAuthor({ uid: r.user_id, nick: r.nick, role: r.role, vip: r.vip_tier, at: r.created_at }));
+    } catch (e) {}
+  }
+  return [...OFF.authors.values()].sort((a, b) => (b.at > a.at ? 1 : -1));
+}
+
 const EMOJI=[
   '😀','😂','🤣','😍','😎','🥳','😱','😤','🤡','🥺','😭','😡','🤔','🙄','😴','🤗','🫡','😏','🤨','😬',
   '🔥','❤','🧡','💛','💚','💙','💜','🖤','🤍','💯','💝','💔','✨','⚡','💥','⭐','🎉','🎊','🏆','👑',
@@ -358,46 +601,33 @@ const EMOJI=[
   '🍕','🍔','🍿','☕','🍺','🎂','🍩','🍭','⚽','🏀','🎯','🎲','🚀','💎','🔫','⚔','🛡','🎃','😹','🐸',
 ];
 
-function switchChat(type,btn){
-  document.querySelectorAll('.chat-tab').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('chat-local').style.display='none';
-  const twFr=document.getElementById('chat-twitch');
-  twFr.classList.remove('active');twFr.style.display='none';
-
-  if(type==='local'){
-    document.getElementById('chat-local').style.display='flex';
-    document.getElementById('chatSubtitle').textContent='Сайт';
-  } else if(type==='twitch'){
-    // Не по twFr.src: у iframe без адреса свойство src — это адрес самой страницы (не пустая строка),
-    // из-за этого раньше Twitch не загружался никогда, а внутри открывалась копия сайта
-    if(!twFr.dataset.loaded){
-      // darkpopout — тёмная тема, как у сайта (на телефоне тоже работает)
-      twFr.src=`https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout&migration=true`;
-      twFr.dataset.loaded='1';
-    }
-    twFr.style.cssText='display:block;width:100%;height:100%;border:none;min-height:320px;flex:1';
-    twFr.classList.add('active');
-    document.getElementById('chatSubtitle').textContent='Twitch';
-  }
+// Вкладка «Twitch» — теперь канал «twitch-чат» сервера «Денчик37» (community.js); функция осталась для старых ссылок
+function switchChat(type){
+  if (type === 'twitch') location.hash = '#/chat/twitch';
+  else location.hash = '#/chat/general';
+}
+// Чат Twitch (грузится один раз: по dataset.loaded, не по iframe.src — у пустого iframe src = адрес страницы)
+function loadTwitchChat(frame){
+  if (!frame || frame.dataset.loaded) return;
+  // darkpopout — тёмная тема, как у сайта (на телефоне тоже работает)
+  frame.src = `https://www.twitch.tv/embed/${TWITCH}/chat?parent=${HOST}&darkpopout&migration=true`;
+  frame.dataset.loaded = '1';
 }
 
-// ── Чат на весь экран (кнопка ⛶ в шапке чата): удобно держать телефон рядом во время стрима ──
+// ── Чат на весь экран (кнопка ⛶): удобно держать телефон рядом во время стрима ──
 // Экран не гаснет (Wake Lock API, где поддерживается), Esc или ✕ — выйти.
 let chatWakeLock = null;
 async function toggleChatFull(force){
   const on = typeof force === 'boolean' ? force : !document.body.classList.contains('chat-full');
   if (on && !/^#\/chat/.test(location.hash)) location.hash = '#/chat';
   document.body.classList.toggle('chat-full', on);
-  const btn = document.getElementById('chatFullBtn');
-  if (btn) { btn.textContent = on ? '✕' : '⛶'; btn.title = on ? 'Выйти из полноэкранного чата' : 'Чат на весь экран (экран не будет гаснуть)'; btn.setAttribute('aria-label', btn.title); }
+  document.querySelectorAll('#chatFullBtn,.ds-full').forEach(btn => { btn.textContent = on ? '✕' : '⛶'; btn.title = on ? 'Выйти из полноэкранного чата' : 'Чат на весь экран (экран не будет гаснуть)'; btn.setAttribute('aria-label', btn.title); });
   try {
     if (on && 'wakeLock' in navigator) chatWakeLock = await navigator.wakeLock.request('screen');
     else if (!on && chatWakeLock) { await chatWakeLock.release(); chatWakeLock = null; }
   } catch (e) { chatWakeLock = null; }
-  const m = document.getElementById('chatMsgs'); if (m) m.scrollTop = m.scrollHeight;
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('chat-full')) toggleChatFull(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('chat-full') && !window.D37Phone?.isOpen?.()) toggleChatFull(false); });
 // Ушли из чата — выйти из полноэкранного режима; вернулись на вкладку — снова не гасить экран
 window.addEventListener('hashchange', () => { if (!/^#\/chat/.test(location.hash) && document.body.classList.contains('chat-full')) toggleChatFull(false); });
 document.addEventListener('visibilitychange', async () => {
@@ -406,71 +636,29 @@ document.addEventListener('visibilitychange', async () => {
   }
 });
 
+// Ник выбран (гость или вход) — поле ввода и «кто онлайн» обновить
 function showChatInput() {
-  document.getElementById('chatNickScreen').style.display = 'none';
-  document.getElementById('chatMainInput').style.display  = 'flex';
-  document.getElementById('chatNickDisplay').textContent  = chatNick;
-  const roleEl = document.getElementById('chatNickRole');
-  const isElevated = currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
-  if (roleEl) {
-    if (currentRole === 'admin') roleEl.textContent = '👑';
-    else if (currentRole === 'moderator') roleEl.textContent = '🛡';
-    else if (currentRole === 'helper') roleEl.textContent = '🧹';
-    else if (currentUser) roleEl.textContent = '✅';
-    else roleEl.textContent = '👤 гость';
-  }
-  // Admin/модератор выходят только через кнопку в шапке (доGlobalLogout) —
-  // локальный "Выйти" тут для них скрыт, чтобы не улетать в гостя со
-  // старой ролью в currentRole (баг: "Гость1234 [ADMIN]" в сообщениях).
-  const localLogoutBtn = document.getElementById('chatLocalLogoutBtn');
-  if (localLogoutBtn) localLogoutBtn.style.display = isElevated ? 'none' : '';
-  if (onlineChannel) onlineChannel.track({ nick: chatNick, ts: Date.now() });
+  const d = document.getElementById('chatNickDisplay'); if (d) d.textContent = chatNick;
+  trackOnline();
+  chatRefresh();
 }
+// Ленты MsgView пересчитывают «можно ли писать» (гость / вошёл / мут) — и шапка сервера
+function chatRefresh(){ window.dispatchEvent(new Event('d37:chatstate')); }
+function chatPushSys(text){ window.dispatchEvent(new CustomEvent('d37:chatsys', { detail: text })); }
 
 function initChat(){
-  document.getElementById('chat-local').style.display='flex';
-  const picker=document.getElementById('emojiPicker');
-  EMOJI.forEach(em=>{
-    const btn=document.createElement('button');
-    btn.textContent=em;
-    btn.setAttribute('aria-label', 'Вставить эмодзи ' + em);
-    btn.onclick=()=>insertEmoji(em);
-    btn.style.cssText='background:none;border:none;font-size:1.2rem;cursor:pointer;padding:.2rem .25rem;border-radius:6px;transition:background .15s';
-    btn.onmouseover=()=>btn.style.background='rgba(255,255,255,.1)';
-    btn.onmouseout=()=>btn.style.background='none';
-    picker.appendChild(btn);
-  });
-  appendCustomEmojiToComposerPicker();
-
-  // Если ник уже сохранён — сразу показываем поле ввода
-  if (chatNick) showChatInput();
-
   const sbReady = initSupabase();
   if (sbReady) {
     sbClient.auth.getSession().then(({ data }) => {
       if (data?.session?.user) onAuthStateChange(data.session.user);
     });
-    // БАГ: customEmoji раньше грузился с задержкой в 2 сек ПОСЛЕ истории
-    // сообщений — любое :имя: в уже загруженных сообщениях так и оставалось
-    // сырым текстом навсегда (addMsg рендерит один раз, повторно не
-    // перерисовывается). Promise.all тут не подошёл бы — он ждёт, пока ВСЕ
-    // завершатся, но не гарантирует, что customEmoji закончит раньше, чем
-    // loadRecentMessages успеет отрендерить сообщения внутри себя. Поэтому
-    // сначала ждём эмодзи (быстрый запрос), потом уже баны+историю параллельно.
-    loadCustomEmoji().then(() => Promise.all([loadBans(), loadRecentMessages()])).then(() => {
+    // Эмодзи сайта и баны — сразу; сама лента грузится, только когда открыли чат (раньше 50 сообщений + реакции
+    // грузились на каждой странице). Подписка на новые сообщения — сразу: тост «новое сообщение» на других страницах.
+    loadCustomEmoji().then(() => Promise.all([loadBans(), chatInfo()])).then(() => {
       subscribeRealtime();
       subscribeReactionsRealtime();
-      const msgs = document.getElementById('chatMsgs');
-      if (!msgs.children.length) {
-        demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
-      }
-      showChatStatus('🟢 Чат подключён');
-      setTimeout(()=>{ const b=document.getElementById('chatStatusBar'); if(b) b.style.display='none'; }, 3000);
-    }).catch(()=>{
-      demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
-    });
-  } else {
-    demoMsgs.forEach((m,i)=>setTimeout(()=>addMsg(m.nick,m.text,m.color,false,false,null,m.role),i*400));
+      loadPinnedMessage();
+    }).catch(() => subscribeRealtime());
   }
 }
 
@@ -490,86 +678,30 @@ function enterAsGuest() {
   }
   showChatInput();
 }
+// Гостю — «войти гостем» (реакции и пр. зовут это вместо старого экрана ника)
+function chatAskNick(){ if (!chatNick) enterAsGuest(); }
 
 function chatLogout() {
-  // Вход один — через шапку. Админ/модератор не может "выйти из чата" отдельно
-  // от сайта: раньше это молча превращало его в Гость#### с ролью currentRole,
-  // ещё оставшейся 'admin' — и в чат уходили сообщения вида "Гость1234 [ADMIN]".
-  if (currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper') {
-    showChatStatus('Это выход из чата. Чтобы выйти из аккаунта — кнопка "Выйти" в шапке сайта', false);
-    setTimeout(()=>{ const b=document.getElementById('chatStatusBar'); if(b) b.style.display='none'; }, 3500);
+  // Вход один — через шапку. Админ/модератор не может "выйти из чата" отдельно от сайта.
+  if (isChatStaff()) {
+    showChatStatus('Это выход из чата. Чтобы выйти из аккаунта — кнопка "Выйти" в шапке сайта', false, 3500);
     return;
   }
   chatNick = '';
   try { localStorage.removeItem('d37_nick'); } catch(e) {}
-  document.getElementById('chatNickScreen').style.display = 'flex';
-  document.getElementById('chatMainInput').style.display = 'none';
+  chatRefresh();
 }
 
-function addMsg(nick, text, color, isOwn, fromDB, msgId, msgRole, userId, vipTier, isSticker){
-  const msgs=document.getElementById('chatMsgs');
-  const initials=(nick.replace(/[^a-zA-Zа-яА-Я0-9]/g,'')||'?').substring(0,2).toUpperCase();
-  const time=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-  const badge = msgRole==='admin' ? '<span class="role-badge admin">ADMIN</span>'
-              : msgRole==='moderator' ? '<span class="role-badge moderator">MOD</span>'
-              : msgRole==='helper' ? '<span class="role-badge helper">HELPER</span>' : '';
-  // Единый цвет для роли/VIP — те же RGB, что и в профиле (GLOW_RGB/
-  // VIP_TIERS из profile.js), чтобы человек выглядел одинаково везде:
-  // им подсвечивается бейдж, ник, полоска слева у сообщения и аватарка.
-  // Роль важнее VIP — как и везде на сайте.
-  const ROLE_RGB_CHAT = { admin: '255,45,85', moderator: '145,71,255', helper: '34,197,94' };
-  const roleRgb = msgRole && ROLE_RGB_CHAT[msgRole] ? ROLE_RGB_CHAT[msgRole] : null;
-  const vipMeta = !roleRgb && vipTier && typeof VIP_TIERS !== 'undefined' ? VIP_TIERS.find(t => t.key === vipTier) : null;
-  const highlightRgb = roleRgb || vipMeta?.rgb || null;
-  const vipBadge = (!badge && vipMeta) ? `<span class="role-badge" style="background:rgba(${vipMeta.rgb},.22);color:rgb(${vipMeta.rgb})">${vipMeta.key==='gold'?'✨':vipMeta.key==='silver'?'⭐':'🔸'} ${vipMeta.key.toUpperCase()}</span>` : '';
-  const nickColor = highlightRgb ? `rgb(${highlightRgb})` : (color||'var(--accent)');
-  const avatarBg = highlightRgb ? `linear-gradient(135deg, rgb(${highlightRgb}), rgba(${highlightRgb},.6))` : (color||'var(--accent)');
-  const stripeStyle = highlightRgb ? `border-left:3px solid rgb(${highlightRgb})` : '';
-  const div=document.createElement('div');
-  const mentionsMe = !isOwn && chatNick && new RegExp(`@${chatNick.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}\\b`, 'i').test(text);
-  div.className='chat-msg'+(isOwn?' own-msg':'')+(mentionsMe?' mentioned-me':'');
-  if(msgId) div.dataset.msgid=msgId;
-  div.dataset.nick=nick;
-  // Клик по нику/аватарке открывает мини-профиль — только если у автора
-  // есть аккаунт (userId не пустой). У гостей аккаунта нет, смотреть нечего.
-  const profileClick = userId ? `onclick="openMiniProfile('${userId}',${jsAttr(nick)},this)" style="cursor:pointer"` : '';
-  // Права и длительность закрепа — из единого конфига баланса (getPinPerks в profile.js)
-  const myPin = (isOwn && msgId && typeof getPinPerks === 'function') ? getPinPerks(currentRole, currentProfile) : null;
-  const canPin = !!myPin;
-  const pinDurationHint = myPin ? myPin.minutes + ' мин' : '';
-  const textBlock = isSticker
-    ? `<div class="chat-text" style="background:none;padding:.2rem 0;font-size:2.4rem;line-height:1">${esc(text)}</div>`
-    : `<div class="chat-text" style="${stripeStyle}${stripeStyle?';padding-left:.5rem':''}">${renderMessageText(esc(text))}</div>`;
-  div.innerHTML=`
-    <div class="chat-avatar" style="background:${avatarBg}" ${profileClick}>${initials}</div>
-    <div class="chat-bubble-col">
-      <div class="chat-bubble" style="${isSticker?'background:none;border:none;box-shadow:none;padding:.2rem 0':''}">
-        <div class="chat-user" style="color:${nickColor}" ${profileClick}><span class="cu-nick">${esc(nick)}</span>${badge}${vipBadge}${userId ? `<span class="lv-badge" data-lv-uid="${esc(userId)}"></span>` : ''}</div>
-        ${textBlock}
-        <div class="chat-time">${time}</div>
-      </div>
-      ${msgId?`<div class="msg-reactions" id="mr-${msgId}"></div>`:''}
-    </div>
-    ${msgId?`<button class="msg-react-btn" aria-label="Поставить реакцию" onclick="openReactionPicker(${msgId},this)" title="Реакция">😊</button>
-    <button class="msg-ban-btn" aria-label="Забанить пользователя" onclick="banNick(this.closest('.chat-msg').dataset.nick,this.closest('.chat-msg'))" title="Забанить">🔨</button>
-    <button class="msg-del-btn" aria-label="Удалить сообщение" onclick="deleteMsg(${msgId},this.closest('.chat-msg'))" title="Удалить">✕</button>`:''}
-    ${canPin?`<button class="msg-pin-btn" aria-label="Закрепить" onclick="pinMessage(${msgId})" title="Закрепить на ${pinDurationHint} (по твоей роли/уровню)">📌</button>`:''}`;
-  msgs.appendChild(div);
-  if (userId && typeof xpQueueBadges === 'function') xpQueueBadges();
-  if (userId) window.d37NickFx?.mark(div);   // радужный ник за охоту за секретами (secrets.js)
-  if(msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 100) msgs.scrollTop=msgs.scrollHeight;
-}
+// Старый способ добавить строчку в чат (системные сообщения) — теперь строчка в открытой ленте общего чата
+function addMsg(nick, text){ chatPushSys(`${nick}: ${text}`); }
 
 // ─── ЗАКРЕП СООБЩЕНИЯ (VIP/модерация) ───
-// Право проверяется ещё раз на сервере внутри RPC-функции (см.
-// chat-pin.sql) — фронтенд лишь не показывает кнопку тем, кому нельзя,
-// это не единственная защита.
+// Право проверяется ещё раз на сервере внутри RPC-функции (chat-pin.sql) — фронтенд лишь не показывает кнопку тем, кому нельзя.
 let chatPinnedId = null;
 let chatPinnedUntil = null;
 setInterval(() => {
   if (chatPinnedId && chatPinnedUntil && new Date(chatPinnedUntil) <= new Date()) {
-    document.getElementById('chatPinBar').style.display = 'none';
-    chatPinnedId = null; chatPinnedUntil = null;
+    renderPinBar(null);
   }
 }, 20000);
 async function pinMessage(msgId){
@@ -592,356 +724,88 @@ async function unpinMessage(msgId){
     showChatStatus('Не удалось открепить: ' + humanErr(e), false);
   }
 }
+let chatPinned = null;
 function renderPinBar(msg){
-  const bar = document.getElementById('chatPinBar');
-  if (!bar) return;
   const active = msg && msg.pinned_until && new Date(msg.pinned_until) > new Date();
-  if (!active) {
-    bar.style.display = 'none';
-    chatPinnedId = null; chatPinnedUntil = null;
-    return;
-  }
-  chatPinnedId = msg.id;
-  chatPinnedUntil = msg.pinned_until;
-  document.getElementById('chatPinNick').textContent = msg.nick;
-  document.getElementById('chatPinText').textContent = msg.text;
-  const canUnpin = currentUser && (currentUser.id === msg.user_id || currentRole === 'admin' || currentRole === 'moderator');
-  document.getElementById('chatPinUnpinBtn').style.display = canUnpin ? 'inline-block' : 'none';
-  bar.style.display = 'flex';
+  chatPinned = active ? msg : null;
+  chatPinnedId = active ? msg.id : null;
+  chatPinnedUntil = active ? msg.pinned_until : null;
+  window.dispatchEvent(new Event('d37:chatpin'));
 }
 async function loadPinnedMessage(){
   if (!sbClient) return;
   try {
     const { data } = await sbClient
       .from('messages')
-      .select('id,nick,text,user_id,pinned_until')
+      .select('*')
       .not('pinned_until', 'is', null)
       .gt('pinned_until', new Date().toISOString())
       .order('pinned_until', { ascending: false })
       .limit(1)
       .maybeSingle();
     renderPinBar(data);
-  } catch(e) { /* тихо — пин-бар не критичен для работы чата */ }
+  } catch(e) { /* тихо — полоска закрепа не критична для работы чата */ }
 }
-
-async function sendMsg(){
-  if(!chatNick){document.getElementById('chatNickScreen').style.display='flex';document.getElementById('chatMainInput').style.display='none';return}
-  const inp=document.getElementById('chatInput'),text=inp.value.trim();
-  if(!text) return;
-  const isStaff = currentRole === 'admin' || currentRole === 'moderator' || currentRole === 'helper';
-
-  // Временный мут — за накопленные подряд нарушения (см. registerStrike).
-  // Не применяется к admin/mod, чтобы не мешать модерации.
-  if (!isStaff && Date.now() < muteUntil) {
-    const secLeft = Math.ceil((muteUntil - Date.now()) / 1000);
-    showChatStatus(`🔇 Мут за спам — ещё ${secLeft} сек`, false);
-    return;
-  }
-  // Ban check
-  if(bannedNicks.has(chatNick.toLowerCase())){
-    showChatStatus('🔨 Ты заблокирован в чате', false);
-    return;
-  }
-  // Rate limit
-  if(!checkRateLimit()){
-    if (!isStaff) registerStrike();
-    showChatStatus(Date.now() < muteUntil
-      ? `🔇 Слишком много попыток — мут на ${Math.ceil((muteUntil-Date.now())/1000)} сек`
-      : `⏱ Не так быстро — максимум ${RATE_LIMIT} сообщений в минуту`, false);
-    return;
-  }
-  // Spam check
-  const spamErr = checkSpam(text);
-  if(spamErr){
-    if (!isStaff) registerStrike();
-    showChatStatus(`🚫 ${spamErr}`, false);
-    return;
-  }
-  // Повтор той же реплики подряд — частый паттерн спама, checkSpam() его не ловит
-  if (!isStaff && text.toLowerCase() === lastSentText.toLowerCase()) {
-    registerStrike();
-    showChatStatus('🚫 Не повторяй одно и то же', false);
-    return;
-  }
-
-  if (!isStaff) registerGoodMsg();
-  const prevSent = lastSentText;
-  lastSentText = text;
-  inp.value='';
-  const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
-  const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
-  const role = (currentUser && currentRole) ? currentRole : 'guest';
-  // Уровень VIP — снимок на момент отправки (как и role выше), чат живёт
-  // через realtime-поток, дешевле хранить, чем джойнить profiles на
-  // каждое сообщение. См. getVipTier() в profile.js.
-  const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
-
-  // Раньше при отказе сервера (флуд, бан, нет связи) сообщение рисовалось у себя как отправленное — его никто
-  // не видел, а человек думал, что написал. Теперь: текст возвращается в поле и видно, почему не ушло.
-  const err = await sendMsgToSupabase(chatNick, text, col, role, vipTierKey);
-  if (err) {
-    lastSentText = prevSent;                 // иначе повторная отправка того же текста упрётся в «не повторяй»
-    if (!inp.value) inp.value = text;
-    showChatStatus('⚠️ Не отправлено: ' + err, false, 6000);
-  }
-}
-
-function insertEmoji(em){
-  const inp=document.getElementById('chatInput');
-  inp.value+=em;inp.focus();
-  document.getElementById('emojiPicker').style.display='none';
-}
-function toggleEmoji(e){
-  e.stopPropagation();
-  const picker=document.getElementById('emojiPicker');
-  document.getElementById('stickerPicker').style.display='none';
-  picker.style.display=picker.style.display==='flex'?'none':'flex';
-}
-document.addEventListener('click',(e)=>{
-  const p=document.getElementById('emojiPicker');if(p)p.style.display='none';
-  if(!e.target.closest('#chatMentionAutocomplete,#chatInput')) closeMentionAutocomplete();
-});
 
 // ═══════════════════════════════════════
 //  СТИКЕРЫ (VIP/стафф) — см. chat-stickers.sql
 // ═══════════════════════════════════════
-// Обычные emoji-реакции есть у всех, стикеры — крупные, на всё сообщение,
-// заметны в общей ленте издалека. Это и плюшка для VIP, и небольшая
-// витрина: не-VIP видит грид, но клик по стикеру ведёт на страницу
-// покупки вместо отправки — показываем чего лишаемся, а не прячем совсем.
-// Наборы открываются с уровнем VIP (какие доступны — VIP_TIERS[].stickerSets в profile.js).
-// Стафф видит все. Сервер проверяет только «стикер может слать VIP/стафф» (vip-balance.sql) —
-// какой именно набор, не проверяет: это эмодзи, подделывать тут нечего.
+// Обычные emoji-реакции есть у всех, стикеры — крупные, на всё сообщение. Не-VIP видит набор, но клик ведёт на /vip.
+// Наборы открываются с уровнем VIP (VIP_TIERS[].stickerSets в profile.js). Сервер проверяет «стикер может слать VIP/стафф».
 const STICKER_SETS = {
   base:   ['🔥','💯','😂','😭','🎉','👑','💀','🤝','🎮','❤️','😎','🍿','🫡','🥶','👀','⚡'],
   silver: ['🌟','🚀','😈','🤯','🥳','💎','🧠','🫶'],
   gold:   ['🏆','🦄','☄️','🐉','🪩','🎯','💫','🔱'],
 };
-const STICKER_SET_META = {
-  base:   { label: '',           need: 'VIP' },
-  silver: { label: '⭐ Silver',  need: 'Silver VIP (от 500₽)' },
-  gold:   { label: '✨ Gold',    need: 'Gold VIP (от 1500₽)' },
-};
-
-function toggleStickerPicker(e){
-  e.stopPropagation();
-  document.getElementById('emojiPicker').style.display='none';
-  const picker=document.getElementById('stickerPicker');
-  const show = picker.style.display!=='flex';
-  if (show) renderStickerPicker();
-  picker.style.display = show ? 'flex' : 'none';
-}
-document.addEventListener('click',(e)=>{
-  if (!e.target.closest('#stickerPicker,[onclick^="toggleStickerPicker"]')) {
-    const sp=document.getElementById('stickerPicker'); if(sp) sp.style.display='none';
-  }
-});
-function renderStickerPicker(){
-  const box = document.getElementById('stickerPicker');
-  const prof = (typeof currentProfile !== 'undefined') ? currentProfile : null;
-  const open = (typeof allowedStickerSets === 'function') ? allowedStickerSets(currentRole, prof) : [];
-  const anyOpen = open.length > 0;
-  const btn = (s, unlocked, needText) => `
-    <button onclick="${unlocked ? `sendSticker('${s}')` : `lockedStickerClick()`}"
-      style="font-size:1.8rem;line-height:1;background:none;border:1px solid ${unlocked?'transparent':'rgba(255,255,255,.06)'};border-radius:8px;padding:.35rem;cursor:pointer;opacity:${unlocked?'1':'.4'};transition:transform .15s,background .15s"
-      onmouseover="this.style.background='rgba(255,255,255,.08)'" onmouseout="this.style.background='none'"
-      title="${unlocked ? 'Отправить стикер' : 'Стикеры — ' + needText}">${s}</button>`;
-  let html = '';
-  Object.keys(STICKER_SETS).forEach(key => {
-    const meta = STICKER_SET_META[key];
-    const unlocked = open.includes(key);
-    // Не-VIP видят только базовый набор (закрытым) — как витрину, не весь каталог
-    if (!anyOpen && key !== 'base') return;
-    if (meta.label) html += `<div style="width:100%;font-size:.66rem;font-weight:800;letter-spacing:.5px;color:${unlocked?'var(--muted)':'#ffd700'};margin-top:.3rem">${meta.label}${unlocked ? '' : ' — 🔒 ' + meta.need}</div>`;
-    html += STICKER_SETS[key].map(s => btn(s, unlocked, meta.need)).join('');
-  });
-  if (!anyOpen) {
-    html += `<div style="width:100%;font-size:.68rem;color:var(--muted);margin-top:.4rem">🔒 Стикеры доступны с VIP (а с Silver и Gold — ещё больше наборов) — <a href="#" onclick="location.hash='#/profile';return false" style="color:#ffd700">оформить</a></div>`;
-  }
-  box.innerHTML = html;
-}
-function lockedStickerClick(){
-  document.getElementById('stickerPicker').style.display = 'none';
-  location.hash = '#/profile';
-}
-async function sendSticker(emoji){
-  document.getElementById('stickerPicker').style.display = 'none';
-  if (!chatNick) { document.getElementById('chatNickScreen').style.display='flex'; return; }
-  const colors=['#9147ff','#29b6f6','#ff6b35','#22c55e','#f59e0b','#ec4899','#5bc4ff'];
-  const col = colors[Math.abs(chatNick.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % colors.length];
-  const role = (currentUser && currentRole) ? currentRole : 'guest';
-  const vipTierKey = (typeof getVipTier === 'function' && currentProfile) ? (getVipTier(currentProfile)?.key || null) : null;
-  if (sbClient) {
-    try {
-      const { error } = await sbClient.from('messages').insert([{ nick: chatNick, text: emoji, color: col, role, vip_tier: vipTierKey, is_sticker: true, user_id: currentUser?.id || null }]);
-      if (error) throw error;
-    } catch(e) {
-      // Сервер (vip-balance.sql) отказал: стикеры — только VIP/стафф. Раньше тут рисовалось
-      // «фантомное» сообщение, которого на самом деле в чате нет.
-      if (/VIP|стикер/i.test(e?.message || '')) { showChatStatus('🔒 Стикеры — только для VIP и команды сайта', false); return; }
-      addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true);
-    }
-  } else {
-    addMsg(chatNick, emoji, col, true, false, null, role, currentUser?.id, vipTierKey, true);
-  }
-}
-
-// ═══════════════════════════════════════
-//  АВТОДОПОЛНЕНИЕ @УПОМИНАНИЙ
-// ═══════════════════════════════════════
-let mentionDebounce = null;
-let mentionActiveIndex = 0;
-let mentionCurrentMatches = [];
-
-function getMentionQueryAtCursor(){
-  const inp = document.getElementById('chatInput');
-  const pos = inp.selectionStart;
-  const before = inp.value.slice(0, pos);
-  const m = before.match(/(?:^|\s)@([a-zA-Zа-яА-Я0-9_]{1,24})$/);
-  return m ? { query: m[1], start: pos - m[1].length } : null;
-}
-
-function handleMentionInput(){
-  clearTimeout(mentionDebounce);
-  const ctx = getMentionQueryAtCursor();
-  if (!ctx) { closeMentionAutocomplete(); return; }
-  mentionDebounce = setTimeout(() => searchMentionCandidates(ctx.query), 200);
-}
-
-async function searchMentionCandidates(query){
-  const box = document.getElementById('chatMentionAutocomplete');
-  if (!sbClient) { closeMentionAutocomplete(); return; }
+async function sendStickerOfficial(chId, emoji){
+  if (!chatNick) return { ok: false, err: 'сначала войди — гостем или в аккаунт' };
+  if (!sbClient) return { ok: false, err: 'нет связи с сервером' };
+  const row = chatRow(emoji, { is_sticker: true });
+  if (chatHasNew() && chId !== 'general') row.channel = chId;
   try {
-    const { data } = await sbClient.from('profiles').select('nick').ilike('nick', `${query}%`).not('nick','is',null).limit(6);
-    mentionCurrentMatches = (data || []).map(r => r.nick).filter(Boolean);
-    mentionActiveIndex = 0;
-    if (!mentionCurrentMatches.length) { closeMentionAutocomplete(); return; }
-    box.innerHTML = mentionCurrentMatches.map((nick, i) => `
-      <div class="chat-mention-option${i===0?' active':''}" data-nick="${esc(nick)}" onclick="selectMention(${jsAttr(nick)})"
-           style="padding:.5rem .8rem;cursor:pointer;font-size:.82rem;${i===0?'background:rgba(145,71,255,.15)':''}">@${esc(nick)}</div>
-    `).join('');
-    box.style.cssText = 'display:block;position:absolute;bottom:100%;left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:.3rem;box-shadow:0 -8px 24px rgba(0,0,0,.4);z-index:20';
-  } catch(e) { closeMentionAutocomplete(); }
-}
-
-function closeMentionAutocomplete(){
-  const box = document.getElementById('chatMentionAutocomplete');
-  box.style.display = 'none';
-  box.innerHTML = '';
-  mentionCurrentMatches = [];
-}
-
-function selectMention(nick){
-  const inp = document.getElementById('chatInput');
-  const ctx = getMentionQueryAtCursor();
-  if (ctx) {
-    inp.value = inp.value.slice(0, ctx.start) + nick + ' ' + inp.value.slice(inp.selectionStart);
-  } else {
-    inp.value += nick + ' ';
-  }
-  closeMentionAutocomplete();
-  inp.focus();
-}
-
-function handleChatInputKeydown(event){
-  if (mentionCurrentMatches.length && document.getElementById('chatMentionAutocomplete').style.display === 'block') {
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      mentionActiveIndex = (mentionActiveIndex + 1) % mentionCurrentMatches.length;
-      updateMentionActiveOption();
-      return;
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      mentionActiveIndex = (mentionActiveIndex - 1 + mentionCurrentMatches.length) % mentionCurrentMatches.length;
-      updateMentionActiveOption();
-      return;
-    }
-    if (event.key === 'Enter' || event.key === 'Tab') {
-      event.preventDefault();
-      selectMention(mentionCurrentMatches[mentionActiveIndex]);
-      return;
-    }
-    if (event.key === 'Escape') {
-      closeMentionAutocomplete();
-      return;
-    }
-  }
-  if (event.key === 'Enter') sendMsg();
-}
-
-function updateMentionActiveOption(){
-  document.querySelectorAll('#chatMentionAutocomplete .chat-mention-option').forEach((el, i) => {
-    el.style.background = i === mentionActiveIndex ? 'rgba(145,71,255,.15)' : '';
-  });
-}
-
-
-
-// ═══════════════════════════════════════
-//  ПОИСК ПО ЧАТУ
-//  Ищет по ВСЕЙ истории в БД, а не только по тому, что сейчас
-//  прогружено на экране (в DOM держится лишь последние ~50 сообщений).
-//  Результаты — отдельным списком (ник, отрывок, время), не пытаемся
-//  прокручивать к сообщению в живой ленте — оно там может и не быть
-//  загружено, а перестройка ленты ради этого только всё усложнит.
-// ═══════════════════════════════════════
-let chatSearchDebounce = null;
-
-function toggleChatSearch(){
-  const bar = document.getElementById('chatSearchBar');
-  const opening = bar.style.display === 'none';
-  bar.style.display = opening ? 'block' : 'none';
-  if (opening) {
-    document.getElementById('chatSearchInput').focus();
-  } else {
-    document.getElementById('chatSearchInput').value = '';
-    document.getElementById('chatSearchResults').innerHTML = '';
-  }
-}
-
-function debouncedChatSearch(){
-  clearTimeout(chatSearchDebounce);
-  chatSearchDebounce = setTimeout(searchChatMessages, 350);
-}
-
-async function searchChatMessages(){
-  const q = document.getElementById('chatSearchInput').value.trim();
-  const resultsEl = document.getElementById('chatSearchResults');
-  if (!q) { resultsEl.innerHTML = ''; return; }
-  if (!sbClient) { resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Поиск недоступен без связи с сервером</div>'; return; }
-
-  resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Ищем...</div>';
-  try {
-    const { data, error } = await sbClient
-      .from('messages')
-      .select('id, nick, text, color, role, created_at')
-      .eq('deleted', false)
-      .or(`text.ilike.%${q}%,nick.ilike.%${q}%`)
-      .order('created_at', { ascending: false })
-      .limit(30);
+    const { error } = await sbClient.from('messages').insert([row]);
     if (error) throw error;
-
-    if (!data || !data.length) {
-      resultsEl.innerHTML = '<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:.5rem">Ничего не нашли</div>';
-      return;
-    }
-    // Подсветка совпадения — экранируем текст ДО подсветки, чтобы не
-    // открыть XSS через regex-замену уже безопасной строки.
-    const reQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const highlight = s => esc(s).replace(new RegExp(reQ, 'gi'), m => `<mark style="background:rgba(145,71,255,.35);color:inherit;border-radius:3px;padding:0 .15rem">${m}</mark>`);
-
-    resultsEl.innerHTML = data.map(m => `
-      <div style="background:rgba(255,255,255,.03);border-radius:8px;padding:.5rem .7rem">
-        <div style="display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted)">
-          <span style="color:${m.color||'var(--tw)'};font-weight:700">${highlight(m.nick)}</span>
-          <span>${new Date(m.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
-        </div>
-        <div style="font-size:.8rem;margin-top:.25rem;word-break:break-word">${highlight(m.text)}</div>
-      </div>`).join('');
+    return { ok: true };
   } catch(e) {
-    resultsEl.innerHTML = `<div style="color:var(--accent);font-size:.78rem;text-align:center;padding:.5rem">Ошибка поиска: ${eschumanErr(e)}</div>`;
+    // Сервер (vip-balance.sql) отказал: стикеры — только VIP/стафф
+    if (/VIP|стикер/i.test(e?.message || '')) return { ok: false, err: '🔒 Стикеры — только для VIP и команды сайта' };
+    return { ok: false, err: humanErr(e) };
   }
 }
+// Старые имена (ссылки из старой разметки, custom-emoji.js) — вставка в открытое поле ввода
+function insertEmoji(em){ window.D37Chat?.view?.insert?.(em); }
+function sendSticker(emoji){ return sendStickerOfficial('general', emoji); }
 
+// Страница #/chat: раскладка «как Дискорд» (community.js + msgview.js — грузятся при первом заходе)
+async function renderChatPage(param){
+  const host = document.getElementById('dsHost'); if (!host) return;
+  if (!window.D37DS?.page) {
+    if (!host.firstElementChild) host.innerHTML = '<div class="mv-load"><i></i>Загружаем чат…</div>';
+    try { await window.D37Phone.need('ds'); }
+    catch (e) { host.innerHTML = '<div class="mv-empty">😵 Чат не загрузился — проверь интернет и обнови страницу<br><button type="button" class="mv-retry" onclick="renderChatPage(currentRouteParam())">Ещё раз</button></div>'; return; }
+  }
+  if (currentRoute() !== 'chat') return;
+  window.D37DS.page(host, param);
+}
 
+// Старые имена из прежней разметки чата (страница могла остаться в кэше браузера) — безопасные заглушки
+function sendMsg(){ window.D37Chat?.view?.focus?.(); }
+function toggleChatSearch(){ window.D37Chat?.view?.search?.(); }
+function toggleEmoji(e){ e?.stopPropagation?.(); }
+function toggleStickerPicker(e){ e?.stopPropagation?.(); }
+function handleMentionInput(){}
+function handleChatInputKeydown(){}
+function debouncedChatSearch(){}
+
+// Для раскладки «как Дискорд» (community.js) и телефона
+window.D37Chat = {
+  viewing: '',                     // открытый канал ('o:general', 'c:12'…) — чтобы не звать тостом
+  view: null,                      // открытая лента (MsgView) на странице чата
+  info: () => OFF.info, channels: offChannels, lastIds: chatLastIds, lastId: ch => OFF.lastId[ch] || 0,
+  mentions: OFF.mentions, adapter: chatAdapter, online: chatOnline, recentAuthors: chatRecentAuthors,
+  pinned: () => chatPinned, loadTwitch: loadTwitchChat, refreshInfo: chatInfo, hasNew: chatHasNew,
+  setSlow: async (ch, sec, modsOnly) => { const { data, error } = await sbClient.rpc('chat_channel_set', { p_id: ch, p_slow: sec, p_mods_only: modsOnly }); if (!error && data?.ok) await chatInfo(true); return error ? { ok: false, err: humanErr(error) } : data; },
+  reports: async () => { const { data, error } = await sbClient.rpc('chat_reports_list'); return error ? null : data; },
+  resolve: async (id, act) => { const { data, error } = await sbClient.rpc('chat_report_resolve', { p_id: id, p_action: act }); return error ? { ok: false, err: humanErr(error) } : data; },
+  _test: { checkSpam, offMsg, onlineMeta },
+};

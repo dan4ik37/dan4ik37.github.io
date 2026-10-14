@@ -1288,6 +1288,12 @@ Players.PlayerAdded.Connect(player => {
     else { P.enabled = false; mpWait('👥 Подключаемся к комнате…'); }
     playVis();
     pl.loop = E.loop(playStep, playFrame);
+    // телефон 📱 (js/features/phone.js): «язычок» слева и клавиша P; пока открыт — клавиши игры молчат; друзьям — «в мире игрока»
+    pl.phoneOff = window.D37Phone?.attach?.('studio', { title: '🧱 ' + (ed.q('.s3-name')?.value || 'Студия 3D'), hotkey: true, fab: true,
+      pause(on){ pl.C.blocked = on; pl.C.reset_state(); if (on) { pl.I.unlock(); pl.I.reset?.(); } pl.I.enabled = !on; },
+      shot: () => { ed.R.render(); return window.D37Phone.snap(ed.R.r.domElement); },
+      activity: () => ed.playId ? { s: ed.playId, t: (ed.q('.s3-name')?.value || '').slice(0, 32), j: `games/studio3d/play/${ed.playId}${ed.mp?.kind === 'play' && ed.mp.code ? '/' + ed.mp.code : ''}` }
+        : ed.mp?.code ? { g: 'studio3d', j: `games/studio3d/join/${ed.mp.code}` } : { g: 'studio3d' } }) || null;
     ed.loop.pause(true);
     if (pl.role === 'solo') msg('▶ Играешь! WASD — идти, Пробел — прыжок, E — действие. ■ Стоп — назад в редактор', true);
   }
@@ -1346,6 +1352,7 @@ Players.PlayerAdded.Connect(player => {
     mpClose();   // сначала сеть: она обёрнута вокруг SC.set/add/remove
     ext('stop');
     ed.NPC.stop();
+    try { pl.phoneOff?.(); } catch (e) {}   // телефон 📱
     pl.loop.stop(); pl.SH.stop(); pl.unf?.(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); pl.hud.remove();
     for (const l of pl.amb || []) l.h.stop();
     ed.playing = null;
@@ -2089,7 +2096,7 @@ Players.PlayerAdded.Connect(player => {
     ext('unmount');
     try { mpClose(); } catch (e) {}   // комната и канал Supabase — сразу (и до SC.dispose: сеть обёрнута вокруг сцены)
     ED = null;
-    try { if (ed.playing) { const pl = ed.playing; pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
+    try { if (ed.playing) { const pl = ed.playing; pl.phoneOff?.(); pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();

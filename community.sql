@@ -12,9 +12,13 @@
 --     мут на N минут, кик, бан (на время или навсегда), медленный режим, канал «пишут только модераторы»,
 --     жалобы (3 разных жалобы — сообщение скрыто до проверки; жалобы видят модераторы и персонал сайта),
 --     @упоминания → 🔔
---   • блокировка человека: не напишет в ЛС, не позвонит, не пришлёт заявку в друзья; дружба удаляется
---   • звонки 1 на 1 между друзьями: история, пропущенные (🔔), «занято», «кто может звонить» (друзья / никто)
---   • «кто из друзей онлайн и где» (на сайте / в мире, сервер N) — видят только друзья, невидимку — никто
+--   • блокировка человека: не напишет в ЛС (а значит, и не позвонит — звонок идёт личным сообщением), не пришлёт заявку
+--     в друзья; дружба удаляется
+--   • «кто из друзей онлайн и чем занят» (мир, сервер N, игра, мир игрока) — для профилей «видят только друзья»: без
+--     этого файла их занятие видно только им самим (у «видят все» — и так через общее «кто онлайн» сайта); невидимку и
+--     «никто» — никто
+--  Звонки и голосовые компании работают и без этого файла: вызов — личное сообщение со ссылкой (его может прислать
+--  только друг — это проверяют старые правила ЛС), звук — напрямую между браузерами.
 --   • общий чат сайта = сервер «Денчик37»: каналы #общий (как раньше), #игры, #поиск-тиммейтов, #мемы, голосовой;
 --     ответы, «изменено», удалить своё, жалобы (3 — сообщение скрыто), мут на N минут, медленный режим, @ и ответы → 🔔
 --   • закреп сообщений в сообществах (модераторы)
@@ -25,6 +29,7 @@
 
 -- Невидимка (privacy.sql) — на случай, если тот файл не запускался
 alter table public.profiles add column if not exists privacy_invisible boolean not null default false;
+alter table public.profiles add column if not exists privacy_profile text not null default 'all';
 
 -- ── Секрет для пропусков в голосовые каналы (читают только функции) ──
 create table if not exists public.comm_secret (
@@ -132,26 +137,6 @@ create table if not exists public.user_blocks (
   constraint no_self_block check (blocker_id <> blocked_id)
 );
 create index if not exists idx_ublocks_blocked on public.user_blocks (blocked_id);
-
-create table if not exists public.calls (
-  id uuid primary key default gen_random_uuid(),
-  caller_id uuid not null references public.profiles(id) on delete cascade,
-  callee_id uuid not null references public.profiles(id) on delete cascade,
-  status text not null default 'ringing' check (status in ('ringing', 'answered', 'ended', 'declined', 'missed', 'busy', 'failed')),
-  seen boolean not null default false,                 -- пропущенный уже посмотрели
-  created_at timestamptz not null default now(),
-  answered_at timestamptz,
-  alive_at timestamptz,                                -- разговор идёт: отметка раз в минуту (зависшая вкладка не держит «занято»)
-  ended_at timestamptz
-);
-create index if not exists idx_calls_callee on public.calls (callee_id, created_at desc);
-create index if not exists idx_calls_caller on public.calls (caller_id, created_at desc);
-
-create table if not exists public.comm_settings (
-  user_id uuid primary key references public.profiles(id) on delete cascade,
-  calls_from text not null default 'friends' check (calls_from in ('friends', 'nobody')),
-  updated_at timestamptz not null default now()
-);
 
 create table if not exists public.comm_online (
   user_id uuid primary key references public.profiles(id) on delete cascade,
@@ -264,8 +249,6 @@ alter table public.community_messages enable row level security;
 alter table public.community_reactions enable row level security;
 alter table public.community_reports enable row level security;
 alter table public.user_blocks enable row level security;
-alter table public.calls enable row level security;
-alter table public.comm_settings enable row level security;
 alter table public.comm_online enable row level security;
 
 drop policy if exists comm_read on public.communities;
@@ -292,10 +275,6 @@ create policy creport_read on public.community_reports for select
   using (reporter_id = auth.uid() or public.comm_is_mod(community_id) or public.comm_is_staff());
 drop policy if exists ublock_read on public.user_blocks;
 create policy ublock_read on public.user_blocks for select using (blocker_id = auth.uid());
-drop policy if exists calls_read on public.calls;
-create policy calls_read on public.calls for select using (auth.uid() = caller_id or auth.uid() = callee_id);
-drop policy if exists csettings_read on public.comm_settings;
-create policy csettings_read on public.comm_settings for select using (user_id = auth.uid());
 -- comm_online — без политик: читается только через friends_online()
 
 -- ═══ Блокировка: и в ЛС, и в заявках в друзья (дополнительное условие к старым правилам) ═══
@@ -308,8 +287,6 @@ begin
   if (select count(*) from public.user_blocks where blocker_id = uid) >= 500 then return jsonb_build_object('ok', false, 'reason', 'many'); end if;
   insert into public.user_blocks (blocker_id, blocked_id) values (uid, p_uid) on conflict do nothing;
   delete from public.friendships where (requester_id = uid and addressee_id = p_uid) or (requester_id = p_uid and addressee_id = uid);
-  update public.calls set status = case when status = 'ringing' then 'missed' else 'ended' end, ended_at = now()
-    where status in ('ringing', 'answered') and ((caller_id = uid and callee_id = p_uid) or (caller_id = p_uid and callee_id = uid));
   return jsonb_build_object('ok', true);
 end $$;
 create or replace function public.user_unblock(p_uid uuid)
@@ -494,6 +471,8 @@ begin
   from public.community_channels x where x.community_id = p_id;
   return jsonb_build_object('ok', true, 'role', v_role, 'staff', staff,
     'muted_until', case when v_mute > now() then v_mute end,
+    -- ключ комнат Realtime сообщества («печатает…»): знают только участники
+    'rt', case when v_role is not null or staff then substr(encode(extensions.hmac('rt:' || c.id, s, 'sha256'), 'hex'), 1, 16) end,
     'c', jsonb_build_object('id', c.id, 'name', c.name, 'about', c.about, 'icon', c.icon, 'public', c.is_public, 'members', c.members,
       'owner', c.owner_id, 'status', c.status, 'code', case when v_role is not null or staff then c.invite_code end),
     'channels', ch);
@@ -913,111 +892,10 @@ begin
     'staff', coalesce(p.role in ('admin', 'moderator'), false));
 end $$;
 
--- ═══ Звонки 1 на 1 (только друзья; «кто может звонить» — друзья / никто) ═══
-create or replace function public.call_start(p_to uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); v_id uuid; v_from text;
-begin
-  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
-  if p_to is null or p_to = uid then return jsonb_build_object('ok', false, 'reason', 'self'); end if;
-  if not exists (select 1 from public.profiles where id = p_to) then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
-  -- старьё: никто не ответил за 45 с — пропущенный; разговор без отметки дольше 2 минут — завершён (вкладку закрыли)
-  update public.calls set status = 'missed', ended_at = now()
-    where status = 'ringing' and created_at < now() - interval '45 seconds' and (caller_id in (uid, p_to) or callee_id in (uid, p_to));
-  update public.calls set status = 'ended', ended_at = coalesce(alive_at, now())
-    where status = 'answered' and coalesce(alive_at, answered_at) < now() - interval '2 minutes' and (caller_id in (uid, p_to) or callee_id in (uid, p_to));
-  if public.comm_blocked(uid, p_to) then return jsonb_build_object('ok', false, 'reason', 'blocked'); end if;
-  if not public.comm_friends(uid, p_to) then return jsonb_build_object('ok', false, 'reason', 'friends'); end if;
-  select calls_from into v_from from public.comm_settings where user_id = p_to;
-  if v_from = 'nobody' then return jsonb_build_object('ok', false, 'reason', 'nobody'); end if;
-  if (select count(*) from public.calls where caller_id = uid and created_at > now() - interval '2 minutes') >= 5
-     or (select count(*) from public.calls where caller_id = uid and created_at > now() - interval '1 hour') >= 30 then
-    return jsonb_build_object('ok', false, 'reason', 'rate'); end if;
-  -- свои старые «звонит / разговор» (переподключился) — закрыть
-  update public.calls set status = case when status = 'ringing' then 'missed' else 'ended' end, ended_at = now()
-    where status in ('ringing', 'answered') and (caller_id = uid or callee_id = uid);
-  -- занято: у друга уже разговор или ему звонят
-  if exists (select 1 from public.calls where (caller_id = p_to or callee_id = p_to) and status in ('ringing', 'answered')) then
-    insert into public.calls (caller_id, callee_id, status, ended_at) values (uid, p_to, 'busy', now()) returning id into v_id;
-    perform public.comm_notify(p_to, 'call_missed', uid, 'звонил(а), пока ты разговаривал(а)', '', '#/phone/calls', 'callbusy:' || uid || ':' || public.comm_bucket(5));
-    return jsonb_build_object('ok', false, 'reason', 'busy', 'id', v_id);
-  end if;
-  insert into public.calls (caller_id, callee_id) values (uid, p_to) returning id into v_id;
-  -- история: хранится 60 дней
-  if random() < .05 then delete from public.calls where created_at < now() - interval '60 days'; end if;
-  return jsonb_build_object('ok', true, 'id', v_id);
-end $$;
-
-create or replace function public.call_answer(p_id uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare v record;
-begin
-  select * into v from public.calls where id = p_id and callee_id = auth.uid();
-  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
-  if v.status <> 'ringing' or v.created_at < now() - interval '45 seconds' then return jsonb_build_object('ok', false, 'reason', 'gone', 'status', v.status); end if;
-  update public.calls set status = 'answered', answered_at = now(), alive_at = now(), seen = true where id = p_id;
-  return jsonb_build_object('ok', true);
-end $$;
-
--- Завершить: звонит → declined (кто принимает) / missed (кто звонит: не дождался или передумал) / busy / failed;
--- разговор → ended / failed
-create or replace function public.call_end(p_id uuid, p_status text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); v record; st text;
-begin
-  select * into v from public.calls where id = p_id and (caller_id = uid or callee_id = uid);
-  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
-  if v.status = 'ringing' then
-    if uid = v.callee_id and p_status in ('declined', 'busy', 'failed') then st := p_status;
-    elsif uid = v.caller_id and p_status in ('missed', 'failed') then st := p_status;
-    else return jsonb_build_object('ok', false, 'reason', 'status'); end if;
-  elsif v.status = 'answered' then
-    if p_status in ('ended', 'failed') then st := p_status; else return jsonb_build_object('ok', false, 'reason', 'status'); end if;
-  else
-    return jsonb_build_object('ok', true, 'status', v.status);   -- уже закончен
-  end if;
-  update public.calls set status = st, ended_at = now(), seen = case when st in ('missed', 'busy') then false else seen end where id = p_id;
-  if st = 'missed' then
-    perform public.comm_notify(v.callee_id, 'call_missed', v.caller_id, 'пропущенный звонок', '', '#/phone/calls', 'callmiss:' || p_id);
-  end if;
-  return jsonb_build_object('ok', true, 'status', st);
-end $$;
-
-create or replace function public.call_ping(p_id uuid)
-returns jsonb language plpgsql security definer set search_path = public as $$
-begin
-  update public.calls set alive_at = now() where id = p_id and status = 'answered' and (caller_id = auth.uid() or callee_id = auth.uid());
-  return jsonb_build_object('ok', found);
-end $$;
-
-create or replace function public.call_state()
-returns jsonb language sql stable security definer set search_path = public as $$
-  select jsonb_build_object(
-    'missed', (select count(*) from public.calls where callee_id = auth.uid() and status in ('missed', 'busy') and not seen),
-    'calls_from', coalesce((select calls_from from public.comm_settings where user_id = auth.uid()), 'friends'));
-$$;
-
-create or replace function public.call_seen()
-returns jsonb language plpgsql security definer set search_path = public as $$
-begin
-  update public.calls set seen = true where callee_id = auth.uid() and not seen;
-  return jsonb_build_object('ok', true);
-end $$;
-
-create or replace function public.call_settings(p_calls_from text)
-returns jsonb language plpgsql security definer set search_path = public as $$
-begin
-  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
-  if p_calls_from not in ('friends', 'nobody') then return jsonb_build_object('ok', false, 'reason', 'value'); end if;
-  insert into public.comm_settings (user_id, calls_from, updated_at) values (auth.uid(), p_calls_from, now())
-    on conflict (user_id) do update set calls_from = excluded.calls_from, updated_at = now();
-  return jsonb_build_object('ok', true, 'calls_from', p_calls_from);
-end $$;
-
 -- ═══ Кто из друзей онлайн и где (телефон раз в минуту отмечается; невидимку не видно) ═══
 create or replace function public.comm_ping(p_place text)
 returns void language plpgsql security definer set search_path = public as $$
-declare v_place text := left(regexp_replace(coalesce(p_place, ''), '[^a-z0-9:_-]', '', 'g'), 24);
+declare v_place text := left(regexp_replace(coalesce(p_place, ''), '[^a-zA-Z0-9:_/|.,-]', '', 'g'), 120);
 begin
   if auth.uid() is null then return; end if;
   insert into public.comm_online (user_id, seen_at, place) values (auth.uid(), now(), v_place)
@@ -1029,7 +907,7 @@ create or replace function public.friends_online()
 returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object('id', o.user_id, 'seen', o.seen_at, 'place', o.place)), '[]'::jsonb)
   from public.comm_online o join public.profiles p on p.id = o.user_id
-  where o.seen_at > now() - interval '3 minutes' and not coalesce(p.privacy_invisible, false)
+  where o.seen_at > now() - interval '3 minutes' and not coalesce(p.privacy_invisible, false) and coalesce(p.privacy_profile, 'all') <> 'nobody'
     and public.comm_friends(auth.uid(), o.user_id) and not public.comm_blocked(auth.uid(), o.user_id);
 $$;
 
@@ -1286,7 +1164,6 @@ begin
     'cm_send(bigint,text,bigint)', 'cm_edit(bigint,text)', 'cm_delete_msg(bigint)', 'cm_react(bigint,text)', 'cm_mute(bigint,uuid,integer)',
     'cm_kick(bigint,uuid)', 'cm_ban(bigint,uuid,text,integer,boolean)', 'cm_unban(bigint,uuid)', 'cm_set_role(bigint,uuid,text)',
     'cm_report(bigint,text,bigint)', 'cm_reports(bigint)', 'cm_report_resolve(bigint,text)', 'cv_pass(bigint,text)', 'cv_check(bigint,text,text)',
-    'call_start(uuid)', 'call_answer(uuid)', 'call_end(uuid,text)', 'call_ping(uuid)', 'call_state()', 'call_seen()', 'call_settings(text)',
     'comm_ping(text)', 'friends_online()', 'chat_edit(bigint,text)', 'chat_delete_own(bigint)', 'chat_report(bigint,text)',
     'chat_reports_list()', 'chat_report_resolve(bigint,text)', 'chat_mute(uuid,text,integer,text)', 'chat_channel_set(text,integer,boolean)',
     'cm_pin(bigint,boolean)'] loop
@@ -1306,15 +1183,12 @@ revoke all on function public.comm_friends(uuid, uuid) from public, anon, authen
 revoke all on function public.chat_reply_notify() from public, anon, authenticated;
 revoke all on function public.chat_guard() from public, anon, authenticated;
 
--- ═══ Realtime: новые сообщения канала и звонки — сразу (RLS решает, кому что придёт) ═══
+-- ═══ Realtime: новые сообщения каналов сообществ — сразу (RLS решает, кому что придёт) ═══
 do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'community_messages') then
       alter publication supabase_realtime add table public.community_messages;
-    end if;
-    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'calls') then
-      alter publication supabase_realtime add table public.calls;
     end if;
   end if;
 end $$;
