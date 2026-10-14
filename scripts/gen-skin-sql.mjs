@@ -1,5 +1,6 @@
-// Цены частей персонажа, VIP-части и слоты char_save в coins.sql — из js/core/avatar.js (PARTS — один источник правды).
-// Запуск: node scripts/gen-skin-sql.mjs (из корня репозитория). Потом — тест PGlite (сверяет все цены) и «запусти coins.sql ещё раз».
+// Цены частей персонажа и пакетов частей тела, VIP-части и слоты char_save в coins.sql — из js/core/avatar.js
+// (PARTS и PACKS — один источник правды). Запуск: node scripts/gen-skin-sql.mjs (из корня репозитория).
+// Потом — node scripts/char-test.cjs (сверяет coins.sql с PARTS), тест PGlite (сверяет все цены на базе) и «запусти coins.sql ещё раз».
 import fs from 'fs';
 import vm from 'vm';
 const win = {};
@@ -10,10 +11,17 @@ for (const slot of C.SLOTS) for (const [id, , price, , isVip] of P[slot].list) {
   rows.push(`('skin:${slot}:${id}', ${price})`);
   if (isVip) vip.push(`'skin:${slot}:${id}'`);
 }
+// пакеты частей тела: купил пакет — все его части (char_save сверяет владение по пакету)
+for (const [id, [, price, isVip]] of Object.entries(C.PACKS)) {
+  rows.push(`('skin:pack:${id}', ${price})`);
+  if (isVip) vip.push(`'skin:pack:${id}'`);
+}
 const lines = [];
 for (let i = 0; i < rows.length; i += 5) lines.push('      ' + rows.slice(i, i + 5).join(', ') + (i + 5 < rows.length ? ',' : ''));
-const pal = C.SLOTS.filter(s => P[s].pal);
-let sql = fs.readFileSync('coins.sql', 'utf8');
+const pal = C.SLOTS.filter(s => P[s].pal), packSlots = C.SLOTS.filter(s => P[s].pack);
+// концы строк: на Windows файл может быть с \r\n (git autocrlf) — работаем с \n и возвращаем как было
+const raw = fs.readFileSync('coins.sql', 'utf8'), crlf = raw.includes('\r\n');
+let sql = raw.replace(/\r\n/g, '\n');
 const a = sql.indexOf("    when p_item like 'skin:%' then (select v.p from (values\n");
 const b = sql.indexOf('    ) v(i, p) where v.i = p_item)');
 if (a < 0 || b < 0) throw new Error('coin_price: не нашёл список цен');
@@ -23,5 +31,8 @@ const loop = /  foreach slot in array array\[[^\]]*\] loop\n/;
 if (!loop.test(sql)) throw new Error('char_save: не нашёл цикл по слотам');
 sql = sql.replace(loop, () => `  foreach slot in array array[${C.SLOTS.map(s => `'${s}'`).join(', ')}] loop\n`);
 sql = sql.replace(/and slot = any\(array\[[^\]]*\]\) then clean/, () => `and slot = any(array[${pal.map(s => `'${s}'`).join(', ')}]) then clean`);
-fs.writeFileSync('coins.sql', sql);
-console.log(`${rows.length} частей, ${C.SLOTS.length} слотов, палитра: ${pal.length}; VIP: ${vip.join(', ')}`);
+const packRe = /if slot = any\(array\[[^\]]*\]\) and public\.coin_price\('skin:pack:' \|\| val\) is not null then/;
+if (!packRe.test(sql)) throw new Error('char_save: не нашёл строку пакетов');
+sql = sql.replace(packRe, () => `if slot = any(array[${packSlots.map(s => `'${s}'`).join(', ')}]) and public.coin_price('skin:pack:' || val) is not null then`);
+fs.writeFileSync('coins.sql', crlf ? sql.replace(/\n/g, '\r\n') : sql);
+console.log(`${rows.length} цен (частей и пакетов), ${C.SLOTS.length} слотов, палитра: ${pal.length}, части из пакетов: ${packSlots.length}; VIP: ${vip.join(', ')}`);

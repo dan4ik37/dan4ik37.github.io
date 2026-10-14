@@ -11,6 +11,8 @@
 --  Персонаж: надетое — coin_wallet.look, сохраняет char_save (только своё, бесплатное или VIP-часть у VIP),
 --  чужих показывает char_looks (рекорды, профиль, игры вдвоём). В look — и части 3D-человечка «Мира Денчика»
 --  (фигура, кожа, рост, причёска, одежда, аксессуары…) и цвета из палитры: «x» + 6 hex-цифр (xff8800), бесплатно.
+--  Части тела как в Роблоксе: форма головы, туловища, каждой руки и ноги (ps*) и их цвета (pc*). Формы — из пакетов:
+--  купил 'skin:pack:robot' — носишь любую часть робота (руку, ногу, голову) вперемешку с обычными.
 --  Цены и лимиты продублированы в js/core/coins.js (RULES, PRICES) и js/core/avatar.js (PARTS):
 --  поменял тут — поменяй там. Цены частей и слоты char_save генерирует скрипт из PARTS (тест PGlite сверяет все).
 --
@@ -139,7 +141,49 @@ create or replace function public.coin_price(p_item text) returns int language s
       ('skin:back:wings', 600), ('skin:back:batwings', 600), ('skin:back:dragon', 3000), ('skin:backc:auto', 0), ('skin:backc:white', 0),
       ('skin:backc:silver', 0), ('skin:backc:gray', 0), ('skin:backc:black', 0), ('skin:backc:red', 0), ('skin:backc:orange', 0),
       ('skin:backc:yellow', 0), ('skin:backc:lime', 0), ('skin:backc:green', 0), ('skin:backc:teal', 0), ('skin:backc:sky', 0),
-      ('skin:backc:blue', 0), ('skin:backc:purple', 0), ('skin:backc:pink', 0), ('skin:backc:brown', 0), ('skin:backc:beige', 0)
+      ('skin:backc:blue', 0), ('skin:backc:purple', 0), ('skin:backc:pink', 0), ('skin:backc:brown', 0), ('skin:backc:beige', 0),
+      ('skin:psh:round', 0), ('skin:psh:egg', 0), ('skin:psh:wide', 0), ('skin:psh:block', 0), ('skin:psh:cube', 80),
+      ('skin:psh:robot', 700), ('skin:psh:knight', 900), ('skin:pst:base', 0), ('skin:pst:block', 0), ('skin:pst:slim', 0),
+      ('skin:pst:chunky', 250), ('skin:pst:robot', 700), ('skin:pst:knight', 900), ('skin:psal:base', 0), ('skin:psal:block', 0),
+      ('skin:psal:slim', 0), ('skin:psal:chunky', 250), ('skin:psal:robot', 700), ('skin:psal:knight', 900), ('skin:psar:base', 0),
+      ('skin:psar:block', 0), ('skin:psar:slim', 0), ('skin:psar:chunky', 250), ('skin:psar:robot', 700), ('skin:psar:knight', 900),
+      ('skin:psll:base', 0), ('skin:psll:block', 0), ('skin:psll:slim', 0), ('skin:psll:chunky', 250), ('skin:psll:robot', 700),
+      ('skin:psll:knight', 900), ('skin:pslr:base', 0), ('skin:pslr:block', 0), ('skin:pslr:slim', 0), ('skin:pslr:chunky', 250),
+      ('skin:pslr:robot', 700), ('skin:pslr:knight', 900), ('skin:pch:auto', 0), ('skin:pch:t1', 0), ('skin:pch:t2', 0),
+      ('skin:pch:t3', 0), ('skin:pch:t4', 0), ('skin:pch:t5', 0), ('skin:pch:t6', 0), ('skin:pch:t7', 0),
+      ('skin:pch:t8', 0), ('skin:pch:zombie', 0), ('skin:pch:alien', 0), ('skin:pch:fairy', 0), ('skin:pch:robot', 0),
+      ('skin:pch:yellow', 0), ('skin:pch:blue', 0), ('skin:pch:green', 0), ('skin:pch:red', 0), ('skin:pch:white', 0),
+      ('skin:pch:black', 0), ('skin:pch:orange', 0), ('skin:pch:purple', 0), ('skin:pch:pink', 0), ('skin:pch:teal', 0),
+      ('skin:pct:auto', 0), ('skin:pct:t1', 0), ('skin:pct:t2', 0), ('skin:pct:t3', 0), ('skin:pct:t4', 0),
+      ('skin:pct:t5', 0), ('skin:pct:t6', 0), ('skin:pct:t7', 0), ('skin:pct:t8', 0), ('skin:pct:zombie', 0),
+      ('skin:pct:alien', 0), ('skin:pct:fairy', 0), ('skin:pct:robot', 0), ('skin:pct:yellow', 0), ('skin:pct:blue', 0),
+      ('skin:pct:green', 0), ('skin:pct:red', 0), ('skin:pct:white', 0), ('skin:pct:black', 0), ('skin:pct:orange', 0),
+      ('skin:pct:purple', 0), ('skin:pct:pink', 0), ('skin:pct:teal', 0), ('skin:pcal:auto', 0), ('skin:pcal:t1', 0),
+      ('skin:pcal:t2', 0), ('skin:pcal:t3', 0), ('skin:pcal:t4', 0), ('skin:pcal:t5', 0), ('skin:pcal:t6', 0),
+      ('skin:pcal:t7', 0), ('skin:pcal:t8', 0), ('skin:pcal:zombie', 0), ('skin:pcal:alien', 0), ('skin:pcal:fairy', 0),
+      ('skin:pcal:robot', 0), ('skin:pcal:yellow', 0), ('skin:pcal:blue', 0), ('skin:pcal:green', 0), ('skin:pcal:red', 0),
+      ('skin:pcal:white', 0), ('skin:pcal:black', 0), ('skin:pcal:orange', 0), ('skin:pcal:purple', 0), ('skin:pcal:pink', 0),
+      ('skin:pcal:teal', 0), ('skin:pcar:auto', 0), ('skin:pcar:t1', 0), ('skin:pcar:t2', 0), ('skin:pcar:t3', 0),
+      ('skin:pcar:t4', 0), ('skin:pcar:t5', 0), ('skin:pcar:t6', 0), ('skin:pcar:t7', 0), ('skin:pcar:t8', 0),
+      ('skin:pcar:zombie', 0), ('skin:pcar:alien', 0), ('skin:pcar:fairy', 0), ('skin:pcar:robot', 0), ('skin:pcar:yellow', 0),
+      ('skin:pcar:blue', 0), ('skin:pcar:green', 0), ('skin:pcar:red', 0), ('skin:pcar:white', 0), ('skin:pcar:black', 0),
+      ('skin:pcar:orange', 0), ('skin:pcar:purple', 0), ('skin:pcar:pink', 0), ('skin:pcar:teal', 0), ('skin:pcll:auto', 0),
+      ('skin:pcll:t1', 0), ('skin:pcll:t2', 0), ('skin:pcll:t3', 0), ('skin:pcll:t4', 0), ('skin:pcll:t5', 0),
+      ('skin:pcll:t6', 0), ('skin:pcll:t7', 0), ('skin:pcll:t8', 0), ('skin:pcll:zombie', 0), ('skin:pcll:alien', 0),
+      ('skin:pcll:fairy', 0), ('skin:pcll:robot', 0), ('skin:pcll:yellow', 0), ('skin:pcll:blue', 0), ('skin:pcll:green', 0),
+      ('skin:pcll:red', 0), ('skin:pcll:white', 0), ('skin:pcll:black', 0), ('skin:pcll:orange', 0), ('skin:pcll:purple', 0),
+      ('skin:pcll:pink', 0), ('skin:pcll:teal', 0), ('skin:pclr:auto', 0), ('skin:pclr:t1', 0), ('skin:pclr:t2', 0),
+      ('skin:pclr:t3', 0), ('skin:pclr:t4', 0), ('skin:pclr:t5', 0), ('skin:pclr:t6', 0), ('skin:pclr:t7', 0),
+      ('skin:pclr:t8', 0), ('skin:pclr:zombie', 0), ('skin:pclr:alien', 0), ('skin:pclr:fairy', 0), ('skin:pclr:robot', 0),
+      ('skin:pclr:yellow', 0), ('skin:pclr:blue', 0), ('skin:pclr:green', 0), ('skin:pclr:red', 0), ('skin:pclr:white', 0),
+      ('skin:pclr:black', 0), ('skin:pclr:orange', 0), ('skin:pclr:purple', 0), ('skin:pclr:pink', 0), ('skin:pclr:teal', 0),
+      ('skin:face:anime', 0), ('skin:face:classic', 0), ('skin:face:toon', 0), ('skin:face:dots', 0), ('skin:face:kawaii', 150),
+      ('skin:glove:none', 0), ('skin:glove:wrist', 40), ('skin:glove:mitts', 60), ('skin:glove:gloves', 80), ('skin:glove:watch', 120),
+      ('skin:glove:boxing', 200), ('skin:glovec:auto', 0), ('skin:glovec:white', 0), ('skin:glovec:silver', 0), ('skin:glovec:gray', 0),
+      ('skin:glovec:black', 0), ('skin:glovec:red', 0), ('skin:glovec:orange', 0), ('skin:glovec:yellow', 0), ('skin:glovec:lime', 0),
+      ('skin:glovec:green', 0), ('skin:glovec:teal', 0), ('skin:glovec:sky', 0), ('skin:glovec:blue', 0), ('skin:glovec:purple', 0),
+      ('skin:glovec:pink', 0), ('skin:glovec:brown', 0), ('skin:glovec:beige', 0), ('skin:pack:base', 0), ('skin:pack:block', 0),
+      ('skin:pack:slim', 0), ('skin:pack:chunky', 250), ('skin:pack:robot', 700), ('skin:pack:knight', 900)
     ) v(i, p) where v.i = p_item)
   end
 $$;
@@ -314,13 +358,15 @@ begin
   if p_look is null or jsonb_typeof(p_look) <> 'object' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
   select items into owned from public.coin_wallet where user_id = uid;
   perks := coalesce(public.has_perks(uid), false);
-  foreach slot in array array['color', 'eyes', 'mouth', 'hat', 'item', 'pet', 'trail', 'body', 'tone', 'hgt', 'wid', 'head', 'eyec', 'brows', 'lash', 'cheek', 'hair', 'hairc', 'top', 'trim', 'bottom', 'botc', 'shoes', 'shoec', 'hatc', 'glasses', 'glassc', 'neck', 'neckc', 'back', 'backc'] loop
+  foreach slot in array array['color', 'eyes', 'mouth', 'hat', 'item', 'pet', 'trail', 'body', 'tone', 'hgt', 'wid', 'head', 'eyec', 'brows', 'lash', 'cheek', 'hair', 'hairc', 'top', 'trim', 'bottom', 'botc', 'shoes', 'shoec', 'hatc', 'glasses', 'glassc', 'neck', 'neckc', 'back', 'backc', 'psh', 'pst', 'psal', 'psar', 'psll', 'pslr', 'pch', 'pct', 'pcal', 'pcar', 'pcll', 'pclr', 'face', 'glove', 'glovec'] loop
     val := p_look ->> slot;
     if val is null or val = '' then continue; end if;
     if val !~ '^[a-z0-9]{1,20}$' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
     -- свой цвет из палитры («x» + 6 hex-цифр) — бесплатно, только у частей с палитрой
-    if val ~ '^x[0-9a-f]{6}$' and slot = any(array['color', 'tone', 'eyec', 'hairc', 'trim', 'botc', 'shoec', 'hatc', 'glassc', 'neckc', 'backc']) then clean := clean || jsonb_build_object(slot, val); continue; end if;
+    if val ~ '^x[0-9a-f]{6}$' and slot = any(array['color', 'tone', 'eyec', 'hairc', 'trim', 'botc', 'shoec', 'hatc', 'glassc', 'neckc', 'backc', 'pch', 'pct', 'pcal', 'pcar', 'pcll', 'pclr', 'glovec']) then clean := clean || jsonb_build_object(slot, val); continue; end if;
     item := 'skin:' || slot || ':' || val;
+    -- части тела из пакетов (робот, рыцарь, силач…): купил пакет — носишь любую его часть
+    if slot = any(array['psh', 'pst', 'psal', 'psar', 'psll', 'pslr']) and public.coin_price('skin:pack:' || val) is not null then item := 'skin:pack:' || val; end if;
     pr := public.coin_price(item);
     if pr is null then return jsonb_build_object('ok', false, 'reason', 'item', 'item', item); end if;
     if pr > 0 and not (item = any(coalesce(owned, '{}'::text[]))) and not (perks and public.coin_vip_item(item)) then
