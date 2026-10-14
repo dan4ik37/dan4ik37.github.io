@@ -24,7 +24,7 @@
       break:        { every: 3, first: 120, gap: 300, max: 4, desk: true },
       game_over:    { refresh: 90 },   // под игрой: обновить не чаще раза в 90 с и только у Яндекса (Google — без обновлений)
       interstitial: { after: 2, first: 60, gap: 180, max: 6, mob: true },
-      floor:        { first: 15, max: 3, mob: true, minW: 320, maxW: 420 },   // РСЯ: overlay — только экраны 320–420 px
+      floor:        { first: 12, max: 3, mob: true, minW: 320, maxW: 420 },   // РСЯ: overlay — только экраны 320–420 px
       rail:         { first: 15, gap: 60, max: 12, desk: true, minW: 1400 },
       feed:         { max: 16 },
     },
@@ -103,6 +103,7 @@
     document.querySelectorAll('.d37-feed, .d37-adload, .d37-adcard').forEach(e => e.remove());
     railOff();
     document.querySelectorAll('.d37-ad').forEach(e => { e.innerHTML = ''; e.hidden = true; });
+    const ga = document.getElementById('gamesAd'); if (ga) { ga.innerHTML = ''; ga.hidden = true; delete ga.dataset.net; }   // и «Перерыв»
     ['ad-mid', 'ad-top', 'ad-bottom'].forEach(id => document.getElementById(id)?.classList.add('ad-empty'));
   }
 
@@ -367,7 +368,7 @@
   function railSpot(){
     if (!/^#\/games\/./.test(location.hash || '') || isTouch()) return null;
     const html = document.documentElement;
-    if (html.classList.contains('s3-open') || html.classList.contains('wld-editing') || document.fullscreenElement) return null;
+    if (['s3-open', 'wld-editing', 'hd-lock'].some(c => html.classList.contains(c)) || document.fullscreenElement) return null;   // окно поверх / игра на весь экран
     const page = $('#games-page'), stage = $('#gamesStage');
     if (!page || !stage || stage.hidden || page.style.display === 'none') return null;
     const W = vw();

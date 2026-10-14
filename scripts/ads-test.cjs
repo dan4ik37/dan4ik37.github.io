@@ -316,9 +316,11 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   currentUser = { id: 'u3' }; currentProfile = { id: 'u3', role: 'user', is_vip: true };
   const slot = new El('div'); slot.className = 'd37-ad'; slot.innerHTML = '<span>Реклама</span>'; body.appendChild(slot);
   const fd = new El('div'); fd.className = 'd37-feed'; body.appendChild(fd);
+  const ga = new El('div'); ga.id = 'gamesAd'; ga.innerHTML = '<div class="d37-break"><div class="d37-break-t">☕ Перерыв</div><div class="d37-break-ad d37-ad"></div></div>'; body.appendChild(ga);
   dispatchEvent(new Event('d37:auth')); advance(100);
   ok(slot.hidden && slot.innerHTML === '' && !fd.isConnected, 'вошёл VIP — показанная реклама убрана');
-  slot.remove();
+  ok(ga.hidden && ga.innerHTML === '', 'и «Перерыв» под игрой — тоже');
+  slot.remove(); ga.remove();
   // рекламу за награду VIP не отнимаем (она по кнопке)
   window.ADS_IDS.yandex.rewarded_desktop = 'R-A-1-7';
   ok(A.rewardReady(), 'VIP: реклама за награду по кнопке остаётся');
@@ -390,7 +392,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
 
   // полоска на телефоне: 320–420 px, не раньше 15 с
   fresh({ env: { coarse: true, width: 400 } }); window.ADS_IDS.yandex.floor = 'R-A-9-2';
-  ok(M.why('floor') === 'first', 'полоска: в первые 15 с — нет');
+  ok(M.why('floor') === 'first', 'полоска: в первые 12 с визита — нет');
   advance(16e3);
   ok(M.why('floor') === '', 'полоска: 400 px, 16 с — можно');
   ENV.width = 600;
@@ -650,6 +652,9 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   html.classList.remove('s3-open');
   advance(61e3); M.railTick();
   ok(!!T.RAIL.el, 'студию закрыли — вернулся (через минуту)');
+  html.classList.add('hd-lock'); M.railTick();
+  ok(!T.RAIL.el, '«Орда» на весь экран (hd-lock) — столбика нет');
+  html.classList.remove('hd-lock'); advance(61e3); M.railTick();
   setHash('#/games'); M.railTick();
   ok(!T.RAIL.el, 'ушёл из игры в витрину — столбика нет');
   setHash('#/games/2048'); advance(10e3); M.railTick();
