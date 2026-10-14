@@ -1,0 +1,142 @@
+// /terms, /refund, /contacts → api/pages.js?page=… — пользовательское соглашение (оферта), политика возврата,
+// реквизиты и контакты. Их требуют платёжные системы (TipTop Pay, Freedom Pay) для подключения сайта.
+// Реквизиты — api/_lib/seller.js (пока заглушки — на странице «уточняется»). Цены — api/_lib/premium.js.
+// ШАБЛОН: тексты простые и честные, но перед приёмом платежей их стоит показать юристу (docs/PAYMENTS_SETUP.md).
+import { SITE, esc } from '../yt.js';
+import { page } from '../page.js';
+import { SELLER, sv, sellerReady } from '../seller.js';
+import { GEMS, PACKS, ITEMS, LIMITS, gemWord, money } from '../premium.js';
+
+const S = SELLER;
+const mail = () => `<a href="mailto:${esc(S.email)}">${esc(S.email)}</a>`;
+const draft = () => sellerReady() ? '' : '<p class="lg-draft">Документ готовится: реквизиты продавца появятся здесь после регистрации ИП.</p>';
+
+function terms() {
+  const vip = ITEMS.filter(i => i.kind === 'vip').map(i => `${i.title.replace('VIP на ', '')} — ${i.price} ${GEMS.icon}`).join(', ');
+  return {
+    title: 'Пользовательское соглашение — dan4ik37',
+    description: 'Правила сайта dan4ik37: аккаунт, кристаллы 💎, VIP, покупки, донаты, несовершеннолетние, возврат и контакты.',
+    h1: 'Пользовательское соглашение',
+    body: `${draft()}
+<p>Это соглашение — правила сайта <a href="${SITE}">${SITE.replace('https://', '')}</a> (дальше — «Сайт») и публичная оферта на покупку цифровой валюты Сайта. Сайт ведёт ${esc(sv(S.name, 'продавец'))} (дальше — «мы»), реквизиты — на странице <a href="/contacts">«Реквизиты и контакты»</a>. Пользуясь Сайтом или оплачивая покупку, ты соглашаешься с этими правилами.</p>
+<h2>1. Аккаунт</h2>
+<ul><li>Регистрация бесплатная. За сохранность пароля отвечает владелец аккаунта.</li>
+<li>Нельзя выдавать себя за других, обманывать игроков, использовать ошибки Сайта и программы для накрутки. За это аккаунт могут ограничить.</li></ul>
+<h2>2. Кристаллы ${GEMS.icon}</h2>
+<ul><li>«${GEMS.name}» — цифровая (виртуальная) валюта внутри Сайта. Это не деньги, не электронные деньги и не ценная бумага.</li>
+<li>Кристаллы покупаются пакетами по ценам из <a href="/shop">магазина</a> (например, ${PACKS[0].gems} ${gemWord(PACKS[0].gems)} — ${money(PACKS[0].kzt, 'KZT')}) или приходят за донат, если пользователь сам выбрал «донат → кристаллы».</li>
+<li>Кристаллы зачисляются на аккаунт сразу после подтверждения оплаты платёжной системой — это и есть передача товара.</li>
+<li>На кристаллы можно купить VIP (${vip}), VIP в подарок другому игроку, игровые монеты и вещи для персонажа на Сайте.</li>
+<li>Кристаллы нельзя вывести, обменять на деньги или передать другому аккаунту (кроме подарка VIP). Монеты обратно в кристаллы не меняются.</li>
+<li>Мы можем менять ассортимент и цены магазина; уже купленное от этого не меняется.</li>
+<li>На Сайте нет лутбоксов и случайных платных наград: за кристаллы всегда понятно, что получаешь.</li></ul>
+<h2>3. VIP</h2>
+<ul><li>VIP — набор возможностей на Сайте на оплаченный срок; что он даёт — на странице <a href="/vip">«VIP»</a>. VIP можно получить и бесплатно — за уровень.</li>
+<li>Уровень VIP (VIP, Silver, Gold) зависит от суммы поддержки за всё время: донаты и покупки кристаллов.</li></ul>
+<h2>4. Донаты</h2>
+<ul><li>Донат через DonationAlerts — добровольная поддержка стримов; его условия — правила DonationAlerts.</li>
+<li>За донат с логином для доната Сайт сам начисляет VIP (100 ₽ = месяц) или кристаллы — как выбрал пользователь в магазине.</li></ul>
+<h2>5. Несовершеннолетние</h2>
+<ul><li>Покупать за деньги могут совершеннолетние, а дети — только с разрешения родителей (законных представителей). Каждая оплата подтверждается отметкой об этом.</li>
+<li>Для защиты от случайных трат действуют лимиты: до ${LIMITS.dayRub.toLocaleString('ru-RU')} ₽ в сутки и ${LIMITS.monthRub.toLocaleString('ru-RU')} ₽ за 30 дней на аккаунт (в тенге — по цене пакетов).</li>
+<li>Если ребёнок купил без разрешения — родители могут написать нам, условия — в <a href="/refund">политике возврата</a>.</li></ul>
+<h2>6. Оплата и возврат</h2>
+<ul><li>Оплата картой проходит на стороне платёжной системы (TipTop Pay, Freedom Pay) или в Kaspi; данные карты Сайт не получает и не хранит.</li>
+<li>Возврат денег — по <a href="/refund">политике возврата</a>. Если банк отменил платёж, купленные на него кристаллы списываются.</li></ul>
+<h2>7. Ответственность</h2>
+<ul><li>Сайт работает «как есть»; возможны перерывы и обновления. Если кристаллы не пришли из-за сбоя — напиши нам с номером заказа, начислим вручную.</li>
+<li>За серьёзные нарушения (мошенничество, кража аккаунтов, отмена оплаты обманом) аккаунт могут заблокировать.</li></ul>
+<h2>8. Данные</h2>
+<p>Какие данные мы храним и зачем — в <a href="/privacy">политике конфиденциальности</a>. Номера карт, телефоны и почту из платежей мы не храним.</p>
+<h2>9. Изменения и связь</h2>
+<p>Новая редакция соглашения публикуется на этой странице. Вопросы — ${mail()}.</p>
+<p class="lg-ed">Редакция от ${esc(S.edition)}.</p>`,
+  };
+}
+
+function refund() {
+  return {
+    title: 'Политика возврата — dan4ik37',
+    description: 'Как вернуть деньги за кристаллы 💎 на сайте dan4ik37: сроки, условия, покупки детей, ошибки оплаты.',
+    h1: 'Политика возврата',
+    body: `${draft()}
+<p>Кристаллы ${GEMS.icon} — цифровой товар, он приходит на аккаунт сразу после оплаты. Мы хотим, чтобы покупки были честными, поэтому возвращаем деньги в таких случаях:</p>
+<h2>Можно вернуть</h2>
+<ul><li><b>Неистраченные кристаллы</b> — в течение 14 дней после покупки, полностью. Кристаллы с аккаунта спишутся.</li>
+<li><b>Ребёнок купил без разрешения</b> — родители пишут нам; неистраченные кристаллы вернём деньгами и после 14 дней, остальное рассмотрим по-человечески.</li>
+<li><b>Ошибка оплаты</b> — списали дважды, кристаллы не пришли, сумма не та — вернём лишнее полностью или начислим недостающее.</li></ul>
+<h2>Нельзя вернуть</h2>
+<ul><li>Кристаллы, которые уже потрачены: VIP включён, монеты получены, вещь куплена — цифровой товар уже получен (кроме технической ошибки).</li>
+<li>Донаты через DonationAlerts — это добровольная поддержка; их возврат — по правилам DonationAlerts. Если донат вернули, начисленные за него VIP или кристаллы списываются.</li></ul>
+<h2>Как вернуть</h2>
+<ol><li>Напиши на ${mail()}: ник на сайте, номер заказа (начинается с D37-, есть в «Истории» магазина и в чеке) и причину.</li>
+<li>Ответим в течение 3 рабочих дней.</li>
+<li>Деньги вернутся на ту же карту или в Kaspi — обычно за 1–10 рабочих дней, срок зависит от банка.</li></ol>
+<p>Если банк отменил платёж (chargeback), купленные на него кристаллы списываются; если их уже потратили — остаток спишется из следующих начислений.</p>
+<p class="lg-ed">Редакция от ${esc(S.edition)}. Реквизиты — <a href="/contacts">«Реквизиты и контакты»</a>, правила — <a href="/terms">«Пользовательское соглашение»</a>.</p>`,
+  };
+}
+
+function contacts() {
+  const rows = [
+    ['Продавец', sv(S.name)], ['ИИН / БИН', sv(S.iin)], ['Адрес', sv(S.address)], ['Страна', S.country],
+    ['Почта', S.email], ['Телефон', sv(S.phone)], ...(sv(S.bank, '') ? [['Банковские реквизиты', S.bank]] : []),
+  ];
+  return {
+    title: 'Реквизиты и контакты — dan4ik37',
+    description: 'Реквизиты продавца, контакты и условия покупки кристаллов 💎 на сайте dan4ik37.',
+    h1: 'Реквизиты и контакты',
+    body: `${draft()}
+<table class="lg-tab">${rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${k === 'Почта' ? mail() : esc(v)}</td></tr>`).join('')}</table>
+<h2>Что продаётся</h2>
+<p>Цифровая валюта сайта «${GEMS.name}» ${GEMS.icon}. Цены пакетов:</p>
+<table class="lg-tab">${PACKS.map(p => `<tr><th>${GEMS.icon} ${p.gems.toLocaleString('ru-RU')} ${gemWord(p.gems)}</th><td>${money(p.kzt, 'KZT')}</td></tr>`).join('')}</table>
+<h2>Как получить</h2>
+<p>Кристаллы зачисляются на аккаунт сайта сразу после оплаты (оплата через Kaspi — после проверки, обычно в течение дня). Доставка не нужна — товар цифровой.</p>
+<h2>Как оплатить</h2>
+<p>Банковской картой (Visa, Mastercard), Apple Pay или Google Pay через платёжную систему, либо через Kaspi — когда способ включён в <a href="/shop">магазине</a>. Данные карты вводятся на стороне платёжной системы, сайт их не видит. Из России — донатом через DonationAlerts.</p>
+<h2>Поддержка</h2>
+<p>Вопросы о покупках, возврат, ошибки оплаты — ${mail()}, ответ в течение 3 рабочих дней. Укажи ник на сайте и номер заказа (D37-…).</p>
+<p class="lg-ed">Правила — <a href="/terms">«Пользовательское соглашение»</a>, возврат — <a href="/refund">«Политика возврата»</a>, данные — <a href="/privacy">«Политика конфиденциальности»</a>.</p>`,
+  };
+}
+
+const PAGES = { terms, refund, contacts };
+
+export default function handler(req, res) {
+  const key = String(req.query.page || '');
+  const make = PAGES[key];
+  if (!make) { res.status(404).send('Not found'); return; }
+  const p = make();
+  const url = `${SITE}/${key}`;
+  const body = `<main class="wrap lg">
+  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/shop">Магазин</a> › <span>${esc(p.h1)}</span></nav>
+  <h1>${esc(p.h1)}</h1>
+  <div class="lg-body">${p.body}</div>
+  <div class="lg-nav"><a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> · <a href="/privacy">Конфиденциальность</a> · <a href="/shop">${GEMS.icon} Магазин</a></div>
+</main>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.status(200).send(page({ title: p.title, description: p.description, url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true }));
+}
+
+export const CSS = `
+.crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
+.crumbs a{text-decoration:none}
+.lg{max-width:820px}
+.lg h1{margin-top:0}
+.lg-body{margin-top:1rem;padding:1.3rem 1.5rem;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:.92rem;color:rgba(240,240,248,.86)}
+.lg-body h2{font-size:1.05rem;margin:1.4rem 0 .5rem;text-transform:none;letter-spacing:.02em}
+.lg-body h2:first-child{margin-top:0}
+.lg-body p{margin:.6rem 0}
+.lg-body ul,.lg-body ol{padding-left:1.3rem;display:flex;flex-direction:column;gap:.35rem}
+.lg-body a{color:#7cc4ff}
+.lg-draft{padding:.6rem .8rem;border-radius:10px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);color:#ffe08a;font-size:.84rem}
+.lg-ed{margin-top:1.4rem!important;font-size:.78rem;color:var(--muted)}
+.lg-tab{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:.88rem}
+.lg-tab th,.lg-tab td{padding:.55rem .6rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.lg-tab th{width:40%;color:var(--muted);font-weight:600}
+.lg-nav{margin-top:1.2rem;font-size:.8rem;color:var(--muted)}
+.lg-nav a{color:var(--text)}
+@media(max-width:600px){.lg-body{padding:1rem}.lg-tab th{width:45%}}
+`;

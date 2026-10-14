@@ -59,6 +59,22 @@
       "destination": "/api/pages?page=vip"
     },
     {
+      "source": "/shop",
+      "destination": "/api/pages?page=shop"
+    },
+    {
+      "source": "/terms",
+      "destination": "/api/pages?page=terms"
+    },
+    {
+      "source": "/refund",
+      "destination": "/api/pages?page=refund"
+    },
+    {
+      "source": "/contacts",
+      "destination": "/api/pages?page=contacts"
+    },
+    {
       "source": "/about",
       "destination": "/api/pages?page=about"
     },
