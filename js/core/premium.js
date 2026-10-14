@@ -49,9 +49,10 @@
 
   function emit(){
     if (typeof document === 'undefined' || !document.querySelectorAll) return;
-    document.querySelectorAll('.js-gems').forEach(el => { el.textContent = num(S.balance); });
+    // Пока premium.sql не выполнен — без числа (значок в шапке всё равно ведёт в магазин)
+    document.querySelectorAll('.js-gems').forEach(el => { el.textContent = S.ok ? num(S.balance) : ''; });
     const chip = document.getElementById && document.getElementById('navGems');
-    if (chip) chip.hidden = !(authed() && S.ok);
+    if (chip) chip.hidden = !authed();
     listeners.forEach(fn => { try { fn(S); } catch (e) {} });
   }
 

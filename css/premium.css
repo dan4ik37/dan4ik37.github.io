@@ -3428,3 +3428,117 @@ ul.un-p{padding-left:1.2rem;display:flex;flex-direction:column;gap:4px}
   .mb-top{font-size:.7rem;gap:.25rem}
 }
 body:not(.high) .mb-bub,body:not(.high) .mb-top .mb-gift{animation:none}
+
+/* ═══ 💎 Магазин кристаллов (#/shop — js/features/shop.js, js/core/premium.js): значок в шапке, витрина, окно оплаты ═══ */
+.nav-gems{flex:none;display:inline-flex;align-items:center;gap:.25rem;height:38px;padding:0 .7rem;margin-left:.45rem;border-radius:12px;
+  border:1px solid rgba(255,209,102,.35);background:rgba(255,209,102,.06);color:#ffe08a;font:800 .78rem 'Montserrat',sans-serif;text-decoration:none;white-space:nowrap}
+.nav-gems:hover{border-color:rgba(255,209,102,.7);background:rgba(255,209,102,.12)}
+.nav-gems[hidden]{display:none}
+.nav-gems b:empty{display:none}
+@media(max-width:640px){.nav-gems{display:none!important}}
+@media(min-width:1181px){body.is-authed .nav-links a.nav-shop{display:none}}
+.nav-links a.nav-shop{color:#ffe08a}
+.shp-load{padding:2rem 0;text-align:center;color:var(--muted);font-size:.85rem}
+.shp-head{display:flex;gap:1.1rem;align-items:center;flex-wrap:wrap}
+.shp-gem{font-size:3rem;line-height:1;filter:drop-shadow(0 10px 26px rgba(120,200,255,.45))}
+.shp-head-body{flex:1;min-width:240px}
+.shp-head-body h3{font-family:var(--font-display);font-weight:600;font-size:1.25rem;letter-spacing:.02em;margin-bottom:.35rem}
+.shp-head-body p{font-size:.82rem;color:rgba(240,240,248,.82);line-height:1.6}
+.shp-note{margin-top:.6rem;padding:.55rem .8rem;border-radius:10px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.25);font-size:.78rem;color:#ffe08a}
+.shp-note a{color:#fff;text-decoration:underline}
+.shp-wallet{display:flex;flex-direction:column;align-items:center;gap:.2rem;min-width:130px;text-align:center}
+.shp-wallet small{font-size:.7rem;color:var(--muted)}
+.shp-wallet .shp-warn{color:#ffb020}
+.shp-bal{font-family:var(--font-display);font-size:1.7rem;font-weight:600;color:#bfe6ff;white-space:nowrap}
+.shp-ways{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+.shp-way-top{display:flex;gap:.7rem;align-items:flex-start;margin-bottom:.8rem}
+.shp-flag{font-size:1.6rem;line-height:1.1}
+.shp-way h4{font-size:.95rem;font-weight:800;margin-bottom:.25rem}
+.shp-way p{font-size:.78rem;color:var(--muted);line-height:1.55}
+.shp-packs{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:.5rem}
+.shp-pack{position:relative;display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.8rem .4rem .7rem;border-radius:14px;cursor:pointer;
+  border:1.5px solid rgba(145,200,255,.22);background:linear-gradient(180deg,rgba(120,190,255,.08),rgba(255,255,255,.02));color:var(--text);font-family:'Montserrat',sans-serif;
+  transition:transform .2s var(--ease-spring),border-color .2s}
+.shp-pack:hover{transform:translateY(-2px);border-color:rgba(145,200,255,.6)}
+.shp-pack[aria-disabled="true"]{opacity:.65}
+.shp-pack-gems{font-family:var(--font-display);font-size:1.15rem;font-weight:600;color:#cfeaff;white-space:nowrap}
+.shp-pack small{font-size:.62rem;color:var(--muted);text-align:center;line-height:1.3}
+.shp-pack b{margin-top:.25rem;font-size:.82rem;color:#fff}
+.shp-bonus{position:absolute;top:-8px;right:-4px;padding:.1rem .4rem;border-radius:999px;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;font-size:.6rem;font-weight:800}
+.shp-small{font-size:.72rem;color:var(--muted);line-height:1.55;margin-top:.6rem}
+.shp-small a,.shp-steps a:not(.dl-copy),.shp-legal a{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+.shp-soon{margin-top:.7rem;padding:.6rem .8rem;border-radius:10px;background:rgba(255,255,255,.04);border:1px dashed var(--line-hi);font-size:.76rem;color:var(--muted)}
+.shp-don-table{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.7rem}
+.shp-don-table span{padding:.3rem .6rem;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--border);font-size:.72rem;color:var(--muted)}
+.shp-don-table b{color:#cfeaff}
+.shp-mode{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;margin-bottom:.7rem}
+.shp-mode button{display:flex;flex-direction:column;gap:.15rem;text-align:left;padding:.6rem .7rem;border-radius:12px;cursor:pointer;border:1.5px solid var(--border);
+  background:rgba(255,255,255,.03);color:var(--text);font-family:'Montserrat',sans-serif}
+.shp-mode button b{font-size:.8rem}
+.shp-mode button small{font-size:.66rem;color:var(--muted);line-height:1.35}
+.shp-mode button.on{border-color:#ffd166;background:rgba(255,209,102,.1)}
+.shp-steps{padding-left:1.2rem;display:flex;flex-direction:column;gap:.45rem;font-size:.8rem;line-height:1.55;margin:.2rem 0 .9rem}
+.shp-login{color:#ffd166;user-select:all;word-break:break-all}
+.shp-don-btn{width:100%;text-decoration:none}
+.shp-h{font-family:var(--font-display);font-weight:600;font-size:1.15rem;letter-spacing:.04em;text-transform:uppercase;margin:1.6rem 0 .3rem}
+.shp-spend-note{margin:0 0 .6rem}
+.shp-block{margin-top:1rem}
+.shp-block-head{display:flex;align-items:baseline;justify-content:space-between;gap:.6rem;flex-wrap:wrap;margin-bottom:.7rem}
+.shp-block-head b{font-size:.92rem}
+.shp-block-head span{font-size:.72rem;color:var(--muted)}
+.shp-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.5rem}
+.shp-item{display:flex;flex-direction:column;gap:.2rem;padding:.75rem .8rem;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.shp-item b{font-size:.8rem}
+.shp-item small{font-size:.66rem;color:var(--muted)}
+.shp-item .pf-btn{margin-top:.35rem}
+.shp-item .pf-btn:disabled,.shp-gift .pf-btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.shp-price{font-family:var(--font-display);font-size:1.05rem;font-weight:600;color:#cfeaff}
+.shp-gift{display:flex;gap:.45rem;flex-wrap:wrap}
+.shp-gift input{flex:1;min-width:160px;background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:9px;padding:.5rem .7rem;color:var(--text);font:600 .8rem 'Montserrat',sans-serif;outline:none}
+.shp-gift input:focus{border-color:var(--tw)}
+.shp-row{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.5rem 0;border-top:1px solid var(--line);font-size:.76rem}
+.shp-row:first-of-type{border-top:0}
+.shp-row small{color:var(--muted);margin-right:.3rem}
+.shp-row .plus{color:#4ade80;font-weight:800;white-space:nowrap}
+.shp-row .minus{color:#fca5a5;font-weight:800;white-space:nowrap}
+.shp-row button{border:none;border-radius:8px;padding:.4rem .7rem;font:700 .7rem 'Montserrat',sans-serif;cursor:pointer;color:#fff}
+.shp-wait{color:#ffe08a}
+.shp-parents ul{padding-left:1.1rem;display:flex;flex-direction:column;gap:.4rem;font-size:.78rem;color:rgba(240,240,248,.82);line-height:1.55}
+.shp-parents ul a{color:var(--text);text-decoration:underline}
+.shp-legal{margin-top:.8rem;font-size:.72rem;color:var(--muted)}
+.shp-adm-sec{padding:.7rem 0;border-top:1px solid var(--line)}
+.shp-adm-sec:first-child{border-top:0;padding-top:0}
+.shp-adm-sec>b{display:block;font-size:.8rem;margin-bottom:.4rem}
+.shp-adm-hist{margin:0 0 .5rem 1rem;padding-left:.6rem;border-left:2px solid var(--line-hi)}
+.shp-adm-set{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.5rem .8rem;align-items:end;font-size:.74rem;color:var(--muted)}
+.shp-adm-set label{display:flex;flex-direction:column;gap:.25rem}
+.shp-adm-set label:has(input[type=checkbox]){flex-direction:row;align-items:center;gap:.4rem}
+.shp-adm-set input[type=number]{background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.45rem .6rem;color:var(--text);font:600 .8rem 'Montserrat',sans-serif}
+.shp-overlay{position:fixed;inset:0;z-index:9600;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,.78);backdrop-filter:blur(8px)}
+.shp-overlay.open{display:flex}
+.shp-modal{width:100%;max-width:440px;max-height:calc(100dvh - 2rem);overflow-y:auto;padding:1.4rem;border-radius:18px;background:var(--card);border:1px solid rgba(145,200,255,.3);box-shadow:0 30px 80px -20px rgba(0,0,0,.8)}
+.shp-modal h4{font-size:1.05rem;font-weight:800;margin-bottom:.9rem}
+.shp-modal p{font-size:.82rem;line-height:1.6}
+.shp-methods{display:flex;flex-direction:column;gap:.4rem}
+.shp-method{display:flex;gap:.6rem;align-items:flex-start;padding:.6rem .7rem;border-radius:12px;border:1.5px solid var(--border);background:rgba(255,255,255,.03);cursor:pointer}
+.shp-method:has(input:checked){border-color:#7cc4ff;background:rgba(124,196,255,.08)}
+.shp-method input{margin-top:.2rem;accent-color:#7cc4ff}
+.shp-method span{display:flex;flex-direction:column;gap:.1rem}
+.shp-method b{font-size:.82rem}
+.shp-method small{font-size:.68rem;color:var(--muted)}
+.shp-consent{display:flex;gap:.55rem;align-items:flex-start;margin-top:.9rem;padding:.6rem .7rem;border-radius:12px;background:rgba(255,209,102,.07);border:1px solid rgba(255,209,102,.25);font-size:.78rem;line-height:1.5;cursor:pointer}
+.shp-consent input{margin-top:.2rem;width:18px;height:18px;flex:none;accent-color:#ffd166}
+.shp-modal-err{min-height:1rem;margin-top:.5rem;font-size:.76rem;color:#fca5a5}
+.shp-modal-act{display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap;margin-top:1rem}
+.shp-modal-act .pf-btn{text-decoration:none}
+@media(max-width:820px){.shp-ways{grid-template-columns:1fr}}
+@media(max-width:480px){.shp-mode{grid-template-columns:1fr}.shp-packs{grid-template-columns:repeat(2,1fr)}.shp-wallet{flex-direction:row;flex-wrap:wrap;justify-content:center;width:100%}.shp-items{grid-template-columns:1fr 1fr}}
+/* 💎 в своём профиле (блок «Логин для доната») и на плашке «Мой персонаж» в играх */
+.pg-box{margin-top:.8rem;padding-top:.75rem;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:.55rem}
+.pg-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;font-size:.85rem}
+.pg-row b{color:#cfeaff;font-size:1rem}
+.pg-mode{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap;font-size:.72rem;color:var(--muted)}
+.pg-mode button{min-height:34px;padding:.3rem .7rem;border-radius:9px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font:700 .72rem 'Montserrat',sans-serif;cursor:pointer}
+.pg-mode button.on{border-color:#ffd166;background:rgba(255,209,102,.12);color:#ffe08a}
+.gm-gems{color:#cfeaff;text-decoration:none;white-space:nowrap}
+.gm-gems:hover{text-decoration:underline}
