@@ -704,6 +704,7 @@
     S.sitAt = sitAt; S.go = go; S.openEditor = openEditor; S.openStage = openStage; S.openGate = openGate; S.showInfo = showInfo;
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
+    try { S.promo = window.D37AdPlaces?.worldPromo?.(S, { panel, go }) || null; } catch (e) { S.promo = null; }   // щиты: свои промо и спонсор (ad-places.js → mir-promo.js)
   }
 
   // ── Шаг логики (1/60 с) ──
@@ -765,7 +766,7 @@
     A.update(dt, t, R.camera.position);
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
     // нажали на игрока — его карточка
-    for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); }
+    for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); else S.promo?.tap(tp.x, tp.y); }   // не игрок — может, щит
     I.frameEnd(); C.frameEnd();
     lifeFrame(dt, t);
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
@@ -1489,6 +1490,7 @@
     try { s.unfollow?.(); } catch (e) {}
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
     try { s.base?.dispose(); } catch (e) {}   // район участков
+    try { s.promo?.dispose(); } catch (e) {}   // щиты (mir-promo.js)
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}

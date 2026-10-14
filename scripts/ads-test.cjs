@@ -691,6 +691,48 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   timers.push(...savedIntervals);
 }
 
+// ═══ 8. Спонсор щитов и щиты «Мира Денчика» ═══
+{
+  fresh();
+  const C = T.cleanSponsor, good = { on: true, title: '🎧 Наушники', text: 'Скидка', url: 'https://shop.example/x?a=1', advertiser: 'ООО «Пример»', erid: '2Vtz-q_X!', bg: '#112233', fg: 'red', until: '2026-12-31' };
+  const c = C(good);
+  ok(c && c.title === '🎧 Наушники' && c.url === 'https://shop.example/x?a=1' && c.erid === '2Vtz-q_X' && c.bg === '#112233' && c.fg === '#ffffff', 'спонсор: поля чистятся (erid — только буквы/цифры/-/_, цвет — #rrggbb)', c);
+  ok(C({ ...good, on: false }) === null && C({ ...good, title: '' }) === null && C({ ...good, url: '' }) === null, 'выключен / нет заголовка / нет ссылки — не показываем');
+  for (const u of ['javascript:alert(1)', 'http://shop.example/', '//evil.example/x', 'data:text/html,1', 'https://user:pw@shop.example/'])
+    ok(C({ ...good, url: u }) === null, 'плохая ссылка отклонена: ' + u);
+  ok(C({ ...good, url: '/vip' })?.url === '/vip' && C({ ...good, url: '#/games/horde' })?.url === '#/games/horde', 'ссылка на свой раздел — можно');
+  ok(C({ ...good, until: '2026-10-01' }) === null && !!C({ ...good, until: '2026-10-15' }), 'срок вышел — щит пустеет сам (по МСК, включительно)');
+  const nl = String.fromCharCode(10), bell = String.fromCharCode(7);
+  ok(C({ ...good, title: 'А' + nl + 'Б' + bell + 'В' })?.title === 'А Б В', 'управляющие символы из заголовка убраны');
+  ok(C({ ...good, title: 'x'.repeat(100) }).title.length === 40 && C({ ...good, text: 'y'.repeat(300) }).text.length === 90, 'длины: заголовок 40, текст 90');
+  // щиты: что на них
+  vm.runInThisContext(read('js/games/mir-promo.js'), { filename: 'mir-promo.js' });
+  const P = window.MirPromo._test;
+  globalThis.wordsDayNo = () => 13; globalThis.wordsToday = () => ({ done: true }); globalThis.sudokuDayNo = () => 6;
+  localStorage.setItem('dan4ik37_cache_v2', JSON.stringify({ ts: clock.t, d: { vids: [{ id: 'g1', title: 'Открыл кейсы на GGDROP' }, { id: 'v2', title: 'Roblox: строю базу' }] } }));
+  let r = P.promos({ live: false }, null);
+  ok(!r.ad && r.list.map(p => p.id).join(',') === 'words,sudoku,video,look,vip,horde,studio', 'промо по порядку: слово дня, судоку, видео, персонаж, VIP, игры', r.list.map(p => p.id));
+  ok(r.list[0].d.includes('угадано') && r.list[2].href === '/v/v2', 'слово дня угадано — так и пишем; ролик про кейсы пропущен — берём следующий');
+  r = P.promos({ live: true }, c);
+  ok(r.list[0].id === 'live' && r.ad && r.ad.sponsor === c && r.ad.href === c.url, 'эфир — первым; спонсор — отдельно (свой щит)');
+  ok(P.markText(c) === 'Реклама · ООО «Пример» · erid: 2Vtz-q_X', 'пометка спонсора: «Реклама · рекламодатель · erid»');
+  currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
+  r = P.promos({ live: false }, c);
+  ok(!r.ad && !r.list.some(p => p.id === 'vip'), 'VIP: ни спонсора, ни «купи VIP»');
+  currentUser = null; currentProfile = null;
+  localStorage.removeItem('dan4ik37_cache_v2');
+  ok(P.promos({}, null).list.find(p => p.id === 'videos')?.href === '/videos', 'роликов в кэше нет — «Почти 6000 роликов» → /videos');
+  // рисование (подменный canvas): рамка, заголовок, пометка «РЕКЛАМА» у спонсора
+  const calls = [];
+  const g = new Proxy({}, { get: (o, k) => k in o ? o[k] : (k === 'measureText' ? (t => ({ width: String(t).length * 20 })) : k === 'createLinearGradient' ? (() => ({ addColorStop(){} })) : (...a) => calls.push([k, ...a])), set: (o, k, v) => { o[k] = v; return true; } });
+  const b = { cur: { id: 'sponsor', sponsor: c, ic: '', t: c.title, d: c.text, c: [c.bg, c.bg], fg: c.fg }, ctx: g, cv: { width: 1024, height: 512 }, tex: { needsUpdate: false } };
+  P.draw(b);
+  const texts = calls.filter(x => x[0] === 'fillText').map(x => x[1]);
+  ok(texts.includes(c.title) && texts.includes('РЕКЛАМА') && texts.some(t => /erid: 2Vtz-q_X/.test(t)) && b.tex.needsUpdate, 'щит спонсора: заголовок, «РЕКЛАМА» в углу и строка с erid', texts);
+  calls.length = 0; b.cur = r = P.promos({}, null).list[0]; b.cur = P.promos({}, null).list[0]; P.draw(b);
+  ok(!calls.some(x => x[0] === 'fillText' && x[1] === 'РЕКЛАМА'), 'свои промо — без пометки «Реклама» (это не реклама)');
+}
+
 console.log(`\nads-test: ${pass} ok, ${fail} fail`);
 Date.now = realNow;
 process.exit(fail ? 1 : 0);
