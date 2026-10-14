@@ -27,6 +27,10 @@
   const TEX_DIR = 'img/tex/';
 
   E.gfxQuality = () => { try { const v = localStorage.getItem('d37_gfx'); if (['low', 'mid', 'high'].includes(v)) return v; } catch (e) {} return E.quality(); };
+  // FSR (как режимы DLSS): кадр рисуется в доле разрешения, AMD FSR 1 в post.js чётко растягивает до экрана (d37_fsr).
+  // «авто» — доля меняется сама (динамическое разрешение), растягивает тоже FSR
+  E.FSR = { quality: .77, balanced: .67, performance: .59 };
+  E.fsrMode = () => { try { const v = localStorage.getItem('d37_fsr'); if (E.FSR[v]) return v; } catch (e) {} return 'auto'; };
 
   // ── Динамическое разрешение — автомат без DOM (проверяется в node): D = E.dynRes({ target (мс кадра), min, step });
   // каждый кадр D.tick(интервал мс, ЦП кадра мс, now) → масштаб min…1. Решает 2 раза в секунду по среднему без худших 10%.
@@ -412,6 +416,18 @@ gl_FragColor = vec4(c, 1.0);
     };
     // Разрешение вручную (замер, настройки): s — доля от плотности качества; dynRes выключается, пока не включат снова
     R.setRes = (s, auto = false) => { DR.on = !!auto; DR.set(s); applyScale(); };
+    // Режим FSR: quality / balanced / performance — постоянная доля кадра; auto — динамическое разрешение (без постобработки
+    // FSR нет — тогда только меньше пикселей). Возвращает режим, который включился.
+    R.fsr = 'auto';
+    R.setFsr = (mode, apply = true) => {
+      const s = E.FSR[mode];
+      R.fsr = s && wantPost ? mode : 'auto';
+      if (R.fsr === 'auto') { DR.on = o.dynRes !== false; DR.set(1); }
+      else { DR.min = Math.min(DR.min, s); DR.on = false; DR.set(s); }
+      if (apply && R.w > 1) applyScale();
+      return R.fsr;
+    };
+    R.setFsr(E.fsrMode(), false);
     const v3 = new T.Vector3(), PRJ = [0, 0, false];
     // Точка мира → экран (для подписей): [x, y, видна ли] — один и тот же массив (разбирать сразу)
     R.project = (x, y, z) => { v3.set(x, y, z).project(camera); PRJ[0] = (v3.x + 1) / 2 * R.w; PRJ[1] = (1 - v3.y) / 2 * R.h; PRJ[2] = v3.z < 1 && Math.abs(v3.x) < 1.25 && Math.abs(v3.y) < 1.25; return PRJ; };

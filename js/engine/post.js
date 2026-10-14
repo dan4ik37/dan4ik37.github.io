@@ -52,17 +52,81 @@ void main(){
   gl_FragColor = vec4((lb < lo || lb > hi) ? a : b, 1.0);
 }`;
 
+  // ── AMD FidelityFX FSR 1 (MIT, © Advanced Micro Devices): кадр в уменьшенном буфере → EASU (увеличение с учётом
+  // направления краёв: 12 выборок, окно Ланцоша-2, без «звона» — в пределах 4 ближних) → RCAS (резкость без шума).
+  // Только WebGL2 (texelFetch). Вход — уже sRGB (после сборки), как требует FSR.
+  const FS_EASU = `uniform sampler2D tSrc; uniform vec2 uIn; uniform vec2 uOut;
+vec3 tx(ivec2 p){ return texelFetch(tSrc, clamp(p, ivec2(0), ivec2(uIn) - 1), 0).rgb; }
+float lm(vec3 c){ return c.b * 0.5 + (c.r * 0.5 + c.g); }
+void eSet(inout vec2 dir, inout float len, float w, float lA, float lB, float lC, float lD, float lE){
+  float lenX = 1.0 / max(max(abs(lD - lC), abs(lC - lB)), 1e-5), dirX = lD - lB;
+  lenX = clamp(abs(dirX) * lenX, 0.0, 1.0); lenX *= lenX;
+  float lenY = 1.0 / max(max(abs(lE - lC), abs(lC - lA)), 1e-5), dirY = lE - lA;
+  lenY = clamp(abs(dirY) * lenY, 0.0, 1.0); lenY *= lenY;
+  dir += vec2(dirX, dirY) * w; len += (lenX + lenY) * w;
+}
+void eTap(inout vec3 aC, inout float aW, vec2 off, vec2 dir, vec2 len, float lob, float clp, vec3 c){
+  vec2 v = vec2(dot(off, dir), dot(off, vec2(-dir.y, dir.x))) * len;
+  float d2 = min(dot(v, v), clp), wB = 0.4 * d2 - 1.0, wA = lob * d2 - 1.0;
+  wB *= wB; wA *= wA; wB = 1.5625 * wB - 0.5625;
+  float w = wB * wA; aC += c * w; aW += w;
+}
+void main(){
+  vec2 pp = gl_FragCoord.xy * (uIn / uOut) - 0.5, fp = floor(pp); pp -= fp;
+  ivec2 p = ivec2(fp);
+  vec3 b = tx(p + ivec2(0, -1)), c = tx(p + ivec2(1, -1)), e = tx(p + ivec2(-1, 0)), f = tx(p), g = tx(p + ivec2(1, 0)), h = tx(p + ivec2(2, 0));
+  vec3 i = tx(p + ivec2(-1, 1)), j = tx(p + ivec2(0, 1)), k = tx(p + ivec2(1, 1)), l = tx(p + ivec2(2, 1)), n = tx(p + ivec2(0, 2)), o = tx(p + ivec2(1, 2));
+  float bL = lm(b), cL = lm(c), eL = lm(e), fL = lm(f), gL = lm(g), hL = lm(h), iL = lm(i), jL = lm(j), kL = lm(k), lL = lm(l), nL = lm(n), oL = lm(o);
+  vec2 dir = vec2(0.0); float len = 0.0;
+  eSet(dir, len, (1.0 - pp.x) * (1.0 - pp.y), bL, eL, fL, gL, jL);
+  eSet(dir, len, pp.x * (1.0 - pp.y), cL, fL, gL, hL, kL);
+  eSet(dir, len, (1.0 - pp.x) * pp.y, fL, iL, jL, kL, nL);
+  eSet(dir, len, pp.x * pp.y, gL, jL, kL, lL, oL);
+  float dirR = dot(dir, dir); bool zro = dirR < 1.0 / 32768.0;
+  dirR = zro ? 1.0 : inversesqrt(dirR); dir.x = zro ? 1.0 : dir.x; dir *= dirR;
+  len = len * 0.5; len *= len;
+  float stretch = dot(dir, dir) / max(abs(dir.x), abs(dir.y));
+  vec2 len2 = vec2(1.0 + (stretch - 1.0) * len, 1.0 - 0.5 * len);
+  float lob = 0.5 + ((1.0 / 4.0 - 0.04) - 0.5) * len, clp = 1.0 / lob;
+  vec3 mn = min(min(f, g), min(j, k)), mx = max(max(f, g), max(j, k)), aC = vec3(0.0); float aW = 0.0;
+  eTap(aC, aW, vec2(0.0, -1.0) - pp, dir, len2, lob, clp, b); eTap(aC, aW, vec2(1.0, -1.0) - pp, dir, len2, lob, clp, c);
+  eTap(aC, aW, vec2(-1.0, 1.0) - pp, dir, len2, lob, clp, i); eTap(aC, aW, vec2(0.0, 1.0) - pp, dir, len2, lob, clp, j);
+  eTap(aC, aW, vec2(0.0, 0.0) - pp, dir, len2, lob, clp, f); eTap(aC, aW, vec2(-1.0, 0.0) - pp, dir, len2, lob, clp, e);
+  eTap(aC, aW, vec2(1.0, 1.0) - pp, dir, len2, lob, clp, k); eTap(aC, aW, vec2(2.0, 1.0) - pp, dir, len2, lob, clp, l);
+  eTap(aC, aW, vec2(2.0, 0.0) - pp, dir, len2, lob, clp, h); eTap(aC, aW, vec2(1.0, 0.0) - pp, dir, len2, lob, clp, g);
+  eTap(aC, aW, vec2(1.0, 2.0) - pp, dir, len2, lob, clp, o); eTap(aC, aW, vec2(0.0, 2.0) - pp, dir, len2, lob, clp, n);
+  gl_FragColor = vec4(min(mx, max(mn, aC / aW)), 1.0);
+}`;
+  // RCAS: крест из 5 выборок, «лепесток» резкости ограничен так, чтобы не выйти за 0…1; на шуме — слабее. uSharp = 2^-ступени
+  const FS_RCAS = `uniform sampler2D tSrc; uniform vec2 uSize; uniform float uSharp;
+vec3 tx(ivec2 p){ return texelFetch(tSrc, clamp(p, ivec2(0), ivec2(uSize) - 1), 0).rgb; }
+float lm(vec3 c){ return c.b * 0.5 + (c.r * 0.5 + c.g); }
+void main(){
+  ivec2 p = ivec2(gl_FragCoord.xy);
+  vec3 b = tx(p + ivec2(0, 1)), d = tx(p + ivec2(-1, 0)), e = tx(p), f = tx(p + ivec2(1, 0)), h = tx(p + ivec2(0, -1));
+  float bL = lm(b), dL = lm(d), eL = lm(e), fL = lm(f), hL = lm(h);
+  float rng = max(max(max(bL, dL), max(eL, fL)), hL) - min(min(min(bL, dL), min(eL, fL)), hL);
+  float nz = clamp(abs(0.25 * (bL + dL + fL + hL) - eL) / max(rng, 1e-5), 0.0, 1.0); nz = -0.5 * nz + 1.0;
+  vec3 mn4 = min(min(b, d), min(f, h)), mx4 = max(max(b, d), max(f, h));
+  vec3 hitMin = mn4 / max(4.0 * mx4, vec3(1e-5)), hitMax = (1.0 - mx4) / min(4.0 * mn4 - 4.0, vec3(-1e-5));
+  vec3 lr = max(-hitMin, hitMax);
+  float lobe = max(-(0.25 - 1.0 / 16.0), min(max(lr.r, max(lr.g, lr.b)), 0.0)) * uSharp * nz;
+  gl_FragColor = vec4((lobe * (b + d + f + h) + e) / (4.0 * lobe + 1.0), 1.0);
+}`;
+
   E.post = function (R, o = {}){
     const T = R.T, r = R.r, q = R.q, ext = r.extensions, gl2 = r.capabilities.isWebGL2;
     // буфер сцены: половинные float (значения > 1 и маска свечения в альфе); нет — обычный (без свечения)
     const half = gl2 ? ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float')
       : ext.has('OES_texture_half_float') && ext.has('OES_texture_half_float_linear') && ext.has('EXT_color_buffer_half_float');
     const type = half ? T.HalfFloatType : T.UnsignedByteType;
-    const P = { ok: true, on: true, hdr: half, msaa: 0, fxaa: true, w: 1, h: 1, pr: 1, passes: 0,
+    // fsr — FSR 1 вместо простого растяжения, когда кадр меньше холста (динамическое разрешение или режим FSR в render.js)
+    const P = { ok: true, on: true, hdr: half, msaa: 0, fxaa: true, fsr: gl2, scaled: false, w: 1, h: 1, ow: 1, oh: 1, pr: 1, passes: 0,
       bloom: { on: o.bloom !== false && half, strength: q === 'high' ? 1 : .9, levels: q === 'high' ? 5 : 4 } };
     const sceneOpt = { type, depthBuffer: true, stencilBuffer: false };
     let rtScene = new T.WebGLRenderTarget(1, 1, sceneOpt);
     const rtLdr = new T.WebGLRenderTarget(1, 1, { depthBuffer: false });
+    const rtUp = gl2 ? new T.WebGLRenderTarget(1, 1, { depthBuffer: false }) : null, DB = new T.Vector2();   // FSR: EASU → сюда (размер холста)
     const B = [];
     const mk = (fs, uniforms, add) => new T.ShaderMaterial({ vertexShader: VS, fragmentShader: fs, uniforms, depthTest: false, depthWrite: false, toneMapped: false,
       blending: add ? T.CustomBlending : T.NoBlending, blendSrc: T.OneFactor, blendDst: T.OneFactor, blendEquation: T.AddEquation });
@@ -71,6 +135,10 @@ void main(){
       pre: mk(FS_PRE, tx()), down: mk(FS_DOWN, tx()), up: mk(FS_UP, tx(), true),
       comp: mk(FS_COMP, { tScene: { value: null }, tBloom: { value: null }, uBloom: { value: 0 }, uLuma: { value: 1 } }), fxaa: mk(FS_FXAA, tx()),
     };
+    if (gl2) {
+      M.easu = mk(FS_EASU, { tSrc: { value: null }, uIn: { value: new T.Vector2() }, uOut: { value: new T.Vector2() } });
+      M.rcas = mk(FS_RCAS, { tSrc: { value: null }, uSize: { value: new T.Vector2() }, uSharp: { value: Math.pow(2, -.2) } });   // 0,2 ступени — как в FSR по умолчанию
+    }
     // один треугольник на весь экран; матрицы не нужны
     const tri = new T.BufferGeometry();
     tri.setAttribute('position', new T.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
@@ -81,7 +149,8 @@ void main(){
 
     P.setSize = (w, h, pr = 1) => {
       P.w = w; P.h = h; P.pr = pr;
-      const scaled = pr < (R.pr0 || 1) - .001;   // динамическое разрешение опустило — кадр растягиваем
+      const scaled = P.scaled = pr < (R.pr0 || 1) - .001;   // динамическое разрешение опустило — кадр растягиваем (FSR)
+      if (rtUp) { r.getDrawingBufferSize(DB); P.ow = Math.max(1, DB.x); P.oh = Math.max(1, DB.y); rtUp.setSize(P.ow, P.oh); }
       const ms = gl2 && q === 'high' && o.msaa !== false && pr <= 1.25 && !scaled ? 4 : 0;
       if (ms !== rtScene.samples) { rtScene.dispose(); rtScene = new T.WebGLRenderTarget(w, h, { ...sceneOpt, samples: ms }); }
       else rtScene.setSize(w, h);
@@ -111,13 +180,18 @@ void main(){
       r.autoClear = false;   // проходы закрашивают весь кадр — чистить нечего
       const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
       const U = M.comp.uniforms; U.tScene.value = rtScene.texture; U.tBloom.value = B[0]?.texture || null; U.uBloom.value = k; U.uLuma.value = P.fxaa ? 1 : 0;
-      if (P.fxaa) { pass(M.comp, rtLdr); M.fxaa.uniforms.tSrc.value = rtLdr.texture; M.fxaa.uniforms.uTexel.value.set(1 / P.w, 1 / P.h); pass(M.fxaa, null); }
+      if (P.fsr && P.scaled && M.easu) {   // FSR 1: сборка в уменьшенный буфер → EASU до размера холста → RCAS на экран
+        U.uLuma.value = 0; pass(M.comp, rtLdr);
+        const ue = M.easu.uniforms; ue.tSrc.value = rtLdr.texture; ue.uIn.value.set(P.w, P.h); ue.uOut.value.set(P.ow, P.oh); pass(M.easu, rtUp);
+        const ur = M.rcas.uniforms; ur.tSrc.value = rtUp.texture; ur.uSize.value.set(P.ow, P.oh); pass(M.rcas, null);
+      }
+      else if (P.fxaa) { pass(M.comp, rtLdr); M.fxaa.uniforms.tSrc.value = rtLdr.texture; M.fxaa.uniforms.uTexel.value.set(1 / P.w, 1 / P.h); pass(M.fxaa, null); }
       else pass(M.comp, null);
       r.autoClear = ac;
       st.post = r.info.render.calls - st.scene;
     };
     P.dispose = () => {
-      rtScene.dispose(); rtLdr.dispose(); for (const b of B) b.dispose();
+      rtScene.dispose(); rtLdr.dispose(); rtUp?.dispose(); for (const b of B) b.dispose();
       for (const k in M) M[k].dispose();
       tri.dispose();
     };

@@ -611,7 +611,7 @@
     const E = window.D37E;
     el.innerHTML = `<div class="wld mir">
         <div class="wld-top"><b>🌍 Мир Денчика</b><span class="wldShard"></span><span class="wldOnline">подключаемся…</span>
-          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="view" title="Вид от 1-го / 3-го лица (V)">👁<span> Вид</span></button><button type="button" data-act="gfx" title="Качество графики: тени, текстуры">🖥<span class="mirGfx"> Графика</span></button><button type="button" data-act="mode" title="Плоский мир — для слабых телефонов">🗺️<span> 2D</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
+          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="view" title="Вид от 1-го / 3-го лица (V)">👁<span> Вид</span></button><button type="button" data-act="gfx" title="Качество графики: тени, текстуры">🖥<span class="mirGfx"> Графика</span></button><button type="button" data-act="fsr" title="FSR (как DLSS): кадр рисуется меньше, AMD FSR чётко растягивает — игра быстрее">⚡<span> FSR</span></button><button type="button" data-act="mode" title="Плоский мир — для слабых телефонов">🗺️<span> 2D</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
         <div class="wld-wrap is3d">
           <div class="wld-tags"></div>
           <div class="wld-log" aria-live="polite"></div>
@@ -1353,6 +1353,13 @@
       const el = root, ga = api;
       unmount(); IMPL.mount(el, ga); current = IMPL;
       ga?.toast?.({ low: '🖥 Графика: низкая — быстро, без теней', mid: '🖥 Графика: средняя — тени', high: '🖥 Графика: высокая — мягкие тени и рельеф текстур' }[next]);
+    }
+    else if (a === 'fsr') {   // FSR: авто → качество → баланс → производительность (сохраняется, сразу, без пересборки мира)
+      const R = S.R; if (!R?.setFsr) return;
+      if (!R.post) { api?.toast?.('⚡ FSR работает на средней и высокой графике — включи её кнопкой 🖥'); return; }
+      const L = ['auto', 'quality', 'balanced', 'performance'], next = R.setFsr(L[(L.indexOf(R.fsr) + 1) % L.length]);
+      try { localStorage.setItem('d37_fsr', next); } catch (e) {}
+      api?.toast?.({ auto: '⚡ FSR: авто — разрешение снижается само, только когда тормозит', quality: '⚡ FSR: качество — кадр 77%, AMD FSR чётко растягивает', balanced: '⚡ FSR: баланс — кадр 67%, быстрее', performance: '⚡ FSR: производительность — кадр 59%, быстрее всего' }[next]);
     }
     else if (a === 'rejoin') { S.q('.wld-status').hidden = true; S.stopped = false; S.idleAt = Date.now(); S.loop?.pause(false); join(1); }
   }
