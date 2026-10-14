@@ -19,12 +19,14 @@ function fillVisibleAds(){
     const box = ins.parentElement?.classList.contains('wrap-sm') ? ins.parentElement : ins;
     // VIP / персонал / «рядом нельзя» (ad-places.js) — места нет совсем
     if (M && M.why(ins.dataset.slotKey, { ignoreId: true })) { box.classList.add('ad-empty'); return; }
-    // Отладка: пустое место видно рамкой
-    if (M && M.debug() && !slotId && !window.ADS_IDS?.yandex?.[ins.dataset.slotKey] && box !== ins) {
+    // Отладка (?adsdebug=1): рамка вместо рекламы, когда раздел открыт
+    if (M && M.frames() && box !== ins) {
       box.classList.remove('ad-empty');
+      if (!box.offsetWidth) return;
       const holder = document.createElement('div');
       ins.replaceWith(holder);
       M.placeholder(holder, ins.dataset.slotKey);
+      M.mark(ins.dataset.slotKey);
       return;
     }
     // Для этого места задан блок Яндекса — показываем его вместо AdSense (js/core/ads-core.js)

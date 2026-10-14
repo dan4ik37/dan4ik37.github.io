@@ -214,6 +214,7 @@ async function openGame(id, param){
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
   document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
+  const adL = window.D37AdPlaces?.loading({ anchor: box.firstChild, game: id, param: gamesParam });   // реклама, если грузится дольше 1,5 с (ad-places.js)
   try {
     for (const s of g.scripts) await gamesLoadScript(s);
     if (gamesActive !== id) return;   // пока грузилось, ушли на другую игру
@@ -222,7 +223,7 @@ async function openGame(id, param){
     window.scrollTo({ top: document.getElementById('games-page').offsetTop - 70, behavior: 'smooth' });
   } catch (e) {
     box.innerHTML = `<div class="empty-state"><span class="empty-state-icon">😵</span><div class="empty-state-title">Игра не загрузилась</div><div class="empty-state-text">Проверь интернет и обнови страницу.</div></div>`;
-  }
+  } finally { adL?.done(); }
 }
 
 function closeGame(fromRouter){

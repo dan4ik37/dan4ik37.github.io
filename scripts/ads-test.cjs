@@ -203,6 +203,7 @@ globalThis.addEventListener = (t, fn) => { (winListeners[t] = winListeners[t] ||
 globalThis.removeEventListener = (t, fn) => { winListeners[t] = (winListeners[t] || []).filter(f => f !== fn); };
 globalThis.dispatchEvent = ev => { (winListeners[ev.type] || []).forEach(fn => fn(ev)); return true; };
 globalThis.Event = class { constructor(t){ this.type = t; } };
+globalThis.getComputedStyle = el => ({ position: el.style.position || (el.classList.contains('wld-status') || el.classList.contains('s3-loading') ? 'absolute' : 'static') });
 const IO = { list: new Map() };
 globalThis.IntersectionObserver = class { constructor(cb, o){ this.cb = cb; this.o = o; IO.obs = this; } observe(el){ IO.list.set(el, this); } unobserve(el){ IO.list.delete(el); } disconnect(){} };
 const showIO = el => { const o = IO.list.get(el); if (o) o.cb([{ target: el, isIntersecting: true }]); };
@@ -229,7 +230,7 @@ function fresh(o = {}){
   Object.assign(ENV, { width: 1280, coarse: false }, o.env || {});
   localStorage.removeItem('d37_noads'); localStorage.removeItem('d37_coinad_at');
   currentUser = null; currentProfile = null; currentRole = null;
-  T.dbg.on = false; T.dbg.nocaps = false;
+  T.dbg.on = false; T.dbg.frames = false; T.dbg.nocaps = false;
   location.hash = o.hash || '#/home';
   yaCalls.length = 0; window.yaContextCb = [];
   timers = timers.filter(t => t.every);   // интервалы модуля оставляем
@@ -355,9 +356,12 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   fresh(); window.ADS_IDS.google = {};
   const el = new El('div'); body.appendChild(el);
   ok(A.render(el, 'games_hub') === false && el.hidden, 'нет номера — место скрыто');
-  T.dbg.on = true;
-  ok(A.render(el, 'games_hub') === true && /d37-ad-ph/.test(el.innerHTML) && /games_hub/.test(el.innerHTML), 'отладка: пустое место — рамка с подписью', el.innerHTML);
-  T.dbg.on = false;
+  T.dbg.on = T.dbg.frames = true;
+  ok(A.render(el, 'games_hub') === true && /d37-ad-ph/.test(el.innerHTML) && /games_hub/.test(el.innerHTML) && /номера блока нет/.test(el.innerHTML), 'отладка: место — рамка с подписью (запросов в сеть нет)', el.innerHTML);
+  window.ADS_IDS.yandex.game_over = 'R-A-9-1';
+  ok(A.render(el, 'game_over') === true && /R-A-9-1/.test(el.innerHTML) && !el.querySelector('[id^="yandex_rtb"]'), 'отладка: и с номером блока — рамка, где видно номер');
+  T.dbg.on = T.dbg.frames = false;
+  fresh(); window.ADS_IDS.google = {};
   window.ADS_IDS.yandex.game_over = 'R-A-9-1';
   ok(A.render(el, 'game_over') === true && el.classList.contains('d37-ad') && /Реклама/.test(el.textContent), 'Яндекс: место с подписью «Реклама»');
   flushYa();
@@ -374,6 +378,10 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(A.render(g, 'games_hub') === true, 'Google: блок есть (games_hub)');
   const ins = g.querySelector('ins');
   ok(ins && ins.getAttribute('data-ad-slot') === IDS.google.games_hub && ins.getAttribute('data-tag-for-age-treatment') === '1', 'Google: data-tag-for-age-treatment="1"', ins && ins.attrs);
+  ok(ins.getAttribute('data-ad-format') === 'auto' && ins.getAttribute('data-full-width-responsive') === 'true', 'Google: обычное место — auto, на всю ширину');
+  const gr = new El('div'); body.appendChild(gr);
+  ok(M.show(gr, 'rail', { checked: true }) && gr.querySelector('ins')?.getAttribute('data-ad-format') === 'vertical' && !gr.querySelector('ins').hasAttribute('data-full-width-responsive'), 'Google: столбик — вертикальный формат, не растягивать');
+  gr.remove();
   // VIP — даже прямой вызов render не показывает
   currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
   const g2 = new El('div'); body.appendChild(g2);
@@ -401,6 +409,85 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ENV.coarse = false; ENV.width = 1280;
   advance(181e3);
   ok(A.interstitial('t') === false, 'компьютер — полноэкранной нет (РСЯ: на компьютере только при переходе между страницами)');
+}
+
+// ═══ 3. Экран загрузки ═══
+{
+  fresh(); window.ADS_IDS.yandex.loading = 'R-A-2-1';
+  const box = new El('div'); body.appendChild(box); box.innerHTML = '<div class="gm-loading">Загружаем игру…</div>';
+  let h = M.loading({ anchor: box.firstChild, game: 'snake' });
+  advance(1000); h.done(); advance(2000);
+  ok(!box.querySelector('.d37-adload') && !T.st().p.loading, 'загрузилось за 1 с — рекламы нет');
+  h = M.loading({ anchor: box.firstChild, game: 'horde' });
+  advance(1400);
+  ok(!box.querySelector('.d37-adload'), '1,4 с — ещё нет');
+  advance(200);
+  const ld = box.querySelector('.d37-adload');
+  ok(ld && ld.parentNode === box.firstChild && /💡/.test(ld.textContent) && ld.querySelector('.d37-ad') && /Реклама/.test(ld.textContent), '1,6 с — реклама под прогрессом, рядом подсказка', ld && ld.outerHTML);
+  flushYa();
+  ok(yaCalls.some(c => c.p.blockId === 'R-A-2-1' && c.p.statId === 11), 'РСЯ: блок загрузки, statId 11');
+  h.done();
+  ok(!box.querySelector('.d37-adload'), 'done() — реклама убрана сразу (игру не задерживаем)');
+  h = M.loading({ anchor: box.firstChild, game: 'td' }); advance(3000);
+  ok(!box.querySelector('.d37-adload'), 'через 3 с снова грузится — без рекламы (не чаще раза в 90 с)');
+  h.done();
+  // мир: games.js рекламу не ставит, а потраченное время засчитывается экрану мира
+  advance(100e3);
+  const g1 = M.loading({ anchor: box.firstChild, game: 'world' });
+  advance(1300);
+  ok(!box.querySelector('.d37-adload'), 'мир: на общем экране загрузки рекламы нет');
+  const st = new El('div'); st.className = 'wld-status'; st._rect = { left: 0, top: 0, width: 1100, height: 600 }; body.appendChild(st);
+  const g2 = M.loading({ anchor: st, tip: 'world' });
+  g1.done();
+  advance(400);
+  ok(!st.querySelector('.d37-adload'), 'экран мира: только что открылся — ещё нет (≥ 0,6 с на новом экране)');
+  advance(300);
+  ok(!!st.querySelector('.d37-adload') && /Сядь|плавать|участок|карточка|костра/.test(st.textContent), 'экран мира: всего 2 с загрузки — реклама и подсказка про мир', st.textContent);
+  g2.done();
+  advance(100e3);
+  st._rect = { left: 0, top: 0, width: 380, height: 300 };   // низкое окно мира (телефон боком): реклама бы обрезалась
+  const g2b = M.loading({ anchor: st, tip: 'world' }); advance(2000);
+  ok(!st.querySelector('.d37-adload'), 'экран загрузки поверх окна ниже 380 px — без рекламы (обрезанной не бывает)');
+  g2b.done(); st.remove();
+  // чужое
+  advance(100e3);
+  const s3 = new El('div'); s3.className = 's3-loading'; body.appendChild(s3);
+  const g3 = M.loading({ anchor: s3, tip: 'studio', ugc: true }); advance(3000);
+  ok(!s3.querySelector('.d37-adload'), 'чужой мир (play/join) — экран загрузки без рекламы');
+  g3.done(); s3.remove();
+  const g4 = M.loading({ anchor: box.firstChild, game: 'studio', param: 'play/abc' }); advance(3000);
+  ok(!box.querySelector('.d37-adload'), 'чужая игра «Студии игр» — без рекламы на загрузке');
+  g4.done();
+  const tmp = new El('div'); body.appendChild(tmp);
+  M.loading({ anchor: tmp }); tmp.remove(); advance(3000);
+  ok(!tmp.querySelector('.d37-adload'), 'экран загрузки уже закрыт — ничего не вставляем');
+  // компилятор: карточка в углу, если окно не тесное
+  advance(100e3);
+  const view = new El('div'); view._rect = { left: 0, top: 0, width: 900, height: 600 }; body.appendChild(view);
+  const c1 = M.loading({ host: view, card: '⚙️ Сборка C++', tip: 'compile' });
+  c1.step('загрузка компилятора 12%'); advance(1600);
+  const card = view.querySelector('.d37-adcard');
+  ok(card && /12%/.test(card.textContent) && card.querySelector('.d37-adcard-x') && card.querySelector('.d37-ad'), 'компилятор: карточка с прогрессом, «✕» и рекламой', card && card.outerHTML);
+  c1.step('загрузка компилятора 64%');
+  ok(card && /64%/.test(card.textContent), 'прогресс обновляется');
+  card?.querySelector('.d37-adcard-x').click();
+  ok(!view.querySelector('.d37-adcard'), '«✕» — карточку можно скрыть');
+  c1.done();
+  advance(100e3);
+  view._rect = { left: 0, top: 0, width: 360, height: 500 };
+  const c2 = M.loading({ host: view, card: '⚙️', tip: 'compile' }); advance(2000);
+  ok(!view.querySelector('.d37-adcard'), 'тесное окно (телефон) — без карточки');
+  c2.done();
+  advance(100e3); currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
+  const g6 = M.loading({ anchor: box.firstChild, game: 'horde' }); advance(2000);
+  ok(!box.querySelector('.d37-adload'), 'VIP — экран загрузки без рекламы');
+  g6.done();
+  // нет рекламы у РСЯ — убираем блок, подсказка остаётся
+  fresh(); window.ADS_IDS.yandex.loading = 'R-A-2-1';
+  const b2 = new El('div'); body.appendChild(b2);
+  const g7 = M.loading({ anchor: b2 }); advance(1600); flushYa(); yaCalls.pop().alt();
+  ok(b2.querySelector('.d37-adload') && !b2.querySelector('.d37-adload-ad') && /💡/.test(b2.textContent), 'у сети нет рекламы — пустого места нет, подсказка осталась');
+  g7.done(); b2.remove(); box.remove(); view.remove();
 }
 
 console.log(`\nads-test: ${pass} ok, ${fail} fail`);

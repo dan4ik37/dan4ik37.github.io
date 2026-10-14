@@ -61,12 +61,10 @@ window.ADS_IDS = {
     if (!el) return false;
     const M = window.D37AdPlaces;
     if (M && !o.checked && M.why(key, { ignoreId: true })) { el.hidden = true; return false; }
+    if (M && M.frames()) { if (!o.checked) M.mark(key); return M.placeholder(el, key); }   // отладка: рамка вместо рекламы
     const i = M ? M.ids(key) : { ya: window.ADS_IDS.yandex[key], g: window.ADS_IDS.google[key] };
     const ya = i.ya, g = i.g;
-    if (!ya && !g) {
-      if (M && M.debug()) return M.placeholder(el, key);   // отладка: пустое место видно рамкой
-      el.hidden = true; return false;
-    }
+    if (!ya && !g) { el.hidden = true; return false; }
     el.hidden = false;
     el.classList.add('d37-ad');
     el.innerHTML = '<span class="d37-ad-label">Реклама</span>';
@@ -85,8 +83,8 @@ window.ADS_IDS = {
       ins.style.display = 'block';
       ins.setAttribute('data-ad-client', CLIENT);
       ins.setAttribute('data-ad-slot', g);
-      ins.setAttribute('data-ad-format', 'auto');
-      ins.setAttribute('data-full-width-responsive', 'true');
+      ins.setAttribute('data-ad-format', o.format || 'auto');   // загрузка/перерыв/столбик/лента — свой формат (не растягивать)
+      if (!o.format) ins.setAttribute('data-full-width-responsive', 'true');
       if (window.ADS_IDS.kids) ins.setAttribute('data-tag-for-age-treatment', String(window.ADS_IDS.kids));
       el.appendChild(ins);
       try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}

@@ -638,7 +638,9 @@
     if (isGuest) { q('.wld-say input').placeholder = 'Войди, чтобы писать в чат'; q('.wld-say input').readOnly = true; }
     wireUi();
     const st0 = S;
+    const adL = window.D37AdPlaces?.loading({ anchor: q('.wld-status'), tip: 'world' });   // реклама под «Загружаем мир…», если дольше 1,5 с (ad-places.js)
     E.load().then(ok => {
+      adL?.done();
       if (S !== st0 || S.stopped) return;
       if (!ok) { status('Не удалось загрузить 3D — включаем плоский мир'); setTimeout(() => switch2d(true), 800); return; }
       try { start3d(); } catch (e) { console.error(e); status('Ошибка 3D: ' + (e.message || e) + ' — включаем плоский мир'); setTimeout(() => switch2d(true), 1500); return; }

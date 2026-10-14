@@ -12,7 +12,8 @@
 //   feed    — карточка «Реклама» в длинных списках: витрина игр, видео, каталоги «Студии игр» и Unity (только проверенные)
 //   rail    — компьютер от 1400 px: один липкий столбик справа от игры, только если там правда пусто
 // Щиты в «Мире Денчика» — не реклама сетей (её нельзя рисовать в 3D): свои промо и спонсор — js/games/mir-promo.js.
-// Отладка: адрес с ?adsdebug=1 (2 — ещё и без лимитов частоты), ?adsdebug=0 — выключить: пустые места видно рамкой.
+// Отладка (запоминается в браузере): ?adsdebug=1 — все места рамками с подписью вместо рекламы (запросов в сети нет),
+// 2 — то же без лимитов частоты (для скриншотов), 3 — настоящая реклама, но обведена; ?adsdebug=0 — выключить.
 (() => {
   const now = () => Date.now();
   const RULES = window.ADS_RULES = Object.assign({
@@ -42,12 +43,12 @@
   const vw = () => (document.documentElement && document.documentElement.clientWidth) || window.innerWidth || 0;
 
   // ── Отладка ──
-  const dbg = { on: false, nocaps: false, log: [] };
+  const dbg = { on: false, frames: false, nocaps: false, log: [] };
   try {
     const m = /[?&]adsdebug=(\d)/.exec(location.search || '');
     if (m) { if (m[1] === '0') localStorage.removeItem('d37_ads_debug'); else localStorage.setItem('d37_ads_debug', m[1]); }
     const v = localStorage.getItem('d37_ads_debug');
-    dbg.on = !!v; dbg.nocaps = v === '2';
+    dbg.on = !!v; dbg.frames = v === '1' || v === '2'; dbg.nocaps = v === '2';
   } catch (e) {}
   function log(place, why){
     dbg.log.push([new Date().toLocaleTimeString('ru'), place, why]);
@@ -155,16 +156,20 @@
   // Пустое место в отладке: рамка с подписью, какое это место и какого размера блок нужен
   function placeholder(el, key){
     el.hidden = false; el.classList.add('d37-ad');
-    el.innerHTML = `<span class="d37-ad-label">Реклама</span><div class="d37-ad-ph"><b>${esc(key)}</b><span>${esc(SIZE[base(key)] || SIZE[key] || 'адаптивный')}</span><small>номера блока нет — ADS_IDS в js/core/ads-core.js</small></div>`;
+    const i = ids(key), has = i.ya ? 'РСЯ ' + i.ya : i.g ? 'Google ' + i.g : 'номера блока нет — ADS_IDS в js/core/ads-core.js';
+    el.innerHTML = `<span class="d37-ad-label">Реклама</span><div class="d37-ad-ph" data-k="${esc(base(key))}"><b>${esc(key)}</b><span>${esc(SIZE[base(key)] || SIZE[key] || 'адаптивный')}</span><small>${esc(has)}</small></div>`;
     return true;
   }
+  // Формат блока Google по месту (РСЯ адаптивный — по размеру контейнера)
+  const FORMAT = { loading: 'rectangle, horizontal', break: 'horizontal, rectangle', rail: 'vertical', feed: 'rectangle' };
   // Показать в el (проверки уже пройдены или делаются тут). → true, если место занято рекламой (или рамкой в отладке)
   function show(el, key, o = {}){
     if (!el) return false;
     const r = o.checked ? '' : why(key, { ignoreId: true, ugc: o.ugc });
     if (r) { log(key, r); return false; }
-    if (!hasId(key)) { if (!dbg.on) { log(key, 'id'); return false; } placeholder(el, key); mark(key); return true; }
-    const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: o.onEmpty });
+    if (dbg.frames) { placeholder(el, key); mark(key); return true; }
+    if (!hasId(key)) { log(key, 'id'); return false; }
+    const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: o.onEmpty, format: FORMAT[base(key)] });
     if (ok) mark(key);
     return ok;
   }
@@ -202,10 +207,13 @@
       if (over || !host || !host.isConnected) return;
       const r = why('loading', { ignoreId: true, ugc: o.ugc });
       if (r) { log('loading', r); return; }
-      if (!hasId('loading') && !dbg.on) { log('loading', 'id'); return; }
+      if (!hasId('loading') && !dbg.frames) { log('loading', 'id'); return; }
       if (o.card) {   // карточка в углу: только если есть место (на телефоне студия и так тесная)
         const b = o.host.getBoundingClientRect();
         if (b.width < 480 || b.height < 340) { log('loading', 'small'); return; }
+      } else if (o.anchor && typeof getComputedStyle === 'function' && /absolute|fixed/.test(getComputedStyle(o.anchor).position)) {
+        // экран загрузки поверх окна (мир, студия): реклама целиком должна поместиться — обрезанной рекламы не бывает
+        if (o.anchor.getBoundingClientRect().height < 380) { log('loading', 'small'); return; }
       }
       const tips = TIPS[o.tip] || TIPS.game, tip = tips[Math.floor(Math.random() * tips.length)];
       const el = h.el = document.createElement('div');
@@ -236,7 +244,7 @@
     let box = stage.querySelector('#gamesAd');
     if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }
     const R = rule('break');
-    if (!isTouch() && s.rounds % (R.every || 3) === 0 && refreshOk(box) && !why('break', { ignoreId: true }) && (hasId('break') || dbg.on)) {
+    if (!isTouch() && s.rounds % (R.every || 3) === 0 && refreshOk(box) && !why('break', { ignoreId: true }) && (hasId('break') || dbg.frames)) {
       box.hidden = false; box.className = 'd37-break'; box.dataset.at = now(); box.dataset.net = net('break');
       box.innerHTML = `<div class="d37-break-t">☕ <b>Перерыв</b> · ${s.rounds} ${plural(s.rounds, 'партия', 'партии', 'партий')} подряд — отдохни минутку, следующая подождёт</div><div class="d37-break-ad"></div>`;
       if (show(box.querySelector('.d37-break-ad'), 'break', { checked: true, onEmpty: () => { box.hidden = true; } })) return 'break';
@@ -294,7 +302,7 @@
     if (o.titles && gambling(o.titles)) { log(place, 'gambling'); return 0; }
     const r = why(place, { ignoreId: true, nocap: true });
     if (r) { log(place, r); return 0; }
-    if (!hasId(place) && !dbg.on) { log(place, 'id'); return 0; }
+    if (!hasId(place) && !dbg.frames) { log(place, 'id'); return 0; }
     const s = st(), p = s.p.feed || {}, R = rule(place);
     let left = Math.min(o.max ?? 3, dbg.nocaps ? 99 : (R.max ?? 99) - (p.n || 0), dbg.nocaps || !RULES.budget ? 99 : RULES.budget - s.n);
     let n = 0;
@@ -356,7 +364,7 @@
     if (!RAIL.el) {
       const r = why('rail', { ignoreId: true });
       if (r) { if (r !== 'narrow') log('rail', r); return; }
-      if (!hasId('rail') && !dbg.on) return;
+      if (!hasId('rail') && !dbg.frames) return;
       const el = RAIL.el = document.createElement('aside');
       el.className = 'd37-rail'; el.setAttribute('aria-label', 'Реклама');
       el.innerHTML = '<div class="d37-rail-in"></div>';
@@ -503,15 +511,18 @@
     const s = document.createElement('style');
     s.id = 'd37AdsCss';
     s.textContent = `
-.d37-ad-ph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:90px;height:100%;padding:10px;border:2px dashed rgba(255,209,102,.65);border-radius:12px;background:rgba(255,209,102,.07);color:#ffd166;font:700 12px/1.35 Montserrat,system-ui,sans-serif;text-align:center}
+.d37-ad-ph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:90px;padding:10px;box-sizing:border-box;border:2px dashed rgba(255,209,102,.65);border-radius:12px;background:rgba(255,209,102,.07);color:#ffd166;font:700 12px/1.35 Montserrat,system-ui,sans-serif;text-align:center}
 .d37-ad-ph span{font-weight:600;opacity:.9}.d37-ad-ph small{font-weight:600;opacity:.6;font-size:10.5px}
+.d37-ad-ph[data-k="rail"]{min-height:600px}.d37-ad-ph[data-k="feed"]{min-height:190px}.d37-ad-ph[data-k="loading"]{min-height:100px}
 html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-ad:has(ins[data-ad-status="unfilled"]){display:none!important}
-.d37-adload{display:flex;flex-direction:column;align-items:center;gap:6px;width:min(100%,728px);margin:10px auto 0;font-weight:600}
+.d37-adload{display:flex;flex-direction:column;align-items:center;gap:6px;width:min(100%,728px);margin:10px auto 0;font-weight:600;flex:none}
+.d37-adload>*{flex:none}
+.s3-loading:has(>.d37-adload){align-content:center;row-gap:4px}
 .d37-adload .d37-ad,.d37-adcard .d37-ad{margin:0 auto;width:100%;max-width:none;min-height:90px}
 .d37-adload-ad{width:100%}
 .d37-adload-tip{font-size:12.5px;line-height:1.45;opacity:.85;max-width:560px;text-align:center}
-.d37-adcard{position:absolute;left:12px;bottom:12px;z-index:6;width:min(340px,calc(100% - 24px));padding:10px 12px 12px;border-radius:12px;background:rgba(12,10,24,.94);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 12.5px/1.4 Montserrat,system-ui,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.d37-adcard{position:absolute;right:12px;bottom:12px;z-index:6;width:min(340px,calc(100% - 24px));padding:10px 12px 12px;border-radius:12px;background:rgba(12,10,24,.94);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 12.5px/1.4 Montserrat,system-ui,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.45)}
 .d37-adcard-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .d37-adcard-h b{white-space:nowrap}
 .d37-adcard-st{flex:1;min-width:0;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -579,7 +590,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
     RULES, why, mark, show, ids, hasId, net, loading, afterRound, interRound, feed, coinOffer, worldPromo, sponsor, fillAll, noAdsPerk,
     placeholder, gambling, railTick,
     ctx(name, on){ if (on) ctxOn.add(name); else ctxOn.delete(name); if (on && name !== 'playing') { railOff(); } },
-    debug: () => dbg.on,
+    debug: () => dbg.on, frames: () => dbg.frames,
     state: () => ({ visit: JSON.parse(JSON.stringify(st())), vip: noAdsPerk(), ugc: ugcRoute(), playing: G.playing, ctx: [...ctxOn], rail: RAIL.el ? RAIL.w : 0, log: dbg.log.slice(-30) }),
     _test: { st: () => st(), reset(){ ST = null; try { sessionStorage.removeItem(SK); } catch (e) {} loadT0 = 0; railOff(); G.playing = false; ctxOn.clear(); }, dbg, G, railSpot, gameRect, cleanSponsor, safeUrl, refreshOk, GAMBLING_RE, TIPS, RAIL, ugcRoute, cdLeft },
   };
