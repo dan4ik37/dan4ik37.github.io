@@ -351,6 +351,18 @@
     if (r < l) { const b = box.getBoundingClientRect(); return { left: b.left, right: b.right }; }
     return { left: l, right: r };
   }
+  // Кнопки, прижатые к правому краю экрана (переключатель «Мощное/Слабое», «наверх»…): столбик левее их
+  function edgeReserve(W){
+    let r = 0;
+    for (const e of document.body.children) {
+      if (e.classList?.contains('d37-rail')) continue;
+      const b = e.getBoundingClientRect?.();
+      if (!b || !b.width || !b.height || b.right < W - 4 || b.width > 240) continue;
+      if (typeof getComputedStyle === 'function' && getComputedStyle(e).position !== 'fixed') continue;
+      r = Math.max(r, b.width);
+    }
+    return r;
+  }
   // Где можно поставить столбик ({ left, top, height, w } от раздела игр) или null
   function railSpot(){
     if (!/^#\/games\/./.test(location.hash || '') || isTouch()) return null;
@@ -362,13 +374,13 @@
     if (W < (rule('rail').minW || 1400)) return null;
     const sr = stage.getBoundingClientRect();
     if (!sr.width || !sr.height) return null;
-    const free = W - sr.right - GAP - EDGE;
+    const edge = EDGE + edgeReserve(W), free = W - sr.right - GAP - edge;
     const w = free >= 300 ? 300 : free >= 160 ? 160 : 0;
     if (!w) return null;
     let x = sr.right + GAP + Math.floor((free - w) / 2);
     if (net('rail') === 'g') {   // Google: от края игры не ближе 150 px
       const gr = gameRect(stage);
-      if (x - gr.right < 150) { x = Math.ceil(gr.right + 150); if (x + w > W - EDGE) return null; }
+      if (x - gr.right < 150) { x = Math.ceil(gr.right + 150); if (x + w > W - edge) return null; }
     }
     const pr = page.getBoundingClientRect();
     return { left: Math.round(x - pr.left), top: Math.round(sr.top - pr.top), height: Math.round(Math.max(sr.height, 640)), w };

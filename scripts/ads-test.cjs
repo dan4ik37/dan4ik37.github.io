@@ -601,6 +601,96 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   grid.remove();
 }
 
+// ═══ 6. Столбик справа от игры ═══
+{
+  fresh({ hash: '#/games/2048', env: { width: 1920 } }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.rail = 'R-A-6-1';
+  YA.fill = true;   // сети «отвечают» (иначе через 8 с пустой столбик убирается — это проверено отдельно ниже)
+  window.yaContextCb = { push: f => f() };   // скрипт РСЯ «загружен»: очередь выполняется сразу
+  const savedIntervals = timers.filter(t => t.every); timers = timers.filter(t => !t.every);   // проверка раз в 2 с — вручную
+  window.adsbygoogle = { push(){ doc.querySelectorAll('ins.adsbygoogle').forEach(i => { if (!i.hasAttribute('data-ad-status')) i.setAttribute('data-ad-status', 'filled'); }); } };
+  const page = new El('div'); page.id = 'games-page';
+  const stage = new El('div'); stage.id = 'gamesStage';
+  const sbox = new El('div'); sbox.id = 'gamesStageBox';
+  const cv = new El('canvas');
+  sbox.appendChild(cv); stage.appendChild(sbox); page.appendChild(stage); body.appendChild(page);
+  const layout = W => {   // как в index.html: .wrap до 1200 px по центру, поля 32 px; игра — поле 560 px посередине
+    ENV.width = W;
+    const pl = Math.max(0, (W - 1200) / 2), pw = Math.min(W, 1200);
+    page._rect = { left: pl, top: 0, width: pw, height: 2000 };
+    stage._rect = { left: pl + 32, top: 160, width: pw - 64, height: 760 };
+    sbox._rect = { left: pl + 50, top: 220, width: pw - 100, height: 680 };
+    cv._rect = { left: W / 2 - 280, top: 240, width: 560, height: 560 };
+  };
+  layout(1920);
+  M.railTick();
+  ok(!T.RAIL.el, 'первые 15 с визита — столбика нет');
+  advance(16e3); M.railTick();
+  const r = T.RAIL.el;
+  ok(r && r.parentNode === page && T.RAIL.w === 300, '1920 px: столбик 300 px в поле справа', T.RAIL.w);
+  const L = parseFloat(r?.style.left), stR = 360 + 1136 + 32 - 360;   // правый край игры от раздела = 32 + 1136
+  ok(L >= 1168 + 40 && L + 300 <= 1920 - 360 - 16 + 360 - 16 + 16 && L + 360 + 300 <= 1920 - 16, 'не ближе 40 px к игре и 16 px к краю экрана (полоса прокрутки)', { L, stR });
+  ok(r.style.top === '160px' && parseFloat(r.style.height) >= 640, 'сверху вровень с игрой, высота — на всю игру (липкий внутри)');
+  ok(r.querySelector('.d37-rail-in.d37-ad') && /Реклама/.test(r.textContent), 'внутри — липкий блок с подписью «Реклама»');
+  flushYa();
+  ok(yaCalls.some(c => c.p.blockId === 'R-A-6-1' && c.p.statId === 13), 'РСЯ: блок столбика, statId 13');
+  advance(9e3); M.railTick();
+  ok(!!T.RAIL.el, 'реклама пришла — столбик стоит (без обновлений)');
+  layout(1600); M.railTick();
+  ok(!T.RAIL.el, '1600 px — 300 px не влезает: убран, новый (160 px) — не раньше чем через минуту');
+  advance(61e3); M.railTick();
+  ok(T.RAIL.el && T.RAIL.w === 160, '1600 px через минуту — узкий столбик 160 px');
+  layout(1500); M.railTick();
+  ok(!T.RAIL.el, '1500 px — места нет (меньше 160 + отступы) — столбик убран');
+  layout(1366); M.railTick();
+  ok(!T.RAIL.el, '1366 px (меньше 1400) — нет');
+  layout(1920); advance(61e3); M.railTick();
+  ok(!!T.RAIL.el, 'снова широко, прошла минута — столбик вернулся');
+  html.classList.add('s3-open'); M.railTick();
+  ok(!T.RAIL.el, 'окно Студии 3D поверх — столбик убран (скрытой рекламы не бывает)');
+  html.classList.remove('s3-open');
+  advance(61e3); M.railTick();
+  ok(!!T.RAIL.el, 'студию закрыли — вернулся (через минуту)');
+  setHash('#/games'); M.railTick();
+  ok(!T.RAIL.el, 'ушёл из игры в витрину — столбика нет');
+  setHash('#/games/2048'); advance(10e3); M.railTick();
+  ok(!T.RAIL.el, 'вернулся в игру через 10 с — новый столбик не раньше минуты');
+  advance(61e3); M.railTick();
+  ok(!!T.RAIL.el, 'через минуту — есть');
+  ENV.coarse = true; M.railTick();
+  ok(!T.RAIL.el, 'сенсорный экран (планшет) — нет: липкие только на компьютере');
+  ENV.coarse = false;
+  // Google: от края игры не ближе 150 px
+  window.ADS_IDS.yandex.rail = ''; window.ADS_IDS.google = { game_over: 'G-1' };
+  advance(61e3); layout(1920); M.railTick();
+  const gl = parseFloat(T.RAIL.el?.style.left) + 360;
+  ok(T.RAIL.el && gl - (960 + 280) >= 150, 'Google: столбик ≥ 150 px от игры (поле 560 px)', gl);
+  T.RAIL.el && T.RAIL.el.remove(); T._test?.reset;
+  cv._rect = { left: 410, top: 240, width: 1100, height: 560 };   // игра во всю ширину (мир, Орда)
+  sbox._rect.width = 1100;
+  advance(61e3); M._test.RAIL.el = null; M.railTick();
+  ok(!T.RAIL.el, 'Google: игра во всю ширину — до поля меньше 150 px — столбика нет');
+  window.ADS_IDS.yandex.rail = 'R-A-6-1'; window.ADS_IDS.google = {};
+  M.railTick();
+  ok(!!T.RAIL.el, 'РСЯ (правила 150 px нет): та же игра во всю ширину — столбик в поле');
+  // кнопка у правого края экрана (#perfToggle, «наверх») — столбик левее неё, без наложения
+  advance(61e3); layout(1920); M.railTick();
+  const pt = new El('button'); pt.id = 'perfToggle'; pt.style.position = 'fixed'; pt._rect = { left: 1920 - 40, top: 500, width: 40, height: 86 }; body.appendChild(pt);
+  M.railTick(); advance(61e3); M.railTick();
+  ok(T.RAIL.el && T.RAIL.w === 160 && parseFloat(T.RAIL.el.style.left) + 360 + 160 <= 1920 - 40 - 16, 'кнопка у края экрана — столбик уже и левее её, без наложения', T.RAIL.el?.style.left);
+  pt.remove();
+  currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
+  dispatchEvent(new Event('d37:auth')); advance(100);
+  ok(!T.RAIL.el, 'вошёл VIP — столбик убран');
+  currentUser = null; currentProfile = null; dispatchEvent(new Event('d37:auth')); advance(100);
+  // блокировщик: столбик с пустой «Рекламой» убирается через 8 с
+  YA.fill = false; advance(61e3); M.railTick();
+  const r2 = T.RAIL.el;
+  advance(8100);
+  ok(r2 && !r2.isConnected, 'реклама не пришла (блокировщик) — через 8 с пустой столбик убран');
+  page.remove(); window.adsbygoogle = [];
+  timers.push(...savedIntervals);
+}
+
 console.log(`\nads-test: ${pass} ok, ${fail} fail`);
 Date.now = realNow;
 process.exit(fail ? 1 : 0);
