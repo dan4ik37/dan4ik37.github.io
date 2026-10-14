@@ -826,7 +826,7 @@
         { id: 'exit', icon: '🚪', text: 'Выйти из мира', warn: true },
       ],
       onPick: id => menuAct(id),
-      onClose: () => { if (S) S.menu = null; },
+      onClose: () => { if (S) { S.menu = null; S.C?.reset_state(); } },   // Enter/Esc, закрывшие меню, — не в игру (чат, меню снова)
     });
   }
   function closeMenu(){ S?.menu?.close(); }
@@ -1398,7 +1398,7 @@
     else if (a === 'mode') switch2d(true);
     // настройки/полный экран: ⚙️ — окно настроек (качество, FSR, вид, клавиши…), 💬 — чат поверх 3D на телефоне лёжа
     else if (a === 'settings' || a === 'gfx' || a === 'fsr') { if (window.D37Settings) window.D37Settings.open({ ctx: 'engine', tab: a === 'settings' ? undefined : 'gfx' }); }
-    else if (a === 'chat') S.q('.wld')?.classList.toggle('gs-chat');
+    else if (a === 'chat') { const on = S.q('.wld')?.classList.toggle('gs-chat'); b?.classList.toggle('on', !!on); }
     else if (a === 'gfx-apply') {   // качество поменяли в ⚙️ (d37_gfx уже записан) — мир пересобирается
       const q0 = S.R?.q, el = root, ga = api;
       unmount(); IMPL.mount(el, ga); current = IMPL;
