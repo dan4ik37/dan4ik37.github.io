@@ -114,13 +114,20 @@
     return { L, lip: L.lip, face: L.face, depth, land: { x: lx, y: fl2.y, z: lz },
       over: { x: L.lip.x + fx * depth * .5, y: L.lip.y + .3 * U * s, z: L.lip.z + fz * depth * .5 } };
   }
-  // Наверху есть, куда встать (хотя бы присев)
+  // Наверху есть, куда встать (хотя бы присев): сначала за край на радиус тела; нет — ближе к краю (тонкая стенка),
+  // чуть в стороны (угол — край там поворачивает) и ниже края до 0,9 (крыша за бортиком)
+  const TOP_D = [1, .55, .3], TOP_S = [0, .3, -.3];
   function roomOnTop(ph, L, r, crouchH){
-    const tx = L.lip.x - L.face.x * (r + .12), tz = L.lip.z - L.face.z * (r + .12);
-    const h = ray(ph, tx, L.lip.y + .4, tz, 0, -1, 0, .6);
-    if (!h || h.ny < .7) return null;
-    if (ph.blocked(tx, tz, h.y + .05, h.y + crouchH, r * .9)) return null;
-    return { x: tx, y: h.y, z: tz };
+    const al = L.along || { x: 0, z: 0 };
+    for (const k of TOP_D) for (const sd of TOP_S) {
+      const d = k === 1 ? r + .12 : Math.max(.12, r * k), s = sd * U;
+      const tx = L.lip.x - L.face.x * d + al.x * s, tz = L.lip.z - L.face.z * d + al.z * s;
+      const h = ray(ph, tx, L.lip.y + .4, tz, 0, -1, 0, 1.3);
+      if (!h || h.ny < .7 || h.y < L.lip.y - .9) continue;
+      if (ph.blocked(tx, tz, h.y + .05, h.y + crouchH, r * .9)) continue;
+      return { x: tx, y: h.y, z: tz };
+    }
+    return null;
   }
   E.grip = { findLedge, findVault, ledgeAt, roomOnTop };
   E.parkour = PK;

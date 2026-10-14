@@ -175,6 +175,19 @@ function pk(boxes, opts = {}){
   t.hold('KeyW'); run(t.P, t.C, .25); t.hold('Space'); run(t.P, t.C, .8); t.hold('Space', false);
   ok(t.moves[0] === 'hang' || t.moves[0] === 'mantle', 'в прыжке ухватился за край 2,7 м', t.moves.join());
 }
+{ // тонкая стена 2 м (0,3 толщиной), за ней пусто — залезть на верх стены (раньше «некуда встать»)
+  const t = pk([{ x: 0, y: 1 * U, z: 2, hx: 4, hy: 1 * U, hz: .15 }]);
+  t.hold('KeyW'); run(t.P, t.C, .4); t.hold('KeyW', false); t.tap('Space'); run(t.P, t.C, .5);
+  ok(t.P.mode === 'hang', 'тонкая стена — повис', t.P.mode + ' ' + t.moves.join());
+  t.tap('Space'); run(t.P, t.C, 1.2);
+  ok(t.P.mode === 'move' && near(t.P.ch.y, 2 * U, .05), 'тонкая стена — залез на верх', t.P.ch.y / U + ' ' + t.P.mode);
+}
+{ // стена под скатом крыши (карниз свисает над стеной) — за верх стены под крышей не хватается
+  const t = pk([{ x: 0, y: 1 * U, z: 2, hx: 4, hy: 1 * U, hz: .15 }]);
+  t.ph.addWedge({ x: 0, y: 2 * U + .5, z: 2.6, hx: 4, hy: .5, hz: 1, yaw: Math.PI });   // низ ската — к нам (−z)
+  t.hold('KeyW'); run(t.P, t.C, .4); t.hold('KeyW', false); t.tap('Space'); run(t.P, t.C, .5);
+  ok(t.P.mode !== 'hang', 'стена под крышей — не повис за верх стены', t.P.mode + ' ' + t.moves.join());
+}
 { // лестница
   const ph = new E.Phys({ ground: 0 });
   ph.addBox({ x: 0, y: 2 * U, z: 8, hx: 3, hy: 2 * U, hz: 6 });   // площадка 4 м, лицо к нам (z = 2)

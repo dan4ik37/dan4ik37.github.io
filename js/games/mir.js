@@ -272,13 +272,25 @@
       if (o.roof === 'flat') {
         const rm = R.tex('sidewalk', { tint: o.roofC || '#7a5236', tile: 2.5, flatColor: o.roofC || '#7a5236' }), pm = wallMat(o.roofC2 || '#e8d2a8');
         R.part(roof, { s: 'box', y: HT + .12, w: o.w + .7, h: .25, d: o.d + .7, m: rm });
-        for (const [w, d, x, z] of [[o.w + .7, .3, 0, -(o.d + .7) / 2], [o.w + .7, .3, 0, (o.d + .7) / 2], [.3, o.d + .7, -(o.w + .7) / 2, 0], [.3, o.d + .7, (o.w + .7) / 2, 0]]) R.part(roof, { s: 'box', x, z, y: HT + .5, w, h: .5, d, m: pm });
+        for (const [w, d, x, z] of [[o.w + .7, .3, 0, -(o.d + .7) / 2], [o.w + .7, .3, 0, (o.d + .7) / 2], [.3, o.d + .7, -(o.w + .7) / 2, 0], [.3, o.d + .7, (o.w + .7) / 2, 0]]) {
+          R.part(roof, { s: 'box', x, z, y: HT + .5, w, h: .5, d, m: pm });
+          ph.addBox({ x: x0 + x, z: z0 + z, y: HT + .5, hx: w / 2, hy: .25, hz: d / 2, tag: 'roof', data: { cam: false } });
+        }
+        // крыша — настоящая (залезть можно; камеру не держит: в доме крыша прячется, камера смотрит сверху)
+        ph.addBox({ x: x0, z: z0, y: HT + .12, hx: (o.w + .7) / 2, hy: .125, hz: (o.d + .7) / 2, tag: 'roof', data: { cam: false } });
       } else {   // двускатная: треугольная призма (цилиндр с 3 гранями)
         const g = R.group(roof, 0, 0, 0, o.ridge === 'z' ? 0 : PI / 2);
         const base = (o.ridge === 'z' ? o.w : o.d) + 1, len = (o.ridge === 'z' ? o.d : o.w) + .9, r = base / 1.732, rise = o.rise || 2.2, sz = rise / (1.5 * r);
         const m = R.part(g, { s: 'cyl', r, h: len, seg: 3, rx: -PI / 2, m: roofMat(o.roofC || '#c2410c', o.ridge === 'z') });
         m.scale.set(1, 1, sz); m.position.y = HT + .5 * r * sz;
         R.part(roof, { s: 'box', y: HT + .06, w: o.w + .3, h: .12, d: o.d + .3, c: trimM });
+        // скаты — настоящие (клинья: низ — у карниза), камеру не держат. Без них руки цеплялись за верх стены под
+        // нарисованной крышей и подтянуться было некуда (владелец 11.10: «за угол неправильно хватает»)
+        const gy = o.ridge === 'z' ? 0 : PI / 2;
+        for (const sd of [-1, 1]) {
+          const lx = sd * base / 4;
+          ph.addWedge({ x: x0 + lx * Math.cos(gy), z: z0 - lx * Math.sin(gy), y: HT + rise / 2, hx: len / 2, hy: rise / 2, hz: base / 4, yaw: gy + sd * PI / 2, tag: 'roof', data: { cam: false } });
+        }
       }
       // UV «по миру» у крыши (она не склеивается — прячется, когда ты внутри) и тени
       roof.updateWorldMatrix(true, true);

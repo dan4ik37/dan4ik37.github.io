@@ -503,6 +503,8 @@
       const m = P(roof, { s: 'cyl', r, h: len, seg: 3, rx: -PI / 2, c: roofC, flat: true });
       m.scale.set(1, 1, sz); m.position.y = H + .5 * r * sz;
       P(roof, { s: 'box', y: H + .06, w: S + .3, h: .12, d: S + .3, c: trim });
+      // скаты — настоящие (камеру не держат): иначе руки цеплялись за верх стены под нарисованной крышей
+      for (const sd of [-1, 1]) bd.push({ t: 'wedge', x: sd * base / 4, z: 0, y0: H, w: len, h: rise, d: base / 2, yaw: sd * PI / 2 });
       if (L >= 2) P(roof, { s: 'box', x: 1.5, y: H + 1.4, z: -1.2, w: .5, h: 1.5, d: .5, c: BRICK });
       x.roof = roof;
       x.room = { hw: hw - t, h: H };
@@ -755,8 +757,10 @@
     function addBody(v, lot, cx, cz, r, b, list){
       const [lx, lz] = rotXZ(r, b.x || 0, b.z || 0), [wx, wz] = lotToWorld(lot, cx + lx, cz + lz);
       const data = { cam: !!b.cam, floor: b.floor };
+      const yaw = lot.yaw + r * PI / 2 + (b.yaw || 0);
       const c = b.t === 'cyl' ? ph.addCyl({ x: wx, z: wz, y: b.y0 + b.h / 2, r: b.r, hy: b.h / 2, tag: 'mb', data })
-        : ph.addBox({ x: wx, z: wz, y: b.y0 + b.h / 2, hx: b.w / 2, hy: b.h / 2, hz: b.d / 2, yaw: lot.yaw + r * PI / 2 + (b.yaw || 0), tag: 'mb', data });
+        : b.t === 'wedge' ? ph.addWedge({ x: wx, z: wz, y: b.y0 + b.h / 2, hx: b.w / 2, hy: b.h / 2, hz: b.d / 2, yaw, tag: 'mb', data })   // скат крыши: низ — у локальной +z
+        : ph.addBox({ x: wx, z: wz, y: b.y0 + b.h / 2, hx: b.w / 2, hy: b.h / 2, hz: b.d / 2, yaw, tag: 'mb', data });
       (list || v.bodies).push(c);
       return c;
     }
