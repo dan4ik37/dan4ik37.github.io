@@ -339,8 +339,8 @@
 
   // ═══ Столбик справа от игры (компьютер) ═══
   // AdSense: липкое — не шире 300 px, одно на экране (не зеркальные с двух сторон), не вплотную к содержимому и полосе
-  // прокрутки, прокручивается вместе со страницей (sticky внутри раздела игры, а не fixed). У Google — ещё и ≥ 150 px
-  // от самой игры. Под окном Студии 3D, редактором персонажа и на весь экран — убираем (скрытой рекламы не бывает).
+  // прокрутки, въезжает и уезжает вместе с разделом игры (липнет только пока раздел на экране — railStick). У Google —
+  // ещё и ≥ 150 px от самой игры. Под окном Студии 3D, редактором персонажа и на весь экран — убираем (скрытой рекламы нет).
   const RAIL = { el: null, w: 0 };
   const GAP = 40, EDGE = 16, STICKY = 84;
   function gameRect(stage){
@@ -387,6 +387,35 @@
     return { left: Math.round(x - pr.left), top: Math.round(sr.top - pr.top), height: Math.round(Math.max(sr.height, 640)), w };
   }
   function railOff(){ if (RAIL.el) { RAIL.el.remove(); RAIL.el = null; } }
+  // «Липкий» вручную: у html и body сайта overflow-x: hidden — body становится областью прокрутки, и position: sticky
+  // не липнет. Поэтому: пока раздел игры на экране — блок fixed на 84 px сверху, в начале и в конце раздела — уезжает с ним
+  function railStick(){
+    const el = RAIL.el, inner = el?.firstChild;
+    if (!inner) return;
+    const a = el.getBoundingClientRect(), h = inner.offsetHeight || 620;
+    const mode = a.top >= STICKY ? 'top' : a.bottom - h <= STICKY ? 'bottom' : 'fixed';
+    if (inner.dataset.stick === mode && mode !== 'fixed') return;
+    inner.dataset.stick = mode;
+    inner.style.cssText = mode === 'fixed' ? `position:fixed;top:${STICKY}px;bottom:auto;left:${Math.round(a.left)}px;width:${Math.round(a.width)}px`
+      : `position:absolute;top:${mode === 'top' ? '0' : 'auto'};bottom:${mode === 'bottom' ? '0' : 'auto'};left:0;width:100%`;
+  }
+  const onScroll = () => { if (RAIL.el) railStick(); };   // событие прокрутки и так раз в кадр; стиль меняется только на границах
+  // Столбик целиком закрыт (окно поверх, игра «на весь экран» своим способом) — скрытой рекламы не бывает: убрать.
+  // Шапка, всплывашки и кнопки у края не считаются — только то, что накрывает весь видимый столбик.
+  function railCovered(){
+    const inner = RAIL.el?.firstChild;
+    if (!inner || typeof document.elementFromPoint !== 'function') return false;
+    const b = inner.getBoundingClientRect(), H = window.innerHeight || 0;
+    const top = Math.max(b.top, 0), bot = Math.min(b.bottom, H), y = (top + bot) / 2;
+    if (bot - top < 40) return false;
+    const hit = document.elementFromPoint(b.left + b.width / 2, y);
+    if (!hit || RAIL.el.contains(hit)) return false;
+    for (let n = hit; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      const c = n.getBoundingClientRect();
+      if (c.left <= b.left && c.right >= b.right && c.top <= top && c.bottom >= bot) return true;
+    }
+    return false;
+  }
   function railTick(){
     const spot = railSpot();
     if (!spot) { railOff(); return; }
@@ -402,9 +431,12 @@
       $('#games-page').appendChild(el);
       Object.assign(el.style, { left: spot.left + 'px', top: spot.top + 'px', height: spot.height + 'px', width: spot.w + 'px' });
       if (!show(el.firstChild, 'rail', { checked: true, onEmpty: railOff })) { railOff(); return; }
+      railStick();
       return;
     }
     Object.assign(RAIL.el.style, { left: spot.left + 'px', top: spot.top + 'px', height: spot.height + 'px' });
+    railStick();
+    if (railCovered()) { log('rail', 'covered'); railOff(); }
   }
 
   // ═══ Монеты за рекламу 🪙 (обычные монеты, не донатная валюта и не деньги) ═══
@@ -575,7 +607,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-house-ic{font-size:2rem;line-height:1}.d37-house small{color:var(--muted,#8d8daa);font-size:.76rem}
 .d37-house-go{font-size:.74rem;font-weight:800;color:var(--accent,#ff2d55)}
 .d37-rail{position:absolute;z-index:3}
-.d37-rail-in{position:sticky;top:${STICKY}px}
+.d37-rail-in{position:absolute;top:0;left:0;width:100%}
 .d37-rail .d37-ad{margin:0;max-width:none;min-height:600px}
 .d37-coinad{display:inline-flex;align-items:center;gap:.3rem;padding:.45rem .8rem;border-radius:10px;border:1px solid rgba(255,209,102,.45);background:rgba(255,209,102,.1);color:#ffd166;font:800 .74rem Montserrat,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .d37-coinad:disabled{opacity:.6;cursor:default}
@@ -610,6 +642,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
     });
     let rt = 0;
     window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(railTick, 250); });
+    window.addEventListener('scroll', onScroll, { passive: true });
     setInterval(railTick, 2000);
     // «⚙️ Настройки сайта» (settings-panel.js грузится позже) — редактор спонсора при открытии
     const hook = () => {

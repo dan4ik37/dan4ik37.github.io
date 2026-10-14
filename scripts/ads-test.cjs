@@ -26,7 +26,11 @@ class Text { constructor(t){ this.nodeType = 3; this.data = t; this.parentNode =
 class El {
   constructor(tag){
     this.nodeType = 1; this.tagName = String(tag).toUpperCase(); this.childNodes = []; this.parentNode = null; this.attrs = {};
-    this.style = {}; this.listeners = {}; this._rect = null; this.hidden = false; this.disabled = false;
+    this.listeners = {}; this._rect = null; this.hidden = false; this.disabled = false;
+    const style = {};
+    Object.defineProperty(style, 'cssText', { enumerable: false, get: () => Object.entries(style).map(([k, v]) => `${k}:${v}`).join(';'),
+      set: t => { for (const k of Object.keys(style)) delete style[k]; String(t).split(';').forEach(p => { const i = p.indexOf(':'); if (i > 0) style[camel(p.slice(0, i).trim())] = p.slice(i + 1).trim(); }); } });
+    this.style = style;
     const self = this;
     this.dataset = new Proxy({}, {
       get: (o, k) => self.attrs['data-' + String(k).replace(/[A-Z]/g, c => '-' + c.toLowerCase())],
@@ -73,6 +77,7 @@ class El {
   querySelector(sel){ return qsa(this, sel)[0] || null; }
   closest(sel){ let n = this; while (n && n.nodeType === 1) { if (matches(n, sel, null)) return n; n = n.parentNode; } return null; }
   matches(sel){ return matches(this, sel, null); }
+  contains(n){ while (n) { if (n === this) return true; n = n.parentNode; } return false; }
   focus(){} blur(){}
 }
 function serialize(n){
@@ -655,6 +660,24 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   html.classList.add('hd-lock'); M.railTick();
   ok(!T.RAIL.el, '«Орда» на весь экран (hd-lock) — столбика нет');
   html.classList.remove('hd-lock'); advance(61e3); M.railTick();
+  // «липкий» вручную (у сайта overflow-x: hidden на html и body — position: sticky не работает)
+  const rin = T.RAIL.el.firstChild, scrollTo = r => { T.RAIL.el._rect = r; dispatchEvent(new Event('scroll')); advance(20); };
+  scrollTo({ left: 1600, top: 200, width: 300, height: 900 });
+  ok(rin.style.position === 'absolute' && rin.style.top === '0', 'раздел игры ещё внизу — блок стоит в начале столбика (едет со страницей)');
+  scrollTo({ left: 1600, top: -150, width: 300, height: 900 });
+  ok(rin.style.position === 'fixed' && rin.style.top === '84px' && rin.style.left === '1600px' && rin.style.width === '300px', 'раздел на экране — блок держится на 84 px сверху', rin.style);
+  scrollTo({ left: 1600, top: -700, width: 300, height: 900 });
+  ok(rin.style.position === 'absolute' && rin.style.bottom === '0', 'раздел уезжает — блок уезжает вместе с ним (не висит над другим)');
+  // что-то легло поверх столбика: маленькая всплывашка — не страшно; окно на весь экран своим способом — убрать
+  Object.defineProperty(globalThis, 'innerHeight', { value: 1080, configurable: true });
+  T.RAIL.el.firstChild._rect = { left: 1600, top: 84, width: 300, height: 600 };
+  const toastEl = new El('div'); toastEl._rect = { left: 1650, top: 350, width: 200, height: 60 }; body.appendChild(toastEl);
+  doc.elementFromPoint = () => toastEl; M.railTick();
+  ok(!!T.RAIL.el, 'всплывашка поверх части столбика — столбик остаётся');
+  const cover = new El('div'); cover._rect = { left: 0, top: 0, width: 1920, height: 1080 }; const inCover = new El('canvas'); inCover._rect = { left: 1500, top: 300, width: 100, height: 100 }; cover.appendChild(inCover); body.appendChild(cover);
+  doc.elementFromPoint = () => inCover; M.railTick();
+  ok(!T.RAIL.el, 'окно «на весь экран» накрыло столбик — убран (скрытой рекламы не бывает)');
+  delete doc.elementFromPoint; toastEl.remove(); cover.remove(); advance(61e3); M.railTick();
   setHash('#/games'); M.railTick();
   ok(!T.RAIL.el, 'ушёл из игры в витрину — столбика нет');
   setHash('#/games/2048'); advance(10e3); M.railTick();
