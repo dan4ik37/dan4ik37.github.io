@@ -724,7 +724,7 @@
     if (C.down('pause') && !setOpen) {
       if (S.menu) closeMenu();
       else if (!S.q('.wld-card').hidden || !S.q('.wld-panel').hidden) closePops();
-      else if (!S.base?.bm && !S.I.touch) openMenu();
+      else if (!S.base?.bm) openMenu();   // нажали Esc — клавиатура есть (и у ноутбука с сенсорным экраном)
     }
     if (C.any()) activity();
     P.first = rig.mode === 'first';
@@ -1403,7 +1403,7 @@
       const q0 = S.R?.q, el = root, ga = api;
       unmount(); IMPL.mount(el, ga); current = IMPL;
       const next = window.D37E.gfxQuality();
-      if (next !== q0) ga?.toast?.({ low: '🖥 Графика: низкая — быстро, без теней', mid: '🖥 Графика: средняя — тени', high: '🖥 Графика: высокая — мягкие тени и рельеф текстур' }[next]);
+      if (next !== q0) ga?.toast?.({ low: '🎨 Графика: низкая — быстро, без теней', mid: '🎨 Графика: средняя — тени', high: '🎨 Графика: высокая — мягкие тени и рельеф текстур' }[next]);
     }
     else if (a === 'rejoin') { S.q('.wld-status').hidden = true; S.stopped = false; S.idleAt = Date.now(); S.loop?.pause(false); join(1); }
   }
