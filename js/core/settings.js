@@ -185,7 +185,7 @@
     const list = tabsFor();
     cur = list.some(t => t.id === o.tab) ? o.tab : cx === 'site' ? 'site' : cx === 'game' ? 'sound' : 'gfx';
     if (!list.some(t => t.id === cur)) cur = list[0]?.id;
-    keyNote = '';
+    keyNote = ''; ctlFail = false;   // клавиши не загрузились — при новом открытии попробовать снова
     if (!win) {
       win = doc.createElement('div'); win.className = 'gs-set'; win.id = 'gsSettings';
       win.setAttribute('role', 'dialog'); win.setAttribute('aria-modal', 'true'); win.setAttribute('aria-label', 'Настройки');
@@ -279,7 +279,8 @@
       + row('Для левши', sw('lefty'), 'Джойстик — справа, кнопки — слева.')
       + head('Клавиши' + (touchDev ? ' <small>(клавиатура и геймпад)</small>' : ''));
     const C = ctl();
-    if (!C) { html += note('⏳ Загружаем список клавиш…'); loadControls().then(ok => { if (ok && win && cur === 'controls') renderBody(); else if (!ok && win && cur === 'controls') renderBody(); }); return html; }
+    if (!C && ctlFail) return html + note('Список клавиш не загрузился — проверь интернет и открой окно ещё раз.');
+    if (!C) { html += note('⏳ Загружаем список клавиш…'); loadControls().then(ok => { if (!ok) ctlFail = true; if (win && cur === 'controls') renderBody(); }); return html; }
     html += keysHtml(C);
     return html;
   }
@@ -311,7 +312,7 @@
 
   // ── Клавиши (controls.js: 2 клавиши на действие; «Пауза» не меняется) ──
   function ctl(){ const E = root.D37E; try { return E?.controls ? E.controls({ listen: false }) : null; } catch (e) { return null; } }
-  let loading = null;
+  let loading = null, ctlFail = false;
   function loadControls(){
     if (root.D37E?.controls) return Promise.resolve(true);
     if (loading) return loading;
