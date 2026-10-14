@@ -293,9 +293,9 @@
     function downBtn(){
       const b = q('.mv-down');
       const divEl = list.querySelector('.mv-new');
-      const show = !V.atBottom && (V.newCount > 0 || (divEl && divEl.offsetTop > list.scrollTop + list.clientHeight));
+      const show = !V.atBottom && (V.newCount > 0 || !!divEl);
       b.hidden = !show;
-      if (show) b.querySelector('span').textContent = V.newCount ? `${V.newCount} ${P.plural(V.newCount, 'новое сообщение', 'новых сообщения', 'новых сообщений')}` : 'К новым сообщениям';
+      if (show) b.querySelector('span').textContent = V.newCount ? `${V.newCount} ${P.plural(V.newCount, 'новое сообщение', 'новых сообщения', 'новых сообщений')}` : divEl && divEl.offsetTop > list.scrollTop + list.clientHeight ? 'К новым сообщениям' : 'Вниз, к последним';
     }
     function markRead(){
       if (document.hidden || !V.atBottom || !V.A) return;

@@ -102,9 +102,12 @@
     const audioBox = document.getElementById('d37Audio') || Object.assign(document.createElement('div'), { id: 'd37Audio', hidden: true });
     if (!audioBox.parentElement) document.body.appendChild(audioBox);
     R.changed = () => { clearTimeout(R.changeT); R.changeT = setTimeout(() => { if (!R.closed) opt.onChange?.(R); }, 60); };
+    // supabase-js отдаёт уже открытый канал с той же темой (например, «смотрели», пока звонило) — сначала убрать его
+    for (const old of sbClient.getChannels?.() || []) if (old.topic === 'realtime:' + opt.topic) { try { await sbClient.removeChannel(old); } catch (er) {} }
     const ch = sbClient.channel(opt.topic, { config: { broadcast: { self: false }, presence: { key: myKey } } });
     R.ch = ch;
-    R.send = async d => { if (R.closed) return; d.ts = Date.now(); const m = JSON.stringify(d); try { await ch.send({ type: 'broadcast', event: 'v', payload: { k: myKey, m, s: await sign(keys.kp.privateKey, m) } }); } catch (er) {} };
+    // «отклонил» шлёт тот, кто ещё не в комнате (только смотрел) — его ключ подписи едет в самом сообщении
+    R.send = async d => { if (R.closed) return; d.ts = Date.now(); const m = JSON.stringify(d); try { await ch.send({ type: 'broadcast', event: 'v', payload: { k: myKey, m, s: await sign(keys.kp.privateKey, m), p: d.t === 'decline' ? keys.pub : undefined } }); } catch (er) {} };
     ch.on('presence', { event: 'sync' }, () => sync(R));
     ch.on('broadcast', { event: 'v' }, ({ payload }) => onMsg(R, payload));
     ch.subscribe(async st => {
@@ -127,7 +130,8 @@
     for (const p of R.peers.values()) dropPeer(R, p);
     R.peers.clear();
     try { R.ch.untrack(); } catch (er) {}
-    setTimeout(() => { try { sbClient.removeChannel(R.ch); } catch (er) {} }, bye ? 300 : 0);
+    if (bye) setTimeout(() => { try { sbClient.removeChannel(R.ch); } catch (er) {} }, 300);
+    else { try { sbClient.removeChannel(R.ch); } catch (er) {} }
     if (R.stream && R.ownStream) { R.stream.getTracks().forEach(t => t.stop()); R.stream._stop?.(); }
   }
   async function sync(R){
@@ -212,7 +216,10 @@
   }
   async function onMsg(R, pl){
     if (R.closed || !pl || typeof pl.k !== 'string' || typeof pl.m !== 'string' || typeof pl.s !== 'string' || pl.m.length > 40000) return;
-    const from = pl.k, pk = R.pubs.get(from);
+    const from = pl.k;
+    let pk = R.pubs.get(from);
+    // «отклонил вызов» — от того, кто только смотрел (его нет в комнате): ключ в сообщении, код комнаты знал только он
+    if (!pk && typeof pl.p === 'string' && pl.p.length < 200 && R.opt.onDecline) { try { pk = await importPub(pl.p); } catch (er) { return; } if (!await verifySig(pk, pl.s, pl.m)) return; let d0; try { d0 = JSON.parse(pl.m); } catch (er) { return; } if (d0?.t === 'decline' && sigOk(d0, R.myKey)) R.opt.onDecline(R, null); return; }
     if (!pk || R.verified.get(from) !== true) return;   // не знаем или не прошёл проверку — не слушаем
     if (!await verifySig(pk, pl.s, pl.m)) return;
     let d; try { d = JSON.parse(pl.m); } catch (er) { return; }
@@ -336,7 +343,11 @@
     let stream;
     try { stream = await getMic(); } catch (er) { return { err: micErr(er) }; }
     const R = await openRoom(Object.assign({ stream, me: { uid: P.me(), nick: P.myNick() || (typeof chatNick !== 'undefined' && chatNick) || 'игрок' },
-      onChange: () => { render(); window.dispatchEvent(new Event('d37:voice')); },
+      onChange: () => {
+        // ник собеседника — из комнаты, если профиль ещё не загрузился
+        if (S?.peer && S.room === R && (!S.peer.nick || S.peer.nick === 'Друг')) { const m = [...R.members.values()].find(x => x.uid === S.peer.uid); if (m?.nick) { S.peer.nick = m.nick; if (S.kind === 'call') S.title = m.nick; } }
+        render(); window.dispatchEvent(new Event('d37:voice'));
+      },
       onConnected: () => { if (S && S.room === R) setState('joined'); },
     }, opt));
     R.ownStream = true;
@@ -479,12 +490,13 @@
     s.room = r.R; s.t0 = Date.now();
     setState('joined'); armConnect(); pill();
   };
-  C.decline = () => {
+  C.decline = async () => {
     if (!S || S.state !== 'in') return;
     const s = S;
-    if (s.watch) s.watch.send({ t: 'decline', to: [...s.watch.members.keys()][0] });
-    s.reason = 'declined_me';
-    setTimeout(() => setState('decline'), 150);
+    s.reason = 'declined_me'; clearTimeout(s.timer); ring(false);
+    const to = s.watch && [...s.watch.members.keys()][0];
+    if (to) await Promise.race([s.watch.send({ t: 'decline', to }), new Promise(r => setTimeout(r, 1500))]);
+    if (S === s) setState('decline');
   };
   C.leave = () => { if (!S) return; if (S.state === 'in') { C.decline(); return; } S.reason = S.reason || 'me'; setState('hangup'); if (S && S.state !== 'ended') { S.state = 'ended'; finish(); render(); } };
   C.voiceMute = () => { const R = S?.room; if (!R) return; R.mute = !R.mute; applyMic(R); R.send({ t: 'st', mute: R.mute, deaf: R.deaf }); R.changed(); pill(); };

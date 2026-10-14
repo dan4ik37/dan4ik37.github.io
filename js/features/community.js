@@ -61,6 +61,8 @@
   }
   DS.refreshBadge = () => loadMy(true).then(commBadge);
 
+  // Кто кого может наказывать (как comm_can_mod в community.sql): персонал сайта — всех, владелец — всех, модератор — участников
+  const canMod = (myRole, targetRole, staff) => !!staff || myRole === 'owner' ? targetRole !== 'owner' || !!staff : myRole === 'mod' && targetRole === 'member';
   // Сообщение сообщества → сообщение ленты
   const cmMsg = r => ({ id: r.id, uid: r.user_id || null, nick: r.nick || 'игрок', text: r.text || '', at: r.created_at, reply: r.reply_to || null,
     edited: r.edited_at || null, deleted: !!r.deleted, hidden: !!r.hidden, reactions: r.reactions || {}, pinned: !!r.pinned_at, ch: r.channel_id });
@@ -80,9 +82,7 @@
     const withMine = async list => { const mine = await myReacts(list.map(x => x.id)); list.forEach(x => { x.myReacts = mine.get(x.id) || new Set(); }); return list; };
     const rpcOk = async (fn, args, okMsg) => { const r = await P.rpc(fn, args); return r.data?.ok ? { ok: true, msg: okMsg, data: r.data } : { ok: false, msg: '⚠️ ' + why(r), err: why(r) }; };
     const modList = uid => {
-      if (!isMod || !uid || uid === me) return [];
-      const tr = roles.get(uid);
-      if (!C.staff && C.role === 'mod' && tr && tr !== 'member') return [];
+      if (!uid || uid === me || !canMod(C.role, roles.get(uid) || 'member', !!C.staff)) return [];
       return [['mute10', '🔇 Мут 10 мин'], ['mute60', '🔇 Мут 1 час'], ['mute1440', '🔇 Мут 1 день'], ['kick', '👢 Выгнать'], ['ban', '⛔ Забанить'], ['banpurge', '⛔ Бан + удалить сообщения за сутки']];
     };
     const doMod = async (k, uid, nick) => {
@@ -645,7 +645,7 @@
   });
 
   // Приглашение #/c/<код> → страница чата с экраном вступления
-  DS._test = { cmMsg, link, REASON, railHtml: () => railHtml('page', OFF_ID) };
+  DS._test = { cmMsg, link, REASON, canMod, railHtml: () => railHtml('page', OFF_ID) };
   commBadge();
   window.addEventListener('d37:auth', () => { S.my = []; S.myAt = 0; S.cache.clear(); S.members.clear(); if (P.me()) loadMy(true); });
 })();

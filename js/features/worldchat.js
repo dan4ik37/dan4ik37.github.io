@@ -22,6 +22,7 @@
     if (!(typeof d.ts === 'number' && d.ts > now - 60000 && d.ts < now + 60000)) return null;
     return { n: d.n.slice(0, 24), u: typeof d.u === 'string' ? d.u : null, sh: Number.isInteger(d.sh) && d.sh > 0 && d.sh < 100 ? d.sh : 0, x: d.x.slice(0, 160), ts: d.ts };
   };
+  W._test = { sign, verify, importPub, b64 };
   W.start = o => {
     const st = { on: false, ready: false, rate: new Map(), pubs: new Map(), checks: new Map(), lastSend: 0, seen: new Set() };
     const btn = document.createElement('button');
