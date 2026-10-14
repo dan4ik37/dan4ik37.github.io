@@ -733,6 +733,98 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ok(!calls.some(x => x[0] === 'fillText' && x[1] === 'РЕКЛАМА'), 'свои промо — без пометки «Реклама» (это не реклама)');
 }
 
+(async () => {
+// ═══ 7. Монеты за рекламу (обычные монеты, не донатная валюта) ═══
+{
+  fresh();
+  const W = { n: 100, ads: 0 };
+  window.D37Coins = { RULES: { ad: 40 }, canAd: () => W.ads < 8, coins: () => W.n, adCoins: async () => { W.ads++; W.n += 40; return { ok: true, got: 40, coins: W.n }; } };
+  ok(M.coinOffer('hub') === '', 'нет блока «за награду» — кнопки «за рекламу» нет вовсе');
+  window.ADS_IDS.yandex.rewarded_desktop = 'R-A-7-1';
+  let html = M.coinOffer('hub');
+  ok(/data-d37-reward="coins"/.test(html) && /Реклама → \+40 🪙/.test(html), 'есть блок — «📺 Реклама → +40 🪙» (на кнопке: что будет реклама и что дадут)', html);
+  const box = new El('div'); body.appendChild(box); box.innerHTML = html;
+  let watched = false, shown = 0;
+  const origShow = A.showReward;
+  A.showReward = async () => { shown++; return watched; };
+  const events = []; addEventListener('d37:coinad', e => events.push(e.detail));
+  globalThis.CustomEvent = class { constructor(t, o){ this.type = t; this.detail = o?.detail; } };
+  let b = box.querySelector('button');
+  b.click(); await flushMicro(); await flushMicro();
+  ok(shown === 1 && W.n === 100 && toasts.pop() === 'Реклама не досмотрена — монет нет' && !b.disabled, 'закрыл рекламу раньше — монет нет, кнопка снова доступна');
+  watched = true;
+  b.click(); await flushMicro(); await flushMicro(); await flushMicro();
+  ok(W.n === 140 && /\+40/.test(toasts.pop()) && /снова через 10 мин/.test(b.textContent) && b.disabled, 'досмотрел — +40 🪙, кнопка «снова через 10 мин»', b.textContent);
+  ok(events.length === 1 && events[0].where === 'hub', 'событие d37:coinad — игра перерисует магазин');
+  html = M.coinOffer('hub');
+  ok(/disabled/.test(html) && /через 10 мин/.test(html) && !/data-d37-reward/.test(html), 'следующие 10 минут — кнопка серая с таймером (раз в 10 минут)');
+  advance(10 * 60e3 + 1000);
+  ok(/data-d37-reward="coins"/.test(M.coinOffer('hub')), 'через 10 минут — снова можно');
+  W.ads = 8;
+  ok(M.coinOffer('hub') === '', '8 наград за день (лимит сервера coins_ad) — кнопки нет');
+  W.ads = 0; currentUser = { id: 'v' }; currentProfile = { id: 'v', is_vip: true };
+  ok(/data-d37-reward/.test(M.coinOffer('hub')), 'VIP: реклама за награду по кнопке остаётся (это его выбор)');
+  currentUser = null; currentProfile = null;
+  A.showReward = origShow; box.remove(); delete window.D37Coins;
+}
+
+// ═══ 9. Серверные страницы и крючки в играх ═══
+{
+  const os = require('os'), { pathToFileURL } = require('url');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'd37-ads-'));
+  fs.mkdirSync(path.join(tmp, 'api/_lib/routes'), { recursive: true });
+  fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
+  for (const f of ['yt.js', 'page.js', 'topics.js', 'uploads-snapshot.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
+  globalThis.fetch = async () => { throw new Error('нет сети'); };   // свежих роликов нет — только снимок
+  try {
+    const { page } = await import(pathToFileURL(path.join(tmp, 'api/_lib/page.js')).href);
+    const html1 = page({ title: 't', body: '<main></main>' });
+    ok(html1.indexOf('pauseAdRequests') > 0 && html1.indexOf('pauseAdRequests') < html1.indexOf('adsbygoogle.js'), 'серверные страницы: пауза AdSense для VIP — до скрипта AdSense');
+    ok(/ads-core\.js"><\/script>\s*<script src="\/js\/core\/ad-places\.js"><\/script>/.test(html1), 'серверные страницы: ad-places.js сразу после ads-core.js');
+    const html2 = page({ title: 't', body: '<main></main>', noAds: true });
+    ok(!/adsbygoogle\.js/.test(html2) && /ctx\("gambling",true\)/.test(html2), 'страница с роликом про кейсы: без AdSense, и полоска РСЯ тоже нельзя (gambling)');
+    const { default: videos } = await import(pathToFileURL(path.join(tmp, 'api/_lib/routes/videos.js')).href);
+    const run = async p => { const res = { h: {}, setHeader(k, v){ this.h[k] = v; }, status(c){ this.code = c; return this; }, send(x){ this.html = x; } }; await videos({ query: { p: String(p) } }, res); return res; };
+    const r1 = await run(1);
+    const n1 = (r1.html.match(/data-ad="feed_videos"/g) || []).length;
+    ok(r1.code === 200 && n1 === 7 && /class="d37-feed" data-ad="feed_videos" data-ad-lazy hidden/.test(r1.html), '/videos: 240 роликов — 7 карточек «Реклама» (каждая 30-я, не последней), грузятся у экрана', n1);
+    let gp = 0;
+    for (let p = 2; p <= 12 && !gp; p++) { const r = await run(p); if (!/adsbygoogle\.js/.test(r.html)) { gp = p; ok(!/data-ad=/.test(r.html), `/videos?p=${p} (есть ролики про кейсы) — ни одного места рекламы`); } }
+    ok(gp > 0, 'нашлась страница архива с роликами про кейсы');
+  } catch (e) { ok(false, 'серверные страницы', String(e && e.stack || e)); }
+  fs.rmSync(tmp, { recursive: true, force: true });
+  // крючки: что и где подключено (если кто-то случайно удалит строку при слиянии)
+  const has = (f, re, name) => ok(re.test(read(f)), name);
+  has('index.html', /ads-core\.js"><\/script>\s*<script src="js\/core\/ad-places\.js"><\/script>/, 'index.html: ad-places.js сразу после ads-core.js');
+  has('index.html', /pauseAdRequests=1}catch\(e\){}<\/script>\s*<script async src="https:\/\/pagead2/, 'index.html: пауза AdSense для VIP — до скрипта AdSense');
+  has('js/features/games.js', /D37AdPlaces\?\.loading\(\{ anchor: box\.firstChild, game: id/, 'games.js: экран загрузки игры');
+  has('js/features/games.js', /finally \{ adL\?\.done\(\); \}/, 'games.js: загрузка кончилась — реклама убирается');
+  has('js/features/games.js', /D37AdPlaces\.afterRound\(stage\)/, 'games.js: после партии — диспетчер');
+  has('js/features/games.js', /feed\(grid, \{ place: 'feed_games'/, 'games.js: карточки в витрине игр');
+  has('js/features/games.js', /coinOffer\?\.\('hub'\)/, 'games.js: монеты за рекламу на плашке «Мой персонаж»');
+  has('js/games/mir.js', /loading\(\{ anchor: q\('\.wld-status'\)/, 'mir.js: реклама под «Загружаем мир…»');
+  has('js/games/mir.js', /E\.load\(\)\.then\(ok => \{\s*adL\?\.done\(\);/, 'mir.js: мир загрузился — реклама прочь');
+  has('js/games/mir.js', /worldPromo\?\.\(S, \{ panel, go \}\)/, 'mir.js: щиты');
+  has('js/games/mir.js', /else S\.promo\?\.tap\(tp\.x, tp\.y\)/, 'mir.js: нажатие по щиту');
+  has('js/games/mir.js', /s\.promo\?\.dispose\(\)/, 'mir.js: щиты убираются при выходе');
+  has('js/games/studio3d.js', /loading\(\{ anchor: q\('\.s3-loading'\), tip: 'studio', ugc: !!\(ED\.playId \|\| ED\.joinCode\)/, 'studio3d.js: загрузка студии (чужой мир — без рекламы)');
+  has('js/games/studio3d.js', /loading\(\{ host: ed\.q\('\.s3-view'\), card:/, 'studio3d.js: карточка сборки C++/Rust');
+  has('js/games/studio3d.js', /finally \{ adL\?\.done\(\); ed\.building = false;/, 'studio3d.js: сборка кончилась — карточка прочь');
+  has('js/games/studio.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'studio.js: реклама только в каталоге проверенных игр');
+  has('js/games/unity-host.js', /eq\('status', 'public'\)[\s\S]{0,900}feed\(box\.firstChild, \{ place: 'feed_ugc'/, 'unity-host.js: реклама только в каталоге проверенных игр');
+  has('js/features/youtube.js', /feed\(grid, \{ place: 'feed_videos'[^\n]*titles: vids\.map/, 'youtube.js: карточки в ленте видео (с проверкой «азартных»)');
+  has('js/games/horde.js', /coinOffer\?\.\('horde_shop'\)/, 'horde.js: монеты за рекламу в магазине');
+  has('js/games/horde.js', /'d37:coinad'/, 'horde.js: после награды магазин перерисовывается');
+  // каждая кнопка «за рекламу» в играх — только когда есть блок (rewardReady) и говорит, что дадут
+  for (const f of fs.readdirSync(path.join(SITE, 'js/games')).filter(f => f.endsWith('.js'))) {
+    const src = read('js/games/' + f);
+    const btns = src.match(/📺[^<`'"]*(?:рекламу|Реклама)[^<`'"]*/g) || [];
+    for (const t of btns) ok(/→|и |за рекламу/.test(t) && !/^📺 Посмотреть рекламу$/.test(t.trim()), `${f}: кнопка «${t.trim().slice(0, 50)}» говорит, что дадут`);
+    if (/showReward\(/.test(src)) ok(/rewardReady\?\.\(\)/.test(src), `${f}: кнопки «за рекламу» — только при rewardReady()`);
+  }
+}
+
 console.log(`\nads-test: ${pass} ok, ${fail} fail`);
 Date.now = realNow;
 process.exit(fail ? 1 : 0);
+})();

@@ -155,6 +155,7 @@ function renderGamesMe(){
   box.innerHTML = `<a class="gm-me-char" href="#/games/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
     <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет</span></div>
     ${D37Coins.canDaily() ? '<button type="button" class="gm-me-btn" onclick="gamesDailyBonus(this)">🎁 Бонус дня</button>' : ''}
+    ${window.D37AdPlaces?.coinOffer?.('hub') || ''}
     <a class="gm-me-btn ghost" href="#/games/wardrobe">🎭 Гардероб</a>`;
   D37Char.draw(box.querySelector('canvas').getContext('2d'), D37Char.look(), 56, 106, 88, { t: 0 });
 }

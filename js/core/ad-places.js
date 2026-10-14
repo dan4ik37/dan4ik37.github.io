@@ -430,6 +430,7 @@
     if (r?.ok) {
       try { localStorage.setItem(CDK, String(now())); } catch (e) {}
       toast(`📺 +${r.got} 🪙 — спасибо!`); b.textContent = `✅ +${r.got} 🪙 · снова через 10 мин`;
+      try { window.dispatchEvent(new CustomEvent('d37:coinad', { detail: { where: b.dataset.where || '', got: r.got } })); } catch (e) {}   // игра перерисует магазин
     } else { toast(r?.reason === 'day_cap' ? 'На сегодня награды за рекламу кончились' : 'Подожди минутку и попробуй снова'); b.disabled = false; }
   }
 
@@ -577,6 +578,8 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-rail .d37-ad{margin:0;max-width:none;min-height:600px}
 .d37-coinad{display:inline-flex;align-items:center;gap:.3rem;padding:.45rem .8rem;border-radius:10px;border:1px solid rgba(255,209,102,.45);background:rgba(255,209,102,.1);color:#ffd166;font:800 .74rem Montserrat,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .d37-coinad:disabled{opacity:.6;cursor:default}
+.gm-me .d37-coinad{flex:none;padding:.55rem .85rem}
+@media(max-width:480px){.gm-me .d37-coinad{flex:1;justify-content:center}}
 .d37-spadm{background:rgba(255,209,102,.05);border:1px solid rgba(255,209,102,.18);border-radius:14px;padding:1.2rem;margin-top:1.2rem;display:flex;flex-direction:column;gap:.5rem}
 .d37-spadm-h{font-size:.72rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ffd166}
 .d37-spadm p{font-size:.72rem;color:var(--muted);margin:0}
