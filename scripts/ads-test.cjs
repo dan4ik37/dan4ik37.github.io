@@ -490,6 +490,57 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   g7.done(); b2.remove(); box.remove(); view.remove();
 }
 
+// ═══ 4. После партии: под игрой и «☕ Перерыв» ═══
+{
+  fresh({ hash: '#/games/snake' }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.game_over = 'R-A-4-1';
+  const stage = new El('div'); stage.id = 'gamesStage'; const sb = new El('div'); sb.id = 'gamesStageBox'; stage.appendChild(sb); body.appendChild(stage);
+  ok(M.afterRound(stage) === 'game_over', '1-я партия — реклама под игрой (game_over)');
+  const box = stage.querySelector('#gamesAd');
+  ok(box && !box.hidden && box.dataset.net === 'ya' && box.parentNode === stage && box.previousElementSibling !== box, 'место под игрой (после поля), сеть — Яндекс');
+  advance(30e3);
+  ok(M.afterRound(stage) === false && box.querySelector('[id^="yandex_rtb"]'), 'через 30 с — то же объявление (обновление не чаще 90 с)');
+  advance(70e3);
+  ok(M.afterRound(stage) === 'game_over' && !box.querySelector('.d37-break'), '3-я партия, но визиту < 2 мин — без перерыва, обычное обновление (Яндекс, ≥ 90 с)');
+  advance(100e3); M.afterRound(stage);
+  advance(100e3); M.afterRound(stage);
+  advance(100e3);
+  ok(M.afterRound(stage) === 'break' && box.querySelector('.d37-break') && /Перерыв/.test(box.textContent) && /6 партий подряд/.test(box.textContent), '6-я партия — «☕ Перерыв · 6 партий подряд»', box.textContent);
+  ok(!!box.querySelector('.d37-break-ad.d37-ad'), 'в перерыве — блок рекламы с подписью');
+  flushYa();
+  ok(yaCalls.some(c => c.p.statId === 12 && c.p.blockId === 'R-A-4-1'), 'перерыв без своего блока — блок game_over, statId 12');
+  advance(1000); sb.dispatch('pointerdown');
+  ok(box.querySelector('.d37-break'), 'нажатие в первые 1,5 с не гасит перерыв (случайное)');
+  advance(1000); sb.dispatch('pointerdown');
+  ok(!box.querySelector('.d37-break-t') && !box.querySelector('.d37-break') && !!box.querySelector('.d37-ad'), 'снова играет — «Перерыв» погас, реклама осталась (без перезагрузки)');
+  ok(M.state().playing === true, 'идёт партия');
+  for (let i = 0; i < 3; i++) { advance(91e3); M.afterRound(stage); }   // 9-я партия — через 273 с после перерыва
+  ok(!box.querySelector('.d37-break'), 'следующий перерыв — не раньше чем через 5 минут');
+  for (let i = 0; i < 3; i++) { advance(91e3); M.afterRound(stage); }   // 12-я — через 546 с
+  ok(box.querySelector('.d37-break'), '12-я партия, прошло > 5 минут — снова перерыв');
+  // ушёл из игры — объявление под ней убираем совсем
+  setHash('#/games/td');
+  ok(box.innerHTML === '' && !box.dataset.net, 'ушёл в другую игру — место под игрой очищено (скрытой рекламы нет)');
+  // телефон — только game_over
+  fresh({ hash: '#/games/snake', env: { coarse: true, width: 400 } }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.game_over = 'R-A-4-1';
+  advance(200e3);
+  const res = []; for (let i = 0; i < 3; i++) { res.push(M.afterRound(stage)); advance(91e3); }
+  ok(res[2] === 'game_over' && !box.querySelector('.d37-break'), 'телефон: перерывов нет (там полноэкранная от игры)', res);
+  // Google: без обновлений и без перерыва в том же месте
+  fresh({ hash: '#/games/snake' }); window.ADS_IDS.yandex = {};
+  box.innerHTML = ''; delete box.dataset.net;
+  ok(M.afterRound(stage) === 'game_over' && box.dataset.net === 'g', 'Google: место под игрой');
+  advance(200e3);
+  ok(M.afterRound(stage) === false && M.afterRound(stage) === false, 'Google: то же объявление, обновлять нельзя (только по просьбе человека)');
+  // лимит визита кончился — показанное не стираем
+  fresh({ hash: '#/games/snake' }); window.ADS_IDS.google = {}; window.ADS_IDS.yandex.game_over = 'R-A-4-1';
+  box.innerHTML = ''; delete box.dataset.net;
+  M.afterRound(stage);
+  for (let i = 0; i < 40; i++) M.mark('games_hub');
+  advance(100e3);
+  ok(M.afterRound(stage) === false && !!box.querySelector('[id^="yandex_rtb"]'), 'лимит визита — новое не показываем, показанное не стираем');
+  stage.remove();
+}
+
 console.log(`\nads-test: ${pass} ok, ${fail} fail`);
 Date.now = realNow;
 process.exit(fail ? 1 : 0);

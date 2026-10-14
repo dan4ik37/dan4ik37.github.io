@@ -166,10 +166,12 @@ async function gamesDailyBonus(btn){
 window.addEventListener('d37:auth', () => { setTimeout(() => { if (document.getElementById('gamesMe') && !document.getElementById('gamesHub')?.hidden) renderGamesMe(); }, 600); });
 window.D37Char?.on(() => { if (!document.getElementById('gamesHub')?.hidden) renderGamesMe(); });
 
-// Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с
+// Реклама под игрой — только после окончания партии (не во время), обновляется не чаще раза в 90 с.
+// Есть диспетчер (ad-places.js) — он: на компьютере каждая 3-я партия — «☕ Перерыв», Google без обновлений, VIP без рекламы
 let gamesAdAt = 0;
 function gamesAdAfterRound(){
   const stage = document.getElementById('gamesStage');
+  if (window.D37AdPlaces) { window.D37AdPlaces.afterRound(stage); return; }
   if (!stage || stage.hidden || !window.D37Ads || Date.now() - gamesAdAt < 90000) return;
   let box = document.getElementById('gamesAd');
   if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }

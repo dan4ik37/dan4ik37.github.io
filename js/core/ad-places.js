@@ -236,7 +236,9 @@
   // Телефон — только game_over (полноэкранную между партиями зовут сами игры: D37Ads.interstitial).
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
   // Обновить рекламу в том же месте можно только у Яндекса (не чаще раза в 30 с — у нас 90); Google — только по просьбе человека
-  const refreshOk = box => !box.dataset.net || (box.dataset.net === 'ya' && now() - (+box.dataset.at || 0) >= (rule('game_over').refresh || 90) * 1e3);
+  // (рамки отладки — как Яндекс; ?adsdebug=2 — и без 90 с)
+  const refreshOk = box => !box.dataset.net || (/^(ya|dbg)$/.test(box.dataset.net) && (dbg.nocaps || now() - (+box.dataset.at || 0) >= (rule('game_over').refresh || 90) * 1e3));
+  const netOf = key => dbg.frames ? 'dbg' : net(key);
   function afterRound(stage){
     if (!stage || stage.hidden) return false;
     const s = st(); s.rounds = (s.rounds || 0) + 1; save();
@@ -244,16 +246,19 @@
     let box = stage.querySelector('#gamesAd');
     if (!box) { box = document.createElement('div'); box.id = 'gamesAd'; stage.appendChild(box); }
     const R = rule('break');
+    // #gamesAd — только коробка; внутри каждый раз новый элемент (классы у одного и того же не переключаем: Chrome
+    // со стилями :has() иногда не пересчитывает такой элемент)
     if (!isTouch() && s.rounds % (R.every || 3) === 0 && refreshOk(box) && !why('break', { ignoreId: true }) && (hasId('break') || dbg.frames)) {
-      box.hidden = false; box.className = 'd37-break'; box.dataset.at = now(); box.dataset.net = net('break');
-      box.innerHTML = `<div class="d37-break-t">☕ <b>Перерыв</b> · ${s.rounds} ${plural(s.rounds, 'партия', 'партии', 'партий')} подряд — отдохни минутку, следующая подождёт</div><div class="d37-break-ad"></div>`;
+      box.hidden = false; box.className = ''; box.dataset.at = now(); box.dataset.net = netOf('break');
+      box.innerHTML = `<div class="d37-break"><div class="d37-break-t">☕ <b>Перерыв</b> · ${s.rounds} ${plural(s.rounds, 'партия', 'партии', 'партий')} подряд — отдохни минутку, следующая подождёт</div><div class="d37-break-ad"></div></div>`;
       if (show(box.querySelector('.d37-break-ad'), 'break', { checked: true, onEmpty: () => { box.hidden = true; } })) return 'break';
     }
     if (!refreshOk(box)) return false;
-    box.className = ''; box.dataset.at = now(); box.dataset.net = net('game_over');
-    box.innerHTML = '';
-    if (show(box, 'game_over')) return 'game_over';
-    delete box.dataset.net;
+    const r = why('game_over', { ignoreId: true });
+    if (r || (!hasId('game_over') && !dbg.frames)) { log('game_over', r || 'id'); return false; }   // показанное не трогаем
+    box.hidden = false; box.className = ''; box.innerHTML = '<div></div>'; box.dataset.at = now(); box.dataset.net = netOf('game_over');
+    if (show(box.firstChild, 'game_over', { checked: true })) return 'game_over';
+    box.innerHTML = ''; delete box.dataset.net;
     return false;
   }
   // Снова играет (нажал в игре): «перерыв» гаснет — реклама остаётся обычным местом под игрой, без перезагрузки
@@ -261,8 +266,8 @@
     if (!/^#\/games\/./.test(location.hash || '')) return;
     if (e.type === 'pointerdown' && !e.target?.closest?.('#gamesStageBox')) return;
     G.playing = true;
-    const b = document.querySelector('#gamesAd.d37-break');
-    if (b && now() - (+b.dataset.at || 0) > 1500) { b.querySelector('.d37-break-t')?.remove(); b.classList.remove('d37-break'); }
+    const b = document.querySelector('#gamesAd .d37-break'), box = b?.parentNode;
+    if (b && now() - (+box.dataset.at || 0) > 1500) { b.querySelector('.d37-break-t')?.remove(); b.classList.remove('d37-break'); b.classList.add('d37-break-off'); }
   }
   // Телефон, полноэкранная между партиями: игры зовут D37Ads.interstitial() — здесь счёт партий и частота
   function interRound(){
@@ -528,7 +533,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-adcard-st{flex:1;min-width:0;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .d37-adcard-x{flex:none;width:24px;height:24px;border-radius:50%;border:0;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;font-size:11px}
 .d37-adcard .d37-adload-tip{text-align:left;margin-bottom:8px}
-.d37-break{margin:1rem auto 0;max-width:780px;padding:.8rem 1rem 1rem;border-radius:16px;background:rgba(255,255,255,.03);border:1px dashed var(--border,rgba(255,255,255,.14));text-align:center}
+.d37-break{margin:1.6rem auto 0;max-width:780px;padding:.8rem 1rem 1rem;border-radius:16px;background:rgba(255,255,255,.03);border:1px dashed var(--border,rgba(255,255,255,.14));text-align:center}
 .d37-break-t{font-size:.8rem;color:var(--muted,#8d8daa);margin-bottom:.5rem}
 .d37-break-t b{color:var(--text,#f0f0f8)}
 .d37-break .d37-ad{margin:0 auto}
