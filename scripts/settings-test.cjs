@@ -362,7 +362,12 @@ const ST = globalThis.D37Settings;
   setSize(915, 412); ok(!doc.getElementById('gsRotHint'), 'повернул — подсказка исчезла');
   ok(F.state().el === stage && !F.state().auto, 'и игра во весь экран (сам нажал 🔄)');
   F.exit(); await tick(10); setSize(412, 915);
-  doc.fullscreenEnabled = true; ORI.can = true; coarse = false;
+  doc.fullscreenEnabled = true; ORI.can = true;
+  // браузер не отвечает на запрос полного экрана — через 1,5 с всё равно поворот / подсказка
+  FS.mode = 'hang'; ORI.can = false;
+  const t0 = Date.now(); await F.rotate(stage);
+  ok(Date.now() - t0 < 2500 && doc.getElementById('gsRotHint'), 'нет ответа API — подсказка через 1,5 с (не ждём вечно)');
+  F.exit(); await tick(10); FS.mode = 'ok'; ORI.can = true; coarse = false;
 
   // 8. смена элемента и release
   const other = new El('div', doc); other.className = 'un-box'; box.appendChild(other);

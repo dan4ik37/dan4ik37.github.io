@@ -165,7 +165,8 @@
   // ── 🔄 Повернуть: полный экран (без него поворот не закрепить) + альбомная ориентация; нет — подсказка ──
   async function rotate(el, o = {}){
     if (!el) return false;
-    if (F.el !== el || F.auto || F.mode !== 'api') { F.auto = false; await enter(el, Object.assign({}, F.el === el ? F.o : {}, o, { api: true })); }
+    // ответ браузера на полный экран ждём не дольше 1,5 с (бывает, что он не приходит вовсе)
+    if (F.el !== el || F.auto || F.mode !== 'api') { F.auto = false; await Promise.race([enter(el, Object.assign({}, F.el === el ? F.o : {}, o, { api: true })), new Promise(r => setTimeout(r, 1500))]); }
     let ok = false;
     const so = root.screen?.orientation;
     if (so?.lock) { try { await so.lock('landscape'); ok = true; F.locked = true; } catch (e) {} }
