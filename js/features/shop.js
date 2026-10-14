@@ -66,11 +66,11 @@ function shopRender(S){
     </button>`;
   }).join('');
   const card = `<section class="shp-way pf-card pf-card-tw" id="shp-buy">
-    <div class="shp-way-top"><span class="shp-flag">🇰🇿</span><div><h4>Карта Казахстана или Kaspi</h4>
+    <div class="shp-way-top"><span class="shp-flag" aria-hidden="true">💳</span><div><h4>Карта Казахстана или Kaspi</h4>
       <p>Visa и Mastercard банков Казахстана, Apple Pay и Google Pay${methods.some(m => m.id === 'kaspi') ? ', Kaspi' : ''}. Кристаллы приходят сразу после оплаты.</p></div></div>
     <div class="shp-packs">${packCards}</div>
     ${methods.length ? `<div class="shp-small">Способы: ${methods.map(m => esc(m.title)).join(' · ')}. Карты российских банков здесь не пройдут — для России ниже донат.</div>`
-      : `<div class="shp-soon">🔜 Оплата картой появится скоро. Пока кристаллы можно получить только донатом ↓</div>`}
+      : `<div class="shp-soon">🔜 Оплата картой появится скоро. ${on ? "Пока кристаллы можно получить донатом — выбери ниже «донат → кристаллы»" : "А VIP уже сейчас можно получить донатом"} ↓</div>`}
   </section>`;
 
   // ── Из России — донатом DonationAlerts ──
@@ -82,7 +82,7 @@ function shopRender(S){
       <button type="button" role="radio" aria-checked="${mode === 'gems'}" class="${mode === 'gems' ? 'on' : ''}" onclick="shopSetMode('gems')"><b>${C.icon} Кристаллы</b><small>1 ₽ = ${shopNum(rate)} ${C.icon}${bonusOn ? ', крупный донат — с бонусом' : ''}; тратишь как хочешь</small></button>
     </div>` : '';
   const donate = `<section class="shp-way pf-card pf-card-accent" id="shp-donate">
-    <div class="shp-way-top"><span class="shp-flag">🇷🇺</span><div><h4>Из России и других стран — донатом</h4>
+    <div class="shp-way-top"><span class="shp-flag" aria-hidden="true">💝</span><div><h4>Из России и других стран — донатом</h4>
       <p>Российские карты казахстанские платёжные системы не принимают, поэтому для России — донат на DonationAlerts (карта, СБП и другие способы). ${ok ? 'Донат сам превратится в VIP или кристаллы — как выберешь ниже.' : 'Донат сам включает VIP: 100 ₽ = месяц, остаток копится.'}</p></div></div>
     ${ok ? `<div class="shp-don-table">${donTable}</div>` : ''}
     ${modeBox}
@@ -211,7 +211,7 @@ function shopBuy(packId){
   const p = (S.packs || C.packs).find(x => x.id === packId);
   if (!p) return;
   const methods = shopMethods?.methods || [];
-  if (!methods.length) { document.getElementById('shp-donate')?.scrollIntoView({ behavior: 'smooth' }); shopToast('Оплата картой появится скоро — пока кристаллы можно получить донатом'); return; }
+  if (!methods.length) { document.getElementById('shp-donate')?.scrollIntoView({ behavior: 'smooth' }); shopToast(S.ready === true ? 'Оплата картой появится скоро — пока кристаллы можно получить донатом' : 'Оплата картой появится скоро — а VIP уже сейчас можно получить донатом'); return; }
   if (!currentUser) { shopLogin(); return; }
   if (S.ready !== true) { shopToast('Магазин скоро откроется'); return; }
   const cur = shopMethods.currency || 'KZT', price = cur === 'RUB' ? p.rub : p.kzt;
@@ -245,7 +245,8 @@ async function shopPay(packId){
   if (!res?.ok) {
     if (btn) { btn.disabled = false; btn.textContent = 'Перейти к оплате'; }
     let t = SHOP_ERR[res?.reason] || 'Не получилось создать заказ — попробуй ещё раз.';
-    if (res?.left != null && /limit/.test(res.reason)) t += ` Можно ещё на ${shopNum(res.left)} ₽.`;
+    // Лимит ещё не исчерпан, просто пакет крупнее остатка
+    if (/^limit_/.test(res?.reason) && res.left > 0) t = `Этот пакет больше лимита покупок ${res.reason === 'limit_day' ? 'на сегодня' : 'на 30 дней'} — это защита от случайных трат. Выбери пакет поменьше.`;
     err.textContent = t; return;
   }
   if (typeof window.va === 'function') window.va('event', { name: 'shop_order', data: { pack: packId, method } });
@@ -374,7 +375,7 @@ async function shopAdminLoad(){
   const { data, error } = await sbClient.rpc('premium_admin_orders');
   if (error) { body.textContent = 'Не загрузилось: ' + humanErr(error); return; }
   const s = data.settings || {}, C = D37Gems.CFG;
-  const row = (o, act) => `<div class="shp-row"><span><b>${esc(o.nick || '?')}</b> · ${esc(o.id || o.order_id || '')} · ${C.icon} ${shopNum(o.gems || 0)} · ${shopMoney(o.amount, o.currency)}${o.provider ? ' · ' + esc(o.provider) : ''}${o.status && o.status !== 'paid' ? ' · ' + esc(o.status) : ''}${o.test ? ' · тест' : ''} <small>${shopTime(o.created_at || o.paid_at)}</small></span>${act || ''}</div>`;
+  const row = (o, act) => `<div class="shp-row"><span><b>${esc(o.nick || '?')}</b> · ${esc(o.id || o.order_id || '')}${o.gems ? ` · ${C.icon} ${shopNum(o.gems)}` : ''} · ${shopMoney(o.amount, o.currency)}${o.provider ? ' · ' + esc(o.provider) : ''}${o.status && o.status !== 'paid' ? ' · ' + esc(o.status) : ''}${o.test ? ' · тест' : ''} <small>${shopTime(o.created_at || o.paid_at)}</small></span>${act || ''}</div>`;
   body.innerHTML = `
     <div class="shp-adm-sec"><b>Найти человека</b>
       <form class="shp-gift" onsubmit="shopAdminFind(event)"><input name="q" placeholder="ник или его часть" required><button class="pf-btn pf-btn-ghost pf-btn-sm">🔎</button></form>

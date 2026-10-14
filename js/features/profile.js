@@ -314,8 +314,10 @@ function renderDonateVipHint(){
   if (!txt || !act) return;
   const login = currentUser && currentProfile?.donate_login;
   const more = '<a class="dv-btn ghost" href="/vip">Что даёт VIP</a><a class="dv-btn ghost" href="#/shop">💎 Магазин</a>';
+  // Выбрал в магазине «донат → кристаллы» (premium.sql) — донат даст 💎, а не VIP
+  const gems = !!window.D37Gems?.isOn() && D37Gems.state().mode === 'gems';
   if (login) {
-    txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — VIP включится сам.`;
+    txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — ${gems ? 'придут кристаллы 💎 (VIP за них — в магазине)' : 'VIP включится сам'}.`;
     act.innerHTML = '<button type="button" class="dv-btn" onclick="copyDonateLogin(this)">📋 Скопировать логин</button>' + more;
   } else if (currentUser) {
     txt.innerHTML = 'Сначала придумай <b>логин для доната</b> в профиле (один раз), потом впиши его в поле «Ваше имя» на DonationAlerts — VIP включится сам.';
@@ -716,7 +718,7 @@ function renderVipPerksPanel(profile, isOwn){
     </div>
     ${next ? `
       <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.8rem 0 .4rem"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,rgb(${tier.rgb}),rgb(${next.rgb}));border-radius:6px"></div></div>
-      <div style="font-size:.72rem;color:var(--muted)">До ${next.icon} ${next.label} ещё <b style="color:var(--text)">${Math.max(0, next.min - total).toFixed(0)}₽</b> донатов — ${tierPerkLine(next)}</div>`
+      <div style="font-size:.72rem;color:var(--muted)">До ${next.icon} ${next.label} ещё <b style="color:var(--text)">${Math.max(0, next.min - total).toFixed(0)}₽</b> поддержки (донаты или 💎) — ${tierPerkLine(next)}</div>`
     : '<div style="font-size:.74rem;color:var(--muted);margin-top:.7rem">Максимальный уровень — спасибо, что с нами 💛</div>'}`;
 }
 
