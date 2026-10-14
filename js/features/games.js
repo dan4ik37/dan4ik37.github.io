@@ -213,6 +213,10 @@ async function openGame(id, param){
   hub.hidden = true; stage.hidden = false;
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
   document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
+  // полный экран и настройки (js/core/fullscreen.js, settings.js): телефон лёжа — игра во весь экран; «во весь экран при запуске»
+  stage.dataset.game = id; gamesSyncMute();
+  window.D37Full?.auto(stage);
+  if (window.D37Settings?.get('autoFull') && !window.D37Full?.active()) window.D37Full?.enter(stage);
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
   try {
     for (const s of g.scripts) await gamesLoadScript(s);
@@ -231,6 +235,7 @@ function closeGame(fromRouter){
   document.body.classList.remove('game-on');
   const hub = document.getElementById('gamesHub');
   const stage = document.getElementById('gamesStage');
+  gamesFullOff(stage);
   if (hub) hub.hidden = false;
   if (stage) stage.hidden = true;
   const grid = document.getElementById('gamesGrid');
@@ -245,12 +250,18 @@ function unmountActiveGame(){
   }
   const box = document.getElementById('gamesStageBox');
   if (box) box.innerHTML = '';
+  document.getElementById('gamesStage')?.classList.remove('gm-own-bar');   // своя панель игры (мир) — снова шапка игры
 }
 // Ушли со страницы игр — останавливаем таймеры/анимации игры
 window.addEventListener('hashchange', () => {
   if (gamesActive && !/^#\/games/.test(location.hash)) { unmountActiveGame(); gamesActive = null; }
-  if (!/^#\/games\/./.test(location.hash)) document.body.classList.remove('game-on');
+  if (!/^#\/games\/./.test(location.hash)) { document.body.classList.remove('game-on'); gamesFullOff(document.getElementById('gamesStage')); }
 });
+// Игру закрыли — выйти из полного экрана и не ждать поворота телефона (js/core/fullscreen.js)
+function gamesFullOff(stage){
+  window.D37Full?.auto(null);
+  if (stage) { window.D37Full?.release(stage); delete stage.dataset.game; }
+}
 
 // ── Локальная статистика (работает и без входа) ──
 function gameLocalStats(id){
@@ -474,13 +485,15 @@ let gameAudioCtx = null;
 function gameSfx(kind){
   try {
     if (localStorage.getItem('d37_games_mute') === '1') return;
+    const k = window.D37Settings ? D37Settings.sfxGain() : 1;   // громкость: ⚙️ Настройки → Звук (общая × эффекты)
+    if (k < .01) return;
     gameAudioCtx = gameAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const ctx = gameAudioCtx, o = ctx.createOscillator(), g = ctx.createGain();
     const map = { ok: [660, .08], bad: [180, .18], win: [880, .25], tick: [520, .03], move: [420, .04] };
     const [f, d] = map[kind] || map.tick;
     o.type = kind === 'bad' ? 'sawtooth' : 'sine';
     o.frequency.value = f;
-    g.gain.setValueAtTime(.07, ctx.currentTime);
+    g.gain.setValueAtTime(.07 * k, ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d);
     o.connect(g); g.connect(ctx.destination);
     o.start(); o.stop(ctx.currentTime + d);
@@ -489,9 +502,18 @@ function gameSfx(kind){
 }
 function toggleGamesMute(btn){
   const muted = localStorage.getItem('d37_games_mute') === '1';
-  try { localStorage.setItem('d37_games_mute', muted ? '0' : '1'); } catch (e) {}
-  btn.textContent = muted ? '🔊' : '🔇';
+  if (window.D37Settings) D37Settings.set('mute', !muted);   // то же, что «Звук в играх» в ⚙️ Настройках
+  else try { localStorage.setItem('d37_games_mute', muted ? '0' : '1'); } catch (e) {}
+  gamesSyncMute();
 }
+// Кнопка 🔊/🔇 в шапке игры — по настоящему состоянию (раньше при входе всегда показывала 🔊)
+function gamesSyncMute(){
+  const b = document.getElementById('gamesMuteBtn'); if (!b) return;
+  let m = false; try { m = localStorage.getItem('d37_games_mute') === '1'; } catch (e) {}
+  b.textContent = m ? '🔇' : '🔊';
+  b.title = m ? 'Звук выключен — включить' : 'Звук включён — выключить';
+}
+window.addEventListener('d37:settings', e => { if (['mute', '*'].includes(e.detail?.key)) gamesSyncMute(); });
 
 // Побед в дуэлях с живыми соперниками (все игры) — за 7 дней или за всё время
 async function renderDuelTop(list){

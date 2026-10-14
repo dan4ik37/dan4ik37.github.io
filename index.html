@@ -1948,7 +1948,11 @@ body.low .donation-alert-icon{animation:none}
       <button class="gm-back" onclick="closeGame()" title="Все игры" aria-label="Все игры">←<span> Все игры</span></button>
       <b id="gamesStageTitle"></b>
       <button class="gm-mute gm-chal" onclick="gamesChallenge(this)" title="Бросить вызов другу: ссылка с твоим рекордом" aria-label="Бросить вызов другу">📣<span> Вызов</span></button>
-      <button class="gm-mute" onclick="toggleGamesMute(this)" title="Звук" aria-label="Звук вкл/выкл">🔊</button>
+      <button class="gm-mute" id="gamesMuteBtn" onclick="toggleGamesMute(this)" title="Звук" aria-label="Звук вкл/выкл">🔊</button>
+      <!-- ⚙️ / 🔄 / ⛶ — js/core/settings.js и js/core/fullscreen.js (обработчики свои, по data-атрибутам) -->
+      <button class="gm-mute gs-setbtn" type="button" data-gs-set title="Настройки: звук, графика, управление, полный экран" aria-label="Настройки">⚙️</button>
+      <button class="gm-mute gs-rotbtn" type="button" data-gs-rot="#gamesStage" title="Повернуть экран: игра горизонтально и во весь экран" aria-label="Повернуть экран">🔄</button>
+      <button class="gm-mute gs-fullbtn" type="button" data-gs-full="#gamesStage" title="Во весь экран" aria-label="Во весь экран">⛶</button>
     </div>
     <div id="gamesStageBox"></div>
   </div>
@@ -2586,6 +2590,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/core/coins.js"></script>
 <script src="js/core/avatar.js"></script>
 <script src="js/core/surprise.js"></script>
+<script src="js/core/fullscreen.js"></script>
+<script src="js/core/settings.js"></script>
 <script src="js/core/live-badge.js" defer></script>
 <script src="js/core/state.js"></script>
 <script src="js/ui/tabs-nav.js"></script>
