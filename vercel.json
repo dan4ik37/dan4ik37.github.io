@@ -6,6 +6,9 @@
     },
     "api/push-check.js": {
       "maxDuration": 60
+    },
+    "api/pay.js": {
+      "maxDuration": 20
     }
   },
   "crons": [

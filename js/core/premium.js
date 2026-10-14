@@ -20,10 +20,10 @@
     // gems — сколько даёт (бонус уже внутри), rub / kzt — цена
     packs: [
       { id: 'p100', gems: 100, bonus: 0, rub: 100, kzt: 590 },
-      { id: 'p300', gems: 300, bonus: 0, rub: 300, kzt: 1790 },
-      { id: 'p550', gems: 550, bonus: 50, rub: 500, kzt: 2990 },
-      { id: 'p1200', gems: 1200, bonus: 200, rub: 1000, kzt: 5990 },
-      { id: 'p2600', gems: 2600, bonus: 600, rub: 2000, kzt: 11990 },
+      { id: 'p300', gems: 300, bonus: 0, rub: 300, kzt: 1770 },
+      { id: 'p550', gems: 550, bonus: 50, rub: 500, kzt: 2950 },
+      { id: 'p1200', gems: 1200, bonus: 200, rub: 1000, kzt: 5900 },
+      { id: 'p2600', gems: 2600, bonus: 600, rub: 2000, kzt: 11800 },
     ],
     items: [
       { id: 'vip:1', kind: 'vip', months: 1, price: 100, title: 'VIP на 1 месяц' },
