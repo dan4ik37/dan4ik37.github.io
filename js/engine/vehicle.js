@@ -54,6 +54,7 @@
       cargo: def.cargo && def.cargo.slots > 0 ? { slots: def.cargo.slots | 0, kg: +def.cargo.kg || 100 } : null,
       sound: def.sound || ({ car: 'veh_car', boat: 'veh_boat', heli: 'veh_rotor', plane: 'veh_prop' }[kind]),
       age: +def.age || 0, area: def.area || null, physics: def.physics === 'rapier' ? 'rapier' : 'arcade',
+      smash: def.smash ?? (kind === 'car' ? 1 : 0),   // что ломает с разгона: 0 — ничего, 1 — мелочь (столбы, скамейки), 2 — и деревья (танк, грузовик)
       cam: { dist: +(def.cam?.dist) || (kind === 'plane' ? 22 : kind === 'heli' ? 17 : kind === 'boat' ? 12 : 10), h: +(def.cam?.h) || size[1] * .8 },
       model: def.model && Array.isArray(def.model.parts) ? def.model : { parts: [{ s: 'box', y: size[1] / 2, w: size[0], h: size[1], d: size[2], c: '#94a3b8' }] },
     };
@@ -238,13 +239,14 @@
   const FL = { eng: 1, lights: 2, horn: 4, boost: 8, broken: 16, parked: 32, ground: 64 };
   function pack(v, parked = false){
     const f = (v.eng ? FL.eng : 0) | (v.lights ? FL.lights : 0) | (v.horn > 0 ? FL.horn : 0) | (v.boost ? FL.boost : 0) | (v.broken ? FL.broken : 0) | (parked ? FL.parked : 0) | (v.grounded ? FL.ground : 0);
-    return [r2(v.x), r2(v.y), r2(v.z), r3(v.yaw), r3(v.pitch), r3(v.roll), r2(v.spd), r2(v.vy), f, r2(v.steer), r2(v.rotor)];
+    return [r2(v.x), r2(v.y), r2(v.z), r3(v.yaw), r3(v.pitch), r3(v.roll), r2(v.spd), r2(v.vy), f, r2(v.steer), r2(v.rotor), Math.round(v.hp)];
   }
   function unpack(a){
     if (!Array.isArray(a) || a.length < 9 || !a.slice(0, 9).every(Number.isFinite)) return null;
     const f = a[8] | 0;
     return { x: a[0], y: a[1], z: a[2], yaw: a[3], pitch: clamp(a[4], -1.4, 1.4), roll: clamp(a[5], -1.4, 1.4), spd: a[6], vy: a[7], fl: f, steer: clamp(+a[9] || 0, -1, 1), rotor: clamp(+a[10] || 0, 0, 1),
-      eng: !!(f & FL.eng), lights: !!(f & FL.lights), horn: !!(f & FL.horn), boost: !!(f & FL.boost), broken: !!(f & FL.broken), parked: !!(f & FL.parked), grounded: !!(f & FL.ground) };
+      eng: !!(f & FL.eng), lights: !!(f & FL.lights), horn: !!(f & FL.horn), boost: !!(f & FL.boost), broken: !!(f & FL.broken), parked: !!(f & FL.parked), grounded: !!(f & FL.ground),
+      hp: Number.isFinite(a[11]) ? Math.max(0, a[11]) : null };
   }
   // b после a через dt секунд — так может эта машина? null — да, иначе причина ('speed' — быстрее потолка, 'climb' — взлёт без крыльев)
   function snapOk(def, a, b, dt){
@@ -259,35 +261,93 @@
     return null;
   }
 
-  // ═══ Вид (Three.js): детали в группу корпуса (склейка игры — merge), колёса и винты — отдельно, крутятся ═══
+  // ═══ Вид (Three.js): корпус — на «подвеске» (крен в повороте, клевок при торможении, приседание при разгоне, толчки на кочках
+  //     и от ударов, качка лодки), колёса — на земле; детали с loose (двери, бампер) и колёса могут отвалиться (повреждения).
+  //     Всё это — только картинка: у каждого игрока из того же состояния машины, по сети не идёт ═══
+  const BURNT = new WeakMap();
   function view(R, def, o = {}){
     const T = R.T, d = typeof def === 'string' ? get(def) : def, g = new T.Group(); g.name = 'veh ' + d.id;
-    const body = new T.Group(); g.add(body);
-    const spin = [];
+    const cy = d.size[1] * .45, chassis = new T.Group(), body = new T.Group();   // точка качания — середина корпуса
+    chassis.position.y = cy; body.position.y = -cy; chassis.add(body); g.add(chassis);
+    const wheelsG = new T.Group(); g.add(wheelsG);
+    const spin = [], loose = {};
+    let lastWheel = null, wi = 0;
     for (const p of d.model.parts) {
       if (p.spin && !o.still) {   // still — стоит без мотора: колёса и винты склеены с корпусом (2–3 вызова отрисовки вместо 7–10)
         // колесо: руль (y) → вращение (x); винт: вокруг своей оси
-        const steerG = new T.Group(); steerG.position.set(p.x || 0, p.y || 0, p.z || 0); steerG.userData.dyn = true; body.add(steerG);
+        const steerG = new T.Group(); steerG.position.set(p.x || 0, p.y || 0, p.z || 0); steerG.userData.dyn = true;
+        (p.spin === 'wheel' ? wheelsG : body).add(steerG);
         const rollG = new T.Group(); rollG.userData.dyn = true; steerG.add(rollG);
         R.part(rollG, { ...p, x: 0, y: 0, z: 0, spin: undefined, dyn: true, m: p.glass && o.glass ? o.glass : p.m });
-        spin.push({ kind: p.spin, steer: +p.steer || 0, r: +p.r || .4, s: steerG, rg: rollG, axis: p.axis || (p.spin === 'wheel' ? 'x' : p.spin === 'rotor' ? 'y' : p.spin === 'tail' ? 'x' : 'z') });
+        const sp = { kind: p.spin, steer: +p.steer || 0, r: +p.r || .4, s: steerG, rg: rollG, axis: p.axis || (p.spin === 'wheel' ? 'x' : p.spin === 'rotor' ? 'y' : p.spin === 'tail' ? 'x' : 'z') };
+        spin.push(sp);
+        if (p.spin === 'wheel') { sp.idx = wi; loose['wheel' + wi++] = steerG; lastWheel = p; }
+      } else if (p.hub && lastWheel && !o.still) {   // колпак — с колесом (поворачивает и отваливается вместе с ним)
+        const m = R.part(loose['wheel' + (wi - 1)], { ...p, x: (p.x || 0) - (lastWheel.x || 0), y: (p.y || 0) - (lastWheel.y || 0), z: (p.z || 0) - (lastWheel.z || 0), dyn: true });
+        if (m) m.userData.dyn = true;
+      } else if (p.loose && !o.still) {   // дверь, бампер: отдельно от склейки — может отвалиться
+        const m = R.part(body, { ...p, dyn: true }); if (m) { m.userData.dyn = true; loose[p.loose] = m; }
       } else R.part(body, p.glass && o.glass ? { ...p, m: o.glass } : p);   // стекло — общий прозрачный материал игры (видно, кто сидит)
     }
     if (o.merge) { try { o.merge(R, body); } catch (e) { console.error(e); } }
     if (R.shadowsOn) R.shadowsOn(g, false, true);   // тень не отбрасывает: карта теней обновляется не каждый кадр — у едущей машины тень отставала бы
     let spinA = 0;
-    return {
-      g, spin, def: d, still: !!o.still,
+    const sus = { y: 0, vy: 0, p: 0, vp: 0, r: 0, vr: 0, spd: null, yaw: 0, py: 0, crashAt: -9, t: (d.id.length * 1.7) % 9 };
+    const W = {
+      g, spin, def: d, still: !!o.still, chassis, body, loose, gone: new Set(), sus,
       update(v, dt){
         g.position.set(v.x, v.y, v.z); g.rotation.set(v.pitch, v.yaw, v.roll, 'YXZ');
         spinA += dt;
+        if (dt > 0 && dt < .25) suspension(v, dt);
         for (const s of spin) {
           if (s.kind === 'wheel') { s.rg.rotation.x += (v.spd / s.r) * dt; if (s.steer) s.s.rotation.y = -v.steer * .45 * s.steer; }
           else { const w = (s.kind === 'rotor' ? 26 : s.kind === 'tail' ? 40 : 34) * v.rotor * dt; s.rg.rotation[s.axis] += w; }
         }
       },
+      // отвалить деталь (дверь, бампер, колесо N): спрятать; вернёт место в мире — там появится обломок
+      drop(name){
+        const m = loose[name]; if (!m || W.gone.has(name)) return null;
+        W.gone.add(name); m.updateMatrixWorld(true);
+        const p = new T.Vector3(); m.getWorldPosition(p); m.visible = false;
+        return { x: p.x, y: p.y, z: p.z };
+      },
+      // сгоревший остов: корпус — тёмный (свой материал на время; стекло как было)
+      burnt(on){
+        let bm = BURNT.get(R); if (!bm) { bm = R.mat('#1c1917', { rough: 1 }); BURNT.set(R, bm); }
+        body.traverse(m => { if (!m.isMesh || m.material?.transparent) return; if (on) { if (!m.userData.mat0) m.userData.mat0 = m.material; m.material = bm; } else if (m.userData.mat0) { m.material = m.userData.mat0; delete m.userData.mat0; } });
+        W.isBurnt = !!on;
+      },
+      reset(){ for (const n of W.gone) if (loose[n]) loose[n].visible = true; W.gone.clear(); if (W.isBurnt) W.burnt(false); },
       dispose(){ g.parent?.remove(g); g.traverse(m => { if (m.isMesh && (m.userData.mzOwn || m.userData.own)) m.geometry?.dispose(); }); },
     };
+    // подвеска: цель наклона — от ускорения, поворота, заноса, качки; пружина с затуханием; кочка и удар — толчок
+    function suspension(v, dt){
+      const kind = d.kind, S = d.speed || {}, mx = S.max || 20;
+      if (sus.spd === null) { sus.spd = v.spd; sus.yaw = v.yaw; sus.py = v.y; }
+      const acc = (v.spd - sus.spd) / dt, yr = angDiff(sus.yaw, v.yaw) / dt, dy = v.y - sus.py;
+      sus.spd = v.spd; sus.yaw = v.yaw; sus.py = v.y; sus.t += dt;
+      let tp = 0, tr = 0;
+      if (kind === 'car') {
+        tp = clamp(-acc * .0055, -.075, .075);                                 // разгон — нос вверх, тормоз — клевок
+        tr = clamp(yr * v.spd * .003 + (v.slip || 0) * .004, -.09, .09);       // поворот и занос — крен наружу
+        if (v.grounded && Math.abs(dy) > .03 && Math.abs(dy) < 1.5) sus.vy -= dy / dt * .3;   // кочка
+        if (W.gone.size) for (const n of W.gone) if (n.startsWith('wheel')) { const i = +n.slice(5); tp += (i < 2 ? .06 : -.06); tr += (i % 2 ? -.07 : .07); }   // без колеса — на один угол
+      } else if (kind === 'boat') {
+        const s = clamp(Math.abs(v.spd) / mx, 0, 1);
+        tp = -.08 * s + Math.sin(sus.t * (1.6 + s * 2.5)) * (.012 + .03 * s);   // нос над водой на ходу, качка на волне
+        tr = clamp(yr * v.spd * .006, -.14, .14) + Math.sin(sus.t * 1.3 + 1) * .02;
+      } else if (kind === 'heli') { tp = clamp(acc * .008, -.07, .07); tr = clamp(-yr * .05, -.06, .06); }
+      if (v.crashAt !== sus.crashAt) {   // удар: толчок корпусу (сильнее — больше)
+        sus.crashAt = v.crashAt; const k = clamp((v.crash || 0) * .02, .03, .28);
+        sus.vp += k * 7 * (v.spd >= 0 ? 1 : -1); sus.vy += k * 5; sus.vr += (Math.sin(v.t * 13.7) > 0 ? 1 : -1) * k * 5;
+      }
+      const K = 150, C = 14;
+      sus.vy += (-K * sus.y - C * sus.vy) * dt; sus.y = clamp(sus.y + sus.vy * dt, -.25, .25);
+      sus.vp += (K * (tp - sus.p) - C * sus.vp) * dt; sus.p = clamp(sus.p + sus.vp * dt, -.3, .3);
+      sus.vr += (K * (tr - sus.r) - C * sus.vr) * dt; sus.r = clamp(sus.r + sus.vr * dt, -.3, .3);
+      chassis.position.y = cy + sus.y; chassis.rotation.set(sus.p, 0, sus.r);
+    }
+    return W;
   }
 
   const H = { clamp, moveTo, angDiff, fwd, right, collide, impact, damage, settle, supportAt, bound, engine, local };

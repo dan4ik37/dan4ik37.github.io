@@ -477,10 +477,12 @@
     const iTrunk = mkI(trunkG, trunkM), iPine = mkI(pineG, pineM), iLeaf = mkI(leafG, leafM);
     const tm = new T.Matrix4(), tq = new T.Quaternion(), ts = new T.Vector3(), tp = new T.Vector3(), te = new T.Euler(), tc = new T.Color();
     let tX = Infinity, tZ = Infinity;
+    const cut = new Set(), tid = (x, z) => 'wt:' + Math.round(x * 4) + ':' + Math.round(z * 4);
+    V.cutTree = (id, on) => { if (on) cut.add(id); else cut.delete(id); tX = Infinity; bX = Infinity; const b = bodies.get(id); if (b && on) { V.ph?.remove?.(b); bodies.delete(id); } };
     function plantTrees(cx, cz){
       let nT = 0, nP = 0, nL = 0;
       WM.trees(cx - TR, cz - TR, cx + TR, cz + TR, (x, y, z, k, pine, r) => {
-        if (nT >= TMAX || (x - cx) ** 2 + (z - cz) ** 2 > TR * TR) return;
+        if (nT >= TMAX || (x - cx) ** 2 + (z - cz) ** 2 > TR * TR || (cut.size && cut.has(tid(x, z)))) return;
         te.set(0, r * 6.28, 0); tq.setFromEuler(te);
         ts.set(k, k * (pine ? 1.25 : 1), k); tp.set(x, y - .1, z); tm.compose(tp, tq, ts); iTrunk.setMatrixAt(nT++, tm);
         ts.set(k * (.85 + r * .3), k * (pine ? 1.1 + r * .3 : .9 + r * .3), k * (.85 + r * .3)); tm.compose(tp, tq, ts);
@@ -495,8 +497,9 @@
     function treeBodies(ph, px, pz){
       if (!ph?.addCyl) return;
       const keep = new Set();
+      V.ph = ph;
       WM.trees(px - 45, pz - 45, px + 45, pz + 45, (x, y, z, k) => {
-        const key = Math.round(x * 4) + ':' + Math.round(z * 4); keep.add(key);
+        const key = tid(x, z); if (cut.has(key)) return; keep.add(key);
         if (!bodies.has(key)) bodies.set(key, ph.addCyl({ x, z, y: y + 2, r: .32 * k + .05, hy: 2, tag: 'tree' }));
       });
       for (const [key, b] of bodies) if (!keep.has(key)) { ph.remove?.(b); bodies.delete(key); }

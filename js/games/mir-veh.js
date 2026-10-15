@@ -191,6 +191,7 @@
         if (C.down('horn')) { v.horn = .6; rt.sfx('horn', { x: v.x, y: v.y + 1, z: v.z, vol: .7 }); }
         if (C.down('lights') && v.def.lights) { v.lights = !v.lights; rt.sfx('click', { vol: .4 }); }
         const ox = v.x, oz = v.z;
+        smash(v);
         VE.step(v, dt, VE.input(C, v, IN), env);
         const why = blockedAt(v);
         if (why) {
@@ -268,7 +269,9 @@
     VS.onHi = () => setTimeout(() => { if (rt.stopped) return; for (const v of VS.list.values()) if (v.local) sendSnap(v, 's'); else if (!v.by && v.lastBy === S.key) sendSnap(v, 'out'); }, 300 + Math.random() * 1200);
     // ── удар, поломка ──
     function onCrash(v, k){
-      if (VS.me?.v === v) { S.rig?.shake?.(Math.min(3, k * .15), .35); rt.sfx('hit', { vol: Math.min(1, .3 + k * .03) }); }
+      if (k > 8) rt.scare?.(v.x, v.z, 10);
+      if (k > 6) { const [fx, fz] = VE.fwd(v); rt.destruct?.burst('sparks', v.x + fx * v.def.size[2] * .45, v.y + .6, v.z + fz * v.def.size[2] * .45, Math.min(24, 6 + k | 0)); }
+      if (VS.me?.v === v) { S.rig?.shake?.(Math.min(3.5, k * .17), .4); S.rig?.kick?.(Math.min(1, k * .05)); rt.sfx('hit', { vol: Math.min(1, .3 + k * .03) }); }
       else rt.sfx('hit', { x: v.x, y: v.y + 1, z: v.z, vol: Math.min(1, .2 + k * .03) });
       if (v.broken && v.local) {
         toast(`💥 ${v.def.name} разбит! Новый появится на стоянке`, false);
@@ -291,6 +294,7 @@
           const k2 = Math.min(1, dt * 8);
           v.pitch += (s.pitch - v.pitch) * k2; v.roll += (s.roll - v.roll) * k2;
           Object.assign(v, { spd: s.spd, steer: s.steer, rotor: s.rotor, eng: s.eng, lights: s.lights, broken: s.broken, grounded: s.grounded, boost: s.boost });
+          if (s.hp != null) v.hp = Math.min(v.def.hp, s.hp);
           if (s.horn && !v._hornN) { v._hornN = true; rt.sfx('horn', { x: v.x, y: v.y + 1, z: v.z, vol: .6 }); } else if (!s.horn) v._hornN = false;
           ph.update(v.body, VE.bodyOf(v));
           if (!driverOn(v)) { v.by = null; v.eng = false; v.spd = 0; v.idleAt = t; }   // водитель ушёл из мира — машина стоит, где была
@@ -360,12 +364,13 @@
       for (const v of VS.list.values()) {
         const d = Math.hypot(v.x - cam.x, v.z - cam.z);
         // стоит без мотора — склеенный вид (колёса и винты не крутятся); едет, винт крутится, рядом — живой (колёса, винты)
-        const live = d < (v.view && !v.view.still ? 80 : 70) && (v.local || !!v.by || v.eng || v.rotor > .02 || Math.abs(v.spd) > .05);
+        const live = d < (v.view && !v.view.still ? 80 : 70) && (v.local || !!v.by || v.eng || v.rotor > .02 || Math.abs(v.spd) > .05 || v.hp < v.def.hp);
         if (v.view && (d > VIEW_OUT || v.view.still === live)) { v.view.dispose(); v.view = null; }
         if (!v.view && d < VIEW_IN) { v.view = VE.view(R, v.def, { merge: (R2, g) => Z.merge(R2, g, { chunk: 0 }), glass: glass(), still: !live }); R.scene.add(v.view.g); }
         if (v.view) {
           if (!v.local && !v.by && v.kind === 'boat') { const tt = now() / 1000 + v.home.x; v.pitch = Math.sin(tt * 1.3) * .02; v.roll = Math.sin(tt * 1.7 + 1) * .03; }   // стоит — качается
           v.view.update(v, dt);
+          if (d < 70) { damageTick(v, dt); if (d < 60 && !v.view.still) effects(v, dt); }
         }
         if (v.item) { v.item.x = v.x; v.item.y = v.y + 1; v.item.z = v.z; }
       }
@@ -373,6 +378,95 @@
       sounds();
       hud();
     };
+    // ═══ Живость: пыль и дым из-под колёс, следы шин, брызги и след лодки, пыль от винта; повреждения: двери, бампер, колёса
+    //     отваливаются, дым → огонь → сгоревший остов (по прочности — у всех одинаково: прочность идёт в снимке) ═══
+    const DIRT = (x, z) => { const Zn = Z.zoneAt(x, z); if (Zn) return Zn.id === 'war' ? 'sand' : null; const M = Z.worldMap?.(); return M && !M.road(x, z) ? 'dirt' : null; };
+    const marks = (() => {   // следы шин: одна сетка-кольцо из полосок на земле (200), старые уступают место
+      const N = R.q === 'low' ? 0 : 200; if (!N) return null;
+      const geo = new T.PlaneGeometry(1, 1); geo.rotateX(-Math.PI / 2);
+      const mat = new T.MeshBasicMaterial({ color: '#1f1f1f', transparent: true, opacity: .32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      const im = new T.InstancedMesh(geo, mat, N); im.count = N; im.frustumCulled = false; im.userData.dyn = true; im.renderOrder = 1;
+      const z0 = new T.Matrix4().makeScale(0, 0, 0); for (let i = 0; i < N; i++) im.setMatrixAt(i, z0);
+      R.scene.add(im);
+      const m4 = new T.Matrix4(), q = new T.Quaternion(), p = new T.Vector3(), s = new T.Vector3(), up = new T.Vector3(0, 1, 0);
+      let i = 0;
+      return { add(x, y, z, yaw, len){ q.setFromAxisAngle(up, yaw); m4.compose(p.set(x, y + .04, z), q, s.set(.32, 1, Math.max(.3, len))); im.setMatrixAt(i, m4); i = (i + 1) % N; im.instanceMatrix.needsUpdate = true; },
+        dispose(){ R.scene.remove(im); geo.dispose(); mat.dispose(); } };
+    })();
+    VS.marks = marks;
+    const FXA = {};
+    function fxAt(kind, x, y, z, n, color, size){
+      const FX = S.FX; if (!FX || n <= 0) return;
+      const key = kind + (color || '') + (size || '');
+      let e = FXA[key]; if (!e) e = FXA[key] = FX.emitter({ kind, at: [x, y, z], rate: 0, size: size || 1, color, color2: color });
+      e.set({ at: [x, y, z] }); e.burst(n);
+    }
+    function effects(v, dt){
+      const d = v.def, sp = Math.abs(v.spd), [fx, fz] = VE.fwd(v), [rx, rz] = VE.right(v), L = d.size[2] * .42, W2 = d.size[0] * .42;
+      const acc = v._fxSpd == null ? 0 : (v.spd - v._fxSpd) / Math.max(dt, 1e-3); v._fxSpd = v.spd;
+      v._fxAcc = (v._fxAcc || 0) + dt;
+      if (v.kind === 'car' && v.grounded) {
+        const skid = Math.abs(v.slip || 0) > 2.2 || (acc < -14 && sp > 6) || (v.load > .9 && sp < 4 && v.local);
+        const dirt = sp > 5 ? DIRT(v.x, v.z) : null;
+        if ((skid || dirt) && v._fxAcc > .07) {
+          v._fxAcc = 0;
+          for (const s of [-1, 1]) {
+            const wx = v.x - fx * L + rx * W2 * s, wz = v.z - fz * L + rz * W2 * s;
+            if (skid) fxAt('smoke', wx, v.y + .25, wz, 2, '#d1d5db', .7);
+            if (dirt) fxAt('smoke', wx, v.y + .3, wz, Math.min(4, 1 + sp / 8 | 0), dirt === 'sand' ? '#d6c08a' : '#a08a64', .9);
+            if (skid && marks) { const len = Math.max(.4, sp * .08); marks.add(wx - fx * len / 2, v.y, wz - fz * len / 2, v.yaw, len); }
+          }
+        }
+      } else if (v.kind === 'boat' && sp > 3 && v._fxAcc > .06) {   // нос режет воду — брызги; за кормой — пена
+        v._fxAcc = 0; const wl = env.water(v.x, v.z), y = wl > -Infinity ? wl : v.y;
+        fxAt('fountain', v.x + fx * L, y + .2, v.z + fz * L, Math.min(6, sp / 4 | 0), '#eaf6ff', .8);
+        fxAt('smoke', v.x - fx * L * 1.1, y + .05, v.z - fz * L * 1.1, 2, '#f8fafc', .7);
+      } else if (v.kind === 'heli' && v.rotor > .7 && v._fxAcc > .1) {   // пыль (или брызги) от винта у земли
+        const gy = ph.groundAt(v.x, v.z), h = v.y - gy;
+        if (h < 14) { v._fxAcc = 0; const wl = env.water(v.x, v.z), onW = wl > gy + .3, n = Math.max(1, 5 - h / 3 | 0);
+          for (let k = 0; k < 2; k++) { const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * 3; fxAt(onW ? 'fountain' : 'smoke', v.x + Math.cos(a) * r, (onW ? wl : gy) + .2, v.z + Math.sin(a) * r, n, onW ? '#eaf6ff' : '#b59a73', .9); } }
+      } else if (v.kind === 'plane' && !v.grounded && sp > d.air.takeoff * 1.3 && Math.abs(v.roll) > .45 && v._fxAcc > .08) {   // крутой вираж — след с концов крыльев
+        v._fxAcc = 0; for (const s of [-1, 1]) fxAt('smoke', v.x + rx * d.size[0] * .48 * s, v.y + 1.2, v.z + rz * d.size[0] * .48 * s, 1, '#ffffff', .4);
+      }
+    }
+    // повреждения по прочности (у всех одинаково): ≤ 70 % — дверь, ≤ 50 % — вторая дверь и бампер + дым, ≤ 30 % — колесо, ≤ 15 % — огонь,
+    // 0 — сгоревший остов; починили (вернулась на стоянку) — как новая. Детский городок (карт 0+) — без этого
+    function damageTick(v, dt){
+      const vw = v.view, d = v.def; if (!vw || d.age < 12 && v.zone === 'kids') return;
+      const k = v.hp / d.hp, lv = v.broken || k <= 0 ? 5 : k <= .15 ? 4 : k <= .3 ? 3 : k <= .5 ? 2 : k <= .7 ? 1 : 0;
+      if (lv === 0) { if (vw.gone.size || vw.isBurnt) vw.reset(); v._dlv = 0; return; }
+      const seed = [...v.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7), DS = rt.destruct;
+      const drop = (name, shape, sx, sy, sz, c) => { const p = vw.drop(name); if (p && DS) { const [rx, rz] = VE.right(v), s = name.endsWith('_r') || /wheel[13]/.test(name) ? -1 : 1; DS.debris({ shape, x: p.x, y: p.y, z: p.z, sx, sy, sz, c, vx: rx * 3 * s + v.vx * .5, vy: 3, vz: rz * 3 * s + v.vz * .5, life: 20 }); } };
+      const col = d.model.parts.find(p => p.loose === 'door_l')?.c || '#64748b';
+      if (lv >= 1) drop(seed % 2 ? 'door_l' : 'door_r', 'box', .08, .55, 1.3, col);
+      if (lv >= 2) { drop(seed % 2 ? 'door_r' : 'door_l', 'box', .08, .55, 1.3, col); drop('bumper', 'box', 2, .26, .2, '#334155'); drop('spare', 'cyl', .84, .26, .84, '#111827'); }
+      if (lv >= 3) drop('wheel' + (seed % 4), 'cyl', .8, .3, .8, '#111827');
+      if (lv >= 5 && !vw.isBurnt) { vw.burnt(true); if (v._dlv !== 5) boom(v); }
+      v._dlv = lv;
+      // дым и огонь — от мотора (перед машины)
+      v._smk = (v._smk || 0) + dt;
+      if (lv >= 2 && v._smk > (lv >= 4 ? .08 : .18)) {
+        v._smk = 0; const [fx, fz] = VE.fwd(v), f = v.kind === 'car' ? d.size[2] * .32 : 0, x = v.x + fx * f, z = v.z + fz * f, y = v.y + d.size[1] * .75;
+        fxAt('smoke', x, y, z, lv >= 4 ? 3 : 1, lv >= 5 ? '#1f2937' : '#6b7280', 1);
+        if (lv === 4 || (lv === 5 && now() - (v._boomAt || 0) < 12000)) fxAt('fire', x, y - .2, z, 2, null, .8);
+      }
+    }
+    // взрыв разбитой машины: огонь, искры, толчок рядом; своя (водитель или последний) — ломает мелочь вокруг (событие по сети)
+    function boom(v){
+      v._boomAt = now();
+      fxAt('fire', v.x, v.y + 1, v.z, 30, null, 1.6); fxAt('sparkles', v.x, v.y + 1, v.z, 20, '#ffb347', 1);
+      const dme = Math.hypot(S.P.ch.x - v.x, S.P.ch.z - v.z);
+      if (dme < 30) { S.rig?.shake?.(Math.max(.5, 3 - dme / 10), .6); rt.sfx('break', { x: v.x, y: v.y + 1, z: v.z, vol: .9 }); }
+      rt.scare?.(v.x, v.z, 16);
+      if ((v.local || v.lastBy === S.key) && v.def.age >= 12) rt.destruct?.hit(v.x, v.z, 5, 3, { by: 'boom' });
+    }
+    // разгон в мелочь: что впереди и по силам машине — сломать (тела убираются до шага — машина проезжает, чуть тормозя)
+    function smash(v){
+      const DS = rt.destruct, pw = v.def.smash || 0; if (!DS || !pw || Math.abs(v.spd) < (pw >= 2 ? 2 : 7)) return;
+      const [fx, fz] = VE.fwd(v), s = Math.sign(v.spd), L = v.def.size[2] * .5 + .6;
+      const r = DS.ahead(v.x + fx * L * s, v.z + fz * L * s, v.def.size[0] * .55, pw, fx * s, fz * s);
+      if (r.n) { v.spd *= r.slow; rt.scare?.(v.x, v.z, 9); S.rig?.shake?.(pw >= 2 ? .5 : .3, .2); }
+    }
     // звук мотора: до 3 ближних машин с мотором (своя — громче), высота тона — по скорости/оборотам
     function sounds(){
       const A = S.AU; if (!A?.loop) return;
@@ -383,7 +477,8 @@
         let h = VS.loops.get(v.id);
         if (!h) { h = A.loop(v.def.sound, { x: v.x, y: v.y, z: v.z, vol: 0 }); VS.loops.set(v.id, h); }
         const S0 = v.def.speed.max, k = v.kind === 'plane' ? .3 + .7 * v.rotor : v.kind === 'heli' ? v.rotor : Math.min(1, Math.abs(v.spd) / S0);
-        h.set({ x: v.x, y: v.y + 1, z: v.z, vol: (VS.me?.v === v ? .5 : .38) * (v.kind === 'heli' ? v.rotor : .45 + .55 * k), rate: (v.kind === 'heli' ? .6 + .5 * v.rotor : .7 + .9 * k) });
+        const ld = v.load || 0, tank = v.def.id === 'tank';
+        h.set({ x: v.x, y: v.y + 1, z: v.z, vol: (VS.me?.v === v ? .5 : .38) * (v.kind === 'heli' ? v.rotor : .4 + .5 * k + .15 * ld), rate: (v.kind === 'heli' ? .6 + .5 * v.rotor : (.7 + .8 * k + .25 * ld) * (tank ? .55 : 1)) });
       }
     }
     // плашка водителя: скорость, высота, бак, прочность
@@ -407,6 +502,7 @@
       for (const T0 of TR) { T0.view?.dispose(); T0.view = null; VE.removeBody(T0.v, ph); }
       for (const h of VS.loops.values()) h.stop();
       VS.loops.clear(); VS.list.clear(); hudEl.remove();
+      VS.marks?.dispose(); for (const k in FXA) FXA[k].dispose?.();
     };
     VS.spawn = (defId, o = {}) => {   // гараж / прокат / тест-драйв: машина у точки (своя: id должен быть ID_RE)
       const d = VE.get(defId); if (!d || !o.id || VS.list.has(o.id)) return null;

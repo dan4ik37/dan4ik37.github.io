@@ -151,6 +151,8 @@
     hit(){ const b = new Bp(120, 1.1), c = new Bp(1400, .9); let hp = 0; return make(.2, 41, (t, r) => { const w = N(r); hp += (w - hp) * .3; return b.do(w) * exp(-t * 26) * 3 + c.do(w) * exp(-t * 70) * .8 + (w - hp) * exp(-t * 180) * .7; }, .13); },
     break(){ const lpS = { v: 0 }, kn = [.0, .07, .13, .22, .31, .43].map((at, i) => [at, new Bp(160 + i * 90, 2)]);   // обломки
       return make(1.1, 42, (t, r) => { const w = N(r), k = .45 - .4 * Math.min(1, t / 1.1); lpS.v += (w - lpS.v) * k; let s = lpS.v * exp(-t * 4) * 1.6; for (const [at, b] of kn) if (t >= at) s += b.do(w) * exp(-(t - at) * 30) * 1.4; return s; }, .12, .15); },
+    glass(){ const b = [2800, 4100, 5600, 7300].map(f => new Bp(f, 9)); let hp = 0;   // звон стекла: россыпь высоких «звяков»
+      return make(.7, 44, (t, r) => { const w = N(r); hp += (w - hp) * .5; let s = 0; for (let i = 0; i < 4; i++) { const at = i * .045; if (t >= at) s += b[i].do(w) * Math.exp(-(t - at) * (22 + i * 6)); } return s * 1.6 + (w - hp) * Math.exp(-t * 60) * .5; }, .1, .04); },
     pickup(){ const b = new Bp(2600, 2.5); let lp = 0; return make(.18, 51, (t, r) => { const w = N(r); lp += (w - lp) * .2; return lp * exp(-t * 60) * 1.2 + b.do(w) * exp(-Math.abs(t - .05) * 50) * .9; }, .07); },
     // электроника (тон можно — это настоящий писк): кнопки замка, ошибка, монета, щелчок интерфейса
     keypad(){ return make(.07, 61, t => Math.sin(PI2 * 2100 * t) * Math.min(1, t / .004) * exp(-t * 18), .08, .015); },

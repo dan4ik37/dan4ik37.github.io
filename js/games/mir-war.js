@@ -94,7 +94,7 @@
     blue: [[-240, 368], [-270, 368], [-210, 368]],
   };
   const POINTS = [{ id: 'A', x: -213, z: 196, name: 'Холм' }, { id: 'B', x: -282, z: 263, name: 'Руины' }, { id: 'C', x: -335, z: 440, name: 'Причал' }];
-  const VEH = { boat: [[-392, 400, -PI / 2], [-392, 412, -PI / 2], [-412, 446, PI]], heli: [[-100, 304, 0], [-100, 330, 0]], plane: [[-148, 432, -PI / 2]], jeep: [[-80, 300, PI], [-80, 314, PI]] };   // лодки — носом в море (не в набережную)
+  const VEH = { boat: [[-392, 400, -PI / 2], [-392, 412, -PI / 2], [-412, 446, PI]], heli: [[-100, 304, 0], [-100, 330, 0]], plane: [[-148, 432, -PI / 2]], jeep: [[-80, 300, PI], [-80, 314, PI]], tank: [[-80, 330, PI]] };   // лодки — носом в море (не в набережную)
   const CC = { x: (CENTER.x0 + CENTER.x1) / 2, z: (CENTER.z0 + CENTER.z1) / 2 };   // центр боя (после появления смотришь туда)
 
   // ═══ Правила (без браузера — проверяются в node) ═══
@@ -189,6 +189,7 @@
       { id: 'w_plane1', def: 'plane', x: VEH.plane[0][0], z: VEH.plane[0][1], yaw: VEH.plane[0][2], area: 'war' },
       { id: 'w_boat1', def: 'motorboat', x: VEH.boat[0][0], z: VEH.boat[0][1], yaw: VEH.boat[0][2], area: 'war' }, { id: 'w_boat2', def: 'motorboat', x: VEH.boat[1][0], z: VEH.boat[1][1], yaw: VEH.boat[1][2], area: 'war' },
       { id: 'w_patrol1', def: 'patrol', x: VEH.boat[2][0], z: VEH.boat[2][1], yaw: VEH.boat[2][2], area: 'war' },
+      { id: 'w_tank1', def: 'tank', x: VEH.tank[0][0], z: VEH.tank[0][1], yaw: VEH.tank[0][2], area: 'war' },
     ],
     streets: W_ROADS,
     ground: [[r2((SEA.x1 + WZ.x1) / 2), (WZ.z0 + WZ.z1) / 2, r2(WZ.x1 - SEA.x1), WZ.z1 - WZ.z0, '#a89a72'], [-216, 392, 160, 64, '#9ca3af', .02], [-216, 432, 160, 16, '#4b5563', .025],
@@ -649,6 +650,7 @@
         if (!MZ.inRect(WZ, nx, nz, 2)) end = true;   // снаряды не вылетают из зоны
         s.x = nx; s.y = ny; s.z = nz;
         if (end || s.life <= 0) {
+          if (end && s.own) rt.destruct?.hit(hx, hz, WP.splash ? 2.4 : .9, WP.dmg >= 20 ? 2 : 1, { y: hy, by: 'shot', dx: s.vx, dz: s.vz });
           if (WP.splash && (s.own || s.robot)) splash(s, hx, hz);
           puff(WP.fx || 'sparkles', hx, hy, hz, WP.color);
           shots.splice(i, 1);
