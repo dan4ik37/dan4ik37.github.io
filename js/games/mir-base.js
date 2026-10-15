@@ -1125,6 +1125,14 @@
       if (B.sql === false && authed()) note('📝 Участок пока хранится в этом браузере — сохранится в аккаунте, когда сайт обновится.');
       renderHud();
       HK.retrack?.();
+      buildFromRaid();
+    }
+    // набеги: «🔨 Строить оборону» в штабе (raid.js) — к своему участку и сразу в стройку, вкладка «Оборона»
+    function buildFromRaid(){
+      let go = null; try { go = sessionStorage.getItem('d37_mb_go'); sessionStorage.removeItem('d37_mb_go'); } catch (e) {}
+      if (go !== 'build' || !B.me || B.stopped) return;
+      goHome();
+      setTimeout(() => { if (B.stopped || B.bm) return; enterBuild(); if (B.bm && !B.bm.room) { B.bm.tab = 'o'; renderCat(); } }, 400);
     }
     async function loadStreet(first){
       const st = B, street = B.street;
@@ -1802,6 +1810,8 @@
     // набеги (raid.js) поменяли участок: армия, добыча, казарма — перечитать свой
     const onBase = () => { if (B.stopped || !B.me) return; if (B.me.local) { const l = readLocal(); if (l) { B.me = { ...l, local: true }; afterChange('sync', {}, { quiet: true }); } } else refreshOwn(); };
     window.addEventListener('d37:base', onBase);
+    const onMb = e => { if (e?.detail === 'build') buildFromRaid(); };
+    window.addEventListener('d37:mb', onMb);
     B.dispose = () => {
       B.stopped = true;
       exitBuild();
@@ -1810,6 +1820,7 @@
       S.wrap.removeEventListener('pointermove', onPtr);
       window.removeEventListener('d37:auth', onAuth);
       window.removeEventListener('d37:base', onBase);
+      window.removeEventListener('d37:mb', onMb);
       clearTimeout(sigT); clearTimeout(reloadT); clearTimeout(noteT);
       hud.remove(); topBtn.remove(); ghostOff(); grid(false); selBox(null);
       for (const m of [stdMat, glowMat, ghostOk, ghostBad, selMat, glassM, boardM]) { m?.map?.dispose(); m?.dispose(); }
