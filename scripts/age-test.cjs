@@ -463,6 +463,14 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
     // подростку чат — без обложки
     A._test.reset(); c.sessionStorage.removeItem('d37_age_ok'); A._test.localSet(2011);
     ok(A.gateRoute('chat', ['chat']) === false, 'подростку чат — без обложки');
+    // сменил возраст, стоя в чате: раздел пересобирается сам (обложка нужна), а если ничего не поменялось — не трогаем
+    reopened = 0;
+    await A.set(2015); c.__advance(5);
+    ok(reopened === 1, 'стал «ребёнком», стоя в чате, — раздел пересобран (обложка появится сразу)', reopened);
+    A.gateRoute('chat', ['chat']); reopened = 0;
+    A.confirm18(); c.__advance(5);
+    ok(reopened === 0, 'обложка уже стоит и нужна — лишней пересборки нет');
+    A._test.reset(); A._test.localSet(2011); A.gateRoute('chat', ['chat']);
     // обложка игры: «Мне есть 18» для не указавшего возраст
     A._test.reset();
     const box = doc.createElement('div'); doc.body.appendChild(box);
