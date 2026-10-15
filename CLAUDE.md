@@ -36,6 +36,10 @@
    применён); `/rpc/ref_public` гостем {"p_code":"zzzzzz"} → {"ok":false,"reason":"not_found"}. До запуска: ссылка — старая ?ref=<ник>,
    «награды появятся, когда сайт обновится». Перезапустил referrals.sql, xp.sql или notifications.sql — потом снова referrals2.sql.
    PGlite: 168 (pg/test-referrals2.mjs).
+7–8. Набеги (15.10.2026): 7) `bases.sql` — ЗАПУСТИТЬ ЕЩЁ РАЗ (оборона, казарма, отряды в base_defs; проверка: `/rpc/base_defs` содержит
+   "cannon" и "u"); 8) `raids.sql` — новый, после bases.sql и premium.sql (проверка: `/rpc/raid_state` гостем → {"ok":false,"reason":"auth"},
+   PGRST202 = не применён; `/rpc/raid_settle` гостем → отказ в правах). До запуска — только обучение и дружеские бои; оборона и казарма —
+   пробные в браузере. PGlite: test-raids.mjs (105), test-bases.mjs (77).
 age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
 поменять пока не могу» — напоминать 1–4 списком. premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
@@ -1207,6 +1211,22 @@ js/features/games.js и хвост css/premium.css.
 - mir.js — 9 «крючков» с пометкой «район участков»; нет mir-base.js — мир как раньше. Подключение: mir-base.js перед mir.js.
   Отрисовка: постройки участка склеены в 2–4 сетки, дальше 125 ед. — спрятаны. Тесты: node scripts/base-test.cjs (388) + PGlite
   test-bases.mjs (76); в браузере — GAME_IMPL.world._test.state().base. Набегов на базы пока нет.
+
+## «Набеги» (#/games/raid, js/games/raid.js + raid-sim.js + raids.sql; агент 15.10.2026) — как Clash of Clans за участки «Мира Денчика»
+- План, все числа, баланс, защита от читов, кристаллы — docs/RAIDS.md. Каталог (оборона: вышка/пушка/мортира/бомба/воздушная мина,
+  казарма, отряды UNITS — боец, лучник, танк, подрывник, летун, лекарь, герой HERO — свой персонаж D37Sprite iso8 с «💥 Удар», RAID —
+  добыча/кубки/щиты/лиги) — js/games/mir-base.js = base_defs() в bases.sql (пересобрать: node scripts/gen-base-defs.cjs; тесты сверяют).
+- Бой — api/_lib/raid-sim.js (целые числа, шаг 1/20 с, 3 мин, разведка 30 с); браузеру — копия js/games/raid-sim.js (НЕ править руками:
+  node scripts/make-raid-sim.mjs, потом поднять GAMES_VER). Тот же код считает сервер: POST /api/raid (api/_lib/routes/raid.js в
+  api/pages.js) → raid_load → RaidSim.run → raid_settle (только service_role). Клиент шлёт только ввод {t,u,x,z}; итог в браузере —
+  картинка. Звёзды: 50 % / ратуша / 100 %. Добыча — только кирпичи (склад 20 % незащищённых, шахты 35 %), лимиты в день и на пару.
+  Щит 8/12 ч после 2/3★, новички — 3 дня. Двойники (хеши IP/устройства) друг другу не попадаются.
+- raids.sql: raid_start (снимок, замок, зерно, жетон HMAC), raid_go, raid_cancel, raid_state, raid_replay (по id — любому), raid_top,
+  raid_buy (💎 через premium_add: щиты 24/48 ч (раз в 7 дней), облики базы/армии, вторая казарма, ускорения — НЕ победы), raid_skin,
+  raid_chest. Ссылки «🤝 Позвать друга штурмовать мою базу» (#/games/raid/friendly/<участок>) и «🔗 Поделиться повтором»
+  (#/games/raid/replay/<id>) — через D37Ref.wrap. Строить оборону — в мире (d37:mb → стройка, вкладка «🛡️ Оборона»). Возраст 12+.
+- Тесты: node scripts/raid-test.cjs [--fast] (152), base-test (817), PGlite test-raids.mjs (105); Chrome — node scripts/raid-e2e.cjs
+  http://localhost:5559 (сервер подменён внутри проверки).
 
 ## «Мир Денчика» 2D (#/games/world при 🗺️, js/games/world.js + world.sql) — старый плоский мир (запасной)
 - Кнопка «🌍 Мир» в шапке и в нижнем меню телефона (вместо Shorts). Карта 2400×1600 рисуется кодом (buildMap, зерно 37):
