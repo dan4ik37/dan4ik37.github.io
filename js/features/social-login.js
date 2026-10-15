@@ -584,6 +584,8 @@
     if (!doc?.head || doc.getElementById('d37LoginCss')) return;
     const s = doc.createElement('style'); s.id = 'd37LoginCss';
     s.textContent = `
+#globalAuthModal.open{overflow-y:auto;overscroll-behavior:contain;align-items:flex-start}
+#globalAuthModal .gauth-box{margin:auto 0;flex:none}
 .lgn-box{margin-bottom:.2rem}
 .lgn-head{font:800 .74rem/1.2 Montserrat,system-ui,sans-serif;letter-spacing:.4px;color:var(--muted,#9a9ab5);margin:0 0 .55rem}
 .lgn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:.5rem}
