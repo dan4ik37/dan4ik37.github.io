@@ -23,18 +23,34 @@
   // w×d — клетки; lv — уровней; cost[L−1] — 🧱 за уровень L (L = 1 — поставить); time[L−1] — секунд; max[ратуша−1] — штук;
   // rate — 🧱 в час, hold — сколько вмещает сама шахта (8 ч), keep — вместимость склада; g: 'deco' — общий лимит украшений;
   // th — с какого уровня ратуши; coins — цена в монетах 🪙 (вместо кирпичей); fixed — не ставится и не убирается.
+  // Набеги (docs/RAIDS.md, бой — api/_lib/raid-sim.js): hp — прочность по уровням; atk — оборона: dmg — урон за выстрел по уровням,
+  // cd — перезарядка (с), rng / min — дальность (клеток), sp — площадь, fly — полёт снаряда (с), gnd / air — по кому бьёт;
+  // trap — ловушка: trig — срабатывает за (клеток), delay — взрыв через (с); army — место в казарме по уровню. Украшения в бою не участвуют.
   const DEFS = {
     th: { n: 'Ратуша', e: '🏛️', w: 3, d: 3, lv: 5, fixed: 1, cost: [0, 500, 2000, 6000, 15000], time: [0, 300, 1800, 7200, 28800], max: [1, 1, 1, 1, 1], keep: [1000, 1500, 2500, 4000, 6000],
-      info: 'Сердце участка: её уровень открывает новые постройки и уровни. Здесь же — подарок дня.' },
+      hp: [1700, 2000, 2350, 2650, 3050], info: 'Сердце участка: её уровень открывает новые постройки и уровни. Здесь же — подарок дня.' },
     house: { n: 'Дом', e: '🏠', w: 5, d: 5, lv: 5, fixed: 1, cost: [0, 300, 1200, 4000, 10000], time: [0, 120, 1200, 5400, 21600], max: [1, 1, 1, 1, 1], furn: [8, 14, 20, 28, 36],
-      info: 'Заходи внутрь и расставляй мебель. Чем выше уровень, тем больше мебели.' },
+      hp: [1150, 1350, 1550, 1750, 2000], info: 'Заходи внутрь и расставляй мебель. Чем выше уровень, тем больше мебели.' },
     mine: { n: 'Шахта', e: '⛏️', w: 2, d: 2, lv: 5, cost: [100, 250, 800, 2500, 7000], time: [20, 120, 1200, 5400, 18000], max: [1, 2, 3, 3, 4], rate: [150, 250, 400, 600, 900], hold: [1200, 2000, 3200, 4800, 7200],
-      info: 'Добывает кирпичи, даже когда тебя нет. Вмещает 8 часов добычи — заходи собирать!' },
+      hp: [420, 480, 550, 610, 680], info: 'Добывает кирпичи, даже когда тебя нет. Вмещает 8 часов добычи — заходи собирать!' },
     store: { n: 'Склад', e: '📦', w: 2, d: 2, lv: 5, cost: [150, 400, 1200, 3500, 9000], time: [20, 180, 1500, 5400, 18000], max: [1, 1, 2, 2, 3], keep: [1000, 2500, 5000, 8000, 12000],
-      info: 'Больше места для кирпичей: дорогие улучшения без склада не накопить.' },
-    shop: { n: 'Мастерская', e: '🛠️', w: 2, d: 2, lv: 1, cost: [1000], time: [600], max: [0, 1, 1, 1, 1], info: 'Второй строитель: две стройки сразу.' },
-    tower: { n: 'Вышка', e: '🗼', w: 2, d: 2, lv: 3, cost: [600, 2000, 6000], time: [300, 3600, 14400], max: [0, 0, 1, 1, 2], info: 'Залезь по лестнице и смотри на район сверху. Уровень — выше.' },
-    wall: { n: 'Забор', e: '🧱', w: 1, d: 1, lv: 5, cost: [10, 30, 80, 200, 500], time: [0, 0, 0, 0, 0], max: [20, 30, 40, 50, 60], info: 'Соседние куски соединяются сами. Улучшается сразу, без строителя.' },
+      hp: [550, 620, 700, 790, 880], info: 'Больше места для кирпичей: дорогие улучшения без склада не накопить.' },
+    shop: { n: 'Мастерская', e: '🛠️', w: 2, d: 2, lv: 1, cost: [1000], time: [600], max: [0, 1, 1, 1, 1], hp: [650], info: 'Второй строитель: две стройки сразу.' },
+    barracks: { n: 'Казарма', e: '⚔️', w: 2, d: 2, lv: 5, cost: [200, 600, 1800, 4500, 10000], time: [60, 600, 3600, 10800, 21600], max: [1, 1, 1, 1, 1], army: [20, 35, 55, 75, 95],
+      hp: [550, 620, 700, 790, 880], info: 'Тренирует армию для набегов. Выше уровень — больше места и новые отряды.' },
+    tower: { n: 'Вышка', e: '🗼', w: 2, d: 2, lv: 5, cost: [400, 1200, 3000, 7000, 14000], time: [120, 1200, 5400, 14400, 28800], max: [1, 1, 2, 2, 3],
+      hp: [520, 580, 650, 730, 800], atk: { dmg: [26, 31, 35, 42, 48], cd: .6, rng: 5.5, min: 0, sp: 0, fly: 0, gnd: 1, air: 1 },
+      info: 'Лучники на вышке стреляют по наземным и летающим. Можно залезть по лестнице и смотреть на район сверху.' },
+    cannon: { n: 'Пушка', e: '💥', w: 2, d: 2, lv: 5, cost: [250, 700, 2000, 5000, 11000], time: [60, 600, 3600, 10800, 21600], max: [2, 2, 3, 3, 4],
+      hp: [570, 650, 730, 810, 900], atk: { dmg: [44, 53, 62, 70, 79], cd: 1, rng: 4.5, min: 0, sp: 0, fly: 0, gnd: 1, air: 0 }, info: 'Бьёт наземные отряды — быстро и метко.' },
+    mortar: { n: 'Мортира', e: '🎯', w: 2, d: 2, lv: 4, th: 2, cost: [800, 2500, 6000, 12000], time: [600, 3600, 10800, 28800], max: [0, 1, 1, 2, 2],
+      hp: [680, 770, 860, 960], atk: { dmg: [66, 79, 92, 106], cd: 4, rng: 7, min: 2, sp: 1.2, fly: 1, gnd: 1, air: 0 }, info: 'Стреляет навесом по толпе. Вплотную не достаёт.' },
+    bomb: { n: 'Бомба', e: '💣', w: 1, d: 1, lv: 3, cost: [100, 400, 1200], time: [0, 0, 0], max: [2, 3, 4, 5, 6],
+      trap: { dmg: [100, 125, 155], trig: .6, sp: 1.5, delay: .5, gnd: 1, air: 0 }, info: 'Ловушка: взрывается под наземными отрядами. Чужим не видна.' },
+    airmine: { n: 'Воздушная мина', e: '🎇', w: 1, d: 1, lv: 3, th: 3, cost: [300, 900, 2500], time: [0, 0, 0], max: [0, 0, 1, 2, 3],
+      trap: { dmg: [250, 320, 390], trig: 1.5, sp: 0, delay: 0, gnd: 0, air: 1 }, info: 'Ловушка для летающих. Чужим не видна.' },
+    wall: { n: 'Забор', e: '🧱', w: 1, d: 1, lv: 5, cost: [10, 30, 80, 200, 500], time: [0, 0, 0, 0, 0], max: [20, 30, 40, 50, 60], hp: [130, 220, 330, 460, 620],
+      info: 'Соседние куски соединяются сами. Улучшается сразу, без строителя. В набеге держит удар.' },
     tree: { n: 'Дерево', e: '🌳', w: 1, d: 1, lv: 1, cost: [30], time: [0], g: 'deco' },
     pine: { n: 'Ёлка', e: '🌲', w: 1, d: 1, lv: 1, cost: [30], time: [0], g: 'deco' },
     bush: { n: 'Куст', e: '🌿', w: 1, d: 1, lv: 1, cost: [15], time: [0], g: 'deco' },
@@ -63,11 +79,57 @@
     chess: { n: 'Шахматный столик', e: '♟️', w: 2, d: 3, cost: 0, coins: 120, info: 'Позови друга в гости: сядете — начнётся партия.' },
     arcade: { n: 'Игровой автомат', e: '🕹️', w: 1, d: 1, cost: 0, coins: 150, info: 'Все игры сайта — не выходя из дома.' },
   };
+  // ═══ Набеги (docs/RAIDS.md): отряды казармы, герой (свой персонаж), правила набегов. Сервер — base_defs() (u, hero, raid) ═══
+  // Отряд: sp — место в казарме, cost — 🧱, time — секунд тренировки, lv — с какого уровня казармы; бой: hp, dmg — урон за удар,
+  // cd — перезарядка (с), rng — дальность (клеток), spd — клеток в секунду, tgt — цель (any — любая постройка, def — оборона,
+  // wall — стены, heal — лечит своих), air — летает; splash — площадь удара; wdmg / boom — подрывник: урон стенам и радиус взрыва;
+  // heal / hr — лечение в секунду и радиус
+  const UNITS = {
+    fighter: { n: 'Боец', e: '🗡️', sp: 1, cost: 5, time: 15, lv: 1, hp: 90, dmg: 10, cd: 1, rng: .6, spd: 1.6, tgt: 'any', info: 'Дешёвый и быстрый — берёт числом.' },
+    archer: { n: 'Лучник', e: '🏹', sp: 1, cost: 8, time: 18, lv: 1, hp: 40, dmg: 9, cd: 1, rng: 3, spd: 1.6, tgt: 'any', info: 'Стреляет издалека — даже из-за стены.' },
+    tank: { n: 'Силач', e: '💪', sp: 4, cost: 30, time: 60, lv: 2, hp: 650, dmg: 18, cd: 2, rng: .6, spd: 1, tgt: 'def', info: 'Идёт прямо к обороне и принимает удары на себя.' },
+    breaker: { n: 'Подрывник', e: '🧨', sp: 2, cost: 20, time: 40, lv: 3, hp: 30, dmg: 40, wdmg: 300, boom: 1, cd: 1, rng: .5, spd: 2.4, tgt: 'wall', info: 'Бежит к ближайшей стене и взрывает её — и себя.' },
+    flyer: { n: 'Летун', e: '🎈', sp: 3, cost: 40, time: 75, lv: 4, hp: 180, dmg: 60, cd: 2, rng: .4, spd: 1.2, splash: .6, tgt: 'def', air: 1, info: 'Летит над стенами прямо к обороне и сбрасывает бомбы.' },
+    healer: { n: 'Лекарь', e: '💚', sp: 5, cost: 60, time: 120, lv: 5, hp: 300, heal: 30, hr: 2, cd: 1, rng: 1, spd: 1.4, tgt: 'heal', air: 1, info: 'Летает над своими и лечит наземных вокруг.' },
+  };
+  // Герой — твой персонаж из гардероба: один на бой, сила — по уровню твоей ратуши; ab — «💥 Удар» (урон постройкам в радиусе abr)
+  const HERO = { n: 'Герой', e: '🦸', hp: [420, 550, 680, 810, 940], dmg: [30, 40, 50, 60, 70], cd: 1, rng: .7, spd: 1.8, tgt: 'any', ab: [200, 280, 360, 440, 520], abr: 2 };
+  // Правила набегов (raids.sql берёт их из base_defs()->'raid'). Время — секунды, кроме помеченного
+  const RAID = {
+    tps: 20, max: 180, scout: 30, go: 45, cancel: 60, grace: 240,   // шагов в секунду; бой; разведка; начать не позже; отмена; сдать итог после боя
+    // добыча: % склада (минус step за уровень ратуши нападающего выше, не меньше min), % шахт, доля ратуши (%), защищено ратушей и складом,
+    // не больше за набег (cap — склад и шахты вместе, ратуша защитника), за день взять (day — ратуша нападающего) и потерять (lose —
+    // ратуша защитника), с одного игрока — раз в pair часов
+    loot: { pct: 20, step: 6, min: 5, mine: 35, th: 40, prot: [400, 600, 900, 1300, 1800], sprot: [150, 300, 500, 800, 1200],
+      cap: [800, 1600, 3000, 5000, 8000], day: [3000, 6000, 10000, 16000, 24000], lose: [1600, 3200, 6000, 10000, 16000], pair: 20 },
+    tr: { win: 20, wdiv: 10, wmin: 6, wmax: 36, lose: 14, ldiv: 12, lmin: 4, lmax: 28 },   // кубки: победа × звёзды/3, поражение
+    shield: { s2: 8, s3: 12, guard: 30, newbie: 3 },   // часы после 2★ / 3★; минуты стражи; дни новичка
+    day: { battles: 20, search: 100, bots: 3 },       // в день: боёв, поисков, набегов на разбойников с добычей
+    next: [10, 25, 50, 80, 120],                      // «Следующий» по ратуше, 🧱
+    league: [0, 100, 400, 800, 1300, 1900, 2600], bonus: [0, 20, 40, 70, 110, 160, 220], chest: [100, 200, 400, 700, 1000, 1500, 2000], chestWins: 3,
+    bot: [120, 250, 450, 700, 1000],                  // разбойники под ратушу: 🧱 за 3★
+    camp: [150, 200, 300, 400, 500, 650, 800, 1000, 1200, 1500, 1800, 2200], campTh: [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5],   // поход: 🧱 за 3★, ратуша лагеря
+    tut: 300, tutArmy: { fighter: 12, archer: 8 },
+    // за 💎 (g) и монеты (c): щит на h часов (не чаще раза в shWeek дней, всего ≤ shMax ч), вторая казарма, 1 💎 за fin секунд, облики
+    shop: { sh1: { g: 30, h: 24 }, sh2: { g: 50, h: 48 }, shWeek: 7, shMax: 72, q2: { g: 150, c: 1500 }, fin: 1200,
+      skin: { winter: { g: 100 }, gold: { g: 100 }, neon: { g: 100 }, autumn: { c: 800 } }, army: { knight: { g: 80 }, robot: { g: 80 } } },
+  };
+  const LEAGUES = [['Новичок', '🪵'], ['Бронза', '🥉'], ['Серебро', '🥈'], ['Золото', '🥇'], ['Кристалл', '💠'], ['Мастер', '🏅'], ['Чемпион', '👑']];
+  const league = tr => { let i = 0; while (i + 1 < RAID.league.length && (tr | 0) >= RAID.league[i + 1]) i++; return i; };
+  // Облики участка: цвет построек смешивается с mix на долю k (и в 3D-мире, и в бою); видно всем
+  const SKINS = {
+    winter: { n: 'Зимний', e: '❄️', mix: [.92, .97, 1], k: .38 },
+    gold: { n: 'Золотой', e: '✨', mix: [1, .78, .26], k: .42 },
+    neon: { n: 'Неон', e: '💜', mix: [.62, .3, 1], k: .4 },
+    autumn: { n: 'Осенний', e: '🍂', mix: [.9, .48, .16], k: .34 },
+  };
   const N = 12, IN = 9, PER = 6, PLOTS = 600, START = 600, DECO_MAX = [6, 10, 15, 20, 25], DOOR = [3, 6, 7, 9];   // DOOR: x0, x1, z0, z1 — проход от двери (клетки комнаты)
   const pickKeys = (o, keys) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Object.fromEntries(keys.filter(f => v[f] != null).map(f => [f, v[f]]))]));
   const SERVER = { n: N, in: IN, per: PER, plots: PLOTS, start: START, deco: DECO_MAX, door: DOOR,
-    k: pickKeys(DEFS, ['w', 'd', 'lv', 'fixed', 'cost', 'time', 'max', 'keep', 'furn', 'rate', 'hold', 'g', 'th', 'coins']),
-    f: pickKeys(FURN, ['w', 'd', 'cost', 'coins', 'floor']) };
+    k: pickKeys(DEFS, ['w', 'd', 'lv', 'fixed', 'cost', 'time', 'max', 'keep', 'furn', 'rate', 'hold', 'g', 'th', 'coins', 'hp', 'atk', 'trap', 'army']),
+    f: pickKeys(FURN, ['w', 'd', 'cost', 'coins', 'floor']),
+    u: pickKeys(UNITS, ['sp', 'cost', 'time', 'lv', 'hp', 'dmg', 'cd', 'rng', 'spd', 'tgt', 'air', 'splash', 'wdmg', 'boom', 'heal', 'hr']),
+    hero: Object.fromEntries(Object.entries(HERO).filter(([k]) => k !== 'n' && k !== 'e')), raid: RAID };
 
   // ═══ Правила (без Three.js и DOM; один в один с base_act в bases.sql) ═══
   const Rules = (() => {
@@ -82,11 +144,25 @@
     const isDeco = k => DEFS[k]?.g === 'deco';
     const limit = (k, t) => isDeco(k) ? DECO_MAX[t - 1] : DEFS[k].max[t - 1];
     const count = (L, k) => L.filter(it => (k === 'deco' ? isDeco(it.k) : it.k === k)).length;
-    // Достроилось — новый уровень (шахта копит с момента окончания)
+    // Достроилось — новый уровень (шахта копит с момента окончания); дотренировались — в армию
     function norm(s, now){
       for (const it of s.layout) if (it.ue != null && it.ue <= now) { it.l = it.ul; if (it.k === 'mine') it.t0 = it.ue; delete it.ul; delete it.ue; }
+      qnorm(s, now);
       return s;
     }
+    // ── Армия (набеги): army — в казарме {отряд: штук}, out — ушли в набег (вернутся, кто не высажен), queue — очередь [{u, ue, t}]:
+    //    одна цепочка, ue растут — готовые сначала. q2 — вторая казарма (учит вдвое быстрее)
+    function qnorm(s, now){
+      if (!s.army) s.army = {}; if (!s.out) s.out = {}; if (!Array.isArray(s.queue)) s.queue = [];
+      let k = 0;
+      while (k < s.queue.length && s.queue[k].ue <= now) { const u = s.queue[k].u; s.army[u] = (s.army[u] || 0) + 1; k++; }
+      if (k) s.queue.splice(0, k);
+    }
+    const barracksLv = s => s.layout.reduce((m, it) => (it.k === 'barracks' && it.l >= 1 ? Math.max(m, it.l) : m), 0);
+    const armyCap = s => { const b = barracksLv(s); return b ? DEFS.barracks.army[b - 1] : 0; };
+    const spaceOf = o => Object.entries(o || {}).reduce((a, [u, n]) => a + (UNITS[u] ? UNITS[u].sp * n : 0), 0);
+    const armySpace = s => spaceOf(s.army) + spaceOf(s.out) + (s.queue || []).reduce((a, q) => a + (UNITS[q.u]?.sp || 0), 0);
+    const trainT = (s, U) => (s.q2 ? Math.ceil(U.time / 2) : U.time);
     // Сколько кирпичей в шахте сейчас (на стройке и при улучшении — не копит)
     function prod(it, now){
       if (it.k !== 'mine' || !(it.l >= 1) || it.ue != null) return 0;
@@ -132,7 +208,7 @@
     const prodSum = (s, id, now) => s.layout.reduce((a, it) => a + (it.k === 'mine' && (id == null || it.i === id) ? prod(it, now) : 0), 0);
     const speedCost = (it, now) => Math.max(1, Math.ceil(Math.max(0, it.ue - now) / 120));
     const fresh = (plot, now) => ({
-      plot, bricks: START, seq: 5, access: 'all', likes: 0, gift: '', own: { 'f:bed': 1, 'f:rug': 1 },
+      plot, bricks: START, seq: 5, access: 'all', likes: 0, gift: '', own: { 'f:bed': 1, 'f:rug': 1 }, army: {}, out: {}, queue: [], q2: false,
       layout: [{ i: 1, k: 'th', x: 5, z: 2, r: 0, l: 1 }, { i: 2, k: 'house', x: 0, z: 6, r: 0, l: 1 }, { i: 3, k: 'mine', x: 9, z: 7, r: 0, l: 1, t0: now }],
       room: [{ i: 4, k: 'bed', x: 0, z: 0, r: 0 }, { i: 5, k: 'rug', x: 3, z: 3, r: 0 }],
     });
@@ -278,6 +354,53 @@
           s.room.splice(i, 1);
           return { ok: true };
         }
+        // ── Казарма: тренировать n отрядов (🧱 сразу, готовы по очереди), убрать последнего такого из очереди (🧱 назад),
+        //    дотренировать всех сразу за монеты, распустить из армии ──
+        case 'train': {
+          const u = str(g.u), n = g.n == null ? 1 : int(g.n, 30);
+          if (u == null || n == null || n < 1) return fail('args');
+          const U = UNITS[u];
+          if (!U) return fail('kind');
+          const bl = barracksLv(s);
+          if (!bl) return fail('barracks');
+          if (U.lv > bl) return fail('ulock');
+          if (armySpace(s) + n * U.sp > armyCap(s)) return fail('space');
+          if (s.bricks < n * U.cost) return fail('bricks');
+          s.bricks -= n * U.cost;
+          const t1 = trainT(s, U);
+          let last = s.queue.length ? s.queue[s.queue.length - 1].ue : now;
+          for (let i = 0; i < n; i++) { last = Math.max(last, now) + t1; s.queue.push({ u, ue: last, t: t1 }); }
+          return { ok: true };
+        }
+        case 'untrain': {
+          const u = g.u == null ? null : str(g.u);
+          if (u != null && !UNITS[u]) return fail('args');
+          let j = -1;
+          for (let i = s.queue.length - 1; i >= 0; i--) if (u == null || s.queue[i].u === u) { j = i; break; }
+          if (j < 0) return fail('noq');
+          const q = s.queue.splice(j, 1)[0];
+          s.bricks = Math.max(s.bricks, Math.min(cap(s), s.bricks + UNITS[q.u].cost));
+          let prev = j > 0 ? s.queue[j - 1].ue : now;   // следующие — раньше
+          for (let i = j; i < s.queue.length; i++) { prev = Math.max(prev, now) + s.queue[i].t; s.queue[i].ue = prev; }
+          return { ok: true };
+        }
+        case 'tfinish': {
+          if (!s.queue.length) return fail('noq');
+          const n = speedCost(s.queue[s.queue.length - 1], now);
+          if (!payCoins(n)) return fail('coins');
+          wallet.coins -= n;
+          for (const q of s.queue) s.army[q.u] = (s.army[q.u] || 0) + 1;
+          s.queue = [];
+          return { ok: true, coins: n };
+        }
+        case 'unarm': {
+          const u = str(g.u), n = g.n == null ? 1 : int(g.n, 100);
+          if (u == null || !UNITS[u] || n == null || n < 1) return fail('args');
+          if ((s.army[u] || 0) < n) return fail('noarmy');
+          s.army[u] -= n;
+          if (!s.army[u]) delete s.army[u];
+          return { ok: true };
+        }
       }
       return fail('args');
     }
@@ -300,12 +423,17 @@
       const own = {};
       if (o.own && typeof o.own === 'object') for (const [k, v] of Object.entries(o.own)) if ((DEFS[k] || FURN[k.slice(2)]) && Number.isInteger(v) && v > 0) own[k] = v;
       const seq = Math.max(Number.isInteger(o.seq) ? o.seq : 0, ...L.map(it => it.i), ...room.map(it => it.i), 0);
+      let qe = 0;
+      const queue = (Array.isArray(o.queue) ? o.queue : []).filter(q => q && UNITS[q.u] && Number.isFinite(q.ue) && Number.isInteger(q.t) && q.t > 0 && q.ue >= qe && (qe = q.ue, true)).slice(0, 100).map(q => ({ u: q.u, ue: q.ue, t: q.t }));
       return { plot: Number.isInteger(o.plot) ? o.plot : 0, bricks: Math.max(0, o.bricks | 0), seq, access: ['all', 'friends', 'nobody'].includes(o.access) ? o.access : 'all',
-        likes: o.likes | 0, gift: typeof o.gift === 'string' ? o.gift : '', own, layout: L, room, rev: o.rev | 0 };
+        likes: o.likes | 0, gift: typeof o.gift === 'string' ? o.gift : '', own, layout: L, room, rev: o.rev | 0,
+        army: sanitizeArmy(o.army), out: sanitizeArmy(o.out), queue, q2: !!o.q2 };
     }
+    const sanitizeArmy = a => { const o = {}; if (a && typeof a === 'object') for (const [u, n] of Object.entries(a)) if (UNITS[u] && Number.isInteger(n) && n > 0) o[u] = Math.min(n, 999); return o; };
     const sanitizeRoom = items => (Array.isArray(items) ? items : []).filter(it => it && FURN[it.k] && Number.isInteger(it.i) && Number.isInteger(it.x) && Number.isInteger(it.z)).map(it => ({ i: it.i, k: it.k, x: it.x, z: it.z, r: (it.r | 0) & 3 }));
     const clone = s => JSON.parse(JSON.stringify(s));
-    return { fp, ffp, th, houseLv, cap, builders, busy, day, isDeco, limit, count, norm, prod, prodSum, fits, ffits, collect, speedCost, fresh, act, canPlace, sanitize, sanitizeRoom, clone };
+    return { fp, ffp, th, houseLv, cap, builders, busy, day, isDeco, limit, count, norm, qnorm, prod, prodSum, fits, ffits, collect, speedCost, fresh, act, canPlace, sanitize, sanitizeArmy, sanitizeRoom, clone,
+      barracksLv, armyCap, armySpace, spaceOf, trainT };
   })();
 
   // ═══ Район на карте мира (единицы движка): северо-запад от площади, за кафе ═══
@@ -340,6 +468,8 @@
     plot: 'Такого участка нет', has: 'У тебя уже есть участок', taken: 'Этот участок уже заняли', house: 'Дом полон — улучши его, чтобы поставить больше',
     empty: 'Пока нечего собирать', full: 'Склад полон — построй или улучши склад 📦', idle: 'Сейчас здесь ничего не строится', args: 'Не получилось',
     net: 'Нет связи с сервером — попробуй ещё раз', layout: 'Не получилось перенести участок', local: 'За монеты — после входа на сайт', max_likes: 'На сегодня хватит лайков 🙂',
+    barracks: 'Сначала построй казарму ⚔️', ulock: 'Этот отряд — с казармы выше уровнем', space: 'В казарме нет места', noq: 'Очередь пуста', noarmy: 'Столько отрядов нет',
+    soon: 'Откроется, когда сайт обновится',
   };
   const fmtT = sec => {
     sec = Math.max(0, Math.ceil(sec));
@@ -429,14 +559,15 @@
     g.font = `800 ${fs}px Montserrat, Arial, sans-serif`;
     while (g.measureText(sub).width > w * .88 && fs > 18) { fs -= 3; g.font = `800 ${fs}px Montserrat, Arial, sans-serif`; }
     g.fillStyle = !info ? '#bbf7d0' : '#fde68a'; g.fillText(sub, w / 2, 126);
-    if (info) { g.fillStyle = '#e9d5ff'; g.font = '700 30px Montserrat, Arial, sans-serif'; g.fillText(`🏛️ ${info.th} ур.   👍 ${info.likes || 0}`, w / 2, 182); }
+    if (info) { g.fillStyle = '#e9d5ff'; g.font = '700 30px Montserrat, Arial, sans-serif'; g.fillText(`🏛️ ${info.th} ур.   👍 ${info.likes || 0}${info.tr > 0 ? `   ${LEAGUES[league(info.tr)][1]} ${info.tr}` : ''}${info.sh ? '   🛡️' : ''}`, w / 2, 182); }
     cv.t.needsUpdate = true;
   }
 
   // ═══ Постройки: рисуются деталями движка (R.part) в системе постройки (центр, перед — +z), тела — списком ═══
   const WOOD = '#a0673a', WOOD_D = '#6b4426', STONE = '#d6cfc0', STONE_D = '#9ca3af', DARK = '#1f2937', GOLD = '#facc15', BRICK = '#c2553d';
   const PAL = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
-  const TOWER_H = [3.6, 4.8, 6];
+  const TOWER_H = [3.4, 4.2, 5, 5.8, 6.6];
+  const TRAPS = new Set(['bomb', 'airmine']);   // ловушки: видны только хозяину участка
   // строительные леса вокруг (стройка и улучшение)
   function scaffold(P, g, w, h, full){
     const hw = w / 2 - .1;
@@ -551,18 +682,78 @@
       return 2.6;
     },
     tower(P, g, it, bd, x){
-      const L = Math.max(1, it.l), Ht = TOWER_H[L - 1], top = Ht + 1.9, pc = ['#8b5a2b', '#78716c', '#1e3a8a'][L - 1];
+      const L = Math.max(1, it.l), Ht = TOWER_H[L - 1], top = Ht + 1.9, pc = ['#8b5a2b', '#78716c', '#1e3a8a', '#334155', '#a16207'][L - 1];
       for (const [px, pz] of [[-1.25, -1.25], [1.25, -1.25], [-1.25, 1.25], [1.25, 1.25]]) { P(g, { s: 'cyl', x: px, y: top / 2, z: pz, r: .12, h: top, c: pc }); bd.push({ t: 'cyl', x: px, z: pz, y0: 0, r: .15, h: top }); }
       P(g, { s: 'box', y: Ht, w: 3, h: .2, d: 3, c: WOOD_D });
       bd.push({ t: 'box', y0: Ht - .1, h: .2, w: 3, d: 3, floor: 'wood' });
       for (const [rx, rz, w, d] of [[0, -1.42, 2.9, .08], [-1.42, 0, .08, 2.9], [1.42, 0, .08, 2.9], [-.95, 1.42, 1, .08], [.95, 1.42, 1, .08]]) { P(g, { s: 'box', x: rx, y: Ht + .55, z: rz, w, h: .08, d, c: WOOD }); bd.push({ t: 'box', x: rx, z: rz, y0: Ht + .1, w: Math.max(w, .12), h: .8, d: Math.max(d, .12) }); }
-      P(g, { s: 'cone', y: top + .55, r: 2.25, h: 1.1, seg: 4, yaw: PI / 4, c: ['#b91c1c', '#7c3aed', '#ca8a04'][L - 1], flat: true });
+      // лучники на площадке (набеги: вышка стреляет): 1 — до 2-го уровня, 2 — дальше
+      for (const ax of (L >= 3 ? [-.7, .7] : [.6])) { P(g, { s: 'cyl', x: ax, y: Ht + .45, z: -.7, r: .17, h: .7, c: '#15803d' }); P(g, { s: 'ball', x: ax, y: Ht + .95, z: -.7, r: .17, c: '#f7cba5' }); P(g, { s: 'cone', x: ax, y: Ht + 1.12, z: -.7, r: .2, h: .2, seg: 8, c: '#166534' }); P(g, { s: 'box', x: ax + .22, y: Ht + .6, z: -.62, w: .04, h: .7, d: .04, rz: .2, c: WOOD_D }); }
+      P(g, { s: 'cone', y: top + .55, r: 2.25, h: 1.1, seg: 4, yaw: PI / 4, c: ['#b91c1c', '#7c3aed', '#ca8a04', '#0f766e', '#be123c'][L - 1], flat: true });
       P(g, { s: 'cyl', y: top + 1.5, r: .04, h: .9, c: '#374151' }); P(g, { s: 'box', x: .26, y: top + 1.75, w: .5, h: .3, d: .04, c: PAL[it.i % PAL.length] });
       // лестница спереди
       for (const sx of [-1, 1]) P(g, { s: 'box', x: sx * .36, y: Ht / 2, z: 1.45, w: .07, h: Ht, d: .07, c: WOOD });
       for (let y = .3; y < Ht; y += .38) P(g, { s: 'box', y, z: 1.45, w: .72, h: .05, d: .06, c: WOOD });
       x.ladder = { x: 0, z: 1.45, top: Ht + .1, ex: 0, ez: .75 };
       return top + 2;
+    },
+    // ── Оборона для набегов: пушка (ствол смотрит вперёд), мортира, ловушки (только хозяину), казарма ──
+    cannon(P, g, it, bd){
+      const L = Math.max(1, it.l), base = ['#a8a29e', '#94a3b8', '#78716c', '#475569', '#a16207'][L - 1], metal = L >= 5 ? GOLD : L >= 3 ? '#1f2937' : '#374151';
+      P(g, { s: 'cyl', y: .25, r: 1.3, h: .5, seg: 10, c: base });
+      P(g, { s: 'cyl', y: .56, r: 1.08, h: .12, seg: 10, c: WOOD_D });
+      P(g, { s: 'box', y: .9, z: -.15, w: .78, h: .55, d: 1, c: WOOD });
+      for (const sx of [-1, 1]) { P(g, { s: 'cyl', x: sx * .5, y: .82, z: -.25, r: .36, h: .12, rz: PI / 2, c: WOOD_D }); P(g, { s: 'cyl', x: sx * .5, y: .82, z: -.25, r: .1, h: .14, rz: PI / 2, c: metal }); }
+      P(g, { s: 'cyl', y: 1.22, z: .35, r: .25, r2: .31, h: 1.5, rx: PI / 2 - .22, c: metal });
+      P(g, { s: 'cyl', y: 1.38, z: 1.08, r: .3, h: .1, rx: PI / 2 - .22, c: DARK });
+      P(g, { s: 'ball', y: 1.12, z: -.62, r: .2, c: metal });
+      if (L >= 2) for (let i = 0; i < 3; i++) P(g, { s: 'ball', x: .85 - i * .26, y: .74, z: -.85, r: .12, c: DARK });
+      if (L >= 4) for (let k = 0; k < 6; k++) { const a = k * PI / 3; P(g, { s: 'box', x: Math.cos(a) * 1.2, y: .6, z: Math.sin(a) * 1.2, w: .3, h: .22, d: .3, c: STONE_D }); }
+      bd.push({ t: 'cyl', y0: 0, r: 1.3, h: .62 }, { t: 'box', y0: .62, w: .9, h: .6, d: 1.6 });
+      return 2.1;
+    },
+    mortar(P, g, it, bd){
+      const L = Math.max(1, it.l), ring = ['#9ca3af', '#a8a29e', '#78716c', '#57534e'][L - 1];
+      P(g, { s: 'cyl', y: .32, r: 1.38, h: .64, seg: 12, c: ring });
+      P(g, { s: 'cyl', y: .66, r: 1.12, h: .05, seg: 12, c: '#57534e' });
+      P(g, { s: 'cyl', y: .78, r: .7, h: .22, seg: 12, c: '#44403c' });
+      P(g, { s: 'cyl', y: 1.25, z: .12, r: .44, r2: .56, h: 1, rx: .32, c: L >= 4 ? GOLD : DARK });
+      P(g, { s: 'cyl', y: 1.72, z: .28, r: .47, h: .08, rx: .32, c: '#111827' });
+      for (let i = 0; i < 3; i++) P(g, { s: 'ball', x: -.75 + i * .26, y: .82, z: .78, r: .13, c: DARK });
+      if (L >= 3) for (const sx of [-1, 1]) P(g, { s: 'box', x: sx * .95, y: .9, z: -.5, w: .14, h: .5, d: .14, c: WOOD_D });
+      bd.push({ t: 'cyl', y0: 0, r: 1.38, h: .7 }, { t: 'cyl', y0: .7, r: .6, h: .9 });
+      return 2.2;
+    },
+    bomb(P, g, it){
+      P(g, { s: 'cyl', y: .01, r: .55, h: .02, c: '#78716c' });
+      P(g, { s: 'ball', y: .16, r: .24 + .03 * (Math.max(1, it.l) - 1), c: '#111827' });
+      P(g, { s: 'cyl', y: .44, r: .04, h: .2, c: '#a16207' }); P(g, { s: 'ball', y: .55, r: .05, c: '#f97316', m: 'glow' });
+      return .9;
+    },
+    airmine(P, g, it){
+      P(g, { s: 'cyl', y: .35, r: .045, h: .7, c: '#6b7280' });
+      P(g, { s: 'ball', y: .82, r: .2 + .03 * (Math.max(1, it.l) - 1), c: '#dc2626' });
+      for (let k = 0; k < 4; k++) { const a = k * PI / 2; P(g, { s: 'cone', x: Math.cos(a) * .22, y: .82, z: Math.sin(a) * .22, r: .05, h: .14, seg: 5, rz: -Math.cos(a) * PI / 2, rx: Math.sin(a) * PI / 2, c: '#fde68a' }); }
+      return 1.2;
+    },
+    barracks(P, g, it, bd){
+      const L = Math.max(1, it.l), wallC = ['#e7c9a0', '#d6d3d1', '#fecaca', '#bfdbfe', '#fde68a'][L - 1], roofC = ['#b91c1c', '#9a3412', '#7f1d1d', '#1e3a8a', '#ca8a04'][L - 1];
+      const W = 2.7, D = 2.1, H = 1.55;
+      P(g, { s: 'box', y: .06, w: 3.1, h: .12, d: 3.1, c: STONE });
+      P(g, { s: 'box', y: H / 2 + .12, z: -.3, w: W, h: H, d: D, c: wallC });
+      const r = (W + .4) / 1.732, rise = 1, sz = rise / (1.5 * r);
+      const m = P(g, { s: 'cyl', r, h: D + .35, seg: 3, rx: -PI / 2, c: roofC, flat: true });
+      m.scale.set(1, 1, sz); m.position.set(0, H + .12 + .5 * r * sz, -.3);
+      P(g, { s: 'box', y: .75, z: .76, w: .8, h: 1.25, d: .06, c: WOOD_D });
+      P(g, { s: 'cyl', x: 0, y: 1.25, z: .79, r: .32, h: .05, rx: PI / 2, c: L >= 5 ? GOLD : '#e5e7eb' });
+      P(g, { s: 'box', y: 1.25, z: .83, w: .5, h: .07, d: .03, rz: .78, c: '#6b7280' }); P(g, { s: 'box', y: 1.25, z: .83, w: .5, h: .07, d: .03, rz: -.78, c: '#6b7280' });
+      // флаг и чучело для тренировки
+      P(g, { s: 'cyl', x: 1.2, y: 1.6, z: -1.2, r: .04, h: 3.2, c: '#374151' }); P(g, { s: 'box', x: 1.52, y: 2.95, z: -1.2, w: .62, h: .38, d: .04, c: roofC });
+      P(g, { s: 'cyl', x: -1.05, y: .55, z: 1.05, r: .05, h: 1.1, c: WOOD_D }); P(g, { s: 'cyl', x: -1.05, y: .82, z: 1.05, r: .2, h: .45, c: '#d6b88a' });
+      P(g, { s: 'ball', x: -1.05, y: 1.18, z: 1.05, r: .16, c: '#e7c9a0' }); P(g, { s: 'box', x: -1.05, y: .9, z: 1.05, w: .7, h: .06, d: .06, c: WOOD_D });
+      if (L >= 3) for (const sx of [-1, 1]) P(g, { s: 'cone', x: sx * 1.2, y: .45, z: .95, r: .16, h: .6, seg: 6, c: '#f59e0b', m: 'glow' });
+      bd.push({ t: 'box', y0: 0, z: -.3, w: W, h: H + .2, d: D, cam: true }, { t: 'cyl', x: -1.05, z: 1.05, y0: 0, r: .22, h: 1.2 });
+      return H + 1.4;
     },
     tree(P, g, it, bd, x){ x.R.prefab('tree', { parent: g, x: 0, z: 0, k: .75, v: it.i % 4, yaw: it.i }); bd.push({ t: 'cyl', y0: 0, r: .28, h: 2 }); return 3; },
     pine(P, g, it, bd, x){ x.R.prefab('pine', { parent: g, x: 0, z: 0, k: .7 }); bd.push({ t: 'cyl', y0: 0, r: .25, h: 2 }); return 3; },
@@ -682,8 +873,9 @@
 
     // ── Склейка: все детали группы → по одной сетке на «цветной», «светящийся» и особые материалы ──
     const m4 = new T.Matrix4(), inv = new T.Matrix4();
-    function merge(root, src){
+    function merge(root, src, tint){
       root.updateMatrixWorld(true);
+      const tk = tint ? tint.k : 0, tm = tint ? tint.mix : null;
       inv.copy(root.matrixWorld).invert();
       const buckets = new Map(), drop = [];
       src.traverse(o => {
@@ -710,7 +902,7 @@
           const gp = g.attributes.position, gn = g.attributes.normal, gu = g.attributes.uv;
           pos.set(gp.array, k * 3); if (gn) nor.set(gn.array, k * 3);
           for (let i = 0; i < gp.count; i++) {
-            if (col) { const a = gn && Math.abs(gn.getY(i)) < .6 ? .62 + .38 * Math.min(1, Math.max(0, gp.getY(i) / 1.4)) : 1; col[(k + i) * 3] = c.r * a; col[(k + i) * 3 + 1] = c.g * a; col[(k + i) * 3 + 2] = c.b * a; }
+            if (col) { const a = gn && Math.abs(gn.getY(i)) < .6 ? .62 + .38 * Math.min(1, Math.max(0, gp.getY(i) / 1.4)) : 1; col[(k + i) * 3] = (c.r + (tk ? (tm[0] - c.r) * tk : 0)) * a; col[(k + i) * 3 + 1] = (c.g + (tk ? (tm[1] - c.g) * tk : 0)) * a; col[(k + i) * 3 + 2] = (c.b + (tk ? (tm[2] - c.b) * tk : 0)) * a; }
             else if (gu) { uv[(k + i) * 2] = gu.getX(i); uv[(k + i) * 2 + 1] = gu.getY(i); }
           }
           k += gp.count; g.dispose();
@@ -732,9 +924,9 @@
     // ── Вид участка: постройки, тела, подсказки, места, крыша и комната дома ──
     const lotInfo = j => {
       const plot = B.street * PER + j + 1;
-      if (B.me && B.me.plot === plot && !(B.me.local && B.data.has(plot))) return { mine: true, local: !!B.me.local, uid: myUid(), nick: 'Я', layout: B.me.layout, access: B.me.access, rev: B.me.rev || 0, likes: B.me.likes || 0, plot };
+      if (B.me && B.me.plot === plot && !(B.me.local && B.data.has(plot))) return { mine: true, local: !!B.me.local, uid: myUid(), nick: 'Я', layout: B.me.layout, access: B.me.access, rev: B.me.rev || 0, likes: B.me.likes || 0, plot, tr: B.me.trophies | 0, skin: B.me.skin || '', sh: B.me.shield | 0 };
       const d = B.data.get(plot);
-      return d ? { mine: d.uid === myUid(), uid: d.uid, nick: d.nick, layout: d.layout, access: d.access, rev: d.rev, likes: d.likes, plot } : null;
+      return d ? { mine: d.uid === myUid(), uid: d.uid, nick: d.nick, layout: d.layout, access: d.access, rev: d.rev, likes: d.likes, plot, tr: d.tr | 0, skin: d.skin || '', sh: d.sh | 0 } : null;
     };
     function clearView(v){
       if (!v) return;
@@ -766,10 +958,10 @@
     }
     const P = (g, o) => R.part(g, o);
     // подпись для «перестроить ли»: только то, что видно (не время шахт)
-    const sigOf = i => !i ? 'free' : [i.plot, i.uid || '', i.access, ...i.layout.map(it => `${it.i}${it.k}${it.x},${it.z},${it.r},${it.l}${it.ul ? '^' + it.ul : ''}`)].join(';');
+    const sigOf = i => !i ? 'free' : [i.plot, i.uid || '', i.access, i.skin || '', ...i.layout.map(it => `${it.i}${it.k}${it.x},${it.z},${it.r},${it.l}${it.ul ? '^' + it.ul : ''}`)].join(';');
     function buildView(j){
       const old = B.views[j], info = lotInfo(j), sig = sigOf(info);
-      drawSign(dist.signs[j].cv, B.street * PER + j + 1, info && { mine: info.mine, local: info.local, nick: info.nick, th: info.layout.find(it => it.k === 'th')?.l || 1, likes: info.likes });
+      drawSign(dist.signs[j].cv, B.street * PER + j + 1, info && { mine: info.mine, local: info.local, nick: info.nick, th: info.layout.find(it => it.k === 'th')?.l || 1, likes: info.likes, tr: info.tr, sh: info.sh > nowS() });
       if (old && old.sig === sig) { old.info = info; return old; }
       clearView(old);
       const lot = LOTS[j];
@@ -783,6 +975,7 @@
       v.root = g;
       const walls = new Set(info.layout.filter(it => it.k === 'wall').map(it => it.x + ',' + it.z));
       for (const it of info.layout) {
+        if (TRAPS.has(it.k) && !info.mine) continue;   // ловушки чужим не видны (набеги)
         const r = it.k === 'wall' ? 0 : it.r, [cx, cz] = itemCenter(it), bg = R.group(src, cx, 0, cz, r * PI / 2), bd = [];
         const x = { T, R, glass: extra.glass, tvMat: extra.tvMat, boardMat: extra.boardMat };
         const [fw, fd] = Rules.fp(it.k, 0);
@@ -811,9 +1004,10 @@
         });
         addItemPrompts(v, it, lot, cx, cz);
       }
-      merge(g, src);                                // всё, кроме крыши дома, — в 2–4 сетки
+      const tint = SKINS[info.skin] || null;        // облик участка (набеги, за 💎/🪙) — цвета построек
+      merge(g, src, tint);                          // всё, кроме крыши дома, — в 2–4 сетки
       if (v.house) {
-        merge(v.house.roof, v.house.roof);          // крыша — своя сетка (прячется целиком)
+        merge(v.house.roof, v.house.roof, tint);    // крыша — своя сетка (прячется целиком)
         syncDoor(v);
         if (info.mine && B.me) buildRoom(v, B.me.room, B.me.rev || 0);
         else if (v.roomCache) buildRoom(v, v.roomCache.items, v.roomCache.rev);
@@ -849,6 +1043,9 @@
       } else if (it.k === 'th') {
         const [wx, wz] = at(0, 2.5);
         v.items.push(X.add({ x: wx, y: 1, z: wz, r: 1.3, prompt: () => giftReady() ? `🎁 Подарок дня: +${giftSize()} 🧱` : '🏛️ Ратуша: меню участка', act: () => (giftReady() ? doAct('gift') : openMenu()) }));
+      } else if (it.k === 'barracks') {   // набеги: казарма → окно «⚔️ Набеги» поверх мира (js/games/raid.js)
+        const [wx, wz] = at(0, 1.7);
+        v.items.push(X.add({ x: wx, y: 1, z: wz, r: 1.2, prompt: () => { const q = B.me?.queue?.length || 0; return q ? `⚔️ Казарма: тренируется ${q}` : '⚔️ Казарма: армия и набеги'; }, act: () => HK.go?.('#/games/raid') }));
       }
     }
     // ── Комната дома: мебель (склейка отдельно — меняется чаще участка) ──
@@ -903,6 +1100,9 @@
       const s = Rules.sanitize(d); if (!s) return null;
       s.gift = d.gift ? '' : Rules.day(nowS());   // сервер говорит «можно ли» — храним как день последнего подарка
       s.coins = d.coins; s.rev = d.rev | 0;
+      // набеги (bases.sql новой версии): кубки, облик, щит; старый сервер армию не знает — новые постройки «скоро»
+      s.trophies = d.trophies | 0; s.skin = SKINS[d.skin] ? d.skin : ''; s.shield = d.shield | 0;
+      B.srv = 'army' in d ? 'new' : 'old';
       return s;
     }
     async function init(){
@@ -925,6 +1125,14 @@
       if (B.sql === false && authed()) note('📝 Участок пока хранится в этом браузере — сохранится в аккаунте, когда сайт обновится.');
       renderHud();
       HK.retrack?.();
+      buildFromRaid();
+    }
+    // набеги: «🔨 Строить оборону» в штабе (raid.js) — к своему участку и сразу в стройку, вкладка «Оборона»
+    function buildFromRaid(){
+      let go = null; try { go = sessionStorage.getItem('d37_mb_go'); sessionStorage.removeItem('d37_mb_go'); } catch (e) {}
+      if (go !== 'build' || !B.me || B.stopped) return;
+      goHome();
+      setTimeout(() => { if (B.stopped || B.bm) return; enterBuild(); if (B.bm && !B.bm.room) { B.bm.tab = 'o'; renderCat(); } }, 400);
     }
     async function loadStreet(first){
       const st = B, street = B.street;
@@ -933,7 +1141,7 @@
       if (r.ok) {
         if (B.sql == null) B.sql = true;
         B.data.clear();
-        for (const p of r.plots || []) { if (p && Number.isInteger(p.p)) { const s = Rules.sanitize({ layout: p.layout, room: [], plot: p.p }); B.data.set(p.p, { uid: p.uid, nick: p.nick, layout: s ? s.layout : [], access: p.access, rev: p.rev | 0, likes: p.likes | 0 }); } }
+        for (const p of r.plots || []) { if (p && Number.isInteger(p.p)) { const s = Rules.sanitize({ layout: p.layout, room: [], plot: p.p }); B.data.set(p.p, { uid: p.uid, nick: p.nick, layout: s ? s.layout : [], access: p.access, rev: p.rev | 0, likes: p.likes | 0, tr: p.tr | 0, skin: SKINS[p.skin] ? p.skin : '', sh: p.sh | 0 }); } }
         B.maxPlot = r.max | 0;
         B.lastLoad = Date.now();
       } else if (r.reason === 'nosql') B.data.clear();
@@ -1069,7 +1277,8 @@
     function ownerPanel(j){
       const i = lotInfo(j); if (!i) return;
       const acc = { all: '🔓 Дом открыт для всех', friends: '💚 В дом пускают только друзей', nobody: '🔒 Дом закрыт' }[i.access] || '';
-      HK.panel?.(`<span class="wld-pe">🏡</span><b>${esc(i.nick)}</b>`, `<p>Участок №${i.plot} · 🏛️ ратуша ${i.layout.find(e => e.k === 'th')?.l || 1} ур. · 👍 ${i.likes || 0}<br>${acc}</p><div class="wld-acts"><button type="button" class="ct-start" data-mb="like:${i.uid}">👍 Нравится</button><button type="button" data-mb="profile:${i.uid}">👤 Профиль</button></div>`);
+      const lg = LEAGUES[league(i.tr)], sh = i.sh > nowS() ? ` · 🛡️ щит ещё ${fmtT(i.sh - nowS())}` : '';
+      HK.panel?.(`<span class="wld-pe">🏡</span><b>${esc(i.nick)}</b>`, `<p>Участок №${i.plot} · 🏛️ ратуша ${i.layout.find(e => e.k === 'th')?.l || 1} ур. · 👍 ${i.likes || 0}<br>${lg[1]} ${lg[0]} · 🏆 ${i.tr || 0}${sh}<br>${acc}</p><div class="wld-acts"><button type="button" class="ct-start" data-mb="like:${i.uid}">👍 Нравится</button><button type="button" data-mb="profile:${i.uid}">👤 Профиль</button><button type="button" data-mb="friendly:${j}" title="Тренировочный бой по базе соседа — без добычи и кубков">🤝 Дружеский бой</button></div>`);
     }
     function arcadePanel(){
       const list = (typeof GAMES !== 'undefined' ? GAMES : []).filter(g => !['world', 'studio', 'studio3d', 'wardrobe'].includes(g.id) && !g.href).slice(0, 18);
@@ -1092,7 +1301,7 @@
         const t = Rules.th(me), cap = Rules.cap(me), busy = Rules.busy(me, now), bl = Rules.builders(me), p = Rules.prodSum(me, null, now);
         const acc = me.access;
         body = `<p>Участок №${me.plot} (улица ${streetOf(me.plot) + 1})${me.local ? ' · <b>пробный</b>' : ''}<br>🏛️ Ратуша ${t} ур. · 🧱 ${num(me.bricks)} / ${num(cap)} · 👷 ${busy}/${bl}${me.local ? '' : ' · 👍 ' + (me.likes || 0)}${p > 0 ? `<br>⛏️ В шахтах: 🧱 ${num(p)}` : ''}</p>
-          <div class="wld-acts"><button type="button" class="ct-start" data-mb="home">🏠 К участку</button><button type="button" data-mb="build">🔨 Строить</button>${p > 0 ? `<button type="button" data-mb="collect">⛏️ Собрать 🧱 ${num(p)}</button>` : ''}${giftReady() ? `<button type="button" data-mb="gift">🎁 Подарок дня</button>` : ''}</div>
+          <div class="wld-acts"><button type="button" class="ct-start" data-mb="home">🏠 К участку</button><button type="button" data-mb="build">🔨 Строить</button>${p > 0 ? `<button type="button" data-mb="collect">⛏️ Собрать 🧱 ${num(p)}</button>` : ''}${giftReady() ? `<button type="button" data-mb="gift">🎁 Подарок дня</button>` : ''}<button type="button" data-mb="raid">⚔️ Набеги</button>${me.local ? '' : '<button type="button" data-mb="raidlog">🛡️ Защита</button>'}</div>
           <div class="wld-sublbl">Кого пускать в дом</div><div class="wld-chips">${[['all', '🔓 Всех'], ['friends', '💚 Друзей'], ['nobody', '🔒 Никого']].map(([a, l]) => `<button type="button" data-mb="access:${a}"${acc === a ? ' class="ct-start"' : ''}>${l}</button>`).join('')}</div>
           ${me.local ? `<p class="mb-small">${authed() ? '📝 Хранится в этом браузере — сохранится в аккаунте, когда сайт обновится.' : '📝 Пробный участок хранится только в этом браузере. <b>Войди</b> — займи участок, и стройка перенесётся.'}</p>${authed() ? '' : '<div class="wld-acts"><button type="button" class="ct-start" data-mb="login">🔑 Войти</button></div>'}` : ''}`;
       }
@@ -1130,6 +1339,13 @@
       else if (a.startsWith('claim:')) { HK.closePops?.(); claim(+a.slice(6)); }
       else if (a.startsWith('street:')) { const s = +a.slice(7); if (s !== B.street && s >= 0 && s < PLOTS / PER) { if (B.bm) exitBuild(); B.street = s; B.data.clear(); rebuildAll(); loadStreet(); HK.retrack?.(); } HK.closePops?.(); }
       else if (a.startsWith('like:')) like(a.slice(5));
+      // набеги (js/games/raid.js): штаб, журнал защиты, дружеский бой по базе соседа (база — через sessionStorage)
+      else if (a === 'raid') { if (B.bm) exitBuild(); HK.closePops?.(); HK.go?.('#/games/raid'); }
+      else if (a === 'raidlog') { HK.closePops?.(); HK.go?.('#/games/raid/log'); }
+      else if (a.startsWith('friendly:')) {
+        const i = lotInfo(+a.slice(9));
+        if (i && !i.mine) { try { sessionStorage.setItem('d37_raid_friendly', JSON.stringify({ plot: i.plot, nick: i.nick, layout: i.layout, skin: i.skin, t: Date.now() })); } catch (e) {} HK.closePops?.(); HK.go?.('#/games/raid/friendly/' + i.plot); }
+      }
       else if (a.startsWith('profile:')) HK.go?.('#/profile/' + a.slice(8));
       else if (a.startsWith('go:')) HK.go?.(a.slice(3));
       else if (a === 'exit') exitBuild();
@@ -1391,10 +1607,11 @@
         q('.mb-gift').hidden = !giftReady() || bm.room;
       }
     }
-    const TABS = { b: ['🏛️ Постройки', ['mine', 'store', 'shop', 'tower']], w: ['🧱 Заборы', ['wall']], d: ['🌳 Украшения', ['tree', 'pine', 'bush', 'flowers', 'rock', 'lamp', 'flag', 'bench', 'fountain', 'statue']], f: ['🛋️ Мебель', Object.keys(FURN)] };
+    const TABS = { b: ['🏛️ Постройки', ['mine', 'store', 'shop', 'barracks']], o: ['🛡️ Оборона', ['tower', 'cannon', 'mortar', 'bomb', 'airmine']], w: ['🧱 Заборы', ['wall']], d: ['🌳 Украшения', ['tree', 'pine', 'bush', 'flowers', 'rock', 'lamp', 'flag', 'bench', 'fountain', 'statue']], f: ['🛋️ Мебель', Object.keys(FURN)] };
+    const NEWK = new Set(['barracks', 'cannon', 'mortar', 'bomb', 'airmine']);   // набеги: старый bases.sql их не знает
     function renderCat(){
       const bm = B.bm, me = B.me; if (!bm || !me) return;
-      const tabs = bm.room ? ['f'] : ['b', 'w', 'd'];
+      const tabs = bm.room ? ['f'] : ['b', 'o', 'w', 'd'];
       q('.mb-tabs').innerHTML = tabs.map(t => `<button type="button" data-mb="tab:${t}"${bm.tab === t ? ' class="on"' : ''}>${TABS[t][0]}</button>`).join('') + (bm.room ? `<span class="mb-lim">${me.room.length}/${DEFS.house.furn[Rules.houseLv(me) - 1]} предметов</span>` : `<span class="mb-lim">🌳 ${Rules.count(me.layout, 'deco')}/${DECO_MAX[Rules.th(me) - 1]}</span>`);
       const t = Rules.th(me);
       q('.mb-cards').innerHTML = TABS[bm.tab][1].map(k => {
@@ -1411,6 +1628,7 @@
           else if (n >= lim) lock = 'макс.';
           if (!Rules.isDeco(k)) cnt = `${Rules.count(me.layout, k)}/${lim}`;
           if (D.coins && me.local && inv <= 0 && !lock) lock = 'после входа';
+          if (!me.local && B.srv === 'old' && NEWK.has(k)) lock = 'скоро';
         }
         const poor = !lock && !price.startsWith('в запасе') && (D.coins ? false : (bm.room ? D.cost : D.cost[0]) > me.bricks);
         return `<button type="button" class="mb-card${bm.tool?.k === k && !bm.tool.move ? ' on' : ''}${poor ? ' poor' : ''}" data-mb="pick:${k}"${lock ? ' disabled' : ''} title="${esc(D.info || D.n)}"><span class="mb-ce">${D.e}</span><b>${esc(D.n)}</b><span class="mb-cc">${lock ? '🔒 ' + lock : price}</span>${cnt ? `<span class="mb-cn">${cnt}</span>` : ''}</button>`;
@@ -1442,6 +1660,12 @@
         if (it.k === 'mine' && it.l >= 1) lines.push(`Добыча: ${D.rate[it.l - 1]} 🧱/час · в шахте ${Rules.prod(it, now)}/${D.hold[it.l - 1]}`);
         if ((it.k === 'store' || it.k === 'th') && it.l >= 1) lines.push(`Вмещает: ${num(D.keep[it.l - 1])} 🧱`);
         if (it.k === 'house' && it.l >= 1) lines.push(`Мебели: до ${D.furn[it.l - 1]} предметов`);
+        // набеги: оборона, ловушки, казарма
+        if (D.atk && it.l >= 1) lines.push(`⚔️ Урон ${D.atk.dmg[it.l - 1]} за выстрел · дальность ${String(D.atk.rng).replace('.', ',')} кл. · ${D.atk.air ? (D.atk.gnd ? 'земля и воздух' : 'воздух') : 'земля'}`);
+        if (D.trap && it.l >= 1) lines.push(`💥 Урон ${D.trap.dmg[it.l - 1]} · ${D.trap.air ? 'по летающим' : 'по наземным'} · чужим не видна`);
+        if (D.army && it.l >= 1) lines.push(`🪖 Армия: до ${D.army[it.l - 1]} мест · отряды — в «⚔️ Набеги»`);
+        if (D.hp && it.l >= 1 && it.k !== 'wall') lines.push(`❤️ Прочность ${num(D.hp[it.l - 1])}`);
+        if (it.k === 'wall' && it.l >= 1) lines.push(`❤️ Держит удар: ${num(D.hp[it.l - 1])}`);
         if (it.ue) {
           lines.push(`⏳ ${it.l === 0 ? 'Строится' : 'Улучшается до ' + it.ul + ' ур.'} — осталось ${fmtT(it.ue - now)}`);
           if (!B.me.local) acts.push(`<button type="button" class="ct-start" data-mb="fin">⚡ Достроить за ${Rules.speedCost(it, now)} 🪙</button>`);
@@ -1451,6 +1675,7 @@
           acts.push(`<button type="button" class="ct-start" data-mb="upg"${cap ? ' disabled' : ''}>⬆ До ${nl} ур.: ${num(cost)} 🧱${tm ? ' · ' + fmtT(tm) : ''}${cap ? ' (' + cap + ')' : ''}</button>`);
         } else if (D.lv > 1) lines.push('Самый высокий уровень ⭐');
         if (it.k === 'mine' && Rules.prod(it, now) > 0) acts.push(`<button type="button" data-mb="col">⛏️ Собрать ${Rules.prod(it, now)}</button>`);
+        if (it.k === 'barracks' && it.l >= 1) acts.push('<button type="button" data-mb="raid">⚔️ Армия и набеги</button>');
         body = `<p>${lines.join('<br>')}</p>`;
         if (it.k !== 'wall') acts.push('<button type="button" data-mb="rot">⟳ Повернуть</button>');
         acts.push('<button type="button" data-mb="mv">✥ Переместить</button>');
@@ -1582,6 +1807,11 @@
     S.wrap.addEventListener('pointermove', onPtr);
     const onAuth = () => { if (!B.stopped) { if (B.bm) exitBuild(); init(); } };
     window.addEventListener('d37:auth', onAuth);
+    // набеги (raid.js) поменяли участок: армия, добыча, казарма — перечитать свой
+    const onBase = () => { if (B.stopped || !B.me) return; if (B.me.local) { const l = readLocal(); if (l) { B.me = { ...l, local: true }; afterChange('sync', {}, { quiet: true }); } } else refreshOwn(); };
+    window.addEventListener('d37:base', onBase);
+    const onMb = e => { if (e?.detail === 'build') buildFromRaid(); };
+    window.addEventListener('d37:mb', onMb);
     B.dispose = () => {
       B.stopped = true;
       exitBuild();
@@ -1589,6 +1819,8 @@
       S.el.removeEventListener('click', onClick);
       S.wrap.removeEventListener('pointermove', onPtr);
       window.removeEventListener('d37:auth', onAuth);
+      window.removeEventListener('d37:base', onBase);
+      window.removeEventListener('d37:mb', onMb);
       clearTimeout(sigT); clearTimeout(reloadT); clearTimeout(noteT);
       hud.remove(); topBtn.remove(); ghostOff(); grid(false); selBox(null);
       for (const m of [stdMat, glowMat, ghostOk, ghostBad, selMat, glassM, boardM]) { m?.map?.dispose(); m?.dispose(); }
@@ -1601,5 +1833,5 @@
     return B;
   }
 
-  root.MirBase = { DEFS, FURN, SERVER, Rules, Geo, WHY, zone, build, start, fmtT, _draw: { DRAW, FDRAW, WALL_ST } };
+  root.MirBase = { DEFS, FURN, UNITS, HERO, RAID, LEAGUES, league, SKINS, SERVER, Rules, Geo, WHY, zone, build, start, fmtT, _draw: { DRAW, FDRAW, WALL_ST } };
 })();

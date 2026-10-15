@@ -12,7 +12,11 @@
 --  цену, строителей, время по своим часам. Добыча шахт и конец стройки — по отметкам времени: клиент только рисует.
 --  Читать: участки — все (base_street и таблица bases); дом — кого пускает хозяин (base_room и RLS base_rooms): все /
 --  друзья (friendships) / никто. Монеты 🪙 (coin_wallet) — только «ускорить стройку» и вещи за монеты.
---  Проверка после запуска: select public.base_street(0); → {"ok": true, …}
+--  Набеги (docs/RAIDS.md, raids.sql — ПОСЛЕ этого файла): оборона (вышка, пушка, мортира, ловушки), казарма и армия —
+--  bases.army {отряд: штук} / army_out (ушли в набег) / queue [{u, ue, t}] (очередь по времени) / q2 (вторая казарма);
+--  тренирует base_act (train / untrain / tfinish / unarm). trophies, skin, shield_until — меняет только raids.sql, видны всем.
+--  Каталог base_defs() собирает scripts/gen-base-defs.cjs из js/games/mir-base.js (руками не править).
+--  Проверка после запуска: select public.base_street(0); → {"ok": true, …}; /rpc/base_defs → есть "cannon" и "u"
 -- ═══════════════════════════════════════════════════════════════════
 
 create table if not exists public.bases (
@@ -31,6 +35,14 @@ alter table public.bases add column if not exists act_t bigint not null default 
 alter table public.bases add column if not exists act_n int not null default 0;        -- и ходов в ней
 alter table public.bases add column if not exists created_at timestamptz not null default now();
 alter table public.bases add column if not exists updated_at timestamptz not null default now();
+-- набеги: армия казармы и то, что видно на табличке участка (кубки, облик, щит) — пишут base_act и raids.sql
+alter table public.bases add column if not exists army jsonb not null default '{}'::jsonb;        -- {отряд: штук} в казарме
+alter table public.bases add column if not exists army_out jsonb not null default '{}'::jsonb;    -- ушли в набег (вернутся невысаженные)
+alter table public.bases add column if not exists queue jsonb not null default '[]'::jsonb;       -- [{u, ue, t}] — очередь тренировки
+alter table public.bases add column if not exists q2 boolean not null default false;              -- вторая казарма: учит вдвое быстрее
+alter table public.bases add column if not exists trophies int not null default 0;
+alter table public.bases add column if not exists skin text not null default '';                  -- облик участка
+alter table public.bases add column if not exists shield_until bigint not null default 0;         -- щит от набегов (секунды эпохи)
 do $$ begin alter table public.bases add constraint bases_plot_chk check (plot between 1 and 600); exception when duplicate_object then null; end $$;
 do $$ begin alter table public.bases add constraint bases_bricks_chk check (bricks >= 0); exception when duplicate_object then null; end $$;
 do $$ begin alter table public.bases add constraint bases_access_chk check (access in ('all', 'friends', 'nobody')); exception when duplicate_object then null; end $$;
@@ -58,17 +70,23 @@ create or replace function public.base_today() returns date language sql stable 
   select (to_timestamp(public.base_now()) at time zone 'Europe/Moscow')::date
 $$;
 -- Каталог — КАК SERVER в mir-base.js: n — клеток участка, in — клеток комнаты, per — участков на улице, start — кирпичей
--- на старт, deco — лимит украшений по уровню ратуши, door — проход от двери (x0, x1, z0, z1); k — постройки, f — мебель
+-- на старт, deco — лимит украшений по уровню ратуши, door — проход от двери (x0, x1, z0, z1); k — постройки, f — мебель,
+-- u — отряды казармы, hero — герой, raid — правила набегов (raids.sql). Собирает node scripts/gen-base-defs.cjs
 create or replace function public.base_defs() returns jsonb language sql immutable as $$
   select '{"n":12,"in":9,"per":6,"plots":600,"start":600,"deco":[6,10,15,20,25],"door":[3,6,7,9],
   "k":{
-    "th":{"w":3,"d":3,"lv":5,"fixed":1,"cost":[0,500,2000,6000,15000],"time":[0,300,1800,7200,28800],"max":[1,1,1,1,1],"keep":[1000,1500,2500,4000,6000]},
-    "house":{"w":5,"d":5,"lv":5,"fixed":1,"cost":[0,300,1200,4000,10000],"time":[0,120,1200,5400,21600],"max":[1,1,1,1,1],"furn":[8,14,20,28,36]},
-    "mine":{"w":2,"d":2,"lv":5,"cost":[100,250,800,2500,7000],"time":[20,120,1200,5400,18000],"max":[1,2,3,3,4],"rate":[150,250,400,600,900],"hold":[1200,2000,3200,4800,7200]},
-    "store":{"w":2,"d":2,"lv":5,"cost":[150,400,1200,3500,9000],"time":[20,180,1500,5400,18000],"max":[1,1,2,2,3],"keep":[1000,2500,5000,8000,12000]},
-    "shop":{"w":2,"d":2,"lv":1,"cost":[1000],"time":[600],"max":[0,1,1,1,1]},
-    "tower":{"w":2,"d":2,"lv":3,"cost":[600,2000,6000],"time":[300,3600,14400],"max":[0,0,1,1,2]},
-    "wall":{"w":1,"d":1,"lv":5,"cost":[10,30,80,200,500],"time":[0,0,0,0,0],"max":[20,30,40,50,60]},
+    "th":{"w":3,"d":3,"lv":5,"fixed":1,"cost":[0,500,2000,6000,15000],"time":[0,300,1800,7200,28800],"max":[1,1,1,1,1],"keep":[1000,1500,2500,4000,6000],"hp":[1700,2000,2350,2650,3050]},
+    "house":{"w":5,"d":5,"lv":5,"fixed":1,"cost":[0,300,1200,4000,10000],"time":[0,120,1200,5400,21600],"max":[1,1,1,1,1],"furn":[8,14,20,28,36],"hp":[1150,1350,1550,1750,2000]},
+    "mine":{"w":2,"d":2,"lv":5,"cost":[100,250,800,2500,7000],"time":[20,120,1200,5400,18000],"max":[1,2,3,3,4],"rate":[150,250,400,600,900],"hold":[1200,2000,3200,4800,7200],"hp":[420,480,550,610,680]},
+    "store":{"w":2,"d":2,"lv":5,"cost":[150,400,1200,3500,9000],"time":[20,180,1500,5400,18000],"max":[1,1,2,2,3],"keep":[1000,2500,5000,8000,12000],"hp":[550,620,700,790,880]},
+    "shop":{"w":2,"d":2,"lv":1,"cost":[1000],"time":[600],"max":[0,1,1,1,1],"hp":[650]},
+    "barracks":{"w":2,"d":2,"lv":5,"cost":[200,600,1800,4500,10000],"time":[60,600,3600,10800,21600],"max":[1,1,1,1,1],"hp":[550,620,700,790,880],"army":[20,35,55,75,95]},
+    "tower":{"w":2,"d":2,"lv":5,"cost":[400,1200,3000,7000,14000],"time":[120,1200,5400,14400,28800],"max":[1,1,2,2,3],"hp":[520,580,650,730,800],"atk":{"dmg":[26,31,35,42,48],"cd":0.6,"rng":5.5,"min":0,"sp":0,"fly":0,"gnd":1,"air":1}},
+    "cannon":{"w":2,"d":2,"lv":5,"cost":[250,700,2000,5000,11000],"time":[60,600,3600,10800,21600],"max":[2,2,3,3,4],"hp":[570,650,730,810,900],"atk":{"dmg":[44,53,62,70,79],"cd":1,"rng":4.5,"min":0,"sp":0,"fly":0,"gnd":1,"air":0}},
+    "mortar":{"w":2,"d":2,"lv":4,"cost":[800,2500,6000,12000],"time":[600,3600,10800,28800],"max":[0,1,1,2,2],"th":2,"hp":[680,770,860,960],"atk":{"dmg":[66,79,92,106],"cd":4,"rng":7,"min":2,"sp":1.2,"fly":1,"gnd":1,"air":0}},
+    "bomb":{"w":1,"d":1,"lv":3,"cost":[100,400,1200],"time":[0,0,0],"max":[2,3,4,5,6],"trap":{"dmg":[100,125,155],"trig":0.6,"sp":1.5,"delay":0.5,"gnd":1,"air":0}},
+    "airmine":{"w":1,"d":1,"lv":3,"cost":[300,900,2500],"time":[0,0,0],"max":[0,0,1,2,3],"th":3,"trap":{"dmg":[250,320,390],"trig":1.5,"sp":0,"delay":0,"gnd":0,"air":1}},
+    "wall":{"w":1,"d":1,"lv":5,"cost":[10,30,80,200,500],"time":[0,0,0,0,0],"max":[20,30,40,50,60],"hp":[130,220,330,460,620]},
     "tree":{"w":1,"d":1,"lv":1,"cost":[30],"time":[0],"g":"deco"},
     "pine":{"w":1,"d":1,"lv":1,"cost":[30],"time":[0],"g":"deco"},
     "bush":{"w":1,"d":1,"lv":1,"cost":[15],"time":[0],"g":"deco"},
@@ -84,7 +102,25 @@ create or replace function public.base_defs() returns jsonb language sql immutab
     "table":{"w":2,"d":2,"cost":50,"coins":0}, "rug":{"w":3,"d":3,"cost":40,"coins":0,"floor":1}, "lamp":{"w":1,"d":1,"cost":30,"coins":0},
     "plant":{"w":1,"d":1,"cost":20,"coins":0}, "shelf":{"w":2,"d":1,"cost":60,"coins":0}, "wardrobe":{"w":2,"d":1,"cost":80,"coins":0},
     "tv":{"w":2,"d":1,"cost":0,"coins":60}, "fire":{"w":2,"d":1,"cost":0,"coins":80}, "aqua":{"w":2,"d":1,"cost":0,"coins":100},
-    "chess":{"w":2,"d":3,"cost":0,"coins":120}, "arcade":{"w":1,"d":1,"cost":0,"coins":150}}}'::jsonb
+    "chess":{"w":2,"d":3,"cost":0,"coins":120}, "arcade":{"w":1,"d":1,"cost":0,"coins":150}},
+  "u":{
+    "fighter":{"sp":1,"cost":5,"time":15,"lv":1,"hp":90,"dmg":10,"cd":1,"rng":0.6,"spd":1.6,"tgt":"any"},
+    "archer":{"sp":1,"cost":8,"time":18,"lv":1,"hp":40,"dmg":9,"cd":1,"rng":3,"spd":1.6,"tgt":"any"},
+    "tank":{"sp":4,"cost":30,"time":60,"lv":2,"hp":650,"dmg":18,"cd":2,"rng":0.6,"spd":1,"tgt":"def"},
+    "breaker":{"sp":2,"cost":20,"time":40,"lv":3,"hp":30,"dmg":40,"cd":1,"rng":0.5,"spd":2.4,"tgt":"wall","wdmg":300,"boom":1},
+    "flyer":{"sp":3,"cost":40,"time":75,"lv":4,"hp":180,"dmg":60,"cd":2,"rng":0.4,"spd":1.2,"tgt":"def","air":1,"splash":0.6},
+    "healer":{"sp":5,"cost":60,"time":120,"lv":5,"hp":300,"cd":1,"rng":1,"spd":1.4,"tgt":"heal","air":1,"heal":30,"hr":2}},
+  "hero":{"hp":[420,550,680,810,940],"dmg":[30,40,50,60,70],"cd":1,"rng":0.7,"spd":1.8,"tgt":"any","ab":[200,280,360,440,520],"abr":2},
+  "raid":{
+    "tps":20,"max":180,"scout":30,"go":45,"cancel":60,"grace":240,
+    "loot":{"pct":20,"step":6,"min":5,"mine":35,"th":40,"prot":[400,600,900,1300,1800],"sprot":[150,300,500,800,1200],"cap":[800,1600,3000,5000,8000],"day":[3000,6000,10000,16000,24000],"lose":[1600,3200,6000,10000,16000],"pair":20},
+    "tr":{"win":20,"wdiv":10,"wmin":6,"wmax":36,"lose":14,"ldiv":12,"lmin":4,"lmax":28},
+    "shield":{"s2":8,"s3":12,"guard":30,"newbie":3},
+    "day":{"battles":20,"search":100,"bots":3},"next":[10,25,50,80,120],"league":[0,100,400,800,1300,1900,2600],"bonus":[0,20,40,70,110,160,220],
+    "chest":[100,200,400,700,1000,1500,2000],"chestWins":3,"bot":[120,250,450,700,1000],"camp":[150,200,300,400,500,650,800,1000,1200,1500,1800,2200],
+    "campTh":[1,1,2,2,2,3,3,3,4,4,5,5],"tut":300,
+    "tutArmy":{"fighter":12,"archer":8},
+    "shop":{"sh1":{"g":30,"h":24},"sh2":{"g":50,"h":48},"shWeek":7,"shMax":72,"q2":{"g":150,"c":1500},"fin":1200,"skin":{"winter":{"g":100},"gold":{"g":100},"neon":{"g":100},"autumn":{"c":800}},"army":{"knight":{"g":80},"robot":{"g":80}}}}}'::jsonb
 $$;
 
 -- ── Помощники (как Rules в mir-base.js) ──
@@ -148,6 +184,30 @@ create or replace function public.base_norm(p_l jsonb, p_now bigint) returns jso
       else q.e end order by q.o), '[]'::jsonb)
   from jsonb_array_elements(coalesce(p_l, '[]'::jsonb)) with ordinality q(e, o)
 $$;
+-- ── Казарма (набеги; как Rules.qnorm / barracksLv / armySpace в mir-base.js) ──
+-- Очередь тренировки: готовые (ue ≤ сейчас) — в армию. Очередь — одна цепочка, ue растут
+create or replace function public.base_qnorm(p_q jsonb, p_army jsonb, p_now bigint, out o_q jsonb, out o_army jsonb)
+language plpgsql immutable as $$
+declare v_e jsonb;
+begin
+  o_q := '[]'::jsonb; o_army := coalesce(p_army, '{}'::jsonb);
+  for v_e in select q.e from jsonb_array_elements(coalesce(p_q, '[]'::jsonb)) with ordinality q(e, o) order by q.o loop
+    if (v_e->>'ue')::bigint <= p_now then
+      o_army := jsonb_set(o_army, array[v_e->>'u'], to_jsonb(coalesce((o_army->>(v_e->>'u'))::int, 0) + 1));
+    else o_q := o_q || jsonb_build_array(v_e);
+    end if;
+  end loop;
+end $$;
+-- Уровень казармы (0 — нет готовой) и сколько мест занято: в казарме, в набеге, в очереди
+create or replace function public.base_barracks_lv(p_l jsonb) returns int language sql immutable as $$
+  select coalesce(max((q.e->>'l')::int), 0)::int from jsonb_array_elements(coalesce(p_l, '[]'::jsonb)) q(e) where q.e->>'k' = 'barracks' and (q.e->>'l')::int >= 1
+$$;
+create or replace function public.base_space(p_army jsonb, p_out jsonb, p_q jsonb) returns int language sql immutable as $$
+  select (coalesce((select sum(((public.base_defs()->'u'->a.key->>'sp')::int) * (a.value #>> '{}')::int) from jsonb_each(coalesce(p_army, '{}'::jsonb)) a where public.base_defs()->'u' ? a.key), 0)
+    + coalesce((select sum(((public.base_defs()->'u'->a.key->>'sp')::int) * (a.value #>> '{}')::int) from jsonb_each(coalesce(p_out, '{}'::jsonb)) a where public.base_defs()->'u' ? a.key), 0)
+    + coalesce((select sum((public.base_defs()->'u'->(q.e->>'u')->>'sp')::int) from jsonb_array_elements(coalesce(p_q, '[]'::jsonb)) q(e)), 0))::int
+$$;
+
 -- Собрать из шахт (p_id — одна, null — все) на склад, сколько влезет; остаток остаётся в шахте
 create or replace function public.base_collect_(p_l jsonb, p_bricks int, p_id int, p_now bigint, out o_l jsonb, out o_br int, out o_got int)
 language plpgsql immutable as $$
@@ -194,8 +254,9 @@ $$;
 create or replace function public.base_view(p_uid uuid, p_now bigint) returns jsonb language sql stable security definer set search_path = public as $$
   select jsonb_build_object('ok', true, 'now', p_now, 'plot', b.plot, 'bricks', b.bricks, 'layout', public.base_norm(b.layout, p_now),
     'room', coalesce(r.items, '[]'::jsonb), 'own', b.own, 'access', b.access, 'seq', b.seq, 'rev', b.rev, 'likes', b.likes,
-    'gift', b.gift_day is distinct from public.base_today(), 'coins', public.base_coins_(p_uid))
-  from public.bases b left join public.base_rooms r on r.user_id = b.user_id where b.user_id = p_uid
+    'gift', b.gift_day is distinct from public.base_today(), 'coins', public.base_coins_(p_uid),
+    'army', qn.o_army, 'out', b.army_out, 'queue', qn.o_q, 'q2', b.q2, 'trophies', b.trophies, 'skin', b.skin, 'shield', b.shield_until)
+  from public.bases b left join public.base_rooms r on r.user_id = b.user_id, lateral public.base_qnorm(b.queue, b.army, p_now) qn where b.user_id = p_uid
 $$;
 
 -- ── Чтение ──
@@ -221,7 +282,7 @@ create or replace function public.base_street(p_street int) returns jsonb langua
   with s as (select greatest(0, least(99, coalesce(p_street, 0))) as n, public.base_now() as nw)
   select jsonb_build_object('ok', true, 'now', s.nw, 'street', s.n, 'max', coalesce((select max(b.plot) from public.bases b), 0),
     'plots', coalesce((select jsonb_agg(jsonb_build_object('p', b.plot, 'uid', b.user_id, 'nick', coalesce(pr.nick, 'Игрок'), 'layout', public.base_norm(b.layout, s.nw),
-        'access', b.access, 'rev', b.rev, 'likes', b.likes) order by b.plot)
+        'access', b.access, 'rev', b.rev, 'likes', b.likes, 'tr', b.trophies, 'skin', b.skin, 'sh', b.shield_until) order by b.plot)
       from public.bases b left join public.profiles pr on pr.id = b.user_id
       where b.plot between s.n * 6 + 1 and s.n * 6 + 6), '[]'::jsonb))
   from s
@@ -321,6 +382,7 @@ end $$;
 -- ── Ход на своём участке (как Rules.act в mir-base.js; порядок проверок тот же) ──
 --   place {k, x, z, r} · move {id, x, z, r} · remove {id} (украшение — в запас) · upgrade {id} · collect {id?} · finish {id} (за 🪙)
 --   gift · access {a: all|friends|nobody} · fplace {k, x, z, r} · fmove {id, x, z, r} · fremove {id} · like {uid} (чужому участку)
+--   казарма: train {u, n} (🧱 сразу, готовы по очереди) · untrain {u?} (последний такой, 🧱 назад) · tfinish (за 🪙) · unarm {u, n}
 --   Не больше 120 ходов в минуту. Ответ — всё о своём участке (как base_state) + got/id/spent или {ok: false, reason}.
 create or replace function public.base_act(p_act text, p_a jsonb default '{}'::jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -330,6 +392,7 @@ declare
   v_l jsonb; v_rm jsonb; v_own jsonb; v_br int; v_seq int; v_acc text; v_gd date; v_err text; v_xtra jsonb := '{}'::jsonb; v_room boolean := false;
   v_k text; v_def jsonb; v_x int; v_z int; v_r int; v_id int; v_idx int; v_it jsonb; v_fp int[]; v_t int; v_lim int; v_cnt int;
   v_tm int; v_cost int; v_coins int; v_nl int; v_inv boolean; v_got int; v_tot int; v_add int;
+  v_army jsonb; v_out jsonb; v_q jsonb; v_bl int; v_n int; v_last bigint; v_i int; v_e jsonb;   -- казарма (набеги)
 begin
   if v_uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   p_a := coalesce(p_a, '{}'::jsonb);
@@ -358,6 +421,8 @@ begin
   v_rm := coalesce((select br.items from public.base_rooms br where br.user_id = v_uid), '[]'::jsonb);
   v_own := coalesce(v_b.own, '{}'::jsonb); v_br := v_b.bricks; v_seq := v_b.seq; v_acc := v_b.access; v_gd := v_b.gift_day;
   v_t := public.base_th(v_l);
+  select qn.o_q, qn.o_army into v_q, v_army from public.base_qnorm(v_b.queue, v_b.army, v_now) qn;   -- дотренировались — в армию
+  v_out := coalesce(v_b.army_out, '{}'::jsonb);
 
   <<main>>
   begin
@@ -524,6 +589,61 @@ begin
       v_rm := v_rm - v_idx;
       v_room := true;
 
+    -- ── Казарма (набеги): train {u, n?} · untrain {u?} · tfinish (за 🪙) · unarm {u, n?} ──
+    elsif p_act = 'train' then
+      v_k := p_a->>'u';
+      v_n := case when p_a ? 'n' and jsonb_typeof(p_a->'n') <> 'null' then public.base_arg(p_a, 'n', 30) else 1 end;
+      if v_k is null or v_n is null or v_n < 1 then v_err := 'args'; exit main; end if;
+      v_def := v_dd->'u'->v_k;
+      if v_def is null then v_err := 'kind'; exit main; end if;
+      v_bl := public.base_barracks_lv(v_l);
+      if v_bl = 0 then v_err := 'barracks'; exit main; end if;
+      if (v_def->>'lv')::int > v_bl then v_err := 'ulock'; exit main; end if;
+      if public.base_space(v_army, v_out, v_q) + v_n * (v_def->>'sp')::int > (v_dk->'barracks'->'army'->>(v_bl - 1))::int then v_err := 'space'; exit main; end if;
+      if v_br < v_n * (v_def->>'cost')::int then v_err := 'bricks'; exit main; end if;
+      v_br := v_br - v_n * (v_def->>'cost')::int;
+      v_tm := case when v_b.q2 then ((v_def->>'time')::int + 1) / 2 else (v_def->>'time')::int end;
+      v_last := case when jsonb_array_length(v_q) > 0 then (v_q->-1->>'ue')::bigint else v_now end;
+      for v_i in 1 .. v_n loop
+        v_last := greatest(v_last, v_now) + v_tm;
+        v_q := v_q || jsonb_build_array(jsonb_build_object('u', v_k, 'ue', v_last, 't', v_tm));
+      end loop;
+
+    elsif p_act = 'untrain' then
+      v_k := null;
+      if p_a ? 'u' and jsonb_typeof(p_a->'u') <> 'null' then
+        v_k := p_a->>'u';
+        if v_dd->'u'->v_k is null then v_err := 'args'; exit main; end if;
+      end if;
+      select max(q.o - 1)::int into v_idx from jsonb_array_elements(v_q) with ordinality q(e, o) where v_k is null or q.e->>'u' = v_k;
+      if v_idx is null then v_err := 'noq'; exit main; end if;
+      v_it := v_q->v_idx;
+      v_q := v_q - v_idx;
+      v_br := greatest(v_br, least(public.base_cap(v_l), v_br + (v_dd->'u'->(v_it->>'u')->>'cost')::int));
+      v_last := case when v_idx > 0 then (v_q->(v_idx - 1)->>'ue')::bigint else v_now end;   -- следующие — раньше
+      for v_i in v_idx .. jsonb_array_length(v_q) - 1 loop
+        v_last := greatest(v_last, v_now) + (v_q->v_i->>'t')::int;
+        v_q := jsonb_set(v_q, array[v_i::text], (v_q->v_i) || jsonb_build_object('ue', v_last));
+      end loop;
+
+    elsif p_act = 'tfinish' then
+      if jsonb_array_length(v_q) = 0 then v_err := 'noq'; exit main; end if;
+      v_coins := greatest(1, ((v_q->-1->>'ue')::bigint - v_now + 119) / 120)::int;   -- 1 🪙 за каждые 2 минуты, как стройка
+      if public.base_coins_(v_uid) < v_coins then v_err := 'coins'; exit main; end if;
+      if not public.base_pay_(v_uid, v_coins, 'train') then v_err := 'coins'; exit main; end if;
+      for v_e in select q.e from jsonb_array_elements(v_q) q(e) loop
+        v_army := jsonb_set(v_army, array[v_e->>'u'], to_jsonb(coalesce((v_army->>(v_e->>'u'))::int, 0) + 1));
+      end loop;
+      v_q := '[]'::jsonb;
+      v_xtra := jsonb_build_object('spent', v_coins);
+
+    elsif p_act = 'unarm' then
+      v_k := p_a->>'u';
+      v_n := case when p_a ? 'n' and jsonb_typeof(p_a->'n') <> 'null' then public.base_arg(p_a, 'n', 100) else 1 end;
+      if v_k is null or v_dd->'u'->v_k is null or v_n is null or v_n < 1 then v_err := 'args'; exit main; end if;
+      if coalesce((v_army->>v_k)::int, 0) < v_n then v_err := 'noarmy'; exit main; end if;
+      if (v_army->>v_k)::int = v_n then v_army := v_army - v_k; else v_army := jsonb_set(v_army, array[v_k], to_jsonb((v_army->>v_k)::int - v_n)); end if;
+
     else v_err := 'args';
     end if;
   end;
@@ -533,7 +653,7 @@ begin
     return jsonb_build_object('ok', false, 'reason', v_err, 'now', v_now);
   end if;
   update public.bases set layout = v_l, bricks = v_br, own = v_own, seq = v_seq, access = v_acc, gift_day = v_gd, rev = rev + 1,
-    act_t = v_b.act_t, act_n = v_b.act_n, updated_at = now() where user_id = v_uid;
+    army = v_army, queue = v_q, act_t = v_b.act_t, act_n = v_b.act_n, updated_at = now() where user_id = v_uid;
   if v_room then
     insert into public.base_rooms (user_id, items) values (v_uid, v_rm)
       on conflict (user_id) do update set items = excluded.items, updated_at = now();
