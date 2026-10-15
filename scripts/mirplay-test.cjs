@@ -509,6 +509,19 @@ MP.P.back = 10;
     ok(S(it({ g: 'chess', c: 'abc123' }, 500)) === '{"busy":true,"join":false}', 'начали до меня — стол занят');
     ok(S(it({ g: 'chess', c: null }, 2000)) === '{"busy":true,"join":false}', 'играет с ботом — стол занят');
     ok(S(it({ g: 'chess', c: 'zzz999' }, 2000)) === '{"busy":true,"join":false}', 'другой код — стол занят');
+    // presence: у Supabase не больше 5 track/untrack за 30 с на клиента (иначе канал мира закрывается) — мы шлём не больше 4 за 31 с
+    {
+      const G = W.presGate, times = [];
+      let sent = 0, t = 0, maxIn30 = 0;
+      for (let i = 0; i < 40; i++) {   // «сел-встал-сыграл» каждые 1,5 с: лишнее ждёт окна
+        t = i * 1500;
+        while (true) { const w = G(times, t); if (!w) { times.push(t); sent++; break; } t += w; }
+        maxIn30 = Math.max(maxIn30, times.filter(x => x > t - 30e3 && x <= t).length);
+      }
+      ok(G([], 0) === 0 && G([0, 1, 2], 3) === 0, 'presGate: пока меньше 4 за 31 с — сразу');
+      ok(G([0, 1000, 2000, 3000], 4000) === 31e3 - 4000 + 60, 'presGate: пятое — ждать, пока старое выйдет из окна', G([0, 1000, 2000, 3000], 4000));
+      ok(maxIn30 <= 4 && sent === 40, 'частые обновления: ни разу больше 4 за 30 с (до лимита сервера — 5)', { maxIn30, sent });
+    }
     me.playing = { g: 'chess', c: 'abc123' }; me.plAt = 5;
     ok(JSON.stringify(W.tableState([{ p: me, c: 'abc123' }], me, my)) === '{"busy":false,"join":false}', 'сам себе — не помеха');
     delete me.playing;

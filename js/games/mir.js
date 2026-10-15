@@ -897,21 +897,52 @@
     try { st.keys = st.keys || await makeKeys(); } catch (e) { status('Браузер не поддерживает защищённые сообщения — обнови его'); return; }
     if (st.me.uid && !st.pass) { try { const { data, error } = await sbClient.rpc('world_pass', { p_pub: st.keys.pub }); if (!error && data) st.pass = data; } catch (e) {} }
     if (S !== st || st.stopped) return;
+    // старый канал с тем же именем ещё закрывается (мир пересобрали, переподключение)? Supabase отдал бы его же, а потом
+    // выкинул из списка по имени — и новый мир остался бы без связи. Сначала дождаться, пока старый уйдёт
+    const old = sbClient.getChannels?.().find(c => c.topic === 'realtime:' + CHAN + shard);
+    if (old) { try { await sbClient.removeChannel(old); } catch (e) {} if (S !== st || st.stopped) return; }
     S.shard = shard;
     S.q('.wldShard').textContent = `сервер ${shard}`;
     const ch = sbClient.channel(CHAN + shard, { config: { broadcast: { self: false }, presence: { key: S.key } } });
-    S.ch = ch; S.firstSync = false;
+    S.ch = ch; S.firstSync = false; S.chWhy = '';
     ch.on('presence', { event: 'sync' }, () => { if (S?.ch === ch) onSync(); });
     ch.on('broadcast', { event: 'w' }, ({ payload }) => { if (S?.ch === ch) onMsg(payload); });
+    ch.on('system', {}, p => { if (S?.ch === ch && p?.status === 'error') S.chWhy = String(p.message || ''); });   // почему сервер закроет канал
     ch.subscribe(async s => {
       if (S?.ch !== ch || S.stopped) return;
-      if (s === 'SUBSCRIBED') { status(''); await ch.track(presenceMeta()); }
+      if (s === 'SUBSCRIBED') { status(''); presCount(); await ch.track(presenceMeta()); }
       else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') status('Связь с миром потерялась — переподключаемся…');
+      else if (s === 'CLOSED') rejoinLater(ch);
     });
   }
   const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0, pl: S.playing ? { g: S.playing.g, c: S.playing.c } : null });
-  const retrack = () => { if (S?.ch && S.keys) S.ch.track(presenceMeta()).catch(() => {}); };
-  function leaveChannel(){ const ch = S?.ch; if (!ch) return; S.ch = null; try { ch.untrack(); } catch (e) {} try { sbClient.removeChannel(ch); } catch (e) {} }
+  // Presence у Supabase: не больше 5 обновлений (track/untrack) за 30 с на клиента, иначе сервер закрывает канал мира
+  // («Client presence rate limit exceeded» — мир «вылетал»: сел-встал-сыграл подряд). Поэтому track — не чаще PRES_N раз
+  // за PRES_WIN: лишнее ждёт и уходит одним, самым свежим состоянием, когда окно освободится.
+  const PRES_N = 4, PRES_WIN = 31e3;
+  // можно ли отправить сейчас: times — отметки прошлых отправок; 0 — можно, иначе — сколько мс ждать
+  function presGate(times, t){ const live = times.filter(x => t - x < PRES_WIN); return live.length < PRES_N ? 0 : PRES_WIN - (t - Math.min(...live)) + 60; }
+  function presCount(){ const t = Date.now(); S.presT = (S.presT || []).filter(x => t - x < PRES_WIN); S.presT.push(t); }
+  function retrack(){
+    const st = S; if (!st?.ch || !st.keys) return;
+    if (st.presWait) return;   // уже ждём окна — уйдёт свежее состояние
+    const wait = presGate(st.presT || [], Date.now());
+    if (!wait) { presCount(); st.ch.track(presenceMeta()).catch(() => {}); return; }
+    st.presWait = setTimeout(() => { if (S !== st) return; st.presWait = 0; retrack(); }, wait);
+  }
+  function leaveChannel(){ const ch = S?.ch; if (!ch) return; S.ch = null; clearTimeout(S.presWait); S.presWait = 0; try { ch.untrack(); } catch (e) {} try { sbClient.removeChannel(ch); } catch (e) {} }
+  // Канал закрыл сервер (лимит presence и т. п.): мир живёт дальше (ходить можно), чужие пропадают; через 31 с (после
+  // лимита — когда окно сервера точно прошло) или 5 с — подключаемся снова. Раньше мир молча оставался без связи.
+  function rejoinLater(ch){
+    const st = S; if (!st || st.ch !== ch || st.stopped) return;
+    const limit = /rate limit/i.test(st.chWhy || '');
+    st.ch = null; clearTimeout(st.presWait); st.presWait = 0;
+    try { sbClient.removeChannel(ch); } catch (e) {}
+    for (const p of st.players.values()) if (!p.leaving) p.leaving = now();
+    toast('📡 Связь с миром прервалась — подключаемся снова…');
+    clearTimeout(st.rejoinT);
+    st.rejoinT = setTimeout(() => { if (S === st && !st.stopped && !st.ch) join(st.shard); }, limit ? 31e3 : 5e3);
+  }
   function onSync(){
     const st = S.ch.presenceState(), seen = new Map();
     for (const [key, metas] of Object.entries(st)) { const m = metas.reduce((a, b) => ((b.at || 0) >= (a.at || 0) ? b : a), metas[0]); if (m && m.id === key) seen.set(key, m); }
@@ -1639,7 +1670,7 @@
     const seatedPlay = !!(s.playing && s.mySeat);
     if (s.playing) { try { window.MirPlay?.close('unmount'); } catch (e) { console.error(e); } s.playing = null; }
     s.stopped = true;
-    clearInterval(s.tick); clearTimeout(s.invT);
+    clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT);
     if (s.mySeat) { s.mySeat = null; }
     try { s.menu?.close(); s.offCtx?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран
     leaveChannel();
@@ -1672,6 +1703,6 @@
       }, 0);
     },
     unmount(){ current?.unmount(); current = null; },
-    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S, afkDue, tableState, standSpot: (sp, d) => S && standSpot(sp, d) },
+    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S, afkDue, tableState, presGate, standSpot: (sp, d) => S && standSpot(sp, d) },
   };
 })();
