@@ -221,6 +221,8 @@ let chatToastTimer=null;
 const CHAT_TOAST_DEFAULT_HTML = '<span>💬</span><span>Новое сообщение в чате</span>';
 function showChatToast(customText){
   if(currentRoute()==='chat') return;
+  // Возраст (js/core/age.js): чат не по возрасту (12+) — не зовём туда тостом и значком
+  if(window.D37Age && !D37Age.canOpen(D37Age.area('chat')?.age || 0)) return;
   const t=document.getElementById('chatToast');
   if(t){
     t.innerHTML = customText ? `<span>✨</span><span>${customText}</span>` : CHAT_TOAST_DEFAULT_HTML;

@@ -74,7 +74,7 @@ body.high .gk-box{animation:gkIn .16s ease-out}
 .gk-sh-body a{color:var(--accent,#a78bfa)}
 .gk-sh-foot{padding:.6rem 1.1rem .9rem;border-top:1px solid rgba(255,255,255,.08)}
 .gk-sh-foot .gk-row{margin:0}
-@media(max-width:440px){.gm-stage-bar>b span{display:none}}
+@media(max-width:440px){.gm-stage-bar>b .gm-tt{display:none}}
 .gm-stage[data-game="world"] .gk-rbtn,.gm-stage[data-game="studio"] .gk-rbtn,.gm-stage[data-game="studio3d"] .gk-rbtn,.gm-stage[data-game="unity"] .gk-rbtn,.gm-stage[data-game="wardrobe"] .gk-rbtn,.gm-stage[data-game="sprites"] .gk-rbtn{display:none}
 /* плашка «чей ход» */
 .gk-turn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;max-width:100%;padding:.32rem .85rem;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--muted,#9a98b3);font-weight:800;font-size:.88rem;line-height:1.3}

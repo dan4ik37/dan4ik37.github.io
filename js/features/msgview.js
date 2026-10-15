@@ -98,15 +98,21 @@
     const c = list.find(x => x.name === name);
     return c ? `<img class="custom-emoji-img inline-emoji" src="${e(c.image_url)}" alt=":${e(name)}:" title=":${e(name)}:">` : null;
   }
-  // → { html, cards: [описание], big: только эмодзи }
-  MV.rich = (text, myNick) => {
+  // → { html, cards: [описание], big: только эмодзи }. o.kid — ребёнок до 13 (js/core/age.js) в общем канале: ссылки скрыты
+  // (кроме роликов и игр сайта), телефоны, почта и соцсети — «[скрыто]»; в ЛС (только друзья) — как у всех
+  MV.rich = (text, myNick, o = {}) => {
     const cards = [];
-    const words = String(text || '').split(/(\s+)/);
+    const kid = !!o.kid && !!window.D37Age;
+    const words = (kid ? window.D37Age.kidText(String(text || ''), { at: false }) : String(text || '')).split(/(\s+)/);
     const html = words.map(w => {
       if (!w) return '';
       if (/^\s+$/.test(w)) return w.includes('\n') ? '<br>'.repeat(Math.min(3, (w.match(/\n/g) || []).length)) : ' ';
       const path = sitePath(w);
-      if (path) { const card = MV.cardOf(path); if (card && cards.length < 2 && !cards.some(c => JSON.stringify(c) === JSON.stringify(card))) cards.push(card); return `<a class="mv-link" href="${e(hrefOf(path))}">${e(linkLabel(path, card))}</a>`; }
+      if (path) {
+        const card = MV.cardOf(path);
+        if (kid && !(card && (card.t === 'video' || card.t === 'game'))) return '<span class="mv-dim">[ссылка]</span>';
+        if (card && cards.length < 2 && !cards.some(c => JSON.stringify(c) === JSON.stringify(card))) cards.push(card); return `<a class="mv-link" href="${e(hrefOf(path))}">${e(linkLabel(path, card))}</a>`;
+      }
       if (EXT_RE.test(w)) return '<span class="mv-dim">[ссылка]</span>';
       let c = P.clean(w);
       if (/^@[\p{L}0-9_.-]{2,24}[.,!?:;)]*$/u.test(c)) {
@@ -208,6 +214,8 @@
     const list = q('.mv-list'), input = q('.mv-in'), over = q('.mv-over'), menu = q('.mv-menu');
     const myNick = () => V.A?.me?.()?.nick || P.myNick() || (typeof chatNick !== 'undefined' ? chatNick : '');
     const myUid = () => V.A?.me?.()?.uid || P.me();
+    // ребёнок (js/core/age.js) в общем канале или сообществе — строгий вид; ЛС (только друзья) — как у всех
+    const kidView = () => !!window.D37Age?.kid?.() && !/^dm:/.test(V.A?.key || '');
 
     // ── Отрисовка одного сообщения ──
     function html(m, prev){
@@ -215,7 +223,7 @@
       const st = authorStyle(m), blocked = m.uid && MV.blocked.has(m.uid);
       const first = !prev || prev.sys || prev.uid !== m.uid || prev.nick !== m.nick || m.reply || Date.parse(m.at) - Date.parse(prev.at) > GROUP_MS || dayName(prev.at) !== dayName(m.at);
       const me = myNick(), mine = m.mine || (m.uid ? m.uid === myUid() : !!me && m.nick === me && !myUid());
-      const r = blocked ? { html: '', cards: [] } : MV.rich(m.text, me);
+      const r = blocked ? { html: '', cards: [] } : MV.rich(m.text, me, { kid: kidView() });
       const hl = !mine && me && (new RegExp('@' + me.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}0-9_])', 'iu').test(m.text || '') || (m.reply && V.msgs.get(m.reply)?.mine));
       const color = st.rgb ? `color:rgb(${st.rgb})` : st.color ? `color:${e(st.color)}` : '';
       const prof = m.uid ? P.prof(m.uid) : null;
@@ -754,7 +762,7 @@
         else if (k === 'guest') V.A.guest?.().then(gate);
         else if (k === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); }
         else if (k === 'join') V.A.onJoin?.();
-        else if (k === 'showblk' && el) { el.querySelector('.mv-blk')?.replaceWith(Object.assign(document.createElement('div'), { className: 'mv-text', innerHTML: MV.rich(m?.text || '', myNick()).html })); }
+        else if (k === 'showblk' && el) { el.querySelector('.mv-blk')?.replaceWith(Object.assign(document.createElement('div'), { className: 'mv-text', innerHTML: MV.rich(m?.text || '', myNick(), { kid: kidView() }).html })); }
         else if (m && k === 'reply') setReply(m);
         else if (m && k === 'react') { if (V.A.caps.react === 'site' && typeof openReactionPicker === 'function') openReactionPicker(m.id, a); else openMenu(m, a); }
         else if (m && k === 'more') openMenu(m, a);

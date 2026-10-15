@@ -38,7 +38,9 @@ function isShortVid(v){
 
 // youtube.js зовёт это, когда список роликов готов (или не загрузился)
 function onVideosLoaded(){
-  shortsList = (typeof newestVids !== 'undefined' ? newestVids : []).filter(isShortVid);
+  // Возраст (js/core/age.js): лента Shorts играет сама — ролики не по возрасту в неё не берём (18+ — и тем, кто возраст не указал)
+  const ageOk = v => !window.D37Age || D37Age.allows(D37Age.video(v.title).age);
+  shortsList = (typeof newestVids !== 'undefined' ? newestVids : []).filter(v => isShortVid(v) && ageOk(v));
   document.body.classList.toggle('no-shorts', !shortsList.length);
   renderShortsRow();
   if (document.body.dataset.route === 'shorts') renderShortsFeed();
