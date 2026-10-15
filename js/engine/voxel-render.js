@@ -435,6 +435,22 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
       return m;
     };
     void LT0;
+    // ── «призрак» блока: куда встанет блок из руки (полупрозрачный кубик); VR.ghost(null) — спрятать ──
+    let ghostMat = null, ghost = null, ghostName = '';
+    VR.ghost = (blockName, x, y, z, itemName) => {
+      if (!blockName) { if (ghost) ghost.visible = false; return; }
+      const name = itemName || blockName;
+      if (!ghostMat) ghostMat = patch(new T.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .45, depthWrite: false }), 'ghost');
+      if (ghostName !== name) {
+        ghostName = name;
+        if (ghost) ghost.geometry.dispose();
+        else { ghost = new T.Mesh(undefined, ghostMat); ghost.renderOrder = 8; ghost.matrixAutoUpdate = true; R.scene.add(ghost); }
+        ghost.geometry = VR.itemGeo(name, (15 << 12) | 0x666);
+        ghost.scale.setScalar(1.002);
+      }
+      ghost.position.set(x - VR.ox + .5, y + .5, z - VR.oz + .5);
+      ghost.visible = true;
+    };
 
     // ── простой режим: шейдер не собрался (старый телефон) — пересобрать без мерцания, бликов и массива текстур ──
     let checkN = 0;
@@ -453,6 +469,7 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
       for (const m of meshPool) m.material = mats.solid;
       R.scene.traverse(o => { if (o.isMesh && (o.material === old.solid || o.material === old.cutout || o.material === old.water)) o.material = o.material === old.cutout ? mats.cutout : o.material === old.water ? mats.water : mats.solid; });
       for (const m of Object.values(old)) m.dispose();
+      if (ghostMat) { ghostMat.dispose(); ghostMat = null; ghostName = ''; if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); ghost = null; } }
       V.iconsReset();
       if (typeof console !== 'undefined') console.warn('Кубомир: шейдер кубиков не собрался — простой режим');
       VR.onSafe?.();
@@ -478,6 +495,7 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
       for (const m of Object.values(mats)) m.dispose();
       tex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
+      if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();
     };
     return VR;
   };

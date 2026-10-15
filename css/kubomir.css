@@ -126,3 +126,16 @@
 @media (max-height:460px){.kb{--kb-s:34px}}
 .kb-wrap .e-btns{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 34px)}
 html.gs-lefty .kb-wrap .e-btns{left:max(12px,env(safe-area-inset-left));right:auto}
+/* ── управление как в Майнкрафте: кнопки телефона (как в Bedrock), кольцо ломания, F1, протяжка в вещах ── */
+.kb-tbar{position:absolute;right:max(12px,env(safe-area-inset-right));bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 30px);z-index:5;display:grid;grid-template-columns:repeat(2,auto);gap:10px;align-items:end;justify-items:center;pointer-events:none}
+html.gs-lefty .kb-tbar{left:max(12px,env(safe-area-inset-left));right:auto}
+.kb-tbtn{pointer-events:auto;touch-action:none;width:56px;height:56px;border-radius:50%;border:2px solid rgba(255,255,255,.45);background:rgba(18,14,36,.55);color:#fff;font-size:22px;display:grid;place-items:center;line-height:1;position:relative;-webkit-tap-highlight-color:transparent;font-family:Montserrat,system-ui,sans-serif}
+.kb-tbtn b{position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:800;white-space:nowrap;text-shadow:0 1px 3px #000}
+.kb-tbtn.big{width:74px;height:74px;font-size:28px;grid-column:span 2}
+.kb-tbtn.on,.kb-tbtn:active{background:rgba(79,140,255,.7);border-color:#fff}
+.kb-tbtn[hidden]{display:none}
+.kb-ring{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;border-radius:50%;pointer-events:none;z-index:5;
+  background:conic-gradient(#ffd23f calc(var(--k,0) * 1%),rgba(255,255,255,.18) 0);-webkit-mask:radial-gradient(circle,transparent 24px,#000 25px);mask:radial-gradient(circle,transparent 24px,#000 25px)}
+.kb-ring[hidden]{display:none}
+.kb-wrap.kb-nohud .kb-hud,.kb-wrap.kb-nohud .e-hud,.kb-wrap.kb-nohud .kb-tbar,.kb-wrap.kb-nohud .kb-ring{visibility:hidden}
+.kb-inv .kb-slot.drag{border-color:#ffd23f;background:rgba(255,210,63,.18)}
