@@ -150,6 +150,21 @@ const stored = e => { try { const r = JSON.parse(e.store.d37_ref2 || 'null'); if
     ok(e.R.wrap('https://dan4ik37.vercel.app/#/games/world') === 'https://dan4ik37.vercel.app/#/games/world', 'wrap: другой аккаунт — без чужого кода');
   }
   {
+    // social-login.js: новый аккаунт любым способом → d37:signup { provider, userId } (currentUser мог ещё не встать)
+    const e = spa('https://dan4ik37.vercel.app/?ref=k7m2qz#/home');
+    let resolveClaim;
+    const calls = withSb(e, { ref_claim: () => new Promise(r => { resolveClaim = () => r({ data: { ok: true, already: false, inviter: 'Vasya' }, error: null }); }),
+      ref_ping: { data: { ok: true, code: 'qrs234' }, error: null } });
+    e.ctx.dispatchEvent({ type: 'd37:signup', detail: { provider: 'vk', userId: 'u9' } });
+    e.ctx.currentUser = { id: 'u9' };
+    e.ctx.dispatchEvent({ type: 'd37:auth' });   // пришло почти одновременно — второй раз не спрашиваем
+    await new Promise(r => setTimeout(r, 10));
+    resolveClaim && resolveClaim();
+    await new Promise(r => setTimeout(r, 30));
+    ok(calls.filter(c => c[0] === 'ref_claim').length === 1 && e.store.d37_ref_done === 'u9' && e.R.pending() === null, 'd37:signup (VK, Яндекс, Telegram…): привязка сразу, один раз — даже если d37:auth пришёл рядом', calls.map(c => c[0]));
+    ok(!('d37_oauth' in e.store) && !Object.keys(e.store).some(k => /^d37_signup_|^d37_login_fails/.test(k)), 'ключи входа (d37_oauth, d37_signup_*, d37_login_fails) не трогаем');
+  }
+  {
     // referrals2.sql ещё не запущен — код ждёт (не теряем)
     const e = spa('https://dan4ik37.vercel.app/?ref=k7m2qz');
     withSb(e, { ref_claim: { data: null, error: { code: 'PGRST202', message: 'Could not find the function' } }, ref_ping: { data: null, error: { code: 'PGRST202' } } });
@@ -335,6 +350,17 @@ const stored = e => { try { const r = JSON.parse(e.store.d37_ref2 || 'null'); if
     Object.assign(ST, { me: null, off: true });
     h = I._test.page();
     ok(h.includes('value="https://dan4ik37.vercel.app/?ref=Vasya"') && h.includes('появятся, когда сайт обновится'), 'без referrals2.sql: временная ссылка ?ref=<ник> и честное «скоро»');
+    // окно входа: «Тебя пригласил(а) <ник>» над «Войти через…» (#gauthRef)
+    const box = { hidden: true, innerHTML: '' };
+    e.ctx.document.getElementById = id => (id === 'gauthRef' ? box : null);
+    e.ctx.currentUser = null;
+    e.store.d37_ref2 = JSON.stringify({ c: 'k7m2qz', k: 'code', t: e.clock.t, s: 'link', p: '' });
+    e.ctx.sbClient = { rpc: async n => (n === 'ref_public' ? { data: { ok: true, nick: 'Vasya' }, error: null } : { data: null, error: { code: 'PGRST202' } }) };
+    await I._test.authLine();
+    ok(!box.hidden && box.innerHTML.includes('Тебя пригласил(а) <b>Vasya</b>') && box.innerHTML.includes('50 🪙'), 'окно входа: «🎁 Тебя пригласил(а) Vasya» и подарок', box.innerHTML);
+    e.ctx.currentUser = { id: 'u1' };
+    await I._test.authLine();
+    ok(box.hidden, 'вошёл — строки в окне входа нет');
   }
 
   fs.rmSync(pageMod.tmp, { recursive: true, force: true });

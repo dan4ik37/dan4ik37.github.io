@@ -177,11 +177,13 @@
 
   // Нет таблиц/функций на сервере (referrals2.sql не запущен) — ждём, ничего не теряем
   const noSql = err => /PGRST202|42883|42P01|does not exist|Could not find/i.test(String(err?.code || '') + ' ' + String(err?.message || ''));
-  let busy = false;
-  // После входа: привязать приглашение (если есть) и раз в день — свой код и метки (только у тех, кто зовёт, и у новичков)
-  async function afterAuth(){
-    const u = user(), sb = sbc();
-    if (!u || !sb || busy) return;
+  let busy = false, again = null;
+  // После входа: привязать приглашение (если есть) и раз в день — свой код и метки (только у тех, кто зовёт, и у новичков).
+  // uidHint — из события d37:signup (social-login.js: первый вход нового аккаунта любым способом; currentUser мог ещё не встать)
+  async function afterAuth(uidHint){
+    const u = user() || (typeof uidHint === 'string' && uidHint ? { id: uidHint } : null), sb = sbc();
+    if (!u || !sb) return;
+    if (busy) { again = u.id; return; }   // уже идёт — повторим, когда закончится
     busy = true;
     try {
       const p = pending(), dev = device();
@@ -200,6 +202,7 @@
       }
     } catch (e) {}
     busy = false;
+    if (again) { const id = again; again = null; if (pending() && lsGet(LS_DONE) !== id) afterAuth(id); }
   }
 
   // Кто позвал по коду (для плашки новичку): { ok, nick, gift }; кэш на визит
@@ -242,7 +245,11 @@
   const forgetFrame = uid => { if (uid) frames.delete(uid); else frames.clear(); };
 
   capture();
-  if (root.addEventListener) root.addEventListener('d37:auth', () => { afterAuth(); });
+  if (root.addEventListener) {
+    root.addEventListener('d37:auth', () => { afterAuth(); });
+    // новый аккаунт (почта, Google, VK, Яндекс, Telegram, Discord, Twitch, GitHub — js/features/social-login.js) — сразу привязать
+    root.addEventListener('d37:signup', e => { afterAuth(e?.detail?.userId); });
+  }
 
   root.D37Ref = {
     RULES, LADDER, ALPHABET, CODE_RE, SITE,

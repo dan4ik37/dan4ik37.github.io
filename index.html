@@ -2384,6 +2384,8 @@ body.low .donation-alert-icon{animation:none}
         <p id="gauthFormSubtitle">Войди в свой аккаунт</p>
       </div>
       <div class="gauth-body">
+        <!-- 👥 «Тебя пригласил …» — js/features/invite.js: есть код приглашения в браузере (js/core/ref.js), человек не вошёл; иначе скрыто -->
+        <div id="gauthRef" class="gauth-ref" hidden></div>
         <!-- ▼ «Войти через…» — js/features/social-login.js (D37Login.renderModal): только включённые входы — VK ID, Telegram, Яндекс ID
              (свои, /api/oauth?a=providers) и Google, Discord, Twitch, GitHub (Supabase /auth/v1/settings). Ничего не включено — блок скрыт ▼ -->
         <div id="gauthOauth" class="lgn-box" hidden></div>

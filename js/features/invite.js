@@ -402,7 +402,22 @@
   setTimeout(banner, 2500);
   window.addEventListener('hashchange', () => { clearTimeout(bannerT); bannerT = setTimeout(banner, 1200); });
 
+  // ═══ Окно входа: «🎁 Тебя пригласил(а) <ник>» над кнопками «Войти через…» (#gauthRef в index.html; само окно — global-auth.js) ═══
+  async function authLine(){
+    const box = document.getElementById('gauthRef');
+    if (!box) return;
+    const p = R()?.pending();
+    if (!p || me()) { box.hidden = true; return; }
+    const L = R().LADDER, info = await R().publicInfo(p.c);
+    if (!R().pending() || me()) { box.hidden = true; return; }
+    box.innerHTML = `🎁 ${info?.nick ? `Тебя пригласил(а) <b>${esc(info.nick)}</b>` : 'Тебя пригласили на сайт'} — создай профиль любым способом, и на ${L.w.lv} уровне получишь ${num(L.w.coins)} 🪙 и ${esc(L.w.text)}.`;
+    box.hidden = false;
+  }
+  const authModal = document.getElementById('globalAuthModal');
+  if (authModal && window.MutationObserver) new MutationObserver(() => { if (authModal.classList.contains('open')) authLine(); }).observe(authModal, { attributes: true, attributeFilter: ['class'] });
+  R()?.on(type => { if (type === 'claim') { const b = document.getElementById('gauthRef'); if (b) b.hidden = true; } });
+
   window.renderInvitePage = renderInvitePage;
   window.renderInviteCard = renderInviteCard;
-  window.D37Invite = { load, shareText, myLink, state: () => ST, _test: { page, partName, placeOptions } };
+  window.D37Invite = { load, shareText, myLink, state: () => ST, _test: { page, partName, placeOptions, authLine } };
 })();
