@@ -92,7 +92,11 @@ async function callback(c, req, res, p) {
   const clear = cookieSet(cookieName(p), '', 0);
   if (!enabled(c, p) || (p === 'tg' && c.tg.mode !== 'oidc')) return back(c, res, errFrag('off', p), clear);
   const st = unsign(c, 'state', cookieGet(req, cookieName(p)));
-  const q = req.query || {};
+  const q = { ...(req.query || {}) };
+  // VK ID в части режимов отдаёт данные одним полем payload (JSON) — разложить по местам
+  if (p === 'vk' && q.payload && !q.code) {
+    try { const j = JSON.parse(String(q.payload).slice(0, 4096)); for (const k of ['code', 'state', 'device_id']) if (j && j[k] != null) q[k] = String(j[k]); } catch (e) {}
+  }
   if (!st || st.p !== p) return back(c, res, errFrag('state', p), clear);
   if (q.error) return back(c, res, errFrag('denied', p), clear);   // человек нажал «Отмена»
   if (!safeEq(q.state, st.s) || !q.code || String(q.code).length > 2048) return back(c, res, errFrag('state', p), clear);

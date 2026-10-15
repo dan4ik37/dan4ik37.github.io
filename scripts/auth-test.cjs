@@ -335,6 +335,12 @@ const cookieOf = res => String(res.headers['set-cookie'] || '').split(';')[0];
   ok(NET.vk.find(x => x[0] === 'token')?.[1].service_token === 'vk-service-token' && DB.links.at(-1).name === 'Иван', 'есть VK_ID_SECRET — уходит как service_token (конфиденциальное приложение); имя без фамилии', NET.vk[0]);
   setEnv(BASE_ENV);
 
+  // VK ID отдал данные одним полем payload (JSON)
+  res = await call({ a: 'start', p: 'vk', b: B }); q = qs(res.headers.location); ck = cookieOf(res); NET.vkChallenge = q.code_challenge;
+  VK_USER = { ...VK_USER, user_id: 7654321 };
+  res = await call({ a: 'callback', p: 'vk', payload: JSON.stringify({ code: 'vk-code', state: q.state, device_id: 'dev-9', type: 'code_v2' }) }, { headers: { cookie: ck } });
+  ok(!!frag(res.headers.location).d37auth && NET.vk.filter(x => x[0] === 'token').at(-1)[1].device_id === 'dev-9', 'VK ID: данные одним полем payload — тоже понимаем');
+
   // ═══ 8. Лимит новых аккаунтов с одного адреса, бан входа, гонка ═══
   DB.ip = {};
   const vkLogin = async (uid, ip) => {
