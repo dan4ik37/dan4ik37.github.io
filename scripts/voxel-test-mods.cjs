@@ -183,7 +183,8 @@ module.exports = async function ({ ok, sec, load, SITE, CORE }){
           try {
             if (c.t === 'boot') { vm.runInContext('(' + c.code + ')()', wctx, { timeout: 2000, filename: 'blob:null/mod-runtime' }); return; }
             wctx.__m = { data: c };
-            vm.runInContext('onmessage(__m)', wctx, { timeout: 400, filename: 'blob:null/frame' });
+            // запуск мода с языком (Java — ~0,5 МБ переводчика) под нагрузкой бывает дольше 0,4 с — запуску даём 3 с
+            vm.runInContext('onmessage(__m)', wctx, { timeout: c.t === 'init' && c.langs && Object.keys(c.langs).length ? 3000 : 400, filename: 'blob:null/frame' });
           } catch (e) { if (/timed out/i.test(e.message)) { B.dead = true; onMsg({ t: 'hang' }); } else onMsg({ t: 'error', where: '', line: 0, msg: e.message }); }
         });
       },

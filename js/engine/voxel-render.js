@@ -25,8 +25,8 @@
   function tileCanvas(layer){
     if (tileCache.has(layer)) return tileCache.get(layer);
     const t = V.tex[layer], d = V.paint(t.name, V.specOf ? V.specOf(t.name) : t.spec || V.TEX_SPECS[t.name]);
-    const c = document.createElement('canvas'); c.width = c.height = 16;
-    const g = c.getContext('2d'), im = g.createImageData(16, 16); im.data.set(d); g.putImageData(im, 0, 0);
+    const TS = V.TEX || 16, c = document.createElement('canvas'); c.width = c.height = TS;
+    const g = c.getContext('2d'), im = g.createImageData(TS, TS); im.data.set(d); g.putImageData(im, 0, 0);
     tileCache.set(layer, c);
     return c;
   }
@@ -34,9 +34,9 @@
   function tinted(layer, rgb){
     const k = 'tint:' + layer + ':' + rgb.join(',');
     if (tileCache.has(k)) return tileCache.get(k);
-    const src = tileCanvas(layer), c = document.createElement('canvas'); c.width = c.height = 16;
+    const TS = V.TEX || 16, src = tileCanvas(layer), c = document.createElement('canvas'); c.width = c.height = TS;
     const g = c.getContext('2d'); g.drawImage(src, 0, 0);
-    const im = g.getImageData(0, 0, 16, 16);
+    const im = g.getImageData(0, 0, TS, TS);
     for (let i = 0; i < im.data.length; i += 4) { im.data[i] = im.data[i] * rgb[0] / 255; im.data[i + 1] = im.data[i + 1] * rgb[1] / 255; im.data[i + 2] = im.data[i + 2] * rgb[2] / 255; }
     g.putImageData(im, 0, 0); tileCache.set(k, c);
     return c;
@@ -54,10 +54,10 @@
         const sideT = b.tint && b.tint !== V.TINT.grass ? tint : W3;
         const top = tinted(f.top, tint), side = tinted(f.side, mul(sideT, .8)), front = tinted(f.front >= 0 ? f.front : f.side, mul(sideT, .62));
         // изометрия: верх — ромб, слева — бок, справа — «перед» (у печи и сундука — их лицевая сторона)
-        const s = size * .46, hs = s * .95, cx = size / 2, y0 = size * .04, cy = y0 + s / 2;
-        g.setTransform(s / 16, s / 32, -s / 16, s / 32, cx, y0); g.drawImage(top, 0, 0);
-        g.setTransform(s / 16, s / 32, 0, hs / 16, cx - s, cy); g.drawImage(side, 0, 0);
-        g.setTransform(s / 16, -s / 32, 0, hs / 16, cx, cy + s / 2); g.drawImage(front, 0, 0);
+        const s = size * .46, hs = s * .95, cx = size / 2, y0 = size * .04, cy = y0 + s / 2, T1 = V.TEX || 16, T2 = T1 * 2;
+        g.setTransform(s / T1, s / T2, -s / T1, s / T2, cx, y0); g.drawImage(top, 0, 0);
+        g.setTransform(s / T1, s / T2, 0, hs / T1, cx - s, cy); g.drawImage(side, 0, 0);
+        g.setTransform(s / T1, -s / T2, 0, hs / T1, cx, cy + s / 2); g.drawImage(front, 0, 0);
         g.setTransform(1, 0, 0, 1, 0, 0);
       } else {
         const layer = it?.texL ?? (b ? b.texf?.side : null);
@@ -188,14 +188,39 @@ varying vec3 vWp;
 #endif`;
   const FS_TEX2 = `
 uniform highp sampler2DArray uTex;
-vec4 d37Tex( vec3 p ) { return texture( uTex, p ); }`;
+vec4 d37Tex( vec3 p ) { return texture( uTex, p ); }
+#ifdef D37_NMAP
+uniform highp sampler2DArray uNTex;
+uniform float uNStr;
+// рельеф текстуры («высокая»): карта нормалей из яркости рисунка (печётся при сборке текстур), базис грани — по производным
+// места и UV (без касательных в вершинах)
+vec3 d37Bump( vec3 n, vec3 p, vec2 uv, vec3 m ) {
+  vec3 q0 = dFdx( p ), q1 = dFdy( p );
+  vec2 s0 = dFdx( uv ), s1 = dFdy( uv );
+  vec3 a = cross( q1, n ), b = cross( n, q0 );
+  vec3 t = a * s0.x + b * s1.x, bt = a * s0.y + b * s1.y;
+  float k = max( dot( t, t ), dot( bt, bt ) );
+  k = k > 0.0 ? inversesqrt( k ) : 0.0;
+  return normalize( t * ( m.x * k ) + bt * ( m.y * k ) + n * m.z );
+}
+#endif`;
+  const FS_NMAP = `
+#include <normal_fragment_maps>
+#ifdef D37_NMAP
+{
+  vec3 d37nm = texture( uNTex, vUvL ).xyz * 2.0 - 1.0;
+  d37nm.xy *= uNStr;
+  normal = d37Bump( normal, - vViewPosition, vUvL.xy, d37nm );
+}
+#endif`;
   const FS_TEX1 = `
 uniform sampler2D uTex;
 uniform float uAtlasN;
+uniform float uTS;
 vec4 d37Tex( vec3 p ) {
   vec2 tile = vec2( mod( p.z, uAtlasN ), floor( p.z / uAtlasN ) );
-  vec2 f = clamp( fract( p.xy ) * 16.0, 0.5, 15.5 );
-  return texture2D( uTex, ( tile * 16.0 + f ) / ( uAtlasN * 16.0 ) );
+  vec2 f = clamp( fract( p.xy ) * uTS, 0.5, uTS - 0.5 );
+  return texture2D( uTex, ( tile * uTS + f ) / ( uAtlasN * uTS ) );
 }`;
   const FS_MAP = `
 vec3 d37uv = vUvL;
@@ -271,28 +296,46 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const VR = { chunks: new Set(), ox: 0, oz: 0, stats: { meshes: 0, quads: 0, poolFree: 0, bytes: 0 }, safe: !!opts.safe };
     let gl2 = gl2real && !VR.safe;   // простой режим — атлас (texture2D) и на WebGL2
     // ── текстуры ──
-    let tex = null, atlasN = 1;
+    let tex = null, atlasN = 1, ntex = null;
+    const nmapOn = () => gl2 && !VR.safe && R.q === 'high' && opts.nmap !== false;
     function buildTextures(){
-      const all = V.paintAll(), L = all.length;
+      const all = V.paintAll(), L = all.length, TS = V.TEX || 16;
       if (tex) tex.dispose();
       if (gl2) {
-        const data = new Uint8Array(16 * 16 * 4 * L);
-        all.forEach((d, i) => data.set(d, i * 1024));
-        tex = new T.DataArrayTexture(data, 16, 16, L);
+        const data = new Uint8Array(TS * TS * 4 * L);
+        all.forEach((d, i) => data.set(d, i * TS * TS * 4));
+        tex = new T.DataArrayTexture(data, TS, TS, L);
         tex.format = T.RGBAFormat; tex.type = T.UnsignedByteType;
         tex.magFilter = T.NearestFilter; tex.minFilter = T.NearestMipmapLinearFilter; tex.generateMipmaps = true;
         tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.encoding = T.sRGBEncoding; tex.anisotropy = 1;
       } else {
         atlasN = Math.ceil(Math.sqrt(L));
-        const S = atlasN * 16, data = new Uint8Array(S * S * 4);
-        all.forEach((d, i) => { const tx = (i % atlasN) * 16, ty = Math.floor(i / atlasN) * 16; for (let y = 0; y < 16; y++) data.set(d.subarray(y * 64, y * 64 + 64), ((ty + y) * S + tx) * 4); });
+        const S = atlasN * TS, data = new Uint8Array(S * S * 4), RW = TS * 4;
+        all.forEach((d, i) => { const tx = (i % atlasN) * TS, ty = Math.floor(i / atlasN) * TS; for (let y = 0; y < TS; y++) data.set(d.subarray(y * RW, y * RW + RW), ((ty + y) * S + tx) * 4); });
         tex = new T.DataTexture(data, S, S, T.RGBAFormat, T.UnsignedByteType);
         tex.magFilter = tex.minFilter = T.NearestFilter; tex.generateMipmaps = false; tex.encoding = T.sRGBEncoding;
       }
       tex.needsUpdate = true;
-      U.uTex.value = tex; U.uAtlasN.value = atlasN;
+      U.uTex.value = tex; U.uAtlasN.value = atlasN; U.uTS.value = TS;
+      // карта нормалей из яркости (рельеф: светлое — выше, тёмные швы и трещины — вглубь), только когда её рисуют
+      if (ntex) { ntex.dispose(); ntex = null; }
+      if (gl2 && nmapOn()) {
+        const nd = new Uint8Array(TS * TS * 4 * L), hgt = new Float32Array(TS * TS);
+        all.forEach((d, l) => {
+          for (let i = 0; i < TS * TS; i++) hgt[i] = d[i * 4 + 3] < 128 ? 0 : (d[i * 4] * .3 + d[i * 4 + 1] * .59 + d[i * 4 + 2] * .11) / 255;
+          const o = l * TS * TS * 4, h = (x, y) => hgt[((y + TS) % TS) * TS + ((x + TS) % TS)];
+          for (let y = 0; y < TS; y++) for (let x = 0; x < TS; x++) {
+            const dx = (h(x + 1, y) - h(x - 1, y)) * 2.2, dy = (h(x, y + 1) - h(x, y - 1)) * 2.2, il = 1 / Math.hypot(dx, dy, 1), j = o + (y * TS + x) * 4;
+            nd[j] = Math.round((-dx * il * .5 + .5) * 255); nd[j + 1] = Math.round((-dy * il * .5 + .5) * 255); nd[j + 2] = Math.round((il * .5 + .5) * 255); nd[j + 3] = 255;
+          }
+        });
+        ntex = new T.DataArrayTexture(nd, TS, TS, L);
+        ntex.format = T.RGBAFormat; ntex.type = T.UnsignedByteType; ntex.magFilter = T.NearestFilter; ntex.minFilter = T.LinearMipmapLinearFilter; ntex.generateMipmaps = true;
+        ntex.wrapS = ntex.wrapT = T.RepeatWrapping; ntex.needsUpdate = true;
+      }
+      U.uNTex.value = ntex;
     }
-    const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
+    const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTS: { value: V.TEX || 16 }, uNTex: { value: null }, uNStr: { value: .75 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
       uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 }, uD37Wind: { value: E.GFXU?.wind || new Float32Array([0, 0, .8, .6]) },
       uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) } };
     VR.U = U;
@@ -339,6 +382,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           .replace('#include <color_fragment>', FS_COLOR)
           .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT + (simple ? '' : FS_WATER));
         if (LFB2 && !simple) fs = fs.replace('#include <lights_fragment_begin>', LFB2);
+        if (!simple) fs = fs.replace('#include <normal_fragment_maps>', FS_NMAP);
         if (FOL) fs = fs.replace('#include <output_fragment>', '#include <output_fragment>\n' + FOL);
         if (!simple) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_BLOOM);
         sh.fragmentShader = fs;
@@ -363,6 +407,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const m = patch(new T.MeshLambertMaterial({ vertexColors: true, ...opt }), k);
       m.defines = { D37_VOX: 1, ['D37_' + k.toUpperCase()]: 1 };
       if (fp) m.defines.D37_FP = 1;
+      if (nmapOn() && k !== 'water') m.defines.D37_NMAP = 1;   // рельеф текстур — на «высокой» (WebGL2)
       m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex', fp: !!fp };
       return m;
     };
@@ -503,9 +548,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       sel.visible = true;
     };
     const crackFS2 = 'precision highp sampler2DArray; uniform sampler2DArray uTex; uniform float uLayer; varying vec2 vUv; void main(){ vec4 c = texture(uTex, vec3(vUv.x, 1.0 - vUv.y, uLayer)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }';
-    const crackFS1 = 'uniform sampler2D uTex; uniform float uAtlasN; uniform float uLayer; varying vec2 vUv; void main(){ vec2 tile = vec2(mod(uLayer, uAtlasN), floor(uLayer / uAtlasN)); vec2 f = clamp(vec2(vUv.x, 1.0 - vUv.y) * 16.0, 0.5, 15.5); vec4 c = texture2D(uTex, (tile * 16.0 + f) / (uAtlasN * 16.0)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }';
+    const crackFS1 = 'uniform sampler2D uTex; uniform float uAtlasN; uniform float uTS; uniform float uLayer; varying vec2 vUv; void main(){ vec2 tile = vec2(mod(uLayer, uAtlasN), floor(uLayer / uAtlasN)); vec2 f = clamp(vec2(vUv.x, 1.0 - vUv.y) * uTS, 0.5, uTS - 0.5); vec4 c = texture2D(uTex, (tile * uTS + f) / (uAtlasN * uTS)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }';
     const crackMat = new T.ShaderMaterial({
-      uniforms: { uTex: U.uTex, uAtlasN: U.uAtlasN, uLayer: { value: 0 } }, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      uniforms: { uTex: U.uTex, uAtlasN: U.uAtlasN, uTS: U.uTS, uLayer: { value: 0 } }, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: gl2 ? crackFS2 : crackFS1,
     });
@@ -680,7 +725,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       for (const m of Object.values(mats)) m.dispose();
       for (const m of Object.values(depthMats)) m.dispose();
       for (const m of Object.values(fpMats)) m.dispose();
-      tex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
+      tex?.dispose(); ntex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
       if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();
     };

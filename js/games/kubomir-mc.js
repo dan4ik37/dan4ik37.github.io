@@ -52,24 +52,26 @@
     return rp;
   }
   async function saveRespack(p){ rp = p; rpLoaded = true; if (p) await VX().store.putMod({ id: RESPACK, pack: p, manifest: { name: p.name } }); else await VX().store.delMod(RESPACK); }
-  // картинка 16×16 RGBA из PNG (пакеты 32×, 64× — сглаженно уменьшаем)
+  // картинка RGBA из PNG размером слоя текстуры (V.TEX, 32): 16× — увеличиваем без сглаживания, 64× и больше — сглаженно уменьшаем
   async function png16(bytes){
+    const N = VX().TEX || 16;
     const blob = new Blob([bytes], { type: 'image/png' });
     const img = window.createImageBitmap ? await createImageBitmap(blob) : await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('картинка')); i.src = URL.createObjectURL(blob); });
-    const c = document.createElement('canvas'); c.width = c.height = 16;
+    const c = document.createElement('canvas'); c.width = c.height = N;
     const g = c.getContext('2d', { willReadFrequently: true });
     const s = Math.min(img.width, img.height);
-    g.imageSmoothingEnabled = s > 16; if (g.imageSmoothingEnabled) g.imageSmoothingQuality = 'high';
-    g.drawImage(img, 0, 0, s, s, 0, 0, 16, 16);
+    g.imageSmoothingEnabled = s > N; if (g.imageSmoothingEnabled) g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, s, s, 0, 0, N, N);
     img.close?.();
-    return new Uint8Array(g.getImageData(0, 0, 16, 16).data.buffer);
+    return new Uint8Array(g.getImageData(0, 0, N, N).data.buffer);
   }
+  const okPix = d => !!d && (d.length === 1024 || d.length === 4096);   // 16×16 (старые пакеты) или 32×32
   // перед запуском мира: блоки «mc:…» мира, пакет текстур
   async function beforeWorld(meta){
     const V = VX(), MC = MCx();
     await loadRespack().catch(() => null);
     V.texOverride.clear();
-    if (rp?.tex) for (const [k, d] of Object.entries(rp.tex)) if (V.texIdx.has(k) && d?.length === 1024) V.texOverride.set(k, { rgba: d });
+    if (rp?.tex) for (const [k, d] of Object.entries(rp.tex)) if (V.texIdx.has(k) && okPix(d)) V.texOverride.set(k, { rgba: d });
     const names = Array.isArray(meta?.mc?.blocks) ? meta.mc.blocks : [];
     if (names.length && MC) registerBlocks(names);
   }
@@ -80,7 +82,7 @@
       if (typeof nm !== 'string' || !/^mc:[a-z0-9_]{1,64}$/.test(nm) || V.block(nm) || V.blocks.length >= 4000) continue;
       const d = MC.blockDef(nm), k = nm.slice(3);
       const pic = rp?.mc?.[k];
-      const spec = pic?.length === 1024 ? { rgba: pic } : d.leaves ? { k: 'leaves', c: d.color } : d.glass ? { k: 'glass', c: d.color } : d.ore ? { k: 'ore', base: '#7d7d80', c: d.color, n: 5 }
+      const spec = okPix(pic) ? { rgba: pic } : d.leaves ? { k: 'leaves', c: d.color } : d.glass ? { k: 'glass', c: d.color } : d.ore ? { k: 'ore', base: '#7d7d80', c: d.color, n: 5 }
         : /planks/.test(k) ? { k: 'planks', c: d.color } : d.pillar ? { k: 'log', c: d.color } : /bricks/.test(k) ? { k: 'bricks', c: d.color, m: '#6b6b6b' } : { k: 'noise', c: d.color, a: /wool|concrete|glazed/.test(k) ? .05 : .12 };
       V.texture(nm, spec);
       const cut = d.cut || d.leaves || d.glass;

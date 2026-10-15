@@ -57,15 +57,15 @@
 .kb-food .e{filter:grayscale(1) brightness(.45)}.kb-food .h{opacity:.6}
 .kb-air{font-size:14px;letter-spacing:-2px}
 .kb-air[hidden]{display:none}
-.kb-iname{min-height:20px;font-weight:800;font-size:14px;text-shadow:0 1px 3px #000;opacity:0}
+.kb-iname{min-height:20px;padding:1px 10px;border-radius:8px;font-weight:800;font-size:15px;letter-spacing:.2px;background:rgba(0,0,0,.35);text-shadow:0 1px 3px #000;opacity:0}
 .kb-iname.show{animation:kbName 2.4s ease forwards}
 @keyframes kbName{0%{opacity:0}8%{opacity:1}75%{opacity:1}100%{opacity:0}}
-.kb-hotbar{display:flex;gap:2px;padding:3px;border-radius:10px;background:rgba(0,0,0,.42);pointer-events:auto}
-.kb-slot{position:relative;width:var(--kb-s);height:var(--kb-s);border-radius:7px;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.12);box-sizing:border-box;flex:none}
-.kb-slot.on{border-color:#fff;background:rgba(255,255,255,.22);box-shadow:0 0 0 2px rgba(255,255,255,.25)}
-.kb-slot i{position:absolute;inset:3px;background:center/contain no-repeat;image-rendering:pixelated}
-.kb-slot b{position:absolute;right:3px;bottom:1px;font-size:12px;font-weight:900;text-shadow:1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000}
-.kb-slot u{position:absolute;left:10%;bottom:3px;height:3px;border-radius:2px;display:block}
+.kb-hotbar{display:flex;gap:3px;padding:4px;border-radius:12px;background:linear-gradient(180deg,rgba(28,32,48,.66),rgba(10,12,20,.78));border:1px solid rgba(255,255,255,.1);box-shadow:0 6px 18px rgba(0,0,0,.35);pointer-events:auto}
+.kb-slot{position:relative;width:var(--kb-s);height:var(--kb-s);border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.04));border:2px solid rgba(255,255,255,.13);box-shadow:inset 0 -3px 0 rgba(0,0,0,.28),inset 0 2px 0 rgba(255,255,255,.06);box-sizing:border-box;flex:none;transition:transform .08s,border-color .08s,background .08s}
+.kb-slot.on{border-color:#fff;background:linear-gradient(180deg,rgba(255,255,255,.3),rgba(255,255,255,.12));box-shadow:0 0 0 2px rgba(255,255,255,.22),0 0 14px rgba(255,255,255,.28);transform:translateY(-2px) scale(1.06);z-index:1}
+.kb-slot i{position:absolute;inset:4px;background:center/contain no-repeat;image-rendering:pixelated;filter:drop-shadow(0 2px 1px rgba(0,0,0,.45))}
+.kb-slot b{position:absolute;right:3px;bottom:1px;font-size:13px;font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-.3px;text-shadow:1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,0 2px 2px rgba(0,0,0,.6)}
+.kb-slot u{position:absolute;left:10%;bottom:3px;height:3px;border-radius:2px;display:block;box-shadow:0 0 0 1px rgba(0,0,0,.55)}
 .kb-slot.res{border-color:rgba(255,210,63,.5)}
 .kb-slot.trash{display:grid;place-items:center;font-size:20px;cursor:pointer}
 .kb-dbg{position:absolute;left:8px;top:8px;padding:6px 9px;border-radius:8px;background:rgba(0,0,0,.55);font:12px/1.45 ui-monospace,Menlo,Consolas,monospace}
@@ -157,3 +157,27 @@ html.gs-lefty .kb-tbar{left:max(12px,env(safe-area-inset-left));right:auto}
 .kb-mclegal a{color:#9fc2ff}
 .kb-mcwin .kb-mcbox{width:min(640px,100%);max-height:calc(100% - 20px);overflow:auto}
 .kb-mcwin .kb-mcbox>.kb-menu{width:100%}
+/* ── книга рецептов, сортировка, подсказки новичку (pass 3) ── */
+.kb-pbtns{display:flex;gap:6px}
+.kb-book{display:flex;flex-direction:column;gap:4px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--kb-line)}
+.kb-book>span{font-weight:800;font-size:.86rem;color:#dfe5ff}
+.kb-booklist{display:flex;flex-wrap:wrap;gap:3px;max-width:calc(var(--kb-s) * 9 + 24px)}
+.kb-booklist small{color:#aab3d6;line-height:1.4}
+.kb-book .kb-slot{cursor:pointer}
+.kb-book .kb-slot:hover{border-color:#ffd23f;background:rgba(255,210,63,.16)}
+.kb-slot.need{opacity:.55;filter:grayscale(.6)}
+.kb-slot.need::after{content:'🛠';position:absolute;left:1px;top:-1px;font-size:11px;filter:none}
+.kb-tip{position:absolute;left:10px;top:10px;max-width:min(420px,calc(100% - 120px));display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:12px;background:rgba(10,14,26,.72);border:1px solid rgba(255,255,255,.12);box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:14px;line-height:1.35;pointer-events:auto;animation:kbTip .35s ease}
+.kb-tip[hidden]{display:none}
+.kb-tip b{display:block;font-size:12px;color:#ffd23f;letter-spacing:.3px}
+.kb-tip button{flex:none;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+@keyframes kbTip{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.kb-dead small.kb-where{color:#ffd9d9}
+.kb-dead .kb-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+/* телефон стоя: кнопки (вещи, красться, прыжок) — выше полосок здоровья и еды, подсказка — компактнее */
+@media (max-width:640px){
+  .kb-tbar{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 64px)}
+  .kb-wrap .e-btns{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 64px)}
+  .kb-tip{font-size:12.5px;max-width:calc(100% - 20px);padding:6px 8px}
+  .kb-log{bottom:calc(var(--kb-s) + 96px)}
+}
