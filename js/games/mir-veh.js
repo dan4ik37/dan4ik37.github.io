@@ -212,11 +212,12 @@
     VS.leave = () => { if (VS.me) exit({ force: true, noPlace: true }); };
     // ── кнопки телефона ──
     function touch(on, v, seat){
-      if (!S.I?.touch || !H?.buttons) return;
-      if (!on) { if (rt.war?.W?.inZone && rt.war.touch) rt.war.touch(true); else H.buttons(BASE_BTNS); return; }
+      const UI = S.H;   // кнопки телефона — интерфейс движка (E.ui), не помощники mir.js
+      if (!S.I?.touch || !UI?.buttons) return;
+      if (!on) { if (rt.war?.W?.inZone && rt.war.touch) rt.war.touch(true); else UI.buttons(BASE_BTNS); return; }
       const air = v.kind === 'heli' || v.kind === 'plane';
-      if (seat > 0) { H.buttons([{ action: 'interact', icon: '🚪', label: 'выйти' }, { action: 'jump', icon: '🧑‍✈️', label: 'за руль' }]); return; }
-      H.buttons(air
+      if (seat > 0) { UI.buttons([{ action: 'interact', icon: '🚪', label: 'выйти' }, { action: 'jump', icon: '🧑‍✈️', label: 'за руль' }]); return; }
+      UI.buttons(air
         ? [{ action: 'interact', icon: '🚪', label: 'выйти' }, { action: 'run', icon: '🚀', label: 'быстрее' }, { action: 'crouch', icon: '⬇', label: v.kind === 'plane' ? 'нос вниз' : 'вниз' }, { action: 'jump', icon: '⬆', label: v.kind === 'plane' ? 'нос вверх' : 'вверх', big: true }]
         : [{ action: 'interact', icon: '🚪', label: 'выйти' }, { action: 'horn', icon: '📯', label: 'сигнал' }, { action: 'run', icon: '🚀', label: 'быстрее' }, { action: 'jump', icon: '🅿️', label: 'тормоз', big: true }]);
     }
