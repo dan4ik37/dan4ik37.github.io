@@ -35,7 +35,10 @@
     .define('upscaler', { def: 'fsr', list: ['fsr', 'nis', 'off'] })
     .define('sharp', { def: 50, min: 0, max: 100 })
     .define('rt', { def: 'off', list: ['off', 'on', 'high'] })
-    .define('framegen', { def: false, bool: 1 });
+    .define('framegen', { def: false, bool: 1 })
+    // ── «Шейдеры» — наборы для 2D и 3D (2D — js/engine/shade2d.js; 3D-наборы движок берёт по этому же ключу) ──
+    .define('shaders', { def: 'auto', list: ['auto', 'normal', 'pretty', 'ultra', 'retro'] })
+    .define('crt', { def: false, bool: 1 });
 
   const dev = () => { const E = root.D37E; try { return E?.quality ? E.quality() : 'mid'; } catch (e) { return 'mid'; } };   // устройство (body.low, телефон, ядра)
   const presetOf = p => PRESETS[p === 'auto' || p === 'custom' ? dev() : p] || PRESETS.mid;
@@ -53,7 +56,7 @@
     const O = root.D37Opt || (root.D37Opt = { rev: 0 });
     O.gfx = { preset: S.get('gfxPreset'), shadowQ: S.get('shadowQ'), ao: S.get('ao'), water: S.get('water'), refl: S.get('refl'), aa: S.get('aa'),
       fog: S.get('fog'), dist: S.get('dist'), grade: S.get('grade'), fpsCap: +S.get('fpsCap') || 0, res: S.get('res'), battery: S.get('battery'),
-      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen') };
+      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen'), shaders: S.get('shaders'), crt: S.get('crt') };
     O.rev++;
   }
   // ── Контекст открытой игры (её «качество — пересобрать мир»): перехватываем context(), окно его не отдаёт ──
@@ -111,7 +114,18 @@
     const HINT = { auto: 'Само подбирает под устройство и снижает, если тормозит.', low: 'Без теней и текстур — для слабых телефонов.', mid: 'Тени, вода, свечение — для телефонов и ноутбуков.',
       high: 'Мягкие тени, затенение в углах (AO), трассировка лучей, MSAA, рельеф текстур.', ultra: 'Для мощных компьютеров: тени 4096, AO и трассировка лучей выше, дальше видно.', custom: 'Своя — всё ниже на выбор.' };
     const pp = [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра'], ['custom', 'Своя']];
-    let h = head('3D-миры: «Мир Денчика», «Студия 3D»')
+    // «Шейдеры»: наборы картинки для 2D-игр («Подземье»…) и 3D (js/engine/shade2d.js — 2D; 3D-наборы — по этому же ключу)
+    const sh = S.get('shaders'), SH = root.D37E?.shade2d, shNow = sh === 'auto' && SH ? `Сейчас: «${SH.PACKS[SH.pack()]?.name || ''}». ` : '';
+    const SHH = { auto: 'По пресету графики и устройству: на телефоне — «Обычные».', normal: 'Мягкий цветной свет, мерцание огня, ореолы — быстро на любом устройстве.',
+      pretty: 'Плюс свечение (bloom), рябь воды, дрожь воздуха над лавой, цвет кадра по краю мира, виньетка, объём текстур по свету.', ultra: 'Плюс свет ещё мягче, свечение шире, больше искр и частиц — для мощных компьютеров.',
+      retro: 'Крупные пиксели, свет клетками и меньше оттенков — как старые игры. Можно с полосками старого телевизора.' };
+    let h = head('Шейдеры')
+      + row('Набор', seg('shaders', [['auto', 'Авто'], ['normal', 'Обычные'], ['pretty', 'Красивые'], ['ultra', 'Ультра'], ['retro', 'Ретро']]), shNow + (SHH[sh] || ''))
+      + (sh === 'retro' ? row('Полоски CRT', sw('crt'), 'Строки и цветная маска, как у старого телевизора.') : '');
+    // открыта 2D-игра (не на 3D-движке) — ей нужны только шейдеры
+    let game2d = false; try { game2d = !gctx?.engine && typeof gamesActive !== 'undefined' && !!gamesActive; } catch (e) {}   // gamesActive — let в games.js
+    if (game2d) return h + note('Остальная графика — для 3D-миров («Мир Денчика», «Студия 3D»).');
+    h += head('3D-миры: «Мир Денчика», «Студия 3D»')
       + row('Пресет', seg('gfxPreset', pp), `${now} ${HINT[p] || ''}${steps}` + (gctx?.gfx ? '' : R ? ' Смена основы (низкая/средняя/высокая) — при следующем запуске.' : ''));
     if (p === 'custom') h += row('Основа', seg('gfx', [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая']]), 'Материалы и свет. Низкая — без теней и текстур (Ламберт). Мир перезагрузится.');
     const lowDis = { dis: low }, lowHint = 'На низкой основе этого нет.';
@@ -153,7 +167,8 @@
     { name: 'NVIDIA Image Scaling (NIS) SDK 1.0.3', who: '© NVIDIA Corporation & Affiliates', lic: 'MIT', url: 'https://github.com/NVIDIAGameWorks/NVIDIAImageScaling/blob/main/licence.txt' },
     { name: 'three.js r149', who: '© three.js authors', lic: 'MIT', url: 'https://github.com/mrdoob/three.js/blob/r149/LICENSE' },
   ];
-  S.addTab({ id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site'], render: tab });
+  // в обычной игре — только если она рисуется 2D-шейдерами (js/engine/shade2d.js: D37E.shade2d.use()), и там — только «Шейдеры»
+  S.addTab({ id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site', 'game'], when: c => c !== 'game' || (root.D37E?.shade2d?.users || 0) > 0, render: tab });
   // проценты у ползунков (окно настроек пишет число — поправляем подпись)
   root.document?.addEventListener?.('input', e => {
     const t = e.target, k = t?.dataset?.range; if (!FMT[k]) return;
