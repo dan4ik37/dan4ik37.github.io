@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#09090f">
+<title>Нет интернета — dan4ik37</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<!-- Офлайн-страница приложения (sw.js отдаёт её, когда нет сети и нет копии страницы). Без внешних файлов: шрифты системные.
+     Игры без интернета — OFFLINE_GAMES в js/features/app.js (тест сверяет список); доступна, если её файл уже в кэше sw.js. -->
+<style>
+:root{--bg:#08080e;--card:#14131d;--line:rgba(255,255,255,.1);--text:#f0f0f8;--muted:#9a9ab5;--accent:#ff2d55;--accent2:#ff6b35}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:max(28px,env(safe-area-inset-top)) 16px max(28px,env(safe-area-inset-bottom))}
+.box{width:min(560px,100%)}
+.head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.head img{width:58px;height:58px;border-radius:14px;flex:none}
+h1{font-size:1.35rem;font-weight:800}
+.sub{color:var(--muted);font-size:.9rem;line-height:1.5;margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:8px;border:0;cursor:pointer;border-radius:999px;padding:.7rem 1.2rem;font:800 .9rem system-ui,sans-serif;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 26px -10px rgba(255,45,85,.8)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 22px}
+.hint{color:var(--muted);font-size:.78rem}
+h2{font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:6px 0 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.g{display:flex;align-items:center;gap:10px;padding:12px;border-radius:14px;background:var(--card);border:1px solid var(--line);color:var(--text);text-decoration:none;font-weight:700;font-size:.9rem}
+.g i{font-style:normal;font-size:1.5rem;line-height:1}
+.g small{display:block;font-weight:500;font-size:.7rem;color:var(--muted);margin-top:2px}
+.g.off{opacity:.45;pointer-events:none}
+.g:hover{border-color:rgba(255,45,85,.5)}
+.note{margin-top:20px;padding:12px 14px;border-radius:12px;background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.28);color:#d6d6e8;font-size:.82rem;line-height:1.5}
+</style>
+</head>
+<body>
+<main class="box">
+  <div class="head"><img src="/icon-192.png" alt=""><div><h1>📡 Нет интернета</h1><p class="sub">Чат, мир, видео и рекорды вернутся, как только появится сеть. А пока — игры, которым интернет не нужен.</p></div></div>
+  <div class="row"><button class="btn" type="button" onclick="location.reload()">🔄 Попробовать снова</button><span class="hint" id="auto">Страница обновится сама, когда сеть появится.</span></div>
+  <h2>Играть без интернета</h2>
+  <div class="grid" id="games"></div>
+  <p class="note" id="note">Игры с ботом и в одиночку работают без сети, если ты уже открывал их с интернетом. Очки и монеты сохранятся в браузере.</p>
+</main>
+<script>
+(function () {
+  // [id, значок, название, файл игры] — как OFFLINE_GAMES в js/features/app.js
+  var GAMES = [
+    ['sudoku', '🔢', 'Судоку', 'sudoku.js'], ['2048', '🧩', '2048', 'g2048.js'], ['kosynka', '♥️', 'Косынка', 'solitaire.js'],
+    ['freecell', '♣️', 'Свободная ячейка', 'solitaire.js'], ['pauk', '🕷️', 'Паук', 'solitaire.js'], ['blocks', '🟦', 'Блоки', 'blocks.js'],
+    ['miner', '💣', 'Сапёр', 'miner.js'], ['mahjong', '🀄', 'Маджонг', 'mahjong.js'], ['snake', '🐍', 'Змейка', 'snake.js'],
+    ['memory', '🃏', 'Найди пару', 'memory.js'], ['reaction', '⚡', 'Реакция', 'reaction.js'], ['ttt', '❌', 'Крестики-нолики', 'tictactoe.js'],
+    ['checkers', '⚫', 'Шашки', 'checkers.js'], ['chess', '♟️', 'Шахматы', 'chess.js'], ['sea', '🚢', 'Морской бой', 'sea.js'],
+    ['words', '🔤', '5 букв', 'words.js'], ['catch', '💰', 'Лови донаты', 'catch.js']
+  ];
+  var box = document.getElementById('games');
+  function draw(have, shell) {
+    box.innerHTML = GAMES.map(function (g) {
+      var ok = shell && have[g[3]];
+      return '<a class="g' + (ok ? '' : ' off') + '" href="/#/games/' + g[0] + '"><i>' + g[1] + '</i><span>' + g[2] + (ok ? '' : '<small>нужен интернет</small>') + '</span></a>';
+    }).join('');
+    if (!shell) document.getElementById('note').textContent = 'Открой сайт хотя бы раз с интернетом — после этого игры заработают и без сети.';
+  }
+  // какие файлы игр уже лежат в кэше приложения (sw.js)
+  var have = {};
+  if (!('caches' in window)) { draw(have, false); }
+  else {
+    caches.keys().then(function (names) {
+      return Promise.all(names.filter(function (n) { return /^d37-(rt|shell)-/.test(n); }).map(function (n) {
+        return caches.open(n).then(function (c) { return c.keys(); }).then(function (keys) {
+          keys.forEach(function (k) { var m = /\/js\/games\/([\w.-]+\.js)(\?|$)/.exec(k.url); if (m) have[m[1]] = 1; });
+        });
+      }));
+    }).then(function () { return caches.match('/'); }).then(function (home) { draw(have, !!home); }).catch(function () { draw(have, false); });
+  }
+  window.addEventListener('online', function () { location.reload(); });
+})();
+</script>
+</body>
+</html>
