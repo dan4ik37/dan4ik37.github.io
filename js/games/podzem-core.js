@@ -350,16 +350,18 @@ function PZ_CORE(){
         else wall = b === B.JUNGLE ? WL.MUDWALL : b === B.DESERT && d < C.dd + 48 ? WL.SANDWALL : WL.STONEWALL;
         if (cave && noise2(x * .031, y * .034, S + 9) < -.22) wall = 0;
       }
-      // озёра и лава в пещерах: участок 96×64, уровень жидкости — свой у участка
+      // озёра и лава в пещерах: участок 96×64, уровень жидкости — один на весь участок (гладь ровная:
+      // границы слоёв берём по средней колонке участка, а не по своей — иначе верх озера шёл бы волной)
       if (cave) {
-        const rx = Math.floor(x / 96), ry = Math.floor(y / 64), lx = x - rx * 96, ly = y - ry * 64;
+        const rx = Math.floor(x / 96), ry = Math.floor(y / 64), lx = x - rx * 96;
         if (lx > 5 && lx < 90) {
-          if (y >= C.lava - 20) {
-            const lvl = ry * 64 + 12 + (hash2(rx, ry, S + 51) % 30);
-            if (rnd2(rx, ry, S + 52) < .7 && y >= lvl) liq = 2;
-          } else if (d > 32 && ly > 2) {
+          const R = colInfo(rx * 96 + 48), top = R.lava - 20;
+          if (y >= top) {
+            const lvl = Math.max(top, ry * 64 + 30 + (hash2(rx, ry, S + 51) % 28));
+            if (rnd2(rx, ry, S + 52) < .5 && y >= lvl) liq = 2;
+          } else if (ry * 64 + 63 < top) {
             const lvl = ry * 64 + 20 + (hash2(rx, ry, S + 53) % 34);
-            if (rnd2(rx, ry, S + 54) < .3 && y >= lvl && noise2(x * .04, y * .05, S + 55) > -.15) liq = 1;
+            if (rnd2(rx, ry, S + 54) < .3 && lvl > R.h + 32 && d > 8 && y >= lvl) liq = 1;
           }
         }
       }

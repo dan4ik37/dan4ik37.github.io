@@ -435,13 +435,17 @@ void main(){
     float top = above ? 0.0 : 1.0 - float(lv) / 255.0;
     if (f.y < top) discard;
     vec4 col;
+    vec2 p = vec2(wp) + f;   // узор — по сплошным мировым координатам (по клеткам он рвался бы сеткой)
     if (lt == 1u) {
       float surf = (!above && f.y - top < 0.08) ? 0.35 : 0.0;
-      float w = sin(float(wp.x) * 1.7 + f.x * 6.0 + uTime * 2.0) * 0.04;
+      float w = sin(p.x * 1.3 + sin(p.y * 0.9 + uTime * 0.7) * 1.4 + uTime * 2.0) * 0.04;
       col = vec4(vec3(0.13, 0.38 + w, 0.82) * L + vec3(surf) * L, 0.6 + surf * 0.3);
     } else {
-      float n = sin(float(wp.x) * 0.9 + f.x * 5.0 + uTime * 1.3) * 0.5 + sin(float(wp.y) * 1.3 + f.y * 4.0 - uTime) * 0.5;
-      col = vec4(mix(vec3(1.0, 0.32, 0.05), vec3(1.0, 0.78, 0.25), 0.45 + 0.3 * n), 0.94);
+      float n = sin(p.x * 0.9 + sin(p.y * 0.8 + uTime * 0.5) * 1.6 + uTime * 0.9) * 0.5 + sin(p.y * 1.1 - uTime * 0.7 + sin(p.x * 0.6) * 1.3) * 0.5;
+      vec3 cc = mix(vec3(0.72, 0.15, 0.03), vec3(1.0, 0.5, 0.1), 0.5 + 0.3 * n);
+      cc = mix(cc, vec3(1.0, 0.84, 0.36), smoothstep(0.45, 0.95, n) * 0.75);   // светлые прожилки
+      if (!above && f.y - top < 0.1) cc = mix(cc, vec3(1.0, 0.86, 0.4), 0.55);   // кромка
+      col = vec4(cc, 0.95);
     }
     oC = vec4(col.rgb * col.a, col.a);
     return;
@@ -525,7 +529,7 @@ uniform vec2 uScale;
 out vec2 vUV; out vec4 vC;
 void main(){ vUV = aUV; vC = aC; vec2 p = aP * uScale; gl_Position = vec4(p.x, -p.y, 0.0, 1.0); }`;
   const FS_SPR = `#version 300 es
-precision mediump float;
+precision highp float; precision highp sampler2D;   // телефоны: mediump-координаты атласа 1024² ошибаются на полпикселя — соседняя клетка «протекает»
 uniform sampler2D uTex;
 in vec2 vUV; in vec4 vC;
 out vec4 oC;
