@@ -1042,43 +1042,5 @@ function boundsOk(R){
   ok(!wrong.length, 'E.isMobile: Android, телефон в «версии для ПК», iPad — телефон/планшет; компьютер, Mac, ноутбук с сенсором — нет', wrong);
 }
 
-// ═══ 21. «Мерцание у травы» (15.10.2026, телефон владельца): трава и листва (вырез по альфе) — не заслонка и не приёмник AO и
-//     контактных теней (код в альфе буфера сцены 1 + 4/1024); AO на телефоне — в половину кадра, а не в четверть ═══
-{
-  const C = T.ShaderChunk, F = E.FOLIAGE_A;
-  const hf = T.DataUtils.fromHalfFloat(T.DataUtils.toHalfFloat(F));
-  ok(hf === F && F > 1.0005 && F < 1.01 && E.rtDecode(F).kind === 'foliage' && E.rtDecode(1).kind === null && E.rtDecode(1.5).kind === null, 'код травы 1 + 4/1024: в половинном float — точно; не блеск, не обычное, не свечение', { F, hf });
-  ok(C.output_fragment.includes('#ifdef USE_ALPHATEST') && C.output_fragment.includes('gl_FragColor.a = ' + F.toFixed(8)) && C.output_fragment.indexOf('#ifdef USE_ALPHATEST') > C.output_fragment.indexOf('d37Rt.y > 0.5'),
-    'вырезанное по альфе (трава, листья, сетки моделей) пишет код травы — только пока коды включены (буфер сцены)');
-  // край травинки при MSAA — среднее с соседом; прозрачное поверх травы — смешивание альфы: «блестящим» не становится никогда
-  const bad = [];
-  for (const nb of [1, 1.5, 2]) for (let k = 0; k <= 4; k++) { const a = (F * k + nb * (4 - k)) / 4, d = E.rtDecode(a).kind; if (d === 'gloss' || d === 'metal' || d === 'clear') bad.push([nb, k, a]); }
-  for (let s = 0; s <= 1.0001; s += .05) { const a = s + F * (1 - s), d = E.rtDecode(a).kind; if (d === 'gloss' || d === 'metal' || d === 'clear') bad.push(['поверх', s, a]); }
-  ok(!bad.length, 'край травы (MSAA) и прозрачное поверх травы — не «блестящее» (отражения на травинках не мерцают)', bad.slice(0, 3));
-  // шейдер AO: трава — не заслонка (выборки AO и шаги контактной тени её пропускают) и сама без AO; пороги — как в rtDecode
-  const fa = E.RT_FS.ao;
-  ok(fa.includes('a > 1.0005 && a < 1.01') && fa.includes('if (fol(vUv)) { gl_FragColor = vec4(1.0, -z, 1.0, 1.0); return; }') && fa.includes('if (fol(su)) continue;') && fa.includes('if (fol(uv)) continue;') && fa.includes('texelFetch(tColor'),
-    'AO и контактные тени: трава пропускается и как заслонка, и как приёмник (код — точно по пикселю, texelFetch)');
-  // проходы на подставном рендерере: AO без трассировки — коды тоже пишутся (только при рисовании сцены), AO знает буфер сцены
-  let cur = null; const log = [];
-  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
-    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; },
-    render: s => { const m = s.children[0]?.material; log.push({ t: cur, fs: m?.fragmentShader || '', mark: E.GFXU.rt[1], u: m?.uniforms }); } };
-  const P = E.post({ T, r, q: 'high', stats: {}, pr0: 1, sunDir: new T.Vector3(.3, .8, .2).normalize(), sky: { lightI: 1, night: 0 }, lighting: { gfx: E.worldGfx() }, rtMarkAll(){} });
-  const cam = new T.PerspectiveCamera(50, 16 / 9, .2, 400); cam.position.set(0, 3, 8); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-  P.setOpts({ ao: 'on', aa: 'fxaa', rt: 'off' }); P.setSize(800, 450, 1);
-  log.length = 0; P.render(new T.Scene(), cam);
-  const aoL = log.find(x => x.fs.includes('uniform vec4 uCS'));
-  ok(log[0].mark === 1 && log.slice(1).every(x => x.mark === 0) && aoL && aoL.u.tColor.value === P._test.rt().scene.texture && aoL.u.uCSize.value.x === 800 && aoL.u.uCSize.value.y === 450,
-    'AO без трассировки: коды (трава) пишутся только при рисовании сцены; AO читает альфу буфера сцены');
-  // свечение (≥ 1,01) и трава (1,004) не путаются: в маске свечения и в сборке трава — не светится
-  ok(P._test.M.pre.fragmentShader.includes('c.a >= 1.01 ?') && P._test.M.comp.fragmentShader.includes('s.a >= 1.01 ?'), 'свечение — от 1,01: трава (1,004) не светится и не ослабляет AO');
-  // разрешение AO: телефон (кадр ~1 Мп при плотности 2) — половина; «ретина» компьютера (кадр 5 Мп) — четверть; обычный — половина
-  const aoW = (w, h, pr) => { P.setSize(w, h, pr); return [P.ao.aw, P.ao.ah]; };
-  const ph = aoW(763, 1330, 2), rt = aoW(2880, 1800, 2), dk = aoW(1920, 1080, 1);
-  ok(ph[0] === 381 && rt[0] === 720 && dk[0] === 960, 'AO: телефон — половина кадра (в четверти края шли «лесенкой» и ползали), «ретина» — четверть, компьютер — половина', { ph, rt, dk });
-  P.dispose();
-}
-
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);

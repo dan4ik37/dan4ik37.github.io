@@ -460,27 +460,15 @@ uniform vec4 d37Rt;`;
 		diffuseColor.rgb *= 1.0 - 0.35 * d37Wt;
 	}
 #endif`;
-  // Листва и трава (вырез по альфе: кустики травы, листья, сетки) — свой код 1 + 4/1024 (15.10.2026, «мерцание у травы»):
-  // затенение (AO) и контактные тени их не учитывают — ни как заслонку, ни как то, что затеняется. Раньше тонкие травинки в
-  // глубине кадра давали вокруг каждого кустика тёмное размытое пятно, а в AO в четверть разрешения (телефон) оно ещё и
-  // мерцало при движении. Код чуть больше 1: с MSAA край травинки смешивается с соседом (1) — выходит 1,001…1,004, в коды
-  // блеска [0,75; 0,999) не попадает никогда; в половинном float 1 + 4/1024 записывается точно. Свечение (1 + сила) — от 1,01.
-  E.FOLIAGE_A = 1 + 4 / 1024;
   const RT_OUT = `
 #if defined( STANDARD ) && defined( OPAQUE )
 	if ( d37Rt.y > 0.5 ) {
-	#ifdef USE_ALPHATEST
-		gl_FragColor.a = ${E.FOLIAGE_A.toFixed(8)};
-	#else
 		float d37G = smoothstep( 0.55, 0.12, roughnessFactor );
 		if ( d37G > 0.01 ) gl_FragColor.a = ( metalnessFactor > 0.5 ? 0.875 : 0.75 ) + 0.12 * d37G;
-	#endif
 	}
 #endif`;
-  // код из альфы (как читает post.js) — для проверок: { kind: 'clear' | 'gloss' | 'metal' | 'foliage' | null, gloss }
-  // (null — обычное и светящееся: не блестит; 'foliage' — не блестит и без AO)
-  E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) }
-    : a > 1.0005 && a < 1.01 ? { kind: 'foliage', gloss: 0 } : { kind: null, gloss: 0 };
+  // код блеска из альфы (как читает post.js) — для проверок: { kind: 'clear' | 'gloss' | 'metal' | null, gloss }
+  E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) } : { kind: null, gloss: 0 };
   E.rtEncode = (rough, metal) => { const t = Math.max(0, Math.min(1, (rough - .55) / (.12 - .55))), g = t * t * (3 - 2 * t); return g > .01 ? (metal > .5 ? .875 : .75) + .12 * g : 1; };
   const LIT = ['basic', 'lambert', 'phong', 'standard', 'physical', 'toon', 'matcap', 'points', 'sprite', 'dashed'];
   E.gfxPatch = T => {
