@@ -1,0 +1,28 @@
+{
+  "id": "starfall",
+  "name": "Звездопад",
+  "version": "1.0.0",
+  "game": "tiles",
+  "api": 1,
+  "author": "dan4ik37",
+  "description": "Ночью с неба падают звёзды и оставляют звёздный камень. Звёздная пыль лечит, из неё — звёздные лампы. Команда /звезда. Пример мода на Lua.",
+  "textures": {
+    "starstone": { "draw": { "pattern": "ore", "base": "#2a2a4a", "color2": "#ffe060", "color3": "#ffffff" } },
+    "stardust": { "draw": { "pattern": "star", "base": "#ffe060" } },
+    "starlamp": { "draw": { "pattern": "lamp", "base": "#ffe060", "color2": "#3a3a5a", "color3": "#ffffff" } }
+  },
+  "blocks": [
+    { "id": "starstone", "name": "Звёздный камень", "texture": "starstone", "hardness": 120, "tier": 1, "light": "#806020", "drop": "stardust" },
+    { "id": "starlamp", "name": "Звёздная лампа", "texture": "starlamp", "hardness": 20, "solid": false, "tool": "any", "light": "#ffe080" }
+  ],
+  "items": [
+    { "id": "stardust", "name": "Звёздная пыль", "texture": "stardust", "stack": 99, "use": true },
+    { "id": "starlamp", "name": "Звёздная лампа", "texture": "starlamp", "places": "starlamp" }
+  ],
+  "recipes": [
+    { "result": "starlamp", "count": 1, "ingredients": [["stardust", 3], ["glass", 1]], "station": "workbench" }
+  ],
+  "scripts": [
+    { "lang": "lua", "file": "main.lua" }
+  ]
+}
