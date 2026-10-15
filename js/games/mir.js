@@ -712,13 +712,14 @@
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
     try { S.promo = window.D37AdPlaces?.worldPromo?.(S, { panel, go }) || null; } catch (e) { S.promo = null; }   // щиты: свои промо и спонсор (ad-places.js → mir-promo.js)
+    try { mirPhone(); } catch (e) { console.error(e); }   // телефон 📱 и «🌍 Весь мир» (phone.js, worldchat.js)
   }
 
   // ── Шаг логики (1/60 с) ──
   function update(dt){
     if (!S || S.stopped || S.editing) return;
     const { C, P, X, rig, ph } = S;
-    const setOpen = !!window.D37Settings?.isOpen?.();
+    const setOpen = !!window.D37Settings?.isOpen?.() || !!S.phoneOn;   // окно ⚙️ или телефон 📱 (phone.js) — Esc у них
     C.blocked = !!S.menu || setOpen;   // открыто меню или ⚙️ — персонаж стоит (Esc работает)
     C.step(dt);
     if (C.down('chat')) { const i = S.q('.wld-say input'); if (!i.readOnly) setTimeout(() => i.focus(), 0); else if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
@@ -776,9 +777,9 @@
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
     rig.update(dt, S.base?.cam || P, look, S.ph, C);   // в стройке камера смотрит на участок
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
-    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu;
+    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu && !S.phoneOn;
     // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
-    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !window.D37Settings?.isOpen?.()) openMenu();
+    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !S.phoneOn && !window.D37Settings?.isOpen?.()) openMenu();
     S.wasLocked = I.locked;
     A.update(dt, t, R.camera.position);
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
@@ -1195,6 +1196,7 @@
       if (!t) return;
       if (Date.now() - (S.lastSay || 0) < 1500) { toast('Не так быстро 🙂'); return; }
       S.lastSay = Date.now(); i.value = ''; i.blur(); activity();
+      if (S.allChat?.on) { S.allChat.send(t); return; }   // «🌍 Весь мир» — все серверы (worldchat.js)
       say(S.me, t); send({ t: 'say', text: t.slice(0, 120) });
     });
     q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly && typeof openGlobalAuth === 'function') openGlobalAuth(); });
@@ -1537,11 +1539,47 @@
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
     try { s.base?.dispose(); } catch (e) {}   // район участков
     try { s.promo?.dispose(); } catch (e) {}   // щиты (mir-promo.js)
+    try { s.phoneOff?.(); s.allChat?.stop(); } catch (e) {}   // телефон 📱 и «🌍 Весь мир»
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
     if (!s.leavingTo) savePos();
     S = null;
+  }
+
+  // ═══ Телефон 📱 (js/features/phone.js) и чат «🌍 Весь мир» (js/features/worldchat.js) — подключение мира ═══
+  // Телефон: кнопка в панели мира и клавиша P; пока открыт — клавиши мира молчат. Камера (снимок кадра), карта с телепортом,
+  // «📍 К другу» (сменить сервер и встать рядом). Чем занят («в Мире, сервер N») — друзьям. «🌍 Весь мир» — кнопка 🏠/🌍 у чата.
+  function mirPhone(){
+    const Ph = window.D37Phone; if (!Ph?.attach || !S) return;
+    const st = S;
+    const tp = (x, z, yaw) => { if (!S?.P) return; if (S.mySeat) S.P.standUp(); S.P.place(x, null, z, yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); if (S.rig) S.rig.yaw = yaw - PI; S.forceSend = true; savePos(); };
+    S.phoneOff = Ph.attach('world', {
+      title: '🌍 Мир Денчика', hotkey: true,
+      pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
+      activity: () => (S ? Object.assign({ w: S.shard }, S.mySeat?.tb ? { g: S.mySeat.tb.game, j: S.mySeat.c ? `games/${S.mySeat.tb.game}/${S.mySeat.c}` : '' } : {}) : {}),
+      shot: () => { S.R.render(); return Ph.snap(S.R.r.domElement); },
+      where: () => (S?.P ? { x: S.P.ch.x, z: S.P.ch.z, yaw: S.P.yaw } : null),
+      players: () => (S ? [...S.players.values()].filter(p => !p.leaving).map(p => ({ x: p.ch.x, z: p.ch.z, nick: p.nick, friend: !!(p.uid && S.friends.has(p.uid)) })) : []),
+      tp,
+      toFriend: uid => { const p = S && [...S.players.values()].find(q => q.uid === uid && !q.leaving); if (!p) return false; tp(p.ch.x + Math.cos(p.yaw) * 1.6, p.ch.z - Math.sin(p.yaw) * 1.6, p.yaw + PI); return true; },
+      shard: n => { if (n != null && S && n !== S.shard && n >= 1 && n <= SHARDS) { leaveChannel(); for (const k of S.players.keys()) S.A?.remove(k); S.players.clear(); join(n); } return S?.shard || 1; },
+    });
+    // кнопка 📱 в панели мира (панель могут перегруппировать — просто добавляемся в конец)
+    const bar = S.q('.wld-topbtns');
+    if (bar && !bar.querySelector('.mir-phone')) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'mir-phone'; b.title = 'Телефон (P): друзья, звонки, карта, камера';
+      b.innerHTML = '📱<span> Телефон</span><em class="ph-bdg" data-ph-badge="total" hidden></em>';
+      b.addEventListener('click', ev => { ev.stopPropagation(); Ph.toggle(); });
+      bar.appendChild(b); Ph.renderBadges?.();
+    }
+    Ph.need('wchat').then(() => {
+      if (S !== st || !window.D37WorldChat) return;
+      S.allChat = window.D37WorldChat.start({ form: S.q('.wld-say'), input: S.q('.wld-say input'), keys: () => S?.keys, pass: () => S?.pass,
+        me: () => ({ uid: S?.me.uid, nick: S?.me.nick }), shard: () => S?.shard || 1, toast, clean,
+        addLog: (nick, text, sh) => { if (S) addLog({ nick: `🌍 ${nick}${sh ? ' · сервер ' + sh : ''}` }, text); },
+        muted: (pub, uid) => !!(S && uid && [...S.players.values()].some(p => p.uid === uid && S.muted.has(p.key))) });
+    }).catch(() => {});
   }
 
   const supported = () => !!window.World3D?.supported?.() && !!window.D37E?.renderer;

@@ -41,15 +41,18 @@ function removeReactionFromState(msgId, emoji, nick){
 }
 
 function renderReactionsFor(msgId){
-  const el = document.getElementById(`mr-${msgId}`);
-  if (!el) return;
+  // Лента сообщений (msgview.js) может быть открыта и на странице чата, и в телефоне — обновляем все места
+  const els = [...document.querySelectorAll(`[data-mr="${msgId}"]`)];
+  const old = document.getElementById(`mr-${msgId}`); if (old && !els.includes(old)) els.push(old);
+  if (!els.length) return;
   const byEmoji = messageReactions[msgId] || {};
   const entries = Object.entries(byEmoji).filter(([,nicks]) => nicks.size > 0);
-  el.innerHTML = entries.map(([emoji,nicks]) => {
+  const html = entries.map(([emoji,nicks]) => {
     const mine = chatNick && nicks.has(chatNick);
     const def = findEmojiDef(emoji);
     return `<button class="react-badge${mine?' mine':''}" data-emoji-value="${esc(emoji)}" onclick="toggleReaction(${msgId},this.dataset.emojiValue)" aria-label="Реакция ${esc(def.id||emoji)}, ${nicks.size}${mine?', твоя':''}">${renderEmoji(def)}<span>${nicks.size}</span></button>`;
   }).join('');
+  els.forEach(el => { el.innerHTML = html; });
 }
 
 async function loadReactionsFor(msgIds){
@@ -64,7 +67,9 @@ async function loadReactionsFor(msgIds){
 // Реакции привязаны к аккаунту (polls-reactions-secure.sql): вошедший ставит/снимает свои,
 // гость может только ставить — снять гостевую реакцию нельзя (иначе любой снимал бы чужие).
 async function toggleReaction(msgId, emoji){
-  if (!chatNick) { document.getElementById('chatNickScreen').style.display='flex'; document.getElementById('chatMainInput').style.display='none'; closeReactionPicker(); return; }
+  // Ещё без ника — входим гостем (раньше открывался экран ника старого чата)
+  if (!chatNick && typeof chatAskNick === 'function') chatAskNick();
+  if (!chatNick) { closeReactionPicker(); return; }
   const already = !!messageReactions[msgId]?.[emoji]?.has(chatNick);
   if (already && !currentUser) { closeReactionPicker(); return; }
   // Оптимистично — не ждём ответа сервера, чтобы не было задержки на клик

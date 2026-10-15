@@ -200,6 +200,7 @@ function subscribeDmRealtime(){
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, payload => {
       const m = payload.new;
       if (m.recipient_id !== currentUser.id) return; // не нам — игнор (RLS и так не отдаст чужое, но на всякий)
+      window.dispatchEvent(new CustomEvent('d37:dm', { detail: m }));   // телефон 📱 (phone-apps.js): переписка вживую
       if (dmCurrentFriendId === m.sender_id && document.getElementById('dmModal').style.display === 'flex') {
         loadDmConversation(m.sender_id);
       } else {
@@ -215,6 +216,7 @@ async function updateDmUnreadBadge(){
     const { count } = await sbClient.from('direct_messages').select('id', { count: 'exact', head: true })
       .eq('recipient_id', currentUser.id).is('read_at', null);
     dmUnreadCount = count || 0;
+    window.dispatchEvent(new CustomEvent('d37:dm-unread', { detail: dmUnreadCount }));   // значок на телефоне 📱
     document.querySelectorAll('.dm-unread-badge').forEach(el => {
       el.style.display = dmUnreadCount > 0 ? 'inline-flex' : 'none';
       el.textContent = dmUnreadCount > 9 ? '9+' : dmUnreadCount;
