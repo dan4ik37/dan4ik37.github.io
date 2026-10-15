@@ -133,7 +133,10 @@
         o.onKey?.(e);
       }, true);
       on(window, 'keyup', e => C.key(e.code, false), true);
-      on(window, 'blur', () => { for (const c of [...down]) C.key(c, false); virt.clear(); stick.x = stick.z = 0; });
+      const releaseAll = () => { for (const c of [...down]) C.key(c, false); virt.clear(); stick.x = stick.z = 0; };
+      on(window, 'blur', releaseAll);
+      // свернули вкладку или ушли в другое приложение (на телефоне «blur» бывает не всегда) — отпустить всё, иначе бежит сам
+      if (typeof document !== 'undefined') on(document, 'visibilitychange', () => { if (document.hidden) releaseAll(); });
     }
 
     // ── Геймпад: кнопки → Pad0…Pad15, левый стик — ходьба, правый — камера ──
