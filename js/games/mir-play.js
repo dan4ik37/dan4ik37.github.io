@@ -122,6 +122,9 @@ body:not(.high) .mp-panel{animation:none}
     const where = el('span', 'mp-where'); where.textContent = s.o.where || '🌍 Мир Денчика';
     const snd = s.snd = el('button', 'mp-snd'); snd.type = 'button'; snd.setAttribute('aria-label', 'Звук вкл/выкл'); paintSnd(s);
     head.append(back, s.titleEl, where);
+    // 📖 правила игры (js/games/gamekit.js: обработчик по data-gk-rules, id — в setTitle)
+    s.rulesBtn = el('button', 'mp-rules', '📖'); s.rulesBtn.type = 'button'; s.rulesBtn.title = 'Правила игры и управление'; s.rulesBtn.setAttribute('aria-label', 'Правила');
+    head.appendChild(s.rulesBtn);
     // ⚙️ настройки и ⛶ / 🔄 полный экран — свои обработчики у settings.js / fullscreen.js (по data-атрибутам); во весь экран
     // уходит #gamesStage — окно внутри него
     if (root.D37Settings) { const b = el('button', 'gs-setbtn'); b.type = 'button'; b.setAttribute('data-gs-set', ''); b.title = 'Настройки: звук, графика, управление'; b.setAttribute('aria-label', 'Настройки'); b.textContent = '⚙️'; head.appendChild(b); }
@@ -167,6 +170,7 @@ body:not(.high) .mp-panel{animation:none}
     const g = info(s.g);
     if (s.titleEl) s.titleEl.textContent = g ? `${g.icon} ${g.title}` : s.g;
     s.el?.setAttribute('aria-label', g ? g.title : s.g);
+    s.rulesBtn?.setAttribute('data-gk-rules', s.g);
   }
 
   // ── Открыть / закрыть ──
@@ -351,7 +355,7 @@ body:not(.high) .mp-panel{animation:none}
   // (меню мира по Esc не откроется: мир на паузе)
   function onKey(e){
     const s = cur; if (!s) return;
-    if (root.D37Settings?.isOpen?.() || root.D37Phone?.isOpen?.()) return;   // поверх — окно ⚙️ или телефон 📱: Esc у них
+    if (root.D37Settings?.isOpen?.() || root.D37Phone?.isOpen?.() || root.GameKit?.isOpen?.()) return;   // поверх — окно ⚙️, телефон 📱 или «точно?»/правила игры: Esc у них
     if (e.key === 'Escape' && s.phase === 'ended' && !typing(e.target)) { e.preventDefault(); e.stopPropagation(); close('back'); return; }
     if (s.phase !== 'ended' || ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape'].includes(e.key)) return;
     resume(s);

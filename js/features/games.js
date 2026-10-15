@@ -96,15 +96,19 @@ let gamesTopKey = 'cities_hard';
 let gamesTopWeek = true;       // рекорды за 7 дней (иначе — за всё время)
 const gamesScriptCache = new Map();
 
+// js/games/gamekit.js — общее для игр («точно?», правила, «чей ход»): грузится раньше любого файла игры (и в окне поверх мира)
+const GAMES_KIT = 'js/games/gamekit.js';
 function gamesLoadScript(src){
   if (gamesScriptCache.has(src)) return gamesScriptCache.get(src);
-  const p = new Promise((res, rej) => {
+  const kit = src !== GAMES_KIT && src.startsWith('js/games/') ? gamesLoadScript(GAMES_KIT) : null;
+  const p = (kit || Promise.resolve()).then(() => new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = src + '?v=' + GAMES_VER;
     s.onload = res;
-    s.onerror = () => { gamesScriptCache.delete(src); rej(new Error('Не загрузилось: ' + src)); };
+    s.onerror = () => rej(new Error('Не загрузилось: ' + src));
     document.head.appendChild(s);
-  });
+  }));
+  p.catch(() => { if (gamesScriptCache.get(src) === p) gamesScriptCache.delete(src); });   // не загрузилось — в другой раз ещё попытка
   gamesScriptCache.set(src, p);
   return p;
 }
@@ -223,7 +227,7 @@ async function openGame(id, param){
   gamesParam = param || null;
   hub.hidden = true; stage.hidden = false;
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
-  document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
+  document.getElementById('gamesStageTitle').innerHTML = `${g.icon} <span>${esc(g.title)}</span>`;   // узкий телефон — только значок (gamekit.js)
   // полный экран и настройки (js/core/fullscreen.js, settings.js): телефон лёжа — игра во весь экран; «во весь экран при запуске»
   stage.dataset.game = id; gamesSyncMute();
   window.D37Full?.auto(stage);
