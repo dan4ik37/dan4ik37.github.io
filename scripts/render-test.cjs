@@ -987,7 +987,7 @@ function boundsOk(R){
   const bad = ms.filter(([, m]) => !m.fragmentShader.startsWith(PREC)).map(([k]) => k);
   ok(ms.length >= 12 && !bad.length, 'постобработка: КАЖДЫЙ шейдер (AO, отражения, генерация кадров, сборка, FSR, NIS…) начинается со строки точности', { n: ms.length, bad });
   const depthReaders = ms.filter(([, m]) => /tDepth/.test(m.fragmentShader)).map(([k]) => k).sort().join();
-  ok(depthReaders === 'ao,comp,fg,health,rays,ssr', 'глубину читают ao, ssr, fg, comp, лучи наборов и самопроверка — все с highp', depthReaders);
+  ok(depthReaders === 'ao,comp,dof,fg,health,rays,ssr', 'глубину читают ao, ssr, fg, comp, лучи и глубина резкости наборов, самопроверка — все с highp', depthReaders);
   ok(P0.depthOK === true && P0.canAO, 'подставной рендерер без чтения пикселей — проверка глубины не мешает (как раньше)');
   P0.dispose();
   // проверка глубины при запуске: видеокарта без highp (precision < 23) или неточная глубина — AO, трассировка, генерация кадров выключены
@@ -1288,6 +1288,20 @@ function boundsOk(R){
   Rc.guard.check(x => { got = x; }); Rc.guard.tick();
   if (Rc.guard.due()) Rc.guard.test(Rc.scene, cam);
   ok(got && got.tests === 1 && got.sum?.codes?.bad === 0 && got.sum.ao?.mean > .8 && got.gpu.model === 'Mali-G57', '«🩺 Проверить»: проверка на следующем кадре, отчёт для окна', got && got.sum);
+  // контекст WebGL потерян (телефон выгрузил видеопамять, сбой драйвера): чтение даёт нули — это не поломка шейдеров
+  for (const k in store) delete store[k];
+  progs.length = 0; let LOST = false; gl.isContextLost = () => LOST;
+  const Rx = mkG(), Z = B(() => [0, 0, 0, 0]);
+  Rx.post.selfTest = () => ({ codes: Rx.post.codesOn(), A: Z, B: Z, AO: Z, F: Z });
+  LOST = true; ticks(Rx.guard, 50);
+  const pX = failProg('ShaderMaterial'); progs.push(pX); props.set(Rx.post._test.M.ao, { currentProgram: pX });
+  Rx.guard.scan(); Rx.guard.check();
+  for (let i = 0; i < 3; i++) Rx.guard.test(Rx.scene, cam);
+  ok(!E.gfxGuardInfo().off.length && Rx.guard.n === 0 && !Rx.guard.due() && Rx.guard.tests === 0 && Rx.guard.log.includes('lost:test'),
+    'контекст WebGL потерян: нули из чтения и «не собралось» — ничего не выключено, счёт кадров стоит', { off: E.gfxGuardInfo().off, log: Rx.guard.log });
+  LOST = false; ticks(Rx.guard, 2);
+  ok(E.gfxGuardState().off.fol === 1, 'контекст вернулся — проверки снова работают (настоящая поломка AO с травой → без травы)', E.gfxGuardInfo().off);
+  delete gl.isContextLost;
   // видеокарты: семейство и модель из строки рендерера
   const gi = s => E.gpuInfo({ getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => s });
   const GPUS = [['ANGLE (Qualcomm, Adreno (TM) 619, OpenGL ES 3.2)', 'adreno', 'Adreno 619'], ['Mali-G52 MC2', 'mali', 'Mali-G52'], ['PowerVR Rogue GE8320', 'powervr', 'PowerVR Rogue GE8320'],
@@ -1368,6 +1382,15 @@ function boundsOk(R){
     ok(rc.x > 0 && M.comp.uniforms.tLut.value && M.comp.uniforms.tLut.value.image.width === 1024, 'лучи: цвет света в сборку; LUT 1024×32 — в сборку');
     Rs.sky.lightDir = [0, .3, 1]; log.length = 0; P.render(new T.Scene(), cam);
     ok(!log.some(x => kind(x) === 'лучи') && M.comp.uniforms.uRayC.value.x === 0, 'солнце за спиной — прохода лучей нет, цвет лучей 0');
+    // «Ультра» на компьютере: глубина резкости — фокус на своём персонаже; на телефоне её нет
+    Rs.focus = { x: 0, y: 0, z: -12, ok: true }; Rs.sky.lightDir = [0, .3, -1];
+    P.setPack(E.packResolve('ultra', { q: 'high' }));
+    log.length = 0; P.render(new T.Scene(), cam);
+    ok(M.comp.defines.D37_DOF !== undefined && P._test.rt().dof && log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 1 && Math.abs(M.dof.uniforms.uDof.value.x - Math.hypot(0, 3 - 1.2, 8 + 12)) < 1e-3,
+      '«Ультра»: глубина резкости (половина кадра), фокус — расстояние до своего персонажа');
+    ok(!E.packResolve('ultra', { q: 'high', mobile: true }).dof, '…на телефоне — без глубины резкости');
+    Rs.focus = { ok: false }; log.length = 0; P.render(new T.Scene(), cam);
+    ok(!log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 0, 'нет своего персонажа (редактор) — прохода нет');
     P.setPack(E.packResolve('toon', { q: 'high' }));
     ok(Object.keys(M.comp.defines).sort().join() === 'D37_LUT,D37_TOON,D37_UNDER', 'мультяшный: полосы и контуры (D37_TOON) + цвет');
     log.length = 0; P.render(new T.Scene(), cam);

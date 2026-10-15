@@ -228,6 +228,9 @@ uniform vec4 uPackA; uniform vec4 uPackB; uniform vec3 uRayC;
 #ifdef D37_RAYS
 uniform sampler2D tRays;
 #endif
+#ifdef D37_DOF
+uniform sampler2D tDof; uniform float uDofOn;
+#endif
 #ifdef D37_LUT
 uniform sampler2D tLut;
 vec3 d37Lut( vec3 s ){   // LUT 32³ (раскладка 1024×32: x = r + 32·b, y = g), между срезами b — смесь
@@ -259,6 +262,9 @@ float d37Iw( vec2 uv ){ return 1.0 / max( -perspectiveDepthToViewZ( texture2D( t
     .replace('c += b * clamp(1.0 - c, 0.0, 1.0); }', `c += b * clamp(1.0 - c, 0.0, 1.0); }
 #ifdef D37_RAYS
   c += texture2D( tRays, vUv ).r * uRayC * clamp( 1.0 - c, 0.0, 1.0 );
+#endif
+#ifdef D37_DOF
+  if ( uDofOn > 0.5 ) { vec4 df = texture2D( tDof, vUv ); c = mix( c, df.rgb, clamp( df.a * 1.6, 0.0, 1.0 ) ); }   // глубина резкости («Ультра»)
 #endif
 #ifdef D37_UNDER
   if ( uPackA.x > 0.5 ) {
@@ -322,7 +328,29 @@ void main(){
   }
   gl_FragColor = vec4( min( s * uRay.w * uSun.z, 1.0 ), 0.0, 0.0, 1.0 );
 }`;
-  E.PACK_FS = { comp: FS_COMP_X, rays: FS_RAYS };
+  // Глубина резкости («Ультра» на компьютере): половина кадра; фокус — на своём персонаже (render.js R.focus), дальше и ближе
+  // глубины резкости — размытие по диску (16 выборок по спирали «золотого угла», без шума по экрану); резкое (передний план)
+  // на фон не размазывается. uDof: x — расстояние фокуса, y — глубина резкости, z — наибольший радиус (пиксели), w — сила
+  const FS_DOF = `#include <packing>
+uniform sampler2D tSrc; uniform sampler2D tDepth; uniform vec4 uDof; uniform vec2 uNF; uniform vec2 uTexel; varying vec2 vUv;
+float coc( vec2 uv ){ float z = -perspectiveDepthToViewZ( textureLod( tDepth, uv, 0.0 ).x, uNF.x, uNF.y ); return clamp( ( abs( z - uDof.x ) - uDof.y ) / ( uDof.x * 3.0 + 6.0 ), 0.0, 1.0 ) * uDof.w; }
+void main(){
+  float c0 = coc( vUv );
+  vec3 acc = textureLod( tSrc, vUv, 0.0 ).rgb; float ws = 1.0;
+  if ( c0 > 0.01 ) {
+    float r = c0 * uDof.z;
+    mat2 ga = mat2( -0.7373688, 0.6754904, -0.6754904, -0.7373688 );
+    vec2 dd = vec2( 1.0, 0.0 );
+    for ( int i = 0; i < 16; i ++ ) {
+      vec2 o = dd * sqrt( ( float( i ) + 0.5 ) / 16.0 ) * r * uTexel;
+      float cs = coc( vUv + o ), w = cs >= c0 * 0.5 ? 1.0 : cs * 2.0;
+      acc += textureLod( tSrc, vUv + o, 0.0 ).rgb * w; ws += w;
+      dd = ga * dd;
+    }
+  }
+  gl_FragColor = vec4( acc / ws, c0 );
+}`;
+  E.PACK_FS = { comp: FS_COMP_X, rays: FS_RAYS, dof: FS_DOF };
   // FXAA (Лоттес, «лёгкий»): 5 выборок яркости, на ровном — сразу выход, на краю — размытие вдоль края (ещё 4)
   const FS_FXAA = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
 void main(){
@@ -717,10 +745,11 @@ void main(){
       M.copy = mk(FS_COPY, { tSrc: { value: null } });
       M.health = mk(FS_HEALTH, { tSrc: { value: null }, tDepth: { value: null }, uMode: { value: 0 }, uDep: { value: 0 } });   // страж графики
       M.rays = mk(FS_RAYS, { tDepth: { value: null }, tSrc: { value: null }, uSun: { value: new T.Vector4() }, uRay: { value: new T.Vector4(24, .9, .955, .05) } });   // наборы: лучи
+      M.dof = mk(FS_DOF, { tSrc: { value: null }, tDepth: { value: null }, uDof: { value: new T.Vector4() }, uNF: { value: new T.Vector2(.2, 800) }, uTexel: { value: new T.Vector2() } });   // «Ультра»: глубина резкости
     }
     // сборка набора (FS_COMP_X): свои uniform — общие с M.comp (тот же объект), переключение — только текст и define
     Object.assign(M.comp.uniforms, { uPackA: { value: new T.Vector4(0, 0, 1, 1) }, uPackB: { value: new T.Vector4(4, 0, 0, 4) }, uRayC: { value: new T.Vector3() },
-      tRays: { value: null }, tLut: { value: null } });
+      tRays: { value: null }, tLut: { value: null }, tDof: { value: null }, uDofOn: { value: 0 } });
     // fg.on — включена (render.js); movers — подвижные настоящего кадра: ключ → [x, y, z, r, h]
     P.fg = { ok: !!gl2, on: false, have: false, vp: new T.Matrix4(), ivp: new T.Matrix4(), gen: 0, real: 0 };
     // включить/выключить (render.js): буфер готового кадра — размером холста
@@ -838,6 +867,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       // лучи набора шейдеров: четверть кадра (ступень 2 — половина)
       if (P.rays.tier && M.rays) { const k = P.rays.tier > 1 ? 1 : 2, rw = Math.max(1, w >> k), rh = Math.max(1, h >> k); if (!rtRays) rtRays = new T.WebGLRenderTarget(rw, rh, { depthBuffer: false }); else rtRays.setSize(rw, rh); }
       else if (rtRays) { rtRays.dispose(); rtRays = null; }
+      if (P.dofOn && M.dof) { const dw = Math.max(1, w >> 1), dh = Math.max(1, h >> 1); if (!rtDof) rtDof = new T.WebGLRenderTarget(dw, dh, { type, depthBuffer: false }); else rtDof.setSize(dw, dh); }
+      else if (rtDof) { rtDof.dispose(); rtDof = null; }
     };
     function bloomPasses(){
       const n = Math.min(P.bloom.levels, B.length);
@@ -907,6 +938,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         U.tRays.value = P.rays.drawn && rtRays ? rtRays.texture : null;
         if (!P.rays.drawn) U.uRayC.value.set(0, 0, 0);
         U.tLut.value = lutTex;
+        U.tDof.value = P.dofDrawn && rtDof ? rtDof.texture : null; U.uDofOn.value = P.dofDrawn ? 1 : 0;
       }
       return U;
     }
@@ -914,7 +946,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     // «Обычные» (fx.id 'normal') — прежняя сборка FS_COMP. Под водой (render.js R.setUnder) — P.setUnder ──
     P.pack = { id: 'normal' }; P.packX = false; P.under = false; P.retro = null;
     P.rays = { tier: 0, drawn: false, color: new T.Vector3(), sun: new T.Vector3(), str: 0, asp: 1 };
-    let lutTex = null, lutKey = '', rtRays = null;
+    let lutTex = null, lutKey = '', rtRays = null, rtDof = null;
+    P.dofOn = false; P.dofDrawn = false;
     P.setUnder = on => { P.under = !!on; };
     P.setPack = (fx = {}) => {
       const id = fx.id || 'normal', x = id !== 'normal' && P.on !== false;
@@ -925,6 +958,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         if (fx.toon) defs.D37_TOON = '';
         if (fx.retro) defs.D37_RETRO = '';
         if (fx.retro && fx.crt) defs.D37_CRT = '';
+        if (fx.dof && gl2 && M.dof && P.depth24) defs.D37_DOF = '';
         if (fx.under) defs.D37_UNDER = '';
       }
       P.pack = fx; P.packX = x;
@@ -941,9 +975,21 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       }
       P.rays.tier = x && defs.D37_RAYS !== undefined ? fx.rays : 0;
       P.retro = x && fx.retro ? fx.retro : null;
+      P.dofOn = x && defs.D37_DOF !== undefined;
       if (P.w > 1) P.setSize(P.w, P.h, P.pr);
       return P.pack;
     };
+    // глубина резкости: фокус — на своём персонаже (R.focus — точка, за которой едет камера); нет его (редактор) — прохода нет
+    function dofPass(camera){
+      P.dofDrawn = false;
+      const F = R.focus; if (!rtDof || !F || !F.ok) return;
+      const fd = Math.hypot(camera.position.x - F.x, camera.position.y - F.y - 1.2, camera.position.z - F.z);
+      const u = M.dof.uniforms;
+      u.tSrc.value = rtScene.texture; u.tDepth.value = rtScene.depthTexture; u.uNF.value.set(camera.near, camera.far); u.uTexel.value.set(1 / rtDof.width, 1 / rtDof.height);
+      u.uDof.value.set(fd, Math.max(4, fd * 1.2), Math.max(3, rtDof.height / 140), 1);   // мягко: резко — свой персонаж и всё рядом, размыта даль
+      pass(M.dof, rtDof);
+      P.dofDrawn = true;
+    }
     // лучи: солнце (днём) или луна (ночью) на экране; не видно (за спиной, далеко за краем) — прохода нет
     const rayV = new T.Vector3(), rayF = new T.Vector3();
     function raysPass(camera){
@@ -983,6 +1029,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (P.ao.on) aoPasses(camera);
       const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
       if (P.rays.tier) raysPass(camera); else P.rays.drawn = false;
+      if (P.dofOn) dofPass(camera); else P.dofDrawn = false;
       const U = compSet(camera, ssrOn, k);
       const out = P.fg.on && rtOut ? rtOut : null;   // генерация кадров: сначала в свой буфер, потом копией на экран
       const nisK = (m, src, w, h, ow, oh) => { const u = m.uniforms; u.tSrc.value = src; u.uIn.value.set(w, h); u.uOut.value.set(ow, oh); };
@@ -1091,10 +1138,10 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       P.fg.gen++;
       return true;
     };
-    P._test = { M, pass, rt: () => ({ scene: rtScene, ldr: rtLdr, up: rtUp, ao: rtAO, ssr: rtSSR, out: rtOut, rays: rtRays }) };   // проверки: шейдеры и проходы
+    P._test = { M, pass, rt: () => ({ scene: rtScene, ldr: rtLdr, up: rtUp, ao: rtAO, ssr: rtSSR, out: rtOut, rays: rtRays, dof: rtDof }) };   // проверки: шейдеры и проходы
     P.dispose = () => {
       rtScene.dispose(); rtScene.depthTexture?.dispose(); rtLdr.dispose(); rtUp?.dispose(); rtAO?.dispose(); rtAO2?.dispose(); for (const b of B) b.dispose();
-      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose(); rtRays?.dispose(); lutTex?.dispose();
+      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose(); rtRays?.dispose(); lutTex?.dispose(); rtDof?.dispose();
       for (const k in M) M[k].dispose();
       tri.dispose();
     };
@@ -1165,7 +1212,13 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     if (P) for (const k of POSTK) if (G.st.off[k]) P.disable(k);   // запомненное — сразу, до первого кадра
     const on = k => !G.st.off[k];
     const base = () => ({ gpu: G.gpu.model, q: R.q, v: gVer() });
+    // контекст WebGL потерян (телефон выгрузил видеопамять, сбой драйвера, вкладка долго в фоне): кадр не рисуется, чтение
+    // даёт нули — это НЕ поломка шейдеров. Пока потерян — ни проверок, ни решений (иначе запомнили бы «без AO» навсегда);
+    // вернётся — three.js сам всё пересоздаст
+    const lost = () => { try { return !!gl.isContextLost?.(); } catch (e) { return false; } };
+    G.lost = lost;
     function off(k, why, prog = ''){
+      if (lost()) { G.log.push('lost:' + k); return false; }
       const s = E.gfxGuardState();
       if (s.off[k] || G.st.off[k]) { G.st = s; G.st.off[k] = 1; return false; }
       s.off[k] = 1; s.why.push({ k, why, prog: String(prog).slice(0, 40), t: Date.now() });
@@ -1201,6 +1254,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     const PACK_DEFS = ['D37_WAVE', 'D37_SKY2', 'D37_WATER3'];
     const packId = () => P?.pack?.id && P.pack.id !== 'normal' ? P.pack.id : '';
     function scan(){
+      if (lost()) return;
       const L = r.info?.programs || [];
       for (const p of L) {
         if (!p || G.seen.has(p) || !p.diagnostics || p.diagnostics.runnable !== false) continue;
@@ -1210,7 +1264,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         // программа уже никем не рисуется (материал пересобрался — например, набор шейдеров сменился раньше проверки) — она
         // ничего не портит: только отметить, ничего не выключать (иначе выключили бы невиновное)
         if (!lb.post && !lb.mat) { G.log.push('orphan:' + (p.name || '')); continue; }
-        if (lb.post === 'rays' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
+        if (lb.post === 'rays' || lb.post === 'dof' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
           if (pk) off('pack:' + pk, 'link', lb.post || lb.scene);
           continue;
         }
@@ -1279,9 +1333,10 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (day && A.ground >= 48 && A.gblack >= A.ground * .5) gSend('gfx_dark', { what: 'ground', why: 'day', prog: `${A.gblack}/${A.ground}`, ...base() });
     }
     // render.js: пора ли проверить кадр (вместо обычного P.render)
-    G.due = () => !G.wait && !!P && P.on && on('test') && !!P.canTest?.() && G.n >= G.testAt && G.tests < 12;
+    G.due = () => !G.wait && !!P && P.on && on('test') && !!P.canTest?.() && G.n >= G.testAt && G.tests < 12 && !lost();
     G.test = (scene, camera) => {
       const k = G.tests, rep = P.selfTest(scene, camera);
+      if (lost()) { G.testAt = G.n + 120; G.log.push('lost:test'); return rep; }   // потерялся во время проверки — нули не считаются
       G.testAt = k === 0 ? G.n + 900 : k === 1 ? G.n + 5400 : Infinity;   // через 15 с и через 1,5 мин; дальше — после смены настроек
       const n0 = G.log.length;
       try { scan(); } catch (e) {}   // не собравшаяся программа — главнее чисел (её проход ничего не нарисовал)
@@ -1296,7 +1351,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       sum: G.last?.sum || null, err: G.last?.err || '', log: G.log.slice(), off: E.gfxGuardInfo().off, gpu: G.gpu, lastLog: G.lastLog || '' });
     // после каждого настоящего кадра (render.js)
     G.tick = () => {
-      if (R.dead) return;
+      if (R.dead || lost()) return;   // без контекста кадров нет — и счёт кадров стоит
       G.n++;
       if (G.n === 2 || G.n === 10 || G.n === 40 || G.n === G.scanAt || G.n % 300 === 0) { try { scan(); } catch (e) {} }
       if (G.n === 60) { try { const e = gl.getError(); if (e && e !== gl.CONTEXT_LOST_WEBGL) gSend('gfx_glerror', { what: 'gl', why: String(e), prog: '', ...base() }); } catch (e) {} }

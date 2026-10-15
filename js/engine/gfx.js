@@ -625,6 +625,16 @@ void main(){
   // в толще — темнее, солнце и звёзды за облаком гаснут); второй слой — тонкие перистые (высокий набор)
   c += uGlow * pow( max( cs, 0.0 ), 24.0 ) * 0.25 * ( 1.0 - 0.5 * t );
   c += uDusk * ( az * az * exp( - max( h, 0.0 ) * 3.0 ) * uM.w ) * 0.35 * uCl.w;
+  if ( uM.x > 0.001 ) c += vec3( 0.06, 0.075, 0.12 ) * uM.x * pow( max( dot( d, uMoon ), 0.0 ), 60.0 );   // ореол луны
+  if ( uP.z > 0.001 && h > 0.0 ) {   // второй слой звёзд — мельче и с цветом (тёплые и голубые)
+    vec3 sq = d * 290.0, cj = floor( sq ), fq = sq - cj - 0.5;
+    float rq = d37Hash( cj + 7.7 );
+    if ( rq > 0.9965 ) {
+      float dq = length( fq ), wq = max( fwidth( dq ), 0.02 );
+      vec3 sc = mix( vec3( 1.0, 0.82, 0.62 ), vec3( 0.7, 0.82, 1.0 ), d37Hash( cj + 2.3 ) );
+      c += sc * ( 1.0 - smoothstep( 0.03, 0.03 + wq * 1.5, dq ) ) * uP.z * smoothstep( 0.05, 0.25, h ) * ( rq - 0.9965 ) * 260.0 * ( 0.7 + 0.3 * sin( uP.w * ( 2.0 + rq * 5.0 ) + rq * 40.0 ) );
+    }
+  }
   if ( uCl.x > 0.001 && h > 0.0 ) {
     vec2 cp = d.xz / ( h + 0.08 ) * 0.9 + uCl.y * vec2( 0.012, 0.005 );
     float n = d37Fbm( cp * 1.6, uCl.z > 1.5 ? 5.0 : 3.0 );
@@ -779,8 +789,8 @@ ${PREC_LO}#endif`)
     normal: { name: 'Обычные', icon: '🎨', hint: 'Как сейчас: проверено на всех устройствах, самое быстрое.', tone: 'aces', bloom: 1 },
     pretty: { name: 'Красивые', icon: '✨', hint: 'Мягкий кинотон (AgX), лучи солнца сквозь листву, облака по небу, трава и листва на ветру, вода с бликами по дну.',
       tone: 'agx', look: { ev: .22, agx: { power: 1.5, sat: 1.35 }, con: .04, warm: .03, shT: [.005, .012, .03], hiT: [.04, .025, 0], split: .45 }, bloom: 1.25, rays: 1, clouds: 1, sky: 1, wave: 1, water: 1, under: 1, halo: 1.2 },
-    ultra: { name: 'Ультра', icon: '💎', hint: 'Всё из «Красивых», лучи и облака в полном качестве, перистые облака — для мощных компьютеров.',
-      tone: 'agx', look: { ev: .24, agx: { power: 1.55, sat: 1.4 }, con: .06, warm: .04, shT: [.006, .014, .035], hiT: [.045, .028, 0], split: .5 }, bloom: 1.4, rays: 2, clouds: 2, sky: 1, wave: 1, water: 1, under: 1, halo: 1.4 },
+    ultra: { name: 'Ультра', icon: '💎', hint: 'Всё из «Красивых», лучи и облака в полном качестве, перистые облака, глубина резкости (фон мягко размыт) — для мощных компьютеров.',
+      tone: 'agx', look: { ev: .24, agx: { power: 1.55, sat: 1.4 }, con: .06, warm: .04, shT: [.006, .014, .035], hiT: [.045, .028, 0], split: .5 }, bloom: 1.4, rays: 2, clouds: 2, sky: 1, wave: 1, water: 1, under: 1, halo: 1.4, dof: 1 },
     toon: { name: 'Мультяшные', icon: '🖍', hint: 'Как мультфильм: свет полосами, чёрные контуры, сочные цвета.',
       tone: 'aces', look: { ev: .05, sat: 1.18, con: .04 }, bloom: .8, clouds: 1, sky: 1, wave: 1, water: 1, under: 1, toon: { bands: 4, line: 1 } },
     retro: { name: 'Ретро/пиксели', icon: '👾', hint: 'Крупные пиксели и цвет полосами — как в старых играх.',

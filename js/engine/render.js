@@ -171,7 +171,7 @@
     // камеры тени почти не видно); шаг — ровно на тексель (иначе тени «дрожат» при ходьбе). Пока карта не перерисована,
     // приёмники берут старую матрицу тени — тени верные, просто коробка догонит при следующей перерисовке
     const lr = new T.Vector3(), lu = new T.Vector3(), tgt = new T.Vector3(), shTgt = new T.Vector3(1e9, 0, 0), camFw = new T.Vector3(), UPV = new T.Vector3(0, 1, 0);
-    const FGself = { x: 0, y: 0, z: 0, ok: false };
+    const FGself = R.focus = { x: 0, y: 0, z: 0, ok: false };   // за кем едет камера (и фокус глубины резкости набора «Ультра»)
     lr.crossVectors(UPV, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
     R.follow = (x, z, y = 0) => {
       FGself.x = x; FGself.y = y; FGself.z = z; FGself.ok = true;   // генерация кадров: свой персонаж — подвижный
@@ -229,6 +229,10 @@
       envAt = performance.now(); envSun.copy(skyMat.uniforms.uSun.value);
     }
     R.envNow = () => { envDue = 0; makeEnv(); };
+    // контекст WebGL вернулся (телефон выгружал видеопамять, сбой драйвера): three.js пересоздаёт всё сам, но то, что было
+    // нарисовано в текстуры, пропало — отражения неба и карту теней заново (страж графики, пока контекст потерян, молчит)
+    const onRestore = () => { SH.dirty = true; setTimeout(() => { if (!R.dead) try { envDue = 0; makeEnv(); } catch (e) {} }, 0); };
+    r.domElement.addEventListener?.('webglcontextrestored', onRestore);
 
     // ═══ Время суток (как Lighting в Roblox): time 0–24, brightness, ambient, fogEnd, shadows + gfx — графика мира ═══
     const M = R.sky = E.skyModel(14);   // модель неба — один объект, без мусора
@@ -704,6 +708,7 @@
     };
     R.dispose = () => {
       R.dead = true;
+      r.domElement.removeEventListener?.('webglcontextrestored', onRestore);
       for (const f of R.preRender) f.dispose?.();
       R.post?.dispose();
       if (halo) { halo.geometry.dispose(); halo.material.dispose(); }
