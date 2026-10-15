@@ -373,7 +373,7 @@
       const F = () => new Float32Array(N), D = () => new Float64Array(N);
       return { N, o, g, m, tex, pos, col, siz, head: 0, live: 0, x: D(), y: D(), z: D(), vx: F(), vy: F(), vz: F(), life: F(), max: F(), s0: F(), s1: F(), a0: F(), cr: F(), cg: F(), cb: F(), drag: F(), up: F(), ph: F(), kind: new Uint8Array(N) };
     }
-    const PF = pool(160, dotTex(1.1, 1.55), false), GL = pool(72, dotTex(2, 1), true);
+    const PF = pool(160, dotTex(1.6, 1.35), false), GL = pool(72, dotTex(2, 1), true);
     // kind: 0 — клуб (растёт и тает), 1 — пузырь (лопается над водой), 2 — лист (кружится и падает), 3 — светлячок (блуждает,
     // мигает), 4 — искра/уголёк (летит дугой); up — всплытие (+) или тяжесть (−), drag — сопротивление воздуха
     function emit(p, kind, x, y, z, vx, vy, vz, life, s0, s1, a0, r, g, b, drag, up){
@@ -433,12 +433,13 @@
 
     // ── эффекты (координаты — мир) ──
     const SMOKE = [.92, .92, .95], SOOT = [.32, .31, .3], STEAM = [.95, .97, 1];
-    // клубы дыма: появился / исчез моб, пар; w — ширина облачка
+    // клубы дыма: появился / исчез моб, пар; w — ширина облачка. Клубки небольшие (0,2–0,6 блока), разные по размеру и тону,
+    // мягкие по краю, быстро всплывают и тают — облачко читается числом, а не огромными дисками
     X.smoke = (x, y, z, n, w = .6, col = SMOKE, a0 = .8, sz = 1) => {
       const L = lightRGB(x, y, z); n = nq(n);
       for (let i = 0; i < n; i++) {
-        const an = FR() * 6.283, r = FR() * w * .5, sp = .4 + FR() * .6;
-        emit(PF, 0, x + Math.cos(an) * r, y + FR() * w * .6, z + Math.sin(an) * r, Math.cos(an) * sp, .3 + FR() * .5, Math.sin(an) * sp, .55 + FR() * .35, (.3 + FR() * .15) * sz, (.7 + FR() * .35) * sz, a0, col[0] * L[0], col[1] * L[1], col[2] * L[2], 3.5, .9);
+        const an = FR() * 6.283, r = FR() * w * .5, sp = .45 + FR() * .7, v = (.8 + FR() * .45) * sz, k = .82 + FR() * .22;
+        emit(PF, 0, x + Math.cos(an) * r, y + FR() * w * .6, z + Math.sin(an) * r, Math.cos(an) * sp, .5 + FR() * .5, Math.sin(an) * sp, .4 + FR() * .25, (.18 + FR() * .09) * v, (.42 + FR() * .21) * v, a0, col[0] * k * L[0], col[1] * k * L[1], col[2] * k * L[2], 3.8, 1.4);
       }
     };
     // пыль цветом блока (верх блока: трава — зелёная, песок — жёлтый); o.ring — кольцом по земле (приземление), иначе — облачком
@@ -605,7 +606,7 @@
       Lit.update(m.lit, S, x, y + M.h * .6, z, 0);
       view.add(m);
       X.mobs.push(m);
-      if (!o.quiet) X.smoke(x, y + M.h * .35, z, 6, Math.max(M.w, .6));   // появился — облачком
+      if (!o.quiet) X.smoke(x, y + M.h * .35, z, 8, Math.max(M.w, .6));   // появился — облачком
       return m;
     };
     function removeMob(m){ const i = X.mobs.indexOf(m); if (i >= 0) X.mobs.splice(i, 1); view.remove(m); }
@@ -741,7 +742,7 @@
         const m = X.dying[i], M = MOBS[m.type], was = m.dying;
         m.dying += Math.min(dt, .05);
         place(m, a);
-        if (was < POOF_T && m.dying >= POOF_T) { X.smoke(m.x, m.y + M.h * .25, m.z, 10, Math.max(M.w, M.h * .55)); S.AU?.play('kb_poof', { x: m.x - S.ox, y: m.y + .5, z: m.z - S.oz, vol: .55, rate: .9 + FR() * .2 }); }
+        if (was < POOF_T && m.dying >= POOF_T) { X.smoke(m.x, m.y + M.h * .25, m.z, 14, Math.max(M.w, M.h * .55)); S.AU?.play('kb_poof', { x: m.x - S.ox, y: m.y + .5, z: m.z - S.oz, vol: .55, rate: .9 + FR() * .2 }); }
         if (m.dying >= DIE_T) { X.dying.splice(i, 1); view.remove(m); continue; }
         view.frame(m, dt, t, S);
       }
