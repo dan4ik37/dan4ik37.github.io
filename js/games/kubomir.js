@@ -470,7 +470,7 @@
       L._t = ((t0 + 24 * dt / DAY_SEC) % 24 + 24) % 24;
       const prevNight = t0 > 19 || t0 < 5.5, nowDay = L._t >= 5.5 && L._t < 19;
       if (prevNight && nowDay && !st.creative && st.nightSeen) unlock('night');
-      if (!nowDay) st.nightSeen = true;
+      if (!prevNight && !nowDay) st.nightSeen = true;   // сумерки при тебе: ночь началась — дожить до утра (смерть сбрасывает)
       if (L._t < t0) st.meta.day = (st.meta.day || 1) + 1;   // полночь — новый день (счётчик дней для модов: world.day())
       L.time = L._t;
     }
@@ -647,6 +647,7 @@
     const keep = (st.meta.diff || 'easy') !== 'normal';
     if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { st.ents?.addItem(P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } }
     st.lastDeath = { x: P.x, y: P.y, z: P.z, t: now(), drop: !keep && !!st.ents };
+    st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра, не погибнув
     const xyz = `X ${Math.floor(P.x)}, Y ${Math.floor(P.y)}, Z ${Math.floor(P.z)}`;
     const box = document.createElement('div'); box.className = 'kb-dead kb-ui';
     box.innerHTML = `<div><b>💀 Ты ${esc(DEATH[why] || 'погиб')}</b><small>${keep ? 'Вещи остались с тобой (сложность «мирно» или «легко»).' : `Вещи выпали там, где ты погиб (${xyz}), и лежат 5 минут — подсказка вверху покажет, куда идти.`}</small><small class="kb-where">Возродишься ${st.meta.bed ? 'у своей кровати' : 'в начале мира'} с полным здоровьем и сытостью.</small><div class="kb-btns"><button type="button" class="kb-btn primary" data-r="1">↺ Возродиться</button><button type="button" class="kb-btn" data-m="1">🏠 В меню</button></div></div>`;
