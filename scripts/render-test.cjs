@@ -987,7 +987,7 @@ function boundsOk(R){
   const bad = ms.filter(([, m]) => !m.fragmentShader.startsWith(PREC)).map(([k]) => k);
   ok(ms.length >= 12 && !bad.length, 'постобработка: КАЖДЫЙ шейдер (AO, отражения, генерация кадров, сборка, FSR, NIS…) начинается со строки точности', { n: ms.length, bad });
   const depthReaders = ms.filter(([, m]) => /tDepth/.test(m.fragmentShader)).map(([k]) => k).sort().join();
-  ok(depthReaders === 'ao,comp,fg,health,ssr', 'глубину читают ao, ssr, fg, comp и самопроверка — все с highp', depthReaders);
+  ok(depthReaders === 'ao,comp,fg,health,rays,ssr', 'глубину читают ao, ssr, fg, comp, лучи наборов и самопроверка — все с highp', depthReaders);
   ok(P0.depthOK === true && P0.canAO, 'подставной рендерер без чтения пикселей — проверка глубины не мешает (как раньше)');
   P0.dispose();
   // проверка глубины при запуске: видеокарта без highp (precision < 23) или неточная глубина — AO, трассировка, генерация кадров выключены
@@ -1294,6 +1294,140 @@ function boundsOk(R){
   delete globalThis.va; delete globalThis.ym; delete globalThis.dispatchEvent;
   console.warn = warn0;
   for (const k in store) delete store[k];
+
+  // ═══ 22. Наборы шейдеров (16.10.2026; gfx.js E.PACKS, post.js setPack, render.js applyPack): «Обычные» — прежние шейдеры до
+  //     буквы; Авто по устройству; страж откатывает набор; LUT (обратный ACES → AgX → цвет набора); ретро; лучи; ветер ═══
+  {
+    const UI = ['auto', 'normal', 'pretty', 'ultra', 'toon', 'retro'];
+    const gsSrc = fs.readFileSync(path.join(SITE, 'js/core/gfx-settings.js'), 'utf8');
+    ok(JSON.stringify(E.PACK_IDS) === JSON.stringify(UI.slice(1)) && gsSrc.includes("list: ['auto', 'normal', 'pretty', 'ultra', 'toon', 'retro']") && E.PACK_IDS.every(id => gsSrc.includes(`'${E.PACKS[id].name}'`) || gsSrc.includes(` ${E.PACKS[id].name}'`)),
+      'наборы: один список в движке и в ⚙️ (имена те же)');
+    const adreno740 = { fam: 'adreno', model: 'Adreno 740' }, adreno610 = { fam: 'adreno', model: 'Adreno 610' }, mali = { fam: 'mali', model: 'Mali-G57' }, mali720 = { fam: 'mali', model: 'Mali-G720' };
+    const res = (w, d) => E.packResolve(w, d).id;
+    ok(res('auto', { q: 'mid', mobile: true, gpu: adreno610, cores: 8 }) === 'normal' && res('auto', { q: 'mid', mobile: true, gpu: mali, cores: 8 }) === 'normal'
+      && res('auto', { q: 'mid', mobile: true, gpu: adreno740, cores: 8 }) === 'pretty' && res('auto', { q: 'mid', mobile: true, gpu: mali720, cores: 8 }) === 'pretty'
+      && res('auto', { q: 'mid', mobile: true, gpu: adreno740, cores: 4 }) === 'normal' && res('auto', { q: 'high', mobile: false }) === 'pretty' && res('auto', { q: 'mid', mobile: false }) === 'normal',
+      '«Авто»: телефон — «Обычные», сильный телефон — «Красивые», мощный компьютер — «Красивые»');
+    ok(res('ultra', { q: 'low' }) === 'normal' && res('toon', { q: 'high', post: false }) === 'normal' && res('nope', { q: 'mid' }) === 'normal', 'низкая основа / без постобработки / неизвестный — «Обычные»');
+    const ph = E.packResolve('ultra', { q: 'high', mobile: true }), pc = E.packResolve('ultra', { q: 'high', mobile: false });
+    ok(ph.rays === 1 && ph.clouds === 1 && !ph.dof && !ph.mblur && pc.rays === 2 && pc.clouds === 2, '«Ультра» на телефоне — лучи и облака попроще (ступень 1)');
+    ok(res('ultra', { q: 'high', off: { 'pack:ultra': 1 } }) === 'pretty' && res('ultra', { q: 'high', off: { 'pack:ultra': 1, 'pack:pretty': 1 } }) === 'normal' && res('toon', { q: 'high', off: { 'pack:toon': 1 } }) === 'normal',
+      'страж запомнил «не работает здесь» — предыдущий набор (ultra → pretty → normal)');
+    ok(E.packResolve('normal', { q: 'high' }).lut === false && E.packResolve('pretty', { q: 'high' }).lut === true && E.packResolve('retro', { q: 'high' }).lut === true, 'LUT — только у наборов со своим тоном/цветом');
+    ok(E.gfxResolve({ pack: 'toon' }, { q: 'high' }).pack === 'toon' && E.gfxResolve({}, { q: 'high' }).pack === 'auto' && E.gfxResolve({ pack: '<script>' }, { q: 'high' }).pack === 'auto', 'настройка игрока: набор проверяется');
+    const san = E.packSanitize({ name: 'x'.repeat(99), tone: 'agx', look: { ev: 9, sat: -3, lift: [1, 1, 1] }, rays: 7, glsl: 'void main(){}' });
+    ok(san.name.length === 24 && san.look.ev === 1 && san.look.sat === 0 && san.look.lift[0] === .1 && san.rays === 2 && !('glsl' in san), 'набор из данных (мир, мод): только известные поля в пределах, без GLSL');
+    // обратный ACES: ACES(обратный(y)) = y
+    let invErr = 0;
+    for (let i = 0; i < 400; i++) { const y = [Math.random() * .97, Math.random() * .97, Math.random() * .97], x = E.acesInv(y), back = E.aces(x, .6); invErr = Math.max(invErr, ...back.map((v, k) => Math.abs(v - y[k]))); }
+    ok(invErr < 2e-3, 'обратный ACES точный (ACES(обратный(y)) = y)', invErr);
+    // AgX: серая лесенка — монотонно, 0 → 0, в пределах 0…1
+    let mono = true, prev = -1; for (let i = 0; i <= 60; i++) { const v = Math.pow(2, -10 + i / 4), o = E.agx([v, v, v]); if (o[1] < prev - 1e-9 || o.some(x => x < 0 || x > 1)) mono = false; prev = o[1]; }
+    ok(mono && E.agx([0, 0, 0])[1] < .01 && E.agx([1e3, 1e3, 1e3])[1] > .9, 'AgX: серая лесенка монотонна, чёрное — чёрное, яркое — к белому');
+    // LUT: нейтральный — тождество; «Красивые» — другой, но серая середина в разумных пределах; ретро — 4 уровня на канал
+    const neutral = { tone: 'aces', look: { ev: 0, sat: 1, con: 0, warm: 0, tint: 0, lift: [0, 0, 0], gain: [1, 1, 1], shT: [0, 0, 0], hiT: [0, 0, 0], split: 0 } };
+    const Ln = E.packLUT(neutral); let idErr = 0;
+    for (let bi = 0; bi < 32; bi += 3) for (let gi = 0; gi < 32; gi += 3) for (let ri = 0; ri < 32; ri += 3) { const i = ((gi * 1024) + ri + bi * 32) * 4; idErr = Math.max(idErr, Math.abs(Ln[i] - Math.round(ri / 31 * 255)), Math.abs(Ln[i + 1] - Math.round(gi / 31 * 255)), Math.abs(Ln[i + 2] - Math.round(bi / 31 * 255))); }
+    ok(idErr <= 1 && Ln.length === 1024 * 32 * 4, 'LUT без тона и цвета — тождество (раскладка 1024×32)', idErr);
+    const Lp = E.packLUT(E.packResolve('pretty', { q: 'high' })), mid = ((16 * 1024) + 16 + 16 * 32) * 4;
+    ok(Lp[mid] > 70 && Lp[mid] < 200 && Math.abs(Lp[mid] - 132) > 2, '«Красивые»: тон и цвет другие, середина серого — в пределах', Lp[mid]);
+    const Lr = E.packLUT(E.packResolve('retro', { q: 'high' })), lv = new Set(); for (let i = 0; i < Lr.length; i += 4) { lv.add(Lr[i]); lv.add(Lr[i + 1]); lv.add(Lr[i + 2]); }
+    const cols = new Set(); for (let i = 0; i < Lr.length; i += 4) cols.add(Lr[i] << 16 | Lr[i + 1] << 8 | Lr[i + 2]);
+    const beige = E.posterize([230 / 255, 215 / 255, 200 / 255], 6);
+    ok(cols.size > 40 && cols.size < 1200 && beige[0] > beige[2] + .02 && beige[0] < .999, 'ретро: цвет полосами (мало цветов), светлое бежевое остаётся тёплым, не белым', { n: cols.size, beige });
+    // сборка кадра: «Обычные» — прежний текст до буквы, без define; наборы — FS_COMP_X с нужными кусками
+    let cur = null; const log = [];
+    const rS = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } }, getDrawingBufferSize: v => v.set(800, 450),
+      setRenderTarget: t => { cur = t; }, render: s => { const m = s.children[0]?.material; log.push({ t: cur, m, fs: m?.fragmentShader || '' }); } };
+    const Rs = { T, r: rS, q: 'high', stats: {}, pr0: 1, sunDir: new T.Vector3(.3, .8, .2).normalize(), sky: { lightDir: [0, .3, -1], light: [1, .9, .8], lightI: 1, night: 0, dusk01: 0 }, lighting: { gfx: E.worldGfx() } };
+    const P = E.post(Rs), M = P._test.M, comp0 = M.comp.fragmentShader;
+    const cam = new T.PerspectiveCamera(50, 16 / 9, .2, 400); cam.position.set(0, 3, 8); cam.lookAt(0, 3, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    P.setOpts({ ao: 'on', aa: 'fxaa' }); P.setSize(800, 450, 1);
+    const X = E.PACK_FS.comp;
+    ok(X.includes('#ifdef D37_LUT') && X.includes('#ifdef D37_RAYS') && X.includes('#ifdef D37_TOON') && X.includes('#ifdef D37_RETRO') && X.includes('#ifdef D37_UNDER') && X.includes('vec2 uv = vUv;') && (X.match(/d37Lut\( c \)/g) || []).length === 1,
+      'сборка набора: все куски на месте (замены нашли свои места)');
+    P.setPack(E.packResolve('normal', { q: 'high' }));
+    ok(M.comp.fragmentShader === comp0 && !Object.keys(M.comp.defines || {}).length && !P.packX, '«Обычные»: сборка кадра — прежняя до буквы, без define (новых программ нет)');
+    P.setPack(E.packResolve('pretty', { q: 'high' }));
+    const dP = Object.keys(M.comp.defines).sort().join();
+    ok(M.comp.fragmentShader === E.POST_PREC + X && dP === 'D37_LUT,D37_RAYS,D37_UNDER' && M.comp.uniforms.tLut && P.packX, '«Красивые»: сборка набора — LUT, лучи, под водой', dP);
+    log.length = 0; P.render(new T.Scene(), cam);
+    const kind = x => x.m === M.rays ? 'лучи' : x.m === M.comp ? 'сборка' : x.m === M.fxaa ? 'fxaa' : x.fs ? '·' : 'сцена';
+    const sq = log.map(kind).filter(k => k !== '·').join(' ');
+    ok(sq === 'сцена лучи сборка fxaa' && M.comp.uniforms.tRays.value === P._test.rt().rays.texture, 'лучи: солнце впереди — проход лучей перед сборкой', sq);
+    const rc = M.comp.uniforms.uRayC.value;
+    ok(rc.x > 0 && M.comp.uniforms.tLut.value && M.comp.uniforms.tLut.value.image.width === 1024, 'лучи: цвет света в сборку; LUT 1024×32 — в сборку');
+    Rs.sky.lightDir = [0, .3, 1]; log.length = 0; P.render(new T.Scene(), cam);
+    ok(!log.some(x => kind(x) === 'лучи') && M.comp.uniforms.uRayC.value.x === 0, 'солнце за спиной — прохода лучей нет, цвет лучей 0');
+    P.setPack(E.packResolve('toon', { q: 'high' }));
+    ok(Object.keys(M.comp.defines).sort().join() === 'D37_LUT,D37_TOON,D37_UNDER', 'мультяшный: полосы и контуры (D37_TOON) + цвет');
+    log.length = 0; P.render(new T.Scene(), cam);
+    ok(M.comp.uniforms.uPackB.value.x === 4 && M.comp.uniforms.uPackB.value.y === 1 && M.comp.uniforms.tDepth.value === P._test.rt().scene.depthTexture, 'мультяшный: 4 полосы, контуры по глубине (глубина — в сборку и без AO)');
+    P.setPack(E.packResolve('retro', { q: 'high' })); P.setSize(267, 150, 1 / 3);
+    log.length = 0; P.render(new T.Scene(), cam);
+    const lastPass = log.filter(x => kind(x) !== 'сцена').pop();
+    ok(P.retro && !P.fxaa && !P.msaa && P._test.rt().scene.d37Nearest && lastPass.m === M.comp && lastPass.t === null && M.comp.defines.D37_RETRO !== undefined && M.comp.uniforms.tLut.value.magFilter === T.NearestFilter,
+      'ретро: крупные пиксели без размытия — сборка сразу на экран (без FSR/FXAA), палитра — ближайший цвет');
+    P.setPack(E.packResolve('normal', { q: 'high' })); P.setSize(800, 450, 1);
+    ok(M.comp.fragmentShader === comp0 && !P.retro && !P._test.rt().scene.d37Nearest && !P._test.rt().rays, 'обратно на «Обычные» — всё как было (буфер лучей убран)');
+    // точность uniform/varying для сборки набора и лучей (все define сразу)
+    const allD = [['D37_LUT', ''], ['D37_RAYS', ''], ['D37_TOON', ''], ['D37_UNDER', '']], allR = [...allD.slice(0, 3), ['D37_RETRO', ''], ['D37_UNDER', '']];
+    const lx = lint('comp+набор', M.comp.vertexShader, E.POST_PREC + X, [...D0, ...allD]), lr = lint('comp+ретро', M.comp.vertexShader, E.POST_PREC + X, [...D0, ...allR]), ly = lint('лучи', M.rays.vertexShader, M.rays.fragmentShader, D0);
+    ok(![...lx.bad, ...lr.bad, ...ly.bad, ...lx.miss].length, 'сборка набора и лучи: точность uniform/varying в обеих стадиях', [...lx.bad, ...lr.bad, ...ly.bad].slice(0, 4));
+    ok(!/\bcontinue\b|texelFetch|isnan/.test(X + E.PACK_FS.rays) && E.PACK_FS.rays.includes('textureLod( tDepth'), 'наборы: без continue/texelFetch/isnan; в цикле лучей — textureLod');
+    P.dispose();
+    // ветер: кусок в project_vertex только под D37_WAVE; без него — как раньше; с ним — точность и uniform ветра в вершинном
+    const pv = T.ShaderChunk.project_vertex, iw = pv.indexOf('#ifdef D37_WAVE'), im = pv.indexOf('mvPosition = modelViewMatrix * mvPosition;');
+    ok(iw > 0 && iw < im && pv.indexOf('instanceMatrix * mvPosition') < iw && T.ShaderChunk.fog_pars_vertex.includes('#ifdef D37_WAVE\n\tuniform vec4 d37Wind;'), 'ветер: после instanceMatrix, до modelViewMatrix, только с D37_WAVE');
+    const wDef = [...D0, ['D37_WAVE', '1'], ['D37_WAVE_H', '2.000'], ['USE_FOG', ''], ['OPAQUE', '']], wv = lint('standard+ветер', T.ShaderLib.standard.vertexShader, T.ShaderLib.standard.fragmentShader, wDef);
+    const wv2 = lint('standard+листва', T.ShaderLib.standard.vertexShader, T.ShaderLib.standard.fragmentShader, [...D0, ['D37_WAVE', '2'], ['USE_FOG', '']]);
+    const vtxW = pre(VPRE + resolve(T.ShaderLib.standard.vertexShader, []), new Map(wDef));
+    ok(!wv.bad.length && !wv2.bad.length && /uniform vec4 d37Wind;/.test(vtxW) && vtxW.includes('d37Hh * d37Hh') && T.ShaderLib.standard.uniforms.d37Wind?.value === E.GFXU.wind, 'ветер: собирается (трава/листва), данные — общий массив', [...wv.bad, ...wv2.bad].slice(0, 3));
+    const wm = E.waveMaterial(new T.MeshStandardMaterial(), { kind: 'leaves' });
+    ok(wm.userData.wave.kind === 2 && E.waveMaterial(new T.MeshStandardMaterial(), {}).userData.wave.kind === 1 && wm.defines?.D37_WAVE === undefined, 'E.waveMaterial: пометка (define ставит render.js, когда набор с ветром)');
+    // небо v2 и вода v3 — только под своими define; небо собирается
+    const sky2 = E.skyMaterial(T), ls = lint('небо v2', sky2.vertexShader, sky2.fragmentShader, [...D0, ['D37_SKY2', '']]);
+    ok(sky2.fragmentShader.includes('#ifdef D37_SKY2') && sky2.uniforms.uCl && !ls.bad.length && !/\bsin\(\s*dot/.test(sky2.fragmentShader), 'небо v2: облака и заря под D37_SKY2 (шум без синусов), собирается', ls.bad);
+    const Rw2 = { T, waterU: { uTime: { value: 0 }, uClear: { value: 0 }, uFoam: { value: 0 }, uWQ: { value: 1 } }, normalFrom: () => new T.DataTexture(new Uint8Array(4), 1, 1) };
+    const wmat = E.waterMaterial(Rw2, '#3080a0'), shW = { uniforms: {}, vertexShader: T.ShaderLib.standard.vertexShader, fragmentShader: T.ShaderLib.standard.fragmentShader };
+    wmat.onBeforeCompile(shW);
+    ok(shW.fragmentShader.includes('#ifdef D37_WATER3') && shW.fragmentShader.indexOf('#ifdef D37_WATER3') > shW.fragmentShader.indexOf('float wDepth') && !wmat.defines.D37_WATER3, 'вода v3: каустика под D37_WATER3 (после глубины), по умолчанию — выкл');
+    // автокачество: сначала дешевле набор
+    const st = E.autoSteps({ ...E.gfxResolve({ preset: 'ultra' }, { q: 'high' }), packFx: 'pretty' }), st0 = E.autoSteps({ ...E.gfxResolve({ preset: 'ultra' }, { q: 'high' }), packFx: 'normal' });
+    ok(st[1].packLite === 1 && st[2].packLite === 2 && st[3].rt !== st[0].rt && !st0.some(x => x.packLite), 'автокачество: сначала набор попроще (без лучей → без облаков и ветра), у «Обычных» этих ступеней нет');
+    // страж: программа набора не собралась / кадр набора гаснет → набор «не работает здесь», предыдущий
+    for (const k in store) delete store[k];
+    store.d37_gfx = 'high';
+    const warn1 = console.warn; console.warn = () => {};
+    const props2 = new Map(), progs2 = [], va2 = []; globalThis.va = (...a) => va2.push(a);
+    const glM = { getExtension: () => null, getParameter: () => 'Mali-G57', getError: () => 0, RENDERER: 1, CONTEXT_LOST_WEBGL: 2 };
+    const mkPack = id => {
+      let re = 0;
+      const rr = { ...rS, info: { render: { calls: 0 }, programs: progs2 }, getContext: () => glM, debug: {}, properties: { get: m => { if (!props2.has(m)) props2.set(m, {}); return props2.get(m); } }, readRenderTargetPixels: (t, x, y, w, h, b) => b.fill(255) };
+      const R = { ...Rs, r: rr, scene: new T.Scene(), reapplyGfx(){ re++; R.post.setPack(E.packResolve(id, { q: 'high', off: E.gfxGuardState().off })); } };
+      R.post = E.post(R); R.post.setOpts({ ao: 'on', aa: 'fxaa' }); R.post.setSize(800, 450, 1); R.post.setPack(E.packResolve(id, { q: 'high' }));
+      R.guard = E.gfxGuard(R); R.re = () => re; return R;
+    };
+    const fp = () => ({ name: 'ShaderMaterial', diagnostics: { runnable: false, programLog: '', vertexShader: { log: '' }, fragmentShader: { log: 'ERROR' } } });
+    let Rp = mkPack('ultra'); const pc1 = fp(); progs2.push(pc1); props2.set(Rp.post._test.M.comp, { currentProgram: pc1 });
+    for (let i = 0; i < 2; i++) Rp.guard.tick();
+    ok(E.gfxGuardState().off['pack:ultra'] === 1 && Rp.re() === 1 && Rp.post.pack.id === 'pretty' && Rp.post.on && !E.gfxGuardState().off.post, 'сборка «Ультра» не собралась — «Ультра» не работает здесь, включены «Красивые» (постобработка цела)');
+    ok(va2.some(a => a[1].data?.what === 'pack:ultra' && a[1].data.why === 'link'), 'и сообщение: что (pack:ultra) и почему');
+    progs2.length = 0; for (const k in store) delete store[k]; store.d37_gfx = 'high';
+    Rp = mkPack('pretty');
+    const wmt = new T.MeshStandardMaterial(); wmt.defines = { D37_WAVE: 1, D37_WAVE_H: '2.000' }; Rp.scene.add(new T.Mesh(new T.PlaneGeometry(), wmt));
+    const pw1 = fp(); pw1.name = 'MeshStandardMaterial'; progs2.push(pw1); props2.set(wmt, { currentProgram: pw1 });
+    for (let i = 0; i < 2; i++) Rp.guard.tick();
+    ok(E.gfxGuardState().off['pack:pretty'] === 1 && !E.gfxGuardState().off.patch && Rp.post.pack.id === 'normal', 'трава с ветром не собралась — «Красивые» откатились на «Обычные» (свои куски шейдеров не трогаем)');
+    progs2.length = 0; for (const k in store) delete store[k]; store.d37_gfx = 'high';
+    Rp = mkPack('toon');
+    const GOOD = (() => { const b = n => new Uint8Array(192 * 4).map((_, i) => (i % 4 === 3 ? 255 : n)); return { A: b(140), AO: b(230), F: b(2) }; })();
+    Rp.post.selfTest = () => ({ codes: false, ...GOOD });
+    Rp.guard.test(Rp.scene, cam);
+    ok(E.gfxGuardState().off['pack:toon'] === 1 && !E.gfxGuardState().off.ao && !E.gfxGuardState().off.post && Rp.post.pack.id === 'normal', 'кадр набора гаснет — сначала набор («Мультяшные» → «Обычные»), AO и постобработка целы');
+    console.warn = warn1; delete globalThis.va;
+    for (const k in store) delete store[k];
+  }
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);

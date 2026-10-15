@@ -81,6 +81,8 @@
     o.upscaler = pick(s.upscaler, E.GFX_KEYS.upscaler, 'fsr');
     o.sharp = cl(Math.round(num(s.sharp, 50)), 0, 100) / 100;
     o.framegen = s.framegen === true;   // «Генерация кадров (×2)» — выключена, пока игрок не включит
+    // набор шейдеров (E.PACKS) — какой хочет игрок; что включится на этом устройстве, решает render.js (E.packResolve)
+    o.pack = s.pack === 'auto' || (typeof s.pack === 'string' && E.PACKS && E.PACKS[s.pack]) ? s.pack : 'auto';
     o.battery = !!s.battery;
     o.prCap = o.tier === 'low' ? 1 : o.tier === 'mid' ? 1.5 : 2;
     if (o.battery) {   // экономия батареи: 30 кадров, без AO и трассировки, тени попроще, ближе дальность, плотность пикселей 1
@@ -103,6 +105,9 @@
   E.autoSteps = base => {
     const L = [{ ...base }], same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     const step = f => { const o = { ...L[L.length - 1] }; f(o); if (!same(o, L[L.length - 1])) L.push(o); };
+    // набор шейдеров (не «Обычные» — render.js ставит base.packFx): сначала дешевле он — без лучей и вторых облаков, потом без
+    // облаков слоем и ветра (packLite 1 / 2)
+    if (base.packFx && base.packFx !== 'normal') { step(o => { o.packLite = 1; }); step(o => { o.packLite = 2; }); }
     step(o => { if (o.rt === 'high') o.rt = 'on'; });
     step(o => { o.rt = 'off'; });
     step(o => { if (o.ao === 'high') o.ao = 'on'; });
@@ -311,14 +316,43 @@
   // rt: x — мокрые поверхности мира 0…1 (пол глаже и темнее), y — 1: метить блестящее в альфе буфера сцены для отражений
   // (только пока рисуется буфер постобработки с трассировкой — на холст альфа < 1 не попадает), z — 1: трава и листва (вырез по
   // альфе) пишут свой код 1 + 4/1024 — для AO (только пока рисуется буфер постобработки с AO), w — запас
+  // wind: x — время (с), y — сила ветра (0 — трава и листва стоят: шейдер набора «Обычные» тот же), zw — направление (по миру)
   const U = E.GFXU = E.GFXU || { fogA: new Float32Array(4), fogB: new Float32Array(4), fogC: new Float32Array(4), sh: new Float32Array(4) };
   U.rt = U.rt || new Float32Array(4);
+  U.wind = U.wind || new Float32Array([0, 0, .8, .6]);
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
+  // Ветер (шейдеры-наборы, 16.10.2026): у материала с define D37_WAVE (R.wave / E.waveMaterial: 1 — трава, верх качается,
+  // D37_WAVE_H — 1/высота кустика; 2 — листва, вся крона чуть «дышит») вершина сдвигается в мировых координатах. Без define —
+  // кусок вырезан препроцессором: у всех остальных материалов шейдер тот же, что и раньше. Тени не качаются (их материал — свой)
   const FOG_PARS_V = `#ifdef USE_FOG
 	varying float vFogDepth;
 	varying vec3 vD37Fog;
+#endif
+#ifdef D37_WAVE
+	uniform vec4 d37Wind;
 #endif`;
+  const WAVE_V = `#ifdef D37_WAVE
+	{
+		vec3 d37Wp = ( modelMatrix * mvPosition ).xyz;
+		float d37Ph = dot( d37Wp.xz, d37Wind.zw ) * 0.35 + d37Wind.x * 1.7;
+		float d37Gust = 0.65 + 0.35 * sin( d37Wind.x * 0.31 + d37Wp.x * 0.021 + d37Wp.z * 0.017 );
+		#if D37_WAVE == 1
+		float d37Hh = clamp( position.y * D37_WAVE_H, 0.0, 1.0 );
+		vec3 d37Off = vec3( d37Wind.z, 0.0, d37Wind.w ) * ( sin( d37Ph ) * 0.6 + 0.4 ) * 0.14 * d37Hh * d37Hh;
+		#else
+		vec3 d37Off = vec3( sin( d37Ph + d37Wp.y * 1.3 ), 0.4 * sin( d37Ph * 1.3 + d37Wp.x ), cos( d37Ph * 0.9 + d37Wp.z ) ) * 0.04;
+		#endif
+		mvPosition.xyz += ( vec4( d37Off * ( d37Wind.y * d37Gust ), 0.0 ) * modelMatrix ).xyz;
+	}
+#endif
+`;
+  // вставка ветра в project_vertex three (после instanceMatrix, до modelViewMatrix)
+  E.patchWave = src => {
+    const k = 'mvPosition = modelViewMatrix * mvPosition;', i = src.indexOf(k);
+    if (i < 0 || src.includes('d37Wind')) return src;
+    return src.slice(0, i) + WAVE_V + src.slice(i);
+  };
   const FOG_V = `#ifdef USE_FOG
 	vFogDepth = - mvPosition.z;
 	vD37Fog = mvPosition.xyz;
@@ -492,7 +526,7 @@ uniform vec4 d37Rt;`;
   E.rtEncode = (rough, metal) => { const t = Math.max(0, Math.min(1, (rough - .55) / (.12 - .55))), g = t * t * (3 - 2 * t); return g > .01 ? (metal > .5 ? .875 : .75) + .12 * g : 1; };
   const LIT = ['basic', 'lambert', 'phong', 'standard', 'physical', 'toon', 'matcap', 'points', 'sprite', 'dashed'];
   // куски three до правки — для безопасного режима (страж графики, post.js: программа сцены не собралась → E.gfxUnpatch)
-  const PATCHED = ['fog_pars_vertex', 'fog_vertex', 'fog_pars_fragment', 'fog_fragment', 'shadowmap_pars_fragment', 'roughnessmap_pars_fragment', 'normal_fragment_maps', 'output_fragment'];
+  const PATCHED = ['fog_pars_vertex', 'fog_vertex', 'fog_pars_fragment', 'fog_fragment', 'shadowmap_pars_fragment', 'roughnessmap_pars_fragment', 'normal_fragment_maps', 'output_fragment', 'project_vertex'];
   let ORIG = null;
   E.gfxUnpatch = T => {
     const C = T && T.ShaderChunk;
@@ -512,9 +546,11 @@ uniform vec4 d37Rt;`;
     if (C.roughnessmap_pars_fragment != null && !C.roughnessmap_pars_fragment.includes('d37Rt')) C.roughnessmap_pars_fragment += RT_PARS;
     if (C.normal_fragment_maps != null && !C.normal_fragment_maps.includes('d37Rt')) C.normal_fragment_maps += RT_WET;
     if (C.output_fragment != null && !C.output_fragment.includes('d37Rt')) C.output_fragment += RT_OUT;
+    if (C.project_vertex != null) C.project_vertex = E.patchWave(C.project_vertex);   // ветер — только у материалов с D37_WAVE
     for (const k of LIT) {
       const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
       L.uniforms.d37FogA = { value: U.fogA }; L.uniforms.d37FogB = { value: U.fogB }; L.uniforms.d37FogC = { value: U.fogC };
+      L.uniforms.d37Wind = { value: U.wind };
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
       if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };
     }
@@ -528,6 +564,8 @@ uniform vec4 d37Rt;`;
       uSun: { value: new T.Vector3(0, 1, 0) }, uMoon: { value: new T.Vector3(0, -1, 0) },
       uZen: { value: new T.Color() }, uHor: { value: new T.Color() }, uGnd: { value: new T.Color() }, uGlow: { value: new T.Color() }, uDusk: { value: new T.Color() }, uSunC: { value: new T.Color() },
       uP: { value: new T.Vector4(1, .25, 0, 0) }, uM: { value: new T.Vector4(0, 0, 0, 0) },
+      // небо v2 (наборы шейдеров, define D37_SKY2): облака слоем по небу — x облачность, y время, z слоёв (1/2), w — сила зари
+      uCl: { value: new T.Vector4(0, 0, 1, 1) }, uClC: { value: new T.Color(1, 1, 1) }, uClD: { value: new T.Color(.6, .65, .72) },
     };
     return new T.ShaderMaterial({
       name: 'sky', uniforms: u, depthWrite: false, depthTest: !env, fog: false, side: T.BackSide, toneMapped: false, extensions: { derivatives: true },
@@ -537,6 +575,19 @@ void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4
       fragmentShader: `uniform vec3 uSun; uniform vec3 uMoon; uniform vec3 uZen; uniform vec3 uHor; uniform vec3 uGnd; uniform vec3 uGlow; uniform vec3 uDusk; uniform vec3 uSunC;
 uniform vec4 uP; uniform vec4 uM; varying vec3 vDir;
 float d37Hash( vec3 p ){ p = fract( p * 0.1031 ); p += dot( p, p.zyx + 31.32 ); return fract( ( p.x + p.y ) * p.z ); }
+#ifdef D37_SKY2
+uniform vec4 uCl; uniform vec3 uClC; uniform vec3 uClD;
+float d37H2( vec2 p ){ vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
+float d37N2( vec2 p ){
+  vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( d37H2( i ), d37H2( i + vec2( 1.0, 0.0 ) ), f.x ), mix( d37H2( i + vec2( 0.0, 1.0 ) ), d37H2( i + vec2( 1.0, 1.0 ) ), f.x ), f.y );
+}
+float d37Fbm( vec2 p, float oct ){
+  float s = 0.0, a = 0.5, n = 0.0;
+  for ( int i = 0; i < 5; i ++ ) { if ( float( i ) >= oct ) break; s += a * d37N2( p ); n += a; p = p * 2.02 + vec2( 11.7, 5.3 ); a *= 0.5; }
+  return s / n;
+}
+#endif
 void main(){
   vec3 d = normalize( vDir );
   float h = d.y, t = pow( clamp( h, 0.0, 1.0 ), 0.45 + 0.35 * uP.y );
@@ -567,6 +618,30 @@ void main(){
       c += vec3( 0.85, 0.9, 1.0 ) * ( 1.0 - smoothstep( 0.04, 0.04 + w * 1.5, dist ) ) * uP.z * tw * smoothstep( 0.0, 0.18, h ) * ( rnd - 0.996 ) * 300.0;
     }
   }
+#ifdef D37_SKY2
+  // небо v2: шире ореол солнца и заря у горизонта; облака слоем (шум по проекции на плоскость, плывут; к солнцу — светлее,
+  // в толще — темнее, солнце и звёзды за облаком гаснут); второй слой — тонкие перистые (высокий набор)
+  c += uGlow * pow( max( cs, 0.0 ), 24.0 ) * 0.25 * ( 1.0 - 0.5 * t );
+  c += uDusk * ( az * az * exp( - max( h, 0.0 ) * 3.0 ) * uM.w ) * 0.35 * uCl.w;
+  if ( uCl.x > 0.001 && h > 0.0 ) {
+    vec2 cp = d.xz / ( h + 0.08 ) * 0.9 + uCl.y * vec2( 0.012, 0.005 );
+    float n = d37Fbm( cp * 1.6, uCl.z > 1.5 ? 5.0 : 3.0 );
+    float th = 1.0 - uCl.x * 0.8;
+    float cov = smoothstep( th, th + 0.26, n );
+    float ln = d37Fbm( cp * 1.6 + uSun.xz * 0.09, 3.0 );
+    float shade = clamp( 0.6 + ( n - ln ) * 2.4, 0.2, 1.0 );
+    float fwd = pow( max( cs, 0.0 ), 6.0 );
+    vec3 cc = mix( uClD, uClC, shade ) + uGlow * fwd * 0.3 * ( 1.0 - cov * 0.5 );
+    cov *= smoothstep( 0.0, 0.14, h );
+    if ( uCl.z > 1.5 ) {
+      float ci = d37Fbm( vec2( cp.x * 0.7, cp.y * 3.2 ) * 1.1 - uCl.y * vec2( 0.02, 0.0 ), 4.0 );
+      float cv2 = smoothstep( 0.55, 0.85, ci ) * 0.35 * smoothstep( 0.05, 0.3, h ) * ( 1.0 - cov );
+      c = mix( c, uClC * 1.05 + uGlow * fwd * 0.2, cv2 );
+    }
+    c = mix( c, cc, cov * 0.94 );
+    glow *= 1.0 - cov;
+  }
+#endif
   gl_FragColor = vec4( max( c, vec3( 0.0 ) ), 1.0 + glow );
 #include <encodings_fragment>
 }`,
@@ -579,6 +654,10 @@ void main(){
     u.uGlow.value.setRGB(M.glow[0], M.glow[1], M.glow[2]); u.uDusk.value.setRGB(M.dusk[0], M.dusk[1], M.dusk[2]); u.uSunC.value.setRGB(M.sunC[0], M.sunC[1], M.sunC[2]);
     u.uP.value.set(M.sunSize, M.haze, M.stars, time % 1000);
     u.uM.value.set(M.moonI * M.night, 0, 0, M.dusk01);
+    if (u.uClC) {   // облака неба v2: освещённая сторона — как облака-спрайты, тень — темнее и с цветом неба
+      u.uClC.value.setRGB(M.cloud[0], M.cloud[1], M.cloud[2]);
+      u.uClD.value.setRGB(M.cloud[0] * .52 + M.zen[0] * .12, M.cloud[1] * .54 + M.zen[1] * .12, M.cloud[2] * .58 + M.zen[2] * .14);
+    }
   };
 
   // ═══ Вода v2: два слоя ряби по миру, френель (у горизонта — зеркало неба), цвет и прозрачность по глубине, пена у берега ═══
@@ -640,13 +719,24 @@ ${PREC_LO}#endif`)
     float foam = uFoam * 0.85 * ( 1.0 - smoothstep( 0.0, 0.16 + 0.14 * fn, wDepth ) ) * smoothstep( 0.4, 0.65, fn + 0.3 * ( 1.0 - wDepth / 0.3 ) );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.95 ), foam );
     diffuseColor.a = max( diffuseColor.a, foam * 0.9 );
-  }`)
+  }
+#ifdef D37_WATER3
+  {   // вода v3 (наборы шейдеров): каустика — свет «пляшет» по мелкому дну, вода чище и бирюзовее у берега
+    vec2 cq = vD37W.xz * 0.33;
+    float c1 = texture2D( normalMap, cq + uTime * vec2( 0.031, 0.017 ) ).x;
+    float c2 = texture2D( normalMap, cq * 1.37 - uTime * vec2( 0.023, 0.029 ) ).y;
+    float ca = pow( clamp( 1.0 - abs( c1 + c2 - 1.0 ) * 2.6, 0.0, 1.0 ), 6.0 );
+    float sh = exp( - wDepth * 1.5 );
+    diffuseColor.rgb += vec3( 0.5, 0.72, 0.66 ) * ca * sh * 0.5;
+    diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 0.86, 1.04, 1.08 ), sh );
+  }
+#endif`)
         // френель: у горизонта вода — зеркало (непрозрачнее)
         .replace('#include <output_fragment>', `#include <output_fragment>
   float fr = pow( 1.0 - clamp( abs( dot( normal, normalize( vViewPosition ) ) ), 0.0, 1.0 ), 4.0 );
   gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, fr * 0.6 ), 0.0, 1.0 );`);
     };
-    m.customProgramCacheKey = () => 'd37-water2' + (dep?.tex ? 'd' : '');
+    m.customProgramCacheKey = () => 'd37-water2' + (dep?.tex ? 'd' : '');   // D37_WATER3 — в defines (ключ программы его учитывает)
     return m;
   };
   // Вода и стекло для отражений (post.js): пока трассировка включена, их смешивание пишет в альфу буфера сцены 0 (цвет —
@@ -669,5 +759,164 @@ ${PREC_LO}#endif`)
     t.magFilter = t.minFilter = T.LinearFilter; t.wrapS = t.wrapT = T.ClampToEdgeWrapping; t.needsUpdate = true;
     R.own?.push(t);
     return t;
+  };
+
+  // ═══ Наборы шейдеров (16.10.2026, владелец: «сделай шейдеры для нашего движка, чтобы Майн, Террария и другие режимы
+  //     работали красиво» — как наборы шейдеров для Майнкрафта, но свои и внутри движка) ═══
+  // Набор — ДАННЫЕ поверх переключателей движка и новых эффектов (никакого GLSL от игроков): тон (ACES как сейчас / AgX —
+  // мягче к ярким, как в кино), цвет кадра (LUT 32³ печётся здесь, в JS), свечение, лучи солнца и луны сквозь листву
+  // (post.js), облака слоем по небу и небо v2 (купол, D37_SKY2), ветер в траве и листве (D37_WAVE), вода v3 (каустика,
+  // D37_WATER3; под водой — тон и колыхание кадра), мультяшный (полосы света + контуры), ретро (крупные пиксели, 64 цвета,
+  // точечный узор). «Обычные» — ровно сегодняшние шейдеры: ни одного нового куска не собирается. Новое у других наборов
+  // включается define'ом — страж графики (post.js) проверяет каждую такую программу: не собралась / кадр гаснет → набор
+  // запоминается как «не работает здесь» и включается предыдущий (ultra → pretty → normal).
+  // Числа эффектов — ступени (0 — выкл): rays 1 — четверть кадра, 24 шага; 2 — половина, 40 шагов; clouds 1 — слой, 3 октавы;
+  // 2 — два слоя (кучевые + перистые), 5 октав; water 1 — каустика; dof, mblur — только «Ультра» на компьютере (позже).
+  const LOOK0 = { ev: 0, sat: 1, con: 0, warm: 0, tint: 0, lift: [0, 0, 0], gain: [1, 1, 1], shT: [0, 0, 0], hiT: [0, 0, 0], split: 0 };
+  E.PACKS = {
+    normal: { name: 'Обычные', icon: '🎨', hint: 'Как сейчас: проверено на всех устройствах, самое быстрое.', tone: 'aces', bloom: 1 },
+    pretty: { name: 'Красивые', icon: '✨', hint: 'Мягкий кинотон (AgX), лучи солнца сквозь листву, облака по небу, трава и листва на ветру, вода с бликами по дну.',
+      tone: 'agx', look: { ev: .22, agx: { power: 1.5, sat: 1.35 }, con: .04, warm: .03, shT: [.005, .012, .03], hiT: [.04, .025, 0], split: .45 }, bloom: 1.25, rays: 1, clouds: 1, sky: 1, wave: 1, water: 1, under: 1, halo: 1.2 },
+    ultra: { name: 'Ультра', icon: '💎', hint: 'Всё из «Красивых», лучи и облака в полном качестве, перистые облака — для мощных компьютеров.',
+      tone: 'agx', look: { ev: .24, agx: { power: 1.55, sat: 1.4 }, con: .06, warm: .04, shT: [.006, .014, .035], hiT: [.045, .028, 0], split: .5 }, bloom: 1.4, rays: 2, clouds: 2, sky: 1, wave: 1, water: 1, under: 1, halo: 1.4 },
+    toon: { name: 'Мультяшные', icon: '🖍', hint: 'Как мультфильм: свет полосами, чёрные контуры, сочные цвета.',
+      tone: 'aces', look: { ev: .05, sat: 1.18, con: .04 }, bloom: .8, clouds: 1, sky: 1, wave: 1, water: 1, under: 1, toon: { bands: 4, line: 1 } },
+    retro: { name: 'Ретро/пиксели', icon: '👾', hint: 'Крупные пиксели и цвет полосами — как в старых играх.',
+      tone: 'aces', look: { ev: .05, sat: 1.1, con: .08 }, bloom: .55, clouds: 1, retro: { pixel: 3, dither: 0, levels: 6 } },
+  };
+  E.PACK_IDS = Object.keys(E.PACKS);
+  E.PACK_FALLBACK = { ultra: 'pretty', pretty: 'normal', toon: 'normal', retro: 'normal', normal: 'normal' };
+  // Сильный телефон (для «Авто»): по видеокарте (E.gpuInfo в post.js) и ядрам
+  E.strongPhone = (gpu, cores) => {
+    if (!gpu) return false;
+    const m = String(gpu.model || ''), num = +(/(\d{3,4})/.exec(m) || [])[1] || 0;
+    const ok = gpu.fam === 'apple' || gpu.fam === 'xclipse' || (gpu.fam === 'adreno' && num >= 730) || (gpu.fam === 'mali' && /g7[1-9]\d|g9\d\d|immortalis/i.test(m));
+    return ok && (cores || 8) >= 6;
+  };
+  // «Авто»: телефон — «Обычные» (сильный — «Красивые»); компьютер — по основе (высокая — «Красивые»)
+  E.packAuto = (dev = {}) => dev.q === 'low' ? 'normal' : dev.mobile ? (E.strongPhone(dev.gpu, dev.cores) ? 'pretty' : 'normal') : dev.q === 'high' ? 'pretty' : 'normal';
+  // Набор → что включить на этом устройстве. want — 'auto' | id; dev — { q, mobile, gpu, cores, off (решения стража), post: false —
+  // без постобработки }. Не работает здесь (страж) — предыдущий по лесенке; low / без постобработки — «Обычные»
+  E.packResolve = (want = 'auto', dev = {}) => {
+    let id = want === 'auto' || !E.PACKS[want] ? E.packAuto(dev) : want;
+    const off = dev.off || {};
+    for (let i = 0; i < 4 && off['pack:' + id]; i++) id = E.PACK_FALLBACK[id] || 'normal';
+    if (dev.q === 'low' || dev.post === false) id = 'normal';
+    const p = E.PACKS[id] || E.PACKS.normal, cap = dev.mobile ? 1 : dev.q === 'high' ? 2 : 1;
+    const look = { ...LOOK0, ...(p.look || {}) };
+    const fx = { id, want, name: p.name, tone: p.tone === 'agx' ? 'agx' : 'aces', look, bloom: num(p.bloom, 1), halo: num(p.halo, 1),
+      rays: Math.min(p.rays | 0, cap), clouds: Math.min(p.clouds | 0, cap), sky: p.sky | 0, wave: p.wave ? 1 : 0, water: p.water ? 1 : 0, under: p.under ? 1 : 0,
+      toon: p.toon ? { bands: cl(p.toon.bands | 0, 2, 8), line: p.toon.line ? 1 : 0 } : null,
+      retro: p.retro ? { pixel: cl(p.retro.pixel | 0, 2, 6), dither: p.retro.dither ? 1 : 0, levels: cl(p.retro.levels | 0, 2, 8) } : null,
+      dof: dev.mobile ? 0 : p.dof | 0, mblur: dev.mobile ? 0 : p.mblur | 0 };
+    fx.lut = fx.tone !== 'aces' || !!fx.retro || JSON.stringify(look) !== JSON.stringify(LOOK0);
+    return fx;
+  };
+  // Набор из данных (мир, мод — потом): только известные поля, числа в пределах; GLSL нельзя
+  E.packSanitize = d => {
+    if (!d || typeof d !== 'object') return null;
+    const L = d.look && typeof d.look === 'object' ? d.look : {}, v3 = (a, lo, hi, def) => Array.isArray(a) && a.length === 3 ? a.map(x => cl(num(x, def), lo, hi)) : [def, def, def];
+    return { name: String(d.name || 'Свой').slice(0, 24), icon: '🎨', tone: d.tone === 'agx' ? 'agx' : 'aces',
+      look: { ev: cl(num(L.ev, 0), -1, 1), sat: cl(num(L.sat, 1), 0, 2), agx: L.agx && typeof L.agx === 'object' ? { power: cl(num(L.agx.power, 1), .5, 2), sat: cl(num(L.agx.sat, 1), 0, 2) } : undefined, con: cl(num(L.con, 0), -.5, .5), warm: cl(num(L.warm, 0), -.5, .5), tint: cl(num(L.tint, 0), -.5, .5),
+        lift: v3(L.lift, -.1, .1, 0), gain: v3(L.gain, .5, 1.5, 1), shT: v3(L.shT, 0, .2, 0), hiT: v3(L.hiT, 0, .2, 0), split: cl(num(L.split, 0), 0, 1) },
+      bloom: cl(num(d.bloom, 1), 0, 2.5), rays: cl(d.rays | 0, 0, 2), clouds: cl(d.clouds | 0, 0, 2), sky: d.sky ? 1 : 0, wave: d.wave ? 1 : 0, water: d.water ? 1 : 0, under: d.under ? 1 : 0 };
+  };
+
+  // ── Тон и цвет кадра: LUT 32³ (sRGB → sRGB) — сборка кадра (post.js, D37_LUT) переводит им «как нарисовано» в «как в наборе».
+  // Материалы рисуют с ACES (как и раньше): для AgX значение возвращается назад через обратный ACES (точно: ACES в three —
+  // матрица × дробь по каналам, обратная дробь — корень квадратного уравнения) и проходит AgX. Потом — цвет набора.
+  const MUL = (m, v, o) => { const x = v[0], y = v[1], z = v[2]; o[0] = m[0] * x + m[1] * y + m[2] * z; o[1] = m[3] * x + m[4] * y + m[5] * z; o[2] = m[6] * x + m[7] * y + m[8] * z; return o; };
+  const INV3 = m => {
+    const [a, b, c, d, e, f, g, h, i] = m, A = e * i - f * h, B = -(d * i - f * g), C = d * h - e * g, det = a * A + b * B + c * C;
+    return [A / det, -(b * i - c * h) / det, (b * f - c * e) / det, B / det, (a * i - c * g) / det, -(a * f - c * d) / det, C / det, -(a * h - b * g) / det, (a * e - b * d) / det];
+  };
+  // строки матриц (a = M · c), как в E.aces
+  const ACES_IN = [.59719, .35458, .04823, .076, .90834, .01566, .0284, .13383, .83777], ACES_OUT = [1.60475, -.53108, -.07367, -.10208, 1.10813, -.00605, -.00327, -.07276, 1.07602];
+  const ACES_IN_I = INV3(ACES_IN), ACES_OUT_I = INV3(ACES_OUT);
+  const rrtInv = w => {   // (a² + 0,0245786a − 0,000090537) / (0,983729a² + 0,432951a + 0,238081) = w → a ≥ 0
+    w = cl(w, 0, 1.0162);
+    const A = 1 - .983729 * w, B = .0245786 - .432951 * w, C = -(.000090537 + .238081 * w);
+    return Math.max(0, (-B + Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A));
+  };
+  // выход ACES (линейный 0…1) → вход до кривой (уже с экспозицией) — то, что увидел бы AgX
+  E.acesInv = (y, out = [0, 0, 0]) => {
+    const w = MUL(ACES_OUT_I, y, [0, 0, 0]);
+    w[0] = rrtInv(w[0]); w[1] = rrtInv(w[1]); w[2] = rrtInv(w[2]);
+    return MUL(ACES_IN_I, w, out);
+  };
+  // AgX (Трой Собетка, Blender; вариант Filament / three.js — MIT, Apache-2.0): линейный sRGB (с экспозицией) → линейный 0…1
+  const S2020 = [.6274, .3293, .0433, .0691, .9195, .0113, .0164, .088, .8956], R2020 = [1.6605, -.5876, -.0728, -.1246, 1.1329, -.0083, -.0182, -.1006, 1.1187];
+  const AGX_IN = [.856627153315983, .0951212405381588, .0482516061458583, .137318972929847, .761241990602591, .101439036467562, .11189821299995, .0767994186031903, .811302368396859];
+  const AGX_OUT = [1.1271005818144368, -.11060664309660323, -.016493938717834573, -.1413297634984383, 1.157823702216272, -.016493938717834257, -.14132976349843826, -.11060664309660294, 1.2519364065950405];
+  const AGX_MIN = -12.47393, AGX_MAX = 4.026069;
+  const agxCurve = x => { const x2 = x * x, x4 = x2 * x2; return 15.5 * x4 * x2 - 40.14 * x4 * x + 31.96 * x4 - 6.868 * x2 * x + .4298 * x2 + .1191 * x - .00232; };
+  // look — «взгляд» AgX (как в Filament/Blender): { power, sat } после кривой («сочный» — 1,35 и 1,4)
+  E.agx = (v, out = [0, 0, 0], look = null) => {
+    const c = MUL(AGX_IN, MUL(S2020, v, [0, 0, 0]), [0, 0, 0]);
+    for (let k = 0; k < 3; k++) c[k] = agxCurve(cl((Math.log2(Math.max(c[k], 1e-10)) - AGX_MIN) / (AGX_MAX - AGX_MIN), 0, 1));
+    if (look) {
+      const pw = look.power || 1, st = look.sat ?? 1;
+      for (let k = 0; k < 3; k++) c[k] = Math.pow(Math.max(0, c[k]), pw);
+      const lu = .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+      for (let k = 0; k < 3; k++) c[k] = lu + st * (c[k] - lu);
+    }
+    MUL(AGX_OUT, c, c);
+    for (let k = 0; k < 3; k++) c[k] = Math.pow(Math.max(0, c[k]), 2.2);
+    MUL(R2020, c, out);
+    for (let k = 0; k < 3; k++) out[k] = cl(out[k], 0, 1);
+    return out;
+  };
+  const toS = x => x <= .0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - .055, fromS = x => x <= .04045 ? x / 12.92 : Math.pow((x + .055) / 1.055, 2.4);
+  // Цвет набора (в линейном 0…1 после тона): экспозиция, баланс тепла/оттенка, насыщенность, «подъём/усиление», сплит-тон
+  // (тени — холоднее, света — теплее), контраст S-кривой (в sRGB). Возвращает sRGB 0…1
+  E.lookApply = (lin, L, out = [0, 0, 0]) => {
+    const e = Math.pow(2, L.ev || 0), w = L.warm || 0, ti = L.tint || 0;
+    let r = lin[0] * e * (1 + .16 * w - .04 * ti), g = lin[1] * e * (1 + .06 * ti), b = lin[2] * e * (1 - .2 * w - .04 * ti);
+    const lum = .2126 * r + .7152 * g + .0722 * b, s = L.sat ?? 1;
+    r = lum + (r - lum) * s; g = lum + (g - lum) * s; b = lum + (b - lum) * s;
+    if (L.split) { const k = L.split, sh = Math.max(0, 1 - lum * 3), hi = cl((lum - .35) * 1.6, 0, 1); r += (L.shT[0] * sh + L.hiT[0] * hi) * k; g += (L.shT[1] * sh + L.hiT[1] * hi) * k; b += (L.shT[2] * sh + L.hiT[2] * hi) * k; }
+    const c = [r, g, b];
+    for (let k = 0; k < 3; k++) {
+      let x = toS(cl(c[k], 0, 1));
+      x = cl(x * (L.gain ? L.gain[k] : 1) + (L.lift ? L.lift[k] : 0) * (1 - x), 0, 1);
+      if (L.con) x = cl(x + L.con * (x * x * (3 - 2 * x) - x) * 2, 0, 1);
+      out[k] = x;
+    }
+    return out;
+  };
+  // Ретро: цвет «полосами» в HSV — оттенок 24 ступени, насыщенность (по корню: у бледных — тоже ступени) и яркость — по lv + 2;
+  // так светлое бежевое не становится белым или розовым (как у палитры «каждый канал отдельно»). o — sRGB 0…1, меняется на месте
+  E.posterize = (o, lv) => {
+    const mx = Math.max(o[0], o[1], o[2]), mn = Math.min(o[0], o[1], o[2]), d = mx - mn;
+    let h = 0;
+    if (d > 1e-6) h = mx === o[0] ? ((o[1] - o[2]) / d + 6) % 6 : mx === o[1] ? (o[2] - o[0]) / d + 2 : (o[0] - o[1]) / d + 4;
+    let s = mx > 1e-6 ? d / mx : 0, v = mx;
+    h = Math.round(h * 4) / 4;   // 24 оттенка
+    const sl = lv - 1; s = Math.pow(Math.round(Math.sqrt(s) * sl) / sl, 2);
+    const vl = lv + 1; v = Math.round(v * vl) / vl;
+    const c = v * s, x = c * (1 - Math.abs(h % 2 - 1)), m = v - c, k = Math.floor(h) % 6;
+    const rgb = k === 0 ? [c, x, 0] : k === 1 ? [x, c, 0] : k === 2 ? [0, c, x] : k === 3 ? [0, x, c] : k === 4 ? [x, 0, c] : [c, 0, x];
+    o[0] = rgb[0] + m; o[1] = rgb[1] + m; o[2] = rgb[2] + m;
+    return o;
+  };
+  // LUT набора: Uint8Array RGBA, раскладка size*size × size (x = r + b*size, y = g); fx — E.packResolve(…)
+  E.packLUT = (fx, size = 32) => {
+    const n = size, data = new Uint8Array(n * n * n * 4), lin = [0, 0, 0], v = [0, 0, 0], t = [0, 0, 0], o = [0, 0, 0];
+    const lv = fx.retro ? fx.retro.levels : 0;
+    for (let bi = 0; bi < n; bi++) for (let gi = 0; gi < n; gi++) for (let ri = 0; ri < n; ri++) {
+      lin[0] = fromS(ri / (n - 1)); lin[1] = fromS(gi / (n - 1)); lin[2] = fromS(bi / (n - 1));
+      if (fx.tone === 'agx') { E.acesInv(lin, v); E.agx(v, t, fx.look?.agx || null); } else { t[0] = lin[0]; t[1] = lin[1]; t[2] = lin[2]; }
+      E.lookApply(t, fx.look || LOOK0, o);
+      if (lv) E.posterize(o, lv);
+      const i = ((gi * n * n) + ri + bi * n) * 4;
+      data[i] = Math.round(o[0] * 255); data[i + 1] = Math.round(o[1] * 255); data[i + 2] = Math.round(o[2] * 255); data[i + 3] = 255;
+    }
+    return data;
+  };
+  // для своих материалов (игры, «Кубомир»): ветер — трава/листва (без R — те же define и данные, что у R.wave)
+  E.waveMaterial = (m, o = {}) => {
+    if (!m || !m.isMaterial) return m;
+    m.userData.wave = { kind: o.kind === 'leaves' ? 2 : 1, h: o.h > 0 ? +o.h : .5 };
+    return m;
   };
 })();

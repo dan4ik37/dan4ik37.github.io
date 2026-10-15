@@ -583,6 +583,7 @@
         }
       }, { seed: 4 });
       const tm = new T.MeshStandardMaterial({ map: tuftMap, alphaTest: .45, side: T.DoubleSide, roughness: .9, envMapIntensity: .5 });
+      R.wave?.(tm, { kind: 'grass', h: .5 });   // трава качается на ветру (наборы шейдеров «Красивые» и выше; R.wave — render.js)
       const tg = new T.BufferGeometry(), pos = [], uv = [], nor = [];
       for (let i = 0; i < 3; i++) {   // три скрещенные плоскости
         const a = i / 3 * PI, cx = Math.cos(a) * .32, cz = Math.sin(a) * .32, h = .5;

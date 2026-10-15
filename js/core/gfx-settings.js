@@ -35,7 +35,18 @@
     .define('upscaler', { def: 'fsr', list: ['fsr', 'nis', 'off'] })
     .define('sharp', { def: 50, min: 0, max: 100 })
     .define('rt', { def: 'off', list: ['off', 'on', 'high'] })
-    .define('framegen', { def: false, bool: 1 });
+    .define('framegen', { def: false, bool: 1 })
+    // наборы шейдеров (js/engine/gfx.js E.PACKS; render-test сверяет список и имена)
+    .define('pack', { def: 'auto', list: ['auto', 'normal', 'pretty', 'ultra', 'toon', 'retro'] });
+  const PACKS = [['auto', '🤖 Авто'], ['normal', '🎨 Обычные'], ['pretty', '✨ Красивые'], ['ultra', '💎 Ультра'], ['toon', '🖍 Мультяшные'], ['retro', '👾 Ретро/пиксели']];
+  const PACK_HINT = {
+    auto: 'Само по устройству: телефон — «Обычные» (сильный — «Красивые»), мощный компьютер — «Красивые».',
+    normal: 'Как сейчас: проверено на всех устройствах, самое быстрое.',
+    pretty: 'Мягкий кинотон, лучи солнца сквозь листву, облака по небу, трава и листва на ветру, блики по дну воды.',
+    ultra: 'Всё из «Красивых» в полном качестве и перистые облака — для мощных компьютеров.',
+    toon: 'Как мультфильм: свет полосами, чёрные контуры, сочные цвета.',
+    retro: 'Крупные пиксели и цвет полосами — как в старых играх.',
+  };
 
   const dev = () => { const E = root.D37E; try { return E?.quality ? E.quality() : 'mid'; } catch (e) { return 'mid'; } };   // устройство (body.low, телефон, ядра)
   const presetOf = p => PRESETS[p === 'auto' || p === 'custom' ? dev() : p] || PRESETS.mid;
@@ -53,7 +64,7 @@
     const O = root.D37Opt || (root.D37Opt = { rev: 0 });
     O.gfx = { preset: S.get('gfxPreset'), shadowQ: S.get('shadowQ'), ao: S.get('ao'), water: S.get('water'), refl: S.get('refl'), aa: S.get('aa'),
       fog: S.get('fog'), dist: S.get('dist'), grade: S.get('grade'), fpsCap: +S.get('fpsCap') || 0, res: S.get('res'), battery: S.get('battery'),
-      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen') };
+      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen'), pack: S.get('pack') };
     O.rev++;
   }
   // ── Контекст открытой игры (её «качество — пересобрать мир»): перехватываем context(), окно его не отдаёт ──
@@ -114,6 +125,12 @@
     let h = head('3D-миры: «Мир Денчика», «Студия 3D»')
       + row('Пресет', seg('gfxPreset', pp), `${now} ${HINT[p] || ''}${steps}` + (gctx?.gfx ? '' : R ? ' Смена основы (низкая/средняя/высокая) — при следующем запуске.' : ''));
     if (p === 'custom') h += row('Основа', seg('gfx', [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая']]), 'Материалы и свет. Низкая — без теней и текстур (Ламберт). Мир перезагрузится.');
+    // наборы шейдеров: что выбрано и что сейчас на деле (страж графики мог вернуть предыдущий, на «низкой» — «Обычные»)
+    {
+      const pw = S.get('pack'), fx = R?.pack, bad = (root.D37E?.gfxGuardInfo?.().off || []).filter(k => k.startsWith('pack:')).map(k => (PACKS.find(x => x[0] === k.slice(5)) || [0, k.slice(5)])[1]);
+      const nowP = fx && fx.id ? `Сейчас: ${(PACKS.find(x => x[0] === fx.id) || [0, fx.id])[1]}.` : '';
+      h += row('Шейдеры', seg('pack', PACKS, { dis: low }), `${low ? 'На низкой основе — «Обычные».' : PACK_HINT[pw] || ''} ${nowP}${bad.length ? ` На этом устройстве не заработали: ${bad.join(', ')} — включён предыдущий.` : ''}`, { dis: low });
+    }
     const lowDis = { dis: low }, lowHint = 'На низкой основе этого нет.';
     // глубина кадра на этой видеокарте неточная (post.js проверяет при запуске) — AO, трассировка и генерация кадров выключены
     const dfx = !R?.post || R.post.depthOK !== false, depDis = { dis: low || !dfx }, depHint = 'На этом устройстве недоступно: видеокарта отдаёт глубину кадра неточно — были бы пятна на полу.';
@@ -157,7 +174,7 @@
     const E = root.D37E; if (!E?.gfxGuardInfo) return '';
     const g = E.gfxGuardInfo(), last = {};
     for (const w of g.why) last[w.k] = w;
-    const list = g.off.map(k => (GNAME[k] || k) + (last[k] ? ` (${GWHY[last[k].why] || last[k].why})` : ''));
+    const list = g.off.map(k => (k.startsWith('pack:') ? `шейдеры «${(PACKS.find(x => x[0] === k.slice(5)) || [0, k.slice(5)])[1].replace(/^\S+\s/, '')}»` : GNAME[k] || k) + (last[k] ? ` (${GWHY[last[k].why] || last[k].why})` : ''));
     const btn = (R?.guard ? '<button type="button" class="gs-btn" data-gguard="check">🩺 Проверить</button> ' : '') + (g.off.length ? '<button type="button" class="gs-btn" data-gguard="reset">↺ Вернуть всё</button>' : '');
     const hint = g.off.length ? `На этом устройстве само выключилось: ${list.join('; ')}. «Вернуть всё» — включить снова (с новой версией сайта страж проверит всё заново сам).`
       : 'Движок сам проверяет, что картинка рисуется правильно: шейдеры собрались, кадр не чёрный, затенение и отражения — числа. Сломалось на этом устройстве — выключит только это и запомнит.';

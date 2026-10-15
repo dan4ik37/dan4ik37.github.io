@@ -217,6 +217,103 @@ void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0)); fl
   c = uGrade.y >= 0.0 ? mix(c, c * c * (3.0 - 2.0 * c), uGrade.y * 2.0) : mix(c, vec3(0.5), -uGrade.y);
   vec2 vd = vUv - 0.5; c *= 1.0 - uGrade.z * smoothstep(0.3, 0.95, length(vd) * 1.41);
   gl_FragColor = vec4(c, uLuma > 0.5 ? dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114)) : 1.0); }`;
+  // Сборка для наборов шейдеров (16.10.2026; gfx.js E.PACKS): та же сборка + куски по define — LUT (тон AgX и цвет набора),
+  // лучи солнца/луны, мультяшный (полосы света, контуры по глубине), ретро (точечный узор под крупные пиксели), под водой (тон,
+  // колыхание). Набор «Обычные» собирает ПРЕЖНИЙ FS_COMP (текст тот же до буквы) — новых программ у него нет.
+  // uPackA: x — под водой (0/1), y — время (с), zw — 1/размер буфера сцены; uPackB: x — полос света, y — контур (0/1),
+  // z — узор ретро (0/1), w — уровней цвета ретро; uRayC — цвет лучей (0 — нет)
+  const FS_COMP_X = FS_COMP
+    .replace('uniform vec3 uGain; uniform vec3 uGrade;', `uniform vec3 uGain; uniform vec3 uGrade;
+uniform vec4 uPackA; uniform vec4 uPackB; uniform vec3 uRayC;
+#ifdef D37_RAYS
+uniform sampler2D tRays;
+#endif
+#ifdef D37_LUT
+uniform sampler2D tLut;
+vec3 d37Lut( vec3 s ){   // LUT 32³ (раскладка 1024×32: x = r + 32·b, y = g), между срезами b — смесь
+  float bf = clamp( s.b, 0.0, 1.0 ) * 31.0, b0 = floor( bf ), b1 = min( b0 + 1.0, 31.0 );
+  vec2 rg = ( clamp( s.rg, 0.0, 1.0 ) * 31.0 + 0.5 ) / vec2( 1024.0, 32.0 );
+  vec3 c0 = texture2D( tLut, rg + vec2( b0 / 32.0, 0.0 ) ).rgb, c1 = texture2D( tLut, rg + vec2( b1 / 32.0, 0.0 ) ).rgb;
+#ifdef D37_RETRO
+  return bf - b0 < 0.5 ? c0 : c1;   // палитра — ближайший цвет, без смеси
+#else
+  return mix( c0, c1, bf - b0 );
+#endif
+}
+#endif
+#ifdef D37_RETRO
+float d37Bayer( vec2 p ){   // 4×4: (0…15 + 0,5) / 16 — из 2×2 [0 2; 3 1]
+  vec2 a = mod( floor( p ), 4.0 ), lo = mod( a, 2.0 ), hi = floor( a / 2.0 );
+  return ( mod( lo.x * 2.0 + lo.y * 3.0, 4.0 ) * 4.0 + mod( hi.x * 2.0 + hi.y * 3.0, 4.0 ) + 0.5 ) / 16.0;
+}
+#endif
+#ifdef D37_TOON
+float d37Iw( vec2 uv ){ return 1.0 / max( -perspectiveDepthToViewZ( texture2D( tDepth, uv ).x, uNF.x, uNF.y ), 1e-3 ); }
+#endif`)
+    .replace('void main(){ vec4 s = texture2D(tScene, vUv);', `void main(){
+  vec2 uv = vUv;
+#ifdef D37_UNDER
+  if ( uPackA.x > 0.5 ) uv += vec2( sin( vUv.y * 31.0 + uPackA.y * 2.1 ), cos( vUv.x * 27.0 + uPackA.y * 1.7 ) ) * 0.0022;
+#endif
+  vec4 s = texture2D(tScene, uv);`)
+    .replace('c += b * clamp(1.0 - c, 0.0, 1.0); }', `c += b * clamp(1.0 - c, 0.0, 1.0); }
+#ifdef D37_RAYS
+  c += texture2D( tRays, vUv ).r * uRayC * clamp( 1.0 - c, 0.0, 1.0 );
+#endif
+#ifdef D37_UNDER
+  if ( uPackA.x > 0.5 ) {
+    float cau = pow( max( 0.0, sin( vUv.x * 40.0 + uPackA.y * 1.3 ) * sin( vUv.y * 37.0 - uPackA.y * 1.1 ) ), 3.0 );
+    c = c * vec3( 0.42, 0.78, 0.88 ) + vec3( 0.0, 0.02, 0.035 ) + cau * 0.06 * vec3( 0.6, 0.9, 1.0 );
+  }
+#endif
+#ifdef D37_TOON
+  {   // свет полосами: решение о полосе — по сглаженной яркости (9 точек на ±6 пикселей: мелкий узор текстуры не «рвётся»
+      // на пятна), переход между полосами мягкий; рисунок текстуры остаётся (отношение к сглаженной яркости)
+    vec3 lw = vec3( 0.2126, 0.7152, 0.0722 );
+    vec2 o = uPackA.zw * 6.0, q = o * 0.7071;
+    float ls = dot( c, lw ) + dot( texture2D( tScene, uv + vec2( o.x, 0.0 ) ).rgb, lw ) + dot( texture2D( tScene, uv - vec2( o.x, 0.0 ) ).rgb, lw )
+      + dot( texture2D( tScene, uv + vec2( 0.0, o.y ) ).rgb, lw ) + dot( texture2D( tScene, uv - vec2( 0.0, o.y ) ).rgb, lw )
+      + dot( texture2D( tScene, uv + q ).rgb, lw ) + dot( texture2D( tScene, uv - q ).rgb, lw )
+      + dot( texture2D( tScene, uv + vec2( q.x, -q.y ) ).rgb, lw ) + dot( texture2D( tScene, uv + vec2( -q.x, q.y ) ).rgb, lw );
+    ls = max( ls / 9.0, 1e-4 );
+    float tb = sqrt( ls ) * uPackB.x, tq = ( floor( tb ) + smoothstep( 0.3, 0.7, fract( tb ) ) ) / uPackB.x;
+    c *= mix( 1.0, max( tq * tq, 0.015 ) / ls, 1.0 - gm );
+  }
+#endif`)
+    .replace('c = clamp(LinearTosRGB(vec4(c, 1.0)).rgb, 0.0, 1.0);', `c = clamp(LinearTosRGB(vec4(c, 1.0)).rgb, 0.0, 1.0);
+#ifdef D37_RETRO
+  if ( uPackB.z > 0.5 ) c = clamp( c + ( d37Bayer( vUv / uPackA.zw ) - 0.5 ) * 0.45 / max( uPackB.w - 1.0, 1.0 ), 0.0, 1.0 );   // узор — мягче полного (меньше «шума» на ровном)
+#endif
+#ifdef D37_LUT
+  c = d37Lut( c );
+#endif
+#ifdef D37_TOON
+  if ( uPackB.y > 0.5 ) {   // контур: излом обратной глубины (у плоскости она линейна по экрану — ровный пол без линий)
+    vec2 px = uPackA.zw;
+    float w0 = d37Iw( vUv ), lap = abs( d37Iw( vUv - vec2( px.x, 0.0 ) ) + d37Iw( vUv + vec2( px.x, 0.0 ) ) + d37Iw( vUv - vec2( 0.0, px.y ) ) + d37Iw( vUv + vec2( 0.0, px.y ) ) - 4.0 * w0 ) / w0;
+    c = mix( c, c * 0.16, smoothstep( 0.05, 0.16, lap ) );
+  }
+#endif`);
+  // Лучи солнца (и луны ночью) сквозь листву и окна — в экране: от точки к солнцу шаги по кадру; где небо (глубина = 1)
+  // рядом с солнцем — свет, затухает с шагом. Четверть кадра (набор «Ультра» на компьютере — половина). uSun: xy — солнце на
+  // экране, z — сила (0 — проход не рисуется), w — ширина/высота кадра; uRay: шагов, длина (доля пути), затухание, вес шага
+  const FS_RAYS = `uniform sampler2D tDepth; uniform sampler2D tSrc; uniform vec4 uSun; uniform vec4 uRay; varying vec2 vUv;
+void main(){
+  vec2 d = ( uSun.xy - vUv ) * ( uRay.y / uRay.x );
+  vec2 uv = vUv; float il = 1.0, s = 0.0;
+  for ( int i = 0; i < 48; i ++ ) {
+    if ( float( i ) >= uRay.x ) break;
+    uv += d;
+    vec2 q = clamp( uv, vec2( 0.001 ), vec2( 0.999 ) );
+    float sky = step( 0.99999, textureLod( tDepth, q, 0.0 ).x );
+    float nr = 1.0 - smoothstep( 0.0, 0.42, length( ( q - uSun.xy ) * vec2( uSun.w, 1.0 ) ) );
+    float lu = min( dot( textureLod( tSrc, q, 0.0 ).rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), 1.2 );
+    s += sky * nr * nr * lu * il;
+    il *= uRay.z;
+  }
+  gl_FragColor = vec4( min( s * uRay.w * uSun.z, 1.0 ), 0.0, 0.0, 1.0 );
+}`;
+  E.PACK_FS = { comp: FS_COMP_X, rays: FS_RAYS };
   // FXAA (Лоттес, «лёгкий»): 5 выборок яркости, на ровном — сразу выход, на краю — размытие вдоль края (ещё 4)
   const FS_FXAA = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
 void main(){
@@ -557,6 +654,7 @@ void main(){
     // буфер сцены: с MSAA или без, с текстурой глубины (для SSAO) или без — пересоздаётся, когда это меняется
     const sceneRT = (w, h, ms, dep) => {
       const t = new T.WebGLRenderTarget(w, h, { ...sceneOpt, samples: ms });
+      if (P.retro) { t.texture.minFilter = t.texture.magFilter = T.NearestFilter; t.d37Nearest = true; }   // ретро: крупные пиксели без размытия
       if (dep) { t.depthTexture = new T.DepthTexture(w, h); t.depthTexture.type = T.UnsignedIntType; t.depthTexture.format = T.DepthFormat; }
       return t;
     };
@@ -609,7 +707,11 @@ void main(){
         uMovA: mu(), uMovB: mu(), uMovN: { value: 0 } });
       M.copy = mk(FS_COPY, { tSrc: { value: null } });
       M.health = mk(FS_HEALTH, { tSrc: { value: null }, tDepth: { value: null }, uMode: { value: 0 }, uDep: { value: 0 } });   // страж графики
+      M.rays = mk(FS_RAYS, { tDepth: { value: null }, tSrc: { value: null }, uSun: { value: new T.Vector4() }, uRay: { value: new T.Vector4(24, .9, .955, .05) } });   // наборы: лучи
     }
+    // сборка набора (FS_COMP_X): свои uniform — общие с M.comp (тот же объект), переключение — только текст и define
+    Object.assign(M.comp.uniforms, { uPackA: { value: new T.Vector4(0, 0, 1, 1) }, uPackB: { value: new T.Vector4(4, 0, 0, 4) }, uRayC: { value: new T.Vector3() },
+      tRays: { value: null }, tLut: { value: null } });
     // fg.on — включена (render.js); movers — подвижные настоящего кадра: ключ → [x, y, z, r, h]
     P.fg = { ok: !!gl2, on: false, have: false, vp: new T.Matrix4(), ivp: new T.Matrix4(), gen: 0, real: 0 };
     // включить/выключить (render.js): буфер готового кадра — размером холста
@@ -697,11 +799,11 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       P.w = w; P.h = h; P.pr = pr;
       const scaled = P.scaled = pr < (R.pr0 || 1) - .001;   // динамическое разрешение опустило — кадр растягиваем (FSR)
       if (rtUp) { r.getDrawingBufferSize(DB); P.ow = Math.max(1, DB.x); P.oh = Math.max(1, DB.y); rtUp.setSize(P.ow, P.oh); }
-      const ms = gl2 && P.aa === 'msaa' && o.msaa !== false && pr <= 1.25 && !scaled ? 4 : 0, dep = P.depth24 || P.ao.mode !== 'off';
-      if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
+      const ms = gl2 && P.aa === 'msaa' && o.msaa !== false && pr <= 1.25 && !scaled && !P.retro ? 4 : 0, dep = P.depth24 || P.ao.mode !== 'off';
+      if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture || !!P.retro !== !!rtScene.d37Nearest) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
       else rtScene.setSize(w, h);   // текстуру глубины three пересоздаст сам (размер буфера сменился)
       P.msaa = ms;
-      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено
+      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA && !P.retro;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено
       rtLdr.setSize(w, h);
       let bw = Math.max(1, w >> (q === 'high' ? 1 : 2)), bh = Math.max(1, h >> (q === 'high' ? 1 : 2));
       for (let i = 0; i < P.bloom.levels; i++) {
@@ -724,6 +826,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         if (!rtAO) { rtAO = new T.WebGLRenderTarget(aw, ah, opt); rtAO2 = new T.WebGLRenderTarget(aw, ah, opt); } else { rtAO.setSize(aw, ah); rtAO2.setSize(aw, ah); }
         P.ao.aw = aw; P.ao.ah = ah;
       } else if (rtAO) { rtAO.dispose(); rtAO2.dispose(); rtAO = rtAO2 = null; }
+      // лучи набора шейдеров: четверть кадра (ступень 2 — половина)
+      if (P.rays.tier && M.rays) { const k = P.rays.tier > 1 ? 1 : 2, rw = Math.max(1, w >> k), rh = Math.max(1, h >> k); if (!rtRays) rtRays = new T.WebGLRenderTarget(rw, rh, { depthBuffer: false }); else rtRays.setSize(rw, rh); }
+      else if (rtRays) { rtRays.dispose(); rtRays = null; }
     };
     function bloomPasses(){
       const n = Math.min(P.bloom.levels, B.length);
@@ -781,11 +886,75 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     const ssrWanted = () => P.rt.on && (R.lighting?.gfx?.rt?.refl ?? 1) > .001;
     function compSet(camera, ssrOn, k){
       const U = M.comp.uniforms; U.tScene.value = rtScene.texture; U.tBloom.value = B[0]?.texture || null; U.uBloom.value = k; U.uLuma.value = P.fxaa ? 1 : 0;
-      U.uAOk.value = P.ao.on ? (P.ao.debug ? 2 : 1) : 0; U.tAO.value = P.ao.on ? rtAO.texture : null; U.tDepth.value = P.ao.on ? rtScene.depthTexture : null;
-      if (P.ao.on) { U.uAOSize.value.set(P.ao.aw, P.ao.ah); U.uNF.value.set(camera.near, camera.far); }
+      const line = !!(P.pack.toon && P.pack.toon.line && rtScene.depthTexture);   // контуры мультяшного — по глубине и без AO
+      U.uAOk.value = P.ao.on ? (P.ao.debug ? 2 : 1) : 0; U.tAO.value = P.ao.on ? rtAO.texture : null; U.tDepth.value = P.ao.on || line ? rtScene.depthTexture : null;
+      if (P.ao.on || line) { U.uAOSize.value.set(P.ao.aw, P.ao.ah); U.uNF.value.set(camera.near, camera.far); }
       U.uSSRk.value = ssrOn ? 1 : 0; U.tSSR.value = ssrOn ? rtSSR.texture : null;
       U.uCSk.value = P.rt.on ? P.rt.contact * sunK() : 0;
+      if (P.packX) {   // набор шейдеров: свои числа (у «Обычных» сборка прежняя — этих uniform в ней нет)
+        const pk = P.pack;
+        U.uPackA.value.set(P.under ? 1 : 0, (performance.now() / 1000) % 1000, 1 / P.w, 1 / P.h);
+        U.uPackB.value.set(pk.toon ? pk.toon.bands : 4, line ? 1 : 0, pk.retro && pk.retro.dither ? 1 : 0, pk.retro ? pk.retro.levels : 4);
+        U.tRays.value = P.rays.drawn && rtRays ? rtRays.texture : null;
+        if (!P.rays.drawn) U.uRayC.value.set(0, 0, 0);
+        U.tLut.value = lutTex;
+      }
       return U;
+    }
+    // ── Наборы шейдеров (gfx.js E.PACKS, E.packResolve → fx): сборка с кусками по define, LUT, лучи, ретро-пиксели. Набор
+    // «Обычные» (fx.id 'normal') — прежняя сборка FS_COMP. Под водой (render.js R.setUnder) — P.setUnder ──
+    P.pack = { id: 'normal' }; P.packX = false; P.under = false; P.retro = null;
+    P.rays = { tier: 0, drawn: false, color: new T.Vector3(), sun: new T.Vector3(), str: 0, asp: 1 };
+    let lutTex = null, lutKey = '', rtRays = null;
+    P.setUnder = on => { P.under = !!on; };
+    P.setPack = (fx = {}) => {
+      const id = fx.id || 'normal', x = id !== 'normal' && P.on !== false;
+      const defs = {};
+      if (x) {
+        if (fx.lut) defs.D37_LUT = '';
+        if (fx.rays && gl2 && M.rays && P.depth24) defs.D37_RAYS = '';
+        if (fx.toon) defs.D37_TOON = '';
+        if (fx.retro) defs.D37_RETRO = '';
+        if (fx.under) defs.D37_UNDER = '';
+      }
+      P.pack = fx; P.packX = x;
+      const fs = E.POST_PREC + (x ? FS_COMP_X : FS_COMP), dk = JSON.stringify(defs);
+      if (M.comp.fragmentShader !== fs || JSON.stringify(M.comp.defines || {}) !== dk) { M.comp.fragmentShader = fs; M.comp.defines = defs; M.comp.needsUpdate = true; }
+      // LUT: печётся в JS (gfx.js E.packLUT, ~30–60 мс), одинаковые наборы — тот же
+      const key = x && fx.lut ? JSON.stringify([fx.tone, fx.look, fx.retro && fx.retro.levels]) : '';
+      if (key !== lutKey) {
+        lutKey = key; lutTex?.dispose(); lutTex = null;
+        if (key && E.packLUT) {
+          lutTex = new T.DataTexture(E.packLUT(fx), 1024, 32, T.RGBAFormat, T.UnsignedByteType);
+          lutTex.minFilter = lutTex.magFilter = fx.retro ? T.NearestFilter : T.LinearFilter; lutTex.generateMipmaps = false; lutTex.needsUpdate = true;
+        }
+      }
+      P.rays.tier = x && defs.D37_RAYS !== undefined ? fx.rays : 0;
+      P.retro = x && fx.retro ? fx.retro : null;
+      if (P.w > 1) P.setSize(P.w, P.h, P.pr);
+      return P.pack;
+    };
+    // лучи: солнце (днём) или луна (ночью) на экране; не видно (за спиной, далеко за краем) — прохода нет
+    const rayV = new T.Vector3(), rayF = new T.Vector3();
+    function raysPass(camera){
+      P.rays.drawn = false;
+      const S = R.sky; if (!P.rays.tier || !rtRays || !S || !M.rays) return;
+      rayV.set(S.lightDir[0], S.lightDir[1], S.lightDir[2]);
+      camera.getWorldDirection(rayF);
+      const facing = rayF.dot(rayV); if (facing < .05) return;
+      rayV.multiplyScalar(500).add(camera.position).project(camera);
+      const sx = rayV.x * .5 + .5, sy = rayV.y * .5 + .5, outK = Math.max(Math.abs(sx - .5), Math.abs(sy - .5)) - .5;
+      const night = S.night || 0, day = S.lightI || 0;
+      const str = Math.min(1, facing * 2.2) * (1 - Math.min(1, Math.max(0, (outK - .1) / .7))) * Math.min(1, day * 1.4) * (1 + .6 * (S.dusk01 || 0));
+      if (str < .01) return;
+      const u = M.rays.uniforms, n = P.rays.tier > 1 ? 40 : 24;
+      u.tDepth.value = rtScene.depthTexture; u.tSrc.value = rtScene.texture;
+      u.uSun.value.set(sx, sy, str, P.w / P.h);
+      u.uRay.value.set(n, .9, P.rays.tier > 1 ? .955 : .935, (P.rays.tier > 1 ? 1.7 : 1.5) / n);
+      pass(M.rays, rtRays);
+      const k = (P.pack.raysK ?? .38) * (night > .5 ? .35 : 1);
+      M.comp.uniforms.uRayC.value.set(S.light[0] * k, S.light[1] * k * .97, S.light[2] * k * (night > .5 ? 1.1 : .88));
+      P.rays.drawn = true;
     }
     P.render = (scene, camera) => {
       const st = R.stats, ac = r.autoClear;
@@ -803,18 +972,20 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (ssrOn) ssrPass(camera);
       if (P.ao.on) aoPasses(camera);
       const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
+      if (P.rays.tier) raysPass(camera); else P.rays.drawn = false;
       const U = compSet(camera, ssrOn, k);
       const out = P.fg.on && rtOut ? rtOut : null;   // генерация кадров: сначала в свой буфер, потом копией на экран
       const nisK = (m, src, w, h, ow, oh) => { const u = m.uniforms; u.tSrc.value = src; u.uIn.value.set(w, h); u.uOut.value.set(ow, oh); };
-      if (P.scaled && P.upscaler === 'nis' && M.nis) {   // NIS: сборка в уменьшенный буфер → NVScaler (увеличение + резкость) на экран
+      const up = P.retro ? 'retro' : P.upscaler;   // ретро: крупные пиксели — сборка сразу на экран, без сглаживания и апскейлера
+      if (P.scaled && up === 'nis' && M.nis) {   // NIS: сборка в уменьшенный буфер → NVScaler (увеличение + резкость) на экран
         U.uLuma.value = 0; pass(M.comp, rtLdr);
         nisK(M.nis, rtLdr.texture, P.w, P.h, P.ow, P.oh); pass(M.nis, out);
-      } else if (P.scaled && P.upscaler === 'fsr' && M.easu) {   // FSR 1: сборка в уменьшенный буфер → EASU до размера холста → RCAS на экран
+      } else if (P.scaled && up === 'fsr' && M.easu) {   // FSR 1: сборка в уменьшенный буфер → EASU до размера холста → RCAS на экран
         U.uLuma.value = 0; pass(M.comp, rtLdr);
         const ue = M.easu.uniforms; ue.tSrc.value = rtLdr.texture; ue.uIn.value.set(P.w, P.h); ue.uOut.value.set(P.ow, P.oh);
         if (P.sharp > .001) { pass(M.easu, rtUp); const ur = M.rcas.uniforms; ur.tSrc.value = rtUp.texture; ur.uSize.value.set(P.ow, P.oh); pass(M.rcas, out); }
         else pass(M.easu, out);
-      } else if (!P.scaled && P.upscaler === 'nis' && M.nisS && P.sharp > .001) {   // NIS в полном кадре: только резкость (NVSharpen)
+      } else if (!P.scaled && up === 'nis' && M.nisS && P.sharp > .001) {   // NIS в полном кадре: только резкость (NVSharpen)
         if (P.fxaa) {   // сначала сгладить, потом резкость
           pass(M.comp, rtLdr); M.fxaa.uniforms.tSrc.value = rtLdr.texture; M.fxaa.uniforms.uTexel.value.set(1 / P.w, 1 / P.h); pass(M.fxaa, rtUp);
           nisK(M.nisS, rtUp.texture, P.ow, P.oh, P.ow, P.oh);
@@ -910,10 +1081,10 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       P.fg.gen++;
       return true;
     };
-    P._test = { M, pass, rt: () => ({ scene: rtScene, ldr: rtLdr, up: rtUp, ao: rtAO, ssr: rtSSR, out: rtOut }) };   // проверки: шейдеры и проходы
+    P._test = { M, pass, rt: () => ({ scene: rtScene, ldr: rtLdr, up: rtUp, ao: rtAO, ssr: rtSSR, out: rtOut, rays: rtRays }) };   // проверки: шейдеры и проходы
     P.dispose = () => {
       rtScene.dispose(); rtScene.depthTexture?.dispose(); rtLdr.dispose(); rtUp?.dispose(); rtAO?.dispose(); rtAO2?.dispose(); for (const b of B) b.dispose();
-      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose();
+      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose(); rtRays?.dispose(); lutTex?.dispose();
       for (const k in M) M[k].dispose();
       tri.dispose();
     };
@@ -994,7 +1165,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       try { console.warn(`🛡 Страж графики: выключено «${k}» (${why}${prog ? ': ' + prog : ''}) — ${G.gpu.model}`); } catch (e) {}
       gSend('gfx_fallback', { what: k, why, prog: String(prog).slice(0, 40), ...base() });
       let rebuild = false;
-      if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
+      if (k.startsWith('pack:')) { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // набор шейдеров — предыдущий (render.js сам выберет)
+      else if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
       else { if (k === 'patch') E.gfxUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
       try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k, why, prog, rebuild } })); } catch (e) {}
       return true;
@@ -1011,17 +1183,24 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     function label(p){
       const M = P?._test?.M || {};
       for (const k in M) if (r.properties.get(M[k])?.currentProgram === p) return { post: k };
-      let name = p.name || 'scene';
-      try { R.scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (r.properties.get(m)?.currentProgram === p) name = m.name || m.type || name; }); } catch (e) {}
-      return { scene: name };
+      let name = p.name || 'scene', mat = null;
+      try { R.scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (r.properties.get(m)?.currentProgram === p) { name = m.name || m.type || name; mat = m; } }); } catch (e) {}
+      return { scene: name, mat };
     }
+    // набор шейдеров (не «Обычные»): его ли это программа — сборка с кусками набора, лучи, материалы с ветром / небом v2 / водой v3
+    const PACK_DEFS = ['D37_WAVE', 'D37_SKY2', 'D37_WATER3'];
+    const packId = () => P?.pack?.id && P.pack.id !== 'normal' ? P.pack.id : '';
     function scan(){
       const L = r.info?.programs || [];
       for (const p of L) {
         if (!p || G.seen.has(p) || !p.diagnostics || p.diagnostics.runnable !== false) continue;
         G.seen.add(p);
-        const d = p.diagnostics, lb = label(p);
+        const d = p.diagnostics, lb = label(p), pk = packId();
         G.lastLog = String(d.fragmentShader?.log || d.vertexShader?.log || d.programLog || '').replace(/\s+/g, ' ').slice(0, 160);
+        if (lb.post === 'rays' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
+          if (pk) off('pack:' + pk, 'link', lb.post || lb.scene);
+          continue;
+        }
         if (lb.post) off(lb.post === 'ao' && P?.fol && on('fol') ? 'fol' : PROGK[lb.post] || 'post', 'link', lb.post);
         else ladder('link', lb.scene);
       }
@@ -1078,7 +1257,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (rep.SSR) { const s = out.ssr = sums(rep.SSR, true); if (s.bad >= Math.max(3, s.total * .02)) { off('rt', 'nan', 'ssr'); return; } }
       if (rep.F) {
         const c = out.comp = crushed(rep.A, rep.F);
-        if (c.n >= 12 && c.bad > c.n * .25) { off(P.ao.on && on('ao') ? (P.fol && on('fol') ? 'fol' : 'ao') : 'post', 'crush', `${c.bad}/${c.n}`); return; }
+        if (c.n >= 12 && c.bad > c.n * .25) { off(packId() && P.packX ? 'pack:' + packId() : P.ao.on && on('ao') ? (P.fol && on('fol') ? 'fol' : 'ao') : 'post', 'crush', `${c.bad}/${c.n}`); return; }
       }
       // «днём чёрный кадр» — только где темно не бывает (игра ставит R.guardBlack: «Мир Денчика»); в пещерах «Кубомира»,
       // тёмных мирах студии чёрный кадр днём — нормально
@@ -1109,7 +1288,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (G.n === 2 || G.n === 10 || G.n === 40 || G.n === G.scanAt || G.n % 300 === 0) { try { scan(); } catch (e) {} }
       if (G.n === 60) { try { const e = gl.getError(); if (e && e !== gl.CONTEXT_LOST_WEBGL) gSend('gfx_glerror', { what: 'gl', why: String(e), prog: '', ...base() }); } catch (e) {} }
       if (P) {   // включили/выключили AO, трассировку, траву, свечение, постобработку — проверить кадр заново (чуть позже)
-        const sig = `${P.on}|${P.ao.on}|${P.rt.on}|${P.fol}|${P.bloom.on}`, sig2 = `${P.upscaler}|${P.fxaa}|${P.scaled}|${P.fg.on}`;
+        const sig = `${P.on}|${P.ao.on}|${P.rt.on}|${P.fol}|${P.bloom.on}|${P.pack?.id}`, sig2 = `${P.upscaler}|${P.fxaa}|${P.scaled}|${P.fg.on}|${R.pack?.wave}`;
         if (sig !== G.sig) { if (G.sig) G.testAt = Math.min(G.testAt, G.n + 20); G.sig = sig; }
         if (sig + sig2 !== G.sig2) { if (G.sig2) G.scanAt = G.n + 2; G.sig2 = sig + sig2; }   // новые проходы — их программы проверить сразу
       }
