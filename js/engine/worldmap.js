@@ -355,26 +355,36 @@
     }
     let lastX = Infinity, lastZ = Infinity, shown = new Set(), pending = false, tick = 0;
     const V = { grp, nodes: () => shown.size, cache: () => cache.size, built: 0 };
+    // Подгрузка по кусочку: нужный узел ещё не готов — вместо него виден ближайший готовый «родитель» (крупнее), а его готовые
+    // «дети» на это время прячутся (без дыр и без наложений); старые узлы — прочь, когда кэш большой
     function refresh(cx, cz, force){
       want.length = 0; far = farOf();
       walk(-HALF, -HALF, HALF * 2, cx, cz);
       want.sort((a, b) => a[3] - b[3]);
-      let budget = force ? 1e9 : (mob ? 2 : 4), missing = 0;
-      const keys = new Set();
+      let budget = force ? 1e9 : (mob || low ? 1 : 3), missing = 0;
+      const vis = new Map(), cover = [];   // key → [x0, z0, size]; «родители» вместо неготовых
       for (const w of want) {
-        const key = w[0] + ':' + w[1] + ':' + w[2]; keys.add(key);
+        const key = w[0] + ':' + w[1] + ':' + w[2];
         let e = cache.get(key);
-        if (!e) { if (budget-- <= 0) { missing++; continue; } e = { mesh: buildNode(w[0], w[1], w[2]), used: 0 }; cache.set(key, e); V.built++; }
-        e.used = tick;
+        if (!e && budget-- > 0) { e = { mesh: buildNode(w[0], w[1], w[2]), used: 0 }; cache.set(key, e); V.built++; }
+        if (e) { e.used = tick; vis.set(key, w); continue; }
+        missing++;
+        let s = w[2], ax = w[0], az = w[1], found = null;
+        while (s < HALF * 2) { s *= 2; ax = Math.floor((ax + HALF) / s) * s - HALF; az = Math.floor((az + HALF) / s) * s - HALF; const k = ax + ':' + az + ':' + s; if (cache.has(k)) { found = [k, ax, az, s]; break; } }
+        if (found && !cover.some(c => c[0] === found[0])) { cover.push(found); cache.get(found[0]).used = tick; }
       }
+      for (const c of cover) {   // «родитель» закрывает всех своих «детей»
+        for (const [k, w] of vis) if (w[0] >= c[1] && w[0] < c[1] + c[3] && w[1] >= c[2] && w[1] < c[2] + c[3]) vis.delete(k);
+        vis.set(c[0], [c[1], c[2], c[3]]);
+      }
+      for (const c of cover) for (const d of cover) if (c !== d && c[3] < d[3] && c[1] >= d[1] && c[1] < d[1] + d[3] && c[2] >= d[2] && c[2] < d[2] + d[3]) vis.delete(c[0]);
       pending = missing > 0;
-      if (pending && shown.size) return;   // пока не всё готово — старый набор (без дыр и наложений)
-      for (const k of shown) if (!keys.has(k)) { const e = cache.get(k); if (e) grp.remove(e.mesh); }
-      for (const k of keys) if (!shown.has(k)) { const e = cache.get(k); if (e) grp.add(e.mesh); }
-      shown = new Set([...keys].filter(k => cache.has(k)));
-      if (cache.size > 160) {   // старые — прочь
+      for (const k of shown) if (!vis.has(k)) { const e = cache.get(k); if (e) grp.remove(e.mesh); }
+      for (const k of vis.keys()) if (!shown.has(k)) { const e = cache.get(k); if (e) grp.add(e.mesh); }
+      shown = new Set(vis.keys());
+      if (cache.size > 150) {   // старые — прочь (не те, что на экране)
         const old = [...cache.entries()].filter(([k]) => !shown.has(k)).sort((a, b) => a[1].used - b[1].used);
-        for (const [k, e] of old.slice(0, cache.size - 120)) { e.mesh.geometry.dispose(); cache.delete(k); }
+        for (const [k, e] of old.slice(0, cache.size - 110)) { e.mesh.geometry.dispose(); cache.delete(k); }
       }
     }
 
@@ -457,7 +467,7 @@
     }
 
     // ── Деревья рядом с камерой: экземпляры (ствол, крона-конус у ели, крона-шар у лиственного) ──
-    const TR = low ? 170 : mob ? 230 : 330, TMAX = low ? 450 : mob ? 900 : 1800;
+    const TR = low ? 160 : mob ? 200 : 320, TMAX = low ? 400 : mob ? 700 : 1600;
     const trunkG = new T.CylinderGeometry(.22, .32, 1, 6); trunkG.translate(0, .5, 0);
     const pineG = new T.ConeGeometry(1.7, 4.6, 7); pineG.translate(0, 4.4, 0);
     const leafG = new T.IcosahedronGeometry(2.1, 0); leafG.translate(0, 4.2, 0);
@@ -495,7 +505,7 @@
     V.update = (cx, cz, o = {}) => {
       tick++;
       if (pending || Math.hypot(cx - lastX, cz - lastZ) > 24 || o.force) { const first = lastX === Infinity; lastX = cx; lastZ = cz; refresh(cx, cz, first || o.force); }
-      if (Math.hypot(cx - tX, cz - tZ) > 36) { tX = cx; tZ = cz; plantTrees(cx, cz); }
+      if (Math.hypot(cx - tX, cz - tZ) > (mob ? 52 : 40)) { tX = cx; tZ = cz; plantTrees(cx, cz); }
       const px = o.px ?? cx, pz = o.pz ?? cz;
       if (o.ph && Math.hypot(px - bX, pz - bZ) > 8) { bX = px; bZ = pz; treeBodies(o.ph, px, pz); }
     };

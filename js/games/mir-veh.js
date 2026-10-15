@@ -52,7 +52,8 @@
     const S = rt.S, R = rt.R, T = rt.T, ph = rt.ph, X = rt.X, H = rt.H, E = rt.E, toast = rt.toast;
     const now = () => performance.now();
     const VS = { list: new Map(), me: null, t: 0, lookAt: -9, sendT: 0, warnAt: -9, hinted: new Set(), cam0: null, loops: new Map() };
-    const env = { ph, water: (x, z) => (ph.waterLevel ? ph.waterLevel(x, z) : -Infinity), bounds: Z.bounds(), onCrash };
+    const map = !!Z.worldMap?.();   // карта-рельеф: ездить и плавать — по всей карте, летать — выше гор
+    const env = { ph, water: (x, z) => (ph.waterLevel ? ph.waterLevel(x, z) : -Infinity), bounds: map ? Z.mapBounds() : Z.bounds(), maxY: map ? 640 : undefined, onCrash };
     let glassM = null;
     const glass = () => glassM || (glassM = (() => { const m = new T.MeshStandardMaterial({ color: '#bfe8ff', transparent: true, opacity: .32, roughness: .08, metalness: 0, depthWrite: false }); R.own.push(m); return R.fresnel ? R.fresnel(m, .5) : m; })());
     const IN = { thr: 0, steer: 0, up: 0, boost: 0, brake: 0, on: true };
@@ -176,6 +177,15 @@
       const v = m.v;
       VS.t += dt;
       if (C.down('interact')) { exit(); return true; }
+      if (m.seat > 0) {   // пассажир въехал в зону не по своему возрасту — высадить там, где был снаружи
+        const Zn = Z.zoneAt(v.x, v.z);
+        if (Zn?.age && !Z.gateOf(Zn).ok) {
+          exit({ force: true, noPlace: true });
+          const s = rt.safe; if (s) S.P.place(s.x, s.y, s.z, S.P.yaw); else { const p = exitSpot(v, m.seat); S.P.place(p.x, p.y, p.z, v.yaw); }
+          toast(`${Zn.icon} ${Zn.name}: вход только ${Zn.age}+ — ты вышел у границы`);
+          return true;
+        }
+      }
       if (m.seat > 0 && !driverOn(v) && C.down('jump')) { moveSeat(v, 0); return true; }
       if (m.seat === 0 && v.local) {
         if (C.down('horn')) { v.horn = .6; rt.sfx('horn', { x: v.x, y: v.y + 1, z: v.z, vol: .7 }); }

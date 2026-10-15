@@ -217,10 +217,23 @@
   function residentAt(R, h){
     const t = ((h - R.shift) % 24 + 24) % 24, j = R.j;
     if (t < 7 || t >= 22.5) return { phase: 'home', x: R.hs[0], z: R.hs[1] };
-    if (t < 8.5) { const k = (t - 7) / 1.5; return { phase: 'go', x: R.hs[0] + (R.ws[0] - R.hs[0]) * k + j[0], z: R.hs[1] + (R.ws[1] - R.hs[1]) * k + j[1] }; }
-    if (t < 17) return { phase: 'work', x: R.ws[0] + j[0], z: R.ws[1] + j[1] };
-    if (t < 19.5) return { phase: 'shop', x: R.ss[0] + j[0], z: R.ss[1] + j[1] };
-    return { phase: 'walk', x: R.hs[0] + j[0] * 2, z: R.hs[1] + j[1] * 2 };
+    if (t < 8.5) { const k = (t - 7) / 1.5; return free(R, 'go', R.hs[0] + (R.ws[0] - R.hs[0]) * k + j[0], R.hs[1] + (R.ws[1] - R.hs[1]) * k + j[1], true); }
+    if (t < 17) return free(R, 'work', R.ws[0] + j[0], R.ws[1] + j[1]);
+    if (t < 19.5) return free(R, 'shop', R.ss[0] + j[0], R.ss[1] + j[1]);
+    return free(R, 'walk', R.hs[0] + j[0] * 2, R.hs[1] + j[1] * 2);
+  }
+  // точка жителя занята (здание, стена, вода, за зоной) или он в пути — на ближайший тротуар улицы зоны
+  function free(R, phase, x, z, street){
+    const D = DEFS[R.zone], Z = ZONES[R.zone];
+    const bad = !Z || !inRect(Z, x, z, -1) || (D?.buildings || []).some(b => b.h > 0 && Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1) || water(x, z) > -Infinity;
+    if (!bad && !street) return { phase, x, z };
+    let best = null, bd = Infinity;
+    for (const r of D?.streets || []) for (let i = 1; i < r.pts.length; i++) {
+      const [x1, z1] = r.pts[i - 1], [x2, z2] = r.pts[i], dx = x2 - x1, dz = z2 - z1, l = dx * dx + dz * dz || 1;
+      const k = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / l)), px = x1 + dx * k, pz = z1 + dz * k, d = Math.hypot(x - px, z - pz);
+      if (d < bd) { const L = Math.sqrt(l), s = ((x - px) * -dz + (z - pz) * dx) >= 0 ? 1 : -1, o = r.w / 2 + 1.3; bd = d; best = [px - dz / L * o * s, pz + dx / L * o * s]; }
+    }
+    return best ? { phase, x: Math.round(best[0] * 100) / 100, z: Math.round(best[1] * 100) / 100 } : { phase, x, z };
   }
   // Возрастные ворота: { ok } | { ok: false, why: 'unknown' | 'young' }
   function gateOf(Z, A = root.D37Age){
@@ -558,8 +571,10 @@
       g.fillStyle = o.bg || '#7c3aed'; g.fillRect(x, y, w, h);
       if (o.border !== false) { g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 4; g.strokeRect(x + 3, y + 3, w - 6, h - 6); }
       g.fillStyle = o.fg || '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      // размер шрифта — сразу по одному замеру (раньше — подбор по 2 px: до 25 замеров на вывеску, на телефоне это рывки при подгрузке зоны)
       let fs = h * .56; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`;
-      while (g.measureText(text).width > w * .9 && fs > 10) { fs -= 2; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`; }
+      const tw = g.measureText(text).width;
+      if (tw > w * .9) { fs = Math.max(10, Math.floor(fs * w * .9 / tw)); g.font = `900 ${fs}px Montserrat, Arial, sans-serif`; }
       g.fillText(text, x + w / 2, y + h / 2 + 2);
       const r = { page: cur, u0: x / size, v0: 1 - (y + h) / size, u1: (x + w) / size, v1: 1 - y / size };
       cur.x += w + 2; cur.rowH = Math.max(cur.rowH, h);
@@ -1365,6 +1380,7 @@
     // ═══ Интерьеры зданий (js/engine/interior.js): этаж строится, когда игрок у входа / внутри / приехал лифтом; далеко — сносится.
     //     Никогда не весь небоскрёб: живут только нужные этажи (не больше INT_CAP). Двери — правила доступа (rt.doorAccess) ═══
     const INT = root.D37E?.interior, mounted = new Map(), intSeats = [];
+    rt.mountedCount = () => mounted.size;   // сколько этажей интерьеров построено (замер: только у входа)
     const INT_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 6;
     let glassM = null;
     const ictx = {
@@ -1543,6 +1559,7 @@
       else for (const zs of rt.mods) { try { if (zs.mod?.click?.(a, b)) break; } catch (er) { console.error(er); } }
     });
     function borderTick(){
+      if (rt.inVeh?.()) return;   // в машине — правила транспорта (mir-veh.js: водитель разворачивается, пассажира высаживают)
       const P = S.P, ch = P.ch, Z = zoneAt(ch.x, ch.z);
       if (Z && Z.age && !gateOf(Z).ok) {
         const s = rt.safe;

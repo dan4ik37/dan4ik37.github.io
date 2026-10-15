@@ -118,7 +118,7 @@
   MZ.def('kids', {
     roles: ROLES_K, buildings: K_BLD, streets: K_STREETS, places: K_PLACES, residents: 14,   // жители по расписанию (MirZones.residents)
     // карты у детской площадки (катаются только по городку)
-    vehicles: [152, 157, 162].map((x, i) => ({ id: 'k_kart' + (i + 1), def: 'kart', x, z: -33.5, yaw: PI / 2, area: 'kids' })),
+    vehicles: [152, 157, 162].map((x, i) => ({ id: 'k_kart' + (i + 1), def: 'kart', x, z: -33.5, yaw: 0, area: 'kids' })),   // рядом, носом к улице (не друг в друга)
     ground: [[200, -24, 180, 8, '#5b6270'], [180, -20, 8, 120, '#5b6270'], [117, -24, 14, 28, '#e7dcc2']],
     actions: rt => {
       const W = wallet('kids'), L = [
@@ -223,9 +223,9 @@
     // транспорт города: такси у стоянки, машины в паркинге, катера на канале, вертолёт на площадке крыши «Сити-1» (y — высота крыши)
     vehicles: [
       { id: 'm_heli1', def: 'heli_city', x: 298.4, z: 160, yaw: PI / 2, y: 109.3 },
-      { id: 'm_taxi1', def: 'taxi', x: 239, z: 121.6, yaw: PI / 2 }, { id: 'm_taxi2', def: 'taxi', x: 253, z: 121.6, yaw: PI / 2 },
+      { id: 'm_taxi1', def: 'taxi', x: 239, z: 121.6, yaw: 0 }, { id: 'm_taxi2', def: 'taxi', x: 253, z: 121.6, yaw: 0 },   // носом к проспекту
       { id: 'm_car1', def: 'sedan_red', x: 230, z: 332, yaw: 0 }, { id: 'm_car2', def: 'sedan', x: 242, z: 332, yaw: 0 }, { id: 'm_car3', def: 'police_car', x: 254, z: 332, yaw: 0 },
-      { id: 'm_boat1', def: 'motorboat', x: 160, z: 261.6, yaw: PI / 2 }, { id: 'm_boat2', def: 'motorboat', x: 228, z: 261.6, yaw: PI / 2 }, { id: 'm_boat3', def: 'motorboat', x: 300, z: 261.6, yaw: PI / 2 },
+      { id: 'm_boat1', def: 'motorboat', x: 160, z: 261.6, yaw: PI / 2 }, { id: 'm_boat2', def: 'motorboat', x: 228, z: 261.6, yaw: PI / 2 }, { id: 'm_boat3', def: 'motorboat', x: 300, z: 261.6, yaw: -PI / 2 },
     ],
     // силуэт издалека выше зданий: телебашня, ярусы «Денчик-Тауэр» — [x, z, w, d, цвет, верх, низ, фасад]
     skyline: [[182, 316, 6, 6, '#e5e7eb', 96, 6.4], [182, 316, 18, 18, '#cbd5e1', 104, 96], [182, 316, 1.4, 1.4, '#e5e7eb', 140, 104], [312, 300, 19.2, 16, '#0f172a', 140.8, 118.4, 'dark'], [298.4, 160, 16, 16, '#1e3a8a', 108.8, 92.8, 'glass']],
@@ -1032,6 +1032,7 @@
       if (st.patient) patient(st.at, true);
       if (st.sick) sickPet(st.at, true);
       if (st.cust || st.cust2 || st.robber) customer(st.cust2 || st.at, st.robber ? '🦹' : '🙋');
+      else if (st.drive && C.step > 0) { customer(null); toast('🚕 Пассажир в машине — вези!', true); }   // такси: пассажир сел
       if (st.trial) customer(SP('m_defend'), '🦹');
       if (st.walk || st.drive) setTarget(st.at, st.icon, null, 0, () => {});   // дойти / доехать — шаг засчитается сам
       else setTarget(st.at, st.icon, `${st.icon} ${st.text}`, st.hold, () => stepDone());
@@ -1350,8 +1351,9 @@
           const st = C.task[C.step], el = rt.q('.mz-task .mz-dist');
           if (st?.at && el) {
             const d = Math.hypot(st.at.x - S.P.ch.x, st.at.z - S.P.ch.z), me = rt.veh?.me, inCar = !!st.drive && me?.seat === 0 && me.v.def.id === st.drive;
-            el.textContent = st.any ? (inCar ? '✅' : '') : d > 3 ? Math.round(d / 1.17) + ' м' : '✋ здесь';
-            if ((st.walk && d < 2.5) || (inCar && (st.any || d < 7))) stepDone();   // такси: доехал (за рулём такси) — засчитано
+            const slow = inCar && Math.abs(me.v.spd || 0) < 3;   // такси: пассажир садится и выходит, только когда машина стоит
+            el.textContent = st.any ? (inCar ? '✅' : '') : d > 3 ? Math.round(d / 1.17) + ' м' : inCar && !slow ? '🛑 остановись' : '✋ здесь';
+            if ((st.walk && d < 2.5) || (inCar && (st.any || (d < 7 && slow)))) stepDone();   // такси: доехал и остановился (за рулём такси) — засчитано
           }
         }
         if (city === 'kids' && here && K.spots.k_tramp) { const t0 = K.spots.k_tramp, ch = S.P.ch; if (Math.hypot(ch.x - t0.x, ch.z - t0.z) < 1.9 && ch.grounded && ch.y > .5 && S.P.mode === 'move') { S.P.push(0, 15, 0); rt.sfx('jump', { vol: .5, rate: 1.4 }); } }
@@ -1390,5 +1392,5 @@
     return mod;
   }
 
-  root.MirCity = { taskList, SPOTS, spotsOf, ROLES_K, ROLES_M, PETS, QUIZ, WALLET, wallet, K_FIRES, K_CUST, K_PETS, K_BLD, M_BLD };
+  root.MirCity = { taskList, SPOTS, spotsOf, ROLES_K, ROLES_M, PETS, QUIZ, WALLET, wallet, K_FIRES, K_CUST, K_PETS, K_BLD, M_BLD, TAXI_STOPS };
 })();

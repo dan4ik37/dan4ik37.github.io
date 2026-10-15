@@ -604,5 +604,70 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   const GR = MZ.groundRect(); ok(GR[0] === SEA.x1 && GR[2] >= C.x1, 'земля мира — до набережной гавани');
 }
 
+// ═══ 17. Логика и баланс (проверка 16.10): жители не в стенах, телепорты не в здания, такси, тест-драйв, полёты над горами ═══
+{
+  const inB = (zid, x, z, m) => (MZ.DEFS[zid]?.buildings || []).find(b => b.h > 0 && Math.abs(x - b.x) < b.w / 2 + m && Math.abs(z - b.z) < b.d / 2 + m);
+  // жители по расписанию: видимые фазы — не в здании (с запасом на стену), в своей зоне, не в воде
+  for (const zid of ['kids', 'metro']) {
+    let bad = null, n = 0;
+    for (const R of MZ.residents(zid)) for (let h = 0; h < 24; h += .25) {
+      const a = MZ.residentAt(R, h); if (a.phase === 'home') continue; n++;
+      const b = inB(zid, a.x, a.z, .7);
+      const onStreet = MZ.DEFS[zid].streets.some(r => r.pts.slice(1).some((q, i) => MZ.segDist(a.x, a.z, r.pts[i][0], r.pts[i][1], q[0], q[1]) < r.w / 2 + 2.6));   // мост — можно
+      if (b || !inRect(ZONES[zid], a.x, a.z) || (MZ.water(a.x, a.z) > -Infinity && !onStreet)) { bad = [R.id, h, a.phase, a.x, a.z, b?.id]; break; }
+    }
+    ok(n > 100 && !bad, `${zid}: жители не застревают в стенах и зданиях (днём и в пути)`, bad || n);
+  }
+  // в пути на работу — по улице (не насквозь через дома)
+  for (const zid of ['kids', 'metro']) {
+    const D = MZ.DEFS[zid]; let off = null;
+    for (const R of MZ.residents(zid)) { const a = MZ.residentAt(R, 7.75 + R.shift); if (a.phase !== 'go') continue; const d = Math.min(...D.streets.flatMap(r => r.pts.slice(1).map((q, i) => MZ.segDist(a.x, a.z, r.pts[i][0], r.pts[i][1], q[0], q[1]) - r.w / 2))); if (d > 3) { off = [R.id, d]; break; } }
+    ok(!off, `${zid}: дорога жителей на работу — по тротуару`, off);
+  }
+  // телепорты карты и лобби: не внутрь здания и не в воду
+  for (const P of MZ.places()) {
+    if (P.zone) ok(!inB(P.zone, P.x, P.z, .4), `телепорт «${P.name}»: не внутри здания`, [P.x, P.z]);
+    ok(MZ.water(P.x, P.z) === -Infinity && MZ.terrain(P.x, P.z) === 0, `телепорт «${P.name}»: на земле, не в воде`, [P.x, P.z]);
+  }
+  for (const pd of MZ.PADS) ok(pd.to === 'studio' || ZONES[pd.to] || MZ.PLACES0.some(p => p[0] === pd.to), `телепорт лобби «${pd.to}» ведёт в известное место`);
+  // такси: остановки у дорог и не в зданиях; оплата как у других работ города
+  const MCt = globalThis.MirCity || {};
+  if (MCt.TAXI_STOPS) {
+    const D = MZ.DEFS.metro;
+    for (const [x, z, nm] of MCt.TAXI_STOPS) {
+      const d = Math.min(...D.streets.flatMap(r => r.pts.slice(1).map((q, i) => MZ.segDist(x, z, r.pts[i][0], r.pts[i][1], q[0], q[1]) - r.w / 2)));
+      ok(d < 4 && !inB('metro', x, z, .5), `такси: остановка «${nm}» — у дороги, не в здании`, [x, z, d]);
+    }
+    ok(MCt.TAXI_STOPS.length >= 6, 'такси: остановок хватает');
+  }
+  if (MCt.ROLES_M) {
+    const pays = Object.entries(MCt.ROLES_M).filter(([k, r]) => r.pay > 0).map(([k, r]) => r.pay);
+    ok(MCt.ROLES_M.taxi.pay >= Math.min(...pays) && MCt.ROLES_M.taxi.pay <= Math.max(...pays), 'таксист получает как другие работы города', pays);
+    ok(Object.values(MCt.ROLES_K).every(r => r.pay <= 5), 'детский город: плата — звёздочки (до 5 за задание)');
+  }
+  // тест-драйв: машина появляется на улице у автосалона, не в здании
+  ok(!inB('metro', 182, 125, 2) && Math.min(...MZ.DEFS.metro.streets.flatMap(r => r.pts.slice(1).map((q, i) => MZ.segDist(182, 125, r.pts[i][0], r.pts[i][1], q[0], q[1]) - r.w / 2))) < 6, 'тест-драйв: машина — у дороги перед салоном, не в здании');
+  // над горами можно пролететь: потолок вертолёта и самолёта с картой (640) выше самых высоких вершин
+  const WM = MZ.worldMap();
+  if (WM) { let hi = -Infinity; for (let i = -3000; i <= 3000; i += 40) for (let j = -3000; j <= 3000; j += 40) hi = Math.max(hi, WM.height(i, j)); ok(hi + 100 < 640, 'горы ниже потолка полёта (640) на 100+', hi); }
+  // техника стоит носом к свободному месту (иначе «газ» — сразу в соседнюю машину или в набережную): впереди 3…9 ед. — не другая
+  // машина и не здание; лодки — вода
+  const SPOTS = globalThis.MirVeh.spots();
+  for (const sp of SPOTS) {
+    const d = E.vehicle.get(sp.def); if (!d || d.kind === 'heli') continue;
+    const fx = Math.sin(sp.yaw || 0), fz = Math.cos(sp.yaw || 0), L = d.size[2] / 2; let bad = null;
+    for (let k = 1; k <= (d.kind === 'boat' ? 40 : 9) && !bad; k += 1) {   // лодке нужен разгон — 40 ед. воды впереди
+      const x = sp.x + fx * (L + k), z = sp.z + fz * (L + k);
+      const other = SPOTS.find(o => o !== sp && Math.hypot(o.x - x, o.z - z) < 2.4);
+      const bb = inB(sp.zone, x, z, .3);
+      // в паркинге машины стоят внутри здания (пандусы) — это можно
+      if (other) bad = ['машина', other.id, k]; else if (bb && bb.type !== 'parking') bad = ['здание', bb.id, k]; else if (d.kind === 'boat' && (MZ.water(x, z) === -Infinity || (sp.zone === 'war' && x > MZ.SEA.x1 - 1))) bad = ['берег', k];
+    }
+    ok(!bad, `${sp.id}: носом к свободному месту (газ — не в соседа и не в стену)`, bad);
+  }
+  // лодки — в океан: граница транспорта с картой — край карты (пролив из гавани)
+  ok(MZ.mapBounds()[0] < MZ.SEA.x0 - 1000, 'граница транспорта — край карты (лодки выходят из гавани в океан)');
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);
