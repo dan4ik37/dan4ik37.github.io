@@ -412,6 +412,7 @@ void main(){ vec3 c = aces(texture2D(tAcc, vUv).rgb); c = mix(c * 12.92, 1.055 *
     E.pathPhoto.cur = C;
     let data = null, rtA = null, rtB = null, M = null, M2 = null, quad = null, pscene = null, pcam = null;
     const cleanup = () => {
+      C.dropFence?.();
       for (const x of [rtA, rtB, M, M2, quad?.geometry]) x?.dispose?.();
       M = M2 = null;
       if (data) for (const t of Object.values(data.tex)) t.dispose();
@@ -464,23 +465,45 @@ void main(){ vec3 c = aces(texture2D(tAcc, vUv).rgb); c = mix(c * 12.92, 1.055 *
       } catch (e) { console.error(e); stEl.textContent = 'не получилось: ' + (e.message || e); }
     }, 60);
     function show(){ quad.material = M2; M2.uniforms.tAcc.value = rtA.texture; r.setRenderTarget(null); r.render(pscene, pcam); }
-    // кадр: 1…8 лучей на пиксель — по тому, как быстро идут кадры (слабым видеокартам не даём зависнуть), показать среднее
-    let spf = 1, lastT = 0;
+    // кадр: 1…8 лучей на пиксель, показать среднее. Темп — по видеокарте: после порции ставим метку (fenceSync); в работе — не
+    // больше 2 порций (иначе очередь команд растёт, и страница «замерзает»). Кадры частые и видеокарта успевает — порцию больше,
+    // не успевает — меньше. Набрали MAXF лучей на пиксель — шум уже не виден: видеокарта отдыхает, картинка просто показывается
+    const MAXF = o.maxSpp || 4096, gl = r.getContext(), fences = [];
+    let spf = 1, lastT = 0, busy = false;
+    C.dropFence = () => { for (const f of fences) gl.deleteSync(f); fences.length = 0; };
+    C.stat = { skip: 0, steps: 0 };
+    const status = done => { const s = (performance.now() - C.t0) / 1000; stEl.textContent = `${done ? '✅ готово: ' : ''}${C.frames} лучей на пиксель · ${s.toFixed(1)} с · ${data.n.toLocaleString('ru-RU')} треугольников${C.build?.skipped ? ` (дальние ${C.build.skipped} предметов — без них)` : ''}`; };
     function step(){
       if (C.closed || !M) return;
+      if (C.frames >= MAXF) { C.dropFence(); show(); if (!C.done) { C.done = true; status(true); } return; }
       const now = performance.now(), iv = lastT ? now - lastT : 16; lastT = now;
-      if (iv < 20) spf = Math.min(8, spf + 1); else if (iv > 34) spf = Math.max(1, spf - 1);
+      C.stat.steps++;
+      while (fences.length && gl.getSyncParameter(fences[0], gl.SYNC_STATUS) === gl.SIGNALED) gl.deleteSync(fences.shift());
+      if (fences.length >= 2) { spf = Math.max(1, spf - 1); busy = true; C.stat.skip++; show(); return; }   // видеокарта ещё считает прошлые
+      if (!busy && iv < 20) spf = Math.min(8, spf + 1); else if (iv > 34) spf = Math.max(1, spf - 1);
+      busy = false;
       quad.material = M;
-      for (let k = 0; k < spf; k++) {
+      for (let k = 0; k < spf && C.frames < MAXF; k++) {
         C.frames++;
         M.uniforms.uFrame.value = C.frames; M.uniforms.tPrev.value = rtA.texture;
         r.setRenderTarget(rtB); r.render(pscene, pcam);
         const t = rtA; rtA = rtB; rtB = t;
       }
       show();
-      if (C.frames % 4 < spf) { const s = (performance.now() - C.t0) / 1000; stEl.textContent =`${C.frames} лучей на пиксель · ${s.toFixed(1)} с · ${data.n.toLocaleString('ru-RU')} треугольников${C.build?.skipped ? ` (дальние ${C.build.skipped} предметов — без них)` : ''}`; }
+      fences.push(gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)); gl.flush();
+      if (C.frames % 4 < spf) status(false);
     }
     C.step = step;
+    // замер: n лучей на пиксель подряд и дождаться видеокарты (чтение пикселя) → мс; await D37E.pathPhoto.cur.bench(64)
+    C.bench = (n = 64) => {
+      if (!M) return null;
+      const px = rtA.texture.type === T.FloatType ? new Float32Array(4) : new Uint16Array(4), t0 = performance.now();
+      quad.material = M;
+      for (let k = 0; k < n; k++) { C.frames++; M.uniforms.uFrame.value = C.frames; M.uniforms.tPrev.value = rtA.texture; r.setRenderTarget(rtB); r.render(pscene, pcam); const t = rtA; rtA = rtB; rtB = t; }
+      r.readRenderTargetPixels(rtA, 0, 0, 1, 1, px); r.setRenderTarget(null);
+      const ms = performance.now() - t0;
+      return { spp: n, ms: Math.round(ms), sppPerSec: Math.round(n / ms * 1000), mpaths: +(n * rtA.width * rtA.height / ms / 1000).toFixed(1) };
+    };
     return C;
   };
 })();
