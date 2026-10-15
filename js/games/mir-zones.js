@@ -217,10 +217,23 @@
   function residentAt(R, h){
     const t = ((h - R.shift) % 24 + 24) % 24, j = R.j;
     if (t < 7 || t >= 22.5) return { phase: 'home', x: R.hs[0], z: R.hs[1] };
-    if (t < 8.5) { const k = (t - 7) / 1.5; return { phase: 'go', x: R.hs[0] + (R.ws[0] - R.hs[0]) * k + j[0], z: R.hs[1] + (R.ws[1] - R.hs[1]) * k + j[1] }; }
-    if (t < 17) return { phase: 'work', x: R.ws[0] + j[0], z: R.ws[1] + j[1] };
-    if (t < 19.5) return { phase: 'shop', x: R.ss[0] + j[0], z: R.ss[1] + j[1] };
-    return { phase: 'walk', x: R.hs[0] + j[0] * 2, z: R.hs[1] + j[1] * 2 };
+    if (t < 8.5) { const k = (t - 7) / 1.5; return free(R, 'go', R.hs[0] + (R.ws[0] - R.hs[0]) * k + j[0], R.hs[1] + (R.ws[1] - R.hs[1]) * k + j[1], true); }
+    if (t < 17) return free(R, 'work', R.ws[0] + j[0], R.ws[1] + j[1]);
+    if (t < 19.5) return free(R, 'shop', R.ss[0] + j[0], R.ss[1] + j[1]);
+    return free(R, 'walk', R.hs[0] + j[0] * 2, R.hs[1] + j[1] * 2);
+  }
+  // точка жителя занята (здание, стена, вода, за зоной) или он в пути — на ближайший тротуар улицы зоны
+  function free(R, phase, x, z, street){
+    const D = DEFS[R.zone], Z = ZONES[R.zone];
+    const bad = !Z || !inRect(Z, x, z, -1) || (D?.buildings || []).some(b => b.h > 0 && Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1) || water(x, z) > -Infinity;
+    if (!bad && !street) return { phase, x, z };
+    let best = null, bd = Infinity;
+    for (const r of D?.streets || []) for (let i = 1; i < r.pts.length; i++) {
+      const [x1, z1] = r.pts[i - 1], [x2, z2] = r.pts[i], dx = x2 - x1, dz = z2 - z1, l = dx * dx + dz * dz || 1;
+      const k = Math.max(0, Math.min(1, ((x - x1) * dx + (z - z1) * dz) / l)), px = x1 + dx * k, pz = z1 + dz * k, d = Math.hypot(x - px, z - pz);
+      if (d < bd) { const L = Math.sqrt(l), s = ((x - px) * -dz + (z - pz) * dx) >= 0 ? 1 : -1, o = r.w / 2 + 1.3; bd = d; best = [px - dz / L * o * s, pz + dx / L * o * s]; }
+    }
+    return best ? { phase, x: Math.round(best[0] * 100) / 100, z: Math.round(best[1] * 100) / 100 } : { phase, x, z };
   }
   // Возрастные ворота: { ok } | { ok: false, why: 'unknown' | 'young' }
   function gateOf(Z, A = root.D37Age){
@@ -401,6 +414,18 @@
     if (ay >= ax && ay >= az) { u = px; v = ny > 0 ? -pz : pz; } else if (ax >= az) { u = nx > 0 ? -pz : pz; v = py; } else { u = nz > 0 ? px : -px; v = py; }
     out[i * 2] = u / tile; out[i * 2 + 1] = v / tile;
   }
+  // Ломаемые вещи внутри склеенных сеток: id → [{ mesh, start, count, orig }] — «спрятать» = стянуть их вершины в точку
+  const BRK = new Map();
+  function brkHide(id, on){
+    const L = BRK.get(id); if (!L) return false;
+    for (const r of L) {
+      const a = r.mesh.geometry.attributes.position, arr = a.array;
+      if (on) { if (!r.orig) r.orig = arr.slice(r.start * 3, (r.start + r.count) * 3); for (let i = r.start * 3; i < (r.start + r.count) * 3; i += 3) { arr[i] = r.orig[0]; arr[i + 1] = -500; arr[i + 2] = r.orig[2]; } }
+      else if (r.orig) arr.set(r.orig, r.start * 3);
+      a.needsUpdate = true;
+    }
+    return true;
+  }
   function merge(R, grp, o = {}){
     const T = R.T, M = sharedMats(R), low = R.q === 'low', CH = o.chunk || 0;
     grp.updateMatrixWorld(true);
@@ -420,16 +445,18 @@
       const g = x.geometry.index ? x.geometry.toNonIndexed() : x.geometry.clone();
       g.applyMatrix4(m4);
       if (mat.flatShading) g.computeVertexNormals();
-      b.list.push({ g, c: mat.color }); b.n += g.attributes.position.count;
+      let brk = x.userData.brk; for (let p = x.parent; !brk && p && p !== grp; p = p.parent) brk = p.userData.brk;
+      b.list.push({ g, c: mat.color, brk }); b.n += g.attributes.position.count;
       drop.push(x);
     });
     const out = [];
     for (const b of buckets.values()) {
       const pos = new Float32Array(b.n * 3), nor = new Float32Array(b.n * 3), col = b.plain ? new Float32Array(b.n * 3) : null, uv = b.plain ? null : new Float32Array(b.n * 2);
       const tile = !b.plain && b.mat.userData?.tile;
-      let k = 0;
-      for (const { g, c } of b.list) {
+      let k = 0; const ranges = [];
+      for (const { g, c, brk } of b.list) {
         const gp = g.attributes.position, gn = g.attributes.normal, gu = g.attributes.uv;
+        if (brk) ranges.push({ id: brk, start: k, count: gp.count });
         pos.set(gp.array, k * 3); if (gn) nor.set(gn.array, k * 3);
         for (let i = 0; i < gp.count; i++) {
           if (col) {
@@ -448,6 +475,8 @@
       mesh.userData.mzOwn = true; mesh.matrixAutoUpdate = false; mesh.updateMatrix();
       if (!low) { mesh.castShadow = !b.glow && !b.mat.transparent && !b.mat.userData?.noCast; mesh.receiveShadow = !b.glow; }
       if (b.mat.transparent) mesh.renderOrder = 2;
+      for (const r of ranges) { let L = BRK.get(r.id); if (!L) BRK.set(r.id, L = []); L.push({ mesh, start: r.start, count: r.count, orig: null }); }
+      if (ranges.length) mesh.geometry.attributes.position.setUsage?.(T.DynamicDrawUsage);
       grp.add(mesh); out.push(mesh);
     }
     for (const x of drop) x.parent?.remove(x);
@@ -558,8 +587,10 @@
       g.fillStyle = o.bg || '#7c3aed'; g.fillRect(x, y, w, h);
       if (o.border !== false) { g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 4; g.strokeRect(x + 3, y + 3, w - 6, h - 6); }
       g.fillStyle = o.fg || '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      // размер шрифта — сразу по одному замеру (раньше — подбор по 2 px: до 25 замеров на вывеску, на телефоне это рывки при подгрузке зоны)
       let fs = h * .56; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`;
-      while (g.measureText(text).width > w * .9 && fs > 10) { fs -= 2; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`; }
+      const tw = g.measureText(text).width;
+      if (tw > w * .9) { fs = Math.max(10, Math.floor(fs * w * .9 / tw)); g.font = `900 ${fs}px Montserrat, Arial, sans-serif`; }
       g.fillText(text, x + w / 2, y + h / 2 + 2);
       const r = { page: cur, u0: x / size, v0: 1 - (y + h) / size, u1: (x + w) / size, v1: 1 - y / size };
       cur.x += w + 2; cur.rowH = Math.max(cur.rowH, h);
@@ -707,14 +738,29 @@
     K.group = (x = 0, y = 0, z = 0, yaw = 0, parent) => { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = yaw; (parent || K.cur || grp).add(g); return g; };
     // готовые предметы движка (дерево, фонарь, скамейка…) — в текущую группу
     K.prefab = (name, o) => R.prefab(name, { ...o, parent: K.cur || grp }, ph);
+    // ломаемое (js/engine/destruct.js): номер — по порядку постройки (у всех одинаковый), тела — свои, спрятать — в склейке
+    let brkN = 0;
+    const canBreak = zs.Z?.id && zs.Z.id !== 'kids';
+    const brkPrefab = (name, o, spec) => {
+      if (!canBreak) return K.prefab(name, o);
+      const id = `z:${zs.Z.id}:${spec.kind[0]}${++brkN}`, bodies = [];
+      const phW = { addCyl: c => { const b = ph.addCyl(c); bodies.push(b); return b; }, addBox: c => { const b = ph.addBox(c); bodies.push(b); return b; } };
+      const g = R.prefab(name, { ...o, parent: K.cur || grp }, phW);
+      if (g) g.userData.brk = id;
+      K.brk.push({ id, zone: zs.Z.id, x: o.x, y: 0, z: o.z, bodies, obj: g, ...spec });
+      return g;
+    };
+    K.brk = [];
     // дерево не растёт в стене здания (улицы и дома двигались — проверка по таблице зданий зоны)
     const solidB = ((zs.D || DEFS[zs.Z?.id])?.buildings || []).filter(b => b.h > 0 && b.type !== 'park' && b.type !== 'lot');
-    K.tree = (x, z, k = 1, v = 0) => solidB.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1) ? null : K.prefab(v < 0 ? 'pine' : 'tree', { x, z, k, v: Math.max(0, v), yaw: (x * 7 + z * 3) % 6 });
+    K.tree = (x, z, k = 1, v = 0) => solidB.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1) ? null
+      : brkPrefab(v < 0 ? 'pine' : 'tree', { x, z, k, v: Math.max(0, v), yaw: (x * 7 + z * 3) % 6 }, { kind: v < 0 ? 'pine' : 'tree', h: (v < 0 ? 4.2 : 3.6) * k, r: .3 * k, c2: v < 0 ? '#2f7d4a' : '#4ea544' });
     // фонарь без ореола-спрайта (спрайт — отдельный вызов отрисовки на каждый; светится шар — свечение постобработки)
     K.lamp = (x, z) => {
-      P({ s: 'cyl', x, y: 1.5, z, r: .1, r2: .07, h: 3, c: '#2d2a3a', seg: 8 }); P({ s: 'cyl', x, y: .06, z, r: .22, h: .12, c: '#2d2a3a', seg: 10 });
-      P({ s: 'ball', x, y: 3.1, z, r: .26, c: '#fff3b0', m: 'glow', seg: 10 }); P({ s: 'cone', x, y: 3.38, z, r: .32, h: .22, c: '#2d2a3a', seg: 10 });
-      K.bodies.push(ph.addCyl({ x, z, y: 1.5, r: .16, hy: 1.5, tag: 'lamp' }));
+      const ms = [P({ s: 'cyl', x, y: 1.5, z, r: .1, r2: .07, h: 3, c: '#2d2a3a', seg: 8 }), P({ s: 'cyl', x, y: .06, z, r: .22, h: .12, c: '#2d2a3a', seg: 10 }),
+        P({ s: 'ball', x, y: 3.1, z, r: .26, c: '#fff3b0', m: 'glow', seg: 10 }), P({ s: 'cone', x, y: 3.38, z, r: .32, h: .22, c: '#2d2a3a', seg: 10 })];
+      const body = ph.addCyl({ x, z, y: 1.5, r: .16, hy: 1.5, tag: 'lamp' }); K.bodies.push(body);
+      if (canBreak) { const id = `z:${zs.Z.id}:l${++brkN}`; for (const m of ms) if (m) m.userData.brk = id; K.brk.push({ id, zone: zs.Z.id, kind: 'lamp', x, y: 0, z, h: 3.4, r: .16, c: '#2d2a3a', bodies: [body], obj: null }); }
     };
     K.label = atlas(R);
     // взаимодействие (X) — запоминаем, чтобы зона могла выключать
@@ -825,7 +871,7 @@
       K.body({ x, z, y: .4, hx: 1.1, hy: .4, hz: .45, yaw, tag: 'sofa' });
       for (const s of [-1, 1]) K.seat(x + Math.cos(yaw) * .5 * s, .56, z - Math.sin(yaw) * .5 * s, yaw, { name: 'Сесть на диван' });
     };
-    K.bench = (x, z, yaw) => { K.prefab('bench', { x, z, yaw, m: K.M.planks }); for (const s of [-1, 1]) K.seat(x + Math.cos(yaw) * .55 * s, .62, z - Math.sin(yaw) * .55 * s, yaw, { name: 'Сесть на скамейку' }); };
+    K.bench = (x, z, yaw) => { brkPrefab('bench', { x, z, yaw, m: K.M.planks }, { kind: 'bench', w: 2.2, d: .62, h: 1, yaw, c: '#a0673a' }); for (const s of [-1, 1]) K.seat(x + Math.cos(yaw) * .55 * s, .62, z - Math.sin(yaw) * .55 * s, yaw, { name: 'Сесть на скамейку' }); };
     K.counter = (x, z, w, d, c = '#7c2d12', top = '#fed7aa', yaw = 0) => { K.box(x, 0, z, w, 1.05, d, c, { solid: true, yaw }); P({ s: 'box', x, y: 1.09, z, w: w + .1, h: .08, d: d + .1, c: top, yaw }); };
     K.shelf = (x, z, w, yaw = 0, items = ['#ef4444', '#facc15', '#22c55e', '#3b82f6']) => {
       const g = K.group(x, 0, z, yaw);
@@ -1284,6 +1330,16 @@
       flushPieces(R, K, zs.grp);   // детали с номерами (боевая зона) — InstancedMesh
       flushPortals(K, zs.grp);   // тёмные проёмы входов
       for (const p of K.pieceList) PIECES.set(p.id, p);
+      const DS = rt.destruct;
+      if (DS && zs.Z.id !== 'kids') {
+        for (const b of K.brk || []) DS.add({ ...b, hide: on => { if (!brkHide(b.id, on) && b.obj) b.obj.visible = !on; } });
+        for (const p of K.pieceList) {
+          const kind = p.kind === 'window' ? 'glass' : ['bag', 'crate', 'barrel', 'fence'].includes(p.kind) ? p.kind : null;
+          if (!kind) continue;
+          DS.add({ id: 'p:' + p.id, zone: zs.Z.id, kind, x: p.x, y: kind === 'glass' ? p.y : p.y - p.h / 2, z: p.z, w: Math.max(p.w, p.d), d: Math.min(p.w, p.d), h: p.h, c: p.c,
+            bodies: p.body ? [p.body] : [], hide: on => { p.broken = !!on; setPieceVis(p, !on); } });
+        }
+      }
       zs.built = true;
       R.shadowDirty?.();
       try { zs.mod = zs.D.start?.(rt, K) || null; } catch (e) { console.error(e); }
@@ -1365,6 +1421,7 @@
     // ═══ Интерьеры зданий (js/engine/interior.js): этаж строится, когда игрок у входа / внутри / приехал лифтом; далеко — сносится.
     //     Никогда не весь небоскрёб: живут только нужные этажи (не больше INT_CAP). Двери — правила доступа (rt.doorAccess) ═══
     const INT = root.D37E?.interior, mounted = new Map(), intSeats = [];
+    rt.mountedCount = () => mounted.size;   // сколько этажей интерьеров построено (замер: только у входа)
     const INT_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 6;
     let glassM = null;
     const ictx = {
@@ -1543,6 +1600,7 @@
       else for (const zs of rt.mods) { try { if (zs.mod?.click?.(a, b)) break; } catch (er) { console.error(er); } }
     });
     function borderTick(){
+      if (rt.inVeh?.()) return;   // в машине — правила транспорта (mir-veh.js: водитель разворачивается, пассажира высаживают)
       const P = S.P, ch = P.ch, Z = zoneAt(ch.x, ch.z);
       if (Z && Z.age && !gateOf(Z).ok) {
         const s = rt.safe;
@@ -1723,6 +1781,10 @@
     rt.onHi = () => { if (rt.zxSig && rt.zxSig !== '{}') setTimeout(() => { if (!rt.stopped) S.forceSend = true; }, 400 + Math.random() * 1600); rt.veh?.onHi?.(); };
     rt.onMsg = (p, d) => {
       if (d.t === 'vh') { try { rt.veh?.onMsg?.(p, d); } catch (e) { console.error(e); } return; }   // транспорт (mir-veh.js)
+      if (d.k === 'brk' && rt.destruct && typeof d.id === 'string' && d.id.length < 64) {   // у другого что-то сломалось — у меня тоже (обломки — свои)
+        rt.destruct.breakId(d.id, (+d.s || 0) >>> 0, Math.max(-1, Math.min(1, +d.dx || 0)), Math.max(-1, Math.min(1, +d.dz || 0)), true);
+        return;
+      }
       for (const zs of rt.mods) { try { if (zs.mod?.onMsg?.(p, d)) return; } catch (e) { console.error(e); } }
     };
     rt.send = d => H.send?.({ t: 'z', ...d });
@@ -1964,11 +2026,35 @@
       for (const zs of rt.mods) { try { zs.mod?.update?.(dt); } catch (e) { console.error(e); } }
       try { rt.veh?.update?.(dt); } catch (e) { console.error(e); }   // транспорт: чужие машины, седоки, возврат на стоянку
     };
+    // ═══ Разрушения (js/engine/destruct.js): детский городок и столица — никогда; Большой город — мелочь (столбы, скамейки,
+    //     деревья); боевая зона и природа — всё. Деревья карты — «лениво» (кто рядом с ударом). По сети — «сломан id» с зерном ═══
+    if (E?.destruct) {
+      const ruleOf = b => { const z = b.zone !== undefined ? b.zone : zoneAt(b.x, b.z)?.id || null; return z === 'kids' ? 'none' : z === 'metro' ? 'small' : z === 'war' ? 'all' : z ? 'none' : inRect(clusterRect(), b.x, b.z, 4) ? 'none' : 'all'; };
+      const treeId = (x, z) => 'wt:' + Math.round(x * 4) + ':' + Math.round(z * 4);
+      const DS = rt.destruct = E.destruct(R, ph, { fx: () => S.FX, sfx: (n, o) => rt.sfx(n, o), rule: ruleOf, restore: 5,
+        // деревья карты: те, что рядом, — в список (спрятать — у вида рельефа)
+        provide: (x, z, r, D) => { const M = worldMap(); if (!M) return; M.trees(x - r, z - r, x + r, z + r, (tx, ty, tz, k, pine) => { const id = treeId(tx, tz); if (!D.list.has(id)) D.add({ id, temp: true, zone: null, kind: pine ? 'pine' : 'tree', x: tx, y: ty - .1, z: tz, h: (pine ? 8.4 : 7) * k, r: .3 * k, c2: pine ? '#2f6b3a' : '#4f9a45', bodies: [], hide: on => rt.wmv?.cutTree?.(id, on) }); }); },
+        lookup: id => { const m = /^wt:(-?\d+):(-?\d+)$/.exec(id); if (!m) return null; const x = +m[1] / 4, z = +m[2] / 4; DS.hit(x, z, 0, 0); return DS.list.get(id) || null; },
+        busy: b => Math.hypot(S.P.ch.x - b.x, S.P.ch.z - b.z) < 3,   // восстановится, когда рядом никто не стоит
+      });
+      DS.onBreak = (id, s, dx, dz) => rt.send({ k: 'brk', id, s, dx, dz });
+    }
+    // жители пугаются (удар, взрыв, что-то упало рядом): убегают от игрока 5 с, «😭» над головой
+    rt.scare = (x, z, r) => {
+      const N = S.NPC; if (!N?.list) return;
+      for (const e of N.list.values()) {
+        const o = e.o, ch = e.P?.ch; if (!ch || Math.hypot(ch.x - x, ch.z - z) > r) continue;
+        if (!o._act0) o._act0 = o.act; o.act = 'flee'; o._fleeT = performance.now() + 5000;
+        try { N.A?.emote?.(e.key, '😭', 2); } catch (er) {}
+      }
+    };
     // рельеф карты: чанки рядом с камерой (дальность — по туману), деревья, тела деревьев рядом с игроком
     try { const wm = worldMap(); if (wm) rt.wmv = wm.view(R, { far: () => R.camera.far * .98 }); } catch (e) { console.error(e); }
     rt.frame = (dt, t) => {
       if (rt.stopped) return;
       if (rt.wmv) { const c = R.camera.position, p = S.P.ch; try { rt.wmv.update(c.x, c.z, { ph: S.ph, px: p.x, pz: p.z }); } catch (e) { console.error(e); rt.wmv = null; } }
+      if (rt.destruct) { try { rt.destruct.update(dt); } catch (e) { console.error(e); } }
+      if (S.NPC?.list) { const tn = performance.now(); for (const e of S.NPC.list.values()) if (e.o._fleeT && tn > e.o._fleeT) { e.o.act = e.o._act0 || 'wander'; e.o._fleeT = 0; e.o._act0 = null; } }
       for (const zs of rt.zones.values()) if (zs.it || zs.mq) { stepBuild(zs, R.q === 'high' ? 4 : 3); if (zs.built && !zs.shown) { const c = R.camera.position; if (distRect(zs.Z, c.x, c.z) < SHOW_D) setShown(zs, true); } }
       for (const zs of rt.mods) { try { zs.mod?.frame?.(dt, t); } catch (e) { console.error(e); } }
       try { rt.veh?.frame?.(dt, t); } catch (e) { console.error(e); }
@@ -1977,6 +2063,7 @@
     rt.dispose = () => {
       try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
       try { rt.wmv?.dispose?.(S.ph); } catch (e) { console.error(e); } rt.wmv = null;
+      try { rt.destruct?.dispose(); } catch (e) { console.error(e); } rt.destruct = null; BRK.clear();
       rt.stopped = true;
       clearTimeout(rt.bannerT); clearTimeout(rt.phT); clearTimeout(rt.eatT); clearInterval(rt.mapT);
       for (const zs of rt.zones.values()) {
@@ -2035,7 +2122,7 @@
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
     def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, BIG_GATES,
-    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES,
+    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES, BRK, brkHide,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
   };

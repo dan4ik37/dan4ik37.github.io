@@ -88,6 +88,8 @@
       for (let i = this._pi; i < P.length; i++) this.remove(P[i]);
       P.length = 0; this._pi = 0;
     }
+    // вернуть убранное тело (разрушения: столб/дерево восстановились) — то же тело, те же ссылки у игры
+    readd(c){ if (!c || this.cols.has(c)) return c; this.cols.add(c); this._cells(c); this._grid(c); this._emit('add', c); return c; }
     remove(c){
       if (!c || !this.cols.delete(c)) return;
       this._ungrid(c, c.gx0, c.gx1, c.gz0, c.gz1);
