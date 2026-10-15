@@ -165,6 +165,27 @@
     mad: { lid: 'angry', mouth: 'frown', brow: 'angry' },
     calm: { eyes: 'closed', mouth: 'smile' },
   };
+  // ── Телефон 📱 (как в ГТА): режимы use — в руке перед грудью, голова к экрану; call — у уха, свободная рука жестикулирует;
+  //    play — боком двумя руками, большие пальцы бегают; photo — двумя руками перед собой, «щёлк» со вспышкой. Код по сети:
+  //    0 — нет, 1 use, 2 call, 3 play, 4 photo. Переходы: достать (рука к карману, телефон вверх) и убрать — тот же путь назад.
+  const PH_MODES = ['use', 'call', 'play', 'photo'];
+  const phIdx = v => typeof v === 'number' ? (v >= 1 && v <= 4 ? (v | 0) - 1 : -1) : PH_MODES.indexOf(v);
+  const PHW = .2, PHH = .36, PHD = .032;   // корпус: ширина, высота, толщина (человечек ~2,3 ростом; чиби — крупнее, чтобы читался)
+  // суставы слоя телефона (в этом порядке — в массивах калибровки): туловище, голова, левая рука, правая рука; последние два —
+  // плечи вверх (их нет в позе: у чиби короткие руки, плечо помогает дотянуться до уха — пишутся в ch.phS.sh)
+  const PHJ = [J.TX, J.TY, J.TZ, J.HX, J.HY, J.HZ, J.ALX, J.ALY, J.ALZ, J.EL, J.ARX, J.ARY, J.ARZ, J.ER, -1, -1];
+  const NPH = PHJ.length;
+  // Режим: h — голова (вниз, к руке, наклон), t — туловище (вперёд), sh — плечи вверх [левое, правое], r — куда кисть от плеча
+  // (направление в осях туловища + доля длины руки), ear — кисть у уха, two — двумя руками, l — свободная левая (жест);
+  // маски: сколько сустава забирает телефон (mt — туловище, mh — голова, ml — левая рука; правая — вся)
+  const PHM = [
+    { h: [.4, .1, .03], t: [.06, 0, 0], sh: [0, 0], r: [-.5, .02, .87, .88], mt: .55, mh: .9, ml: 0, scr: 'home', spd: 4.6 },
+    { h: [.07, -.05, -.37], t: [.02, 0, 0], sh: [0, .055], ear: 1, l: [-.6, .1, -.1, -1.25], mt: .4, mh: .85, ml: .75, scr: 'call', spd: 6 },
+    { h: [.32, 0, 0], t: [.13, 0, 0], sh: [0, 0], r: [-.55, -.12, .82, .92], two: 1, mt: .7, mh: .95, ml: 1, scr: 'game', spd: 3 },
+    { h: [.14, .04, 0], t: [-.03, 0, 0], sh: [.03, .03], r: [-.42, .03, .9, .97], two: 1, mt: .6, mh: .85, ml: 1, scr: 'camera', spd: 3.2 },
+  ];
+  // рука у кармана (сбоку у бедра, чуть назад), голова глянула туда же
+  const PH_POCKET = { h: [.16, .22, 0], t: [.08, .1, 0], sh: [0, 0], r: [.12, -.95, -.28, .97], mt: .5, mh: .6, ml: 0 };
   const wrapA = a => { a = (a + PI) % TAU; if (a < 0) a += TAU; return a - PI; };
   const autoQ = () => { try { return window.D37E?.gfxQuality?.() || (document.body?.classList.contains('low') ? 'low' : 'high'); } catch (e) { return 'high'; } };
 
@@ -358,7 +379,8 @@
         root: null, body: null, torso: null, headP: null, head: null, legL: null, legR: null, kneeL: null, kneeR: null, armL: null, armR: null, elbowL: null, elbowR: null, handL: null, handR: null,
         face: null, faceSet: null, expr: 'base', mkSet: null, blink: false, pet: null, top: 2.3, headY: 1.6, hipY: .52, hs: 1,
         yaw: 0.5, phase: Math.random() * 6 + .5, blinkAt: Math.random() * 4 + .5, emote: null, emoteT: 0.5,
-        P: REST.slice(), Pt: REST.slice(), Ps: REST.slice(), cat: 0, xf: 1.5, xd: .2, wMove: 0.5, wRun: 0.5, land: 0.5, lookX: 0.5, lookY: 0.5, cw: 0.5 };
+        P: REST.slice(), Pt: REST.slice(), Ps: REST.slice(), cat: 0, xf: 1.5, xd: .2, wMove: 0.5, wRun: 0.5, land: 0.5, lookX: 0.5, lookY: 0.5, cw: 0.5,
+        phS: null, ph: null, phC: null, phWant: null, phD: null, handC: '' };   // телефон: состояние, корпус в руке, калибровка, что нужно, размеры, цвет кисти
       ch.yaw = 0; ch.emoteT = 0; ch.wMove = 0; ch.wRun = 0; ch.land = 0; ch.lookX = 0; ch.lookY = 0; ch.cw = 0; ch.xf = 1;
       const anims = ch.anims, rainbow = [];
       // краски: P(цвет | X => цвет, класс); PS — из слота палитры; acc — у аксессуара «как задумано» = свой цвет вещи
@@ -585,7 +607,7 @@
         const ar0 = .098 * lw, kr = sh === 'slim' ? .74 : sh === 'chunky' ? 1.3 : 1, ar = ar0 * kr;
         const shX = shT === 'base' && !TD.box ? rT * .93 + .035 : TD.w(.77) * (TD.box ? .98 : .97) + .035;
         const A = B(torso, s * (shX + (ar - ar0) * .7 + (isArmor(sh) ? .015 : 0)), yT - .2, 0, part);
-        A.rotation.z = s * .16;
+        A.rotation.z = s * .16; A.userData.y0 = A.position.y;   // y0 — плечо на месте (поднять — SLY/SRY)
         const E = B(A, 0, -Lu, 0, part), H = G(E, 0, -Lf, 0);
         H.userData.anchor = true;   // точка кисти остаётся (в неё берут предметы)
         A.userData.La = La; A.userData.hand = H;   // как раньше: длина руки и кисть
@@ -1130,7 +1152,17 @@
       ch.legL = legsLR[0].L; ch.legR = legsLR[1].L; ch.kneeL = legsLR[0].K; ch.kneeR = legsLR[1].K;
       ch.armL = armsLR[0].A; ch.armR = armsLR[1].A; ch.elbowL = armsLR[0].E; ch.elbowR = armsLR[1].E; ch.handL = armsLR[0].H; ch.handR = HR;
       ch.blink = !!base.userData.blink; ch.pet = pet; ch.top = top; ch.headY = hipY + yT - .06 + hr * .86; ch.hipY = hipY; ch.hs = hs;
+      // для телефона: полуширина и глубина головы (до масштаба hs) — где ухо и глаза; цвет кисти (большие пальцы на экране)
+      ch.phD = { hw: HD.k === 'ell' ? .56 * HD.s[0] : HD.k === 'cyl' ? HD.r : HD.s[0], hy: HD.k === 'ell' ? .56 * HD.s[1] : HD.k === 'cyl' ? HD.h + HD.c : HD.s[1],
+        hz: HD.k === 'ell' ? .56 * HD.s[2] : HD.k === 'cyl' ? HD.r : HD.s[2], box: HD.k !== 'ell', tw: TD.w(.6), td: TD.d(.6), y0: yB, y1: yT };
+      ch.handC = handColor(R);
       return ch;
+    }
+    // Цвет кисти: варежки/перчатки — их цвет, иначе кожа (или металл брони) правой руки
+    function handColor(R){
+      const g = R.glove;
+      if (g === 'mitts' || g === 'gloves' || g === 'boxing') return R.glovec === 'auto' ? { mitts: '#e23b4e', gloves: '#2b2b33', boxing: '#d6213f' }[g] : colorOf(R, 'glovec');
+      return partCol(R, 'armR');
     }
 
     // Перекрасить готового человечка, если поменялись только цвета (обычные, не особые материалы). false — нужна пересборка
@@ -1144,6 +1176,8 @@
         if (s[0] === 'p' && s[1] === 'c' && R.tone === 'goldskin' && (R[s] === 'auto') !== (O[s] === 'auto')) return false;   // часть стала/перестала быть золотой
       }
       ch.R = R;
+      ch.handC = handColor(R);
+      if (ch.ph) for (const th of ch.ph.thumbs) th.material = toon(ch.handC);   // большие пальцы на экране телефона
       for (const r of ch.ranges) {
         const c = linear(r.col(R)), at = r.g.attributes.color, a = at.array;
         for (let k = 0; k < r.n; k++) { const q = (r.a + k) * 3; a[q] = c[0]; a[q + 1] = c[1]; a[q + 2] = c[2]; }
@@ -1158,6 +1192,405 @@
       if (!set) set = ch.sets.get('base');
       if (ch.faceSet && ch.faceSet !== set) { ch.faceSet.visible = false; if (ch.faceSet.userData.eyes) ch.faceSet.userData.eyes.scale.y = 1; }
       set.visible = true; ch.faceSet = set; ch.expr = name;
+    }
+
+    // ═══ Телефон 📱 — как в ГТА (владелец 15.10.2026): достать из кармана, смотреть в экран, говорить у уха, играть двумя
+    // руками, снимать; убрать обратно. Слой поверх любой позы (идёт, сидит, присел, прыгнул): руки, голова, плечи — от
+    // телефона, ноги — свои. Состояние ch.phS: o — «насколько достал» 0…2 (0 — рука своя, 1 — рука у кармана, телефон
+    // появляется, 2 — в руке в позе режима; убрать — тот же путь назад, без рывков), w — веса режимов (смена — плавно).
+    // Позы рук — двухзвенная рука (IK) от размеров ЭТОГО человечка (у чиби короткие руки и большая голова): считаются
+    // один раз (ch.phC). Корпус — общие геометрия и материалы на всех; появляется в handR при первом «достать».
+    const pv = () => new T.Vector3(), pq = () => new T.Quaternion();
+    const IKD = pv(), IKN = pv(), IKa = pv(), IKb = pv(), IKc = pv(), IKa2 = pv(), IKb2 = pv(), IKc2 = pv(), IKm1 = new T.Matrix4(), IKm2 = new T.Matrix4(), IKe = new T.Euler();
+    // Рука: плечо S (оси туловища), длины Lu (до локтя) и Lf (до кисти), цель P, hint — куда смотрит локоть → out[o…o+3] = углы плеча
+    // (Эйлер XYZ) и локтя. Не достаёт — вытянута к цели. Возвращает, сколько было до цели
+    function armIK(S, Lu, Lf, P, hint, out, o){
+      IKD.subVectors(P, S);
+      const reach = IKD.length();
+      const d = Math.max(Math.abs(Lu - Lf) + .02, Math.min((Lu + Lf) * .995, reach));
+      IKD.normalize();
+      const e = -Math.acos(Math.max(-1, Math.min(1, (d * d - Lu * Lu - Lf * Lf) / (2 * Lu * Lf))));
+      IKa.set(0, -Lu - Lf * Math.cos(e), -Lf * Math.sin(e)).normalize();
+      IKb.set(0, -1, 0).addScaledVector(IKa, IKa.y).normalize(); IKc.crossVectors(IKa, IKb);   // локоть ⟂ кисти (в осях плеча)
+      const ca = Math.max(-1, Math.min(1, (Lu * Lu + d * d - Lf * Lf) / (2 * Lu * d))), sa = Math.sqrt(1 - ca * ca);
+      IKN.copy(hint).addScaledVector(IKD, -hint.dot(IKD));
+      if (IKN.lengthSq() < 1e-8) IKN.set(0, -1, 0).addScaledVector(IKD, -IKD.y);
+      IKN.normalize();
+      IKb2.copy(IKD).multiplyScalar(ca).addScaledVector(IKN, sa);
+      IKb2.addScaledVector(IKD, -IKb2.dot(IKD)).normalize(); IKc2.crossVectors(IKD, IKb2); IKa2.copy(IKD);
+      IKm1.makeBasis(IKa, IKb, IKc).transpose(); IKm2.makeBasis(IKa2, IKb2, IKc2).multiply(IKm1);
+      IKe.setFromRotationMatrix(IKm2, 'XYZ');
+      out[o] = IKe.x; out[o + 1] = IKe.y; out[o + 2] = IKe.z; out[o + 3] = e;
+      return reach;
+    }
+    const FKq = pq(), FKq2 = pq(), FKe = new T.Euler(), FKx = new T.Vector3(1, 0, 0), FKv = pv();
+    // Кисть по углам: положение и поворот в осях туловища
+    function armFK(S, Lu, Lf, a, o, pos, q){
+      FKe.set(a[o], a[o + 1], a[o + 2], 'XYZ'); q.setFromEuler(FKe);
+      FKq2.setFromAxisAngle(FKx, a[o + 3]);
+      FKv.set(0, -Lf, 0).applyQuaternion(FKq2); FKv.y -= Lu;
+      pos.copy(FKv).applyQuaternion(q).add(S);
+      q.multiply(FKq2);
+    }
+    const HDq = pq(), HDe = new T.Euler();
+    // Точка головы (x, y, z — в осях головы до масштаба hs) при повороте головы h → в осях туловища
+    function headPt(ch, h, x, y, z, out){
+      HDe.set(h[0], h[1], h[2], 'YXZ'); HDq.setFromEuler(HDe);
+      out.set(x * ch.hs, y * ch.hs, z * ch.hs).add(ch.head.position).applyQuaternion(HDq).add(ch.headP.position);
+      return out;
+    }
+    // Не залез ли телефон (центр c, оси x, u, n — в осях туловища) в голову (поза головы h) или в грудь: насколько вытолкнуть
+    // (единиц) и куда — в out. Голова — эллипсоид с запасом (у кубика и робота — больше), туловище — эллиптический цилиндр
+    const PNq = pq(), PNqi = pq(), PNe = new T.Euler(), PNp = pv(), PNl = pv();
+    function phPen(ch, h, c, x, u, n, out, m){
+      const D = ch.phD, hs = ch.hs, k = D.box ? 1.12 : 1;
+      PNe.set(h[0], h[1], h[2], 'YXZ'); PNq.setFromEuler(PNe); PNqi.copy(PNq).invert();
+      let best = 0;
+      for (let i = 0; i < 18; i++) {
+        const sx = (i % 3) - 1, sy = ((i / 3 | 0) % 3) - 1, sz = i < 9 ? -1 : 1;
+        PNp.copy(c).addScaledVector(x, sx * PHW / 2).addScaledVector(u, sy * PHH / 2).addScaledVector(n, sz * PHD / 2);
+        // голова: в её оси (до масштаба)
+        PNl.copy(PNp).sub(ch.headP.position).applyQuaternion(PNqi).sub(ch.head.position).multiplyScalar(1 / hs);
+        const ax = D.hw * k + m, ay = D.hy * k + m, az = D.hz * k + m, e = Math.hypot(PNl.x / ax, PNl.y / ay, PNl.z / az);
+        if (e < 1) {
+          const dep = (1 - e) * Math.min(ax, ay, az) * hs;
+          if (dep > best) { best = dep; out.set(PNl.x / (ax * ax), PNl.y / (ay * ay), PNl.z / (az * az)).applyQuaternion(PNq).normalize(); }   // наружу по нормали
+        }
+        // грудь: на высоте туловища — снаружи эллипса (полуширина, полуглубина) с запасом
+        if (PNp.y > D.y0 && PNp.y < D.y1) {
+          const e2 = Math.hypot(PNp.x / (D.tw + .02), PNp.z / (D.td + .02));
+          if (e2 < 1) { const dep = (1 - e2) * Math.min(D.tw, D.td); if (dep > best) { best = dep; out.set(PNp.x / D.tw, 0, PNp.z / D.td).normalize(); } }
+        }
+      }
+      return best;
+    }
+    // Калибровка (один раз на человечка): для каждого режима и кармана — суставы слоя (в порядке PHJ), маски, где телефон
+    // в кисти (pos, q), где большие пальцы на экране (thR, thL — в осях телефона)
+    function phCal(ch){
+      if (ch.phC) return ch.phC;
+      const A = [ch.armL, ch.armR], Ls = [-ch.elbowL.position.y, -ch.elbowR.position.y], Lh = [-ch.handL.position.y, -ch.handR.position.y];
+      const S = [pv(), pv()], H = [pv(), pv()], HQ = [pq(), pq()], eye = pv(), ear = pv(), n = pv(), u = pv(), x = pv(), c = pv(), tgt = pv(), hint = pv(), tmp = pv();
+      const PQm = new T.Matrix4(), Pq = pq(), Pqi = pq(), ang = new Float32Array(8);
+      const D = ch.phD || { hw: .58, hz: .55 };
+      const one = (d, i) => {
+        const a = new Float32Array(NPH), mk = new Float32Array(NPH);
+        a.set(d.t, 0); a.set(d.h, 3);
+        const he = [d.h[0] * d.mh, d.h[1] * d.mh, d.h[2] * d.mh];   // голова на деле (маска: остальное — своя поза, стоит почти прямо)
+        for (const s of [0, 1]) S[s].set(A[s].position.x, (A[s].userData.y0 ?? A[s].position.y) + (d.sh ? d.sh[s] : 0), A[s].position.z);
+        // кисть правой: у уха (по голове этого человечка) или по направлению от плеча
+        if (d.ear) {
+          headPt(ch, he, D.hw, -.07, 0, ear);
+          HDe.set(he[0], he[1], he[2], 'YXZ'); HDq.setFromEuler(HDe);
+          n.set(-1, 0, 0).applyQuaternion(HDq); u.set(0, .8, -.6).normalize().applyQuaternion(HDq);
+          c.copy(ear).addScaledVector(n, -(PHD / 2 + .016)).addScaledVector(u, -(PHH / 2 - .026));   // где хотим центр телефона
+          tgt.copy(c).addScaledVector(n, -.04).addScaledVector(u, -.09);
+          hint.set(1, -.15, .25);
+        } else {
+          tgt.set(d.r[0], d.r[1], d.r[2]).normalize().multiplyScalar((Ls[1] + Lh[1]) * d.r[3]).add(S[1]);
+          hint.set(1, -1, d.two ? 0 : -.3);
+        }
+        const hint0 = hint.normalize().clone();
+        armIK(S[1], Ls[1], Lh[1], tgt, hint0, ang, 4);
+        armFK(S[1], Ls[1], Lh[1], ang, 4, H[1], HQ[1]);
+        // как держим: n — экран (к глазам / к щеке / наружу), u — верх телефона (вперёд / к левой руке / вверх)
+        if (!d.ear) {
+          if (i === 3) n.set(0, .35, -1).normalize();
+          else if (i < 0) n.set(1, 0, .2).normalize();
+          else n.subVectors(headPt(ch, he, 0, -.08, D.hz, eye), H[1]).normalize();
+          if (i === 0) u.set(0, .3, 1); else if (i < 0) u.set(0, 1, .25); else u.set(-1, 0, 0);
+          u.addScaledVector(n, -u.dot(n)).normalize();
+        }
+        x.crossVectors(u, n);
+        const g = d.two ? .135 : d.ear ? .09 : i < 0 ? .025 : .11, gn = d.two ? .036 : .04;   // кисть держит низ (двумя — концы)
+        c.copy(H[1]).addScaledVector(n, gn).addScaledVector(u, g);   // центр телефона — у кисти (телефон не отрывается)
+        // залез в голову или в грудь (большая голова, короткие руки) — кисть наружу, руку заново
+        if (i >= 0) for (let it = 0; it < 6; it++) {
+          const dep = phPen(ch, he, c, x, u, n, tmp, d.ear ? .012 : .03);   // у уха — вплотную к щеке
+          if (dep < .004) break;
+          tgt.copy(H[1]).addScaledVector(tmp, dep + .012);
+          armIK(S[1], Ls[1], Lh[1], tgt, hint0, ang, 4);
+          armFK(S[1], Ls[1], Lh[1], ang, 4, H[1], HQ[1]);
+          c.copy(H[1]).addScaledVector(n, gn).addScaledVector(u, g);
+        }
+        PQm.makeBasis(x, u, n); Pq.setFromRotationMatrix(PQm);
+        // левая: держит другой конец (двумя руками) или своя поза (жест у уха / свободна)
+        if (d.two) {
+          tgt.copy(c).addScaledVector(u, g).addScaledVector(n, -gn);
+          armIK(S[0], Ls[0], Lh[0], tgt, hint.set(-1, -1, 0).normalize(), ang, 0);
+          armFK(S[0], Ls[0], Lh[0], ang, 0, H[0], HQ[0]);
+        } else if (d.l) ang.set(d.l, 0);
+        else ang.fill(0, 0, 4);
+        a.set(ang, 6); a[14] = d.sh ? d.sh[0] : 0; a[15] = d.sh ? d.sh[1] : 0;
+        mk.fill(d.mt, 0, 3); mk.fill(d.mh, 3, 6); mk.fill(d.ml, 6, 10); mk.fill(1, 10, 16);
+        // телефон в осях кисти
+        Pqi.copy(HQ[1]).invert();
+        const pos = tmp.copy(c).sub(H[1]).applyQuaternion(Pqi).clone(), q = Pqi.clone().multiply(Pq);
+        // большие пальцы: где кисть — оттуда палец на экран (в осях телефона)
+        const thumb = s => { const iq = Pq.clone().invert(), p = pv().subVectors(H[s], c).applyQuaternion(iq);
+          return pv().set(Math.max(-(PHW / 2 - .028), Math.min(PHW / 2 - .028, p.x * .55)), Math.max(-(PHH / 2 - .04), Math.min(PHH / 2 - .04, p.y * .55 + (d.two ? 0 : .035))), PHD / 2 + .02); };
+        return { a, mk, pos, q, thR: thumb(1), thL: d.two ? thumb(0) : null };
+      };
+      ch.phC = { m: PHM.map((d, i) => one(d, i)), pk: one(PH_POCKET, -1) };
+      return ch.phC;
+    }
+    // Состояние телефона человечка (создаётся при первом «достать»; при смене внешности/дальности переносится в новый)
+    const phState = () => ({ o: 0, want: -1, w: new Float32Array(4), snapT: -9, manual: false, snapOn: false, ev: 0, env: 0, shL: 0, shR: 0 });
+    // события кадра (ch.phS.ev, звуки — у того, кто рисует): 1 — шорох кармана, 2 — касание экрана, 4 — щелчок камеры
+    const PHE_POCKET = 1, PHE_TAP = 2, PHE_SHUTTER = 4;
+    const PHT = new Float32Array(NPH), PHN = new Float32Array(NPH), PHDN = new Float32Array(NPH);
+    // значения суставов режима m в этот миг: калибровка + живое движение по фазе f
+    function phMode(ch, m, C, f, S, out){
+      out.set(C.m[m].a);
+      if (m === 0) {   // в руке: изредка поднимает глаза, большой палец стучит — предплечье чуть вздрагивает
+        const g = Math.pow(Math.max(0, Math.sin(f)), 6), tap = Math.max(0, Math.sin(f * 7));
+        out[3] -= .34 * g; out[4] *= 1 - g; out[13] -= .035 * tap * tap;
+      } else if (m === 1) {   // у уха: кивает, смотрит по сторонам, свободная рука жестикулирует
+        out[3] += .05 * Math.sin(5 * f) * (.6 + .4 * Math.sin(2 * f)); out[4] += .1 * Math.sin(f + 1);
+        out[6] += .22 * Math.sin(3 * f + .5) + .1 * Math.sin(7 * f); out[7] += .2 * Math.sin(3 * f); out[8] += .12 * Math.sin(2 * f + 1); out[9] += .3 * Math.sin(4 * f + 2);
+      } else if (m === 2) {   // играет: наклонился, пальцы бегают — предплечья подрагивают, голова — за игрой
+        out[0] += .02 * Math.sin(2 * f); out[4] += .05 * Math.sin(f);
+        out[9] += .025 * Math.sin(17 * f); out[13] += .025 * Math.sin(13 * f + 1);
+      } else {   // снимает: держит ровно, «щёлк» — руки чуть вперёд
+        const s = S.env;
+        out[3] += .02 * Math.sin(f); out[9] += .2 * s; out[13] += .2 * s; out[6] -= .08 * s; out[10] -= .08 * s;
+      }
+    }
+    // Слой телефона поверх позы Pt (до перехода между состояниями — смена состояния его тоже сглаживает).
+    // cap — можно с телефоном (земля, воздух, сидит); вода, лестница, кувырок, паркур — телефон сразу в карман
+    function phoneLayer(ch, Pt, t, dt, o, snap, cat, emw){
+      let want = phIdx(o && o.phone != null ? o.phone : ch.phWant);
+      let S = ch.phS;
+      if (!S) { if (want < 0) return; S = ch.phS = phState(); }
+      const cap = cat === 0 || cat === 6 || cat === 7;
+      if (!cap) want = -1;
+      S.ev = 0; S.want = want;
+      const o0 = S.o;
+      if (snap) {
+        S.o = want < 0 ? 0 : 2 * Math.max(0, Math.min(1, o.phoneK ?? 1));
+        if (want >= 0) { S.w.fill(0); S.w[want] = 1; }
+      } else if (want >= 0) {
+        if (S.o <= 1) { S.w.fill(0); S.w[want] = 1; }   // ещё в кармане — сразу нужный режим
+        else { let sum = 0; for (let i = 0; i < 4; i++) { S.w[i] = E3moveTo(S.w[i], i === want ? 1 : 0, dt / .28); sum += S.w[i]; } if (sum > 0) for (let i = 0; i < 4; i++) S.w[i] /= sum; }
+        S.o = Math.min(2, S.o + dt * (S.o < 1 ? 1 / .15 : 1 / .35));
+      } else {
+        S.o = Math.max(0, S.o - dt * (!cap ? 1 / .06 : S.o > 1 ? 1 / .3 : 1 / .15));
+        if (!cap && S.o > .99) S.o = .99;   // нельзя с телефоном — в карман сразу
+      }
+      if (!snap) {   // звуки: достал/убрал (шорох), экран включился/выключился (касание)
+        if ((o0 <= 1) !== (S.o <= 1)) S.ev |= PHE_POCKET;
+        if ((o0 < 1.75) !== (S.o < 1.75)) S.ev |= PHE_TAP;
+      }
+      if (S.o <= 0) { S.env = 0; S.shL = S.shR = 0; return; }
+      const C = phCal(ch);
+      // фаза живого движения: у спрайтов — своя (o.phonePh, цикл замкнут), иначе — по времени и «отпечатку» человечка
+      const own = o && o.phonePh != null;
+      // «щёлк» камеры: по кнопке (phoneSnap) или сам раз в цикл (чужие, у кого кнопки нет)
+      let env = 0;
+      if (S.w[3] > .01) {
+        if (S.manual) { const x = (t - S.snapT) / .3; env = x >= 0 && x < 1 ? Math.sin(x * PI) : 0; }
+        else { const f = own ? o.phonePh : t * TAU / PHM[3].spd + ch.seed * 2, x = ((f % TAU) + TAU) % TAU - 4.9; env = x > 0 && x < 1 ? Math.sin(x * PI) : 0; }
+      }
+      S.env = env;
+      if (!snap && (env > .5) !== S.snapOn) { S.snapOn = env > .5; if (S.snapOn) S.ev |= PHE_SHUTTER; }
+      PHN.fill(0); PHDN.fill(0);
+      for (let m = 0; m < 4; m++) {
+        const w = S.w[m]; if (w < .001) continue;
+        phMode(ch, m, C, own ? o.phonePh : t * TAU / PHM[m].spd + ch.seed * 2, S, PHT);
+        const mk = C.m[m].mk;
+        for (let j = 0; j < NPH; j++) { PHN[j] += w * mk[j] * PHT[j]; PHDN[j] += w * mk[j]; }
+      }
+      const L = E3smooth(Math.min(1, S.o)) * (1 - emw), r = E3smooth(Math.max(0, S.o - 1)), pk = C.pk;
+      for (let j = 0; j < NPH - 2; j++) {
+        const ji = PHJ[j], b = Pt[ji];
+        Pt[ji] = b + L * ((1 - r) * pk.mk[j] * (pk.a[j] - b) + r * (PHN[j] - PHDN[j] * b));
+      }
+      S.shL = L * ((1 - r) * pk.a[NPH - 2] + r * PHN[NPH - 2]); S.shR = L * ((1 - r) * pk.a[NPH - 1] + r * PHN[NPH - 1]);   // плечи (без сустава в позе)
+    }
+    // Новый человечек вместо старого (сменил образ, дальний/ближний): телефон в том же положении, без «достать» заново
+    function phoneKeep(from, to){ if (!from || !to || from === to) return; to.phWant = from.phWant; if (from.phS) { to.phS = from.phS; to.phS.snapOn = false; } }
+    const E3moveTo = (a, b, d) => Math.abs(b - a) <= d ? b : a + Math.sign(b - a) * d;
+    const E3smooth = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+
+    // ── Корпус: скруглённая плитка, экран-картинка по режиму, мягкое свечение (mid/high), камера и вспышка сзади, большие
+    //    пальцы на экране (цвет кисти). Дальний (LOD) и «низкое» качество — проще ──
+    const phBodyGeo = () => rbox(PHW, PHH, PHD, .012, 8, 14);
+    const phScrGeo = () => geo('phScr', () => new T.PlaneGeometry(PHW - .02, PHH - .032));
+    const phGlowGeo = () => geo('phGlow', () => new T.PlaneGeometry(PHW * 1.75, PHH * 1.32));
+    // Картинки экрана (128×256, кодом): домашний экран, звонок, игра (телефон боком), камера
+    function phTex(name){
+      return canvasTex('ph:' + name, 128, 256, (g, w, h) => {
+        const rr = (x, y, ww, hh, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + ww, y, x + ww, y + hh, r); g.arcTo(x + ww, y + hh, x, y + hh, r); g.arcTo(x, y + hh, x, y, r); g.arcTo(x, y, x + ww, y, r); g.closePath(); };
+        const lin = (x0, y0, x1, y1, st) => { const gr = g.createLinearGradient(x0, y0, x1, y1); for (const [k, c] of st) gr.addColorStop(k, c); return gr; };
+        const dot = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); };
+        g.textAlign = 'center'; g.textBaseline = 'middle';
+        if (name === 'home') {
+          g.fillStyle = lin(0, 0, w * .4, h, [[0, '#4c1d95'], [.55, '#be185d'], [1, '#f59e0b']]); g.fillRect(0, 0, w, h);
+          dot(26, 70, 38, 'rgba(255,255,255,.1)'); dot(112, 176, 48, 'rgba(255,255,255,.08)');
+          g.fillStyle = '#fff'; g.font = '800 34px sans-serif'; g.fillText('12:37', 64, 46); g.font = '700 11px sans-serif'; g.fillText('Мир Денчика', 64, 70);
+          const IC = ['#22c55e', '#38bdf8', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185', '#34d399', '#60a5fa', '#f97316', '#e879f9', '#facc15', '#4ade80'];
+          for (let i = 0; i < 12; i++) { const x = 13 + (i % 4) * 27, y = 92 + (i / 4 | 0) * 33; g.fillStyle = IC[i]; rr(x, y, 21, 21, 6); g.fill(); dot(x + 10.5, y + 10.5, 4.5, 'rgba(255,255,255,.75)'); }
+          g.fillStyle = 'rgba(255,255,255,.22)'; rr(8, 206, 112, 36, 13); g.fill();
+          for (let i = 0; i < 4; i++) { g.fillStyle = ['#22c55e', '#34d399', '#818cf8', '#f472b6'][i]; rr(15 + i * 26, 213, 21, 21, 6); g.fill(); }
+        } else if (name === 'call') {
+          g.fillStyle = lin(0, 0, 0, h, [[0, '#047857'], [1, '#022c22']]); g.fillRect(0, 0, w, h);
+          g.strokeStyle = 'rgba(134,239,172,.45)'; g.lineWidth = 4; g.beginPath(); g.arc(64, 88, 41, 0, TAU); g.stroke();
+          dot(64, 88, 31, '#e5e7eb'); dot(64, 80, 11, '#9ca3af'); g.fillStyle = '#9ca3af'; g.beginPath(); g.arc(64, 112, 19, PI, TAU); g.fill();
+          g.fillStyle = '#fff'; rr(34, 136, 60, 9, 4); g.fill(); g.font = '700 15px sans-serif'; g.fillText('0:37', 64, 162);
+          dot(30, 222, 12, 'rgba(255,255,255,.22)'); dot(98, 222, 12, 'rgba(255,255,255,.22)'); dot(64, 222, 17, '#ef4444');
+          g.fillStyle = '#fff'; rr(55, 219, 18, 6, 3); g.fill();
+        } else if (name === 'game') {   // игра «Птичка» боком: телефон держат горизонтально
+          g.translate(w, 0); g.rotate(PI / 2);
+          const W2 = h, H2 = w;
+          g.fillStyle = lin(0, 0, 0, H2, [[0, '#38bdf8'], [1, '#bae6fd']]); g.fillRect(0, 0, W2, H2);
+          dot(40, 26, 12, 'rgba(255,255,255,.85)'); dot(54, 24, 9, 'rgba(255,255,255,.85)'); dot(190, 34, 10, 'rgba(255,255,255,.8)');
+          g.fillStyle = '#16a34a'; for (const [x, y0, y1] of [[64, 0, 34], [64, 76, 104], [150, 0, 18], [150, 60, 104], [226, 0, 46], [226, 88, 104]]) { g.fillRect(x, y0, 22, y1 - y0); }
+          g.fillStyle = '#65a30d'; g.fillRect(0, 104, W2, 24); g.fillStyle = '#a16207'; g.fillRect(0, 112, W2, 16);
+          dot(112, 56, 10, '#facc15'); dot(116, 52, 3.5, '#fff'); dot(117, 52, 1.6, '#111'); g.fillStyle = '#f97316'; g.beginPath(); g.moveTo(121, 56); g.lineTo(129, 58); g.lineTo(121, 61); g.fill();
+          g.fillStyle = '#fff'; g.font = '900 22px sans-serif'; g.fillText('37', W2 / 2, 18);
+        } else if (name === 'camera') {
+          g.fillStyle = lin(0, 0, 0, 200, [[0, '#7dd3fc'], [1, '#e0f2fe']]); g.fillRect(0, 0, w, h);
+          dot(98, 58, 13, '#fde047'); g.fillStyle = '#4ade80'; g.beginPath(); g.ellipse(40, 190, 90, 50, 0, 0, TAU); g.fill(); g.fillStyle = '#22c55e'; g.beginPath(); g.ellipse(120, 200, 80, 44, 0, 0, TAU); g.fill();
+          g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1; for (const k of [1, 2]) { g.beginPath(); g.moveTo(w * k / 3, 22); g.lineTo(w * k / 3, 200); g.stroke(); g.beginPath(); g.moveTo(0, 22 + 178 * k / 3); g.lineTo(w, 22 + 178 * k / 3); g.stroke(); }
+          g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(0, 0, w, 22); g.fillRect(0, 200, w, 56);
+          g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.arc(64, 228, 17, 0, TAU); g.stroke(); dot(64, 228, 12.5, '#fff');
+          g.fillStyle = '#9ca3af'; rr(18, 220, 16, 16, 4); g.fill(); dot(104, 228, 8, 'rgba(255,255,255,.3)');
+          g.fillStyle = '#facc15'; g.font = '700 10px sans-serif'; g.fillText('ФОТО', 64, 210);
+        }
+      });
+    }
+    // Экран: картинка без света (на «низком» — тусклее: свечения нет), выключенный — чёрный, вспышка — белый
+    const phScreen = name => cache(mats, 'phs:' + name, () => name === 'off' ? new T.MeshBasicMaterial({ color: '#07080b' })
+      : name === 'flash' ? new T.MeshBasicMaterial({ color: '#ffffff', toneMapped: false })
+      : new T.MeshBasicMaterial({ map: phTex(name), color: Q === 'low' ? '#a4a9b4' : '#ffffff', toneMapped: false }));
+    const phGlowTex = () => canvasTex('phGlow', 64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 6, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.85)'); gr.addColorStop(.55, 'rgba(255,255,255,.3)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+    const phGlowMat = () => cache(mats, 'phGlowM', () => new T.MeshBasicMaterial({ map: phGlowTex(), color: '#cfe2ff', transparent: true, opacity: .42, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    // материалы экранов (движку — свечение: R.bloom на mid/high)
+    const phoneMats = () => ['home', 'call', 'game', 'camera', 'flash'].map(phScreen);
+    function phoneBuild(ch){
+      const g = new T.Group(), lod = !!ch.lod, lowQ = Q === 'low';
+      g.name = 'phone'; g.visible = false;
+      const items = ch.handR.children.slice();   // предмет в руке (шарик, эмодзи) — прячется, пока в руке телефон
+      g.add(new T.Mesh(phBodyGeo(), toon('#23262e')));
+      const scr = new T.Mesh(phScrGeo(), phScreen('off')); scr.position.z = PHD / 2 + .0012; g.add(scr);
+      let glow = null, flash = null; const thumbs = [];
+      if (!lod) {
+        if (!lowQ) { glow = new T.Mesh(phGlowGeo(), phGlowMat()); glow.position.z = PHD / 2 + .0004; glow.renderOrder = 6; g.add(glow); }
+        M(g, cyl(.024, .024, .01, 12), toon('#0e1015'), PHW / 2 - .044, PHH / 2 - .046, -PHD / 2 - .004, 1, 1, 1, PI / 2, 0, 0);
+        M(g, sph(.012, 8, 6), basic('#5b8fd6'), PHW / 2 - .044, PHH / 2 - .046, -PHD / 2 - .009);
+        if (!lowQ) { flash = M(g, sph(.011, 8, 6), basic('#fff6c8'), PHW / 2 - .088, PHH / 2 - .04, -PHD / 2 - .004); flash.visible = false; }
+        for (let i = 0; i < 2; i++) { const th = new T.Mesh(sph(.04, 10, 8), toon(ch.handC || '#f7cba5')); th.scale.set(1, 1.18, .72); th.visible = false; g.add(th); thumbs.push(th); }
+      }
+      ch.handR.add(g);
+      return { g, scr, glow, flash, thumbs, items, scrK: 'off', shown: false };
+    }
+    const PPq = pq(), PPq2 = pq(), PPv = pv();
+    // Корпус после костей: виден, где в кисти, какой экран, пальцы, вспышка
+    function phoneProp(ch, t, o){
+      const S = ch.phS; if (!S) return;
+      const vis = S.o > 1;
+      if (vis && !ch.ph) ch.ph = phoneBuild(ch);
+      const ph = ch.ph; if (!ph) return;
+      if (ph.shown !== vis) { ph.shown = vis; ph.g.visible = vis; for (const it of ph.items) it.visible = !vis; }
+      if (!vis) return;
+      const C = ch.phC, r = E3smooth(Math.max(0, S.o - 1)), pk = C.pk;
+      // где в кисти: смесь режимов (кватернионы — по одну сторону), из кармана — к ней
+      PPv.set(0, 0, 0); PPq.set(0, 0, 0, 0);
+      let best = 0, bw = -1;
+      for (let m = 0; m < 4; m++) {
+        const w = S.w[m]; if (w < .001) continue;
+        if (w > bw) { bw = w; best = m; }
+        const c = C.m[m], s = PPq.x * c.q.x + PPq.y * c.q.y + PPq.z * c.q.z + PPq.w * c.q.w < 0 ? -w : w;
+        PPv.addScaledVector(c.pos, w); PPq.x += c.q.x * s; PPq.y += c.q.y * s; PPq.z += c.q.z * s; PPq.w += c.q.w * s;
+      }
+      PPq.normalize();
+      ph.g.position.copy(pk.pos).lerp(PPv, r);
+      ph.g.quaternion.copy(pk.q).slerp(PPq, r);
+      // экран: выключен в кармане, включается у лица; «щёлк» — белая вспышка
+      const k = S.o < 1.75 ? 'off' : S.env > .55 ? 'flash' : PHM[best].scr;
+      if (k !== ph.scrK) { ph.scrK = k; ph.scr.material = phScreen(k); if (ph.glow) ph.glow.visible = k !== 'off'; }
+      if (ph.flash) ph.flash.visible = S.env > .55;
+      // большие пальцы: в руке (use) — стучит по экрану, играет (play) — оба бегают
+      if (ph.thumbs.length) {
+        const own = o && o.phonePh != null, f = own ? o.phonePh : t * TAU / PHM[best].spd + ch.seed * 2;
+        const onR = r > .7 && (best === 0 || best === 2), onL = r > .7 && best === 2;
+        const tR = ph.thumbs[0], tL = ph.thumbs[1];
+        tR.visible = onR; tL.visible = onL;
+        if (onR) {
+          const c = C.m[best];
+          if (best === 0) { const tap = Math.max(0, Math.sin(f * 7)); tR.position.set(c.thR.x + .012 * Math.sin(3 * f), c.thR.y + .015 * Math.sin(2 * f + 1), c.thR.z - .014 * tap * tap); }
+          else tR.position.set(c.thR.x + .01 * Math.sin(11 * f), c.thR.y + .008 * Math.cos(9 * f), c.thR.z - .012 * Math.max(0, Math.sin(17 * f)));
+        }
+        if (onL) { const c = C.m[2]; tL.position.set(c.thL.x + .01 * Math.cos(10 * f), c.thL.y + .008 * Math.sin(12 * f), c.thL.z - .012 * Math.max(0, Math.sin(13 * f + 1))); }
+      }
+    }
+    // ── От 1-го лица (как в ГТА): своего человечка не видно — у камеры кисть с телефоном внизу экрана, рукав, вторая кисть
+    //    (игра, камера). Рисуется поверх мира (свои материалы без глубины), плавно поднимается снизу и опускается.
+    //    v = phoneView(ch) → v.g (в сцену), v.place(camera, ch, t, bob) каждый кадр (bob: { ph, w, k } — покачивание камеры), v.dispose()
+    // режимы (в осях камеры): где телефон, поворот (x, y, z), где кисти — в осях телефона (вторая — только двумя руками)
+    const VM = [
+      { p: [.13, -.2, -.46], r: [-.5, .2, .08], hr: [.04, -.1, -.045], hl: null },
+      { p: [.34, -.17, -.37], r: [.05, -1.2, .2], hr: [.01, -.1, -.045], hl: null },
+      { p: [0, -.18, -.43], r: [-.38, 0, PI / 2], hr: [0, -.13, -.045], hl: [0, .13, -.045] },
+      { p: [.02, -.12, -.41], r: [-.1, 0, PI / 2], hr: [0, -.13, -.045], hl: [0, .13, -.045] },
+    ];
+    const vmQ = VM.map(v => new T.Quaternion().setFromEuler(new T.Euler(v.r[0], v.r[1], v.r[2], 'YXZ')));
+    const VMv = pv(), VMv2 = pv(), VMq = pq(), VMup = new T.Vector3(0, 1, 0), VMe = new T.Euler();
+    function phoneView(ch){
+      // материалы поверх мира: копия без проверки глубины (порядок — renderOrder: рукав, кисть, телефон, экран, пальцы)
+      const top = (m, k) => cache(mats, 'vm:' + k, () => { const c = m.clone(); c.depthTest = false; c.depthWrite = false; return c; });
+      const sleeve = ['tshirt', 'jersey', 'dress'].includes(ch.R.top) || isArmor(ch.R.psar) ? ch.handC : colorOf(ch.R, 'color');
+      const g = new T.Group(), hold = new T.Group(), phone = new T.Group();
+      g.visible = false; g.add(hold); hold.add(phone);
+      const mk = (geom, mat, ro, parent) => { const m = new T.Mesh(geom, mat); m.renderOrder = ro; m.frustumCulled = false; (parent || hold).add(m); return m; };
+      mk(phBodyGeo(), top(toon('#23262e'), 'body'), 993, phone);
+      const scr = mk(phScrGeo(), top(phScreen('home'), 'home'), 994, phone); scr.position.z = PHD / 2 + .0012;
+      const hands = [0, 1].map(s => mk(sph(.07, 16, 12), top(toon(ch.handC || '#f7cba5'), 'h' + ch.handC), 992));
+      for (const h of hands) h.scale.set(1, 1.1, .82);
+      const arms = [0, 1].map(s => mk(cap(.055, .5, 12), top(toon(sleeve), 's' + sleeve), 991));
+      const thumb = mk(sph(.026, 10, 8), top(toon(ch.handC || '#f7cba5'), 'h' + ch.handC), 995, phone); thumb.scale.set(1, 1.2, .7);
+      let scrK = 'home';
+      const ELB = [pv().set(-.42, -.66, -.12), pv().set(.42, -.66, -.12)];
+      return {
+        g,
+        place(camera, ch2, t, bob){
+          const S = ch2.phS, on = !!S && S.o > 1;
+          g.visible = on; if (!on) return;
+          g.position.copy(camera.position); g.quaternion.copy(camera.quaternion);
+          const r = E3smooth(S.o - 1);
+          let bw = -1, best = 0; VMv.set(0, 0, 0); VMq.set(0, 0, 0, 0);
+          for (let m = 0; m < 4; m++) {
+            const w = S.w[m]; if (w < .001) continue;
+            if (w > bw) { bw = w; best = m; }
+            const q = vmQ[m], s = VMq.dot(q) < 0 ? -w : w;
+            VMv.x += VM[m].p[0] * w; VMv.y += VM[m].p[1] * w; VMv.z += VM[m].p[2] * w;
+            VMq.x += q.x * s; VMq.y += q.y * s; VMq.z += q.z * s; VMq.w += q.w * s;
+          }
+          VMq.normalize();
+          // поднимается снизу (достал) и уходит вниз (убрал); на ходу — покачивание (настройка «Покачивание камеры»)
+          const k = bob ? bob.k : 0, bw2 = bob ? bob.w : 0, bp = bob ? bob.ph : 0;
+          phone.position.set(VMv.x + Math.cos(bp) * .009 * bw2 * k, VMv.y - .5 * (1 - r) - Math.abs(Math.sin(bp)) * .013 * bw2 * k + Math.sin(t * 1.3) * .003, VMv.z);
+          VMe.set(-.7 * (1 - r), 0, 0); phone.quaternion.setFromEuler(VMe).multiply(VMq);
+          // экран — как у человечка
+          const sk = S.o < 1.75 ? 'off' : S.env > .55 ? 'flash' : PHM[best].scr;
+          if (sk !== scrK) { scrK = sk; scr.material = top(phScreen(sk), sk); }
+          // кисти: правая всегда, левая — пока режим «двумя руками» (иначе ушла вниз за край)
+          const two = S.w[2] + S.w[3], d = VM[best];
+          for (let s = 0; s < 2; s++) {
+            const hp = s ? (d.hr || VM[0].hr) : (d.hl || VM[2].hl), h = hands[s];
+            h.position.set(hp[0], hp[1], hp[2]).applyQuaternion(phone.quaternion).add(phone.position);
+            if (!s) h.position.y -= .45 * (1 - Math.min(1, two));
+            h.visible = s === 1 || two > .05;
+            // рукав: от кисти к локтю за краем экрана
+            VMv2.subVectors(ELB[s], h.position); const L = VMv2.length();
+            arms[s].visible = h.visible; arms[s].position.copy(h.position).addScaledVector(VMv2, .5);
+            arms[s].quaternion.setFromUnitVectors(VMup, VMv2.multiplyScalar(1 / L)); arms[s].scale.set(1, L / .6, 1);
+          }
+          // большой палец стучит по экрану (в руке и в игре)
+          thumb.visible = r > .7 && (best === 0 || best === 2);
+          if (thumb.visible) { const f = t * 6; thumb.position.set(best === 2 ? .02 * Math.sin(f * 2) : .028 + .01 * Math.sin(f * .5), best === 2 ? -.085 : -.05 + .012 * Math.sin(f * .7), PHD / 2 + .02 - .01 * Math.max(0, Math.sin(f * (best === 2 ? 2.6 : 1.2)))); }
+        },
+        dispose(){ g.parent?.remove(g); },
+      };
     }
 
     // ── Анимация: поза из состояния → плавный переход → кости ──
@@ -1277,8 +1710,10 @@
       // эмоции (только на земле): плавно входят и выходят
       if (cat !== 0 && cat !== 6 && cat !== 7) ch.emote = null;   // кувырок, вис, лестница, паркур, вода — не до эмоций
       const e = ch.emote, el = t - ch.emoteT, dur = EMO_T[e] || 1.6;
+      let emw = 0;   // вес эмоции (телефон в это время уступает руки)
       if (e && el >= 0 && el < dur) {
         const w = Math.max(0, Math.min(1, el / .15, (dur - el) / .25)), k = el * 10;
+        emw = w;
         if (e === '👋') { mx(Pt, J.ARX, -2.7, w); mx(Pt, J.ARZ, .3 + Math.sin(k) * .45, w); mx(Pt, J.ER, -.35 + Math.sin(k) * .2, w); mx(Pt, J.HZ, .1, w); mx(Pt, J.TY, -.12, w); }
         else if (e === '🎉') { const j = Math.max(0, Math.sin(k * .8)); Pt[J.BY] += j * .45 * w; mx(Pt, J.ALX, -2.9, w); mx(Pt, J.ALZ, -.35, w); mx(Pt, J.ARX, -2.9, w); mx(Pt, J.ARZ, .35, w); mx(Pt, J.EL, -.2, w); mx(Pt, J.ER, -.2, w); Pt[J.KL] += j * .5 * w; Pt[J.KR] += j * .5 * w; }
         else if (e === '🔥') { const j = Math.max(0, Math.sin(k * .8)); Pt[J.BY] += j * .5 * w; mx(Pt, J.ARX, -2.6, w); mx(Pt, J.ER, -1.2, w); mx(Pt, J.ALX, -.5, w); mx(Pt, J.EL, -1.4, w); Pt[J.KL] += j * .4 * w; }
@@ -1315,6 +1750,8 @@
       const kl = snap ? 1 : Math.min(1, dt * 5);
       ch.lookY += (ly - ch.lookY) * kl; ch.lookX += (lx - ch.lookX) * kl;
       Pt[J.HY] += ch.lookY * .75; Pt[J.TY] += ch.lookY * .25 * (1 - ch.wMove); Pt[J.HX] += ch.lookX;
+      // телефон 📱: руки, голова, плечи — поверх позы (ноги свои: идёт и пишет, как в ГТА)
+      if (ch.phS || (o && o.phone) || ch.phWant) phoneLayer(ch, Pt, t, dt, o, snap, cat, emw);
       // плавный переход между состояниями
       if (ch.xf < 1 && !snap) {
         ch.xf = Math.min(1, ch.xf + dt / ch.xd);
@@ -1328,6 +1765,7 @@
       ch.headP.rotation.set(P[J.HX], P[J.HY], P[J.HZ]);
       ch.armL.rotation.set(P[J.ALX], P[J.ALY], P[J.ALZ]); ch.elbowL.rotation.x = P[J.EL];
       ch.armR.rotation.set(P[J.ARX], P[J.ARY], P[J.ARZ]); ch.elbowR.rotation.x = P[J.ER];
+      const PS = ch.phS; ch.armL.position.y = ch.armL.userData.y0 + (PS ? PS.shL : 0); ch.armR.position.y = ch.armR.userData.y0 + (PS ? PS.shR : 0);
       ch.legL.rotation.set(P[J.LLX], 0, P[J.LLZ]); ch.kneeL.rotation.x = P[J.KL];
       ch.legR.rotation.set(P[J.LRX], 0, P[J.LRZ]); ch.kneeR.rotation.x = P[J.KR];
       // лицо: выражение по эмоции, моргание
@@ -1336,6 +1774,7 @@
       const fs = ch.faceSet;
       if (fs && fs.userData.blink && fs.userData.eyes) fs.userData.eyes.scale.y = (snap ? !!o.blink : (t + ch.blinkAt) % 4 > 3.86) ? .12 : 1;
       for (let i = 0; i < ch.anims.length; i++) ch.anims[i](t, dt, mv, s);
+      if (ch.phS) phoneProp(ch, t, o);   // корпус телефона в кисти, экран, пальцы
     }
     function dispose(ch){
       if (!ch) return;
@@ -1398,7 +1837,8 @@
       });
     }
     const pulseHL = t => { const k = .62 + .25 * Math.sin(t * 5); for (const h of hlMats.values()) h.emissiveIntensity = k; };
-    return { T, Q, grad, toon, basic, geo, sph, cyl, tor, box, cone, rbox, emojiSprite, build, recolor, animate, dispose, trails, lights, cloth, mats, geos, texs, highlight, pulseHL, setExpr, EMOTES };
+    return { T, Q, grad, toon, basic, geo, sph, cyl, tor, box, cone, rbox, emojiSprite, build, recolor, animate, dispose, trails, lights, cloth, mats, geos, texs, highlight, pulseHL, setExpr, EMOTES,
+      phoneView, phoneMats, phoneKeep, PHE: { POCKET: PHE_POCKET, TAP: PHE_TAP, SHUTTER: PHE_SHUTTER } };
   }
 
   // ═══ Мир ═══
@@ -1757,7 +2197,14 @@
   }
 
   // Версия внешности человечка: менять при любой правке геометрии, цветов или поз (кэш спрайтов и картинок по ней сбрасывается).
-  // 1 — до частей тела; 2 — части тела, колени и локти, новые лица (15.10.2026)
-  const CHAR_VERSION = 2;
-  window.World3D = { supported, load, create, preview, resolve, kit, frameOf, PART_DEF, EMOTES, HEADS, CHAR_VERSION };
+  // 1 — до частей тела; 2 — части тела, колени и локти, новые лица (15.10.2026); 3 — телефон 📱, плечи поднимаются (15.10.2026)
+  const CHAR_VERSION = 3;
+  // Телефон человечка (без набора kit): phonePose(ch, 'use' | 'call' | 'play' | 'photo' | '' или код 0…4) — что держать
+  // (достанет / уберёт сам, плавно); если animate получает o.phone — главнее оно. phoneSnap(ch, t) — «щёлк» камеры сейчас (t — то же
+  // время, что в animate; дальше — только по кнопке). phoneCode('call') → 2, phoneName(2) → 'call'
+  const phonePose = (ch, s) => { if (ch) ch.phWant = s == null ? '' : s; };
+  const phoneSnap = (ch, t) => { if (ch?.phS) { ch.phS.snapT = t; ch.phS.manual = true; } };
+  const phoneCode = s => phIdx(s) + 1;
+  const phoneName = c => PH_MODES[phIdx(c)] || '';
+  window.World3D = { supported, load, create, preview, resolve, kit, frameOf, PART_DEF, EMOTES, HEADS, CHAR_VERSION, PH_MODES, phonePose, phoneSnap, phoneCode, phoneName };
 })();

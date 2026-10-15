@@ -50,6 +50,25 @@ if (ALLOC) {
   console.log(JSON.stringify({ perCall: best }));
   return;
 }
+// ═══ Кадр с телефоном 📱 без мусора: достать → все режимы → убрать, на ходу, сидя, в прыжке (тот же замер) ═══
+if (process.argv.includes('--alloc-phone')) {
+  const K = W.kit(T, { q: 'high' });
+  const chs = [{ item: 'sword' }, { psh: 'robot', pst: 'robot', psal: 'robot', psar: 'robot', item: 'balloon' }, { hair: 'long', glove: 'boxing' }].map((l, i) => K.build(l, 'p' + i));
+  const PH = ['', 'use', 'call', 'play', 'photo', 'use', ''];
+  const o = { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: { x: 2, y: 1.6, z: 5 }, phone: '' };
+  const tt = new Float64Array(1);
+  const run = n => { for (let i = 0; i < n; i++) { tt[0] += 1 / 60; o.phone = PH[(i / 90 | 0) % PH.length]; o.sit = (i >> 9) % 4 === 1; o.air = (i >> 7) % 9 === 3; for (let c = 0; c < chs.length; c++) K.animate(chs[c], (i >> 5) % 3 !== 0, 1 / 60, tt[0], o); } };
+  run(30000);
+  let best = Infinity;
+  for (let k = 0; k < 3; k++) {
+    global.gc(); global.gc();
+    const h0 = process.memoryUsage().heapUsed;
+    run(40000);
+    best = Math.min(best, (process.memoryUsage().heapUsed - h0) / (40000 * chs.length));
+  }
+  console.log(JSON.stringify({ perCall: best }));
+  return;
+}
 
 // ═══ 1. Образы: нормализация и миграция ═══
 const ref = JSON.parse(fs.readFileSync(path.join(__dirname, 'char-ref.json'), 'utf8'));
@@ -251,6 +270,144 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   ok(Math.abs(ch.headP.rotation.y) < .1, 'за спиной — голову не выворачивает', ch.headP.rotation.y.toFixed(2));
 }
 
+// ═══ 6б. Телефон 📱 (как в ГТА): позы, переходы, предмет в руке, ходьба с телефоном, сеть-коды, корпус ═══
+{
+  const K = kits.high, J = 28, wrapA = a => { a = (a + Math.PI) % (Math.PI * 2); if (a < 0) a += Math.PI * 2; return a - Math.PI; };
+  const v = (o, p) => { const r = new T.Vector3(...(p || [0, 0, 0])); o.updateWorldMatrix(true, false); return o.localToWorld(r); };
+  ok(W.CHAR_VERSION >= 3 && W.PH_MODES.join() === 'use,call,play,photo', 'телефон: версия персонажа и режимы', W.CHAR_VERSION);
+  ok(W.phoneCode('call') === 2 && W.phoneCode('') === 0 && W.phoneCode(4) === 4 && W.phoneCode('zzz') === 0 && W.phoneName(3) === 'play' && W.phoneName(0) === '' && W.phoneName(9) === '', 'телефон: коды для сети');
+  // без телефона — ничего лишнего (ни состояния, ни корпуса)
+  const plain = K.build({}, 'np'); for (let f = 0; f < 30; f++) K.animate(plain, f % 2 === 0, 1 / 60, f / 60, { rate: 10.5 });
+  ok(plain.phS === null && plain.ph === null, 'без телефона — ни состояния, ни корпуса');
+  // все режимы: телефон в кисти, без NaN; предмет спрятан; потом убрал — предмет снова в руке
+  const looks = [{ item: 'sword' }, { item: 'balloon', body: 'girl', hair: 'long' }, { psh: 'robot', pst: 'robot', psal: 'robot', psar: 'robot', item: 'sword' }, { pst: 'chunky', psar: 'chunky', hgt: '4' }, { psh: 'cube', glove: 'boxing' }, { hgt: '0', head: '4', hair: 'afro' }];
+  let nan = 0, maxJump = 0, jumpAt = '';
+  for (const [li, look] of looks.entries()) for (const mode of W.PH_MODES) {
+    const ch = K.build(look, 'ph' + li);
+    const items = ch.handR.children.slice();
+    let t = 0;
+    const prev = new Float32Array(J);
+    const step = (n, o, mv) => { for (let f = 0; f < n; f++) { t += 1 / 60; prev.set(ch.P); K.animate(ch, !!mv, 1 / 60, t, o); for (let j = 0; j < J; j++) { if (!Number.isFinite(ch.P[j])) nan++; const d = Math.abs(wrapA(ch.P[j] - prev[j])); if (d > maxJump) { maxJump = d; jumpAt = mode + ' ' + li + ' сустав ' + j; } } } };
+    step(20, { phone: '' });
+    step(50, { phone: mode });   // достал (~0,5 с)
+    ok(ch.phS.o === 2 && ch.ph && ch.ph.g.visible && ch.ph.g.parent === ch.handR, 'достал за полсекунды — в руке', mode + ' ' + li);
+    ok(items.every(it => !it.visible), 'предмет в руке спрятан, пока телефон', mode + ' ' + li + ' ' + items.length);
+    ok(ch.ph.scrK === ['home', 'call', 'game', 'camera'][W.PH_MODES.indexOf(mode)] || (mode === 'photo' && ch.ph.scrK === 'flash'), 'экран — по режиму', mode + ' ' + ch.ph.scrK);
+    const hp = v(ch.handR), pp = v(ch.ph.g);
+    ok(hp.distanceTo(pp) < .16, 'телефон — в кисти, не отрывается', mode + ' ' + li + ' ' + hp.distanceTo(pp).toFixed(3));
+    step(60, { phone: mode }, true);   // идёт с телефоном
+    ok(ch.ph.g.visible && ch.phS.o === 2, 'идёт — телефон в руке', mode + ' ' + li);
+    step(40, { phone: '' });   // убрал
+    ok(ch.phS.o === 0 && !ch.ph.g.visible && items.every(it => it.visible), 'убрал — телефона нет, предмет снова в руке', mode + ' ' + li);
+    ok(Math.abs(ch.armR.position.y - ch.armR.userData.y0) < 1e-9 && Math.abs(ch.armL.position.y - ch.armL.userData.y0) < 1e-9, 'плечи на месте', mode + ' ' + li);
+  }
+  ok(!nan, 'телефон: нет NaN в позе', nan);
+  ok(maxJump < .35, 'телефон: без рывков (достать, режимы, ходьба, убрать)', maxJump.toFixed(3) + ' ' + jumpAt);
+  // у уха: кисть и верх телефона рядом с ухом (у чиби короткие руки — плечо поднимается, голова наклоняется)
+  const earCheck = (look, lim, limTop, name) => {
+    const ch = K.build(look, 'ear'); ch.seed = 0;
+    const ear = () => v(ch.head, [ch.phD.hw, -.07, 0]);
+    K.animate(ch, false, 1 / 60, 0, { rate: 10.5 }); const rest = v(ch.handR).distanceTo(ear());
+    let t = 0; for (let f = 0; f < 90; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'call' }); }
+    const d = v(ch.handR).distanceTo(ear()), top = v(ch.ph.g, [0, .18, 0]).distanceTo(ear());
+    ok(d < lim && d < rest * .45, 'у уха: кисть рядом с ухом — ' + name, `${d.toFixed(3)} (было ${rest.toFixed(3)})`);
+    ok(top < limTop, 'у уха: верх телефона у уха — ' + name, top.toFixed(3));
+    ok(ch.phS.shR > .04, 'у уха: плечо поднято — ' + name, ch.phS.shR);
+    // ходит и говорит — телефон у уха не уплывает
+    let worst = 0; for (let f = 0; f < 120; f++) { t += 1 / 60; K.animate(ch, true, 1 / 60, t, { phone: 'call', rate: f < 60 ? 10.5 : 13.5 }); worst = Math.max(worst, v(ch.ph.g, [0, .18, 0]).distanceTo(ear())); }
+    ok(worst < limTop + .08, 'у уха на ходу и бегом — телефон у уха — ' + name, worst.toFixed(3));
+    return d;
+  };
+  earCheck({}, .3, .12, 'обычный'); earCheck({ body: 'girl', hair: 'long' }, .3, .12, 'девочка'); earCheck({ hgt: '4', pst: 'chunky', psar: 'chunky' }, .3, .12, 'высокий силач');
+  earCheck({ psh: 'robot', pst: 'robot', psal: 'robot', psar: 'robot' }, .34, .2, 'робот'); earCheck({ psh: 'cube' }, .36, .22, 'кубик');
+  // ходьба с телефоном: ноги шагают, рука с телефоном — на месте (как в ГТА)
+  {
+    const ch = K.build({}, 'walk'); let t = 0;
+    for (let f = 0; f < 60; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'use' }); }
+    let lmin = 9, lmax = -9, amin = 9, amax = -9;
+    for (let f = 0; f < 120; f++) { t += 1 / 60; K.animate(ch, true, 1 / 60, t, { phone: 'use', rate: 10.5 }); lmin = Math.min(lmin, ch.P[22]); lmax = Math.max(lmax, ch.P[22]); amin = Math.min(amin, ch.P[18]); amax = Math.max(amax, ch.P[18]); }
+    ok(lmax - lmin > .8, 'ходьба с телефоном: ноги шагают', (lmax - lmin).toFixed(2));
+    ok(amax - amin < .2, 'ходьба с телефоном: рука с телефоном не машет', (amax - amin).toFixed(3));
+    // сидит и пишет: ноги сидят, руки — телефон
+    for (let f = 0; f < 60; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'use', sit: true }); }
+    ok(ch.P[22] < -1.2 && ch.ph.g.visible, 'сидит с телефоном', ch.P[22].toFixed(2));
+    // поплыл — телефон сразу в карман; вышел на берег — достал снова
+    for (let f = 0; f < 20; f++) { t += 1 / 60; K.animate(ch, true, 1 / 60, t, { phone: 'use', swim: true }); }
+    ok(!ch.ph.g.visible && ch.phS.o <= 1, 'в воде — телефона нет', ch.phS.o.toFixed(2));
+    for (let f = 0; f < 60; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'use' }); }
+    ok(ch.ph.g.visible && ch.phS.o === 2, 'на земле — снова в руке');
+  }
+  // snap: поза телефона зависит только от (phase, t, o) — у каждого режима и на каждом шаге «достать»
+  {
+    const a = K.build({ item: 'sword' }, 'snapph'), b = K.build({ item: 'sword' }, 'snapph');
+    for (let f = 0; f < 150; f++) K.animate(a, f % 40 < 20, 1 / 60, f / 60, { phone: W.PH_MODES[(f / 30 | 0) % 4] });   // у «a» — своя история
+    let same = true, sameProp = true;
+    const pv = new T.Vector3(), qv = new T.Quaternion();
+    for (const mode of W.PH_MODES) for (const k of [0, .3, .5, .6, .8, 1]) for (const mv of [false, true]) {
+      a.phase = b.phase = .7;
+      const o = { snap: true, phone: mode, phoneK: k, phonePh: 1.3, rate: 10.5 };
+      K.animate(a, mv, 0, 7, o); K.animate(b, mv, 0, 7, o);
+      for (let j = 0; j < J; j++) if (Math.abs(a.P[j] - b.P[j]) > 1e-6) same = false;
+      if (!!a.ph?.g.visible !== !!b.ph?.g.visible) sameProp = false;
+      if (a.ph?.g.visible) { pv.copy(a.ph.g.position).sub(b.ph.g.position); qv.copy(a.ph.g.quaternion); if (pv.length() > 1e-6 || Math.abs(Math.abs(qv.dot(b.ph.g.quaternion)) - 1) > 1e-6 || a.ph.scrK !== b.ph.scrK) sameProp = false; }
+      if (Math.abs(a.armR.position.y - b.armR.position.y) > 1e-9) same = false;
+    }
+    ok(same, 'snap: поза телефона — одна и та же при любой истории');
+    ok(sameProp, 'snap: телефон в кисти и экран — те же');
+    K.animate(a, false, 0, 7, { snap: true, phone: 'use', phoneK: .3 }); ok(!a.ph.g.visible && a.handR.children.some(c => c !== a.ph.g && c.visible), 'snap: k = 0,3 — рука у кармана, телефона ещё нет');
+    K.animate(a, false, 0, 7, { snap: true, phone: 'use', phoneK: .7 }); ok(a.ph.g.visible && a.ph.scrK === 'off', 'snap: k = 0,7 — телефон в руке, экран ещё тёмный');
+    K.animate(a, false, 0, 7, { snap: true }); ok(!a.ph.g.visible && a.phS.o === 0, 'snap без телефона — убран');
+    // phonePose / phoneKeep: телефон по команде и в новом человечке (сменил образ) — без «достать» заново
+    const c = K.build({}, 'keep'); W.phonePose(c, 'call');
+    for (let f = 0; f < 50; f++) K.animate(c, false, 1 / 60, f / 60, null);
+    ok(c.phS.o === 2 && c.ph.scrK === 'call', 'phonePose: достал и держит у уха');
+    const c2 = K.build({ color: 'red' }, 'keep'); K.phoneKeep(c, c2); K.animate(c2, false, 1 / 60, 1, null);
+    ok(c2.phS.o === 2 && c2.ph.g.visible, 'новый человечек (сменил образ) — телефон уже в руке');
+    W.phonePose(c2, ''); for (let f = 0; f < 50; f++) K.animate(c2, false, 1 / 60, 2 + f / 60, null);
+    ok(c2.phS.o === 0 && !c2.ph.g.visible, 'phonePose(\'\') — убрал');
+  }
+  // звуки-события: шорох (достал/убрал), касание (экран вкл/выкл), «щёлк» (камера: сам раз в цикл, по кнопке — сразу)
+  {
+    const ch = K.build({}, 'ev'); let t = 0, ev = 0;
+    for (let f = 0; f < 50; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'photo' }); ev |= ch.phS.ev; }
+    ok((ev & 1) && (ev & 2), 'достал: шорох кармана и касание экрана', ev);
+    let shots = 0; for (let f = 0; f < 60 * 7; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'photo' }); if (ch.phS.ev & 4) shots++; }
+    ok(shots >= 1 && shots <= 3, 'камера: сама щёлкает раз в цикл (чужие)', shots);
+    W.phoneSnap(ch, t); let got = false, flash = false;
+    for (let f = 0; f < 20; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'photo' }); if (ch.phS.ev & 4) got = true; if (ch.ph.scrK === 'flash') flash = true; }
+    ok(got && flash, 'phoneSnap: щёлк по кнопке — звук и вспышка');
+    ev = 0; for (let f = 0; f < 50; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: '' }); ev |= ch.phS.ev; }
+    ok((ev & 1) && (ev & 2), 'убрал: касание и шорох', ev);
+  }
+  // корпус: общие геометрия и материалы; дальний и «низкое» качество — проще; экран без света — на «низком» тусклее
+  {
+    const mk = (Kx, bo) => { const ch = Kx.build({}, 'prop', bo); for (let f = 0; f < 50; f++) Kx.animate(ch, false, 1 / 60, f / 60, { phone: 'use' }); return ch; };
+    const a = mk(K), b = mk(K), far = mk(K, { lod: 1 }), lo = mk(kits.low);
+    const meshes = ch => { let n = 0; ch.ph.g.traverse(o => { if (o.isMesh) n++; }); return n; };
+    ok(a.ph.g.children[0].geometry === b.ph.g.children[0].geometry && a.ph.scr.material === b.ph.scr.material, 'корпус и экран — общие у всех человечков');
+    ok(meshes(far) <= 2 && meshes(lo) < meshes(a) && !lo.ph.glow && !!a.ph.glow, 'дальний и «низкое» — проще, свечение — только mid/high', `${meshes(a)} / ${meshes(far)} / ${meshes(lo)}`);
+    ok(lo.ph.scr.material.color.r < a.ph.scr.material.color.r - .2 && a.ph.scr.material.color.r > .97, 'на «низком» экран тусклее (без свечения)', `${lo.ph.scrK}:${lo.ph.scr.material.color.getHexString()} / ${a.ph.scrK}:${a.ph.scr.material.color.getHexString()}`);
+    ok(K.phoneMats().length === 5 && K.phoneMats().every(m => m.isMaterial), 'материалы экранов — для свечения движка');
+    let own = 0; a.ph.g.traverse(o => { if (o.isMesh && (o.userData.own || o.material.userData?.own)) own++; });
+    ok(!own, 'корпус не удаляется вместе с человечком (общий)');
+    K.dispose(a); ok(b.ph.g.children[0].geometry.attributes.position.count > 0, 'убрали одного — у других телефон на месте');
+  }
+  // от 1-го лица: кисть с телефоном у камеры, поднимается снизу
+  {
+    const ch = K.build({}, 'fp'), cam = new T.PerspectiveCamera(70, 1, .2, 100), vm = K.phoneView(ch);
+    cam.position.set(1, 2, 3); cam.updateMatrixWorld(true);
+    let t = 0; for (let f = 0; f < 40 && !(ch.phS?.o > 1.2); f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'use' }); vm.place(cam, ch, t, { ph: 0, w: 0, k: 1 }); }
+    const y0 = vm.g.children[0].children[0].position.y;   // поднимается (рука уже у кармана)
+    for (let f = 0; f < 60; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: 'use' }); vm.place(cam, ch, t, { ph: f * .3, w: 1, k: 1 }); }
+    const y1 = vm.g.children[0].children[0].position.y;
+    ok(vm.g.visible && vm.g.position.distanceTo(cam.position) < 1e-9 && y1 > y0 + .1, 'от 1-го лица: телефон поднялся снизу к камере', `${y0.toFixed(2)} → ${y1.toFixed(2)}`);
+    let noDepth = true; vm.g.traverse(o => { if (o.isMesh && o.material.depthTest !== false) noDepth = false; });
+    ok(noDepth, 'от 1-го лица: поверх мира (без проверки глубины)');
+    for (let f = 0; f < 50; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, { phone: '' }); vm.place(cam, ch, t, null); }
+    ok(!vm.g.visible, 'от 1-го лица: убрал — не видно');
+  }
+}
+
 // ═══ 7. Кадр без мусора (отдельный процесс) ═══
 {
   const r = cp.spawnSync(process.execPath, ['--expose-gc', '--max-semi-space-size=128', __filename, threePath, '--alloc'], { encoding: 'utf8', timeout: 180000 });
@@ -259,6 +416,11 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   // до 32 байт — упакованные числа-аргументы (время) на вызове; объект или массив за кадр дали бы больше
   ok(res && res.perCall < 32, 'анимация не мусорит (байт на кадр человечка)', res ? res.perCall.toFixed(1) : (r.stderr || r.stdout || '').slice(0, 300));
   if (res) console.log(`  анимация: ${res.perCall.toFixed(1)} байт на кадр человечка (все состояния, эмоции, аксессуары)`);
+  const rp = cp.spawnSync(process.execPath, ['--expose-gc', '--max-semi-space-size=128', __filename, threePath, '--alloc-phone'], { encoding: 'utf8', timeout: 180000 });
+  let resP = null;
+  try { resP = JSON.parse((rp.stdout || '').trim().split('\n').pop()); } catch (e) {}
+  ok(resP && resP.perCall < 32, 'телефон: анимация не мусорит (байт на кадр человечка)', resP ? resP.perCall.toFixed(1) : (rp.stderr || rp.stdout || '').slice(0, 300));
+  if (resP) console.log(`  телефон: ${resP.perCall.toFixed(1)} байт на кадр человечка (достать, все режимы, убрать, ходьба, сидя, прыжок)`);
 }
 
 // ═══ 8. coins.sql пересобран из PARTS (scripts/gen-skin-sql.mjs) ═══
