@@ -592,6 +592,9 @@
     setTimeout(() => {
       const w = reg.active; if (!w) return;
       const urls = new Set();
+      // общее для всех игр (games.js грузит его раньше файла игры; без него игра не откроется) и тексты «📖 Правила»
+      const kit = typeof GAMES_KIT !== 'undefined' ? GAMES_KIT : 'js/games/gamekit.js';
+      for (const s of [kit, 'js/games/rules-data.js']) urls.add('/' + s + '?v=' + GAMES_VER);
       for (const id of OFFLINE_GAMES) {
         const g = GAMES.find(x => x.id === id);
         for (const s of g?.scripts || []) urls.add('/' + String(s).replace(/^\/+/, '') + '?v=' + GAMES_VER);

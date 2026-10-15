@@ -274,6 +274,8 @@ async function testUpdateFlow(){
   ok(!!msg, 'приложение: список файлов игр ушёл в sw.js');
   const urls = msg ? msg[1].urls : [];
   ok(urls.includes('/js/games/sudoku.js?v=62') && urls.includes('/js/games/g2048.js?v=62') && !urls.some(u => /world/.test(u)), 'в списке — игры без интернета с ?v=GAMES_VER, без «Мира»', urls);
+  ok(urls.includes('/js/games/gamekit.js?v=62') && urls.includes('/js/games/rules-data.js?v=62'), 'и общее для игр: gamekit.js (без него игра не грузится) и правила');
+  ok(/const GAMES_KIT = 'js\/games\/gamekit\.js'/.test(src('js/features/games.js')) || !fs.existsSync(path.join(SITE, 'js/games/gamekit.js')), 'games.js: общий файл игр — тот, что кладём в кэш');
   ok(U4.store.d37_app_off === '62:' + U4.W.D37App._test.OFFLINE_GAMES.length, 'запомнено: повторно до смены GAMES_VER не шлём');
 }
 

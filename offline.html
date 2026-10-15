@@ -54,7 +54,7 @@ h2{font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;color:var(--mu
   var box = document.getElementById('games');
   function draw(have, shell) {
     box.innerHTML = GAMES.map(function (g) {
-      var ok = shell && have[g[3]];
+      var ok = shell && have[g[3]] && have['gamekit.js'];   // gamekit.js — общее для всех игр, без него игра не откроется
       return '<a class="g' + (ok ? '' : ' off') + '" href="/#/games/' + g[0] + '"><i>' + g[1] + '</i><span>' + g[2] + (ok ? '' : '<small>нужен интернет</small>') + '</span></a>';
     }).join('');
     if (!shell) document.getElementById('note').textContent = 'Открой сайт хотя бы раз с интернетом — после этого игры заработают и без сети.';
