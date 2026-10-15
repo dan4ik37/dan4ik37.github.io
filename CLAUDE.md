@@ -20,6 +20,12 @@
    `/rpc/my_age_group` гостем {} → {"ok":false,"reason":"auth"} (PGRST202 = не применён); `/rest/v1/ugc_games?select=age_rating&limit=0`
    → [] (400 «does not exist» = не применён). До запуска год живёт в браузере (и у вошедших), метки игр игроков — 12+, лимиты
    магазина — как раньше, карта у детей запрещена только в браузере. Тест PGlite: 99 (scratchpad pg/test-age.mjs).
+2–4. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 2) `games-more.sql` (ещё раз) — проверка
+   `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия); 3) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
+   (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20; 4) `economy.sql` (новый, ПОСЛЕДНИМ) —
+   `/rpc/xp_rule` {"p_key":"visit"} → 5 (PGRST202 — не применён), `/rpc/achievement_xp` {"p_code":"creator"} → 250 (500 — старая).
+   До запуска сервер считает по старым числам, подписи на сайте уже новые. Перезапустил xp.sql, games.sql, progression.sql,
+   secrets.sql или unity.sql — после них снова economy.sql. Тесты PGlite: pg/eco/test-economy.mjs (86), pg/eco/test-coins-eco.mjs.
 premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
 cm_invite_info → null, chat_info → каналы general/games/lfg/memes/voice, messages.channel/reply_to/edited_at → 200).
@@ -414,21 +420,33 @@ js/features/games.js и хвост css/premium.css.
 - `donate_login`, `vip_pending_rub`, `referred_by` раньше читались всеми — теперь только сам человек / админ (персонал).
 - SQL проверялся на PGlite с ролями anon/authenticated и заглушкой `auth.uid()` — так же можно проверять новые правки.
 
-## Прогрессия (progression.sql): уровни, ачивки, награды
-- Цифры в двух местах: сервер (`friend_limit`, `check_level_rewards`, `achievement_xp`, `my_achievements`) и клиент
-  (`LEVEL_REWARDS` в xp.js, `ACHIEVEMENT_DEFS` в achievements.js). Меняешь одно — меняй другое.
-- Уровень 5: рамка аватара + заявки в друзья (как ограниченный аккаунт Steam: иначе 5 рефералов или донат; персонал
-  всегда). Лимит друзей 15 → +5 каждые 5 уровней с 15-го до 35 (30 ур.); VIP 50/70/100; персонал без лимита.
-  Проверка — RLS на `friendships` (insert и accept). Уровень 10: титул (`user_titles`, RPC `set_title`), титул роли/VIP
-  показывается только пока роль/VIP есть (`nick_extras`). 30/50/100: Bronze 1 мес / Silver 3 мес / Gold 1 год
-  (`vip_grants`, прибавляется после текущего VIP). Уведомления о порогах — `level_progress` + `notify()`.
-- VIP-уровень теперь = max(донатный, за уровень): `vip_tier_of()` (её зовут has_perks, закреп, messages.vip_tier);
-  `profiles_public` отдаёт эффективные `is_vip`/`vip_until` и `vip_tier` — клиент `getVipTier()` берёт `vip_tier`.
-  VIP за уровень нельзя писать в profiles: триггер `protect_profile_columns` откатывает is_vip в клиентской сессии.
-- XP: ачивки — разово (`claim_achievements()` при входе и на своём профиле, source `ach`), донаты — 1 XP/₽ до 1000
-  (триггер на `vip_donation_log.matched`, source `donation`). Невидимка — с Silver VIP (`can_be_invisible`).
-- Рамки (лесенка): 5 неон · 15 золото · 30 радуга · 50 пламя · 100 бриллиант — `FRAME_LEVELS`/`avatarFrameClass` в xp.js,
-  стили `.lv-frame-*` в premium.css (только CSS, без SQL), анимация — только в `body.high`. Подписи — LEVEL_REWARDS.
+## Прогрессия (progression.sql + economy.sql): уровни, ачивки, награды (экономика пересобрана 15.10.2026 — docs/ECONOMY.md)
+- Числа наград — economy.sql (последним; переопределяет функции xp.sql, games.sql, progression.sql, secrets.sql, unity.sql; старые
+  файлы НЕ перезапускаем — progression.sql пересоздал бы profiles_public). XP — `xp_rule()` ↔ `XP_NUM` в xp.js; лестница —
+  `level_ladder()` ↔ `LEVEL_REWARDS`; ачивки — `achievement_xp`/`my_achievements` ↔ `ACHIEVEMENT_DEFS`. Сверка —
+  `node scripts/economy-test.cjs` (620), расчёт по времени — `node scripts/economy-sim.cjs [--write]`. Меняешь одно — меняй другое.
+- XP: визит 5, серия 7/30 — 25/100, чат 1 (до 15), форум 8 (до 3) / 2 (до 10), идея 3 (до 3) / сняли 50, приглашение 50, просмотр 3
+  (до 10), задание дня 25, секреты 50, донат 1 XP/₽ (до 1000). Игры: `game_win_xp` 1…20 (games-more.sql); XP — первые 3 победы в день
+  в ОДНОЙ игре (`game_family`: horde_duel → horde, pauk4 → pauk) и до 100 XP в день за все (`game_xp_award`; game_result отдаёт
+  `xp_cap` 'game'|'day' — подсказка игроку); Unity — 5 XP, все Unity-игры — одна игра. Ачивки вдвое меньше (VIP и донат — как
+  были); значки level_10/20/30/40/50/75/100 — без XP. user_visits — напрямую только сегодняшняя дата (серию не подделать).
+- Лестница (уровень = floor(√(XP/50))+1): 5 неоновая рамка, заявки в друзья (15); 10 титул, след «Листопад»; 15 золотая рамка, 20
+  друзей, 100 🪙; 20 Совёнок, «Бывалый», 25; 25 — 30, 150 🪙; 30 радужная рамка, 35, VIP на 3 дня; 35 медаль, 40; 40 золотой ник,
+  «Мастер», 45; 45 «Снежинки», 300 🪙; 50 огненная рамка, VIP на неделю; 55 Волчонок, 400 🪙; 60 радужный ник навсегда; 65 шар,
+  500 🪙; 70 «Кометы»; 75 «Живая легенда», 700 🪙; 80 Орёл; 90 «Галактика», 1000 🪙; 100 бриллиантовая рамка, «Бессмертный», VIP на
+  месяц. VIP за уровень — только Bronze (vip_grants, после текущего VIP), Silver/Gold — только за поддержку (владелец: «а то так
+  обанкрочусь»); старый VIP за 30/50/100 остаётся, пробный на тот же уровень не дают. Монеты за уровень — разово (coin_log 'level',
+  ref lvN; кто уже выше — получит при следующем XP). Ник — `nick_fx()` (золото 40+, радуга 60+ или секреты) → secrets.js
+  `.nick-gold`/`.nick-rainbow`. Друзья: 15 → +5 каждые 5 уровней с 15-го до 40-го (45); VIP 50/70/100; персонал без лимита (RLS на
+  `friendships`). Уровень 10: титул (`user_titles`, RPC `set_title`; титул роли/VIP — только пока роль/VIP есть, `nick_extras`).
+  Время (economy-sim): обычный игрок (30–45 мин/день) — 10 ур. за ~2 мес, 30 — ~21 мес, 50 — ~5 лет.
+- VIP-уровень = max(донатный, за уровень): `vip_tier_of()` (её зовут has_perks, закреп, messages.vip_tier); `profiles_public` отдаёт
+  эффективные `is_vip`/`vip_until` и `vip_tier` — клиент `getVipTier()` берёт `vip_tier`. VIP за уровень нельзя писать в profiles:
+  триггер `protect_profile_columns` откатывает is_vip в клиентской сессии. Невидимка — с Silver VIP (`can_be_invisible`).
+- Ачивки — разово (`claim_achievements()` при входе и на своём профиле, source `ach`), донаты — триггер на
+  `vip_donation_log.matched`, source `donation`. Уведомления о порогах — `level_progress` + `notify()`.
+- Рамки (лесенка): 5 неон · 15 золото · 30 радуга · 50 пламя · 100 бриллиант — `FRAME_LEVELS`/`avatarFrameClass` в xp.js, стили
+  `.lv-frame-*` в premium.css (только CSS, без SQL), анимация — только в `body.high`. Подписи — LEVEL_REWARDS.
 
 ## Игры (#/games, games.sql)
 - Витрина и общее API — `js/features/games.js` (`GAMES`, `gamesApi(id).report(key, win, score, localBest)`).
@@ -484,6 +502,14 @@ js/features/games.js и хвост css/premium.css.
 - Кошелёк — `js/core/coins.js` (`D37Coins`): вошёл + coins.sql → база (coins_state, coins_run/ad/daily/buy/revive/import), иначе
   localStorage `d37_coins` с теми же лимитами; при входе гостевые монеты переносятся (до 1000, один раз). Купленное = база ∪ браузер.
   Цены/лимиты в трёх местах: coins.sql (coin_price, coin_run_cap, coins_*), coins.js (RULES, HERO/UP цены), avatar.js (PARTS).
+- Числа монет (15.10.2026) — `coin_rule()` в coins.sql ↔ `RULES` в coins.js: бонус дня 20 (VIP ×2), задание дня 30, победа 3 (до 15 в
+  день), забеги до 600 в день (раз в 20 с, VIP ×2), реклама 25 (до 6), «×2 за забег» 3 в день, перенос гостевых до 500, возрождение 30.
+  `coin_run_cap` ↔ `RUN_CAP`: Орда 150, Башни 150, Блоки 80, косынка 20, паук 50, ячейка 15, сапёр 30, маджонг 20, судоку 30.
+  Формулы: Орда — подбор (1/3/5, сундук 5) + 2 в минуту + 25 за победу; Башни 2 за волну + 25; Блоки очки/100; косынка 12/20, паук
+  15/30/50, ячейка 15; сапёр 5/15/30; маджонг 3 + уровень; судоку 5/10/18/30, дня 20; Unity — половина просимого (до 25). Цены и
+  обмен 💎→🪙 не меняли. Вещи «за уровень» — 7-е поле PARTS: цена 0, не продаются; `coin_level_item` (gen-skin-sql.mjs), char_save
+  сверяет user_level (reason 'level'); coins_state отдаёт level → `D37Coins.level()`; гардеробы — «🔒 ур. N». Сейчас: следы Листопад
+  10, Снежинки 45, Кометы 70, Галактика 90; питомцы Совёнок 20, Волчонок 55, Орёл 80; в руку Медаль 35, Хрустальный шар 65.
 - Персонаж — `js/core/avatar.js` (`D37Char`): PARTS — 46 слотов. 7 «2D» (SLOTS2D: цвет, глаза, рот, шапка, предмет, питомец, след —
   рисуются кодом в 2D-играх, `sprite()` — кэш для игр, `img()` — для <img>) + 39 частей 3D-человечка (BODY_SLOTS, `body: 1`): фигура, кожа,
   рост/телосложение/голова ('0'…'4'), цвет глаз, брови, ресницы, щёчки, причёска и цвет волос, верх + отделка, низ, обувь, цвета шапки/
