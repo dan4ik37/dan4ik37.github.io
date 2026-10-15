@@ -182,6 +182,14 @@
   ];
   MZ.def('war', {
     roles: ROLES_W, buildings: W_BLD, extraFoot: W_GROUND, places: W_PLACES, plots: PLOTS,
+    // техника зоны (js/engine/vehicle.js): ездит, плавает и летает; только внутри боевой зоны (area)
+    vehicles: [
+      { id: 'w_jeep1', def: 'jeep', x: VEH.jeep[0][0], z: VEH.jeep[0][1], yaw: VEH.jeep[0][2], area: 'war' }, { id: 'w_jeep2', def: 'jeep', x: VEH.jeep[1][0], z: VEH.jeep[1][1], yaw: VEH.jeep[1][2], area: 'war' },
+      { id: 'w_heli1', def: 'heli', x: VEH.heli[0][0], z: VEH.heli[0][1], yaw: VEH.heli[0][2], area: 'war' }, { id: 'w_heli2', def: 'heli', x: VEH.heli[1][0], z: VEH.heli[1][1], yaw: VEH.heli[1][2], area: 'war' },
+      { id: 'w_plane1', def: 'plane', x: VEH.plane[0][0], z: VEH.plane[0][1], yaw: VEH.plane[0][2], area: 'war' },
+      { id: 'w_boat1', def: 'motorboat', x: VEH.boat[0][0], z: VEH.boat[0][1], yaw: VEH.boat[0][2], area: 'war' }, { id: 'w_boat2', def: 'motorboat', x: VEH.boat[1][0], z: VEH.boat[1][1], yaw: VEH.boat[1][2], area: 'war' },
+      { id: 'w_patrol1', def: 'patrol', x: VEH.boat[2][0], z: VEH.boat[2][1], yaw: VEH.boat[2][2], area: 'war' },
+    ],
     streets: W_ROADS,
     ground: [[r2((SEA.x1 + WZ.x1) / 2), (WZ.z0 + WZ.z1) / 2, r2(WZ.x1 - SEA.x1), WZ.z1 - WZ.z0, '#a89a72'], [-216, 392, 160, 64, '#9ca3af', .02], [-216, 432, 160, 16, '#4b5563', .025],
       ...W_ROADS.map(({ w, pts: [[ax, az], [bx, bz]] }) => [r2((ax + bx) / 2), r2((az + bz) / 2), ax === bx ? w : r2(Math.abs(bx - ax)), az === bz ? w : r2(Math.abs(bz - az)), '#5b6270', .03])],
@@ -314,7 +322,6 @@
       for (let i = 0; i < 10; i++) { const c = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed'][i % 5]; K.piece({ id: `w_port:container:${i + 1}`, kind: 'container', b: 'w_port', x: PORT.x1 - 14 - (i % 2) * 3, y: (i > 5 ? 2.6 : 0) + 1.3, z: PORT.z0 + 8 + (i % 6) * 7, w: 2.6, h: 2.6, d: 6, c, hp: 200, cam: true }); }
       K.cyl(-346, 0, 410, .5, 16, '#facc15', { solid: true }); K.part({ s: 'box', x: -356, y: 16, z: 410, w: 22, h: .6, d: .6, c: '#facc15' }); K.part({ s: 'cyl', x: -364, y: 13, z: 410, r: .03, h: 6, c: '#374151' });
       warship(K, -440, 406, 0);
-      for (const [x, z, yaw] of VEH.boat) boatModel(K, x, z, yaw);
       K.npc({ id: 'w_harbor', name: '⚓ Капитан порта', x: -350, z: 372, yaw: 270, seed: 'kapitan', say: ['Корабли и катера — у причалов ⚓', 'У баз без своего берега — места у этих причалов', 'В море можно плавать — у причалов есть лестницы'] });
       if (K.E.ladder) for (const z of [370, 400, 446]) { K.part({ s: 'box', x: SEA.x1 - .3, y: -3.2, z, w: .1, h: 6.4, d: .8, c: '#e5e7eb' }); K.E.ladder(K.ph, { x: SEA.x1 - 1, z, yaw: PI / 2, top: .02, w: .9 }); }
     }
@@ -341,13 +348,12 @@
       [[0, -3.95, 8, .1], [0, 3.95, 8, .1], [-3.95, 0, .1, 8], [3.95, 0, .1, 8]].forEach(([dx, dz, w, d], k) => pc('window', k + 1, { x: ct.x + dx, y: 11.6, z: ct.z + dz, w, h: 2.8, d, glass: true }));
       pc('roof', 1, { x: ct.x, y: 13.2, z: ct.z, w: 8.6, h: .4, d: 8.6, c: ct.roof });
       K.label.sign('🛫 Аэродром', ct.x, 6, ct.z + 3.1, 5, .8, 0, { bg: '#1e3a8a', w: 640, h: 100 });
-      for (const [x, z] of VEH.plane) planeModel(K, x, z, -PI / 2);
       K.npc({ id: 'w_pilot', name: '🧑‍✈️ Пилот', x: -244, z: 396, yaw: 90, seed: 'pilot7', say: ['Полоса — общая, у каждой базы своя стоянка ✈️', 'Взлетай на запад — над морем простор'] });
     }
     // вертолётные площадки лагеря
     for (const [x, z] of VEH.heli) {
       K.cyl(x, 0, z, 6, .12, '#374151', { solid: true, seg: 24 }); K.part({ s: 'ring', x, y: .14, z, r: 5.4, r2: 5, rx: -PI / 2, c: '#facc15' });
-      K.label.sign('H', x, .15, z, 4, 4, 0, { bg: '#374151', w: 128, h: 128, border: false }); heliModel(K, x, z, 0);
+      K.label.sign('H', x, .15, z, 4, 4, 0, { bg: '#374151', w: 128, h: 128, border: false });
     }
     yield;
     // ── Точки захвата, руины, полигон, укрытия (только в нейтральном центре и в порту) ──
@@ -453,7 +459,7 @@
     const nowMs = () => Date.now();
     const W = { inZone: false, hp: HP, down: 0, prot: 0, shield: 0, slot: 0, cd: {}, kills: 0, deaths: 0, robotKills: 0, team: 0, prevRole: null, ch: null, chOn: false, chAt: 0, out: { f: [], h: [] }, sendAt: 0,
       hist: new Map(), score: {}, teams: { 1: 0, 2: 0 }, mode: 'ffa', votes: {}, round: { id: 0, end: 0 }, pts: POINTS.map(p => ({ id: p.id, own: 0, prog: 0 })), ref: false, rsAt: 0, regenAt: 0, lastHit: 0 };
-    rt.war = { board, rules, armory, hire, plotInfo, W };
+    rt.war = { board, rules, armory, hire, plotInfo, W, touch: on => touchButtons(on) };
     // ── HUD боя ──
     const hud = document.createElement('div'); hud.className = 'mz-war'; hud.hidden = true; rt.hud.appendChild(hud);
     hud.innerHTML = `<div class="mz-hitfx"></div><div class="mz-cross"></div><div class="mz-hp"><i></i><b></b></div><div class="mz-wpn">${SLOTS.map((w, i) => `<button type="button" data-mz="w:slot:${i}" title="${esc(WEAPONS[w].name)} (${i + 1})">${WEAPONS[w].icon}<small>${i + 1}</small></button>`).join('')}</div><div class="mz-score"></div><div class="mz-feed"></div><div class="mz-down" hidden></div>`;
@@ -954,7 +960,7 @@
         if (W.inZone) {
           const C = S.C;
           for (let i = 0; i < SLOTS.length; i++) if (C?.down('slot' + (i + 1))) setSlot(i);
-          if (C && (C.held('attack') || (S.I?.locked && C.heldRaw?.('attack'))) && !S.menu && !S.phoneOn) fire();
+          if (C && (C.held('attack') || (S.I?.locked && C.heldRaw?.('attack'))) && !S.menu && !S.phoneOn && !rt.veh?.driving?.()) fire();   // за рулём не стреляют (пассажир — может)
           if (W.down && nowMs() >= W.down) respawn();
           if (!W.down && W.hp < HP && nowMs() - W.lastHit > 6000) { W.hp = Math.min(HP, W.hp + dt * 4); const hb = Math.ceil(W.hp / 10); if (hb !== rt.zx.h) rt.setZX({ h: hb }); drawHud(); }
           robotTick(dt); mercTick(dt);

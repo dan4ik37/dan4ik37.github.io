@@ -7,9 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 globalThis.window = globalThis;
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js']) load(f);
-const hasVeh = fs.existsSync(path.join(SITE, 'js/engine/vehicle.js'));
-if (hasVeh) load('js/engine/vehicle.js');
+for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
 const MZ = globalThis.MirZones, MC = globalThis.MirCity, MW = globalThis.MirWar, E = globalThis.D37E;
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra)); } };
@@ -434,9 +432,37 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   }
 }
 
-// ═══ 14. Транспорт (js/engine/vehicle.js) ═══
-if (hasVeh && E.vehicles) require(path.join(__dirname, 'vehicle-test-part.cjs'))({ E, MZ, MW, ok, near });
-else console.log('  (vehicle.js ещё нет — проверки транспорта пропущены)');
+// ═══ 14. Транспорт в мире (js/games/mir-veh.js + js/engine/vehicle*.js; физика — scripts/vehicle-test.cjs) ═══
+{
+  const VE = E.vehicle, L = globalThis.MirVeh.spots(), ID_RE = /^[a-z][a-z0-9_]{0,15}$/;
+  ok(L.length >= 15, 'машин в мире — не меньше 15 (боевая зона, город, детский городок)', L.length);
+  ok(new Set(L.map(s => s.id)).size === L.length, 'номера машин — разные');
+  for (const sp of L) {
+    const d = VE.get(sp.def), Zn = ZONES[sp.zone];
+    ok(!!d, `${sp.id}: есть описание ${sp.def}`);
+    if (!d) continue;
+    ok(ID_RE.test(sp.id), `${sp.id}: номер годится для zx.v (сеть)`);
+    ok(Zn && inRect(Zn, sp.x, sp.z, -2), `${sp.id}: стоит в своей зоне`, [sp.x, sp.z]);
+    if (sp.area) ok(sp.area === sp.zone, `${sp.id}: «только в зоне» — своя зона`);
+    ok(d.age <= (Zn?.age ?? 0) || sp.zone === 'war', `${sp.id}: возраст машины (${d.age}+) не выше зоны`);
+    const wl = MZ.water(sp.x, sp.z), floor = MZ.terrain(sp.x, sp.z);
+    if (d.kind === 'boat') ok(wl > -Infinity && wl - floor > d.water.draft + .3, `${sp.id}: лодка — на воде, глубоко`, [wl, floor]);
+    else ok(wl === -Infinity, `${sp.id}: ${d.kind} — на суше`);
+    if (sp.zone === 'war') ok(!MW.inPlot(sp.x, sp.z, 2) && !MW.inPlot(sp.x + 4, sp.z, 0) && !MW.inPlot(sp.x - 4, sp.z, 0), `${sp.id}: не на участке базы`);
+    if (d.kind === 'car') {
+      const blds = MZ.buildings(sp.zone).filter(b => b.h > 0 && b.type !== 'park' && b.type !== 'lot' && b.type !== 'parking');
+      ok(!blds.some(b => Math.abs(sp.x - b.x) < b.w / 2 && Math.abs(sp.z - b.z) < b.d / 2), `${sp.id}: не в стене здания`);
+    }
+  }
+  ok(L.some(s => s.def === 'plane') && L.some(s => s.def === 'heli') && L.some(s => VE.get(s.def)?.kind === 'boat') && L.some(s => VE.get(s.def)?.kind === 'car'), 'все 4 вида: машины, лодки, вертолёты, самолёт');
+  const pl = L.find(s => s.def === 'plane'), RW = MW.AIR.runway;
+  ok(pl && inRect(RW, pl.x, pl.z, 1) && Math.abs(Math.sin(pl.yaw)) > .99, 'самолёт — на полосе, нос вдоль полосы');
+  // сеть: место в машине проходит белый список zx
+  ok(JSON.stringify(MZ.cleanZX({ v: ['w_jeep1', 0] })) === '{"v":["w_jeep1",0]}' && MZ.cleanZX({ v: ['Плохо', 0] }) === null, 'zx.v [машина, место] — проходит, чужое — нет');
+  // снимок машины мира туда-обратно и проверка скорости
+  const v = VE.create('jeep', { id: 'w_jeep1', x: -80, z: 300 }), a = VE.unpack(VE.pack(v));
+  ok(a && VE.snapOk(v.def, a, { ...a, x: a.x + 3 }, .2) === null && VE.snapOk(v.def, a, { ...a, x: a.x + 300 }, .2) === 'speed', 'снимок джипа и проверка скорости');
+}
 
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);

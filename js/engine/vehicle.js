@@ -80,7 +80,7 @@
   function local(v, p, out = {}){
     const s = Math.sin(v.yaw), c = Math.cos(v.yaw);
     out.x = v.x + p[0] * c + p[2] * s; out.z = v.z - p[0] * s + p[2] * c;
-    out.y = v.y + p[1] + p[2] * Math.sin(-v.pitch) * 1 + p[0] * Math.sin(v.roll) * 0;
+    out.y = v.y + p[1] * Math.cos(v.pitch) * Math.cos(v.roll) - p[2] * Math.sin(v.pitch) + p[0] * Math.sin(v.roll);   // нос вниз (pitch > 0) — точка спереди ниже
     out.yaw = v.yaw;
     return out;
   }
@@ -265,19 +265,19 @@
     const body = new T.Group(); g.add(body);
     const spin = [];
     for (const p of d.model.parts) {
-      if (p.spin) {
+      if (p.spin && !o.still) {   // still — стоит без мотора: колёса и винты склеены с корпусом (2–3 вызова отрисовки вместо 7–10)
         // колесо: руль (y) → вращение (x); винт: вокруг своей оси
         const steerG = new T.Group(); steerG.position.set(p.x || 0, p.y || 0, p.z || 0); steerG.userData.dyn = true; body.add(steerG);
         const rollG = new T.Group(); rollG.userData.dyn = true; steerG.add(rollG);
-        R.part(rollG, { ...p, x: 0, y: 0, z: 0, spin: undefined, dyn: true });
+        R.part(rollG, { ...p, x: 0, y: 0, z: 0, spin: undefined, dyn: true, m: p.glass && o.glass ? o.glass : p.m });
         spin.push({ kind: p.spin, steer: +p.steer || 0, r: +p.r || .4, s: steerG, rg: rollG, axis: p.axis || (p.spin === 'wheel' ? 'x' : p.spin === 'rotor' ? 'y' : p.spin === 'tail' ? 'x' : 'z') });
-      } else R.part(body, p);
+      } else R.part(body, p.glass && o.glass ? { ...p, m: o.glass } : p);   // стекло — общий прозрачный материал игры (видно, кто сидит)
     }
     if (o.merge) { try { o.merge(R, body); } catch (e) { console.error(e); } }
     if (R.shadowsOn) R.shadowsOn(g);
     let spinA = 0;
     return {
-      g, spin, def: d,
+      g, spin, def: d, still: !!o.still,
       update(v, dt){
         g.position.set(v.x, v.y, v.z); g.rotation.set(v.pitch, v.yaw, v.roll, 'YXZ');
         spinA += dt;

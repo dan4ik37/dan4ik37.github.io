@@ -1305,7 +1305,7 @@
           if (k >= 0 && !(k === 0 && b.skip0)) want.set(keyOf(b, k), [b, k, 0]);
           const t = P0.tiers[P0.tiers.length - 1];
           if (Math.abs(p.x - b.x) < t.w / 2 && Math.abs(p.z - b.z) < t.d / 2 && p.y > t.top - .2 && p.y < t.top + 4) want.set(keyOf(b, 'roof'), [b, 'roof', 0]);
-          if (!b.skip0) {   // подошёл к входу по земле — первый этаж заранее
+          if (!b.skip0 && !rt.inVeh?.()) {   // подошёл к входу по земле — первый этаж заранее (едет мимо на машине — нет)
             const dx = Math.max(Math.abs(p.x - b.x) - b.w / 2, 0), dz = Math.max(Math.abs(p.z - b.z) - b.d / 2, 0), d = Math.hypot(dx, dz);
             if (d < 16 && p.y < P0.base0 + .5 && !want.has(keyOf(b, 0))) want.set(keyOf(b, 0), [b, 0, d]);
           }
@@ -1446,6 +1446,7 @@
     // ── Телепорт: проверка возраста → затемнение → подгрузка зоны → на место ──
     function place(x, z, yaw, y){
       const P = S.P;
+      rt.veh?.leave?.();   // телепорт и появление — сначала из машины
       if (P.mode === 'sit') P.standUp();
       rt.unsit();
       // опора — не выше пола первого этажа (иначе P.place поставит на крышу здания над точкой)
@@ -1609,9 +1610,17 @@
       p.zx = z;
       if (JSON.stringify(was || null) !== JSON.stringify(z)) for (const zs of rt.mods) { try { zs.mod?.remote?.(p, z, was); } catch (e) { console.error(e); } }
     };
-    rt.onHi = () => { if (rt.zxSig && rt.zxSig !== '{}') setTimeout(() => { if (!rt.stopped) S.forceSend = true; }, 400 + Math.random() * 1600); };
-    rt.onMsg = (p, d) => { for (const zs of rt.mods) { try { if (zs.mod?.onMsg?.(p, d)) return; } catch (e) { console.error(e); } } };
+    rt.onHi = () => { if (rt.zxSig && rt.zxSig !== '{}') setTimeout(() => { if (!rt.stopped) S.forceSend = true; }, 400 + Math.random() * 1600); rt.veh?.onHi?.(); };
+    rt.onMsg = (p, d) => {
+      if (d.t === 'vh') { try { rt.veh?.onMsg?.(p, d); } catch (e) { console.error(e); } return; }   // транспорт (mir-veh.js)
+      for (const zs of rt.mods) { try { if (zs.mod?.onMsg?.(p, d)) return; } catch (e) { console.error(e); } }
+    };
     rt.send = d => H.send?.({ t: 'z', ...d });
+    rt.vehSend = d => H.send?.({ t: 'vh', ...d });
+    // транспорт: крючки mir.js (за рулём — шаг машины вместо шага человечка; камера — за машиной; направление не шлём)
+    rt.drive = (dt, C, rig) => { try { return !!rt.veh?.drive?.(dt, C, rig); } catch (e) { console.error(e); return false; } };
+    rt.camTarget = () => rt.veh?.camTarget?.() || null;
+    rt.inVeh = () => !!rt.veh?.inVeh?.();
     // ── Подпись у ника: роль (значок) и семья ──
     rt.tag = p => {
       const z = p === S.me ? rt.zx : p.zx; if (!z) return '';
@@ -1713,6 +1722,7 @@
       const me = S.A.get(S.key);
       if (me && rt.zx.a === 'sleep') { me.sit = false; me.moving = false; }
       for (const zs of rt.mods) { try { zs.mod?.preActors?.(dt, t); } catch (e) { console.error(e); } }
+      try { rt.veh?.preActors?.(); } catch (e) { console.error(e); }   // седоки — в машинах
     };
     const SPIN = new T.Euler();
     rt.postActors = (dt, t) => {
@@ -1802,14 +1812,17 @@
         intTick();    // этажи зданий (генератор интерьеров) — у входа, внутри, по лифту
       }
       for (const zs of rt.mods) { try { zs.mod?.update?.(dt); } catch (e) { console.error(e); } }
+      try { rt.veh?.update?.(dt); } catch (e) { console.error(e); }   // транспорт: чужие машины, седоки, возврат на стоянку
     };
     rt.frame = (dt, t) => {
       if (rt.stopped) return;
       for (const zs of rt.zones.values()) if (zs.it || zs.mq) { stepBuild(zs, R.q === 'high' ? 4 : 3); if (zs.built && !zs.shown) { const c = R.camera.position; if (distRect(zs.Z, c.x, c.z) < SHOW_D) setShown(zs, true); } }
       for (const zs of rt.mods) { try { zs.mod?.frame?.(dt, t); } catch (e) { console.error(e); } }
+      try { rt.veh?.frame?.(dt, t); } catch (e) { console.error(e); }
       drawNpcTags();
     };
     rt.dispose = () => {
+      try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
       rt.stopped = true;
       clearTimeout(rt.bannerT); clearTimeout(rt.phT); clearTimeout(rt.eatT); clearInterval(rt.mapT);
       for (const zs of rt.zones.values()) {
@@ -1857,6 +1870,8 @@
       else if (r?.reason === 'game') { if (!rt.payHint) { rt.payHint = true; toast('🪙 Зарплата монетами заработает, когда сайт обновится'); } }
       else if (r?.reason === 'day_cap') { s2.pend = 0; paySave(s2); }
     };
+    // транспорт мира: машины, лодки, вертолёты, самолёт из мест зон (js/games/mir-veh.js + js/engine/vehicle*.js)
+    try { rt.veh = root.MirVeh?.start?.(rt) || null; } catch (e) { console.error(e); rt.veh = null; }
     return rt;
   }
   const FAMILY = { mom: ['👩', 'Мама'], dad: ['👨', 'Папа'], son: ['👦', 'Сын'], dau: ['👧', 'Дочка'], baby: ['👶', 'Малыш'], gma: ['👵', 'Бабушка'], gpa: ['👴', 'Дедушка'], pet: ['🐾', 'Питомец семьи'] };

@@ -113,3 +113,8 @@
 .mz-ilift button{min-height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:inherit;font:800 14px Montserrat,sans-serif;cursor:pointer}
 .mz-ilift button:hover{background:rgba(255,255,255,.14)}
 .mz-ilift button.on{border-color:#38bdf8;background:rgba(56,189,248,.18);cursor:default}
+
+/* транспорт: плашка водителя (скорость, высота, газ, бак) — над кнопками, по центру снизу */
+.mz-veh{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);padding:.34rem .8rem;border-radius:12px;background:rgba(12,10,28,.78);
+  border:1.5px solid rgba(96,165,250,.7);font-size:.82rem;font-weight:800;letter-spacing:.01em;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+@media (max-width:640px){.mz-veh{bottom:auto;top:96px;font-size:.74rem}}

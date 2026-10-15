@@ -768,8 +768,10 @@
     }
     if (C.any()) activity();
     P.first = rig.mode === 'first';
-    P.update(dt, C, rig);
-    X.update(dt, P, C, rig.fwd(), P.first);
+    if (!S.zones?.drive?.(dt, C, rig)) {   // транспорт (mir-veh.js): в машине человечек сидит, управление — машине
+      P.update(dt, C, rig);
+      X.update(dt, P, C, rig.fwd(), P.first);
+    }
     // чужие: та же физика по их направлению
     for (const p of S.players.values()) stepRemote(p, dt);
     // в доме: крыша прячется, камера ближе
@@ -812,7 +814,7 @@
     if (S.me.emo && S.me.emo.t !== S.me._emoA) { S.me._emoA = S.me.emo.t; A.emote(S.key, S.me.emo.e, t); }
     for (const k of [...A.list.keys()]) if (k !== S.key && !S.players.has(k)) A.remove(k);
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
-    rig.update(dt, S.base?.cam || P, look, S.ph, C);   // в стройке камера смотрит на участок
+    rig.update(dt, S.zones?.camTarget?.() || S.base?.cam || P, look, S.ph, C);   // в машине — за машиной; в стройке — на участок
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
     I.wantLock = rig.mode === 'first' && !I.touch && !S.menu && !S.phoneOn;
     // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
@@ -1076,7 +1078,7 @@
     if (p.rate.length >= 16) return;   // защита от флуда: не больше 16 событий за 2 с
     p.rate.push(t);
     if (d.t === 'st') applySt(p, d);
-    else if (d.t === 'z') S.zones?.onMsg(p, d);   // зоны мира: события городов и боевой зоны
+    else if (d.t === 'z' || d.t === 'vh') S.zones?.onMsg(p, d);   // зоны мира: события городов и боевой зоны; транспорт ('vh')
     else if (d.t === 'hi') {
       S.zones?.onHi();   // зоны мира: новичку — своё состояние (роль, команда) ещё раз в 'st'
       const elders = [S.me, ...[...S.players.values()].filter(x => !x.leaving && x.key !== p.key)].sort((a, b) => (a.at || S.joinedAt) - (b.at || S.joinedAt));
@@ -1145,7 +1147,7 @@
     const P = S.P, C = S.C, rig = S.rig, U = window.D37E.UNIT;
     S.sendT += dt;
     let a = -1, s = 0, k = 0;
-    if (P.mode === 'move') {
+    if (P.mode === 'move' && !S.zones?.inVeh?.()) {   // в машине направление не шлём (машину ведёт 'vh')
       const m = C.move, fx = -Math.sin(rig.yaw), fz = -Math.cos(rig.yaw), rx = Math.cos(rig.yaw), rz = -Math.sin(rig.yaw);
       const wx = rx * m.x + fx * m.z, wz = rz * m.x + fz * m.z, wl = Math.hypot(wx, wz);
       if (wl > .2 && P.enabled) { a = Math.round(Math.atan2(wx, wz) / (PI * 2) * 16) & 15; s = P.crouch ? 1 : P.running ? 3 : 2; k = Math.round(Math.min(1, wl) * 4) / 4; }

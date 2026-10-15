@@ -117,6 +117,8 @@
   ];
   MZ.def('kids', {
     roles: ROLES_K, buildings: K_BLD, streets: K_STREETS, places: K_PLACES,
+    // карты у детской площадки (катаются только по городку)
+    vehicles: [152, 157, 162].map((x, i) => ({ id: 'k_kart' + (i + 1), def: 'kart', x, z: -33.5, yaw: PI / 2, area: 'kids' })),
     ground: [[200, -24, 180, 8, '#5b6270'], [180, -20, 8, 120, '#5b6270'], [117, -24, 14, 28, '#e7dcc2']],
     actions: rt => {
       const W = wallet('kids'), L = [
@@ -212,6 +214,13 @@
   ];
   MZ.def('metro', {
     roles: ROLES_M, buildings: M_BLD, streets: M_STREETS, places: M_PLACES,
+    // транспорт города: такси у стоянки, машины в паркинге, катера на канале, вертолёт на площадке крыши «Сити-1» (y — высота крыши)
+    vehicles: [
+      { id: 'm_heli1', def: 'heli_city', x: 298.4, z: 160, yaw: PI / 2, y: 109.3 },
+      { id: 'm_taxi1', def: 'taxi', x: 239, z: 121.6, yaw: PI / 2 }, { id: 'm_taxi2', def: 'taxi', x: 253, z: 121.6, yaw: PI / 2 },
+      { id: 'm_car1', def: 'sedan_red', x: 230, z: 332, yaw: 0 }, { id: 'm_car2', def: 'sedan', x: 242, z: 332, yaw: 0 }, { id: 'm_car3', def: 'police_car', x: 254, z: 332, yaw: 0 },
+      { id: 'm_boat1', def: 'motorboat', x: 160, z: 261.6, yaw: PI / 2 }, { id: 'm_boat2', def: 'motorboat', x: 228, z: 261.6, yaw: PI / 2 }, { id: 'm_boat3', def: 'motorboat', x: 300, z: 261.6, yaw: PI / 2 },
+    ],
     // силуэт издалека выше зданий: телебашня, ярусы «Денчик-Тауэр» — [x, z, w, d, цвет, верх, низ, фасад]
     skyline: [[182, 316, 6, 6, '#e5e7eb', 96, 6.4], [182, 316, 18, 18, '#cbd5e1', 104, 96], [182, 316, 1.4, 1.4, '#e5e7eb', 140, 104], [312, 300, 19.2, 16, '#0f172a', 140.8, 118.4, 'dark'], [298.4, 160, 16, 16, '#1e3a8a', 108.8, 92.8, 'glass']],
     ground: [[215, 130, 250, 8, '#5b6270'], [215, 205, 250, 8, '#5b6270'], [215, 274, 250, 8, '#5b6270'], [150, 225, 8, 250, '#5b6270'], [215, 225, 8, 250, '#5b6270'], [280, 156, 8, 112, '#5b6270']],
@@ -552,7 +561,6 @@
     K.item({ x: 182, y: 1.2, z: 117.5, r: 1.6, prompt: () => '🚗 Машины: посмотреть', act: () => K.rt.city?.metro?.dealer() });
     K.building({ id: 'm_taxi', x: 246, z: 112, w: 20, d: 14, h: 4.5, wall: '#fef9c3', trim: '#a16207', roofC: roofOf('m_taxi'), floor: '#e5e7eb', floorM: M.concrete, floorType: 'concrete',
       doors: [{ side: 's', at: -4, w: 5, h: 3.4 }, { side: 's', at: 5, w: 2.4 }], sign: '🚕 Такси', signBg: '#a16207' });
-    carModel(K, 239, 121.6, PI / 2, '#facc15', 0); carModel(K, 253, 121.6, PI / 2, '#facc15', 0);
     K.npc({ id: 'm_disp', name: '🚕 Диспетчер', x: 250, z: 110, yaw: 180, seed: 'dispet', say: ['Такси! Куда едем? 🚕', 'Таксистом можно стать в мэрии'] });
     for (const [sx, sz] of [[-7, -3.6], [7, -3.6], [-7, 3.6], [7, 3.6]]) K.box(115 + sx, 0, 113 + sz, .4, 4.4, .4, '#e5e7eb', { solid: true });
     K.part({ s: 'box', x: 115, y: 4.6, z: 113, w: 16, h: .4, d: 9, c: roofOf('m_gas') });
@@ -735,8 +743,7 @@
       // фонари, деревья в кадках, скамейки на северной набережной
       for (let x = X0 + 6; x < X1 - 4; x += 16) if (!gapsN.some(([g, h]) => Math.abs(x - g) < h + 2)) { K.lamp(x, zN - 4.8); }
       for (let x = X0 + 14; x < X1 - 4; x += 32) if (!gapsN.some(([g, h]) => Math.abs(x - g) < h + 4)) { K.bench(x, zN - 2.2, 0); K.cyl(x + 5, 0, zN - 4.6, .7, .6, '#78716c', { solid: true }); K.tree(x + 5, zN - 4.6, .7, 2); }
-      // лодки у причальной стенки (пока стоят; прокат — вместе с транспортом)
-      for (const [x, c] of [[160, '#f8fafc'], [228, '#fde68a'], [300, '#bfdbfe']]) boatSmall(K, x, CN.wl, zS - 2.4, c);
+      // катера у причальной стенки — настоящие (vehicles в описании города)
       K.board(182, 2.2, zN - 5.8, 4.4, 1.4, PI, '🌉 Набережная канала', { bg: '#0e7490' }); K.box(182, 0, zN - 5.6, .16, 1.5, .16, '#334155', { solid: true });
     }
     yield;
@@ -824,7 +831,6 @@
     {
       const B = MB('m_park');
       K.garage({ id: 'm_park', name: B.name, x: B.x, z: B.z, w: B.w, d: B.d, levels: 3, lh: 3.6 });
-      for (const [px, c] of [[230, '#ef4444'], [242, '#e5e7eb'], [254, '#2563eb']]) carModel(K, px, B.z, 0, c, 0);
       K.label.sign('🅿️ Паркинг', B.x - B.w / 2 - .1, 2.6, B.z + 6, 4, 1, -PI / 2, { bg: '#1d4ed8', w: 512, h: 128 });
     }
     yield;
