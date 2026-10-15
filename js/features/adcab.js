@@ -245,7 +245,7 @@
     thumbs(root);
   }
   function card(c){
-    const cap = Math.max(1, c.budget - c.refunded), pct = Math.min(100, Math.round(Number(c.spent) / cap * 100));
+    const cap = Math.max(0, c.budget - c.refunded), pct = cap ? Math.min(100, Math.round(Number(c.spent) / cap * 100)) : 0;   // отклонённая — всё вернулось, копилки нет
     const sub = c.status === 'paused' ? PAUSED[c.paused_by] : c.status === 'finished' ? FINISH[c.finish_reason] : c.status === 'rejected' ? (c.reject_reason || '') : c.changed ? 'изменена — ждёт проверки' : '';
     return `<a class="adc-card pf-card pf-card-muted" href="#/adv/c/${esc(c.id)}">
       <span class="adc-thumb"${c.thumb ? ` data-img="${esc(c.thumb)}"` : ''}>${c.thumb ? '' : '📣'}</span>
@@ -253,8 +253,8 @@
         <b class="adc-card-t">${esc(c.title)}</b>
         <span class="adc-card-m">${statusChip(c)}${ageChip(c.age_rating)}<small>${esc(priceLine(c))}</small></span>
         ${sub ? `<small class="adc-card-sub">${esc(sub)}</small>` : ''}
-        ${c.budget ? `<span class="adc-bar" title="Потрачено ${dec(c.spent)} из ${num(cap)} 💎"><i style="width:${pct}%"></i></span>` : ''}
-        <small class="adc-card-s">👁 ${num(c.views)} · 👆 ${num(c.clicks)} · CTR ${ctr(c.views, c.clicks)}${c.budget ? ` · ${dec(c.spent)} / ${num(cap)} 💎` : ''}</small>
+        ${cap ? `<span class="adc-bar" title="Потрачено ${dec(c.spent)} из ${num(cap)} 💎"><i style="width:${pct}%"></i></span>` : ''}
+        <small class="adc-card-s">👁 ${num(c.views)} · 👆 ${num(c.clicks)} · CTR ${ctr(c.views, c.clicks)}${cap ? ` · ${dec(c.spent)} / ${num(cap)} 💎` : ''}</small>
       </span></a>`;
   }
   async function thumbs(root){
@@ -436,7 +436,7 @@
     }
     if (g === 'board') {
       const b = E.cr.board || {};
-      return `<div class="adc-pv-i"><small>🌍 Щит в 3D-мире</small><div class="adc-board"><div class="adc-board-face">${img('board', b.title)}<span class="adc-board-tag">РЕКЛАМА</span><span class="adc-board-mark">Реклама · ${esc(c.advertiser || 'рекламодатель')}${c.erid ? ' · erid: ' + esc(c.erid) : ''}</span></div><i></i><i></i></div></div>`;
+      return `<div class="adc-pv-i"><small>🌍 Щит в 3D-мире</small><div class="adc-board"><div class="adc-board-face">${img('board', b.title)}<span class="adc-board-tag">РЕКЛАМА</span><span class="adc-board-mark">Реклама${c.age_rating != null ? ` ${c.age_rating}+` : ''} · ${esc(c.advertiser || 'рекламодатель')}${c.erid ? ' · erid: ' + esc(c.erid) : ''}</span></div><i></i><i></i></div></div>`;
     }
     return GROUPS.find(f => f.g === g).kinds.filter(k => E.cr[k]?.src || E.cr[k]?.image).map(k => {
       const [dw, dh] = KIND[k].show;

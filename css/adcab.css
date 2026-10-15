@@ -86,7 +86,8 @@
 .adc-empty .pf-btn{text-decoration:none}
 /* редактор */
 .adc-ed{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1rem;align-items:start}
-.adc-ed-side{position:sticky;top:5rem}
+/* position: sticky на сайте не липнет (у html и body overflow-x: hidden — см. ad-places.js), поэтому превью просто справа */
+.adc-ed-side{min-width:0}
 .adc-groups{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
 .adc-grp{display:flex;gap:.55rem;align-items:flex-start;padding:.6rem .7rem;border-radius:12px;border:1.5px solid var(--border);background:rgba(255,255,255,.03);cursor:pointer;font-size:.74rem}
 .adc-grp.on{border-color:#a78bfa;background:rgba(145,71,255,.1)}
@@ -130,7 +131,7 @@
 .adc-calc b{font-family:var(--font-display);font-size:1.3rem;font-weight:600;color:#cfeaff}
 .adc-calc span{font-size:.76rem}
 .adc-calc small{font-size:.68rem;color:var(--muted);line-height:1.45}
-.adc-act-sticky{position:sticky;bottom:0;z-index:5;margin:1rem -.4rem 0;padding:.7rem .4rem;background:linear-gradient(180deg,transparent,var(--bg) 35%);justify-content:flex-end}
+.adc-act-sticky{margin-top:1rem;justify-content:flex-end}
 /* превью — те же .dad-*, что на сайте */
 .adc-pv{display:flex;flex-direction:column;gap:1rem;overflow:hidden}
 .adc-pv-wide{flex-direction:row;flex-wrap:wrap;align-items:flex-start}
