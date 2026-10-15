@@ -61,7 +61,7 @@
         // подобрать
         if (!P.dead && e.age > .6 && Math.abs(P.x - e.x) < 1.3 && Math.abs(P.z - e.z) < 1.3 && e.y > P.y - .6 && e.y < P.y + 2) {
           const left = X.give ? X.give(e.s) : e.s.n;
-          if (left < e.s.n) { S.AU?.play('kb_pop', { vol: .35, rate: 1 + X.rng() * .3 }); if (e.s.id === 'iron_ingot') S.ents.hookUnlock?.('iron'); }
+          if (left < e.s.n) { S.AU?.play('kb_pop', { vol: .35, rate: 1 + X.rng() * .3 }); if (e.s.id === 'iron_ingot') S.ents.hookUnlock?.('iron'); X.hookPickup?.(e.s.id, e.s.n - left); }
           if (left <= 0) { dropItem(i); continue; }
           e.s.n = left;
         }
@@ -112,8 +112,9 @@
         dLife[j] = .5 + r() * .5;
       }
     };
-    X.particles = (kind, x, y, z, n = 10) => {
-      const c = kind === 'heart' ? [1, .3, .4] : kind === 'magic' ? [.7, .4, 1] : kind === 'smoke' ? [.4, .4, .4] : kind === 'fire' ? [1, .6, .2] : [1, 1, .6];
+    X.particles = (kind, x, y, z, n = 10, color) => {   // color — «#rrggbb» (моды)
+      const hx = /^#[0-9a-f]{6}$/i.test(color || '') ? parseInt(color.slice(1), 16) : -1;
+      const c = hx >= 0 ? [(hx >> 16 & 255) / 255, (hx >> 8 & 255) / 255, (hx & 255) / 255] : kind === 'heart' ? [1, .3, .4] : kind === 'magic' ? [.7, .4, 1] : kind === 'smoke' ? [.4, .4, .4] : kind === 'fire' ? [1, .6, .2] : kind === 'water' ? [.4, .6, 1] : [1, 1, .6];
       X.debris(Math.floor(x), Math.floor(y), Math.floor(z), 0, Math.max(1, Math.min(40, n | 0)), c);
     };
     let dOX = 0, dOZ = 0;
@@ -215,6 +216,7 @@
         for (const [id, a, b] of MOBS[m.type].drops) { const n = a + Math.floor(m.rng() * (b - a + 1)); if (n > 0) X.addItem(m.x, m.y + .5, m.z, { id, n }); }
         X.debris(Math.floor(m.x), Math.floor(m.y), Math.floor(m.z), 0, 18, [.85, .85, .85]);
         if (m.type === 'zombie' && by === 'player') S.ents.hookUnlock?.('zombie');
+        X.hookKill?.(m, by);   // моды: событие mobKill
         removeMob(m);
       }
     };
@@ -469,10 +471,10 @@
         const t = v & 0xfff;
         if (t !== ID.furnace && t !== ID.furnace_lit) { X.furnaces.delete(k); continue; }
         const f = W.tile(x, y, z, () => ({ in: null, fuel: null, out: null, burn: 0, burnMax: 0, cook: 0 }));
-        const rec = f.in && Vx.smelting.get(f.in.id), outOk = rec && (!f.out || (f.out.id === rec.out && f.out.n < Vx.item(rec.out).stack));
+        const rec = f.in && Vx.smelting.get(f.in.id), rn = rec ? rec.n || 1 : 1, outOk = rec && (!f.out || (f.out.id === rec.out && f.out.n + rn <= Vx.item(rec.out).stack));
         if (f.burn > 0) f.burn -= dt;
         if (f.burn <= 0 && outOk && f.fuel && Vx.item(f.fuel.id)?.fuel) { f.burnMax = f.burn = Vx.item(f.fuel.id).fuel * (S.creative ? 1 : 1); f.fuel.n--; if (f.fuel.n <= 0) f.fuel = null; W.markTile(x, z); }
-        if (f.burn > 0 && outOk) { f.cook += dt; if (f.cook >= rec.time) { f.cook = 0; f.in.n--; if (f.in.n <= 0) f.in = null; if (f.out) f.out.n++; else f.out = { id: rec.out, n: 1 }; W.markTile(x, z); if (rec.out === 'iron_ingot') S.ents.hookUnlock?.('iron'); if (rec.out === 'meat_cooked' || rec.out === 'chicken_cooked') S.ents.hookUnlock?.('cook'); } }
+        if (f.burn > 0 && outOk) { f.cook += dt; if (f.cook >= rec.time) { f.cook = 0; f.in.n--; if (f.in.n <= 0) f.in = null; if (f.out) f.out.n += rn; else f.out = { id: rec.out, n: rn }; W.markTile(x, z); if (rec.out === 'iron_ingot') S.ents.hookUnlock?.('iron'); if (rec.out === 'meat_cooked' || rec.out === 'chicken_cooked') S.ents.hookUnlock?.('cook'); } }
         else f.cook = Math.max(0, f.cook - dt * 2);
         const lit = f.burn > 0;
         if (lit !== (t === ID.furnace_lit)) W.set(x, y, z, Vx.cell(lit ? ID.furnace_lit : ID.furnace, v >>> 12), { urgent: 1 });

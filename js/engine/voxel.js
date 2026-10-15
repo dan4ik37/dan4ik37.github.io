@@ -197,7 +197,7 @@
   V.TAGS = { planks: ['planks_oak', 'planks_birch', 'planks_spruce'], log: ['log_oak', 'log_birch', 'log_spruce'], coal: ['coal'] };
   V.recipes = []; V.smelting = new Map();
   V.addRecipe = r => { V.recipes.push(r); return r; };
-  V.addSmelt = (input, out, time = 6) => { V.smelting.set(input, { out, time }); };
+  V.addSmelt = (input, out, time = 6, n = 1) => { V.smelting.set(input, { out, time, n: Math.max(1, n | 0) }); };   // n — сколько выходит (рецепт мода)
   const R = r => V.addRecipe(r);
   R({ list: ['log_oak'], out: 'planks_oak', n: 4 }); R({ list: ['log_birch'], out: 'planks_birch', n: 4 }); R({ list: ['log_spruce'], out: 'planks_spruce', n: 4 });
   R({ pattern: ['#', '#'], key: { '#': '#planks' }, out: 'stick', n: 4 });
@@ -242,6 +242,7 @@
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push(grid[y * w + x] || null);
     const filled = cells.filter(Boolean);
     for (const r of V.recipes) {
+      if (r.table && w < 3) continue;   // только на верстаке (рецепт мода: station workbench / больше 4 предметов)
       if (r.list) {
         if (r.list.length !== filled.length) continue;
         const left = filled.slice();

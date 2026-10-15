@@ -268,7 +268,9 @@
     st.A.add('me', look, { x: P.x - st.ox, y: P.y, z: P.z - st.oz, yaw: 0 });
     // сущности и окна
     st.ents = window.KubomirEnts ? window.KubomirEnts.create(st) : null;
-    if (st.ents) { st.ents.hookHurt = n => hurt(st, n, 'mob'); st.ents.hookUnlock = id => unlock(id); st.ents.give = s => give(st, s); }
+    if (st.ents) { st.ents.hookHurt = n => hurt(st, n, 'mob'); st.ents.hookUnlock = id => unlock(id); st.ents.give = s => give(st, s);
+      st.ents.hookPickup = (id, n) => st.modRun?.event('pickup', { item: id, n });   // моды: подобрал вещь, победил моба
+      st.ents.hookKill = (m, by) => { if (by === 'player') st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); }; }
     if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
     // моды: события в песочнице
@@ -360,7 +362,7 @@
     const st = S; if (!st || !st.ready) return;
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
-    const m = metaSnap(st), meta = { player: m.player, time: m.time, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData };
+    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData };
     V.store.journal(st.meta.id, { recs, meta });
     saveAll(st).catch(() => {});
   }
@@ -410,6 +412,7 @@
       const prevNight = t0 > 19 || t0 < 5.5, nowDay = L._t >= 5.5 && L._t < 19;
       if (prevNight && nowDay && !st.creative && st.nightSeen) unlock('night');
       if (!nowDay) st.nightSeen = true;
+      if (L._t < t0) st.meta.day = (st.meta.day || 1) + 1;   // полночь — новый день (счётчик дней для модов: world.day())
       L.time = L._t;
     }
     if (now() - st.lastSave > 12000) saveAll(st).catch(() => {});
@@ -703,6 +706,8 @@
     // вещь мода «в воздух» (палочка, свиток) — тоже событие use
     if (!hit && s && st.modRun?.hasUse(s.id)) { st.modRun.event('use', { x: Math.floor(P.x), y: Math.floor(P.y + 1), z: Math.floor(P.z), block: '', item: s.id }); st.swing = 1; return; }
     if (it?.food && (P.food < 20 || st.creative)) { eat(st, it); return; }
+    // лечебная вещь мода (heal в mod.json)
+    if (it?.heal && P.hp < 20) { P.hp = Math.min(20, P.hp + it.heal); st.AU?.play('kb_eat', { vol: .5, rate: 1.3 }); if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } st.swing = 1; return; }
     if (!hit || !it?.place) return;
     if (placeBlock(st, hit, s, it)) { st.swing = 1; if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } }
   }
@@ -1036,7 +1041,7 @@
     const [cmd, ...a] = line.slice(1).split(/\s+/), P = st.P, V = VX();
     const cheat = st.creative || st.meta.cheats;
     switch (cmd) {
-      case 'help': log('Команды: /time day|night|<часы>, /gamemode survival|creative, /tp x y z, /seed, /give <вещь> [сколько], /spawn, /where' + (st.modRun?.commands().length ? ', моды: /' + st.modRun.commands().join(', /') : '')); return;
+      case 'help': log('Команды: /time day|night|<часы>, /gamemode survival|creative, /tp x y z, /seed, /give <вещь> [сколько], /spawn, /where'); for (const c of st.modRun?.commandInfo?.() || []) log(`🧩 /${c.name}${c.desc ? ' — ' + c.desc : ''} (${c.mod})`); return;
       case 'seed': log('🌱 Зерно мира: ' + st.meta.seed); return;
       case 'where': log(`📍 ${Math.floor(P.x)} ${Math.floor(P.y)} ${Math.floor(P.z)}`); return;
       case 'time': { if (!cheat) break; const h = a[0] === 'day' ? 8 : a[0] === 'night' ? 21 : a[0] === 'noon' ? 12 : +a[0]; if (Number.isFinite(h)) { st.R.lighting.time = ((h % 24) + 24) % 24; log('🕐 Время: ' + st.R.lighting.time + ' ч'); } return; }
@@ -1096,7 +1101,8 @@
       player: () => S?.P, give: s => give(S, s), hurt: n => hurt(S, n, 'mob'), heal: n => { if (S) S.P.hp = clamp(S.P.hp + n, 0, 20); },
       launch: (vx, vy, vz) => { if (!S) return; const P = S.P; P.vx += vx; P.vy = vy; P.vz += vz; P.onGround = false; P.fallTop = P.y; P.modFall = true; },
       teleport: (x, y, z) => { if (!S) return; Object.assign(S.P, { x, y, z, vx: 0, vy: 0, vz: 0, fallTop: y }); rebase(true); },
-      particles: (kind, x, y, z, n) => S?.ents?.particles?.(kind, x, y, z, n), sound: (n, x, y, z) => S?.AU?.play(n, { x: x - S.ox, y, z: z - S.oz }),
+      particles: (kind, x, y, z, n, color) => S?.ents?.particles?.(kind, x, y, z, n, color), sound: (n, x, y, z, vol) => S?.AU?.play(n, { x: x - S.ox, y, z: z - S.oz, vol: vol ?? 1 }),
+      text: (x, y, z, t) => log('✨ ' + t), shake: p => S?.rig?.shake?.(1 + p * 4, .25 + p * .4),
       spawn: (type, x, y, z) => { const M = window.KubomirEnts?.MOBS?.[type]; if (!S || !M || (S.meta.diff === 'peaceful' && !M.passive)) return; S.ents?.spawn?.(type, x, y, z); },
     };
   }

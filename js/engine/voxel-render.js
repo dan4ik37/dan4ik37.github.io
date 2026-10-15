@@ -159,19 +159,25 @@ float d37ao = 0.42 + 0.58 * vLit.z;
 reflectedLight.directDiffuse *= d37sk * d37ao;
 reflectedLight.indirectDiffuse *= max( d37sk, uMinAmb ) * d37ao;
 reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
+    // Вырезанное по альфе (листва, трава, цветы, факелы, стекло) — код травы E.FOLIAGE_A в альфе буфера сцены, пока включены AO или
+    // трассировка (d37Rt.y, gfx.js): затенение углов и контактные тени их не учитывают — иначе вокруг травинок тёмные пятна
+    const FOLIAGE = (E.FOLIAGE_A || (1 + 4 / 1024)).toFixed(8), RTU = E.GFXU?.rt || null;
     function patch(m, kind){
       m.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, U);
+        const fol = kind === 'cutout' && RTU;
+        if (fol) sh.uniforms.d37Rt = { value: RTU };
         // #include — только с новой строки (иначе шейдер не собирается)
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', '#include <common>\n' + VS_HEAD)
           .replace('#include <beginnormal_vertex>', VS_NORMAL)
           .replace('#include <begin_vertex>', VS_BEGIN);
         sh.fragmentShader = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\n' + FS_HEAD)
+          .replace('#include <common>', '#include <common>\n' + FS_HEAD + (fol ? '\nuniform vec4 d37Rt;' : ''))
           .replace('#include <map_fragment>', FS_MAP)
           .replace('#include <color_fragment>', FS_COLOR)
           .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT);
+        if (fol) sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', `#include <output_fragment>\nif ( d37Rt.y > 0.5 ) gl_FragColor.a = ${FOLIAGE};`);
       };
       m.customProgramCacheKey = () => 'd37vox-' + kind + (gl2 ? '2' : '1');
       return m;

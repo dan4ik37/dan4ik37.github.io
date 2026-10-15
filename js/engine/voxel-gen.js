@@ -304,7 +304,7 @@
       }
       // моды: россыпь на поверхности
       for (const f of G.features) {
-        if (f.type !== 'scatter' || !(f.block > 0)) continue;
+        if (f.type !== 'scatter' || f.under || !(f.block > 0)) continue;
         if (f.biomes && f.biomes.length && !f.biomes.includes(V.BIOME_IDS[b])) continue;
         if (f.on && f.on.length && !f.on.includes(topNow)) continue;
         if (ids[base | h] !== 0 || h >= H - 2) continue;
@@ -324,6 +324,21 @@
             if (o.replace && o.replace.length ? o.replace.includes(cur) : cur === ID.stone) ids[i] = o.b;
           }
           const d = Math.floor(hr() * 6); if (d === 0) x++; else if (d === 1) x--; else if (d === 2) z++; else if (d === 3) z--; else if (d === 4) y++; else y--;
+        }
+      }
+    }
+    // моды: россыпь в пещерах (worldgen scatter глубже поверхности) — на блоке из on, если над ним воздух
+    for (const f of G.features) {
+      if (f.type !== 'scatter' || !f.under || !(f.block > 0)) continue;
+      const y0 = Math.max(2, f.minY | 0), y1 = Math.min(H - 2, f.maxY | 0), salt = (G.seed + 700 + (f.block | 0)) | 0;
+      for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
+        if (f.biomes && f.biomes.length && !f.biomes.includes(V.BIOME_IDS[biome[x * 16 + z]])) continue;
+        const base = (x << 11) | (z << 7);
+        for (let y = y0; y <= y1; y++) {
+          if (ids[base | y] !== 0) continue;
+          const below = ids[base | (y - 1)];
+          if (!below || (f.on && f.on.length ? !f.on.includes(below) : below !== ID.stone)) continue;
+          if (V.hash(x0 + x, y, z0 + z, salt) / 4294967296 < f.chance) ids[base | y] = f.block;
         }
       }
     }

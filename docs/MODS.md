@@ -6,7 +6,7 @@
 | Игра | `game` в mod.json | Где код |
 |---|---|---|
 | «Подземье» — песочница сбоку (#/games/podzem) | `"tiles"` | js/games/podzem-mods.js |
-| кубический мир (воксели) | `"voxel"` | см. раздел «Воксели» ниже (заполняет агент кубической игры) |
+| «Кубомир» — кубический мир (#/games/kubomir) | `"voxel"` | js/engine/voxel-mods.js, js/games/kubomir-mods.js; особенности — раздел 7 |
 | обе | `"both"` | мод подходит обеим: каждая игра берёт то, что понимает |
 
 Общая часть (формат файла, поля mod.json, API скриптов версии 1, ограничения) — **одинаковая в обеих играх**: меняется
@@ -203,7 +203,298 @@ end)
 - Звуки для `fx.sound`: `coin pickup hit break click jump land buzz door_wood_open door_wood_close build_wood build_metal dig digstone place swing magic roar shoot splash squish craft levelup drink`.
 - Встроенные ключи блоков и предметов — `TILE_LIST` и `defItem` в js/games/podzem-core.js.
 
-## 7. Воксели (кубический мир, `game: "voxel"`)
+## 7. «Кубомир» (3D, `game: "voxel"`) — особенности
 
-Заполняет агент кубической игры: что игра берёт из общей части (стороны блока `faces`, размер текстуры, глубина в
-воксельном мире и т. п.). Общая часть выше — одна на обе игры; расширения — новыми полями, которые другая игра игнорирует.
+«Кубомир» (#/games/kubomir) — бесконечный мир из кубиков. Код: js/engine/voxel-mods.js (проверка mod.json, zip, реестр,
+песочница), js/games/kubomir-mods.js (окно «🧩 Моды»). Моды ставятся в меню миров → «🧩 Моды» (файл `.d37mod`, `.zip`,
+`mod.json`, папка или перетаскиванием) и включаются для мира при создании или в игре: меню → «🧩 Моды мира» → «🔄 Применить».
+Мод `"both"` ставится в каждую игру отдельно. Примеры в игре — «📦 Примеры» (кнопка «📤» скачивает файл мода);
+«Светящиеся рубины» из mods/podzem (`both`) работают и здесь. Моды мира попадают в файл мира (`📤 Сохранить файл мира`).
+
+### Как общие поля переводятся в кубический мир
+
+| Поле | В «Кубомире» |
+|---|---|
+| `hardness` | секунды ломания рукой = hardness × 0,015 (камень 100 → 1,5 с, обсидиан 260 → 3,9 с); `-1` — не ломается |
+| `tier` | какая кирка нужна: 0 — любая (или рука), 1 — деревянная, 2 — каменная, 3 — железная, 4 и 5 — алмазная |
+| `tool` | `pick`, `axe`, `any` (рукой); `hammer` = кирка; своё: `shovel`, `sword` |
+| `light` | свет белый: яркость 0…15 = самый яркий канал цвета («#ff4060» → 15, «#901028» → 8); можно и числом 0…15 |
+| `transparent`, `solid`, `falls`, `climbable` | как в общей части (несплошной куб — сквозь него проходят) |
+| `stack` | до 64 |
+| `tool` предмета | скорость = `power` / 10 (медная кирка «Подземья» 35 → 3,5, каменная здесь — 4), `tier` 1…4, своё: `durability` (по умолчанию 60 / 130 / 250 / 1000 по tier), `damage` |
+| `weapon` | меч: урон = damage × 20 / 45 (зомби «Подземья» — 45, здесь — 20); своё: `durability` |
+| `heal` | здоровье здесь 20 (10 сердечек): лечит heal / 5 (50 → 10), предмет тратится |
+| `use: true` | правая кнопка с предметом в руке — событие `use` своему моду (и в воздух, и по блоку) |
+| рецепты | `ingredients` раскладываются в сетку (до 9 штук); `station` `workbench` / `anvil` или больше 4 предметов — только на верстаке, `furnace` — печь (на входе один предмет, `count` — сколько выйдет) |
+| `worldgen` | глубина — от уровня моря (y = 52), 1 м = 1 блок; до 44 м — метр в метр, глубже мир кончается — сжато ко дну (y 8 → 2: руда «глубже 75 м» будет у самого дна); `rarity` × 8 = жил на чанк 16×16; `in` / `on` — блоки кубического мира; `scatter` с `minDepth` больше 2 — в пещерах (на блоке из `on`, если над ним воздух), иначе — на поверхности |
+
+Ключи «Подземья», которых здесь нет, заменяются похожими (`wood` → доски, в рецептах — любые доски `#planks`; `gel` → слизь;
+`workbench` → верстак; `deepstone` → камень; `bar_iron` / `bar_gold` → слитки; `rope` → лестница), остальные — пропускаются с
+предупреждением (рецепт на `bar_silver` просто не появится). Генерация модов появляется и в уже открытых местах мира: мир
+хранит только правки игрока, остальное каждый раз строится по зерну.
+
+### Свои поля кубического мира (2D-игра их пропускает)
+
+- блок: `faces` — текстуры граней `{ "top", "side", "bottom", "front" }` (`texture` — для 2D и запасная); `shape` — `cube`,
+  `cross` (растение крестом), `torch`, `ladder`, `cactus`, `chest`; `sound` — `stone wood dirt grass sand gravel snow glass metal wool`;
+  `bounce` — подбрасывает (скорость до 30, батут игры — 15), `hurt` — урон в секунду при касании, `slip` — скользкость (лёд 0,9),
+  `replaceable` — ставится поверх, `axis` — поворачивается как бревно, `tint` — цвет биома (`grass`, `foliage`, `birch`,
+  `spruce`; текстура — серая), `ui` — `craft` (верстак) / `chest` (сундук), `fuel` — секунд в печи, `lightBlock` — гасит свет (0…15);
+- предмет: `food` — `{ "hunger": 4, "saturation": 2.4 }`, `fuel`;
+- рецепт: `pattern` + `key` — по форме, как на верстаке (`["RRR", " | ", " | "]`, пробел — пусто), `mirror: false` — без зеркала.
+  Для мода `"both"` пиши и `ingredients` — их возьмёт 2D-игра;
+- `features[]` — генерация по высоте y и биомам: `ore` (`minY`, `maxY`, `size`, `perChunk`, `replace`), `scatter` (`on`,
+  `chance`), `boulder` (`radius`, `radiusVar`), `column` (`min`, `max`, `top`), `tree` (`log`, `leaves`, `min`, `max`, `radius`);
+  везде `biomes` (`ocean beach plains forest birch desert snow mountains swamp river`) и `perChunk` (можно дробное);
+- текстура `{ "draw": { "k": … } }` — рисунки движка напрямую: `noise ore planks log log_top leaves grass_side bricks glass stripes checker dots
+  stick tool ingot gem lump food feather plant torch ladder door lamp cobble`; узоры общего формата переводятся в них сами.
+
+### Скрипты в 3D
+
+API — тот же, версии 1 (`mod`, `world`, `fx`, `npc`, `commands`, `player`, `game`, `print`), но координаты — **x, y, z**:
+`world.get(x, y, z)`, `world.set(x, y, z, "блок")`, `world.liquid(x, y, z)`, `fx.particles(x, y, z, вид, сколько, "#цвет")`,
+`fx.text(x, y, z, текст)`, `game.spawn(моб, x, y, z)`. Вызов как в 2D (без z: `fx.particles(x, y, "spark", 16)`) тоже работает —
+на глубине игрока. `world.time()` — 0…1, `world.view()` → `{ x0, y0, z0, w, h, d }`. Окно мира — 17×17×17 вокруг места
+события, 25×17×25 вокруг игрока (`tick`, команды). Стен (фона) нет: `world.wall` → `null`, `world.setWall` ничего не делает.
+Проводника нет: `npc.say` — строка в чат, `npc.addLine` принимается, `talk` не приходит.
+
+- События: `start`, `tileBreak` и `tilePlace` (`x, y, z, tile`), `use` (`item, x, y, z, tile` — блок под прицелом или `""`),
+  `tick` (дважды в секунду, `dt` = 0,5), `mobKill` (`mob, x, y, z`), `pickup` (`item, n`). Свои: `stepOn` — игрок встал на блок
+  или зашёл в него (`x, y, z, tile`; нужно указать блок: `mod.on("stepOn", "spring", f)`; не чаще раза в 0,3 с), `chat` — сообщение
+  в чат (`text`). У события есть и `e.player`.
+- `mod.on(событие, "на что", функция)` — с фильтром по блоку или предмету (своё — коротко, «spring»; игры — как есть); с фильтром
+  `use` срабатывает и на блоках («правая кнопка по моему блоку»). В `e.tile` и `e.item` имена полные (`rubies:ruby_ore`).
+- Свои объекты: `mod.storage.get / set / remove` — память мода в мире (до 64 КБ, сохраняется с миром), `mod.wait(сек)` (в Lua —
+  `task.wait`), `mod.command(имя, f)` = `commands.add`; `world.read(x, y, z)` — блок где угодно в загруженном мире (с ожиданием;
+  в Lua ждёт само), `world.hours()` — часы 0…24; `player.z`, `.food`, `.name`, `.mode` (`survival` / `creative`), `.item` (что в руке),
+  `.sneaking`; `player.hurt(n)`, `player.launch(vx, vy, vz)` (до 30; после толчка — приземление без урона), `player.teleport(x, y, z)`
+  (до 128 блоков, только в загруженный мир).
+- Звуки `fx.sound` — общий список (заменяются похожими) и звуки игры `kb_bounce kb_pop kb_place kb_eat kb_moo kb_oink kb_cluck kb_groan kb_squish`.
+  Мобы `game.spawn` — `cow pig chicken zombie slime` (`blueslime`, `purpleslime` → `slime`; в «Мирно» враги не появятся).
+- Ограничения — как в общей части: 400 действий за событие и 600 в секунду; `world.set` — до 64 блоков от игрока, не трогает и не
+  ставит сундуки, печи, верстаки и двери; `player.give` — свои предметы и простые: земля, камень, булыжник, песок, стекло, факел,
+  лестница, палка, слизь, доски, брёвна (и ключи «Подземья» `wood`, `gel`, `rope`, `platform`); `player.heal` — до 10 (здоровье 20) и
+  не чаще раза в 0,5 с; `player.message` — 2 в секунду. Ещё: ошибка при запуске (опечатка в коде) — мод выключается сразу, с
+  файлом и строкой; обработчик дольше 0,25 с пять раз — тоже. Журнал каждого мода — в игре: меню → «🧩 Моды мира».
+
+Проверка без браузера: `node scripts/voxel-test.cjs` (часть «моды»: формат, zip, реестр, генерация, песочница JS и Lua, лимиты).
+
+### Примеры для «Кубомира»
+
+### Новая руда и инструмент — «Рубины» (JavaScript)
+
+Руда глубоко под землёй (worldgen), рубин в печи, кирка (быстрее алмазной) и меч, блок из рубинов; скрипт — искры и счётчик находок в `mod.storage`, команда `/rubies`. `pattern` — рецепт по форме для верстака «Кубомира»; `ingredients` — тот же рецепт в общем формате (без `pattern` «Кубомир» разложит его сам; для мода `"both"` их читает и 2D-игра).
+
+`mod.json`:
+
+```json
+{
+  "id": "rubies",
+  "name": "Рубины",
+  "version": "1.0.0",
+  "game": "voxel",
+  "api": 1,
+  "author": "Денчик37",
+  "description": "Рубиновая руда глубоко под землёй, рубиновая кирка и меч, блок из рубинов. Найденные рубины считает команда /rubies.",
+  "textures": {
+    "ruby_ore": { "draw": { "pattern": "ore", "base": "#7d7d80", "color2": "#e0115f", "color3": "#ff8fb5" } },
+    "ruby": { "draw": { "pattern": "gem", "base": "#e0115f" } },
+    "ruby_block": { "draw": { "pattern": "crystal", "base": "#c8104f", "color2": "#ff5c95" } },
+    "ruby_pick": { "draw": { "pattern": "pick", "base": "#e0115f" } },
+    "ruby_sword": { "draw": { "pattern": "sword", "base": "#e0115f" } }
+  },
+  "blocks": [
+    { "id": "ruby_ore", "name": "Рубиновая руда", "texture": "ruby_ore", "hardness": 200, "tier": 3, "drop": "ruby" },
+    {
+      "id": "ruby_block",
+      "name": "Рубиновый блок",
+      "texture": "ruby_block",
+      "hardness": 330,
+      "tier": 2,
+      "light": "#401020",
+      "sound": "metal"
+    }
+  ],
+  "items": [
+    { "id": "ruby", "name": "Рубин", "texture": "ruby" },
+    {
+      "id": "ruby_pick",
+      "name": "Рубиновая кирка",
+      "texture": "ruby_pick",
+      "tool": { "type": "pickaxe", "power": 100, "tier": 4, "speed": 0.2, "durability": 900 }
+    },
+    {
+      "id": "ruby_sword",
+      "name": "Рубиновый меч",
+      "texture": "ruby_sword",
+      "weapon": { "damage": 18, "speed": 0.25, "reach": 2.8 }
+    }
+  ],
+  "recipes": [
+    {
+      "result": "ruby_pick",
+      "ingredients": [["ruby", 3], ["stick", 2]],
+      "station": "workbench",
+      "pattern": ["RRR", " | ", " | "],
+      "key": { "R": "ruby", "|": "stick" }
+    },
+    {
+      "result": "ruby_sword",
+      "ingredients": [["ruby", 2], ["stick", 1]],
+      "station": "workbench",
+      "pattern": ["R", "R", "|"],
+      "key": { "R": "ruby", "|": "stick" }
+    },
+    { "result": "ruby_block", "ingredients": [["ruby", 9]], "station": "workbench" },
+    { "result": "ruby", "count": 9, "ingredients": [["ruby_block", 1]] },
+    { "result": "ruby", "ingredients": [["ruby_ore", 1]], "station": "furnace" }
+  ],
+  "worldgen": [{ "type": "ore", "block": "ruby_ore", "minDepth": 22, "maxDepth": 60, "size": 4, "rarity": 0.2, "in": ["stone"] }],
+  "scripts": [{ "lang": "js", "file": "rubies.js" }]
+}
+```
+
+`rubies.js`:
+
+```js
+// Нашёл рубин — искры, звон и счётчик находок (он хранится в мире)
+mod.on('tileBreak', e => {
+  if (e.tile !== 'rubies:ruby_ore') return;
+  fx.particles(e.x + 0.5, e.y + 0.5, e.z + 0.5, 'magic', 16, '#ff4080');
+  fx.sound('coin');
+  const n = (mod.storage.get('found') || 0) + 1;
+  mod.storage.set('found', n);
+  if (n === 1) player.message('💎 Первый рубин! Три рубина и две палки — кирка, которая копает быстрее алмазной.');
+});
+
+// Команда /rubies — сколько рубинов найдено в этом мире
+commands.add('rubies', 'сколько рубинов найдено', args => {
+  player.message('Найдено рубинов: ' + (mod.storage.get('found') || 0));
+});
+```
+
+### Блок, который подбрасывает, — «Батут» (Lua)
+
+Проще всего — без скрипта: у блока `"bounce": 15`. Скрипт — если нужно своё: искры, звук, «присел — не прыгает», своя сила. `faces` — верх пружинный, бока деревянные.
+
+`mod.json`:
+
+```json
+{
+  "id": "trampoline",
+  "name": "Батут",
+  "version": "1.0.0",
+  "game": "voxel",
+  "api": 1,
+  "author": "Денчик37",
+  "description": "Пружинный блок: встань на него — подбросит высоко вверх. Присядь (C), чтобы не прыгать. Скрипт на Lua.",
+  "textures": { "spring": { "draw": { "pattern": "strata", "base": "#ff7a1f", "color2": "#ffd84a" } } },
+  "blocks": [
+    {
+      "id": "spring",
+      "name": "Пружинный блок",
+      "texture": "spring",
+      "faces": { "top": "spring", "side": "planks_oak", "bottom": "planks_oak" },
+      "hardness": 40,
+      "tool": "axe",
+      "sound": "wool"
+    }
+  ],
+  "recipes": [
+    {
+      "result": "spring",
+      "count": 2,
+      "ingredients": [["slime_ball", 3], ["wood", 3]],
+      "station": "workbench",
+      "pattern": ["SSS", "PPP"],
+      "key": { "S": "slime_ball", "P": "#planks" }
+    }
+  ],
+  "scripts": [{ "lang": "lua", "file": "spring.lua" }]
+}
+```
+
+`spring.lua`:
+
+```lua
+-- Встал на пружину — подбросить вверх (присел — не подбрасывает)
+mod.on("stepOn", "spring", function(e)
+  if player.sneaking then return end
+  player.launch(0, 17, 0)
+  fx.particles(e.x + 0.5, e.y + 1, e.z + 0.5, "spark", 10)
+  fx.sound("jump")
+end)
+```
+
+### Своя фича биома — «Кристальные шипы» (только данные)
+
+В горах и снегах — кристальные столбы и россыпь кристаллов (`features` по биомам), в пустыне — кристальные валуны, в пещерах — кристаллы (`worldgen` scatter глубже поверхности). Кристаллы светятся (`light`).
+
+`mod.json`:
+
+```json
+{
+  "id": "crystals",
+  "name": "Кристальные шипы",
+  "version": "1.0.0",
+  "game": "voxel",
+  "api": 1,
+  "author": "Денчик37",
+  "description": "В горах и снегах растут светящиеся кристаллы и кристальные столбы, в пустыне лежат кристальные валуны, в пещерах — кристаллы. Только данные — без скриптов.",
+  "textures": {
+    "crystal": { "draw": { "pattern": "gem", "base": "#7fd8ff" } },
+    "crystal_block": { "draw": { "pattern": "crystal", "base": "#4fa8d8", "color2": "#e8fbff" } }
+  },
+  "blocks": [
+    {
+      "id": "crystal_block",
+      "name": "Кристальный блок",
+      "texture": "crystal_block",
+      "hardness": 80,
+      "tier": 1,
+      "light": "#4f7f8f",
+      "sound": "glass"
+    },
+    {
+      "id": "crystal",
+      "name": "Кристалл",
+      "shape": "cross",
+      "texture": "crystal",
+      "hardness": 20,
+      "tool": "any",
+      "solid": false,
+      "light": "#80b0c0",
+      "sound": "glass"
+    }
+  ],
+  "recipes": [{ "result": "crystal_block", "ingredients": [["crystal", 4]], "pattern": ["CC", "CC"], "key": { "C": "crystal" } }],
+  "worldgen": [{ "type": "scatter", "block": "crystal", "minDepth": 10, "maxDepth": 45, "chance": 0.02, "on": ["stone"] }],
+  "features": [
+    {
+      "type": "column",
+      "block": "crystal_block",
+      "top": "crystal",
+      "biomes": ["snow", "mountains"],
+      "perChunk": 0.6,
+      "min": 2,
+      "max": 5
+    },
+    {
+      "type": "scatter",
+      "block": "crystal",
+      "on": ["stone", "snow", "snow_grass", "grass"],
+      "biomes": ["snow", "mountains"],
+      "chance": 0.006
+    },
+    {
+      "type": "boulder",
+      "block": "crystal_block",
+      "biomes": ["desert"],
+      "perChunk": 0.15,
+      "radius": 1,
+      "radiusVar": 1
+    }
+  ]
+}
+```
+

@@ -34,7 +34,7 @@
   const P = {};
   P.noise = (d, s, nm) => fillNoise(d, hx(s.c), s.a ?? .12, nm);
   P.ore = (d, s, nm, name) => {
-    paintInto(d, s.base || 'stone', name);
+    if (typeof s.base === 'string' && s.base[0] === '#') fillNoise(d, hx(s.base), .14, nm); else paintInto(d, s.base || 'stone', name);   // основа: цвет (моды) или текстура
     const c = hx(s.c), dk = shade(c, .7), r = nm.r, n = s.n ?? 5;
     for (let k = 0; k < n; k++) {
       const cx = 2 + Math.floor(r() * 12), cy = 2 + Math.floor(r() * 12), sz = 1 + Math.floor(r() * 3);
@@ -273,6 +273,7 @@
   function paintInto(d, name, owner){
     const spec = S[name] || V.tex[V.texIdx?.get(name)]?.spec || { k: 'noise', c: '#808080' };
     const nm = noiseMap(hs(name));
+    if (spec.rgba && spec.rgba.length === N * N * 4) { d.set(spec.rgba); return; }   // картинка мода
     for (let i = 0; i < N * N * 4; i += 4) d[i + 3] = 255;
     (P[spec.k] || P.noise)(d, spec, nm, owner || name);
   }

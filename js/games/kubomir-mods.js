@@ -28,7 +28,6 @@
     if (MJ == null) throw new Error('в моде нет mod.json (он должен лежать в корне архива или папки)');
     const M = VX().mods, r = M.validate(text(MJ), files);
     if (!r.ok) { const e = new Error(r.errors.slice(0, 8).join('\n')); e.list = r.errors; throw e; }
-    if (r.m.game === 'tiles') throw new Error('Этот мод — для 2D-песочницы (game: "tiles"), а не для «Кубомира».');
     const manifest = JSON.parse(text(MJ).replace(/^[^{]*/, ''));
     // храним только то, что нужно моду: картинки текстур и файлы скриптов
     const keep = {};
@@ -150,7 +149,6 @@
       if (!rec) { missing.push(id); continue; }
       const r = M.validate(rec.manifest, rec.files || {});
       if (!r.ok) { failed.push({ id, name: rec.manifest?.name || id, why: r.errors[0] }); continue; }
-      if (r.m.game === 'tiles') { failed.push({ id, name: r.m.name, why: 'мод для 2D-песочницы' }); continue; }
       try { const rgba = await decodeTextures(r.m, rec.files || {}); M.register(r.m, rgba, { recipes: false }); loaded.push({ m: r.m, rec }); }
       catch (e) { failed.push({ id, name: r.m.name, why: e.message || String(e) }); }
     }
@@ -178,7 +176,7 @@
       <input type="file" class="kb-mfile" accept=".d37mod,.zip,.json,application/zip,application/json" hidden><input type="file" class="kb-mdir" webkitdirectory multiple hidden>
       <div class="kb-mres" aria-live="polite"></div>
       <div class="kb-mods kb-mylist"></div>
-      <h3 class="kb-mh">📦 Примеры</h3><p class="kb-note">Готовые моды — поставь и посмотри, как они сделаны («📤» — скачать файл и открыть mod.json и скрипты). Как сделать свой — инструкция для авторов модов (docs/MODS.md).</p>
+      <h3 class="kb-mh">📦 Примеры</h3><p class="kb-note">Готовые моды — поставь и посмотри, как они сделаны («📤» — скачать файл и открыть mod.json и скрипты). Как сделать свой — <a href="https://github.com/dan4ik37/dan4ik37.github.io/blob/main/docs/MODS.md#7-кубомир-3d-game-voxel--особенности" target="_blank" rel="noopener">инструкция для авторов модов</a> (формат общий с «Подземьем»).</p>
       <div class="kb-mods kb-exlist"></div>
       <div class="kb-mods"><div class="kb-mod off"><div><b>🌐 Каталог модов</b><small>Скоро: моды других игроков после проверки модератором. Пока делись файлом .d37mod.</small></div><button type="button" class="kb-btn" disabled>Скоро</button></div></div></div>`;
     const res = sc.querySelector('.kb-mres');
@@ -190,7 +188,7 @@
       for (const rec of lib) {
         const r = M.validate(rec.manifest, rec.files || {}), m = r.m || { name: rec.id, blocks: [], items: [], recipes: [], scripts: [], features: [], textures: {} };
         const card = document.createElement('div'); card.className = 'kb-mod' + (r.ok ? '' : ' off');
-        card.innerHTML = `<div><b>${esc(m.name)} <small>${esc(m.version || '')}${m.author ? ' · ' + esc(m.author) : ''}</small></b>
+        card.innerHTML = `<div><b>${esc(m.name)} <small>${esc(m.version || '')}${m.author ? ' · ' + esc(m.author) : ''}${m.game === 'both' ? ' · для обеих игр' : ''}</small></b>
           <small>${esc(m.description || '')}</small>
           <div class="kb-modtex"></div>
           <small>🧱 ${m.blocks.length} · 🎒 ${m.items.length} · 📜 ${m.recipes.length}${m.features.length ? ' · 🌍 ' + m.features.length : ''}${m.scripts.length ? ' · ⚙️ ' + m.scripts.map(s => s.lang === 'lua' ? 'Lua' : 'JS').join(', ') : ''} · ${Math.max(1, Math.round((rec.size || 0) / 1024))} КБ</small>
