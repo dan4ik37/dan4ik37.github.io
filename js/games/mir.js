@@ -1419,11 +1419,11 @@
     const c = /^[a-z0-9]{4,12}$/.test(param || '') ? param : null;
     st.playing = { g, c, tb: o.tb || null, t: Date.now() };
     playPause(true);
-    retrack(); phoneAct(g, param);
+    retrack();   // друзьям «играет в …» (телефон 📱) сообщает само окно — mir-play.js phoneAct
     MP.open(g, param || null, {
       wrap: st.wrap, auto: o.auto || null,
       where: o.tb ? '🌍 Мир Денчика · за столом' : '🌍 Мир Денчика',
-      onRoute: (g2, p2) => { if (S === st && st.playing) { st.playing.g = g2; st.playing.c = /^[a-z0-9]{4,12}$/.test(p2 || '') ? p2 : null; retrack(); phoneAct(g2, p2); } },
+      onRoute: (g2, p2) => { if (S === st && st.playing) { st.playing.g = g2; st.playing.c = /^[a-z0-9]{4,12}$/.test(p2 || '') ? p2 : null; retrack(); } },
       onClose: why => { if (S === st) playClosed(why); },
       onFail: () => { if (S === st && !st.leavingTo) { st.leavingTo = `#/games/${g}${param ? '/' + param : ''}`; location.hash = st.leavingTo; } },
     });
@@ -1450,7 +1450,6 @@
   function playClosed(why){
     const st = S; if (!st?.playing) return;
     st.playing = null;
-    phoneAct(null);
     if (why === 'unmount') return;   // мир и так закрывается
     playPause(false);
     if (st.mySeat?.tb) {   // встаёшь у стола: за своим стулом, лицом к столу (P.on('stand') → leaveSeat → retrack)
@@ -1461,14 +1460,6 @@
       if (p) { st.P.place(p.x, p.y, p.z, p.yaw); st.forceSend = true; }
     } else retrack();
     if (why === 'editor') openEditor();
-  }
-  // Телефон 📱 (phone.js): друзьям — «играет в <игра>» и куда прийти (j: games/<игра>/<код> или …/coop/<код>); null — сброс
-  function phoneAct(g, param){
-    try {
-      if (!g) { window.D37Phone?.setActivity?.(null); return; }
-      const j = /^(?:coop\/)?[a-z0-9]{4,12}$/.test(param || '') ? `games/${g}/${param}` : '';
-      window.D37Phone?.setActivity?.({ g, j });
-    } catch (e) {}
   }
   // Место «рядом со столом»: за стулом (d назад от сиденья), занято (стойка, стена, другой стол) — наискосок, вбок, ближе.
   // Опора — не выше сиденья (не на стойку и не на крышу кафе); над опорой — место во весь рост. Нет места — null.

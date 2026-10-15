@@ -21,7 +21,8 @@
 // D37AdPlaces.ctx('playing'); после партии gamesAdAfterRound (games.js) кладёт рекламу / «☕ Перерыв» в полоску итога
 // (MirPlay.adStage), а не под мир — показ только между партиями. Телефон 📱 (js/features/phone.js): кнопка в шапке окна, его
 // слой выше; открыт — Esc его (наш Esc молчит); клавиша P во время партии — игре (mir.js: hotkey мира выключен, пока играешь);
-// друзьям — «играет в …» (mir.js phoneAct → D37Phone.setActivity). Тесты: node scripts/mirplay-test.cjs.
+// друзьям — «играет в …» и куда прийти (phoneAct → D37Phone.setActivity, после каждого mount; закрыли — null).
+// Тесты: node scripts/mirplay-test.cjs.
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const NO = new Set(['world', 'studio', 'studio3d', 'unity', 'wardrobe']);   // поверх мира не открываются
@@ -42,6 +43,8 @@
   const toast = t => { try { if (typeof gameToast === 'function') gameToast(t); } catch (e) {} };
   const muted = () => { try { return localStorage.getItem('d37_games_mute') === '1'; } catch (e) { return false; } };
   const adCtx = on => { try { root.D37AdPlaces?.ctx?.('playing', on); } catch (e) {} };   // «идёт партия» — без «☕ Перерыва»
+  // телефон 📱: друзья видят «играет в …» и «📍 К другу» ведёт в эту комнату (phone.js)
+  const phoneAct = s => { try { root.D37Phone?.setActivity?.(s ? { g: s.g, j: s.param ? `games/${s.g}/${s.param}` : '' } : null); } catch (e) {} };
   const typing = t => !!t?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
 
   // '#/games/chess/abc' → { g: 'chess', param: 'abc' }; не страница игры (витрина, другой раздел) — null
@@ -192,6 +195,7 @@ body:not(.high) .mp-panel{animation:none}
     stopEnd(s);
     unmountGame(s);
     adCtx(false);
+    phoneAct(null);
     root.removeEventListener?.('popstate', onPop, true);
     root.removeEventListener?.('keydown', onKey, true);
     root.removeEventListener?.('d37:settings', onSettings);
@@ -221,6 +225,7 @@ body:not(.high) .mp-panel{animation:none}
       s.mounted = s.g;
       impl.mount(s.box, api(s, gen));
       s.phase = 'playing';
+      phoneAct(s);
       return true;
     } catch (err) {
       console.error(err);
