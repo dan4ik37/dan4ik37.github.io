@@ -217,11 +217,13 @@
   async function tgPopup(o, mode, opts = {}) {
     if (!root.Telegram?.Login?.auth) { loadTg().catch(() => {}); note(mode, 'Секунду — Telegram ещё загружается. Нажми кнопку ещё раз.'); return; }
     setPending({ p: 'tg', m: mode, uid: opts.uid || null, then: opts.then || null });
-    root.Telegram.Login.auth({ bot_id: o.id, request_access: false, lang: 'ru' }, user => { if (!user) { clearPending(); return; } tgDone(user); });
+    // ответ приходит из окошка Telegram (виджет сверяет, что сообщение — от этого окошка)
+    root.Telegram.Login.auth({ bot_id: o.id, request_access: false, lang: 'ru' }, user => { if (!user) { clearPending(); return; } tgDone(user, true); });
   }
-  async function tgDone(user) {
+  async function tgDone(user, fromPopup) {
     const pend = getPending() || { p: 'tg', m: 'login' };
     if (pend.m === 'link') {
+      if (!fromPopup) { clearPending(); return; }
       const r = await postJson('/api/oauth?a=tglink', { user }, await accessToken());
       clearPending();
       if (r?.ok) { toast('✅ Telegram привязан — теперь можно входить и через него'); renderMethods(); return; }
@@ -298,7 +300,13 @@
     if (e.auth) return finishHandoff(e.auth);
     if (e.err) return showErr(e.err, e.p, getPending()?.m);
     if (e.link) { clearPending(); toast(`✅ ${NAME[e.link] || 'Вход'} привязан — теперь можно входить и через него`); return go('#/profile/logins'); }
-    if (e.tg) { const pend = getPending(); if (pend?.p === 'tg') return tgDone(e.tg); return; }   // чужая ссылка с данными Telegram — не наша
+    // Telegram вернул данные в адресе (окошко не открылось): только если вход начинали здесь и сейчас — и никогда для ПРИВЯЗКИ
+    // (иначе чужая ссылка с его Telegram привязала бы его к твоему аккаунту); привязка — только из окошка Telegram
+    if (e.tg) {
+      const pend = getPending();
+      if (pend?.p === 'tg' && pend.m !== 'link' && +e.tg.auth_date * 1000 >= (+pend.at || 0) - 60e3) return tgDone(e.tg);
+      return;
+    }
     if (e.sb) { const pend = getPending(); if (pend) showErr(sbCode(e.sb, pend.m), pend.p, pend.m); }
   }
   // Встроенный вход (Google, Discord…) вернул сессию → новый аккаунт? привязка? «это ты»?
