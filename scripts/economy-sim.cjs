@@ -260,7 +260,7 @@ function report(){
   lines.push('', '**Бесплатный VIP за уровень — когда** (до → после):', '');
   for (const { P, a, b } of res) {
     lines.push(`- ${P.name}: было — ${a.vip.map(v => `ур. ${v.lv}: ${vipName(v)} через ${fmtDays(v.day)}`).join('; ') || 'нет'}; ` +
-      `стало — ${b.vip.map(v => `ур. ${v.lv}: ${vipName(v)} через ${fmtDays(v.day)}`).join('; ') || 'нет'}.`);
+      `стало — ${b.vip.map(v => `ур. ${v.lv}: ${vipName(v)} через ${fmtDays(v.day)}`).join('; ') || 'нет'}`.replace(/\.?$/, '.'));
   }
   const typ = res.find(r => r.P.id === 'casual'), act = res.find(r => r.P.id === 'active');
   lines.push('', '**Сколько дней копить монеты** (Обычный / Активный; было → стало):', '');
