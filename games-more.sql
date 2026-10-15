@@ -8,7 +8,7 @@
 --  «Косынка» (kosynka, kosynka3, kosynka_duel), «Паук» (pauk1, pauk2, pauk4), «Свободная ячейка» (freecell, freecell_duel),
 --  «Сапёр» (miner1, miner2, miner3, miner_duel), «Маджонг Коннект» (mahjong, mahjong_duel),
 --  «Судоку» (sudoku1..4, sudoku_daily, sudoku_duel) + рекорды дня daily_top(),
---  «Крокодил» (krokodil — 10 рисунков бота, krokodil_online — компанией).
+--  «Крокодил» (krokodil — 10 рисунков бота, krokodil_online — компанией), «Балда» (balda_easy / _normal / _hard, balda_online).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
@@ -63,6 +63,7 @@ returns int language sql immutable as $$
     when p_game = 'sudoku_duel' then 2500
     when p_game = 'krokodil' then 3000
     when p_game = 'krokodil_online' then 25000
+    when p_game in ('balda_easy', 'balda_normal', 'balda_hard', 'balda_online') then 400
     else null end;
 $$;
 
@@ -103,6 +104,7 @@ returns int language sql immutable as $$
     when 'mahjong' then 4 when 'mahjong_duel' then 5
     when 'sudoku1' then 1 when 'sudoku2' then 4 when 'sudoku3' then 8 when 'sudoku4' then 12 when 'sudoku_daily' then 12 when 'sudoku_duel' then 5
     when 'krokodil' then 3 when 'krokodil_online' then 6
+    when 'balda_easy' then 1 when 'balda_normal' then 3 when 'balda_hard' then 6 when 'balda_online' then 5
     else 0 end;
 $$;
 
