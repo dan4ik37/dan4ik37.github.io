@@ -163,7 +163,7 @@
   // ═══ Цветокоррекция (последний проход post.js): экспозиция, контраст, насыщенность, температура, оттенок, виньетка ═══
   E.GRADES = {
     neutral: { name: 'Обычный', exposure: 0, contrast: 0, saturation: 1, temp: 0, tint: 0, vignette: .14 },
-    vivid: { name: 'Яркий', exposure: .03, contrast: .1, saturation: 1.2, temp: .04, tint: 0, vignette: .16 },
+    vivid: { name: 'Яркий', exposure: .02, contrast: .08, saturation: 1.12, temp: .03, tint: 0, vignette: .16 },
     warm: { name: 'Тёплый', exposure: 0, contrast: .06, saturation: 1.06, temp: .3, tint: .03, vignette: .22 },
     cold: { name: 'Холодный', exposure: 0, contrast: .05, saturation: .92, temp: -.3, tint: -.02, vignette: .22 },
     cinema: { name: 'Кино', exposure: -.04, contrast: .2, saturation: .88, temp: .06, tint: 0, vignette: .38 },
@@ -322,45 +322,46 @@
 	vec3 d37Fc = fogColor;
 	if ( d37FogA.w > 0.0 || d37FogB.a > 0.0 ) {
 		vec3 d37Rel = vec3( dot( viewMatrix[ 0 ].xyz, vD37Fog ), dot( viewMatrix[ 1 ].xyz, vD37Fog ), dot( viewMatrix[ 2 ].xyz, vD37Fog ) );
-		float d37Len = length( d37Rel );
-		vec3 d37Dir = d37Rel / max( d37Len, 1e-4 );
 		if ( d37FogA.w > 0.0 ) {
-			vec2 d37H = d37Dir.xz / max( length( d37Dir.xz ), 1e-4 ), d37S = d37FogA.xz / max( length( d37FogA.xz ), 1e-4 );
-			float d37Az = max( dot( d37H, d37S ), 0.0 );
+			float d37Az = max( dot( d37Rel.xz, d37FogA.xz ) * inversesqrt( max( dot( d37Rel.xz, d37Rel.xz ), 1e-6 ) ), 0.0 );
 			d37Fc = mix( fogColor, d37FogB.rgb, d37FogA.w * d37Az * d37Az * d37Az );
 		}
 		if ( d37FogB.a > 0.0 ) {
-			float d37B = max( d37FogC.y, 1e-3 ), d37Cy = cameraPosition.y - d37FogC.x, d37Dy = d37Rel.y * d37B;
+			float d37Dy = d37Rel.y * d37FogC.y;
 			float d37G = abs( d37Dy ) < 1e-3 ? 1.0 - 0.5 * d37Dy : ( 1.0 - exp( - d37Dy ) ) / d37Dy;
-			float d37Am = d37FogB.a * exp( - d37B * max( d37Cy, -20.0 ) ) * d37Len * d37G;
-			fogFactor = max( fogFactor, 1.0 - exp( - max( d37Am, 0.0 ) ) );
+			fogFactor = max( fogFactor, 1.0 - exp( - max( d37FogC.z * length( d37Rel ) * d37G, 0.0 ) ) );
 		}
 	}
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );
 #endif`;
   // мягкие тени: выборки по спирали Фогеля (+ поворот шумом), PCSS-lite — полутень шире, чем дальше заслонка
+  // спираль Фогеля без синусов на каждую выборку: поворот на «золотой угол» — умножением на постоянную матрицу
   const SH_FN = `uniform vec4 d37Sh;
 	float d37Ign( vec2 p ) { return fract( 52.9829189 * fract( dot( p, vec2( 0.06711056, 0.00583715 ) ) ) ); }
-	vec2 d37Vogel( int i, float n, float rot ) { float r = sqrt( ( float( i ) + 0.5 ) / n ); float a = float( i ) * 2.39996323 + rot; return vec2( cos( a ), sin( a ) ) * r; }
 	float d37Pcf( sampler2D map, vec2 size, float radius, vec3 c ) {
 		vec2 texel = 1.0 / size;
 		float n = d37Sh.x > 0.5 ? d37Sh.x : 12.0;
 		float rot = d37Sh.w > 0.5 ? d37Ign( gl_FragCoord.xy ) * 6.2831853 : 0.0;
 		float rad = max( radius, 1.0 );
+		mat2 ga = mat2( -0.7373688, 0.6754904, -0.6754904, -0.7373688 );
+		vec2 d0 = vec2( cos( rot ), sin( rot ) ), d = d0;
 		if ( d37Sh.y > 0.5 ) {
 			float sum = 0.0, cnt = 0.0, sr = rad * 4.0;
 			for ( int i = 0; i < 16; i ++ ) {
 				if ( float( i ) >= d37Sh.y ) break;
-				float z = unpackRGBAToDepth( texture2D( map, c.xy + d37Vogel( i, d37Sh.y, rot ) * sr * texel ) );
+				float z = unpackRGBAToDepth( texture2D( map, c.xy + d * sqrt( ( float( i ) + 0.5 ) / d37Sh.y ) * sr * texel ) );
 				if ( z < c.z ) { sum += z; cnt += 1.0; }
+				d = ga * d;
 			}
 			if ( cnt < 0.5 ) return 1.0;
 			rad = clamp( ( c.z - sum / cnt ) * d37Sh.z, 1.0, rad * 4.0 );
+			d = d0;
 		}
 		float s = 0.0;
 		for ( int i = 0; i < 32; i ++ ) {
 			if ( float( i ) >= n ) break;
-			s += texture2DCompare( map, c.xy + d37Vogel( i, n, rot ) * rad * texel, c.z );
+			s += texture2DCompare( map, c.xy + d * sqrt( ( float( i ) + 0.5 ) / n ) * rad * texel, c.z );
+			d = ga * d;
 		}
 		return s / n;
 	}
@@ -473,7 +474,7 @@ void main(){
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { let h = 0; for (const [a, b, p, k] of waves) h += Math.sin((a * x + b * y) / n * PI * 2 + p) * k / Math.hypot(a, b); H[y * n + x] = h * .5; }
       return H;
     }, 2.2);
-    const m = new T.MeshStandardMaterial({ color: c, roughness: .1, metalness: 0, transparent: true, opacity: .9, normalMap: nm, envMapIntensity: .85 });
+    const m = new T.MeshStandardMaterial({ color: c, roughness: .08, metalness: 0, transparent: true, opacity: .9, normalMap: nm, envMapIntensity: 1.1 });
     m.normalScale = new T.Vector2(.5, .5);
     m.userData.tile = 4 * (E.UNIT || 1); m.userData.noCast = true; m.userData.noAO = true; m.userData.water = true;
     const dep = opts.depth || null;
@@ -512,12 +513,12 @@ uniform sampler2D tDep;
   vec2 duv = ( vD37W.xz - uDepR.xy ) / uDepR.zw;
   if ( uWQ > 0.5 && duv.x > 0.0 && duv.y > 0.0 && duv.x < 1.0 && duv.y < 1.0 ) wDepth = max( vD37W.y - texture2D( tDep, duv ).r, 0.0 );
 #endif
-  float wk = 1.0 - exp( - wDepth * mix( 1.4, 0.18, uClear ) );
-  diffuseColor.rgb = mix( diffuse * vec3( 1.1, 1.25, 1.15 ) + 0.03, diffuse * vec3( 0.22, 0.36, 0.5 ), wk );
-  diffuseColor.a = mix( mix( 0.3, 0.08, uClear ), mix( 0.97, 0.86, uClear ), wk );
-  if ( uWQ > 0.5 && wDepth < 1.0 ) {
+  float wk = 1.0 - exp( - wDepth * mix( 1.4, 0.18, uClear ) ), wa = 1.0 - exp( - wDepth * mix( 2.6, 0.45, uClear ) );
+  diffuseColor.rgb = mix( diffuse * vec3( 0.55, 0.7, 0.7 ) + 0.01, diffuse * vec3( 0.025, 0.06, 0.1 ), wk );
+  diffuseColor.a = mix( mix( 0.35, 0.1, uClear ), mix( 0.97, 0.88, uClear ), wa );
+  if ( uWQ > 0.5 && wDepth < 0.6 ) {
     float fn = texture2D( normalMap, vD37W.xz * 0.21 - uTime * vec2( 0.03, 0.02 ) ).x;
-    float foam = uFoam * ( 1.0 - smoothstep( 0.0, 0.35 + 0.25 * fn, wDepth ) ) * smoothstep( 0.35, 0.6, fn + 0.25 * ( 1.0 - wDepth / 0.6 ) );
+    float foam = uFoam * 0.85 * ( 1.0 - smoothstep( 0.0, 0.16 + 0.14 * fn, wDepth ) ) * smoothstep( 0.4, 0.65, fn + 0.3 * ( 1.0 - wDepth / 0.3 ) );
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.95 ), foam );
     diffuseColor.a = max( diffuseColor.a, foam * 0.9 );
   }`)

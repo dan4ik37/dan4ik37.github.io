@@ -190,7 +190,7 @@ void main(){
     // fsr — FSR 1 вместо простого растяжения, когда кадр меньше холста (динамическое разрешение или режим FSR в render.js)
     const P = { ok: true, on: true, hdr: half, msaa: 0, fxaa: true, fsr: gl2, scaled: false, w: 1, h: 1, ow: 1, oh: 1, pr: 1, passes: 0,
       aa: q === 'high' ? 'msaa' : 'fxaa', canAO: gl2 && half,
-      ao: { mode: 'off', on: false, radius: 1.5 * (E.UNIT || 1), bias: .02, strength: 1.1, aw: 1, ah: 1 },
+      ao: { mode: 'off', on: false, radius: .95 * (E.UNIT || 1), bias: .02, strength: 1, aw: 1, ah: 1 },
       bloom: { on: o.bloom !== false && half, strength: q === 'high' ? 1 : .9, levels: q === 'high' ? 5 : 4 } };
     const sceneOpt = { type, depthBuffer: true, stencilBuffer: false };
     // буфер сцены: с MSAA или без, с текстурой глубины (для SSAO) или без — пересоздаётся, когда это меняется
