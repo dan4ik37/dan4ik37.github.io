@@ -13,27 +13,12 @@
 - Коммитить и пушить в `main` можно без отдельного вопроса — так договорились, это и есть выкладка.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
-1. `premium.sql` (15.10.2026) — 💎 кристаллы: premium_wallet, premium_ledger, premium_orders, premium_payments, premium_settings;
-   premium_state / premium_spend / premium_set_mode / premium_order_status, для сервера premium_order_create / premium_credit /
-   premium_refund, админ premium_admin_*. Переопределяет credit_donation (5 аргументов, из server-hardening.sql) и
-   apply_unmatched_donation (vip-claims.sql) — режим «донат → кристаллы» (по умолчанию донат даёт VIP, как раньше).
-   Проверка: `/rpc/premium_state` гостем {} → {"ok":false,"reason":"auth",…} (PGRST202 = не применён). До запуска магазин
-   #/shop — витрина и «скоро», донат даёт VIP как раньше, заказы картой не создаются. Перезапустил server-hardening.sql или
-   vip-claims.sql → перезапустить premium.sql. Тест PGlite: 127 + 14 сквозных (api/pay.js на настоящем premium.sql).
-2. `coins.sql` — ЗАПУСТИТЬ ЕЩЁ РАЗ (15.10.2026): части тела (формы ps*, цвета pc*), пакеты skin:pack:* (Силач 250, Робот 700,
-   Рыцарь 900), стиль лица, перчатки; char_save — 46 слотов (часть пакета — по купленному пакету); вещи только за 💎 (coin_gems_item:
-   корона, крылья, след из кристаллов — надеваются, если куплены в магазине; за монеты не продаются). Проверка: `/rpc/coin_price`
-   {"p_item":"skin:pack:robot"} → 700 (null = старая версия). До запуска новые части не купить, бесплатные новые части и купленное
-   за 💎 надеты только в этом браузере (другие видят образ из базы без них). С premium.sql — в любом порядке.
-3. `community.sql` (15.10.2026) — чат «как Дискорд» и сообщества: каналы общего чата (игры, поиск-тиммейтов, мемы, голосовой),
-   ответы, правка, жалобы, мут, медленный режим; сообщества (каналы, роли, приглашения /c/<код>, модерация), блокировка игроков,
-   голосовые каналы (пропуска cv_pass/cv_check), «кто где» у друзей (comm_ping / friends_online). Проверка: `/rpc/cm_invite_info`
-   гостем {"p_code":"x"} → null и `/rpc/chat_info` гостем {} → JSON с "channels" (PGRST202 = не применён);
-   `/rest/v1/messages?select=channel,reply_to,edited_at&limit=0` → 200 (400 «does not exist» = не применён). До запуска: в чате
-   только #общий (остальные каналы «скоро»), сообщества и голосовые каналы — «появятся, когда сайт обновится», /c/<код> —
-   «сообщества скоро появятся», блокировка — только в браузере; звонки 1 на 1 и «компания», «🌍 Весь мир», «кто где» у профилей
-   «видят все» работают и без него. Тест PGlite: 239 проверок (scratchpad pg/test-community.mjs).
-Порядок запуска: premium.sql, coins.sql, community.sql — в любом порядке (друг от друга не зависят).
+Сейчас — НИЧЕГО (проверено с сервера 15.10.2026, после «сделал»).
+premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
+premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
+cm_invite_info → null, chat_info → каналы general/games/lfg/memes/voice, messages.channel/reply_to/edited_at → 200).
+Если перезапускать server-hardening.sql или vip-claims.sql — после них снова premium.sql (он переопределяет credit_donation и
+apply_unmatched_donation).
 Применены (проверено с сервера 15.10.2026, самые свежие версии): world.sql (`/rpc/world_check` гостем {"p_pass":"x","p_pub":"y"}
 → null), coins.sql (`/rpc/coin_price` {"p_item":"skin:hair:afro"} → 150), ugc.sql (`/rpc/ugc_play` {"p_id":"x"} → not_found,
 `/rpc/ugc_model_save` гостем {"p_id":"abcdef","p_name":"x","p_tris":1,"p_bytes":1} → reason auth), unity.sql (`/rpc/unity_play`
