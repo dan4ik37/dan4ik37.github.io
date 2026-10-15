@@ -12,6 +12,8 @@
 //   feed    — карточка «Реклама» в длинных списках: витрина игр, видео, каталоги «Студии игр» и Unity (только проверенные)
 //   rail    — компьютер от 1400 px: один липкий столбик справа от игры, только если там правда пусто
 // Щиты в «Мире Денчика» — не реклама сетей (её нельзя рисовать в 3D): свои промо и спонсор — js/games/mir-promo.js.
+// Прямая реклама (кабинет рекламодателя #/adv, ads.sql) — js/core/ad-direct.js: подошла своя кампания — она раньше сети
+// (show → direct), не нашлось — как раньше. Места считаются «есть» (hasId) и без номера блока, если такие кампании работают.
 // Отладка (запоминается в браузере): ?adsdebug=1 — все места рамками с подписью вместо рекламы (запросов в сети нет),
 // 2 — то же без лимитов частоты (для скриншотов), 3 — настоящая реклама, но обведена; ?adsdebug=0 — выключить.
 (() => {
@@ -122,12 +124,14 @@
     const A = window.ADS_IDS || {}, Y = A.yandex || {}, Gg = A.google || {}, b = base(key);
     return { ya: Y[key] || Y[b] || Y[YA_FB[b]] || '', g: Gg[key] || Gg[b] || Gg[G_FB[b]] || '' };
   }
-  function hasId(key){
+  function hasNet(key){
     const i = ids(key), b = base(key);
     if (b === 'interstitial') return !!i.ya || !!(window.ADS_IDS && window.ADS_IDS.h5games);
     if (b === 'floor') return !!i.ya;
     return !!(i.ya || i.g);
   }
+  // Место «есть»: блок сети или работающая кампания из кабинета рекламодателя (прямая реклама, js/core/ad-direct.js)
+  function hasId(key){ return hasNet(key) || !!window.D37AdDirect?.has?.(key); }
   const net = key => { const i = ids(key); return i.ya ? 'ya' : i.g ? 'g' : ''; };
 
   // Почему нельзя показать сейчас ('' — можно). o.ignoreId — без проверки номера блока (отладка рисует рамку), o.ugc — чужое
@@ -168,16 +172,40 @@
     if (!el) return false;
     const r = o.checked ? '' : why(key, { ignoreId: true, ugc: o.ugc });
     if (r) { log(key, r); return false; }
+    if (direct(el, key, o)) { mark(key); return true; }   // прямая реклама (кабинет рекламодателя) — раньше сети
     if (dbg.frames) { placeholder(el, key); mark(key); return true; }
-    if (!hasId(key)) { log(key, 'id'); return false; }
+    if (!hasNet(key)) { log(key, 'id'); return false; }
+    const ok = netShow(el, key, o);
+    if (ok) mark(key);
+    return ok;
+  }
+  // Реклама сети в el (показ засчитывает вызывающий)
+  function netShow(el, key, o){
     const empty = o.onEmpty && (() => { if (el.dataset.adEmpty) return; el.dataset.adEmpty = '1'; log(key, 'unfilled'); o.onEmpty(el); });
     const ok = !!window.D37Ads?.render(el, key, { checked: true, onEmpty: empty, format: FORMAT[base(key)] });
-    if (ok) {
-      mark(key);
-      // блокировщик рекламы или сеть молчит: через 8 с пустое место с подписью «Реклама» — убрать (или своя подсказка)
-      if (empty) setTimeout(() => { if (el.isConnected && !filled(el)) empty(); }, 8000);
-    }
+    // блокировщик рекламы или сеть молчит: через 8 с пустое место с подписью «Реклама» — убрать (или своя подсказка)
+    if (ok && empty) setTimeout(() => { if (el.isConnected && !filled(el)) empty(); }, 8000);
     return ok;
+  }
+  // ── Прямая реклама (кабинет рекламодателя #/adv: ads.sql, js/core/ad-direct.js) ──
+  // Есть работающая кампания этого формата → место её: сервер выберет по таргетингу; не нашлось — как раньше
+  // (сеть, рамка отладки, своя подсказка или пусто). Проверки «можно ли» (VIP, «рядом нельзя», частота) — уже пройдены.
+  function direct(el, key, o = {}){
+    const D = window.D37AdDirect;
+    if (!D?.wants?.(key, o)) return false;
+    const box = () => el.closest?.('#gamesAd');
+    D.fill(el, key, {
+      onShown: () => { const b = box(); if (b) b.dataset.net = 'dir'; log(key, 'direct'); },
+      fallback: () => {
+        if (!el.isConnected) return;
+        const b = box(); if (b) b.dataset.net = netOf(key);
+        if (dbg.frames) { placeholder(el, key); return; }
+        if (hasNet(key) && netShow(el, key, o)) return;
+        log(key, 'id');
+        if (o.onEmpty) o.onEmpty(el); else { el.innerHTML = ''; el.hidden = true; }
+      },
+    });
+    return true;
   }
   // Сеть что-то нарисовала: у РСЯ — содержимое в контейнере, у Google — ins с data-ad-status="filled"
   function filled(el){
@@ -250,7 +278,7 @@
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
   // Обновить рекламу в том же месте можно только у Яндекса (не чаще раза в 30 с — у нас 90); Google — только по просьбе человека
   // (рамки отладки — как Яндекс; ?adsdebug=2 — и без 90 с)
-  const refreshOk = box => !box.dataset.net || (/^(ya|dbg)$/.test(box.dataset.net) && (dbg.nocaps || now() - (+box.dataset.at || 0) >= (rule('game_over').refresh || 90) * 1e3));
+  const refreshOk = box => !box.dataset.net || (/^(ya|dbg|dir)$/.test(box.dataset.net) && (dbg.nocaps || now() - (+box.dataset.at || 0) >= (rule('game_over').refresh || 90) * 1e3));   // dir — прямая реклама
   const netOf = key => dbg.frames ? 'dbg' : net(key);
   function afterRound(stage){
     if (!stage || stage.hidden) return false;
@@ -656,7 +684,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 
   window.D37AdPlaces = {
     RULES, why, mark, show, ids, hasId, net, loading, afterRound, interRound, feed, coinOffer, worldPromo, sponsor, fillAll, noAdsPerk,
-    placeholder, gambling, railTick,
+    placeholder, gambling, railTick, direct, hasNet,
     ctx(name, on){ if (on) ctxOn.add(name); else ctxOn.delete(name); if (on && name !== 'playing') { railOff(); } },
     debug: () => dbg.on, frames: () => dbg.frames,
     state: () => ({ visit: JSON.parse(JSON.stringify(st())), vip: noAdsPerk(), ugc: ugcRoute(), playing: G.playing, ctx: [...ctxOn], rail: RAIL.el ? RAIL.w : 0, log: dbg.log.slice(-30) }),

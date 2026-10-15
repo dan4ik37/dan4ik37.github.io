@@ -77,10 +77,11 @@ ${script ? `<script>${script}</script>` : ''}
 <script>document.addEventListener('click',function(e){var d=document.querySelector('details.mmenu[open]');if(d&&!d.contains(e.target))d.open=false});</script>
 <script src="/js/core/ads-core.js"></script>
 <script src="/js/core/ad-places.js"></script>
+<script src="/js/core/ad-direct.js"></script>
 <script src="/js/core/surprise.js" defer></script>
 <script src="/js/core/live-badge.js" defer></script>
 <script src="/js/features/secrets.js" defer></script>
-<script>${noAds ? 'window.D37AdPlaces&&D37AdPlaces.ctx("gambling",true);' : ''}window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
+<script>${noAds ? 'window.D37AdPlaces&&D37AdPlaces.ctx("gambling",true);' : ''}(function(f){window.D37AdDirect?D37AdDirect.ready(f):f()})(function(){window.D37Ads&&D37Ads.fillAll()});setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>
 </html>`;
 }

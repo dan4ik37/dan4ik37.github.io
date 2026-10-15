@@ -7,6 +7,9 @@
 // «Реклама», рекламодатель и erid). Спонсор занимает щит у площади, остальные щиты меняют промо раз в 20 с.
 // Дёшево: одна текстура на щит, перерисовка только при смене промо, за кадр — ничего. Нажал на щит или [E] рядом —
 // окошко мира с описанием и кнопкой (сразу никуда не уводим — чтобы не уйти из мира случайно). VIP — без спонсора.
+// Прямая реклама (кабинет рекламодателя #/adv, js/core/ad-direct.js): одобренная кампания «щит» занимает место спонсора
+// (картинка рекламодателя в ту же текстуру + наша строка «Реклама · кто · erid»), показ засчитывается, когда щит в кадре
+// секунду, переход — /go/<id>. Нет такой кампании — спонсор из site_config, как раньше.
 (() => {
   const PI = Math.PI, ROTATE = 20000;
   // Где стоят (единицы мира): на краю площади — видно с точки появления; запад площади; улица с домиками.
@@ -42,7 +45,7 @@
     if (!vip) out.push({ id: 'vip', ic: '✨', t: 'VIP на сайте', d: 'Цветной ник, стикеры и сайт без рекламы', href: '/vip', c: ['#713f12', '#ca8a04'] });
     out.push({ id: 'horde', ic: '🧟', t: 'Орда', d: 'Выживи 10 минут против орды монстров', go: '#/games/horde', c: ['#3b0764', '#7c3aed'] });
     out.push({ id: 'studio', ic: '🧱', t: 'Студия 3D', d: 'Построй свой мир со скриптами — как в Roblox', go: '#/games/studio3d', c: ['#78350f', '#f59e0b'] });
-    const ad = sp && !vip ? { id: 'sponsor', sponsor: sp, ic: '', t: sp.title, d: sp.text, href: sp.url, c: [sp.bg, sp.bg], fg: sp.fg } : null;
+    const ad = sp && !vip ? { id: sp.direct ? 'direct:' + sp.direct.t : 'sponsor', sponsor: sp, ic: '', t: sp.title, d: sp.text, href: sp.url, c: [sp.bg, sp.bg], fg: sp.fg, img: sp.img || null } : null;
     return { ad, list: out };
   }
   const markText = sp => ['Реклама', sp.advertiser, sp.erid ? 'erid: ' + sp.erid : ''].filter(Boolean).join(' · ');
@@ -70,6 +73,20 @@
     const p = b.cur, g = b.ctx, W = b.cv.width, H = b.cv.height, k = W / 1024;
     if (!p || !g) return;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H);
+    // Прямая реклама (кабинет рекламодателя): картинка рекламодателя на весь щит + наша пометка «Реклама · кто · erid» снизу
+    if (p.img) {
+      g.drawImage(p.img, 0, 0, W, H);
+      g.fillStyle = 'rgba(0,0,0,.62)'; g.fillRect(0, H - 50 * k, W, 50 * k);
+      g.fillStyle = '#fff'; g.textAlign = 'left'; g.textBaseline = 'middle';
+      fitFont(g, markText(p.sponsor), 700, 26 * k, W - 60 * k, 14 * k);
+      g.fillText(markText(p.sponsor), 30 * k, H - 25 * k);
+      g.font = `800 ${24 * k}px Montserrat, Arial, sans-serif`; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+      g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(W - 190 * k, 18 * k, 172 * k, 40 * k);
+      g.fillStyle = '#fff'; g.fillText('РЕКЛАМА', W - 32 * k, 47 * k);
+      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 8 * k; g.strokeRect(4 * k, 4 * k, W - 8 * k, H - 8 * k);
+      if (b.tex) b.tex.needsUpdate = true;
+      return;
+    }
     const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, p.c[0]); gr.addColorStop(1, p.c[1]);
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
     g.globalAlpha = .1; g.fillStyle = '#fff'; g.beginPath(); g.arc(W * .88, H * .05, H * .6, 0, 7); g.fill(); g.globalAlpha = 1;
@@ -133,12 +150,41 @@
     }
     fill();
     st.timer = setInterval(() => { st.tick++; fill(); }, ROTATE);
-    // спонсор — из site_config (кэш 10 мин в ad-places.js); пришёл — первый щит его
-    window.D37AdPlaces?.sponsor?.().then(sp => {
-      if (st.dead || !sp) return;
-      st.sponsor = sp; fill();
-      try { window.va?.('event', { name: 'sponsor_view', data: { t: sp.title } }); } catch (e) {}
-    });
+    // Спонсор первого щита: одобренная кампания «щит» из кабинета рекламодателя (js/core/ad-direct.js; новая выдача раз
+    // в 10 минут), нет её — спонсор из site_config (кэш 10 мин в ad-places.js). Текстура — та же одна на щит
+    function sponsorPick(){
+      if (st.dead) return;
+      Promise.resolve(window.D37AdDirect?.billboard?.()).catch(() => null).then(dp => {
+        if (st.dead) return;
+        if (dp) { st.sponsor = dp; st.visT = 0; fill(); return; }
+        if (st.sponsor?.direct) { st.sponsor = null; fill(); }
+        window.D37AdPlaces?.sponsor?.().then(sp => {
+          if (st.dead || !sp || st.sponsor?.direct) return;
+          const was = st.sponsor; st.sponsor = sp; fill();
+          if (!was) try { window.va?.('event', { name: 'sponsor_view', data: { t: sp.title } }); } catch (e) {}
+        });
+      });
+    }
+    sponsorPick();
+    st.spTimer = setInterval(sponsorPick, 10 * 60e3);
+    // Показ прямой рекламы на щите засчитывается, когда щит в кадре лицом к камере, ближе 40 ед. — не меньше секунды
+    // (как «видно ≥ 50 % секунду» у баннеров); поверх мира открыта партия / редактор — не считается
+    const vC = new T.Vector3(), vP = new T.Vector3();
+    st.visT = 0;
+    st.visTimer = setInterval(() => {
+      const sp = st.sponsor, b = st.boards[0], cam = R.camera;
+      if (st.dead || !sp?.direct || !b || b.cur?.sponsor !== sp || st.seenTok === sp.direct.t || !cam) { st.visT = 0; return; }
+      vC.set(b.sp.x, LIFT + b.sp.h / 2, b.sp.z);
+      const dx = cam.position.x - vC.x, dz = cam.position.z - vC.z, dist = Math.hypot(dx, cam.position.y - vC.y, dz);
+      const facing = Math.sin(b.g.rotation.y) * dx + Math.cos(b.g.rotation.y) * dz > 0;
+      vP.copy(vC).project(cam);
+      const inView = vP.z < 1 && Math.abs(vP.x) < 0.9 && Math.abs(vP.y) < 0.9;
+      const busy = S.stopped || S.editing || window.MirPlay?.isOpen?.() || (typeof document !== 'undefined' && document.visibilityState === 'hidden');
+      if (facing && inView && dist < 40 && !busy) {
+        st.visT += 300;
+        if (st.visT >= 1000) { st.seenTok = sp.direct.t; window.D37AdDirect?.seen?.(sp.direct); }
+      } else st.visT = 0;
+    }, 300);
     // нажатие по щиту (короткий тап/клик по миру — mir.js)
     const ray = new T.Raycaster(), v2 = new T.Vector2();
     function tap(cx, cy){
@@ -157,17 +203,20 @@
       if (!p || st.dead) return;
       if (p.act === 'stage') { S.openStage?.(); return; }
       if (p.act === 'look') { S.openEditor?.(); return; }
-      const ext = p.sponsor && /^https:/.test(p.href);
+      const ext = p.sponsor && (/^https:/.test(p.href) || !!p.sponsor.direct);   // прямая реклама — переход /go/<id> (считает клик)
       const btn = p.go ? `<button type="button" class="ct-start" data-act="go:${esc(p.go)}">▶ Открыть</button>`
         : `<a class="ct-start" href="${esc(p.href)}"${ext ? ' target="_blank" rel="sponsored noopener"' : ''}>${ext ? 'Перейти на сайт ↗' : 'Открыть →'}</a>`;
-      const body = `<p>${esc(p.d || '')}</p>${p.sponsor ? `<p class="wld-ad-mark">${esc(markText(p.sponsor))}</p>` : ''}<div class="wld-acts">${btn}</div>`;
+      const dir = p.sponsor?.direct;
+      const body = `<p>${esc(p.d || '')}</p>${p.sponsor ? `<p class="wld-ad-mark">${esc(markText(p.sponsor))}${dir && p.sponsor.inn ? ` · ИНН/БИН ${esc(p.sponsor.inn)}` : ''}</p>` : ''}` +
+        `<div class="wld-acts">${btn}${dir ? '<button type="button" class="wld-ad-about">ⓘ О рекламе</button>' : ''}</div>`;
       if (typeof ctx.panel === 'function') ctx.panel(`<span class="wld-pe">${p.ic || '📣'}</span><b>${esc(p.t)}</b>`, body);
       else if (p.go) location.hash = p.go;
+      if (dir) document.querySelector('.wld-panel .wld-ad-about')?.addEventListener('click', e => { e.preventDefault(); window.D37AdDirect?.about?.(dir, null); });
       if (p.sponsor) try { window.va?.('event', { name: 'sponsor_open', data: { t: p.t } }); } catch (e) {}
     }
     function dispose(){
       if (st.dead) return;
-      st.dead = true; clearInterval(st.timer);
+      st.dead = true; clearInterval(st.timer); clearInterval(st.spTimer); clearInterval(st.visTimer);
       for (const b of st.boards) {
         try { X?.remove?.(b.item); } catch (e) {}
         b.g.parent?.remove(b.g);
