@@ -151,6 +151,10 @@
       "destination": "/api/pages?page=ugc&id=:id"
     },
     {
+      "source": "/c/:code",
+      "destination": "/api/pages?page=invite&code=:code"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },
