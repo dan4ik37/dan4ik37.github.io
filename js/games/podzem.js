@@ -575,6 +575,10 @@
     m.hp = 0;
     for (const [id, a, b, ch] of m.D.drop || []) if (rand() < ch) dropItem(id, a + Math.floor(rand() * (b - a + 1)), m.x + m.w / 2, m.y + m.h / 2);
     burst(m.x + m.w / 2, m.y + m.h / 2, m.D.boss ? 60 : 14, m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0x8a2a2a, m.D.boss ? 12 : 6, .8, .2);
+    // «пуф»: облачко дыма вверх и искры (у босса — крупнее)
+    const big = m.D.boss ? 3 : 1;
+    for (let k = 0; k < 9 * big; k++) part(m.x + m.w / 2 + (rand() - .5) * m.w * .8, m.y + m.h * (.3 + rand() * .6), (rand() - .5) * 2.4, -1.2 - rand() * 1.6, .55 + rand() * .5, (.22 + rand() * .2) * (big > 1 ? 1.6 : 1), rand() < .5 ? 0x8a8a92 : 0xb4b4bc, -.25);
+    for (let k = 0; k < 5 * big; k++) part(m.x + m.w / 2, m.y + m.h / 2, (rand() - .5) * 9, -3 - rand() * 4, .4 + rand() * .3, .1, 0xffe9a0, 1.2, 1);
     G.modsEmit?.('mobKill', { mob: m.type, x: m.x + m.w / 2, y: m.y + m.h / 2 });
     if (m.D.boss) bossDown(m);
   }
