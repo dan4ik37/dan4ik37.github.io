@@ -290,5 +290,8 @@
     return d;
   };
   V.PAINTERS = Object.keys(P);
-  V.paintAll = () => V.tex.map(t => V.paint(t.name, t.spec || S[t.name]));
+  // пакет текстур игрока (перенос из Minecraft — kubomir-mc.js): имя текстуры → { rgba } поверх своего рисунка; пусто — как было
+  V.texOverride = V.texOverride || new Map();
+  V.specOf = name => V.texOverride.get(name) || V.tex[V.texIdx.get(name)]?.spec || S[name];
+  V.paintAll = () => V.tex.map(t => V.paint(t.name, V.texOverride.get(t.name) || t.spec || S[t.name]));
 })();

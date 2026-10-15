@@ -75,7 +75,7 @@
     async putChunks(id, recs){
       if (!recs.length) return;
       const d = await open();
-      const empty = r => r.e && r.e.length === 0 && !(r.t && r.t.length);
+      const empty = r => r.e && r.e.length === 0 && !(r.t && r.t.length) && !(r.b && r.b.length);   // b — «основа» чанка (мир из Minecraft)
       if (!d) { for (const r of recs) { if (empty(r)) mem.chunks.delete(ckey(id, r.cx, r.cz)); else mem.chunks.set(ckey(id, r.cx, r.cz), r); } return; }
       const tx = d.transaction('chunks', 'readwrite'), s = tx.objectStore('chunks');
       for (const r of recs) { if (empty(r)) s.delete(ckey(id, r.cx, r.cz)); else s.put(r, ckey(id, r.cx, r.cz)); }
@@ -106,7 +106,7 @@
     async exportWorld(id){
       const w = await S.world(id); if (!w) return null;
       const d = await open(), chunks = [];
-      const push = r => chunks.push({ cx: r.cx, cz: r.cz, e: S.b64(new Uint8Array(r.e.buffer, r.e.byteOffset, r.e.byteLength)), t: r.t || [] });
+      const push = r => chunks.push(Object.assign({ cx: r.cx, cz: r.cz, e: S.b64(new Uint8Array(r.e.buffer, r.e.byteOffset, r.e.byteLength)), t: r.t || [] }, r.b && r.b.length ? { b: S.b64(new Uint8Array(r.b.buffer, r.b.byteOffset, r.b.byteLength)) } : {}));
       if (!d) { for (const [k, r] of mem.chunks) if (k.startsWith(id + '|')) push(r); }
       else { const all = await reqP(d.transaction('chunks').objectStore('chunks').getAll(IDBKeyRange.bound(id + '|', id + '|￿'))); all.forEach(push); }
       return { format: 'kubomir', v: 1, exported: Date.now(), world: w, chunks };
@@ -128,7 +128,10 @@
         let okc = true;
         for (let i = 0; i < e.length; i++) if ((e[i] >>> 16) >= V.CELLS) { okc = false; break; }
         if (!okc) continue;
-        recs.push({ cx: c.cx, cz: c.cz, e, t: Array.isArray(c.t) ? c.t.slice(0, 4096) : [] });
+        const rec = { cx: c.cx, cz: c.cz, e, t: Array.isArray(c.t) ? c.t.slice(0, 4096) : [] };
+        // «основа» чанка (мир из Minecraft): повторы (сколько, значение) — сумма ровно V.CELLS
+        if (typeof c.b === 'string') { const ub = S.unb64(c.b); if (ub.length % 2 === 0) { const b = new Uint16Array(ub.buffer.slice(0), 0, ub.length / 2); let n = 0; for (let i = 0; i < b.length; i += 2) n += b[i]; if (n === V.CELLS) rec.b = b; } }
+        recs.push(rec);
       }
       await S.putWorld(w);
       for (let i = 0; i < recs.length; i += 500) await S.putChunks(newId, recs.slice(i, i + 500));

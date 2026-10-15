@@ -20,7 +20,7 @@
   const iconCache = new Map(), tileCache = new Map();
   function tileCanvas(layer){
     if (tileCache.has(layer)) return tileCache.get(layer);
-    const t = V.tex[layer], d = V.paint(t.name, t.spec || V.TEX_SPECS[t.name]);
+    const t = V.tex[layer], d = V.paint(t.name, V.specOf ? V.specOf(t.name) : t.spec || V.TEX_SPECS[t.name]);
     const c = document.createElement('canvas'); c.width = c.height = 16;
     const g = c.getContext('2d'), im = g.createImageData(16, 16); im.data.set(d); g.putImageData(im, 0, 0);
     tileCache.set(layer, c);

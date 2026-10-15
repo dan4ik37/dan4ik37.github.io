@@ -85,6 +85,7 @@
       { b: ID.gravel, minY: 5, maxY: 90, size: 14, n: 4 }, { b: ID.dirt, minY: 20, maxY: 100, size: 14, n: 4 },
     ];
     for (const f of G.features) if (f.type === 'ore' && f.block > 0) G.ores.push({ b: f.block, minY: f.minY ?? 5, maxY: f.maxY ?? 64, size: f.size ?? 6, n: f.perChunk ?? 2, replace: f.replace, biomes: f.biomes, mod: true });   // руды модов — после ванили (ваниль не меняется)
+    G.void = G.features.some(f => f && f.type === 'void');   // мир без земли — весь из сохранения (перенос из Minecraft)
     return G;
   };
 
@@ -344,6 +345,7 @@
     }
     // деревья, кактусы, озёра — из своего чанка и соседей
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const f of originsOf(G, cx + dx, cz + dz)) placeFeature(G, ids, x0, z0, f);
+    if (G.void) ids.fill(0);   // «пустой» мир (перенос из Minecraft): только то, что лежит в сохранении; цвета биомов — как обычно
     return { ids, biome, tint };
   };
 

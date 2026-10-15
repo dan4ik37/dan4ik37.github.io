@@ -122,6 +122,8 @@
 ### scripts[] — скрипты
 
 `{ "lang": "js", "file": "main.js" }`, `{ "lang": "lua", "file": "main.lua" }` или `{ "lang": "js", "code": "…" }`.
+Язык по расширению файла: `.js` — JavaScript, `.lua` — Lua, `.java` — Java (заработает, когда на сайте появится язык Java:
+в «Кубомире» он подключается одной строкой — таблица `LANGS` в `js/engine/voxel-mods.js`).
 
 ## 3. Скрипты: API версии 1
 
@@ -247,7 +249,9 @@ end)
   `chance`), `boulder` (`radius`, `radiusVar`), `column` (`min`, `max`, `top`), `tree` (`log`, `leaves`, `min`, `max`, `radius`);
   везде `biomes` (`ocean beach plains forest birch desert snow mountains swamp river`) и `perChunk` (можно дробное);
 - текстура `{ "draw": { "k": … } }` — рисунки движка напрямую: `noise ore planks log log_top leaves grass_side bricks glass stripes checker dots
-  stick tool ingot gem lump food feather plant torch ladder door lamp cobble`; узоры общего формата переводятся в них сами.
+  stick tool ingot gem lump food feather plant torch ladder door lamp cobble`; узоры общего формата переводятся в них сами;
+- `minecraft` — `{ "blocks": { "мод:блок": "свой_блок" } }`: как ставить блоки Minecraft (ванили или чужого мода) из построек и
+  миров при переносе (см. «Перенос из Minecraft»). Импорт мода `.jar` заполняет это поле сам.
 
 ### Скрипты в 3D
 
@@ -497,4 +501,51 @@ end)
   ]
 }
 ```
+
+## Перенос из Minecraft
+
+В «Кубомире»: меню миров → **📥 Из Minecraft** (или «🧩 Моды» → «⛏ Импорт из Minecraft», или в игре: Esc → «📥 Импорт из
+Minecraft»). Файл можно перетащить в окно. Всё переводится **один раз**, при импорте; файлы Minecraft не уходят на сайт и
+хранятся только в браузере игрока (IndexedDB). «Кубомир» не связан с Mojang и Microsoft: он читает форматы файлов, а
+картинок Minecraft у сайта нет — их приносит сам игрок (пакет текстур).
+
+| Что | Файлы | Что получится |
+|---|---|---|
+| Постройка | `.schem` (WorldEdit/Sponge v1–3), `.schematic` (MCEdit), `.litematic`, `.mcstructure` (Bedrock), `.nbt` (структурный блок), `.zip` с ними | новый мир с постройкой на площадке или «🏗 Поставить перед собой» в открытом мире |
+| Мир Java | `.zip` папки мира (`region/*.mca` + `level.dat`) или один `.mca` | новый мир из выбранной области: карта чанков, размер до 528 × 528, окно высоты (мир «Кубомира» — 128 блоков; по умолчанию уровень моря совпадает) |
+| Мир Bedrock | `.mcworld` | то же, «как получится» (LevelDB; подчанки формата 8/9) |
+| Пакет данных | `.zip` с `data/…` | мод: рецепты (по форме, без формы, печь), функции `.mcfunction` → скрипт (команды `/function пакет:имя` и по именам, `tick`/`load`) |
+| Дополнение Bedrock | `.mcaddon`, `.mcpack` | мод: блоки, предметы, рецепты, добыча, функции, скрипты `@minecraft/server`; картинки ванили из пакета ресурсов — пакетом текстур |
+| Мод Java | `.jar` | мод **только из данных**: блоки (по моделям и blockstates), предметы, переводы (ru_ru, en_us), рецепты, добыча, теги «чем копать» |
+| Пакет текстур | `.zip` Java (`assets/minecraft/textures`) или Bedrock (`textures/blocks`) | картинки поверх своих во всех мирах (приводятся к 16 × 16); убрать — там же |
+
+**Блоки.** Таблица `js/engine/mc-map.js`: знакомые блоки — на свои (ось бревна, сторона факела, лестницы, печи, двери);
+ступени, плиты, стены, заборы — целым блоком своего материала; тонкое (ковры, кнопки, рельсы, таблички, цветы) пропускается;
+блоков, которых нет (шерсть, бетон, терракота, медь…), «Кубомир» делает сам — цветной кубик (`mc:имя`; с пакетом текстур — с его
+картинкой); незнакомые — розово-чёрные (`missing`), их список — в отчёте. Течение воды и лавы убирается (потечёт само из
+источников). Блоки модов: поле `minecraft` в mod.json (импорт `.jar` и дополнений заполняет его сам) — поставь мод, и
+постройки с его блоками перенесутся.
+
+**Функции (.mcfunction)** — что работает: `say`, `tellraw`, `title`, `give`, `setblock` (`keep`), `fill` (`replace`, `keep`,
+`hollow`, `outline`), `tp`/`teleport`, `scoreboard objectives add`, `scoreboard players set/add/remove/reset`, `function`,
+`summon` (зомби, скелет, паук, крипер, слизень, свинья, корова, курица, овца), `particle`, `playsound`, `execute` — `as`/`at`
+(игрок), `positioned`, `if`/`unless block`, `if`/`unless score … matches`, `if entity` и `run`. Координаты `~` — от игрока.
+Остальное становится комментарием и попадает в отчёт. Ограничения песочницы те же: 400 действий за событие, 600 в секунду,
+`world.set` — до 64 блоков от игрока, `give` — свои и простые предметы.
+
+**Скрипты Bedrock (`@minecraft/server`)** — модули собираются в один скрипт, к нему добавляется свой слой «@minecraft/server»
+поверх API модов: `world.afterEvents` (`playerBreakBlock`, `playerPlaceBlock`, `chatSend`, `itemUse`, `itemUseOn`,
+`playerInteractWithBlock`, `playerSpawn`, `worldInitialize`/`worldLoad`, `entityDie`), `world.sendMessage`, `getPlayers`,
+`getDimension().getBlock(…)` → `typeId`, `setType`, `above/below`, `world.scoreboard` (цели и очки), `get/setDynamicProperty`,
+`system.run`, `runTimeout`, `runInterval`, `clearRun`, игрок (`name`, `location`, `sendMessage`, `teleport`, здоровье, вещи),
+`ItemStack`, `BlockPermutation`. Формы `@minecraft/server-ui` открываются как «закрыто», `runCommand` — нет. Песочница та же.
+
+**Моды Java (.jar).** Код мода (`.class`, Fabric/Forge/NeoForge) в браузере не запускается и не переводится — переносятся
+данные. Поведение (что блок делает, когда его ломают, кликают, наступают) можно переписать скриптом мода: JavaScript, Lua или
+Java (когда на сайте появится язык Java — тот же API: `mod.on("tileBreak", …)`, `world.set(…)`, `player.give(…)`). Свет блока
+берётся по имени (lamp, lantern, glow, light, torch…), прочность — по виду (руда, дерево, земля…), инструмент — из тегов
+`mineable/*` и `needs_*_tool`. Большой мод делится на части (в общем формате — до 64 блоков, 128 предметов, 256 рецептов) —
+включай части вместе.
+
+**Как проверить:** `node scripts/mc-import-test.cjs` — образцы всех форматов собираются в самом тесте (без файлов Mojang).
 

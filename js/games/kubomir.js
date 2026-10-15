@@ -89,7 +89,7 @@
     const sc = screen(); if (!sc) return;
     setWhere('');
     sc.innerHTML = `<div class="kb-menu"><div class="kb-logo"><span>🧊</span><div><b>Кубомир</b><small>Бесконечный мир из кубиков: строй, копай, выживай</small></div></div>
-      <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-m="new">➕ Новый мир</button><button type="button" class="kb-btn" data-m="import">📥 Загрузить файл мира</button><button type="button" class="kb-btn" data-m="mods">🧩 Моды</button><button type="button" class="kb-btn" data-m="ach">🏆 Достижения</button></div>
+      <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-m="new">➕ Новый мир</button><button type="button" class="kb-btn" data-m="import">📂 Загрузить файл мира</button><button type="button" class="kb-btn" data-m="mc">📥 Из Minecraft</button><button type="button" class="kb-btn" data-m="mods">🧩 Моды</button><button type="button" class="kb-btn" data-m="ach">🏆 Достижения</button></div>
       <div class="kb-worlds"><div class="kb-note">⏳ Загружаем миры…</div></div>
       <input type="file" class="kb-file" accept=".kubomir,.json,application/json" hidden></div>`;
     sc.querySelector('.kb-mbtns').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; menuAct(b.dataset.m); });
@@ -108,7 +108,8 @@
   function menuAct(a){
     if (a === 'new') newWorldDialog();
     else if (a === 'import') screen()?.querySelector('.kb-file')?.click();
-    else if (a === 'mods') window.KubomirMods?.library(screen(), { back: showMenu });
+    else if (a === 'mods') window.KubomirMods?.library(screen(), { back: showMenu, mc: file => window.KubomirMC?.open(screen(), { back: () => menuAct('mods'), play: id => playById(id), file }) });
+    else if (a === 'mc') window.KubomirMC?.open(screen(), { back: showMenu, play: id => playById(id) });
     else if (a === 'ach') achScreen();
   }
   async function worldAct(a, id, w){
@@ -210,9 +211,21 @@
     const Ex = E(), V = VX(), sc = screen(), wr = wrap();
     // журнал (вкладку закрыли до сохранения) — сначала дописать в базу
     const J = V.store.takeJournal(meta.id);
-    if (J) { try { if (J.recs?.length) await V.store.putChunks(meta.id, J.recs.map(r => ({ cx: r.cx, cz: r.cz, e: new Uint32Array(V.store.unb64(r.e).buffer), t: r.t || [] }))); if (J.meta) Object.assign(meta, J.meta); await V.store.putWorld(meta); } catch (e) { console.error(e); } }
+    if (J) {
+      try {
+        if (J.recs?.length) {
+          const recs = [];
+          for (const r of J.recs) { const old = await V.store.chunk(meta.id, r.cx, r.cz).catch(() => null); recs.push({ cx: r.cx, cz: r.cz, e: new Uint32Array(V.store.unb64(r.e).buffer), t: r.t || [], b: old?.b }); }   // «основа» (мир из Minecraft) — не терять
+          await V.store.putChunks(meta.id, recs);
+        }
+        if (J.meta) Object.assign(meta, J.meta); await V.store.putWorld(meta);
+      } catch (e) { console.error(e); }
+    }
     // моды мира: блоки, вещи, рецепты, текстуры, фичи генерации, скрипты
     const modState = window.KubomirMods ? await window.KubomirMods.forWorld(meta) : { features: [], loaded: [] };
+    // перенос из Minecraft: цветные блоки «mc:…» мира, пакет текстур; мир «без земли» — весь из сохранения
+    try { await window.KubomirMC?.beforeWorld(meta); } catch (e) { console.error(e); }
+    if (meta.gen === 'void') modState.features = [...modState.features, { type: 'void' }];
     V.compile();
     // палитра мира: номер в сохранении → имя блока
     if (!Array.isArray(meta.palette) || !meta.palette.length) meta.palette = V.blocks.map(b => b.name);
@@ -233,6 +246,16 @@
       stats: { placed: 0, fps: 0 }, chat: [], achQ: [], dayPrev: null,
     };
     S = st;
+    // новые блоки посреди игры (постройка из Minecraft с блоками «mc:…»): реестр, палитра мира, картинки, потоки
+    st.addBlocks = names => {
+      const n = window.KubomirMC?.registerBlocks(names) || 0; if (!n) return 0;
+      for (const b of V.blocks) if (!palIdx.has(b.name)) { palIdx.set(b.name, meta.palette.length); meta.palette.push(b.name); }
+      const ro = new Uint16Array(V.blocks.length); for (const b of V.blocks) ro[b.id] = palIdx.get(b.name); st.remapOut = ro;
+      for (let i = 0; i < meta.palette.length && i < 4096; i++) { const b = V.block(meta.palette[i]); remapIn[i] = b ? b.id : V.ID.missing; }
+      meta.mc = meta.mc || { blocks: [] }; for (const nm of names) if (!meta.mc.blocks.includes(nm)) meta.mc.blocks.push(nm);
+      st.VR?.rebuildTextures(); st.ST?.reinit(st.mods.features);
+      return n;
+    };
     // свет и время суток (небо движка): своя дальность тумана — по дальности прорисовки
     R.setLighting({ time: meta.time ?? 8, brightness: .66, ambient: .82, fogEnd: fogFor(R), shadows: true, gfx: { sky: { haze: .2, clouds: .9 }, fog: { density: 0, height: 0, sun: .5 }, grade: 'neutral', bloom: .8 } });
     dayLight(R);
@@ -331,6 +354,14 @@
   // ═══ Сохранение ═══
   function applySaved(c, rec){
     const V = VX(), e = rec.e, ri = S.remapIn;
+    // «основа» — целый слой чанка (мир или постройка из Minecraft), сжатый повторами; правки игрока — поверх
+    if (rec.b && rec.b.length && window.KubomirMC) {
+      const raw = new Uint16Array(V.CELLS);
+      if (window.KubomirMC.unrle(rec.b, raw) === V.CELLS) {
+        for (let i = 0; i < raw.length; i++) { const v = raw[i]; if (v) c.ids[i] = ((ri[v & 0xfff] ?? V.ID.missing) & 0xfff) | (v & 0xf000); }
+        c.base = rec.b;
+      }
+    }
     if (e && e.length) {
       c.edits = c.edits || new Map();
       for (let i = 0; i < e.length; i++) {
@@ -343,7 +374,9 @@
   function chunkRec(c, st = S){
     const out = new Uint32Array(c.edits ? c.edits.size : 0); let i = 0;
     if (c.edits) for (const [k, v] of c.edits) out[i++] = ((k & 0x7fff) << 16 | ((st.remapOut[v & 0xfff] ?? 0) | (v & 0xf000))) >>> 0;
-    return { cx: c.cx, cz: c.cz, e: out, t: c.tiles ? [...c.tiles] : [] };
+    const r = { cx: c.cx, cz: c.cz, e: out, t: c.tiles ? [...c.tiles] : [] };
+    if (c.base) r.b = c.base;   // мир из Minecraft: слой как был + правки
+    return r;
   }
   function saveChunks(list, st = S){
     if (!st || !list.length) return Promise.resolve();
@@ -404,7 +437,7 @@
     if (!st.ready) { if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
     st.steps++;
     // Esc: окно → закрыть; иначе меню
-    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (uiOpen) st.ui.close(); else if (st.modWin) st.modWin.querySelector('[data-x]')?.click(); else if (menu) closeMenu(); else openMenu(); }
+    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (uiOpen) st.ui.close(); else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); } else if (menu) closeMenu(); else openMenu(); }
     // E — вещи (и закрыть окно вещей той же клавишей, как в Майнкрафте)
     if (K.downRaw('inventory') && !menu && !chatting && !window.D37Settings?.isOpen?.()) { if (uiOpen) st.ui.close(); else st.ui?.open('inv'); }
     if (K.down('camera')) cycleCam();
@@ -1158,6 +1191,7 @@
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         { id: 'mods', icon: '🧩', text: 'Моды мира' + (st.mods.loaded.length ? ` (${st.mods.loaded.length})` : '') },
+        { id: 'mc', icon: '📥', text: 'Импорт из Minecraft' },
         { id: 'export', icon: '📤', text: 'Сохранить файл мира' },
         { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
         { id: 'help', icon: '❓', text: 'Как играть' },
@@ -1173,10 +1207,23 @@
     if (id === 'resume') { closeMenu(); if (!st.I.touch) { try { wrap().querySelector('.kb-gl')?.requestPointerLock?.()?.catch?.(() => {}); } catch (e) {} } }
     else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine', tab: 'kubomir' });
     else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap(), { restart: ids => { if (S !== st) return; st.meta.mods = ids; restartWorld(); } }); }
+    else if (id === 'mc') { closeMenu(); mcWindow(st); }
     else if (id === 'export') { await saveAll(st); exportWorld(st.meta.id); }
     else if (id === 'full') { window.D37Full?.toggle(el.closest('#gamesStage') || wrap(), { esc: false }); setTimeout(() => S?.menu?.redraw(), 80); }
     else if (id === 'help') help();
     else if (id === 'exit') { closeMenu(); const sc = screen(); await stopWorld(); if (sc) showMenu(); }
+  }
+  // «📥 Импорт из Minecraft» в игре: окно поверх мира (постройку — перед собой, мир — новым миром)
+  function mcWindow(st){
+    if (!window.KubomirMC || st.modWin) return;
+    st.I.unlock();
+    const box = document.createElement('div'); box.className = 'kb-inv kb-modwin kb-ui kb-mcwin';
+    box.innerHTML = '<div class="kb-mcbox"></div>';
+    const close = () => { box.remove(); st.C?.reset_state?.(); if (st.modWin === box) st.modWin = null; };
+    box.close = close;
+    box.addEventListener('click', e => { if (e.target === box) close(); });
+    wrap().appendChild(box); st.modWin = box;
+    window.KubomirMC.open(box.querySelector('.kb-mcbox'), { st, back: close, play: async id => { close(); const sc = screen(); await stopWorld(); if (sc) playById(id); } });
   }
   function chatOpen(prefix){
     const st = S; if (!st || st.chatEl) return;

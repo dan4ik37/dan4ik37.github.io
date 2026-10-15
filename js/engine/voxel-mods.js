@@ -25,6 +25,11 @@
   const SOUNDS = ['stone', 'wood', 'dirt', 'grass', 'sand', 'gravel', 'snow', 'glass', 'metal', 'wool'];
   const TINTS = { grass: 1, foliage: 2, water: 3, birch: 4, spruce: 5 };
   const EVENTS = ['tileBreak', 'tilePlace', 'use', 'tick', 'mobKill', 'pickup', 'talk', 'start', 'stepOn', 'chat'];
+  // языки скриптов модов: имя → файл языка (''/null — встроенный JS). Новый язык (например, Java: D37E.lang('java', код) с тем же
+  // договором, что у Lua — D37E.langs.java.worker) — одна строка здесь; песочница сама берёт self.D37Lang[язык].run
+  const LANGS = { js: '', lua: 'js/engine/lang-lua.js', java: 'js/engine/lang-java.js' };
+  const LANGS_EXT = { js: 'js', mjs: 'js', lua: 'lua', luau: 'lua', java: 'java' };
+  V.MOD_LANGS = LANGS;
   const SEA = V.SEA || 52;
   const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
   const str = (v, n) => typeof v === 'string' ? v.trim().slice(0, n) : '';
@@ -312,11 +317,24 @@
       let code = typeof s.code === 'string' ? s.code : null, nm = str(s.name, 60);
       if (code === null && typeof s.file === 'string') { const p = s.file.replace(/^\.\//, ''), f = files[p]; if (f == null) { err(`scripts[${i}]: нет файла ${s.file}`); return; } code = text(f); nm = nm || p; }
       if (code === null) { err(`scripts[${i}]: code или file`); return; }
-      const lang = s.lang === 'lua' || (s.lang === undefined && /\.lua$/i.test(nm)) ? 'lua' : s.lang === 'js' || s.lang === undefined ? 'js' : null;
-      if (!lang) { err(`scripts[${i}]: lang — "js" или "lua"`); return; }
+      // язык: js (по умолчанию), lua (.lua), java (.java — когда на сайте есть D37E.langs.java; крючок — LANGS)
+      const ext = (/\.(\w+)$/.exec(nm) || [])[1], lang = s.lang ? (LANGS[s.lang] !== undefined ? s.lang : null) : ext && LANGS_EXT[ext.toLowerCase()] || 'js';
+      if (!lang) { err(`scripts[${i}]: lang — ${Object.keys(LANGS).map(x => '"' + x + '"').join(', ')}`); return; }
       if (code.length > LIM.code) { err(`scripts[${i}]: больше ${LIM.code / 1000} КБ`); return; }
       m.scripts.push({ name: nm || `script${i + 1}.${lang}`, lang, code });
     });
+    // перенос из Minecraft: «minecraft»: { "blocks": { "мод_minecraft:имя": "наш_блок" } } — как ставить его блоки в постройках и мирах
+    if (j.minecraft !== undefined) {
+      const mb = isObj(j.minecraft) && isObj(j.minecraft.blocks) ? j.minecraft.blocks : null;
+      if (!mb) warn('minecraft: { "blocks": { "minecraft:имя": "блок" } }');
+      else {
+        m.mcMap = {};
+        for (const [k, v] of Object.entries(mb).slice(0, 2048)) {
+          if (!/^[a-z0-9_.-]{1,64}:[a-z0-9_./-]{1,96}$/.test(k) || typeof v !== 'string') { warn(`minecraft.blocks: «${String(k).slice(0, 40)}» пропущен`); continue; }
+          const r = ref(v, 'minecraft.blocks', { block: true, tag: false }); if (r) m.mcMap[k] = r;
+        }
+      }
+    }
     m.size = JSON.stringify(j).length + Object.values(files).reduce((a, f) => a + bytes(f), 0);
     if (m.size > LIM.zipBytes) err(`мод больше ${LIM.zipBytes / 1e6} МБ`);
     if (!m.blocks.length && !m.items.length && !m.recipes.length && !m.scripts.length && !m.features.length) warn('мод пустой: нет блоков, предметов, рецептов, генерации и скриптов');
@@ -619,15 +637,17 @@ up({ t: 'frame' });
         // номер строки: new Function добавляет строки заголовка (и "use strict") — узнаём, сколько
         try { new Function('throw new Error("x")')(); } catch (e2) { const m = /<anonymous>:(\d+):\d+/.exec(e2.stack || '') || /> Function:(\d+):\d+/.exec(e2.stack || ''); LINE0 = m ? +m[1] : 0; }
         INIT = true;
-        if (d.lua) { try { (0, eval)(String(d.lua)); } catch (e5) { fail('Lua', e5); } }
+        // языки (Lua, Java…): их «поток» приходит текстом, кладёт себя в self.D37Lang[язык]
+        const LG = Object.assign({}, d.langs || {}); if (d.lua && !LG.lua) LG.lua = d.lua;
+        for (const [ln, src] of Object.entries(LG)) { try { (0, eval)(String(src)); } catch (e5) { fail(ln, e5); } }
         for (const s of d.scripts || []) {
           CUR = s.name; budget = 0;
-          if (s.lang === 'lua') {
-            const L = self.D37Lang && self.D37Lang.lua;
-            if (!L) { fail(s.name, new Error('Lua не загрузился — обнови страницу')); continue; }
-            // те же объекты, что у JS; строка 1 — объявления (номера строк не сдвигаются) — как у «Подземья»
-            const pre = 'local mod, world, fx, npc, commands, player, game = script.mod, script.world, script.fx, script.npc, script.commands, script.player, script.game; ';
-            try { L.run(pre + String(s.code), { script: API, print, warn: (...a) => mod.log('⚠', ...a) }, { name: s.name, error: (msg, line) => send({ t: 'error', where: s.name, line: line | 0, msg: String(msg).slice(0, 300), init: INIT }), err: e4 => fail(s.name, e4), setCurrent(){} }); } catch (e4) { fail(s.name, e4); }
+          if (s.lang && s.lang !== 'js') {
+            const L = self.D37Lang && self.D37Lang[s.lang];
+            if (!L) { fail(s.name, new Error('язык «' + s.lang + '» не загрузился — обнови страницу')); continue; }
+            // те же объекты, что у JS; у Lua строка 1 — объявления (номера строк не сдвигаются) — как у «Подземья»
+            const pre = s.lang === 'lua' ? 'local mod, world, fx, npc, commands, player, game = script.mod, script.world, script.fx, script.npc, script.commands, script.player, script.game; ' : '';
+            try { L.run(pre + String(s.code), { script: API, mod, world, fx, npc, commands, player, game, print, warn: (...a) => mod.log('⚠', ...a) }, { name: s.name, error: (msg, line) => send({ t: 'error', where: s.name, line: line | 0, msg: String(msg).slice(0, 300), init: INIT }), err: e4 => fail(s.name, e4), setCurrent(){} }); } catch (e4) { fail(s.name, e4); }
             continue;
           }
           try { new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game', 'print', 'log', '"use strict";\n' + String(s.code))(mod, world, fx, npc, commands, player, game, print, print); } catch (e4) { fail(s.name, e4); }
@@ -740,10 +760,11 @@ up({ t: 'frame' });
       if (t === 'frame') {
         if (M.booted) return;
         M.booted = true;
-        const L = M.m.scripts.some(s => s.lang === 'lua') && root.D37E?.langs?.lua?.worker;
+        const langs = {};
+        for (const s of M.m.scripts) if (s.lang && s.lang !== 'js' && !langs[s.lang]) { const w = root.D37E?.langs?.[s.lang]?.worker; if (w) langs[s.lang] = '(' + w.toString() + ')();'; }
         let store = {}; try { store = JSON.parse(st.meta?.modData?.[M.m.id] || '{}') || {}; } catch (e) {}
         M.box.post({ t: 'boot', code: modRuntime.toString() });
-        M.box.post({ t: 'init', mod: M.m.id, scripts: M.m.scripts, lua: L ? '(' + L.toString() + ')();' : '', store, names: NAMES, limit: LIM.perEvent });
+        M.box.post({ t: 'init', mod: M.m.id, scripts: M.m.scripts, langs, store, names: NAMES, limit: LIM.perEvent });
         return;
       }
       if (t === 'ready') { M.ready = true; post(M, { t: 'ev', ev: 'start', data: {}, st: state() }); return; }
