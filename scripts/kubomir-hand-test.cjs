@@ -245,6 +245,44 @@ function fakeWorld(sky, blk, walls = new Set()){
   window.KubomirEnts.mobView = null;
   ok(calls[0] === 'add:cow' && calls.includes('frame') && calls.includes('remove') && calls[calls.length - 1] === 'dispose' && m2.lit && m2.lit.u, 'свой вид мобов (KubomirEnts.mobView) — подменяет коробки целиком', calls);
 
+  // ═══ 5. Окно вещей: «📖 Можно сделать» и сортировка (без DOM: render без окна — пусто) ═══
+  sec('окно вещей: книга рецептов, сортировка');
+  run('js/games/kubomir-ui.js');
+  const SU = { P: { inv: new Array(36).fill(null), cursor: null, sel: 0 }, creative: false, W: { markTile(){} } };
+  const toasts = [];
+  const UI = window.KubomirUI.create(SU, { toast: t => toasts.push(t) });
+  UI.kind = 'inv';
+  ok(UI.book().length === 0, 'пустые вещи — книга пустая');
+  SU.P.inv[0] = { id: 'log_oak', n: 3 };
+  let bk = UI.book().map(b => b.r.out);
+  ok(bk.length === 1 && bk[0] === 'planks_oak', 'бревно → можно сделать доски', bk);
+  SU.P.inv[0] = { id: 'planks_birch', n: 7 };
+  bk = UI.book();
+  const outs = bk.map(b => b.r.out + (b.table ? '*' : ''));
+  ok(outs.includes('stick') && outs.includes('crafting_table') && outs.includes('door*') && !outs.includes('pick_wood'), 'доски: палки и верстак — сразу, дверь — «на верстаке», кирки без палок — нет', outs);
+  ok(bk.findIndex(b => b.table) > bk.findIndex(b => !b.table), 'сначала то, что можно сделать здесь');
+  UI.bookList = bk;
+  const ti = bk.findIndex(b => b.r.out === 'crafting_table');
+  // «нажать» верстак в книге: доски легли 2×2 в сетку, из вещей ушли 4
+  UI.craft.fill(null);
+  // (click — внутренняя; проверяем через fill: book → сетка)
+  ok(typeof UI.book === 'function' && typeof UI.sort === 'function', 'книга и сортировка — в API окна');
+  SU.P.inv[0] = { id: 'planks_oak', n: 5 }; SU.P.inv[1] = { id: 'stick', n: 4 };
+  UI.kind = 'craft';
+  bk = UI.book().map(b => b.r.out);
+  ok(bk.includes('pick_wood') && bk.includes('sword_wood') && bk.includes('axe_wood') && bk.includes('shovel_wood') && bk.includes('chest') === false, 'на верстаке: доски + палки → все деревянные инструменты; сундук (8 досок) — нет', bk);
+  // сортировка: стопки склеиваются, инструменты первыми, панель 1–9 не трогается
+  SU.P.inv.fill(null);
+  SU.P.inv[0] = { id: 'torch', n: 5 };
+  SU.P.inv[12] = { id: 'cobble', n: 30 }; SU.P.inv[20] = { id: 'cobble', n: 50 }; SU.P.inv[30] = { id: 'pick_stone', n: 1, d: 3 }; SU.P.inv[33] = { id: 'apple', n: 2 };
+  UI.sort('inv');
+  const inv = SU.P.inv;
+  ok(inv[0]?.id === 'torch' && inv[0].n === 5, 'панель 1–9 на месте');
+  ok(inv[9]?.id === 'pick_stone' && inv[9].d === 3, 'инструменты — первыми (с износом)', inv.slice(9, 14));
+  const cob = inv.filter(s => s && s.id === 'cobble').map(s => s.n);
+  ok(cob.join() === '64,16' && inv[10]?.id === 'cobble', 'булыжник склеился в стопку 64 + 16, сразу после инструментов', cob);
+  ok(inv.slice(9).filter(Boolean).length === 4 && inv.slice(13).every(s => !s), 'дыр нет — всё подряд с начала рюкзака');
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

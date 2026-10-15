@@ -157,3 +157,27 @@ html.gs-lefty .kb-tbar{left:max(12px,env(safe-area-inset-left));right:auto}
 .kb-mclegal a{color:#9fc2ff}
 .kb-mcwin .kb-mcbox{width:min(640px,100%);max-height:calc(100% - 20px);overflow:auto}
 .kb-mcwin .kb-mcbox>.kb-menu{width:100%}
+/* ── книга рецептов, сортировка, подсказки новичку (pass 3) ── */
+.kb-pbtns{display:flex;gap:6px}
+.kb-book{display:flex;flex-direction:column;gap:4px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--kb-line)}
+.kb-book>span{font-weight:800;font-size:.86rem;color:#dfe5ff}
+.kb-booklist{display:flex;flex-wrap:wrap;gap:3px;max-width:calc(var(--kb-s) * 9 + 24px)}
+.kb-booklist small{color:#aab3d6;line-height:1.4}
+.kb-book .kb-slot{cursor:pointer}
+.kb-book .kb-slot:hover{border-color:#ffd23f;background:rgba(255,210,63,.16)}
+.kb-slot.need{opacity:.55;filter:grayscale(.6)}
+.kb-slot.need::after{content:'🛠';position:absolute;left:1px;top:-1px;font-size:11px;filter:none}
+.kb-tip{position:absolute;left:10px;top:10px;max-width:min(420px,calc(100% - 120px));display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:12px;background:rgba(10,14,26,.72);border:1px solid rgba(255,255,255,.12);box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:14px;line-height:1.35;pointer-events:auto;animation:kbTip .35s ease}
+.kb-tip[hidden]{display:none}
+.kb-tip b{display:block;font-size:12px;color:#ffd23f;letter-spacing:.3px}
+.kb-tip button{flex:none;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
+@keyframes kbTip{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.kb-dead small.kb-where{color:#ffd9d9}
+.kb-dead .kb-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+/* телефон стоя: кнопки (вещи, красться, прыжок) — выше полосок здоровья и еды, подсказка — компактнее */
+@media (max-width:640px){
+  .kb-tbar{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 64px)}
+  .kb-wrap .e-btns{bottom:calc(max(14px,env(safe-area-inset-bottom)) + var(--kb-s) + 64px)}
+  .kb-tip{font-size:12.5px;max-width:calc(100% - 20px);padding:6px 8px}
+  .kb-log{bottom:calc(var(--kb-s) + 96px)}
+}

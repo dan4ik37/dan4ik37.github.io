@@ -79,11 +79,75 @@
       return made;
     }
 
+    // ── «📖 Можно сделать» (книга рецептов): рецепты, на которые хватает вещей; нажал — ингредиенты легли в сетку (Shift — на
+    //    сколько хватит), рецепты «только на верстаке» в окне вещей — серые с подсказкой ──
+    const needs = r => r.list ? r.list.slice() : r.pattern.flatMap(row => [...row].filter(ch => ch !== ' ').map(ch => r.key[ch]));
+    const fitsGrid = (r, w) => r.list ? r.list.length <= w * w : r.pattern.length <= w && Math.max(...r.pattern.map(s => s.length)) <= w;
+    function haveMap(){ const m = new Map(); for (const s of [...P().inv, ...U.craft]) if (s && !it(s.id)?.tool) m.set(s.id, (m.get(s.id) || 0) + s.n); return m; }
+    // под каждый ключ (имя или группа #planks) — вещь, которой больше всего; null — не хватает
+    function assign(r, have){
+      const left = new Map(have), out = [];
+      for (const k of needs(r)) {
+        let pick = null; for (const [id, n] of left) if (n > 0 && V().tagHas(k, id) && (!pick || n > left.get(pick))) pick = id;
+        if (!pick) return null;
+        left.set(pick, left.get(pick) - 1); out.push(pick);
+      }
+      return out;
+    }
+    U.book = () => {
+      const w = craftSize(), have = haveMap(), seen = new Set(), list = [];
+      for (const r of V().recipes) {
+        if (seen.has(r.out) || !fitsGrid(r, 3)) continue;
+        const table = !!r.table || !fitsGrid(r, w);
+        if (table && U.kind === 'craft') continue;
+        if (!assign(r, have)) continue;
+        seen.add(r.out); list.push({ r, table });
+      }
+      list.sort((a, b) => a.table - b.table);
+      return list;
+    };
+    function fill(r, many){
+      const w = craftSize();
+      for (let i = 0; i < 9; i++) if (U.craft[i]) { const left = U.give(U.craft[i]); if (left > 0) hooks.drop?.({ ...U.craft[i], n: left }); U.craft[i] = null; }
+      const ids = assign(r, haveMap()); if (!ids) return false;
+      const cells = r.list ? r.list.map((k, j) => Math.floor(j / w) * 3 + (j % w)) : r.pattern.flatMap((row, y) => [...row].map((ch, x) => ch !== ' ' ? y * 3 + x : -1)).filter(i => i >= 0);
+      const uses = new Map(); for (const id of ids) uses.set(id, (uses.get(id) || 0) + 1);
+      const have = haveMap();
+      let sets = 1;
+      if (many) { sets = 64; for (const [id, u] of uses) sets = Math.min(sets, Math.floor((have.get(id) || 0) / u), it(id)?.stack || 64); sets = Math.max(1, sets); }
+      const take = (id, n) => { let got = 0; const inv = P().inv; for (let i = 35; i >= 0 && got < n; i--) { const s = inv[i]; if (!s || s.id !== id || it(id)?.tool) continue; const q = Math.min(s.n, n - got); s.n -= q; got += q; if (s.n <= 0) inv[i] = null; } return got; };
+      cells.forEach((ci, j) => { const id = ids[j], got = take(id, sets); if (got > 0) U.craft[ci] = { id, n: got }; });
+      return true;
+    }
+    // ── сортировка: стопки одинаковых — вместе, порядок — инструменты, блоки, природа, еда и прочее; панель (1–9) не трогаем ──
+    const CAT_ORDER = { tools: 0, blocks: 1, nature: 2, food: 3, mods: 4 };
+    U.sort = (k = 'inv') => {
+      const C = cont(k); if (!C) return;
+      const from = k === 'inv' ? 9 : 0, to = k === 'inv' ? 36 : C.length, items = [];
+      for (let i = from; i < to; i++) if (C[i]) { items.push(C[i]); setSlot(k, i, null); }
+      const merged = [];
+      for (const s of items) {
+        const m = !it(s.id)?.tool && merged.find(x => same(x, s) && x.n < max(x));
+        if (m) { const q = Math.min(s.n, max(m) - m.n); m.n += q; s.n -= q; if (s.n > 0) merged.push(s); } else merged.push(s);
+      }
+      const ord = s => { const item = it(s.id); return [item ? CAT_ORDER[catOf(item)] ?? 5 : 6, item?.title || s.id, -s.n]; };
+      merged.sort((a, b) => { const A = ord(a), B = ord(b); return A[0] - B[0] || String(A[1]).localeCompare(String(B[1]), 'ru') || A[2] - B[2]; });
+      merged.forEach((s, j) => setSlot(k, from + j, s));
+      hooks.sound?.('click', { vol: .3, rate: 1.3 });
+      render();
+    };
+
     // ── нажатия по ячейкам ──
     let lastPick = null;   // { k, i, t } — взял стопку: второй клик быстро по той же ячейке — собрать такие же
     function click(k, i, right, shift){
       const p = P();
       if (k === 'result') { takeResult(shift); render(); return; }
+      if (k === 'book') {
+        const b = U.bookList?.[i]; if (!b) return;
+        if (b.table) { hooks.toast?.('🛠️ «' + (it(b.r.out)?.title || b.r.out) + '» делают на верстаке: поставь его (ПКМ) и открой'); return; }
+        if (fill(b.r, shift)) { hooks.sound?.('click', { vol: .3, rate: 1.6 }); if (shift) takeResult(true); }
+        render(); return;
+      }
       if (!right && !shift && p.cursor && lastPick && lastPick.k === k && lastPick.i === i && performance.now() - lastPick.t < 350) { lastPick = null; collect(); render(); return; }
       if (k === 'cat') { const id = catList()[i]; if (!id) return; const s = { id, n: right ? 1 : it(id).stack }; if (p.cursor && same(p.cursor, s)) p.cursor.n = Math.min(max(s), p.cursor.n + s.n); else p.cursor = s; render(); return; }
       if (k === 'trash') { p.cursor = null; render(); return; }
@@ -227,6 +291,10 @@
         const w = craftSize(), r = result();
         let g = ''; for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) g += slot('craft', y * 3 + x, U.craft[y * 3 + x]);
         top += `<div class="kb-craft"><div class="kb-cgrid" style="grid-template-columns:repeat(${w},auto)">${g}</div><span class="kb-arrow">➜</span>${slot('result', 0, r ? { id: r.out, n: r.n } : null, 'res')}${creative ? '<div class="kb-slot trash" data-k="trash" data-i="0" title="Выбросить совсем">🗑</div>' : ''}</div>`;
+        if (!creative) {
+          const list = U.bookList = U.book();
+          top += `<div class="kb-book"><span title="${S.I?.touch ? 'Нажми — ингредиенты лягут в сетку' : 'Клик — ингредиенты лягут в сетку, Shift+клик — сделать сколько хватит'}">📖 Можно сделать</span><div class="kb-booklist">${list.length ? list.map((b, j) => slot('book', j, { id: b.r.out, n: b.r.n || 1 }, b.table ? 'need' : '')).join('') : `<small>Пока ничего. ${U.kind === 'inv' ? 'Добудь брёвна: держи ЛКМ по дереву (на телефоне — держи палец).' : 'Положи в вещи доски, палки, булыжник…'}</small>`}</div></div>`;
+        }
       } else if (U.kind === 'furnace') {
         const f = furnaceTile();
         top += `<div class="kb-furn"><div class="kb-fcol">${slot('furnace', 0, f?.in)}<span class="kb-flame">🔥</span>${slot('furnace', 1, f?.fuel)}</div><span class="kb-arrow kb-prog">➜</span>${slot('furnace', 2, f?.out, 'res')}</div><p class="kb-hint">Сверху — что плавить (руда, песок, сырое мясо), снизу — топливо (уголь, доски, брёвна).</p>`;
@@ -237,7 +305,8 @@
       let main = '', hot = '';
       for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
       for (let i = 0; i < 9; i++) hot += slot('inv', i, p.inv[i], i === p.sel ? 'on' : '');
-      panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></div>${top}<div class="kb-grid">${main}</div><div class="kb-grid kb-hotrow">${hot}</div>
+      const sortBtn = U.kind === 'chest' ? '<button type="button" class="kb-x" data-sort="chest" title="Разложить сундук по порядку">⇅</button>' : '<button type="button" class="kb-x" data-sort="inv" title="Разложить вещи по порядку (панель 1–9 не трогаем)">⇅</button>';
+      panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><span class="kb-pbtns">${sortBtn}<button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></span></div>${top}<div class="kb-grid">${main}</div><div class="kb-grid kb-hotrow">${hot}</div>
         <p class="kb-hint">${S.I?.touch ? 'Нажми — взять/положить, подержи — половину или одну.' : 'Клик — взять/положить, ПКМ — половину или одну, Shift+клик — перекинуть, протянуть с вещью: ПКМ — по одной, ЛКМ — поровну; двойной клик — собрать; 1–9 над ячейкой — на панель, Q — выбросить. E или Esc — закрыть.'}</p>`;
       if (U.kind === 'inv' && creative) renderCat();
       if (U.kind === 'furnace') renderFurnace();
@@ -268,6 +337,7 @@
     function onDown(e){
       const t = e.target;
       if (t.closest('[data-close]')) { U.close(); return; }
+      const so = t.closest('[data-sort]'); if (so) { U.sort(so.dataset.sort); return; }
       const cat = t.closest('[data-cat]'); if (cat) { U.cat = cat.dataset.cat; U.q = ''; catCache = null; render(); return; }
       if (t.closest('.kb-search')) return;
       const s = t.closest('[data-k]');
