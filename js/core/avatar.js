@@ -278,10 +278,13 @@
       const loc = current(), srv = norm(look);
       // Части 3D-человечка и свои цвета: старый char_save (до обновления coins.sql) их не хранит — берём из браузера
       const keep = !BODY_SLOTS.some(s => s in look) && BODY_SLOTS.some(s => loc[s] !== undefined);
-      if (keep) for (const s of SLOTS) if (loc[s] !== undefined && (PARTS[s].body || custom(s, loc[s]))) srv[s] = loc[s];
+      if (keep) { for (const s of SLOTS) if (loc[s] !== undefined && (PARTS[s].body || custom(s, loc[s]))) srv[s] = loc[s]; }
       // Новые части (формы и цвета частей тела, стиль лица, перчатки): пока coins.sql не запущен ещё раз, сервер их молча
       // выбрасывает — то, чего нет в базе, оставляем из браузера (иначе после входа рука робота пропадала бы)
-      else for (const s of BODY_SLOTS) if (!(s in look) && loc[s] !== undefined && srv[s] === undefined) srv[s] = loc[s];
+      else { for (const s of BODY_SLOTS) if (!(s in look) && loc[s] !== undefined && srv[s] === undefined) srv[s] = loc[s]; }
+      // Вещи только за 💎 (корона, крылья, след из кристаллов): старый char_save их не принимает — купленное в магазине
+      // остаётся надетым из браузера (сервер про эту часть молчит; если там явно другое — верим серверу)
+      for (const s of SLOTS) if (!(s in look) && loc[s] !== undefined && gemsOf(`skin:${s}:${loc[s]}`) && owns(s, loc[s])) srv[s] = loc[s];
       mine = srv;
       if (keep) window.D37Coins?.saveLook?.(mine);
       try { localStorage.setItem(LS, JSON.stringify(mine)); } catch (e) {}

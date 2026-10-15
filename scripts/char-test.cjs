@@ -279,5 +279,51 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   ok(sql.includes(`and slot = any(array[${C.SLOTS.filter(s => C.PARTS[s].pal).map(s => `'${s}'`).join(', ')}]) then clean`), 'char_save: свои цвета у всех палитр');
 }
 
-console.log(`${pass} ок, ${fail} ошибок`);
-process.exit(fail ? 1 : 0);
+// ═══ 9. В базе старый coins.sql (не запущен ещё раз): новые части и купленное за 💎 не пропадают ═══
+(async () => {
+  // char_save как в coins.sql от 11.10.2026: свои 31 слот, неизвестная вещь — { reason: 'item', item }
+  const OLD = ['color', 'eyes', 'mouth', 'hat', 'item', 'pet', 'trail', 'body', 'tone', 'hgt', 'wid', 'head', 'eyec', 'brows', 'lash', 'cheek', 'hair', 'hairc', 'top', 'trim', 'bottom', 'botc', 'shoes', 'shoec', 'hatc', 'glasses', 'glassc', 'neck', 'neckc', 'back', 'backc'];
+  const st = {}, wallet = ['skin:hat:gemcrown', 'skin:trail:gems', 'skin:back:gemwings', 'skin:pack:robot'];
+  let srv = {}, saves = 0;
+  const sb = { rpc: async (name, a) => {
+    if (name === 'coins_state') return { data: { ok: true, coins: 0, items: wallet, daily: true, ads: 0, doubles: 0, perks: false, imported: true, look: srv }, error: null };
+    if (name !== 'char_save') return { data: null, error: null };
+    saves++;
+    const clean = {};
+    for (const s of OLD) {
+      const v = a.p_look[s];
+      if (v == null || v === '') continue;
+      if (/^x[0-9a-f]{6}$/.test(v)) { clean[s] = v; continue; }
+      if (C.gemsOf(`skin:${s}:${v}`)) return { data: { ok: false, reason: 'item', item: `skin:${s}:${v}` }, error: null };
+      clean[s] = v;
+    }
+    srv = clean;
+    return { data: { ok: true, look: clean }, error: null };
+  } };
+  const ctx = vm.createContext({ console, setTimeout, sbClient: sb, currentUser: { id: 'u1' },
+    localStorage: { getItem: k => (k in st ? st[k] : null), setItem: (k, v) => { st[k] = String(v); }, removeItem: k => { delete st[k]; } },
+    document: { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d }), querySelectorAll: () => [], body: { classList: { contains: () => false } } } });
+  vm.runInContext('var window = globalThis; window.addEventListener = () => {};', ctx);
+  for (const f of ['js/core/coins.js', 'js/core/avatar.js']) vm.runInContext(fs.readFileSync(path.join(SITE, f), 'utf8'), ctx, { filename: f });
+  const D = ctx.D37Coins, Ch = ctx.D37Char;
+  await D.sync();
+  const r = await Ch.set({ color: 'red', body: 'girl', hgt: '3', hat: 'gemcrown', trail: 'gems', back: 'gemwings', psal: 'robot', pcal: 'x00ff00' });
+  ok(r.ok && r.partial, 'старый сервер: сохранилось всё, что он знает', JSON.stringify(r));
+  ok(srv.color === 'red' && srv.body === 'girl' && srv.hgt === '3' && !('hat' in srv) && !('trail' in srv) && !('back' in srv), 'в базе — без вещей за 💎', JSON.stringify(srv));
+  await D.sync();
+  await new Promise(res => setTimeout(res, 0));
+  const L = Ch.look();
+  ok(L.hat === 'gemcrown' && L.trail === 'gems' && L.back === 'gemwings' && L.psal === 'robot' && L.pcal === 'x00ff00' && L.color === 'red' && L.body === 'girl',
+    'после синхронизации надето всё: купленное за 💎 и новые части — из браузера', JSON.stringify(L));
+  Ch.fromServer({ ...srv, hat: 'none' });
+  ok(Ch.look().hat === 'none' && Ch.look().trail === 'gems', 'в базе явно другое — верим базе', JSON.stringify(Ch.look()));
+  Ch.fromServer({ color: 'green' });   // совсем старый coins.sql (до 11.10): в базе только 2D-части
+  await new Promise(res => setTimeout(res, 0));
+  ok(Ch.look().color === 'green' && Ch.look().body === 'girl' && Ch.look().psal === 'robot' && Ch.look().pcal === 'x00ff00' && Ch.look().trail === 'gems',
+    'в базе только 2D-части — части человечка из браузера', JSON.stringify(Ch.look()));
+  wallet.length = 0;Ch.fromServer({ color: 'blue', body: 'boy' });
+  ok(Ch.look().trail === 'none' && Ch.look().back === undefined && Ch.look().color === 'blue', 'не куплено за 💎 — не надевается', JSON.stringify(Ch.look()));
+  ok(saves < 12, 'повторных сохранений немного', saves);
+  console.log(`${pass} ок, ${fail} ошибок`);
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.log('FAIL', e); process.exit(1); });
