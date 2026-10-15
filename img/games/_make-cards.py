@@ -44,6 +44,7 @@ GAMES = [
     ('domino', 'draw:domino', 'Домино', '#e5e7eb'),
     ('fillword', 'draw:fillword', 'Филворд', '#a855f7'),
     ('podzem', 'draw:podzem', 'Подземье', '#d9783a'),
+    ('kubomir', 'draw:kubomir', 'Кубомир', '#4f8cff'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
     ('studio3d', '🧱', 'Студия 3D', '#f59e0b'),
@@ -263,6 +264,60 @@ def draw_podzem():
     out = Image.new('RGBA', im.size, (0, 0, 0, 0)); out.paste(im, (0, 0), mask)
     return out
 
+# «Кубомир»: островок из кубиков в изометрии (дёрн, земля, камень с рудой, дерево, вода) — пиксельные грани
+def draw_kubomir():
+    import random
+    R = random.Random(37)
+    a = 34                                   # полширины ромба верха
+    im = Image.new('RGBA', (a * 2 * 7 + 40, a * 2 * 7 + 40), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    ox, oy = im.width // 2, 150
+    def shade(c, k): return tuple(max(0, min(255, int(v * k))) for v in c)
+    def face(poly, base, speck=None, n=26):
+        d.polygon(poly, fill=base)
+        xs = [p[0] for p in poly]; ys = [p[1] for p in poly]
+        for _ in range(n):              # пиксельный шум внутри грани
+            u, v = R.random(), R.random()
+            p0, p1, p3 = poly[0], poly[1], poly[3]
+            x = p0[0] + (p1[0] - p0[0]) * u + (p3[0] - p0[0]) * v; y = p0[1] + (p1[1] - p0[1]) * u + (p3[1] - p0[1]) * v
+            c = speck if speck and R.random() < .35 else shade(base, .82 + R.random() * .3)
+            d.rectangle((x - 3, y - 3, x + 3, y + 3), fill=c)
+    def cube(gx, gy, gz, top, side, ore=None, top_side=None):
+        x = ox + (gx - gz) * a; y = oy + (gx + gz) * a // 2 - gy * a
+        t = [(x, y - a // 2), (x + a, y), (x, y + a // 2), (x - a, y)]
+        l = [(x - a, y), (x, y + a // 2), (x, y + a // 2 + a), (x - a, y + a)]
+        r = [(x, y + a // 2), (x + a, y), (x + a, y + a), (x, y + a // 2 + a)]
+        face(l, shade(side, .78), ore); face(r, shade(side, .6), ore)
+        if top_side:                        # полоса травы по верху боковин
+            d.polygon([l[0], l[1], (l[1][0], l[1][1] + 9), (l[0][0], l[0][1] + 9)], fill=shade(top_side, .8))
+            d.polygon([r[0], r[1], (r[1][0], r[1][1] + 9), (r[0][0], r[0][1] + 9)], fill=shade(top_side, .62))
+        face(t, top, ore)
+        for p, q in ((t[0], t[1]), (t[1], t[2]), (t[2], t[3]), (t[3], t[0]), (l[2], l[3]), (r[2], r[3]), (t[2], l[2])):
+            d.line([p, q], fill=(20, 24, 40, 90), width=1)
+    GRASS, DIRT, STONE, SAND, WATER = (95, 176, 70), (122, 86, 52), (125, 125, 130), (221, 208, 154), (70, 130, 220)
+    LOG, LEAF, DIAM = (107, 79, 44), (60, 150, 60), (95, 240, 230)
+    blocks = []
+    for gx in range(4):
+        for gz in range(4):
+            h = 2 if (gx, gz) not in ((3, 3), (3, 2), (2, 3)) else 1
+            for gy in range(h):
+                top = gy == h - 1
+                if (gx, gz) in ((3, 3), (3, 2), (2, 3)) and top: blocks.append((gx, gy, gz, WATER, shade(WATER, .9), None, None)); continue
+                if gy == 0: blocks.append((gx, gy, gz, STONE, STONE, DIAM if (gx, gz) == (0, 3) else None, None))
+                elif (gx, gz) == (2, 2): blocks.append((gx, gy, gz, SAND, SAND, None, None))
+                else: blocks.append((gx, gy, gz, GRASS, DIRT, None, GRASS))
+    for gy in (2, 3, 4): blocks.append((1, gy, 1, (176, 138, 82), LOG, None, None))
+    for gx, gy, gz in ((0, 4, 1), (1, 4, 0), (2, 4, 1), (1, 4, 2), (0, 5, 0), (1, 5, 1), (1, 6, 1), (2, 5, 2), (0, 5, 2), (2, 5, 0)):
+        blocks.append((gx, gy, gz, LEAF, shade(LEAF, .9), (40, 120, 40), None))
+    blocks.sort(key=lambda b: (b[0] + b[2], b[1]))
+    for b in blocks: cube(*b)
+    # человечек на острове
+    x = ox + (3 - 0) * a; y = oy + (3 + 0) * a // 2 - 1 * a + 4   # стоит на верхнем блоке (3, 1, 0)
+    d.rectangle((x - 9, y - 70, x + 9, y - 52), fill=(240, 200, 160)); d.rectangle((x - 9, y - 72, x + 9, y - 66), fill=(90, 58, 32))
+    d.rectangle((x - 11, y - 52, x + 11, y - 26), fill=(79, 141, 247)); d.rectangle((x - 9, y - 26, x - 2, y), fill=(58, 74, 106)); d.rectangle((x + 2, y - 26, x + 9, y), fill=(58, 74, 106))
+    d.line([(x + 10, y - 40), (x + 30, y - 62)], fill=(120, 80, 45), width=4); d.line([(x + 18, y - 70), (x + 40, y - 56)], fill=(95, 240, 230), width=6)
+    return im.crop(im.getbbox())
+
 W, H = 1200, 630
 for gid, ic, title, color in GAMES:
     if ONLY and gid not in ONLY: continue
@@ -290,6 +345,9 @@ for gid, ic, title, color in GAMES:
     elif ic == 'draw:podzem':
         em = draw_podzem()
         em.thumbnail((420, 420), Image.LANCZOS)
+    elif ic == 'draw:kubomir':
+        em = draw_kubomir()
+        em.thumbnail((440, 440), Image.LANCZOS)
     else:
         em = Image.new('RGBA', (700, 700), (0, 0, 0, 0))
         ImageDraw.Draw(em).text((120, 120), ic, font=emoji, embedded_color=True)
@@ -303,7 +361,7 @@ for gid, ic, title, color in GAMES:
     while d.textlength(title, font=bold(size)) > 660: size -= 4
     d.text((80, 190), title, font=bold(size), fill=(255, 255, 255))
     sub = {'games': 'С ботом или с другом по ссылке', 'studio3d': 'Построй свой мир, как в Roblox', 'unity': 'Выложи свою игру из Unity',
-           'krokodil': 'Рисуй и угадывай с друзьями', 'raid': 'Строй базу и нападай', 'podzem': 'Копай, строй, сражайся'}.get(gid, 'Побьёшь мой рекорд?')
+           'krokodil': 'Рисуй и угадывай с друзьями', 'raid': 'Строй базу и нападай', 'podzem': 'Копай, строй, сражайся', 'kubomir': 'Свой мир из кубиков'}.get(gid, 'Побьёшь мой рекорд?')
     d.text((84, 200 + size + 20), sub, font=reg(48), fill=c if sum(c) > 300 else (200, 200, 220))
     # кнопка
     bx, by = 84, 470

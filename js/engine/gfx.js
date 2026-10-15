@@ -482,6 +482,9 @@ uniform vec4 d37Rt;`;
 	}
 	#endif
 #endif`;
+  // Для своих шейдеров (вырезанное по альфе в «Кубомире» — voxel-render.js и т. п.): код травы — этой строкой после
+  // #include <output_fragment>, с uniform vec4 d37Rt = { value: E.GFXU.rt } (флаг z ставит post.js, страж его проверяет)
+  E.FOLIAGE_GLSL = `gl_FragColor = vec4( gl_FragColor.rgb, d37Rt.z > 0.5 ? ${E.FOLIAGE_A.toFixed(8)} : gl_FragColor.a );`;
   // код из альфы (как читает post.js) — для проверок: { kind: 'clear' | 'gloss' | 'metal' | 'foliage' | null, gloss }
   // (null — обычное и светящееся: не блестит; 'foliage' — трава и листва: не блестит и без AO)
   E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) }
