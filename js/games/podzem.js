@@ -411,7 +411,8 @@
     G.U?.inv();
     return true;
   }
-  function useOne(){ const s = selItem(); if (!s) return; s.n--; if (s.n <= 0) G.CH.inv[G.CH.sel] = null; G.U?.inv(); }
+  // потратили последний — пустая рука не начнёт копать, пока не отпустили ЛКМ (иначе ломала только что поставленный факел)
+  function useOne(){ const s = selItem(); if (!s) return; s.n--; if (s.n <= 0) { G.CH.inv[G.CH.sel] = null; if (G.pl) G.pl.handLock = true; } G.U?.inv(); }
 
   // ═══ Крафт: станки рядом (до 4 клеток от игрока) ═══
   function stationsNear(){
@@ -709,33 +710,49 @@
     for (let k = 1; k < n; k++) { const t = k / n; if (shapeAt(Math.floor(x0 + (x1 - x0) * t), Math.floor(y0 + (y1 - y0) * t)) === 1) return false; }
     return true;
   }
-  // появление мобов: за экраном, по глубине и времени суток
+  // ═══ Появление мобов — как в Террарии: раз в секунду игрового времени (шаг логики — 1/60 с, от частоты экрана не зависит)
+  // шанс по месту и времени суток (днём наверху редко, ночью и в глубине чаще), реже, когда рядом уже много; предел — на
+  // участок вокруг героя. Только за экраном (прямоугольник камеры + 3 клетки) и не ближе SPAWN_SAFE к герою; не в домах;
+  // SPAWN_GRACE с после входа в мир и возрождения — тихо. Свой генератор (G.srand): картинка не сбивает очередь случайностей.
+  const SPAWN_GRACE = 20, SPAWN_SAFE = 16, MOB_AREA_X = 110, MOB_AREA_Y = 80;   // участок героя: дальше мобы исчезают
+  const mulberry = s => () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  function spawnZone(depth, py, C){   // [мобы с весами, предел рядом, шанс за секунду]
+    if (depth < 18) return isNight() ? [[['zombie', 6], ['slime', 2], ['bat', 1]], 6, .14] : [[['slime', 1]], 3, .05];
+    if (py < C.deep) return [[['blueslime', 4], ['bat', 3], ['crawler', 3]], 5, .1];
+    if (py < C.lava) return [[['purpleslime', 4], ['bat', 3], ['crawler', 4]], 6, .12];
+    return [[['imp', 5], ['purpleslime', 3], ['bat', 2]], 7, .14];
+  }
+  // место для моба (x — середина, y — ноги): за экраном, далеко от героя, не в доме (на поверхности — у любой стены, внизу — у
+  // стены, которую поставил игрок: не такой, как в мире по зерну)
+  function spawnOk(x, y, D, surface){
+    const [vw, vh] = viewTiles(), p = G.pl;
+    const ox = Math.abs(x - G.cam.x) - D.w / 2 - vw / 2, oy = Math.abs(y - D.h / 2 - G.cam.y) - D.h / 2 - vh / 2;
+    if (ox < 3 && oy < 3) return false;
+    if (Math.hypot(x - (p.x + p.w / 2), y - D.h / 2 - (p.y + p.h / 2)) < SPAWN_SAFE) return false;
+    const tx = Math.floor(x), ty = Math.floor(y - .5), w = wallAt(tx, ty);
+    if (w && (surface || w !== (G.gen.base(tx, ty) >> 8 & 255))) return false;
+    return true;
+  }
   function spawnTick(){
-    const p = G.pl; if (p.dead) return;
+    const p = G.pl; if (p.dead || G.spawnGrace > 0) return;
+    const sr = G.srand || rand;
     const px = p.x + p.w / 2, py = p.y + p.h, C = G.gen.colInfo(Math.floor(px)), depth = py - C.h;
-    const [vw] = viewTiles();
-    let pool, cap;
-    if (depth < 18) { if (isNight()) { pool = [['zombie', 6], ['slime', 2], ['bat', 1]]; cap = 8; } else { pool = [['slime', 1]]; cap = 4; } }
-    else if (py < C.deep) { pool = [['blueslime', 4], ['bat', 3], ['crawler', 3]]; cap = 7; }
-    else if (py < C.lava) { pool = [['purpleslime', 4], ['bat', 3], ['crawler', 4]]; cap = 8; }
-    else { pool = [['imp', 5], ['purpleslime', 3], ['bat', 2]]; cap = 9; }
-    let n = 0; for (const m of G.mobs) if (!m.D.boss) n++;
-    if (n >= cap) return;
+    const [pool, cap, chance] = spawnZone(depth, py, C);
+    let n = 0; for (const m of G.mobs) if (!m.D.boss && Math.abs(m.x - p.x) <= MOB_AREA_X && Math.abs(m.y - p.y) <= MOB_AREA_Y) n++;   // участок вокруг героя (дальше мобы исчезают)
+    if (n >= cap || sr() >= chance * (1 - .5 * n / cap)) return;
     const tot = pool.reduce((s, q) => s + q[1], 0);
-    let r = rand() * tot, type = pool[0][0];
+    let r = sr() * tot, type = pool[0][0];
     for (const [k, w] of pool) { if ((r -= w) < 0) { type = k; break; } }
-    const D = MOBS[type];
-    for (let tries = 0; tries < 10; tries++) {
-      const side = rand() < .5 ? -1 : 1, x = Math.floor(px + side * (vw / 2 + 4 + rand() * 22)), y0 = Math.floor(p.y + (rand() - .5) * 30);
+    const D = MOBS[type], fly = D.ai === 'bat' || D.ai === 'imp';
+    const [vw, vh] = viewTiles();
+    for (let tries = 0; tries < 12; tries++) {
+      const side = sr() < .5 ? -1 : 1, x = Math.floor(G.cam.x + side * (vw / 2 + 5 + sr() * 20)), y0 = Math.floor(G.cam.y + (sr() - .5) * (vh + 20));
       if (!cAt(x, y0)) continue;
-      if (D.ai === 'bat' || D.ai === 'imp') {
-        if (!shapeAt(x, y0) && !shapeAt(x + 1, y0) && !shapeAt(x, y0 + 1) && !lqAt(x, y0)) { spawnMob(type, x + .5, y0 + 1); return; }
-        continue;
-      }
-      const gy = groundY(x, y0 - 6);
-      if (gy == null || Math.abs(gy - y0) > 30 || lqAt(x, gy - 1) > 100) continue;
-      if (depth < 18 && wallAt(x, gy - 1)) continue;   // на поверхности в домах (у стен) — не появляются
-      spawnMob(type, x + .5, gy);
+      let fy;
+      if (fly) { if (shapeAt(x, y0) || shapeAt(x + 1, y0) || shapeAt(x, y0 + 1) || lqAt(x, y0)) continue; fy = y0 + 1; }
+      else { const gy = groundY(x, y0 - 6); if (gy == null || Math.abs(gy - y0) > 30 || lqAt(x, gy - 1) > 100) continue; fy = gy; }
+      if (!spawnOk(x + .5, fy, D, depth < 18)) continue;
+      spawnMob(type, x + .5, fy);
       return;
     }
   }
@@ -790,7 +807,7 @@
   function respawn(){
     const p = G.pl, s = G.W.bed || G.W.spawn;
     p.x = s.x + .5 - p.w / 2; p.y = s.y - p.h; p.vx = p.vy = 0; p.dead = 0; p.iframes = 2; p.fallY = p.y;
-    G.CH.hp = G.CH.maxHp; G.CH.mana = G.CH.maxMana;
+    G.CH.hp = G.CH.maxHp; G.CH.mana = G.CH.maxMana; G.spawnGrace = SPAWN_GRACE;   // после возрождения — передышка
     G.cam.x = p.x; G.cam.y = p.y;
     stream(true);
     G.U?.dead(null); G.U?.hud();
@@ -885,15 +902,18 @@
     T0.x = tx; T0.y = ty; T0.ok = !!ok; T0.smart = smart; T0.kind = it ? it.kind : null;
     return T0;
   }
-  // Shift держат — сам подбери в ячейках инструмент под курсором: руда — лучшая кирка, дерево — топор, стена — молоток,
-  // пусто и темно — факел (отпустили Shift — вернётся прежняя ячейка)
+  // Shift держат — сам подбери в ячейках инструмент под курсором: руда — лучшая кирка, дерево — топор, пусто и темно — факел
+  // (отпустили Shift — вернётся прежняя ячейка). Сам взял то, что ставится (факел, блок, мебель, стену), — не трогаем: ЛКМ
+  // только ставит. Молоток не подаём — стены ломает только молоток, который игрок взял сам.
+  const placeable = d => !!d && (d.kind === 'tile' || d.kind === 'wall');
   function autoSelect(){
-    const [tx, ty] = cursorTile(), f = fgAt(tx, ty), w = wallAt(tx, ty);
+    const own = G.CH.inv[G.autoPrev >= 0 ? G.autoPrev : G.CH.sel];
+    if (placeable(own && itemDef(own.id))) return;
+    const [tx, ty] = cursorTile(), f = fgAt(tx, ty);
     const pick = score => { let best = -1, bv = 0; for (let i = 0; i < HOT_N; i++) { const s = G.CH.inv[i]; if (!s) continue; const v = score(itemDef(s.id)); if (v > bv) { bv = v; best = i; } } return best; };
     let want = -1;
     if (f && f !== 255 && P.TOOL[f] === 0) want = pick(it => it?.kind === 'tool' && it.tool === 'pick' ? (it.tier >= P.TIER[f] ? 1000 : 0) + it.power : 0);
     else if (f && f !== 255 && P.TOOL[f] === 1) want = pick(it => it?.kind === 'tool' && it.tool === 'axe' ? it.power : 0);
-    else if (!f && w) want = pick(it => it?.kind === 'tool' && it.tool === 'hammer' ? 1 : 0);
     else if (!f) { const L = lightAt(tx + .5, ty + .5); if (L[0] + L[1] + L[2] < 1) want = pick(it => it?.key === 'torch' ? 1 : 0); }
     if (want >= 0 && want !== G.CH.sel) { G.CH.sel = want; G.pl.mine = null; G.U?.hud(); }
   }
@@ -1047,7 +1067,7 @@
     const U = G.U;
     if (I.blocked || G.pl.recallT > 0) { G.pl.mine = null; return; }
     const wantUse = G.mouse.l || G.C.held('attack') || !!U?.touch?.use;
-    if (!wantUse) { if (G.pl.mine) G.pl.mine.t += dt; if (G.pl.mine && G.pl.mine.t > 2) G.pl.mine = null; return; }
+    if (!wantUse) { G.pl.handLock = false; if (G.pl.mine) G.pl.mine.t += dt; if (G.pl.mine && G.pl.mine.t > 2) G.pl.mine = null; return; }
     if (G.pl.useT > 0) return;
     useItem();
   }
@@ -1056,7 +1076,7 @@
     const tg = updTarget(), tx = tg.x, ty = tg.y;
     const pcx = p.x + p.w / 2;
     if (G.aim.x < pcx - .2) p.dir = -1; else if (G.aim.x > pcx + .2) p.dir = 1;
-    if (!it) { handBreak(tx, ty); p.useT = .3; return; }
+    if (!it) { if (!p.handLock) handBreak(tx, ty); p.useT = .3; return; }
     switch (it.kind) {
       case 'tool': return useTool(it, tx, ty);
       case 'melee': return swingWeapon(it);
@@ -1087,6 +1107,7 @@
     const p = G.pl, fast = buffOn('mine') ? .78 : 1;   // «Зелье шахтёра» — удар чаще и сильнее
     p.useT = it.speed * fast; p.swing = it.speed * fast; p.swingDur = it.speed * fast;
     snd('swing', { vol: .25, rate: 1.2 });
+    swingHit(toolDmg(it), it.reach || 2.2);   // замах инструментом задевает мобов
     if (!inReach(tx, ty)) return;
     const f = fgAt(tx, ty); if (f === 255) return;
     if (it.tool === 'hammer') {
@@ -1420,23 +1441,28 @@
     toast(moved ? `📦 Разложено по сундукам рядом: ${moved} шт. (${chests})` : 'Рядом нет сундуков с такими же вещами', moved ? 'good' : 'bad');
     if (moved) snd('door_wood_close', { vol: .4, rate: 1.4 });
   }
-  // ── Оружие ближнего боя: дуга перед игроком ──
-  function swingWeapon(it){
-    const p = G.pl;
-    p.useT = it.speed; p.swing = it.speed; p.swingDur = it.speed; p.swingId++;
-    snd('swing', { vol: .5 });
-    const id = p.swingId;
+  // ── Удар дугой перед игроком: оружие и инструменты (кирка, топор, молоток — тоже бьют, слабее; как в Террарии) ──
+  function swingHit(dmg, reach){
+    const p = G.pl, id = ++p.swingId;
     const cx = p.x + p.w / 2, cy = p.y + p.h * .45;
     for (const m of G.mobs) {
       if (m.hp <= 0 || m.hitBy === id) continue;
       const mx = clamp(cx, m.x, m.x + m.w), my = clamp(cy, m.y, m.y + m.h), dx = mx - cx, dy = my - cy;
-      if (Math.hypot(dx, dy) > it.reach + .3) continue;
+      if (Math.hypot(dx, dy) > reach + .3) continue;
       if (dx * p.dir < -.6) continue;
       m.hitBy = id;
-      hurtMob(m, it.dmg, p.dir);
+      hurtMob(m, dmg, p.dir);   // искры, отброс, цифра урона — как у оружия
     }
+  }
+  // урон инструмента: свой (podzem-core) или по силе (инструменты из модов)
+  const toolDmg = it => it.dmg || Math.max(2, Math.round((it.power || 30) / 9));
+  function swingWeapon(it){
+    const p = G.pl;
+    p.useT = it.speed; p.swing = it.speed; p.swingDur = it.speed;
+    snd('swing', { vol: .5 });
+    swingHit(it.dmg, it.reach);
     // по пути рубит траву
-    const tx = Math.floor(cx + p.dir * 1.2);
+    const cx = p.x + p.w / 2, tx = Math.floor(cx + p.dir * 1.2);
     for (let y = Math.floor(p.y); y <= Math.floor(p.y + p.h); y++) { const f = fgAt(tx, y); if (f && f !== 255 && P.TOOL[f] === 2 && P.HARD[f] === 0) breakTile(tx, y, true); }
   }
   // ── Взаимодействие: дверь, сундук, кровать, Проводник ──
@@ -1566,7 +1592,7 @@
       for (let n = G.mobs.length - 1; n >= 0; n--) {
         const m = G.mobs[n];
         if (m.hp <= 0) { G.mobs.splice(n, 1); continue; }
-        const far = Math.abs(m.x - G.pl.x) > 110 || Math.abs(m.y - G.pl.y) > 80;
+        const far = Math.abs(m.x - G.pl.x) > MOB_AREA_X || Math.abs(m.y - G.pl.y) > MOB_AREA_Y;
         if (far && !m.D.boss) { G.mobs.splice(n, 1); continue; }
         if (!cAt(Math.floor(m.x), Math.floor(m.y)) && !m.fly) continue;   // мир под ним ещё грузится
         mobAI(m, dt);
@@ -1575,7 +1601,8 @@
       updProjs(dt);
       updItems(dt);
       if ((G.tick & 1) === 0) liquids();
-      G.spawnT -= dt; if (G.spawnT <= 0) { G.spawnT = 1; spawnTick(); }
+      if (G.spawnGrace > 0) G.spawnGrace -= dt;
+      G.spawnT -= dt; if (G.spawnT <= 0) { G.spawnT += 1; spawnTick(); }
       G.modT -= dt; if (G.modT <= 0) { G.modT = .5; G.modsTick?.(); }
     }
     updParts(dt);
@@ -2247,6 +2274,7 @@
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
     G.mobs.length = 0; G.items.length = 0; G.projs.length = 0; G.npcs.length = 0; G.texts.length = 0; G.boss = null; PT.n = 0;
     G.edits.length = 0; G.editIdx.clear(); G.cheats = !!W.cheats;
+    G.spawnGrace = SPAWN_GRACE; G.spawnT = 1; G.srand = mulberry((W.seed ^ Math.floor(W.playtime || 0)) >>> 0);   // мобы — не сразу после входа
     lastC = null; inbox.length = 0;
     G.U?.loading(true, 'Мир строится…');
     // моды мира
