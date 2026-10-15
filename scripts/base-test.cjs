@@ -489,6 +489,7 @@ var r;
       try { h = DRAW[k]((g, o) => { parts.push(o); return new G(); }, new G(), { i: 1, k, x: 2, z: 2, r: 0, l }, bd, x); } catch (e) { err = e.message; }
       ok(!err, `${k} ${l} ур.: рисуется`, err);
       ok(parts.every(o => ['x', 'y', 'z', 'w', 'h', 'd', 'r', 'yaw', 'rx', 'rz'].every(f => fin(o[f]))), `${k} ${l} ур.: размеры деталей — числа`);
+      ok(parts.every(o => ['box', 'cyl', 'cone', 'ball', 'ico', 'torus', 'ring', 'disc', 'plane'].includes(o.s || 'box')), `${k} ${l} ур.: детали — те, что умеет движок (R.part)`, parts.map(o => o.s));
       ok(h === undefined || (Number.isFinite(h) && h > 0 && h < 20), `${k} ${l} ур.: высота`, h);
       ok(bd.every(b => (b.t === 'cyl' ? b.r > 0 : b.w > 0 && b.d > 0) && b.h > 0 && fin(b.y0) && fin(b.x) && fin(b.z)), `${k} ${l} ур.: тела`, bd);
     }
