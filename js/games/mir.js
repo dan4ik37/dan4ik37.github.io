@@ -19,7 +19,7 @@
   const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃', '👏', '🤔', '😮', '😡', '🙇', '🤸'];   // как World3D.EMOTES
   const NO_ROOM = new Set(['pauk', 'wardrobe', 'clicker', 'quiz', 'wheel', 'random', 'typing', 'cps', 'fonts', 'world', 'studio']);
   const COOP = new Set(['horde', 'td']);
-  const QUICK = ['chess', 'durak', 'uno', 'checkers', 'pool', 'nardy', 'arena', 'horde', 'td', 'sea'];
+  const QUICK = ['chess', 'durak', 'uno', 'domino', 'balda', 'checkers', 'pool', 'nardy', 'arena', 'horde', 'td', 'sea'];
   const ROLE = { admin: ['👑', '#ff4d6d', 'Админ'], moderator: ['🛡️', '#4ade80', 'Модератор'], helper: ['🤝', '#38bdf8', 'Помощник'] };
   const VIPC = { gold: '#facc15', silver: '#e2e8f0', bronze: '#f59e0b' };
   const PI = Math.PI;

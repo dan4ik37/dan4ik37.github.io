@@ -561,5 +561,74 @@ function boundsOk(R){
   const D3 = E.dynRes({ min: 0, step: 1 / 6 }); D3.set(0); ok(D3.scale === 0, 'ступени автокачества: 0 — самая дешёвая');
 }
 
+// ═══ 15. «Рябь на полу» (15.10.2026) не возвращается: тени без шума по экрану, наклон приёмника; AO — размытие по плоскости,
+//     глубина сцены — 24 бита. Формулы берутся прямо из текста шейдеров и считаются здесь на числах ═══
+{
+  const shp = T.ShaderChunk.shadowmap_pars_fragment, gs = shp.slice(shp.indexOf('uniform vec4 d37Sh;'), shp.indexOf('vec2 cubeToUV('));
+  ok(gs.length > 500 && !gs.includes('gl_FragCoord'), 'тени: без шума по пикселям экрана (он ползал при движении — рябь на полу)');
+  ok(/float d37Bil\(/.test(gs) && (gs.match(/d37Cmp\( map,/g) || []).length === 4 && gs.includes('s += d37Bil( map, size,'), 'тени: каждая выборка — 2×2 текселя с весами');
+  const iV = gs.indexOf('#if __VERSION__ >= 300'), iD = gs.indexOf('dFdx( shadowCoord'), iF = gs.indexOf('if ( frustumTest )');
+  ok(iV >= 0 && iD > iV && iD < iF && !/GL_OES_standard_derivatives/.test(gs), 'тени: наклон приёмника — по производным, только WebGL2, до ветвлений');
+  ok(/rad = clamp\( sum \/ cnt \* d37Sh\.z, rad \* 0\.5, rad \* 2\.5 \)/.test(gs), 'PCSS: полутень от ½ до 2,5 радиуса (у самой заслонки — без «лесенки» текселей)');
+  // наклон приёмника: формула из шейдера по производным (u, v, z) восстанавливает наклон плоскости при любом виде с экрана
+  const mDet = /float det = ([^;]+);/.exec(gs), mG = /g = vec2\( ([^,]+), ([^)]+) \) \/ det;/.exec(gs);
+  ok(!!(mDet && mG), 'тени: формула наклона найдена в шейдере');
+  if (mDet && mG) {
+    const fDet = new Function('cx', 'cy', 'return ' + mDet[1]), fx = new Function('cx', 'cy', 'return ' + mG[1]), fy = new Function('cx', 'cy', 'return ' + mG[2]);
+    let worst = 0;
+    for (let k = 0; k < 200; k++) {
+      const gx = (Math.random() - .5) * 8, gy = (Math.random() - .5) * 8;   // dz/du, dz/dv плоскости
+      const a = [(Math.random() - .5) * 1e-3, (Math.random() - .5) * 1e-3], b = [(Math.random() - .5) * 1e-3, (Math.random() - .5) * 1e-3];   // du,dv по x и y экрана
+      if (Math.abs(a[0] * b[1] - a[1] * b[0]) < 1e-8) continue;
+      const cx = { x: a[0], y: a[1], z: gx * a[0] + gy * a[1] }, cy = { x: b[0], y: b[1], z: gx * b[0] + gy * b[1] }, det = fDet(cx, cy);
+      worst = Math.max(worst, Math.abs(fx(cx, cy) / det - gx), Math.abs(fy(cx, cy) / det - gy));
+    }
+    ok(worst < 1e-6, 'тени: наклон приёмника из производных — точный (иначе низкое солнце даёт полосы)', worst);
+  }
+  // постобработка на подставном рендерере: какие проходы, куда пишут, что читает сборка кадра
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; },
+    render: (scene) => { const m = scene.children[0] && scene.children[0].material, u = m && m.uniforms; log.push({ t: cur, m, fs: m && m.fragmentShader, tex: u && u.uTexel && u.uTexel.value.clone(), src: u && u.tSrc && u.tSrc.value, ao: u && u.tAO && u.tAO.value }); } };
+  const P = E.post({ T, r, q: 'high', stats: {}, pr0: 1 });
+  const cam = new T.PerspectiveCamera(50, 16 / 9, .2, 400); cam.updateProjectionMatrix();
+  const frame = () => { log.length = 0; P.render(new T.Scene(), cam); return log.slice(); };
+  P.setOpts({ ao: 'off', aa: 'fxaa' }); P.setSize(800, 450, 1);
+  let L = frame();
+  ok(!P.ao.on && L[0].t && L[0].t.depthTexture && L[0].t.depthTexture.type === T.UnsignedIntType, 'глубина сцены — 24 бита (текстурой) и без AO: тонкие слои пола не путаются', { on: P.ao.on });
+  ok(!L.some(x => x.fs && x.fs.includes('perspectiveDepthToViewZ(texture2D(tDepth, uv)')), 'AO выключен — проходов AO нет (текстура глубины его не включает)');
+  P.setOpts({ ao: 'on', aa: 'fxaa' });
+  L = frame();
+  const iAO = L.findIndex(x => x.fs && x.fs.includes('uAO')), b1 = L[iAO + 1], b2 = L[iAO + 2], comp = L.find(x => x.ao !== undefined && x.fs && x.fs.includes('aoUp'));
+  ok(P.ao.on && iAO > 0 && L[iAO].t && b1 && b2 && b1.m === b2.m && b1.src === L[iAO].t.texture && b2.src === b1.t.texture, 'AO: расчёт → размытие вдоль → поперёк', iAO);
+  ok(b1 && b2 && b1.tex.x > 0 && b1.tex.y === 0 && b2.tex.x === 0 && b2.tex.y > 0, 'AO: два прохода размытия — по x и по y');
+  ok(comp && b2 && comp.ao === b2.t.texture, 'сборка кадра берёт AO после обоих проходов');
+  const fsAO = L[iAO].fs, fsB = b1 && b1.fs;
+  ok(!/mod\(floor\(gl_FragCoord\.xy\), 4\.0\)/.test(fsAO) && fsAO.includes('52.9829189'), 'AO: поворот — свой у пикселя, без узора 4×4 (он оставался полосами)');
+  // вес размытия из шейдера: на полу под острым углом (1/глубины меняется линейно) соседи не отбрасываются, на краю предмета — да
+  const mK = fsB && /float k = ([^;]+);/.exec(fsB), mW = fsB && /float wa = ([^;]+);/.exec(fsB);
+  ok(!!(mK && mW), 'AO: формулы веса найдены в шейдере размытия');
+  if (mK && mW) {
+    const js = s => s.replace(/\bmax\(/g, 'Math.max(').replace(/\babs\(/g, 'Math.abs(');
+    const fK = new Function('wc', 'wl', 'wr', 'return ' + js(mK[1])), fW = new Function('wg', 'a', 'wc', 'k', 'fi', 'return ' + js(mW[1]));
+    const blurW = z => {   // z(i) — глубина соседа i (i = −4…4); доля веса Гаусса, которую размытие оставляет
+      const wc = 1 / z(0), k = fK(wc, 1 / z(-1), 1 / z(1));
+      let got = 0, all = 0; for (let i = 1; i <= 4; i++) { const wg = Math.exp(-i * i * .1); got += fW(wg, { y: z(i) }, wc, k, i) + fW(wg, { y: z(-i) }, wc, -k, i); all += 2 * wg; }
+      return got / all;
+    };
+    let floorMin = 1;
+    for (const [z0, step] of [[3, .05], [8, .4], [25, 2], [60, 6], [140, 15]]) {   // пол: от «под ногами» до «у горизонта»
+      const w0 = 1 / z0, dw = 1 / (z0 + step) - w0;
+      floorMin = Math.min(floorMin, blurW(i => 1 / (w0 + dw * i)));
+    }
+    ok(floorMin > .9, 'AO: на полу под углом размытие берёт соседей (было: отбрасывало — полосы, «лесенка»)', floorMin);
+    // в 2 пикселях — край стула (на 25% ближе): его выборки не берутся, остальные — да
+    const edge = blurW(i => i >= 2 ? 6 : 8), keep = 1 - (Math.exp(-.4) + Math.exp(-.9) + Math.exp(-1.6)) / (2 * [1, 2, 3, 4].reduce((s, i) => s + Math.exp(-i * i * .1), 0));
+    ok(Math.abs(edge - keep) < .01, 'AO: через край предмета не размывает', { edge, keep });
+  }
+  P.dispose();
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);

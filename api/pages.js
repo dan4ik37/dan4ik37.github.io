@@ -25,9 +25,10 @@ import invite from './_lib/routes/invite.js';
 import adgo, { geo } from './_lib/routes/adgo.js';   // реклама за 💎: переход /go/<id> и страна /api/geo
 import adsterms from './_lib/routes/adterms.js';     // реклама за 💎: правила для рекламодателей /ads-terms
 import ref from './_lib/routes/ref.js';               // 👥 приглашение друга /r/<код>
+import oauth from './_lib/routes/oauth.js';          // вход через VK ID, Яндекс ID, Telegram: /auth/<p>/start|callback, /api/oauth
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, r: ref };
+  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, oauth, r: ref };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

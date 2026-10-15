@@ -120,6 +120,9 @@ async function renderProfilePage(viewUserId){
   // #/profile/vip — свой профиль сразу на блоках «Логин для доната» и «Хочу купить VIP» (кнопка со страницы /vip)
   const focusVip = viewUserId === 'vip';
   if (focusVip) viewUserId = null;
+  // #/profile/logins — свой профиль сразу на «Способах входа» (js/features/social-login.js; туда возвращает привязка входа)
+  const focusLogins = viewUserId === 'logins';
+  if (focusLogins) viewUserId = null;
   const loHint = loggedOutEl?.querySelector('p');
   if (loHint) loHint.textContent = focusVip ? 'VIP привязывается к аккаунту — войди или зарегистрируйся, и откроется, как его получить' : 'Чтобы завести профиль — войди или зарегистрируйся';
 
@@ -169,7 +172,8 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileNick').textContent = profile.nick || 'Без ника';
   window.d37NickFx?.markEl(document.getElementById('profileNick'), targetId);
   renderProfileChar(targetId, isOwn);
-  profileEmailRaw = isOwn ? (currentUser?.email || '') : '';
+  // служебная почта аккаунта из VK / Яндекса / Telegram (…@id.invalid) — не настоящая, не показываем
+  profileEmailRaw = isOwn && !window.D37Login?.isSynthetic?.(currentUser) ? (currentUser?.email || '') : '';
   profileEmailVisible = false;
   document.getElementById('profileEmailToggle').style.display = (isOwn && profileEmailRaw) ? 'inline' : 'none';
   renderProfileEmailMask();
@@ -186,6 +190,8 @@ async function renderProfilePage(viewUserId){
   renderStaffVipPanel(profile, isOwn);
 
   document.getElementById('profileRoleBadge').innerHTML = ROLE_BADGE_HTML[profile.role] || '';
+  // модераторам на чужом профиле — «связанные входы» (какие сервисы и сколько, без номеров и почты; social-login.js)
+  if (window.D37Login) window.D37Login.staffNote(isOwn ? null : targetId).catch(() => {});
   {
     const tier = getVipTier(profile);
     const vipBadgeEl = document.getElementById('profileVipBadge');
@@ -234,6 +240,9 @@ async function renderProfilePage(viewUserId){
   if (hidden) document.getElementById('profileXpCard').hidden = true;
   else if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
   if (isOwn) renderPrivacySettings(profile);
+  if (isOwn && window.D37Login) window.D37Login.renderMethods().then(() => {   // «Способы входа»
+    if (focusLogins) { const el = document.getElementById('profileLogins'); if (el && !el.hidden) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  }).catch(e => console.warn('способы входа:', e));
 
   // Редактирование — только на своём профиле
   document.getElementById('profileBannerEditBtn').style.display = isOwn ? 'flex' : 'none';

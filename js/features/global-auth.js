@@ -32,6 +32,9 @@ function oauthProviders() {
   return oauthProvidersPromise;
 }
 async function signInWithProvider(provider) {
+  // ▼ вход через сервисы — js/features/social-login.js (VK ID, Telegram, Яндекс ID, Google, Discord, Twitch, GitHub) ▼
+  if (window.D37Login) return window.D37Login.start(provider);
+  // ▲ ▲
   if (!sbClient) return;
   try { localStorage.setItem('d37_after_login', '#/profile'); } catch (e) {}
   if (typeof window.va === 'function') window.va('event', { name: 'oauth_click', data: { provider } });
@@ -42,7 +45,9 @@ async function signInWithProvider(provider) {
 function openLoginModal(mode) {
   const modal = document.getElementById('globalAuthModal');
   modal.classList.add('open');
-  oauthProviders().then(p => { const box = document.getElementById('gauthOauth'); if (box) box.hidden = !p.google; });
+  // ▼ «Войти через…» рисует js/features/social-login.js (switchAuthTab ниже зовёт D37Login.renderModal); без него — как раньше, только Google ▼
+  if (!window.D37Login) oauthProviders().then(p => { const box = document.getElementById('gauthOauth'); if (box) box.hidden = !p.google; });
+  // ▲ ▲
   switchAuthTab(mode === 'register' ? 'register' : 'login');
   document.getElementById('gauthLogin').style.display = 'block';
   trapModalFocus(modal);
@@ -94,6 +99,9 @@ function switchAuthTab(mode) {
   document.getElementById('gauthErr').textContent = '';
   document.getElementById('gauthRegErr').textContent = '';
   document.getElementById('gauthResetErr').textContent = '';
+  // ▼ вход через сервисы: кнопки «Войти через…» и «я не робот» под эту вкладку (js/features/social-login.js) ▼
+  window.D37Login?.renderModal?.(isReset ? 'reset' : isReg ? 'register' : 'login');
+  // ▲ ▲
 }
 
 // ─── Забыл пароль ───
@@ -105,9 +113,13 @@ async function doForgotPassword() {
   errEl.style.color = '';
   errEl.textContent = 'Отправляем письмо...';
   try {
+    // ▼ «я не робот» (D37Captcha, js/features/social-login.js; выключено, пока нет TURNSTILE_SITE_KEY) ▼
+    const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('login') : null;
     const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-      redirectTo: location.origin + location.pathname,
+      redirectTo: location.origin + location.pathname, ...(captchaToken ? { captchaToken } : {}),
     });
+    window.D37Captcha?.done('login', true, false);
+    // ▲ ▲
     if (error) throw error;
     errEl.style.color = 'var(--tw)';
     errEl.textContent = '✅ Письмо отправлено. Перейди по ссылке в нём, чтобы задать новый пароль.';
@@ -159,7 +171,11 @@ async function doGlobalLogin() {
 
   try {
     if (!sbClient) throw new Error('Нет связи с сервером — обнови страницу');
-    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
+    // ▼ «я не робот»: невидимо, после 2 неудачных входов — галочка (D37Captcha, js/features/social-login.js) ▼
+    const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('login') : null;
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass, options: captchaToken ? { captchaToken } : undefined });
+    window.D37Captcha?.done('login', !error);
+    // ▲ ▲
     if (error) throw error;
     await onAuthStateChange(data.user);
     goToOwnProfile();
@@ -193,7 +209,12 @@ async function doGlobalRegister() {
     // его читает handle_new_user() из referrals.sql. Раньше не передавался вовсе.
     let ref = '';
     try { ref = localStorage.getItem('d37_ref') || ''; } catch(e) {}
-    const { data, error } = await sbClient.auth.signUp({ email, password: pass, options: ref ? { data: { ref } } : undefined });
+    // ▼ «я не робот» при регистрации (D37Captcha, js/features/social-login.js; выключено, пока нет TURNSTILE_SITE_KEY) ▼
+    const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('register') : null;
+    const signOpts = { ...(ref ? { data: { ref } } : {}), ...(captchaToken ? { captchaToken } : {}) };
+    const { data, error } = await sbClient.auth.signUp({ email, password: pass, options: Object.keys(signOpts).length ? signOpts : undefined });
+    window.D37Captcha?.done('register', !error);
+    // ▲ ▲
     if (error) throw error;
 
     if (data.session && data.user) {
