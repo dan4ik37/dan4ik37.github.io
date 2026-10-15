@@ -46,8 +46,14 @@
     Script: { name: 'Скрипт', code: '', enabled: true, lang: 'js' },
     Effect: { name: 'Эффект', kind: 'fire', pos: [0, 1, 0], rate: 1, scale: 1, color: '', color2: '', enabled: true },
     NPC: { name: 'Персонаж', pos: [0, 0, 0], rot: [0, 0, 0], look: 'random', seed: '', act: 'idle', speed: 1, radius: 8, damage: 0, text: '' },
+    // ── Режимы игры и ракурсы (studio3d-modes.js, views.js) ──
+    // Camera — камера для ракурса «камеры в мире»: смотрит вдоль своей −Z (rot как у детали), fov — угол обзора,
+    // kind: fixed — смотрит, куда поставили; track — стоит на месте и поворачивается за игроком. Детали внутри камеры — её зоны:
+    // игрок в зоне — включается эта камера. У деталей и точек появления: team — команда 1…4 (0 — для всех), order — номер
+    // чекпоинта гонки; touch — ещё check (чекпоинт), hill (зона «Царя горы»), zspawn (здесь появляются зомби).
+    Camera: { name: 'Камера', pos: [0, 6, 12], rot: [-20, 0, 0], fov: 50, kind: 'fixed' },
   };
-  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch', 'look', 'seed', 'act', 'speed', 'radius', 'damage'];
+  const SAVE = ['name', 'shape', 'pos', 'rot', 'size', 'color', 'mat', 'alpha', 'collide', 'anchored', 'shadow', 'range', 'power', 'kind', 'scale', 'text', 'code', 'lang', 'src', 'enabled', 'attrs', 'locked', 'model', 'fit', 'rate', 'color2', 'touch', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order'];
   const r3 = v => Math.round(v * 1000) / 1000;
   const copy = v => Array.isArray(v) ? v.slice() : v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
 
@@ -177,7 +183,7 @@
     }
     function tag(o3, obj){ o3.traverse(c => { c.userData.oid = obj.id; }); }
     function unbuild(obj){
-      if (obj._mesh) { R.scene.remove(obj._mesh); obj._mesh.traverse(c => { if (c.isMesh && c.userData.ownGeo) c.geometry.dispose(); if (c.isMesh && c.userData.ownMat) c.material.dispose(); }); obj._mesh = null; }
+      if (obj._mesh) { R.scene.remove(obj._mesh); obj._mesh.traverse(c => { if ((c.isMesh || c.isLineSegments) && c.userData.ownGeo) c.geometry.dispose(); if (c.isMesh && c.userData.ownMat) c.material.dispose(); }); obj._mesh = null; }
       if (obj._light) { R.scene.remove(obj._light); obj._light = null; }
       if (obj._em) { obj._em.dispose(); obj._em = null; }
       if (obj.cls === 'NPC') SC.npc?.remove(obj);
@@ -250,8 +256,24 @@
         if (R.r.shadowMap.enabled) R.shadowsOn(holder);
         holder.traverse(c => { if (c.isMesh) c.userData.dyn = true; });
         tag(holder, obj); R.scene.add(holder); obj._mesh = holder; obj._cols = cols;
+      } else if (obj.cls === 'Camera') {   // камера ракурса: в редакторе — корпус и «пирамида» обзора, в игре её не видно
+        const g = new T.Group();
+        if (SC.edit) {
+          const m = camMat(), body = new T.Mesh(new T.BoxGeometry(.8, .55, 1), m); body.userData.ownGeo = true; g.add(body);
+          const lens = new T.Mesh(new T.CylinderGeometry(.2, .28, .4, 14), m); lens.rotation.x = Math.PI / 2; lens.position.z = -.66; lens.userData.ownGeo = true; g.add(lens);
+          const L = 3, a = Math.tan(Math.max(10, Math.min(110, obj.fov || 50)) * DEG / 2) * L, b = a * 1.6;   // обзор 16:10
+          const P = [0, 0, -.85], C4 = [[-b, a], [b, a], [b, -a], [-b, -a]].map(([x, y]) => [x, y, -.85 - L]), pts = [];
+          for (const c of C4) pts.push(...P, ...c);
+          for (let i = 0; i < 4; i++) pts.push(...C4[i], ...C4[(i + 1) % 4]);
+          const lg = new T.BufferGeometry(); lg.setAttribute('position', new T.Float32BufferAttribute(pts, 3));
+          const lines = new T.LineSegments(lg, camLines()); lines.userData.ownGeo = true; g.add(lines);
+        }
+        place(g, obj); tag(g, obj); R.scene.add(g); obj._mesh = g;
       }
     }
+    let camM = null, camL = null;
+    const camMat = () => camM || (camM = new T.MeshBasicMaterial({ color: '#f472b6', toneMapped: false }));
+    const camLines = () => camL || (camL = new T.LineBasicMaterial({ color: '#f9a8d4', toneMapped: false, transparent: true, opacity: .85 }));
     let npcM = null;
     const npcPick = () => npcM || (npcM = new T.MeshBasicMaterial({ visible: false }));
     let fxM = null;
@@ -308,7 +330,7 @@
       if (obj.cls === 'Model' && (key === 'pos' || key === 'rot')) { SC.transformModel(obj, key, val); return; }
       obj[key] = copy(val);
       if (obj.cls === 'NPC') { if (key === 'pos' || key === 'rot') place(obj._mesh, obj); SC.npc?.sync(obj); }
-      else if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model', 'rate', 'color2'].includes(key) || (key === 'enabled' && obj.cls === 'Effect')) build(obj);
+      else if (['shape', 'size', 'mat', 'color', 'alpha', 'kind', 'scale', 'text', 'range', 'power', 'shadow', 'model', 'rate', 'color2'].includes(key) || (key === 'enabled' && obj.cls === 'Effect') || (key === 'fov' && obj.cls === 'Camera')) build(obj);
       else if (key === 'pos' || key === 'rot') {
         if (obj._mesh && obj.cls !== 'Prefab') place(obj._mesh, obj);
         if (obj._light) obj._light.position.set(...obj.pos);
@@ -359,15 +381,26 @@
     };
     SC.serialize = list => list.map(o => { const d = { id: o.id, cls: o.cls, parent: o.parent }; for (const k of SAVE) if (o[k] !== undefined && (k !== 'attrs' || Object.keys(o[k] || {}).length)) d[k] = Array.isArray(o[k]) ? o[k].map(v => typeof v === 'number' ? r3(v) : v) : copy(o[k]); return d; });
     SC.clear = () => { for (const o of order.slice()) if (!o.parent) SC.remove(o); };
-    SC.toJSON = () => ({ v: 1, objects: SC.serialize(order), lighting: { ...R.lighting } });   // ландшафт — отдельно (TR.toJSON, сжатие асинхронное)
+    SC.toJSON = () => ({ v: 1, objects: SC.serialize(order), lighting: { ...R.lighting }, ...settingsJSON() });   // ландшафт — отдельно (TR.toJSON, сжатие асинхронное)
     SC.fromJSON = data => {
       if (SC.rigid) { SC.rigid.dispose(); SC.rigid = null; }   // новый мир — новая физика деталей (создастся в SC.step, если нужна)
       SC.clear();
       const list = Array.isArray(data?.objects) ? data.objects : [];
       for (const d of list) if (d && DEF[d.cls]) { try { SC.add(d.cls, d, d.parent && objects.get(d.parent) ? d.parent : null, typeof d.id === 'string' ? d.id.slice(0, 24) : null); } catch (e) { console.warn('объект пропущен:', e.message); } }
       if (data?.lighting && R.setLighting) R.setLighting(data.lighting);
+      settingsFrom(data);
       return SC;
     };
+    // ═══ Настройки мира: режим игры (game) и ракурс камеры (camera) — studio3d-modes.js, studio3d-play.js, views.js ═══
+    // Сохраняются вместе с миром (и выкладываются). fromJSON без них (↶ Отменить, ■ Стоп — только objects) их не трогает;
+    // целый мир (есть lighting) без settings — настройки по умолчанию.
+    SC.settings = {};
+    function settingsJSON(){ return SC.settings && Object.keys(SC.settings).length ? { settings: copy(SC.settings) } : {}; }
+    function settingsFrom(data){
+      const s = data?.settings;
+      if (s && typeof s === 'object' && !Array.isArray(s)) { let t = ''; try { t = JSON.stringify(s); } catch (e) {} SC.settings = t && t.length < 20000 ? JSON.parse(t) : {}; }
+      else if (data?.lighting) SC.settings = {};
+    }
 
     // ── Выбор мышью: луч по мешам объектов ──
     SC.pick = ray => {

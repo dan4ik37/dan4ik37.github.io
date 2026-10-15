@@ -19,6 +19,10 @@
 // #/games/studio3d/play/<мир>/<код>; «👥 Тест вдвоём» в редакторе — #/games/studio3d/join/<код> (мир есть только у хозяина:
 // объекты приходят по сети, ландшафт/свет/скрипты — «большими данными» world). Хозяин (кто раньше в комнате) считает мир и
 // скрипты, гости рисуют копию и ведут своего персонажа; ушёл хозяин — следующий продолжает с копии (скрипты — заново).
+// Расширения (D37E.studioExt, крючки extAny/extReduce, STUDIO_API.core): studio3d-ui (раскладка, подсказки, шпаргалка), -touch
+// (телефон), -pad (геймпад), -tools (виды, закладки, на поверхность, массив), -modes (окно «🎮 Режим», предметы для игры,
+// заготовки), -learn (обучение). Модули игры (D37E.studioPlay, pplug — и в чужом мире, и у гостя): studio3d-play (режим игры
+// по js/engine/modes.js и ракурс по js/engine/views.js). Настройки мира — SC.settings (game, camera, age).
 (() => {
   const PI = Math.PI, DEG = PI / 180;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -102,6 +106,7 @@ Players.PlayerAdded.Connect(player => {
 - игрок: player.Name, player.Position, player.Humanoid.WalkSpeed (16 обычно), .JumpPower (50), .Health / .MaxHealth (100), .TakeDamage(n), player.Teleport(Vector3), player.SetStat(имя, число) / AddStat / GetStat (таблица очков), player.Message(текст, секунды)
 - TweenService.Create(obj, { Time, EasingStyle: 'quad'|'sine'|'linear'|'back'|'bounce', Reverses, RepeatCount (-1 бесконечно), DelayTime }, { Position, Size, Orientation, Color, Transparency }).Play() — плавно
 - task.wait(сек) (с await), task.delay(сек, fn), task.spawn(fn), random(a, b), print(...), gui.message(текст, сек), gui.text(ключ, текст), sound.play('coin'|'jump'|'hit'|'click'|'pickup'|'buzz'|'door_wood_open'|'build_wood'|'break')
+- режим игры и камера: Game.Mode ('obby'|'race'|'ffa'|'teams'|'koth'|'hide'|'coins'|'survival'|''), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart.Connect(r => …), Game.RoundEnd.Connect((winner, text) => …), Game.AddScore(player, n), Game.GetScore(player), Game.GetTeam(player), Game.EndRound(player); Camera.Mode = 'third'|'first'|'shoulder'|'top'|'iso'|'side'|'fixed', Camera.SetMode('top', player), Camera.Shake(сила, сек)
 Нельзя: сеть, document, window, localStorage. Код выполняется сразу (можно await на верхнем уровне).
 Задача: `;
 
@@ -123,7 +128,10 @@ Players.PlayerAdded.Connect(player => {
   // ── Шаблоны новых миров ──
   function template(SC, TR, kind){
     SC.clear();
+    SC.settings = {};   // режим игры и ракурс — у каждого мира свои
     if (TR) flatTerrain(TR, kind === 'winter' ? 3 : 0);
+    const X = window.D37E?.studioTemplates?.[kind];   // заготовки из расширений (режимы игры — studio3d-modes.js)
+    if (X) { TR?.setEnabled(false); const L = X.build(SC, TR, { COLORS, EXAMPLES, flatTerrain, generateHills }); SC.R.setLighting({ time: 14, brightness: 1, ambient: 1, fogEnd: 360, shadows: true, cycle: 0, ...(L || {}) }); return; }
     const A = (cls, p, parent) => SC.add(cls, p, parent);
     let light = { time: 14, brightness: 1, ambient: 1, fogEnd: 360, shadows: true, cycle: 0 };
     if (kind === 'empty') {
@@ -460,11 +468,12 @@ Players.PlayerAdded.Connect(player => {
     if (cls === 'Script') { parent = ed.sel && ed.sel.cls !== 'Script' ? ed.sel : null; let l = 'js'; try { l = localStorage.getItem('d37_s3_lang') || 'js'; } catch (e) {} if (!props.lang && window.D37E.langs[l]) props.lang = l; }
     else {
       const p = insertPoint(), def = SC.DEF[cls];
-      const h = cls === 'Part' || cls === 'Mesh' ? (props.size || def.size)[1] / 2 : cls === 'Spawn' ? def.size[1] / 2 : cls === 'Light' ? 3 : 0;
-      props.pos = [p[0], +(p[1] + h).toFixed(3), p[2]];
+      const h = cls === 'Part' || cls === 'Mesh' ? (props.size || def.size)[1] / 2 : cls === 'Spawn' ? (props.size || def.size)[1] / 2 : cls === 'Light' ? 3 : 0;
+      if (!props.pos) props.pos = [p[0], +(p[1] + h).toFixed(3), p[2]];   // своё место (камера — по виду редактора) не трогаем
       if (ed.sel?.cls === 'Model') parent = ed.sel;
     }
     const obj = SC.add(cls, props, parent);
+    ext('inserted', obj);   // «на поверхность» и т. п. (studio3d-tools.js) — тот же шаг «Отменить»
     renderTree(); select(obj);
     if (cls === 'Script') { setBottom('code'); ED.q('.s3-ta').focus(); tutStep('script'); } else if (cls === 'Part') tutStep('add');
     return obj;
@@ -539,6 +548,7 @@ Players.PlayerAdded.Connect(player => {
       if (!ED || e.target.closest?.('input,textarea,select,[contenteditable]')) return;
       const k = e.code, ctrl = e.ctrlKey || e.metaKey;
       if (ed.playing) return;
+      if (extAny('key', e)) { e.preventDefault(); return; }   // клавиши расширений (виды, массив, «на землю»…) — раньше студии
       if (ctrl && k === 'KeyZ') { e.preventDefault(); undo(e.shiftKey); return; }
       if (ctrl && k === 'KeyY') { e.preventDefault(); undo(true); return; }
       if (ctrl && k === 'KeyD') { e.preventDefault(); duplicate(); return; }
@@ -561,6 +571,7 @@ Players.PlayerAdded.Connect(player => {
     // мышь и пальцы по 3D-виду
     const ptrs = new Map();
     const rayAt = (x, y) => { const b = canvas.getBoundingClientRect(); ed.ray.setFromCamera(new T.Vector2((x - b.left) / b.width * 2 - 1, -((y - b.top) / b.height) * 2 + 1), ed.R.camera); return ed.ray; };
+    ed.rayAt = rayAt; ed.dragPart = dragPart;   // для расширений (STUDIO_API.core)
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     // файл модели перетащили в окно — загрузить
     view.addEventListener('dragover', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
@@ -568,6 +579,7 @@ Players.PlayerAdded.Connect(player => {
     canvas.addEventListener('pointerdown', e => {
       if (ed.playing) return;
       closeMenu();
+      if (extAny('pointer', 'down', e)) return;   // пальцы (studio3d-touch.js), сдвиг вида «сверху» (studio3d-tools.js)
       try { canvas.setPointerCapture(e.pointerId); } catch (er) {}
       const p = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, btn: e.button, type: e.pointerType, moved: false, mode: null };
       ptrs.set(e.pointerId, p);
@@ -581,6 +593,7 @@ Players.PlayerAdded.Connect(player => {
       p.mode = hit && hit.obj === ed.sel && ed.selSet.size <= 1 && !p.add && ed.tool === 'move' && ed.sel.cls !== 'Model' ? 'dragPart' : e.pointerType === 'touch' ? 'look' : 'click';
     });
     canvas.addEventListener('pointermove', e => {
+      if (!ed.playing && extAny('pointer', 'move', e)) return;
       const p = ptrs.get(e.pointerId);
       const ray = rayAt(e.clientX, e.clientY);
       if (!p) { if (!ed.playing) { ed.G.hover(ray); brushCursor(ray); } return; }
@@ -601,6 +614,7 @@ Players.PlayerAdded.Connect(player => {
       if (p.mode === 'dragPart' && p.moved) dragPart(ray, p);
     });
     const up = e => {
+      if (!ed.playing && extAny('pointer', 'up', e)) return;
       const p = ptrs.get(e.pointerId); if (!p) return;
       ptrs.delete(e.pointerId);
       if (ptrs.size < 2) ed.pinch = 0;
@@ -610,11 +624,12 @@ Players.PlayerAdded.Connect(player => {
       if ((p.mode === 'click' || (p.mode === 'look' && p.type === 'touch')) && !p.moved && e.type === 'pointerup') { if (p.hit || !p.add) select(p.hit ? p.hit.obj : null, p.add); renderTree(); }
     };
     canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
-    canvas.addEventListener('wheel', e => { if (ed.playing) return; e.preventDefault(); if (ed.panel === 'terrain' && e.shiftKey) { ed.brush.r = Math.max(2, Math.min(30, ed.brush.r * (e.deltaY > 0 ? .9 : 1.1))); renderProps(); return; } flyMove(0, 0, e.deltaY > 0 ? -2.5 : 2.5); }, { passive: false });
+    canvas.addEventListener('wheel', e => { if (ed.playing) return; e.preventDefault(); if (extAny('wheel', e)) return; if (ed.panel === 'terrain' && e.shiftKey) { ed.brush.r = Math.max(2, Math.min(30, ed.brush.r * (e.deltaY > 0 ? .9 : 1.1))); renderProps(); return; } flyMove(0, 0, e.deltaY > 0 ? -2.5 : 2.5); }, { passive: false });
     // тащим деталь по поверхностям (как в Roblox)
     function dragPart(ray, p){
       const o = ed.sel; if (!o?.pos) return;
       if (!p.started) { pushHist(); p.started = true; }
+      if (extAny('dragPart', o, ray)) { updateGizmo(); return; }   // «🧲 на поверхность» — со стенами и поворотом (studio3d-tools.js)
       const meshes = [];
       for (const x of ed.SC.all()) if (x._mesh && x !== o) meshes.push(x._mesh);
       if (ed.TR.enabled) meshes.push(ed.TR.mesh); else meshes.push(ed.ground);
@@ -684,7 +699,8 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED; if (!ed || ed.playing) return;
     const k = ed.keys, sp = (k.has('ShiftLeft') || k.has('ShiftRight') ? 60 : 20) * dt;
     const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0), s = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0), u = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0);
-    if (f || s || u) flyMove(s * sp, u * sp, f * sp);
+    if ((f || s || u) && !extAny('editFly', f, s, u, sp)) flyMove(s * sp, u * sp, f * sp);   // вид «сверху/сбоку» — сдвиг, а не полёт (studio3d-tools.js)
+    ext('editStep', dt);   // геймпад (studio3d-pad.js) и др.
     // кисть ландшафта
     if (ed.brushOn && ed.brushPt) {
       const b = ed.brush, opt = { ch: b.ch };
@@ -702,6 +718,7 @@ Players.PlayerAdded.Connect(player => {
     ed.FX.update(dt);
     ed.NPC.frame(dt, performance.now() / 1000, cam.position);
     ed.R.update(dt); ed.R.follow(c.x - Math.sin(c.yaw) * 20, c.z - Math.cos(c.yaw) * 20, 0);
+    ext('editFrame', dt);   // прицел геймпада, вид «сверху», подсказки… — до кадра
     ed.R.render();
   }
   function brushCursor(ray){
@@ -741,7 +758,9 @@ Players.PlayerAdded.Connect(player => {
         + (list.length ? `<div class="s3-mh">Мои миры</div>${list.slice(0, 12).map(x => `<div class="s3-mrow"><button type="button" data-m="open:${esc(x.id)}">${x.id === ed.placeId ? '▸ ' : ''}${esc(x.name)} <small>${x.n} об.</small></button><button type="button" data-m="del:${esc(x.id)}" title="Удалить">🗑</button></div>`).join('')}` : '')
         + '<div class="s3-mh">Файл</div><button type="button" data-m="export">⬇ Выгрузить в файл</button><button type="button" data-m="import">⬆ Загрузить из файла</button>';
     }
+    html = extReduce('menuHtml', html, kind);   // свои пункты расширений (камеры и зоны, заготовки режимов…)
     m.innerHTML = html;
+    m.dataset.kind = kind;
     const b = btn.getBoundingClientRect(), bb = ed.box.getBoundingClientRect();
     m.style.left = Math.max(4, Math.min(bb.width - 230, b.left - bb.left)) + 'px'; m.style.top = (b.bottom - bb.top + 4) + 'px';
     m.hidden = false;
@@ -785,7 +804,7 @@ Players.PlayerAdded.Connect(player => {
       <label class="s3-lbl">Название<input type="text" class="s3p-t" maxlength="60" value="${esc(ed.q('.s3-name').value.trim() || 'Мой мир')}"></label>
       <label class="s3-lbl">Описание — что делать в мире<textarea class="s3p-d" maxlength="300" rows="3"></textarea></label>
       <label class="s3-lbl">Значок<input type="text" class="s3p-i" maxlength="4" value="🧱"></label>
-      ${window.D37Age ? `<label class="s3-lbl">🎂 Для какого возраста${D37Age.ugc.select(ed.pubAge ?? 12, { staff: isStaff(), attr: 'data-s3p-age' })}</label>` : ''}
+      ${window.D37Age ? `<label class="s3-lbl">🎂 Для какого возраста${D37Age.ugc.select(ed.pubAge ?? ed.SC.settings?.age ?? 12, { staff: isStaff(), attr: 'data-s3p-age' })}</label>` : ''}
       <label class="s3-chk"><input type="radio" name="s3p-v" value="link" checked> 🔗 По ссылке — играют те, кому дашь ссылку</label>
       <label class="s3-chk"><input type="radio" name="s3p-v" value="review"> 🌍 В каталог — после проверки модератором</label>
       ${own.length ? `<p class="s3-note">🧩 Своих моделей: ${own.length}. Они уйдут на проверку — пока модератор не одобрит, у других на их месте будет пустая коробка.</p>` : ''}
@@ -933,6 +952,7 @@ Players.PlayerAdded.Connect(player => {
   }
   async function menuAct(a){
     const ed = ED; closeMenu();
+    if (extAny('menu', a)) return;   // пункты меню расширений
     const [k, v, w] = a.split(':');
     if (k === 'part') insert('Part', { shape: v, size: v === 'ball' ? [2, 2, 2] : v === 'cyl' ? [2, 2, 2] : v === 'wedge' ? [4, 2, 4] : [4, 1, 2], name: { block: 'Деталь', ball: 'Шар', cyl: 'Цилиндр', wedge: 'Клин' }[v] });
     else if (k === 'spawn') insert('Spawn');
@@ -957,7 +977,7 @@ Players.PlayerAdded.Connect(player => {
       await window.D37E.models.remove(v); for (const o of ed.SC.all()) if (o.cls === 'Mesh' && o.model === v) ed.SC.set(o, 'model', v, true); msg('Модель удалена');
     }
     else if (k === 'save') save();
-    else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров', camp: 'Лагерь у костра', winter: 'Зимний лес' }[v] || 'Мой мир'; ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
+    else if (k === 'new') { if (ed.dirty) await save(true); template(ed.SC, ed.TR, v); ed.placeId = newId(); ed.q('.s3-name').value = { grass: 'Мой мир', empty: 'Пустой мир', obby: 'Моё обби', island: 'Остров', camp: 'Лагерь у костра', winter: 'Зимний лес' }[v] || window.D37E.studioTemplates?.[v]?.name || 'Мой мир'; ed.ground.visible = !ed.TR.enabled; ed.hist = []; ed.fut = []; select(null); renderTree(); await save(true); msg('Новый мир создан', true); }
     else if (k === 'open') { if (ed.dirty) await save(true); const d = store.load(v); if (d) { await openPlace(v, d); msg('Открыт: ' + (d.name || 'мир'), true); } }
     else if (k === 'del') { if (v === ed.placeId) { msg('Сначала открой другой мир', false); return; } if (confirm('Удалить мир из браузера навсегда?')) { store.remove(v); msg('Удалено'); } }
     else if (k === 'export') { const d = await snapshot(); d.models = await packModels(); const blob = new Blob([JSON.stringify(d)], { type: 'application/json' }); const a2 = document.createElement('a'); a2.href = URL.createObjectURL(blob); a2.download = (d.name || 'мир').replace(/[^\p{L}\p{N} _-]/gu, '') + '.d37world.json'; a2.click(); setTimeout(() => URL.revokeObjectURL(a2.href), 4000); }
@@ -969,6 +989,7 @@ Players.PlayerAdded.Connect(player => {
   }
   function act(a, b){
     const ed = ED;
+    if (extAny('act', a, b)) return;   // кнопки расширений (data-a)
     if (a.startsWith('menu:')) { const m = ed.q('.s3-menu'); if (!m.hidden && ed.menuFor === a) { closeMenu(); return; } ed.menuFor = a; openMenu(a.slice(5), b); return; }
     if (a === 'exit') { exitStudio(); return; }
     if (a === 'undo') undo(false); else if (a === 'redo') undo(true);
@@ -1091,7 +1112,8 @@ Players.PlayerAdded.Connect(player => {
   }
 
   // ═══ Проводник ═══
-  const ICON = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', NPC: (window.D37E.npcs.LOOKS[o.look] || ['🧍'])[0] === '🎲' ? '🧍' : (window.D37E.npcs.LOOKS[o.look] || ['🧍'])[0], Effect: (window.D37E.fx.KINDS[o.kind] || {}).icon || '✨', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
+  const ICON0 = o => o.cls === 'Part' ? ({ block: '🟫', ball: '⚪', cyl: '🛢️', wedge: '📐' }[o.shape] || '🟫') : { Spawn: '📍', Light: '💡', Model: '📦', Mesh: '🧩', NPC: (window.D37E.npcs.LOOKS[o.look] || ['🧍'])[0] === '🎲' ? '🧍' : (window.D37E.npcs.LOOKS[o.look] || ['🧍'])[0], Effect: (window.D37E.fx.KINDS[o.kind] || {}).icon || '✨', Script: langOf(o).icon, Prefab: (window.D37E.scene.PREFABS.find(p => p[0] === o.kind) || [])[2] || '🌳' }[o.cls] || '❔';
+  const ICON = o => extReduce('icon', ICON0(o), o);   // свои значки расширений (камера, зоны режима)
   function renderTree(){
     const ed = ED, SC = ed.SC, tree = ed.q('.s3-tree');
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
@@ -1155,7 +1177,7 @@ Players.PlayerAdded.Connect(player => {
       h += `<div class="s3-grid3"><button type="button" data-a="group">📦 Группа</button><button type="button" data-a="dup">⧉ Копия</button><button type="button" data-a="del" class="warn">🗑 Удалить</button></div>`;
       P.innerHTML = h;
     } else if (!o) {
-      P.innerHTML = `<p class="s3-note">Ничего не выбрано. Нажми на деталь в мире или в Проводнике.<br><br>➕ <b>Деталь</b> — блок, шар, цилиндр, клин.<br>🌳 <b>Предметы</b> — дерево, фонарь, скамейка…<br>📜 <b>Скрипт</b> — оживить деталь.<br>▶ <b>Играть</b> — пройтись по миру.</p>`;
+      P.innerHTML = extReduce('propsHtml', `<p class="s3-note">Ничего не выбрано. Нажми на деталь в мире или в Проводнике.<br><br>➕ <b>Деталь</b> — блок, шар, цилиндр, клин.<br>🌳 <b>Предметы</b> — дерево, фонарь, скамейка…<br>📜 <b>Скрипт</b> — оживить деталь.<br>▶ <b>Играть</b> — пройтись по миру.</p>`, null);
     } else {
       const v3 = (k, lbl, step) => `<div class="s3-lbl">${lbl}</div><div class="s3-v3">${[0, 1, 2].map(i => `<label>${'XYZ'[i]}<input type="number" step="${step}" value="${+(+o[k][i]).toFixed(3)}" data-p="${k}:${i}"></label>`).join('')}</div>`;
       let h = `<label class="s3-lbl">Имя<input type="text" maxlength="40" value="${esc(o.name)}" data-p="name"></label>`;
@@ -1213,17 +1235,18 @@ Players.PlayerAdded.Connect(player => {
         h += `<label class="s3-lbl">Язык<select data-p="lang">${Object.values(window.D37E.langs).map(l => `<option value="${l.id}"${l.id === langOf(o).id ? ' selected' : ''}>${l.icon} ${esc(l.label)}</option>`).join('')}</select></label>`;
         h += `<label class="s3-chk"><input type="checkbox" data-p="enabled"${o.enabled !== false ? ' checked' : ''}> Включён</label><p class="s3-note">Код — внизу во вкладке «📜 Скрипт». Скрипт работает, когда нажмёшь ▶ Играть.</p>`;
       }
+      h += '<!--s3x-->';   // сюда расширения вставляют свои свойства (команда спавна, порядок чекпоинта, камера…)
       if (o.cls !== 'Script') h += `<label class="s3-chk"><input type="checkbox" data-p="locked"${o.locked ? ' checked' : ''}> 🔒 Заблокирован — не выбирается кликом в мире</label>`;
       if (o.cls === 'Model') h += `<button type="button" data-a="ungroup">📤 Разгруппировать (Ctrl+U)</button>`;
       h += `<div class="s3-grid3"><button type="button" data-a="dup">⧉ Копия</button><button type="button" data-a="focus">🎯 К нему</button><button type="button" data-a="del" class="warn">🗑 Удалить</button></div>`;
-      P.innerHTML = h;
+      P.innerHTML = extReduce('propsHtml', h, o);
     }
     if (!P.dataset.wired) {
       P.dataset.wired = 1;
       const onIn = (e, commit) => {
         const el = e.target, key = el.dataset.p; if (!key) return;
         const ed2 = ED, o2 = ed2.sel, SC2 = ed2.SC;
-        const val = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' ? +el.value : el.value;
+        const val = el.type === 'checkbox' ? el.checked : el.type === 'range' || el.type === 'number' || 'num' in el.dataset ? +el.value : el.value;   // data-num — список с числами
         if (key.startsWith('b:')) { ed2.brush[key.slice(2)] = val; const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(key === 'b:r' ? 0 : 1); return; }
         if (key === 'cycle:on') { ed2.R.lighting.cycle = val ? 10 : 0; markDirty(); renderProps(); return; }
         if (key === 'cycle:min') { ed2.R.lighting.cycle = Math.max(1, Math.min(60, val | 0)); const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = ed2.R.lighting.cycle + ' мин'; markDirty(); return; }
@@ -1242,8 +1265,8 @@ Players.PlayerAdded.Connect(player => {
         else SC2.set(o2, key, val);
         if (el.type === 'range') { const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(key === 'alpha' ? 2 : 1); }
         updateGizmo();
-        if (key === 'shape' || key === 'kind' || key === 'enabled') renderProps();
-        if (key === 'kind' || key === 'locked' || key === 'look') renderTree();
+        if (key === 'shape' || key === 'kind' || key === 'enabled' || key === 'touch') renderProps();   // touch: «чекпоинт» — появится номер
+        if (key === 'kind' || key === 'locked' || key === 'look' || key === 'team' || key === 'touch') renderTree();   // значок в Проводнике (команда, чекпоинт, зона)
         if (key === 'act') renderProps();
       };
       P.addEventListener('input', e => onIn(e, false));
@@ -1309,6 +1332,7 @@ Players.PlayerAdded.Connect(player => {
       error: (s, line, m) => { print(`❌ ${s || 'скрипт'}${line > 0 ? ', строка ' + line : ''}: ${m}`, 'err'); setBottom('out'); },
       hang: () => { print('⛔ Скрипт завис (бесконечный цикл?) — остановлен. Используй await task.wait() в циклах.', 'err'); setBottom('out'); },
     });
+    pplug('start', PLAY_API);   // режим игры и ракурс камеры (studio3d-play.js) — и в чужом мире, и у гостя
     ed.box.classList.add('s3-playing');
     ed.q('.s3-play').textContent = ed.player ? '🔁 Заново' : '■ Стоп';
     ed.q('.s3-hint').hidden = true;
@@ -1336,6 +1360,7 @@ Players.PlayerAdded.Connect(player => {
     if (SC.all().some(o => o.anchored === false)) window.D37E.rigid?.load();
     ed.NPC.start({ onHit: (e, dmg, who) => npcHit(dmg, who), onSay: (e, text) => npcSay(e, text) });
     pl.running = true;
+    pplug('world', !!restore);   // этот браузер считает мир — режим игры (раунды, очки) тоже здесь
   }
   // Мир считает другой (стали гостем): скрипты, NPC и твины — стоп; подсказки и клики придут от хозяина
   function stopWorld(pl){
@@ -1344,6 +1369,7 @@ Players.PlayerAdded.Connect(player => {
     if (SC.rigid) { SC.rigid.dispose(); SC.rigid = null; }
     pl.tweens = []; pl.prompts = new Map(); pl.clicks = new Map(); syncItems();
     pl.running = false;
+    pplug('unworld');
   }
   // Игроки для скриптов: свой — 'me', гости — их номера в комнате (позиции — проверенные хозяином)
   function scriptPlayers(){
@@ -1372,12 +1398,13 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED;
     for (const o of ed.SC.objects.values()) {
       const m = o._mesh; if (!m || m.visible === false) continue;
-      if (o.cls === 'Light' || o.cls === 'Effect' || (o.alpha || 0) >= .999) m.visible = false;
+      if (o.cls === 'Light' || o.cls === 'Effect' || o.cls === 'Camera' || (o.alpha || 0) >= .999) m.visible = false;
       else if (o.cls === 'Mesh' && !ed.player) { const c = m.children[0]; if (c?.userData.stub && c.visible) c.visible = false; }
     }
   }
   function stopPlay(){
     const ed = ED, pl = ed.playing; if (!pl) return;
+    pplug('stop');   // режим игры, ракурс, свои кнопки
     mpClose();   // сначала сеть: она обёрнута вокруг SC.set/add/remove
     ext('stop');
     ed.NPC.stop();
@@ -1440,6 +1467,7 @@ Players.PlayerAdded.Connect(player => {
     else if (d.t === 'player') { if (d.pid && d.pid !== 'me') peerCmd(d.pid, d.cmd, d.v); else playerCmd(d.cmd, d.v); }
     else if (d.t === 'gui') { const g = { cmd: String(d.cmd || ''), key: String(d.key ?? '').slice(0, 30), text: String(d.text || '').slice(0, 140) }; guiCmd(g); mpAll('gui', g); }
     else if (d.t === 'sound') { const s = { name: String(d.name || ''), pos: okVec(d.pos) ? d.pos.slice() : null }; soundCmd(s); mpAll('sound', s); }
+    else if (d.t === 'mode' || d.t === 'camera') pplug('cmd', d);   // Game.* и Camera.* из скриптов (studio3d-play.js проверит)
   }
   // надписи и сообщения скриптов (gui) — и у хозяина, и у гостей
   function guiCmd(d){
@@ -1498,10 +1526,12 @@ Players.PlayerAdded.Connect(player => {
   const addStat = (pid, k, d) => setStat(pid, k, Math.round(((+statsOf(pid)?.[k] || 0) + d) * 100) / 100);
   function die(){
     const pl = ED.playing; if (!pl || pl.dead) return;
-    pl.dead = 1.6; pl.P.enabled = false;
-    pl.H.toast('💀 Ты погиб — сейчас вернёшься', false);
+    const rd = pplugAny('respawnDelay', 'me');   // режим игры: своя задержка, выбыл — Infinity (вернёт новый раунд)
+    pl.dead = rd ? Math.max(.05, +rd.v || 0) : 1.6; pl.P.enabled = false;
+    pl.H.toast(rd?.text || '💀 Ты погиб — сейчас вернёшься', false);
     pl.AU.play('hit');
     if (pl.role === 'guest') ED.mp.S.sendEvent('died', {}); else scriptEvent('died', { player: 'me' });
+    pplug('died', 'me');
   }
   // урон: укус NPC (у гостя — по сети от хозяина)
   function hurt(dmg){
@@ -1517,6 +1547,7 @@ Players.PlayerAdded.Connect(player => {
   // монетку и финиш у гостя считает хозяин мира (mpHostStep → hostTouch)
   function touchAct(pl, o){
     if (!o || pl.dead) return;
+    if (pplugAny('touch', 'me', o)) return;   // режим игры забрал касание (чекпоинт гонки, чужой спавн команды…)
     const P = pl.P, U = window.D37E.UNIT;
     if (o.cls === 'Spawn') {
       const sp = [o.pos[0], o.pos[1] + o.size[1] / 2 + .05, o.pos[2]];
@@ -1548,11 +1579,12 @@ Players.PlayerAdded.Connect(player => {
   }
   function respawn(){
     const pl = ED.playing; if (!pl) return;
-    const sp = pl.sp;
+    const sp = pplugAny('spawnAt', 'me') || pl.sp;   // режим с командами — к своей команде
     pl.P.place(sp[0], sp[1], sp[2], 0); pl.P.enabled = true; pl.dead = 0;
     pl.health = pl.maxHealth; drawHealth();
     mpTeleported();
     if (pl.role === 'guest') ED.mp.S.sendEvent('respawned', {}); else scriptEvent('respawned', { player: 'me' });
+    pplug('respawned', 'me');
   }
   // Звуки окружения в игре: у огня — треск, дождь и снег — со всех сторон, у воды — плеск (synth.js, A.loop)
   const AMB = { fire: ['amb_fire', .75], rain: ['amb_rain', .55], snow: ['amb_wind', .35], magic: ['amb_magic', .35], sparkles: ['amb_magic', .25] };
@@ -1625,7 +1657,9 @@ Players.PlayerAdded.Connect(player => {
     const on = P.ch.grounded ? P.ch.onCol?.data?.part : null, onObj = on && SC.get(on);
     if (onObj?.pos && pl.onId === on && pl.onPos) { const dx = onObj.pos[0] - pl.onPos[0], dy = onObj.pos[1] - pl.onPos[1], dz = onObj.pos[2] - pl.onPos[2]; if (dx || dy || dz) { P.ch.x += dx; P.ch.y += dy; P.ch.z += dz; } }
     pl.onId = on; pl.onPos = onObj?.pos ? onObj.pos.slice() : null;
-    P.update(dt, C, rig);
+    const mc = pplugAny('moveCam', dt) || rig;   // ракурс «сверху / сбоку / камеры»: куда идти — по ракурсу (studio3d-play.js)
+    P.update(dt, C, mc);
+    pplug('moved', dt);   // «сбоку» — держим плоскость
     X.update(dt, P, C, rig.fwd(), false);
     // касания (Touched / TouchEnded); касания гостей хозяин считает сам (mpHostStep)
     const now = pl.role === 'wait' ? new Set() : SC.touching(P.ch), SH = pl.SH;
@@ -1645,6 +1679,7 @@ Players.PlayerAdded.Connect(player => {
     // упал с мира или смерть
     if (P.ch.y < -60 && P.enabled) { pl.health = 0; die(); }
     if (pl.dead) { pl.dead -= dt; if (pl.dead <= 0) respawn(); }
+    if (ED?.playing === pl) pplug('step', dt, live);   // режим игры: таймер, раунды, очки (считает тот, кто считает мир)
   }
   // Мир: твины, физика деталей, NPC, скрипты — только у того, кто его считает (один или хозяин комнаты)
   function worldStep(dt, pl){
@@ -1681,6 +1716,7 @@ Players.PlayerAdded.Connect(player => {
   }
   // Вид от 1-го / 3-го лица (V, настройка «Вид»): прицел, свой человечек прячется, на компьютере — захват мыши
   function playView(pl){
+    if (pplugAny('view')) return;   // ракурс мира сам решает (сверху, сбоку — без переключения; из-за плеча ↔ 1-е лицо)
     const m = pl.rig.toggle();
     pl.H.crosshair(m === 'first');
     if (m !== 'first') pl.I.unlock();
@@ -1693,7 +1729,8 @@ Players.PlayerAdded.Connect(player => {
     A.pose(pl.meKey, P.pose());
     const meA = A.get?.(pl.meKey); if (meA) { meA.hidden = rig.mode === 'first'; meA.phone = pl.phoneHand || ''; meA.fp = meA.hidden ? rig : null; }   // телефон 📱; от 1-го лица — у камеры
     if (ed.mp) mpFrame(dt);   // чужие игроки (по сети) — плавно, со своей внешностью
-    rig.update(dt, P, { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom }, ed.ph, C);
+    const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
+    if (!pplugAny('camera', dt, look)) rig.update(dt, P, look, ed.ph, C);   // ракурс мира (views.js): сверху, сбоку, камеры…
     A.update(dt, t, R.camera.position);
     ambTick(pl);
     ed.NPC.frame(dt, t, R.camera.position);
@@ -1706,6 +1743,7 @@ Players.PlayerAdded.Connect(player => {
     ed.FX.update(dt);
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);
     playVis();
+    pplug('frame', dt);   // табло режима, таймер, подписи команд
     R.render();
     H.prompt(I.touch ? (pl.X.raw && pl.X.cur ? '✋ ' + pl.X.raw : null) : pl.X.text, pl.X.progress);
     H.stamina(P.stamina / P.maxStamina, P.exhausted);
@@ -1718,7 +1756,7 @@ Players.PlayerAdded.Connect(player => {
   // Скрипты про игроков: свой — 'me', гости — их номера в комнате. Объекты — сами (сеть обёрнута вокруг SC.set/add/remove);
   // подсказки и клики скриптов — свойствами объекта prompt / click. Ландшафт, свет, скрипты, авторы моделей — «большими
   // данными» world (новичку и новому хозяину). Ушёл хозяин — новый перезапускает скрипты из world (очки игроков — из их данных).
-  const NET_EXTRA = ['touch', 'model', 'fit', 'rate', 'color2', 'look', 'seed', 'act', 'speed', 'radius', 'damage'];   // свойства сверх PROPS net.js
+  const NET_EXTRA = ['touch', 'model', 'fit', 'rate', 'color2', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order'];   // свойства сверх PROPS net.js (fov — камера, team / order — режимы игры)
   const MP_MAX = 8;
   // #/games/studio3d/… : play/<мир>[/<комната>] — выложенный мир (с друзьями), join/<комната> — «Тест вдвоём»
   function mpParam(param){
@@ -1755,7 +1793,9 @@ Players.PlayerAdded.Connect(player => {
     mp.S = E.net.session({ transport: tr, scene: ed.SC, nick: pl.nick, info: { look }, extra: NET_EXTRA,
       onHost: live(mpOnHost), onPlayer: live(mpOnPlayer), onGuestEvent: live(mpGuestEvent), onEvent: live(mpEvent),
       onBlob: live((name, u, text) => { if (name === 'world') mpWorld(text()); }), onReady: live(mpReadyCheck),
-      onTeleport: live(mpTeleport), onCheat: live(mpCheat) });
+      onTeleport: live(mpTeleport), onCheat: live(mpCheat),
+      // сам прыгнул (возрождение): к точке появления, как в net.js, — или куда разрешил режим игры (чекпоинт гонки)
+      validTeleport: (id, wp) => nearSpawn(ed.SC, wp) || !!pplugAny('validTeleport', id, wp) });
     // мой человечек — под номером в комнате: у не выбранных частей тела «отпечаток» ключа, пусть он будет как у других
     const a = pl.A.get(pl.meKey);
     pl.A.remove(pl.meKey); pl.meKey = mp.S.myId; pl.A.add(pl.meKey, look, { x: a?.x ?? pl.P.ch.x, y: a?.y ?? pl.P.ch.y, z: a?.z ?? pl.P.ch.z, yaw: pl.P.yaw });
@@ -1763,6 +1803,11 @@ Players.PlayerAdded.Connect(player => {
     if (pl.role === 'wait') mpWait('👥 Подключаемся к комнате…', `Код комнаты: ${code}`);
     mpPanel(); renderPInfo(); drawStats();
     return true;
+  }
+  function nearSpawn(SC, wp){
+    const sp = SC.all().filter(x => x.cls === 'Spawn' && Array.isArray(x.pos));
+    if (!sp.length) return true;
+    return sp.some(s => Math.hypot(s.pos[0] - wp[0], s.pos[2] - wp[2]) < Math.max(s.size?.[0] || 4, s.size?.[2] || 4) / 2 + 3 && Math.abs(s.pos[1] - wp[1]) < 8);
   }
   function mpClose(){
     const ed = ED, mp = ed?.mp; if (!mp) return;
@@ -1833,7 +1878,7 @@ Players.PlayerAdded.Connect(player => {
     if (u) for (const o of SC.all()) if (o.cls === 'Mesh' && o.model && !models[o.model]) models[o.model] = u.id;   // свои (если выложены — их скачают)
     let terrain = null; try { terrain = await ed.TR.toJSON(); } catch (e) {}
     if (ED !== ed) return null;
-    const d = { v: 1, name: ed.q('.s3-name').value.trim().slice(0, 60), terrain, lighting: { ...ed.R.lighting }, scripts, models };
+    const d = { v: 1, name: ed.q('.s3-name').value.trim().slice(0, 60), terrain, lighting: { ...ed.R.lighting }, scripts, models, settings: SC.settings || {} };   // settings — режим игры и ракурс
     let s = JSON.stringify(d);
     if (s.length > 3e6) { for (const x of d.scripts) if (x.code.length > 2e5) x.code = ''; s = JSON.stringify(d); }   // огромные .wasm новому хозяину не уйдут
     return s;
@@ -1857,11 +1902,13 @@ Players.PlayerAdded.Connect(player => {
         if (Object.keys(pl.labels).length) mp.S.sendEvent('gui', { cmd: 'labels', labels: pl.labels }, p.id);   // надписи скриптов — новичку сразу
       }
       if (!p.me) pl.H.toast(`👋 ${p.nick || 'Игрок'} в игре`, true);
+      if (!p.me) pplug('join', p);   // режим игры: новый игрок (у хозяина — в команду, в таблицу)
     } else if (ev === 'leave') {
       if (pl.role === 'host' && mp.peers.has(p.id)) { mp.peers.delete(p.id); scriptEvent('playerRemoving', { id: p.id }); }
       pl.A.remove(p.id); mp.actors.delete(p.id);
       const tg = mp.tags.get(p.id); if (tg) { tg.remove(); mp.tags.delete(p.id); }
       if (!p.me) pl.H.toast(`🚪 ${p.nick || 'Игрок'} вышел`);
+      if (!p.me) pplug('leave', p);
     }
     mpPanel(); drawStats();
   }
@@ -1869,6 +1916,7 @@ Players.PlayerAdded.Connect(player => {
   function mpGuestEvent(ty, d, from){
     const ed = ED, mp = ed.mp, pl = ed.playing;
     if (pl.role !== 'host' || from === mp.S.myId || !mp.peers.has(from)) return;
+    if (pplugAny('hostEvent', ty, d, from)) return;   // режим игры: удар гостя, его смерть и т. п.
     const id = d && typeof d.id === 'string' ? d.id : null, o = id ? ed.SC.get(id) : null, c = mp.S.latest(from);
     const near = r => !!(c && o?.pos && Math.hypot(c.wx - o.pos[0], c.wy - o.pos[1], c.wz - o.pos[2]) <= r + Math.max(...(o.size || [2, 2, 2])) / 2);
     if (ty === 'prompt') { if (o && pl.prompts.has(id) && near(8)) scriptEvent('prompt', { id, player: from }); }
@@ -1879,6 +1927,7 @@ Players.PlayerAdded.Connect(player => {
   function mpEvent(ty, d, from){
     const ed = ED, mp = ed.mp, pl = ed.playing;
     if (from !== mp.S.hostId || !d || typeof d !== 'object') return;
+    if (pplugAny('guestEvent', ty, d)) return;   // режим игры и ракурс от хозяина (studio3d-play.js)
     if (ty === 'player') { if (['walk', 'jump', 'health', 'maxHealth', 'respawn', 'message'].includes(d.cmd)) playerCmd(d.cmd, d.v); }
     else if (ty === 'gui') guiCmd({ cmd: String(d.cmd || ''), key: String(d.key ?? '').slice(0, 30), text: String(d.text || '').slice(0, 140), labels: d.labels });
     else if (ty === 'sound') soundCmd({ name: String(d.name || ''), pos: d.pos });
@@ -1902,6 +1951,7 @@ Players.PlayerAdded.Connect(player => {
       if (d.lighting && typeof d.lighting === 'object') ed.R.setLighting(d.lighting);
       if (typeof d.name === 'string' && d.name.trim()) ed.q('.s3-name').value = d.name.slice(0, 60);
       for (const o of ed.SC.all()) if (o.cls === 'Mesh' && o.model && !window.D37E.models.cached(o.model)) ed.SC.set(o, 'model', o.model, true);
+      if (d.settings && typeof d.settings === 'object') { ed.SC.settings = JSON.parse(JSON.stringify(d.settings)); pplug('settings'); }   // ракурс и режим мира друга
     }
     mpReadyCheck();
   }
@@ -2052,6 +2102,7 @@ Players.PlayerAdded.Connect(player => {
   }
   // Касание гостя без кода (у хозяина): ускорение — запас скорости в проверке движения, монетка, финиш
   function hostTouch(g, o){
+    if (pplugAny('touch', g.id, o)) return;   // режим игры (у хозяина — и за гостей)
     const ed = ED, mp = ed.mp, t = o.touch; if (!t) return;
     if (t === 'speed') { g.speedT = 3.6; mp.S.setLimits(g.id, { walk: g.walk * 1.8 }); }
     else if (t === 'coin') { ed.SC.remove(o); addStat(g.id, 'Монеты', 1); mp.S.sendEvent('coin', {}, g.id); }
@@ -2138,7 +2189,7 @@ Players.PlayerAdded.Connect(player => {
     try { mpClose(); } catch (e) {}   // комната и канал Supabase — сразу (и до SC.dispose: сеть обёрнута вокруг сцены)
     ED = null;
     try { ed.offCtx?.(); window.D37Full?.release(ed.box); } catch (e) {}   // настройки/полный экран
-    try { if (ed.playing) { const pl = ed.playing; pl.phoneOff?.(); pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
+    try { if (ed.playing) { const pl = ed.playing; pplug('stop'); pl.phoneOff?.(); pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();
@@ -2158,12 +2209,91 @@ Players.PlayerAdded.Connect(player => {
     pushHist: () => pushHist(), markDirty: () => markDirty(), refresh: () => { renderTree(); renderProps(); updateGizmo(); },
     msg: (t, ok) => msg(t, ok), print: (t, kind) => print(t, kind), setBottom: b => setBottom(b), showCode: o => showCode(o),
     playing: () => !!ED?.playing,
+    // Ядро редактора для своего ввода (пальцы, геймпад, виды): луч, выбор, стрелки, перетаскивание, камера, команды
+    core: {
+      rayAt: (x, y) => ED.rayAt(x, y),
+      centerRay(){ const ed = ED; ed.ray.setFromCamera(new ed.R.T.Vector2(0, 0), ed.R.camera); return ed.ray; },
+      pick: (ray, alt) => pickAt(ray, alt),
+      gizmoHover: ray => ED.G.hover(ray),
+      gizmoDown(ray){ if (!ED.G.down(ray)) return false; pushHist(); return true; },
+      gizmoDrag(ray){ const r = ED.G.drag(ray); if (r && ED.sel) applyTransform(r); return !!r; },
+      gizmoUp(){ const ch = ED.G.up(); if (!ch) ED.hist.pop(); else tutStep('move'); renderProps(); updateGizmo(); return ch; },
+      dragPart: (ray, st) => ED.dragPart(ray, st),
+      dragEnd(st){ if (st?.started) { renderProps(); updateGizmo(); } },
+      fly: (dx, dy, dz) => flyMove(dx, dy, dz),
+      focus: () => focusSel(),
+      tool: t => { if (t) setTool(t); return ED.tool; },
+      undo: redo => undo(!!redo),
+      duplicate: () => duplicate(), remove: () => remove(), group: () => groupSel(), ungroup: () => ungroupSel(),
+      copy: cut => copySel(!!cut), paste: () => paste(),
+      menu: a => menuAct(a), act: (a, b) => act(a, b || null), openMenu: (kind, btn) => openMenu(kind, btn), closeMenu: () => closeMenu(),
+      play: () => { if (!ED.playing) startPlay(); }, stop: () => { if (ED.playing) stopPlay(); },
+      save: quiet => save(quiet), insertPoint: () => insertPoint(), moveBy: (o, d) => moveBy(o, d), turnAround: (o, c, dy) => turnAround(o, c, dy),
+      updateGizmo: () => updateGizmo(), renderProps: () => renderProps(), renderTree: () => renderTree(), setPanel: p => setPanel(p), hint: t => hint(t),
+      selTop: () => selTop(), tut: k => tutStep(k), npcPresets: () => NPC_PRESETS, colors: () => COLORS.slice(),
+    },
   };
   function ext(fn, ...a){
     for (const x of window.D37E?.studioExt || []) { try { x[fn]?.(...a); } catch (e) { console.error('студия, расширение ' + (x.id || '?'), e); } }
   }
+  // первое расширение, которое «взяло» событие (вернуло не пусто), — дальше студия его не обрабатывает. Чужой мир — без расширений
+  function extAny(fn, ...a){
+    if (!ED || ED.player) return null;
+    for (const x of window.D37E?.studioExt || []) { if (typeof x[fn] !== 'function') continue; try { const r = x[fn](...a); if (r) return r; } catch (e) { console.error('студия, расширение ' + (x.id || '?'), e); } }
+    return null;
+  }
+  // значение по цепочке расширений (html меню и свойств, значок в Проводнике)
+  function extReduce(fn, v, ...a){
+    if (!ED || ED.player) return v;
+    for (const x of window.D37E?.studioExt || []) { if (typeof x[fn] !== 'function') continue; try { const r = x[fn](v, ...a); if (r !== undefined && r !== null) v = r; } catch (e) { console.error('студия, расширение ' + (x.id || '?'), e); } }
+    return v;
+  }
+
+  // ═══ Модули игры (режим игры, ракурс камеры — js/games/studio3d-play.js): работают ВСЕГДА — и в редакторе, и в чужом мире,
+  // и у гостя. window.D37E.studioPlay.push({ id, start(papi), world(restore), unworld(), step(dt, live), moveCam(dt), moved(dt),
+  // camera(dt, look), frame(dt), touch(pid, obj) → true — забрал, died(pid), respawned(pid), respawnDelay(pid) → { v, text },
+  // spawnAt(pid) → [x, y, z], view() → true — V не переключает, join(p), leave(p), hostEvent(ty, d, from), guestEvent(ty, d),
+  // cmd(d) — Game.* / Camera.* из скриптов, settings(), stop() }
+  function pplug(fn, ...a){
+    for (const x of window.D37E?.studioPlay || []) { if (typeof x[fn] !== 'function') continue; try { x[fn](...a); } catch (e) { console.error('студия, модуль игры ' + (x.id || '?'), e); } }
+  }
+  function pplugAny(fn, ...a){
+    for (const x of window.D37E?.studioPlay || []) { if (typeof x[fn] !== 'function') continue; try { const r = x[fn](...a); if (r) return r; } catch (e) { console.error('студия, модуль игры ' + (x.id || '?'), e); } }
+    return null;
+  }
+  // Что модулям игры можно делать с игрой: игроки, телепорт, урон, очки, сеть (хозяин ↔ гости), скрипты
+  const PLAY_API = {
+    get ed(){ return ED; }, get pl(){ return ED?.playing || null; }, get SC(){ return ED?.SC || null; }, get R(){ return ED?.R || null; }, get mp(){ return ED?.mp || null; },
+    role: () => ED?.playing?.role || null,
+    live: () => { const r = ED?.playing?.role; return r === 'solo' || r === 'host'; },
+    myId: () => ED?.mp?.S?.myId || 'me',
+    // игроки, которых видит этот браузер: я ('me') и (у хозяина) гости — с проверенными позициями
+    players(){
+      const ed = ED, pl = ed?.playing; if (!pl) return [];
+      const P = pl.P, out = [{ id: 'me', name: pl.nick, me: true, host: pl.role !== 'guest', pos: [P.ch.x, P.ch.y, P.ch.z], dead: !!pl.dead }];
+      const mp = ed.mp;
+      if (mp?.S) for (const p of mp.S.players()) {
+        if (p.me) continue;
+        const c = mp.S.latest(p.id), r = c ? null : mp.S.remotes().find(x => x.id === p.id)?.pose;
+        out.push({ id: p.id, name: String(p.nick || 'Игрок').slice(0, 24), me: false, host: !!p.host, pos: c ? [c.wx, c.wy, c.wz] : r ? [r.x, r.y, r.z] : null, yaw: r?.yaw });
+      }
+      return out;
+    },
+    toast: (t, ok) => ED?.playing?.H.toast(t, ok), msg: (t, ok) => msg(t, ok), print: (t, k) => print(t, k),
+    respawn: () => respawn(), die: () => die(), hurt: dmg => hurt(dmg), finishFx: d => finishFx(d),
+    teleport(pid, p, yaw){ const pl = ED?.playing; if (!pl || !okVec(p)) return; if (pid === 'me' || pid === PLAY_API.myId()) { pl.P.place(p[0], p[1], p[2], yaw); mpTeleported(); } else ED.mp?.S?.teleport(pid, p.slice()); },
+    setStat: (pid, k, v) => setStat(pid, k, v), addStat: (pid, k, d) => addStat(pid, k, d), stats: pid => statsOf(pid),
+    peerCmd: (pid, cmd, v) => peerCmd(pid, cmd, v), playerCmd: (cmd, v) => playerCmd(cmd, v),
+    sendAll: (ty, d) => mpAll(ty, d),
+    sendTo: (pid, ty, d) => { const S = ED?.mp?.S; if (S && ED.playing?.role === 'host') S.sendEvent(ty, d, pid); },
+    sendHost: (ty, d) => { const S = ED?.mp?.S; if (S && ED.playing?.role === 'guest') S.sendEvent(ty, d); },
+    scriptEvent: (ev, data) => scriptEvent(ev, data),
+    sync: () => syncItems(), drawStats: () => drawStats(), sound: (name, pos) => soundCmd({ name, pos }),
+    spawnPoint: () => spawnPoint(),
+  };
   {   // список расширений: push после загрузки студии — сразу mount
     const E = window.D37E = window.D37E || {}, list = E.studioExt = E.studioExt || [];
+    E.studioPlay = E.studioPlay || [];   // модули игры (studio3d-play.js) — без mount, зовутся при каждом ▶
     const push = list.push;
     list.push = (...xs) => { const n = push.apply(list, xs); if (ED?.SC && !ED.playId) for (const x of xs) { try { x.mount?.(STUDIO_API); } catch (e) { console.error(e); } } return n; };
   }
