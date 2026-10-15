@@ -271,7 +271,7 @@
       if (U.kind === 'chest') hooks.sound?.('door_wood_close', { vol: .4, rate: 1.4 });
       U.el.remove(); U.el = null; U.kind = ''; U.pos = null;
       S.C?.reset_state();
-      if (!S.I?.touch) { try { S.R.r.domElement.requestPointerLock?.()?.catch?.(() => {}); } catch (e) {} }
+      if (!S.I?.touch) S.I?.lock?.();   // тот же элемент, что у движка (input.js), — иначе мышь захвачена, а камера не крутится
     };
     U.dispose = () => { window.removeEventListener('keydown', hoverKey, true); if (U.el) { clearInterval(U.timer); U.el.remove(); U.el = null; } };
 

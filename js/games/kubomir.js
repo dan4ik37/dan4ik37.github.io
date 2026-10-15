@@ -347,7 +347,7 @@
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
     try { st.R?.dispose(); } catch (e) {}
-    st.hudEl?.remove(); st.modWin?.remove(); st.tbar?.el?.remove(); st.ringEl?.remove();
+    st.hudEl?.remove(); st.modWin?.remove(); st.tbar?.el?.remove(); st.ringEl?.remove(); st.lockEl?.remove();
     wrap()?.classList.remove('kb-nohud', 'kb-touchtap');
     settingsTab(true);
   }
@@ -945,7 +945,14 @@
     camApply(st, dt);
     I.wantLock = !I.touch && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
     if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
+    const padNow = !!st.K?.padLast;
+    if (st.wasLocked !== I.locked || st.padWas !== padNow) { st.padWas = padNow; crossUpdate(st); }   // мышь отпущена — прицел прячем (иначе «кружок» висит посреди экрана)
     st.wasLocked = I.locked;
+    // мышь не захвачена и окон нет (закрыл меню паузы Esc, браузер не вернул мышь после «Продолжить», только вошёл) — подсказка;
+    // через 0,3 с, чтобы не мигала, пока браузер захватывает мышь после «Продолжить»
+    const free = st.ready && !I.touch && !I.locked && !padNow && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
+    st.freeT = free ? (st.freeT || 0) + dt : 0;
+    lockHint(st, st.freeT > .3);
     // персонаж: тело — по взгляду (на ходу поворачивается к движению, но не больше чем на 60°), голова — туда, куда смотрит игрок
     const me = A.get('me');
     if (me) {
@@ -1003,7 +1010,16 @@
     cam.updateMatrixWorld();
   }
   // прицел: виден от 1-го лица и сзади; не виден спереди, без интерфейса (F1) и на телефоне в режиме «под пальцем»
-  function crossUpdate(st){ st.H.crosshair(st.camMode !== 2 && !st.hudHidden && !(st.I.touch && opts.touchMode !== 'cross')); }
+  function crossUpdate(st){ st.H.crosshair(st.camMode !== 2 && !st.hudHidden && !(st.I.touch && opts.touchMode !== 'cross') && (st.I.touch || st.I.locked || !!st.K?.padLast)); }
+  // «🖱 Нажми на мир, чтобы играть» — щелчок проходит сквозь подсказку в мир, мир сам захватывает мышь (input.js, wantLock)
+  function lockHint(st, on){
+    if (!st.lockEl) {
+      if (!on) return;
+      const el = document.createElement('div'); el.className = 'kb-lockhint'; el.textContent = '🖱 Нажми на мир, чтобы играть';
+      const w = wrap(); if (!w) return; w.appendChild(el); st.lockEl = el; return;
+    }
+    if (st.lockEl.hidden !== !on) st.lockEl.hidden = !on;
+  }
   // F1: спрятать всё (для снимков), ещё раз — вернуть
   function hideHud(on){
     const st = S; if (!st) return;
@@ -1222,7 +1238,7 @@
   function closeMenu(){ S?.menu?.close(); }
   async function menuPick(id){
     const st = S; if (!st) return;
-    if (id === 'resume') { closeMenu(); if (!st.I.touch) { try { wrap().querySelector('.kb-gl')?.requestPointerLock?.()?.catch?.(() => {}); } catch (e) {} } }
+    if (id === 'resume') { closeMenu(); if (!st.I.touch) st.I.lock?.(); }   // не вышло (браузер не дал сразу после Esc) — «🖱 Нажми на мир»
     else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine', tab: 'kubomir' });
     else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap(), { restart: ids => { if (S !== st) return; st.meta.mods = ids; restartWorld(); } }); }
     else if (id === 'mc') { closeMenu(); mcWindow(st); }
