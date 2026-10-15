@@ -412,9 +412,10 @@ function boundsOk(R){
   // лесенка автокачества: от лучшего к дешёвому, каждая ступень не дороже прошлой
   const L = E.autoSteps(R0({ preset: 'ultra' })), SQ = ['low', 'mid', 'high', 'ultra'], AO = ['off', 'on', 'high'];
   ok(L.length >= 6 && JSON.stringify(L[0]) === JSON.stringify(R0({ preset: 'ultra' })) && !L[L.length - 1].shadows, 'лесенка: от пресета до «без теней»', L.length);
-  let mono = true;
-  for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i]; if (AO.indexOf(b.ao) > AO.indexOf(a.ao) || SQ.indexOf(b.shadowQ) > SQ.indexOf(a.shadowQ) || b.dist > a.dist || (b.shadows && !a.shadows)) mono = false; }
+  let mono = true; const RTO = ['off', 'on', 'high'];
+  for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i]; if (AO.indexOf(b.ao) > AO.indexOf(a.ao) || SQ.indexOf(b.shadowQ) > SQ.indexOf(a.shadowQ) || RTO.indexOf(b.rt) > RTO.indexOf(a.rt) || b.dist > a.dist || (b.shadows && !a.shadows)) mono = false; }
   ok(mono, 'каждая ступень не дороже прошлой');
+  ok(L[0].rt === 'high' && L[1].rt === 'on' && L[2].rt === 'off' && L[2].ao === L[0].ao, 'лесенка: сначала трассировка лучей (high → on → выкл), потом AO', L.slice(0, 3).map(x => x.rt + '/' + x.ao));
   ok(E.autoSteps(E.gfxResolve({}, { q: 'low' })).length === 1, 'на low упрощать нечего');
   // тени по качеству
   ok(['low', 'mid', 'high', 'ultra'].every((k, i, a) => !i || (E.SHADOW_Q[k].map >= E.SHADOW_Q[a[i - 1]].map && E.SHADOW_Q[k].taps > E.SHADOW_Q[a[i - 1]].taps)), 'качество теней растёт: карта и выборки');
@@ -627,6 +628,229 @@ function boundsOk(R){
     const edge = blurW(i => i >= 2 ? 6 : 8), keep = 1 - (Math.exp(-.4) + Math.exp(-.9) + Math.exp(-1.6)) / (2 * [1, 2, 3, 4].reduce((s, i) => s + Math.exp(-i * i * .1), 0));
     ok(Math.abs(edge - keep) < .01, 'AO: через край предмета не размывает', { edge, keep });
   }
+  P.dispose();
+}
+
+// ═══ 16. NVIDIA Image Scaling (NIS) — перенос NVScaler / NVSharpen (post.js): таблицы фильтров сверены с таблицами NVIDIA
+//     в половинной точности (NIS_Config.h coef_scale_fp16 / coef_usm_fp16 — MIT © 2022 NVIDIA CORPORATION & AFFILIATES),
+//     константы NVScalerUpdateConfig, шейдеры, проходы; эталон на JS (scripts/nis-ref.cjs) — свойства картинки ═══
+{
+  const N = E.NIS, ROWS = 64;
+  ok(N && N.scale.length === ROWS * 6 && N.usm.length === ROWS * 6, 'NIS: таблицы 64 фазы × 6 отводов');
+  // fp16 (биты half) из NIS_Config.h — 6 отводов на фазу (7-й и 8-й — нули)
+  const F16S = [[0, 0, 15360, 0, 0, 0], [6640, 41601, 15360, 8898, 39671, 0], [7796, 42592, 15357, 9955, 40695, 0], [8321, 43167, 15351, 10576, 41286, 4121], [8702, 43537, 15346, 11058, 41797, 4121],
+    [9029, 43871, 15339, 11408, 42146, 4121], [9280, 44112, 15328, 11672, 42402, 5145], [9411, 44256, 15316, 11944, 42690, 5669], [9535, 44401, 15304, 12216, 42979, 6169], [9667, 44528, 15288, 12396, 43137, 6378],
+    [9758, 44656, 15273, 12540, 43282, 6640], [9857, 44768, 15255, 12688, 43423, 6903], [9922, 44872, 15235, 12844, 43583, 7297], [10014, 44959, 15213, 13000, 43744, 7429], [10079, 45048, 15190, 13156, 43888, 7691],
+    [10112, 45092, 15167, 13316, 44040, 7796], [10178, 45124, 15140, 13398, 44120, 8058], [10211, 45152, 15112, 13482, 44201, 8256], [10211, 45180, 15085, 13566, 44279, 8387], [10242, 45200, 15054, 13652, 44360, 8518],
+    [10242, 45216, 15023, 13738, 44440, 8636], [10242, 45228, 14990, 13826, 44520, 8767], [10242, 45236, 14955, 13912, 44592, 8964], [10211, 45244, 14921, 14002, 44673, 9082], [10178, 45244, 14885, 14090, 44745, 9213],
+    [10145, 45244, 14849, 14178, 44817, 9280], [10112, 45236, 14810, 14266, 44887, 9378], [10079, 45228, 14770, 14346, 44953, 9437], [10014, 45216, 14731, 14390, 45017, 9503], [9981, 45204, 14689, 14434, 45064, 9601],
+    [9922, 45188, 14649, 14478, 45096, 9667], [9857, 45168, 14607, 14521, 45120, 9726], [9791, 45144, 14564, 14564, 45144, 9791]];
+  const F16U = [[0, 47309, 15565, 47309, 0, 0], [6640, 47326, 15563, 47289, 39408, 0], [7429, 47339, 15560, 47266, 40695, 4121], [8058, 47349, 15554, 47239, 41286, 0], [8387, 47357, 15545, 47209, 41915, 0],
+    [8636, 47363, 15534, 47176, 42238, 4121], [8767, 47364, 15522, 47141, 42657, 4121], [9029, 47367, 15509, 47105, 43023, 4121], [9213, 47363, 15490, 47018, 43249, 4121], [9280, 47357, 15472, 46928, 43472, 5145],
+    [9345, 47347, 15450, 46836, 43727, 5145], [9378, 47337, 15427, 46736, 43999, 5669], [9437, 47323, 15401, 46630, 44152, 5669], [9470, 47310, 15376, 46520, 44312, 6169], [9503, 47294, 15338, 46402, 44479, 6378],
+    [9503, 47272, 15274, 46280, 44648, 6640], [9503, 47253, 15215, 46158, 44817, 6903], [9503, 47231, 15150, 45972, 45017, 7165], [9535, 47206, 15082, 45708, 45132, 7297], [9503, 47180, 15012, 45432, 45232, 7429],
+    [9470, 47153, 14939, 45152, 45332, 7560], [9470, 47126, 14868, 44681, 45444, 7691], [9437, 47090, 14793, 44071, 45560, 7796], [9411, 47030, 14714, 42847, 45668, 7927], [9411, 46968, 14635, 8387, 45788, 8058],
+    [9345, 46902, 14552, 10786, 45908, 8256], [9313, 46846, 14478, 11647, 46036, 8321], [9247, 46776, 14394, 12292, 46120, 8453], [9247, 46714, 14288, 12620, 46184, 8518], [9147, 46648, 14130, 12936, 46248, 8570],
+    [9029, 46576, 13956, 13268, 46312, 8702], [8964, 46512, 13792, 13456, 46378, 8767], [8898, 46446, 13624, 13624, 46446, 8898]];
+  const half = b => { const s = b & 0x8000 ? -1 : 1, e = (b >> 10) & 31, m = b & 1023; return e === 0 ? s * m * Math.pow(2, -24) : s * (1 + m / 1024) * Math.pow(2, e - 15); };
+  let worst = 0, sym = 0, sumS = 0, sumU = 0;
+  for (let ph = 0; ph < ROWS; ph++) {
+    // фазы 33…63 у NVIDIA — зеркало 31…1 (проверяем и это)
+    const src = ph <= 32 ? ph : 64 - ph, rev = ph > 32;
+    for (let t = 0; t < 6; t++) {
+      const tt = rev ? 5 - t : t;
+      worst = Math.max(worst, Math.abs(N.scale[ph * 6 + t] - half(F16S[src][tt])), Math.abs(N.usm[ph * 6 + t] - half(F16U[src][tt])));
+      if (ph >= 1) sym = Math.max(sym, Math.abs(N.scale[ph * 6 + t] - N.scale[(64 - ph) % 64 * 6 + 5 - t] * (ph === 0 ? 0 : 1)));
+    }
+    let s = 0, u = 0; for (let t = 0; t < 6; t++) { s += N.scale[ph * 6 + t]; u += N.usm[ph * 6 + t]; }
+    sumS = Math.max(sumS, Math.abs(s - 1)); sumU = Math.max(sumU, Math.abs(u));
+  }
+  ok(worst < 6e-4, 'NIS: таблицы = таблицы NVIDIA (сверка с fp16 из NIS_Config.h)', worst);
+  ok(sym < 1e-9, 'NIS: фазы зеркальны (64 − k = k наоборот)', sym);
+  ok(sumS < .0025 && sumU < .0025, 'NIS: увеличение сохраняет яркость (сумма = 1), резкость — без сдвига (сумма = 0)', { sumS, sumU });
+  // константы (NVScalerUpdateConfig, SDR)
+  const c5 = E.nisConfig(.5), c0 = E.nisConfig(0), c1 = E.nisConfig(1), near = (a, b) => Math.abs(a - b) < 1e-6;
+  ok(near(c5.kDetectRatio, 2 * 1127 / 1024) && near(c5.kDetectThres, 64 / 1024) && near(c5.kRatioNorm, 1 / 8) && near(c5.kEps, 1 / 255) && near(c5.kSharpScaleY, 1 / .45), 'NIS: постоянные как у NVIDIA');
+  ok(near(c5.kSharpStrengthMin, .4) && near(c5.kSharpStrengthScale, 1.2) && near(c5.kSharpLimitMin, .14) && near(c5.kSharpLimitScale, .36), 'NIS: резкость 50% — середина шкалы NVIDIA', c5);
+  ok(near(c0.kSharpStrengthMin, 0) && near(c0.kSharpStrengthScale, 1.6 - .5 * 1.75 * 1.8) && near(c0.kSharpLimitMin, .1) && near(c1.kSharpStrengthMin, .4 + .5 * 1.25 * 1.2) && near(c1.kSharpLimitScale, .5 + .5 * 1.25 * .6 - (.14 + .5 * 1.25 * .32)), 'NIS: 0% и 100% — по формулам NVScalerUpdateConfig', { c0, c1 });
+  ok(E.nisConfig(-3).kSharpStrengthMin === c0.kSharpStrengthMin && E.nisConfig(9).kSharpStrengthMin === c1.kSharpStrengthMin, 'NIS: резкость за пределами 0…1 — по краю');
+  // шейдеры: окно 6×6 / 5×5, карта краёв, 4 направления, таблицы — из текстуры
+  const fsN = N.fs.scaler, fsS = N.fs.sharpen;
+  ok((fsN.match(/= nL\(b \+ ivec2/g) || []).length === 36 && (fsN.match(/nEdge\(p/g) || []).length === 4 && fsN.includes('texelFetch(tCoef') && ['if (w.x > 0.0)', 'if (w.y > 0.0)', 'if (w.z > 0.0)', 'if (w.w > 0.0)'].every(s => fsN.includes(s)), 'NIS-шейдер: окно 6×6, края в 4 точках, 4 направления, таблицы — текстурой');
+  ok((fsS.match(/= nL\(b \+ ivec2/g) || []).length === 25 && (fsS.match(/nUsm\(/g) || []).length >= 5 && fsS.includes('nEdge(p11, p12, p13, p21, p22, p23, p31, p32, p33)'), 'NIS-резкость: окно 5×5, 4 направления USM, края по середине');
+  const bal = (s, a, b) => (s.match(a) || []).length === (s.match(b) || []).length;
+  ok(bal(fsN, /\{/g, /\}/g) && bal(fsN, /\(/g, /\)/g) && bal(fsS, /\{/g, /\}/g) && bal(fsS, /\(/g, /\)/g), 'NIS-шейдеры: скобки сходятся');
+  // эталон NVIDIA на JS: ровное остаётся ровным, резкость ограничена и растёт с ползунком
+  const ref = require('./nis-ref.cjs')(E);
+  const W = 24, H = 16, flat = new Float32Array(W * H * 3).fill(.42);
+  const fl = ref.scale(flat, W, H, 37, 25, 1), fs2 = ref.sharpen(flat, W, H, 1);
+  ok(fl.every(v => Math.abs(v - .42) < 1e-4) && fs2.every(v => Math.abs(v - .42) < 1e-6), 'NIS: ровная картинка остаётся ровной (и при 100% резкости)');
+  const step = new Float32Array(W * H * 3); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) step.fill(x < 12 ? .2 : .8, (y * W + x) * 3, (y * W + x) * 3 + 3);
+  const prof = s => { const o = ref.scale(step, W, H, 36, 24, s), row = []; for (let x = 0; x < 36; x++) row.push(o[(12 * 36 + x) * 3 + 1]); return row; };
+  const p0 = prof(0), p1 = prof(1), over = r => Math.max(...r) - .8, under = r => .2 - Math.min(...r);
+  ok(over(p1) > over(p0) - 1e-6 && over(p1) < .2 && under(p1) < .2 && p1.every(v => v >= 0 && v <= 1), 'NIS: край ступеньки — резче на 100%, но без «звона» больше предела', { over0: over(p0), over1: over(p1) });
+  ok(Math.abs(p1[2] - .2) < .01 && Math.abs(p1[33] - .8) < .01, 'NIS: вдали от края цвет не меняется');
+  // проходы на подставном рендерере: уменьшенный кадр → NIS / FSR / просто; полный — резкость NIS
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(1000, 500), setRenderTarget: t => { cur = t; }, render: s => { log.push({ t: cur, fs: s.children[0]?.material?.fragmentShader || '' }); } };
+  const R0 = { T, r, q: 'high', stats: {}, pr0: 1 }, P = E.post(R0);
+  const cam = new T.PerspectiveCamera(50, 2, .2, 400); cam.updateProjectionMatrix();
+  const passes = (up, sharp, scaled) => { P.setOpts({ ao: 'off', aa: 'fxaa', upscaler: up, sharp }); P.setSize(scaled ? 670 : 1000, scaled ? 335 : 500, scaled ? .67 : 1); log.length = 0; P.render(new T.Scene(), cam); return log.slice(1); };
+  const kind = x => x.fs.includes('nPoly(') ? 'nis' : x.fs.includes('nUsm(') ? 'nisS' : x.fs.includes('eTap(') ? 'easu' : x.fs.includes('hitMin') ? 'rcas' : x.fs.includes('dir = clamp(dir * rcp') ? 'fxaa' : x.fs.includes('aoUp()') ? 'comp' : 'другое';
+  const seq = (up, sh, sc) => passes(up, sh, sc).filter(x => kind(x) !== 'другое').map(x => kind(x) + (x.t ? '' : '→экран')).join(' ');
+  ok(seq('nis', .5, true) === 'comp nis→экран', 'уменьшенный кадр + NIS: сборка → NVScaler на экран', seq('nis', .5, true));
+  ok(seq('fsr', .5, true) === 'comp easu rcas→экран' && seq('fsr', 0, true) === 'comp easu→экран', 'уменьшенный кадр + FSR: EASU → RCAS (резкость 0 — без RCAS)', seq('fsr', 0, true));
+  ok(seq('off', .5, true) === 'comp fxaa→экран', 'апскейлер выключен — просто растянуть (сглаживание FXAA)', seq('off', .5, true));
+  ok(seq('nis', .5, false) === 'comp fxaa nisS→экран' && seq('nis', 0, false) === 'comp fxaa→экран' && seq('fsr', .5, false) === 'comp fxaa→экран', 'полный кадр: у NIS — резкость после FXAA (0% — без неё), у FSR — как было', seq('nis', .5, false));
+  P.setOpts({ upscaler: 'nis', sharp: .5 }); P.setSize(670, 335, .67); log.length = 0; P.render(new T.Scene(), cam);
+  const nisPass = P._test.M.nis.uniforms;
+  ok(nisPass.uIn.value.x === 670 && nisPass.uOut.value.x === 1000 && Math.abs(nisPass.uK2.value.x - .4) < 1e-6, 'NIS: размеры входа/выхода и резкость — в шейдер');
+  const g = E.gfxResolve({ upscaler: 'nis', sharp: 80 }, { q: 'high' }), g2 = E.gfxResolve({ upscaler: 'dlss', sharp: 500 }, { q: 'mid' });
+  ok(g.upscaler === 'nis' && g.sharp === .8 && g2.upscaler === 'fsr' && g2.sharp === 1, 'настройки: апскейлер и резкость проверяются');
+  P.dispose();
+}
+
+// ═══ 17. «Трассировка лучей» (gfx.js + post.js): код блеска в альфе, мокрое, отражения в экране, контактные тени ═══
+{
+  const C = T.ShaderChunk;
+  ok(C.output_fragment.includes('#if defined( STANDARD ) && defined( OPAQUE )') && C.output_fragment.includes('d37Rt.y > 0.5'), 'код блеска: только стандартные непрозрачные и только пока трассировка рисует свой буфер');
+  ok(C.normal_fragment_maps.includes('#ifdef STANDARD') && C.normal_fragment_maps.includes('geometryNormal') && C.roughnessmap_pars_fragment.includes('uniform vec4 d37Rt;'), 'мокрое: по геометрической нормали, данные — только у стандартных');
+  ok(T.ShaderLib.standard.uniforms.d37Rt?.value === E.GFXU.rt && T.ShaderLib.physical.uniforms.d37Rt?.value === E.GFXU.rt && !T.ShaderLib.lambert.uniforms.d37Rt, 'данные трассировки — общий массив у стандартных материалов');
+  // код блеска: туда и обратно, и пороги — как в шейдере отражений
+  let rtOk = true;
+  for (const [ro, me] of [[.1, 0], [.3, 1], [.5, 0], [.05, 1], [.2, 0]]) { const a = E.rtEncode(ro, me), d = E.rtDecode(a); if (!d.kind || (me > .5) !== (d.kind === 'metal') || d.gloss <= 0) rtOk = false; }
+  ok(rtOk && E.rtEncode(.9, 0) === 1 && E.rtDecode(1).kind === null && E.rtDecode(0).kind === 'clear' && E.rtDecode(1.5).kind === null, 'код блеска: гладкое / металл / вода и стекло / обычное / свечение различаются');
+  ok(E.rtDecode(.5).kind === null, 'край воды при MSAA (альфа ~0,5) — не блестит (зазор в коде)');
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  const fsS = E.RT_FS.ssr;
+  ok(fsS.includes('a < 0.25') && fsS.includes('a >= 0.875') && fsS.includes('/ 0.12') && fsS.includes('uStride') && !/gl_FragCoord|fract\(52\.98/.test(fsS), 'шейдер отражений: те же пороги кода; шаги ровные, без шума по экрану');
+  ok(!/texture2D\(tDepth, uv\)/.test(fsS) && fsS.includes('textureLod(tDepth'), 'глубина в циклах — textureLod (без производных в цикле)');
+  // вода и стекло: метка в альфе — смешиванием (ноль), обратно — обычное
+  const wm = new T.MeshStandardMaterial({ transparent: true });
+  E.rtMark(T, wm, true);
+  ok(wm.blending === T.CustomBlending && wm.blendSrc === T.SrcAlphaFactor && wm.blendDst === T.OneMinusSrcAlphaFactor && wm.blendSrcAlpha === T.ZeroFactor && wm.blendDstAlpha === T.ZeroFactor, 'вода/стекло: цвет смешивается как обычно, альфа буфера — 0');
+  E.rtMark(T, wm, false); ok(wm.blending === T.NormalBlending, 'трассировка выключена — обычное смешивание');
+  ok(E.rtMark(T, new T.MeshStandardMaterial(), true).blending === T.NormalBlending, 'непрозрачное не трогаем');
+  // проходы на подставном рендерере
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; },
+    render: s => { const m = s.children[0]?.material; log.push({ t: cur, fs: m?.fragmentShader || '', mark: E.GFXU.rt[1], u: m?.uniforms }); } };
+  const marks = [];
+  const R0 = { T, r, q: 'high', stats: {}, pr0: 1, sunDir: new T.Vector3(.3, .8, .2).normalize(), sky: { lightI: 1, night: 0 }, lighting: { gfx: E.worldGfx({ rt: { refl: 1.5 } }) }, rtMarkAll: on => marks.push(on) };
+  const P = E.post(R0);
+  const cam = new T.PerspectiveCamera(50, 16 / 9, .2, 400); cam.position.set(0, 3, 8); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+  P.setOpts({ ao: 'off', aa: 'fxaa', rt: 'on' }); P.setSize(800, 450, 1);
+  ok(P.rt.on && P.ao.on && marks[marks.length - 1] === true, 'трассировка: отражения + проход контактных теней (и без AO); вода и стекло помечены');
+  log.length = 0; P.render(new T.Scene(), cam);
+  const kind = x => x.fs.includes('uniform float uStride') ? 'ssr' : x.fs.includes('uniform vec4 uCS') ? 'ao' : x.fs.includes('s += a.xz * wa') ? 'blur' : x.fs.includes('aoUp()') ? 'comp' : x.fs ? 'другое' : 'сцена';
+  const seq = log.map(kind).filter(k => k !== 'другое');
+  ok(seq.join(' ').startsWith('сцена ssr ao blur blur') && seq.includes('comp'), 'проходы: сцена → отражения → AO с контактными тенями → размытие ×2 → сборка', seq.join(' '));
+  ok(log[0].mark === 1 && log.slice(1).every(x => x.mark === 0) && E.GFXU.rt[1] === 0, 'код блеска пишется только при рисовании сцены в буфер (потом — 0: холст и другие рендереры не трогает)');
+  const ssrL = log.find(x => kind(x) === 'ssr'), aoL = log.find(x => kind(x) === 'ao'), comp = log.find(x => kind(x) === 'comp');
+  ok(ssrL.u.uSSR.value.z === 1.5 && ssrL.u.uSSR.value.x === P.rt.steps && ssrL.u.uStride.value === 3, 'сила отражений — из графики мира, шаг 3 пикселя');
+  const cs = aoL.u.uCS.value, sv = R0.sunDir.clone().transformDirection(cam.matrixWorldInverse);
+  ok(Math.abs(cs.x - sv.x) < 1e-6 && Math.abs(cs.y - sv.y) < 1e-6 && cs.w > 0 && aoL.u.uAO.value.z === 0, 'контактные тени: солнце в координатах камеры; AO выключен — сила AO 0');
+  ok(comp.u.uSSRk.value === 1 && comp.u.tSSR.value === P._test.rt().ssr.texture && comp.u.uCSk.value > .3, 'сборка: отражения и контактные тени днём');
+  R0.sky = { lightI: 0, night: 1 }; log.length = 0; P.render(new T.Scene(), cam);
+  ok(log.find(x => kind(x) === 'comp').u.uCSk.value === 0, 'ночью без света — контактных теней нет');
+  P.setOpts({ rt: 'high' }); log.length = 0; P.render(new T.Scene(), cam);
+  ok(P.rt.steps === 96 && log.find(x => kind(x) === 'ssr').u.uStride.value === 1.5, '«Высокая»: шаг 1,5 пикселя, до 96 шагов');
+  R0.lighting.gfx.rt.refl = 0; log.length = 0; P.render(new T.Scene(), cam);
+  ok(!log.some(x => kind(x) === 'ssr') && log.find(x => kind(x) === 'comp').u.uSSRk.value === 0, 'отражения мира выключены (сила 0) — прохода отражений нет');
+  P.setOpts({ rt: 'off', ao: 'off' });
+  ok(!P.rt.on && !P.ao.on && marks[marks.length - 1] === false && !P._test.rt().ssr, 'трассировка выключена — буфер отражений убран, метка воды снята');
+  // настройки и мир
+  ok(E.gfxResolve({ preset: 'ultra' }, { q: 'high' }).rt === 'high' && E.gfxResolve({ preset: 'high' }, { q: 'high' }).rt === 'on' && E.gfxResolve({ preset: 'mid' }, { q: 'mid' }).rt === 'off', 'пресеты: «Ультра» — высокая, «Высокая» — вкл, «Средняя» — выкл');
+  ok(E.gfxResolve({ preset: 'custom', rt: 'high' }, { q: 'mid' }).rt === 'high' && E.gfxResolve({ preset: 'ultra', battery: true }, { q: 'high' }).rt === 'off' && E.gfxResolve({ preset: 'custom', rt: 'high' }, { q: 'low' }).rt === 'off', '«Своя» — как выбрано; батарея и low — выкл');
+  const wg = E.worldGfx({ rt: { refl: 9, wet: -1 } });
+  ok(wg.rt.refl === 2 && wg.rt.wet === 0 && E.worldGfx().rt.refl === 1 && E.worldGfx().rt.wet === 0, 'графика мира: отражения 0…2, мокрое 0…1');
+  const lt = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, gfx: E.worldGfx() };
+  E.mergeLighting(lt, { gfx: { rt: { wet: .4 } } });
+  ok(lt.gfx.rt.wet === .4 && lt.gfx.rt.refl === 1, 'мокрое мира дописывается (сила отражений остаётся)');
+  ok(E.WORLD_PRESETS.neon.gfx.rt.wet > .5, 'настроение «Неон-город» — мокрые улицы');
+  P.dispose();
+}
+
+// ═══ 18. «Генерация кадров (×2)» (post.js): перекладка прошлого кадра под новую камеру — сходимость поиска (тот же
+//     алгоритм, что в шейдере: 4 шага, второй старт «как будто далеко», не сошлось — дальний), подвижные, проходы ═══
+{
+  const fsF = E.FG.fs;
+  ok((fsF.match(/for \(int k = 0; k < 4; k\+\+\)/g) || []).length === 1 && fsF.includes('solve(uv, uv + (uv - toNew(wOld(uv, 0.99995))))') && fsF.includes('dOld(s1) >= dOld(s2) ? s1 : s2'), 'шейдер перекладки: 4 шага, два старта, иначе — дальний');
+  // сцена «пол + ящик» и две камеры; глубина «старого кадра» считается точно (как буфер глубины без ошибок)
+  const camA = new T.PerspectiveCamera(50, 16 / 9, .2, 300); camA.position.set(0, 3, 9); camA.lookAt(0, .6, 0); camA.updateMatrixWorld();
+  const box = { min: [-1, 0, -1], max: [1, 2, 1] };
+  const hit = (o, d, shift) => {   // луч: ближайшее из пола y=0 и ящика (сдвинут на shift)
+    let tBest = Infinity;
+    if (d.y < -1e-6) tBest = -o.y / d.y;
+    let t0 = 0, t1 = Infinity;
+    for (let a = 0; a < 3; a++) { const k = 'xyz'[a], mn = box.min[a] + (shift ? shift[a] : 0), mx = box.max[a] + (shift ? shift[a] : 0);
+      if (Math.abs(d[k]) < 1e-9) { if (o[k] < mn || o[k] > mx) { t0 = Infinity; break; } continue; }
+      let ta = (mn - o[k]) / d[k], tb = (mx - o[k]) / d[k]; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
+    if (t0 <= t1 && t0 > 0 && t0 < tBest) return { t: t0, box: true };
+    return { t: tBest, box: false };
+  };
+  const vp = c => new T.Matrix4().multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse);
+  const ray = (c, uv) => { const o = c.position.clone(), p = new T.Vector3(uv[0] * 2 - 1, uv[1] * 2 - 1, .5).unproject(c); return { o, d: p.sub(o).normalize() }; };
+  const depthAt = (c, uv, shift) => { const { o, d } = ray(c, uv), h = hit(o, d, shift); if (!isFinite(h.t)) return .99995; const p = o.clone().addScaledVector(d, h.t).project(c); return Math.min((p.z + 1) / 2, .99995); };
+  const run = (camB, mov) => {
+    const ivpA = vp(camA).invert(), vpB = vp(camB), W = 160, H = 90;
+    const wOld = (uv, d) => new T.Vector4(uv[0] * 2 - 1, uv[1] * 2 - 1, d * 2 - 1, 1).applyMatrix4(ivpA);
+    const mv = p => { if (mov) { const q = [p.x - mov.c[0], p.z - mov.c[2]]; if (q[0] * q[0] + q[1] * q[1] < mov.r * mov.r && p.y > mov.c[1] - .2 && p.y < mov.c[1] + mov.h) return new T.Vector3(p.x + mov.d[0], p.y + mov.d[1], p.z + mov.d[2]); } return p; };
+    const toNew = p => { const c = new T.Vector4(p.x, p.y, p.z, 1).applyMatrix4(vpB); return [c.x / c.w * .5 + .5, c.y / c.w * .5 + .5]; };
+    const dOld = uv => depthAt(camA, [Math.min(1, Math.max(0, uv[0])), Math.min(1, Math.max(0, uv[1]))], null);
+    const W3 = (uv) => { const h = wOld(uv, dOld(uv)); return new T.Vector3(h.x / h.w, h.y / h.w, h.z / h.w); };
+    const solve = (uv, s) => { s = s.slice(); for (let k = 0; k < 4; k++) { const q = toNew(mv(W3(s))); s[0] += uv[0] - q[0]; s[1] += uv[1] - q[1]; } return s; };
+    const err = (uv, s) => { const q = toNew(mv(W3(s))); return Math.hypot((q[0] - uv[0]) * W, (q[1] - uv[1]) * H); };
+    let good = 0, all = 0;
+    for (let y = 4; y < H - 4; y += 3) for (let x = 4; x < W - 4; x += 3) {
+      const uv = [(x + .5) / W, (y + .5) / H];
+      // правда: что видит новая камера (ящик сдвинут, если подвижный) — и где эта точка была в старом кадре
+      const { o, d } = ray(camB, uv), h = hit(o, d, mov ? mov.d : null); if (!isFinite(h.t)) continue;
+      let pw = o.clone().addScaledVector(d, h.t); if (mov && h.box) pw = pw.sub(new T.Vector3(...mov.d));
+      const pa = pw.clone().project(camA), su = [pa.x * .5 + .5, pa.y * .5 + .5];
+      if (su[0] < .02 || su[0] > .98 || su[1] < .02 || su[1] > .98) continue;
+      if (Math.abs(depthAt(camA, su, null) - (pa.z + 1) / 2) > 1e-4) continue;   // в старом кадре точку закрывало — открывшееся, пропускаем
+      const far =(() => { const h2 = wOld(uv, .99995); const q = toNew(new T.Vector3(h2.x / h2.w, h2.y / h2.w, h2.z / h2.w)); return [uv[0] + (uv[0] - q[0]), uv[1] + (uv[1] - q[1])]; })();
+      const s1 = solve(uv, uv), s2 = solve(uv, far), e1 = err(uv, s1), e2 = err(uv, s2);
+      const s = e1 <= 1 ? s1 : e2 <= 1 ? s2 : (dOld(s1) >= dOld(s2) ? s1 : s2);
+      all++; if (Math.hypot((s[0] - su[0]) * W, (s[1] - su[1]) * H) < .75) good++;
+    }
+    return { share: good / Math.max(1, all), all };
+  };
+  const camB = camA.clone(); camB.rotateOnWorldAxis(new T.Vector3(0, 1, 0), .035); camB.position.add(new T.Vector3(.12, 0, -.15)); camB.updateMatrixWorld();
+  const a = run(camB, null);
+  ok(a.all > 500 && a.share > .97, 'перекладка: поворот 2° и шаг — 97%+ пикселей точно на месте (< 0,75 px)', a);
+  const camC = camA.clone(); camC.rotateOnWorldAxis(new T.Vector3(0, 1, 0), .1); camC.updateMatrixWorld();
+  const b = run(camC, null);
+  ok(b.share > .95, 'перекладка: поворот 6° — 95%+ пикселей на месте', b);
+  const c = run(camB, { c: [0, 0, 0], r: 1.6, h: 2.5, d: [.12, 0, -.15] });
+  ok(c.share > .95, 'подвижный (ящик едет вместе с камерой, как свой персонаж) — на месте', c);
+  // проходы
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; }, render: s => { const m = s.children[0]?.material; log.push({ t: cur, fs: m?.fragmentShader || '', u: m?.uniforms }); } };
+  const P = E.post({ T, r, q: 'high', stats: {}, pr0: 1 });
+  P.setOpts({ ao: 'off', aa: 'fxaa' }); P.setSize(800, 450, 1);
+  ok(P.renderGen(camA, []) === false, 'генерация выключена — промежуточного кадра нет');
+  P.setFg(true);
+  ok(P.fg.on && P._test.rt().out && P._test.rt().out.width === 800 && P.renderGen(camA, []) === false, 'включена: буфер готового кадра размером холста; до первого настоящего — нечего перекладывать');
+  log.length = 0; P.render(new T.Scene(), camA);
+  const last = log[log.length - 1], prev = log[log.length - 2];
+  ok(last.t === null && last.fs.includes('gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0)') && prev.t === P._test.rt().out && P.fg.have, 'настоящий кадр: в свой буфер, копией — на экран');
+  log.length = 0;
+  ok(P.renderGen(camB, [[0, 0, 0, .7, 2.6, .1, 0, -.1]]) === true && log.length === 1 && log[0].t === null && log[0].fs.includes('uMovA'), 'промежуточный кадр — один проход перекладки прямо на экран');
+  const u = log[0].u;
+  ok(u.uMovN.value === 1 && u.uMovA.value[0].w === .7 && u.uMovB.value[0].x === .1 && u.uMovB.value[0].w === 2.6 && u.tDepth.value === P._test.rt().scene.depthTexture, 'подвижные и глубина настоящего кадра — в шейдер');
+  const ivp = vp(camA).invert();
+  ok(u.uInvVP.value.elements.every((v, i) => Math.abs(v - ivp.elements[i]) < 1e-6), 'камера настоящего кадра — обратная матрица запомнена');
+  P.setFg(false);
+  ok(!P.fg.on && !P._test.rt().out && P.renderGen(camB, []) === false, 'выключили — буфер убран');
+  const g0 = E.gfxResolve({}, { q: 'high' }), g1 = E.gfxResolve({ framegen: true }, { q: 'high' }), g2 = E.gfxResolve({ framegen: true }, { q: 'low' });
+  ok(g0.framegen === false && g1.framegen === true && g2.framegen === false, 'генерация кадров: выключена по умолчанию, на low — нет');
   P.dispose();
 }
 

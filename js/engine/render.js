@@ -167,8 +167,10 @@
     // камеры тени почти не видно); шаг — ровно на тексель (иначе тени «дрожат» при ходьбе). Пока карта не перерисована,
     // приёмники берут старую матрицу тени — тени верные, просто коробка догонит при следующей перерисовке
     const lr = new T.Vector3(), lu = new T.Vector3(), tgt = new T.Vector3(), shTgt = new T.Vector3(1e9, 0, 0), camFw = new T.Vector3(), UPV = new T.Vector3(0, 1, 0);
+    const FGself = { x: 0, y: 0, z: 0, ok: false };
     lr.crossVectors(UPV, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
     R.follow = (x, z, y = 0) => {
+      FGself.x = x; FGself.y = y; FGself.z = z; FGself.ok = true;   // генерация кадров: свой персонаж — подвижный
       tgt.set(x, y, z);
       if (shadows) {
         const e = sun.shadow.camera.right;
@@ -462,10 +464,63 @@
     };
     // ═══ Кадр: склейка/лампы → отражения неба (если пора) → тени по делу → сцена (через постобработку или прямо) →
     //     счётчики, разрешение и автокачество ═══
+    // ═══ «Генерация кадров (×2)» (post.js P.renderGen): настоящий кадр — через раз, промежуточный — прошлый, переложенный
+    //     под новую камеру. Сама выключается (настоящий кадр), когда будет плохо: камера прыгнула или резко повернулась,
+    //     сменился вид / размер, R.cut() (телепорт, смена сцены), стрелки редактора, кто-то рядом движется слишком быстро ═══
+    const FG = R.fg = { want: false, on: false, last: 'real', cut: 0, camPos: new T.Vector3(), camQ: new T.Quaternion(), fov: 0, aspect: 0,
+      lastRealT: 0, snap: new Map(), movers: [], why: '' };
+    R.cut = (n = 2) => { FG.cut = Math.max(FG.cut, n); };
+    // подвижные: свой персонаж (R.follow) + что даст игра (R.fgMovers → [[ключ, x, y, z], …]); [x, y, z] — ступни
+    const MOV_R = .62 * (E.UNIT || 1), MOV_H = 2.3 * (E.UNIT || 1);
+    function fgSources(){
+      const out = FGself.ok ? [['@', FGself.x, FGself.y, FGself.z]] : [];
+      if (typeof R.fgMovers === 'function') { try { const L = R.fgMovers(); if (Array.isArray(L)) for (const m of L) if (m && m[0] !== '@') out.push(m); } catch (e) {} }
+      return out;
+    }
+    function fgSnap(){
+      FG.snap.clear();
+      for (const m of fgSources()) FG.snap.set(m[0], [m[1], m[2], m[3]]);
+      FG.camPos.copy(camera.position); FG.camQ.copy(camera.quaternion); FG.fov = camera.fov; FG.aspect = camera.aspect;
+    }
+    function fgMovers(){
+      const L = [];
+      for (const m of fgSources()) {
+        const s = FG.snap.get(m[0]); if (!s) continue;
+        L.push([s[0], s[1] + .05, s[2], MOV_R, MOV_H, m[1] - s[0], m[2] - s[1], m[3] - s[2], (s[0] - camera.position.x) ** 2 + (s[2] - camera.position.z) ** 2]);
+      }
+      L.sort((a, b) => a[8] - b[8]);
+      return L.length > 8 ? L.slice(0, 8) : L;
+    }
+    // промежуточный ли кадр сейчас
+    function fgGen(){
+      const ok = FG.want && R.post && R.post.on && R.post.fg?.ok;
+      if (!ok) { if (R.post?.fg?.on) R.post.setFg(false); FG.on = false; FG.last = 'real'; return false; }
+      if (!R.post.fg.on) R.post.setFg(true);
+      FG.on = true;
+      if (FG.last !== 'real' || !R.post.fg.have) return false;
+      if (FG.cut > 0) { FG.cut--; FG.why = 'смена сцены'; return false; }
+      if (R.post.lastOver) { FG.why = 'редактор'; return false; }
+      if (camera.position.distanceTo(FG.camPos) > 2.5 * (E.UNIT || 1) || 1 - Math.abs(camera.quaternion.dot(FG.camQ)) > .015 || camera.fov !== FG.fov || camera.aspect !== FG.aspect) { FG.why = 'камера резко'; return false; }
+      const M = fgMovers();
+      for (const m of M) if (Math.hypot(m[5], m[6], m[7]) > 1.2 * (E.UNIT || 1)) { FG.why = 'быстро рядом'; return false; }
+      FG.movers = M; FG.why = '';
+      return true;
+    }
     let lastT = 0;
     R.render = () => {
       const t0 = performance.now(), dt = lastT ? t0 - lastT : 0;
       lastT = t0;
+      if (fgGen()) {   // промежуточный кадр: ни теней, ни сцены — одна перекладка (логика игры и интерфейс шли как обычно)
+        r.info.reset();
+        R.post.renderGen(camera, FG.movers);
+        FG.last = 'gen';
+        const t1 = performance.now();
+        ST.cpu = t1 - t0; ST.dt = dt; ST.calls = r.info.render.calls; ST.post = ST.calls; ST.gen = (ST.gen || 0) + 1;
+        if (dt > 0 && dt < 1000) { ST.frames++; ST.sumDt += dt; if (dt > ST.maxDt) ST.maxDt = dt; ST.sumR += ST.cpu; }
+        if (E.perf?.on) E.perf.frame(R);
+        const O = window.D37Opt; if (O && O.rev !== optRev) optSync(O);
+        return;
+      }
       for (let i = 0; i < R.preRender.length; i++) R.preRender[i](R, t0);
       sky.position.copy(camera.position); cloudG.position.set(camera.position.x, 0, camera.position.z);
       if (GU.fogB[3] > 0) fogCam();
@@ -473,17 +528,25 @@
       L.update(Math.min(.1, dt / 1000), camera);
       ST.shadowNow = shadowTick(t0);
       r.info.reset();
+      if (GU.rt) GU.rt[0] = q !== 'low' ? R.lighting.gfx.rt?.wet || 0 : 0;   // мокрое — мира (данные общие на страницу: после кадра — 0)
       if (R.post && R.post.on) R.post.render(scene, camera);
       else { r.render(scene, camera); ST.scene = r.info.render.calls; ST.post = 0; }
+      if (GU.rt) GU.rt[0] = 0;
       const inf = r.info.render;
       ST.calls = inf.calls; ST.tris = inf.triangles;
       if (ST.shadowNow) { ST.shadowUpd++; if (ST.sceneNoSh) ST.shadow = Math.max(0, ST.scene - ST.sceneNoSh); } else ST.sceneNoSh = ST.scene;
       const t1 = performance.now(), cpu = t1 - t0, f0 = E.frameT0 && t0 - E.frameT0 < 50 ? E.frameT0 : t0;
       ST.cpu = cpu; ST.cpuFrame = t1 - f0; ST.dt = dt;
       if (dt > 0 && dt < 1000) { ST.frames++; ST.sumDt += dt; if (dt > ST.maxDt) ST.maxDt = dt; ST.sumCpu += ST.cpuFrame; if (ST.cpuFrame > ST.maxCpu) ST.maxCpu = ST.cpuFrame; ST.sumR += cpu; }
-      if (DR.on && dt > 0 && DR.tick(dt, ST.cpuFrame, t0) !== scaleNow) { applyScale(); AQ?.D.hold(2500, t0); }
-      if (AQ && !AQ.off && dt > 0) {   // автокачество: ступень лесенки по времени кадра (разрешение и ступени — по очереди)
-        const s = AQ.D.tick(dt, ST.cpuFrame, t0), i = Math.round((1 - s) * (AQ.L.length - 1));
+      ST.real = (ST.real || 0) + 1; ST.realN = (ST.realN || 0) + 1;   // настоящих кадров (счётчик FPS: «60 (30 настоящих)»)
+      // генерация кадров: запомнить камеру и подвижных этого настоящего кадра; автоматам разрешения и качества — время
+      // настоящего кадра на 2 (на экране кадр в 2 раза чаще)
+      let dtq = dt;
+      if (FG.on) { FG.last = 'real'; fgSnap(); dtq = FG.lastRealT ? (t0 - FG.lastRealT) / 2 : 0; }
+      FG.lastRealT = t0;
+      if (DR.on && dtq > 0 && DR.tick(dtq, ST.cpuFrame, t0) !== scaleNow) { applyScale(); AQ?.D.hold(2500, t0); }
+      if (AQ && !AQ.off && dtq > 0) {   // автокачество: ступень лесенки по времени кадра (разрешение и ступени — по очереди)
+        const s = AQ.D.tick(dtq, ST.cpuFrame, t0), i = Math.round((1 - s) * (AQ.L.length - 1));
         if (i !== AQ.i) { AQ.i = i; applyOpts(AQ.L[i]); DR.hold(2500, t0); }
       }
       if (E.perf?.on) E.perf.frame(R);
@@ -520,6 +583,7 @@
     const gradeU = { gain: [1, 1, 1], sat: 1, con: 0, vig: 0 };
     function applyOpts(op){
       R.opt = op;
+      FG.want = !!op.framegen;   // генерация кадров (×2) — настройка игрока
       const pr = Math.min(window.devicePixelRatio || 1, op.prCap || 2);
       if (pr !== PR0) { PR0 = pr; if (R.w > 1) { r.setPixelRatio(PR0); r.setSize(R.w, R.h, false); } }
       DR.max = Math.max(.5, Math.min(1, (op.res || 100) / 100));
@@ -528,7 +592,7 @@
       applyShadowQ();
       scene.environment = op.refl && q !== 'low' ? envOut?.texture || null : null;
       R.waterU.uWQ.value = op.water === 'good' ? 1 : 0;
-      R.post?.setOpts?.({ ao: op.ao, aa: op.aa });
+      R.post?.setOpts?.({ ao: op.ao, aa: op.aa, upscaler: op.upscaler, sharp: op.sharp, rt: op.rt || 'off' });
       applyGrade();
       applyFog();
       if (R.w > 1) applyScale();
@@ -720,12 +784,16 @@
         return H;
       }, PROC_N[name]);
     };
+    // «Трассировка лучей»: прозрачное блестящее (вода, стекло, лёд) — пока она включена, пишет в альфу буфера сцены 0 (E.rtMark)
+    R.rtClear = new Set();
+    R.rtMarkAll = on => { R.rtOn = !!on; for (const m of R.rtClear) E.rtMark?.(T, m, R.rtOn); };
+    const rtAdd = m => { if (m?.transparent && E.rtMark) { R.rtClear.add(m); if (R.rtOn) E.rtMark(T, m, true); } return m; };
     // Стекло, лёд: френель — под углом отражают сильнее и меньше просвечивают (прозрачные не склеиваются — правка шейдера можно)
     R.fresnel = (m, k = .7) => {
       if (q === 'low' || !m?.transparent || !m.isMeshStandardMaterial) return m;
       m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', '#include <output_fragment>\n  gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, pow( 1.0 - clamp( abs( dot( normal, normalize( vViewPosition ) ) ), 0.0, 1.0 ), 4.0 ) * ' + (+k).toFixed(2) + ' ), 0.0, 1.0 );'); };
       m.customProgramCacheKey = () => 'd37-fr' + (+k).toFixed(2);
-      return m;
+      return rtAdd(m);
     };
     R.texMat = (key, map, o = {}) => cache('cm' + key + (o.tint || ''), () => {
       if (q === 'low') return new T.MeshLambertMaterial({ color: o.flatColor || o.tint || '#ffffff', map: o.lowMap ? map : null });
@@ -743,6 +811,7 @@
       const m = q === 'low' ? new T.MeshLambertMaterial({ color: c, transparent: true, opacity: .9 }) : E.waterMaterial(R, c, wo);
       m.userData.baseColor = c; m.userData.fixedColor = !!wo.fixedColor; m.userData.noCast = true;
       R.waters.push(m);
+      if (q !== 'low') rtAdd(m);
       if (R.opt && !m.userData.fixedColor && R.lighting.gfx.water.color) m.color.set(R.lighting.gfx.water.color);
       return m;
     });
