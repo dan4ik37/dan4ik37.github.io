@@ -807,6 +807,22 @@
     cv.addEventListener('pointerdown', onDown);
     look = CH()?.look() || null;
     resize();
+    // 2D-проекция своего 3D-персонажа (js/core/char2d.js) — печём заранее, пока открыто меню
+    if (typeof gamesLoadScript === 'function') gamesLoadScript('js/core/char2d.js').then(() => { if (look && cv) sprOf(0, look, true); }).catch(() => {});
+  }
+  // ── Герой — проекция 3D-персонажа сбоку (смотрит туда, куда бежит), оружие героя — в руке. Лист не готов или нет WebGL —
+  //    старый 2D-персонаж (как раньше) ──
+  const sprH = new Map(), sprSt = new Map();
+  function sprOf(idx, pl, mine){
+    const SP = window.D37Sprite;
+    if (!SP || !pl || !SP.supported()) return null;
+    const size = Math.max(32, Math.min(128, Math.round(40 * scale * 1.2 / 8) * 8));
+    let e = sprH.get(idx);
+    if (!e || e.look !== pl || e.size !== size) {
+      e = { look: pl, size, h: SP.handle(pl, { view: 'side', size, noItem: true, key: mine ? SP.myKey() : 'horde-' + idx, anims: ['idle', 'run', 'hurt'], style: SP.styleFor('toon'), pin: mine }) };
+      sprH.set(idx, e);
+    }
+    return e.h;
   }
   function showOv(html){ ov.innerHTML = html; ov.hidden = false; ov.scrollTop = 0; ovLock = Date.now() + 350; input.on = false; input.jx = input.jy = 0; }
   function hideOv(){ ov.hidden = true; ov.innerHTML = ''; }
@@ -1057,7 +1073,14 @@
       drawSpr(pet, 22, petX, petY);
     }
     if (p.inv > 0 && Math.floor(G.t * 16) % 2) ctx.globalAlpha = .45;
-    if (CH() && pl) {
+    const SH = CH() && pl ? sprOf(p.idx, pl, p.idx === G.me) : null;
+    if (SH && SH.ready()) {
+      const S = 40 * k, old = sprSt.get(p.idx), st = old && old.G === G ? old : { G, hp: p.hp, hurt: -9 };
+      if (p.hp < st.hp - .01) st.hurt = G.t;   // только что ранили — «больно»
+      st.hp = p.hp; sprSt.set(p.idx, st);
+      const ht = G.t - st.hurt, hurt = ht >= 0 && ht < .3;
+      SH.draw(ctx, hurt ? 'hurt' : p.moving ? 'run' : 'idle', hurt ? ht : G.t, X, Y + S * .5, { flip: p.hx < 0, h: S * 1.2, item: p.hand });
+    } else if (CH() && pl) {
       const S = 40 * k, sq = p.moving ? Math.sin(G.t * 18) * .04 : Math.sin(G.t * 3) * .015;
       const sp = CH().sprite(pl, S, { dir: p.hx, item: p.hand, noPet: true, t: G.t });
       const w = sp.c.width * (1 + sq), h = sp.c.height * (1 - sq);

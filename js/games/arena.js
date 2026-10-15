@@ -163,6 +163,22 @@
     root.querySelector('.ar-sup').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); doShoot(Wd?.p[me].aim ?? 0, true); });
     look = CH()?.look() || null;
     resize();
+    if (typeof gamesLoadScript === 'function') gamesLoadScript('js/core/char2d.js').then(() => { if (look) sprOf(me, look, true); }).catch(() => {});
+  }
+  // ── Бойцы — проекция 3D-персонажей сверху на 8 сторон: смотрят туда, куда целятся, бластер — в руке.
+  //    Лист не готов или нет WebGL — старый 2D-персонаж ──
+  const BOT_LOOK = { color: 'red', eyes: 'angry' };
+  const sprH = new Map(), sprMv = new Map();
+  function sprOf(i, L, mine){
+    const SP = window.D37Sprite;
+    if (!SP || !L || !SP.supported()) return null;
+    const size = Math.max(32, Math.min(128, Math.round(PR * 2.6 * k / dpr / 8) * 8));
+    let e = sprH.get(i);
+    if (!e || e.look !== L || e.size !== size) {
+      e = { look: L, size, h: SP.handle(L, { view: 'iso8', size, noItem: true, key: mine ? SP.myKey() : L === BOT_LOOK ? 'arena-bot' : 'arena-' + i, anims: ['idle', 'run'], style: SP.styleFor('toon'), pin: mine }) };
+      sprH.set(i, e);
+    }
+    return e.h;
   }
   function resize(){
     if (!cv) return;
@@ -386,7 +402,14 @@
       ctx.beginPath(); ctx.ellipse(sx, sy + PR * .7 * k, PR * k, PR * .4 * k, 0, 0, Math.PI * 2); ctx.stroke();
       const L = mine ? look : oppLook;
       const dirX = Math.cos(p.aim) < 0 ? -1 : 1;
-      if (CH() && (L || !mine)) { const sp = CH().sprite(L || { color: 'red', eyes: 'angry' }, PR * 2.4 * k, { dir: rot ? (Math.sin(p.aim) > 0 ? -1 : 1) : dirX, item: '🔫', noPet: true, t: Wd.t }); ctx.drawImage(sp.c, sx - sp.ax, sy + PR * .8 * k - sp.ay); }
+      const SH = CH() ? sprOf(p.i, L || (mine ? null : BOT_LOOK), mine) : null;
+      if (SH && SH.ready()) {
+        const m = sprMv.get(p.i) || { x: p.x, y: p.y, t: -9 };
+        if (Math.hypot(p.x - m.x, p.y - m.y) > .5) m.t = Wd.t;   // бежит, если сдвинулся за последние 0,15 с
+        m.x = p.x; m.y = p.y; sprMv.set(p.i, m);
+        const ax = Math.cos(p.aim), ay = Math.sin(p.aim);
+        SH.draw(ctx, Wd.t - m.t < .15 ? 'run' : 'idle', Wd.t, sx, sy + PR * .8 * k, { dir: window.D37Sprite.dir8(rot ? -ay : ax, rot ? ax : ay), h: PR * 2.6 * k, item: '🔫' });
+      } else if (CH() && (L || !mine)) { const sp = CH().sprite(L || { color: 'red', eyes: 'angry' }, PR * 2.4 * k, { dir: rot ? (Math.sin(p.aim) > 0 ? -1 : 1) : dirX, item: '🔫', noPet: true, t: Wd.t }); ctx.drawImage(sp.c, sx - sp.ax, sy + PR * .8 * k - sp.ay); }
       else { ctx.fillStyle = mine ? '#4ade80' : '#ff4d6d'; ctx.beginPath(); ctx.arc(sx, sy, PR * k, 0, Math.PI * 2); ctx.fill(); }
       if (p.hurt > 0) { ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.arc(sx, sy, PR * k * 1.1, 0, Math.PI * 2); ctx.fill(); }
       ctx.globalAlpha = 1;

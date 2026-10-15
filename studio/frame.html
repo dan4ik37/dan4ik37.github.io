@@ -14,8 +14,8 @@
 <script>
 (() => {
   'use strict';
-  // ═══ Внутри игры: объект D37 (счёт, конец игры, звуки, мини-движок 2D) — код ниже уходит в игру текстом ═══
-  function harness(RUN, STORE){
+  // ═══ Внутри игры: объект D37 (счёт, конец игры, звуки, мини-движок 2D, персонаж игрока) — код ниже уходит в игру текстом ═══
+  function harness(RUN, STORE, PLAYER){
     'use strict';
     var send = function (t, v, x) {
       try { var m = { __d37: RUN, t: t, v: v }; if (x) for (var k in x) m[k] = x[k]; parent.postMessage(m, '*'); } catch (e) {}
@@ -84,6 +84,46 @@
     D37.sfx = function (k) { (SFX[k] || SFX.click)(); };
     window.addEventListener('pointerdown', D37.unlock, true);
     window.addEventListener('keydown', D37.unlock, true);
+
+    // ── Персонаж игрока: 2D-проекция его 3D-персонажа с сайта (у каждого игрока свой), сбоку, с анимациями.
+    //    Картинка — data URL (сеть не нужна). Может прийти через секунду после старта: тогда D37.player.ready станет true ──
+    var PL = D37.player = { ready: false, pet: '', color: '', view: 'side', anims: [] }, PIMG = null, PM = null;
+    function setPlayer(p) {
+      if (!p || typeof p.src !== 'string' || !p.meta || !p.meta.anims) return;
+      var img = new Image();
+      img.onload = function () {
+        PIMG = img; PM = p.meta;
+        PL.pet = p.pet || ''; PL.color = p.color || ''; PL.view = PM.view || 'side'; PL.anims = Object.keys(PM.anims); PL.ready = true;
+        if (typeof D37.onplayer === 'function') { try { D37.onplayer(PL); } catch (e) {} }
+      };
+      img.src = p.src;
+    }
+    if (PLAYER) setPlayer(PLAYER);
+    window.addEventListener('message', function (e) { if (e.source === parent && e.data && e.data.__d37p === RUN) setPlayer(e.data.player); });
+    // Нарисовать персонажа ногами в (x, y): anim — 'idle', 'walk', 'run', 'jump', 'fall', 'hurt', 'use', 'wave', 'dance', 'cheer';
+    // t — секунды от начала анимации; o.h — рост в единицах холста (по умолчанию 64), o.flip — смотрит влево, o.alpha.
+    // Не готов — false (тогда рисуй героя сам, например эмодзи)
+    D37.drawPlayer = function (ctx, anim, t, x, y, o) {
+      o = o || {};
+      if (!PL.ready || !ctx) return false;
+      var A = PM.anims, a = A[anim] || (anim === 'run' && A.walk) || (anim === 'fall' && A.jump) || A.idle;   // как D37Sprite.frame на сайте
+      if (!a) return false;
+      var n = a.n, f = n <= 1 ? 0 : Math.floor(Math.max(0, +t || 0) * n / a.dur + 1e-9);
+      f = a.loop ? ((f % n) + n) % n : Math.min(n - 1, f);
+      var dirs = PM.dirs || [6], d = PL.view === 'side' ? (o.flip ? 6 : 2) : ((Math.round(+o.dir || 0) % 8) + 8) % 8;
+      var r = dirs.indexOf(d), mir = false;
+      if (r < 0) { r = dirs.indexOf((8 - d) % 8); mir = true; }
+      if (r < 0 || r >= a.rows) r = 0;
+      var k = (o.h || 64) / PM.nom;
+      ctx.save();
+      if (o.alpha != null) ctx.globalAlpha *= o.alpha;
+      if (PM.px) ctx.imageSmoothingEnabled = false;
+      ctx.translate(x, y);
+      if (mir) ctx.scale(-1, 1);
+      ctx.drawImage(PIMG, f * a.cw, a.y + r * a.ch, a.cw, a.ch, -a.ax * k, -a.ay * k, a.cw * k, a.ch * k);
+      ctx.restore();
+      return true;
+    };
 
     // ── Мини-движок 2D: холст на всё окно, высота мира h (по умолчанию 600), ширина — по форме экрана ──
     var EMO = {};
@@ -170,8 +210,25 @@
 
   // ═══ Хозяин песочницы: принимает игру от сайта, запускает во вложенном окне без доступа к сайту, передаёт события ═══
   const HOST = location.origin === 'null' ? '*' : location.origin;
-  let frame = null, run = 0, lineOff = 0;
+  let frame = null, run = 0, lineOff = 0, player = null, ready = false;
   const RELAY = { ready: 1, score: 1, over: 1, error: 1, log: 1, save: 1, again: 1 };
+  // Персонаж игрока от сайта: только картинка data URL и числа таблицы кадров — всё проверяем и собираем заново
+  function cleanPlayer(p){
+    if (!p || typeof p !== 'object' || typeof p.src !== 'string' || p.src.length > 4e6 || !/^data:image\/(png|webp);base64,[A-Za-z0-9+/=]+$/.test(p.src)) return null;
+    const m = p.meta;
+    if (!m || typeof m !== 'object' || !m.anims || typeof m.anims !== 'object') return null;
+    const num = (v, lo, hi) => { v = +v; return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : lo; };
+    const anims = {};
+    for (const k of Object.keys(m.anims).slice(0, 24)) {
+      const a = m.anims[k];
+      if (!/^[a-z]{2,10}$/.test(k) || !a || typeof a !== 'object') continue;
+      anims[k] = { y: num(a.y, 0, 32768), cw: num(a.cw, 1, 4096), ch: num(a.ch, 1, 4096), n: Math.round(num(a.n, 1, 64)), rows: Math.round(num(a.rows, 1, 8)), ax: num(a.ax, -4096, 4096), ay: num(a.ay, -4096, 4096), dur: num(a.dur, .01, 60), loop: a.loop ? 1 : 0 };
+    }
+    if (!Object.keys(anims).length) return null;
+    return { src: p.src, pet: typeof p.pet === 'string' ? p.pet.slice(0, 12) : '', color: /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '',
+      meta: { view: ['side', 'iso4', 'iso8', 'front'].includes(m.view) ? m.view : 'side', dirs: (Array.isArray(m.dirs) ? m.dirs : [6]).slice(0, 8).map(v => Math.round(num(v, 0, 7))), nom: num(m.nom, 1, 4096), px: m.px ? 1 : 0, anims } };
+  }
+  const sendPlayer = () => { if (frame && ready && player) try { frame.contentWindow.postMessage({ __d37p: run, player }, '*'); } catch (e) {} };
   window.addEventListener('message', e => {
     const d = e.data;
     if (!d || typeof d !== 'object') return;
@@ -179,8 +236,10 @@
       if (d.type === 'run') start(d);
       else if (d.type === 'stop') stop();
       else if (d.type === 'focus') frame?.focus();
+      else if (d.type === 'player') { const p = cleanPlayer(d.player); if (p) { player = p; if (d.run === run) sendPlayer(); } }
       return;
     }
+    if (frame && e.source === frame.contentWindow && d.__d37 === run && d.t === 'ready' && !ready) { ready = true; if (!started) sendPlayer(); }
     if (frame && e.source === frame.contentWindow && d.__d37 === run && RELAY[d.t]) {
       const out = { type: 'game', run, t: d.t };
       if (d.t === 'save') out.v = JSON.stringify(d.v || {}).slice(0, 60000);
@@ -191,10 +250,14 @@
       parent.postMessage(out, '*');
     }
   });
-  function stop(){ if (frame) { frame.remove(); frame = null; } }
+  // started — персонаж уже был в игре с самого начала (вшит в srcdoc); иначе пошлём, когда игра скажет ready
+  let started = false;
+  function stop(){ if (frame) { frame.remove(); frame = null; } ready = false; }
   function start(d){
     stop();
     run = +d.run || run + 1;
+    if (d.player) player = cleanPlayer(d.player) || player;
+    started = !!player;
     frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts allow-pointer-lock');
     frame.setAttribute('allow', 'autoplay; gamepad');
@@ -204,7 +267,7 @@
     const head = '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">' +
       '<meta http-equiv="Content-Security-Policy" content="frame-src \'none\'; child-src \'none\'; worker-src \'none\'; form-action \'none\'">' +
       '<style>html,body{margin:0;padding:0;height:100%;overscroll-behavior:none}</style>' +
-      '<script>(' + harness.toString() + ')(' + run + ', ' + JSON.stringify(store).replace(/</g, '\\u003c') + ');<\/script>';
+      '<script>(' + harness.toString() + ')(' + run + ', ' + JSON.stringify(store).replace(/</g, '\\u003c') + ', ' + (player ? JSON.stringify(player).replace(/</g, '\\u003c') : 'null') + ');<\/script>';
     let html;
     if (d.kind === 'tpl') {
       html = '<!doctype html><html lang="ru"><head>' + head + '</head><body><script>(' + String(d.code) + ')(' +

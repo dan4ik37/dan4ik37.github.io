@@ -182,16 +182,22 @@
       root = el; api = gameApi; trying = null; parts = [];
       if (window.D37Editor && window.World3D?.supported()) {
         mode3d = true;
-        window.D37Editor.mount(el, { api: gameApi }).then(ok => { if (!ok && root === el) { mode3d = false; start2d(); } });
+        window.D37Editor.mount(el, { api: gameApi }).then(ok => { if (!ok && root === el) { mode3d = false; start2d(); } else if (ok) spr2d(el); });
         return;
       }
       start2d();
     },
     unmount(){
+      window.D37SpriteView?.close();
       if (mode3d) { window.D37Editor?.unmount(); mode3d = false; root = null; return; }
       stop2d();
     },
   };
+  // «🎞 2D» над 3D-персонажем: как он выглядит в 2D-играх (js/games/sprite-view.js + js/core/char2d.js, грузятся лениво)
+  function spr2d(el){
+    if (typeof gamesLoadScript !== 'function') return;
+    Promise.all(['js/core/char2d.js', 'js/games/sprite-view.js'].map(gamesLoadScript)).then(() => { if (root === el && mode3d) window.D37SpriteView?.wardrobe(el); }).catch(() => {});
+  }
   function start2d(){
     render();
     offCoins = W().on(() => { const w = root?.querySelector('.wr-wallet .js-coins'); if (w) w.textContent = num(W().coins()); });
