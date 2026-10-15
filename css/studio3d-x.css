@@ -200,6 +200,11 @@
 .s3-compact.s3-playing .s3-stats{top:auto;bottom:96px;right:8px}
 .s3x-moded .s3-stats{top:auto;bottom:110px}   /* режим игры: своё табло сверху справа, таблица скриптов — ниже */
 .s3-view:has(.s3x-mhud) .s3-labels{top:74px}
+/* узкий экран в игре: полоска здоровья — слева сверху, под ней табло режима, своя строка, лучшие — справа ниже */
+.s3-compact .s3x-mhud{top:28px;font-size:12.5px;gap:8px;padding:4px 10px}
+.s3-compact .s3x-mhud .t{font-size:14px}
+.s3-compact .s3x-mine{top:60px;font-size:11.5px;max-width:calc(100% - 16px);white-space:normal;text-align:center}
+.s3-compact .s3x-board{top:94px;right:8px;min-width:0;max-width:52%;font-size:11.5px;padding:5px 8px}
 
 /* ── Обучение «Первый мир за 5 минут» ── */
 .s3x-tut{position:absolute;z-index:9;left:12px;bottom:56px;width:min(340px,calc(100% - 24px));display:grid;gap:8px;padding:14px 14px 12px;border-radius:16px;background:#1e293b;border:2px solid #60a5fa;box-shadow:0 14px 40px rgba(0,0,0,.55);color:#fff}

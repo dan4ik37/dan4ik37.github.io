@@ -57,7 +57,7 @@
       // rig: 1-е лицо / 3-е / из-за плеча (ближе и выше)
       if (V.mode === 'first') rig.mode = 'first';
       else { rig.mode = 'third'; if (rig.mode === 'third' && was === 'first') rig.fp = 0; }
-      if (V.mode === 'shoulder') Object.assign(rig, { dist: 4.4 * U / 1.17, minD: 2.4, maxD: 7, lift: 1.75 });
+      if (V.mode === 'shoulder') Object.assign(rig, { dist: (camera.aspect < 1 ? 6.4 : 4.4) * U / 1.17, minD: 2.4, maxD: 9, lift: 1.75 });   // телефон стоя — дальше, иначе спина на пол-экрана
       else Object.assign(rig, { dist: V.rig0.dist, minD: V.rig0.minD, maxD: V.rig0.maxD, lift: V.rig0.lift });
       V.plane = null; V.heldYaw = null;
       return V.mode;
@@ -90,7 +90,7 @@
       if (RIGM.has(m)) {
         rig.update(dt, P, look, phys, C);
         if (m === 'shoulder' && camera.position) {   // за правым плечом: сдвиг вбок, взгляд тот же
-          const r = rig.right(); camera.position.x += r.x * .95; camera.position.z += r.z * .95;
+          const r = rig.right(), off = camera.aspect < 1 ? .5 : .95; camera.position.x += r.x * off; camera.position.z += r.z * off;
         }
       } else {
         // цель — игрок (мягко); stepOff — плавные ступеньки
