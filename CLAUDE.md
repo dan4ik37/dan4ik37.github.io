@@ -499,8 +499,13 @@ js/features/games.js и хвост css/premium.css.
   на сайт — auth_limits(). Turnstile (D37Captcha): TURNSTILE_SITE_KEY в config.js. Бан ника → отпечатки всех входов в auth_link_bans
   (через них не создать новый аккаунт). Модератору — «🔗 Входы (N): …». Новый аккаунт → событие d37:signup { provider, userId }
   (для рефералов). Классы lgn-* (sl-* — пасьянсы!). Тесты: node scripts/auth-test.cjs (141); PGlite pg/test-authlinks.mjs (130).
-- Известный хвост (было и раньше): клиент Supabase принимает любую ссылку #access_token= (неявный поток) — чужой ссылкой можно
-  войти в ЧУЖОЙ (атакующего) аккаунт. Лечится flowType: 'pkce' (меняет поведение писем подтверждения/сброса) — сделать отдельно.
+- ИСПРАВЛЕНО 15.10 (js/features/auth-guard.js, D37AuthUrl): раньше supabase-js молча принимал ЛЮБУЮ ссылку #access_token= (login
+  CSRF), а Метрика (url: location.href) получала адрес с токенами. Теперь скрипт в <head> index.html (ДО Метрики и AdSense) забирает
+  токены/ошибки/#d37auth/#tgAuthResult и метку ?oa= в window.__d37AuthHash и стирает их из адреса; chat.js — createClient(…, { auth:
+  { detectSessionInUrl: false } }). Молча — только свой вход (почта/«Забыли пароль?» — отметка d37_authmark на сутки; Google… —
+  d37_oauth + одноразовая ?oa=) и если не открыт другой аккаунт; иначе «Войти как <ник>?» («Нет» по умолчанию). PKCE не берём
+  (письмо на другом устройстве не сработало бы). В Supabase Redirect URLs нужен https://dan4ik37.vercel.app/**. Новый вход с токенами
+  в адресе — только через auth-guard.js. Тесты: auth-test (170), scratchpad ui-urlguard.cjs (41).
 
 ## Push-уведомления (новое видео / начало стрима, даже при закрытом сайте)
 - Клиент: `js/features/push-pwa.js` (`togglePush`, `syncPush`) — `pushManager.subscribe` с ключом из
