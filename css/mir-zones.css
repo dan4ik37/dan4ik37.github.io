@@ -1,0 +1,104 @@
+/* ═══ «Мир Денчика»: зоны — плашка «где я», карта мира, действия, работы, бой (js/games/mir-zones.js, mir-city.js, mir-war.js).
+   Свой файл (грузит mir-zones.js) — без правок premium.css ═══ */
+.mz-hud{position:absolute;inset:0;pointer-events:none;z-index:3;font-family:'Montserrat',system-ui,sans-serif;color:#fff}
+.mz-hud [hidden]{display:none!important}
+.mz-hud button{font-family:inherit}
+.mz-tags{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.mz-x{border:0;background:rgba(255,255,255,.1);color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:.85rem;flex:none}
+.mz-x:hover{background:rgba(255,255,255,.2)}
+
+/* плашка «где я» при входе в зону */
+.mz-banner{position:absolute;left:50%;top:18%;transform:translateX(-50%);display:grid;justify-items:center;gap:.2rem;padding:.6rem 1.3rem .65rem;border-radius:16px;
+  background:linear-gradient(180deg,rgba(17,14,40,.88),rgba(17,14,40,.72));border:1px solid rgba(255,255,255,.18);box-shadow:0 12px 40px rgba(0,0,0,.45);
+  text-align:center;max-width:min(92%,560px);animation:mzBanner 3.6s ease forwards}
+.mz-banner b{font-size:clamp(1.05rem,3.4vw,1.6rem);font-weight:900;letter-spacing:.01em;text-shadow:0 2px 10px rgba(0,0,0,.4)}
+.mz-banner small{font-size:clamp(.68rem,2vw,.82rem);font-weight:700;color:#e9d5ff;line-height:1.35}
+.mz-banner.zone{border-color:rgba(250,204,21,.6)}
+.mz-banner.war{border-color:#ef4444;background:linear-gradient(180deg,rgba(69,10,10,.9),rgba(40,8,8,.78))}
+.mz-banner.war small{color:#fecaca}
+@keyframes mzBanner{0%{opacity:0;transform:translate(-50%,-10px) scale(.96)}10%{opacity:1;transform:translate(-50%,0) scale(1)}82%{opacity:1}100%{opacity:0}}
+
+/* задание работы */
+.mz-task{position:absolute;left:50%;top:58px;transform:translateX(-50%);display:flex;align-items:center;gap:.55rem;padding:.42rem .5rem .42rem .8rem;border-radius:14px;
+  background:rgba(12,10,28,.86);border:1.5px solid #facc15;box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:.8rem;font-weight:700;pointer-events:auto;max-width:min(94%,560px)}
+.mz-task b{color:#fde68a;font-weight:900}
+.mz-task .mz-dist{color:#a5f3fc;font-weight:800;white-space:nowrap}
+.mz-task button{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;border-radius:10px;padding:.3rem .6rem;font-weight:800;font-size:.72rem;cursor:pointer;white-space:nowrap}
+.mz-task .mz-prog{flex:none;width:58px;height:7px;border-radius:5px;background:rgba(255,255,255,.18);overflow:hidden}
+.mz-task .mz-prog i{display:block;height:100%;background:linear-gradient(90deg,#facc15,#4ade80)}
+
+/* затемнение телепорта */
+.mz-fade{position:absolute;inset:0;background:#0b0820;opacity:1;transition:opacity .35s;display:grid;place-items:center;font-weight:800;font-size:1rem;color:#e9d5ff;pointer-events:auto}
+.mz-fade.out{opacity:0}
+
+/* действия 🎬 */
+.mz-acts{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(94%,460px);padding:.6rem .7rem .55rem;border-radius:16px;background:rgba(14,11,32,.94);
+  border:1px solid rgba(255,255,255,.16);box-shadow:0 14px 40px rgba(0,0,0,.5);pointer-events:auto}
+.mz-acts-h{display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.45rem;font-size:.86rem}
+.mz-acts-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:.4rem}
+.mz-acts-g button{display:grid;justify-items:center;gap:.15rem;min-height:58px;padding:.35rem .2rem;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);
+  color:#fff;font-size:1.35rem;cursor:pointer}
+.mz-acts-g button span{font-size:.66rem;font-weight:800;line-height:1.15;text-align:center}
+.mz-acts-g button:hover,.mz-acts-g button:active{background:rgba(124,58,237,.55)}
+.mz-acts small{display:block;margin-top:.45rem;font-size:.66rem;color:#a5a3c9}
+
+/* карта мира */
+.mz-map{position:absolute;inset:0;display:grid;place-items:center;background:rgba(5,4,14,.55);pointer-events:auto;z-index:6;padding:8px}
+.mz-map-box{display:flex;flex-direction:column;width:min(980px,100%);height:min(720px,100%);border-radius:18px;background:#120f26;border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+.mz-map-head{display:flex;align-items:center;gap:.6rem;padding:.55rem .7rem;border-bottom:1px solid rgba(255,255,255,.08)}
+.mz-map-head b{font-size:.95rem;white-space:nowrap}
+.mz-map-head span{flex:1;font-size:.7rem;color:#a5a3c9;font-weight:700}
+.mz-map-cv{flex:1;min-height:160px;position:relative}
+.mz-map-cv canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.mz-map-pts{max-height:34%;overflow:auto;padding:.45rem .6rem .6rem;border-top:1px solid rgba(255,255,255,.08)}
+.mz-map-sec{font-size:.68rem;font-weight:900;color:#c4b5fd;margin:.3rem 0 .25rem;text-transform:uppercase;letter-spacing:.04em}
+.mz-map-row{display:flex;flex-wrap:wrap;gap:.3rem}
+.mz-map-row button{display:inline-flex;align-items:center;gap:.3rem;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.05);color:#fff;border-radius:10px;
+  padding:.32rem .55rem;font-size:.72rem;font-weight:700;cursor:pointer}
+.mz-map-row button:hover{background:rgba(124,58,237,.45)}
+.mz-age{font-style:normal;font-weight:900;font-size:.6rem;padding:.08rem .3rem;border-radius:5px;background:#a16207;color:#fff}
+.mz-age.a16{background:#c2410c}.mz-age.a18{background:#b91c1c}
+@media (max-width:640px){.mz-map{padding:0}.mz-map-box{border-radius:0;height:100%}.mz-map-head span{display:none}.mz-map-pts{max-height:40%}}
+
+/* окно возраста внутри панели мира */
+.mz-agebox .age-cover{background:none;border:0;padding:.4rem 0 0}
+.mz-agebox .age-cover-b{width:52px;height:52px;font-size:1.1rem}
+
+/* щит работ, роли, семья (внутри .wld-panel) */
+.mz-jobs{display:grid;gap:.4rem;margin:.3rem 0 .2rem;max-height:52vh;overflow:auto}
+.mz-job{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:.55rem;padding:.45rem .55rem;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.mz-job i{font-style:normal;font-size:1.5rem}
+.mz-job b{display:block;font-size:.84rem}
+.mz-job small{display:block;font-size:.7rem;color:#c7c4e6;line-height:1.35}
+.mz-job.on{border-color:#4ade80;background:rgba(74,222,128,.12)}
+.mz-job button{white-space:nowrap}
+.mz-cash{display:inline-flex;gap:.6rem;flex-wrap:wrap;font-size:.78rem;font-weight:800;margin:.1rem 0 .35rem}
+.mz-cash span{padding:.18rem .5rem;border-radius:8px;background:rgba(255,255,255,.07)}
+
+/* кошелёк города (сверху слева) */
+.mz-wallet{position:absolute;left:10px;top:58px;display:flex;gap:.35rem;flex-wrap:wrap;pointer-events:none}
+.mz-wallet span{padding:.28rem .55rem;border-radius:10px;background:rgba(12,10,28,.78);border:1px solid rgba(255,255,255,.14);font-size:.74rem;font-weight:800}
+
+/* ── Боевая зона: жизни, оружие, счёт, лента ── */
+.mz-war{position:absolute;inset:0;pointer-events:none}
+.mz-hp{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);width:min(260px,52vw);height:12px;border-radius:8px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.25);overflow:hidden}
+.mz-hp i{display:block;height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b,#4ade80);transition:width .15s}
+.mz-hp b{position:absolute;inset:0;display:grid;place-items:center;font-size:.6rem;font-weight:900;text-shadow:0 1px 2px #000}
+.mz-wpn{position:absolute;left:50%;bottom:110px;transform:translateX(-50%);display:flex;gap:.3rem;pointer-events:auto}
+.mz-wpn button{min-width:44px;height:44px;border-radius:12px;border:2px solid rgba(255,255,255,.25);background:rgba(12,10,28,.72);color:#fff;font-size:1.25rem;cursor:pointer;position:relative}
+.mz-wpn button.on{border-color:#facc15;background:rgba(250,204,21,.25)}
+.mz-wpn button small{position:absolute;right:3px;bottom:1px;font-size:.55rem;font-weight:900}
+.mz-score{position:absolute;right:10px;top:58px;min-width:150px;padding:.45rem .6rem;border-radius:12px;background:rgba(12,10,28,.82);border:1px solid rgba(255,255,255,.14);font-size:.72rem;pointer-events:auto}
+.mz-score b{display:block;font-size:.78rem;margin-bottom:.2rem}
+.mz-score .r{color:#fca5a5}.mz-score .bl{color:#93c5fd}
+.mz-score ol{margin:.1rem 0 0;padding-left:1.1rem}
+.mz-feed{position:absolute;right:10px;top:150px;display:grid;gap:.2rem;justify-items:end;font-size:.7rem;font-weight:800}
+.mz-feed div{padding:.18rem .5rem;border-radius:8px;background:rgba(12,10,28,.72);animation:mzFeed 5s forwards}
+@keyframes mzFeed{0%,80%{opacity:1}100%{opacity:0}}
+.mz-down{position:absolute;inset:0;display:grid;place-items:center;background:rgba(80,0,0,.28);font-size:1.3rem;font-weight:900;text-shadow:0 2px 8px #000}
+.mz-hitfx{position:absolute;inset:0;box-shadow:inset 0 0 70px rgba(239,68,68,.65);opacity:0;transition:opacity .25s}
+.mz-hitfx.on{opacity:1;transition:none}
+.mz-cross{position:absolute;left:50%;top:46%;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+.mz-cross.hit{border-color:#facc15}
+@media (max-width:640px){.mz-score{top:auto;bottom:160px;right:8px;min-width:120px;font-size:.66rem}.mz-feed{top:auto;bottom:250px}.mz-hp{bottom:150px}.mz-wpn{bottom:168px}}

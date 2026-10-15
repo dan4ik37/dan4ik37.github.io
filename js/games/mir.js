@@ -67,7 +67,7 @@
   const mirTime = () => window.D37E?.dayClock ? window.D37E.dayClock(Date.now(), 40, .2) : 14;
   // Жители (NPC): стоят на своём месте у всех игроков, поворачиваются к подошедшему и говорят по очереди; [E] — поговорить.
   const FOLK = [
-    { id: 'guide', name: '🧭 Гид', x: -5.6, z: 12.4, yaw: 156, seed: 'gid37', info: true, say: ['Привет! Я гид Мира Денчика 👋 Нажми E — расскажу, что тут есть', 'Кафе — на севере: сядь за столик, кто сядет напротив — с тем и сыграешь ♟️', 'В парке пруд — в нём можно плавать! 🏊 «Присесть» — нырнуть', 'Свой участок и дом — в районе за кафе 🏡', 'Игровой клуб с автоматами — на востоке 🕹️'] },
+    { id: 'guide', name: '🧭 Гид', x: -5.6, z: 12.4, yaw: 156, seed: 'gid37', info: true, say: ['Привет! Я гид Мира Денчика 👋 Нажми E — расскажу, что тут есть', 'Кафе — на севере: сядь за столик, кто сядет напротив — с тем и сыграешь ♟️', 'В парке пруд — в нём можно плавать! 🏊 «Присесть» — нырнуть', 'Свой участок и дом — в районе за кафе 🏡', 'Игровой клуб с автоматами — на востоке 🕹️', 'Круги у фонтана — телепорты: города и Боевая зона 🌀', 'Карта мира — клавиша M или кнопка 🗺️'] },
     { id: 'barista', name: '☕ Бариста', x: 7.4, z: -41.4, yaw: 0, seed: 'kofe5', say: ['☕ Привет! Садись за столик — сыграем', 'Партия начнётся, когда напротив сядет второй 🎲', '«Дурак» и «Одна!» — за дальними столиками, до 4 игроков 🃏'] },
     { id: 'dj', name: '🎧 Диджей', x: -36.4, y: .8, z: -4.5, yaw: 90, seed: 'dj777', say: ['🎧 На большом экране — ролики Денчика', 'Когда Денчик в эфире — здесь прямая трансляция 🔴', 'Подойди к экрану и нажми E — смотреть 📺'] },
     { id: 'fisher', name: '🎣 Рыбак', x: 35, z: 41, yaw: -157, seed: 'ryba1', say: ['🎣 Тсс… рыба пугается', 'Пруд глубокий — можно плавать. Присядь, чтобы нырнуть 🐟', 'Вечером у костра в парке тепло 🔥 Садись на бревно'] },
@@ -185,8 +185,10 @@
     // ── Земля, площадь, дорожки ──
     // земля — с дыркой под чашей пруда (сама чаша — в парке)
     {
-      const gs = new T.Shape([new T.Vector2(-160, -160), new T.Vector2(160, -160), new T.Vector2(160, 160), new T.Vector2(-160, 160)]);
+      const GB = window.MirZones?.groundRect?.() || [-160, -160, 160, 160];   // зоны мира (mir-zones.js): земля под всеми зонами
+      const gs = new T.Shape([new T.Vector2(GB[0], -GB[3]), new T.Vector2(GB[2], -GB[3]), new T.Vector2(GB[2], -GB[1]), new T.Vector2(GB[0], -GB[1])]);
       const hole = new T.Path(); hole.absarc(POND.x, -POND.z, POND.r, 0, PI * 2, true); gs.holes.push(hole);
+      window.MirZones?.groundHoles?.(T, gs);   // зоны мира: море и бункер боевой зоны — дыры в земле
       const gm = new T.Mesh(new T.ShapeGeometry(gs, 48), M.grass); gm.rotation.x = -PI / 2; st.add(gm);
     }
     disc(0, 0, 18.4, '#cdbf9f', .015, M.border); disc(0, 0, 17.6, '#ece2cb', .02, M.plaza);
@@ -220,7 +222,7 @@
     for (let i = 0; i < 6; i++) { const a = (i + .5) / 6 * PI * 2, x = Math.cos(a) * 9, z = Math.sin(a) * 9; if (Math.abs(x) < 3 && z > 0) continue; bench(x, z, Math.atan2(-x, -z)); }
     for (let i = 0; i < 8; i++) { const a = i / 8 * PI * 2 + PI / 8; R.prefab('lamp', { x: Math.cos(a) * 16, z: Math.sin(a) * 16 }, ph); }
     R.prefab('sign', { x: -3.6, z: 13.5, yaw: 0, text: 'Мир Денчика', c: '#7c3aed' }, ph);
-    infoSpot(-3.6, 13.5, '🌍 Мир Денчика', 'Добро пожаловать! Кафе — на севере, игровой клуб — на востоке, сцена — на западе, улица с домиками — на юге, парк — на юго-востоке. Сядь за столик, чтобы сыграть с тем, кто сядет напротив.');
+    infoSpot(-3.6, 13.5, '🌍 Мир Денчика', 'Добро пожаловать в лобби! Кафе — на севере, игровой клуб — на востоке, сцена — на западе, улица с домиками — на юге, парк — на юго-востоке. Светящиеся круги вокруг фонтана — телепорты: в Солнечный городок, Большой город, Боевую зону и другие места. Карта мира — M или 🗺️. Сядь за столик, чтобы сыграть с тем, кто сядет напротив.');
 
     // ── Здания: пол, стены с проёмами (двери, окна), крыша, зона «внутри» (крыша прячется, камера ближе) ──
     function building(o){
@@ -549,6 +551,7 @@
     const free = (x, z, m) => {
       if (Math.hypot(x, z) < 22) return false;
       if (window.MirBase?.zone(x, z)) return false;   // район участков (mir-base.js)
+      if (window.MirZones?.blocked?.(x, z)) return false;   // зоны мира: дороги, телепорты, города, боевая зона
       if (Math.abs(x) < 13 && z > 15 && z < 80) return false;   // улица
       if (x > -13 && x < 13 && z < -26 && z > -46) return false;   // кафе
       if (x > 26 && x < 47 && z > -15 && z < 11) return false;   // клуб
@@ -607,13 +610,23 @@
     for (let k = 0; k < 10; k++) { const x = (R0() - .5) * 140, z = (R0() - .5) * 140 + 6; if (free(x, z, 3)) R.prefab('rock', { x, z, k: .7 + R0() * .6, yaw: R0() * 6 }, ph); }
     // облака и холмы на горизонте (в дымке)
     R.clouds(low ? 8 : 16, 9);
-    for (let i = 0; i < 14; i++) { const a = i / 14 * PI * 2 + R0() * .3, d = 190 + R0() * 60, k = 28 + R0() * 30; P(null, { s: 'ico', x: Math.cos(a) * d, y: -k * .35, z: Math.sin(a) * d + 6, r: k, det: 1, sy: .55, c: ['#6fae62', '#7bbb6a', '#5f9d58'][i % 3] }); }
-    // край мира: невидимые стены
-    for (const [x, z, hx, hz] of [[0, -72, 90, 1], [0, 92, 90, 1], [-84, 10, 1, 90], [84, 10, 1, 90]]) ph.addBox({ x, z, y: 5, hx, hz, hy: 5, tag: 'edge' });
+    for (let i = 0; i < 14; i++) {
+      const a = i / 14 * PI * 2 + R0() * .3, d = 190 + R0() * 60, k = 28 + R0() * 30, hx = Math.cos(a) * d, hz = Math.sin(a) * d + 6;
+      if (window.MirZones?.hillOk && !window.MirZones.hillOk(hx, hz, k)) continue;   // зоны мира: холм — только за краем мира
+      P(null, { s: 'ico', x: hx, y: -k * .35, z: hz, r: k, det: 1, sy: .55, c: ['#6fae62', '#7bbb6a', '#5f9d58'][i % 3] });
+    }
+    // край мира: невидимые стены (зоны мира — шире; высокие — для вертолётов и самолётов)
+    {
+      const B = window.MirZones?.bounds?.() || [-83, -71, 83, 91], cx = (B[0] + B[2]) / 2, cz = (B[1] + B[3]) / 2, hw = (B[2] - B[0]) / 2 + 2, hd = (B[3] - B[1]) / 2 + 2;
+      for (const [x, z, hx, hz] of [[cx, B[1] - 1, hw, 1], [cx, B[3] + 1, hw, 1], [B[0] - 1, cz, 1, hd], [B[2] + 1, cz, 1, hd]]) ph.addBox({ x, z, y: 100, hx, hz, hy: 100, tag: 'edge' });
+    }
     // ── Район участков: улица, земля участков, таблички (сами базы — S.base, после склейки) — mir-base.js ──
     const district = window.MirBase?.build?.({ R, ph, X, S, P, M, box, plaque, label, path, seatSpot }) || null;
+    // ── Зоны мира: дороги, телепорты лобби, щит-карта, ворота и силуэты городов и боевой зоны — mir-zones.js ──
+    let zones = null;
+    try { zones = window.MirZones?.build?.({ R, ph, X, S, P, M }) || null; } catch (e) { console.error(e); }
 
-    return { rooms, seats, screens, floorAt, district };
+    return { rooms, seats, screens, floorAt, district, zones };
   }
 
   // ═══ Экран ═══
@@ -683,12 +696,14 @@
     const X = S.X = E.interact(ph, { who: S.key });
     S.world = buildWorld(R, ph, X, S);
     S.calls = R.bakeStatic();
-    ph.terrain = { sample: pondH };   // чаша пруда (вне пруда — ровно 0)
-    ph.waterLevel = (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r ? POND.wl : -Infinity;
+    const MZ = window.MirZones;   // зоны мира: море и бункер боевой зоны — свой рельеф и вода
+    ph.terrain = { sample: MZ?.terrain ? (x, z) => pondH(x, z) + MZ.terrain(x, z) : pondH };   // чаша пруда (вне пруда — ровно 0)
+    ph.waterLevel = (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r ? POND.wl : MZ?.water ? MZ.water(x, z) : -Infinity;
     // свой персонаж
     let pos = null;
     try { pos = JSON.parse(localStorage.getItem('d37_mir_pos') || 'null'); } catch (e) {}
-    const sp = pos && Math.abs(pos.x) < 80 && pos.z > -68 && pos.z < 88 ? pos : { x: SPAWN.x + (Math.random() - .5) * 6, z: SPAWN.z + Math.random() * 3, yaw: SPAWN.yaw };
+    const WB = MZ?.bounds?.() || [-80, -68, 80, 88];
+    const sp = pos && pos.x > WB[0] && pos.x < WB[2] && pos.z > WB[1] && pos.z < WB[3] ? pos : { x: SPAWN.x + (Math.random() - .5) * 6, z: SPAWN.z + Math.random() * 3, yaw: SPAWN.yaw };
     const P = S.P = E.player(ph, { x: sp.x, z: sp.z, yaw: sp.yaw ?? SPAWN.yaw });
     P.place(sp.x, typeof sp.y === 'number' ? S.ph.supportAt(sp.x, sp.z, P.ch.r * .5, sp.y + .3).y : S.ph.supportAt(sp.x, sp.z, P.ch.r * .5, 1).y, sp.z, sp.yaw ?? SPAWN.yaw);
     P.floorAt = S.world.floorAt;
@@ -730,6 +745,8 @@
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
     try { S.promo = window.D37AdPlaces?.worldPromo?.(S, { panel, go }) || null; } catch (e) { S.promo = null; }   // щиты: свои промо и спонсор (ad-places.js → mir-promo.js)
     try { mirPhone(); } catch (e) { console.error(e); }   // телефон 📱 и «🌍 Весь мир» (phone.js, worldchat.js)
+    // зоны мира: лобби с телепортами, карта (M), города и боевая зона — подгрузка рядом, возраст, роли, действия (mir-zones.js)
+    try { S.zones = window.MirZones?.start?.(S, { send, retrack, panel, closePops, go, emote, addLog, savePos, showInfo, sign, verify }) || null; } catch (e) { console.error(e); S.zones = null; }
   }
 
   // ── Шаг логики (1/60 с) ──
@@ -745,6 +762,7 @@
     // Esc: закрыть меню / окно — иначе меню (как в обычных играх). Стройку участка Esc отменяет сам mir-base.js; ⚙️ закрывает себя само
     if (C.down('pause') && !setOpen) {
       if (S.menu) closeMenu();
+      else if (S.zones?.esc?.()) {}   // зоны мира: своё окно (карта, действия, щит профессий)
       else if (!S.q('.wld-card').hidden || !S.q('.wld-panel').hidden) closePops();
       else if (!S.base?.bm) openMenu();   // нажали Esc — клавиатура есть (и у ноутбука с сенсорным экраном)
     }
@@ -767,6 +785,7 @@
     netTick(dt);
     tableTick(dt);
     S.base?.update(dt);   // район участков: стройка, подгрузка соседей
+    S.zones?.update(dt);   // зоны мира: граница по возрасту, подгрузка, работы, бой
     if (S.NPC) {   // жители смотрят на ближайшего (свой + чужие)
       const near = S.folkNear || (S.folkNear = []); near.length = 0;
       near.push(P.ch);
@@ -799,12 +818,15 @@
     // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
     if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !S.phoneOn && !window.D37Settings?.isOpen?.()) openMenu();
     S.wasLocked = I.locked;
+    S.zones?.preActors(dt, t);   // зоны мира: сидит/лежит по чужому zx
     A.update(dt, t, R.camera.position);
+    S.zones?.postActors(dt, t);   // зоны мира: лежит, ест, несёт, шланг, оружие — поверх позы
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
     // нажали на игрока — его карточка
     for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); else S.promo?.tap(tp.x, tp.y); }   // не игрок — может, щит
     I.frameEnd(); C.frameEnd();
     lifeFrame(dt, t);
+    S.zones?.frame(dt, t);   // зоны мира: постройка по кусочку, подписи жителей, эффекты
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
     R.render();
     drawTags(); drawFolk();
@@ -1039,7 +1061,7 @@
     S.pending = keep;
   }
   const num = v => (typeof v === 'number' && isFinite(v) ? v : null);
-  const clampPos = (x, z) => [Math.max(-82, Math.min(82, x)), Math.max(-70, Math.min(90, z))];
+  const clampPos = (x, z) => { const B = window.MirZones?.bounds?.() || [-82, -70, 82, 90]; return [Math.max(B[0], Math.min(B[2], x)), Math.max(B[1], Math.min(B[3], z))]; };   // зоны мира — шире
   async function onMsg(pl){
     if (!S || !pl || typeof pl.k !== 'string' || typeof pl.m !== 'string' || typeof pl.s !== 'string' || pl.m.length > 3000) return;
     const p = S.players.get(pl.k);
@@ -1054,7 +1076,9 @@
     if (p.rate.length >= 16) return;   // защита от флуда: не больше 16 событий за 2 с
     p.rate.push(t);
     if (d.t === 'st') applySt(p, d);
+    else if (d.t === 'z') S.zones?.onMsg(p, d);   // зоны мира: события городов и боевой зоны
     else if (d.t === 'hi') {
+      S.zones?.onHi();   // зоны мира: новичку — своё состояние (роль, команда) ещё раз в 'st'
       const elders = [S.me, ...[...S.players.values()].filter(x => !x.leaving && x.key !== p.key)].sort((a, b) => (a.at || S.joinedAt) - (b.at || S.joinedAt));
       if (elders[0] === S.me && now() - S.hostSnapAt > 1500) {
         S.hostSnapAt = now();
@@ -1068,7 +1092,7 @@
         if (!Array.isArray(it) || it[0] === S.key) continue;
         const o = S.players.get(it[0]);
         if (!o || [1, 2, 3].some(i => typeof it[i] !== 'number')) continue;
-        if (o.key === p.key || Date.now() - S.joinedAt < 8000) { const [x, z] = clampPos(it[1], it[3]); o.ch.x = x; o.ch.y = Math.max(0, Math.min(20, it[2])); o.ch.z = z; o.yaw = +it[4] || 0; if (o.key === p.key || !o.lastTs) o.phone = phoneOf(it[5]); }
+        if (o.key === p.key || Date.now() - S.joinedAt < 8000) { const [x, z] = clampPos(it[1], it[3]); o.ch.x = x; o.ch.y = Math.max(-10, Math.min(220, it[2])); o.ch.z = z; o.yaw = +it[4] || 0; if (o.key === p.key || !o.lastTs) o.phone = phoneOf(it[5]); }
       }
     } else if (d.t === 'say') {
       if (!p.uid || S.muted.has(p.key) || typeof d.text !== 'string') return;
@@ -1098,7 +1122,7 @@
   function applySt(p, d){
     const x = num(d.x), y = num(d.y), z = num(d.z);
     if (x === null || y === null || z === null) return;
-    const [cx, cz] = clampPos(x, z), cy = Math.max(-1, Math.min(30, y)), U = window.D37E.UNIT;
+    const [cx, cz] = clampPos(x, z), cy = Math.max(-10, Math.min(220, y)), U = window.D37E.UNIT;   // ниже — бункер и море, выше — вертолёты
     const ex = cx - p.ch.x, ey = cy - p.ch.y, ez = cz - p.ch.z;
     if (Math.hypot(ex, ey, ez) > 1.8) { p.ch.x = cx; p.ch.y = cy; p.ch.z = cz; p.err = { x: 0, y: 0, z: 0 }; }
     else p.err = { x: ex, y: ey, z: ez };
@@ -1112,6 +1136,7 @@
     if (num(d.yw) !== null) p.yaw = d.yw;
     if (num(d.vy) !== null && d.vy > 0) { p.ch.vy = Math.min(20, d.vy); p.ch.grounded = false; p.ch.airT = 0; }
     p.phone = phoneOf(d.ph);   // телефон 📱 (нет поля — убран)
+    S.zones?.onSt(p, d);   // зоны мира: роль, действие, команда, жизни, транспорт (поле zx)
   }
   const phoneOf = v => (Number.isInteger(v) && v >= 0 && v <= 4 ? v : 0);
   // Своё движение: шлём, только когда меняется направление/скорость/режим (и сверку раз в 2,5 с)
@@ -1127,11 +1152,13 @@
     }
     const mode = MODES.indexOf(P.mode === 'pk' ? 'pk' : P.mode);
     const ph = window.World3D?.phoneCode?.(S.phoneHand) || 0;   // телефон 📱: 0 нет, 1 в руке, 2 у уха, 3 играет, 4 снимает
-    const key = `${mode}|${a}|${s}|${k}|${ph}`, moving = a >= 0 || !P.ch.grounded;
+    const zx = S.zones?.stx();   // зоны мира: роль, действие, команда, жизни, транспорт — поменялось → шлём сразу
+    const key = `${mode}|${a}|${s}|${k}|${ph}|${zx ? zx.sig : ''}`, moving = a >= 0 || !P.ch.grounded;
     const due = key !== S.lastSend.key || S.forceSend || (moving && S.sendT - S.lastSend.t > 2.5);
     if (!due || S.sendT - S.lastSend.t < .15) return;
     const ch = P.ch, d = { t: 'st', x: r2(ch.x), y: r2(ch.y), z: r2(ch.z), a, s, k, m: Math.max(0, mode), yw: r2(P.yaw) };
     if (ph) d.ph = ph;
+    if (zx) d.zx = zx.data;
     if (S.jumpVy) { d.vy = r2(S.jumpVy); S.jumpVy = 0; }
     S.lastSend = { key, t: S.sendT }; S.forceSend = false;
     send(d);
@@ -1291,7 +1318,13 @@
   const toast = t => { if (S?.H) S.H.toast(t); else api?.toast?.(t); };
   const activity = () => { if (S) S.idleAt = Date.now(); };
   function status(t){ const s = S?.q('.wld-status'); if (!s) return; s.hidden = !t; s.textContent = t; }
-  function say(p, text){ const t = clean(text); if (!t) return; p.bubble = { text: t, t: now() }; addLog(p, t); }
+  function say(p, text){
+    let t = clean(text); if (!t) return;
+    const z = S.zones?.chat(p, t);   // зоны мира: «/me действие» и строгий фильтр в детском городе
+    if (z?.me) { p.bubble = { text: '* ' + z.text, t: now() }; addLog(null, `* ${p.nick} ${z.text}`); return; }
+    if (typeof z === 'string') t = z;
+    p.bubble = { text: t, t: now() }; addLog(p, t);
+  }
   function emote(e){ if (Date.now() - (S.lastEmo || 0) < 900) return; S.lastEmo = Date.now(); S.me.emo = { e, t: now() }; send({ t: 'emo', e }); }
   function addLog(p, text){
     S.log.push({ who: p ? p.nick : '', me: p === S.me, sys: !p, text });
@@ -1372,7 +1405,7 @@
   }
   function folkTalk(id){
     const k = S?.folk?.get(id); if (!k) return;
-    if (k.f.info) S.showInfo?.('🧭 Гид Мира Денчика', 'Площадь с фонтаном — в центре. Кафе «У Денчика» — на севере: сядь за столик, и кто сядет напротив — с тем сыграешь (шахматы, шашки, нарды, «Дурак», «Одна!»). Игровой клуб с автоматами и бильярдом — на востоке. Сцена с роликами и эфиром Денчика — на западе. Улица с домиками — на юге, район участков (свой дом и база) — за кафе. В парке — пруд (можно плавать, «присесть» — нырнуть), костёр и ворота в «Орду», «Арену», «Башни».');
+    if (k.f.info) S.showInfo?.('🧭 Гид Мира Денчика', 'Площадь с фонтаном — в центре. Кафе «У Денчика» — на севере: сядь за столик, и кто сядет напротив — с тем сыграешь (шахматы, шашки, нарды, «Дурак», «Одна!»). Игровой клуб с автоматами и бильярдом — на востоке. Сцена с роликами и эфиром Денчика — на западе. Улица с домиками — на юге, район участков (свой дом и база) — за кафе. В парке — пруд (можно плавать, «присесть» — нырнуть), костёр и ворота в «Орду», «Арену», «Башни». Дальше по дорогам — Солнечный городок (работы, школа, питомцы), Большой город (для взрослых) и Боевая зона (12+); телепорты в них — светящиеся круги вокруг фонтана, карта мира — M или 🗺️.');
     folkSay(k, k.f.say[k.i]);
   }
   // кадр: частицы, жители, огонь мигает, под водой — синий туман
@@ -1532,8 +1565,8 @@
     else if (a === 'view') { if (S.rig) toggleView(); }
     else if (a === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
     else if (a === 'help') showInfo('❓ Как играть', S.I?.touch
-      ? 'Левый палец — джойстик (до упора — бег). Правым пальцем крути камеру, двумя — приближай. ⤒ — прыжок (у стены — залезть на уступ), ⬇ — присесть, ✋ — сесть или играть. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Положи телефон горизонтально (или 🔄) — мир на весь экран; ⚙️ — настройки: кнопки, графика, звук.'
-      : 'WASD — идти, Shift — бег, Пробел — прыжок (у стены — залезть на уступ, перелезть стол), C — присесть, Q — кувырок, E — сесть или играть, V — вид от 1-го лица, мышь — камера, колесо — приближение, Enter — чат, Esc — меню. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Клавиши, графика, звук и камера — в ⚙️ Настройках.');
+      ? 'Левый палец — джойстик (до упора — бег). Правым пальцем крути камеру, двумя — приближай. ⤒ — прыжок (у стены — залезть на уступ), ⬇ — присесть, ✋ — сесть или играть. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Положи телефон горизонтально (или 🔄) — мир на весь экран; ⚙️ — настройки: кнопки, графика, звук. 🗺️ — карта и телепорты, 🎬 — действия в городе (сесть, спать, есть, позвонить).'
+      : 'WASD — идти, Shift — бег, Пробел — прыжок (у стены — залезть на уступ, перелезть стол), C — присесть, Q — кувырок, E — сесть или играть, V — вид от 1-го лица, мышь — камера, колесо — приближение, Enter — чат, Esc — меню, M — карта мира и телепорты, T — действия в городе, F — удар в Боевой зоне. «/me танцует» в чате — что делает персонаж. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Клавиши, графика, звук и камера — в ⚙️ Настройках.');
     else if (a.startsWith('profile:')) go('#/profile/' + a.slice(8));
     else if (a.startsWith('go:')) go(a.slice(3));
     else if (a.startsWith('room:')) go(roomUrl(a.slice(5), newCode(), false));
@@ -1648,7 +1681,7 @@
       if (p.v?.vip) col = VIPC[p.v.vip] || col;
       if (p.v?.role && ROLE[p.v.role]) { col = ROLE[p.v.role][1]; pre = ROLE[p.v.role][0] + ' '; }
       if (p.uid && S.friends.has(p.uid)) pre = '💚 ' + pre;
-      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '') + (p.playing ? ` · ${gameInfo(p.playing.g).icon} играет` : '');
+      const name = (S.zones?.tag(p) || '') + pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '') + (p.playing ? ` · ${gameInfo(p.playing.g).icon} играет` : '');   // зоны мира: значок роли
       const nm = el.lastChild;
       if (nm.textContent !== name) nm.textContent = name;
       if (nm.style.color !== col) nm.style.color = col;
@@ -1701,6 +1734,7 @@
     try { s.unfollow?.(); } catch (e) {}
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
     try { s.base?.dispose(); } catch (e) {}   // район участков
+    try { s.zones?.dispose(); } catch (e) { console.error(e); }   // зоны мира
     try { s.promo?.dispose(); } catch (e) {}   // щиты (mir-promo.js)
     try { s.phoneOff?.(); s.allChat?.stop(); } catch (e) {}   // телефон 📱 и «🌍 Весь мир»
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
@@ -1731,8 +1765,9 @@
       shot: () => { const me = S.A?.get(S.key); if (me?.ch) window.World3D?.phoneSnap?.(me.ch, now() / 1000); S.R.render(); return Ph.snap(S.R.r.domElement); },   // «щёлк» — персонаж снимает
       where: () => (S?.P ? { x: S.P.ch.x, z: S.P.ch.z, yaw: S.P.yaw } : null),
       players: () => (S ? [...S.players.values()].filter(p => !p.leaving).map(p => ({ x: p.ch.x, z: p.ch.z, nick: p.nick, friend: !!(p.uid && S.friends.has(p.uid)) })) : []),
-      tp,
-      toFriend: uid => { const p = S && [...S.players.values()].find(q => q.uid === uid && !q.leaving); if (!p) return false; tp(p.ch.x + Math.cos(p.yaw) * 1.6, p.ch.z - Math.sin(p.yaw) * 1.6, p.yaw + PI); return true; },
+      tp: (x, z, yaw) => (S?.zones ? S.zones.tp(x, z, yaw) : tp(x, z, yaw)),   // зоны мира: возраст зоны, подгрузка, затемнение
+      placeName: () => S?.zones?.placeName() || '',
+      toFriend: uid => { const p = S && [...S.players.values()].find(q => q.uid === uid && !q.leaving); if (!p) return false; const x = p.ch.x + Math.cos(p.yaw) * 1.6, z = p.ch.z - Math.sin(p.yaw) * 1.6; if (S.zones) S.zones.tp(x, z, p.yaw + PI); else tp(x, z, p.yaw + PI); return true; },
       shard: n => { if (n != null && S && n !== S.shard && n >= 1 && n <= SHARDS) { leaveChannel(); for (const k of S.players.keys()) S.A?.remove(k); S.players.clear(); join(n); } return S?.shard || 1; },
     });
     // кнопка 📱 в панели мира (панель могут перегруппировать — просто добавляемся в конец)
