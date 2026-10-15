@@ -2941,7 +2941,7 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .ce-tools button:hover{background:rgba(255,255,255,.16)}
 .ce-tools button.on{background:var(--accent,#9b6dff)}
 .ce-panel{display:flex;flex-direction:column;min-height:0;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden}
-.ce-cats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid rgba(255,255,255,.07)}
+.ce-cats{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:8px;border-bottom:1px solid rgba(255,255,255,.07)}
 .ce-cats button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:.45rem .1rem;border:0;border-radius:12px;background:transparent;color:#cbd5e1;font:700 .7rem 'Montserrat',sans-serif;cursor:pointer;min-width:0}
 .ce-cats button i{font-style:normal;font-size:1.35rem;line-height:1}
 .ce-cats button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2997,6 +2997,26 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .ce-btn:disabled{opacity:.5;cursor:default}
 .ce-earn{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px 10px;border-top:1px solid rgba(255,255,255,.07)}
 .ce-note{color:var(--muted);font-size:.74rem;flex:1 1 200px}
+/* части тела: голова, туловище, руки, ноги по отдельности (charedit.js → «Части») */
+.ce-parts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.ce-parts button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:.45rem .1rem;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#e2e8f0;font:700 .68rem 'Montserrat',sans-serif;cursor:pointer;min-width:0}
+.ce-parts button i{font-style:normal;font-size:1.15rem;line-height:1}
+.ce-parts button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ce-parts button.on{background:linear-gradient(135deg,rgba(155,109,255,.38),rgba(255,111,181,.26));border-color:#a78bfa;color:#fff}
+.ce-ptools{display:flex;flex-wrap:wrap;gap:6px}
+.ce-ptools button{flex:1 1 auto;padding:.42rem .7rem;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#e2e8f0;font:700 .76rem 'Montserrat',sans-serif;cursor:pointer;white-space:nowrap}
+.ce-ptools button.on{background:#fff;color:#16122e;border-color:#fff}
+.ce-ptools button:disabled,.ce-tools button:disabled{opacity:.4;cursor:default}
+.ce-phint{color:var(--muted);font:600 .74rem/1.35 'Montserrat',sans-serif}
+.ce-tag.gem{background:rgba(126,240,255,.14);color:#7ef0ff}
+.ce-chip.gem{background:rgba(70,40,140,.45)}
+.ce-try-gem{color:#a5f3fc;font-size:.78rem}
+.ce-try-gem a{color:#fff;font-weight:800}
+@media(max-width:480px){
+  .ce-parts{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ce-cats button{font-size:.6rem}
+  .ce-tools button{width:36px;height:36px}
+}
 @media(max-width:860px){
   .ce{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto;min-height:0}
   .ce-stage{height:44vh;min-height:260px}

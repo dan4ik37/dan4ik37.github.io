@@ -161,6 +161,7 @@
   }
 
   async function buy(item){
+    if (window.D37Char?.gemsOf?.(item)) return { ok: false, reason: 'gems' };   // вещь только за 💎 — в магазине #/shop
     const p = price(item);
     if (p == null || item === 'revive') return { ok: false, reason: 'item' };
     if (owns(item)) return { ok: false, reason: 'owned' };
@@ -193,11 +194,18 @@
   async function saveLook(look){
     if (!server) return { ok: true, local: true };
     let r = await rpc('char_save', { p_look: look });
-    // старый char_save (до нового coins.sql) не знает частей 3D-человечка и своих цветов — сохраним то, что он понимает
     const C = window.D37Char;
+    // старый char_save (coins.sql не запущен ещё раз) не знает вещей только за 💎 — сохраним всё остальное, а купленное
+    // в магазине остаётся надетым из браузера (avatar.js fromServer)
+    for (let i = 0; i < 3 && r && r.ok === false && r.reason === 'item' && C?.gemsOf?.(r.item); i++) {
+      look = { ...look }; delete look[String(r.item).split(':')[1]];
+      r = await rpc('char_save', { p_look: look });
+      if (r?.ok) r.partial = true;
+    }
+    // совсем старый char_save (до частей 3D-человечка) не знает их и своих цветов — сохраним то, что он понимает
     if (r && r.ok === false && r.reason === 'item' && C?.nearest) {
       const L = {};
-      for (const s of C.SLOTS2D) if (look[s] != null) L[s] = C.nearest(s, look[s]);
+      for (const s of C.SLOTS2D) if (look[s] != null && !C.gemsOf?.(`skin:${s}:${look[s]}`)) L[s] = C.nearest(s, look[s]);
       r = await rpc('char_save', { p_look: L });
       if (r?.ok) r.partial = true;
     }

@@ -97,7 +97,7 @@
   };
 
   E.renderer = function (container, o = {}){
-    const T = window.THREE, K = window.World3D.kit(T), q = o.quality || E.gfxQuality();
+    const T = window.THREE, q = o.quality || E.gfxQuality(), K = window.World3D.kit(T, { q });   // человечки — по качеству
     // постобработка (post.js): сцена — в буфер HDR, сглаживает она (MSAA буфера или FXAA) — холсту своё не нужно
     const wantPost = q !== 'low' && o.post !== false && typeof E.post === 'function';
     const r = new T.WebGLRenderer({ antialias: q !== 'low' && !wantPost, powerPreference: 'high-performance' });
