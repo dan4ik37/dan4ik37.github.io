@@ -2195,7 +2195,7 @@ Players.PlayerAdded.Connect(player => {
       play: () => { if (!ED.playing) startPlay(); }, stop: () => { if (ED.playing) stopPlay(); },
       save: quiet => save(quiet), insertPoint: () => insertPoint(), moveBy: (o, d) => moveBy(o, d), turnAround: (o, c, dy) => turnAround(o, c, dy),
       updateGizmo: () => updateGizmo(), renderProps: () => renderProps(), renderTree: () => renderTree(), setPanel: p => setPanel(p), hint: t => hint(t),
-      selTop: () => selTop(), tut: k => tutStep(k),
+      selTop: () => selTop(), tut: k => tutStep(k), npcPresets: () => NPC_PRESETS, colors: () => COLORS.slice(),
     },
   };
   function ext(fn, ...a){

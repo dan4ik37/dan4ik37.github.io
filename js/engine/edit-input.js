@@ -108,8 +108,7 @@
         out.active = now.some(Boolean) || !!(lx || ly || rx || ry) || lt > .1 || rt > .1;
         const act = a => out.actions.push(a);
         if (ctx.radial) {
-          const sx = lx || rx, sy = lx ? ly : ry;
-          out.radial = { x: sx, y: sy };
+          out.radial = Math.hypot(lx, ly) >= Math.hypot(rx, ry) ? { x: lx, y: ly } : { x: rx, y: ry };   // какой стик отклонён сильнее
           if (edge(BT.A)) act('radialPick');
           if (edge(BT.B)) act('radialBack');
           if (edge(BT.BACK) || edge(BT.START)) act('radialClose');
