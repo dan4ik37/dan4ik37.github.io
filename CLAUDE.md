@@ -43,6 +43,10 @@
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
+16.10 (слияние мира, GAMES_VER 92): games-more.sql и coins.sql снова ИЗМЕНЕНЫ — ключи mirwar (game_score_cap 200, game_win_xp 3;
+coin_run_cap 20) и rp (coin_run_cap 10). Владельцу ЕЩЁ РАЗ, по порядку: games-more.sql → coins.sql → economy.sql. Проверка:
+`/rpc/game_win_xp` {"p_game":"mirwar"} → 3; `/rpc/coin_run_cap` {"p_game":"mirwar"} → 20, {"p_game":"rp"} → 10; economy — как выше.
+До запуска работы в городе и бои зоны не дают монет и XP (ошибок игрок не видит).
 Раньше (13:05 UTC): 1–8 ещё НЕ применены (game_win_xp(horde) = 20, остальные — PGRST202). 7–8 (bases.sql,
 raids.sql) — давать владельцу только после того, как агент набегов закончит переделку (3D, большие базы): файлы ещё меняются.
 age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
