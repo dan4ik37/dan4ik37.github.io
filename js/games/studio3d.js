@@ -799,6 +799,7 @@ Players.PlayerAdded.Connect(player => {
       <label class="s3-lbl">Название<input type="text" class="s3p-t" maxlength="60" value="${esc(ed.q('.s3-name').value.trim() || 'Мой мир')}"></label>
       <label class="s3-lbl">Описание — что делать в мире<textarea class="s3p-d" maxlength="300" rows="3"></textarea></label>
       <label class="s3-lbl">Значок<input type="text" class="s3p-i" maxlength="4" value="🧱"></label>
+      ${window.D37Age ? `<label class="s3-lbl">🎂 Для какого возраста${D37Age.ugc.select(ed.pubAge ?? 12, { staff: isStaff(), attr: 'data-s3p-age' })}</label>` : ''}
       <label class="s3-chk"><input type="radio" name="s3p-v" value="link" checked> 🔗 По ссылке — играют те, кому дашь ссылку</label>
       <label class="s3-chk"><input type="radio" name="s3p-v" value="review"> 🌍 В каталог — после проверки модератором</label>
       ${own.length ? `<p class="s3-note">🧩 Своих моделей: ${own.length}. Они уйдут на проверку — пока модератор не одобрит, у других на их месте будет пустая коробка.</p>` : ''}
@@ -845,8 +846,15 @@ Players.PlayerAdded.Connect(player => {
       if (ED !== ed) return;
       ed.pubId = r.id; ed.dirty = true; save(true);
       const st = await rpc('ugc_status', { p_id: r.id, p_status: vis });
+      // 🎂 возрастная метка мира (age.sql; автор — до 16+, модератор может поменять). Нет age.sql — молча без метки
+      const ageSel = dlg.querySelector('[data-s3p-age]');
+      let ageNote = '';
+      if (ageSel && window.D37Age) {
+        const ar = await D37Age.ugc.set('ugc', r.id, +ageSel.value);
+        if (ar?.ok) ed.pubAge = +ageSel.value; else if (ar?.reason !== 'missing') ageNote = ' ' + D37Age.ugc.err(ar) + '.';
+      }
       ed.pubLink = `${location.origin}/g/${r.id}`;
-      say(`✅ Выложено!${st?.status === 'review' ? ' В каталог попадёт после проверки модератором.' : ''}${uploaded ? ` Моделей на проверке: ${uploaded}.` : ''}<br><a href="${esc(ed.pubLink)}" target="_blank" rel="noopener">${esc(ed.pubLink)}</a> <button type="button" data-a="pub:copy">📋 Скопировать</button>`);
+      say(`✅ Выложено!${st?.status === 'review' ? ' В каталог попадёт после проверки модератором.' : ''}${uploaded ? ` Моделей на проверке: ${uploaded}.` : ''}${esc(ageNote)}<br><a href="${esc(ed.pubLink)}" target="_blank" rel="noopener">${esc(ed.pubLink)}</a> <button type="button" data-a="pub:copy">📋 Скопировать</button>`);
       print(`📤 Мир выложен: ${ed.pubLink}`, 'sys');
     } catch (e) { say('❌ ' + esc(e.message || e)); }
     finally { ed.publishing = false; const b = dlg.querySelector('[data-a="pub:go"]'); if (b) b.disabled = false; }
@@ -861,6 +869,19 @@ Players.PlayerAdded.Connect(player => {
     try { ({ data: row } = await c.from('ugc_games').select('id,title,icon,descr,kind,data,status,author,plays,likes,profiles(nick)').eq('id', id).maybeSingle()); } catch (e) {}
     if (ED !== ed) return;
     if (!row || row.kind !== 'place' || !Array.isArray(row.data?.objects)) { fail('Мир не найден или скрыт автором.<br><a href="#/games/studio">Другие миры и игры</a>'); return; }
+    // Возраст (js/core/age.js): чужой мир не по возрасту — «обложка» вместо мира (метка age_rating — отдельно: до age.sql колонки нет)
+    const AG = window.D37Age;
+    if (AG && !(me() && row.author === me().id)) {
+      let ar = null;
+      try { const { data: a, error } = await c.from('ugc_games').select('age_rating').eq('id', id).maybeSingle(); if (!error) ar = a?.age_rating; } catch (e) {}
+      if (ED !== ed) return;
+      const n = AG.ugc.age(ar);
+      if (!AG.canOpen(n)) {
+        const L = document.createElement('div'); L.className = 's3-loading s3-agec'; ed.box.appendChild(L);
+        AG.cover(L, n, { why: AG.ugc.WHY, title: row.title, back: '#/games/studio', onOpen: () => { L.remove(); if (ED === ed) openPublished(id); } });
+        return;
+      }
+    }
     ed.player.row = row;
     const d = row.data;
     for (const [mid, au] of Object.entries(d.models || {}).slice(0, 200)) if (typeof au === 'string') ed.remoteAuthors.set(mid, au);

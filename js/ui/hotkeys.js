@@ -93,7 +93,9 @@ let archiveVids = null, archiveLoading = null;
 function loadArchive(){
   if (archiveVids || archiveLoading) return archiveLoading;
   archiveLoading = fetch('/api/ids?t=1').then(r => r.ok ? r.json() : null).then(d => {
-    archiveVids = (d && Array.isArray(d.v) ? d.v : []).map(([id, title, date]) => ({ kind:'video', label:title,
+    // возраст (js/core/age.js): несовершеннолетнему ролики 18+ (кейсы, промокоды на депозит) в поиске не показываем
+    const ok = t => !window.D37Age || D37Age.listOk(D37Age.video(t).age);
+    archiveVids = (d && Array.isArray(d.v) ? d.v : []).filter(x => ok(x[1])).map(([id, title, date]) => ({ kind:'video', label:title,
       sub: date ? date.split('-').reverse().join('.') : '', href:'/v/'+id, thumb:'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg' }));
   }).catch(() => { archiveVids = []; });
   return archiveLoading;
