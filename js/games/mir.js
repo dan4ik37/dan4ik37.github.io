@@ -188,6 +188,7 @@
       const GB = window.MirZones?.groundRect?.() || [-160, -160, 160, 160];   // зоны мира (mir-zones.js): земля под всеми зонами
       const gs = new T.Shape([new T.Vector2(GB[0], -GB[3]), new T.Vector2(GB[2], -GB[3]), new T.Vector2(GB[2], -GB[1]), new T.Vector2(GB[0], -GB[1])]);
       const hole = new T.Path(); hole.absarc(POND.x, -POND.z, POND.r, 0, PI * 2, true); gs.holes.push(hole);
+      window.MirZones?.addHole?.({ x0: POND.x - POND.r, x1: POND.x + POND.r, z0: POND.z - POND.r, z1: POND.z + POND.r });   // карта-рельеф: под прудом не рисовать
       window.MirZones?.groundHoles?.(T, gs);   // зоны мира: море и бункер боевой зоны — дыры в земле
       const gm = new T.Mesh(new T.ShapeGeometry(gs, 48), M.grass); gm.rotation.x = -PI / 2; st.add(gm);
     }
@@ -618,7 +619,7 @@
     }
     // край мира: невидимые стены (зоны мира — шире; высокие — для вертолётов и самолётов)
     {
-      const B = window.MirZones?.bounds?.() || [-83, -71, 83, 91], cx = (B[0] + B[2]) / 2, cz = (B[1] + B[3]) / 2, hw = (B[2] - B[0]) / 2 + 2, hd = (B[3] - B[1]) / 2 + 2;
+      const B = window.MirZones?.worldMap?.() ? window.MirZones.mapBounds() : window.MirZones?.bounds?.() || [-83, -71, 83, 91], cx = (B[0] + B[2]) / 2, cz = (B[1] + B[3]) / 2, hw = (B[2] - B[0]) / 2 + 2, hd = (B[3] - B[1]) / 2 + 2;   // с картой — край карты
       for (const [x, z, hx, hz] of [[cx, B[1] - 1, hw, 1], [cx, B[3] + 1, hw, 1], [B[0] - 1, cz, 1, hd], [B[2] + 1, cz, 1, hd]]) ph.addBox({ x, z, y: 100, hx, hz, hy: 100, tag: 'edge' });
     }
     // ── Район участков: улица, земля участков, таблички (сами базы — S.base, после склейки) — mir-base.js ──
@@ -691,7 +692,7 @@
     // генерация кадров (×2): другие игроки — подвижные (свой персонаж движок знает сам — по R.follow)
     R.fgMovers = () => { const L = []; if (S?.players) for (const p of S.players.values()) if (p.ch) L.push([p.key, p.ch.x, p.ch.y, p.ch.z]); return L; };
     // графика v3: время суток — общее для всех игроков (сутки 40 мин, ночь — пятая часть), небо, туман, вода, цвет кадра
-    R.setLighting({ time: mirTime(), brightness: 1.05, ambient: 1.05, fogEnd: 260, shadows: true, gfx: MIR_GFX });
+    R.setLighting({ time: mirTime(), brightness: 1.05, ambient: 1.05, fogEnd: window.MirZones?.worldMap?.() ? (R.q === 'low' || window.D37E?.isMobile?.() ? 430 : 640) : 260, shadows: true, gfx: MIR_GFX });   // с картой-рельефом — видно горы
     const ph = S.ph = new E.Phys({ ground: 0 });
     const C = S.C = E.controls({ onKey: () => activity() });
     const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb, .mp' });
@@ -1070,7 +1071,7 @@
     S.pending = keep;
   }
   const num = v => (typeof v === 'number' && isFinite(v) ? v : null);
-  const clampPos = (x, z) => { const B = window.MirZones?.bounds?.() || [-82, -70, 82, 90]; return [Math.max(B[0], Math.min(B[2], x)), Math.max(B[1], Math.min(B[3], z))]; };   // зоны мира — шире
+  const clampPos = (x, z) => { const MZ = window.MirZones, B = MZ?.worldMap?.() ? MZ.mapBounds() : MZ?.bounds?.() || [-82, -70, 82, 90]; return [Math.max(B[0], Math.min(B[2], x)), Math.max(B[1], Math.min(B[3], z))]; };   // зоны мира — шире
   async function onMsg(pl){
     if (!S || !pl || typeof pl.k !== 'string' || typeof pl.m !== 'string' || typeof pl.s !== 'string' || pl.m.length > 3000) return;
     const p = S.players.get(pl.k);
@@ -1132,7 +1133,7 @@
     const x = num(d.x), y = num(d.y), z = num(d.z);
     if (x === null || y === null || z === null) return;
     p.stAt = now();
-    const [cx, cz] = clampPos(x, z), cy = Math.max(-10, Math.min(220, y)), U = window.D37E.UNIT;   // ниже — бункер и море, выше — вертолёты
+    const [cx, cz] = clampPos(x, z), cy = Math.max(-80, Math.min(700, y)), U = window.D37E.UNIT;   // ниже — бункер и море, выше — горы и вертолёты
     const ex = cx - p.ch.x, ey = cy - p.ch.y, ez = cz - p.ch.z;
     if (Math.hypot(ex, ey, ez) > 1.8) { p.ch.x = cx; p.ch.y = cy; p.ch.z = cz; p.err = { x: 0, y: 0, z: 0 }; }
     else p.err = { x: ex, y: ey, z: ez };

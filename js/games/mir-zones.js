@@ -141,14 +141,43 @@
     if (B) { x0 = Math.min(x0, B[0]); z0 = Math.min(z0, B[1]); x1 = Math.max(x1, B[2]); z1 = Math.max(z1, B[3]); }
     return [x0, z0, x1, z1];
   }
-  const groundRect = () => { const [x0, z0, x1, z1] = bounds(); return [x0 - 220, z0 - 220, x1 + 220, z1 + 220]; };
+  const groundRect = () => { if (worldMap()) { const c = clusterRect(); return [c.x0, c.z0 - 6, c.x1 + 6, c.z1 + 6]; } const [x0, z0, x1, z1] = bounds(); return [x0 - 220, z0 - 220, x1 + 220, z1 + 220]; };
   // Деревья и трава мира — не на дорогах, телепортах и в зонах
   const blocked = (x, z) => ZLIST.some(Z => inRect(Z, x, z, 6)) || inRect(RESERVE, x, z) || EXPAND.some(r => inRect(r, x, z, 4)) || roadDist(x, z) < 4 || PADS.some(p => Math.hypot(p.x - x, p.z - z) < 2.2) || BIG_GATES.some(g => Math.hypot(g.x - x, g.z - z) < 5);
   // Холм на горизонте: только целиком за краем мира (иначе — насквозь проходимая гора посреди зоны) и не на месте роста городов
-  const hillOk = (x, z, r) => { const [x0, z0, x1, z1] = bounds(); return (x + r < x0 || x - r > x1 || z + r < z0 || z - r > z1) && !EXPAND.some(e => rectsOverlap(e, { x0: x - r, x1: x + r, z0: z - r, z1: z + r })); };
-  // Рельеф зон: море (дно SEA.floor, у берега отвесная набережная), бункер (пол ниже земли), канал Большого города
-  const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : inRect(CANAL, x, z) ? CANAL.floor : 0;
-  const water = (x, z) => inRect(SEA, x, z) ? SEA.wl : inRect(CANAL, x, z) ? CANAL.wl : -Infinity;
+  const hillOk = (x, z, r) => { if (worldMap()) return false; const [x0, z0, x1, z1] = bounds(); return (x + r < x0 || x - r > x1 || z + r < z0 || z - r > z1) && !EXPAND.some(e => rectsOverlap(e, { x0: x - r, x1: x + r, z0: z - r, z1: z + r })); };
+  // ═══ Большая карта-рельеф (js/engine/worldmap.js, docs/WORLD_MAP.md): вокруг мира — горы, равнины, реки, озёра, море.
+  //     Мир (столица и зоны) — ровная площадка (как было); гавань боевой зоны открыта в океан. У всех одно и то же по зерну ═══
+  const MAP = { seed: 37, half: 3072 };
+  const mapBounds = () => [-MAP.half, -MAP.half, MAP.half, MAP.half];
+  const HOLES = [BUNKER, CANAL];   // тут рельеф не рисуется (свои стены и пол); mir.js добавляет чашу пруда
+  // площадка мира: всё старое (зоны, места роста, район) — ровно; запад — до набережной гавани (дальше — море)
+  function clusterRect(){
+    const [x0, z0, x1, z1] = bounds();
+    let X1 = x1, Z1 = z1, Z0 = z0;
+    for (const e of EXPAND) { X1 = Math.max(X1, e.x1 + 10); Z1 = Math.max(Z1, e.z1 + 10); Z0 = Math.min(Z0, e.z0 - 10); }
+    return { x0: Math.max(x0, SEA.x1), x1: X1, z0: Z0, z1: Z1 };
+  }
+  function mapLayout(){
+    return {
+      seed: MAP.seed, half: MAP.half, sea: SEA.wl,
+      pads: [{ id: 'world', ...clusterRect(), y: 0, m: 8, blend: 120 }],
+      // гавань боевой зоны (ровное дно у набережной) и пролив из неё в океан
+      oceans: [{ ...SEA, floor: SEA.floor }, { x0: -MAP.half - 200, x1: SEA.x0, z0: SEA.z0 - 30, z1: SEA.z1 + 30 }],
+      rivers: [
+        { id: 'bystraya', name: 'Быстрая', w0: 6, w1: 18, depth: 2.2, pts: [[-1350, -2350], [-1150, -1700], [-900, -1100], [-760, -600], [-700, -200], [-640, 80], [-700, 200]] },
+        { id: 'svetlaya', name: 'Светлая', w0: 7, w1: 24, depth: 2.6, pts: [[1500, -2450], [1250, -1800], [1000, -1250], [820, -700], [700, -200], [640, 300], [700, 800], [820, 1400], [760, 1900], [640, 2500], [600, 2950]] },
+      ],
+      lakes: [{ id: 'zerk', name: 'Зеркальное', x: -950, z: -750, r: 60 }, { id: 'tihoe', name: 'Тихое', x: 1200, z: 700, r: 85 }, { id: 'gornoe', name: 'Горное', x: -1600, z: -2150, r: 50, depth: 7 }],
+      roads: [], holes: HOLES,
+    };
+  }
+  let WM = null;
+  const worldMap = () => WM || (root.D37E?.worldMap ? (WM = root.D37E.worldMap(mapLayout())) : null);
+  const addHole = r => { if (r && !HOLES.some(h => h.x0 === r.x0 && h.z0 === r.z0)) HOLES.push(r); };
+  // Рельеф: гавань (дно SEA.floor, у берега отвесная набережная), бункер (пол ниже земли), канал Большого города, дальше — карта
+  const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : inRect(CANAL, x, z) ? CANAL.floor : (worldMap()?.ground(x, z) ?? 0);
+  const water = (x, z) => inRect(SEA, x, z) ? SEA.wl : inRect(CANAL, x, z) ? CANAL.wl : (worldMap()?.water(x, z) ?? -Infinity);
   // ═══ Жители по расписанию (задел «города-симулятора»): у каждого — дом, работа, любимый магазин из таблицы зданий зоны.
   //     По часам мира (E.dayClock — у всех одинаково): ночью дома (не видно), утром — по дороге, днём — у работы, вечером — у
   //     магазина, потом — гуляет у дома. По зерну зоны: у всех игроков одни и те же люди в тех же местах. Дёшево: без путей —
@@ -1030,13 +1059,17 @@
       for (let k = 12; k < L - 6; k += 24) for (const s of [-1, 1]) R.prefab('lamp', { x: x1 + dx * k / L + Math.cos(yaw) * (r.w / 2 + 2.4) * s, z: z1 + dz * k / L - Math.sin(yaw) * (r.w / 2 + 2.4) * s }, ph);
     }
     // вода моря и канала (дыры в земле) — видна сразу, до подгрузки зон; дно — песок, края — каменные стенки
+    const open = !!worldMap();   // с картой гавань открыта в океан: вода и дно — карты, стенка — только набережная
     for (const [r, c, key] of [[SEA, '#2f7fc1', 'mzsea'], [CANAL, '#3a8fd0', 'mzcanal']]) {
-      const wm = R.water(c, { key, fixedColor: true }); wm.side = T.DoubleSide;   // из-под воды видно поверхность
-      const m = new T.Mesh(new T.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0), wm); m.rotation.x = -PI / 2; m.position.set((r.x0 + r.x1) / 2, r.wl, (r.z0 + r.z1) / 2);
-      m.userData.dyn = true; R.scene.add(m); R.own.push(m.geometry);
-      P(null, { s: 'box', x: (r.x0 + r.x1) / 2, y: r.floor - .1, z: (r.z0 + r.z1) / 2, w: r.x1 - r.x0, h: .2, d: r.z1 - r.z0, c: '#b8a77a' });
+      const sea = r === SEA;
+      if (!(open && sea)) {
+        const wm = R.water(c, { key, fixedColor: true }); wm.side = T.DoubleSide;   // из-под воды видно поверхность
+        const m = new T.Mesh(new T.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0), wm); m.rotation.x = -PI / 2; m.position.set((r.x0 + r.x1) / 2, r.wl, (r.z0 + r.z1) / 2);
+        m.userData.dyn = true; R.scene.add(m); R.own.push(m.geometry);
+        P(null, { s: 'box', x: (r.x0 + r.x1) / 2, y: r.floor - .1, z: (r.z0 + r.z1) / 2, w: r.x1 - r.x0, h: .2, d: r.z1 - r.z0, c: '#b8a77a' });
+      }
       const hh = .02 - r.floor, yc = r.floor + hh / 2;
-      for (const [x, z, w, d] of [[(r.x0 + r.x1) / 2, r.z0 + .2, r.x1 - r.x0, .4], [(r.x0 + r.x1) / 2, r.z1 - .2, r.x1 - r.x0, .4], [r.x0 + .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0], [r.x1 - .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0]]) {
+      for (const [x, z, w, d] of (open && sea ? [[r.x1 - .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0]] : [[(r.x0 + r.x1) / 2, r.z0 + .2, r.x1 - r.x0, .4], [(r.x0 + r.x1) / 2, r.z1 - .2, r.x1 - r.x0, .4], [r.x0 + .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0], [r.x1 - .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0]])) {
         P(null, { s: 'box', x, y: yc, z, w, h: hh, d, c: '#8d8a83' });
         ph.addBox({ x, y: yc, z, hx: w / 2, hy: hh / 2, hz: d / 2, tag: 'wall', data: { cam: false, floor: 'concrete' } });
       }
@@ -1133,7 +1166,7 @@
   }
   // Земля шире и с дырами (море, бункер) — крючок в постройке земли mir.js
   function groundHoles(T, shape){
-    for (const r of [SEA, BUNKER, CANAL]) {
+    for (const r of worldMap() ? [BUNKER, CANAL] : [SEA, BUNKER, CANAL]) {
       const h = new T.Path();
       h.moveTo(r.x0, -r.z1); h.lineTo(r.x1, -r.z1); h.lineTo(r.x1, -r.z0); h.lineTo(r.x0, -r.z0); h.lineTo(r.x0, -r.z1);
       shape.holes.push(h);
@@ -1931,8 +1964,11 @@
       for (const zs of rt.mods) { try { zs.mod?.update?.(dt); } catch (e) { console.error(e); } }
       try { rt.veh?.update?.(dt); } catch (e) { console.error(e); }   // транспорт: чужие машины, седоки, возврат на стоянку
     };
+    // рельеф карты: чанки рядом с камерой (дальность — по туману), деревья, тела деревьев рядом с игроком
+    try { const wm = worldMap(); if (wm) rt.wmv = wm.view(R, { far: () => R.camera.far * .98 }); } catch (e) { console.error(e); }
     rt.frame = (dt, t) => {
       if (rt.stopped) return;
+      if (rt.wmv) { const c = R.camera.position, p = S.P.ch; try { rt.wmv.update(c.x, c.z, { ph: S.ph, px: p.x, pz: p.z }); } catch (e) { console.error(e); rt.wmv = null; } }
       for (const zs of rt.zones.values()) if (zs.it || zs.mq) { stepBuild(zs, R.q === 'high' ? 4 : 3); if (zs.built && !zs.shown) { const c = R.camera.position; if (distRect(zs.Z, c.x, c.z) < SHOW_D) setShown(zs, true); } }
       for (const zs of rt.mods) { try { zs.mod?.frame?.(dt, t); } catch (e) { console.error(e); } }
       try { rt.veh?.frame?.(dt, t); } catch (e) { console.error(e); }
@@ -1940,6 +1976,7 @@
     };
     rt.dispose = () => {
       try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
+      try { rt.wmv?.dispose?.(S.ph); } catch (e) { console.error(e); } rt.wmv = null;
       rt.stopped = true;
       clearTimeout(rt.bannerT); clearTimeout(rt.phT); clearTimeout(rt.eatT); clearInterval(rt.mapT);
       for (const zs of rt.zones.values()) {
@@ -1998,6 +2035,7 @@
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
     def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, BIG_GATES,
+    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
   };
