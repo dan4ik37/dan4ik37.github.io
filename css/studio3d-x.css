@@ -1,0 +1,220 @@
+/* ═══ «Студия 3D»: телефон, геймпад, компьютер, режимы игры, ракурсы, обучение (js/games/studio3d-*.js) ═══
+   Классы s3x-* — новые элементы; .s3-compact (узкий экран) / .s3-port (стоя) / .s3-land (лёжа) — раскладка;
+   .s3-in-kb / .s3-in-touch / .s3-in-pad — чем управляют сейчас. Подключает studio3d-ui.js. */
+
+/* ── Подсказки внизу вида ── */
+.s3x-hints{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:3;display:flex;align-items:center;gap:8px;max-width:min(96%,900px);padding:5px 6px 5px 12px;border-radius:12px;background:rgba(12,10,24,.7);color:#e6e8ee;font-size:12px;line-height:1.35;pointer-events:auto}
+.s3x-hints span{overflow:hidden;text-overflow:ellipsis}
+.s3 .s3x-hints button{flex:none;padding:2px 7px;font-size:11px;background:transparent;border-color:transparent;color:#9aa3b5}
+.s3x-hints kbd,.s3x-kt kbd{display:inline-block;min-width:1.4em;padding:0 5px;border-radius:5px;background:#3a3d48;border:1px solid #4a4e5c;border-bottom-width:2px;color:#fff;font:700 11px/1.5 Montserrat,system-ui,sans-serif;text-align:center;white-space:nowrap}
+.s3-playing .s3x-hints{display:none}
+.s3-msg{bottom:52px}
+.s3x-keysbtn span{margin-left:2px}
+
+/* ── Лист (окно) расширений: на компьютере — окно справа, на телефоне — снизу / сбоку ── */
+.s3x-sheet{position:absolute;z-index:8;right:12px;top:56px;width:min(380px,calc(100% - 24px));max-height:calc(100% - 70px);display:flex;flex-direction:column;border-radius:14px;background:#23252d;border:1px solid #3a3d48;box-shadow:0 16px 44px rgba(0,0,0,.5);opacity:0;transform:translateY(8px);transition:opacity .16s,transform .16s}
+.s3x-sheet.on{opacity:1;transform:none}
+.s3x-sheet.s3x-wide{width:min(620px,calc(100% - 24px))}
+.s3x-sh{display:flex;align-items:center;gap:8px;padding:10px 10px 8px 14px;border-bottom:1px solid #3a3d48}
+.s3x-sh b{flex:1;font-size:15px}
+.s3 .s3x-x{flex:none;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px}
+.s3x-sb{overflow:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:10px;overscroll-behavior:contain}
+.s3x-kh{font-weight:800;font-size:12px;color:#fbbf24;margin-top:4px}
+.s3x-kt{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;align-items:center;font-size:12.5px}
+
+/* ── Плитки: вставка, «Ещё», меню у пальца ── */
+.s3x-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.s3 .s3x-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:74px;padding:8px 4px;border-radius:12px;font-size:12px;font-weight:700;white-space:normal;text-align:center;line-height:1.15}
+.s3x-tile i{font-style:normal;font-size:26px;line-height:1}
+.s3 .s3x-tile.on{background:#2563eb;border-color:#60a5fa}
+.s3 .s3x-tile.go{background:#16a34a;border-color:#22c55e;color:#fff}
+.s3 .s3x-tile.warn{background:#7f1d1d;border-color:#b91c1c}
+.s3x-row{display:flex;gap:6px;flex-wrap:wrap}
+.s3 .s3x-seg{display:flex;gap:4px;flex-wrap:wrap}
+.s3 .s3x-seg button{flex:1;min-width:52px;min-height:40px}
+
+/* ── Меню у пальца (долгое нажатие) ── */
+.s3x-ctx{position:absolute;z-index:9;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;width:min(300px,calc(100% - 16px));padding:10px;border-radius:16px;background:#23252d;border:1px solid #4a4e5c;box-shadow:0 14px 40px rgba(0,0,0,.55)}
+.s3x-ctx>b{grid-column:1/-1;font-size:13px;padding:0 4px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s3 .s3x-ctx button{display:flex;align-items:center;gap:8px;min-height:46px;padding:6px 10px;border-radius:11px;font-size:14px;text-align:left;white-space:normal}
+.s3 .s3x-ctx button i{font-style:normal;font-size:20px}
+
+/* ── Нижняя панель инструментов (узкий экран) ── */
+.s3x-bar{display:none}
+.s3-compact .s3x-bar{display:flex;align-items:stretch;justify-content:space-around;gap:4px;padding:6px max(6px,env(safe-area-inset-left)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-right));background:#2b2d36;border-top:1px solid #3a3d48;z-index:5}
+.s3 .s3x-bar button{flex:1 1 0;min-width:0;max-width:86px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:56px;padding:4px 2px;border-radius:12px;font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden}
+.s3x-bar button i{font-style:normal;font-size:22px;line-height:1}
+.s3 .s3x-bar button.add{background:#16a34a;border-color:#22c55e;color:#fff}
+.s3-playing .s3x-bar{display:none!important}
+
+/* ── Узкий экран: верхняя панель — только главное, остальное в «⋯ Ещё» ── */
+.s3-compact .s3-top{gap:6px;padding:max(6px,env(safe-area-inset-top)) max(6px,env(safe-area-inset-right)) 6px max(6px,env(safe-area-inset-left))}
+.s3-compact .s3-top>*:not([data-a="exit"]):not(.s3-name):not([data-a="undo"]):not([data-a="redo"]):not(.s3x-more):not(.s3-play):not(.s3-grow):not(.s3-pinfo):not(.gs-s3){display:none!important}
+.s3-compact .s3-top button{min-height:40px;min-width:40px;font-size:16px}
+.s3-compact .s3-name{flex:1 1 auto!important;width:auto;min-width:60px;max-width:180px;font-size:14px;padding:8px}
+.s3-compact .s3-grow{display:none}
+.s3-compact .s3-top .s3-play{padding:8px 14px;font-size:14px}
+.s3-compact:not(.s3-playing) .gs-s3{display:none!important}
+.s3-compact .s3-main{overflow:hidden}
+.s3x-more{display:none}
+.s3-compact .s3x-more{display:inline-block}
+
+/* выдвижные листы вместо боковых панелей */
+.s3-compact .s3-main{grid-template-columns:minmax(0,1fr)!important}
+.s3-compact .s3-left,.s3-compact .s3-right{position:absolute;z-index:6;left:0;right:0;top:auto;bottom:0;width:auto;height:min(60%,520px);border:1px solid #3a3d48;border-radius:18px 18px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.5);transform:translateY(105%);transition:transform .22s;padding-bottom:env(safe-area-inset-bottom)}
+.s3-compact.s3-showL .s3-left,.s3-compact.s3-showR .s3-right{transform:none}
+.s3-compact .s3-ph{padding:10px 12px;font-size:14px}
+.s3-compact .s3-ph .s3x-x{margin-left:auto}
+.s3-compact .s3-row{padding:10px 12px;font-size:14px}
+.s3-compact .s3-props{gap:12px;padding:12px 14px 20px}
+.s3-compact .s3-props button,.s3-compact .s3-props select,.s3-compact .s3-props input[type=text],.s3-compact .s3-props input[type=number]{min-height:40px;font-size:14px}
+.s3-compact .s3-chk{font-size:14px;min-height:34px}
+.s3-compact .s3-chk input{width:22px;height:22px}
+.s3-compact .s3-lbl{font-size:13px}
+.s3-compact .s3-pal{grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.s3-compact .s3-mats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.s3-compact .s3-mob{display:none!important}
+.s3:not(.s3-compact) .s3-ph .s3x-x,.s3:not(.s3-compact) .s3-btabs .s3x-x,.s3:not(.s3-compact) .s3x-chip,.s3:not(.s3-compact) .s3x-snapbtn{display:none}
+.s3 .s3-ph .s3x-x,.s3 .s3-btabs .s3x-x{width:38px;height:38px;margin-left:auto}
+/* вывод и код — лист снизу (открывается сам при скрипте, ⋯ → Вывод) */
+.s3-compact .s3-bottom{position:absolute;z-index:7;left:0;right:0;bottom:0;height:min(58%,480px);border-radius:18px 18px 0 0;box-shadow:0 -10px 34px rgba(0,0,0,.5);transform:translateY(105%);transition:transform .22s}
+.s3-compact.s3-showB .s3-bottom{transform:none}
+.s3-compact.s3-minB .s3-bottom{height:min(58%,480px)}
+.s3-compact.s3-minB .s3-out,.s3-compact.s3-minB .s3-code{display:flex!important}
+.s3-compact .s3-out{display:block!important}
+.s3-compact .s3-out[hidden],.s3-compact .s3-code[hidden]{display:none!important}
+.s3-compact .s3-btabs button{min-height:38px;font-size:13px}
+.s3-compact .s3-btabs [data-a="toggleBottom"]{display:none}
+.s3-compact .s3-ta{font-size:14px}
+/* меню «Деталь», «Файл»… — плитками в листе */
+.s3-compact .s3-menu{left:8px!important;right:8px;top:auto!important;bottom:calc(var(--s3x-bar,74px) + 8px);max-height:min(64%,560px);display:grid!important;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;padding:10px;border-radius:16px;overscroll-behavior:contain}
+.s3-compact .s3-menu[hidden]{display:none!important}
+.s3-compact .s3-menu .s3-mh,.s3-compact .s3-menu hr,.s3-compact .s3-menu .s3-mrow,.s3-compact .s3-menu .s3-mlist,.s3-compact .s3-menu .s3-note,.s3-compact .s3-menu .s3x-full{grid-column:1/-1}
+.s3-compact .s3-menu>button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:72px;padding:6px 4px;border-radius:12px;background:#3a3d48;border:1px solid #4a4e5c;font-size:11.5px;white-space:normal;text-align:center;line-height:1.15}
+.s3-compact .s3-menu .s3x-ti{font-size:26px;line-height:1}
+.s3-compact .s3-menu .s3-mrow button{min-height:44px;font-size:14px}
+.s3-compact .s3-menu .s3x-full{min-height:46px!important;flex-direction:row!important;font-size:14px!important}
+/* узкий экран лёжа: панель — колонкой слева, листы — справа */
+.s3-land{grid-template-columns:auto minmax(0,1fr)}
+.s3-land .s3-top{grid-column:1/-1}
+.s3-land .s3-main{grid-row:2;grid-column:2}
+.s3-land .s3x-bar{grid-row:2;grid-column:1;flex-direction:column;justify-content:flex-start;border-top:0;border-right:1px solid #3a3d48;padding:6px 4px max(6px,env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left));overflow-y:auto;scrollbar-width:none}
+.s3-land .s3x-bar{gap:3px}
+.s3 .s3-land .s3x-bar button,.s3-land .s3x-bar button{flex:1 1 0;width:62px;max-width:none;min-height:42px;max-height:58px;font-size:10px;gap:1px}
+.s3-land .s3x-bar button i{font-size:19px}
+.s3-land .s3-left,.s3-land .s3-right,.s3-land .s3-bottom{left:auto;top:0;bottom:0;right:0;width:min(46%,400px);height:auto;border-radius:18px 0 0 18px;transform:translateX(105%);padding-right:env(safe-area-inset-right)}
+.s3-land .s3-menu{left:auto!important;right:8px;top:56px!important;bottom:8px;width:min(52%,440px);max-height:none}
+.s3-land .s3x-sheet{top:52px;bottom:8px;right:8px;max-height:none;width:min(48%,420px)}
+.s3-land .s3x-sheet.s3x-wide{width:min(60%,560px)}
+/* листы расширений на узком экране стоя — снизу */
+.s3-port .s3x-sheet,.s3-port .s3x-sheet.s3x-wide{left:0;right:0;bottom:0;top:auto;width:auto;max-height:min(72%,640px);border-radius:18px 18px 0 0;transform:translateY(30px);padding-bottom:env(safe-area-inset-bottom)}
+.s3-port .s3x-sheet.on{transform:none}
+.s3-compact .s3x-hints{bottom:8px;font-size:11px;max-width:calc(100% - 16px);padding:4px 4px 4px 10px}
+.s3-compact .s3x-hints span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;white-space:normal}
+.s3-compact .s3-hint{display:none}
+.s3-compact .s3-tut{display:none}
+.s3-compact .s3-msg{bottom:48px}
+
+/* ── Выбранный объект — плашка сверху вида (узкий экран) ── */
+.s3x-chip{position:absolute;left:8px;top:8px;z-index:4;display:flex;align-items:center;gap:4px;max-width:calc(100% - 76px);padding:4px;border-radius:14px;background:rgba(23,24,32,.86);border:1px solid #4a4e5c;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.s3x-chip b{padding:0 6px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.s3 .s3x-chip button{flex:none;min-width:40px;min-height:40px;padding:0 8px;border-radius:10px;font-size:17px}
+.s3 .s3x-chip button.on{background:#2563eb;border-color:#60a5fa}
+.s3-playing .s3x-chip,.s3-playing .s3x-snapbtn,.s3-playing .s3x-fab{display:none!important}
+/* сетка / угол / на поверхность — круглая кнопка справа сверху */
+.s3 .s3x-snapbtn{position:absolute;right:8px;top:8px;z-index:4;min-width:52px;height:44px;padding:0 10px;border-radius:22px;background:rgba(23,24,32,.86);border:1px solid #4a4e5c;font-size:14px;font-weight:800;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.s3x-snapbtn small{font-size:11px;color:#93c5fd;margin-left:3px}
+
+/* ── Геймпад: прицел, подсветка, круговое меню ── */
+.s3x-cross{position:absolute;left:50%;top:50%;z-index:3;width:28px;height:28px;margin:-14px 0 0 -14px;pointer-events:none}
+.s3x-cross::before,.s3x-cross::after{content:'';position:absolute;background:#fff;box-shadow:0 0 0 1.5px rgba(0,0,0,.45);border-radius:2px}
+.s3x-cross::before{left:13px;top:2px;width:2px;height:24px}
+.s3x-cross::after{top:13px;left:2px;height:2px;width:24px}
+.s3x-cross.hot::before,.s3x-cross.hot::after{background:#fbbf24}
+.s3x-cross.grab::before,.s3x-cross.grab::after{background:#4ade80}
+.s3x-padtag{position:absolute;left:50%;top:calc(50% + 22px);transform:translateX(-50%);z-index:3;padding:2px 9px;border-radius:9px;background:rgba(12,10,24,.7);color:#fff;font-size:12px;font-weight:700;white-space:nowrap;pointer-events:none}
+.s3x-radial{position:absolute;left:50%;top:50%;z-index:9;width:min(86vmin,420px);height:min(86vmin,420px);transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle,rgba(23,24,32,.96) 0 31%,rgba(23,24,32,.9) 31.5% 100%);border:2px solid #4a4e5c;box-shadow:0 18px 60px rgba(0,0,0,.6)}
+.s3x-rc{position:absolute;left:50%;top:50%;width:30%;transform:translate(-50%,-50%);text-align:center;font-size:13px;font-weight:800;color:#fff;line-height:1.25}
+.s3x-rc small{display:block;font-size:11px;font-weight:600;color:#9aa3b5;margin-top:4px}
+.s3x-ri{position:absolute;width:84px;margin:-36px 0 0 -42px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11.5px;font-weight:700;color:#cbd5e1;text-align:center;line-height:1.15;border-radius:14px;padding:6px 2px;transition:background .1s,transform .1s}
+.s3x-ri i{font-style:normal;font-size:28px;line-height:1}
+.s3x-ri.on{background:#2563eb;color:#fff;transform:scale(1.12)}
+
+/* ── Виды «сверху / спереди / сбоку» ── */
+.s3x-viewtag{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:3;padding:4px 12px;border-radius:10px;background:rgba(37,99,235,.86);color:#fff;font-size:12.5px;font-weight:800;pointer-events:none}
+.s3-compact .s3x-viewtag{top:58px}
+.s3x-bm{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center}
+.s3x-bm span{font-size:12.5px;color:#cbd5e1}
+.s3x-arr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.s3x-arr label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;font-weight:700;color:#aab2c3}
+.s3 .s3x-arr input{width:100%}
+
+/* ── Режим игры (окно в редакторе) ── */
+.s3x-modes{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:7px}
+.s3 .s3x-mode{display:flex;flex-direction:column;align-items:center;gap:3px;min-height:78px;padding:8px 4px;border-radius:12px;white-space:normal;text-align:center;font-size:12px;line-height:1.15}
+.s3x-mode i{font-style:normal;font-size:26px;line-height:1}
+.s3 .s3x-mode.on{background:#2563eb;border-color:#93c5fd;color:#fff}
+.s3x-desc{margin:0;font-size:12.5px;line-height:1.45;color:#cbd5e1}
+.s3x-par{display:grid;gap:8px}
+.s3x-par label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:#aab2c3}
+.s3x-par label b{color:#fff}
+.s3x-need{display:grid;gap:5px}
+.s3x-need div{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.s3x-need div span{flex:1}
+.s3 .s3x-need button{padding:4px 10px;font-size:12px}
+.s3x-sec{font-weight:800;font-size:12.5px;color:#fbbf24;margin-top:4px}
+.s3x-help h4{margin:6px 0 2px;font-size:14px;color:#fbbf24}
+.s3x-help p,.s3x-help li{margin:0;font-size:13px;line-height:1.5;color:#dbe2ee}
+.s3x-help ol,.s3x-help ul{margin:0;padding-left:20px;display:grid;gap:4px}
+.s3x-help code{padding:1px 5px;border-radius:5px;background:#16171d;color:#fde68a;font:12px Consolas,"Cascadia Mono",monospace}
+.s3x-help pre{margin:0;padding:8px 10px;border-radius:9px;background:#16171d;color:#e6e8ee;font:12px/1.5 Consolas,"Cascadia Mono",monospace;overflow:auto;white-space:pre;-webkit-user-select:text;user-select:text}
+
+/* ── Игра: табло режима, отсчёт, итоги раунда ── */
+.s3x-mhud{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:4;display:flex;align-items:center;gap:10px;padding:5px 14px;border-radius:14px;background:rgba(12,10,24,.74);color:#fff;font-size:13.5px;font-weight:800;white-space:nowrap;pointer-events:none;max-width:calc(100% - 24px)}
+.s3x-mhud .t{font-variant-numeric:tabular-nums;color:#fbbf24;font-size:16px}
+.s3x-mhud .r{color:#93c5fd;font-size:12px}
+.s3x-mhud .m{overflow:hidden;text-overflow:ellipsis}
+.s3x-teams{display:flex;gap:6px}
+.s3x-teams span{padding:1px 8px;border-radius:8px;font-variant-numeric:tabular-nums}
+.s3x-mine{position:absolute;left:50%;top:44px;transform:translateX(-50%);z-index:4;padding:3px 12px;border-radius:10px;background:rgba(12,10,24,.6);color:#e6e8ee;font-size:12.5px;font-weight:700;white-space:nowrap;pointer-events:none}
+.s3x-board{position:absolute;right:10px;top:10px;z-index:4;min-width:160px;max-width:min(44%,260px);padding:7px 10px;border-radius:12px;background:rgba(12,10,24,.7);color:#fff;font-size:12.5px;pointer-events:none}
+.s3x-board div{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
+.s3x-board div span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s3x-board div b{font-variant-numeric:tabular-nums}
+.s3x-board .me{color:#93c5fd}
+.s3x-board .out{opacity:.5;text-decoration:line-through}
+.s3x-count{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);z-index:6;font-size:min(22vmin,120px);font-weight:900;color:#fff;text-shadow:0 6px 24px rgba(0,0,0,.6);pointer-events:none;animation:s3xPop .9s ease-out}
+.s3x-count.go{color:#4ade80}
+@keyframes s3xPop{0%{transform:translate(-50%,-50%) scale(1.6);opacity:0}25%{opacity:1}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.s3x-blind{position:absolute;inset:0;z-index:5;display:grid;place-items:center;background:rgba(8,8,16,.9);color:#fff;font-size:20px;font-weight:800;text-align:center;padding:20px;pointer-events:none}
+.s3x-win{position:absolute;inset:0;z-index:8;display:grid;place-items:center;padding:16px;background:rgba(9,8,20,.55)}
+.s3x-win>div{width:min(420px,100%);max-height:100%;overflow:auto;display:grid;gap:10px;padding:18px;border-radius:18px;background:#23252d;border:1px solid #4a4e5c;box-shadow:0 20px 60px rgba(0,0,0,.6);text-align:center}
+.s3x-win h3{margin:0;font-size:22px}
+.s3x-win p{margin:0;color:#cbd5e1;font-size:13.5px}
+.s3x-win table{width:100%;border-collapse:collapse;font-size:13.5px}
+.s3x-win td{padding:4px 6px;border-bottom:1px solid #3a3d48;text-align:left}
+.s3x-win td:last-child{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.s3x-win tr.me td{color:#93c5fd}
+.s3x-win .s3x-row{justify-content:center}
+.s3 .s3x-win button{min-height:44px;padding:8px 16px;font-size:14px}
+.s3-compact.s3-playing .s3-stats{top:auto;bottom:96px;right:8px}
+.s3-view:has(.s3x-mhud) .s3-labels{top:74px}
+
+/* ── Обучение «Первый мир за 5 минут» ── */
+.s3x-tut{position:absolute;z-index:9;left:12px;bottom:56px;width:min(340px,calc(100% - 24px));display:grid;gap:8px;padding:14px 14px 12px;border-radius:16px;background:#1e293b;border:2px solid #60a5fa;box-shadow:0 14px 40px rgba(0,0,0,.55);color:#fff}
+.s3x-tut b{font-size:15px}
+.s3x-tut p{margin:0;font-size:13.5px;line-height:1.45;color:#dbeafe}
+.s3x-tut .dots{display:flex;gap:5px}
+.s3x-tut .dots i{width:9px;height:9px;border-radius:50%;background:#475569}
+.s3x-tut .dots i.ok{background:#4ade80}
+.s3x-tut .dots i.cur{background:#fbbf24}
+.s3 .s3x-tut button{min-height:38px;padding:6px 12px}
+.s3-port .s3x-tut{left:8px;right:8px;width:auto;bottom:calc(var(--s3x-bar,74px) + 8px)}
+.s3-land .s3x-tut{left:80px;bottom:10px}
+.s3-playing .s3x-tut{bottom:auto;top:56px}
+.s3x-ring{position:fixed;z-index:100002;border:3px solid #fbbf24;border-radius:14px;box-shadow:0 0 0 4px rgba(251,191,36,.25),0 0 22px rgba(251,191,36,.6);pointer-events:none;animation:s3xRing 1.2s ease-in-out infinite}
+@keyframes s3xRing{50%{box-shadow:0 0 0 9px rgba(251,191,36,.12),0 0 30px rgba(251,191,36,.75)}}
+
+/* крупнее на сенсорных экранах и в «большом» режиме */
+.s3-in-touch .s3x-sheet button,.s3-in-pad .s3x-sheet button{min-height:42px}
+@media (prefers-reduced-motion: reduce){.s3x-ring,.s3x-count{animation:none}}
