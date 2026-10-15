@@ -1,0 +1,138 @@
+// ═══════════════════════════════════════
+//  НАСТРОЙКИ ГРАФИКИ 3D (вкладка «🎨 Графика» окна ⚙️ — поверх js/core/settings.js через define / addTab / on)
+// ═══════════════════════════════════════
+// Пресеты: Авто (по устройству + сам снижает/поднимает ступени по времени кадра) / Низкая / Средняя / Высокая / Ультра / Своя.
+// Тронул любую мелочь — пресет становится «Своя» (с теми же значениями, что были). Ключи в d37_settings: gfxPreset, shadowQ,
+// ao, water, refl, aa, fog, dist, grade, fpsCap, res, battery (+ старые gfx — «основа» рендерера, fsr, shadows, fps, world2d).
+// Перенос: был d37_gfx (low/mid/high) — пресет он же; «Тени: выкл» сохраняются. На живую: window.D37Opt.gfx (+ rev++) —
+// render.js (E.gfxResolve → R.applyGfx). Смена «основы» (low ↔ mid ↔ high) — мир пересобирается (ctx.gfx), студия — при
+// следующем запуске. Пресеты — те же, что E.GFX_PRESETS в js/engine/gfx.js (render-test сверяет).
+(() => {
+  const root = typeof window !== 'undefined' ? window : globalThis;
+  const S = root.D37Settings;
+  if (!S || S.gfxExt) return;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // ── Пресеты (как E.GFX_PRESETS в gfx.js; «основа» ultra — high) ──
+  const PRESETS = {
+    low: { tier: 'low', shadows: false, shadowQ: 'low', ao: 'off', water: 'simple', refl: false, aa: 'off', fog: true, dist: .8, grade: false },
+    mid: { tier: 'mid', shadows: true, shadowQ: 'mid', ao: 'off', water: 'good', refl: true, aa: 'fxaa', fog: true, dist: 1, grade: true },
+    high: { tier: 'high', shadows: true, shadowQ: 'high', ao: 'on', water: 'good', refl: true, aa: 'msaa', fog: true, dist: 1.25, grade: true },
+    ultra: { tier: 'high', shadows: true, shadowQ: 'ultra', ao: 'high', water: 'good', refl: true, aa: 'msaa', fog: true, dist: 1.6, grade: true },
+  };
+  const DETAIL = ['shadows', 'shadowQ', 'ao', 'water', 'refl', 'aa', 'fog', 'dist', 'grade'];
+  S.define('gfxPreset', { def: 'auto', list: ['auto', 'low', 'mid', 'high', 'ultra', 'custom'] })
+    .define('shadowQ', { def: 'mid', list: ['low', 'mid', 'high', 'ultra'] })
+    .define('ao', { def: 'off', list: ['off', 'on', 'high'] })
+    .define('water', { def: 'good', list: ['simple', 'good'] })
+    .define('refl', { def: true, bool: 1 })
+    .define('aa', { def: 'fxaa', list: ['off', 'fxaa', 'msaa'] })
+    .define('fog', { def: true, bool: 1 })
+    .define('dist', { def: 1, min: .5, max: 2 })
+    .define('grade', { def: true, bool: 1 })
+    .define('fpsCap', { def: '0', list: ['0', '30', '45', '60', '90', '120'] })
+    .define('res', { def: 100, min: 50, max: 100 })
+    .define('battery', { def: false, bool: 1 });
+
+  const dev = () => { const E = root.D37E; try { return E?.quality ? E.quality() : 'mid'; } catch (e) { return 'mid'; } };   // устройство (body.low, телефон, ядра)
+  const presetOf = p => PRESETS[p === 'auto' || p === 'custom' ? dev() : p] || PRESETS.mid;
+  // ── Перенос: был выбор качества (d37_gfx) — пресет он же ──
+  try {
+    const raw = JSON.parse(root.localStorage?.getItem('d37_settings') || '{}') || {};
+    if (!('gfxPreset' in raw)) {
+      const old = root.localStorage?.getItem('d37_gfx');
+      if (['low', 'mid', 'high'].includes(old)) S.set('gfxPreset', old);
+    }
+  } catch (e) {}
+
+  // ── «На живую»: D37Opt.gfx для движка ──
+  function publish(){
+    const O = root.D37Opt || (root.D37Opt = { rev: 0 });
+    O.gfx = { preset: S.get('gfxPreset'), shadowQ: S.get('shadowQ'), ao: S.get('ao'), water: S.get('water'), refl: S.get('refl'), aa: S.get('aa'),
+      fog: S.get('fog'), dist: S.get('dist'), grade: S.get('grade'), fpsCap: +S.get('fpsCap') || 0, res: S.get('res'), battery: S.get('battery') };
+    O.rev++;
+  }
+  // ── Контекст открытой игры (её «качество — пересобрать мир»): перехватываем context(), окно его не отдаёт ──
+  let gctx = null;
+  const ctx0 = S.context;
+  S.context = c => { gctx = c || null; const off = ctx0(c); return () => { if (gctx === c) gctx = null; off(); }; };
+  const liveR = () => { try { return gctx?.R?.() || null; } catch (e) { return null; } };
+  // основа рендерера сменилась — пересобрать мир (если игра умеет), иначе — при следующем запуске
+  function tierTo(t){
+    if (S.get('gfx') === t) return;
+    S.set('gfx', t);
+    const R = liveR(), E = root.D37E, now = E?.gfxQuality ? E.gfxQuality() : null;
+    if (R && now && now !== R.q) { try { gctx?.gfx?.(t); } catch (e) { console.error(e); } }
+  }
+  let busy = false;
+  S.on(d => {
+    if (busy) return;
+    busy = true;
+    try {
+      const k = d?.key;
+      if (k === 'gfxPreset' && d.ui) {
+        const p = d.value;
+        if (p !== 'custom') {   // пресет: «основа» по нему, тени — как в пресете, мелочи — его значения (для «Своя» потом)
+          const v = presetOf(p);
+          for (const key of DETAIL) S.set(key, v[key]);
+          S.set('shadows', true);
+          tierTo(p === 'auto' ? 'auto' : v.tier);
+        }
+      } else if (d?.ui && DETAIL.includes(k) && S.get('gfxPreset') !== 'custom') {   // тронул мелочь — «Своя» с прежними значениями
+        const v = presetOf(S.get('gfxPreset'));
+        for (const key of DETAIL) if (key !== k) S.set(key, key === 'shadows' ? S.get('shadows') && v.shadows !== false : v[key]);
+        S.set('gfxPreset', 'custom');
+      }
+    } finally { busy = false; }
+    publish();
+  });
+  publish();
+
+  // ── Вкладка ──
+  const row = (label, ctl, hint, o = {}) => `<div class="gs-row${o.dis ? ' dis' : ''}"><div class="gs-lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
+  const seg = (k, opts, o = {}) => `<div class="gs-seg" role="radiogroup">${opts.map(([v, t]) => { const on = S.get(k) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-set="${k}" data-v="${esc(v)}"${o.dis ? ' disabled' : ''}>${t}</button>`; }).join('')}</div>`;
+  const sw = (k, o = {}) => `<label class="gs-sw"><input type="checkbox" data-sw="${k}"${S.get(k) ? ' checked' : ''}${o.dis ? ' disabled' : ''}><i aria-hidden="true"></i></label>`;
+  const FMT = { dist: v => Math.round(v * 100) + '%', res: v => Math.round(v) + '%' };
+  const range = (k, min, max, step, mul = 1, o = {}) => `<div class="gs-range"><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.round(S.get(k) * mul)}" data-range="${k}" data-mul="${mul}" aria-label="${k}"${o.dis ? ' disabled' : ''}><output data-out="${k}">${FMT[k] ? FMT[k](S.get(k)) : S.get(k)}</output></div>`;
+  const head = t => `<div class="gs-sec">${t}</div>`;
+  const note = t => `<p class="gs-note">${t}</p>`;
+  const QN = { low: 'низкое', mid: 'среднее', high: 'высокое' };
+  function tab(){
+    const R = liveR(), p = S.get('gfxPreset'), tier = R ? R.q : (S.get('gfx') === 'auto' ? dev() : S.get('gfx')), low = tier === 'low';
+    const aq = R?.autoQ?.(), steps = aq && aq.step ? ` Сейчас упрощено на ${aq.step} из ${aq.steps - 1} ступеней — 3D тормозило.` : '';
+    const now = R ? `Сейчас: ${QN[R.q] || R.q}${p === 'ultra' && R.q === 'high' ? ' + ультра' : ''}.` : p === 'auto' ? `Для этого устройства: ${QN[dev()]}.` : '';
+    const HINT = { auto: 'Само подбирает под устройство и снижает, если тормозит.', low: 'Без теней и текстур — для слабых телефонов.', mid: 'Тени, вода, свечение — для телефонов и ноутбуков.',
+      high: 'Мягкие тени, затенение в углах (AO), MSAA, рельеф текстур.', ultra: 'Для мощных компьютеров: тени 4096, AO выше, дальше видно.', custom: 'Своя — всё ниже на выбор.' };
+    const pp = [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра'], ['custom', 'Своя']];
+    let h = head('3D-миры: «Мир Денчика», «Студия 3D»')
+      + row('Пресет', seg('gfxPreset', pp), `${now} ${HINT[p] || ''}${steps}` + (gctx?.gfx ? '' : R ? ' Смена основы (низкая/средняя/высокая) — при следующем запуске.' : ''));
+    if (p === 'custom') h += row('Основа', seg('gfx', [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая']]), 'Материалы и свет. Низкая — без теней и текстур (Ламберт). Мир перезагрузится.');
+    const lowDis = { dis: low }, lowHint = 'На низкой основе этого нет.';
+    h += head('Картинка')
+      + row('Тени', `${sw('shadows', lowDis)}`, low ? lowHint : 'Выключи, если 3D тормозит.', lowDis)
+      + row('Качество теней', seg('shadowQ', [['low', 'Низкое'], ['mid', 'Среднее'], ['high', 'Высокое'], ['ultra', 'Ультра']], { dis: low || !S.get('shadows') }), 'Выше — чётче и мягче (карта 1024 → 4096), дороже.', { dis: low || !S.get('shadows') })
+      + row('Затенение в углах (AO)', seg('ao', [['off', 'Выкл'], ['on', 'Вкл'], ['high', 'Высокое']], lowDis), low ? lowHint : 'Тени в углах, под предметами и у стен — объёмнее. Дорого для телефона.', lowDis)
+      + row('Вода', seg('water', [['simple', 'Простая'], ['good', 'Красивая']], lowDis), low ? lowHint : 'Красивая: глубина, пена у берега, два слоя ряби.', lowDis)
+      + row('Отражения неба', sw('refl', lowDis), low ? lowHint : 'Блеск металла, стекла и воды.', lowDis)
+      + row('Сглаживание', seg('aa', [['off', 'Выкл'], ['fxaa', 'FXAA'], ['msaa', 'MSAA']], lowDis), low ? lowHint : 'MSAA — чище, но дороже (на «ретине» само станет FXAA).', lowDis)
+      + row('Туман и дымка', sw('fog'), 'Воздух вдали, туман у земли, тёплое свечение к солнцу.')
+      + row('Дальность прорисовки', range('dist', 50, 200, 5, 100), 'Дальше — видно больше, но тяжелее.')
+      + row('Цвет кадра', sw('grade', lowDis), low ? lowHint : 'Цветокоррекция мира и виньетка (как задумал автор мира).', lowDis)
+      + head('Скорость')
+      + row('Разрешение (FSR)', seg('fsr', [['auto', 'Авто'], ['native', '100%'], ['quality', 'Качество'], ['balanced', 'Баланс'], ['performance', 'Скорость']], lowDis),
+        low ? 'FSR работает на средней основе и выше.' : 'AMD FSR 1, как DLSS: кадр рисуется меньше (77 / 67 / 59%) и чётко растягивается. «Авто» снижает разрешение само, когда тормозит.', lowDis)
+      + row('Масштаб разрешения', range('res', 50, 100, 5), 'Потолок доли кадра: меньше — быстрее, но мыльнее.')
+      + row('Лимит FPS', seg('fpsCap', [['0', 'Нет'], ['30', '30'], ['45', '45'], ['60', '60'], ['90', '90'], ['120', '120']]), 'Меньше кадров — телефон меньше греется.')
+      + row('Экономия батареи', sw('battery'), '30 кадров, без AO, тени попроще, плотность пикселей ×1.')
+      + row('Счётчик FPS', sw('fps'), 'Кадры в секунду и нагрузка — поверх 3D (клавиша F3).')
+      + row('Плоский «Мир Денчика»', sw('world2d'), 'Мир без 3D — для очень слабых телефонов.')
+      + note('Графику своего мира (время суток, небо, туман, цвет, вода) автор задаёт в «Студии 3D» → «🎨 Графика». Твои настройки — потолок: на слабом устройстве тяжёлое само выключается. Анимации сайта — во вкладке «🌐 Сайт».');
+    return h;
+  }
+  S.addTab({ id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site'], render: tab });
+  // проценты у ползунков (окно настроек пишет число — поправляем подпись)
+  root.document?.addEventListener?.('input', e => {
+    const t = e.target, k = t?.dataset?.range; if (!FMT[k]) return;
+    const out = t.closest('.gs-range')?.querySelector(`[data-out="${k}"]`); if (out) out.textContent = FMT[k](S.get(k));
+  });
+  S.gfxExt = { PRESETS, DETAIL, publish, presetOf };
+})();
