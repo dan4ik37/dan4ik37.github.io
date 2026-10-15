@@ -51,27 +51,30 @@
   const playHref = g => g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`;
 
   // ── Персонаж игрока для игр (D37.player в песочнице): 2D-проекция своего 3D-персонажа сбоку — один атлас (data URL) +
-  //    таблица кадров (js/core/char2d.js). Готов не сразу: печётся при первом заходе, потом — из кэша браузера ──
+  //    таблица кадров (js/core/char2d.js). Стиль — как задумано шаблоном (sprite в STUDIO_TPL, «Раннер» — 16-бит), свой код —
+  //    «Мультик»; выбор игрока в настройках важнее. Готов не сразу: печётся при первом заходе, потом — из кэша браузера ──
   const SPR_ANIMS = ['idle', 'walk', 'run', 'jump', 'fall', 'hurt', 'use', 'wave', 'dance', 'cheer'];
-  let sprP = null, sprData = null;
-  window.D37Char?.on?.(() => { sprP = null; sprData = null; });   // переоделся — новый лист
-  function playerSprite(){
-    if (sprP) return sprP;
-    sprP = (async () => {
+  const sprP = new Map(), sprData = new Map();   // стиль шаблона → обещание / готовые данные
+  window.D37Char?.on?.(() => { sprP.clear(); sprData.clear(); });   // переоделся — новые листы
+  function playerSprite(def = 'toon'){
+    if (sprP.has(def)) return sprP.get(def);
+    const p = (async () => {
       try {
         if (!window.D37Sprite && typeof gamesLoadScript === 'function') await gamesLoadScript('js/core/char2d.js');
         const SP = window.D37Sprite, C = window.D37Char;
         if (!SP || !C || !SP.supported()) return null;
         const look = C.look();
-        const sh = await SP.sheet(look, { view: 'side', size: 96, dpr: 1, lo: false, style: SP.styleFor('toon'), anims: SPR_ANIMS, key: SP.myKey(), all: true });
+        const sh = await SP.sheet(look, { view: 'side', size: 96, dpr: 1, lo: false, style: SP.styleFor(def), anims: SPR_ANIMS, key: SP.myKey(), all: true });
         const pk = sh && !sh.fallback && SP.pack(sh, SPR_ANIMS);
         if (!pk) return null;
-        sprData = { src: pk.canvas.toDataURL('image/png'), meta: pk.meta, pet: C.petEmoji(look), color: C.part('color', look.color)?.v || '' };
+        const d = { src: pk.canvas.toDataURL('image/png'), meta: pk.meta, pet: C.petEmoji(look), color: C.part('color', look.color)?.v || '' };
         pk.canvas.width = pk.canvas.height = 0;
-        return sprData;
+        sprData.set(def, d);
+        return d;
       } catch (e) { return null; }
     })();
-    return sprP;
+    sprP.set(def, p);
+    return p;
   }
 
   // ── Песочница ──
@@ -99,10 +102,10 @@
     hostPage().then(h => { if (!dead) f.srcdoc = h; }).catch(() => { box.innerHTML = '<div class="st-empty">Не загрузилось — проверь интернет</div>'; });
     box.appendChild(f);
     // персонаж игрока: готов — уходит вместе с игрой, нет — догонит её, когда испечётся
-    const late = () => playerSprite().then(p => { if (!p || dead) return; const m = { type: 'player', run, player: p }; if (ready) send(m); else plQ = m; });
+    const late = def => playerSprite(def).then(p => { if (!p || dead) return; const m = { type: 'player', run, player: p }; if (ready) send(m); else plQ = m; });
     return {
       el: f,
-      run(game, store){ run++; const m = { type: 'run', run, store: store || '{}', ...game }; if (sprData) m.player = sprData; else late(); if (ready) send(m); else queued = m; },
+      run(game, store){ run++; const m = { type: 'run', run, store: store || '{}', ...game }, d = sprData.get(game.spr || 'toon'); if (d) m.player = d; else late(game.spr || 'toon'); if (ready) send(m); else queued = m; },
       stop(){ if (ready) send({ type: 'stop' }); },
       focus(){ try { f.focus(); } catch (e) {} },
       destroy(){ dead = true; window.removeEventListener('message', onMsg); f.remove(); },
@@ -113,9 +116,9 @@
     if (g.kind === 'tpl') {
       const t = TPL().get(g.tpl);
       if (!t) return null;
-      return { kind: 'tpl', code: t.code.toString(), params: TPL().clean(t, g.data || g.params) };
+      return { kind: 'tpl', code: t.code.toString(), params: TPL().clean(t, g.data || g.params), spr: t.sprite || 'toon' };
     }
-    return { kind: 'html', html: String(g.html || '').slice(0, MAX_HTML) };
+    return { kind: 'html', html: String(g.html || '').slice(0, MAX_HTML), spr: 'toon' };
   }
 
   // ═══ Экраны ═══

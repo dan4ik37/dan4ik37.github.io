@@ -21,6 +21,7 @@
 .spv-chip.on{background:linear-gradient(135deg,rgba(155,109,255,.55),rgba(255,111,181,.4));border-color:transparent;color:#fff}
 .spv-pref{display:flex;align-items:center;gap:6px;color:#cbd5e1;font:700 .76rem 'Montserrat',sans-serif;flex-wrap:wrap}
 .spv-pref select{background:#1e1945;color:#fff;border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:.2rem .4rem;font:700 .76rem 'Montserrat',sans-serif}
+.spv-mini{position:absolute;right:10px;bottom:64px;width:64px;height:64px;z-index:2;border-radius:14px;background:rgba(10,8,24,.62);border:1px solid rgba(255,255,255,.14);cursor:pointer}
 .spv-x{position:absolute;right:10px;top:54px;z-index:4;width:34px;height:34px;border-radius:50%;border:0;background:rgba(10,8,24,.62);color:#fff;font-size:1rem;cursor:pointer}
 .spd{display:flex;flex-direction:column;gap:10px}
 .spd-head b{font:900 1.1rem 'Montserrat',sans-serif;color:#fff}.spd-head span{display:block;color:var(--muted,#94a3b8);font-size:.85rem;margin-top:2px}
@@ -58,9 +59,33 @@
     btn.type = 'button'; btn.className = 'spv-btn'; btn.textContent = '🎞 2D';
     btn.title = 'Как твой персонаж выглядит в 2D-играх';
     host.appendChild(btn);
-    W = { el, host, btn, pane: null, raf: 0, view: 'side', style: SP().styleFor('toon'), anim: 'walk', hs: [], look: null, t0: now(), off: null };
+    W = { el, host, btn, pane: null, raf: 0, view: 'side', style: SP().styleFor('toon'), anim: 'walk', hs: [], look: null, t0: now(), off: null, mini: null, mh: null, miniT: 0 };
     btn.addEventListener('click', () => (W?.pane ? hide() : show()));
-    W.off = C().on(() => { if (W?.pane) handles(true); });
+    W.off = C().on(look => { if (W?.pane) handles(true); W?.mh?.set(look); });
+    mini();
+  }
+  // Окошко редактора «так ты выглядишь в 2D-играх» (.ce-2d, рисует старого 2D-персонажа) — накрываем живой 2D-проекцией
+  // на том же месте (те же right/bottom/размер — переживает смену размера); нажал — панель «🎞 2D»
+  function mini(){
+    const old = W.host.querySelector('.ce-2d');
+    if (!old) return;
+    const cs = getComputedStyle(old), c = document.createElement('canvas');
+    c.className = 'spv-mini'; c.title = 'Так ты выглядишь в 2D-играх — нажми, чтобы посмотреть все виды и стили';
+    for (const k of ['right', 'bottom', 'width', 'height', 'borderRadius']) if (cs[k] && cs[k] !== 'auto') c.style[k] = cs[k];
+    W.host.appendChild(c);
+    c.addEventListener('click', () => (W?.pane ? hide() : show()));
+    W.mini = c;
+    W.mh = SP().handle(C().look(), { view: 'side', size: 56, style: SP().styleFor('toon'), anims: ['idle'], key: SP().myKey(), pin: true });
+    const paintMini = () => {
+      if (!W?.mini?.isConnected) return;
+      const r = c.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.max(16, Math.round(r.width)), h = Math.max(16, Math.round(r.height));
+      if (c.width !== w * dpr || c.height !== h * dpr) { c.width = w * dpr; c.height = h * dpr; }
+      const g = c.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+      W.mh.draw(g, 'idle', (now() - W.t0) / 1000, w / 2, h * .94, { h: h * .98 });
+    };
+    W.miniT = setInterval(paintMini, 200);
+    paintMini();
   }
   function show(){
     if (!W) return;
@@ -100,7 +125,9 @@
   }
   function close(){
     if (!W) return;
-    hide(); W.off?.(); W.btn.remove(); W = null;
+    hide(); W.off?.(); W.btn.remove();
+    clearInterval(W.miniT); W.mini?.remove();
+    W = null;
   }
   function chips(){
     const p = W.pane;
