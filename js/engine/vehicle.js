@@ -274,7 +274,7 @@
       } else R.part(body, p.glass && o.glass ? { ...p, m: o.glass } : p);   // стекло — общий прозрачный материал игры (видно, кто сидит)
     }
     if (o.merge) { try { o.merge(R, body); } catch (e) { console.error(e); } }
-    if (R.shadowsOn) R.shadowsOn(g);
+    if (R.shadowsOn) R.shadowsOn(g, false, true);   // тень не отбрасывает: карта теней обновляется не каждый кадр — у едущей машины тень отставала бы
     let spinA = 0;
     return {
       g, spin, def: d, still: !!o.still,

@@ -28,6 +28,25 @@
     plane: 'W — газ, S — сбросить газ, на скорости Пробел — взлёт (нос вверх), C — нос вниз, A/D — крен и поворот, E — выйти (на земле)',
   };
 
+  // ═══ Фоновое движение: кольцо квартала в правом ряду и место машины по часам (чистые функции — проверяются в node) ═══
+  function laneLoop(rect, off = 2){
+    const [x0, z0, x1, z1] = rect, C = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]];
+    const R0 = C.map((a, i) => { const b = C[(i + 1) % 4], dx = Math.sign(b[0] - a[0]), dz = Math.sign(b[1] - a[1]); return [-dz, dx]; });   // правая сторона по ходу
+    return C.map((c, i) => { const p = R0[(i + 3) % 4], q = R0[i]; return [c[0] + (p[0] + q[0]) * off, c[1] + (p[1] + q[1]) * off]; });
+  }
+  // где машина трафика в момент sec: на отрезке кольца, нос — по отрезку, у угла — плавно к следующему
+  function trafficPose(T0, sec, v){
+    const L = T0.L, s = ((((sec * T0.t.speed) / L + (T0.t.phase || 0)) % 1) + 1) % 1 * L;
+    let k = 0; while (k < T0.P.length - 1 && T0.cum[k + 1] <= s) k++;
+    const n = T0.P.length, a = T0.P[k], b = T0.P[(k + 1) % n], seg = T0.cum[k + 1] - T0.cum[k], u = (s - T0.cum[k]) / seg;
+    v.x = a[0] + (b[0] - a[0]) * u; v.z = a[1] + (b[1] - a[1]) * u; v.y = 0;
+    let yaw = Math.atan2(b[0] - a[0], b[1] - a[1]);
+    const left = seg - (s - T0.cum[k]), done = s - T0.cum[k];
+    if (left < 3) { const c = T0.P[(k + 2) % n]; yaw += root.D37E.vehicle.H.angDiff(yaw, Math.atan2(c[0] - b[0], c[1] - b[1])) * (1 - left / 3) * .5; }
+    else if (done < 3) { const z0 = T0.P[(k - 1 + n) % n]; yaw += root.D37E.vehicle.H.angDiff(yaw, Math.atan2(a[0] - z0[0], a[1] - z0[1])) * (1 - done / 3) * .5; }
+    v.yaw = yaw; v.spd = T0.t.speed; v.rotor = 0;
+    return v;
+  }
   function start(rt){
     const VE = root.D37E?.vehicle, Z = MZ(); if (!VE || !Z) return null;
     const S = rt.S, R = rt.R, T = rt.T, ph = rt.ph, X = rt.X, H = rt.H, E = rt.E, toast = rt.toast;
@@ -296,6 +315,33 @@
       if (VS.me) { const a = S.A.get(S.key); if (a) pose(a, VS.me.v, VS.me.seat); }
       for (const p of S.players.values()) { const zv = p.zx?.v, v = zv && VS.list.get(zv[0]); const a = v && S.A.get(p.key); if (a && !p.leaving) pose(a, v, zv[1]); }
     };
+    // ═══ Фоновое движение (ИИ-трафик): машины по кольцам улиц, место — по часам (Date.now; у всех одинаково, без сети).
+    //     Описание зоны: traffic: [{ id, def, rect: [x0, z0, x1, z1], speed, phase (доля кольца 0…1) }] — по часовой стрелке,
+    //     в правом ряду (2 м от середины улицы). Сквозь препятствия не тормозят (фон): тело есть — игрока и машины отодвигает ═══
+    const TR = [];
+    for (const [zid, d] of Object.entries(Z.DEFS)) for (const t of d.traffic || []) {
+      const def = VE.get(t.def); if (!def || !Array.isArray(t.rect)) continue;
+      const P = laneLoop(t.rect), cum = [0];
+      for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; cum.push(cum[i] + Math.hypot(b[0] - a[0], b[1] - a[1])); }
+      const v = VE.create(def, { id: 'tr_' + t.id, x: P[0][0], z: P[0][1] }); v.eng = true; v.traffic = true;
+      TR.push({ t, zone: zid, P, cum, L: cum[cum.length - 1], v, view: null });
+    }
+    VS.traffic = TR;
+    VS.trafficPose = trafficPose;
+    function trafficTick(dt){
+      if (!TR.length) return;
+      const sec = Date.now() / 1000, cam = R.camera.position, me = S.P.ch;
+      for (const T0 of TR) {
+        const v = T0.v, shown = !!rt.zones.get(T0.zone)?.shown;
+        trafficPose(T0, sec, v);
+        const dCam = Math.hypot(v.x - cam.x, v.z - cam.z), dMe = Math.hypot(v.x - me.x, v.z - me.z);
+        const live = dCam < (T0.view && !T0.view.still ? 55 : 45);   // рядом — колёса крутятся, дальше — склеенный вид
+        if (T0.view && (!shown || dCam > 210 || T0.view.still === live)) { T0.view.dispose(); T0.view = null; }
+        if (!T0.view && shown && dCam < 200) { T0.view = VE.view(R, v.def, { merge: (R2, g) => Z.merge(R2, g, { chunk: 0 }), glass: glass(), still: !live }); R.scene.add(T0.view.g); }
+        T0.view?.update(v, dt);
+        if (shown && dMe < 120) { if (!v.body) VE.addBody(v, ph); else ph.update(v.body, VE.bodyOf(v)); } else if (v.body) VE.removeBody(v, ph);
+      }
+    }
     // ── кадр: вид машин рядом (строится у камеры, вдали — убирается), колёса и винты, подсказки, звук мотора ──
     const VIEW_IN = 150, VIEW_OUT = 190;
     VS.frame = dt => {
@@ -312,13 +358,14 @@
         }
         if (v.item) { v.item.x = v.x; v.item.y = v.y + 1; v.item.z = v.z; }
       }
+      trafficTick(dt);
       sounds();
       hud();
     };
     // звук мотора: до 3 ближних машин с мотором (своя — громче), высота тона — по скорости/оборотам
     function sounds(){
       const A = S.AU; if (!A?.loop) return;
-      const cam = R.camera.position, L = [...VS.list.values()].filter(v => v.eng || v.rotor > .05).map(v => [v, Math.hypot(v.x - cam.x, v.y - cam.y, v.z - cam.z)]).filter(([, d]) => d < 60).sort((a, b) => a[1] - b[1]).slice(0, 3);
+      const cam = R.camera.position, L = [...VS.list.values(), ...TR.filter(T0 => T0.view).map(T0 => T0.v)].filter(v => v.eng || v.rotor > .05).map(v => [v, Math.hypot(v.x - cam.x, v.y - cam.y, v.z - cam.z)]).filter(([, d]) => d < 60).sort((a, b) => a[1] - b[1]).slice(0, 3);
       const want = new Set(L.map(([v]) => v.id));
       for (const [id, h] of VS.loops) if (!want.has(id)) { h.stop(); VS.loops.delete(id); }
       for (const [v] of L) {
@@ -346,6 +393,7 @@
     VS.dispose = () => {
       if (VS.me) exit({ force: true, noPlace: true });
       for (const v of VS.list.values()) { v.view?.dispose(); VE.removeBody(v, ph); if (v.item) X.remove(v.item); }
+      for (const T0 of TR) { T0.view?.dispose(); T0.view = null; VE.removeBody(T0.v, ph); }
       for (const h of VS.loops.values()) h.stop();
       VS.loops.clear(); VS.list.clear(); hudEl.remove();
     };
@@ -382,5 +430,5 @@
     VS._ = { enter, exit, seatsOf, home, blockedAt, env };
     return VS;
   }
-  root.MirVeh = { start, spots, AREA_MSG };
+  root.MirVeh = { start, spots, AREA_MSG, laneLoop, trafficPose };
 })();

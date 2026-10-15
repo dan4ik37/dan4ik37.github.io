@@ -214,6 +214,12 @@
   ];
   MZ.def('metro', {
     roles: ROLES_M, buildings: M_BLD, streets: M_STREETS, places: M_PLACES, residents: 24,   // жители по расписанию (MirZones.residents)
+    // фоновое движение по кварталам (mir-veh.js): по часовой стрелке, правый ряд; место — по часам, у всех одинаково
+    traffic: [
+      { id: 'a1', def: 'taxi', rect: [150, 130, 215, 205], speed: 8, phase: 0 }, { id: 'a2', def: 'sedan', rect: [150, 130, 215, 205], speed: 8, phase: .5 },
+      { id: 'b1', def: 'sedan_red', rect: [215, 130, 280, 205], speed: 9, phase: .2 }, { id: 'b2', def: 'police_car', rect: [215, 130, 280, 205], speed: 9, phase: .7 },
+      { id: 'c1', def: 'sedan', rect: [150, 205, 215, 274], speed: 8, phase: .35 },
+    ],
     // транспорт города: такси у стоянки, машины в паркинге, катера на канале, вертолёт на площадке крыши «Сити-1» (y — высота крыши)
     vehicles: [
       { id: 'm_heli1', def: 'heli_city', x: 298.4, z: 160, yaw: PI / 2, y: 109.3 },

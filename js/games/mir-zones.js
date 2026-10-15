@@ -1273,6 +1273,7 @@
     }
     // ── Жители зон — по расстоянию (как PopulationDirector в Backrooms: рядом — появляются, далеко — уходят), не больше NPC_CAP ──
     const NPC_NEAR = 62, NPC_FAR = 82, NPC_CAP = R.q === 'low' || E?.isMobile?.() ? 8 : 16;
+    const RES_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 7;   // из них — жителей по расписанию (человечек — 7–18 вызовов отрисовки)
     const hourNow = () => S.fixedTime ?? (E?.dayClock ? E.dayClock(Date.now(), 40, .2) : 14);
     rt.hourNow = hourNow;
     function npcTick(){
@@ -1292,10 +1293,10 @@
         L.push([d, o, !home && !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR)]);
       }
       L.sort((a, b) => a[0] - b[0]);
-      let n = 0;
+      let n = 0, nr = 0;
       for (const [, o, want] of L) {
-        const on = want && n < NPC_CAP;
-        if (on) n++;
+        const res = !!o.mz?.sched, on = want && n < NPC_CAP && (!res || nr < RES_CAP);
+        if (on) { n++; if (res) nr++; }
         if (on && !o._on) { S.NPC.add(o); o._on = true; }
         else if (!on && o._on) { S.NPC.remove(o); o._on = false; }
       }

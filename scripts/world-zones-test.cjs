@@ -488,6 +488,30 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   // снимок машины мира туда-обратно и проверка скорости
   const v = VE.create('jeep', { id: 'w_jeep1', x: -80, z: 300 }), a = VE.unpack(VE.pack(v));
   ok(a && VE.snapOk(v.def, a, { ...a, x: a.x + 3 }, .2) === null && VE.snapOk(v.def, a, { ...a, x: a.x + 300 }, .2) === 'speed', 'снимок джипа и проверка скорости');
+  // фоновое движение: кольца в правом ряду по улицам, место — по часам (одинаково у всех)
+  const MV = globalThis.MirVeh, TRF = Object.entries(MZ.DEFS).flatMap(([zid, d]) => (d.traffic || []).map(t => ({ ...t, zone: zid })));
+  ok(TRF.length >= 4, 'фоновых машин в городе — не меньше 4', TRF.length);
+  const onStreet = (zid, x, z) => (MZ.DEFS[zid].streets || []).some(r => r.pts.some((q, i) => i && MZ.segDist(x, z, r.pts[i - 1][0], r.pts[i - 1][1], q[0], q[1]) < 3.2));
+  const lanes = [];
+  for (const t of TRF) {
+    ok(!!VE.get(t.def), `трафик ${t.id}: есть машина ${t.def}`);
+    const P = MV.laneLoop(t.rect), cum = [0];
+    for (let i = 0; i < P.length; i++) { const p0 = P[i], p1 = P[(i + 1) % P.length]; cum.push(cum[i] + Math.hypot(p1[0] - p0[0], p1[1] - p0[1])); }
+    const T0 = { t, P, cum, L: cum[cum.length - 1] }, vv = {};
+    let okStreet = true, okZone = true;
+    for (let sec = 0; sec < T0.L / t.speed; sec += .5) { MV.trafficPose(T0, sec, vv); if (!onStreet(t.zone, vv.x, vv.z)) okStreet = false; if (!inRect(ZONES[t.zone], vv.x, vv.z, -2)) okZone = false; }
+    ok(okStreet && okZone, `трафик ${t.id}: весь круг — по улицам своей зоны`);
+    const A = MV.trafficPose(T0, 1234.5, {}), B = MV.trafficPose(T0, 1234.5, {});
+    ok(A.x === B.x && A.z === B.z && A.yaw === B.yaw, `трафик ${t.id}: место по часам — одно и то же`);
+    const C2 = MV.trafficPose(T0, 1235.5, {});
+    ok(Math.abs(Math.hypot(C2.x - A.x, C2.z - A.z) - t.speed) < .6 || Math.hypot(C2.x - A.x, C2.z - A.z) < t.speed, `трафик ${t.id}: за секунду — не больше скорости`);
+    for (let i = 0; i < P.length; i++) { const p0 = P[i], p1 = P[(i + 1) % P.length]; lanes.push({ id: t.id, rect: t.rect.join(), x0: Math.min(p0[0], p1[0]), x1: Math.max(p0[0], p1[0]), z0: Math.min(p0[1], p1[1]), z1: Math.max(p0[1], p1[1]), dx: Math.sign(p1[0] - p0[0]), dz: Math.sign(p1[1] - p0[1]) }); }
+  }
+  // разные кольца не едут по одной полосе (встречные — в разных рядах)
+  let clash = null;
+  for (const a2 of lanes) for (const b2 of lanes) if (a2.rect !== b2.rect && a2.x0 === a2.x1 && b2.x0 === b2.x1 && Math.abs(a2.x0 - b2.x0) < .5 && Math.min(a2.z1, b2.z1) - Math.max(a2.z0, b2.z0) > 4) clash = [a2.id, b2.id];
+  for (const a2 of lanes) for (const b2 of lanes) if (a2.rect !== b2.rect && a2.z0 === a2.z1 && b2.z0 === b2.z1 && Math.abs(a2.z0 - b2.z0) < .5 && Math.min(a2.x1, b2.x1) - Math.max(a2.x0, b2.x0) > 4) clash = [a2.id, b2.id];
+  ok(!clash, 'кольца разных кварталов не делят одну полосу', clash);
 }
 
 // ═══ 15. Город-симулятор: жители по расписанию (дом → работа → магазин → дом по часам мира) ═══
