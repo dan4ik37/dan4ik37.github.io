@@ -102,3 +102,9 @@
 .mz-cross{position:absolute;left:50%;top:46%;width:22px;height:22px;margin:-11px 0 0 -11px;border:2px solid rgba(255,255,255,.85);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
 .mz-cross.hit{border-color:#facc15}
 @media (max-width:640px){.mz-score{top:auto;bottom:160px;right:8px;min-width:120px;font-size:.66rem}.mz-feed{top:auto;bottom:250px}.mz-hp{bottom:150px}.mz-wpn{bottom:168px}}
+/* лифт 🛗 (небоскрёбы, ТЦ, отель, телебашня, паркинг) */
+.mz-lift{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:6px}
+.mz-lift button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:inherit;font:700 13px Montserrat,sans-serif;cursor:pointer;text-align:left;min-height:44px}
+.mz-lift button:hover{background:rgba(255,255,255,.12)}
+.mz-lift button.on{border-color:#38bdf8;background:rgba(56,189,248,.16);cursor:default}
+.mz-lift small{font-weight:600;opacity:.7}

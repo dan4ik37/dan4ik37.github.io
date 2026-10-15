@@ -69,12 +69,29 @@
 
   // ═══ «Солнечный городок» (детский, 0+): x 110…250, z −80…40 ═══
   const KZ = MZ.ZONES.kids;
-  const K_STREETS = [{ w: 8, pts: [[110, -24], [250, -24]] }, { w: 8, pts: [[180, -80], [180, 40]] }];
-  const K_FOOT = [
-    [132, -56, 28, 18, '#fbbf24', 4.2], [204, -56, 26, 18, '#f1f5f9', 4], [236, -56, 20, 18, '#dc2626', 4.6], [128, -2, 18, 14, '#fdba74', 3.8],
-    [148, -6, 9, 7, '#f9a8d4', 3.2], [165, -2, 12, 12, '#86efac', 3.6], [196, -4, 11, 10, '#fde68a', 3.4], [218, -4, 11, 10, '#a5f3fc', 3.4],
-    [240, -4, 11, 10, '#f5d0fe', 3.4], [241, 25, 11, 10, '#bbf7d0', 3.4], [204, 24, 20, 16, '#d6b98c', 0], [161, -54, 22, 34, '#e9d5a1', 0], [142, 25, 56, 26, '#6ec466', 0],
+  const K_STREETS = [{ w: 8, pts: [[110, -24], [290, -24]] }, { w: 8, pts: [[180, -80], [180, 40]] }];
+  // Таблица зданий (MirZones: стабильные id, тип, помещения). Детский город — невысокий и цветной; на востоке — ратуша и участки
+  const K_BLD = [
+    { id: 'k_play', type: 'park', name: 'Детская площадка', x: 161, z: -54, w: 22, d: 34, h: 0, wall: '#e9d5a1' },
+    { id: 'k_park', type: 'park', name: 'Парк городка', x: 142, z: 25, w: 56, d: 26, h: 0 },
+    { id: 'k_site', type: 'lot', sub: 'site', name: 'Стройка', x: 204, z: 24, w: 20, d: 16, h: 0 },
+    { id: 'k_school', type: 'public', sub: 'school', name: 'Школа', x: 132, z: -56, w: 28, d: 18, h: 4.2, wall: '#fde68a' },
+    { id: 'k_hosp', type: 'public', sub: 'hospital', name: 'Больница и ветклиника', x: 204, z: -56, w: 26, d: 18, h: 4, wall: '#f8fafc', lots: [{ kind: 'clinic', name: '🐾 Ветклиника' }] },
+    { id: 'k_fire', type: 'public', sub: 'fire', name: 'Пожарная часть', x: 236, z: -56, w: 20, d: 18, h: 4.6, wall: '#fca5a5' },
+    { id: 'k_bake', type: 'cafe', sub: 'bakery', name: 'Пекарня «Булочка»', x: 128, z: -2, w: 18, d: 14, h: 3.8, wall: '#fed7aa' },
+    { id: 'k_ice', type: 'cafe', sub: 'icecream', name: 'Мороженое', x: 148, z: -6, w: 9, d: 7, h: 3.2, wall: '#fbcfe8' },
+    { id: 'k_pets', type: 'shop', sub: 'pets', name: 'Зоомагазин', x: 165, z: -2, w: 12, d: 12, h: 3.6, wall: '#bbf7d0' },
+    { id: 'k_h1', type: 'house', name: 'Жёлтый домик', x: 196, z: -4, w: 11, d: 10, h: 3.4, wall: '#fde68a' },
+    { id: 'k_h2', type: 'house', name: 'Голубой домик', x: 218, z: -4, w: 11, d: 10, h: 3.4, wall: '#a5f3fc' },
+    { id: 'k_h3', type: 'house', name: 'Сиреневый домик', x: 240, z: -4, w: 11, d: 10, h: 3.4, wall: '#f5d0fe' },
+    { id: 'k_h4', type: 'house', name: 'Зелёный домик', x: 241, z: 25, w: 11, d: 10, h: 3.4, wall: '#bbf7d0' },
+    // восток: ратуша (кабинет будущего мэра), «Радужный дом», свободные участки под рост
+    { id: 'k_hall', type: 'public', sub: 'hall', name: 'Ратуша Солнечного городка', x: 272, z: -54, w: 28, d: 20, h: 5.2, wall: '#fef3c7' },
+    { id: 'k_flats', type: 'apartment', name: 'Радужный дом', x: 264, z: 4, w: 16, d: 12.8, h: 9.6, wall: '#fff1f7', style: 'kids', tint: '#ffe4f1' },
+    { id: 'k_lot1', type: 'lot', name: 'Свободный участок', x: 282.5, z: 4, w: 13, d: 12, h: 0 },
+    { id: 'k_lot2', type: 'lot', name: 'Свободный участок у парка', x: 272, z: 28, w: 32, d: 16, h: 0 },
   ];
+  const KB = id => K_BLD.find(b => b.id === id);
   const K_PLACES = [
     { id: 'k_school', icon: '🏫', name: 'Школа', x: 132, z: -42, lx: 132, lz: -56, sub: 1 },
     { id: 'k_play', icon: '🛝', name: 'Детская площадка', x: 161, z: -34, lx: 161, lz: -54, sub: 1 },
@@ -84,6 +101,7 @@
     { id: 'k_pets', icon: '🐶', name: 'Зоомагазин', x: 165, z: -13, lx: 165, lz: -2, sub: 1 },
     { id: 'k_park', icon: '🌳', name: 'Парк городка', x: 142, z: 14, lx: 142, lz: 25, sub: 1 },
     { id: 'k_build', icon: '🏗️', name: 'Стройка', x: 192, z: 14, lx: 204, lz: 24, sub: 1 },
+    { id: 'k_halltp', icon: '🏛️', name: 'Ратуша', x: 272, z: -40, lx: 272, lz: -54, sub: 1 },
   ];
   // точки заданий
   const K_FIRES = [[126, -38], [151, -13], [176, 9], [199, -13], [222, -13], [236, 13], [170, -38], [190, 35], [118, 6], [214, 36]];
@@ -98,8 +116,8 @@
     ['Кто строит плотины?', ['Бобры', 'Зайцы', 'Совы'], 0], ['Сколько цветов у радуги?', ['7', '5', '9'], 0], ['Что нужно растению?', ['Вода и свет', 'Только темнота', 'Только песок'], 0],
   ];
   MZ.def('kids', {
-    roles: ROLES_K, footprints: K_FOOT, streets: K_STREETS, places: K_PLACES,
-    ground: [[180, -24, 140, 8, '#5b6270'], [180, -20, 8, 120, '#5b6270'], [117, -24, 14, 28, '#e7dcc2']],
+    roles: ROLES_K, buildings: K_BLD, streets: K_STREETS, places: K_PLACES,
+    ground: [[200, -24, 180, 8, '#5b6270'], [180, -20, 8, 120, '#5b6270'], [117, -24, 14, 28, '#e7dcc2']],
     actions: rt => {
       const W = wallet('kids'), L = [
         { id: 'wave', icon: '👋', name: 'Помахать' }, { id: 'dance', icon: '💃', name: 'Танцевать' }, { id: 'clap', icon: '👏', name: 'Хлопать' },
@@ -115,14 +133,62 @@
     start: (rt, K) => cityMod(rt, K, 'kids'),
   });
 
-  // ═══ «Большой город» (для взрослых, ADULT_AGE+): x 90…270, z 100…260 ═══
+  // ═══ «Большой город» (для взрослых, ADULT_AGE+): x 90…340, z 100…350 ═══
+  // Улицы: с запада на восток z 130, 205, 274; с севера на юг x 150, 215, 280 (на x 280 — эстакада над каналом и улицей 274).
+  // Канал z 252…264 (MZ.CANAL) — мосты на проспектах 150 и 215, пешеходные мостики. Старый центр (полиция, суд, мэрия, банк,
+  // больница, автосалон, такси, магазины, бизнес-центр) — на прежних местах; новые кварталы: «Сити» (небоскрёбы), ТЦ «Галерея»,
+  // телебашня, «Гранд Отель», паркинг, ЖК «Солнечный», «Денчик-Тауэр», пожарная часть, свободные участки под застройку.
   const MC = MZ.ZONES.metro;
-  const M_STREETS = [{ w: 8, pts: [[90, 130], [270, 130]] }, { w: 8, pts: [[90, 205], [270, 205]] }, { w: 8, pts: [[150, 100], [150, 260]] }, { w: 8, pts: [[215, 100], [215, 260]] }];
-  const M_FOOT = [
-    [116, 152, 26, 18, '#1e3a8a', 5], [116, 184, 24, 16, '#e5e7eb', 5.5], [182, 175, 28, 22, '#fef3c7', 7], [246, 152, 24, 18, '#d6d3d1', 6], [246, 184, 22, 14, '#f8fafc', 5],
-    [182, 112, 28, 14, '#93c5fd', 5], [246, 112, 20, 14, '#facc15', 4.5], [115, 113, 16, 9, '#ef4444', 4.6], [105, 234, 22, 18, '#86efac', 5], [131, 234, 16, 18, '#fca5a5', 4.6],
-    [166, 230, 12, 10, '#a78bfa', 4], [182, 230, 12, 10, '#f9a8d4', 4], [198, 230, 12, 10, '#67e8f9', 4], [235, 236, 14, 14, '#fde68a', 8], [258, 236, 14, 14, '#c4b5fd', 9],
+  const M_STREETS = [
+    { w: 8, pts: [[90, 130], [340, 130]] }, { w: 8, pts: [[90, 205], [340, 205]] }, { w: 8, pts: [[90, 274], [340, 274]] },
+    { w: 8, pts: [[150, 100], [150, 350]] }, { w: 8, pts: [[215, 100], [215, 350]] }, { w: 8, pts: [[280, 100], [280, 350]] },
   ];
+  // Таблица зданий (MirZones: стабильные id, тип, помещения). Высоты небоскрёбов кратны этажу 3,2; style — фасад
+  const M_BLD = [
+    // площади и парки (земля — рисуются первыми)
+    { id: 'm_plaza', type: 'park', name: 'Площадь у мэрии', x: 182, z: 150, w: 40, d: 26, h: 0, wall: '#d6d3d1' },
+    { id: 'm_cityplaza', type: 'park', name: 'Площадь «Сити»', x: 298, z: 141, w: 22, d: 12, h: 0, wall: '#d6d3d1' },
+    { id: 'm_citygarden', type: 'park', name: 'Сквер «Сити»', x: 298, z: 186, w: 22, d: 26, h: 0 },
+    { id: 'm_tvpark', type: 'park', name: 'Парк у телебашни', x: 182, z: 306, w: 56, d: 48, h: 0 },
+    // старый центр
+    { id: 'm_police', type: 'public', sub: 'police', name: 'Полиция и тюрьма', x: 116, z: 152, w: 26, d: 18, h: 5, wall: '#cbd5e1' },
+    { id: 'm_court', type: 'public', sub: 'court', name: 'Суд', x: 116, z: 184, w: 24, d: 16, h: 5.5, wall: '#f5f5f4' },
+    { id: 'm_hall', type: 'public', sub: 'hall', name: 'Мэрия', x: 182, z: 175, w: 28, d: 22, h: 7, wall: '#fef3c7' },
+    { id: 'm_bank', type: 'office', sub: 'bank', name: 'Банк', x: 246, z: 152, w: 24, d: 18, h: 6, wall: '#e7e5e4', lots: [{ kind: 'bank', name: 'Банк' }] },
+    { id: 'm_hosp', type: 'public', sub: 'hospital', name: 'Больница', x: 246, z: 184, w: 22, d: 14, h: 5, wall: '#f8fafc' },
+    { id: 'm_cars', type: 'shop', sub: 'cars', name: 'Автосалон', x: 182, z: 112, w: 28, d: 14, h: 5, wall: '#e0f2fe' },
+    { id: 'm_taxi', type: 'service', sub: 'taxi', name: 'Такси', x: 246, z: 112, w: 20, d: 14, h: 4.5, wall: '#fef9c3' },
+    { id: 'm_gas', type: 'service', sub: 'gas', name: 'Заправка', x: 115, z: 113, w: 16, d: 9, h: 4.8, wall: '#ef4444' },
+    { id: 'm_shop', type: 'shop', sub: 'market', name: 'Супермаркет', x: 105, z: 234, w: 22, d: 18, h: 5, wall: '#dcfce7' },
+    { id: 'm_rest', type: 'cafe', sub: 'restaurant', name: 'Ресторан «Вкусно»', x: 131, z: 234, w: 16, d: 18, h: 4.6, wall: '#fee2e2' },
+    { id: 'm_coffee', type: 'cafe', name: 'Кофейня', x: 166, z: 230, w: 12, d: 10, h: 4, wall: '#f8fafc' },
+    { id: 'm_flowers', type: 'shop', name: 'Цветы', x: 182, z: 230, w: 12, d: 10, h: 4, wall: '#f8fafc' },
+    { id: 'm_wash', type: 'service', sub: 'carwash', name: 'Автомойка', x: 198, z: 230, w: 12, d: 10, h: 4, wall: '#f8fafc' },
+    { id: 'm_h1', type: 'apartment', name: 'Дом на Садовой', x: 235, z: 236, w: 14, d: 14, h: 28.8, wall: '#fde68a', style: 'flat', tint: '#fff1c2' },
+    { id: 'm_h2', type: 'apartment', name: 'Дом у канала', x: 258, z: 236, w: 14, d: 14, h: 38.4, wall: '#c4b5fd', style: 'brick' },
+    // новые кварталы
+    { id: 'm_fire', type: 'public', sub: 'fire', name: 'Пожарная часть', x: 300, z: 113, w: 26, d: 16, h: 6.4, wall: '#fca5a5' },
+    { id: 'm_lot1', type: 'lot', name: 'Свободный участок у пожарной части', x: 327, z: 113, w: 20, d: 14, h: 0 },
+    { id: 'm_city1', type: 'office', name: 'Сити-1', x: 298.4, z: 160, w: 22.4, d: 22.4, h: 92.8, style: 'glass', enter: true },
+    { id: 'm_city2', type: 'office', name: 'Сити-2', x: 326.4, z: 150, w: 19.2, d: 22.4, h: 70.4, style: 'dark' },
+    { id: 'm_city3', type: 'office', name: 'Бизнес-центр «37»', x: 326.4, z: 186, w: 19.2, d: 22.4, h: 48, style: 'office' },
+    { id: 'm_pharm', type: 'shop', sub: 'pharmacy', name: 'Аптека', x: 230, z: 217, w: 14, d: 10, h: 9.6, wall: '#f0fdf4', style: 'flat', base: 'shop', flats: true },
+    { id: 'm_books', type: 'shop', sub: 'books', name: 'Книжный', x: 248, z: 217, w: 14, d: 10, h: 9.6, wall: '#fefce8', style: 'brick', base: 'shop', flats: true },
+    { id: 'm_gym', type: 'service', sub: 'gym', name: 'Спортзал', x: 266, z: 217, w: 14, d: 10, h: 9.6, wall: '#eff6ff', style: 'office', base: 'shop' },
+    { id: 'm_mall', type: 'shop', sub: 'mall', name: 'ТЦ «Галерея»', x: 313, z: 228, w: 48, d: 32, h: 10.4, wall: '#e2e8f0', enter: true,
+      lots: [{ kind: 'shop', name: '👕 Одежда' }, { kind: 'shop', name: '👟 Обувь' }, { kind: 'shop', name: '📱 Электроника' }, { kind: 'shop', name: '🧸 Игрушки' },
+        { kind: 'cafe', name: '🍔 Фуд-корт' }, { kind: 'cinema', name: '🎬 Кинотеатр', floor: 1 }, { kind: 'arcade', name: '🕹️ Автоматы', floor: 1 }, { kind: 'cafe', name: '☕ Кафе на 2-м этаже', floor: 1 }] },
+    { id: 'm_flat1', type: 'apartment', name: 'ЖК «Солнечный», дом 1', x: 106, z: 298, w: 19.2, d: 16, h: 35.2, style: 'flat', base: 'shop', shops: 2 },
+    { id: 'm_flat2', type: 'apartment', name: 'ЖК «Солнечный», дом 2', x: 134, z: 298, w: 16, d: 16, h: 28.8, style: 'brick' },
+    { id: 'm_flat3', type: 'apartment', name: 'ЖК «Солнечный», дом 3', x: 120, z: 332, w: 35.2, d: 12.8, h: 22.4, style: 'flat', tint: '#f3e6ff' },
+    { id: 'm_tv', type: 'public', sub: 'tv', name: 'Телебашня', x: 182, z: 316, w: 16, d: 16, h: 6.4, wall: '#e5e7eb', enter: true },
+    { id: 'm_hotel', type: 'hotel', name: 'Гранд Отель', x: 247, z: 298, w: 28.8, d: 19.2, h: 64, style: 'brick', tint: '#ffe7da', enter: true },
+    { id: 'm_park', type: 'parking', name: 'Паркинг', x: 247, z: 332, w: 48, d: 26, h: 7.2, enter: true },
+    { id: 'm_tower', type: 'office', name: 'Денчик-Тауэр', x: 312, z: 300, w: 25.6, d: 22.4, h: 118.4, style: 'dark' },
+    { id: 'm_office5', type: 'office', name: 'Деловой дом «Канал»', x: 316, z: 334, w: 32, d: 16, h: 41.6, style: 'office' },
+    { id: 'm_lot2', type: 'lot', name: 'Свободный участок у парка', x: 199, z: 340, w: 16, d: 14, h: 0 },
+  ];
+  const MB = id => M_BLD.find(b => b.id === id);
   const M_PLACES = [
     { id: 'm_hall', icon: '🏛️', name: 'Мэрия — работа', x: 182, z: 140, lx: 182, lz: 175, sub: 1 },
     { id: 'm_police', icon: '👮', name: 'Полиция и тюрьма', x: 116, z: 138, lx: 116, lz: 152, sub: 1 },
@@ -133,10 +199,20 @@
     { id: 'm_taxi', icon: '🚕', name: 'Такси', x: 246, z: 123, lx: 246, lz: 112, sub: 1 },
     { id: 'm_shop', icon: '🛒', name: 'Супермаркет и ресторан', x: 118, z: 212, lx: 118, lz: 234, sub: 1 },
     { id: 'm_biz', icon: '💼', name: 'Бизнес-центр', x: 182, z: 212, lx: 182, lz: 230, sub: 1 },
+    { id: 'm_citytp', icon: '🏙️', name: 'Небоскрёбы «Сити»', x: 298, z: 142, lx: 298, lz: 160, sub: 1 },
+    { id: 'm_malltp', icon: '🛍️', name: 'ТЦ «Галерея»', x: 313, z: 210.4, lx: 313, lz: 228, sub: 1 },
+    { id: 'm_canal', icon: '🌉', name: 'Набережная канала', x: 182, z: 249, lx: 182, lz: 258, sub: 1 },
+    { id: 'm_tvtp', icon: '📡', name: 'Телебашня — вид сверху', x: 182, z: 300, lx: 182, lz: 316, sub: 1 },
+    { id: 'm_hoteltp', icon: '🏨', name: 'Гранд Отель', x: 247, z: 285.5, lx: 247, lz: 298, sub: 1 },
+    { id: 'm_parktp', icon: '🅿️', name: 'Паркинг', x: 219, z: 332, lx: 247, lz: 332, sub: 1 },
+    { id: 'm_firetp', icon: '🚒', name: 'Пожарная часть', x: 300, z: 125, lx: 300, lz: 113, sub: 1 },
+    { id: 'm_flatstp', icon: '🏢', name: 'ЖК «Солнечный»', x: 120, z: 316, lx: 120, lz: 298, sub: 1 },
   ];
   MZ.def('metro', {
-    roles: ROLES_M, footprints: M_FOOT, streets: M_STREETS, places: M_PLACES,
-    ground: [[180, 130, 180, 8, '#5b6270'], [180, 205, 180, 8, '#5b6270'], [150, 180, 8, 160, '#5b6270'], [215, 180, 8, 160, '#5b6270'], [182, 150, 40, 26, '#d6d3d1']],
+    roles: ROLES_M, buildings: M_BLD, streets: M_STREETS, places: M_PLACES,
+    // силуэт издалека выше зданий: телебашня, ярусы «Денчик-Тауэр» — [x, z, w, d, цвет, верх, низ, фасад]
+    skyline: [[182, 316, 6, 6, '#e5e7eb', 96, 6.4], [182, 316, 18, 18, '#cbd5e1', 104, 96], [182, 316, 1.4, 1.4, '#e5e7eb', 140, 104], [312, 300, 19.2, 16, '#0f172a', 140.8, 118.4, 'dark'], [298.4, 160, 16, 16, '#1e3a8a', 108.8, 92.8, 'glass']],
+    ground: [[215, 130, 250, 8, '#5b6270'], [215, 205, 250, 8, '#5b6270'], [215, 274, 250, 8, '#5b6270'], [150, 225, 8, 250, '#5b6270'], [215, 225, 8, 250, '#5b6270'], [280, 156, 8, 112, '#5b6270']],
     actions: rt => {
       const W = wallet('metro'), L = [
         { id: 'wave', icon: '👋', name: 'Помахать' }, { id: 'dance', icon: '💃', name: 'Танцевать' }, { id: 'clap', icon: '👏', name: 'Аплодировать' },
@@ -160,15 +236,15 @@
     const spot = id => K.spots[id];
     // ── улицы, перекрёсток, площадь у входа ──
     K.chunk('streets');
-    K.road(110, -24, 176, -24, 8); K.road(184, -24, 250, -24, 8);
+    K.road(110, -24, 176, -24, 8); K.road(184, -24, 290, -24, 8);
     K.road(180, -80, 180, -28, 8); K.road(180, -20, 180, 40, 8);
     K.part({ s: 'box', x: 180, y: .025, z: -24, w: 8, h: .02, d: 8, m: M.asphalt });
     for (const [x, z, yaw] of [[171, -24, PI / 2], [189, -24, PI / 2], [180, -33, 0], [180, -15, 0]]) K.zebra(x, z, 8, yaw);
     K.part({ s: 'box', x: 117, y: .03, z: -24, w: 14, h: .03, d: 28, m: M.plaza });   // площадь у входа
     for (const [x, z] of [[124, -31], [124, -17]]) { K.cyl(x, 0, z, 1.1, .16, '#d6cfc0', { solid: true }); K.prefab('flowers', { x, z, n: 9, seed: x + z, c: '#f472b6' }); }
-    for (let x = 130; x < 250; x += 16) for (const s of [-1, 1]) if (Math.abs(x - 180) > 9) K.lamp(x, -24 + s * 5.6);
+    for (let x = 130; x < 290; x += 16) for (const s of [-1, 1]) if (Math.abs(x - 180) > 9) K.lamp(x, -24 + s * 5.6);
     for (let z = -72; z < 38; z += 16) for (const s of [-1, 1]) if (Math.abs(z + 24) > 9) K.lamp(180 + s * 5.6, z);
-    for (let x = 136; x < 246; x += 22) for (const s of [-1, 1]) if (Math.abs(x - 180) > 10) K.tree(x + 6, -24 + s * 7.6, .75, (x / 22 | 0) % 4);
+    for (let x = 136; x < 286; x += 22) for (const s of [-1, 1]) if (Math.abs(x - 180) > 10) K.tree(x + 6, -24 + s * 7.6, .75, (x / 22 | 0) % 4);
     K.board(120, 2.2, -36.8, 3, 1.5, 0, '🧰 Работа в городке', { bg: '#166534' });
     K.box(120, 0, -37, .16, 1.5, .16, '#6b4426', { solid: true });
     K.board(113.5, 2.2, -36.8, 3, 1.5, 0, '👪 Семья: выбери роль', { bg: '#9d174d' });
@@ -180,7 +256,7 @@
     yield;
     // ── Школа ──
     K.chunk('school');
-    K.building({ id: 'k_school', x: 132, z: -56, w: 28, d: 18, h: 4.2, wall: '#fde68a', trim: '#b45309', roofC: '#c2410c', floor: '#d4a373',
+    K.building({ id: 'k_school', x: 132, z: -56, w: 28, d: 18, h: 4.2, wall: '#fde68a', trim: '#b45309', roofC: KB('k_school').roof, floor: '#d4a373',
       doors: [{ side: 's', at: 0, w: 3 }], windows: [{ side: 's', at: -9, w: 4 }, { side: 's', at: 9, w: 4 }, { side: 'e', at: 0, w: 4 }, { side: 'w', at: 0, w: 4 }, { side: 'n', at: -8, w: 3 }, { side: 'n', at: 8, w: 3 }],
       sign: '🏫 Школа', signBg: '#b45309' });
     K.box(132, .12, -64.4, 9, 2.4, .12, '#14532d');   // доска
@@ -224,7 +300,7 @@
     yield;
     // ── Больница и ветклиника ──
     K.chunk('hosp');
-    K.building({ id: 'k_hosp', x: 204, z: -56, w: 26, d: 18, h: 4, wall: '#f8fafc', trim: '#ef4444', roofC: '#94a3b8', floor: '#e2e8f0', floorType: 'tile', floorM: M.walk,
+    K.building({ id: 'k_hosp', x: 204, z: -56, w: 26, d: 18, h: 4, wall: '#f8fafc', trim: '#ef4444', roofC: KB('k_hosp').roof, floor: '#e2e8f0', floorType: 'tile', floorM: M.walk,
       doors: [{ side: 's', at: -6, w: 2.8 }, { side: 's', at: 7, w: 2.8 }], windows: [{ side: 's', at: -11, w: 2.4 }, { side: 's', at: 1, w: 2.4 }, { side: 'e', at: 0, w: 3 }, { side: 'w', at: 0, w: 3 }],
       sign: '🏥 Больница', signBg: '#dc2626' });
     K.label.sign('🐾 Ветклиника', 211, 3.4, -46.8, 5, .9, 0, { bg: '#16a34a', w: 512, h: 92 });
@@ -241,7 +317,7 @@
     yield;
     // ── Пожарная часть ──
     K.chunk('fire');
-    K.building({ id: 'k_fire', x: 236, z: -56, w: 20, d: 18, h: 4.6, wall: '#fca5a5', trim: '#991b1b', roofC: '#7f1d1d', floor: '#9ca3af', floorType: 'concrete', floorM: M.concrete,
+    K.building({ id: 'k_fire', x: 236, z: -56, w: 20, d: 18, h: 4.6, wall: '#fca5a5', trim: '#991b1b', roofC: KB('k_fire').roof, floor: '#9ca3af', floorType: 'concrete', floorM: M.concrete,
       doors: [{ side: 's', at: -3, w: 6, h: 3.6 }, { side: 's', at: 6, w: 2.4 }], windows: [{ side: 'e', at: 0, w: 3 }, { side: 'w', at: -3, w: 3 }], sign: '🚒 Пожарная часть', signBg: '#991b1b' });
     fireTruck(K, 233, -57, 0);
     K.box(243.6, .12, -50, .3, 2, 2, '#9ca3af', { solid: true }); K.part({ s: 'torus', x: 243.4, y: 1.3, z: -50, r: .5, t: .1, yaw: PI / 2, c: '#facc15' });
@@ -250,7 +326,7 @@
     yield;
     // ── Пекарня ──
     K.chunk('bake');
-    K.building({ id: 'k_bake', x: 128, z: -2, w: 18, d: 14, h: 3.8, wall: '#fed7aa', trim: '#9a3412', roofC: '#9a3412', floor: '#c8956a',
+    K.building({ id: 'k_bake', x: 128, z: -2, w: 18, d: 14, h: 3.8, wall: '#fed7aa', trim: '#9a3412', roofC: KB('k_bake').roof, floor: '#c8956a',
       doors: [{ side: 'n', at: 0, w: 2.6 }], windows: [{ side: 'n', at: -5.5, w: 3 }, { side: 'n', at: 5.5, w: 3 }, { side: 'e', at: 0, w: 2.4 }], sign: '🥐 Пекарня «Булочка»', signBg: '#9a3412' });
     K.counter(128, -4.4, 8, .9, '#9a3412', '#fde68a');
     for (let i = 0; i < 5; i++) K.part({ s: 'ball', x: 125 + i * 1.5, y: 1.25, z: -4.4, r: .18, c: '#d97706', seg: 8 });
@@ -263,7 +339,7 @@
     K.npc({ id: 'k_baker', name: '👨‍🍳 Пекарь Булкин', x: 128, z: -2.4, yaw: 180, seed: 'bulkin', say: ['Свежие булочки! 🥐 Всего ⭐1', 'Хочешь печь сам? Стань пекарем на щите «Работа»', 'Тесто любит, когда его месят с любовью'] });
     K.item({ x: 128, y: 1.2, z: -5.6, r: 1.2, prompt: () => '🥐 Купить булочку (⭐1)', act: () => K.rt.city?.kids?.buy('bun', 1) });
     // ── Киоск мороженого ──
-    K.building({ id: 'k_ice', x: 148, z: -6, w: 9, d: 7, h: 3.2, wall: '#fbcfe8', trim: '#db2777', roofC: '#f472b6', floor: '#fce7f3', interior: true,
+    K.building({ id: 'k_ice', x: 148, z: -6, w: 9, d: 7, h: 3.2, wall: '#fbcfe8', trim: '#db2777', roofC: KB('k_ice').roof, floor: '#fce7f3', interior: true,
       doors: [{ side: 'e', at: 1, w: 2 }], windows: [{ side: 'n', at: 0, w: 4, h: 1.2 }], sign: '🍦 Мороженое', signBg: '#db2777' });
     K.counter(148, -8.6, 4.6, .8, '#f9a8d4', '#ffffff');
     spot('k_icewin'); spot('k_icecounter');
@@ -272,7 +348,7 @@
     yield;
     // ── Зоомагазин ──
     K.chunk('pets');
-    K.building({ id: 'k_pets', x: 165, z: -2, w: 12, d: 12, h: 3.6, wall: '#bbf7d0', trim: '#15803d', roofC: '#166534', floor: '#d9f99d',
+    K.building({ id: 'k_pets', x: 165, z: -2, w: 12, d: 12, h: 3.6, wall: '#bbf7d0', trim: '#15803d', roofC: KB('k_pets').roof, floor: '#d9f99d',
       doors: [{ side: 'n', at: 0, w: 2.6 }], windows: [{ side: 'n', at: -3.6, w: 2 }, { side: 'n', at: 3.6, w: 2 }], sign: '🐶 Зоомагазин', signBg: '#15803d' });
     K.counter(165, -4.6, 4, .8, '#15803d', '#dcfce7');
     Object.values(PETS).forEach(([e], i) => { const x = 160.8 + i * 1.65, z = 3.2; K.box(x, .12, z, 1.3, 1.1, 1.3, '#cbd5e1', { solid: true }); K.label.sign(e, x, 1.6, z - .7, .9, .9, PI, { bg: '#ecfccb', w: 96, h: 96, border: false }); });
@@ -296,7 +372,7 @@
     const HOUSES = [['k_h1', 196, -4, 'n', '#fde68a'], ['k_h2', 218, -4, 'n', '#a5f3fc'], ['k_h3', 240, -4, 'n', '#f5d0fe'], ['k_h4', 241, 25, 'w', '#bbf7d0']];
     K.houses = [];
     for (const [id, x, z, side, wall] of HOUSES) {
-      K.building({ id, x, z, w: 11, d: 10, h: 3.4, wall, trim: '#7c2d12', roofC: '#b91c1c', floor: '#d6a77a',
+      K.building({ id, x, z, w: 11, d: 10, h: 3.4, wall, trim: '#7c2d12', roofC: KB(id).roof, floor: '#d6a77a',
         doors: [{ side, at: 0, w: 2.2 }], windows: [{ side, at: -3.4, w: 1.6 }, { side, at: 3.4, w: 1.6 }, { side: side === 'n' ? 's' : 'e', at: 0, w: 2 }] });
       const fx = side === 'n' ? 0 : -1, fz = side === 'n' ? -1 : 0;   // куда дверь
       K.bed(x + (side === 'n' ? 3 : 2.6), z + (side === 'n' ? 2.6 : -2.6), side === 'n' ? PI : PI / 2, pick(['#60a5fa', '#f472b6', '#4ade80', '#facc15']));
@@ -321,6 +397,28 @@
     spot('k_site');
     K.npc({ id: 'k_foreman', name: '👷 Прораб Иван', x: 199, z: 29, yaw: 120, seed: 'prorab', say: ['Каска — обязательно! ⛑️', 'Носи кирпичи на стройку — дом растёт!', 'Строителем можно стать на щите «Работа»'] });
     yield;
+    // ── Восток: ратуша (кабинет будущего мэра), «Радужный дом» (цветной фасад), свободные участки ──
+    K.chunk('east');
+    {
+      const B = KB('k_hall');
+      const hb = K.building({ id: 'k_hall', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, wall: B.wall, trim: '#b45309', roofC: B.roof, floor: '#f5e6c8', floorM: M.walk,
+        doors: [{ side: 's', at: 0, w: 3.2, h: 3.2 }], windows: [{ side: 's', at: -8, w: 3, h: 2 }, { side: 's', at: 8, w: 3, h: 2 }, { side: 'e', at: 0, w: 4 }, { side: 'w', at: 0, w: 4 }], sign: '🏛️ Ратуша', signBg: '#b45309' });
+      // часовая башня (цветная, видно с площади)
+      const rp = p => K.R.part(hb.roof, p);   // башня — в группе крыши (изнутри ратуши прячется вместе с крышей)
+      rp({ s: 'box', y: B.h + 3.24, z: -3, w: 5, h: 6, d: 5, c: '#fde68a' }); K.body({ x: B.x, z: B.z - 3, y: B.h + 3.24, hx: 2.5, hy: 3, hz: 2.5, tag: 'tower', data: { cam: false } });
+      rp({ s: 'cone', y: B.h + 7.74, z: -3, r: 3.9, h: 3, seg: 4, yaw: PI / 4, c: '#dc2626' });
+      for (const [s, yaw] of [[1, 0], [-1, PI]]) { rp({ s: 'cyl', y: B.h + 3.6, z: -3 + s * 2.52, r: 1.4, h: .1, rx: PI / 2, c: '#f8fafc', seg: 20 }); rp({ s: 'box', y: B.h + 3.9, z: -3 + s * 2.6, w: .12, h: .8, d: .04, c: '#111827' }); rp({ s: 'box', x: .25, y: B.h + 3.6, z: -3 + s * 2.6, w: .6, h: .1, d: .04, c: '#111827', yaw }); }
+      K.counter(B.x, B.z - 2, 7, 1, '#b45309', '#fde68a');
+      mayorOffice(K, B.x - 8, B.z - 5, 'kids');
+      for (const [x, c] of [[B.x - 11, '#facc15'], [B.x + 11, '#60a5fa']]) { K.cyl(x, 0, B.z + B.d / 2 + 2, .06, 4.5, '#d6d3d1'); K.part({ s: 'box', x: x + .55, y: 4, z: B.z + B.d / 2 + 2, w: 1.1, h: .7, d: .03, c }); }
+      K.npc({ id: 'k_mayor', name: '🎩 Мэр городка', x: B.x, z: B.z - 3.2, yaw: 0, seed: 'kidmayor', say: ['Добро пожаловать в ратушу! 🏛️', 'Скоро в городке пройдут выборы мэра 🗳️', 'На свободных участках что-нибудь построим вместе!'] });
+      const F = KB('k_flats');
+      K.tower({ id: 'k_flats', x: F.x, z: F.z, w: F.w, d: F.d, h: F.h, style: F.style, tint: F.tint, roof: F.roof, crown: 'pyramid' });
+      K.label.sign('🌈 Радужный дом', F.x, 2.4, F.z - F.d / 2 - .08, 5, .9, PI, { bg: '#db2777', w: 512, h: 92 });
+      lotSign(K, KB('k_lot1')); lotSign(K, KB('k_lot2'));
+      for (const [x, z] of [[256, -36], [288, -36], [254, 16], [289, 16]]) K.tree(x, z, .8, (x + z) % 4);
+    }
+    yield;
     K.flush();
     K.done = true;
   }
@@ -334,38 +432,49 @@
     K.body({ x, z, y: 1.3, hx: 1.3, hy: 1.3, hz: 3.4, yaw, tag: 'car' });
   }
   // ═══ ПОСТРОЙКА: Большой город ═══
+  // Небоскрёбы — фасадом (окна картинкой, ночью светятся), внутрь — холл, лифт 🛗 на этажи и на крышу; мебель этажей — лениво.
   function* buildMetro(K){
-    const { R } = K, M = K.M;
+    const { R } = K, M = K.M, T = K.T;
     K.spots = spotsOf(K.Z.id);
     const spot = id => K.spots[id];
+    const roofOf = id => MB(id).roof;
+    const XS = [150, 215, 280], ZS = [130, 205, 274], X0 = MC.x0, X1 = MC.x1, Z0 = MC.z0, Z1 = MC.z1, CN = MZ.CANAL;
+    const nearX = x => XS.some(c => Math.abs(x - c) < 9), nearZ = z => ZS.some(c => Math.abs(z - c) < 9);
+    // ── улицы: с запада на восток (под эстакадой улица 274 идёт насквозь), с севера на юг — с мостами через канал ──
     K.chunk('streets');
-    K.road(90, 130, 146, 130); K.road(154, 130, 211, 130); K.road(219, 130, 270, 130);
-    K.road(90, 205, 146, 205); K.road(154, 205, 211, 205); K.road(219, 205, 270, 205);
-    K.road(150, 100, 150, 126); K.road(150, 134, 150, 201); K.road(150, 209, 150, 260);
-    K.road(215, 100, 215, 126); K.road(215, 134, 215, 201); K.road(215, 209, 215, 260);
-    for (const [x, z] of [[150, 130], [215, 130], [150, 205], [215, 205]]) {
+    for (const zz of ZS) {
+      let a = X0;
+      for (const c of XS) { if (zz === 274 && c === 280) continue; K.road(a, zz, c - 4, zz); a = c + 4; }
+      K.road(a, zz, X1, zz);
+    }
+    for (const xx of XS) {
+      const segs = xx === 280 ? [[Z0, 126], [134, 201], [209, 212], [336, Z1]] : [[Z0, 126], [134, 201], [209, CN.z0 - 2], [CN.z1 + 2, 270], [278, Z1]];
+      for (const [a, b] of segs) if (b - a > .5) K.road(xx, a, xx, b);
+    }
+    for (const x of XS) for (const z of ZS) {
+      if (x === 280 && z === 274) continue;   // под эстакадой
       K.part({ s: 'box', x, y: .025, z, w: 8, h: .02, d: 8, m: M.asphalt });
-      for (const [dx, dz, yaw] of [[-9, 0, PI / 2], [9, 0, PI / 2], [0, -9, 0], [0, 9, 0]]) K.zebra(x + dx, z + dz, 8, yaw);
-      // светофоры (огни светятся)
+      for (const [dx, dz, yaw] of [[-9, 0, PI / 2], [9, 0, PI / 2], [0, -9, 0], [0, 9, 0]]) { if (x === 280 && z === 205 && dz > 0) continue; K.zebra(x + dx, z + dz, 8, yaw); }
       for (const [sx, sz] of [[-5.4, -5.4], [5.4, 5.4]]) { K.box(x + sx, 0, z + sz, .16, 3.2, .16, '#1f2937', { solid: true }); K.part({ s: 'box', x: x + sx, y: 3.4, z: z + sz, w: .4, h: 1, d: .3, c: '#111827' }); K.part({ s: 'ball', x: x + sx, y: 3.7, z: z + sz + .16, r: .1, c: '#ef4444', m: 'glow' }); K.part({ s: 'ball', x: x + sx, y: 3.1, z: z + sz + .16, r: .1, c: '#22c55e', m: 'glow' }); }
     }
-    for (let x = 100; x < 268; x += 18) for (const zz of [130, 205]) for (const s of [-1, 1]) if (Math.abs(x - 150) > 8 && Math.abs(x - 215) > 8) K.lamp(x, zz + s * 5.6);
-    for (let z = 108; z < 258; z += 18) for (const xx of [150, 215]) for (const s of [-1, 1]) if (Math.abs(z - 130) > 8 && Math.abs(z - 205) > 8) K.lamp(xx + s * 5.6, z);
-    for (let x = 108; x < 268; x += 24) for (const zz of [130, 205]) if (Math.abs(x - 150) > 10 && Math.abs(x - 215) > 10) K.tree(x + 5, zz + 7.8, .8, (x / 24 | 0) % 4);
+    for (let x = X0 + 10; x < X1 - 2; x += 18) for (const zz of ZS) for (const s of [-1, 1]) if (!nearX(x) && !(zz === 274 && Math.abs(x - 280) < 10)) K.lamp(x, zz + s * 5.6);
+    for (let z = Z0 + 8; z < Z1 - 2; z += 18) for (const xx of XS) for (const s of [-1, 1]) if (!nearZ(z) && !(z > CN.z0 - 6 && z < CN.z1 + 6) && !(xx === 280 && z > 208 && z < 338)) K.lamp(xx + s * 5.6, z);
+    for (let x = X0 + 18; x < X1 - 6; x += 24) for (const zz of [130, 205]) if (!nearX(x) && Math.abs(x - 298) > 14) K.tree(x + 5, zz + 7.8, .8, (x / 24 | 0) % 4);
     K.board(96, 2.2, 140.2, 3, 1.5, PI, '🏛️ Работа — в мэрии', { bg: '#1e3a8a' });
     K.box(96, 0, 140.4, .16, 1.5, .16, '#475569', { solid: true });
     K.item({ x: 96, y: 1.6, z: 139.2, r: 1.2, prompt: () => '🧰 Работа: выбрать профессию', act: () => K.rt.city?.metro?.jobBoard() });
     yield;
-    // ── Мэрия и площадь с фонтаном ──
+    // ── Мэрия (кабинет будущего мэра) и площадь с фонтаном ──
     K.chunk('hall');
-    K.building({ id: 'm_hall', x: 182, z: 175, w: 28, d: 22, h: 7, wall: '#fef3c7', trim: '#92400e', roofC: '#78350f', floor: '#e7d3a8', floorM: M.walk,
+    K.building({ id: 'm_hall', x: 182, z: 175, w: 28, d: 22, h: 7, wall: '#fef3c7', trim: '#92400e', roofC: roofOf('m_hall'), floor: '#e7d3a8', floorM: M.walk,
       doors: [{ side: 'n', at: 0, w: 3.4, h: 3.6 }], windows: [{ side: 'n', at: -9, w: 3, h: 2.6 }, { side: 'n', at: 9, w: 3, h: 2.6 }, { side: 'e', at: 0, w: 4, h: 2.6 }, { side: 'w', at: 0, w: 4, h: 2.6 }],
       sign: '🏛️ Мэрия', signBg: '#92400e' });
     for (const x of [172, 177, 187, 192]) K.cyl(x, 0, 163, .45, 6.6, '#f5f5f4', { solid: true });
     K.counter(182, 180, 8, 1, '#78350f', '#fde68a');
     K.board(182, 3, 185.8, 5, 2, PI, '📋 Вакансии города', { bg: '#1e3a8a' });
     K.item({ x: 182, y: 1.3, z: 178.5, r: 1.6, prompt: () => '🧰 Работа: выбрать профессию', act: () => K.rt.city?.metro?.jobBoard() });
-    K.npc({ id: 'm_mayor', name: '🎩 Мэр города', x: 182, z: 181.6, yaw: 180, seed: 'mayor1', say: ['Добро пожаловать в Большой город! 🏙️', 'Работа есть для всех — выбирай на стойке', 'Грабителей у нас ловят быстро 👮'] });
+    mayorOffice(K, 172, 181, 'metro');
+    K.npc({ id: 'm_mayor', name: '🎩 Мэр города', x: 182, z: 181.6, yaw: 180, seed: 'mayor1', say: ['Добро пожаловать в Большой город! 🏙️', 'Работа есть для всех — выбирай на стойке', 'Скоро — выборы мэра! 🗳️'] });
     K.part({ s: 'box', x: 182, y: .03, z: 150, w: 40, h: .03, d: 26, m: M.plaza });
     K.cyl(182, 0, 150, 3.4, .6, '#d6d3d1', { solid: true, seg: 24 }); K.part({ s: 'cyl', x: 182, y: .34, z: 150, r: 3.1, h: .5, c: '#38bdf8', seg: 24, m: K.R.water('#38bdf8', { key: 'mzmfount', fixedColor: true }) });
     K.part({ s: 'cyl', x: 182, y: 1.1, z: 150, r: .35, h: 1.6, c: '#e7e5e4' });
@@ -375,11 +484,10 @@
     yield;
     // ── Полиция и тюрьма ──
     K.chunk('police');
-    K.building({ id: 'm_police', x: 116, z: 152, w: 26, d: 18, h: 5, wall: '#cbd5e1', trim: '#1e3a8a', roofC: '#1e3a8a', floor: '#e2e8f0', floorType: 'tile', floorM: M.walk,
+    K.building({ id: 'm_police', x: 116, z: 152, w: 26, d: 18, h: 5, wall: '#cbd5e1', trim: '#1e3a8a', roofC: roofOf('m_police'), floor: '#e2e8f0', floorType: 'tile', floorM: M.walk,
       doors: [{ side: 'n', at: -4, w: 3 }], windows: [{ side: 'n', at: -10, w: 2.6 }, { side: 'n', at: 4, w: 2.6 }, { side: 'w', at: 0, w: 3 }], sign: '👮 Полиция', signBg: '#1e3a8a' });
     K.counter(110, 148, 6, 1, '#1e3a8a', '#e2e8f0');
     for (const x of [118, 123]) { K.table(x, 147, 1.6, .9, '#475569'); K.chair(x, 148, PI); }
-    // камеры: решётки (тела), внутри — нары
     K.box(116, .12, 155, 26 - .6, .1, .1, '#334155');
     const CELLS = [];
     for (let i = 0; i < 3; i++) {
@@ -397,24 +505,23 @@
     yield;
     // ── Суд ──
     K.chunk('court');
-    K.building({ id: 'm_court', x: 116, z: 184, w: 24, d: 16, h: 5.5, wall: '#f5f5f4', trim: '#57534e', roofC: '#44403c', floor: '#d6d3d1', floorM: M.walk,
+    K.building({ id: 'm_court', x: 116, z: 184, w: 24, d: 16, h: 5.5, wall: '#f5f5f4', trim: '#57534e', roofC: roofOf('m_court'), floor: '#d6d3d1', floorM: M.walk,
       doors: [{ side: 's', at: 0, w: 3 }], windows: [{ side: 's', at: -8, w: 2.4 }, { side: 's', at: 8, w: 2.4 }, { side: 'e', at: 0, w: 3 }], sign: '⚖️ Суд', signBg: '#57534e' });
     K.box(116, .12, 179, 6, 1.4, 1.4, '#7c2d12', { solid: true }); K.box(116, 1.52, 179, 6.2, .1, 1.6, '#a16207');
     K.chair(116, 177.2, 0, '#7c2d12');
     spot('m_judge');
-    for (let r = 0; r < 3; r++) K.bench(116 + (r - 1) * 0, 184 + r * 2.4, PI);
+    for (let r = 0; r < 3; r++) K.bench(116, 184 + r * 2.4, PI);
     K.box(109, .12, 182, 1.4, 1, 1.4, '#a8a29e', { solid: true }); spot('m_defend');
     K.npc({ id: 'm_judgeNpc', name: '⚖️ Секретарь суда', x: 122, z: 180, yaw: 270, seed: 'secret', say: ['Встать, суд идёт! ⚖️', 'Судьёй можно стать в мэрии'] });
     yield;
     // ── Банк ──
     K.chunk('bank');
-    K.building({ id: 'm_bank', x: 246, z: 152, w: 24, d: 18, h: 6, wall: '#e7e5e4', trim: '#166534', roofC: '#14532d', floor: '#f5f5f4', floorType: 'tile', floorM: M.walk,
+    K.building({ id: 'm_bank', x: 246, z: 152, w: 24, d: 18, h: 6, wall: '#e7e5e4', trim: '#166534', roofC: roofOf('m_bank'), floor: '#f5f5f4', floorType: 'tile', floorM: M.walk,
       doors: [{ side: 'n', at: 0, w: 3.2 }], windows: [{ side: 'n', at: -7, w: 3, h: 2.2 }, { side: 'n', at: 7, w: 3, h: 2.2 }], sign: '🏦 Банк', signBg: '#166534' });
     for (const x of [240, 252]) K.cyl(x, 0, 142.6, .4, 5.4, '#f5f5f4', { solid: true });
     K.counter(246, 151, 14, 1, '#166534', '#dcfce7');
     for (const x of [242, 250]) K.part({ s: 'box', x, y: 1.7, z: 151, w: 2.4, h: 1, d: .05, m: K.M.glass });
     spot('m_teller'); spot('m_client');
-    // хранилище: дверь-сейф и золото
     K.box(246, .12, 159.2, 8, 4, .3, '#64748b', { solid: true, cam: true });
     K.cyl(246, .12, 159, 1.3, .3, '#94a3b8', { rx: PI / 2 }); K.part({ s: 'torus', x: 246, y: 1.42, z: 158.75, r: .6, t: .08, c: '#facc15' });
     for (let i = 0; i < 6; i++) K.part({ s: 'box', x: 243 + (i % 3) * .7, y: .32 + Math.floor(i / 3) * .25, z: 160.4, w: .6, h: .22, d: .3, c: '#facc15', metal: .8, rough: .3 });
@@ -425,42 +532,42 @@
     yield;
     // ── Больница ──
     K.chunk('hosp');
-    K.building({ id: 'm_hosp', x: 246, z: 184, w: 22, d: 14, h: 5, wall: '#f8fafc', trim: '#dc2626', roofC: '#94a3b8', floor: '#e2e8f0', floorType: 'tile', floorM: M.walk,
+    K.building({ id: 'm_hosp', x: 246, z: 184, w: 22, d: 14, h: 5, wall: '#f8fafc', trim: '#dc2626', roofC: roofOf('m_hosp'), floor: '#e2e8f0', floorType: 'tile', floorM: M.walk,
       doors: [{ side: 's', at: 0, w: 3 }], windows: [{ side: 's', at: -7, w: 2.4 }, { side: 's', at: 7, w: 2.4 }], sign: '🏥 Больница', signBg: '#dc2626' });
     for (const [i, x] of [238, 242, 250, 254].entries()) { K.bed(x, 179.4, 0, '#bfdbfe'); spot('m_bed' + i); }
     K.counter(246, 186, 4, .9, '#e5e7eb', '#ffffff'); spot('m_meds');
     K.box(236, .12, 187, .6, 2, 1.6, '#f1f5f9', { solid: true });
+    K.part({ s: 'box', x: 246, y: 5.6, z: 184, w: 6, h: .4, d: 6, c: '#dc2626' }); K.part({ s: 'box', x: 246, y: 5.85, z: 184, w: 4, h: .1, d: 1.2, c: '#f8fafc' }); K.part({ s: 'box', x: 246, y: 5.85, z: 184, w: 1.2, h: .1, d: 4, c: '#f8fafc' });   // крест на крыше (видно сверху)
     K.npc({ id: 'm_doc', name: '🩺 Доктор Иванова', x: 246, z: 184.6, yaw: 0, seed: 'ivanova', say: ['Здоровья вам! 🩺', 'Больница — место, где все поправляются'] });
     yield;
     // ── Автосалон, такси, заправка ──
     K.chunk('cars');
-    K.building({ id: 'm_cars', x: 182, z: 112, w: 28, d: 14, h: 5, wall: '#e0f2fe', trim: '#0369a1', roofC: '#0c4a6e', floor: '#f1f5f9', floorType: 'tile', floorM: M.walk,
+    K.building({ id: 'm_cars', x: 182, z: 112, w: 28, d: 14, h: 5, wall: '#e0f2fe', trim: '#0369a1', roofC: roofOf('m_cars'), floor: '#f1f5f9', floorType: 'tile', floorM: M.walk,
       doors: [{ side: 's', at: 0, w: 4 }], windows: [{ side: 's', at: -9, w: 7, h: 2.6 }, { side: 's', at: 9, w: 7, h: 2.6 }], sign: '🚗 Автосалон', signBg: '#0369a1' });
     for (const [x, c] of [[172, '#ef4444'], [182, '#2563eb'], [192, '#22c55e']]) { K.cyl(x, .12, 110, 2.6, .2, '#cbd5e1', { seg: 20 }); carModel(K, x, 110, PI / 6, c, .32); }
     spot('m_dealer');
-    K.npc({ id: 'm_dealer', name: '🚗 Продавец машин', x: 186, z: 116.4, yaw: 200, seed: 'automan', say: ['Лучшие машины города! 🚗', 'Машины можно будет водить — уже скоро'] });
+    K.npc({ id: 'm_dealer', name: '🚗 Продавец машин', x: 186, z: 116.4, yaw: 200, seed: 'automan', say: ['Лучшие машины города! 🚗', 'Тест-драйв — по проспектам, мостам и эстакаде'] });
     K.item({ x: 182, y: 1.2, z: 117.5, r: 1.6, prompt: () => '🚗 Машины: посмотреть', act: () => K.rt.city?.metro?.dealer() });
-    K.building({ id: 'm_taxi', x: 246, z: 112, w: 20, d: 14, h: 4.5, wall: '#fef9c3', trim: '#a16207', roofC: '#713f12', floor: '#e5e7eb', floorM: M.concrete, floorType: 'concrete',
+    K.building({ id: 'm_taxi', x: 246, z: 112, w: 20, d: 14, h: 4.5, wall: '#fef9c3', trim: '#a16207', roofC: roofOf('m_taxi'), floor: '#e5e7eb', floorM: M.concrete, floorType: 'concrete',
       doors: [{ side: 's', at: -4, w: 5, h: 3.4 }, { side: 's', at: 5, w: 2.4 }], sign: '🚕 Такси', signBg: '#a16207' });
     carModel(K, 239, 121.6, PI / 2, '#facc15', 0); carModel(K, 253, 121.6, PI / 2, '#facc15', 0);
     K.npc({ id: 'm_disp', name: '🚕 Диспетчер', x: 250, z: 110, yaw: 180, seed: 'dispet', say: ['Такси! Куда едем? 🚕', 'Таксистом можно стать в мэрии'] });
-    // заправка: навес на столбах, колонки
     for (const [sx, sz] of [[-7, -3.6], [7, -3.6], [-7, 3.6], [7, 3.6]]) K.box(115 + sx, 0, 113 + sz, .4, 4.4, .4, '#e5e7eb', { solid: true });
-    K.part({ s: 'box', x: 115, y: 4.6, z: 113, w: 16, h: .4, d: 9, c: '#ef4444' });
+    K.part({ s: 'box', x: 115, y: 4.6, z: 113, w: 16, h: .4, d: 9, c: roofOf('m_gas') });
     K.label.sign('⛽ Заправка', 115, 4.6, 117.55, 6, .5, 0, { bg: '#b91c1c', w: 512, h: 64 });
     for (const x of [111, 119]) { K.box(x, 0, 113, .8, 1.6, .6, '#f8fafc', { solid: true }); K.part({ s: 'box', x, y: 1.3, z: 112.68, w: .5, h: .3, d: .02, c: '#22c55e', m: 'glow' }); }
     K.part({ s: 'box', x: 115, y: .03, z: 113, w: 20, h: .02, d: 12, m: M.concrete });
     yield;
     // ── Супермаркет и ресторан ──
     K.chunk('shops');
-    K.building({ id: 'm_shop', x: 105, z: 234, w: 22, d: 18, h: 5, wall: '#dcfce7', trim: '#15803d', roofC: '#14532d', floor: '#f1f5f9', floorType: 'tile', floorM: M.walk,
+    K.building({ id: 'm_shop', x: 105, z: 234, w: 22, d: 18, h: 5, wall: '#dcfce7', trim: '#15803d', roofC: roofOf('m_shop'), floor: '#f1f5f9', floorType: 'tile', floorM: M.walk,
       doors: [{ side: 'n', at: -3, w: 3.4 }], windows: [{ side: 'n', at: 5, w: 6, h: 2.4 }], sign: '🛒 Супермаркет', signBg: '#15803d' });
     for (let i = 0; i < 3; i++) K.shelf(100 + i * 5, 238, 3.2, 0);
     K.counter(99, 229, 3, 1, '#15803d', '#dcfce7'); spot('m_till'); spot('m_buyer');
     K.box(115, .12, 242, 2, 2, 1, '#94a3b8', { solid: true }); spot('m_dock');
     K.npc({ id: 'm_shopper', name: '🧑 Покупатель', x: 104, z: 236, yaw: 0, seed: 'pokup2', act: 'wander', radius: 4, say: ['Где тут свежий хлеб? 🍞'] });
     K.item({ x: 99, y: 1.2, z: 227.6, r: 1.2, prompt: () => '🛒 Купить продукты', act: () => K.rt.city?.metro?.shop('market') });
-    K.building({ id: 'm_rest', x: 131, z: 234, w: 16, d: 18, h: 4.6, wall: '#fee2e2', trim: '#b91c1c', roofC: '#7f1d1d', floor: '#c8956a',
+    K.building({ id: 'm_rest', x: 131, z: 234, w: 16, d: 18, h: 4.6, wall: '#fee2e2', trim: '#b91c1c', roofC: roofOf('m_rest'), floor: '#c8956a',
       doors: [{ side: 'n', at: 0, w: 2.8 }], windows: [{ side: 'n', at: -5, w: 2.6 }, { side: 'n', at: 5, w: 2.6 }, { side: 'e', at: 2, w: 3 }], sign: '🍝 Ресторан «Вкусно»', signBg: '#b91c1c' });
     for (const [x, z] of [[127, 229], [135, 229], [127, 234], [135, 234]]) { K.table(x, z, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z, PI / 2, '#7f1d1d'); K.chair(x + 1, z, -PI / 2, '#7f1d1d'); }
     K.box(131, .12, 241.6, 6, 1, 1, '#9ca3af', { solid: true }); K.part({ s: 'box', x: 129, y: 1.15, z: 241.6, w: 1.4, h: .1, d: .8, c: '#f97316', m: 'glow' });
@@ -471,38 +578,374 @@
     yield;
     // ── Бизнес-центр: три киоска (купить бизнес) ──
     K.chunk('biz');
-    K.part({ s: 'box', x: 182, y: .03, z: 238, w: 50, h: .02, d: 20, m: M.concrete });
+    K.part({ s: 'box', x: 182, y: .03, z: 237, w: 50, h: .02, d: 18, m: M.concrete });
     for (const [id, x, name, c, e] of [['coffee', 166, '☕ Кофейня', '#7c3aed', '☕'], ['flowers', 182, '💐 Цветы', '#db2777', '💐'], ['wash', 198, '🚿 Автомойка', '#0891b2', '🚿']]) {
-      K.building({ id: 'm_' + id, x, z: 230, w: 12, d: 10, h: 4, wall: '#f8fafc', trim: c, roofC: c, floor: '#e5e7eb', floorM: M.walk,
+      K.building({ id: 'm_' + id, x, z: 230, w: 12, d: 10, h: 4, wall: '#f8fafc', trim: c, roofC: roofOf('m_' + id), floor: '#e5e7eb', floorM: M.walk,
         doors: [{ side: 'n', at: 0, w: 2.6 }], windows: [{ side: 'n', at: -3.6, w: 2 }, { side: 'n', at: 3.6, w: 2 }], sign: name, signBg: c });
       K.counter(x, 232, 4, .9, c, '#ffffff');
       spot('m_biz_' + id);
       K.item({ x, y: 1.2, z: 224.4, r: 1.2, prompt: () => K.rt.city?.metro?.bizPrompt(id, name), act: () => K.rt.city?.metro?.bizAct(id, name, e) });
     }
     yield;
-    // ── Жилые дома (квартиры) ──
+    // ── Жилые дома у канала: квартира на 1-м этаже («сделать своим»), этажи выше — фасадом, лифт на крышу ──
     K.chunk('homes');
     K.houses = [];
-    for (const [id, x, z, wall, h] of [['m_h1', 235, 236, '#fde68a', 8], ['m_h2', 258, 236, '#c4b5fd', 9]]) {
-      const b = K.building({ id, x, z, w: 14, d: 14, h: 4, wall, trim: '#57534e', roofC: '#44403c', floor: '#d6a77a', doors: [{ side: 'n', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4.5, w: 2 }, { side: 'n', at: 4.5, w: 2 }, { side: 's', at: 0, w: 3 }] });
-      // верхние этажи — в группе крыши (изнутри прячутся вместе с ней), тело камеру не держит
-      K.R.part(b.roof, { s: 'box', y: 4.36 + (h - 4) / 2, w: 13.4, h: h - 4, d: 13.4, c: wall });
-      for (let f = 0; f < Math.floor((h - 4) / 2); f++) for (const s of [-1, 1]) K.R.part(b.roof, { s: 'box', x: s * 3.5, y: 5.6 + f * 2, z: -6.73, w: 2.2, h: 1.2, d: .06, c: '#93c5fd' });
-      K.body({ x, z, y: 4.36 + (h - 4) / 2, hx: 6.7, hy: (h - 4) / 2, hz: 6.7, data: { cam: false } });
+    for (const id of ['m_h1', 'm_h2']) {
+      const B = MB(id), x = B.x, z = B.z;
+      const b = K.building({ id, x, z, w: 14, d: 14, h: 4, wall: B.wall, trim: '#57534e', roofC: B.roof, floor: '#d6a77a', doors: [{ side: 'n', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4.5, w: 2 }, { side: 'n', at: 4.5, w: 2 }, { side: 's', at: 0, w: 3 }] });
+      const t = K.tower({ id, x, z, w: 13.6, d: 13.6, h: B.h, y0: 4.36, style: B.style, tint: B.tint, roof: B.roof }, b.roof);
+      if (b.trig) b.trig.data.camOff = t.bodies;   // в квартире камера проходит сквозь этажи выше (они спрятаны)
+      const rs = K.roofDeck(b.roof, x, z, t, 'Крыша — вид на канал');
       K.bed(x + 4, z + 3.5, PI, '#93c5fd'); K.sofa(x - 3.5, z + 4.2, PI, '#475569');
       K.table(x - 3, z - 1, 1.4, .9, '#78350f'); K.chair(x - 4, z - 1, PI / 2); K.chair(x - 2, z - 1, -PI / 2);
       K.box(x + 5.4, .12, z - 3, 1.4, .9, 2, '#e5e7eb', { solid: true });
       K.rug(x, z + 1, 4, 3, '#bfdbfe');
       K.houses.push({ id, x, z, door: { x, z: z - 7.4 } });
       K.item({ x, y: 1.4, z: z - 7.4, r: 1.1, prompt: () => K.rt.city?.metro?.housePrompt(id), act: () => K.rt.city?.metro?.houseAct(id) });
+      K.box(x + 5.6, .12, z + 5.6, 1.6, 2.6, 1.6, '#cbd5e1', { solid: true });   // лифт в углу квартиры
+      K.addLift(id, B.name, [{ name: 'Квартира', at: .12, x: x + 4, z: z + 5.4, yaw: PI / 2, ix: x + 4.4, iz: z + 5.6 }, rs]);
     }
     K.npc({ id: 'm_walker1', name: '🧑‍💼 Прохожий', x: 182, z: 150, yaw: 0, seed: 'walk01', act: 'wander', radius: 16, phone: 1, say: ['Отличная погода для прогулки!'] });
     K.npc({ id: 'm_patrol', name: '👮 Патрульный', x: 182, z: 205, yaw: 0, seed: 'patrol', act: 'wander', radius: 26, say: ['Порядок в городе! 👮'] });
     yield;
+    // ── Пожарная часть и свободный участок (северо-восток) ──
+    K.chunk('fire');
+    {
+      const B = MB('m_fire');
+      K.building({ id: 'm_fire', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, wall: B.wall, trim: '#991b1b', roofC: B.roof, floor: '#9ca3af', floorType: 'concrete', floorM: M.concrete,
+        doors: [{ side: 's', at: -7, w: 6, h: 4.2 }, { side: 's', at: 2, w: 6, h: 4.2 }, { side: 's', at: 9.5, w: 2.4 }], windows: [{ side: 'e', at: 0, w: 4 }, { side: 'w', at: 0, w: 4 }, { side: 'n', at: -6, w: 3 }, { side: 'n', at: 6, w: 3 }], sign: '🚒 Пожарная часть', signBg: '#991b1b' });
+      fireTruck(K, B.x - 7, B.z - 1, 0); fireTruck(K, B.x + 2, B.z - 1, 0);
+      K.box(B.x + 11, .12, B.z - 5, .3, 2, 2, '#9ca3af', { solid: true }); K.part({ s: 'torus', x: B.x + 10.8, y: 1.3, z: B.z - 5, r: .5, t: .1, yaw: PI / 2, c: '#facc15' });
+      K.npc({ id: 'm_fireman', name: '🚒 Пожарный Сергей', x: B.x + 9, z: B.z + 3, yaw: 180, seed: 'sergey9', say: ['Пожарная часть Большого города! 🚒', 'Скоро и здесь можно будет работать пожарным'] });
+      lotSign(K, MB('m_lot1'));
+    }
+    yield;
+    // ── «Сити»: три небоскрёба (в «Сити-1» — холл, лифт на 10 и 20 этаж и на крышу с вертолётной площадкой) ──
+    K.chunk('city');
+    {
+      const B = MB('m_city1');
+      K.towerIn({ id: 'm_city1', name: 'Сити-1', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, h1: B.h, tiers: [{ w: 16, d: 16, h: 108.8 }], style: B.style, roof: B.roof, crown: 'helipad',
+        lobbyH: 6.4, lobbyWall: '#e2e8f0', trim: '#1e3a8a', lobbyFloor: '#f1f5f9',
+        doors: [{ side: 'n', at: 0, w: 4, h: 3.4 }], windows: [{ side: 'n', at: -7, w: 5, h: 3.6, y0: .6 }, { side: 'n', at: 7, w: 5, h: 3.6, y0: .6 }, { side: 'w', at: 0, w: 9, h: 3.6, y0: .6 }, { side: 'e', at: 0, w: 9, h: 3.6, y0: .6 }],
+        sign: '🏙️ Сити-1', signBg: '#1e3a8a', lobbyName: 'Холл',
+        stops: [{ name: '10 этаж — офисы', at: 28.8, furnish: officeFloor }, { name: '20 этаж — кафе с видом', at: 60.8, furnish: skyCafe }], roofStop: 'Крыша — вертолётная площадка' });
+      // холл: стойка ресепшена, диваны, растения
+      K.counter(B.x - 5, B.z + 2, 5, 1, '#1e3a8a', '#e2e8f0'); K.sofa(B.x + 4, B.z - 4, PI, '#334155'); K.plant(B.x - 9, B.z - 9); K.plant(B.x + 9, B.z - 9);
+      K.npc({ id: 'm_city_rec', name: '💼 Администратор', x: B.x - 5, z: B.z + 3.4, yaw: 180, seed: 'admin7', say: ['Добро пожаловать в «Сити»! 🏙️', 'Лифт — у дальней стены: офисы, кафе на 20-м и крыша'] });
+      const C2 = MB('m_city2'), C3 = MB('m_city3');
+      K.tower({ id: 'm_city2', x: C2.x, z: C2.z, w: C2.w, d: C2.d, h: C2.h, style: C2.style, roof: C2.roof, base: 'shop', baseH: 3.2, crown: 'antenna' });
+      K.tower({ id: 'm_city3', x: C3.x, z: C3.z, w: C3.w, d: C3.d, h: C3.h, style: C3.style, roof: C3.roof, base: 'shop', baseH: 3.2, crown: 'pyramid', logo: '37' });
+      // площадь «Сити» и сквер с фонтаном
+      K.part({ s: 'box', x: 298, y: .03, z: 141, w: 22, h: .03, d: 12, m: M.plaza });
+      K.board(298, 2.4, 136.2, 5, 1.6, PI, '🏙️ «Сити» — деловой квартал', { bg: '#1e3a8a' }); K.box(298, 0, 136.4, .16, 1.6, .16, '#334155', { solid: true });
+      for (const x of [290, 306]) K.bench(x, 143, PI);
+      K.part({ s: 'box', x: 298, y: .03, z: 186, w: 22, h: .03, d: 26, m: M.walk });
+      K.cyl(298, 0, 186, 2.8, .5, '#d6d3d1', { solid: true, seg: 20 }); K.part({ s: 'cyl', x: 298, y: .3, z: 186, r: 2.5, h: .4, seg: 20, m: K.R.water('#38bdf8', { key: 'mzcityfount', fixedColor: true }) });
+      for (const [x, z] of [[290, 178], [306, 178], [290, 194], [306, 194]]) K.tree(x, z, .9, 2);
+      for (const [x, z, yaw] of [[293, 186, PI / 2], [303, 186, -PI / 2]]) K.bench(x, z, yaw);
+    }
+    yield;
+    // ── Дома с магазинами внизу (аптека, книжный, спортзал) — фасады ──
+    K.chunk('rowshops');
+    for (const id of ['m_pharm', 'm_books', 'm_gym']) {
+      const B = MB(id);
+      K.tower({ id, x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, roof: B.roof, base: 'shop', baseH: 3.2, trim: '#334155' });
+      K.label.sign({ m_pharm: '💊 Аптека', m_books: '📚 Книги', m_gym: '💪 Спортзал' }[id], B.x, 2.6, B.z - B.d / 2 - .08, 6, 1, PI, { bg: { m_pharm: '#15803d', m_books: '#a16207', m_gym: '#1d4ed8' }[id], w: 512, h: 86 });
+    }
+    yield;
+    // ── ТЦ «Галерея»: 2 этажа, атриум с эскалатором, лифт до крыши; магазины, фуд-корт, кино и автоматы — лениво ──
+    K.chunk('mall');
+    {
+      const B = MB('m_mall'), x0 = B.x, z0 = B.z, w = B.w, d = B.d, F2 = 5.2;
+      const l1 = K.building({ id: 'm_mall', x: x0, z: z0, w, d, h: F2, wall: B.wall, trim: '#0f766e', floor: '#e7e5e4', floorType: 'tile', floorM: M.walk, open: true,
+        doors: [{ side: 'n', at: 0, w: 6, h: 3.6 }, { side: 'n', at: -17, w: 3 }, { side: 'n', at: 17, w: 3 }],
+        windows: [{ side: 'n', at: -9, w: 8, h: 3, y0: .5 }, { side: 'n', at: 9, w: 8, h: 3, y0: .5 }, { side: 'w', at: 0, w: 14, h: 3, y0: .5 }, { side: 'e', at: 0, w: 14, h: 3, y0: .5 }],
+        sign: '🛍️ ТЦ «Галерея»', signBg: '#0f766e' });
+      const hx0 = x0 - 8, hx1 = x0 + 8, hz0 = z0 - 6, hz1 = z0 + 6;   // атриум
+      for (const [a, b, c, e] of [[x0 - w / 2, x0 + w / 2, z0 - d / 2, hz0], [x0 - w / 2, x0 + w / 2, hz1, z0 + d / 2], [x0 - w / 2, hx0, hz0, hz1], [hx1, x0 + w / 2, hz0, hz1]]) {
+        R.part(l1.roof, { s: 'box', x: (a + b) / 2 - x0, y: F2 - .12, z: (c + e) / 2 - z0, w: b - a, h: .24, d: e - c, m: M.walk });
+        K.body({ x: (a + b) / 2, z: (c + e) / 2, y: F2 - .12, hx: (b - a) / 2, hy: .12, hz: (e - c) / 2, tag: 'deck', data: { cam: false, floor: 'tile' } });
+      }
+      // перила атриума (кроме выхода эскалатора на востоке)
+      for (const [a, b, c, e] of [[hx0, hx1, hz0 - .05, hz0 + .05], [hx0, hx1 - 3.4, hz1 - .05, hz1 + .05], [hx0 - .05, hx0 + .05, hz0, hz1], [hx1 - .05, hx1 + .05, hz0, hz1 - 3.4]]) {
+        R.part(l1.roof, { s: 'box', x: (a + b) / 2 - x0, y: F2 + .5, z: (c + e) / 2 - z0, w: b - a, h: 1, d: e - c, m: K.M.glass });
+        R.part(l1.roof, { s: 'box', x: (a + b) / 2 - x0, y: F2 + 1.02, z: (c + e) / 2 - z0, w: Math.max(b - a, .12), h: .07, d: Math.max(e - c, .12), c: '#94a3b8' });
+        K.body({ x: (a + b) / 2, z: (c + e) / 2, y: F2 + .5, hx: Math.max(b - a, .2) / 2, hy: .5, hz: Math.max(e - c, .2) / 2, tag: 'rail', data: { cam: false } });
+      }
+      // эскалатор: пандус с 1-го на 2-й этаж вдоль южного края атриума
+      K.prism(hx1 - 7, hz1 - 1.7, 3, 14, F2, -PI / 2, R.mat('#94a3b8', { metal: .3, rough: .4 }));
+      for (const s of [-1, 1]) K.part({ s: 'box', x: hx1 - 7, y: F2 / 2 + 1, z: hz1 - 1.7 + s * 1.55, w: Math.hypot(14, F2), h: .1, d: .1, rz: Math.atan2(F2, 14), c: '#1f2937' });
+      for (let k = 1; k < 9; k++) K.part({ s: 'box', x: hx1 - 14 + k * 1.55, y: F2 * k * 1.55 / 14 + .03, z: hz1 - 1.7, w: .06, h: .02, d: 2.8, c: '#facc15', m: 'glow' });
+      // 2-й этаж: стены с окнами (крыша — своя, прячется изнутри)
+      const l2 = K.building({ id: 'm_mall2', x: x0, z: z0, w, d, h: F2, y0: F2, into: l1.roof, noFloor: true, wall: B.wall, trim: '#0f766e', roofC: B.roof,
+        windows: [{ side: 'n', at: -14, w: 10, h: 2.6 }, { side: 'n', at: 0, w: 10, h: 2.6 }, { side: 'n', at: 14, w: 10, h: 2.6 }, { side: 'e', at: 0, w: 18, h: 2.6 }, { side: 'w', at: 0, w: 18, h: 2.6 }] });
+      // вывески магазинов (внутри, у стен)
+      for (const [t, x, z, yaw, c] of [['👕 Одежда', x0 - 18, z0 + d / 2 - .4, PI, '#be185d'], ['👟 Обувь', x0 - 6, z0 + d / 2 - .4, PI, '#7c3aed'], ['📱 Электроника', x0 + 6, z0 + d / 2 - .4, PI, '#0369a1'], ['🧸 Игрушки', x0 + 18, z0 + d / 2 - .4, PI, '#ea580c'], ['🍔 Фуд-корт', x0 - w / 2 + .4, z0, PI / 2, '#b91c1c']])
+        K.label.sign(t, x, 3.6, z, 5, .8, yaw, { bg: c, w: 512, h: 82 });
+      for (const [t, x, z, yaw, c] of [['🎬 Кино', x0 - w / 2 + .4, z0 - 9, PI / 2, '#111827'], ['🕹️ Автоматы', x0 + w / 2 - .4, z0 - 9, -PI / 2, '#4c1d95'], ['☕ Кафе', x0 + 6, z0 - d / 2 + .4, 0, '#92400e']])
+        K.label.sign(t, x, F2 + 3.4, z, 5, .8, yaw, { bg: c, w: 512, h: 82 });
+      K.lazy(x0, z0, 46, KK => mallFloor1(KK, x0, z0, w, d, hx0, hx1, hz0, hz1));
+      K.lazy(x0, z0, 46, KK => mallFloor2(KK, x0, z0, w, d, hx0, hx1, hz0, hz1), F2, l1.roof);
+      // лифт: 1 этаж, 2 этаж, крыша (с видом на канал)
+      const ex = x0 + w / 2 - 2.4, ez = z0 + d / 2 - 2;
+      K.box(ex + 1, .12, ez + 1, 1.6, 2.6, 1.6, '#cbd5e1', { solid: true });
+      R.part(l1.roof, { s: 'box', x: ex + 1 - x0, y: F2 + 1.3, z: ez + 1 - z0, w: 1.6, h: 2.6, d: 1.6, c: '#cbd5e1' }); K.body({ x: ex + 1, z: ez + 1, y: F2 + 1.3, hx: .8, hy: 1.3, hz: .8, tag: 'lift' });
+      K.addLift('m_mall', B.name, [{ name: '1 этаж — магазины', at: .12, x: ex - 1, z: ez, yaw: PI, ix: ex, iz: ez + .6 }, { name: '2 этаж — кино и автоматы', at: F2, x: ex - 1, z: ez, yaw: PI, ix: ex, iz: ez + .6 },
+        { name: 'Крыша — вид на канал', at: 2 * F2 + .24, x: x0, z: z0 + d / 2 - 3, yaw: PI }]);
+      void l2;
+      K.npc({ id: 'm_mall_guard', name: '🛡️ Охранник ТЦ', x: x0 + 3, z: z0 - d / 2 + 2.4, yaw: 180, seed: 'ohrana', say: ['Добро пожаловать в «Галерею»! 🛍️', 'Эскалатор — в атриуме, лифт — в углу'] });
+    }
+    yield;
+    // ── Канал: набережные, перила, мосты на проспектах, пешеходные мостики, лестницы к воде, лодки ──
+    K.chunk('canal');
+    {
+      const zN = CN.z0, zS = CN.z1, gapsN = [[118, 1.9], [150, 6.8], [182, 1.9], [215, 6.8], [248, 1.9], [312, 1.9]];
+      K.part({ s: 'box', x: (X0 + X1) / 2, y: .03, z: zN - 3, w: X1 - X0, h: .04, d: 6, m: M.walk });   // набережная (север)
+      K.part({ s: 'box', x: (X0 + X1) / 2, y: .03, z: zS + 1.7, w: X1 - X0, h: .04, d: 3.4, m: M.walk });   // набережная (юг)
+      // перила вдоль воды (с проходами на мосты)
+      for (const zz of [zN - .12, zS + .12]) {
+        const cuts = gapsN.map(([x, h]) => [x - h, x + h]).sort((a, b) => a[0] - b[0]);
+        let a = X0;
+        for (const [l, r] of [...cuts, [X1, X1]]) {
+          if (l - a > .5) {
+            K.part({ s: 'box', x: (a + l) / 2, y: .95, z: zz, w: l - a, h: .07, d: .07, c: '#475569' });
+            for (let px = a + .5; px < l; px += 2.5) K.part({ s: 'box', x: px, y: .48, z: zz, w: .07, h: .95, d: .07, c: '#475569' });
+            K.body({ x: (a + l) / 2, z: zz, y: .5, hx: (l - a) / 2, hy: .5, hz: .08, tag: 'rail', data: { cam: false } });
+          }
+          a = r;
+        }
+      }
+      // мосты на проспектах 150 и 215: дорога, тротуары, перила, арка снизу
+      for (const x of [150, 215]) {
+        K.box(x, -.62, (zN + zS) / 2, 13.2, .64, zS - zN + 4, '#a8a29e', { solid: true, floor: 'concrete' });
+        K.part({ s: 'box', x, y: .025, z: (zN + zS) / 2, w: 8, h: .02, d: zS - zN + 4, m: M.asphalt });
+        for (const s of [-1, 1]) {
+          K.part({ s: 'box', x: x + s * 5.3, y: .08, z: (zN + zS) / 2, w: 2.6, h: .12, d: zS - zN + 4, m: M.walk });
+          K.box(x + s * 6.5, .02, (zN + zS) / 2, .22, 1, zS - zN + 2, '#e2e8f0', { solid: true, data: { cam: false } });
+          K.part({ s: 'torus', x: x + s * 6.3, y: CN.floor, z: (zN + zS) / 2, r: 5.6, t: .3, arc: PI, yaw: PI / 2, c: '#94a3b8' });
+        }
+      }
+      // пешеходные мостики (арочкой не надо — ровные, с перилами)
+      for (const x of [118, 182, 248, 312]) {
+        K.box(x, -.3, (zN + zS) / 2, 3.4, .35, zS - zN + 1, '#d6d3d1', { solid: true, floor: 'wood' });
+        K.part({ s: 'box', x, y: .06, z: (zN + zS) / 2, w: 3, h: .02, d: zS - zN + 1, m: M.planks });
+        for (const s of [-1, 1]) K.box(x + s * 1.65, .05, (zN + zS) / 2, .1, .95, zS - zN, '#78350f', { solid: true, data: { cam: false } });
+      }
+      // лестницы из воды (вплавь — к ним)
+      if (K.E.ladder) for (const x of [134, 198, 264, 326]) {
+        K.part({ s: 'box', x, y: CN.wl / 2 - .2, z: zN + .45, w: .8, h: -CN.wl + .5, d: .08, c: '#e5e7eb' });
+        K.E.ladder(K.ph, { x, z: zN + 1, yaw: PI, top: .02, w: .9 });
+        K.part({ s: 'box', x: x + 8, y: CN.wl / 2 - .2, z: zS - .45, w: .8, h: -CN.wl + .5, d: .08, c: '#e5e7eb' });
+        K.E.ladder(K.ph, { x: x + 8, z: zS - 1, yaw: 0, top: .02, w: .9 });
+      }
+      // фонари, деревья в кадках, скамейки на северной набережной
+      for (let x = X0 + 6; x < X1 - 4; x += 16) if (!gapsN.some(([g, h]) => Math.abs(x - g) < h + 2)) { K.lamp(x, zN - 4.8); }
+      for (let x = X0 + 14; x < X1 - 4; x += 32) if (!gapsN.some(([g, h]) => Math.abs(x - g) < h + 4)) { K.bench(x, zN - 2.2, 0); K.cyl(x + 5, 0, zN - 4.6, .7, .6, '#78716c', { solid: true }); K.tree(x + 5, zN - 4.6, .7, 2); }
+      // лодки у причальной стенки (пока стоят; прокат — вместе с транспортом)
+      for (const [x, c] of [[160, '#f8fafc'], [228, '#fde68a'], [300, '#bfdbfe']]) boatSmall(K, x, CN.wl, zS - 2.4, c);
+      K.board(182, 2.2, zN - 5.8, 4.4, 1.4, PI, '🌉 Набережная канала', { bg: '#0e7490' }); K.box(182, 0, zN - 5.6, .16, 1.5, .16, '#334155', { solid: true });
+    }
+    yield;
+    // ── Эстакада: проспект 280 поднимается над каналом и улицей 274 (z 212…336, верх 6,5) ──
+    K.chunk('overpass');
+    {
+      const x = 280, OVH = 6.5, ow = 11, L = 36, ang = Math.atan2(OVH, L), conc = M.concrete;
+      K.prism(x, 212 + L / 2, ow, L, OVH, PI, conc);        // въезд: низ у z 212, верх у z 248
+      K.prism(x, 336 - L / 2, ow, L, OVH, 0, conc);          // съезд: верх у z 300, низ у z 336
+      K.box(x, OVH - .7, 274, ow, .7, 52, '#9ca3af', { solid: true, data: { cam: false, floor: 'concrete' } });   // пролёт z 248…300
+      for (const [zc, rx] of [[212 + L / 2, -ang], [336 - L / 2, ang]]) {
+        K.part({ s: 'box', x, y: OVH / 2 + .02, z: zc, w: 8, h: .02, d: Math.hypot(L, OVH), rx, m: M.asphalt });
+        for (const s of [-1, 1]) K.part({ s: 'box', x: x + s * (ow / 2 - .15), y: OVH / 2 + .55, z: zc, w: .3, h: .9, d: Math.hypot(L, OVH), rx, c: '#d6d3d1' });
+        // ограждение пандуса — ступеньками (тела коробок не наклоняются)
+        for (let k = 0; k < 6; k++) {
+          const z1 = zc - L / 2 + (k + .5) * L / 6, f = rx < 0 ? (z1 - (zc - L / 2)) / L : 1 - (z1 - (zc - L / 2)) / L, ys = f * OVH;
+          for (const s of [-1, 1]) K.body({ x: x + s * (ow / 2 - .15), z: z1, y: ys + .45, hx: .15, hy: .95, hz: L / 12, tag: 'rail', data: { cam: false } });
+        }
+      }
+      K.part({ s: 'box', x, y: OVH + .015, z: 274, w: 8, h: .02, d: 52, m: M.asphalt });
+      for (let k = 4; k < 50; k += 5) K.part({ s: 'box', x, y: OVH + .03, z: 248 + k, w: .22, h: .01, d: 2, c: '#f1f5f9' });
+      for (const s of [-1, 1]) { K.box(x + s * (ow / 2 - .15), OVH, 274, .3, 1, 52, '#d6d3d1', { solid: true, data: { cam: false } }); }
+      for (const z of [258, 284, 296]) for (const s of [-1, 1]) { const y0 = z < 266 ? CN.floor : 0; K.cyl(x + s * 3.2, y0, z, .7, OVH - .7 - y0, '#a8a29e', { solid: true }); }
+      for (const z of [256, 276, 292]) { K.part({ s: 'cyl', x: x - ow / 2 + .5, y: OVH + 2, z, r: .08, h: 4, c: '#2d2a3a', seg: 6 }); K.part({ s: 'ball', x: x - ow / 2 + .5, y: OVH + 4.1, z, r: .26, c: '#fff3b0', m: 'glow', seg: 8 }); }
+      K.label.sign('↑ Эстакада', x, OVH + 3.8, 247.8, 3.6, .7, PI, { bg: '#1d4ed8', w: 512, h: 100 });
+    }
+    yield;
+    // ── ЖК «Солнечный»: три жилых дома (фасады) и двор ──
+    K.chunk('flats');
+    for (const id of ['m_flat1', 'm_flat2', 'm_flat3']) {
+      const B = MB(id);
+      K.tower({ id, x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, tint: B.tint, roof: B.roof, base: B.base, baseH: 3.2 });
+    }
+    K.part({ s: 'box', x: 120, y: .03, z: 316, w: 40, h: .03, d: 14, m: M.walk });
+    for (const [x, z] of [[104, 314], [136, 318], [112, 320]]) K.tree(x, z, 1, (x + z) % 4);
+    for (const [x, z, yaw] of [[116, 312, 0], [126, 312, 0]]) K.bench(x, z, yaw);
+    K.label.sign('🏢 ЖК «Солнечный»', 106, 2.6, 289.92, 6, 1, PI, { bg: '#16a34a', w: 512, h: 86 });
+    yield;
+    // ── Телебашня: павильон с лифтом, ствол, смотровая площадка 96 м, антенна до 140 м ──
+    K.chunk('tv');
+    {
+      const B = MB('m_tv'), x = B.x, z = B.z, D0 = 96, PR = 9;
+      const lb = K.building({ id: 'm_tv', x, z, w: 16, d: 16, h: 6.4, wall: '#e5e7eb', trim: '#1e40af', roofC: B.roof, floor: '#e7e5e4', floorType: 'tile', floorM: M.walk,
+        doors: [{ side: 'n', at: 0, w: 3.2, h: 3.2 }], windows: [{ side: 'n', at: -5, w: 3, h: 2.6 }, { side: 'n', at: 5, w: 3, h: 2.6 }, { side: 'e', at: 0, w: 6, h: 2.6 }, { side: 'w', at: 0, w: 6, h: 2.6 }], sign: '📡 Телебашня', signBg: '#1e40af' });
+      const g = lb.roof;
+      R.part(g, { s: 'cyl', y: 6.64 + (D0 - 6.64) / 2, r: 2.2, r2: 3.6, h: D0 - 6.64, c: '#eef2f7', seg: 16 });
+      K.bodies.push(K.ph.addCyl({ x, z, y: 6.64 + (D0 - 6.64) / 2, r: 3, hy: (D0 - 6.64) / 2, tag: 'tower', data: { cam: true } }));
+      for (let k = 1; k < 9; k++) R.part(g, { s: 'cyl', y: 6.64 + k * 10, r: 3.6 - k * .15 + .08, h: 1.4, c: k % 2 ? '#ef4444' : '#f8fafc', seg: 16 });
+      R.part(g, { s: 'cyl', y: D0 - .3, r: PR, h: .6, c: '#94a3b8', seg: 28 });
+      K.bodies.push(K.ph.addCyl({ x, z, y: D0 - .3, r: PR, hy: .3, tag: 'deck', data: { cam: false, floor: 'concrete' } }));
+      for (let i = 0; i < 14; i++) {   // стеклянное кольцо (14 панелей)
+        const a = i / 14 * PI * 2, th = -a - PI / 2, pw = 2 * PR * Math.sin(PI / 14) + .06, px = Math.cos(a) * (PR - .15), pz = Math.sin(a) * (PR - .15);
+        R.part(g, { s: 'box', x: px, y: D0 + 1.7, z: pz, w: pw, h: 3.4, d: .08, yaw: th, m: K.M.glass });
+        K.body({ x: x + px, z: z + pz, y: D0 + 1.7, hx: pw / 2, hy: 1.7, hz: .16, yaw: th, tag: 'glass', data: { cam: false } });
+      }
+      R.part(g, { s: 'torus', y: D0 + 1.05, r: PR - .4, t: .05, rx: -PI / 2, c: '#64748b' });
+      const up = new T.Group(); up.userData.dyn = true; g.add(up); K.roofs.push(up);
+      R.part(up, { s: 'cyl', y: D0 + 3.6, r: PR + .5, h: .5, c: '#1e40af', seg: 28 });
+      R.part(up, { s: 'cyl', y: D0 + 4.2, r: PR * .7, r2: PR + .2, h: .7, c: '#1e3a8a', seg: 28 });
+      R.part(up, { s: 'cyl', y: D0 + 4.6 + 20, r: .25, r2: 1, h: 40, c: '#e5e7eb', seg: 10 });
+      for (const k of [14, 28]) R.part(up, { s: 'ball', y: D0 + 4.6 + k, r: .3, m: R.glow('#ff3b3b'), seg: 8 });
+      R.part(up, { s: 'ball', y: D0 + 44.8, r: .45, m: R.glow('#ff3b3b'), seg: 8 });
+      K.body({ x, z, y: D0 + 1.7, hx: PR - 1.2, hy: 1.7, hz: PR - 1.2, trigger: true, tag: 'room', data: { room: 'm_tv:deck', roof: up } });
+      K.lazy(x, z, 40, KK => tvDeck(KK, x, z, PR), D0, g);
+      K.box(x + 5.6, .12, z + 5.6, 1.6, 2.6, 1.6, '#cbd5e1', { solid: true });
+      K.addLift('m_tv', 'Телебашня', [{ name: 'Вход', at: .12, x: x + 3.6, z: z + 5.4, yaw: PI / 2, ix: x + 4.2, iz: z + 5.6 }, { name: 'Смотровая площадка — 96 м', at: D0, x: x + 5.2, z, yaw: PI / 2, ix: x + 5.6, iz: z + 1.6 }]);
+      K.npc({ id: 'm_tv_guide', name: '📡 Экскурсовод', x: x - 4, z: z + 3, yaw: 90, seed: 'ekskurs', say: ['Лифт на смотровую — 96 метров! 📡', 'Сверху видно весь мир: и детский городок, и боевую зону'] });
+      // парк вокруг: дорожки крестом, клумбы, деревья, скамейки
+      K.part({ s: 'box', x, y: .025, z: 306, w: 2.6, h: .02, d: 48, m: M.walk }); K.part({ s: 'box', x, y: .025, z: 302, w: 56, h: .02, d: 2.6, m: M.walk });
+      for (const [px, pz] of [[160, 286], [204, 286], [160, 326], [204, 326], [166, 300], [198, 300]]) K.tree(px, pz, 1.1, (px + pz) % 4);
+      for (const [px, pz, c] of [[170, 312, '#f472b6'], [194, 312, '#facc15'], [170, 292, '#a78bfa'], [194, 292, '#60a5fa']]) K.prefab('flowers', { x: px, z: pz, seed: px + pz, c });
+      for (const [px, pz, yaw] of [[176, 296, PI], [188, 296, PI], [176, 326, 0], [188, 326, 0]]) K.bench(px, pz, yaw);
+      lotSign(K, MB('m_lot2'));
+    }
+    yield;
+    // ── «Гранд Отель»: холл, лифт на 12 этаж (номера) и на крышу с бассейном ──
+    K.chunk('hotel');
+    {
+      const B = MB('m_hotel');
+      const H0 = K.towerIn({ id: 'm_hotel', name: 'Гранд Отель', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, tint: B.tint, roof: B.roof, lobbyH: 6.4, lobbyWall: '#fef3c7', trim: '#7c2d12', lobbyFloor: '#f5e6c8',
+        doors: [{ side: 'n', at: 0, w: 4, h: 3.4 }], windows: [{ side: 'n', at: -9, w: 6, h: 3.4, y0: .6 }, { side: 'n', at: 9, w: 6, h: 3.4, y0: .6 }, { side: 'e', at: 0, w: 8, h: 3.4, y0: .6 }, { side: 'w', at: 0, w: 8, h: 3.4, y0: .6 }],
+        sign: '🏨 Гранд Отель', signBg: '#7c2d12', lobbyName: 'Холл отеля',
+        stops: [{ name: '12 этаж — номера', at: 38.4, furnish: hotelFloor }], roofStop: 'Крыша — бассейн с видом' });
+      K.counter(B.x - 6, B.z + 3, 6, 1, '#7c2d12', '#fde68a'); K.sofa(B.x + 5, B.z - 5, PI, '#7f1d1d'); K.sofa(B.x + 9, B.z - 5, PI, '#7f1d1d'); K.plant(B.x - 12, B.z - 7); K.plant(B.x + 12, B.z - 7);
+      K.npc({ id: 'm_hotel_rec', name: '🛎️ Портье', x: B.x - 6, z: B.z + 4.4, yaw: 180, seed: 'porte', say: ['Добро пожаловать в «Гранд Отель»! 🛎️', 'Номера — на 12 этаже, бассейн — на крыше'] });
+      // бассейн и шезлонги на крыше (в группе верха — прячется, когда ты в номерах)
+      const gt = H0.topGroup, t = H0.t, top = t.top, gx = B.x, gz = B.z;
+      R.part(gt, { s: 'box', x: t.x - gx, y: top + .25, z: t.z - gz + 1, w: 12, h: .5, d: 6, c: '#e2e8f0' });
+      R.part(gt, { s: 'box', x: t.x - gx, y: top + .45, z: t.z - gz + 1, w: 11.2, h: .12, d: 5.2, m: K.R.water('#38bdf8', { key: 'mzpool', fixedColor: true }) });
+      K.body({ x: t.x, z: t.z + 1, y: top + .2, hx: 6, hy: .2, hz: 3, tag: 'pool', data: { cam: false } });
+      for (const k of [-4, -1.5, 1, 3.5]) { R.part(gt, { s: 'box', x: t.x - gx + k, y: top + .3, z: t.z - gz - 4, w: .9, h: .2, d: 2, c: '#fef3c7' }); K.seat(t.x + k, top + .4, t.z - 4, PI, { bed: true, name: 'Позагорать' }); }
+    }
+    yield;
+    // ── Паркинг (3 яруса, пандусы, лифт) ──
+    K.chunk('parking');
+    {
+      const B = MB('m_park');
+      K.garage({ id: 'm_park', name: B.name, x: B.x, z: B.z, w: B.w, d: B.d, levels: 3, lh: 3.6 });
+      for (const [px, c] of [[230, '#ef4444'], [242, '#e5e7eb'], [254, '#2563eb']]) carModel(K, px, B.z, 0, c, 0);
+      K.label.sign('🅿️ Паркинг', B.x - B.w / 2 - .1, 2.6, B.z + 6, 4, 1, -PI / 2, { bg: '#1d4ed8', w: 512, h: 128 });
+    }
+    yield;
+    // ── «Денчик-Тауэр» (самый высокий, светящийся венец и «37») и деловой дом «Канал» ──
+    K.chunk('towers');
+    {
+      const B = MB('m_tower'), O = MB('m_office5');
+      K.tower({ id: 'm_tower', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, tiers: [{ w: 19.2, d: 16, h: 140.8 }], style: B.style, roof: B.roof, base: 'shop', baseH: 6.4, crown: 'glow', glowC: '#a78bfa', logo: '37' });
+      K.tower({ id: 'm_office5', x: O.x, z: O.z, w: O.w, d: O.d, h: O.h, style: O.style, roof: O.roof, base: 'shop', baseH: 3.2, crown: 'antenna' });
+      K.label.sign('🏙️ Денчик-Тауэр', B.x, 5, B.z - B.d / 2 - .1, 8, 1.4, PI, { bg: '#4c1d95', w: 640, h: 112 });
+    }
+    yield;
     K.flush();
     K.done = true;
   }
-  // машинка (декорация; ездить — vehicle.js, когда будет)
+  // табличка «Свободный участок» (будущий «градостроитель»: здесь можно будет строить) — забор, земля, щит
+  function lotSign(K, B){
+    const { x, z, w, d } = B, M = K.M;
+    K.part({ s: 'box', x, y: .03, z, w, h: .03, d, m: M.dirt });
+    for (const [x1, z1, x2, z2] of [[x - w / 2, z - d / 2, x + w / 2, z - d / 2], [x - w / 2, z + d / 2, x + w / 2, z + d / 2], [x - w / 2, z - d / 2, x - w / 2, z + d / 2], [x + w / 2, z - d / 2, x + w / 2, z + d / 2]]) K.prefab('fence', { x1, z1, x2, z2, c: '#a3a3a3' });
+    K.board(x, 1.8, z, 3.6, 1.4, PI, '🚧 Свободный участок', { bg: '#65a30d' });
+    K.box(x, 0, z + .1, .14, 1.1, .14, '#57534e', { solid: true });
+    K.item({ x, y: 1.4, z: z - .8, r: 1.4, prompt: () => '🚧 Свободный участок', act: () => K.rt.H?.panel('<span class="wld-pe">🚧</span><b>Свободный участок</b>', '<p>Здесь пока пусто. Скоро в городе появится градостроитель: участки можно будет занять, построить свой магазин или дом, развивать бизнес — а самый деловой житель станет мэром на выборах. 🗳️</p>') });
+  }
+  // кабинет мэра (будущие выборы): стол, кресло, флаг, табличка
+  function mayorOffice(K, x, z, city){
+    K.table(x, z, 2.2, 1, '#78350f', .8); K.chair(x, z + 1, PI, '#7f1d1d');
+    K.cyl(x + 1.8, 0, z + 1.4, .05, 2.4, '#d6d3d1'); K.part({ s: 'box', x: x + 2.25, y: 2.1, z: z + 1.4, w: .9, h: .55, d: .03, c: city === 'kids' ? '#facc15' : '#2563eb' });
+    K.item({ x, y: 1.2, z: z - .9, r: 1.4, prompt: () => '🗳️ Кабинет мэра', act: () => K.rt.H?.panel('<span class="wld-pe">🗳️</span><b>Кабинет мэра</b>', `<p>${city === 'kids' ? 'В Солнечном городке' : 'В Большом городе'} скоро пройдут <b>выборы мэра</b>. Мэр будет решать, что строить на свободных участках, какие бизнесы открывать и как развивать город.</p><p><small>Готовим «градостроитель» — следи за новостями канала.</small></p>`) });
+  }
+  // мебель этажей (лениво, K.yo — высота этажа): офис, кафе, номера отеля, смотровая, ТЦ
+  function officeFloor(K, x0, z0, w, d){
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
+      const x = x0 - w / 2 + 3.4 + c * 4.4, z = z0 - d / 2 + 3.4 + r * 4.2;
+      K.table(x, z, 2, 1, '#e5e7eb', .76);
+      K.part({ s: 'box', x, y: 1.05, z: z - .3, w: .9, h: .55, d: .05, c: '#0f172a' }); K.part({ s: 'box', x, y: 1.05, z: z - .27, w: .82, h: .47, d: .02, c: '#60a5fa', m: 'glow' });
+      K.chair(x, z + .9, PI, '#334155');
+    }
+    K.table(x0 + 4, z0 + 5, 4, 1.6, '#78350f'); for (const s of [-1, 1]) for (const k of [-1, 1]) K.chair(x0 + 4 + k * 1.2, z0 + 5 + s * 1.3, s > 0 ? PI : 0, '#475569');
+    K.plant(x0 - w / 2 + 2, z0 + d / 2 - 2); K.plant(x0 + w / 2 - 2, z0 - d / 2 + 2);
+    K.box(x0 - w / 2 + 1, 0, z0 + 3, .6, 1.4, .6, '#e2e8f0', { solid: true }); K.part({ s: 'cyl', x: x0 - w / 2 + 1, y: 1.6, z: z0 + 3, r: .22, h: .5, c: '#7dd3fc', seg: 8 });
+    K.npc({ id: 'm_office_mgr', name: '🧑‍💼 Менеджер', x: x0 - 2, z: z0 + 2, yaw: 90, seed: 'mened10', act: 'wander', radius: 4, phone: 1, say: ['Отчёт к пятнице! 📊', 'Вид отсюда — лучший в городе'] });
+  }
+  function skyCafe(K, x0, z0, w, d){
+    K.counter(x0 - w / 2 + 3, z0, 1.2, 8, '#7c2d12', '#fde68a', 0);
+    for (const [x, z] of [[x0 - 2, z0 - 6], [x0 + 3, z0 - 6], [x0 - 2, z0 - 1], [x0 + 3, z0 - 1], [x0 + 8, z0 - 6], [x0 + 8, z0 - 1]]) { K.table(x, z, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z, PI / 2, '#b45309'); K.chair(x + 1, z, -PI / 2, '#b45309'); }
+    K.plant(x0 - w / 2 + 2, z0 - d / 2 + 2); K.plant(x0 + w / 2 - 2, z0 - d / 2 + 2);
+    K.npc({ id: 'm_skycafe', name: '☕ Бариста', x: x0 - w / 2 + 4.6, z: z0, yaw: 270, seed: 'barista20', say: ['Кофе с видом на весь город! ☕', 'Попробуйте десерт дня 🍰'] });
+  }
+  function hotelFloor(K, x0, z0, w, d){
+    for (let i = 0; i < 4; i++) {
+      const x = x0 - w / 2 + 4 + i * 6.6, z = z0 - d / 2 + 3.4;
+      K.bed(x, z, 0, ['#fca5a5', '#93c5fd', '#fde68a', '#a7f3d0'][i]);
+      K.box(x + 2, 0, z - 1.2, .8, .7, .8, '#78350f', { solid: true }); K.lampIn(x + 2, 1.6, z - 1.2);
+      K.box(x + 3.2, 0, z0 - d / 2 + 4.6, .14, 2.9, 6, '#f5e6c8', { solid: true, cam: true });   // перегородки номеров
+    }
+    K.sofa(x0, z0 + 4, PI, '#7f1d1d'); K.rug(x0, z0 + 2, 8, 2.6, '#7f1d1d');
+    K.npc({ id: 'm_maid', name: '🧹 Горничная', x: x0 + 3, z: z0 + 3, yaw: 0, seed: 'gornich', act: 'wander', radius: 5, say: ['Номер убран! ✨', 'Бассейн — на крыше, лифт в конце коридора'] });
+  }
+  function tvDeck(K, x0, z0, PR){
+    for (let i = 0; i < 4; i++) {
+      const a = i / 4 * PI * 2 + PI / 4, x = x0 + Math.cos(a) * (PR - 1.6), z = z0 + Math.sin(a) * (PR - 1.6);
+      K.cyl(x, 0, z, .08, 1.1, '#475569'); K.part({ s: 'cyl', x, y: 1.25, z, r: .1, r2: .16, h: .7, rz: PI / 2.4, yaw: -a, c: '#1f2937', seg: 8 });
+      K.seat(x - Math.cos(a) * 1.2, .5, z - Math.sin(a) * 1.2, -a + PI / 2, { name: 'Посмотреть в бинокль' });
+    }
+    K.npc({ id: 'm_tv_deck', name: '📸 Турист', x: x0 + 5, z: z0 - 3, yaw: 0, seed: 'turist96', phone: 1, say: ['Отсюда видно весь мир! 🌍', 'Вон боевая зона — а там детский городок'] });
+  }
+  function mallFloor1(K, x0, z0, w, d, hx0, hx1, hz0, hz1){
+    const zs = z0 + d / 2 - 2.4;   // южная стена: одежда, обувь, электроника, игрушки
+    for (const [i, cx] of [x0 - 18, x0 - 6, x0 + 6, x0 + 18].entries()) {
+      K.counter(cx, zs - 2.6, 3, .8, ['#be185d', '#7c3aed', '#0369a1', '#ea580c'][i], '#f8fafc');
+      if (i === 0) for (let k = 0; k < 3; k++) { K.cyl(cx - 3 + k * 2, 0, zs, .04, 1.6, '#64748b'); for (let j = 0; j < 4; j++) K.part({ s: 'box', x: cx - 3.5 + k * 2 + j * .3, y: 1.1, z: zs, w: .12, h: .9, d: .5, c: ['#f472b6', '#60a5fa', '#facc15', '#34d399'][j] }); }
+      if (i === 1) K.shelf(cx, zs + .6, 5, 0, ['#111827', '#f8fafc', '#dc2626', '#2563eb']);
+      if (i === 2) for (let k = 0; k < 3; k++) { K.box(cx - 2.4 + k * 2.4, 0, zs, 1.6, .9, .7, '#e5e7eb', { solid: true }); K.part({ s: 'box', x: cx - 2.4 + k * 2.4, y: 1.3, z: zs - .1, w: 1.2, h: .7, d: .05, c: '#38bdf8', m: 'glow' }); }
+      if (i === 3) { K.part({ s: 'ball', x: cx - 2, y: .5, z: zs, r: .5, c: '#f87171' }); K.part({ s: 'ball', x: cx, y: .45, z: zs, r: .45, c: '#a78bfa' }); K.part({ s: 'ball', x: cx + 2, y: .7, z: zs, r: .4, c: '#b45309' }); K.part({ s: 'ball', x: cx + 2, y: 1.3, z: zs, r: .3, c: '#b45309' }); }
+      K.npc({ id: 'm_mall_s' + i, name: ['👗 Продавщица', '👟 Продавец', '📱 Консультант', '🧸 Продавец игрушек'][i], x: cx, z: zs - 1.6, yaw: 0, seed: 'mallseller' + i, say: [['Новая коллекция! 👕', 'Примерочные справа'], ['Кроссовки для бега 👟'], ['Новые телефоны уже здесь! 📱'], ['Игрушки для всех возрастов 🧸']][i] });
+    }
+    // фуд-корт: стойки у западной стены, столики под атриумом
+    for (const [k, c] of ['#b91c1c', '#ca8a04', '#15803d'].entries()) K.counter(x0 - w / 2 + 1.6, z0 - 6 + k * 6, 1.2, 4, c, '#fef3c7', 0);
+    for (const [x, z] of [[x0 - 5, z0 - 3], [x0, z0 - 3], [x0 + 5, z0 - 3], [x0 - 5, z0 + 1], [x0, z0 + 1]]) { K.table(x, z, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z, PI / 2, '#0f766e'); K.chair(x + 1, z, -PI / 2, '#0f766e'); }
+    K.item({ x: x0 - w / 2 + 3, y: 1.2, z: z0, r: 1.6, prompt: () => '🍔 Фуд-корт: купить еду', act: () => K.rt.city?.metro?.shop('food') });
+  }
+  function mallFloor2(K, x0, z0, w, d, hx0, hx1, hz0, hz1){
+    // кино: экран у западной стены, ряды кресел (можно сесть)
+    K.part({ s: 'box', x: x0 - w / 2 + .5, y: 2.4, z: z0 - 9, w: .1, h: 3, d: 10, c: '#7dd3fc', m: 'glow' });
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) K.chair(x0 - w / 2 + 5 + r * 2, z0 - 13 + c * 2.4, -PI / 2, '#7f1d1d');
+    // автоматы: игры сайта поверх мира
+    for (const [i, g] of ['catch', 'reaction', 'memory', 'fillword'].entries()) {
+      const x = x0 + w / 2 - 1.2, z = z0 - 14 + i * 2.6;
+      K.box(x, 0, z, 1.2, 2.1, 1.4, ['#7c3aed', '#db2777', '#0891b2', '#16a34a'][i], { solid: true });
+      K.part({ s: 'box', x: x - .62, y: 1.45, z, w: .03, h: .7, d: 1, c: '#a5f3fc', m: 'glow' });
+      K.item({ x: x - 1.4, y: 1.2, z, r: 1.2, prompt: () => `🕹️ Сыграть: ${(typeof GAMES !== 'undefined' && GAMES.find(q => q.id === g)?.title) || g}`, act: () => K.rt.H?.go?.('#/games/' + g) });
+    }
+    // кафе: стойка и столики у северной стены
+    K.counter(x0 + 6, z0 - d / 2 + 1.6, 6, 1, '#92400e', '#fde68a');
+    for (const x of [x0 - 2, x0 + 2, x0 + 10]) { K.table(x, z0 - d / 2 + 5, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z0 - d / 2 + 5, PI / 2, '#92400e'); K.chair(x + 1, z0 - d / 2 + 5, -PI / 2, '#92400e'); }
+    K.item({ x: x0 + 6, y: 1.2, z: z0 - d / 2 + 2.8, r: 1.4, prompt: () => '☕ Кафе: заказать', act: () => K.rt.city?.metro?.shop('rest') });
+  }
+  // лодочка (пока стоит у стенки канала)
+  function boatSmall(K, x, y, z, c){
+    const g = K.group(x, y, z, PI / 2), P = p => K.R.part(g, p);
+    P({ s: 'box', y: .15, w: 1.6, h: .5, d: 4, c }); P({ s: 'cone', y: .15, z: 2.3, r: .8, h: .9, rx: PI / 2, seg: 4, c }); P({ s: 'box', y: .5, z: -.6, w: 1.2, h: .25, d: .5, c: '#78350f' });
+  }
+  // машинка (декорация; ездить — vehicle.js)
   function carModel(K, x, z, yaw, c, y0 = 0){
     const g = K.group(x, y0, z, yaw), P = p => K.R.part(g, p);
     P({ s: 'box', y: .75, w: 2, h: .7, d: 4.2, c }); P({ s: 'box', y: 1.35, z: -.2, w: 1.8, h: .6, d: 2.2, c: '#dbeafe' });
@@ -728,10 +1171,12 @@
       H.panel('<span class="wld-pe">🐾</span><b>Зоомагазин</b>', `<p>Питомец ходит за тобой, пока ты в мире, — его видят все. Корм — ⭐1.</p><div class="mz-cash"><span>⭐ ${s.cash}</span></div><div class="wld-acts">${Object.entries(PETS).map(([id, p]) => `<button type="button"${rt.zx.pt === id ? ' class="ct-start"' : ''} data-mz="c:kids:pet:${id}">${p[0]} ${esc(p[1])}</button>`).join('')}${rt.zx.pt ? '<button type="button" data-mz="c:kids:pet:">Отпустить домой</button>' : ''}</div>`);
     }
     const SHOPS = { kids: { icecream: ['🍦 Мороженое', 1], bun: ['🥐 Булочка', 1], apple: ['🍎 Яблоко', 1] },
-      market: { apple: ['🍎 Яблоко', 5], juice: ['🧃 Сок', 6], burger: ['🍔 Бургер', 12] }, rest: { pizza: ['🍕 Пицца', 15], soup: ['🍲 Суп', 12], coffee: ['☕ Кофе', 8] } };
+      market: { apple: ['🍎 Яблоко', 5], juice: ['🧃 Сок', 6], burger: ['🍔 Бургер', 12] }, rest: { pizza: ['🍕 Пицца', 15], soup: ['🍲 Суп', 12], coffee: ['☕ Кофе', 8] },
+      food: { burger: ['🍔 Бургер', 10], pizza: ['🍕 Пицца', 13], juice: ['🧃 Сок', 5], coffee: ['☕ Кофе', 7] } };
+    const SHOP_T = { market: ['🛒', 'Супермаркет'], rest: ['🍝', 'Ресторан «Вкусно»'], food: ['🍔', 'Фуд-корт ТЦ «Галерея»'] };
     function shop(kind){
       const L = SHOPS[kind], s = W();
-      H.panel(`<span class="wld-pe">${kind === 'rest' ? '🍝' : '🛒'}</span><b>${kind === 'rest' ? 'Ресторан «Вкусно»' : 'Супермаркет'}</b>`, `<div class="mz-cash"><span>💵 ${s.cash}</span></div><div class="wld-acts">${Object.entries(L).map(([id, [n, p]]) => `<button type="button" data-mz="c:metro:buy:${id}:${p}">${n} — 💵${p}</button>`).join('')}</div><p><small>Купленное — в 🎬 «Действия»: съесть или выпить.</small></p>`);
+      H.panel(`<span class="wld-pe">${(SHOP_T[kind] || SHOP_T.market)[0]}</span><b>${(SHOP_T[kind] || SHOP_T.market)[1]}</b>`, `<div class="mz-cash"><span>💵 ${s.cash}</span></div><div class="wld-acts">${Object.entries(L).map(([id, [n, p]]) => `<button type="button" data-mz="c:metro:buy:${id}:${p}">${n} — 💵${p}</button>`).join('')}</div><p><small>Купленное — в 🎬 «Действия»: съесть или выпить.</small></p>`);
     }
     function buy(item, price){
       if (!spend(price)) return;
@@ -957,5 +1402,5 @@
     return mod;
   }
 
-  root.MirCity = { taskList, SPOTS, spotsOf, ROLES_K, ROLES_M, PETS, QUIZ, WALLET, wallet, K_FIRES, K_CUST, K_PETS, K_FOOT, M_FOOT };
+  root.MirCity = { taskList, SPOTS, spotsOf, ROLES_K, ROLES_M, PETS, QUIZ, WALLET, wallet, K_FIRES, K_CUST, K_PETS, K_BLD, M_BLD };
 })();

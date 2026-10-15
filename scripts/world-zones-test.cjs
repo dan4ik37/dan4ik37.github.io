@@ -235,7 +235,114 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   ok(P.filter(p => p.zone === 'war').every(p => p.age === 12) && P.filter(p => p.zone === 'metro').every(p => p.age === MZ.ADULT_AGE), 'места зон помечены возрастом (12+ / ' + MZ.ADULT_AGE + '+)');
 }
 
-// ═══ 10. Транспорт (js/engine/vehicle.js) ═══
+// ═══ 10. Здания — одна таблица (для будущей «симуляции города»): id, тип, помещения, мэрии, цвет крыш по типу ═══
+{
+  const all = MZ.buildings(), ids = new Set();
+  ok(all.length >= 50, 'зданий в таблице много', all.length);
+  for (const b of all) {
+    ok(/^[a-z][a-z0-9_]*$/.test(b.id) && !ids.has(b.id), 'id здания стабильный и единственный: ' + b.id); ids.add(b.id);
+    ok(MZ.BTYPES[b.type], `${b.id}: тип известен (${b.type})`);
+    ok(b.zone && MZ.ZONES[b.zone] && inRect(MZ.ZONES[b.zone], b.x, b.z), `${b.id}: в своей зоне`);
+    ok(b.roof === MZ.roofColor(b) && /^#[0-9a-f]{6}$/i.test(b.roof), `${b.id}: крыша — цвет типа`);
+    ok(Array.isArray(b.lots) && b.lots.every(l => l.id.startsWith(b.id + ':') && l.kind && l.name), `${b.id}: помещения с номерами`);
+    ok(new Set(b.lots.map(l => l.id)).size === b.lots.length, `${b.id}: номера помещений не повторяются`);
+    if (b.type === 'public') ok(b.sub === 'hall' ? b.lots.length === 1 && b.lots[0].kind === 'mayor' : b.lots.every(l => l.kind !== 'flat' && l.kind !== 'office'), `${b.id}: городское здание — не продаётся (у мэрии — кабинет мэра, внутри — только отдельные места вроде ветклиники)`);
+    if (b.type === 'apartment') ok(b.lots.filter(l => l.kind === 'flat').length >= 2, `${b.id}: квартиры`);
+    if (b.type === 'office' && b.h > 20) ok(b.lots.length >= Math.round(b.h / MZ.FLOOR_H) - 1, `${b.id}: этажи офиса — помещения`);
+    if (b.type === 'lot') ok(b.h === 0 && b.lots[0]?.kind === 'land', `${b.id}: свободный участок — земля под застройку`);
+    if (b.style) ok(MZ.FACADES[b.style], `${b.id}: фасад ${b.style} есть`);
+    if (b.style && b.h > 9) ok(Math.abs(b.h / MZ.FLOOR_H - Math.round(b.h / MZ.FLOOR_H)) < 1e-6, `${b.id}: высота кратна этажу (окна = этажи)`);
+  }
+  for (const z of ['kids', 'metro']) {
+    const L = MZ.buildings(z);
+    ok(L.some(b => b.type === 'public' && b.sub === 'hall'), `${z}: мэрия/ратуша (кабинет будущего мэра)`);
+    ok(L.filter(b => b.type === 'lot').length >= 2, `${z}: свободные участки под застройку`);
+    for (const t of ['public', 'shop', 'cafe']) ok(L.some(b => b.type === t), `${z}: есть ${t}`);
+  }
+  ok(MZ.buildings('metro').some(b => b.h >= 100), 'Большой город — высокий: башня выше 100');
+  ok(MZ.buildings('metro').filter(b => b.h >= 40).length >= 6, 'Большой город — много высоток');
+  ok(MZ.buildings('kids').every(b => b.h <= 12), 'детский городок — невысокий');
+  ok(MZ.buildings('war').every(b => b.type === 'military' && b.lots.length === 0), 'боевая зона — военные объекты, без помещений');
+  const res = new Set(['house', 'apartment']), com = new Set(['shop', 'cafe', 'office', 'hotel']);
+  const rc = t => MZ.roofColor({ type: t });
+  ok([...res].every(t => ![...com].some(c => rc(c) === rc(t))) && rc('public') !== rc('shop') && rc('factory') !== rc('house'), 'сверху: жильё, торговля, город и производство — разного цвета');
+  // места роста городов
+  for (const e of MZ.EXPAND) {
+    const Z = ZONES[e.zone];
+    ok(!ZLIST.some(z => rectsOverlap(z, e, -.01)) && !rectsOverlap(e, RESERVE, 0), `рост ${e.id}: не на зонах и не на районе участков`);
+    ok(e.x0 === Z.x1 || e.x1 === Z.x0 || e.z0 === Z.z1 || e.z1 === Z.z0, `рост ${e.id}: вплотную к своему городу`);
+    ok(MZ.blocked((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2) && !MZ.hillOk((e.x0 + e.x1) / 2, (e.z0 + e.z1) / 2, 10), `рост ${e.id}: без деревьев и холмов`);
+  }
+  // канал: в городе, ниже улиц (под мостами проходят лодки), мосты — на проспектах
+  const C = MZ.CANAL, M = ZONES.metro;
+  ok(C.x0 >= M.x0 && C.x1 <= M.x1 && C.z0 > M.z0 && C.z1 < M.z1, 'канал — в Большом городе');
+  ok(MZ.terrain(200, 258) === C.floor && MZ.water(200, 258) === C.wl && MZ.water(200, 240) === -Infinity && C.wl < -1.5 && C.wl - C.floor > 2, 'канал: вода ниже улиц на 1,5+, глубина — плыть');
+  const ns = MZ.DEFS.metro.streets.filter(s => s.pts[0][0] === s.pts[1][0]);
+  ok(ns.length >= 3 && ns.every(s => Math.min(s.pts[0][1], s.pts[1][1]) < C.z0 && Math.max(s.pts[0][1], s.pts[1][1]) > C.z1), 'проспекты пересекают канал (мосты, эстакада)');
+  for (const b of MZ.buildings('metro')) if (b.h > 0) ok(!rectsOverlap({ x0: b.x - b.w / 2, x1: b.x + b.w / 2, z0: b.z - b.d / 2, z1: b.z + b.d / 2 }, C, 1), `${b.id}: не в канале`);
+}
+
+// ═══ 11. Детали с постоянными номерами (боевая зона, будущие разрушения) ═══
+{
+  const spec = { id: 'w_test', x: 10, z: 20, w: 12, d: 8, h: 4, wall: '#abc', doors: [{ side: 'n', at: 0, w: 2.4 }], windows: [{ side: 's', at: -3, w: 2 }, { side: 'e', at: 0, w: 2 }] };
+  const A = MZ.modular(spec), B = MZ.modular(spec);
+  ok(A.length > 30 && JSON.stringify(A.map(p => p.id)) === JSON.stringify(B.map(p => p.id)), 'детали здания: номера одинаковые при каждой постройке', A.length);
+  ok(new Set(A.map(p => p.id)).size === A.length, 'номера деталей не повторяются');
+  ok(A.every(p => /^w_test:(floor|wall|window|lintel|sill|pillar|roof|parapet):\d+$/.test(p.id) && p.b === 'w_test' && p.destructible === true), 'номер = здание:вид:n, можно ломать');
+  ok(A.every(p => p.x >= 10 - 6.5 && p.x <= 10 + 6.5 && p.z >= 20 - 4.5 && p.z <= 20 + 4.5 && p.w > 0 && p.h > 0 && p.d > 0), 'детали — в границах здания');
+  ok(A.filter(p => p.kind === 'window').length === 2 && A.filter(p => p.kind === 'window').every(p => p.glass), 'окна — стеклом (2)');
+  const wallN = A.filter(p => p.side === 'n' && p.kind === 'wall'), doorGap = wallN.some(p => Math.abs(p.x - 10) < 1.2);
+  ok(wallN.length >= 2 && !doorGap, 'на месте двери стены нет');
+  ok(MZ.modular({ ...spec, destructible: false }).every(p => !p.destructible), 'неразрушаемое — помечено');
+  // группа деталей (крыша изнутри): прячет и возвращает, как Object3D.visible
+  const calls = [], mesh = { setMatrixAt: (i, m) => calls.push([i, m]), instanceMatrix: {} };
+  const P2 = [{ inst: { mesh, i: 0, zero: 'Z' }, m4: 'M0' }, { inst: { mesh, i: 1, zero: 'Z' }, m4: 'M1', broken: true }];
+  const G = MZ.pieceGroup(P2);
+  G.visible = false; ok(calls.length === 2 && calls.every(c => c[1] === 'Z') && G.visible === false, 'группа деталей прячется');
+  calls.length = 0; G.visible = true; ok(calls[0][1] === 'M0' && calls[1][1] === 'Z', 'возвращается — сломанные остаются спрятанными');
+}
+
+// ═══ 12. Постройка зон «вхолостую» (подменный набор K): без ошибок; детали — только в боевой зоне ═══
+{
+  const deep = (nm = 'x') => {
+    const f = function(){};
+    return new Proxy(f, {
+      get(t, k){ if (k === Symbol.toPrimitive) return () => 0; if (k === 'valueOf') return () => 0; if (k === Symbol.iterator) return function*(){}; if (k === 'then') return undefined; if (k in t) return t[k]; return (t[k] = deep(nm + '.' + String(k))); },
+      apply(){ return deep(nm + '()'); }, construct(){ return deep('new ' + nm); }, set(t, k, v){ t[k] = v; return true; },
+    });
+  };
+  const runZone = zone => {
+    const pieces = [], lazies = [], npcs = [], lifts = {};
+    const tgt = { E, Z: ZONES[zone], M: deep('M'), lifts, roofs: [], npcs, items: [], seats: [], bodies: [], yo: 0, pieceList: pieces,
+      piece: o => { const p = { ...o, zone, destructible: o.destructible !== false }; pieces.push(p); return p; },
+      lazy: (x, z, r, gen, y) => lazies.push({ x, z, r, gen, y }),
+      addLift: (id, name, stops) => (lifts[id] = { name, stops }),
+      npc: o => { npcs.push(o); return o; } };
+    const K = new Proxy(tgt, { get: (t, k) => (k in t ? t[k] : (t[k] = deep('K.' + String(k)))), set: (t, k, v) => { t[k] = v; return true; } });
+    tgt.mbuilding = spec => { const list = MZ.modular(spec).map(o => K.piece(o)); return { list, roof: MZ.pieceGroup(list) }; };
+    let err = null;
+    try { for (const _ of MZ.DEFS[zone].build(K)); for (const L of lazies) L.gen(K); } catch (e) { err = e; }
+    return { err, pieces, lazies, npcs, lifts };
+  };
+  const res = {};
+  for (const z of ['kids', 'metro', 'war']) {
+    res[z] = runZone(z);
+    ok(!res[z].err, `${z}: постройка без ошибок`, res[z].err && String(res[z].err.stack || res[z].err).split('\n').slice(0, 3).join(' | '));
+  }
+  ok(res.kids.pieces.length === 0 && res.metro.pieces.length === 0, 'детский и взрослый город — без разрушаемых деталей');
+  const W = res.war.pieces, wid = W.map(p => p.id);
+  ok(W.length > 300 && new Set(wid).size === W.length, 'боевая зона — сотни деталей с разными номерами', W.length);
+  ok(W.every(p => inRect(ZONES.war, p.x, p.z, 1)), 'детали — внутри боевой зоны');
+  ok(W.filter(p => !p.destructible).every(p => p.b === 'w_bunker') && W.some(p => p.b === 'w_bunker'), 'неразрушаемый — только бункер');
+  for (const k of ['wall', 'window', 'roof', 'floor', 'bag', 'crate', 'container']) ok(W.some(p => p.kind === k), 'в боевой зоне есть детали: ' + k);
+  const W2 = runZone('war').pieces.map(p => p.id);
+  ok(JSON.stringify(W2) === JSON.stringify(wid), 'номера деталей боевой зоны одинаковые при каждой постройке (у всех игроков)');
+  for (const id of ['m_mall', 'm_tv', 'm_h1', 'm_h2']) ok(res.metro.lifts[id]?.stops?.length >= 2, `лифт ${id}: остановки`);
+  ok(res.metro.lazies.length >= 3, 'интерьеры Большого города — ленивые (ТЦ, смотровая; этажи башен — в K.towerIn)', res.metro.lazies.length);
+  ok(res.metro.npcs.length >= 20, 'жители Большого города', res.metro.npcs.length);
+}
+
+// ═══ 13. Транспорт (js/engine/vehicle.js) ═══
 if (hasVeh && E.vehicles) require(path.join(__dirname, 'vehicle-test-part.cjs'))({ E, MZ, MW, ok, near });
 else console.log('  (vehicle.js ещё нет — проверки транспорта пропущены)');
 

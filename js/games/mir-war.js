@@ -82,11 +82,22 @@
     red: { icon: '🟥', name: 'Красные', hat: 'army', vest: '#dc2626', stripe: 1 },
     blue: { icon: '🟦', name: 'Синие', hat: 'army', vest: '#2563eb', stripe: 1 },
   };
-  const W_FOOT = [
-    [-124, 150, 22, 16, '#57534e', 5], [-104, 168, 16, 10, '#4d7c0f', 3.6], [-152, 152, 12, 10, '#44403c', 3.6], [-173, 187, 26, 22, '#78716c', 0],
-    [-158, 291, 20, 16, '#6b7280', 7], [-158, 329, 20, 16, '#6b7280', 7], [-158, 360, 8, 8, '#e5e7eb', 14], [-200, 332, 16, 125, '#4b5563', 0],
-    [-276, 200, 30, 6, '#78350f', 0], [-276, 262, 30, 6, '#78350f', 0], [-112, 214, 14, 14, '#a8a29e', 2], [-205, 214, 20, 18, '#78716c', 3], [-238, 330, 12, 12, '#a8a29e', 1.5],
+  // Таблица зданий (MirZones: стабильные id, тип 'military'; помещений нет). Всё наземное здесь — из деталей с номерами (K.mbuilding,
+  // K.piece): стены кусками, плиты, окна, колонны, крыши, укрытия — для будущих разрушений («как в Майне, или на куски»).
+  // destructible: true — можно ломать (боевая зона); бункер — неразрушаемый (destructible: false), город и детский городок — без деталей.
+  const W_BLD = [
+    { id: 'w_hq', type: 'military', sub: 'hq', name: 'Штаб', x: -124, z: 150, w: 22, d: 16, h: 5, wall: '#a8a29e' },
+    { id: 'w_barracks', type: 'military', sub: 'barracks', name: 'Казарма', x: -104, z: 168, w: 16, d: 10, h: 3.6, wall: '#4d7c0f' },
+    { id: 'w_armory', type: 'military', sub: 'armory', name: 'Оружейная', x: -152, z: 152, w: 12, d: 10, h: 3.6, wall: '#57534e' },
+    { id: 'w_hangar1', type: 'military', sub: 'hangar', name: 'Ангар 1', x: -158, z: 291, w: 20, d: 16, h: 7, wall: '#9ca3af' },
+    { id: 'w_hangar2', type: 'military', sub: 'hangar', name: 'Ангар 2', x: -158, z: 329, w: 20, d: 16, h: 7, wall: '#9ca3af' },
+    { id: 'w_control', type: 'military', sub: 'control', name: 'Диспетчерская вышка', x: -158, z: 360, w: 8, d: 8, h: 13.4, wall: '#e5e7eb' },
+    { id: 'w_point_a', type: 'military', sub: 'point', name: 'Точка A · Холм', x: -112, z: 214, w: 14, d: 14, h: 2, wall: '#a8a29e' },
+    { id: 'w_point_b', type: 'military', sub: 'point', name: 'Точка B · Руины', x: -205, z: 214, w: 20, d: 18, h: 3, wall: '#78716c' },
+    { id: 'w_point_c', type: 'military', sub: 'point', name: 'Точка C · Причал', x: -238, z: 330, w: 12, d: 12, h: 1.5, wall: '#a8a29e' },
   ];
+  // земля без зданий: бункер (под землёй), полоса, причалы
+  const W_GROUND = [[-173, 187, 26, 22, '#78716c', 0], [-200, 332, 16, 125, '#4b5563', 0], [-276, 200, 30, 6, '#78350f', 0], [-276, 262, 30, 6, '#78350f', 0]];
   const W_PLACES = [
     { id: 'w_base', icon: '🏯', name: 'Военная база', x: -110, z: 132, lx: -124, lz: 150, sub: 1 },
     { id: 'w_bunker', icon: '🕳️', name: 'Бункер', x: -150, z: 187, lx: -173, lz: 187, sub: 1 },
@@ -96,7 +107,7 @@
     { id: 'w_range', icon: '🤖', name: 'Полигон с роботами', x: -111, z: 244, lx: -111, lz: 270, sub: 1 },
   ];
   MZ.def('war', {
-    roles: ROLES_W, footprints: W_FOOT, places: W_PLACES,
+    roles: ROLES_W, buildings: W_BLD, extraFoot: W_GROUND, places: W_PLACES,
     streets: [{ w: 7, pts: [[-70, 130], [-140, 130], [-140, 386]] }],
     ground: [[-166, 250, 192, 300, '#a89a72'], [-200, 332, 16, 125, '#4b5563', .02], [-140, 258, 7, 256, '#5b6270', .02], [-105, 130, 70, 7, '#5b6270', .02]],
     *build(K){ yield* buildWar(K); },
@@ -104,8 +115,10 @@
   });
 
   // ═══ ПОСТРОЙКА ═══
+  const WB = id => W_BLD.find(b => b.id === id);
   function* buildWar(K){
     const { R } = K, M = K.M, rnd = (K.E.rng || (s => Math.random))(4242);
+    K.nBags = 0; K.nCrate = 0; K.nBlock = 0;   // номера укрытий — по порядку постройки (одинаковые у всех)
     K.spots = {};
     const spot = (id, x, y, z) => (K.spots[id] = { x, y, z });
     K.M.mil = R.tex('sidewalk', { tint: '#c7c1a8', tile: 3, flatColor: '#a8a07c' });
@@ -123,8 +136,7 @@
     yield;
     // ── КПП: будка, шлагбаум, предупреждение, щит режима, телепорт в лобби ──
     K.chunk('gate');
-    K.box(-78, 0, 122, 3, 3, 3, '#e7e5e4', { solid: true, cam: true }); K.part({ s: 'box', x: -78, y: 2, z: 123.55, w: 2, h: .9, d: .06, m: M.glass });
-    K.box(-78, 3, 122, 3.4, .25, 3.4, '#b91c1c');
+    K.mbuilding({ id: 'w_gate', x: -78, z: 122, w: 3, d: 3, h: 3, wall: '#e7e5e4', trim: '#b91c1c', roofC: '#b91c1c', floorC: '#a8a29e', windows: [{ side: 's', at: 0, w: 2, h: .9 }], interior: false });
     for (let i = 0; i < 6; i++) K.part({ s: 'box', x: -76, y: 1.1, z: 125.4 + i * .8, w: .12, h: .16, d: .8, c: i % 2 ? '#f8fafc' : '#dc2626' });
     K.board(-86, 2.4, 124.2, 5, 2.2, 0, '⚠️ Боевая зона 12+: здесь можно сражаться', { bg: '#7f1d1d' });
     K.box(-86, 0, 124, .2, 1.3, .2, '#57534e', { solid: true });
@@ -136,7 +148,7 @@
     // ── Главная база: штаб, казарма, оружейная, вышки, флаг, палатка наёмников ──
     K.chunk('base');
     K.part({ s: 'box', x: -112, y: .03, z: 152, w: 46, h: .02, d: 44, m: K.M.mil });
-    K.building({ id: 'w_hq', x: -124, z: 150, w: 22, d: 16, h: 5, wall: '#a8a29e', trim: '#3f6212', roofC: '#44403c', floor: '#a8a29e', floorType: 'concrete', floorM: M.concrete,
+    K.mbuilding({ id: 'w_hq', x: -124, z: 150, w: 22, d: 16, h: 5, wall: '#a8a29e', trim: '#3f6212', roofC: WB('w_hq').roof, floorC: '#a8a29e', floorType: 'concrete',
       doors: [{ side: 'n', at: 0, w: 3 }], windows: [{ side: 'n', at: -7, w: 2.4 }, { side: 'n', at: 7, w: 2.4 }, { side: 'e', at: 0, w: 2.4 }], sign: '🪖 Штаб', signBg: '#3f6212' });
     K.table(-124, 152, 5, 3, '#365314', .9); K.part({ s: 'box', x: -124, y: .92, z: 152, w: 4.6, h: .02, d: 2.6, c: '#84cc16' });
     for (const [x, z] of [[-122, 151.4], [-126, 152.6], [-123.4, 153]]) K.part({ s: 'cone', x, y: 1.05, z, r: .12, h: .25, c: ['#dc2626', '#2563eb', '#facc15'][(x * 7 | 0) % 3 & 3] || '#dc2626' });
@@ -144,21 +156,22 @@
     K.npc({ id: 'w_general', name: '🎖️ Генерал', x: -124, z: 155.5, yaw: 180, seed: 'general', say: ['Боец! Захвати точки A, B и C 🚩', 'В бункере — оружейная и аптечки', 'Наёмники — в палатке у КПП, 30 🪙'] });
     spot('w_map', -124, 1.2, 149.6);
     // казарма
-    K.building({ id: 'w_barracks', x: -104, z: 168, w: 16, d: 10, h: 3.6, wall: '#4d7c0f', trim: '#365314', roofC: '#3f6212', floor: '#78716c', floorType: 'concrete', floorM: M.concrete,
+    K.mbuilding({ id: 'w_barracks', x: -104, z: 168, w: 16, d: 10, h: 3.6, wall: '#4d7c0f', trim: '#365314', roofC: WB('w_barracks').roof, floorC: '#78716c', floorType: 'concrete',
       doors: [{ side: 'w', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4, w: 2 }, { side: 'n', at: 4, w: 2 }] });
     for (let i = 0; i < 4; i++) K.bed(-109 + i * 3.4, 171, PI, '#4d7c0f');
     // оружейная
-    K.building({ id: 'w_armory', x: -152, z: 152, w: 12, d: 10, h: 3.6, wall: '#57534e', trim: '#292524', roofC: '#292524', floor: '#78716c', floorType: 'concrete', floorM: M.concrete,
+    K.mbuilding({ id: 'w_armory', x: -152, z: 152, w: 12, d: 10, h: 3.6, wall: '#57534e', trim: '#292524', roofC: WB('w_armory').roof, floorC: '#78716c', floorType: 'concrete',
       doors: [{ side: 'e', at: 0, w: 2.4 }], sign: '🔫 Оружейная', signBg: '#292524' });
     for (let i = 0; i < 4; i++) { K.box(-157.4, .12, 148.5 + i * 2.3, .5, 2, 1.8, '#44403c', { solid: true }); for (let k = 0; k < 3; k++) K.part({ s: 'box', x: -157.1, y: .9 + k * .5, z: 148.5 + i * 2.3, w: .1, h: .14, d: 1.4, c: ['#38bdf8', '#f472b6', '#60a5fa'][k] }); }
     K.item({ x: -154.5, y: 1.2, z: 152, r: 1.6, prompt: () => '🔫 Оружейная: аптечка и полный заряд', act: () => K.rt.war?.armory() });
     K.npc({ id: 'w_armorer', name: '🔧 Оружейник', x: -150, z: 155, yaw: 270, seed: 'oruzh1', say: ['Пена, краска, вода — выбирай! 🔫', 'Клавиши 1–5 — оружие, F — стрелять'] });
     // вышки (с лестницей наверх)
-    for (const [x, z] of [[-100, 140], [-158, 172], [-102, 186]]) {
-      for (const [sx, sz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) K.part({ s: 'box', x: x + sx, y: 3, z: z + sz, w: .25, h: 6, d: .25, c: '#78350f' });
-      K.box(x, 6, z, 3.2, .25, 3.2, '#92400e', { solid: true, floor: 'wood' });
-      for (const [w, d, ox, oz] of [[3.2, .12, 0, -1.6], [3.2, .12, 0, 1.6], [.12, 3.2, -1.6, 0]]) K.box(x + ox, 6.25, z + oz, w, .9, d, '#78350f', { solid: true });
-      K.box(x, 7.6, z, 3.6, .2, 3.6, '#365314');
+    for (const [i, [x, z]] of [[-100, 140], [-158, 172], [-102, 186]].entries()) {
+      const id = 'w_watch' + (i + 1), pc = (kind, n, o) => K.piece({ id: `${id}:${kind}:${n}`, kind, b: id, ...o });
+      [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]].forEach(([sx, sz], k) => pc('pillar', k + 1, { x: x + sx, y: 3, z: z + sz, w: .25, h: 6, d: .25, c: '#78350f', solid: false }));
+      pc('floor', 1, { x, y: 6.125, z, w: 3.2, h: .25, d: 3.2, c: '#92400e', floor: 'wood' });
+      [[3.2, .12, 0, -1.6], [3.2, .12, 0, 1.6], [.12, 3.2, -1.6, 0]].forEach(([w, d, ox, oz], k) => pc('wall', k + 1, { x: x + ox, y: 6.7, z: z + oz, w, h: .9, d, c: '#78350f' }));
+      pc('roof', 1, { x, y: 7.7, z, w: 3.6, h: .2, d: 3.6, c: '#365314', solid: false });
       if (K.E.ladder) { K.part({ s: 'box', x: x + 1.75, y: 3.1, z, w: .08, h: 6.2, d: .7, c: '#a16207' }); K.E.ladder(K.ph, { x: x + 2, z, yaw: -PI / 2, top: 6.25, w: .8 }); }
     }
     // флаг
@@ -179,12 +192,13 @@
       const stair = { x0: x1 - 10, x1: x1, z0: cz - 2.2, z1: cz + 2.2 };   // лестница вдоль восточной стены, вниз — на запад
       K.part({ s: 'box', x: cx, y: F + .01, z: cz, w: W, h: .02, d: D, m: M.concrete });
       // стены по краю (от пола до земли)
-      for (const [x, z, w, d] of [[cx, z0 + .2, W, .4], [cx, z1 - .2, W, .4], [x0 + .2, cz, .4, D], [x1 - .2, cz, .4, D]]) K.box(x, F, z, w, -F, d, '#78716c', { solid: true, cam: true });
-      // плита-крыша: всё, кроме проёма над лестницей (своя группа — прячется изнутри)
-      const roof = K.group(0, 0, 0, 0, K.root); roof.userData.dyn = true;
-      const slab = (ax0, ax1, az0, az1) => { if (ax1 - ax0 < .05 || az1 - az0 < .05) return; K.R.part(roof, { s: 'box', x: (ax0 + ax1) / 2, y: BK.roof / 2, z: (az0 + az1) / 2, w: ax1 - ax0, h: -BK.roof, d: az1 - az0, m: K.M.mil }); K.body({ x: (ax0 + ax1) / 2, z: (az0 + az1) / 2, y: BK.roof / 2, hx: (ax1 - ax0) / 2, hy: -BK.roof / 2, hz: (az1 - az0) / 2, tag: 'roof', data: { cam: false } }); };
+      const bp = (kind, n, o) => K.piece({ id: `w_bunker:${kind}:${n}`, kind, b: 'w_bunker', destructible: false, ...o });
+      [[cx, z0 + .2, W, .4], [cx, z1 - .2, W, .4], [x0 + .2, cz, .4, D], [x1 - .2, cz, .4, D]].forEach(([x, z, w, d], k) => bp('wall', k + 1, { x, y: F / 2, z, w, h: -F, d, c: '#78716c', cam: true }));
+      // плита-крыша: всё, кроме проёма над лестницей (детали; изнутри прячутся — группа деталей)
+      const roofP = [];
+      const slab = (ax0, ax1, az0, az1) => { if (ax1 - ax0 < .05 || az1 - az0 < .05) return; roofP.push(bp('roof', roofP.length + 1, { x: (ax0 + ax1) / 2, y: BK.roof / 2, z: (az0 + az1) / 2, w: ax1 - ax0, h: -BK.roof, d: az1 - az0, c: '#b5ad8f' })); };
       slab(x0, stair.x0, z0, z1); slab(stair.x0, x1, z0, stair.z0); slab(stair.x0, x1, stair.z1, z1);
-      K.roofs.push(roof);
+      const roof = MZ.pieceGroup(roofP);
       K.body({ x: cx, z: cz, y: F / 2, hx: W / 2 - .4, hy: -F / 2 + .2, hz: D / 2 - .4, trigger: true, tag: 'room', data: { room: 'w_bunker', roof } });
       // лестница: 12 ступеней от земли вниз на запад, по бокам — стенки
       const n = 12, step = -F / n, len = stair.x1 - stair.x0;
@@ -214,7 +228,7 @@
       K.box(-276, 0, pz, 30, .3, 6, '#78350f', { solid: true, floor: 'wood', m: M.planks });
       for (let i = 0; i < 6; i++) for (const s of [-1, 1]) K.cyl(-264 - i * 5, -7, pz + s * 2.6, .25, 7.2, '#57534e', { solid: true });
     }
-    for (let i = 0; i < 10; i++) { const c = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed'][i % 5]; K.box(-245 - (i % 2) * 3, (i > 5 ? 2.6 : 0), 160 + (i % 6) * 7, 2.6, 2.6, 6, c, { solid: true }); }
+    for (let i = 0; i < 10; i++) { const c = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed'][i % 5]; K.piece({ id: `w_port:container:${i + 1}`, kind: 'container', b: 'w_port', x: -245 - (i % 2) * 3, y: (i > 5 ? 2.6 : 0) + 1.3, z: 160 + (i % 6) * 7, w: 2.6, h: 2.6, d: 6, c, hp: 200, cam: true }); }
     K.cyl(-252, 0, 232, .5, 16, '#facc15', { solid: true }); K.part({ s: 'box', x: -262, y: 16, z: 232, w: 22, h: .6, d: .6, c: '#facc15' }); K.part({ s: 'cyl', x: -270, y: 13, z: 232, r: .03, h: 6, c: '#374151' });
     warship(K, -300, 232, 0);
     for (const [x, z, yaw] of VEH.boat) boatModel(K, x, z, yaw);
@@ -226,13 +240,19 @@
     K.part({ s: 'box', x: -200, y: .03, z: 332, w: 16, h: .02, d: 125, m: M.asphalt });
     for (let z = 276; z < 392; z += 9) K.part({ s: 'box', x: -200, y: .045, z, w: .5, h: .01, d: 4.5, c: '#f8fafc' });
     for (const s of [-1, 1]) for (let z = 272; z < 394; z += 6) K.part({ s: 'ball', x: -200 + s * 8.2, y: .12, z, r: .12, c: s < 0 ? '#facc15' : '#4ade80', m: 'glow', seg: 6 });
-    for (const hz of [291, 329]) {
-      K.building({ id: 'w_hangar' + hz, x: -158, z: hz, w: 20, d: 16, h: 7, wall: '#9ca3af', trim: '#4b5563', roofC: '#4b5563', floor: '#6b7280', floorType: 'concrete', floorM: M.concrete,
-        doors: [{ side: 'w', at: 0, w: 12, h: 6 }], sign: hz < 300 ? '✈️ Ангар 1' : '✈️ Ангар 2', signBg: '#374151' });
+    for (const [k, hz] of [291, 329].entries()) {
+      const id = 'w_hangar' + (k + 1);
+      K.mbuilding({ id, x: -158, z: hz, w: 20, d: 16, h: 7, wall: '#9ca3af', trim: '#4b5563', roofC: WB(id).roof, floorC: '#6b7280', floorType: 'concrete',
+        doors: [{ side: 'w', at: 0, w: 12, h: 6 }], sign: k ? '✈️ Ангар 2' : '✈️ Ангар 1', signBg: '#374151' });
     }
     planeModel(K, -160, 291, -PI / 2);
-    K.box(-158, 0, 360, 6, 10, 6, '#e5e7eb', { solid: true, cam: true });
-    K.box(-158, 10, 360, 8, 3, 8, '#bae6fd', { solid: true }); K.part({ s: 'box', x: -158, y: 13.2, z: 360, w: 8.6, h: .4, d: 8.6, c: '#374151' });
+    {
+      const pc = (kind, n, o) => K.piece({ id: `w_control:${kind}:${n}`, kind, b: 'w_control', ...o });
+      [[0, -2.85, 6, .3], [0, 2.85, 6, .3], [-2.85, 0, .3, 5.4], [2.85, 0, .3, 5.4]].forEach(([dx, dz, w, d], k) => pc('wall', k + 1, { x: -158 + dx, y: 5, z: 360 + dz, w, h: 10, d, c: '#e5e7eb', cam: true }));
+      pc('floor', 1, { x: -158, y: 10.1, z: 360, w: 8, h: .2, d: 8, c: '#9ca3af' });
+      [[0, -3.95, 8, .1], [0, 3.95, 8, .1], [-3.95, 0, .1, 8], [3.95, 0, .1, 8]].forEach(([dx, dz, w, d], k) => pc('window', k + 1, { x: -158 + dx, y: 11.6, z: 360 + dz, w, h: 2.8, d, glass: true }));
+      pc('roof', 1, { x: -158, y: 13.2, z: 360, w: 8.6, h: .4, d: 8.6, c: WB('w_control').roof });
+    }
     K.label.sign('🛫 Аэродром', -161.1, 6, 360, 5, .8, -PI / 2, { bg: '#1e3a8a', w: 640, h: 100 });
     for (const [x, z] of VEH.heli) {
       K.cyl(x, 0, z, 6, .12, '#374151', { solid: true, seg: 24 }); K.part({ s: 'ring', x, y: .14, z, r: 5.4, r2: 5, rx: -PI / 2, c: '#facc15' });
@@ -252,7 +272,7 @@
       P.h = h;
     }
     // руины у точки B
-    for (const [dx, dz, w, d, hh] of [[-8, -6, 6, .5, 3], [-6, 7, .5, 5, 2.4], [7, -7, .5, 4, 3.4], [6, 6, 5, .5, 2], [0, -9, 3, .5, 1.6]]) K.box(-205 + dx, 0, 214 + dz, w, hh, d, '#78716c', { solid: true, cam: true });
+    [[-8, -6, 6, .5, 3], [-6, 7, .5, 5, 2.4], [7, -7, .5, 4, 3.4], [6, 6, 5, .5, 2], [0, -9, 3, .5, 1.6]].forEach(([dx, dz, w, d, hh], k) => K.piece({ id: `w_point_b:wall:${k + 1}`, kind: 'wall', b: 'w_point_b', x: -205 + dx, y: hh / 2, z: 214 + dz, w, h: hh, d, c: '#78716c', cam: true }));
     // полигон: мишени, ограда
     K.part({ s: 'box', x: -111, y: .03, z: 270, w: 30, h: .02, d: 44, m: M.dirt });
     for (let i = 0; i < 6; i++) { const x = -122 + i * 4.4; K.cyl(x, 0, 290, .08, 1.2, '#78350f'); K.part({ s: 'cyl', x, y: 1.6, z: 290, r: .7, h: .1, rx: PI / 2, c: '#f8fafc' }); K.part({ s: 'cyl', x, y: 1.6, z: 289.94, r: .45, h: .1, rx: PI / 2, c: '#dc2626' }); }
@@ -264,18 +284,21 @@
       if (MZ.inRect(BK, x, z, 6) || Math.abs(x + 140) < 6 || Math.abs(z - 130) < 6 || (x < -186 && x > -214 && z > 265) || Math.hypot(x + 124, z - 152) < 30 || POINTS.some(P => Math.hypot(P.x - x, P.z - z) < 9) || (x > -126 && x < -96 && z > 248 && z < 292) || x < -250) continue;
       const t = rnd();
       if (t < .4) sandbags(K, x, z, rnd() * PI);
-      else if (t < .75) K.box(x, 0, z, 1.6, 1.6, 1.6, '#a16207', { solid: true });
-      else K.box(x, 0, z, 3.2, 1.2, .9, '#9ca3af', { solid: true, yaw: rnd() * PI });
+      else if (t < .75) K.piece({ id: `w_cover:crate:${++K.nCrate}`, kind: 'crate', b: 'w_cover', x, y: .8, z, w: 1.6, h: 1.6, d: 1.6, c: '#a16207', hp: 40 });
+      else K.piece({ id: `w_cover:block:${++K.nBlock}`, kind: 'block', b: 'w_cover', x, y: .6, z, w: 3.2, h: 1.2, d: .9, yaw: rnd() * PI, c: '#9ca3af', hp: 150 });
     }
     for (let k = 0; k < 18; k++) { const x = WZ.x0 + 100 + rnd() * 160, z = WZ.z0 + 15 + rnd() * 270; if (!MZ.inRect(BK, x, z, 8) && Math.abs(x + 140) > 8 && Math.abs(x + 200) > 12 && Math.hypot(x + 124, z - 152) > 32) K.tree(x, z, 1, -1); }
     yield;
     K.flush();
     K.done = true;
   }
+  // мешки с песком: каждый мешок — деталь с номером (укрытие можно будет разбить по мешку)
   function sandbags(K, x, z, yaw){
-    const g = K.group(x, 0, z, yaw);
-    for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) K.R.part(g, { s: 'box', x: -1.5 + i + (r ? .5 : 0), y: .22 + r * .4, w: .95, h: .4, d: .7, c: '#b7a37a' });
-    K.body({ x, z, y: .45, hx: 2, hy: .45, hz: .4, yaw, tag: 'cover' });
+    const n = ++K.nBags, c = Math.cos(yaw), s = Math.sin(yaw);
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
+      const lx = -1.5 + i + (r ? .5 : 0);
+      K.piece({ id: `w_cover:bags${n}:${r * 4 + i + 1}`, kind: 'bag', b: 'w_cover', x: x + c * lx, y: .22 + r * .4, z: z - s * lx, w: .95, h: .4, d: .7, yaw, c: '#b7a37a', hp: 30 });
+    }
   }
   // модели транспорта (пока стоят; ездить — vehicle.js)
   function boatModel(K, x, z, yaw){

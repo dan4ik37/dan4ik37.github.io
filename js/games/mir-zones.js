@@ -28,11 +28,13 @@
   const WAR_AGE = 12;
 
   // ═══ Зоны (прямоугольники) ═══
+  // 15.10.2026 (владелец: «город побольше в высоту, разных зданий»): Большой город вырос на восток и юг — небоскрёбы, ТЦ,
+  // телебашня, отель, паркинг, канал с мостами и эстакада; детский — на восток (ратуша, цветные дома, свободные участки)
   const ZONES = {
-    kids: { id: 'kids', name: 'Солнечный городок', short: 'Детский город', icon: '🧸', age: 0, x0: 110, x1: 250, z0: -80, z1: 40, color: '#facc15',
+    kids: { id: 'kids', name: 'Солнечный городок', short: 'Детский город', icon: '🧸', age: 0, x0: 110, x1: 290, z0: -80, z1: 40, color: '#facc15',
       entry: { x: 118, z: -24, yaw: PI / 2 }, gate: { x: 110, z: -24 }, sub: 'Детский город: работы, школа, питомцы, игровая площадка' },
-    metro: { id: 'metro', name: 'Большой город', short: 'Город', icon: '🏙️', age: ADULT_AGE, x0: 90, x1: 270, z0: 100, z1: 260, color: '#60a5fa',
-      entry: { x: 98, z: 130, yaw: PI / 2 }, gate: { x: 90, z: 130 }, sub: 'Город для взрослых: работы с зарплатой, полиция и грабители, банк, бизнес' },
+    metro: { id: 'metro', name: 'Большой город', short: 'Город', icon: '🏙️', age: ADULT_AGE, x0: 90, x1: 340, z0: 100, z1: 350, color: '#60a5fa',
+      entry: { x: 98, z: 130, yaw: PI / 2 }, gate: { x: 90, z: 130 }, sub: 'Город для взрослых: небоскрёбы, работы с зарплатой, полиция и грабители, банк, бизнес' },
     war: { id: 'war', name: 'Боевая зона', short: 'Боевая зона', icon: '🪖', age: WAR_AGE, x0: -340, x1: -70, z0: 100, z1: 400, color: '#ef4444',
       entry: { x: -84, z: 130, yaw: -PI / 2 }, gate: { x: -70, z: 130 }, sub: 'Мультяшный бой: база, бункер, порт, аэродром, наёмники' },
   };
@@ -42,6 +44,23 @@
   // Море и бункер боевой зоны: дыры в земле, дно (ph.terrain) и вода (ph.waterLevel) — нужны миру сразу, до подгрузки зоны
   const SEA = { x0: -420, x1: -262, z0: 112, z1: 396, wl: -.55, floor: -7 };
   const BUNKER = { x0: -186, x1: -160, z0: 176, z1: 198, floor: -5.4, roof: -.35 };
+  // Канал Большого города (с востока на запад через весь город): мосты на проспектах, эстакада над ним, пешеходные мостики
+  const CANAL = { x0: 90, x1: 340, z0: 252, z1: 264, wl: -2.4, floor: -5.6 };   // вода ниже улиц: под мостами проходят лодки
+  // Места под рост городов (будущий «градостроитель»): здесь ничего своего не строим — ни деревьев, ни холмов
+  const EXPAND = [
+    { id: 'kids_e', zone: 'kids', x0: 290, x1: 350, z0: -80, z1: 40, name: 'Рост Солнечного городка (восток)' },
+    { id: 'metro_e', zone: 'metro', x0: 340, x1: 420, z0: 100, z1: 350, name: 'Рост Большого города (восток)' },
+    { id: 'metro_s', zone: 'metro', x0: 90, x1: 340, z0: 350, z1: 420, name: 'Рост Большого города (юг)' },
+  ];
+  // ═══ Типы зданий (одна таблица для будущей «симуляции города»): цвет крыши — по типу, чтобы город читался сверху ═══
+  // жильё — зелёное, торговля и офисы — синие, производство — жёлтое, город (мэрия, школа, больница, полиция, пожарные) — красное
+  const BTYPES = {
+    house: ['🏠', 'Дом', '#4d9a3c'], apartment: ['🏢', 'Жилой дом', '#2f7d4a'], shop: ['🛍️', 'Магазин', '#2f6fd6'], cafe: ['☕', 'Кафе', '#4f8fe8'],
+    office: ['🏙️', 'Офис', '#22489c'], hotel: ['🏨', 'Отель', '#5b57d0'], service: ['🔧', 'Сервис', '#b0761e'], factory: ['🏭', 'Производство', '#d6a21e'],
+    public: ['🏛️', 'Городское здание', '#c23a3a'], parking: ['🅿️', 'Паркинг', '#6b7280'], park: ['🌳', 'Парк', '#6ec466'], lot: ['🚧', 'Свободный участок', '#b7d77a'],
+    military: ['🪖', 'Военный объект', '#5b6b2e'],
+  };
+  const roofColor = b => (b.type === 'public' && b.sub === 'hall' ? '#a3242a' : (BTYPES[b.type] || BTYPES.lot)[2]);
   // Старые места мира — для плашки «где я» и карты (как в mir.js buildWorld)
   const AREAS = [
     { id: 'cafe', icon: '☕', name: 'Кафе «У Денчика»', x0: -11, x1: 11, z0: -43, z1: -29 },
@@ -112,12 +131,12 @@
   }
   const groundRect = () => { const [x0, z0, x1, z1] = bounds(); return [x0 - 220, z0 - 220, x1 + 220, z1 + 220]; };
   // Деревья и трава мира — не на дорогах, телепортах и в зонах
-  const blocked = (x, z) => ZLIST.some(Z => inRect(Z, x, z, 6)) || inRect(RESERVE, x, z) || roadDist(x, z) < 4 || PADS.some(p => Math.hypot(p.x - x, p.z - z) < 2.2);
-  // Холм на горизонте: только целиком за краем мира (иначе — насквозь проходимая гора посреди зоны)
-  const hillOk = (x, z, r) => { const [x0, z0, x1, z1] = bounds(); return x + r < x0 || x - r > x1 || z + r < z0 || z - r > z1; };
-  // Рельеф зон: море (дно SEA.floor, у берега отвесная набережная) и бункер (пол ниже земли)
-  const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : 0;
-  const water = (x, z) => inRect(SEA, x, z) ? SEA.wl : -Infinity;
+  const blocked = (x, z) => ZLIST.some(Z => inRect(Z, x, z, 6)) || inRect(RESERVE, x, z) || EXPAND.some(r => inRect(r, x, z, 4)) || roadDist(x, z) < 4 || PADS.some(p => Math.hypot(p.x - x, p.z - z) < 2.2);
+  // Холм на горизонте: только целиком за краем мира (иначе — насквозь проходимая гора посреди зоны) и не на месте роста городов
+  const hillOk = (x, z, r) => { const [x0, z0, x1, z1] = bounds(); return (x + r < x0 || x - r > x1 || z + r < z0 || z - r > z1) && !EXPAND.some(e => rectsOverlap(e, { x0: x - r, x1: x + r, z0: z - r, z1: z + r })); };
+  // Рельеф зон: море (дно SEA.floor, у берега отвесная набережная), бункер (пол ниже земли), канал Большого города
+  const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : inRect(CANAL, x, z) ? CANAL.floor : 0;
+  const water = (x, z) => inRect(SEA, x, z) ? SEA.wl : inRect(CANAL, x, z) ? CANAL.wl : -Infinity;
   // Возрастные ворота: { ok } | { ok: false, why: 'unknown' | 'young' }
   function gateOf(Z, A = root.D37Age){
     if (!Z || !Z.age || !A) return { ok: true };
@@ -125,9 +144,42 @@
     return A.canOpen(Z.age) ? { ok: true } : { ok: false, why: 'young' };
   }
 
+  // ═══ Здания — ОДНА таблица (для будущей «симуляции города»: владение, бизнесы, выборы мэра) ═══
+  // Файлы зон отдают def(…, { buildings: [...] }): { id (стабильный, не менять), type (BTYPES), sub (мэрия hall, школа school,
+  // больница hospital, полиция police, пожарные fire, суд court…), name, icon, x, z, w, d, h, wall, style (фасад небоскрёба),
+  // lots (помещения — их потом смогут покупать игроки; нет — посчитаются сами) }. Отсюда же — силуэты зон и карта.
+  const FLOOR_H = 3.2;
+  function lotsOf(b){
+    const L = [], add = (kind, name, floor = 0) => L.push({ id: `${b.id}:${L.length + 1}`, kind, name, floor });
+    if (Array.isArray(b.lots)) { for (const l of b.lots) add(l.kind || b.type, l.name || b.name, l.floor || 0); return L; }
+    const floors = Math.max(1, Math.round((b.h || FLOOR_H) / FLOOR_H));
+    if (b.type === 'public') { if (b.sub === 'hall') add('mayor', 'Кабинет мэра', 0); return L; }
+    if (b.type === 'park' || b.type === 'military') return L;
+    if (b.type === 'lot') { add('land', 'Земля под застройку'); return L; }
+    if (b.type === 'apartment') {
+      const per = b.w * b.d > 320 ? 4 : 2, from = b.shops ? 1 : 0;
+      for (let i = 0; i < (b.shops || 0); i++) add('shop', `Магазин ${i + 1} на 1-м этаже`, 0);
+      for (let f = from; f < Math.min(floors, 30); f++) for (let k = 0; k < per; k++) add('flat', `Квартира ${f + 1}${String.fromCharCode(1072 + k)}`, f);
+      return L;
+    }
+    if (b.type === 'office') { for (let f = 0; f < Math.min(floors, 40); f++) add('office', f ? `Офис на ${f + 1}-м этаже` : 'Холл и приёмная', f); return L; }
+    add(b.type === 'house' ? 'home' : b.type, b.name, 0);
+    for (let f = 1; f < floors && b.flats; f++) add('flat', `Квартира на ${f + 1}-м этаже`, f);
+    return L;
+  }
+  const buildings = zone => { const out = []; for (const [id, d] of Object.entries(DEFS)) if (!zone || zone === id) for (const b of d.buildings || []) out.push(b); return out; };
+  const building = id => { for (const d of Object.values(DEFS)) for (const b of d.buildings || []) if (b.id === id) return b; return null; };
+
   // ═══ Роли и действия (их дают файлы зон): ROLES[id] = { icon, name, zone, hat, vest, color, pay } ═══
   const DEFS = {}, ROLES = {};
-  const def = (id, d) => { DEFS[id] = d; for (const [k, r] of Object.entries(d.roles || {})) ROLES[k] = { ...r, id: k, zone: id }; return d; };
+  const def = (id, d) => {
+    DEFS[id] = d;
+    for (const [k, r] of Object.entries(d.roles || {})) ROLES[k] = { ...r, id: k, zone: id };
+    // таблица зданий: зона, помещения, цвет крыши; силуэты и карта — из неё (+ площади и парки — extraFoot)
+    for (const b of d.buildings || []) { b.zone = id; b.lots = lotsOf(b); b.roof = b.roof || roofColor(b); if (!b.icon) b.icon = (BTYPES[b.type] || BTYPES.lot)[0]; }
+    if (!d.footprints) d.footprints = [...(d.buildings || []).map(b => [b.x, b.z, b.w, b.d, b.wall || b.roof, b.h ?? 4, b.style || null, b.roof]), ...(d.extraFoot || [])];
+    return d;
+  };
 
   // ═══ Своё состояние игрока по сети (поле zx в 'st'): что можно — белым списком ═══
   // r роль · f семья · a действие · sl [x, y, z, yaw] место (сесть/лечь) · t команда 1/2 · h жизни 0…10 · w оружие · m наёмников
@@ -189,9 +241,13 @@
     const D = district();
     rr(RESERVE, 'rgba(147,207,124,.32)'); rr(D, 'rgba(147,207,124,.55)');
     g.strokeStyle = 'rgba(255,255,255,.4)'; g.setLineDash([5, 4]); g.strokeRect(sx(RESERVE.x0), sz(RESERVE.z0), (RESERVE.x1 - RESERVE.x0) * sc, (RESERVE.z1 - RESERVE.z0) * sc); g.setLineDash([]);
+    // места роста городов — пунктир
+    g.strokeStyle = 'rgba(255,255,255,.28)'; g.setLineDash([3, 4]);
+    for (const e of EXPAND) g.strokeRect(sx(e.x0), sz(e.z0), (e.x1 - e.x0) * sc, (e.z1 - e.z0) * sc);
+    g.setLineDash([]);
     // зоны
     for (const Z of ZLIST) { rr(Z, Z.id === 'war' ? '#8a7f5a' : Z.id === 'kids' ? '#7fc96a' : '#8b95a6', .9); g.strokeStyle = Z.color; g.lineWidth = Math.max(1.5, sc * 1.2); g.strokeRect(sx(Z.x0), sz(Z.z0), (Z.x1 - Z.x0) * sc, (Z.z1 - Z.z0) * sc); }
-    rr(SEA, '#2f7fc1');
+    rr(SEA, '#2f7fc1'); rr(CANAL, '#3a8fd0');
     // дороги
     g.lineCap = 'round'; g.lineJoin = 'round';
     const road = (pts, w, c) => { g.strokeStyle = c; g.lineWidth = Math.max(2, w * sc); g.beginPath(); pts.forEach(([x, z], i) => (i ? g.lineTo(sx(x), sz(z)) : g.moveTo(sx(x), sz(z)))); g.stroke(); };
@@ -206,7 +262,7 @@
     // здания: старые и зон
     const foot = (x, z, w, d, c) => { g.fillStyle = c; g.fillRect(sx(x - w / 2), sz(z - d / 2), Math.max(1, w * sc), Math.max(1, d * sc)); };
     for (const [, x, z, w, d, c] of FOOT0) foot(x, z, w, d, c);
-    for (const d of Object.values(DEFS)) for (const f of d.footprints || []) foot(f[0], f[1], f[2], f[3], f[4]);
+    for (const d of Object.values(DEFS)) for (const f of d.footprints || []) foot(f[0], f[1], f[2], f[3], f[7] || f[4]);   // сверху — крыша (цвет по типу здания)
     // названия зон и метки возраста
     const fs = Math.max(10, Math.min(18, W / 34));
     g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -305,54 +361,226 @@
   }
   const disposeOwn = grp => grp.traverse(x => { if (x.isMesh && x.userData.mzOwn) x.geometry.dispose(); });
 
-  // ═══ Надписи: один холст на зону (атлас) — все вывески одной сеткой ═══
+  // ═══ Здание из деталей с постоянными номерами (боевая зона): чистая функция — проверяется в node ═══
+  // spec: { id, x, z, w, d, h, wall, trim, roofC, floorC, floorType, doors: [{ side, at, w, h }], windows: [{ side, at, w, h }], destructible }
+  // Номер детали: «<здание>:<вид>:<n>» — n по порядку постройки (одинаковый у всех игроков и после перезагрузки).
+  // Виды: floor (плиты пола ≤ 4×4), wall (куски стены ≤ 2,4), window (стекло), lintel (над проёмом), sill (под окном),
+  // pillar (угол), roof (плиты крыши), parapet (бортик крыши)
+  function modular(spec){
+    const out = [], cnt = {}, t = .3, H = spec.h || 3.8, hw = spec.w / 2, hd = spec.d / 2, x0 = spec.x, z0 = spec.z, D = spec.destructible !== false;
+    const add = (kind, o) => { cnt[kind] = (cnt[kind] || 0) + 1; out.push({ id: `${spec.id}:${kind}:${cnt[kind]}`, kind, b: spec.id, destructible: D, ...o }); };
+    const tiles = (w, d, f) => { const nx = Math.max(1, Math.ceil(w / 4 - 1e-6)), nz = Math.max(1, Math.ceil(d / 4 - 1e-6)); for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) f(-w / 2 + w / nx * (i + .5), -d / 2 + d / nz * (j + .5), w / nx, d / nz); };
+    tiles(spec.w, spec.d, (lx, lz, tw, td) => add('floor', { x: x0 + lx, y: .06, z: z0 + lz, w: tw, h: .12, d: td, c: spec.floorC || '#a8a29e', floor: spec.floorType || 'concrete', cam: false }));
+    for (const side of ['n', 's', 'e', 'w']) {
+      const horiz = side === 'n' || side === 's', L = horiz ? spec.w : spec.d;
+      const ops = [...(spec.doors || []).filter(o => o.side === side).map(o => ({ at: o.at || 0, w: o.w || 2.6, y0: 0, y1: o.h || 2.9, door: true })),
+        ...(spec.windows || []).filter(o => o.side === side).map(o => ({ at: o.at || 0, w: o.w || 2, y0: 1.1, y1: 1.1 + (o.h || 1.4) }))].sort((a, b) => a.at - b.at);
+      const put = (kind, a, b, y0, y1) => {
+        if (b - a < .02 || y1 - y0 < .02) return;
+        const n = kind === 'window' ? 1 : Math.max(1, Math.ceil((b - a) / 2.4 - 1e-6)), sl = (b - a) / n;
+        for (let k = 0; k < n; k++) {
+          const c = a + sl * (k + .5), wx = horiz ? x0 + c : x0 + (side === 'e' ? hw : -hw), wz = horiz ? z0 + (side === 's' ? hd : -hd) : z0 + c, th = kind === 'window' ? .1 : t;
+          add(kind, { x: wx, y: (y0 + y1) / 2, z: wz, w: horiz ? sl : th, h: y1 - y0, d: horiz ? th : sl, c: kind === 'window' ? null : spec.wall || '#a8a29e', glass: kind === 'window', cam: kind !== 'window', side });
+        }
+      };
+      let a = -L / 2;
+      for (const p of ops) {
+        const l = p.at - p.w / 2, r = p.at + p.w / 2;
+        put('wall', a, l, 0, H); put('lintel', l, r, p.y1, H);
+        if (!p.door) { put('sill', l, r, 0, p.y0); put('window', l, r, p.y0, p.y1); }
+        a = r;
+      }
+      put('wall', a, L / 2, 0, H);
+    }
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add('pillar', { x: x0 + sx * hw, y: (H + .1) / 2, z: z0 + sz * hd, w: .45, h: H + .1, d: .45, c: spec.trim || '#57534e', cam: true });
+    tiles(spec.w + .6, spec.d + .6, (lx, lz, tw, td) => add('roof', { x: x0 + lx, y: H + .12, z: z0 + lz, w: tw, h: .24, d: td, c: spec.roofC || '#57534e', cam: false }));
+    const W2 = spec.w + .6, D2 = spec.d + .6;
+    for (const [len, horiz, px, pz] of [[W2, true, 0, -D2 / 2], [W2, true, 0, D2 / 2], [D2, false, -W2 / 2, 0], [D2, false, W2 / 2, 0]]) {
+      const n = Math.max(1, Math.ceil(len / 4 - 1e-6)), sl = len / n;
+      for (let k = 0; k < n; k++) { const c = -len / 2 + sl * (k + .5); add('parapet', { x: x0 + px + (horiz ? c : 0), y: H + .45, z: z0 + pz + (horiz ? 0 : c), w: horiz ? sl : .3, h: .42, d: horiz ? .3 : sl, c: spec.trim || '#57534e', cam: false }); }
+    }
+    return out;
+  }
+  // Детали рисуются InstancedMesh: спрятать = матрица нулевого размера (крыша изнутри, будущая поломка)
+  function setPieceVis(p, on){
+    const it = p.inst; if (!it) return;
+    if (on) it.mesh.setMatrixAt(it.i, p.m4); else it.mesh.setMatrixAt(it.i, it.zero);
+    it.mesh.instanceMatrix.needsUpdate = true;
+  }
+  // «Группа» деталей для триггера комнаты (mir.js прячет крышу: roof.visible = false) — те же правила, что у Object3D.visible
+  function pieceGroup(list){
+    let vis = true;
+    return { isPieceGroup: true, list, get visible(){ return vis; }, set visible(v){ v = !!v; if (v === vis) return; vis = v; for (const p of list) setPieceVis(p, v && !p.broken); } };
+  }
+  function flushPieces(R, K, grp){
+    const T = R.T, L = K.pieceList; if (!L.length) return [];
+    const CH = 96, low = R.q === 'low';
+    let sm = SHARED_P.get(R);
+    if (!sm) { sm = low ? new T.MeshLambertMaterial({ color: '#ffffff' }) : new T.MeshStandardMaterial({ color: '#ffffff', roughness: .85, metalness: 0, envMapIntensity: .6 }); R.own.push(sm); SHARED_P.set(R, sm); }
+    const buckets = new Map();
+    for (const p of L) {
+      if (p.inst) continue;
+      const key = (p.glass ? 'g' : 's') + '|' + Math.floor(p.x / CH) + ',' + Math.floor(p.z / CH);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(p);
+    }
+    const out = [], q = new T.Quaternion(), up = new T.Vector3(0, 1, 0), v = new T.Vector3(), s = new T.Vector3(), col = new T.Color(), zero = new T.Matrix4().makeScale(0, 0, 0);
+    for (const [key, list] of buckets) {
+      const glass = key[0] === 'g', geo = new T.BoxGeometry(1, 1, 1);
+      const mesh = new T.InstancedMesh(geo, glass ? K.M.glass : sm, list.length);
+      let mnx = Infinity, mny = Infinity, mnz = Infinity, mxx = -Infinity, mxy = -Infinity, mxz = -Infinity;
+      list.forEach((p, i) => {
+        p.m4 = new T.Matrix4().compose(v.set(p.x, p.y, p.z), q.setFromAxisAngle(up, p.yaw || 0), s.set(p.w, p.h, p.d));
+        mesh.setMatrixAt(i, p.m4);
+        if (!glass) mesh.setColorAt(i, col.set(p.c || '#a8a29e'));
+        p.inst = { mesh, i, zero };
+        const r = Math.hypot(p.w, p.h, p.d) / 2;
+        mnx = Math.min(mnx, p.x - r); mny = Math.min(mny, p.y - r); mnz = Math.min(mnz, p.z - r); mxx = Math.max(mxx, p.x + r); mxy = Math.max(mxy, p.y + r); mxz = Math.max(mxz, p.z + r);
+      });
+      // своя сфера охвата (иначе отсечение по видимости считает только кубик в начале координат)
+      geo.boundingSphere = new T.Sphere(new T.Vector3((mnx + mxx) / 2, (mny + mxy) / 2, (mnz + mxz) / 2), Math.hypot(mxx - mnx, mxy - mny, mxz - mnz) / 2);
+      geo.boundingBox = new T.Box3(new T.Vector3(mnx, mny, mnz), new T.Vector3(mxx, mxy, mxz));
+      mesh.userData.mzOwn = true; mesh.userData.dyn = true;
+      if (!low && !glass) { mesh.castShadow = true; mesh.receiveShadow = true; }
+      if (glass) mesh.renderOrder = 2;
+      grp.add(mesh); out.push(mesh);
+    }
+    return out;
+  }
+  const SHARED_P = new WeakMap();
+  const PIECES = new Map();   // все построенные детали с номерами: id → деталь (реестр для будущих разрушений)
+
+  // ═══ Надписи: холст на зону (атлас) — все вывески одной сеткой; места мало — следующая страница (ещё одна сетка) ═══
   function atlas(R, size = 1024){
-    const T = R.T, c = document.createElement('canvas'); c.width = c.height = size;
-    const g = c.getContext('2d'); let x = 0, y = 0, rowH = 0;
-    const quads = [], A = {};
+    const T = R.T, pages = [], A = {};
+    const page = () => { const c = document.createElement('canvas'); c.width = c.height = size; const P = { c, g: c.getContext('2d'), x: 0, y: 0, rowH: 0, quads: [] }; pages.push(P); return P; };
+    let cur = page();
     A.add = (text, o = {}) => {
-      const w = o.w || 512, h = o.h || 96;
-      if (x + w > size) { x = 0; y += rowH + 2; rowH = 0; }
-      if (y + h > size) return null;   // место кончилось — без надписи
+      const w = Math.min(size, o.w || 512), h = Math.min(size, o.h || 96);
+      if (cur.x + w > size) { cur.x = 0; cur.y += cur.rowH + 2; cur.rowH = 0; }
+      if (cur.y + h > size) cur = page();   // место кончилось — новая страница
+      const { g, x, y } = cur;
       g.fillStyle = o.bg || '#7c3aed'; g.fillRect(x, y, w, h);
       if (o.border !== false) { g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 4; g.strokeRect(x + 3, y + 3, w - 6, h - 6); }
       g.fillStyle = o.fg || '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
       let fs = h * .56; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`;
       while (g.measureText(text).width > w * .9 && fs > 10) { fs -= 2; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`; }
       g.fillText(text, x + w / 2, y + h / 2 + 2);
-      const r = { u0: x / size, v0: 1 - (y + h) / size, u1: (x + w) / size, v1: 1 - y / size };
-      x += w + 2; rowH = Math.max(rowH, h);
+      const r = { page: cur, u0: x / size, v0: 1 - (y + h) / size, u1: (x + w) / size, v1: 1 - y / size };
+      cur.x += w + 2; cur.rowH = Math.max(cur.rowH, h);
       return r;
     };
     // табличка в мире: центр (px, py, pz), размер ww × hh, поворот yaw (лицом к +z при yaw 0)
-    A.quad = (r, px, py, pz, ww, hh, yaw = 0) => { if (r) quads.push({ r, px, py, pz, ww, hh, yaw }); };
+    A.quad = (r, px, py, pz, ww, hh, yaw = 0) => { if (r) r.page.quads.push({ r, px, py, pz, ww, hh, yaw }); };
     A.sign = (text, px, py, pz, ww, hh, yaw, o) => A.quad(A.add(text, o), px, py, pz, ww, hh, yaw);
-    A.mesh = () => {
-      if (!quads.length) return null;
+    const meshOf = P => {
+      const quads = P.quads;
       const pos = new Float32Array(quads.length * 18), uv = new Float32Array(quads.length * 12), nor = new Float32Array(quads.length * 18);
       quads.forEach((q, i) => {
         const c = Math.cos(q.yaw), s = Math.sin(q.yaw), hw = q.ww / 2, hh = q.hh / 2;
-        const P = (lx, ly) => [q.px + lx * c, q.py + ly, q.pz - lx * s];
-        const v = [P(-hw, -hh), P(hw, -hh), P(hw, hh), P(-hw, -hh), P(hw, hh), P(-hw, hh)];
+        const PT = (lx, ly) => [q.px + lx * c, q.py + ly, q.pz - lx * s];
+        const v = [PT(-hw, -hh), PT(hw, -hh), PT(hw, hh), PT(-hw, -hh), PT(hw, hh), PT(-hw, hh)];
         const t = [[q.r.u0, q.r.v0], [q.r.u1, q.r.v0], [q.r.u1, q.r.v1], [q.r.u0, q.r.v0], [q.r.u1, q.r.v1], [q.r.u0, q.r.v1]];
         for (let k = 0; k < 6; k++) { pos.set(v[k], i * 18 + k * 3); uv.set(t[k], i * 12 + k * 2); nor.set([s, 0, c], i * 18 + k * 3); }
       });
       const geo = new T.BufferGeometry();
       geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('uv', new T.BufferAttribute(uv, 2)); geo.setAttribute('normal', new T.BufferAttribute(nor, 3));
       geo.computeBoundingSphere();
-      const tex = new T.CanvasTexture(c); tex.encoding = T.sRGBEncoding; tex.anisotropy = 4;
+      const tex = new T.CanvasTexture(P.c); tex.encoding = T.sRGBEncoding; tex.anisotropy = 4;
       const mat = new T.MeshBasicMaterial({ map: tex, toneMapped: false });   // одна сторона: с изнанки — своя табличка
       R.own.push(tex, mat);
       const m = new T.Mesh(geo, mat); m.userData.mzOwn = true; m.userData.dyn = true;
       return m;
     };
+    A.mesh = () => {
+      const L = pages.filter(P => P.quads.length).map(meshOf);
+      if (!L.length) return null;
+      if (L.length === 1) return L[0];
+      const grp = new T.Group(); grp.userData.dyn = true; for (const m of L) grp.add(m); return grp;
+    };
+    A.pages = () => pages.length;
     return A;
+  }
+
+  // ═══ Фасады небоскрёбов: окна — картинкой (не сетками: 12 треугольников на ярус), ночью светятся (emissiveMap) ═══
+  // Плитка — 4 этажа × 4 пролёта по 3,2 (FLOOR_H): этажи совпадают с миром (v = y / TILE), по ширине — от начала координат
+  // склейки. Только стандартные материалы three (MeshStandard / Lambert), своих шейдеров нет. Свет окон — R.night (render.js).
+  const TILE = FLOOR_H * 4;
+  const FACADES = {
+    glass: { bg: '#1e3246', a: '#a6dcf5', b: '#2c75a8', frame: '#14212f', cols: 4, wx: .96, wy: .86, top: .04, lit: .42, litC: ['#ffe2a6', '#d9eeff', '#fff4d6'], metal: .5, rough: .14, band: '#0f1c2a' },
+    dark: { bg: '#0a1320', a: '#3d6790', b: '#132840', frame: '#060b14', cols: 4, wx: .96, wy: .86, top: .04, lit: .36, litC: ['#e8f3ff', '#ffe6b5'], metal: .55, rough: .12, band: '#05090f' },
+    office: { bg: '#d9d3c7', a: '#7891ab', b: '#33475c', frame: '#f6f2ea', cols: 4, wx: .7, wy: .54, top: .17, lit: .5, litC: ['#ffe3a5', '#fff2cf'], rough: .82 },
+    flat: { bg: '#ebe0cc', a: '#7c91aa', b: '#394c62', frame: '#ffffff', cols: 8, wx: .56, wy: .5, top: .2, lit: .55, litC: ['#ffc56e', '#ffdb9c', '#fff0c8', '#ffb38a'], balcony: '#b9ab92', rough: .9 },
+    brick: { bg: 'brick', a: '#6a7f97', b: '#2c3a4b', frame: '#f4f1ea', cols: 6, wx: .52, wy: .54, top: .2, lit: .52, litC: ['#ffc56e', '#ffe0a8'], rough: .9 },
+    shop: { bg: '#2d2d30', a: '#d4f0fc', b: '#86c3df', frame: '#1c1c1e', cols: 2, wx: .86, wy: .62, top: .26, lit: .95, litC: ['#fff5d8'], fascia: ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed', '#0891b2'], rough: .7, ek: 1.3 },
+    kids: { bg: '#fffbf2', a: '#b5e3f7', b: '#5fb3dc', frame: '#ffffff', cols: 4, wx: .46, wy: .5, top: .2, lit: .6, litC: ['#ffd27a'], shutters: ['#f472b6', '#60a5fa', '#34d399', '#fbbf24'], rough: .9 },
+  };
+  const hash3 = (i, j, s) => { let h = (2166136261 ^ Math.imul(i + 1, 374761393) ^ Math.imul(j + 7, 668265263) ^ Math.imul(s, 2246822519)) >>> 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  function paintFacade(g, n, F, seed, em){
+    const rows = 4, cell = n / rows, cols = F.cols, cw = n / cols;
+    if (em) { g.fillStyle = '#000'; g.fillRect(0, 0, n, n); }
+    else if (F.bg === 'brick') {
+      g.fillStyle = '#d8cfc2'; g.fillRect(0, 0, n, n);
+      const bh = n / 48, bw = n / 12;
+      for (let r = 0; r * bh < n; r++) for (let i = -1; i < 13; i++) { const v = .82 + hash3(r, i, 5) * .3; g.fillStyle = `rgb(${158 * v | 0},${74 * v | 0},${48 * v | 0})`; g.fillRect(i * bw + (r % 2) * bw / 2 + 1, r * bh + 1, bw - 2, bh - 2); }
+    } else { g.fillStyle = F.bg; g.fillRect(0, 0, n, n); }
+    for (let r = 0; r < rows; r++) {
+      const y0 = r * cell;
+      if (F.band && !em) { g.fillStyle = F.band; g.fillRect(0, y0 + cell * .9, n, cell * .1); }
+      for (let c = 0; c < cols; c++) {
+        const x0 = c * cw, ww = cw * F.wx, wh = cell * F.wy, wx = x0 + (cw - ww) / 2, wy = y0 + cell * F.top;
+        const lit = hash3(r, c, seed) < F.lit;
+        if (F.fascia) {   // витрина: вывеска над окном (цвет — по пролёту), стекло, цоколь
+          if (!em) { g.fillStyle = F.fascia[(c + r) % F.fascia.length]; g.fillRect(x0 + cw * .04, y0 + cell * .05, cw * .92, cell * .17); g.fillStyle = 'rgba(255,255,255,.75)'; g.fillRect(x0 + cw * .2, y0 + cell * .11, cw * .6, cell * .05); }
+          else { g.fillStyle = '#5a5040'; g.fillRect(x0 + cw * .2, y0 + cell * .11, cw * .6, cell * .05); }
+        }
+        if (em) {
+          if (!lit) continue;
+          const col = F.litC[Math.floor(hash3(c, r, seed + 3) * F.litC.length)], k = .55 + hash3(r + 9, c, seed) * .45;
+          const gr = g.createLinearGradient(0, wy, 0, wy + wh); gr.addColorStop(0, col); gr.addColorStop(1, `rgba(0,0,0,${1 - k})`);
+          g.globalAlpha = k; g.fillStyle = gr; g.fillRect(wx + 1, wy + 1, ww - 2, wh - 2); g.globalAlpha = 1;
+          continue;
+        }
+        const gr = g.createLinearGradient(0, wy, 0, wy + wh), v = hash3(r, c, seed + 1) * .25;
+        gr.addColorStop(0, F.a); gr.addColorStop(1, F.b);
+        g.fillStyle = F.frame; g.fillRect(wx - 2, wy - 2, ww + 4, wh + 4);
+        g.fillStyle = gr; g.fillRect(wx, wy, ww, wh);
+        if (v > .12) { g.fillStyle = `rgba(255,255,255,${(v - .12) * .9})`; g.fillRect(wx + ww * .1, wy + wh * .08, ww * .25, wh * .84); }   // блик
+        g.fillStyle = F.frame; g.fillRect(wx + ww / 2 - 1, wy, 2, wh);   // переплёт
+        if (F.balcony && (r + c) % 3 === 0) { g.fillStyle = F.balcony; g.fillRect(wx - cw * .12, wy + wh, ww + cw * .24, cell * .16); }
+        if (F.shutters) { g.fillStyle = F.shutters[(c + r * 2) % F.shutters.length]; g.fillRect(wx - ww * .32, wy, ww * .26, wh); g.fillRect(wx + ww * 1.06, wy, ww * .26, wh); }
+      }
+    }
+  }
+  const FAC = new WeakMap();   // R → { материалы, обновление света }
+  function facadeMat(R, style, tint){
+    const T = R.T, E = root.D37E;
+    let F0 = FAC.get(R);
+    if (!F0) {
+      F0 = { mats: new Map(), list: [] };
+      F0.light = () => { const k = Math.max(0, Math.min(1, (R.night || 0) * 1.25)); for (const m of F0.list) m.emissiveIntensity = k * (m.userData.ek || 1); };
+      R.onLight?.push((L, o) => F0.light(o));
+      FAC.set(R, F0);
+    }
+    const key = style + '|' + (tint || '');
+    let m = F0.mats.get(key);
+    if (m) return m;
+    const F = FACADES[style] || FACADES.office, n = R.q === 'high' && !E?.isMobile?.() ? 512 : 256, seed = Object.keys(FACADES).indexOf(style) * 31 + 7;
+    const map = R.canvasTex('mzf:' + style + n, n, g => paintFacade(g, n, F, seed, false));
+    const emi = R.canvasTex('mzfe:' + style + n, n, g => paintFacade(g, n, F, seed, true));
+    const o = { color: tint || '#ffffff', map, emissiveMap: emi, emissive: '#ffffff', emissiveIntensity: 0 };
+    m = R.q === 'low' ? new T.MeshLambertMaterial(o) : new T.MeshStandardMaterial({ ...o, roughness: F.rough ?? .8, metalness: F.metal || 0, envMapIntensity: F.metal ? 1.15 : .7 });
+    m.userData.tile = TILE; m.userData.ek = F.ek || 1; m.userData.facade = style;
+    R.own.push(m); F0.mats.set(key, m); F0.list.push(m);
+    F0.light({ night: R.night || 0 });
+    return m;
   }
 
   // ═══ Набор для постройки содержимого зоны (K): детали в текущую группу, тела, здания, мебель, места, жители ═══
   function kit(rt, zs, grp){
     const { R, ph, X } = rt, T = R.T, E = root.D37E, low = R.q === 'low';
-    const K = { R, T, ph, X, E, rt, zs, Z: zs.Z, root: grp, cur: null, low, bodies: [], items: [], npcs: [], roofs: [], seats: [], anims: [] };
+    // yo — высота «пола» для мебели на этажах небоскрёбов (ленивые интерьеры): детали — в группе на этой высоте, тела/места/предметы — + yo
+    const K = { R, T, ph, X, E, rt, zs, Z: zs.Z, root: grp, cur: null, low, yo: 0, bodies: [], items: [], npcs: [], roofs: [], seats: [], anims: [], lazies: [], lifts: {}, pieceList: [] };
     const tex = (name, o) => R.tex(name, o);
     K.M = {
       asphalt: tex('asphalt', { tile: 4, tint: '#a9afba', flatColor: '#5b6270', rough: .95 }),
@@ -370,17 +598,17 @@
     // коробка: x, z — центр, y0 — низ; o.solid — тело, o.cam — держит камеру, o.m — материал, o.floor — звук шагов
     K.box = (x, y0, z, w, h, d, c, o = {}) => {
       const m = P({ s: 'box', x, y: y0 + h / 2, z, w, h, d, c, yaw: o.yaw, m: o.m, dyn: o.dyn, rough: o.rough, metal: o.metal });
-      if (o.solid) K.bodies.push(ph.addBox({ x, y: y0 + h / 2, z, hx: w / 2, hy: h / 2, hz: d / 2, yaw: o.yaw || 0, tag: o.tag || 'zone', data: o.data ?? { cam: !!o.cam, floor: o.floor } }));
+      if (o.solid) K.bodies.push(ph.addBox({ x, y: y0 + h / 2 + K.yo, z, hx: w / 2, hy: h / 2, hz: d / 2, yaw: o.yaw || 0, tag: o.tag || 'zone', data: o.data ?? { cam: !!o.cam, floor: o.floor } }));
       return m;
     };
     K.cyl = (x, y0, z, r, h, c, o = {}) => {
       const m = P({ s: 'cyl', x, y: y0 + h / 2, z, r, r2: o.r2, h, c, seg: o.seg || 12, m: o.m, rx: o.rx, rz: o.rz, yaw: o.yaw });
-      if (o.solid) K.bodies.push(ph.addCyl({ x, z, y: y0 + h / 2, r: o.pr || r, hy: h / 2, tag: o.tag || 'zone', data: o.data ?? { floor: o.floor } }));
+      if (o.solid) K.bodies.push(ph.addCyl({ x, z, y: y0 + h / 2 + K.yo, r: o.pr || r, hy: h / 2, tag: o.tag || 'zone', data: o.data ?? { floor: o.floor } }));
       return m;
     };
     K.flat = (x, z, w, d, c, y = .03, o = {}) => P({ s: 'box', x, y: y + .005, z, w, h: .01, d, c, m: o.m, yaw: o.yaw });
-    K.body = o => { const b = ph.addBox({ tag: 'zone', ...o }); K.bodies.push(b); return b; };
-    K.wedge = o => { const b = ph.addWedge({ tag: 'zone', ...o }); K.bodies.push(b); return b; };
+    K.body = o => { const b = ph.addBox({ tag: 'zone', ...o, y: (o.y || 0) + K.yo }); K.bodies.push(b); return b; };
+    K.wedge = o => { const b = ph.addWedge({ tag: 'zone', ...o, y: (o.y || 0) + K.yo }); K.bodies.push(b); return b; };
     K.group = (x = 0, y = 0, z = 0, yaw = 0, parent) => { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = yaw; (parent || K.cur || grp).add(g); return g; };
     // готовые предметы движка (дерево, фонарь, скамейка…) — в текущую группу
     K.prefab = (name, o) => R.prefab(name, { ...o, parent: K.cur || grp }, ph);
@@ -393,65 +621,88 @@
     };
     K.label = atlas(R);
     // взаимодействие (X) — запоминаем, чтобы зона могла выключать
-    K.item = it => { const x = X.add(it); K.items.push(x); return x; };
+    K.item = it => { if (K.yo) it = { ...it, y: (it.y || 0) + K.yo }; const x = X.add(it); K.items.push(x); return x; };
     // место: сесть / лечь (своё — без presence; другим — через zx: a + sl)
-    K.seat = (x, y, z, yaw, o = {}) => { const sp = { x, y, z, yaw, bed: !!o.bed, name: o.name || (o.bed ? 'Лечь спать' : 'Сесть') }; K.seats.push(sp); K.item({ x, y: y + .5, z, r: o.bed ? 1.1 : .5, prompt: () => rt.seatPrompt(sp), act: () => rt.sitDown(sp) }); return sp; };
+    K.seat = (x, y, z, yaw, o = {}) => { const sp = { x, y: y + K.yo, z, yaw, bed: !!o.bed, name: o.name || (o.bed ? 'Лечь спать' : 'Сесть') }; K.seats.push(sp); K.item({ x, y: y + .5, z, r: o.bed ? 1.1 : .5, prompt: () => rt.seatPrompt(sp), act: () => rt.sitDown(sp) }); return sp; };
     // житель: появляется, пока зона видна
     // o: { id, name, x, z, yaw (градусы), look, seed, act, radius, speed, say: [фразы] } → объект npc.js
     K.npc = o => {
-      const n = { id: 'mz_' + o.id, name: o.name, cls: 'NPC', pos: [o.x, o.y || 0, o.z], rot: [0, o.yaw || 0, 0], look: o.look || 'random', seed: o.seed || o.id, act: o.act || 'idle',
+      const n = { id: 'mz_' + o.id, name: o.name, cls: 'NPC', pos: [o.x, (o.y || 0) + K.yo, o.z], rot: [0, o.yaw || 0, 0], look: o.look || 'random', seed: o.seed || o.id, act: o.act || 'idle',
         speed: o.speed ?? 1, radius: o.radius ?? 0, damage: 0, text: (o.say || [])[0] || '', say: o.say || [], phone: o.phone ? 1 : 0, _mz: true, mz: o };
       K.npcs.push(n); return n;
     };
     // ── Здание: пол, стены с проёмами (двери, окна), крыша (своя сетка — прячется, когда внутри), зона «внутри», вывеска ──
     // spec: { id, name, x, z, w, d, h, wall, trim, floor, floorM, roofC, doors: [{ side, at, w }], windows: [{ side, at, w }], sign, signBg, interior }
+    // Этаж выше первого: spec.y0 — высота пола, spec.into — группа (координаты — мировые, сдвиг группы учитывается),
+    // spec.noFloor — без пола (свой, с проёмом), spec.open — без плиты крыши (над этажом — ещё этаж)
     K.building = spec => {
-      const H = spec.h || 3.8, t = .3, x0 = spec.x, z0 = spec.z, hw = spec.w / 2, hd = spec.d / 2;
+      const H = spec.h || 3.8, t = .3, x0 = spec.x, z0 = spec.z, hw = spec.w / 2, hd = spec.d / 2, Y = spec.y0 || 0, into = spec.into || null;
       const wallC = spec.wall || '#f4e3c3', trim = spec.trim || '#7c2d12';
-      K.box(x0, 0, z0, spec.w, .12, spec.d, spec.floor || '#c79a6b', { solid: true, floor: spec.floorType || 'wood', m: spec.floorM || (spec.interior === false ? undefined : K.M.parquet) });
+      let ox = 0, oy = 0, oz = 0;
+      if (into) { into.updateWorldMatrix(true, false); const e = into.matrixWorld.elements; ox = e[12]; oy = e[13]; oz = e[14]; }
+      const PP = p => into ? R.part(into, { ...p, x: (p.x || 0) - ox, y: (p.y || 0) - oy, z: (p.z || 0) - oz }) : P(p);
+      const BX = (x, y0, z, w, h, d, c, o = {}) => { PP({ s: 'box', x, y: y0 + h / 2, z, w, h, d, c, m: o.m }); if (o.solid) K.body({ x, y: y0 + h / 2, z, hx: w / 2, hy: h / 2, hz: d / 2, tag: 'zone', data: { cam: !!o.cam, floor: o.floor } }); };
+      if (!spec.noFloor) BX(x0, Y, z0, spec.w, .12, spec.d, spec.floor || '#c79a6b', { solid: true, floor: spec.floorType || 'wood', m: spec.floorM || (spec.interior === false ? undefined : K.M.parquet) });
       for (const side of ['n', 's', 'e', 'w']) {
         const horiz = side === 'n' || side === 's', L = horiz ? spec.w : spec.d;
         const ops = [...(spec.doors || []).filter(d => d.side === side).map(d => ({ at: d.at || 0, w: d.w || 2.6, y0: 0, y1: d.h || 2.9, door: true })),
-          ...(spec.windows || []).filter(w => w.side === side).map(w => ({ at: w.at || 0, w: w.w || 2, y0: 1.1, y1: 1.1 + (w.h || 1.4) }))].sort((a, b) => a.at - b.at);
+          ...(spec.windows || []).filter(w => w.side === side).map(w => ({ at: w.at || 0, w: w.w || 2, y0: w.y0 ?? 1.1, y1: (w.y0 ?? 1.1) + (w.h || 1.4) }))].sort((a, b) => a.at - b.at);
         const put = (a, b, y0, y1, glass) => {
           if (b - a < .02 || y1 - y0 < .02) return;
           const c = (a + b) / 2, len = b - a;
           const wx = horiz ? x0 + c : x0 + (side === 'e' ? hw : -hw), wz = horiz ? z0 + (side === 's' ? hd : -hd) : z0 + c;
-          if (glass) { P({ s: 'box', x: wx, y: (y0 + y1) / 2, z: wz, w: horiz ? len : .06, h: y1 - y0, d: horiz ? .06 : len, m: K.M.glass }); K.body({ x: wx, y: (y0 + y1) / 2, z: wz, hx: horiz ? len / 2 : t / 2, hy: (y1 - y0) / 2, hz: horiz ? t / 2 : len / 2, tag: 'glass', data: { cam: false } }); return; }
-          K.box(wx, y0, wz, horiz ? len : t, y1 - y0, horiz ? t : len, wallC, { solid: true, cam: true });
+          if (glass) { PP({ s: 'box', x: wx, y: Y + (y0 + y1) / 2, z: wz, w: horiz ? len : .06, h: y1 - y0, d: horiz ? .06 : len, m: K.M.glass }); K.body({ x: wx, y: Y + (y0 + y1) / 2, z: wz, hx: horiz ? len / 2 : t / 2, hy: (y1 - y0) / 2, hz: horiz ? t / 2 : len / 2, tag: 'glass', data: { cam: false } }); return; }
+          BX(wx, Y + y0, wz, horiz ? len : t, y1 - y0, horiz ? t : len, wallC, { solid: true, cam: true });
         };
         let a = -L / 2;
         for (const p of ops) {
           const l = p.at - p.w / 2, r = p.at + p.w / 2;
           put(a, l, 0, H); put(l, r, p.y1, H);
           if (!p.door) { put(l, r, 0, p.y0); put(l, r, p.y0, p.y1, true); }
-          else for (const sx of [l - .07, r + .07]) { const fx = horiz ? x0 + sx : x0 + (side === 'e' ? hw : -hw), fz = horiz ? z0 + (side === 's' ? hd : -hd) : z0 + sx; P({ s: 'box', x: fx, y: p.y1 / 2, z: fz, w: horiz ? .14 : t + .1, h: p.y1, d: horiz ? t + .1 : .14, c: trim }); }
+          else for (const sx of [l - .07, r + .07]) { const fx = horiz ? x0 + sx : x0 + (side === 'e' ? hw : -hw), fz = horiz ? z0 + (side === 's' ? hd : -hd) : z0 + sx; PP({ s: 'box', x: fx, y: Y + p.y1 / 2, z: fz, w: horiz ? .14 : t + .1, h: p.y1, d: horiz ? t + .1 : .14, c: trim }); }
           a = r;
         }
         put(a, L / 2, 0, H);
       }
-      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) P({ s: 'box', x: x0 + sx * hw, y: (H + .1) / 2, z: z0 + sz * hd, w: .45, h: H + .1, d: .45, c: trim });
+      for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) PP({ s: 'box', x: x0 + sx * hw, y: Y + (H + .1) / 2, z: z0 + sz * hd, w: .45, h: H + .1, d: .45, c: trim });
       // крыша: своя группа (прячется изнутри) — плоская с бортиком; тело есть (залезть можно), камеру не держит
-      const roof = K.group(x0, 0, z0, 0, grp); roof.userData.dyn = true;
+      const roof = new T.Group(); roof.position.set(into ? 0 : x0, 0, into ? 0 : z0); (into || grp).add(roof); roof.userData.dyn = true;
+      const rx = into ? x0 - ox : 0, rz = into ? z0 - oz : 0;   // центр здания в координатах группы крыши
       const rc = spec.roofC || '#7a5236', rc2 = spec.roofC2 || trim;
-      R.part(roof, { s: 'box', y: H + .12, w: spec.w + .6, h: .24, d: spec.d + .6, c: rc });
-      for (const [w, d, x, z] of [[spec.w + .6, .3, 0, -(spec.d + .6) / 2], [spec.w + .6, .3, 0, (spec.d + .6) / 2], [.3, spec.d + .6, -(spec.w + .6) / 2, 0], [.3, spec.d + .6, (spec.w + .6) / 2, 0]]) {
-        R.part(roof, { s: 'box', x, z, y: H + .45, w, h: .42, d, c: rc2 });
-        K.body({ x: x0 + x, z: z0 + z, y: H + .45, hx: w / 2, hy: .21, hz: d / 2, tag: 'roof', data: { cam: false } });
+      if (!spec.open) {
+        R.part(roof, { s: 'box', x: rx, y: Y + H + .12 - oy, z: rz, w: spec.w + .6, h: .24, d: spec.d + .6, c: rc });
+        for (const [w, d, x, z] of [[spec.w + .6, .3, 0, -(spec.d + .6) / 2], [spec.w + .6, .3, 0, (spec.d + .6) / 2], [.3, spec.d + .6, -(spec.w + .6) / 2, 0], [.3, spec.d + .6, (spec.w + .6) / 2, 0]]) {
+          R.part(roof, { s: 'box', x: rx + x, z: rz + z, y: Y + H + .45 - oy, w, h: .42, d, c: rc2 });
+          K.body({ x: x0 + x, z: z0 + z, y: Y + H + .45, hx: w / 2, hy: .21, hz: d / 2, tag: 'roof', data: { cam: false } });
+        }
+        K.body({ x: x0, z: z0, y: Y + H + .12, hx: (spec.w + .6) / 2, hy: .12, hz: (spec.d + .6) / 2, tag: 'roof', data: { cam: false } });
       }
-      K.body({ x: x0, z: z0, y: H + .12, hx: (spec.w + .6) / 2, hy: .12, hz: (spec.d + .6) / 2, tag: 'roof', data: { cam: false } });
       if (spec.interior !== false) {
         K.roofs.push(roof);
-        K.body({ x: x0, z: z0, y: H / 2, hx: hw - .3, hy: H / 2 + .3, hz: hd - .3, trigger: true, tag: 'room', data: { room: spec.id, roof } });
+        var trig = K.body({ x: x0, z: z0, y: Y + H / 2, hx: hw - .3, hy: H / 2 + .3, hz: hd - .3, trigger: true, tag: 'room', data: { room: spec.id, roof } });
       }
       // вывеска над первой дверью (в атлас зоны)
       if (spec.sign) {
         const d = (spec.doors || [])[0], side = d?.side || 's', sw = Math.min(spec.w - 1, 7);
         const px = side === 'e' ? x0 + hw + .2 : side === 'w' ? x0 - hw - .2 : x0 + (d?.at || 0), pz = side === 's' ? z0 + hd + .2 : side === 'n' ? z0 - hd - .2 : z0 + (d?.at || 0);
         const yaw = side === 's' ? 0 : side === 'n' ? PI : side === 'e' ? PI / 2 : -PI / 2;
-        K.label.sign(spec.sign, px, Math.min(H - .45, (d?.h || 2.9) + .55), pz, sw, sw / 5.3, yaw, { bg: spec.signBg || trim });
+        K.label.sign(spec.sign, px, Y + Math.min(H - .45, (d?.h || 2.9) + .55), pz, sw, sw / 5.3, yaw, { bg: spec.signBg || trim });
       }
-      return { x0, z0, hw, hd, H, roof };
+      return { x0, z0, hw, hd, H, roof, trig: trig || null };
+    };
+    // Пандус-«призма» (насыпь эстакады, лестница-скат): низ — у +z, верх — у −z (как клин physics.js), поворот yaw; тело — клин
+    K.prism = (x, z, w, L, h, yaw, m, o = {}) => {
+      const geo = R.K.geo(`mzprism${w}_${L}_${h}`, () => {
+        const a = -w / 2, b = w / 2, f = L / 2, k = -L / 2, V = [];
+        const quad = (p, q, r, s) => V.push(...p, ...q, ...r, ...p, ...r, ...s);
+        quad([a, h, k], [a, 0, f], [b, 0, f], [b, h, k]);   // скат
+        quad([b, h, k], [b, 0, k], [a, 0, k], [a, h, k]);   // задняя стенка
+        V.push(a, 0, k, a, 0, f, a, h, k); V.push(b, 0, k, b, h, k, b, 0, f);   // бока
+        const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(V, 3)); g.computeVertexNormals(); return g;
+      });
+      const mesh = new T.Mesh(geo, m || R.mat('#a8a29e')); mesh.position.set(x, o.y0 || 0, z); mesh.rotation.y = yaw; (K.cur || grp).add(mesh);
+      if (o.solid !== false) K.wedge({ x, z, y: (o.y0 || 0) + h / 2, hx: w / 2, hy: h / 2, hz: L / 2, yaw, data: { floor: o.floor || 'concrete', cam: false } });
+      return mesh;
     };
     // ── Мебель и уличное ──
     K.table = (x, z, w = 1.4, d = .9, c = '#8b5a2b', h = .78) => { K.box(x, h - .07, z, w, .07, d, c); for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) P({ s: 'box', x: x + sx * (w / 2 - .08), y: (h - .07) / 2, z: z + sz * (d / 2 - .08), w: .07, h: h - .07, d: .07, c: '#5b3a1e' }); K.body({ x, z, y: h / 2, hx: w / 2, hy: h / 2, hz: d / 2, tag: 'table' }); };
@@ -500,9 +751,218 @@
       if (o.lines !== false) for (let k = 4; k < L - 4; k += 5) P({ s: 'box', x: x1 + dx * k / L, y: .04, z: z1 + dz * k / L, w: .22, h: .01, d: 2, yaw, c: '#f1f5f9' });
     };
     K.zebra = (x, z, w, yaw = 0) => { for (let i = 0; i < 7; i++) { const o = -w / 2 + .6 + i * (w - 1.2) / 6; P({ s: 'box', x: x + Math.cos(yaw) * o, y: .045, z: z - Math.sin(yaw) * o, w: .5, h: .01, d: 3, yaw, c: '#f8fafc' }); } };
+
+    // ── Ленивый интерьер: строится, когда игрок ближе r (мебель этажей, магазины ТЦ, номера отеля); дальше r + 60 — прячется.
+    //    gen(K) — как обычная постройка (K.cur — своя группа на высоте y, тела и места — с поправкой K.yo); без надписей (атлас готов) ──
+    // parent — группа этажа (прячется вместе с ним: мебель 2-го этажа не висит в воздухе, когда ты на 1-м)
+    K.lazy = (x, z, r, gen, y = 0, parent = null) => K.lazies.push({ x, z, r, gen, y, parent, done: false, grp: null });
+    // ── Небоскрёб без входа: витрины внизу, ярусы с фасадом (окна светятся ночью), крыша — цвет типа здания, верх ──
+    // spec: { id, x, z, w, d, h, h1 (верх основного яруса), style, tint, base ('shop'), baseH, tiers: [{ w, d, h, dx, dz }], crown, roof, logo }
+    K.tower = (spec, parent) => {
+      const g = parent || K.cur || grp, m = facadeMat(R, spec.style || 'office', spec.tint), roofC = spec.roof || '#4b5563', ox = parent ? spec.x : 0, oz = parent ? spec.z : 0;
+      const gx = x => x - (parent ? ox : 0), gz = z => z - (parent ? oz : 0);   // в группе здания — свои координаты
+      let top = spec.y0 || 0;
+      if (spec.base && !spec.y0) {
+        const bh = spec.baseH || FLOOR_H;
+        R.part(g, { s: 'box', x: gx(spec.x), y: bh / 2, z: gz(spec.z), w: spec.w, h: bh, d: spec.d, m: facadeMat(R, spec.base) });
+        R.part(g, { s: 'box', x: gx(spec.x), y: bh + .1, z: gz(spec.z), w: spec.w + .5, h: .2, d: spec.d + .5, c: spec.trim || '#3f3f46' });
+        top = bh;
+      }
+      const shafts = [{ w: spec.w, d: spec.d, h: spec.h1 || spec.h, dx: 0, dz: 0 }, ...(spec.tiers || [])], tb = [];
+      let last = shafts[0], first = true;
+      for (const t of shafts) {
+        const x = spec.x + (t.dx || 0), z = spec.z + (t.dz || 0), hh = t.h - top;
+        if (hh <= .05) continue;
+        R.part(g, { s: 'box', x: gx(x), y: top + hh / 2, z: gz(z), w: t.w, h: hh, d: t.d, m });
+        R.part(g, { s: 'box', x: gx(x), y: t.h + .15, z: gz(z), w: t.w + .3, h: .3, d: t.d + .3, c: roofC });
+        const b0 = first ? (spec.y0 || 0) : top;
+        tb.push(K.body({ x, z, y: (b0 + t.h + .3) / 2, hx: t.w / 2 + .15, hy: (t.h + .3 - b0) / 2, hz: t.d / 2 + .15, tag: 'tower', data: { cam: true, floor: 'concrete' } }));
+        top = t.h + .3; last = { ...t, x, z }; first = false;
+      }
+      const lx = last.x ?? spec.x, lz = last.z ?? spec.z, lw = last.w, ld = last.d;
+      // на крыше: вентиляция, бак, будка лестницы (сверху город живее)
+      if (spec.crown !== 'helipad' && lw > 8) {
+        R.part(g, { s: 'box', x: gx(lx - lw * .25), y: top + .6, z: gz(lz + ld * .2), w: 2.4, h: 1.2, d: 1.6, c: '#9ca3af' });
+        R.part(g, { s: 'cyl', x: gx(lx + lw * .22), y: top + 1.3, z: gz(lz - ld * .22), r: 1.1, h: 2.6, c: '#78716c', seg: 10 });
+        R.part(g, { s: 'box', x: gx(lx + lw * .2), y: top + 1.2, z: gz(lz + ld * .25), w: 3, h: 2.4, d: 2.4, c: '#a8a29e' });
+      }
+      const red = R.glow('#ff3b3b');
+      const crown = spec.crown || '';
+      if (crown === 'antenna') {
+        R.part(g, { s: 'cyl', x: gx(lx), y: top + 7, z: gz(lz), r: .28, r2: .18, h: 14, c: '#374151', seg: 8 });
+        R.part(g, { s: 'cyl', x: gx(lx), y: top + 18, z: gz(lz), r: .1, h: 8, c: '#9ca3af', seg: 6 });
+        R.part(g, { s: 'ball', x: gx(lx), y: top + 22.2, z: gz(lz), r: .35, m: red, seg: 8 });
+      } else if (crown === 'spire') {
+        R.part(g, { s: 'cone', x: gx(lx), y: top + 9, z: gz(lz), r: Math.min(lw, ld) * .2, h: 18, c: '#d1d5db', seg: 8 });
+        R.part(g, { s: 'ball', x: gx(lx), y: top + 18.3, z: gz(lz), r: .38, m: red, seg: 8 });
+      } else if (crown === 'helipad') {
+        const r0 = Math.min(lw, ld) * .42;
+        R.part(g, { s: 'cyl', x: gx(lx), y: top + .08, z: gz(lz), r: r0, h: .16, c: '#374151', seg: 24 });
+        R.part(g, { s: 'ring', x: gx(lx), y: top + .18, z: gz(lz), r: r0 * .92, r2: r0 * .82, rx: -PI / 2, c: '#facc15' });
+        for (const [w, d, x] of [[.7, r0 * .9, -r0 * .3], [.7, r0 * .9, r0 * .3], [r0 * .6, .7, 0]]) R.part(g, { s: 'box', x: gx(lx + x), y: top + .19, z: gz(lz), w, h: .02, d, c: '#f8fafc' });
+        K.body({ x: lx, z: lz, y: top + .08, hx: r0 * .7, hy: .08, hz: r0 * .7, tag: 'roof', data: { cam: false } });
+      } else if (crown === 'pyramid') {
+        R.part(g, { s: 'cone', x: gx(lx), y: top + lw * .35, z: gz(lz), r: Math.min(lw, ld) * .72, h: lw * .7, c: roofC, seg: 4, yaw: PI / 4 });
+      } else if (crown === 'glow') {   // светящийся венец (виден ночью издалека)
+        const gm = R.glow(spec.glowC || '#a78bfa');
+        for (const [w, d, x, z] of [[lw + .4, .3, 0, ld / 2 + .1], [lw + .4, .3, 0, -ld / 2 - .1], [.3, ld + .4, lw / 2 + .1, 0], [.3, ld + .4, -lw / 2 - .1, 0]]) R.part(g, { s: 'box', x: gx(lx + x), y: top - .8, z: gz(lz + z), w, h: .5, d, m: gm });
+        R.part(g, { s: 'cyl', x: gx(lx), y: top + 9, z: gz(lz), r: .3, r2: .12, h: 18, c: '#e5e7eb', seg: 8 });
+        R.part(g, { s: 'ball', x: gx(lx), y: top + 18.4, z: gz(lz), r: .4, m: red, seg: 8 });
+      }
+      // огни для самолётов на углах высоких башен
+      if (spec.h > 50 && crown !== 'glow') for (const [sx, sz] of [[-1, -1], [1, 1]]) R.part(g, { s: 'ball', x: gx(lx + sx * (lw / 2 - .3)), y: top + .3, z: gz(lz + sz * (ld / 2 - .3)), r: .22, m: red, seg: 6 });
+      if (spec.logo) for (const s of [1, -1]) K.label.sign(spec.logo, lx, top - 4.6, lz + s * (ld / 2 + .08), Math.min(lw - 2, 10), 4, s > 0 ? 0 : PI, { bg: spec.logoBg || '#0f172a', w: 384, h: 154, fg: spec.logoFg || '#fde047' });
+      return { top, x: lx, z: lz, w: lw, d: ld, bodies: tb };
+    };
+
+    // ── Небоскрёб со входом: холл (крыша прячется изнутри, как у обычного здания), лифт 🛗 на этажи и на крышу.
+    // Этаж-остановка — стеклянная «комната» внутри фасада: свой триггер прячет всё, что выше (вложенные группы),
+    // мебель — лениво. spec: как у tower + lobbyH, stops: [{ name, at (высота пола), furnish(K, x, z, w, d) }], roofStop (имя) ──
+    K.towerIn = spec => {
+      const LH = spec.lobbyH || FLOOR_H * 2, w = spec.w, d = spec.d, x0 = spec.x, z0 = spec.z;
+      const lb = K.building({ id: spec.id, x: x0, z: z0, w, d, h: LH, wall: spec.lobbyWall || '#e7e5e4', trim: spec.trim || '#334155', roofC: spec.roof, floor: spec.lobbyFloor || '#e7e5e4',
+        floorType: 'tile', floorM: K.M.walk, doors: spec.doors, windows: spec.windows, sign: spec.sign, signBg: spec.signBg });
+      const stops = [{ name: spec.lobbyName || 'Холл', at: .12, x: x0, z: z0 }];
+      let g = lb.roof, below = LH + .24;
+      const fac = facadeMat(R, spec.style || 'glass', spec.tint), RH = FLOOR_H + .4;
+      const camOff = [];   // тела башни выше холла: пока ты внутри (холл, этаж) — камера проходит сквозь них (там всё спрятано)
+      if (lb.trig) lb.trig.data.camOff = camOff;
+      const seg = (grp2, y0, y1) => { if (y1 - y0 < .05) return; R.part(grp2, { s: 'box', y: (y0 + y1) / 2, w, h: y1 - y0, d, m: fac }); camOff.push(K.body({ x: x0, z: z0, y: (y0 + y1) / 2, hx: w / 2, hy: (y1 - y0) / 2, hz: d / 2, tag: 'tower', data: { cam: true, floor: 'concrete' } })); };
+      for (const [k, st] of (spec.stops || []).entries()) {
+        const at = st.at;
+        seg(g, below, at - .17);   // глухой фасад до этажа (верх — под плитой пола, без мерцания)
+        // пол этажа (верх нижнего куска) и стеклянные стены с простенками по углам
+        R.part(g, { s: 'box', y: at - .08, w: w - .1, h: .16, d: d - .1, c: st.floorC || '#d6d3d1' });
+        K.body({ x: x0, z: z0, y: at - .08, hx: w / 2, hy: .08, hz: d / 2, tag: 'deck', data: { cam: false, floor: 'tile' } });
+        for (const [px, pz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { R.part(g, { s: 'box', x: px * (w / 2 - .4), y: at + RH / 2, z: pz * (d / 2 - .4), w: .8, h: RH, d: .8, c: spec.trim || '#334155' }); }
+        for (const side of ['n', 's', 'e', 'w']) {
+          const horiz = side === 'n' || side === 's', L = (horiz ? w : d) - 1.6, px = horiz ? 0 : (side === 'e' ? w / 2 - .15 : -w / 2 + .15), pz = horiz ? (side === 's' ? d / 2 - .15 : -d / 2 + .15) : 0;
+          R.part(g, { s: 'box', x: px, y: at + RH / 2, z: pz, w: horiz ? L : .08, h: RH - .1, d: horiz ? .08 : L, m: K.M.glass });
+          K.body({ x: x0 + px, z: z0 + pz, y: at + RH / 2, hx: horiz ? L / 2 : .15, hy: RH / 2, hz: horiz ? .15 : L / 2, tag: 'glass', data: { cam: false } });
+          R.part(g, { s: 'box', x: px, y: at + 1.05, z: pz, w: horiz ? L : .1, h: .06, d: horiz ? .1 : L, c: '#94a3b8' });   // поручень
+        }
+        R.part(g, { s: 'box', x: w / 2 - 3, y: at + 1.35, z: d / 2 - .45, w: 2.2, h: 2.7, d: .12, c: '#9ca3af' });   // двери лифта
+        R.part(g, { s: 'box', x: w / 2 - 1.6, y: at + 1.25, z: d / 2 - .52, w: .2, h: .3, d: .04, c: '#38bdf8', m: 'glow' });
+        // выше этажа — своя группа (прячется, когда ты на этаже)
+        const up = new T.Group(); up.userData.dyn = true; g.add(up); K.roofs.push(up);
+        R.part(up, { s: 'box', y: at + RH + .08, w, h: .16, d, c: '#9ca3af' });   // потолок
+        K.body({ x: x0, z: z0, y: at + RH / 2, hx: w / 2 - .5, hy: RH / 2, hz: d / 2 - .5, trigger: true, tag: 'room', data: { room: spec.id + ':' + (k + 1), roof: up, camOff } });
+        stops.push({ name: st.name, at, x: x0, z: z0 });
+        if (st.furnish) K.lazy(x0, z0, Math.max(w, d) + 30, KK => st.furnish(KK, x0, z0, w, d), at, g);
+        g = up; below = at + RH + .16;
+      }
+      // остаток башни и крыша с видом
+      const t = K.tower({ ...spec, y0: below, base: null, tiers: spec.tiers }, g);
+      camOff.push(...t.bodies);
+      if (spec.roofStop !== false) stops.push(K.roofDeck(g, x0, z0, t, spec.roofStop || 'Крыша — вид на город'));
+      // лифт: дверь в холле (у задней стены) + на каждой остановке
+      const id = spec.id;
+      K.lifts[id] = { name: spec.name || spec.sign || 'Лифт', stops };
+      const doorZ = z0 + d / 2 - .9;
+      K.box(x0 + w / 2 - 3, .12, z0 + d / 2 - .25, 2.2, 2.7, .2, '#9ca3af'); K.part({ s: 'box', x: x0 + w / 2 - 3, y: 1.45, z: z0 + d / 2 - .37, w: .03, h: 2.5, d: .02, c: '#475569' });
+      K.part({ s: 'box', x: x0 + w / 2 - 1.6, y: 1.25, z: z0 + d / 2 - .36, w: .2, h: .3, d: .04, c: '#38bdf8', m: 'glow' });
+      stops[0].x = x0 + w / 2 - 3; stops[0].z = doorZ - .8; stops[0].yaw = PI;
+      stops.forEach((s, k) => {
+        if (k > 0 && !s.roof) { s.x = x0 + w / 2 - 3; s.z = doorZ - .8; s.yaw = PI; }
+        K.items.push(X.add({ x: s.x, y: s.at + 1.2, z: s.roof ? s.z : doorZ - .2, r: 1.5, prompt: () => `🛗 Лифт · ${s.name}`, act: () => rt.liftPanel(id, k) }));
+      });
+      return { stops, lobby: lb, top: t.top, topGroup: g, t };
+    };
+    // ── Крыша с видом: ограждение по краю, будка лифта в углу; вернёт остановку лифта. g — группа (её начало — gx0, gz0) ──
+    K.roofDeck = (g, gx0, gz0, t, name) => {
+      const top = t.top;
+      for (const [ww, dd, px, pz] of [[t.w, .3, 0, -t.d / 2], [t.w, .3, 0, t.d / 2], [.3, t.d, -t.w / 2, 0], [.3, t.d, t.w / 2, 0]]) {
+        R.part(g, { s: 'box', x: t.x - gx0 + px, y: top + .55, z: t.z - gz0 + pz, w: ww, h: 1.1, d: dd, c: '#cbd5e1' });
+        K.body({ x: t.x + px, z: t.z + pz, y: top + .55, hx: Math.max(ww, .3) / 2, hy: .55, hz: Math.max(dd, .3) / 2, tag: 'rail', data: { cam: false } });
+      }
+      const bx = t.x - t.w / 2 + 2.2, bz = t.z - t.d / 2 + 2.2;
+      R.part(g, { s: 'box', x: bx - gx0, y: top + 1.3, z: bz - gz0, w: 3, h: 2.6, d: 3, c: '#e5e7eb' });
+      R.part(g, { s: 'box', x: bx - gx0 + 1.52, y: top + 1.1, z: bz - gz0, w: .04, h: 2.2, d: 1.6, c: '#94a3b8' });
+      K.body({ x: bx, z: bz, y: top + 1.3, hx: 1.5, hy: 1.3, hz: 1.5, tag: 'lift', data: { cam: false } });
+      return { name, at: top, x: bx + 2.6, z: bz, yaw: PI / 2, roof: true };
+    };
+    // ── Лифт из списка остановок { name, at, x, z, yaw, ix, iz } (кнопка — у точки ix/iz или у самой остановки) ──
+    K.addLift = (id, name, stops) => {
+      K.lifts[id] = { name, stops };
+      stops.forEach((s, k) => K.items.push(X.add({ x: s.ix ?? s.x, y: s.at + 1.2, z: s.iz ?? s.z, r: 1.5, prompt: () => `🛗 Лифт · ${s.name}`, act: () => rt.liftPanel(id, k) })));
+      return K.lifts[id];
+    };
+
+    // ── Многоэтажный паркинг: этажи-плиты, пандусы (клинья: заехать и зайти), колонны, борта, разметка; лифт.
+    // Каждый ярус прячет то, что выше (вложенные группы). spec: { id, x, z, w, d, levels (3), lh (высота яруса) } ──
+    K.garage = spec => {
+      const { id, x: cx, z: cz, w, d } = spec, n = spec.levels || 3, lh = spec.lh || 3.6, x0 = cx - w / 2, z0 = cz - d / 2, conc = K.M.concrete;
+      const RL = Math.min(30, w - 16), strip = 6;   // длина пандуса, ширина полосы пандуса
+      const lift = { name: spec.name || 'Паркинг', stops: [] };
+      const lv = [];   // группа каждого яруса: ярус L — всё, что от его пола до пола следующего (колонны, будка лифта, пандус вверх)
+      let parent = K.group(cx, 0, cz, 0, grp); parent.userData.dyn = true; K.roofs.push(parent);
+      for (let L = 0; L < n; L++) { const g = L ? new T.Group() : parent; if (L) { g.userData.dyn = true; lv[L - 1].add(g); K.roofs.push(g); } lv.push(g); }
+      const box = (g, a, b, c, e, y0, y1, o) => { R.part(g, { s: 'box', x: (a + b) / 2 - cx, y: (y0 + y1) / 2, z: (c + e) / 2 - cz, w: b - a, h: y1 - y0, d: e - c, ...o }); };
+      for (let L = 0; L < n; L++) {
+        const g = lv[L], y = L * lh;
+        // плита яруса (на земле — асфальт улицы): пол там, где снизу не проходит пандус
+        if (L > 0) {
+          const fromS = (L - 1) % 2 === 0, rx0 = fromS ? x0 + 4 : x0 + w - 4 - RL, rx1 = rx0 + RL;
+          const slabs = [[x0, x0 + w, z0 + strip, z0 + d - strip]];
+          if (fromS) slabs.push([x0, x0 + w, z0, z0 + strip], [rx1, x0 + w, z0 + d - strip, z0 + d], [x0, rx0, z0 + d - strip, z0 + d]);
+          else slabs.push([x0, x0 + w, z0 + d - strip, z0 + d], [x0, rx0, z0, z0 + strip], [rx1, x0 + w, z0, z0 + strip]);
+          for (const [a, b, c, e] of slabs) if (b - a > .2 && e - c > .2) {
+            box(g, a, b, c, e, y - .36, y, { m: conc });
+            K.body({ x: (a + b) / 2, z: (c + e) / 2, y: y - .18, hx: (b - a) / 2, hy: .18, hz: (e - c) / 2, tag: 'deck', data: { cam: false, floor: 'concrete' } });
+          }
+          // борта по краю (кроме полосы, где снизу пандус)
+          for (const zz of [z0 + .12, z0 + d - .12]) { box(g, x0, x0 + w, zz - .12, zz + .12, y, y + .9, { c: '#d6d3d1' }); K.body({ x: cx, z: zz, y: y + .45, hx: w / 2, hy: .45, hz: .12, tag: 'rail', data: { cam: false } }); }
+          for (const xx of [x0 + .12, x0 + w - .12]) { box(g, xx - .12, xx + .12, z0, z0 + d, y, y + .9, { c: '#d6d3d1' }); K.body({ x: xx, z: cz, y: y + .45, hx: .12, hy: .45, hz: d / 2, tag: 'rail', data: { cam: false } }); }
+          // колонны (стоят в ярусе ниже — видны, пока ты там)
+          for (let px = x0 + 8; px < x0 + w - 4; px += 10) for (const pz of [z0 + strip + .4, z0 + d - strip - .4]) {
+            box(lv[L - 1], px - .3, px + .3, pz - .3, pz + .3, y - lh, y - .36, { c: '#a8a29e' });
+            K.body({ x: px, z: pz, y: y - lh / 2 - .18, hx: .3, hy: (lh - .36) / 2, hz: .3, tag: 'pillar', data: { cam: false } });
+          }
+        }
+        // пандус на следующий ярус: с чётного — по южной полосе на восток, с нечётного — по северной на запад
+        if (L < n - 1) {
+          const south = L % 2 === 0, rz = south ? z0 + d - strip / 2 : z0 + strip / 2, rx0 = south ? x0 + 4 : x0 + w - 4 - RL, ang = Math.atan2(lh, RL);
+          R.part(g, { s: 'box', x: rx0 + RL / 2 - cx, y: y + lh / 2 - .1, z: rz - cz, w: Math.hypot(RL, lh), h: .3, d: strip - .4, rz: south ? ang : -ang, m: conc });
+          K.wedge({ x: rx0 + RL / 2, z: rz, y: y + lh / 2, hx: (strip - .4) / 2, hy: lh / 2, hz: RL / 2, yaw: south ? -PI / 2 : PI / 2, data: { floor: 'concrete', cam: false } });
+          for (const s of [-1, 1]) R.part(g, { s: 'box', x: rx0 + RL / 2 - cx, y: y + lh / 2 + .35, z: rz - cz + s * (strip / 2 - .15), w: Math.hypot(RL, lh), h: .5, d: .2, rz: south ? ang : -ang, c: '#facc15' });
+          // ярус — «комната»: что выше, прячется
+          K.body({ x: cx, z: cz, y: y + lh / 2, hx: w / 2 - .3, hy: lh / 2 - .25, hz: d / 2 - .3, trigger: true, tag: 'room', data: { room: id + ':' + L, roof: lv[L + 1] } });
+        }
+        // разметка мест и будка лифта
+        for (let px = x0 + 6; px < x0 + w - 4; px += 3.2) R.part(g, { s: 'box', x: px - cx, y: y + .025, z: 0, w: .12, h: .02, d: d - 2 * strip - 3, c: '#f8fafc' });
+        box(g, x0 + .2, x0 + 1.6, cz - 2.3, cz - .9, y, y + 2.6, { c: '#e5e7eb' });
+        K.body({ x: x0 + .9, z: cz - 1.6, y: y + 1.3, hx: .7, hy: 1.3, hz: .7, tag: 'lift', data: { cam: false } });
+        lift.stops.push({ name: L === 0 ? 'Въезд' : L === n - 1 ? 'Крыша паркинга' : `Ярус ${L + 1}`, at: y + (L ? 0 : .02), x: x0 + 2.4, z: cz, yaw: -PI / 2 });
+      }
+      K.lifts[id] = lift;
+      for (const [k, s] of lift.stops.entries()) K.items.push(X.add({ x: x0 + 2.2, y: s.at + 1.2, z: cz - 1.6, r: 1.4, prompt: () => `🛗 Лифт · ${s.name}`, act: () => rt.liftPanel(id, k) }));
+      return lift;
+    };
+
+    // ── Детали с постоянными номерами (боевая зона): стены кусками, плиты, окна, колонны, крыша, укрытия — для будущих
+    //    разрушений («как в Майне, или на куски»). Рисуются InstancedMesh (одна сетка на материал и кусок 96 м): спрятать
+    //    деталь = матрица нулевого размера; у каждой своё тело (data.piece = номер). Реестр — rt.pieces ──
+    K.piece = o => {
+      const p = { ...o, y: o.y + K.yo, zone: zs.Z.id, destructible: o.destructible !== false, hp: o.hp || (o.kind === 'window' ? 10 : o.kind === 'bag' ? 30 : 60), broken: false };
+      if (o.solid !== false) { p.body = ph.addBox({ x: p.x, y: p.y, z: p.z, hx: p.w / 2, hy: p.h / 2, hz: p.d / 2, yaw: p.yaw || 0, tag: 'piece', data: { piece: p.id, cam: !!o.cam, floor: o.floor } }); K.bodies.push(p.body); }
+      K.pieceList.push(p);
+      return p;
+    };
+    K.mbuilding = spec => {
+      const list = modular(spec).map(K.piece), roofList = list.filter(p => p.kind === 'roof' || p.kind === 'parapet');
+      const roof = pieceGroup(roofList);
+      if (spec.interior !== false) K.body({ x: spec.x, z: spec.z, y: (spec.h || 3.8) / 2, hx: spec.w / 2 - .3, hy: (spec.h || 3.8) / 2 + .3, hz: spec.d / 2 - .3, trigger: true, tag: 'room', data: { room: spec.id, roof } });
+      if (spec.sign) {
+        const dd = (spec.doors || [])[0], side = dd?.side || 's', hw = spec.w / 2, hd = spec.d / 2, sw = Math.min(spec.w - 1, 7);
+        const px = side === 'e' ? spec.x + hw + .2 : side === 'w' ? spec.x - hw - .2 : spec.x + (dd?.at || 0), pz = side === 's' ? spec.z + hd + .2 : side === 'n' ? spec.z - hd - .2 : spec.z + (dd?.at || 0);
+        K.label.sign(spec.sign, px, Math.min((spec.h || 3.8) - .45, (dd?.h || 2.9) + .55), pz, sw, sw / 5.3, side === 's' ? 0 : side === 'n' ? PI : side === 'e' ? PI / 2 : -PI / 2, { bg: spec.signBg || spec.trim });
+      }
+      return { list, roof };
+    };
     // кусок готов — склеить (группа куска — новый ребёнок корня)
     K.chunk = name => { if (K.cur) K.flush(); K.cur = new T.Group(); K.cur.name = name || ''; grp.add(K.cur); return K.cur; };
-    K.flush = () => { if (!K.cur) return; merge(R, K.cur, { chunk: 64 }); K.cur = null; };
+    // склейка — потом, всей зоной по клеткам (prepMerge в start): куски одной улицы и разных зданий в одной клетке — одна сетка
+    K.flush = () => { K.cur = null; };
     return K;
   }
 
@@ -518,6 +978,18 @@
       for (const s of [-1, 1]) { const ox = Math.cos(yaw) * (r.w / 2 + 1) * s, oz = -Math.sin(yaw) * (r.w / 2 + 1) * s; P(null, { s: 'box', x: cx + ox, y: .06, z: cz + oz, w: 2, h: .12, d: L, yaw, m: M.walk }); }
       for (let k = 4; k < L - 4; k += 5) P(null, { s: 'box', x: x1 + dx * k / L, y: .036, z: z1 + dz * k / L, w: .22, h: .01, d: 2, yaw, c: '#f1f5f9' });
       for (let k = 12; k < L - 6; k += 24) for (const s of [-1, 1]) R.prefab('lamp', { x: x1 + dx * k / L + Math.cos(yaw) * (r.w / 2 + 2.4) * s, z: z1 + dz * k / L - Math.sin(yaw) * (r.w / 2 + 2.4) * s }, ph);
+    }
+    // вода моря и канала (дыры в земле) — видна сразу, до подгрузки зон; дно — песок, края — каменные стенки
+    for (const [r, c, key] of [[SEA, '#2f7fc1', 'mzsea'], [CANAL, '#3a8fd0', 'mzcanal']]) {
+      const wm = R.water(c, { key, fixedColor: true }); wm.side = T.DoubleSide;   // из-под воды видно поверхность
+      const m = new T.Mesh(new T.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0), wm); m.rotation.x = -PI / 2; m.position.set((r.x0 + r.x1) / 2, r.wl, (r.z0 + r.z1) / 2);
+      m.userData.dyn = true; R.scene.add(m); R.own.push(m.geometry);
+      P(null, { s: 'box', x: (r.x0 + r.x1) / 2, y: r.floor - .1, z: (r.z0 + r.z1) / 2, w: r.x1 - r.x0, h: .2, d: r.z1 - r.z0, c: '#b8a77a' });
+      const hh = .02 - r.floor, yc = r.floor + hh / 2;
+      for (const [x, z, w, d] of [[(r.x0 + r.x1) / 2, r.z0 + .2, r.x1 - r.x0, .4], [(r.x0 + r.x1) / 2, r.z1 - .2, r.x1 - r.x0, .4], [r.x0 + .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0], [r.x1 - .2, (r.z0 + r.z1) / 2, .4, r.z1 - r.z0]]) {
+        P(null, { s: 'box', x, y: yc, z, w, h: hh, d, c: '#8d8a83' });
+        ph.addBox({ x, y: yc, z, hx: w / 2, hy: hh / 2, hz: d / 2, tag: 'wall', data: { cam: false, floor: 'concrete' } });
+      }
     }
     // указатели на развилке и у дорог
     R.prefab('sign', { x: 6, z: 124, yaw: PI, text: '🏙️ Большой город →', c: '#1d4ed8' }, ph);
@@ -584,7 +1056,14 @@
     for (const Z of ZLIST) {
       const D = DEFS[Z.id], g = new T.Group(); g.name = 'mz-proxy-' + Z.id; R.scene.add(g);
       if (D?.ground) for (const q of D.ground) R.part(g, { s: 'box', x: q[0], y: q[5] ?? .015, z: q[1], w: q[2], h: .02, d: q[3], c: q[4] });
-      for (const f of D?.footprints || []) if (f[5] !== 0) R.part(g, { s: 'box', x: f[0], y: (f[5] || 4) / 2, z: f[1], w: f[2], h: f[5] || 4, d: f[3], c: f[4] });
+      // здания: у небоскрёбов — тот же фасад (окна светятся ночью — силуэт города издалека живой), крыша — цвет типа
+      for (const f of D?.footprints || []) if (f[5] !== 0) {
+        const h = f[5] || 4;
+        R.part(g, { s: 'box', x: f[0], y: h / 2, z: f[1], w: f[2], h, d: f[3], ...(f[6] ? { m: facadeMat(R, f[6]) } : { c: f[4] }) });
+        if (f[7]) R.part(g, { s: 'box', x: f[0], y: h + .15, z: f[1], w: f[2] + .3, h: .3, d: f[3] + .3, c: f[7] });
+      }
+      // силуэт выше зданий: ярусы, шпили, телебашня — [x, z, w, d, цвет, верх, низ, фасад]
+      for (const s of D?.skyline || []) R.part(g, { s: 'box', x: s[0], y: ((s[5] || 4) + (s[6] || 0)) / 2, z: s[1], w: s[2], h: (s[5] || 4) - (s[6] || 0), d: s[3], ...(s[7] ? { m: facadeMat(R, s[7]) } : { c: s[4] }) });
       merge(R, g, { chunk: 0 });
       proxies[Z.id] = g;
     }
@@ -593,7 +1072,7 @@
   }
   // Земля шире и с дырами (море, бункер) — крючок в постройке земли mir.js
   function groundHoles(T, shape){
-    for (const r of [SEA, BUNKER]) {
+    for (const r of [SEA, BUNKER, CANAL]) {
       const h = new T.Path();
       h.moveTo(r.x0, -r.z1); h.lineTo(r.x1, -r.z1); h.lineTo(r.x1, -r.z0); h.lineTo(r.x0, -r.z0); h.lineTo(r.x0, -r.z1);
       shape.holes.push(h);
@@ -644,21 +1123,56 @@
       zs.grp = grp; zs.K = kit(rt, zs, grp);
       zs.it = zs.D.build(zs.K);
     }
+    // постройка по кусочку → склейка по клеткам (по одной за раз) → готово
     function stepBuild(zs, budget){
       const t0 = now();
-      while (zs.it && now() - t0 < budget) {
-        let r;
-        try { r = zs.it.next(); } catch (e) { console.error('зона', zs.Z.id, e); r = { done: true }; }
-        if (r.done) finishBuild(zs);
+      while (now() - t0 < budget) {
+        if (zs.it) {
+          let r;
+          try { r = zs.it.next(); } catch (e) { console.error('зона', zs.Z.id, e); r = { done: true }; }
+          if (r.done) { zs.it = null; zs.K.flush(); prepMerge(zs); }
+          continue;
+        }
+        if (zs.mq) {
+          const it = zs.mq.shift();
+          try { if (it.roof) { merge(R, it.roof, { chunk: 0 }); R.shadowsOn?.(it.roof); } else merge(R, it, { chunk: 0 }); } catch (e) { console.error('склейка', zs.Z.id, e); }
+          if (!zs.mq.length) { zs.mq = null; finishBuild(zs); }
+          continue;
+        }
+        break;
       }
+    }
+    // все детали зоны (кроме прячущихся групп: крыши, этажи, ленивые интерьеры) — в группы клеток 96 × 96 с сохранением места
+    const CELL = 96;
+    function prepMerge(zs){
+      const grp = zs.grp, cells = new Map(), sph = new T.Sphere(), list = [];
+      grp.updateMatrixWorld(true);
+      grp.traverse(x => {
+        if (!x.isMesh || x.isInstancedMesh || x.userData.dyn || x.userData.mzOwn) return;
+        for (let q = x.parent; q && q !== grp; q = q.parent) if (q.userData.dyn) return;
+        list.push(x);
+      });
+      for (const x of list) {
+        if (!x.geometry.boundingSphere) x.geometry.computeBoundingSphere();
+        sph.copy(x.geometry.boundingSphere).applyMatrix4(x.matrixWorld);
+        const key = sph.radius > CELL * .75 ? 'big' : Math.floor(sph.center.x / CELL) + ',' + Math.floor(sph.center.z / CELL);
+        let g = cells.get(key);
+        if (!g) { g = new T.Group(); g.name = 'cell ' + key; g.userData.cell = true; cells.set(key, g); }
+        x.matrixWorld.decompose(x.position, x.quaternion, x.scale);
+        x.parent.remove(x); g.add(x);
+      }
+      // опустевшие группы кусков — прочь (прячущиеся группы и надписи остаются)
+      const keep = c => c.userData.dyn || c.userData.mzOwn || c.isMesh || c.children.some(keep);
+      for (const c of [...grp.children]) if (!keep(c)) grp.remove(c);
+      for (const g of cells.values()) grp.add(g);
+      zs.mq = [...cells.values(), ...zs.K.roofs.map(r => ({ roof: r }))];
+      if (!zs.mq.length) { zs.mq = null; finishBuild(zs); }
     }
     function finishBuild(zs){
       const K = zs.K;
-      zs.it = null;
-      K.flush();
-      merge(R, zs.grp, { chunk: 64 });   // что строилось не в кусках — тоже склеить
-      for (const roof of K.roofs) { merge(R, roof, { chunk: 0 }); R.shadowsOn?.(roof); }
       const lm = K.label.mesh(); if (lm) zs.grp.add(lm);
+      flushPieces(R, K, zs.grp);   // детали с номерами (боевая зона) — InstancedMesh
+      for (const p of K.pieceList) PIECES.set(p.id, p);
       zs.built = true;
       R.shadowDirty?.();
       try { zs.mod = zs.D.start?.(rt, K) || null; } catch (e) { console.error(e); }
@@ -667,7 +1181,7 @@
     // построить сразу (телепорт в зону): кусочками с ожиданием кадра, пока не готово
     rt.buildNow = zs => new Promise(res => {
       beginBuild(zs);
-      const tick = () => { if (rt.stopped) return res(false); stepBuild(zs, 24); if (zs.built || !zs.it) res(true); else setTimeout(tick, 0); };
+      const tick = () => { if (rt.stopped) return res(false); stepBuild(zs, 24); if (zs.built || (!zs.it && !zs.mq)) res(true); else setTimeout(tick, 0); };
       tick();
     });
     function setShown(zs, on){
@@ -675,12 +1189,86 @@
       if (zs.grp) zs.grp.visible = on;
       if (zs.proxy) zs.proxy.visible = !on;
       R.shadowDirty?.();
-      // жители — только пока видно
-      if (on && !zs.npcOn && S.NPC) { for (const o of zs.K.npcs) S.NPC.add(o); zs.npcOn = true; }
-      else if (!on && zs.npcOn && S.NPC) { for (const o of zs.K.npcs) S.NPC.remove(o); zs.npcOn = false; }
+      zs.npcOn = on;   // жители — только пока видно и только рядом (npcTick)
+      if (!on) npcTick();
       try { zs.mod?.shown?.(on); } catch (e) { console.error(e); }
     }
+    // ── Жители зон — по расстоянию (как PopulationDirector в Backrooms: рядом — появляются, далеко — уходят), не больше NPC_CAP ──
+    const NPC_NEAR = 62, NPC_FAR = 82, NPC_CAP = R.q === 'low' || E?.isMobile?.() ? 8 : 16;
+    function npcTick(){
+      if (!S.NPC) return;
+      const p = S.P.ch, L = [];
+      for (const zs of rt.zones.values()) for (const o of zs.K?.npcs || []) {
+        const d = Math.hypot(o.pos[0] - p.x, o.pos[2] - p.z) + Math.abs(o.pos[1] - p.y) * 2;   // другой этаж — «дальше»
+        L.push([d, o, !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR)]);
+      }
+      L.sort((a, b) => a[0] - b[0]);
+      let n = 0;
+      for (const [, o, want] of L) {
+        const on = want && n < NPC_CAP;
+        if (on) n++;
+        if (on && !o._on) { S.NPC.add(o); o._on = true; }
+        else if (!on && o._on) { S.NPC.remove(o); o._on = false; }
+      }
+    }
     rt.zoneState = id => rt.zones.get(id);
+    // ── Ленивые интерьеры: игрок рядом — построить (один за раз); далеко — спрятать ──
+    function lazyTick(){
+      const p = S.P.ch;
+      for (const zs of rt.zones.values()) {
+        if (!zs.built || !zs.K?.lazies.length) continue;
+        for (const L of zs.K.lazies) {
+          const dd = Math.hypot(L.x - p.x, L.z - p.z);
+          if (!L.done && dd < L.r && zs.shown) { buildLazy(zs, L); return; }
+          if (L.done && L.grp) { const want = dd < L.r + 60; if (L.grp.visible !== want) { L.grp.visible = want; R.shadowDirty?.(); } }
+        }
+      }
+    }
+    function buildLazy(zs, L){
+      const K = zs.K, g = new T.Group();
+      let px = 0, py = 0, pz = 0;
+      if (L.parent) { L.parent.updateWorldMatrix(true, false); const e = L.parent.matrixWorld.elements; px = e[12]; py = e[13]; pz = e[14]; }
+      g.position.set(-px, L.y - py, -pz); (L.parent || zs.grp).add(g);   // детали — в мировых координатах, как в обычной постройке
+      const cur = K.cur, yo = K.yo, n0 = K.npcs.length;
+      K.cur = g; K.yo = L.y;
+      try { L.gen(K); } catch (e) { console.error('интерьер', e); }
+      K.cur = cur; K.yo = yo;
+      merge(R, g, { chunk: 0 }); R.shadowsOn?.(g);
+      L.grp = g; L.done = true;
+      void n0;   // жители интерьера появятся сами (npcTick)
+      R.shadowDirty?.();
+    }
+    rt.lazyAll = () => { for (const zs of rt.zones.values()) for (const L of zs.K?.lazies || []) if (!L.done) buildLazy(zs, L); };   // для проверок
+    // ── Лифт 🛗: окно этажей → затемнение → на этаж ──
+    const liftOf = id => { for (const zs of rt.zones.values()) if (zs.K?.lifts?.[id]) return zs.K.lifts[id]; return null; };
+    rt.liftPanel = (id, from) => {
+      const L = liftOf(id); if (!L) return;
+      H.panel(`<span class="wld-pe">🛗</span><b>Лифт · ${esc(L.name)}</b>`, `<div class="mz-lift">${L.stops.map((s, k) => `<button type="button"${k === from ? ' class="on" disabled' : ''} data-mz="lift:${esc(id)}:${k}"><b>${k === from ? '● ' : ''}${esc(s.name)}</b><small>${s.at < .5 ? '1 этаж' : Math.round(s.at / FLOOR_H) + 1 + ' этаж'}</small></button>`).join('')}</div>`);
+    };
+    rt.liftGo = async (id, k) => {
+      const L = liftOf(id), s = L?.stops[k]; if (!s || rt.tpBusy) return;
+      H.closePops();
+      rt.tpBusy = true;
+      const f = q('.mz-fade'); f.hidden = false; f.classList.remove('out'); f.textContent = `🛗 ${s.name}`;
+      rt.sfx('click', { rate: .8 });
+      // интерьер этажа — сразу (лифт приехал — мебель на месте)
+      for (const zs of rt.zones.values()) for (const Lz of zs.K?.lazies || []) if (!Lz.done && Math.hypot(Lz.x - s.x, Lz.z - s.z) < Lz.r && Math.abs(Lz.y - s.at) < 1) buildLazy(zs, Lz);
+      await new Promise(r => setTimeout(r, 650));
+      rt.tpBusy = false;
+      if (rt.stopped) return;
+      place(s.x, s.z, s.yaw ?? 0, s.at);
+      rt.sfx('pickup', { vol: .4, rate: 1.6 });
+      f.classList.add('out'); setTimeout(() => { if (f.classList.contains('out')) f.hidden = true; }, 380);
+    };
+    // ── Детали с номерами (боевая зона) — для будущих разрушений: найти, спрятать (сломать) и вернуть ──
+    rt.pieces = {
+      all: zone => [...PIECES.values()].filter(p => !zone || p.zone === zone),
+      get: id => PIECES.get(id) || null,
+      byBuilding: bid => [...PIECES.values()].filter(p => p.b === bid),
+      // сломать: картинка — прочь, тело — прочь (только destructible); вернуть — назад
+      breakPiece(id){ const p = PIECES.get(id); if (!p || p.broken || !p.destructible) return false; p.broken = true; setPieceVis(p, false); if (p.body) ph.remove(p.body); R.shadowDirty?.(); return true; },
+      restore(id){ const p = PIECES.get(id); if (!p || !p.broken) return false; p.broken = false; setPieceVis(p, true); if (p.body) ph.update(p.body, {}); if (p.body && !ph.cols.has(p.body)) { const b = p.body; p.body = ph.addBox({ x: b.x, y: b.y, z: b.z, hx: b.hx, hy: b.hy, hz: b.hz, yaw: b.yaw, tag: 'piece', data: b.data }); } R.shadowDirty?.(); return true; },
+    };
     // ── «Где я»: плашка при входе в зону и место ──
     let areaT = 0, areaPend = null;
     function banner(icon, name, sub, cls = ''){
@@ -733,6 +1321,7 @@
       if (a === 'age') root.D37Age?.ask?.({ edit: true });
       else if (a === 'map-close') closeMap();
       else if (a.startsWith('tp:')) mapTp(a.slice(3));
+      else if (a.startsWith('lift:')) { const i = a.lastIndexOf(':'); rt.liftGo(a.slice(5, i), +a.slice(i + 1)); }
       else if (a.startsWith('act:')) doAct(a.slice(4));
       else if (a === 'acts-x') toggleActs(false);
       else for (const zs of rt.mods) { try { if (zs.mod?.click?.(a, b)) break; } catch (er) { console.error(er); } }
@@ -1063,12 +1652,12 @@
       if (!S.NPC) return;
       const P = S.P.ch;
       for (const zs of rt.zones.values()) {
-        if (!zs.npcOn) { for (const o of zs.K?.npcs || []) if (o._tagEl) o._tagEl.style.display = 'none'; continue; }
-        for (const o of zs.K.npcs) {
+        for (const o of zs.K?.npcs || []) {
+          if (!o._on) { if (o._tagEl) o._tagEl.style.display = 'none'; continue; }
           const e = S.NPC.list.get(o.id), h = e && S.NPC.head(e);
           let el = o._tagEl;
           if (!el) { el = o._tagEl = document.createElement('div'); el.className = 'wld-tag wld-npc'; el.innerHTML = '<div class="wld-tbub" hidden></div><b class="wld-tname"></b>'; el.lastChild.textContent = o.name || ''; tagBox.appendChild(el); }
-          const far = !h || Math.hypot(h[0] - P.x, h[2] - P.z) > 24;
+          const far = !h || Math.hypot(h[0] - P.x, h[2] - P.z) > 24 || Math.abs(h[1] - P.y) > 10;   // этажом выше/ниже — без подписи
           const [sx, sy, vis] = h && !far ? R.project(h[0], h[1] + .15, h[2]) : [0, 0, false];
           if (!vis) { el.style.display = 'none'; continue; }
           el.style.display = '';
@@ -1083,6 +1672,10 @@
     rt.update = dt => {
       if (rt.stopped) return;
       rt.t += dt;
+      // камера внутри небоскрёба/дома с верхними этажами: тела выше (спрятанные) не держат камеру, пока ты внутри
+      let camOff = null;
+      for (const c of S.P.ch.inside) if (c.data?.camOff) { camOff = c.data.camOff; break; }
+      if (camOff !== rt.camOff) { for (const b of rt.camOff || []) b.data.cam = true; for (const b of camOff || []) b.data.cam = false; rt.camOff = camOff; }
       const C = S.C;
       if (C && !rt.modal && C.down('map')) openMap();
       else if (C && rt.modal === 'map' && C.downRaw?.('map')) closeMap();
@@ -1098,12 +1691,14 @@
           if (!zs.built && !zs.it && d < LOAD_D) beginBuild(zs);
           if (zs.built) { const want = d < (zs.shown ? HIDE_D : SHOW_D); if (want !== zs.shown) setShown(zs, want); }
         }
+        lazyTick();   // интерьеры этажей, магазинов ТЦ, номеров — рядом с игроком
+        npcTick();    // жители — только рядом
       }
       for (const zs of rt.mods) { try { zs.mod?.update?.(dt); } catch (e) { console.error(e); } }
     };
     rt.frame = (dt, t) => {
       if (rt.stopped) return;
-      for (const zs of rt.zones.values()) if (zs.it) { stepBuild(zs, R.q === 'high' ? 4 : 3); if (zs.built && !zs.shown) { const c = R.camera.position; if (distRect(zs.Z, c.x, c.z) < SHOW_D) setShown(zs, true); } }
+      for (const zs of rt.zones.values()) if (zs.it || zs.mq) { stepBuild(zs, R.q === 'high' ? 4 : 3); if (zs.built && !zs.shown) { const c = R.camera.position; if (distRect(zs.Z, c.x, c.z) < SHOW_D) setShown(zs, true); } }
       for (const zs of rt.mods) { try { zs.mod?.frame?.(dt, t); } catch (e) { console.error(e); } }
       drawNpcTags();
     };
@@ -1112,8 +1707,9 @@
       clearTimeout(rt.bannerT); clearTimeout(rt.phT); clearTimeout(rt.eatT); clearInterval(rt.mapT);
       for (const zs of rt.zones.values()) {
         try { zs.mod?.stop?.(); } catch (e) { console.error(e); }
-        if (zs.npcOn && S.NPC) for (const o of zs.K.npcs) S.NPC.remove(o);
+        if (S.NPC) for (const o of zs.K?.npcs || []) if (o._on) { S.NPC.remove(o); o._on = false; }
         if (zs.grp) { disposeOwn(zs.grp); zs.grp.parent?.remove(zs.grp); }
+        for (const p of zs.K?.pieceList || []) PIECES.delete(p.id);
       }
       if (S.menu?.close === closeMap) S.menu = null;
       hud.remove(); rt.actBtn?.remove(); rt.mapBtn?.remove();
@@ -1159,7 +1755,8 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   root.MirZones = {
-    ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
+    ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
+    BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat,
     def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
