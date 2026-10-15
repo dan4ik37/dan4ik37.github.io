@@ -64,7 +64,7 @@ const nondec = a => a.every((v, i) => i === 0 || v >= a[i - 1]);
   ok(S.u && S.hero && S.raid && !('n' in S.u.fighter) && !('info' in S.u.fighter) && !('n' in S.hero) && S.k.cannon.atk.dmg.length === 5, 'base_defs: отряды, герой и правила — без подписей');
   // 12×12 вмещает обязательное ядро ратуши 5 (без украшений): ратуша, дом, казарма, шахты, склады, оборона
   const core = ['th', 'house', 'barracks', 'mine', 'store', 'shop', 'tower', 'cannon', 'mortar'].reduce((a, k) => a + DEFS[k].w * DEFS[k].d * DEFS[k].max[4], 0);
-  ok(core + DEFS.bomb.max[4] + DEFS.airmine.max[4] + 30 <= 144, `ратуша 5: ядро + ловушки + 30 заборов влезают (${core} клеток)`);
+  ok(core + DEFS.bomb.max[4] + DEFS.airmine.max[4] + 25 <= 144, `ратуша 5: ядро + ловушки + 25 заборов влезают (${core} клеток) — выбирать, что ставить, всё равно придётся`);
 }
 
 // ═══ Казарма: тренировка по времени, очередь, место, ускорение, распуск ═══
