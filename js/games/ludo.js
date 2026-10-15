@@ -308,7 +308,7 @@
     const txt = P.winner >= 0 ? (P.winner === me ? '🏆 <b>Победа!</b>' : `😔 Победил ${esc(P.players[P.winner].nick)}`)
       : myTurn ? (P.phase === 'roll' ? '🟢 Брось кубик' : many ? '🟢 Выбери фишку' : '🟢 Ходит твоя фишка') : `⏳ Ходит ${esc(P.players[P.turn].nick)}…`;
     root.querySelector('.un-status').innerHTML = (P.winner >= 0 || !window.GameKit ? txt : GameKit.turn(myTurn, txt)) + (room && myTurn ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : '');
-    if (P.winner < 0) root.querySelector('.un-acts').innerHTML = pickTok >= 0 ? '<button type="button" class="un-btn gk-go" data-act="go">▶ Ходить</button><button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>' : '';
+    if (P.winner < 0) root.querySelector('.un-acts').innerHTML = pickTok >= 0 ? '<button type="button" class="un-btn gk-go" data-act="commit">▶ Ходить</button><button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>' : '';
     const hint = root.querySelector('.gk-hint');
     if (hint) hint.innerHTML = P.winner >= 0 || !moving || !many ? '' : pickTok >= 0 ? `Призрак показывает, куда встанет. Нажми фишку ещё раз или «Ходить»; передумал — другую фишку${room ? ' · после хода отменить нельзя' : ''}` : 'Нажми фишку (подсвечены) — покажу, куда она встанет';
     draw();
@@ -349,7 +349,7 @@
     if (a === 'solo') { startSolo(); return; }
     if (a === 'online') { location.hash = '#/games/ludo/' + GameRoom.newCode(); return; }
     if (a === 'roll') { doAct({ a: 'roll' }); return; }
-    if (a === 'go') { if (pickTok >= 0) doAct({ a: 'move', i: pickTok }); return; }
+    if (a === 'commit') { if (pickTok >= 0) doAct({ a: 'move', i: pickTok }); return; }
     if (a === 'cancel') { pickTok = -1; render(); return; }
     if (a === 'again') { if (online()) hostStart(); else startSolo(); return; }
     if (a === 'leave') { if (online()) location.hash = '#/games/ludo'; else menu(); return; }

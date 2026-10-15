@@ -343,7 +343,7 @@
     const tgtOf = sel ? (S.tgt >= 0 && selT.includes(S.tgt) ? S.tgt : selT.length === 1 ? selT[0] : -1) : -1;
     let status = '', mine = false;
     if (P.over) status = '';
-    else if (isDef) { mine = !P.taking && free.length > 0; status = P.taking ? '🛡️ Ты берёшь — ждём, что подкинут' : free.length ? '🛡️ Отбивайся' : '🛡️ Отбился! Ждём, подкинут ли ещё'; }
+    else if (isDef) { mine = !P.taking && free.length > 0; status = P.taking ? '🛡️ Ты берёшь — ждём, что подкинут' : free.length ? '🛡️ Отбивайся' : !P.table.length ? `⏳ Ходит ${esc(P.order[P.attacker].nick)} — ты отбиваешься` : '🛡️ Отбился! Ждём, подкинут ли ещё'; }
     else if (!P.table.length) { mine = P.attacker === me; status = mine ? '⚔️ Твой ход: положи любую карту' : `⏳ Ходит ${esc(P.order[P.attacker].nick)}…`; }
     else if (passedMe) status = '⏳ Ждём остальных…';
     else { mine = P.taking || !free.length; status = P.taking ? `⚔️ ${esc(P.order[P.defender].nick)} берёт — можешь подкинуть` : free.length ? `⏳ ${esc(P.order[P.defender].nick)} отбивается…` : '⚔️ Подкинь карту или нажми «Бито»'; }
@@ -375,7 +375,7 @@
         <div class="un-log" aria-live="polite">${esc(P.log)}</div>
         <div class="un-status">${status ? (window.GameKit ? GameKit.turn(mine, status) : status) : ''}${online() && mine ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : ''}</div>
         <div class="un-acts">
-          ${btnTxt ? `<button type="button" class="un-btn gk-go" data-act="go">${btnTxt}</button>` : ''}${sel || S.tgt >= 0 ? '<button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>' : ''}
+          ${btnTxt ? `<button type="button" class="un-btn gk-go" data-act="commit">${btnTxt}</button>` : ''}${sel || S.tgt >= 0 ? '<button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>' : ''}
           ${isDef && !P.taking && free.length && !P.over && !sel ? `<button type="button" class="un-btn catch${S.arm ? ' gk-armed' : ''}" data-act="take">${S.arm ? '🫴 Точно беру?' : '🫴 Беру'}</button>` : ''}
           ${isAtt && P.table.length && !passedMe && (P.taking || !free.length) && !sel ? `<button type="button" class="un-btn" data-act="pass">${P.taking ? '✋ Пас' : '✅ Бито'}</button>` : ''}
         </div>
@@ -421,7 +421,8 @@
     if (a === 'pass') { doAct({ a: 'pass' }); return; }
     if (a.startsWith('card:')) { pickEv({ t: 'card', i: +a.slice(5) }); return; }
     if (a.startsWith('tgt:')) { pickEv({ t: 'tgt', j: +a.slice(4) }); return; }
-    if (a === 'go' || a === 'cancel') { pickEv({ t: a }); return; }
+    if (a === 'commit') { pickEv({ t: 'go' }); return; }   // кнопка хода (не 'go' — это «▶ Начать» за столом)
+    if (a === 'cancel') { pickEv({ t: a }); return; }
     if (a === 'copy') { const inp = root.querySelector('.ct-link input'); navigator.clipboard?.writeText(inp.value).then(() => { b.textContent = '✅ Скопировано'; }, () => inp.select()); return; }
     if (a === 'bot') { bots++; lobby(); return; }
     if (a.startsWith('unbot:')) { bots = Math.max(0, bots - 1); lobby(); return; }

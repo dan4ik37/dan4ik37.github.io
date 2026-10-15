@@ -334,7 +334,7 @@
         <div class="un-log" aria-live="polite">${esc(P.log)}</div>
         <div class="un-status">${turnTxt ? (window.GameKit ? GameKit.turn(myTurn, turnTxt) : turnTxt) : ''}${online() && myTurn ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : ''}</div>
         <div class="un-acts">
-          ${sel ? `<button type="button" class="un-btn gk-go" data-act="go">${colorOf(hand[S.pick]) ? '✅ Сходить' : '🎨 Выбрать цвет'}</button><button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>` : ''}
+          ${sel ? `<button type="button" class="un-btn gk-go" data-act="commit">${colorOf(hand[S.pick]) ? '✅ Сходить' : '🎨 Выбрать цвет'}</button><button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>` : ''}
           ${hand.length <= 2 && !P.order[meIdx].said && P.winner < 0 ? `<button type="button" class="un-btn uno${exposedMe ? ' urgent' : ''}" data-act="uno">📢 Одна!</button>` : ''}
           ${canCatch ? `<button type="button" class="un-btn catch" data-act="catch">🫵 Поймал ${esc(P.order[P.exposed].nick)}!</button>` : ''}
           ${myTurn && P.drew != null && !sel ? '<button type="button" class="un-btn" data-act="pass">Пропустить ход</button>' : ''}
@@ -382,7 +382,8 @@
     if (a === 'uno') { doAct({ a: 'uno' }); return; }
     if (a === 'catch') { doAct({ a: 'catch' }); return; }
     if (a.startsWith('play:')) { pickEv({ t: 'card', i: +a.slice(5) }); return; }
-    if (a === 'go' || a === 'cancel' || a === 'back') { pickEv({ t: a }); return; }
+    if (a === 'commit') { pickEv({ t: 'go' }); return; }   // «Сходить» (не 'go' — это «▶ Начать» за столом)
+    if (a === 'cancel' || a === 'back') { pickEv({ t: a }); return; }
     if (a.startsWith('color:')) { pickEv({ t: 'color', c: a.slice(6) }); return; }
     // лобби стола
     if (a === 'copy') { const inp = root.querySelector('.ct-link input'); navigator.clipboard?.writeText(inp.value).then(() => { b.textContent = '✅ Скопировано'; }, () => inp.select()); return; }

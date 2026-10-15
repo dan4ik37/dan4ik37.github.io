@@ -1815,7 +1815,9 @@ body.low .ct-city{animation:none}
 .sn-over .ct-start[hidden]{display:none}
 .sn-pad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,48px);gap:6px;justify-content:center;margin-top:.8rem}
 .sn-pad button{border:1px solid var(--border);background:rgba(255,255,255,.05);color:var(--text);border-radius:12px;font-size:1rem;cursor:pointer;touch-action:manipulation}
-.sn-pad button:first-child{grid-column:2}
+.sn-pad button:first-child{grid-column:2;grid-row:1}
+/* ◀ ▼ ▶ — нижним рядом (раньше ◀ уезжал вверх, правее ▲) */
+.sn-pad button:nth-child(2){grid-column:1;grid-row:2}.sn-pad button:nth-child(3){grid-column:2;grid-row:2}.sn-pad button:nth-child(4){grid-column:3;grid-row:2}
 .sn-pad button:active{background:var(--ac-18)}
 @media(hover:hover) and (pointer:fine){.sn-pad{display:none}}
 /* Найди пару */
@@ -2592,8 +2594,8 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .un-wc{display:flex;gap:.8rem}
 /* выбор карты (uno.js, durak.js): нажал — карта поднялась; ещё раз / «Сходить» — ход */
 .un-hand{padding-top:1.9rem}
-.uc.sel,.dk.sel{transform:translateY(-24px)!important;z-index:3;box-shadow:0 0 0 3px #22c55e,0 10px 24px rgba(34,197,94,.45)!important;filter:none!important}
 .uc.ok,.dk.ok{position:relative;z-index:1}
+.uc.sel,.dk.sel{transform:translateY(-24px)!important;z-index:3;box-shadow:0 0 0 3px #22c55e,0 10px 24px rgba(34,197,94,.45)!important;filter:none!important}
 .uc.no,.dk.no{animation:unNo .26s ease-in-out}
 @keyframes unNo{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 .un-hand.picking .uc.ok:not(.sel),.un-hand.picking .dk.ok:not(.sel){transform:translateY(-6px)}
