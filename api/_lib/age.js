@@ -17,7 +17,7 @@ export const GAME_AGE = {
   arena: [12, 'Перестрелка двух персонажей (мультяшная, без крови).'],
   td: [6, 'Башни отбиваются от мультяшных монстров.'],
   balda: [0, ''], sudoku: [0, ''], mahjong: [0, ''], miner: [0, ''], kosynka: [0, ''], freecell: [0, ''], pauk: [0, ''], blocks: [0, ''],
-  chess: [0, ''], uno: [0, ''], durak: [0, ''], pool: [0, ''], ludo: [0, ''], nardy: [0, ''],
+  domino: [0, ''], chess: [0, ''], uno: [0, ''], durak: [0, ''], pool: [0, ''], ludo: [0, ''], nardy: [0, ''],
   wardrobe: [0, ''], cities: [0, ''], words: [0, ''],
   guess: [12, 'Кусочки превью роликов канала — бывают страшилки.'],
   '2048': [0, ''], checkers: [0, ''], catch: [0, ''], sea: [0, ''], snake: [0, ''], memory: [0, ''], ttt: [0, ''], reaction: [0, ''],
