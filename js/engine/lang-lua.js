@@ -2032,6 +2032,7 @@
       G('_G', new LT()); G('shared', new LT()); G('_VERSION', 'Luau');
       for (const k of ['game', 'workspace', 'Instance', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'gui', 'sound', 'random']) G(k, fromJS(env[k]));
       G('Game', fromJS(env.Game || env.game)); G('Camera', env.Camera ? fromJS(env.Camera) : null); G('Workspace', env.workspace);   // Game — и режим игры (Game.Mode), и прежний game
+      if (Array.isArray(env.__globals)) for (const k of env.__globals) G(k, fromJS(env[k]));   // свои глобальные (моды «Кубомира»: mod, world, player)
       for (const k of ['Vector3', 'CFrame', 'BrickColor']) if (typeof env[k] === 'function') G(k, classTable(env[k]));
       ENVMT = tab({ __index: BASE });
     }

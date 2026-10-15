@@ -528,7 +528,7 @@
       }
     // под ногами: подброс / скользко / свой блок мода
     const fv = W.raw(Math.floor(x), Math.floor(y - .05), Math.floor(z));
-    if (fv > 0) { const b = V.blocks[fv & TYPE]; out.under = fv & TYPE; if (b.bounce) out.bounce = b.bounce; out.slip = b.slip || 0; } else { out.under = 0; out.slip = 0; }
+    if (fv > 0) { const b = V.blocks[fv & TYPE]; out.under = fv & TYPE; if (b.bounce) out.bounce = b.bounce; out.slip = b.slip || 0; if (b.mod && !out.blocks.includes(out.under)) out.blocks.push(out.under); } else { out.under = 0; out.slip = 0; }
     return out;
   };
   // Высота жидкости в блоке (0…1): источник и падающая — 0,875, течение — меньше с расстоянием

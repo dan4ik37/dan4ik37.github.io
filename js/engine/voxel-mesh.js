@@ -242,10 +242,12 @@
             else lay = texFor(T, t, st & 3, d);
             boxFace(streams[1], d, x, y, z, bx, lay, Math.max(sky[li], ls), Math.max(blk[li], lb), WHITE, 0);
           }
-        } else if (sh === 3) {   // жидкость: вода — прозрачная, лава — непрозрачная
+        } else if (sh === 3) {   // жидкость: вода — прозрачная, лава — непрозрачная; поверхность — плавными углами
           const lq = liquid[t], s = lq === 1 ? streams[2] : streams[0], lay = T.tex[t * 7 + 2];
-          const above = y < H - 1 ? reg[ri + 1] & TYPE : 0, full = above === t, hgt = full ? 1 : V.liquidHeight(cv);
+          const above = y < H - 1 ? reg[ri + 1] & TYPE : 0, full = above === t;
           const c = lq === 1 ? tintOf(tint, x, z, 3, TC) : WHITE;
+          // высоты четырёх углов: среднее по клеткам вокруг угла (источник весит больше, воздух тянет край вниз)
+          for (let k = 0; k < 4; k++) HC[k] = full ? 1 : cornerH(reg, ri, t, y, k & 1, k >> 1, cv, opaque);
           for (let d = 0; d < 6; d++) {
             const D = DIRS[d], ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0);
             if (ny < 0) continue;
@@ -254,8 +256,7 @@
             if (opaque[nt] && d !== 2) continue;
             if (d === 2 && full) continue;
             const li = ny < H ? ri + D.n : ri;
-            WB[4] = hgt;
-            boxFace(s, d, x, y, z, WB, lay, Math.max(sky[li], ls), Math.max(blk[li], lb), c, lq === 1 ? 2 : 0);
+            liquidFace(s, d, x, y, z, HC, lay, Math.max(sky[li], ls), Math.max(blk[li], lb), c, lq === 1 ? 2 : 0);
           }
         }
       }
@@ -275,7 +276,36 @@
     out.light = L;
     return out;
   };
-  const WB = [0, 0, 0, 1, .875, 1], BC = [0, 0, 0];
+  const BC = [0, 0, 0], HC = [1, 1, 1, 1];
+  // Высота жидкости в углу (cx, cz ∈ {0, 1} — угол клетки): клетки вокруг угла — эта и три соседние
+  function cornerH(reg, ri, t, y, cx, cz, cv, opaque){
+    let h = 0, w = 0;
+    for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+      const j = ri + (cx - 1 + a) * SX + (cz - 1 + b) * SZ, v = reg[j], tt = v & TYPE;
+      if (tt === t) {
+        if (y < H - 1 && (reg[j + 1] & TYPE) === t) return 1;   // сверху тоже жидкость — угол до верха
+        const src = (v >>> 12) === 0, k = src ? 10 : 1;
+        h += V.liquidHeight(v) * k; w += k;
+      } else if (!opaque[tt]) w += 1;   // воздух рядом — край ниже
+    }
+    return w ? h / w : V.liquidHeight(cv);
+  }
+  // Грань жидкости: как у куба, верхние вершины — на высоте своего угла
+  function liquidFace(s, d, x, y, z, Hc, layer, ls, lb, c, flags){
+    grow(s, s.q + 1);
+    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col;
+    for (let vi = 0; vi < 4; vi++) {
+      const o = q * 4 + vi;
+      BC[d >> 1] = (d & 1) ? 0 : 1; BC[D.ua] = D.c[vi][0]; BC[D.va] = D.c[vi][1];
+      const X = BC[0], Z = BC[2], Y = BC[1] > 0 ? Hc[X + Z * 2] : 0;
+      let U, Vv;
+      if (d === 2 || d === 3) { U = X; Vv = Z; } else if (d === 0) { U = 1 - Z; Vv = 1 - Y; } else if (d === 1) { U = Z; Vv = 1 - Y; } else if (d === 4) { U = X; Vv = 1 - Y; } else { U = 1 - X; Vv = 1 - Y; }
+      P[o * 3] = (x + X) * 16; P[o * 3 + 1] = Math.round((y + Y) * 16); P[o * 3 + 2] = (z + Z) * 16;
+      VD[o * 4] = Math.round(U * 16); VD[o * 4 + 1] = Math.round(Vv * 16); VD[o * 4 + 2] = layer | (d << 12);
+      VD[o * 4 + 3] = 3 | ((ls * 4) << 2) | ((lb * 4) << 8) | (flags << 14);
+      C[o * 3] = c[0]; C[o * 3 + 1] = c[1]; C[o * 3 + 2] = c[2];
+    }
+  }
 
   // Квадрат «жадной» грани: клетка (x, y, z), w × h по осям (ua, va)
   function emitCube(s, d, x, y, z, w, h, layer, ka, k1, k2, k3, sway){

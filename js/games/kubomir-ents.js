@@ -238,6 +238,8 @@
         const dxp = P.x - m.x, dzp = P.z - m.z, dp = Math.hypot(dxp, dzp);
         // далеко — исчезает (враги) или замирает (звери)
         if (!M.passive && (dp > 72 || (S.meta.diff === 'peaceful'))) { removeMob(m); continue; }
+        // враги вдали (или глубоко по высоте) понемногу исчезают — освобождают место ближним
+        if (!M.passive && (dp > 40 || Math.abs(P.y - m.y) > 28) && m.age > 20 && m.rng() < dt / 25) { removeMob(m); continue; }
         if (dp > (S.ST.rd * 16 + 24)) { if (!M.passive || dp > S.ST.rd * 16 + 48) removeMob(m); continue; }
         if (!W.loaded(m.x, m.z) || !W.loaded(m.x + 8, m.z) || !W.loaded(m.x - 8, m.z)) continue;
         m.hurtT = Math.max(0, m.hurtT - dt); m.atkT -= dt; m.sndT -= dt;
@@ -262,6 +264,9 @@
           let drop = 0; for (let y = Math.floor(m.y) - 1; y > Math.floor(m.y) - 5; y--) { const v = W.raw(fx, y, fz); if (v !== 0) break; drop++; }
           if (drop >= 3) { wx = wz = 0; m.stT = 0; }
         }
+        // застрял (упёрся и стоит) — обойти: шаг вбок на 0,8 с
+        if (m.side > 0) { m.side -= dt; const s2 = m.sideDir; const ox = wx; wx = -wz * s2; wz = ox * s2; }
+        else if ((wx || wz) && m.blockedT > .7) { m.side = .8; m.sideDir = m.rng() < .5 ? 1 : -1; m.blockedT = 0; }
         // слизень — прыжками
         if (M.hop) { m.hopT -= dt; if (m.ground && m.hopT <= 0 && (wx || wz)) { m.vy = 7.5; m.vx = wx * sp; m.vz = wz * sp; m.hopT = .8 + m.rng() * .8; m.ground = false; } if (m.ground) { m.vx *= .7; m.vz *= .7; } }
         else { const k = 1 - Math.exp(-dt * (m.ground ? 10 : 2)); m.vx += (wx * sp - m.vx) * k; m.vz += (wz * sp - m.vz) * k; }
@@ -274,6 +279,7 @@
         // упёрся в ступеньку — прыжок
         if ((MB.hitX || MB.hitZ) && m.ground && !M.hop && (wx || wz)) m.vy = 8.2;
         m.ground = MB.hitY && vy0 <= 0; if (MB.hitY) m.vy = 0;
+        if ((MB.hitX || MB.hitZ) && Math.hypot(MB.x - m.x, MB.z - m.z) < sp * dt * .3) m.blockedT = (m.blockedT || 0) + dt; else m.blockedT = Math.max(0, (m.blockedT || 0) - dt);
         m.x = MB.x; m.y = MB.y; m.z = MB.z;
         if (m.y < -10) { removeMob(m); continue; }
         m.walk += Math.hypot(m.vx, m.vz) * dt * 3.2;
@@ -301,8 +307,9 @@
     // появление: звери — днём на траве при свете, враги — ночью и в темноте
     function spawnTick(){
       const P = S.P, Vx = V(), night = isNight(), r = X.rng;
+      // считаем тех, кто рядом по высоте (зомби глубоко в пещерах не мешают появляться наверху)
       let passive = 0, hostile = 0;
-      for (const m of X.mobs) if (MOBS[m.type].passive) passive++; else hostile++;
+      for (const m of X.mobs) { if (Math.abs(m.y - P.y) > 20) continue; if (MOBS[m.type].passive) passive++; else hostile++; }
       const tryAt = (minD, maxD) => {
         const a = r() * 6.283, d = minD + r() * (maxD - minD), x = Math.floor(P.x + Math.cos(a) * d), z = Math.floor(P.z + Math.sin(a) * d);
         if (!W.loaded(x, z)) return null;
@@ -491,8 +498,12 @@
     // звери мира сохраняются (враги — нет)
     X.save = () => X.mobs.filter(m => MOBS[m.type].passive).slice(0, 48).map(m => ({ t: m.type, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), hp: m.hp }));
     X.load = arr => { if (!Array.isArray(arr)) return; for (const o of arr.slice(0, 48)) if (MOBS[o.t] && MOBS[o.t].passive && [o.x, o.y, o.z].every(Number.isFinite)) X.spawn(o.t, o.x, o.y, o.z, { hp: o.hp }); };
-    // печи загруженных чанков с топливом — снова греются
-    X.onChunkTiles = c => { if (!c.tiles) return; for (const [i, t] of c.tiles) if (t && ('fuel' in t || 'in' in t)) { const x = c.cx * 16 + (i >> 11), z = c.cz * 16 + ((i >> 7) & 15), y = i & 127; X.furnaces.add(x + ',' + y + ',' + z); } };
+    // чанк загрузился: печи с топливом — снова греются; сохранённое течение воды и лавы — снова течёт (или высыхает),
+    // песок над пустотой — падает (запланированные обновления не хранятся — их создаём заново по правкам)
+    X.onChunkTiles = c => {
+      if (c.tiles) for (const [i, t] of c.tiles) if (t && ('fuel' in t || 'in' in t)) { const x = c.cx * 16 + (i >> 11), z = c.cz * 16 + ((i >> 7) & 15), y = i & 127; X.furnaces.add(x + ',' + y + ',' + z); }
+      if (c.edits) { const T = V().T; let n = 0; for (const [i, v] of c.edits) { const t = v & 0xfff; if ((T.liquid[t] && (v >>> 12)) || V().blocks[t]?.fall) { schedule(c.cx * 16 + (i >> 11), i & 127, c.cz * 16 + ((i >> 7) & 15), 10 + (n++ & 15)); } } }
+    };
     X.dispose = () => {
       for (const e of X.items) { R.scene.remove(e.mesh); e.mesh.geometry.dispose(); }
       for (const f of X.falling) { R.scene.remove(f.m); f.m.geometry.dispose(); }

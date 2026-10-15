@@ -91,7 +91,7 @@
       <input type="file" class="kb-file" accept=".kubomir,.json,application/json" hidden></div>`;
     sc.querySelector('.kb-mbtns').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; menuAct(b.dataset.m); });
     sc.querySelector('.kb-file').addEventListener('change', e => importFile(e.target.files?.[0]));
-    const V = VX(), list = await V.store.worlds().catch(() => []);
+    const V = VX(), [list] = await Promise.all([V.store.worlds().catch(() => []), window.KubomirMods?.ready?.()?.catch?.(() => {})]);
     if (view !== 'menu' || !el) return;
     const box = sc.querySelector('.kb-worlds');
     if (!V.store.persistent()) box.insertAdjacentHTML('beforebegin', '<div class="kb-warn">⚠️ Браузер не даёт сохранять в базу (приватный режим?) — мир сохранится, только пока открыта вкладка. Выгружай мир в файл.</div>');
@@ -152,6 +152,8 @@
   async function exportWorld(id){
     const V = VX(), obj = await V.store.exportWorld(id);
     if (!obj) return;
+    // моды мира — в тот же файл (на другом компьютере мир откроется с ними)
+    try { const mods = await window.KubomirMods?.pack?.(obj.world.mods || []); if (mods?.length) obj.mods = mods; } catch (e) {}
     const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
     a.download = (obj.world.name || 'мир').replace(/[\\/:*?"<>|]+/g, '_') + '.kubomir'; a.click();
@@ -163,7 +165,8 @@
       if (file.size > 60e6) throw new Error('файл больше 60 МБ');
       const obj = JSON.parse(await file.text());
       const w = await VX().store.importWorld(obj, 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
-      toastMsg('📥 Мир «' + w.name + '» загружен'); showMenu();
+      const got = Array.isArray(obj.mods) ? await window.KubomirMods?.unpack?.(obj.mods).catch(() => null) : null;
+      toastMsg('📥 Мир «' + w.name + '» загружен' + (got?.added?.length ? ' + моды: ' + got.added.join(', ') : '')); showMenu();
     } catch (e) { toastMsg('Не получилось: ' + (e.message || e)); }
   }
   function achScreen(){
@@ -502,9 +505,9 @@
     if (!P.onGround && !inLiquid && !P.climb && !P.fly) { if (P.y > P.fallTop) P.fallTop = P.y; }
     if (P.onGround && !was) {
       const d = P.fallTop - P.y;
-      if (d > 3.4 && !st.creative && !touch.bounce) hurt(st, Math.ceil(d - 3.4), 'fall');
+      if (d > 3.4 && !st.creative && !touch.bounce && !P.modFall) hurt(st, Math.ceil(d - 3.4), 'fall');   // modFall — подбросил мод (батут): приземление без урона
       if (d > 1.2) st.AU?.play('land', { vol: Math.min(1, .25 + d * .08) });
-      P.fallTop = P.y;
+      P.fallTop = P.y; P.modFall = false;
     }
     if (P.onGround || inLiquid || P.climb || P.fly) P.fallTop = P.y;
     // шаги и усталость от бега
@@ -696,6 +699,8 @@
       if (b.shape === V.SHAPE.door) { toggleDoor(st, hit); st.swing = 1; return; }
       if (st.modRun?.hasUse(b.name) || st.modRun?.hasUse(s?.id)) { st.modRun.event('use', { x: hit.x, y: hit.y, z: hit.z, block: b.name, item: s?.id || '' }); st.swing = 1; return; }
     }
+    // вещь мода «в воздух» (палочка, свиток) — тоже событие use
+    if (!hit && s && st.modRun?.hasUse(s.id)) { st.modRun.event('use', { x: Math.floor(P.x), y: Math.floor(P.y + 1), z: Math.floor(P.z), block: '', item: s.id }); st.swing = 1; return; }
     if (it?.food && (P.food < 20 || st.creative)) { eat(st, it); return; }
     if (!hit || !it?.place) return;
     if (placeBlock(st, hit, s, it)) { st.swing = 1; if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } }
@@ -998,9 +1003,9 @@
   function closeMenu(){ S?.menu?.close(); }
   async function menuPick(id){
     const st = S; if (!st) return;
-    if (id === 'resume') { closeMenu(); if (!st.I.touch) { try { wrap().querySelector('.kb-gl')?.requestPointerLock?.(); } catch (e) {} } }
+    if (id === 'resume') { closeMenu(); if (!st.I.touch) { try { wrap().querySelector('.kb-gl')?.requestPointerLock?.()?.catch?.(() => {}); } catch (e) {} } }
     else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine', tab: 'kubomir' });
-    else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap()); }
+    else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap(), { restart: ids => { if (S !== st) return; st.meta.mods = ids; restartWorld(); } }); }
     else if (id === 'export') { await saveAll(st); exportWorld(st.meta.id); }
     else if (id === 'full') { window.D37Full?.toggle(el.closest('#gamesStage') || wrap(), { esc: false }); setTimeout(() => S?.menu?.redraw(), 80); }
     else if (id === 'help') help();
@@ -1087,10 +1092,10 @@
     return {
       log, toast: (t, ok) => S?.H.toast(t, ok),
       player: () => S?.P, give: s => give(S, s), hurt: n => hurt(S, n, 'mob'), heal: n => { if (S) S.P.hp = clamp(S.P.hp + n, 0, 20); },
-      launch: (vx, vy, vz) => { if (!S) return; const P = S.P; P.vx += vx; P.vy = vy; P.vz += vz; P.onGround = false; P.fallTop = P.y; },
-      teleport: (x, y, z) => { if (!S) return; Object.assign(S.P, { x, y, z, vy: 0, fallTop: y }); rebase(true); },
+      launch: (vx, vy, vz) => { if (!S) return; const P = S.P; P.vx += vx; P.vy = vy; P.vz += vz; P.onGround = false; P.fallTop = P.y; P.modFall = true; },
+      teleport: (x, y, z) => { if (!S) return; Object.assign(S.P, { x, y, z, vx: 0, vy: 0, vz: 0, fallTop: y }); rebase(true); },
       particles: (kind, x, y, z, n) => S?.ents?.particles?.(kind, x, y, z, n), sound: (n, x, y, z) => S?.AU?.play(n, { x: x - S.ox, y, z: z - S.oz }),
-      spawn: (type, x, y, z) => S?.ents?.spawn?.(type, x, y, z),
+      spawn: (type, x, y, z) => { const M = window.KubomirEnts?.MOBS?.[type]; if (!S || !M || (S.meta.diff === 'peaceful' && !M.passive)) return; S.ents?.spawn?.(type, x, y, z); },
     };
   }
 
@@ -1102,5 +1107,7 @@
   });
 
   window.GAME_IMPL = window.GAME_IMPL || {};
-  window.GAME_IMPL[ID] = { mount, unmount, _test: { state: () => S, give: s => give(S, s), command: c => command(c), unlock, ACH, save: () => saveAll(S), stop: () => stopWorld() } };
+  // для проверок (консоль, node): навести взгляд на точку, нажать «поставить/использовать»
+  function aim(x, y, z){ const st = S; if (!st) return null; const [ex, ey, ez] = eye(st), dx = x - ex, dy = y - ey, dz = z - ez; st.rig.yaw = Math.atan2(-dx, -dz); st.rig.fp = Math.atan2(-dy, Math.hypot(dx, dz)); st.rig.mode = 'first'; return st.rig; }
+  window.GAME_IMPL[ID] = { mount, unmount, _test: { state: () => S, give: s => give(S, s), command: c => command(c), unlock, ACH, save: () => saveAll(S), stop: () => stopWorld(), aim, use: () => use(S, S.hit), menu: () => showMenu() } };
 })();
