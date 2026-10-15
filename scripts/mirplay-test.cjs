@@ -424,6 +424,30 @@ MP.P.back = 10;
     flushHistory();
   }
 
+  // ═══ Телефон 📱 и окно ⚙️ поверх окна игры: Esc — их (phone.js / settings.js) ═══
+  {
+    let phoneOpen = false, toggles = 0, setOpen = false;
+    globalThis.D37Phone = { toggle(){ toggles++; phoneOpen = !phoneOpen; }, isOpen: () => phoneOpen, renderBadges(){} };
+    globalThis.D37Settings = { isOpen: () => setOpen };
+    calls.length = 0;
+    await MP.open('chess', 'abc123', opts());
+    const pb = overlay().querySelector('.mp-phone'), sb = overlay().querySelector('.gs-setbtn');
+    ok(pb && sb && sb.hasAttribute('data-gs-set'), 'в шапке окна — 📱 и ⚙️');
+    pb.click();
+    ok(toggles === 1 && phoneOpen, '📱 — открыть телефон');
+    await CH.api.report('chess_online', true, 1, 1);
+    fireWin('keydown', { key: 'Escape', target: body });
+    ok(MP.isOpen() && MP.state().phase === 'ended', 'телефон открыт — Esc не наш (окно игры на месте)');
+    phoneOpen = false; setOpen = true;
+    fireWin('keydown', { key: 'Escape', target: body });
+    ok(MP.isOpen(), 'окно ⚙️ открыто — Esc не наш');
+    setOpen = false;
+    fireWin('keydown', { key: 'Escape', target: body });
+    ok(!MP.isOpen() && calls.includes('close:back'), 'поверх ничего — Esc после партии в мир');
+    flushHistory();
+    delete globalThis.D37Phone; delete globalThis.D37Settings;
+  }
+
   // ═══ Не открылась — по-старому ═══
   {
     calls.length = 0; errs.length = 0;
