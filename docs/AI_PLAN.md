@@ -25,7 +25,7 @@
    - Эффекты: `D37E.fx.KINDS`.
    - Свет: time, brightness, ambient, fogEnd, shadows, cycle.
    - Ландшафт: `setEnabled`, `setWater(on, level)`, `sample`, `toJSONSync` / `fromJSON`.
-4. **Языки скриптов.** `D37E.langs[id].ai` — правила для ИИ у каждого языка (js, lua, cs, cpp, rust); текст кончается
+4. **Языки скриптов.** `D37E.langs[id].ai` — правила для ИИ у каждого языка (js, lua, cs, java, cpp, rust); текст кончается
    на «Задача: ».
    - `L.compile(src, {name, onStep})` → `{wasm, log}` или ошибка с `.log` по-русски («Строка N: ошибка: …»).
    - Rust собирается на сайте только в Chrome / Edge / Яндекс 137+ на компьютере.
@@ -73,7 +73,7 @@
 - Объекты:
   - part, spawn, light, fx, npc (готовые NPC), prefab;
   - model — со сдвигом `pos`/`yaw` для детей;
-  - script — js, lua или cs;
+  - script — js, lua, cs или java;
   - item — id из «Набора», только если есть `D37E.toolbox.build`.
 - Повторы, чтобы ответы были короче: `repeat{n,step,rot}`, `grid{nx,nz,dx,dz}`, `ring{n,r,face}`.
 - Координаты — от якоря (точка, куда смотрит камера, или выделенный объект, на уровне земли). `pos` — центр детали,
