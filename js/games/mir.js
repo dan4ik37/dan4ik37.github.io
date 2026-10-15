@@ -719,7 +719,7 @@
   function update(dt){
     if (!S || S.stopped || S.editing) return;
     const { C, P, X, rig, ph } = S;
-    const setOpen = !!window.D37Settings?.isOpen?.();
+    const setOpen = !!window.D37Settings?.isOpen?.() || !!S.phoneOn;   // окно ⚙️ или телефон 📱 (phone.js) — Esc у них
     C.blocked = !!S.menu || setOpen;   // открыто меню или ⚙️ — персонаж стоит (Esc работает)
     C.step(dt);
     if (C.down('chat')) { const i = S.q('.wld-say input'); if (!i.readOnly) setTimeout(() => i.focus(), 0); else if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
@@ -777,9 +777,9 @@
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
     rig.update(dt, S.base?.cam || P, look, S.ph, C);   // в стройке камера смотрит на участок
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
-    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu;
+    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu && !S.phoneOn;
     // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
-    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !window.D37Settings?.isOpen?.()) openMenu();
+    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !S.phoneOn && !window.D37Settings?.isOpen?.()) openMenu();
     S.wasLocked = I.locked;
     A.update(dt, t, R.camera.position);
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
@@ -1556,7 +1556,7 @@
     const tp = (x, z, yaw) => { if (!S?.P) return; if (S.mySeat) S.P.standUp(); S.P.place(x, null, z, yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); if (S.rig) S.rig.yaw = yaw - PI; S.forceSend = true; savePos(); };
     S.phoneOff = Ph.attach('world', {
       title: '🌍 Мир Денчика', hotkey: true,
-      pause(on){ const s = S; if (!s?.C) return; s.C.blocked = on; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
+      pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
       activity: () => (S ? Object.assign({ w: S.shard }, S.mySeat?.tb ? { g: S.mySeat.tb.game, j: S.mySeat.c ? `games/${S.mySeat.tb.game}/${S.mySeat.c}` : '' } : {}) : {}),
       shot: () => { S.R.render(); return Ph.snap(S.R.r.domElement); },
       where: () => (S?.P ? { x: S.P.ch.x, z: S.P.ch.z, yaw: S.P.yaw } : null),

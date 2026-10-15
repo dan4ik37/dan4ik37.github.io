@@ -1959,6 +1959,8 @@ body.low .donation-alert-icon{animation:none}
       <b id="gamesStageTitle"></b>
       <button class="gm-mute gm-chal" onclick="gamesChallenge(this)" title="Бросить вызов другу: ссылка с твоим рекордом" aria-label="Бросить вызов другу">📣<span> Вызов</span></button>
       <button class="gm-mute" id="gamesMuteBtn" onclick="toggleGamesMute(this)" title="Звук" aria-label="Звук вкл/выкл">🔊</button>
+      <!-- 📱 — телефон (js/features/phone.js); видна только во весь экран, когда шапки сайта с 📱 не видно -->
+      <button class="gm-mute ph-gamebtn" type="button" onclick="window.D37Phone&&D37Phone.toggle()" title="Телефон: сообщения, звонки, друзья" aria-label="Телефон">📱<em class="ph-bdg" data-ph-badge="total" hidden></em></button>
       <!-- ⚙️ / 🔄 / ⛶ — js/core/settings.js и js/core/fullscreen.js (обработчики свои, по data-атрибутам) -->
       <button class="gm-mute gs-setbtn" type="button" data-gs-set title="Настройки: звук, графика, управление, полный экран" aria-label="Настройки">⚙️</button>
       <button class="gm-mute gs-rotbtn" type="button" data-gs-rot="#gamesStage" title="Повернуть экран: игра горизонтально и во весь экран" aria-label="Повернуть экран">🔄</button>

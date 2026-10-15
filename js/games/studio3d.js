@@ -1295,9 +1295,9 @@ Players.PlayerAdded.Connect(player => {
     else { P.enabled = false; mpWait('👥 Подключаемся к комнате…'); }
     playVis();
     pl.loop = E.loop(playStep, playFrame);
-    // телефон 📱 (js/features/phone.js): «язычок» слева и клавиша P; пока открыт — клавиши игры молчат; друзьям — «в мире игрока»
-    pl.phoneOff = window.D37Phone?.attach?.('studio', { title: '🧱 ' + (ed.q('.s3-name')?.value || 'Студия 3D'), hotkey: true, fab: true,
-      pause(on){ pl.C.blocked = on; pl.C.reset_state(); if (on) { pl.I.unlock(); pl.I.reset?.(); } pl.I.enabled = !on; },
+    // телефон 📱 (js/features/phone.js): кнопка рядом с ⚙️ ⛶ и клавиша P; пока открыт — клавиши игры молчат; друзьям — «в мире игрока»
+    pl.phoneOff = window.D37Phone?.attach?.('studio', { title: '🧱 ' + (ed.q('.s3-name')?.value || 'Студия 3D'), hotkey: true, bar: ed.q('.gs-s3'),
+      pause(on){ pl.phoneOn = on; pl.C.blocked = on; pl.C.reset_state(); if (on) { pl.I.unlock(); pl.I.reset?.(); } pl.I.enabled = !on; },
       shot: () => { ed.R.render(); return window.D37Phone.snap(ed.R.r.domElement); },
       activity: () => ed.playId ? { s: ed.playId, t: (ed.q('.s3-name')?.value || '').slice(0, 32), j: `games/studio3d/play/${ed.playId}${ed.mp?.kind === 'play' && ed.mp.code ? '/' + ed.mp.code : ''}` }
         : ed.mp?.code ? { g: 'studio3d', j: `games/studio3d/join/${ed.mp.code}` } : { g: 'studio3d' } }) || null;
@@ -1594,7 +1594,7 @@ Players.PlayerAdded.Connect(player => {
     pl.cmds = 0;
     const Lg = ed.R.lighting;
     if (Lg.cycle > 0) { pl.cycT = (pl.cycT || 0) + dt; if (pl.cycT >= 1.5) { ed.R.setLighting({ time: (Lg.time + pl.cycT * 24 / (Lg.cycle * 60)) % 24 }); pl.cycT = 0; } }
-    C.blocked = !!window.D37Settings?.isOpen?.();   // открыто окно ⚙️ — персонаж стоит
+    C.blocked = !!window.D37Settings?.isOpen?.() || !!pl.phoneOn;   // открыто окно ⚙️ или телефон 📱 — персонаж стоит
     C.step(dt);
     if (C.down('pause') && !C.blocked && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
     if (C.down('view')) playView(pl);   // V — вид от 1-го / 3-го лица (как в «Мире»)
@@ -1666,7 +1666,7 @@ Players.PlayerAdded.Connect(player => {
   function playFrame(dt){
     const ed = ED, pl = ed?.playing; if (!pl) return;
     const { P, A, rig, I, C, H } = pl, R = ed.R, t = performance.now() / 1000;
-    I.wantLock = rig.mode === 'first' && !I.touch && !window.D37Settings?.isOpen?.();
+    I.wantLock = rig.mode === 'first' && !I.touch && !window.D37Settings?.isOpen?.() && !pl.phoneOn;
     A.pose(pl.meKey, P.pose());
     const meA = A.get?.(pl.meKey); if (meA) meA.hidden = rig.mode === 'first';
     if (ed.mp) mpFrame(dt);   // чужие игроки (по сети) — плавно, со своей внешностью

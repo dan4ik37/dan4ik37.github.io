@@ -261,9 +261,12 @@
     try { p.an?.src.disconnect(); } catch (er) {}
     const t = R.hiT.get(p.key); if (t) { clearTimeout(t); R.hiT.delete(p.key); }
   }
+  // громкость собеседников — окно ⚙️: «🔊 Звук» → «Общая громкость» × «Голос» (settings.js → D37Opt); «звук в играх» звонок не глушит
+  const voiceVol = () => { const O = window.D37Opt; const v = O ? (O.vol ?? 1) * (O.volVoice ?? 1) : 1; return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 1; };
+  window.addEventListener('d37:settings', () => { const v = voiceVol(); for (const p of S?.room?.peers?.values() || []) if (p.audio) p.audio.volume = v; });
   function attachAudio(R, p, stream){
     if (!p.audio) { p.audio = document.createElement('audio'); p.audio.autoplay = true; p.audio.setAttribute('playsinline', ''); document.getElementById('d37Audio').appendChild(p.audio); }
-    p.audio.srcObject = stream; p.audio.muted = R.deaf;
+    p.audio.srcObject = stream; p.audio.muted = R.deaf; p.audio.volume = voiceVol();
     p.audio.play().catch(() => {});
     try { p.an?.src.disconnect(); } catch (er) {}
     p.an = analyser(stream);
@@ -297,6 +300,14 @@
   window.addEventListener('keydown', ev => { if (!P.set.ptt || !S?.room || ev.repeat || ev.code !== (P.set.pttKey || 'Backquote')) return; if (ev.target?.closest?.('input,textarea,[contenteditable]')) return; setPtt(true); }, true);
   window.addEventListener('keyup', ev => { if (ev.code === (P.set.pttKey || 'Backquote')) setPtt(false); }, true);
   window.addEventListener('blur', () => setPtt(false));
+  // настройки телефона поменяли во время разговора (вкладка «📱 Телефон»): рация и шумоподавление — сразу
+  window.addEventListener('d37:phoneset', () => {
+    const R = S?.room; if (!R) return;
+    if (!P.set.ptt) pttHeld = false;
+    applyMic(R);
+    R.stream?.getAudioTracks().forEach(t => { try { t.applyConstraints?.({ echoCancellation: true, noiseSuppression: P.set.ns !== false, autoGainControl: true })?.catch?.(() => {}); } catch (er) {} });
+    R.changed(); pill();
+  });
 
   // ═══ Текущий разговор (один на вкладку) ═══
   // S = { kind: 'call' | 'party' | 'voice', state (FSM), code, topic, title, peer: { uid, nick } (звонок), room, t0, reason, spec (голосовой) }

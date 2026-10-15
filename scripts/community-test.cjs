@@ -27,6 +27,9 @@ globalThis.GAMES = [{ id: 'chess', icon: '♟️', title: 'Шахматы', desc
 globalThis.customEmoji = [{ name: 'dan', image_url: 'https://x.supabase.co/storage/v1/object/public/emoji/dan.png' }];
 globalThis.currentRoute = () => 'home';
 const timers = []; const _si = setInterval; globalThis.setInterval = (f, ms) => { const t = _si(f, ms); t.unref?.(); timers.push(t); return t; };
+// окно «⚙️ Настройки» (js/core/settings.js) — заглушка: телефон добавляет туда свою вкладку
+const setTabs = []; let setOpened = null;
+window.D37Settings = { addTab(t){ setTabs.push(t); }, open(o){ setOpened = o; }, isOpen: () => false };
 for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/worldchat.js', 'js/features/chat.js'])
   vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 const P = window.D37Phone, MV = window.MsgView, C = window.D37Calls._test, DS = window.D37DS._test, W = window.D37WorldChat, CH = window.D37Chat._test;
@@ -157,6 +160,17 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
 
   // ═══ 10. Мат в чужих названиях и текстах (телефон) ═══
   ok(P.clean('сука блять') !== 'сука блять' && P.clean('хлебало и сукно') === 'хлебало и сукно', 'фильтр мата: ругань — да, похожие слова — нет');
+
+  // ═══ 11. Настройки телефона — вкладка «📱 Телефон» в окне ⚙️ ═══
+  const tab = setTabs.find(t => t.id === 'phone');
+  ok(tab && tab.icon === '📱' && ['engine', 'game', 'site'].every(c => tab.ctx.includes(c)), 'вкладка «📱 Телефон» есть в мире, в играх и на сайте', tab && { ctx: tab.ctx });
+  const body = document.createElement('div'); let box = null; body.appendChild = c => { box = c; return c; };
+  tab?.render(body);
+  ok(box && /Кто может звонить/.test(box.innerHTML) && /Мелодия/.test(box.innerHTML) && /Клавиша рации/.test(box.innerHTML) && /Заблокированные/.test(box.innerHTML), 'вкладка: звонки, мелодия, рация, заблокированные');
+  ok(box && /data-phs="calls" data-v="friends"/.test(box.innerHTML) && /class="on" data-phs="calls" data-v="friends"/.test(box.innerHTML), 'по умолчанию звонят друзья');
+  ok(box && !/data-set=|data-sw=|data-range=/.test(box.innerHTML), 'свои атрибуты — окно настроек их не перехватывает');
+  ok(P.keyName('Backquote') === 'Ё' && P.keyName('KeyV') === 'V' && P.keyName('ShiftLeft') === 'Shift' && P.keyName('Digit5') === '5', 'названия клавиш рации');
+  ok(P.openSettings() === true && setOpened?.tab === 'phone', '⚙️ в телефоне открывает окно настроек на вкладке «📱 Телефон»');
 
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);

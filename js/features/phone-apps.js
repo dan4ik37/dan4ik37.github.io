@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════
 //  ПРИЛОЖЕНИЯ ТЕЛЕФОНА 📱: Сообщения (ЛС — та же лента MsgView, что в чате), Друзья (кто где — «📍 К другу», позвать в
-//  игру, позвонить), Камера (снимок 3D: сохранить / поделиться), Карта «Мира Денчика» (телепорт), Уведомления, Настройки.
+//  игру, позвонить), Камера (снимок 3D: сохранить / поделиться), Карта «Мира Денчика» (телепорт), Уведомления.
+//  Настройки телефона — вкладка «📱 Телефон» в окне «⚙️ Настройки» (phone.js).
 // ═══════════════════════════════════════
 // ЛС — таблица direct_messages (friends-dm.sql): писать можно только другу (проверяет сервер). Новое ЛС приходит событием
 // d37:dm (friends.js). Картинки в чаты не отправляются (детская аудитория): снимок — сохранить или поделиться самому.
@@ -298,53 +299,5 @@
     },
   });
 
-  // ═══ Настройки ═══
-  P.define('settings', {
-    render(el){
-      el.innerHTML = P.head('⚙️ Настройки') + '<div class="ph-body"></div>';
-      const b = el.querySelector('.ph-body'), s = P.set;
-      const draw = () => {
-        b.innerHTML = `<div class="ph-set"><b>🔔 Звонок</b>
-            <label>Громкость <input type="range" min="0" max="1" step="0.05" value="${s.vol}" data-f="vol" aria-label="Громкость звонка"></label>
-            <label>Мелодия <select data-f="ring">${Object.entries(P.RINGS).map(([k, r]) => `<option value="${k}"${s.ring === k ? ' selected' : ''}>${e(r.t)}</option>`).join('')}</select> <button type="button" class="ph-btn ghost" data-k="test">▶</button></label>
-            <label><input type="checkbox" data-f="sounds"${s.sounds !== false ? ' checked' : ''}> Звуки сообщений и кнопок</label></div>
-          <div class="ph-set"><b>📞 Кто может звонить</b><div class="ph-seg" data-seg="calls"><button type="button" data-v="friends" class="${s.calls !== 'nobody' ? 'on' : ''}">Друзья</button><button type="button" data-v="nobody" class="${s.calls === 'nobody' ? 'on' : ''}">Никто</button></div>
-            <small>Звонить могут только друзья. «Никто» — телефон не звонит, вызовы попадут в пропущенные.</small></div>
-          <div class="ph-set"><b>🎙 Голос</b>
-            <label><input type="checkbox" data-f="ns"${s.ns !== false ? ' checked' : ''}> Шумоподавление и эхо</label>
-            <label><input type="checkbox" data-f="ptt"${s.ptt ? ' checked' : ''}> Рация: говорить, только пока держишь клавишу</label>
-            <label>Клавиша рации <button type="button" class="ph-btn ghost" data-k="pttkey">${e(keyName(s.pttKey || 'Backquote'))}</button></label>
-            <small>На телефоне — кнопка «📻 Держи, чтобы говорить» в разговоре.</small></div>
-          <div class="ph-set"><b>🚫 Заблокированные</b><div data-f="blocks"><small>Загружаем…</small></div></div>
-          <div class="ph-set"><b>🔒 Приватность</b><small>Кто видит профиль и чем ты занят, невидимка — в настройках профиля.</small><div class="ph-row" style="margin-top:8px"><a class="ph-btn ghost" href="#/profile">Открыть профиль</a></div></div>
-          <div class="ph-set"><b>📱 Телефон</b><small>Открывается кнопкой 📱 вверху сайта, в мире — клавишей P. Звонки и голос работают, пока ходишь по сайту: из мира в игру и обратно.</small></div>`;
-        loadBlocks();
-      };
-      const keyName = c => (window.D37E?.controls?.keyName?.(c)) || c.replace(/^Key|^Digit/, '').replace('Backquote', 'Ё');
-      async function loadBlocks(){
-        const box = b.querySelector('[data-f="blocks"]');
-        let ids = [];
-        if (P.me()) { await MV.loadBlocks(); ids = [...MV.blocked]; }
-        try { ids = [...new Set([...ids, ...(JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || [])])]; } catch (er) {}
-        await P.profiles(ids);
-        box.innerHTML = ids.length ? ids.map(id => { const p = P.prof(id) || {}; return `<div class="ph-item">${P.avatar(p, p.nick, 30)}<span><b>${e(p.nick || 'игрок')}</b></span><button type="button" class="ph-btn ghost" data-unblock="${e(id)}">Разблокировать</button></div>`; }).join('') : '<small>Никого. Заблокировать — нажми на ник в чате → «🚫 Заблокировать».</small>';
-      }
-      b.addEventListener('input', ev => { const f = ev.target.dataset.f; if (f === 'vol') { s.vol = +ev.target.value; P.saveSet(); } });
-      b.addEventListener('change', ev => {
-        const f = ev.target.dataset.f; if (!f || f === 'vol') return;
-        if (f === 'ring') s.ring = ev.target.value; else s[f] = ev.target.checked;
-        P.saveSet();
-      });
-      b.addEventListener('click', async ev => {
-        const k = ev.target.closest('[data-k]')?.dataset.k;
-        if (k === 'test') P.sfx('ring');
-        else if (k === 'pttkey') { const btn = ev.target.closest('[data-k]'); btn.textContent = 'Нажми клавишу…'; const h = e2 => { e2.preventDefault(); e2.stopPropagation(); window.removeEventListener('keydown', h, true); if (e2.code !== 'Escape') { s.pttKey = e2.code; P.saveSet(); } draw(); }; window.addEventListener('keydown', h, true); }
-        const seg = ev.target.closest('[data-seg] [data-v]');
-        if (seg) { s.calls = seg.dataset.v; P.saveSet(); draw(); }
-        const ub = ev.target.closest('[data-unblock]');
-        if (ub) { const r = await MV.block(ub.dataset.unblock, false); try { const l = (JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || []).filter(x => x !== ub.dataset.unblock); localStorage.setItem('d37_blocks_local', JSON.stringify(l)); } catch (er) {} if (!r.ok && !/обновится/.test(r.err || '')) P.toast(r.err, false); loadBlocks(); }
-      });
-      draw();
-    },
-  });
+  // ⚙️ Настройки телефона — вкладка «📱 Телефон» в общем окне настроек (phone.js → D37Settings.addTab)
 })();

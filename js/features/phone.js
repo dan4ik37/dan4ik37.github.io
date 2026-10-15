@@ -1,19 +1,21 @@
 // ═══════════════════════════════════════
-//  ТЕЛЕФОН 📱 (D37Phone) — один телефон на весь сайт: кнопка 📱 в шапке, страница #/phone, «Мир Денчика» (кнопка и
-//  клавиша P), «Студия 3D» в игре (кнопка слева сверху), остальные игры (кнопка в полоске игры).
-//  Приложения: Сообщения, Звонки, Сообщества, Друзья, Камера, Карта, Уведомления, Настройки + ярлыки (Мир, Игры, Чат).
+//  ТЕЛЕФОН 📱 (D37Phone) — один телефон на весь сайт: кнопка 📱 в шапке, страница #/phone, «Мир Денчика» (кнопка в панели
+//  и клавиша P), «Студия 3D» в игре (кнопка рядом с ⚙️ и клавиша P), игры во весь экран (кнопка в полоске игры).
+//  Приложения: Сообщения, Звонки, Сообщества, Друзья, Камера, Карта, Уведомления, Настройки + ярлыки (Мир, Игры, Чат, Персонаж).
 // ═══════════════════════════════════════
-// Здесь — корпус, переходы между экранами, значки непрочитанного, входящий звонок (подписка на таблицу calls — работает и
-// при закрытом телефоне), «я онлайн» для друзей (comm_ping раз в минуту, только вошедшим), звуки (WebAudio, без файлов).
-// Сами приложения грузятся при первом открытии: phone-apps.js (сообщения, друзья, камера, карта, уведомления, настройки),
-// calls.js (звонки 1 на 1 и голосовые каналы), community.js (сообщества). База — community.sql; пока он не выполнен,
-// звонки и сообщества пишут «появятся, когда сайт обновится», остальное работает.
+// Здесь — корпус, переходы между экранами, значки непрочитанного, входящий звонок (личное сообщение со ссылкой
+// #/phone/call/<код> — слышно на любой странице, пока вошёл; таблиц не нужно), «чем занят» для друзей (presence чата +
+// comm_ping), звуки (WebAudio, без файлов), вкладка «📱 Телефон» в окне «⚙️ Настройки» (js/core/settings.js).
+// Приложения грузятся при первом открытии: phone-apps.js (сообщения, друзья, камера, карта, уведомления), calls.js (звонки,
+// «компания», голосовые каналы), community.js + msgview.js (сообщества, чат «как Дискорд»). База — community.sql; пока он не
+// выполнен, сообщества и голосовые каналы пишут «появятся, когда сайт обновится», остальное работает.
+// Файлы приложений грузятся с ?v=VER — поменял phone-apps.js / calls.js / community.js / msgview.js / worldchat.js — подними VER.
 //
-// Игра подключает телефон: off = D37Phone.attach('world', { title, hotkey: true, fab: false, pause(on), shot(), where(),
-//   players(), tp(x, z, yaw), toFriend(uid) → true/false, shard(n?) , place() }) → off() при выходе. Пока телефон открыт —
-//   pause(true): клавиши игры молчат (C.blocked), мышь отпущена. P / Esc — закрыть (кроме ввода текста).
-// Пути: '' (домашний), msgs, msgs/<uid>, friends, calls, incall, comm, comm/<id>[/<канал>|members|settings|reports],
-//   comm/join/<код>, camera, map, notif, settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → comm/join/<код>.
+// Игра подключает телефон: off = D37Phone.attach('world', { title, hotkey: true, bar: элемент (сюда кнопка 📱), pause(on),
+//   activity(), shot(), where(), players(), tp(x, z, yaw), toFriend(uid) → true/false, shard(n?) }) → off() при выходе.
+//   Пока телефон открыт — pause(true): игра держит C.blocked (как при окне ⚙️), мышь отпущена; Esc и P забирает телефон.
+// Пути: '' (домашний), msgs, msgs/<uid>, friends, calls, calls/<код> (войти в звонок), incall, comm, comm/<id>[/<канал>|…],
+//   comm/join/<код>, camera, map, notif, settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → #/chat/join/<код>.
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
   const VER = '1';
@@ -27,7 +29,7 @@
     { id: 'camera', ic: '📷', t: 'Камера', bg: '#94a3b8,#475569', mod: 'apps' },
     { id: 'map', ic: '🗺️', t: 'Карта', bg: '#4ade80,#0d9488', mod: 'apps' },
     { id: 'notif', ic: '🔔', t: 'Уведомления', bg: '#fbbf24,#ea580c', mod: 'apps', b: 'notif' },
-    { id: 'settings', ic: '⚙️', t: 'Настройки', bg: '#a1a1aa,#3f3f46', mod: 'apps' },
+    { id: 'settings', ic: '⚙️', t: 'Настройки', bg: '#a1a1aa,#3f3f46' },
   ];
   const LINKS = [
     { ic: '🌍', t: 'Мир', h: '#/games/world', bg: '#38bdf8,#2563eb' }, { ic: '🎮', t: 'Игры', h: '#/games', bg: '#fb7185,#e11d48' },
@@ -41,11 +43,15 @@
   let root = null, view = null, stack = [], cur = null, cleanup = null, isOpen = false, docked = false, ctx = null, returnFocus = null;
   let openedByCall = false;
 
-  // ── Настройки (браузер) ──
-  const SET0 = { vol: .8, ring: 'classic', ptt: false, pttKey: 'Backquote', ns: true, sounds: true };
+  // ── Настройки (браузер, d37_phone; меняются во вкладке «📱 Телефон» окна ⚙️ — внизу файла) ──
+  // vol — громкость мелодии и звуков телефона (0…1); calls — кто может звонить; ns — шумоподавление; ptt — рация
+  const SET0 = { vol: .8, ring: 'classic', ptt: false, pttKey: 'Backquote', ns: true, sounds: true, calls: 'friends' };
   P.set = Object.assign({}, SET0);
   try { Object.assign(P.set, JSON.parse(localStorage.getItem('d37_phone') || '{}')); } catch (e) {}
-  P.saveSet = () => { try { localStorage.setItem('d37_phone', JSON.stringify(P.set)); } catch (e) {} };
+  P.saveSet = () => {
+    try { localStorage.setItem('d37_phone', JSON.stringify(P.set)); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('d37:phoneset')); } catch (e) {}   // calls.js: рация, шумоподавление — сразу
+  };
 
   // ── Сервер ──
   const sb = () => (typeof sbClient !== 'undefined' && sbClient) || null;
@@ -375,14 +381,19 @@
   function renderHome(){
     const d = new Date();
     const live = window.D37Calls?.liveInfo?.();
+    const day = d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });   // «среда, 15 октября» → «Среда, 15 октября»
     view.innerHTML = `<div class="ph-home">
-      <div class="ph-wid"><b>${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</b><span>${d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+      <div class="ph-wid"><b>${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</b><span>${esc(day.charAt(0).toUpperCase() + day.slice(1))}</span>
         <div class="ph-wid-info">${P.me() ? '<span class="ph-wid-on">👥 друзья онлайн: …</span>' : '<button type="button" class="ph-wid-login" data-ph-login>🔑 Войди — будут звонки, друзья и сообщества</button>'}${ctx ? `<span>📍 ${esc(ctx.hooks.title || '')}</span>` : ''}${live ? `<span>${esc(live)}</span>` : ''}</div></div>
       <div class="ph-grid">${APPS.filter(a => !DOCK.includes(a.id)).map(appIcon).join('')}${LINKS.map(l => `<a class="ph-icon" href="${l.h}"><i style="background:linear-gradient(135deg,${l.bg})">${l.ic}</i><span>${l.t}</span></a>`).join('')}</div>
       <div class="ph-dock">${DOCK.map(id => appIcon(APPS.find(a => a.id === id))).join('')}</div>
     </div>`;
     view.querySelector('[data-ph-login]')?.addEventListener('click', () => { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); });
-    view.querySelectorAll('[data-ph-app]').forEach(b => b.addEventListener('click', () => { P.sfx('tap'); P.go(b.dataset.phApp); }));
+    view.querySelectorAll('[data-ph-app]').forEach(b => b.addEventListener('click', () => {
+      P.sfx('tap');
+      if (b.dataset.phApp === 'settings' && openSettings()) return;   // ⚙️ — общее окно настроек, вкладка «📱 Телефон»
+      P.go(b.dataset.phApp);
+    }));
     renderBadges();
     if (P.me()) P.online().then(m => { const w = view.querySelector('.ph-wid-on'); if (w) w.textContent = `👥 друзья онлайн: ${m.size}`; });
   }
@@ -426,15 +437,24 @@
   P.attach = (name, hooks) => {
     const me = { name, hooks: hooks || {} };
     ctx = me;
-    document.documentElement.classList.toggle('ph-fab-on', !!hooks?.fab);
+    // кнопка 📱 в панели игры (у «Студии 3D» — рядом с ⚙️ ⛶: шапки сайта там не видно)
+    let btn = null;
+    if (hooks?.bar?.appendChild) {
+      btn = document.createElement('button'); btn.type = 'button'; btn.className = 'ph-barbtn';
+      btn.title = 'Телефон (P): друзья, звонки, сообщения'; btn.setAttribute('aria-label', 'Телефон');
+      btn.innerHTML = '📱<em class="ph-bdg" data-ph-badge="total" hidden></em>';
+      btn.addEventListener('click', ev => { ev.stopPropagation(); P.toggle(); });
+      hooks.bar.insertBefore(btn, hooks.bar.firstChild);
+      renderBadges();
+    }
     if (isOpen && hooks?.pause) try { hooks.pause(true); } catch (e) {}
     setTimeout(() => actCheck(true), 300);
     if (pendingTp) tryPendingTp();
     return () => {
+      btn?.remove();
       if (ctx !== me) return;
       if (isOpen && me.hooks.pause) try { me.hooks.pause(false); } catch (e) {}
       ctx = null;
-      document.documentElement.classList.remove('ph-fab-on');
       if (isOpen && (cur === 'map' || cur === 'camera')) P.refresh();
       setTimeout(() => actCheck(true), 300);
     };
@@ -457,34 +477,31 @@
     setTimeout(tryPendingTp, 700);
   }
 
-  // ── «Язычок» 📱 слева: Студия 3D в игре и полный экран игры (там шапки сайта не видно; не закрывает ⛶ и кнопки управления) ──
-  const fab = document.createElement('button');
-  fab.type = 'button'; fab.className = 'ph-fab'; fab.title = 'Телефон (P)'; fab.setAttribute('aria-label', 'Телефон');
-  fab.innerHTML = '📱<em class="ph-bdg" data-ph-badge="total" hidden></em>';
-  fab.addEventListener('click', () => P.toggle());
-  document.body.appendChild(fab);
-  // Полный экран (игра, мир): видно только то, что внутри него — переносим туда и телефон, и «язычок»
+  // Полный экран сайта (D37Full) — на всю страницу: телефон и плашка звонка в body и так видны (z-index выше слоя игры 9100).
+  // Если что-то развернули само (Fullscreen API на элементе) — видно только его содержимое: переносим телефон туда.
   document.addEventListener('fullscreenchange', () => {
     const fs = document.fullscreenElement;
     const host = fs && fs !== document.documentElement && fs !== document.body && fs.tagName !== 'IFRAME' && fs.tagName !== 'VIDEO' ? fs : document.body;
-    if (fab.parentElement !== host) host.appendChild(fab);
     if (root && !docked && root.parentElement !== host) host.appendChild(root);
     renderBadges();
   });
 
-  // ── Клавиши: P — телефон (в мире/студии), Esc — назад/закрыть ──
+  // ── Клавиши: P — телефон (в мире/студии), Esc — назад/закрыть. Забираем клавишу целиком (stopImmediatePropagation):
+  //    управление игры её не видит — иначе Esc, закрывший телефон, в следующем шаге открыл бы меню паузы мира ──
+  const eat = e => { e.preventDefault(); e.stopImmediatePropagation(); };
   window.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (window.D37Settings?.isOpen?.()) return;   // поверх открыто окно ⚙️ — Esc его
     const typing = !!e.target?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
     if (isOpen) {
       if (e.code === 'Escape') {
         if (P.sheetOpen()) P.closeSheet(); else if (docked || stack.length > 1 || cur) P.back(); else P.close();
-        e.preventDefault(); e.stopPropagation(); return;
+        eat(e); return;
       }
-      if (e.code === 'KeyP' && !typing && !docked && !e.repeat) { P.close(); e.preventDefault(); e.stopPropagation(); }
+      if (e.code === 'KeyP' && !typing && !docked && !e.repeat) { P.close(); eat(e); }
       return;
     }
-    if (e.code === 'KeyP' && !typing && !e.repeat && ctx?.hooks.hotkey && !document.querySelector('.wld-edit')) { P.open(); e.preventDefault(); e.stopPropagation(); }
+    if (e.code === 'KeyP' && !typing && !e.repeat && ctx?.hooks.hotkey && !document.querySelector('.wld-edit')) { P.open(); eat(e); }
   }, true);
 
   // ── Маршруты сайта: #/phone/<путь> и #/c/<код> ──
@@ -652,6 +669,95 @@
     c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', .86);
   };
+
+  // ═══ ⚙️ Настройки телефона — вкладка «📱 Телефон» в общем окне настроек (js/core/settings.js) ═══
+  // Значения свои (P.set, d37_phone): их читают звуки телефона и calls.js. Громкость собеседников — «🔊 Звук → Голос» (D37Opt.volVoice).
+  function openSettings(){
+    const SS = window.D37Settings; if (!SS?.open) return false;
+    SS.open({ tab: 'phone' });
+    return true;
+  }
+  P.openSettings = openSettings;
+  P.define('settings', {   // ссылка #/phone/settings: окно настроек поверх телефона
+    render(el){
+      el.innerHTML = P.head('⚙️ Настройки') + `<div class="ph-empty"><b>⚙️ Настройки телефона</b><span>Мелодия, кто может звонить, рация и заблокированные — в общем окне настроек, вкладка «📱 Телефон».</span><button type="button" class="ph-btn" data-ph-set>Открыть настройки</button></div>`;
+      el.querySelector('[data-ph-set]').onclick = () => { if (!openSettings()) P.toast('Окно настроек не загрузилось — обнови страницу', false); };
+      setTimeout(openSettings, 0);
+    },
+  });
+  const KEYN = { Backquote: 'Ё', Space: 'Пробел', CapsLock: 'Caps Lock', Quote: 'Э', Semicolon: 'Ж', BracketLeft: 'Х', BracketRight: 'Ъ', Comma: 'Б', Period: 'Ю', Slash: '.', Backslash: '\\', Minus: '−', Equal: '=' };
+  P.keyName = c => KEYN[c] || String(c || '').replace(/^Key|^Digit/, '').replace(/(Left|Right)$/, '') || '—';
+  (function settingsTab(){
+    const SS = window.D37Settings; if (!SS?.addTab) return;
+    const row = (label, ctl, hint) => `<div class="gs-row"><div class="gs-lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
+    const seg = (k, opts) => `<div class="gs-seg" role="radiogroup">${opts.map(([v, t]) => { const on = (P.set[k] || opts[0][0]) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-phs="${k}" data-v="${v}">${t}</button>`; }).join('')}</div>`;
+    const sw = k => `<label class="gs-sw"><input type="checkbox" data-phw="${k}"${P.set[k] ? ' checked' : ''}><i aria-hidden="true"></i></label>`;
+    const localBlocks = () => { try { return JSON.parse(localStorage.getItem('d37_blocks_local') || '[]') || []; } catch (e) { return []; } };
+    SS.addTab({ id: 'phone', icon: '📱', title: 'Телефон', order: 60, ctx: ['engine', 'game', 'site'], render(body){
+      const box = document.createElement('div'); body.appendChild(box);
+      let capturing = false;
+      const draw = () => {
+        const s = P.set, v = Math.round((s.vol ?? .8) * 100);
+        box.innerHTML = '<div class="gs-sec">Звонки</div>'
+          + row('Кто может звонить', seg('calls', [['friends', '🤝 Друзья'], ['nobody', '🔕 Никто']]), 'Звонить могут только друзья. «Никто» — телефон молчит, вызовы попадут в пропущенные.')
+          + row('Мелодия', `${seg('ring', Object.entries(P.RINGS).map(([k, r]) => [k, r.t]))} <button type="button" class="gs-btn" data-pht="ring" title="Послушать" aria-label="Послушать мелодию">▶</button>`)
+          + row('Громкость мелодии', `<div class="gs-range"><input type="range" min="0" max="100" step="5" value="${v}" data-phr="vol" aria-label="Громкость мелодии"><output>${v}%</output></div>`, 'И звуки телефона.')
+          + row('Звуки телефона', sw('sounds'), 'Новое сообщение, нажатия.')
+          + '<div class="gs-sec">Голос</div>'
+          + row('Шумоподавление', sw('ns'), 'Выключи, если голос звучит «как под водой».')
+          + row('Рация', sw('ptt'), 'Говоришь, только пока держишь клавишу. На телефоне — кнопка «📻 Держи, чтобы говорить» в разговоре.')
+          + row('Клавиша рации', `<button type="button" class="gs-key${capturing ? ' cap' : ''}" data-pht="key">${capturing ? 'Нажми клавишу…' : esc(P.keyName(s.pttKey || 'Backquote'))}</button>`, capturing ? 'Нажми нужную клавишу.' : '')
+          + '<p class="gs-note">Громкость собеседников — во вкладке «🔊 Звук» → «Голос».</p>'
+          + '<div class="gs-sec">Заблокированные</div><div data-phb><p class="gs-note">Загружаем…</p></div>'
+          + '<p class="gs-note">Кто видит профиль и чем ты занят, невидимка — во вкладке «🌐 Сайт» → «Профиль и приватность».</p>';
+        blocks();
+      };
+      async function blocks(){
+        let ids = localBlocks();
+        if (P.me()) { try { await P.need('mv'); await window.MsgView?.loadBlocks?.(); ids = [...new Set([...ids, ...(window.MsgView?.blocked || [])])]; } catch (e) {} }
+        const el = box.querySelector('[data-phb]'); if (!el || !box.isConnected) return;
+        if (!ids.length) { el.innerHTML = '<p class="gs-note">Никого. Заблокировать — нажми на ник в чате → «🚫 Заблокировать».</p>'; return; }
+        await P.profiles(ids);
+        if (!box.isConnected) return;
+        el.innerHTML = ids.map(id => { const p = P.prof(id) || {}; return row(`${P.avatar(p, p.nick, 26)} ${esc(p.nick || 'игрок')}`, `<button type="button" class="gs-btn" data-phu="${esc(id)}">Разблокировать</button>`); }).join('');
+      }
+      // клавиша рации: следующее нажатие (Esc закрывает окно настроек — тогда ждать перестаём)
+      const onCap = e => {
+        window.removeEventListener('keydown', onCap, true);
+        if (!capturing || !box.isConnected) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+        capturing = false;
+        if (e.code && e.code !== 'Escape') { P.set.pttKey = e.code; P.saveSet(); }
+        draw();
+      };
+      box.addEventListener('click', async ev => {
+        const t = ev.target.closest('button'); if (!t || t.disabled) return;
+        const d = t.dataset;
+        if (d.phs) { P.set[d.phs] = d.v; P.saveSet(); draw(); if (d.phs === 'ring') P.sfx('ring'); }
+        else if (d.pht === 'ring') P.sfx('ring');
+        else if (d.pht === 'key') { if (capturing) return; capturing = true; draw(); setTimeout(() => window.addEventListener('keydown', onCap, true), 0); }
+        else if (d.phu) {
+          t.disabled = true;
+          try { localStorage.setItem('d37_blocks_local', JSON.stringify(localBlocks().filter(x => x !== d.phu))); } catch (e) {}
+          if (P.me() && window.MsgView?.block) { const r = await window.MsgView.block(d.phu, false); if (!r.ok) { t.disabled = false; P.toast(r.err || 'Не получилось', false); return; } }
+          else window.MsgView?.blocked?.delete?.(d.phu);
+          window.dispatchEvent(new Event('d37:blocks'));
+          blocks();
+        }
+      });
+      box.addEventListener('input', ev => {
+        const t = ev.target; if (t.dataset.phr !== 'vol') return;
+        P.set.vol = Math.max(0, Math.min(1, +t.value / 100)); P.saveSet();
+        const o = t.parentElement.querySelector('output'); if (o) o.textContent = t.value + '%';
+      });
+      box.addEventListener('change', ev => {
+        const t = ev.target;
+        if (t.dataset.phw) { P.set[t.dataset.phw] = t.checked; P.saveSet(); }
+        else if (t.dataset.phr === 'vol') P.sfx('ring');   // отпустил ползунок — послушать
+      });
+      draw();
+    } });
+  })();
 
   P._test = { clean: P.clean, APPS, place, MODS };
   renderBadges();
