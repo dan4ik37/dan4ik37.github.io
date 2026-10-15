@@ -52,11 +52,12 @@ function initSupabase() {
       showChatStatus('💡 Чат работает локально', false, 0);
       return false;
     }
-    sbClient = supabase.createClient(SB_URL, SB_KEY);
-    // Ссылка "забыл пароль" из письма возвращает человека на сайт с
-    // токеном восстановления в URL — Supabase SDK сам его парсит
-    // (detectSessionInUrl включён по умолчанию) и шлёт это событие.
-    // Открываем форму "новый пароль" вместо обычного логина.
+    // detectSessionInUrl: false — вход по ссылке из адреса (#access_token…: письма «подтверди почту», «смени пароль», возврат из
+    // Google / Discord…) supabase-js сам больше НЕ принимает: любую такую ссылку мог сделать кто-то другой из своего аккаунта и
+    // молча впустить человека в чужой аккаунт. Ссылку разбирает js/features/auth-guard.js (D37AuthUrl): свой вход — молча,
+    // чужой / с другого устройства / при открытом другом аккаунте — спросит «Войти как <ник>?». Смену пароля (раньше — событие
+    // PASSWORD_RECOVERY ниже) он открывает сам; обработчик оставлен на случай старых версий.
+    sbClient = supabase.createClient(SB_URL, SB_KEY, { auth: { detectSessionInUrl: false } });
     sbClient.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
         openLoginModal();

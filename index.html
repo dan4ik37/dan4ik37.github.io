@@ -12,6 +12,9 @@
 <!-- Главный адрес — dan4ik37.vercel.app. Копия на GitHub Pages (тот же репозиторий)
      без серверных функций и дублирует контент для поисковиков — уводим оттуда. -->
 <script>if(/\.github\.io$/.test(location.hostname))location.replace('https://dan4ik37.vercel.app/'+location.hash);</script>
+<!-- Вход по ссылке: токены во фрагменте (#access_token… — письма Supabase и Google/Discord/Twitch/GitHub; #d37auth… — VK/Яндекс/Telegram)
+     забрать и СРАЗУ стереть из адреса — до Метрики (url: location.href) и рекламы. Разбирают js/features/auth-guard.js и social-login.js -->
+<script>(function(){try{var h=location.hash;if(/(?:^#|&)(?:access_token|refresh_token|error_description|error_code|d37auth|d37auth_err|d37link|tgAuthResult)=/.test(h)){window.__d37AuthHash=h;history.replaceState(null,'',location.pathname+location.search)}}catch(e){}})()</script>
 <link rel="manifest" href="/manifest.json">
 <!-- Приложение 📲 (js/features/app.js): на iPhone «На экран «Домой»» открывает сайт своим окном с чёрной строкой состояния -->
 <meta name="mobile-web-app-capable" content="yes">
@@ -2613,6 +2616,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/achievements.js"></script>
 <script src="js/features/global-auth.js"></script>
 <script src="js/features/social-login.js"></script>
+<script src="js/features/auth-guard.js"></script>
 <script src="js/features/profile.js"></script>
 <script src="js/features/forum.js"></script>
 <script src="js/features/friends.js"></script>

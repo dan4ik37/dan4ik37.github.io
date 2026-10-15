@@ -85,15 +85,16 @@
       return { sb: { error: String(q.get('error') || '').slice(0, 60), code: String(q.get('error_code') || '').slice(0, 60), desc: String(q.get('error_description') || '').slice(0, 200) } };
     return null;
   }
-  // Сразу при загрузке (до роутера): наш фрагмент забрать и стереть из адреса (в истории браузера пропуска не останется)
-  let early = null, sbReturn = false;
+  // Сразу при загрузке (до роутера): наш фрагмент забрать и стереть из адреса (в истории браузера пропуска не останется).
+  // Обычно его уже забрал и стёр скрипт в <head> index.html (до Метрики и рекламы) — он в window.__d37AuthHash.
+  // Токены Supabase (#access_token…: Google, Discord…, письма) разбирает js/features/auth-guard.js — только свой вход, иначе спросит.
+  let early = null;
   try {
-    const h = String(root.location?.hash || '');
-    sbReturn = /(?:^#|&)access_token=/.test(h);   // вернулись из Google / Discord… — сессию из адреса заберёт supabase-js
+    const h = String(root.__d37AuthHash != null ? root.__d37AuthHash : (root.location?.hash || ''));
     const r = parseReturn(h);
     if (r && (!r.sb || getPending())) {
       early = r;
-      root.history?.replaceState?.(null, '', String(root.location.pathname || '/') + String(root.location.search || ''));
+      if (root.__d37AuthHash == null) root.history?.replaceState?.(null, '', String(root.location.pathname || '/') + String(root.location.search || ''));
     }
   } catch (e) {}
 
@@ -309,15 +310,14 @@
     }
     if (e.sb) { const pend = getPending(); if (pend) showErr(sbCode(e.sb, pend.m), pend.p, pend.m); }
   }
-  // Встроенный вход (Google, Discord…) вернул сессию → новый аккаунт? привязка? «это ты»?
-  function afterAuth() {
-    if (!sbReturn) return;
+  // Встроенный вход (Google, Discord…) вернул сессию, её принял auth-guard.js (D37AuthUrl) → новый аккаунт? привязка? «это ты»?
+  function afterOAuth(user) {
     const pend = getPending();
-    if (!pend || !BUILTIN.includes(pend.p) || !me()) return;
-    sbReturn = false;
+    const u = user || me();
+    if (!pend || !BUILTIN.includes(pend.p) || !u) return;
     clearPending();
     scrubProviderTokens();
-    const u = me(), has = (u.identities || []).some(i => i.provider === pend.p);
+    const has = (u.identities || []).some(i => i.provider === pend.p);
     if (pend.m === 'link') { if (has) toast(`✅ ${NAME[pend.p]} привязан — теперь можно входить и через него`); return go('#/profile/logins'); }
     if (pend.m === 'reauth') {
       if (pend.uid && u.id !== pend.uid) { errAfter = 'Ты вошёл в другой аккаунт. Чтобы привязать вход к прежнему — выйди и войди в него.'; return go('#/profile/logins'); }
@@ -333,15 +333,18 @@
     return x && x.style.display === 'block' ? 'reset' : r && r.style.display === 'block' ? 'register' : 'login';
   }
   const btnHtml = (p, reg) => `<button type="button" class="lgn-btn lgn-${p}" data-lgn-login="${p}" aria-label="${reg ? 'Зарегистрироваться' : 'Войти'} через ${esc(NAME[p])}"><span class="lgn-ic" aria-hidden="true">${ICON[p]}</span><span class="lgn-t">${esc(NAME[p])}</span></button>`;
+  let renderSeq = 0;
   async function renderModal(mode) {
     if (!doc) return;
     css();
     const box = doc.getElementById('gauthOauth');
     if (!box) return;
+    const my = ++renderSeq;   // вкладку переключили, пока грузился список входов (вход → «новый пароль»), — старый вызов не рисует
     mode = mode || modalMode();
     if (mode === 'reset') { box.hidden = true; return; }
     D37Captcha.mount(mode === 'register' ? 'register' : 'login');
     const P = await providers();
+    if (my !== renderSeq) return;
     if (!P.list.length) { box.hidden = true; box.innerHTML = ''; return; }
     if (P.list.includes('tg') && P.o.tg?.mode === 'widget') loadTg().catch(() => {});
     const reg = mode === 'register';
@@ -452,7 +455,7 @@
     if (BUILTIN.includes(p)) {
       const r = await rpc('auth_link_intent', { p_provider: p });   // null — нет auth-links.sql: без разрешения (и без защиты в базе)
       if (r && !r.ok) { if (r.reason === 'reauth') { showReauth(p); methodsStatus(''); return; } return methodsStatus(errText(r.reason, p), true); }
-      setPending({ p, m: 'link' });
+      setPending({ p, m: 'link', uid: me()?.id || null });
       const { error } = await sb().auth.linkIdentity({ provider: p, options: { redirectTo: root.location.origin + '/' } });
       if (error) { clearPending(); methodsStatus(errText(sbCode(error, 'link'), p), true); }
       return;
@@ -637,7 +640,6 @@
     doc.addEventListener('click', onClick);
     const boot = () => { css(); resume(); };
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
-    root.addEventListener?.('d37:auth', () => setTimeout(afterAuth, 0));
     // Наш фрагмент пришёл без перезагрузки (та же страница) — разобрать так же; слушатель раньше роутера (router.js грузится позже)
     root.addEventListener?.('hashchange', () => {
       const r = parseReturn(root.location.hash);
@@ -651,6 +653,7 @@
   root.D37Captcha = D37Captcha;
   root.D37Login = {
     NAME, ORDER, BUILTIN, OWN, providers, start, renderModal, renderMethods, staffNote, link, unlink, isSynthetic,
+    pending: getPending, afterOAuth, signup,   // для auth-guard.js (вход по ссылке #access_token…)
     _test: { parseReturn, buttons, ways, canUnlink, isSynthetic, freshAt, isFresh, errText, sbCode, setPending, getPending, clearPending, early: () => early },
   };
 })();
