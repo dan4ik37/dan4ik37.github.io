@@ -184,12 +184,12 @@ function PZ_CORE(){
   defItem('axe_copper', 'Медный топор', { kind: 'tool', tool: 'axe', power: 40, speed: .3, dmg: 5, reach: 2.2, stack: 1, icon: ['axe', '#d9783a'] });
   defItem('axe_iron', 'Железный топор', { kind: 'tool', tool: 'axe', power: 60, speed: .26, dmg: 8, reach: 2.3, stack: 1, icon: ['axe', '#c8c0b8'] });
   defItem('hammer', 'Молоток', { kind: 'tool', tool: 'hammer', power: 40, speed: .3, dmg: 6, reach: 2.2, stack: 1, icon: ['hammer', '#d9783a'] });
-  defItem('sword_copper', 'Медный меч', { kind: 'melee', dmg: 9, speed: .32, reach: 2.4, stack: 1, icon: ['sword', '#d9783a'] });
-  defItem('sword_iron', 'Железный меч', { kind: 'melee', dmg: 13, speed: .3, reach: 2.6, stack: 1, icon: ['sword', '#c8c0b8'] });
-  defItem('sword_silver', 'Серебряный меч', { kind: 'melee', dmg: 16, speed: .29, reach: 2.7, stack: 1, icon: ['sword', '#dfe6ee'] });
-  defItem('sword_gold', 'Золотой меч', { kind: 'melee', dmg: 20, speed: .28, reach: 2.8, stack: 1, icon: ['sword', '#f2c230'] });
-  defItem('sword_deep', 'Глубинный меч', { kind: 'melee', dmg: 28, speed: .26, reach: 3, stack: 1, icon: ['sword', '#4f7cff'] });
-  defItem('sword_fire', 'Огненный меч', { kind: 'melee', dmg: 38, speed: .25, reach: 3.2, stack: 1, icon: ['sword', '#ff5a1a'] });
+  defItem('sword_copper', 'Медный меч', { kind: 'melee', dmg: 9, speed: .32, reach: 2.4, kb: 3.5, stack: 1, icon: ['sword', '#d9783a'] });
+  defItem('sword_iron', 'Железный меч', { kind: 'melee', dmg: 13, speed: .3, reach: 2.6, kb: 4.5, stack: 1, icon: ['sword', '#c8c0b8'] });
+  defItem('sword_silver', 'Серебряный меч', { kind: 'melee', dmg: 16, speed: .29, reach: 2.7, kb: 5, stack: 1, icon: ['sword', '#dfe6ee'] });
+  defItem('sword_gold', 'Золотой меч', { kind: 'melee', dmg: 20, speed: .28, reach: 2.8, kb: 5.5, stack: 1, icon: ['sword', '#f2c230'] });
+  defItem('sword_deep', 'Глубинный меч', { kind: 'melee', dmg: 28, speed: .26, reach: 3, kb: 6, stack: 1, icon: ['sword', '#4f7cff'] });
+  defItem('sword_fire', 'Огненный меч', { kind: 'melee', dmg: 38, speed: .25, reach: 3.2, kb: 6.5, stack: 1, icon: ['sword', '#ff5a1a'] });
   defItem('bow', 'Деревянный лук', { kind: 'bow', dmg: 7, speed: .45, stack: 1, icon: ['bow', '#a8743e'] });
   defItem('arrow', 'Стрела', { kind: 'ammo', dmg: 5, icon: ['arrow', '#c8c0b8'] });
   defItem('wand', 'Искровой жезл', { kind: 'wand', dmg: 16, mana: 5, speed: .35, stack: 1, icon: ['wand', '#ff8af0'] });
@@ -247,6 +247,10 @@ function PZ_CORE(){
     ['potion_shine', 1, [['bottle', 1], ['glowshroom', 2], ['gel', 1]], 'workbench'],
     ['slimebait', 1, [['gel', 25], ['mushroom', 1]], 'workbench'],
     ['anvil', 1, [['bar_iron', 5]], 'workbench'],
+    ['hammer', 1, [['wood', 8]], 'workbench'],
+    ['pick_copper', 1, [['bar_copper', 8], ['wood', 3]], 'workbench'],
+    ['axe_copper', 1, [['bar_copper', 6], ['wood', 3]], 'workbench'],
+    ['sword_copper', 1, [['bar_copper', 6]], 'workbench'],
     ['bar_copper', 1, [['copper', 3]], 'furnace'],
     ['bar_iron', 1, [['iron', 3]], 'furnace'],
     ['bar_silver', 1, [['silver', 4]], 'furnace'],

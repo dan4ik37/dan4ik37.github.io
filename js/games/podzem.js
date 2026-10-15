@@ -441,6 +441,7 @@
       made++;
       ach('craft');
       if (r.o === 'workbench') ach('workbench');
+      if (r.o === 'workbench' || r.o === 'furnace' || r.o === 'anvil') { G.W.flags = G.W.flags || {}; G.W.flags['made_' + r.o] = 1; }
       if (/^bar_/.test(r.o)) ach('smelt');
     }
     if (made) snd('craft', { vol: .7 });
@@ -537,11 +538,11 @@
   const MOBS = {
     slime: { name: 'Слизень', w: 1.55, h: 1.15, hp: 20, dmg: 6, ai: 'slime', spr: 'slime', tint: [90, 215, 100], drop: [['gel', 1, 3, 1]] },
     blueslime: { name: 'Пещерный слизень', w: 1.6, h: 1.2, hp: 32, dmg: 10, ai: 'slime', spr: 'slime', tint: [80, 150, 255], drop: [['gel', 2, 4, 1]] },
-    purpleslime: { name: 'Глубинный слизень', w: 1.8, h: 1.35, hp: 70, dmg: 18, ai: 'slime', spr: 'slime', tint: [190, 95, 255], drop: [['gel', 2, 5, 1], ['crystal', 1, 1, .08]] },
-    zombie: { name: 'Зомби', w: 1.2, h: 2.7, hp: 45, dmg: 12, ai: 'walker', spr: 'zombie', speed: 2.4, jump: 15, drop: [['fiber', 1, 2, .35], ['mushroom', 1, 1, .05]] },
+    purpleslime: { name: 'Глубинный слизень', w: 1.8, h: 1.35, hp: 70, dmg: 18, ai: 'slime', spr: 'slime', tint: [190, 95, 255], kbr: .3, drop: [['gel', 2, 5, 1], ['crystal', 1, 1, .08]] },
+    zombie: { name: 'Зомби', w: 1.2, h: 2.7, hp: 45, dmg: 12, ai: 'walker', spr: 'zombie', speed: 2.4, jump: 15, kbr: .5, drop: [['fiber', 1, 2, .35], ['mushroom', 1, 1, .05]] },
     bat: { name: 'Летучая мышь', w: 1.2, h: .8, hp: 16, dmg: 10, ai: 'bat', spr: 'bat', speed: 6, drop: [['membrane', 1, 1, .5]] },
-    crawler: { name: 'Жук-камнегрыз', w: 1.7, h: .85, hp: 55, dmg: 15, ai: 'walker', spr: 'crawler', speed: 1.8, jump: 10, drop: [['crystal', 1, 1, .1], ['iron', 1, 3, .3]] },
-    imp: { name: 'Огневик', w: 1.4, h: 1.4, hp: 85, dmg: 24, ai: 'imp', spr: 'imp', speed: 3.2, drop: [['fireore', 1, 2, .5]] },
+    crawler: { name: 'Жук-камнегрыз', w: 1.7, h: .85, hp: 55, dmg: 15, ai: 'walker', spr: 'crawler', speed: 1.8, jump: 10, kbr: .55, drop: [['crystal', 1, 1, .1], ['iron', 1, 3, .3]] },
+    imp: { name: 'Огневик', w: 1.4, h: 1.4, hp: 85, dmg: 24, ai: 'imp', spr: 'imp', speed: 3.2, kbr: .3, drop: [['fireore', 1, 2, .5]] },
     slimeking: { name: 'Желейный великан', w: 6, h: 4.4, hp: 950, dmg: 24, ai: 'bossSlime', spr: 'bigslime', tint: [70, 170, 255], boss: 1, drop: [['gel', 25, 40, 1], ['lifecrystal', 2, 2, 1], ['bar_gold', 6, 10, 1], ['boots', 1, 1, 1], ['potion', 3, 5, 1]] },
     owl: { name: 'Ночной филин', w: 4, h: 3.4, hp: 1800, dmg: 30, ai: 'bossOwl', spr: 'owl', boss: 2, drop: [['feather', 12, 16, 1], ['bar_silver', 8, 12, 1], ['manastar', 1, 1, 1], ['lifecrystal', 1, 2, 1]] },
   };
@@ -553,7 +554,7 @@
     G.mobs.push(m);
     return m;
   }
-  function hurtMob(m, dmg, kx, src){
+  function hurtMob(m, dmg, kx, src, kb = 5){
     if (m.hp <= 0) return;
     const crit = rand() < .05;
     const d = Math.max(1, Math.round(dmg * (crit ? 2 : 1) * (.9 + rand() * .2)));
@@ -561,7 +562,7 @@
     floatText(m.x + m.w / 2, m.y, crit ? d + '!' : d, crit ? '#ffd84a' : '#ffffff', crit);
     if (crit || d >= 20) G.cam.shake = Math.max(G.cam.shake, crit ? .22 : .12);   // ощутимый удар: камера вздрагивает
     if (crit) G.hitStop = .045;                                                     // и на миг «замирает» (как в файтингах)
-    if (!m.D.boss) { m.vx = kx * 7; m.vy = Math.min(m.vy, -5); }
+    if (!m.D.boss) { const k = kb * (1 - (m.D.kbr || 0)); m.vx = kx * k; m.vy = Math.min(m.vy, -k * .7); }   // отброс: сила оружия × (1 − стойкость моба)
     snd(m.D.ai === 'slime' || m.D.ai === 'bossSlime' ? 'squish' : 'hit', { x: m.x, y: m.y, vol: .7 });
     const mc = m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0xb02020;   // брызги — по ходу удара
     for (let k = 0, n = crit ? 9 : 5; k < n; k++) part(m.x + m.w / 2 - kx * m.w * .25, m.y + m.h * (.3 + rand() * .4), kx * (3 + rand() * 5) + (rand() - .5) * 2.5, -2 - rand() * 4, .35 + rand() * .3, .1 + rand() * .1, shade(mc, .35), 1);
@@ -694,7 +695,10 @@
           const a = m.anim * (angry ? 1.4 : 1), tx = pcx + Math.cos(a) * 11 - m.w / 2, ty = pcy - 10 + Math.sin(a * 2) * 2 - m.h / 2;
           m.vx += ((tx - m.x) * 3 - m.vx) * dt * 3; m.vy += ((ty - m.y) * 3 - m.vy) * dt * 3;
           if (angry) { m.fireT -= dt; if (m.fireT <= 0) { m.fireT = .7; for (const s of [-.25, 0, .25]) { const a2 = Math.atan2(dy, dx) + s; shoot('featherp', mcx, mcy, Math.cos(a2) * 15, Math.sin(a2) * 15, 18, 'mob'); } snd('shoot', { x: mcx, y: mcy, vol: .5 }); } }
-          if (m.t <= 0) { m.st = 1; m.t = 1.1; const l = dist || 1; m.vx = dx / l * (angry ? 26 : 22); m.vy = dy / l * (angry ? 26 : 22); snd('roar', { vol: .5, rate: 1.5 }); }
+          if (m.t <= 0) { m.st = 3; m.t = angry ? .45 : .7; snd('roar', { vol: .5, rate: 1.5 }); floatText(mcx, m.y - .3, '!', '#ff6a3a', true); }   // замах перед пикированием: крик и «!» — успеть отскочить
+        } else if (m.st === 3) {
+          m.vx *= .9; m.vy = m.vy * .9 - 2 * dt; m.hurt = .12;   // зависает и вспыхивает
+          if (m.t <= 0) { m.st = 1; m.t = 1.1; const l = dist || 1; m.vx = dx / l * (angry ? 26 : 22); m.vy = dy / l * (angry ? 26 : 22); }
         } else if (m.st === 1) { if (m.t <= 0) { m.st = 2; m.t = 1; } }
         else { m.vy += (-12 - m.vy) * dt * 3; m.vx *= .97; if (m.t <= 0) { m.st = 0; m.t = angry ? 2.2 : 3.2; } }
         m.dir = m.vx >= 0 ? 1 : -1;
@@ -778,7 +782,7 @@
       if (!dead && q.owner === 'pl') {
         for (const m of G.mobs) {
           if (m.hp <= 0 || q.hit.has(m) || !(q.x > m.x && q.x < m.x + m.w && q.y > m.y && q.y < m.y + m.h)) continue;
-          hurtMob(m, q.dmg, Math.sign(q.vx) || 1); q.hit.add(m);
+          hurtMob(m, q.dmg, Math.sign(q.vx) || 1, 'shot', 3.5); q.hit.add(m);
           if (q.pierce-- <= 0) { dead = true; break; }
         }
       } else if (!dead && q.owner === 'mob' && !p.dead && p.iframes <= 0 && q.x > p.x && q.x < p.x + p.w && q.y > p.y && q.y < p.y + p.h) { hurtPlayer(q.dmg, Math.sign(q.vx) || 1, 'снаряд'); dead = true; }
@@ -1111,7 +1115,7 @@
     const p = G.pl, fast = buffOn('mine') ? .78 : 1;   // «Зелье шахтёра» — удар чаще и сильнее
     p.useT = it.speed * fast; p.swing = it.speed * fast; p.swingDur = it.speed * fast;
     snd('swing', { vol: .25, rate: 1.2 });
-    swingHit(toolDmg(it), it.reach || 2.2);   // замах инструментом задевает мобов
+    swingHit(toolDmg(it), it.reach || 2.2, 3);   // замах инструментом задевает мобов (отброс слабый)
     if (!inReach(tx, ty)) return;
     const f = fgAt(tx, ty); if (f === 255) return;
     if (it.tool === 'hammer') {
@@ -1446,7 +1450,7 @@
     if (moved) snd('door_wood_close', { vol: .4, rate: 1.4 });
   }
   // ── Удар дугой перед игроком: оружие и инструменты (кирка, топор, молоток — тоже бьют, слабее; как в Террарии) ──
-  function swingHit(dmg, reach){
+  function swingHit(dmg, reach, kb){
     const p = G.pl, id = ++p.swingId;
     const cx = p.x + p.w / 2, cy = p.y + p.h * .45;
     for (const m of G.mobs) {
@@ -1455,7 +1459,7 @@
       if (Math.hypot(dx, dy) > reach + .3) continue;
       if (dx * p.dir < -.6) continue;
       m.hitBy = id;
-      hurtMob(m, dmg, p.dir);   // искры, отброс, цифра урона — как у оружия
+      hurtMob(m, dmg, p.dir, 'pl', kb);   // искры, отброс, цифра урона — как у оружия
     }
   }
   // урон инструмента: свой (podzem-core) или по силе (инструменты из модов)
@@ -1464,7 +1468,7 @@
     const p = G.pl;
     p.useT = it.speed; p.swing = it.speed; p.swingDur = it.speed;
     snd('swing', { vol: .5 });
-    swingHit(it.dmg, it.reach);
+    swingHit(it.dmg, it.reach, it.kb || 5);
     // по пути рубит траву
     const cx = p.x + p.w / 2, tx = Math.floor(cx + p.dir * 1.2);
     for (let y = Math.floor(p.y); y <= Math.floor(p.y + p.h); y++) { const f = fgAt(tx, y); if (f && f !== 255 && P.TOOL[f] === 2 && P.HARD[f] === 0) breakTile(tx, y, true); }
@@ -1533,8 +1537,30 @@
     'Возвратный амулет переносит домой — без него из глубины долго выбираться.',
     'Мир бесконечный: влево, вправо и вниз. Где-то есть пустыни, снега и джунгли.',
   ];
+  // ═══ Цели первых часов (по порядку; выполненная — уже не показывается): подсказка в углу и у Проводника ═══
+  const GOALS = [
+    ['🌳', 'Сруби дерево: нужно 10 дерева (топор, ЛКМ по стволу)', () => count('wood') >= 10 || has('workbench')],
+    ['🔨', 'Сделай верстак (🎒 → «Можно сделать»)', () => has('workbench')],
+    ['🔥', 'Поставь факел (факел = дерево + гель со слизней)', () => !!ach0('torch')],
+    ['⛏', 'Копай вниз: добудь медь или железо', () => count('copper') + count('iron') > 0 || !!ach0('smelt')],
+    ['🧱', 'Сделай печь у верстака (камень, дерево, факелы)', () => has('furnace')],
+    ['🟧', 'Выплавь слиток в печи', () => !!ach0('smelt')],
+    ['⚒', 'Сделай наковальню (5 железных слитков)', () => has('anvil')],
+    ['⛏', 'Выкуй железную кирку — она берёт серебро и золото', () => ['pick_iron', 'pick_gold', 'pick_deep', 'pick_fire'].some(k => count(k) > 0)],
+    ['🌙', 'Переживи ночь (дом с дверью — зомби их не открывают)', () => !!ach0('night')],
+    ['🟢', 'Победи Желейного великана (приманка: 25 геля + гриб)', () => !!ach0('boss1')],
+  ];
+  const ach0 = id => G.CH.ach?.[id];
+  // предмет есть в вещах, поставлен рядом или уже был сделан (флаг мира)
+  const has = key => count(key) > 0 || stationsNear().has(key) || !!G.W.flags?.['made_' + key];
+  function goalNow(){
+    for (let i = 0; i < GOALS.length; i++) if (!GOALS[i][2]()) return { i, n: GOALS.length, icon: GOALS[i][0], text: GOALS[i][1] };
+    return null;
+  }
   function guideTip(){
     const CH = G.CH, list = [];
+    const goal = goalNow();
+    if (goal && rand() < .5) return `Сейчас главное: ${goal.text}.`;
     if (count('wood') < 10 && !count('workbench') && !stationsNear().has('workbench')) list.push('Сначала наруби дерева: нужно 10, чтобы сделать верстак (кнопка 🎒 — вещи и крафт).');
     if (isNight()) list.push('Ночь! Зомби не открывают двери — переждать лучше дома.');
     if (!count('torch')) list.push('Без факелов под землёй темно. Факел = дерево + гель.');
@@ -2515,7 +2541,7 @@
     put: (st, v) => DB.put(st, v), dbAll: st => DB.all(st), dbDel: (st, k) => DB.del(st, k), dbGet: (st, k) => DB.get(st, k),
     aimTouch, tapTouch, interactNear, useItem: () => useItem(), runCommand, toast, snd, isNight, statusText,
     sortInv, quickStack, quickHeal, quickBuff, toggleHook, attackStart, attackEnd, buildMode, buildMove, buildSet, setSmart, escKey,
-    buffs: () => G?.CH?.buffs || {}, hasHook: () => !!(G?.CH && count('hook')),
+    buffs: () => G?.CH?.buffs || {}, hasHook: () => !!(G?.CH && count('hook')), goal: () => (G?.CH && G.W && G.pl ? goalNow() : undefined), GOALS,
     setCell, fgAt, wallAt, lqAt, ltAt, tileKey, dropItem, burst: (x, y, n, col, sp, life, size, grav, glow) => burst(x, y, n, col, sp, life, size, grav, glow), floatText,
     spawnMob, spawnBoss, rgbInt, last: () => { try { return JSON.parse(lsGet(LS_LAST) || 'null'); } catch (e) { return null; } },
     buildAtlas,
