@@ -673,6 +673,8 @@
     const E = window.D37E, wrap = S.wrap;
     const R = S.R = E.renderer(wrap);
     R.r.domElement.classList.add('wld-gl');
+    // генерация кадров (×2): другие игроки — подвижные (свой персонаж движок знает сам — по R.follow)
+    R.fgMovers = () => { const L = []; if (S?.players) for (const p of S.players.values()) if (p.ch) L.push([p.key, p.ch.x, p.ch.y, p.ch.z]); return L; };
     // графика v3: время суток — общее для всех игроков (сутки 40 мин, ночь — пятая часть), небо, туман, вода, цвет кадра
     R.setLighting({ time: mirTime(), brightness: 1.05, ambient: 1.05, fogEnd: 260, shadows: true, gfx: MIR_GFX });
     const ph = S.ph = new E.Phys({ ground: 0 });

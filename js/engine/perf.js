@@ -35,11 +35,13 @@
     const t = performance.now();
     if (t - last < 250) return;
     const S = R.stats, n = Math.max(1, S.frames), ms = S.sumDt / n, inf = R.r.info, D = R.dynRes, post = R.post;
-    if (!last) { S.frames = S.sumDt = S.maxDt = S.sumCpu = S.maxCpu = S.sumR = 0; last = t; shUpd0 = R.shadow?.updates || 0; shT0 = t; return; }
+    if (!last) { S.frames = S.sumDt = S.maxDt = S.sumCpu = S.maxCpu = S.sumR = S.realN = 0; last = t; shUpd0 = R.shadow?.updates || 0; shT0 = t; return; }
     const shPerSec = R.shadow ? (R.shadow.updates - shUpd0) / ((t - shT0) / 1000) : 0;
     shUpd0 = R.shadow?.updates || 0; shT0 = t;
+    // генерация кадров: на экране FPS вдвое, настоящих — сколько нарисовано по-настоящему
+    const fgTxt = R.fg?.on ? ` (${Math.round((S.realN || 0) / Math.max(.001, (t - last) / 1000))} настоящих${R.fg.why ? ' · сейчас: ' + R.fg.why : ''})` : '';
     const lines = [
-      `FPS ${f1(1000 / ms)} · кадр ${f1(ms)} мс (худший ${f1(S.maxDt)})`,
+      `FPS ${f1(1000 / ms)}${fgTxt} · кадр ${f1(ms)} мс (худший ${f1(S.maxDt)})`,
       `ЦП: кадр ${f1(S.sumCpu / n)} мс (худший ${f1(S.maxCpu)}) · отрисовка ${f1(S.sumR / n)}`,
       `Вызовы: ${S.calls} (сцена ${S.scene - (S.shadowNow ? S.shadow : 0)} · тени ~${S.shadow} · пост ${S.post})`,
       `Треугольники: ${k(S.tris)}`,
@@ -48,10 +50,11 @@
       `Тени: ${R.shadow ? f1(shPerSec) + ' раз/с' : 'нет'} · лампы ${R.lights ? R.lights.lit + '/' + R.lights.list.length + ' (макс ' + R.lights.max + ')' : '—'} · качество ${R.q}`,
     ];
     const o = R.opt, aq = R.autoQ?.();   // графика v3: пресет, ступень автокачества, что включено
-    if (o) lines.push(`Графика: ${o.preset}${aq ? ` (ступень ${aq.step}/${aq.steps - 1})` : ''} · тени ${o.shadows ? o.shadowQ : 'выкл'} · AO ${o.ao} · вода ${o.water} · ${o.aa} · дальность ${f1(o.dist * 100)}%${o.fpsCap ? ' · ≤' + o.fpsCap + ' FPS' : ''}${o.battery ? ' · 🔋' : ''}`);
+    if (o) lines.push(`Графика: ${o.preset}${aq ? ` (ступень ${aq.step}/${aq.steps - 1})` : ''} · тени ${o.shadows ? o.shadowQ : 'выкл'} · AO ${o.ao} · лучи ${o.rt || 'off'} · вода ${o.water} · ${o.aa} · дальность ${f1(o.dist * 100)}%${o.fpsCap ? ' · ≤' + o.fpsCap + ' FPS' : ''}${o.battery ? ' · 🔋' : ''}`);
+    if (post) lines.push(`Апскейлер: ${post.scaled ? ({ fsr: 'FSR 1', nis: 'NIS', off: 'растяжение' }[post.upscaler] || post.upscaler) : post.upscaler === 'nis' && post.sharp > 0 ? 'NIS (резкость)' : 'не нужен (100%)'} · резкость ${Math.round((post.sharp ?? 0) * 100)}%${R.fg?.on ? ' · генерация кадров ×2' : ''}`);
     for (const [name, fn] of P.stats) { let v; try { v = fn(); } catch (e) { v = '—'; } lines.push(`${name}: ${typeof v === 'number' ? f1(v) : v}`); }
     box().textContent = lines.join('\n');
-    S.frames = S.sumDt = S.maxDt = S.sumCpu = S.maxCpu = S.sumR = 0;
+    S.frames = S.sumDt = S.maxDt = S.sumCpu = S.maxCpu = S.sumR = S.realN = 0;
     last = t;
   };
   window.addEventListener('keydown', e => {
