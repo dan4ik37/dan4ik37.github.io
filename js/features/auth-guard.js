@@ -242,6 +242,7 @@
     const m = !cur && KINDS[link.type] ? await findMark(link.type, user.email) : null;
     const pend = pending();
     const nonceOk = !!(pend && pend.n && root.__d37OA && pend.n === root.__d37OA);   // метка из адреса возврата (?oa=…) — своего входа
+    root.__d37OA = null;   // метка — на одну ссылку
     const decision = decide({ type: link.type, uid: user.id, cur, mark: !!m, pend, nonceOk, providers: (user.identities || []).map(i => i.provider) });
     if (decision === 'silent') return accept(link, user, { cur, mark: m });
     const nick = await fetchNick(user.id, link.at);
