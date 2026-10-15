@@ -84,7 +84,9 @@ body.high .gk-turn.me{animation:gkTurn 1.6s ease-in-out infinite}
 .gk-turn.end{color:#fde68a;background:rgba(250,204,21,.12);border-color:rgba(250,204,21,.5)}
 .gk-cd{display:inline-block;margin-left:.35rem;font-weight:900;color:#fca5a5;font-variant-numeric:tabular-nums}
 .gk-cd:empty{display:none}
-.gk-hint{text-align:center;font-size:.74rem;color:var(--muted,#9a98b3);line-height:1.4;min-height:1.1em}
+/* подсказка под кнопками: место на 2 строки сразу — иначе рука карт прыгала вниз, когда подсказка становилась длиннее */
+.gk-hint{text-align:center;font-size:.74rem;color:var(--muted,#9a98b3);line-height:1.4;min-height:2.8em}
+.un-acts{min-height:2.75rem}
 .gk-hint b{color:var(--text,#f0f0f8)}
 .gk-prac{display:inline-block;margin-left:.3rem;padding:.05rem .45rem;border-radius:8px;background:rgba(56,189,248,.16);color:#7dd3fc;font-size:.7rem;font-weight:800;vertical-align:middle}
 /* кнопки «отменить / готово / сходить» — общий вид */
