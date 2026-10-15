@@ -81,7 +81,8 @@ Supabase → **SQL Editor** → New query → вставь весь файл `au
 
 ## Шаг 6. VK ID
 
-1. Открой https://id.vk.com/about/business/go (VK ID для бизнеса) → войди → **Создать приложение**.
+1. Открой https://id.vk.ru/about/business/go (VK ID для бизнеса; старый адрес id.vk.com тоже ведёт туда) → войди →
+   **Создать приложение**.
 2. Платформа — **Web** (сайт). Название `dan4ik37`, домен `dan4ik37.vercel.app`.
 3. **Доверенный Redirect URL**: `https://dan4ik37.vercel.app/auth/vk/callback` (ровно так).
 4. Доступы: только базовые («имя, фамилия, фото» — `vkid.personal_info`). Почту и телефон **не** включай.

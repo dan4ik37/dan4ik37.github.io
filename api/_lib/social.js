@@ -169,7 +169,7 @@ export const VK_HOST = 'https://id.vk.ru';
 export const PROVIDERS = {
   vk: {
     authorize: (c, s) => `${VK_HOST}/authorize?` + form({ response_type: 'code', client_id: c.vk.id, redirect_uri: redirectUri(c, 'vk'),
-      state: s.state, code_challenge: s.challenge, code_challenge_method: 'S256', scope: 'vkid.personal_info', lang_id: 0, scheme: 'dark' }),
+      state: s.state, code_challenge: s.challenge, code_challenge_method: 'S256', scope: 'vkid.personal_info', lang_id: 0 }),
     async profile(c, q, st) {
       const device = String(q.device_id || '');
       if (!device || device.length > 200) throw new Error('vk: нет device_id');
