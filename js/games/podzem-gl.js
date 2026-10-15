@@ -559,7 +559,7 @@ void main(){
     if (s > 0.9965) col += vec3(0.85, 0.9, 1.0) * uNight * (0.5 + 0.5 * sin(uCam.z * 2.0 + s * 300.0));
   }
   // солнце / луна
-  vec2 sd = (vUV - uSun.xy) * vec2(uRes.x / uRes.y, 1.0);
+  vec2 sd = (vec2(vUV.x, 1.0 - vUV.y) - uSun.xy) * vec2(uRes.x / uRes.y, 1.0);   // uSun — доли экрана сверху
   float d = length(sd);
   if (uSun.w > 0.5) { col += vec3(1.0, 0.85, 0.5) * smoothstep(uSun.z * 4.0, 0.0, d) * 0.35; if (d < uSun.z) col = mix(col, vec3(1.0, 0.97, 0.85), 0.95); }
   else if (uSun.w > -0.5) { col += vec3(0.6, 0.7, 1.0) * smoothstep(uSun.z * 3.0, 0.0, d) * 0.15; if (d < uSun.z) col = mix(col, vec3(0.92, 0.94, 1.0), 0.9 - 0.4 * step(0.0, sd.x - uSun.z * 0.35)); }
