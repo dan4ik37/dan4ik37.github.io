@@ -7,6 +7,7 @@ import { videoFromSnapshot } from '../video-snap.js';
 import { QUIZZES } from '../quizzes.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS, TOPIC_INTRO, topicOf } from '../topics.js';
+import { videoAge, ageBadge, ageAttr } from '../age.js';
 
 const PER = 120;
 const ru = (n, one, few, many) => n % 10 === 1 && n % 100 !== 11 ? one : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? few : many;
@@ -43,7 +44,8 @@ function chips(counts, cur){
 
 function card(v, views){
   const d = new Date(v.publishedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Moscow' });
-  return `<a class="card" href="/v/${esc(v.id)}"><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180"><span>${esc(v.title)}</span><small>${views ? '👁 ' + esc(fmtCount(views)) + ' · ' : ''}${esc(d)}</small></a>`;
+  const a = videoAge(v.title).age;   // возрастная метка (api/_lib/age.js): в списке — значок от 16+
+  return `<a class="card" href="/v/${esc(v.id)}"${ageAttr(a)}><img src="${esc(v.thumb)}" alt="${esc(v.title)}" loading="lazy" width="320" height="180">${ageBadge(a, { min: 16 })}<span>${esc(v.title)}</span><small>${views ? '👁 ' + esc(fmtCount(views)) + ' · ' : ''}${esc(d)}</small></a>`;
 }
 
 function hubPage(counts){
@@ -56,7 +58,7 @@ function hubPage(counts){
   <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/videos">Все видео</a> › <span>Игры</span></nav>
   <h1>Во что играет dan4ik37</h1>
   <p class="lead">Все ролики канала, разложенные по играм. Выбери игру — откроются все видео по ней, от новых к старым.</p>
-  <div class="tgrid">${list.map(x => `<a class="tcard" href="/topic/${x.slug}"><b>${esc(x.name)}</b><small>${vids(counts.get(x.slug))}</small><span>${esc(x.about)}</span></a>`).join('')}</div>
+  <div class="tgrid">${list.map(x => `<a class="tcard" href="/topic/${x.slug}"><b>${esc(x.name)} ${ageBadge(x.age, { title: x.ageWhy })}</b><small>${vids(counts.get(x.slug))}</small><span>${esc(x.about)}</span></a>`).join('')}</div>
   <div data-ad="video_page" hidden></div>
   <p class="all"><a href="/videos">Все видео канала →</a> · <a href="/games">🎮 Игры на сайте</a></p>
 </main>`;
@@ -94,7 +96,7 @@ function topicPage(t, all, counts, req){
 <main class="wrap">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/topics">Игры канала</a> › <span>${esc(t.name)}</span></nav>
   <h1>${esc(t.name)} — видео dan4ik37</h1>
-  <p class="lead">${esc(t.about)} На канале — ${vids(n)}${first && first !== last ? `, с ${first} по ${last} год` : ''}. От новых к старым.</p>
+  <p class="lead">${ageBadge(t.age, { title: t.ageWhy })} ${esc(t.about)} На канале — ${vids(n)}${first && first !== last ? `, с ${first} по ${last} год` : ''}. От новых к старым.</p>
   ${p === 1 && TOPIC_INTRO[t.slug] ? `<p class="intro">${esc(TOPIC_INTRO[t.slug])}</p>` : ''}
   <div class="cta">
     <a class="btn btn-yt" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">▶ Подписаться на канал</a>

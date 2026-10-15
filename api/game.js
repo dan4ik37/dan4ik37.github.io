@@ -7,6 +7,9 @@
 import { SITE, esc } from './_lib/yt.js';
 import { page } from './_lib/page.js';
 import { GAME_PAGES, HUB, scoreLabel } from './_lib/games-seo.js';
+import { GAME_AGE, ageBadge } from './_lib/age.js';
+// Возрастная метка игры (как GAMES[].age в js/features/games.js)
+const ageOf = id => GAME_AGE[id] || [0, ''];
 
 // Картинки-превью — img/games/<id>.png (рисует img/games/_make-cards.py)
 const cardImage = id => `${SITE}/img/games/${id}.png`;
@@ -41,7 +44,9 @@ function sendPage(res, html) {
 }
 
 function card(g) {
+  const [a, why] = ageOf(g.id);
   return `<a class="gcard" href="/games/${g.id}">
+    ${ageBadge(a, { title: why || 'Без ограничений' })}
     <span class="gic">${g.icon}</span>
     <b>${esc(g.name)}</b>
     <span>${esc(g.description)}</span>
@@ -101,11 +106,13 @@ function gamePage(g, ch) {
   const url = `${SITE}/games/${g.id}`;
   const play = `/#/games/${g.id}`;
   const others = GAME_PAGES.filter(x => x.id !== g.id);
+  const [age, ageWhy] = ageOf(g.id);
   const ld = {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'VideoGame', name: g.name, description: g.description, url, image: cardImage(g.id), inLanguage: 'ru',
+        contentRating: `${age}+`,
         genre: 'Browser game', gamePlatform: 'Web browser', applicationCategory: 'Game', operatingSystem: 'Any',
         playMode: ['SinglePlayer', 'MultiPlayer'],
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'RUB' },
@@ -138,7 +145,7 @@ function gamePage(g, ch) {
         <a class="btn btn-acc big" href="${play}">▶ Играть бесплатно</a>
         <button type="button" class="btn btn-ghost" id="share">🔗 Поделиться</button>
       </div>
-      <p class="muted small">Без регистрации и скачивания · телефон и компьютер</p>
+      <p class="muted small">${ageBadge(age, { title: ageWhy || 'Без ограничений' })} ${ageWhy ? esc(ageWhy) + ' · ' : ''}Без регистрации и скачивания · телефон и компьютер</p>
     </div>
   </div>
 
@@ -204,7 +211,8 @@ const GAME_CSS = `
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
 .faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
 .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1rem}
-.gcard{display:flex;flex-direction:column;gap:.4rem;padding:1.1rem;border-radius:16px;background:var(--card);border:1px solid var(--line);text-decoration:none;transition:transform .25s,border-color .25s}
+.gcard{position:relative;display:flex;flex-direction:column;gap:.4rem;padding:1.1rem;border-radius:16px;background:var(--card);border:1px solid var(--line);text-decoration:none;transition:transform .25s,border-color .25s}
+.gcard>.age-b{position:absolute;top:.8rem;right:.8rem}
 .gcard:hover{transform:translateY(-3px);border-color:rgba(255,45,85,.5)}
 .gcard .gic{font-size:2rem}
 .gcard b{font-size:1rem}
