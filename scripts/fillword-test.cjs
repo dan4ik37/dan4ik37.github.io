@@ -77,6 +77,12 @@ for (const { lv, o } of sizes) {
   ok(F.dailyPuzzle(1).grid.join('') !== F.dailyPuzzle(2).grid.join(''), 'каждый день — новое поле');
   const t0 = Date.UTC(2026, 9, 15) - 3 * 3600e3;   // полночь 15.10.2026 по МСК
   ok(F.dayNo(t0) === 1 && F.dayNo(t0 - 1000) === 0 && F.dayNo(t0 + 864e5) === 2, 'день №1 — 15.10.2026, смена в полночь по МСК');
+  // карточка «Филворд дня» на главной (games.js) считает номер дня так же
+  {
+    const m = fs.readFileSync(path.join(SITE, 'js/features/games.js'), 'utf8').match(/function fillwordDayNo\(\)\{ return ([^}]+) \}/);
+    const day = m && (now => vm.runInNewContext(m[1].replace(/Date\.now\(\)/g, String(now)), { Math, Date }));
+    ok(day && [t0, t0 - 1000, t0 + 864e5 * 40 + 5000, t0 + 864e5 * 400 - 1].every(t => day(t) === F.dayNo(t)), 'games.js fillwordDayNo — тот же номер дня, что в игре');
+  }
   for (const lv of [1, 5, 12, 40]) ok(F.levelPuzzle(lv).grid.join('') === F2.levelPuzzle(lv).grid.join(''), `уровень ${lv} — одинаковый у всех`);
   let slow = 0;
   for (let lv = 1; lv <= 60; lv++) { const t = Date.now(), P = F.levelPuzzle(lv); if (!P || checkPuzzle(P, F.sizeOf(lv))) slow += 100; if (Date.now() - t > 1500) slow++; }

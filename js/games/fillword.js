@@ -397,9 +397,13 @@
       else if (a === 'duel') location.hash = '#/games/fillword/' + root.GameRoom.newCode();
     });
     paint();
+    // поле поменяло размер (полный экран, поворот телефона, окно) — «змейки» пересчитать: они в пикселях поля
+    let lastW = grid.clientWidth;
+    const ro = root.ResizeObserver ? new ResizeObserver(() => { if (stopped || grid.clientWidth === lastW) return; lastW = grid.clientWidth; paint(); }) : null;
+    ro?.observe(grid);
     runAt = Date.now(); tick = setInterval(clock, 500); clock();
     if (daily) loadTop(q('.fw-top'));
-    me.stop = () => { if (!ended) { S.elapsed = secs(); runAt = 0; persist(); } stopped = true; clearInterval(tick); clearTimeout(msgT); root.removeEventListener('keydown', onKey); };
+    me.stop = () => { if (!ended) { S.elapsed = secs(); runAt = 0; persist(); } stopped = true; clearInterval(tick); clearTimeout(msgT); ro?.disconnect(); root.removeEventListener('keydown', onKey); };
     me.S = S; me.P = P;
     me.trace = cellsList => { path = []; for (const c of cellsList) tap(c); return S.found.length; };
     me.check = () => submit(false);
@@ -514,5 +518,5 @@ body:not(.high) .fw-c{transition:none}
     get board(){ return B; },
     _test: { rng, sizeOf, words, hamPath, cutLengths, countPaths, generate, dayNo, levelPuzzle, dailyPuzzle, scoreOf, coinsOf, nbs, DAILY_SIZE, DUEL_SIZE },
   };
-  root.fillwordToday = () => ({ day: dayNo(), done: readDaily() });
+  // «Филворд дня» на главной — fillwordDayNo()/fillwordToday() в js/features/games.js (та же формула дня и d37_fillword_daily)
 })();

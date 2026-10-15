@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '68';
+const GAMES_VER = '69';
 const GAMES = [
   { id: 'world',    age: '12+', ageWhy: 'Онлайн-мир: общение с незнакомыми игроками в чате.', icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   age: '6+', ageWhy: 'Конструктор игр; игры других игроков — со своей меткой.', icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -459,6 +459,11 @@ function sudokuDayNo(){ return Math.floor((Date.now() + 3 * 3600e3 - Date.UTC(20
 function sudokuToday(){
   try { const d = JSON.parse(localStorage.getItem('d37_sudoku_daily')); return d && d.day === sudokuDayNo() ? d : null; } catch (e) { return null; }
 }
+// «Филворд дня»: номер и итог (как в js/games/fillword.js: день №1 = 15.10.2026 по МСК)
+function fillwordDayNo(){ return Math.floor((Date.now() + 3 * 3600e3 - Date.UTC(2026, 9, 15)) / 864e5) + 1; }
+function fillwordToday(){
+  try { const d = JSON.parse(localStorage.getItem('d37_fillword_daily')); return d && d.day === fillwordDayNo() ? d : null; } catch (e) { return null; }
+}
 function wordsToday(){
   try { const s = JSON.parse(localStorage.getItem('d37_words_day')); return s && s.n === wordsDayNo() ? s : null; } catch (e) { return null; }
 }
@@ -468,8 +473,8 @@ function gamesDailyDot(){
 }
 // «🆕 Новое на сайте» над «Сегодня на сайте»: один раз на каждую пачку новинок (WHATSNEW_VER), закрыл ✕ — не показываем.
 // Для тех, кто заходил раньше и не знает про новые разделы. Новая пачка → поднять версию и поменять список.
-const WHATSNEW_VER = '2026-10-13b';
-const WHATSNEW = [['#/games/unity', '🕹️', 'Unity-игры — выложи свою игру из Unity'], ['#/games/studio3d', '🧱', 'Студия 3D — построй свой мир со скриптами'], ['#/games/world', '🌍', 'Мир Денчика 3D: кафе, столики с играми, домики'], ['#/games/studio', '🛠️', 'Студия игр — сделай свою игру'], ['#/games/wardrobe', '🎭', '3D-персонаж: тело, одежда, любые цвета'], ['#/games/sudoku', '🔢', 'Судоку дня'], ['#/games/mahjong', '🀄', 'Маджонг Коннект'], ['#/games/miner', '💣', 'Сапёр'], ['#/games/kosynka', '♥️', 'Косынка'], ['#/games/pauk', '🕷️', 'Паук'], ['#/games/freecell', '♣️', 'Свободная ячейка'], ['#/games/blocks', '🟦', 'Блоки — как Block Blast'], ['#/games/chess', '♟️', 'Шахматы'], ['#/games/arena', '🔫', 'Арена 1 на 1'], ['#/games/nardy', '🎯', 'Нарды'], ['#/games/ludo', '🎲', 'Лудо'], ['#/games/pool', '🎱', 'Бильярд'], ['#/games/durak', '♠️', 'Дурак онлайн'], ['#/games/uno', '🃏', 'Одна! — карты как Уно'], ['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/td', '🏰', 'Башни — защита замка'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
+const WHATSNEW_VER = '2026-10-15';
+const WHATSNEW = [['#/games/krokodil', '🐊', 'Крокодил — рисуй и угадывай компанией'], ['#/games/fillword', '🔎', 'Филворд дня'], ['#/games/balda', '🔠', 'Балда — игра в слова'], ['#/games/domino', '🐐', 'Домино «Козёл»'], ['#/games/unity', '🕹️', 'Unity-игры — выложи свою игру из Unity'], ['#/games/studio3d', '🧱', 'Студия 3D — построй свой мир со скриптами'], ['#/games/world', '🌍', 'Мир Денчика 3D: кафе, столики с играми, домики'], ['#/games/studio', '🛠️', 'Студия игр — сделай свою игру'], ['#/games/wardrobe', '🎭', '3D-персонаж: тело, одежда, любые цвета'], ['#/games/sudoku', '🔢', 'Судоку дня'], ['#/games/mahjong', '🀄', 'Маджонг Коннект'], ['#/games/miner', '💣', 'Сапёр'], ['#/games/kosynka', '♥️', 'Косынка'], ['#/games/pauk', '🕷️', 'Паук'], ['#/games/freecell', '♣️', 'Свободная ячейка'], ['#/games/blocks', '🟦', 'Блоки — как Block Blast'], ['#/games/chess', '♟️', 'Шахматы'], ['#/games/arena', '🔫', 'Арена 1 на 1'], ['#/games/nardy', '🎯', 'Нарды'], ['#/games/ludo', '🎲', 'Лудо'], ['#/games/pool', '🎱', 'Бильярд'], ['#/games/durak', '♠️', 'Дурак онлайн'], ['#/games/uno', '🃏', 'Одна! — карты как Уно'], ['#/games/horde', '🧟', 'Орда — выживание'], ['#/games/td', '🏰', 'Башни — защита замка'], ['#/games/emoji', '🤔', 'Угадай игру по эмодзи'], ['/quiz', '🧩', 'Тесты «Кто ты из игр»'], ['#/games/words/archive', '📚', 'Архив «5 букв»'], ['/tools/wheel', '🎡', 'Колесо фортуны'], ['/tools/fonts', '✒️', 'Шрифты для ника'], ['/tools/random', '🔢', 'Рандомайзер'], ['/tools/cps', '🖱', 'CPS тест'], ['/top', '🏆', 'Лучшие видео']];
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
@@ -488,14 +493,13 @@ function renderToday(){
   const state = !s ? 'Угадай слово из 5 букв — новое каждый день'
     : s.done ? (s.win ? `✅ Угадано с ${s.rows.length}-й попытки · завтра новое` : '❌ Не угадано · завтра новое слово')
     : `Попытка ${s.rows.length + 1} из 6 — доиграй!`;
-  // Игры — без инструментов (колесо, тесты, шрифты, CPS ведут на свои страницы)
-  const n = GAMES.filter(g => !g.href || g.href[0] === '#').length;
-  const qz = QUIZ_DAY[wordsDayNo() % QUIZ_DAY.length], sd = sudokuToday();
+  const qz = QUIZ_DAY[wordsDayNo() % QUIZ_DAY.length], sd = sudokuToday(), fw = fillwordToday();
+  const mmss = sec => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   box.innerHTML = whatsNewHtml() + `<a class="today-online" id="todayOnline" href="#/chat" hidden></a><div class="today-grid">
       <a class="today-card hot-slot${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
       <a class="today-card" href="/quiz/${qz[0]}"><span class="ti">${qz[1]}</span><span class="tt"><b>Тест дня</b><small>${esc(qz[2])}</small></span></a>
-      <a class="today-card" href="#/games"><span class="ti">🎮</span><span class="tt"><b>${n} игр на сайте</b><small>Морской бой, Города, Шашки — с ботом или с другом по ссылке</small></span></a>
-      <a class="today-card${sd ? '' : ' hot'}" href="#/games/sudoku"><span class="ti">🔢</span><span class="tt"><b>Судоку дня #${sudokuDayNo()}</b><small>${sd ? (sd.won ? `✅ Решено за ${Math.floor(sd.sec / 60)}:${String(sd.sec % 60).padStart(2, '0')} · завтра новое` : '❌ Не решено · завтра новое') : 'Одно на всех — кто решит быстрее?'}</small></span></a>
+      <a class="today-card${fw ? '' : ' hot'}" href="#/games/fillword/daily"><span class="ti">🔎</span><span class="tt"><b>Филворд дня #${fillwordDayNo()}</b><small>${fw ? `✅ Решён за ${mmss(fw.sec)} · завтра новый` : 'Найди все слова — одно поле на всех'}</small></span></a>
+      <a class="today-card${sd ? '' : ' hot'}" href="#/games/sudoku"><span class="ti">🔢</span><span class="tt"><b>Судоку дня #${sudokuDayNo()}</b><small>${sd ? (sd.won ? `✅ Решено за ${mmss(sd.sec)} · завтра новое` : '❌ Не решено · завтра новое') : 'Одно на всех — кто решит быстрее?'}</small></span></a>
       ${window.__d37Daily ? `<a class="today-card today-vid" href="/v/${esc(window.__d37Daily.id)}"><span class="ti">🎬</span><span class="tt"><b>Видео дня</b><small>${esc(window.__d37Daily.title)}</small></span></a>`
         : '<a class="today-card" href="/top"><span class="ti">🏆</span><span class="tt"><b>Лучшие видео</b><small>Самые популярные ролики канала</small></span></a>'}
       <button type="button" class="today-card" onclick="d37Surprise(this)"><span class="ti">🎲</span><span class="tt"><b>Удиви меня</b><small>Случайное видео из почти 6000</small></span></button>
