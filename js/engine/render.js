@@ -560,8 +560,10 @@
       const want = O.fsr || 'auto';
       if (want !== optFsr) { optFsr = want; if (R.w > 1) R.setFsr(want); }
       R.userShadows = O.shadows !== false;
-      R.applyGfx(E.gfxResolve({ ...(O.gfx || {}), shadows: O.shadows !== false }, { q, gl2: r.capabilities.isWebGL2 }));
+      R.applyGfx(E.gfxResolve({ ...(O.gfx || {}), shadows: O.shadows !== false }, devInfo()));
     }
+    // устройство для E.gfxResolve: каркас, WebGL2, телефон ли, точна ли глубина кадра (post.js проверяет при запуске)
+    function devInfo(){ return { q, gl2: r.capabilities.isWebGL2, mobile: !!E.isMobile?.(), depthFx: !R.post || R.post.depthOK !== false }; }
     let optFsr = E.fsrMode();
     R.userShadows = true;
     R.setShadows = on => { R.userShadows = !!on; applyShadowQ(); };
@@ -1057,7 +1059,7 @@
     }
     if (window.D37Opt?.fps && E.perf && !E.perf.on) E.perf.toggle(true);   // настройки: «Счётчик FPS» — сразу при входе в 3D
     // графика игрока (настройки) и свет по умолчанию — сразу, до первого кадра
-    { const O = window.D37Opt; if (O) optSync(O); else R.applyGfx(E.gfxResolve({}, { q, gl2: r.capabilities.isWebGL2 })); }
+    { const O = window.D37Opt; if (O) optSync(O); else R.applyGfx(E.gfxResolve({}, devInfo())); }
     applyLighting();
     R.envNow();   // отражения неба — до первого кадра (иначе шейдеры соберутся дважды: без них и с ними)
     return R;

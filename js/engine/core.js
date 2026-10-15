@@ -48,10 +48,22 @@
     return h(i) * (1 - u) + h(i + 1) * u;
   };
 
-  // ── Качество графики: low (слабые телефоны / «Экономный» режим сайта), mid, high ──
+  // ── Телефон или планшет — не только по строке браузера: «версия для ПК» на телефоне и iPad пишут себя компьютером ──
+  // (палец без мыши + небольшой экран; iPad — «Macintosh» с сенсорным экраном; Chromium — userAgentData.mobile)
+  E.isMobile = () => {
+    try {
+      const nav = root.navigator || {}, ua = nav.userAgent || '';
+      if (/Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|IEMobile|Opera Mini/i.test(ua)) return true;
+      if (nav.userAgentData && nav.userAgentData.mobile) return true;
+      if (/Macintosh/.test(ua) && (nav.maxTouchPoints || 0) > 1) return true;
+      const mm = q => !!(root.matchMedia && root.matchMedia(q).matches), sc = root.screen || {};
+      return mm('(pointer: coarse)') && !mm('(any-pointer: fine)') && Math.min(sc.width || 9999, sc.height || 9999) <= 1024;
+    } catch (e) { return false; }
+  };
+  // ── Качество графики: low (слабые телефоны / «Экономный» режим сайта), mid (телефоны), high ──
   E.quality = () => {
     if (document.body.classList.contains('low')) return 'low';
-    const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent), cores = navigator.hardwareConcurrency || 4;
+    const mobile = E.isMobile(), cores = navigator.hardwareConcurrency || 4;
     if (mobile && cores <= 4) return 'low';
     if (mobile || cores <= 4) return 'mid';
     return 'high';
