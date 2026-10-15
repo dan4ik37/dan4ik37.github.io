@@ -53,6 +53,8 @@
     M = E.modes.create(c, hooks);
     M.setChecks(st.checks.length);
     for (const p of A.players()) M.join(idOf(p.id), p.name);
+    // новый хозяин: зомби прежнего хозяина уже в мире (пришли по сети) — они наши (волна не «отбита» сама собой)
+    if (restore) for (const o of SC().all()) if (o.cls === 'NPC' && o.look === 'zombie' && o.name === 'Зомби' && !st.zIds.has(o.id)) { st.zIds.add(o.id); st.zhp.set(o.id, 100); }
     if (!(restore && st.view && M.restore(st.view))) M.start();
     st.sentAt = 0; broadcast(true);
   }
