@@ -8,11 +8,12 @@
 // Очки: база уровня × min(3, эталон / секунды) − 50 за ошибку. Ключи: sudoku1..4, sudoku_daily, sudoku_duel.
 // Рекорды дня — RPC daily_top('sudoku_daily') (games-more.sql; засчитывается первая попытка). Движок — GAME_IMPL.sudoku._test.
 (() => {
+  // coins — монеты за решение (экономика 15.10.2026: вдвое меньше прежнего; потолок — coin_run_cap('sudoku'))
   const LEVELS = {
-    1: { name: 'Лёгкий', givens: 40, singles: true, base: 100, ref: 300, coins: 10 },
-    2: { name: 'Средний', givens: 33, singles: true, base: 200, ref: 480, coins: 20 },
-    3: { name: 'Сложный', givens: 28, singles: false, base: 400, ref: 720, coins: 35 },
-    4: { name: 'Эксперт', givens: 24, singles: false, base: 800, ref: 1200, coins: 60 },
+    1: { name: 'Лёгкий', givens: 40, singles: true, base: 100, ref: 300, coins: 5 },
+    2: { name: 'Средний', givens: 33, singles: true, base: 200, ref: 480, coins: 10 },
+    3: { name: 'Сложный', givens: 28, singles: false, base: 400, ref: 720, coins: 18 },
+    4: { name: 'Эксперт', givens: 24, singles: false, base: 800, ref: 1200, coins: 30 },
   };
   const MAX_MISTAKES = 3, DUEL_SEC = 600, DAY1 = Date.UTC(2026, 9, 10), DAILY_KEY = 'd37_sudoku_daily', PREF = 'd37_sudoku_level';
 
@@ -307,7 +308,7 @@
           <div class="ct-actions"><button type="button" class="ct-start" data-act="${daily ? 'mode:lv:' + (o.lv || 2) : 'again'}">${daily ? '🔢 Сыграть обычное' : '↻ Новое судоку'}</button><button type="button" data-act="look">👀 Посмотреть поле</button></div>`);
         return;
       }
-      const sc = scoreOf(lv, sec, S.mistakes), prevBest = api.local().best || 0, coins = daily ? 40 : LEVELS[lv].coins, runId = 'sd' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+      const sc = scoreOf(lv, sec, S.mistakes), prevBest = api.local().best || 0, coins = daily ? 20 : LEVELS[lv].coins, runId = 'sd' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
       api.report(key, true, sc, sc);
       api.sfx('win');
       if (daily) { try { localStorage.setItem(DAILY_KEY, JSON.stringify({ day: o.day, won: true, sec: Math.round(sec), mistakes: S.mistakes, score: sc })); } catch (e) {} window.dispatchEvent(new Event('d37:daily')); }

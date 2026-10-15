@@ -8,7 +8,7 @@
 // «⚔️ Соревнование» (versus.js): у обоих одни и те же фигуры (общий seed, без подсказок), 3 минуты — у кого больше.
 // Движок без DOM — GAME_IMPL.blocks._test (проверять в node).
 (() => {
-  const N = 8, DUEL_SEC = 180, WIN = 2000, COIN_DIV = 50, COIN_MAX = 150, SAVE = 'd37_blocks_save';
+  const N = 8, DUEL_SEC = 180, WIN = 2000, COIN_DIV = 100, COIN_MAX = 80, SAVE = 'd37_blocks_save';   // монеты: очки / COIN_DIV, до COIN_MAX (= coin_run_cap)
   const COLORS = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7', '#ec4899'];
   // «#» — клетка, «.» — пусто, «|» — новая строка; число — как часто выпадает
   const DEFS = [

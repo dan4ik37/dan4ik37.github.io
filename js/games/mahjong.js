@@ -289,7 +289,7 @@
       api.sfx('win');
       if (o.duel) { ended = true; clearInterval(tick); showOv(`<div class="sl-t">✨ Все пары найдены!</div><div class="sl-big">${num(G.score)}</div><div class="sl-s">Бонус за время +${num(bonus)}. Итог соревнования — сверху</div>`); o.onScore?.(G.score); o.onEnd?.(G.score); return; }
       busy = true;
-      const coins = Math.min(40, 5 + 2 * G.n), runId = 'mj' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+      const coins = Math.min(20, 3 + G.n), runId = 'mj' + Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
       api.report('mahjong', true, G.score, G.score);
       const next = G.n + 1;
       dropSave();

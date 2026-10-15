@@ -3,11 +3,13 @@
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно.
 --  Нужны: games.sql (game_log), xp.sql (xp_ledger), vip-balance.sql (has_perks) — они уже применены.
 --
---  Откуда монеты: монеты из забега в «Орде»/«Башнях» (coins_run, до 300 за забег и 1500 в день),
---  победа в любой игре сайта (+5, до 20 раз в день — триггер на game_log), бонус дня (coins_daily),
---  задание дня (+50 — триггер на xp_ledger), реклама за награду (coins_ad: +40 до 8 раз в день или
---  «×2 за забег» до 5 раз в день). VIP и персонал получают за забеги и бонус дня вдвое больше.
+--  Откуда монеты (все числа — coin_rule ниже; экономика 15.10.2026, docs/ECONOMY.md — примерно вдвое меньше прежнего):
+--  забеги и партии (coins_run: до coin_run_cap за раз, до 600 в день, не чаще раза в 20 с), победа в любой игре сайта
+--  (+3, до 15 раз в день — триггер на game_log), бонус дня (coins_daily, 20), задание дня (+30 — триггер на xp_ledger),
+--  реклама за награду (coins_ad: +25 до 6 раз в день или «×2 за забег» до 3 раз в день). VIP и персонал получают за
+--  забеги и бонус дня вдвое больше. Награды лестницы уровней (+100…1000 🪙, источник 'level') начисляет economy.sql.
 --  На что: возрождение (30), герои и улучшения «Орды», части своего персонажа (coins_buy, цены — coin_price).
+--  Части «за уровень» (coin_level_item): цена 0, не продаются, char_save надевает их только с нужного уровня (user_level).
 --  Персонаж: надетое — coin_wallet.look, сохраняет char_save (только своё, бесплатное или VIP-часть у VIP),
 --  чужих показывает char_looks (рекорды, профиль, игры вдвоём). В look — и части 3D-человечка «Мира Денчика»
 --  (фигура, кожа, рост, причёска, одежда, аксессуары…) и цвета из палитры: «x» + 6 hex-цифр (xff8800), бесплатно.
@@ -18,7 +20,8 @@
 --
 --  Как и с очками игр, сервер верит клиенту только в пределах лимитов: монеты тратятся только на
 --  игровое, поэтому накрутка в рамках лимитов ничего не ломает.
---  Проверка после запуска: select public.coin_price('hero:ninja'); → 400
+--  Проверка после запуска: select public.coin_price('hero:ninja'); → 400; /rpc/coin_rule {"p_key":"daily"} → 20
+--  (PGRST202 — старая версия файла); /rpc/coin_level_item {"p_item":"skin:pet:owl"} → 20.
 -- ═══════════════════════════════════════════════════════════════════
 
 create table if not exists public.coin_wallet (
@@ -71,10 +74,24 @@ create or replace function public.coin_today() returns date language sql stable 
   select (now() at time zone 'Europe/Moscow')::date
 $$;
 
+-- ── Все числа монет — здесь (как RULES в js/core/coins.js; scripts/economy-test.cjs сверяет) ──
+--   daily — бонус дня (VIP ×2); quest — задание дня; win / win_day — победа в игре и сколько раз в день; ad / ad_day / ad_gap —
+--   реклама за награду (монет, раз в день, секунд между); double_day — «×2 за забег» в день; run_day / run_gap — монет забегов
+--   в день на все игры и секунд между забегами; import — перенос гостевых монет; revive — возрождение и прочие «за 30»;
+--   unity_round — раунд Unity-игры (сайт даёт половину того, что просит игра, но не больше этого)
+create or replace function public.coin_rule(p_key text) returns int language sql immutable as $$
+  select case p_key
+    when 'daily' then 20 when 'quest' then 30 when 'win' then 3 when 'win_day' then 15
+    when 'ad' then 25 when 'ad_day' then 6 when 'ad_gap' then 45 when 'double_day' then 3
+    when 'run_day' then 600 when 'run_gap' then 20 when 'import' then 500 when 'revive' then 30 when 'unity_round' then 25
+  end
+$$;
+grant execute on function public.coin_rule(text) to anon, authenticated;
+
 -- Цены (как в coins.js и avatar.js). null — такого товара нет, 0 — бесплатная часть персонажа
 create or replace function public.coin_price(p_item text) returns int language sql immutable as $$
   select case
-    when p_item = 'revive' then 30
+    when p_item = 'revive' then public.coin_rule('revive')
     when p_item = 'hero:ninja' then 400
     when p_item = 'hero:knight' then 400
     when p_item = 'hero:vampire' then 800
@@ -93,97 +110,99 @@ create or replace function public.coin_price(p_item text) returns int language s
       ('skin:hat:helmet', 150), ('skin:hat:army', 150), ('skin:hat:top', 200), ('skin:hat:ears', 200), ('skin:hat:horns', 250),
       ('skin:hat:propeller', 250), ('skin:hat:halo', 300), ('skin:hat:crown', 800), ('skin:hat:headphones', 3000), ('skin:item:none', 0),
       ('skin:item:rose', 80), ('skin:item:pizza', 80), ('skin:item:balloon', 100), ('skin:item:mic', 100), ('skin:item:gamepad', 120),
-      ('skin:item:flashlight', 120), ('skin:item:sword', 150), ('skin:item:trophy', 300), ('skin:pet:none', 0), ('skin:pet:dog', 300),
-      ('skin:pet:cat', 300), ('skin:pet:frog', 300), ('skin:pet:fox', 400), ('skin:pet:ghost', 400), ('skin:pet:robot', 500),
-      ('skin:pet:unicorn', 700), ('skin:pet:dragon', 900), ('skin:trail:none', 0), ('skin:trail:dust', 100), ('skin:trail:sparks', 250),
+      ('skin:item:flashlight', 120), ('skin:item:sword', 150), ('skin:item:trophy', 300), ('skin:item:medal', 0), ('skin:item:orb', 0),
+      ('skin:pet:none', 0), ('skin:pet:dog', 300), ('skin:pet:cat', 300), ('skin:pet:frog', 300), ('skin:pet:fox', 400),
+      ('skin:pet:ghost', 400), ('skin:pet:robot', 500), ('skin:pet:unicorn', 700), ('skin:pet:dragon', 900), ('skin:pet:owl', 0),
+      ('skin:pet:wolf', 0), ('skin:pet:eagle', 0), ('skin:trail:none', 0), ('skin:trail:dust', 100), ('skin:trail:sparks', 250),
       ('skin:trail:hearts', 250), ('skin:trail:notes', 300), ('skin:trail:stars', 300), ('skin:trail:fire', 350), ('skin:trail:rainbow', 3000),
-      ('skin:body:boy', 0), ('skin:body:girl', 0), ('skin:tone:t1', 0), ('skin:tone:t2', 0), ('skin:tone:t3', 0),
-      ('skin:tone:t4', 0), ('skin:tone:t5', 0), ('skin:tone:t6', 0), ('skin:tone:t7', 0), ('skin:tone:t8', 0),
-      ('skin:tone:zombie', 0), ('skin:tone:alien', 0), ('skin:tone:fairy', 0), ('skin:tone:robot', 0), ('skin:tone:goldskin', 1000),
-      ('skin:hgt:0', 0), ('skin:hgt:1', 0), ('skin:hgt:2', 0), ('skin:hgt:3', 0), ('skin:hgt:4', 0),
-      ('skin:wid:0', 0), ('skin:wid:1', 0), ('skin:wid:2', 0), ('skin:wid:3', 0), ('skin:wid:4', 0),
-      ('skin:head:0', 0), ('skin:head:1', 0), ('skin:head:2', 0), ('skin:head:3', 0), ('skin:head:4', 0),
-      ('skin:eyec:brown', 0), ('skin:eyec:dark', 0), ('skin:eyec:blue', 0), ('skin:eyec:green', 0), ('skin:eyec:gray', 0),
-      ('skin:eyec:amber', 0), ('skin:eyec:violet', 0), ('skin:eyec:pink', 0), ('skin:eyec:red', 0), ('skin:eyec:gold', 0),
-      ('skin:eyec:glow', 300), ('skin:eyec:fire', 300), ('skin:brows:soft', 0), ('skin:brows:thin', 0), ('skin:brows:thick', 0),
-      ('skin:brows:angry', 0), ('skin:brows:none', 0), ('skin:lash:no', 0), ('skin:lash:yes', 0), ('skin:lash:long', 40),
-      ('skin:cheek:blush', 0), ('skin:cheek:none', 0), ('skin:cheek:freckles', 0), ('skin:cheek:both', 0), ('skin:cheek:stars', 80),
-      ('skin:cheek:hearts', 80), ('skin:hair:short', 0), ('skin:hair:side', 0), ('skin:hair:spiky', 0), ('skin:hair:curly', 0),
-      ('skin:hair:buzz', 0), ('skin:hair:bob', 0), ('skin:hair:ponytail', 0), ('skin:hair:long', 0), ('skin:hair:buns', 0),
-      ('skin:hair:bald', 0), ('skin:hair:twintails', 100), ('skin:hair:braid', 100), ('skin:hair:mohawk', 150), ('skin:hair:afro', 150),
-      ('skin:hair:wavy', 200), ('skin:hair:anime', 250), ('skin:hairc:black', 0), ('skin:hairc:dark', 0), ('skin:hairc:brown', 0),
-      ('skin:hairc:caramel', 0), ('skin:hairc:blond', 0), ('skin:hairc:ginger', 0), ('skin:hairc:platinum', 0), ('skin:hairc:pink', 0),
-      ('skin:hairc:blue', 0), ('skin:hairc:mint', 0), ('skin:hairc:purple', 0), ('skin:hairc:red', 0), ('skin:hairc:white', 0),
-      ('skin:hairc:neon', 600), ('skin:hairc:rainbow', 2000), ('skin:top:hoodie', 0), ('skin:top:tshirt', 0), ('skin:top:sweater', 0),
-      ('skin:top:dress', 0), ('skin:top:jacket', 100), ('skin:top:jersey', 300), ('skin:top:suit', 400), ('skin:trim:auto', 0),
-      ('skin:trim:white', 0), ('skin:trim:silver', 0), ('skin:trim:gray', 0), ('skin:trim:black', 0), ('skin:trim:red', 0),
-      ('skin:trim:orange', 0), ('skin:trim:yellow', 0), ('skin:trim:lime', 0), ('skin:trim:green', 0), ('skin:trim:teal', 0),
-      ('skin:trim:sky', 0), ('skin:trim:blue', 0), ('skin:trim:purple', 0), ('skin:trim:pink', 0), ('skin:trim:brown', 0),
-      ('skin:trim:beige', 0), ('skin:bottom:pants', 0), ('skin:bottom:jeans', 0), ('skin:bottom:shorts', 0), ('skin:bottom:skirt', 0),
-      ('skin:bottom:cargo', 80), ('skin:botc:graphite', 0), ('skin:botc:denim', 0), ('skin:botc:black', 0), ('skin:botc:khaki', 0),
-      ('skin:botc:beige', 0), ('skin:botc:white', 0), ('skin:botc:red', 0), ('skin:botc:pink', 0), ('skin:botc:purple', 0),
-      ('skin:botc:green', 0), ('skin:shoes:sneakers', 0), ('skin:shoes:kedy', 0), ('skin:shoes:boots', 60), ('skin:shoes:bunny', 200),
-      ('skin:shoec:white', 0), ('skin:shoec:black', 0), ('skin:shoec:red', 0), ('skin:shoec:blue', 0), ('skin:shoec:brown', 0),
-      ('skin:shoec:yellow', 0), ('skin:shoec:pink', 0), ('skin:shoec:green', 0), ('skin:hatc:auto', 0), ('skin:hatc:white', 0),
-      ('skin:hatc:silver', 0), ('skin:hatc:gray', 0), ('skin:hatc:black', 0), ('skin:hatc:red', 0), ('skin:hatc:orange', 0),
-      ('skin:hatc:yellow', 0), ('skin:hatc:lime', 0), ('skin:hatc:green', 0), ('skin:hatc:teal', 0), ('skin:hatc:sky', 0),
-      ('skin:hatc:blue', 0), ('skin:hatc:purple', 0), ('skin:hatc:pink', 0), ('skin:hatc:brown', 0), ('skin:hatc:beige', 0),
-      ('skin:glasses:none', 0), ('skin:glasses:round', 60), ('skin:glasses:square', 60), ('skin:glasses:heart', 120), ('skin:glasses:star', 150),
-      ('skin:glasses:monocle', 200), ('skin:glassc:auto', 0), ('skin:glassc:white', 0), ('skin:glassc:silver', 0), ('skin:glassc:gray', 0),
-      ('skin:glassc:black', 0), ('skin:glassc:red', 0), ('skin:glassc:orange', 0), ('skin:glassc:yellow', 0), ('skin:glassc:lime', 0),
-      ('skin:glassc:green', 0), ('skin:glassc:teal', 0), ('skin:glassc:sky', 0), ('skin:glassc:blue', 0), ('skin:glassc:purple', 0),
-      ('skin:glassc:pink', 0), ('skin:glassc:brown', 0), ('skin:glassc:beige', 0), ('skin:neck:none', 0), ('skin:neck:bowtie', 60),
-      ('skin:neck:tie', 60), ('skin:neck:scarf', 80), ('skin:neck:chain', 250), ('skin:neckc:auto', 0), ('skin:neckc:white', 0),
-      ('skin:neckc:silver', 0), ('skin:neckc:gray', 0), ('skin:neckc:black', 0), ('skin:neckc:red', 0), ('skin:neckc:orange', 0),
-      ('skin:neckc:yellow', 0), ('skin:neckc:lime', 0), ('skin:neckc:green', 0), ('skin:neckc:teal', 0), ('skin:neckc:sky', 0),
-      ('skin:neckc:blue', 0), ('skin:neckc:purple', 0), ('skin:neckc:pink', 0), ('skin:neckc:brown', 0), ('skin:neckc:beige', 0),
-      ('skin:back:none', 0), ('skin:back:backpack', 100), ('skin:back:tail', 150), ('skin:back:guitar', 250), ('skin:back:cape', 300),
-      ('skin:back:wings', 600), ('skin:back:batwings', 600), ('skin:back:dragon', 3000), ('skin:backc:auto', 0), ('skin:backc:white', 0),
-      ('skin:backc:silver', 0), ('skin:backc:gray', 0), ('skin:backc:black', 0), ('skin:backc:red', 0), ('skin:backc:orange', 0),
-      ('skin:backc:yellow', 0), ('skin:backc:lime', 0), ('skin:backc:green', 0), ('skin:backc:teal', 0), ('skin:backc:sky', 0),
-      ('skin:backc:blue', 0), ('skin:backc:purple', 0), ('skin:backc:pink', 0), ('skin:backc:brown', 0), ('skin:backc:beige', 0),
-      ('skin:psh:round', 0), ('skin:psh:egg', 0), ('skin:psh:wide', 0), ('skin:psh:block', 0), ('skin:psh:cube', 80),
-      ('skin:psh:robot', 700), ('skin:psh:knight', 900), ('skin:pst:base', 0), ('skin:pst:block', 0), ('skin:pst:slim', 0),
-      ('skin:pst:chunky', 250), ('skin:pst:robot', 700), ('skin:pst:knight', 900), ('skin:psal:base', 0), ('skin:psal:block', 0),
-      ('skin:psal:slim', 0), ('skin:psal:chunky', 250), ('skin:psal:robot', 700), ('skin:psal:knight', 900), ('skin:psar:base', 0),
-      ('skin:psar:block', 0), ('skin:psar:slim', 0), ('skin:psar:chunky', 250), ('skin:psar:robot', 700), ('skin:psar:knight', 900),
-      ('skin:psll:base', 0), ('skin:psll:block', 0), ('skin:psll:slim', 0), ('skin:psll:chunky', 250), ('skin:psll:robot', 700),
-      ('skin:psll:knight', 900), ('skin:pslr:base', 0), ('skin:pslr:block', 0), ('skin:pslr:slim', 0), ('skin:pslr:chunky', 250),
-      ('skin:pslr:robot', 700), ('skin:pslr:knight', 900), ('skin:pch:auto', 0), ('skin:pch:t1', 0), ('skin:pch:t2', 0),
-      ('skin:pch:t3', 0), ('skin:pch:t4', 0), ('skin:pch:t5', 0), ('skin:pch:t6', 0), ('skin:pch:t7', 0),
-      ('skin:pch:t8', 0), ('skin:pch:zombie', 0), ('skin:pch:alien', 0), ('skin:pch:fairy', 0), ('skin:pch:robot', 0),
-      ('skin:pch:yellow', 0), ('skin:pch:blue', 0), ('skin:pch:green', 0), ('skin:pch:red', 0), ('skin:pch:white', 0),
-      ('skin:pch:black', 0), ('skin:pch:orange', 0), ('skin:pch:purple', 0), ('skin:pch:pink', 0), ('skin:pch:teal', 0),
-      ('skin:pct:auto', 0), ('skin:pct:t1', 0), ('skin:pct:t2', 0), ('skin:pct:t3', 0), ('skin:pct:t4', 0),
-      ('skin:pct:t5', 0), ('skin:pct:t6', 0), ('skin:pct:t7', 0), ('skin:pct:t8', 0), ('skin:pct:zombie', 0),
-      ('skin:pct:alien', 0), ('skin:pct:fairy', 0), ('skin:pct:robot', 0), ('skin:pct:yellow', 0), ('skin:pct:blue', 0),
-      ('skin:pct:green', 0), ('skin:pct:red', 0), ('skin:pct:white', 0), ('skin:pct:black', 0), ('skin:pct:orange', 0),
-      ('skin:pct:purple', 0), ('skin:pct:pink', 0), ('skin:pct:teal', 0), ('skin:pcal:auto', 0), ('skin:pcal:t1', 0),
-      ('skin:pcal:t2', 0), ('skin:pcal:t3', 0), ('skin:pcal:t4', 0), ('skin:pcal:t5', 0), ('skin:pcal:t6', 0),
-      ('skin:pcal:t7', 0), ('skin:pcal:t8', 0), ('skin:pcal:zombie', 0), ('skin:pcal:alien', 0), ('skin:pcal:fairy', 0),
-      ('skin:pcal:robot', 0), ('skin:pcal:yellow', 0), ('skin:pcal:blue', 0), ('skin:pcal:green', 0), ('skin:pcal:red', 0),
-      ('skin:pcal:white', 0), ('skin:pcal:black', 0), ('skin:pcal:orange', 0), ('skin:pcal:purple', 0), ('skin:pcal:pink', 0),
-      ('skin:pcal:teal', 0), ('skin:pcar:auto', 0), ('skin:pcar:t1', 0), ('skin:pcar:t2', 0), ('skin:pcar:t3', 0),
-      ('skin:pcar:t4', 0), ('skin:pcar:t5', 0), ('skin:pcar:t6', 0), ('skin:pcar:t7', 0), ('skin:pcar:t8', 0),
-      ('skin:pcar:zombie', 0), ('skin:pcar:alien', 0), ('skin:pcar:fairy', 0), ('skin:pcar:robot', 0), ('skin:pcar:yellow', 0),
-      ('skin:pcar:blue', 0), ('skin:pcar:green', 0), ('skin:pcar:red', 0), ('skin:pcar:white', 0), ('skin:pcar:black', 0),
-      ('skin:pcar:orange', 0), ('skin:pcar:purple', 0), ('skin:pcar:pink', 0), ('skin:pcar:teal', 0), ('skin:pcll:auto', 0),
-      ('skin:pcll:t1', 0), ('skin:pcll:t2', 0), ('skin:pcll:t3', 0), ('skin:pcll:t4', 0), ('skin:pcll:t5', 0),
-      ('skin:pcll:t6', 0), ('skin:pcll:t7', 0), ('skin:pcll:t8', 0), ('skin:pcll:zombie', 0), ('skin:pcll:alien', 0),
-      ('skin:pcll:fairy', 0), ('skin:pcll:robot', 0), ('skin:pcll:yellow', 0), ('skin:pcll:blue', 0), ('skin:pcll:green', 0),
-      ('skin:pcll:red', 0), ('skin:pcll:white', 0), ('skin:pcll:black', 0), ('skin:pcll:orange', 0), ('skin:pcll:purple', 0),
-      ('skin:pcll:pink', 0), ('skin:pcll:teal', 0), ('skin:pclr:auto', 0), ('skin:pclr:t1', 0), ('skin:pclr:t2', 0),
-      ('skin:pclr:t3', 0), ('skin:pclr:t4', 0), ('skin:pclr:t5', 0), ('skin:pclr:t6', 0), ('skin:pclr:t7', 0),
-      ('skin:pclr:t8', 0), ('skin:pclr:zombie', 0), ('skin:pclr:alien', 0), ('skin:pclr:fairy', 0), ('skin:pclr:robot', 0),
-      ('skin:pclr:yellow', 0), ('skin:pclr:blue', 0), ('skin:pclr:green', 0), ('skin:pclr:red', 0), ('skin:pclr:white', 0),
-      ('skin:pclr:black', 0), ('skin:pclr:orange', 0), ('skin:pclr:purple', 0), ('skin:pclr:pink', 0), ('skin:pclr:teal', 0),
-      ('skin:face:anime', 0), ('skin:face:classic', 0), ('skin:face:toon', 0), ('skin:face:dots', 0), ('skin:face:kawaii', 150),
-      ('skin:glove:none', 0), ('skin:glove:wrist', 40), ('skin:glove:mitts', 60), ('skin:glove:gloves', 80), ('skin:glove:watch', 120),
-      ('skin:glove:boxing', 200), ('skin:glovec:auto', 0), ('skin:glovec:white', 0), ('skin:glovec:silver', 0), ('skin:glovec:gray', 0),
-      ('skin:glovec:black', 0), ('skin:glovec:red', 0), ('skin:glovec:orange', 0), ('skin:glovec:yellow', 0), ('skin:glovec:lime', 0),
-      ('skin:glovec:green', 0), ('skin:glovec:teal', 0), ('skin:glovec:sky', 0), ('skin:glovec:blue', 0), ('skin:glovec:purple', 0),
-      ('skin:glovec:pink', 0), ('skin:glovec:brown', 0), ('skin:glovec:beige', 0), ('skin:pack:base', 0), ('skin:pack:block', 0),
-      ('skin:pack:slim', 0), ('skin:pack:chunky', 250), ('skin:pack:robot', 700), ('skin:pack:knight', 900)
+      ('skin:trail:leaves', 0), ('skin:trail:snow', 0), ('skin:trail:comet', 0), ('skin:trail:galaxy', 0), ('skin:body:boy', 0),
+      ('skin:body:girl', 0), ('skin:tone:t1', 0), ('skin:tone:t2', 0), ('skin:tone:t3', 0), ('skin:tone:t4', 0),
+      ('skin:tone:t5', 0), ('skin:tone:t6', 0), ('skin:tone:t7', 0), ('skin:tone:t8', 0), ('skin:tone:zombie', 0),
+      ('skin:tone:alien', 0), ('skin:tone:fairy', 0), ('skin:tone:robot', 0), ('skin:tone:goldskin', 1000), ('skin:hgt:0', 0),
+      ('skin:hgt:1', 0), ('skin:hgt:2', 0), ('skin:hgt:3', 0), ('skin:hgt:4', 0), ('skin:wid:0', 0),
+      ('skin:wid:1', 0), ('skin:wid:2', 0), ('skin:wid:3', 0), ('skin:wid:4', 0), ('skin:head:0', 0),
+      ('skin:head:1', 0), ('skin:head:2', 0), ('skin:head:3', 0), ('skin:head:4', 0), ('skin:eyec:brown', 0),
+      ('skin:eyec:dark', 0), ('skin:eyec:blue', 0), ('skin:eyec:green', 0), ('skin:eyec:gray', 0), ('skin:eyec:amber', 0),
+      ('skin:eyec:violet', 0), ('skin:eyec:pink', 0), ('skin:eyec:red', 0), ('skin:eyec:gold', 0), ('skin:eyec:glow', 300),
+      ('skin:eyec:fire', 300), ('skin:brows:soft', 0), ('skin:brows:thin', 0), ('skin:brows:thick', 0), ('skin:brows:angry', 0),
+      ('skin:brows:none', 0), ('skin:lash:no', 0), ('skin:lash:yes', 0), ('skin:lash:long', 40), ('skin:cheek:blush', 0),
+      ('skin:cheek:none', 0), ('skin:cheek:freckles', 0), ('skin:cheek:both', 0), ('skin:cheek:stars', 80), ('skin:cheek:hearts', 80),
+      ('skin:hair:short', 0), ('skin:hair:side', 0), ('skin:hair:spiky', 0), ('skin:hair:curly', 0), ('skin:hair:buzz', 0),
+      ('skin:hair:bob', 0), ('skin:hair:ponytail', 0), ('skin:hair:long', 0), ('skin:hair:buns', 0), ('skin:hair:bald', 0),
+      ('skin:hair:twintails', 100), ('skin:hair:braid', 100), ('skin:hair:mohawk', 150), ('skin:hair:afro', 150), ('skin:hair:wavy', 200),
+      ('skin:hair:anime', 250), ('skin:hairc:black', 0), ('skin:hairc:dark', 0), ('skin:hairc:brown', 0), ('skin:hairc:caramel', 0),
+      ('skin:hairc:blond', 0), ('skin:hairc:ginger', 0), ('skin:hairc:platinum', 0), ('skin:hairc:pink', 0), ('skin:hairc:blue', 0),
+      ('skin:hairc:mint', 0), ('skin:hairc:purple', 0), ('skin:hairc:red', 0), ('skin:hairc:white', 0), ('skin:hairc:neon', 600),
+      ('skin:hairc:rainbow', 2000), ('skin:top:hoodie', 0), ('skin:top:tshirt', 0), ('skin:top:sweater', 0), ('skin:top:dress', 0),
+      ('skin:top:jacket', 100), ('skin:top:jersey', 300), ('skin:top:suit', 400), ('skin:trim:auto', 0), ('skin:trim:white', 0),
+      ('skin:trim:silver', 0), ('skin:trim:gray', 0), ('skin:trim:black', 0), ('skin:trim:red', 0), ('skin:trim:orange', 0),
+      ('skin:trim:yellow', 0), ('skin:trim:lime', 0), ('skin:trim:green', 0), ('skin:trim:teal', 0), ('skin:trim:sky', 0),
+      ('skin:trim:blue', 0), ('skin:trim:purple', 0), ('skin:trim:pink', 0), ('skin:trim:brown', 0), ('skin:trim:beige', 0),
+      ('skin:bottom:pants', 0), ('skin:bottom:jeans', 0), ('skin:bottom:shorts', 0), ('skin:bottom:skirt', 0), ('skin:bottom:cargo', 80),
+      ('skin:botc:graphite', 0), ('skin:botc:denim', 0), ('skin:botc:black', 0), ('skin:botc:khaki', 0), ('skin:botc:beige', 0),
+      ('skin:botc:white', 0), ('skin:botc:red', 0), ('skin:botc:pink', 0), ('skin:botc:purple', 0), ('skin:botc:green', 0),
+      ('skin:shoes:sneakers', 0), ('skin:shoes:kedy', 0), ('skin:shoes:boots', 60), ('skin:shoes:bunny', 200), ('skin:shoec:white', 0),
+      ('skin:shoec:black', 0), ('skin:shoec:red', 0), ('skin:shoec:blue', 0), ('skin:shoec:brown', 0), ('skin:shoec:yellow', 0),
+      ('skin:shoec:pink', 0), ('skin:shoec:green', 0), ('skin:hatc:auto', 0), ('skin:hatc:white', 0), ('skin:hatc:silver', 0),
+      ('skin:hatc:gray', 0), ('skin:hatc:black', 0), ('skin:hatc:red', 0), ('skin:hatc:orange', 0), ('skin:hatc:yellow', 0),
+      ('skin:hatc:lime', 0), ('skin:hatc:green', 0), ('skin:hatc:teal', 0), ('skin:hatc:sky', 0), ('skin:hatc:blue', 0),
+      ('skin:hatc:purple', 0), ('skin:hatc:pink', 0), ('skin:hatc:brown', 0), ('skin:hatc:beige', 0), ('skin:glasses:none', 0),
+      ('skin:glasses:round', 60), ('skin:glasses:square', 60), ('skin:glasses:heart', 120), ('skin:glasses:star', 150), ('skin:glasses:monocle', 200),
+      ('skin:glassc:auto', 0), ('skin:glassc:white', 0), ('skin:glassc:silver', 0), ('skin:glassc:gray', 0), ('skin:glassc:black', 0),
+      ('skin:glassc:red', 0), ('skin:glassc:orange', 0), ('skin:glassc:yellow', 0), ('skin:glassc:lime', 0), ('skin:glassc:green', 0),
+      ('skin:glassc:teal', 0), ('skin:glassc:sky', 0), ('skin:glassc:blue', 0), ('skin:glassc:purple', 0), ('skin:glassc:pink', 0),
+      ('skin:glassc:brown', 0), ('skin:glassc:beige', 0), ('skin:neck:none', 0), ('skin:neck:bowtie', 60), ('skin:neck:tie', 60),
+      ('skin:neck:scarf', 80), ('skin:neck:chain', 250), ('skin:neckc:auto', 0), ('skin:neckc:white', 0), ('skin:neckc:silver', 0),
+      ('skin:neckc:gray', 0), ('skin:neckc:black', 0), ('skin:neckc:red', 0), ('skin:neckc:orange', 0), ('skin:neckc:yellow', 0),
+      ('skin:neckc:lime', 0), ('skin:neckc:green', 0), ('skin:neckc:teal', 0), ('skin:neckc:sky', 0), ('skin:neckc:blue', 0),
+      ('skin:neckc:purple', 0), ('skin:neckc:pink', 0), ('skin:neckc:brown', 0), ('skin:neckc:beige', 0), ('skin:back:none', 0),
+      ('skin:back:backpack', 100), ('skin:back:tail', 150), ('skin:back:guitar', 250), ('skin:back:cape', 300), ('skin:back:wings', 600),
+      ('skin:back:batwings', 600), ('skin:back:dragon', 3000), ('skin:backc:auto', 0), ('skin:backc:white', 0), ('skin:backc:silver', 0),
+      ('skin:backc:gray', 0), ('skin:backc:black', 0), ('skin:backc:red', 0), ('skin:backc:orange', 0), ('skin:backc:yellow', 0),
+      ('skin:backc:lime', 0), ('skin:backc:green', 0), ('skin:backc:teal', 0), ('skin:backc:sky', 0), ('skin:backc:blue', 0),
+      ('skin:backc:purple', 0), ('skin:backc:pink', 0), ('skin:backc:brown', 0), ('skin:backc:beige', 0), ('skin:psh:round', 0),
+      ('skin:psh:egg', 0), ('skin:psh:wide', 0), ('skin:psh:block', 0), ('skin:psh:cube', 80), ('skin:psh:robot', 700),
+      ('skin:psh:knight', 900), ('skin:pst:base', 0), ('skin:pst:block', 0), ('skin:pst:slim', 0), ('skin:pst:chunky', 250),
+      ('skin:pst:robot', 700), ('skin:pst:knight', 900), ('skin:psal:base', 0), ('skin:psal:block', 0), ('skin:psal:slim', 0),
+      ('skin:psal:chunky', 250), ('skin:psal:robot', 700), ('skin:psal:knight', 900), ('skin:psar:base', 0), ('skin:psar:block', 0),
+      ('skin:psar:slim', 0), ('skin:psar:chunky', 250), ('skin:psar:robot', 700), ('skin:psar:knight', 900), ('skin:psll:base', 0),
+      ('skin:psll:block', 0), ('skin:psll:slim', 0), ('skin:psll:chunky', 250), ('skin:psll:robot', 700), ('skin:psll:knight', 900),
+      ('skin:pslr:base', 0), ('skin:pslr:block', 0), ('skin:pslr:slim', 0), ('skin:pslr:chunky', 250), ('skin:pslr:robot', 700),
+      ('skin:pslr:knight', 900), ('skin:pch:auto', 0), ('skin:pch:t1', 0), ('skin:pch:t2', 0), ('skin:pch:t3', 0),
+      ('skin:pch:t4', 0), ('skin:pch:t5', 0), ('skin:pch:t6', 0), ('skin:pch:t7', 0), ('skin:pch:t8', 0),
+      ('skin:pch:zombie', 0), ('skin:pch:alien', 0), ('skin:pch:fairy', 0), ('skin:pch:robot', 0), ('skin:pch:yellow', 0),
+      ('skin:pch:blue', 0), ('skin:pch:green', 0), ('skin:pch:red', 0), ('skin:pch:white', 0), ('skin:pch:black', 0),
+      ('skin:pch:orange', 0), ('skin:pch:purple', 0), ('skin:pch:pink', 0), ('skin:pch:teal', 0), ('skin:pct:auto', 0),
+      ('skin:pct:t1', 0), ('skin:pct:t2', 0), ('skin:pct:t3', 0), ('skin:pct:t4', 0), ('skin:pct:t5', 0),
+      ('skin:pct:t6', 0), ('skin:pct:t7', 0), ('skin:pct:t8', 0), ('skin:pct:zombie', 0), ('skin:pct:alien', 0),
+      ('skin:pct:fairy', 0), ('skin:pct:robot', 0), ('skin:pct:yellow', 0), ('skin:pct:blue', 0), ('skin:pct:green', 0),
+      ('skin:pct:red', 0), ('skin:pct:white', 0), ('skin:pct:black', 0), ('skin:pct:orange', 0), ('skin:pct:purple', 0),
+      ('skin:pct:pink', 0), ('skin:pct:teal', 0), ('skin:pcal:auto', 0), ('skin:pcal:t1', 0), ('skin:pcal:t2', 0),
+      ('skin:pcal:t3', 0), ('skin:pcal:t4', 0), ('skin:pcal:t5', 0), ('skin:pcal:t6', 0), ('skin:pcal:t7', 0),
+      ('skin:pcal:t8', 0), ('skin:pcal:zombie', 0), ('skin:pcal:alien', 0), ('skin:pcal:fairy', 0), ('skin:pcal:robot', 0),
+      ('skin:pcal:yellow', 0), ('skin:pcal:blue', 0), ('skin:pcal:green', 0), ('skin:pcal:red', 0), ('skin:pcal:white', 0),
+      ('skin:pcal:black', 0), ('skin:pcal:orange', 0), ('skin:pcal:purple', 0), ('skin:pcal:pink', 0), ('skin:pcal:teal', 0),
+      ('skin:pcar:auto', 0), ('skin:pcar:t1', 0), ('skin:pcar:t2', 0), ('skin:pcar:t3', 0), ('skin:pcar:t4', 0),
+      ('skin:pcar:t5', 0), ('skin:pcar:t6', 0), ('skin:pcar:t7', 0), ('skin:pcar:t8', 0), ('skin:pcar:zombie', 0),
+      ('skin:pcar:alien', 0), ('skin:pcar:fairy', 0), ('skin:pcar:robot', 0), ('skin:pcar:yellow', 0), ('skin:pcar:blue', 0),
+      ('skin:pcar:green', 0), ('skin:pcar:red', 0), ('skin:pcar:white', 0), ('skin:pcar:black', 0), ('skin:pcar:orange', 0),
+      ('skin:pcar:purple', 0), ('skin:pcar:pink', 0), ('skin:pcar:teal', 0), ('skin:pcll:auto', 0), ('skin:pcll:t1', 0),
+      ('skin:pcll:t2', 0), ('skin:pcll:t3', 0), ('skin:pcll:t4', 0), ('skin:pcll:t5', 0), ('skin:pcll:t6', 0),
+      ('skin:pcll:t7', 0), ('skin:pcll:t8', 0), ('skin:pcll:zombie', 0), ('skin:pcll:alien', 0), ('skin:pcll:fairy', 0),
+      ('skin:pcll:robot', 0), ('skin:pcll:yellow', 0), ('skin:pcll:blue', 0), ('skin:pcll:green', 0), ('skin:pcll:red', 0),
+      ('skin:pcll:white', 0), ('skin:pcll:black', 0), ('skin:pcll:orange', 0), ('skin:pcll:purple', 0), ('skin:pcll:pink', 0),
+      ('skin:pcll:teal', 0), ('skin:pclr:auto', 0), ('skin:pclr:t1', 0), ('skin:pclr:t2', 0), ('skin:pclr:t3', 0),
+      ('skin:pclr:t4', 0), ('skin:pclr:t5', 0), ('skin:pclr:t6', 0), ('skin:pclr:t7', 0), ('skin:pclr:t8', 0),
+      ('skin:pclr:zombie', 0), ('skin:pclr:alien', 0), ('skin:pclr:fairy', 0), ('skin:pclr:robot', 0), ('skin:pclr:yellow', 0),
+      ('skin:pclr:blue', 0), ('skin:pclr:green', 0), ('skin:pclr:red', 0), ('skin:pclr:white', 0), ('skin:pclr:black', 0),
+      ('skin:pclr:orange', 0), ('skin:pclr:purple', 0), ('skin:pclr:pink', 0), ('skin:pclr:teal', 0), ('skin:face:anime', 0),
+      ('skin:face:classic', 0), ('skin:face:toon', 0), ('skin:face:dots', 0), ('skin:face:kawaii', 150), ('skin:glove:none', 0),
+      ('skin:glove:wrist', 40), ('skin:glove:mitts', 60), ('skin:glove:gloves', 80), ('skin:glove:watch', 120), ('skin:glove:boxing', 200),
+      ('skin:glovec:auto', 0), ('skin:glovec:white', 0), ('skin:glovec:silver', 0), ('skin:glovec:gray', 0), ('skin:glovec:black', 0),
+      ('skin:glovec:red', 0), ('skin:glovec:orange', 0), ('skin:glovec:yellow', 0), ('skin:glovec:lime', 0), ('skin:glovec:green', 0),
+      ('skin:glovec:teal', 0), ('skin:glovec:sky', 0), ('skin:glovec:blue', 0), ('skin:glovec:purple', 0), ('skin:glovec:pink', 0),
+      ('skin:glovec:brown', 0), ('skin:glovec:beige', 0), ('skin:pack:base', 0), ('skin:pack:block', 0), ('skin:pack:slim', 0),
+      ('skin:pack:chunky', 250), ('skin:pack:robot', 700), ('skin:pack:knight', 900)
     ) v(i, p) where v.i = p_item)
   end
 $$;
@@ -199,19 +218,28 @@ create or replace function public.coin_gems_item(p_item text) returns boolean la
   select p_item in ('skin:hat:gemcrown', 'skin:trail:gems', 'skin:back:gemwings')
 $$;
 
+-- Части персонажа «за уровень» (7-е поле в PARTS, генерирует scripts/gen-skin-sql.mjs): цена 0, не продаются, char_save
+-- надевает только с этого уровня. null — обычная часть
+create or replace function public.coin_level_item(p_item text) returns int language sql immutable as $$
+  select v.l from (values ('skin:item:medal', 35), ('skin:item:orb', 65), ('skin:pet:owl', 20), ('skin:pet:wolf', 55), ('skin:pet:eagle', 80), ('skin:trail:leaves', 10), ('skin:trail:snow', 45), ('skin:trail:comet', 70), ('skin:trail:galaxy', 90)) v(i, l) where v.i = p_item
+$$;
+grant execute on function public.coin_level_item(text) to anon, authenticated;
+
 -- Сколько монет можно принести из одного забега (как RUN_CAP в coins.js)
 create or replace function public.coin_run_cap(p_game text) returns int language sql immutable as $$
-  select case p_game when 'horde' then 300 when 'td' then 300 when 'blocks' then 150 when 'kosynka' then 40 when 'pauk' then 100 when 'freecell' then 30 when 'miner' then 60 when 'mahjong' then 40 when 'sudoku' then 60 end
+  select case p_game when 'horde' then 150 when 'td' then 150 when 'blocks' then 80 when 'kosynka' then 20 when 'pauk' then 50 when 'freecell' then 15 when 'miner' then 30 when 'mahjong' then 20 when 'sudoku' then 30 end
 $$;
 
 -- ── Состояние кошелька (для витрины) ──
 create or replace function public.coins_state()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare uid uuid := auth.uid(); w public.coin_wallet%rowtype;
+declare uid uuid := auth.uid(); w public.coin_wallet%rowtype; lv int;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   select * into w from public.coin_wallet where user_id = uid;
-  return jsonb_build_object('ok', true,
+  -- уровень — для частей «за уровень» (user_level — progression.sql)
+  if to_regprocedure('public.user_level(uuid)') is not null then lv := public.user_level(uid); end if;
+  return jsonb_build_object('ok', true, 'level', lv,
     'coins', coalesce(w.coins, 0),
     'items', to_jsonb(coalesce(w.items, '{}'::text[])),
     'look', coalesce(w.look, '{}'::jsonb),
@@ -223,22 +251,23 @@ begin
 end; $$;
 grant execute on function public.coins_state() to authenticated;
 
--- ── Бонус дня: 30 монет (VIP/персонал — 60), раз в сутки по МСК ──
+-- ── Бонус дня: coin_rule('daily') монет (VIP/персонал — вдвое), раз в сутки по МСК ──
 create or replace function public.coins_daily()
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); got int := 30; bal int;
+declare uid uuid := auth.uid(); n int := public.coin_rule('daily'); got int; bal int;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if exists (select 1 from public.coin_log where user_id = uid and source = 'daily' and ref = public.coin_today()::text) then
     return jsonb_build_object('ok', false, 'reason', 'done');
   end if;
-  bal := public.coin_add(uid, 30, 'daily', public.coin_today()::text);
-  if coalesce(public.has_perks(uid), false) then bal := public.coin_add(uid, 30, 'vip', 'daily'); got := 60; end if;
+  bal := public.coin_add(uid, n, 'daily', public.coin_today()::text);
+  got := n;
+  if coalesce(public.has_perks(uid), false) then bal := public.coin_add(uid, n, 'vip', 'daily'); got := 2 * n; end if;
   return jsonb_build_object('ok', true, 'got', got, 'coins', bal);
 end; $$;
 grant execute on function public.coins_daily() to authenticated;
 
--- ── Монеты из забега: p_ref — номер забега (один раз), не чаще раза в 20 с, до 1500 в день ──
+-- ── Монеты из забега: p_ref — номер забега (один раз), не чаще раза в run_gap секунд, до run_day в день ──
 create or replace function public.coins_run(p_game text, p_amount int, p_ref text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare uid uuid := auth.uid(); cap int := public.coin_run_cap(p_game); amt int; today int; bal int; got int;
@@ -248,11 +277,11 @@ begin
   if coalesce(p_ref, '') = '' or length(p_ref) > 40 then return jsonb_build_object('ok', false, 'reason', 'ref'); end if;
   amt := least(greatest(coalesce(p_amount, 0), 0), cap);
   if amt = 0 then return jsonb_build_object('ok', true, 'got', 0, 'coins', public.coin_add(uid, 0, '', '')); end if;
-  if exists (select 1 from public.coin_log where user_id = uid and source = 'run' and created_at > now() - interval '20 seconds') then
+  if exists (select 1 from public.coin_log where user_id = uid and source = 'run' and created_at > now() - make_interval(secs => public.coin_rule('run_gap'))) then
     return jsonb_build_object('ok', false, 'reason', 'too_fast');
   end if;
   select coalesce(sum(amount), 0) into today from public.coin_log where user_id = uid and source = 'run' and day = public.coin_today();
-  amt := least(amt, greatest(0, 1500 - today));
+  amt := least(amt, greatest(0, public.coin_rule('run_day') - today));
   if amt = 0 then return jsonb_build_object('ok', false, 'reason', 'day_cap'); end if;
   if exists (select 1 from public.coin_log where user_id = uid and source = 'run' and ref = p_ref) then
     return jsonb_build_object('ok', false, 'reason', 'dup');
@@ -265,24 +294,24 @@ end; $$;
 grant execute on function public.coins_run(text, int, text) to authenticated;
 
 -- ── Реклама за награду (кнопка «📺 Смотреть рекламу» — награда, только если досмотрел) ──
---   p_kind 'coins'  — +40 монет, до 8 раз в день, не чаще раза в 45 с;
---   p_kind 'double' — ещё столько же, сколько принёс забег p_ref (за последние 15 минут), до 5 раз в день.
+--   p_kind 'coins'  — coin_rule('ad') монет, до ad_day раз в день, не чаще раза в ad_gap секунд;
+--   p_kind 'double' — ещё столько же, сколько принёс забег p_ref (за последние 15 минут), до double_day раз в день.
 create or replace function public.coins_ad(p_kind text, p_ref text default '')
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); n int; run_amt int; bal int;
+declare uid uuid := auth.uid(); n int; run_amt int; bal int; got int := public.coin_rule('ad');
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if p_kind = 'coins' then
     select count(*) into n from public.coin_log where user_id = uid and source = 'ad' and day = public.coin_today();
-    if n >= 8 then return jsonb_build_object('ok', false, 'reason', 'day_cap'); end if;
-    if exists (select 1 from public.coin_log where user_id = uid and source = 'ad' and created_at > now() - interval '45 seconds') then
+    if n >= public.coin_rule('ad_day') then return jsonb_build_object('ok', false, 'reason', 'day_cap'); end if;
+    if exists (select 1 from public.coin_log where user_id = uid and source = 'ad' and created_at > now() - make_interval(secs => public.coin_rule('ad_gap'))) then
       return jsonb_build_object('ok', false, 'reason', 'too_fast');
     end if;
-    bal := public.coin_add(uid, 40, 'ad', '');
-    return jsonb_build_object('ok', true, 'got', 40, 'coins', bal);
+    bal := public.coin_add(uid, got, 'ad', '');
+    return jsonb_build_object('ok', true, 'got', got, 'coins', bal);
   elsif p_kind = 'double' then
     select count(*) into n from public.coin_log where user_id = uid and source = 'double' and day = public.coin_today();
-    if n >= 5 then return jsonb_build_object('ok', false, 'reason', 'day_cap'); end if;
+    if n >= public.coin_rule('double_day') then return jsonb_build_object('ok', false, 'reason', 'day_cap'); end if;
     select amount into run_amt from public.coin_log
       where user_id = uid and source = 'run' and ref = coalesce(p_ref, '') and created_at > now() - interval '15 minutes';
     if run_amt is null then return jsonb_build_object('ok', false, 'reason', 'run'); end if;
@@ -340,10 +369,10 @@ begin
 end; $$;
 grant execute on function public.coins_revive(text) to authenticated;
 
--- ── Перенос монет, накопленных без входа: один раз, до 1000 ──
+-- ── Перенос монет, накопленных без входа: один раз, до coin_rule('import') ──
 create or replace function public.coins_import(p_amount int)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); amt int := least(greatest(coalesce(p_amount, 0), 0), 1000); bal int;
+declare uid uuid := auth.uid(); amt int := least(greatest(coalesce(p_amount, 0), 0), public.coin_rule('import')); bal int;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if exists (select 1 from public.coin_log where user_id = uid and source = 'import') then
@@ -355,10 +384,11 @@ begin
 end; $$;
 grant execute on function public.coins_import(int) to authenticated;
 
--- ── Надеть персонажа: каждая часть — бесплатная, купленная или VIP-часть у VIP/персонала ──
+-- ── Надеть персонажа: каждая часть — бесплатная, купленная, VIP-часть у VIP/персонала или «за уровень» с нужного уровня ──
 create or replace function public.char_save(p_look jsonb)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare uid uuid := auth.uid(); slot text; val text; item text; pr int; owned text[]; perks boolean; clean jsonb := '{}'::jsonb;
+  need_lv int; my_lv int;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if p_look is null or jsonb_typeof(p_look) <> 'object' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
@@ -373,6 +403,16 @@ begin
     item := 'skin:' || slot || ':' || val;
     -- части тела из пакетов (робот, рыцарь, силач…): купил пакет — носишь любую его часть
     if slot = any(array['psh', 'pst', 'psal', 'psar', 'psll', 'pslr']) and public.coin_price('skin:pack:' || val) is not null then item := 'skin:pack:' || val; end if;
+    -- часть «за уровень»: бесплатно, но только с нужного уровня (уровень не падает — снимать потом не нужно)
+    need_lv := public.coin_level_item(item);
+    if need_lv is not null then
+      if my_lv is null then
+        if to_regprocedure('public.user_level(uuid)') is not null then my_lv := public.user_level(uid); else my_lv := 1; end if;
+      end if;
+      if my_lv < need_lv then return jsonb_build_object('ok', false, 'reason', 'level', 'item', item, 'need', need_lv); end if;
+      clean := clean || jsonb_build_object(slot, val);
+      continue;
+    end if;
     pr := public.coin_price(item);
     -- цены в монетах нет: куплено за 💎 (или снято с продажи) — надеть можно, если вещь есть в кошельке
     if pr is null then
@@ -398,14 +438,14 @@ returns table(user_id uuid, look jsonb) language sql stable security definer set
 $$;
 grant execute on function public.char_looks(uuid[]) to anon, authenticated;
 
--- ── Победа в любой игре сайта: +5 монет, до 20 раз в день (пишет game_result через game_log) ──
+-- ── Победа в любой игре сайта: +coin_rule('win') монет, до win_day раз в день (пишет game_result через game_log) ──
 create or replace function public.coins_on_game_win()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.win then
     begin
-      if (select count(*) from public.coin_log where user_id = new.user_id and source = 'win' and day = public.coin_today()) < 20 then
-        perform public.coin_add(new.user_id, 5, 'win', new.game);
+      if (select count(*) from public.coin_log where user_id = new.user_id and source = 'win' and day = public.coin_today()) < public.coin_rule('win_day') then
+        perform public.coin_add(new.user_id, public.coin_rule('win'), 'win', new.game);
       end if;
     exception when others then null;   -- монеты никогда не ломают запись результата
     end;
@@ -416,14 +456,14 @@ drop trigger if exists trg_coins_on_game_win on public.game_log;
 create trigger trg_coins_on_game_win after insert on public.game_log
   for each row execute function public.coins_on_game_win();
 
--- ── Задание дня выполнено (claim_daily_quest пишет XP с source 'daily'): +50 монет ──
+-- ── Задание дня выполнено (claim_daily_quest пишет XP с source 'daily'): +coin_rule('quest') монет ──
 create or replace function public.coins_on_daily_quest()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.source = 'daily' then
     begin
       if not exists (select 1 from public.coin_log where user_id = new.user_id and source = 'quest' and ref = new.ref) then
-        perform public.coin_add(new.user_id, 50, 'quest', new.ref);
+        perform public.coin_add(new.user_id, public.coin_rule('quest'), 'quest', new.ref);
       end if;
     exception when others then null;
     end;

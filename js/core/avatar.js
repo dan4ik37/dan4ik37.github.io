@@ -4,7 +4,8 @@
 // Рисуется кодом на canvas (без картинок): D37Char.draw(ctx, look, x, y, size) — ноги в точке (x, y),
 // size — рост. Для игр быстрее D37Char.sprite(look, px) — готовый canvas, рисовать drawImage.
 // Части покупаются за монеты (js/core/coins.js, предмет 'skin:<слот>:<id>'); цена 0 — доступна всем;
-// vip — бесплатно для VIP/персонала или за монеты; 💎 — только за кристаллы в магазине #/shop. Части тела (формы ps*)
+// vip — бесплатно для VIP/персонала или за монеты; 💎 — только за кристаллы в магазине #/shop; уровень (7-е поле) —
+// бесплатно, но только с этого уровня (награды лестницы уровней, economy.sql; сервер сверяет в char_save). Части тела (формы ps*)
 // из пакетов PACKS покупаются пакетом ('skin:pack:<id>') — buyItem() говорит, что купить. Цены — coin_price() в
 // coins.sql: после правки PARTS/PACKS — node scripts/gen-skin-sql.mjs и node scripts/char-test.cjs.
 // Надетое (look) — в базе (char_save / char_looks в coins.sql) или в браузере (d37_char), пока не вошёл.
@@ -13,11 +14,14 @@
 (() => {
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   const TAU = Math.PI * 2;
-  // [id, название, цена, значение (цвет / эмодзи), vip, 💎]
+  // [id, название, цена, значение (цвет / эмодзи), vip, 💎, уровень]
   // Палитра (pal: 1): кроме готовых цветов — любой свой, id «x» + 6 hex-цифр (xff8800), бесплатно. Обычные цвета бесплатны,
   // за монеты — особые материалы (радуга, космос, золото, светящиеся глаза, неоновые и переливающиеся волосы).
   // 💎 (6-е поле) — цена в кристаллах: вещь только из магазина #/shop (js/core/premium.js, premium_spend кладёт её в
   // coin_wallet.items), за монеты не продаётся (D37Coins.buy откажет, coin_price в базе — null).
+  // Уровень (7-е поле) — награда лестницы уровней (LEVEL_REWARDS в xp.js, level_ladder в economy.sql): цена 0, не продаётся,
+  // носить — с этого уровня (coin_level_item в coins.sql, тоже из этого списка — scripts/gen-skin-sql.mjs). Только эмодзи-вещи
+  // (в руке, питомец, след): их рисуют и 2D, и 3D без новых моделей.
   const CUSTOM = /^x[0-9a-f]{6}$/;
   const BASE = [
     ['white', 'Белый', '#f4f5f7'], ['silver', 'Светло-серый', '#c9ced8'], ['gray', 'Серый', '#7d8696'], ['black', 'Чёрный', '#25252d'],
@@ -69,16 +73,20 @@
       ['none', 'Ничего', 0], ['rose', 'Роза', 80, '🌹'], ['pizza', 'Пицца', 80, '🍕'], ['balloon', 'Шарик', 100, '🎈'],
       ['mic', 'Микрофон', 100, '🎤'], ['gamepad', 'Геймпад', 120, '🎮'], ['flashlight', 'Фонарик', 120, '🔦'],
       ['sword', 'Меч', 150, '🗡️'], ['trophy', 'Кубок', 300, '🏆'],
+      ['medal', 'Медаль', 0, '🏅', 0, 0, 35], ['orb', 'Хрустальный шар', 0, '🔮', 0, 0, 65],
     ] },
     pet: { name: 'Питомец', icon: '🐾', list: [
       ['none', 'Без питомца', 0], ['dog', 'Пёсик', 300, '🐶'], ['cat', 'Котик', 300, '🐱'], ['frog', 'Лягушка', 300, '🐸'],
       ['fox', 'Лис', 400, '🦊'], ['ghost', 'Призрак', 400, '👻'], ['robot', 'Робот', 500, '🤖'], ['unicorn', 'Единорог', 700, '🦄'],
       ['dragon', 'Дракончик', 900, '🐲'],
+      ['owl', 'Совёнок', 0, '🦉', 0, 0, 20], ['wolf', 'Волчонок', 0, '🐺', 0, 0, 55], ['eagle', 'Орёл', 0, '🦅', 0, 0, 80],
     ] },
     trail: { name: 'След', icon: '✨', list: [
       ['none', 'Без следа', 0], ['dust', 'Пыль', 100, '💨'], ['sparks', 'Искры', 250, '✨'], ['hearts', 'Сердечки', 250, '💕'],
       ['notes', 'Ноты', 300, '🎵'], ['stars', 'Звёзды', 300, '⭐'], ['fire', 'Огонь', 350, '🔥'], ['rainbow', 'Радуга', 3000, '🌈', 1],
       ['gems', 'След из кристаллов', 0, '💎', 0, 100],
+      ['leaves', 'Листопад', 0, '🍂', 0, 0, 10], ['snow', 'Снежинки', 0, '❄️', 0, 0, 45], ['comet', 'Кометы', 0, '☄️', 0, 0, 70],
+      ['galaxy', 'Галактика', 0, '🌌', 0, 0, 90],
     ] },
     // ── 3D-человечек («Мир Денчика», гардероб): тело, лицо, волосы, одежда, аксессуары и их цвета. В 2D-играх не рисуются
     //    (body: 1). Не выбрано (нет в look) — мир берёт по «отпечатку» игрока, чтобы толпа была разной (world3d.js → resolve)
@@ -178,12 +186,14 @@
   const LS = 'd37_char';
 
   const custom = (slot, id) => !!PARTS[slot]?.pal && CUSTOM.test(id || '');
-  // gems — цена в 💎 (вещь только из магазина); у таких price = gems, чтобы нигде не сойти за бесплатную
+  // gems — цена в 💎 (вещь только из магазина); у таких price = gems, чтобы нигде не сойти за бесплатную; lvl — с какого уровня
   const part = (slot, id) => {
-    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true, gems: 0, premium: false };
+    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true, gems: 0, premium: false, lvl: 0 };
     const p = PARTS[slot]?.list.find(x => x[0] === id) || PARTS[slot]?.list[0];
-    return p && { id: p[0], name: p[1], price: p[5] || p[2], v: p[3] || '', vip: !!p[4], gems: p[5] || 0, premium: !!p[5] };
+    return p && { id: p[0], name: p[1], price: p[5] || p[2], v: p[3] || '', vip: !!p[4], gems: p[5] || 0, premium: !!p[5], lvl: p[6] || 0 };
   };
+  // Уровень игрока — из кошелька (coins_state / user_level); гость — 0: вещи «за уровень» только у вошедших
+  const myLevel = () => { try { return +(window.D37Coins?.level?.() || 0); } catch (e) { return 0; } };
   // Часть из пакета (форма туловища/рук/ног, голова робота…) → сам пакет: { id, name, price, vip, gems } или null
   function packOf(slot, id){
     const pk = PARTS[slot]?.pack && Object.prototype.hasOwnProperty.call(PACKS, id) ? PACKS[id] : null;
@@ -194,7 +204,7 @@
     const pk = packOf(slot, id);
     if (pk) return { item: 'skin:pack:' + id, name: `Пакет «${pk.name}»`, price: pk.price, vip: pk.vip, gems: pk.gems, premium: pk.premium, pack: id };
     const p = part(slot, id);
-    return p && { item: `skin:${slot}:${p.id}`, name: p.name, price: p.price, vip: p.vip, gems: p.gems, premium: p.premium };
+    return p && { item: `skin:${slot}:${p.id}`, name: p.name, price: p.price, vip: p.vip, gems: p.gems, premium: p.premium, lvl: p.lvl };
   }
   // Цена вещи: монеты, а у вещей только за 💎 — цена в кристаллах (магазин так узнаёт, что вещь есть в гардеробе;
   // за монеты её не продают — см. gemsOf)
@@ -214,6 +224,12 @@
     if (m[1] === 'pack') return Object.prototype.hasOwnProperty.call(PACKS, m[2]) ? PACKS[m[2]][3] || 0 : 0;
     const p = PARTS[m[1]]?.list.find(x => x[0] === m[2]);
     return p ? p[5] || 0 : 0;
+  }
+  // С какого уровня вещь (0 — обычная): награда лестницы уровней, не продаётся
+  function levelOf(item){
+    const m = /^skin:(\w+):(\w+)$/.exec(item || '');
+    const p = m && PARTS[m[1]]?.list.find(x => x[0] === m[2]);
+    return p ? p[6] || 0 : 0;
   }
   function norm(look){
     const L = { ...DEFAULT };
@@ -242,10 +258,11 @@
     return best;
   }
 
-  // ── Владение: бесплатное, купленное (сама часть или её пакет), VIP-часть у VIP/персонала ──
+  // ── Владение: бесплатное, купленное (сама часть или её пакет), VIP-часть у VIP/персонала, «за уровень» — с уровня ──
   function owns(slot, id){
     const p = part(slot, id);
     if (!p || p.id !== id) return false;
+    if (p.lvl) return myLevel() >= p.lvl;
     if (!p.price) return true;
     const C = window.D37Coins, b = buyItem(slot, id);
     return !!C && (C.owns(b.item) || (b.vip && C.perks()));
@@ -282,9 +299,9 @@
       // Новые части (формы и цвета частей тела, стиль лица, перчатки): пока coins.sql не запущен ещё раз, сервер их молча
       // выбрасывает — то, чего нет в базе, оставляем из браузера (иначе после входа рука робота пропадала бы)
       else { for (const s of BODY_SLOTS) if (!(s in look) && loc[s] !== undefined && srv[s] === undefined) srv[s] = loc[s]; }
-      // Вещи только за 💎 (корона, крылья, след из кристаллов): старый char_save их не принимает — купленное в магазине
+      // Вещи только за 💎 (корона, крылья, след из кристаллов) и «за уровень»: старый char_save их не принимает — своё
       // остаётся надетым из браузера (сервер про эту часть молчит; если там явно другое — верим серверу)
-      for (const s of SLOTS) if (!(s in look) && loc[s] !== undefined && gemsOf(`skin:${s}:${loc[s]}`) && owns(s, loc[s])) srv[s] = loc[s];
+      for (const s of SLOTS) if (!(s in look) && loc[s] !== undefined && (gemsOf(`skin:${s}:${loc[s]}`) || levelOf(`skin:${s}:${loc[s]}`)) && owns(s, loc[s])) srv[s] = loc[s];
       mine = srv;
       if (keep) window.D37Coins?.saveLook?.(mine);
       try { localStorage.setItem(LS, JSON.stringify(mine)); } catch (e) {}
@@ -693,7 +710,7 @@
   }
 
   window.D37Char = {
-    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, gemsOf, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
+    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, gemsOf, levelOf, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
     look: () => wearable(current()), set, fromServer,
     draw, sprite, img, trail, petEmoji, looksOf, drawWalker, walker,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },
