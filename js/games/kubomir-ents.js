@@ -366,7 +366,8 @@
       const A = (a, k) => new T.BufferAttribute(a, k).setUsage(T.DynamicDrawUsage);
       g.setAttribute('position', A(pos, 3)); g.setAttribute('color', A(col, 4)); g.setAttribute('aSize', A(siz, 1)); g.setDrawRange(0, 0);
       const m = new T.PointsMaterial({ size: 1, map: tex, vertexColors: true, transparent: true, depthWrite: false, blending: add ? T.AdditiveBlending : T.NormalBlending, toneMapped: !add });
-      m.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('uniform float size;', 'uniform float size;\nattribute float aSize;').replace('gl_PointSize = size;', 'gl_PointSize = size * aSize;'); };
+      // размер у каждой точки свой: правим шейдер точек three, только если оба места на месте (иначе — обычные точки)
+      m.onBeforeCompile = sh => { const vs = sh.vertexShader; if (vs.includes('uniform float size;') && vs.includes('gl_PointSize = size;')) sh.vertexShader = vs.replace('uniform float size;', 'uniform float size;\nattribute float aSize;').replace('gl_PointSize = size;', 'gl_PointSize = size * aSize;'); };
       m.customProgramCacheKey = () => 'kbpts1' + (add ? 'a' : 'n');
       const o = new T.Points(g, m); o.frustumCulled = false; o.visible = false; o.renderOrder = add ? 7 : 6; R.scene.add(o);
       const F = () => new Float32Array(N), D = () => new Float64Array(N);

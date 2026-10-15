@@ -441,6 +441,8 @@ function fakeWorld(sky, blk, walls = new Set()){
       X.placeFx(95, 10, 95, ID.planks_oak);
       X.frame(1 / 60, 0);
       const O = X.fxObjects(), st0 = X.fxStats();
+      { const sh = shaderOf('points'); O.puffs.material.onBeforeCompile(sh); const k1 = O.puffs.material.customProgramCacheKey(), k2 = O.glows.material.customProgramCacheKey();
+        ok(/attribute float aSize;/.test(sh.vertexShader) && /gl_PointSize = size \* aSize;/.test(sh.vertexShader) && incOk(sh.vertexShader) && k1 !== k2 && /^kbpts/.test(k1), 'точки клубов: свой размер у каждой — кусок шейдера three r149 на месте, свой ключ программы', [k1, k2]); }
       ok(st0.shards <= 96 && st0.shards > 0 && st0.puffs <= 160 && st0.glows <= 72 && O.shards.visible && O.puffs.visible, 'пулы ограничены (осколков ≤ 96, клубов ≤ 160, искр ≤ 72)', st0);
       let finite = true;
       for (let k = 0; k < 30; k++) {

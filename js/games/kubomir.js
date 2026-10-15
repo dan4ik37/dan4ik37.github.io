@@ -986,7 +986,7 @@
     const st = S; if (!st) return;
     const { R, P, rig, I, C, VR, A } = st, V = VX(), t = now() / 1000;
     // мобы, вещи и песок считаются 20 раз в секунду (каждый 3-й шаг логики) — рисуем их плавно: доля пути до следующего такта
-    if (st.ents) st.ents.frac = Math.min(1, ((st.steps % 3) + (alpha || 0)) / 3);
+    if (st.ents) st.ents.frac = P.dead || !st.ready ? 1 : Math.min(1, ((st.steps % 3) + (alpha || 0)) / 3);   // такты стоят — рисуем как есть
     const f = rig.fwd();
     st.ST.update(P.x, P.z, -f.x, -f.z);
     if (!st.ready) { loadingInfo(st); }
