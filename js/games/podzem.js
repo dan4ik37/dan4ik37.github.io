@@ -1666,8 +1666,9 @@
   function saveAll(){
     if (!G?.W || !G.CH) return Promise.resolve();
     if (saving) return saving;
+    const last = JSON.stringify({ w: G.W.id, c: G.CH.id });   // G к концу записи может уже смениться (вышли из игры)
     const p = Promise.all([saveChunks([...G.dirtySave]), DB.put('worlds', worldRecord()), DB.put('chars', charRecord())])
-      .then(() => { lsSet(LS_JOURNAL, null); lsSet(LS_LAST, JSON.stringify({ w: G.W.id, c: G.CH.id })); }, e => console.warn('Подземье: сохранение', e))
+      .then(() => { lsSet(LS_JOURNAL, null); lsSet(LS_LAST, last); }, e => console.warn('Подземье: сохранение', e))
       .finally(() => { saving = null; });
     saving = p;
     return p;
@@ -1752,10 +1753,14 @@
   }
 
   // ═══ Запуск мира ═══
+  let playTok = 0;
   async function play(worldId, charId){
+    const tok = ++playTok, g0 = G, gone = () => !G || G !== g0 || tok !== playTok;   // игру закрыли или нажали «играть» ещё раз, пока ждали базу
     const W = await DB.get('worlds', worldId), CH = await DB.get('chars', charId);
+    if (gone()) return;
     if (!W || !CH) { toast('Мир или персонаж не найден', 'bad'); return; }
     if (G.state !== 'menu') await stopWorld(true);
+    if (gone()) return;
     // старые сохранения: недостающие поля
     CH.inv = Array.from({ length: INV_N }, (_, i) => CH.inv?.[i] || null);
     if (!(CH.hp > 0)) CH.hp = CH.maxHp;   // сохранились мёртвыми (вкладку закрыли во время возрождения)
@@ -1769,8 +1774,11 @@
     G.U?.loading(true, 'Мир строится…');
     // моды мира
     await (G.modsStart ? G.modsStart(W) : Promise.resolve());
+    if (gone()) return;
     // сохранённые чанки — список ключей (без данных)
-    try { G.saved = new Set(await DB.keys('chunks', W.id + '|', W.id + '|￿')); } catch (e) { G.saved = new Set(); }
+    let saved; try { saved = new Set(await DB.keys('chunks', W.id + '|', W.id + '|￿')); } catch (e) { saved = new Set(); }
+    if (gone()) return;
+    G.saved = saved;
     // атлас (с блоками модов) и рисовальщик
     buildAtlas();
     G.worker?.stop();
@@ -1793,6 +1801,7 @@
   async function stopWorld(save){
     if (!G.W) { G.state = 'menu'; return; }
     if (save) await saveAll();
+    if (!G?.W) return;
     reportDepth();
     G.modsStop?.();
     G.worker?.stop(); G.worker = null;
