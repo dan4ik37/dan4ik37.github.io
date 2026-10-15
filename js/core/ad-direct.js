@@ -415,7 +415,7 @@
   if (!off && !perk()) setTimeout(freshLive, 0);
 
   window.D37AdDirect = {
-    has, wants, fill, ready, billboard, seen, about, cabinet, geo, section, refresh: () => loadLive(true),
+    has, wants, fill, ready, billboard, seen, about, cabinet, geo, section, refresh: () => loadLive(true), img: imgUrl,
     live: () => live, isOff: () => off, DEF,
     rules: { BAD_WORDS, SHORT_HOSTS, SIZES, KIND_GROUP, GROUP, textBad, urlBad, hostOf },
     _test: { pickFor, render, watch, chooseKind, imgUrl, session, rpc, shown, sent, watchers, setLive: v => { live = v; }, setOff: v => { off = v; }, groupOf, goHref, mark,

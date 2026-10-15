@@ -22,6 +22,7 @@ const PAGES = {
   games:      ['games-page'],
   shop:       ['shop-page'],
   ads:        ['ad-bottom','ads'],
+  adv:        ['adv-page'],      // 📣 кабинет рекламодателя (js/features/adcab.js грузится при входе)
   phone:      ['phone-page']     // телефон 📱 на странице (js/features/phone.js)
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
@@ -69,6 +70,7 @@ function finishShowPage(route, activeIds){
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
   if (route==='donate' && typeof renderDonateVipHint==='function') renderDonateVipHint();
   if (route==='shop' && typeof renderShopPage==='function') renderShopPage(currentRouteParam());
+  if (route==='adv') window.D37AdDirect?.cabinet?.(currentRouteParam());                            // 📣 реклама за 💎
   if (route==='chat' && typeof renderChatPage==='function') renderChatPage(currentRouteParam());     // чат «как Дискорд»
   if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, currentRouteParam());      // телефон 📱 на странице
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
