@@ -450,11 +450,22 @@ function renderPrivacySettings(profile){
   document.getElementById('pvInvisibleLock').hidden = canInv;
   document.getElementById('pvDonations').checked = !!profile.privacy_hide_donations;
   document.getElementById('pvStatus').textContent = '';
+  // Ребёнку до 13 (js/core/age.js; сервер включает это сам — age.sql): заявки в друзья — только когда сам зовёшь
+  const req = document.getElementById('pvRequests'), kid = !!window.D37Age?.kid?.();
+  let note = document.getElementById('pvKidNote');
+  if (kid && req && !note) { note = document.createElement('div'); note.id = 'pvKidNote'; note.className = 'pv-kid'; req.insertAdjacentElement('afterend', note); }
+  if (note) { note.hidden = !kid; note.textContent = '🔒 Тебе меньше 13: заявки «от всех» лучше включать вместе с родителями. Друзей можно звать самому — заявку отправляешь ты.'; }
 }
 
 async function savePrivacy(col, value){
   const st = document.getElementById('pvStatus');
   if (!sbClient || !currentUser) return;
+  // ребёнок открывает заявки «от всех» — переспросить (js/core/age.js)
+  if (col === 'privacy_friend_requests' && value === 'all' && window.D37Age?.kid?.()
+      && !confirm('Тебе меньше 13. Заявки в друзья «от всех» — это значит, что писать в друзья смогут и незнакомые люди. Включить? Лучше вместе с родителями.')) {
+    renderPrivacySettings(currentProfile || {});
+    return;
+  }
   st.style.color = 'var(--muted)'; st.textContent = 'Сохраняем...';
   const { error } = await sbClient.from('profiles').update({ [col]: value }).eq('id', currentUser.id);
   if (error) {

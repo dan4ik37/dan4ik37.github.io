@@ -527,6 +527,9 @@ html.d37-h18 [data-age="18"]{display:none!important}
 .age-rate{max-width:100%;height:34px;padding:0 .5rem;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:#0d0c15;color:#f0f0f8;font:700 .74rem Montserrat,system-ui,sans-serif}
 .age-rate-l{display:inline-flex;align-items:center;gap:.4rem;font-size:.74rem;font-weight:700;flex-wrap:wrap}
 .st-card .age-b,.st-play-t .age-b,.st-row-b .age-b{margin-left:.3rem;font-size:.58rem}
+.shp-kid{padding:.9rem 1rem;border-radius:14px;background:rgba(255,209,102,.07);border:1px dashed rgba(255,209,102,.45);font-size:.82rem}
+.shp-kid p{margin:.45rem 0 0;font-size:.78rem;line-height:1.5;color:var(--muted,#8d8daa)}
+.pv-kid{margin-top:.5rem;font-size:.72rem;color:#ffd166}
 .modal-vid.age-on{padding-bottom:0;min-height:0;background:transparent}
 .age-hidden>:not(.age-page-cover){display:none!important}
 .age-page-cover{padding:2rem 0}
