@@ -280,6 +280,73 @@
     },
   });
 
+  // ═══ «Птичка» — мини-игра в телефоне: нажимай — взлетает, не задевай трубы. В мире персонаж держит телефон боком
+  //     двумя руками и «играет» (phone.js → hand 'play'). Рекорд — в браузере (d37_ph_bird), без наград ═══
+  P.define('game', {
+    render(el){
+      el.innerHTML = P.head('🐤 Птичка', '<b class="ph-gbest"></b>') + '<div class="ph-body ph-game"><canvas width="320" height="440" aria-label="Мини-игра «Птичка»: нажимай, чтобы взлететь"></canvas><small class="ph-dim">Нажимай на экран (или Пробел) — птичка взлетает. Не задевай трубы!</small></div>';
+      const cv = el.querySelector('canvas'), g = cv.getContext('2d'), W = 320, H = 440, GROUND = 400, GAP = 128, R = 13;
+      let best = 0; try { best = +localStorage.getItem('d37_ph_bird') || 0; } catch (e) {}
+      const bestEl = el.querySelector('.ph-gbest'), showBest = () => { bestEl.textContent = best ? `🏆 ${best}` : ''; };
+      showBest();
+      let s = null, raf = 0, last = 0, alive = true;
+      const reset = () => { s = { y: H * .42, vy: 0, pipes: [], next: 1.1, score: 0, mode: 'ready', t: 0 }; };
+      reset();
+      const flap = () => {
+        if (s.mode === 'over') { if (s.t > .5) reset(); return; }
+        s.mode = 'play'; s.vy = -330; P.sfx('tap');
+      };
+      const hit = (p) => 90 + R > p.x && 90 - R < p.x + 52 && (s.y - R < p.gy || s.y + R > p.gy + GAP);
+      function step(dt){
+        s.t += dt;
+        if (s.mode === 'ready') { s.y = H * .42 + Math.sin(s.t * 4) * 6; return; }
+        if (s.mode === 'over') { if (s.y < GROUND - R) { s.vy += 1300 * dt; s.y = Math.min(GROUND - R, s.y + s.vy * dt); } return; }
+        s.vy += 1100 * dt; s.y += s.vy * dt;
+        if ((s.next -= dt) <= 0) { s.next = 1.45; s.pipes.push({ x: W + 10, gy: 70 + Math.random() * (GROUND - GAP - 130), got: false }); }
+        for (const p of s.pipes) { p.x -= 120 * dt; if (!p.got && p.x + 52 < 90) { p.got = true; s.score++; P.tone([[1320, .05]], .35); } }
+        s.pipes = s.pipes.filter(p => p.x > -60);
+        if (s.y + R >= GROUND || s.y < -40 || s.pipes.some(hit)) {
+          s.mode = 'over'; s.t = 0; P.tone([[300, .12], [220, .18]], .5);
+          if (s.score > best) { best = s.score; try { localStorage.setItem('d37_ph_bird', String(best)); } catch (e) {} showBest(); }
+        }
+      }
+      function draw(){
+        const sky = g.createLinearGradient(0, 0, 0, GROUND); sky.addColorStop(0, '#38bdf8'); sky.addColorStop(1, '#bae6fd');
+        g.fillStyle = sky; g.fillRect(0, 0, W, H);
+        g.fillStyle = 'rgba(255,255,255,.85)'; for (const [x, y, r] of [[60, 70, 18], [82, 66, 14], [230, 110, 16], [250, 106, 12]]) { g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); }
+        for (const p of s.pipes) {
+          g.fillStyle = '#16a34a'; g.fillRect(p.x, 0, 52, p.gy); g.fillRect(p.x, p.gy + GAP, 52, GROUND - p.gy - GAP);
+          g.fillStyle = '#15803d'; g.fillRect(p.x - 4, p.gy - 16, 60, 16); g.fillRect(p.x - 4, p.gy + GAP, 60, 16);
+        }
+        g.fillStyle = '#65a30d'; g.fillRect(0, GROUND, W, 12); g.fillStyle = '#a16207'; g.fillRect(0, GROUND + 12, W, H - GROUND - 12);
+        // птичка: наклон по скорости
+        g.save(); g.translate(90, s.y); g.rotate(Math.max(-.5, Math.min(1.1, s.vy / 500)));
+        g.fillStyle = '#facc15'; g.beginPath(); g.arc(0, 0, R, 0, 7); g.fill();
+        g.fillStyle = '#fde68a'; g.beginPath(); g.ellipse(-3, 3, 7, 5, 0, 0, 7); g.fill();
+        g.fillStyle = '#fff'; g.beginPath(); g.arc(5, -4, 4.5, 0, 7); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(6.5, -4, 2, 0, 7); g.fill();
+        g.fillStyle = '#f97316'; g.beginPath(); g.moveTo(10, 0); g.lineTo(20, 3); g.lineTo(10, 6); g.fill();
+        g.restore();
+        g.fillStyle = '#fff'; g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 5; g.textAlign = 'center'; g.font = '900 40px Montserrat, sans-serif';
+        if (s.mode !== 'ready') { g.strokeText(String(s.score), W / 2, 58); g.fillText(String(s.score), W / 2, 58); }
+        g.font = '800 20px Montserrat, sans-serif';
+        if (s.mode === 'ready') { g.strokeText('Нажми, чтобы лететь', W / 2, 140); g.fillText('Нажми, чтобы лететь', W / 2, 140); }
+        if (s.mode === 'over') { g.strokeText('Упала! Нажми — ещё раз', W / 2, 150); g.fillText('Упала! Нажми — ещё раз', W / 2, 150); }
+      }
+      const frame = now => {
+        if (!alive) return;
+        raf = requestAnimationFrame(frame);
+        const dt = Math.min(.05, Math.max(0, (now - (last || now)) / 1000)); last = now;
+        step(dt); draw();
+      };
+      raf = requestAnimationFrame(frame);
+      cv.addEventListener('pointerdown', e => { e.preventDefault(); flap(); });
+      // Пробел — игре (управление мира его не получит: телефон открыт, мир стоит)
+      const onKey = e => { if (e.code !== 'Space' || e.repeat || e.target?.closest?.('input, textarea')) return; e.preventDefault(); flap(); };
+      window.addEventListener('keydown', onKey);
+      return () => { alive = false; cancelAnimationFrame(raf); window.removeEventListener('keydown', onKey); };
+    },
+  });
+
   // ═══ Уведомления (notifications.js) ═══
   P.define('notif', {
     render(el){

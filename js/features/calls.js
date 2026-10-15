@@ -331,6 +331,7 @@
     if (next !== 'in' && next !== 'out') ring(false);
     if (next === 'ended') finish();
     render();
+    try { window.dispatchEvent(new Event('d37:callstate')); } catch (er) {}   // телефон 📱: персонаж подносит к уху / убирает (phone.js)
   }
   C.inCall = () => !!S && ['out', 'joining', 'live'].includes(S.state);
   C.state = () => S ? { kind: S.kind, state: S.state, title: S.title, code: S.code } : null;
