@@ -482,7 +482,8 @@ export function makeRaidSim(){
       for (const s of stores) { const v = Math.floor(rest * K.store.keep[s.l - 1] / sum); if (v > 0) st[s.i] = v; given += v; }
       if (stores.length && rest - given > 0) st[stores[0].i] = (st[stores[0].i] || 0) + rest - given;
     }
-    for (const it of L.slice().sort((a, b) => a.i - b.i)) if (it.k === 'mine') { const v = Math.floor(prodNow(defs, it, now) * R.mine / 100); if (v > 0) mn[it.i] = v; }
+    let room = Math.max(0, R.cap[dth - 1] - pool);   // потолок за набег — склад и шахты вместе
+    for (const it of L.slice().sort((a, b) => a.i - b.i)) if (it.k === 'mine') { const v = Math.min(room, Math.floor(prodNow(defs, it, now) * R.mine / 100)); room -= v; if (v > 0) mn[it.i] = v; }
     const total = Object.values(st).reduce((a, b) => a + b, 0) + Object.values(mn).reduce((a, b) => a + b, 0);
     return { th: dth, prot, pct, pool, st, mn, total };
   }
@@ -493,7 +494,8 @@ export function makeRaidSim(){
     return { win, lose, delta: stars > 0 ? Math.ceil(win * stars / 3) : -lose };
   }
   // Итог набега на игрока (как raid_settle): o — offer со старта, res — итог боя, x — что сейчас на сервере:
-  // { attTh, attTr, defTr, lootDay, pair, alt, attBricks, attCap, defBricks, defProt, mines: {id: в шахте сейчас} }
+  // { attTh, attTr, defTr (кубки на старте — по ним считаются), attNow, defNow (сейчас — к ним прибавляется; нет — как на старте),
+  //   lootDay (взял сегодня), lossDay (защитник потерял сегодня), pair, alt, attBricks, attCap, defBricks, defProt, mines: {id: в шахте сейчас} }
   function settle(defs, o, res, x){
     const R = defs.raid, dead = new Set(res.destroyed || []);
     let st = 0;
@@ -503,15 +505,18 @@ export function makeRaidSim(){
     for (const id of ids) if (dead.has(id)) mines[id] = Math.min(o.mn[id], Math.max(0, x.mines?.[id] | 0));
     const zero = !!(x.alt || x.pair);
     if (zero) { st = 0; for (const id of Object.keys(mines)) mines[id] = 0; }
-    let left = Math.max(0, R.loot.day[x.attTh - 1] - (x.lootDay | 0));
-    st = Math.min(st, left); left -= st;
-    for (const id of ids) if (id in mines) { mines[id] = Math.min(mines[id], left); left -= mines[id]; }
+    // потолки дня: сколько нападающий может взять и сколько защитник — потерять (сначала склад, потом шахты по номеру)
+    for (const left0 of [R.loot.day[x.attTh - 1] - (x.lootDay | 0), R.loot.lose[(o.th || 1) - 1] - (x.lossDay | 0)]) {
+      let left = Math.max(0, left0);
+      st = Math.min(st, left); left -= st;
+      for (const id of ids) if (id in mines) { mines[id] = Math.min(mines[id], left); left -= mines[id]; }
+    }
     for (const id of Object.keys(mines)) if (!mines[id]) delete mines[id];
     const total = st + Object.values(mines).reduce((a, b) => a + b, 0);
     const T = zero ? { win: 0, lose: 0, delta: 0 } : trophies(defs, x.attTr | 0, x.defTr | 0, res.stars | 0);
     const bonus = !zero && res.stars > 0 ? Math.floor(R.bonus[league(defs, x.attTr)] * res.stars / 3) : 0;
     const added = Math.min(Math.max(0, (x.attCap | 0) - (x.attBricks | 0)), total + bonus);
-    return { st, mines, total, bonus, added, tr: T.delta, attTr: Math.max(0, (x.attTr | 0) + T.delta), defTr: Math.max(0, (x.defTr | 0) - T.delta), zero };
+    return { st, mines, total, bonus, added, tr: T.delta, attTr: Math.max(0, (x.attNow ?? x.attTr | 0) + T.delta), defTr: Math.max(0, (x.defNow ?? x.defTr | 0) - T.delta), zero };
   }
   // Награда за разбойников: bot — под ратушу (3 раза в день), camp — новые звёзды похода, tut — учебный (один раз)
   function pve(defs, mode, lv, stars, x){
