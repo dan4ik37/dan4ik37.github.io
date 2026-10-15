@@ -45,8 +45,15 @@
 .kb-loadbar small,.kb-load small{color:#aab3d6}
 /* ── экран игры ── */
 .kb-hud{position:absolute;inset:0;pointer-events:none;z-index:4;font-family:Montserrat,system-ui,sans-serif;color:#fff}
-.kb-hud.kb-hit::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 45%,rgba(200,20,20,.45) 100%);animation:kbHit .45s ease-out forwards}
-@keyframes kbHit{from{opacity:1}to{opacity:0}}
+/* ранили — красные края (яркость — по силе удара, kubomir.js hurt); мало здоровья — края красноватые, на «Мощном» — пульсируют */
+.kb-hurt,.kb-lowhp{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(150,0,10,0) 46%,rgba(205,14,26,.62) 100%)}
+.kb-lowhp{background:radial-gradient(ellipse at center,rgba(150,0,10,0) 58%,rgba(175,10,22,.4) 100%);transition:opacity .6s}
+.kb-hud.kb-low .kb-lowhp{opacity:1}
+body.high .kb-hud.kb-low .kb-lowhp{animation:kbLow 1.5s ease-in-out infinite}
+@keyframes kbLow{50%{opacity:.4}}
+/* подобрал вещь — ячейка панели подпрыгивает */
+.kb-slot.pop{animation:kbPop .24s ease-out}
+@keyframes kbPop{40%{transform:translateY(-3px) scale(1.2)}}
 .kb-bottom{position:absolute;left:50%;bottom:max(10px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px}
 .kb-bars{display:flex;justify-content:space-between;width:calc(var(--kb-s) * 9 + 16px);gap:8px}
 .kb-bars[hidden]{display:none}
