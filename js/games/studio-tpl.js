@@ -11,7 +11,7 @@
     const G = D37.game({ h: 600, minW: 340, maxW: 1100 });
     const FLOOR = 470, HX = 120, HS = 64;
     const sp0 = 230 + P.speed * 32, jv = 610 + P.jump * 40, grav = 2000;
-    let st = 'start', hero, obs, coins, score, coinsN, dist, speed, nextObs, nextCoin, lives, hurt, endT = 0;
+    let st = 'start', hero, obs, coins, score, coinsN, dist, speed, nextObs, nextCoin, lives, hurt, endT = 0, jumpT = 0;
     let best = +localStorage.getItem('best') || 0;
     const clouds = Array.from({ length: 7 }, (_, i) => ({ x: i * 200 + Math.random() * 120, y: 50 + Math.random() * 170, s: .6 + Math.random() * .8 }));
     function reset() {
@@ -20,7 +20,7 @@
     }
     reset();
     const jump = () => {
-      if (hero.on || hero.jumps < (P.double ? 2 : 1)) { hero.vy = -jv * (hero.on ? 1 : .85); hero.on = false; hero.jumps++; D37.sfx('jump'); }
+      if (hero.on || hero.jumps < (P.double ? 2 : 1)) { hero.vy = -jv * (hero.on ? 1 : .85); hero.on = false; hero.jumps++; jumpT = G.t; D37.sfx('jump'); }
     };
     const overlay = (a, b) => {
       G.rect(0, 0, G.w, G.h, 'rgba(0,0,0,.32)');
@@ -81,7 +81,10 @@
       for (const c of coins) G.emoji(P.coin, c.x, c.y + Math.sin(G.t * 5 + c.x * .02) * 4, 40);
       for (const o of obs) G.emoji(o.e, o.x, o.fly ? FLOOR - 165 + Math.sin(G.t * 4 + o.x * .01) * 10 : FLOOR - o.s * .45, o.s);
       G.ctx.globalAlpha = .22; G.circle(HX, FLOOR + 8, 26 * (1 - Math.min(.6, (FLOOR - hero.y) / 400)), '#000'); G.ctx.globalAlpha = 1;
-      if (!(hurt > 0 && Math.floor(G.t * 12) % 2)) G.emoji(P.hero, HX, hero.y - HS * .45, HS, hero.rot);
+      // герой — свой персонаж игрока (D37.player: 2D-проекция его 3D-персонажа), пока не готов или выключено — эмодзи
+      const anim = st === 'over' ? 'hurt' : st === 'start' ? 'idle' : !hero.on ? (hero.vy < 0 ? 'jump' : 'fall') : 'run';
+      const at = st === 'over' ? endT : anim === 'jump' ? G.t - jumpT : G.t;
+      if (!(hurt > 0 && Math.floor(G.t * 12) % 2) && !(P.me && D37.drawPlayer && D37.drawPlayer(G.ctx, anim, at, HX, hero.y + 6, { h: HS * 1.45 }))) G.emoji(P.hero, HX, hero.y - HS * .45, HS, hero.rot);
       G.text(score, 20, 36, 32, '#fff', 'left');
       G.text('🏆 ' + best, G.w - 20, 36, 22, '#fff', 'right');
       if (P.lives > 1 && st === 'play') G.text('❤️'.repeat(Math.max(0, lives)), 20, 76, 22, '#fff', 'left', false);
@@ -414,6 +417,7 @@
     { id: 'runner', name: 'Раннер', icon: '🏃', desc: 'Беги, прыгай через препятствия и собирай монеты — как динозаврик в браузере.', code: runner, params: [
       { k: 'title', t: 'text', label: 'Надпись на старте', def: 'Беги и прыгай!', max: 40 },
       { k: 'hero', t: 'emoji', label: 'Герой', def: '🏃' },
+      { k: 'me', t: 'bool', label: '🎭 Герой — персонаж игрока из гардероба (у каждого свой; эмодзи — пока он загружается)', def: true, old: false },
       { k: 'obstacles', t: 'emojis', label: 'Препятствия', def: ['🌵', '🪨', '🔥'], max: 6 },
       { k: 'coin', t: 'emoji', label: 'Монетка', def: '🪙' },
       { k: 'sky', t: 'color', label: 'Небо', def: '#7dd3fc' },
@@ -486,7 +490,7 @@
         out[p.k] = arr.length || p.min === 0 ? arr : p.def.slice();
       } else if (p.t === 'color') out[p.k] = /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : p.def;
       else if (p.t === 'range') { const mn = p.min ?? 1, mx = p.max ?? 10, st = p.step || 1, n = Math.round((+v || +p.def) / st) * st; out[p.k] = Math.max(mn, Math.min(mx, Number.isFinite(n) ? n : p.def)); }
-      else if (p.t === 'bool') out[p.k] = v === undefined ? !!p.def : !!v;
+      else if (p.t === 'bool') out[p.k] = v === undefined ? !!(p.old ?? p.def) : !!v;   // old — для игр, сохранённых до появления поля
       else if (p.t === 'qa') {
         const list = (Array.isArray(v) ? v : p.def).slice(0, 30).map(q => {
           const a = (Array.isArray(q?.a) ? q.a : []).map(x => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, 60)).filter(Boolean).slice(0, 4);

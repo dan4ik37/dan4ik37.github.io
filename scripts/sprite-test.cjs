@@ -154,7 +154,78 @@ ok(S.styleFor('pixel') === 'sketch', 'выбор игрока в гардеро�
 S.setMyStyle('auto');
 ok(S.styleFor('нет') === 'toon', 'неизвестный стиль → «Мультик»');
 
-// ═══ 8. Настоящий человечек (если дан путь к three@0.149) ═══
+// ═══ 8. Песочница «Студии игр»: проверка данных хозяином (cleanPlayer) и D37.drawPlayer в игре — те же кадры, что у D37Sprite ═══
+section('песочница «Студии игр»');
+{
+  const html = fs.readFileSync(path.join(ROOT, 'studio/frame.html'), 'utf8').replace(/\r\n/g, '\n');
+  const cut = (from, to) => { const i = html.indexOf(from), j = html.indexOf(to, i); return i >= 0 && j > i ? html.slice(i, j) : ''; };
+  const harnessSrc = cut('function harness(', '\n  // ═══ Хозяин песочницы'), cleanSrc = cut('function cleanPlayer(', '\n  const sendPlayer');
+  ok(harnessSrc.length > 1000 && cleanSrc.length > 300, 'код песочницы найден в studio/frame.html');
+  // фальшивый лист: 3 анимации, сбоку (печётся «влево»)
+  const sh = { anims: {}, view: 'side', full: false, nom: 100, px: false, top: 90, pet: '🐶', size: 64 };
+  const fake = (n, rows, cw, ch) => ({ img: { width: cw * n, height: ch * rows }, cw, ch, ax: 20, ay: 70, n, rows, hand: new Float32Array(n * rows * 3).fill(1) });
+  sh.anims.idle = fake(4, 1, 40, 80); sh.anims.walk = fake(8, 1, 44, 82); sh.anims.jump = fake(2, 1, 50, 90);
+  const pk = S.pack(sh, ['idle', 'walk', 'jump']);
+  ok(pk && pk.meta.anims.walk.y === 80 && pk.meta.anims.jump.y === 162 && pk.canvas.width === 352, 'атлас: анимации друг под другом');
+  const hctx = vm.createContext({ console, Math, JSON, Number, Object, Array, String, isFinite, setTimeout, clearTimeout });
+  vm.runInContext(cleanSrc + '; this.cleanPlayer = cleanPlayer;', hctx);
+  const good = { src: 'data:image/png;base64,iVBORw0KGgo=', meta: JSON.parse(JSON.stringify(pk.meta)), pet: '🐶', color: '#ff8800' };
+  const cp = hctx.cleanPlayer(good);
+  ok(cp && cp.meta.anims.walk.n === 8 && cp.meta.view === 'side' && cp.meta.dirs[0] === 6, 'хозяин принимает правильного персонажа');
+  ok(cp && !('hand' in cp.meta.anims.walk) && !('top' in cp.meta), 'в игру уходят только нужные числа');
+  for (const [why, bad] of Object.entries({
+    'ссылка вместо data URL': { ...good, src: 'https://evil.example/x.png' },
+    'javascript:': { ...good, src: 'javascript:alert(1)' },
+    'svg (может нести скрипт)': { ...good, src: 'data:image/svg+xml;base64,PHN2Zz4=' },
+    'кавычки в data URL': { ...good, src: 'data:image/png;base64,AAA"onerror="x' },
+    'нет таблицы кадров': { ...good, meta: null },
+    'огромная картинка': { ...good, src: 'data:image/png;base64,' + 'A'.repeat(4.1e6) },
+  })) ok(hctx.cleanPlayer(bad) === null, 'хозяин отклоняет: ' + why);
+  const weird = hctx.cleanPlayer({ ...good, color: 'red;}', pet: 'x'.repeat(50), meta: { ...good.meta, view: '<script>', anims: { ...good.meta.anims, 'Bad-Key': { n: 3 }, walk: { ...good.meta.anims.walk, n: 1e9, cw: -5, dur: 'abc' } } } });
+  ok(weird && weird.color === '' && weird.pet.length <= 12 && weird.meta.view === 'side' && !weird.meta.anims['Bad-Key'], 'странные поля вычищены');
+  ok(weird && weird.meta.anims.walk.n === 64 && weird.meta.anims.walk.cw === 1 && weird.meta.anims.walk.dur === .01, 'числа зажаты в разумные пределы');
+  // игра: harness с этим персонажем → D37.drawPlayer
+  const calls = [];
+  const rec = { save(){}, restore(){}, translate(x, y){ this.tx = x; this.ty = y; }, scale(x){ this.sx = x; }, drawImage(...a){ calls.push({ a, sx: this.sx || 1, tx: this.tx, ty: this.ty }); this.sx = 1; }, globalAlpha: 1, imageSmoothingEnabled: true };
+  class Img { set src(v){ this._s = v; setTimeout(() => this.onload && this.onload(), 0); } get src(){ return this._s; } }
+  const gwin = { console, Math, JSON, Number, Object, Array, String, isFinite, setTimeout, clearTimeout, Image: Img, performance: win.performance, listeners: {},
+    addEventListener(t, f){ (this.listeners[t] = this.listeners[t] || []).push(f); }, parent: { postMessage(){} }, document: { documentElement: { style: {} }, body: { style: {} }, createElement: () => fakeCanvas() } };
+  gwin.window = gwin;
+  const gctx = vm.createContext(gwin);
+  vm.runInContext('(' + harnessSrc + ')(1, {}, ' + JSON.stringify(cp) + ');', gctx);
+  const D = gwin.D37;
+  ok(D && typeof D.drawPlayer === 'function' && D.player && D.player.ready === false, 'в игре есть D37.player и D37.drawPlayer (пока картинка грузится — не готов)');
+  ok(D && D.drawPlayer(rec, 'walk', 0, 0, 0) === false, 'не готов — drawPlayer возвращает false (игра рисует эмодзи)');
+  setTimeout(() => {
+    ok(D.player.ready && D.player.pet === '🐶' && D.player.anims.join() === 'idle,walk,jump', 'картинка загрузилась — персонаж готов');
+    const shs = { ...sh, dead: false, fallback: false, jobs: new Set(), loading: true };   // loading — не просить допечь
+    let same = true;
+    for (const [anim, t, flip] of [['walk', 0, false], ['walk', .2, false], ['walk', .37, true], ['idle', 1.3, true], ['jump', 5, false], ['run', .1, false]]) {
+      calls.length = 0;
+      D.drawPlayer(rec, anim, t, 100, 200, { h: 50, flip });
+      const F = S.frame(shs, anim, t, undefined, flip), A = sh.anims[F.anim], my = calls[0];
+      if (!my || my.a[1] !== F.sx || my.a[2] !== pk.meta.anims[F.anim].y + F.sy || my.a[3] !== A.cw || (my.sx < 0) !== F.flip) { same = false; console.log('   ', anim, t, flip, my && my.a.slice(1, 5), F.sx, F.sy, F.flip); }
+      if (my && Math.abs(my.a[5] + A.ax * 50 / 100) > 1e-9) same = false;   // якорь — ноги в (x, y) при росте h
+    }
+    ok(same, 'drawPlayer в игре берёт те же кадры и то же зеркало, что D37Sprite.frame на сайте');
+    ok(calls.length === 1, 'нет «run» — рисуется «walk», нет анимации совсем — idle (как на сайте)');
+    // поздняя доставка: сообщение от хозяина
+    const late = { ...cp, pet: '🐱' };
+    const say = (src, run) => gwin.listeners.message.forEach(f => f({ source: src, data: { __d37p: run, player: late } }));
+    say(gwin.parent, 2);
+    setTimeout(() => {
+      ok(D.player.pet === '🐶', 'чужой номер запуска — персонаж не меняется');
+      say({ fake: 1 }, 1);
+      setTimeout(() => {
+        ok(D.player.pet === '🐶', 'сообщение не от хозяина — не принимается');
+        say(gwin.parent, 1);
+        setTimeout(() => { ok(D.player.pet === '🐱', 'хозяин прислал персонажа позже — игра его подхватила'); part3(); }, 5);
+      }, 5);
+    }, 5);
+  }, 5);
+}
+function part3(){
+// ═══ 9. Настоящий человечек (если дан путь к three@0.149) ═══
 const TP = process.argv[2] || process.env.THREE_PATH;
 if (TP) {
   const cjs = path.join(TP, 'build/three.cjs');
@@ -252,3 +323,4 @@ if (TP) {
 
 console.log(`\n${fail ? '❌' : '✅'} sprite-test: ${pass} проверок прошло${fail ? `, ${fail} — нет` : ''}`);
 process.exit(fail ? 1 : 0);
+}

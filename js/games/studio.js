@@ -50,6 +50,30 @@
   const LIGHT = 'id,title,icon,descr,kind,tpl,status,plays,likes,created_at,updated_at,author,profiles(nick)';
   const playHref = g => g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`;
 
+  // ── Персонаж игрока для игр (D37.player в песочнице): 2D-проекция своего 3D-персонажа сбоку — один атлас (data URL) +
+  //    таблица кадров (js/core/char2d.js). Готов не сразу: печётся при первом заходе, потом — из кэша браузера ──
+  const SPR_ANIMS = ['idle', 'walk', 'run', 'jump', 'fall', 'hurt', 'use', 'wave', 'dance', 'cheer'];
+  let sprP = null, sprData = null;
+  window.D37Char?.on?.(() => { sprP = null; sprData = null; });   // переоделся — новый лист
+  function playerSprite(){
+    if (sprP) return sprP;
+    sprP = (async () => {
+      try {
+        if (!window.D37Sprite && typeof gamesLoadScript === 'function') await gamesLoadScript('js/core/char2d.js');
+        const SP = window.D37Sprite, C = window.D37Char;
+        if (!SP || !C || !SP.supported()) return null;
+        const look = C.look();
+        const sh = await SP.sheet(look, { view: 'side', size: 96, dpr: 1, lo: false, style: SP.styleFor('toon'), anims: SPR_ANIMS, key: SP.myKey(), all: true });
+        const pk = sh && !sh.fallback && SP.pack(sh, SPR_ANIMS);
+        if (!pk) return null;
+        sprData = { src: pk.canvas.toDataURL('image/png'), meta: pk.meta, pet: C.petEmoji(look), color: C.part('color', look.color)?.v || '' };
+        pk.canvas.width = pk.canvas.height = 0;
+        return sprData;
+      } catch (e) { return null; }
+    })();
+    return sprP;
+  }
+
   // ── Песочница ──
   let hostHtml = null;
   async function hostPage(){
@@ -62,21 +86,23 @@
     f.setAttribute('sandbox', 'allow-scripts allow-pointer-lock');
     f.setAttribute('allow', 'autoplay; gamepad');
     f.title = 'Игра';
-    let ready = false, queued = null, run = 0, dead = false;
+    let ready = false, queued = null, run = 0, dead = false, plQ = null;
     const send = m => { try { f.contentWindow.postMessage(m, '*'); } catch (e) {} };
     const onMsg = e => {
       if (dead || e.source !== f.contentWindow) return;
       const d = e.data;
       if (!d || typeof d !== 'object') return;
-      if (d.type === 'host') { ready = true; if (queued) { send(queued); queued = null; } return; }
+      if (d.type === 'host') { ready = true; if (queued) { send(queued); queued = null; } if (plQ) { send(plQ); plQ = null; } return; }
       if (d.type === 'game' && d.run === run) on(d);
     };
     window.addEventListener('message', onMsg);
     hostPage().then(h => { if (!dead) f.srcdoc = h; }).catch(() => { box.innerHTML = '<div class="st-empty">Не загрузилось — проверь интернет</div>'; });
     box.appendChild(f);
+    // персонаж игрока: готов — уходит вместе с игрой, нет — догонит её, когда испечётся
+    const late = () => playerSprite().then(p => { if (!p || dead) return; const m = { type: 'player', run, player: p }; if (ready) send(m); else plQ = m; });
     return {
       el: f,
-      run(game, store){ run++; const m = { type: 'run', run, store: store || '{}', ...game }; if (ready) send(m); else queued = m; },
+      run(game, store){ run++; const m = { type: 'run', run, store: store || '{}', ...game }; if (sprData) m.player = sprData; else late(); if (ready) send(m); else queued = m; },
       stop(){ if (ready) send({ type: 'stop' }); },
       focus(){ try { f.focus(); } catch (e) {} },
       destroy(){ dead = true; window.removeEventListener('message', onMsg); f.remove(); },
@@ -278,6 +304,7 @@
 5. Нельзя: alert, prompt, confirm, формы, ссылки, открытие окон, просьбы ввести пароль или личные данные.
 6. Все тексты в игре — на русском. Сначала экран «Нажми, чтобы начать», в углу — счёт и рекорд (рекорд можно хранить в localStorage).
 7. Можно подключить одну библиотеку: <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script> (Phaser 3), но лучше без неё.
+8. Героем может быть персонаж самого игрока (его 3D-персонаж с сайта, нарисованный сбоку, у каждого игрока свой). Когда D37.player.ready === true, рисуй героя так: D37.drawPlayer(ctx, анимация, время, x, y, { h: рост, flip: смотритВлево }) — ноги в точке (x, y), рост h — в пикселях холста, время — секунды с начала этой анимации. Анимации: 'idle' (стоит), 'walk', 'run', 'jump' (летит вверх), 'fall' (падает), 'hurt' (получил удар), 'use' (удар рукой), 'wave', 'dance', 'cheer'. Персонаж появляется через секунду-две после старта — до этого (и если D37.drawPlayer вернул false) рисуй героя эмодзи.
 
 Ответь только полным кодом файла, без пояснений.`;
   }
