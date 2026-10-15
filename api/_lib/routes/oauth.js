@@ -1,5 +1,6 @@
 // Вход через VK ID, Яндекс ID и Telegram → api/pages.js?page=oauth (rewrites в vercel.json). Логика и проверки — api/_lib/social.js.
-//   GET  /auth/<p>/start?b=<отпечаток секрета вкладки>&n=<#/раздел>[&m=link&t=<билет>] → кука состояния + переход в сервис
+//   GET  /auth/<p>/start?b=<отпечаток секрета вкладки>&n=<#/раздел>[&m=link&t=<билет> | &m=reauth&u=<свой id>] → кука + переход в сервис
+//        (m=reauth — «подтверди, что это ты» перед привязкой: войти можно только в этот же аккаунт, новый не создаётся)
 //   GET  /auth/<p>/callback?code&state[&device_id]    → вход/привязка → назад на сайт: #d37auth=<пропуск> | #d37link=<p> | #d37auth_err=<код>
 //   GET  /api/oauth?a=providers                       → какие свои входы включены (без секретов)
 //   POST /api/oauth?a=finish  {k, f}                  → пропуск + секрет вкладки → { token_hash } (одноразово, 3 мин)
@@ -15,6 +16,7 @@ import { sbRpc } from '../store.js';
 
 const now = () => Date.now() / 1000;
 const B_RE = /^[A-Za-z0-9_-]{43}$/;   // отпечаток секрета вкладки: base64url(SHA-256)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function send(res, code, obj, extra = {}) {
   res.statusCode = code;
@@ -70,14 +72,18 @@ async function start(c, req, res, p) {
   if (!enabled(c, p) || (p === 'tg' && c.tg.mode !== 'oidc') || !(await sqlReady())) return back(c, res, errFrag('off', p));
   const b = String(req.query.b || '');
   if (!B_RE.test(b)) return back(c, res, errFrag('state', p));
-  const link = req.query.m === 'link';
-  let u = null, at = 0;
-  if (link) {
+  const m = ['link', 'reauth'].includes(req.query.m) ? req.query.m : 'login';
+  let u = null, at = 0, x = null;
+  if (m === 'link') {
     const t = unsign(c, 'ticket', req.query.t);
     if (!t || t.p !== p || t.b !== b || typeof t.u !== 'string') return back(c, res, errFrag('reauth', p));
     u = t.u; at = +t.at || 0;
   }
-  const st = { p, s: rnd(32), v: rnd(32), b, m: link ? 'link' : 'login', u, at, n: safeNext(req.query.n), e: now() + TTL.STATE_TTL };
+  if (m === 'reauth') {   // «подтверди, что это ты»: войти можно только в этот же аккаунт
+    x = String(req.query.u || '');
+    if (!UUID_RE.test(x)) return back(c, res, errFrag('state', p));
+  }
+  const st = { p, s: rnd(32), v: rnd(32), b, m, u, at, x, n: safeNext(req.query.n), e: now() + TTL.STATE_TTL };
   return go(res, PROVIDERS[p].authorize(c, { state: st.s, challenge: pkceChallenge(st.v) }), cookieSet(cookieName(p), sign(c, 'state', st), TTL.STATE_TTL));
 }
 
@@ -102,7 +108,7 @@ async function callback(c, req, res, p) {
     return back(c, res, r?.ok ? `d37link=${p}` : errFrag(r?.reason || 'server', p), clear);
   }
   let r;
-  try { r = await loginOrCreate(c, p, prof, req); }
+  try { r = await loginOrCreate(c, p, prof, req, { expect: st.m === 'reauth' ? st.x : null }); }
   catch (e) { console.error('[oauth]', p, 'вход:', String(e?.message || e).slice(0, 160)); r = { ok: false, reason: 'server' }; }
   if (!r.ok) return back(c, res, errFrag(r.reason, p), clear);
   const k = seal(c, { h: r.hashed, b: st.b, p, nw: r.isNew ? 1 : 0, n: r.isNew ? '#/profile' : st.n, e: now() + TTL.HANDOFF_TTL });
@@ -155,8 +161,10 @@ async function tgWidget(c, req, res, link) {
     catch (e) { r = { ok: false, reason: 'server' }; }
     return send(res, 200, r?.ok ? { ok: true } : { ok: false, reason: r?.reason || 'server' });
   }
+  const x = String(body.x || '');
+  if (x && !UUID_RE.test(x)) return send(res, 200, { ok: false, reason: 'bad' });
   let r;
-  try { r = await loginOrCreate(c, 'tg', v, req); }
+  try { r = await loginOrCreate(c, 'tg', v, req, { expect: x || null }); }
   catch (e) { console.error('[oauth] tg вход:', String(e?.message || e).slice(0, 160)); r = { ok: false, reason: 'server' }; }
   if (!r.ok) return send(res, 200, { ok: false, reason: r.reason });
   return send(res, 200, { ok: true, token_hash: r.hashed, provider: 'tg', new: r.isNew, next: r.isNew ? '#/profile' : safeNext(body.n) });

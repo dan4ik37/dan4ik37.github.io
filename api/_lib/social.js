@@ -336,10 +336,12 @@ export async function sqlReady() {
 export function resetReadyCache() { ready = { v: false, at: 0 }; }
 export const onceUse = async (key, sec) => { try { return (await sbRpc('auth_once_use', { p_key: key, p_sec: sec })) === true; } catch (e) { return false; } };
 
-// Номер в сервисе → аккаунт сайта (создать, если его ещё нет) → hashed_token для входа без письма
-export async function loginOrCreate(c, p, prof, req) {
+// Номер в сервисе → аккаунт сайта (создать, если его ещё нет) → hashed_token для входа без письма.
+// expect — «подтверди, что это ты» перед привязкой: войти можно только в ЭТОТ аккаунт (нового не создаём, в чужой не пускаем)
+export async function loginOrCreate(c, p, prof, req, { expect } = {}) {
   const b = await sbRpc('auth_social_begin', { p_provider: p, p_uid: prof.uid, p_ip: ipHash(c, clientIp(req)), p_name: prof.name || null, p_avatar: prof.avatar || null });
   if (!b?.ok) return { ok: false, reason: b?.reason || 'server' };
+  if (expect && (b.create || b.user !== expect)) return { ok: false, reason: 'other' };
   let user = b.user, email = null, isNew = false;
   if (b.create) {
     const made = await adminCreateUser(p, prof.uid);

@@ -10,6 +10,15 @@ const CACHE_TTL = 15 * 60 * 1000;
 const HOST      = location.hostname || 'localhost';
 
 // ═══════════════════════════════════════
+//  «Я НЕ РОБОТ» — Cloudflare Turnstile (бесплатно), защита регистрации и входа по почте от ботов
+// ═══════════════════════════════════════
+// Пусто — выключено (как раньше). Включать ПО ПОРЯДКУ (docs/LOGIN_PROVIDERS.md, «Защита от ботов»): 1) Cloudflare → Turnstile →
+// виджет для dan4ik37.vercel.app → «Site Key» вписать сюда и выложить сайт; 2) только потом Supabase → Authentication →
+// Bot and Abuse Protection → Enable CAPTCHA → Turnstile → «Secret Key». Наоборот нельзя: Supabase начнёт требовать
+// проверку, а сайт её ещё не умеет — вход и регистрация по почте перестанут работать. Код — js/features/social-login.js (D37Captcha).
+const TURNSTILE_SITE_KEY = '';
+
+// ═══════════════════════════════════════
 //  GOOGLE ADSENSE — ID рекламных блоков
 // ═══════════════════════════════════════
 // AdSense → Реклама → По рекламным блокам → «Медийный» → скопировать

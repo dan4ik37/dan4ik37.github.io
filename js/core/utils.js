@@ -29,6 +29,7 @@ function humanErr(e){
   if (/password should be at least|weak password/i.test(m)) return 'пароль слишком короткий — минимум 6 символов';
   if (/unable to validate email|invalid.*email|email.*invalid/i.test(m)) return 'проверь email — похоже, в нём ошибка';
   if (/rate limit|too many requests|429/i.test(m)) return 'слишком много попыток — подожди пару минут';
+  if (code === 'captcha_failed' || /captcha/i.test(m)) return 'проверка «я не робот» не прошла — подожди пару секунд и попробуй ещё раз';
   if (/jwt|session.*(expired|missing)|not authenticated/i.test(m)) return 'сессия устарела — войди заново';
   if (code === '42501' || /row-level security|permission denied/i.test(m)) return 'нет прав на это действие';
   if (code === '23505' || /duplicate key/i.test(m)) return 'такое уже есть';

@@ -471,7 +471,7 @@ async function clientTests() {
   if (!fs.existsSync(file)) { ok(false, 'нет js/features/social-login.js'); return; }
   const store = {};
   const ls = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
-  const ctx = { console, setTimeout, clearTimeout, URLSearchParams, TextEncoder, crypto: crypto.webcrypto, localStorage: ls, sessionStorage: ls, location: { hash: '', search: '', pathname: '/', origin: 'https://dan4ik37.vercel.app', href: 'https://dan4ik37.vercel.app/' },
+  const ctx = { console, setTimeout, clearTimeout, URLSearchParams, TextEncoder, TextDecoder, URL, crypto: crypto.webcrypto, localStorage: ls, sessionStorage: ls, location: { hash: '', search: '', pathname: '/', origin: 'https://dan4ik37.vercel.app', href: 'https://dan4ik37.vercel.app/' },
     history: { replaceState() {} }, addEventListener() {}, dispatchEvent() {}, CustomEvent: class { constructor(t, o) { this.type = t; this.detail = o?.detail; } }, Event: class { constructor(t) { this.type = t; } },
     atob: s => Buffer.from(s, 'base64').toString('binary'), btoa: s => Buffer.from(s, 'binary').toString('base64'), fetch: async () => ({ ok: false, json: async () => ({}) }) };
   ctx.window = ctx; ctx.globalThis = ctx;
@@ -482,7 +482,7 @@ async function clientTests() {
   if (!T) return;
   // возврат: что лежит во фрагменте
   const H = T.parseReturn;
-  ok(H('#d37auth=abc_DEF-1').auth === 'abc_DEF-1' && H('#d37auth_err=rate&p=vk').err === 'rate' && H('#d37auth_err=rate&p=vk').p === 'vk' && H('#d37link=tg').link === 'tg',
+  ok(H('#d37auth=abc_DEF-1abc_DEF-1abc_DEF-1').auth === 'abc_DEF-1abc_DEF-1abc_DEF-1' && H('#d37auth=short') === null && H('#d37auth_err=rate&p=vk').err === 'rate' && H('#d37auth_err=rate&p=vk').p === 'vk' && H('#d37link=tg').link === 'tg',
     'фрагмент возврата: пропуск, ошибка с сервисом, привязка');
   ok(H('#/profile') === null && H('#access_token=x&refresh_token=y') === null && H('') === null, 'обычный раздел и токены Supabase — не наши (их не трогаем)');
   ok(H('#d37auth=<script>') === null && H('#d37link=evil').link === undefined && H('#d37auth_err=%3Cb%3E&p=vk').err === 'server', 'мусор во фрагменте — не принимаем');

@@ -1873,6 +1873,10 @@ body.low .donation-alert-icon{animation:none}
         <div id="pvStatus" class="pv-status"></div>
         <div class="pv-note">Скрытый профиль: остальные видят только ник, аватар, роль и значок VIP. Модераторы тоже не видят скрытое — им доступны лишь служебные данные (дата регистрации, роль, VIP), чтобы разбираться с жалобами.</div>
       </div>
+      <!-- ▼ «Способы входа» — js/features/social-login.js (D37Login.renderMethods): почта, VK ID, Telegram, Яндекс ID, Google, Discord, Twitch,
+           GitHub — привязать (только со свежим входом) / отвязать (последний нельзя). Скрыт, пока ни один вход не включён. #/profile/logins ▼ -->
+      <div id="profileLogins" class="pv-box" hidden></div>
+      <!-- ▲ «Способы входа» ▲ -->
     </div>
   </div>
 </div>
@@ -2369,11 +2373,10 @@ body.low .donation-alert-icon{animation:none}
         <p id="gauthFormSubtitle">Войди в свой аккаунт</p>
       </div>
       <div class="gauth-body">
-        <!-- «Войти через Google» — видно, только когда провайдер включён в Supabase (global-auth.js → oauthProviders) -->
-        <div id="gauthOauth" hidden>
-          <button type="button" class="auth-google" onclick="signInWithProvider('google')"><span class="g-ic" aria-hidden="true">G</span>Войти через Google</button>
-          <div class="auth-or"><span>или по почте</span></div>
-        </div>
+        <!-- ▼ «Войти через…» — js/features/social-login.js (D37Login.renderModal): только включённые входы — VK ID, Telegram, Яндекс ID
+             (свои, /api/oauth?a=providers) и Google, Discord, Twitch, GitHub (Supabase /auth/v1/settings). Ничего не включено — блок скрыт ▼ -->
+        <div id="gauthOauth" class="lgn-box" hidden></div>
+        <!-- ▲ «Войти через…» ▲ -->
         <div id="gauthLoginFields">
           <input class="auth-inp" type="email" id="gauthEmail" aria-label="Email" placeholder="Email" autocomplete="email">
           <input class="auth-inp" type="password" id="gauthPassword" aria-label="Пароль" placeholder="Пароль" autocomplete="current-password" onkeydown="if(event.key==='Enter')doGlobalLogin()">
@@ -2523,6 +2526,7 @@ body.low .donation-alert-icon{animation:none}
       <p><strong style="color:var(--text)">Cookies:</strong> используются для Google Translate, Google AdSense, Яндекс Метрики и запоминания настроек сайта (режим отображения, ник).</p>
       <p><strong style="color:var(--text)">Покупки кристаллов:</strong> оплату проводит платёжная система (TipTop Pay, Freedom Pay или Kaspi) на своей стороне — номер карты сайт не получает и не хранит. В базе сайта хранятся номер заказа, сумма, валюта, время, статус и номер платежа в платёжной системе — чтобы начислить кристаллы и при необходимости сделать возврат. Донаты через DonationAlerts: имя донатера и сумма — чтобы выдать VIP или кристаллы.</p>
       <p><strong style="color:var(--text)">Возраст (по желанию):</strong> только год рождения, не дата. Он нужен, чтобы показывать подходящие по возрасту игры, ролики и рекламу и включать защиту детей. Год видит только сам человек — ни другие посетители, ни модераторы, ни администратор; он не публикуется, не попадает в адреса страниц и статистику и не передаётся третьим лицам. Рекламе Google уходит только признак «ребёнок» или «подросток» (без года) — чтобы реклама была без персонализации. У гостя год хранится в браузере, у аккаунта — в базе сайта; удалить его можно в любой момент: ⚙️ Настройки → Сайт → «Удалить», а вместе с аккаунтом он удаляется сам.</p>
+      <p><strong style="color:var(--text)">Вход через другие сервисы (по желанию):</strong> при входе через VK ID, Яндекс ID или Telegram сайт получает от сервиса только номер аккаунта в этом сервисе, имя и аватарку — почту, телефон, друзей и переписку не запрашивает. Номер нужен, чтобы узнавать тебя при следующем входе; имя и аватарку видишь только ты (Профиль → «Способы входа»), их можно стереть кнопкой «Скрыть имя». Пароли и токены доступа сервисов сайт не получает и не хранит. Вход через Google, Discord, Twitch и GitHub проводит сервис аутентификации Supabase — он хранит то, что передал сервис (номер, имя, почту, аватарку). Модераторы видят только, какие сервисы привязаны к аккаунту, — без номеров, имён и почты. Чтобы защищаться от ботов, сайт считает новые аккаунты по отпечатку IP-адреса: сам адрес не хранится, отпечаток меняется каждый день и стирается через 2 дня. Если аккаунт заблокирован, привязанные к нему входы тоже блокируются (хранится отпечаток, а не номер). Во время входа ставится техническая cookie на 10 минут (защита от подделки входа). Проверка «я не робот» — Cloudflare Turnstile (<a href="https://www.cloudflare.com/privacypolicy/" target="_blank" style="color:var(--accent)">политика Cloudflare</a>). Отвязать вход — Профиль → «Способы входа»; вместе с аккаунтом всё это удаляется.</p>
 
       <h3>2. Google AdSense</h3>
       <p>Сайт использует Google AdSense для показа рекламы. Google может использовать cookies для персонализации рекламы. Подробнее: <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--accent)">Политика конфиденциальности Google</a>. Вы можете отключить персонализированную рекламу в <a href="https://adssettings.google.com" target="_blank" style="color:var(--accent)">настройках рекламы Google</a>.</p>
@@ -2592,6 +2596,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/chat.js"></script>
 <script src="js/features/achievements.js"></script>
 <script src="js/features/global-auth.js"></script>
+<script src="js/features/social-login.js"></script>
 <script src="js/features/profile.js"></script>
 <script src="js/features/forum.js"></script>
 <script src="js/features/friends.js"></script>
