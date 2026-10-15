@@ -99,13 +99,21 @@
     ['street', '🏠', 'Улица с домиками', 0, 40, 0, 60],
     ['park', '🌳', 'Парк и пруд', 24, 27, 32, 34],
     ['camp', '🔥', 'Костёр', 37, 46, 40, 50],
-    ['gates', '🧟', 'Ворота «Орда», «Арена», «Башни»', 43, 32, 47, 32],
+    ['gates', '🧟', 'Ворота игр: «Орда», «Арена», «Башни»', 43, 32, 47, 32],
+    ['kubomir', '🧊', '«Кубомир» — ворота в парке', 43, 32, 47, 32],
+    ['podzem', '⛏', '«Подземье» — ворота в парке', 43, 48, 47, 48],
     ['district', '🏘️', 'Район участков', -10.4, -13.6, -11.8, -24],   // у арки со стороны площади (за аркой — район, он растёт)
     ['kids', '🧸', 'Солнечный городок', ZONES.kids.entry.x, ZONES.kids.entry.z, 140, -24, 'kids'],
     ['metro', '🏙️', 'Большой город', ZONES.metro.entry.x, ZONES.metro.entry.z, 130, 130, 'metro'],
     ['war', '🪖', 'Боевая зона', ZONES.war.entry.x, ZONES.war.entry.z, -110, 130, 'war'],
   ];
   const STUDIO = { id: 'studio', icon: '🧱', name: 'Студия 3D — свой мир' };
+  // Ворота больших песочниц (координатор 15.10: «Кубомир» искали «в списке» — в мире входа не было): в парке, в ряд с воротами
+  // «Орда» (z 24) и «Арена» (z 40) у восточного края; открываются своей страницей (мир закрывается), не окном поверх мира
+  const BIG_GATES = [
+    { g: 'kubomir', x: 47, z: 32, yaw: -PI / 2, name: 'Кубомир', e: '🧊', c: '#16a34a', what: 'Свой бесконечный мир из кубиков: копай, строй, крафти, выживай ночью.' },
+    { g: 'podzem', x: 47, z: 48, yaw: -PI / 2, name: 'Подземье', e: '⛏', c: '#b45309', what: 'Песочница сбоку, как Террария: копай вглубь, строй дом, сражайся с боссами.' },
+  ];
 
   // ═══ Геометрия (без браузера — проверяется в node) ═══
   const inRect = (r, x, z, m = 0) => x >= r.x0 - m && x <= r.x1 + m && z >= r.z0 - m && z <= r.z1 + m;
@@ -135,7 +143,7 @@
   }
   const groundRect = () => { const [x0, z0, x1, z1] = bounds(); return [x0 - 220, z0 - 220, x1 + 220, z1 + 220]; };
   // Деревья и трава мира — не на дорогах, телепортах и в зонах
-  const blocked = (x, z) => ZLIST.some(Z => inRect(Z, x, z, 6)) || inRect(RESERVE, x, z) || EXPAND.some(r => inRect(r, x, z, 4)) || roadDist(x, z) < 4 || PADS.some(p => Math.hypot(p.x - x, p.z - z) < 2.2);
+  const blocked = (x, z) => ZLIST.some(Z => inRect(Z, x, z, 6)) || inRect(RESERVE, x, z) || EXPAND.some(r => inRect(r, x, z, 4)) || roadDist(x, z) < 4 || PADS.some(p => Math.hypot(p.x - x, p.z - z) < 2.2) || BIG_GATES.some(g => Math.hypot(g.x - x, g.z - z) < 5);
   // Холм на горизонте: только целиком за краем мира (иначе — насквозь проходимая гора посреди зоны) и не на месте роста городов
   const hillOk = (x, z, r) => { const [x0, z0, x1, z1] = bounds(); return (x + r < x0 || x - r > x1 || z + r < z0 || z - r > z1) && !EXPAND.some(e => rectsOverlap(e, { x0: x - r, x1: x + r, z0: z - r, z1: z + r })); };
   // Рельеф зон: море (дно SEA.floor, у берега отвесная набережная), бункер (пол ниже земли), канал Большого города
@@ -1081,6 +1089,17 @@
       lbl.sign(t, g.x + (alongX ? .45 : 0), 5, g.z + (alongX ? 0 : .45), 7.5, .62, yaw, { bg: '#111827', w: 768, h: 64 });
       lbl.sign(t, g.x - (alongX ? .45 : 0), 5, g.z - (alongX ? 0 : .45), 7.5, .62, yaw + PI, { bg: '#111827', w: 768, h: 64 });
     }
+    // ворота больших песочниц (если игра есть на сайте): столбы, перекладина, надпись; [E] — окно «Играть» (своей страницей)
+    for (const gt of BIG_GATES) {
+      if (typeof GAMES !== 'undefined' && !GAMES.some(x => x.id === gt.g)) continue;
+      const c = Math.cos(gt.yaw), s = Math.sin(gt.yaw);
+      for (const k of [-1, 1]) { P(null, { s: 'box', x: gt.x + c * k * 1.8, y: 1.7, z: gt.z - s * k * 1.8, w: .6, h: 3.4, d: .6, yaw: gt.yaw, c: gt.c }); ph.addBox({ x: gt.x + c * k * 1.8, z: gt.z - s * k * 1.8, y: 1.7, hx: .3, hy: 1.7, hz: .3, yaw: gt.yaw, tag: 'world' }); }
+      P(null, { s: 'box', x: gt.x, y: 3.6, z: gt.z, w: 4.4, h: .6, d: .8, yaw: gt.yaw, c: gt.c });
+      const fx = Math.sin(gt.yaw), fz = Math.cos(gt.yaw);
+      lbl.sign(`${gt.e} ${gt.name}`, gt.x + fx * .42, 3.6, gt.z + fz * .42, 3.6, .9, gt.yaw, { bg: gt.c, w: 512, h: 128 });
+      lbl.sign(`${gt.e} ${gt.name}`, gt.x - fx * .42, 3.6, gt.z - fz * .42, 3.6, .9, gt.yaw + PI, { bg: gt.c, w: 512, h: 128 });
+      X.add({ x: gt.x + fx * .2, y: 1.2, z: gt.z + fz * .2, r: 1.6, prompt: () => `${gt.e} ${gt.name}: играть`, act: () => S.zones?.bigGame?.(gt) });
+    }
     const lm = lbl.mesh(); if (lm) R.scene.add(lm);
     // деревья вдоль дорог и между зонами (новые места мира пустые) — не в зонах, не на дорогах, не к северо-западу (район растёт)
     {
@@ -1709,6 +1728,13 @@
       return true;
     };
     rt.inOverview = () => !!OV;
+    // ворота «Кубомира» и «Подземья»: большая игра на весь экран — своей страницей (MirPlay их не берёт), вернуться — «🌍 Мир»
+    rt.bigGame = gt => {
+      const gi = typeof GAMES !== 'undefined' ? GAMES.find(x => x.id === gt.g) : null;
+      if (!gi) { toast(`${gt.e} ${gt.name} — скоро`); return; }
+      H.panel(`<span class="wld-pe">${gt.e}</span><b>${esc(gt.name)}</b>${gi.age ? ` <i class="mz-age a${parseInt(gi.age, 10) || 0}">${esc(gi.age)}</i>` : ''}`,
+        `<p>${esc(gt.what || gi.desc || '')}</p><p><small>Большая игра на весь экран — мир закроется. Вернуться — кнопкой «🌍 Мир».</small></p><div class="wld-acts"><button type="button" class="ct-start" data-act="go:#/games/${esc(gt.g)}">▶ Играть</button><button type="button" data-act="close">Остаться в мире</button></div>`);
+    };
     rt.inVeh = () => !!rt.veh?.inVeh?.();
     // ── Подпись у ника: роль (значок) и семья ──
     rt.tag = p => {
@@ -1970,7 +1996,7 @@
   root.MirZones = {
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
-    def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt,
+    def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, BIG_GATES,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
   };

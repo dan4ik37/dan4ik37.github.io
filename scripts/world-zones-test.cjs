@@ -82,6 +82,19 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   }
 }
 
+// ═══ 2б. Ворота больших песочниц («Кубомир», «Подземье») — в парке, в ряд с «Ордой» и «Ареной» ═══
+{
+  const OLD_GATES = [[47, 24], [47, 40], [30, 52]];   // mir.js GATES: Орда, Арена, Башни
+  ok(MZ.BIG_GATES.map(g => g.g).join() === 'kubomir,podzem', 'ворота: «Кубомир» и «Подземье»');
+  for (const g of MZ.BIG_GATES) {
+    ok(!ZLIST.some(Z => inRect(Z, g.x, g.z, 8)) && !inRect(RESERVE, g.x, g.z, 4) && MZ.roadDist(g.x, g.z) > 6, `ворота «${g.name}» — в парке, не на дороге`);
+    ok(OLD_GATES.every(([x, z]) => Math.hypot(x - g.x, z - g.z) >= 7.9), `ворота «${g.name}» — не налезают на соседние ворота`);
+    ok(Math.hypot(g.x - 32, g.z - 34) > 12 && Math.hypot(g.x - 40, g.z - 50) > 6, `ворота «${g.name}» — не в пруду и не на костре`);
+    ok(MZ.places().some(p => p.id === g.g && Math.hypot(p.x - g.x, p.z - g.z) < 6), `«${g.name}» — в списке мест (карта и телефон), телепорт к воротам`);
+    ok(MZ.blocked(g.x, g.z), `у ворот «${g.name}» не растут деревья`);
+  }
+}
+
 // ═══ 3. Здания зон: внутри своей зоны, не друг на друге, не на улицах ═══
 {
   const rectOf = f => ({ x0: f[0] - f[2] / 2, x1: f[0] + f[2] / 2, z0: f[1] - f[3] / 2, z1: f[1] + f[3] / 2 });

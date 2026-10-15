@@ -151,6 +151,8 @@ globalThis.GAMES = [
   { id: 'broken', icon: '💥', title: 'Сломанная', scripts: ['js/games/broken.js'] },
   { id: 'wardrobe', icon: '🎭', title: 'Мой персонаж', scripts: ['js/games/wardrobe.js'] },
   { id: 'studio3d', icon: '🧱', title: 'Студия 3D', scripts: ['js/games/studio3d.js'] },
+  { id: 'kubomir', icon: '🧊', title: 'Кубомир', scripts: ['js/games/kubomir.js'] },
+  { id: 'podzem', icon: '⛏', title: 'Подземье', scripts: ['js/games/podzem.js'] },
   { id: 'quiz', icon: '🧩', title: 'Тесты', href: '/quiz' },
 ];
 const loaded = [];
@@ -208,6 +210,7 @@ MP.P.back = 10;
     ok(d(tab, '#/games/horde/coop/a1b2c3').act === 'reroute' && d(tab, '#/games/horde/coop/a1b2c3').g === 'horde', 'другая игра — в окне');
     for (const h of ['#/games/studio3d', '#/games/quiz', '#/games', '#/home', '#/profile/42', '#/chat']) ok(d(tab, h).act === 'pass', 'обычный переход сайта: ' + h);
     ok(MP.can('chess') && MP.can('horde') && !MP.can('world') && !MP.can('wardrobe') && !MP.can('studio3d') && !MP.can('quiz') && !MP.can('nope'), 'can: какие игры открываются поверх мира');
+    ok(!MP.can('kubomir') && !MP.can('podzem') && d(tab, '#/games/kubomir').act === 'pass' && d(tab, '#/games/podzem').act === 'pass', 'большие песочницы (Кубомир, Подземье) — своей страницей, не поверх мира');
   }
 
   // ═══ Открыть → партия → итог → сам в мир ═══
