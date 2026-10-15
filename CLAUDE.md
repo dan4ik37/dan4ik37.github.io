@@ -13,25 +13,19 @@
 - Коммитить и пушить в `main` можно без отдельного вопроса — так договорились, это и есть выкладка.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
-1. `age.sql` (15.10.2026) — 🎂 возраст: user_age (только год; читает только сам), my_age_group / age_set / age_clear, age_group_of
-   (только сервер), детские настройки (заявки в друзья — «ни от кого»), метки игр игроков ugc_games/unity_games.age_rating +
-   age_set_rating, лимиты магазина по возрасту (premium_settings.teen_*, age_shop_caps; premium_state и premium_order_create с веткой
-   возраста — та же ветка уже в premium.sql). Запускать ПОСЛЕ premium.sql (premium.sql повторно — не нужно). Проверка:
-   `/rpc/my_age_group` гостем {} → {"ok":false,"reason":"auth"} (PGRST202 = не применён); `/rest/v1/ugc_games?select=age_rating&limit=0`
-   → [] (400 «does not exist» = не применён). До запуска год живёт в браузере (и у вошедших), метки игр игроков — 12+, лимиты
-   магазина — как раньше, карта у детей запрещена только в браузере. Тест PGlite: 99 (scratchpad pg/test-age.mjs).
-2–4. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 2) `games-more.sql` (ещё раз) — проверка
-   `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия); 3) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
-   (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20; 4) `economy.sql` (новый, ПОСЛЕДНИМ) —
+1–3. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 1) `games-more.sql` (ещё раз) — проверка
+   `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия); 2) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
+   (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20; 3) `economy.sql` (новый, ПОСЛЕДНИМ) —
    `/rpc/xp_rule` {"p_key":"visit"} → 5 (PGRST202 — не применён), `/rpc/achievement_xp` {"p_code":"creator"} → 250 (500 — старая).
    До запуска сервер считает по старым числам, подписи на сайте уже новые. Перезапустил xp.sql, games.sql, progression.sql,
    secrets.sql или unity.sql — после них снова economy.sql. Тесты PGlite: pg/eco/test-economy.mjs (86), pg/eco/test-coins-eco.mjs.
-5. `ads.sql` (15.10.2026) — реклама за 💎, кабинет рекламодателя #/adv (ad_settings, ad_campaigns, ad_creatives, ad_stats, ad_seen,
+4. `ads.sql` (15.10.2026) — реклама за 💎, кабинет рекламодателя #/adv (ad_settings, ad_campaigns, ad_creatives, ad_stats, ad_seen,
    ad_log, ad_reports, ad_advertisers; ad_prices / ad_live / ad_pick / ad_view / ad_go (только service_role) / ad_save / ad_act / ad_my
    / ad_get / ad_terms_accept / ad_report / ad_admin_*; закрытое хранилище ads). Нужен premium.sql (применён); от age.sql и
    economy.sql не зависит. Проверка: `/rpc/ad_prices` гостем → {"enabled":true,…}, `/rpc/ad_live` → {"on":true,"f":{}}, `/rpc/ad_go`
    гостем → отказ в правах (PGRST202 = не применён). До запуска кабинет пишет «откроется, когда сайт обновится». PGlite: 259 (pg/test-ads.mjs).
-premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
+age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
+поменять пока не могу» — напоминать 1–4 списком. premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
 cm_invite_info → null, chat_info → каналы general/games/lfg/memes/voice, messages.channel/reply_to/edited_at → 200).
 Если перезапускать server-hardening.sql или vip-claims.sql — после них снова premium.sql (он переопределяет credit_donation и
