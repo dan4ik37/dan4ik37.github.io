@@ -1,0 +1,104 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ПРИЛОЖЕНИЕ 📲 (js/features/app.js, app-guide.js) — установка, окно приложения, значок, обновления
+   ═══════════════════════════════════════════════════════════════════ */
+[data-app-install][hidden]{display:none!important}
+
+/* ── Пункт меню «📲 Установить приложение» / «⟳ Обновить» (в «Ещё ▾»; на телефоне — плитка в ☰) ── */
+.nav-app{font:inherit;cursor:pointer;border:0;background:none;text-align:left;width:100%;
+  display:block;padding:.7rem .95rem;border-radius:12px;white-space:nowrap;
+  font-size:.7rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.nav-app:hover{background:rgba(255,255,255,.06);color:var(--text)}
+@media(max-width:1180px){
+  .nav-links .nav-app{display:flex!important;align-items:center;gap:.3rem;min-height:44px;padding:.55rem .85rem!important;
+    border-radius:12px!important;background:var(--ac-10,rgba(255,45,85,.1))!important;color:var(--text);font-size:.78rem;letter-spacing:.05em;width:auto}
+}
+
+/* ── Разовая карточка «Приложение dan4ik37» ── */
+.apc{position:fixed;left:50%;bottom:1rem;z-index:9200;display:flex;align-items:center;gap:.8rem;width:min(430px,calc(100vw - 1.5rem));
+  padding:.8rem .8rem .8rem .9rem;border-radius:18px;background:#15131f;border:1px solid rgba(255,255,255,.12);color:#f0f0f8;
+  box-shadow:0 22px 60px rgba(0,0,0,.6),0 0 0 1px rgba(0,0,0,.3);font-family:'Montserrat',system-ui,sans-serif;
+  opacity:0;transform:translate(-50%,16px);transition:opacity .25s,transform .35s cubic-bezier(.16,1,.3,1)}
+.apc.on{opacity:1;transform:translate(-50%,0)}
+.apc-i{width:48px;height:48px;border-radius:12px;flex:none}
+.apc-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.apc-t b{font-size:.84rem;font-weight:800}
+.apc-t span{font-size:.7rem;color:#a7a7c0;line-height:1.35}
+.apc-go,.aps-go{border:0;cursor:pointer;font:800 .74rem 'Montserrat',system-ui,sans-serif;color:#fff;padding:.6rem 1rem;border-radius:999px;white-space:nowrap;
+  background:linear-gradient(135deg,var(--accent,#ff2d55),var(--accent2,#ff6b35));box-shadow:0 8px 22px -8px rgba(255,45,85,.7)}
+.apc-go:hover,.aps-go:hover{filter:brightness(1.08)}
+.apc-x,.aps-x,.apu-x{border:0;background:none;color:#9a9ab5;cursor:pointer;font-size:1rem;padding:.35rem;line-height:1;flex:none}
+.apc-x:hover,.aps-x:hover,.apu-x:hover{color:#fff}
+@media(max-width:768px){.apc{bottom:calc(58px + env(safe-area-inset-bottom) + .7rem)}}
+
+/* ── Окно «Как установить» и «Поделиться на dan4ik37» ── */
+.aps{position:fixed;inset:0;z-index:100700;display:flex;align-items:center;justify-content:center;padding:1rem;
+  background:rgba(4,4,8,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;transition:opacity .2s;
+  font-family:'Montserrat',system-ui,sans-serif;color:#f0f0f8}
+.aps.on,.aps-share{opacity:1}
+.aps-box{position:relative;width:min(540px,100%);max-height:calc(100dvh - 2rem);overflow-y:auto;overscroll-behavior:contain;
+  padding:1.2rem 1.2rem 1rem;border-radius:22px;background:#15131f;border:1px solid rgba(255,255,255,.12);box-shadow:0 30px 80px rgba(0,0,0,.7);
+  transform:translateY(14px);transition:transform .35s cubic-bezier(.16,1,.3,1)}
+.aps.on .aps-box,.aps-share .aps-box{transform:none}
+.aps-x{position:absolute;top:.7rem;right:.7rem}
+.aps-head{display:flex;align-items:center;gap:.85rem;margin:0 2rem .8rem 0}
+.aps-head img{border-radius:14px;flex:none}
+.aps-head b{display:block;font-size:1.02rem;font-weight:800}
+.aps-head span{display:block;font-size:.74rem;color:#a7a7c0;margin-top:.15rem}
+.aps-h{font-size:1rem;font-weight:800;margin:0 2rem .7rem 0}
+.aps-why{list-style:none;margin:0 0 .9rem;padding:.7rem .85rem;border-radius:14px;background:rgba(255,255,255,.04);display:grid;gap:.35rem;font-size:.76rem;color:#d8d8e8}
+.aps-main{display:flex;flex-direction:column;align-items:stretch;gap:.5rem}
+.aps-big{font-size:.92rem;padding:.85rem 1.2rem;align-self:center;min-width:220px}
+.aps-small{display:block;font-size:.68rem;color:#8d8daa;line-height:1.45;margin-top:.6rem;text-align:center}
+.aps-note{font-size:.72rem;color:#c9c9dc;line-height:1.45;margin:.6rem 0 0;padding:.55rem .7rem;border-radius:10px;background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.25)}
+.aps-steps{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}
+.aps-steps li{display:grid;gap:.45rem}
+.aps-steps figure{margin:0;border-radius:14px;overflow:hidden;background:#0d0c14;border:1px solid rgba(255,255,255,.06);display:flex;justify-content:center;padding:.4rem}
+.apg-pic{width:100%;max-width:300px;height:auto;display:block}
+.aps-steps p{margin:0;font-size:.8rem;line-height:1.5;color:#e6e6f2;display:flex;gap:.55rem;align-items:flex-start}
+.aps-steps p b{flex:none;width:1.45rem;height:1.45rem;border-radius:50%;display:grid;place-items:center;font-size:.72rem;
+  background:linear-gradient(135deg,var(--accent,#ff2d55),var(--accent2,#ff6b35));color:#fff}
+body.high .apg-hl{animation:apgPulse 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes apgPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.aps-other{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;margin-top:.9rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.08);font-size:.7rem;color:#8d8daa}
+.aps-other button{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#e6e6f2;border-radius:999px;padding:.38rem .7rem;font:700 .68rem 'Montserrat',system-ui,sans-serif;cursor:pointer}
+.aps-other button.on{border-color:var(--accent,#ff2d55);background:rgba(255,45,85,.14)}
+.aps-q{margin:0 0 .9rem;padding:.7rem .85rem;border-left:3px solid var(--accent,#ff2d55);border-radius:10px;background:rgba(255,255,255,.04);
+  font-size:.78rem;line-height:1.5;color:#e6e6f2;max-height:9rem;overflow:auto;word-break:break-word}
+.aps-acts{display:flex;flex-wrap:wrap;gap:.5rem}
+.aps-acts .aps-go{flex:1 1 150px}
+.aps-go.ghost{background:rgba(255,255,255,.06);box-shadow:none;border:1px solid rgba(255,255,255,.14)}
+@media(max-width:600px){
+  .aps{align-items:flex-end;padding:0}
+  .aps-box{width:100%;max-height:92dvh;border-radius:22px 22px 0 0;padding-bottom:calc(1rem + env(safe-area-inset-bottom));transform:translateY(40px)}
+}
+
+/* ── «✨ Доступна новая версия — Обновить» ── */
+.apu{position:fixed;left:50%;top:calc(4.6rem + env(safe-area-inset-top));z-index:9300;display:flex;align-items:center;gap:.6rem;
+  max-width:calc(100vw - 1.5rem);padding:.45rem .5rem .45rem 1rem;border-radius:999px;background:#1b1830;border:1px solid rgba(145,71,255,.45);
+  color:#f0f0f8;font:700 .76rem 'Montserrat',system-ui,sans-serif;box-shadow:0 14px 40px rgba(0,0,0,.55);
+  opacity:0;transform:translate(-50%,-10px);transition:opacity .25s,transform .3s cubic-bezier(.16,1,.3,1)}
+.apu.on{opacity:1;transform:translate(-50%,0)}
+.apu-go{border:0;cursor:pointer;border-radius:999px;padding:.42rem .9rem;font:800 .72rem 'Montserrat',system-ui,sans-serif;color:#fff;background:linear-gradient(135deg,#9147ff,#ff2d55)}
+
+/* ── Тост ── */
+.apt{position:fixed;left:50%;bottom:1.4rem;z-index:100800;max-width:min(440px,calc(100vw - 1.5rem));padding:.7rem 1.1rem;border-radius:16px;
+  background:#16161f;border:1px solid rgba(255,255,255,.14);color:#f0f0f8;font:700 .78rem/1.4 'Montserrat',system-ui,sans-serif;text-align:center;
+  box-shadow:0 14px 40px rgba(0,0,0,.6);opacity:0;pointer-events:none;transform:translate(-50%,12px);transition:opacity .25s,transform .3s}
+.apt.on{opacity:1;transform:translate(-50%,0)}
+@media(max-width:768px){.apt{bottom:calc(58px + env(safe-area-inset-bottom) + .8rem)}}
+
+/* ═══ Окно приложения (без браузера) ═══ */
+/* без «резинки» и протягивания страницы за край */
+html.app-standalone,html.app-standalone body{overscroll-behavior-y:none}
+html.app-standalone{-webkit-tap-highlight-color:transparent}
+/* На ПК (window-controls-overlay): шапка сайта — заголовок окна. Кнопки окна (свернуть/развернуть/закрыть; на Mac — слева)
+   не закрывают меню — отступы из getTitlebarAreaRect (app.js: --app-tb-l / --app-tb-r); окно тянется за пустое место шапки */
+html.app-wco #nav{padding-left:calc(2rem + var(--app-tb-l,0px));padding-right:calc(1rem + var(--app-tb-r,0px));-webkit-app-region:drag;app-region:drag}
+html.app-wco #nav a,html.app-wco #nav button,html.app-wco #nav input,html.app-wco #nav select,html.app-wco #nav label,html.app-wco #nav summary,
+html.app-wco #nav [role="dialog"],html.app-wco #nav .nav-more-panel,html.app-wco #nav .lang-dropdown,html.app-wco #nav .notif-panel,
+html.app-wco #nav .nav-links.open,html.app-wco #nav .notif-wrap,html.app-wco #nav .lang-wrap{-webkit-app-region:no-drag;app-region:no-drag}
+/* в узком окне шапка теснее: меньше отступы у пунктов */
+@media(min-width:1181px) and (max-width:1500px){html.app-wco .nav-links a,html.app-wco .nav-more-btn{padding:.55rem .6rem}}
+
+/* ═══ Сборка для Google Play (?app=play): покупки цифровых товаров — только через Google Play Billing, поэтому их не видно ═══ */
+html.app-play .nav-shop,html.app-play #navGems,html.app-play .nav-donate,html.app-play #donateFab,html.app-play .nav-vip{display:none!important}

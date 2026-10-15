@@ -51,12 +51,14 @@ function saveSub(sub) {
 
 // Старый sw.js (без обработчика push) мог остаться активным — тогда приветствие
 // приходит, но не показывается. Перед подпиской просим браузер проверить обновление
-// и ждём (до 5 с), пока новая версия встанет.
+// и ждём (до 5 с), пока новая версия встанет. Новая версия sw.js (app.js) сама не встаёт —
+// ждёт кнопки «Обновить»; push умеют все версии, поэтому ждём, только пока ставится
+// самая первая (активной ещё нет).
 async function freshServiceWorker() {
   const reg = await navigator.serviceWorker.ready;
   try { await reg.update(); } catch (e) {}
   const w = reg.installing || reg.waiting;
-  if (w) {
+  if (w && !reg.active) {
     await new Promise(res => {
       const t = setTimeout(res, 5000);
       w.addEventListener('statechange', () => { if (w.state === 'activated') { clearTimeout(t); res(); } });
@@ -159,39 +161,5 @@ async function pushWordsReminder(btn) {
 updatePushBtn();
 
 // ═══════════════════════════════════════
-//  PWA
+//  PWA — установка, регистрация sw.js и обновления теперь в js/features/app.js (D37App)
 // ═══════════════════════════════════════
-let deferredPrompt = null;
-
-// Раньше не было ни manifest.json, ни Service Worker — beforeinstallprompt
-// в реальном браузере физически не мог сработать (это требование спеки),
-// баннер установки был мёртвым кодом. Теперь оба на месте.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
-}
-
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  deferredPrompt = e;
-  // Показываем баннер через 3 секунды
-  setTimeout(() => {
-    if (!localStorage.getItem('d37_pwa_dismissed')) {
-      document.getElementById('pwaBanner').classList.add('show');
-    }
-  }, 3000);
-});
-
-async function installPWA() {
-  if (!deferredPrompt) return;
-  deferredPrompt.prompt();
-  const { outcome } = await deferredPrompt.userChoice;
-  deferredPrompt = null;
-  document.getElementById('pwaBanner').classList.remove('show');
-  if (outcome === 'accepted') localStorage.setItem('d37_pwa_installed','1');
-}
-
-document.getElementById('pwaBanner').querySelector('.pwa-close').addEventListener('click', () => {
-  localStorage.setItem('d37_pwa_dismissed','1');
-});
