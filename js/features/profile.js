@@ -189,7 +189,7 @@ async function renderProfilePage(viewUserId){
 
   document.getElementById('profileRoleBadge').innerHTML = ROLE_BADGE_HTML[profile.role] || '';
   // модераторам на чужом профиле — «связанные входы» (какие сервисы и сколько, без номеров и почты; social-login.js)
-  if (window.D37Login) window.D37Login.staffNote(isOwn ? null : targetId);
+  if (window.D37Login) window.D37Login.staffNote(isOwn ? null : targetId).catch(() => {});
   {
     const tier = getVipTier(profile);
     const vipBadgeEl = document.getElementById('profileVipBadge');
