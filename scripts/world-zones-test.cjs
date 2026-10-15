@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 globalThis.window = globalThis;
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
+for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/worldmap.js', 'js/engine/vehicle.js', 'js/engine/vehicle-ground.js', 'js/engine/vehicle-water.js', 'js/engine/vehicle-air.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js', 'js/games/mir-veh.js']) load(f);
 const MZ = globalThis.MirZones, MC = globalThis.MirCity, MW = globalThis.MirWar, E = globalThis.D37E;
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra)); } };
@@ -37,8 +37,12 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   // граница мира и земля
   const B = MZ.bounds(), G = MZ.groundRect();
   for (const R of [...ZLIST, RESERVE, OLD]) ok(B[0] <= R.x0 && B[2] >= R.x1 && B[1] <= R.z0 && B[3] >= R.z1, 'граница мира вмещает ' + (R.id || 'район/старый мир'));
-  ok(G[0] < B[0] - 100 && G[2] > B[2] + 100 && G[1] < B[1] - 100 && G[3] > B[3] + 100, 'земля шире границы мира (до тумана — не пустота)');
-  ok(!MZ.hillOk(170, 170, 40) && MZ.hillOk(B[2] + 80, 0, 40) && !MZ.hillOk(B[2] + 20, 0, 40), 'холмы горизонта — только целиком за краем мира');
+  // с картой-рельефом (worldmap.js): земля мира — площадка до набережной, дальше — рельеф карты (раздел 16); без карты — как раньше
+  if (MZ.worldMap()) ok(G[0] === MZ.SEA.x1 && G[2] >= B[2] && G[1] <= B[1] && G[3] >= B[3] && !MZ.hillOk(B[2] + 80, 0, 40), 'земля мира — площадка, вокруг — рельеф карты (без «картонных» холмов)');
+  else {
+    ok(G[0] < B[0] - 100 && G[2] > B[2] + 100 && G[1] < B[1] - 100 && G[3] > B[3] + 100, 'земля шире границы мира (до тумана — не пустота)');
+    ok(!MZ.hillOk(170, 170, 40) && MZ.hillOk(B[2] + 80, 0, 40) && !MZ.hillOk(B[2] + 20, 0, 40), 'холмы горизонта — только целиком за краем мира');
+  }
   // море и бункер — в боевой зоне; рельеф и вода
   const W = ZONES.war;
   ok(SEA.x1 > W.x0 && SEA.x1 < W.x1 && SEA.z0 >= W.z0 && SEA.z1 <= W.z1, 'море — в западной части боевой зоны');
@@ -531,6 +535,73 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
     ok(busy(12) > L.length * .7 && busy(3) < L.length * .2, `${zid}: днём город живой, ночью улицы пустые`, [busy(12), busy(3)]);
   }
   ok(MZ.residents('war').length === 0, 'в боевой зоне жителей нет');
+}
+
+// ═══ 16. Карта-рельеф вокруг мира (js/engine/worldmap.js): мир ровный как был, вокруг — горы, реки, озёра, море ═══
+{
+  const WM = MZ.worldMap();
+  ok(!!WM, 'карта-рельеф создаётся');
+  const C = MZ.clusterRect(), [mx0, mz0, mx1, mz1] = MZ.mapBounds();
+  ok(mx1 - mx0 >= 5000 && mz1 - mz0 >= 5000, 'карта — несколько километров', [mx1 - mx0]);
+  for (const e of MZ.EXPAND) ok(inRect(C, e.x0, e.z0) && inRect(C, e.x1, e.z1), `площадка мира включает место роста ${e.id}`);
+  for (const Z of ZLIST) ok(inRect(C, Math.max(Z.x0, SEA.x1), Z.z0) && inRect(C, Z.x1, Z.z1), `площадка мира включает зону ${Z.id}`);
+  ok(inRect(C, RESERVE.x0, RESERVE.z0) && inRect(C, RESERVE.x1, RESERVE.z1), 'площадка мира включает место района участков');
+  ok(C.x0 === SEA.x1, 'запад площадки — набережная гавани', [C.x0, SEA.x1]);
+  // внутри — ровно 0 (как было), кроме гавани, бункера и канала
+  const rnd = E.rng(99);
+  let flat = true, bad = null;
+  for (let k = 0; k < 3000; k++) {
+    const x = C.x0 + rnd() * (C.x1 - C.x0), z = C.z0 + rnd() * (C.z1 - C.z0);
+    if (inRect(SEA, x, z) || inRect(BUNKER, x, z) || inRect(MZ.CANAL, x, z)) continue;
+    const h = MZ.terrain(x, z); if (h !== 0) { flat = false; bad = [x, z, h]; break; }
+  }
+  ok(flat, 'площадка мира ровная: 0 везде, кроме гавани, бункера и канала', bad);
+  ok(MZ.terrain((SEA.x0 + SEA.x1) / 2, (SEA.z0 + SEA.z1) / 2) === SEA.floor && MZ.water((SEA.x0 + SEA.x1) / 2, 280) === SEA.wl, 'гавань: дно и вода как были');
+  ok(MZ.terrain((BUNKER.x0 + BUNKER.x1) / 2, (BUNKER.z0 + BUNKER.z1) / 2) === BUNKER.floor, 'бункер: пол как был');
+  // гавань открыта в океан: от неё на запад — вода до края карты
+  let sea = true, dry = null;
+  for (let x = SEA.x0 - 10; x > mx0 + 50; x -= 40) { const w = MZ.water(x, 280), h = WM.height(x, 280); if (!(w === SEA.wl && h < SEA.wl)) { sea = false; dry = [x, h]; break; } }
+  ok(sea, 'из гавани — пролив в океан (вода до края карты)', dry);
+  // природа: горы, равнины, суша и море
+  let hi = -Infinity, land = 0, N = 0;
+  for (let i = -2900; i <= 2900; i += 97) for (let j = -2900; j <= 2900; j += 97) { const h = WM.height(i, j); hi = Math.max(hi, h); if (h > WM.SEA) land++; N++; }
+  ok(hi > 250, 'есть горы выше 250', hi);
+  ok(land / N > .5 && land / N < .9, 'суши — больше половины, вокруг — море', land / N);
+  ok(WM.height(-3000, 0) < WM.SEA && WM.height(0, 3000) < WM.SEA && WM.height(3000, -2900) < WM.SEA, 'у края карты — море');
+  // одинаково у всех (по зерну): вторая карта — те же высоты
+  const WM2 = E.worldMap(MZ.mapLayout());
+  let same = true;
+  for (let k = 0; k < 400; k++) { const x = (rnd() - .5) * 6000, z = (rnd() - .5) * 6000; if (WM.height(x, z) !== WM2.height(x, z) || WM.water(x, z) !== WM2.water(x, z)) same = false; }
+  ok(same, 'карта одинаковая у всех (зерно, без сети)');
+  // реки: уровень только вниз, у устья — море; вода выше дна
+  for (const Rv of WM.RIVERS) {
+    let down = true; for (let k = 1; k <= Rv.n; k++) if (Rv.ys[k] > Rv.ys[k - 1] + 1e-6) down = false;
+    ok(down, `река ${Rv.id}: течёт только вниз`);
+    ok(Math.abs(Rv.ys[Rv.n] - WM.SEA) < 1e-6, `река ${Rv.id}: впадает в море`);
+    let wet = 0, tot = 0;
+    for (let s = 20; s < Rv.L - 20; s += 50) { const P = WM.at(Rv.pts, Rv.cum, s); tot++; if (WM.water(P[0], P[1]) > WM.height(P[0], P[1]) + .3) wet++; }
+    ok(wet / tot > .97, `река ${Rv.id}: в русле вода`, [wet, tot]);
+    ok(Rv.pts.every(([x, z]) => MZ.distRect(C, x, z) > 150), `река ${Rv.id}: не через мир`);
+  }
+  for (const L of WM.LAKES) {
+    ok(WM.water(L.x, L.z) === L.wl && WM.height(L.x, L.z) < L.wl - 2, `озеро ${L.id}: вода в чаше`);
+    let rim = true; for (let a = 0; a < 16; a++) { const t = a / 16 * Math.PI * 2; if (WM.height(L.x + Math.cos(t) * L.r * 1.15, L.z + Math.sin(t) * L.r * 1.15) < L.wl) rim = false; }
+    ok(rim, `озеро ${L.id}: берег выше воды (не перельётся)`);
+  }
+  // деревья: не на площадке, не в воде, одинаковые у всех
+  const tr = [];
+  WM.trees(-900, -900, 900, 900, (x, y, z, k, pine, r) => tr.push([x, y, z]));
+  ok(tr.length > 200, 'в природе есть деревья', tr.length);
+  ok(tr.every(([x, y, z]) => MZ.distRect(C, x, z) > 8 && y > WM.SEA + 2 && WM.water(x, z) === -Infinity), 'деревья — не на площадке мира и не в воде');
+  const tr2 = []; WM2.trees(-900, -900, 900, 900, (x, y, z) => tr2.push([x, y, z]));
+  ok(JSON.stringify(tr) === JSON.stringify(tr2), 'деревья одинаковые у всех');
+  // скорость: высота — дешёвая (её зовут физика, NPC, машины)
+  const t0 = process.hrtime.bigint(); let acc = 0;
+  for (let k = 0; k < 20000; k++) acc += WM.ground((rnd() - .5) * 6000, (rnd() - .5) * 6000);
+  const us = Number(process.hrtime.bigint() - t0) / 1000 / 20000;
+  ok(us < 6, 'высота земли — меньше 6 мкс', us.toFixed(2));
+  ok(MZ.hillOk(500, 500, 20) === false, 'с картой — без «картонных» холмов');
+  const GR = MZ.groundRect(); ok(GR[0] === SEA.x1 && GR[2] >= C.x1, 'земля мира — до набережной гавани');
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);

@@ -697,6 +697,69 @@ async function gameTests(){
     const keep = await spawnRun(60, 200, .7, false);
     ok(keep.maxNear <= 6, 'мобы: рядом не больше предела (поверхность, ночь — 6)', keep.maxNear);
   }
+  // ── логика систем: каждый рецепт делается у своего станка, сундук, вода на лаву, сохранение, экспорт, отброс, замах филина ──
+  {
+    await A.stopWorld(false);
+    await sim.newWorld('pz-test-qa'); const G = sim.G, PZ = A.PZ; T.god(true); G.npcs.length = 0; await sim.frames(1);
+    const p = G.pl, px = Math.floor(p.x + p.w / 2), y0 = Math.floor(p.y + p.h - .01) + 1;
+    for (let x = px - 9; x <= px + 9; x++) { for (let y = y0 - 5; y < y0; y++) T.setCell(x, y, 0, 0); T.setCell(x, y0, PZ.TILE.stone.id, 0); }
+    T.placeTile('workbench', px + 2, y0 - 1); T.placeTile('furnace', px + 5, y0 - 1); T.placeTile('anvil', px - 4, y0 - 1);
+    await sim.frames(.2);
+    const bad = [];
+    for (const r of PZ.RECIPES) {
+      G.CH.inv.fill(null); for (const [k, n] of r.i) A.give(k, n);
+      A.craft(r, 1);
+      const got = A.count(r.o) + G.items.filter(i => i.id === r.o).reduce((s, i) => s + i.n, 0); G.items.length = 0;
+      if (got < r.n) bad.push(r.o + '@' + (r.st || '—'));
+    }
+    ok(!bad.length && PZ.RECIPES.length >= 50, `рецепты: все ${PZ.RECIPES.length} делаются у своего станка`, bad);
+    ok(['pick_copper', 'axe_copper', 'hammer', 'sword_copper'].every(k => PZ.RECIPES.some(r => r.o === k)), 'рецепты: начальные инструменты можно сделать заново (потерял — не тупик)');
+    // цели первых часов: по порядку, выполненная сменяется следующей
+    {
+      const g = () => A.goal()?.i ?? -1, wb = PZ.RECIPES.find(r => r.o === 'workbench');
+      const save = G.CH.inv.slice(), ach = G.CH.ach, flags = G.W.flags;
+      G.CH.inv.fill(null); G.CH.ach = {}; G.W.flags = {}; T.breakTile(px + 2, y0 - 1); T.breakTile(px + 5, y0 - 1); T.breakTile(px - 4, y0 - 1); G.items.length = 0;
+      const s0 = g(); A.give('wood', 10); const s1 = g(); A.craft(wb, 1); const s2 = g(); G.CH.ach.torch = 1; const s3 = g();
+      ok(s0 === 0 && s1 === 1 && s2 === 2 && s3 === 3 && A.GOALS.length >= 8, 'цели: дерево → верстак → факел → руда (по порядку)', [s0, s1, s2, s3]);
+      G.CH.inv.splice(0, G.CH.inv.length, ...save); G.CH.ach = ach; G.W.flags = flags;
+      T.placeTile('workbench', px + 2, y0 - 1); T.placeTile('furnace', px + 5, y0 - 1); T.placeTile('anvil', px - 4, y0 - 1); await sim.frames(.1);
+    }
+    // сундук с вещами не ломается, пустой — ломается
+    G.CH.inv.fill(null); G.CH.inv[0] = { id: 'pick_copper', n: 1 };
+    T.placeTile('chest', px - 2, y0 - 1); await sim.frames(.1);
+    const ck = [...G.chests.keys()].find(k => Math.abs(+k.split(',')[0] - (px - 2)) <= 1), [cx, cy] = ck ? ck.split(',').map(Number) : [0, 0];
+    if (ck) G.chests.get(ck)[0] = { id: 'stone', n: 3 };
+    const full = T.breakTile(cx, cy); if (ck) G.chests.get(ck)[0] = null; const empty = T.breakTile(cx, cy);
+    ok(!!ck && !full && empty, 'сундук: с вещами не ломается, пустой — ломается', { ck, full, empty });
+    // вода на лаву — обсидиан
+    const lx = px + 8, ly = y0 + 4;
+    for (let x = lx - 2; x <= lx + 2; x++) for (let y = ly - 3; y <= ly + 1; y++) T.setCell(x, y, PZ.TILE.stone.id, 0);
+    for (let y = ly - 2; y <= ly; y++) T.setCell(lx, y, 0, 0);
+    T.setCell(lx, ly, 0, 0, null, 255, 2); T.setCell(lx, ly - 2, 0, 0, null, 255, 1);
+    await sim.frames(3);
+    ok(A.fgAt(lx, ly) === PZ.TILE.obsidian.id, 'жидкости: вода на лаву — обсидиан', A.fgAt(lx, ly));
+    // отброс: сила оружия × (1 − стойкость моба); зомби держит удар лучше слизня
+    G.CH.inv[2] = { id: 'sword_copper', n: 1 }; A.selSlot(2); G.mobs.length = 0;
+    const z = T.mob('zombie', px + 1.9, y0), s = T.mob('slime', px + 1.9, y0 - 3);
+    sim.aimAt(z.x + z.w / 2, z.y + z.h / 2); G.mouse.l = true; await sim.frames(1 / 60); G.mouse.l = false;
+    ok(Math.abs(z.vx) > 1 && Math.abs(z.vx) < 2.2 && PZ.ITEMS.sword_copper.kb < PZ.ITEMS.sword_fire.kb, 'отброс: у оружия своя сила, у мобов стойкость (медный меч по зомби — 1,75)', z.vx);
+    G.mobs.length = 0;
+    // филин: перед пикированием — замах («!», зависает), не сразу
+    T.time(.7); T.boss('owl'); const owl = G.boss; await sim.frames(.1); owl.t = 0; owl.st = 0; await sim.frames(2 / 60);
+    const wind = owl.st === 3, texts = G.texts.some(q => q.text === '!');
+    await sim.frames(.8);
+    ok(wind && texts && (owl.st === 1 || owl.st === 2), 'боссы: филин замахивается («!», ~0,7 с) и только потом пикирует', { wind, texts, st: owl.st });
+    G.mobs.length = 0; G.boss = null; T.time(.3);
+    // сохранение и вход заново; экспорт → импорт
+    const bx = px - 1, by = y0 - 4; T.setCell(bx, by, PZ.TILE.brick.id, 0); A.give('gold', 7);
+    const wid = G.W.id, cid = G.CH.id, gold = A.count('gold');
+    await A.saveAll(); await A.stopWorld(true); await A.play(wid, cid);
+    for (let i = 0; i < 300 && sim.G.state !== 'play'; i++) await sim.frames(.05);
+    await sim.frames(.5);
+    ok(sim.G.state === 'play' && A.fgAt(bx, by) === PZ.TILE.brick.id && A.count('gold') === gold, 'сохранение: блок и вещи на месте после выхода и входа');
+    const data = await A.exportWorld(wid), w2 = await A.importWorld(JSON.parse(JSON.stringify(data)));
+    ok(Object.keys(data.chunks).length > 0 && w2.id !== wid && w2.seed === data.world.seed, 'экспорт → импорт: копия мира с теми же чанками', Object.keys(data.chunks).length);
+  }
   await A.stopWorld(false);
 }
 

@@ -19,62 +19,101 @@
 
   // ═══ Узоры 16×16 (g — контекст, ox/oy — угол ячейки, c — цвета [основа, тёмный, светлый], R — случайность варианта) ═══
   function P(g, ox, oy){ return (x, y, col, w = 1, h = 1) => { g.fillStyle = col; g.fillRect(ox + x, oy + y, w, h); }; }
-  const PAT = {
-    dirt(g, ox, oy, c, R){
-      const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
-      for (let i = 0; i < 34; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1], .9 + R() * .2));
-      for (let i = 0; i < 14; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[2]));
-      for (let i = 0; i < 2; i++) { const x = R() * 13 | 0, y = R() * 13 | 0; p(x, y, rgb(c[1], .8), 3, 2); p(x, y, rgb(c[2], 1.05), 2, 1); }
-    },
-    stone(g, ox, oy, c, R){
-      const p = P(g, ox, oy); p(0, 0, rgb(c[1]), 16, 16);
-      // 3–4 «камня» со светлым верхом и тёмным низом
-      for (let k = 0; k < 4; k++) {
-        const x = (k % 2) * 8 + (R() * 3 | 0) - 1, y = (k >> 1) * 8 + (R() * 3 | 0) - 1, w = 7 + (R() * 3 | 0), h = 6 + (R() * 3 | 0);
-        p(x, y, rgb(c[0]), w, h); p(x, y, rgb(c[2]), w - 1, 1); p(x, y, rgb(c[2]), 1, h - 1);
-        p(x + 1, y + h - 1, rgb(c[1], .78), w - 1, 1); p(x + w - 1, y + 1, rgb(c[1], .78), 1, h - 1);
+  // кружок радиуса r (обрезается краем ячейки)
+  function blob(p, x, y, r, col){ for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r) { const X = x + xx | 0, Y = y + yy | 0; if (X >= 0 && Y >= 0 && X < 16 && Y < 16) p(X, Y, col); } }
+  // «камни» по Вороному на торе (узор стыкуется сам с собой): номер камня и «шов» для каждой из 256 точек
+  function cells(R, n){
+    const pts = []; for (let i = 0; i < n; i++) pts.push([R() * 16, R() * 16]);
+    const id = new Uint8Array(256), seam = new Uint8Array(256);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      let d1 = 1e9, d2 = 1e9, b = 0;
+      for (let i = 0; i < n; i++) for (let oy = -16; oy <= 16; oy += 16) for (let ox = -16; ox <= 16; ox += 16) {
+        const dx = x + .5 - pts[i][0] - ox, dy = (y + .5 - pts[i][1] - oy) * 1.25, d = dx * dx + dy * dy;
+        if (d < d1) { d2 = d1; d1 = d; b = i; } else if (d < d2) d2 = d;
       }
-      for (let i = 0; i < 10; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1], .85));
-    },
-    sand(g, ox, oy, c, R){
+      id[y * 16 + x] = b; seam[y * 16 + x] = Math.sqrt(d2) - Math.sqrt(d1) < 1.05 ? 1 : 0;
+    }
+    return { id, seam, n };
+  }
+  // камни с объёмом: свой тон у каждого, светлый край сверху-слева, тень снизу-справа, тёмные швы
+  function cobble(p, c, R, n, seamK = .78){
+    const C = cells(R, n), tone = Array.from({ length: n }, () => [.9 + R() * .16, R() * .35]);
+    const at = (x, y) => C.seam[((y + 16) % 16) * 16 + ((x + 16) % 16)];
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
+      const i = y * 16 + x;
+      if (C.seam[i]) { p(x, y, rgb(c[1], seamK)); continue; }
+      const [k, m] = tone[C.id[i]], base = mixc(c[0], c[2], m);
+      const hi = at(x, y - 1) || at(x - 1, y), lo = at(x, y + 1) || at(x + 1, y);
+      p(x, y, rgb(hi ? mixc(base, c[2], .65) : base, lo ? k * .84 : k));
+    }
+    return C;
+  }
+  const PAT = {
+    dirt(g, ox, oy, c, R){   // комья двух тонов, камешки со светлым верхом, корешок
       const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
-      for (let i = 0; i < 46; i++) p(R() * 16 | 0, R() * 16 | 0, R() < .55 ? rgb(c[1]) : rgb(c[2]));
+      for (let k = 0; k < 7; k++) { const dk = R() < .55; blob(p, R() * 16, R() * 16, 1.2 + R() * 2.2, rgb(dk ? c[1] : c[2], dk ? .9 + R() * .12 : .98 + R() * .06)); }
+      for (let i = 0; i < 18; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1], .82));
+      for (let i = 0; i < 6; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[2], 1.08));
+      for (let i = 0; i < 3; i++) { const x = R() * 14 | 0, y = R() * 14 | 0, s = mixc(c[2], [196, 188, 176], .45); p(x, y, rgb(s), 2, 2); p(x, y, rgb(s, 1.18), 1, 1); p(x + 1, y + 1, rgb(c[1], .66), 1, 1); }
+      if (R() < .45) { let x = R() * 16 | 0, y = R() * 8 | 0; for (let i = 0; i < 5; i++) { p(x, y, rgb(c[1], .7)); if (R() < .5) x = (x + 1) % 16; y++; } }
     },
-    snow(g, ox, oy, c, R){
-      const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
-      for (let i = 0; i < 20; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1]));
-      for (let i = 0; i < 10; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[2]));
+    stone(g, ox, oy, c, R){   // камни по Вороному: стыкуются без шва, у каждого свой тон и объём
+      const p = P(g, ox, oy);
+      cobble(p, c, R, 5);
+      for (let i = 0; i < 7; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1], .9));
+      if (R() < .5) { let x = R() * 16 | 0, y = R() * 16 | 0; for (let i = 0; i < 4; i++) { p(x, y, rgb(c[1], .72)); x = (x + (R() < .5 ? 1 : 0)) % 16; y = (y + 1) % 16; } }   // трещинка
     },
-    ice(g, ox, oy, c, R){
+    sand(g, ox, oy, c, R){   // рябь от ветра (узор стыкуется) и песчинки
       const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
-      for (let k = 0; k < 3; k++) { const s = R() * 16 | 0; for (let i = 0; i < 9; i++) p((s + i) % 16, (i + k * 5) % 16, rgb(c[2])); }
-      for (let i = 0; i < 12; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1]));
+      const ph = R() * 8 | 0;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const r = (x + 2 * y + ph + (y >> 2)) & 7; if (r === 0) p(x, y, rgb(c[1], .96)); else if (r === 1) p(x, y, rgb(c[2], 1.02)); }
+      for (let i = 0; i < 22; i++) p(R() * 16 | 0, R() * 16 | 0, R() < .5 ? rgb(c[1], .9) : rgb(c[2], 1.05));
+    },
+    snow(g, ox, oy, c, R){   // мягкие сугробы с голубой тенью и искорки
+      const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
+      for (let k = 0; k < 4; k++) blob(p, R() * 16, R() * 16, 1.5 + R() * 2.5, rgb(c[1], 1.01));
+      for (let k = 0; k < 4; k++) blob(p, R() * 16, R() * 16, 1 + R() * 1.6, rgb(c[0], 1.02));
+      for (let i = 0; i < 4; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[2]));
+      for (let i = 0; i < 2; i++) { const x = 1 + R() * 14 | 0, y = 1 + R() * 14 | 0; p(x, y, 'rgba(255,255,255,1)'); p(x - 1, y, 'rgba(225,240,255,.8)'); p(x + 1, y, 'rgba(225,240,255,.8)'); }
+    },
+    ice(g, ox, oy, c, R){   // грани, косые блики и трещины
+      const p = P(g, ox, oy);
+      const C = cells(R, 3);
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const i = y * 16 + x, t = C.id[i] / 3; p(x, y, C.seam[i] ? rgb(c[1], .92) : rgb(mixc(c[0], c[2], .12 + t * .25))); }
+      for (let k = 0; k < 2; k++) { const s = R() * 16 | 0; for (let i = 0; i < 6; i++) p((s + i) % 16, (k * 8 + 6 - i + 16) % 16, 'rgba(255,255,255,.75)'); }
+      for (let i = 0; i < 3; i++) p(R() * 16 | 0, R() * 16 | 0, 'rgba(255,255,255,.9)');
     },
     strata(g, ox, oy, c, R){
       const p = P(g, ox, oy);
       for (let y = 0; y < 16; y++) { const band = ((y + (R() * 2 | 0)) >> 2) & 1; p(0, y, rgb(band ? c[0] : c[1]), 16, 1); }
       for (let i = 0; i < 18; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[2]));
     },
-    ore(g, ox, oy, c, R){
+    ore(g, ox, oy, c, R){   // камень + самородки с тёмной оправой, светлой гранью и искрой
       PAT.stone(g, ox, oy, [c[0], mixc(hex('#000000'), c[0], .8), mixc(c[0], [255, 255, 255], .25)], R);
       const p = P(g, ox, oy);
       for (let k = 0; k < 4; k++) {
-        const x = 1 + (R() * 12 | 0), y = 1 + (R() * 12 | 0);
-        p(x, y, rgb(c[1], .7), 3, 3); p(x, y, rgb(c[1]), 2, 2); p(x, y, rgb(c[2]), 1, 1);
+        const x = 1 + (R() * 11 | 0), y = 1 + (R() * 11 | 0), big = R() < .5;
+        p(x - 1, y, rgb(c[1], .42), big ? 5 : 4, big ? 4 : 3); p(x, y - 1, rgb(c[1], .42), big ? 3 : 2, big ? 6 : 5);   // оправа
+        p(x, y, rgb(c[1], .82), big ? 3 : 2, big ? 3 : 2); p(x, y, rgb(c[1]), big ? 2 : 1, big ? 2 : 2);
+        p(x, y, rgb(c[2]), 1, 1); if (big) p(x + 2, y + 2, rgb(c[1], .6), 1, 1);
       }
+      if (R() < .75) { const x = 2 + (R() * 12 | 0), y = 2 + (R() * 12 | 0); p(x, y, 'rgba(255,255,255,1)'); p(x - 1, y, rgb(c[2], 1, .85)); p(x + 1, y, rgb(c[2], 1, .85)); p(x, y - 1, rgb(c[2], 1, .85)); p(x, y + 1, rgb(c[2], 1, .85)); }   // искра
     },
     obsid(g, ox, oy, c, R){
       const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
       for (let i = 0; i < 26; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1]));
       for (let k = 0; k < 3; k++) { const x = R() * 13 | 0, y = R() * 13 | 0; p(x, y, rgb(c[2]), 2, 1); p(x + 1, y + 1, rgb(c[2], .8), 2, 1); }
     },
-    planks(g, ox, oy, c, R){
-      const p = P(g, ox, oy); p(0, 0, rgb(c[0]), 16, 16);
+    planks(g, ox, oy, c, R){   // две доски: свой тон, волокна, сучок, гвозди у стыка
+      const p = P(g, ox, oy);
       for (let row = 0; row < 2; row++) {
-        const y = row * 8, cut = 3 + (R() * 10 | 0);
-        p(0, y + 7, rgb(c[1], .8), 16, 1); p(0, y, rgb(c[2]), 16, 1);
-        p(cut, y, rgb(c[1], .8), 1, 7);
-        for (let i = 0; i < 5; i++) p(R() * 16 | 0, y + 2 + (R() * 4 | 0), rgb(c[1]), 2 + (R() * 3 | 0), 1);
+        const y = row * 8, cut = 3 + (R() * 10 | 0), k = .94 + R() * .1;
+        p(0, y, rgb(c[0], k), 16, 8);
+        for (let i = 0; i < 6; i++) p(R() * 16 | 0, y + 1 + (R() * 6 | 0), rgb(c[1], k * .96), 3 + (R() * 5 | 0), 1);   // волокна
+        if (R() < .5) { const x = 2 + (R() * 11 | 0), yy = y + 2 + (R() * 3 | 0); p(x, yy, rgb(c[1], .8), 2, 2); p(x, yy, rgb(c[1], .65), 1, 1); }   // сучок
+        p(0, y, rgb(c[2], k), 16, 1); p(0, y + 7, rgb(c[1], .74), 16, 1);
+        p(cut, y, rgb(c[1], .7), 1, 7); p(cut + 1, y + 1, rgb(c[2], .95), 1, 6);
+        p(cut - 2, y + 2, 'rgba(40,30,25,.9)'); p(cut + 2, y + 2, 'rgba(40,30,25,.9)'); p(cut - 2, y + 1, 'rgba(255,240,210,.35)');   // гвозди
       }
     },
     brick(g, ox, oy, c, R){
@@ -105,24 +144,25 @@
       p(7, 7, rgb(c[0]), 2, 9); p(7, 7, rgb(c[0], 1.3), 1, 9);
       p(6, 3, rgb(c[1]), 4, 5); p(7, 1, rgb(c[1]), 2, 3); p(7, 4, rgb(c[2]), 2, 3); p(8, 0 + (R() * 2 | 0), rgb(c[1], 1, .8), 1, 1);
     },
-    trunk(g, ox, oy, c, R){
+    trunk(g, ox, oy, c, R){   // кора: продольные борозды, светлая сторона, сучок
       const p = P(g, ox, oy); g.clearRect(ox, oy, 16, 16);
-      p(3, 0, rgb(c[0]), 10, 16); p(3, 0, rgb(c[1]), 1, 16); p(12, 0, rgb(c[1]), 1, 16); p(4, 0, rgb(c[2]), 1, 16);
-      for (let i = 0; i < 5; i++) p(5 + (R() * 6 | 0), R() * 16 | 0, rgb(c[1]), 1, 3 + (R() * 3 | 0));
-      if (R() < .3) { const y = 4 + (R() * 8 | 0); p(6, y, rgb(c[1]), 3, 2); }
+      p(3, 0, rgb(c[0]), 10, 16); p(3, 0, rgb(c[1], .85), 1, 16); p(12, 0, rgb(c[1], .8), 1, 16); p(4, 0, rgb(c[2]), 2, 16); p(11, 0, rgb(c[1]), 1, 16);
+      for (let i = 0; i < 6; i++) { const x = 5 + (R() * 6 | 0), y = R() * 16 | 0, h = 3 + (R() * 5 | 0); p(x, y, rgb(c[1], .9), 1, h); p(x + 1, y + 1, rgb(c[2], .95), 1, Math.max(1, h - 2)); }
+      if (R() < .35) { const y = 3 + (R() * 9 | 0); p(6, y, rgb(c[1], .7), 4, 3); p(7, y + 1, rgb(c[1], .5), 2, 1); p(6, y, rgb(c[2]), 4, 1); }
     },
-    leaves(g, ox, oy, c, R){   // сплошная листва: тёмная основа, светлые «пучки» сверху (края скругляет шейдер по соседям)
+    leaves(g, ox, oy, c, R){   // сплошная листва: тёмная основа, пучки с бликом сверху и тенью снизу, просветы (края скругляет шейдер)
       const p = P(g, ox, oy);
       p(0, 0, rgb(c[1]), 16, 16);
-      for (let k = 0; k < 9; k++) {
-        const x = R() * 16, y = R() * 16, r = 2 + R() * 2.5;
+      for (let k = 0; k < 10; k++) {
+        const x = R() * 16, y = R() * 16, r = 1.8 + R() * 2.4;
         for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) {
           if (xx * xx + yy * yy > r * r) continue;
           const X = x + xx | 0, Y = y + yy | 0; if (X < 0 || Y < 0 || X > 15 || Y > 15) continue;
-          p(X, Y, rgb(yy < -r * .35 ? c[2] : c[0]));
+          p(X, Y, rgb(yy < -r * .4 ? c[2] : yy > r * .5 ? c[1] : c[0], yy > r * .5 ? 1.08 : 1));
         }
       }
-      for (let i = 0; i < 10; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1], .75));
+      for (let i = 0; i < 8; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[1], .62));   // просветы
+      for (let i = 0; i < 5; i++) p(R() * 16 | 0, R() * 16 | 0, rgb(c[2], 1.12));
     },
     pleaves(g, ox, oy, c, R){
       const p = P(g, ox, oy);
@@ -247,49 +287,89 @@
     },
   };
   // ── Спрайты (мобы, боссы, снаряды, эффекты): имя → [w, h, кадров, рисовать(g, x, y, кадр)] ──
+  // желе (слизни): полупрозрачный купол — тёмная кромка, низ темнее, блик сверху слева, ядро, пузырьки, глаза с бликом.
+  // Серое — красится цветом вершин (у каждого слизня свой). k — толщина «пикселя» (великан — 2)
+  function jelly(g, x, y, W, H, sq, k){
+    const p = P(g, x, y), w = W - 4 * k + sq, h = H - 6 * k - sq, ox = (W - w) >> 1, oy = H - h, R = Math.round;
+    // купол: низ (четверть) во всю ширину, выше — по дуге
+    const inside = (xx, yy) => { if (xx < 0 || xx >= w || yy < 0 || yy >= h) return false; const v = (h - yy - .5) / h, q = v > .3 ? (v - .3) / .7 : 0, hw = w / 2 * Math.sqrt(Math.max(0, 1 - q * q)); return Math.abs(xx + .5 - w / 2) <= hw; };
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+      if (!inside(xx, yy)) continue;
+      const edge = !inside(xx - k, yy) || !inside(xx + k, yy) || !inside(xx, yy - k) || yy >= h - k;
+      const gl = yy < h * .3 && xx > w * .14 && xx < w * .48 && inside(xx, yy - 2 * k);
+      let c = 236 - yy / h * 56 | 0, a = .8;
+      if (edge) { c = 128; a = .96; } else if (gl) { c = 255; a = .92; }
+      p(ox + xx, oy + yy, `rgba(${c},${c},${c},${a})`);
+    }
+    const cx = ox + w * .5, cy = oy + h * .64, rx = w * .17, ry = h * .17;
+    for (let yy = -ry; yy <= ry; yy++) for (let xx = -rx; xx <= rx; xx++) if ((xx * xx) / (rx * rx) + (yy * yy) / (ry * ry) <= 1) p(R(cx + xx), R(cy + yy), 'rgba(110,110,120,.2)');
+    p(R(ox + w * .72), R(oy + h * .5), 'rgba(255,255,255,.75)', k, k); p(R(ox + w * .27), R(oy + h * .74), 'rgba(255,255,255,.55)', k, k);
+    const ey = oy + R(h * .3), e = Math.max(3, R(3 * k));
+    p(ox + R(w * .22), ey, '#1a1a22', e, e + k); p(ox + R(w * .64), ey, '#1a1a22', e, e + k);
+    p(ox + R(w * .22), ey, '#fff', k, k); p(ox + R(w * .64), ey, '#fff', k, k);
+    p(ox + R(w * .42), ey + e + 2 * k, '#1a1a22', R(w * .16), k);
+  }
+  // тёмный контур по краю непрозрачного (как у спрайтов Террарии) — только внутри кадра
+  function outline(g, x, y, w, h){
+    const im = g.getImageData(x, y, w, h), d = im.data, a = i => d[i * 4 + 3];
+    const add = [];
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
+      const i = yy * w + xx; if (a(i) > 40) continue;
+      if ((xx > 0 && a(i - 1) > 160) || (xx < w - 1 && a(i + 1) > 160) || (yy > 0 && a(i - w) > 160) || (yy < h - 1 && a(i + w) > 160)) add.push(i);
+    }
+    for (const i of add) { d[i * 4] = 18; d[i * 4 + 1] = 16; d[i * 4 + 2] = 24; d[i * 4 + 3] = 170; }
+    g.putImageData(im, x, y);
+  }
+  const OUTLINED = new Set(['zombie', 'bat', 'crawler', 'imp', 'owl', 'person']);
   const SPR = {
     white: [4, 4, 1, (g, x, y) => { g.fillStyle = '#fff'; g.fillRect(x, y, 4, 4); }],
-    slime: [26, 20, 3, (g, x, y, f) => {   // серый — красится цветом вершин
-      const p = P(g, x, y), sq = [0, 3, -2][f], w = 22 + sq, h = 14 - sq, ox = (26 - w) >> 1, oy = 20 - h;
-      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
-        const u = (xx - w / 2 + .5) / (w / 2), v = (yy - h) / h;
-        if (u * u + (v + .45) * (v + .45) * 1.6 > 1.1 && yy < h * .55) continue;
-        p(ox + xx, oy + yy, `rgba(${yy < 4 ? 250 : 215},${yy < 4 ? 250 : 215},${yy < 4 ? 250 : 215},.82)`);
+    slime: [26, 20, 3, (g, x, y, f) => jelly(g, x, y, 26, 20, [0, 3, -2][f], 1)],   // серый — красится цветом вершин
+    zombie: [20, 44, 4, (g, x, y, f) => {   // рваная рубаха, сквозь дыры — кожа, светящиеся глаза, руки вперёд качаются
+      const p = P(g, x, y), sw = [0, 2, 0, -2][f], st = f % 2, skin = '#7fae6a', sk2 = '#5f8f50', dk = '#46703c', shirt = '#4a6a9a', sh2 = '#36507a', pants = '#4a3a2e', pa2 = '#352a20';
+      p(6, 0, skin, 9, 9); p(6, 0, dk, 9, 2); p(6, 2, sk2, 1, 7); p(14, 2, sk2, 1, 7);   // голова
+      p(7, 3, '#20301a', 3, 3); p(11, 3, '#20301a', 3, 3); p(8, 4, '#f2ea60', 1, 1); p(12, 4, '#f2ea60', 1, 1);   // глазницы и глаза
+      p(8, 7, '#3a2a20', 5, 1); p(9, 7, '#d8d0b0', 1, 1); p(11, 7, '#d8d0b0', 1, 1); p(10, 1, '#8fc07a', 3, 1);
+      p(5, 9, shirt, 11, 15); p(5, 9, sh2, 11, 2); p(5, 9, sh2, 1, 15); p(7, 13, skin, 2, 3); p(12, 18, skin, 2, 2); p(8, 21, sh2, 4, 1);   // рубаха с дырами
+      p(5, 22, '#2a2018', 11, 2); p(10, 22, '#8a7a40', 1, 2);   // ремень
+      for (let i = 0; i < 5; i++) p(5 + i * 2 + (i % 2), 24, sh2, 1, 2);   // рваный край
+      p(13, 11 + st, skin, 7, 3); p(13, 13 + st, sk2, 7, 1); p(14 + sw, 15 - st, skin, 6, 3); p(18 + sw, 15 - st, sk2, 2, 3);   // руки вперёд
+      p(6, 25, pants, 4, 15 + st); p(11, 25, pants, 4, 15 - st); p(6, 25, pa2, 1, 15 + st); p(7, 31, '#5a4a3a', 2, 2);
+      p(6 - sw, 40, '#2a2420', 5, 4); p(11 + sw, 40, '#2a2420', 5, 4); p(6 - sw, 40, '#3a3430', 5, 1); p(11 + sw, 40, '#3a3430', 5, 1);
+    }],
+    bat: [26, 14, 4, (g, x, y, f) => {   // уши, клыки, перепонки с «пальцами»
+      const p = P(g, x, y), wy = [0, 4, 7, 4][f];
+      for (let i = 0; i < 10; i++) {
+        const yy = 4 + Math.round(wy * (1 - i / 10)) - (i < 3 ? 1 : 0), Y = Math.max(0, Math.min(11, yy)), hh = 3 + (i % 3 === 2 ? 1 : 0);
+        p(9 - i, Y, '#5a4a6a', 1, hh); p(16 + i, Y, '#5a4a6a', 1, hh);
+        if (i % 3 === 2) { p(9 - i, Y, '#3a2e4a', 1, 1); p(16 + i, Y, '#3a2e4a', 1, 1); }   // «пальцы» крыла
       }
-      p(ox + 5, oy + 5, '#1a1a22', 3, 3); p(ox + w - 8, oy + 5, '#1a1a22', 3, 3); p(ox + 4, oy + 3, '#fff', 3, 1);
+      p(10, 4, '#4a3a5a', 6, 7); p(10, 4, '#5e4c70', 6, 2); p(10, 2, '#4a3a5a', 2, 2); p(14, 2, '#4a3a5a', 2, 2); p(10, 1, '#4a3a5a', 1, 1); p(15, 1, '#4a3a5a', 1, 1);
+      p(11, 6, '#ff4040', 1, 1); p(14, 6, '#ff4040', 1, 1); p(12, 9, '#f0f0f0', 1, 1); p(13, 9, '#f0f0f0', 1, 1);
     }],
-    zombie: [20, 44, 4, (g, x, y, f) => {
-      const p = P(g, x, y), sw = [0, 2, 0, -2][f], skin = '#7fae6a', dk = '#5a8a4c', shirt = '#4a6a9a', pants = '#4a3a2e';
-      p(6, 0, skin, 9, 9); p(6, 0, dk, 9, 2); p(7, 3, '#e8e04a', 2, 2); p(12, 3, '#e8e04a', 2, 2); p(8, 7, '#3a2a20', 5, 1);
-      p(5, 9, shirt, 11, 15); p(5, 9, '#3a5a8a', 11, 2); p(7, 18, '#2a3a5a', 3, 2);
-      p(13, 11, skin, 7, 3); p(14 + sw, 11, skin, 6, 3);     // руки вперёд
-      p(6, 24, pants, 4, 17 + (f % 2)); p(11, 24, pants, 4, 17 - (f % 2)); p(6 - sw, 40, '#2a2420', 5, 4); p(11 + sw, 40, '#2a2420', 5, 4);
+    crawler: [28, 14, 4, (g, x, y, f) => {   // жук: панцирь из сегментов с бликом, голова с жвалами, 6 лапок
+      const p = P(g, x, y);
+      for (let i = 0; i < 3; i++) { const lx = 6 + i * 6, ph = (f + i) % 4, dy = ph === 1 ? -1 : ph === 3 ? 1 : 0; p(lx - 1 + (ph < 2 ? 0 : 1), 10, '#2e241c', 1, 3 + dy); p(lx + 2 - (ph < 2 ? 0 : 1), 10, '#2e241c', 1, 3 - dy); }
+      p(4, 3, '#5a4a3a', 18, 8); p(5, 2, '#5a4a3a', 16, 1);
+      for (let s = 0; s < 3; s++) { p(5 + s * 6, 3, '#7a6a52', 5, 2); p(5 + s * 6, 4, '#8f7e62', 2, 1); p(10 + s * 6, 3, '#3e3226', 1, 7); }
+      p(4, 9, '#3e3226', 18, 1);
+      p(22, 4, '#3a2e24', 5, 6); p(22, 4, '#4e4030', 4, 1); p(24, 6, '#ff7a3a', 2, 1); p(26, 9, '#d8c8a0', 2, 1); p(26, 7, '#d8c8a0', 1, 1);   // голова, глаз, жвала
     }],
-    bat: [26, 14, 3, (g, x, y, f) => {
-      const p = P(g, x, y), wy = [0, 4, 7][f];
-      p(10, 4, '#4a3a5a', 6, 7); p(11, 2, '#4a3a5a', 1, 2); p(14, 2, '#4a3a5a', 1, 2); p(11, 6, '#ff4040', 1, 1); p(14, 6, '#ff4040', 1, 1);
-      for (let i = 0; i < 10; i++) { const yy = 4 + Math.round(wy * (1 - i / 10)) - (i < 3 ? 1 : 0); p(9 - i, Math.max(0, Math.min(12, yy)), '#5a4a6a', 1, 3); p(16 + i, Math.max(0, Math.min(12, yy)), '#5a4a6a', 1, 3); }
+    imp: [24, 24, 3, (g, x, y, f) => {   // рога, хвост, крылья машут
+      const p = P(g, x, y), w = [-2, 0, 2][f];
+      p(0, 8 + w, '#7a2a20', 7, 4); p(1, 7 + w, '#5a1e16', 5, 1); p(17, 8 + w, '#7a2a20', 7, 4); p(18, 7 + w, '#5a1e16', 5, 1);
+      p(2, 12 + w, '#5a1e16', 1, 2); p(21, 12 + w, '#5a1e16', 1, 2);
+      p(7, 6, '#c03a2a', 10, 12); p(8, 3, '#c03a2a', 8, 4); p(7, 6, '#9a2c20', 1, 12); p(16, 6, '#e05a3a', 1, 10); p(10, 12, '#e0704a', 4, 4);
+      p(8, 0, '#ffa040', 2, 3); p(7, 0, '#ffd080', 1, 1); p(14, 0, '#ffa040', 2, 3); p(16, 0, '#ffd080', 1, 1);   // рога
+      p(9, 5, '#ffe060', 2, 2); p(13, 5, '#ffe060', 2, 2); p(10, 5, '#fff8c0', 1, 1); p(14, 5, '#fff8c0', 1, 1); p(10, 8, '#5a1e16', 4, 1); p(11, 8, '#fff', 1, 1); p(13, 8, '#fff', 1, 1);
+      p(9, 18, '#7a2a20', 2, 5); p(13, 18, '#7a2a20', 2, 5);
+      p(17, 16, '#9a2c20', 3, 1); p(19, 17 + (f === 1 ? 1 : 0), '#9a2c20', 2, 1); p(21, 16, '#ff6a3a', 2, 2);   // хвост
     }],
-    crawler: [28, 14, 2, (g, x, y, f) => {
-      const p = P(g, x, y); p(4, 3, '#5a4a3a', 20, 8); p(4, 3, '#7a6a52', 20, 2); p(22, 5, '#3a2e24', 5, 5); p(24, 6, '#ff7a3a', 2, 1);
-      for (let i = 0; i < 4; i++) p(6 + i * 5 + (f ? 1 : -1) * (i % 2), 11, '#2e241c', 2, 3);
-    }],
-    imp: [24, 24, 2, (g, x, y, f) => {
-      const p = P(g, x, y); p(7, 6, '#c03a2a', 10, 12); p(8, 3, '#c03a2a', 8, 4); p(8, 1, '#ffa040', 2, 3); p(14, 1, '#ffa040', 2, 3); p(9, 5, '#ffe060', 2, 2); p(13, 5, '#ffe060', 2, 2);
-      const w = f ? 2 : -2; p(0, 8 + w, '#7a2a20', 7, 4); p(17, 8 + w, '#7a2a20', 7, 4); p(9, 18, '#7a2a20', 2, 5); p(13, 18, '#7a2a20', 2, 5);
-    }],
-    bigslime: [96, 72, 2, (g, x, y, f) => {
-      const p = P(g, x, y), sq = f ? 6 : 0, w = 88 + sq, h = 60 - sq, ox = (96 - w) >> 1, oy = 72 - h;
-      for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
-        const u = (xx - w / 2 + .5) / (w / 2), v = (yy - h) / h;
-        if (u * u + (v + .45) * (v + .45) * 1.6 > 1.1 && yy < h * .55) continue;
-        const k = yy < 10 ? 252 : 210 + ((xx * 7 + yy * 3) % 9);
-        p(ox + xx, oy + yy, `rgba(${k},${k},${k},.84)`);
-      }
-      p(ox + w * .3, oy + 22, '#141420', 9, 10); p(ox + w * .6, oy + 22, '#141420', 9, 10); p(ox + w * .3 + 2, oy + 23, '#fff', 3, 3); p(ox + w * .6 + 2, oy + 23, '#fff', 3, 3);
-      p(ox + w * .4, oy + 40, '#141420', w * .2, 3);
-      // корона из желе
-      for (let i = 0; i < 5; i++) p(ox + w * .3 + i * 7, oy - 6 + (i % 2) * 3, 'rgba(255,220,60,.95)', 5, 8);
+    bigslime: [96, 72, 3, (g, x, y, f) => {   // великан: то же желе крупно + корона с камнем
+      const sq = [0, 6, -4][f], w = 88 + sq, h = 60 - sq, ox = (96 - w) >> 1, oy = 72 - h;
+      jelly(g, x, y, 96, 72, sq, 2);
+      const p = P(g, x, y);
+      for (let i = 0; i < 5; i++) { p(ox + w * .3 + i * 7, oy - 6 + (i % 2) * 3, 'rgba(255,214,60,.98)', 5, 9); p(ox + w * .3 + i * 7, oy - 6 + (i % 2) * 3, 'rgba(255,248,170,1)', 2, 2); }
+      p(ox + w * .3, oy + 1, 'rgba(200,150,30,1)', 33, 3); p(ox + w * .3 + 14, oy - 3, 'rgba(230,40,70,1)', 5, 5); p(ox + w * .3 + 15, oy - 2, 'rgba(255,190,200,1)', 2, 2);
     }],
     owl: [64, 56, 3, (g, x, y, f) => {
       const p = P(g, x, y), wy = [0, 10, 18][f];
@@ -390,6 +470,7 @@
       for (let f = 0; f < n; f++) {
         if (sx + w > AS) { sx = 0; sy += rowH + 2; rowH = 0; }
         g.save(); g.beginPath(); g.rect(sx, sy, w, h); g.clip(); draw(g, sx, sy, f); g.restore();
+        if (OUTLINED.has(name)) outline(g, sx, sy, w, h);
         fr.push([sx, sy, w, h]); sx += w + 2; rowH = Math.max(rowH, h);
       }
       out.spr[name] = fr;
