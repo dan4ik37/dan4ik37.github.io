@@ -221,7 +221,8 @@
     const wasOpen = P.isOpen();
     try { return await h.shot(); } catch (er) { return null; } finally { if (!wasOpen) P.close(); }
   }
-  const galleryHtml = from => shots.length > (from || 0) ? `<div class="ph-sec">Снимки этой игры</div><div class="ph-gal">${shots.slice(from || 0).map((s, i) => `<img src="${s.url}" alt="Снимок" data-g="${i + (from || 0)}">`).join('')}</div>` : '';
+  // (объявление функцией: P.define выше может сразу нарисовать камеру — открыта первой, пока файл грузился)
+  function galleryHtml(from){ return shots.length > (from || 0) ? `<div class="ph-sec">Снимки этой игры</div><div class="ph-gal">${shots.slice(from || 0).map((s, i) => `<img src="${s.url}" alt="Снимок" data-g="${i + (from || 0)}">`).join('')}</div>` : ''; }
 
   // ═══ Карта «Мира Денчика»: где что, где ты и друзья; нажми место — телепорт ═══
   // Схема — по mir.js (buildWorld): поменялись здания — поправь здесь

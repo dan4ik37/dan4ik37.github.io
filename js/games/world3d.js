@@ -1528,11 +1528,12 @@
     //    v = phoneView(ch) → v.g (в сцену), v.place(camera, ch, t, bob) каждый кадр (bob: { ph, w, k } — покачивание камеры), v.dispose()
     // режимы (в осях камеры): где телефон, поворот (x, y, z), где кисти — в осях телефона (вторая — только двумя руками)
     const VM = [
-      { p: [.13, -.2, -.46], r: [-.5, .2, .08], hr: [.04, -.1, -.045], hl: null },
-      { p: [.34, -.17, -.37], r: [.05, -1.2, .2], hr: [.01, -.1, -.045], hl: null },
-      { p: [0, -.18, -.43], r: [-.38, 0, PI / 2], hr: [0, -.13, -.045], hl: [0, .13, -.045] },
-      { p: [.02, -.12, -.41], r: [-.1, 0, PI / 2], hr: [0, -.13, -.045], hl: [0, .13, -.045] },
+      { p: [.17, -.23, -.64], r: [-.42, .22, .1], hr: [.095, -.1, -.035], hl: null },
+      { p: [.36, -.19, -.42], r: [.05, -1.2, .2], hr: [.08, -.09, -.035], hl: null },
+      { p: [0, -.21, -.62], r: [-.36, 0, PI / 2], hr: [0, -.16, -.035], hl: [0, .16, -.035] },
+      { p: [.02, -.15, -.6], r: [-.1, 0, PI / 2], hr: [0, -.16, -.035], hl: [0, .16, -.035] },
     ];
+    const VMS = .85;   // телефон от 1-го лица чуть меньше (как в ГТА: внизу экрана, видна кисть)
     const vmQ = VM.map(v => new T.Quaternion().setFromEuler(new T.Euler(v.r[0], v.r[1], v.r[2], 'YXZ')));
     const VMv = pv(), VMv2 = pv(), VMq = pq(), VMup = new T.Vector3(0, 1, 0), VMe = new T.Euler();
     function phoneView(ch){
@@ -1540,7 +1541,7 @@
       const top = (m, k) => cache(mats, 'vm:' + k, () => { const c = m.clone(); c.depthTest = false; c.depthWrite = false; return c; });
       const sleeve = ['tshirt', 'jersey', 'dress'].includes(ch.R.top) || isArmor(ch.R.psar) ? ch.handC : colorOf(ch.R, 'color');
       const g = new T.Group(), hold = new T.Group(), phone = new T.Group();
-      g.visible = false; g.add(hold); hold.add(phone);
+      g.visible = false; g.add(hold); hold.add(phone); phone.scale.setScalar(VMS);
       const mk = (geom, mat, ro, parent) => { const m = new T.Mesh(geom, mat); m.renderOrder = ro; m.frustumCulled = false; (parent || hold).add(m); return m; };
       mk(phBodyGeo(), top(toon('#23262e'), 'body'), 993, phone);
       const scr = mk(phScrGeo(), top(phScreen('home'), 'home'), 994, phone); scr.position.z = PHD / 2 + .0012;
@@ -1577,7 +1578,7 @@
           const two = S.w[2] + S.w[3], d = VM[best];
           for (let s = 0; s < 2; s++) {
             const hp = s ? (d.hr || VM[0].hr) : (d.hl || VM[2].hl), h = hands[s];
-            h.position.set(hp[0], hp[1], hp[2]).applyQuaternion(phone.quaternion).add(phone.position);
+            h.position.set(hp[0] * VMS, hp[1] * VMS, hp[2] * VMS).applyQuaternion(phone.quaternion).add(phone.position);
             if (!s) h.position.y -= .45 * (1 - Math.min(1, two));
             h.visible = s === 1 || two > .05;
             // рукав: от кисти к локтю за краем экрана
@@ -1978,8 +1979,9 @@
       chars.set(key, { ch, sig, op: 1, lastTrail: 0 });
     }
     function removePlayer(key){ const c = chars.get(key); if (c) { K.dispose(c.ch); chars.delete(key); } }
-    // Каждый кадр: позиция (координаты карты), идёт ли, прозрачность (вход/выход)
-    function updatePlayer(key, x, y, moving, dt, t, fade){
+    // Каждый кадр: позиция (координаты карты), идёт ли, прозрачность (вход/выход), телефон 📱 (код 0…4 или 'use' / 'call'…)
+    const UAO = { phone: '' };
+    function updatePlayer(key, x, y, moving, dt, t, fade, phone){
       const c = chars.get(key);
       if (!c) return;
       const ch = c.ch, X = x / U, Z = y / U, r = ch.root;
@@ -1991,7 +1993,8 @@
       }
       r.position.set(X, 0, Z);
       r.rotation.y = ch.yaw;
-      K.animate(ch, moving, dt, t);
+      UAO.phone = phone || '';
+      K.animate(ch, moving, dt, t, phone || ch.phS ? UAO : undefined);
       if (moving && ch.R.trail !== 'none' && t - c.lastTrail > .09) { c.lastTrail = t; trail.emit(ch.R.trail, X - Math.sin(ch.yaw) * .4, 0, Z - Math.cos(ch.yaw) * .4, t); }
       if (ch.pet) {
         const tx = X - Math.sin(ch.yaw) * .9 + Math.cos(ch.yaw) * .7, tz = Z - Math.cos(ch.yaw) * .9 - Math.sin(ch.yaw) * .7, p = ch.pet.position;

@@ -724,6 +724,7 @@
     const { C, P, X, rig, ph } = S;
     const setOpen = !!window.D37Settings?.isOpen?.() || !!S.phoneOn;   // окно ⚙️ или телефон 📱 (phone.js) — Esc у них
     C.blocked = !!S.menu || setOpen;   // открыто меню или ⚙️ — персонаж стоит (Esc работает)
+    C.walk = !!S.phoneOn && !S.menu && !window.D37Settings?.isOpen?.();   // с телефоном в руке можно идти (как в ГТА), без бега и прыжка
     C.step(dt);
     if (C.down('chat')) { const i = S.q('.wld-say input'); if (!i.readOnly) setTimeout(() => i.focus(), 0); else if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
     if (C.down('view')) toggleView();
@@ -766,7 +767,7 @@
     const { R, A, P, rig, I, C, H, AU } = S, t = now() / 1000;
     // свой
     const me = A.get(S.key), pose = P.pose();
-    if (me) { A.pose(S.key, pose); me.hidden = rig.mode === 'first'; }
+    if (me) { A.pose(S.key, pose); me.hidden = rig.mode === 'first'; me.phone = S.phoneHand || ''; me.fp = me.hidden ? rig : null; }   // телефон 📱 в руке; от 1-го лица — у камеры
     if (S.me._lookDirty) { A.setLook(me, S.me.look); S.me._lookDirty = false; }
     for (const p of S.players.values()) {
       let a = A.get(p.key);
@@ -855,8 +856,8 @@
     const E = window.D37E;
     const p = { key, uid: typeof m.uid === 'string' ? m.uid : null, nick: String(m.nick || 'Гость').slice(0, 24), look: freeLook(m.look), at: +m.at || 0,
       ch: S.ph.character({ x: +m.x || 0, y: 0, z: +m.z || 0 }), yaw: 0, wish: { x: 0, z: 0 }, spd: 0, mode: 'move', err: { x: 0, y: 0, z: 0 },
-      pose: { moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, roll: -1, hang: false, ladder: false, pk: '', pkK: 0, x: +m.x || 0, y: 0, z: +m.z || 0, yaw: 0 },
-      bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, leaving: 0, rate: [], seat: null, modeT: 0 };
+      pose: { moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, roll: -1, hang: false, ladder: false, pk: '', pkK: 0, x: +m.x || 0, y: 0, z: +m.z || 0, yaw: 0, phone: 0 },
+      bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, leaving: 0, rate: [], seat: null, modeT: 0, phone: 0 };
     p.ch.g = 20 * E.UNIT; p.ch.accG = 60; p.ch.accA = 30;
     p.ch.y = S.ph.supportAt(p.ch.x, p.ch.z, p.ch.r, 50).y;
     return p;
@@ -864,6 +865,7 @@
   function stepRemote(p, dt){
     const E = window.D37E, ch = p.ch, ps = p.pose;
     p.modeT += dt;
+    ps.phone = p.phone;   // телефон 📱 — как прислал (в руке, у уха, играет, снимает)
     if (p.seat && S.world.seats.get(p.seat.id)) {   // сидит (место — из presence)
       const sp = S.world.seats.get(p.seat.id);
       ch.x = sp.x; ch.z = sp.z; ch.y = 0; p.yaw = sp.yaw;
@@ -1042,7 +1044,8 @@
       const elders = [S.me, ...[...S.players.values()].filter(x => !x.leaving && x.key !== p.key)].sort((a, b) => (a.at || S.joinedAt) - (b.at || S.joinedAt));
       if (elders[0] === S.me && now() - S.hostSnapAt > 1500) {
         S.hostSnapAt = now();
-        const me = S.P.ch, list = [[S.key, r2(me.x), r2(me.y), r2(me.z), r2(S.P.yaw)], ...[...S.players.values()].filter(x => !x.leaving && x.key !== p.key).slice(0, 40).map(x => [x.key, r2(x.ch.x), r2(x.ch.y), r2(x.ch.z), r2(x.yaw)])];
+        const me = S.P.ch, myPh = window.World3D?.phoneCode?.(S.phoneHand) || 0;   // + телефон 📱 (новичок сразу видит, кто с телефоном)
+        const list = [[S.key, r2(me.x), r2(me.y), r2(me.z), r2(S.P.yaw), myPh], ...[...S.players.values()].filter(x => !x.leaving && x.key !== p.key).slice(0, 40).map(x => [x.key, r2(x.ch.x), r2(x.ch.y), r2(x.ch.z), r2(x.yaw), x.phone || 0])];
         setTimeout(() => send({ t: 'snap', list }), 200);
       }
     } else if (d.t === 'snap') {
@@ -1051,7 +1054,7 @@
         if (!Array.isArray(it) || it[0] === S.key) continue;
         const o = S.players.get(it[0]);
         if (!o || [1, 2, 3].some(i => typeof it[i] !== 'number')) continue;
-        if (o.key === p.key || Date.now() - S.joinedAt < 8000) { const [x, z] = clampPos(it[1], it[3]); o.ch.x = x; o.ch.y = Math.max(0, Math.min(20, it[2])); o.ch.z = z; o.yaw = +it[4] || 0; }
+        if (o.key === p.key || Date.now() - S.joinedAt < 8000) { const [x, z] = clampPos(it[1], it[3]); o.ch.x = x; o.ch.y = Math.max(0, Math.min(20, it[2])); o.ch.z = z; o.yaw = +it[4] || 0; if (o.key === p.key || !o.lastTs) o.phone = phoneOf(it[5]); }
       }
     } else if (d.t === 'say') {
       if (!p.uid || S.muted.has(p.key) || typeof d.text !== 'string') return;
@@ -1094,7 +1097,9 @@
     p.mode = mode;
     if (num(d.yw) !== null) p.yaw = d.yw;
     if (num(d.vy) !== null && d.vy > 0) { p.ch.vy = Math.min(20, d.vy); p.ch.grounded = false; p.ch.airT = 0; }
+    p.phone = phoneOf(d.ph);   // телефон 📱 (нет поля — убран)
   }
+  const phoneOf = v => (Number.isInteger(v) && v >= 0 && v <= 4 ? v : 0);
   // Своё движение: шлём, только когда меняется направление/скорость/режим (и сверку раз в 2,5 с)
   function netTick(dt){
     if (!S.ch || !S.keys) return;
@@ -1107,10 +1112,12 @@
       if (wl > .2 && P.enabled) { a = Math.round(Math.atan2(wx, wz) / (PI * 2) * 16) & 15; s = P.crouch ? 1 : P.running ? 3 : 2; k = Math.round(Math.min(1, wl) * 4) / 4; }
     }
     const mode = MODES.indexOf(P.mode === 'pk' ? 'pk' : P.mode);
-    const key = `${mode}|${a}|${s}|${k}`, moving = a >= 0 || !P.ch.grounded;
+    const ph = window.World3D?.phoneCode?.(S.phoneHand) || 0;   // телефон 📱: 0 нет, 1 в руке, 2 у уха, 3 играет, 4 снимает
+    const key = `${mode}|${a}|${s}|${k}|${ph}`, moving = a >= 0 || !P.ch.grounded;
     const due = key !== S.lastSend.key || S.forceSend || (moving && S.sendT - S.lastSend.t > 2.5);
     if (!due || S.sendT - S.lastSend.t < .15) return;
     const ch = P.ch, d = { t: 'st', x: r2(ch.x), y: r2(ch.y), z: r2(ch.z), a, s, k, m: Math.max(0, mode), yw: r2(P.yaw) };
+    if (ph) d.ph = ph;
     if (S.jumpVy) { d.vy = r2(S.jumpVy); S.jumpVy = 0; }
     S.lastSend = { key, t: S.sendT }; S.forceSend = false;
     send(d);
@@ -1337,7 +1344,7 @@
     if (!NPC) return;
     S.folk = new Map();
     for (const f of FOLK) {
-      const o = { id: f.id, cls: 'NPC', name: f.name, pos: [f.x, f.y || 0, f.z], rot: [0, f.yaw, 0], look: 'random', seed: f.seed, act: 'idle', speed: 1, radius: 0, damage: 0, text: f.say[0] };
+      const o = { id: f.id, cls: 'NPC', name: f.name, pos: [f.x, f.y || 0, f.z], rot: [0, f.yaw, 0], look: 'random', seed: f.seed, act: 'idle', speed: 1, radius: 0, damage: 0, text: f.say[0], phone: 1 };   // phone — иногда в телефоне 📱 (npc.js)
       NPC.add(o);
       S.folk.set(f.id, { f, o, i: 0, bubble: null, tag: null });
       X.add({ x: f.x, y: (f.y || 0) + 1.2, z: f.z, r: 1.5, prompt: () => `💬 ${f.name}: поговорить`, act: () => folkTalk(f.id) });
@@ -1700,8 +1707,14 @@
       title: '🌍 Мир Денчика',
       get hotkey(){ return !S?.playing; },   // игра поверх мира (mir-play.js): клавиша P — игре («5 букв»), телефон — кнопкой 📱 окна
       pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
+      // телефон в руке персонажа (как в ГТА): достаёт, у уха, играет, снимает — видят все (в 'st'); true — показываем человечком
+      hand(st){
+        const s = S; if (!s) return false;
+        if (s.phoneHand !== st) { s.phoneHand = st; s.forceSend = true; }
+        return !!(s.A && s.loop && !s.loop.paused && !s.stopped && !s.playing && !s.editing);
+      },
       activity: () => (S ? Object.assign({ w: S.shard }, S.mySeat?.tb ? { g: S.mySeat.tb.game, j: S.mySeat.c ? `games/${S.mySeat.tb.game}/${S.mySeat.c}` : '' } : {}) : {}),
-      shot: () => { S.R.render(); return Ph.snap(S.R.r.domElement); },
+      shot: () => { const me = S.A?.get(S.key); if (me?.ch) window.World3D?.phoneSnap?.(me.ch, now() / 1000); S.R.render(); return Ph.snap(S.R.r.domElement); },   // «щёлк» — персонаж снимает
       where: () => (S?.P ? { x: S.P.ch.x, z: S.P.ch.z, yaw: S.P.yaw } : null),
       players: () => (S ? [...S.players.values()].filter(p => !p.leaving).map(p => ({ x: p.ch.x, z: p.ch.z, nick: p.nick, friend: !!(p.uid && S.friends.has(p.uid)) })) : []),
       tp,

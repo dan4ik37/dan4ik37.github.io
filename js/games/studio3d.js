@@ -1298,7 +1298,8 @@ Players.PlayerAdded.Connect(player => {
     // телефон 📱 (js/features/phone.js): кнопка рядом с ⚙️ ⛶ и клавиша P; пока открыт — клавиши игры молчат; друзьям — «в мире игрока»
     pl.phoneOff = window.D37Phone?.attach?.('studio', { title: '🧱 ' + (ed.q('.s3-name')?.value || 'Студия 3D'), hotkey: true, bar: ed.q('.gs-s3'),
       pause(on){ pl.phoneOn = on; pl.C.blocked = on; pl.C.reset_state(); if (on) { pl.I.unlock(); pl.I.reset?.(); } pl.I.enabled = !on; },
-      shot: () => { ed.R.render(); return window.D37Phone.snap(ed.R.r.domElement); },
+      hand(st){ pl.phoneHand = st; return ED?.playing === pl && !pl.loop?.paused; },   // телефон в руке персонажа (как в ГТА) — видят и по сети
+      shot: () => { const me = pl.A.get(pl.meKey); if (me?.ch) window.World3D?.phoneSnap?.(me.ch, performance.now() / 1000); ed.R.render(); return window.D37Phone.snap(ed.R.r.domElement); },
       activity: () => ed.playId ? { s: ed.playId, t: (ed.q('.s3-name')?.value || '').slice(0, 32), j: `games/studio3d/play/${ed.playId}${ed.mp?.kind === 'play' && ed.mp.code ? '/' + ed.mp.code : ''}` }
         : ed.mp?.code ? { g: 'studio3d', j: `games/studio3d/join/${ed.mp.code}` } : { g: 'studio3d' } }) || null;
     ed.loop.pause(true);
@@ -1595,6 +1596,7 @@ Players.PlayerAdded.Connect(player => {
     const Lg = ed.R.lighting;
     if (Lg.cycle > 0) { pl.cycT = (pl.cycT || 0) + dt; if (pl.cycT >= 1.5) { ed.R.setLighting({ time: (Lg.time + pl.cycT * 24 / (Lg.cycle * 60)) % 24 }); pl.cycT = 0; } }
     C.blocked = !!window.D37Settings?.isOpen?.() || !!pl.phoneOn;   // открыто окно ⚙️ или телефон 📱 — персонаж стоит
+    C.walk = !!pl.phoneOn && !window.D37Settings?.isOpen?.();   // с телефоном в руке — можно идти (как в ГТА)
     C.step(dt);
     if (C.down('pause') && !C.blocked && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
     if (C.down('view')) playView(pl);   // V — вид от 1-го / 3-го лица (как в «Мире»)
@@ -1615,7 +1617,7 @@ Players.PlayerAdded.Connect(player => {
     if (live) worldStep(dt, pl); else if (mp) mpGuestStep(dt);
     // своё положение — в сеть; приём, отправка, плавные чужие и объекты (у гостя)
     if (mp?.S) {
-      mp.S.setMyCharacter(mp.spawned ? { ...P.pose(), vx: P.ch.vx, vy: P.ch.vy, vz: P.ch.vz, on: P.ch.grounded ? P.ch.onCol?.data?.part : null } : null);
+      mp.S.setMyCharacter(mp.spawned ? { ...P.pose(), vx: P.ch.vx, vy: P.ch.vy, vz: P.ch.vz, on: P.ch.grounded ? P.ch.onCol?.data?.part : null, phone: window.World3D?.phoneCode?.(pl.phoneHand) || 0 } : null);
       mp.S.tick(dt);
       if (pl.role === 'host') mpFlushStats(dt);
     }
@@ -1668,7 +1670,7 @@ Players.PlayerAdded.Connect(player => {
     const { P, A, rig, I, C, H } = pl, R = ed.R, t = performance.now() / 1000;
     I.wantLock = rig.mode === 'first' && !I.touch && !window.D37Settings?.isOpen?.() && !pl.phoneOn;
     A.pose(pl.meKey, P.pose());
-    const meA = A.get?.(pl.meKey); if (meA) meA.hidden = rig.mode === 'first';
+    const meA = A.get?.(pl.meKey); if (meA) { meA.hidden = rig.mode === 'first'; meA.phone = pl.phoneHand || ''; meA.fp = meA.hidden ? rig : null; }   // телефон 📱; от 1-го лица — у камеры
     if (ed.mp) mpFrame(dt);   // чужие игроки (по сети) — плавно, со своей внешностью
     rig.update(dt, P, { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom }, ed.ph, C);
     A.update(dt, t, R.camera.position);
