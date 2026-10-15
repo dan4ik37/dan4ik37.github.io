@@ -25,7 +25,7 @@
   const NO = new Set(['world', 'studio', 'studio3d', 'unity', 'wardrobe']);   // поверх мира не открываются
   const FLAG = 'd37_from_world', FLAG_TTL = 3 * 3600e3;
   const VOLUNTARY = new Set(['back', 'auto', 'leave', 'exit', 'world', 'editor']);   // закрыли сами — свои записи истории убрать
-  const AGAIN_ACT = /^(again|rematch|restart|retry|replay|co-again|co-go)$/;
+  const AGAIN_ACT = /^(again|rematch|restart|retry|replay|co-again|co-go|next)$/;   // next — «▶ Уровень N» (маджонг)
   const AGAIN_TXT = /^\s*(↻|🔄)|ещё (раз|парти)|реванш|заново|снова|новая (игра|парти|раздача)/i;
   const PAID = /реклам|монет|🪙|📺|купить/i;   // такие кнопки сами не нажимаем
   const WAIT = /ждём|ожида/i;
@@ -125,7 +125,7 @@ body:not(.high) .mp-panel{animation:none}
     const body = el('div', 'mp-body');
     s.box = el('div', 'mp-game');
     body.appendChild(s.box);
-    // полоска после партии; .mp-end-ad — место для рекламы между партиями (data-ad ставит реклама сайта, здесь — пусто)
+    // полоска после партии; .mp-end-ad — реклама между партиями (games.js gamesAdAfterRound → MirPlay.adStage → ad-places.js)
     s.end = el('div', 'mp-end'); s.end.hidden = true;
     const row = el('div', 'mp-end-row');
     s.endT = el('span', 'mp-end-t');

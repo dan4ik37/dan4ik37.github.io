@@ -287,6 +287,11 @@ MP.P.back = 10;
     await CH.api.report('chess_online', true, 1, 1);
     endScreen(CH, 'paid');
     ok(T.findAgain(CH.el) === null, 'кнопка «за рекламу» — не «ещё партия»');
+    // «▶ Уровень N» (маджонг) — тоже «ещё»; из нескольких — главная (ct-start)
+    { const box = new El('div'); body.appendChild(box);
+      const mk = (cls, act, txt) => { const b = new El('button'); b.className = cls; if (act) b.setAttribute('data-act', act); b.textContent = txt; box.appendChild(b); return b; };
+      mk('g2-new', 'new', '↻ Заново'); const lv = mk('ct-start', 'next', '▶ Уровень 3');
+      ok(T.findAgain(box) === lv, 'маджонг: «▶ Уровень N» — главная кнопка «ещё»'); box.remove(); }
     MP.close('back'); flushHistory();
   }
 
