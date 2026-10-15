@@ -251,7 +251,10 @@
   };
 
   // ── Значки непрочитанного: элементы с data-ph-badge="total|msgs|calls|…" обновляются сами ──
-  function setBadge(k, n){ n = Math.max(0, n | 0); if (badges[k] === n) return; badges[k] = n; renderBadges(); }
+  function setBadge(k, n){
+    n = Math.max(0, n | 0); if (badges[k] === n) return; badges[k] = n; renderBadges();
+    try { window.dispatchEvent(new CustomEvent('d37:badges', { detail: Object.assign({}, badges) })); } catch (e) {}   // приложение 📲: число на значке (app.js)
+  }
   P.badge = (k, n) => n === undefined ? badges[k] || 0 : setBadge(k, n);
   P.total = () => badges.msgs + badges.calls + badges.friends + badges.comm;
   function renderBadges(){

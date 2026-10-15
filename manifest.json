@@ -1,22 +1,59 @@
 {
   "id": "/",
-  "name": "dan4ik37 — официальный сайт",
+  "name": "dan4ik37 — игры, чат и видео",
   "short_name": "dan4ik37",
-  "description": "Видео, стримы, чат и онлайн-игры dan4ik37 — YouTube, TikTok, Twitch, VK, Telegram",
+  "description": "Сайт стримера dan4ik37 как приложение: онлайн-игры и «Мир Денчика» в 3D, чат и звонки с друзьями, видео и стримы. Бесплатно.",
+  "lang": "ru",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#08080e",
-  "theme_color": "#ff2d55",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "any",
-  "lang": "ru",
+  "background_color": "#08080e",
+  "theme_color": "#09090f",
+  "categories": ["games", "entertainment", "social"],
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/img/app/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/img/app/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/img/app/mono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "monochrome" }
+  ],
+  "screenshots": [
+    { "src": "/img/app/shot-wide-home.webp", "sizes": "1920x1080", "type": "image/webp", "form_factor": "wide", "label": "Главная: новые видео и стримы dan4ik37" },
+    { "src": "/img/app/shot-wide-world.webp", "sizes": "1920x1080", "type": "image/webp", "form_factor": "wide", "label": "«Мир Денчика» в 3D: бегай, садись за столы и играй с друзьями" },
+    { "src": "/img/app/shot-wide-games.webp", "sizes": "1920x1080", "type": "image/webp", "form_factor": "wide", "label": "Онлайн-игры: с ботом и с друзьями по ссылке" },
+    { "src": "/img/app/shot-narrow-home.webp", "sizes": "1080x1920", "type": "image/webp", "form_factor": "narrow", "label": "Видео и стримы dan4ik37" },
+    { "src": "/img/app/shot-narrow-games.webp", "sizes": "1080x1920", "type": "image/webp", "form_factor": "narrow", "label": "Игры, монеты и свой персонаж" },
+    { "src": "/img/app/shot-narrow-kosynka.webp", "sizes": "1080x1920", "type": "image/webp", "form_factor": "narrow", "label": "Пасьянсы, судоку, 2048 — даже без интернета" }
   ],
   "shortcuts": [
-    { "name": "Чат", "short_name": "Чат", "description": "Живой чат сайта и Twitch", "url": "/#/chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
-    { "name": "Слово дня — 5 букв", "short_name": "5 букв", "url": "/#/games/words", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] },
-    { "name": "Игры", "short_name": "Игры", "description": "Онлайн-игры с друзьями", "url": "/#/games", "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }] }
+    { "name": "Мир Денчика", "short_name": "Мир", "description": "Онлайн-мир в 3D", "url": "/#/games/world",
+      "icons": [{ "src": "/img/app/sc-world.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-world-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
+    { "name": "Чат", "short_name": "Чат", "description": "Чат сайта, сообщества и Twitch", "url": "/#/chat",
+      "icons": [{ "src": "/img/app/sc-chat.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-chat-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
+    { "name": "Игры", "short_name": "Игры", "description": "Онлайн-игры с друзьями", "url": "/#/games",
+      "icons": [{ "src": "/img/app/sc-games.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-games-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
+    { "name": "Слово дня — 5 букв", "short_name": "Слово дня", "description": "Новое слово каждый день", "url": "/#/games/words",
+      "icons": [{ "src": "/img/app/sc-words.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-words-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
+    { "name": "Магазин кристаллов", "short_name": "Магазин", "description": "💎 Кристаллы и VIP", "url": "/#/shop",
+      "icons": [{ "src": "/img/app/sc-shop.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-shop-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "title": "share_title", "text": "share_text", "url": "share_url" }
+  },
+  "protocol_handlers": [
+    { "protocol": "web+denchik", "url": "/?proto=%s" }
+  ],
+  "launch_handler": { "client_mode": ["focus-existing", "auto"] },
+  "handle_links": "preferred",
+  "edge_side_panel": { "preferred_width": 480 },
+  "prefer_related_applications": false,
+  "related_applications": [
+    { "platform": "webapp", "url": "https://dan4ik37.vercel.app/manifest.json" }
   ]
 }

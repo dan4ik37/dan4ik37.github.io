@@ -2,3 +2,21 @@ node_modules/
 dist/
 vendor/
 logs/
+# Сборки приложения для магазинов (apps/, docs/APPS.md): ключи подписи и готовые файлы — НЕ в репозиторий (он открытый!)
+*.keystore
+*.jks
+*.apk
+*.aab
+*.msix
+*.msixbundle
+*.appxbundle
+signing-key-info.txt
+apps/android/*/app/
+apps/android/*/build/
+apps/android/*/.gradle/
+apps/android/*/gradle/
+apps/android/*/gradlew*
+apps/android/*/*.gradle
+apps/android/*/gradle.properties
+apps/android/*/manifest-checksum.txt
+apps/android/*/store_icon.png

@@ -309,7 +309,9 @@
       + row('Профиль и приватность', authed ? '<button type="button" class="gs-btn" data-site="profile">👤 Открыть</button>' : '<button type="button" class="gs-btn primary" data-site="login">🔑 Войти</button>',
         authed ? 'Кто видит профиль, заявки в друзья, невидимка, логин для доната.' : 'Войди — и появятся настройки профиля.')
       // «🎂 Возраст»: год рождения (видит только сам) — Изменить / Удалить (js/core/age.js; кнопки ловит он же)
-      + (root.D37Age?.settingsRow ? root.D37Age.settingsRow() : '');
+      + (root.D37Age?.settingsRow ? root.D37Age.settingsRow() : '')
+      // «📲 Приложение»: установить / счётчик на значке (js/features/app.js; кнопки ловит он же)
+      + (root.D37App?.settingsRow ? root.D37App.settingsRow() : '');
   }
 
   // ── Клавиши (controls.js: 2 клавиши на действие; «Пауза» не меняется) ──
