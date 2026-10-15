@@ -581,5 +581,8 @@
       root = null; cv = null; ctx = null;
     },
     _test: { newGame, roll, move, sequences, legalNow, botTurn, badBlock, canStep, absOf, relOf, draft, draftStep, draftUndo, draftDone, applySeq, pub },
+    // проверка в браузере (две вкладки): состояние и те же действия, что у кнопок/доски
+    _dbg: () => ({ P, D, sel, meIdx, sent, legal: D ? legalNow(D, meIdx) : [] }),
+    _ui: { step: (f, d) => step(f, d), undo: () => undoStep(), done: () => done() },
   };
 })();
