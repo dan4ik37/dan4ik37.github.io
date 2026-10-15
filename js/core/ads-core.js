@@ -20,7 +20,7 @@ window.ADS_IDS = {
     break:      '', // компьютер: «☕ Перерыв» под игрой после каждой 3-й партии (пусто — берётся блок game_over)
     feed:       '', // карточка «Реклама» в списках: игры, видео, каталоги игр игроков (размер карточки ~300×250)
     rail:       '', // компьютер от 1400 px: столбик справа от игры (в РСЯ — «Баннер» 160×600 или 300×600)
-    // Реклама за награду (тип блока «Rewarded»): возрождение в «Орде», +40 монет, ×2 монеты за забег.
+    // Реклама за награду (тип блока «Rewarded»): возрождение в «Орде», +25 монет (6 раз в день — coin_rule в coins.sql), ×2 монеты за забег.
     // В РСЯ это два отдельных блока — для телефона и для компьютера. Пусто — кнопок «за рекламу» не видно.
     rewarded:           '', // Rewarded, телефон (platform touch)
     rewarded_desktop:   '', // Rewarded, компьютер
@@ -63,6 +63,7 @@ window.ADS_IDS = {
     if (!el) return false;
     const M = window.D37AdPlaces;
     if (M && !o.checked && M.why(key, { ignoreId: true })) { el.hidden = true; return false; }
+    if (M && !o.checked && M.direct?.(el, key, o)) { M.mark(key); return true; }   // прямая реклама (кабинет рекламодателя, ad-direct.js)
     if (M && M.frames()) { if (!o.checked) M.mark(key); return M.placeholder(el, key); }   // отладка: рамка вместо рекламы
     const i = M ? M.ids(key) : { ya: window.ADS_IDS.yandex[key], g: window.ADS_IDS.google[key] };
     const ya = i.ya, g = i.g;

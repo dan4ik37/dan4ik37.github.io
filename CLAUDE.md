@@ -26,6 +26,11 @@
    `/rpc/xp_rule` {"p_key":"visit"} → 5 (PGRST202 — не применён), `/rpc/achievement_xp` {"p_code":"creator"} → 250 (500 — старая).
    До запуска сервер считает по старым числам, подписи на сайте уже новые. Перезапустил xp.sql, games.sql, progression.sql,
    secrets.sql или unity.sql — после них снова economy.sql. Тесты PGlite: pg/eco/test-economy.mjs (86), pg/eco/test-coins-eco.mjs.
+5. `ads.sql` (15.10.2026) — реклама за 💎, кабинет рекламодателя #/adv (ad_settings, ad_campaigns, ad_creatives, ad_stats, ad_seen,
+   ad_log, ad_reports, ad_advertisers; ad_prices / ad_live / ad_pick / ad_view / ad_go (только service_role) / ad_save / ad_act / ad_my
+   / ad_get / ad_terms_accept / ad_report / ad_admin_*; закрытое хранилище ads). Нужен premium.sql (применён); от age.sql и
+   economy.sql не зависит. Проверка: `/rpc/ad_prices` гостем → {"enabled":true,…}, `/rpc/ad_live` → {"on":true,"f":{}}, `/rpc/ad_go`
+   гостем → отказ в правах (PGRST202 = не применён). До запуска кабинет пишет «откроется, когда сайт обновится». PGlite: 259 (pg/test-ads.mjs).
 premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
 cm_invite_info → null, chat_info → каналы general/games/lfg/memes/voice, messages.channel/reply_to/edited_at → 200).
@@ -304,6 +309,19 @@ js/features/games.js и хвост css/premium.css.
   реклама сетей (её в 3D рисовать нельзя). `ADS_IDS.kids` = 0 (1 — запросы Google «для детей»: меньше дохода, меньше риска —
   решает владелец). Отладка: `?adsdebug=1` рамки вместо рекламы, 2 — без лимитов, 3 — настоящая с обводкой, 0 — выкл;
   `D37AdPlaces.state()`. Тест: `node scripts/ads-test.cjs` (227). Старые AdSense-блоки — `AD_SLOTS` в config.js + `js/features/ads.js`.
+- 📣 Реклама за 💎 — кабинет рекламодателя (#/adv, ads.sql; агент 15.10.2026; владелец: «оплатил — выставил рекламу, и она показывается
+  как гугл»). Любой вошедший, принявший /ads-terms, делает кампанию: карточка в ленте, баннер 300×250/728×90, столбик 160/300×600, щит в
+  3D-мире; https-ссылка; рекламодатель, ИНН/БИН, erid; возрастная метка (обязательно); разделы, устройства, возраст, Россия/не Россия,
+  даты; CPM или пакет «по дням». Кабинет — js/features/adcab.js + css/adcab.css; админ #/adv/admin — очередь, одобрить/отклонить с
+  причиной, блок, метка, итоги, цены. Деньги: отправка → premium_add(−бюджет, 'ads', id) в копилку; показ CPM — bid/1000, пакет — день
+  при первом засчитанном показе (МСК); отказ/стоп/конец/бюджет/блок → остаток сам назад ('ads_refund'). Цены (💎, CPM/день): карточка
+  70/60, баннер 50/50, столбик 60/40, щит 100/100; бюджет от 200 (ads.sql = js/core/ad-direct.js DEF = api/_lib/ad-rules.js, тесты
+  сверяют). Показ: ad-direct.js через D37AdPlaces — своя кампания раньше сети; ad_live (нет кампаний — ни одного лишнего запроса),
+  ad_pick (вес по ставке, частота 6/день); без erid — только зрителям вне России (/api/geo; неизвестно = Россия); метка не старше
+  группы, детям щита нет. Засчитывание: видно ≥ 50 % ≥ 1 с → ad_view (подпись выдачи, раз в 30 мин, свои/роботы/флуд не считаются).
+  Клик — /go/<id> (api/_lib/routes/adgo.js → ad_go, 302). На рекламе — «Реклама 12+ · рекламодатель · erid», «ⓘ О рекламе» (жалоба:
+  3 — пауза до админа). Картинки — закрытое хранилище ads. Закон — docs/ADS_CABINET.md (показать юристу). Тесты: ad-direct-test (149),
+  PGlite test-ads.mjs (259). Во встроенном браузере IntersectionObserver стоит — показы проверять в node.
 - Чат (`#/chat`, chat.js): на телефоне окно от шапки до нижнего меню (premium.css, `body[data-route="chat"]`); кнопка ⛶ —
   `toggleChatFull()` (body.chat-full, Wake Lock — экран не гаснет; у #chat свой слой z-index:1 — в полноэкранном его поднимаем).
   Вкладка Twitch грузится по `dataset.loaded`, НЕ по `iframe.src` (у пустого iframe src = адрес страницы — так Twitch не грузился годами).
@@ -936,6 +954,28 @@ js/features/games.js и хвост css/premium.css.
   low — без поста. F3 / D37E.perf.toggle(); замер: await D37E.bench.studio(2000) / D37E.bench.world(). Тест: node scripts/render-test.cjs
   <scratchpad/three149/node_modules/three> (74). В браузере (13.10): студия 2000 объектов — 677 → 213 вызовов, ЦП 5,8 → 1,0 мс;
   мир — 143 вызова, 59 FPS, ЦП 1,5 мс.
+- Графика v3 (агент движка 15.10.2026; js/engine/gfx.js, post.js, render.js, js/core/gfx-settings.js, js/games/studio3d-gfx.js): небо по
+  времени суток — E.skyModel (восход 6, полдень 64°, закат 18; ключи цвета по высоте солнца + свечение Ми + заря; луна напротив солнца,
+  звёзды в шейдере купола); купол рисуется последним. Свет: днём солнце, ночью луна, полусфера — цвета неба, отражения — PMREM из купола
+  (не чаще раза в 2/4 с). Туман и тени — свои куски шейдеров three (E.gfxPatch, один раз на страницу): туман по расстоянию + высотный +
+  тёплый к солнцу; тени — спираль Фогеля + PCSS-lite (E.SHADOW_Q: карта 1024…4096, 6…24 выборки); общие Float32Array E.GFXU (по ссылке
+  у всех материалов). Коробка теней сдвинута по взгляду камеры. Вода v2: R.water(цвет, { key, depth: { tex, rect }, fixedColor }) —
+  рябь, глубина, пена у берега, френель. SSAO (post.js, WebGL2+HDR, половинное разрешение; стрелки и рамки renderOrder ≥ 990 —
+  поверх). Цвет кадра E.GRADES (Обычный, Яркий, Тёплый, Холодный, Кино, Мягкий, Неон, Ретро, Ч/Б) + виньетка. R.procN — рельеф
+  текстур (high), R.fresnel — стекло и лёд. Уровни: low — Ламберт без поста и теней; mid — тени 1024, FXAA, вода v2, туман, цвет,
+  свечение; high — тени 2048 + PCSS, SSAO, MSAA 4×, рельеф, дальность 125 %; ultra — тени 4096, сильнее AO, дальность 160 %. «Авто» —
+  лесенка E.autoSteps (AO → тени → MSAA → дальность → тени выкл) по времени кадра, по очереди с динамическим разрешением. Экономия
+  батареи: 30 кадров, без AO, тени mid, плотность ×1. Лимит FPS — E.fpsCap (core.js).
+- Графика мира — R.lighting.gfx (E.worldGfx: sky, fog, grade, bloom, exposure, water, shadow, preset): в файле мира, при «📤 Выложить» и
+  гостям в блоке world. Полный объект освещения (time + brightness + fogEnd) СБРАСЫВАЕТ gfx, частичный — дописывает (E.mergeLighting).
+  Студия: «🎨 Графика» (studio3d-gfx.js через studioExt) — настроения E.WORLD_PRESETS (Солнечный день, Закат, Ночь, Туманный лес,
+  Неон-город) и все поля, «Сутки в игре длятся» (lighting.cycle). «Мир Денчика»: время суток общее для всех — E.dayClock(Date.now(), 40,
+  .2) (сутки 40 мин, ночь — пятая часть), пруд v2, под водой — R.setUnder; S.fixedTime — остановить время (для проверок).
+- Настройки игрока (⚙️ → «🎨 Графика», gfx-settings.js поверх settings.js): gfxPreset auto/low/mid/high/ultra/custom (тронул мелочь —
+  «Своя»), shadows + shadowQ, ao, water, refl, aa, fog, dist, grade, fpsCap, res, battery; старый d37_gfx — «основа» (смена low/mid/high
+  пересобирает мир). На живую: D37Opt.gfx → E.gfxResolve → R.applyGfx; настройки игрока — потолок для графики мира (туман выкл —
+  без высотного; цвет выкл — без цвета мира; дальность = fogEnd мира × dist игрока). Тест: render-test (162). Замер 15.10: мир mid —
+  ЦП ~1,4 мс (как было), high — 1,63 → 1,17 мс при AO+MSAA+PCSS.
 - Частицы (js/engine/fx.js, объект Effect): огонь, дым, искры, конфетти, снег, дождь, магия, пузыри — пресеты KINDS; один
   эмиттер = один Points (свой шейдер: размер в мире, форма — круг/квадрат/кольцо/звёздочка), до 900 частиц, без мусора на кадр.
   Внутри детали — летит с её верхней грани (at), сам по себе — из pos; rate/scale — множители, свои цвета. Светящиеся (add)
