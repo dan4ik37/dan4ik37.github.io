@@ -1150,7 +1150,8 @@ js/features/games.js и хвост css/premium.css.
   В переведённом коде BigInt/Math/Number/String — локальные имена ($.JS; такие имена Java-переменных переименовываются — JSRES).
   Не поддерживается: потоки и synchronized, рефлексия, java.io/nio, сеть, Scanner. Отличие: == у Integer сравнивает значения (в Java —
   объекты; всё равно пиши equals). Библиотека — каталог LIBSRC/STUDIO_SRC (строка «Имя<T> : предки | члены») + объекты в boot();
-  новый член — в оба места (тест сверяет). Тест: node scripts/lang-java-test.cjs (105).
+  новый член — в оба места (тест сверяет). Тест: node scripts/lang-java-test.cjs (105). Моды «Кубомира»/«Подземья» на Java (фасад
+  Fabric/Forge, крючки загрузчиков) и исследование .jar — НЕ сделаны (владелец 15.10: «только главное» — лимит), план — docs/JAVA.md.
 - Расширения студии (13.10): новые инструменты, набор предметов, ИИ-помощник — своими файлами, studio3d.js не трогая:
   window.D37E.studioExt.push({ id, mount(api), unmount(), select(sel, selSet), play(), stop() }) — можно и после открытия студии
   (сразу mount). api: ed (состояние, ed.SC — сцена), slot (место для кнопок в верхней панели .s3-ext), insert, select, setSel,
