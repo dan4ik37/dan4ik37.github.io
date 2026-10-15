@@ -14,8 +14,9 @@
 
 ## Ожидает запуска владельцем (обновлять этот список!)
 1–3. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 1) `games-more.sql` (ещё раз) — проверка
-   `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия); 2) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
-   (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20; 3) `economy.sql` (новый, ПОСЛЕДНИМ) —
+   `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия), {"p_game":"fillword_daily"} → 6 (новые игры); 2) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
+   (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20, `/rpc/coin_run_cap` {"p_game":"fillword"} → 15;
+   3) `economy.sql` (новый, ПОСЛЕДНИМ) —
    `/rpc/xp_rule` {"p_key":"visit"} → 5 (PGRST202 — не применён), `/rpc/achievement_xp` {"p_code":"creator"} → 250 (500 — старая).
    До запуска сервер считает по старым числам, подписи на сайте уже новые. Перезапустил xp.sql, games.sql, progression.sql,
    secrets.sql или unity.sql — после них снова economy.sql. Тесты PGlite: pg/eco/test-economy.mjs (86), pg/eco/test-coins-eco.mjs.
@@ -750,6 +751,30 @@ js/features/games.js и хвост css/premium.css.
   один раз в день (localStorage d37_sudoku_daily), рекорды дня — RPC daily_top (первая попытка дня). Карточка в «Сегодня на сайте»
   (вместо колеса фортуны). 3 ошибки → вторая попытка за рекламу/30 монет (coins_revive 'sudoku'); подсказки: 3, ещё — так же.
   Ключи sudoku1..4, sudoku_daily, sudoku_duel (10 мин, очки за верные цифры + 1000 за решение).
+
+## «Крокодил», «Балда», «Домино», «Филворд» (агент 15.10.2026)
+- «Крокодил» (#/games/krokodil, js/games/krokodil.js, 12+) — рисуй и угадывай: онлайн 2–10 (#/games/krokodil/<код>), «🤖 Угадай
+  рисунок бота» (10 из 54 готовых PICS), «🎨 Просто порисовать». Хозяин (первый вошедший) ведёт игру чистой функцией hostStep:
+  художник выбирает 1 из 3 слов (15 с), время 60–120 с, раунды 2–5, буквы-подсказки; слов 453 в 3 уровнях (★★★ ×1,5). Догадки —
+  лично хозяину (верное слово другим не видно). Ушёл хозяин — ведёт следующий, слово ему пересылает художник. Рисунок — правки
+  пачками: WebRTC «звезда» (netplay.js) раз в 0,1 с, без связи — Supabase не чаще раза в 0,35 с, весь рисунок по запросу не чаще
+  раза в 1,5 с. Мат/ссылки — у хозяина и у получателя (детям D37Age.kidText), ≤ 4 сообщений за 3 с, 🙈 — скрыть, 🚩 — половина
+  против — ход пропущен. Ключи: krokodil, krokodil_online. Тест: node scripts/krokodil-test.cjs (446).
+- «Балда» (#/games/balda, 0+) — 5×5, бот 3 уровней, вдвоём, онлайн на двоих (room.js, 2 мин на ход). Словари: js/games/nouns-data.js
+  (40 731 существительное) и nouns-common.js (1862 понятных), собирает `python -X utf8 scripts/make-words.py <dictionary-ru index.dic>`
+  (BSD-3). С ботом 1 отмена бесплатно, дальше 🎓 тренировочная; онлайн засчитывается от 6 ходов. Ключи balda_easy/_normal/_hard/_online.
+  Тест: node scripts/balda-test.cjs.
+- «Домино» («Козёл», #/games/domino, 0+) — 2–4, боты простые/хитрые, до 51/101, с базаром или без; онлайн — стол table.js (хозяин
+  сдаёт и проверяет, sendTo, ушёл — бот, > 30 с — ход за него). Ход: костяшка → место → «Сходить», отмены нет. Ключи domino,
+  domino_online. Тест: node scripts/domino-test.cjs (3000 партий).
+- «Филворд» (#/games/fillword, 0+) — поле целиком из слов-«змеек», каждое читается одним путём. Уровни 4×4…9×9, «Филворд дня»
+  (#/games/fillword/daily: день №1 = 15.10.2026 по МСК, 7×7, один раз в день, daily_top('fillword_daily'); карточка на главной и щит в
+  мире — fillwordDayNo/fillwordToday в games.js), соревнование 6×6 на 5 мин. Монеты: уровень 3–5, день 12 (coin_run_cap 15). Ключи
+  fillword (2 XP), fillword_daily (6), fillword_duel (4). Тест: node scripts/fillword-test.cjs.
+- У всех: SEO /games/<id>, «📖 Правила» (make-rules.mjs), картинка img/games/<id>.png. «Балда», «Домино», «Филворд» — офлайн
+  (OFFLINE_GAMES, offline.html; sw.js VERSION v4). «Домино» и «Балда» — в «Позвать в игру» мира. Столов в 3D-мире для новых игр пока
+  нет (идея: стол домино в кафе, автомат «Филворда», мольберт «Крокодила»). Игра поверх мира (mir-play.js) теперь тоже показывает
+  возрастную обложку (D37Age.cover), как страница игры.
 
 ## Движок D37E (js/engine/*) — перенос систем из Unity-проекта владельца (D:\UnityProjects\Backrooms)
 - Владелец просил «движок адаптировать с игры юнити, а не игру»: перенесены СИСТЕМЫ (не Backrooms). Файлы и порядок
