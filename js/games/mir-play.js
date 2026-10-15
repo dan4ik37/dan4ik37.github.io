@@ -66,8 +66,9 @@
   const CSS = `
 html.mir-playing,html.mir-playing body{overflow:hidden}
 html.mir-playing:not(.gs-full) #games-page{z-index:9000!important;transform:none!important}
-.mp{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:clamp(10px,2.2vw,26px);background:rgba(6,5,16,.64);touch-action:auto;font-family:Montserrat,system-ui,sans-serif}
-.mp-panel{position:relative;display:flex;flex-direction:column;width:min(1180px,100%);height:100%;max-height:980px;background:var(--card,#111119);border:1px solid rgba(255,255,255,.1);border-radius:20px;box-shadow:0 30px 90px -20px rgba(0,0,0,.8);overflow:hidden;animation:mpIn .2s ease-out}
+.mp{position:fixed;inset:0;z-index:60;background:rgba(6,5,16,.64);touch-action:auto;font-family:Montserrat,system-ui,sans-serif}
+/* размер окна — от inset, а не height: реклама Google ставит предкам height:auto!important (окно росло выше экрана) */
+.mp-panel{position:absolute;inset:clamp(10px,2.2vw,26px);margin:auto;max-width:1180px;max-height:980px;display:flex;flex-direction:column;background:var(--card,#111119);border:1px solid rgba(255,255,255,.1);border-radius:20px;box-shadow:0 30px 90px -20px rgba(0,0,0,.8);overflow:hidden;animation:mpIn .2s ease-out}
 @keyframes mpIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
 .mp-head{flex:none;display:flex;align-items:center;gap:.55rem;padding:.5rem .7rem;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.025)}
 .mp-head b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-display,Oswald,sans-serif);letter-spacing:1px;font-size:1.08rem;color:var(--text,#f0f0f8)}
@@ -77,7 +78,7 @@ html.mir-playing:not(.gs-full) #games-page{z-index:9000!important;transform:none
 .mp-head button:hover{border-color:#4ade80}
 .mp-where{flex:none;font-size:.7rem;color:var(--muted,#8d8daa);white-space:nowrap}
 .mp-body{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:1rem 1.1rem 1.3rem;-webkit-overflow-scrolling:touch}
-.mp-end{flex:none;border-top:1px solid rgba(250,204,21,.35);background:linear-gradient(180deg,rgba(250,204,21,.11),rgba(250,204,21,.03));padding:.5rem .7rem calc(.5rem + env(safe-area-inset-bottom,0px))}
+.mp-end{flex:none;max-height:58%;overflow-y:auto;border-top:1px solid rgba(250,204,21,.35);background:linear-gradient(180deg,rgba(250,204,21,.11),rgba(250,204,21,.03));padding:.5rem .7rem calc(.5rem + env(safe-area-inset-bottom,0px))}
 .mp-end[hidden]{display:none}
 .mp-end-row{display:flex;align-items:center;justify-content:center;gap:.5rem;flex-wrap:wrap}
 .mp-end-t{font-weight:800;font-size:.86rem;color:#fde68a;margin-right:.2rem}
@@ -92,8 +93,8 @@ html.mir-playing:not(.gs-full) #games-page{z-index:9000!important;transform:none
 .gm-stage-bar .mp-shell{border-color:rgba(34,197,94,.6);background:rgba(34,197,94,.14)}
 .gm-stage-bar .mp-shell[hidden]{display:none}
 @media (max-width:640px){
-  .mp{padding:0;background:var(--bg,#08080e)}
-  .mp-panel{width:100%;max-height:none;border:0;border-radius:0;box-shadow:none;animation:none}
+  .mp{background:var(--bg,#08080e)}
+  .mp-panel{inset:0;max-width:none;max-height:none;border:0;border-radius:0;box-shadow:none;animation:none}
   .mp-head{padding:max(.4rem,env(safe-area-inset-top,0px)) .45rem .4rem}
   .mp-head button span,.mp-where{display:none}
   .mp-body{padding:.5rem .4rem calc(.6rem + env(safe-area-inset-bottom,0px))}
