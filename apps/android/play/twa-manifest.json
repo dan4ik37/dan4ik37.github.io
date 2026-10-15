@@ -1,0 +1,53 @@
+{
+  "packageId": "app.vercel.dan4ik37.twa",
+  "host": "dan4ik37.vercel.app",
+  "name": "dan4ik37 — игры, чат и видео",
+  "launcherName": "dan4ik37",
+  "display": "standalone",
+  "orientation": "default",
+  "themeColor": "#09090F",
+  "themeColorDark": "#09090F",
+  "navigationColor": "#08080E",
+  "navigationColorDark": "#08080E",
+  "navigationDividerColor": "#08080E",
+  "navigationDividerColorDark": "#08080E",
+  "backgroundColor": "#08080E",
+  "enableNotifications": true,
+  "startUrl": "/?app=play",
+  "iconUrl": "https://dan4ik37.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://dan4ik37.vercel.app/img/app/maskable-512.png",
+  "monochromeIconUrl": "https://dan4ik37.vercel.app/img/app/mono-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": { "path": "./android.keystore", "alias": "android" },
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    { "name": "Мир Денчика", "shortName": "Мир", "url": "https://dan4ik37.vercel.app/?app=play#/games/world", "chosenIconUrl": "https://dan4ik37.vercel.app/img/app/sc-world-m.png" },
+    { "name": "Чат", "shortName": "Чат", "url": "https://dan4ik37.vercel.app/?app=play#/chat", "chosenIconUrl": "https://dan4ik37.vercel.app/img/app/sc-chat-m.png" },
+    { "name": "Игры", "shortName": "Игры", "url": "https://dan4ik37.vercel.app/?app=play#/games", "chosenIconUrl": "https://dan4ik37.vercel.app/img/app/sc-games-m.png" },
+    { "name": "Слово дня — 5 букв", "shortName": "Слово дня", "url": "https://dan4ik37.vercel.app/?app=play#/games/words", "chosenIconUrl": "https://dan4ik37.vercel.app/img/app/sc-words-m.png" }
+  ],
+  "shareTarget": {
+    "action": "/",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": { "title": "share_title", "text": "share_text", "url": "share_url" }
+  },
+  "protocolHandlers": [
+    { "protocol": "web+denchik", "url": "https://dan4ik37.vercel.app/?proto=%s" }
+  ],
+  "launchHandlerClientMode": "focus-existing",
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://dan4ik37.vercel.app/manifest.json",
+  "fullScopeUrl": "https://dan4ik37.vercel.app/",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": { "enabled": false },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

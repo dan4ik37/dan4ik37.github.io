@@ -13,6 +13,11 @@
      без серверных функций и дублирует контент для поисковиков — уводим оттуда. -->
 <script>if(/\.github\.io$/.test(location.hostname))location.replace('https://dan4ik37.vercel.app/'+location.hash);</script>
 <link rel="manifest" href="/manifest.json">
+<!-- Приложение 📲 (js/features/app.js): на iPhone «На экран «Домой»» открывает сайт своим окном с чёрной строкой состояния -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="dan4ik37">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" href="/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -926,16 +931,6 @@ body.high .avatar::before{
 .poll-new-btn:hover{border-color:var(--accent);color:var(--accent)}
 
 /* ── CHAT REACTIONS ── */
-/* ── PWA BANNER ── */
-#pwaBanner{position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);z-index:8000;background:var(--card);border:1px solid rgba(255,45,85,.25);border-radius:16px;padding:1rem 1.4rem;display:none;align-items:center;gap:1rem;box-shadow:0 8px 32px rgba(0,0,0,.5);max-width:380px;width:calc(100% - 2rem)}
-#pwaBanner.show{display:flex}
-.pwa-icon{font-size:2rem;flex-shrink:0}
-.pwa-text{flex:1}
-.pwa-title{font-size:.82rem;font-weight:800;margin-bottom:.1rem}
-.pwa-sub{font-size:.68rem;color:var(--muted)}
-.pwa-install{padding:.5rem 1rem;border-radius:50px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;font-size:.72rem;font-weight:800;cursor:pointer;white-space:nowrap;font-family:'Montserrat',sans-serif;transition:transform .2s}
-.pwa-install:hover{transform:scale(1.05)}
-.pwa-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;flex-shrink:0;padding:.2rem}
 
 /* ── GLOBAL AUTH BTN ── */
 .global-auth-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.38rem .85rem;border-radius:50px;font-size:.7rem;font-weight:700;letter-spacing:.8px;text-transform:uppercase;border:1.5px solid rgba(255,255,255,.12);background:transparent;color:var(--muted);cursor:pointer;transition:all .2s;white-space:nowrap;font-family:'Montserrat',sans-serif}
@@ -998,7 +993,6 @@ body.high .avatar::before{
   .bt-icon{font-size:1.2rem;line-height:1}
   .bt-label{font-size:.58rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase}
   .bt-item.active-route{color:var(--accent)}
-  #pwaBanner{bottom:calc(58px + env(safe-area-inset-bottom) + .8rem)}
 }
 
 /* ── ЧАТ-ТОСТ (новое сообщение, если открыта другая страница) ── */
@@ -1030,6 +1024,8 @@ body.low .donation-alert-icon{animation:none}
 <!-- Чат «как Дискорд» + лента сообщений (community.js, msgview.js) и телефон 📱 (phone.js, calls.js) -->
 <link rel="stylesheet" href="css/ds.css">
 <link rel="stylesheet" href="css/phone.css">
+<!-- Приложение 📲: установка, окно приложения, значок, обновления (js/features/app.js) -->
+<link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
@@ -1044,16 +1040,7 @@ body.low .donation-alert-icon{animation:none}
   </div>
 </div>
 
-<!-- PWA INSTALL BANNER -->
-<div id="pwaBanner">
-  <div class="pwa-icon">📱</div>
-  <div class="pwa-text">
-    <div class="pwa-title">Установить на телефон</div>
-    <div class="pwa-sub">Быстрый доступ к сайту dan4ik37</div>
-  </div>
-  <button class="pwa-install" onclick="installPWA()">Установить</button>
-  <button class="pwa-close" aria-label="Закрыть баннер установки" onclick="document.getElementById('pwaBanner').classList.remove('show')">✕</button>
-</div>
+<!-- Установить приложение 📲: карточка, окно с шагами, «Доступна новая версия» — рисует js/features/app.js -->
 
 <!-- ЧАСТИЦЫ -->
 <div id="ambient" aria-hidden="true"><i class="amb a1"></i><i class="amb a2"></i><i class="amb a3"></i></div>
@@ -1865,6 +1852,7 @@ body.low .donation-alert-icon{animation:none}
       <div class="pf-kicker" style="margin-bottom:.8rem">Настройки аккаунта</div>
       <div style="display:flex;gap:.6rem;flex-wrap:wrap">
         <button id="profilePushBtn" onclick="togglePush()" class="pf-btn pf-btn-ghost pf-btn-sm">🔔 Подписаться на уведомления</button>
+        <button type="button" class="pf-btn pf-btn-ghost pf-btn-sm" data-app-install data-app-act="install" data-from="profile" hidden>📲 Установить приложение</button>
         <button onclick="confirmLogout()" class="pf-btn pf-btn-danger pf-btn-sm">🚪 Выйти из аккаунта</button>
       </div>
       <!-- Приватность (privacy.sql) — скрыта, пока скрипт не выполнен -->
@@ -2620,6 +2608,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/polls.js"></script>
 <script src="js/features/reactions.js"></script>
 <script src="js/features/push-pwa.js"></script>
+<!-- приложение 📲: установка, окно, значок, «Поделиться», обновления sw.js -->
+<script src="js/features/app.js"></script>
 <script src="js/features/leaderboard.js"></script>
 <script src="js/features/performance-mode.js"></script>
 <script src="js/features/google-translate.js"></script>
