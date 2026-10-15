@@ -399,6 +399,7 @@
 .dad-a:hover .dad-t{text-decoration:underline}
 .dad-banner,.dad-rail{align-items:center;margin:0 auto;max-width:100%}
 .dad-banner .dad-lbl,.dad-rail .dad-lbl{width:min(100%,var(--dad-w));}
+.dad-rail .dad-lbl{align-items:flex-start}.dad-rail .dad-lbl-t{white-space:normal}   /* узкий столбик: рекламодатель целиком, в две строки */
 .dad-banner .dad-a,.dad-rail .dad-a{width:min(100%,var(--dad-w));aspect-ratio:var(--dad-ar);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.04)}
 .dad-banner img,.dad-rail img{width:100%;height:100%;display:block;object-fit:cover}
 .dad-banner .dad-host,.dad-rail .dad-host{width:min(100%,var(--dad-w));text-align:right}

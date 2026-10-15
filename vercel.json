@@ -163,6 +163,10 @@
       "destination": "/api/pages?page=geo"
     },
     {
+      "source": "/ads-terms",
+      "destination": "/api/pages?page=adsterms"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },

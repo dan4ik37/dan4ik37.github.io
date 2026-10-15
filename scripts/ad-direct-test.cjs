@@ -578,6 +578,16 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
     res = await run({ page: 'geo' }, { 'x-vercel-ip-country': 'ru' });
     ok(res.code === 200 && res.body === '{"c":"RU"}' && res.h['Cache-Control'] === 'private, no-store', '/api/geo: только код страны, без кэша');
     ok((await run({ page: 'geo' }, { 'x-vercel-ip-country': '<script>' })).body === '{"c":""}' && (await run({ page: 'geo' }, {})).body === '{"c":""}', '/api/geo: мусор или нет заголовка — пусто');
+    // Правила для рекламодателей /ads-terms
+    res = await run({ page: 'adsterms' });
+    const tb = res.body || '';
+    ok(res.code === 200 && /Правила рекламы на сайте/.test(tb) && /показать юристу/.test(tb), '/ads-terms: страница, пометка «шаблон — показать юристу»');
+    ok(/38-ФЗ/.test(tb) && /erid/.test(tb) && /ОРД/.test(tb) && /Казахстан/.test(tb) && /партнёрский материал/.test(tb), '/ads-terms: маркировка — Россия (erid, ОРД) и Казахстан');
+    ok(/азартные игры/.test(tb) && /вейпы/.test(tb) && /криптовалюты/.test(tb) && /ты выиграл/.test(tb), '/ads-terms: запрещённые темы');
+    ok(/0\+, 6\+, 12\+, 16\+ или 18\+/.test(tb) && /до 13 лет — только 0\+ и 6\+/.test(tb), '/ads-terms: возрастные метки');
+    ok(/Возврат неизрасходованного бюджета/.test(tb) && new RegExp(`Минимальный бюджет — ${D.DEF.min_budget}`).test(tb) && /noindex/.test(tb) === false && !/adsbygoogle\.js/.test(tb), '/ads-terms: возврат, цены из правил, без рекламы');
+    const rk = await run({ page: 'reklama' });
+    ok(rk.code === 200 && /Разместить рекламу самостоятельно/.test(rk.body) && /href="\/#\/adv"/.test(rk.body) && /href="\/ads-terms"/.test(rk.body), '/reklama: блок «Разместить рекламу самостоятельно» → кабинет и правила');
     globalThis.fetch = realFetch; globalThis.setTimeout = fakeST; globalThis.clearTimeout = fakeCT;
   } catch (e) { ok(false, 'сервер сайта', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -594,7 +604,16 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
   has('js/games/mir-promo.js', /D37AdDirect\?\.billboard\?\.\(\)/, 'mir-promo.js: щит — прямая реклама');
   has('api/pages.js', /go: adgo, geo/, 'api/pages.js: маршруты go и geo');
   const vj = JSON.parse(read('vercel.json'));
-  ok(vj.rewrites.some(r => r.source === '/go/:id' && r.destination === '/api/pages?page=go&id=:id') && vj.rewrites.some(r => r.source === '/api/geo'), 'vercel.json: /go/:id и /api/geo');
+  ok(vj.rewrites.some(r => r.source === '/go/:id' && r.destination === '/api/pages?page=go&id=:id') && vj.rewrites.some(r => r.source === '/api/geo') && vj.rewrites.some(r => r.source === '/ads-terms' && r.destination === '/api/pages?page=adsterms'), 'vercel.json: /go/:id, /api/geo, /ads-terms');
+  has('js/ui/router.js', /adv:\s*\['adv-page'\]/, 'router.js: раздел #/adv');
+  has('js/ui/router.js', /route==='adv'\) window\.D37AdDirect\?\.cabinet\?\.\(currentRouteParam\(\)\)/, 'router.js: кабинет грузится при входе');
+  has('index.html', /id="adv-page"[\s\S]{0,400}id="advRoot"/, 'index.html: блок кабинета');
+  has('index.html', /href="#\/adv" data-route="adv"/, 'index.html: кабинет в меню сайта');
+  has('js/features/fx.js', /'ads', 'adv'\]/, 'fx.js: кабинет в «Ещё ▾»');
+  has('js/features/shop.js', /href="#\/adv"/, 'магазин: ссылка на кабинет');
+  has('js/features/shop.js', /ads: 'Реклама на сайте', ads_refund: 'Возврат остатка рекламы'/, 'магазин: подписи в истории 💎');
+  has('api/_lib/page.js', /href="\/#\/adv"/, 'серверные страницы: кабинет в меню и подвале');
+  for (const f of ['js/features/adcab.js', 'css/adcab.css']) ok(fs.existsSync(path.join(SITE, f)), 'есть ' + f);
   ok(fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'функций Vercel не больше 12');
 }
 
