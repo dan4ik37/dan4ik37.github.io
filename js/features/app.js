@@ -40,6 +40,9 @@
   const read = () => { try { const v = JSON.parse(lsGet(LS) || 'null'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } };
   let st = read();
   const save = () => lsSet(LS, JSON.stringify(st));
+  // старая полоска установки (push-pwa.js до 15.10.2026): «установил» / «закрыл» — помним
+  if (lsGet('d37_pwa_installed') === '1' && !st.inst) { st.inst = 1; save(); }
+  if (lsGet('d37_pwa_dismissed') && !st.x) { st.x = 1; save(); }
   // Статистика: Vercel Analytics (события) и цель Метрики — только «откуда нажали», ОС и браузер
   function track(name, data){
     try { if (typeof root.va === 'function') root.va('event', data ? { name, data } : { name }); } catch (e) {}

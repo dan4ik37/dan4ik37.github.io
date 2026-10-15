@@ -33,7 +33,7 @@ function fakeSW(){
   return { posted, reg, et, api: { controller: {}, register: () => Promise.resolve(reg), addEventListener: (...a) => et.addEventListener(...a), ready: Promise.resolve(reg) } };
 }
 function fakeBrowser(o = {}){
-  const W = new EventTarget(), store = {}, sstore = {};
+  const W = new EventTarget(), store = Object.assign({}, o.store), sstore = {};
   const doc = new EventTarget();
   Object.assign(doc, { readyState: 'complete', visibilityState: 'visible', referrer: o.referrer || '', createElement: t => new El(t), head: new El('head'), body: new El('body'), documentElement: new El('html') });
   const byId = {};
@@ -205,6 +205,9 @@ ok(la('https://evil.example/#/chat') === null, 'чужой адрес — нич
   ok(JSON.parse(C.store.d37_app).inst === 1, 'appinstalled → установлено');
   ok((C.W._va || []).some(a => a[1]?.name === 'app_installed' && a[1].data && !('uid' in a[1].data)), 'app_installed в аналитике — без личных данных');
   ok(!!C.doc.getElementById('appToast'), 'appinstalled → «спасибо»');
+  // старая полоска установки: «установил» / «закрыл ✕» — помним
+  const Old = fakeBrowser({ store: { d37_pwa_installed: '1', d37_pwa_dismissed: '1' } });
+  ok(JSON.parse(Old.store.d37_app).inst === 1 && JSON.parse(Old.store.d37_app).x === 1, 'старая полоска: «установлено» и «закрыта» перенесены');
   // кнопка браузера: beforeinstallprompt перехвачен (своя карточка), «установлено» сброшено (приложение удалили)
   let prevented = false;
   const ev = new C.W.Event('beforeinstallprompt'); ev.preventDefault = () => { prevented = true; };
