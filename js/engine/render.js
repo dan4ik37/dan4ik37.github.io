@@ -229,6 +229,10 @@
       envAt = performance.now(); envSun.copy(skyMat.uniforms.uSun.value);
     }
     R.envNow = () => { envDue = 0; makeEnv(); };
+    // контекст WebGL вернулся (телефон выгружал видеопамять, сбой драйвера): three.js пересоздаёт всё сам, но то, что было
+    // нарисовано в текстуры, пропало — отражения неба и карту теней заново (страж графики, пока контекст потерян, молчит)
+    const onRestore = () => { SH.dirty = true; setTimeout(() => { if (!R.dead) try { envDue = 0; makeEnv(); } catch (e) {} }, 0); };
+    r.domElement.addEventListener?.('webglcontextrestored', onRestore);
 
     // ═══ Время суток (как Lighting в Roblox): time 0–24, brightness, ambient, fogEnd, shadows + gfx — графика мира ═══
     const M = R.sky = E.skyModel(14);   // модель неба — один объект, без мусора
@@ -655,6 +659,7 @@
     };
     R.dispose = () => {
       R.dead = true;
+      r.domElement.removeEventListener?.('webglcontextrestored', onRestore);
       for (const f of R.preRender) f.dispose?.();
       R.post?.dispose();
       if (halo) { halo.geometry.dispose(); halo.material.dispose(); }

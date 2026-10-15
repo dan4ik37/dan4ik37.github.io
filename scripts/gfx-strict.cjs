@@ -3,11 +3,12 @@
 // многое прощает; здесь шейдеры проходят другой путь сборки (16.10.2026, после «чёрной земли» на телефоне владельца).
 // Проверяет: все программы собрались (three: diagnostics), страж графики (post.js) ничего лишнего не выключил, его самопроверка
 // прошла, кадр в полдень не чёрный. Картинка — <папка временных файлов>/gfx-strict-<бэкенд>-<пресет>.png.
-// Запуск из корня сайта: node scripts/gfx-strict.cjs [swiftshader|vulkan|gl|d3d11] [high|mid|ultra|auto] [плотность пикселей]
+// Запуск из корня сайта: node scripts/gfx-strict.cjs [swiftshader|vulkan|gl|d3d11] [high|mid|ultra|auto] [плотность пикселей] [lose]
+// lose — ещё и потеря контекста WebGL (как на телефоне, выгрузившем видеопамять): страж ничего не выключает, после возврата кадр рисуется
 // (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
-const [angle = 'swiftshader', preset = 'high', DSF = '1'] = process.argv.slice(2);
+const [angle = 'swiftshader', preset = 'high', DSF = '1', LOSE = ''] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -55,6 +56,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     if (!up) throw new Error('мир не открылся');
     for (let i = 0; i < 240; i++) { await sleep(500); const t = await ev(`(GAME_IMPL.world._test.state().R.guard || {}).tests ?? -1`, 5000).catch(() => -2); if (t >= 1 || t === -1) break; }
     const res = await ev(`(async () => {
+      // мир мог пересобраться (страж графики что-то выключил → 'd37:gfxfallback') — ждём новый
+      for (let i = 0; i < 240 && !GAME_IMPL.world._test.state()?.R; i++) await new Promise(r => setTimeout(r, 500));
       const S = GAME_IMPL.world._test.state(), R = S.R, P = R.post, G = R.guard;
       S.fixedTime = 12; R.setLighting({ time: 12 });
       await new Promise(r => setTimeout(r, 1500));
@@ -79,7 +82,34 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     ok(res.frame.mean > 60 && res.frame.black < .2, 'кадр в полдень не чёрный', res.frame);
     const bad = logs.filter(l => /WebGLProgram|Shader Error|страж графики|exception/i.test(l));
     ok(!bad.length, 'в консоли — без ошибок шейдеров', bad.slice(0, 4));
-  } catch (e) { fail++; console.log('ОШИБКА', e.message); }
+    if (LOSE === 'lose') {
+      const lr = await ev(`(async () => {
+        const S = GAME_IMPL.world._test.state(), R = S.R, G = R.guard, gl = R.r.getContext(), x = gl.getExtension('WEBGL_lose_context');
+        if (!x) return { skip: true };
+        const wait = ms => new Promise(r => setTimeout(r, ms));
+        const shot = () => { R.render(); const c = R.r.domElement, k = document.createElement('canvas'); k.width = 103; k.height = Math.round(c.height * 103 / c.width);
+          const g = k.getContext('2d'); g.drawImage(c, 0, 0, k.width, k.height); const d = g.getImageData(0, 0, k.width, k.height).data;
+          let sum = 0, n = 0; for (let i = 0; i < d.length; i += 4) { sum += .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]; n++; } return +(sum / n).toFixed(1); };
+        const before = shot();
+        x.loseContext(); await wait(300);
+        const lostNow = gl.isContextLost();
+        if (G) G.check(); await wait(4000);
+        const offLost = D37E.gfxGuardInfo().off.slice();
+        x.restoreContext(); await wait(3000);
+        let rep = null; if (G) { G.check(r => { rep = r; }); for (let i = 0; i < 80 && !rep; i++) await wait(100); }
+        await wait(1500);
+        return { lostNow, offLost, offAfter: D37E.gfxGuardInfo().off, restored: !gl.isContextLost(), same: GAME_IMPL.world._test.state() === S,
+          before, after: shot(), rep: rep && { log: rep.log, err: rep.err }, log: G ? G.log.slice(-6) : [] };
+      })()`, 90000);
+      console.log('  потеря контекста:', JSON.stringify(lr).slice(0, 500));
+      ok(lr && (lr.skip || (lr.lostNow && !lr.offLost.length)), 'контекст потерян — страж ничего не выключил', lr);
+      ok(lr && (lr.skip || (lr.restored && lr.same && !lr.offAfter.length && lr.after > 60 && Math.abs(lr.after - lr.before) < 4)), 'контекст вернулся — тот же мир, кадр как до потери, страж чист', lr);
+    }
+  } catch (e) {
+    fail++; console.log('ОШИБКА', e.message);
+    try { console.log('  страж:', JSON.stringify(await ev(`window.D37E?.gfxGuardInfo?.() || null`, 5000)).slice(0, 600)); } catch (e2) {}
+    for (const l of logs.slice(-6)) console.log('  консоль:', l.slice(0, 240));
+  }
   finally { try { ws.close(); } catch (e) {} proc.kill(); server.close(); await sleep(800); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {} }
   console.log(fail ? `gfx-strict: ${fail} ошибок` : 'gfx-strict: всё в порядке');
   process.exit(fail ? 1 : 0);

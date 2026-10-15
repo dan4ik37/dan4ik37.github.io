@@ -984,7 +984,13 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     if (P) for (const k of POSTK) if (G.st.off[k]) P.disable(k);   // запомненное — сразу, до первого кадра
     const on = k => !G.st.off[k];
     const base = () => ({ gpu: G.gpu.model, q: R.q, v: gVer() });
+    // контекст WebGL потерян (телефон выгрузил видеопамять, сбой драйвера, вкладка долго в фоне): кадр не рисуется, чтение
+    // даёт нули — это НЕ поломка шейдеров. Пока потерян — ни проверок, ни решений (иначе запомнили бы «без AO» навсегда);
+    // вернётся — three.js сам всё пересоздаст
+    const lost = () => { try { return !!gl.isContextLost?.(); } catch (e) { return false; } };
+    G.lost = lost;
     function off(k, why, prog = ''){
+      if (lost()) { G.log.push('lost:' + k); return false; }
       const s = E.gfxGuardState();
       if (s.off[k] || G.st.off[k]) { G.st = s; G.st.off[k] = 1; return false; }
       s.off[k] = 1; s.why.push({ k, why, prog: String(prog).slice(0, 40), t: Date.now() });
@@ -1016,6 +1022,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       return { scene: name };
     }
     function scan(){
+      if (lost()) return;
       const L = r.info?.programs || [];
       for (const p of L) {
         if (!p || G.seen.has(p) || !p.diagnostics || p.diagnostics.runnable !== false) continue;
@@ -1087,9 +1094,10 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (day && A.ground >= 48 && A.gblack >= A.ground * .5) gSend('gfx_dark', { what: 'ground', why: 'day', prog: `${A.gblack}/${A.ground}`, ...base() });
     }
     // render.js: пора ли проверить кадр (вместо обычного P.render)
-    G.due = () => !G.wait && !!P && P.on && on('test') && !!P.canTest?.() && G.n >= G.testAt && G.tests < 12;
+    G.due = () => !G.wait && !!P && P.on && on('test') && !!P.canTest?.() && G.n >= G.testAt && G.tests < 12 && !lost();
     G.test = (scene, camera) => {
       const k = G.tests, rep = P.selfTest(scene, camera);
+      if (lost()) { G.testAt = G.n + 120; G.log.push('lost:test'); return rep; }   // потерялся во время проверки — нули не считаются
       G.testAt = k === 0 ? G.n + 900 : k === 1 ? G.n + 5400 : Infinity;   // через 15 с и через 1,5 мин; дальше — после смены настроек
       const n0 = G.log.length;
       try { scan(); } catch (e) {}   // не собравшаяся программа — главнее чисел (её проход ничего не нарисовал)
@@ -1104,7 +1112,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       sum: G.last?.sum || null, err: G.last?.err || '', log: G.log.slice(), off: E.gfxGuardInfo().off, gpu: G.gpu, lastLog: G.lastLog || '' });
     // после каждого настоящего кадра (render.js)
     G.tick = () => {
-      if (R.dead) return;
+      if (R.dead || lost()) return;   // без контекста кадров нет — и счёт кадров стоит
       G.n++;
       if (G.n === 2 || G.n === 10 || G.n === 40 || G.n === G.scanAt || G.n % 300 === 0) { try { scan(); } catch (e) {} }
       if (G.n === 60) { try { const e = gl.getError(); if (e && e !== gl.CONTEXT_LOST_WEBGL) gSend('gfx_glerror', { what: 'gl', why: String(e), prog: '', ...base() }); } catch (e) {} }

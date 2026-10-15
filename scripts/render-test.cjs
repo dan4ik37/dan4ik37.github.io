@@ -1283,6 +1283,20 @@ function boundsOk(R){
   Rc.guard.check(x => { got = x; }); Rc.guard.tick();
   if (Rc.guard.due()) Rc.guard.test(Rc.scene, cam);
   ok(got && got.tests === 1 && got.sum?.codes?.bad === 0 && got.sum.ao?.mean > .8 && got.gpu.model === 'Mali-G57', '«🩺 Проверить»: проверка на следующем кадре, отчёт для окна', got && got.sum);
+  // контекст WebGL потерян (телефон выгрузил видеопамять, сбой драйвера): чтение даёт нули — это не поломка шейдеров
+  for (const k in store) delete store[k];
+  progs.length = 0; let LOST = false; gl.isContextLost = () => LOST;
+  const Rx = mkG(), Z = B(() => [0, 0, 0, 0]);
+  Rx.post.selfTest = () => ({ codes: Rx.post.codesOn(), A: Z, B: Z, AO: Z, F: Z });
+  LOST = true; ticks(Rx.guard, 50);
+  const pX = failProg('ShaderMaterial'); progs.push(pX); props.set(Rx.post._test.M.ao, { currentProgram: pX });
+  Rx.guard.scan(); Rx.guard.check();
+  for (let i = 0; i < 3; i++) Rx.guard.test(Rx.scene, cam);
+  ok(!E.gfxGuardInfo().off.length && Rx.guard.n === 0 && !Rx.guard.due() && Rx.guard.tests === 0 && Rx.guard.log.includes('lost:test'),
+    'контекст WebGL потерян: нули из чтения и «не собралось» — ничего не выключено, счёт кадров стоит', { off: E.gfxGuardInfo().off, log: Rx.guard.log });
+  LOST = false; ticks(Rx.guard, 2);
+  ok(E.gfxGuardState().off.fol === 1, 'контекст вернулся — проверки снова работают (настоящая поломка AO с травой → без травы)', E.gfxGuardInfo().off);
+  delete gl.isContextLost;
   // видеокарты: семейство и модель из строки рендерера
   const gi = s => E.gpuInfo({ getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => s });
   const GPUS = [['ANGLE (Qualcomm, Adreno (TM) 619, OpenGL ES 3.2)', 'adreno', 'Adreno 619'], ['Mali-G52 MC2', 'mali', 'Mali-G52'], ['PowerVR Rogue GE8320', 'powervr', 'PowerVR Rogue GE8320'],
