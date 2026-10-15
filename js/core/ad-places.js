@@ -505,15 +505,15 @@
   }
 
   // ═══ Монеты за рекламу 🪙 (обычные монеты, не донатная валюта и не деньги) ═══
-  // coinOffer(где) → кнопка «📺 Реклама → +40 🪙» (или пусто). Только если есть блок «за награду» (rewardReady), монеты за
-  // рекламу на сегодня не кончились (canAd: 8 в день, сервер coins_ad) и с прошлой награды здесь прошло 10 минут.
+  // coinOffer(где) → кнопка «📺 Реклама → +25 🪙» (или пусто; сколько — D37Coins.RULES.ad = coin_rule('ad')). Только если есть блок «за награду» (rewardReady), монеты за
+  // рекламу на сегодня не кончились (canAd: 6 в день — coin_rule('ad_day'), сервер coins_ad) и с прошлой награды здесь прошло 10 минут.
   // Нажатие ловит этот файл сам (data-d37-reward) — игре ничего делать не надо.
   const CD = 10 * 60e3, CDK = 'd37_coinad_at';
   const cdLeft = () => { let t = 0; try { t = +localStorage.getItem(CDK) || 0; } catch (e) {} return Math.max(0, t + CD - now()); };
   function coinOffer(where){
     const W = window.D37Coins, A = window.D37Ads;
     if (!W || !A?.rewardReady?.() || !W.canAd?.()) return '';
-    const got = W.RULES?.ad ?? 40, left = cdLeft();
+    const got = W.RULES?.ad ?? 25, left = cdLeft();
     if (left > 0) return `<button type="button" class="d37-coinad" disabled title="Награда за рекламу — раз в 10 минут">📺 +${got} 🪙 за рекламу — через ${Math.ceil(left / 60e3)} мин</button>`;
     return `<button type="button" class="d37-coinad" data-d37-reward="coins" data-where="${esc(where || '')}" title="Посмотреть рекламу и получить ${got} монет">📺 Реклама → +${got} 🪙</button>`;
   }
