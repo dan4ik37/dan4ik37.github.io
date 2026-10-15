@@ -215,7 +215,20 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
     for (const [role, R] of Object.entries(roles)) {
       ok(R.icon && R.name && R.desc && R.hat && R.vest, `${city}/${role}: значок, название, описание, форма`);
       ok(MZ.ROLES[role] && MZ.ROLES[role].zone === city, `${city}/${role}: роль известна сети (zx.r)`);
-      if (R.car) { ok(MC.taskList(role, city, spots, rnd) === null, `${role}: без машин — без заданий (vehicle.js)`); continue; }
+      if (R.car) {   // таксист: шаги «доехать» — у дорог (машина доедет), не в стенах
+        for (let k = 0; k < 12; k++) {
+          const L = MC.taskList(role, city, spots, rnd);
+          ok(Array.isArray(L) && L.length === 3 && L.every(st => st.drive && globalThis.D37E.vehicle.get(st.drive)), `${role}: задание — за руль, забрать, отвезти`);
+          for (const st of L.slice(1)) {
+            ok(inRect(Z, st.at.x, st.at.z, -2), `${role}: «${st.text}» — в городе`);
+            const near = (MZ.DEFS[city].streets || []).some(r => r.pts.some((p, i) => i && MZ.segDist(st.at.x, st.at.z, r.pts[i - 1][0], r.pts[i - 1][1], p[0], p[1]) < 6));
+            ok(near, `${role}: остановка «${st.text}» — у дороги`, st.at);
+            ok(!MZ.buildings(city).some(b => b.h > 0 && b.type !== 'park' && b.type !== 'lot' && Math.abs(st.at.x - b.x) < b.w / 2 && Math.abs(st.at.z - b.z) < b.d / 2), `${role}: остановка не в здании`, st.at);
+          }
+          ok(L[1].text !== L[2].text, `${role}: забрать и отвезти — разные места`);
+        }
+        continue;
+      }
       for (let k = 0; k < 12; k++) {
         const L = MC.taskList(role, city, spots, rnd, ['coffee']);
         ok(Array.isArray(L) && L.length >= 1 && L.length <= 8, `${city}/${role}: задание из 1–8 шагов`);

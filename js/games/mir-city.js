@@ -919,6 +919,9 @@
     K.body({ x, z, y: y0 + 1, hx: 1, hy: 1, hz: 2.1, yaw, tag: 'car' });
   }
 
+  // остановки такси — на дорогах Большого города (доедет машина): [x, z, куда]
+  const TAXI_STOPS = [[182, 134, 'площадь у мэрии'], [246, 134, 'банк'], [120, 134, 'полиция'], [280, 180, 'небоскрёбы «Сити»'], [215, 184, 'больница'],
+    [230, 209, 'аптека'], [150, 240, 'ресторан у канала'], [247, 278, 'Гранд Отель'], [150, 300, 'ЖК «Солнечный»'], [313, 209, 'торговый центр']];
   // ═══ Задания по ролям (чистая функция — проверяется в node): шаги { text, at (точка), hold (с), act (поза), carry, icon, … } ═══
   function taskList(role, city, spots, r = Math.random, biz = []){
     const SP = id => spots[id], P3 = (x, z, y = 1) => ({ x, y, z }), pick = a => a[Math.floor(r() * a.length)];
@@ -954,7 +957,13 @@
       case 'judge': return [{ text: 'Подсудимый ждёт: займи место судьи', at: SP('m_judge'), hold: 1.5, icon: '⚖️', trial: true }];
       case 'biz': { if (!biz.length) return [{ text: 'Купи бизнес в бизнес-центре (киоски на юге)', at: P3(182, 224), icon: '💼', walk: true, nobiz: true }];
         const b = pick(biz); return [{ text: 'Закупи товар на складе супермаркета', at: SP('m_dock'), hold: 1.2, icon: '📦' }, { text: 'Привези товар в свой бизнес', at: SP('m_biz_' + b), hold: 1.2, icon: '💼', carry: 'box', done: 'Полки полные — продажи растут! 📈' }]; }
-      case 'taxi': return null;
+      case 'taxi': {   // таксист: за руль такси → забери пассажира → отвези (остановки — у дорог, доедет машина)
+        const a = pick(TAXI_STOPS); let b = pick(TAXI_STOPS); for (let i = 0; i < 6 && b === a; i++) b = pick(TAXI_STOPS);
+        if (b === a) b = TAXI_STOPS[(TAXI_STOPS.indexOf(a) + 1) % TAXI_STOPS.length];
+        return [
+          { text: 'Сядь за руль такси (стоянка у «Такси»)', at: P3(246, 124), drive: 'taxi', any: true, icon: '🚕' },
+          { text: `Забери пассажира: ${a[2]}`, at: P3(a[0], a[1]), drive: 'taxi', icon: '🙋', cust: true },
+          { text: `Отвези пассажира: ${b[2]}`, at: P3(b[0], b[1]), drive: 'taxi', icon: '🏁', done: 'Пассажир доволен — чаевые! 💵' }]; }
     }
     return null;
   }
@@ -999,7 +1008,7 @@
       drawWallet();
       if (!role) { toast('Ты свободен — без работы'); return; }
       const R0 = ROLES[role];
-      if (R0.car && !root.D37E?.vehicles) { toast(`${R0.icon} ${R0.name}: такси поедет, когда в мире появятся машины — скоро!`); return; }
+      if (R0.car && !root.D37E?.vehicle) { toast(`${R0.icon} ${R0.name}: такси поедет, когда в мире появятся машины — скоро!`); return; }
       toast(`${R0.icon} Ты — ${R0.name}! ${R0.desc}`, true);
       setTimeout(() => { if (C.job === role && !C.task) nextTask(); }, 900);
     }
@@ -1018,7 +1027,7 @@
       if (st.sick) sickPet(st.at, true);
       if (st.cust || st.cust2 || st.robber) customer(st.cust2 || st.at, st.robber ? '🦹' : '🙋');
       if (st.trial) customer(SP('m_defend'), '🦹');
-      if (st.walk) setTarget(st.at, st.icon, null, 0, () => {});
+      if (st.walk || st.drive) setTarget(st.at, st.icon, null, 0, () => {});   // дойти / доехать — шаг засчитается сам
       else setTarget(st.at, st.icon, `${st.icon} ${st.text}`, st.hold, () => stepDone());
       drawTask();
     }
@@ -1123,7 +1132,7 @@
     // ═══ Окна: работа, семья, питомцы, магазины, банк, бизнес, дома ═══
     function jobBoard(){
       const s = W(), cur = rt.zx.r;
-      const rows = Object.entries(ROLES).map(([id, r]) => `<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)}</b><small>${esc(r.desc)}${r.pay ? ` · ${W0.icon}${r.pay} за задание + немного 🪙` : ''}</small></div>${cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.car && !root.D37E?.vehicles ? 'Скоро' : 'Работать'}</button>`}</div>`).join('');
+      const rows = Object.entries(ROLES).map(([id, r]) => `<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)}</b><small>${esc(r.desc)}${r.pay ? ` · ${W0.icon}${r.pay} за задание + немного 🪙` : ''}</small></div>${cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.car && !root.D37E?.vehicle ? 'Скоро' : 'Работать'}</button>`}</div>`).join('');
       H.panel(`<span class="wld-pe">🧰</span><b>Работа · ${esc(Z.name)}</b>`, `<div class="mz-cash"><span>${W0.icon} ${s.cash.toLocaleString('ru')}</span><span>🪙 за работу сегодня: ${MZ.payState().got}/${MZ.PAY.day}</span></div><div class="mz-jobs">${rows}</div>`);
     }
     function familyBoard(){
@@ -1168,8 +1177,12 @@
       const s2 = W(); s2.biz.push(id); walletSave(city, s2);
       toast(`💼 ${name} — теперь твой бизнес! Выручка копится, пока ты в городе`, true);
     }
+    // автосалон: тест-драйв (машина появится у салона на 5 минут — видна всем; покупка — позже, гаражи на сервере)
     function dealer(){
-      H.panel('<span class="wld-pe">🚗</span><b>Автосалон</b>', `<p>${root.D37E?.vehicles ? 'Выбери машину — она появится у салона.' : 'Машины скоро можно будет водить по дорогам мира! Пока — посмотри модели в зале. 🚗'}</p>`);
+      const ok = !!root.D37E?.vehicle && !!rt.veh?.testDrive;
+      H.panel('<span class="wld-pe">🚗</span><b>Автосалон</b>', ok
+        ? `<p>Выбери машину для тест-драйва — она появится у салона на 5 минут. Покатайся по проспектам, мостам и эстакаде!</p><div class="wld-acts">${[['sedan', '🚗 Седан (синий)'], ['sedan_red', '🚗 Седан (красный)']].filter(([d]) => root.D37E.vehicle.get(d)).map(([d, t]) => `<button type="button" class="ct-start" data-mz="c:${city}:drive:${d}">${t}</button>`).join('')}</div><p><small>Купить свою машину и гараж — скоро.</small></p>`
+        : '<p>Машины скоро можно будет водить по дорогам мира! Пока — посмотри модели в зале. 🚗</p>');
     }
     // ── урок в школе (детский) ──
     function quiz(){
@@ -1278,6 +1291,7 @@
       const [, , cmd, v, v2] = a.split(':');
       if (cmd === 'quit') { setJob(null); H.closePops(); return true; }
       if (cmd === 'job') { H.closePops(); setJob(v || null); return true; }
+      if (cmd === 'drive') { H.closePops(); rt.veh?.testDrive?.(v, { x: 182, z: 125, yaw: PI / 2, zone: city }); return true; }
       if (cmd === 'fam') { H.closePops(); rt.setZX({ f: v || null }); toast(v ? `${MZ.FAMILY[v][0]} Ты — ${MZ.FAMILY[v][1]}!` : 'Без роли в семье', true); return true; }
       if (cmd === 'pet') {
         H.closePops();
@@ -1328,7 +1342,11 @@
           sprayTick();
           // метка — расстояние
           const st = C.task[C.step], el = rt.q('.mz-task .mz-dist');
-          if (st?.at && el) { const d = Math.hypot(st.at.x - S.P.ch.x, st.at.z - S.P.ch.z); el.textContent = d > 3 ? Math.round(d / 1.17) + ' м' : '✋ здесь'; if (st.walk && d < 2.5) stepDone(); }
+          if (st?.at && el) {
+            const d = Math.hypot(st.at.x - S.P.ch.x, st.at.z - S.P.ch.z), me = rt.veh?.me, inCar = !!st.drive && me?.seat === 0 && me.v.def.id === st.drive;
+            el.textContent = st.any ? (inCar ? '✅' : '') : d > 3 ? Math.round(d / 1.17) + ' м' : '✋ здесь';
+            if ((st.walk && d < 2.5) || (inCar && (st.any || d < 7))) stepDone();   // такси: доехал (за рулём такси) — засчитано
+          }
         }
         if (city === 'kids' && here && K.spots.k_tramp) { const t0 = K.spots.k_tramp, ch = S.P.ch; if (Math.hypot(ch.x - t0.x, ch.z - t0.z) < 1.9 && ch.grounded && ch.y > .5 && S.P.mode === 'move') { S.P.push(0, 15, 0); rt.sfx('jump', { vol: .5, rate: 1.4 }); } }
         if (city === 'metro') { wantedTick(dt); prisonTick(dt); }

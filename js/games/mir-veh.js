@@ -64,6 +64,7 @@
       const d = v.def;
       if (v.broken) return `🔧 ${d.icon} ${d.name} сломан — скоро новый`;
       const occ = seatsOf(v);
+      if (v.temp && v.owner !== S.key) { const fr = d.seats.findIndex((s, i) => i > 0 && !occ[i]); return fr > 0 ? `🪑 Сесть пассажиром · ${d.name} (тест-драйв)` : null; }
       if (!occ[0] && !driverOn(v)) return `${d.icon} Сесть за руль · ${d.name}`;
       const free = d.seats.findIndex((s, i) => i > 0 && !occ[i]);
       return free > 0 ? `🪑 Сесть пассажиром · ${d.name}` : null;
@@ -71,7 +72,7 @@
     function tryEnter(v){
       if (VS.me || v.broken) return;
       const occ = seatsOf(v);
-      const seat = !occ[0] && !driverOn(v) ? 0 : v.def.seats.findIndex((s, i) => i > 0 && !occ[i]);
+      const seat = !occ[0] && !driverOn(v) && !(v.temp && v.owner !== S.key) ? 0 : v.def.seats.findIndex((s, i) => i > 0 && !occ[i]);
       if (seat < 0) { toast('Мест нет'); return; }
       enter(v, seat);
     }
@@ -112,6 +113,7 @@
       if (!o.force && (d.kind === 'heli' || d.kind === 'plane') && !v.grounded && v.y - ph.supportAt(v.x, v.z, 1, v.y, v.body).y > 3) { toast('🪂 Сначала приземлись — потом выйти'); return false; }
       if (!o.noPlace) { const p = exitSpot(v, m.seat); P.place(p.x, p.y, p.z, v.yaw); }
       if (m.seat === 0) { v.local = false; v.by = null; v.lastBy = S.key; v.eng = false; v.spd = 0; v.vx = v.vz = 0; v.slip = 0; v.thr = 0; v.idleAt = now(); sendSnap(v, 'out'); }
+      if (v.temp && v.owner === S.key) { clearTimeout(v.goneT); v.goneT = setTimeout(() => { if (VS.me?.v !== v && VS.list.get(v.id) === v) { rt.vehSend?.({ k: 'gone', id: v.id }); VS.despawn(v.id); } }, 25000); }
       VS.me = null;
       rt.setZX({ v: null });
       if (VS.cam0) { Object.assign(rig, VS.cam0); VS.cam0 = null; }
@@ -200,15 +202,20 @@
         : [{ action: 'interact', icon: '🚪', label: 'выйти' }, { action: 'horn', icon: '📯', label: 'сигнал' }, { action: 'run', icon: '🚀', label: 'быстрее' }, { action: 'jump', icon: '🅿️', label: 'тормоз', big: true }]);
     }
     // ── сеть ──
-    function sendSnap(v, k){ rt.vehSend?.({ k, id: v.id, s: VE.pack(v, k === 'out'), c: v.claimAt || 0 }); }
+    function sendSnap(v, k){ rt.vehSend?.({ k, id: v.id, s: VE.pack(v, k === 'out'), c: v.claimAt || 0, ...(v.temp ? { d: v.def.id } : {}) }); }
     function netTick(v, dt){
       VS.sendT += dt;
       const moving = Math.abs(v.spd) > .3 || Math.abs(v.vy) > .3 || (v.kind === 'heli' && !v.grounded);
       if (VS.sendT >= (moving ? .2 : 1.2)) { VS.sendT = 0; sendSnap(v, 's'); }
     }
     VS.onMsg = (p, d) => {
-      const v = VS.list.get(d.id); if (!v || !['in', 's', 'out'].includes(d.k)) return true;
+      if (d.k === 'gone') { const g = VS.list.get(d.id); if (g?.temp && g.owner === p.key) VS.despawn(d.id); return true; }
+      let v = VS.list.get(d.id); if (!['in', 's', 'out'].includes(d.k)) return true;
       const s = VE.unpack(d.s); if (!s) return true;
+      if (!v && TEMP_RE.test(d.id) && typeof d.d === 'string' && VE.get(d.d) && d.k !== 'out' && VS.list.size < 60) {   // тест-драйв другого игрока
+        v = VS.spawn(d.d, { id: d.id, x: s.x, z: s.z, yaw: s.yaw, temp: true }); if (v) { v.owner = p.key; v.y = s.y; }
+      }
+      if (!v) return true;
       const c = +d.c || 0, ts = +d.ts || Date.now();
       // кто ведёт: кто раньше сел (c), при равенстве — меньший ключ
       if (v.local && d.k !== 'out') {
@@ -261,6 +268,8 @@
           const zs = rt.zones.get(v.zone);   // зона построилась — встать на площадку/перрон (до постройки — на земле)
           if (zs?.built) { v.y = restY(v.def, v.x, v.z, v.spotY, v.body); v.home.y = v.y; v.settled = true; ph.update(v.body, VE.bodyOf(v)); }
         }
+        if (v.temp && v.owner !== S.key && (!S.players.get(v.owner) || S.players.get(v.owner).leaving) && t - v.idleAt > 30000) { VS.despawn(v.id); continue; }
+        if (v.temp) continue;   // у тест-драйва нет стоянки
         // никто не едет давно (или разбит) и рядом никого — обратно на стоянку целой
         const moved = Math.hypot(v.x - v.home.x, v.z - v.home.z) > 6 || Math.abs(v.y - v.home.y) > 3;
         if (!v.by && (v.broken ? t - v.idleAt > 20000 : moved && t - v.idleAt > 240000) && !seatsOf(v).some(Boolean) && !nearPlayer(v, 25)) home(v);
@@ -347,6 +356,20 @@
       VE.addBody(v, ph);
       v.item = X.add({ x: v.x, y: v.y + 1, z: v.z, r: Math.max(1.4, d.size[2] * .42), col: v.body, prompt: () => promptOf(v), act: () => tryEnter(v) });
       VS.list.set(v.id, v);
+      return v;
+    };
+    const TEMP_RE = /^t_[a-z0-9]{2,12}$/;
+    VS.testDrive = (defId, at) => {
+      if (!VE.get(defId) || VS.me) return null;
+      const old = [...VS.list.values()].find(v => v.temp && v.owner === S.key);
+      if (old) { rt.vehSend?.({ k: 'gone', id: old.id }); VS.despawn(old.id); }
+      const tag = (S.key || 'me').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-6) || 'me';
+      const v = VS.spawn(defId, { id: 't_' + tag + (Date.now() % 1296).toString(36), x: at.x, z: at.z, yaw: at.yaw || 0, temp: true, zone: at.zone || null });
+      if (!v) return null;
+      v.owner = S.key;
+      enter(v, 0);
+      toast(`🚗 Тест-драйв: ${v.def.name} — 5 минут`, true);
+      clearTimeout(v.endT); v.endT = setTimeout(() => { if (VS.list.get(v.id) !== v) return; if (VS.me?.v === v) { exit({ force: true }); toast('🚗 Тест-драйв окончен — понравилось? Скоро можно будет купить'); } rt.vehSend?.({ k: 'gone', id: v.id }); VS.despawn(v.id); }, 300000);
       return v;
     };
     VS.despawn = id => {
