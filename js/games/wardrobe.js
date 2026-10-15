@@ -54,10 +54,10 @@
   function grid(){
     const box = root.querySelector('.wr-grid'), wear = wearing();
     const P = C().PARTS[slot];
-    box.innerHTML = P.list.map(([id, name, price, v, vip]) => {
+    box.innerHTML = P.list.map(([id, name, price, v, vip, gems]) => {
       const own = C().owns(slot, id), on = wear[slot] === id, tr = trying[slot] === id && !on;
       const tag = on ? '<span class="wr-tag on">надето</span>' : own ? '<span class="wr-tag">есть</span>'
-        : `<span class="wr-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</span>`;
+        : gems ? `<span class="wr-tag price">💎 ${num(gems)}</span>` : `<span class="wr-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</span>`;
       return `<button type="button" class="wr-card${on ? ' on' : ''}${tr ? ' trying' : ''}${own ? '' : ' locked'}" data-part="${id}" title="${name}">
         <canvas width="88" height="88" data-mini="${id}"></canvas><b>${name}</b>${tag}</button>`;
     }).join('');
@@ -82,6 +82,11 @@
     const s = diff[0], p = C().part(s, trying[s]), have = W().coins();
     const vipFree = p.vip && W().perks();
     bar.hidden = false;
+    if (p.gems) {   // только за 💎 — купить в магазине
+      bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — только за 💎 кристаллы</div>
+        <div class="wr-try-row"><a class="wr-btn gold" href="#/shop">💎 ${num(p.gems)} — в магазин</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
+      return;
+    }
     bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> (${C().PARTS[s].name.toLowerCase()})</div>
       ${p.vip ? `<div class="wr-try-vip">👑 Для VIP — бесплатно. <a href="/vip" target="_blank" rel="noopener">Как получить VIP</a></div>` : ''}
       <div class="wr-try-row">

@@ -442,7 +442,8 @@
         e.preventDefault();
         if (L.pid === 'st') { stockTap(); return; }
         if (!canPick(S, L.pid, L.idx)) { flash([+ce.dataset.id], 'shake', 320); return; }
-        drag = { pid: L.pid, idx: L.idx, ids: pile(S, L.pid).slice(L.idx).map(c => c.id), x0: e.clientX, y0: e.clientY, dx: 0, dy: 0, moved: false, pointer: e.pointerId };
+        // k — во сколько раз стол уменьшен целиком (полный экран на телефоне лёжа, games.js gamesFit): карта идёт ровно за пальцем
+        drag = { pid: L.pid, idx: L.idx, ids: pile(S, L.pid).slice(L.idx).map(c => c.id), x0: e.clientX, y0: e.clientY, dx: 0, dy: 0, moved: false, pointer: e.pointerId, k: board.offsetWidth / (board.getBoundingClientRect().width || board.offsetWidth || 1) };
         try { board.setPointerCapture(e.pointerId); } catch (err) {}
         return;
       }
@@ -450,7 +451,7 @@
     });
     board.addEventListener('pointermove', e => {
       if (!drag || e.pointerId !== drag.pointer) return;
-      drag.dx = e.clientX - drag.x0; drag.dy = e.clientY - drag.y0;
+      drag.dx = (e.clientX - drag.x0) * drag.k; drag.dy = (e.clientY - drag.y0) * drag.k;
       if (!drag.moved) {
         if (Math.hypot(drag.dx, drag.dy) < 7) return;
         drag.moved = true;

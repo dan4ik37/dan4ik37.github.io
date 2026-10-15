@@ -36,7 +36,7 @@
       if (mouse) C?.mouse(e.button, true);
       if (I.locked) return;
       try { el.setPointerCapture(e.pointerId); } catch (er) {}
-      const b = el.getBoundingClientRect(), lx = e.clientX - b.left;
+      const b = el.getBoundingClientRect(), lefty = !!window.D37Opt?.lefty, lx = lefty ? b.right - e.clientX : e.clientX - b.left;   // левша (настройки) — джойстик справа
       const p = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button, kind: 'look', mouse };
       if (e.pointerType === 'touch' && !joy && lx < b.width * .42 && (e.clientY - b.top) > b.height * .2) {
         p.kind = 'joy'; joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY }; showJoy(); updJoy();

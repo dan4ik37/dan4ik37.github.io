@@ -796,7 +796,7 @@
     el.innerHTML = `<div class="hd">
         <div class="hd-wrap">
           <canvas class="hd-cv"></canvas>
-          <div class="hd-hud" hidden><button type="button" class="hd-btn" data-act="pause" aria-label="Пауза">⏸</button><button type="button" class="hd-btn" data-act="full" aria-label="Во весь экран">⛶</button></div>
+          <div class="hd-hud" hidden><button type="button" class="hd-btn" data-act="pause" aria-label="Пауза">⏸</button>${window.D37Full ? window.D37Full.btn('#gamesStage', { cls: 'hd-btn' }) : '<button type="button" class="hd-btn" data-act="full" aria-label="Во весь экран">⛶</button>'}</div>
           <div class="hd-ov"></div>
         </div>
         <div class="ct-note hd-note">Ходи стрелками / WASD или пальцем: зажми в любом месте поля и веди. Оружие бьёт само, ты выбираешь улучшения.</div>
@@ -827,13 +827,17 @@
   function showOv(html){ ov.innerHTML = html; ov.hidden = false; ov.scrollTop = 0; ovLock = Date.now() + 350; input.on = false; input.jx = input.jy = 0; }
   function hideOv(){ ov.hidden = true; ov.innerHTML = ''; }
 
+  // Полный экран — общий (js/core/fullscreen.js): во весь экран вся игра (#gamesStage), холст — во всё место под шапкой игры
+  const fsOn = () => !!(window.D37Full && wrap && window.D37Full.contains(wrap));
   function resize(){
     if (!cv) return;
     dpr = Math.min(document.body.classList.contains('low') ? 1 : 2, window.devicePixelRatio || 1);
+    const fs = fsOn();
     const w = full ? window.innerWidth : (wrap.parentElement.clientWidth || 360);
     const phone = w < 640;
-    let h = full ? window.innerHeight : phone ? Math.min(window.innerHeight - 140, Math.round(w * 1.7)) : Math.min(Math.max(440, window.innerHeight - 230), Math.round(w * .66));
-    h = Math.max(340, h);
+    let h = full ? window.innerHeight : fs ? Math.floor((root || wrap.parentElement).getBoundingClientRect().bottom - wrap.getBoundingClientRect().top)
+      : phone ? Math.min(window.innerHeight - 140, Math.round(w * 1.7)) : Math.min(Math.max(440, window.innerHeight - 230), Math.round(w * .66));
+    h = Math.max(fs ? 200 : 340, h);
     cssW = w; cssH = h;
     cv.style.height = h + 'px';
     cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
@@ -843,6 +847,8 @@
     draw();
   }
   function toggleFull(){
+    const st = document.getElementById('gamesStage');
+    if (window.D37Full && st) { window.D37Full.toggle(st); return; }   // общий полный экран (кнопка ⛶ обычно сама — data-gs-full)
     full = !full;
     wrap.classList.toggle('hd-full', full);
     document.documentElement.classList.toggle('hd-lock', full);
@@ -1186,7 +1192,7 @@
       <div class="ct-actions"><button type="button" class="ct-start" data-act="play">▶ Играть</button><button type="button" class="ct-duel-btn" data-act="coop">🤝 Вместе</button><button type="button" class="ct-duel-btn" data-act="duel">⚔️ Кто дольше</button></div>
       <div class="hd-wallet">🪙 <b class="js-coins">${num(C().coins())}</b> монет
         ${C().canDaily() ? '<button type="button" class="hd-mini gold" data-act="daily">🎁 Бонус дня</button>' : ''}
-        <button type="button" class="hd-mini" data-act="shop">🛒 Улучшения</button></div>
+        <button type="button" class="hd-mini" data-act="shop">🛒 Улучшения</button>${window.D37AdPlaces?.coinOffer?.('horde') || ''}</div>
       ${best ? `<div class="hd-best">Рекорд: <b>${num(best)}</b> очков</div>` : ''}
       ${signedIn() ? '' : '<div class="hd-hint">Войди в аккаунт — за победы будут XP, а монеты и покупки сохранятся на всех устройствах.</div>'}`);
     draw();
@@ -1201,7 +1207,7 @@
   }
   function shop(){
     showOv(`<div class="hd-title">🛒 Улучшения</div><div class="hd-sub">Навсегда, для всех героев. В соревновании не действуют.</div>
-      <div class="hd-wallet">🪙 <b class="js-coins">${num(C().coins())}</b> монет</div>
+      <div class="hd-wallet">🪙 <b class="js-coins">${num(C().coins())}</b> монет${window.D37AdPlaces?.coinOffer?.('horde_shop') || ''}</div>
       <div class="hd-shop">${UPS.map(([id, e, name, text, max]) => {
         const l = C().upLevel(id), pr = l < max ? C().price(`up:${id}:${l + 1}`) : 0;
         return `<div class="hd-up"><span class="ic">${e}</span><div class="hd-up-b"><b>${name}</b><small>${text} за уровень</small><span class="hd-pips">${'●'.repeat(l)}${'○'.repeat(max - l)}</span></div>
@@ -1791,6 +1797,8 @@
       on(window, 'keydown', onKey); on(window, 'keyup', onKey); on(window, 'resize', resize);
       on(document, 'visibilitychange', onVis); on(window, 'pointermove', onMove); on(window, 'pointerup', onUp); on(window, 'pointercancel', onUp);
       on(document, 'fullscreenchange', onFs);
+      // монеты за рекламу (кнопка ad-places.js в меню и магазине) — перерисовать с новым балансом: «купить» станет доступна
+      on(window, 'd37:coinad', e => { if (mode !== 'menu' || hooks || !ov || ov.hidden) return; if (e.detail?.where === 'horde_shop') shop(); else if (e.detail?.where === 'horde') menu(); });
       const tick = setInterval(trailTick, 30);
       listeners.push([{ removeEventListener: () => clearInterval(tick) }, '', null]);
       const coop = /^coop\/([a-z0-9]{4,12})$/.exec(gameApi.param || '');
