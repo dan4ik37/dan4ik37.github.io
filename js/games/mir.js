@@ -1366,9 +1366,18 @@
     st.playing = null;
     if (why === 'unmount') return;   // мир и так закрывается
     playPause(false);
-    if (st.mySeat?.tb) { st.P?.standUp(); if (st.mySeat) leaveSeat(); }   // встаёшь у стола (P.on('stand') → leaveSeat → retrack)
-    else retrack();
+    if (st.mySeat?.tb) {   // встаёшь у стола: за своим стулом, лицом к столу (P.on('stand') → leaveSeat → retrack)
+      const sp = st.world.seats.get(st.mySeat.id);
+      st.P?.standUp();
+      if (st.mySeat) leaveSeat();
+      if (sp) { const p = standSpot(sp); st.P.place(p.x, p.y, p.z, p.yaw); st.forceSend = true; }
+    } else retrack();
     if (why === 'editor') openEditor();
+  }
+  // Место «рядом со столом»: за стулом (d назад от сиденья), опора — от высоты сиденья вниз (не на крышу кафе)
+  function standSpot(sp, d = 1.3){
+    const x = sp.x - Math.sin(sp.yaw) * d, z = sp.z - Math.cos(sp.yaw) * d;
+    return { x, z, yaw: sp.yaw, y: S.ph.supportAt(x, z, S.P.ch.r * .5, (sp.y || 0) + 1.6).y };
   }
   function inviteMenu(p){
     const sub = S.q('.wld-card .wld-sub'); if (!sub) return;
@@ -1393,7 +1402,8 @@
       const seat = [...S.world.seats.values()].find(sp => sp.tb === tb && !S.occ.get(sp.id));
       if (seat) {
         if (S.mySeat) S.P.standUp();
-        S.P.place(seat.x - Math.sin(seat.yaw) * 1.2, null, seat.z - Math.cos(seat.yaw) * 1.2, seat.yaw);
+        const p = standSpot(seat, 1.2);   // опора — от сиденья вниз (раньше y = null искал опору сверху — и ставил на крышу кафе)
+        S.P.place(p.x, p.y, p.z, p.yaw);
         sitAt(seat);
         if (S.mySeat) { S.mySeat.c = box.dataset.code; retrack(); }
         return;
