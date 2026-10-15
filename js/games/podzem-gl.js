@@ -413,8 +413,10 @@ void main(){ vT = aP * 64.0; vS = uOff + vT; vec2 p = vS * uScale; gl_Position =
   // ── Чанк, «красивый»: свет как в Террарии (режим «Цвет») и дальше — по качеству uQ (0 низкое … 3 ультра):
   // 1+ мерцание огня, тень у стен (контактная), волны и блик воды; 2+ объём по свету (рельеф текстур и кромки к свету),
   // лучи в воде, параллакс фона пещер. Сломается на телефоне (не соберётся / рисует чёрным) — renderer() берёт FS_CHUNK_BASIC.
-  // smoothstep — только с edge0 < edge1 (иначе на части видеокарт неопределённо).
-  const FS_CHUNK_HQ = `#version 300 es
+  // smoothstep — только с edge0 < edge1 (иначе на части видеокарт неопределённо). Общие куски (шум, кривая света и мерцание,
+  // тень у стен, гладь, лучи, лава) — из js/engine/shade2d.js (D37E.shade2d.GLSL): их же возьмут другие 2D-игры.
+  const S2 = (typeof window !== 'undefined' && window.D37E && window.D37E.shade2d && window.D37E.shade2d.GLSL) || null;
+  const FS_CHUNK_HQ = !S2 ? null : `#version 300 es
 precision highp float; precision highp int; precision highp usampler2D; precision highp sampler2D;
 uniform usampler2D uT0, uT1, uProps;
 uniform sampler2D uLight, uAtlas;
@@ -428,38 +430,27 @@ uniform int uPass, uSmooth, uBack, uQ;
 in vec2 vT;
 in vec2 vS;
 out vec4 oC;
-uint hsh(ivec2 p){ uint h = uint(p.x + 1073741824) * 0x27d4eb2du ^ uint(p.y + 1073741824) * 0x165667b1u; h = (h ^ (h >> 15u)) * 0x85ebca6bu; h ^= h >> 13u; return h; }
-float vn(vec2 p){   // гладкий шум 0…1
-  vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-  ivec2 q = ivec2(i);
-  float a = float(hsh(q) & 1023u), b = float(hsh(q + ivec2(1, 0)) & 1023u), c = float(hsh(q + ivec2(0, 1)) & 1023u), d = float(hsh(q + ivec2(1, 1)) & 1023u);
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y) / 1023.0;
-}
+${S2.noise}
+${S2.light}
+${S2.aoWall}
+${S2.water}
 vec4 at(int cell, ivec2 px){ return texelFetch(uAtlas, ivec2((cell % ${AN}) * 16 + px.x, (cell / ${AN}) * 16 + px.y), 0); }
-float lum(vec3 c){ return dot(c, vec3(0.3, 0.5, 0.2)); }
 vec4 Lraw(vec2 p){ return uSmooth == 1 ? texture(uLight, (p + 1.0) / 66.0) : texelFetch(uLight, clamp(ivec2(floor(p)) + 1, ivec2(0), ivec2(65)), 0); }
-float Llum(vec2 p){ vec4 L = Lraw(p); return lum(max(L.rgb, uSky * L.a)); }
+// «Ультра»: свет ещё мягче — 5 выборок вокруг точки (без «ромбиков» между серединами клеток)
+vec4 Lsoft(vec2 p){
+  if (uQ < 3 || uSmooth != 1) return Lraw(p);
+  return Lraw(p) * 0.4 + (Lraw(p + vec2(0.35, 0.18)) + Lraw(p + vec2(-0.18, 0.35)) + Lraw(p + vec2(-0.35, -0.18)) + Lraw(p + vec2(0.18, -0.35))) * 0.15;
+}
+float Llum(vec2 p){ vec4 L = Lraw(p); return s2lum(max(L.rgb, uSky * L.a)); }
 // свет в точке: огонь (мерцает) или небо — что ярче, + тусклый свет вокруг героя
 vec3 lightCol(vec4 L, vec2 pw, vec2 p){
-  vec3 blk = pow(L.rgb, vec3(0.75)) * 1.16;   // кривая яркости: середина хвоста светлее, у огня — пересвет (до 1,35)
-  if (uQ >= 1) blk *= 1.0 + 0.10 * (vn(pw * 0.21 + vec2(uTime * 2.3, uTime * 1.7)) - 0.5) + 0.06 * (vn(pw * 0.83 + vec2(-uTime * 5.3, uTime * 4.1)) - 0.5);
-  vec3 c = max(blk, uSky * pow(L.a, 0.75));
+  vec3 c = s2light(L.rgb, L.a, uSky, pw, uTime, uQ);
   float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / max(uGlowR, 1.0)); g *= g;
   return max(c, vec3(g, g * 0.9, g * 0.78)) + uAmb;
 }
-// тень от блоков на стене за ними: m — какие из 8 соседей твёрдые, f — точка в клетке
-float aoWall(uint m, vec2 f){
-  float a = 0.0, r = 0.5;
-  if ((m & 1u) != 0u) a += 1.0 - smoothstep(0.0, r, f.y);
-  if ((m & 2u) != 0u) a += 1.0 - smoothstep(0.0, r, 1.0 - f.x);
-  if ((m & 4u) != 0u) a += 1.0 - smoothstep(0.0, r, 1.0 - f.y);
-  if ((m & 8u) != 0u) a += 1.0 - smoothstep(0.0, r, f.x);
-  if ((m & 16u) != 0u) a += 1.0 - smoothstep(0.0, r, length(vec2(1.0 - f.x, f.y)));
-  if ((m & 32u) != 0u) a += 1.0 - smoothstep(0.0, r, length(vec2(1.0 - f.x, 1.0 - f.y)));
-  if ((m & 64u) != 0u) a += 1.0 - smoothstep(0.0, r, length(vec2(f.x, 1.0 - f.y)));
-  if ((m & 128u) != 0u) a += 1.0 - smoothstep(0.0, r, length(f));
-  return 1.0 - 0.45 * min(a, 1.0);
-}
+uint hsh(ivec2 p){ return s2hash(p); }
+float lum(vec3 c){ return s2lum(c); }
+float aoWall(uint m, vec2 f){ return s2ao(m, f); }
 void main(){
   ivec2 c = clamp(ivec2(floor(vT)), ivec2(0), ivec2(63));
   vec2 f = vT - vec2(c);
@@ -468,16 +459,13 @@ void main(){
   ivec2 wp = uOrg + c;
   uint hv = hsh(wp);
   vec2 pw = vec2(uOrg & 4095) + vT;   // мировые клетки (по модулю — для шума без потери точности)
-  vec4 Lr = Lraw(vT);
+  vec4 Lr = Lsoft(vT);
   vec3 L = lightCol(Lr, pw, vT);
   if (uPass == 1) {
     uint lv = t1.g, lt = t1.b & 3u; bool above = (t1.b & 128u) != 0u;
     if (lv == 0u || lt == 0u) discard;
     float top = above ? 0.0 : 1.0 - float(lv) / 255.0;
-    if (!above && uQ >= 1) {   // волны на глади (только вниз от верха клетки)
-      float wv = lt == 1u ? 0.5 + 0.3 * sin(pw.x * 1.7 + uTime * 2.2) + 0.2 * sin(pw.x * 3.3 - uTime * 3.1) : 0.5 + 0.5 * sin(pw.x * 0.9 + uTime * 0.8);
-      top = min(0.98, top + wv * (lt == 1u ? 0.07 : 0.05));
-    }
+    if (!above && uQ >= 1) top = min(0.98, top + s2wave(pw, uTime, lt != 1u) * (lt == 1u ? 0.07 : 0.05));   // волны на глади (только вниз от верха клетки)
     if (f.y < top) discard;
     float dep = f.y - top;
     vec4 col;
@@ -485,16 +473,11 @@ void main(){
       vec3 base = above ? vec3(0.07, 0.25, 0.62) : vec3(0.10, 0.33, 0.74);
       vec3 cc = base * L;
       float a = above ? 0.74 : 0.64;
-      if (uQ >= 2) {   // лучи света в воде: косые полосы, ярче там, где светло
-        float ray = smoothstep(0.55, 1.0, sin(pw.x * 0.9 + pw.y * 0.35 + uTime * 0.6) * 0.5 + 0.5 + 0.35 * sin(pw.x * 2.3 - uTime * 0.9));
-        cc += vec3(0.25, 0.42, 0.5) * ray * min(1.2, lum(L)) * 0.5;
-      }
+      if (uQ >= 2) cc += vec3(0.25, 0.42, 0.5) * s2rays(pw, uTime) * min(1.2, lum(L)) * 0.5;   // лучи света в воде: косые полосы, ярче там, где светло
       if (!above && dep < 0.1) { cc = mix(cc, vec3(0.7, 0.88, 1.0) * (L * 1.15 + 0.04), 0.65); a = 0.92; }   // блик: в нём отражается свет
       col = vec4(cc, a);
     } else {
-      float n = sin(pw.x * 0.9 + sin(pw.y * 0.8 + uTime * 0.5) * 1.6 + uTime * 0.9) * 0.5 + sin(pw.y * 1.1 - uTime * 0.7 + sin(pw.x * 0.6) * 1.3) * 0.5;
-      vec3 cc = mix(vec3(0.72, 0.15, 0.03), vec3(1.0, 0.5, 0.1), 0.5 + 0.3 * n);
-      cc = mix(cc, vec3(1.0, 0.84, 0.36), smoothstep(0.45, 0.95, n) * 0.75);
+      vec3 cc = s2lava(pw, uTime);
       if (!above && dep < 0.12) cc = mix(cc, vec3(1.0, 0.88, 0.45), 0.6);
       col = vec4(cc, 0.96);
     }
@@ -896,7 +879,7 @@ void main(){
     };
     // «красивые» шейдеры; не собрались — простые (как в 1-й версии), рисуют чёрным — тоже простые (R.selfTest)
     const tryCompile = (vs, fs, name) => { try { return compile(vs, fs); } catch (e) { console.warn('Подземье: шейдер «' + name + '» не собрался — беру простой', e.message); return null; } };
-    const progCH = opts.basic ? null : tryCompile(VS_CHUNK, FS_CHUNK_HQ, 'клетки'), progBH = opts.basic ? null : tryCompile(VS_BG, FS_BG_HQ, 'небо');
+    const progCH = opts.basic || !FS_CHUNK_HQ ? null : tryCompile(VS_CHUNK, FS_CHUNK_HQ, 'клетки'), progBH = opts.basic ? null : tryCompile(VS_BG, FS_BG_HQ, 'небо');
     let progCB = null, progBB = null;
     const basicC = () => progCB || (progCB = compile(VS_CHUNK, FS_CHUNK_BASIC)), basicB = () => progBB || (progBB = compile(VS_BG, FS_BG_BASIC));
     let progC = progCH || basicC(), progB = progBH || basicB();
@@ -973,12 +956,17 @@ void main(){
     R.chunkFree = c => { if (!c.gl) return; gl.deleteTexture(c.gl.t0); gl.deleteTexture(c.gl.t1); gl.deleteTexture(c.gl.l); c.gl = null; };
 
     R.resize = (w, h, tile) => { R.w = w; R.h = h; R.tile = tile; if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; } };
-    R.begin = (camX, camY) => {
+    // постобработка набора шейдеров (js/engine/shade2d.js): «Красивые»/«Ультра» — свечение, рябь, жар, цвет, виньетка;
+    // «Ретро» — крупные пиксели, меньше оттенков, полоски CRT. Нет модуля или не собралась — рисуем прямо на экран.
+    R.post = !opts.basic && window.D37E?.shade2d ? window.D37E.shade2d.create(gl) : null;
+    R.begin = (camX, camY, fl) => {
       R.camX = camX; R.camY = camY; R.stats.draws = 0; R.stats.sprites = 0;
-      gl.viewport(0, 0, R.w, R.h);
+      if (!(R.post && R.post.begin(R.w, R.h, fl))) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, R.w, R.h); }
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
       gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     };
+    // кадр готов: постобработка на экран (params: time, grade, bloom, vignette; поле искажений — R.post.field)
+    R.end = params => { R.flush(); if (R.post?.active) { R.post.end(params); R.stats.draws += R.post.stats.passes; } };
     // небо, горы, облака, солнце/луна (s: { top, bot, hill1, hill2, hill3 — [r,g,b] 0…1, sun: [x, y, r, kind], night, surf, time })
     // + горы и деревья края (shape, shape2, blend: [острота, деревья, неровность, дымка]), заря у горизонта (horizon), q
     R.background = s => {
@@ -1123,6 +1111,7 @@ void main(){
       imgTex.clear();
       if (atlasTex) gl.deleteTexture(atlasTex); if (propsTex) gl.deleteTexture(propsTex);
       gl.deleteBuffer(quad); gl.deleteBuffer(vboS); gl.deleteBuffer(ibo);
+      try { R.post?.dispose(); } catch (e) {}
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
     return R;

@@ -12,7 +12,7 @@
 // Окно: D37Settings.open({ tab, ctx: 'engine' | 'game' | 'site', onClose }) / close() / isOpen(). Игра со своими действиями
 // регистрирует контекст: off = D37Settings.context({ engine: true, gfx(), world2d(v), view(v), onClose() }) — «качество»
 // пересобирает мир, «вид» переключает камеру, onClose — сбросить нажатия (Esc закрыл окно — меню игры не открывать).
-// Свои вкладки (телефон и т. п.): D37Settings.addTab({ id, icon, title, order, ctx: ['engine','game','site'], render(el, S) })
+// Свои вкладки (телефон и т. п.): D37Settings.addTab({ id, icon, title, order, ctx: ['engine','game','site'], when(cx) — показывать ли сейчас, render(el, S) })
 // и свои значения: D37Settings.define(key, { def, list | bool | min/max | obj }).
 // Меню паузы для игр: D37Settings.menu(parent, { title, sub, items: [{ id, icon, text, primary, warn }], onPick(id), onClose }).
 (() => {
@@ -175,7 +175,7 @@
     { id: 'site', icon: '🌐', title: 'Сайт', order: 90, ctx: ['engine', 'game', 'site'], render: tabSite },
   ];
   let win = null, cur = 'gfx', cx = 'site', opened = {}, capture = null, keyNote = '', padT = 0, sfxAt = 0;
-  const tabsFor = () => TABS.filter(t => !t.ctx || t.ctx.includes(cx)).sort((a, b) => a.order - b.order);
+  const tabsFor = () => TABS.filter(t => (!t.ctx || t.ctx.includes(cx)) && (!t.when || t.when(cx))).sort((a, b) => a.order - b.order);   // when(cx) — своё условие вкладки
   const gameOpen = () => { try { return typeof gamesActive !== 'undefined' && !!gamesActive; } catch (e) { return false; } };   // gamesActive — games.js
 
   function open(o = {}){

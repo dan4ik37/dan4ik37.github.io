@@ -476,6 +476,7 @@
       const o = G.opt, chk = (k, t) => `<label class="pz-chk"><input type="checkbox" data-opt="${k}" ${o[k] ? 'checked' : ''}> ${t}</label>`;
       return `<div class="pz-card" style="max-width:460px"><h2>⚙️ Настройки игры</h2>
         <div class="pz-field"><span>Масштаб: <b data-zv>${Math.round(o.zoom * 100)}%</b></span><input type="range" min="60" max="190" step="5" value="${Math.round(o.zoom * 100)}" data-opt="zoom"></div>
+        ${shadersHtml()}
         ${chk('smooth', 'Плавный свет (выкл — свет «клетками», как в старых играх)')}
         ${chk('back', 'Подземный фон в пещерах')}
         ${chk('parts', 'Частицы (крошки, искры)')}
@@ -483,6 +484,15 @@
         ${chk('fps', 'Показывать кадры в секунду и время кадра')}
         <div class="pz-row"><button type="button" class="pz-b" data-a="keys">🎮 Клавиши, звук, интерфейс сайта</button></div>
         <div class="pz-row"><button type="button" class="pz-b pri" data-a="back">← Назад</button></div></div>`;
+    }
+    // «Шейдеры» — та же настройка сайта (⚙️ → Графика → «Шейдеры», js/engine/shade2d.js): меняется сразу, на живую
+    function shadersHtml(){
+      const S = window.D37Settings, SH = window.D37E?.shade2d; if (!S || !SH) return '';
+      const cur = S.get('shaders'), now = cur === 'auto' ? ` — сейчас «${SH.PACKS[SH.pack()]?.name}»` : '';
+      const opts = [['auto', 'Авто'], ['normal', 'Обычные'], ['pretty', 'Красивые'], ['ultra', 'Ультра'], ['retro', 'Ретро']];
+      return `<div class="pz-field"><span>🎨 Шейдеры${now}</span><div class="pz-tabs pz-sh">${opts.map(([v, t]) => `<button type="button" data-shaders="${v}" class="${cur === v ? 'on' : ''}">${t}</button>`).join('')}</div>
+        <small>Обычные — быстро; Красивые — свечение, рябь воды, жар над лавой, цвет края; Ультра — ещё мягче свет и больше искр; Ретро — крупные пиксели.</small>
+        ${cur === 'retro' ? `<label class="pz-chk"><input type="checkbox" data-crt ${S.get('crt') ? 'checked' : ''}> Полоски старого телевизора (CRT)</label>` : ''}</div>`;
     }
     function achHtml(){
       const got = G.CH?.ach || {};
@@ -510,6 +520,8 @@
     const download = (name, obj) => { const b = new Blob([JSON.stringify(obj)], { type: 'application/json' }), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); };
     const ask = (t, txt) => window.GameKit?.ask ? window.GameKit.ask({ icon: '🗑', title: t, text: txt, yes: 'Удалить', no: 'Отмена', danger: true }) : Promise.resolve(confirm(t));
     async function onMenu(e){
+      const shb = e.target.closest('[data-shaders]');
+      if (shb) { window.D37Settings?.set('shaders', shb.dataset.shaders, { ui: true }); U.menu('opts'); return; }
       const ch = e.target.closest('[data-char]'), w = e.target.closest('[data-world]'), a = e.target.closest('[data-a]')?.dataset.a, id = e.target.closest('[data-id]')?.dataset.id;
       if (!a && ch) { selChar = ch.dataset.char; startMenu(); return; }
       if (!a && w) { selWorld = w.dataset.world; startMenu(); return; }
@@ -562,6 +574,7 @@
     menuEl && 0;
     on(document, 'change', e => {
       if (!menuEl || !menuEl.contains(e.target)) return;
+      if (e.target.matches?.('[data-crt]')) { window.D37Settings?.set('crt', !!e.target.checked, { ui: true }); return; }
       const k = e.target.dataset.opt; if (!k) return;
       if (k === 'zoom') { G.opt.zoom = +e.target.value / 100; menuEl.querySelector('[data-zv]').textContent = e.target.value + '%'; API.resize(); }
       else G.opt[k] = !!e.target.checked;

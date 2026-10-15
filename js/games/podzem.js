@@ -1674,16 +1674,17 @@
     if (t < NIGHT0) { const u = t / NIGHT0; sunV[0] = .08 + u * .84; sunV[1] = .2 + Math.pow((u - .5) * 2, 2) * .5; sunV[2] = .045; sunV[3] = 1; }
     else { const u = (t - NIGHT0) / (1 - NIGHT0); sunV[0] = .1 + u * .8; sunV[1] = .18 + Math.pow((u - .5) * 2, 2) * .45; sunV[2] = .035; sunV[3] = 0; }
   }
-  // ═══ Качество картинки — из настроек сайта (⚙️ → Графика): низкое 0, среднее 1, высокое 2, ультра 3 ═══
-  // («Авто» и «Своя» — по устройству: D37E.quality(); перечитываем при смене настроек и раз в полсекунды)
+  // ═══ Картинка — набор шейдеров (⚙️ → Графика → «Шейдеры»: Обычные / Красивые / Ультра / Ретро; «Авто» — по пресету
+  // графики и устройству; js/engine/shade2d.js). G.fl — что включено, G.q — детали шейдера клеток (0…3). Перечитываем при
+  // смене настроек и раз в полсекунды ═══
   let qRev = -1, qAt = 0;
   function gfxQ(){
     const O = window.D37Opt, fr = G.R ? G.R.frame : 0;
-    if (G.q != null && O?.rev === qRev && fr - qAt < 30) return G.q;
+    if (G.fl && O?.rev === qRev && fr - qAt < 30) return G.q;
     qRev = O ? O.rev : 0; qAt = fr;
-    let p = O?.gfx?.preset || 'auto';
-    if (p === 'auto' || p === 'custom') { try { p = window.D37E?.quality?.() || 'mid'; } catch (e) { p = 'mid'; } }
-    G.q = p === 'low' ? 0 : p === 'mid' ? 1 : p === 'ultra' ? 3 : 2;
+    const S2 = window.D37E?.shade2d;
+    G.fl = S2 ? S2.flags() : { id: 'normal', q: 1, smooth: true, post: false, particles: 1 };
+    G.q = G.fl.q;
     return G.q;
   }
   // ═══ Ореолы у источников света (среднее и выше): факелы мерцают; на высоком — ещё руда и гладь лавы ═══
@@ -1703,6 +1704,7 @@
     const R = G.R, q = G.q;
     if (q < 1 || !R.glow) return;
     const t = G.t, x0 = camX - vw / 2 - 3, x1 = camX + vw / 2 + 3, y0 = camY - vh / 2 - 3, y1 = camY + vh / 2 + 3;
+    const ember = G.fl && G.fl.particles > 1 ? G.fl.particles - 1 : 0;   // «Красивые»/«Ультра»: искры над огнём и лавой
     let n = 0;
     R.glowBegin();
     for (const c of visList) {
@@ -1719,6 +1721,7 @@
         else { rad = 1.5; a = .22 + .04 * Math.sin(t * 1.5 + x + y); }   // светогрибы, кристаллы
         R.glow(gx, gy, rad, P.LR[f], P.LG[f], P.LB[f], a * 255 | 0);
         if (q >= 3 && f === T.TORCH) R.glow(gx, gy, 6.5, P.LR[f], P.LG[f], P.LB[f], 22);   // ультра: широкая дымка вокруг огня
+        if (f === T.TORCH && ember > 0 && G.state === 'play' && rand() < ember * .9 / 60) part(x + .5 + (rand() - .5) * .25, y + .2, (rand() - .5) * .7, -1.3 - rand(), .8 + rand() * .7, .06 + rand() * .05, rand() < .5 ? 0xffc060 : 0xff8030, -.5, 1);   // искры над огнём
         n++;
       }
       if (q >= 2) {
@@ -1727,11 +1730,50 @@
           const i = c.lava[k], x = ox + (i & CM), y = oy + (i >> CB);
           if (x < x0 || x > x1 || y < y0 || y > y1) continue;
           R.glow(x + .5, y + .7, 1.8, 255, 118, 36, (.1 + .04 * Math.sin(t * 1.3 + x * .7)) * 255 | 0);
+          if (ember > 0 && G.state === 'play' && rand() < ember * .08 / 60) part(x + rand(), y + .1, (rand() - .5) * 1.2, -2 - rand() * 2, .7 + rand() * .6, .07, 0xffa040, 3, 1);   // брызги лавы
           n++;
         }
       }
     }
     R.glowEnd();
+  }
+  // ═══ Поле искажений для постобработки (R — вода: рябь, G — жар над лавой: дрожь воздуха): клетка поля = клетка мира ═══
+  let FLD = null;
+  function distortField(camX, camY, vw, vh){
+    const x0 = Math.floor(camX - vw / 2) - 1, y0 = Math.floor(camY - vh / 2) - 1, w = Math.ceil(vw) + 3, h = Math.ceil(vh) + 3;
+    if (!FLD || w * h * 4 > FLD.length) FLD = new Uint8Array(w * h * 4);
+    FLD.fill(0, 0, w * h * 4);
+    let c = null, lcx = 1e9, lcy = 1e9, any = false;
+    for (let j = 0; j < h; j++) {
+      const y = y0 + j; if (y < 0) continue;
+      for (let i = 0; i < w; i++) {
+        const x = x0 + i, cx = x >> CB, cy = y >> CB;
+        if (cx !== lcx || cy !== lcy) { lcx = cx; lcy = cy; c = chunk(cx, cy); }
+        if (!c) continue;
+        const k = (y & CM) << CB | (x & CM);
+        if (!c.lq[k]) continue;
+        any = true;
+        if (c.lt[k] === 1) FLD[(j * w + i) * 4] = 255;
+        else for (let d = 0; d <= 4 && j - d >= 0; d++) { const q = ((j - d) * w + i) * 4 + 1, v = 255 - d * 50; if (FLD[q] < v) FLD[q] = v; }   // жар — на 4 клетки вверх, слабее
+      }
+    }
+    if (!any) return;
+    const u0 = (x0 - (camX - vw / 2)) / vw, v0 = (y0 - (camY - vh / 2)) / vh;   // где поле на экране (uv, y вниз)
+    G.R.post.field(FLD, w, h, [u0, v0, u0 + w / vw, v0 + h / vh]);
+  }
+  // ═══ Цвет кадра: свой у каждого края, в пещерах строже, у лавы теплее (плавно, без мусора на кадр) ═══
+  const GRADE = { tint: [1, 1, 1], sat: 1, con: 1, bright: 1 };
+  const GRADES = [[1, 1, 1, 1.06, 1.04], [1.06, 1, .9, 1.04, 1.05], [.94, .99, 1.07, .9, 1.03], [.95, 1.05, .94, 1.14, 1.05]];   // [тон r, g, b, насыщенность, контраст]: лес, пустыня, снега, джунгли
+  function gradeAt(camX, camY){
+    const C = G.gen.colInfo(Math.floor(camX)), g = GRADES[C.b] || GRADES[0], d = camY - C.h;
+    let r = g[0], gg = g[1], b = g[2], sat = g[3], con = g[4];
+    if (d > 30) { const k = Math.min(1, (d - 30) / 60); r += (1 - r) * k; gg += (.98 - gg) * k; b += (.97 - b) * k; sat += (.94 - sat) * k; con += (1.08 - con) * k; }   // пещеры
+    const lv = C.lava - 40;
+    if (camY > lv) { const k = Math.min(1, (camY - lv) / 50); r += (1.1 - r) * k; gg += (.96 - gg) * k; b += (.88 - b) * k; sat += (1.08 - sat) * k; }   // у лавы — жар
+    const a = .025, T0 = GRADE.tint;
+    T0[0] += (r - T0[0]) * a; T0[1] += (gg - T0[1]) * a; T0[2] += (b - T0[2]) * a;
+    GRADE.sat += (sat - GRADE.sat) * a; GRADE.con += (con - GRADE.con) * a;
+    return GRADE;
   }
   const visList = [];
   function render(){
@@ -1753,7 +1795,7 @@
     const camX = Math.round((G.cam.x + sx) * G.cam.tile) / G.cam.tile, camY = Math.round((G.cam.y + sy) * G.cam.tile) / G.cam.tile;
     bgBiome(G.gen.colInfo(Math.floor(camX)).b, 1 / 60);
     skyAt(G.W.time);
-    BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth; CHS.back = G.opt.back;
+    BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth && G.fl.smooth !== false; CHS.back = G.opt.back;   // «Ретро» — свет клетками, как раньше в Террарии
     CHS.q = BG.q = G.q; CHS.amb = G.q === 0 ? .025 : .012;
     // тусклый свет вокруг героя — чтобы в пещере без факела было видно хоть что-то рядом
     const shine = buffOn('shine');   // «Зелье сияния» — герой сам светит
@@ -1769,13 +1811,17 @@
       visList.push(c);
     }
     if (ups < 6) for (const c of G.chunks.values()) { if (ups >= 6) break; if (!c.ready || c.dirty0 || c.dirty1 || c.dirtyL) { upload(c); ups++; } }
-    R.begin(camX, camY);
+    R.begin(camX, camY, G.fl);
     R.background(BG);
     R.chunks(visList, CHS, 0);
     drawSprites();
     R.flush();
     R.chunks(visList, CHS, 1);
     drawGlows(camX, camY, vw, vh);
+    if (R.post?.active) {   // постобработка набора: рябь воды и дрожь над лавой (поле по клеткам вокруг камеры), цвет края
+      if (G.fl.distort) distortField(camX, camY, vw, vh);
+      R.end({ time: G.t, grade: gradeAt(camX, camY) });
+    } else R.end();
     drawOverlay(camX, camY);
     if ((R.frame & 255) === 0) R.gc();
     G.perf.renderMs = now() - t0;
@@ -1898,7 +1944,7 @@
       itemSpr('hook', hk.x - .45, hk.y - .45, .9, .9, Math.atan2(dy, dx) - Math.PI / 4, .45, .45);
     }
     // прицел: превью блока (зелёный — встанет, красный — нет), рамка цели, трещины и полоска копания, круг досягаемости
-    if (G.state === 'play' && !p.dead && !G.U?.modal()) {
+    if (G.state === 'play' && !p.dead && !G.U?.modal() && !G.noCursor) {   // noCursor — снимки для сравнения (без прицела)
       const tg = G.target || updTarget(), s = selItem(), it = s ? itemDef(s.id) : null;
       const pcx = p.x + p.w / 2, pcy = p.y + p.h * .4, work = it && (it.kind === 'tool' || it.kind === 'tile' || it.kind === 'wall');
       if (work && (it.kind === 'tile' || it.kind === 'wall')) {
@@ -2363,6 +2409,7 @@
     if (window.D37Sprite) sprites();
     else if (typeof gamesLoadScript === 'function') gamesLoadScript('js/core/char2d.js').then(sprites).catch(() => {});
     G.offLook = window.D37Char?.on?.(() => { G.look = window.D37Char.look(); G.H?.set(G.look); });
+    G.offS2 = window.D37E?.shade2d?.use?.();   // в ⚙️ появится «Графика → Шейдеры»
     G.loop = loop();
     if (window.PZMods) G.mods = window.PZMods.attach(G, API);
     applyJournal().finally(() => G?.U?.menu('start'));
@@ -2376,7 +2423,7 @@
     g.modsStop?.();
     g.worker?.stop();
     for (const [t, ev, f, o] of g.listeners) t.removeEventListener(ev, f, o);
-    g.offFs?.(); g.offLook?.();
+    g.offFs?.(); g.offLook?.(); g.offS2?.();
     g.C?.dispose?.();
     g.U?.dispose();
     try { for (const c of g.chunks.values()) g.R?.chunkFree(c); g.R?.dispose(); } catch (e) {}

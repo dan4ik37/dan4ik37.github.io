@@ -2,7 +2,7 @@
 // (углы, потолки, ступеньки, полублоки, склоны, платформы), упаковка/сохранение, моды (проверка mod.json и песочница
 // JS/Lua с ошибками), замер скорости генерации и света.
 //   node scripts/tiles-test.cjs            — всё
-//   node scripts/tiles-test.cjs gen,light  — только эти разделы (gen, border, light, liquid, physics, save, mods, sandbox, perf)
+//   node scripts/tiles-test.cjs gen,light  — только эти разделы (gen, border, light, liquid, physics, save, mods, sandbox, shade2d, perf)
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = path.join(__dirname, '..');
 const ONLY = (process.argv[2] || '').split(',').filter(Boolean);
@@ -510,6 +510,42 @@ async function sandboxTests(){
   await new Promise(r => setTimeout(r, 20));
   const le = LE.out.find(m => m.t === 'error');
   ok(le && le.line === 3, 'песочница Lua: ошибка — с номером строки', le);
+}
+
+// ═══ 10. Шейдеры 2D (js/engine/shade2d.js): наборы, «Авто», признаки; GLSL — безопасно для телефонов ═══
+if (want('shade2d')) {
+  const saved = globalThis.D37E, savedOpt = globalThis.D37Opt;
+  let dev = 'high';
+  globalThis.D37E = { quality: () => dev };
+  globalThis.D37Opt = undefined;
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/shade2d.js'), 'utf8'), { filename: 'shade2d.js' });
+  const S2 = globalThis.D37E.shade2d;
+  ok(!!S2 && ['normal', 'pretty', 'ultra', 'retro'].every(k => S2.PACKS[k]) && S2.LIST.join() === 'auto,normal,pretty,ultra,retro', 'шейдеры 2D: четыре набора и «Авто»');
+  ok(S2.pack() === 'pretty', 'шейдеры 2D: «Авто» на мощном устройстве — «Красивые»', S2.pack());
+  dev = 'mid'; ok(S2.pack() === 'normal', 'шейдеры 2D: «Авто» на телефоне — «Обычные»', S2.pack());
+  dev = 'low'; ok(S2.flags().q === 0 && S2.flags().post === false, 'шейдеры 2D: слабое устройство — «Обычные» без мелочей', S2.flags());
+  dev = 'high';
+  globalThis.D37Opt = { rev: 1, gfx: { preset: 'ultra', shaders: 'auto' } }; ok(S2.pack() === 'ultra', 'шейдеры 2D: «Авто» по пресету «Ультра»');
+  globalThis.D37Opt.gfx.preset = 'low'; ok(S2.pack() === 'normal', 'шейдеры 2D: «Авто» по пресету «Низкая» — «Обычные»');
+  globalThis.D37Opt.gfx = { preset: 'auto', shaders: 'retro', crt: true };
+  const fr = S2.flags();
+  ok(S2.pack() === 'retro' && fr.crt === true && fr.smooth === false && fr.pixel === 2 && fr.posterize > 0 && fr.post, 'шейдеры 2D: «Ретро» — крупные пиксели, свет клетками, полоски CRT', fr);
+  globalThis.D37Opt.gfx = { shaders: 'pretty' }; const fp = S2.flags();
+  ok(fp.post && fp.bloom > 0 && fp.distort && fp.vignette > 0 && fp.grade && fp.q === 2, 'шейдеры 2D: «Красивые» — свечение, рябь/жар, цвет, виньетка', fp);
+  globalThis.D37Opt.gfx = { shaders: 'ultra' }; const fu = S2.flags();
+  ok(fu.q === 3 && fu.bloomBlur > fp.bloomBlur && fu.particles > fp.particles, 'шейдеры 2D: «Ультра» — больше выборок и частиц', fu);
+  globalThis.D37Opt.gfx = { shaders: 'чужое' }; ok(S2.pack() === 'pretty', 'шейдеры 2D: неизвестное значение — как «Авто»');
+  const off = S2.use(); ok(S2.users === 1, 'шейдеры 2D: игра отметилась (вкладка «Графика» в её ⚙️)'); off(); off(); ok(S2.users === 0, 'шейдеры 2D: закрыли — счётчик назад (дважды — не уходит в минус)');
+  // GLSL для телефонов: highp у сэмплеров, smoothstep(a, b, x) с числами — только a < b
+  const glsl = Object.values(S2.GLSL).join('\n'), gl2 = fs.readFileSync(path.join(SITE, 'js/games/podzem-gl.js'), 'utf8'), s2src = fs.readFileSync(path.join(SITE, 'js/engine/shade2d.js'), 'utf8');
+  const bad = [];
+  for (const src of [glsl, gl2, s2src]) for (const m of src.matchAll(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g)) if (+m[1] >= +m[2]) bad.push(m[0]);
+  ok(!bad.length, 'шейдеры 2D: smoothstep только с edge0 < edge1 (иначе на части телефонов не определено)', bad);
+  const shaders = [...s2src.matchAll(/`#version 300 es[\s\S]*?`/g), ...gl2.matchAll(/`#version 300 es[\s\S]*?`/g)].map(m => m[0]);
+  const noHp = shaders.filter(s => /uniform\s+(u?)sampler2D/.test(s) && !/precision highp sampler2D/.test(s));
+  ok(shaders.length >= 8 && !noHp.length, 'шейдеры 2D: у всех сэмплеров highp (телефоны)', noHp.map(s => s.slice(0, 80)));
+  ok(Object.values(S2.GLSL).every(s => (s.match(/\{/g) || []).length === (s.match(/\}/g) || []).length), 'шейдеры 2D: куски GLSL — скобки сходятся');
+  globalThis.D37E = saved; globalThis.D37Opt = savedOpt;
 }
 
 // ═══ 9. Скорость: генерация и свет на чанк ═══
