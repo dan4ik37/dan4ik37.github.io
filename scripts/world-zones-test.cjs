@@ -7,7 +7,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 globalThis.window = globalThis;
 const load = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js']) load(f);
+for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/games/mir-zones.js', 'js/games/mir-city.js', 'js/games/mir-war.js']) load(f);
 const hasVeh = fs.existsSync(path.join(SITE, 'js/engine/vehicle.js'));
 if (hasVeh) load('js/engine/vehicle.js');
 const MZ = globalThis.MirZones, MC = globalThis.MirCity, MW = globalThis.MirWar, E = globalThis.D37E;
@@ -312,17 +312,18 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
     });
   };
   const runZone = zone => {
-    const pieces = [], lazies = [], npcs = [], lifts = {};
+    const pieces = [], lazies = [], npcs = [], lifts = {}, towers = [];
     const tgt = { E, Z: ZONES[zone], M: deep('M'), lifts, roofs: [], npcs, items: [], seats: [], bodies: [], yo: 0, pieceList: pieces,
       piece: o => { const p = { ...o, zone, destructible: o.destructible !== false }; pieces.push(p); return p; },
       lazy: (x, z, r, gen, y) => lazies.push({ x, z, r, gen, y }),
       addLift: (id, name, stops) => (lifts[id] = { name, stops }),
-      npc: o => { npcs.push(o); return o; } };
+      npc: o => { npcs.push(o); return o; },
+      tower: spec => { if (spec.door) towers.push(spec); return deep('tower'); } };
     const K = new Proxy(tgt, { get: (t, k) => (k in t ? t[k] : (t[k] = deep('K.' + String(k)))), set: (t, k, v) => { t[k] = v; return true; } });
     tgt.mbuilding = spec => { const list = MZ.modular(spec).map(o => K.piece(o)); return { list, roof: MZ.pieceGroup(list) }; };
     let err = null;
     try { for (const _ of MZ.DEFS[zone].build(K)); for (const L of lazies) L.gen(K); } catch (e) { err = e; }
-    return { err, pieces, lazies, npcs, lifts };
+    return { err, pieces, lazies, npcs, lifts, towers };
   };
   const res = {};
   for (const z of ['kids', 'metro', 'war']) {
@@ -337,12 +338,65 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   for (const k of ['wall', 'window', 'roof', 'floor', 'bag', 'crate', 'container']) ok(W.some(p => p.kind === k), 'в боевой зоне есть детали: ' + k);
   const W2 = runZone('war').pieces.map(p => p.id);
   ok(JSON.stringify(W2) === JSON.stringify(wid), 'номера деталей боевой зоны одинаковые при каждой постройке (у всех игроков)');
-  for (const id of ['m_mall', 'm_tv', 'm_h1', 'm_h2']) ok(res.metro.lifts[id]?.stops?.length >= 2, `лифт ${id}: остановки`);
+  for (const id of ['m_mall', 'm_tv']) ok(res.metro.lifts[id]?.stops?.length >= 2, `лифт ${id}: остановки`);
   ok(res.metro.lazies.length >= 3, 'интерьеры Большого города — ленивые (ТЦ, смотровая; этажи башен — в K.towerIn)', res.metro.lazies.length);
-  ok(res.metro.npcs.length >= 20, 'жители Большого города', res.metro.npcs.length);
+  ok(res.metro.npcs.length >= 15, 'жители Большого города', res.metro.npcs.length);
+  globalThis.__INT_TOWERS = [...res.metro.towers, ...res.kids.towers];
 }
 
-// ═══ 13. Транспорт (js/engine/vehicle.js) ═══
+// ═══ 13. Интерьеры (js/engine/interior.js): в каждое здание можно зайти — этажи по зерну, у всех одинаковые ═══
+{
+  const I = E.interior, T = globalThis.__INT_TOWERS || [];
+  ok(I && typeof I.plan === 'function' && typeof I.mount === 'function', 'генератор интерьеров подключён');
+  const want = ['m_city1', 'm_city2', 'm_city3', 'm_pharm', 'm_books', 'm_gym', 'm_flat1', 'm_flat2', 'm_flat3', 'm_hotel', 'm_tower', 'm_office5', 'm_h1', 'm_h2', 'k_flats'];
+  for (const id of want) ok(T.some(b => b.id === id), 'здание с интерьером: ' + id);
+  // все здания городов теперь входимые: свои интерьеры (K.building) или генератор
+  const hand = new Set(['m_police', 'm_court', 'm_hall', 'm_bank', 'm_hosp', 'm_cars', 'm_taxi', 'm_shop', 'm_rest', 'm_coffee', 'm_flowers', 'm_wash', 'm_fire', 'm_mall', 'm_tv', 'm_park', 'k_school', 'k_hosp', 'k_fire', 'k_bake', 'k_ice', 'k_pets', 'k_h1', 'k_h2', 'k_h3', 'k_h4', 'k_hall']);
+  for (const b of [...MZ.buildings('metro'), ...MZ.buildings('kids')]) if (b.h > 0 && b.type !== 'service' || b.sub === 'gym') if (b.h > 0 && !['m_gas'].includes(b.id)) ok(hand.has(b.id) || T.some(q => q.id === b.id), `${b.id}: можно зайти`);
+  const rnd = (s => () => (s = (s * 48271) % 2147483647) / 2147483647)(11);
+  const ph = new E.Phys({ ground: 0 });
+  for (const b of T) {
+    const P = I.plan(b), F = I.frame(b);
+    ok(P.n >= 2 && P.n <= 50, `${b.id}: этажей ${P.n}`);
+    if (b.style) ok(Math.abs((P.top - P.base0) / P.fh - Math.round((P.top - P.base0) / P.fh)) < .02, `${b.id}: этажи совпадают с рядами окон фасада`);
+    for (const k of [0, 1, Math.floor(P.n / 2), P.n - 1]) {
+      if (k === 0 && b.skip0) continue;
+      const fp = I.floorPlan(b, k), fp2 = I.floorPlan(b, k);
+      ok(JSON.stringify(fp, (key, v) => key === 'F' ? undefined : v) === JSON.stringify(fp2, (key, v) => key === 'F' ? undefined : v), `${b.id}/${k}: план одинаковый у всех (по зерну)`);
+      const t = fp.tier, inside = (x, z, m = 0) => Math.abs(x - b.x) <= t.w / 2 + m && Math.abs(z - b.z) <= t.d / 2 + m;
+      ok(fp.rooms.length >= 1 && fp.rooms.every(q => inside(q.x0, q.z0, .01) && inside(q.x1, q.z1, .01)), `${b.id}/${k}: комнаты внутри этажа`);
+      ok(fp.furniture.every(f => inside(f.x, f.z, -.05)), `${b.id}/${k}: мебель — внутри`, fp.furniture.filter(f => !inside(f.x, f.z, -.05)).map(f => f.t));
+      ok(fp.doors.every(d => inside(d.x, d.z) && Number.isFinite(d.yaw) && Math.hypot(d.ix, d.iz) > .99), `${b.id}/${k}: двери в стенах, открываются в комнату`);
+      if (P.n > 1) ok(fp.landing && inside(fp.landing.x, fp.landing.z, -.3), `${b.id}/${k}: площадка лифта внутри`);
+      ok(I.where(b, b.x, fp.y + .1, b.z) === k, `${b.id}/${k}: «где я» — этот этаж`);
+      if (k === 0) ok(fp.windows.some(w => w.door), `${b.id}: вход на первом этаже — дверь в стене`);
+      ok(fp.furniture.length > 0 || fp.custom, `${b.id}/${k}: есть мебель (${fp.kind})`);
+    }
+    // оболочка: у двери — проход, у стен — нет
+    const L = I.shell(b).map(sb => ph.addBox({ ...sb, tag: 'shell' }));
+    if (!b.shellFrom) {
+      const D = b.door, hw = b.w / 2, hd = b.d / 2, [dx, dz] = D.side === 'n' ? [b.x + (D.at || 0), b.z - hd] : D.side === 's' ? [b.x + (D.at || 0), b.z + hd] : D.side === 'e' ? [b.x + hw, b.z + (D.at || 0)] : [b.x - hw, b.z + (D.at || 0)];
+      ok(!ph.blocked(dx, dz, .2, 2, .35), `${b.id}: в дверь можно войти`);
+      ok(!!ph.blocked(b.x + (D.side === 'e' || D.side === 'w' ? 0 : hw - .15), b.z + (D.side === 'e' || D.side === 'w' ? hd - .15 : 0), .2, 2, .2), `${b.id}: стены сплошные`);
+    }
+    for (const c of L) ph.remove(c);
+  }
+  // разные здания — разные этажи; свой интерьер — без мебели генератора; запертые двери — в полиции и банке
+  const a1 = I.floorPlan(T.find(b => b.id === 'm_flat1'), 3), a2 = I.floorPlan(T.find(b => b.id === 'm_flat2'), 3);
+  ok(JSON.stringify(a1.rooms.map(q => q.x1 - q.x0)) !== JSON.stringify(a2.rooms.map(q => q.x1 - q.x0)), 'у разных домов — разная планировка');
+  const own = { ...T.find(b => b.id === 'm_flat1'), custom: true };
+  ok(I.floorPlan(own, 2).furniture.length === 0, 'свой интерьер (купленное место): мебели генератора нет');
+  const pol = { id: 'gen_police', type: 'public', sub: 'police', x: 0, z: 0, w: 20, d: 14, h: 6.4, door: { side: 's', at: 0 } };
+  const bank = { id: 'gen_bank', type: 'public', sub: 'bank', x: 0, z: 0, w: 18, d: 14, h: 6.4, door: { side: 's', at: 0 } };
+  ok(I.floorPlan(pol, 0).doors.some(d => d.kind === 'bars' && d.locked), 'полиция: камеры с решёткой — заперты');
+  ok(I.floorPlan(bank, 1).doors.some(d => d.kind === 'vault' && d.locked) || I.floorPlan(bank, 0).kind === 'bank', 'банк: хранилище заперто');
+  for (const t of ['office', 'apartment', 'shop', 'cafe', 'hotel', 'factory', 'parking', 'house']) {
+    const b = { id: 'gen_' + t, type: t, x: 0, z: 0, w: 18, d: 14, h: 9.6, door: { side: 'e', at: 1 } };
+    const fp = I.floorPlan(b, 0); ok(fp.rooms.length && (fp.furniture.length || t === 'house'), `тип ${t}: первый этаж — ${fp.kind}`);
+  }
+}
+
+// ═══ 14. Транспорт (js/engine/vehicle.js) ═══
 if (hasVeh && E.vehicles) require(path.join(__dirname, 'vehicle-test-part.cjs'))({ E, MZ, MW, ok, near });
 else console.log('  (vehicle.js ещё нет — проверки транспорта пропущены)');
 

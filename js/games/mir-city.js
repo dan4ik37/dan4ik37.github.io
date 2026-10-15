@@ -189,6 +189,8 @@
     { id: 'm_lot2', type: 'lot', name: 'Свободный участок у парка', x: 199, z: 340, w: 16, d: 14, h: 0 },
   ];
   const MB = id => M_BLD.find(b => b.id === id);
+  // здание для генератора интерьеров (js/engine/interior.js): тип и вид — из таблицы, вход — door, этажи — по 3,2
+  const gen = (B, o = {}) => ({ id: B.id, name: B.name, type: B.type, sub: B.sub, x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, tint: B.tint, roof: B.roof, shops: B.shops, flats: B.flats, ...o });
   const M_PLACES = [
     { id: 'm_hall', icon: '🏛️', name: 'Мэрия — работа', x: 182, z: 140, lx: 182, lz: 175, sub: 1 },
     { id: 'm_police', icon: '👮', name: 'Полиция и тюрьма', x: 116, z: 138, lx: 116, lz: 152, sub: 1 },
@@ -413,7 +415,7 @@
       for (const [x, c] of [[B.x - 11, '#facc15'], [B.x + 11, '#60a5fa']]) { K.cyl(x, 0, B.z + B.d / 2 + 2, .06, 4.5, '#d6d3d1'); K.part({ s: 'box', x: x + .55, y: 4, z: B.z + B.d / 2 + 2, w: 1.1, h: .7, d: .03, c }); }
       K.npc({ id: 'k_mayor', name: '🎩 Мэр городка', x: B.x, z: B.z - 3.2, yaw: 0, seed: 'kidmayor', say: ['Добро пожаловать в ратушу! 🏛️', 'Скоро в городке пройдут выборы мэра 🗳️', 'На свободных участках что-нибудь построим вместе!'] });
       const F = KB('k_flats');
-      K.tower({ id: 'k_flats', x: F.x, z: F.z, w: F.w, d: F.d, h: F.h, style: F.style, tint: F.tint, roof: F.roof, crown: 'pyramid' });
+      K.tower({ id: 'k_flats', name: F.name, type: F.type, x: F.x, z: F.z, w: F.w, d: F.d, h: F.h, style: F.style, tint: F.tint, roof: F.roof, crown: 'pyramid', door: { side: 'n', at: 0 }, roofKind: 'none' });
       K.label.sign('🌈 Радужный дом', F.x, 2.4, F.z - F.d / 2 - .08, 5, .9, PI, { bg: '#db2777', w: 512, h: 92 });
       lotSign(K, KB('k_lot1')); lotSign(K, KB('k_lot2'));
       for (const [x, z] of [[256, -36], [288, -36], [254, 16], [289, 16]]) K.tree(x, z, .8, (x + z) % 4);
@@ -592,10 +594,10 @@
     K.houses = [];
     for (const id of ['m_h1', 'm_h2']) {
       const B = MB(id), x = B.x, z = B.z;
-      const b = K.building({ id, x, z, w: 14, d: 14, h: 4, wall: B.wall, trim: '#57534e', roofC: B.roof, floor: '#d6a77a', doors: [{ side: 'n', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4.5, w: 2 }, { side: 'n', at: 4.5, w: 2 }, { side: 's', at: 0, w: 3 }] });
-      const t = K.tower({ id, x, z, w: 13.6, d: 13.6, h: B.h, y0: 4.36, style: B.style, tint: B.tint, roof: B.roof }, b.roof);
-      if (b.trig) b.trig.data.camOff = t.bodies;   // в квартире камера проходит сквозь этажи выше (они спрятаны)
-      const rs = K.roofDeck(b.roof, x, z, t, 'Крыша — вид на канал');
+      const b = K.building({ id, x, z, w: 14, d: 14, h: 2.96, wall: B.wall, trim: '#57534e', roofC: B.roof, floor: '#d6a77a', doors: [{ side: 'n', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4.5, w: 2 }, { side: 'n', at: 4.5, w: 2 }, { side: 's', at: 0, w: 3 }] });
+      // этажи выше — генератор интерьеров (квартиры по коридору), первый этаж — эта квартира (skip0), лифт — из угла
+      const spec = gen(B, { w: 14, d: 14, y0: 3.2, base0: 3.2, door: { side: 'n', at: 0 }, shellFrom: 3.2, skip0: true, home0: { x: x + 4, z: z + 5.4, y: .12, yaw: PI / 2 } });
+      K.tower(spec, b.roof);
       K.bed(x + 4, z + 3.5, PI, '#93c5fd'); K.sofa(x - 3.5, z + 4.2, PI, '#475569');
       K.table(x - 3, z - 1, 1.4, .9, '#78350f'); K.chair(x - 4, z - 1, PI / 2); K.chair(x - 2, z - 1, -PI / 2);
       K.box(x + 5.4, .12, z - 3, 1.4, .9, 2, '#e5e7eb', { solid: true });
@@ -603,7 +605,7 @@
       K.houses.push({ id, x, z, door: { x, z: z - 7.4 } });
       K.item({ x, y: 1.4, z: z - 7.4, r: 1.1, prompt: () => K.rt.city?.metro?.housePrompt(id), act: () => K.rt.city?.metro?.houseAct(id) });
       K.box(x + 5.6, .12, z + 5.6, 1.6, 2.6, 1.6, '#cbd5e1', { solid: true });   // лифт в углу квартиры
-      K.addLift(id, B.name, [{ name: 'Квартира', at: .12, x: x + 4, z: z + 5.4, yaw: PI / 2, ix: x + 4.4, iz: z + 5.6 }, rs]);
+      K.item({ x: x + 4.4, y: 1.2, z: z + 5.6, r: 1.4, prompt: () => '🛗 Лифт · этажи и крыша', act: () => K.rt.intLiftPanel?.(spec, 0) });
     }
     K.npc({ id: 'm_walker1', name: '🧑‍💼 Прохожий', x: 182, z: 150, yaw: 0, seed: 'walk01', act: 'wander', radius: 16, phone: 1, say: ['Отличная погода для прогулки!'] });
     K.npc({ id: 'm_patrol', name: '👮 Патрульный', x: 182, z: 205, yaw: 0, seed: 'patrol', act: 'wander', radius: 26, say: ['Порядок в городе! 👮'] });
@@ -624,17 +626,10 @@
     K.chunk('city');
     {
       const B = MB('m_city1');
-      K.towerIn({ id: 'm_city1', name: 'Сити-1', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, h1: B.h, tiers: [{ w: 16, d: 16, h: 108.8 }], style: B.style, roof: B.roof, crown: 'helipad',
-        lobbyH: 6.4, lobbyWall: '#e2e8f0', trim: '#1e3a8a', lobbyFloor: '#f1f5f9',
-        doors: [{ side: 'n', at: 0, w: 4, h: 3.4 }], windows: [{ side: 'n', at: -7, w: 5, h: 3.6, y0: .6 }, { side: 'n', at: 7, w: 5, h: 3.6, y0: .6 }, { side: 'w', at: 0, w: 9, h: 3.6, y0: .6 }, { side: 'e', at: 0, w: 9, h: 3.6, y0: .6 }],
-        sign: '🏙️ Сити-1', signBg: '#1e3a8a', lobbyName: 'Холл',
-        stops: [{ name: '10 этаж — офисы', at: 28.8, furnish: officeFloor }, { name: '20 этаж — кафе с видом', at: 60.8, furnish: skyCafe }], roofStop: 'Крыша — вертолётная площадка' });
-      // холл: стойка ресепшена, диваны, растения
-      K.counter(B.x - 5, B.z + 2, 5, 1, '#1e3a8a', '#e2e8f0'); K.sofa(B.x + 4, B.z - 4, PI, '#334155'); K.plant(B.x - 9, B.z - 9); K.plant(B.x + 9, B.z - 9);
-      K.npc({ id: 'm_city_rec', name: '💼 Администратор', x: B.x - 5, z: B.z + 3.4, yaw: 180, seed: 'admin7', say: ['Добро пожаловать в «Сити»! 🏙️', 'Лифт — у дальней стены: офисы, кафе на 20-м и крыша'] });
+      K.tower(gen(B, { tiers: [{ w: 16, d: 16, h: 108.8 }], crown: 'helipad', base0: 6.4, door: { side: 'n', at: 0, w: 3 }, trim: '#1e3a8a', sign: '🏙️ Сити-1', signBg: '#1e3a8a', special: { 19: 'skycafe' }, roofKind: 'view' }));
       const C2 = MB('m_city2'), C3 = MB('m_city3');
-      K.tower({ id: 'm_city2', x: C2.x, z: C2.z, w: C2.w, d: C2.d, h: C2.h, style: C2.style, roof: C2.roof, base: 'shop', baseH: 3.2, crown: 'antenna' });
-      K.tower({ id: 'm_city3', x: C3.x, z: C3.z, w: C3.w, d: C3.d, h: C3.h, style: C3.style, roof: C3.roof, base: 'shop', baseH: 3.2, crown: 'pyramid', logo: '37' });
+      K.tower(gen(C2, { base: 'shop', baseH: 3.2, crown: 'antenna', door: { side: 'n', at: 0 }, sign: '🏢 Сити-2', signBg: '#0f172a' }));
+      K.tower(gen(C3, { base: 'shop', baseH: 3.2, crown: 'pyramid', logo: '37', door: { side: 's', at: 0 }, sign: '🏢 БЦ «37»', signBg: '#334155' }));
       // площадь «Сити» и сквер с фонтаном
       K.part({ s: 'box', x: 298, y: .03, z: 141, w: 22, h: .03, d: 12, m: M.plaza });
       K.board(298, 2.4, 136.2, 5, 1.6, PI, '🏙️ «Сити» — деловой квартал', { bg: '#1e3a8a' }); K.box(298, 0, 136.4, .16, 1.6, .16, '#334155', { solid: true });
@@ -649,8 +644,7 @@
     K.chunk('rowshops');
     for (const id of ['m_pharm', 'm_books', 'm_gym']) {
       const B = MB(id);
-      K.tower({ id, x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, roof: B.roof, base: 'shop', baseH: 3.2, trim: '#334155' });
-      K.label.sign({ m_pharm: '💊 Аптека', m_books: '📚 Книги', m_gym: '💪 Спортзал' }[id], B.x, 2.6, B.z - B.d / 2 - .08, 6, 1, PI, { bg: { m_pharm: '#15803d', m_books: '#a16207', m_gym: '#1d4ed8' }[id], w: 512, h: 86 });
+      K.tower(gen(B, { base: 'shop', baseH: 3.2, trim: '#334155', door: { side: 'n', at: 0 }, sign: { m_pharm: '💊 Аптека', m_books: '📚 Книги', m_gym: '💪 Спортзал' }[id], signBg: { m_pharm: '#15803d', m_books: '#a16207', m_gym: '#1d4ed8' }[id] }));
     }
     yield;
     // ── ТЦ «Галерея»: 2 этажа, атриум с эскалатором, лифт до крыши; магазины, фуд-корт, кино и автоматы — лениво ──
@@ -774,7 +768,7 @@
     K.chunk('flats');
     for (const id of ['m_flat1', 'm_flat2', 'm_flat3']) {
       const B = MB(id);
-      K.tower({ id, x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, tint: B.tint, roof: B.roof, base: B.base, baseH: 3.2 });
+      K.tower(gen(B, { base: B.base, baseH: 3.2, door: { side: 'n', at: 0 }, sign: '🏢 ' + B.name.replace('ЖК «Солнечный», ', ''), signBg: '#16a34a' }));
     }
     K.part({ s: 'box', x: 120, y: .03, z: 316, w: 40, h: .03, d: 14, m: M.walk });
     for (const [x, z] of [[104, 314], [136, 318], [112, 320]]) K.tree(x, z, 1, (x + z) % 4);
@@ -822,18 +816,7 @@
     K.chunk('hotel');
     {
       const B = MB('m_hotel');
-      const H0 = K.towerIn({ id: 'm_hotel', name: 'Гранд Отель', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, style: B.style, tint: B.tint, roof: B.roof, lobbyH: 6.4, lobbyWall: '#fef3c7', trim: '#7c2d12', lobbyFloor: '#f5e6c8',
-        doors: [{ side: 'n', at: 0, w: 4, h: 3.4 }], windows: [{ side: 'n', at: -9, w: 6, h: 3.4, y0: .6 }, { side: 'n', at: 9, w: 6, h: 3.4, y0: .6 }, { side: 'e', at: 0, w: 8, h: 3.4, y0: .6 }, { side: 'w', at: 0, w: 8, h: 3.4, y0: .6 }],
-        sign: '🏨 Гранд Отель', signBg: '#7c2d12', lobbyName: 'Холл отеля',
-        stops: [{ name: '12 этаж — номера', at: 38.4, furnish: hotelFloor }], roofStop: 'Крыша — бассейн с видом' });
-      K.counter(B.x - 6, B.z + 3, 6, 1, '#7c2d12', '#fde68a'); K.sofa(B.x + 5, B.z - 5, PI, '#7f1d1d'); K.sofa(B.x + 9, B.z - 5, PI, '#7f1d1d'); K.plant(B.x - 12, B.z - 7); K.plant(B.x + 12, B.z - 7);
-      K.npc({ id: 'm_hotel_rec', name: '🛎️ Портье', x: B.x - 6, z: B.z + 4.4, yaw: 180, seed: 'porte', say: ['Добро пожаловать в «Гранд Отель»! 🛎️', 'Номера — на 12 этаже, бассейн — на крыше'] });
-      // бассейн и шезлонги на крыше (в группе верха — прячется, когда ты в номерах)
-      const gt = H0.topGroup, t = H0.t, top = t.top, gx = B.x, gz = B.z;
-      R.part(gt, { s: 'box', x: t.x - gx, y: top + .25, z: t.z - gz + 1, w: 12, h: .5, d: 6, c: '#e2e8f0' });
-      R.part(gt, { s: 'box', x: t.x - gx, y: top + .45, z: t.z - gz + 1, w: 11.2, h: .12, d: 5.2, m: K.R.water('#38bdf8', { key: 'mzpool', fixedColor: true }) });
-      K.body({ x: t.x, z: t.z + 1, y: top + .2, hx: 6, hy: .2, hz: 3, tag: 'pool', data: { cam: false } });
-      for (const k of [-4, -1.5, 1, 3.5]) { R.part(gt, { s: 'box', x: t.x - gx + k, y: top + .3, z: t.z - gz - 4, w: .9, h: .2, d: 2, c: '#fef3c7' }); K.seat(t.x + k, top + .4, t.z - 4, PI, { bed: true, name: 'Позагорать' }); }
+      K.tower(gen(B, { base0: 6.4, door: { side: 'n', at: 0, w: 3 }, trim: '#7c2d12', sign: '🏨 Гранд Отель', signBg: '#7c2d12', roofKind: 'pool' }));
     }
     yield;
     // ── Паркинг (3 яруса, пандусы, лифт) ──
@@ -849,8 +832,8 @@
     K.chunk('towers');
     {
       const B = MB('m_tower'), O = MB('m_office5');
-      K.tower({ id: 'm_tower', x: B.x, z: B.z, w: B.w, d: B.d, h: B.h, tiers: [{ w: 19.2, d: 16, h: 140.8 }], style: B.style, roof: B.roof, base: 'shop', baseH: 6.4, crown: 'glow', glowC: '#a78bfa', logo: '37' });
-      K.tower({ id: 'm_office5', x: O.x, z: O.z, w: O.w, d: O.d, h: O.h, style: O.style, roof: O.roof, base: 'shop', baseH: 3.2, crown: 'antenna' });
+      K.tower(gen(B, { tiers: [{ w: 19.2, d: 16, h: 140.8 }], base: 'shop', baseH: 6.4, base0: 6.4, crown: 'glow', glowC: '#a78bfa', logo: '37', door: { side: 'n', at: 0, w: 3 }, roofKind: 'view' }));
+      K.tower(gen(O, { base: 'shop', baseH: 3.2, crown: 'antenna', door: { side: 'n', at: 0 }, sign: '🏢 «Канал»', signBg: '#334155' }));
       K.label.sign('🏙️ Денчик-Тауэр', B.x, 5, B.z - B.d / 2 - .1, 8, 1.4, PI, { bg: '#4c1d95', w: 640, h: 112 });
     }
     yield;
@@ -873,34 +856,9 @@
     K.item({ x, y: 1.2, z: z - .9, r: 1.4, prompt: () => '🗳️ Кабинет мэра', act: () => K.rt.H?.panel('<span class="wld-pe">🗳️</span><b>Кабинет мэра</b>', `<p>${city === 'kids' ? 'В Солнечном городке' : 'В Большом городе'} скоро пройдут <b>выборы мэра</b>. Мэр будет решать, что строить на свободных участках, какие бизнесы открывать и как развивать город.</p><p><small>Готовим «градостроитель» — следи за новостями канала.</small></p>`) });
   }
   // мебель этажей (лениво, K.yo — высота этажа): офис, кафе, номера отеля, смотровая, ТЦ
-  function officeFloor(K, x0, z0, w, d){
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) {
-      const x = x0 - w / 2 + 3.4 + c * 4.4, z = z0 - d / 2 + 3.4 + r * 4.2;
-      K.table(x, z, 2, 1, '#e5e7eb', .76);
-      K.part({ s: 'box', x, y: 1.05, z: z - .3, w: .9, h: .55, d: .05, c: '#0f172a' }); K.part({ s: 'box', x, y: 1.05, z: z - .27, w: .82, h: .47, d: .02, c: '#60a5fa', m: 'glow' });
-      K.chair(x, z + .9, PI, '#334155');
-    }
-    K.table(x0 + 4, z0 + 5, 4, 1.6, '#78350f'); for (const s of [-1, 1]) for (const k of [-1, 1]) K.chair(x0 + 4 + k * 1.2, z0 + 5 + s * 1.3, s > 0 ? PI : 0, '#475569');
-    K.plant(x0 - w / 2 + 2, z0 + d / 2 - 2); K.plant(x0 + w / 2 - 2, z0 - d / 2 + 2);
-    K.box(x0 - w / 2 + 1, 0, z0 + 3, .6, 1.4, .6, '#e2e8f0', { solid: true }); K.part({ s: 'cyl', x: x0 - w / 2 + 1, y: 1.6, z: z0 + 3, r: .22, h: .5, c: '#7dd3fc', seg: 8 });
-    K.npc({ id: 'm_office_mgr', name: '🧑‍💼 Менеджер', x: x0 - 2, z: z0 + 2, yaw: 90, seed: 'mened10', act: 'wander', radius: 4, phone: 1, say: ['Отчёт к пятнице! 📊', 'Вид отсюда — лучший в городе'] });
-  }
-  function skyCafe(K, x0, z0, w, d){
-    K.counter(x0 - w / 2 + 3, z0, 1.2, 8, '#7c2d12', '#fde68a', 0);
-    for (const [x, z] of [[x0 - 2, z0 - 6], [x0 + 3, z0 - 6], [x0 - 2, z0 - 1], [x0 + 3, z0 - 1], [x0 + 8, z0 - 6], [x0 + 8, z0 - 1]]) { K.table(x, z, 1.1, 1.1, '#f8fafc', .76); K.chair(x - 1, z, PI / 2, '#b45309'); K.chair(x + 1, z, -PI / 2, '#b45309'); }
-    K.plant(x0 - w / 2 + 2, z0 - d / 2 + 2); K.plant(x0 + w / 2 - 2, z0 - d / 2 + 2);
-    K.npc({ id: 'm_skycafe', name: '☕ Бариста', x: x0 - w / 2 + 4.6, z: z0, yaw: 270, seed: 'barista20', say: ['Кофе с видом на весь город! ☕', 'Попробуйте десерт дня 🍰'] });
-  }
-  function hotelFloor(K, x0, z0, w, d){
-    for (let i = 0; i < 4; i++) {
-      const x = x0 - w / 2 + 4 + i * 6.6, z = z0 - d / 2 + 3.4;
-      K.bed(x, z, 0, ['#fca5a5', '#93c5fd', '#fde68a', '#a7f3d0'][i]);
-      K.box(x + 2, 0, z - 1.2, .8, .7, .8, '#78350f', { solid: true }); K.lampIn(x + 2, 1.6, z - 1.2);
-      K.box(x + 3.2, 0, z0 - d / 2 + 4.6, .14, 2.9, 6, '#f5e6c8', { solid: true, cam: true });   // перегородки номеров
-    }
-    K.sofa(x0, z0 + 4, PI, '#7f1d1d'); K.rug(x0, z0 + 2, 8, 2.6, '#7f1d1d');
-    K.npc({ id: 'm_maid', name: '🧹 Горничная', x: x0 + 3, z: z0 + 3, yaw: 0, seed: 'gornich', act: 'wander', radius: 5, say: ['Номер убран! ✨', 'Бассейн — на крыше, лифт в конце коридора'] });
-  }
+
+
+
   function tvDeck(K, x0, z0, PR){
     for (let i = 0; i < 4; i++) {
       const a = i / 4 * PI * 2 + PI / 4, x = x0 + Math.cos(a) * (PR - 1.6), z = z0 + Math.sin(a) * (PR - 1.6);

@@ -108,3 +108,8 @@
 .mz-lift button:hover{background:rgba(255,255,255,.12)}
 .mz-lift button.on{border-color:#38bdf8;background:rgba(56,189,248,.16);cursor:default}
 .mz-lift small{font-weight:600;opacity:.7}
+/* лифт генератора интерьеров: этажи сеткой (у небоскрёба их десятки) */
+.mz-ilift{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;margin-top:6px;max-height:46vh;overflow:auto}
+.mz-ilift button{min-height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:inherit;font:800 14px Montserrat,sans-serif;cursor:pointer}
+.mz-ilift button:hover{background:rgba(255,255,255,.14)}
+.mz-ilift button.on{border-color:#38bdf8;background:rgba(56,189,248,.18);cursor:default}

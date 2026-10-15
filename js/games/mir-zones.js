@@ -23,6 +23,7 @@
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const PI = Math.PI;
+  const INTF = () => root.D37E?.interior;   // генератор интерьеров (js/engine/interior.js)
   // ── Возраст зон. Большой город — 18+; владелец может поставить 16 (одна цифра) ──
   const ADULT_AGE = 18;
   const WAR_AGE = 12;
@@ -449,6 +450,7 @@
   }
   const SHARED_P = new WeakMap();
   const PIECES = new Map();   // все построенные детали с номерами: id → деталь (реестр для будущих разрушений)
+  const MZ_ACCESS = [];   // правила дверей: f(door, rt) → true (пустить) | 'причина' (нет) | undefined (не моё) — для РП и будущих владельцев
 
   // ═══ Надписи: холст на зону (атлас) — все вывески одной сеткой; места мало — следующая страница (ещё одна сетка) ═══
   function atlas(R, size = 1024){
@@ -580,7 +582,7 @@
   function kit(rt, zs, grp){
     const { R, ph, X } = rt, T = R.T, E = root.D37E, low = R.q === 'low';
     // yo — высота «пола» для мебели на этажах небоскрёбов (ленивые интерьеры): детали — в группе на этой высоте, тела/места/предметы — + yo
-    const K = { R, T, ph, X, E, rt, zs, Z: zs.Z, root: grp, cur: null, low, yo: 0, bodies: [], items: [], npcs: [], roofs: [], seats: [], anims: [], lazies: [], lifts: {}, pieceList: [] };
+    const K = { R, T, ph, X, E, rt, zs, Z: zs.Z, root: grp, cur: null, low, yo: 0, bodies: [], items: [], npcs: [], roofs: [], seats: [], anims: [], lazies: [], lifts: {}, pieceList: [], ints: [], portals: [] };
     const tex = (name, o) => R.tex(name, o);
     K.M = {
       asphalt: tex('asphalt', { tile: 4, tint: '#a9afba', flatColor: '#5b6270', rough: .95 }),
@@ -612,7 +614,9 @@
     K.group = (x = 0, y = 0, z = 0, yaw = 0, parent) => { const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = yaw; (parent || K.cur || grp).add(g); return g; };
     // готовые предметы движка (дерево, фонарь, скамейка…) — в текущую группу
     K.prefab = (name, o) => R.prefab(name, { ...o, parent: K.cur || grp }, ph);
-    K.tree = (x, z, k = 1, v = 0) => K.prefab(v < 0 ? 'pine' : 'tree', { x, z, k, v: Math.max(0, v), yaw: (x * 7 + z * 3) % 6 });
+    // дерево не растёт в стене здания (улицы и дома двигались — проверка по таблице зданий зоны)
+    const solidB = ((zs.D || DEFS[zs.Z?.id])?.buildings || []).filter(b => b.h > 0 && b.type !== 'park' && b.type !== 'lot');
+    K.tree = (x, z, k = 1, v = 0) => solidB.some(b => Math.abs(x - b.x) < b.w / 2 + 1 && Math.abs(z - b.z) < b.d / 2 + 1) ? null : K.prefab(v < 0 ? 'pine' : 'tree', { x, z, k, v: Math.max(0, v), yaw: (x * 7 + z * 3) % 6 });
     // фонарь без ореола-спрайта (спрайт — отдельный вызов отрисовки на каждый; светится шар — свечение постобработки)
     K.lamp = (x, z) => {
       P({ s: 'cyl', x, y: 1.5, z, r: .1, r2: .07, h: 3, c: '#2d2a3a', seg: 8 }); P({ s: 'cyl', x, y: .06, z, r: .22, h: .12, c: '#2d2a3a', seg: 10 });
@@ -762,26 +766,60 @@
       const g = parent || K.cur || grp, m = facadeMat(R, spec.style || 'office', spec.tint), roofC = spec.roof || '#4b5563', ox = parent ? spec.x : 0, oz = parent ? spec.z : 0;
       const gx = x => x - (parent ? ox : 0), gz = z => z - (parent ? oz : 0);   // в группе здания — свои координаты
       let top = spec.y0 || 0;
+      // входимая башня: фасад — 4 плоскости лицом наружу (изнутри их не видно), карнизы и уступы — рамкой (сверху внутрь не мешают)
+      const hollow = !!(spec.door && INTF());
+      const walls = (x, z, w, d, y0, y1, mat) => {
+        if (!hollow) { R.part(g, { s: 'box', x: gx(x), y: (y0 + y1) / 2, z: gz(z), w, h: y1 - y0, d, m: mat }); return; }
+        const h = y1 - y0, y = (y0 + y1) / 2;
+        R.part(g, { s: 'plane', x: gx(x), y, z: gz(z + d / 2), w, d: h, m: mat });
+        R.part(g, { s: 'plane', x: gx(x), y, z: gz(z - d / 2), w, d: h, yaw: PI, m: mat });
+        R.part(g, { s: 'plane', x: gx(x + w / 2), y, z: gz(z), w: d, d: h, yaw: PI / 2, m: mat });
+        R.part(g, { s: 'plane', x: gx(x - w / 2), y, z: gz(z), w: d, d: h, yaw: -PI / 2, m: mat });
+      };
+      const ring = (x, z, w, d, y, h, c, hole) => {   // рамка вокруг «дыры» (верхний ярус) или сплошная плита
+        if (!hollow) { R.part(g, { s: 'box', x: gx(x), y, z: gz(z), w, h, d, c }); return; }
+        const iw = hole ? hole.w : w - .6, id = hole ? hole.d : d - .6, sx = (w - iw) / 2, sz = (d - id) / 2;
+        R.part(g, { s: 'box', x: gx(x), y, z: gz(z - d / 2 + sz / 2), w, h, d: sz, c }); R.part(g, { s: 'box', x: gx(x), y, z: gz(z + d / 2 - sz / 2), w, h, d: sz, c });
+        R.part(g, { s: 'box', x: gx(x - w / 2 + sx / 2), y, z: gz(z), w: sx, h, d: id, c }); R.part(g, { s: 'box', x: gx(x + w / 2 - sx / 2), y, z: gz(z), w: sx, h, d: id, c });
+      };
       if (spec.base && !spec.y0) {
         const bh = spec.baseH || FLOOR_H;
-        R.part(g, { s: 'box', x: gx(spec.x), y: bh / 2, z: gz(spec.z), w: spec.w, h: bh, d: spec.d, m: facadeMat(R, spec.base) });
-        R.part(g, { s: 'box', x: gx(spec.x), y: bh + .1, z: gz(spec.z), w: spec.w + .5, h: .2, d: spec.d + .5, c: spec.trim || '#3f3f46' });
+        walls(spec.x, spec.z, spec.w, spec.d, 0, bh, facadeMat(R, spec.base));
+        ring(spec.x, spec.z, spec.w + .5, spec.d + .5, bh + .1, .2, spec.trim || '#3f3f46', { w: spec.w - .1, d: spec.d - .1 });
         top = bh;
       }
       const shafts = [{ w: spec.w, d: spec.d, h: spec.h1 || spec.h, dx: 0, dz: 0 }, ...(spec.tiers || [])], tb = [];
       let last = shafts[0], first = true;
-      for (const t of shafts) {
+      for (const [ti, t] of shafts.entries()) {
         const x = spec.x + (t.dx || 0), z = spec.z + (t.dz || 0), hh = t.h - top;
         if (hh <= .05) continue;
-        R.part(g, { s: 'box', x: gx(x), y: top + hh / 2, z: gz(z), w: t.w, h: hh, d: t.d, m });
-        R.part(g, { s: 'box', x: gx(x), y: t.h + .15, z: gz(z), w: t.w + .3, h: .3, d: t.d + .3, c: roofC });
+        walls(x, z, t.w, t.d, top, t.h, m);
+        const up = shafts[ti + 1];   // уступ под следующим ярусом — рамкой; самый верх — сплошная крыша
+        if (up) ring(x, z, t.w + .3, t.d + .3, t.h + .15, .3, roofC, { w: up.w - .02, d: up.d - .02 });
+        else R.part(g, { s: 'box', x: gx(x), y: t.h + .15, z: gz(z), w: t.w + .3, h: .3, d: t.d + .3, c: roofC });
         const b0 = first ? (spec.y0 || 0) : top;
-        tb.push(K.body({ x, z, y: (b0 + t.h + .3) / 2, hx: t.w / 2 + .15, hy: (t.h + .3 - b0) / 2, hz: t.d / 2 + .15, tag: 'tower', data: { cam: true, floor: 'concrete' } }));
+        if (!spec.door || !INTF()) tb.push(K.body({ x, z, y: (b0 + t.h + .3) / 2, hx: t.w / 2 + .15, hy: (t.h + .3 - b0) / 2, hz: t.d / 2 + .15, tag: 'tower', data: { cam: true, floor: 'concrete' } }));
         top = t.h + .3; last = { ...t, x, z }; first = false;
       }
       const lx = last.x ?? spec.x, lz = last.z ?? spec.z, lw = last.w, ld = last.d;
+      // ── входимая башня (E.interior): оболочка — стены со входом и плиты; этажи строятся, когда игрок рядом / приехал лифтом ──
+      const INT = INTF();
+      if (spec.door && INT) {
+        for (const sb of INT.shell(spec)) tb.push(K.body({ x: sb.x, z: sb.z, y: sb.y, hx: sb.hx, hy: sb.hy, hz: sb.hz, tag: 'tower', data: { cam: sb.cam, floor: 'concrete' } }));
+        if (!spec.shellFrom) {   // вход на фасаде: рама, тёмный проём, козырёк (снаружи видно, где дверь)
+          const D = spec.door, side = D.side || 's', at = D.at || 0, hw = spec.w / 2, hd = spec.d / 2, dw = D.w || 2.4;
+          const [dx, dz, yaw] = side === 'n' ? [spec.x + at, spec.z - hd - .07, PI] : side === 's' ? [spec.x + at, spec.z + hd + .07, 0] : side === 'e' ? [spec.x + hw + .07, spec.z + at, PI / 2] : [spec.x - hw - .07, spec.z + at, -PI / 2];
+          const fx = Math.sin(yaw), fz = Math.cos(yaw), ax = Math.cos(yaw), az = -Math.sin(yaw);
+          // тёмный проём (снаружи видно «там вход»): общий InstancedMesh зоны; построен первый этаж — проём прячется, видно холл
+          spec._portal = { x: dx, y: 1.32, z: dz, yaw, w: dw - .1, h: 2.64 }; K.portals.push(spec._portal);
+          for (const sd of [-1, 1]) R.part(g, { s: 'box', x: gx(dx + ax * sd * (dw / 2 + .05)), y: 1.4, z: gz(dz + az * sd * (dw / 2 + .05)), w: .14, h: 2.8, d: .16, yaw, c: spec.trim || '#334155' });
+          R.part(g, { s: 'box', x: gx(dx + fx * .7), y: 2.95, z: gz(dz + fz * .7), w: dw + 1.2, h: .14, d: 1.4, yaw, c: spec.trim || '#334155' });
+          if (spec.sign) K.label.sign(spec.sign, dx + fx * .08, 3.55, dz + fz * .08, Math.min(spec.w - 1, 6), 1, yaw, { bg: spec.signBg || '#1e3a8a', w: 512, h: 86 });
+        }
+        K.ints.push(spec);
+      }
       // на крыше: вентиляция, бак, будка лестницы (сверху город живее)
-      if (spec.crown !== 'helipad' && lw > 8) {
+      if (spec.crown !== 'helipad' && lw > 8 && !(hollow && spec.roofKind !== 'none')) {   // у входимой башни крыша — своя (E.interior.roofMount: с телами)
         R.part(g, { s: 'box', x: gx(lx - lw * .25), y: top + .6, z: gz(lz + ld * .2), w: 2.4, h: 1.2, d: 1.6, c: '#9ca3af' });
         R.part(g, { s: 'cyl', x: gx(lx + lw * .22), y: top + 1.3, z: gz(lz - ld * .22), r: 1.1, h: 2.6, c: '#78716c', seg: 10 });
         R.part(g, { s: 'box', x: gx(lx + lw * .2), y: top + 1.2, z: gz(lz + ld * .25), w: 3, h: 2.4, d: 2.4, c: '#a8a29e' });
@@ -815,59 +853,6 @@
       return { top, x: lx, z: lz, w: lw, d: ld, bodies: tb };
     };
 
-    // ── Небоскрёб со входом: холл (крыша прячется изнутри, как у обычного здания), лифт 🛗 на этажи и на крышу.
-    // Этаж-остановка — стеклянная «комната» внутри фасада: свой триггер прячет всё, что выше (вложенные группы),
-    // мебель — лениво. spec: как у tower + lobbyH, stops: [{ name, at (высота пола), furnish(K, x, z, w, d) }], roofStop (имя) ──
-    K.towerIn = spec => {
-      const LH = spec.lobbyH || FLOOR_H * 2, w = spec.w, d = spec.d, x0 = spec.x, z0 = spec.z;
-      const lb = K.building({ id: spec.id, x: x0, z: z0, w, d, h: LH, wall: spec.lobbyWall || '#e7e5e4', trim: spec.trim || '#334155', roofC: spec.roof, floor: spec.lobbyFloor || '#e7e5e4',
-        floorType: 'tile', floorM: K.M.walk, doors: spec.doors, windows: spec.windows, sign: spec.sign, signBg: spec.signBg });
-      const stops = [{ name: spec.lobbyName || 'Холл', at: .12, x: x0, z: z0 }];
-      let g = lb.roof, below = LH + .24;
-      const fac = facadeMat(R, spec.style || 'glass', spec.tint), RH = FLOOR_H + .4;
-      const camOff = [];   // тела башни выше холла: пока ты внутри (холл, этаж) — камера проходит сквозь них (там всё спрятано)
-      if (lb.trig) lb.trig.data.camOff = camOff;
-      const seg = (grp2, y0, y1) => { if (y1 - y0 < .05) return; R.part(grp2, { s: 'box', y: (y0 + y1) / 2, w, h: y1 - y0, d, m: fac }); camOff.push(K.body({ x: x0, z: z0, y: (y0 + y1) / 2, hx: w / 2, hy: (y1 - y0) / 2, hz: d / 2, tag: 'tower', data: { cam: true, floor: 'concrete' } })); };
-      for (const [k, st] of (spec.stops || []).entries()) {
-        const at = st.at;
-        seg(g, below, at - .17);   // глухой фасад до этажа (верх — под плитой пола, без мерцания)
-        // пол этажа (верх нижнего куска) и стеклянные стены с простенками по углам
-        R.part(g, { s: 'box', y: at - .08, w: w - .1, h: .16, d: d - .1, c: st.floorC || '#d6d3d1' });
-        K.body({ x: x0, z: z0, y: at - .08, hx: w / 2, hy: .08, hz: d / 2, tag: 'deck', data: { cam: false, floor: 'tile' } });
-        for (const [px, pz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { R.part(g, { s: 'box', x: px * (w / 2 - .4), y: at + RH / 2, z: pz * (d / 2 - .4), w: .8, h: RH, d: .8, c: spec.trim || '#334155' }); }
-        for (const side of ['n', 's', 'e', 'w']) {
-          const horiz = side === 'n' || side === 's', L = (horiz ? w : d) - 1.6, px = horiz ? 0 : (side === 'e' ? w / 2 - .15 : -w / 2 + .15), pz = horiz ? (side === 's' ? d / 2 - .15 : -d / 2 + .15) : 0;
-          R.part(g, { s: 'box', x: px, y: at + RH / 2, z: pz, w: horiz ? L : .08, h: RH - .1, d: horiz ? .08 : L, m: K.M.glass });
-          K.body({ x: x0 + px, z: z0 + pz, y: at + RH / 2, hx: horiz ? L / 2 : .15, hy: RH / 2, hz: horiz ? .15 : L / 2, tag: 'glass', data: { cam: false } });
-          R.part(g, { s: 'box', x: px, y: at + 1.05, z: pz, w: horiz ? L : .1, h: .06, d: horiz ? .1 : L, c: '#94a3b8' });   // поручень
-        }
-        R.part(g, { s: 'box', x: w / 2 - 3, y: at + 1.35, z: d / 2 - .45, w: 2.2, h: 2.7, d: .12, c: '#9ca3af' });   // двери лифта
-        R.part(g, { s: 'box', x: w / 2 - 1.6, y: at + 1.25, z: d / 2 - .52, w: .2, h: .3, d: .04, c: '#38bdf8', m: 'glow' });
-        // выше этажа — своя группа (прячется, когда ты на этаже)
-        const up = new T.Group(); up.userData.dyn = true; g.add(up); K.roofs.push(up);
-        R.part(up, { s: 'box', y: at + RH + .08, w, h: .16, d, c: '#9ca3af' });   // потолок
-        K.body({ x: x0, z: z0, y: at + RH / 2, hx: w / 2 - .5, hy: RH / 2, hz: d / 2 - .5, trigger: true, tag: 'room', data: { room: spec.id + ':' + (k + 1), roof: up, camOff } });
-        stops.push({ name: st.name, at, x: x0, z: z0 });
-        if (st.furnish) K.lazy(x0, z0, Math.max(w, d) + 30, KK => st.furnish(KK, x0, z0, w, d), at, g);
-        g = up; below = at + RH + .16;
-      }
-      // остаток башни и крыша с видом
-      const t = K.tower({ ...spec, y0: below, base: null, tiers: spec.tiers }, g);
-      camOff.push(...t.bodies);
-      if (spec.roofStop !== false) stops.push(K.roofDeck(g, x0, z0, t, spec.roofStop || 'Крыша — вид на город'));
-      // лифт: дверь в холле (у задней стены) + на каждой остановке
-      const id = spec.id;
-      K.lifts[id] = { name: spec.name || spec.sign || 'Лифт', stops };
-      const doorZ = z0 + d / 2 - .9;
-      K.box(x0 + w / 2 - 3, .12, z0 + d / 2 - .25, 2.2, 2.7, .2, '#9ca3af'); K.part({ s: 'box', x: x0 + w / 2 - 3, y: 1.45, z: z0 + d / 2 - .37, w: .03, h: 2.5, d: .02, c: '#475569' });
-      K.part({ s: 'box', x: x0 + w / 2 - 1.6, y: 1.25, z: z0 + d / 2 - .36, w: .2, h: .3, d: .04, c: '#38bdf8', m: 'glow' });
-      stops[0].x = x0 + w / 2 - 3; stops[0].z = doorZ - .8; stops[0].yaw = PI;
-      stops.forEach((s, k) => {
-        if (k > 0 && !s.roof) { s.x = x0 + w / 2 - 3; s.z = doorZ - .8; s.yaw = PI; }
-        K.items.push(X.add({ x: s.x, y: s.at + 1.2, z: s.roof ? s.z : doorZ - .2, r: 1.5, prompt: () => `🛗 Лифт · ${s.name}`, act: () => rt.liftPanel(id, k) }));
-      });
-      return { stops, lobby: lb, top: t.top, topGroup: g, t };
-    };
     // ── Крыша с видом: ограждение по краю, будка лифта в углу; вернёт остановку лифта. g — группа (её начало — gx0, gz0) ──
     K.roofDeck = (g, gx0, gz0, t, name) => {
       const top = t.top;
@@ -1168,10 +1153,26 @@
       zs.mq = [...cells.values(), ...zs.K.roofs.map(r => ({ roof: r }))];
       if (!zs.mq.length) { zs.mq = null; finishBuild(zs); }
     }
+    function flushPortals(K, grp){
+      const L = K.portals; if (!L.length) return;
+      const geo = new T.PlaneGeometry(1, 1), mat = new T.MeshBasicMaterial({ color: '#0b1120' }), mesh = new T.InstancedMesh(geo, mat, L.length);
+      const q4 = new T.Quaternion(), up = new T.Vector3(0, 1, 0), v = new T.Vector3(), sc = new T.Vector3(), zero = new T.Matrix4().makeScale(0, 0, 0);
+      let mnx = Infinity, mnz = Infinity, mxx = -Infinity, mxz = -Infinity;
+      L.forEach((p, i) => {
+        p.m4 = new T.Matrix4().compose(v.set(p.x, p.y, p.z), q4.setFromAxisAngle(up, p.yaw), sc.set(p.w, p.h, 1));
+        mesh.setMatrixAt(i, p.m4); p.inst = { mesh, i, zero };
+        mnx = Math.min(mnx, p.x); mnz = Math.min(mnz, p.z); mxx = Math.max(mxx, p.x); mxz = Math.max(mxz, p.z);
+      });
+      geo.boundingSphere = new T.Sphere(new T.Vector3((mnx + mxx) / 2, 1.3, (mnz + mxz) / 2), Math.hypot(mxx - mnx, mxz - mnz) / 2 + 4);
+      mesh.userData.mzOwn = true; mesh.userData.dyn = true;
+      R.own.push(geo, mat);
+      grp.add(mesh);
+    }
     function finishBuild(zs){
       const K = zs.K;
       const lm = K.label.mesh(); if (lm) zs.grp.add(lm);
       flushPieces(R, K, zs.grp);   // детали с номерами (боевая зона) — InstancedMesh
+      flushPortals(K, zs.grp);   // тёмные проёмы входов
       for (const p of K.pieceList) PIECES.set(p.id, p);
       zs.built = true;
       R.shadowDirty?.();
@@ -1239,6 +1240,97 @@
       R.shadowDirty?.();
     }
     rt.lazyAll = () => { for (const zs of rt.zones.values()) for (const L of zs.K?.lazies || []) if (!L.done) buildLazy(zs, L); };   // для проверок
+    // ═══ Интерьеры зданий (js/engine/interior.js): этаж строится, когда игрок у входа / внутри / приехал лифтом; далеко — сносится.
+    //     Никогда не весь небоскрёб: живут только нужные этажи (не больше INT_CAP). Двери — правила доступа (rt.doorAccess) ═══
+    const INT = root.D37E?.interior, mounted = new Map(), intSeats = [];
+    const INT_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 6;
+    let glassM = null;
+    const ictx = {
+      R, ph, toast,
+      merge: (R2, g) => merge(R2, g, { chunk: 0 }),
+      get glass(){ if (!glassM) { for (const zs of rt.zones.values()) if (zs.K?.M?.glass) { glassM = zs.K.M.glass; break; } } return glassM; },
+      item: it => X.add(it),
+      unitem: h => { if (!h) return; if (h.npc) { if (S.NPC) S.NPC.remove(h.npc); h.tag?.remove(); return; } X.remove(h); },
+      seat: sp => { const s2 = { ...sp, name: sp.name || (sp.bed ? 'Лечь' : 'Сесть') }; intSeats.push(s2); const it = X.add({ x: s2.x, y: s2.y + .5, z: s2.z, r: s2.bed ? 1.1 : .55, prompt: () => rt.seatPrompt(s2), act: () => rt.sitDown(s2) }); return { s: s2, it }; },
+      unseat: h => { X.remove(h.it); const i = intSeats.indexOf(h.s); if (i >= 0) intSeats.splice(i, 1); },
+      lift: (b, k) => rt.intLiftPanel(b, k),
+      access: door => rt.doorAccess(door),
+      sound: () => rt.sfx('click', { vol: .4 }),
+      npc: o => {   // житель интерьера (администратор, продавец, бариста…) — пока этаж построен
+        if (!S.NPC) return null;
+        const NAMES = { admin: '💼 Администратор', porte: '🛎️ Портье', seller: '🛒 Продавец', barista: '☕ Бариста', mayor: '🎩 Мэр' };
+        const n = { id: `int_${o.b.id}_${o.who}_${Math.round(o.y)}`, name: NAMES[o.who] || '🧑 Сотрудник', cls: 'NPC', pos: [o.x, o.y, o.z], rot: [0, o.yaw * 180 / PI, 0], look: 'random', seed: `${o.b.id}:${o.who}`, act: 'idle', speed: 1, radius: 0, damage: 0, text: '', say: [], phone: 0 };
+        S.NPC.add(n);
+        return { npc: n };
+      },
+    };
+    rt.intSeats = intSeats;
+    // правила дверей: запертое открывает тот, кому положено (РП). Будущие правила (владельцы, «градостроитель») — MirZones.accessRules
+    rt.doorAccess = door => {
+      for (const f of MZ_ACCESS) { try { const v = f(door, rt); if (v !== undefined) return v; } catch (e) { console.error(e); } }
+      const role = rt.zx.r;
+      if (door.kind === 'bars') return role === 'police' ? true : '🔒 Камеру открывает полицейский';
+      if (door.kind === 'vault') return role === 'cashier' ? true : '🔒 Хранилище открывает кассир банка';
+      return '🔒 Заперто';
+    };
+    const keyOf = (b, k) => b.id + ':' + k;
+    function intMount(b, k){
+      const key = keyOf(b, k);
+      if (mounted.has(key)) return mounted.get(key);
+      let h = null;
+      try { h = k === 'roof' ? INT.roofMount(ictx, b) : INT.mount(ictx, b, k); } catch (e) { console.error('интерьер', b.id, k, e); }
+      if (h) { h.__b = b; h.__k = k; mounted.set(key, h); R.shadowDirty?.(); if (k === 0 && b._portal) setPieceVis(b._portal, false); }
+      return h;
+    }
+    function intTick(force){
+      if (!INT) return;
+      const p = S.P.ch, want = new Map();
+      for (const zs of rt.zones.values()) {
+        if (!zs.shown || !zs.K?.ints?.length) continue;
+        for (const b of zs.K.ints) {
+          const P0 = INT.plan(b), k = INT.where(b, p.x, p.y, p.z);
+          if (k >= 0 && !(k === 0 && b.skip0)) want.set(keyOf(b, k), [b, k, 0]);
+          const t = P0.tiers[P0.tiers.length - 1];
+          if (Math.abs(p.x - b.x) < t.w / 2 && Math.abs(p.z - b.z) < t.d / 2 && p.y > t.top - .2 && p.y < t.top + 4) want.set(keyOf(b, 'roof'), [b, 'roof', 0]);
+          if (!b.skip0) {   // подошёл к входу по земле — первый этаж заранее
+            const dx = Math.max(Math.abs(p.x - b.x) - b.w / 2, 0), dz = Math.max(Math.abs(p.z - b.z) - b.d / 2, 0), d = Math.hypot(dx, dz);
+            if (d < 16 && p.y < P0.base0 + .5 && !want.has(keyOf(b, 0))) want.set(keyOf(b, 0), [b, 0, d]);
+          }
+        }
+      }
+      if (rt.intHold) want.set(rt.intHold.key, [rt.intHold.b, rt.intHold.k, -1]);
+      const L = [...want.entries()].sort((a, c) => a[1][2] - c[1][2]).slice(0, INT_CAP), keep = new Set(L.map(e => e[0]));
+      for (const [key, h] of mounted) if (!keep.has(key)) { try { h.dispose(); } catch (e) { console.error(e); } mounted.delete(key); R.shadowDirty?.(); if (h.__k === 0 && h.__b?._portal) setPieceVis(h.__b._portal, true); }
+      for (const [, [b, k]] of L) if (!mounted.has(keyOf(b, k))) { intMount(b, k); if (!force) break; }   // по одному этажу за раз
+    }
+    rt.intTick = intTick; rt.intMounted = mounted;
+    // лифт: окно этажей (сеткой — у небоскрёба их десятки) и крыша
+    rt.intLiftPanel = (b, from) => {
+      const P0 = INT.plan(b);
+      rt.intLiftB = b;
+      const btn = (k, label) => `<button type="button"${k === from ? ' class="on" disabled' : ''} data-mz="ilift:${esc(b.id)}:${k}">${label}</button>`;
+      const floors = []; for (let k = b.skip0 ? 0 : 0; k < P0.n; k++) floors.push(btn(k, k === 0 && b.skip0 ? '1 · дом' : String(k + 1)));
+      H.panel(`<span class="wld-pe">🛗</span><b>Лифт · ${esc(b.name || b.id)}</b>`, `<div class="mz-ilift">${floors.join('')}${P0.roof ? btn('roof', '🏙️ Крыша') : ''}</div><p><small>Этаж строится, когда лифт приезжает: двери, мебель, соседи — у всех одинаковые.</small></p>`);
+    };
+    rt.intGo = async (id, k) => {
+      let b = null; for (const zs of rt.zones.values()) for (const q of zs.K?.ints || []) if (q.id === id) b = q;
+      if (!b || rt.tpBusy) return;
+      H.closePops(); rt.tpBusy = true;
+      const f = q('.mz-fade'); f.hidden = false; f.classList.remove('out'); f.textContent = k === 'roof' ? '🛗 Крыша' : `🛗 ${+k + 1} этаж`;
+      rt.sfx('click', { rate: .8 });
+      rt.intHold = { b, k: k === 'roof' ? 'roof' : +k, key: keyOf(b, k === 'roof' ? 'roof' : +k) };
+      let land = null;
+      if (k === 'roof') { const h = intMount(b, 'roof'); land = h?.landing; }
+      else if (+k === 0 && b.skip0) land = b.home0 || null;
+      else { const h = intMount(b, +k), fp = h?.fp; if (fp?.landing) land = { x: fp.landing.x, z: fp.landing.z, y: fp.y + (fp.k === 0 ? .08 : 0), yaw: fp.landing.wyaw }; }
+      await new Promise(r => setTimeout(r, 600));
+      rt.tpBusy = false;
+      if (rt.stopped || !land) { f.classList.add('out'); setTimeout(() => { f.hidden = true; }, 380); return; }
+      place(land.x, land.z, land.yaw ?? 0, land.y);
+      setTimeout(() => { rt.intHold = null; }, 1500);
+      rt.sfx('pickup', { vol: .4, rate: 1.6 });
+      f.classList.add('out'); setTimeout(() => { if (f.classList.contains('out')) f.hidden = true; }, 380);
+    };
     // ── Лифт 🛗: окно этажей → затемнение → на этаж ──
     const liftOf = id => { for (const zs of rt.zones.values()) if (zs.K?.lifts?.[id]) return zs.K.lifts[id]; return null; };
     rt.liftPanel = (id, from) => {
@@ -1322,6 +1414,7 @@
       else if (a === 'map-close') closeMap();
       else if (a.startsWith('tp:')) mapTp(a.slice(3));
       else if (a.startsWith('lift:')) { const i = a.lastIndexOf(':'); rt.liftGo(a.slice(5, i), +a.slice(i + 1)); }
+      else if (a.startsWith('ilift:')) { const i = a.lastIndexOf(':'); rt.intGo(a.slice(6, i), a.slice(i + 1)); }
       else if (a.startsWith('act:')) doAct(a.slice(4));
       else if (a === 'acts-x') toggleActs(false);
       else for (const zs of rt.mods) { try { if (zs.mod?.click?.(a, b)) break; } catch (er) { console.error(er); } }
@@ -1479,7 +1572,7 @@
     rt.sitHere = () => {
       const P = S.P, ch = P.ch;
       let best = null, bd = 4;
-      for (const zs of rt.zones.values()) for (const sp of zs.K?.seats || []) { const d = Math.hypot(sp.x - ch.x, sp.z - ch.z); if (!sp.bed && d < bd) { bd = d; best = sp; } }
+      for (const sp of [...[...rt.zones.values()].flatMap(zs => zs.K?.seats || []), ...intSeats]) { const d = Math.hypot(sp.x - ch.x, sp.z - ch.z) + Math.abs(sp.y - ch.y) * 2; if (!sp.bed && d < bd) { bd = d; best = sp; } }
       if (best) return rt.sitDown(best);
       if (P.mode !== 'move' || !ch.grounded) return;
       rt.sitDown({ x: ch.x, y: ch.y + .32, z: ch.z, yaw: P.yaw, name: 'Сесть' });   // прямо на землю
@@ -1487,7 +1580,7 @@
     rt.sleepHere = () => {
       const ch = S.P.ch;
       let best = null, bd = 5;
-      for (const zs of rt.zones.values()) for (const sp of zs.K?.seats || []) { const d = Math.hypot(sp.x - ch.x, sp.z - ch.z); if (sp.bed && d < bd) { bd = d; best = sp; } }
+      for (const sp of [...[...rt.zones.values()].flatMap(zs => zs.K?.seats || []), ...intSeats]) { const d = Math.hypot(sp.x - ch.x, sp.z - ch.z) + Math.abs(sp.y - ch.y) * 2; if (sp.bed && d < bd) { bd = d; best = sp; } }
       if (best) rt.sitDown(best); else toast('🛏 Подойди к кровати — в домах и в больнице');
     };
     // ── zx: своё состояние для сети ──
@@ -1693,6 +1786,7 @@
         }
         lazyTick();   // интерьеры этажей, магазинов ТЦ, номеров — рядом с игроком
         npcTick();    // жители — только рядом
+        intTick();    // этажи зданий (генератор интерьеров) — у входа, внутри, по лифту
       }
       for (const zs of rt.mods) { try { zs.mod?.update?.(dt); } catch (e) { console.error(e); } }
     };
@@ -1711,6 +1805,7 @@
         if (zs.grp) { disposeOwn(zs.grp); zs.grp.parent?.remove(zs.grp); }
         for (const p of zs.K?.pieceList || []) PIECES.delete(p.id);
       }
+      for (const h of mounted.values()) { try { h.dispose(); } catch (e) {} } mounted.clear();
       if (S.menu?.close === closeMap) S.menu = null;
       hud.remove(); rt.actBtn?.remove(); rt.mapBtn?.remove();
     };
@@ -1756,7 +1851,7 @@
 
   root.MirZones = {
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
-    BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat,
+    BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
     def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,

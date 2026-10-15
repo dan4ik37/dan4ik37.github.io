@@ -779,8 +779,8 @@
       if (S.inside) S.inside.roof.visible = true;
       if (inside) inside.roof.visible = false;
       S.inside = inside;
-      rig.maxD = inside ? 9 : 22; rig.minP = inside ? .55 : .08;
-      if (inside) { rig.dist = Math.min(rig.dist, 8); rig.pitch = Math.max(rig.pitch, .75); }
+      rig.maxD = inside ? 9 : 22; rig.minP = inside ? inside.minP ?? .55 : .08;   // этажи зданий (E.interior) просят камеру круче
+      if (inside) { rig.dist = Math.min(rig.dist, 8); rig.pitch = Math.max(rig.pitch, inside.pitch ?? .75); }
     }
     netTick(dt);
     tableTick(dt);
