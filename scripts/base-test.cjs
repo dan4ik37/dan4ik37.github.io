@@ -35,6 +35,128 @@ const nondec = a => a.every((v, i) => i === 0 || v >= a[i - 1]);
   ok(S.n === 12 && S.in === 9 && S.per === 6 && S.plots === 600 && S.k.mine.rate.length === 5 && S.f.rug.floor === 1 && !('n' in S.k.th), 'серверная часть каталога (base_defs)');
 }
 
+// ═══ Набеги: оборона, ловушки, казарма, отряды, герой (docs/RAIDS.md) ═══
+{
+  const { UNITS, HERO, RAID, LEAGUES, SKINS } = MB, S = MB.SERVER;
+  const pos = a => Array.isArray(a) && a.every(v => typeof v === 'number' && v > 0);
+  for (const [k, D] of Object.entries(DEFS)) {
+    if (D.g === 'deco') { ok(!D.hp && !D.atk && !D.trap, `${k}: украшение в бою не участвует`); continue; }
+    if (D.trap) ok(!D.hp && pos(D.trap.dmg) && D.trap.dmg.length === D.lv && nondec(D.trap.dmg) && D.trap.trig > 0 && (D.trap.gnd ^ D.trap.air) === 1, `${k}: ловушка — урон по уровням, срабатывание, одна цель`);
+    else ok(pos(D.hp) && D.hp.length === D.lv && nondec(D.hp), `${k}: прочность на каждый уровень и растёт`);
+    if (D.atk) ok(pos(D.atk.dmg) && D.atk.dmg.length === D.lv && nondec(D.atk.dmg) && D.atk.cd > 0 && D.atk.rng > D.atk.min && (D.atk.gnd || D.atk.air), `${k}: оборона — урон, перезарядка, дальность`);
+  }
+  ok(DEFS.tower.atk && DEFS.tower.atk.air && DEFS.tower.lv === 5 && DEFS.tower.max[0] >= 1, 'вышка — настоящая оборона: бьёт и летающих, с ратуши 1, 5 уровней');
+  ok(DEFS.cannon.max[0] >= 1 && DEFS.bomb.max[0] >= 1, 'пушка и бомба — с первой ратуши (новичку есть чем защищаться)');
+  ok(DEFS.barracks.army.length === 5 && nondec(DEFS.barracks.army) && DEFS.barracks.max.every(m => m === 1), 'казарма: одна, место растёт с уровнем');
+  const lvs = Object.values(UNITS).map(U => U.lv);
+  ok(Object.keys(UNITS).length >= 4 && Object.keys(UNITS).length <= 6 && lvs.includes(1) && Math.max(...lvs) <= DEFS.barracks.lv, '4–6 отрядов, первый — с казармы 1');
+  for (const [u, U] of Object.entries(UNITS)) {
+    ok([U.sp, U.cost, U.time, U.hp, U.spd, U.rng].every(v => typeof v === 'number' && v > 0) && Number.isInteger(U.sp) && Number.isInteger(U.cost) && Number.isInteger(U.time), `${u}: место, цена, время, жизни, скорость`);
+    ok(['any', 'def', 'wall', 'heal'].includes(U.tgt) && (U.tgt === 'heal' ? U.heal > 0 && U.hr > 0 : U.dmg > 0) && U.n && U.e, `${u}: цель и урон/лечение`);
+    ok(U.sp <= DEFS.barracks.army[U.lv - 1], `${u}: влезает в казарму своего уровня`);
+  }
+  ok(HERO.hp.length === 5 && HERO.dmg.length === 5 && HERO.ab.length === 5 && nondec(HERO.hp) && nondec(HERO.ab), 'герой: по уровню ратуши');
+  ok(RAID.tps === 20 && RAID.max === 180 && RAID.loot.prot.length === 5 && RAID.loot.cap.length === 5 && RAID.loot.day.length === 5 && RAID.league.length === LEAGUES.length && RAID.bonus.length === LEAGUES.length && RAID.chest.length === LEAGUES.length, 'правила набегов: таблицы по ратуше и лигам');
+  ok(RAID.camp.length === RAID.campTh.length && RAID.campTh.every((t, i) => t >= 1 && t <= 5 && (!i || t >= RAID.campTh[i - 1])), 'поход: ратуши лагерей не убывают');
+  ok(Object.keys(RAID.shop.skin).every(k => SKINS[k]) && Object.values(RAID.shop.skin).every(p => (p.g > 0) !== (p.c > 0)), 'облики: есть в SKINS, одна цена (💎 или 🪙)');
+  ok(Object.values(RAID.shop.skin).some(p => p.c > 0) && RAID.shop.q2.c > 0, 'за монеты тоже можно (облик и вторая казарма) — путь без денег');
+  ok(MB.league(0) === 0 && MB.league(99) === 0 && MB.league(100) === 1 && MB.league(2600) === 6 && MB.league(99999) === 6, 'лига по кубкам');
+  ok(S.u && S.hero && S.raid && !('n' in S.u.fighter) && !('info' in S.u.fighter) && !('n' in S.hero) && S.k.cannon.atk.dmg.length === 5, 'base_defs: отряды, герой и правила — без подписей');
+  // 12×12 вмещает обязательное ядро ратуши 5 (без украшений): ратуша, дом, казарма, шахты, склады, оборона
+  const core = ['th', 'house', 'barracks', 'mine', 'store', 'shop', 'tower', 'cannon', 'mortar'].reduce((a, k) => a + DEFS[k].w * DEFS[k].d * DEFS[k].max[4], 0);
+  ok(core + DEFS.bomb.max[4] + DEFS.airmine.max[4] + 30 <= 144, `ратуша 5: ядро + ловушки + 30 заборов влезают (${core} клеток)`);
+}
+
+// ═══ Казарма: тренировка по времени, очередь, место, ускорение, распуск ═══
+{
+  const { UNITS, DEFS: D } = MB;
+  const s = fresh();
+  ok(act(s, 'train', { u: 'fighter', n: 1 }).reason === 'barracks', 'нет казармы — не тренировать');
+  let r = act(s, 'place', { k: 'barracks', x: 9, z: 3, r: 0 });
+  ok(r.ok && s.bricks === 600 - D.barracks.cost[0], 'казарма поставлена', r);
+  ok(act(s, 'train', { u: 'fighter', n: 1 }).reason === 'barracks', 'казарма строится — пока нельзя');
+  RU.norm(s, T0 + 60);
+  const t1 = T0 + 60, cap1 = D.barracks.army[0];
+  ok(RU.barracksLv(s) === 1 && RU.armyCap(s) === cap1 && RU.armySpace(s) === 0, 'казарма 1: место ' + cap1);
+  ok(act(s, 'train', { u: 'tank', n: 1 }, t1).reason === 'ulock', 'силач — с казармы 2');
+  ok(act(s, 'train', { u: 'dragon', n: 1 }, t1).reason === 'kind' && act(s, 'train', { u: 'fighter', n: 0 }, t1).reason === 'args' && act(s, 'train', { u: 'fighter', n: 31 }, t1).reason === 'args' && act(s, 'train', { u: 'fighter', n: 1.5 }, t1).reason === 'args' && act(s, 'train', { n: 1 }, t1).reason === 'args', 'плохие аргументы');
+  const b0 = s.bricks;
+  r = act(s, 'train', { u: 'fighter', n: 3 }, t1);
+  const Tf = UNITS.fighter.time;
+  ok(r.ok && s.bricks === b0 - 3 * UNITS.fighter.cost && s.queue.length === 3 && s.queue.map(q => q.ue).join() === [t1 + Tf, t1 + 2 * Tf, t1 + 3 * Tf].join(), 'трое бойцов: по очереди', s.queue);
+  r = act(s, 'train', { u: 'archer' }, t1 + 5);
+  ok(r.ok && s.queue.at(-1).ue === t1 + 3 * Tf + UNITS.archer.time, 'n не указано — один; встал в конец очереди');
+  RU.norm(s, t1 + Tf);
+  ok(s.army.fighter === 1 && s.queue.length === 3, 'первый готов — в армии');
+  // убрать из очереди: последний боец (середина цепочки) → лучник раньше, кирпичи назад
+  const b1 = s.bricks;
+  r = act(s, 'untrain', { u: 'fighter' }, t1 + Tf);
+  ok(r.ok && s.bricks === b1 + UNITS.fighter.cost && s.queue.length === 2 && s.queue[1].u === 'archer' && s.queue[1].ue === t1 + 2 * Tf + UNITS.archer.time, 'убрал бойца — лучник раньше на ' + Tf + ' с', s.queue);
+  ok(act(s, 'untrain', { u: 'tank' }, t1 + Tf).reason === 'noq' && act(s, 'untrain', { u: 'zzz' }, t1 + Tf).reason === 'args', 'нет такого в очереди / мусор');
+  // место: армия + очередь ≤ места
+  s.bricks = 1000;
+  const used = RU.armySpace(s);
+  ok(act(s, 'train', { u: 'fighter', n: cap1 - used + 1 }, t1 + Tf).reason === 'space' && act(s, 'train', { u: 'fighter', n: cap1 - used }, t1 + Tf).ok && RU.armySpace(s) === cap1, 'места ровно ' + cap1);
+  // ушли в набег — тоже занимают место
+  const s2 = RU.clone(s); s2.out = { fighter: 1 }; s2.queue.pop();
+  ok(act(s2, 'train', { u: 'fighter', n: 1 }, t1 + Tf).reason === 'space', 'армия в набеге занимает место');
+  // ускорение за монеты: 1 🪙 за 2 мин до конца последнего
+  const left = s.queue.at(-1).ue - (t1 + Tf), need = Math.max(1, Math.ceil(left / 120));
+  ok(act(s, 'tfinish', {}, t1 + Tf).reason === 'coins', 'без монет — нет');
+  const w = { coins: need };
+  r = act(s, 'tfinish', {}, t1 + Tf, w);
+  ok(r.ok && r.coins === need && w.coins === 0 && !s.queue.length && RU.spaceOf(s.army) === cap1, `дотренировал всех за ${need} 🪙`);
+  ok(act(s, 'tfinish', {}, t1 + Tf, { coins: 99 }).reason === 'noq', 'очередь пуста — нечего ускорять');
+  // распустить
+  ok(act(s, 'unarm', { u: 'archer', n: 2 }).reason === 'noarmy' && act(s, 'unarm', { u: 'archer', n: 1 }).ok && !('archer' in s.army), 'распустил лучника; лишних — нет');
+  // вторая казарма — вдвое быстрее (округление вверх)
+  const s3 = fresh(); act(s3, 'place', { k: 'barracks', x: 9, z: 3, r: 0 }); RU.norm(s3, T0 + 60); s3.q2 = true;
+  act(s3, 'train', { u: 'archer', n: 2 }, T0 + 60);
+  ok(s3.queue[0].t === Math.ceil(UNITS.archer.time / 2) && s3.queue[1].ue === T0 + 60 + 2 * Math.ceil(UNITS.archer.time / 2), 'вторая казарма: вдвое быстрее');
+  // очередь простаивала — новый встаёт «от сейчас»
+  RU.norm(s3, T0 + 9999); act(s3, 'train', { u: 'fighter', n: 1 }, T0 + 9999);
+  ok(s3.queue[0].ue === T0 + 9999 + Math.ceil(UNITS.fighter.time / 2) && s3.army.archer === 2, 'пустая очередь — от сейчас');
+  // сохранение: очередь и армия — туда-обратно, мусор отброшен
+  const back = RU.sanitize(JSON.parse(JSON.stringify({ ...s3, army: { ...s3.army, nuke: 5, fighter: -1 }, queue: [...s3.queue, { u: 'zzz', ue: 1, t: 1 }] })));
+  ok(JSON.stringify(back.queue) === JSON.stringify(s3.queue) && back.army.archer === 2 && !('nuke' in back.army) && !('fighter' in back.army) && back.q2 === true, 'армия и очередь — туда-обратно');
+  // казарма выше — сильные отряды и больше места
+  const s4 = fresh(); act(s4, 'place', { k: 'barracks', x: 9, z: 3, r: 0 }); RU.norm(s4, T0 + 60);
+  const bk = s4.layout.find(it => it.k === 'barracks'); bk.l = 5; s4.layout.find(it => it.k === 'th').l = 5; s4.bricks = 6000;
+  ok(Object.keys(UNITS).every(u => act(RU.clone(s4), 'train', { u, n: 1 }, T0 + 60).ok) && RU.armyCap(s4) === D.barracks.army[4], 'казарма 5: все отряды и ' + D.barracks.army[4] + ' мест');
+}
+
+// ═══ Казарма: случайные ходы — правила держатся ═══
+{
+  const { UNITS } = MB;
+  const rnd = (() => { let a = 4242; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+  const pick = a => a[Math.floor(rnd() * a.length)];
+  let bad = 0, oks = 0, now = T0;
+  for (let run = 0; run < 20; run++) {
+    const s = fresh(now), w = { coins: 300 };
+    act(s, 'place', { k: 'barracks', x: 9, z: 3, r: 0 }, now); now += 60;
+    const bk = s.layout.find(it => it.k === 'barracks');
+    for (let step = 0; step < 250; step++) {
+      now += Math.floor(rnd() * rnd() * 300);
+      if (rnd() < .05) { RU.norm(s, now); if (bk.l < 5) { bk.l++; s.layout.find(it => it.k === 'th').l = Math.max(bk.l, RU.th(s)); } }
+      if (rnd() < .2) s.bricks = Math.min(RU.cap(s), s.bricks + Math.floor(rnd() * 800));
+      if (rnd() < .03) s.q2 = true;
+      if (rnd() < .04) { s.out = rnd() < .5 ? {} : { fighter: 1 + Math.floor(rnd() * 3) }; }
+      const a = pick(['train', 'train', 'train', 'untrain', 'tfinish', 'unarm']);
+      const g = a === 'train' ? { u: pick(Object.keys(UNITS)), n: 1 + Math.floor(rnd() * 6) } : a === 'untrain' ? (rnd() < .5 ? {} : { u: pick(Object.keys(UNITS)) }) : a === 'unarm' ? { u: pick(Object.keys(UNITS)), n: 1 + Math.floor(rnd() * 3) } : {};
+      const before = JSON.stringify(s), res = RU.act(s, a, g, now, w);
+      if (res.ok) oks++;
+      else if (JSON.stringify(RU.norm(JSON.parse(before), now)) !== JSON.stringify(s)) { bad++; console.log('отказ изменил казарму', a, g, res); }
+      // правила: место, очередь по возрастанию, время каждого — не меньше его длительности, ничего в минус
+      if (res.ok && a === 'train' && RU.armySpace(s) > RU.armyCap(s)) { bad++; console.log('места больше, чем в казарме', s.army, s.out, s.queue.length); }
+      for (let i = 1; i < s.queue.length; i++) if (s.queue[i].ue < s.queue[i - 1].ue + s.queue[i].t) { bad++; console.log('очередь не по порядку', s.queue); break; }
+      if (s.queue.length && s.queue[0].ue <= now) { bad++; console.log('готовый остался в очереди'); }
+      if (s.bricks < 0 || w.coins < 0 || Object.values(s.army).some(n => !(n > 0))) { bad++; console.log('минус или ноль в армии', s.army); }
+      if (bad > 5) break;
+    }
+  }
+  ok(bad === 0 && oks > 1000, `5000 случайных ходов казармы: правила не нарушены (успешных ${oks})`);
+}
+
 // ═══ Новый участок ═══
 {
   const s = fresh();
