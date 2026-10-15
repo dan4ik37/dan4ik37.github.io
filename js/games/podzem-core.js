@@ -176,14 +176,14 @@ function PZ_CORE(){
   ITEMS.door.stack = 99; ITEMS.chest.stack = 99; ITEMS.bed.stack = 99; ITEMS.workbench.stack = 99; ITEMS.furnace.stack = 99; ITEMS.anvil.stack = 99;
   for (const w of WALLS) if (w && w.id) defItem(w.key, w.name, { kind: 'wall', wall: w.key });
   // инструменты и оружие (power — сила за удар, tier — какие блоки берёт, speed — секунд на удар)
-  defItem('pick_copper', 'Медная кирка', { kind: 'tool', tool: 'pick', power: 35, tier: 1, speed: .26, stack: 1, icon: ['pick', '#d9783a'] });
-  defItem('pick_iron', 'Железная кирка', { kind: 'tool', tool: 'pick', power: 48, tier: 2, speed: .24, stack: 1, icon: ['pick', '#c8c0b8'] });
-  defItem('pick_gold', 'Золотая кирка', { kind: 'tool', tool: 'pick', power: 62, tier: 3, speed: .22, stack: 1, icon: ['pick', '#f2c230'] });
-  defItem('pick_deep', 'Глубинная кирка', { kind: 'tool', tool: 'pick', power: 80, tier: 4, speed: .2, stack: 1, icon: ['pick', '#4f7cff'] });
-  defItem('pick_fire', 'Огненная кирка', { kind: 'tool', tool: 'pick', power: 110, tier: 5, speed: .17, stack: 1, icon: ['pick', '#ff5a1a'] });
-  defItem('axe_copper', 'Медный топор', { kind: 'tool', tool: 'axe', power: 40, speed: .3, stack: 1, icon: ['axe', '#d9783a'] });
-  defItem('axe_iron', 'Железный топор', { kind: 'tool', tool: 'axe', power: 60, speed: .26, stack: 1, icon: ['axe', '#c8c0b8'] });
-  defItem('hammer', 'Молоток', { kind: 'tool', tool: 'hammer', power: 40, speed: .3, stack: 1, icon: ['hammer', '#d9783a'] });
+  defItem('pick_copper', 'Медная кирка', { kind: 'tool', tool: 'pick', power: 35, tier: 1, speed: .26, dmg: 4, reach: 2.2, stack: 1, icon: ['pick', '#d9783a'] });
+  defItem('pick_iron', 'Железная кирка', { kind: 'tool', tool: 'pick', power: 48, tier: 2, speed: .24, dmg: 6, reach: 2.3, stack: 1, icon: ['pick', '#c8c0b8'] });
+  defItem('pick_gold', 'Золотая кирка', { kind: 'tool', tool: 'pick', power: 62, tier: 3, speed: .22, dmg: 8, reach: 2.3, stack: 1, icon: ['pick', '#f2c230'] });
+  defItem('pick_deep', 'Глубинная кирка', { kind: 'tool', tool: 'pick', power: 80, tier: 4, speed: .2, dmg: 11, reach: 2.4, stack: 1, icon: ['pick', '#4f7cff'] });
+  defItem('pick_fire', 'Огненная кирка', { kind: 'tool', tool: 'pick', power: 110, tier: 5, speed: .17, dmg: 15, reach: 2.5, stack: 1, icon: ['pick', '#ff5a1a'] });
+  defItem('axe_copper', 'Медный топор', { kind: 'tool', tool: 'axe', power: 40, speed: .3, dmg: 5, reach: 2.2, stack: 1, icon: ['axe', '#d9783a'] });
+  defItem('axe_iron', 'Железный топор', { kind: 'tool', tool: 'axe', power: 60, speed: .26, dmg: 8, reach: 2.3, stack: 1, icon: ['axe', '#c8c0b8'] });
+  defItem('hammer', 'Молоток', { kind: 'tool', tool: 'hammer', power: 40, speed: .3, dmg: 6, reach: 2.2, stack: 1, icon: ['hammer', '#d9783a'] });
   defItem('sword_copper', 'Медный меч', { kind: 'melee', dmg: 9, speed: .32, reach: 2.4, stack: 1, icon: ['sword', '#d9783a'] });
   defItem('sword_iron', 'Железный меч', { kind: 'melee', dmg: 13, speed: .3, reach: 2.6, stack: 1, icon: ['sword', '#c8c0b8'] });
   defItem('sword_silver', 'Серебряный меч', { kind: 'melee', dmg: 16, speed: .29, reach: 2.7, stack: 1, icon: ['sword', '#dfe6ee'] });

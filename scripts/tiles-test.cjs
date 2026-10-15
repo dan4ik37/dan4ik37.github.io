@@ -2,7 +2,7 @@
 // (углы, потолки, ступеньки, полублоки, склоны, платформы), упаковка/сохранение, моды (проверка mod.json и песочница
 // JS/Lua с ошибками), замер скорости генерации и света.
 //   node scripts/tiles-test.cjs            — всё
-//   node scripts/tiles-test.cjs gen,light  — только эти разделы (gen, border, light, liquid, physics, save, mods, sandbox, shade2d, perf)
+//   node scripts/tiles-test.cjs gen,light  — только эти разделы (gen, border, light, liquid, physics, save, mods, sandbox, shade2d, perf, game)
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = path.join(__dirname, '..');
 const ONLY = (process.argv[2] || '').split(',').filter(Boolean);
@@ -595,11 +595,117 @@ function perf(){
   ok(editMs < 15, 'скорость: правка клетки со светом < 15 мс', editMs);
 }
 
+// ═══ 11. Игра целиком в node (scripts/podzem-sim.cjs): инструменты бьют мобов; то, что ставится, ЛКМ только ставит
+// (стены — только молотком); мобы появляются редко, за экраном и одинаково при 60/144/240 Гц ═══
+async function gameTests(){
+  const sim = await require('./podzem-sim.cjs')(SITE);
+  const A = sim.A, T = sim.T, IT = A.PZ.ITEMS;
+  ok(await sim.newWorld('pz-test-game') === 'play', 'игра в node: мир загрузился');
+  let G = sim.G; T.god(true); G.npcs.length = 0;   // Проводник не мешает касаниям
+  await sim.frames(1);
+  const pl = () => sim.G.pl;
+  // ── инструменты — слабое оружие (как в Террарии) ──
+  {
+    G.mobs.length = 0;
+    const px = pl().x + pl().w / 2, feet = pl().y + pl().h;
+    const m = T.mob('slime', px + 1.8, feet), dmg = {};
+    for (const [slot, id] of [[0, 'pick_copper'], [1, 'axe_copper'], [3, 'hammer'], [2, 'sword_copper']]) {
+      Object.assign(m, { hp: m.maxHp, x: px + 1.8 - m.w / 2, y: feet - m.h, vx: 0, vy: 0, hurt: 0 });
+      A.selSlot(slot); const n0 = G.texts.length; pl().useT = 0;
+      sim.aimAt(m.x + m.w / 2, m.y + m.h / 2); G.mouse.l = true; await sim.frames(.2); G.mouse.l = false; await sim.frames(.05);
+      dmg[id] = { hp: m.maxHp - m.hp, num: G.texts.length > n0, kick: m.x + m.w / 2 > px + 1.8 + .05 || m.hurt > 0 };
+    }
+    ok(['pick_copper', 'axe_copper', 'hammer'].every(k => dmg[k].hp > 0 && dmg[k].num), 'урон: кирка, топор и молоток бьют мобов (с цифрой урона)', dmg);
+    ok(dmg.sword_copper.hp > dmg.pick_copper.hp && IT.sword_copper.dmg > IT.pick_copper.dmg, 'урон: меч сильнее кирки', dmg);
+    ok(['pick_copper', 'pick_fire', 'axe_iron', 'hammer'].every(k => IT[k].dmg > 0 && IT[k].reach > 0), 'урон: у всех инструментов есть урон и дальность');
+    G.mobs.length = 0;
+  }
+  // ── факел (и всё, что ставится): ЛКМ только ставит — никаких «копать вместо»; стену ломает только молоток ──
+  {
+    const TORCH = A.PZ.TILE.torch.id, WD = A.PZ.WALL.dirtwall.id;
+    const foot = Math.floor(pl().y + pl().h - .01), px = Math.floor(pl().x + pl().w / 2), tx = px + 3, ty = foot - 2;
+    const area = f => { for (let y = foot - 5; y <= foot - 1; y++) for (let x = px + 1; x <= px + 5; x++) f(x, y); };
+    const walls = () => { let n = 0; area((x, y) => { if (A.wallAt(x, y)) n++; }); return n; };
+    const torches = () => { let n = 0; area((x, y) => { if (A.fgAt(x, y) === TORCH) n++; }); return n; };
+    const torchesHeld = () => G.CH.inv.reduce((s, q) => s + (q && q.id === 'torch' ? q.n : 0), 0) + G.items.reduce((s, q) => s + (q.id === 'torch' ? q.n : 0), 0);
+    const reset = (n = 8, slot = 4) => {
+      G.mobs.length = 0; G.items.length = 0; area((x, y) => T.setCell(x, y, 0, 0, WD));
+      G.CH.inv[4] = { id: 'torch', n }; A.selSlot(slot);
+      G.opt.smart = false; G.shift = false; G.autoPrev = -1; G.mouse.l = false; G.aim.src = 'mouse'; sim.touch.use = false; sim.C.held.clear(); pl().useT = 0;
+    };
+    const hold = async sec => { sim.aimAt(tx + .5, ty + .5); G.mouse.l = true; await sim.frames(sec); G.mouse.l = false; };
+    const cases = [
+      ['щелчок', () => hold(1 / 60)],
+      ['ЛКМ держат', () => hold(1.5)],
+      ['умный курсор (Ctrl)', () => { G.opt.smart = true; return hold(1.5); }],
+      ['Shift — «сам подберу инструмент»', async () => { G.shift = true; G.autoPrev = G.CH.sel; await hold(1.5); G.shift = false; }],
+      ['касание пальцем', async () => { const [sx, sy] = sim.screenOf(tx + .5, ty + .5); if (!A.tapTouch(sx, sy)) A.useItem(); }],
+      ['палец держат', async () => { const [sx, sy] = sim.screenOf(tx + .5, ty + .5); A.aimTouch(sx, sy); sim.touch.use = true; await sim.frames(1.5); sim.touch.use = false; }],
+      ['геймпад (прицел стиком, «атака»)', async () => { const p = pl(); G.aim.src = 'pad'; G.pad.cx = tx + .5 - (p.x + p.w / 2); G.pad.cy = ty + .5 - (p.y + p.h * .45); sim.C.held.add('attack'); await sim.frames(1.5); sim.C.held.clear(); }],
+    ];
+    for (const [name, fn] of cases) {
+      reset(); await sim.frames(.05);
+      const w0 = walls(); await fn(); await sim.frames(.2);
+      const hand = G.CH.inv[G.CH.sel];
+      ok(walls() === w0 && torches() >= 1 && (!hand || hand.id === 'torch'), `факел: ${name} — ставится, стена цела`, { walls: [w0, walls()], torches: torches(), hand: hand && hand.id });
+    }
+    // последний факел, ЛКМ не отпускают: поставили — пустая рука его же не ломает (и стену не трогает)
+    reset(1); await sim.frames(.05);
+    let placed = false, lost = 0; sim.onFrame = () => { const on = A.fgAt(tx, ty) === TORCH; if (on) placed = true; else if (placed) lost++; };
+    await hold(3); await sim.frames(.2); sim.onFrame = null;
+    ok(placed && !lost && torches() === 1 && torchesHeld() === 0 && walls() === 25, 'факел: последний поставлен и остался (пустая рука не копает, пока ЛКМ не отпустили)', { lost, torches: torches(), held: torchesHeld(), walls: walls() });
+    // стены: кирка и пустая рука не трогают, молоток ломает
+    reset(8, 0); await sim.frames(.05); await hold(1.5);
+    ok(!!A.wallAt(tx, ty), 'стена: кирка стену не ломает');
+    reset(8, 3); await sim.frames(.05); await hold(3);
+    ok(!A.wallAt(tx, ty), 'стена: молоток ломает');
+    // Shift с киркой в руке над пустой клеткой со стеной — молоток не подаётся (стены — только если сам взял молоток)
+    reset(8, 0); await sim.frames(.05); G.shift = true; G.autoPrev = G.CH.sel; await hold(1.5); G.shift = false;
+    ok(!!A.wallAt(tx, ty) && G.CH.inv[G.CH.sel]?.id !== 'hammer', 'стена: Shift не подаёт молоток и стену не ломает', G.CH.inv[G.CH.sel]);
+  }
+  // ── появление мобов ──
+  {
+    // за 60 с при частоте экрана hz; kill — сразу убирать (видно чистую скорость), иначе — следим за пределом рядом
+    async function spawnRun(hz, sec, time, kill){
+      await A.stopWorld(false);
+      await sim.newWorld('pz-test-spawn'); const G = sim.G; T.god(true); T.time(time); G.npcs.length = 0;
+      const seen = new WeakSet(), log = []; let maxNear = 0; const t0 = G.t;
+      sim.onFrame = () => {
+        const vw = G.R.w / G.cam.tile, vh = G.R.h / G.cam.tile, p = G.pl;
+        for (const m of G.mobs) if (!seen.has(m) && !m.D.boss) {
+          seen.add(m);
+          log.push({ t: +(G.t - t0).toFixed(2), out: Math.max(Math.abs(m.x + m.w / 2 - G.cam.x) - m.w / 2 - vw / 2, Math.abs(m.y + m.h / 2 - G.cam.y) - m.h / 2 - vh / 2), dist: Math.hypot(m.x + m.w / 2 - p.x - p.w / 2, m.y + m.h / 2 - p.y - p.h / 2) });
+        }
+        if (kill) G.mobs.length = 0;
+        else maxNear = Math.max(maxNear, G.mobs.filter(m => !m.D.boss && Math.abs(m.x - p.x) <= 110 && Math.abs(m.y - p.y) <= 80).length);   // участок героя (дальше мобы исчезают)
+      };
+      await sim.frames(sec, hz); sim.onFrame = null;
+      return { log, maxNear, perMin: +(log.filter(q => q.t >= 25).length / ((sec - 25) / 60)).toFixed(1) };
+    }
+    const night = {};
+    for (const hz of [60, 144, 240]) night[hz] = await spawnRun(hz, 205, .7, true);
+    const per = [60, 144, 240].map(hz => night[hz].perMin);
+    console.log(`  мобы ночью на поверхности, в минуту (60/144/240 Гц): ${per.join(' / ')}; первые появились через ${[60, 144, 240].map(hz => night[hz].log[0]?.t).join(' / ')} с`);
+    ok(Math.max(...per) - Math.min(...per) <= .4, 'мобы: скорость появления одинакова при 60, 144 и 240 Гц', per);
+    ok(per[0] >= 3 && per[0] <= 12, 'мобы: ночью на поверхности — 3…12 в минуту (было 60, как «кровавая луна»)', per);
+    const day = await spawnRun(60, 205, .2, true);
+    ok(day.perMin < per[0] * .6, 'мобы: днём реже, чем ночью', { day: day.perMin, night: per[0] });
+    const all = [...night[60].log, ...night[240].log, ...day.log];
+    ok(all.every(q => q.t >= 15), 'мобы: первые 15 с после входа в мир — тихо', all.slice(0, 3));
+    const bad = all.filter(q => q.out < 2 || q.dist < 16);
+    ok(all.length > 10 && !bad.length, 'мобы: появляются только за экраном (+2 клетки) и не ближе 16 клеток к герою', bad.slice(0, 4));
+    const keep = await spawnRun(60, 200, .7, false);
+    ok(keep.maxNear <= 6, 'мобы: рядом не больше предела (поверхность, ночь — 6)', keep.maxNear);
+  }
+  await A.stopWorld(false);
+}
+
 (async () => {
   try {
     if (want('mods')) await modsTests();
     if (want('sandbox')) await sandboxTests();
     if (want('perf')) perf();
+    if (want('game')) await gameTests();
   } catch (e) { fail++; console.log('FAIL исключение', e && e.stack || e); }
   console.log(`tiles-test: ${pass} ok, ${fail} fail (${((Date.now() - t00) / 1000).toFixed(1)} с)`);
   process.exit(fail ? 1 : 0);
