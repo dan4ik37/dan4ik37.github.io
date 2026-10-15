@@ -672,6 +672,7 @@
   function start3d(){
     const E = window.D37E, wrap = S.wrap;
     const R = S.R = E.renderer(wrap);
+    R.guardBlack = true;   // страж графики (post.js): днём здесь кадр не бывает чёрным (пещер нет) — значит, сломалось
     R.r.domElement.classList.add('wld-gl');
     // генерация кадров (×2): другие игроки — подвижные (свой персонаж движок знает сам — по R.follow)
     R.fgMovers = () => { const L = []; if (S?.players) for (const p of S.players.values()) if (p.ch) L.push([p.key, p.ch.x, p.ch.y, p.ch.z]); return L; };

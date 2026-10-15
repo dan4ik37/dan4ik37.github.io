@@ -1080,7 +1080,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         const c = out.comp = crushed(rep.A, rep.F);
         if (c.n >= 12 && c.bad > c.n * .25) { off(P.ao.on && on('ao') ? (P.fol && on('fol') ? 'fol' : 'ao') : 'post', 'crush', `${c.bad}/${c.n}`); return; }
       }
-      const day = out.day = dayLike();
+      // «днём чёрный кадр» — только где темно не бывает (игра ставит R.guardBlack: «Мир Денчика»); в пещерах «Кубомира»,
+      // тёмных мирах студии чёрный кадр днём — нормально
+      const day = out.day = dayLike() && !!R.guardBlack;
       if (day && A.n >= 96 && A.black >= A.n * .9) { if (++G.black >= 2) ladder('black', `${A.black}/${A.n}`); } else G.black = 0;
       if (day && A.ground >= 48 && A.gblack >= A.ground * .5) gSend('gfx_dark', { what: 'ground', why: 'day', prog: `${A.gblack}/${A.ground}`, ...base() });
     }

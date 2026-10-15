@@ -1200,7 +1200,7 @@ function boundsOk(R){
   const props = new Map(), progs = [];
   const mkG = () => {
     const r = mkR({ programs: progs, getContext: () => gl, debug: { checkShaderErrors: false }, properties: { get: m => { if (!props.has(m)) props.set(m, {}); return props.get(m); } }, readRenderTargetPixels: (t, x, y, w, h, b) => b.fill(255) });
-    const R = { ...R1, r, scene: new T.Scene(), applyGfx(){}, optBase: {} };
+    const R = { ...R1, r, scene: new T.Scene(), applyGfx(){}, optBase: {}, guardBlack: true };
     R.post = E.post(R); R.post.setOpts({ ao: 'on', aa: 'fxaa' }); R.post.setSize(800, 450, 1);
     R.guard = E.gfxGuard(R); return R;
   };
@@ -1248,7 +1248,7 @@ function boundsOk(R){
   const judgeCase = (rep, opt = {}) => {
     for (const k in store) delete store[k];
     progs.length = 0;
-    const R = mkG(); if (opt.night) R.sky = { lightI: 0, night: 1 }; if (opt.rt) R.post.setOpts({ ao: 'on', aa: 'fxaa', rt: 'on' });
+    const R = mkG(); if (opt.night) R.sky = { lightI: 0, night: 1 }; if (opt.cave) R.guardBlack = false; if (opt.rt) R.post.setOpts({ ao: 'on', aa: 'fxaa', rt: 'on' });
     const reps = Array.isArray(rep) ? rep : [rep]; let n = 0;
     R.post.selfTest = () => ({ codes: R.post.codesOn(), ...reps[Math.min(n++, reps.length - 1)] });
     for (let i = 0; i < reps.length; i++) R.guard.test(R.scene, cam);
@@ -1266,6 +1266,7 @@ function boundsOk(R){
   const black = { ...GOOD, A: B(() => [0, 0, 0, 255]), F: B(() => [0, 0, 0, 255]) };
   ok(judgeCase([black]).off === '' && judgeCase([black, black]).off === 'codes', 'днём весь кадр чёрный — 2 проверки подряд → без кодов (дальше — без своих кусков, «низкая»)');
   ok(judgeCase([black, black, black], { night: true }).off === '', 'ночью чёрный кадр — это ночь');
+  ok(judgeCase([black, black, black], { cave: true }).off === '', 'без R.guardBlack (пещеры «Кубомира», тёмные миры студии) чёрный кадр днём — не поломка');
   ok(judgeCase([{ ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) }, { ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) }]).off === 'codes', 'в сцене «не числа» 2 раза подряд → по ступенькам');
   // не собралась программа сцены, а коды в альфе включены — коды тут ни при чём (это не текст шейдера): сразу без своих кусков
   for (const k in store) delete store[k];
