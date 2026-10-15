@@ -19,7 +19,17 @@
     slime: { title: 'Слизень', hp: 8, w: .8, h: .8, speed: 3, passive: false, dmg: 2, drops: [['slime_ball', 1, 2]], snd: 'kb_squish', body: '#6fcf5a', spot: '#4caa40', legs: '#4caa40', head: '#6fcf5a', hop: true },
   };
 
-  window.KubomirEnts = { MOBS, create, onChunk(){}, onDrop(){} };
+  window.KubomirEnts = { MOBS, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice() };
+  // цвет освещения существа по свету клетки: небо — белым, факелы и лава — своим цветом (как у кубиков) → [r, g, b, яркость]
+  const LTC = [1, 1, 1, 1];
+  function lightTint(L, min = .06){
+    // кривая — как у кубиков (voxel-render.js): по самому яркому каналу, в квадрате — оттенок света не меняется
+    const s = (L >>> 12) & 15, sk = (s / 15) ** 2, r0 = (L >>> 8) & 15, g0 = (L >>> 4) & 15, b0 = L & 15, m = Math.max(r0, g0, b0) / 15, k = 1.5 / 15 * m / ((4 - 3 * m) ** 2);
+    const r = r0 * k, g = g0 * k, b = b0 * k;
+    LTC[0] = Math.min(1.4, Math.max(sk, r, min)); LTC[1] = Math.min(1.4, Math.max(sk, g, min)); LTC[2] = Math.min(1.4, Math.max(sk, b, min));
+    LTC[3] = Math.max(LTC[0], LTC[1], LTC[2]);
+    return LTC;
+  }
 
   function create(S){
     const T = S.R.T, R = S.R, VR = S.VR, W = S.W;
@@ -32,7 +42,7 @@
       const r = X.rng;
       const e = { x, y, z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lk: -1, ground: false };
       if (scatter) { e.vx = (r() - .5) * 6; e.vz = (r() - .5) * 6; e.vy = 4; }
-      e.mesh = VR.itemMesh(e.s.id, 15, 0);
+      e.mesh = VR.itemMesh(e.s.id, 15 << 12);
       const flat = e.mesh.geometry.userData.flat;
       e.mesh.scale.setScalar(flat ? .42 : .28); e.k = flat ? .21 : .14;
       R.scene.add(e.mesh);
@@ -79,7 +89,7 @@
         m.position.set(e.x - S.ox, e.y + e.k + .08 + Math.sin(t * 2.4 + e.ph) * .05, e.z - S.oz);
         m.rotation.y = t * 1.6 + e.ph;
         const L = W.lightAt(e.x, e.y + .3, e.z);
-        if (L !== e.lk) { e.lk = L; VR.itemLight(m.geometry, L >> 4, L & 15); }
+        if (L !== e.lk) { e.lk = L; VR.itemLight(m.geometry, L); }
       }
     }
 
@@ -102,7 +112,7 @@
     }
     X.debris = (x, y, z, bid, n = 14, colOverride) => {
       const b = V().blocks[bid], layer = b?.texf ? b.texf.side : 0, P = texAvg(layer), r = X.rng;
-      const L = W.lightAt(x, y + 1, z), k = Math.max(((L >> 4) / 15) ** 2, ((L & 15) / 15) ** 2, .08) * .8;
+      const L = W.lightAt(x, y + 1, z), k = Math.max((V().lSky(L) / 15) ** 2, (V().lBlk(L) / 15) ** 2, .08) * .8;
       for (let i = 0; i < n; i++) {
         const j = dHead; dHead = (dHead + 1) % DN;
         dPos[j * 3] = x + .5 + (r() - .5) * .7 - S.ox; dPos[j * 3 + 1] = y + .5 + (r() - .5) * .7; dPos[j * 3 + 2] = z + .5 + (r() - .5) * .7 - S.oz;
@@ -136,7 +146,7 @@
     // ═══ Падающий песок и гравий ═══
     function startFall(x, y, z, v){
       W.set(x, y, z, 0, { urgent: 2 });
-      const name = V().blocks[v & 0xfff].name, m = VR.itemMesh(name, 15, 0);
+      const name = V().blocks[v & 0xfff].name, m = VR.itemMesh(name, 15 << 12);
       m.scale.setScalar(1); R.scene.add(m);
       X.falling.push({ x: x + .5, y, z: z + .5, vy: 0, v, m });
     }
@@ -286,7 +296,7 @@
         if (m.y < -10) { removeMob(m); continue; }
         m.walk += Math.hypot(m.vx, m.vz) * dt * 3.2;
         // зомби горят на солнце
-        if (M.burns && !night) { const L = W.lightAt(m.x, m.y + M.h, m.z); if ((L >> 4) >= 13) { m.burnT += dt; if (m.burnT > 1) { m.burnT = 0; X.debris(Math.floor(m.x), Math.floor(m.y + 1), Math.floor(m.z), 0, 6, [1, .5, .1]); X.damage(m, 2, 0, 0, 'sun'); if (m.hp <= 0) continue; } } }
+        if (M.burns && !night) { const L = W.lightAt(m.x, m.y + M.h, m.z); if (V().lSky(L) >= 13) { m.burnT += dt; if (m.burnT > 1) { m.burnT = 0; X.debris(Math.floor(m.x), Math.floor(m.y + 1), Math.floor(m.z), 0, 6, [1, .5, .1]); X.damage(m, 2, 0, 0, 'sun'); if (m.hp <= 0) continue; } } }
         if (TC.lava > .1 || TC.hurt >= 4) X.damage(m, 4 * dt * 5, 0, 0, 'lava');
         if (m.sndT <= 0) { m.sndT = 6 + m.rng() * 14; if (dp < 20) S.AU?.play(M.snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .5, rate: .9 + m.rng() * .2 }); }
       }
@@ -299,9 +309,9 @@
         if (m.parts.legs) m.parts.legs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? sw : -sw); });
         if (m.parts.arms) m.parts.arms.forEach((a, i) => { a.rotation.x = -1.35 + (i ? sw : -sw) * .3; });
         if (M.hop) { const sq = m.ground ? 1 : 1.12; g.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)); }
-        // яркость по свету клетки; красная вспышка при уроне
-        const L = W.lightAt(m.x, m.y + M.h * .6, m.z), k = Math.max(((L >> 4) / 15) ** 2, ((L & 15) / 15) ** 2 * .9, .06);
-        if (Math.abs(k - m.k) > .02 || m.hurtT > 0 || m.hurtWas) { m.k = k; m.parts.mat.color.setRGB(m.hurtT > 0 ? Math.min(1.6, k * 1.6) : k, m.hurtT > 0 ? k * .3 : k, m.hurtT > 0 ? k * .3 : k); m.hurtWas = m.hurtT > 0; }
+        // яркость и цвет по свету клетки (у факела — тёплые); красная вспышка при уроне
+        const L = W.lightAt(m.x, m.y + M.h * .6, m.z), lc = lightTint(L, .06), k = lc[3];
+        if (Math.abs(k - m.k) > .02 || L !== m.lk || m.hurtT > 0 || m.hurtWas) { m.k = k; m.lk = L; m.parts.mat.color.setRGB(m.hurtT > 0 ? Math.min(1.6, k * 1.6) : lc[0], m.hurtT > 0 ? k * .3 : lc[1], m.hurtT > 0 ? k * .3 : lc[2]); m.hurtWas = m.hurtT > 0; }
       }
     }
     function isNight(){ const t = S.R.lighting.time; return t < 5.6 || t > 18.8; }
@@ -321,7 +331,7 @@
         const q = tryAt(20, 44);
         if (q) {
           const h = W.heightAt(q.x, q.z), top = W.get(q.x, h - 1, q.z);
-          if (h > 0 && (top === Vx.ID.grass || top === Vx.ID.snow_grass) && W.get(q.x, h, q.z) === 0 && W.get(q.x, h + 1, q.z) === 0 && ((W.lightAt(q.x, h, q.z) >> 4) >= 9)) {
+          if (h > 0 && (top === Vx.ID.grass || top === Vx.ID.snow_grass) && W.get(q.x, h, q.z) === 0 && W.get(q.x, h + 1, q.z) === 0 && (Vx.lSky(W.lightAt(q.x, h, q.z)) >= 9)) {
             const type = ['cow', 'cow', 'pig', 'pig', 'chicken'][Math.floor(r() * 5)], n = 1 + Math.floor(r() * 3);
             for (let k = 0; k < n; k++) X.spawn(type, q.x + .5 + (r() - .5) * 2, h + .01, q.z + .5 + (r() - .5) * 2);
           }
@@ -335,7 +345,7 @@
           for (let y = Math.min(h + 1, V().H - 3); y > 2; y -= 1 + Math.floor(r() * 3)) {
             const f = W.get(q.x, y - 1, q.z), a = W.get(q.x, y, q.z), b = W.get(q.x, y + 1, q.z);
             if (f <= 0 || !Vx.T.solid[f] || Vx.T.shape[f] !== 1 || a !== 0 || b !== 0) continue;
-            const L = W.lightAt(q.x, y, q.z), sky = (L >> 4) * (night ? .25 : 1), lit = Math.max(sky, L & 15);
+            const L = W.lightAt(q.x, y, q.z), sky = Vx.lSky(L) * (night ? .25 : 1), lit = Math.max(sky, Vx.lBlk(L));
             if (lit > 6) continue;
             if (Math.abs(y - P.y) > 24) continue;
             X.spawn(r() < .8 ? 'zombie' : 'slime', q.x + .5, y + .01, q.z + .5);
@@ -445,7 +455,7 @@
           const lx = Math.floor(r() * 16), lz = Math.floor(r() * 16), y = 1 + Math.floor(r() * (c.maxY || 100));
           const x = c.cx * 16 + lx, z = c.cz * 16 + lz, v = c.ids[(lx << 11) | (lz << 7) | y], t = v & 0xfff;
           if (t === ID.dirt) {   // трава с соседей
-            const up = W.get(x, y + 1, z); if (up !== 0 || ((W.lightAt(x, y + 1, z) >> 4) < 9)) continue;
+            const up = W.get(x, y + 1, z); if (up !== 0 || (V().lSky(W.lightAt(x, y + 1, z)) < 9)) continue;
             for (let q = 0; q < 4; q++) { const nx = x + Math.floor(r() * 3) - 1, ny = y + Math.floor(r() * 3) - 1, nz = z + Math.floor(r() * 3) - 1; if (W.get(nx, ny, nz) === ID.grass) { W.set(x, y, z, ID.grass, { urgent: 0 }); break; } }
           } else if (t === ID.grass) { const up = W.get(x, y + 1, z); if (up > 0 && T.opaque[up]) W.set(x, y, z, ID.dirt, { urgent: 0 }); }
           else if (Vx.blocks[t]?.name.startsWith('sapling_') && r() < .35) growTree(x, y, z, Vx.blocks[t].name.slice(8));

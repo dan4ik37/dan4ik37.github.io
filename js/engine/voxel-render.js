@@ -4,9 +4,13 @@
 // ═══════════════════════════════════════
 // VR = V.renderer(R) — R из D37E.renderer (небо по времени суток, солнце/луна с тенями, туман, постобработка, FSR — всё
 // движка). Материал — Ламберт движка + свой кусок шейдера: свет солнца и неба умножается на «свет неба» кубика (в пещере
-// темно и днём), свет факелов и лавы добавляется своим тёплым цветом, углы — AO. VR.setChunk(c, m) / dropChunk(c) —
-// сетки чанка (m — ответ потока); VR.setOrigin(ox, oz) — сдвиг начала координат (далеко от нуля float32 дрожит: сцена
-// всегда рядом с нулём); VR.select(hit), VR.crack(x, y, z, стадия), VR.itemMesh(имя, свет), V.icon(имя, размер) — значок.
+// темно и днём), ЦВЕТНОЙ свет факелов, лавы, ламп (три канала из сетки, плавно по вершинам, факелы чуть мерцают) добавляется
+// своим цветом, углы — AO; факел, лава, лампа светятся сами (не темнеют ночью). Настоящие лампы движка (R.lights) освещают
+// без «света неба» — в пещере тоже. Вода — блики солнца и отражение неба под острым углом (рябь кодом).
+// Шейдер не собрался (бывает на старых телефонах) — VR сам переходит на простой (атлас, без мерцания и бликов): VR.safe.
+// VR.setChunk(c, m) / dropChunk(c) — сетки чанка (m — ответ потока); VR.setOrigin(ox, oz) — сдвиг начала координат (далеко
+// от нуля float32 дрожит: сцена всегда рядом с нулём); VR.select(hit), VR.crack(x, y, z, стадия), VR.itemMesh(имя, свет),
+// VR.itemLight(геометрия, свет клетки) — свет вещи (W.lightAt: небо << 12 | R << 8 | G << 4 | B), V.icon(имя, размер) — значок.
 (() => {
   const E = window.D37E = window.D37E || {};
   const V = E.vox = E.vox || {};
@@ -65,9 +69,135 @@
   V.iconURL = (name, size = 40) => { const c = V.icon(name, size); return c._url || (c._url = c.toDataURL()); };
   V.iconsReset = () => { iconCache.clear(); tileCache.clear(); };
 
+  // ═══ Шейдеры (куски для Ламберта движка) ═══
+  // vd.w: AO (0–1) | свечение грани 0…15 (2–5) | флаги (14–15: 1 — качается на ветру); lt: небо, R, G, B — ×4 (0…60)
+  const VS_HEAD = `
+attribute vec4 vd;
+attribute vec4 lt;
+varying vec3 vUvL;
+varying vec4 vLt;
+varying float vAo;
+varying float vEm;
+uniform float uTime;
+uniform float uFlick;
+#ifdef D37_WATER
+varying vec3 vWp;
+#endif
+vec3 d37N( float i ) {
+  if ( i < 0.5 ) return vec3( 1.0, 0.0, 0.0 );
+  if ( i < 1.5 ) return vec3( -1.0, 0.0, 0.0 );
+  if ( i < 2.5 ) return vec3( 0.0, 1.0, 0.0 );
+  if ( i < 3.5 ) return vec3( 0.0, -1.0, 0.0 );
+  if ( i < 4.5 ) return vec3( 0.0, 0.0, 1.0 );
+  if ( i < 5.5 ) return vec3( 0.0, 0.0, -1.0 );
+  return vec3( 0.0, 1.0, 0.0 );
+}`;
+  const VS_NORMAL = `
+vec3 objectNormal = d37N( floor( vd.z / 4096.0 ) );`;
+  // свет: кривая «как в играх-кубиках» (l / (4 − 3l)) — там она в гамма-пространстве, а у нас свет линейный: поэтому
+  // свет блоков — в квадрате (у факела ярко, хвост тёмный — видно «пятно»), свет неба — в степени 1,5 (тень под деревом,
+  // вход в пещеру); у цветного света кривая — по самому яркому каналу (оттенок не меняется); мерцание факелов — своё у
+  // каждого места (по мировым координатам), только у света блоков
+  const VS_BEGIN = (simple) => `
+vec3 transformed = vec3( position );
+float d37w = vd.w;
+float d37f = floor( d37w / 16384.0 );
+vUvL = vec3( vd.x / 16.0, vd.y / 16.0, mod( vd.z, 4096.0 ) );
+vec4 d37l = clamp( lt / 60.0, 0.0, 1.0 );
+float d37m = max( max( d37l.y, d37l.z ), d37l.w );
+float d37s = d37l.x / ( 4.0 - 3.0 * d37l.x );
+float d37k = 4.0 - 3.0 * d37m;
+vec4 d37c = vec4( d37s * sqrt( d37s ), d37l.yzw * d37m / ( d37k * d37k ) );
+vec4 d37wp = modelMatrix * vec4( transformed, 1.0 );
+${simple ? 'float d37fl = 1.0;' : `float d37h = d37wp.x * 1.31 + d37wp.z * 1.73 + d37wp.y * 0.71;
+float d37fl = 1.0 + uFlick * ( 0.07 * sin( uTime * 8.7 + d37h ) + 0.045 * sin( uTime * 15.3 + d37h * 2.1 ) );`}
+vLt = vec4( d37c.x, d37c.yzw * d37fl );
+vAo = mod( d37w, 4.0 ) / 3.0;
+vEm = mod( floor( d37w / 4.0 ), 16.0 ) / 15.0;
+#ifdef D37_WATER
+vWp = d37wp.xyz;
+#endif
+if ( d37f > 0.5 && d37f < 1.5 ) {
+  float d37ph = d37wp.x * 0.7 + d37wp.z * 0.9 + d37wp.y * 0.3;
+  transformed.x += sin( uTime * 1.6 + d37ph ) * 0.8;
+  transformed.z += cos( uTime * 1.2 + d37ph ) * 0.6;
+}`;
+  const FS_COMMON = `
+varying vec3 vUvL;
+varying vec4 vLt;
+varying float vAo;
+varying float vEm;
+uniform float uTime;
+uniform float uMinAmb;
+uniform float uBlockK;
+uniform float uEmK;
+uniform float uDay;
+uniform float uBloomK;
+uniform vec3 uSunV;
+uniform vec3 uSunC;
+uniform vec3 uSkyC;
+vec3 d37pt = vec3( 0.0 );
+#ifdef D37_WATER
+varying vec3 vWp;
+#endif`;
+  const FS_TEX2 = `
+uniform highp sampler2DArray uTex;
+vec4 d37Tex( vec3 p ) { return texture( uTex, p ); }`;
+  const FS_TEX1 = `
+uniform sampler2D uTex;
+uniform float uAtlasN;
+vec4 d37Tex( vec3 p ) {
+  vec2 tile = vec2( mod( p.z, uAtlasN ), floor( p.z / uAtlasN ) );
+  vec2 f = clamp( fract( p.xy ) * 16.0, 0.5, 15.5 );
+  return texture2D( uTex, ( tile * 16.0 + f ) / ( uAtlasN * 16.0 ) );
+}`;
+  const FS_MAP = `
+vec3 d37uv = vUvL;
+#ifdef D37_WATER
+d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );
+#endif
+vec4 d37c = d37Tex( d37uv );
+diffuseColor *= d37c;`;
+  const FS_COLOR = `
+#if defined( USE_COLOR )
+diffuseColor.rgb *= vColor * vColor;
+#endif`;
+  // солнце/луна — только где есть «свет неба» (в пещере днём темно), лампы движка (d37pt) — везде; свет блоков — своим цветом
+  // (днём под открытым небом его почти не видно — как в жизни: факел на солнце не светит пятном); светящиеся грани (факел,
+  // лава, лампа) — сами
+  const FS_LIGHT = `
+float d37ao = 0.42 + 0.58 * vAo;
+vec3 d37sun = reflectedLight.directDiffuse - d37pt;
+reflectedLight.directDiffuse = d37sun * vLt.x * d37ao + d37pt * ( d37ao * ( 1.0 - 0.6 * vEm ) );
+reflectedLight.indirectDiffuse *= max( vLt.x, uMinAmb ) * d37ao;
+reflectedLight.indirectDiffuse += diffuseColor.rgb * vLt.yzw * ( uBlockK * ( 1.0 - 0.72 * uDay * vLt.x ) * ( 1.0 - 0.8 * vEm ) ) * d37ao;
+totalEmissiveRadiance += diffuseColor.rgb * vEm * uEmK;`;
+  // свечение (bloom) у светящихся граней — метка в альфе, как у R.bloom движка (только на «высокой»: uBloomK > 0)
+  const FS_BLOOM = `
+#ifdef OPAQUE
+if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
+#endif`;
+  // вода: рябь по мировым координатам → блик солнца/луны и небо под острым углом (френель)
+  const FS_WATER = `
+#ifdef D37_WATER
+{
+  vec3 d37V = normalize( vViewPosition );
+  float d37a = uTime * 1.3;
+  vec3 d37pw = vec3( sin( vWp.x * 1.7 + d37a ) * 0.06 + sin( vWp.z * 2.3 - d37a * 1.3 ) * 0.04, 0.0, cos( vWp.z * 1.9 + d37a * 0.9 ) * 0.06 + cos( vWp.x * 2.9 - d37a * 1.1 ) * 0.04 );
+  vec3 d37n = normalize( normal + ( viewMatrix * vec4( d37pw, 0.0 ) ).xyz );
+  float d37fr = pow( 1.0 - max( dot( d37n, d37V ), 0.0 ), 4.0 );
+  vec3 d37r = reflect( -d37V, d37n );
+  float d37sp = pow( max( dot( d37r, uSunV ), 0.0 ), 90.0 );
+  reflectedLight.indirectDiffuse = mix( reflectedLight.indirectDiffuse, uSkyC * vLt.x, d37fr * 0.55 );
+  totalEmissiveRadiance += uSunC * d37sp * vLt.x;
+  diffuseColor.a = min( 1.0, diffuseColor.a + d37fr * 0.3 );
+}
+#endif`;
+
   V.renderer = function (R, opts = {}){
-    const T = R.T, gl2 = !!R.r.capabilities.isWebGL2;
-    const VR = { chunks: new Set(), ox: 0, oz: 0, stats: { meshes: 0, quads: 0, poolFree: 0, bytes: 0 } };
+    const T = R.T, gl2real = !!R.r.capabilities.isWebGL2;
+    const VR = { chunks: new Set(), ox: 0, oz: 0, stats: { meshes: 0, quads: 0, poolFree: 0, bytes: 0 }, safe: !!opts.safe };
+    let gl2 = gl2real && !VR.safe;   // простой режим — атлас (texture2D) и на WebGL2
     // ── текстуры ──
     let tex = null, atlasN = 1;
     function buildTextures(){
@@ -90,105 +220,45 @@
       tex.needsUpdate = true;
       U.uTex.value = tex; U.uAtlasN.value = atlasN;
     }
-    const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTime: { value: 0 }, uTorch: { value: new T.Color(1.35, 1.0, .62) }, uMinAmb: { value: .045 }, uGlow: { value: 1 } };
+    const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
+      uDay: { value: 1 }, uBloomK: { value: 0 },
+      uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) } };
     VR.U = U;
     // ── материалы ──
-    const VS_HEAD = `
-attribute vec4 vd;
-varying vec3 vUvL;
-varying vec3 vLit;
-uniform float uTime;
-vec3 d37N( float i ) {
-  if ( i < 0.5 ) return vec3( 1.0, 0.0, 0.0 );
-  if ( i < 1.5 ) return vec3( -1.0, 0.0, 0.0 );
-  if ( i < 2.5 ) return vec3( 0.0, 1.0, 0.0 );
-  if ( i < 3.5 ) return vec3( 0.0, -1.0, 0.0 );
-  if ( i < 4.5 ) return vec3( 0.0, 0.0, 1.0 );
-  if ( i < 5.5 ) return vec3( 0.0, 0.0, -1.0 );
-  return vec3( 0.0, 1.0, 0.0 );
-}`;
-    const VS_NORMAL = `
-vec3 objectNormal = d37N( floor( vd.z / 4096.0 ) );`;
-    const VS_BEGIN = `
-vec3 transformed = vec3( position );
-float d37w = vd.w;
-float d37f = floor( d37w / 16384.0 );
-vUvL = vec3( vd.x / 16.0, vd.y / 16.0, mod( vd.z, 4096.0 ) );
-vLit = vec3( mod( floor( d37w / 4.0 ), 64.0 ) / 60.0, mod( floor( d37w / 256.0 ), 64.0 ) / 60.0, mod( d37w, 4.0 ) / 3.0 );
-if ( d37f > 0.5 && d37f < 1.5 ) {
-  vec4 d37wp = modelMatrix * vec4( transformed, 1.0 );
-  float d37ph = d37wp.x * 0.7 + d37wp.z * 0.9 + d37wp.y * 0.3;
-  transformed.x += sin( uTime * 1.6 + d37ph ) * 0.8;
-  transformed.z += cos( uTime * 1.2 + d37ph ) * 0.6;
-}`;
-    const FS_HEAD = gl2 ? `
-uniform highp sampler2DArray uTex;
-varying vec3 vUvL;
-varying vec3 vLit;
-uniform float uTime;
-uniform vec3 uTorch;
-uniform float uMinAmb;
-vec4 d37Tex( vec3 p ) { return texture( uTex, p ); }` : `
-uniform sampler2D uTex;
-uniform float uAtlasN;
-varying vec3 vUvL;
-varying vec3 vLit;
-uniform float uTime;
-uniform vec3 uTorch;
-uniform float uMinAmb;
-vec4 d37Tex( vec3 p ) {
-  vec2 tile = vec2( mod( p.z, uAtlasN ), floor( p.z / uAtlasN ) );
-  vec2 f = clamp( fract( p.xy ) * 16.0, 0.5, 15.5 );
-  return texture2D( uTex, ( tile * 16.0 + f ) / ( uAtlasN * 16.0 ) );
-}`;
-    const FS_MAP = `
-vec3 d37uv = vUvL;
-#ifdef D37_WATER
-d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );
-#endif
-vec4 d37c = d37Tex( d37uv );
-diffuseColor *= d37c;`;
-    const FS_COLOR = `
-#if defined( USE_COLOR )
-diffuseColor.rgb *= vColor * vColor;
-#endif`;
-    const FS_LIGHT = `
-float d37sk = vLit.x * vLit.x;
-float d37bl = vLit.y * vLit.y * ( 0.55 + 0.45 * vLit.y );
-float d37ao = 0.42 + 0.58 * vLit.z;
-reflectedLight.directDiffuse *= d37sk * d37ao;
-reflectedLight.indirectDiffuse *= max( d37sk, uMinAmb ) * d37ao;
-reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
-    // Вырезанное по альфе (листва, трава, цветы, факелы, стекло) — код травы E.FOLIAGE_A в альфе буфера сцены, пока включены AO или
-    // трассировка (d37Rt.y, gfx.js): затенение углов и контактные тени их не учитывают — иначе вокруг травинок тёмные пятна.
-    // Только если движок знает этот код (E.FOLIAGE_A): в main его откатили 15.10 — тогда альфу не трогаем
-    const FOLIAGE = E.FOLIAGE_A ? E.FOLIAGE_A.toFixed(8) : '', RTU = FOLIAGE ? E.GFXU?.rt || null : null;
+    // лампы движка (точечные) — до солнца в куске lights_fragment_begin: запомнить их вклад (d37pt), чтобы «свет неба» их не гасил
+    const LFB = String(T.ShaderChunk.lights_fragment_begin || ''), SPOT = '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )';
+    const LFB2 = LFB.includes(SPOT) ? LFB.replace(SPOT, 'd37pt = reflectedLight.directDiffuse;\n' + SPOT) : '';
     function patch(m, kind){
+      const simple = VR.safe;
       m.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, U);
-        const fol = kind === 'cutout' && RTU;
-        if (fol) sh.uniforms.d37Rt = { value: RTU };
         // #include — только с новой строки (иначе шейдер не собирается)
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', '#include <common>\n' + VS_HEAD)
           .replace('#include <beginnormal_vertex>', VS_NORMAL)
-          .replace('#include <begin_vertex>', VS_BEGIN);
-        sh.fragmentShader = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\n' + FS_HEAD + (fol ? '\nuniform vec4 d37Rt;' : ''))
+          .replace('#include <begin_vertex>', VS_BEGIN(simple));
+        let fs = sh.fragmentShader
+          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (gl2 ? FS_TEX2 : FS_TEX1))
           .replace('#include <map_fragment>', FS_MAP)
           .replace('#include <color_fragment>', FS_COLOR)
-          .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT);
-        if (fol) sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', `#include <output_fragment>\nif ( d37Rt.y > 0.5 ) gl_FragColor.a = ${FOLIAGE};`);
+          .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT + (simple ? '' : FS_WATER));
+        if (LFB2 && !simple) fs = fs.replace('#include <lights_fragment_begin>', LFB2);
+        if (!simple) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_BLOOM);
+        sh.fragmentShader = fs;
       };
-      m.customProgramCacheKey = () => 'd37vox-' + kind + (gl2 ? '2' : '1');
+      m.customProgramCacheKey = () => 'd37vox4-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '');
       return m;
     }
-    const mats = {
-      solid: patch(new T.MeshLambertMaterial({ vertexColors: true }), 'solid'),
-      cutout: patch(new T.MeshLambertMaterial({ vertexColors: true, alphaTest: .5 }), 'cutout'),
-      water: patch(new T.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .82, depthWrite: false }), 'water'),
+    const makeMats = () => {
+      const o = {
+        solid: patch(new T.MeshLambertMaterial({ vertexColors: true }), 'solid'),
+        cutout: patch(new T.MeshLambertMaterial({ vertexColors: true, alphaTest: .5 }), 'cutout'),
+        water: patch(new T.MeshLambertMaterial({ vertexColors: true, transparent: true, opacity: .82, depthWrite: false }), 'water'),
+      };
+      o.water.defines = { D37_WATER: 1 };
+      return o;
     };
-    mats.water.defines = { D37_WATER: 1 };
+    let mats = makeMats();
     VR.mats = mats;
     buildTextures();
     VR.rebuildTextures = () => { buildTextures(); V.iconsReset(); };
@@ -206,7 +276,7 @@ reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
     }
     ensureIndex(16384);
     // ── пул геометрий по ёмкости (квадратов): степени двойки от 256 ──
-    const pool = new Map();
+    const pool = new Map(), VB = 21;   // байт на вершину: pos 6 + vd 8 + цвет 3 + свет 4
     const capOf = n => { let c = 256; while (c < n) c *= 2; return c; };
     function takeGeo(n){
       const cap = capOf(n), list = pool.get(cap);
@@ -217,23 +287,26 @@ reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
       g.setAttribute('position', new T.BufferAttribute(new Uint16Array(cap * 12), 3).setUsage(dyn));
       g.setAttribute('vd', new T.BufferAttribute(new Uint16Array(cap * 16), 4).setUsage(dyn));
       g.setAttribute('color', new T.BufferAttribute(new Uint8Array(cap * 12), 3, true).setUsage(dyn));
+      g.setAttribute('lt', new T.BufferAttribute(new Uint8Array(cap * 16), 4, false).setUsage(dyn));
       g.setIndex(index);
       g.userData.cap = cap;
       g.boundingSphere = new T.Sphere(new T.Vector3(), 1);
-      VR.stats.bytes += cap * 4 * 17;
+      VR.stats.bytes += cap * 4 * VB;
       return g;
     }
     function giveGeo(g){
       const cap = g.userData.cap, list = pool.get(cap) || [];
-      if (list.length >= 12) { g.dispose(); VR.stats.bytes -= cap * 4 * 17; return; }
+      if (list.length >= 12) { g.dispose(); VR.stats.bytes -= cap * 4 * VB; return; }
       list.push(g); pool.set(cap, list);
     }
     function fill(g, m, yMax){
-      const n = m.n, P = g.attributes.position, D = g.attributes.vd, C = g.attributes.color;
+      const n = m.n, P = g.attributes.position, D = g.attributes.vd, C = g.attributes.color, L = g.attributes.lt;
       P.array.set(m.pos); D.array.set(m.vd); C.array.set(m.col);
+      if (m.lt) L.array.set(m.lt); else L.array.fill(60, 0, n * 16);
       P.updateRange.offset = 0; P.updateRange.count = n * 12; P.needsUpdate = true;
       D.updateRange.offset = 0; D.updateRange.count = n * 16; D.needsUpdate = true;
       C.updateRange.offset = 0; C.updateRange.count = n * 12; C.needsUpdate = true;
+      L.updateRange.offset = 0; L.updateRange.count = n * 16; L.needsUpdate = true;
       g.setDrawRange(0, n * 6);
       const hy = (yMax + 2) * 8;
       g.boundingSphere.center.set(128, hy, 128); g.boundingSphere.radius = Math.sqrt(128 * 128 * 2 + hy * hy);
@@ -288,11 +361,12 @@ reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
       sel.position.set(hit.x - VR.ox + (b[0] + b[3]) / 2, hit.y + (b[1] + b[4]) / 2, hit.z - VR.oz + (b[2] + b[5]) / 2);
       sel.visible = true;
     };
+    const crackFS2 = 'precision highp sampler2DArray; uniform sampler2DArray uTex; uniform float uLayer; varying vec2 vUv; void main(){ vec4 c = texture(uTex, vec3(vUv.x, 1.0 - vUv.y, uLayer)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }';
+    const crackFS1 = 'uniform sampler2D uTex; uniform float uAtlasN; uniform float uLayer; varying vec2 vUv; void main(){ vec2 tile = vec2(mod(uLayer, uAtlasN), floor(uLayer / uAtlasN)); vec2 f = clamp(vec2(vUv.x, 1.0 - vUv.y) * 16.0, 0.5, 15.5); vec4 c = texture2D(uTex, (tile * 16.0 + f) / (uAtlasN * 16.0)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }';
     const crackMat = new T.ShaderMaterial({
       uniforms: { uTex: U.uTex, uAtlasN: U.uAtlasN, uLayer: { value: 0 } }, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: gl2 ? 'precision highp sampler2DArray; uniform sampler2DArray uTex; uniform float uLayer; varying vec2 vUv; void main(){ vec4 c = texture(uTex, vec3(vUv.x, 1.0 - vUv.y, uLayer)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }'
-        : 'uniform sampler2D uTex; uniform float uAtlasN; uniform float uLayer; varying vec2 vUv; void main(){ vec2 tile = vec2(mod(uLayer, uAtlasN), floor(uLayer / uAtlasN)); vec2 f = clamp(vec2(vUv.x, 1.0 - vUv.y) * 16.0, 0.5, 15.5); vec4 c = texture2D(uTex, (tile * 16.0 + f) / (uAtlasN * 16.0)); if (c.a < 0.1) discard; gl_FragColor = vec4(c.rgb * 0.2, c.a * 0.75); }',
+      fragmentShader: gl2 ? crackFS2 : crackFS1,
     });
     const crack = new T.Mesh(new T.BoxGeometry(1.004, 1.004, 1.004), crackMat);
     crack.visible = false; crack.renderOrder = 7; R.scene.add(crack);
@@ -304,10 +378,12 @@ reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
     };
 
     // ── вещь в 3D (в руке, на земле): тот же формат вершин, что у чанков ──
-    VR.itemGeo = (name, sky = 15, blk = 0) => {
+    const ltOf = (L, out) => { out[0] = ((L >>> 12) & 15) * 4; out[1] = ((L >>> 8) & 15) * 4; out[2] = ((L >>> 4) & 15) * 4; out[3] = (L & 15) * 4; return out; };
+    const LT0 = [60, 0, 0, 0];
+    VR.itemGeo = (name, L = 15 << 12) => {
       const it = V.item(name), b = it?.place ? V.block(it.place) : null;
-      const quads = [];
-      const L = 3 | ((sky * 4) << 2) | ((blk * 4) << 8);
+      const quads = [], lt = ltOf(L, [0, 0, 0, 0]);
+      const glow = b ? V.T.emit[b.id] : 0;
       if (b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus) && !it.tex) {
         const tint = b.tint ? (b.tint === V.TINT.birch ? [128, 167, 85] : b.tint === V.TINT.spruce ? [97, 153, 97] : [124, 189, 90]) : [255, 255, 255];
         for (let d = 0; d < 6; d++) {
@@ -327,35 +403,74 @@ reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
         quads.push(P.map((p, i) => ({ p, uv: UV[i], layer, nrm: 4, col })));
         quads.push([3, 2, 1, 0].map(i => ({ p: [P[i][0], P[i][1], -.001], uv: UV[i], layer, nrm: 5, col })));
       }
-      const n = quads.length, pos = new Float32Array(n * 12), vd = new Uint16Array(n * 16), cl = new Uint8Array(n * 12), idx = [];
+      const n = quads.length, pos = new Float32Array(n * 12), vd = new Uint16Array(n * 16), cl = new Uint8Array(n * 12), lta = new Uint8Array(n * 16), idx = [];
       quads.forEach((q, qi) => q.forEach((v, k) => {
         const o = qi * 4 + k;
-        pos.set(v.p, o * 3); vd[o * 4] = Math.round(v.uv[0] * 16); vd[o * 4 + 1] = Math.round(v.uv[1] * 16); vd[o * 4 + 2] = v.layer | (v.nrm << 12); vd[o * 4 + 3] = L;
-        cl.set(v.col, o * 3);
+        pos.set(v.p, o * 3); vd[o * 4] = Math.round(v.uv[0] * 16); vd[o * 4 + 1] = Math.round(v.uv[1] * 16); vd[o * 4 + 2] = v.layer | (v.nrm << 12); vd[o * 4 + 3] = 3 | (glow << 2);
+        cl.set(v.col, o * 3); lta.set(lt, o * 4);
       }));
       for (let qi = 0; qi < n; qi++) idx.push(qi * 4, qi * 4 + 1, qi * 4 + 2, qi * 4, qi * 4 + 2, qi * 4 + 3);
       const g = new T.BufferGeometry();
       g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('vd', new T.BufferAttribute(vd, 4)); g.setAttribute('color', new T.BufferAttribute(cl, 3, true));
+      g.setAttribute('lt', new T.BufferAttribute(lta, 4, false));
       g.setIndex(idx);
       g.userData.flat = !(b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus) && !it.tex);
+      g.userData.L = L;
       return g;
     };
-    // свет вещи (в пещере — темнее): переписать биты света в вершинах
-    VR.itemLight = (g, sky, blk) => {
-      const a = g.attributes.vd, L = 3 | ((sky * 4) << 2) | ((blk * 4) << 8);
+    // свет вещи (в пещере — темнее, у факела — тёплая): переписать свет вершин; L — свет клетки (W.lightAt)
+    const LTtmp = [0, 0, 0, 0];
+    VR.itemLight = (g, L) => {
       if (g.userData.L === L) return;
       g.userData.L = L;
-      for (let i = 0; i < a.count; i++) a.array[i * 4 + 3] = L;
+      const a = g.attributes.lt; if (!a) return;
+      ltOf(L, LTtmp);
+      for (let i = 0; i < a.count; i++) { a.array[i * 4] = LTtmp[0]; a.array[i * 4 + 1] = LTtmp[1]; a.array[i * 4 + 2] = LTtmp[2]; a.array[i * 4 + 3] = LTtmp[3]; }
       a.needsUpdate = true;
     };
-    VR.itemMesh = (name, sky, blk) => {
-      const g = VR.itemGeo(name, sky, blk);
+    VR.itemMesh = (name, L) => {
+      const g = VR.itemGeo(name, L);
       const m = new T.Mesh(g, g.userData.flat ? mats.cutout : mats.solid);
       m.userData.item = name;
       return m;
     };
+    void LT0;
 
-    VR.update = (dt, t) => { U.uTime.value = t % 1000; };
+    // ── простой режим: шейдер не собрался (старый телефон) — пересобрать без мерцания, бликов и массива текстур ──
+    let checkN = 0;
+    function failed(m){
+      const p = R.r.properties.get(m)?.currentProgram;
+      return !!(p && p.diagnostics && p.diagnostics.runnable === false);
+    }
+    function goSafe(){
+      if (VR.safe) return;
+      VR.safe = true; gl2 = false;
+      const old = mats;
+      mats = VR.mats = makeMats();
+      buildTextures();
+      crackMat.fragmentShader = crackFS1; crackMat.needsUpdate = true;
+      for (const c of VR.chunks) for (const k of LAYERS) { const m = c.vis?.[k]; if (m) m.material = mats[k]; }
+      for (const m of meshPool) m.material = mats.solid;
+      R.scene.traverse(o => { if (o.isMesh && (o.material === old.solid || o.material === old.cutout || o.material === old.water)) o.material = o.material === old.cutout ? mats.cutout : o.material === old.water ? mats.water : mats.solid; });
+      for (const m of Object.values(old)) m.dispose();
+      V.iconsReset();
+      if (typeof console !== 'undefined') console.warn('Кубомир: шейдер кубиков не собрался — простой режим');
+      VR.onSafe?.();
+    }
+    VR.goSafe = goSafe;
+
+    // ── каждый кадр: время, мерцание, солнце (в координатах камеры) и небо для воды; проверка шейдеров первые кадры ──
+    const sv = new T.Vector3();
+    VR.update = (dt, t) => {
+      U.uTime.value = t % 1000;
+      const cam = R.camera;
+      if (R.sunDir && cam) { sv.copy(R.sunDir).transformDirection(cam.matrixWorldInverse); U.uSunV.value.copy(sv); }
+      if (R.sun) { const k = Math.min(1.6, R.sun.intensity * .55); U.uSunC.value.copy(R.sun.color).multiplyScalar(R.sun.castShadow || R.sun.intensity > .05 ? k : 0); }
+      if (R.sky?.hor) { const s = R.sky, zc = s.zen || s.hor; U.uSkyC.value.setRGB(s.hor[0] * .6 + zc[0] * .4, s.hor[1] * .6 + zc[1] * .4, s.hor[2] * .6 + zc[2] * .4); }
+      U.uDay.value = 1 - Math.max(0, Math.min(1, R.night || 0));
+      U.uBloomK.value = R.q === 'high' && R.post ? .7 : 0;
+      if (!VR.safe && checkN < 240) { checkN++; if ((checkN & 7) === 0 && (failed(mats.solid) || failed(mats.cutout) || failed(mats.water))) goSafe(); }
+    };
     VR.dispose = () => {
       for (const c of [...VR.chunks]) VR.dropChunk(c);
       for (const list of pool.values()) for (const g of list) g.dispose();

@@ -53,7 +53,8 @@
   // съедает 0…15), emit (светит 0…15), tex (имя или { top, bottom, side, front }), tint, hard (секунды «рукой»; -1 — нельзя),
   // tool ('pick' | 'axe' | 'shovel'), tier (какая кирка нужна, чтобы выпал: 1 дерево … 4 алмаз), drop (имя вещи,
   // null — ничего), sound, replace (можно поставить поверх), fall (падает), liquid, climb, ui ('craft'|'chest'|'furnace'),
-  // bounce (подбрасывает: скорость), hurt (урон в секунду при касании), mod (чей)
+  // bounce (подбрасывает: скорость), hurt (урон в секунду при касании), mod (чей); свет: emit — яркость 0…15, lcol [r, g, b] — цвет
+  // 0…1 (нет — тёплый белый), glowTex — какие текстуры светятся сами (нет — все грани светящегося блока), glow: false — сам не светится
   V.blocks = []; V.byName = new Map();
   const DEF = { shape: SHAPE.cube, layer: LAYER.solid, solid: true, opaque: true, op: 15, emit: 0, tint: TINT.none, hard: 1, tool: '', tier: 0, drop: undefined, sound: 'stone', replace: false, fall: false, liquid: '', climb: false, ui: '', bounce: 0, hurt: 0, slip: 0, cullSelf: true, axis: false, mod: '', title: '' };
   V.defineBlock = d => {
@@ -86,7 +87,7 @@
   B({ name: 'gravel', title: 'Гравий', tex: 'gravel', hard: .6, tool: 'shovel', fall: true, sound: 'gravel' });
   B({ name: 'bedrock', title: 'Коренная порода', tex: 'bedrock', hard: -1, drop: null });
   B({ name: 'water', title: 'Вода', shape: SHAPE.liquid, layer: LAYER.water, solid: false, opaque: false, op: 2, tex: 'water', tint: TINT.water, hard: -1, drop: null, replace: true, liquid: 'water', sound: 'water' });
-  B({ name: 'lava', title: 'Лава', shape: SHAPE.liquid, layer: LAYER.solid, solid: false, opaque: false, op: 15, emit: 15, tex: 'lava', hard: -1, drop: null, replace: true, liquid: 'lava', hurt: 4, sound: 'lava' });
+  B({ name: 'lava', title: 'Лава', shape: SHAPE.liquid, layer: LAYER.solid, solid: false, opaque: false, op: 15, emit: 15, lcol: [1, .55, .2], tex: 'lava', hard: -1, drop: null, replace: true, liquid: 'lava', hurt: 4, sound: 'lava' });
   B({ name: 'log_oak', axis: true, title: 'Дубовое бревно', tex: { top: 'log_oak_top', side: 'log_oak' }, hard: 2, tool: 'axe', sound: 'wood' });
   B({ name: 'leaves_oak', title: 'Дубовая листва', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_oak', tint: TINT.foliage, hard: .2, drop: null, sound: 'grass' });
   B({ name: 'planks_oak', title: 'Дубовые доски', tex: 'planks_oak', hard: 2, tool: 'axe', sound: 'wood' });
@@ -108,7 +109,7 @@
   B({ name: 'flower_yellow', title: 'Одуванчик', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'flower_yellow', hard: 0, sound: 'grass' });
   B({ name: 'flower_red', title: 'Мак', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'flower_red', hard: 0, sound: 'grass' });
   B({ name: 'dead_bush', title: 'Сухой куст', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'dead_bush', hard: 0, drop: 'stick', replace: true, sound: 'grass' });
-  B({ name: 'torch', title: 'Факел', shape: SHAPE.torch, layer: LAYER.cutout, solid: false, opaque: false, op: 0, emit: 14, tex: 'torch', hard: 0, sound: 'wood' });
+  B({ name: 'torch', title: 'Факел', shape: SHAPE.torch, layer: LAYER.cutout, solid: false, opaque: false, op: 0, emit: 14, lcol: [1, .78, .5], tex: 'torch', hard: 0, sound: 'wood' });
   B({ name: 'crafting_table', title: 'Верстак', tex: { top: 'table_top', side: 'table_side', front: 'table_front', bottom: 'planks_oak' }, hard: 2.5, tool: 'axe', ui: 'craft', sound: 'wood' });
   B({ name: 'furnace', title: 'Печь', tex: { top: 'furnace_top', side: 'furnace_side', front: 'furnace_front', bottom: 'furnace_top', extra: 'furnace_front_lit' }, hard: 3.5, tool: 'pick', tier: 1, ui: 'furnace' });
   B({ name: 'chest', title: 'Сундук', shape: SHAPE.chest, layer: LAYER.cutout, opaque: false, op: 0, tex: { top: 'chest_top', side: 'chest_side', front: 'chest_front', bottom: 'chest_top' }, hard: 2.5, tool: 'axe', ui: 'chest', sound: 'wood', cullSelf: false });
@@ -116,7 +117,7 @@
   B({ name: 'door_oak', title: 'Дверь', shape: SHAPE.door, layer: LAYER.cutout, solid: true, opaque: false, op: 0, tex: { side: 'door_bottom', top: 'door_top' }, hard: 3, tool: 'axe', drop: 'door', sound: 'wood', cullSelf: false });
   B({ name: 'bricks', title: 'Кирпичи', tex: 'bricks', hard: 2, tool: 'pick', tier: 1 });
   B({ name: 'stone_bricks', title: 'Каменные кирпичи', tex: 'stone_bricks', hard: 1.5, tool: 'pick', tier: 1 });
-  B({ name: 'lamp', title: 'Лампа', tex: 'lamp', emit: 15, hard: .3, sound: 'glass' });
+  B({ name: 'lamp', title: 'Лампа', tex: 'lamp', emit: 15, lcol: [1, .93, .72], hard: .3, sound: 'glass' });
   B({ name: 'obsidian', title: 'Обсидиан', tex: 'obsidian', hard: 25, tool: 'pick', tier: 4 });
   B({ name: 'iron_block', title: 'Железный блок', tex: 'iron_block', hard: 5, tool: 'pick', tier: 2, sound: 'metal' });
   B({ name: 'gold_block', title: 'Золотой блок', tex: 'gold_block', hard: 3, tool: 'pick', tier: 3, sound: 'metal' });
@@ -128,7 +129,7 @@
   B({ name: 'sapling_birch', title: 'Росток берёзы', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_birch', hard: 0, sound: 'grass' });
   B({ name: 'sapling_spruce', title: 'Росток ели', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_spruce', hard: 0, sound: 'grass' });
   B({ name: 'mossy_cobble', title: 'Замшелый булыжник', tex: 'mossy_cobble', hard: 2, tool: 'pick', tier: 1 });
-  B({ name: 'furnace_lit', title: 'Печь', tex: { top: 'furnace_top', side: 'furnace_side', front: 'furnace_front_lit', bottom: 'furnace_top' }, emit: 13, hard: 3.5, tool: 'pick', tier: 1, ui: 'furnace', drop: 'furnace', noItem: true });
+  B({ name: 'furnace_lit', title: 'Печь', tex: { top: 'furnace_top', side: 'furnace_side', front: 'furnace_front_lit', bottom: 'furnace_top' }, emit: 13, lcol: [1, .72, .45], glowTex: ['furnace_front_lit'], hard: 3.5, tool: 'pick', tier: 1, ui: 'furnace', drop: 'furnace', noItem: true });
   B({ name: 'bouncer', title: 'Батут', tex: 'bouncer', bounce: 15, hard: .3, sound: 'wool' });
   B({ name: 'missing', title: 'Неизвестный блок', tex: 'missing', hard: .5, drop: null, noItem: true });   // блок отключённого мода
   V.VANILLA_BLOCKS = V.blocks.length;
@@ -266,11 +267,14 @@
   };
 
   // ═══ Таблицы для сетки и света (V.compile — после модов; их же получают потоки) ═══
+  const LCOL0 = [1, .95, .84];   // свет без своего цвета — тёплый белый
   V.compile = () => {
     const n = V.blocks.length, T = {
       n, shape: new Uint8Array(n), layer: new Uint8Array(n), solid: new Uint8Array(n), opaque: new Uint8Array(n), op: new Uint8Array(n), emit: new Uint8Array(n),
       tint: new Uint8Array(n), cullSelf: new Uint8Array(n), liquid: new Uint8Array(n), climb: new Uint8Array(n), axis: new Uint8Array(n),
       tex: new Int16Array(n * 7),   // top, bottom, side, front, back, extra, (запас)
+      ecol: new Uint8Array(n * 3),  // цветной свет блока: R, G, B (0…255 = уровень × 17; самый яркий канал = emit × 17)
+      glowL: new Uint8Array(V.tex.length + 1),   // текстура светится сама (0…15): факел, лава, лампа, «перед» горящей печи
     };
     for (const b of V.blocks) {
       const i = b.id;
@@ -279,6 +283,15 @@
       T.tint[i] = b.tint; T.cullSelf[i] = b.cullSelf ? 1 : 0; T.liquid[i] = b.liquid === 'water' ? 1 : b.liquid === 'lava' ? 2 : 0; T.climb[i] = b.climb ? 1 : 0; T.axis[i] = b.axis ? 1 : 0;
       const f = b.texf;
       if (f) { T.tex[i * 7] = f.top; T.tex[i * 7 + 1] = f.bottom; T.tex[i * 7 + 2] = f.side; T.tex[i * 7 + 3] = f.front; T.tex[i * 7 + 4] = f.back; T.tex[i * 7 + 5] = f.extra; }
+      const e = T.emit[i];
+      if (e) {
+        const c = Array.isArray(b.lcol) && b.lcol.length === 3 ? b.lcol : LCOL0, mx = Math.max(c[0], c[1], c[2], 1e-3);
+        for (let k = 0; k < 3; k++) T.ecol[i * 3 + k] = Math.max(0, Math.min(255, Math.round(e * 17 * Math.max(0, c[k]) / mx)));
+        if (b.glow !== false) {
+          const lst = Array.isArray(b.glowTex) ? b.glowTex.map(nm => V.texIdx.get(nm)).filter(l => l >= 0) : f ? [f.top, f.bottom, f.side, f.front, f.back] : [];
+          for (const l of lst) if (l >= 0 && l < T.glowL.length && e > T.glowL[l]) T.glowL[l] = e;
+        }
+      }
     }
     V.T = T; V.compiled = true;
     V.AIR = 0; V.ID = {}; for (const b of V.blocks) V.ID[b.name] = b.id;
@@ -362,11 +375,11 @@
       if (!o.silent) for (const f of this.listeners) { try { f(x, y, z, was, v, o); } catch (e) { if (typeof console !== 'undefined') console.error(e); } }
       return true;
     }
-    // свет в точке: [небо 0…15, блоки 0…15] (до пересчёта — небо 15)
+    // свет в точке: небо << 12 | R << 8 | G << 4 | B (по 0…15; до пересчёта — небо 15) — V.lSky / V.lBlk / V.lR …
     lightAt(x, y, z){
-      if (y >= H) return 15 << 4;
+      if (y >= H) return 15 << 12;
       if (y < 0) return 0;
-      const c = this.chunkAt(x, z); if (!c || !c.light) return 15 << 4;
+      const c = this.chunkAt(x, z); if (!c || !c.light) return 15 << 12;
       return c.light[((Math.floor(x) & 15) << 11) | ((Math.floor(z) & 15) << 7) | Math.floor(y)];
     }
     // высота поверхности (верх непрозрачного) в столбце
@@ -533,5 +546,8 @@
     return out;
   };
   // Высота жидкости в блоке (0…1): источник и падающая — 0,875, течение — меньше с расстоянием
+  // разбор света клетки (W.lightAt): небо, цвет блоков и самая яркая составляющая
+  V.lSky = L => (L >>> 12) & 15; V.lR = L => (L >>> 8) & 15; V.lG = L => (L >>> 4) & 15; V.lB = L => L & 15;
+  V.lBlk = L => Math.max((L >>> 8) & 15, (L >>> 4) & 15, L & 15);
   V.liquidHeight = v => { const s = v >>> 12; if (s === 0 || s >= 8) return .875; return Math.max(.1, .875 * (8 - s) / 8); };
 })();

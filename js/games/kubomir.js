@@ -230,17 +230,19 @@
     };
     S = st;
     // свет и время суток (небо движка): своя дальность тумана — по дальности прорисовки
-    R.setLighting({ time: meta.time ?? 8, brightness: 1.05, ambient: 1.1, fogEnd: fogFor(R), shadows: true, gfx: { sky: { haze: .2, clouds: .9 }, fog: { density: 0, height: 0, sun: .5 }, grade: 'neutral', bloom: .8 } });
+    R.setLighting({ time: meta.time ?? 8, brightness: .66, ambient: .82, fogEnd: fogFor(R), shadows: true, gfx: { sky: { haze: .2, clouds: .9 }, fog: { density: 0, height: 0, sun: .5 }, grade: 'neutral', bloom: .8 } });
+    dayLight(R);
     R.clouds(R.q === 'low' ? 8 : 14, 3);
     const VR = st.VR = V.renderer(R);
+    st.KL = window.KubomirLight ? window.KubomirLight.create(st) : null;   // настоящие лампы, факел в руке, туман в пещере
     // подгрузка мира
     const url = 'js/engine/voxel-worker.js?v=' + ver();
     st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features,
       load: c => st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
       applySaved: (c, rec) => applySaved(c, rec),
       onGen: c => { st.ents?.onChunkTiles?.(c); },
-      onMesh: (c, m) => VR.setChunk(c, m),
-      onDrop: c => { VR.dropChunk(c); if (st.unsaved.has(c.key)) saveChunks([c]); window.KubomirEnts?.onDrop?.(st, c); },
+      onMesh: (c, m) => { VR.setChunk(c, m); st.KL?.onChunk(c, m); },
+      onDrop: c => { VR.dropChunk(c); st.KL?.onDrop(c); if (st.unsaved.has(c.key)) saveChunks([c]); window.KubomirEnts?.onDrop?.(st, c); },
       log: t => console.warn('Кубомир:', t) });
     W.listeners.push((x, y, z, was, v, o) => onEdit(x, y, z, was, v, o));
     // управление, камера, звук, интерфейс
@@ -290,6 +292,9 @@
   }
   // туман движка начинается с 30 % дальности — у кубиков видно дальше: начало тумана — 60 % (конец прячет край мира)
   function fogNear(st){ const f = st.R.scene.fog; if (f && !st.P.eyeWater && f.far > 20) f.near = f.far * .6; }
+  // яркость солнца и неба: днём мягче, чем у движка по умолчанию (иначе трава и песок выгорают в белёсое), ночью луна чуть
+  // тусклее движковой (темно, но видно дорогу) — свет факелов от этого не зависит: ночью и в пещерах он заметен пятнами
+  function dayLight(R){ const n = Math.max(0, Math.min(1, R.night || 0)); R.lighting.brightness = .66 - .16 * n; R.lighting.ambient = .82 - .12 * n; }
   function fogFor(R){ const O = R.opt || { dist: 1, fog: true }; return Math.max(40, (opts.rd * 16 - 10) / (O.dist || 1) / (O.fog === false ? 1.6 : 1)); }
   function giveStart(P){ P.inv[0] = null; }
   function invLoad(inv, arr){ if (!Array.isArray(arr)) return; for (let i = 0; i < inv.length; i++) { const s = arr[i]; inv[i] = s && VX().item(s.id) && s.n > 0 ? { id: s.id, n: Math.min(s.n | 0, VX().item(s.id).stack), d: s.d | 0 } : null; } }
@@ -305,6 +310,7 @@
     try { st.modRun?.stop(); } catch (e) {}
     try { st.ents?.dispose(); } catch (e) {}
     try { st.ui?.dispose(); } catch (e) {}
+    try { st.KL?.dispose(); } catch (e) {}
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose();
     try { st.R?.dispose(); } catch (e) {}
@@ -843,9 +849,12 @@
     if (st.mine.st >= 0 && st.hit) VR.crack(st.hit.x, st.hit.y, st.hit.z, st.mine.st); else VR.crack(0, 0, 0, -1);
     VR.update(dt, t);
     // небо и туман: время суток — раз в 0,25 с
-    if ((st.skyT = (st.skyT || 0) - dt) <= 0) { st.skyT = .25; R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R) }); fogNear(st); }
+    if ((st.skyT = (st.skyT || 0) - dt) <= 0) { st.skyT = .25; dayLight(R); R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R) }); fogNear(st); st.KL?.afterSky(); }
     // под водой — синий туман
-    R.setUnder?.(!!st.P.eyeWater, '#1f5f9e');
+    const uw = !!st.P.eyeWater; R.setUnder?.(uw, '#1f5f9e');
+    if (st.uwWas !== uw) { st.uwWas = uw; if (!uw) { fogNear(st); st.KL?.afterSky(); } }
+    // лампы у факелов, лавы и ламп, факел в руке, туман в пещере
+    st.KL?.frame(dt, t);
     st.AU?.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
     R.update(dt); R.follow(P.x - st.ox, P.z - st.oz, P.y);
     R.render();
@@ -855,25 +864,24 @@
   // яркость своего персонажа в пещере (материалы — свои копии)
   function lightEntity(st){
     const me = st.A.get('me'); if (!me?.ch) return;
-    const V = VX(), P = st.P, L = st.W.lightAt(P.x, P.y + 1, P.z), sky = (L >> 4) / 15, blk = (L & 15) / 15;
-    const k = Math.max(sky * sky, blk * blk * .9, .06);
-    if (Math.abs((st.meK ?? -1) - k) < .02 && st.meKch === me.ch) return;
-    st.meK = k;
+    const P = st.P, L = st.W.lightAt(P.x, P.y + 1, P.z), lt = window.KubomirEnts?.lightTint?.(L, .06) || [1, 1, 1, 1], k = lt[3];
+    if (Math.abs((st.meK ?? -1) - k) < .02 && st.meL === L && st.meKch === me.ch) return;
+    st.meK = k; st.meL = L;
     if (st.meKch !== me.ch) { st.meKch = me.ch; me.ch.root.traverse(o => { if (o.isMesh && o.material && !o.material.userData?.kbOwn) { o.material = o.material.clone(); o.material.userData.kbOwn = true; o.material.userData.kbBase = o.material.color ? o.material.color.clone() : null; } }); }
-    me.ch.root.traverse(o => { const m = o.material; if (m?.userData?.kbBase && m.color) m.color.copy(m.userData.kbBase).multiplyScalar(k); });
+    me.ch.root.traverse(o => { const m = o.material; if (m?.userData?.kbBase && m.color) { m.color.copy(m.userData.kbBase); m.color.r *= lt[0]; m.color.g *= lt[1]; m.color.b *= lt[2]; } });
   }
   // вещь в руке: от 1-го лица — у камеры (взмах при ударе), от 3-го — в кисти персонажа
   function heldItem(st, dt){
     const P = st.P, s = P.inv[P.sel], name = s ? s.id : '', R = st.R, VR = st.VR;
-    const L = st.W.lightAt(P.x, P.y + 1.5, P.z), sky = L >> 4, blk = L & 15;
+    const L = st.W.lightAt(P.x, P.y + 1.5, P.z);
     if (st.heldName !== name) {
       st.heldName = name;
       if (st.held) { st.held.parent?.remove(st.held); st.held.geometry.dispose(); st.held = null; }
-      if (name) { st.held = VR.itemMesh(name, sky, blk); st.held.renderOrder = 20; st.held.frustumCulled = false; }
+      if (name) { st.held = VR.itemMesh(name, L); st.held.renderOrder = 20; st.held.frustumCulled = false; }
       heldInHand(st, true);
     }
     if (!st.held) return;
-    VR.itemLight(st.held.geometry, sky, blk);
+    VR.itemLight(st.held.geometry, L);
     st.swing = Math.max(0, st.swing - dt * 4);
     if (st.rig.mode === 'first') {
       if (st.held.parent !== R.camera) { R.camera.add(st.held); if (!R.camera.parent) R.scene.add(R.camera); }
@@ -946,7 +954,7 @@
       if ((st.dbgT = (st.dbgT || 0) - 1) <= 0) {
         st.dbgT = 10;
         const s = st.ST.stats, r = st.VR.count(), c = st.G ? V.genColumn(st.G, Math.floor(P.x), Math.floor(P.z), {}) : null, L = st.W.lightAt(P.x, P.y + 1, P.z), rs = st.R.stats;
-        d.innerHTML = `XYZ ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)} · чанк ${Math.floor(P.x) >> 4}, ${Math.floor(P.z) >> 4}<br>биом ${c ? V.BIOMES[c.b] : '—'} · свет небо ${L >> 4} блоки ${L & 15} · время ${st.R.lighting.time.toFixed(1)} ч<br>`
+        d.innerHTML = `XYZ ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)} · чанк ${Math.floor(P.x) >> 4}, ${Math.floor(P.z) >> 4}<br>биом ${c ? V.BIOMES[c.b] : '—'} · свет небо ${V.lSky(L)} блоки ${V.lR(L)}/${V.lG(L)}/${V.lB(L)} · время ${st.R.lighting.time.toFixed(1)} ч<br>`
           + `чанков ${s.chunks} · сетка ${s.mesh} (${(s.meshMs / Math.max(1, s.mesh)).toFixed(1)} мс) · ген ${s.gen} (${(s.genMs / Math.max(1, s.gen)).toFixed(1)} мс) · в работе ${s.jobs} · ждут ${s.pend}<br>`
           + `мешей ${r.meshes} · квадов ${(r.quads / 1000).toFixed(0)} тыс. · пул ${r.poolFree} · ~${(r.bytes / 1048576).toFixed(0)} МБ · вызовов ${rs.calls} · ${st.ST.inline ? 'без потоков' : st.ST.workers.length + ' поток(а)'} · дальность ${opts.rd}`;
       }

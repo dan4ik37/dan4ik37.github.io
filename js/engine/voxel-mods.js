@@ -41,6 +41,15 @@
     else { const c = colorOf(v); if (c) { const n = parseInt(c.slice(1), 16); rgb = [n >> 16 & 255, n >> 8 & 255, n & 255]; } }
     return rgb ? Math.round(Math.max(...rgb) / 255 * 15) : 0;
   };
+  // цвет света (свет кубиков цветной: каналы R, G, B) — доли 0…1; число или нет цвета — по умолчанию (тёплый белый)
+  const lightCol = v => {
+    let rgb = null;
+    if (Array.isArray(v) && v.length === 3) rgb = v.map(x => num(x, 0, 0, 255));
+    else { const c = colorOf(v); if (c) { const n = parseInt(c.slice(1), 16); rgb = [n >> 16 & 255, n >> 8 & 255, n & 255]; } }
+    if (!rgb) return undefined;
+    const mx = Math.max(rgb[0], rgb[1], rgb[2], 1);
+    return rgb.map(x => Math.round(x / mx * 100) / 100);
+  };
   // глубина в метрах (общий формат, от уровня поверхности) → высота y: уровень — море (y = 52), до 44 м — метр в метр; глубже мир
   // кончается — сжимается в самый низ (y 8 → 2), чтобы «очень глубокие» руды «Подземья» были на самом дне кубического мира
   const yOfDepth = d => d <= 44 ? Math.max(1, Math.min(V.H - 2, Math.round(SEA - d))) : Math.max(2, Math.round(8 - 6 * (1 - 44 / d)));
@@ -181,7 +190,7 @@
       const hard = b.hardness === -1 || b.unbreakable === true ? -1 : num(b.hardness, 60, 0, 2000) * .015;   // общая прочность (камень 100) → секунды рукой
       const tool = b.tool === 'any' ? '' : b.tool === 'hammer' ? 'pick' : ['pick', 'axe', 'shovel', 'sword'].includes(b.tool) ? b.tool : solid ? 'pick' : '';
       const nb = { name: id + ':' + b.id, title: str(b.name, 40) || b.id, tex, shape, layer: opaque ? 1 : 2, solid, opaque, op: opaque ? 15 : num(b.lightBlock, 0, 0, 15) | 0,
-        emit: lightOf(b.light), hard: hard < 0 ? -1 : Math.round(hard * 100) / 100, tool, tier: Math.min(4, num(b.tier, 0, 0, 5) | 0),
+        emit: lightOf(b.light), lcol: lightCol(b.light), glow: b.glow !== false, hard: hard < 0 ? -1 : Math.round(hard * 100) / 100, tool, tier: Math.min(4, num(b.tier, 0, 0, 5) | 0),
         sound: SOUNDS.includes(b.sound) ? b.sound : 'stone', bounce: num(b.bounce, 0, 0, 30), hurt: num(b.hurt, 0, 0, 10), slip: num(b.slip, 0, 0, .98),
         climb: !!(b.climbable || b.climb) || shape === 5, replace: !!b.replaceable, fall: !!b.falls, cullSelf: b.cullSelf !== false && shape !== 7 && shape !== 8,
         axis: !!b.axis && shape === 1, tint: TINTS[b.tint] || 0, ui: b.ui === 'craft' || b.ui === 'chest' ? b.ui : '', fuel: num(b.fuel, 0, 0, 600), stack: Math.min(64, num(b.stack, 64, 1, 999) | 0), mod: id };

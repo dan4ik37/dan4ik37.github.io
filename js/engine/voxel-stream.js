@@ -54,7 +54,7 @@
       if (!G) G = V.genInit(W.seed, { features: o.features || [] });
       const t0 = now();
       if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, ms: now() - t0 }); }
-      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint); onResult({ id: j.id, reg: j.reg, light: m.light, solid: m.solid, cutout: m.cutout, water: m.water, yMax: m.yMax, ms: now() - t0 }); }
+      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint); onResult({ id: j.id, reg: j.reg, light: m.light, lights: m.lights, solid: m.solid, cutout: m.cutout, water: m.water, yMax: m.yMax, ms: now() - t0 }); }
     }
     function send(j, msg, tr){
       if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; inlineRun(j); return; }
