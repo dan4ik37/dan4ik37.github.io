@@ -240,7 +240,8 @@ js/features/games.js и хвост css/premium.css.
   индексирование /, /about, /games, /tools/fonts, /tools/nick, /tools/cps, /games/words (≈10 в день).
 - IndexNow (Яндекс, Bing → и поиск ChatGPT): ключ — файл `/351f920e862a819020eb7eb5ea035ac2.txt` (НЕ удалять),
   `api/_lib/indexnow.js`; новые ролики — автоматически из push-check; все страницы — `node scripts/indexnow.mjs [pages|videos|all]`
-  (09.10 отправлены все 6073). Не чаще раза в несколько дней целиком.
+  (09.10 отправлены все 6073; 15.10 — pages: новые игры, магазин, /terms /refund /contacts — 200/202). Не чаще раза в несколько
+  дней целиком.
 - Ник по-русски — «Денчик37» (так хочет владелец), не «Данчик37».
 - «Кто такой dan4ik37» — `/about` (api/_lib/routes/about.js): только настоящие данные (YouTube + список роликов). Личных фактов
   (имя, возраст, город) нет — добавлять, только если владелец сам даст. `/llms.txt` — справка для ИИ.
