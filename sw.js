@@ -44,7 +44,7 @@ function route(req){
   if (u.origin === self.location.origin) {
     const p = u.pathname;
     // /api/* (и /api/geo), /go/* — переходы по рекламе кабинета, /_vercel — статистика: только сеть
-    if (/^\/(api|go|_vercel|studio|sdk|\.well-known)(\/|$)/.test(p) || p === '/sw.js') return 'pass';
+    if (/^\/(api|go)(\/|$)/.test(p) || /^\/(_vercel|studio|sdk|\.well-known)\//.test(p) || p === '/sw.js') return 'pass';
     if (/^\/(ads\.txt|robots\.txt|llms\.txt|sitemap[\w-]*\.xml|[0-9a-f]{32}\.txt|yandex_[0-9a-f]+\.html)$/.test(p)) return 'pass';
     if (req.mode === 'navigate') return p === '/' || p === '/index.html' ? 'shell' : 'page';
     if (u.searchParams.has('v')) return 'swr';
@@ -121,8 +121,9 @@ async function swr(event){
   const cross = new URL(req.url).origin !== self.location.origin;
   const c = await caches.open(RT);
   const hit = await c.match(req);
-  const update = () => fetch(req).then(async res => {
-    if (storable(res, cross)) { await c.put(req, res.clone()); if (!hit) await trim(c, req); }
+  // ответ — сразу, запись в кэш (и уборка старых номеров) — следом, пока sw.js жив
+  const update = () => fetch(req).then(res => {
+    if (storable(res, cross)) keep(event, c.put(req, res.clone()).then(() => (hit ? null : trim(c, req))).catch(() => {}));
     return res;
   });
   if (hit) {

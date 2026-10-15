@@ -364,6 +364,7 @@ async function testSW(){
   ok(R('/api/geo') === 'pass' && R('/api') === 'pass' && R('/go/abc123', { mode: 'navigate' }) === 'pass' && R('/go/abc123') === 'pass' && R('/go', { mode: 'navigate' }) === 'pass', '/api/geo и /go/* (переходы по рекламе кабинета) — мимо кэша');
   ok(R('https://zdisuowyjgqirhvcyjfq.supabase.co/storage/v1/object/public/ads/banner.webp') === 'pass', 'картинки рекламы из хранилища Supabase — мимо кэша');
   ok(R('/gold.png') === 'swr' && R('/games/sudoku', { mode: 'navigate' }) === 'page', '/go… не задевает похожие адреса');
+  ok(R('/studio', { mode: 'navigate' }) === 'page' && R('/ads-terms', { mode: 'navigate' }) === 'page', '/studio (страница «Конструктор игр») и /ads-terms — обычные серверные страницы');
   ok(R('/', { mode: 'navigate' }) === 'shell' && R('/?share_text=x', { mode: 'navigate' }) === 'shell' && R('/index.html', { mode: 'navigate' }) === 'shell', 'главная (и с параметрами) — оболочка');
   ok(R('/v/dQw4w9WgXcQ', { mode: 'navigate' }) === 'page' && R('/games/sudoku', { mode: 'navigate' }) === 'page', 'серверные страницы — сеть, без сети — офлайн-страница');
   ok(R('/js/games/sudoku.js?v=62') === 'swr' && R('/js/features/app-guide.js?v=1') === 'swr', 'файлы с ?v= — из кэша и тихо обновить');
