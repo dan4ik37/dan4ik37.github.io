@@ -41,7 +41,8 @@
   const ACH_BY = new Map(ACH.map(a => [a[0], a]));
 
   let el = null, api = null, S = null, view = 'menu', opts = null;
-  const optsLoad = () => Object.assign({ rd: (E()?.quality?.() || 'mid') === 'low' ? 4 : (E()?.quality?.() === 'high' ? 10 : 8), auto: null, sens: 1 }, lsGet(LS_OPT, {}));
+  // дальность по умолчанию: телефон — 6 (безопасно для слабых видеокарт), «низкая» графика — 4, «высокая» на компьютере — 10
+  const optsLoad = () => { const Ex = E(), q = Ex?.gfxQuality?.() || 'mid', phone = !!Ex?.isMobile?.(); return Object.assign({ rd: q === 'low' ? 4 : phone ? 6 : q === 'high' ? 10 : 8, auto: null, sens: 1 }, lsGet(LS_OPT, {})); };
   function css(){
     if (document.getElementById('kb-css')) return;
     const l = document.createElement('link'); l.id = 'kb-css'; l.rel = 'stylesheet';
@@ -305,7 +306,7 @@
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose();
     try { st.R?.dispose(); } catch (e) {}
-    st.hudEl?.remove();
+    st.hudEl?.remove(); st.modWin?.remove();
     settingsTab(true);
   }
   async function restartWorld(){ if (!S) return; const m = S.meta; await stopWorld(); playWorld(m); }
@@ -378,13 +379,13 @@
   function update(dt){
     const st = S; if (!st || st.dead) return;
     const { C, P, W } = st, V = VX();
-    const uiOpen = !!st.ui?.isOpen(), menu = !!st.menu, chatting = !!st.chatEl;
+    const uiOpen = !!st.ui?.isOpen(), menu = !!st.menu || !!st.modWin, chatting = !!st.chatEl;   // modWin — окно «Моды мира»
     C.blocked = uiOpen || menu || chatting || !!window.D37Settings?.isOpen?.();
     C.step(dt);
     if (!st.ready) { if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
     st.steps++;
     // Esc: окно → закрыть; иначе меню
-    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (uiOpen) st.ui.close(); else if (menu) closeMenu(); else openMenu(); }
+    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (uiOpen) st.ui.close(); else if (st.modWin) st.modWin.querySelector('[data-x]')?.click(); else if (menu) closeMenu(); else openMenu(); }
     if (C.downRaw('inventory') && !menu && !chatting) { if (uiOpen) st.ui.close(); else st.ui?.open('inv'); }
     if (C.down('view')) toggleView();
     if (C.down('chat') && !uiOpen) chatOpen();
@@ -814,9 +815,10 @@
     const ch = CAMP.ch;
     ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx; ch.vz = P.vz; ch.h = P.sneak ? 1.5 : 1.85; ch.grounded = P.onGround;
     CAMP.running = P.sprint; CAMP.crouchW = P.sneak ? 1 : 0;
-    rig.update(dt, CAMP, st.ui?.isOpen() || st.menu ? null : look, PHYS, C);
-    I.wantLock = !I.touch && !st.ui?.isOpen() && !st.menu && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
-    if (st.wasLocked && !I.locked && !st.ui?.isOpen() && !st.menu && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
+    const over = st.ui?.isOpen() || st.menu || st.modWin;   // открыто окно поверх мира
+    rig.update(dt, CAMP, over ? null : look, PHYS, C);
+    I.wantLock = !I.touch && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
+    if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
     st.wasLocked = I.locked;
     // персонаж: смотрит туда, куда камера; на ходу — туда, куда идёт (от 3-го лица)
     const me = A.get('me');

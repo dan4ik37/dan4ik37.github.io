@@ -84,7 +84,7 @@
       { b: ID.ore_gold, minY: 5, maxY: 32, size: 6, n: 3 }, { b: ID.ore_diamond, minY: 4, maxY: 16, size: 5, n: 1.2 },
       { b: ID.gravel, minY: 5, maxY: 90, size: 14, n: 4 }, { b: ID.dirt, minY: 20, maxY: 100, size: 14, n: 4 },
     ];
-    for (const f of G.features) if (f.type === 'ore' && f.block > 0) G.ores.push({ b: f.block, minY: f.minY ?? 5, maxY: f.maxY ?? 64, size: f.size ?? 6, n: f.perChunk ?? 2, replace: f.replace, biomes: f.biomes });
+    for (const f of G.features) if (f.type === 'ore' && f.block > 0) G.ores.push({ b: f.block, minY: f.minY ?? 5, maxY: f.maxY ?? 64, size: f.size ?? 6, n: f.perChunk ?? 2, replace: f.replace, biomes: f.biomes, mod: true });   // руды модов — после ванили (ваниль не меняется)
     return G;
   };
 
@@ -319,7 +319,7 @@
         let x = Math.floor(hr() * 16), z = Math.floor(hr() * 16), y = o.minY + Math.floor(hr() * Math.max(1, o.maxY - o.minY));
         if (o.biomes && o.biomes.length && !o.biomes.includes(V.BIOME_IDS[biome[x * 16 + z]])) { for (let s = 0; s < o.size; s++) { hr(); hr(); hr(); } continue; }
         for (let s = 0; s < o.size; s++) {
-          if (x >= 0 && x < 16 && z >= 0 && z < 16 && y > 0 && y < H) {
+          if (x >= 0 && x < 16 && z >= 0 && z < 16 && y > 0 && y < H && (!o.mod || (y >= o.minY && y <= o.maxY))) {   // жила мода — строго в своих высотах
             const i = (x << 11) | (z << 7) | y, cur = ids[i];
             if (o.replace && o.replace.length ? o.replace.includes(cur) : cur === ID.stone) ids[i] = o.b;
           }

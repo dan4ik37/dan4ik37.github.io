@@ -302,9 +302,9 @@
     const tg = JSON.parse(VAN.tags); for (const k of Object.keys(V.TAGS)) delete V.TAGS[k]; Object.assign(V.TAGS, tg);
     V.compile(); V.iconsReset?.();
   }
-  // m — проверенный мод (validate().m); rgba — { имя текстуры: Uint8Array 16×16×4 } (PNG уже разобраны браузером)
-  // → { skipped: [что не подключилось и почему] }
-  function register(m, rgba = {}){
+  // m — проверенный мод (validate().m); rgba — { имя текстуры: Uint8Array 16×16×4 } (PNG уже разобраны браузером);
+  // o.recipes === false — рецепты потом (recipes(m)), когда все моды мира добавили свои вещи → { skipped: [что не подключилось] }
+  function register(m, rgba = {}, o = {}){
     const skipped = [];
     for (const [tn, t] of Object.entries(m.textures)) {
       let spec;
@@ -316,15 +316,20 @@
     for (const b of m.blocks) { if (V.blocks.length >= 4000) { skipped.push(b.name + ': слишком много блоков'); break; } V.defineBlock(Object.assign({}, b)); }
     V.blockItems(from);
     for (const it of m.items) V.defineItem(Object.assign({}, it));
-    const has = n => !n || n[0] === '#' || !!V.item(n);
+    if (o.recipes !== false) skipped.push(...recipes(m));
+    V.compile(); V.iconsReset?.();
+    return { skipped };
+  }
+  // рецепты и печь мода; чего-то нет (мод, на котором он держится, не включён) — рецепт пропущен → [почему]
+  function recipes(m){
+    const skipped = [], has = n => !n || n[0] === '#' || !!V.item(n);
     for (const r of m.recipes) {
       const need = r.smelt ? [r.input, r.out] : [r.out, ...(r.list || Object.values(r.key || {}))];
       const miss = need.filter(n => !has(n));
       if (miss.length) { skipped.push(`рецепт «${r.out}»: нет ${miss.join(', ')}`); continue; }
       if (r.smelt) V.addSmelt(r.input, r.out, r.time); else V.addRecipe(Object.assign({ mod: m.id }, r));
     }
-    V.compile(); V.iconsReset?.();
-    return { skipped };
+    return skipped;
   }
   // фичи генерации: имена → номера блоков (в поток уходят только числа)
   function features(list){
@@ -559,8 +564,8 @@ up({ t: 'frame' });
             if (was > 0 && V.blocks[was]?.ui) { const t = st.W.dropTile?.(c.x, c.y, c.z); for (const s of tileItems(t)) if (s) st.ents?.addItem?.(c.x + .5, c.y + .5, c.z + .5, s, true); }
             st.W.set(c.x, c.y, c.z, b.id, { urgent: 2, mod: M.m.id });
           } else if (c.c === 'give') {
-            if (++M.secGives > 10) continue;
             const it = V.item(String(c.i)); if (!it) { log(M, `player.give: нет вещи «${c.i}»`, true); continue; }
+            if (++M.secGives > 10) continue;
             hooks.give?.({ id: it.name, n: Math.max(1, Math.min(it.stack || 64, c.n | 0)) });
           } else if (c.c === 'msg') { if (++M.secMsg <= 5) hooks.log?.(`🧩 ${M.m.name}: ${String(c.t).slice(0, 200)}`); }
           else if (c.c === 'heal') { if (Number.isFinite(c.n)) hooks.heal?.(Math.max(-20, Math.min(20, c.n))); }
@@ -741,7 +746,7 @@ end)
     }, files: {} },
   ];
 
-  V.mods = { API, LIM, EVENTS, validate, unzip, zip, crc32, reset, register, features, runner, runtime: modRuntime, frameHtml, EXAMPLES,
+  V.mods = { API, LIM, EVENTS, validate, unzip, zip, crc32, reset, register, recipes, features, runner, runtime: modRuntime, frameHtml, EXAMPLES,
     // Каталог модов с модерацией — следующий шаг (как «Студия игр»: таблица, статус review → public, жалобы). Крючок для окна модов:
     catalog: { ready: false, list: async () => [], get: async () => null, submit: async () => { throw new Error('Каталог модов появится позже — пока делись файлом .d37mod'); } } };
 })();
