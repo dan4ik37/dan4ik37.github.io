@@ -305,6 +305,7 @@ function fakeWorld(sky, blk, walls = new Set()){
     // сравниваем сам множитель урона; суммы за ночь — только в вывод
     ok(window.KubomirEnts.DIFF.easy.dmg < window.KubomirEnts.DIFF.normal.dmg, '«легко» — бьют слабее (урон × 0,67)', [window.KubomirEnts.DIFF.easy.dmg, window.KubomirEnts.DIFF.normal.dmg, N1.dmgPerMin, N2.dmgPerMin]);
     ok(D2.spawnedPerMin === 0, 'днём на свету — враги не появляются');
+    { const H = window.KubomirEnts.DIFF.hard, N = window.KubomirEnts.DIFF.normal; ok(H && H.cap > N.cap && H.dmg > N.dmg && H.every <= N.every, '«сложно» — мобов больше, бьют сильнее, появляются чаще', H); }
     ok(window.KubomirEnts.DIFF.easy.dmg * window.KubomirEnts.MOBS.zombie.dmg >= 1.9 && window.KubomirEnts.DIFF.easy.dmg * window.KubomirEnts.MOBS.zombie.dmg <= 2.1, 'зомби на «легко» — 2 (как в Майнкрафте), «обычно» — 3');
     // копание (секунды): формула игры — прочность × (можно добыть ? 1,5 : 5) / скорость инструмента
     const bt = (blk, tool) => { const b = V.blocks[ID[blk]], t = tool ? V.item(tool).tool : null, right = !!(t && b.tool && t.kind === b.tool), can = !b.tier || (right && t.tier >= b.tier); return +(b.hard * (can ? 1.5 : 5) / (right ? t.speed : 1)).toFixed(2); };

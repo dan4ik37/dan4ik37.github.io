@@ -68,8 +68,8 @@
     },
   };
   // Сложность: враги рядом не больше cap, попытка появиться — раз в every с (только в темноте, свет ≤ 6), урон × dmg
-  // (зомби: «легко» 2, «обычно» 3 — как в Майнкрафте). Шаг логики — 20 раз в секунду от часов игры, не от частоты кадров.
-  const DIFF = { peaceful: { cap: 0, every: 2, dmg: 0 }, easy: { cap: 4, every: 4, dmg: .67 }, normal: { cap: 6, every: 3, dmg: 1 } };
+  // (зомби: «легко» 2, «обычно» 3, «сложно» 4,5 — как в Майнкрафте). Шаг логики — 20 раз в секунду от часов игры, не от частоты кадров.
+  const DIFF = { peaceful: { cap: 0, every: 2, dmg: 0 }, easy: { cap: 4, every: 4, dmg: .67 }, normal: { cap: 6, every: 3, dmg: 1 }, hard: { cap: 9, every: 2, dmg: 1.5 } };
   window.KubomirEnts = { MOBS, DIFF, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice(), Lit, mobView: null, boxMobView: c => boxMobView(c) };
   // цвет освещения существа по свету клетки: небо — белым, факелы и лава — своим цветом (как у кубиков) → [r, g, b, яркость]
   // (запасной путь, если свой кусок шейдера не собрался)

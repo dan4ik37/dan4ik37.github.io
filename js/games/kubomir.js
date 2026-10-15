@@ -129,11 +129,11 @@
       <label>Название<input type="text" class="kb-in" data-f="name" maxlength="40" value="Мой мир"></label>
       <label>Зерно <small>(число или слово — один и тот же мир у всех, оставь пустым — случайный)</small><input type="text" class="kb-in" data-f="seed" maxlength="32" placeholder="случайное"></label>
       <div class="kb-seg" data-f="mode"><button type="button" class="on" data-v="survival">⚔️ Выживание</button><button type="button" data-v="creative">🎨 Творчество</button></div>
-      <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button></div>
+      <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button><button type="button" data-v="hard">💀 Сложно</button></div>
       <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после смерти вещи остаются.</p>
       ${mods.length ? `<div class="kb-modpick"><b>🧩 Моды в этом мире</b>${mods.map(m => `<label class="kb-chk"><input type="checkbox" data-mod="${esc(m.id)}"> ${esc(m.manifest?.name || m.id)} <small>${esc(m.manifest?.version || '')}</small></label>`).join('')}</div>` : '<p class="kb-note">🧩 Моды можно добавить в меню миров → «Моды».</p>'}
       <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-n="go">🌍 Создать мир</button><button type="button" class="kb-btn" data-n="back">← Назад</button></div></div>`;
-    const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после смерти вещи остаются.', normal: 'Обычно: после смерти вещи выпадают — успей их подобрать.' };
+    const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после смерти вещи остаются.', normal: 'Обычно: после смерти вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может убить, вещи после смерти выпадают.' };
     sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; }));
     sc.querySelector('[data-n="back"]').onclick = showMenu;
     sc.querySelector('[data-n="go"]').onclick = async () => {
@@ -624,7 +624,7 @@
     P.exh += dt * .012;   // жизнь тоже тратит силы (медленно)
     if (P.food >= 18 && P.hp < 20) { P.regT += dt; if (P.regT >= 3) { P.regT = 0; P.hp = Math.min(20, P.hp + 1); P.exh += 3; } } else P.regT = 0;
     if (diff === 'peaceful' && P.hp < 20) { P.regT += dt * .5; if (P.regT >= 3) { P.regT = 0; P.hp++; } }
-    if (P.food <= 0 && diff !== 'peaceful') { P.starveT += dt; if (P.starveT >= 4) { P.starveT = 0; if (P.hp > (diff === 'easy' ? 10 : 1)) hurt(st, 1, 'starve'); } }
+    if (P.food <= 0 && diff !== 'peaceful') { P.starveT += dt; if (P.starveT >= 4) { P.starveT = 0; if (P.hp > (diff === 'easy' ? 10 : diff === 'hard' ? 0 : 1)) hurt(st, 1, 'starve'); } }   // «сложно» — голод убивает (как в Майнкрафте)
     // воздух под водой
     if (P.eyeWater) { P.air = Math.max(0, P.air - dt); if (P.air <= 0) { P.drownT = (P.drownT || 0) + dt; if (P.drownT >= 1) { P.drownT = 0; hurt(st, 2, 'drown'); } } }
     else P.air = Math.min(15, P.air + dt * 4);
@@ -644,7 +644,7 @@
   function die(st, why){
     const P = st.P; P.dead = true;
     st.I.unlock();
-    const keep = (st.meta.diff || 'easy') !== 'normal';
+    const keep = !['normal', 'hard'].includes(st.meta.diff || 'easy');
     if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { st.ents?.addItem(P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } }
     st.lastDeath = { x: P.x, y: P.y, z: P.z, t: now(), drop: !keep && !!st.ents };
     st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра, не погибнув
