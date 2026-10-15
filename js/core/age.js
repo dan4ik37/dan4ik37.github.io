@@ -137,9 +137,13 @@
   }
   function emit(){
     marks();
+    const rs = doc?.querySelector?.('.age-reg select');   // поле в регистрации — тот же год
+    if (rs) rs.value = validYear(S.y) ? String(S.y) : '';
     for (const f of [...subs]) { try { f(group()); } catch (e) { console.error(e); } }
     try { root.dispatchEvent(new root.CustomEvent('d37:age', { detail: { group: group() } })); } catch (e) {}
     try { if (root.D37Settings?.isOpen?.()) root.D37Settings.refresh(); } catch (e) {}
+    // открыт раздел с меткой (чат, форум…) — пересобрать: обложка появится или уйдёт сразу
+    try { if (typeof showPage === 'function' && typeof currentRoute === 'function' && AREAS[currentRoute()]) setTimeout(() => showPage(currentRoute()), 0); } catch (e) {}
   }
 
   // ═══ Сервер (age.sql). Нет файла (PGRST202) — всё живёт в браузере, как у гостя ═══
