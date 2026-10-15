@@ -1,0 +1,250 @@
+// Проверка рук и света существ «Кубомира» без браузера: node scripts/kubomir-hand-test.cjs [путь к three@0.149]
+// Свет существ (KubomirEnts.Lit): 8 клеток вокруг, непрозрачные не считаются, кривая — как у вершин кубиков, плавно по
+// времени, свой свет факела в руке; материалы (VR.entityMaterial) — куски шейдера находят свои места в настоящих шейдерах
+// three r149 (мультяшный, Ламберт, Фонг, «плоский»), «вид из глаз» (D37_FP) — и у вещей; VR.itemLightF; рука
+// (KubomirHand): взмах повторяется, пока копаешь, толчок, смена вещи, еда, вид от 1-го и 3-го лица, свет человечка;
+// мобы — через один «вид» (KubomirEnts.mobView), свой вид подменяется.
+// Нужен three.js r149 (как render-test.cjs): npm i three@0.149.0 во временной папке (на диске E), путь — первым аргументом.
+const fs = require('fs'), path = require('path'), vm = require('vm');
+const SITE = path.join(__dirname, '..');
+let THREE;
+for (const p of [process.argv[2], process.env.THREE_PATH, 'three'].filter(Boolean)) {
+  try { THREE = require(fs.existsSync(path.join(p, 'build/three.cjs')) ? path.join(p, 'build/three.cjs') : p); break; } catch (e) {}
+}
+if (!THREE) { console.log('Нет three.js r149: npm i three@0.149.0 во временной папке и node scripts/kubomir-hand-test.cjs <путь>/node_modules/three'); process.exit(1); }
+let pass = 0, fail = 0;
+const ok = (c, msg, extra) => { if (c) pass++; else { fail++; console.log('  ✗', msg, extra !== undefined ? JSON.stringify(extra).slice(0, 300) : ''); } };
+const sec = t => console.log('— ' + t);
+const near = (a, b, e = 1e-3) => Math.abs(a - b) <= e;
+
+globalThis.window = globalThis; globalThis.self = globalThis; globalThis.THREE = THREE;
+const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
+for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js', 'js/games/kubomir-ents.js', 'js/games/kubomir-hand.js']) run(f);
+const T = THREE, E = window.D37E, V = E.vox, Lit = window.KubomirEnts.Lit, ID = V.ID;
+
+// ── сцена движка без WebGL: столько, сколько нужно voxel-render (R.wave — как у движка: метка на материале) ──
+const waved = [];
+const R = { T, r: { capabilities: { isWebGL2: true }, properties: { get: () => ({}) } }, scene: new T.Scene(), camera: new T.PerspectiveCamera(70, 16 / 9, .2, 500), q: 'high', night: 0, shadowDirty(){},
+  wave(m, o){ waved.push([m, o]); E.waveMaterial?.(m, o); return m; } };
+const VR = V.renderer(R);
+const SH = { toon: T.MeshToonMaterial, lambert: T.MeshLambertMaterial, phong: T.MeshPhongMaterial, basic: T.MeshBasicMaterial };
+const shaderOf = (lib) => ({ uniforms: {}, vertexShader: T.ShaderLib[lib].vertexShader, fragmentShader: T.ShaderLib[lib].fragmentShader });
+const incOk = s => s.split('\n').every(l => !l.includes('#include') || /^\s*#include <\w+>\s*$/.test(l));   // #include — своей строкой
+
+// ── мир для проверок: небо и свет блоков — функции клетки; стены — множество клеток ──
+function fakeWorld(sky, blk, walls = new Set()){
+  return {
+    seed: 37,
+    raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); return walls.has(x + ',' + y + ',' + z) ? ID.stone : 0; },
+    lightAt(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (walls.has(x + ',' + y + ',' + z)) return 0; const b = blk(x, y, z); return (sky(x, y, z) << 12) | (b[0] << 8) | (b[1] << 4) | b[2]; },
+    loaded: () => true, heightAt: () => 0, get(x, y, z){ return this.raw(x, y, z) & 0xfff; },
+  };
+}
+
+(async () => {
+  // ═══ 1. Свет в точке ═══
+  sec('свет существ: 8 клеток, стены, кривая, плавность');
+  const W1 = fakeWorld((x, y) => y >= 10 ? 15 : 0, x => [Math.max(0, Math.min(15, x)), 0, 0]);
+  const o = [0, 0, 0, 0];
+  Lit.sample(W1, 4.5, 5.5, 2.5, o);
+  ok(near(o[1], 4) && near(o[0], 0), 'в середине клетки — ровно её свет', o);
+  Lit.sample(W1, 5, 5.5, 2.5, o);
+  ok(near(o[1], 4.5), 'между клетками — среднее (плавно, без ступенек)', o);
+  Lit.sample(W1, 4.75, 5.5, 2.5, o);
+  ok(near(o[1], 4.25), 'на четверти — по весам расстояния', o);
+  Lit.sample(W1, 2.5, 10, 2.5, o);
+  ok(near(o[0], 7.5), 'граница неба по высоте — тоже плавно', o);
+  // у стены: клетка стены (свет 0) не тянет вниз
+  const W2 = fakeWorld(() => 15, () => [0, 0, 0], new Set(['5,5,2', '5,6,2', '5,5,3', '5,6,3']));
+  Lit.sample(W2, 4.9, 5.9, 2.9, o);
+  ok(near(o[0], 15), 'у стены не темнеет (непрозрачные клетки не считаются)', o);
+  const all = new Set(); for (let x = 3; x <= 6; x++) for (let y = 3; y <= 7; y++) for (let z = 1; z <= 4; z++) all.add(x + ',' + y + ',' + z);
+  const W3 = fakeWorld(() => 15, () => [9, 9, 9], all);
+  Lit.sample(W3, 4.6, 5.4, 2.4, o);
+  ok(o.every(v => v >= 0 && v <= 15), 'внутри камня — запасной путь (свет самой клетки), без NaN', o);
+  // кривая — как в шейдере кубиков (VS_BEGIN): небо (l / (4 − 3l))^1,5, блоки — rgb · m / (4 − 3m)² по самому яркому каналу
+  const v4 = { x: 0, y: 0, z: 0, w: 0 };
+  for (const lv of [[15, 0, 0, 0], [0, 15, 10, 4], [7, 3, 3, 3], [0, 0, 0, 0], [12.5, 6.2, 9.1, 1]]) {
+    Lit.vec(lv, v4, 1);
+    const l = lv[0] / 15, s = l / (4 - 3 * l), m = Math.max(lv[1], lv[2], lv[3]) / 15, k = 4 - 3 * m;
+    ok(near(v4.x, s * Math.sqrt(s), 1e-6) && near(v4.y, lv[1] / 15 * m / (k * k), 1e-6) && near(v4.w, lv[3] / 15 * m / (k * k), 1e-6), 'кривая = шейдер кубиков ' + lv.join('/'), v4);
+  }
+  Lit.vec([0, 15, 10, 4], v4, 1);
+  ok(v4.y > v4.z && v4.z > v4.w && near(v4.z / v4.y, 10 / 15, 1e-6), 'цвет света факела не меняется (кривая по самому яркому каналу)', v4);
+  // по времени: догоняет, а dt = 0 — сразу
+  const E1 = Lit.make(T), st1 = { W: W1, VR, ox: 0, oz: 0 };
+  Lit.update(E1, st1, 2.5, 5.5, 2.5, 0);
+  ok(near(E1.lv[1], 2), 'первый раз — сразу (без «вспышки» из темноты)', [...E1.lv]);
+  for (let i = 0; i < 6; i++) Lit.update(E1, st1, 10.5, 5.5, 2.5, 1 / 60);
+  ok(E1.lv[1] > 2.5 && E1.lv[1] < 10, 'перешёл в светлую клетку — свет догоняет плавно', [...E1.lv]);
+  for (let i = 0; i < 60; i++) Lit.update(E1, st1, 10.5, 5.5, 2.5, 1 / 60);
+  ok(near(E1.lv[1], 10, .01), 'через секунду — уже свет новой клетки', [...E1.lv]);
+  ok(E1.u.value.isVector4 && near(E1.u.value.y, Lit.vec(E1.lv, { x: 0, y: 0, z: 0, w: 0 }, Lit.flick(VR.U, 10.5, 5.5, 2.5)).y, 1e-6), 'униформа — та же кривая с мерцанием, как у кубиков');
+  // свой свет: факел в руке
+  const tc = Lit.held('torch', [0, 0, 0]);
+  ok(tc && tc[0] > tc[1] && tc[1] > tc[2] && tc[0] <= 14 && tc[0] >= 12, 'факел в руке — тёплый свет на шаг слабее источника', tc);
+  ok(Lit.held('stone', [0, 0, 0]) === null && Lit.held('', [0, 0, 0]) === null && Lit.held('pick_iron', [0, 0, 0]) === null, 'камень, кирка, пустая рука — своего света нет');
+
+  // ═══ 2. Материалы существ ═══
+  sec('материалы существ: свет кубиков в шейдерах three r149');
+  const U1 = { value: new T.Vector4(1, 0, 0, 0) };
+  for (const [lib, Cls] of Object.entries(SH)) for (const fp of [false, true]) {
+    const src = new Cls({ color: '#ff8844' }), m = VR.entityMaterial(src, U1, { fp, kind: 'test' }), sh = shaderOf(lib);
+    m.onBeforeCompile(sh);
+    const lit = lib !== 'basic';
+    ok(m !== src && m.userData.d37ent && m.userData.d37ent.fp === fp, lib + (fp ? ' fp' : '') + ': своя копия с меткой d37ent');
+    ok(sh.uniforms.uD37L === U1 && sh.uniforms.uDay === VR.U.uDay && sh.uniforms.uBlockK === VR.U.uBlockK, lib + ': униформа существа по ссылке, день и сила света блоков — общие с кубиками');
+    ok(sh.fragmentShader.includes('uniform vec4 uD37L;') && /#include <aomap_fragment>\s*#ifdef D37_ENT_LIT/.test(sh.fragmentShader), lib + ': кусок света встал после aomap_fragment');
+    ok(!lit || sh.fragmentShader.includes('d37pt = reflectedLight.directDiffuse;'), lib + ': лампы движка отделены от солнца (метка перед прожекторами найдена)');
+    ok(!!m.defines.D37_ENT_LIT === lit && !!m.defines.D37_FP === fp, lib + ': defines', m.defines);
+    ok(!fp || (sh.vertexShader.includes('#include <project_vertex>\n#ifdef D37_FP') && sh.vertexShader.includes('gl_Position.w * 0.99')), lib + ': «вид из глаз» — глубина сжата после project_vertex');
+    ok(incOk(sh.fragmentShader) && incOk(sh.vertexShader), lib + ': #include — с новой строки');
+    ok(src.defines === undefined || !src.defines.D37_ENT, lib + ': исходный материал не тронут');
+  }
+  const kA = VR.entityMaterial(new T.MeshToonMaterial(), U1).customProgramCacheKey(), kB = VR.entityMaterial(new T.MeshToonMaterial(), U1, { fp: true }).customProgramCacheKey(), kC = VR.entityMaterial(new T.MeshBasicMaterial(), U1).customProgramCacheKey();
+  ok(kA !== kB && kA !== kC && kB !== kC, 'ключи программ разные: обычный, «из глаз», «плоский»', [kA, kB, kC]);
+  // вещи «из глаз»
+  const it0 = VR.itemMesh('planks_oak', 15 << 12), it1 = VR.itemMesh('planks_oak', 15 << 12, { fp: true }), it2 = VR.itemMesh('pick_iron', 15 << 12, { fp: true });
+  ok(it1.material !== it0.material && it1.material.defines.D37_FP === 1 && !it0.material.defines.D37_FP && it1.userData.fp, 'вещь «из глаз» — свой материал слоя с D37_FP');
+  ok(it2.material.userData.d37vox.layer === 'cutout' && it2.material.userData.d37vox.fp, 'плоская вещь «из глаз» — вырезной слой');
+  ok(VR.itemMesh('planks_oak', 0, { fp: true }).material === it1.material, 'материал «из глаз» — один на слой');
+  const shV = shaderOf('lambert'); it1.material.onBeforeCompile(shV);
+  ok(shV.vertexShader.includes('#ifdef D37_FP') && shV.vertexShader.includes('attribute vec4 lt;') && incOk(shV.vertexShader), 'кубики: кусок «из глаз» в вершинном шейдере (под #ifdef)');
+  ok(it1.material.customProgramCacheKey() !== it0.material.customProgramCacheKey(), 'кубики: ключ программы «из глаз» свой');
+  // трава и листва: код травы движка (E.FOLIAGE_GLSL) и ветер движка (R.wave, E.GFXU.wind)
+  sec('трава и листва: код травы и ветер движка');
+  ok(typeof E.FOLIAGE_GLSL === 'string' && E.GFXU && E.GFXU.rt && E.GFXU.wind, 'движок дал E.FOLIAGE_GLSL и E.GFXU (rt, wind)');
+  for (const k of V.LAYERS) {
+    const m = VR.mats[k], sh = shaderOf('lambert'); m.onBeforeCompile(sh);
+    const cut = k === 'cutout' || k === 'foliage' || k === 'glass';
+    ok(sh.fragmentShader.includes('#include <output_fragment>\n' + E.FOLIAGE_GLSL) === cut && (sh.uniforms.d37Rt?.value === E.GFXU.rt) === cut, k + ': код травы движка — ' + (cut ? 'после output_fragment, d37Rt — общий E.GFXU.rt' : 'нет (не вырезное)'));
+    ok(!cut || sh.fragmentShader.includes('uniform vec4 d37Rt;'), k + ': d37Rt объявлен');
+    ok(!/gl_FragColor\.a\s*=/.test(sh.fragmentShader), k + ': альфа — целым вектором, без «.a =» (как советует страж графики)');
+    ok(sh.uniforms.uD37Wind.value === E.GFXU.wind, k + ': ветер — общий E.GFXU.wind по ссылке');
+    ok(/#ifdef D37_WAVE\s*\nif \( d37f > 0\.5 && d37f < 1\.5 \)/.test(sh.vertexShader) && /#undef D37_WAVE\s*#endif\s*#include <project_vertex>/.test(sh.vertexShader), k + ': качание — под D37_WAVE набора, кусок ветра движка (для моделей без масштаба) снят');
+    ok(incOk(sh.fragmentShader) && incOk(sh.vertexShader), k + ': #include — своей строкой');
+  }
+  const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
+  ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
+  ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
+  const dm = (() => { const cm = new T.Mesh(); let d = null; VR.setChunk({ cx: 0, cz: 0, key: 't' }, { foliage: { n: 1, pos: new Uint16Array(12), vd: new Uint16Array(16), col: new Uint8Array(12), lt: new Uint8Array(16) } }); for (const c of VR.chunks) d = c.vis.foliage.customDepthMaterial; return d; })();
+  const shD = shaderOf('depth'); dm.onBeforeCompile(shD);
+  ok(shD.vertexShader.includes('uD37Wind.y > 0.0') && shD.uniforms.uD37Wind.value === E.GFXU.wind && incOk(shD.vertexShader), 'тень листвы качается тем же ветром (без ветра — стоит)');
+  // свет вещи дробными уровнями
+  const g = it0.geometry, lt = g.attributes.lt;
+  VR.itemLightF(g, [15, 0, 0, 0]);
+  ok(lt.array[0] === 60 && lt.array[1] === 0, 'itemLightF: уровни × 4 в вершины', [...lt.array.slice(0, 4)]);
+  VR.itemLightF(g, [7.4, 12.6, 3.1, 0]);
+  ok(lt.array[0] === 30 && lt.array[1] === 50 && lt.array[2] === 12 && lt.array[lt.array.length - 4] === 30, 'itemLightF: четверть уровня, у всех вершин', [...lt.array.slice(0, 4)]);
+  lt.needsUpdate = false; const ver = lt.version;
+  VR.itemLightF(g, [7.4, 12.6, 3.1, 0]);
+  ok(lt.version === ver, 'тот же свет — буфер не переписывается');
+  VR.itemLight(g, 15 << 12); VR.itemLightF(g, [7.4, 12.6, 3.1, 0]);
+  ok(lt.array[0] === 30, 'itemLight и itemLightF не путают свою «память»');
+
+  // ═══ 3. Рука ═══
+  sec('рука: взмах, толчок, смена вещи, еда, вид от 1-го и 3-го лица, свет человечка');
+  // человечек-заглушка: как у world3d — плечо (armR, userData.La) → локоть → кисть
+  const mkCh = () => {
+    const root = new T.Group(), armR = new T.Group(), elbowR = new T.Group(), handR = new T.Group(), body = new T.Mesh(new T.BoxGeometry(.4, .6, .2), new T.MeshToonMaterial({ color: '#3366cc' }));
+    root.add(body); root.add(armR); armR.position.set(.3, 1.3, 0); armR.userData.La = .6;
+    armR.add(new T.Mesh(new T.BoxGeometry(.1, .3, .1), new T.MeshToonMaterial({ color: '#3366cc' })));
+    elbowR.position.set(0, -.3, 0); armR.add(elbowR); elbowR.add(new T.Mesh(new T.BoxGeometry(.1, .3, .1), new T.MeshToonMaterial({ color: '#f0c0a0' })));
+    handR.position.set(0, -.3, 0); elbowR.add(handR); handR.add(new T.Mesh(new T.SphereGeometry(.07), new T.MeshBasicMaterial({ color: '#f0c0a0' })));
+    return { root, armR, elbowR, handR, body };
+  };
+  const ch = mkCh();
+  const actor = { key: 'me', x: 2.5, y: 5, z: 2.5, ch, hidden: true };
+  const A = { list: new Map([['me', actor]]), get: k => A.list.get(k) };
+  const cave = fakeWorld(() => 0, () => [13, 10, 6]);
+  const P = { x: 2.5, y: 5, z: 2.5, sneak: false, dead: false, inv: new Array(36).fill(null), sel: 0 };
+  P.inv[0] = { id: 'pick_iron', n: 1 }; P.inv[1] = { id: 'planks_oak', n: 10 }; P.inv[2] = { id: 'torch', n: 4 }; P.inv[3] = { id: 'apple', n: 3 };
+  const st = { R, VR, W: cave, P, A, ox: 0, oz: 0, camMode: 0, hudHidden: false, eat: null, rig: { yaw: 0, fp: 0, feel: { bobPh: 0, bobW: 0 }, motion: 1 } };
+  const H = window.KubomirHand.create(st);
+  const tick = (sec2, f) => { const n = Math.round(sec2 * 60); for (let i = 0; i < n; i++) { f?.(i); H.frame(1 / 60, i / 60); } };
+  H.frame(1 / 60, 0);
+  let s = H.state();
+  ok(s.item === 'pick_iron' && s.equip === 1 && s.fp && s.arm, 'вещь при входе в мир — сразу, без «опустить-поднять»', s);
+  const ak = Math.max(.62, Math.min(1, R.camera.aspect / 1.6)), F0 = window.KubomirHand.FP.fist;
+  ok(s.fist && near(s.fist[0], F0[0] * ak, .05) && near(s.fist[1], F0[1], .05) && near(s.fist[2], F0[2], .05), 'кулак — там, где задано (внизу справа)', { fist: s.fist, F0 });
+  ok(ch.body.material.userData.d37ent && ch.armR.children[0].material.userData.d37ent, 'материалы человечка — со светом кубиков');
+  let fpMats = 0; R.camera.traverse(o => { if (o.isMesh && o.material?.userData?.d37ent?.fp) fpMats++; });
+  ok(fpMats >= 3, 'рука от 1-го лица — копия руки человечка с материалами «из глаз»', fpMats);
+  // свет: пещера с факелами
+  ok(s.body[0] < .01 && s.body[1] > s.body[2] && s.body[2] > s.body[3], 'в пещере у факела: неба нет, свет тёплый', s.body);
+  const uMe = H.light('me').u.value;
+  ok(uMe.x < .01 && uMe.y > uMe.w, 'униформа человечка — тот же тёплый свет', uMe);
+  // взмах повторяется, пока копает
+  let starts = 0, prev = 1;
+  H.mine(true);
+  tick(1, () => { const w = H.sw; if (w < prev - .5) starts++; prev = w; });
+  H.mine(false); tick(.4);
+  ok(starts >= 2 && starts <= 4 && H.sw === 1, 'держишь «ломать» — взмах за взмахом (~0,3 с), отпустил — рука останавливается', { starts, sw: H.sw });
+  H.act('swing'); ok(H.sw === 0, 'клик — новый взмах');
+  tick(.06); const mid = H.sw; H.act('swing');
+  ok(H.sw === mid && mid > 0 && mid < .5, 'клик в начале взмаха — не сбивает (как в Майнкрафте)', mid);
+  tick(.12); H.act('swing'); ok(H.sw === 0, 'после половины — новый взмах');
+  tick(.5);
+  H.act('push'); ok(H.push === 0, 'поставить блок — толчок'); tick(.25); ok(H.push === 1, 'толчок короткий (0,2 с)');
+  // смена вещи: опустить и поднять
+  P.sel = 1; H.frame(1 / 60, 0); s = H.state();
+  ok(s.item === 'planks_oak' && s.equip < .2, 'сменил вещь — рука опускается и поднимается', s.equip);
+  tick(.3); ok(H.state().equip === 1, 'смена вещи — за четверть секунды');
+  // факел в руке светит на свою руку и человечка даже в темноте
+  st.W = fakeWorld(() => 0, () => [0, 0, 0]);
+  P.sel = 2; tick(.5); s = H.state();
+  ok(s.eye[1] > 10 && s.body[1] > 10 && s.eye[1] > s.eye[3], 'факел в руке — рука и человечек в его тёплом свете', s.eye);
+  P.sel = 1; tick(.5); s = H.state();
+  ok(s.eye[1] < .2 && s.body[1] < .2, 'убрал факел — снова темно', s.eye);
+  st.W = cave;
+  // еда: рука ко рту
+  P.sel = 3; tick(.3);
+  st.eat = { t: 0, need: 1.6 }; tick(.5); const e1 = H.state().eat;
+  ok(e1 > .9, 'ест — рука с едой ко рту', e1);
+  const fE = H.state().fist;
+  ok(fE && fE[0] < F0[0] * ak - .1, 'кулак у рта — ближе к середине экрана', fE);
+  st.eat = null; tick(.6); ok(H.state().eat < .05, 'доел (или отпустил) — рука на место', H.state().eat);
+  // от 3-го лица: поверх позы world3d, без накопления
+  st.camMode = 1; actor.hidden = false;
+  const base = { x: .1, y: .02, z: .16, e: -.2 };
+  const pose = () => { ch.armR.rotation.set(base.x, base.y, base.z); ch.elbowR.rotation.x = base.e; };   // как animate каждый кадр
+  P.sel = 0; for (let i = 0; i < 30; i++) { pose(); H.frame(1 / 60, i / 60); }
+  ok(!H.state().fp, 'вид сзади — руки «из глаз» нет');
+  const hx = ch.armR.rotation.x;
+  ok(hx < base.x - .2 && hx > base.x - .5, 'с вещью рука чуть вперёд (как в Майнкрафте)', hx);
+  for (let i = 0; i < 30; i++) { pose(); H.frame(1 / 60, i / 60); }
+  ok(near(ch.armR.rotation.x, hx, 1e-6), 'поверх позы — без накопления от кадра к кадру');
+  H.act('swing'); let minX = 9; for (let i = 0; i < 18; i++) { pose(); H.frame(1 / 60, i / 60); minX = Math.min(minX, ch.armR.rotation.x); }
+  ok(minX < base.x - 1.2, 'взмах от 3-го лица — рука поднимается и рубит', minX);
+  ok(H.tpItem && H.tpItem.parent === ch.handR, 'вещь от 3-го лица — в кисти человечка');
+  st.camMode = 0; actor.hidden = true; pose(); H.frame(1 / 60, 0);
+  ok(H.state().fp, 'снова от 1-го лица — рука на месте');
+  st.hudHidden = true; H.frame(1 / 60, 0); ok(!H.state().fp, 'F1 — руку не видно'); st.hudHidden = false;
+  P.dead = true; H.frame(1 / 60, 0); ok(!H.state().fp && !H.state().item, 'погиб — ни руки, ни вещи'); P.dead = false; H.frame(1 / 60, 0);
+  // пересобрали человечка — рука пересобирается
+  actor.ch = mkCh(); H.frame(1 / 60, 0);
+  ok(actor.ch.body.material.userData.d37ent && H.armCh === actor.ch, 'новый человечек — свет и рука заново');
+  const orig = actor.ch.armR.children[0].material;
+  H.dispose();
+  ok(!orig.userData.d37ent || orig !== actor.ch.armR.children[0].material, 'закрыли мир — человечку вернулись его материалы');
+  let left = 0; R.camera.traverse(o => { if (o.isMesh) left++; }); ok(left === 0, 'закрыли мир — у камеры ничего не осталось', left);
+
+  // ═══ 4. Мобы — через один «вид» ═══
+  sec('мобы: вид — одна функция, свет — как у кубиков');
+  const S = { R, VR, W: Object.assign(fakeWorld(() => 15, () => [0, 0, 0]), { chunk: () => null }), P: { x: 0, y: 5, z: 0, dead: false }, ox: 0, oz: 0, meta: { diff: 'normal' }, ST: { rd: 6 }, creative: false };
+  const X = window.KubomirEnts.create(S);
+  const m = X.spawn('pig', 1.5, 5, 1.5);
+  ok(m && m.parts && m.parts.mat.userData.d37ent && m.parts.mat.userData.d37ent.kind === 'mob', 'моб-коробки: материал со светом кубиков');
+  X.frame(1 / 60, 0);
+  ok(m.lit.u.value.x > .99 && m.parts.g.position.x === 1.5, 'моб: свет и место — каждый кадр', m.lit.u.value);
+  m.hurtT = .3; X.frame(1 / 60, 0); ok(m.parts.mat.color.g < .5, 'удар — красная вспышка'); m.hurtT = 0; X.frame(1 / 60, 0); ok(m.parts.mat.color.g === 1, 'после удара — обычный цвет');
+  X.dispose();
+  const calls = [];
+  window.KubomirEnts.mobView = ctx => ({ add(mm){ calls.push('add:' + mm.type); }, frame(mm){ calls.push('frame'); }, remove(mm){ calls.push('remove'); }, dispose(){ calls.push('dispose'); } });
+  const X2 = window.KubomirEnts.create(S); const m2 = X2.spawn('cow', 2.5, 5, 2.5); X2.frame(1 / 60, 0); X2.dispose();
+  window.KubomirEnts.mobView = null;
+  ok(calls[0] === 'add:cow' && calls.includes('frame') && calls.includes('remove') && calls[calls.length - 1] === 'dispose' && m2.lit && m2.lit.u, 'свой вид мобов (KubomirEnts.mobView) — подменяет коробки целиком', calls);
+
+  console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error(e); process.exit(1); });

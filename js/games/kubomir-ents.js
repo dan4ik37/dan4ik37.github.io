@@ -5,7 +5,8 @@
 // window.KubomirEnts.create(S) → X: tick(dt) — 20 раз в секунду (ИИ мобов, вода, печи), frame(dt, t) — рисование,
 // addItem(x, y, z, вещь, разбросать, скорость), debris(x, y, z, блок), rayMob(…), damage(моб, урон, nx, nz), spawn(вид, x, y, z),
 // onBlockChanged(x, y, z, было, стало) — соседей «будим» (вода течёт, песок падает), blocked(x, y, z) — моб в клетке,
-// save()/load() — звери мира, dispose(). ИИ дешёвый и предсказуемый: у каждого моба свой генератор от номера, шаг 1/20 с,
+// crumbs(x, y, z, вещь) — крошки еды, save()/load() — звери мира, dispose(). Свет мобов, вещей и человечков — плавный, как у
+// кубиков (KubomirEnts.Lit); как рисуется моб — одно место (view, boxMobView). ИИ дешёвый и предсказуемый: у каждого моба свой генератор от номера, шаг 1/20 с,
 // дальше 64 блоков — не думают. Вода: источник (0) и течение 1…7, падающая (8); лава течёт на 3 и медленнее;
 // вода + лава → обсидиан (источник лавы) или булыжник.
 (() => {
@@ -19,7 +20,65 @@
     slime: { title: 'Слизень', hp: 8, w: .8, h: .8, speed: 3, passive: false, dmg: 2, drops: [['slime_ball', 1, 2]], snd: 'kb_squish', body: '#6fcf5a', spot: '#4caa40', legs: '#4caa40', head: '#6fcf5a', hop: true },
   };
 
-  window.KubomirEnts = { MOBS, create, onChunk(){}, onDrop(){} };
+  // ═══ Свет существ — как у кубиков, плавно ═══
+  // Lit.sample(W, x, y, z, out) → out = [небо, R, G, B] — уровни 0…15 дробные: 8 клеток вокруг точки (веса — по расстоянию до
+  // их середин), клетки внутри непрозрачных блоков не считаются (у стены не темнеет, в узком проходе — тоже). Lit.make(T) →
+  // состояние { lv, tg, u } (u — униформа для VR.entityMaterial); Lit.update(E, st, x, y, z, dt, add) — свет в точке (мировые
+  // координаты), по времени догоняет за ~0,1 с (dt = 0 — сразу); add — [R, G, B] уровни своего света (факел в руке).
+  // Lit.vec(уровни, v, мерцание) — та же кривая, что у вершин кубиков (VS_BEGIN в voxel-render.js) → v.x небо, v.yzw — R, G, B.
+  const Lit = {
+    sample(W, x, y, z, out){
+      const V = window.D37E.vox, op = V.T.opaque;
+      const fx = x - .5, fy = y - .5, fz = z - .5, x0 = Math.floor(fx), y0 = Math.floor(fy), z0 = Math.floor(fz), tx = fx - x0, ty = fy - y0, tz = fz - z0;
+      let ws = 0, s = 0, r = 0, g = 0, b = 0;
+      for (let i = 0; i < 8; i++) {
+        const dx = i & 1, dy = (i >> 1) & 1, dz = i >> 2, w = (dx ? tx : 1 - tx) * (dy ? ty : 1 - ty) * (dz ? tz : 1 - tz);
+        if (w <= 1e-6) continue;
+        const cx = x0 + dx, cy = y0 + dy, cz = z0 + dz, v = W.raw(cx, cy, cz);
+        if (v > 0 && op[v & 0xfff]) continue;
+        const L = W.lightAt(cx, cy, cz);
+        ws += w; s += w * ((L >>> 12) & 15); r += w * ((L >>> 8) & 15); g += w * ((L >>> 4) & 15); b += w * (L & 15);
+      }
+      if (ws < 1e-4) { const L = W.lightAt(x, y, z); out[0] = (L >>> 12) & 15; out[1] = (L >>> 8) & 15; out[2] = (L >>> 4) & 15; out[3] = L & 15; return out; }
+      out[0] = s / ws; out[1] = r / ws; out[2] = g / ws; out[3] = b / ws;
+      return out;
+    },
+    vec(lv, v, fl = 1){
+      const l = Math.max(0, Math.min(1, lv[0] / 15)), s = l / (4 - 3 * l), m = Math.max(0, Math.min(1, Math.max(lv[1], lv[2], lv[3]) / 15)), k = 4 - 3 * m, q = m / (k * k) * fl / 15;
+      v.x = s * Math.sqrt(s); v.y = lv[1] * q; v.z = lv[2] * q; v.w = lv[3] * q;
+      return v;
+    },
+    make(T){ return { lv: new Float32Array(4), tg: new Float32Array(4), init: false, u: { value: T ? new T.Vector4(1, 0, 0, 0) : { x: 1, y: 0, z: 0, w: 0 } } }; },
+    // мерцание факелов — как у кубиков (по месту в сцене и времени шейдера)
+    flick(U, rx, y, rz){ if (!U) return 1; const h = rx * 1.31 + rz * 1.73 + y * .71, t = U.uTime.value; return 1 + U.uFlick.value * (.07 * Math.sin(t * 8.7 + h) + .045 * Math.sin(t * 15.3 + h * 2.1)); },
+    update(E, st, x, y, z, dt, add){
+      Lit.sample(st.W, x, y, z, E.tg);
+      if (add) for (let c = 0; c < 3; c++) if (add[c] > E.tg[c + 1]) E.tg[c + 1] = add[c];
+      if (!E.init || !(dt > 0)) { E.lv.set(E.tg); E.init = true; }
+      else { const k = 1 - Math.exp(-dt * 12); for (let i = 0; i < 4; i++) E.lv[i] += (E.tg[i] - E.lv[i]) * k; }
+      Lit.vec(E.lv, E.u.value, Lit.flick(st.VR?.U, x - (st.ox || 0), y, z - (st.oz || 0)));
+      return E;
+    },
+    // свой свет вещи в руке (факел, лава в ведре, светящийся блок мода): уровни R, G, B на шаг от источника; null — нет
+    held(id, out){
+      const V = window.D37E.vox, it = id ? V.item(id) : null, b = it?.place ? V.block(it.place) : null, e = b ? V.T.emit[b.id] : 0;
+      if (!e) return null;
+      for (let c = 0; c < 3; c++) out[c] = Math.max(0, V.T.ecol[b.id * 3 + c] / 17 - 1);
+      return out;
+    },
+  };
+  window.KubomirEnts = { MOBS, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice(), Lit, mobView: null, boxMobView: c => boxMobView(c) };
+  // цвет освещения существа по свету клетки: небо — белым, факелы и лава — своим цветом (как у кубиков) → [r, g, b, яркость]
+  // (запасной путь, если свой кусок шейдера не собрался)
+  const LTC = [1, 1, 1, 1];
+  function lightTint(L, min = .06){
+    // кривая — как у кубиков (voxel-render.js): по самому яркому каналу, в квадрате — оттенок света не меняется
+    const s = (L >>> 12) & 15, sk = (s / 15) ** 2, r0 = (L >>> 8) & 15, g0 = (L >>> 4) & 15, b0 = L & 15, m = Math.max(r0, g0, b0) / 15, k = 1.5 / 15 * m / ((4 - 3 * m) ** 2);
+    const r = r0 * k, g = g0 * k, b = b0 * k;
+    LTC[0] = Math.min(1.4, Math.max(sk, r, min)); LTC[1] = Math.min(1.4, Math.max(sk, g, min)); LTC[2] = Math.min(1.4, Math.max(sk, b, min));
+    LTC[3] = Math.max(LTC[0], LTC[1], LTC[2]);
+    return LTC;
+  }
 
   function create(S){
     const T = S.R.T, R = S.R, VR = S.VR, W = S.W;
@@ -30,9 +89,9 @@
     X.addItem = (x, y, z, stack, scatter, vel) => {
       if (!stack || !(stack.n > 0) || !V().item(stack.id)) return null;
       const r = X.rng;
-      const e = { x, y, z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lk: -1, ground: false };
+      const e = { x, y, z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lit: Lit.make(null), ground: false };
       if (scatter) { e.vx = (r() - .5) * 6; e.vz = (r() - .5) * 6; e.vy = 4; }
-      e.mesh = VR.itemMesh(e.s.id, 15, 0);
+      e.mesh = VR.itemMesh(e.s.id, 15 << 12);
       const flat = e.mesh.geometry.userData.flat;
       e.mesh.scale.setScalar(flat ? .42 : .28); e.k = flat ? .21 : .14;
       R.scene.add(e.mesh);
@@ -73,13 +132,19 @@
         a.s.n += b.s.n; dropItem(j);
       }
     }
-    function itemsFrame(t){
-      for (const e of X.items) {
-        const m = e.mesh;
+    // свет вещи — плавно (Lit); дальние (дальше 20 блоков) — раз в 4 кадра
+    let fN = 0;
+    function itemsFrame(t, dt){
+      fN++;
+      const P = S.P;
+      for (let i = 0; i < X.items.length; i++) {
+        const e = X.items[i], m = e.mesh;
         m.position.set(e.x - S.ox, e.y + e.k + .08 + Math.sin(t * 2.4 + e.ph) * .05, e.z - S.oz);
         m.rotation.y = t * 1.6 + e.ph;
-        const L = W.lightAt(e.x, e.y + .3, e.z);
-        if (L !== e.lk) { e.lk = L; VR.itemLight(m.geometry, L >> 4, L & 15); }
+        const far = Math.abs(e.x - P.x) > 20 || Math.abs(e.z - P.z) > 20;
+        if (far && e.lit.init && ((fN + i) & 3)) continue;
+        Lit.update(e.lit, S, e.x, e.y + e.k + .1, e.z, far ? dt * 4 : dt);
+        VR.itemLightF(m.geometry, e.lit.lv);
       }
     }
 
@@ -102,7 +167,7 @@
     }
     X.debris = (x, y, z, bid, n = 14, colOverride) => {
       const b = V().blocks[bid], layer = b?.texf ? b.texf.side : 0, P = texAvg(layer), r = X.rng;
-      const L = W.lightAt(x, y + 1, z), k = Math.max(((L >> 4) / 15) ** 2, ((L & 15) / 15) ** 2, .08) * .8;
+      const L = W.lightAt(x, y + 1, z), k = Math.max((V().lSky(L) / 15) ** 2, (V().lBlk(L) / 15) ** 2, .08) * .8;
       for (let i = 0; i < n; i++) {
         const j = dHead; dHead = (dHead + 1) % DN;
         dPos[j * 3] = x + .5 + (r() - .5) * .7 - S.ox; dPos[j * 3 + 1] = y + .5 + (r() - .5) * .7; dPos[j * 3 + 2] = z + .5 + (r() - .5) * .7 - S.oz;
@@ -116,6 +181,19 @@
       const hx = /^#[0-9a-f]{6}$/i.test(color || '') ? parseInt(color.slice(1), 16) : -1;
       const c = hx >= 0 ? [(hx >> 16 & 255) / 255, (hx >> 8 & 255) / 255, (hx & 255) / 255] : kind === 'heart' ? [1, .3, .4] : kind === 'magic' ? [.7, .4, 1] : kind === 'smoke' ? [.4, .4, .4] : kind === 'fire' ? [1, .6, .2] : kind === 'water' ? [.4, .6, 1] : [1, 1, .6];
       X.debris(Math.floor(x), Math.floor(y), Math.floor(z), 0, Math.max(1, Math.min(40, n | 0)), c);
+    };
+    // крошки еды у рта (точная точка, цвета — по картинке вещи)
+    X.crumbs = (x, y, z, id, n = 4) => {
+      const it = V().item(id), b = it?.place ? V().block(it.place) : null, P = texAvg(it?.texL ?? b?.texf?.side ?? 0), r = X.rng;
+      const L = W.lightAt(x, y, z), k = Math.max((V().lSky(L) / 15) ** 2, (V().lBlk(L) / 15) ** 2, .08) * .8;
+      for (let i = 0; i < n; i++) {
+        const j = dHead; dHead = (dHead + 1) % DN;
+        dPos[j * 3] = x + (r() - .5) * .16 - S.ox; dPos[j * 3 + 1] = y + (r() - .5) * .1; dPos[j * 3 + 2] = z + (r() - .5) * .16 - S.oz;
+        dVel[j * 3] = (r() - .5) * 1.6; dVel[j * 3 + 1] = r() * .8 + .2; dVel[j * 3 + 2] = (r() - .5) * 1.6;
+        const c = P.pal[Math.floor(r() * P.pal.length)];
+        dCol[j * 3] = c[0] * k; dCol[j * 3 + 1] = c[1] * k; dCol[j * 3 + 2] = c[2] * k;
+        dLife[j] = .35 + r() * .3;
+      }
     };
     let dOX = 0, dOZ = 0;
     function debrisFrame(dt){
@@ -136,9 +214,9 @@
     // ═══ Падающий песок и гравий ═══
     function startFall(x, y, z, v){
       W.set(x, y, z, 0, { urgent: 2 });
-      const name = V().blocks[v & 0xfff].name, m = VR.itemMesh(name, 15, 0);
+      const name = V().blocks[v & 0xfff].name, m = VR.itemMesh(name, 15 << 12);
       m.scale.setScalar(1); R.scene.add(m);
-      X.falling.push({ x: x + .5, y, z: z + .5, vy: 0, v, m });
+      X.falling.push({ x: x + .5, y, z: z + .5, vy: 0, v, m, lit: Lit.make(null) });
     }
     function fallingTick(dt){
       for (let i = X.falling.length - 1; i >= 0; i--) {
@@ -158,54 +236,20 @@
     }
 
     // ═══ Мобы ═══
-    const mobGeo = {};
-    function geoFor(type){
-      if (mobGeo[type]) return mobGeo[type];
-      const M = MOBS[type], parts = {};
-      const box = (w, h, d, x, y, z, col) => { const g = new T.BoxGeometry(w, h, d); g.translate(x, y, z); const c = new T.Color(col), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new T.BufferAttribute(a, 3)); return g; };
-      const merge = list => mergeGeos(T, list);
-      if (type === 'zombie') {
-        parts.body = merge([box(.5, .7, .28, 0, 1.1, 0, M.body)]);
-        parts.head = merge([box(.48, .48, .48, 0, .24, 0, M.head), box(.1, .08, .02, -.11, .3, .245, '#1b1b1b'), box(.1, .08, .02, .11, .3, .245, '#1b1b1b')]); parts.headY = 1.45;
-        parts.leg = merge([box(.22, .75, .24, 0, -.375, 0, M.legs)]); parts.legY = .75; parts.legX = .13; parts.legZ = 0;
-        parts.arm = merge([box(.2, .2, .7, 0, 0, .3, M.head)]); parts.armY = 1.35; parts.armX = .36;
-      } else if (type === 'slime') {
-        parts.body = merge([box(.8, .8, .8, 0, .4, 0, M.body), box(.12, .12, .02, -.16, .5, .41, '#1c3a18'), box(.12, .12, .02, .16, .5, .41, '#1c3a18'), box(.2, .06, .02, 0, .3, .41, '#2c5a26')]);
-      } else if (type === 'chicken') {
-        parts.body = merge([box(.4, .36, .5, 0, .48, 0, M.body), box(.06, .25, .3, -.22, .5, 0, '#e6e6e0'), box(.06, .25, .3, .22, .5, 0, '#e6e6e0')]);
-        parts.head = merge([box(.26, .32, .2, 0, .16, 0, M.head), box(.12, .07, .1, 0, .12, .14, '#f2b630'), box(.08, .1, .05, 0, .02, .1, M.spot)]); parts.headY = .62; parts.headZ = .26;
-        parts.leg = merge([box(.06, .3, .06, 0, -.15, 0, M.legs)]); parts.legY = .3; parts.legX = .1; parts.legZ = 0;
-      } else {   // корова, свинья
-        const pig = type === 'pig', L = pig ? .35 : .55;
-        const spots = pig ? [] : [box(.62, .3, .3, 0, .95, .15, M.spot), box(.3, .25, .4, .2, .9, -.35, M.spot)];
-        parts.body = merge([box(pig ? .7 : .75, pig ? .55 : .65, 1.15, 0, L + (pig ? .28 : .33), 0, M.body), ...spots]);
-        parts.head = merge([box(pig ? .5 : .5, pig ? .45 : .5, .45, 0, .1, .2, M.head), pig ? box(.26, .18, .06, 0, .02, .44, '#e4747e') : box(.32, .18, .06, 0, -.02, .44, '#d8b9a6'),
-          box(.08, .08, .02, -.14, .16, .43, '#111'), box(.08, .08, .02, .14, .16, .43, '#111'), ...(pig ? [] : [box(.08, .14, .08, -.24, .36, .2, '#e9e1cf'), box(.08, .14, .08, .24, .36, .2, '#e9e1cf')])]);
-        parts.headY = L + (pig ? .45 : .62); parts.headZ = .55;
-        parts.leg = merge([box(.22, L, .22, 0, -L / 2, 0, M.legs)]); parts.legY = L; parts.legX = .22; parts.legZ = .38;
-      }
-      mobGeo[type] = parts;
-      return parts;
-    }
-    function buildMob(m){
-      const p = geoFor(m.type), mat = new T.MeshLambertMaterial({ vertexColors: true }), g = new T.Group();
-      const mesh = geo => { const o = new T.Mesh(geo, mat); o.castShadow = true; return o; };
-      g.add(mesh(p.body));
-      m.parts = { g, mat };
-      if (p.head) { const h = new T.Group(); h.position.set(0, p.headY, p.headZ || 0); h.add(mesh(p.head)); g.add(h); m.parts.head = h; }
-      if (p.leg) { m.parts.legs = []; const zs = p.legZ ? [p.legZ, -p.legZ] : [0]; for (const z of zs) for (const x of [-p.legX, p.legX]) { const l = new T.Group(); l.position.set(x, p.legY, z); l.add(mesh(p.leg)); g.add(l); m.parts.legs.push(l); } }
-      if (p.arm) { m.parts.arms = []; for (const x of [-p.armX, p.armX]) { const a = new T.Group(); a.position.set(x, p.armY, 0); a.add(mesh(p.arm)); g.add(a); m.parts.arms.push(a); } }
-      R.scene.add(g);
-    }
+    // как моб рисуется — одно место: view (по умолчанию коробки — boxMobView ниже; KubomirEnts.mobView — свой вид);
+    // свет — m.lit (Lit, тот же, что у кубиков), удар — m.hurtT
+    const view = (window.KubomirEnts.mobView || boxMobView)({ T, R, VR, MOBS });
+    X.view = view;
     X.spawn = (type, x, y, z, o = {}) => {
       if (!MOBS[type] || X.mobs.length >= 60) return null;
       const M = MOBS[type], id = ++X.seq;
-      const m = { id, type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: o.yaw ?? X.rng() * 6.28, hp: o.hp ?? M.hp, ground: false, walk: 0, state: 'idle', stT: 0, tgtYaw: 0, hurtT: 0, atkT: 0, flee: 0, hopT: 0, lk: -1, k: 1, sndT: 4 + X.rng() * 10, rng: V().rng(V().hash(W.seed, id, now() | 0)), burnT: 0, age: 0 };
-      buildMob(m);
+      const m = { id, type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: o.yaw ?? X.rng() * 6.28, hp: o.hp ?? M.hp, ground: false, walk: 0, state: 'idle', stT: 0, tgtYaw: 0, hurtT: 0, atkT: 0, flee: 0, hopT: 0, lit: Lit.make(T), sndT: 4 + X.rng() * 10, rng: V().rng(V().hash(W.seed, id, now() | 0)), burnT: 0, age: 0 };
+      Lit.update(m.lit, S, x, y + M.h * .6, z, 0);
+      view.add(m);
       X.mobs.push(m);
       return m;
     };
-    function removeMob(m){ const i = X.mobs.indexOf(m); if (i >= 0) X.mobs.splice(i, 1); R.scene.remove(m.parts.g); m.parts.mat.dispose(); }
+    function removeMob(m){ const i = X.mobs.indexOf(m); if (i >= 0) X.mobs.splice(i, 1); view.remove(m); }
     X.damage = (m, dmg, nx, nz, by) => {
       if (m.hp <= 0) return;
       m.hp -= dmg; m.hurtT = .35;
@@ -286,22 +330,20 @@
         if (m.y < -10) { removeMob(m); continue; }
         m.walk += Math.hypot(m.vx, m.vz) * dt * 3.2;
         // зомби горят на солнце
-        if (M.burns && !night) { const L = W.lightAt(m.x, m.y + M.h, m.z); if ((L >> 4) >= 13) { m.burnT += dt; if (m.burnT > 1) { m.burnT = 0; X.debris(Math.floor(m.x), Math.floor(m.y + 1), Math.floor(m.z), 0, 6, [1, .5, .1]); X.damage(m, 2, 0, 0, 'sun'); if (m.hp <= 0) continue; } } }
+        if (M.burns && !night) { const L = W.lightAt(m.x, m.y + M.h, m.z); if (V().lSky(L) >= 13) { m.burnT += dt; if (m.burnT > 1) { m.burnT = 0; X.debris(Math.floor(m.x), Math.floor(m.y + 1), Math.floor(m.z), 0, 6, [1, .5, .1]); X.damage(m, 2, 0, 0, 'sun'); if (m.hp <= 0) continue; } } }
         if (TC.lava > .1 || TC.hurt >= 4) X.damage(m, 4 * dt * 5, 0, 0, 'lava');
         if (m.sndT <= 0) { m.sndT = 6 + m.rng() * 14; if (dp < 20) S.AU?.play(M.snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .5, rate: .9 + m.rng() * .2 }); }
       }
     }
+    // свет моба — плавно, по месту груди (дальние, дальше 32 блоков, — раз в 4 кадра); рисует view
+    let mN = 0;
     function mobsFrame(dt, t){
-      for (const m of X.mobs) {
-        const g = m.parts.g, M = MOBS[m.type];
-        g.position.set(m.x - S.ox, m.y, m.z - S.oz); g.rotation.y = m.yaw;
-        const sw = Math.sin(m.walk) * Math.min(1, Math.hypot(m.vx, m.vz) / 1.2) * .7;
-        if (m.parts.legs) m.parts.legs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? sw : -sw); });
-        if (m.parts.arms) m.parts.arms.forEach((a, i) => { a.rotation.x = -1.35 + (i ? sw : -sw) * .3; });
-        if (M.hop) { const sq = m.ground ? 1 : 1.12; g.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)); }
-        // яркость по свету клетки; красная вспышка при уроне
-        const L = W.lightAt(m.x, m.y + M.h * .6, m.z), k = Math.max(((L >> 4) / 15) ** 2, ((L & 15) / 15) ** 2 * .9, .06);
-        if (Math.abs(k - m.k) > .02 || m.hurtT > 0 || m.hurtWas) { m.k = k; m.parts.mat.color.setRGB(m.hurtT > 0 ? Math.min(1.6, k * 1.6) : k, m.hurtT > 0 ? k * .3 : k, m.hurtT > 0 ? k * .3 : k); m.hurtWas = m.hurtT > 0; }
+      mN++;
+      const P = S.P;
+      for (let i = 0; i < X.mobs.length; i++) {
+        const m = X.mobs[i], M = MOBS[m.type], far = Math.abs(m.x - P.x) > 32 || Math.abs(m.z - P.z) > 32;
+        if (!far || !((mN + i) & 3)) Lit.update(m.lit, S, m.x, m.y + M.h * .6, m.z, far ? dt * 4 : dt);
+        view.frame(m, dt, t, S);
       }
     }
     function isNight(){ const t = S.R.lighting.time; return t < 5.6 || t > 18.8; }
@@ -321,7 +363,7 @@
         const q = tryAt(20, 44);
         if (q) {
           const h = W.heightAt(q.x, q.z), top = W.get(q.x, h - 1, q.z);
-          if (h > 0 && (top === Vx.ID.grass || top === Vx.ID.snow_grass) && W.get(q.x, h, q.z) === 0 && W.get(q.x, h + 1, q.z) === 0 && ((W.lightAt(q.x, h, q.z) >> 4) >= 9)) {
+          if (h > 0 && (top === Vx.ID.grass || top === Vx.ID.snow_grass) && W.get(q.x, h, q.z) === 0 && W.get(q.x, h + 1, q.z) === 0 && (Vx.lSky(W.lightAt(q.x, h, q.z)) >= 9)) {
             const type = ['cow', 'cow', 'pig', 'pig', 'chicken'][Math.floor(r() * 5)], n = 1 + Math.floor(r() * 3);
             for (let k = 0; k < n; k++) X.spawn(type, q.x + .5 + (r() - .5) * 2, h + .01, q.z + .5 + (r() - .5) * 2);
           }
@@ -335,7 +377,7 @@
           for (let y = Math.min(h + 1, V().H - 3); y > 2; y -= 1 + Math.floor(r() * 3)) {
             const f = W.get(q.x, y - 1, q.z), a = W.get(q.x, y, q.z), b = W.get(q.x, y + 1, q.z);
             if (f <= 0 || !Vx.T.solid[f] || Vx.T.shape[f] !== 1 || a !== 0 || b !== 0) continue;
-            const L = W.lightAt(q.x, y, q.z), sky = (L >> 4) * (night ? .25 : 1), lit = Math.max(sky, L & 15);
+            const L = W.lightAt(q.x, y, q.z), sky = Vx.lSky(L) * (night ? .25 : 1), lit = Math.max(sky, Vx.lBlk(L));
             if (lit > 6) continue;
             if (Math.abs(y - P.y) > 24) continue;
             X.spawn(r() < .8 ? 'zombie' : 'slime', q.x + .5, y + .01, q.z + .5);
@@ -445,7 +487,7 @@
           const lx = Math.floor(r() * 16), lz = Math.floor(r() * 16), y = 1 + Math.floor(r() * (c.maxY || 100));
           const x = c.cx * 16 + lx, z = c.cz * 16 + lz, v = c.ids[(lx << 11) | (lz << 7) | y], t = v & 0xfff;
           if (t === ID.dirt) {   // трава с соседей
-            const up = W.get(x, y + 1, z); if (up !== 0 || ((W.lightAt(x, y + 1, z) >> 4) < 9)) continue;
+            const up = W.get(x, y + 1, z); if (up !== 0 || (V().lSky(W.lightAt(x, y + 1, z)) < 9)) continue;
             for (let q = 0; q < 4; q++) { const nx = x + Math.floor(r() * 3) - 1, ny = y + Math.floor(r() * 3) - 1, nz = z + Math.floor(r() * 3) - 1; if (W.get(nx, ny, nz) === ID.grass) { W.set(x, y, z, ID.grass, { urgent: 0 }); break; } }
           } else if (t === ID.grass) { const up = W.get(x, y + 1, z); if (up > 0 && T.opaque[up]) W.set(x, y, z, ID.dirt, { urgent: 0 }); }
           else if (Vx.blocks[t]?.name.startsWith('sapling_') && r() < .35) growTree(x, y, z, Vx.blocks[t].name.slice(8));
@@ -494,8 +536,8 @@
       if ((X.spawnT -= dt) <= 0) { X.spawnT = 2; spawnTick(); }
     };
     X.frame = (dt, t) => {
-      itemsFrame(t); mobsFrame(dt, t); debrisFrame(dt);
-      for (const f of X.falling) f.m.position.set(f.x - S.ox, f.y + .5, f.z - S.oz);
+      itemsFrame(t, dt); mobsFrame(dt, t); debrisFrame(dt);
+      for (const f of X.falling) { f.m.position.set(f.x - S.ox, f.y + .5, f.z - S.oz); Lit.update(f.lit, S, f.x, f.y + .5, f.z, dt); VR.itemLightF(f.m.geometry, f.lit.lv); }
     };
     // звери мира сохраняются (враги — нет)
     X.save = () => X.mobs.filter(m => MOBS[m.type].passive).slice(0, 48).map(m => ({ t: m.type, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), hp: m.hp }));
@@ -510,7 +552,7 @@
       for (const e of X.items) { R.scene.remove(e.mesh); e.mesh.geometry.dispose(); }
       for (const f of X.falling) { R.scene.remove(f.m); f.m.geometry.dispose(); }
       for (const m of [...X.mobs]) removeMob(m);
-      for (const p of Object.values(mobGeo)) for (const g of Object.values(p)) if (g && g.isBufferGeometry) g.dispose();
+      view.dispose();
       R.scene.remove(dPts); dGeo.dispose(); dMat.dispose();
       X.items = []; X.falling = []; X.mobs = [];
     };
@@ -519,6 +561,74 @@
     return X;
   }
   function angTo(a, b, k){ let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * Math.min(1, k); }
+
+  // ═══ Как рисуются мобы: коробки (одно место — потом заменим плавными существами, общими с «Подземьем») ═══
+  // view = boxMobView({ T, R, VR, MOBS }) → add(m), frame(m, dt, t, st), remove(m), dispose(). Другой вид — такая же функция в
+  // KubomirEnts.mobView (до начала мира). Моб: m.type, m.x/y/z (мир), m.yaw, m.walk (фаза шага), m.vx/vz, m.ground, m.hurtT
+  // (красная вспышка), m.lit.u — униформа света (VR.entityMaterial: тот же свет, что у кубиков). Сдвиг сцены — st.ox / st.oz.
+  function boxMobView(ctx){
+    const { T, R, VR, MOBS } = ctx, mobGeo = {};
+    const base = new T.MeshLambertMaterial({ vertexColors: true });
+    function geoFor(type){
+      if (mobGeo[type]) return mobGeo[type];
+      const M = MOBS[type], parts = {};
+      const box = (w, h, d, x, y, z, col) => { const g = new T.BoxGeometry(w, h, d); g.translate(x, y, z); const c = new T.Color(col), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute('color', new T.BufferAttribute(a, 3)); return g; };
+      const merge = list => mergeGeos(T, list);
+      if (type === 'zombie') {
+        parts.body = merge([box(.5, .7, .28, 0, 1.1, 0, M.body)]);
+        parts.head = merge([box(.48, .48, .48, 0, .24, 0, M.head), box(.1, .08, .02, -.11, .3, .245, '#1b1b1b'), box(.1, .08, .02, .11, .3, .245, '#1b1b1b')]); parts.headY = 1.45;
+        parts.leg = merge([box(.22, .75, .24, 0, -.375, 0, M.legs)]); parts.legY = .75; parts.legX = .13; parts.legZ = 0;
+        parts.arm = merge([box(.2, .2, .7, 0, 0, .3, M.head)]); parts.armY = 1.35; parts.armX = .36;
+      } else if (type === 'slime') {
+        parts.body = merge([box(.8, .8, .8, 0, .4, 0, M.body), box(.12, .12, .02, -.16, .5, .41, '#1c3a18'), box(.12, .12, .02, .16, .5, .41, '#1c3a18'), box(.2, .06, .02, 0, .3, .41, '#2c5a26')]);
+      } else if (type === 'chicken') {
+        parts.body = merge([box(.4, .36, .5, 0, .48, 0, M.body), box(.06, .25, .3, -.22, .5, 0, '#e6e6e0'), box(.06, .25, .3, .22, .5, 0, '#e6e6e0')]);
+        parts.head = merge([box(.26, .32, .2, 0, .16, 0, M.head), box(.12, .07, .1, 0, .12, .14, '#f2b630'), box(.08, .1, .05, 0, .02, .1, M.spot)]); parts.headY = .62; parts.headZ = .26;
+        parts.leg = merge([box(.06, .3, .06, 0, -.15, 0, M.legs)]); parts.legY = .3; parts.legX = .1; parts.legZ = 0;
+      } else {   // корова, свинья
+        const pig = type === 'pig', L = pig ? .35 : .55;
+        const spots = pig ? [] : [box(.62, .3, .3, 0, .95, .15, M.spot), box(.3, .25, .4, .2, .9, -.35, M.spot)];
+        parts.body = merge([box(pig ? .7 : .75, pig ? .55 : .65, 1.15, 0, L + (pig ? .28 : .33), 0, M.body), ...spots]);
+        parts.head = merge([box(pig ? .5 : .5, pig ? .45 : .5, .45, 0, .1, .2, M.head), pig ? box(.26, .18, .06, 0, .02, .44, '#e4747e') : box(.32, .18, .06, 0, -.02, .44, '#d8b9a6'),
+          box(.08, .08, .02, -.14, .16, .43, '#111'), box(.08, .08, .02, .14, .16, .43, '#111'), ...(pig ? [] : [box(.08, .14, .08, -.24, .36, .2, '#e9e1cf'), box(.08, .14, .08, .24, .36, .2, '#e9e1cf')])]);
+        parts.headY = L + (pig ? .45 : .62); parts.headZ = .55;
+        parts.leg = merge([box(.22, L, .22, 0, -L / 2, 0, M.legs)]); parts.legY = L; parts.legX = .22; parts.legZ = .38;
+      }
+      mobGeo[type] = parts;
+      return parts;
+    }
+    return {
+      add(m){
+        const p = geoFor(m.type), g = new T.Group();
+        const mat = VR?.entityMaterial ? VR.entityMaterial(base, m.lit.u, { kind: 'mob' }) : base.clone();
+        const mesh = geo => { const o = new T.Mesh(geo, mat); o.castShadow = true; return o; };
+        g.add(mesh(p.body));
+        m.parts = { g, mat, chk: 0 };
+        if (p.head) { const h = new T.Group(); h.position.set(0, p.headY, p.headZ || 0); h.add(mesh(p.head)); g.add(h); m.parts.head = h; }
+        if (p.leg) { m.parts.legs = []; const zs = p.legZ ? [p.legZ, -p.legZ] : [0]; for (const z of zs) for (const x of [-p.legX, p.legX]) { const l = new T.Group(); l.position.set(x, p.legY, z); l.add(mesh(p.leg)); g.add(l); m.parts.legs.push(l); } }
+        if (p.arm) { m.parts.arms = []; for (const x of [-p.armX, p.armX]) { const a = new T.Group(); a.position.set(x, p.armY, 0); a.add(mesh(p.arm)); g.add(a); m.parts.arms.push(a); } }
+        R.scene.add(g);
+      },
+      frame(m, dt, t, st){
+        const g = m.parts.g, M = MOBS[m.type];
+        g.position.set(m.x - st.ox, m.y, m.z - st.oz); g.rotation.y = m.yaw;
+        const sw = Math.sin(m.walk) * Math.min(1, Math.hypot(m.vx, m.vz) / 1.2) * .7;
+        if (m.parts.legs) m.parts.legs.forEach((l, i) => { l.rotation.x = (i === 0 || i === 3 ? sw : -sw); });
+        if (m.parts.arms) m.parts.arms.forEach((a, i) => { a.rotation.x = -1.35 + (i ? sw : -sw) * .3; });
+        if (M.hop) { const sq = m.ground ? 1 : 1.12; g.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq)); }
+        // красная вспышка при уроне (свет — в униформе m.lit.u)
+        const hurt = m.hurtT > 0;
+        if (hurt !== !!m.parts.hurt) { m.parts.hurt = hurt; m.parts.mat.color.setRGB(hurt ? 1.6 : 1, hurt ? .35 : 1, hurt ? .35 : 1); }
+        // свой кусок шейдера не собрался (старый телефон) — обычный материал с цветом по свету клетки
+        if (m.parts.chk < 3 && ++m.parts.chk === 3 && VR?.failed?.(m.parts.mat)) {
+          const pl = base.clone(); g.traverse(o => { if (o.isMesh) o.material = pl; }); m.parts.mat.dispose(); m.parts.mat = pl; m.parts.plain = true;
+        }
+        if (m.parts.plain && !hurt) { const L = st.W.lightAt(m.x, m.y + M.h * .6, m.z), lc = lightTint(L, .06); m.parts.mat.color.setRGB(lc[0], lc[1], lc[2]); }
+      },
+      remove(m){ R.scene.remove(m.parts.g); m.parts.mat.dispose(); },
+      dispose(){ for (const p of Object.values(mobGeo)) for (const g of Object.values(p)) if (g && g.isBufferGeometry) g.dispose(); base.dispose(); },
+    };
+  }
   // склеить коробки (позиции, нормали, цвета) в одну геометрию
   function mergeGeos(T, list){
     let n = 0, ni = 0; for (const g of list) { n += g.attributes.position.count; ni += g.index.count; }

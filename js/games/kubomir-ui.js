@@ -2,8 +2,10 @@
 //  «КУБОМИР» — окна вещей: инвентарь (крафт 2×2), верстак (3×3), печь, сундук, каталог «Творчества»
 // ═══════════════════════════════════════
 // window.KubomirUI.create(S, hooks) → U: open('inv' | 'craft' | 'furnace' | 'chest', { x, y, z }), close(), isOpen(), give(вещь)
-// → сколько не влезло, dispose(). Нажатие на ячейку — взять/положить/поменять; правая кнопка (на телефоне — долгое нажатие) —
-// половину или одну; Shift — перекинуть одним нажатием. Вещь «в руке» мимо окна — выбросить. Закрыл — крафт вернулся в вещи.
+// → сколько не влезло, dispose(). Как в Майнкрафте: клик — взять/положить/поменять; ПКМ (на телефоне — долгое нажатие) —
+// половину или одну; Shift+клик — перекинуть; ПКМ с протяжкой — по одной в каждую ячейку; ЛКМ с протяжкой — поровну;
+// двойной клик — собрать такие же в руку; цифра 1–9 над ячейкой — поменять с ячейкой панели; Q над ячейкой — выбросить одну
+// (Ctrl+Q — стопку). Вещь «в руке» мимо окна — выбросить. Закрыл — крафт вернулся в вещи.
 (() => {
   const V = () => window.D37E.vox;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -78,9 +80,11 @@
     }
 
     // ── нажатия по ячейкам ──
+    let lastPick = null;   // { k, i, t } — взял стопку: второй клик быстро по той же ячейке — собрать такие же
     function click(k, i, right, shift){
       const p = P();
       if (k === 'result') { takeResult(shift); render(); return; }
+      if (!right && !shift && p.cursor && lastPick && lastPick.k === k && lastPick.i === i && performance.now() - lastPick.t < 350) { lastPick = null; collect(); render(); return; }
       if (k === 'cat') { const id = catList()[i]; if (!id) return; const s = { id, n: right ? 1 : it(id).stack }; if (p.cursor && same(p.cursor, s)) p.cursor.n = Math.min(max(s), p.cursor.n + s.n); else p.cursor = s; render(); return; }
       if (k === 'trash') { p.cursor = null; render(); return; }
       const C = cont(k); if (!C) return;
@@ -88,7 +92,7 @@
       if (shift && s) { quickMove(k, i, s); render(); return; }
       const cur = p.cursor;
       if (!right) {
-        if (!cur) { if (s) { p.cursor = s; setSlot(k, i, null); } }
+        if (!cur) { if (s) { p.cursor = s; setSlot(k, i, null); lastPick = { k, i, t: performance.now() }; } }
         else if (!fits(k, i, cur)) { if (!s && k === 'furnace' && i === 2) {} }
         else if (!s) { setSlot(k, i, cur); p.cursor = null; }
         else if (same(s, cur)) { const m = max(s), q = Math.min(cur.n, m - s.n); s.n += q; cur.n -= q; if (cur.n <= 0) p.cursor = null; setSlot(k, i, s); }
@@ -98,6 +102,50 @@
         else if (fits(k, i, cur) && (!s || (same(s, cur) && s.n < max(s)))) { if (s) s.n++; else setSlot(k, i, { id: cur.id, n: 1, d: cur.d | 0 }); if (s) setSlot(k, i, s); cur.n--; if (cur.n <= 0) p.cursor = null; }
       }
       render();
+    }
+    // двойной клик: в руку — такие же из всех ячеек окна (сначала неполные стопки), пока не наберётся стопка
+    function collect(){
+      const cur = P().cursor; if (!cur || it(cur.id)?.tool) return;
+      const lists = [['inv', 36]]; if (U.kind === 'chest') lists.unshift(['chest', 27]); if (U.kind === 'craft' || U.kind === 'inv') lists.push(['craft', 9]);
+      for (let pass = 0; pass < 2; pass++) for (const [k, n] of lists) {
+        const Cn = cont(k); if (!Cn) continue;
+        for (let j = 0; j < n && cur.n < max(cur); j++) {
+          const s = Cn[j]; if (!same(s, cur) || (pass === 0 && s.n >= max(s))) continue;
+          const q = Math.min(s.n, max(cur) - cur.n); cur.n += q; s.n -= q; setSlot(k, j, s.n > 0 ? s : null);
+        }
+      }
+    }
+    // протяжка с вещью в руке: ПКМ — по одной в каждую новую ячейку сразу; ЛКМ — поровну при отпускании
+    const canTake = (k, i, cur) => { const Cn = cont(k); if (!Cn || !fits(k, i, cur)) return false; const s = Cn[i]; return !s || (same(s, cur) && s.n < max(s)); };
+    function spreadEven(slots){
+      const cur = P().cursor; if (!cur || !slots.length) return;
+      const per = Math.max(1, Math.floor(cur.n / slots.length));
+      for (const [k, i] of slots) {
+        if (cur.n <= 0) break;
+        const Cn = cont(k), s = Cn?.[i]; if (!Cn || !canTake(k, i, cur)) continue;
+        const q = Math.min(per, cur.n, max(cur) - (s ? s.n : 0));
+        if (s) { s.n += q; setSlot(k, i, s); } else setSlot(k, i, { id: cur.id, n: q, d: cur.d | 0 });
+        cur.n -= q;
+      }
+      if (cur.n <= 0) P().cursor = null;
+    }
+    // цифра над ячейкой — поменять с ячейкой панели N; Q — выбросить одну, Ctrl+Q — стопку
+    function hoverKey(e){
+      if (!U.el || !U.hover || e.target?.closest?.('input, textarea')) return;
+      const [k, i] = U.hover, Cn = cont(k); if (!Cn) return;
+      const m = /^Digit([1-9])$/.exec(e.code);
+      if (m) {
+        e.preventDefault(); e.stopPropagation();
+        const h = +m[1] - 1; if (k === 'inv' && i === h) return;
+        const a = Cn[i], b = P().inv[h];
+        if (b && !fits(k, i, b)) return;
+        setSlot(k, i, b || null); P().inv[h] = a || null; render();
+      } else if (e.code === 'KeyQ' && Cn[i]) {
+        e.preventDefault(); e.stopPropagation();
+        const s = Cn[i], n = e.ctrlKey ? s.n : 1;
+        hooks.drop?.({ id: s.id, n, d: s.d | 0 });
+        s.n -= n; setSlot(k, i, s.n > 0 ? s : null); render();
+      }
     }
     function quickMove(k, i, s){
       const inv = P().inv;
@@ -143,6 +191,8 @@
       el.addEventListener('pointermove', onMove);
       el.addEventListener('contextmenu', e => e.preventDefault());
       el.addEventListener('input', e => { if (e.target.matches('.kb-search')) { U.q = e.target.value; catCache = null; renderCat(); } });
+      U.hover = null; drag = null;
+      window.addEventListener('keydown', hoverKey, true);
       render();
       if (kind === 'furnace') U.timer = setInterval(() => { if (U.el) renderFurnace(); }, 150);
       if (kind === 'chest') hooks.sound?.('door_wood_open', { vol: .4, rate: 1.4 });
@@ -153,12 +203,13 @@
       for (let i = 0; i < 9; i++) if (U.craft[i]) { const left = U.give(U.craft[i]); if (left > 0) hooks.drop?.({ ...U.craft[i], n: left }); U.craft[i] = null; }
       if (p.cursor) { const left = U.give(p.cursor); if (left > 0) hooks.drop?.({ ...p.cursor, n: left }); p.cursor = null; }
       clearInterval(U.timer);
+      window.removeEventListener('keydown', hoverKey, true); U.hover = null; drag = null;
       if (U.kind === 'chest') hooks.sound?.('door_wood_close', { vol: .4, rate: 1.4 });
       U.el.remove(); U.el = null; U.kind = ''; U.pos = null;
       S.C?.reset_state();
       if (!S.I?.touch) { try { S.R.r.domElement.requestPointerLock?.()?.catch?.(() => {}); } catch (e) {} }
     };
-    U.dispose = () => { if (U.el) { clearInterval(U.timer); U.el.remove(); U.el = null; } };
+    U.dispose = () => { window.removeEventListener('keydown', hoverKey, true); if (U.el) { clearInterval(U.timer); U.el.remove(); U.el = null; } };
 
     const slot = (k, i, s, cls = '') => {
       const item = s && it(s.id), dur = item?.tool && s.d ? 1 - s.d / item.tool.dur : -1;
@@ -187,7 +238,7 @@
       for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
       for (let i = 0; i < 9; i++) hot += slot('inv', i, p.inv[i], i === p.sel ? 'on' : '');
       panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></div>${top}<div class="kb-grid">${main}</div><div class="kb-grid kb-hotrow">${hot}</div>
-        <p class="kb-hint">${S.I?.touch ? 'Нажми — взять/положить, подержи — половину или одну.' : 'Клик — взять/положить, правая кнопка — половину или одну, Shift — перекинуть.'}</p>`;
+        <p class="kb-hint">${S.I?.touch ? 'Нажми — взять/положить, подержи — половину или одну.' : 'Клик — взять/положить, ПКМ — половину или одну, Shift+клик — перекинуть, протянуть с вещью: ПКМ — по одной, ЛКМ — поровну; двойной клик — собрать; 1–9 над ячейкой — на панель, Q — выбросить. E или Esc — закрыть.'}</p>`;
       if (U.kind === 'inv' && creative) renderCat();
       if (U.kind === 'furnace') renderFurnace();
       renderCursor();
@@ -212,7 +263,8 @@
       if (x != null) { c.style.left = x + 'px'; c.style.top = y + 'px'; }
     }
     // ── ввод: мышь и палец (долгое нажатие = правая кнопка) ──
-    let press = null;
+    let press = null, drag = null;
+    const SLOT_K = { inv: 1, craft: 1, chest: 1, furnace: 1 };   // ячейки, куда можно «протянуть»
     function onDown(e){
       const t = e.target;
       if (t.closest('[data-close]')) { U.close(); return; }
@@ -228,15 +280,42 @@
       }
       e.preventDefault();
       if (e.pointerType === 'touch') { press = { s, t0: performance.now(), timer: setTimeout(() => { if (press?.s === s) { press.long = true; click(s.dataset.k, +s.dataset.i, true, false); } }, 420) }; return; }
-      click(s.dataset.k, +s.dataset.i, e.button === 2, e.shiftKey);
+      const k = s.dataset.k, i = +s.dataset.i, cur = P().cursor;
+      // с вещью в руке по обычной ячейке: ПКМ — сразу одну и дальше «протяжка»; ЛКМ — ждём: отпустил тут же — обычный клик
+      if (cur && SLOT_K[k] && !e.shiftKey && (e.button === 0 || e.button === 2)) {
+        drag = { btn: e.button, start: [k, i], list: [[k, i]], key: new Set([k + i]) };
+        if (e.button === 2) click(k, i, true, false);
+        else mark();
+        return;
+      }
+      click(k, i, e.button === 2, e.shiftKey);
     }
     function onUp(e){
+      if (drag) {
+        const d = drag; drag = null;
+        if (d.btn === 0) { if (d.list.length > 1) spreadEven(d.list); else click(d.start[0], d.start[1], false, false); }
+        render();
+        return;
+      }
       if (!press) return;
       clearTimeout(press.timer);
       if (!press.long) click(press.s.dataset.k, +press.s.dataset.i, false, false);
       press = null;
     }
-    function onMove(e){ if (!U.el) return; const r = U.el.getBoundingClientRect(); renderCursor(e.clientX - r.left, e.clientY - r.top); }
+    function onMove(e){
+      if (!U.el) return;
+      const r = U.el.getBoundingClientRect(); renderCursor(e.clientX - r.left, e.clientY - r.top);
+      const s = e.target.closest?.('[data-k]');
+      U.hover = s && SLOT_K[s.dataset.k] ? [s.dataset.k, +s.dataset.i] : null;
+      if (!drag || !s || !SLOT_K[s.dataset.k]) return;
+      const k = s.dataset.k, i = +s.dataset.i, cur = P().cursor;
+      if (!cur || drag.key.has(k + i) || !canTake(k, i, cur)) return;
+      drag.key.add(k + i); drag.list.push([k, i]);
+      if (drag.btn === 2) click(k, i, true, false); else mark();
+    }
+    // подсветка ячеек протяжки ЛКМ
+    function mark(){ if (!U.el || !drag) return; U.el.querySelectorAll('.kb-slot.drag').forEach(d => d.classList.remove('drag')); for (const [k, i] of drag.list) U.el.querySelector(`[data-k="${k}"][data-i="${i}"]`)?.classList.add('drag'); }
+    U._key = hoverKey;
     return U;
   }
 })();

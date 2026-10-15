@@ -121,12 +121,18 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   let r4 = mk(); at(r4, 2, 40, 2, ID.stone); at(r4, 8, 40, 8, ID.dirt);
   ok(q(mesh(r4), 'solid') === 12, 'два отдельных блока — 12 граней');
   let r5 = mk(); at(r5, 2, 40, 2, ID.glass); at(r5, 3, 40, 2, ID.glass);
-  ok(q(mesh(r5), 'cutout') === 6, 'стекло к стеклу — общая грань не рисуется (2 блока → 6 граней)', q(mesh(r5), 'cutout'));
+  ok(q(mesh(r5), 'glass') === 6 && !mesh(r5).cutout, 'стекло к стеклу — общая грань не рисуется (2 блока → 6 граней, своя сетка glass)', q(mesh(r5), 'glass'));
   let r6 = mk(); at(r6, 2, 40, 2, ID.stone); at(r6, 3, 40, 2, ID.glass);
   const m6 = mesh(r6);
-  ok(q(m6, 'solid') === 6 && q(m6, 'cutout') === 5, 'камень рядом со стеклом: камень — 6, стекло — 5', [q(m6, 'solid'), q(m6, 'cutout')]);
+  ok(q(m6, 'solid') === 6 && q(m6, 'glass') === 5, 'камень рядом со стеклом: камень — 6, стекло — 5', [q(m6, 'solid'), q(m6, 'glass')]);
   let r7 = mk(); at(r7, 4, 30, 4, ID.stone); at(r7, 4, 31, 4, ID.tall_grass);
-  ok(q(mesh(r7), 'cutout') === 4, 'трава — крест: 4 квадрата (с двух сторон)');
+  ok(q(mesh(r7), 'foliage') === 4 && !mesh(r7).cutout, 'трава — крест: 4 квадрата (с двух сторон), сетка листвы (foliage)');
+  let rl2 = mk(); at(rl2, 4, 40, 4, ID.leaves_oak); at(rl2, 8, 30, 8, ID.stone); at(rl2, 8, 31, 8, ID.torch);
+  const ml2 = mesh(rl2);
+  ok(q(ml2, 'foliage') === 6 && q(ml2, 'cutout') === 4 && q(ml2, 'solid') === 6, 'листва — в foliage, факел — в cutout, камень — в solid', V.LAYERS.map(k => q(ml2, k)));
+  const swayOf = s => { let n = 0; for (let i = 0; i < s.n * 4; i++) if ((s.vd[i * 4 + 3] >> 14) === 1) n++; return n; };
+  ok(swayOf(ml2.foliage) === 24 && swayOf(ml2.cutout) === 0, 'листва качается (флаг у всех вершин), факел — нет', [swayOf(ml2.foliage), swayOf(ml2.cutout)]);
+  ok(V.LAYERS.join() === 'solid,cutout,water,foliage,glass' && V.T.stream[ID.glass] === 4 && V.T.stream[ID.leaves_birch] === 3 && V.T.stream[ID.water] === 2 && V.T.stream[ID.lava] === 0 && V.T.stream[ID.ladder] === 1, 'сетки чанка: solid, cutout, water, foliage, glass');
   let r8 = mk(); for (let x = 0; x < 2; x++) for (let z = 0; z < 2; z++) { at(r8, x + 4, 30, z + 4, ID.stone); at(r8, x + 4, 31, z + 4, ID.water); }
   const m8 = mesh(r8);
   ok(q(m8, 'water') === 4 * 1 + 8, 'вода 2×2: верх 4 + бока 8 (внутри — нет)', q(m8, 'water'));
@@ -161,8 +167,46 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   at(rl, 7, 30, 7, ID.torch);
   let L = V.lightRegion(rl, V.T);
   const li = (x, y, z) => ((x + 16) * RW + (z + 16)) * H + y;
-  ok(L.blk[li(7, 30, 7)] === 14 && L.blk[li(8, 30, 7)] === 13 && L.blk[li(10, 30, 7)] === 11 && L.blk[li(10, 32, 10)] === 6, 'факел: 14 и на шаг меньше (по шагам «манхэттен»)', [L.blk[li(7, 30, 7)], L.blk[li(8, 30, 7)], L.blk[li(10, 30, 7)], L.blk[li(10, 32, 10)]]);
-  ok(L.blk[li(3, 30, 7)] === 0 && L.sky[li(7, 31, 7)] === 0, 'сквозь камень свет не идёт, неба в закрытой комнате нет');
+  const lv = v => (v + 8) / 17 | 0;   // канал 0…255 → уровень 0…15
+  ok(lv(L.r[li(7, 30, 7)]) === 14 && lv(L.r[li(8, 30, 7)]) === 13 && lv(L.r[li(10, 30, 7)]) === 11 && lv(L.r[li(10, 32, 10)]) === 6, 'факел (красный канал): 14 и на шаг меньше (по шагам «манхэттен»)', [L.r[li(7, 30, 7)], L.r[li(8, 30, 7)], L.r[li(10, 30, 7)], L.r[li(10, 32, 10)]].map(lv));
+  ok(L.r[li(3, 30, 7)] === 0 && L.g[li(3, 30, 7)] === 0 && L.sky[li(7, 31, 7)] === 0, 'сквозь камень свет не идёт, неба в закрытой комнате нет');
+  // цвет: факел тёплый (R > G > B); с расстоянием тускнеет, а оттенок тот же (не «краснеет»)
+  const tc = [L.r[li(7, 30, 7)], L.g[li(7, 30, 7)], L.b[li(7, 30, 7)]], tc2 = [L.r[li(10, 32, 10)], L.g[li(10, 32, 10)], L.b[li(10, 32, 10)]];
+  const hue = c => [c[1] / c[0], c[2] / c[0]];
+  ok(tc[0] === 238 && tc[1] > tc[2] && tc[1] < tc[0] && tc2[0] === 102 && Math.abs(hue(tc2)[0] - hue(tc)[0]) < .04 && Math.abs(hue(tc2)[1] - hue(tc)[1]) < .05, 'факел тёплый: R > G > B, вдали тусклее, но того же цвета', [tc, tc2]);
+  const ec = n => { const t = ID[n]; return [V.T.ecol[t * 3], V.T.ecol[t * 3 + 1], V.T.ecol[t * 3 + 2]]; };
+  const lav = ec('lava'), lmp = ec('lamp');
+  ok(lav[0] === 255 && lav[1] < 170 && lav[2] < 85 && lmp[0] === 255 && lmp[1] >= 221 && lmp[2] >= 170, 'лава — оранжевая, лампа — почти белая тёплая', { lav, lmp });
+  ok(V.blocks.every((b, i) => { const e = V.T.emit[i]; const c = [V.T.ecol[i * 3], V.T.ecol[i * 3 + 1], V.T.ecol[i * 3 + 2]]; return e ? Math.max(...c) === e * 17 : c.every(v => v === 0); }), 'у каждого светящегося блока самый яркий канал = его сила света × 17');
+  // свечение граней: у факела, лавы, лампы — да; у горящей печи — только передняя сторона; у камня — нет
+  const gl = nm => V.T.glowL[V.texIdx.get(nm)] || 0;
+  ok(gl('torch') === 14 && gl('lava') === 15 && gl('lamp') === 15, 'факел, лава и лампа светятся (грани)', [gl('torch'), gl('lava'), gl('lamp')]);
+  ok(gl('furnace_front_lit') > 0 && gl('furnace_side') === 0 && gl('stone') === 0, 'горящая печь светится только «лицом», камень — нет', [gl('furnace_front_lit'), gl('furnace_side'), gl('stone')]);
+  // стекло пропускает свет; вода и листва — гасят сильнее
+  let rg = mk(); rg.fill(ID.stone);
+  for (let x = 4; x < 13; x++) for (let y = 30; y < 31; y++) at(rg, x, y, 7, 0);
+  at(rg, 4, 30, 7, ID.torch); at(rg, 7, 30, 7, ID.glass);
+  let Lg = V.lightRegion(rg, V.T);
+  ok(lv(Lg.r[li(8, 30, 7)]) === 14 - 4, 'стекло пропускает свет факела без потерь', lv(Lg.r[li(8, 30, 7)]));
+  at(rg, 7, 30, 7, ID.water);
+  Lg = V.lightRegion(rg, V.T);
+  ok(lv(Lg.r[li(7, 30, 7)]) === 10 && lv(Lg.r[li(8, 30, 7)]) === 9, 'вода гасит свет сильнее воздуха (−2 за клетку)', [lv(Lg.r[li(7, 30, 7)]), lv(Lg.r[li(8, 30, 7)])]);
+  at(rg, 7, 30, 7, ID.leaves_oak);
+  Lg = V.lightRegion(rg, V.T);
+  ok(lv(Lg.r[li(7, 30, 7)]) === 11 && lv(Lg.r[li(8, 30, 7)]) === 10, 'листва пропускает свет блоков (как в Майнкрафте), а небо гасит на 1 за слой', [lv(Lg.r[li(7, 30, 7)]), lv(Lg.r[li(8, 30, 7)])]);
+  // свет в сетке: центр отдаёт небо << 12 | R << 8 | G << 4 | B и список светящихся клеток
+  at(rg, 7, 30, 7, 0); at(rg, 10, 30, 7, ID.lava);
+  const mlt = V.meshChunk(rg, V.lightRegion(rg, V.T), V.T, null);
+  const lc = mlt.light[(4 << 11) | (7 << 7) | 30];
+  ok(V.lSky(lc) === 0 && V.lR(lc) === 14 && V.lG(lc) === lv(V.T.ecol[ID.torch * 3 + 1]) && V.lB(lc) === lv(V.T.ecol[ID.torch * 3 + 2]) && V.lBlk(lc) === 14, 'свет центра: небо << 12 | R << 8 | G << 4 | B (уровни 0…15)', [V.lSky(lc), V.lR(lc), V.lG(lc), V.lB(lc)]);
+  const lset = [...(mlt.lights || [])].map(v => [(v & 32767) >> 11, (v >> 7) & 15, v & 127, v >>> 15]);
+  ok(lset.some(([x, z, y, t]) => x === 4 && z === 7 && y === 30 && t === ID.torch) && lset.some(([x, z, y, t]) => x === 10 && z === 7 && y === 30 && t === ID.lava), 'список светящихся клеток: факел и лава', lset);
+  // грани с подсветкой: у лавы в сетке есть свечение (биты 2…5 vd[3])
+  const glowSeen = (m, k) => { const s = m[k]; if (!s) return 0; let g = 0; for (let i = 0; i < s.n * 4; i++) g = Math.max(g, (s.vd[i * 4 + 3] >> 2) & 15); return g; };
+  ok(Math.max(...V.LAYERS.map(k => glowSeen(mlt, k))) > 0, 'у светящихся блоков в сетке есть свечение граней');
+  // плавный свет по вершинам: lt — 4 байта на вершину, значения ×4 (0…60)
+  const anyLt = V.LAYERS.filter(k => mlt[k]).every(k => mlt[k].lt && mlt[k].lt.length >= mlt[k].n * 16 && mlt[k].lt.subarray(0, mlt[k].n * 16).every(v => v <= 60));
+  ok(anyLt, 'свет вершин: небо, R, G, B в пределах 0…60');
   let rs = mk();
   for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) at(rs, x, 50, z, ID.stone);   // пол
   for (let x = 5; x < 10; x++) for (let z = 5; z < 10; z++) at(rs, x, 54, z, ID.stone);   // крыша 5×5
@@ -178,10 +222,10 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   for (let x = 10; x < 22; x++) for (let z = 4; z < 10; z++) for (let y = 30; y < 33; y++) ws.set(x, y, z, 0, { silent: true });
   ws.set(15, 30, 6, ID.torch, { silent: true });
   const regA = V.buildRegion((x, z) => ws.chunk(x, z)?.ids, 0, 0), regB = V.buildRegion((x, z) => ws.chunk(x, z)?.ids, 1, 0);
-  const LA = V.lightRegion(regA, V.T), blkA = new Uint8Array(LA.blk), LB = V.lightRegion(regB, V.T);
+  const LA = V.lightRegion(regA, V.T), blkA = new Uint8Array(LA.r), gA = new Uint8Array(LA.g), LB = V.lightRegion(regB, V.T);
   let diff = 0;
-  for (let x = 10; x < 22; x++) for (let z = 4; z < 10; z++) for (let y = 30; y < 33; y++) { const a1 = blkA[((x + 16) * RW + (z + 16)) * H + y], b1 = LB.blk[((x - 16 + 16) * RW + (z + 16)) * H + y]; if (a1 !== b1) diff++; }
-  ok(diff === 0 && blkA[((16 + 16) * RW + (6 + 16)) * H + 30] === 13, 'свет через границу: обе области считают одинаково', diff);
+  for (let x = 10; x < 22; x++) for (let z = 4; z < 10; z++) for (let y = 30; y < 33; y++) { const ia = ((x + 16) * RW + (z + 16)) * H + y, ib = ((x - 16 + 16) * RW + (z + 16)) * H + y; if (blkA[ia] !== LB.r[ib] || gA[ia] !== LB.g[ib]) diff++; }
+  ok(diff === 0 && lv(blkA[((16 + 16) * RW + (6 + 16)) * H + 30]) === 13, 'свет через границу: обе области считают одинаково', diff);
 
   // ═══ 6. Луч и столкновения ═══
   sec('луч и столкновения');
@@ -280,7 +324,7 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
     V.buildRegion((x, z) => map.get(x + ',' + z)?.ids, cx, cz, reg);
     const t0 = performance.now(); const LL = V.lightRegion(reg, V.T); const t1 = performance.now(); const mm = V.meshChunk(reg, LL, V.T, map.get(cx + ',' + cz).tint); const t2 = performance.now();
     tl += t1 - t0; tm += t2 - t1; nm++;
-    quads += (mm.solid?.n || 0) + (mm.cutout?.n || 0) + (mm.water?.n || 0);
+    for (const k of V.LAYERS) quads += mm[k]?.n || 0;
   }
   const perf = { gen: +(tg / n).toFixed(2), light: +(tl / nm).toFixed(2), mesh: +(tm / nm).toFixed(2), quads: Math.round(quads / nm) };
   console.log('  на чанк, мс:', JSON.stringify(perf));

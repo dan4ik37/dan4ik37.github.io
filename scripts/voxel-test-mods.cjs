@@ -11,6 +11,9 @@ module.exports = async function ({ ok, sec, load, SITE, CORE }){
   const ctx = load([...CORE, 'js/engine/voxel-mods.js']);
   ctx.window = ctx;
   vm.runInContext(fs.readFileSync(path.join(SITE, 'js/engine/lang-lua.js'), 'utf8'), ctx, { filename: 'lang-lua.js' });
+  // Java (язык сайта js/engine/lang-java.js; крючок «Кубомира» — LANGS в voxel-mods.js): если файл есть — проверим и его
+  const JAVA = fs.existsSync(path.join(SITE, 'js/engine/lang-java.js'));
+  if (JAVA) vm.runInContext(fs.readFileSync(path.join(SITE, 'js/engine/lang-java.js'), 'utf8'), ctx, { filename: 'lang-java.js' });
   const V = ctx.D37E.vox, M = V.mods;
   const tick = (ms = 25) => new Promise(r => setTimeout(r, ms));
   const files = x => Object.assign({}, x.files);
@@ -353,6 +356,14 @@ commands.add("hi", "привет", function(args) player.message("привет, 
     ok(g.log.log.some(t => /lua bedrock bedrock n=1/.test(t)), 'Lua: world.read ждёт ответ, task.wait, mod.storage', g.log.log);
     g.R.command('hi', ['a', 'b']); await tick(150);
     ok(g.log.log.some(t => /привет, Игрок 2/.test(t)), 'Lua: commands.add с аргументами', g.log.log);
+    g.R.stop(); }
+  // скрипт мода на Java: тот же API (mod, world, player…) — по расширению .java, язык подгружается сам
+  if (JAVA) { const g = mkGame([{ manifest: { id: 'javamod', name: 'javamod', version: '1', game: 'voxel', scripts: [{ file: 'Main.java' }] }, files: { 'Main.java': `System.out.println("java " + (6 * 7));
+mod.on("chat", e -> player.message("java чат " + e.text));` } }]); await waitReady(g.R); await tick(30);
+    ok(g.ms[0].scripts[0].lang === 'java', 'Java: язык — по расширению .java');
+    ok(g.R.mods[0].ready && !g.R.mods[0].off && g.R.logs.some(l => /java 42/.test(l.t)), 'Java-мод запустился (println → журнал)', { off: g.R.mods[0].off, logs: g.R.logs.slice(0, 4) });
+    g.R.event('chat', { x: 8, y: 2, z: 8, text: 'ку' }); await tick(150);
+    ok(g.log.log.some(t => /java чат ку/.test(t)), 'Java: mod.on с лямбдой, player.message', g.log.log);
     g.R.stop(); }
 
   // ═══ 6. Рамка песочницы: «пинг» с номером ═══

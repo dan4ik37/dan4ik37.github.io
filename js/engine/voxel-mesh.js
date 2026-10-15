@@ -1,13 +1,18 @@
 // ═══════════════════════════════════════
-//  ДВИЖОК ДЕНЧИКА — свет и сетки «Кубомира»: свет неба и блоков (волной по 3×3 чанкам) и «жадная» сетка чанка
-//  с затенением углов (AO) и плавным светом по вершинам
+//  ДВИЖОК ДЕНЧИКА — свет и сетки «Кубомира»: свет неба и ЦВЕТНОЙ свет блоков (волной по 3×3 чанкам) и «жадная» сетка
+//  чанка с затенением углов (AO) и плавным светом по вершинам
 // ═══════════════════════════════════════
 // Работает в потоке (voxel-worker.js), в окне (если потоков нет) и в node. Вход — область 48×48×H (чанк в центре и
 // по чанку вокруг): свет считается заново целиком — без «дыр» и «протечек» пошагового света; свет гаснет за 15 блоков,
-// поэтому соседей на 16 блоков хватает для точного ответа. Выход — свет центра (Uint8Array: небо << 4 | блоки) и три
-// сетки: solid (непрозрачное), cutout (листва, трава, стекло — отсечение по альфе), water (вода, прозрачная).
+// поэтому соседей на 16 блоков хватает для точного ответа. Свет блоков — три канала R, G, B по 0…255 (уровень × 17; у
+// факела, лавы, лампы свой цвет — V.T.ecol); за шаг самый яркий канал гаснет на уровень (сквозь воду — сильнее), остальные
+// — в той же доле: цвет с расстоянием тускнеет, но не «краснеет»; разные источники смешиваются по наибольшему. Выход —
+// свет центра (Uint16Array: небо << 12 | R << 8 | G << 4 | B, по 0…15), сетки V.LAYERS: solid (непрозрачное), cutout (факелы,
+// лестницы, двери, сундуки, кактусы — отсечение по альфе), water (вода, прозрачная), foliage (листва, трава, цветы — по альфе,
+// качаются), glass (стекло — по альфе) и lights — светящиеся клетки центра (для настоящих ламп и ореолов).
 // Вершина: pos — Uint16 ×3 (1/16 блока; меш масштабирован 1/16), vd — Uint16 ×4: u, v (1/16 блока), слой | нормаль << 12,
-// AO | небо×4 << 2 | блоки×4 << 8 | флаги << 14 (1 — качается на ветру, 2 — вода); col — Uint8 ×3 (цвет биома).
+// AO | свечение грани (0…15) << 2 | флаги << 14 (1 — качается на ветру, 2 — вода); lt — Uint8 ×4: небо, R, G, B (×4 — 0…60,
+// плавно: среднее по 4 клеткам у угла); col — Uint8 ×3 (цвет биома).
 // Индексы общие для всех (0 1 2 0 2 3 + 4k): тёмный угол AO — порядком вершин (диагональ через светлые углы).
 (() => {
   const root = typeof self !== 'undefined' ? self : globalThis;
@@ -16,15 +21,17 @@
   const H = V.H, RW = 48, SZ = H, SX = RW * H, RC = RW * RW * H;
   const TYPE = 0xfff;
   V.REGION = RW;
+  // сетки чанка (по одной на вид материала): непрозрачное, вырезное (факелы, лестницы, двери, сундуки), вода, листва и
+  // трава (качаются на ветру), стекло — V.T.stream[блок] = номер здесь. Новые — только в конец (номера в потоках)
+  V.LAYERS = ['solid', 'cutout', 'water', 'foliage', 'glass'];
 
   // ═══ Свет области ═══
-  let Q = null, SKY = null, BLK = null;
+  let Q = null, SKY = null, LR = null, LG = null, LB = null;
   const TOP = new Int16Array(RW * RW);
   V.lightRegion = (reg, T) => {
-    if (!SKY) { SKY = new Uint8Array(RC); BLK = new Uint8Array(RC); Q = new Int32Array(1 << 20); }
-    const op = T.op, emit = T.emit, sky = SKY, blk = BLK, QM = Q.length - 1;
+    if (!SKY) { SKY = new Uint8Array(RC); LR = new Uint8Array(RC); LG = new Uint8Array(RC); LB = new Uint8Array(RC); Q = new Int32Array(1 << 20); }
+    const op = T.op, emit = T.emit, ecol = T.ecol, sky = SKY, QM = Q.length - 1;
     let qt = 0;
-    blk.fill(0);
     // небо: сверху вниз по столбцу без потерь, через листву/воду — минус их «плотность»
     for (let c = 0; c < RW * RW; c++) {
       const b = c * H; let L = 15, t15 = 0;
@@ -52,11 +59,16 @@
       }
     }
     spread(reg, sky, op, 0, qt, QM);
-    // свет блоков: факелы, лава, лампы…
+    // свет блоков (факелы, лава, лампы…) — три канала цвета
+    LR.fill(0); LG.fill(0); LB.fill(0);
     qt = 0;
-    for (let i = 0; i < RC; i++) { const e = emit[reg[i] & TYPE]; if (e) { blk[i] = e; Q[qt] = i; qt = (qt + 1) & QM; } }
-    spread(reg, blk, op, 0, qt, QM);
-    return { sky, blk };
+    for (let i = 0; i < RC; i++) {
+      const t = reg[i] & TYPE, e = emit[t]; if (!e) continue;
+      if (ecol) { LR[i] = ecol[t * 3]; LG[i] = ecol[t * 3 + 1]; LB[i] = ecol[t * 3 + 2]; } else LR[i] = LG[i] = LB[i] = e * 17;
+      Q[qt] = i; qt = (qt + 1) & QM;
+    }
+    spreadRGB(reg, op, qt, QM);
+    return { sky, r: LR, g: LG, b: LB };
   };
   // волна: от клетки со светом l — соседу l − max(1, плотность соседа)
   function spread(reg, L, op, qh, qt, QM){
@@ -75,16 +87,41 @@
       }
     }
   }
+  // та же волна для цвета (каналы 0…255): самый яркий канал клетки m гаснет на 17 × max(1, плотность), остальные — в той же
+  // доле (оттенок сохраняется); сосед берёт по каждому каналу наибольшее и идёт дальше, если хоть один канал стал ярче
+  function spreadRGB(reg, op, qt, QM){
+    let qh = 0;
+    while (qh !== qt) {
+      const i = Q[qh]; qh = (qh + 1) & QM;
+      const r = LR[i], g = LG[i], b = LB[i], m = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      if (m < 34) continue;   // меньше 2 уровней — дальше не идёт
+      const y = i & (H - 1), c = i >> 7, rz = c % RW, rx = (c - rz) / RW;
+      for (let d = 0; d < 6; d++) {
+        let j;
+        if (d === 0) { if (rx === RW - 1) continue; j = i + SX; } else if (d === 1) { if (rx === 0) continue; j = i - SX; }
+        else if (d === 2) { if (rz === RW - 1) continue; j = i + SZ; } else if (d === 3) { if (rz === 0) continue; j = i - SZ; }
+        else if (d === 4) { if (y === H - 1) continue; j = i + 1; } else { if (y === 0) continue; j = i - 1; }
+        const o = op[reg[j] & TYPE]; if (o >= 15) continue;
+        const nm = m - (o > 1 ? o : 1) * 17; if (nm <= 0) continue;
+        const nr = r * nm / m | 0, ng = g * nm / m | 0, nb = b * nm / m | 0;
+        let up = 0;
+        if (nr > LR[j]) { LR[j] = nr; up = 1; }
+        if (ng > LG[j]) { LG[j] = ng; up = 1; }
+        if (nb > LB[j]) { LB[j] = nb; up = 1; }
+        if (up && (LR[j] >= 34 || LG[j] >= 34 || LB[j] >= 34)) { Q[qt] = j; qt = (qt + 1) & QM; }
+      }
+    }
+  }
 
   // ═══ Сетка чанка ═══
   // буферы (растут по надобности и переиспользуются между заданиями)
-  const streams = [0, 1, 2].map(() => ({ q: 0, cap: 0, pos: null, vd: null, col: null }));
+  const streams = V.LAYERS.map(() => ({ q: 0, cap: 0, pos: null, vd: null, col: null, lt: null }));
   function grow(s, need){
     if (s.cap >= need) return;
     let cap = s.cap || 4096; while (cap < need) cap *= 2;
-    const pos = new Uint16Array(cap * 12), vd = new Uint16Array(cap * 16), col = new Uint8Array(cap * 12);
-    if (s.pos) { pos.set(s.pos.subarray(0, s.q * 12)); vd.set(s.vd.subarray(0, s.q * 16)); col.set(s.col.subarray(0, s.q * 12)); }
-    s.pos = pos; s.vd = vd; s.col = col; s.cap = cap;
+    const pos = new Uint16Array(cap * 12), vd = new Uint16Array(cap * 16), col = new Uint8Array(cap * 12), lt = new Uint8Array(cap * 16);
+    if (s.pos) { pos.set(s.pos.subarray(0, s.q * 12)); vd.set(s.vd.subarray(0, s.q * 16)); col.set(s.col.subarray(0, s.q * 12)); lt.set(s.lt.subarray(0, s.q * 16)); }
+    s.pos = pos; s.vd = vd; s.col = col; s.lt = lt; s.cap = cap;
   }
   // направления: 0 +x, 1 −x, 2 +y, 3 −y, 4 +z, 5 −z; оси граней (ua, va), шаги в области и углы вершин (du, dv)
   // (порядок вершин — против часовой стрелки, если смотреть снаружи)
@@ -124,14 +161,27 @@
     return out;
   }
 
-  // маски «жадной» склейки (слой до 128 × 16)
-  const MK0 = new Int32Array(H * 16), MK1 = new Int32Array(H * 16), MK2 = new Int32Array(H * 16), MK3 = new Int32Array(H * 16), MAO = new Int32Array(H * 16);
-  const CS = new Int32Array(4), CB = new Int32Array(4), CA = new Int32Array(4);
+  // маски «жадной» склейки (слой до 128 × 16): вид, AO, свет неба и R, G, B по 4 углам (по 6 бит), цвет биома
+  const N16 = H * 16;
+  const MK0 = new Int32Array(N16), MKS = new Int32Array(N16), MKR = new Int32Array(N16), MKG = new Int32Array(N16), MKB = new Int32Array(N16), MK3 = new Int32Array(N16), MAO = new Int32Array(N16);
+  const CS = new Int32Array(4), CR = new Int32Array(4), CG = new Int32Array(4), CB = new Int32Array(4), CA = new Int32Array(4);
   const PQ = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  const LT4 = new Uint8Array(4);
+  // клетки маски склеиваются, только если совпадает всё: вид, AO, свет неба и R, G, B по углам, цвет биома
+  const same = (j, mi) => MK0[j] === MK0[mi] && MAO[j] === MAO[mi] && MKS[j] === MKS[mi] && MKR[j] === MKR[mi] && MKG[j] === MKG[mi] && MKB[j] === MKB[mi] && MK3[j] === MK3[mi];   // свет «одной клеткой» для не-кубов: небо, R, G, B (×4)
 
-  // reg — область 48×48×H (Uint16), light — { sky, blk } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9)
+  // reg — область 48×48×H (Uint16), light — { sky, r, g, b } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9)
   V.meshChunk = (reg, light, T, tint) => {
-    const sky = light.sky, blk = light.blk, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
+    const sky = light.sky, lr = light.r, lg = light.g, lb = light.b, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
+    const glowL = T.glowL || null, emit = T.emit, sT = T.stream || null;
+    const gl = l => glowL && l >= 0 && l < glowL.length ? glowL[l] : 0;
+    // свет клетки li (и, если надо, наибольший с клеткой li2) → LT4 (вершинам — всё в 0…60: небо × 4, цвет × 60 / 255)
+    const cellLt = (li, li2) => {
+      let s = sky[li], r = lr[li], g = lg[li], b = lb[li];
+      if (li2 >= 0) { if (sky[li2] > s) s = sky[li2]; if (lr[li2] > r) r = lr[li2]; if (lg[li2] > g) g = lg[li2]; if (lb[li2] > b) b = lb[li2]; }
+      LT4[0] = s * 4; LT4[1] = (r * 60 + 127) / 255 | 0; LT4[2] = (g * 60 + 127) / 255 | 0; LT4[3] = (b * 60 + 127) / 255 | 0;
+      return LT4;
+    };
     for (const s of streams) s.q = 0;
     // выше последнего непустого — делать нечего
     let yMax = 0;
@@ -162,7 +212,7 @@
           const layer = texFor(T, t, cv >>> 12, d);
           if (layer < 0) continue;
           // углы: AO и свет по 4 клеткам перед гранью (вне мира по y: сверху — светло, снизу — темно)
-          if (ny >= H) { CA[0] = CA[1] = CA[2] = CA[3] = 3; CS[0] = CS[1] = CS[2] = CS[3] = 60; CB[0] = CB[1] = CB[2] = CB[3] = 0; }
+          if (ny >= H) { CA[0] = CA[1] = CA[2] = CA[3] = 3; CS[0] = CS[1] = CS[2] = CS[3] = 60; CR[0] = CR[1] = CR[2] = CR[3] = CG[0] = CG[1] = CG[2] = CG[3] = CB[0] = CB[1] = CB[2] = CB[3] = 0; }
           else {
             const n = ri + D.n, nTop = ny >= H - 1, nBot = ny <= 0;
             for (let k = 0; k < 4; k++) {
@@ -170,42 +220,46 @@
               const okU = !(D.tu === 1 && ((du > 0 && nTop) || (du < 0 && nBot))), okV = !(D.tv === 1 && ((dv > 0 && nTop) || (dv < 0 && nBot)));
               const o1 = okU ? opaque[reg[n + su] & TYPE] : 0, o2 = okV ? opaque[reg[n + sv] & TYPE] : 0, oc = okU && okV ? opaque[reg[n + su + sv] & TYPE] : 0;
               CA[k] = o1 && o2 ? 0 : 3 - o1 - o2 - oc;
-              let ls = sky[n], lb = blk[n], cnt = 1;
-              if (okU && !o1) { ls += sky[n + su]; lb += blk[n + su]; cnt++; }
-              if (okV && !o2) { ls += sky[n + sv]; lb += blk[n + sv]; cnt++; }
-              if (okU && okV && !oc && !(o1 && o2)) { ls += sky[n + su + sv]; lb += blk[n + su + sv]; cnt++; }
-              CS[k] = (ls * 4 + (cnt >> 1)) / cnt | 0; CB[k] = (lb * 4 + (cnt >> 1)) / cnt | 0;
+              let ls = sky[n], ar = lr[n], ag = lg[n], ab = lb[n], cnt = 1;
+              if (okU && !o1) { const j = n + su; ls += sky[j]; ar += lr[j]; ag += lg[j]; ab += lb[j]; cnt++; }
+              if (okV && !o2) { const j = n + sv; ls += sky[j]; ar += lr[j]; ag += lg[j]; ab += lb[j]; cnt++; }
+              if (okU && okV && !oc && !(o1 && o2)) { const j = n + su + sv; ls += sky[j]; ar += lr[j]; ag += lg[j]; ab += lb[j]; cnt++; }
+              const h2 = cnt >> 1, den = 255 * cnt, hd = den >> 1;
+              CS[k] = (ls * 4 + h2) / cnt | 0; CR[k] = (ar * 60 + hd) / den | 0; CG[k] = (ag * 60 + hd) / den | 0; CB[k] = (ab * 60 + hd) / den | 0;
             }
           }
           const tk = tintT[t];
           let tq = 0;
           if (tk && !(tk === 1 && d !== 2)) { tintOf(tint, x, z, tk, TC); tq = 0x1000000 | ((TC[0] >> 3) << 10) | ((TC[1] >> 3) << 5) | (TC[2] >> 3); }
-          const lay = layerT[t] === 2 ? 1 : 0, sway = tk === 2 || tk === 4 || tk === 5 ? 1 : 0;
-          MK0[mi] = 0x800000 | layer | (lay << 12) | (sway << 13);
+          const lay = sT ? sT[t] : layerT[t] === 2 ? 1 : 0, sway = tk === 2 || tk === 4 || tk === 5 ? 1 : 0;
+          MK0[mi] = 0x800000 | layer | (lay << 12) | (sway << 15);
           MAO[mi] = CA[0] | (CA[1] << 2) | (CA[2] << 4) | (CA[3] << 6);
-          MK1[mi] = CS[0] | (CS[1] << 6) | (CS[2] << 12) | (CS[3] << 18);
-          MK2[mi] = CB[0] | (CB[1] << 6) | (CB[2] << 12) | (CB[3] << 18);
+          MKS[mi] = CS[0] | (CS[1] << 6) | (CS[2] << 12) | (CS[3] << 18);
+          MKR[mi] = CR[0] | (CR[1] << 6) | (CR[2] << 12) | (CR[3] << 18);
+          MKG[mi] = CG[0] | (CG[1] << 6) | (CG[2] << 12) | (CG[3] << 18);
+          MKB[mi] = CB[0] | (CB[1] << 6) | (CB[2] << 12) | (CB[3] << 18);
           MK3[mi] = tq;
           any = true;
         }
         if (!any) continue;
-        // склейка: вдоль u, потом строки вдоль v
+        // склейка: вдоль u, потом строки вдоль v (только одинаковые вид, AO, свет и цвет)
         for (let v = 0; v < nV; v++) for (let u = 0; u < nU;) {
           const mi = v * nU + u, k0 = MK0[mi];
           if (!k0) { u++; continue; }
-          const ka = MAO[mi], k1 = MK1[mi], k2 = MK2[mi], k3 = MK3[mi];
+          const ka = MAO[mi], ks = MKS[mi], kr = MKR[mi], kg = MKG[mi], kb = MKB[mi], k3 = MK3[mi];
           let w = 1;
-          while (u + w < nU) { const j = mi + w; if (MK0[j] !== k0 || MAO[j] !== ka || MK1[j] !== k1 || MK2[j] !== k2 || MK3[j] !== k3) break; w++; }
+          while (u + w < nU && same(mi + w, mi)) w++;
           let h = 1;
           grow: while (v + h < nV) {
             const row = (v + h) * nU + u;
-            for (let q = 0; q < w; q++) { const j = row + q; if (MK0[j] !== k0 || MAO[j] !== ka || MK1[j] !== k1 || MK2[j] !== k2 || MK3[j] !== k3) break grow; }
+            for (let q = 0; q < w; q++) if (!same(row + q, mi)) break grow;
             h++;
           }
           for (let hh = 0; hh < h; hh++) { const row = (v + hh) * nU + u; for (let q = 0; q < w; q++) MK0[row + q] = 0; }
           let x, y, z;
           if (axis === 0) { x = sl; y = u; z = v; } else if (axis === 1) { x = u; y = sl; z = v; } else { x = u; y = v; z = sl; }
-          emitCube(streams[(k0 >> 12) & 1], d, x, y, z, w, h, k0 & 0xfff, ka, k1, k2, k3, (k0 >> 13) & 1);
+          const layer = k0 & 0xfff;
+          emitCube(streams[(k0 >> 12) & 7], d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, (k0 >> 15) & 1, gl(layer));
           u += w;
         }
       }
@@ -216,31 +270,31 @@
       for (let y = 0; y <= yMax; y++) {
         const ri = b0 + y, cv = reg[ri], t = cv & TYPE, sh = shape[t];
         if (sh <= 1) continue;
-        const st = cv >>> 12, ls = sky[ri], lb = blk[ri];
+        const st = cv >>> 12;
         if (sh === 2) {   // крест: две диагонали, каждая — с двух сторон
           const tk = tintT[t], c = tk ? tintOf(tint, x, z, tk, TC) : WHITE, lay = T.tex[t * 7 + 2];
-          cross(streams[1], x + .15, y, z + .15, .7, 1, lay, ls, lb, c, 1);
-        } else if (sh === 4) {   // факел: крест; на стене — прижат к ней и чуть выше
-          const f = st & 7, dd = f >= 1 && f <= 4 ? V.FACING[f - 1] : null;
-          cross(streams[1], x + .3 - (dd ? dd[0] * .3 : 0), y + (dd ? .2 : 0), z + .3 - (dd ? dd[2] * .3 : 0), .4, 1, T.tex[t * 7 + 2], 15, 14, WHITE, 0);
+          cross(streams[sT ? sT[t] || 3 : 1], x + .15, y, z + .15, .7, 1, lay, cellLt(ri, -1), c, 1, gl(lay));
+        } else if (sh === 4) {   // факел: крест; на стене — прижат к ней и чуть выше; светится сам
+          const f = st & 7, dd = f >= 1 && f <= 4 ? V.FACING[f - 1] : null, lay = T.tex[t * 7 + 2];
+          cross(streams[1], x + .3 - (dd ? dd[0] * .3 : 0), y + (dd ? .2 : 0), z + .3 - (dd ? dd[2] * .3 : 0), .4, 1, lay, cellLt(ri, -1), WHITE, 0, gl(lay) || emit[t]);
         } else if (sh === 5) {   // лестница: пластина у стены, с двух сторон
-          const dd = V.FACING[st & 3], e = .06, lay = T.tex[t * 7 + 2];
+          const dd = V.FACING[st & 3], e = .06, lay = T.tex[t * 7 + 2], L4 = cellLt(ri, -1);
           let A, B;   // концы пластины по горизонтали (снизу)
           if (dd[0] > 0) { A = [x + e, z + 1]; B = [x + e, z]; } else if (dd[0] < 0) { A = [x + 1 - e, z]; B = [x + 1 - e, z + 1]; }
           else if (dd[2] > 0) { A = [x, z + e]; B = [x + 1, z + e]; } else { A = [x + 1, z + 1 - e]; B = [x, z + 1 - e]; }
-          plate(streams[1], A, B, y, 1, lay, ls, lb, WHITE, 0, false);
-          plate(streams[1], B, A, y, 1, lay, ls, lb, WHITE, 0, false);
+          plate(streams[1], A, B, y, 1, lay, L4, WHITE, 0, false, gl(lay));
+          plate(streams[1], B, A, y, 1, lay, L4, WHITE, 0, false, gl(lay));
         } else if (sh === 6 || sh === 7 || sh === 8) {   // дверь / кактус / сундук: коробка
           const bx = V.boxOf(cv, false); if (!bx) continue;
           for (let d = 0; d < 6; d++) {
             const D = DIRS[d], ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0);
             const onEdge = (d === 0 && bx[3] >= 1) || (d === 1 && bx[0] <= 0) || (d === 2 && bx[4] >= 1) || (d === 3 && bx[1] <= 0) || (d === 4 && bx[5] >= 1) || (d === 5 && bx[2] <= 0);
-            let li = ri;
+            let li = -1;
             if (onEdge && ny >= 0 && ny < H) { const nt = reg[ri + D.n] & TYPE; if (opaque[nt] || (nt === t && sh === 7 && (d === 2 || d === 3))) continue; li = ri + D.n; }
             let lay;
             if (sh === 6) lay = T.tex[t * 7 + ((st >> 3) & 1 && d !== 2 && d !== 3 ? 0 : 2)];
             else lay = texFor(T, t, st & 3, d);
-            boxFace(streams[1], d, x, y, z, bx, lay, Math.max(sky[li], ls), Math.max(blk[li], lb), WHITE, 0);
+            boxFace(streams[1], d, x, y, z, bx, lay, cellLt(ri, li), WHITE, 0, gl(lay));
           }
         } else if (sh === 3) {   // жидкость: вода — прозрачная, лава — непрозрачная; поверхность — плавными углами
           const lq = liquid[t], s = lq === 1 ? streams[2] : streams[0], lay = T.tex[t * 7 + 2];
@@ -255,25 +309,36 @@
             if (nt === t) continue;
             if (opaque[nt] && d !== 2) continue;
             if (d === 2 && full) continue;
-            const li = ny < H ? ri + D.n : ri;
-            liquidFace(s, d, x, y, z, HC, lay, Math.max(sky[li], ls), Math.max(blk[li], lb), c, lq === 1 ? 2 : 0);
+            liquidFace(s, d, x, y, z, HC, lay, cellLt(ri, ny < H ? ri + D.n : -1), c, lq === 1 ? 2 : 0, gl(lay));
           }
         }
       }
     }
     // выход: копии нужной длины (буферы потока остаются)
     const out = { yMax };
-    ['solid', 'cutout', 'water'].forEach((k, i) => {
+    V.LAYERS.forEach((k, i) => {
       const s = streams[i];
-      out[k] = s.q ? { n: s.q, pos: s.pos.slice(0, s.q * 12), vd: s.vd.slice(0, s.q * 16), col: s.col.slice(0, s.q * 12) } : null;
+      out[k] = s.q ? { n: s.q, pos: s.pos.slice(0, s.q * 12), vd: s.vd.slice(0, s.q * 16), col: s.col.slice(0, s.q * 12), lt: s.lt.slice(0, s.q * 16) } : null;
     });
-    // свет центра (для игры: яркость мобов, где им появляться)
-    const L = new Uint8Array(V.CELLS);
+    // свет центра (для игры: цвет и яркость мобов и вещей, где им появляться) и светящиеся клетки (лампы и ореолы)
+    const L = new Uint16Array(V.CELLS), lights = [], lava = new Set();
     for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
       const b = ((x + 16) * RW + (z + 16)) * H, o2 = (x << 11) | (z << 7);
-      for (let y = 0; y < H; y++) L[o2 | y] = (sky[b + y] << 4) | blk[b + y];
+      for (let y = 0; y < H; y++) {
+        const i = b + y;
+        L[o2 | y] = (sky[i] << 12) | (((lr[i] + 8) / 17 | 0) << 8) | (((lg[i] + 8) / 17 | 0) << 4) | ((lb[i] + 8) / 17 | 0);
+        const t = reg[i] & TYPE;
+        if (!emit[t] || lights.length >= 256) continue;
+        if (liquid[t] === 2) {   // лава: одна лампа на поверхность 4×4 (и по высоте)
+          if (y < H - 1 && (reg[i + 1] & TYPE) === t) continue;
+          const key = (x >> 2) * 1000 + (z >> 2) * 100 + y; if (lava.has(key)) continue;
+          lava.add(key);
+        }
+        lights.push(o2 | y | (t << 15));
+      }
     }
     out.light = L;
+    out.lights = lights.length ? Int32Array.from(lights) : null;
     return out;
   };
   const BC = [0, 0, 0], HC = [1, 1, 1, 1];
@@ -290,10 +355,11 @@
     }
     return w ? h / w : V.liquidHeight(cv);
   }
+  const putLt = (LT, o, L4) => { LT[o * 4] = L4[0]; LT[o * 4 + 1] = L4[1]; LT[o * 4 + 2] = L4[2]; LT[o * 4 + 3] = L4[3]; };
   // Грань жидкости: как у куба, верхние вершины — на высоте своего угла
-  function liquidFace(s, d, x, y, z, Hc, layer, ls, lb, c, flags){
+  function liquidFace(s, d, x, y, z, Hc, layer, L4, c, flags, glow){
     grow(s, s.q + 1);
-    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col;
+    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt;
     for (let vi = 0; vi < 4; vi++) {
       const o = q * 4 + vi;
       BC[d >> 1] = (d & 1) ? 0 : 1; BC[D.ua] = D.c[vi][0]; BC[D.va] = D.c[vi][1];
@@ -302,20 +368,21 @@
       if (d === 2 || d === 3) { U = X; Vv = Z; } else if (d === 0) { U = 1 - Z; Vv = 1 - Y; } else if (d === 1) { U = Z; Vv = 1 - Y; } else if (d === 4) { U = X; Vv = 1 - Y; } else { U = 1 - X; Vv = 1 - Y; }
       P[o * 3] = (x + X) * 16; P[o * 3 + 1] = Math.round((y + Y) * 16); P[o * 3 + 2] = (z + Z) * 16;
       VD[o * 4] = Math.round(U * 16); VD[o * 4 + 1] = Math.round(Vv * 16); VD[o * 4 + 2] = layer | (d << 12);
-      VD[o * 4 + 3] = 3 | ((ls * 4) << 2) | ((lb * 4) << 8) | (flags << 14);
+      VD[o * 4 + 3] = 3 | (glow << 2) | (flags << 14);
+      putLt(LT, o, L4);
       C[o * 3] = c[0]; C[o * 3 + 1] = c[1]; C[o * 3 + 2] = c[2];
     }
   }
 
   // Квадрат «жадной» грани: клетка (x, y, z), w × h по осям (ua, va)
-  function emitCube(s, d, x, y, z, w, h, layer, ka, k1, k2, k3, sway){
+  function emitCube(s, d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, sway, glow){
     grow(s, s.q + 1);
-    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col;
+    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt;
     const a0 = ka & 3, a1 = (ka >> 2) & 3, a2 = (ka >> 4) & 3, a3 = (ka >> 6) & 3;
     const flip = a0 + a2 < a1 + a3 ? 1 : 0;   // тёмная диагональ 0–2 — делим по 1–3
     const r = k3 ? (((k3 >> 10) & 31) << 3) | 4 : 255, g = k3 ? (((k3 >> 5) & 31) << 3) | 4 : 255, b = k3 ? ((k3 & 31) << 3) | 4 : 255;
     for (let vi = 0; vi < 4; vi++) {
-      const k = (vi + flip) & 3, du = D.c[k][0], dv = D.c[k][1];
+      const k = (vi + flip) & 3, du = D.c[k][0], dv = D.c[k][1], sh = k * 6;
       let X = x, Y = y, Z = z;
       if (d === 0) X++; else if (d === 2) Y++; else if (d === 4) Z++;
       if (D.ua === 0) X += du * w; else Y += du * w;
@@ -325,40 +392,42 @@
       const o = q * 4 + vi, ak = k === 0 ? a0 : k === 1 ? a1 : k === 2 ? a2 : a3;
       P[o * 3] = X * 16; P[o * 3 + 1] = Y * 16; P[o * 3 + 2] = Z * 16;
       VD[o * 4] = U * 16; VD[o * 4 + 1] = Vv * 16; VD[o * 4 + 2] = layer | (d << 12);
-      VD[o * 4 + 3] = ak | (((k1 >> (k * 6)) & 63) << 2) | (((k2 >> (k * 6)) & 63) << 8) | (sway << 14);
+      VD[o * 4 + 3] = ak | (glow << 2) | (sway << 14);
+      LT[o * 4] = (ks >> sh) & 63; LT[o * 4 + 1] = (kr >> sh) & 63; LT[o * 4 + 2] = (kg >> sh) & 63; LT[o * 4 + 3] = (kb >> sh) & 63;
       C[o * 3] = r; C[o * 3 + 1] = g; C[o * 3 + 2] = b;
     }
   }
   // Вертикальная пластина от A до B (по горизонтали), высота h, против часовой — со стороны «справа» от A→B
-  function plate(s, A, B, y, h, layer, ls, lb, c, sway, rev){
+  function plate(s, A, B, y, h, layer, L4, c, sway, rev, glow){
     PQ[0][0] = A[0]; PQ[0][1] = y; PQ[0][2] = A[1];
     PQ[1][0] = A[0]; PQ[1][1] = y + h; PQ[1][2] = A[1];
     PQ[2][0] = B[0]; PQ[2][1] = y + h; PQ[2][2] = B[1];
     PQ[3][0] = B[0]; PQ[3][1] = y; PQ[3][2] = B[1];
-    quad(s, PQ, layer, 6, ls, lb, c, sway);
+    quad(s, PQ, layer, 6, L4, c, sway, glow);
   }
   // Крест (трава, цветы, факел): квадрат со стороной k в плане от (x0, z0), высота h
-  function cross(s, x0, y, z0, k, h, layer, ls, lb, c, sway){
+  function cross(s, x0, y, z0, k, h, layer, L4, c, sway, glow){
     const A = [x0, z0], B = [x0 + k, z0 + k], C2 = [x0 + k, z0], D2 = [x0, z0 + k];
-    plate(s, A, B, y, h, layer, ls, lb, c, sway); plate(s, B, A, y, h, layer, ls, lb, c, sway);
-    plate(s, C2, D2, y, h, layer, ls, lb, c, sway); plate(s, D2, C2, y, h, layer, ls, lb, c, sway);
+    plate(s, A, B, y, h, layer, L4, c, sway, false, glow); plate(s, B, A, y, h, layer, L4, c, sway, false, glow);
+    plate(s, C2, D2, y, h, layer, L4, c, sway, false, glow); plate(s, D2, C2, y, h, layer, L4, c, sway, false, glow);
   }
   const UV4 = [[0, 1], [0, 0], [1, 0], [1, 1]];
-  function quad(s, P4, layer, nrm, ls, lb, c, sway){
+  function quad(s, P4, layer, nrm, L4, c, sway, glow){
     grow(s, s.q + 1);
-    const q = s.q++, P = s.pos, VD = s.vd, C = s.col;
+    const q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt;
     for (let vi = 0; vi < 4; vi++) {
       const p = P4[vi], o = q * 4 + vi;
       P[o * 3] = Math.round(p[0] * 16); P[o * 3 + 1] = Math.round(p[1] * 16); P[o * 3 + 2] = Math.round(p[2] * 16);
       VD[o * 4] = UV4[vi][0] * 16; VD[o * 4 + 1] = UV4[vi][1] * 16; VD[o * 4 + 2] = layer | (nrm << 12);
-      VD[o * 4 + 3] = 3 | ((ls * 4) << 2) | ((lb * 4) << 8) | ((sway && (vi === 1 || vi === 2) ? 1 : 0) << 14);
+      VD[o * 4 + 3] = 3 | ((glow | 0) << 2) | ((sway && (vi === 1 || vi === 2) ? 1 : 0) << 14);
+      putLt(LT, o, L4);
       C[o * 3] = c[0]; C[o * 3 + 1] = c[1]; C[o * 3 + 2] = c[2];
     }
   }
   // Грань коробки bx (доли блока) в направлении d: дверь, кактус, сундук, вода. UV — по доле клетки (не тянется)
-  function boxFace(s, d, x, y, z, bx, layer, ls, lb, c, flags){
+  function boxFace(s, d, x, y, z, bx, layer, L4, c, flags, glow){
     grow(s, s.q + 1);
-    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col, nAx = d >> 1, nHi = (d & 1) === 0;
+    const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt, nAx = d >> 1, nHi = (d & 1) === 0;
     for (let vi = 0; vi < 4; vi++) {
       const du = D.c[vi][0], dv = D.c[vi][1], o = q * 4 + vi;
       BC[nAx] = nHi ? bx[nAx + 3] : bx[nAx];
@@ -369,7 +438,8 @@
       if (d === 2 || d === 3) { U = X; Vv = Z; } else if (d === 0) { U = 1 - Z; Vv = 1 - Y; } else if (d === 1) { U = Z; Vv = 1 - Y; } else if (d === 4) { U = X; Vv = 1 - Y; } else { U = 1 - X; Vv = 1 - Y; }
       P[o * 3] = Math.round((x + X) * 16); P[o * 3 + 1] = Math.round((y + Y) * 16); P[o * 3 + 2] = Math.round((z + Z) * 16);
       VD[o * 4] = Math.round(U * 16); VD[o * 4 + 1] = Math.round(Vv * 16); VD[o * 4 + 2] = layer | (d << 12);
-      VD[o * 4 + 3] = 3 | ((ls * 4) << 2) | ((lb * 4) << 8) | (flags << 14);
+      VD[o * 4 + 3] = 3 | ((glow | 0) << 2) | (flags << 14);
+      putLt(LT, o, L4);
       C[o * 3] = c[0]; C[o * 3 + 1] = c[1]; C[o * 3 + 2] = c[2];
     }
   }

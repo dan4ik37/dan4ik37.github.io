@@ -15,12 +15,18 @@
   // ═══ Библиотека модов (IndexedDB «d37-kubomir», хранилище mods; без базы — в памяти вкладки) ═══
   function ready(){ return libP || (libP = refresh()); }
   async function refresh(){
-    try { lib = (await VX().store.mods()) || []; } catch (e) { lib = []; }
+    try { lib = ((await VX().store.mods()) || []).filter(r => !String(r.id).startsWith('__')); } catch (e) { lib = []; }   // «__…» — служебное (пакет текстур)
     lib.sort((a, b) => String(a.manifest?.name || a.id).localeCompare(String(b.manifest?.name || b.id), 'ru'));
     return lib;
   }
   const list = () => lib;
   const find = id => lib.find(r => r.id === id) || null;
+  // таблица переноса из Minecraft от модов библиотеки («minecraft»: { blocks }) — для построек и миров с блоками этих модов
+  function mcMaps(){
+    const out = {}, M = VX().mods;
+    for (const rec of lib) { if (!rec.manifest?.minecraft) continue; const r = M.validate(rec.manifest, rec.files || {}); if (r.ok && r.m.mcMap) Object.assign(out, r.m.mcMap); }
+    return out;
+  }
 
   // files: { путь: Uint8Array | строка } — из архива или папки; mod.json в корне
   async function install(files){
@@ -155,7 +161,9 @@
     // рецепты — когда все блоки и вещи уже есть (мод может брать вещи другого мода)
     for (const L of loaded) skipped.push(...M.recipes(L.m).map(s => L.m.name + ': ' + s));
     const features = M.features(loaded.flatMap(L => L.m.features));
-    if (loaded.some(L => L.m.scripts.some(s => s.lang === 'lua')) && !window.D37E?.langs?.lua?.worker) await loadJs('js/engine/lang-lua.js').catch(() => {});
+    // языки скриптов (Lua, Java…) — файл языка подгружается, только если мод на нём (таблица — V.MOD_LANGS в voxel-mods.js)
+    const LANGS = V.MOD_LANGS || { lua: 'js/engine/lang-lua.js' };
+    for (const ln of new Set(loaded.flatMap(L => L.m.scripts.map(s => s.lang)))) if (ln && ln !== 'js' && LANGS[ln] && !window.D37E?.langs?.[ln]?.worker) await loadJs(LANGS[ln]).catch(() => {});
     return { features, loaded, missing, failed, skipped };
   }
   function run(st, state, hooks){
@@ -172,7 +180,7 @@
     const M = VX().mods;
     sc.innerHTML = `<div class="kb-menu kb-modlib"><h3>🧩 Моды</h3>
       <p class="kb-note">Моды добавляют новые блоки, вещи, рецепты, руды и поведение (скрипты на JavaScript или Lua). Скрипты работают в закрытой «песочнице»: без интернета и без доступа к сайту. Мод включают при создании мира (или в игре: меню → «🧩 Моды мира»).</p>
-      <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-a="file">📥 Добавить мод (.d37mod, .zip, mod.json)</button><button type="button" class="kb-btn" data-a="dir">📁 Папка с модом</button><button type="button" class="kb-btn" data-a="back">← Назад</button></div>
+      <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-a="file">📥 Добавить мод (.d37mod, .zip, mod.json)</button><button type="button" class="kb-btn" data-a="dir">📁 Папка с модом</button>${o.mc ? '<button type="button" class="kb-btn" data-a="mc">⛏ Импорт из Minecraft (.jar, .mcaddon, пакеты)</button>' : ''}<button type="button" class="kb-btn" data-a="back">← Назад</button></div>
       <input type="file" class="kb-mfile" accept=".d37mod,.zip,.json,application/zip,application/json" hidden><input type="file" class="kb-mdir" webkitdirectory multiple hidden>
       <div class="kb-mres" aria-live="polite"></div>
       <div class="kb-mods kb-mylist"></div>
@@ -215,6 +223,9 @@
     }
     async function addFrom(files){
       if (!files) return;
+      // файл Minecraft (мод .jar, дополнение, постройка, мир) — в импорт из Minecraft
+      const f0 = files[0];
+      if (files.length === 1 && f0 && /\.(jar|mcaddon|mcpack|mcworld|schem|schematic|litematic|mcstructure|mca|nbt)$/i.test(f0.name || '') && o.mc) { o.mc(f0); return; }
       show('⏳ Проверяем мод…');
       try {
         const map = await readInput(files);
@@ -226,6 +237,7 @@
     sc.querySelector('.kb-mbtns').addEventListener('click', e => {
       const b = e.target.closest('[data-a]'); if (!b) return;
       if (b.dataset.a === 'back') o.back?.();
+      else if (b.dataset.a === 'mc') o.mc?.();
       else if (b.dataset.a === 'file') sc.querySelector('.kb-mfile').click();
       else if (b.dataset.a === 'dir') sc.querySelector('.kb-mdir').click();
     });
@@ -278,5 +290,5 @@
     box.querySelector('[data-x]')?.focus?.();
   }
 
-  window.KubomirMods = { ready, list, refresh, install, remove, readInput, forWorld, run, library, worldPanel, pack, unpack, zipOf, _test: { png16, decodeTextures } };
+  window.KubomirMods = { ready, list, refresh, install, remove, readInput, forWorld, run, library, worldPanel, pack, unpack, zipOf, mcMaps, png16, _test: { png16, decodeTextures } };
 })();
