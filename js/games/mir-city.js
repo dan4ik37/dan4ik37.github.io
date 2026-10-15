@@ -116,7 +116,7 @@
     ['Кто строит плотины?', ['Бобры', 'Зайцы', 'Совы'], 0], ['Сколько цветов у радуги?', ['7', '5', '9'], 0], ['Что нужно растению?', ['Вода и свет', 'Только темнота', 'Только песок'], 0],
   ];
   MZ.def('kids', {
-    roles: ROLES_K, buildings: K_BLD, streets: K_STREETS, places: K_PLACES,
+    roles: ROLES_K, buildings: K_BLD, streets: K_STREETS, places: K_PLACES, residents: 14,   // жители по расписанию (MirZones.residents)
     // карты у детской площадки (катаются только по городку)
     vehicles: [152, 157, 162].map((x, i) => ({ id: 'k_kart' + (i + 1), def: 'kart', x, z: -33.5, yaw: PI / 2, area: 'kids' })),
     ground: [[200, -24, 180, 8, '#5b6270'], [180, -20, 8, 120, '#5b6270'], [117, -24, 14, 28, '#e7dcc2']],
@@ -213,7 +213,7 @@
     { id: 'm_flatstp', icon: '🏢', name: 'ЖК «Солнечный»', x: 120, z: 316, lx: 120, lz: 298, sub: 1 },
   ];
   MZ.def('metro', {
-    roles: ROLES_M, buildings: M_BLD, streets: M_STREETS, places: M_PLACES,
+    roles: ROLES_M, buildings: M_BLD, streets: M_STREETS, places: M_PLACES, residents: 24,   // жители по расписанию (MirZones.residents)
     // транспорт города: такси у стоянки, машины в паркинге, катера на канале, вертолёт на площадке крыши «Сити-1» (y — высота крыши)
     vehicles: [
       { id: 'm_heli1', def: 'heli_city', x: 298.4, z: 160, yaw: PI / 2, y: 109.3 },
@@ -859,7 +859,7 @@
   function mayorOffice(K, x, z, city){
     K.table(x, z, 2.2, 1, '#78350f', .8); K.chair(x, z + 1, PI, '#7f1d1d');
     K.cyl(x + 1.8, 0, z + 1.4, .05, 2.4, '#d6d3d1'); K.part({ s: 'box', x: x + 2.25, y: 2.1, z: z + 1.4, w: .9, h: .55, d: .03, c: city === 'kids' ? '#facc15' : '#2563eb' });
-    K.item({ x, y: 1.2, z: z - .9, r: 1.4, prompt: () => '🗳️ Кабинет мэра', act: () => K.rt.H?.panel('<span class="wld-pe">🗳️</span><b>Кабинет мэра</b>', `<p>${city === 'kids' ? 'В Солнечном городке' : 'В Большом городе'} скоро пройдут <b>выборы мэра</b>. Мэр будет решать, что строить на свободных участках, какие бизнесы открывать и как развивать город.</p><p><small>Готовим «градостроитель» — следи за новостями канала.</small></p>`) });
+    K.item({ x, y: 1.2, z: z - .9, r: 1.4, prompt: () => '🗳️ Кабинет мэра', act: () => K.rt.H?.panel('<span class="wld-pe">🗳️</span><b>Кабинет мэра</b>', `<p>${city === 'kids' ? 'В Солнечном городке' : 'В Большом городе'} скоро пройдут <b>выборы мэра</b>. Мэр будет решать, что строить на свободных участках, какие бизнесы открывать и как развивать город.</p><p><small>Готовим «градостроитель» — следи за новостями канала.</small></p><div class="wld-acts"><button type="button" class="ct-start" data-mz="ov:${city}">🏙️ Город сверху (вид мэра)</button></div>`) });
   }
   // мебель этажей (лениво, K.yo — высота этажа): офис, кафе, номера отеля, смотровая, ТЦ
 

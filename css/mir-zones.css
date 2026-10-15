@@ -118,3 +118,7 @@
 .mz-veh{position:absolute;left:50%;bottom:86px;transform:translateX(-50%);padding:.34rem .8rem;border-radius:12px;background:rgba(12,10,28,.78);
   border:1.5px solid rgba(96,165,250,.7);font-size:.82rem;font-weight:800;letter-spacing:.01em;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.35)}
 @media (max-width:640px){.mz-veh{bottom:auto;top:96px;font-size:.74rem}}
+
+/* вид мэра (город сверху): кнопка выхода */
+.mz-ov{position:absolute;left:50%;top:14px;transform:translateX(-50%);pointer-events:auto;border:1.5px solid rgba(250,204,21,.8);background:rgba(12,10,28,.85);
+  color:#fde68a;border-radius:12px;padding:.42rem .9rem;font-weight:800;font-size:.8rem;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)}

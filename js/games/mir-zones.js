@@ -141,6 +141,50 @@
   // Рельеф зон: море (дно SEA.floor, у берега отвесная набережная), бункер (пол ниже земли), канал Большого города
   const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : inRect(CANAL, x, z) ? CANAL.floor : 0;
   const water = (x, z) => inRect(SEA, x, z) ? SEA.wl : inRect(CANAL, x, z) ? CANAL.wl : -Infinity;
+  // ═══ Жители по расписанию (задел «города-симулятора»): у каждого — дом, работа, любимый магазин из таблицы зданий зоны.
+  //     По часам мира (E.dayClock — у всех одинаково): ночью дома (не видно), утром — по дороге, днём — у работы, вечером — у
+  //     магазина, потом — гуляет у дома. По зерну зоны: у всех игроков одни и те же люди в тех же местах. Дёшево: без путей —
+  //     переходят, пока игрок далеко. D.residents — сколько (def зоны) ═══
+  const RES_NAMES = ['Аня', 'Борис', 'Вика', 'Гоша', 'Даша', 'Егор', 'Женя', 'Зоя', 'Игорь', 'Катя', 'Лёва', 'Маша', 'Никита', 'Оля', 'Паша', 'Рита', 'Саша', 'Таня', 'Федя', 'Юля', 'Артём', 'Ксюша', 'Миша', 'Соня'];
+  const hashS = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const prng = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  // точка у входа: сторона здания, ближняя к улице зоны, в 2,5 м от стены
+  function doorSpot(b, D){
+    const sides = [[0, -b.d / 2 - 2.5], [0, b.d / 2 + 2.5], [-b.w / 2 - 2.5, 0], [b.w / 2 + 2.5, 0]];
+    let best = null, bd = Infinity;
+    for (const [dx, dz] of sides) {
+      const x = b.x + dx, z = b.z + dz;
+      let d = Infinity; for (const r of D.streets || []) for (let i = 1; i < r.pts.length; i++) d = Math.min(d, segDist(x, z, r.pts[i - 1][0], r.pts[i - 1][1], r.pts[i][0], r.pts[i][1]));
+      if (d < bd) { bd = d; best = [x, z]; }
+    }
+    return best || [b.x, b.z + b.d / 2 + 2.5];
+  }
+  function residents(zid){
+    const D = DEFS[zid]; if (!D?.residents) return [];
+    if (D._res) return D._res;
+    const B = (D.buildings || []).filter(b => b.h > 0);
+    const homes = B.filter(b => b.type === 'apartment' || b.type === 'house'), works = B.filter(b => ['office', 'shop', 'cafe', 'service', 'public', 'hotel', 'factory'].includes(b.type));
+    const shops = B.filter(b => b.type === 'shop' || b.type === 'cafe' || b.sub === 'mall');
+    if (!homes.length || !works.length) return (D._res = []);
+    const r = prng(hashS('res|' + zid)), pick = a => a[Math.floor(r() * a.length)];
+    const out = [];
+    for (let i = 0; i < D.residents; i++) {
+      const home = pick(homes), work = pick(works), shop = pick(shops.length ? shops : works);
+      out.push({ id: `${zid}_r${i}`, zone: zid, name: RES_NAMES[Math.floor(r() * RES_NAMES.length)], home: home.id, work: work.id, shop: shop.id,
+        hs: doorSpot(home, D), ws: doorSpot(work, D), ss: doorSpot(shop, D), shift: Math.round((r() * 2 - 1) * 100) / 100, j: [Math.round((r() * 2 - 1) * 300) / 100, Math.round((r() * 2 - 1) * 300) / 100], seed: 'res' + zid + i,
+        says: [`Живу: ${home.name}`, `Работаю: ${work.name}`, `Вечером — в «${shop.name.replace(/[«»]/g, '')}»`] });
+    }
+    return (D._res = out);
+  }
+  // где житель в час h: { phase, x, z } (phase 'home' — дома, не видно)
+  function residentAt(R, h){
+    const t = ((h - R.shift) % 24 + 24) % 24, j = R.j;
+    if (t < 7 || t >= 22.5) return { phase: 'home', x: R.hs[0], z: R.hs[1] };
+    if (t < 8.5) { const k = (t - 7) / 1.5; return { phase: 'go', x: R.hs[0] + (R.ws[0] - R.hs[0]) * k + j[0], z: R.hs[1] + (R.ws[1] - R.hs[1]) * k + j[1] }; }
+    if (t < 17) return { phase: 'work', x: R.ws[0] + j[0], z: R.ws[1] + j[1] };
+    if (t < 19.5) return { phase: 'shop', x: R.ss[0] + j[0], z: R.ss[1] + j[1] };
+    return { phase: 'walk', x: R.hs[0] + j[0] * 2, z: R.hs[1] + j[1] * 2 };
+  }
   // Возрастные ворота: { ok } | { ok: false, why: 'unknown' | 'young' }
   function gateOf(Z, A = root.D37Age){
     if (!Z || !Z.age || !A) return { ok: true };
@@ -1183,6 +1227,7 @@
     }
     function finishBuild(zs){
       const K = zs.K;
+      for (const Rs of residents(zs.Z.id)) K.npc({ id: Rs.id, name: '🙂 ' + Rs.name, x: Rs.hs[0], z: Rs.hs[1], yaw: 0, seed: Rs.seed, act: 'wander', radius: 3, speed: .8, say: Rs.says, sched: Rs });
       const lm = K.label.mesh(); if (lm) zs.grp.add(lm);
       flushPieces(R, K, zs.grp);   // детали с номерами (боевая зона) — InstancedMesh
       flushPortals(K, zs.grp);   // тёмные проёмы входов
@@ -1209,12 +1254,23 @@
     }
     // ── Жители зон — по расстоянию (как PopulationDirector в Backrooms: рядом — появляются, далеко — уходят), не больше NPC_CAP ──
     const NPC_NEAR = 62, NPC_FAR = 82, NPC_CAP = R.q === 'low' || E?.isMobile?.() ? 8 : 16;
+    const hourNow = () => S.fixedTime ?? (E?.dayClock ? E.dayClock(Date.now(), 40, .2) : 14);
+    rt.hourNow = hourNow;
     function npcTick(){
       if (!S.NPC) return;
-      const p = S.P.ch, L = [];
+      const p = S.P.ch, L = [], h = hourNow();
       for (const zs of rt.zones.values()) for (const o of zs.K?.npcs || []) {
+        let home = false;
+        if (o.mz?.sched) {   // житель: место по часам; рядом с игроком не прыгает — переходит, когда игрок далеко
+          const at = residentAt(o.mz.sched, h), far = Math.hypot(o.pos[0] - p.x, o.pos[2] - p.z) > 45;
+          home = at.phase === 'home';
+          if ((!o._on || far) && (Math.abs(at.x - o.pos[0]) > 1 || Math.abs(at.z - o.pos[2]) > 1)) {
+            if (o._on) { S.NPC.remove(o); o._on = false; }
+            o.pos[0] = at.x; o.pos[2] = at.z; o.phase = at.phase;
+          }
+        }
         const d = Math.hypot(o.pos[0] - p.x, o.pos[2] - p.z) + Math.abs(o.pos[1] - p.y) * 2;   // другой этаж — «дальше»
-        L.push([d, o, !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR)]);
+        L.push([d, o, !home && !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR)]);
       }
       L.sort((a, b) => a[0] - b[0]);
       let n = 0;
@@ -1428,6 +1484,7 @@
       else if (a.startsWith('tp:')) mapTp(a.slice(3));
       else if (a.startsWith('lift:')) { const i = a.lastIndexOf(':'); rt.liftGo(a.slice(5, i), +a.slice(i + 1)); }
       else if (a.startsWith('ilift:')) { const i = a.lastIndexOf(':'); rt.intGo(a.slice(6, i), a.slice(i + 1)); }
+      else if (a.startsWith('ov:')) { H.closePops?.(); rt.overview(a.slice(3) || null); }
       else if (a.startsWith('act:')) doAct(a.slice(4));
       else if (a === 'acts-x') toggleActs(false);
       else for (const zs of rt.mods) { try { if (zs.mod?.click?.(a, b)) break; } catch (er) { console.error(er); } }
@@ -1618,8 +1675,40 @@
     rt.send = d => H.send?.({ t: 'z', ...d });
     rt.vehSend = d => H.send?.({ t: 'vh', ...d });
     // транспорт: крючки mir.js (за рулём — шаг машины вместо шага человечка; камера — за машиной; направление не шлём)
-    rt.drive = (dt, C, rig) => { try { return !!rt.veh?.drive?.(dt, C, rig); } catch (e) { console.error(e); return false; } };
-    rt.camTarget = () => rt.veh?.camTarget?.() || null;
+    rt.drive = (dt, C, rig) => {
+      if (OV) { ovStep(dt, C); return true; }   // вид мэра: человечек стоит, WASD двигает камеру
+      try { return !!rt.veh?.drive?.(dt, C, rig); } catch (e) { console.error(e); return false; }
+    };
+    rt.camTarget = () => (OV ? OV.pt : rt.veh?.camTarget?.() || null);
+    // ═══ Вид мэра (задел «градостроителя»): город сверху — крыши по типу зданий (жильё зелёное, торговля и офисы синие,
+    //     производство жёлтое, город — красный, мэрия — бордовая); WASD — двигаться, колесо — ближе/дальше, мышь — повернуть ═══
+    let OV = null;
+    function ovStep(dt, C){
+      const rig = S.rig, Zn = ZONES[OV.zid], k = rig.dist * .9 * dt;
+      const fx = -Math.sin(rig.yaw), fz = -Math.cos(rig.yaw), rx = Math.cos(rig.yaw), rz = -Math.sin(rig.yaw);
+      OV.pt.x = Math.max(Zn.x0, Math.min(Zn.x1, OV.pt.x + (rx * C.move.x + fx * C.move.z) * k));
+      OV.pt.z = Math.max(Zn.z0, Math.min(Zn.z1, OV.pt.z + (rz * C.move.x + fz * C.move.z) * k));
+      if (C.down('interact')) rt.overview(null);
+    }
+    rt.overview = zid => {
+      const rig = S.rig;
+      if (OV || !zid || !ZONES[zid]) {
+        if (!OV) return false;
+        Object.assign(rig, OV.rig); if (OV.fog) R.setLighting?.(OV.fog);
+        OV = null; q('.mz-ov')?.remove(); toast('👋 Обычный вид'); return false;
+      }
+      const Zn = ZONES[zid];
+      H.closePops?.();
+      // точка — высоко над крышами (луч камеры к ней не упирается в небоскрёбы)
+      const L0 = R.lighting || {}, fog0 = L0.gfx?.fog ? { ...L0.gfx.fog } : null;
+      OV = { zid, pt: { x: (Zn.x0 + Zn.x1) / 2, y: 150, z: (Zn.z0 + Zn.z1) / 2 }, rig: { dist: rig.dist, maxD: rig.maxD, minD: rig.minD, minP: rig.minP, pitch: rig.pitch }, fog: { fogEnd: L0.fogEnd ?? 260, ...(fog0 ? { gfx: { fog: fog0 } } : {}) } };
+      Object.assign(rig, { maxD: 420, minD: 60, minP: .7, dist: Math.max(Zn.x1 - Zn.x0, Zn.z1 - Zn.z0) * .8, pitch: 1.2 });
+      R.setLighting?.({ fogEnd: 1600, gfx: { fog: { density: 0, height: 0 } } });   // сверху — без тумана (частичное освещение — только туман)
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'mz-ov'; b.dataset.mz = 'ov:'; b.textContent = '✕ Выйти из вида мэра'; hud.appendChild(b);
+      toast('🏛️ Вид мэра: крыши — по типу зданий. WASD — двигаться, колесо — ближе/дальше, E или Esc — выйти', true);
+      return true;
+    };
+    rt.inOverview = () => !!OV;
     rt.inVeh = () => !!rt.veh?.inVeh?.();
     // ── Подпись у ника: роль (значок) и семья ──
     rt.tag = p => {
@@ -1638,6 +1727,7 @@
     };
     // ── Esc: закрыть своё ──
     rt.esc = () => {
+      if (OV) { rt.overview(null); return true; }
       if (rt.modal === 'map') { closeMap(); return true; }
       if (rt.actsOpen) { toggleActs(false); return true; }
       for (const zs of rt.mods) { try { if (zs.mod?.esc?.()) return true; } catch (e) {} }
@@ -1880,7 +1970,7 @@
   root.MirZones = {
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
-    def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX,
+    def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
   };

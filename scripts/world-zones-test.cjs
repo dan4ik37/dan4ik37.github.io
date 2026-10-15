@@ -464,5 +464,24 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   ok(a && VE.snapOk(v.def, a, { ...a, x: a.x + 3 }, .2) === null && VE.snapOk(v.def, a, { ...a, x: a.x + 300 }, .2) === 'speed', 'снимок джипа и проверка скорости');
 }
 
+// ═══ 15. Город-симулятор: жители по расписанию (дом → работа → магазин → дом по часам мира) ═══
+{
+  for (const zid of ['metro', 'kids']) {
+    const L = MZ.residents(zid), L2 = MZ.residents(zid), B = id => MZ.building(id);
+    ok(L.length >= 10 && L === L2, `${zid}: жители есть и одни и те же (по зерну)`, L.length);
+    ok(new Set(L.map(r => r.id)).size === L.length, `${zid}: номера жителей — разные`);
+    ok(L.every(r => ['apartment', 'house'].includes(B(r.home)?.type) && B(r.work) && B(r.shop)), `${zid}: дом — жильё, работа и магазин — из таблицы зданий`);
+    ok(L.every(r => [r.hs, r.ws, r.ss].every(([x, z]) => inRect(ZONES[zid], x, z, 6))), `${zid}: места жителей — в зоне`);
+    ok(L.every(r => [[r.home, r.hs], [r.work, r.ws], [r.shop, r.ss]].every(([id, [x, z]]) => { const b = B(id); return Math.abs(x - b.x) > b.w / 2 || Math.abs(z - b.z) > b.d / 2; })), `${zid}: место у входа — снаружи здания`);
+    const R = L[0], ph = h => MZ.residentAt(R, h + R.shift).phase;
+    ok(ph(3) === 'home' && ph(7.7) === 'go' && ph(12) === 'work' && ph(18) === 'shop' && ph(21) === 'walk' && ph(23) === 'home', `${zid}: день жителя — дом, дорога, работа, магазин, прогулка, дом`);
+    const at = MZ.residentAt(R, 12 + R.shift);
+    ok(Math.hypot(at.x - R.ws[0], at.z - R.ws[1]) < 5, `${zid}: днём — у работы`);
+    const busy = h => L.filter(r => MZ.residentAt(r, h).phase !== 'home').length;
+    ok(busy(12) > L.length * .7 && busy(3) < L.length * .2, `${zid}: днём город живой, ночью улицы пустые`, [busy(12), busy(3)]);
+  }
+  ok(MZ.residents('war').length === 0, 'в боевой зоне жителей нет');
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);
