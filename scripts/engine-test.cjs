@@ -55,6 +55,11 @@ const DT = 1 / 60;
   C.blocked = true; C.key('Space', true); C.key('Escape', true); C.step(DT);
   ok(!C.down('jump') && C.down('pause'), 'окно открыто: игра молчит, пауза работает');
   C.blocked = false; C.key('Space', false); C.key('Escape', false); C.step(DT);
+  // телефон 📱 открыт (как в ГТА): окно, но ходить можно — без бега и прыжка
+  C.blocked = true; C.walk = true; C.key('KeyW', true); C.key('ShiftLeft', true); C.key('Space', true); C.step(DT);
+  ok(near(C.move.z, 1, 1e-6) && !C.held('run') && !C.down('jump'), 'телефон открыт: идёт, но не бежит и не прыгает');
+  C.walk = false; C.step(DT); ok(C.move.z === 0, 'окно без телефона — стоит');
+  C.blocked = false; C.key('KeyW', false); C.key('ShiftLeft', false); C.key('Space', false); C.step(DT);
   ok(C.label('jump') === 'Пробел' && C.label('interact') === 'E' && C.fmt('Открыть {interact}') === 'Открыть E', 'подсказки клавиш');
   C.press('jump', true); C.step(DT); ok(C.down('jump'), 'экранная кнопка'); C.press('jump', false); C.step(DT); ok(C.up('jump'), 'экранная кнопка — отпустили');
 }
@@ -357,6 +362,23 @@ function pk(boxes, opts = {}){
   const P3 = E.player(g3.ph, { x: c3.x, z: c3.z - T * .9 }); const k3 = mkC();
   let maxY = 0; k3.hold('KeyW'); run(P3, k3.C, 2.5, () => { maxY = Math.max(maxY, P3.ch.y); });
   ok(maxY > g3.HU - .4, 'поднялся по лестнице на 2-й этаж', maxY / g3.HU);
+}
+
+// ═══ Жители с телефоном 📱 (npc.js): своё расписание от seed — у всех одинаково, толпа не синхронна ═══
+{
+  const box = { window: { D37E: { UNIT: E.UNIT } } };
+  vm.runInNewContext(fs.readFileSync(path.join(SITE, 'js/engine/npc.js'), 'utf8'), box, { filename: 'npc.js' });
+  const at = box.window.D37E.npcs.phoneAt, seen = new Set();
+  let same = true, busy = 0, diff = 0;
+  for (let t = 0; t < 600; t += .5) {
+    const a = at('gid37', t); seen.add(a);
+    if (a !== at('gid37', t)) same = false;
+    if (a) busy++;
+    if (a !== at('kofe5', t)) diff++;
+  }
+  ok(same && seen.has('use') && seen.has('call') && seen.has('play') && seen.has(''), 'житель: то смотрит, то говорит, то играет — по расписанию', [...seen].join());
+  ok(busy > 200 && busy < 800, 'житель: с телефоном — меньше половины времени', busy);
+  ok(diff > 300, 'жители не синхронны', diff);
 }
 
 // ═══ Звуки ═══
