@@ -1707,6 +1707,8 @@ body.low .ct-city{animation:none}
 /* 2048 */
 .g2{max-width:420px;margin:0 auto}
 .g2-new{margin-left:auto;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);border-radius:10px;padding:.35rem .7rem;font-size:.72rem;cursor:pointer}
+.g2-new.g2-reset{margin-left:0}
+.g2-undo:disabled{opacity:.4;cursor:default}
 .g2-wrap{position:relative;touch-action:none}
 .g2-board{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);gap:8px;padding:8px;border-radius:14px;background:rgba(255,255,255,.05);aspect-ratio:1}
 .g2-cell{border-radius:10px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:clamp(1rem,6vw,1.7rem);color:#fff;font-variant-numeric:tabular-nums}
