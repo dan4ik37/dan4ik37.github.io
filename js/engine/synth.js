@@ -157,6 +157,15 @@
     buzz(){ return make(.38, 62, t => Math.sign(Math.sin(PI2 * 118 * t)) * .6 * Math.min(1, t / .01) * (1 - t / .38), .09, .03); },
     coin(){ return make(.32, 63, t => (Math.sin(PI2 * 1320 * t) * (t < .08 ? 1 : 0) + Math.sin(PI2 * 1760 * t) * (t >= .07 ? 1 : 0)) * exp(-Math.max(0, t - .07) * 9) * Math.min(1, t / .003), .08, .05); },
     click(){ let hp = 0; return make(.03, 64, (t, r) => { const w = N(r); hp += (w - hp) * .5; return (w - hp) * exp(-t * 400); }, .05, .005); },
+    // телефон 📱 (как в ГТА): шорох ткани кармана — достал/убрал, мягкое касание стекла — экран включился/выключился,
+    // щелчок камеры — «шторка» (два коротких щелчка механизма)
+    ph_pocket(){ const f = new Bp(1700, .7), f2 = new Bp(3800, .9), lo = new Bp(420, .8);
+      return make(.32, 81, (t, r) => { const w = N(r), sw = Math.sin(Math.min(1, t / .32) * Math.PI), fl = .55 + .45 * Math.sin(t * 61) * Math.sin(t * 23 + 1);
+        return (f.do(w) * .9 + f2.do(w) * .45 + lo.do(w) * .35) * sw * fl; }, .045, .05); },
+    ph_tap(){ const b = new Bp(2900, 3), b2 = new Bp(1200, 2); let hp = 0;
+      return make(.06, 82, (t, r) => { const w = N(r); hp += (w - hp) * .45; return (b.do(w) * 1.6 + b2.do(w) * .6) * exp(-t * 90) + (w - hp) * exp(-t * 600) * .4; }, .05, .01); },
+    ph_shutter(){ const m = new Bp(2400, 4), m2 = new Bp(5200, 2); let hp = 0;
+      return make(.16, 83, (t, r) => { const w = N(r); hp += (w - hp) * .5; let s = 0; for (const at of [0, .07]) if (t >= at) { const e = exp(-(t - at) * 160); s += (m.do(w) * 1.5 + m2.do(w) * .8 + (w - hp) * .7) * e; } return s; }, .07, .02); },
   };
   // ── Звуки-петли окружения (A.loop): тот же шум через резонаторы; края сшиты наплывом — петля без щелчка ──
   function loopMake(sec, seed, fn, rms){

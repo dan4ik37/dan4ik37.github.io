@@ -15,10 +15,15 @@
 //   activity(), shot(), where(), players(), tp(x, z, yaw), toFriend(uid) → true/false, shard(n?) }) → off() при выходе.
 //   Пока телефон открыт — pause(true): игра держит C.blocked (как при окне ⚙️), мышь отпущена; Esc и P забирает телефон.
 // Пути: '' (домашний), msgs, msgs/<uid>, friends, calls, calls/<код> (войти в звонок), incall, comm, comm/<id>[/<канал>|…],
-//   comm/join/<код>, camera, map, notif, settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → #/chat/join/<код>.
+//   comm/join/<код>, camera, map, game (мини-игра «Птичка»), notif, settings. Ссылка #/phone/<путь>; приглашение #/c/<код> → #/chat/join/<код>.
+// Телефон в руке персонажа (как в ГТА, world3d.js): hooks.hand(состояние) — '' (убран), use (смотрит в экран), call (у уха —
+//   звонок 1 на 1, и с закрытым телефоном), play (мини-игра), photo (камера); вернула true — игра показывает это 3D-человечком:
+//   тогда экран телефона выезжает, когда телефон уже в руке (~0,33 с), а закрывается — сначала экран, потом персонаж убирает
+//   телефон. Без 3D (нет WebGL, плоский мир, обычная страница) — только экран, без задержки. Событие 'd37:hand' (detail —
+//   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '1';
+  const VER = '2';
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
   const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js'], wchat: ['js/features/worldchat.js'] };
   const APPS = [
@@ -28,6 +33,7 @@
     { id: 'friends', ic: '🤝', t: 'Друзья', bg: '#f472b6,#db2777', mod: 'apps', b: 'friends' },
     { id: 'camera', ic: '📷', t: 'Камера', bg: '#94a3b8,#475569', mod: 'apps' },
     { id: 'map', ic: '🗺️', t: 'Карта', bg: '#4ade80,#0d9488', mod: 'apps' },
+    { id: 'game', ic: '🐤', t: 'Птичка', bg: '#fde047,#f97316', mod: 'apps' },
     { id: 'notif', ic: '🔔', t: 'Уведомления', bg: '#fbbf24,#ea580c', mod: 'apps', b: 'notif' },
     { id: 'settings', ic: '⚙️', t: 'Настройки', bg: '#a1a1aa,#3f3f46' },
   ];
@@ -42,6 +48,31 @@
   const badges = { msgs: 0, calls: 0, notif: 0, comm: 0, friends: 0 };
   let root = null, view = null, stack = [], cur = null, cleanup = null, isOpen = false, docked = false, ctx = null, returnFocus = null;
   let openedByCall = false;
+
+  // ── Телефон в руке персонажа (как в ГТА): что держит — по экрану и звонку; игре — hooks.hand, всем — событие d37:hand ──
+  const HAND_IN = 330, HAND_OUT = 190;   // мс: экран выезжает, когда телефон уже в руке; закрыли — сначала экран, потом убирает
+  // открыт (поверх игры, не страница #/phone), путь экрана, звонок (D37Calls.state()) → '' | use | call | play | photo
+  P.handFor = (open, path, call) => {
+    const talk = !!call && call.kind === 'call' && ['out', 'joining', 'live'].includes(call.state);   // 1 на 1 — у уха (и с закрытым экраном)
+    if (!open) return talk ? 'call' : '';
+    const id = String(path || '').split('/')[0];
+    if (id === 'camera') return 'photo';
+    if (id === 'game') return 'play';
+    if (id === 'incall' && talk) return 'call';
+    return 'use';
+  };
+  let hand = '', slideT = 0;
+  // сообщить, что в руке; true — игра показывает это человечком (тогда экран ждёт руку)
+  function handSync(){
+    const s = P.handFor(isOpen && !docked, cur, window.D37Calls?.state?.());
+    let anim = false;
+    try { anim = ctx?.hooks.hand?.(s) === true; } catch (e) { console.error(e); }
+    if (s !== hand) { hand = s; try { window.dispatchEvent(new CustomEvent('d37:hand', { detail: s })); } catch (e) {} }
+    return anim;
+  }
+  P.hand = () => hand;
+  window.addEventListener('d37:callstate', () => handSync());   // calls.js: звонит / ответил / положил
+  window.addEventListener('d37:voice', () => handSync());
 
   // ── Настройки (браузер, d37_phone; меняются во вкладке «📱 Телефон» окна ⚙️ — внизу файла) ──
   // vol — громкость мелодии и звуков телефона (0…1); calls — кто может звонить; ns — шумоподавление; ptt — рация
@@ -282,7 +313,13 @@
       returnFocus = document.activeElement;
       root.hidden = false;
       document.documentElement.classList.add('ph-open');
-      requestAnimationFrame(() => root.classList.add('on'));
+      // персонаж достаёт телефон (3D) — экран выезжает снизу, когда телефон уже в руке; иначе — сразу
+      cur = path !== undefined && path !== null ? String(path).replace(/^\/+|\/+$/g, '').replace(/^call\//, 'calls/') : cur;
+      const anim = handSync() && !docked;
+      root.classList.toggle('ph-rise', anim);
+      clearTimeout(slideT);
+      if (anim) slideT = setTimeout(() => { if (isOpen) root.classList.add('on'); }, HAND_IN);
+      else requestAnimationFrame(() => root.classList.add('on'));
       if (ctx?.hooks.pause) try { ctx.hooks.pause(true); } catch (e) {}
       if (!docked) setTimeout(() => { if (isOpen && !root.contains(document.activeElement)) root.focus({ preventScroll: true }); }, 30);
       refreshCounts();
@@ -295,12 +332,14 @@
     if (!isOpen || docked) return;
     isOpen = false; openedByCall = false;
     P.closeSheet();
+    clearTimeout(slideT);
     root.classList.remove('on');
     document.documentElement.classList.remove('ph-open');
-    setTimeout(() => { if (!isOpen) root.hidden = true; }, 180);
+    setTimeout(() => { if (!isOpen) root.hidden = true; }, root.classList.contains('ph-rise') ? 240 : 180);
     runCleanup();
     view.innerHTML = '';
     if (ctx?.hooks.pause) try { ctx.hooks.pause(false); } catch (e) {}
+    slideT = setTimeout(() => { if (!isOpen) handSync(); }, HAND_OUT);   // сначала уехал экран — потом персонаж убирает телефон
     if (returnFocus && document.body.contains(returnFocus) && returnFocus.focus) try { returnFocus.focus({ preventScroll: true }); } catch (e) {}
     returnFocus = null;
   };
@@ -328,6 +367,7 @@
     runCleanup();
     P.closeSheet();
     cur = path;
+    if (isOpen) handSync();   // камера — снимает, игра — держит боком, звонок — у уха
     const [id, ...rest] = path.split('/');
     if (!id) { renderHome(); return; }
     const app = APPS.find(a => a.id === id) || (id === 'incall' ? { id, mod: 'calls', t: 'Звонок' } : null);
@@ -455,6 +495,7 @@
       renderBadges();
     }
     if (isOpen && hooks?.pause) try { hooks.pause(true); } catch (e) {}
+    hand = ''; handSync();   // разговор уже идёт — персонаж сразу у уха (вошёл в мир во время звонка)
     setTimeout(() => actCheck(true), 300);
     if (pendingTp) tryPendingTp();
     return () => {

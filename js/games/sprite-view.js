@@ -221,7 +221,7 @@
     const looks = [me, ...[1, 2, 3, 4, 5, 6, 7].map(i => randomLook(D.seed * 100 + i))];
     const opt = (view, i, anims) => ({ view, size: D.size, style: D.style, anims, key: i ? 'demo-' + D.seed + '-' + i : mk, pin: !i });
     const sw = D.el.querySelector('.spd-side').getBoundingClientRect().width || 600;
-    D.side = looks.slice(0, 5).map((L, i) => ({ h: S.handle(L, opt('side', i, ['idle', 'walk', 'run', 'jump', 'fall', 'use', 'wave', 'dance', 'cheer'])), x: (i + .5) / 5 * sw, y: 0, vx: 0, vy: 0, st: 'idle', t: 0, at: Math.random() * 2, face: i % 2 ? -1 : 1, air: false, jt: 0 }));
+    D.side = looks.slice(0, 5).map((L, i) => ({ h: S.handle(L, opt('side', i, ['idle', 'walk', 'run', 'jump', 'fall', 'use', 'phone', 'call', 'wave', 'dance', 'cheer'])), x: (i + .5) / 5 * sw, y: 0, vx: 0, vy: 0, st: 'idle', t: 0, at: Math.random() * 2, face: i % 2 ? -1 : 1, air: false, jt: 0 }));
     D.top = looks.map((L, i) => ({ h: S.handle(L, opt('iso8', i, ['idle', 'walk'])), x: 40 + ((i * 97) % 100) / 100 * (sw - 80), y: 60 + (i * 53) % 220, tx: 0, ty: 0, d: i % 8, st: 'idle', t: 0, at: Math.random() * 2 }));
     D.all = S.handle(me, opt('side', 0, VIEW_ANIMS.side));
     D.all.want(VIEW_ANIMS.side);
@@ -235,7 +235,7 @@
       if (c.at <= 0 && !c.air) {
         const r = Math.random();
         const E = EMOS();
-        c.st = r < .3 ? 'walk' : r < .55 ? 'run' : r < .7 ? 'idle' : r < .8 ? 'jump' : r < .88 ? 'use' : E[Math.floor(Math.random() * E.length)];
+        c.st = r < .28 ? 'walk' : r < .5 ? 'run' : r < .62 ? 'idle' : r < .72 ? 'jump' : r < .78 ? 'use' : r < .88 ? (r < .83 ? 'phone' : 'call') : E[Math.floor(Math.random() * E.length)];   // телефон 📱 — постоят, посмотрят, поговорят
         c.at = c.st === 'jump' ? 0 : 1 + Math.random() * 2.5; c.t = 0;
         if (c.st === 'walk' || c.st === 'run') c.face = Math.random() < .5 ? -1 : 1;
         if (c.st === 'jump') { c.vy = -520; c.air = true; c.jt = 0; c.st = Math.random() < .5 ? 'run' : 'walk'; }

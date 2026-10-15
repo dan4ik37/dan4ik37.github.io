@@ -12,6 +12,7 @@
 //   chordDown(a, b) — нажали вместе (≤ 0,12 с между нажатиями); move {x, z} — ходьба (клавиши −1/0/1, стик — плавно);
 //   look {dx, dy} — поворот камеры правым стиком (в пикселях, как мышь), забирает камера.
 // blocked = true (открыто окно) — игровые чтения молчат, кроме «запертых» (pause); downRaw/heldRaw — мимо замка.
+// walk = true (вместе с blocked: открыт телефон 📱, как в ГТА) — ходить можно (move), всё остальное молчит (без бега и прыжка).
 // off = true — клавиатура совсем мимо (не запоминаем и не гасим preventDefault): поверх мира открыта игра (js/games/mir-play.js).
 // Подсказки: label(a) «Пробел», hint(a) «[E]», fmt('Открыть {interact}') → «Открыть E», title(a) — название.
 // Переназначение: get(a, slot), set(a, slot, code), reset(a), resetAll(), capture(cb) — ждёт клавишу (Esc — отмена),
@@ -58,7 +59,7 @@
   const typing = t => !!t?.closest?.('input, textarea, select, [contenteditable="true"], [contenteditable=""]');
 
   E.controls = function (o = {}){
-    const C = { blocked: false, off: false, now: 0, move: { x: 0, z: 0 }, look: { dx: 0, dy: 0 }, capturing: false, pad: false, actions: ACTIONS.map(a => a[0]) };
+    const C = { blocked: false, walk: false, off: false, now: 0, move: { x: 0, z: 0 }, look: { dx: 0, dy: 0 }, capturing: false, pad: false, actions: ACTIONS.map(a => a[0]) };
     const binds = new Map();                 // action → [code0, code1]
     const down = new Set();                  // клавиши, нажатые сейчас
     const edgeDown = new Set(), edgeUp = new Set();   // нажали/отпустили с прошлого шага
@@ -180,7 +181,7 @@
       let m = { x, z };
       for (const s of [stick, padMove]) if (Math.hypot(s.x, s.z) > Math.hypot(m.x, m.z)) m = { x: s.x, z: s.z };
       const ml = Math.hypot(m.x, m.z); if (ml > 1) { m.x /= ml; m.z /= ml; }
-      if (C.blocked || C.capturing) m = { x: 0, z: 0 };
+      if ((C.blocked && !C.walk) || C.capturing) m = { x: 0, z: 0 };
       C.move.x = m.x; C.move.z = m.z;
     };
     C.frameEnd = () => { C.look.dx = 0; C.look.dy = 0; };

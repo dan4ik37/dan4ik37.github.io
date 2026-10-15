@@ -16,7 +16,7 @@
 // Стили (STYLES): smooth, toon, flat, pixel (16-бит), retro (8-бит), sketch, chibi. Выбор игрока — D37Sprite.styleFor(свой_по_умолчанию).
 // ВСЕ обращения к World3D — только в разделе «Переходник» (W3): поменялся движок персонажа — править там.
 (() => {
-  const VER = 1;                 // версия листов: поменял позы, раскладку или стили — подними (кэш IndexedDB перепечётся)
+  const VER = 2;                 // версия листов: поменял позы, раскладку или стили — подними (кэш IndexedDB перепечётся); 2 — телефон 📱
   const STD = 2.6;               // «стандартный рост» в единицах 3D: столько занимает size (обычный человечек — ~2,3)
   const PI = Math.PI, TAU = PI * 2;
   const W3_SRC = 'js/games/world3d.js';
@@ -46,6 +46,8 @@
     sit:    { name: 'Сидит', n: 1, dur: 1, loop: 1 },
     hurt:   { name: 'Больно', n: 3, dur: .3, loop: 0 },
     use:    { name: 'Удар', n: 5, dur: .32, loop: 0 },
+    phone:  { name: 'Телефон', n: 4, lo: 2, dur: 2.4, loop: 1 },   // смотрит в телефон, палец стучит, изредка поднимает глаза
+    call:   { name: 'Звонок', n: 4, lo: 2, dur: 2.4, loop: 1 },    // телефон у уха, свободная рука жестикулирует, кивает
     wave:   { name: 'Машет', emo: '👋', n: 6, lo: 4, dur: TAU / 10, loop: 1 },
     laugh:  { name: 'Смеётся', emo: '😂', n: 4, dur: TAU / 20, loop: 1 },
     love:   { name: 'Любовь', emo: '❤️', n: 6, lo: 4, dur: TAU / 5, loop: 1 },
@@ -402,6 +404,7 @@
       else if (anim === 'climb') { o.ladder = true; o.climbPh = TAU * k; }
       else if (anim === 'swim') { o.swim = true; mv = true; t = T0 + k * A.dur; }
       else if (anim === 'sit') o.sit = true;
+      else if (anim === 'phone' || anim === 'call') { o.phone = anim === 'phone' ? 'use' : 'call'; o.phonePh = TAU * k; }   // телефон 📱: фаза — своя, цикл замкнут
       else if (A.emo) { ch.emote = A.emo; ch.emoteT = t - (A.loop ? EMO_IN + k * A.dur : k * (A.dur - .02)); }
       K.animate(ch, mv, 0, t, o);
       const { body, torso, headP, legL, legR, armL, armR, kneeL, kneeR, elbowL, elbowR } = ch, s = Math.sin(TAU * k);
