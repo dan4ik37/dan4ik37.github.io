@@ -8,7 +8,8 @@
 // → N.stop(). Поведение (obj.act): idle — стоит, wander — бродит в радиусе obj.radius, follow — идёт к ближайшему игроку,
 // flee — убегает. obj.speed — множитель скорости, obj.damage — урон в секунду при касании, obj.text — фраза при подходе.
 // Внешность (obj.look): random — своя по obj.seed, me — как у игрока, zombie / alien / fairy — кожа такого цвета,
-// robot / knight — весь из частей тела робота / рыцаря.
+// robot / knight — весь из частей тела робота / рыцаря. obj.phone — иногда достаёт телефон 📱 (смотрит, говорит, играет) по своему
+// расписанию от seed (у всех игроков одинаково, без сети); подошёл игрок — убирает (N.phoneAt(seed, t) → '' | use | call | play).
 (() => {
   const E = window.D37E = window.D37E || {};
   const U = E.UNIT || 2.1 / 1.8;
@@ -20,6 +21,17 @@
   const lookOf = o => o.look === 'me' ? (window.D37Char?.look?.() || {}) : o.look === 'robot' ? { tone: 'robot', ...pack('robot') } : o.look === 'knight' ? pack('knight')
     : LOOKS[o.look] && o.look !== 'random' ? { tone: o.look } : {};
   const keyOf = o => 'npc:' + (o.seed || o.id);
+  // Телефон жителя: расписание (с) — то смотрит в экран, то говорит, то играет; свой темп и сдвиг по seed — толпа не синхронна
+  const PH_PLAN = [['use', 7], ['', 15], ['call', 9], ['', 19], ['use', 5], ['', 13], ['play', 6], ['', 17]];
+  const PH_LEN = PH_PLAN.reduce((s, p) => s + p[1], 0);
+  const phHash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const phoneAt = (seed, t) => phoneAtH(phHash(seed), t);
+  const phoneAtH = (h, t) => {
+    const k = .85 + (h % 31) / 100;
+    let x = ((t / k + (h >>> 5) % PH_LEN) % PH_LEN + PH_LEN) % PH_LEN;
+    for (const [s, d] of PH_PLAN) { if (x < d) return s; x -= d; }
+    return '';
+  };
 
   E.npcs = function (R, ph){
     const A = E.actors(R), list = new Map();
@@ -29,7 +41,7 @@
     const CAM = { yaw: Math.PI };
     N.add = o => {
       N.remove(o);
-      const e = { o, key: keyOf(o), home: o.pos.slice(), P: null, C: null, tgt: null, waitT: 0, stuckT: 0, hitT: 0, sayT: 0, near: false };
+      const e = { o, key: keyOf(o), home: o.pos.slice(), P: null, C: null, tgt: null, waitT: 0, stuckT: 0, hitT: 0, sayT: 0, near: false, phH: null };
       A.add(e.key, lookOf(o), { x: o.pos[0], y: o.pos[1], z: o.pos[2], yaw: (o.rot?.[1] || 0) * Math.PI / 180 });
       list.set(o.id, e);
     };
@@ -97,13 +109,17 @@
       }
     };
     N.frame = (dt, t, cam) => {
-      if (N.playing) for (const e of list.values()) if (e.P) A.pose(e.key, e.P.pose());
+      if (N.playing) for (const e of list.values()) if (e.P) {
+        const a = A.pose(e.key, e.P.pose());
+        if (a && e.o.phone) { if (e.phH == null) e.phH = phHash(e.o.seed || e.o.id); a.phone = e.near ? '' : phoneAtH(e.phH, t); }   // телефон 📱 по расписанию; рядом игрок — убрал
+      }
       A.update(dt, t, cam);
     };
+    N.phoneAt = phoneAt;
     // где голова (для облачка с фразой): [x, y, z]
     N.head = e => { const a = A.get(e.key); return a ? [a.x, a.y + A.top(e.key) + .3, a.z] : null; };
     N.dispose = () => { A.dispose(); list.clear(); };
     return N;
   };
-  E.npcs.LOOKS = LOOKS; E.npcs.ACTS = ACTS;
+  E.npcs.LOOKS = LOOKS; E.npcs.ACTS = ACTS; E.npcs.phoneAt = phoneAt;
 })();

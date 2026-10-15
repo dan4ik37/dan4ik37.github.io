@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════
-//  ОХОТА ЗА СЕКРЕТАМИ — 7 спрятанных ✦ по сайту → радужный ник на 30 дней (+100 XP)
+//  ОХОТА ЗА СЕКРЕТАМИ — 7 спрятанных ✦ по сайту → радужный ник на 30 дней (+XP, сколько — xp_rule('secret') в economy.sql)
 // ═══════════════════════════════════════
 // Один файл и для SPA (index.html), и для серверных страниц (/videos, /topic/…):
 // там нет входа, поэтому находки копятся в localStorage и уходят на сервер (secrets.sql →
@@ -8,7 +8,7 @@
 // Где спрятаны: avatar — 5 кликов по аватарке на главной (easter-egg.js), footer — подвал
 // главной, games — под рекордами в «Играх», archive — последняя страница /videos, horror —
 // /topic/horror, levels — «Что даёт уровень» в профиле, words — итог слова дня в «5 букв».
-// Радужный ник: nick_fx_users() → класс .nick-rainbow в чате и профиле (d37NickFx ниже).
+// Радужный / золотой ник: nick_fx() (или старая nick_fx_users()) → класс .nick-rainbow / .nick-gold в чате и профиле (d37NickFx ниже).
 (() => {
   const CODES = ['avatar', 'footer', 'games', 'archive', 'horror', 'levels', 'words'];
   const HINTS = {
@@ -100,26 +100,35 @@
 
   window.d37Secret = { find, sync, paint, codes: CODES };
 
-  // ── Радужный ник: у кого сейчас награда (nick_fx_users) ──
+  // ── Эффект ника: радуга (охота за секретами или 60 уровень) и золото (40 уровень) — nick_fx (economy.sql);
+  //    без economy.sql — nick_fx_users (только радуга). Map: uid → 'rainbow' | 'gold' ──
   let fx = null, fxAt = 0, fxLoading = null;
+  const FX = ['rainbow', 'gold'];
   async function fxLoad(){
-    if (typeof sbClient === 'undefined' || !sbClient) return new Set();
+    if (typeof sbClient === 'undefined' || !sbClient) return new Map();
     if (fx && Date.now() - fxAt < 5 * 60e3) return fx;
-    if (!fxLoading) fxLoading = sbClient.rpc('nick_fx_users').then(({ data, error }) => {
-      fx = new Set(error ? [] : (data || []).map(r => typeof r === 'string' ? r : r.nick_fx_users)); fxAt = Date.now();
-      fxLoading = null; return fx;
-    }).catch(() => { fxLoading = null; return fx || new Set(); });
+    if (!fxLoading) fxLoading = (async () => {
+      let m = new Map();
+      const r = await sbClient.rpc('nick_fx');
+      if (!r.error) (r.data || []).forEach(x => { if (x && FX.includes(x.fx)) m.set(x.user_id, x.fx); });
+      else {
+        const { data, error } = await sbClient.rpc('nick_fx_users');
+        if (!error) (data || []).forEach(x => m.set(typeof x === 'string' ? x : x.nick_fx_users, 'rainbow'));
+      }
+      fx = m; fxAt = Date.now(); fxLoading = null; return fx;
+    })().catch(() => { fxLoading = null; return fx || new Map(); });
     return fxLoading;
   }
+  const paintFx = (el, f) => { for (const k of FX) el.classList.toggle('nick-' + k, f === k); };
   // Сообщения чата: ник — .cu-nick внутри .chat-user, uid — у .lv-badge[data-lv-uid]
   async function mark(root){
     const s = await fxLoad();
     if (!s.size) return;
     (root || document).querySelectorAll('.chat-user').forEach(u => {
-      const uid = u.querySelector('[data-lv-uid]')?.dataset.lvUid;
-      u.querySelector('.cu-nick')?.classList.toggle('nick-rainbow', !!uid && s.has(uid));
+      const uid = u.querySelector('[data-lv-uid]')?.dataset.lvUid, n = u.querySelector('.cu-nick');
+      if (n) paintFx(n, uid && s.get(uid));
     });
   }
-  async function markEl(el, uid){ if (!el) return; const s = await fxLoad(); el.classList.toggle('nick-rainbow', !!uid && s.has(uid)); }
+  async function markEl(el, uid){ if (!el) return; const s = await fxLoad(); paintFx(el, uid && s.get(uid)); }
   window.d37NickFx = { mark, markEl, reload(){ fx = null; mark(); } };
 })();

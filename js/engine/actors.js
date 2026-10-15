@@ -11,6 +11,9 @@
 // Дальние (дальше 30 ед.) — упрощённый человечек (LOD: меньше треугольников, без мелочей), ближе 24 — снова подробный;
 // не больше одной пересборки за кадр.
 // Кто-то сдвинулся или машет — R.shadowDirty(true): тени солнца перерисуются (render.js, на mid — через кадр).
+// Телефон 📱 (как в ГТА, world3d.js): a.phone = '' | 'use' | 'call' | 'play' | 'photo' (или код 0…4) — достанет, будет держать,
+// уберёт сам; звуки (шорох кармана, касание экрана, щелчок камеры) — здесь, у человечка. От 1-го лица (a.hidden и a.fp = rig
+// камеры) — кисть с телефоном у камеры, внизу экрана (покачивание — по настройке «Покачивание камеры»).
 (() => {
   const E = window.D37E = window.D37E || {};
   const LOD_FAR = 30, LOD_NEAR = 24, LOOK_R = 5, CAM_R = 14, ME_R = 8;
@@ -24,8 +27,10 @@
       const ch = K.build(look, a.key, { lod: a.lod });
       R.scene.add(ch.root);
       if (ch.pet) R.scene.add(ch.pet);
+      if (a.vm) { a.vm.dispose(); a.vm = null; }   // кисть от 1-го лица — другого цвета
       if (a.ch) {
         ch.yaw = a.ch.yaw; ch.phase = a.ch.phase; ch.emote = a.ch.emote; ch.emoteT = a.ch.emoteT;
+        K.phoneKeep?.(a.ch, ch);   // телефон — как был (не доставать заново)
         if (ch.pet && a.ch.pet) ch.pet.position.copy(a.ch.pet.position);
         ch.root.position.copy(a.ch.root.position); ch.root.rotation.y = a.ch.root.rotation.y; ch.root.visible = a.ch.root.visible;
         K.dispose(a.ch);
@@ -39,13 +44,25 @@
       remove(key);
       const a = { key, x: o.x || 0, y: o.y || 0, z: o.z || 0, yaw: o.yaw || 0, moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, sitY: 0,
         roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, hidden: false, fade: 1, lastTrail: 0, ch: null, sig: '',
-        lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 },
-        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: null } };
+        lod: 0, lookAt: null, lk: null, lkT: Math.random() * .3, lt: { x: 0, y: 0, z: 0 }, phone: '', fp: null, vm: null, bob: { ph: 0, w: 0, k: 1 },
+        ao: { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: null, phone: '' } };
       setLook(a, look);
       list.set(key, a); sync();
       return a;
     }
-    function remove(key){ const a = list.get(key); if (a) { K.dispose(a.ch); list.delete(key); sync(); for (let i = 0; i < arr.length; i++) if (arr[i].lk === a) arr[i].lk = null; R.shadowDirty?.(); } }
+    function remove(key){ const a = list.get(key); if (a) { if (a.vm) a.vm.dispose(); K.dispose(a.ch); list.delete(key); sync(); for (let i = 0; i < arr.length; i++) if (arr[i].lk === a) arr[i].lk = null; R.shadowDirty?.(); } }
+    // Звуки телефона у человечка (события кадра из world3d.js: 1 — шорох кармана, 2 — касание экрана, 4 — щелчок камеры)
+    const PHE = K.PHE || { POCKET: 1, TAP: 2, SHUTTER: 4 };
+    function phoneSounds(a, ev, cam){
+      const AU = E._audio; if (!AU) return;
+      const d = cam ? Math.hypot(a.x - cam.x, a.z - cam.z) : 0;
+      if (d > 18) return;
+      const p = { x: a.x, y: a.y + 1, z: a.z, vol: .5 };
+      if (ev & PHE.POCKET) AU.play('ph_pocket', p);
+      if (ev & PHE.TAP) { p.vol = .3; AU.play('ph_tap', p); }
+      if (ev & PHE.SHUTTER && d < 9) { p.vol = .45; AU.play('ph_shutter', p); }
+    }
+    let phBloom = false;
     // куда смотреть: точка в a.lt (общий объект актёра) или null
     function lookTarget(a, cam, me, t){
       if (a.lookAt) return a.lookAt;
@@ -92,9 +109,21 @@
           const o = a.ao;
           o.rate = a.speed < .3 ? 10.5 : 5 + a.speed; o.air = a.air; o.sit = a.sit; o.crouch = a.crouch;
           o.roll = a.roll; o.rollBack = a.rollBack; o.hang = a.hang; o.ladder = a.ladder; o.climbPh = a.climbPh; o.pk = a.pk; o.pkK = a.pkK;
-          o.swim = a.swim; o.dive = a.dive;
+          o.swim = a.swim; o.dive = a.dive; o.phone = a.phone;
           o.look = far ? null : lookTarget(a, cam, me, t);
           K.animate(ch, a.moving && !a.sit, far ? dt * 3 : dt, t, o);
+          const ps = ch.phS;
+          if (ps) {   // телефон: звуки, свечение экрана (mid/high — постобработка), от 1-го лица — кисть у камеры
+            if (ps.ev) phoneSounds(a, ps.ev, cam);
+            if (!phBloom && ps.o > 1 && R.bloom && R.q !== 'low' && K.phoneMats) { phBloom = true; for (const m of K.phoneMats()) R.bloom(m, .45); }
+            if (a.hidden && a.fp && ps.o > 1) {
+              if (!a.vm && K.phoneView) { a.vm = K.phoneView(ch); R.scene.add(a.vm.g); }
+              const F = a.fp.feel, b = a.bob;
+              b.ph = F ? F.bobPh : 0; b.w = F ? F.bobW : 0; b.k = a.fp.motion ?? 1;
+              a.vm?.place(R.camera, ch, t, b);
+            } else if (a.vm && a.vm.g.visible) a.vm.g.visible = false;
+            if (ps.o > 0 && ps.o < 2) moved = true;   // достаёт / убирает — тени за рукой
+          }
         }
         if (a.moving || a.air || a.roll >= 0 || a.hang || a.ladder || a.pk || a.swim || ch.emote) moved = true;
         if (a.moving && !a.air && !a.hang && !a.ladder && ch.R.trail !== 'none' && t - a.lastTrail > .09) {
@@ -119,7 +148,7 @@
       pose(key, p){ const a = list.get(key); if (a && p) Object.assign(a, p); return a; },
       emote(key, e, t){ const a = list.get(key); if (a) { a.ch.emote = e; a.ch.emoteT = t; } },
       top: key => list.get(key)?.ch.top || 2.3,
-      dispose(){ for (const a of list.values()) K.dispose(a.ch); list.clear(); arr = []; trail.clear(); R.shadowDirty?.(); },
+      dispose(){ for (const a of list.values()) { if (a.vm) a.vm.dispose(); K.dispose(a.ch); } list.clear(); arr = []; trail.clear(); R.shadowDirty?.(); },
     };
   };
 })();

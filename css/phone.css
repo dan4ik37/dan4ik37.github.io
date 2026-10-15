@@ -214,3 +214,12 @@ html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 .vc-ptt.held{background:#16a34a!important;color:#fff!important}
 .vc-note{margin:10px 0;padding:10px 12px;border-radius:12px;background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.2);font-size:12.5px;line-height:1.5}
 .vc-note.bad{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.3);color:#fecaca}
+
+/* телефон в руке персонажа (как в ГТА): в 3D-игре экран выезжает снизу, когда телефон уже в руке (phone.js → .ph-rise) */
+.ph.ph-rise{transform:translateY(54px) scale(.95);transition:opacity .16s ease,transform .26s cubic-bezier(.2,.9,.28,1.08)}
+.ph.ph-rise.on{transform:none}
+@media (prefers-reduced-motion:reduce){.ph.ph-rise{transition:none;transform:none}}
+/* мини-игра «Птичка» */
+.ph-game{display:flex;flex-direction:column;align-items:center;gap:6px}
+.ph-game canvas{display:block;width:100%;max-width:330px;height:auto;border-radius:18px;touch-action:manipulation;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,.35)}
+.ph-gbest{font-size:13px;color:#fde047}

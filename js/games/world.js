@@ -417,11 +417,14 @@
     });
     const onVis = () => { if (document.hidden) S.hiddenAt = Date.now(); else { S.hiddenAt = 0; S.last = now(); } };
     document.addEventListener('visibilitychange', onVis);
+    const onHand = e => setMyPhone(e.detail);   // телефон 📱 открыли/закрыли, звонок (phone.js)
+    window.addEventListener('d37:hand', onHand);
 
     S.cleanup = () => {
       ro?.disconnect(); window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', kd); window.removeEventListener('keyup', ku);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('d37:hand', onHand);
     };
     S.last = now();
     S.raf = requestAnimationFrame(frame);
@@ -441,7 +444,7 @@
   }
 
   function mkPlayer(o){
-    return { key: o.key, uid: o.uid || null, nick: o.nick || 'Игрок', look: o.look || {}, x: o.x, y: o.y, path: [], dir: 1, face: 0, moving: false, bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, at: o.at || 0, born: now(), leaving: 0, rate: [], phase: Math.random() * 6 };
+    return { key: o.key, uid: o.uid || null, nick: o.nick || 'Игрок', look: o.look || {}, x: o.x, y: o.y, path: [], dir: 1, face: 0, moving: false, bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, at: o.at || 0, born: now(), leaving: 0, rate: [], phase: Math.random() * 6, phone: 0 };
   }
   const toast = t => api?.toast?.(t);
   const activity = () => { S.idleAt = Date.now(); };
@@ -583,7 +586,7 @@
       if (elders[0] === S.me && now() - S.hostSnapAt > 1500) {
         S.hostSnapAt = now();
         const list = [S.me, ...S.players.values()].filter(x => !x.leaving && x.key !== p.key).slice(0, 40)
-          .map(x => { const tg = x.path.length ? x.path[x.path.length - 1] : [x.x, x.y]; return [x.key, Math.round(x.x), Math.round(x.y), Math.round(tg[0]), Math.round(tg[1])]; });
+          .map(x => { const tg = x.path.length ? x.path[x.path.length - 1] : [x.x, x.y]; return [x.key, Math.round(x.x), Math.round(x.y), Math.round(tg[0]), Math.round(tg[1]), x.phone || 0]; });
         setTimeout(() => send({ t: 'snap', list }), 200);
       }
     } else if (d.t === 'snap') {
@@ -592,13 +595,15 @@
         if (!Array.isArray(it) || it[0] === S.key) continue;
         const o = S.players.get(it[0]);
         if (!o || [1, 2, 3, 4].some(i => typeof it[i] !== 'number')) continue;
-        if (o.key === p.key || Date.now() - S.joinedAt < 8000) { o.x = clampX(it[1]); o.y = clampY(it[2]); o.path = findPath(S.M, o.x, o.y, clampX(it[3]), clampY(it[4])); }
+        if (o.key === p.key || Date.now() - S.joinedAt < 8000) { o.x = clampX(it[1]); o.y = clampY(it[2]); o.path = findPath(S.M, o.x, o.y, clampX(it[3]), clampY(it[4])); if (o.key === p.key || !o.lastTs) o.phone = phoneOf(it[5]); }
       }
     } else if (d.t === 'say') {
       if (!p.uid || S.muted.has(p.key) || typeof d.text !== 'string') return;
       say(p, d.text);
     } else if (d.t === 'emo') {
       if (EMOS.includes(d.e) && !S.muted.has(p.key)) p.emo = { e: d.e, t: now() };
+    } else if (d.t === 'ph') {
+      p.phone = phoneOf(d.s);   // телефон 📱 у игрока: 0 нет, 1 смотрит, 2 говорит, 3 играет, 4 снимает
     } else if (d.t === 'inv') {
       if (d.to !== S.key || S.muted.has(p.key) || typeof d.g !== 'string' || typeof d.code !== 'string') return;
       if (!/^[a-z0-9]{4,12}$/.test(d.code) || !(typeof GAMES !== 'undefined' && GAMES.some(g => g.id === d.g)) || NO_ROOM.has(d.g)) return;
@@ -612,6 +617,15 @@
     }
   }
   const clampX = x => Math.max(30, Math.min(W - 30, x)), clampY = y => Math.max(60, Math.min(H - 30, y));
+  // Телефон 📱 (phone.js, событие d37:hand): свой — всем в мире, у чужих — значок над головой и поза (спрайт/3D)
+  const PH_CODE = { use: 1, call: 2, play: 3, photo: 4 };
+  const phoneOf = v => (Number.isInteger(v) && v >= 0 && v <= 4 ? v : 0);
+  function setMyPhone(st){
+    if (!S?.me) return;
+    const c = PH_CODE[st] || 0;
+    if (c === S.me.phone) return;
+    S.me.phone = c; send({ t: 'ph', s: c });
+  }
   function sendMove(x, y){
     const d = { t: 'mv', fx: Math.round(S.me.x), fy: Math.round(S.me.y), x: Math.round(x), y: Math.round(y) };
     // не чаще раза в 0,4 с: последнее нажатие досылаем
@@ -881,7 +895,7 @@
     for (const p of [S.me, ...S.players.values()]) {
       const sig = p._sig || (p._sig = JSON.stringify(p.look || {}));
       if (sig !== p._sigDone) { g.setPlayer(p.key, p.look); p._sigDone = sig; }
-      g.updatePlayer(p.key, p.x, p.y, p.moving, dt, time, p.leaving ? Math.max(0, 1 - (now() - p.leaving) / 600) : 1);
+      g.updatePlayer(p.key, p.x, p.y, p.moving, dt, time, p.leaving ? Math.max(0, 1 - (now() - p.leaving) / 600) : 1, p.phone);
       if (p.emo && p.emo.t !== p._emo3) { p._emo3 = p.emo.t; g.emote(p.key, p.emo.e, time); }
     }
     for (const k of g.keys()) if (k !== S.key && !S.players.has(k)) g.removePlayer(k);
@@ -910,7 +924,7 @@
       if (p.v?.vip) col = VIPC[p.v.vip] || col;
       if (p.v?.role && ROLE[p.v.role]) { col = ROLE[p.v.role][1]; pre = ROLE[p.v.role][0] + ' '; }
       if (p.uid && S.friends.has(p.uid)) pre = '💚 ' + pre;
-      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '');
+      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '') + (p.phone ? (p.phone === 2 ? ' 📞' : ' 📱') : '');
       const nm = el.lastChild;
       if (nm.textContent !== name) nm.textContent = name;
       if (nm.style.color !== col) nm.style.color = col;
@@ -1004,7 +1018,8 @@
       if (!p._spr) { S.sprN = (S.sprN || 0) + 1; p._spr = SP.handle(p.look, { view: 'iso8', size: p.isMe ? 64 : 52, key: p.key, anims: ['idle', 'walk'], style: SP.styleFor('toon'), pin: !!p.isMe }); p._sprLook = p.look; }
       else if (p._sprLook !== p.look) { p._spr.set(p.look); p._sprLook = p.look; }
       const emo = p.emo && SP.EMO_ANIM?.[p.emo.e] && now() - p.emo.t < 2200 ? SP.EMO_ANIM[p.emo.e] : '';   // эмоция — своя анимация
-      p._spr.draw(ctx, emo || (p.moving ? 'walk' : 'idle'), emo ? (now() - p.emo.t) / 1000 : time + p.phase, p.x, p.y, { dir: p.d8 ?? 0, h: 62, alpha: fade });
+      const ph = !emo && !p.moving && p.phone ? (p.phone === 2 ? 'call' : 'phone') : '';   // стоит с телефоном 📱 — смотрит в экран / у уха
+      p._spr.draw(ctx, emo || ph || (p.moving ? 'walk' : 'idle'), emo ? (now() - p.emo.t) / 1000 : time + p.phase, p.x, p.y, { dir: p.d8 ?? 0, h: 62, alpha: fade });
       return;
     }
     const bob = p.moving ? -Math.abs(Math.sin(time * 12 + p.phase)) * 4 : 0;
@@ -1027,6 +1042,8 @@
     ctx.font = `800 ${fs}px Montserrat, sans-serif`;
     ctx.lineWidth = Math.max(3, fs / 4); ctx.strokeStyle = 'rgba(10,8,24,.85)'; ctx.lineJoin = 'round';
     ctx.strokeText(name, p.x, y0); ctx.fillStyle = col; ctx.fillText(name, p.x, y0);
+    // телефон 📱: значок у головы (говорит — трубка)
+    if (p.phone) { const nw = ctx.measureText(name).width; ctx.font = `${Math.round(18 / Math.min(1, z))}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`; ctx.fillText(p.phone === 2 ? '📞' : '📱', p.x + nw / 2 + 14, y0 - 2); ctx.font = `800 ${fs}px Montserrat, sans-serif`; }
     // пузырь с сообщением
     if (p.bubble && now() - p.bubble.t < 7000 && !S.muted.has(p.key)) {
       const a = Math.min(1, (7000 - (now() - p.bubble.t)) / 600);
