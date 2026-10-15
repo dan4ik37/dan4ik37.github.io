@@ -1156,7 +1156,7 @@
     if (!S || S.leavingTo || S.playing) return;
     const st = S, sp = S.world.seats.get(S.mySeat?.id);
     // перезагрузил страницу / ушёл на страницу игры — вернёшься к этому же столу (стоя рядом)
-    if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw);
+    const ss = sp && standSpot(sp); if (ss) savePos(ss.x, ss.z, ss.yaw);
     const n = (st.byTable?.get(tb.id) || []).length || 2;
     try { sessionStorage.setItem('d37_autostart', JSON.stringify({ g: tb.game, c: code, n, t: Date.now() })); } catch (e) {}
     const sent = send({ t: 'go', tb: tb.id, c: code }).catch(() => {});
@@ -1194,7 +1194,7 @@
     activity();
     if (a === 'up') S.P.standUp();
     else if (a === 'bot') {   // с ботом — меню игры поверх мира (сидишь за столом, пока играешь)
-      const sp = S.world.seats.get(my.id); if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw);
+      const sp = S.world.seats.get(my.id), ss = sp && standSpot(sp); if (ss) savePos(ss.x, ss.z, ss.yaw);
       if (!playOver(tb.game, null, { tb })) { S.leavingTo = `#/games/${tb.game}`; location.hash = S.leavingTo; }
     }
     else if (a === 'go') startGame(tb, my.c);
@@ -1423,14 +1423,21 @@
       const sp = st.world.seats.get(st.mySeat.id);
       st.P?.standUp();
       if (st.mySeat) leaveSeat();
-      if (sp) { const p = standSpot(sp); st.P.place(p.x, p.y, p.z, p.yaw); st.forceSend = true; }
+      const p = sp && standSpot(sp);
+      if (p) { st.P.place(p.x, p.y, p.z, p.yaw); st.forceSend = true; }
     } else retrack();
     if (why === 'editor') openEditor();
   }
-  // Место «рядом со столом»: за стулом (d назад от сиденья), опора — от высоты сиденья вниз (не на крышу кафе)
+  // Место «рядом со столом»: за стулом (d назад от сиденья), занято (стойка, стена, другой стол) — наискосок, вбок, ближе.
+  // Опора — не выше сиденья (не на стойку и не на крышу кафе); над опорой — место во весь рост. Нет места — null.
   function standSpot(sp, d = 1.3){
-    const x = sp.x - Math.sin(sp.yaw) * d, z = sp.z - Math.cos(sp.yaw) * d;
-    return { x, z, yaw: sp.yaw, y: S.ph.supportAt(x, z, S.P.ch.r * .5, (sp.y || 0) + 1.6).y };
+    const ph = S.ph, ch = S.P.ch, H = S.P.standH || 2.1, step = ch.step || .6;
+    for (const k of [1, .75]) for (const a of [0, .6, -.6, 1.2, -1.2, PI / 2, -PI / 2]) {
+      const yaw = sp.yaw + a, x = sp.x - Math.sin(yaw) * d * k, z = sp.z - Math.cos(yaw) * d * k;
+      const y = ph.supportAt(x, z, ch.r * .5, (sp.y || 0) + .5).y;
+      if (!ph.blocked(x, z, y + step, y + H, ch.r * .9)) return { x, y, z, yaw: sp.yaw };
+    }
+    return null;
   }
   function inviteMenu(p){
     const sub = S.q('.wld-card .wld-sub'); if (!sub) return;
@@ -1456,7 +1463,7 @@
       if (seat) {
         if (S.mySeat) S.P.standUp();
         const p = standSpot(seat, 1.2);   // опора — от сиденья вниз (раньше y = null искал опору сверху — и ставил на крышу кафе)
-        S.P.place(p.x, p.y, p.z, p.yaw);
+        if (p) S.P.place(p.x, p.y, p.z, p.yaw); else S.P.place(seat.x, S.ph.supportAt(seat.x, seat.z, S.P.ch.r * .5, (seat.y || 0) + .5).y, seat.z, seat.yaw);
         sitAt(seat);
         if (S.mySeat) { S.mySeat.c = box.dataset.code; retrack(); }
         return;
@@ -1665,6 +1672,6 @@
       }, 0);
     },
     unmount(){ current?.unmount(); current = null; },
-    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S, afkDue, tableState },
+    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S, afkDue, tableState, standSpot: (sp, d) => S && standSpot(sp, d) },
   };
 })();
