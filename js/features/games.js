@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '68';
+const GAMES_VER = '69';   // 69 — ссылки «позвать» с кодом приглашения (room, mir, studio, studio3d), вещи «за друзей» в гардеробе
 const GAMES = [
   { id: 'world',    age: '12+', ageWhy: 'Онлайн-мир: общение с незнакомыми игроками в чате.', icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   age: '6+', ageWhy: 'Конструктор игр; игры других игроков — со своей меткой.', icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -432,7 +432,7 @@ async function gamesChallenge(btn, id = gamesActive){
   const g = GAMES.find(x => x.id === id);
   const best = gameLocalStats(id).best || 0;
   const nick = (typeof currentProfile !== 'undefined' && currentProfile?.nick) || '';
-  const url = location.origin + '/games/' + id + (best > 0 ? `?s=${best}&n=${encodeURIComponent(nick || 'Друг')}` : '');
+  const url = (window.D37Ref?.wrap || (u => u))(location.origin + '/games/' + id + (best > 0 ? `?s=${best}&n=${encodeURIComponent(nick || 'Друг')}` : ''));   // 👥 с кодом приглашения
   const text = best > 0 ? `Мой рекорд в «${g?.title || 'игре'}» — ${gameBestLabel(id, best)}. Побьёшь?` : `Сыграй со мной в «${g?.title || 'игру'}» на сайте dan4ik37!`;
   if (typeof window.va === 'function') window.va('event', { name: 'game_challenge', data: { game: id } });
   if (navigator.share) { navigator.share({ title: g?.title || 'Игры', text, url }).catch(() => {}); return; }

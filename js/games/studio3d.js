@@ -1007,7 +1007,7 @@ Players.PlayerAdded.Connect(player => {
     else if (a === 'tut:x') { ed.q('.s3-tut')?.remove(); ed.tut = null; try { localStorage.setItem('d37_s3_tut', '1'); } catch (e) {} }
     else if (a === 'pub:close') { ed.dlg?.remove(); ed.dlg = null; }
     else if (a === 'pub:go') doPublish();
-    else if (a === 'pub:copy') { navigator.clipboard?.writeText(ed.pubLink || '').then(() => msg('Ссылка скопирована', true), () => prompt('Скопируй ссылку:', ed.pubLink)); }
+    else if (a === 'pub:copy') { const L = ed.pubLink ? (window.D37Ref?.wrap || (u => u))(ed.pubLink) : ''; navigator.clipboard?.writeText(L).then(() => msg('Ссылка скопирована', true), () => prompt('Скопируй ссылку:', L)); }
     else if (a === 'like') likePlace();
     else if (a === 'toggleLeft') ed.box.classList.toggle('s3-showL');
     else if (a === 'toggleRight') ed.box.classList.toggle('s3-showR');
@@ -2042,7 +2042,7 @@ Players.PlayerAdded.Connect(player => {
   }
   function mpCopyLink(text){
     const mp = ED?.mp; if (!mp) return;
-    const link = mpLink(mp), w = navigator.clipboard?.writeText(link);
+    const link = (window.D37Ref?.wrap || (u => u))(mpLink(mp)), w = navigator.clipboard?.writeText(link);   // 👥 с кодом приглашения (js/core/ref.js)
     if (w) w.then(() => msg(text || '🔗 Ссылка скопирована', true), () => prompt('Скопируй ссылку:', link)); else prompt('Скопируй ссылку:', link);
   }
   function mpPanel(){

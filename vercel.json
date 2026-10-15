@@ -186,6 +186,10 @@
       "destination": "/api/pages?page=invite&code=:code"
     },
     {
+      "source": "/r/:code",
+      "destination": "/api/pages?page=r&code=:code"
+    },
+    {
       "source": "/go/:id",
       "destination": "/api/pages?page=go&id=:id"
     },

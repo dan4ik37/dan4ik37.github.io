@@ -223,6 +223,7 @@
     if (own) return b.price ? '<i class="ce-tag">есть</i>' : b.lvl ? `<i class="ce-tag">ур. ${b.lvl}</i>` : '';
     if (b.gems) return `<i class="ce-tag price gem" title="Только за кристаллы — в магазине">💎 ${num(b.gems)}</i>`;
     if (b.lvl) return `<i class="ce-tag price" title="Награда за ${b.lvl} уровень — бесплатно, не продаётся">🔒 ур. ${b.lvl}</i>`;
+    if (b.ref) return '<i class="ce-tag price" title="Награда за приглашения друзей — не продаётся">🤝 друзья</i>';   // 👥 js/core/ref.js
     return `<i class="ce-tag price">${b.vip ? 'VIP · ' : ''}🪙 ${num(b.price)}${b.pack ? ' · пакет' : ''}</i>`;
   }
   function cards(slot){
@@ -394,13 +395,15 @@
     if (!bar) return;
     const items = toBuy();
     if (!items.length) { bar.hidden = true; bar.innerHTML = ''; return; }
-    const coinItems = items.filter(x => !x.gems && !x.lvl), gemItems = items.filter(x => x.gems), lvlItems = items.filter(x => x.lvl && !x.gems);
+    const coinItems = items.filter(x => !x.gems && !x.lvl && !x.ref), gemItems = items.filter(x => x.gems), lvlItems = items.filter(x => x.lvl && !x.gems),
+      refItems = items.filter(x => x.ref);
     const total = coinItems.reduce((a, x) => a + x.price, 0), have = W().coins();
     bar.hidden = false;
-    bar.innerHTML = `<div class="ce-try-t">👀 Примерка: ${items.map(x => `<span class="ce-chip${x.gems ? ' gem' : ''}">${esc(x.name)} · ${x.gems ? '💎 ' + num(x.gems) : x.lvl ? '🔒 ур. ' + x.lvl : '🪙 ' + num(x.price)}<button type="button" data-act="untry" data-slots="${x.slots.join(',')}" title="Снять" aria-label="Снять">✕</button></span>`).join('')}</div>
+    bar.innerHTML = `<div class="ce-try-t">👀 Примерка: ${items.map(x => `<span class="ce-chip${x.gems ? ' gem' : ''}">${esc(x.name)} · ${x.gems ? '💎 ' + num(x.gems) : x.lvl ? '🔒 ур. ' + x.lvl : x.ref ? '🤝 друзья' : '🪙 ' + num(x.price)}<button type="button" data-act="untry" data-slots="${x.slots.join(',')}" title="Снять" aria-label="Снять">✕</button></span>`).join('')}</div>
       ${coinItems.some(x => x.vip) ? '<div class="ce-try-vip">👑 VIP-вещи для VIP — бесплатно. <a href="/vip" target="_blank" rel="noopener">Как получить VIP</a></div>' : ''}
       ${gemItems.length ? `<div class="ce-try-gem">💎 ${gemItems.map(x => esc(x.name)).join(', ')} — только за кристаллы. <a href="#/shop">В магазин 💎</a></div>` : ''}
       ${lvlItems.length ? `<div class="ce-try-vip">🔒 ${lvlItems.map(x => `${esc(x.name)} — с ${x.lvl} уровня`).join(', ')}: награда за уровень, не продаётся${W()?.level?.() ? ` (у тебя ${W().level()})` : ' — войди в аккаунт'}. <a href="#/profile">Что даёт уровень</a></div>` : ''}
+      ${refItems.length ? `<div class="ce-try-vip">🤝 ${refItems.map(x => esc(x.name)).join(', ')} — награда за приглашения друзей, не продаётся. <a href="#/invite">Как получить</a></div>` : ''}
       ${coinItems.length ? `<div class="ce-try-row"><button type="button" class="ce-btn gold" data-act="buyall"${have < total ? ' disabled' : ''}>Купить и надеть · 🪙 ${num(total)}</button>
       ${have < total ? `<span class="ce-need">Не хватает 🪙 ${num(total - have)} — играй в игры, забери бонус дня</span>` : ''}</div>` : ''}`;
   }
@@ -472,7 +475,7 @@
     } else if (act === 'buyall') {
       t.disabled = true;
       let bought = 0;
-      for (const x of toBuy().filter(y => !y.gems && !y.lvl)) {
+      for (const x of toBuy().filter(y => !y.gems && !y.lvl && !y.ref)) {
         const r = await W().buy(x.item);
         if (r?.ok || r?.reason === 'owned') bought++;
         else { toast(r?.reason === 'coins' ? 'Не хватает монет' : r?.reason === 'auth' ? 'Войди в аккаунт' : r?.reason === 'gems' ? 'Эта вещь — только за 💎 в магазине' : r?.reason === 'item' ? 'Эта вещь появится в продаже после обновления сайта — загляни позже' : 'Не получилось — попробуй ещё раз'); break; }

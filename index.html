@@ -1026,6 +1026,8 @@ body.low .donation-alert-icon{animation:none}
 <link rel="stylesheet" href="css/phone.css">
 <!-- Приложение 📲: установка, окно приложения, значок, обновления (js/features/app.js) -->
 <link rel="stylesheet" href="css/app.css">
+<!-- 👥 Пригласи друзей: страница #/invite, плашка новичку, рамка «Посол» (js/features/invite.js, js/core/ref.js) -->
+<link rel="stylesheet" href="css/invite.css">
 </head>
 <body>
 
@@ -1095,6 +1097,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/poll" data-route="poll">Опрос</a>
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
     <a href="#/games" data-route="games">🎮 Игры</a>
+    <a href="#/invite" data-route="invite">👥 Позвать друзей</a>
     <a href="#/ads" data-route="ads">Реклама</a>
     <a href="#/adv" data-route="adv">📣 Разместить рекламу</a>
     <a href="/vip" class="nav-vip">✨ VIP</a>
@@ -1633,7 +1636,7 @@ body.low .donation-alert-icon{animation:none}
       <div class="profile-stat-card" style="animation-delay:.32s">
         <div style="font-size:1.25rem">🔗</div>
         <div id="profileStatReferrals" style="font-weight:800;font-size:.82rem;margin-top:.3rem">—</div>
-        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem">Рефералов</div>
+        <div style="font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:.15rem" title="Друзья по твоей ссылке, дошедшие до 3 уровня">Привёл друзей</div>
       </div>
       <div class="profile-stat-card" style="animation-delay:.38s">
         <div style="font-size:1.25rem">🔥</div>
@@ -1964,6 +1967,14 @@ body.low .donation-alert-icon{animation:none}
     </div>
     <div id="gamesStageBox"></div>
   </div>
+</div>
+
+<!-- 👥 ПРИГЛАСИ ДРУЗЕЙ — ссылка, награды, мои приглашения, топ; #/invite/admin — проверка (js/features/invite.js, referrals2.sql) -->
+<div class="wrap reveal" id="invite-page">
+  <div class="sec-title-row">
+    <h2 class="sec-title">👥 Пригласи друзей</h2>
+  </div>
+  <div id="inviteRoot"></div>
 </div>
 
 <!-- 💎 МАГАЗИН КРИСТАЛЛОВ (js/features/shop.js, premium.sql, api/pay.js) -->
@@ -2522,6 +2533,7 @@ body.low .donation-alert-icon{animation:none}
       <p><strong style="color:var(--text)">Вводимые вами:</strong> никнейм в чате (хранится локально в браузере), сообщения в чате сайта (хранятся в базе Supabase).</p>
       <p><strong style="color:var(--text)">Cookies:</strong> используются для Google Translate, Google AdSense, Яндекс Метрики и запоминания настроек сайта (режим отображения, ник).</p>
       <p><strong style="color:var(--text)">Покупки кристаллов:</strong> оплату проводит платёжная система (TipTop Pay, Freedom Pay или Kaspi) на своей стороне — номер карты сайт не получает и не хранит. В базе сайта хранятся номер заказа, сумма, валюта, время, статус и номер платежа в платёжной системе — чтобы начислить кристаллы и при необходимости сделать возврат. Донаты через DonationAlerts: имя донатера и сумма — чтобы выдать VIP или кристаллы.</p>
+      <p><strong style="color:var(--text)">Приглашения друзей:</strong> кто кого пригласил по ссылке, до какого уровня дошёл друг и какие награды выданы. Чтобы нельзя было «пригласить» самого себя или свой второй аккаунт, у тех, кто зовёт друзей, и у новичков по ссылке в первые 30 дней сайт хранит отпечаток IP-адреса и случайного ключа браузера — только в виде хеша (по нему нельзя узнать сам адрес), до 90 дней и только для этой проверки. Пригласивший видит у друга только ник и уровень (дату и профиль — если профиль открыт), но никогда — его покупки, возраст и почту.</p>
       <p><strong style="color:var(--text)">Возраст (по желанию):</strong> только год рождения, не дата. Он нужен, чтобы показывать подходящие по возрасту игры, ролики и рекламу и включать защиту детей. Год видит только сам человек — ни другие посетители, ни модераторы, ни администратор; он не публикуется, не попадает в адреса страниц и статистику и не передаётся третьим лицам. Рекламе Google уходит только признак «ребёнок» или «подросток» (без года) — чтобы реклама была без персонализации. У гостя год хранится в браузере, у аккаунта — в базе сайта; удалить его можно в любой момент: ⚙️ Настройки → Сайт → «Удалить», а вместе с аккаунтом он удаляется сам.</p>
 
       <h3>2. Google AdSense</h3>
@@ -2575,6 +2587,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/core/ads-core.js"></script>
 <script src="js/core/ad-places.js"></script>
 <script src="js/core/ad-direct.js"></script>
+<!-- 👥 приглашения: код из ссылки ловится до init.js (старый captureReferralCode его уже не увидит) -->
+<script src="js/core/ref.js"></script>
 <script src="js/core/coins.js"></script>
 <script src="js/core/premium.js"></script>
 <script src="js/core/avatar.js"></script>
@@ -2622,6 +2636,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/phone.js"></script>
 <script src="js/features/games.js"></script>
 <script src="js/features/shop.js"></script>
+<script src="js/features/invite.js"></script>
 <script src="js/init.js"></script>
 <script src="js/ui/router.js"></script>
 <script src="js/features/secrets.js"></script>

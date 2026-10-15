@@ -115,6 +115,8 @@ async function renderProfileChar(uid, isOwn){
 async function renderProfilePage(viewUserId){
   const loggedOutEl = document.getElementById('profileLoggedOut');
   const contentEl = document.getElementById('profileContent');
+  // #/profile/invites — «👥 Мои приглашения» (страница #/invite, js/features/invite.js)
+  if (viewUserId === 'invites') { location.replace('#/invite'); return; }
   // #/profile/vip — свой профиль сразу на блоках «Логин для доната» и «Хочу купить VIP» (кнопка со страницы /vip)
   const focusVip = viewUserId === 'vip';
   if (focusVip) viewUserId = null;
@@ -487,11 +489,12 @@ async function savePrivacy(col, value){
   st.textContent = col === 'privacy_hide_donations' ? '✅ Сохранено — топ донатеров обновится в течение нескольких минут' : '✅ Сохранено';
 }
 
-// Реферальная ссылка на своём профиле — используем собственный уникальный
-// nick как код приглашения (?ref=<nick>), без отдельной колонки-кода.
+// «👥 Пригласи друзей» на своём профиле — карточка из js/features/invite.js (ссылка /r/<код>, счётчики, «Мои приглашения»).
+// Нет её — по-старому: ник как код приглашения (?ref=<nick>)
 function renderReferralPanel(profile, isOwn){
   const panel = document.getElementById('profileReferralPanel');
   if (!panel) return;
+  if (typeof renderInviteCard === 'function') return renderInviteCard(panel, isOwn);
   if (!isOwn || !profile?.nick) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
   const link = `${location.origin}${location.pathname}?ref=${encodeURIComponent(profile.nick)}`;

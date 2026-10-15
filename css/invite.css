@@ -1,0 +1,167 @@
+/* ═══════════════════════════════════════════════════════════════════
+   👥 ПРИГЛАСИ ДРУЗЕЙ (js/features/invite.js, js/core/ref.js) — страница #/invite, карточка в профиле, плашка новичку
+   Классы rf-* (iv-* — у серверной страницы /c/<код>)
+   ═══════════════════════════════════════════════════════════════════ */
+#inviteRoot{display:grid;grid-template-columns:minmax(0,1fr);gap:1rem;align-items:start}
+@media(min-width:980px){
+  #inviteRoot{grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);grid-auto-flow:row dense}
+  #inviteRoot>.rf-hero,#inviteRoot>.rf-rules,#inviteRoot>.rf-login,#inviteRoot>.rf-off,#inviteRoot>.rf-adm-go,#inviteRoot>.rf-wait,#inviteRoot>.rf-adm{grid-column:1/-1}
+  #inviteRoot>.rf-link,#inviteRoot>.rf-stats-card,#inviteRoot>.rf-list{grid-column:1}
+  #inviteRoot>.rf-prog,#inviteRoot>.rf-top,#inviteRoot>.rf-invited{grid-column:2}
+}
+#inviteRoot .pf-card{background:var(--card);border:1px solid var(--line,rgba(255,255,255,.08));min-width:0}
+.rf-wait,.rf-empty{color:var(--muted);font-size:.82rem;padding:.6rem 0}
+.rf-small{color:var(--muted);font-size:.74rem;line-height:1.5;margin:.6rem 0 0}
+.rf-row{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem}
+.rf-note{min-height:1.1em;font-size:.74rem;color:#4ade80;margin-top:.45rem}
+
+/* ── Шапка ── */
+.rf-hero{display:flex;flex-direction:column;gap:.8rem;background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 14%,var(--card)),var(--card) 60%)!important}
+.rf-hero-t{display:flex;gap:.9rem;align-items:flex-start}
+.rf-hero-ic{font-size:2.4rem;line-height:1;flex:none;filter:drop-shadow(0 6px 16px rgba(0,0,0,.4))}
+.rf-hero h3{margin:0 0 .35rem;font-family:var(--font-display,'Oswald',sans-serif);font-size:1.35rem;letter-spacing:.02em;text-transform:uppercase}
+.rf-hero p{margin:0;color:var(--text);opacity:.88;font-size:.86rem;line-height:1.55}
+.rf-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}
+.rf-steps li{display:flex;flex-direction:column;gap:.15rem;padding:.65rem .75rem;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07)}
+.rf-steps b{font-size:.78rem}
+.rf-steps span{font-size:.74rem;color:#ffd166;font-weight:700}
+@media(max-width:520px){.rf-steps{grid-template-columns:1fr}.rf-steps li{flex-direction:row;justify-content:space-between;align-items:center}}
+
+/* ── Ссылка и «Поделиться» ── */
+.rf-code{font-family:ui-monospace,Consolas,monospace;font-size:.85rem;letter-spacing:.12em;color:#ffd166;text-transform:none}
+.rf-url{display:flex;gap:.5rem;margin-top:.6rem;min-width:0}
+.rf-url input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1.5px solid var(--line-hi,rgba(255,255,255,.18));border-radius:10px;padding:.6rem .8rem;
+  color:var(--text);font:600 .82rem ui-monospace,Consolas,monospace}
+.rf-share{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.75rem}
+.rf-sh{border:0;cursor:pointer;min-height:40px;padding:.5rem .9rem;border-radius:999px;font:800 .76rem 'Montserrat',sans-serif;color:#fff;
+  background:rgba(255,255,255,.08);transition:transform .15s,filter .15s}
+.rf-sh:hover{transform:translateY(-1px);filter:brightness(1.1)}
+.rf-sh-native{background:linear-gradient(135deg,var(--accent),var(--accent2))}
+.rf-sh-tg{background:#229ed9}
+.rf-sh-vk{background:#0077ff}
+.rf-sh-wa{background:#1fa855}
+.rf-sh-qr{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.18)}
+.rf-sh-qr.on{background:#fff;color:#111}
+.rf-place{display:flex;align-items:center;gap:.6rem;margin-top:.8rem;font-size:.76rem;color:var(--muted);flex-wrap:wrap}
+.rf-place select{flex:1;min-width:180px;max-width:100%;background:rgba(255,255,255,.05);color:var(--text);border:1.5px solid var(--line-hi,rgba(255,255,255,.18));
+  border-radius:10px;padding:.5rem .6rem;font:600 .8rem 'Montserrat',sans-serif}
+.rf-qr{display:flex;gap:1rem;align-items:center;margin-top:.9rem;flex-wrap:wrap}
+.rf-qr[hidden]{display:none}
+.rf-qr-img{background:#fff;border-radius:12px;padding:.35rem;line-height:0;flex:none}
+.rf-qr-img svg{width:min(190px,52vw);height:auto;display:block}
+.rf-qr-t{display:flex;flex-direction:column;gap:.35rem;min-width:0;flex:1}
+.rf-qr-t b{font-size:.82rem}
+.rf-qr-t span{font:600 .72rem ui-monospace,Consolas,monospace;color:var(--muted);word-break:break-all}
+.rf-qr-t .pf-btn{align-self:flex-start}
+
+/* ── Награды ── */
+.rf-off,.rf-login,.rf-invited{display:flex;flex-direction:column;gap:.35rem}
+.rf-off span,.rf-login span,.rf-invited span{color:var(--muted);font-size:.8rem;line-height:1.5}
+.rf-invited span a{color:var(--accent)}
+.rf-next{margin:.5rem 0 .8rem;font-size:.84rem;line-height:1.5}
+.rf-tiers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
+.rf-tiers li{display:flex;gap:.7rem;align-items:center;padding:.55rem .65rem;border-radius:12px;background:rgba(255,255,255,.035)}
+.rf-tiers li.done{background:rgba(74,222,128,.08);outline:1px solid rgba(74,222,128,.25)}
+.rf-ti{font-size:1.5rem;width:2rem;text-align:center;flex:none}
+.rf-tt{display:flex;flex-direction:column;gap:.2rem;min-width:0;flex:1}
+.rf-tt b{font-size:.8rem}
+.rf-tt small{font-size:.7rem;color:var(--muted)}
+.rf-bar{display:block;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:.25rem}
+.rf-bar>i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#ffd166)}
+.rf-aff{display:flex;flex-direction:column;gap:.2rem;margin-top:.9rem;padding:.7rem .8rem;border-radius:12px;background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.25)}
+.rf-aff span{font-size:.76rem;color:var(--muted)}
+.rf-aff b{font-size:1rem}
+.rf-aff small{font-size:.7rem;color:var(--muted);line-height:1.45;margin-top:.25rem}
+.rf-tg{display:flex;align-items:center;gap:.5rem;margin-top:.8rem;font-size:.78rem;cursor:pointer;min-height:32px}
+.rf-tg input{width:18px;height:18px;accent-color:var(--accent)}
+.rf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:.5rem}
+.rf-stat{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.6rem .4rem;border-radius:12px;background:rgba(255,255,255,.04);text-align:center}
+.rf-stat b{font-size:1.25rem;font-family:var(--font-display,'Oswald',sans-serif)}
+.rf-stat span{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;line-height:1.3}
+.rf-earned{margin-top:.8rem;font-size:.8rem;line-height:1.6}
+.rf-earned>span{color:var(--muted)}
+.rf-earned small{display:block;color:var(--muted);font-size:.72rem;margin-top:.3rem}
+.rf-pf-stats{font-size:.78rem;margin:0 0 .4rem;color:var(--muted)}
+.rf-pf-stats b{color:var(--text)}
+
+/* ── Мои приглашения ── */
+.rf-list ul{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-direction:column;gap:.4rem;max-height:520px;overflow-y:auto}
+.rf-list li{display:flex;align-items:center;gap:.6rem;padding:.5rem .55rem;border-radius:12px;background:rgba(255,255,255,.035);flex-wrap:wrap}
+.rf-ava{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:.7rem;font-weight:800;color:#fff;
+  background:linear-gradient(135deg,var(--tw),var(--accent)) center/cover no-repeat}
+.rf-ava[style*="background-image"]{color:transparent}
+.rf-fn{display:flex;flex-direction:column;min-width:0;flex:1}
+.rf-fn a,.rf-fn span{font-weight:700;font-size:.82rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rf-fn a:hover{color:var(--accent)}
+.rf-fn small{font-size:.66rem;color:var(--muted)}
+.rf-lv{font-size:.72rem;font-weight:800;color:#ffd166}
+.rf-ms{display:flex;gap:.2rem}
+.rf-m{font-style:normal;font-size:.62rem;font-weight:800;min-width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
+  background:rgba(255,255,255,.06);color:var(--muted)}
+.rf-m.on{background:rgba(74,222,128,.18);color:#4ade80}
+.rf-st{font-style:normal;font-size:.66rem;font-weight:800;padding:.2rem .5rem;border-radius:99px;background:rgba(255,255,255,.07)}
+.rf-st.hold{color:#fbbf24}.rf-st.no,.rf-st.denied{color:#f87171}.rf-st.self{color:#fb923c}.rf-st.ok{color:#4ade80}
+
+/* ── Топ ── */
+.rf-top-h{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}
+.rf-tabs{display:flex;gap:.3rem;flex-wrap:wrap}
+.rf-tabs button{border:1.5px solid var(--line-hi,rgba(255,255,255,.18));background:none;color:var(--muted);border-radius:99px;padding:.35rem .8rem;
+  font:800 .7rem 'Montserrat',sans-serif;cursor:pointer;min-height:32px}
+.rf-tabs button.on{background:var(--text);color:#111;border-color:var(--text)}
+.rf-toplist{list-style:none;margin:.7rem 0 0;padding:0;display:flex;flex-direction:column;gap:.3rem}
+.rf-toplist li{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border-radius:10px;background:rgba(255,255,255,.03)}
+.rf-toplist li.me{background:var(--ac-10,rgba(255,45,85,.1));outline:1px solid var(--ac-30,rgba(255,45,85,.3))}
+.rf-rk{width:1.8rem;text-align:center;font-weight:800;font-size:.8rem;flex:none}
+.rf-tn{flex:1;min-width:0;font-size:.82rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rf-tn a{color:var(--text)}
+.rf-tn a:hover{color:var(--accent)}
+.rf-tn small{color:var(--muted);font-weight:600}
+.rf-anon{color:var(--muted)}
+.rf-toplist b{font-family:var(--font-display,'Oswald',sans-serif);font-size:1rem}
+
+/* ── Как это работает ── */
+.rf-rules details{border-top:1px solid rgba(255,255,255,.06);padding:.6rem 0}
+.rf-rules details:first-of-type{border-top:0}
+.rf-rules summary{cursor:pointer;font-weight:700;font-size:.84rem;min-height:28px;display:flex;align-items:center}
+.rf-rules p{margin:.45rem 0 0;color:var(--muted);font-size:.78rem;line-height:1.6}
+.rf-adm-go{display:flex;justify-content:flex-end}
+
+/* ── Проверка приглашений (админ) ── */
+.rf-adm{display:flex;flex-direction:column;gap:.8rem}
+.rf-crumbs a{color:var(--muted);font-size:.78rem}
+.rf-adm .rf-tabs{margin-top:.8rem}
+.rf-adm-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem}
+.rf-adm-h{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.86rem}
+.rf-adm-h span{color:var(--muted);font-size:.78rem}
+.rf-adm-h a{color:var(--text)}
+.rf-adm-m{font-size:.72rem;color:var(--muted);margin-top:.35rem}
+.rf-flags{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.5rem}
+.rf-flags span{font-size:.7rem;font-weight:700;padding:.25rem .55rem;border-radius:8px;background:rgba(251,191,36,.12);color:#fbbf24}
+
+/* ── Плашка новичку и всплывашка ── */
+.rf-bn{position:fixed;left:50%;bottom:1rem;z-index:9190;display:flex;align-items:center;gap:.7rem;width:min(460px,calc(100vw - 1.5rem));
+  padding:.75rem .75rem .75rem .9rem;border-radius:18px;background:#17141f;border:1px solid rgba(255,209,102,.35);color:#f0f0f8;
+  box-shadow:0 22px 60px rgba(0,0,0,.6);font-family:'Montserrat',system-ui,sans-serif;opacity:0;transform:translate(-50%,16px);
+  transition:opacity .25s,transform .35s cubic-bezier(.16,1,.3,1)}
+.rf-bn.on{opacity:1;transform:translate(-50%,0)}
+.rf-bn-ic{font-size:1.8rem;flex:none}
+.rf-bn-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:.15rem}
+.rf-bn-t b{font-size:.84rem}
+.rf-bn-t span{font-size:.7rem;color:#b9b9cf;line-height:1.35}
+.rf-bn-go{border:0;cursor:pointer;font:800 .74rem 'Montserrat',sans-serif;color:#111;padding:.6rem .9rem;border-radius:999px;white-space:nowrap;min-height:40px;
+  background:linear-gradient(135deg,#ffd700,#ff9500)}
+.rf-bn-x{border:0;background:none;color:#9a9ab5;cursor:pointer;font-size:1rem;padding:.35rem;flex:none;min-width:32px;min-height:32px}
+.rf-bn-x:hover{color:#fff}
+@media(max-width:768px){.rf-bn{bottom:calc(58px + env(safe-area-inset-bottom) + .7rem)}}
+@media(max-width:420px){.rf-bn{flex-wrap:wrap}.rf-bn-go{flex:1}}
+.rf-toast{position:fixed;left:50%;top:5rem;z-index:100250;transform:translate(-50%,-12px);opacity:0;pointer-events:none;width:min(480px,calc(100vw - 1.5rem));
+  padding:.8rem 1rem;border-radius:14px;background:#17141f;border:1px solid rgba(255,209,102,.35);color:#f0f0f8;font:600 .8rem/1.5 'Montserrat',sans-serif;
+  box-shadow:0 18px 50px rgba(0,0,0,.6);transition:opacity .25s,transform .3s}
+.rf-toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.rf-toast a{color:#ffd166}
+body:not(.high) .rf-bn,body:not(.high) .rf-toast{transition:none}
+
+/* Рамка аватара «Посол» (ступень t3 — 5 друзей дошли до 5 уровня; xp.js applyLevelFrame) */
+.lv-frame-ref{position:relative;outline:3px solid #34d399;outline-offset:5px;filter:drop-shadow(0 0 10px rgba(52,211,153,.5))}
+.lv-frame-ref::after{content:'🤝';position:absolute;right:-6px;bottom:-6px;font-size:1.05rem;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+.profile-avatar-glow.lv-frame-ref{outline-color:#34d399!important}

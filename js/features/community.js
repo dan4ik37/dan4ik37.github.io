@@ -394,7 +394,7 @@
     });
   }
   async function showInvite(srv){
-    const url = `${location.origin}/c/${srv.c?.code}`;
+    const url = (window.D37Ref?.wrap || (u => u))(`${location.origin}/c/${srv.c?.code}`);   // 👥 с кодом приглашения (js/core/ref.js)
     if (!srv.c?.code) return;
     if (navigator.share && P.touch()) { navigator.share({ title: srv.name, text: `Заходи в сообщество «${srv.name}» на сайте dan4ik37`, url }).catch(() => {}); return; }
     try { await navigator.clipboard.writeText(url); P.toast?.('🔗 Ссылка-приглашение скопирована', true); if (!P.isOpen()) alert('Ссылка-приглашение скопирована:\n' + url); } catch (er) { prompt('Ссылка-приглашение:', url); }
