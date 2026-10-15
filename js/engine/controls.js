@@ -39,6 +39,10 @@
     ['inventory', 'Вещи', 'Действия', ['Tab', 'KeyI']],
     ['emote', 'Эмоции', 'Действия', ['KeyT', '']],
     ['attack', 'Удар (режимы игры с боем: «Каждый сам», «Команды», «Выживание»)', 'Действия', ['KeyF', 'Pad7']],
+    // «Кубомир» (js/games/kubomir.js): ломать / ставить / взять блок под прицелом — мышью; на геймпаде ставит LT, ломает RT (удар)
+    ['mine', 'Кубомир: ломать блок, ударить', 'Действия', ['Mouse0', '']],
+    ['place', 'Кубомир: поставить блок, открыть, съесть', 'Действия', ['Mouse2', 'Pad6']],
+    ['pick', 'Кубомир: взять блок под прицелом в руку', 'Действия', ['Mouse1', '']],
     ['horn', 'Сигнал (за рулём)', 'Транспорт', ['KeyH', '']],
     ['lights', 'Фары (за рулём)', 'Транспорт', ['KeyL', '']],
     ['chat', 'Написать в чат', 'Система', ['Enter', '']],
@@ -131,7 +135,10 @@
         o.onKey?.(e);
       }, true);
       on(window, 'keyup', e => C.key(e.code, false), true);
-      on(window, 'blur', () => { for (const c of [...down]) C.key(c, false); virt.clear(); stick.x = stick.z = 0; });
+      const releaseAll = () => { for (const c of [...down]) C.key(c, false); virt.clear(); stick.x = stick.z = 0; };
+      on(window, 'blur', releaseAll);
+      // свернули вкладку или ушли в другое приложение (на телефоне «blur» бывает не всегда) — отпустить всё, иначе бежит сам
+      if (typeof document !== 'undefined') on(document, 'visibilitychange', () => { if (document.hidden) releaseAll(); });
     }
 
     // ── Геймпад: кнопки → Pad0…Pad15, левый стик — ходьба, правый — камера ──

@@ -72,6 +72,7 @@
     };
     on(el, 'pointerup', up);
     on(el, 'pointercancel', up);
+    on(el, 'lostpointercapture', up);   // захват потерян без «отпустил» (окно поверх, элемент спрятали) — иначе джойстик залипал и персонаж бежал сам
     on(window, 'pointerup', e => { if (I.locked && e.pointerType === 'mouse') C?.mouse(e.button, false); });
     on(el, 'wheel', e => { if (!I.enabled) return; e.preventDefault(); I.zoom *= e.deltaY > 0 ? 1.12 : 1 / 1.12; }, { passive: false });
     function lookDist(){

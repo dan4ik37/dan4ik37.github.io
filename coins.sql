@@ -228,7 +228,7 @@ grant execute on function public.coin_level_item(text) to anon, authenticated;
 -- Сколько монет можно принести из одного забега (как RUN_CAP в coins.js)
 create or replace function public.coin_run_cap(p_game text) returns int language sql immutable as $$
   select case p_game when 'horde' then 150 when 'td' then 150 when 'blocks' then 80 when 'kosynka' then 20 when 'pauk' then 50 when 'freecell' then 15 when 'miner' then 30 when 'mahjong' then 20 when 'sudoku' then 30
-    when 'krokodil' then 10 when 'fillword' then 15 when 'podzem' then 20
+    when 'krokodil' then 10 when 'fillword' then 15 when 'podzem' then 20 when 'kubomir' then 15
     when 'rp' then 10 when 'mirwar' then 20 end   -- «Мир Денчика»: работа в городах (mir-city.js), раунд Боевой зоны и наёмник (revive) — mir-war.js
 $$;
 

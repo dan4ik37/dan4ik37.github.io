@@ -2,7 +2,7 @@
 // (углы, потолки, ступеньки, полублоки, склоны, платформы), упаковка/сохранение, моды (проверка mod.json и песочница
 // JS/Lua с ошибками), замер скорости генерации и света.
 //   node scripts/tiles-test.cjs            — всё
-//   node scripts/tiles-test.cjs gen,light  — только эти разделы (gen, border, light, liquid, physics, save, mods, sandbox, perf)
+//   node scripts/tiles-test.cjs gen,light  — только эти разделы (gen, border, light, liquid, physics, save, mods, sandbox, shade2d, perf, game)
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = path.join(__dirname, '..');
 const ONLY = (process.argv[2] || '').split(',').filter(Boolean);
@@ -46,7 +46,7 @@ if (want('gen')) {
   // лавовый слой и бесконечная глубина
   const deep = G.genChunk(0, 40, mk()), deeper = G.genChunk(0, 400, mk());
   ok(deep.fg.some(f => f === T.ASH || f === T.DEEPSTONE) && deeper.fg.some(f => f === T.ASH || f === T.DEEPSTONE), 'генерация: глубже 2,5 км и 25 км — мир есть (бесконечно вниз)');
-  ok(deeper.lt.some(v => v === 2), 'генерация: внизу — лава');
+  ok([-1, 0, 1].some(cx => [399, 400, 401].some(cy => G.genChunk(cx, cy, mk()).lt.some(v => v === 2))), 'генерация: внизу — лава (лужи в чашах)');
   // далеко в стороны — тоже мир (бесконечно вбок)
   const far = G.genChunk(1e6, 3, mk()), farL = G.genChunk(-1e6, 3, mk());
   ok(far.fg.some(Boolean) && farL.fg.some(Boolean), 'генерация: на миллион клеток вправо и влево — мир есть');
@@ -139,28 +139,40 @@ if (want('light')) {
   const cx0 = sp.x, cy0 = sp.y + 60;
   const room = [];
   for (let y = cy0 - 4; y <= cy0 + 4; y++) for (let x = cx0 - 15; x <= cx0 + 15; x++) room.push([x, y, 0, 2]);
+  for (let y = cy0 - 5; y <= cy0 + 5; y++) for (let x = cx0 + 16; x <= cx0 + 19; x++) room.push([x, y, T.STONE, 2]);   // справа — сплошной камень
   w.edit(room);
   ok(w.L(cx0, cy0).slice(0, 3).every(v => v === 0), 'свет: пустая комната под землёй — темно', w.L(cx0, cy0));
   w.edit([[cx0, cy0, T.TORCH, 2]]);
   const at = d => w.L(cx0 + d, cy0)[0];
+  // ожидаемое: каждая клетка воздуха пропускает долю LMUL[0] (как в Террарии, режим «Цвет»), меньше LCUT — ноль
+  const chain = (v, n, m = PZ.LMUL[0][0]) => { for (let k = 0; k < n; k++) { v = (v * m) >> 8; if (v < PZ.LCUT) v = 0; } return v; };
   ok(at(0) === 255, 'свет: у факела — 255', at(0));
-  ok(at(1) === 240 && at(4) === 195 && at(10) === 105, 'свет: в воздухе −15 за клетку', [at(1), at(4), at(10)]);
+  ok(at(1) === chain(255, 1) && at(4) === chain(255, 4) && at(10) === chain(255, 10), 'свет: в воздухе — доля за клетку (0,86)', [at(1), at(4), at(10), chain(255, 10)]);
+  ok(at(1) > 210 && at(4) > 140 && at(10) > 60 && at(10) < 100, 'свет: яркое ядро и мягкий хвост', [at(1), at(4), at(10)]);
+  ok(Math.max(...PZ.LMUL.map(a => Math.max(...a))) === PZ.LMUL[0][0] && chain(255, PZ.LR) === 0 && PZ.LMUL.every((a, i) => a.every((m, j) => PZ.LMULD[i][j] <= m)), 'свет: дальше LR не достаёт (коробка пересчёта правки — честная)', PZ.LR);
   ok(at(-7) === at(7) && w.L(cx0, cy0 - 3)[0] === at(3), 'свет: одинаково во все стороны', [at(-7), at(7), w.L(cx0, cy0 - 3)[0], at(3)]);
-  ok(w.L(cx0 + 4, cy0 + 3)[0] >= 195 - 15 * 3 && w.L(cx0 + 4, cy0 + 3)[0] <= 195, 'свет: по диагонали — не больше, чем по прямой');
-  ok(at(14) >= 0 && at(14) <= 45 && w.L(cx0 + 16, cy0)[0] <= at(14), 'свет: сквозь камень — быстро гаснет', [at(14), w.L(cx0 + 16, cy0)[0]]);
-  ok(w.L(cx0, cy0)[1] === 190 && w.L(cx0, cy0)[2] === 110, 'свет: цвет факела тёплый (R > G > B)', w.L(cx0, cy0));
+  ok(w.L(cx0 + 4, cy0 + 3)[0] >= at(7) && w.L(cx0 + 4, cy0 + 3)[0] <= at(4), 'свет: по диагонали — не больше, чем по прямой', [w.L(cx0 + 4, cy0 + 3)[0], at(4), at(7)]);
+  ok(at(14) > 0 && at(14) <= 60 && w.L(cx0 + 16, cy0)[0] < at(15) * .6 && w.L(cx0 + 17, cy0)[0] < at(15) * .4, 'свет: в камень заходит на 2–3 клетки и гаснет', [at(14), at(15), w.L(cx0 + 16, cy0)[0], w.L(cx0 + 17, cy0)[0]]);
+  ok(w.L(cx0, cy0)[1] === PZ.P.LG[T.TORCH] && w.L(cx0, cy0)[2] === PZ.P.LB[T.TORCH] && PZ.P.LR[T.TORCH] > PZ.P.LG[T.TORCH] && PZ.P.LG[T.TORCH] > PZ.P.LB[T.TORCH], 'свет: цвет факела тёплый (R > G > B)', w.L(cx0, cy0));
+  ok(w.L(cx0 + 7, cy0)[1] / w.L(cx0 + 7, cy0)[0] > .6, 'свет: вдали от факела цвет тот же (каналы гаснут одинаково)', w.L(cx0 + 7, cy0));
   // факел у границы чанка: соседний чанк освещён так же
   const bx = (Math.floor((cx0 + 40) / CS) + 1) * CS, by = cy0;
   const tun = []; for (let x = bx - 12; x <= bx + 12; x++) for (let y = by - 1; y <= by + 1; y++) tun.push([x, y, 0, 2]);
   w.edit(tun);
   w.edit([[bx - 1, by, T.TORCH, 2]]);
-  ok(w.L(bx - 1 - 5, by)[0] === w.L(bx - 1 + 5, by)[0] && w.L(bx - 1 + 5, by)[0] === 180, 'свет: через границу чанков — без шва', [w.L(bx - 6, by)[0], w.L(bx + 4, by)[0]]);
+  ok(w.L(bx - 1 - 5, by)[0] === w.L(bx - 1 + 5, by)[0] && w.L(bx - 1 + 5, by)[0] === chain(255, 5), 'свет: через границу чанков — без шва', [w.L(bx - 6, by)[0], w.L(bx + 4, by)[0]]);
   // снять факел — снова темно (и в соседнем чанке)
   w.edit([[bx - 1, by, 0, 2]]);
   ok(w.L(bx + 3, by)[0] === 0 && w.L(bx - 5, by)[0] === 0, 'свет: факел убрали — темно по обе стороны границы', [w.L(bx + 3, by), w.L(bx - 5, by)]);
   // лава светится
   w.edit([[cx0 - 10, cy0 + 4, 0, 2, 255, 2]]);
   ok(w.L(cx0 - 10, cy0 + 4)[0] > 150 && w.L(cx0 - 10, cy0 + 4)[2] < 60, 'свет: лава светит оранжевым', w.L(cx0 - 10, cy0 + 4));
+  // вода: красный гаснет быстрее синего — свет сквозь воду синеет
+  const pool = []; for (let x = cx0 + 6; x <= cx0 + 14; x++) for (let y = cy0 - 4; y <= cy0 + 4; y++) pool.push([x, y, 0, 2, 255, 1]);
+  w.edit(pool);
+  const Lw = w.L(cx0 + 12, cy0), La = w.L(cx0 - 12, cy0 - 4);
+  const tr = PZ.P.LB[T.TORCH] / PZ.P.LR[T.TORCH];   // синий к красному у самого факела
+  ok(Lw[2] / Math.max(1, Lw[0]) > tr * 2 && La[2] / Math.max(1, La[0]) < tr * 1.3, 'свет: сквозь воду синеет, в воздухе — тёплый', { Lw, La, tr });
   // шахта с поверхности: небо идёт вниз по шахте без стен; крыша над головой — небо гаснет
   const sx = sp.x + 30, top = G.colInfo(sx).h;
   const shaft = []; for (let y = top; y < top + 20; y++) for (let x = sx; x <= sx + 1; x++) shaft.push([x, y, 0, 0]);
@@ -238,6 +250,28 @@ if (want('liquid')) {
   w5.set(5, 10, T.SAND);
   const b5 = w5.sum(1); w5.run(600);
   ok(w5.cell(5, 29).c.fg[w5.cell(5, 29).i] === T.SAND && w5.sum(1) === b5, 'песок: тонет в воде, вода не пропадает', [w5.sum(1), b5]);
+  // озёра из генерации — в чашах: подошёл игрок (жидкости ожили) — ничего не утекает, гладь ровная
+  const Gb = PZ.makeGen(12345);
+  let found = [];
+  for (let rx = -12; rx <= 12 && found.length < 4; rx++) for (let ry = 4; ry <= 20 && found.length < 4; ry++) { const b = Gb.basin(rx, ry); if (b && b.lt === 1 && b.cells >= 20) found.push(b); }
+  ok(found.length >= 3, 'озёра: в чашах есть вода (несколько озёр рядом со стартом)', found.length);
+  let leaks = 0, flat = 0, moved = 0;
+  for (const b of found) {
+    const w6 = { W: new Map() }, list = [];
+    for (let cy = Math.floor(b.Y0 / CS) - 1; cy <= Math.floor((b.Y0 + 63) / CS) + 1; cy++) for (let cx = Math.floor(b.X0 / CS) - 1; cx <= Math.floor((b.X0 + 95) / CS) + 1; cx++) {
+      const c = Object.assign(Gb.genChunk(cx, cy, mk()), { cx, cy, awake: 40 }); w6.W.set(cx + ',' + cy, c); list.push(c);
+    }
+    const LW6 = { chunk: (cx, cy) => w6.W.get(cx + ',' + cy), changed(){ moved++; } };
+    const lake = () => { let s = 0; for (let y = b.Y0; y < b.Y0 + 64; y++) for (let x = b.X0; x < b.X0 + 96; x++) if (b.fill[(y - b.Y0) * 96 + (x - b.X0)]) { const c = w6.W.get(Math.floor(x / CS) + ',' + Math.floor(y / CS)); s += c.lq[((y & 63) << 6) | (x & 63)]; } return s; };
+    const l0 = lake();
+    for (let t = 0; t < 600; t++) PZ.liquidStep(LW6, list, t, 1e9);
+    if (lake() !== l0) leaks++;
+    // гладь: верхний ряд чаши — у всех клеток над водой воздух
+    let row = 0; for (let x = b.X0; x < b.X0 + 96; x++) if (b.fill[(b.level - b.Y0) * 96 + (x - b.X0)]) row++;
+    if (row >= 3) flat++;
+  }
+  ok(leaks === 0, 'озёра: 600 шагов жидкостей — из чаш ничего не утекло', { leaks, n: found.length });
+  ok(flat === found.length, 'озёра: у каждой чаши ровная гладь (верхний ряд — 3+ клетки)', flat);
 }
 
 // ═══ 5. Столкновения ═══
@@ -500,6 +534,43 @@ async function sandboxTests(){
   ok(le && le.line === 3, 'песочница Lua: ошибка — с номером строки', le);
 }
 
+// ═══ 10. Шейдеры 2D (js/engine/shade2d.js): наборы, «Авто», признаки; GLSL — безопасно для телефонов ═══
+if (want('shade2d')) {
+  const saved = globalThis.D37E, savedOpt = globalThis.D37Opt;
+  let dev = 'high';
+  globalThis.D37E = { quality: () => dev };
+  globalThis.D37Opt = undefined;
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/shade2d.js'), 'utf8'), { filename: 'shade2d.js' });
+  const S2 = globalThis.D37E.shade2d;
+  ok(!!S2 && ['normal', 'pretty', 'ultra', 'retro'].every(k => S2.PACKS[k]) && S2.LIST.join() === 'auto,normal,pretty,ultra,retro', 'шейдеры 2D: четыре набора и «Авто»');
+  ok(S2.pack() === 'pretty', 'шейдеры 2D: «Авто» на мощном устройстве — «Красивые»', S2.pack());
+  dev = 'mid'; ok(S2.pack() === 'normal', 'шейдеры 2D: «Авто» на телефоне — «Обычные»', S2.pack());
+  dev = 'low'; ok(S2.flags().q === 0 && S2.flags().post === false, 'шейдеры 2D: слабое устройство — «Обычные» без мелочей', S2.flags());
+  dev = 'high';
+  globalThis.D37Opt = { rev: 1, gfx: { preset: 'ultra', shaders: 'auto' } }; ok(S2.pack() === 'ultra', 'шейдеры 2D: «Авто» по пресету «Ультра»');
+  globalThis.D37Opt.gfx.preset = 'low'; ok(S2.pack() === 'normal', 'шейдеры 2D: «Авто» по пресету «Низкая» — «Обычные»');
+  globalThis.D37Opt.gfx = { preset: 'auto', shaders: 'retro', crt: true };
+  const fr = S2.flags();
+  ok(S2.pack() === 'retro' && fr.crt === true && fr.smooth === false && fr.pixel === 2 && fr.posterize > 0 && fr.post, 'шейдеры 2D: «Ретро» — крупные пиксели, свет клетками, полоски CRT', fr);
+  globalThis.D37Opt.gfx = { shaders: 'pretty' }; const fp = S2.flags();
+  ok(fp.post && fp.bloom > 0 && fp.distort && fp.vignette > 0 && fp.grade && fp.q === 2, 'шейдеры 2D: «Красивые» — свечение, рябь/жар, цвет, виньетка', fp);
+  globalThis.D37Opt.gfx = { shaders: 'ultra' }; const fu = S2.flags();
+  ok(fu.q === 3 && fu.bloomBlur > fp.bloomBlur && fu.particles > fp.particles, 'шейдеры 2D: «Ультра» — больше выборок и частиц', fu);
+  globalThis.D37Opt.gfx = { shaders: 'чужое' }; ok(S2.pack() === 'pretty', 'шейдеры 2D: неизвестное значение — как «Авто»');
+  dev = 'mid'; globalThis.D37Opt.gfx = { shaders: 'toon' }; ok(S2.pack() === 'pretty', 'шейдеры 2D: набор 3D «Мультяшные» (toon, ключ общий) — как «Красивые»', S2.pack()); dev = 'high';
+  const off = S2.use(); ok(S2.users === 1, 'шейдеры 2D: игра отметилась (вкладка «Графика» в её ⚙️)'); off(); off(); ok(S2.users === 0, 'шейдеры 2D: закрыли — счётчик назад (дважды — не уходит в минус)');
+  // GLSL для телефонов: highp у сэмплеров, smoothstep(a, b, x) с числами — только a < b
+  const glsl = Object.values(S2.GLSL).join('\n'), gl2 = fs.readFileSync(path.join(SITE, 'js/games/podzem-gl.js'), 'utf8'), s2src = fs.readFileSync(path.join(SITE, 'js/engine/shade2d.js'), 'utf8');
+  const bad = [];
+  for (const src of [glsl, gl2, s2src]) for (const m of src.matchAll(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g)) if (+m[1] >= +m[2]) bad.push(m[0]);
+  ok(!bad.length, 'шейдеры 2D: smoothstep только с edge0 < edge1 (иначе на части телефонов не определено)', bad);
+  const shaders = [...s2src.matchAll(/`#version 300 es[\s\S]*?`/g), ...gl2.matchAll(/`#version 300 es[\s\S]*?`/g)].map(m => m[0]);
+  const noHp = shaders.filter(s => /uniform\s+(u?)sampler2D/.test(s) && !/precision highp sampler2D/.test(s));
+  ok(shaders.length >= 8 && !noHp.length, 'шейдеры 2D: у всех сэмплеров highp (телефоны)', noHp.map(s => s.slice(0, 80)));
+  ok(Object.values(S2.GLSL).every(s => (s.match(/\{/g) || []).length === (s.match(/\}/g) || []).length), 'шейдеры 2D: куски GLSL — скобки сходятся');
+  globalThis.D37E = saved; globalThis.D37Opt = savedOpt;
+}
+
 // ═══ 9. Скорость: генерация и свет на чанк ═══
 function perf(){
   const G = PZ.makeGen(2024);
@@ -524,11 +595,117 @@ function perf(){
   ok(editMs < 15, 'скорость: правка клетки со светом < 15 мс', editMs);
 }
 
+// ═══ 11. Игра целиком в node (scripts/podzem-sim.cjs): инструменты бьют мобов; то, что ставится, ЛКМ только ставит
+// (стены — только молотком); мобы появляются редко, за экраном и одинаково при 60/144/240 Гц ═══
+async function gameTests(){
+  const sim = await require('./podzem-sim.cjs')(SITE);
+  const A = sim.A, T = sim.T, IT = A.PZ.ITEMS;
+  ok(await sim.newWorld('pz-test-game') === 'play', 'игра в node: мир загрузился');
+  let G = sim.G; T.god(true); G.npcs.length = 0;   // Проводник не мешает касаниям
+  await sim.frames(1);
+  const pl = () => sim.G.pl;
+  // ── инструменты — слабое оружие (как в Террарии) ──
+  {
+    G.mobs.length = 0;
+    const px = pl().x + pl().w / 2, feet = pl().y + pl().h;
+    const m = T.mob('slime', px + 1.8, feet), dmg = {};
+    for (const [slot, id] of [[0, 'pick_copper'], [1, 'axe_copper'], [3, 'hammer'], [2, 'sword_copper']]) {
+      Object.assign(m, { hp: m.maxHp, x: px + 1.8 - m.w / 2, y: feet - m.h, vx: 0, vy: 0, hurt: 0 });
+      A.selSlot(slot); const n0 = G.texts.length; pl().useT = 0;
+      sim.aimAt(m.x + m.w / 2, m.y + m.h / 2); G.mouse.l = true; await sim.frames(.2); G.mouse.l = false; await sim.frames(.05);
+      dmg[id] = { hp: m.maxHp - m.hp, num: G.texts.length > n0, kick: m.x + m.w / 2 > px + 1.8 + .05 || m.hurt > 0 };
+    }
+    ok(['pick_copper', 'axe_copper', 'hammer'].every(k => dmg[k].hp > 0 && dmg[k].num), 'урон: кирка, топор и молоток бьют мобов (с цифрой урона)', dmg);
+    ok(dmg.sword_copper.hp > dmg.pick_copper.hp && IT.sword_copper.dmg > IT.pick_copper.dmg, 'урон: меч сильнее кирки', dmg);
+    ok(['pick_copper', 'pick_fire', 'axe_iron', 'hammer'].every(k => IT[k].dmg > 0 && IT[k].reach > 0), 'урон: у всех инструментов есть урон и дальность');
+    G.mobs.length = 0;
+  }
+  // ── факел (и всё, что ставится): ЛКМ только ставит — никаких «копать вместо»; стену ломает только молоток ──
+  {
+    const TORCH = A.PZ.TILE.torch.id, WD = A.PZ.WALL.dirtwall.id;
+    const foot = Math.floor(pl().y + pl().h - .01), px = Math.floor(pl().x + pl().w / 2), tx = px + 3, ty = foot - 2;
+    const area = f => { for (let y = foot - 5; y <= foot - 1; y++) for (let x = px + 1; x <= px + 5; x++) f(x, y); };
+    const walls = () => { let n = 0; area((x, y) => { if (A.wallAt(x, y)) n++; }); return n; };
+    const torches = () => { let n = 0; area((x, y) => { if (A.fgAt(x, y) === TORCH) n++; }); return n; };
+    const torchesHeld = () => G.CH.inv.reduce((s, q) => s + (q && q.id === 'torch' ? q.n : 0), 0) + G.items.reduce((s, q) => s + (q.id === 'torch' ? q.n : 0), 0);
+    const reset = (n = 8, slot = 4) => {
+      G.mobs.length = 0; G.items.length = 0; area((x, y) => T.setCell(x, y, 0, 0, WD));
+      G.CH.inv[4] = { id: 'torch', n }; A.selSlot(slot);
+      G.opt.smart = false; G.shift = false; G.autoPrev = -1; G.mouse.l = false; G.aim.src = 'mouse'; sim.touch.use = false; sim.C.held.clear(); pl().useT = 0;
+    };
+    const hold = async sec => { sim.aimAt(tx + .5, ty + .5); G.mouse.l = true; await sim.frames(sec); G.mouse.l = false; };
+    const cases = [
+      ['щелчок', () => hold(1 / 60)],
+      ['ЛКМ держат', () => hold(1.5)],
+      ['умный курсор (Ctrl)', () => { G.opt.smart = true; return hold(1.5); }],
+      ['Shift — «сам подберу инструмент»', async () => { G.shift = true; G.autoPrev = G.CH.sel; await hold(1.5); G.shift = false; }],
+      ['касание пальцем', async () => { const [sx, sy] = sim.screenOf(tx + .5, ty + .5); if (!A.tapTouch(sx, sy)) A.useItem(); }],
+      ['палец держат', async () => { const [sx, sy] = sim.screenOf(tx + .5, ty + .5); A.aimTouch(sx, sy); sim.touch.use = true; await sim.frames(1.5); sim.touch.use = false; }],
+      ['геймпад (прицел стиком, «атака»)', async () => { const p = pl(); G.aim.src = 'pad'; G.pad.cx = tx + .5 - (p.x + p.w / 2); G.pad.cy = ty + .5 - (p.y + p.h * .45); sim.C.held.add('attack'); await sim.frames(1.5); sim.C.held.clear(); }],
+    ];
+    for (const [name, fn] of cases) {
+      reset(); await sim.frames(.05);
+      const w0 = walls(); await fn(); await sim.frames(.2);
+      const hand = G.CH.inv[G.CH.sel];
+      ok(walls() === w0 && torches() >= 1 && (!hand || hand.id === 'torch'), `факел: ${name} — ставится, стена цела`, { walls: [w0, walls()], torches: torches(), hand: hand && hand.id });
+    }
+    // последний факел, ЛКМ не отпускают: поставили — пустая рука его же не ломает (и стену не трогает)
+    reset(1); await sim.frames(.05);
+    let placed = false, lost = 0; sim.onFrame = () => { const on = A.fgAt(tx, ty) === TORCH; if (on) placed = true; else if (placed) lost++; };
+    await hold(3); await sim.frames(.2); sim.onFrame = null;
+    ok(placed && !lost && torches() === 1 && torchesHeld() === 0 && walls() === 25, 'факел: последний поставлен и остался (пустая рука не копает, пока ЛКМ не отпустили)', { lost, torches: torches(), held: torchesHeld(), walls: walls() });
+    // стены: кирка и пустая рука не трогают, молоток ломает
+    reset(8, 0); await sim.frames(.05); await hold(1.5);
+    ok(!!A.wallAt(tx, ty), 'стена: кирка стену не ломает');
+    reset(8, 3); await sim.frames(.05); await hold(3);
+    ok(!A.wallAt(tx, ty), 'стена: молоток ломает');
+    // Shift с киркой в руке над пустой клеткой со стеной — молоток не подаётся (стены — только если сам взял молоток)
+    reset(8, 0); await sim.frames(.05); G.shift = true; G.autoPrev = G.CH.sel; await hold(1.5); G.shift = false;
+    ok(!!A.wallAt(tx, ty) && G.CH.inv[G.CH.sel]?.id !== 'hammer', 'стена: Shift не подаёт молоток и стену не ломает', G.CH.inv[G.CH.sel]);
+  }
+  // ── появление мобов ──
+  {
+    // за 60 с при частоте экрана hz; kill — сразу убирать (видно чистую скорость), иначе — следим за пределом рядом
+    async function spawnRun(hz, sec, time, kill){
+      await A.stopWorld(false);
+      await sim.newWorld('pz-test-spawn'); const G = sim.G; T.god(true); T.time(time); G.npcs.length = 0;
+      const seen = new WeakSet(), log = []; let maxNear = 0; const t0 = G.t;
+      sim.onFrame = () => {
+        const vw = G.R.w / G.cam.tile, vh = G.R.h / G.cam.tile, p = G.pl;
+        for (const m of G.mobs) if (!seen.has(m) && !m.D.boss) {
+          seen.add(m);
+          log.push({ t: +(G.t - t0).toFixed(2), out: Math.max(Math.abs(m.x + m.w / 2 - G.cam.x) - m.w / 2 - vw / 2, Math.abs(m.y + m.h / 2 - G.cam.y) - m.h / 2 - vh / 2), dist: Math.hypot(m.x + m.w / 2 - p.x - p.w / 2, m.y + m.h / 2 - p.y - p.h / 2) });
+        }
+        if (kill) G.mobs.length = 0;
+        else maxNear = Math.max(maxNear, G.mobs.filter(m => !m.D.boss && Math.abs(m.x - p.x) <= 110 && Math.abs(m.y - p.y) <= 80).length);   // участок героя (дальше мобы исчезают)
+      };
+      await sim.frames(sec, hz); sim.onFrame = null;
+      return { log, maxNear, perMin: +(log.filter(q => q.t >= 25).length / ((sec - 25) / 60)).toFixed(1) };
+    }
+    const night = {};
+    for (const hz of [60, 144, 240]) night[hz] = await spawnRun(hz, 205, .7, true);
+    const per = [60, 144, 240].map(hz => night[hz].perMin);
+    console.log(`  мобы ночью на поверхности, в минуту (60/144/240 Гц): ${per.join(' / ')}; первые появились через ${[60, 144, 240].map(hz => night[hz].log[0]?.t).join(' / ')} с`);
+    ok(Math.max(...per) - Math.min(...per) <= .4, 'мобы: скорость появления одинакова при 60, 144 и 240 Гц', per);
+    ok(per[0] >= 3 && per[0] <= 12, 'мобы: ночью на поверхности — 3…12 в минуту (было 60, как «кровавая луна»)', per);
+    const day = await spawnRun(60, 205, .2, true);
+    ok(day.perMin < per[0] * .6, 'мобы: днём реже, чем ночью', { day: day.perMin, night: per[0] });
+    const all = [...night[60].log, ...night[240].log, ...day.log];
+    ok(all.every(q => q.t >= 15), 'мобы: первые 15 с после входа в мир — тихо', all.slice(0, 3));
+    const bad = all.filter(q => q.out < 2 || q.dist < 16);
+    ok(all.length > 10 && !bad.length, 'мобы: появляются только за экраном (+2 клетки) и не ближе 16 клеток к герою', bad.slice(0, 4));
+    const keep = await spawnRun(60, 200, .7, false);
+    ok(keep.maxNear <= 6, 'мобы: рядом не больше предела (поверхность, ночь — 6)', keep.maxNear);
+  }
+  await A.stopWorld(false);
+}
+
 (async () => {
   try {
     if (want('mods')) await modsTests();
     if (want('sandbox')) await sandboxTests();
     if (want('perf')) perf();
+    if (want('game')) await gameTests();
   } catch (e) { fail++; console.log('FAIL исключение', e && e.stack || e); }
   console.log(`tiles-test: ${pass} ok, ${fail} fail (${((Date.now() - t00) / 1000).toFixed(1)} с)`);
   process.exit(fail ? 1 : 0);

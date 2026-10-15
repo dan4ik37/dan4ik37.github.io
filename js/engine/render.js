@@ -34,7 +34,11 @@
   const PI = Math.PI, TAU = PI * 2;
   const TEX_DIR = 'img/tex/';
 
-  E.gfxQuality = () => { try { const v = localStorage.getItem('d37_gfx'); if (['low', 'mid', 'high'].includes(v)) return v; } catch (e) {} return E.quality(); };
+  E.gfxQuality = () => {
+    if (E.gfxSafe?.('tier')) return 'low';   // страж графики (post.js): на этом устройстве выше «низкой» не рисовалось
+    try { const v = localStorage.getItem('d37_gfx'); if (['low', 'mid', 'high'].includes(v)) return v; } catch (e) {}
+    return E.quality();
+  };
   // FSR (как режимы DLSS): кадр рисуется в доле разрешения, AMD FSR 1 в post.js чётко растягивает до экрана (d37_fsr).
   // «авто» — доля меняется сама (динамическое разрешение), растягивает тоже FSR
   E.FSR = { quality: .77, balanced: .67, performance: .59 };
@@ -167,7 +171,7 @@
     // камеры тени почти не видно); шаг — ровно на тексель (иначе тени «дрожат» при ходьбе). Пока карта не перерисована,
     // приёмники берут старую матрицу тени — тени верные, просто коробка догонит при следующей перерисовке
     const lr = new T.Vector3(), lu = new T.Vector3(), tgt = new T.Vector3(), shTgt = new T.Vector3(1e9, 0, 0), camFw = new T.Vector3(), UPV = new T.Vector3(0, 1, 0);
-    const FGself = { x: 0, y: 0, z: 0, ok: false };
+    const FGself = R.focus = { x: 0, y: 0, z: 0, ok: false };   // за кем едет камера (и фокус глубины резкости набора «Ультра»)
     lr.crossVectors(UPV, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
     R.follow = (x, z, y = 0) => {
       FGself.x = x; FGself.y = y; FGself.z = z; FGself.ok = true;   // генерация кадров: свой персонаж — подвижный
@@ -225,6 +229,10 @@
       envAt = performance.now(); envSun.copy(skyMat.uniforms.uSun.value);
     }
     R.envNow = () => { envDue = 0; makeEnv(); };
+    // контекст WebGL вернулся (телефон выгружал видеопамять, сбой драйвера): three.js пересоздаёт всё сам, но то, что было
+    // нарисовано в текстуры, пропало — отражения неба и карту теней заново (страж графики, пока контекст потерян, молчит)
+    const onRestore = () => { SH.dirty = true; setTimeout(() => { if (!R.dead) try { envDue = 0; makeEnv(); } catch (e) {} }, 0); };
+    r.domElement.addEventListener?.('webglcontextrestored', onRestore);
 
     // ═══ Время суток (как Lighting в Roblox): time 0–24, brightness, ambient, fogEnd, shadows + gfx — графика мира ═══
     const M = R.sky = E.skyModel(14);   // модель неба — один объект, без мусора
@@ -274,6 +282,7 @@
       // облака: цвет по свету (ночью тёмные), сколько видно — облачность мира
       const cn = Math.round(clouds.length * G.sky.clouds);
       for (let i = 0; i < clouds.length; i++) { const s = clouds[i]; s.visible = i < cn; s.material.color.setRGB(M.cloud[0], M.cloud[1], M.cloud[2]); s.material.opacity = .9 * (1 - .35 * M.night); }
+      skyMat.uniforms.uCl.value.x = R.pack?.clouds ? Math.max(0, Math.min(1, G.sky.clouds)) : 0;   // небо v2 (набор шейдеров): облачность мира
       sun.castShadow = shadows && Lg.shadows !== false && O.shadows && M.lightI > .02;   // ночью без луны — теней нет
       if (moved) SH.dirty = true;
       r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * M.night) * Math.pow(2, G.exposure);
@@ -310,7 +319,7 @@
     // высотный туман: плотность на высоте камеры — один раз за кадр (а не в каждом пикселе)
     function fogCam(){ GU.fogC[2] = GU.fogB[3] > 0 ? GU.fogB[3] * Math.exp(-GU.fogC[1] * Math.max(camera.position.y - GU.fogC[0], -20)) : 0; }
     // Под водой (mir.js: камера ниже уровня пруда): синий густой туман, вышли — как было
-    R.setUnder = (on, color = '#1d6f96') => { const was = under; under = on ? color : null; if (was !== under) applyFog(); };
+    R.setUnder = (on, color = '#1d6f96') => { const was = under; under = on ? color : null; if (was !== under) applyFog(); R.post?.setUnder?.(!!under); };
 
     // ═══ Облака: мягкие спрайты кодом, медленно плывут; группа ездит с камерой (как небо), при малой дальности — ближе
     //     и меньше (тот же вид); цвет — по свету (applyLighting), сколько видно — облачность мира ═══
@@ -425,7 +434,7 @@
       if (!list.length) { if (halo) halo.visible = false; return; }
       if (!halo || halo.userData.cap < list.length) haloInit(Math.max(16, (halo?.userData.cap || 8) * 2, list.length));
       const g = halo.geometry, P = g.attributes.position.array, C = g.attributes.hcol.array, S = g.attributes.hsize.array;
-      const day = .3 + .7 * (R.night || 0);   // днём ореол еле виден, ночью — в полную силу
+      const day = (.3 + .7 * (R.night || 0)) * (R.pack?.halo || 1);   // днём ореол еле виден, ночью — в полную силу; набор шейдеров — ярче
       for (let i = 0; i < list.length; i++) {
         const rec = list[i], s = rec.src, p = posOf(s), k = s.visible === false ? 0 : Math.min(1.4, (s.intensity || 0) / 2.5) * (1 - .55 * rec.w) * day;
         P[i * 3] = p.x; P[i * 3 + 1] = p.y; P[i * 3 + 2] = p.z;
@@ -438,13 +447,54 @@
       halo.visible = true;
     }
 
+    // ═══ Наборы шейдеров (gfx.js E.PACKS, 16.10.2026): тон и цвет кадра, лучи, облака слоем и небо v2, ветер в траве и листве,
+    //     вода v3, мультяшный, ретро. «Обычные» — сегодняшние шейдеры (новые куски не собираются). Набор выбирает игрок (⚙️ →
+    //     Графика → «Шейдеры»; «Авто» — по устройству), страж графики (post.js) откатывает набор, который здесь не работает ═══
+    R.pack = E.packResolve ? E.packResolve('normal', { q }) : { id: 'normal' };
+    // ветер: R.wave(материал, { kind: 'grass' | 'leaves', h: высота травы }) — материал сам качается, когда набор с ветром
+    R.waveMats = new Set();
+    const setDefine = (m, k, on, v = '') => {
+      const has = !!m.defines && m.defines[k] !== undefined;
+      if (has === !!on && (!on || m.defines[k] === v)) return;
+      const d = { ...(m.defines || {}) }; if (on) d[k] = v; else delete d[k];
+      m.defines = d; m.needsUpdate = true;
+    };
+    const waveSet = (m, on) => {
+      const w = m.userData.wave; if (!w) return;
+      setDefine(m, 'D37_WAVE', on, w.kind); setDefine(m, 'D37_WAVE_H', on && w.kind === 1, (1 / w.h).toFixed(3));
+    };
+    R.wave = (m, o = {}) => { if (!m?.isMaterial || !E.waveMaterial) return m; E.waveMaterial(m, o); R.waveMats.add(m); waveSet(m, !!R.pack.wave && q !== 'low'); return m; };
+    // что из набора включить сейчас: на low и без постобработки — «Обычные»; автокачество (packLite) снимает дорогое первым
+    function packOf(op){
+      if (!E.packResolve) return { id: 'normal' };
+      const fx = E.packResolve(op.pack || 'auto', { ...devInfo(), preset: op.preset, crt: !!op.crt, off: E.gfxGuardState?.().off || {}, post: !!(R.post && R.post.on) });
+      if (op.packLite >= 1) { fx.rays = 0; fx.clouds = Math.min(fx.clouds, 1); }
+      if (op.packLite >= 2) { fx.clouds = 0; fx.wave = 0; }
+      return fx;
+    }
+    function applyPack(fx){
+      const prev = R.pack; R.pack = fx;
+      R.post?.setPack?.(fx);
+      setDefine(skyMat, 'D37_SKY2', !!(fx.sky || fx.clouds));
+      skyMat.uniforms.uCl.value.z = fx.clouds > 1 ? 2 : 1;
+      cloudG.visible = !(fx.clouds > 0);   // облака слоем по небу вместо облаков-спрайтов
+      GU.wind[1] = fx.wave ? 1 : 0;
+      scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (m.userData?.wave) R.waveMats.add(m); });
+      for (const m of R.waveMats) waveSet(m, !!fx.wave && q !== 'low');
+      for (const m of R.waters) if (m.isMeshStandardMaterial) setDefine(m, 'D37_WATER3', !!fx.water, '1');
+      if ((prev?.retro?.pixel || 0) !== (fx.retro?.pixel || 0) && R.w > 1) applyScale();
+    }
+    R.packFx = () => R.pack;   // для игр («Кубомир»): что сейчас включено
+
     // ═══ Разрешение: плотность пикселей качества × динамический масштаб (на слабом кадре — меньше пикселей) ═══
     const DR = R.dynRes = E.dynRes({ on: o.dynRes !== false });
     let scaleNow = 1;
     function applyScale(){
       const s = scaleNow = DR.scale;
       R.pr0 = PR0;
-      if (R.post) R.post.setSize(Math.max(1, Math.round(R.w * PR0 * s)), Math.max(1, Math.round(R.h * PR0 * s)), PR0 * s);
+      const px = R.post && R.post.on && R.pack?.retro ? R.pack.retro.pixel : 0;   // ретро-набор: пиксель — px точек экрана
+      if (px) R.post.setSize(Math.max(1, Math.round(R.w / px)), Math.max(1, Math.round(R.h / px)), 1 / px);
+      else if (R.post) R.post.setSize(Math.max(1, Math.round(R.w * PR0 * s)), Math.max(1, Math.round(R.h * PR0 * s)), PR0 * s);
       else { r.setPixelRatio(PR0 * s); r.setSize(R.w, R.h, false); }
       R.renderH = Math.max(1, Math.round(R.h * PR0 * s));
       r.domElement.style.width = R.w + 'px'; r.domElement.style.height = R.h + 'px';
@@ -460,6 +510,7 @@
     R.update = dt => {
       for (let i = 0; i < clouds.length; i++) { const s = clouds[i]; s.position.x += s.userData.v * dt; if (s.position.x > 300) s.position.x = -300; }
       R.waterU.uTime.value += dt; skyT += dt; skyMat.uniforms.uP.value.w = skyT % 1000;
+      GU.wind[0] = (GU.wind[0] + dt) % 10000; skyMat.uniforms.uCl.value.y = skyT % 10000;   // ветер и облака (наборы шейдеров)
       for (let i = 0; i < R.anims.length; i++) R.anims[i](dt);
     };
     // ═══ Кадр: склейка/лампы → отражения неба (если пора) → тени по делу → сцена (через постобработку или прямо) →
@@ -530,9 +581,10 @@
       ST.shadowNow = shadowTick(t0);
       r.info.reset();
       if (GU.rt) GU.rt[0] = q !== 'low' ? R.lighting.gfx.rt?.wet || 0 : 0;   // мокрое — мира (данные общие на страницу: после кадра — 0)
-      if (R.post && R.post.on) R.post.render(scene, camera);
+      if (R.post && R.post.on) { if (R.guard?.due()) R.guard.test(scene, camera); else R.post.render(scene, camera); }   // страж графики: иногда — кадр с самопроверкой
       else { r.render(scene, camera); ST.scene = r.info.render.calls; ST.post = 0; }
       if (GU.rt) GU.rt[0] = 0;
+      R.guard?.tick();
       const inf = r.info.render;
       ST.calls = inf.calls; ST.tris = inf.triangles;
       if (ST.shadowNow) { ST.shadowUpd++; if (ST.sceneNoSh) ST.shadow = Math.max(0, ST.scene - ST.sceneNoSh); } else ST.sceneNoSh = ST.scene;
@@ -563,7 +615,11 @@
       R.applyGfx(E.gfxResolve({ ...(O.gfx || {}), shadows: O.shadows !== false }, devInfo()));
     }
     // устройство для E.gfxResolve: каркас, WebGL2, телефон ли, точна ли глубина кадра (post.js проверяет при запуске)
-    function devInfo(){ return { q, gl2: r.capabilities.isWebGL2, mobile: !!E.isMobile?.(), depthFx: !R.post || R.post.depthOK !== false }; }
+    let gpu0 = null;
+    function devInfo(){
+      if (!gpu0) { try { gpu0 = E.gpuInfo?.(r.getContext()) || { fam: 'other', model: '' }; } catch (e) { gpu0 = { fam: 'other', model: '' }; } }
+      return { q, gl2: r.capabilities.isWebGL2, mobile: !!E.isMobile?.(), depthFx: !R.post || R.post.depthOK !== false, gpu: gpu0, cores: navigator.hardwareConcurrency || 4 };
+    }
     let optFsr = E.fsrMode();
     R.userShadows = true;
     R.setShadows = on => { R.userShadows = !!on; applyShadowQ(); };
@@ -571,6 +627,7 @@
     let AQ = null;
     R.applyGfx = base => {
       R.optBase = base;
+      if (E.packResolve) base = { ...base, packFx: packOf(base).id };
       const tgt = 1000 / Math.min(60, base.fpsCap || 60);
       DR.target = tgt;
       if (base.auto) {
@@ -596,6 +653,7 @@
       scene.environment = op.refl && q !== 'low' ? envOut?.texture || null : null;
       R.waterU.uWQ.value = op.water === 'good' ? 1 : 0;
       R.post?.setOpts?.({ ao: op.ao, aa: op.aa, upscaler: op.upscaler, sharp: op.sharp, rt: op.rt || 'off' });
+      applyPack(packOf(op));   // набор шейдеров (после настроек постобработки: ему нужны её буферы)
       applyGrade();
       applyFog();
       if (R.w > 1) applyScale();
@@ -620,7 +678,7 @@
       E.gradeUniforms(E.gradeOf(G.grade), R.opt.grade, 0, gradeU);
       gradeU.sat *= 1 - .35 * M.night;   // ночью цвета блёкнут (как видит глаз в темноте)
       R.post.setGrade?.(gradeU);
-      R.post.bloom.strength = (q === 'high' ? 1 : .9) * G.bloom;
+      R.post.bloom.strength = (q === 'high' ? 1 : .9) * G.bloom * (R.pack?.bloom ?? 1);   // × набор шейдеров
     }
     // Разрешение вручную (замер, настройки): s — доля от плотности качества; dynRes выключается, пока не включат снова
     R.setRes = (s, auto = false) => { DR.on = !!auto; DR.set(s); applyScale(); };
@@ -650,6 +708,7 @@
     };
     R.dispose = () => {
       R.dead = true;
+      r.domElement.removeEventListener?.('webglcontextrestored', onRestore);
       for (const f of R.preRender) f.dispose?.();
       R.post?.dispose();
       if (halo) { halo.geometry.dispose(); halo.material.dispose(); }
@@ -668,11 +727,13 @@
     const mats = new Map(), texCache = new Map();
     const cache = (k, f) => mats.get(k) || (mats.set(k, f()), mats.get(k));
     // Обычный материал: PBR (шероховатый «пластик/краска»), на слабых — Ламберт
-    R.mat = (c, o = {}) => cache(`m${c}|${o.rough ?? ''}|${o.metal ?? ''}|${o.flat ? 1 : 0}|${o.emissive || ''}|${o.ds ? 1 : 0}`, () => {
+    R.mat = (c, o = {}) => cache(`m${c}|${o.rough ?? ''}|${o.metal ?? ''}|${o.flat ? 1 : 0}|${o.emissive || ''}|${o.ds ? 1 : 0}|${o.wave || ''}`, () => {
       const p = { color: c, side: o.ds ? T.DoubleSide : T.FrontSide };
       if (o.emissive) { p.emissive = new T.Color(o.emissive); p.emissiveIntensity = o.ei ?? 1; }
-      if (q === 'low') return new T.MeshLambertMaterial({ ...p, flatShading: !!o.flat });
-      return new T.MeshStandardMaterial({ ...p, roughness: o.rough ?? .82, metalness: o.metal ?? 0, flatShading: !!o.flat, envMapIntensity: o.env ?? .65 });
+      const m = q === 'low' ? new T.MeshLambertMaterial({ ...p, flatShading: !!o.flat })
+        : new T.MeshStandardMaterial({ ...p, roughness: o.rough ?? .82, metalness: o.metal ?? 0, flatShading: !!o.flat, envMapIntensity: o.env ?? .65 });
+      if (o.wave) R.wave(m, { kind: o.wave });   // листва — качается на ветру (набор шейдеров)
+      return m;
     });
     // Свечение (bloom): непрозрачный материал пишет в альфу буфера 1 + сила — постобработка размывает такие пиксели.
     // Шейдер общий для всех (сила — uniform). Копия материала (clone) метку не наследует — прозрачные копии не светятся
@@ -821,7 +882,7 @@
 
     // ═══ Детали ═══
     const matOf = p => p.m === 'basic' || p.m === 'glow' ? glow(p.c || '#ffffff') : p.m === 'ds' ? R.mat(p.c || '#cccccc', { ds: true }) : p.m?.isMaterial ? p.m
-      : R.mat(p.c || '#cccccc', { flat: p.s === 'ico' || p.flat, rough: p.rough, metal: p.metal, emissive: p.emissive });
+      : R.mat(p.c || '#cccccc', { flat: p.s === 'ico' || p.flat, rough: p.rough, metal: p.metal, emissive: p.emissive, wave: p.wave });
     const f3 = v => (+v).toFixed(3);
     const geoOf = p => {
       const s = p.s || 'box';
@@ -880,20 +941,20 @@
         const greens = o.colors || ['#3f8f3a', '#4ea544', '#62b84f', '#367d34'], v = o.v || 0;
         R.part(g, { s: 'cyl', r: .32 * k, r2: .22 * k, h: 1.9 * k, y: .95 * k, c: '#7a4f2c', seg: 7, rough: .95 });
         [[0, 2.45, 0, 1.25], [-.7, 2.0, .25, .9], [.7, 2.05, -.15, .95], [.1, 2.95, .1, .8]].forEach(([dx, dy, dz, rr], j) =>
-          R.part(g, { s: 'ico', r: rr * k, x: dx * k, y: dy * k, z: dz * k, c: greens[(v + j) % greens.length], sy: .9, det: 1 }));
+          R.part(g, { s: 'ico', r: rr * k, x: dx * k, y: dy * k, z: dz * k, c: greens[(v + j) % greens.length], sy: .9, det: 1, wave: 'leaves' }));
         ph?.addCyl({ x: o.x, z: o.z, y: 1.2 * k, r: .38 * k, hy: 1.2 * k, tag: 'tree' });
         return g;
       },
       pine(o, ph){
         const g = R.group(o.parent, o.x, 0, o.z), k = o.k || 1;
         R.part(g, { s: 'cyl', r: .26 * k, h: 1.2 * k, y: .6 * k, c: '#6b4426', seg: 6 });
-        [[1.5, 1.6, 1.6], [1.15, 1.4, 2.6], [.78, 1.2, 3.45]].forEach(([rr, hh, y]) => R.part(g, { s: 'cone', r: rr * k, h: hh * k, y: y * k, c: o.c || '#2f7d4a', seg: 8, flat: true }));
+        [[1.5, 1.6, 1.6], [1.15, 1.4, 2.6], [.78, 1.2, 3.45]].forEach(([rr, hh, y]) => R.part(g, { s: 'cone', r: rr * k, h: hh * k, y: y * k, c: o.c || '#2f7d4a', seg: 8, flat: true, wave: 'leaves' }));
         ph?.addCyl({ x: o.x, z: o.z, y: 1.2 * k, r: .32 * k, hy: 1.2 * k, tag: 'tree' });
         return g;
       },
       bush(o){
         const g = R.group(o.parent, o.x, 0, o.z), k = o.k || 1;
-        [[0, .45, 0, .6], [.45, .35, .1, .45], [-.4, .35, -.05, .42]].forEach(([dx, dy, dz, rr]) => R.part(g, { s: 'ico', r: rr * k, x: dx * k, y: dy * k, z: dz * k, c: o.c || '#3f9a4c', det: 1 }));
+        [[0, .45, 0, .6], [.45, .35, .1, .45], [-.4, .35, -.05, .42]].forEach(([dx, dy, dz, rr]) => R.part(g, { s: 'ico', r: rr * k, x: dx * k, y: dy * k, z: dz * k, c: o.c || '#3f9a4c', det: 1, wave: 'leaves' }));
         return g;
       },
       rock(o, ph){
@@ -1057,6 +1118,10 @@
       if (R.post && !R.post.ok) { R.post.dispose(); R.post = null; }
       if (!R.post) r.setPixelRatio(PR0);
     }
+    // страж графики (post.js E.gfxGuard): шейдер не собрался / кадр рисуется не так — выключить только это и запомнить;
+    // запомненное — сразу (до настроек игрока и первого кадра)
+    try { R.guard = E.gfxGuard ? E.gfxGuard(R) : null; } catch (e) { console.warn('страж графики:', e); R.guard = null; }
+    R.reapplyGfx = () => { if (R.optBase) R.applyGfx(R.optBase); };
     if (window.D37Opt?.fps && E.perf && !E.perf.on) E.perf.toggle(true);   // настройки: «Счётчик FPS» — сразу при входе в 3D
     // графика игрока (настройки) и свет по умолчанию — сразу, до первого кадра
     { const O = window.D37Opt; if (O) optSync(O); else R.applyGfx(E.gfxResolve({}, devInfo())); }

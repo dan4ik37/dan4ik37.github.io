@@ -35,7 +35,21 @@
     .define('upscaler', { def: 'fsr', list: ['fsr', 'nis', 'off'] })
     .define('sharp', { def: 50, min: 0, max: 100 })
     .define('rt', { def: 'off', list: ['off', 'on', 'high'] })
-    .define('framegen', { def: false, bool: 1 });
+    .define('framegen', { def: false, bool: 1 })
+    // ── «Шейдеры» — наборы для 2D и 3D (2D — js/engine/shade2d.js; 3D — js/engine/gfx.js E.PACKS, тот же ключ; render-test
+    //    сверяет список и имена). «Мультяшные» (toon) — только 3D: в 2D они выглядят как «Красивые» ──
+    .define('shaders', { def: 'auto', list: ['auto', 'normal', 'pretty', 'ultra', 'toon', 'retro'] })
+    .define('crt', { def: false, bool: 1 });
+  // имена 3D-наборов (как E.PACKS[id].name) и подсказки для 3D-игр
+  const PACKS = [['auto', '🤖 Авто'], ['normal', '🎨 Обычные'], ['pretty', '✨ Красивые'], ['ultra', '💎 Ультра'], ['toon', '🖍 Мультяшные'], ['retro', '👾 Ретро/пиксели']];
+  const PACK_HINT = {
+    auto: 'Само по устройству: телефон — «Обычные» (сильный — «Красивые»), мощный компьютер — «Красивые».',
+    normal: 'Как сейчас: проверено на всех устройствах, самое быстрое.',
+    pretty: 'Мягкий кинотон, лучи солнца сквозь листву, облака по небу, трава и листва на ветру, блики по дну воды.',
+    ultra: 'Всё из «Красивых» в полном качестве, перистые облака и глубина резкости (фон мягко размыт) — для мощных компьютеров.',
+    toon: 'Как мультфильм: свет полосами, чёрные контуры, сочные цвета.',
+    retro: 'Крупные пиксели и цвет полосами — как в старых играх. Можно с полосками старого телевизора.',
+  };
 
   const dev = () => { const E = root.D37E; try { return E?.quality ? E.quality() : 'mid'; } catch (e) { return 'mid'; } };   // устройство (body.low, телефон, ядра)
   const presetOf = p => PRESETS[p === 'auto' || p === 'custom' ? dev() : p] || PRESETS.mid;
@@ -53,7 +67,7 @@
     const O = root.D37Opt || (root.D37Opt = { rev: 0 });
     O.gfx = { preset: S.get('gfxPreset'), shadowQ: S.get('shadowQ'), ao: S.get('ao'), water: S.get('water'), refl: S.get('refl'), aa: S.get('aa'),
       fog: S.get('fog'), dist: S.get('dist'), grade: S.get('grade'), fpsCap: +S.get('fpsCap') || 0, res: S.get('res'), battery: S.get('battery'),
-      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen') };
+      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen'), shaders: S.get('shaders'), crt: S.get('crt') };
     O.rev++;
   }
   // ── Контекст открытой игры (её «качество — пересобрать мир»): перехватываем context(), окно его не отдаёт ──
@@ -111,7 +125,25 @@
     const HINT = { auto: 'Само подбирает под устройство и снижает, если тормозит.', low: 'Без теней и текстур — для слабых телефонов.', mid: 'Тени, вода, свечение — для телефонов и ноутбуков.',
       high: 'Мягкие тени, затенение в углах (AO), трассировка лучей, MSAA, рельеф текстур.', ultra: 'Для мощных компьютеров: тени 4096, AO и трассировка лучей выше, дальше видно.', custom: 'Своя — всё ниже на выбор.' };
     const pp = [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая'], ['ultra', 'Ультра'], ['custom', 'Своя']];
-    let h = head('3D-миры: «Мир Денчика», «Студия 3D»')
+    // «Шейдеры»: наборы картинки для 2D-игр («Подземье»…) и 3D (js/engine/shade2d.js — 2D; 3D-наборы — по этому же ключу)
+    const sh = S.get('shaders'), SH = root.D37E?.shade2d, is3d = !!(gctx?.engine || R);
+    const SHH = { auto: 'По пресету графики и устройству: на телефоне — «Обычные».', normal: 'Мягкий цветной свет, мерцание огня, ореолы — быстро на любом устройстве.',
+      pretty: 'Плюс свечение (bloom), рябь воды, дрожь воздуха над лавой, цвет кадра по краю мира, виньетка, объём текстур по свету.', ultra: 'Плюс свет ещё мягче, свечение шире, больше искр и частиц — для мощных компьютеров.',
+      toon: 'В 2D-играх — как «Красивые» (мультяшный вид — у 3D-миров).',
+      retro: 'Крупные пиксели, свет клетками и меньше оттенков — как старые игры. Можно с полосками старого телевизора.' };
+    // открыт 3D-мир: что включено на деле (страж графики мог вернуть предыдущий набор, на «низкой» — «Обычные»)
+    let shNow = '';
+    if (is3d) {
+      const fx = R?.pack, bad = (root.D37E?.gfxGuardInfo?.().off || []).filter(k => k.startsWith('pack:')).map(k => (PACKS.find(x => x[0] === k.slice(5)) || [0, k.slice(5)])[1]);
+      shNow = (fx && fx.id ? `Сейчас: ${(PACKS.find(x => x[0] === fx.id) || [0, fx.id])[1]}. ` : '') + (bad.length ? `На этом устройстве не заработали: ${bad.join(', ')} — включён предыдущий. ` : '');
+    } else if (sh === 'auto' && SH) shNow = `Сейчас: «${SH.PACKS[SH.pack()]?.name || ''}». `;
+    let h = head('Шейдеры')
+      + row('Набор', seg('shaders', [['auto', 'Авто'], ['normal', 'Обычные'], ['pretty', 'Красивые'], ['ultra', 'Ультра'], ['toon', 'Мультяшные'], ['retro', 'Ретро']]), shNow + ((is3d ? PACK_HINT : SHH)[sh] || ''))
+      + (sh === 'retro' ? row('Полоски CRT', sw('crt'), 'Строки и цветная маска, как у старого телевизора.') : '');
+    // открыта 2D-игра (не на 3D-движке) — ей нужны только шейдеры
+    let game2d = false; try { game2d = !gctx?.engine && typeof gamesActive !== 'undefined' && !!gamesActive; } catch (e) {}   // gamesActive — let в games.js
+    if (game2d) return h + note('Остальная графика — для 3D-миров («Мир Денчика», «Студия 3D»).');
+    h += head('3D-миры: «Мир Денчика», «Студия 3D»')
       + row('Пресет', seg('gfxPreset', pp), `${now} ${HINT[p] || ''}${steps}` + (gctx?.gfx ? '' : R ? ' Смена основы (низкая/средняя/высокая) — при следующем запуске.' : ''));
     if (p === 'custom') h += row('Основа', seg('gfx', [['auto', 'Авто'], ['low', 'Низкая'], ['mid', 'Средняя'], ['high', 'Высокая']]), 'Материалы и свет. Низкая — без теней и текстур (Ламберт). Мир перезагрузится.');
     const lowDis = { dis: low }, lowHint = 'На низкой основе этого нет.';
@@ -143,17 +175,54 @@
       + (R && R.r?.capabilities?.isWebGL2 ? row('📸 Фото с трассировкой пути', '<button type="button" class="gs-btn" data-ptphoto="1">📸 Снять</button>', 'Снимок того, что видно сейчас: честные лучи света (тени, отражения, отскоки), картинка уточняется на глазах. «💾 Сохранить» — PNG.') : '')
       + row('Плоский «Мир Денчика»', sw('world2d'), 'Мир без 3D — для очень слабых телефонов.')
       + note('Графику своего мира (время суток, небо, туман, цвет, вода) автор задаёт в «Студии 3D» → «🎨 Графика». Твои настройки — потолок: на слабом устройстве тяжёлое само выключается. Анимации сайта — во вкладке «🌐 Сайт».')
+      + guardBlock(R)
       + head('Технологии')
       + TECH.map(t => `<p class="gs-note"><b>${esc(t.name)}</b> — ${esc(t.who)}, лицензия ${esc(t.lic)} · <a href="${t.url}" target="_blank" rel="noopener noreferrer">лицензия и код</a></p>`).join('');
     return h;
   }
+  // ── 🛡 Страж графики (js/engine/post.js E.gfxGuard): что на этом устройстве выключено само и почему, «Проверить», «Вернуть» ──
+  const GNAME = { codes: 'коды в кадре (трава без затенения, блеск для отражений)', fol: 'трава и листва без затенения', ao: 'затенение в углах (AO)', rt: 'трассировка лучей',
+    fg: 'генерация кадров', nis: 'NIS', fsr: 'FSR 1', fxaa: 'FXAA', bloom: 'свечение', post: 'постобработка', test: 'самопроверка', patch: 'туман и тени v3', tier: 'графика выше низкой' };
+  const GWHY = { link: 'шейдер не собрался', color: 'менял цвет картинки', ao: 'затенение считалось неверно', nan: 'в кадре были «не числа»', crush: 'кадр гас', black: 'кадр был чёрным', error: 'проверка не удалась' };
+  let gLast = null;   // итог последней «🩺 Проверить»
+  function guardBlock(R){
+    const E = root.D37E; if (!E?.gfxGuardInfo) return '';
+    const g = E.gfxGuardInfo(), last = {};
+    for (const w of g.why) last[w.k] = w;
+    const list = g.off.map(k => (k.startsWith('pack:') ? `шейдеры «${(PACKS.find(x => x[0] === k.slice(5)) || [0, k.slice(5)])[1].replace(/^\S+\s/, '')}»` : GNAME[k] || k) + (last[k] ? ` (${GWHY[last[k].why] || last[k].why})` : ''));
+    const btn = (R?.guard ? '<button type="button" class="gs-btn" data-gguard="check">🩺 Проверить</button> ' : '') + (g.off.length ? '<button type="button" class="gs-btn" data-gguard="reset">↺ Вернуть всё</button>' : '');
+    const hint = g.off.length ? `На этом устройстве само выключилось: ${list.join('; ')}. «Вернуть всё» — включить снова (с новой версией сайта страж проверит всё заново сам).`
+      : 'Движок сам проверяет, что картинка рисуется правильно: шейдеры собрались, кадр не чёрный, затенение и отражения — числа. Сломалось на этом устройстве — выключит только это и запомнит.';
+    return head('🛡 Страж графики') + row('Проверка графики', btn || '—', esc(hint)) + (gLast ? note(esc(gLast)) : '');
+  }
+  function guardText(rep){
+    if (!rep) return 'Проверка не прошла: игра на паузе? Закрой настройки и попробуй ещё раз.';
+    const s = rep.sum || {}, bad = rep.log.length ? ' Выключено сейчас: ' + rep.log.map(x => GNAME[x.split(':')[0]] || x).join(', ') + '.' : '';
+    const parts = [`шейдеров ${rep.programs}${rep.failed ? `, не собралось ${rep.failed}` : ', все собрались'}`];
+    if (s.codes) parts.push(s.codes.bad ? `коды меняли цвет в ${s.codes.bad} точках` : 'коды в кадре — без следов');
+    if (s.ao) parts.push(`затенение ${Math.round(s.ao.mean * 100)}%`);
+    if (s.comp) parts.push(s.comp.bad ? `кадр гас в ${s.comp.bad} из ${s.comp.n} точек` : 'кадр собирается правильно');
+    return `${rep.failed || bad ? '⚠️' : '✅'} ${rep.gpu?.model || ''}: ${parts.join(', ')}.${bad}${rep.err ? ' Ошибка: ' + rep.err : ''}`;
+  }
+  root.document?.addEventListener?.('click', e => {
+    const b = e.target?.closest?.('[data-gguard]'); if (!b) return;
+    const E = root.D37E, R = liveR();
+    if (b.dataset.gguard === 'reset') { gLast = null; E?.gfxGuardReset?.(); S.refresh(); return; }
+    if (!R?.guard) return;
+    b.disabled = true; b.textContent = '⏳ Проверяем…';
+    let done = false;
+    const fin = rep => { if (done) return; done = true; gLast = guardText(rep); S.refresh(); };
+    R.guard.check(fin);
+    setTimeout(() => fin(null), 4000);   // кадров нет (пауза, панель скрыта) — честно сказать
+  });
   // благодарности: чужой код в графике (лицензии требуют сохранить уведомление — оно в js/engine/post.js)
   const TECH = [
     { name: 'AMD FidelityFX Super Resolution 1 (FSR 1)', who: '© Advanced Micro Devices, Inc.', lic: 'MIT', url: 'https://github.com/GPUOpen-Effects/FidelityFX-FSR/blob/master/license.txt' },
     { name: 'NVIDIA Image Scaling (NIS) SDK 1.0.3', who: '© NVIDIA Corporation & Affiliates', lic: 'MIT', url: 'https://github.com/NVIDIAGameWorks/NVIDIAImageScaling/blob/main/licence.txt' },
     { name: 'three.js r149', who: '© three.js authors', lic: 'MIT', url: 'https://github.com/mrdoob/three.js/blob/r149/LICENSE' },
   ];
-  S.addTab({ id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site'], render: tab });
+  // в обычной игре — только если она рисуется 2D-шейдерами (js/engine/shade2d.js: D37E.shade2d.use()), и там — только «Шейдеры»
+  S.addTab({ id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site', 'game'], when: c => c !== 'game' || (root.D37E?.shade2d?.users || 0) > 0, render: tab });
   // проценты у ползунков (окно настроек пишет число — поправляем подпись)
   root.document?.addEventListener?.('input', e => {
     const t = e.target, k = t?.dataset?.range; if (!FMT[k]) return;

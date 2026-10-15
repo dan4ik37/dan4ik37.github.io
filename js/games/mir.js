@@ -306,8 +306,8 @@
       roof.updateWorldMatrix(true, true);
       roof.traverse(c => { if (c.isMesh && c.material.userData?.tile) R.worldUV(c, c.material.userData.tile); });
       R.shadowsOn(roof);
-      // зона «внутри»
-      const zone = ph.addBox({ x: x0, z: z0, y: HT / 2, hx: hw - .3, hy: HT / 2 + .3, hz: hd - .3, trigger: true, tag: 'room', data: { room: o.id, roof } });
+      // зона «внутри» — от пола до чуть ниже крыши: на крыше (теперь на неё можно залезть) ты снаружи, крыша не прячется
+      const zone = ph.addBox({ x: x0, z: z0, y: HT / 2 - .3, hx: hw - .3, hy: HT / 2, hz: hd - .3, trigger: true, tag: 'room', data: { room: o.id, roof } });
       rooms.push({ id: o.id, roof, zone, name: o.name });
       // вывеска над дверью
       if (o.sign) {
@@ -586,6 +586,7 @@
         }
       }, { seed: 4 });
       const tm = new T.MeshStandardMaterial({ map: tuftMap, alphaTest: .45, side: T.DoubleSide, roughness: .9, envMapIntensity: .5 });
+      R.wave?.(tm, { kind: 'grass', h: .5 });   // трава качается на ветру (наборы шейдеров «Красивые» и выше; R.wave — render.js)
       const tg = new T.BufferGeometry(), pos = [], uv = [], nor = [];
       for (let i = 0; i < 3; i++) {   // три скрещенные плоскости
         const a = i / 3 * PI, cx = Math.cos(a) * .32, cz = Math.sin(a) * .32, h = .5;
@@ -685,6 +686,7 @@
   function start3d(){
     const E = window.D37E, wrap = S.wrap;
     const R = S.R = E.renderer(wrap);
+    R.guardBlack = true;   // страж графики (post.js): днём здесь кадр не бывает чёрным (пещер нет) — значит, сломалось
     R.r.domElement.classList.add('wld-gl');
     // генерация кадров (×2): другие игроки — подвижные (свой персонаж движок знает сам — по R.follow)
     R.fgMovers = () => { const L = []; if (S?.players) for (const p of S.players.values()) if (p.ch) L.push([p.key, p.ch.x, p.ch.y, p.ch.z]); return L; };
@@ -740,6 +742,8 @@
     // ── настройки/полный экран: своя панель вместо шапки игры; окну ⚙️ — пересобрать мир (качество), 2D, вид; вид при входе ──
     S.stage = S.el.closest('#gamesStage'); S.stage?.classList.add('gm-own-bar');
     S.offCtx = window.D37Settings?.context({ engine: true, R: () => S?.R, gfx: () => setTimeout(() => { if (S) onAct('gfx-apply'); }, 60), world2d: v => setTimeout(() => { if (S && v) switch2d(true); }, 60), view: v => { if (S?.rig && S.rig.mode !== v) toggleView(); }, onClose: () => S?.C?.reset_state() });
+    // страж графики (js/engine/post.js): без своих кусков шейдеров / «низкая» / «↺ Вернуть всё» — только с новым рендерером: мир пересобирается
+    { const onFb = e => { if (S && e.detail?.rebuild) setTimeout(() => { if (S) onAct('gfx-apply'); }, 60); }; window.addEventListener('d37:gfxfallback', onFb); S.offFb = () => window.removeEventListener('d37:gfxfallback', onFb); }
     if (window.D37Settings?.get('view') === 'first') { rig.mode = 'first'; H.crosshair(true); }
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
@@ -910,6 +914,9 @@
       Object.assign(ps, { x: sp.x, y: 0, z: sp.z, yaw: sp.yaw, moving: false, speed: 0, air: false, sit: !sp.stand, seatY: sp.stand ? null : sp.y, roll: -1, hang: false, ladder: false, pk: '' });
       return;
     }
+    // давно нет вестей (вкладка свёрнута, партия поверх мира, связь пропала), а он «шёл» — стоп: на ходу сверка
+    // приходит раз в 2,5 с, иначе человечек бежал бы у всех бесконечно
+    if ((p.wish.x || p.wish.z) && now() - (p.stAt || 0) > 4000) { p.wish = { x: 0, z: 0 }; p.spd = 0; }
     if (p.mode === 'move') {
       S.ph.move(ch, dt, p.wish, p.spd, false);
       // сверка с последним сообщением — мягко
@@ -1124,6 +1131,7 @@
   function applySt(p, d){
     const x = num(d.x), y = num(d.y), z = num(d.z);
     if (x === null || y === null || z === null) return;
+    p.stAt = now();
     const [cx, cz] = clampPos(x, z), cy = Math.max(-10, Math.min(220, y)), U = window.D37E.UNIT;   // ниже — бункер и море, выше — вертолёты
     const ex = cx - p.ch.x, ey = cy - p.ch.y, ez = cz - p.ch.z;
     if (Math.hypot(ex, ey, ez) > 1.8) { p.ch.x = cx; p.ch.y = cy; p.ch.z = cz; p.err = { x: 0, y: 0, z: 0 }; }
@@ -1163,6 +1171,18 @@
     if (zx) d.zx = zx.data;
     if (S.jumpVy) { d.vy = r2(S.jumpVy); S.jumpVy = 0; }
     S.lastSend = { key, t: S.sendT }; S.forceSend = false;
+    send(d);
+  }
+  // Мир встал на паузу (партия поверх мира, вкладка свёрнута): сразу «стою» — иначе у других человечек бежал бы дальше
+  function sendStop(){
+    if (!S?.P?.ch || !S.keys) return;
+    const P = S.P, ch = P.ch, mode = MODES.indexOf(P.mode === 'pk' ? 'pk' : P.mode);
+    const ph = window.World3D?.phoneCode?.(S.phoneHand) || 0;
+    const d = { t: 'st', x: r2(ch.x), y: r2(ch.y), z: r2(ch.z), a: -1, s: 0, k: 0, m: Math.max(0, mode), yw: r2(P.yaw) };
+    if (ph) d.ph = ph;
+    const zx = S.zones?.stx?.();   // зоны мира (роль, транспорт): без поля другие решили бы, что он вышел из машины
+    if (zx) d.zx = zx.data;
+    S.lastSend = { key: `${mode}|-1|0|0|${ph}|${zx ? zx.sig : ''}`, t: S.sendT };
     send(d);
   }
 
@@ -1313,7 +1333,7 @@
     q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly && typeof openGlobalAuth === 'function') openGlobalAuth(); });
     q('.wld-say input').addEventListener('keydown', e => { if (e.key === 'Escape') e.target.blur(); });
     el.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b) && !b.closest('.mp')) onAct(b.dataset.act, b); });   // .mp — игра поверх мира: её data-act не наши
-    const onVis = () => { if (document.hidden) S.hiddenAt = Date.now(); else S.hiddenAt = 0; };
+    const onVis = () => { if (document.hidden) { S.hiddenAt = Date.now(); sendStop(); } else S.hiddenAt = 0; };
     document.addEventListener('visibilitychange', onVis);
     S.cleanupUi = () => document.removeEventListener('visibilitychange', onVis);
   }
@@ -1488,6 +1508,7 @@
     const st = S; if (!st) return;
     if (on) {
       closePops(); closeMenu();   // меню Esc — не поверх партии
+      sendStop();   // другим — «стою», пока идёт партия
       st.loop?.pause(true);
       if (st.C) { st.C.reset_state(); st.C.off = true; }
       if (st.I) { st.I.unlock?.(); st.I.reset?.(); st.I.enabled = false; }
@@ -1730,7 +1751,7 @@
     s.stopped = true;
     clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT);
     if (s.mySeat) { s.mySeat = null; }
-    try { s.menu?.close(); s.offCtx?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран
+    try { s.menu?.close(); s.offCtx?.(); s.offFb?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран, страж графики
     leaveChannel();
     try { s.loop?.stop(); } catch (e) {}
     try { s.unfollow?.(); } catch (e) {}

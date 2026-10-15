@@ -990,7 +990,7 @@
         if (it.k === 'house' && it.l > 0 && x.roof) {
           v.house = { it, cx, cz, r, roof: x.roof, door: x.door, hw: x.room.hw };
           const [wx, wz] = lotToWorld(lot, cx, cz);
-          v.bodies.push(ph.addBox({ x: wx, z: wz, y: 1.6, hx: x.room.hw - .1, hy: 1.9, hz: x.room.hw - .1, yaw: lot.yaw + r * PI / 2, trigger: true, tag: 'room', data: { room: 'mb' + info.plot, roof: x.roof } }));
+          v.bodies.push(ph.addBox({ x: wx, z: wz, y: 1.2, hx: x.room.hw - .1, hy: 1.5, hz: x.room.hw - .1, yaw: lot.yaw + r * PI / 2, trigger: true, tag: 'room', data: { room: 'mb' + info.plot, roof: x.roof } }));   // до 2,7 — ниже крыши (стены 3): на крыше ты снаружи
         }
         if (x.ladder && it.l > 0) {
           const L = x.ladder, [lx, lz] = rotXZ(r, L.x, L.z), [wx, wz] = lotToWorld(lot, cx + lx, cz + lz), [ex, ez] = rotXZ(r, L.ex, L.ez), [wex, wez] = lotToWorld(lot, cx + ex, cz + ez);

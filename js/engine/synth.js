@@ -234,6 +234,9 @@
     return d;
   };
   E.synth = { render: synthRender, NAMES, FLOORS, RATE, Bp };
+  // Свои звуки игры (так же — шум через резонаторы): E.synth.add(имя, k => Float32Array), k = { make, Bp, N, exp, RATE, rng }
+  // («Кубомир»: копать камень/дерево/землю, поставить, мычание…). Уже есть такое имя — false
+  E.synth.add = (name, f) => { if (FX[name] || LOOPS[name] || typeof f !== 'function') return false; FX[name] = () => f({ make, Bp, N, exp, RATE, rng }); NAMES.push(name); return true; };
 
   // ═══ Проигрывание (WebAudio): сторона и затухание по расстоянию ═══
   E.audio = function (){

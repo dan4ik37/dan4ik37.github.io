@@ -10,6 +10,7 @@
 --  «Судоку» (sudoku1..4, sudoku_daily, sudoku_duel) + рекорды дня daily_top(),
 --  «Крокодил» (krokodil — 10 рисунков бота, krokodil_online — компанией), «Балда» (balda_easy / _normal / _hard, balda_online),
 --  «Домино» (domino — с ботами, domino_online), «Филворд» (fillword — уровни, fillword_daily — «Филворд дня», fillword_duel),
+--  «Кубомир» (kubomir — достижение в «Выживании»: счёт — сколько достижений, XP — как за победу, в общем лимите игр).
 --  «Подземье» (podzem — рекорд глубины в метрах, без XP; podzem_boss1 / podzem_boss2 — победа над боссом).
 --  «Мир Денчика», Боевая зона (mirwar — раунд: очки = выбитые, победа — команда/первое место; 3 XP, одна «игра» в лимите 3 побед).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
@@ -70,6 +71,7 @@ returns int language sql immutable as $$
     when p_game in ('domino', 'domino_online') then 500
     when p_game in ('fillword', 'fillword_duel') then 3000
     when p_game = 'fillword_daily' then 2000
+    when p_game = 'kubomir' then 30
     when p_game = 'podzem' then 100000                       -- «Подземье»: рекорд глубины, метры (без XP)
     when p_game in ('podzem_boss1', 'podzem_boss2') then 600 -- победа над боссом: 600 − секунд боя
     when p_game = 'mirwar' then 200                          -- «Мир Денчика», Боевая зона: выбитые за раунд (mir-war.js)
@@ -116,6 +118,7 @@ returns int language sql immutable as $$
     when 'balda_easy' then 1 when 'balda_normal' then 3 when 'balda_hard' then 6 when 'balda_online' then 5
     when 'domino' then 4 when 'domino_online' then 6
     when 'fillword' then 2 when 'fillword_daily' then 6 when 'fillword_duel' then 4
+    when 'kubomir' then 4
     when 'podzem_boss1' then 6 when 'podzem_boss2' then 10
     when 'mirwar' then 3
     else 0 end;
