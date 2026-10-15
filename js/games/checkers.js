@@ -177,44 +177,100 @@
   }
 
   // me — мой цвет ('w'/'b'); у бота — противоположный; вдвоём — оба
+  // Отмена: с ботом — твой ход и ответ бота, одна за партию бесплатно (на случай промаха), дальше — партия тренировочная
+  // (победа без XP и рекорда: иначе отменами обыгрывают «Сложного»); вдвоём — сколько угодно; онлайн — нельзя, ход
+  // подтверждается «✅ Сходить». «↻ Заново», «⚙ Соперник» посреди партии и «🏳 Сдаться» спрашивают «Точно?».
   function start(level, onlineMe){
     timers.forEach(clearTimeout); timers = [];
     const prevMe = G?.me;
     const me = onlineMe || (level === 'duo' ? 'w' : (prevMe === 'w' ? 'b' : 'w'));   // с ботом цвет по очереди
-    G = { level, board: initial(), turn: 'w', me, bot: level === 'duo' || onlineMe ? null : other(me), sel: null, moves: [], over: false, quiet: 0, n: 0, last: null, online: !!onlineMe };
+    G = { level, board: initial(), turn: 'w', me, bot: level === 'duo' || onlineMe ? null : other(me), sel: null, moves: [], over: false, quiet: 0, n: 0, last: null, online: !!onlineMe,
+      hist: [], takebacks: 0, practice: false, pend: null };
     const badge = G.online ? `👥 против ${esc(R?.opp?.nick || 'соперника')}` : LEVELS[level].label;
     root.innerHTML = `<div class="ck">
         <div class="ct-top"><span class="ct-badge">${badge}</span><span class="ct-score">Ты: <b>${level === 'duo' ? '⚪/⚫' : me === 'w' ? '⚪ белые' : '⚫ чёрные'}</b></span><span class="ct-status" id="kStatus"></span></div>
         <div class="ck-board" id="kBoard"></div>
-        <div class="ct-actions" id="kActions">${G.online ? '<button id="kGiveUp">🏳 Сдаться</button>' : '<button id="kAgain">↻ Заново</button><button id="kSetup">⚙ Соперник</button>'}</div>
+        <div class="ct-actions" id="kActions"></div>
       </div>`;
-    if (G.online) root.querySelector('#kGiveUp').onclick = () => finish(false, 'Ты сдался', true);
-    else { root.querySelector('#kAgain').onclick = () => start(level); root.querySelector('#kSetup').onclick = renderSetup; }
+    root.querySelector('#kActions').onclick = onAction;
+    turnStart();
+  }
+  // Кнопки под доской — по состоянию партии
+  function actions(){
+    const el = root?.querySelector('#kActions');
+    if (!el || G.over) return;
+    if (G.pend) { el.innerHTML = '<button class="gk-go" data-k="commit">✅ Сходить</button><button data-k="uncommit">↩ Отмена</button>'; return; }
+    if (G.online) { el.innerHTML = '<button data-k="giveup">🏳 Сдаться</button>'; return; }
+    const can = G.level === 'duo' ? G.hist.length > 0 : G.hist.some(h => h.turn === G.me);
+    el.innerHTML = `<button data-k="undo"${can ? '' : ' disabled'}>${G.level !== 'duo' && G.takebacks >= 1 && !G.practice ? '↩ Отменить ещё' : '↩ Отменить ход'}</button><button data-k="again">↻ Заново</button><button data-k="setup">⚙ Соперник</button>`;
+  }
+  async function onAction(e){
+    const b = e.target.closest('[data-k]');
+    if (!b || b.disabled || !G) return;
+    const k = b.dataset.k, g0 = G;
+    if (k === 'commit') { if (G.pend) commitMove(G.pend); return; }
+    if (k === 'uncommit') { G.pend = null; actions(); draw(); return; }
+    if (k === 'undo') { undo(); return; }
+    // посреди партии — не потерять её от случайного нажатия
+    const busy = !G.over && G.n >= 2;
+    if (k === 'giveup') {
+      if (window.GameKit && !await GameKit.ask({ icon: '🏳', title: 'Сдаться?', text: 'Партия закончится поражением.', yes: '🏳 Сдаться', no: 'Играть дальше', danger: true })) return;
+      if (G === g0 && !G.over) finish(false, 'Ты сдался', true);
+      return;
+    }
+    if ((k === 'again' || k === 'setup') && busy && window.GameKit && !await GameKit.ask({ icon: '↻', title: k === 'again' ? 'Начать заново?' : 'Сменить соперника?', text: 'Эта партия не доиграна и пропадёт.', yes: k === 'again' ? '↻ Заново' : '⚙ Сменить', no: 'Играть дальше' })) return;
+    if (G !== g0) return;
+    if (k === 'again') start(G.level); else if (k === 'setup') { timers.forEach(clearTimeout); timers = []; G.over = true; renderSetup(); }
+  }
+  // «↩ Отменить ход»: с ботом — до твоего последнего хода (и его ответа), вдвоём — один ход
+  async function undo(){
+    if (!G || G.over || G.online || !G.hist.length) return;
+    if (G.level !== 'duo') {
+      if (!G.hist.some(h => h.turn === G.me)) return;
+      if (G.takebacks >= 1 && !G.practice) {
+        const g0 = G, n0 = G.n;
+        if (window.GameKit && !await GameKit.ask({ icon: '🎓', title: 'Отменить ещё ход?', text: 'Одна отмена за партию — на случай промаха — уже была. Отменишь ещё — партия станет тренировочной: победа не даст XP и не попадёт в рекорды.', yes: '↩ Отменить', no: 'Играть дальше' })) return;
+        if (G !== g0 || G.over || G.n !== n0) return;
+        G.practice = true;
+      }
+      G.takebacks++;
+    }
+    timers.forEach(clearTimeout); timers = [];   // бот ещё думал — пусть не ходит
+    let h = G.hist.pop();
+    if (G.level !== 'duo') while (h.turn !== G.me && G.hist.length) h = G.hist.pop();
+    G.board = h.board; G.turn = h.turn; G.quiet = h.quiet; G.n = h.n; G.last = h.last; G.pend = null;
+    api.sfx('tick');
     turnStart();
   }
 
   const flipped = () => G.me === 'b';
   function draw(){
     const board = root.querySelector('#kBoard');
-    const targets = new Set(G.sel ? G.moves.filter(m => m.from[0] === G.sel[0] && m.from[1] === G.sel[1]).map(m => m.to.join(',')) : []);
+    const pend = G.pend;
+    const B = pend ? apply(G.board, pend) : G.board;   // онлайн: ход ждёт «Сходить» — уже на доске
+    const targets = new Set(G.sel && !pend ? G.moves.filter(m => m.from[0] === G.sel[0] && m.from[1] === G.sel[1]).map(m => m.to.join(',')) : []);
     const movable = new Set(G.moves.map(m => m.from.join(',')));
-    const myTurn = isMyTurn();
+    const myTurn = isMyTurn() && !pend;
+    const path = pend ? pend.path : G.last;
     let html = '';
     for (let vr = 0; vr < 8; vr++) for (let vc = 0; vc < 8; vc++) {
       const r = flipped() ? 7 - vr : vr, c = flipped() ? 7 - vc : vc;
-      const dark = (r + c) % 2 === 1, p = G.board[r][c], k = r + ',' + c;
+      const dark = (r + c) % 2 === 1, p = B[r][c], k = r + ',' + c;
       const cls = ['ck-cell', dark ? 'd' : 'l'];
-      if (G.sel && G.sel[0] === r && G.sel[1] === c) cls.push('sel');
+      if (G.sel && !pend && G.sel[0] === r && G.sel[1] === c) cls.push('sel');
       if (targets.has(k)) cls.push('tgt');
       if (myTurn && movable.has(k)) cls.push('can');
-      if (G.last && G.last.some(([a, b]) => a === r && b === c)) cls.push('last');
+      if (path && path.some(([a, b]) => a === r && b === c)) cls.push(pend ? 'pend' : 'last');
       html += `<div class="${cls.join(' ')}" data-r="${r}" data-c="${c}">${p ? `<span class="ck-p ${colorOf(p)}${isKing(p) ? ' k' : ''}"></span>` : ''}</div>`;
     }
     board.innerHTML = html;
   }
   function isMyTurn(){ return !G.over && (G.level === 'duo' || G.turn === G.me); }
 
-  function status(t){ root.querySelector('#kStatus').innerHTML = t; }
+  function status(t, mine){
+    const el = root.querySelector('#kStatus');
+    el.innerHTML = mine != null && window.GameKit ? GameKit.turn(mine, t) + (G.practice ? '<span class="gk-prac" title="Были отмены ходов — победа без XP и рекорда">🎓 тренировка</span>' : '') : t;
+  }
 
   function turnStart(){
     G.moves = legalMoves(G.board, G.turn);
@@ -227,10 +283,11 @@
     }
     if (G.quiet >= 40) { draw(); return finish(null, 'Ничья: 40 ходов без взятий'); }
     const mustCap = G.moves[0].caps.length > 0;
-    if (G.level === 'duo') status(`Ходят ${G.turn === 'w' ? '⚪ белые' : '⚫ чёрные'}${mustCap ? ' · бить обязательно!' : ''}`);
-    else if (G.turn === G.me) status(`Твой ход${mustCap ? ' · бить обязательно!' : ''}`);
-    else status(G.online ? `Ход ${esc(R?.opp?.nick || 'соперника')}…` : '🤖 думает…');
+    if (G.level === 'duo') status(`Ходят ${G.turn === 'w' ? '⚪ белые' : '⚫ чёрные'}${mustCap ? ' · бить обязательно!' : ''}`, true);
+    else if (G.turn === G.me) status(`🟢 Твой ход${mustCap ? ' · бить обязательно!' : ''}`, true);
+    else status(G.online ? `⏳ Ход ${esc(R?.opp?.nick || 'соперника')}…` : '🤖 думает…', false);
     draw();
+    actions();
     root.querySelector('#kBoard').onclick = onClick;
     if (G.bot && G.turn === G.bot) later(() => {
       if (!G || G.over || !root) return;
@@ -243,21 +300,34 @@
     const cell = e.target.closest('.ck-cell');
     if (!cell || !isMyTurn()) return;
     const r = +cell.dataset.r, c = +cell.dataset.c;
+    // онлайн-ход ждёт подтверждения: та же клетка — сходить, другая — передумал
+    if (G.pend) { const t = G.pend.to; if (t[0] === r && t[1] === c) commitMove(G.pend); else { G.pend = null; actions(); draw(); } return; }
     if (G.sel) {
       const opts = G.moves.filter(m => m.from[0] === G.sel[0] && m.from[1] === G.sel[1] && m.to[0] === r && m.to[1] === c);
       if (opts.length) {
         // Несколько путей в одну клетку — берём тот, где сбито больше
         const m = opts.sort((a, b) => b.caps.length - a.caps.length)[0];
+        if (G.online) { G.pend = m; api.sfx('tick'); actions(); draw(); return; }
         doMove(m);
-        if (G.online) R?.send({ type: 'move', from: m.from, to: m.to, caps: m.caps.length, n: G.n });
         return;
       }
     }
-    if (G.moves.some(m => m.from[0] === r && m.from[1] === c)) { G.sel = [r, c]; api.sfx('tick'); draw(); }
+    if (G.moves.some(m => m.from[0] === r && m.from[1] === c)) {
+      // та же шашка ещё раз — выбор снят
+      if (G.sel && G.sel[0] === r && G.sel[1] === c) G.sel = null; else { G.sel = [r, c]; api.sfx('tick'); }
+      draw();
+    }
     else if (G.board[r][c] && colorOf(G.board[r][c]) === G.turn && G.moves[0]?.caps.length) status('Бить обязательно — выбери шашку, которая может бить');
+    else if (G.sel) { G.sel = null; draw(); }   // нажал мимо — выбор снят
+  }
+  function commitMove(m){
+    G.pend = null;
+    doMove(m);
+    if (G.online) R?.send({ type: 'move', from: m.from, to: m.to, caps: m.caps.length, n: G.n });
   }
 
   function doMove(m){
+    if (!G.online) G.hist.push({ board: G.board.map(row => row.slice()), turn: G.turn, quiet: G.quiet, n: G.n, last: G.last });   // для «Отменить ход»
     G.board = apply(G.board, m);
     G.n++;
     G.quiet = m.caps.length ? 0 : G.quiet + 1;
@@ -273,7 +343,8 @@
     timers.forEach(clearTimeout); timers = [];
     draw();
     const left = G.board.flat().filter(p => colorOf(p) === G.me).length;
-    status(win === null ? `🤝 ${reason}` : win ? `🎉 Победа! ${reason}` : `😔 Поражение. ${reason}`);
+    G.pend = null;
+    status((win === null ? `🤝 ${reason}` : win ? `🎉 Победа! ${reason}` : `😔 Поражение. ${reason}`) + (G.practice ? ' <span class="gk-prac" title="Были отмены ходов — без XP и рекорда">🎓 тренировка</span>' : ''));
     api.sfx(win ? 'win' : win === null ? 'ok' : 'bad');
     if (G.online) {
       if (byMe && !win) R?.send({ type: 'lose' });
@@ -284,7 +355,11 @@
       if (G.n >= 10 && win !== null) api.report('checkers_online', win, left, 0);   // короткие партии — без XP
       return;
     }
-    if (G.level !== 'duo' && win !== null) api.report('checkers_' + G.level, win, left, win ? left : 0);
+    // тренировочная (были лишние отмены) — партия сыграна, но победа не в зачёт: ни XP, ни рекорда
+    const counted = win && !G.practice;
+    if (G.level !== 'duo' && win !== null) api.report('checkers_' + G.level, counted, counted ? left : 0, counted ? left : 0);
+    const acts = root.querySelector('#kActions');
+    if (acts) acts.innerHTML = `<button class="ct-start" data-k="again">↻ Ещё партия</button><button data-k="setup">⚙ Соперник</button>`;
   }
 
   // ═══ Онлайн ═══
@@ -350,6 +425,7 @@
       if (GameRoom.validCode(gameApi.param)) online(gameApi.param); else renderSetup();
     },
     unmount(){ timers.forEach(clearTimeout); timers = []; if (G) G.over = true; R?.leave(); R = null; root = null; },
-    _test: { initial, legalMoves, apply },   // для проверки правил
+    _test: { initial, legalMoves, apply, search, evaluate },   // для проверки правил
+    _dbg: () => G,   // проверка в браузере: состояние партии
   };
 })();

@@ -233,6 +233,7 @@
   let root, api, wrap, cv, ctx, bar, panel, ov, S = null, raf = 0, last = 0, acc = 0, mode = 'menu', hooks = null, stopDuel = null;
   let dpr = 1, cell = 40, bx = 0, by = 0, sel = null, hover = null, mapId = 'meadow', runId = '', adGold = false, adCont = false, contUsed = false, look = null;
   let MP = null;   // «Вместе»: { room, np, host, me, peer, pend: [], seq, remoteT, hashes, ... }
+  let sellArm = null, sellT = 0;   // «Продать» ждёт второго нажатия (id башни)
   const C = () => window.D37Coins, CH = () => window.D37Char;
   const num = n => Math.round(n).toLocaleString('ru');
   const sprites = new Map();
@@ -311,7 +312,14 @@
     const a = b.dataset.act;
     if (a.startsWith('build:')) { if (sel && 'x' in sel) { if (issue({ c: 'build', x: sel.x, y: sel.y, ty: a.slice(6) })) api.sfx('move'); sel = null; renderPanel(); } return; }
     if (a === 'up') { if (sel?.tw && issue({ c: 'up', id: sel.tw })) api.sfx('ok'); renderPanel(); return; }
-    if (a === 'sell') { if (sel?.tw && issue({ c: 'sell', id: sel.tw })) api.sfx('tick'); sel = null; renderPanel(); return; }
+    // «Продать» — два нажатия: первое спрашивает «Точно?» (3,5 с), второе продаёт (60 % цены назад не вернуть)
+    if (a === 'sell') {
+      if (!sel?.tw) return;
+      if (sellArm !== sel.tw) { sellArm = sel.tw; clearTimeout(sellT); sellT = setTimeout(() => { sellArm = null; renderPanel(); }, 3500); api.sfx('tick'); renderPanel(); return; }
+      sellArm = null; clearTimeout(sellT);
+      if (issue({ c: 'sell', id: sel.tw })) api.sfx('tick');
+      sel = null; renderPanel(); return;
+    }
     if (a === 'close') { sel = null; renderPanel(); return; }
     if (a === 'next') { issue({ c: 'next' }); return; }
     if (a === 'speed') { if (!MP || MP.host) issue({ c: 'speed', v: S.speed === 3 ? 1 : S.speed + 1 }); return; }
@@ -353,7 +361,7 @@
       const T = TOWERS[t.ty], lv = t.lvl - 1, mine = t.p === me();
       const upCost = t.lvl < 3 ? T.up[t.lvl - 1] : 0;
       html = `<div class="td-ti"><span class="ic">${T.e}</span><div><b>${T.name} · ур. ${t.lvl}</b><small>Урон ${T.dmg[lv]}${T.splash ? ' по площади' : ''}${T.chain ? ` · цепь ×${T.chain[lv]}` : ''}${T.slow ? ` · замедление ${Math.round(T.slow[lv] * 100)}%` : ''} · радиус ${T.range[lv]}</small>${mine ? '' : '<small>Башня напарника</small>'}</div></div>
-        ${mine ? `<div class="td-acts">${t.lvl < 3 ? `<button type="button" class="td-b go" data-act="up"${g < upCost ? ' disabled' : ''}>⬆ Улучшить · 💰 ${upCost}</button>` : '<span class="td-max">Максимум</span>'}<button type="button" class="td-b" data-act="sell">Продать · +${Math.floor(t.spent * .6)}💰</button></div>` : ''}
+        ${mine ? `<div class="td-acts">${t.lvl < 3 ? `<button type="button" class="td-b go" data-act="up"${g < upCost ? ' disabled' : ''}>⬆ Улучшить · 💰 ${upCost}</button>` : '<span class="td-max">Максимум</span>'}<button type="button" class="td-b${sellArm === t.id ? ' gk-armed' : ''}" data-act="sell">${sellArm === t.id ? 'Точно продать?' : 'Продать'} · +${Math.floor(t.spent * .6)}💰</button></div>` : ''}
         <button type="button" class="td-x" data-act="close">✕</button>`;
     } else if (hooks) {
       html = `<div class="td-pt">⚔️ Отправить монстров сопернику:</div><div class="td-sends">${SENDS.map((s, i) => `<button type="button" class="td-b" data-act="send:${i}"${g < s.cost ? ' disabled' : ''}>${FOES[s.ty].e}×${s.n} · 💰 ${s.cost}</button>`).join('')}</div>`;
@@ -687,6 +695,7 @@
     },
     unmount(){
       stopRun();
+      clearTimeout(sellT); sellArm = null;
       for (const [t, ev, fn] of listeners.splice(0)) t.removeEventListener(ev, fn);
       if (MP) { MP.np?.close(); MP.room?.leave(); MP = null; }
       stopDuel?.(); stopDuel = null; hooks = null;

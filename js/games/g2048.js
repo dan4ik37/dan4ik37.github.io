@@ -7,13 +7,17 @@
   const N = 4, DUEL_SEC = 180;
   let root, api, keyHandler, board = null, stopDuel = null;
 
+  // «↩ Отменить» — последний ход назад (одна ступень): 2 раза за игру, VIP и персоналу — 5 (как подсказка в «5 букв»).
+  // Больше нельзя: у «2048» таблица рекордов. В соревновании отмены нет (плитки у соперников разошлись бы).
+  const UNDO_FREE = 2, UNDO_VIP = 5;
   // Одна доска: el — куда рисовать, opt: { rand, timeLimit, onScore(score), onEnd(score, won2048) }
   function createBoard(el, opt){
     const rand = opt.rand || Math.random;
-    let grid, score = 0, won = false, over = false, touch = null, timer = 0, left = opt.timeLimit || 0;
+    let grid, score = 0, won = false, over = false, touch = null, timer = 0, left = opt.timeLimit || 0, prev = null, undos = 0;
+    const undoMax = () => (window.GameKit?.vipPerk?.() ? UNDO_VIP : UNDO_FREE);
     el.innerHTML = `<div class="g2">
         <div class="ct-top"><span class="ct-score">Счёт: <b class="g2Score">0</b></span>
-          ${opt.timeLimit ? '<span class="ct-timer g2Timer"></span>' : '<span class="ct-score">Рекорд: <b class="g2Best">0</b></span><button class="g2-new">↻ Заново</button>'}</div>
+          ${opt.timeLimit ? '<span class="ct-timer g2Timer"></span>' : '<span class="ct-score">Рекорд: <b class="g2Best">0</b></span><button class="g2-new g2-undo" title="Отменить последний ход">↩ <b class="g2UndoN"></b></button><button class="g2-new g2-reset">↻ Заново</button>'}</div>
         <div class="g2-wrap"><div class="g2-board"></div>
           <div class="g2-over" hidden><div><span class="g2-over-t">Ходов нет!</span><br>Счёт: <b>0</b></div>${opt.timeLimit ? '' : '<button class="ct-start g2-again">↻ Ещё раз</button>'}</div></div>
         <div class="ct-note">Стрелки / WASD на клавиатуре, свайпы на телефоне. Соединяй одинаковые плитки.</div>
@@ -49,6 +53,8 @@
     function draw(fresh){
       q('.g2Score').textContent = score;
       const best = q('.g2Best'); if (best) best.textContent = Math.max(api.local().best || 0, score);
+      const ub = q('.g2-undo');
+      if (ub) { const n = Math.max(0, undoMax() - undos); ub.disabled = !prev || over || !n; q('.g2UndoN').textContent = n; ub.title = n ? `Отменить последний ход (осталось ${n})` : 'Отмены на эту игру кончились'; }
       q('.g2-board').innerHTML = grid.map((row, r) => row.map((v, c) =>
         `<div class="g2-cell${v ? ' v' + Math.min(v, 4096) : ''}${fresh && fresh[0] === r && fresh[1] === c ? ' fresh' : ''}">${v || ''}</div>`).join('')).join('');
     }
@@ -65,6 +71,7 @@
     }
     function move(dir){
       if (over) return;
+      const before = { grid: grid.map(row => row.slice()), score, won };   // для «↩ Отменить»
       let moved = false, gained = 0;
       const get = (i, j) => dir === 'left' ? [i, j] : dir === 'right' ? [i, N - 1 - j] : dir === 'up' ? [j, i] : [N - 1 - j, i];
       for (let i = 0; i < N; i++) {
@@ -79,6 +86,7 @@
         }
       }
       if (!moved) return;
+      if (!opt.timeLimit) prev = before;
       score += gained;
       const fresh = spawn();
       api.sfx(gained ? 'ok' : 'move');
@@ -87,9 +95,17 @@
       if (Math.max(...grid.flat()) >= 2048 && !won) { won = true; opt.on2048?.(score); }
       if (!canMove()) end();
     }
+    // Отменить последний ход (новая плитка тоже уходит; 2048 уже засчитано — так и остаётся)
+    function undo(){
+      if (!prev || over || undos >= undoMax()) return;
+      grid = prev.grid; score = prev.score; won = won || prev.won; prev = null; undos++;
+      api.sfx('tick');
+      draw();
+      opt.onScore?.(score);
+    }
     function reset(){
       grid = Array.from({ length: N }, () => Array(N).fill(0));
-      score = 0; won = false; over = false;
+      score = 0; won = false; over = false; prev = null; undos = 0;
       spawn(); spawn();
       q('.g2-over').hidden = true;
       draw();
@@ -102,7 +118,12 @@
         timer = setInterval(() => { left--; tick(); if (left <= 0) end('Время вышло!'); }, 1000);
       }
     }
-    q('.g2-new')?.addEventListener('click', reset);
+    // «↻ Заново» посреди игры — спросить: счёт этой игры пропадёт
+    q('.g2-reset')?.addEventListener('click', async () => {
+      if (!over && score > 0 && window.GameKit && !await GameKit.ask({ icon: '🧩', title: 'Начать заново?', text: `Эта игра (${score} очков) не закончена — счёт пропадёт.`, yes: '↻ Заново', no: 'Играть дальше' })) return;
+      reset();
+    });
+    q('.g2-undo')?.addEventListener('click', undo);
     q('.g2-again')?.addEventListener('click', reset);
     const wrap = q('.g2-wrap');
     wrap.addEventListener('touchstart', e => { const t = e.touches[0]; touch = [t.clientX, t.clientY]; }, { passive: true });
@@ -115,7 +136,7 @@
       move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
     });
     reset();
-    return { move, stop(){ over = true; clearInterval(timer); } };
+    return { move, undo, stop(){ over = true; clearInterval(timer); }, state: () => ({ grid, score, won, over, undos, prev: !!prev }) };
   }
 
   function solo(){
@@ -134,7 +155,8 @@
       root = el; api = gameApi;
       const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', a: 'left', d: 'right', w: 'up', s: 'down', ф: 'left', в: 'right', ц: 'up', ы: 'down' };
       keyHandler = e => {
-        if (e.target?.closest?.('input,textarea,select,[contenteditable]')) return;
+        if (e.target?.closest?.('input,textarea,select,[contenteditable]') || window.GameKit?.isOpen?.()) return;
+        if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyZ' || e.key === 'z' || e.key === 'я')) { e.preventDefault(); board?.undo?.(); return; }
         const dir = map[e.key] || map[e.key?.toLowerCase()];
         if (!dir || !board) return;
         e.preventDefault();
@@ -155,5 +177,6 @@
       } else solo();
     },
     unmount(){ window.removeEventListener('keydown', keyHandler); board?.stop(); board = null; stopDuel?.(); stopDuel = null; root = null; },
+    _dbg: () => board?.state(),   // проверка в браузере
   };
 })();

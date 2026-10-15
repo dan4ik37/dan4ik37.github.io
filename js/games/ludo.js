@@ -112,9 +112,19 @@
     return G.players.some((_, q) => q !== p && G.tok[q].some(x => x >= 0 && x <= 50 && ((a - absPos(G, q, x) + 52) % 52) >= 1 && ((a - absPos(G, q, x) + 52) % 52) <= 6));
   }
   const pub = G => ({ players: G.players.map(pl => ({ id: pl.id, nick: pl.nick, bot: !!pl.bot, color: pl.color, look: pl.look || null })), tok: G.tok.map(t => t.slice()), turn: G.turn, roll: G.roll, phase: G.phase, winner: G.winner, log: G.log, last: G.last, v: G.v });
+  // Выбор фишки (чистая функция): фишки на одной клетке — один и тот же ход. Нажал фишку — выбрана; ещё раз (или другую
+  // с той же клетки) — ход; другую — выбор сменился. Вернёт { sel, move } (move — номер фишки для хода или -1)
+  function tokPick(sel, i, tok){
+    if (sel >= 0 && tok[sel] === tok[i]) return { sel: -1, move: sel };
+    return { sel: i, move: -1 };
+  }
+  // Сколько разных ходов (фишки на одной клетке — один ход)
+  const choices = (G, p, roll) => new Set(movable(G, p, roll).map(i => G.tok[p][i])).size;
 
   // ═══ ЭКРАН ═══
+  const TURN_MS = 20000;   // онлайн: столько думает человек, потом ход за него
   let root, api, G = null, P = null, meIdx = 0, mode = 'menu', room = null, timers = [], botT = 0, tickT = 0, nBots = 3, bots = 0, code = '', cv, ctx, rolling = 0, animTok = null;
+  let pickTok = -1, turnUntil = 0, lastV = -1;
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
   const online = () => !!room;
   const isHost = () => !room || room.isHost;
@@ -153,8 +163,10 @@
         <div class="un-log" aria-live="polite"></div>
         <div class="ld-ctl"><button type="button" class="ld-die" data-act="roll" aria-label="Бросить кубик">🎲</button><div class="un-status"></div></div>
         <div class="un-acts"></div>
+        <div class="gk-hint"></div>
       </div>`;
     cv = root.querySelector('.ld-cv'); ctx = cv.getContext('2d');
+    pickTok = -1;
     cv.addEventListener('pointerdown', onTap);
     resize();
   }
@@ -169,8 +181,8 @@
     if (!G) return;
     P = pub(G);
     if (room) G.players.forEach(pl => { if (!pl.bot && pl.id !== room.myId) room.sendTo(pl.id, { type: 'up', pub: P }); });
+    schedule();   // раньше рисования: отсчёт хода онлайн (turnUntil) уже свежий
     render();
-    schedule();
   }
   function schedule(){
     clearTimeout(botT); clearTimeout(tickT);
@@ -190,14 +202,18 @@
       const can = movable(G, p, G.roll);
       if (new Set(can.map(i => G.tok[p][i])).size === 1) { botT = later(() => { if (G && G.v === v) { doMove(G, p, can[0]); sync(); } }, 450); return; }
     }
-    if (room) tickT = later(() => {
-      if (!G || G.v !== v) return;
-      if (G.phase === 'roll') doRoll(G, p); else { const i = botPick(G, p); if (i >= 0) doMove(G, p, i); }
-      sync();
-    }, 20000);
+    if (room) {
+      turnUntil = Date.now() + TURN_MS;
+      tickT = later(() => {
+        if (!G || G.v !== v) return;
+        if (G.phase === 'roll') doRoll(G, p); else { const i = botPick(G, p); if (i >= 0) doMove(G, p, i); }
+        sync();
+      }, TURN_MS);
+    }
   }
   function doAct(a){
     if (!P || P.winner >= 0) return;
+    pickTok = -1;
     if (isHost()) {
       const err = a.a === 'roll' ? doRoll(G, meIdx) : doMove(G, meIdx, a.i);
       if (err) { api.toast(err); return; }
@@ -253,8 +269,24 @@
       ctx.fillStyle = col; ctx.strokeStyle = '#fff'; ctx.lineWidth = k * .08;
       ctx.beginPath(); ctx.arc(X, Y, k * .34, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(X - k * .1, Y - k * .1, k * .1, 0, Math.PI * 2); ctx.fill();
-      if (s.p === meIdx && can.includes(s.i)) { ctx.strokeStyle = pulse ? '#111' : '#fff'; ctx.lineWidth = k * .1; ctx.beginPath(); ctx.arc(X, Y, k * .46, 0, Math.PI * 2); ctx.stroke(); }
+      const picked = s.p === meIdx && pickTok >= 0 && P.tok[meIdx][pickTok] === P.tok[meIdx][s.i] && (P.tok[meIdx][s.i] >= 0 || s.i === pickTok);
+      if (picked) { ctx.strokeStyle = '#16a34a'; ctx.lineWidth = k * .16; ctx.beginPath(); ctx.arc(X, Y, k * .5, 0, Math.PI * 2); ctx.stroke(); }
+      else if (s.p === meIdx && can.includes(s.i)) { ctx.strokeStyle = pulse ? '#111' : '#fff'; ctx.lineWidth = k * .1; ctx.beginPath(); ctx.arc(X, Y, k * .46, 0, Math.PI * 2); ctx.stroke(); }
     });
+    // выбранная фишка: куда встанет (призрак), чужую там собьёт — красный крест
+    if (pickTok >= 0 && can.includes(pickTok)) {
+      const from = P.tok[meIdx][pickTok], to = from < 0 ? 0 : from + P.roll;
+      const [tx, ty] = cellXY(meIdx, to, pickTok), X = tx * k, Y = ty * k;
+      ctx.save(); ctx.globalAlpha = .55; ctx.fillStyle = COLORS[P.players[meIdx].color].c;
+      ctx.beginPath(); ctx.arc(X, Y, k * .34, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.setLineDash([k * .14, k * .1]); ctx.strokeStyle = '#16a34a'; ctx.lineWidth = k * .1;
+      ctx.beginPath(); ctx.arc(X, Y, k * .48, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+      const a = to <= 50 ? (START[P.players[meIdx].color] + to) % 52 : -1;
+      if (a >= 0 && !SAFE.has(a) && P.tok.some((t, q) => q !== meIdx && t.some(pos => pos >= 0 && pos <= 50 && (START[P.players[q].color] + pos) % 52 === a))) {
+        ctx.strokeStyle = '#dc2626'; ctx.lineWidth = k * .12; ctx.beginPath();
+        ctx.moveTo(X - k * .25, Y - k * .25); ctx.lineTo(X + k * .25, Y + k * .25); ctx.moveTo(X + k * .25, Y - k * .25); ctx.lineTo(X - k * .25, Y + k * .25); ctx.stroke();
+      }
+    }
     // финишировавшие — счётчик в центре
     P.tok.forEach((t, p) => { const n = t.filter(x => x === FIN).length; if (!n) return; const [hx, hy] = HOME[P.players[p].color][5]; ctx.fillStyle = '#111'; ctx.font = `800 ${Math.round(k * .45)}px Montserrat,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(n, (hx + .5) * k, (hy + .5) * k); });
   }
@@ -269,12 +301,27 @@
     die.textContent = P.roll ? DICE[P.roll - 1] : '🎲';
     die.disabled = !(myTurn && P.phase === 'roll');
     die.classList.toggle('go', myTurn && P.phase === 'roll');
-    root.querySelector('.un-status').innerHTML = P.winner >= 0 ? (P.winner === me ? '🏆 <b>Победа!</b>' : `😔 Победил ${esc(P.players[P.winner].nick)}`)
-      : myTurn ? (P.phase === 'roll' ? '🟢 Брось кубик' : '🟢 Выбери фишку (подсвечена)') : `⏳ Ходит ${esc(P.players[P.turn].nick)}…`;
+    const moving = myTurn && P.phase === 'move';
+    const can = moving ? movable({ players: P.players, tok: P.tok }, me, P.roll) : [];
+    if (pickTok >= 0 && !can.includes(pickTok)) pickTok = -1;   // стол сменился — выбор снят
+    const many = new Set(can.map(i => P.tok[me][i])).size > 1;
+    const txt = P.winner >= 0 ? (P.winner === me ? '🏆 <b>Победа!</b>' : `😔 Победил ${esc(P.players[P.winner].nick)}`)
+      : myTurn ? (P.phase === 'roll' ? '🟢 Брось кубик' : many ? '🟢 Выбери фишку' : '🟢 Ходит твоя фишка') : `⏳ Ходит ${esc(P.players[P.turn].nick)}…`;
+    root.querySelector('.un-status').innerHTML = (P.winner >= 0 || !window.GameKit ? txt : GameKit.turn(myTurn, txt)) + (room && myTurn ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : '');
+    if (P.winner < 0) root.querySelector('.un-acts').innerHTML = pickTok >= 0 ? '<button type="button" class="un-btn gk-go" data-act="commit">▶ Ходить</button><button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>' : '';
+    const hint = root.querySelector('.gk-hint');
+    if (hint) hint.innerHTML = P.winner >= 0 || !moving || !many ? '' : pickTok >= 0 ? `Призрак показывает, куда встанет. Нажми фишку ещё раз или «Ходить»; передумал — другую фишку${room ? ' · после хода отменить нельзя' : ''}` : 'Нажми фишку (подсвечены) — покажу, куда она встанет';
     draw();
     clearInterval(pulseT);
-    if (myTurn && P.phase === 'move') pulseT = setInterval(draw, 300);
+    if (moving) pulseT = setInterval(draw, 300);
+    window.GameKit?.cd();
     if (P.winner >= 0 && mode === 'play') over();
+  }
+  // Нажал свою фишку: выбрать / сходить (если она уже выбрана)
+  function pickTokEv(i){
+    const r = tokPick(pickTok, i, P.tok[meIdx]);
+    if (r.move >= 0) { doAct({ a: 'move', i: r.move }); return; }
+    pickTok = r.sel; api.sfx('tick'); render();
   }
   function over(){
     mode = 'over';
@@ -291,7 +338,8 @@
     const can = movable({ players: P.players, tok: P.tok }, meIdx, P.roll);
     let best = -1, bd = 1.1;
     for (const i of can) { const [cx, cy] = cellXY(meIdx, P.tok[meIdx][i], i), d = Math.hypot(cx - x, cy - y); if (d < bd) { bd = d; best = i; } }
-    if (best >= 0) doAct({ a: 'move', i: best });
+    if (best >= 0) pickTokEv(best);
+    else if (pickTok >= 0) { pickTok = -1; render(); }   // нажал мимо фишек — выбор снят
   }
   function onClick(e){
     const b = e.target.closest('[data-act]');
@@ -301,6 +349,8 @@
     if (a === 'solo') { startSolo(); return; }
     if (a === 'online') { location.hash = '#/games/ludo/' + GameRoom.newCode(); return; }
     if (a === 'roll') { doAct({ a: 'roll' }); return; }
+    if (a === 'commit') { if (pickTok >= 0) doAct({ a: 'move', i: pickTok }); return; }
+    if (a === 'cancel') { pickTok = -1; render(); return; }
     if (a === 'again') { if (online()) hostStart(); else startSolo(); return; }
     if (a === 'leave') { if (online()) location.hash = '#/games/ludo'; else menu(); return; }
     if (a === 'copy') { const inp = root.querySelector('.ct-link input'); navigator.clipboard?.writeText(inp.value).then(() => { b.textContent = '✅ Скопировано'; }, () => inp.select()); return; }
@@ -363,7 +413,8 @@
           P = m.pub;
           meIdx = P.players.findIndex(o => o.id === room.myId);
           if (meIdx < 0) return;
-          if (first && P.winner < 0) { mode = 'play'; build(); }
+          if (first && P.winner < 0) { mode = 'play'; pickTok = -1; build(); }
+          if (P.v !== lastV) { lastV = P.v; turnUntil = Date.now() + TURN_MS - 600; }   // хозяин заводит отсчёт на каждое изменение
           render();
           if (P.turn === meIdx) api.sfx('tick');
         } else if (m.type === 'err') api.toast(m.text);
@@ -372,11 +423,18 @@
     if (!room) root.innerHTML = GameRoom.errorHtml;
   }
 
+  // Esc — снять выбор фишки (раньше выхода из полного экрана: он смотрит defaultPrevented)
+  function onKey(e){
+    if (e.key !== 'Escape' || pickTok < 0 || window.GameKit?.isOpen?.()) return;
+    e.preventDefault(); pickTok = -1; render();
+  }
+
   window.GAME_IMPL.ludo = {
     mount(el, gameApi){
-      root = el; api = gameApi;
+      root = el; api = gameApi; pickTok = -1; lastV = -1;
       root.addEventListener('click', onClick);
       window.addEventListener('resize', resize);
+      window.addEventListener('keydown', onKey, true);
       if (GameRoom.validCode(gameApi.param)) joinTable(gameApi.param); else menu();
     },
     unmount(){
@@ -384,10 +442,12 @@
       clearTimeout(botT); clearTimeout(tickT); clearInterval(pulseT);
       root?.removeEventListener('click', onClick);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('keydown', onKey, true);
       room?.leave(); room = null;
-      G = null; P = null; bots = 0; mode = 'menu';
+      G = null; P = null; bots = 0; mode = 'menu'; pickTok = -1;
       root = null; cv = null; ctx = null;
     },
-    _test: { newGame, doRoll, doMove, movable, botPick, TRACK, START, HOME, FIN },
+    _test: { newGame, doRoll, doMove, movable, botPick, TRACK, START, HOME, FIN, tokPick, choices },
+    _dbg: () => ({ P, meIdx, pickTok, xy: (p, pos, i) => cellXY(p, pos, i) }),   // проверка в браузере: где фишка (клетки поля)
   };
 })();

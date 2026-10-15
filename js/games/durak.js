@@ -95,12 +95,17 @@
       const def = G.defender, cards = G.table.flatMap(t => t.d ? [t.a, t.d] : [t.a]);
       G.hands[def].push(...cards);
       G.log = `${G.players[def].nick} берёт ${cards.length} ${cards.length === 1 ? 'карту' : cards.length < 5 ? 'карты' : 'карт'}`;
+      // колода кончилась и все только берут — карты могут ходить по кругу вечно (боты, когда ты уже вышел):
+      // счётчик таких раундов; боты начинают ходить вразнобой, а через 40 подряд — ничья
+      G.stall = G.deck.length ? 0 : (G.stall || 0) + 1;
       refill(G);
-      if (!finished(G)) startRound(G, nextActive(G, def));
+      if (G.stall >= 40 && !G.over) { G.over = true; G.loser = -1; G.table = []; G.log = 'Ничья — карты ходят по кругу, никто не отбивается'; }
+      else if (!finished(G)) startRound(G, nextActive(G, def));
     } else if (!unbeaten(G).length) {
       if (waiting.length && G.table.length < G.limit) return;
       const def = G.defender;
       G.log = 'Бито!';
+      G.stall = 0;
       refill(G);
       if (!finished(G)) startRound(G, inGame(G, def) ? def : nextActive(G, def));
     }
@@ -138,7 +143,8 @@
     }
     if (!attackersOf(G).includes(p)) return null;
     const throwable = hand.map((c, i) => ({ c, i })).filter(o => canThrow(G, p, o.c)).sort((x, y) => cheap(x.c, y.c));
-    if (!G.table.length) return throwable.length ? { a: 'attack', i: throwable[0].i } : null;
+    // карты пошли по кругу (G.stall) — ходим не самой младшей, а наугад: так круг рвётся
+    if (!G.table.length) return throwable.length ? { a: 'attack', i: throwable[(G.stall || 0) >= 6 && G.rand ? Math.floor(G.rand() * throwable.length) : 0].i } : null;
     if (G.passed.includes(p)) return null;
     if (!G.taking && unbeaten(G).length) return null;
     const ok = throwable.filter(o => G.deck.length < 4 || (suit(o.c) !== tr && rv(o.c) <= 4));
@@ -152,15 +158,81 @@
       over: G.over, loser: G.loser, log: G.log, v: G.v };
   }
 
+  // Можно ли побить ВСЕ небитые карты (каждую — своей картой)? Паросочетание: карт на столе ≤ 6
+  function canBeatAll(G, hand){
+    const free = unbeaten(G), used = new Array(hand.length).fill(-1);
+    const tryT = (t, seen) => {
+      for (let i = 0; i < hand.length; i++) {
+        if (seen[i] || !beats(hand[i], G.table[t].a, G.trump)) continue;
+        seen[i] = true;
+        if (used[i] < 0 || tryT(used[i], seen)) { used[i] = t; return true; }
+      }
+      return false;
+    };
+    return free.every(t => tryT(t, new Array(hand.length).fill(false)));
+  }
+
+  // ═══ ВЫБОР КАРТЫ: нажал — поднялась; ещё раз / кнопка — ход; передумал — другая, «Отмена», мимо, Esc ═══
+  // Чистая функция (проверяется в node). s = { pick, pickC, tgt, arm }: выбранная карта (номер в руке и сама карта),
+  // выбранная карта на столе (отбиваясь: какую бьём), до какого времени «Беру» ждёт второго нажатия.
+  // ctx = { hand, att: [можно подкинуть], bt: [[какие карты стола бьёт]], free, def, takeAsk, now }.
+  // Вернёт { s, act, msg }; до act всё только у себя — по сети ничего не уходит.
+  const NOSEL = { pick: -1, pickC: '', tgt: -1, arm: 0 };
+  function pickReduce(s, ev, ctx){
+    const clear = { ...NOSEL };
+    const can = i => i >= 0 && i < ctx.hand.length && (!!ctx.att[i] || !!ctx.bt[i]?.length);
+    let cur = s.pick >= 0 && (ctx.hand[s.pick] !== s.pickC || !can(s.pick)) ? { ...clear } : { ...s };
+    if (cur.tgt >= 0 && !(ctx.def && ctx.free.includes(cur.tgt))) cur.tgt = -1;
+    if (cur.arm && (ctx.now > cur.arm || !ctx.def)) cur.arm = 0;
+    const targetOf = c => {
+      const ts = ctx.bt[c.pick] || [];
+      return c.tgt >= 0 && ts.includes(c.tgt) ? c.tgt : ts.length === 1 ? ts[0] : -1;
+    };
+    const confirm = c => {
+      if (ctx.att[c.pick]) return { s: clear, act: { a: 'attack', i: c.pick } };
+      const t = targetOf(c);
+      return t >= 0 ? { s: clear, act: { a: 'beat', i: c.pick, t } } : { s: c, act: null, msg: 'choose' };
+    };
+    switch (ev.t) {
+      case 'sync': return { s: cur, act: null };
+      case 'card': {
+        if (!can(ev.i)) return { s: { ...cur, arm: 0 }, act: null, msg: 'bad' };
+        if (cur.tgt >= 0 && !(ctx.bt[ev.i] || []).includes(cur.tgt) && !ctx.att[ev.i]) return { s: cur, act: null, msg: 'bad' };
+        if (cur.pick === ev.i) return confirm(cur);
+        return { s: { ...cur, pick: ev.i, pickC: ctx.hand[ev.i], arm: 0 }, act: null };
+      }
+      case 'tgt': {
+        if (!ctx.def || !ctx.free.includes(ev.j)) return { s: cur, act: null };
+        if (cur.pick >= 0) {
+          if ((ctx.bt[cur.pick] || []).includes(ev.j)) return { s: clear, act: { a: 'beat', i: cur.pick, t: ev.j } };
+          return { s: cur, act: null, msg: 'bad' };
+        }
+        return { s: { ...cur, tgt: cur.tgt === ev.j ? -1 : ev.j, arm: 0 }, act: null };
+      }
+      case 'go': return cur.pick >= 0 ? confirm(cur) : { s: cur, act: null };
+      case 'cancel': case 'bg': case 'esc': return { s: clear, act: null };
+      case 'take':
+        if (!ctx.def) return { s: cur, act: null };
+        // «Беру», когда отбиться ещё можно, — сначала «Точно?» (второе нажатие за 4 с)
+        if (!ctx.takeAsk || cur.arm) return { s: clear, act: { a: 'take' } };
+        return { s: { ...clear, arm: ctx.now + 4000 }, act: null, msg: 'arm' };
+    }
+    return { s: cur, act: null };
+  }
+  // Рука на экране: по мастям (козыри — в конце), внутри — по старшинству (в данных порядок свой)
+  const sortKey = (c, tr) => (suit(c) === tr ? 4 : SUITS.indexOf(suit(c))) * 10 + rv(c);
+
   // ═══ ЭКРАН ═══
-  let root, api, G = null, P = null, hand = [], meIdx = 0, mode = 'menu', room = null, timers = [], botT = 0, tickT = 0, nBots = 1, sel = -1, bots = 0, code = '';
+  const TURN_MS = 25000;   // онлайн: столько думает человек, потом ход за него
+  let root, api, G = null, P = null, hand = [], meIdx = 0, mode = 'menu', room = null, timers = [], botT = 0, tickT = 0, nBots = 1, bots = 0, code = '';
+  let S = { ...NOSEL }, armT = 0, turnUntil = 0, lastV = -1;
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
   const online = () => !!room;
   const isHost = () => !room || room.isHost;
   const hostId = () => room?.seats[0]?.id;
   const red = c => suit(c) === 'h' || suit(c) === 'd';
   function cardHtml(c, i, o = {}){
-    return `<button type="button" class="dk${red(c) ? ' red' : ''}${o.ok ? ' ok' : ''}${o.dim ? ' dim' : ''}${o.sel ? ' sel' : ''}${o.small ? ' sm' : ''}" ${i != null ? `data-act="card:${i}"` : ''} aria-label="${label(c)}"${o.disabled ? ' disabled' : ''}>
+    return `<button type="button" class="dk${red(c) ? ' red' : ''}${o.ok ? ' ok' : ''}${o.dim ? ' dim' : ''}${o.sel ? ' sel' : ''}${o.small ? ' sm' : ''}${o.cls ? ' ' + o.cls : ''}" ${o.act ? `data-act="${o.act}"` : i != null ? `data-act="card:${i}"` : ''} aria-label="${label(c)}"${o.sel ? ' aria-pressed="true"' : ''}${o.disabled ? ' disabled' : ''}>
       <span class="dk-t">${RL[rank(c)] || rank(c)}<i>${SCH[suit(c)]}</i></span><span class="dk-m">${SCH[suit(c)]}</span></button>`;
   }
 
@@ -187,7 +259,7 @@
     const players = [{ id: 'me', nick: GameRoom.nick(), look: window.D37Char?.look() || null }];
     for (let i = 0; i < nBots; i++) players.push({ id: 'bot' + i, nick: BOTS[i], bot: true });
     G = newGame(players, Math.random);
-    meIdx = 0; mode = 'play'; sel = -1;
+    meIdx = 0; mode = 'play'; S = { ...NOSEL };
     sync();
   }
   function sync(){
@@ -195,8 +267,8 @@
     P = pub(G);
     hand = G.hands[meIdx].slice();
     if (room) G.players.forEach((pl, i) => { if (!pl.bot && pl.id !== room.myId) room.sendTo(pl.id, { type: 'up', pub: P, hand: G.hands[i] }); });
+    schedule();   // раньше рисования: отсчёт хода онлайн (turnUntil) уже свежий
     render();
-    schedule();
     if (G.over) over();
   }
   // Боты ходят по одному; люди онлайн — не дольше 25 с (иначе «беру»/«пас»/младшая карта)
@@ -213,6 +285,7 @@
       return;
     }
     if (!room) return;
+    turnUntil = Date.now() + TURN_MS;
     tickT = later(() => {
       if (!G || G.v !== v || G.over) return;
       const p = G.defender;
@@ -220,40 +293,76 @@
       if (!G.table.length) { const a = G.attacker, i = G.hands[a].findIndex(c => canThrow(G, a, c)); if (i >= 0) { act(G, a, { a: 'attack', i }); sync(); } return; }
       for (const q of attackersOf(G)) if (!G.passed.includes(q) && !G.players[q].bot) act(G, q, { a: 'pass' });
       sync();
-    }, 25000);
+    }, TURN_MS);
   }
   function doAct(a){
     if (!P || P.over) return;
+    S = { ...NOSEL };
     if (isHost()) {
       const err = act(G, meIdx, a);
-      if (err) { api.toast(err); return; }
+      if (err) { api.toast(err); render(); return; }
       api.sfx(a.a === 'take' ? 'bad' : 'move');
-      sel = -1;
       sync();
     } else {
       room.sendTo(hostId(), { type: 'act', act: a, v: P.v });
-      sel = -1;
       api.sfx('tick');
+      render();
     }
+  }
+
+  // Что сейчас можно мне: подкинуть / какие карты стола бьёт каждая моя карта, надо ли спрашивать «Точно беру?»
+  function ctxOf(){
+    const me = meIdx, isDef = !!P && P.defender === me && !P.over, isAtt = !!P && !isDef && P.order[me].n > 0 && !P.over;
+    const free = P ? P.table.map((t, i) => t.d ? -1 : i).filter(i => i >= 0) : [];
+    const ranks = new Set(P ? P.table.flatMap(t => t.d ? [rank(t.a), rank(t.d)] : [rank(t.a)]) : []);
+    const passedMe = !!P && P.passed.includes(me);
+    const att = hand.map(c => isAtt && P.table.length < P.limit && (P.table.length ? ranks.has(rank(c)) : P.attacker === me));
+    const bt = hand.map(c => isDef && !P.taking ? free.filter(j => beats(c, P.table[j].a, P.trump)) : []);
+    const takeAsk = isDef && !P.taking && free.length > 0 && canBeatAll({ table: P.table, trump: P.trump }, hand);
+    return { hand, att, bt, free, def: isDef && !P.taking, takeAsk, now: Date.now(), isDef, isAtt, passedMe };
+  }
+  function pickEv(ev){
+    if (!P || mode !== 'play') return;
+    const r = pickReduce(S, ev, ctxOf());
+    S = r.s;
+    clearTimeout(armT);
+    if (S.arm) armT = later(() => { if (S.arm && Date.now() >= S.arm) { S = { ...S, arm: 0 }; render(); } }, S.arm - Date.now() + 30);
+    if (r.msg === 'bad') { api.sfx('bad'); if (ev.i != null) root.querySelector(`.dk[data-act="card:${ev.i}"]`)?.classList.add('no'); setTimeout(() => render(), 260); return; }
+    if (r.act) { doAct(r.act); return; }
+    if (r.msg === 'choose') api.sfx('tick');
+    else if (ev.t === 'card' || ev.t === 'tgt') api.sfx('tick');
+    render();
   }
 
   function render(){
     if (!P || mode !== 'play') return;
-    const me = meIdx, isDef = P.defender === me, isAtt = !isDef && P.order[me].n > 0 && !P.over;
-    const free = P.table.map((t, i) => t.d ? -1 : i).filter(i => i >= 0);
-    const ranks = new Set(P.table.flatMap(t => t.d ? [rank(t.a), rank(t.d)] : [rank(t.a)]));
-    const canThrowC = c => isAtt && P.table.length < P.limit && (P.table.length ? ranks.has(rank(c)) : P.attacker === me);
-    const canBeatC = c => isDef && !P.taking && free.some(j => beats(c, P.table[j].a, P.trump));
-    const okCard = c => canThrowC(c) || canBeatC(c);
-    const passedMe = P.passed.includes(me);
-    let status = '';
+    S = pickReduce(S, { t: 'sync' }, ctxOf()).s;   // стол обновился — выбор ещё в силе?
+    const c = ctxOf(), me = meIdx, { isDef, isAtt, free, passedMe } = c;
+    const okCard = i => !!c.att[i] || c.bt[i].length > 0;
+    const sel = S.pick >= 0, selT = sel ? c.bt[S.pick] : [];
+    const tgtOf = sel ? (S.tgt >= 0 && selT.includes(S.tgt) ? S.tgt : selT.length === 1 ? selT[0] : -1) : -1;
+    let status = '', mine = false;
     if (P.over) status = '';
-    else if (isDef) status = P.taking ? '🛡️ Ты берёшь — ждём, что подкинут' : free.length ? '🛡️ Отбивайся: нажми карту, которой бьёшь' : '🛡️ Отбился! Ждём, подкинут ли ещё';
-    else if (!P.table.length) status = P.attacker === me ? '⚔️ Твой ход: положи любую карту' : `⏳ Ходит ${esc(P.order[P.attacker].nick)}…`;
+    else if (isDef) { mine = !P.taking && free.length > 0; status = P.taking ? '🛡️ Ты берёшь — ждём, что подкинут' : free.length ? '🛡️ Отбивайся' : !P.table.length ? `⏳ Ходит ${esc(P.order[P.attacker].nick)} — ты отбиваешься` : '🛡️ Отбился! Ждём, подкинут ли ещё'; }
+    else if (!P.table.length) { mine = P.attacker === me; status = mine ? '⚔️ Твой ход: положи любую карту' : `⏳ Ходит ${esc(P.order[P.attacker].nick)}…`; }
     else if (passedMe) status = '⏳ Ждём остальных…';
-    else status = P.taking ? `⚔️ ${esc(P.order[P.defender].nick)} берёт — можешь подкинуть` : free.length ? `⏳ ${esc(P.order[P.defender].nick)} отбивается…` : '⚔️ Подкинь карту или нажми «Бито»';
+    else { mine = P.taking || !free.length; status = P.taking ? `⚔️ ${esc(P.order[P.defender].nick)} берёт — можешь подкинуть` : free.length ? `⏳ ${esc(P.order[P.defender].nick)} отбивается…` : '⚔️ Подкинь карту или нажми «Бито»'; }
+    const hint = P.over ? '' : S.arm ? '⚠️ Отбиться ещё можно! Нажми «Беру» <b>ещё раз</b>, если всё равно берёшь'
+      : sel && c.bt[S.pick].length && tgtOf < 0 ? 'Эта карта бьёт несколько — <b>нажми карту на столе</b>, которую бьёшь'
+      : sel ? `Нажми карту ещё раз или кнопку. Передумал — другая карта или «Отмена»${online() ? ' · после хода отменить нельзя' : ''}`
+      : S.tgt >= 0 ? 'Теперь нажми карту, которой бьёшь (подходящие подняты)'
+      : isDef && !P.taking && free.length ? 'Нажми карту, которой бьёшь, — или сначала карту на столе' : mine && P.table.length < P.limit && hand.some((x, i) => c.att[i]) ? 'Нажми карту, чтобы её выбрать' : '';
     const others = P.order.map((o, i) => ({ ...o, i })).filter(o => o.i !== me)
       .sort((a, b) => ((a.i - me + P.order.length) % P.order.length) - ((b.i - me + P.order.length) % P.order.length));
+    const order = hand.map((x, i) => i).sort((a, b) => sortKey(hand[a], P.trump) - sortKey(hand[b], P.trump) || a - b);
+    // карты стола: небитые — можно нажать (отбиваясь), подходящие для выбранной — подсвечены
+    const tableCard = (t, j) => {
+      if (t.d || !isDef || P.taking) return cardHtml(t.a, null, { small: true });
+      const cls = S.tgt === j || tgtOf === j ? 'tsel' : sel && selT.includes(j) ? 'tgt' : 'tfree';
+      return cardHtml(t.a, null, { small: true, act: 'tgt:' + j, cls });
+    };
+    const btnTxt = !sel ? '' : c.att[S.pick] ? (P.table.length ? '➕ Подкинуть' : '⚔️ Сходить') : tgtOf >= 0 ? `🛡️ Побить ${label(P.table[tgtOf].a)}` : '';
+    const keep = root.querySelector('.un-hand')?.scrollLeft || 0;
     root.innerHTML = `<div class="un dkg">
         <div class="un-opps">${others.map(o => `<div class="un-opp${(P.defender === o.i || (!P.table.length && P.attacker === o.i)) && !P.over ? ' turn' : ''}${o.out ? ' out' : ''}">
             ${o.bot ? '<span class="un-av">🤖</span>' : o.look && window.D37Char ? `<img class="un-av" alt="" src="${window.D37Char.img(o.look, 56)}">` : '<span class="un-av">🙂</span>'}
@@ -261,16 +370,24 @@
             <i class="dk-role">${P.defender === o.i ? '🛡️' : P.attacker === o.i ? '⚔️' : ''}</i></div>`).join('')}</div>
         <div class="dk-mid">
           <div class="dk-deck">${P.deckN ? `<div class="dk-trump">${cardHtml(P.trumpCard, null, { small: true })}</div><div class="dk-back"><b>${P.deckN}</b></div>` : ''}<div class="dk-tr">козырь <b class="${P.trump === 'h' || P.trump === 'd' ? 'redt' : ''}">${SCH[P.trump]}</b></div></div>
-          <div class="dk-table">${P.table.length ? P.table.map(t => `<div class="dk-pair">${cardHtml(t.a, null, { small: true })}${t.d ? `<div class="dk-on">${cardHtml(t.d, null, { small: true })}</div>` : ''}</div>`).join('') : '<div class="dk-empty">Стол пуст</div>'}</div>
+          <div class="dk-table">${P.table.length ? P.table.map((t, j) => `<div class="dk-pair">${tableCard(t, j)}${t.d ? `<div class="dk-on">${cardHtml(t.d, null, { small: true })}</div>` : ''}</div>`).join('') : '<div class="dk-empty">Стол пуст</div>'}</div>
         </div>
         <div class="un-log" aria-live="polite">${esc(P.log)}</div>
-        <div class="un-status">${status}</div>
+        <div class="un-status">${status ? (window.GameKit ? GameKit.turn(mine, status) : status) : ''}${online() && mine ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : ''}</div>
         <div class="un-acts">
-          ${isDef && !P.taking && free.length && !P.over ? '<button type="button" class="un-btn catch" data-act="take">🫴 Беру</button>' : ''}
-          ${isAtt && P.table.length && !passedMe && (P.taking || !free.length) ? `<button type="button" class="un-btn" data-act="pass">${P.taking ? '✋ Пас' : '✅ Бито'}</button>` : ''}
+          ${btnTxt ? `<button type="button" class="un-btn gk-go" data-act="commit">${btnTxt}</button>` : ''}${sel || S.tgt >= 0 ? '<button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>' : ''}
+          ${isDef && !P.taking && free.length && !P.over && !sel ? `<button type="button" class="un-btn catch${S.arm ? ' gk-armed' : ''}" data-act="take">${S.arm ? '🫴 Точно беру?' : '🫴 Беру'}</button>` : ''}
+          ${isAtt && P.table.length && !passedMe && (P.taking || !free.length) && !sel ? `<button type="button" class="un-btn" data-act="pass">${P.taking ? '✋ Пас' : '✅ Бито'}</button>` : ''}
         </div>
-        <div class="un-hand dk-hand${hand.length > 9 ? ' many' : ''}">${hand.map((c, i) => cardHtml(c, i, { ok: okCard(c), dim: !okCard(c), sel: sel === i })).join('')}</div>
+        <div class="gk-hint">${hint}</div>
+        <div class="un-hand dk-hand${hand.length > 9 ? ' many' : ''}${sel ? ' picking' : ''}">${order.map(i => {
+          const ok = okCard(i) && (S.tgt < 0 || c.bt[i].includes(S.tgt));
+          return cardHtml(hand[i], i, { ok, dim: !ok, sel: S.pick === i });
+        }).join('')}</div>
       </div>`;
+    const h = root.querySelector('.un-hand');
+    if (h && keep) h.scrollLeft = keep;
+    window.GameKit?.cd();
   }
   function over(){
     clearTimeout(botT); clearTimeout(tickT);
@@ -290,22 +407,22 @@
 
   function onClick(e){
     const b = e.target.closest('[data-act]');
-    if (!b || b.disabled) return;
+    if (!b || b.disabled) {
+      if (mode === 'play' && (S.pick >= 0 || S.tgt >= 0 || S.arm) && !e.target.closest('.un-hand')) pickEv({ t: 'bg' });   // нажал мимо — выбор снят
+      return;
+    }
     const a = b.dataset.act;
     if (a.startsWith('nb:')) { nBots = +a.slice(3); menu(); return; }
     if (a === 'solo') { startSolo(); return; }
     if (a === 'online') { location.hash = '#/games/durak/' + GameRoom.newCode(); return; }
     if (a === 'again') { if (online()) hostStart(); else startSolo(); return; }
     if (a === 'leave') { if (online()) location.hash = '#/games/durak'; else menu(); return; }
-    if (a === 'take') { doAct({ a: 'take' }); return; }
+    if (a === 'take') { pickEv({ t: 'take' }); return; }
     if (a === 'pass') { doAct({ a: 'pass' }); return; }
-    if (a.startsWith('card:')) {
-      const i = +a.slice(5), c = hand[i];
-      if (!c || !P) return;
-      if (P.defender === meIdx) doAct({ a: 'beat', i });
-      else doAct({ a: 'attack', i });
-      return;
-    }
+    if (a.startsWith('card:')) { pickEv({ t: 'card', i: +a.slice(5) }); return; }
+    if (a.startsWith('tgt:')) { pickEv({ t: 'tgt', j: +a.slice(4) }); return; }
+    if (a === 'commit') { pickEv({ t: 'go' }); return; }   // кнопка хода (не 'go' — это «▶ Начать» за столом)
+    if (a === 'cancel') { pickEv({ t: a }); return; }
     if (a === 'copy') { const inp = root.querySelector('.ct-link input'); navigator.clipboard?.writeText(inp.value).then(() => { b.textContent = '✅ Скопировано'; }, () => inp.select()); return; }
     if (a === 'bot') { bots++; lobby(); return; }
     if (a.startsWith('unbot:')) { bots = Math.max(0, bots - 1); lobby(); return; }
@@ -330,7 +447,7 @@
     if (players.length < 2) { api.toast('Нужно хотя бы двое: позови друга или добавь бота'); return; }
     G = newGame(players, Math.random);
     meIdx = players.findIndex(p => p.id === room.myId);
-    mode = 'play';
+    mode = 'play'; S = { ...NOSEL };
     sync();
   }
   function joinTable(c){
@@ -366,7 +483,8 @@
           P = m.pub; hand = m.hand || [];
           meIdx = P.order.findIndex(o => o.id === room.myId);
           if (meIdx < 0) return;
-          if (first && !P.over) mode = 'play';
+          if (first && !P.over) { mode = 'play'; S = { ...NOSEL }; }
+          if (P.v !== lastV) { lastV = P.v; turnUntil = Date.now() + TURN_MS - 600; }   // хозяин заводит отсчёт на каждое изменение стола
           render();
           if (P.over) over();
         } else if (m.type === 'err') api.toast(m.text);
@@ -375,20 +493,29 @@
     if (!room) root.innerHTML = GameRoom.errorHtml;
   }
 
+  // Esc — снять выбор (раньше выхода из полного экрана: он смотрит defaultPrevented)
+  function onKey(e){
+    if (e.key !== 'Escape' || mode !== 'play' || window.GameKit?.isOpen?.() || !(S.pick >= 0 || S.tgt >= 0 || S.arm)) return;
+    e.preventDefault();
+    pickEv({ t: 'esc' });
+  }
+
   window.GAME_IMPL.durak = {
     mount(el, gameApi){
-      root = el; api = gameApi;
+      root = el; api = gameApi; S = { ...NOSEL }; lastV = -1;
       root.addEventListener('click', onClick);
+      window.addEventListener('keydown', onKey, true);
       if (GameRoom.validCode(gameApi.param)) joinTable(gameApi.param); else menu();
     },
     unmount(){
       timers.forEach(clearTimeout); timers = [];
-      clearTimeout(botT); clearTimeout(tickT);
+      clearTimeout(botT); clearTimeout(tickT); clearTimeout(armT);
       root?.removeEventListener('click', onClick);
+      window.removeEventListener('keydown', onKey, true);
       room?.leave(); room = null;
-      G = null; P = null; hand = []; bots = 0; mode = 'menu';
+      G = null; P = null; hand = []; bots = 0; mode = 'menu'; S = { ...NOSEL };
       root = null;
     },
-    _test: { newGame, act, botMove, beats, canThrow, pub, label, attackersOf, unbeaten },
+    _test: { newGame, act, botMove, beats, canThrow, pub, label, attackersOf, unbeaten, pickReduce, canBeatAll, sortKey, NOSEL },
   };
 })();
