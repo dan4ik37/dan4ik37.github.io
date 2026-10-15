@@ -216,6 +216,11 @@ function PZ_CORE(){
   defItem('recall', 'Возвратный амулет', { kind: 'use', use: 'recall', keep: 1, stack: 1, icon: ['amulet', '#ff8af0'] });
   defItem('boots', 'Сапоги-прыгуны', { kind: 'acc', acc: 'jump', stack: 1, icon: ['boots', '#3ac0ff'] });
   defItem('wings', 'Крылья филина', { kind: 'acc', acc: 'glide', stack: 1, icon: ['wings', '#d8c8a8'] });
+  // крюк — как в Террарии: E (геймпад Ⓑ, на телефоне 🪝) — бросить к прицелу, цепляется за блок и тянет; работает из вещей
+  defItem('hook', 'Крюк-кошка', { kind: 'hook', range: 12, speed: 38, stack: 1, icon: ['hook', '#c8c0b8'] });
+  // усиления (B — выпить все, что не действуют): шахтёр — копать быстрее, сияние — свет вокруг героя
+  defItem('potion_miner', 'Зелье шахтёра', { kind: 'use', use: 'buff', buff: 'mine', dur: 180, stack: 30, icon: ['potion', '#f2c230'] });
+  defItem('potion_shine', 'Зелье сияния', { kind: 'use', use: 'buff', buff: 'shine', dur: 180, stack: 30, icon: ['potion', '#8fe8ff'] });
 
   // ═══ Рецепты: [что, сколько, [[из чего, сколько]…], станок] (станок — ключ блока рядом: workbench | furnace | anvil) ═══
   const RECIPES = [
@@ -238,6 +243,8 @@ function PZ_CORE(){
     ['brickwall', 4, [['brick', 1]], 'workbench'],
     ['glasswall', 4, [['glass', 1]], 'workbench'],
     ['potion', 1, [['bottle', 1], ['mushroom', 2], ['gel', 1]], 'workbench'],
+    ['potion_miner', 1, [['bottle', 1], ['copper', 3], ['mushroom', 1]], 'workbench'],
+    ['potion_shine', 1, [['bottle', 1], ['glowshroom', 2], ['gel', 1]], 'workbench'],
     ['slimebait', 1, [['gel', 25], ['mushroom', 1]], 'workbench'],
     ['anvil', 1, [['bar_iron', 5]], 'workbench'],
     ['bar_copper', 1, [['copper', 3]], 'furnace'],
@@ -254,6 +261,7 @@ function PZ_CORE(){
     ['pick_deep', 1, [['bar_deep', 15]], 'anvil'],
     ['pick_fire', 1, [['bar_fire', 15], ['obsidian', 5]], 'anvil'],
     ['axe_iron', 1, [['bar_iron', 9], ['wood', 3]], 'anvil'],
+    ['hook', 1, [['bar_iron', 3], ['rope', 10]], 'anvil'],
     ['sword_iron', 1, [['bar_iron', 8]], 'anvil'],
     ['sword_silver', 1, [['bar_silver', 9]], 'anvil'],
     ['sword_gold', 1, [['bar_gold', 10]], 'anvil'],

@@ -239,6 +239,12 @@
     amulet(p, c){ for (let i = 0; i < 8; i++) { p(3 + i, 1 + (i < 4 ? i : 7 - i), rgb([230, 200, 90])); } p(5, 7, rgb(c), 6, 6); p(6, 8, rgb([255, 255, 255], 1, .8), 2, 2); },
     boots(p, c){ p(3, 3, rgb(c), 5, 9); p(3, 10, rgb(c), 10, 4); p(3, 13, rgb([40, 40, 50]), 10, 2); p(4, 4, rgb(c, 1.3), 1, 7); },
     wings(p, c){ for (let i = 0; i < 7; i++) { p(1 + i, 3 + i, rgb(c), 6 - (i >> 1), 2); p(9 + (i >> 1), 3 + i, rgb(c), 6 - (i >> 1), 2); } p(7, 4, rgb([120, 80, 45]), 2, 8); },
+    hook(p, c){   // крюк-кошка: стержень, три зубца, кольцо и кусок верёвки
+      for (let i = 0; i < 8; i++) p(5 + i, 11 - i, rgb(c, .85));
+      p(11, 1, rgb(c), 2, 5); p(12, 1, rgb(c, 1.35), 1, 3); p(9, 3, rgb(c), 2, 2); p(8, 2, rgb(c), 1, 2); p(13, 5, rgb(c), 2, 2); p(14, 4, rgb(c), 1, 2);
+      p(3, 11, rgb(c, .7), 3, 3); p(4, 12, rgb([30, 30, 34]), 1, 1);
+      for (let i = 0; i < 4; i++) p(i, 13 + (i & 1), rgb([170, 120, 70]), 1, 1);
+    },
   };
   // ── Спрайты (мобы, боссы, снаряды, эффекты): имя → [w, h, кадров, рисовать(g, x, y, кадр)] ──
   const SPR = {
@@ -416,6 +422,7 @@ uniform ivec2 uOrg;
 uniform vec3 uSky;
 uniform float uAmb, uTime;
 uniform vec3 uGlow;     // свет вокруг героя: x, y (от угла чанка), сила
+uniform float uGlowR;   // и его радиус (клеток; «Зелье сияния» — больше)
 uniform vec2 uCamP;     // камера × 0,65 (по модулю 1020) — параллакс фона пещер
 uniform int uPass, uSmooth, uBack, uQ;
 in vec2 vT;
@@ -437,7 +444,7 @@ vec3 lightCol(vec4 L, vec2 pw, vec2 p){
   vec3 blk = pow(L.rgb, vec3(0.75)) * 1.16;   // кривая яркости: середина хвоста светлее, у огня — пересвет (до 1,35)
   if (uQ >= 1) blk *= 1.0 + 0.10 * (vn(pw * 0.21 + vec2(uTime * 2.3, uTime * 1.7)) - 0.5) + 0.06 * (vn(pw * 0.83 + vec2(-uTime * 5.3, uTime * 4.1)) - 0.5);
   vec3 c = max(blk, uSky * pow(L.a, 0.75));
-  float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / 7.5); g *= g;
+  float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / max(uGlowR, 1.0)); g *= g;
   return max(c, vec3(g, g * 0.9, g * 0.78)) + uAmb;
 }
 // тень от блоков на стене за ними: m — какие из 8 соседей твёрдые, f — точка в клетке
@@ -999,6 +1006,7 @@ void main(){
       gl.uniform3fv(u.uSky, s.sky); gl.uniform1f(u.uAmb, s.amb); gl.uniform1f(u.uTime, s.time); gl.uniform1i(u.uPass, pass);
       gl.uniform1i(u.uSmooth, s.smooth ? 1 : 0); gl.uniform1i(u.uBack, s.back === false ? 0 : 1);
       if (u.uQ) gl.uniform1i(u.uQ, s.q | 0);
+      if (u.uGlowR) gl.uniform1f(u.uGlowR, s.glowR || 7.5);
       if (u.uCamP) gl.uniform2f(u.uCamP, (R.camX * .65) % 1020, (R.camY * .65) % 1020);   // 1020 — кратно 6: узор фона (3 × 2) не прыгает
       gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, atlasTex); gl.uniform1i(u.uAtlas, 3);
       gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, propsTex); gl.uniform1i(u.uProps, 4);

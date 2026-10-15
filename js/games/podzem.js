@@ -70,8 +70,11 @@
       cam: { x: 0, y: 0, tile: 24, zoom: 1, shake: 0 }, mouse: { sx: -1, sy: -1, wx: 0, wy: 0, l: false, r: false, in: false, moved: 0 },
       pad: { on: false, cx: 3, cy: -1, lb: false, rb: false, y: false, lt: false }, aim: { x: 0, y: 0, src: 'mouse' },
       t: 0, tick: 0, liqTick: 0, saveT: 0, streamT: 0, spawnT: 0, modT: 0, hudT: 0, frame: 0, perf: { frames: [], cpu: [], last: 0 },
-      opt: Object.assign({ zoom: 1, smooth: true, back: true, parts: true, autosave: true, fps: false }, (() => { try { return JSON.parse(lsGet(LS_OPT) || '{}'); } catch (e) { return {}; } })()),
+      opt: Object.assign({ zoom: 1, smooth: true, back: true, parts: true, autosave: true, fps: false, smart: false }, (() => { try { return JSON.parse(lsGet(LS_OPT) || '{}'); } catch (e) { return {}; } })()),
       chestOpen: null, talk: null, cheats: false, listeners: [], loop: null,
+      hook: null,          // крюк: { state: fly | latched | back, x, y, dx, dy, … }
+      target: null,        // куда сейчас подействует предмет в руке: { x, y, ok, kind } (умный курсор, превью)
+      shift: false, autoPrev: -1,   // Shift держат: «сам выберу инструмент», вернуть ячейку прежнюю
     };
   }
   const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); G.listeners.push([t, ev, f, o]); };
@@ -791,17 +794,158 @@
     return { left, right, up, down, mx, jump: !blocked && (C.held('jump') || !!tch.jump), jumpDown: !blocked && (C.down('jump') || !!tch.jumpDown), blocked };
   }
   function cursorTile(){ return [Math.floor(G.aim.x), Math.floor(G.aim.y)]; }
+  function nearestFoe(r){
+    const p = G.pl, px = p.x + p.w / 2, py = p.y + p.h / 2;
+    let best = null, bd = r * r;
+    for (const m of G.mobs) { if (m.hp <= 0) continue; const dx = m.x + m.w / 2 - px, dy = m.y + m.h / 2 - py, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = m; } }
+    return best;
+  }
   function updAim(){
     const p = G.pl, pcx = p.x + p.w / 2, pcy = p.y + p.h * .45;
     if (G.pad.on && (Math.abs(G.pad.ax) > .2 || Math.abs(G.pad.ay) > .2)) { G.pad.cx = G.pad.ax * 6; G.pad.cy = G.pad.ay * 6; G.aim.src = 'pad'; }
     if (G.aim.src === 'pad') { G.aim.x = pcx + G.pad.cx; G.aim.y = pcy + G.pad.cy; return; }
-    // кнопка ⚔ на телефоне: перед собой (джойстик вверх/вниз — копать вверх/вниз)
     const tch = G.U?.touch;
-    if (tch?.front) { const my = tch.my || 0; G.aim.x = pcx + (Math.abs(my) > .55 ? 0 : p.dir * 1.3); G.aim.y = my > .55 ? p.y + p.h + .5 : my < -.55 ? p.y - .5 : p.y + p.h * .6; return; }
-    if (G.aim.src === 'touch') return;   // палец сам ставит точку
+    // телефон, «режим строителя»: точный прицел-крестик (его двигают пальцем)
+    if (tch?.build && G.build) {
+      const [vw, vh] = viewTiles();   // крестик не уходит за экран
+      G.build.x = clamp(G.build.x, G.cam.x - vw / 2 + .5, G.cam.x + vw / 2 - .5); G.build.y = clamp(G.build.y, G.cam.y - vh / 2 + .5, G.cam.y + vh / 2 - .5);
+      G.aim.x = G.build.x; G.aim.y = G.build.y; G.aim.src = 'build'; return;
+    }
+    // кнопка ⚔ на телефоне: враг рядом — по нему (как в Террарии на телефоне), иначе — перед собой (джойстик вверх/вниз — вверх/вниз)
+    if (tch?.front) {
+      const m = nearestFoe(9);
+      if (m) { G.aim.x = m.x + m.w / 2; G.aim.y = m.y + m.h / 2; return; }
+      const my = tch.my || 0; G.aim.x = pcx + (Math.abs(my) > .55 ? 0 : p.dir * 1.3); G.aim.y = my > .55 ? p.y + p.h + .5 : my < -.55 ? p.y - .5 : p.y + p.h * .6; return;
+    }
+    if (G.aim.src === 'touch' || G.aim.src === 'build') return;   // палец сам ставит точку
     if (G.mouse.in) { G.aim.x = G.cam.x + (G.mouse.sx * G.res - G.R.w / 2) / G.cam.tile; G.aim.y = G.cam.y + (G.mouse.sy * G.res - G.R.h / 2) / G.cam.tile; }
   }
   const inReach = (x, y) => { const p = G.pl; return Math.hypot(x + .5 - (p.x + p.w / 2), y + .5 - (p.y + p.h * .4)) <= REACH; };
+
+  // ═══ Куда подействует предмет в руке ═══
+  // Обычный курсор — клетка под ним. Умный (Ctrl — вкл/выкл; на геймпаде и пальцем — всегда; в «режиме строителя» — нет):
+  // кирка/топор — первый подходящий блок на линии от героя к курсору, иначе ближайший к курсору; блок/стена — ближайшее
+  // к курсору место, где встанет. Копать и ставить не спорят: решает только предмет в руке.
+  const smartOn = () => G.aim.src === 'pad' || G.aim.src === 'touch' || (G.aim.src !== 'build' && !!G.opt.smart);
+  function toolCan(it, x, y){
+    const f = fgAt(x, y);
+    if (it.tool === 'hammer') return !f && !!wallAt(x, y);
+    if (!f || f === 255) return false;
+    if (it.tool === 'pick') return P.TOOL[f] === 0 && P.TIER[f] <= it.tier;
+    if (it.tool === 'axe') return P.TOOL[f] === 1;
+    return false;
+  }
+  function smartTarget(it){
+    const p = G.pl, ox = p.x + p.w / 2, oy = p.y + p.h * .4, ax = G.aim.x, ay = G.aim.y;
+    const test = it.kind === 'tool' ? (x, y) => toolCan(it, x, y) : it.kind === 'tile' ? (x, y) => canPlace(it, x, y) === '' : it.kind === 'wall' ? (x, y) => canWall(it, x, y) : null;
+    if (!test) return null;
+    if (it.kind === 'tool' && it.tool !== 'hammer') {   // по линии от героя к курсору
+      const dx = ax - ox, dy = ay - oy, L = Math.hypot(dx, dy);
+      if (L > .01) for (let k = 1, n = Math.ceil(Math.min(L, REACH + 1) * 4); k <= n; k++) {
+        const x = Math.floor(ox + dx / L * k / 4), y = Math.floor(oy + dy / L * k / 4);
+        if (!inReach(x, y)) break;
+        if (test(x, y)) return [x, y];
+        const f = fgAt(x, y); if (f && P.SOLID[f] === 1) break;   // упёрлись в то, что этой киркой не взять
+      }
+    }
+    let best = null, bd = 1e9;
+    const cx = Math.floor(ax), cy = Math.floor(ay);
+    for (let y = cy - 4; y <= cy + 4; y++) for (let x = cx - 4; x <= cx + 4; x++) {
+      if (!inReach(x, y)) continue;
+      const d = (x + .5 - ax) * (x + .5 - ax) + (y + .5 - ay) * (y + .5 - ay);
+      if (d < bd && test(x, y)) { bd = d; best = [x, y]; }
+    }
+    return best;
+  }
+  // цель на этот шаг: G.target = { x, y, ok (можно ли), smart, kind }
+  function updTarget(){
+    const s = selItem(), it = s ? itemDef(s.id) : null;
+    let [tx, ty] = cursorTile(), smart = false;
+    if (it && (it.kind === 'tool' || it.kind === 'tile' || it.kind === 'wall') && smartOn()) { const q = smartTarget(it); if (q) { tx = q[0]; ty = q[1]; smart = true; } }
+    let ok = inReach(tx, ty);
+    if (it && ok) {
+      const f = fgAt(tx, ty);
+      if (it.kind === 'tile') ok = canPlace(it, tx, ty) === '';
+      else if (it.kind === 'wall') ok = canWall(it, tx, ty);
+      else if (it.kind === 'tool') ok = toolCan(it, tx, ty) || (f && f !== 255 && P.TOOL[f] === 2) || (it.tool === 'hammer' && f && P.KIND[f] === 0 && P.SOLID[f] === 1);
+    }
+    const T0 = G.target || (G.target = {});
+    T0.x = tx; T0.y = ty; T0.ok = !!ok; T0.smart = smart; T0.kind = it ? it.kind : null;
+    return T0;
+  }
+  // Shift держат — сам подбери в ячейках инструмент под курсором: руда — лучшая кирка, дерево — топор, стена — молоток,
+  // пусто и темно — факел (отпустили Shift — вернётся прежняя ячейка)
+  function autoSelect(){
+    const [tx, ty] = cursorTile(), f = fgAt(tx, ty), w = wallAt(tx, ty);
+    const pick = score => { let best = -1, bv = 0; for (let i = 0; i < HOT_N; i++) { const s = G.CH.inv[i]; if (!s) continue; const v = score(itemDef(s.id)); if (v > bv) { bv = v; best = i; } } return best; };
+    let want = -1;
+    if (f && f !== 255 && P.TOOL[f] === 0) want = pick(it => it?.kind === 'tool' && it.tool === 'pick' ? (it.tier >= P.TIER[f] ? 1000 : 0) + it.power : 0);
+    else if (f && f !== 255 && P.TOOL[f] === 1) want = pick(it => it?.kind === 'tool' && it.tool === 'axe' ? it.power : 0);
+    else if (!f && w) want = pick(it => it?.kind === 'tool' && it.tool === 'hammer' ? 1 : 0);
+    else if (!f) { const L = lightAt(tx + .5, ty + .5); if (L[0] + L[1] + L[2] < 1) want = pick(it => it?.key === 'torch' ? 1 : 0); }
+    if (want >= 0 && want !== G.CH.sel) { G.CH.sel = want; G.pl.mine = null; G.U?.hud(); }
+  }
+  function setShift(v){
+    if (v === G.shift) return;
+    G.shift = v;
+    if (v) G.autoPrev = G.CH ? G.CH.sel : -1;
+    else if (G.autoPrev >= 0 && G.CH) { if (G.CH.sel !== G.autoPrev) selSlot(G.autoPrev); G.autoPrev = -1; }
+  }
+
+  // ═══ Крюк-кошка: летит к прицелу, цепляется за блок (платформу, ствол), тянет; у точки — висишь; прыжок — отцепиться ═══
+  const hookable = f => f && f !== 255 && (P.SOLID[f] === 1 || P.SOLID[f] === 2 || f === T.TRUNK);
+  function hookDir(){
+    const p = G.pl, px = p.x + p.w / 2, py = p.y + p.h * .35, tch = G.U?.touch;
+    if (G.aim.src === 'touch' || G.aim.src === 'build' || tch?.front || (tch && (tch.mx || tch.my) && G.aim.src !== 'mouse')) {
+      // пальцем: куда наклонён джойстик; не наклонён — вверх-вперёд (ближайшая зацепка в этой стороне)
+      const mx = tch?.mx || 0, my = tch?.my || 0;
+      if (Math.hypot(mx, my) > .35) { const l = Math.hypot(mx, my); return [mx / l, my / l]; }
+      let best = null;
+      for (let a = 0; a <= 8; a++) {
+        const ang = (-Math.PI / 2) + p.dir * a * (Math.PI / 2) / 8, dx = Math.cos(ang), dy = Math.sin(ang);
+        for (let k = 1; k <= 48; k++) { const x = Math.floor(px + dx * k / 4), y = Math.floor(py + dy * k / 4); if (hookable(fgAt(x, y))) { const d = k / 4; if (!best || d < best.d) best = { d, dx, dy }; break; } }
+      }
+      return best ? [best.dx, best.dy] : [p.dir * .5, -.866];
+    }
+    const dx = G.aim.x - px, dy = G.aim.y - py, l = Math.hypot(dx, dy) || 1;
+    return [dx / l, dy / l];
+  }
+  function toggleHook(){
+    if (!count('hook')) { hint('Крюк-кошку делают на наковальне: 3 железных слитка + 10 верёвок'); return false; }
+    if (G.hook && G.hook.state !== 'back') { G.hook.state = 'back'; return true; }   // ещё раз — отцепиться
+    const p = G.pl, it = ITEMS.hook, [dx, dy] = hookDir();
+    G.hook = { state: 'fly', x: p.x + p.w / 2, y: p.y + p.h * .35, dx, dy, range: it.range, speed: it.speed, tx: 0, ty: 0 };
+    snd('swing', { vol: .5, rate: .7 });
+    return true;
+  }
+  function updHook(dt){
+    const hk = G.hook; if (!hk) return;
+    const p = G.pl, px = p.x + p.w / 2, py = p.y + p.h * .35;
+    if (p.dead) { G.hook = null; return; }
+    if (hk.state === 'fly') {
+      const sp = hk.speed * dt, n = Math.ceil(sp / .2);
+      for (let k = 0; k < n; k++) {
+        hk.x += hk.dx * sp / n; hk.y += hk.dy * sp / n;
+        const tx = Math.floor(hk.x), ty = Math.floor(hk.y);
+        if (hookable(fgAt(tx, ty))) { hk.state = 'latched'; hk.tx = tx; hk.ty = ty; snd('place', { x: tx, y: ty, vol: .55, rate: 1.7 }); burst(hk.x, hk.y, 4, 0xcccccc, 2, .25, .08); return; }
+        if (Math.hypot(hk.x - px, hk.y - py) > hk.range) { hk.state = 'back'; return; }
+      }
+    } else if (hk.state === 'back') {
+      const dx = px - hk.x, dy = py - hk.y, d = Math.hypot(dx, dy);
+      if (d < .8) { G.hook = null; return; }
+      const sp = Math.min(d, 50 * dt); hk.x += dx / d * sp; hk.y += dy / d * sp;
+    } else if (!hookable(fgAt(hk.tx, hk.ty)) || Math.hypot(hk.x - px, hk.y - py) > hk.range + 4) hk.state = 'back';   // блок сломали / оторвало
+  }
+  // тянет героя (после обычной физики шага, до столкновений)
+  function hookPull(p, I){
+    const hk = G.hook; if (!hk || hk.state !== 'latched') return false;
+    if (I.jumpDown) { hk.state = 'back'; p.vy = -13; p.jumpBuf = 0; p.jumpHold = .12; return false; }
+    const hx = hk.x - (p.x + p.w / 2), hy = hk.y - (p.y + p.h * .3), d = Math.hypot(hx, hy);
+    if (d > 1.1) { p.vx = hx / d * 19; p.vy = hy / d * 19; }
+    else { p.vx *= .5; p.vy = 0; }
+    p.climb = false; p.fallY = p.y;
+    return true;
+  }
 
   // ═══ Шаг игрока ═══
   function updPlayer(dt){
@@ -810,6 +954,7 @@
     const I = inputState();
     p.iframes -= dt; p.hurtT -= dt; p.useT -= dt; p.potionT -= dt;
     if (p.swing > 0) p.swing -= dt;
+    tickBuffs(dt);
     // вода / лава / лестницы
     const cx = Math.floor(p.x + p.w / 2), feetY = Math.floor(p.y + p.h - .1), midY = Math.floor(p.y + p.h * .5);
     const wMid = lqAt(cx, midY), wFeet = lqAt(cx, feetY), lavaHere = ltAt(cx, midY) === 2 || ltAt(cx, feetY) === 2;
@@ -848,6 +993,7 @@
         p.vy = Math.min(p.vy + g * dt, wings && I.jump && p.vy > 0 ? 3.5 : MAXFALL);
       }
     }
+    hookPull(p, I);
     // сквозь платформу — вниз (зажать «вниз»)
     if (I.down && !p.climb) p.dropT = .25; else p.dropT -= dt;
     p.drop = p.dropT > 0;
@@ -895,7 +1041,7 @@
   }
   function useItem(){
     const p = G.pl, s = selItem(), it = s ? itemDef(s.id) : null;
-    const [tx, ty] = cursorTile();
+    const tg = updTarget(), tx = tg.x, ty = tg.y;
     const pcx = p.x + p.w / 2;
     if (G.aim.x < pcx - .2) p.dir = -1; else if (G.aim.x > pcx + .2) p.dir = 1;
     if (!it) { handBreak(tx, ty); p.useT = .3; return; }
@@ -916,6 +1062,7 @@
       case 'tile': return placeTile(it, tx, ty);
       case 'wall': return placeWall(it, tx, ty);
       case 'use': return useConsumable(it, s);
+      case 'hook': p.useT = .3; toggleHook(); return;
       default: p.useT = .3;
     }
   }
@@ -925,8 +1072,8 @@
     if (f && f !== 255 && P.TOOL[f] === 2 && P.HARD[f] <= 1 && inReach(tx, ty)) { breakTile(tx, ty); G.pl.swing = .25; }
   }
   function useTool(it, tx, ty){
-    const p = G.pl;
-    p.useT = it.speed; p.swing = it.speed; p.swingDur = it.speed;
+    const p = G.pl, fast = buffOn('mine') ? .78 : 1;   // «Зелье шахтёра» — удар чаще и сильнее
+    p.useT = it.speed * fast; p.swing = it.speed * fast; p.swingDur = it.speed * fast;
     snd('swing', { vol: .25, rate: 1.2 });
     if (!inReach(tx, ty)) return;
     const f = fgAt(tx, ty); if (f === 255) return;
@@ -947,7 +1094,7 @@
     if (tool === 1 && it.tool !== 'axe') { hint('Это рубят топором 🪓'); return; }
     if (tool === 0 && it.tool !== 'pick') { hint('Тут нужна кирка ⛏'); return; }
     if (it.tool === 'pick' && P.TIER[f] > it.tier) { hint(`Нужна кирка мощнее (${tierName(P.TIER[f])})`); burst(tx + .5, ty + .5, 3, 0xaaaaaa, 2, .2, .08); snd('digstone', { vol: .4, rate: 1.4 }); return; }
-    mineHit(tx, ty, 'fg', it.power, P.HARD[f]);
+    mineHit(tx, ty, 'fg', it.power * (fast < 1 ? 1.35 : 1), P.HARD[f]);
   }
   const tierName = t => ['любая', 'медная', 'железная', 'золотая', 'глубинная', 'огненная'][t] || 'лучше';
   let hintAt = 0;
@@ -1044,6 +1191,8 @@
     if (r() < .5) add('arrow', 15 + Math.floor(r() * 25));
     if (r() < .4) add('rope', 10 + Math.floor(r() * 20));
     if (r() < .3) add('crystal', 1 + Math.floor(r() * 3));
+    if (r() < .35) add(r() < .5 ? 'potion_miner' : 'potion_shine', 1 + Math.floor(r() * 2));   // новое — в конце: прежние сундуки те же
+    if (r() < .12) add('hook', 1);
     return out;
   }
   // дерево: ствол и всё над ним (листва, лианы), не дальше 4 клеток в стороны
@@ -1102,30 +1251,50 @@
     for (const m of G.mobs) if (hit(m)) return true;
     return false;
   }
+  // можно ли поставить блок предмета it в (tx, ty) — без побочных эффектов (умный курсор и превью тоже спрашивают):
+  // '' — можно, иначе причина (пустая строка подсказки — молча нельзя)
+  function canPlace(it, tx, ty){
+    const id = it.tileId || PZ.TILE[it.tile]?.id; if (!id) return '-';
+    if (!inReach(tx, ty)) return '-';
+    const k = P.KIND[id], s = P.SOLID[id];
+    if (k === 1) {   // предмет из нескольких клеток: ставим так, чтобы низ был в клетке курсора
+      const w = P.W[id], h = P.H[id], ax = tx - Math.floor((w - 1) / 2), ay = ty - h + 1;
+      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) { const v = fgAt(ax + dx, ay + dy); if (v && (P.KIND[v] !== 2 || P.CLIMB[v])) return '-'; }
+      if (P.SUP[id] === 1 || id === T.DOOR) for (let dx = 0; dx < w; dx++) { const b = fgAt(ax + dx, ay + h); if (!(P.SOLID[b] === 1 || P.SOLID[b] === 2) || b === 255) return '-'; }
+      if (id === T.DOOR) { const a = fgAt(ax, ay - 1); if (!(P.SOLID[a] === 1) || a === 255) return 'Дверь ставят в проём высотой 3: блок сверху и снизу'; }
+      if (s && bodyIn(ax, ay, w, h)) return '-';
+      return '';
+    }
+    const cur = fgAt(tx, ty);
+    if (cur === 255) return '-';
+    if (cur && !(P.KIND[cur] === 2 && P.HARD[cur] === 0)) return '-';   // траву можно заменить
+    if (s === 1 && bodyIn(tx, ty, 1, 1)) return '-';
+    if (id === T.TORCH && !(wallAt(tx, ty) || [[0, 1], [1, 0], [-1, 0]].some(([dx, dy]) => P.SOLID[fgAt(tx + dx, ty + dy)] === 1))) return 'Факел нужно прислонить к стене или блоку';
+    if (id === T.ROPE && !(P.SOLID[fgAt(tx, ty - 1)] || fgAt(tx, ty - 1) === T.ROPE)) return 'Верёвку вешают под блок или другую верёвку';
+    if (P.SUP[id] === 1 && !(P.SOLID[fgAt(tx, ty + 1)] === 1)) return '-';
+    if (!anySupport(tx, ty) && id !== T.ROPE) return '-';
+    return '';
+  }
+  function canWall(it, tx, ty){
+    if (!PZ.WALL[it.wall]?.id || !inReach(tx, ty) || wallAt(tx, ty) || fgAt(tx, ty) === 255) return false;
+    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) if (wallAt(tx + dx, ty + dy) || P.SOLID[fgAt(tx + dx, ty + dy)] === 1) return true;
+    return false;
+  }
   function placeTile(it, tx, ty){
     const p = G.pl;
     const id = it.tileId || PZ.TILE[it.tile]?.id; if (!id) return;
     if (!inReach(tx, ty)) return;
     p.useT = .12;
+    const why = canPlace(it, tx, ty);
+    if (why) { if (why !== '-') hint(why); return; }
     const k = P.KIND[id], s = P.SOLID[id];
-    if (k === 1) {   // предмет из нескольких клеток: ставим так, чтобы низ был в клетке курсора
+    if (k === 1) {
       const w = P.W[id], h = P.H[id], ax = tx - Math.floor((w - 1) / 2), ay = ty - h + 1;
-      for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) { const v = fgAt(ax + dx, ay + dy); if (v && (P.KIND[v] !== 2 || P.CLIMB[v])) return; }
-      if (P.SUP[id] === 1 || id === T.DOOR) for (let dx = 0; dx < w; dx++) { const b = fgAt(ax + dx, ay + h); if (!(P.SOLID[b] === 1 || P.SOLID[b] === 2) || b === 255) return; }
-      if (id === T.DOOR) { const a = fgAt(ax, ay - 1); if (!(P.SOLID[a] === 1) || a === 255) { hint('Дверь ставят в проём высотой 3: блок сверху и снизу'); return; } }
-      if (s && bodyIn(ax, ay, w, h)) return;
       for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) setCell(ax + dx, ay + dy, id, (dx + dy * w) << 4, null, 0);
       if (id === T.CHEST) G.chests.set(ax + ',' + ay, Array(CHEST_N).fill(null));
       if (id === T.BED) { G.W.bed = { x: ax + 1, y: ay + 1 }; toast('🛏 Здесь ты теперь возрождаешься', 'good'); }
     } else {
       const cur = fgAt(tx, ty);
-      if (cur === 255) return;
-      if (cur && !(P.KIND[cur] === 2 && P.HARD[cur] === 0)) return;   // траву можно заменить
-      if (s === 1 && bodyIn(tx, ty, 1, 1)) return;
-      if (id === T.TORCH && !(wallAt(tx, ty) || [[0, 1], [1, 0], [-1, 0]].some(([dx, dy]) => P.SOLID[fgAt(tx + dx, ty + dy)] === 1))) { hint('Факел нужно прислонить к стене или блоку'); return; }
-      if (id === T.ROPE && !(P.SOLID[fgAt(tx, ty - 1)] || fgAt(tx, ty - 1) === T.ROPE)) { hint('Верёвку вешают под блок или другую верёвку'); return; }
-      if (P.SUP[id] === 1 && !(P.SOLID[fgAt(tx, ty + 1)] === 1)) return;
-      if (!anySupport(tx, ty) && id !== T.ROPE) return;
       if (cur) setCell(tx, ty, 0, 0);
       setCell(tx, ty, id, 0, null, s === 1 ? 0 : null);
       if (id === T.TORCH) ach('torch');
@@ -1138,10 +1307,7 @@
     const id = PZ.WALL[it.wall]?.id; if (!id) return;
     if (!inReach(tx, ty)) return;
     G.pl.useT = .1;
-    if (wallAt(tx, ty) || fgAt(tx, ty) === 255) return;
-    let ok = false;
-    for (const [dx, dy] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { if (wallAt(tx + dx, ty + dy) || P.SOLID[fgAt(tx + dx, ty + dy)] === 1) ok = true; }
-    if (!ok) return;
+    if (!canWall(it, tx, ty)) return;
     setCell(tx, ty, null, null, id);
     useOne();
     snd('place', { x: tx, y: ty, vol: .5, rate: .8 });
@@ -1153,11 +1319,17 @@
     burst(x + .5, y + .5, 6, tileColor(0, w), 4, .4, .12);
     checkSupport(x, y);
   }
-  // ── Расходники ──
-  function useConsumable(it){
+  // ── Расходники (slot — из какой ячейки тратить; по умолчанию — из руки) ──
+  function useConsumable(it, s, slot = G.CH.sel){
     const p = G.pl, CH = G.CH;
     p.useT = .5;
     switch (it.use) {
+      case 'buff': {
+        const b = CH.buffs || (CH.buffs = {});
+        b[it.buff] = Math.max(b[it.buff] || 0, it.dur);
+        snd('drink', { vol: .6 }); burst(p.x + p.w / 2, p.y + p.h / 2, 14, it.buff === 'shine' ? 0x8fe8ff : 0xf2c230, 4, .6, .14, 0, 1);
+        toast(`${it.name} — ${Math.round(it.dur / 60)} мин`, 'good'); break;
+      }
       case 'heal':
         if (it.key === 'potion') { if (p.potionT > 0) { hint(`Зелье ещё нельзя: ${Math.ceil(p.potionT)} с`); return; } p.potionT = 30; }
         if (CH.hp >= CH.maxHp) { hint('Здоровье и так полное'); return; }
@@ -1176,8 +1348,63 @@
       case 'script': if (!G.modsUse?.(it.key, G.aim.x, G.aim.y)) hint('Мод этого предмета сейчас не работает'); return;   // предмет мода: решает его скрипт
       default: return;
     }
-    if (!it.keep) useOne();
+    if (!it.keep) { const q = CH.inv[slot]; if (q && q.id === it.key) { q.n--; if (q.n <= 0) CH.inv[slot] = null; G.U?.inv(); } else useOne(); }
     G.U?.hud();
+  }
+  const buffOn = k => (G.CH?.buffs?.[k] || 0) > 0;
+  function tickBuffs(dt){
+    const b = G.CH.buffs; if (!b) return;
+    for (const k in b) { b[k] -= dt; if (b[k] <= 0) { delete b[k]; toast(k === 'mine' ? '⛏ Зелье шахтёра закончилось' : '✨ Сияние погасло', 'info'); } }
+  }
+  // H — лечение: большое зелье, если ран много и оно готово, иначе гриб
+  function quickHeal(){
+    const CH = G.CH, p = G.pl, miss = CH.maxHp - CH.hp;
+    if (miss <= 0) { hint('Здоровье и так полное'); return; }
+    const at = id => CH.inv.findIndex(s => s && s.id === id);
+    let i = -1;
+    if (p.potionT <= 0 && (miss >= 40 || at('mushroom') < 0)) i = at('potion');
+    if (i < 0) i = at('mushroom');
+    if (i < 0) { hint(at('potion') >= 0 ? `Зелье ещё нельзя: ${Math.ceil(p.potionT)} с` : 'Нечем лечиться: грибы и зелья лечения (H)'); return; }
+    useConsumable(itemDef(CH.inv[i].id), CH.inv[i], i);
+  }
+  // B — все зелья-усиления, которые сейчас не действуют
+  function quickBuff(){
+    const CH = G.CH, b = CH.buffs || {};
+    let n = 0;
+    for (let i = 0; i < CH.inv.length; i++) { const s = CH.inv[i], it = s && itemDef(s.id); if (it?.use === 'buff' && !(b[it.buff] > 5)) { useConsumable(it, s, i); n++; } }
+    if (!n) hint('Нет зелий-усилений (B): «Зелье шахтёра», «Зелье сияния» — на верстаке');
+  }
+  // ═══ Вещи: сортировка и «разложить по сундукам рядом» (как в Террарии; панель ячеек не трогаем) ═══
+  const SORT_KIND = { tool: 0, melee: 1, bow: 1, wand: 1, ammo: 2, hook: 3, acc: 3, use: 4, tile: 5, wall: 6, mat: 7 };
+  function sortInv(){
+    const inv = G.CH.inv, rest = [];
+    for (let i = HOT_N; i < INV_N; i++) if (inv[i]) { rest.push(inv[i]); inv[i] = null; }
+    const merged = [];
+    for (const s of rest) { const mx = stackOf(s.id); let n = s.n; for (const m of merged) if (n && m.id === s.id && m.n < mx) { const a = Math.min(n, mx - m.n); m.n += a; n -= a; } if (n) merged.push({ id: s.id, n }); }
+    merged.sort((a, b) => { const A = itemDef(a.id), B = itemDef(b.id); return (SORT_KIND[A?.kind] ?? 8) - (SORT_KIND[B?.kind] ?? 8) || String(A?.name || a.id).localeCompare(String(B?.name || b.id), 'ru') || b.n - a.n; });
+    merged.forEach((s, k) => { inv[HOT_N + k] = s; });
+    G.U?.inv(); snd('click', { vol: .4 });
+  }
+  function quickStack(){
+    const p = G.pl, px = p.x + p.w / 2, py = p.y + p.h / 2, inv = G.CH.inv;
+    let moved = 0, chests = 0;
+    for (const [k, items] of G.chests) {
+      const [ax, ay] = k.split(',').map(Number);
+      if (!items || Math.hypot(ax + 1 - px, ay + .5 - py) > 8) continue;
+      let used = false;
+      for (let i = HOT_N; i < INV_N; i++) {
+        const s = inv[i]; if (!s || !items.some(o => o && o.id === s.id)) continue;
+        const mx = stackOf(s.id); let n = s.n;
+        for (let j = 0; j < items.length && n; j++) { const o = items[j]; if (o && o.id === s.id && o.n < mx) { const a = Math.min(n, mx - o.n); o.n += a; n -= a; } }
+        for (let j = 0; j < items.length && n; j++) if (!items[j]) { items[j] = { id: s.id, n }; n = 0; }
+        if (n !== s.n) { moved += s.n - n; used = true; }
+        if (n) s.n = n; else inv[i] = null;
+      }
+      if (used) { chests++; const c = cAt(ax, ay); if (c) { c.mod = true; G.dirtySave.add(c); } }
+    }
+    G.U?.inv();
+    toast(moved ? `📦 Разложено по сундукам рядом: ${moved} шт. (${chests})` : 'Рядом нет сундуков с такими же вещами', moved ? 'good' : 'bad');
+    if (moved) snd('door_wood_close', { vol: .4, rate: 1.4 });
   }
   // ── Оружие ближнего боя: дуга перед игроком ──
   function swingWeapon(it){
@@ -1220,6 +1447,15 @@
     }
     return best ? interactAt(best[0], best[1]) : false;
   }
+  // ПКМ чуть мимо двери/сундука — всё равно открыть (ближайшее в клетке вокруг курсора)
+  function interactAround(tx, ty){
+    let best = null, bd = 9;
+    for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) {
+      const f = fgAt(x, y);
+      if ((f === T.DOOR || f === T.DOOROPEN || f === T.CHEST || f === T.LOOT || f === T.BED) && inReach(x, y)) { const d = Math.hypot(x - tx, y - ty); if (d < bd) { bd = d; best = [x, y]; } }
+    }
+    return best ? interactAt(best[0], best[1]) : false;
+  }
   function toggleDoor(x, y){
     const f = fgAt(x, y), [ax, ay] = objAnchor(x, y), to = f === T.DOOR ? T.DOOROPEN : T.DOOR;
     if (to === T.DOOR && bodyIn(ax, ay, 1, 3)) { hint('В проёме кто-то стоит'); return; }
@@ -1244,6 +1480,9 @@
     'Чем глубже, тем богаче руда: медь и железо сверху, серебро и золото глубже, ниже 360 м — глубинит, а у лавы — жарит.',
     'Глубинит берёт только золотая кирка, а жарит — глубинная.',
     'Кристаллы жизни ❤️ прячутся в пещерах — каждый навсегда прибавляет 20 здоровья.',
+    'Ctrl — умный курсор 🎯: кирка сама найдёт ближайший блок, а блок встанет туда, где держится. Shift — держи, и я подам нужный инструмент.',
+    'Крюк-кошка (наковальня: 3 железных слитка и 10 верёвок): E — бросить, цепляется за камень и стволы. Прыжок — отцепиться.',
+    'Зелье сияния (светогрибы) — светишь сам, без факелов. Зелье шахтёра — копаешь быстрее. B — выпить все усиления разом.',
     'Вода и лава встретятся — будет обсидиан. Он нужен для огненных вещей.',
     'Желейная приманка (25 геля + гриб) зовёт Желейного великана. Совиный манок — Ночного филина, только ночью.',
     'Молоток бьёт стены, а по блоку — делает полублок и склоны.',
@@ -1305,7 +1544,10 @@
       if (t0 < NIGHT0 && G.W.time >= NIGHT0) { G.nightDied = false; toast('🌙 Наступила ночь — берегись зомби', 'bad'); }
       G.W.playtime = (G.W.playtime || 0) + dt; G.CH.playtime = (G.CH.playtime || 0) + dt;
       keysOnce();
+      if (G.shift && !G.U?.modal()) autoSelect();
+      updHook(dt);
       updPlayer(dt);
+      updTarget();
       if (G.U) G.U.touch.jumpDown = false;   // «нажали прыжок» пальцем — один шаг
       for (let n = G.mobs.length - 1; n >= 0; n--) {
         const m = G.mobs[n];
@@ -1340,19 +1582,27 @@
     for (let k = 0; k < r; k++) liqList.push(liqList.shift());
     PZ.liquidStep(LW, liqList, G.liqTick, 2600);
   }
-  // клавиши «один раз»: ячейки, вещи, действие, пауза
+  // клавиши «один раз»: ячейки, вещи, действие (Esc, P, H, B, Ctrl, Shift — в bindInput: они не из «действий» движка)
   function keysOnce(){
     const C = G.C, U = G.U;
     for (let n = 1; n <= 9; n++) if (C.down('slot' + n)) selSlot(n - 1);
     if (C.down('inventory')) U?.toggleInv();
-    // Esc: сначала команда/окна, потом вещи, потом разговор, и только потом — пауза
-    if (C.down('pause')) { if (U?.modal()) U.closeTop(); else if (U?.invOpen()) U.toggleInv(false); else if (G.talk) { G.talk = null; U?.talk(null); } else pause(); }
     if (U?.modal()) return;
-    if (C.down('interact')) interactNear();
+    // E: есть крюк — крюк (как в Террарии), нет — действие рядом
+    if (C.down('interact')) { if (count('hook')) toggleHook(); else interactNear(); }
+  }
+  // Esc — как в Террарии: закрыть окно / разговор, иначе — вещи (меню паузы — ⏸ или P, в вещах — «⚙ Меню»)
+  function escKey(){
+    const U = G.U;
+    if (U?.modal()) U.closeTop();
+    else if (G.talk) { G.talk = null; U?.talk(null); }
+    else U?.toggleInv();
   }
   function selSlot(i){ G.CH.sel = clamp(i, 0, HOT_N - 1); G.pl.mine = null; G.U?.hud(); }
 
-  // ═══ Геймпад: правый стик — прицел, LB/RB — ячейки, Y — вещи, LT — лечение ═══
+  // ═══ Геймпад — как Террария на приставке: левый стик — идти, Ⓐ — прыжок, правый стик — прицел (умный курсор всегда),
+  // RT — копать/бить/ставить, Ⓧ — действие, Ⓑ — крюк, Ⓨ — вещи, LB/RB — ячейки, LT — лечение, крестовина ↑ — усиления,
+  // R3 — умный курсор для мыши, Start — меню (Ⓐ, Ⓧ, RT — через движок управления: Pad0 / Pad2 / Pad7) ═══
   function pollPad(){
     const pads = navigator.getGamepads ? navigator.getGamepads() : null, gp = pads && [...pads].find(q => q && q.connected);
     if (!gp) { G.pad.on = false; return; }
@@ -1361,10 +1611,15 @@
     G.pad.ax = dz(gp.axes[2] || 0); G.pad.ay = dz(gp.axes[3] || 0);
     const b = i => !!gp.buttons[i]?.pressed;
     const edge = (k, v) => { const was = G.pad[k]; G.pad[k] = v; return v && !was; };
+    const play = G.state === 'play' && !G.U?.modal();
+    if (edge('start', b(9))) { if (G.state === 'play') pause(); else if (G.state === 'paused') resume(); }
     if (edge('lb', b(4))) selSlot((G.CH.sel + HOT_N - 1) % HOT_N);
     if (edge('rb', b(5))) selSlot((G.CH.sel + 1) % HOT_N);
-    if (edge('y', b(3))) G.U?.toggleInv();
-    if (edge('lt', b(6)) && G.state === 'play') { const i = G.CH.inv.findIndex(s => s && (s.id === 'potion' || s.id === 'mushroom')); if (i >= 0) { const s = G.CH.inv[i]; G.CH.sel !== i && (G.CH.sel = i); useConsumable(itemDef(s.id), s); } }
+    if (edge('y', b(3)) && G.state === 'play') G.U?.toggleInv();
+    if (edge('lt', b(6)) && play) quickHeal();
+    if (edge('bb', b(1)) && play) toggleHook();
+    if (edge('up', b(12)) && play) quickBuff();
+    if (edge('r3', b(11)) && play) setSmart(!G.opt.smart);
     if (G.pad.ax || G.pad.ay) G.aim.src = 'pad';
   }
 
@@ -1501,7 +1756,8 @@
     BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth; CHS.back = G.opt.back;
     CHS.q = BG.q = G.q; CHS.amb = G.q === 0 ? .025 : .012;
     // тусклый свет вокруг героя — чтобы в пещере без факела было видно хоть что-то рядом
-    CHS.glowX = p.x + p.w / 2; CHS.glowY = p.y + p.h * .45; CHS.glow = p.dead ? 0 : .3;
+    const shine = buffOn('shine');   // «Зелье сияния» — герой сам светит
+    CHS.glowX = p.x + p.w / 2; CHS.glowY = p.y + p.h * .45; CHS.glow = p.dead ? 0 : shine ? .85 : .3; CHS.glowR = shine ? 13 : 7.5;
     window.D37E?._audio?.listener?.(camX, camY, 0, 0);
     // видимые чанки → на видеокарту (не больше 14 загрузок за кадр)
     visList.length = 0;
@@ -1537,7 +1793,7 @@
     }
     if (!any) { LT[0] = LT[1] = LT[2] = .1; return LT; }
     s /= 255;
-    const p = G.pl, d = p && !p.dead ? Math.max(0, 1 - Math.hypot(x - CHS.glowX, y - CHS.glowY) / 7.5) : 0, gw = CHS.glow * d * d;
+    const p = G.pl, d = p && !p.dead ? Math.max(0, 1 - Math.hypot(x - CHS.glowX, y - CHS.glowY) / (CHS.glowR || 7.5)) : 0, gw = CHS.glow * d * d;
     const amb = CHS.amb + .03;
     s = Math.pow(s, .75); r = Math.pow(r / 255, .75) * 1.16; g = Math.pow(g / 255, .75) * 1.16; b = Math.pow(b / 255, .75) * 1.16;   // та же кривая, что в шейдере
     LT[0] = Math.min(1, Math.max(r, s * skyL[0], gw) + amb); LT[1] = Math.min(1, Math.max(g, s * skyL[1], gw * .9) + amb); LT[2] = Math.min(1, Math.max(b, s * skyL[2], gw * .78) + amb);   // не больше 1: цвет спрайта — байт
@@ -1634,12 +1890,49 @@
       const q = A.spr.white[0];
       G.R.sprite(null, PT.x[i] - s / 2, PT.y[i] - s / 2, s, s, q[0], q[1], q[0] + 4, q[1] + 4, r, g, b, 255 * Math.min(1, k * 1.5) | 0);
     }
-    // курсор и трещины
-    if (G.state === 'play' && !p.dead && !G.U?.modal()) {
-      const [cx, cy] = cursorTile(), ok = inReach(cx, cy);
-      spr('frame', 0, cx, cy, 1, 1, false, 0, ok ? [255, 255, 255] : [255, 90, 90], ok ? .7 : .35, null, null, false);
-      if (p.mine) { const f = fgAt(p.mine.x, p.mine.y), hard = p.mine.layer === 'wall' ? 30 : P.HARD[f] || 1, st = clamp(Math.floor(p.mine.dmg / hard * 4), 0, 3); spr('crack', st, p.mine.x, p.mine.y, 1, 1, false, 0, null, 1, null, null, false); }
+    // крюк: верёвка звеньями от руки и сам крюк
+    const hk = G.hook;
+    if (hk && !p.dead) {
+      const hx = p.x + p.w / 2, hy = p.y + p.h * .35, dx = hk.x - hx, dy = hk.y - hy, d = Math.hypot(dx, dy), n = Math.floor(d / .32);
+      for (let k = 1; k < n; k++) spr('white', 0, hx + dx * k / n - .07, hy + dy * k / n - .07, .14, .14, false, 0, [120, 100, 80], 1);
+      itemSpr('hook', hk.x - .45, hk.y - .45, .9, .9, Math.atan2(dy, dx) - Math.PI / 4, .45, .45);
     }
+    // прицел: превью блока (зелёный — встанет, красный — нет), рамка цели, трещины и полоска копания, круг досягаемости
+    if (G.state === 'play' && !p.dead && !G.U?.modal()) {
+      const tg = G.target || updTarget(), s = selItem(), it = s ? itemDef(s.id) : null;
+      const pcx = p.x + p.w / 2, pcy = p.y + p.h * .4, work = it && (it.kind === 'tool' || it.kind === 'tile' || it.kind === 'wall');
+      if (work && (it.kind === 'tile' || it.kind === 'wall')) {
+        const c = G.A.item[it.key];
+        if (c !== undefined) { const u = (c % 64) * 16, v = (c >> 6) * 16; G.R.sprite(null, tg.x + .1, tg.y + .1, .8, .8, u, v, u + 16, v + 16, tg.ok ? 200 : 255, tg.ok ? 255 : 110, tg.ok ? 200 : 110, tg.ok ? 150 : 90); }
+        spr('frame', 0, tg.x, tg.y, 1, 1, false, 0, tg.ok ? [120, 255, 150] : [255, 90, 90], tg.ok ? .85 : .5, null, null, false);
+      } else {
+        const ok = work ? tg.ok : inReach(tg.x, tg.y);
+        spr('frame', 0, tg.x, tg.y, 1, 1, false, 0, ok ? [255, 255, 255] : [255, 90, 90], ok ? .75 : .32, null, null, false);
+      }
+      if (tg.smart) { const [rx, ry] = cursorTile(); if (rx !== tg.x || ry !== tg.y) spr('frame', 0, rx + .25, ry + .25, .5, .5, false, 0, [255, 255, 255], .25, null, null, false); }   // где сам курсор
+      if (G.aim.src === 'build') {   // «режим строителя»: крестик
+        spr('white', 0, G.aim.x - .7, G.aim.y - .04, 1.4, .08, false, 0, [255, 230, 120], .9, null, null, false);
+        spr('white', 0, G.aim.x - .04, G.aim.y - .7, .08, 1.4, false, 0, [255, 230, 120], .9, null, null, false);
+      }
+      if (p.mine) {
+        const f = fgAt(p.mine.x, p.mine.y), hard = p.mine.layer === 'wall' ? 30 : P.HARD[f] || 1, k = clamp(p.mine.dmg / hard, 0, 1), st = clamp(Math.floor(k * 4), 0, 3);
+        spr('crack', st, p.mine.x, p.mine.y, 1, 1, false, 0, null, 1, null, null, false);
+        spr('white', 0, p.mine.x + .08, p.mine.y + 1.08, .84, .13, false, 0, [20, 20, 26], .8, null, null, false);
+        spr('white', 0, p.mine.x + .08, p.mine.y + 1.08, .84 * k, .13, false, 0, [255, 210, 80], .95, null, null, false);
+      }
+      if (work) {   // круг «докуда достаёт рука»: еле виден, а когда курсор дальше — заметнее
+        const far = Math.hypot(G.aim.x - pcx, G.aim.y - pcy) > REACH - .3;
+        if (far || G.q >= 1) G.R.sprite(ringImg(), pcx - REACH - .5, pcy - REACH - .5, (REACH + .5) * 2, (REACH + .5) * 2, 0, 0, 128, 128, 255, 255, 255, far ? 70 : 22);
+      }
+    }
+  }
+  let ringC = null;
+  function ringImg(){
+    if (ringC) return ringC;
+    ringC = document.createElement('canvas'); ringC.width = ringC.height = 128;
+    const g = ringC.getContext('2d'); g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 2; g.setLineDash([6, 5]);
+    g.beginPath(); g.arc(64, 64, 61, 0, Math.PI * 2); g.stroke();
+    return ringC;
   }
   // надписи (2D поверх): цифры урона, имена, подсказка над курсором
   function drawOverlay(camX, camY){
@@ -1937,25 +2230,67 @@
       pos(e); G.mouse.in = true; G.aim.src = 'mouse';
       if (G.state !== 'play' || G.U?.modal()) return;
       if (e.button === 0) G.mouse.l = true;
-      if (e.button === 2) { updAim(); const [tx, ty] = cursorTile(); if (!interactAt(tx, ty)) useRight(); }
+      if (e.button === 2) { updAim(); const [tx, ty] = cursorTile(); if (!interactAt(tx, ty) && !interactAround(tx, ty)) useRight(); }
       e.preventDefault();
     });
     on(window, 'pointerup', e => { if (e.pointerType === 'mouse' && e.button === 0) G.mouse.l = false; });
     on(window, 'blur', () => { G.mouse.l = false; });
+    let ctrlSolo = false;   // Ctrl нажали и отпустили без другой клавиши/колеса — переключить умный курсор
     on(cv, 'wheel', e => {
       if (G.state !== 'play') return;
       e.preventDefault();
-      if (e.ctrlKey) { zoom(e.deltaY > 0 ? .9 : 1.1); return; }
+      if (e.ctrlKey) { ctrlSolo = false; zoom(e.deltaY > 0 ? .9 : 1.1); return; }
       selSlot((G.CH.sel + (e.deltaY > 0 ? 1 : HOT_N - 1)) % HOT_N);
     }, { passive: false });
     on(window, 'keydown', e => {
       if (!G || G.state !== 'play' || e.target?.closest?.('input, textarea')) return;
-      if (e.code === 'Digit0') { selSlot(9); e.preventDefault(); }
+      if (e.code === 'ControlLeft' || e.code === 'ControlRight') { if (!e.repeat) ctrlSolo = true; return; }
+      ctrlSolo = false;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { setShift(true); return; }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+      if (e.code === 'Escape') { escKey(); e.preventDefault(); }
+      else if (e.code === 'Digit0') { selSlot(9); e.preventDefault(); }
       else if (e.code === 'Equal' || e.code === 'NumpadAdd') zoom(1.1);
       else if (e.code === 'Minus' || e.code === 'NumpadSubtract') zoom(.9);
-      else if (e.code === 'KeyH') { const i = G.CH.inv.findIndex(s => s && (s.id === 'potion' || s.id === 'mushroom')); if (i >= 0) useConsumable(itemDef(G.CH.inv[i].id)); }
+      else if (e.code === 'KeyH') quickHeal();
+      else if (e.code === 'KeyB') quickBuff();
+      else if (e.code === 'KeyP') pause();
       else if (e.code === 'Slash' || (e.code === 'Enter' && !G.U?.modal())) { G.U?.command(); e.preventDefault(); }
     });
+    on(window, 'keyup', e => {
+      if (!G) return;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') setShift(false);
+      if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && ctrlSolo && G.state === 'play') { ctrlSolo = false; setSmart(!G.opt.smart); }
+    });
+    on(window, 'blur', () => setShift(false));
+  }
+  // ⚔ на телефоне: враг рядом, а в руке не оружие — на время нажатия взять лучшее оружие из ячеек (отпустил — вернётся)
+  const isWeapon = d => d && (d.kind === 'melee' || d.kind === 'bow' || d.kind === 'wand');
+  function attackStart(){
+    const s = selItem();
+    if (isWeapon(s && itemDef(s.id)) || !nearestFoe(9)) return;
+    let best = -1, bv = 0;
+    for (let i = 0; i < HOT_N; i++) { const q = G.CH.inv[i], d = q && itemDef(q.id); if (isWeapon(d) && (d.dmg || 1) > bv) { bv = d.dmg || 1; best = i; } }
+    if (best >= 0) { G.atkPrev = G.CH.sel; selSlot(best); }
+  }
+  function attackEnd(){ if (G.atkPrev >= 0 && G.CH) selSlot(G.atkPrev); G.atkPrev = -1; }
+  // «режим строителя» на телефоне: крестик двигают пальцем (точно, по клетке), ставит/копает кнопка ✓
+  function buildMode(v){
+    const tch = G.U?.touch; if (!tch) return;
+    tch.build = !!v;
+    if (v) { const p = G.pl; G.build = { x: p.x + p.w / 2 + p.dir * 2.2, y: p.y + p.h * .6 }; G.aim.src = 'build'; }
+    else { G.build = null; G.aim.src = 'touch'; }
+  }
+  function buildMove(dx, dy){   // сдвиг пальца в пикселях холста (CSS)
+    if (!G.build) return;
+    const k = G.res / G.cam.tile;
+    G.build.x += dx * k; G.build.y += dy * k;
+  }
+  function buildSet(sx, sy){ if (G.build) { G.build.x = G.cam.x + (sx * G.res - G.R.w / 2) / G.cam.tile; G.build.y = G.cam.y + (sy * G.res - G.R.h / 2) / G.cam.tile; } }
+  function setSmart(v){
+    G.opt.smart = !!v; saveOpt();
+    toast(v ? '🎯 Умный курсор: включён (Ctrl — выключить)' : '🎯 Умный курсор: выключен', 'info');
+    G.U?.smart?.(G.opt.smart);
   }
   // ПКМ без двери/сундука: еда/зелье в руке — съесть
   function useRight(){ const s = selItem(), it = s && itemDef(s.id); if (it && it.kind === 'use') useConsumable(it, s); }
@@ -2055,6 +2390,8 @@
     listWorlds, listChars, newWorldRecord, newCharRecord, deleteWorld, deleteChar, exportWorld, importWorld, exportChar, importChar,
     put: (st, v) => DB.put(st, v), dbAll: st => DB.all(st), dbDel: (st, k) => DB.del(st, k), dbGet: (st, k) => DB.get(st, k),
     aimTouch, tapTouch, interactNear, useItem: () => useItem(), runCommand, toast, snd, isNight, statusText,
+    sortInv, quickStack, quickHeal, quickBuff, toggleHook, attackStart, attackEnd, buildMode, buildMove, buildSet, setSmart, escKey,
+    buffs: () => G?.CH?.buffs || {}, hasHook: () => !!(G?.CH && count('hook')),
     setCell, fgAt, wallAt, lqAt, ltAt, tileKey, dropItem, burst: (x, y, n, col, sp, life, size, grav, glow) => burst(x, y, n, col, sp, life, size, grav, glow), floatText,
     spawnMob, spawnBoss, rgbInt, last: () => { try { return JSON.parse(lsGet(LS_LAST) || 'null'); } catch (e) { return null; } },
     buildAtlas,
