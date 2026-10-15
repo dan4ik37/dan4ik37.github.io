@@ -36,15 +36,18 @@
       entry: { x: 118, z: -24, yaw: PI / 2 }, gate: { x: 110, z: -24 }, sub: 'Детский город: работы, школа, питомцы, игровая площадка' },
     metro: { id: 'metro', name: 'Большой город', short: 'Город', icon: '🏙️', age: ADULT_AGE, x0: 90, x1: 340, z0: 100, z1: 350, color: '#60a5fa',
       entry: { x: 98, z: 130, yaw: PI / 2 }, gate: { x: 90, z: 130 }, sub: 'Город для взрослых: небоскрёбы, работы с зарплатой, полиция и грабители, банк, бизнес' },
-    war: { id: 'war', name: 'Боевая зона', short: 'Боевая зона', icon: '🪖', age: WAR_AGE, x0: -340, x1: -70, z0: 100, z1: 400, color: '#ef4444',
-      entry: { x: -84, z: 130, yaw: -PI / 2 }, gate: { x: -70, z: 130 }, sub: 'Мультяшный бой: база, бункер, порт, аэродром, наёмники' },
+    // 15.10.2026 (владелец): боевая зона — дом военных баз игроков (как Military Tycoon): 12 участков кольцом (mir-war.js PLOTS),
+    // нейтральные центр с бункером, порт, аэродром и лагерь у КПП
+    war: { id: 'war', name: 'Боевая зона', short: 'Боевая зона', icon: '🪖', age: WAR_AGE, x0: -506, x1: -70, z0: 100, z1: 460, color: '#ef4444',
+      entry: { x: -84, z: 130, yaw: -PI / 2 }, gate: { x: -70, z: 130 }, sub: 'Мультяшный бой: участки военных баз, бункер, порт, аэродром, наёмники' },
   };
   const ZLIST = [ZONES.kids, ZONES.metro, ZONES.war];
   // Под рост района участков (агент набегов: участки 32×32 кольцами, 4 на улицу) — здесь ничего своего не строим; край мира — шире
   const RESERVE = { x0: -133, x1: -12, z0: -137, z1: -12 };
   // Море и бункер боевой зоны: дыры в земле, дно (ph.terrain) и вода (ph.waterLevel) — нужны миру сразу, до подгрузки зоны
-  const SEA = { x0: -420, x1: -262, z0: 112, z1: 396, wl: -.55, floor: -7 };
-  const BUNKER = { x0: -186, x1: -160, z0: 176, z1: 198, floor: -5.4, roof: -.35 };
+  // (берег — x −364,8: западный край кольца участков; у 4 участков — свой берег под доки; бункер — в нейтральном центре кольца)
+  const SEA = { x0: -500, x1: -364.8, z0: 104, z1: 456, wl: -.55, floor: -7 };
+  const BUNKER = { x0: -260.4, x1: -234.4, z0: 218.4, z1: 240.4, floor: -5.4, roof: -.35 };
   // Канал Большого города (с востока на запад через весь город): мосты на проспектах, эстакада над ним, пешеходные мостики
   const CANAL = { x0: 90, x1: 340, z0: 252, z1: 264, wl: -2.4, floor: -5.6 };   // вода ниже улиц: под мостами проходят лодки
   // Места под рост городов (будущий «градостроитель»): здесь ничего своего не строим — ни деревьев, ни холмов
@@ -178,7 +181,8 @@
     for (const [k, r] of Object.entries(d.roles || {})) ROLES[k] = { ...r, id: k, zone: id };
     // таблица зданий: зона, помещения, цвет крыши; силуэты и карта — из неё (+ площади и парки — extraFoot)
     for (const b of d.buildings || []) { b.zone = id; b.lots = lotsOf(b); b.roof = b.roof || roofColor(b); if (!b.icon) b.icon = (BTYPES[b.type] || BTYPES.lot)[0]; }
-    if (!d.footprints) d.footprints = [...(d.buildings || []).map(b => [b.x, b.z, b.w, b.d, b.wall || b.roof, b.h ?? 4, b.style || null, b.roof]), ...(d.extraFoot || [])];
+    // сначала земля (площади, перрон, порт), сверху — здания (на карте ангары не прячутся под перроном)
+    if (!d.footprints) d.footprints = [...(d.extraFoot || []), ...(d.buildings || []).map(b => [b.x, b.z, b.w, b.d, b.wall || b.roof, b.h ?? 4, b.style || null, b.roof])];
     return d;
   };
 
@@ -264,6 +268,14 @@
     const foot = (x, z, w, d, c) => { g.fillStyle = c; g.fillRect(sx(x - w / 2), sz(z - d / 2), Math.max(1, w * sc), Math.max(1, d * sc)); };
     for (const [, x, z, w, d, c] of FOOT0) foot(x, z, w, d, c);
     for (const d of Object.values(DEFS)) for (const f of d.footprints || []) foot(f[0], f[1], f[2], f[3], f[7] || f[4]);   // сверху — крыша (цвет по типу здания)
+    // участки военных баз (боевая зона): пунктир и номер; занятые — цвет базы (o.plots: { id: { c, name } } — от системы баз)
+    for (const d of Object.values(DEFS)) for (const P of d.plots || []) {
+      const own = o.plots?.[P.id];
+      if (own?.c) { g.globalAlpha = .35; g.fillStyle = own.c; g.fillRect(sx(P.x0), sz(P.z0), (P.x1 - P.x0) * sc, (P.z1 - P.z0) * sc); g.globalAlpha = 1; }
+      g.strokeStyle = own?.c || 'rgba(255,255,255,.75)'; g.lineWidth = Math.max(1, sc * .6); g.setLineDash([4, 3]);
+      g.strokeRect(sx(P.x0), sz(P.z0), (P.x1 - P.x0) * sc, (P.z1 - P.z0) * sc); g.setLineDash([]);
+      if ((P.x1 - P.x0) * sc > 16) { g.fillStyle = '#fff'; g.font = `800 ${Math.max(9, Math.min(16, (P.x1 - P.x0) * sc / 3))}px Montserrat, Arial, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(P.n), sx(P.cx), sz(P.cz)); }
+    }
     // названия зон и метки возраста
     const fs = Math.max(10, Math.min(18, W / 34));
     g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -747,12 +759,13 @@
     // ── Улица: дорога с тротуарами и разметкой, зебра, фонари ──
     K.road = (x1, z1, x2, z2, w = 8, o = {}) => {
       const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz), yaw = Math.atan2(dx, dz), cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
-      P({ s: 'box', x: cx, y: .025, z: cz, w, h: .02, d: L, yaw, m: K.M.asphalt });
+      const ry = o.y ?? .025;
+      P({ s: 'box', x: cx, y: ry, z: cz, w, h: .02, d: L, yaw, m: o.m || K.M.asphalt });
       if (o.walk !== false) for (const s of [-1, 1]) {
         const ox = Math.cos(yaw) * (w / 2 + 1.3) * s, oz = -Math.sin(yaw) * (w / 2 + 1.3) * s;
         P({ s: 'box', x: cx + ox, y: .07, z: cz + oz, w: 2.6, h: .14, d: L, yaw, m: K.M.walk });
       }
-      if (o.lines !== false) for (let k = 4; k < L - 4; k += 5) P({ s: 'box', x: x1 + dx * k / L, y: .04, z: z1 + dz * k / L, w: .22, h: .01, d: 2, yaw, c: '#f1f5f9' });
+      if (o.lines !== false) for (let k = 4; k < L - 4; k += 5) P({ s: 'box', x: x1 + dx * k / L, y: ry + .015, z: z1 + dz * k / L, w: .22, h: .01, d: 2, yaw, c: '#f1f5f9' });
     };
     K.zebra = (x, z, w, yaw = 0) => { for (let i = 0; i < 7; i++) { const o = -w / 2 + .6 + i * (w - 1.2) / 6; P({ s: 'box', x: x + Math.cos(yaw) * o, y: .045, z: z - Math.sin(yaw) * o, w: .5, h: .01, d: 3, yaw, c: '#f8fafc' }); } };
 

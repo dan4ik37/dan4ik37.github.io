@@ -45,8 +45,9 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   const W = ZONES.war;
   ok(SEA.x1 > W.x0 && SEA.x1 < W.x1 && SEA.z0 >= W.z0 && SEA.z1 <= W.z1, 'море — в западной части боевой зоны');
   ok(inRect(W, BUNKER.x0, BUNKER.z0, -5) && inRect(W, BUNKER.x1, BUNKER.z1, -5), 'бункер — внутри боевой зоны');
-  ok(MZ.terrain(-300, 250) === SEA.floor && MZ.water(-300, 250) === SEA.wl && MZ.water(-200, 250) === -Infinity, 'море: дно и вода');
-  ok(MZ.terrain(-173, 187) === BUNKER.floor && MZ.terrain(-140, 187) === 0 && MZ.terrain(0, 0) === 0, 'бункер: пол ниже земли, вокруг — ровно');
+  ok(MZ.terrain((SEA.x0 + SEA.x1) / 2, (SEA.z0 + SEA.z1) / 2) === SEA.floor && MZ.water(SEA.x1 - 10, 250) === SEA.wl && MZ.water(-200, 250) === -Infinity, 'море: дно и вода');
+  const bcx = (BUNKER.x0 + BUNKER.x1) / 2, bcz = (BUNKER.z0 + BUNKER.z1) / 2;
+  ok(MZ.terrain(bcx, bcz) === BUNKER.floor && MZ.terrain(BUNKER.x1 + 20, bcz) === 0 && MZ.terrain(0, 0) === 0, 'бункер: пол ниже земли, вокруг — ровно');
   ok(SEA.wl > SEA.floor + 5, 'море глубокое — можно плавать');
 }
 
@@ -143,6 +144,43 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   for (const [k, L] of Object.entries(MW.SPAWNS)) for (const [x, z] of L) ok(inRect(ZONES.war, x, z, -3) && !inRect(SEA, x, z, 2) && !inRect(BUNKER, x, z, 2), `появление ${k} (${x}, ${z}) — в зоне на суше`);
   for (const P of MW.POINTS) ok(inRect(ZONES.war, P.x, P.z, -8) && !inRect(SEA, P.x, P.z, 8) && !inRect(BUNKER, P.x, P.z, 8), 'точка захвата ' + P.id + ' — в зоне');
   ok(MW.MERC.max <= 3 && MW.MERC.price >= 20, 'наёмники: немного и не бесплатно');
+}
+
+// ═══ 5б. Участки военных баз (владелец: боевая зона — дом военных баз, как Military Tycoon; систему баз делает агент набегов) ═══
+{
+  const W = ZONES.war, L = MW.PLOTS;
+  ok(L.length >= 8 && L.length <= 16, 'участков баз — от 8 до 16', L.length);
+  ok(new Set(L.map(p => p.id)).size === L.length && L.every((p, i) => p.id === 'wb' + String(i + 1).padStart(2, '0') && p.n === i + 1), 'номера участков — постоянные, разные, по порядку (wb01…)');
+  for (const P of L) {
+    ok(near(P.x1 - P.x0, 51.2) && near(P.z1 - P.z0, 51.2) && P.cells === 32 && P.cell === 1.6, `${P.id}: 32 × 32 клетки по 1,6`);
+    ok(inRect(W, P.x0, P.z0, -1) && inRect(W, P.x1, P.z1, -1), `${P.id}: в боевой зоне`);
+    ok(!rectsOverlap(P, SEA, -.01) && !rectsOverlap(P, BUNKER, 4), `${P.id}: на суше, не над бункером`);
+    for (const Q of L) if (Q !== P) ok(!rectsOverlap(P, Q, 4), `${P.id} и ${Q.id}: между участками — дорога`);
+    for (const k of ['spawn', 'garage', 'heli', 'hangar', 'cp']) ok(inRect(P, P[k].x, P[k].z, -2), `${P.id}: ${k} — внутри участка`, P[k]);
+    ok(near(Math.min(Math.abs(P.gate.x - P.x0), Math.abs(P.gate.x - P.x1), Math.abs(P.gate.z - P.z0), Math.abs(P.gate.z - P.z1)), 0), `${P.id}: въезд — на ограде`);
+    ok(inRect(SEA, P.dock.x, P.dock.z, -1), `${P.id}: доки / причал — в воде`, P.dock);
+    if (P.coast) ok(near(P.x0, SEA.x1) && P.dock.own, `${P.id}: свой берег`);
+    else ok(!P.dock.own && P.dock.z > MW.PORT.z0 && P.dock.z < MW.PORT.z1, `${P.id}: место у причала порта`, P.dock);
+    ok(P.airSlot && inRect(MW.AIR.apron, P.airSlot.x, P.airSlot.z, -5) && !rectsOverlap({ x0: P.airSlot.x - 5.5, x1: P.airSlot.x + 5.5, z0: P.airSlot.z - 5.5, z1: P.airSlot.z + 5.5 }, MW.AIR.runway), `${P.id}: стоянка на перроне, не на полосе`);
+    ok(P.under.x0 > P.x0 && P.under.x1 < P.x1 && P.under.z0 > P.z0 && P.under.z1 < P.z1 && P.under.floor < P.under.top && P.under.top <= 0 && MZ.terrain((P.under.x0 + P.under.x1) / 2, (P.under.z0 + P.under.z1) / 2) === 0, `${P.id}: место под подвал — под участком, сейчас там пусто`);
+  }
+  ok(L.filter(p => p.coast).length >= 3, 'у части участков свой берег (доки)', L.filter(p => p.coast).length);
+  ok(new Set(L.map(p => p.dock.x + ',' + p.dock.z)).size === L.length && new Set(L.map(p => p.airSlot.x)).size === L.length, 'у каждой базы свои доки / причал и своя стоянка');
+  // нейтральные места — не на участках
+  for (const [nm, r] of [['центр', MW.CENTER], ['порт', MW.PORT], ['перрон', MW.AIR.apron], ['полоса', MW.AIR.runway], ['бункер', BUNKER]]) for (const P of L) ok(!rectsOverlap(P, r, 2), `${nm} — не на участке ${P.id}`);
+  for (const P of MW.POINTS) ok(!MW.inPlot(P.x, P.z, 8), `точка ${P.id} — на нейтральной земле`);
+  for (const [k, S] of Object.entries(MW.SPAWNS)) for (const [x, z] of S) ok(!MW.inPlot(x, z, 1), `появление ${k} (${x}, ${z}) — не на участке базы`);
+  for (const [k, S] of Object.entries(MW.VEH)) for (const [x, z] of S) ok(!MW.inPlot(x, z, 1), `транспорт ${k} — не на участке базы`);
+  ok(MZ.buildings('war').filter(b => b.sub === 'cp').length === L.length && L.every(P => MZ.building(P.id + '_cp')?.plot === P.id), 'на каждом участке — командный пункт (одна постройка)');
+  ok(MZ.buildings('war').filter(b => b.sub !== 'cp').every(b => !MW.inPlot(b.x, b.z, 1)), 'другие здания зоны — не на участках');
+  // небо над полосой свободно: высоких зданий рядом нет, полоса длинная
+  const RW = MW.AIR.runway, air = { x0: RW.x0 - 40, x1: RW.x1 + 40, z0: RW.z0 - 30, z1: RW.z1 + 30 };
+  ok(MZ.buildings('war').filter(b => b.h > 8 && b.id !== 'w_control').every(b => !inRect(air, b.x, b.z)), 'у полосы нет высоких зданий (кроме диспетчерской)');
+  ok(RW.x1 - RW.x0 >= 150, 'полоса не короче 150 м');
+  // дороги зоны: каждый въезд участка — у дороги
+  const roadNear = (x, z) => MW.W_ROADS.some(r => { const [[ax, az], [bx, bz]] = r.pts; return x >= Math.min(ax, bx) - 9 && x <= Math.max(ax, bx) + 9 && z >= Math.min(az, bz) - 9 && z <= Math.max(az, bz) + 9; });
+  for (const P of L) ok(roadNear(P.gate.x, P.gate.z), `${P.id}: у въезда — дорога`);
+  ok(MZ.DEFS.war.plots === L, 'участки — в описании зоны (карта рисует их пунктиром)');
 }
 
 // ═══ 6. Захват точек и команды ═══
