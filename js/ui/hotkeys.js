@@ -10,7 +10,7 @@ function isTypingContext(){
   return false;
 }
 function isModalOpen(){
-  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal','settingsAdminModal','gsSettings'].some(id=>{
+  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal','settingsAdminModal','gsSettings','d37Phone'].some(id=>{
     const el=document.getElementById(id);
     return el && getComputedStyle(el).display!=='none';
   });

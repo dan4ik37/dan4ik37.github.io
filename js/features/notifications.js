@@ -91,6 +91,7 @@ function notifUpdateCount(bump){
     if (bump) { c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); }
   }
   document.getElementById('notifBtn')?.setAttribute('aria-label', notifUnread ? `Уведомления: ${notifUnread} новых` : 'Уведомления');
+  window.dispatchEvent(new CustomEvent('d37:notif', { detail: notifUnread }));   // значок «Уведомления» в телефоне 📱
   document.title = notifUnread ? `(${notifUnread}) ${notifBaseTitle}` : notifBaseTitle;
 }
 

@@ -9,8 +9,10 @@
 // та же физика: стены его держат), hi/snap — новичку всех сразу, say, emo, inv (позвать в игру или за столик), go (начать
 // партию за столом), mute. Лимит Supabase — 2 млн сообщений в месяц по числу получателей, поэтому шагов не шлём.
 // Столы: место — в presence (seat: id, код комнаты, время); код стола = код того, кто сел первым. Все места заняты (или
-// «Начать» за карточным столом) — отсчёт и все уходят в #/games/<игра>/<код>: это обычная онлайн-игра сайта. Вернулся —
-// стоишь у того же стола. Нет WebGL или выбран плоский мир — старый мир (world.js, GAME_IMPL.world до этого файла).
+// «Начать» за карточным столом) — отсчёт, и у всех за столом партия #/games/<игра>/<код> открывается ОКНОМ ПОВЕРХ МИРА
+// (js/games/mir-play.js): мир не выгружается, связь и место за столом остаются, в presence — pl { g, c } («играет»).
+// Партия кончилась / «↩ В мир» — стоишь у того же стола. Автоматы, ворота, приглашения — так же. Окно не открылось —
+// по-старому, на страницу игры (там «↩ В мир»). Нет WebGL или выбран плоский мир — старый мир (world.js, GAME_IMPL.world до этого файла).
 (() => {
   const OLD = window.GAME_IMPL?.world;
   const MAX_ROOM = 20, SHARDS = 6, IDLE_MS = 15 * 60e3, HIDDEN_MS = 10 * 60e3, CHAN = 'mir-';
@@ -392,7 +394,7 @@
         prompt: () => {
           if (S.mySeat?.id === sp.id) return null;
           const who = S.occ?.get(sp.id);
-          if (who && who !== S.me) return 'Занято: ' + who.nick;
+          if (who && who !== S.me) return 'Занято: ' + who.nick + (who.playing ? ' (играет)' : '');
           if (sp.tb) { const gi = gameInfo(sp.tb.game); return `${sp.stand ? 'Встать к столу' : 'Сесть'}: ${gi.icon} ${gi.title}`; }
           return 'Сесть';
         },
@@ -663,7 +665,7 @@
     R.setSky('#5aa7ff', '#cfeaff', '#eaf6ff', 90, 230);
     const ph = S.ph = new E.Phys({ ground: 0 });
     const C = S.C = E.controls({ onKey: () => activity() });
-    const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb' });
+    const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb, .mp' });
     const X = S.X = E.interact(ph, { who: S.key });
     S.world = buildWorld(R, ph, X, S);
     S.calls = R.bakeStatic();
@@ -697,7 +699,8 @@
     // камера в домах ближе, крыша прячется
     S.inside = null;
     S.loop = E.loop(update, frame);
-    const ro = window.ResizeObserver ? new ResizeObserver(() => R.resize()) : null;
+    // игра поверх мира: цикл стоит — после смены размера один кадр, чтобы мир за окном не пропал
+    const ro = window.ResizeObserver ? new ResizeObserver(() => { R.resize(); if (S?.playing && !S.stopped) { try { R.render(); } catch (e) {} } }) : null;
     ro?.observe(wrap);
     R.resize();
     S.cleanup3d = () => { ro?.disconnect(); };
@@ -712,13 +715,14 @@
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
     try { S.promo = window.D37AdPlaces?.worldPromo?.(S, { panel, go }) || null; } catch (e) { S.promo = null; }   // щиты: свои промо и спонсор (ad-places.js → mir-promo.js)
+    try { mirPhone(); } catch (e) { console.error(e); }   // телефон 📱 и «🌍 Весь мир» (phone.js, worldchat.js)
   }
 
   // ── Шаг логики (1/60 с) ──
   function update(dt){
     if (!S || S.stopped || S.editing) return;
     const { C, P, X, rig, ph } = S;
-    const setOpen = !!window.D37Settings?.isOpen?.();
+    const setOpen = !!window.D37Settings?.isOpen?.() || !!S.phoneOn;   // окно ⚙️ или телефон 📱 (phone.js) — Esc у них
     C.blocked = !!S.menu || setOpen;   // открыто меню или ⚙️ — персонаж стоит (Esc работает)
     C.step(dt);
     if (C.down('chat')) { const i = S.q('.wld-say input'); if (!i.readOnly) setTimeout(() => i.focus(), 0); else if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
@@ -776,9 +780,9 @@
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
     rig.update(dt, S.base?.cam || P, look, S.ph, C);   // в стройке камера смотрит на участок
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
-    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu;
+    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu && !S.phoneOn;
     // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
-    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !window.D37Settings?.isOpen?.()) openMenu();
+    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !S.phoneOn && !window.D37Settings?.isOpen?.()) openMenu();
     S.wasLocked = I.locked;
     A.update(dt, t, R.camera.position);
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
@@ -894,21 +898,52 @@
     try { st.keys = st.keys || await makeKeys(); } catch (e) { status('Браузер не поддерживает защищённые сообщения — обнови его'); return; }
     if (st.me.uid && !st.pass) { try { const { data, error } = await sbClient.rpc('world_pass', { p_pub: st.keys.pub }); if (!error && data) st.pass = data; } catch (e) {} }
     if (S !== st || st.stopped) return;
+    // старый канал с тем же именем ещё закрывается (мир пересобрали, переподключение)? Supabase отдал бы его же, а потом
+    // выкинул из списка по имени — и новый мир остался бы без связи. Сначала дождаться, пока старый уйдёт
+    const old = sbClient.getChannels?.().find(c => c.topic === 'realtime:' + CHAN + shard);
+    if (old) { try { await sbClient.removeChannel(old); } catch (e) {} if (S !== st || st.stopped) return; }
     S.shard = shard;
     S.q('.wldShard').textContent = `сервер ${shard}`;
     const ch = sbClient.channel(CHAN + shard, { config: { broadcast: { self: false }, presence: { key: S.key } } });
-    S.ch = ch; S.firstSync = false;
+    S.ch = ch; S.firstSync = false; S.chWhy = '';
     ch.on('presence', { event: 'sync' }, () => { if (S?.ch === ch) onSync(); });
     ch.on('broadcast', { event: 'w' }, ({ payload }) => { if (S?.ch === ch) onMsg(payload); });
+    ch.on('system', {}, p => { if (S?.ch === ch && p?.status === 'error') S.chWhy = String(p.message || ''); });   // почему сервер закроет канал
     ch.subscribe(async s => {
       if (S?.ch !== ch || S.stopped) return;
-      if (s === 'SUBSCRIBED') { status(''); await ch.track(presenceMeta()); }
+      if (s === 'SUBSCRIBED') { status(''); presCount(); await ch.track(presenceMeta()); }
       else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') status('Связь с миром потерялась — переподключаемся…');
+      else if (s === 'CLOSED') rejoinLater(ch);
     });
   }
-  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0 });
-  const retrack = () => { if (S?.ch && S.keys) S.ch.track(presenceMeta()).catch(() => {}); };
-  function leaveChannel(){ const ch = S?.ch; if (!ch) return; S.ch = null; try { ch.untrack(); } catch (e) {} try { sbClient.removeChannel(ch); } catch (e) {} }
+  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0, pl: S.playing ? { g: S.playing.g, c: S.playing.c } : null });
+  // Presence у Supabase: не больше 5 обновлений (track/untrack) за 30 с на клиента, иначе сервер закрывает канал мира
+  // («Client presence rate limit exceeded» — мир «вылетал»: сел-встал-сыграл подряд). Поэтому track — не чаще PRES_N раз
+  // за PRES_WIN: лишнее ждёт и уходит одним, самым свежим состоянием, когда окно освободится.
+  const PRES_N = 4, PRES_WIN = 31e3;
+  // можно ли отправить сейчас: times — отметки прошлых отправок; 0 — можно, иначе — сколько мс ждать
+  function presGate(times, t){ const live = times.filter(x => t - x < PRES_WIN); return live.length < PRES_N ? 0 : PRES_WIN - (t - Math.min(...live)) + 60; }
+  function presCount(){ const t = Date.now(); S.presT = (S.presT || []).filter(x => t - x < PRES_WIN); S.presT.push(t); }
+  function retrack(){
+    const st = S; if (!st?.ch || !st.keys) return;
+    if (st.presWait) return;   // уже ждём окна — уйдёт свежее состояние
+    const wait = presGate(st.presT || [], Date.now());
+    if (!wait) { presCount(); st.ch.track(presenceMeta()).catch(() => {}); return; }
+    st.presWait = setTimeout(() => { if (S !== st) return; st.presWait = 0; retrack(); }, wait);
+  }
+  function leaveChannel(){ const ch = S?.ch; if (!ch) return; S.ch = null; clearTimeout(S.presWait); S.presWait = 0; try { ch.untrack(); } catch (e) {} try { sbClient.removeChannel(ch); } catch (e) {} }
+  // Канал закрыл сервер (лимит presence и т. п.): мир живёт дальше (ходить можно), чужие пропадают; через 31 с (после
+  // лимита — когда окно сервера точно прошло) или 5 с — подключаемся снова. Раньше мир молча оставался без связи.
+  function rejoinLater(ch){
+    const st = S; if (!st || st.ch !== ch || st.stopped) return;
+    const limit = /rate limit/i.test(st.chWhy || '');
+    st.ch = null; clearTimeout(st.presWait); st.presWait = 0;
+    try { sbClient.removeChannel(ch); } catch (e) {}
+    for (const p of st.players.values()) if (!p.leaving) p.leaving = now();
+    toast('📡 Связь с миром прервалась — подключаемся снова…');
+    clearTimeout(st.rejoinT);
+    st.rejoinT = setTimeout(() => { if (S === st && !st.stopped && !st.ch) join(st.shard); }, limit ? 31e3 : 5e3);
+  }
   function onSync(){
     const st = S.ch.presenceState(), seen = new Map();
     for (const [key, metas] of Object.entries(st)) { const m = metas.reduce((a, b) => ((b.at || 0) >= (a.at || 0) ? b : a), metas[0]); if (m && m.id === key) seen.set(key, m); }
@@ -935,6 +970,9 @@
       // место за столом/на скамейке
       const s = m.seat && typeof m.seat.id === 'string' && S.world.seats.has(m.seat.id) ? { id: m.seat.id, c: /^[a-z0-9]{4,12}$/.test(m.seat.c || '') ? m.seat.c : null, t: +m.seat.t || 0 } : null;
       p.seat = s;
+      // играет поверх мира (js/games/mir-play.js): какая игра и код комнаты; plAt — когда мы это увидели
+      const pl = m.pl && typeof m.pl.g === 'string' && /^[a-z0-9_]{1,16}$/.test(m.pl.g) ? { g: m.pl.g, c: /^[a-z0-9]{4,12}$/.test(m.pl.c || '') ? m.pl.c : null } : null;
+      if ((pl?.g || '') + '|' + (pl?.c || '') !== (p.playing?.g || '') + '|' + (p.playing?.c || '')) { p.playing = pl; p.plAt = pl ? Date.now() : 0; }
     }
     for (const [key, p] of S.players) if (!seen.has(key) && !p.leaving) p.leaving = now();
     recomputeSeats();
@@ -1094,9 +1132,9 @@
       if (sp?.tb) { if (!byTable.has(sp.tb.id)) byTable.set(sp.tb.id, []); byTable.get(sp.tb.id).push(it); }
     }
     S.occ = occ; S.byTable = byTable;
-    // код стола — у того, кто сел первым
-    if (S.mySeat?.tb) {
-      const list = byTable.get(S.mySeat.tb.id) || [], host = list.find(it => it.c);
+    // код стола — у того, кто сел первым (кто сейчас играет поверх мира — не в счёт: его партия уже идёт, новым — новый код)
+    if (S.mySeat?.tb && !S.playing) {
+      const list = byTable.get(S.mySeat.tb.id) || [], host = list.find(it => it.c && !it.p.playing);
       if (host && host.c !== S.mySeat.c && host.p !== S.me) { S.mySeat.c = host.c; retrack(); }
     }
     renderTablePanel();
@@ -1108,10 +1146,21 @@
     if (!P.sitOn({ x: sp.x, y: sp.y, z: sp.z, yaw: sp.yaw, stand: sp.stand })) return;
     S.AU.play('click');
     if (!sp.tb) { S.mySeat = { id: sp.id, t: Date.now(), c: null }; retrack(); recomputeSeats(); return; }
-    const list = S.byTable?.get(sp.tb.id) || [], host = list.find(it => it.c && it.p !== S.me);
+    const list = S.byTable?.get(sp.tb.id) || [], host = list.find(it => it.c && it.p !== S.me && !it.p.playing);
     S.mySeat = { id: sp.id, tb: sp.tb, s: sp.s, t: Date.now(), c: host ? host.c : newCode() };
     S.countdown = 0;
     retrack(); recomputeSeats();
+  }
+  // За столом уже играют поверх мира: busy — партия идёт без меня (началась до того, как я сел), join — началась после и с
+  // кодом моего стола (это и моя партия: «go» могло не дойти — догоняем сами)
+  function tableState(list, me, my){
+    let busy = false, join = false;
+    for (const it of list) {
+      const pl = it.p.playing;
+      if (it.p === me || !pl) continue;
+      if (pl.c && pl.c === my.c && it.p.plAt >= my.t) join = true; else busy = true;
+    }
+    return { busy, join };
   }
   function leaveSeat(){
     if (!S.mySeat) return;
@@ -1122,7 +1171,9 @@
   function tableTick(dt){
     const my = S.mySeat;
     if (!my?.tb) { S.countdown = 0; return; }
-    const list = S.byTable?.get(my.tb.id) || [], full = list.length >= my.tb.n;
+    const list = S.byTable?.get(my.tb.id) || [], ts = tableState(list, S.me, my);
+    if (ts.join) { S.countdown = 0; startGame(my.tb, my.c); return; }
+    const full = !ts.busy && list.length >= my.tb.n;
     if (full) {
       if (!S.countdown) { S.countdown = 3.2; S.AU.play('coin'); }
       const prev = Math.ceil(S.countdown);
@@ -1131,17 +1182,20 @@
       if (S.countdown <= 0) { S.countdown = 0; startGame(my.tb, my.c); }
     } else if (S.countdown) { S.countdown = 0; renderTablePanel(); }
   }
-  // В игру: сначала «начали» всем за столом (кто досчитал первым — уводит остальных: иначе его уход отменит их отсчёт)
+  // В игру: сначала «начали» всем за столом (кто досчитал первым — зовёт остальных), потом партия — окном поверх мира
+  // (js/games/mir-play.js; все за столом входят в одну комнату по коду стола). Окно не открылось — по-старому, на страницу игры.
   async function startGame(tb, code){
-    if (!S || S.leavingTo) return;
+    if (!S || S.leavingTo || S.playing) return;
     const st = S, sp = S.world.seats.get(S.mySeat?.id);
-    // вернуться — к этому же столу (стоя рядом)
-    if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw);
-    st.leavingTo = `#/games/${tb.game}/${code}`;
+    // перезагрузил страницу / ушёл на страницу игры — вернёшься к этому же столу (стоя рядом)
+    const ss = sp && standSpot(sp); if (ss) savePos(ss.x, ss.z, ss.yaw);
     const n = (st.byTable?.get(tb.id) || []).length || 2;
     try { sessionStorage.setItem('d37_autostart', JSON.stringify({ g: tb.game, c: code, n, t: Date.now() })); } catch (e) {}
-    try { await Promise.race([send({ t: 'go', tb: tb.id, c: code }), new Promise(r => setTimeout(r, 600))]); } catch (e) {}
-    location.hash = st.leavingTo;
+    const sent = send({ t: 'go', tb: tb.id, c: code }).catch(() => {});
+    if (playOver(tb.game, code, { tb, auto: { g: tb.game, c: code, n } })) return;
+    st.leavingTo = `#/games/${tb.game}/${code}`;
+    try { await Promise.race([sent, new Promise(r => setTimeout(r, 600))]); } catch (e) {}   // уходим из мира — пусть «начали» успеет уйти
+    if (S === st) location.hash = st.leavingTo;
   }
   function renderTablePanel(){
     let box = S.q('.mir-tb');
@@ -1150,6 +1204,11 @@
     if (!box) { box = document.createElement('div'); box.className = 'wld-inv mir-tb'; S.wrap.appendChild(box); box.addEventListener('click', e => { const b = e.target.closest('[data-tb]'); if (b) tableAct(b.dataset.tb); }); }
     const tb = my.tb, gi = gameInfo(tb.game), list = S.byTable?.get(tb.id) || [], n = list.length, others = list.filter(it => it.p !== S.me).map(it => esc(it.p.nick));
     let msg;
+    if (tableState(list, S.me, my).busy) {   // за столом ещё доигрывают свою партию (поверх мира)
+      box.innerHTML = `<div><b>${gi.icon} ${esc(gi.title)}</b>: здесь идёт партия — ${list.filter(it => it.p !== S.me && it.p.playing).map(it => esc(it.p.nick)).join(', ')} ${list.filter(it => it.p !== S.me && it.p.playing).length > 1 ? 'играют' : 'играет'}. Подожди или садись за другой стол.</div><div class="wld-acts"><button type="button" data-tb="up">Встать</button></div>`;
+      box.hidden = false;
+      return;
+    }
     if (S.countdown > 0) msg = `<b>${gi.icon} ${esc(gi.title)}</b>: все на месте — начинаем через <b>${Math.ceil(S.countdown)}</b>…`;
     else if (n < 2) msg = `<b>${gi.icon} ${esc(gi.title)}</b> · ${n}/${tb.n}. Ждём соперника — или позови друга.`;
     else msg = `<b>${gi.icon} ${esc(gi.title)}</b> · ${n}/${tb.n}: ${others.join(', ')}`;
@@ -1166,7 +1225,10 @@
     const tb = my.tb;
     activity();
     if (a === 'up') S.P.standUp();
-    else if (a === 'bot') { const sp = S.world.seats.get(my.id); if (sp) savePos(sp.x + Math.sin(sp.yaw) * -1.3, sp.z + Math.cos(sp.yaw) * -1.3, sp.yaw); S.leavingTo = `#/games/${tb.game}`; location.hash = S.leavingTo; }
+    else if (a === 'bot') {   // с ботом — меню игры поверх мира (сидишь за столом, пока играешь)
+      const sp = S.world.seats.get(my.id), ss = sp && standSpot(sp); if (ss) savePos(ss.x, ss.z, ss.yaw);
+      if (!playOver(tb.game, null, { tb })) { S.leavingTo = `#/games/${tb.game}`; location.hash = S.leavingTo; }
+    }
     else if (a === 'go') startGame(tb, my.c);
     else if (a === 'link') {
       const url = `${location.origin}/#/games/${tb.game}/${my.c}`;
@@ -1195,11 +1257,12 @@
       if (!t) return;
       if (Date.now() - (S.lastSay || 0) < 1500) { toast('Не так быстро 🙂'); return; }
       S.lastSay = Date.now(); i.value = ''; i.blur(); activity();
+      if (S.allChat?.on) { S.allChat.send(t); return; }   // «🌍 Весь мир» — все серверы (worldchat.js)
       say(S.me, t); send({ t: 'say', text: t.slice(0, 120) });
     });
     q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly && typeof openGlobalAuth === 'function') openGlobalAuth(); });
     q('.wld-say input').addEventListener('keydown', e => { if (e.key === 'Escape') e.target.blur(); });
-    el.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b)) onAct(b.dataset.act, b); });
+    el.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b) && !b.closest('.mp')) onAct(b.dataset.act, b); });   // .mp — игра поверх мира: её data-act не наши
     const onVis = () => { if (document.hidden) S.hiddenAt = Date.now(); else S.hiddenAt = 0; };
     document.addEventListener('visibilitychange', onVis);
     S.cleanupUi = () => document.removeEventListener('visibilitychange', onVis);
@@ -1337,7 +1400,78 @@
     const gi = gameInfo(gt.g);
     panel(`<span class="wld-pe">${gt.e}</span><b>${esc(gt.name)}</b>`, `<p>${esc(gi.desc || '')}</p><div class="wld-acts"><button type="button" class="ct-start" data-act="go:#/games/${gt.g}">▶ Играть</button>${NO_ROOM.has(gt.g) ? '' : `<button type="button" data-act="room:${gt.g}">👥 С другом</button>`}${COOP.has(gt.g) ? `<button type="button" data-act="coop:${gt.g}">🤝 Вместе</button>` : ''}</div>`);
   }
-  function go(hash){ savePos(); S.leavingTo = hash; location.hash = hash; }
+  // Перейти: игру (автомат, ворота, приглашение, «С другом») — окном поверх мира; остальное — как раньше, со страницы мира
+  function go(hash){
+    savePos();
+    const r = /^#\/games\/([a-z0-9_]+)(?:\/(.+))?$/.exec(hash || '');
+    if (r && r[1] !== 'world' && playOver(r[1], r[2] || null)) return;
+    S.leavingTo = hash; location.hash = hash;
+  }
+
+  // ═══ Игра поверх мира (js/games/mir-play.js): мир не выгружается — цикл на паузе (физика, жители, отрисовка стоят),
+  // клавиатура и мышь — игре, звуки мира — тише; связь, presence и место за столом остаются, в presence — pl («играет»).
+  // false — окно не открыть (нет mir-play.js, игра не умеет) — тогда по-старому, на страницу игры.
+  function playOver(g, param, o = {}){
+    const MP = window.MirPlay, st = S;
+    if (!st?.wrap || !st.loop || !MP?.can?.(g)) return false;
+    if (st.playing) return true;
+    if (st.editing) closeEditor();
+    const c = /^[a-z0-9]{4,12}$/.test(param || '') ? param : null;
+    st.playing = { g, c, tb: o.tb || null, t: Date.now() };
+    playPause(true);
+    retrack();
+    MP.open(g, param || null, {
+      wrap: st.wrap, auto: o.auto || null,
+      where: o.tb ? '🌍 Мир Денчика · за столом' : '🌍 Мир Денчика',
+      onRoute: (g2, p2) => { if (S === st && st.playing) { st.playing.g = g2; st.playing.c = /^[a-z0-9]{4,12}$/.test(p2 || '') ? p2 : null; retrack(); } },
+      onClose: why => { if (S === st) playClosed(why); },
+      onFail: () => { if (S === st && !st.leavingTo) { st.leavingTo = `#/games/${g}${param ? '/' + param : ''}`; location.hash = st.leavingTo; } },
+    });
+    return true;
+  }
+  function playPause(on){
+    const st = S; if (!st) return;
+    if (on) {
+      closePops(); closeMenu();   // меню Esc — не поверх партии
+      st.loop?.pause(true);
+      if (st.C) { st.C.reset_state(); st.C.off = true; }
+      if (st.I) { st.I.unlock?.(); st.I.reset?.(); st.I.enabled = false; }
+      st.wasLocked = false;   // мышь отпустили мы, а не Esc — после партии меню само не открывать
+      if (st.AU?.volume) { st.vol0 = st.AU.vol; st.AU.volume(0); }
+    } else {
+      if (st.C) { st.C.off = false; st.C.reset_state(); }
+      if (st.I) { st.I.reset?.(); st.I.enabled = true; }
+      if (st.AU?.volume && st.vol0 != null) { st.AU.volume(st.vol0); st.vol0 = null; }
+      st.idleAt = Date.now();
+      if (!st.stopped && !st.editing) st.loop?.pause(false);
+    }
+  }
+  // Окно закрылось: мир дальше; сидел за столом — встаёшь рядом (место свободно — новая партия только по новому «сели»)
+  function playClosed(why){
+    const st = S; if (!st?.playing) return;
+    st.playing = null;
+    if (why === 'unmount') return;   // мир и так закрывается
+    playPause(false);
+    if (st.mySeat?.tb) {   // встаёшь у стола: за своим стулом, лицом к столу (P.on('stand') → leaveSeat → retrack)
+      const sp = st.world.seats.get(st.mySeat.id);
+      st.P?.standUp();
+      if (st.mySeat) leaveSeat();
+      const p = sp && standSpot(sp);
+      if (p) { st.P.place(p.x, p.y, p.z, p.yaw); st.forceSend = true; }
+    } else retrack();
+    if (why === 'editor') openEditor();
+  }
+  // Место «рядом со столом»: за стулом (d назад от сиденья), занято (стойка, стена, другой стол) — наискосок, вбок, ближе.
+  // Опора — не выше сиденья (не на стойку и не на крышу кафе); над опорой — место во весь рост. Нет места — null.
+  function standSpot(sp, d = 1.3){
+    const ph = S.ph, ch = S.P.ch, H = S.P.standH || 2.1, step = ch.step || .6;
+    for (const k of [1, .75]) for (const a of [0, .6, -.6, 1.2, -1.2, PI / 2, -PI / 2]) {
+      const yaw = sp.yaw + a, x = sp.x - Math.sin(yaw) * d * k, z = sp.z - Math.cos(yaw) * d * k;
+      const y = ph.supportAt(x, z, ch.r * .5, (sp.y || 0) + .5).y;
+      if (!ph.blocked(x, z, y + step, y + H, ch.r * .9)) return { x, y, z, yaw: sp.yaw };
+    }
+    return null;
+  }
   function inviteMenu(p){
     const sub = S.q('.wld-card .wld-sub'); if (!sub) return;
     sub.hidden = false;
@@ -1361,7 +1495,8 @@
       const seat = [...S.world.seats.values()].find(sp => sp.tb === tb && !S.occ.get(sp.id));
       if (seat) {
         if (S.mySeat) S.P.standUp();
-        S.P.place(seat.x - Math.sin(seat.yaw) * 1.2, null, seat.z - Math.cos(seat.yaw) * 1.2, seat.yaw);
+        const p = standSpot(seat, 1.2);   // опора — от сиденья вниз (раньше y = null искал опору сверху — и ставил на крышу кафе)
+        if (p) S.P.place(p.x, p.y, p.z, p.yaw); else S.P.place(seat.x, S.ph.supportAt(seat.x, seat.z, S.P.ch.r * .5, (seat.y || 0) + .5).y, seat.z, seat.yaw);
         sitAt(seat);
         if (S.mySeat) { S.mySeat.c = box.dataset.code; retrack(); }
         return;
@@ -1444,9 +1579,15 @@
     map.needsUpdate = true;
   }
 
+  // Вывести из мира за бездействие? Пока играешь поверх мира — нет (вкладка спрятана — только через 3 × HIDDEN_MS)
+  function afkDue(st, t){
+    if (st.playing) return !!st.hiddenAt && t - st.hiddenAt > HIDDEN_MS * 3;
+    return t - st.idleAt > IDLE_MS || (!!st.hiddenAt && t - st.hiddenAt > HIDDEN_MS);
+  }
   function housekeeping(){
     if (!S || S.stopped) return;
-    if (Date.now() - S.idleAt > IDLE_MS || (S.hiddenAt && Date.now() - S.hiddenAt > HIDDEN_MS)) {
+    if (S.playing) S.idleAt = Date.now();   // игра поверх мира — это не «стоит на месте»
+    if (afkDue(S, Date.now())) {
       S.stopped = true;
       leaveChannel();
       S.loop?.pause(true);
@@ -1486,7 +1627,7 @@
       if (p.v?.vip) col = VIPC[p.v.vip] || col;
       if (p.v?.role && ROLE[p.v.role]) { col = ROLE[p.v.role][1]; pre = ROLE[p.v.role][0] + ' '; }
       if (p.uid && S.friends.has(p.uid)) pre = '💚 ' + pre;
-      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '');
+      const name = pre + (p.v?.level ? `⭐${p.v.level} ` : '') + p.nick + (p.uid && !p.v && p !== S.me ? ' ?' : '') + (p.playing ? ` · ${gameInfo(p.playing.g).icon} играет` : '');
       const nm = el.lastChild;
       if (nm.textContent !== name) nm.textContent = name;
       if (nm.style.color !== col) nm.style.color = col;
@@ -1527,8 +1668,11 @@
   function unmount(){
     if (!S) return;
     const s = S;
+    // игра поверх мира — закрыть вместе с миром; сидел за столом — место «рядом со столом» уже сохранено в startGame
+    const seatedPlay = !!(s.playing && s.mySeat);
+    if (s.playing) { try { window.MirPlay?.close('unmount'); } catch (e) { console.error(e); } s.playing = null; }
     s.stopped = true;
-    clearInterval(s.tick); clearTimeout(s.invT);
+    clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT);
     if (s.mySeat) { s.mySeat = null; }
     try { s.menu?.close(); s.offCtx?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран
     leaveChannel();
@@ -1537,11 +1681,47 @@
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
     try { s.base?.dispose(); } catch (e) {}   // район участков
     try { s.promo?.dispose(); } catch (e) {}   // щиты (mir-promo.js)
+    try { s.phoneOff?.(); s.allChat?.stop(); } catch (e) {}   // телефон 📱 и «🌍 Весь мир»
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
-    if (!s.leavingTo) savePos();
+    if (!s.leavingTo && !seatedPlay) savePos();
     S = null;
+  }
+
+  // ═══ Телефон 📱 (js/features/phone.js) и чат «🌍 Весь мир» (js/features/worldchat.js) — подключение мира ═══
+  // Телефон: кнопка в панели мира и клавиша P; пока открыт — клавиши мира молчат. Камера (снимок кадра), карта с телепортом,
+  // «📍 К другу» (сменить сервер и встать рядом). Чем занят («в Мире, сервер N») — друзьям. «🌍 Весь мир» — кнопка 🏠/🌍 у чата.
+  function mirPhone(){
+    const Ph = window.D37Phone; if (!Ph?.attach || !S) return;
+    const st = S;
+    const tp = (x, z, yaw) => { if (!S?.P) return; if (S.mySeat) S.P.standUp(); S.P.place(x, null, z, yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); if (S.rig) S.rig.yaw = yaw - PI; S.forceSend = true; savePos(); };
+    S.phoneOff = Ph.attach('world', {
+      title: '🌍 Мир Денчика', hotkey: true,
+      pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
+      activity: () => (S ? Object.assign({ w: S.shard }, S.mySeat?.tb ? { g: S.mySeat.tb.game, j: S.mySeat.c ? `games/${S.mySeat.tb.game}/${S.mySeat.c}` : '' } : {}) : {}),
+      shot: () => { S.R.render(); return Ph.snap(S.R.r.domElement); },
+      where: () => (S?.P ? { x: S.P.ch.x, z: S.P.ch.z, yaw: S.P.yaw } : null),
+      players: () => (S ? [...S.players.values()].filter(p => !p.leaving).map(p => ({ x: p.ch.x, z: p.ch.z, nick: p.nick, friend: !!(p.uid && S.friends.has(p.uid)) })) : []),
+      tp,
+      toFriend: uid => { const p = S && [...S.players.values()].find(q => q.uid === uid && !q.leaving); if (!p) return false; tp(p.ch.x + Math.cos(p.yaw) * 1.6, p.ch.z - Math.sin(p.yaw) * 1.6, p.yaw + PI); return true; },
+      shard: n => { if (n != null && S && n !== S.shard && n >= 1 && n <= SHARDS) { leaveChannel(); for (const k of S.players.keys()) S.A?.remove(k); S.players.clear(); join(n); } return S?.shard || 1; },
+    });
+    // кнопка 📱 в панели мира (панель могут перегруппировать — просто добавляемся в конец)
+    const bar = S.q('.wld-topbtns');
+    if (bar && !bar.querySelector('.mir-phone')) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'mir-phone'; b.title = 'Телефон (P): друзья, звонки, карта, камера';
+      b.innerHTML = '📱<span> Телефон</span><em class="ph-bdg" data-ph-badge="total" hidden></em>';
+      b.addEventListener('click', ev => { ev.stopPropagation(); Ph.toggle(); });
+      bar.appendChild(b); Ph.renderBadges?.();
+    }
+    Ph.need('wchat').then(() => {
+      if (S !== st || !window.D37WorldChat) return;
+      S.allChat = window.D37WorldChat.start({ form: S.q('.wld-say'), input: S.q('.wld-say input'), keys: () => S?.keys, pass: () => S?.pass,
+        me: () => ({ uid: S?.me.uid, nick: S?.me.nick }), shard: () => S?.shard || 1, toast, clean,
+        addLog: (nick, text, sh) => { if (S) addLog({ nick: `🌍 ${nick}${sh ? ' · сервер ' + sh : ''}` }, text); },
+        muted: (pub, uid) => !!(S && uid && [...S.players.values()].some(p => p.uid === uid && S.muted.has(p.key))) });
+    }).catch(() => {});
   }
 
   const supported = () => !!window.World3D?.supported?.() && !!window.D37E?.renderer;
@@ -1561,6 +1741,6 @@
       }, 0);
     },
     unmount(){ current?.unmount(); current = null; },
-    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S },
+    _test: { TABLES, ARCADE, GATES, clean, old: OLD?._test, state: () => S, afkDue, tableState, presGate, standSpot: (sp, d) => S && standSpot(sp, d) },
   };
 })();

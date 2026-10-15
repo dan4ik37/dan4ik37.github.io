@@ -21,9 +21,10 @@ import typing from './_lib/routes/typing.js';
 import ugc from './_lib/routes/ugc.js';
 import shop from './_lib/routes/shop.js';
 import legal from './_lib/routes/legal.js';
+import invite from './_lib/routes/invite.js';
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal };
+  shop, terms: legal, refund: legal, contacts: legal, invite };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

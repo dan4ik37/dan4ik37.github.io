@@ -1295,6 +1295,12 @@ Players.PlayerAdded.Connect(player => {
     else { P.enabled = false; mpWait('👥 Подключаемся к комнате…'); }
     playVis();
     pl.loop = E.loop(playStep, playFrame);
+    // телефон 📱 (js/features/phone.js): кнопка рядом с ⚙️ ⛶ и клавиша P; пока открыт — клавиши игры молчат; друзьям — «в мире игрока»
+    pl.phoneOff = window.D37Phone?.attach?.('studio', { title: '🧱 ' + (ed.q('.s3-name')?.value || 'Студия 3D'), hotkey: true, bar: ed.q('.gs-s3'),
+      pause(on){ pl.phoneOn = on; pl.C.blocked = on; pl.C.reset_state(); if (on) { pl.I.unlock(); pl.I.reset?.(); } pl.I.enabled = !on; },
+      shot: () => { ed.R.render(); return window.D37Phone.snap(ed.R.r.domElement); },
+      activity: () => ed.playId ? { s: ed.playId, t: (ed.q('.s3-name')?.value || '').slice(0, 32), j: `games/studio3d/play/${ed.playId}${ed.mp?.kind === 'play' && ed.mp.code ? '/' + ed.mp.code : ''}` }
+        : ed.mp?.code ? { g: 'studio3d', j: `games/studio3d/join/${ed.mp.code}` } : { g: 'studio3d' } }) || null;
     ed.loop.pause(true);
     if (pl.role === 'solo') msg('▶ Играешь! WASD — идти, Пробел — прыжок, E — действие. ■ Стоп — назад в редактор', true);
   }
@@ -1353,6 +1359,7 @@ Players.PlayerAdded.Connect(player => {
     mpClose();   // сначала сеть: она обёрнута вокруг SC.set/add/remove
     ext('stop');
     ed.NPC.stop();
+    try { pl.phoneOff?.(); } catch (e) {}   // телефон 📱
     pl.loop.stop(); pl.SH.stop(); pl.unf?.(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); pl.hud.remove();
     for (const l of pl.amb || []) l.h.stop();
     ed.playing = null;
@@ -1587,7 +1594,7 @@ Players.PlayerAdded.Connect(player => {
     pl.cmds = 0;
     const Lg = ed.R.lighting;
     if (Lg.cycle > 0) { pl.cycT = (pl.cycT || 0) + dt; if (pl.cycT >= 1.5) { ed.R.setLighting({ time: (Lg.time + pl.cycT * 24 / (Lg.cycle * 60)) % 24 }); pl.cycT = 0; } }
-    C.blocked = !!window.D37Settings?.isOpen?.();   // открыто окно ⚙️ — персонаж стоит
+    C.blocked = !!window.D37Settings?.isOpen?.() || !!pl.phoneOn;   // открыто окно ⚙️ или телефон 📱 — персонаж стоит
     C.step(dt);
     if (C.down('pause') && !C.blocked && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
     if (C.down('view')) playView(pl);   // V — вид от 1-го / 3-го лица (как в «Мире»)
@@ -1659,7 +1666,7 @@ Players.PlayerAdded.Connect(player => {
   function playFrame(dt){
     const ed = ED, pl = ed?.playing; if (!pl) return;
     const { P, A, rig, I, C, H } = pl, R = ed.R, t = performance.now() / 1000;
-    I.wantLock = rig.mode === 'first' && !I.touch && !window.D37Settings?.isOpen?.();
+    I.wantLock = rig.mode === 'first' && !I.touch && !window.D37Settings?.isOpen?.() && !pl.phoneOn;
     A.pose(pl.meKey, P.pose());
     const meA = A.get?.(pl.meKey); if (meA) meA.hidden = rig.mode === 'first';
     if (ed.mp) mpFrame(dt);   // чужие игроки (по сети) — плавно, со своей внешностью
@@ -2108,7 +2115,7 @@ Players.PlayerAdded.Connect(player => {
     try { mpClose(); } catch (e) {}   // комната и канал Supabase — сразу (и до SC.dispose: сеть обёрнута вокруг сцены)
     ED = null;
     try { ed.offCtx?.(); window.D37Full?.release(ed.box); } catch (e) {}   // настройки/полный экран
-    try { if (ed.playing) { const pl = ed.playing; pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
+    try { if (ed.playing) { const pl = ed.playing; pl.phoneOff?.(); pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
     clearInterval(ed.autosave);
     ed.loop?.stop(); ed.ro?.disconnect();
