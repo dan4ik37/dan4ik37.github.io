@@ -111,6 +111,7 @@ alter table public.ad_campaigns add column if not exists paused_by text;        
 alter table public.ad_campaigns add column if not exists finish_reason text;                      -- budget | date | owner | admin
 alter table public.ad_campaigns add column if not exists reject_reason text;
 alter table public.ad_campaigns add column if not exists reports int not null default 0;
+alter table public.ad_campaigns add column if not exists age_rating int;                          -- метка 0/6/12/16/18 (выбирает рекламодатель)
 alter table public.ad_campaigns add column if not exists submitted_at timestamptz;
 alter table public.ad_campaigns add column if not exists finished_at timestamptz;
 alter table public.ad_campaigns add column if not exists updated_at timestamptz not null default now();
@@ -120,6 +121,7 @@ alter table public.ad_campaigns add constraint ad_campaigns_check check (
   and pricing in ('cpm', 'day') and geo in ('any', 'ru', 'not_ru')
   and id ~ '^[a-z0-9]{6,16}$' and char_length(title) between 1 and 60
   and budget >= 0 and refunded >= 0 and spent >= 0 and bid >= 0 and days >= 0 and day_price >= 0 and plan_budget >= 0
+  and (age_rating is null or age_rating in (0, 6, 12, 16, 18))
   and refunded + spent <= budget);                 -- главная страховка: вернуть и потратить больше внесённого нельзя
 create index if not exists ad_campaigns_owner on public.ad_campaigns (owner, created_at desc);
 create index if not exists ad_campaigns_live on public.ad_campaigns (status, approved);
@@ -326,6 +328,15 @@ create or replace function public.ad_is_bot(p_ua text) returns boolean language 
   select lower(coalesce(p_ua, '')) ~ '(bot|crawl|spider|slurp|headless|lighthouse|preview|curl|wget|python|scrapy|httpclient)'
 $$;
 
+-- Возрастная группа зрителя (js/core/age.js; «не указан» браузер уже перевёл по ADS_RULES.age.unknown) → самая «взрослая» метка
+-- рекламы, которую ему можно: до 13 — 6+, 13–15 — 12+, 16–17 — 16+, взрослым — 18+. Неизвестная группа — как подросток
+create or replace function public.ad_age_max(p_group text) returns int language sql immutable as $$
+  select case p_group when 'child' then 6 when 'teen' then 12 when 'teen16' then 16 when 'adult' then 18 else 12 end
+$$;
+create or replace function public.ad_age_group(p_group text) returns text language sql immutable as $$
+  select case when p_group in ('child', 'teen', 'teen16', 'adult') then p_group else 'teen' end
+$$;
+
 -- Подпись выдачи: «время.зритель.место.подпись» — показ и клик засчитываются только по ней
 create or replace function public.ad_sign(p text) returns text language sql stable security definer set search_path = public, extensions as $$
   select left(encode(extensions.hmac(p, (select k from public.ad_secret where id = 1), 'sha256'), 'hex'), 24)
@@ -377,7 +388,15 @@ end $$;
 -- Отпечаток того, что видят зрители (одобряется именно он; поменялся — снова на проверку)
 create or replace function public.ad_hash(p_id text) returns text language sql stable security definer set search_path = public as $$
   select md5(concat_ws('|', k.url, k.advertiser, k.inn, k.erid, array_to_string(k.sections, ','), array_to_string(k.devices, ','),
-    array_to_string(k.ages, ','), k.geo,
+    array_to_string(k.ages, ','), k.geo, coalesce(k.age_rating, -1),
+    (select string_agg(concat_ws('~', c.kind, c.title, c.body, c.cta, c.image, c.w, c.h), '^' order by c.kind)
+       from public.ad_creatives c where c.campaign_id = k.id)))
+  from public.ad_campaigns k where k.id = p_id
+$$;
+
+create or replace function public.ad_hash_with(p_id text, p_age int) returns text language sql stable security definer set search_path = public as $$
+  select md5(concat_ws('|', k.url, k.advertiser, k.inn, k.erid, array_to_string(k.sections, ','), array_to_string(k.devices, ','),
+    array_to_string(k.ages, ','), k.geo, coalesce(p_age, -1),
     (select string_agg(concat_ws('~', c.kind, c.title, c.body, c.cta, c.image, c.w, c.h), '^' order by c.kind)
        from public.ad_creatives c where c.campaign_id = k.id)))
   from public.ad_campaigns k where k.id = p_id
@@ -483,6 +502,8 @@ declare
   v_sec text := lower(coalesce(ctx ->> 'section', 'other'));
   v_dev text := case when ctx ->> 'device' = 'mobile' then 'mobile' else 'desktop' end;
   v_age text := coalesce(nullif(ctx ->> 'age', ''), 'unknown');
+  -- группа для метки: что прислал браузер (D37AdPlaces.adAge — «не указан» уже по ADS_RULES.age.unknown); нет — по age, иначе подросток
+  v_ar text := public.ad_age_group(coalesce(nullif(ctx ->> 'ar', ''), nullif(ctx ->> 'age', '')));
   hdr json := public.ad_headers();
   v_cc text := upper(left(coalesce(nullif(hdr ->> 'cf-ipcountry', ''), ctx ->> 'country', ''), 2));
   v_ru boolean;
@@ -492,6 +513,7 @@ begin
   if g is null then return null; end if;
   select * into s from public.ad_settings where id = 1;
   if not s.enabled or public.ad_perks(uid) then return null; end if;
+  if g = 'board' and v_ar = 'child' then return null; end if;   -- детям — без спонсора на щитах мира (как ADS_RULES.age.child.off)
   -- Россия или страна неизвестна → считаем Россией (закон о маркировке: без erid там нельзя)
   -- (заголовок сервера важнее слов браузера; если хоть кто-то говорит «Россия» — Россия)
   v_ru := v_cc in ('', 'RU', 'XX', 'T1') or upper(coalesce(ctx ->> 'country', '')) = 'RU';
@@ -509,6 +531,7 @@ begin
       and (cardinality(k.sections) = 0 or v_sec = any(k.sections))
       and (cardinality(k.devices) = 0 or v_dev = any(k.devices))
       and (cardinality(k.ages) = 0 or v_age = any(k.ages))
+      and coalesce(k.age_rating, 18) <= public.ad_age_max(v_ar)
       and (k.geo = 'any' or (k.geo = 'ru' and v_ru) or (k.geo = 'not_ru' and not v_ru))
       and (k.erid <> '' or not v_ru)
       and not (k.id = any(v_ex))
@@ -528,7 +551,7 @@ begin
       'image', cc.image, 'w', cc.w, 'h', cc.h) order by cc.kind), '[]'::jsonb) into cr
     from public.ad_creatives cc where cc.campaign_id = best.id and public.ad_kind_group(cc.kind) = g;
   return (select jsonb_build_object('id', k.id, 'g', g, 'cr', cr, 'adv', k.advertiser, 'inn', k.inn, 'erid', k.erid,
-      'host', public.ad_host(k.url), 't', public.ad_token(k.id, v_vh, pl, extract(epoch from now())::bigint))
+      'host', public.ad_host(k.url), 'age', k.age_rating, 't', public.ad_token(k.id, v_vh, pl, extract(epoch from now())::bigint))
     from public.ad_campaigns k where k.id = best.id);
 end $$;
 
@@ -666,7 +689,7 @@ create or replace function public.ad_card(k public.ad_campaigns) returns jsonb l
     'start_date', k.start_date, 'end_date', k.end_date, 'sections', k.sections, 'devices', k.devices, 'ages', k.ages, 'geo', k.geo,
     'advertiser', k.advertiser, 'inn', k.inn, 'erid', k.erid, 'url', k.url, 'host', public.ad_host(k.url),
     'approved', k.approved, 'paused_by', k.paused_by, 'finish_reason', k.finish_reason, 'reject_reason', k.reject_reason,
-    'reports', k.reports, 'groups', public.ad_groups(k.id), 'created_at', k.created_at, 'submitted_at', k.submitted_at,
+    'reports', k.reports, 'age_rating', k.age_rating, 'groups', public.ad_groups(k.id), 'created_at', k.created_at, 'submitted_at', k.submitted_at,
     'updated_at', k.updated_at, 'finished_at', k.finished_at,
     'changed', k.approved_hash is not null and k.approved_hash is distinct from public.ad_hash(k.id),
     'today', (select jsonb_build_object('views', coalesce(sum(t.views), 0), 'clicks', coalesce(sum(t.clicks), 0))
@@ -715,7 +738,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   uid uuid := auth.uid(); s public.ad_settings%rowtype; k public.ad_campaigns%rowtype; new_id text; locked boolean;
   v_title text; v_pricing text; v_bid int; v_days int; v_plan int; v_start date; v_end date; v_sections text[]; v_devices text[];
-  v_ages text[]; v_geo text; v_adv text; v_inn text; v_erid text; v_url text; bad text; ec jsonb; sz int[]; cw int; ch int; v_status text; td date := public.ad_today();
+  v_ages text[]; v_geo text; v_adv text; v_inn text; v_erid text; v_url text; v_age int; bad text; ec jsonb; sz int[]; cw int; ch int; v_status text; td date := public.ad_today();
   kinds text[] := '{}';
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
@@ -775,6 +798,10 @@ begin
   v_adv := left(btrim(coalesce(p ->> 'advertiser', k.advertiser, '')), 120);
   v_inn := btrim(coalesce(p ->> 'inn', k.inn, ''));
   if v_inn <> '' and v_inn !~ '^([0-9]{10}|[0-9]{12})$' then return jsonb_build_object('ok', false, 'reason', 'inn'); end if;
+  if p ? 'age_rating' then
+    begin v_age := nullif(p ->> 'age_rating', '')::int; exception when others then return jsonb_build_object('ok', false, 'reason', 'age'); end;
+    if v_age is not null and v_age not in (0, 6, 12, 16, 18) then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+  else v_age := k.age_rating; end if;
   v_erid := btrim(coalesce(p ->> 'erid', k.erid, ''));
   if v_erid <> '' and v_erid !~ '^[A-Za-z0-9_-]{4,64}$' then return jsonb_build_object('ok', false, 'reason', 'erid'); end if;
   v_url := btrim(coalesce(p ->> 'url', k.url, ''));
@@ -818,7 +845,7 @@ begin
   v_status := case when k.status = 'rejected' then 'draft' else k.status end;   -- отклонённую поправили — снова черновик
   update public.ad_campaigns set title = v_title, pricing = v_pricing, bid = v_bid, days = v_days, plan_budget = v_plan,
     start_date = v_start, end_date = v_end, sections = v_sections, devices = v_devices, ages = v_ages, geo = v_geo,
-    advertiser = v_adv, inn = v_inn, erid = v_erid, url = v_url, status = v_status, updated_at = now()
+    advertiser = v_adv, inn = v_inn, erid = v_erid, url = v_url, age_rating = v_age, status = v_status, updated_at = now()
     where id = k.id;
   if p ? 'creatives' then
     delete from public.ad_creatives where campaign_id = k.id;
@@ -859,6 +886,7 @@ begin
     if public.ad_url_ok(k.url) <> '' then return jsonb_build_object('ok', false, 'reason', 'url', 'why', public.ad_url_ok(k.url)); end if;
     select count(*) into n from public.ad_creatives where campaign_id = k.id;
     if n = 0 then return jsonb_build_object('ok', false, 'reason', 'creatives'); end if;
+    if k.age_rating is null then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
     v_start := coalesce(k.start_date, td);
     if v_start < td then return jsonb_build_object('ok', false, 'reason', 'dates'); end if;
     if v_start > td + 90 then return jsonb_build_object('ok', false, 'reason', 'dates'); end if;
@@ -947,9 +975,9 @@ begin
     if (select count(*) from public.ad_campaigns where owner = uid) >= 30 then return jsonb_build_object('ok', false, 'reason', 'limit'); end if;
     new_id := public.ad_new_id();
     insert into public.ad_campaigns (id, owner, title, pricing, bid, days, plan_budget, end_date, sections, devices, ages, geo,
-        advertiser, inn, erid, url)
+        advertiser, inn, erid, url, age_rating)
       values (new_id, uid, left(k.title || ' (копия)', 60), k.pricing, k.bid, k.days, greatest(k.plan_budget, s.min_budget), null,
-        k.sections, k.devices, k.ages, k.geo, k.advertiser, k.inn, k.erid, k.url);
+        k.sections, k.devices, k.ages, k.geo, k.advertiser, k.inn, k.erid, k.url, k.age_rating);
     insert into public.ad_creatives (campaign_id, kind, title, body, cta, image, w, h)
       select new_id, kind, title, body, cta, image, w, h from public.ad_creatives where campaign_id = k.id;
     perform public.ad_log_add(new_id, 'create', 'Копия ' || k.id, uid);
@@ -1041,6 +1069,17 @@ begin
     if why <> '' then perform public.ad_log_add(k.id, 'note', why, uid); end if;
     return jsonb_build_object('ok', true, 'status', 'finished', 'refund', amt);
 
+  elsif p_act = 'rate' then
+    if why !~ '^(0|6|12|16|18)$' then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+    update public.ad_campaigns set age_rating = why::int, updated_at = now() where id = k.id;
+    -- одобренное содержимое не менялось — метку админа считаем частью одобренного (иначе «изменена»)
+    if k.approved and k.approved_hash is not distinct from public.ad_hash_with(k.id, k.age_rating) then
+      update public.ad_campaigns set approved_hash = public.ad_hash(k.id) where id = k.id;
+    end if;
+    perform public.ad_log_add(k.id, 'rate', 'Возрастная метка: ' || why || '+', uid);
+    perform public.ad_notify(k.owner, '🔞 Метка рекламы: ' || why || '+', 'Администратор поменял возрастную метку кампании «' || left(k.title, 60) || '».', '#/adv/c/' || k.id);
+    return jsonb_build_object('ok', true, 'status', k.status, 'age_rating', why::int);
+
   elsif p_act = 'ban' then
     if k.status = 'banned' then return jsonb_build_object('ok', false, 'reason', 'status'); end if;
     if char_length(why) < 3 then return jsonb_build_object('ok', false, 'reason', 'why'); end if;
@@ -1106,6 +1145,7 @@ revoke execute on function public.ad_viewer() from public, anon, authenticated;
 revoke execute on function public.ad_new_id() from public, anon, authenticated;
 revoke execute on function public.ad_card(public.ad_campaigns) from public, anon, authenticated;
 revoke execute on function public.ad_hash(text) from public, anon, authenticated;
+revoke execute on function public.ad_hash_with(text, int) from public, anon, authenticated;
 revoke execute on function public.ad_perks(uuid) from public, anon, authenticated;
 revoke execute on function public.ad_groups(text) from public, anon, authenticated;
 revoke execute on function public.ad_floor(text) from public, anon, authenticated;

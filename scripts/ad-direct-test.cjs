@@ -493,6 +493,32 @@ ok(typeof D.fill === 'function' && typeof M.direct === 'function' && typeof D.bi
   delete window.MirPlay;
 }
 
+// ═══ 8б. Возраст (js/core/age.js → ADS_RULES.age): метка кампании и места, выключенные для группы ═══
+{
+  fresh(); NET.pick = b => b.p_place === 'billboard' ? PK('camp000020', 'board', ['board'], { place: 'billboard', age: 6 }) : PK('camp000021', 'native', ['native'], { age: 12 });
+  const el = box(320); M.show(el, 'feed_games', { checked: true }); await flush();
+  let pc = rpcCalls('ad_pick').pop().body.p_ctx;
+  ok(pc.age === 'unknown' && pc.ar === 'teen', 'возраст не указан: таргетингу — «не указан», метке — как решает ADS_RULES.age.unknown (подросток)', pc);
+  ok(/Реклама\s*12\+\s*·/.test(el.textContent) && el.querySelector('.dad-age')?.textContent === '12+', 'на рекламе — её возрастная метка', el.textContent);
+  el.querySelector('[data-dad-about]').click();
+  ok(/Возраст\s*12\+/.test(doc.querySelector('.dad-pop')?.textContent || ''), '«О рекламе»: возрастная метка');
+  window.D37Age = { group: () => 'child' };
+  ok(M.adAge() === 'child' && D.has('feed_games') && !D.has('billboard'), 'ребёнок: в ленте прямая реклама может быть (сервер даст только 0+ и 6+), щита — нет');
+  const before = rpcCalls('ad_pick').length;
+  ok(await D.billboard() === null && rpcCalls('ad_pick').length === before, 'ребёнок: щит мира без прямой рекламы — даже не спрашиваем сервер');
+  const el2 = box(320); M.show(el2, 'feed_games', { checked: true }); await flush();
+  pc = rpcCalls('ad_pick').pop().body.p_ctx;
+  ok(pc.age === 'child' && pc.ar === 'child', 'ребёнок: сервер получает группу (без года и возраста)');
+  window.D37Age = { group: () => 'adult' };
+  const sp = await D.billboard(); await flush();
+  ok(sp && sp.age === '6+', 'взрослый: щит есть, с меткой');
+  const P = window.MirPromo._test;
+  ok(P.markText(sp) === 'Реклама 6+ · ИП Блогеров · erid: Kra23abc', 'на щите — «Реклама 6+ · кто · erid»', P.markText(sp));
+  window.D37Age = { group: () => 'child' };
+  ok(!P.promos({}, sp).ad, 'щит уже показывал рекламу, а зритель оказался ребёнком — со следующей перерисовки только свои промо');
+  delete window.D37Age;
+}
+
 // ═══ 9. Правила ссылок и слов: браузер = сервер сайта ═══
 const R = D.rules;
 const urls = ['https://example.com/', 'http://example.com/', 'https://bit.ly/x', 'https://sub.vk.cc/x', 'https://casino.example/', 'https://1.2.3.4/',

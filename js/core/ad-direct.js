@@ -134,9 +134,12 @@
     loadLive().then(go, go); setTimeout(go, ms);
   }
   const perk = () => { try { return !!window.D37AdPlaces?.noAdsPerk?.(); } catch (e) { return false; } };
+  // Возраст (js/core/age.js → ADS_RULES.age в ad-places.js): где у группы реклама сетей выключена — и прямой нет.
+  // Щит мира = «спонсор» (детям — только свои промо сайта)
+  const ageOff = key => { try { return !!window.D37AdPlaces?.ageOff?.(groupOf(key) === 'board' ? 'sponsor' : /^feed/.test(key) ? 'feed' : key); } catch (e) { return false; } };
   function has(key){
     const g = groupOf(key);
-    if (!g || off || perk()) return false;
+    if (!g || off || perk() || ageOff(key)) return false;
     freshLive();
     return !!(live && live.on && live.f && live.f[g] > 0);
   }
@@ -160,7 +163,10 @@
     return serverSection(p);
   }
   const isTouch = () => { try { return matchMedia('(pointer: coarse)').matches || matchMedia('(max-width: 768px)').matches; } catch (e) { return false; } };
+  // Возраст: группа из D37Age (для таргетинга «кому показывать», в т. ч. «не указан») и группа рекламы ad-places.js (adAge:
+  // «не указан» — по ADS_RULES.age.unknown, «сайт для детей» — строже) — по ней сервер не выдаёт кампанию с меткой старше группы
   const age = () => { try { const g = window.D37Age?.group?.(); return ['child', 'teen', 'teen16', 'adult'].includes(g) ? g : 'unknown'; } catch (e) { return 'unknown'; } };
+  const adAge = () => { try { return window.D37AdPlaces?.adAge?.() || ''; } catch (e) { return ''; } };
   // Страна — только код от сервера сайта (/api/geo; Vercel знает по IP), один раз за визит. Нет ответа — '' (= как Россия)
   let geoP = null;
   function geo(){
@@ -180,7 +186,7 @@
     return w || (typeof innerWidth === 'number' ? innerWidth : 0);
   }
   async function pickFor(key, el, extra = {}){
-    const ctx = { section: extra.section || section(), device: isTouch() ? 'mobile' : 'desktop', age: age(), country: await geo(),
+    const ctx = { section: extra.section || section(), device: isTouch() ? 'mobile' : 'desktop', age: age(), ar: adAge(), country: await geo(),
       w: extra.w ?? (el ? widthOf(el) : 0), ex: [...shown].slice(-20) };
     const p = await rpc('ad_pick', { p_place: key, p_ctx: ctx });
     if (!p || typeof p !== 'object' || !p.id || !Array.isArray(p.cr) || !p.cr.length || typeof p.t !== 'string') return null;
@@ -212,8 +218,9 @@
 
   // ── Рисование ──
   const goHref = (p, place) => `/go/${encodeURIComponent(p.id)}?t=${encodeURIComponent(p.t)}${dbg() ? '&d=1' : ''}`;
-  const mark = p => `Реклама · ${p.adv || 'рекламодатель'}${p.erid ? ' · erid: ' + p.erid : ''}`;
-  const label = p => `<div class="dad-lbl"><span class="dad-lbl-t" title="${esc(mark(p))}">Реклама · <b>${esc(p.adv || 'рекламодатель')}</b>${p.erid ? ` · erid: ${esc(p.erid)}` : ''}</span>` +
+  const ageTxt = p => (p.age === 0 || p.age > 0) && [0, 6, 12, 16, 18].includes(+p.age) ? `${+p.age}+` : '';   // возрастная метка кампании
+  const mark = p => `Реклама${ageTxt(p) ? ' ' + ageTxt(p) : ''} · ${p.adv || 'рекламодатель'}${p.erid ? ' · erid: ' + p.erid : ''}`;
+  const label = p => `<div class="dad-lbl"><span class="dad-lbl-t" title="${esc(mark(p))}">Реклама${ageTxt(p) ? ` <span class="dad-age">${ageTxt(p)}</span>` : ''} · <b>${esc(p.adv || 'рекламодатель')}</b>${p.erid ? ` · erid: ${esc(p.erid)}` : ''}</span>` +
     `<button type="button" class="dad-i" data-dad-about aria-label="О рекламе" title="О рекламе">ⓘ</button></div>`;
   function chooseKind(p, g, w){
     const k = new Set(p.cr.map(c => c.kind));
@@ -258,6 +265,7 @@
     pop.innerHTML = `<b>О рекламе</b>
       <div class="dad-pop-row"><span>Рекламодатель</span><b>${esc(p.adv || '—')}</b></div>
       ${p.inn ? `<div class="dad-pop-row"><span>ИНН / БИН</span><b>${esc(p.inn)}</b></div>` : ''}
+      ${ageTxt(p) ? `<div class="dad-pop-row"><span>Возраст</span><b>${ageTxt(p)}</b></div>` : ''}
       ${p.erid ? `<div class="dad-pop-row"><span>erid</span><b>${esc(p.erid)}</b></div>` : ''}
       ${p.host ? `<div class="dad-pop-row"><span>Сайт</span><a href="${esc(goHref(p))}" target="_blank" rel="sponsored noopener nofollow">${esc(p.host)} ↗</a></div>` : ''}
       <p>Размещено через кабинет рекламодателя этого сайта и прошло проверку. С VIP рекламы нет. <a href="/ads-terms" target="_blank">Правила рекламы</a></p>
@@ -343,7 +351,7 @@
       im.onload = () => { clearTimeout(t); res(im); }; im.onerror = () => { clearTimeout(t); res(null); };
       im.src = src;
     }) : null;
-    return { id: p.id, title: cr.title || p.adv, text: p.host ? p.host + ' ↗' : '', url: goHref(p, 'billboard'), advertiser: p.adv, erid: p.erid, inn: p.inn,
+    return { id: p.id, age: ageTxt(p), title: cr.title || p.adv, text: p.host ? p.host + ' ↗' : '', url: goHref(p, 'billboard'), advertiser: p.adv, erid: p.erid, inn: p.inn,
       host: p.host, bg: '#0f172a', fg: '#ffffff', img, direct: p };
   }
 
@@ -377,6 +385,7 @@
 .dad-lbl{display:flex;align-items:center;gap:.35rem;min-width:0;font-size:.64rem;line-height:1.3;color:var(--muted,#8d8daa);letter-spacing:.02em}
 .dad-lbl-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dad-lbl-t b{color:var(--text,#f0f0f8);font-weight:700}
+.dad-age{display:inline-block;padding:0 .3rem;border-radius:5px;border:1px solid currentColor;font-size:.6rem;font-weight:800;line-height:1.35;opacity:.85}
 .dad-i{flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--border,rgba(255,255,255,.18));background:rgba(255,255,255,.05);color:inherit;font-size:.72rem;line-height:1;cursor:pointer;padding:0}
 .dad-i:hover{color:#fff;border-color:rgba(255,255,255,.4)}
 .dad-a{display:flex;flex-direction:column;gap:.35rem;color:inherit;text-decoration:none;min-width:0}

@@ -45,10 +45,11 @@
     if (!vip) out.push({ id: 'vip', ic: '✨', t: 'VIP на сайте', d: 'Цветной ник, стикеры и сайт без рекламы', href: '/vip', c: ['#713f12', '#ca8a04'] });
     out.push({ id: 'horde', ic: '🧟', t: 'Орда', d: 'Выживи 10 минут против орды монстров', go: '#/games/horde', c: ['#3b0764', '#7c3aed'] });
     out.push({ id: 'studio', ic: '🧱', t: 'Студия 3D', d: 'Построй свой мир со скриптами — как в Roblox', go: '#/games/studio3d', c: ['#78350f', '#f59e0b'] });
-    const ad = sp && !vip ? { id: sp.direct ? 'direct:' + sp.direct.t : 'sponsor', sponsor: sp, ic: '', t: sp.title, d: sp.text, href: sp.url, c: [sp.bg, sp.bg], fg: sp.fg, img: sp.img || null } : null;
+    const kidOff = !!window.D37AdPlaces?.ageOff?.('sponsor');   // возраст (ADS_RULES.age): детям — без спонсора, даже если уже загружен
+    const ad = sp && !vip && !kidOff ? { id: sp.direct ? 'direct:' + sp.direct.t : 'sponsor', sponsor: sp, ic: '', t: sp.title, d: sp.text, href: sp.url, c: [sp.bg, sp.bg], fg: sp.fg, img: sp.img || null } : null;
     return { ad, list: out };
   }
-  const markText = sp => ['Реклама', sp.advertiser, sp.erid ? 'erid: ' + sp.erid : ''].filter(Boolean).join(' · ');
+  const markText = sp => [sp.age ? 'Реклама ' + sp.age : 'Реклама', sp.advertiser, sp.erid ? 'erid: ' + sp.erid : ''].filter(Boolean).join(' · ');
 
   // ── Рисование щита (canvas → текстура) ──
   function fitFont(g, text, weight, size, maxW, min = 18){

@@ -75,6 +75,10 @@
 .adc-card-sub{color:#ffcf70}
 .adc-st{display:inline-flex;align-items:center;gap:.3rem;padding:.12rem .55rem;border-radius:999px;font-size:.66rem;font-weight:800;color:var(--st);background:color-mix(in srgb,var(--st) 14%,transparent);border:1px solid color-mix(in srgb,var(--st) 40%,transparent);white-space:nowrap}
 .adc-st::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--st)}
+.adc-age{display:inline-flex;align-items:center;padding:.08rem .4rem;border-radius:6px;border:1px solid rgba(255,255,255,.35);font-size:.64rem;font-weight:800;color:#e9e9f5}
+.adc-age-row .adc-chk small{color:var(--muted);font-size:.64rem}
+.adc-rate select{background:transparent;border:0;color:var(--text);font:700 .7rem 'Montserrat',sans-serif;cursor:pointer}
+.adc-rate select option{background:var(--bg2,#0f0f18)}
 .adc-bar{display:block;height:6px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden;margin-top:.15rem}
 .adc-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ffd166);border-radius:inherit}
 .adc-empty{display:flex;flex-direction:column;align-items:center;gap:.5rem;text-align:center;padding:1.6rem!important}

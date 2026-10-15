@@ -39,6 +39,10 @@
   const DEVICES = [['mobile', '📱 Телефон'], ['desktop', '💻 Компьютер']];
   const AGES = [['child', 'до 13 лет'], ['teen', '13–15'], ['teen16', '16–17'], ['adult', '18+'], ['unknown', 'возраст не указан']];
   const GEO = [['any', '🌐 Везде'], ['ru', '🇷🇺 Только Россия'], ['not_ru', '🌍 Кроме России']];
+  // Возрастная метка рекламы (как у игр и роликов сайта) → кому из зрителей её можно (группы — js/core/age.js; «не указан» — по
+  // ADS_RULES.age.unknown, обычно как 13–15). Сервер не выдаёт кампанию зрителю младше метки (ad_age_max в ads.sql)
+  const RATINGS = [[0, 'всем'], [6, 'всем'], [12, 'с 13 лет'], [16, 'с 16 лет'], [18, 'только взрослым']];
+  const ageChip = r => (r === 0 || r > 0) ? `<span class="adc-age">${+r}+</span>` : '';
   const STATUS = { draft: ['Черновик', '#a1a1b5'], review: ['На проверке', '#ffd166'], active: ['Показывается', '#4ade80'], paused: ['На паузе', '#7cc4ff'],
     finished: ['Завершена', '#a1a1b5'], rejected: ['Отклонена', '#fca5a5'], banned: ['Заблокирована', '#ff2d55'] };
   const PAUSED = { owner: 'поставил(а) ты', admin: 'поставил администратор', reports: 'жалобы зрителей — ждёт решения администратора' };
@@ -47,7 +51,7 @@
     break: '«☕ Перерыв»', game_over: 'Под игрой после партии', games_hub: 'Раздел «Игры»', seo_game: 'Страницы игр', video_page: 'Страницы роликов',
     home_mid: 'Главная', rail: 'Столбик справа от игры', billboard: 'Щит в 3D-мире', other: 'Прочее' };
   const LOGACT = { create: 'Создана', submit: 'Отправлена на проверку', approve: '✅ Одобрена', reject: '⛔ Отклонена', pause: '⏸ Пауза', resume: '▶ Продолжена',
-    finish: '🏁 Завершена', refund: '↩ Возврат', topup: '💎 Пополнение', edit: '✏️ Изменена', withdraw: '↩ Отозвана с проверки', ban: '🚫 Заблокирована', note: '📝 Заметка' };
+    finish: '🏁 Завершена', refund: '↩ Возврат', topup: '💎 Пополнение', edit: '✏️ Изменена', withdraw: '↩ Отозвана с проверки', ban: '🚫 Заблокирована', note: '📝 Заметка', rate: '🔞 Метка' };
   const URLWHY = { empty: 'Нужна ссылка на сайт', long: 'Слишком длинная ссылка', https: 'Ссылка должна начинаться с https://',
     chars: 'В ссылке пробелы, кавычки или угловые скобки', host: 'Странный адрес сайта (без IP, логина и порта)',
     short: 'Короткие ссылки (bit.ly, clck.ru, vk.cc…) нельзя — дай прямой адрес сайта', bad: 'В ссылке запрещённая тема' };
@@ -59,7 +63,7 @@
     creatives: 'Добавь хотя бы один формат с картинкой.', kind: 'Неизвестный формат.', image: 'Картинка не загрузилась — выбери её ещё раз.',
     size: 'Картинка не того размера — выбери её ещё раз.', text: 'Слишком длинный текст.', title: 'У карточки нужен заголовок (от 2 букв).',
     advertiser: 'Укажи рекламодателя: ФИО ИП, название компании или имя блогера.', day_off: 'Пакеты «по дням» сейчас выключены — выбери оплату за показы.',
-    status: 'Сейчас так нельзя — у кампании другой статус.', off: 'Реклама временно выключена администратором.', act: 'Неизвестное действие.', why: 'Нужна причина (хотя бы пару слов).',
+    age: 'Выбери возрастную метку рекламы: 0+, 6+, 12+, 16+ или 18+.', status: 'Сейчас так нельзя — у кампании другой статус.', off: 'Реклама временно выключена администратором.', act: 'Неизвестное действие.', why: 'Нужна причина (хотя бы пару слов).',
   };
   function errText(r){
     if (!r) return 'Нет связи с сервером — попробуй ещё раз.';
@@ -172,7 +176,7 @@
     return `<details class="adc-how pf-card pf-card-tw"${open ? ' open' : ''}><summary><b>❓ Как это работает</b></summary>
       <ol class="adc-steps">
         <li><b>Создай кампанию:</b> ссылка на сайт, рекламодатель, картинки и текст — превью сразу покажет, как это будет выглядеть.</li>
-        <li><b>Выбери, кому и где:</b> разделы сайта, телефон или компьютер, возраст, Россия или другие страны, даты.</li>
+        <li><b>Выбери, кому и где:</b> возрастная метка рекламы (0+…18+ — реклама не покажется тем, кто младше), разделы сайта, телефон или компьютер, возраст, Россия или другие страны, даты.</li>
         <li><b>Оплата 💎:</b> за 1000 показов (ставка — от минимальной; выше ставка — чаще показ) или пакет «по дням». При отправке бюджет переходит в копилку кампании.</li>
         <li><b>Проверка:</b> обычно в течение дня. Отклонили — 💎 сразу возвращаются, причина видна в кабинете.</li>
         <li><b>Показ:</b> реклама сама встаёт в свободные места. Показ засчитывается, только когда реклама видна хотя бы наполовину не меньше секунды, — раз в ${c.dedup_min || 30} минут на зрителя и не больше ${c.freq_day || 6} раз в день. Свои показы не считаются, VIP рекламу не видят.</li>
@@ -188,7 +192,7 @@
     root.innerHTML = `<section class="adc-terms pf-card pf-card-gold">
       <h3>📜 Перед первой кампанией — правила рекламы</h3>
       <ul class="adc-list-dot">
-        <li>Реклама показывается детям и подросткам — запрещены азарт, кейсы и ставки, алкоголь, табак и вейпы, 18+, оружие, крипта и «лёгкие деньги», займы, лекарства, обман.</li>
+        <li>Реклама показывается детям и подросткам — запрещены азарт, кейсы и ставки, алкоголь, табак и вейпы, 18+, оружие, крипта и «лёгкие деньги», займы, лекарства, обман. У каждой кампании — возрастная метка (0+…18+): младшим зрителям она не показывается, детям до 13 — только 0+ и 6+.</li>
         <li>Каждую кампанию проверяет администратор. Отклонили — 💎 возвращаются. Неизрасходованный остаток возвращается всегда.</li>
         <li>Для показа в России нужен <b>erid</b> из ОРД — его получает рекламодатель (или его агентство). Без erid реклама идёт только в другие страны. На рекламе всегда пишем «Реклама · рекламодатель».</li>
         <li>Ты — рекламодатель или действуешь по его поручению и отвечаешь за содержание и ссылку.</li>
@@ -247,7 +251,7 @@
       <span class="adc-thumb"${c.thumb ? ` data-img="${esc(c.thumb)}"` : ''}>${c.thumb ? '' : '📣'}</span>
       <span class="adc-card-b">
         <b class="adc-card-t">${esc(c.title)}</b>
-        <span class="adc-card-m">${statusChip(c)}<small>${esc(priceLine(c))}</small></span>
+        <span class="adc-card-m">${statusChip(c)}${ageChip(c.age_rating)}<small>${esc(priceLine(c))}</small></span>
         ${sub ? `<small class="adc-card-sub">${esc(sub)}</small>` : ''}
         ${c.budget ? `<span class="adc-bar" title="Потрачено ${dec(c.spent)} из ${num(cap)} 💎"><i style="width:${pct}%"></i></span>` : ''}
         <small class="adc-card-s">👁 ${num(c.views)} · 👆 ${num(c.clicks)} · CTR ${ctr(c.views, c.clicks)}${c.budget ? ` · ${dec(c.spent)} / ${num(cap)} 💎` : ''}</small>
@@ -266,7 +270,7 @@
     const a = ST.my?.advertiser || {}, c = cfg();
     return { id: null, status: 'draft', locked: false, approved: false,
       c: { title: '', url: '', advertiser: a.name || '', inn: a.inn || '', erid: '', pricing: 'cpm', bid: (c.prices?.native?.cpm || 70), plan_budget: Math.max(c.min_budget || 200, 500),
-        days: 3, start_date: mskDay(), end_date: '', sections: [], devices: [], ages: [], geo: 'any' },
+        days: 3, start_date: mskDay(), end_date: '', sections: [], devices: [], ages: [], geo: 'any', age_rating: null },
       on: { native: true, banner: false, rail: false, board: false }, cr: {}, color: '#ff2d55' };
   }
   const groupsOn = E => GROUPS.filter(f => E.on[f.g]).map(f => f.g);
@@ -283,7 +287,7 @@
       E = { id: c.id, status: c.status, locked: !['draft', 'rejected'].includes(c.status), approved: c.approved, color: '#ff2d55',
         c: { title: c.title, url: c.url, advertiser: c.advertiser, inn: c.inn, erid: c.erid, pricing: c.pricing, bid: c.bid, plan_budget: c.plan_budget || cfg().min_budget,
           days: c.days || 3, start_date: c.start_date ? String(c.start_date).slice(0, 10) : mskDay(), end_date: c.end_date ? String(c.end_date).slice(0, 10) : '',
-          sections: c.sections || [], devices: c.devices || [], ages: c.ages || [], geo: c.geo || 'any' },
+          sections: c.sections || [], devices: c.devices || [], ages: c.ages || [], geo: c.geo || 'any', age_rating: c.age_rating ?? null },
         on: { native: false, banner: false, rail: false, board: false }, cr: {} };
       for (const cr of data.creatives || []) {
         const g = (RL().KIND_GROUP || {})[cr.kind]; if (g) E.on[g] = true;
@@ -316,6 +320,8 @@
             <label class="adc-f adc-color"><span>Цвет кнопки и фона для «🪄 Из карточки»</span><input type="color" data-f="color" value="${esc(E.color)}"></label>
           </section>
           <section class="pf-card pf-card-muted adc-box"><h4>3. Кому показывать <small>(ничего не выбрано — всем)</small></h4>
+            <div class="adc-chk-row adc-age-row"><span>Возрастная метка рекламы — обязательно <small>(как у игр и роликов сайта)</small></span>${RATINGS.map(([n, t]) => `<label class="adc-chk"><input type="radio" name="adcAge" data-agerating="${n}"${c.age_rating === n ? ' checked' : ''}> <b>${n}+</b> <small>${t}</small></label>`).join('')}</div>
+            <small class="adc-hint" data-hint="age"></small>
             <div class="adc-chk-row"><span>Разделы</span>${SECTIONS.map(([v, t]) => chk('sections', v, t, c.sections)).join('')}<span class="adc-chk adc-chk-soon" title="В чате и сообществах рекламы пока нет">💬 Чат — скоро</span></div>
             <div class="adc-chk-row"><span>Устройства</span>${DEVICES.map(([v, t]) => chk('devices', v, t, c.devices)).join('')}</div>
             <div class="adc-chk-row"><span>Возраст</span>${AGES.map(([v, t]) => chk('ages', v, t, c.ages)).join('')}</div>
@@ -396,6 +402,8 @@
     hint('url', !c.url ? 'На рекламе будет виден домен сайта.' : ub ? URLWHY[ub] : `На рекламе будет: ${R.hostOf?.(c.url)} ↗`, !!ub);
     hint('erid', c.erid ? '' : 'Без erid реклама в России не показывается — только в других странах.', false);
     hint('geo', !c.erid && c.geo !== 'not_ru' ? '⚠ erid не указан — показы в России будут пропущены (закон о маркировке рекламы).' : '', !c.erid && c.geo !== 'not_ru');
+    hint('age', c.age_rating == null ? 'Выбери метку: аудитория сайта — в основном дети; реклама с меткой старше зрителя ему не покажется.'
+      : c.age_rating >= 16 ? `${c.age_rating}+ — детям и подросткам до ${c.age_rating} не покажется (как и тем, кто возраст не указал).` : '', c.age_rating == null);
     const fl = floorOf(gs);
     hint('bid', fl ? `минимум для выбранных форматов — ${gems(fl)}` : '', +c.bid < fl);
     // расчёт
@@ -419,7 +427,7 @@
   const submitSum = E => E.c.pricing === 'day' ? dayPrice(groupsOn(E)) * (+E.c.days || 0) : (+E.c.plan_budget || 0);
   // Тот же вид, что у настоящей рекламы (стили .dad-* — js/core/ad-direct.js)
   function preview(E, g){
-    const c = E.c, host = RL().hostOf?.(c.url) || 'сайт.рф', lbl = `<div class="dad-lbl"><span class="dad-lbl-t">Реклама · <b>${esc(c.advertiser || 'рекламодатель')}</b>${c.erid ? ` · erid: ${esc(c.erid)}` : ''}</span><span class="dad-i">ⓘ</span></div>`;
+    const c = E.c, host = RL().hostOf?.(c.url) || 'сайт.рф', lbl = `<div class="dad-lbl"><span class="dad-lbl-t">Реклама${c.age_rating != null ? ` <span class="dad-age">${c.age_rating}+</span>` : ''} · <b>${esc(c.advertiser || 'рекламодатель')}</b>${c.erid ? ` · erid: ${esc(c.erid)}` : ''}</span><span class="dad-i">ⓘ</span></div>`;
     const img = (k, alt) => E.cr[k]?.src ? `<img src="${esc(E.cr[k].src)}" alt="${esc(alt || '')}">` : `<span class="dad-noimg">${KIND[k].t}<br>нет картинки</span>`;
     if (g === 'native') {
       const n = E.cr.native || {};
@@ -545,7 +553,7 @@
   function payload(E){
     const c = E.c, out = { title: c.title.trim() || 'Кампания', url: c.url.trim(), advertiser: c.advertiser.trim(), inn: c.inn.trim(), erid: c.erid.trim(),
       sections: c.sections, devices: c.devices, ages: c.ages, geo: c.geo, pricing: c.pricing, bid: Math.round(+c.bid || 0), plan_budget: Math.round(+c.plan_budget || 0),
-      days: Math.round(+c.days || 0), start_date: c.start_date || '', end_date: c.pricing === 'cpm' ? (c.end_date || '') : '', creatives: [] };
+      days: Math.round(+c.days || 0), start_date: c.start_date || '', end_date: c.pricing === 'cpm' ? (c.end_date || '') : '', age_rating: c.age_rating ?? null, creatives: [] };
     for (const g of groupsOn(E)) for (const k of GROUPS.find(f => f.g === g).kinds) {
       const cr = E.cr[k];
       if (!cr?.image) continue;
@@ -565,6 +573,7 @@
     if (!c.url) return URLWHY.empty;
     if (c.advertiser.trim().length < 2) return ERR.advertiser;
     if (!gs.length) return ERR.creatives;
+    if (c.age_rating == null) return ERR.age;
     for (const g of gs) {
       const has = GROUPS.find(f => f.g === g).kinds.some(k => E.cr[k]?.image || E.cr[k]?.blob);
       if (!has) return `Формат «${GROUPS.find(f => f.g === g).t}»: добавь картинку (или сними галочку).`;
@@ -658,7 +667,7 @@
     root.innerHTML = `
       <div class="adc-crumbs"><a href="#/adv">← ${own ? 'Мои кампании' : 'Кабинет'}</a>${adm ? ' · <a href="#/adv/admin">модерация</a>' : ''}</div>
       <div class="adc-c-head pf-card pf-card-accent">
-        <div class="adc-c-t"><h3>${esc(c.title)}</h3><div class="adc-card-m">${statusChip(c)}<small>${esc(priceLine(c))}</small>${!own ? `<small>· ${esc(data.owner_nick || '')}</small>` : ''}</div>
+        <div class="adc-c-t"><h3>${esc(c.title)}</h3><div class="adc-card-m">${statusChip(c)}${ageChip(c.age_rating)}<small>${esc(priceLine(c))}</small>${!own ? `<small>· ${esc(data.owner_nick || '')}</small>` : ''}</div>
           <small class="adc-muted">${c.start_date ? `${ruDate(c.start_date)} — ${c.end_date ? ruDate(c.end_date) : 'пока не кончится бюджет'}` : 'даты — после отправки'} · ${esc(c.host || '')}${c.erid ? ' · erid ' + esc(c.erid) : ''}</small></div>
         <div class="adc-c-money">
           <div><b>${dec(c.spent)}</b><small>потрачено 💎</small></div><div><b>${num(left)}</b><small>осталось 💎</small></div>
@@ -683,7 +692,8 @@
   }
   function targeting(c){
     const name = (list, vals) => vals?.length ? vals.map(v => (list.find(x => x[0] === v) || [v, v])[1]).join(', ') : 'все';
-    return `Разделы: ${esc(name(SECTIONS, c.sections))} · устройства: ${esc(name(DEVICES, c.devices))} · возраст: ${esc(name(AGES, c.ages))} · страна: ${esc((GEO.find(g => g[0] === c.geo) || [0, 'везде'])[1])}`;
+    const r = RATINGS.find(x => x[0] === c.age_rating);
+    return `Метка: ${r ? `${r[0]}+ (${r[1]})` : 'не выбрана'} · разделы: ${esc(name(SECTIONS, c.sections))} · устройства: ${esc(name(DEVICES, c.devices))} · возраст: ${esc(name(AGES, c.ages))} · страна: ${esc((GEO.find(g => g[0] === c.geo) || [0, 'везде'])[1])}`;
   }
   function chart(stats){
     if (!stats.length) return '<p class="adc-small">Показов пока нет. Статистика появится после первых показов (обновляется сразу).</p>';
@@ -769,6 +779,7 @@
     if (!x.inn) warn.push('ИНН/БИН не указан');
     if (x.changed) warn.push('изменена после одобрения');
     if (x.reports) warn.push(`жалоб: ${x.reports}`);
+    if (x.age_rating == null) warn.push('нет возрастной метки');
     const lbl = `<div class="dad-lbl"><span class="dad-lbl-t">Реклама · <b>${esc(x.advertiser)}</b>${x.erid ? ` · erid: ${esc(x.erid)}` : ''}</span></div>`;
     const crs = (x.creatives || []).map(cr => {
       const [dw, dh] = KIND[cr.kind]?.show || [300, 250];
@@ -776,17 +787,18 @@
         ${lbl}<img data-src="${esc(cr.image)}" alt="" width="${dw}" height="${dh}" style="width:${dw}px;max-width:100%;aspect-ratio:${dw}/${dh}"></figure>`;
     }).join('');
     const btn = (a, t, k) => `<button type="button" class="pf-btn pf-btn-${k} pf-btn-sm" data-a="adm-${a}" data-id="${esc(x.id)}">${t}</button>`;
+    const rateSel = `<label class="adc-mini adc-rate">🔞 метка <select data-rate="${esc(x.id)}">${x.age_rating == null ? '<option value="" selected>—</option>' : ''}${RATINGS.map(([n]) => `<option value="${n}"${x.age_rating === n ? ' selected' : ''}>${n}+</option>`).join('')}</select></label>`;
     const acts = x.status === 'review' ? btn('approve', '✅ Одобрить', 'gold') + btn('reject', '⛔ Отклонить', 'danger')
       : x.status === 'active' ? btn('pause', '⏸ Пауза', 'ghost') + btn('stop', '🏁 Остановить', 'ghost')
       : x.status === 'paused' ? btn('resume', '▶ Продолжить', 'primary') + btn('stop', '🏁 Остановить', 'ghost') : '';
     return `<article class="adc-adm pf-card ${x.status === 'review' ? 'pf-card-gold' : 'pf-card-muted'}">
-      <div class="adc-adm-h"><b>${esc(x.title)}</b>${statusChip(x)}<small>${esc(x.owner_nick || '?')} · ${esc(priceLine(x))} · в копилке ${num(Math.max(0, x.budget - x.refunded))} 💎 · потрачено ${dec(x.spent)}</small></div>
+      <div class="adc-adm-h"><b>${esc(x.title)}</b>${statusChip(x)}${ageChip(x.age_rating)}<small>${esc(x.owner_nick || '?')} · ${esc(priceLine(x))} · в копилке ${num(Math.max(0, x.budget - x.refunded))} 💎 · потрачено ${dec(x.spent)}</small></div>
       <div class="adc-adm-g"><div><small>Рекламодатель</small><b>${esc(x.advertiser || '—')}</b></div><div><small>ИНН/БИН</small><b>${esc(x.inn || '—')}</b></div>
         <div><small>erid</small><b>${esc(x.erid || '—')}</b></div><div><small>Ссылка</small><a href="${esc(x.url)}" target="_blank" rel="noopener nofollow noreferrer">${esc(x.url)}</a></div></div>
       <p class="adc-small">${targeting(x)} · ${x.start_date ? `${ruDate(x.start_date)} — ${x.end_date ? ruDate(x.end_date) : 'без конца'}` : ''}</p>
       ${warn.length ? `<p class="adc-warn">⚠ ${esc(warn.join(' · '))}</p>` : ''}
       <div class="adc-adm-crs">${crs}</div>
-      <div class="adc-act">${acts}${x.status !== 'banned' ? btn('ban', '🚫 Заблокировать', 'danger') : ''}<a class="pf-btn pf-btn-ghost pf-btn-sm" href="#/adv/c/${esc(x.id)}">📈 Статистика</a></div>
+      <div class="adc-act">${acts}${x.status !== 'banned' ? btn('ban', '🚫 Заблокировать', 'danger') : ''}${rateSel}<a class="pf-btn pf-btn-ghost pf-btn-sm" href="#/adv/c/${esc(x.id)}">📈 Статистика</a></div>
     </article>`;
   }
   function pricesForm(c){
@@ -835,6 +847,12 @@
       };
     });
   }
+  async function rate(id, v){
+    const { data, error } = await api('ad_admin_act', { p_id: id, p_act: 'rate', p_reason: String(v) });
+    if (error || !data?.ok) { toast(error ? (error.message || 'Ошибка') : errText(data)); return; }
+    toast(`🔞 Метка: ${v}+`);
+    rerender();
+  }
   async function savePrices(form){
     const f = form.elements, prices = {};
     for (const g of GROUPS) prices[g.g] = { cpm: Math.round(+f['cpm_' + g.g].value || 0), day: Math.round(+f['day_' + g.g].value || 0) };
@@ -877,10 +895,12 @@
     root.addEventListener('change', async e => {
       const E = ST.ed, t = e.target;
       if (t.closest?.('[data-form="prices"]')) return;
+      if (t.dataset.rate) { rate(t.dataset.rate, t.value); return; }
       if (!E) return;
       if (t.dataset.grp) { E.on[t.dataset.grp] = t.checked; t.closest('.adc-grp')?.classList.toggle('on', t.checked); const blk = $(`[data-crg="${t.dataset.grp}"]`, root); if (blk) blk.hidden = !t.checked; refresh(E); }
       else if (t.dataset.arr) { const arr = E.c[t.dataset.arr]; const i = arr.indexOf(t.value); if (t.checked && i < 0) arr.push(t.value); if (!t.checked && i >= 0) arr.splice(i, 1); refresh(E); }
       else if (t.dataset.geo) { E.c.geo = t.dataset.geo; refresh(E); }
+      else if (t.dataset.agerating) { E.c.age_rating = +t.dataset.agerating; refresh(E); }
       else if (t.dataset.pay) { E.c.pricing = t.dataset.pay; $$('.adc-pay-opt', root).forEach(x => x.classList.toggle('on', !!x.querySelector('input:checked'))); refresh(E); }
       else if (t.dataset.file) {
         const k = t.dataset.file, f = t.files?.[0];
