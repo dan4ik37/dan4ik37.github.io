@@ -32,7 +32,8 @@
     iso8:  { name: '2.5D · 8 сторон', el: .56, bake: [0, 7, 6, 5, 4], full: [0, 1, 2, 3, 4, 5, 6, 7], turn: .3 },
     front: { name: 'Портрет', el: .12, bake: [0], yaw: .32 },
   };
-  // ── Анимации: n кадров (lo — на слабых) ровно на один цикл dur (с); loop: 0 — разовая (последний кадр держится) ──
+  // ── Анимации: n кадров (lo — на слабых) ровно на один цикл dur (с); loop: 0 — разовая (последний кадр держится).
+  //    Эмоции (emo — ключ World3D.EMOTES, с выражением лица): цикл — период движения в позе world3d.js, разовые — целиком ──
   const ANIMS = {
     idle:   { name: 'Стоит', n: 4, lo: 2, dur: 2.6, loop: 1 },
     walk:   { name: 'Идёт', n: 8, lo: 6, dur: TAU / 10.5, loop: 1 },
@@ -41,14 +42,29 @@
     fall:   { name: 'Падает', n: 2, dur: .4, loop: 1 },
     crouch: { name: 'Присел', n: 2, lo: 1, dur: 2.6, loop: 1 },
     climb:  { name: 'Лезет', n: 4, dur: .8, loop: 1 },
-    swim:   { name: 'Плывёт', n: 6, lo: 4, dur: TAU / 5.5, loop: 1 },
+    swim:   { name: 'Плывёт', n: 6, lo: 4, dur: TAU / 3.4, loop: 1 },
     sit:    { name: 'Сидит', n: 1, dur: 1, loop: 1 },
     hurt:   { name: 'Больно', n: 3, dur: .3, loop: 0 },
     use:    { name: 'Удар', n: 5, dur: .32, loop: 0 },
-    wave:   { name: 'Машет', n: 6, lo: 4, dur: TAU / 10, loop: 1 },
-    dance:  { name: 'Танец', n: 8, lo: 6, dur: TAU / 5.5, loop: 1 },
-    cheer:  { name: 'Ура', n: 6, lo: 4, dur: TAU / 8, loop: 1 },
+    wave:   { name: 'Машет', emo: '👋', n: 6, lo: 4, dur: TAU / 10, loop: 1 },
+    laugh:  { name: 'Смеётся', emo: '😂', n: 4, dur: TAU / 20, loop: 1 },
+    love:   { name: 'Любовь', emo: '❤️', n: 6, lo: 4, dur: TAU / 5, loop: 1 },
+    fire:   { name: 'Огонь', emo: '🔥', n: 6, lo: 4, dur: TAU / 8, loop: 1 },
+    cheer:  { name: 'Ура', emo: '🎉', n: 6, lo: 4, dur: TAU / 8, loop: 1 },
+    cool:   { name: 'Круто', emo: '😎', n: 4, dur: TAU / 10, loop: 1 },
+    cry:    { name: 'Плачет', emo: '😭', n: 4, dur: TAU / 30, loop: 1 },
+    like:   { name: 'Класс', emo: '👍', n: 4, dur: TAU / 6, loop: 1 },
+    dance:  { name: 'Танец', emo: '💃', n: 8, lo: 6, dur: TAU / 5.5, loop: 1 },
+    clap:   { name: 'Хлопает', emo: '👏', n: 4, dur: TAU / 11, loop: 1 },
+    think:  { name: 'Думает', emo: '🤔', n: 1, dur: 1, loop: 1 },
+    wow:    { name: 'Ого', emo: '😮', n: 1, dur: 1, loop: 1 },
+    angry:  { name: 'Злится', emo: '😡', n: 4, dur: TAU / 14, loop: 1 },
+    bow:    { name: 'Поклон', emo: '🙇', n: 5, lo: 3, dur: 1.9, loop: 0 },
+    flip:   { name: 'Сальто', emo: '🤸', n: 8, lo: 6, dur: 1.15, loop: 0 },
   };
+  // Эмоция по эмодзи (чат мира и т. п.) → анимация
+  const EMO_ANIM = {};
+  for (const [a, A] of Object.entries(ANIMS)) if (A.emo) EMO_ANIM[A.emo] = a;
   // ── Стили: bands — полосы света (3 — как в мире), ink — контур (доля единицы 3D), px — рост в пикселях арта,
   //    levels — уровней на канал, pal — палитра, sketch — штриховка, chibi — большая голова, flat — без светотени ──
   const STYLES = {
@@ -61,7 +77,6 @@
     chibi:  { name: 'Чиби', icon: '🍡', bands: 2, chibi: 1, ink: .036 },
   };
   const STYLE_LIST = Object.keys(STYLES);
-  const EMO = { wave: '👋', dance: '💃', cheer: '🎉' };
   // Палитра «8-бит» (как у NES)
   const NES = ['000000', 'fcfcfc', 'bcbcbc', '7c7c7c', 'a4e4fc', '3cbcfc', '0078f8', '0000fc', 'b8b8f8', '6888fc', '0058f8', '0000bc', 'd8b8f8',
     '9878f8', '6844fc', '4428bc', 'f8b8f8', 'f878f8', 'd800cc', '940084', 'f8a4c0', 'f85898', 'e40058', 'a80020', 'f0d0b0', 'f87858', 'f83800',
@@ -113,12 +128,12 @@
     return [Math.max(0, r), fl, view === 'front' ? !!flip : d >= 5 && d <= 7];
   }
 
-  // ── Образ для ключа: нормализованный look; если частей человечка не хватает — их выберет «отпечаток» key (world3d resolve) ──
+  // ── Образ для ключа: нормализованный look; если нет частей, которые world3d выбирает по «отпечатку» key (W3_KEYED), — и key ──
   function lookSig(look, key){
     const D = C();
     if (!D) return JSON.stringify(look || {}) + '#' + (key || '');
     const L = D.norm(look);
-    return JSON.stringify(L) + (D.BODY_SLOTS.some(s => L[s] === undefined) ? '#' + (key || '') : '');
+    return JSON.stringify(L) + (W3_KEYED.some(s => L[s] === undefined) ? '#' + (key || '') : '');
   }
   function opts(o = {}){
     const view = VIEWS[o.view] ? o.view : 'side';
@@ -126,7 +141,7 @@
     const lo = o.lo != null ? !!o.lo : isLow();
     const dpr = Math.max(1, Math.min(3, +o.dpr || (lo ? 1 : Math.min(2, (typeof window !== 'undefined' && window.devicePixelRatio) || 1))));
     const size = Math.max(16, Math.min(256, Math.round(+o.size || 64)));
-    const St = STYLES[style], dev = Math.round(size * dpr);
+    const St = STYLES[style], dev = Math.round(size * dpr * (lo ? .85 : 1));   // слабое устройство — кадры помельче (рисуются тем же размером)
     const f = St.px ? Math.max(1, Math.round(dev / St.px)) : 1;   // пиксель-арт: целый множитель увеличения
     return {
       view, style, lo, dpr, size, dev, f, ppu: dev / f / STD, key: String(o.key || 'me'), noItem: !!o.noItem, full: !!o.full,
@@ -139,9 +154,32 @@
     return 'v' + VER + '-' + hash([lookSig(L, O.key), O.view, O.dev, O.dpr, O.style, O.lo ? 1 : 0, O.noItem ? 1 : 0, O.shadow ? 1 : 0, O.full ? 1 : 0].join('|')).toString(36);
   }
 
-  // ═══ Выбор стиля игроком (гардероб → «Стиль в играх»): 'auto' — как задумано игрой ═══
-  function myStyle(){ try { const s = localStorage.getItem(LS_STYLE); return STYLES[s] ? s : 'auto'; } catch (e) { return 'auto'; } }
-  function setMyStyle(s){ try { localStorage.setItem(LS_STYLE, STYLES[s] ? s : 'auto'); } catch (e) {} }
+  // ═══ Выбор стиля игроком (гардероб → «🎞 2D» и окно «⚙️ Настройки» → «🎞 2D-персонаж»): 'auto' — как задумано игрой.
+  //    Хранится в D37Settings ('spr2d'), d37_spr_style — зеркало (если окна настроек нет) ═══
+  const SETS = () => (typeof window !== 'undefined' && window.D37Settings?.schema?.spr2d ? window.D37Settings : null);
+  function myStyle(){
+    const S = SETS();
+    let s = S ? S.get('spr2d') : null;
+    if (!STYLES[s] && s !== 'auto') { try { s = localStorage.getItem(LS_STYLE); } catch (e) { s = null; } }
+    return STYLES[s] ? s : 'auto';
+  }
+  function setMyStyle(s){
+    s = STYLES[s] ? s : 'auto';
+    SETS()?.set('spr2d', s);
+    try { localStorage.setItem(LS_STYLE, s); } catch (e) {}
+  }
+  function settingsTab(){
+    const S = typeof window !== 'undefined' && window.D37Settings;
+    if (!S?.define || !S.addTab) return;
+    try {
+      S.define('spr2d', { def: 'auto', list: ['auto', ...STYLE_LIST] });
+      S.addTab({ id: 'spr2d', icon: '🎞', title: '2D-персонаж', order: 55, ctx: ['game', 'site'], render(){
+        const cur = myStyle(), b = (v, t) => `<button type="button" role="radio" aria-checked="${cur === v}" class="${cur === v ? 'on' : ''}" data-set="spr2d" data-v="${v}">${t}</button>`;
+        return `<div class="gs-row"><div class="gs-lbl"><b>Стиль персонажа в 2D-играх</b><small>Твой 3D-персонаж в «Орде», «Арене», плоском мире и играх игроков. «Как задумано» — стиль выбирает сама игра. Посмотреть все — гардероб → «🎞 2D».</small></div>
+          <div class="gs-ctl"><div class="gs-seg" role="radiogroup" style="flex-wrap:wrap">${b('auto', 'Как задумано')}${STYLE_LIST.map(v => b(v, STYLES[v].icon + ' ' + STYLES[v].name)).join('')}</div></div></div>`;
+      } });
+    } catch (e) {}
+  }
   function styleFor(def){ const s = myStyle(); return s !== 'auto' ? s : STYLES[def] ? def : 'toon'; }
   // Ключ своего персонажа — как в редакторе (charedit), мире и комнатах (GameRoom.guestId): аккаунт или гость вкладки.
   // Невыбранные части человечка выбираются по этому ключу — везде должен быть один и тот же
@@ -168,13 +206,14 @@
     if (bytes <= lim) return;
     for (const sh of [...mem.values()]) {
       if (bytes <= lim * .85) break;
-      if (sh.pin || sh.busy) continue;
+      if (sh.pin || sh.busy || sh.waiters.length) continue;   // свой, печётся или его ждут — не трогаем
       drop(sh);
     }
   }
   function freeImg(img){ try { if (img && img.close) img.close(); else if (img) { img.width = 0; img.height = 0; } } catch (e) {} }
   function drop(sh){
     sh.dead = true;
+    for (const w of sh.waiters.splice(0)) w.res(sh);
     for (const a of Object.values(sh.anims)) freeImg(a.img);
     bytes -= sh.bytes; sh.bytes = 0; sh.anims = {};
     if (mem.get(sh.k) === sh) mem.delete(sh.k);
@@ -217,6 +256,27 @@
     } catch (e) {}
   }
   const AMETA = ['cw', 'ch', 'ax', 'ay', 'n', 'rows', 'seat'];
+  // PNG для IndexedDB — в отдельном потоке (OffscreenCanvas.convertToBlob): снимок кадров из видеокарты не держит главный
+  // поток (toBlob на холсте — синхронное чтение пикселей, рывок). Нет OffscreenCanvas — по-старому, toBlob
+  let encW = null, encSeq = 0;
+  const encQ = new Map();
+  function encoder(){
+    if (encW !== null) return encW;
+    try {
+      if (typeof OffscreenCanvas === 'undefined' || typeof Worker === 'undefined' || typeof createImageBitmap !== 'function') return (encW = false);
+      const src = 'onmessage=async e=>{const{id,b}=e.data;try{const c=new OffscreenCanvas(b.width,b.height);c.getContext("2d").drawImage(b,0,0);b.close();postMessage({id,blob:await c.convertToBlob({type:"image/png"})})}catch(er){postMessage({id,blob:null})}}';
+      encW = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+      encW.onmessage = e => { const r = encQ.get(e.data.id); encQ.delete(e.data.id); r?.(e.data.blob || null); };
+      encW.onerror = () => { encW = false; for (const r of encQ.values()) r(null); encQ.clear(); };
+    } catch (e) { encW = false; }
+    return encW;
+  }
+  function pngOf(bmp){
+    const w = encoder();
+    if (!w) { bmp.close?.(); return Promise.resolve(null); }
+    return new Promise(res => { const id = ++encSeq; encQ.set(id, res); try { w.postMessage({ id, b: bmp }, [bmp]); } catch (e) { encQ.delete(id); res(null); } });
+  }
+  const blobOf = cv => new Promise(res => { try { cv.toBlob(res, 'image/png'); } catch (e) { res(null); } });
   const saveT = new Map();
   function saveLater(sh){
     if (sh.dead || sh.noSave) return;
@@ -228,8 +288,10 @@
     const old = await idbGet(sh.k);
     const rec = { k: sh.k, v: VER, cv: sh.cv, at: Date.now(), meta: { view: sh.view, style: sh.style, top: sh.top }, anims: {} };
     if (old && old.v === VER && old.cv === sh.cv) for (const [n, a] of Object.entries(old.anims || {})) rec.anims[n] = a;
+    let wait = false;
     for (const [n, a] of Object.entries(sh.anims)) {
       if (rec.anims[n] && !a.fresh) continue;
+      if (a.fresh && !a.blobP) { wait = true; continue; }   // PNG ещё не начали делать — сохраним в следующий раз
       const blob = await (a.blobP || null);
       if (!blob) continue;
       const m = { blob, hand: Array.from(a.hand || []) };
@@ -238,6 +300,7 @@
       a.fresh = false; a.blobP = null;
     }
     if (Object.keys(rec.anims).length) await idbPut(rec);
+    if (wait) saveLater(sh);
     setTimeout(idbPrune, 4000);
   }
   async function load(sh){
@@ -261,13 +324,18 @@
   }
 
   // ═══ Переходник к 3D-человечку (js/games/world3d.js). ВСЕ обращения к World3D — только здесь ═══
-  // Нужно от world3d.js: World3D.supported/load/kit(T); kit → build(look, key), animate(ch, moving, dt, t, o), dispose(ch), grad;
-  // человечек: root, body, torso, headP, legL/legR, armL/armR (+ armR.userData.La), hipY, phase, blink, emote/emoteT.
-  // animate: o.snap — поза сразу, без сглаживания (новый движок); rate (бег > 13), air, sit, crouch, ladder + climbPh, swim.
-  // Эмоции — ключи 👋 💃 🎉. Время t «заморожено» (T0 ± 0,1): хвосты, крылья и волосы чуть качаются, но цикл замкнут.
+  // Нужно от world3d.js (CHAR_VERSION 2): World3D.supported/load/kit(T, { q }), CHAR_VERSION; kit → build(look, key, { lod }),
+  // animate(ch, moving, dt, t, o), dispose(ch), grad (общая градиентная карта toon-материалов).
+  // Человечек: root (тень — меш прямо в root), body → torso → headP; armL/armR → elbowL/R → handL/R (в handR — предмет);
+  // legL/legR → kneeL/R; hipY, phase, emote/emoteT. animate: o.snap — поза сразу, без сглаживания, переходов и моргания
+  // (для каждого кадра!), rate (бег > 13), air, sit, crouch, ladder + climbPh, swim. Эмоции — ключи EMOTES; вес эмоции растёт
+  // первые 0,15 с и спадает последние 0,25 с — кадры цикла берём внутри. Время t «заморожено» (T0 ± 0,1): хвосты, крылья
+  // и волосы чуть качаются, но цикл замкнут; плавание идёт по t (гребок — t·3,4), ноги — свои, ровно 3 удара на гребок.
+  // Части, которые world3d.js (resolve) выбирает по ключу игрока, если их нет в образе; остальные — постоянные «как задумано»
+  const W3_KEYED = ['body', 'tone', 'eyec', 'hair', 'hairc', 'bottom', 'botc', 'shoec'];
   const W3 = (() => {
     let K = null, T = null, fp = '', loadP = null, failed = false;
-    const T0 = 1.5;
+    const T0 = 1.5, EMO_IN = .16;
     function script(src){
       if (typeof gamesLoadScript === 'function') return gamesLoadScript(src);
       return new Promise((res, rej) => {
@@ -287,21 +355,21 @@
         if (!await scriptOnly()) return false;
         const W = window.World3D;
         if (!W.supported?.() || !await W.load()) return false;
-        T = window.THREE; K = W.kit(T);
+        T = window.THREE; K = W.kit(T, { q: isLow() ? 'mid' : 'high' });   // листы маленькие — но «высокое» гладче на крупных
         return !!K;
       })().then(ok => { if (!ok) failed = true; loadP = null; return ok; }, () => { failed = true; loadP = null; return false; });
       return loadP;
     }
-    // Версия персонажа: номер из world3d.js (если есть) + отпечаток кода kit — поменялся код человечка → листы перепекутся сами
+    // Версия персонажа: CHAR_VERSION из world3d.js + отпечаток кода kit — поменялся код человечка → листы перепекутся сами
     function version(){
       const W = window.World3D;
       if (!W) return '';
       if (!fp) { try { fp = hash(String(W.kit)).toString(36); } catch (e) { fp = '?'; } }
-      return String(W.VERSION ?? W.version ?? W.CHAR_VERSION ?? W.CHAR_VER ?? W.REV ?? '') + ':' + fp;
+      return String(W.CHAR_VERSION ?? W.VERSION ?? '') + ':' + fp;
     }
-    function build(look, key){
-      const ch = K.build(look, key);
-      ch.blink = false;
+    // lod — дальний (грубее, без выражений лица): для мелких листов без эмоций быстрее собирается
+    function build(look, key, lod){
+      const ch = K.build(look, key, { lod: lod ? 1 : 0 });
       for (const o of ch.root.children) if (o.isMesh) o.visible = false;   // круглая тень под ногами — рисуем свою, 2D
       ch.__b = { lg: ch.legL?.scale.y || 1, hp: ch.headP?.scale.x || 1 };
       return ch;
@@ -318,47 +386,56 @@
       g.needsUpdate = true;
     }
     const lerpK = (arr, k) => { const x = Math.max(0, Math.min(1, k)) * (arr.length - 1), i = Math.min(arr.length - 2, Math.floor(x)), f = x - i; return arr[i] + (arr[i + 1] - arr[i]) * f; };
-    const USE = { ax: [-2.85, -2.3, -1.25, -.3, -.55], az: [.4, .32, .18, .1, .16], ty: [-.32, -.18, .1, .24, .08], tx: [-.06, 0, .12, .18, .06], lx: [.4, .25, -.15, -.4, -.12], ll: [.12, .1, -.15, -.25, -.08], lr: [-.1, -.05, .15, .22, .06] };
-    // Поставить позу кадра: k — доля цикла, A — анимация, St — стиль (чиби)
+    // «Удар»: замах правой сверху вниз с поворотом корпуса (ключи по доле k)
+    const USE = { ax: [-2.85, -2.3, -1.25, -.3, -.55], az: [.4, .32, .18, .1, .16], er: [-.7, -.45, -.2, -.12, -.3], ty: [-.32, -.18, .1, .24, .08], tx: [-.06, 0, .12, .18, .06],
+      lx: [.4, .25, -.15, -.4, -.12], ll: [.12, .1, -.15, -.25, -.08], lr: [-.1, -.05, .15, .22, .06] };
+    const O = { snap: true, rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, land: 0, blink: false };
+    // Поставить позу кадра: k — доля (цикл: i/n, разовая: i/(n−1)), A — анимация, St — стиль (чиби)
     function pose(ch, anim, k, A, St){
-      const t = T0 + (A.loop ? .1 * Math.sin(TAU * k) : .1 * k);
-      const o = { snap: true, rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false };
+      let t = T0 + (A.loop ? .1 * Math.sin(TAU * k) : .1 * k);
+      const o = Object.assign({}, O);
       let mv = false;
-      ch.emote = null; ch.blink = false; ch.phase = 0;
+      ch.emote = null; ch.phase = 0;
       if (anim === 'walk' || anim === 'run') { mv = true; ch.phase = TAU * k; if (anim === 'run') o.rate = 15; }
       else if (anim === 'jump' || anim === 'fall') o.air = true;
       else if (anim === 'crouch') o.crouch = 1;
       else if (anim === 'climb') { o.ladder = true; o.climbPh = TAU * k; }
-      else if (anim === 'swim') { o.swim = true; mv = true; ch.phase = TAU * k - t * 5.5; }
+      else if (anim === 'swim') { o.swim = true; mv = true; t = T0 + k * A.dur; }
       else if (anim === 'sit') o.sit = true;
-      else if (EMO[anim]) { ch.emote = EMO[anim]; ch.emoteT = t - k * A.dur; }
+      else if (A.emo) { ch.emote = A.emo; ch.emoteT = t - (A.loop ? EMO_IN + k * A.dur : k * (A.dur - .02)); }
       K.animate(ch, mv, 0, t, o);
-      const { body, torso, headP, legL, legR, armL, armR } = ch, s = Math.sin(TAU * k);
+      const { body, torso, headP, legL, legR, armL, armR, kneeL, kneeR, elbowL, elbowR } = ch, s = Math.sin(TAU * k);
       const set = (b, x, y, z) => { if (b) b.rotation.set(x, y, z); };
+      const rx = (b, x) => { if (b) b.rotation.x = x; };
       if (anim === 'idle' || anim === 'crouch' || anim === 'sit') {   // дыхание — своё, чтобы цикл замкнулся ровно
         if (torso) torso.scale.y = 1 + .016 * s;
         if (headP && anim !== 'sit') headP.rotation.z = .028 * Math.sin(TAU * k + .8);
         if (anim === 'idle') { if (armL) armL.rotation.z = -.16 - .025 * s; if (armR) armR.rotation.z = .16 + .025 * s; }
-      } else if (anim === 'jump' && k < .5) {   // отрыв: колени вверх, руки вверх
-        if (legL) legL.rotation.x = -.95; if (legR) legR.rotation.x = .2;
-        set(armL, -2.6, 0, -.3); set(armR, -2.6, 0, .3);
-        if (torso) torso.rotation.x = -.04;
+      } else if (anim === 'jump' && k < .5) {   // отрыв: колено к груди, руки вверх
+        rx(legL, -1.05); rx(kneeL, 1.35); rx(legR, .2); rx(kneeR, .45);
+        set(armL, -2.6, 0, -.3); set(armR, -2.6, 0, .3); rx(elbowL, -.3); rx(elbowR, -.3);
+        rx(torso, -.04);
       } else if (anim === 'fall') {   // падает: руки вверх и машут, ноги болтаются
-        if (legL) legL.rotation.x = -.35 + .22 * s; if (legR) legR.rotation.x = .3 - .22 * s;
-        set(armL, -2.5 + .22 * s, 0, -.55); set(armR, -2.5 - .22 * s, 0, .55);
-        if (torso) torso.rotation.x = -.06;
+        rx(legL, -.35 + .22 * s); rx(legR, .3 - .22 * s); rx(kneeL, .5 + .2 * s); rx(kneeR, .4 - .2 * s);
+        set(armL, -2.5 + .22 * s, 0, -.55); set(armR, -2.5 - .22 * s, 0, .55); rx(elbowL, -.4); rx(elbowR, -.4);
+        rx(torso, -.06);
+      } else if (anim === 'clap') { if (body) body.position.y = Math.abs(Math.sin(PI * k)) * .04;   // подскок — раз за цикл (в world3d — другой период)
+      } else if (anim === 'angry') { if (body) body.rotation.z = Math.sin(TAU * 2 * k) * .04;   // дрожь — 2 раза за цикл
+      } else if (anim === 'swim') {   // ноги «ножницами» — ровно 3 удара за гребок, чтобы цикл замкнулся
+        const q = Math.sin(TAU * 3 * k);
+        rx(legL, q * .28); rx(legR, -q * .28); rx(kneeL, .12 + .25 * Math.max(0, -q)); rx(kneeR, .12 + .25 * Math.max(0, q));
       } else if (anim === 'hurt') {   // отпрянул назад и «отходит»
         const a = 1 - .8 * k;
-        if (torso) torso.rotation.x = -.42 * a;
+        rx(torso, -.42 * a);
         if (headP) headP.rotation.set(-.35 * a, 0, .08 * a);
-        set(armL, -.55 * a, 0, -.16 - a); set(armR, -.55 * a, 0, .16 + a);
-        if (legL) legL.rotation.x = .22 * a; if (legR) legR.rotation.x = -.1 * a;
+        set(armL, -.55 * a, 0, -.16 - a); set(armR, -.55 * a, 0, .16 + a); rx(elbowL, -.12 - .5 * a); rx(elbowR, -.12 - .5 * a);
+        rx(legL, .22 * a); rx(legR, -.1 * a); rx(kneeL, .05 + .3 * a);
         if (body) body.position.y = .05 * a;
-      } else if (anim === 'use') {   // замах правой рукой сверху вниз с поворотом корпуса
-        set(armR, lerpK(USE.ax, k), 0, lerpK(USE.az, k));
+      } else if (anim === 'use') {
+        set(armR, lerpK(USE.ax, k), 0, lerpK(USE.az, k)); rx(elbowR, lerpK(USE.er, k));
         if (torso) torso.rotation.set(lerpK(USE.tx, k), lerpK(USE.ty, k), 0);
-        if (armL) armL.rotation.x = lerpK(USE.lx, k);
-        if (legL) legL.rotation.x = lerpK(USE.ll, k); if (legR) legR.rotation.x = lerpK(USE.lr, k);
+        rx(armL, lerpK(USE.lx, k)); rx(elbowL, -.5);
+        rx(legL, lerpK(USE.ll, k)); rx(legR, lerpK(USE.lr, k));
       }
       // чиби: голова больше, ноги короче (тело опускаем, чтобы ноги стояли на земле)
       const B = ch.__b || { lg: 1, hp: 1 }, kl = St?.chibi ? .72 : 1;
@@ -366,13 +443,17 @@
       if (headP) headP.scale.setScalar(B.hp * (St?.chibi ? 1.32 : 1));
       if (St?.chibi && body) body.position.y -= (ch.hipY || .52) * (1 - kl) * (body.scale.y || 1);
     }
-    // Точки в мире (после root.updateMatrixWorld): кисть правой руки и грудь
-    function handAt(ch, v){ const a = ch.armR; if (!a) return false; v.set(0, -(a.userData?.La ?? .42) + .03, 0); a.localToWorld(v); return true; }
+    // Точки в мире (после root.updateMatrixWorld): кисть правой руки (в ней предмет) и грудь
+    function handAt(ch, v){
+      if (ch.handR) { ch.handR.getWorldPosition(v); return true; }
+      const a = ch.armR; if (!a) return false;
+      v.set(0, -(a.userData?.La ?? .42) + .03, 0); a.localToWorld(v); return true;
+    }
     function chestAt(ch, v){ const b = ch.torso || ch.body || ch.root; v.set(0, .4, 0); b.localToWorld(v); return v; }
     return {
       ready, version, scriptOnly, build, dispose, bands, pose, handAt, chestAt,
       hip: ch => ch.hipY || .52, get T(){ return T; }, get ok(){ return !!K; }, get failed(){ return failed; },
-      _useKit(T2, K2){ T = T2; K = K2 || window.World3D.kit(T2); failed = false; },   // для тестов в node
+      _useKit(T2, K2){ T = T2; K = K2 || window.World3D.kit(T2, { q: 'high' }); failed = false; },   // для тестов в node
     };
   })();
 
@@ -433,7 +514,7 @@
     let c = BK.chars.get(sh.k);
     if (c) { BK.chars.delete(sh.k); BK.chars.set(sh.k, c); return c; }
     while (BK.chars.size >= 2) { const [k0, c0] = BK.chars.entries().next().value; BK.chars.delete(k0); c0.root.parent?.remove(c0.root); W3.dispose(c0); }
-    c = W3.build(sh.look, sh.key);
+    c = W3.build(sh.look, sh.key, sh.lod);
     BK.chars.set(sh.k, c);
     return c;
   }
@@ -513,15 +594,16 @@
 
   // ── Холсты и обработка под стиль ──
   function canvas(w, h){ const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; }
-  // Контур: силуэт тёмным цветом со сдвигами вокруг, сверху — сам кадр (поля клетки не дают залезть к соседу)
-  function ink(cv, w, col){
+  // Контур: силуэт тёмным цветом со сдвигами вокруг, сверху — сам кадр. По строке клеток (y0, h) за раз — поля клетки
+  // не дают залезть к соседу
+  function ink(cv, w, col, y0 = 0, h = cv.height){
     if (w < 1) return;
-    const sil = canvas(cv.width, cv.height), g = sil.getContext('2d');
-    g.drawImage(cv, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, sil.width, sil.height);
-    const out = canvas(cv.width, cv.height), q = out.getContext('2d'), steps = w > 1 ? 12 : 8;
+    const W = cv.width, sil = canvas(W, h), g = sil.getContext('2d');
+    g.drawImage(cv, 0, y0, W, h, 0, 0, W, h); g.globalCompositeOperation = 'source-in'; g.fillStyle = col; g.fillRect(0, 0, W, h);
+    const out = canvas(W, h), q = out.getContext('2d'), steps = w > 1 ? 12 : 8;
     for (let a = 0; a < steps; a++) q.drawImage(sil, Math.round(Math.cos(a / steps * TAU) * w), Math.round(Math.sin(a / steps * TAU) * w));
-    q.drawImage(cv, 0, 0);
-    const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height); c.drawImage(out, 0, 0);
+    q.drawImage(cv, 0, y0, W, h, 0, 0, W, h);
+    const c = cv.getContext('2d'); c.clearRect(0, y0, W, h); c.drawImage(out, 0, y0);
     sil.width = out.width = 0;
   }
   // Пиксель-арт: жёсткая прозрачность, палитра, контур в 1 пиксель, тень — без сглаживания. По строке клеток за раз
@@ -593,7 +675,7 @@
     P.ppu = sh.ppu;
     if (St.px) { const map = new Map(); for (let r = 0; r < P.rows; r++) { pixelBand(g, St, P, r * P.ch, sh.shadow, map); await maybePause(); } return; }
     if (St.sketch) for (let r = 0; r < P.rows; r++) { sketchBand(g, P, r * P.ch); await maybePause(); }
-    if (St.ink) ink(cv, Math.max(1, Math.round(St.ink * sh.ppu)), St.inkc || '#17111f');
+    if (St.ink) for (let r = 0; r < P.rows; r++) { ink(cv, Math.max(1, Math.round(St.ink * sh.ppu)), St.inkc || '#17111f', r * P.ch, P.ch); await maybePause(); }
     if (sh.shadow) shadows(cv, P, P.n, P.rows, St.sketch ? 'rgba(60,45,30,.22)' : 'rgba(0,0,0,.24)');
   }
 
@@ -696,11 +778,17 @@
     step = 'post ' + sh.style;
     await post(cv, sh, P);
     if (sh.dead) return;
-    const a = { img: cv, cw: P.cw, ch: P.ch, ax: P.ax, ay: P.ay, n: P.n, rows: P.rows, hand, seat: P.seat, fresh: true };
-    // ImageBitmap — быстрее рисовать; PNG для IndexedDB снимаем с холста сразу (он копируется синхронно)
-    a.blobP = !sh.noSave && cv.toBlob ? new Promise(res => { try { cv.toBlob(res, 'image/png'); } catch (e) { res(null); } }) : null;
+    const a = { img: cv, cw: P.cw, ch: P.ch, ax: P.ax, ay: P.ay, n: P.n, rows: P.rows, hand, seat: P.seat, fresh: true, blobP: null };
     commit(sh, anim, a);
-    if (typeof createImageBitmap === 'function') createImageBitmap(cv).then(bmp => { if (sh.dead || sh.anims[anim] !== a) { bmp.close?.(); return; } a.img = bmp; setTimeout(() => { cv.width = cv.height = 0; }, 0); }, () => {});
+    // ImageBitmap — быстрее рисовать (холст после этого освобождаем); его копия уходит в поток-кодировщик PNG для IndexedDB
+    const keep = !sh.noSave;
+    if (typeof createImageBitmap === 'function') createImageBitmap(cv).then(bmp => {
+      if (sh.dead || sh.anims[anim] !== a) { bmp.close?.(); return; }
+      a.img = bmp;
+      if (keep) a.blobP = encoder() ? createImageBitmap(bmp).then(pngOf, () => null) : blobOf(cv);
+      setTimeout(() => { cv.width = cv.height = 0; }, 0);
+    }, () => { if (keep) a.blobP = blobOf(cv); });
+    else if (keep) a.blobP = blobOf(cv);
     const ms = now() - t0, cpu = busy() - c0;
     STATS.baked++; STATS.frames += n; STATS.ms += cpu;
     STATS.log.push({ k: sh.k, anim, view: sh.view, style: sh.style, frames: n, cpu: Math.round(cpu * 10) / 10, wall: Math.round(ms), kb: Math.round(P.cw * P.n * P.ch * P.rows * 4 / 1024) });
@@ -728,19 +816,19 @@
     sh = {
       k, look: L, key: O.key, view: O.view, style: O.style, size: O.size, dpr: O.dpr, dev: O.dev, f: O.f, ppu: O.ppu, lo: O.lo, full: O.full,
       shadow: O.shadow, noItem: O.noItem, pin: O.pin, px: !!STYLES[O.style].px, nom: STD * O.ppu,
-      anims: {}, jobs: new Set(), waiters: [], bytes: 0, used: now(), t0: now(), dead: false, busy: false, cv: '', top: 0,
+      lod: !!STYLES[O.style].px || O.dev <= 100,   // мелкий лист — дальний человечек (втрое меньше треугольников, сборка ~4 мс)
+      anims: {}, jobs: new Set(), want: new Set(O.anims), waiters: [], bytes: 0, used: now(), t0: now(), dead: false, busy: false, cv: '', top: 0,
       pet: C()?.petEmoji?.(look) || '', fallback: !supported(), src: 'bake',
     };
     mem.set(k, sh);
     if (sh.fallback) return sh;
-    const want = O.anims.length ? O.anims : ['idle'];
     sh.loading = load(sh).catch(() => false).then(got => {
       sh.loading = null;
       if (sh.dead) return;
       if (got) STATS.idb++;
       const base = O.pin ? 0 : 1;
       enqueue(sh, 'idle', base);
-      for (const a of want) if (a !== 'idle') enqueue(sh, a, base + 3);
+      for (const a of sh.want) if (a !== 'idle') enqueue(sh, a, base + 3);   // и то, что попросили, пока читали кэш
       if (sh.cvUnknown) verifyLater();
     });
     return sh;
@@ -760,7 +848,11 @@
     });
   }
   // Попросить анимацию: нет — допечётся (своему — раньше)
-  function request(sh, anim){ if (!sh.anims[anim] && !sh.jobs.has(anim) && !sh.loading && !sh.fallback) enqueue(sh, anim, sh.pin ? 2 : 3); }
+  function request(sh, anim){
+    if (sh.anims[anim] || sh.jobs.has(anim) || sh.fallback || !ANIMS[anim]) return;
+    if (sh.loading) { sh.want.add(anim); return; }   // ещё читаем кэш — допечём после
+    enqueue(sh, anim, sh.pin ? 2 : 3);
+  }
 
   // ═══ Кадр и рисование ═══
   // → { img, sx, sy, sw, sh, ax, ay, flip, i, row, a, anim } или null (листа ещё нет)
@@ -915,8 +1007,9 @@
     if (all) idb().then(db => { try { db?.transaction('sheets', 'readwrite').objectStore('sheets').clear(); } catch (e) {} });
   }
 
+  settingsTab();
   window.D37Sprite = {
-    VER, STD, VIEWS, ANIMS, STYLES, STYLE_LIST,
+    VER, STD, VIEWS, ANIMS, STYLES, STYLE_LIST, EMO_ANIM,
     supported, handle, sheet, get, frame, draw, pack, dir8, dir4, frameIndex,
     styleFor, myStyle, setMyStyle, myKey, stats, clear,
     budget(mb){ if (mb > 0) { budgetB = mb * 1048576; evict(); } return Math.round((budgetB || budgetDefault()) / 1048576); },

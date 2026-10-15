@@ -198,7 +198,7 @@ section('песочница «Студии игр»');
   ok(D && D.drawPlayer(rec, 'walk', 0, 0, 0) === false, 'не готов — drawPlayer возвращает false (игра рисует эмодзи)');
   setTimeout(() => {
     ok(D.player.ready && D.player.pet === '🐶' && D.player.anims.join() === 'idle,walk,jump', 'картинка загрузилась — персонаж готов');
-    const shs = { ...sh, dead: false, fallback: false, jobs: new Set(), loading: true };   // loading — не просить допечь
+    const shs = { ...sh, dead: false, fallback: false, jobs: new Set(), want: new Set(), loading: true };   // loading — не просить допечь
     let same = true;
     for (const [anim, t, flip] of [['walk', 0, false], ['walk', .2, false], ['walk', .37, true], ['idle', 1.3, true], ['jump', 5, false], ['run', .1, false]]) {
       calls.length = 0;
@@ -219,10 +219,27 @@ section('песочница «Студии игр»');
       setTimeout(() => {
         ok(D.player.pet === '🐶', 'сообщение не от хозяина — не принимается');
         say(gwin.parent, 1);
-        setTimeout(() => { ok(D.player.pet === '🐱', 'хозяин прислал персонажа позже — игра его подхватила'); part3(); }, 5);
+        setTimeout(() => { ok(D.player.pet === '🐱', 'хозяин прислал персонажа позже — игра его подхватила'); wantTest(part3); }, 5);
       }, 5);
     }, 5);
   }, 5);
+}
+// Анимацию попросили, пока лист читается из IndexedDB, — она не теряется, а встаёт в очередь после чтения
+function wantTest(next){
+  section('просьбы, пока читается кэш');
+  X.BK.gl = true;
+  const o = X.opts({ view: 'side', size: 64, dpr: 1, anims: ['idle'] });
+  const sh = X.ensure({ color: 'teal' }, o, 'k-want');
+  ok(!!sh.loading, 'лист читается из кэша');
+  S.frame(sh, 'walk', 0);   // кадров нет — просит допечь
+  ok(sh.want.has('walk') && !sh.jobs.has('walk'), 'просьба, пока читается кэш, запомнена');
+  sh.loading.then(() => {
+    ok(sh.jobs.has('walk') && sh.jobs.has('idle'), 'после чтения кэша — в очереди и idle, и запрошенное');
+    let res = false; sh.waiters.push({ anim: 'walk', res: () => { res = true; } });
+    X.drop(sh); X.BK.gl = false;
+    ok(res, 'вытеснили лист — ждущие не зависают');
+    next();
+  });
 }
 function part3(){
 // ═══ 9. Настоящий человечек (если дан путь к three@0.149) ═══
@@ -256,7 +273,11 @@ if (TP) {
       X.posed(ch, anim, A, 0, n, sh, 2);
       X.posed(ch, anim, A, 1 % n, n, sh, 2); const s2 = snap(ch);
       ok(s1 === s2, `${L.name} · ${anim}: одна и та же поза при повторе`);
-      if (A.loop && n > 1) {
+      // эмоция: вес в world3d растёт первые 0,15 с и спадает последние 0,25 с — все кадры цикла должны быть в полном весе
+      const EDUR = { '💃': 3.2, '🤔': 2.4, '🙇': 1.9, '🤸': 1.15, '👏': 1.8 }, edur = A.emo ? EDUR[A.emo] || 1.6 : 0;
+      if (A.emo && A.loop) ok(.16 + (n - 1) / n * A.dur <= edur - .25 + 1e-9, `${L.name} · ${anim}: все кадры эмоции — в полном весе`);
+      const closable = !A.emo || .16 + A.dur <= edur - .25;   // точка k = 1 (её не рисуем) ещё в полном весе — можно сравнить с k = 0
+      if (A.loop && n > 1 && closable) {
         // δ — чуть после начала: у танца на самой границе рука «перещёлкивается» (так задумано в world3d)
         const dl = 1e-6;
         X.W3.pose(ch, anim, 1 + dl, A, S.STYLES.toon); ch.root.rotation.set(0, Math.PI / 2, 0); const e = snap(ch);

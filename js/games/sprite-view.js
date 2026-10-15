@@ -31,10 +31,11 @@
 .spd-cap{color:var(--muted,#94a3b8);font:700 .78rem 'Montserrat',sans-serif;margin:2px 0 -4px}
 .spd-stats{font:600 .78rem/1.5 ui-monospace,Consolas,monospace;color:#cbd5e1;background:rgba(10,8,24,.45);border-radius:10px;padding:8px 10px;white-space:pre-wrap;word-break:break-word}`;
   function css(){ if (document.getElementById('spv-css')) return; const s = document.createElement('style'); s.id = 'spv-css'; s.textContent = CSS; document.head.appendChild(s); }
+  const EMOS = () => Object.keys(SP().ANIMS).filter(a => SP().ANIMS[a].emo);
   const VIEW_ANIMS = {
-    side: ['idle', 'walk', 'run', 'jump', 'fall', 'crouch', 'climb', 'swim', 'sit', 'hurt', 'use', 'wave', 'dance', 'cheer'],
-    iso8: ['idle', 'walk', 'run', 'sit', 'wave', 'dance', 'cheer'],
-    front: ['idle', 'wave', 'dance', 'cheer'],
+    get side(){ return Object.keys(SP().ANIMS); },
+    get iso8(){ return ['idle', 'walk', 'run', 'sit', ...EMOS()]; },
+    get front(){ return ['idle', ...EMOS()]; },
   };
   const VIEW_NAME = { side: 'Сбоку', iso8: 'Сверху · 8 сторон', front: 'Портрет' };
   function fit(cv){
@@ -110,12 +111,11 @@
   }
   function handles(force){
     const look = C().look();
-    if (!force && W.look && JSON.stringify(look) === JSON.stringify(W.look) && W.hs.key === W.view + W.style) { W.hs.forEach(h => h.want(VIEW_ANIMS[W.view])); return; }
+    if (!force && W.look && JSON.stringify(look) === JSON.stringify(W.look) && W.hs.key === W.view + W.style) return;
     W.look = look;
     const big = W.view === 'iso8' ? 72 : W.view === 'front' ? 168 : 150;
     const h = SP().handle(look, { view: W.view, size: big, style: W.style, anims: ['idle', W.anim], key: SP().myKey(), pin: true });
-    W.hs = [h]; W.hs.key = W.view + W.style;
-    h.want(VIEW_ANIMS[W.view]);
+    W.hs = [h]; W.hs.key = W.view + W.style;   // остальные анимации допекутся, когда их выберут
   }
   function paint(){
     const cv = W.pane.querySelector('.spv-cv'), { w, h, dpr } = fit(cv), g = cv.getContext('2d');
@@ -171,7 +171,7 @@
       </div>
       <div class="spd-cap">Сбоку — как в платформере</div><canvas class="spd-cv spd-side" style="height:260px"></canvas>
       <div class="spd-cap">Сверху — 8 сторон, как в 2D-мире</div><canvas class="spd-cv spd-top" style="height:320px"></canvas>
-      <div class="spd-cap">Все анимации твоего персонажа</div><canvas class="spd-cv spd-all" style="height:300px"></canvas>
+      <div class="spd-cap">Все анимации твоего персонажа</div><canvas class="spd-cv spd-all" style="height:520px"></canvas>
       <div class="spd-stats">…</div>
     </div>`;
     D = { el, api, style: SP().styleFor('toon'), size: 64, seed: 1, side: [], top: [], all: null, raf: 0, last: now(), statT: 0 };
@@ -193,8 +193,9 @@
     const S = SP(), me = C().look(), mk = S.myKey();
     const looks = [me, ...[1, 2, 3, 4, 5, 6, 7].map(i => randomLook(D.seed * 100 + i))];
     const opt = (view, i, anims) => ({ view, size: D.size, style: D.style, anims, key: i ? 'demo-' + D.seed + '-' + i : mk, pin: !i });
-    D.side = looks.slice(0, 5).map((L, i) => ({ h: S.handle(L, opt('side', i, ['idle', 'walk', 'run', 'jump', 'fall', 'use', 'wave', 'dance', 'cheer'])), x: 60 + i * 140, y: 0, vx: 0, vy: 0, st: 'idle', t: 0, at: Math.random() * 2, face: i % 2 ? -1 : 1, air: false, jt: 0 }));
-    D.top = looks.map((L, i) => ({ h: S.handle(L, opt('iso8', i, ['idle', 'walk', 'wave', 'dance', 'cheer'])), x: 80 + (i * 97) % 500, y: 60 + (i * 53) % 220, tx: 0, ty: 0, d: i % 8, st: 'idle', t: 0, at: Math.random() * 2 }));
+    const sw = D.el.querySelector('.spd-side').getBoundingClientRect().width || 600;
+    D.side = looks.slice(0, 5).map((L, i) => ({ h: S.handle(L, opt('side', i, ['idle', 'walk', 'run', 'jump', 'fall', 'use', 'wave', 'dance', 'cheer'])), x: (i + .5) / 5 * sw, y: 0, vx: 0, vy: 0, st: 'idle', t: 0, at: Math.random() * 2, face: i % 2 ? -1 : 1, air: false, jt: 0 }));
+    D.top = looks.map((L, i) => ({ h: S.handle(L, opt('iso8', i, ['idle', 'walk'])), x: 40 + ((i * 97) % 100) / 100 * (sw - 80), y: 60 + (i * 53) % 220, tx: 0, ty: 0, d: i % 8, st: 'idle', t: 0, at: Math.random() * 2 }));
     D.all = S.handle(me, opt('side', 0, VIEW_ANIMS.side));
     D.all.want(VIEW_ANIMS.side);
   }
@@ -206,7 +207,8 @@
       c.t += dt; c.at -= dt;
       if (c.at <= 0 && !c.air) {
         const r = Math.random();
-        c.st = r < .3 ? 'walk' : r < .55 ? 'run' : r < .7 ? 'idle' : r < .8 ? 'jump' : r < .88 ? 'use' : ['wave', 'dance', 'cheer'][Math.floor(Math.random() * 3)];
+        const E = EMOS();
+        c.st = r < .3 ? 'walk' : r < .55 ? 'run' : r < .7 ? 'idle' : r < .8 ? 'jump' : r < .88 ? 'use' : E[Math.floor(Math.random() * E.length)];
         c.at = c.st === 'jump' ? 0 : 1 + Math.random() * 2.5; c.t = 0;
         if (c.st === 'walk' || c.st === 'run') c.face = Math.random() < .5 ? -1 : 1;
         if (c.st === 'jump') { c.vy = -520; c.air = true; c.jt = 0; c.st = Math.random() < .5 ? 'run' : 'walk'; }
@@ -229,7 +231,7 @@
       if (c.at <= 0) {
         const r = Math.random();
         if (r < .65) { c.st = 'walk'; c.tx = 40 + Math.random() * (W3 - 80); c.ty = 70 + Math.random() * (H3 - 90); c.at = 9; }
-        else { c.st = r < .8 ? 'idle' : ['wave', 'dance', 'cheer'][Math.floor(Math.random() * 3)]; c.at = 1.5 + Math.random() * 2; }
+        else { const E = EMOS(); c.st = r < .8 ? 'idle' : E[Math.floor(Math.random() * E.length)]; c.at = 1.5 + Math.random() * 2; }
         c.t = 0;
       }
       if (c.st === 'walk') {

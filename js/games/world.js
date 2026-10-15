@@ -993,8 +993,6 @@
     ctx.fillStyle = '#4b3621'; ctx.fillRect(-26, 4, 5, 8); ctx.fillRect(21, 4, 5, 8);
     ctx.restore();
   }
-  // Эмоции, у которых есть анимация 2D-персонажа
-  const EMO_ANIM = { '👋': 'wave', '💃': 'dance', '🎉': 'cheer', '🔥': 'cheer' };
   const SPR_MAX = 24;   // больше игроков на экране — остальные старыми человечками (память и выпечка)
   function drawPlayer(ctx, p, time){
     if (!window.D37Char) return;
@@ -1003,7 +1001,7 @@
     if (SP && (p._spr || S.sprN < SPR_MAX)) {
       if (!p._spr) { S.sprN = (S.sprN || 0) + 1; p._spr = SP.handle(p.look, { view: 'iso8', size: p.isMe ? 64 : 52, key: p.key, anims: ['idle', 'walk'], style: SP.styleFor('toon'), pin: !!p.isMe }); p._sprLook = p.look; }
       else if (p._sprLook !== p.look) { p._spr.set(p.look); p._sprLook = p.look; }
-      const emo = p.emo && EMO_ANIM[p.emo.e] && now() - p.emo.t < 2200 ? EMO_ANIM[p.emo.e] : '';
+      const emo = p.emo && SP.EMO_ANIM?.[p.emo.e] && now() - p.emo.t < 2200 ? SP.EMO_ANIM[p.emo.e] : '';   // эмоция — своя анимация
       p._spr.draw(ctx, emo || (p.moving ? 'walk' : 'idle'), emo ? (now() - p.emo.t) / 1000 : time + p.phase, p.x, p.y, { dir: p.d8 ?? 0, h: 62, alpha: fade });
       return;
     }
