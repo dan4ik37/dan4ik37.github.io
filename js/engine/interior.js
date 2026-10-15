@@ -25,7 +25,8 @@
   const FH = 3.2, TW = .3, PI = Math.PI;
 
   // ── Зерно: FNV + mulberry32 (одинаково в браузере и в node) ──
-  const hashStr = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+  // FNV-1a + перемешивание (как fmix32 в MurmurHash3): соседние этажи «m|1|…», «m|2|…» не дают похожих чисел
+  const hashStr = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0; };
   function rngOf(b, k, salt){
     let a = hashStr(`${b.seed || b.id}|${k}|${salt}`);
     return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
