@@ -300,9 +300,9 @@
       }
       fog.color.setRGB(M.hor[0], M.hor[1], M.hor[2]); fog.near = fe * (O.fog ? .3 : .6); fog.far = fe;
       scene.background.copy(fog.color);
-      const sl = Math.hypot(M.sun[0], M.sun[2]) || 1;   // к солнцу — по горизонтали (шейдеру — готовое направление)
-      GU.fogA[0] = M.sun[0] / sl; GU.fogA[1] = 0; GU.fogA[2] = M.sun[2] / sl; GU.fogA[3] = O.fog && !skyOver ? G.fog.sun : 0;
-      GU.fogB[0] = M.fogSun[0]; GU.fogB[1] = M.fogSun[1]; GU.fogB[2] = M.fogSun[2]; GU.fogB[3] = O.fog ? G.fog.density * G.fog.density * .03 : 0;
+      const sl = Math.hypot(M.sun[0], M.sun[2]) || 1, fx = O.fog && q !== 'low';   // low — только обычный туман (легко)
+      GU.fogA[0] = M.sun[0] / sl; GU.fogA[1] = 0; GU.fogA[2] = M.sun[2] / sl; GU.fogA[3] = fx && !skyOver ? G.fog.sun : 0;   // к солнцу — по горизонтали
+      GU.fogB[0] = M.fogSun[0]; GU.fogB[1] = M.fogSun[1]; GU.fogB[2] = M.fogSun[2]; GU.fogB[3] = fx ? G.fog.density * G.fog.density * .03 : 0;
       GU.fogC[0] = G.fog.height; GU.fogC[1] = .05 + .06 * (1 - G.fog.density); fogCam();
     }
     // высотный туман: плотность на высоте камеры — один раз за кадр (а не в каждом пикселе)
