@@ -56,14 +56,22 @@
   }
   const zoomView = k => { if (V) V.H = Math.max(1.5, Math.min(400, V.H * k)); };
   S3X.ortho = { get on(){ return !!V; }, pan: panView, zoom: zoomView, set: (k, o) => setView(k, o) };
-  // туман — дальше на время вида (камера в 300 ед. от мира), потом как был; R.setLighting делает новый туман — заново
-  let fogObj = null, fogBase = null;
+  // туман и дальняя плоскость — дальше на время вида (камера в 320 ед. от мира), потом как были. render.js сам меняет туман и
+  // camera.far (свет, «Дальность» в ⚙️) — тогда берём его новые значения за основу
+  let fogObj = null, fogBase = null, fogSet = null, far0 = 0, farSet = 0;
   function fogFor(){
-    const fog = ed()?.R.scene.fog; if (!fog) return;
-    if (fog !== fogObj) { fogObj = fog; fogBase = { near: fog.near, far: fog.far }; }
-    fog.near = fogBase.near + D; fog.far = fogBase.far + D;
+    const R = ed()?.R, fog = R?.scene.fog, cam = R?.camera; if (!cam) return;
+    if (cam.far !== farSet) far0 = cam.far;
+    const fw = Math.max(far0, D + 400); if (cam.far !== fw) { cam.far = fw; cam.updateProjectionMatrix(); } farSet = fw;
+    if (!fog) return;
+    if (fog !== fogObj || !fogSet || fog.near !== fogSet.near || fog.far !== fogSet.far) { fogObj = fog; fogBase = { near: fog.near, far: fog.far }; }
+    fog.near = fogBase.near + D; fog.far = fogBase.far + D; fogSet = { near: fog.near, far: fog.far };
   }
-  function fogBack(){ if (fogObj && fogBase) { fogObj.near = fogBase.near; fogObj.far = fogBase.far; } fogObj = fogBase = null; }
+  function fogBack(){
+    if (fogObj && fogBase && fogSet && fogObj.near === fogSet.near && fogObj.far === fogSet.far) { fogObj.near = fogBase.near; fogObj.far = fogBase.far; }
+    const cam = ed()?.R?.camera; if (cam && far0 && cam.far === farSet) { cam.far = far0; cam.updateProjectionMatrix(); }
+    fogObj = fogBase = fogSet = null; far0 = farSet = 0;
+  }
   function tag(){
     const e = ed(); if (!e) return;
     let t = e.q('.s3x-viewtag');
