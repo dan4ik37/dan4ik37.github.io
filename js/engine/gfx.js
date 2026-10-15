@@ -135,7 +135,7 @@
   E.WORLD_PRESETS = {
     day: { name: 'Солнечный день', icon: '☀️', lighting: { time: 13, brightness: 1.1, ambient: 1, fogEnd: 420 },
       gfx: { sky: { haze: .12, clouds: .8, stars: 1 }, fog: { density: .06, height: 0, sun: .4 }, grade: 'vivid', bloom: .8, exposure: 0, water: { clarity: .7, foam: .5 }, shadow: { soft: .25 } } },
-    sunset: { name: 'Закат', icon: '🌇', lighting: { time: 18.15, brightness: 1.25, ambient: .9, fogEnd: 320 },
+    sunset: { name: 'Закат', icon: '🌇', lighting: { time: 17.7, brightness: 1.25, ambient: .95, fogEnd: 320 },
       gfx: { sky: { haze: .45, clouds: 1, sun: 1.4 }, fog: { density: .25, height: 0, sun: 1 }, grade: 'warm', bloom: 1.3, exposure: .05, water: { clarity: .5, foam: .5 }, shadow: { soft: .55 } } },
     night: { name: 'Ночь', icon: '🌙', lighting: { time: .5, brightness: 1, ambient: 1.2, fogEnd: 240 },
       gfx: { sky: { haze: .1, stars: 1, moon: true, clouds: .6 }, fog: { density: .18, height: 0, sun: .3 }, grade: 'cold', bloom: 1.5, exposure: .2, water: { clarity: .4, foam: .4 }, shadow: { soft: .4 } } },
@@ -190,8 +190,8 @@
   const SKY_KEYS = [
     [-.35, '#04081a', '#0c1630', '#000000'],
     [-.16, '#0b1638', '#1d2b55', '#2a1d3a'],
-    [-.05, '#1c2f66', '#55557e', '#a8564a'],
-    [.03, '#2f4f99', '#a98f9c', '#ff8a4a'],
+    [-.05, '#22397a', '#6b5d8f', '#c8644a'],
+    [.03, '#3156a3', '#b8949a', '#ff8a4a'],
     [.14, '#3f6fc4', '#c8c9cf', '#ffb06a'],
     [.32, '#3d7fdb', '#b9d7f0', '#ffd9a8'],
     [.6, '#3f88ea', '#b4d6f5', '#fff1d6'],
@@ -458,7 +458,7 @@ void main(){
       for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { let h = 0; for (const [a, b, p, k] of waves) h += Math.sin((a * x + b * y) / n * PI * 2 + p) * k / Math.hypot(a, b); H[y * n + x] = h * .5; }
       return H;
     }, 2.2);
-    const m = new T.MeshStandardMaterial({ color: c, roughness: .07, metalness: 0, transparent: true, opacity: .9, normalMap: nm, envMapIntensity: 1.25 });
+    const m = new T.MeshStandardMaterial({ color: c, roughness: .1, metalness: 0, transparent: true, opacity: .9, normalMap: nm, envMapIntensity: .85 });
     m.normalScale = new T.Vector2(.5, .5);
     m.userData.tile = 4 * (E.UNIT || 1); m.userData.noCast = true; m.userData.noAO = true; m.userData.water = true;
     const dep = opts.depth || null;
@@ -498,8 +498,8 @@ uniform sampler2D tDep;
   if ( uWQ > 0.5 && duv.x > 0.0 && duv.y > 0.0 && duv.x < 1.0 && duv.y < 1.0 ) wDepth = max( vD37W.y - texture2D( tDep, duv ).r, 0.0 );
 #endif
   float wk = 1.0 - exp( - wDepth * mix( 1.4, 0.18, uClear ) );
-  diffuseColor.rgb = mix( diffuse * vec3( 1.15, 1.3, 1.2 ) + 0.04, diffuse * vec3( 0.32, 0.45, 0.55 ), wk );
-  diffuseColor.a = mix( mix( 0.25, 0.05, uClear ), mix( 0.95, 0.8, uClear ), wk );
+  diffuseColor.rgb = mix( diffuse * vec3( 1.1, 1.25, 1.15 ) + 0.03, diffuse * vec3( 0.22, 0.36, 0.5 ), wk );
+  diffuseColor.a = mix( mix( 0.3, 0.08, uClear ), mix( 0.97, 0.86, uClear ), wk );
   if ( uWQ > 0.5 && wDepth < 1.0 ) {
     float fn = texture2D( normalMap, vD37W.xz * 0.21 - uTime * vec2( 0.03, 0.02 ) ).x;
     float foam = uFoam * ( 1.0 - smoothstep( 0.0, 0.35 + 0.25 * fn, wDepth ) ) * smoothstep( 0.35, 0.6, fn + 0.25 * ( 1.0 - wDepth / 0.6 ) );
@@ -509,7 +509,7 @@ uniform sampler2D tDep;
         // френель: у горизонта вода — зеркало (непрозрачнее)
         .replace('#include <output_fragment>', `#include <output_fragment>
   float fr = pow( 1.0 - clamp( abs( dot( normal, normalize( vViewPosition ) ) ), 0.0, 1.0 ), 4.0 );
-  gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, fr * 0.85 ), 0.0, 1.0 );`);
+  gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, fr * 0.6 ), 0.0, 1.0 );`);
     };
     m.customProgramCacheKey = () => 'd37-water2' + (dep?.tex ? 'd' : '');
     return m;

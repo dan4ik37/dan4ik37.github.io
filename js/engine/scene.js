@@ -58,6 +58,7 @@
     const matCache = new Map();
 
     // ── Материал по ключу, цвету и прозрачности ──
+    const fresnel = (m, k) => R.fresnel ? R.fresnel(m, k) : m;   // графика v3 (render.js); без неё — как было
     function material(key, color, alpha){
       const k = `${key}|${color}|${alpha}`;
       if (matCache.has(k)) return matCache.get(k);
@@ -65,8 +66,9 @@
       let m;
       switch (key) {
         case 'neon': m = new T.MeshBasicMaterial({ color, toneMapped: false }); break;
-        case 'glass': m = low ? new T.MeshLambertMaterial({ color, transparent: true, opacity: .45 }) : new T.MeshStandardMaterial({ color, roughness: .04, metalness: .1, transparent: true, opacity: .3, envMapIntensity: 1.5 }); break;
-        case 'ice': m = low ? new T.MeshLambertMaterial({ color, transparent: true, opacity: .85 }) : new T.MeshStandardMaterial({ color, roughness: .06, metalness: 0, transparent: true, opacity: .82, envMapIntensity: 1.3 }); break;
+        // графика v3: стекло и лёд — с френелем (R.fresnel), у текстур кодом — рельеф (R.procN, high)
+        case 'glass': m = low ? new T.MeshLambertMaterial({ color, transparent: true, opacity: .45 }) : fresnel(new T.MeshStandardMaterial({ color, roughness: .04, metalness: .1, transparent: true, opacity: .3, envMapIntensity: 1.5 }), .75); break;
+        case 'ice': m = low ? new T.MeshLambertMaterial({ color, transparent: true, opacity: .85 }) : fresnel(new T.MeshStandardMaterial({ color, roughness: .06, metalness: 0, transparent: true, opacity: .82, envMapIntensity: 1.3 }), .5); break;
         case 'smooth': m = R.mat(color, { rough: .18, env: 1 }); break;
         case 'metal': m = R.mat(color, { rough: .3, metal: .85, env: 1.1 }); break;
         case 'wood': m = R.tex('planks', { tint: color, tile, flatColor: color, rough: .7 }); break;
@@ -78,7 +80,7 @@
         case 'fabric': m = R.tex('carpet', { tint: color, tile, flatColor: color }); break;
         case 'tiles': m = R.tex('tiles', { tint: color, tile, flatColor: color, rough: .3 }); break;
         case 'grass': case 'sand': case 'rock': case 'brick': case 'snow': case 'dirt': case 'diamond':
-          m = R.texMat('m:' + key, R.proc(key), { tint: color, tile, flatColor: color, rough: key === 'diamond' ? .4 : .92 });
+          m = R.texMat('m:' + key, R.proc(key), { tint: color, tile, flatColor: color, rough: key === 'diamond' ? .4 : .92, normalMap: R.procN?.(key), ns: .85 });
           if (key === 'diamond' && !low) { m = m.clone(); m.metalness = .7; }
           break;
         default: m = R.mat(color, { rough: .42 });

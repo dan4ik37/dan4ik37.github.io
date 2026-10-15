@@ -268,7 +268,7 @@
       // свет неба: цвет — небо (наполовину к белому), сила — по яркости неба (ночью не темнее трети дня — играть можно)
       const mx = Math.max(M.ambSky[0], M.ambSky[1], M.ambSky[2], 1e-4), lumS = .2126 * M.ambSky[0] + .7152 * M.ambSky[1] + .0722 * M.ambSky[2];
       hemi.color.setRGB(.5 + .5 * M.ambSky[0] / mx, .5 + .5 * M.ambSky[1] / mx, .5 + .5 * M.ambSky[2] / mx);
-      hemi.groundColor.setRGB(M.ambGnd[0] / mx, M.ambGnd[1] / mx, M.ambGnd[2] / mx);
+      hemi.groundColor.setRGB(Math.min(.55, M.ambGnd[0] / mx), Math.min(.55, M.ambGnd[1] / mx), Math.min(.55, M.ambGnd[2] / mx));
       hemi.intensity = (q === 'low' ? 1 : .42) * Math.max(lumS / .44, .34 + .1 * (1 - M.night)) * amb;
       R.night = M.night;
       applyFog();
@@ -549,7 +549,9 @@
     function applyGrade(){
       if (!R.post || !R.opt) return;
       const G = R.lighting.gfx;
-      R.post.setGrade?.(E.gradeUniforms(E.gradeOf(G.grade), R.opt.grade, 0, gradeU));
+      E.gradeUniforms(E.gradeOf(G.grade), R.opt.grade, 0, gradeU);
+      gradeU.sat *= 1 - .35 * M.night;   // ночью цвета блёкнут (как видит глаз в темноте)
+      R.post.setGrade?.(gradeU);
       R.post.bloom.strength = (q === 'high' ? 1 : .9) * G.bloom;
     }
     // Разрешение вручную (замер, настройки): s — доля от плотности качества; dynRes выключается, пока не включат снова
@@ -704,6 +706,25 @@
         }),
       };
       return (P[name] || P.grass)();
+    };
+    // Материалы v2: рельеф для текстур кодом — карта нормалей из их же яркости (кирпич, камень, рифлёнка выпуклые); только high
+    const PROC_N = { grass: 1.1, sand: 1.4, rock: 2.6, brick: 3, snow: .9, dirt: 1.6, diamond: 3.2 };
+    R.procN = name => {
+      if (q !== 'high' || !PROC_N[name]) return null;
+      const src = R.proc(name).image;
+      if (!src?.getContext) return null;
+      return R.normalFrom('pN:' + name, src.width, n => {
+        const d = src.getContext('2d').getImageData(0, 0, n, n).data, H = new Float32Array(n * n);
+        for (let i = 0; i < n * n; i++) H[i] = (d[i * 4] * .3 + d[i * 4 + 1] * .59 + d[i * 4 + 2] * .11) / 255;
+        return H;
+      }, PROC_N[name]);
+    };
+    // Стекло, лёд: френель — под углом отражают сильнее и меньше просвечивают (прозрачные не склеиваются — правка шейдера можно)
+    R.fresnel = (m, k = .7) => {
+      if (q === 'low' || !m?.transparent || !m.isMeshStandardMaterial) return m;
+      m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', '#include <output_fragment>\n  gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, pow( 1.0 - clamp( abs( dot( normal, normalize( vViewPosition ) ) ), 0.0, 1.0 ), 4.0 ) * ' + (+k).toFixed(2) + ' ), 0.0, 1.0 );'); };
+      m.customProgramCacheKey = () => 'd37-fr' + (+k).toFixed(2);
+      return m;
     };
     R.texMat = (key, map, o = {}) => cache('cm' + key + (o.tint || ''), () => {
       if (q === 'low') return new T.MeshLambertMaterial({ color: o.flatColor || o.tint || '#ffffff', map: o.lowMap ? map : null });
