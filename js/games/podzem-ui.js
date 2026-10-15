@@ -73,7 +73,7 @@
 .pz-life{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;padding:4px 6px}
 .pz-hearts,.pz-stars{max-width:130px}.pz-hearts .pz-ic,.pz-stars .pz-ic{--s:15px}.pz-hp-n{display:none}
 .pz-btns{gap:3px}.pz-btns .pz-b{min-width:34px;height:34px;padding:0 7px}
-.pz-sel-name{top:96px}}
+.pz-sel-name{top:96px}.pz-panel{top:84px;max-height:calc(100% - 92px)}}
 .pz-list{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow:auto}
 .pz-it{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:2px solid transparent;cursor:pointer}
 .pz-it.on{border-color:#ffd84a;background:rgba(255,216,74,.08)}
@@ -88,7 +88,7 @@
 .pz-field input,.pz-field select{border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;padding:9px 11px;font:600 14px/1.2 system-ui,sans-serif}
 .pz-field small{opacity:.7}
 .pz-chk{display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer}
-.pz-toasts{position:absolute;left:50%;top:84px;transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;width:min(520px,94%)}
+.pz-toasts{position:absolute;left:50%;top:104px;transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;width:min(520px,94%)}
 .pz-toast{padding:7px 12px;border-radius:10px;background:rgba(12,12,24,.9);border:1px solid rgba(255,255,255,.12);font:700 13px/1.3 system-ui,sans-serif;text-align:center;animation:pzIn .2s ease-out}
 .pz-toast.bad{border-color:rgba(255,90,90,.5)}.pz-toast.good{border-color:rgba(90,255,140,.45)}.pz-toast.ach{border-color:rgba(255,216,74,.7);background:rgba(50,40,10,.92)}.pz-toast.boss{border-color:rgba(200,90,255,.7);font-size:15px}
 @keyframes pzIn{from{opacity:0;transform:translateY(-6px)}}
@@ -117,6 +117,7 @@
 .pz-note{font-size:12px;opacity:.7}
 .pz-mods .pz-it{cursor:default}
 .pz-err{color:#ff9a9a;font-size:12px}
+@media (max-width:560px){.pz-boss{top:112px}.pz-toasts{top:140px}}
 `;
   function addCss(){ if (document.getElementById('pz-css')) return; const s = document.createElement('style'); s.id = 'pz-css'; s.textContent = CSS; document.head.appendChild(s); }
   const isTouch = () => { try { return matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window; } catch (e) { return false; } };
