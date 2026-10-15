@@ -407,7 +407,29 @@ const cookieOf = res => String(res.headers['set-cookie'] || '').split(';')[0];
   res = await call({ ...cbq, state: q.state }, { headers: { cookie: ck } });
   ok(frag(res.headers.location).d37auth_err === 'reauth', 'старый вход в билете — база ещё раз говорит reauth');
 
+  // ═══ 10б. «Подтверди, что это ты» (m=reauth): войти можно только в СВОЙ аккаунт — нового не создаём, в чужой не пускаем ═══
+  const OWNER = DB.links.find(x => x.uid === '2002').user;   // VK 2002 привязан к ME
+  res = await call({ a: 'start', p: 'vk', b: B, m: 'reauth', u: 'не-uuid' });
+  ok(frag(res.headers.location).d37auth_err === 'state', 'reauth без своего id — отказ');
+  const reauth = async (vkUid, u) => {
+    const s = await call({ a: 'start', p: 'vk', b: B, m: 'reauth', u, n: '#/profile/logins' }); const qq = qs(s.headers.location); NET.vkChallenge = qq.code_challenge;
+    VK_USER = { ...VK_USER, user_id: vkUid };
+    return frag((await call({ ...cbq, state: qq.state }, { headers: { cookie: cookieOf(s), 'x-real-ip': '192.0.2.50' } })).headers.location);
+  };
+  let rf = await reauth(2002, OWNER);
+  fj = rf.d37auth ? (await post('finish', { k: rf.d37auth, f: fid })).json() : rf;
+  ok(fj.ok && fj.new === false && fj.next === '#/profile/logins', 'reauth тем же VK — вход в свой аккаунт и назад к «Способам входа»', fj);
+  const nUsers = Object.keys(DB.users).length;
+  rf = await reauth(4004, OWNER);
+  ok(rf.d37auth_err === 'other' && Object.keys(DB.users).length === nUsers, 'reauth чужим (непривязанным) VK — other, новый аккаунт НЕ создан', rf);
+  rf = await reauth(1001, OWNER);
+  ok(rf.d37auth_err === 'other', 'reauth VK, привязанным к другому аккаунту, — other (в чужой не пускаем)');
+  const tgx = fresh(); tgx.id = 555000333; tgx.hash = crypto.createHmac('sha256', crypto.createHash('sha256').update(TG_TOKEN).digest()).update(Object.keys(tgx).filter(k => k !== 'hash').sort().map(k => k + '=' + tgx[k]).join('\n')).digest('hex');
+  ok((await post('tg', { user: tgx, x: OWNER })).json().reason === 'other', 'виджет Telegram в режиме «это ты»: чужой Telegram — other');
+  ok((await post('tg', { user: fresh(), x: 'не-uuid' })).json().reason === 'bad', 'виджет Telegram: кривой id в x — bad');
+
   // ═══ 11. Виджет Telegram ═══
+  DB.ip = {};
   let d = fresh();
   res = await post('tg', { user: d, n: '#/games' });
   let tj = res.json();
@@ -425,7 +447,7 @@ const cookieOf = res => String(res.headers['set-cookie'] || '').split(';')[0];
   ok((await post('tg', { user: fresh() })).json().reason === 'off', 'включён новый вход Telegram — виджет выключен');
 
   // ═══ 12. Telegram OpenID: старт → oauth.telegram.org → id_token ═══
-  TG_KEYS = [jwkR];
+  TG_KEYS = [jwkR]; DB.ip = {};   // новый день лимита адреса (все запросы теста — с одного адреса)
   res = await call({ a: 'start', p: 'tg', b: B });
   q = qs(res.headers.location); ck = cookieOf(res); NET.tgChallenge = q.code_challenge;
   ok(res.headers.location.startsWith('https://oauth.telegram.org/auth?') && q.client_id === '123456789' && q.scope === 'openid profile' && q.redirect_uri === SITE + '/auth/tg/callback',

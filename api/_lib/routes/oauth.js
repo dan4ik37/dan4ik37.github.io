@@ -147,12 +147,15 @@ async function tgWidget(c, req, res, link) {
   const body = await readBody(req);
   const v = tgWidgetCheck(body.user, c.tg.token);
   if (!v.ok) return send(res, 200, { ok: false, reason: v.reason === 'old' ? 'expired' : 'bad' });
+  const x = link ? '' : String(body.x || '');   // «подтверди, что это ты» — только в этот аккаунт
+  if (x && !UUID_RE.test(x)) return send(res, 200, { ok: false, reason: 'bad' });
   let who = null;
   if (link) {
     who = await userFromBearer(req);
     if (!who) return send(res, 401, { ok: false, reason: 'auth' });
     if (!isFresh(who.at)) return send(res, 200, { ok: false, reason: 'reauth' });
   }
+  // все проверки — до одноразовой отметки: ошибка в запросе не «сжигает» вход
   if (!(await onceUse('tg:' + v.hash, 900))) return send(res, 200, { ok: false, reason: 'used' });
   if (link) {
     let r;
@@ -161,8 +164,6 @@ async function tgWidget(c, req, res, link) {
     catch (e) { r = { ok: false, reason: 'server' }; }
     return send(res, 200, r?.ok ? { ok: true } : { ok: false, reason: r?.reason || 'server' });
   }
-  const x = String(body.x || '');
-  if (x && !UUID_RE.test(x)) return send(res, 200, { ok: false, reason: 'bad' });
   let r;
   try { r = await loginOrCreate(c, 'tg', v, req, { expect: x || null }); }
   catch (e) { console.error('[oauth] tg вход:', String(e?.message || e).slice(0, 160)); r = { ok: false, reason: 'server' }; }
