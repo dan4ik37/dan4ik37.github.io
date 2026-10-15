@@ -7,7 +7,9 @@ const win = {};
 vm.runInNewContext(fs.readFileSync('js/core/avatar.js', 'utf8'), { window: win, document: {}, localStorage: { getItem: () => null }, console });
 const C = win.D37Char, P = C.PARTS;
 const rows = [], vip = [], gems = [], lvls = [];
-for (const slot of C.SLOTS) for (const [id, , price, , isVip, gemPrice, lvl] of P[slot].list) {
+for (const slot of C.SLOTS) for (const [id, , price, , isVip, gemPrice, lvl, ref] of P[slot].list) {
+  // за приглашения друзей (8-е поле) — не продаётся: цены нет, char_save надевает выданное (referrals2.sql кладёт в coin_wallet.items)
+  if (ref) continue;
   // только за 💎 — цены в монетах нет (coins_buy откажет), char_save наденет купленное в магазине
   if (gemPrice) { gems.push(`'skin:${slot}:${id}'`); continue; }
   rows.push(`('skin:${slot}:${id}', ${price})`);

@@ -19,7 +19,7 @@
   const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃', '👏', '🤔', '😮', '😡', '🙇', '🤸'];   // как World3D.EMOTES
   const NO_ROOM = new Set(['pauk', 'wardrobe', 'clicker', 'quiz', 'wheel', 'random', 'typing', 'cps', 'fonts', 'world', 'studio']);
   const COOP = new Set(['horde', 'td']);
-  const QUICK = ['chess', 'durak', 'uno', 'checkers', 'pool', 'nardy', 'arena', 'horde', 'td', 'sea'];
+  const QUICK = ['chess', 'durak', 'uno', 'domino', 'balda', 'checkers', 'pool', 'nardy', 'arena', 'horde', 'td', 'sea'];
   const ROLE = { admin: ['👑', '#ff4d6d', 'Админ'], moderator: ['🛡️', '#4ade80', 'Модератор'], helper: ['🤝', '#38bdf8', 'Помощник'] };
   const VIPC = { gold: '#facc15', silver: '#e2e8f0', bronze: '#f59e0b' };
   const PI = Math.PI;
@@ -1250,7 +1250,7 @@
     }
     else if (a === 'go') startGame(tb, my.c);
     else if (a === 'link') {
-      const url = `${location.origin}/#/games/${tb.game}/${my.c}`;
+      const url = (window.D37Ref?.wrap || (u => u))(`${location.origin}/#/games/${tb.game}/${my.c}`);   // 👥 с кодом приглашения (js/core/ref.js)
       navigator.clipboard?.writeText(url).then(() => toast('🔗 Ссылка скопирована — отправь другу'), () => prompt('Ссылка на эту партию:', url));
     } else if (a === 'invite') {
       const sub = S.q('.mir-tb .wld-sub'), free = [...S.players.values()].filter(p => !p.leaving && !p.seat);

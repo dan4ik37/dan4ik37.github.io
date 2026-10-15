@@ -21,7 +21,7 @@ const XP_RULES = [
   ['💬', 'Писать в чат', `+${XP_NUM.chat} за сообщение, до ${XP_NUM.chat * XP_NUM.chat_day} в день`],
   ['🗂️', 'Форум', `+${XP_NUM.forum_thread} за тему (до ${XP_NUM.forum_thread_day} в день), +${XP_NUM.forum_post} за ответ (до ${XP_NUM.forum_post_day})`],
   ['💡', 'Идеи для видео', `+${XP_NUM.idea} за идею (до ${XP_NUM.idea_day} в день), +${XP_NUM.idea_done} если её сняли`],
-  ['🔗', 'Позвать друга', `+${XP_NUM.referral} за каждого по твоей ссылке`],
+  ['👥', 'Позвать друга', `до +${XP_NUM.referral} за каждого друга по твоей ссылке — когда он дойдёт до 3 и 5 уровня (и монеты, вещи: «Пригласи друзей»)`],
   ['🏆', 'Ачивки', 'от +5 до +300 за каждую, один раз'],
   ['💖', 'Донат', '+1 XP за каждый рубль (до 1000 за донат)'],
   ['🎮', 'Игры', `от +1 до +20 за победу; в одной игре — первые ${XP_NUM.game_family} победы за день, всего до ${XP_NUM.game_day} XP в день — играй в разные!`],
@@ -125,9 +125,10 @@ const FRAME_LEVELS = [100, 50, 30, 15, 5];
 function avatarFrameClass(level){ const lv = FRAME_LEVELS.find(x => level >= x); return lv ? 'lv-frame-' + lv : ''; }
 async function applyLevelFrame(el, uid){
   if (!el) return;
-  el.classList.remove(...FRAME_LEVELS.map(x => 'lv-frame-' + x));
-  const ex = await xpGetExtras(uid);
-  const cls = ex && avatarFrameClass(ex.level);
+  el.classList.remove(...FRAME_LEVELS.map(x => 'lv-frame-' + x), 'lv-frame-ref');
+  const [ex, amb] = await Promise.all([xpGetExtras(uid), window.D37Ref?.hasFrame?.(uid) || false]);
+  // «Посол» (5 друзей по ссылке дошли до 5 уровня, js/core/ref.js; выключается на странице приглашений) — вместо рамки уровня
+  const cls = amb ? 'lv-frame-ref' : ex && avatarFrameClass(ex.level);
   if (cls) el.classList.add(cls);
 }
 

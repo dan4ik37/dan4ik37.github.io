@@ -133,9 +133,9 @@ try { oldMore = cp.execFileSync('git', ['show', '833f6ee:games-more.sql'], { cwd
 const nx = pairs(fnBody(more, 'game_win_xp'));
 if (oldMore) {
   const ox = pairs(fnBody(oldMore, 'game_win_xp'));
-  ok(same(Object.keys(ox).sort(), Object.keys(nx).sort()), 'XP за победу: все прежние ключи на месте');
+  ok(Object.keys(ox).every(k => k in nx), 'XP за победу: все прежние ключи на месте', Object.keys(ox).filter(k => !(k in nx)));
   for (const k in ox) ok(nx[k] > 0 && nx[k] < ox[k] || (ox[k] <= 3 && nx[k] >= 1 && nx[k] <= ox[k]), `XP за победу ${k}: ${ox[k]} → ${nx[k]}`);
-  const sumO = Object.values(ox).reduce((a, b) => a + b, 0), sumN = Object.values(nx).reduce((a, b) => a + b, 0);
+  const sumO = Object.values(ox).reduce((a, b) => a + b, 0), sumN = Object.keys(ox).reduce((a, k) => a + (nx[k] || 0), 0);   // новые игры — не в сравнении
   ok(sumN <= sumO * .6, 'XP за победы в среднем меньше хотя бы на 40 %', [sumO, sumN]);
 } else console.log('  (нет git — сравнение с 833f6ee пропущено)');
 for (const k in nx) ok(nx[k] >= 1 && nx[k] <= 20, 'XP за победу 1…20: ' + k, nx[k]);

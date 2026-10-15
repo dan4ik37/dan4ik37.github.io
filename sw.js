@@ -19,7 +19,7 @@
 // Обновление: новая версия ставится и ЖДЁТ — app.js показывает «Доступна новая версия — Обновить» и шлёт SKIP_WAITING.
 // Самая первая установка и переход со старого sw.js (кэши dan4ik37-shell-v1/v2) — сразу, без кнопки.
 // Поменял этот файл — подними VERSION (у всех откроется «Доступна новая версия»). Тест: node scripts/pwa-test.cjs.
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL = 'd37-shell-' + VERSION;
 const RT = 'd37-rt-v1';
 const MINE = /^(d37-shell-|d37-rt-|dan4ik37-shell-)/;

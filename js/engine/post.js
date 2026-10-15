@@ -11,8 +11,11 @@
 // неон, лампочки, ореолы ламп, диск солнца. P.bloom = { on, strength, levels }; P.fxaa / P.msaa — что сглаживает сейчас.
 // P.setOpts({ ao: 'off'|'on'|'high', aa: 'off'|'fxaa'|'msaa' }) — настройки игрока (render.js R.applyGfx). MSAA (4×) — только
 // WebGL2, плотность ≤ 1,25 и кадр не уменьшен — иначе FXAA. P.setGrade({ gain, sat, con, vig }) — цвет кадра (gfx.js).
+// Глубина сцены — 24 бита (текстурой, P.depth24): буфер глубины three без текстуры — 16 бит, тонкие слои пола (плитка
+// площади в 5 мм над подложкой) вдали путаются (z-fighting).
 // SSAO (только WebGL2 + HDR): глубина сцены — текстурой (с MSAA three копирует её при сборке кадра), AO — в половинном
-// разрешении (8 / 14 выборок по спирали, поворот — узор 4×4), размытие 4×4 по глубине, в сборке — подъём с учётом глубины.
+// разрешении (8 / 14 выборок по спирали, поворот — свой у пикселя), размытие 2 проходами по плоскости, в сборке — подъём
+// с учётом глубины.
 // Не затеняются: небо, светящееся (альфа > 1). Стрелки редактора и рамки (renderOrder ≥ 990, прямо в сцене) рисуются ПОСЛЕ
 // постобработки поверх кадра — затенение «того, что за ними» их не пачкает.
 (() => {
@@ -51,8 +54,8 @@ void main(){
   float rPx = uAO.x * uPx / -z;
   if (rPx < 1.5) { gl_FragColor = vec4(1.0, -z, 0.0, 1.0); return; }
   rPx = min(rPx, uAO.w > 10.0 ? 64.0 : 48.0);
-  vec2 q = mod(floor(gl_FragCoord.xy), 4.0);
-  float ang = (q.x * 4.0 + q.y + 0.5) * 0.392699;
+  // поворот спирали — свой у каждого пикселя (шум «градиентный», Хименес): мелкий, без узора — размытие убирает целиком
+  float ang = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   float occ = 0.0, ns = uAO.w, r2 = uAO.x * uAO.x, bias = uAO.y * (1.0 - z * 0.04);
   for (int i = 0; i < 16; i++) {
     if (float(i) >= ns) break;
@@ -63,17 +66,25 @@ void main(){
   }
   gl_FragColor = vec4(clamp(1.0 - occ * uAO.z * 5.0 / (r2 * r2 * r2 * ns), 0.0, 1.0), -z, 0.0, 1.0);
 }`;
-  // размытие 4×4 (узор поворота — 4×4, поэтому шум уходит целиком) с весом по близости глубины
+  // размытие — два прохода (вдоль и поперёк, uTexel — шаг), 9 выборок по Гауссу с весом по плоскости: глубину соседа
+  // сравниваем не с глубиной середины, а с плоскостью через неё (1/глубины меняется по экрану линейно). Раньше было 4×4
+  // с весом «глубина как у середины» — на полу под углом соседи сверху/снизу отбрасывались, узор поворота 4×4 оставался
+  // полосами и «лесенкой» у ножек, стульев, бордюров и ползал при движении (та самая рябь на полу)
   const FS_AOB = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
 void main(){
   vec2 c = texture2D(tSrc, vUv).rg;
-  float s = 0.0, ws = 0.0;
-  for (int y = -2; y < 2; y++) for (int x = -2; x < 2; x++) {
-    vec2 a = texture2D(tSrc, vUv + vec2(float(x), float(y)) * uTexel).rg;
-    float w = max(0.0, 1.0 - abs(a.y - c.y) / (0.03 * c.y + 0.08));
-    s += a.x * w; ws += w;
+  if (c.y > 5000.0) { gl_FragColor = vec4(c, 0.0, 1.0); return; }
+  float wc = 1.0 / max(c.y, 1e-3), wl = 1.0 / max(texture2D(tSrc, vUv - uTexel).g, 1e-3), wr = 1.0 / max(texture2D(tSrc, vUv + uTexel).g, 1e-3);
+  float k = abs(wr - wc) < abs(wc - wl) ? wr - wc : wc - wl;
+  float s = c.x, ws = 1.0;
+  for (int i = 1; i <= 4; i++) {
+    float fi = float(i), wg = exp(-fi * fi * 0.1);
+    vec2 a = texture2D(tSrc, vUv + uTexel * fi).rg, b = texture2D(tSrc, vUv - uTexel * fi).rg;
+    float wa = wg * max(0.0, 1.0 - abs(1.0 / max(a.y, 1e-3) - wc - k * fi) / (wc * 0.035));
+    float wb = wg * max(0.0, 1.0 - abs(1.0 / max(b.y, 1e-3) - wc + k * fi) / (wc * 0.035));
+    s += a.x * wa + b.x * wb; ws += wa + wb;
   }
-  gl_FragColor = vec4(ws > 0.001 ? s / ws : c.x, c.y, 0.0, 1.0);
+  gl_FragColor = vec4(s / ws, c.y, 0.0, 1.0);
 }`;
   // сборка: сцена × AO (подъём с учётом глубины) + свечение (как «экран»: на ярком почти не добавляет; на самом светящемся —
   // четверть, ореол — вокруг: неон не выгорает в белое и не меняет цвет) → цвет кадра (усиление по каналам, насыщенность)
@@ -190,6 +201,9 @@ void main(){
     // fsr — FSR 1 вместо простого растяжения, когда кадр меньше холста (динамическое разрешение или режим FSR в render.js)
     const P = { ok: true, on: true, hdr: half, msaa: 0, fxaa: true, fsr: gl2, scaled: false, w: 1, h: 1, ow: 1, oh: 1, pr: 1, passes: 0,
       aa: q === 'high' ? 'msaa' : 'fxaa', canAO: gl2 && half,
+      // глубина сцены — 24 бита (текстурой глубины): буфер глубины three без неё — 16 бит, и вдали тонкие слои пола
+      // (плитка площади в 5 мм над подложкой, дорожки) путаются — проступает нижний (z-fighting)
+      depth24: gl2 || ext.has('WEBGL_depth_texture'),
       ao: { mode: 'off', on: false, radius: .95 * (E.UNIT || 1), bias: .02, strength: 1, aw: 1, ah: 1 },
       bloom: { on: o.bloom !== false && half, strength: q === 'high' ? 1 : .9, levels: q === 'high' ? 5 : 4 } };
     const sceneOpt = { type, depthBuffer: true, stencilBuffer: false };
@@ -245,7 +259,7 @@ void main(){
       P.w = w; P.h = h; P.pr = pr;
       const scaled = P.scaled = pr < (R.pr0 || 1) - .001;   // динамическое разрешение опустило — кадр растягиваем (FSR)
       if (rtUp) { r.getDrawingBufferSize(DB); P.ow = Math.max(1, DB.x); P.oh = Math.max(1, DB.y); rtUp.setSize(P.ow, P.oh); }
-      const ms = gl2 && P.aa === 'msaa' && o.msaa !== false && pr <= 1.25 && !scaled ? 4 : 0, dep = P.ao.mode !== 'off';
+      const ms = gl2 && P.aa === 'msaa' && o.msaa !== false && pr <= 1.25 && !scaled ? 4 : 0, dep = P.depth24 || P.ao.mode !== 'off';
       if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
       else rtScene.setSize(w, h);   // текстуру глубины three пересоздаст сам (размер буфера сменился)
       P.msaa = ms;
@@ -257,8 +271,8 @@ void main(){
         bw = Math.max(1, bw >> 1); bh = Math.max(1, bh >> 1);
       }
       // SSAO: половина кадра (с «ретины» — четверть), 8 / 14 выборок
-      P.ao.on = dep;
-      if (dep) {
+      const aoOn = P.ao.on = P.canAO && P.ao.mode !== 'off' && !!rtScene.depthTexture;
+      if (aoOn) {
         const k = pr > 1.3 ? 2 : 1, aw = Math.max(1, w >> k), ah = Math.max(1, h >> k);
         const opt = { type, depthBuffer: false, minFilter: T.NearestFilter, magFilter: T.NearestFilter };
         if (!rtAO) { rtAO = new T.WebGLRenderTarget(aw, ah, opt); rtAO2 = new T.WebGLRenderTarget(aw, ah, opt); } else { rtAO.setSize(aw, ah); rtAO2.setSize(aw, ah); }
@@ -280,8 +294,10 @@ void main(){
       u.uAO.value.set(A.radius, A.bias, A.strength, A.mode === 'high' ? 14 : 8);
       u.uPx.value = P.h * pm[5] / 2;
       pass(M.ao, rtAO);
-      M.aob.uniforms.tSrc.value = rtAO.texture; M.aob.uniforms.uTexel.value.set(1 / A.aw, 1 / A.ah);
-      pass(M.aob, rtAO2);
+      // размытие: вдоль (rtAO → rtAO2), поперёк (rtAO2 → rtAO); итог — в rtAO
+      const b = M.aob.uniforms;
+      b.tSrc.value = rtAO.texture; b.uTexel.value.set(1 / A.aw, 0); pass(M.aob, rtAO2);
+      b.tSrc.value = rtAO2.texture; b.uTexel.value.set(0, 1 / A.ah); pass(M.aob, rtAO);
     }
     // стрелки редактора, рамки, кольцо кисти (renderOrder ≥ 990, прямо в сцене): с AO — поверх готового кадра
     const over = [];
@@ -297,7 +313,7 @@ void main(){
       if (P.ao.on) aoPasses(camera);
       const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
       const U = M.comp.uniforms; U.tScene.value = rtScene.texture; U.tBloom.value = B[0]?.texture || null; U.uBloom.value = k; U.uLuma.value = P.fxaa ? 1 : 0;
-      U.uAOk.value = P.ao.on ? (P.ao.debug ? 2 : 1) : 0; U.tAO.value = P.ao.on ? rtAO2.texture : null; U.tDepth.value = P.ao.on ? rtScene.depthTexture : null;
+      U.uAOk.value = P.ao.on ? (P.ao.debug ? 2 : 1) : 0; U.tAO.value = P.ao.on ? rtAO.texture : null; U.tDepth.value = P.ao.on ? rtScene.depthTexture : null;
       if (P.ao.on) { U.uAOSize.value.set(P.ao.aw, P.ao.ah); U.uNF.value.set(camera.near, camera.far); }
       if (P.fsr && P.scaled && M.easu) {   // FSR 1: сборка в уменьшенный буфер → EASU до размера холста → RCAS на экран
         U.uLuma.value = 0; pass(M.comp, rtLdr);

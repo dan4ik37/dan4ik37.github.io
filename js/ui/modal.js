@@ -55,7 +55,7 @@ function closePrivacy(){
 let modalVidId = '';
 function vidPageUrl(id){ return 'https://dan4ik37.vercel.app/v/' + id; }
 function shareCurrentVid(){
-  const url = vidPageUrl(modalVidId), btn = document.getElementById('mShare');
+  const url = (window.D37Ref?.wrap || (u => u))(vidPageUrl(modalVidId)), btn = document.getElementById('mShare');   // 👥 с кодом приглашения
   const title = document.getElementById('mTitle').textContent;
   if (navigator.share) { navigator.share({ title, url }).catch(()=>{}); return; }
   (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(()=>{
