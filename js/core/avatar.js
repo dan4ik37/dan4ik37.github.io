@@ -4,16 +4,20 @@
 // Рисуется кодом на canvas (без картинок): D37Char.draw(ctx, look, x, y, size) — ноги в точке (x, y),
 // size — рост. Для игр быстрее D37Char.sprite(look, px) — готовый canvas, рисовать drawImage.
 // Части покупаются за монеты (js/core/coins.js, предмет 'skin:<слот>:<id>'); цена 0 — доступна всем;
-// vip — бесплатно для VIP/персонала или за монеты. Цены — как coin_price() в coins.sql (раздел «Персонаж»):
-// поменял тут — поменяй там (scripts в сессии генерировали SQL из этого списка).
+// vip — бесплатно для VIP/персонала или за монеты; 💎 — только за кристаллы в магазине #/shop. Части тела (формы ps*)
+// из пакетов PACKS покупаются пакетом ('skin:pack:<id>') — buyItem() говорит, что купить. Цены — coin_price() в
+// coins.sql: после правки PARTS/PACKS — node scripts/gen-skin-sql.mjs и node scripts/char-test.cjs.
 // Надетое (look) — в базе (char_save / char_looks в coins.sql) или в браузере (d37_char), пока не вошёл.
-// Где виден: «Орда» (герой), гардероб #/games/wardrobe (js/games/wardrobe.js), витрина игр, профиль.
+// Старые образы: upgrade(look) — новые слоты «как было» (PART_DEFAULT), внешность не меняется.
+// Где виден: «Орда» (герой), гардероб #/games/wardrobe (3D — js/games/charedit.js, 2D — wardrobe.js), мир, профиль.
 (() => {
   const EF = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
   const TAU = Math.PI * 2;
-  // [id, название, цена, значение (цвет / эмодзи), vip]
+  // [id, название, цена, значение (цвет / эмодзи), vip, 💎]
   // Палитра (pal: 1): кроме готовых цветов — любой свой, id «x» + 6 hex-цифр (xff8800), бесплатно. Обычные цвета бесплатны,
   // за монеты — особые материалы (радуга, космос, золото, светящиеся глаза, неоновые и переливающиеся волосы).
+  // 💎 (6-е поле) — цена в кристаллах: вещь только из магазина #/shop (js/core/premium.js, premium_spend кладёт её в
+  // coin_wallet.items), за монеты не продаётся (D37Coins.buy откажет, coin_price в базе — null).
   const CUSTOM = /^x[0-9a-f]{6}$/;
   const BASE = [
     ['white', 'Белый', '#f4f5f7'], ['silver', 'Светло-серый', '#c9ced8'], ['gray', 'Серый', '#7d8696'], ['black', 'Чёрный', '#25252d'],
@@ -21,6 +25,22 @@
     ['green', 'Зелёный', '#22a35a'], ['teal', 'Бирюзовый', '#22c7b8'], ['sky', 'Голубой', '#5ab8ff'], ['blue', 'Синий', '#3b6fe0'],
     ['purple', 'Фиолетовый', '#8b5cf6'], ['pink', 'Розовый', '#ff6fb5'], ['brown', 'Коричневый', '#7a4f2c'], ['beige', 'Бежевый', '#d9c4a0'],
   ].map(([id, n, c]) => [id, n, 0, c]);
+  // ── Части тела, как в Роблоксе: у головы, туловища, каждой руки и ноги — своя форма и свой цвет ──
+  // Пакет — набор форм туловища, рук и ног (у робота и рыцаря — и головы): купил пакет ('skin:pack:<id>') — носишь любые его
+  // части вперемешку (рука робота + обычная рука). [название, цена, vip, 💎]
+  const PACKS = {
+    base: ['Обычный', 0], block: ['Классика', 0], slim: ['Стройный', 0], chunky: ['Силач', 250], robot: ['Робот', 700], knight: ['Рыцарь', 900],
+  };
+  const packList = () => Object.entries(PACKS).map(([id, p]) => [id, p[0], p[1], '', p[2] || 0, p[3] || 0]);
+  // Цвет части: «как задумано» — кожа (tone) у живой части, свой металл у брони; кожа, яркие цвета Роблокса — бесплатно
+  const PCOL = [['auto', 'Как задумано', 0],
+    ['t1', 'Фарфор', 0, '#fff0e4'], ['t2', 'Светлая', 0, '#ffe0c7'], ['t3', 'Персик', 0, '#f7cba5'], ['t4', 'Бежевая', 0, '#e9b48a'],
+    ['t5', 'Загар', 0, '#d39a69'], ['t6', 'Смуглая', 0, '#ad744c'], ['t7', 'Тёмная', 0, '#82573a'], ['t8', 'Шоколад', 0, '#5c3b27'],
+    ['zombie', 'Зомби', 0, '#a4d17f'], ['alien', 'Пришелец', 0, '#93d5ff'], ['fairy', 'Фея', 0, '#dcc2ff'], ['robot', 'Металл', 0, '#b9c3cd'],
+    ['yellow', 'Жёлтый', 0, '#f5cd30'], ['blue', 'Синий', 0, '#0d69ac'], ['green', 'Зелёный', 0, '#4b974b'], ['red', 'Красный', 0, '#c4281c'],
+    ['white', 'Белый', 0, '#f2f3f3'], ['black', 'Чёрный', 0, '#27272f'], ['orange', 'Оранжевый', 0, '#da8541'], ['purple', 'Фиолетовый', 0, '#6b327c'],
+    ['pink', 'Розовый', 0, '#ff66cc'], ['teal', 'Бирюзовый', 0, '#12eed4'],
+  ];
   const PARTS = {
     color: { name: 'Цвет', icon: '🎨', pal: 1, list: [
       ['blue', 'Синий', 0, '#4f8df7'], ['red', 'Красный', 0, '#ff4d6d'], ['green', 'Зелёный', 0, '#34c759'],
@@ -43,6 +63,7 @@
       ['grad', 'Выпускник', 150, '🎓'], ['helmet', 'Каска', 150, '⛑️'], ['army', 'Шлем', 150, '🪖'], ['top', 'Цилиндр', 200, '🎩'],
       ['ears', 'Ушки', 200], ['horns', 'Рожки', 250], ['propeller', 'Пропеллер', 250], ['halo', 'Нимб', 300],
       ['crown', 'Корона', 800, '👑'], ['headphones', 'Наушники стримера', 3000, '', 1],
+      ['gemcrown', 'Кристальная корона', 0, '', 0, 150],
     ] },
     item: { name: 'В руке', icon: '✋', list: [
       ['none', 'Ничего', 0], ['rose', 'Роза', 80, '🌹'], ['pizza', 'Пицца', 80, '🍕'], ['balloon', 'Шарик', 100, '🎈'],
@@ -57,6 +78,7 @@
     trail: { name: 'След', icon: '✨', list: [
       ['none', 'Без следа', 0], ['dust', 'Пыль', 100, '💨'], ['sparks', 'Искры', 250, '✨'], ['hearts', 'Сердечки', 250, '💕'],
       ['notes', 'Ноты', 300, '🎵'], ['stars', 'Звёзды', 300, '⭐'], ['fire', 'Огонь', 350, '🔥'], ['rainbow', 'Радуга', 3000, '🌈', 1],
+      ['gems', 'След из кристаллов', 0, '💎', 0, 100],
     ] },
     // ── 3D-человечек («Мир Денчика», гардероб): тело, лицо, волосы, одежда, аксессуары и их цвета. В 2D-играх не рисуются
     //    (body: 1). Не выбрано (нет в look) — мир берёт по «отпечатку» игрока, чтобы толпа была разной (world3d.js → resolve)
@@ -120,30 +142,89 @@
     back: { name: 'На спине', icon: '🎒', body: 1, list: [
       ['none', 'Ничего', 0], ['backpack', 'Рюкзак', 100], ['tail', 'Хвостик', 150], ['guitar', 'Гитара', 250], ['cape', 'Плащ', 300],
       ['wings', 'Крылья ангела', 600], ['batwings', 'Крылья мыши', 600], ['dragon', 'Крылья дракона', 3000, '', 1],
+      ['gemwings', 'Кристальные крылья', 0, '', 0, 300],
     ] },
     backc: { name: 'Цвет на спине', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
+    // ── Части тела (ps* — форма, pc* — цвет): голова, туловище, левая/правая рука, левая/правая нога. pack: 1 — формы из пакетов
+    psh: { name: 'Форма головы', icon: '🗿', body: 1, pack: 1, list: [
+      ['round', 'Круглая', 0], ['egg', 'Овальная', 0], ['wide', 'Широкая', 0], ['block', 'Классика', 0], ['cube', 'Кубик', 80],
+      ['robot', 'Робот', PACKS.robot[1]], ['knight', 'Рыцарь', PACKS.knight[1]],
+    ] },
+    pst: { name: 'Туловище', icon: '👕', body: 1, pack: 1, list: packList() },
+    psal: { name: 'Левая рука', icon: '💪', body: 1, pack: 1, list: packList() },
+    psar: { name: 'Правая рука', icon: '💪', body: 1, pack: 1, list: packList() },
+    psll: { name: 'Левая нога', icon: '🦵', body: 1, pack: 1, list: packList() },
+    pslr: { name: 'Правая нога', icon: '🦵', body: 1, pack: 1, list: packList() },
+    pch: { name: 'Цвет головы', icon: '🎨', body: 1, pal: 1, list: PCOL },
+    pct: { name: 'Цвет туловища', icon: '🎨', body: 1, pal: 1, list: PCOL },
+    pcal: { name: 'Цвет левой руки', icon: '🎨', body: 1, pal: 1, list: PCOL },
+    pcar: { name: 'Цвет правой руки', icon: '🎨', body: 1, pal: 1, list: PCOL },
+    pcll: { name: 'Цвет левой ноги', icon: '🎨', body: 1, pal: 1, list: PCOL },
+    pclr: { name: 'Цвет правой ноги', icon: '🎨', body: 1, pal: 1, list: PCOL },
+    // стиль лица: как рисуются обычные глаза и рот (особые глаза — сердечки, звёзды, визор… — во всех стилях свои)
+    face: { name: 'Стиль лица', icon: '😶', body: 1, list: [['anime', 'Аниме', 0], ['classic', 'Классика', 0], ['toon', 'Мультик', 0], ['dots', 'Точки', 0], ['kawaii', 'Кавай', 150]] },
+    glove: { name: 'На руках', icon: '🧤', body: 1, list: [
+      ['none', 'Ничего', 0], ['wrist', 'Напульсники', 40], ['mitts', 'Варежки', 60], ['gloves', 'Перчатки', 80], ['watch', 'Часы', 120], ['boxing', 'Боксёрские', 200],
+    ] },
+    glovec: { name: 'Цвет на руках', icon: '🎨', body: 1, pal: 1, list: [['auto', 'Как задумано', 0], ...BASE] },
   };
   const SLOTS = Object.keys(PARTS);
   const BODY_SLOTS = SLOTS.filter(s => PARTS[s].body), SLOTS2D = SLOTS.filter(s => !PARTS[s].body);
   const DEFAULT = { color: 'blue', eyes: 'normal', mouth: 'smile', hat: 'none', item: 'none', pet: 'none', trail: 'none' };
+  // Части тела, стиль лица, перчатки: нет в образе — «как было до них» (не по отпечатку игрока, иначе старые образы поменялись бы)
+  const PART_DEFAULT = { psh: 'round', pst: 'base', psal: 'base', psar: 'base', psll: 'base', pslr: 'base', pch: 'auto', pct: 'auto', pcal: 'auto', pcar: 'auto', pcll: 'auto', pclr: 'auto', face: 'anime', glove: 'none', glovec: 'auto' };
+  // Части тела по-человечески: ключ → [слот формы, слот цвета, название]
+  const BODY_PARTS = { head: ['psh', 'pch', 'Голова'], torso: ['pst', 'pct', 'Туловище'], armL: ['psal', 'pcal', 'Левая рука'], armR: ['psar', 'pcar', 'Правая рука'], legL: ['psll', 'pcll', 'Левая нога'], legR: ['pslr', 'pclr', 'Правая нога'] };
   const LS = 'd37_char';
 
   const custom = (slot, id) => !!PARTS[slot]?.pal && CUSTOM.test(id || '');
+  // gems — цена в 💎 (вещь только из магазина); у таких price = gems, чтобы нигде не сойти за бесплатную
   const part = (slot, id) => {
-    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true };
+    if (custom(slot, id)) return { id, name: 'Свой цвет', price: 0, v: '#' + id.slice(1), vip: false, custom: true, gems: 0, premium: false };
     const p = PARTS[slot]?.list.find(x => x[0] === id) || PARTS[slot]?.list[0];
-    return p && { id: p[0], name: p[1], price: p[2], v: p[3] || '', vip: !!p[4] };
+    return p && { id: p[0], name: p[1], price: p[5] || p[2], v: p[3] || '', vip: !!p[4], gems: p[5] || 0, premium: !!p[5] };
   };
+  // Часть из пакета (форма туловища/рук/ног, голова робота…) → сам пакет: { id, name, price, vip, gems } или null
+  function packOf(slot, id){
+    const pk = PARTS[slot]?.pack && Object.prototype.hasOwnProperty.call(PACKS, id) ? PACKS[id] : null;
+    return pk ? { id, name: pk[0], price: pk[3] || pk[1], vip: !!pk[2], gems: pk[3] || 0, premium: !!pk[3] } : null;
+  }
+  // Что купить, чтобы надеть часть: сама часть ('skin:<слот>:<id>') или её пакет ('skin:pack:<id>'); gems > 0 — только за 💎
+  function buyItem(slot, id){
+    const pk = packOf(slot, id);
+    if (pk) return { item: 'skin:pack:' + id, name: `Пакет «${pk.name}»`, price: pk.price, vip: pk.vip, gems: pk.gems, premium: pk.premium, pack: id };
+    const p = part(slot, id);
+    return p && { item: `skin:${slot}:${p.id}`, name: p.name, price: p.price, vip: p.vip, gems: p.gems, premium: p.premium };
+  }
+  // Цена вещи: монеты, а у вещей только за 💎 — цена в кристаллах (магазин так узнаёт, что вещь есть в гардеробе;
+  // за монеты её не продают — см. gemsOf)
   function price(item){
     const m = /^skin:(\w+):(\w+)$/.exec(item || '');
-    if (!m || !PARTS[m[1]]) return null;
+    if (!m) return null;
+    if (m[1] === 'pack') return Object.prototype.hasOwnProperty.call(PACKS, m[2]) ? PACKS[m[2]][3] || PACKS[m[2]][1] : null;
+    if (!PARTS[m[1]]) return null;
     if (custom(m[1], m[2])) return 0;
     const p = PARTS[m[1]].list.find(x => x[0] === m[2]);
-    return p ? p[2] : null;
+    return p ? p[5] || p[2] : null;
+  }
+  // Сколько 💎 стоит вещь, которую продают только за кристаллы (0 — обычная, за монеты)
+  function gemsOf(item){
+    const m = /^skin:(\w+):(\w+)$/.exec(item || '');
+    if (!m) return 0;
+    if (m[1] === 'pack') return Object.prototype.hasOwnProperty.call(PACKS, m[2]) ? PACKS[m[2]][3] || 0 : 0;
+    const p = PARTS[m[1]]?.list.find(x => x[0] === m[2]);
+    return p ? p[5] || 0 : 0;
   }
   function norm(look){
     const L = { ...DEFAULT };
     if (look && typeof look === 'object') for (const s of SLOTS) if (PARTS[s].list.some(x => x[0] === look[s]) || custom(s, look[s])) L[s] = look[s];
+    return L;
+  }
+  // Миграция образа из версии до частей тела: всё выбранное остаётся как есть, мусор отбрасывается (norm), а новые слоты
+  // (формы частей, их цвета, стиль лица, перчатки) получают значения «как было» — человечек выглядит точно так же
+  function upgrade(look){
+    const L = norm(look);
+    for (const s in PART_DEFAULT) if (L[s] === undefined) L[s] = PART_DEFAULT[s];
     return L;
   }
 
@@ -161,13 +242,13 @@
     return best;
   }
 
-  // ── Владение: бесплатное, купленное, VIP-часть у VIP/персонала ──
+  // ── Владение: бесплатное, купленное (сама часть или её пакет), VIP-часть у VIP/персонала ──
   function owns(slot, id){
     const p = part(slot, id);
     if (!p || p.id !== id) return false;
     if (!p.price) return true;
-    const C = window.D37Coins;
-    return !!C && (C.owns(`skin:${slot}:${id}`) || (p.vip && C.perks()));
+    const C = window.D37Coins, b = buyItem(slot, id);
+    return !!C && (C.owns(b.item) || (b.vip && C.perks()));
   }
 
   // ── Надетое ──
@@ -197,7 +278,13 @@
       const loc = current(), srv = norm(look);
       // Части 3D-человечка и свои цвета: старый char_save (до обновления coins.sql) их не хранит — берём из браузера
       const keep = !BODY_SLOTS.some(s => s in look) && BODY_SLOTS.some(s => loc[s] !== undefined);
-      if (keep) for (const s of SLOTS) if (loc[s] !== undefined && (PARTS[s].body || custom(s, loc[s]))) srv[s] = loc[s];
+      if (keep) { for (const s of SLOTS) if (loc[s] !== undefined && (PARTS[s].body || custom(s, loc[s]))) srv[s] = loc[s]; }
+      // Новые части (формы и цвета частей тела, стиль лица, перчатки): пока coins.sql не запущен ещё раз, сервер их молча
+      // выбрасывает — то, чего нет в базе, оставляем из браузера (иначе после входа рука робота пропадала бы)
+      else { for (const s of BODY_SLOTS) if (!(s in look) && loc[s] !== undefined && srv[s] === undefined) srv[s] = loc[s]; }
+      // Вещи только за 💎 (корона, крылья, след из кристаллов): старый char_save их не принимает — купленное в магазине
+      // остаётся надетым из браузера (сервер про эту часть молчит; если там явно другое — верим серверу)
+      for (const s of SLOTS) if (!(s in look) && loc[s] !== undefined && gemsOf(`skin:${s}:${loc[s]}`) && owns(s, loc[s])) srv[s] = loc[s];
       mine = srv;
       if (keep) window.D37Coins?.saveLook?.(mine);
       try { localStorage.setItem(LS, JSON.stringify(mine)); } catch (e) {}
@@ -398,6 +485,18 @@
         ctx.fillStyle = '#ff4d6d'; ctx.beginPath(); ctx.ellipse(0, top - .14 * S, .24 * S * Math.abs(a) + .015 * S, .04 * S, 0, 0, TAU); ctx.fill();
         return;
       }
+      case 'gemcrown': {   // кристальная корона: зубцы-кристаллы, переливается
+        const y0 = top + .08 * S, g = ctx.createLinearGradient(0, y0 - .3 * S, 0, y0);
+        g.addColorStop(0, '#e0fbff'); g.addColorStop(.45, '#8ee8ff'); g.addColorStop(1, '#a78bfa');
+        ctx.fillStyle = g; ctx.strokeStyle = 'rgba(70,40,140,.7)'; ctx.lineWidth = .02 * S;
+        ctx.beginPath(); ctx.moveTo(-.25 * S, y0);
+        [[-.25, -.18], [-.15, -.08], [-.08, -.3], [0, -.12], [.08, -.3], [.15, -.08], [.25, -.18], [.25, 0]].forEach(([x, y]) => ctx.lineTo(x * S, y0 + y * S));
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        const gem = (x, y, r, c) => { ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x * S, y0 + (y - r) * S); ctx.lineTo((x + r * .8) * S, y0 + y * S); ctx.lineTo(x * S, y0 + (y + r) * S); ctx.lineTo((x - r * .8) * S, y0 + y * S); ctx.closePath(); ctx.fill(); };
+        gem(0, -.06, .045, '#ff7ce6'); gem(-.16, -.05, .03, '#7cf2ff'); gem(.16, -.05, .03, '#7cf2ff');
+        ctx.fillStyle = 'rgba(255,255,255,.9)'; star(ctx, .1 * S, y0 - .24 * S, .025 * S * (1 + Math.sin(t * 5) * .4));
+        return;
+      }
       case 'headphones':
         ctx.strokeStyle = '#2b2b33'; ctx.lineWidth = .055 * S;
         ctx.beginPath(); ctx.arc(0, -.6 * S, .35 * S, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
@@ -459,7 +558,7 @@
   // ── Готовые картинки для игр (кэш) ──
   // Анимированные части (радуга, пропеллер, глаза-визор) — 8 кадров по времени
   const cache = new Map();
-  function animated(L){ return L.color === 'rainbow' || L.hat === 'propeller' || L.hat === 'halo' || ['robot', 'dizzy', 'heart'].includes(L.eyes) || L.color === 'gold'; }
+  function animated(L){ return L.color === 'rainbow' || L.hat === 'propeller' || L.hat === 'halo' || L.hat === 'gemcrown' || ['robot', 'dizzy', 'heart'].includes(L.eyes) || L.color === 'gold'; }
   // → { c: canvas, ax, ay } — точка (ax, ay) в пикселях canvas: ноги персонажа
   function sprite(look, px, o = {}){
     const L = norm(look);
@@ -594,7 +693,7 @@
   }
 
   window.D37Char = {
-    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, part, price, norm, owns, wearable, custom, nearest,
+    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, gemsOf, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
     look: () => wearable(current()), set, fromServer,
     draw, sprite, img, trail, petEmoji, looksOf, drawWalker, walker,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },

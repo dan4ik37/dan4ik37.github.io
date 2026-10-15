@@ -2,24 +2,30 @@
 //  РЕДАКТОР 3D-ПЕРСОНАЖА 🎭 — части тела и одежды, как в Роблоксе, + палитра на каждую часть, как в китайских играх
 // ═══════════════════════════════════════
 // D37Editor.mount(el, { api, onClose, key }) → Promise<boolean> (false — нет WebGL/Three.js, тогда гардероб остаётся 2D).
-// Витрина — World3D.preview (крутится пальцем, кнопки: пройтись, помахать, танец, случайный образ). Разделы → вкладки →
-// карточки с картинками (thumb рисует тот же 3D-человечек) и палитры: готовые цвета + «🎨 свой» (квадрат насыщенность/
-// яркость, полоска оттенка, #код). Своё/бесплатное надевается сразу (D37Char.set → char_save), платное — примерка с
-// «Купить и надеть» (D37Coins.buy). Пока тянут палитру — меняется только витрина (recolor без пересборки), сохраняем
-// после отпускания. Используется в гардеробе (#/games/wardrobe) и окном внутри «Мира Денчика».
+// Витрина — World3D.preview (крутится пальцем; нажатие на часть тела — раздел «Части» с этой частью, она подсвечена;
+// кнопки: повернуть, пройтись, эмоции по кругу, случайный образ, отменить). Разделы → вкладки → карточки с картинками
+// (thumb рисует тот же 3D-человечек) и палитры: готовые цвета + «🎨 свой» (квадрат насыщенность/яркость, полоска оттенка,
+// #код). «Части»: голова, туловище, руки и ноги по отдельности — форма (пакеты: классика, стройный, силач, робот, рыцарь)
+// и цвет части; «🪞 Зеркально» — левая и правая вместе, «Сбросить» — часть как была, «Случайно», «Отменить».
+// Своё/бесплатное надевается сразу (D37Char.set → char_save), платное — примерка с «Купить и надеть» (D37Coins.buy; часть
+// из пакета — покупается пакет, один раз на все его части), вещи только за 💎 — ссылка в магазин #/shop. Пока тянут
+// палитру — меняется только витрина (recolor без пересборки), сохраняем после отпускания. Используется в гардеробе
+// (#/games/wardrobe) и окном внутри «Мира Денчика».
 (() => {
   const C = () => window.D37Char, W = () => window.D37Coins;
   const num = n => Number(n || 0).toLocaleString('ru');
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const TS = 144;   // размер картинки варианта (в CSS — 72 px)
-  // Разделы и вкладки: slot — что выбираем, view — куда смотрит камера, colors — палитры под карточками
+  // Разделы и вкладки: slot — что выбираем, view — куда смотрит камера, colors — палитры под карточками; parts — части тела
   const CATS = [
     { id: 'body', icon: '🧍', name: 'Тело', subs: [
       { slot: 'body', name: 'Фигура', view: 'full' },
       { name: 'Кожа', view: 'top', colors: ['tone'] },
       { name: 'Пропорции', view: 'full', sliders: ['hgt', 'wid', 'head'] },
     ] },
+    { id: 'parts', icon: '🦾', name: 'Части', title: 'Части тела', subs: [{ parts: 1, name: 'Части тела' }] },
     { id: 'face', icon: '🙂', name: 'Лицо', subs: [
+      { slot: 'face', name: 'Стиль', view: 'head' },
       { slot: 'eyes', name: 'Глаза', view: 'head', colors: ['eyec'] },
       { slot: 'brows', name: 'Брови', view: 'head' },
       { slot: 'lash', name: 'Ресницы', view: 'head' },
@@ -37,11 +43,16 @@
       { slot: 'glasses', name: 'Очки', view: 'head', colors: ['glassc'] },
       { slot: 'neck', name: 'На шее', view: 'top', colors: ['neckc'] },
       { slot: 'back', name: 'На спине', view: 'back', colors: ['backc'] },
+      { slot: 'glove', name: 'На руках', view: 'armR', colors: ['glovec'] },
       { slot: 'item', name: 'В руке', view: 'full' },
     ] },
     { id: 'pet', icon: '🐾', name: 'Питомец', subs: [{ slot: 'pet', name: 'Питомец', view: 'full' }, { slot: 'trail', name: 'След', view: 'full' }] },
   ];
   const EMOJI_SLOTS = new Set(['item', 'pet', 'trail']);
+  // Части тела: кнопки, куда смотрит камера, пары левая ↔ правая (для «зеркально»)
+  const PART_UI = [['head', 'Голова', '🙂'], ['torso', 'Туловище', '👕'], ['armL', 'Л. рука', '💪'], ['armR', 'П. рука', '💪'], ['legL', 'Л. нога', '🦵'], ['legR', 'П. нога', '🦵']];
+  const MSLOT = { psal: 'psar', psar: 'psal', psll: 'pslr', pslr: 'psll', pcal: 'pcar', pcar: 'pcal', pcll: 'pclr', pclr: 'pcll' };
+  const LIMBS = ['pst', 'psal', 'psar', 'psll', 'pslr'], PCS = ['pch', 'pct', 'pcal', 'pcar', 'pcll', 'pclr'];
   // Как выглядят особые материалы на кружке палитры
   const FX_BG = {
     rainbow: 'conic-gradient(#ff4d6d,#ffcc33,#34c759,#22c7b8,#4f8df7,#9b6dff,#ff4d6d)',
@@ -49,7 +60,9 @@
     gold: 'linear-gradient(135deg,#fff3c4,#f2b91e 45%,#a86b05)', goldskin: 'linear-gradient(135deg,#fff3c4,#f2b91e 45%,#a86b05)',
     neon: 'radial-gradient(circle,#fff 0 20%,#ff4fd8 60%)', glow: 'radial-gradient(circle,#fff 0 20%,#5ef2ff 60%)', fire: 'radial-gradient(circle,#fff3b0 0 20%,#ff7a1a 60%)',
   };
+  const EMOS = () => window.World3D?.EMOTES || ['👋', '💃'];
   let st = null;
+  const readMirror = () => { try { return localStorage.getItem('d37_ce_mirror') !== '0'; } catch (e) { return true; } };
 
   function myKey(){
     if (typeof currentUser !== 'undefined' && currentUser?.id) return 'u:' + currentUser.id;
@@ -70,7 +83,8 @@
 
   async function mount(el, opts = {}){
     unmount();
-    const s = st = { el, opts, key: opts.key || myKey(), cat: 'body', sub: 0, trying: null, pv: null, pending: 0, offCoins: null, offLook: null, saving: 0 };
+    const s = st = { el, opts, key: opts.key || myKey(), cat: 'body', sub: 0, trying: null, pv: null, pending: 0, offCoins: null, offLook: null, saving: 0,
+      part: 'armL', mirror: readMirror(), hist: [], snap: null, emo: 0 };
     el.innerHTML = '<div class="ce-wait">🎭 Загружаем 3D-персонажа…</div>';
     const ok = !!window.World3D?.supported() && await window.World3D.load();
     if (st !== s) return false;
@@ -97,6 +111,16 @@
     for (const sl of C().SLOTS) { const v = st.trying[sl]; if (v !== undefined && !C().owns(sl, v)) out[sl] = v; }
     return out;
   }
+  // Что купить для примерки: часть или её пакет (один на все части пакета); вещи за 💎 — отдельно
+  function toBuy(){
+    const map = new Map();
+    for (const [sl, id] of Object.entries(unowned())) {
+      const b = C().buyItem ? C().buyItem(sl, id) : { item: `skin:${sl}:${id}`, ...C().part(sl, id) };
+      if (!b) continue;
+      if (map.has(b.item)) map.get(b.item).slots.push(sl); else map.set(b.item, { ...b, slots: [sl] });
+    }
+    return [...map.values()];
+  }
 
   function render(){
     const s = st;
@@ -112,14 +136,14 @@
         <div class="ce-tools">
           <button type="button" data-act="rot" data-d="-1" title="Повернуть" aria-label="Повернуть влево">⟲</button>
           <button type="button" data-act="walk" title="Пройтись" aria-label="Пройтись">🚶</button>
-          <button type="button" data-act="emo" data-e="👋" title="Помахать" aria-label="Помахать">👋</button>
-          <button type="button" data-act="emo" data-e="💃" title="Потанцевать" aria-label="Потанцевать">💃</button>
+          <button type="button" data-act="emonext" title="Эмоции по очереди" aria-label="Эмоция">${EMOS()[0]}</button>
           <button type="button" data-act="random" title="Случайный образ" aria-label="Случайный образ">🎲</button>
+          <button type="button" data-act="undo" title="Отменить" aria-label="Отменить" disabled>↩</button>
           <button type="button" data-act="rot" data-d="1" title="Повернуть" aria-label="Повернуть вправо">⟳</button>
         </div>
       </div>
       <div class="ce-panel">
-        <div class="ce-cats" role="tablist">${CATS.map(c => `<button type="button" role="tab" data-cat="${c.id}" class="${c.id === s.cat ? 'on' : ''}"><i>${c.icon}</i><span>${c.name}</span></button>`).join('')}</div>
+        <div class="ce-cats" role="tablist">${CATS.map(c => `<button type="button" role="tab" data-cat="${c.id}" class="${c.id === s.cat ? 'on' : ''}" title="${esc(c.title || c.name)}"><i>${c.icon}</i><span>${c.name}</span></button>`).join('')}</div>
         <div class="ce-subs"></div>
         <div class="ce-try" hidden></div>
         <div class="ce-body"></div>
@@ -128,6 +152,7 @@
     </div>`;
     s.pv = window.World3D.preview(s.el.querySelector('.ce-view'), { key: s.key });
     s.pv.set(s.trying, s.key);
+    s.pv.onPick?.(p => selectPart(p));   // нажал на часть тела на витрине
     const root = s.el.querySelector('.ce');
     root.addEventListener('click', onClick);
     root.addEventListener('input', onInput);
@@ -142,6 +167,8 @@
   }
   function renderBody(){
     const s = st, sb = curSub(), box = s.el.querySelector('.ce-body');
+    if (sb.parts) { renderParts(); return; }
+    s.pv.highlight?.(null);
     s.pv.focus(sb.view || 'full');
     let html = '';
     if (sb.sliders) html += sb.sliders.map(slider).join('');
@@ -152,24 +179,57 @@
     thumbs();
     box.querySelectorAll('.ce-pick').forEach(initPicker);
   }
-  // Картинки вариантов текущей вкладки (тот же человечек с этой частью)
-  function thumbs(){
-    const s = st, sb = curSub();
-    if (!sb.slot || EMOJI_SLOTS.has(sb.slot)) return;
-    s.el.querySelectorAll('.ce-grid canvas[data-thumb]').forEach(cv => s.pv.thumb({ ...s.trying, [sb.slot]: cv.dataset.thumb }, s.key, sb.view, cv));
+  // ── Части тела: голова, туловище, руки и ноги по отдельности ──
+  const partSlots = p => C().BODY_PARTS?.[p] || ['psh', 'pch', ''];
+  function renderParts(){
+    const s = st, box = s.el.querySelector('.ce-body'), [shs, cls] = partSlots(s.part);
+    s.pv.focus(s.part);
+    s.pv.highlight?.(s.part);
+    box.innerHTML = `<div class="ce-parts">${PART_UI.map(([id, name, icon]) => `<button type="button" data-part="${id}" class="${id === s.part ? 'on' : ''}" title="${esc(name)}"><i>${icon}</i><span>${esc(name)}</span></button>`).join('')}</div>
+      <div class="ce-ptools">
+        <button type="button" data-act="mirror" class="${s.mirror ? 'on' : ''}" title="Левая и правая рука (нога) — одинаковые">🪞 Зеркально</button>
+        <button type="button" data-act="resetpart" title="Форма и цвет части — как было">♻ Сбросить</button>
+        <button type="button" data-act="randparts" title="Случайные формы и цвета частей">🎲 Случайно</button>
+        <button type="button" data-act="undo" title="Отменить последнее"${s.hist.length ? '' : ' disabled'}>↩ Отменить</button>
+      </div>
+      <div class="ce-phint">Нажми на часть тела на витрине или выбери выше. Пакет (силач, робот, рыцарь) покупается один раз — все его части твои, носи вперемешку.</div>
+      <div class="ce-grid" data-grid="${shs}">${cards(shs)}</div>
+      ${palette(cls)}`;
+    box.scrollTop = 0;
+    thumbs();
+    box.querySelectorAll('.ce-pick').forEach(initPicker);
   }
-  function tag(slot, id, price, vip){
-    const wear = C().look()[slot] === id, own = C().owns(slot, id);
+  function selectPart(p){
+    const s = st;
+    if (!s || !partSlots(p)[2]) return;
+    s.part = p;
+    if (s.cat !== 'parts') { s.cat = 'parts'; s.sub = 0; s.el.querySelectorAll('.ce-cats button').forEach(b => b.classList.toggle('on', b.dataset.cat === 'parts')); renderSubs(); }
+    renderBody(); sfx('tick');
+  }
+  // Картинки вариантов текущей вкладки (тот же человечек с этой частью; «зеркально» — сразу обе стороны)
+  function thumbs(){
+    const s = st, sb = curSub(), slot = sb.parts ? partSlots(s.part)[0] : sb.slot;
+    if (!slot || EMOJI_SLOTS.has(slot)) return;
+    const view = sb.parts ? s.part : sb.view;
+    s.el.querySelectorAll('.ce-grid canvas[data-thumb]').forEach(cv => {
+      const L = { ...s.trying, [slot]: cv.dataset.thumb };
+      if (sb.parts && s.mirror && MSLOT[slot]) L[MSLOT[slot]] = cv.dataset.thumb;
+      s.pv.thumb(L, s.key, view, cv);
+    });
+  }
+  function tag(slot, id){
+    const wear = C().look()[slot] === id, own = C().owns(slot, id), b = C().buyItem ? C().buyItem(slot, id) : C().part(slot, id);
     if (wear) return '<i class="ce-tag on">надето</i>';
-    if (own) return price ? '<i class="ce-tag">есть</i>' : '';
-    return `<i class="ce-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</i>`;
+    if (own) return b.price ? '<i class="ce-tag">есть</i>' : '';
+    if (b.gems) return `<i class="ce-tag price gem" title="Только за кристаллы — в магазине">💎 ${num(b.gems)}</i>`;
+    return `<i class="ce-tag price">${b.vip ? 'VIP · ' : ''}🪙 ${num(b.price)}${b.pack ? ' · пакет' : ''}</i>`;
   }
   function cards(slot){
     const tr = st.trying;
-    return C().PARTS[slot].list.map(([id, name, price, v, vip]) => {
+    return C().PARTS[slot].list.map(([id, name, , v]) => {
       const own = C().owns(slot, id), on = tr[slot] === id;
       const pic = EMOJI_SLOTS.has(slot) ? `<span class="ce-emo">${v || '🚫'}</span>` : `<canvas data-thumb="${id}" width="${TS}" height="${TS}"></canvas>`;
-      return `<button type="button" class="ce-card${on ? ' on' : ''}${own ? '' : ' locked'}" data-slot="${slot}" data-id="${id}" title="${esc(name)}">${pic}<b>${esc(name)}</b>${tag(slot, id, price, vip)}</button>`;
+      return `<button type="button" class="ce-card${on ? ' on' : ''}${own ? '' : ' locked'}" data-slot="${slot}" data-id="${id}" title="${esc(name)}">${pic}<b>${esc(name)}</b>${tag(slot, id)}</button>`;
     }).join('');
   }
   function slider(slot){
@@ -249,29 +309,62 @@
     });
   }
 
-  // ── Выбор части ──
+  // ── Выбор части; история для «Отменить» (снимок до правки — до первого движения палитры) ──
+  function pushHist(prev){
+    const s = st;
+    if (!prev || JSON.stringify(prev) === JSON.stringify(s.trying)) return;
+    s.hist.push(prev);
+    if (s.hist.length > 40) s.hist.shift();
+    undoBtns();
+  }
+  function undoBtns(){ st?.el.querySelectorAll('[data-act="undo"]').forEach(b => { b.disabled = !st.hist.length; }); }
+  async function save(){
+    const s = st;
+    s.saving++;
+    try { const r = await C().set(s.trying); if (r && r.ok === false && r.reason !== 'item') toast('Не сохранилось — попробуй ещё раз'); }
+    finally { s.saving--; }
+  }
   async function setPart(slot, id, o = {}){
     const s = st;
     if (!s) return;
-    s.trying = { ...s.trying, [slot]: id };
+    if (!s.snap) s.snap = { ...s.trying };
+    const next = { ...s.trying, [slot]: id };
+    if (s.mirror && MSLOT[slot] && curSub()?.parts) next[MSLOT[slot]] = id;   // левая и правая вместе
+    s.trying = next;
     updatePreview();
     if (o.live) return;   // тянут палитру/ползунок — только витрина
-    if (C().owns(slot, id)) {
-      s.saving++;
-      try { const r = await C().set(s.trying); if (r && r.ok === false && r.reason !== 'item') toast('Не сохранилось — попробуй ещё раз'); }
-      finally { s.saving--; }
-    }
+    pushHist(s.snap); s.snap = null;
+    if (C().owns(slot, id)) await save();
     if (st !== s) return;
     refresh(o.keepPicker ? slot : null);
+  }
+  // Сразу много частей (сброс, случайно, отменить): витрина пересобирается, своё сохраняется
+  async function setMany(look, hist = true){
+    const s = st;
+    if (hist) pushHist({ ...s.trying });
+    s.trying = materialize(look, s.key);
+    updatePreview(true);
+    await save();
+    if (st !== s) return;
+    refresh();
+  }
+  async function undo(){
+    const s = st, prev = s?.hist.pop();
+    if (!prev) return;
+    undoBtns();
+    await setMany(prev, false);
+    sfx('tick');
   }
   // Витрина: если поменялись только цвета — перекрашиваем, иначе собираем человечка заново (не чаще раза за кадр)
   function updatePreview(rebuild){
     const s = st;
-    if (!s || s.pending) return;
+    if (!s || s.pending) { if (s && rebuild) s.rebuild = true; return; }
+    s.rebuild = !!rebuild;
     s.pending = requestAnimationFrame(() => {
       s.pending = 0;
       if (st !== s || !s.pv) return;
-      if (rebuild || !s.pv.recolor(s.trying)) s.pv.set(s.trying, s.key);
+      if (s.rebuild || !s.pv.recolor(s.trying)) s.pv.set(s.trying, s.key);
+      s.rebuild = false;
       draw2d();
     });
   }
@@ -279,32 +372,35 @@
   function refresh(keepPicker){
     const s = st;
     if (!s) return;
-    const sb = curSub();
-    if (sb.slot) { const g = s.el.querySelector('.ce-grid'); if (g) { g.innerHTML = cards(sb.slot); thumbs(); } }
+    const sb = curSub(), slot = sb.parts ? partSlots(s.part)[0] : sb.slot;
+    if (slot) { const g = s.el.querySelector('.ce-grid'); if (g) { g.innerHTML = cards(slot); thumbs(); } }
     s.el.querySelectorAll('.ce-pal').forEach(p => {
-      const slot = p.dataset.pal, cur = s.trying[slot], part = C().part(slot, cur), custom = C().custom(slot, cur);
+      const slot2 = p.dataset.pal, cur = s.trying[slot2], part = C().part(slot2, cur), custom = C().custom(slot2, cur);
       p.querySelectorAll('.ce-sw[data-id]').forEach(b => b.classList.toggle('on', b.dataset.id === cur));
       p.querySelector('.ce-sw-custom').classList.toggle('on', custom);
       const cs = p.querySelector('.ce-pal-cur'); cs.setAttribute('style', swatchStyle(part?.id, part?.v));
       p.querySelector('.ce-pal-name').textContent = custom ? 'Свой цвет ' + part.v : part?.name || '';
       const pk = p.querySelector('.ce-pick');
-      if (slot !== keepPicker) pk._sync?.();
+      if (slot2 !== keepPicker) pk._sync?.();
     });
     s.el.querySelectorAll('[data-sl]').forEach(b => { const P = C().PARTS[b.dataset.sl], v = +(s.trying[b.dataset.sl] ?? 2) || 0; b.textContent = P.list[Math.max(0, Math.min(4, v))][1]; });
+    undoBtns();
     tryBar();
   }
-  // Полоска примерки: что не куплено, сколько стоит, «Купить и надеть»
+  // Полоска примерки: что не куплено, сколько стоит, «Купить и надеть»; пакет — одной строкой; за 💎 — в магазин
   function tryBar(){
     const s = st, bar = s?.el.querySelector('.ce-try');
     if (!bar) return;
-    const items = Object.entries(unowned()).map(([sl, id]) => ({ sl, id, p: C().part(sl, id) }));
+    const items = toBuy();
     if (!items.length) { bar.hidden = true; bar.innerHTML = ''; return; }
-    const total = items.reduce((a, x) => a + x.p.price, 0), have = W().coins();
+    const coinItems = items.filter(x => !x.gems), gemItems = items.filter(x => x.gems);
+    const total = coinItems.reduce((a, x) => a + x.price, 0), have = W().coins();
     bar.hidden = false;
-    bar.innerHTML = `<div class="ce-try-t">👀 Примерка: ${items.map(x => `<span class="ce-chip">${esc(x.p.name)} · 🪙 ${num(x.p.price)}<button type="button" data-act="untry" data-slot="${x.sl}" title="Снять" aria-label="Снять">✕</button></span>`).join('')}</div>
-      ${items.some(x => x.p.vip) ? '<div class="ce-try-vip">👑 VIP-вещи для VIP — бесплатно. <a href="/vip" target="_blank" rel="noopener">Как получить VIP</a></div>' : ''}
-      <div class="ce-try-row"><button type="button" class="ce-btn gold" data-act="buyall"${have < total ? ' disabled' : ''}>Купить и надеть · 🪙 ${num(total)}</button>
-      ${have < total ? `<span class="ce-need">Не хватает 🪙 ${num(total - have)} — играй в игры, забери бонус дня</span>` : ''}</div>`;
+    bar.innerHTML = `<div class="ce-try-t">👀 Примерка: ${items.map(x => `<span class="ce-chip${x.gems ? ' gem' : ''}">${esc(x.name)} · ${x.gems ? '💎 ' + num(x.gems) : '🪙 ' + num(x.price)}<button type="button" data-act="untry" data-slots="${x.slots.join(',')}" title="Снять" aria-label="Снять">✕</button></span>`).join('')}</div>
+      ${coinItems.some(x => x.vip) ? '<div class="ce-try-vip">👑 VIP-вещи для VIP — бесплатно. <a href="/vip" target="_blank" rel="noopener">Как получить VIP</a></div>' : ''}
+      ${gemItems.length ? `<div class="ce-try-gem">💎 ${gemItems.map(x => esc(x.name)).join(', ')} — только за кристаллы. <a href="#/shop">В магазин 💎</a></div>` : ''}
+      ${coinItems.length ? `<div class="ce-try-row"><button type="button" class="ce-btn gold" data-act="buyall"${have < total ? ' disabled' : ''}>Купить и надеть · 🪙 ${num(total)}</button>
+      ${have < total ? `<span class="ce-need">Не хватает 🪙 ${num(total - have)} — играй в игры, забери бонус дня</span>` : ''}</div>` : ''}`;
   }
   function earn(){
     const box = st?.el.querySelector('.ce-earn');
@@ -313,7 +409,7 @@
     const ad = !!window.D37Ads?.rewardReady?.() && W().canAd();
     box.innerHTML = `${W().canDaily() ? '<button type="button" class="ce-btn gold" data-act="daily">🎁 Бонус дня</button>' : ''}
       ${ad ? '<button type="button" class="ce-btn" data-act="ad">📺 Реклама → +40 🪙</button>' : ''}
-      <span class="ce-note">Обычные цвета — бесплатно. ${authed ? 'Образ сохраняется в аккаунте.' : '<b>Войди</b> — образ и покупки сохранятся на всех устройствах.'}</span>`;
+      <span class="ce-note">Обычные цвета и формы частей — бесплатно. ${authed ? 'Образ сохраняется в аккаунте.' : '<b>Войди</b> — образ и покупки сохранятся на всех устройствах.'}</span>`;
   }
   // Маленький 2D-персонаж: так ты выглядишь в «Орде» и других 2D-играх
   function draw2d(){
@@ -327,7 +423,7 @@
   async function onClick(e){
     const s = st;
     if (!s) return;
-    const t = e.target.closest('[data-cat],[data-sub],[data-act],[data-slot][data-id]');
+    const t = e.target.closest('[data-cat],[data-sub],[data-part],[data-act],[data-slot][data-id]');
     if (!t) return;
     if (t.dataset.cat) {
       s.cat = t.dataset.cat; s.sub = 0;
@@ -341,6 +437,7 @@
       renderBody(); sfx('tick');
       return;
     }
+    if (t.dataset.part) { selectPart(t.dataset.part); return; }
     const act = t.dataset.act;
     if (!act) {   // карточка или кружок палитры
       const slot = t.dataset.slot, id = t.dataset.id;
@@ -353,25 +450,33 @@
     else if (act === 'rot') s.pv.spin(+t.dataset.d * .7);
     else if (act === 'walk') { const on = !s.pv.walking; s.pv.walk(on); t.classList.toggle('on', on); }
     else if (act === 'emo') s.pv.emote(t.dataset.e);
+    else if (act === 'emonext') { const L = EMOS(); s.pv.emote(L[s.emo % L.length]); s.emo = (s.emo + 1) % L.length; t.textContent = L[s.emo]; }
+    else if (act === 'undo') undo();
+    else if (act === 'mirror') { s.mirror = !s.mirror; t.classList.toggle('on', s.mirror); try { localStorage.setItem('d37_ce_mirror', s.mirror ? '1' : '0'); } catch (er) {} renderBody(); }
+    else if (act === 'resetpart') {   // форма и цвет части — «как было» (зеркально — обе стороны)
+      const [shs, cls] = partSlots(s.part), L = { ...s.trying, [shs]: C().PART_DEFAULT[shs], [cls]: 'auto' };
+      if (s.mirror) { if (MSLOT[shs]) L[MSLOT[shs]] = L[shs]; if (MSLOT[cls]) L[MSLOT[cls]] = 'auto'; }
+      await setMany(L); sfx('move');
+    } else if (act === 'randparts') { await setMany(randomParts({ ...s.trying })); sfx('ok'); }
     else if (act === 'pick') {
       const pk = s.el.querySelector(`.ce-pick[data-slot="${t.dataset.slot}"]`);
       if (pk) { pk.hidden = !pk.hidden; if (!pk.hidden) { pk._sync?.(); pk.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } }
     } else if (act === 'untry') {
-      const sl = t.dataset.slot, wear = C().look();
-      s.trying = materialize({ ...s.trying, [sl]: wear[sl] }, s.key);
-      if (wear[sl] === undefined) s.trying[sl] = materialize(wear, s.key)[sl];
-      updatePreview(); refresh();
+      const wear = C().look(), L = { ...s.trying };
+      for (const sl of (t.dataset.slots || '').split(',').filter(Boolean)) L[sl] = wear[sl];
+      s.trying = materialize(L, s.key);
+      for (const sl of (t.dataset.slots || '').split(',').filter(Boolean)) if (wear[sl] === undefined) s.trying[sl] = materialize(wear, s.key)[sl];
+      updatePreview(true); refresh();
     } else if (act === 'buyall') {
       t.disabled = true;
-      const items = Object.entries(unowned());
       let bought = 0;
-      for (const [sl, id] of items) {
-        const r = await W().buy(`skin:${sl}:${id}`);
+      for (const x of toBuy().filter(y => !y.gems)) {
+        const r = await W().buy(x.item);
         if (r?.ok || r?.reason === 'owned') bought++;
-        else { toast(r?.reason === 'coins' ? 'Не хватает монет' : r?.reason === 'auth' ? 'Войди в аккаунт' : 'Не получилось — попробуй ещё раз'); break; }
+        else { toast(r?.reason === 'coins' ? 'Не хватает монет' : r?.reason === 'auth' ? 'Войди в аккаунт' : r?.reason === 'gems' ? 'Эта вещь — только за 💎 в магазине' : r?.reason === 'item' ? 'Эта вещь появится в продаже после обновления сайта — загляни позже' : 'Не получилось — попробуй ещё раз'); break; }
       }
       if (st !== s) return;
-      if (bought) { s.saving++; try { await C().set(s.trying); } finally { s.saving--; } sfx('win'); toast(`✅ Куплено и надето: ${bought}`); }
+      if (bought) { await save(); sfx('win'); toast(`✅ Куплено и надето: ${bought}`); }
       refresh();
     } else if (act === 'random') randomLook();
     else if (act === 'daily') {
@@ -398,22 +503,38 @@
     const r = e.target.closest('[data-range]');
     if (r) setPart(r.dataset.range, String(r.value));
   }
-  // Случайный образ: из своего и бесплатного, цвета — любые из готовых
+  const pickOf = a => a[Math.floor(Math.random() * a.length)];
+  const ownIds = sl => C().PARTS[sl] ? C().PARTS[sl].list.filter(p => C().owns(sl, p[0])).map(p => p[0]) : [];
+  // Случайные части тела: чаще один пакет на всё, иногда вперемешку; цвета частей — чаще «как задумано»
+  function randomParts(L){
+    if (!C().PARTS.psal) return L;
+    const packs = ownIds('psal'), base = pickOf(packs), mixed = Math.random() < .35;
+    for (const sl of LIMBS) L[sl] = mixed ? pickOf(packs) : base;
+    if (st?.mirror) { L.psar = L.psal; L.pslr = L.psll; }
+    const heads = ownIds('psh');
+    L.psh = Math.random() < .5 && heads.includes(base) ? base : pickOf(heads);
+    const cols = C().PARTS.pch.list.map(p => p[0]).filter(id => id !== 'auto');
+    const tint = Math.random() < .4 ? pickOf(cols) : null;
+    for (const sl of PCS) L[sl] = tint && Math.random() < .6 ? tint : 'auto';
+    if (st?.mirror) { L.pcar = L.pcal; L.pclr = L.pcll; }
+    return L;
+  }
+  // Случайный образ: из своего и бесплатного, цвета — любые из готовых; части тела — чаще обычные
   async function randomLook(){
-    const s = st, L = {}, pick = a => a[Math.floor(Math.random() * a.length)];
-    for (const sl of C().SLOTS) {
-      const own = C().PARTS[sl].list.filter(p => C().owns(sl, p[0]));
-      if (own.length) L[sl] = pick(own)[0];
-    }
+    const s = st, L = {};
+    for (const sl of C().SLOTS) { const own = ownIds(sl); if (own.length) L[sl] = pickOf(own); }
     if (Math.random() < .7) { L.hat = 'none'; L.glasses = 'none'; }
     if (Math.random() < .6) L.back = 'none';
-    for (const sl of ['trim', 'hatc', 'glassc', 'neckc', 'backc']) if (Math.random() < .6) L[sl] = 'auto';
+    if (Math.random() < .7) L.glove = 'none';
+    for (const sl of ['trim', 'hatc', 'glassc', 'neckc', 'backc', 'glovec']) if (Math.random() < .6) L[sl] = 'auto';
+    if (C().PART_DEFAULT) {
+      if (Math.random() < .7) { for (const sl in C().PART_DEFAULT) if (/^p[sc]/.test(sl)) L[sl] = C().PART_DEFAULT[sl]; }
+      else randomParts(L);
+      if (Math.random() < .6) L.face = 'anime';
+    }
     L.hgt = L.wid = L.head = '2';
-    s.trying = L;
-    s.saving++;
-    try { await C().set(L); } finally { s.saving--; }
+    await setMany(L);
     sfx('ok');
-    updatePreview(true); refresh();
   }
 
   window.D37Editor = { mount, unmount, get open(){ return !!st; } };
