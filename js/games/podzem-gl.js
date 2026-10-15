@@ -239,6 +239,12 @@
     amulet(p, c){ for (let i = 0; i < 8; i++) { p(3 + i, 1 + (i < 4 ? i : 7 - i), rgb([230, 200, 90])); } p(5, 7, rgb(c), 6, 6); p(6, 8, rgb([255, 255, 255], 1, .8), 2, 2); },
     boots(p, c){ p(3, 3, rgb(c), 5, 9); p(3, 10, rgb(c), 10, 4); p(3, 13, rgb([40, 40, 50]), 10, 2); p(4, 4, rgb(c, 1.3), 1, 7); },
     wings(p, c){ for (let i = 0; i < 7; i++) { p(1 + i, 3 + i, rgb(c), 6 - (i >> 1), 2); p(9 + (i >> 1), 3 + i, rgb(c), 6 - (i >> 1), 2); } p(7, 4, rgb([120, 80, 45]), 2, 8); },
+    hook(p, c){   // крюк-кошка: стержень, три зубца, кольцо и кусок верёвки
+      for (let i = 0; i < 8; i++) p(5 + i, 11 - i, rgb(c, .85));
+      p(11, 1, rgb(c), 2, 5); p(12, 1, rgb(c, 1.35), 1, 3); p(9, 3, rgb(c), 2, 2); p(8, 2, rgb(c), 1, 2); p(13, 5, rgb(c), 2, 2); p(14, 4, rgb(c), 1, 2);
+      p(3, 11, rgb(c, .7), 3, 3); p(4, 12, rgb([30, 30, 34]), 1, 1);
+      for (let i = 0; i < 4; i++) p(i, 13 + (i & 1), rgb([170, 120, 70]), 1, 1);
+    },
   };
   // ── Спрайты (мобы, боссы, снаряды, эффекты): имя → [w, h, кадров, рисовать(g, x, y, кадр)] ──
   const SPR = {
@@ -399,11 +405,193 @@
 
   // ═══ WebGL2 ═══
   const VS_CHUNK = `#version 300 es
-in vec2 aP;
+layout(location = 0) in vec2 aP;
 uniform vec2 uOff, uScale;
 out vec2 vT;
-void main(){ vT = aP * 64.0; vec2 p = (uOff + vT) * uScale; gl_Position = vec4(p.x, -p.y, 0.0, 1.0); }`;
-  const FS_CHUNK = `#version 300 es
+out vec2 vS;   // клетки от камеры (для параллакса фона пещер)
+void main(){ vT = aP * 64.0; vS = uOff + vT; vec2 p = vS * uScale; gl_Position = vec4(p.x, -p.y, 0.0, 1.0); }`;
+  // ── Чанк, «красивый»: свет как в Террарии (режим «Цвет») и дальше — по качеству uQ (0 низкое … 3 ультра):
+  // 1+ мерцание огня, тень у стен (контактная), волны и блик воды; 2+ объём по свету (рельеф текстур и кромки к свету),
+  // лучи в воде, параллакс фона пещер. Сломается на телефоне (не соберётся / рисует чёрным) — renderer() берёт FS_CHUNK_BASIC.
+  // smoothstep — только с edge0 < edge1 (иначе на части видеокарт неопределённо). Общие куски (шум, кривая света и мерцание,
+  // тень у стен, гладь, лучи, лава) — из js/engine/shade2d.js (D37E.shade2d.GLSL): их же возьмут другие 2D-игры.
+  const S2 = (typeof window !== 'undefined' && window.D37E && window.D37E.shade2d && window.D37E.shade2d.GLSL) || null;
+  const FS_CHUNK_HQ = !S2 ? null : `#version 300 es
+precision highp float; precision highp int; precision highp usampler2D; precision highp sampler2D;
+uniform usampler2D uT0, uT1, uProps;
+uniform sampler2D uLight, uAtlas;
+uniform ivec2 uOrg;
+uniform vec3 uSky;
+uniform float uAmb, uTime;
+uniform vec3 uGlow;     // свет вокруг героя: x, y (от угла чанка), сила
+uniform float uGlowR;   // и его радиус (клеток; «Зелье сияния» — больше)
+uniform vec2 uCamP;     // камера × 0,65 (по модулю 1020) — параллакс фона пещер
+uniform int uPass, uSmooth, uBack, uQ;
+in vec2 vT;
+in vec2 vS;
+out vec4 oC;
+${S2.noise}
+${S2.light}
+${S2.aoWall}
+${S2.water}
+vec4 at(int cell, ivec2 px){ return texelFetch(uAtlas, ivec2((cell % ${AN}) * 16 + px.x, (cell / ${AN}) * 16 + px.y), 0); }
+vec4 Lraw(vec2 p){ return uSmooth == 1 ? texture(uLight, (p + 1.0) / 66.0) : texelFetch(uLight, clamp(ivec2(floor(p)) + 1, ivec2(0), ivec2(65)), 0); }
+// «Ультра»: свет ещё мягче — 5 выборок вокруг точки (без «ромбиков» между серединами клеток)
+vec4 Lsoft(vec2 p){
+  if (uQ < 3 || uSmooth != 1) return Lraw(p);
+  return Lraw(p) * 0.4 + (Lraw(p + vec2(0.35, 0.18)) + Lraw(p + vec2(-0.18, 0.35)) + Lraw(p + vec2(-0.35, -0.18)) + Lraw(p + vec2(0.18, -0.35))) * 0.15;
+}
+float Llum(vec2 p){ vec4 L = Lraw(p); return s2lum(max(L.rgb, uSky * L.a)); }
+// свет в точке: огонь (мерцает) или небо — что ярче, + тусклый свет вокруг героя
+vec3 lightCol(vec4 L, vec2 pw, vec2 p){
+  vec3 c = s2light(L.rgb, L.a, uSky, pw, uTime, uQ);
+  float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / max(uGlowR, 1.0)); g *= g;
+  return max(c, vec3(g, g * 0.9, g * 0.78)) + uAmb;
+}
+uint hsh(ivec2 p){ return s2hash(p); }
+float lum(vec3 c){ return s2lum(c); }
+float aoWall(uint m, vec2 f){ return s2ao(m, f); }
+void main(){
+  ivec2 c = clamp(ivec2(floor(vT)), ivec2(0), ivec2(63));
+  vec2 f = vT - vec2(c);
+  ivec2 px = ivec2(clamp(floor(f * 16.0), 0.0, 15.0));
+  uvec4 t0 = texelFetch(uT0, c, 0), t1 = texelFetch(uT1, c, 0);
+  ivec2 wp = uOrg + c;
+  uint hv = hsh(wp);
+  vec2 pw = vec2(uOrg & 4095) + vT;   // мировые клетки (по модулю — для шума без потери точности)
+  vec4 Lr = Lsoft(vT);
+  vec3 L = lightCol(Lr, pw, vT);
+  if (uPass == 1) {
+    uint lv = t1.g, lt = t1.b & 3u; bool above = (t1.b & 128u) != 0u;
+    if (lv == 0u || lt == 0u) discard;
+    float top = above ? 0.0 : 1.0 - float(lv) / 255.0;
+    if (!above && uQ >= 1) top = min(0.98, top + s2wave(pw, uTime, lt != 1u) * (lt == 1u ? 0.07 : 0.05));   // волны на глади (только вниз от верха клетки)
+    if (f.y < top) discard;
+    float dep = f.y - top;
+    vec4 col;
+    if (lt == 1u) {
+      vec3 base = above ? vec3(0.07, 0.25, 0.62) : vec3(0.10, 0.33, 0.74);
+      vec3 cc = base * L;
+      float a = above ? 0.74 : 0.64;
+      if (uQ >= 2) cc += vec3(0.25, 0.42, 0.5) * s2rays(pw, uTime) * min(1.2, lum(L)) * 0.5;   // лучи света в воде: косые полосы, ярче там, где светло
+      if (!above && dep < 0.1) { cc = mix(cc, vec3(0.7, 0.88, 1.0) * (L * 1.15 + 0.04), 0.65); a = 0.92; }   // блик: в нём отражается свет
+      col = vec4(cc, a);
+    } else {
+      vec3 cc = s2lava(pw, uTime);
+      if (!above && dep < 0.12) cc = mix(cc, vec3(1.0, 0.88, 0.45), 0.6);
+      col = vec4(cc, 0.96);
+    }
+    oC = vec4(col.rgb * col.a, col.a);
+    return;
+  }
+  uint fg = t0.r, sm = t0.g, wall = t0.b, wm = t0.a & 15u, same = t0.a >> 4u, st = t1.r;
+  vec4 col = vec4(0.0);
+  float emis = 0.0, rel = 1.0;
+  bool dirL = uQ >= 2;
+  vec2 lgN = vec2(0.0);
+  if (dirL) {   // куда светлее (в клетках мира, y вниз): для объёма текстур и кромок
+    vec2 lg = vec2(Llum(vT + vec2(0.6, 0.0)) - Llum(vT - vec2(0.6, 0.0)), Llum(vT + vec2(0.0, 0.6)) - Llum(vT - vec2(0.0, 0.6)));
+    float ll = length(lg);
+    lgN = lg / (ll + 0.015) * smoothstep(0.0, 0.08, ll);
+  }
+  if (wall != 0u) {
+    uvec4 wi = texelFetch(uProps, ivec2(int(wall), 2), 0);
+    int wc = int(wi.r | (wi.g << 8u)) + int(hv & 3u);
+    vec4 w = at(wc, px);
+    float e = 0.0;
+    if ((wm & 1u) != 0u && px.y < 2) e = 1.0;
+    if ((wm & 2u) != 0u && px.x > 13) e = 1.0;
+    if ((wm & 4u) != 0u && px.y > 13) e = 1.0;
+    if ((wm & 8u) != 0u && px.x < 2) e = 1.0;
+    col = vec4(w.rgb * (0.58 - e * 0.2), w.a);
+    if (uQ >= 1) col.rgb *= aoWall(sm, f);
+    if (dirL) {
+      vec2 hg = vec2(lum(at(wc, clamp(px + ivec2(1, 0), ivec2(0), ivec2(15))).rgb) - lum(at(wc, clamp(px - ivec2(1, 0), ivec2(0), ivec2(15))).rgb),
+                     lum(at(wc, clamp(px + ivec2(0, 1), ivec2(0), ivec2(15))).rgb) - lum(at(wc, clamp(px - ivec2(0, 1), ivec2(0), ivec2(15))).rgb));
+      rel = 1.0 - clamp(dot(hg, lgN) * 0.8, -0.25, 0.25);
+    }
+  } else if ((t1.a & 1u) != 0u && uBack == 1) {
+    // фон пещер: дальний слой (параллакс на «высоком»), темнее и в цвет глубины
+    vec2 bq = uQ >= 2 ? vS + uCamP : vec2(wp) + f;
+    ivec2 bc = ivec2(floor(bq)); vec2 bf = bq - vec2(bc);
+    uvec4 wi = texelFetch(uProps, ivec2(2, 2), 0);
+    ivec2 bpx = ivec2(clamp(floor(bf * 16.0), 0.0, 15.0));
+    vec4 w = at(int(wi.r | (wi.g << 8u)) + int((hsh(ivec2(floor(vec2(bc) / 3.0))) >> 3u) & 3u), ivec2((bpx.x + (bc.x & 1) * 8) & 15, (bpx.y + (bc.y & 1) * 8) & 15));
+    float d = clamp((float(wp.y) - 200.0) / 1200.0, 0.0, 1.0);
+    vec3 tint = mix(vec3(0.62, 0.48, 0.38), vec3(0.42, 0.44, 0.62), d);
+    if (wp.y > 1150) tint = vec3(0.65, 0.36, 0.3);
+    col = vec4(w.rgb * tint * (uQ >= 2 ? 0.36 : 0.42), 1.0);
+    if (uQ >= 1) col.rgb *= aoWall(sm, f);
+  }
+  uvec4 fi = texelFetch(uProps, ivec2(int(fg), 0), 0);
+  if (fg != 0u && fi.a != 3u) {
+    uvec4 fx = texelFetch(uProps, ivec2(int(fg), 1), 0);
+    int base = int(fi.r | (fi.g << 8u));
+    uint fl = fi.b, kind = fi.a;
+    int tcell = kind == 1u ? base + int(st >> 4u) : base + int(hv & 3u);
+    vec4 tc = at(tcell, px);
+    float frel = 1.0;
+    if (kind == 0u) {
+      uint shape = st & 15u;
+      bool cut = false;
+      bool U = (sm & 1u) == 0u, R = (sm & 2u) == 0u, D = (sm & 4u) == 0u, Lf = (sm & 8u) == 0u;
+      if (shape == 1u && px.y < 8) cut = true;
+      if (shape == 2u && px.y < 15 - px.x) cut = true;
+      if (shape == 3u && px.y < px.x) cut = true;
+      if (shape == 0u) {
+        int rr = (fl & 2u) != 0u ? 7 : 2;   // листва — скругляем сильнее
+        if (U && Lf && px.x + px.y < rr) cut = true;
+        if (U && R && 15 - px.x + px.y < rr) cut = true;
+        if (D && Lf && px.x + 15 - px.y < rr) cut = true;
+        if (D && R && 30 - px.x - px.y < rr) cut = true;
+      }
+      if (cut) tc.a = 0.0;
+      else {
+        if (shape == 1u) U = true;
+        int topY = shape == 1u ? 8 : 0;
+        vec2 en = vec2(0.0);   // наружу от кромки
+        if (U && px.y == topY) en.y -= 1.0;
+        if (D && px.y == 15) en.y += 1.0;
+        if (Lf && px.x == 0) en.x -= 1.0;
+        if (R && px.x == 15) en.x += 1.0;
+        if (shape == 2u && px.y == 15 - px.x) en = vec2(-0.7, -0.7);
+        if (shape == 3u && px.y == px.x) en = vec2(0.7, -0.7);
+        bool edge = en.x != 0.0 || en.y != 0.0;
+        bool seam = ((same & 1u) == 0u && !U && px.y == 0) || ((same & 2u) == 0u && !R && px.x == 15) || ((same & 4u) == 0u && !D && px.y == 15) || ((same & 8u) == 0u && !Lf && px.x == 0);
+        if ((fl & 1u) != 0u) {
+          int g = 99;
+          if (U) g = min(g, px.y - topY);
+          if (Lf) g = min(g, px.x);
+          if (R) g = min(g, 15 - px.x);
+          if (D) g = min(g, 15 - px.y);
+          if (shape == 2u) g = min(g, px.y - (15 - px.x));
+          if (shape == 3u) g = min(g, px.y - px.x);
+          int dep = 2 + int((hsh(wp * 16 + px) >> 7u) & 1u) + int(((hsh(ivec2(wp.x * 16 + px.x, 7)) >> 5u) & 1u));
+          vec3 gc = vec3(fx.rgb) / 255.0;
+          if (g < dep) tc.rgb = gc * (1.0 + 0.1 * float(dep - g) - (g == 0 ? 0.15 : 0.0));
+          else if (g == dep) tc.rgb = mix(tc.rgb, gc * 0.6, 0.5);
+        }
+        if (edge) tc.rgb *= dirL ? mix(0.55, 1.18, clamp(0.5 + 0.7 * dot(normalize(en), lgN), 0.0, 1.0)) : 0.6;   // кромка к свету — светлее
+        else if (seam) tc.rgb *= 0.78;
+        if (dirL && !edge) {
+          vec2 hg = vec2(lum(at(tcell, clamp(px + ivec2(1, 0), ivec2(0), ivec2(15))).rgb) - lum(at(tcell, clamp(px - ivec2(1, 0), ivec2(0), ivec2(15))).rgb),
+                         lum(at(tcell, clamp(px + ivec2(0, 1), ivec2(0), ivec2(15))).rgb) - lum(at(tcell, clamp(px - ivec2(0, 1), ivec2(0), ivec2(15))).rgb));
+          frel = 1.0 - clamp(dot(hg, lgN) * 1.1, -0.3, 0.3);
+        }
+      }
+    }
+    emis = float(fx.a) / 255.0;
+    if (tc.a > 0.5) rel = frel;
+    col.rgb = tc.rgb * tc.a + col.rgb * (1.0 - tc.a);
+    col.a = tc.a + col.a * (1.0 - tc.a);
+  }
+  if (col.a < 0.004) discard;
+  vec3 lit = col.rgb * min(L, vec3(1.35)) * rel;
+  lit = max(lit, col.rgb * emis);
+  oC = vec4(lit * col.a, col.a);
+}`;
+  // ── Чанк, «простой» (как было в 1-й версии): запасной, если «красивый» не собрался или рисует чёрным ──
+  const FS_CHUNK_BASIC = `#version 300 es
 precision highp float; precision highp int; precision highp usampler2D; precision highp sampler2D;
 uniform usampler2D uT0, uT1, uProps;
 uniform sampler2D uLight, uAtlas;
@@ -535,9 +723,87 @@ in vec2 vUV; in vec4 vC;
 out vec4 oC;
 void main(){ vec4 t = texture(uTex, vUV); oC = vec4(t.rgb * vC.rgb, t.a) * vC.a; if (oC.a < 0.004) discard; }`;
   const VS_BG = `#version 300 es
-in vec2 aP; out vec2 vUV;
+layout(location = 0) in vec2 aP; out vec2 vUV;
 void main(){ vUV = aP; gl_Position = vec4(aP * 2.0 - 1.0, 0.0, 1.0); }`;
-  const FS_BG = `#version 300 es
+  // ── Небо и даль, «красивое»: свои горы и деревья у каждого края (uShape/uShape2 + uBlend — плавный переход), дымка у
+  // подножий (даль в цвет неба), заря у горизонта со стороны солнца, облака с подсветкой снизу ──
+  const FS_BG_HQ = `#version 300 es
+precision highp float;
+in vec2 vUV; out vec4 oC;
+uniform vec3 uTop, uBot, uHill1, uHill2, uHill3, uHorizon;
+uniform vec2 uRes;      // пикселей
+uniform float uTile;    // пикселей на клетку
+uniform vec3 uCam;      // x (по модулю, для параллакса), y (мировой), время
+uniform vec4 uSun;      // x, y (доли экрана), радиус (доля высоты), 1 — солнце / 0 — луна
+uniform vec4 uShape, uShape2;   // острота гор 0…1, деревья (0 нет, 1 круглые, 2 ели, 3 джунгли, 4 кактусы), неровность, дымка
+uniform float uBlend;   // 0 — uShape, 1 — uShape2
+uniform float uNight, uSurf;
+uniform int uQ;
+float h1(float x){ return fract(sin(x * 127.1) * 43758.5453); }
+float n1(float x){ float i = floor(x), f = fract(x); float u = f * f * (3.0 - 2.0 * f); return mix(h1(i), h1(i + 1.0), u); }
+float fbm(float x){ return n1(x) * 0.55 + n1(x * 2.1 + 3.1) * 0.28 + n1(x * 4.3 + 7.7) * 0.17; }
+float rid(float x){ return (1.0 - abs(n1(x) * 2.0 - 1.0)) * 0.6 + (1.0 - abs(n1(x * 2.3 + 5.0) * 2.0 - 1.0)) * 0.3 + n1(x * 5.1) * 0.1; }
+float n2(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  float a = h1(i.x + i.y * 57.0), b = h1(i.x + 1.0 + i.y * 57.0), c = h1(i.x + (i.y + 1.0) * 57.0), d = h1(i.x + 1.0 + (i.y + 1.0) * 57.0);
+  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y); }
+// силуэт деревьев (в долях высоты дерева, 0…1) по стилю
+float trees(float x, float style){
+  float i = floor(x), fx = fract(x), r = h1(i * 3.7 + 1.3);
+  if (style < 0.5 || r < 0.35) return 0.0;
+  float c = 0.5 + (h1(i * 5.1) - 0.5) * 0.4, dx = abs(fx - c);
+  if (style < 1.5) { float w = 0.4 + 0.08 * r, q = dx / w; return dx < w ? (0.5 + 0.5 * sqrt(max(0.0, 1.0 - q * q))) * (0.6 + 0.5 * r) : 0.0; }
+  if (style < 2.5) { float w = 0.28 + 0.1 * r; return dx < w ? (1.0 - dx / w) * (0.8 + 0.4 * r) : 0.0; }
+  if (style < 3.5) { float w = 0.42 + 0.06 * r, q = dx / w; return dx < w ? (1.0 + 0.35 * r) * (1.0 - q * q * q) : 0.0; }
+  float arm = (dx > 0.12 && dx < 0.2) ? 0.6 : 0.0;
+  return dx < 0.07 ? 0.9 * (0.7 + 0.3 * r) : arm * (0.7 + 0.3 * r);
+}
+float layerH(float x, vec4 S, float lay){   // высота слоя 0…1
+  if (lay < 0.5) return mix(fbm(x * 0.02), rid(x * 0.018), S.x);
+  if (lay < 1.5) return mix(fbm(x * 0.035 + 11.0), rid(x * 0.03 + 11.0), S.x * 0.6) * (0.75 + 0.5 * S.z);
+  return fbm(x * 0.05 + 23.0);
+}
+void main(){
+  vec2 px = vec2(vUV.x * uRes.x, (1.0 - vUV.y) * uRes.y);   // y вниз
+  vec3 col = mix(uTop, uBot, clamp(1.0 - vUV.y, 0.0, 1.0));
+  // звёзды (мерцают)
+  if (uNight > 0.01) {
+    vec2 sp = floor(px / 3.0);
+    float s = h1(sp.x * 1.37 + sp.y * 91.7);
+    if (s > 0.9965) col += vec3(0.85, 0.9, 1.0) * uNight * (0.5 + 0.5 * sin(uCam.z * 2.0 + s * 300.0));
+  }
+  // заря у горизонта — со стороны солнца
+  float H = uRes.y, sy = px.y, dpx = (uCam.y - uSurf) * uTile, u = uTile / 18.0;
+  float base1 = H * 0.44 - dpx * 0.22, base2 = H * 0.52 - dpx * 0.42, base3 = H * 0.6 - dpx * 0.65;
+  float hz = clamp(1.0 - abs(sy - base1) / (H * 0.45), 0.0, 1.0);
+  col += uHorizon * hz * hz * (0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.7, abs(vUV.x - uSun.x))));
+  // солнце / луна
+  vec2 sd = (vec2(vUV.x, 1.0 - vUV.y) - uSun.xy) * vec2(uRes.x / uRes.y, 1.0);
+  float d = length(sd);
+  if (uSun.w > 0.5) { col += vec3(1.0, 0.85, 0.5) * (1.0 - smoothstep(0.0, uSun.z * 4.0, d)) * 0.35 + vec3(1.0, 0.9, 0.7) * (1.0 - smoothstep(0.0, uSun.z * 12.0, d)) * 0.12; if (d < uSun.z) col = mix(col, vec3(1.0, 0.97, 0.85), 0.95); }
+  else if (uSun.w > -0.5) { col += vec3(0.6, 0.7, 1.0) * (1.0 - smoothstep(0.0, uSun.z * 3.0, d)) * 0.18; if (d < uSun.z) col = mix(col, vec3(0.92, 0.94, 1.0), 0.9 - 0.4 * step(0.0, sd.x - uSun.z * 0.35)); }
+  // облака — над дальними горами, снизу подсвечены зарёй
+  float cl = n2(vec2((px.x / uTile + uCam.x * 0.06 + uCam.z * 0.5) * 0.06, sy / uTile * 0.12));
+  cl = smoothstep(0.62, 0.85, cl * 0.7 + n2(vec2(px.x / uTile * 0.15 + uCam.x * 0.09, sy / uTile * 0.3)) * 0.3);
+  vec3 ccol = mix(vec3(1.0), uTop * 0.6, uNight * 0.85) + uHorizon * 0.6;
+  col = mix(col, ccol, cl * 0.55 * (1.0 - smoothstep(base1 - H * 0.3, base1, sy)));
+  vec4 S = mix(uShape, uShape2, uBlend);
+  float hz1 = S.w;
+  // дальние горы
+  float hx1 = (px.x - uRes.x * 0.5) / uTile * 0.5 + uCam.x * 0.15;
+  float top1 = base1 - layerH(hx1, S, 0.0) * H * (0.3 + 0.16 * S.x) * u;
+  if (sy > top1) { float m = smoothstep(top1, base1 + H * 0.1, sy); col = mix(uHill1, mix(uHill1, uBot, hz1), m); }
+  // средние холмы
+  float hx2 = (px.x - uRes.x * 0.5) / uTile * 0.7 + uCam.x * 0.3;
+  float top2 = base2 - layerH(hx2, S, 1.0) * H * 0.24 * u;
+  if (sy > top2) { float m = smoothstep(top2, base2 + H * 0.12, sy); col = mix(uHill2, mix(uHill2, uBot, hz1 * 0.7), m * 0.9); }
+  // ближние холмы и деревья (стиль смешивается на переходе)
+  float hx3 = (px.x - uRes.x * 0.5) / uTile * 0.85 + uCam.x * 0.5;
+  float t3 = mix(trees(hx3 * 0.4, uShape.y), trees(hx3 * 0.4, uShape2.y), uBlend);
+  float top3 = base3 - (fbm(hx3 * 0.05 + 23.0) * 16.0 + t3 * 6.5) * uTile * 0.6;
+  if (sy > top3) col = mix(uHill3, uBot * 0.35 + uHill3 * 0.65, (1.0 - smoothstep(top3, top3 + uTile * 2.0, sy)) * 0.25 * hz1);
+  oC = vec4(col, 1.0);
+}`;
+  const FS_BG_BASIC = `#version 300 es
 precision highp float;
 in vec2 vUV; out vec4 oC;
 uniform vec3 uTop, uBot, uHill1, uHill2, uHill3;
@@ -565,15 +831,15 @@ void main(){
   // солнце / луна
   vec2 sd = (vec2(vUV.x, 1.0 - vUV.y) - uSun.xy) * vec2(uRes.x / uRes.y, 1.0);   // uSun — доли экрана сверху
   float d = length(sd);
-  if (uSun.w > 0.5) { col += vec3(1.0, 0.85, 0.5) * smoothstep(uSun.z * 4.0, 0.0, d) * 0.35; if (d < uSun.z) col = mix(col, vec3(1.0, 0.97, 0.85), 0.95); }
-  else if (uSun.w > -0.5) { col += vec3(0.6, 0.7, 1.0) * smoothstep(uSun.z * 3.0, 0.0, d) * 0.15; if (d < uSun.z) col = mix(col, vec3(0.92, 0.94, 1.0), 0.9 - 0.4 * step(0.0, sd.x - uSun.z * 0.35)); }
+  if (uSun.w > 0.5) { col += vec3(1.0, 0.85, 0.5) * (1.0 - smoothstep(0.0, uSun.z * 4.0, d)) * 0.35; if (d < uSun.z) col = mix(col, vec3(1.0, 0.97, 0.85), 0.95); }
+  else if (uSun.w > -0.5) { col += vec3(0.6, 0.7, 1.0) * (1.0 - smoothstep(0.0, uSun.z * 3.0, d)) * 0.15; if (d < uSun.z) col = mix(col, vec3(0.92, 0.94, 1.0), 0.9 - 0.4 * step(0.0, sd.x - uSun.z * 0.35)); }
   // горы и холмы — в пикселях экрана: у поверхности основание ниже середины, спускаешься — уходят вверх (параллакс)
   float H = uRes.y, sy = px.y, dpx = (uCam.y - uSurf) * uTile, u = uTile / 18.0;
   float base1 = H * 0.44 - dpx * 0.22, base2 = H * 0.52 - dpx * 0.42, base3 = H * 0.6 - dpx * 0.65;
   // облака — над дальними горами
   float cl = n2(vec2((px.x / uTile + uCam.x * 0.06 + uCam.z * 0.5) * 0.06, sy / uTile * 0.12));
   cl = smoothstep(0.62, 0.85, cl * 0.7 + n2(vec2(px.x / uTile * 0.15 + uCam.x * 0.09, sy / uTile * 0.3)) * 0.3);
-  col = mix(col, mix(vec3(1.0), uTop * 0.6, uNight * 0.85), cl * 0.55 * smoothstep(base1, base1 - H * 0.3, sy));
+  col = mix(col, mix(vec3(1.0), uTop * 0.6, uNight * 0.85), cl * 0.55 * (1.0 - smoothstep(base1 - H * 0.3, base1, sy)));
   float hx1 = (px.x - uRes.x * 0.5) / uTile * 0.5 + uCam.x * 0.15;
   if (sy > base1 - fbm(hx1 * 0.02) * H * 0.34 * u) col = mix(col, uHill1, 0.85);
   float hx2 = (px.x - uRes.x * 0.5) / uTile * 0.7 + uCam.x * 0.3;
@@ -584,6 +850,17 @@ void main(){
   oC = vec4(col, 1.0);
 }`;
 
+  const DEF_SHAPE = new Float32Array([.25, 1, .5, .45]), ZERO3 = new Float32Array(3);
+  // ореол: белый круг с мягким краем (рисуется сложением цвета — R.glowBegin / R.glowEnd)
+  let glowImg = null;
+  function glowCanvas(){
+    if (glowImg) return glowImg;
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.18, 'rgba(255,255,255,.62)'); gr.addColorStop(.45, 'rgba(255,255,255,.2)'); gr.addColorStop(.75, 'rgba(255,255,255,.05)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return (glowImg = c);
+  }
   function renderer(canvas, opts = {}){
     const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, premultipliedAlpha: true, preserveDrawingBuffer: !!opts.keep, powerPreference: 'high-performance' });
     if (!gl) return null;
@@ -600,12 +877,17 @@ void main(){
       for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); }
       return { p, u };
     };
-    const progC = compile(VS_CHUNK, FS_CHUNK), progS = compile(VS_SPR, FS_SPR), progB = compile(VS_BG, FS_BG);
+    // «красивые» шейдеры; не собрались — простые (как в 1-й версии), рисуют чёрным — тоже простые (R.selfTest)
+    const tryCompile = (vs, fs, name) => { try { return compile(vs, fs); } catch (e) { console.warn('Подземье: шейдер «' + name + '» не собрался — беру простой', e.message); return null; } };
+    const progCH = opts.basic || !FS_CHUNK_HQ ? null : tryCompile(VS_CHUNK, FS_CHUNK_HQ, 'клетки'), progBH = opts.basic ? null : tryCompile(VS_BG, FS_BG_HQ, 'небо');
+    let progCB = null, progBB = null;
+    const basicC = () => progCB || (progCB = compile(VS_CHUNK, FS_CHUNK_BASIC)), basicB = () => progBB || (progBB = compile(VS_BG, FS_BG_BASIC));
+    let progC = progCH || basicC(), progB = progBH || basicB();
+    const progS = compile(VS_SPR, FS_SPR);
     // квадрат 0…1
     const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
     const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.bindAttribLocation(progC.p, 0, 'aP');
     // спрайты: 4 вершины × (x, y, u, v, rgba8) на спрайт
     const MAXS = 6000, STRIDE = 20;
     const sbuf = new ArrayBuffer(MAXS * 4 * STRIDE), sf = new Float32Array(sbuf), su = new Uint8Array(sbuf);
@@ -620,7 +902,7 @@ void main(){
     gl.enableVertexAttribArray(aUV); gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, STRIDE, 8);
     gl.enableVertexAttribArray(aC); gl.vertexAttribPointer(aC, 4, gl.UNSIGNED_BYTE, true, STRIDE, 16);
     const vaoB = gl.createVertexArray(); gl.bindVertexArray(vaoB); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-    const aPB = gl.getAttribLocation(progB.p, 'aP'); gl.enableVertexAttribArray(aPB); gl.vertexAttribPointer(aPB, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
 
     const texU = (w, h, fmt) => {   // целочисленная текстура данных (без фильтрации)
@@ -664,6 +946,7 @@ void main(){
       if (!propsTex) propsTex = texU(256, 3);
       gl.bindTexture(gl.TEXTURE_2D, propsTex);
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 3, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE, d);
+      R.selfTest();
     };
     // ── Чанк: текстуры t0 (fg, маска, стена, маски) и t1 (форма/кадр, жидкость, тип|над ней, флаги), свет 66×66 ──
     R.chunkInit = c => { if (!c.gl) c.gl = { t0: texU(64, 64), t1: texU(64, 64), l: texL() }; return c.gl; };
@@ -673,13 +956,19 @@ void main(){
     R.chunkFree = c => { if (!c.gl) return; gl.deleteTexture(c.gl.t0); gl.deleteTexture(c.gl.t1); gl.deleteTexture(c.gl.l); c.gl = null; };
 
     R.resize = (w, h, tile) => { R.w = w; R.h = h; R.tile = tile; if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; } };
-    R.begin = (camX, camY) => {
+    // постобработка набора шейдеров (js/engine/shade2d.js): «Красивые»/«Ультра» — свечение, рябь, жар, цвет, виньетка;
+    // «Ретро» — крупные пиксели, меньше оттенков, полоски CRT. Нет модуля или не собралась — рисуем прямо на экран.
+    R.post = !opts.basic && window.D37E?.shade2d ? window.D37E.shade2d.create(gl) : null;
+    R.begin = (camX, camY, fl) => {
       R.camX = camX; R.camY = camY; R.stats.draws = 0; R.stats.sprites = 0;
-      gl.viewport(0, 0, R.w, R.h);
+      if (!(R.post && R.post.begin(R.w, R.h, fl))) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, R.w, R.h); }
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
       gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     };
+    // кадр готов: постобработка на экран (params: time, grade, bloom, vignette; поле искажений — R.post.field)
+    R.end = params => { R.flush(); if (R.post?.active) { R.post.end(params); R.stats.draws += R.post.stats.passes; } };
     // небо, горы, облака, солнце/луна (s: { top, bot, hill1, hill2, hill3 — [r,g,b] 0…1, sun: [x, y, r, kind], night, surf, time })
+    // + горы и деревья края (shape, shape2, blend: [острота, деревья, неровность, дымка]), заря у горизонта (horizon), q
     R.background = s => {
       gl.useProgram(progB.p); gl.bindVertexArray(vaoB);
       const u = progB.u;
@@ -687,6 +976,9 @@ void main(){
       gl.uniform2f(u.uRes, R.w, R.h); gl.uniform1f(u.uTile, R.tile);
       gl.uniform3f(u.uCam, R.camX % 100000, R.camY, s.time); gl.uniform4fv(u.uSun, s.sun);
       gl.uniform1f(u.uNight, s.night); gl.uniform1f(u.uSurf, s.surf);
+      if (u.uShape) { gl.uniform4fv(u.uShape, s.shape || DEF_SHAPE); gl.uniform4fv(u.uShape2, s.shape2 || s.shape || DEF_SHAPE); gl.uniform1f(u.uBlend, s.blend || 0); }
+      if (u.uHorizon) gl.uniform3fv(u.uHorizon, s.horizon || ZERO3);
+      if (u.uQ) gl.uniform1i(u.uQ, s.q | 0);
       gl.disable(gl.BLEND);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.enable(gl.BLEND);
@@ -701,6 +993,9 @@ void main(){
       gl.uniform2fv(u.uScale, sc);
       gl.uniform3fv(u.uSky, s.sky); gl.uniform1f(u.uAmb, s.amb); gl.uniform1f(u.uTime, s.time); gl.uniform1i(u.uPass, pass);
       gl.uniform1i(u.uSmooth, s.smooth ? 1 : 0); gl.uniform1i(u.uBack, s.back === false ? 0 : 1);
+      if (u.uQ) gl.uniform1i(u.uQ, s.q | 0);
+      if (u.uGlowR) gl.uniform1f(u.uGlowR, s.glowR || 7.5);
+      if (u.uCamP) gl.uniform2f(u.uCamP, (R.camX * .65) % 1020, (R.camY * .65) % 1020);   // 1020 — кратно 6: узор фона (3 × 2) не прыгает
       gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, atlasTex); gl.uniform1i(u.uAtlas, 3);
       gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, propsTex); gl.uniform1i(u.uProps, 4);
       gl.uniform1i(u.uT0, 0); gl.uniform1i(u.uT1, 1); gl.uniform1i(u.uLight, 2);
@@ -771,6 +1066,43 @@ void main(){
       R.stats.draws++; R.stats.sprites += sn;
       sn = 0;
     };
+    // ── Ореолы света: всё, что между glowBegin и glowEnd, складывается с картинкой (свечение, «блум» без постобработки) ──
+    R.glowBegin = () => { R.flush(); gl.blendFunc(gl.ONE, gl.ONE); };
+    R.glow = (x, y, rad, r, g, b, a) => { const img = glowCanvas(); R.sprite(img, x - rad, y - rad, rad * 2, rad * 2, 0, 0, 64, 64, r, g, b, a); };
+    R.glowEnd = () => { R.flush(); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); };
+
+    // ── Проверка на этой видеокарте: «красивые» шейдеры рисуют не чёрным? (на части телефонов шейдер собирается, а
+    // рисует чёрное — так было с травой в 3D). Рисуем кусочек стены и неба в маленькую текстуру и читаем пиксель. ──
+    R.hq = { chunk: progC === progCH && !!progCH, bg: progB === progBH && !!progBH };
+    let tested = false;
+    R.selfTest = () => {
+      if (tested || !atlasTex || !propsTex) return R.hq;
+      tested = true;
+      const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, 16, 16);
+      const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tx, 0);
+      const tc = { cx: 0, cy: 0, gl: null, ready: true, hasLq: false };
+      const d0 = new Uint8Array(4096 * 4), d1 = new Uint8Array(4096 * 4), dl = new Uint8Array(66 * 66 * 4).fill(255);
+      for (let i = 0; i < 4096; i++) { d0[i * 4 + 2] = 1; d1[i * 4 + 3] = 1; }   // всюду стена №1, «под землёй»
+      R.upload0(tc, d0); R.upload1(tc, d1); R.uploadL(tc, dl);
+      const save = [R.w, R.h, R.tile, R.camX, R.camY], px = new Uint8Array(4);
+      const sum = draw => { gl.viewport(0, 0, 16, 16); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); draw(); gl.readPixels(8, 8, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return px[0] + px[1] + px[2]; };
+      R.w = 16; R.h = 16; R.tile = 8; R.camX = 2; R.camY = 2;
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      const st = { sky: [1, 1, 1], amb: 0, time: 1, smooth: true, back: true, q: 2, glow: 0 };
+      const bgs = { top: [.3, .5, .9], bot: [.6, .8, 1], hill1: [.3, .5, .6], hill2: [.2, .4, .3], hill3: [.1, .3, .2], sun: new Float32Array([.5, .2, .05, 1]), night: 0, surf: 2, time: 1, q: 2 };
+      const res = { chunk: 0, bg: 0, chunkBasic: -1, bgBasic: -1 };
+      try {
+        if (progCH) { progC = progCH; res.chunk = sum(() => R.chunks([tc], st, 0)); if (res.chunk < 12) { progC = basicC(); res.chunkBasic = sum(() => R.chunks([tc], st, 0)); if (res.chunkBasic < 12) progC = progCH; } }
+        if (progBH) { progB = progBH; res.bg = sum(() => R.background(bgs)); if (res.bg < 12) { progB = basicB(); res.bgBasic = sum(() => R.background(bgs)); if (res.bgBasic < 12) progB = progBH; } }
+      } catch (e) { console.warn('Подземье: проверка шейдеров', e); }
+      [R.w, R.h, R.tile, R.camX, R.camY] = save;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.deleteFramebuffer(fb); gl.deleteTexture(tx); R.chunkFree(tc);
+      gl.viewport(0, 0, R.w, R.h);
+      R.hq = { chunk: progC === progCH && !!progCH, bg: progB === progBH && !!progBH, test: res };
+      if (!R.hq.chunk || !R.hq.bg) console.warn('Подземье: «красивая» графика на этой видеокарте выключена', res);
+      return R.hq;
+    };
     // старые текстуры персонажа (лист сменился) — удалить через 10 с без использования
     R.gc = () => { for (const [img, t] of imgTex) if (R.frame - t.used > 600) { gl.deleteTexture(t.t); imgTex.delete(img); } };
     R.lost = () => gl.isContextLost();
@@ -779,6 +1111,7 @@ void main(){
       imgTex.clear();
       if (atlasTex) gl.deleteTexture(atlasTex); if (propsTex) gl.deleteTexture(propsTex);
       gl.deleteBuffer(quad); gl.deleteBuffer(vboS); gl.deleteBuffer(ibo);
+      try { R.post?.dispose(); } catch (e) {}
       gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
     return R;
