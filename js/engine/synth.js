@@ -209,6 +209,9 @@
     if (E._audio) return E._audio;
     const A = { vol: 1, lx: 0, ly: 0, lz: 0, lyaw: 0, ctx: null, master: null, bufs: new Map(), lastStep: {} };
     const muted = () => { try { return localStorage.getItem('d37_games_mute') === '1'; } catch (e) { return false; } };
+    // громкости из окна ⚙️ Настройки (js/core/settings.js → window.D37Opt): общая × эффекты / окружение
+    const kFx = () => { const O = root.D37Opt; return O ? (O.mute ? 0 : O.vol * O.volFx) : 1; };
+    const kAmb = () => { const O = root.D37Opt; return O ? (O.mute ? 0 : O.vol * O.volAmb) : 1; };
     const ensure = () => {
       if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume().catch(() => {}); return A.ctx; }
       const C = root.AudioContext || root.webkitAudioContext; if (!C) return null;
@@ -253,7 +256,7 @@
         if (ctx.createStereoPanner) { h.pan = ctx.createStereoPanner(); h.gain.connect(h.pan); h.pan.connect(A.master); } else h.gain.connect(A.master);
         h.src.start(0, Math.random() * b.duration);   // с разного места — две одинаковые петли не звучат в унисон
       }
-      const [g, p] = place(h.o, muted() ? 0 : h.o.vol ?? .6), t = ctx.currentTime;
+      const [g, p] = place(h.o, muted() ? 0 : (h.o.vol ?? .6) * kAmb()), t = ctx.currentTime;
       h.gain.gain.setTargetAtTime(g, t, .08);
       if (h.pan) h.pan.pan.setTargetAtTime(p, t, .08);
     }
@@ -264,7 +267,8 @@
       if (muted() || A.vol <= 0) return;
       const ctx = A.ctx; if (!ctx || ctx.state !== 'running') { ensure(); return; }
       const b = buf(name); if (!b) return;
-      let g = o.vol ?? 1, pan = 0;
+      let g = (o.vol ?? 1) * kFx(), pan = 0;
+      if (g < .003) return;
       if (o.x != null) {   // в мире: тише издалека (полностью — до 3 м, не слышно — дальше 40 м), сторона — по камере
         const U = E.UNIT || 1, dx = o.x - A.lx, dy = (o.y ?? A.ly) - A.ly, dz = o.z - A.lz, d = Math.hypot(dx, dy, dz) / U;
         const k = d <= 3 ? 1 : Math.max(0, 1 - (d - 3) / 37); g *= k * k;

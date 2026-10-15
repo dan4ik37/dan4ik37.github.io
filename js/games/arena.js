@@ -179,7 +179,8 @@
   const fromS = (sx, sy) => rot ? [sy / k, H - sx / k] : [sx / k, sy / k];
 
   // ── Управление ──
-  function local(e){ const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr]; }
+  // экран → холст по доле размера (верно и когда игра уменьшена целиком — полный экран на телефоне лёжа, games.js gamesFit)
+  function local(e){ const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * (cv.width / (r.width || 1)), (e.clientY - r.top) * (cv.height / (r.height || 1))]; }
   function onDown(e){
     if (!Wd || mode !== 'play') return;
     const [sx, sy] = local(e);
@@ -415,8 +416,8 @@
     // джойстики
     for (const s of [sticks.move, sticks.aim]) {
       if (!s) continue;
-      const r = cv.getBoundingClientRect(), bx = (s.x0 - r.left) * dpr, by = (s.y0 - r.top) * dpr;
-      let dx = (s.x - s.x0) * dpr, dy = (s.y - s.y0) * dpr; const d = Math.hypot(dx, dy), m = 50 * dpr;
+      const r = cv.getBoundingClientRect(), kx = cv.width / (r.width || 1), bx = (s.x0 - r.left) * kx, by = (s.y0 - r.top) * kx;
+      let dx = (s.x - s.x0) * kx, dy = (s.y - s.y0) * kx; const d = Math.hypot(dx, dy), m = 50 * dpr;
       if (d > m) { dx = dx / d * m; dy = dy / d * m; }
       ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(bx, by, m, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = s === sticks.aim ? 'rgba(255,209,102,.6)' : 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.arc(bx + dx, by + dy, 22 * dpr, 0, Math.PI * 2); ctx.fill();

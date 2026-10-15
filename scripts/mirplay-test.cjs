@@ -12,12 +12,13 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
 // ═══ Маленький DOM ═══
 const camel = s => s.replace(/-([a-z])/g, (m, c) => c.toUpperCase());
 function simple(n, s){
-  const m = /^([a-z]+)?((?:\.[\w-]+)*)(?:\[([\w-]+)\])?(?:#([\w-]+))?$/i.exec(s);
+  const m = /^([a-z]+)?((?:\.[\w-]+)*)(?:\[([\w-]+)(?:="([^"]*)")?\])?(?:#([\w-]+))?$/i.exec(s);
   if (!m) throw new Error('селектор не поддержан: ' + s);
   if (m[1] && n.tagName !== m[1].toUpperCase()) return false;
   if (m[2]) for (const c of m[2].split('.').filter(Boolean)) if (!n.classList.contains(c)) return false;
   if (m[3] && !n.hasAttribute(m[3])) return false;
-  if (m[4] && n.id !== m[4]) return false;
+  if (m[3] && m[4] !== undefined && n.getAttribute(m[3]) !== m[4]) return false;
+  if (m[5] && n.id !== m[5]) return false;
   return true;
 }
 class El {
@@ -78,7 +79,16 @@ globalThis.window = globalThis;
 const winLs = [];
 globalThis.addEventListener = (t, f, o) => winLs.push({ t, f, cap: o === true || !!o?.capture });
 globalThis.removeEventListener = (t, f, o) => { const cap = o === true || !!o?.capture, i = winLs.findIndex(l => l.t === t && l.f === f && l.cap === cap); if (i >= 0) winLs.splice(i, 1); };
-const fireWin = (type, init = {}) => { const ev = { type, ...init }; for (const l of winLs.slice()) if (l.t === type) l.f(ev); return ev; };
+// как в браузере: у цели сначала слушатели захвата, потом остальные; stopImmediatePropagation — дальше никому
+const fireWin = (type, init = {}) => {
+  const ev = { type, defaultPrevented: false, _stop: false, preventDefault(){ this.defaultPrevented = true; }, stopPropagation(){}, stopImmediatePropagation(){ this._stop = true; }, ...init };
+  const ls = winLs.filter(l => l.t === type);
+  for (const l of [...ls.filter(l => l.cap), ...ls.filter(l => !l.cap)]) { if (ev._stop) break; l.f(ev); }
+  return ev;
+};
+// «полный экран» (как js/core/fullscreen.js): свой слушатель «Назад», подписан раньше окна игры
+const fullPops = [];
+globalThis.addEventListener('popstate', () => fullPops.push(location.hash));
 const BASE = 'https://site.test/';
 const hashOf = u => { const i = String(u).indexOf('#'); return i < 0 ? '' : String(u).slice(i); };
 const H = { entries: [{ url: BASE + '#/games', state: null }, { url: BASE + '#/games/world', state: null }], i: 1, log: [], q: [] };
@@ -145,9 +155,11 @@ globalThis.GAMES = [
 ];
 const loaded = [];
 globalThis.gamesLoadScript = async src => { if (src.includes('broken')) throw new Error('Не загрузилось: ' + src); loaded.push(src); };
-const reports = [], toasts = [];
-globalThis.gamesApi = id => ({ id, async report(key, win, score){ reports.push({ id, key, win, score }); return { ok: true }; }, toast: t => toasts.push(t), local: () => ({}), saveLocal(){}, sfx(){} });
+const reports = [], toasts = [], adCtx = [];
+// как games.js: report → gamesAdAfterRound → реклама в MirPlay.adStage() (полоска итога) — запоминаем, видна ли она в этот миг
+globalThis.gamesApi = id => ({ id, async report(key, win, score){ const st = globalThis.MirPlay?.adStage?.(); reports.push({ id, key, win, score, adStage: !!st, adVisible: !!st && st.getClientRects().length > 0, playing: adCtx[adCtx.length - 1] }); return { ok: true }; }, toast: t => toasts.push(t), local: () => ({}), saveLocal(){}, sfx(){} });
 globalThis.gameToast = t => toasts.push(t);
+globalThis.D37AdPlaces = { ctx: (name, on) => { if (name === 'playing') adCtx.push(!!on); } };
 const GI = globalThis.GAME_IMPL = {};
 function fakeGame(id){
   const G = { mounts: 0, unmounts: 0, api: null, el: null, again: 0, params: [] };
@@ -209,7 +221,7 @@ MP.P.back = 10;
     ok(overlay() && overlay().querySelector('.mp-game').contains(CH.st) && html.classList.contains('mir-playing'), 'окно внутри wrap мира, html.mir-playing');
     ok(overlay().querySelector('.mp-title').textContent === '♟️ Шахматы', 'заголовок окна');
     ok(H.log.includes('push') && history.state?.mp && history.state.mpd === 1 && location.hash === '#/games/world', 'своя запись истории, адрес мира не менялся');
-    ok(winCount('popstate') === 1 && winCount('keydown') === 1, 'слушатели окна: «Назад» и клавиши');
+    ok(winCount('popstate') === 2 && winLs.some(l => l.t === 'popstate' && l.cap) && winCount('keydown') === 1, 'слушатели окна: «Назад» (захват, раньше полного экрана) и клавиши');
     ok(bar().hidden === true, 'полоски итога пока нет');
     await CH.api.report('chess_online', true, 1, 1);
     ok(reports.length === 1 && reports[0].key === 'chess_online', 'report дошёл до сайта (XP, рекорды)');
@@ -220,7 +232,7 @@ MP.P.back = 10;
     ok(/\(7\)/.test(bar().textContent), 'отсчёт идёт', bar().textContent);
     tick(7);
     ok(!MP.isOpen() && calls.includes('close:auto') && CH.unmounts === 1, 'через 10 с — сам в мир, игра размонтирована', calls);
-    ok(!overlay() && !html.classList.contains('mir-playing') && winCount('popstate') === 0 && winCount('keydown') === 0, 'окно и слушатели убраны');
+    ok(!overlay() && !html.classList.contains('mir-playing') && winCount('popstate') === 1 && winCount('keydown') === 0, 'окно и слушатели убраны');
     ok(H.log.includes('go-1'), 'своя запись истории — назад', H.log);
     flushHistory();
     ok(location.hash === '#/games/world' && history.state == null && routed.length === 0, 'вернулись на запись мира, роутер не трогали');
@@ -360,13 +372,60 @@ MP.P.back = 10;
     ok(history.state == null && location.hash === '#/games/world', 'свои записи пройдены');
   }
 
+  // ═══ Реклама: «идёт партия» и полоска итога (ad-places.js) ═══
+  {
+    adCtx.length = 0; reports.length = 0;
+    await MP.open('chess', 'abc123', opts());
+    ok(adCtx[adCtx.length - 1] === true, 'открыли — D37AdPlaces.ctx(playing, true)');
+    ok(MP.adStage() && MP.adStage().classList.contains('mp-end-ad'), 'adStage — место в полоске итога');
+    await CH.api.report('chess_online', true, 1, 1);
+    ok(reports[0].playing === false && reports[0].adStage && reports[0].adVisible, 'к отчёту: партия не идёт, полоска уже видна — реклама ляжет в неё', reports[0]);
+    dispatch(CH.st, 'pointerdown');
+    ok(adCtx[adCtx.length - 1] === true && bar().hidden, 'снова играет — ctx(playing) и полоска (с рекламой) спрятана');
+    MP.close('back'); flushHistory();
+    ok(adCtx[adCtx.length - 1] === false && MP.adStage() === null, 'закрыли — ctx(playing) снят, adStage — null (реклама снова под игрой)');
+  }
+
+  // ═══ Полный экран (fullscreen.js) и Esc ═══
+  {
+    calls.length = 0;
+    H.entries[H.i] = { url: BASE + '#/games/world', state: { gsFull: 7 } };   // мир во весь экран: своя запись «полного экрана»
+    await MP.open('chess', 'abc123', opts());
+    ok(JSON.stringify(history.state) === JSON.stringify({ mp: history.state?.mp, mpd: 1 }), 'своя запись — без gsFull (не притворяемся записью полного экрана)', history.state);
+    const f0 = fullPops.length;
+    location.hash = '#/games/chess/w7w7w7';
+    ok(fullPops.length === f0 && MP.isOpen(), 'переход игры внутри окна — «полный экран» о нём не узнал (не выключится)');
+    history.back(); flushHistory();
+    ok(!MP.isOpen() && calls.includes('close:popstate') && fullPops.length > f0, '«Назад» — окно закрыто, «полный экран» своё «назад» увидел');
+    ok(history.state?.gsFull === 7 && location.hash === '#/games/world', 'стоим на записи полного экрана мира', history.state);
+    // ⛶ нажали уже в окне: поверх нашей записи — запись полного экрана; закрыли окно — историю не трогаем
+    await MP.open('chess', 'abc123', opts());
+    history.pushState({ ...history.state, gsFull: 8 }, '', location.href);
+    const g0 = H.log.length;
+    MP.close('back');
+    ok(!H.log.slice(g0).some(x => x.startsWith('go')), 'поверх — запись полного экрана: «назад» не делаем (не выключаем полный экран)');
+    H.entries.splice(H.i + 1); H.entries[H.i] = { url: BASE + '#/games/world', state: null };
+    // Esc
+    calls.length = 0;
+    await MP.open('chess', 'abc123', opts());
+    const e1 = fireWin('keydown', { key: 'Escape', target: body });
+    ok(MP.isOpen() && !e1.defaultPrevented, 'Esc во время партии — игре (окно не закрывается)');
+    await CH.api.report('chess_online', true, 1, 1);
+    const inp = new El('input'); CH.el.appendChild(inp);
+    fireWin('keydown', { key: 'Escape', target: inp });
+    ok(MP.isOpen(), 'Esc в поле ввода игры — не наш');
+    const e2 = fireWin('keydown', { key: 'Escape', target: body });
+    ok(!MP.isOpen() && calls.includes('close:back') && e2.defaultPrevented, 'Esc после партии — в мир');
+    flushHistory();
+  }
+
   // ═══ Не открылась — по-старому ═══
   {
     calls.length = 0; errs.length = 0;
     const pushes = H.log.filter(x => x === 'push').length;
     const r = await MP.open('broken', 'abc123', opts());
     ok(r === false && !MP.isOpen() && calls.join() === 'close:fail,fail:Не загрузилось: js/games/broken.js', 'скрипт не загрузился: onClose(fail) + onFail', calls);
-    ok(!overlay() && !html.classList.contains('mir-playing') && winCount('popstate') === 0 && H.log.filter(x => x === 'push').length === pushes, 'окна и записи истории не осталось');
+    ok(!overlay() && !html.classList.contains('mir-playing') && winCount('popstate') === 1 && H.log.filter(x => x === 'push').length === pushes, 'окна и записи истории не осталось');
     calls.length = 0;
     GI.boom = { mount(){ throw new Error('mount упал'); }, unmount(){ calls.push('boom-unmount'); } };
     GAMES.push({ id: 'boom', icon: '💣', title: 'Бум', scripts: ['js/games/boom.js'] });

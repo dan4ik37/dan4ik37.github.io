@@ -20,6 +20,7 @@ const PAGES = {
   forum:      ['forum-page'],
   lfg:        ['lfg-page'],
   games:      ['games-page'],
+  shop:       ['shop-page'],
   ads:        ['ad-bottom','ads']
 };
 const ALL_PAGE_IDS = Object.values(PAGES).flat();
@@ -62,6 +63,7 @@ function finishShowPage(route, activeIds){
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
   if (route==='donate' && typeof renderDonateVipHint==='function') renderDonateVipHint();
+  if (route==='shop' && typeof renderShopPage==='function') renderShopPage(currentRouteParam());
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным
   activeIds.forEach(id=>{

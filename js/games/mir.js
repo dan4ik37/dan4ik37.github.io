@@ -611,9 +611,12 @@
   function mount(el, gapi){
     api = gapi; root = el;
     const E = window.D37E;
-    el.innerHTML = `<div class="wld mir">
+    // панель: 🎭 ⚙️ (💬 — только телефон лёжа) 🔄 ⛶ ❓; mir-base ставит 🏘️ в начало, другие могут дописать свои кнопки в .wld-topbtns.
+    // Вид, графика, FSR и 2D — в окне ⚙️ Настройки (js/core/settings.js); gs-noesc — Esc у «Мира» открывает меню, а не выходит
+    const FS = window.D37Full;
+    el.innerHTML = `<div class="wld mir gs-noesc">
         <div class="wld-top"><b>🌍 Мир Денчика</b><span class="wldShard"></span><span class="wldOnline">подключаемся…</span>
-          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="view" title="Вид от 1-го / 3-го лица (V)">👁<span> Вид</span></button><button type="button" data-act="gfx" title="Качество графики: тени, текстуры">🖥<span class="mirGfx"> Графика</span></button><button type="button" data-act="fsr" title="FSR (как DLSS): кадр рисуется меньше, AMD FSR чётко растягивает — игра быстрее">⚡<span> FSR</span></button><button type="button" data-act="mode" title="Плоский мир — для слабых телефонов">🗺️<span> 2D</span></button><button type="button" data-act="help" title="Как играть">❓</button></span></div>
+          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="settings" title="Настройки: графика, звук, управление, камера (Esc — меню)">⚙️<span> Настройки</span></button><button type="button" class="gs-chatbtn" data-act="chat" title="Чат и эмоции">💬</button>${FS ? FS.rotBtn('#gamesStage') + FS.btn('#gamesStage', { esc: false, cls: 'gs-fullbtn' }) : ''}<button type="button" data-act="help" title="Как играть">❓</button></span></div>
         <div class="wld-wrap is3d">
           <div class="wld-tags"></div>
           <div class="wld-log" aria-live="polite"></div>
@@ -640,7 +643,9 @@
     if (isGuest) { q('.wld-say input').placeholder = 'Войди, чтобы писать в чат'; q('.wld-say input').readOnly = true; }
     wireUi();
     const st0 = S;
+    const adL = window.D37AdPlaces?.loading({ anchor: q('.wld-status'), tip: 'world' });   // реклама под «Загружаем мир…», если дольше 1,5 с (ad-places.js)
     E.load().then(ok => {
+      adL?.done();
       if (S !== st0 || S.stopped) return;
       if (!ok) { status('Не удалось загрузить 3D — включаем плоский мир'); setTimeout(() => switch2d(true), 800); return; }
       try { start3d(); } catch (e) { console.error(e); status('Ошибка 3D: ' + (e.message || e) + ' — включаем плоский мир'); setTimeout(() => switch2d(true), 1500); return; }
@@ -703,18 +708,30 @@
     drawStageScreen();
     startLife();
     S.sitAt = sitAt; S.go = go; S.openEditor = openEditor; S.openStage = openStage; S.openGate = openGate; S.showInfo = showInfo;
+    // ── настройки/полный экран: своя панель вместо шапки игры; окну ⚙️ — пересобрать мир (качество), 2D, вид; вид при входе ──
+    S.stage = S.el.closest('#gamesStage'); S.stage?.classList.add('gm-own-bar');
+    S.offCtx = window.D37Settings?.context({ engine: true, R: () => S?.R, gfx: () => setTimeout(() => { if (S) onAct('gfx-apply'); }, 60), world2d: v => setTimeout(() => { if (S && v) switch2d(true); }, 60), view: v => { if (S?.rig && S.rig.mode !== v) toggleView(); }, onClose: () => S?.C?.reset_state() });
+    if (window.D37Settings?.get('view') === 'first') { rig.mode = 'first'; H.crosshair(true); }
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
+    try { S.promo = window.D37AdPlaces?.worldPromo?.(S, { panel, go }) || null; } catch (e) { S.promo = null; }   // щиты: свои промо и спонсор (ad-places.js → mir-promo.js)
   }
 
   // ── Шаг логики (1/60 с) ──
   function update(dt){
     if (!S || S.stopped || S.editing) return;
     const { C, P, X, rig, ph } = S;
+    const setOpen = !!window.D37Settings?.isOpen?.();
+    C.blocked = !!S.menu || setOpen;   // открыто меню или ⚙️ — персонаж стоит (Esc работает)
     C.step(dt);
     if (C.down('chat')) { const i = S.q('.wld-say input'); if (!i.readOnly) setTimeout(() => i.focus(), 0); else if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
     if (C.down('view')) toggleView();
-    if (C.down('pause')) closePops();
+    // Esc: закрыть меню / окно — иначе меню (как в обычных играх). Стройку участка Esc отменяет сам mir-base.js; ⚙️ закрывает себя само
+    if (C.down('pause') && !setOpen) {
+      if (S.menu) closeMenu();
+      else if (!S.q('.wld-card').hidden || !S.q('.wld-panel').hidden) closePops();
+      else if (!S.base?.bm) openMenu();   // нажали Esc — клавиатура есть (и у ноутбука с сенсорным экраном)
+    }
     if (C.any()) activity();
     P.first = rig.mode === 'first';
     P.update(dt, C, rig);
@@ -762,11 +779,14 @@
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
     rig.update(dt, S.base?.cam || P, look, S.ph, C);   // в стройке камера смотрит на участок
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
-    I.wantLock = rig.mode === 'first' && !I.touch;
+    I.wantLock = rig.mode === 'first' && !I.touch && !S.menu;
+    // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
+    if (S.wasLocked && !I.locked && rig.mode === 'first' && !S.menu && !S.editing && !window.D37Settings?.isOpen?.()) openMenu();
+    S.wasLocked = I.locked;
     A.update(dt, t, R.camera.position);
     AU.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
     // нажали на игрока — его карточка
-    for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); }
+    for (const tp of I.taps) { const hit = pickPlayer(tp.x, tp.y); if (hit) openCard(hit); else S.promo?.tap(tp.x, tp.y); }   // не игрок — может, щит
     I.frameEnd(); C.frameEnd();
     lifeFrame(dt, t);
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
@@ -795,6 +815,38 @@
     return hit;
   }
   function toggleView(){ const m = S.rig.toggle(); S.H.crosshair(m === 'first'); if (m !== 'first') S.I.unlock(); toast(m === 'first' ? '👁 Вид от 1-го лица (V — обратно)' : '🎥 Вид от 3-го лица'); }
+
+  // ═══ Меню (Esc на компьютере): продолжить, настройки, персонаж, полный экран, выйти — js/core/settings.js D37Settings.menu ═══
+  function openMenu(){
+    if (!S || S.menu || !window.D37Settings || S.stopped) return;
+    S.I?.unlock();
+    const fsOn = () => !!window.D37Full?.contains?.(S.wrap);
+    S.menu = window.D37Settings.menu(S.wrap, {
+      title: '🌍 Мир Денчика', sub: 'Мир онлайн — он идёт и в меню. Esc — вернуться',
+      items: () => [
+        { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        { id: 'settings', icon: '⚙️', text: 'Настройки' },
+        { id: 'look', icon: '🎭', text: 'Персонаж' },
+        { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
+        { id: 'help', icon: '❓', text: 'Как играть' },
+        { id: 'exit', icon: '🚪', text: 'Выйти из мира', warn: true },
+      ],
+      onPick: id => menuAct(id),
+      onClose: () => { if (S) { S.menu = null; S.C?.reset_state(); } },   // Enter/Esc, закрывшие меню, — не в игру (чат, меню снова)
+    });
+  }
+  function closeMenu(){ S?.menu?.close(); }
+  function menuAct(id){
+    if (!S) return;
+    if (id === 'resume') {
+      closeMenu();
+      if (S.rig?.mode === 'first' && !S.I.touch) { try { const r = S.wrap.requestPointerLock?.(); r?.catch?.(() => {}); } catch (e) {} }   // нажатие — можно снова захватить мышь
+    } else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine' });
+    else if (id === 'look') { closeMenu(); openEditor(); }
+    else if (id === 'full') { window.D37Full?.toggle(S.stage || S.el, { esc: false }); setTimeout(() => S?.menu?.redraw(), 80); }
+    else if (id === 'help') { closeMenu(); onAct('help'); }
+    else if (id === 'exit') { closeMenu(); go('#/games'); }
+  }
 
   // ═══ Чужие игроки: та же физика по направлению из сообщений ═══
   const MODES = ['move', 'sit', 'hang', 'ladder', 'roll', 'pk'];
@@ -1347,10 +1399,11 @@
   function playPause(on){
     const st = S; if (!st) return;
     if (on) {
-      closePops();
+      closePops(); closeMenu();   // меню Esc — не поверх партии
       st.loop?.pause(true);
       if (st.C) { st.C.reset_state(); st.C.off = true; }
       if (st.I) { st.I.unlock?.(); st.I.reset?.(); st.I.enabled = false; }
+      st.wasLocked = false;   // мышь отпустили мы, а не Esc — после партии меню само не открывать
       if (st.AU?.volume) { st.vol0 = st.AU.vol; st.AU.volume(0); }
     } else {
       if (st.C) { st.C.off = false; st.C.reset_state(); }
@@ -1419,8 +1472,8 @@
     else if (a === 'view') { if (S.rig) toggleView(); }
     else if (a === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
     else if (a === 'help') showInfo('❓ Как играть', S.I?.touch
-      ? 'Левый палец — джойстик (до упора — бег). Правым пальцем крути камеру, двумя — приближай. ⤒ — прыжок (у стены — залезть на уступ), ⬇ — присесть, ✋ — сесть или играть. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся.'
-      : 'WASD — идти, Shift — бег, Пробел — прыжок (у стены — залезть на уступ, перелезть стол), C — присесть, Q — кувырок, E — сесть или играть, V — вид от 1-го лица, мышь — камера, колесо — приближение, Enter — чат. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Клавиши можно поменять в настройках позже.');
+      ? 'Левый палец — джойстик (до упора — бег). Правым пальцем крути камеру, двумя — приближай. ⤒ — прыжок (у стены — залезть на уступ), ⬇ — присесть, ✋ — сесть или играть. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Положи телефон горизонтально (или 🔄) — мир на весь экран; ⚙️ — настройки: кнопки, графика, звук.'
+      : 'WASD — идти, Shift — бег, Пробел — прыжок (у стены — залезть на уступ, перелезть стол), C — присесть, Q — кувырок, E — сесть или играть, V — вид от 1-го лица, мышь — камера, колесо — приближение, Enter — чат, Esc — меню. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Клавиши, графика, звук и камера — в ⚙️ Настройках.');
     else if (a.startsWith('profile:')) go('#/profile/' + a.slice(8));
     else if (a.startsWith('go:')) go(a.slice(3));
     else if (a.startsWith('room:')) go(roomUrl(a.slice(5), newCode(), false));
@@ -1441,19 +1494,14 @@
     else if (a === 'accept') acceptInvite(S.q('.wld-inv:not(.mir-tb)'));
     else if (a === 'decline') S.q('.wld-inv:not(.mir-tb)').hidden = true;
     else if (a === 'mode') switch2d(true);
-    else if (a === 'gfx') {   // качество: низкое → среднее → высокое (сохраняется), мир пересобирается
-      const L = ['low', 'mid', 'high'], cur = S.R?.q || window.D37E.gfxQuality(), next = L[(L.indexOf(cur) + 1) % 3];
-      try { localStorage.setItem('d37_gfx', next); } catch (e) {}
-      const el = root, ga = api;
+    // настройки/полный экран: ⚙️ — окно настроек (качество, FSR, вид, клавиши…), 💬 — чат поверх 3D на телефоне лёжа
+    else if (a === 'settings' || a === 'gfx' || a === 'fsr') { if (window.D37Settings) window.D37Settings.open({ ctx: 'engine', tab: a === 'settings' ? undefined : 'gfx' }); }
+    else if (a === 'chat') { const on = S.q('.wld')?.classList.toggle('gs-chat'); b?.classList.toggle('on', !!on); }
+    else if (a === 'gfx-apply') {   // качество поменяли в ⚙️ (d37_gfx уже записан) — мир пересобирается
+      const q0 = S.R?.q, el = root, ga = api;
       unmount(); IMPL.mount(el, ga); current = IMPL;
-      ga?.toast?.({ low: '🖥 Графика: низкая — быстро, без теней', mid: '🖥 Графика: средняя — тени', high: '🖥 Графика: высокая — мягкие тени и рельеф текстур' }[next]);
-    }
-    else if (a === 'fsr') {   // FSR: авто → качество → баланс → производительность (сохраняется, сразу, без пересборки мира)
-      const R = S.R; if (!R?.setFsr) return;
-      if (!R.post) { api?.toast?.('⚡ FSR работает на средней и высокой графике — включи её кнопкой 🖥'); return; }
-      const L = ['auto', 'quality', 'balanced', 'performance'], next = R.setFsr(L[(L.indexOf(R.fsr) + 1) % L.length]);
-      try { localStorage.setItem('d37_fsr', next); } catch (e) {}
-      api?.toast?.({ auto: '⚡ FSR: авто — разрешение снижается само, только когда тормозит', quality: '⚡ FSR: качество — кадр 77%, AMD FSR чётко растягивает', balanced: '⚡ FSR: баланс — кадр 67%, быстрее', performance: '⚡ FSR: производительность — кадр 59%, быстрее всего' }[next]);
+      const next = window.D37E.gfxQuality();
+      if (next !== q0) ga?.toast?.({ low: '🎨 Графика: низкая — быстро, без теней', mid: '🎨 Графика: средняя — тени', high: '🎨 Графика: высокая — мягкие тени и рельеф текстур' }[next]);
     }
     else if (a === 'rejoin') { S.q('.wld-status').hidden = true; S.stopped = false; S.idleAt = Date.now(); S.loop?.pause(false); join(1); }
   }
@@ -1571,6 +1619,7 @@
     window.D37Editor?.unmount();
     S.editing.remove(); S.editing = null;
     document.documentElement.classList.remove('wld-editing');
+    S.C?.reset_state();   // Esc, закрывший редактор, не должен открыть меню мира
     S.loop?.pause(false);
     const L = window.D37Char ? window.D37Char.look() : {};
     if (JSON.stringify(L) !== JSON.stringify(S.me.look)) { S.me.look = L; S.me._lookDirty = true; retrack(); toast('🎭 Новый образ — его видят все в мире'); }
@@ -1585,11 +1634,13 @@
     s.stopped = true;
     clearInterval(s.tick); clearTimeout(s.invT);
     if (s.mySeat) { s.mySeat = null; }
+    try { s.menu?.close(); s.offCtx?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран
     leaveChannel();
     try { s.loop?.stop(); } catch (e) {}
     try { s.unfollow?.(); } catch (e) {}
     if (s.editing) { window.D37Editor?.unmount(); s.editing.remove(); document.documentElement.classList.remove('wld-editing'); }
     try { s.base?.dispose(); } catch (e) {}   // район участков
+    try { s.promo?.dispose(); } catch (e) {}   // щиты (mir-promo.js)
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}

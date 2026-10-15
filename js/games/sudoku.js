@@ -250,7 +250,7 @@
       const adOk = !!window.D37Ads?.rewardReady?.(), price = C()?.RULES?.revive ?? 30, coins = C()?.coins?.() ?? 0;
       showOv(`<div class="sl-t">${what === 'hint' ? 'Подсказки кончились' : '3 ошибки'}</div>
         <div class="sl-s">${what === 'hint' ? 'Ещё одна подсказка — за рекламу или монеты.' : 'Вторая попытка (ошибок станет 2) — за рекламу или монеты. Можно один раз за игру.'}</div>
-        <div class="sl-col">${adOk ? `<button type="button" class="ct-start" data-act="pay-ad:${what}">📺 Посмотреть рекламу</button>` : ''}
+        <div class="sl-col">${adOk ? `<button type="button" class="ct-start" data-act="pay-ad:${what}">📺 Посмотреть рекламу → ${what === 'hint' ? 'подсказка' : 'вторая попытка'}</button>` : ''}
         ${C() ? `<button type="button" class="${adOk ? 'hd-alt' : 'ct-start'}" data-act="pay-coins:${what}"${coins >= price ? '' : ' disabled'}>🪙 За ${price} монет</button>` : ''}
         <button type="button" class="hd-alt" data-act="${what === 'hint' ? 'close' : 'giveup'}">${what === 'hint' ? '↩ Играть дальше' : '🏁 Закончить'}</button></div>`);
     }

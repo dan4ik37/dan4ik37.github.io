@@ -6,6 +6,7 @@
 //   Яндекс: partner.yandex.ru → Площадки → блок «Adaptive»/«Баннер» → id вида R-A-1234567-1
 //   Google: AdSense → Реклама → По рекламным блокам → «Медийный» → data-ad-slot (только цифры)
 // Если у места заданы оба — показывается Яндекс (российская аудитория, Google в РФ рекламу не крутит).
+// Когда, где и как часто показывать — js/core/ad-places.js (ADS_RULES: частота, VIP без рекламы, «рядом нельзя»).
 window.ADS_IDS = {
   yandex: {
     game_over:  '', // под игрой, после окончания партии (не во время игры)
@@ -14,6 +15,11 @@ window.ADS_IDS = {
     video_page: '', // страница ролика /v/<id>, под описанием
     home_mid:   '', // главная, после ленты видео
     floor:      '', // «Floor Ad» — полоска внизу экрана на телефонах (тип блока «Floor Ad» в РСЯ)
+    // Новые места (ad-places.js). Тип блока в РСЯ — «Баннер» (адаптивный, тема «Тёмная»):
+    loading:    '', // экран загрузки мира / Студии 3D / большой игры / компилятора — если грузится дольше 1,5 с
+    break:      '', // компьютер: «☕ Перерыв» под игрой после каждой 3-й партии (пусто — берётся блок game_over)
+    feed:       '', // карточка «Реклама» в списках: игры, видео, каталоги игр игроков (размер карточки ~300×250)
+    rail:       '', // компьютер от 1400 px: столбик справа от игры (в РСЯ — «Баннер» 160×600 или 300×600)
     // Реклама за награду (тип блока «Rewarded»): возрождение в «Орде», +40 монет, ×2 монеты за забег.
     // В РСЯ это два отдельных блока — для телефона и для компьютера. Пусто — кнопок «за рекламу» не видно.
     rewarded:           '', // Rewarded, телефон (platform touch)
@@ -23,9 +29,12 @@ window.ADS_IDS = {
   // Google H5 Games Ads (adBreak: награда и реклама между партиями) — только после одобрения отдельной заявки
   // в AdSense (developers.google.com/ad-placement). Обычные блоки AdSense за награду показывать НЕЛЬЗЯ — бан.
   h5games: false,
+  // Аудитория — дети и подростки: 1 — «детская» обработка запросов Google (без персонализации, data-tag-for-age-treatment),
+  // 2 — «подростковая», 0 — не указывать. Меньше дохода с Google, зато спокойнее с законами о детях (COPPA, GDPR).
+  kids: 0,
   google: {
-    game_over:  '5464523123', // «Игры — после партии»
-    games_hub:  '5924218354', // «Игры — витрина»
+    game_over:  '5464523123', // «Игры — после партии» (его же берут loading, break, rail, если своих нет)
+    games_hub:  '5924218354', // «Игры — витрина» (его же берёт feed)
     seo_game:   '8326096973', // «Страницы игр»
     video_page: '7013015305', // «Страница видео»
   },
@@ -45,10 +54,16 @@ window.ADS_IDS = {
     document.head.appendChild(s);
   }
 
-  // Показать рекламу в el (контейнер с подписью «Реклама»). Вернёт false, если для места нет номера блока.
-  function render(el, key){
+  // Показать рекламу в el (контейнер с подписью «Реклама»). Вернёт false, если для места нет номера блока или сейчас нельзя
+  // (VIP, «рядом нельзя», частота — спрашиваем ad-places.js). o.checked — диспетчер уже всё проверил и сам засчитает показ;
+  // o.onEmpty(el) — у сети не нашлось рекламы (РСЯ: второй аргумент render).
+  function render(el, key, o = {}){
     if (!el) return false;
-    const ya = window.ADS_IDS.yandex[key], g = window.ADS_IDS.google[key];
+    const M = window.D37AdPlaces;
+    if (M && !o.checked && M.why(key, { ignoreId: true })) { el.hidden = true; return false; }
+    if (M && M.frames()) { if (!o.checked) M.mark(key); return M.placeholder(el, key); }   // отладка: рамка вместо рекламы
+    const i = M ? M.ids(key) : { ya: window.ADS_IDS.yandex[key], g: window.ADS_IDS.google[key] };
+    const ya = i.ya, g = i.g;
     if (!ya && !g) { el.hidden = true; return false; }
     el.hidden = false;
     el.classList.add('d37-ad');
@@ -59,33 +74,44 @@ window.ADS_IDS = {
       const box = document.createElement('div');
       box.id = id;
       el.appendChild(box);
-      window.yaContextCb.push(() => { try { Ya.Context.AdvManager.render({ blockId: ya, renderTo: id }); } catch (e) {} });
+      const p = { blockId: ya, renderTo: id, darkTheme: true };
+      const stat = STAT[key]; if (stat) p.statId = stat;
+      window.yaContextCb.push(() => { try { Ya.Context.AdvManager.render(p, () => { try { o.onEmpty?.(el); } catch (e) {} }); } catch (e) {} });
     } else {
       const ins = document.createElement('ins');
       ins.className = 'adsbygoogle';
       ins.style.display = 'block';
       ins.setAttribute('data-ad-client', CLIENT);
       ins.setAttribute('data-ad-slot', g);
-      ins.setAttribute('data-ad-format', 'auto');
-      ins.setAttribute('data-full-width-responsive', 'true');
+      ins.setAttribute('data-ad-format', o.format || 'auto');   // загрузка/перерыв/столбик/лента — свой формат (не растягивать)
+      if (!o.format) ins.setAttribute('data-full-width-responsive', 'true');
+      if (window.ADS_IDS.kids) ins.setAttribute('data-tag-for-age-treatment', String(window.ADS_IDS.kids));
       el.appendChild(ins);
       try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
     }
+    if (M && !o.checked) M.mark(key);
     return true;
   }
+  // statId РСЯ — срез статистики по местам (один блок может стоять в нескольких местах)
+  const STAT = { loading: 11, break: 12, rail: 13, game_over: 14, feed: 20, feed_games: 21, feed_videos: 22, feed_ugc: 23 };
 
-  // Полоска внизу экрана — только на телефонах, один раз за визит
+  // Полоска внизу экрана — только на телефонах (320–420 px, правило РСЯ для overlay), не чаще правил ad-places.js
   let floorShown = false;
   function floor(){
-    const ya = window.ADS_IDS.yandex.floor;
-    if (!ya || floorShown || !matchMedia('(max-width: 768px)').matches) return;
+    const ya = window.ADS_IDS.yandex.floor, M = window.D37AdPlaces;
+    if (!ya || floorShown) return;
+    if (M ? M.why('floor') : !matchMedia('(max-width: 768px)').matches) return;
     floorShown = true;
+    M?.mark('floor');
     loadYandex();
     window.yaContextCb.push(() => { try { Ya.Context.AdvManager.render({ blockId: ya, type: 'floorAd', platform: 'touch' }); } catch (e) {} });
   }
 
-  // На серверных страницах: все <div data-ad="ключ"> заполняются сами
-  function fillAll(){ document.querySelectorAll('[data-ad]').forEach(el => { if (!el.dataset.adDone) { el.dataset.adDone = '1'; render(el, el.dataset.ad); } }); }
+  // На серверных страницах: все <div data-ad="ключ"> заполняются сами (data-ad-lazy — когда подъедут к экрану)
+  function fillAll(){
+    if (window.D37AdPlaces) { window.D37AdPlaces.fillAll(); return; }
+    document.querySelectorAll('[data-ad]').forEach(el => { if (!el.dataset.adDone) { el.dataset.adDone = '1'; render(el, el.dataset.ad); } });
+  }
 
   const isTouch = () => matchMedia('(pointer: coarse)').matches || matchMedia('(max-width: 768px)').matches;
 
@@ -151,18 +177,20 @@ window.ADS_IDS = {
   }
 
   // ── Полноэкранная реклама между партиями (только телефон): не после первой партии визита и не чаще раза в 3 минуты ──
+  // Счёт партий, частота, VIP — ad-places.js (ADS_RULES.places.interstitial)
   let interAt = 0, interRounds = 0;
   function interstitial(name){
-    interRounds++;
-    if (interRounds < 2 || Date.now() - interAt < 180000 || !isTouch()) return false;
+    const M = window.D37AdPlaces;
+    if (M) { if (!M.interRound()) return false; }
+    else { interRounds++; if (interRounds < 2 || Date.now() - interAt < 180000 || !isTouch()) return false; }
     const id = window.ADS_IDS.yandex.fullscreen;
     if (id) {
-      interAt = Date.now();
+      interAt = Date.now(); M?.mark('interstitial');
       loadYandex();
       window.yaContextCb.push(() => { try { Ya.Context.AdvManager.render({ blockId: id, type: 'fullscreen', platform: 'touch' }); } catch (e) {} });
       return true;
     }
-    if (window.ADS_IDS.h5games) { h5Setup(); interAt = Date.now(); window.adBreak({ type: 'next', name: name || 'next' }); return true; }
+    if (window.ADS_IDS.h5games) { h5Setup(); interAt = Date.now(); M?.mark('interstitial'); window.adBreak({ type: 'next', name: name || 'next' }); return true; }
     return false;
   }
 

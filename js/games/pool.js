@@ -264,7 +264,8 @@
   }
   // стол → экран и обратно
   function toScreen(x, y){ const k = scale * dpr, m = 30 * k; return rot ? [m + (H - y) * k, m + x * k] : [m + x * k, m + y * k]; }
-  function toTable(e){ const r = cv.getBoundingClientRect(), sx = (e.clientX - r.left) / scale - 30, sy = (e.clientY - r.top) / scale - 30; return rot ? [sy, H - sx] : [sx, sy]; }
+  // доля размера (cw / r.width) — верно и когда игра уменьшена целиком (полный экран на телефоне лёжа, games.js gamesFit)
+  function toTable(e){ const r = cv.getBoundingClientRect(), kx = cw / (r.width || cw), ky = ch / (r.height || ch), sx = (e.clientX - r.left) * kx / scale - 30, sy = (e.clientY - r.top) * ky / scale - 30; return rot ? [sy, H - sx] : [sx, sy]; }
 
   function onDown(e){
     if (!myTurn()) return;
