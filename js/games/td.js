@@ -521,7 +521,7 @@
     mode = 'end'; sel = null;
     renderPanel(); renderBar();
     const sc = score(S), won = S.won;
-    const coins = S.wave * 4 + (won ? 50 : 0);
+    const coins = S.wave * 2 + (won ? 25 : 0);   // экономика 15.10.2026: вдвое меньше прежнего (потолок — coin_run_cap('td'))
     api.sfx(won ? 'win' : 'bad');
     if (hooks) { hooks.progress(sc); hooks.done(sc); }
     else if (MP) api.report('td_coop', won, sc, 0);

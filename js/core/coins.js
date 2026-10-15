@@ -4,17 +4,19 @@
 // Вошёл и coins.sql выполнен — кошелёк в базе (одинаковый на всех устройствах). Без входа (или пока SQL
 // не выполнен) — копятся в этом браузере; при входе переносятся в аккаунт (до 1000, один раз).
 // Купленное в браузере остаётся доступным и после входа (владение = база ∪ браузер).
-// Лимиты и цены — как в coins.sql (coin_price, coin_run_cap, coins_*): поменял там — поменяй тут.
+// Лимиты и цены — как в coins.sql (coin_rule, coin_price, coin_run_cap): поменял там — поменяй тут (scripts/economy-test.cjs сверяет).
+// Экономика 15.10.2026 (docs/ECONOMY.md): монет примерно вдвое меньше — вещи за монеты требуют настоящей игры или кристаллов 💎.
 //
 // API (window.D37Coins):
-//   coins() — баланс, owns(item), price(item), perks() — VIP/персонал (×2 за забеги и бонус дня)
+//   coins() — баланс, owns(item), price(item), perks() — VIP/персонал (×2 за забеги и бонус дня), level() — уровень (вещи «за уровень»)
 //   daily() — забрать бонус дня; canDaily()
 //   run(game, amount, ref) — монеты из забега → { got }; double(ref) — ×2 за забег (после рекламы)
-//   adCoins() — +40 за рекламу; canAd(); buy(item); revive(game); saveLook(look) — персонаж (js/core/avatar.js)
+//   adCoins() — +RULES.ad за рекламу; canAd(); buy(item); revive(game); saveLook(look) — персонаж (js/core/avatar.js)
 //   on(fn) — подписка на изменения; элементы .js-coins обновляются сами
 (() => {
-  const RULES = { daily: 30, ad: 40, adPerDay: 8, adGap: 45, doublePerDay: 5, runDay: 1500, runGap: 20, revive: 30 };
-  const RUN_CAP = { horde: 300, td: 300, blocks: 150, kosynka: 40, pauk: 100, freecell: 30, miner: 60, mahjong: 40, sudoku: 60 };
+  // как coin_rule в coins.sql: daily, quest, win/winPerDay, ad/adPerDay/adGap, doublePerDay, runDay/runGap, import, revive
+  const RULES = { daily: 20, quest: 30, win: 3, winPerDay: 15, ad: 25, adPerDay: 6, adGap: 45, doublePerDay: 3, runDay: 600, runGap: 20, import: 500, revive: 30 };
+  const RUN_CAP = { horde: 150, td: 150, blocks: 80, kosynka: 20, pauk: 50, freecell: 15, miner: 30, mahjong: 20, sudoku: 30 };
   const HERO_PRICES = { ninja: 400, knight: 400, vampire: 800, robot: 1200, streamer: 2500 };
   const UP_PRICES = [100, 200, 400, 700, 1000], ARMOR_PRICES = [150, 400, 800];
   const LS = 'd37_coins';
@@ -46,7 +48,7 @@
 
   let server = false;          // кошелёк в базе
   let serverMissing = false;   // coins.sql не выполнен — не спрашиваем снова до перезагрузки
-  let S = { coins: 0, items: [], daily: false, ads: 0, doubles: 0, perks: false };
+  let S = { coins: 0, items: [], daily: false, ads: 0, doubles: 0, perks: false, level: 0 };
   const listeners = new Set();
 
   function clientPerks(){
@@ -54,7 +56,7 @@
   }
   function fromLocal(){
     const L = readLocal();
-    S = { coins: L.coins, items: L.items, daily: L.daily, ads: L.ads, doubles: L.doubles, perks: clientPerks() };
+    S = { coins: L.coins, items: L.items, daily: L.daily, ads: L.ads, doubles: L.doubles, perks: clientPerks(), level: S.level || 0 };
   }
   function emit(){
     document.querySelectorAll('.js-coins').forEach(el => { el.textContent = Number(S.coins).toLocaleString('ru'); });
@@ -77,11 +79,16 @@
   // Узнать, где кошелёк, и обновить баланс
   async function sync(){
     const authed = typeof currentUser !== 'undefined' && !!currentUser;
+    if (!authed) S.level = 0;
     if (!authed || serverMissing) { server = false; fromLocal(); emit(); return S; }
     const d = await rpc('coins_state');
     if (!d?.ok) { server = false; fromLocal(); emit(); return S; }
     server = true;
-    S = { coins: d.coins, items: d.items || [], daily: d.daily, ads: d.ads, doubles: d.doubles, perks: !!d.perks };
+    // уровень — до fromServer: от него зависит, что из образа можно носить (вещи «за уровень»); старый coins.sql его
+    // не отдаёт — спросим user_level (progression.sql)
+    let lv = d.level;
+    if (lv == null) { try { const u = await sbClient.rpc('user_level', { uid: currentUser.id }); lv = u.error ? null : u.data; } catch (e) {} }   // не через rpc(): та отключает кошелёк, если функции нет
+    S = { coins: d.coins, items: d.items || [], daily: d.daily, ads: d.ads, doubles: d.doubles, perks: !!d.perks, level: +lv || 1 };
     window.D37Char?.fromServer(d.look);
     // Монеты, накопленные без входа, — в аккаунт (один раз на аккаунт, до 1000)
     const L = readLocal();
@@ -162,6 +169,7 @@
 
   async function buy(item){
     if (window.D37Char?.gemsOf?.(item)) return { ok: false, reason: 'gems' };   // вещь только за 💎 — в магазине #/shop
+    if (window.D37Char?.levelOf?.(item)) return { ok: false, reason: 'level' };   // награда за уровень — не продаётся
     const p = price(item);
     if (p == null || item === 'revive') return { ok: false, reason: 'item' };
     if (owns(item)) return { ok: false, reason: 'owned' };
@@ -195,9 +203,10 @@
     if (!server) return { ok: true, local: true };
     let r = await rpc('char_save', { p_look: look });
     const C = window.D37Char;
-    // старый char_save (coins.sql не запущен ещё раз) не знает вещей только за 💎 — сохраним всё остальное, а купленное
-    // в магазине остаётся надетым из браузера (avatar.js fromServer)
-    for (let i = 0; i < 3 && r && r.ok === false && r.reason === 'item' && C?.gemsOf?.(r.item); i++) {
+    // старый char_save (coins.sql не запущен ещё раз) не знает вещей только за 💎 и «за уровень» — сохраним всё остальное,
+    // а своё остаётся надетым из браузера (avatar.js fromServer); 'level' — сервер считает, что уровень ещё мал
+    const local = it => C?.gemsOf?.(it) || C?.levelOf?.(it);
+    for (let i = 0; i < 5 && r && r.ok === false && (r.reason === 'item' || r.reason === 'level') && local(r.item); i++) {
       look = { ...look }; delete look[String(r.item).split(':')[1]];
       r = await rpc('char_save', { p_look: look });
       if (r?.ok) r.partial = true;
@@ -205,7 +214,7 @@
     // совсем старый char_save (до частей 3D-человечка) не знает их и своих цветов — сохраним то, что он понимает
     if (r && r.ok === false && r.reason === 'item' && C?.nearest) {
       const L = {};
-      for (const s of C.SLOTS2D) if (look[s] != null && !C.gemsOf?.(`skin:${s}:${look[s]}`)) L[s] = C.nearest(s, look[s]);
+      for (const s of C.SLOTS2D) if (look[s] != null && !local(`skin:${s}:${look[s]}`)) L[s] = C.nearest(s, look[s]);
       r = await rpc('char_save', { p_look: L });
       if (r?.ok) r.partial = true;
     }
@@ -218,8 +227,8 @@
   fromLocal();
   window.addEventListener('d37:auth', () => { sync(); });
   window.D37Coins = {
-    RULES, price, sync, owns, items, upLevel,
-    coins: () => S.coins, perks: () => S.perks || clientPerks(), isServer: () => server,
+    RULES, RUN_CAP, price, sync, owns, items, upLevel,
+    coins: () => S.coins, perks: () => S.perks || clientPerks(), isServer: () => server, level: () => S.level || 0,
     canDaily, daily, run, canAd, adCoins, canDouble, double, buy, revive, saveLook,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },
   };

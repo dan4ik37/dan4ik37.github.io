@@ -250,7 +250,8 @@
   };
   const optOf = S => S.kind === 'k' ? S.draw : S.kind === 'f' ? S.num : S.suits;
   const keyOf = S => S.kind === 'k' ? (S.draw === 3 ? 'kosynka3' : 'kosynka') : S.kind === 'f' ? 'freecell' : 'pauk' + S.suits;
-  const coinsFor = S => S.kind === 'k' ? (S.draw === 3 ? 40 : 25) : S.kind === 'f' ? 30 : ({ 1: 30, 2: 60, 4: 100 })[S.suits] || 30;
+  // монеты за победу (экономика 15.10.2026: вдвое меньше прежнего; потолки — coin_run_cap)
+  const coinsFor = S => S.kind === 'k' ? (S.draw === 3 ? 20 : 12) : S.kind === 'f' ? 15 : ({ 1: 15, 2: 30, 4: 50 })[S.suits] || 15;
   const randDeal = () => 1 + Math.floor(Math.random() * 32000);
   const C = () => window.D37Coins;
   const num = n => Number(n || 0).toLocaleString('ru');

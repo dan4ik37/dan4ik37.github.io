@@ -26,7 +26,7 @@
             <div class="wr-wallet">🪙 <b class="js-coins">${num(W().coins())}</b> <span>монет</span></div>
             <div class="wr-earn">
               ${W().canDaily() ? '<button type="button" class="wr-btn gold" data-act="daily">🎁 Бонус дня</button>' : '<span class="wr-done">🎁 Бонус дня получен</span>'}
-              ${ad ? '<button type="button" class="wr-btn" data-act="ad">📺 Реклама → +40 🪙</button>' : ''}
+              ${ad ? `<button type="button" class="wr-btn" data-act="ad">📺 Реклама → +${W().RULES?.ad ?? 25} 🪙</button>` : ''}
             </div>
             <div class="wr-try" hidden></div>
             <div class="wr-acts"><button type="button" class="wr-btn" data-act="random">🎲 Случайный образ</button><a class="wr-btn" href="#/games/horde">🧟 Играть в «Орду»</a></div>
@@ -54,10 +54,11 @@
   function grid(){
     const box = root.querySelector('.wr-grid'), wear = wearing();
     const P = C().PARTS[slot];
-    box.innerHTML = P.list.map(([id, name, price, v, vip, gems]) => {
+    box.innerHTML = P.list.map(([id, name, price, v, vip, gems, lvl]) => {
       const own = C().owns(slot, id), on = wear[slot] === id, tr = trying[slot] === id && !on;
       const tag = on ? '<span class="wr-tag on">надето</span>' : own ? '<span class="wr-tag">есть</span>'
-        : gems ? `<span class="wr-tag price">💎 ${num(gems)}</span>` : `<span class="wr-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</span>`;
+        : gems ? `<span class="wr-tag price">💎 ${num(gems)}</span>` : lvl ? `<span class="wr-tag price">🔒 ур. ${lvl}</span>`
+        : `<span class="wr-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</span>`;
       return `<button type="button" class="wr-card${on ? ' on' : ''}${tr ? ' trying' : ''}${own ? '' : ' locked'}" data-part="${id}" title="${name}">
         <canvas width="88" height="88" data-mini="${id}"></canvas><b>${name}</b>${tag}</button>`;
     }).join('');
@@ -85,6 +86,13 @@
     if (p.gems) {   // только за 💎 — купить в магазине
       bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — только за 💎 кристаллы</div>
         <div class="wr-try-row"><a class="wr-btn gold" href="#/shop">💎 ${num(p.gems)} — в магазин</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
+      return;
+    }
+    if (p.lvl) {   // награда за уровень — не продаётся
+      const lv = W().level?.() || 0;
+      bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — награда за ${p.lvl} уровень${lv ? ` (у тебя ${lv})` : ''}</div>
+        <div class="wr-try-row"><a class="wr-btn" href="#/profile">⬆️ Что даёт уровень</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>
+        ${lv ? '' : '<div class="wr-try-need"><b>Войди</b> — уровень растёт от игр, заданий дня и ачивок.</div>'}`;
       return;
     }
     bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> (${C().PARTS[s].name.toLowerCase()})</div>
