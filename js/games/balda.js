@@ -176,7 +176,7 @@
   let opts = { level: 'normal', first: 0 };
   try { Object.assign(opts, JSON.parse(localStorage.getItem('d37_balda_opts') || '{}')); } catch (e) {}
   // vs: 'bot' | 'duo' | 'online'; me — мой номер (0/1); names
-  let vs = 'bot', me = 0, names = ['Ты', 'Бот'], hist = [], hints = HINTS, room = null, O = null, deadline = 0, reported = false, hintMv = null;
+  let vs = 'bot', me = 0, names = ['Ты', 'Бот'], hist = [], hints = HINTS, room = null, O = null, deadline = 0, reported = false, hintMv = null, undos = 0, prac = false;
   // Ход в процессе: клетка, буква, путь
   let pick = { cell: -1, ch: '', path: [] }, drag = null, err = '', busy = false;
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
@@ -213,7 +213,7 @@
     vs = 'bot'; me = opts.first ? 1 : 0;
     names = me === 0 ? ['Ты', '🤖 ' + LEVELS[opts.level].name] : ['🤖 ' + LEVELS[opts.level].name, 'Ты'];
     G = newGame(D.starts[Math.floor(Math.random() * D.starts.length)], 0);
-    hist = []; hints = HINTS; reported = false; hintMv = null; mode = 'play';
+    hist = []; hints = HINTS; reported = false; hintMv = null; mode = 'play'; undos = 0; prac = false;
     resetPick(); build(); render();
     if (G.turn !== me) later(botTurn, 700);
   }
@@ -249,7 +249,7 @@
       // слово: клетки по порядку
       if (i !== pick.cell && !G.b[i]) { if (canPlace(G, i)) { pick.cell = i; pick.path = []; api.sfx('tick'); } render(); return; }
       const k = pick.path.indexOf(i);
-      if (k === pick.path.length - 1) pick.path.pop();
+      if (k >= 0 && k === pick.path.length - 1) pick.path.pop();
       else if (k >= 0) pick.path = pick.path.slice(0, k + 1);
       else if (!pick.path.length || NB[pick.path[pick.path.length - 1]].includes(i)) pick.path.push(i);
       else { pick.path = [i]; }
@@ -303,8 +303,15 @@
     if (vs === 'bot') later(botTurn, 450);
     if (vs === 'online') startClock();
   }
-  function undo(){
+  // С ботом: 1 отмена за партию — бесплатно (промах пальцем), дальше партия тренировочная: без XP и рекорда
+  async function undo(){
     if (vs !== 'bot' || !hist.length || busy || !G || G.over) return;
+    if (undos >= 1 && !prac) {
+      const yes = root.GameKit ? await root.GameKit.ask({ icon: '🎓', title: 'Сделать партию тренировочной?', text: 'Одна отмена за партию — бесплатно. Дальше отменять можно сколько угодно, но партия станет тренировочной: без XP и рекорда.', yes: 'Отменить ход', no: 'Играть дальше' }) : true;
+      if (!yes || !G || G.over) return;
+      prac = true;
+    }
+    undos++;
     timers.forEach(clearTimeout); timers = [];
     const h = JSON.parse(hist.pop());
     G = h.G; hints = h.hints; busy = false; hintMv = null;
@@ -434,8 +441,11 @@
       el.classList.toggle('turn', !G.over && G.turn === p);
     });
     const t = rootEl.querySelector('.bd-turn');
-    t.textContent = G.over ? (winner(G) < 0 ? '🤝 Ничья' : vs === 'duo' ? `🏆 Победил ${names[winner(G)]}` : winner(G) === me ? '🏆 Победа!' : '😔 Поражение')
-      : busy ? '🤖 думает…' : mine ? (vs === 'duo' ? `Ходит ${names[G.turn]}` : 'Твой ход') : `Ходит ${names[G.turn]}…`;
+    const tt = G.over ? (winner(G) < 0 ? '🤝 Ничья' : vs === 'duo' ? `🏆 Победил ${E(names[winner(G)])}` : winner(G) === me ? '🏆 Победа!' : '😔 Поражение')
+      : busy ? '🤖 думает…' : mine ? (vs === 'duo' ? `Ходит ${E(names[G.turn])}` : '🟢 Твой ход') : `⏳ Ходит ${E(names[G.turn])}…`;
+    const th = (root.GameKit ? root.GameKit.turn(mine, tt, G.over) : tt) + (prac ? '<span class="gk-prac">🎓 тренировочная</span>' : '') + (vs === 'online' && mine && deadline ? `<span class="gk-cd" data-gk-cd="${deadline}"></span>` : '');
+    if (t.innerHTML !== th) t.innerHTML = th;
+    root.GameKit?.cd?.();
     // слово
     const wordEl = rootEl.querySelector('.bd-word');
     const cur = path.map(i => (i === pick.cell ? pick.ch : G.b[i])).join('');
@@ -462,7 +472,7 @@
         <button type="button" class="bd-b" data-act="leave">${vs === 'online' ? '🚪 Выйти' : '🏠 Меню'}</button>`
       : `${mine ? '<button type="button" class="bd-b" data-act="pass">⏭ Пропустить ход</button>' : ''}
         ${vs === 'bot' ? `<button type="button" class="bd-b" data-act="hint"${hints ? '' : ' disabled'}>💡 Подсказка <small>${hints}</small></button>` : ''}
-        ${vs === 'bot' && hist.length ? `<button type="button" class="bd-b" data-act="undo"${busy ? ' disabled' : ''}>↶ Отменить ход</button>` : ''}
+        ${vs === 'bot' && hist.length ? `<button type="button" class="bd-b" data-act="undo"${busy ? ' disabled' : ''} title="${undos && !prac ? 'Следующая отмена сделает партию тренировочной' : 'Вернуть свой ход и ответ бота'}">↩ Отменить ход${undos && !prac ? ' 🎓' : ''}</button>` : ''}
         <button type="button" class="bd-b" data-act="resign">🏳️ Сдаться</button>`;
     acts.insertAdjacentHTML('beforeend', `<div class="bd-note">Начальное слово: <b>${E(G.start.toUpperCase())}</b> · свободно клеток: ${G.b.filter(x => !x).length}${G.passes ? ` · пропусков подряд: ${G.passes}/${MAX_PASSES}` : ''}</div>`);
     renderClock();
@@ -485,6 +495,7 @@
     render();
     if (reported || vs === 'duo') return;
     reported = true;
+    if (prac) { api.toast('🎓 Тренировочная партия — без XP и рекорда'); return; }
     if (vs === 'bot') api.report('balda_' + opts.level, win, G.sc[me], G.sc[me]);
     else if (G.moves >= 6) api.report('balda_online', win, G.sc[me], G.sc[me]);
   }
@@ -606,10 +617,19 @@
     if (a === 'submit') { submit(); return; }
     if (a === 'back') { backspace(); return; }
     if (a === 'cancel') { cancel(); return; }
-    if (a === 'pass') { doPass(); return; }
+    if (a === 'pass') {
+      // пропуск не отменить (онлайн, вдвоём, последний пропуск партии) — сначала «Точно?»; с ботом есть «↩ Отменить ход»
+      const last = G && G.passes + 1 >= MAX_PASSES;
+      if ((vs === 'bot' && !last) || !root.GameKit) { doPass(); return; }
+      root.GameKit.ask({ icon: '⏭', title: 'Пропустить ход?', text: last ? `Это ${MAX_PASSES}-й пропуск подряд — партия закончится, победит тот, у кого больше очков.` : 'Ход перейдёт к сопернику, очков за него не будет.', yes: 'Пропустить', no: 'Искать слово' }).then(y => { if (y) doPass(); });
+      return;
+    }
     if (a === 'hint') { hint(); return; }
     if (a === 'undo') { undo(); return; }
-    if (a === 'resign') { if (confirmResign(b)) resign(); }
+    if (a === 'resign') {
+      if (!root.GameKit) { if (confirmResign(b)) resign(); return; }
+      root.GameKit.ask({ icon: '🏳️', title: 'Сдаться?', text: 'Партия закончится поражением.', yes: 'Сдаться', no: 'Играть дальше', danger: true }).then(y => { if (y) resign(); });
+    }
   }
   // «Сдаться» — второе нажатие в течение 3 с (без системного окна)
   function confirmResign(b){
@@ -644,7 +664,7 @@
 .bd-pl b{font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .bd-sc{font:900 1.5rem var(--font-display);color:#ffd166;line-height:1}
 .bd-mid{flex:1.2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;text-align:center}
-.bd-turn{font-weight:800;font-size:.86rem}
+.bd-turn{font-weight:800;font-size:.86rem;display:flex;flex-wrap:wrap;gap:.2rem;justify-content:center;align-items:center}
 .bd-clock{font-weight:800;font-size:.8rem;font-variant-numeric:tabular-nums;color:var(--muted)}
 .bd-clock.low{color:#f87171}
 .bd-body{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:.8rem;align-items:start}
