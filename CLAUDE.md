@@ -565,6 +565,38 @@ js/features/games.js и хвост css/premium.css.
 - Кадр в полный размер из встроенного браузера: R.render() и сразу canvas.toDataURL (иначе пусто) → большой ответ
   javascript_tool сам ложится в файл → base64 в jpg (python) → Read.
 
+## Полный экран, «⚙️ Настройки», поворот телефона (js/core/fullscreen.js, js/core/settings.js; агент 15.10.2026)
+- D37Full — один полный экран на всё: шапка игры (#gamesStage), «Мир», «Студия 3D» (.s3), окно Unity (.un-box). CSS закрепляет
+  элемент во всё окно (el.gs-fs; html.gs-full прячет шапку, нижнее меню, плашки и кнопки сайта; у предков снимаются
+  transform/z-index — .gs-anc: у .reveal.visible transform ломал position: fixed). Fullscreen API — на ВСЕЙ странице
+  (documentElement), а не на элементе: иначе не видно окон сайта поверх игры (вход, ⚙️, редактор персонажа, всплывашки). Нет API
+  (iPhone) или отказ — режим pseudo (только CSS; размер холста ловит ResizeObserver); на время полного экрана в meta viewport
+  viewport-fit=cover (вырез — env(safe-area-*)). Esc и «Назад» (своя запись истории) выходят; внутри .gs-noesc (мир, студия) Esc —
+  игре. Кнопки без кода: data-gs-full="#gamesStage" (⛶), data-gs-rot (🔄: полный экран + screen.orientation.lock; не вышло за
+  1,5 с — подсказка «Поверни телефон»). games.js: D37Full.auto(stage) — телефон лёжа → игра сама во весь экран (html.gs-compact),
+  обратно — выход; release(el) — игру закрыли переходом: выход БЕЗ history.back. Экран не гаснет (Wake Lock). Событие
+  'd37:fullscreen'. Слой полного экрана — z-index 9100 (всплывающая реклама — выше; столбик рекламы при gs-full убирается).
+- Телефон лёжа: шапка игры — колонкой слева; DOM-игры выше экрана games.js gamesFit уменьшает целиком (transform; кроме
+  world/studio3d/horde/unity). Поэтому нажатия в играх считать ДОЛЕЙ от getBoundingClientRect (arena, pool, td, catch, пасьянсы
+  уже так). manifest.json: orientation any (установленный сайт тоже поворачивается).
+- D37Settings — окно «⚙️ Настройки»: Графика (gfx, fsr + «100%», shadows, fps, world2d) / Звук (mute, vol, volFx, volAmb, volVoice —
+  для звонков) / Управление (клавиши: 2 на действие, геймпад, конфликты; sens, invertY, touchSize, touchAlpha, lefty) / Камера
+  (view, fov, motion, shake) / Интерфейс (uiScale, tags, bubbles, autoFull, autoLand) / Сайт (режим сайта → setPerf, push,
+  приватность). В 3D — все вкладки, в обычной игре — звук, интерфейс, сайт. Хранилище d37_settings; старые d37_gfx, d37_fsr,
+  d37_keys, d37_games_mute, d37_cam_sens, d37_cam_motion, d37_world_2d перенесены и остаются ЗЕРКАЛОМ (их читают движок и старый
+  код). «На живую» — window.D37Opt (rev): render.js (FSR, R.setShadows, FPS), camera.js, controls.js (keysRev), synth.js, input.js
+  (левша); CSS --gs-ui, --gs-touch / --gs-touch-a, html.gs-lefty / gs-notags / gs-nobub. Свои вкладки —
+  D37Settings.addTab({ id, icon, title, order, ctx, render(el, S) }), свои значения — define(); игра с движком —
+  D37Settings.context({ engine: true, R, gfx(), world2d(v), view(v), onClose }). Открыть: шапка игры, мир, студия, меню сайта
+  «Ещё ▾» / ☰ → «⚙️ Настройки».
+- «Мир»: панель 🏘️ 🎭 ⚙️ (💬 — телефон лёжа) 🔄 ⛶ ❓ — .wld-topbtns (свои кнопки дописывать сюда); 👁 🖥 ⚡ 🗺️ — в настройках.
+  Esc — меню паузы (D37Settings.menu: продолжить, настройки, персонаж, полный экран, как играть, выйти) — только если Esc больше
+  никому не нужен (открытые панели, стройка участка); от 1-го лица браузер отпускает мышь — меню само. Пока меню или ⚙️ открыты —
+  C.blocked, после — C.reset_state. Студия: ⚙️ ⛶ в верхней панели, V в игре (1-е/3-е лицо).
+- Тест: node scripts/settings-test.cjs (159). Во встроенном браузере API полного экрана не отвечает — проверяется режим pseudo;
+  transition, resize и ResizeObserver стоят, пока панель скрыта (для проверки — *{transition:none!important} и
+  dispatchEvent(new Event('resize'))).
+
 ## «Мир Денчика» 3D (#/games/world, js/games/mir.js) — мир на движке D37E
 - Площадь с фонтаном (спавн), кафе «У Денчика» (север: столики шахматы ×2, шашки, нарды, «Дурак», «Одна!»), игровой клуб
   (восток: автоматы одиночных игр, бильярд, морской бой, крестики), сцена (запад: экран — эфир/ролики), гардероб (зеркало →
