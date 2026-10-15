@@ -747,7 +747,7 @@
   // ═══ Игрок: урон, смерть, возрождение ═══
   function hurtPlayer(dmg, kx, by){
     const p = G.pl;
-    if (p.dead || p.iframes > 0) return;
+    if (p.dead || p.iframes > 0 || G.god) return;   // god — только для проверок (_test.god)
     const d = Math.max(1, Math.round(dmg * (.9 + rand() * .2)));
     G.CH.hp -= d; p.iframes = .66; p.hurtT = .3; p.regenT = 0;
     p.vx = kx * 8; p.vy = -7; p.ground = false;
@@ -1256,12 +1256,19 @@
   }
   function talk(n){ G.talk = { n, text: guideTip(), t: 0 }; G.U?.talk(n.name, G.talk.text); snd('click', { vol: .5 }); G.modsEmit?.('talk', { npc: 'guide' }); }
   function newGuide(x, y){
-    return { kind: 'guide', name: 'Проводник', x: x - .55, y: y - PL_H, w: 1.1, h: PL_H, vx: 0, vy: 0, ground: false, stepUp: 1.05, dir: 1, t: 2, home: x, anim: 'idle', animT: 0 };
+    return { kind: 'guide', name: 'Проводник', x: x - .55, y: y - PL_H, w: 1.1, h: PL_H, vx: 0, vy: 0, ground: false, stepUp: 1.05, dir: 1, t: 2, home: x, homeY: y, anim: 'idle', animT: 0 };
   }
   function updNpcs(dt){
     const p = G.pl;
+    const [vw, vh] = viewTiles();
     for (const n of G.npcs) {
       n.animT += dt; n.t -= dt;
+      // упал в шахту или ушёл далеко, а его не видно — вернуться домой
+      const off = Math.abs(n.x - G.cam.x) > vw / 2 + 4 || Math.abs(n.y - G.cam.y) > vh / 2 + 4;
+      if (off && (n.y > n.homeY + 12 || Math.abs(n.x - n.home) > 30)) {
+        const gy = groundY(Math.floor(n.home), Math.floor(n.homeY) - 4);
+        if (gy != null) { n.x = n.home - n.w / 2; n.y = gy - n.h; n.vx = n.vy = 0; }
+      }
       const near = Math.hypot(p.x - n.x, p.y - n.y) < 6;
       if (near) { n.vx *= .8; n.dir = p.x > n.x ? 1 : -1; }
       else if (n.t <= 0) { n.t = 2 + rand() * 4; n.vx = rand() < .45 ? 0 : (rand() < .5 ? -1 : 1) * 2.2; if (Math.abs(n.x - n.home) > 12) n.vx = Math.sign(n.home - n.x) * 2.2; }
@@ -1402,6 +1409,8 @@
     const camX = Math.round((G.cam.x + sx) * G.cam.tile) / G.cam.tile, camY = Math.round((G.cam.y + sy) * G.cam.tile) / G.cam.tile;
     skyAt(G.W.time);
     BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth; CHS.back = G.opt.back;
+    // тусклый свет вокруг героя — чтобы в пещере без факела было видно хоть что-то рядом
+    CHS.glowX = p.x + p.w / 2; CHS.glowY = p.y + p.h * .45; CHS.glow = p.dead ? 0 : .26;
     window.D37E?._audio?.listener?.(camX, camY, 0, 0);
     // видимые чанки → на видеокарту (не больше 14 загрузок за кадр)
     visList.length = 0;
@@ -1429,7 +1438,8 @@
     const c = cAt(Math.floor(x), Math.floor(y));
     if (!c) { LT[0] = LT[1] = LT[2] = .1; return LT; }
     const i = idx(Math.floor(x), Math.floor(y)) << 2, L = c.light, s = L[i + 3] / 255;
-    LT[0] = Math.min(1, Math.max(L[i] / 230, s * skyL[0]) + .06); LT[1] = Math.min(1, Math.max(L[i + 1] / 230, s * skyL[1]) + .06); LT[2] = Math.min(1, Math.max(L[i + 2] / 230, s * skyL[2]) + .06);
+    const p = G.pl, g = p && !p.dead ? .26 * Math.max(0, 1 - Math.hypot(x - CHS.glowX, y - CHS.glowY) / 6.5) : 0;
+    LT[0] = Math.min(1, Math.max(L[i] / 230, s * skyL[0], g) + .06); LT[1] = Math.min(1, Math.max(L[i + 1] / 230, s * skyL[1], g * .92) + .06); LT[2] = Math.min(1, Math.max(L[i + 2] / 230, s * skyL[2], g * .8) + .06);
     return LT;
   }
   function spr(name, f, x, y, w, h, flip, rot, tint, a, ox, oy, lit = true){
@@ -1763,7 +1773,9 @@
     G.pl = newPlayer(pos.x, pos.y);
     G.fresh = !W.pos;
     const gp = W.guide || { x: W.spawn.x + 4, y: W.spawn.y };
-    G.npcs.push(newGuide(gp.x, gp.y));
+    const guide = newGuide(gp.x, gp.y);
+    guide.home = W.spawn.x + 4; guide.homeY = W.spawn.y;   // дом Проводника — у точки появления
+    G.npcs.push(guide);
     G.cam.x = G.pl.x; G.cam.y = G.pl.y;
     G.state = 'loading'; G.loadT = 0;
     stream(true);
@@ -1942,7 +1954,7 @@
     _test: {
       state: () => G && { state: G.state, world: G.W && { id: G.W.id, seed: G.W.seed, time: +G.W.time.toFixed(3), maxDepth: G.W.maxDepth, mods: G.W.mods }, pl: G.pl && { x: +G.pl.x.toFixed(2), y: +G.pl.y.toFixed(2), ground: G.pl.ground, hp: G.CH?.hp, dead: G.pl.dead }, chunks: G.chunks.size, pending: G.pending.size, mobs: G.mobs.length, items: G.items.length, boss: G.boss && G.boss.type, worker: G.worker?.kind, fps: G.perf.frames.length ? +(1000 / (G.perf.frames.reduce((a, b) => a + b, 0) / G.perf.frames.length)).toFixed(1) : 0, cpu: G.perf.cpu.length ? +(G.perf.cpu.reduce((a, b) => a + b, 0) / G.perf.cpu.length).toFixed(2) : 0, draws: G.R?.stats.draws, sprites: G.R?.stats.sprites },
       tp(x, y){ if (!G?.pl) return; G.pl.x = x; G.pl.y = y; G.pl.vx = G.pl.vy = 0; G.pl.fallY = y; G.cam.x = x; G.cam.y = y; stream(true); },
-      give: (id, n) => give(id, n), time(v){ if (G?.W) G.W.time = v; }, step, render, stream, shapeAt, fgAt, setCell, breakTile, placeTile: (id, x, y) => placeTile(itemDef(id), x, y),
+      give: (id, n) => give(id, n), time(v){ if (G?.W) G.W.time = v; }, god(v = true){ if (G) G.god = v; }, step, render, stream, shapeAt, fgAt, setCell, breakTile, placeTile: (id, x, y) => placeTile(itemDef(id), x, y),
       boss: k => spawnBoss(k), mob: (k, x, y) => spawnMob(k, x, y), save: () => saveAll(), get G(){ return G; }, perf: () => G && { frames: G.perf.frames.slice(), cpu: G.perf.cpu.slice() },
       lootFor: (x, y) => lootFor(x, y), PT, chunk, upload,
     },

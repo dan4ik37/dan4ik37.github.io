@@ -410,6 +410,7 @@ uniform sampler2D uLight, uAtlas;
 uniform ivec2 uOrg;
 uniform vec3 uSky;
 uniform float uAmb, uTime;
+uniform vec3 uGlow;   // тусклый свет вокруг героя: x, y (от угла чанка), сила
 uniform int uPass, uSmooth, uBack;
 in vec2 vT;
 out vec4 oC;
@@ -417,7 +418,8 @@ uint hsh(ivec2 p){ uint h = uint(p.x) * 0x27d4eb2du ^ uint(p.y) * 0x165667b1u; h
 vec4 at(int cell, ivec2 px){ return texelFetch(uAtlas, ivec2((cell % ${AN}) * 16 + px.x, (cell / ${AN}) * 16 + px.y), 0); }
 vec3 lightAt(vec2 p){
   vec4 L = uSmooth == 1 ? texture(uLight, (p + 1.0) / 66.0) : texelFetch(uLight, ivec2(floor(p)) + 1, 0);
-  return max(L.rgb * 1.1, uSky * L.a) + uAmb;
+  float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / 6.5);
+  return max(max(L.rgb * 1.1, uSky * L.a), vec3(g, g * 0.92, g * 0.8)) + uAmb;
 }
 void main(){
   ivec2 c = clamp(ivec2(floor(vT)), ivec2(0), ivec2(63));
@@ -705,6 +707,7 @@ void main(){
         gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, c.gl.l);
         gl.uniform2f(u.uOff, c.cx * 64 - R.camX, c.cy * 64 - R.camY);
         gl.uniform2i(u.uOrg, c.cx * 64, c.cy * 64);
+        gl.uniform3f(u.uGlow, (s.glowX ?? -1e4) - c.cx * 64, (s.glowY ?? -1e4) - c.cy * 64, s.glow || 0);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         R.stats.draws++;
       }
