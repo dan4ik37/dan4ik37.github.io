@@ -25,6 +25,7 @@
 .pz-slot.sel{border-color:#ffd84a;background:rgba(70,62,30,.85);box-shadow:0 0 0 2px rgba(255,216,74,.25)}
 .pz-slot b{position:absolute;right:3px;bottom:1px;font:800 11px/1 system-ui,sans-serif;text-shadow:0 1px 2px #000,0 0 2px #000}
 .pz-slot i.k{position:absolute;left:3px;top:2px;font:700 9px/1 system-ui,sans-serif;font-style:normal;opacity:.6}
+.pz-slot .pz-ic{--s:30px}
 .pz-sel-name{position:absolute;top:58px;left:50%;transform:translateX(-50%);font:800 13px/1 system-ui,sans-serif;text-shadow:0 1px 3px #000;pointer-events:none;white-space:nowrap;z-index:3}
 .pz-life{display:flex;flex-direction:column;gap:3px;align-items:flex-start;padding:5px 7px;border-radius:12px;background:rgba(8,8,16,.45)}
 .pz-hearts,.pz-stars{display:flex;flex-wrap:wrap;gap:1px;max-width:230px}
@@ -64,7 +65,15 @@
 .pz-card h3{margin:12px 0 6px;font:800 14px/1.2 system-ui,sans-serif;opacity:.85}
 .pz-card p{margin:0 0 8px;opacity:.85}
 .pz-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media (max-width:560px){.pz-cols{grid-template-columns:1fr}.pz-slot{width:34px;height:34px;--s:24px}.pz-bar{gap:2px;padding:3px}}
+@media (max-width:560px){.pz-cols{grid-template-columns:1fr}.pz-bar{gap:2px;padding:3px}
+.pz-hud{flex-wrap:wrap;gap:4px;left:6px;right:6px;top:6px}
+.pz-hot{order:3;flex:1 1 100%;justify-content:center}
+.pz-hot .pz-slot{flex:1 1 0;min-width:0;max-width:40px;width:auto;height:auto;aspect-ratio:1}
+.pz-slot .pz-ic{--s:22px}.pz-slot i.k{display:none}
+.pz-life{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;padding:4px 6px}
+.pz-hearts,.pz-stars{max-width:130px}.pz-hearts .pz-ic,.pz-stars .pz-ic{--s:15px}.pz-hp-n{display:none}
+.pz-btns{gap:3px}.pz-btns .pz-b{min-width:34px;height:34px;padding:0 7px}
+.pz-sel-name{top:96px}}
 .pz-list{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow:auto}
 .pz-it{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);border:2px solid transparent;cursor:pointer}
 .pz-it.on{border-color:#ffd84a;background:rgba(255,216,74,.08)}
@@ -225,13 +234,13 @@
       lastHud = key;
       // сердца: каждое — 20 здоровья, неполное — бледнее
       const hearts = [], nh = Math.ceil(CH.maxHp / 20);
-      for (let i = 0; i < nh; i++) { const f = Math.max(0, Math.min(1, (CH.hp - i * 20) / 20)); hearts.push(`<span style="opacity:${f <= 0 ? .18 : .35 + f * .65}">${icon('lifecrystal', 20)}</span>`); }
+      for (let i = 0; i < nh; i++) { const f = Math.max(0, Math.min(1, (CH.hp - i * 20) / 20)); hearts.push(`<span style="opacity:${f <= 0 ? .18 : .35 + f * .65}">${icon('lifecrystal')}</span>`); }
       lifeEl.querySelector('.pz-hearts').innerHTML = hearts.join('');
       const stars = [], ns = Math.ceil(CH.maxMana / 20);
-      for (let i = 0; i < ns; i++) { const f = Math.max(0, Math.min(1, (CH.mana - i * 20) / 20)); stars.push(`<span style="opacity:${f <= 0 ? .18 : .35 + f * .65}">${icon('manastar', 20)}</span>`); }
+      for (let i = 0; i < ns; i++) { const f = Math.max(0, Math.min(1, (CH.mana - i * 20) / 20)); stars.push(`<span style="opacity:${f <= 0 ? .18 : .35 + f * .65}">${icon('manastar')}</span>`); }
       lifeEl.querySelector('.pz-stars').innerHTML = stars.join('');
       lifeEl.querySelector('.pz-hp-n').textContent = `❤ ${Math.max(0, CH.hp | 0)}/${CH.maxHp} · ★ ${CH.mana | 0}/${CH.maxMana}`;
-      hotEl.innerHTML = CH.inv.slice(0, 10).map((s, i) => `<button type="button" class="pz-slot${i === CH.sel ? ' sel' : ''}" data-slot="${i}" data-box="inv" title="${s ? esc(descOf(s.id)) : 'Пусто'}"><i class="k">${(i + 1) % 10}</i>${s ? icon(s.id, 30) + (s.n > 1 ? `<b>${s.n}</b>` : '') : ''}</button>`).join('');
+      hotEl.innerHTML = CH.inv.slice(0, 10).map((s, i) => `<button type="button" class="pz-slot${i === CH.sel ? ' sel' : ''}" data-slot="${i}" data-box="inv" title="${s ? esc(descOf(s.id)) : 'Пусто'}"><i class="k">${(i + 1) % 10}</i>${s ? icon(s.id) + (s.n > 1 ? `<b>${s.n}</b>` : '') : ''}</button>`).join('');
       const s = CH.inv[CH.sel];
       selName.textContent = s ? nameOf(s.id) : '';
       if (bossEl && !bossEl.hidden && G.boss) bossEl.querySelector('i').style.width = Math.max(0, G.boss.hp / G.boss.maxHp * 100) + '%';
@@ -250,7 +259,7 @@
     U.chest = k => { G.chestOpen = k; if (k) { invOpen = true; panel.hidden = false; U.inv(); } else if (invOpen) U.inv(); };
     function grid(box, items, n, from = 0){
       let h = '<div class="pz-grid">';
-      for (let i = from; i < n; i++) { const s = items[i]; h += `<button type="button" class="pz-slot${box === 'inv' && i === G.CH.sel ? ' sel' : ''}" data-box="${box}" data-slot="${i}" title="${s ? esc(descOf(s.id)) : 'Пусто'}">${s ? icon(s.id, 30) + (s.n > 1 ? `<b>${s.n}</b>` : '') : ''}</button>`; }
+      for (let i = from; i < n; i++) { const s = items[i]; h += `<button type="button" class="pz-slot${box === 'inv' && i === G.CH.sel ? ' sel' : ''}" data-box="${box}" data-slot="${i}" title="${s ? esc(descOf(s.id)) : 'Пусто'}">${s ? icon(s.id) + (s.n > 1 ? `<b>${s.n}</b>` : '') : ''}</button>`; }
       return h + '</div>';
     }
     U.inv = () => {

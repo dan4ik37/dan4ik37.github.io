@@ -188,6 +188,9 @@
     if (!c.awake) for (let i = 0; i < CA - CS; i++) if (P.FALL[c.fg[i]] && !c.fg[i + CS]) { c.awake = 40; break; }
     return c;
   }
+  // пришедшие чанки разбираем по 2 за кадр (маски — ~1 мс на чанк): без рывков, когда приходят пачкой
+  const inbox = [];
+  function drainInbox(max){ for (let n = 0; n < max && inbox.length; n++) onChunk(inbox.shift()); }
   function onChunk(d){
     const k = kOf(d.cx, d.cy);
     G.pending.delete(k);
@@ -201,7 +204,10 @@
     masksAll(c); masksBorder(c);
     if (G.R) G.R.chunkInit(c);
   }
-  function onLight(d){ const c = chunk(d.cx, d.cy); if (!c) return; c.light = d.light; c.dirtyL = true; for (const [dx, dy] of NB) { const n = chunk(c.cx + dx, c.cy + dy); if (n) n.dirtyL = true; } }
+  function onLight(d){
+    const c = chunk(d.cx, d.cy);
+    if (!c) { const q = inbox.find(m => m.cx === d.cx && m.cy === d.cy); if (q) q.light = d.light; return; }   // ещё в очереди — свет туда
+    c.light = d.light; c.dirtyL = true; for (const [dx, dy] of NB) { const n = chunk(c.cx + dx, c.cy + dy); if (n) n.dirtyL = true; } }
   // загрузить данные чанка на видеокарту (только изменённое)
   function upload(c){
     const R = G.R; if (!R) return;
@@ -346,7 +352,7 @@
 
   // ═══ Поток (Worker) — из текста ядра; нет потоков — то же самое в этом же потоке ═══
   function startWorker(){
-    const handlers = d => { if (!G) return; if (d.t === 'chunk') onChunk(d); else if (d.t === 'light') onLight(d); else if (d.t === 'err') console.warn('Подземье, поток:', d.msg); };
+    const handlers = d => { if (!G) return; if (d.t === 'chunk') inbox.push(d); else if (d.t === 'light') onLight(d); else if (d.t === 'err') console.warn('Подземье, поток:', d.msg); };
     const S = { kind: 'worker' };
     let w = null, local = null;
     const makeLocal = () => {   // то же ядро в этом потоке (сообщения — без копирования, ответы — в следующем такте)
@@ -1578,6 +1584,7 @@
         let n = 0;
         while (acc >= 1 / 60 && n < 5) { step(1 / 60); acc -= 1 / 60; n++; }
         if (n === 5) acc = 0;
+        drainInbox(G.state === 'loading' ? 12 : 2);
         if (G.state === 'loading') loadingTick();
         render();
         G.perf.cpu.push(now() - c0); if (G.perf.cpu.length > 120) G.perf.cpu.shift();   // ЦП за кадр: логика + рисование
@@ -1758,7 +1765,7 @@
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
     G.mobs.length = 0; G.items.length = 0; G.projs.length = 0; G.npcs.length = 0; G.texts.length = 0; G.boss = null; PT.n = 0;
     G.edits.length = 0; G.editIdx.clear(); G.cheats = !!W.cheats;
-    lastC = null;
+    lastC = null; inbox.length = 0;
     G.U?.loading(true, 'Мир строится…');
     // моды мира
     await (G.modsStart ? G.modsStart(W) : Promise.resolve());
