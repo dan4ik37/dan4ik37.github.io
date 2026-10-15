@@ -93,7 +93,9 @@ html.app-standalone,html.app-standalone body{overscroll-behavior-y:none}
 html.app-standalone{-webkit-tap-highlight-color:transparent}
 /* На ПК (window-controls-overlay): шапка сайта — заголовок окна. Кнопки окна (свернуть/развернуть/закрыть; на Mac — слева)
    не закрывают меню — отступы из getTitlebarAreaRect (app.js: --app-tb-l / --app-tb-r); окно тянется за пустое место шапки */
-html.app-wco #nav{padding-left:calc(2rem + var(--app-tb-l,0px));padding-right:calc(1rem + var(--app-tb-r,0px));-webkit-app-region:drag;app-region:drag}
+/* (боковые отступы — без плавного перехода: app.js сразу меряет, влезает ли шапка) */
+html.app-wco #nav{padding-left:calc(2rem + var(--app-tb-l,0px));padding-right:calc(1rem + var(--app-tb-r,0px));-webkit-app-region:drag;app-region:drag;
+  transition:padding-top .35s var(--ease-out,ease),padding-bottom .35s var(--ease-out,ease),box-shadow .35s,background .35s}
 html.app-wco #nav a,html.app-wco #nav button,html.app-wco #nav input,html.app-wco #nav select,html.app-wco #nav label,html.app-wco #nav summary,
 html.app-wco #nav [role="dialog"],html.app-wco #nav .nav-more-panel,html.app-wco #nav .lang-dropdown,html.app-wco #nav .notif-panel,
 html.app-wco #nav .nav-links.open,html.app-wco #nav .notif-wrap,html.app-wco #nav .lang-wrap{-webkit-app-region:no-drag;app-region:no-drag}

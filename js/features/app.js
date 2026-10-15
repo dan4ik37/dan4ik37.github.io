@@ -351,21 +351,41 @@
 
   // ═══ Окно приложения на ПК: шапка сайта — заголовок окна (window-controls-overlay) ═══
   function wco(){
-    const o = nav.windowControlsOverlay; if (!o) return;
+    const o = nav.windowControlsOverlay;
     const upd = () => {
-      const on = !!o.visible;
+      const on = !!o?.visible;
       html.classList.toggle('app-wco', on);
-      if (!on) return;
-      let r = null; try { r = o.getTitlebarAreaRect(); } catch (e) {}
-      if (!r || !r.width) return;
+      let r = null; if (on) try { r = o.getTitlebarAreaRect(); } catch (e) {}
       const W = root.innerWidth || html.clientWidth || 0;
-      html.style.setProperty('--app-tb-l', Math.max(0, Math.round(r.x)) + 'px');
-      html.style.setProperty('--app-tb-r', Math.max(0, Math.round(W - r.x - r.width)) + 'px');
-      html.style.setProperty('--app-tb-h', Math.round(r.height) + 'px');
+      html.style.setProperty('--app-tb-l', (r && r.width ? Math.max(0, Math.round(r.x)) : 0) + 'px');
+      html.style.setProperty('--app-tb-r', (r && r.width ? Math.max(0, Math.round(W - r.x - r.width)) : 0) + 'px');
+      html.style.setProperty('--app-tb-h', (r && r.width ? Math.round(r.height) : 0) + 'px');
+      requestAnimationFrame(fitNav);
+      setTimeout(() => requestAnimationFrame(fitNav), 450);   // ещё раз — когда шапка точно перестроилась
     };
-    try { o.addEventListener('geometrychange', upd); } catch (e) {}
-    root.addEventListener('resize', upd);
+    try { o?.addEventListener('geometrychange', upd); } catch (e) {}
+    let t = 0;
+    root.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(upd, 150); });
     upd();
+    if (doc.fonts?.ready) doc.fonts.ready.then(() => requestAnimationFrame(fitNav));
+  }
+  // В окне программы шапке тесно (окно уже экрана, справа — кнопки окна): лишние пункты уезжают в «Ещё ▾». Только в окне
+  // приложения на ПК — вкладку браузера не трогаем
+  const SPARE = ['shorts', 'forum', 'ideas', 'profile', 'world'];
+  const moved = [];   // [пункт, сосед справа до переноса] — окно расширили / шрифты догрузились: вернуть и разложить заново
+  function fitNav(){
+    if (!SA || ENV.mobile) return;
+    const bar = doc.getElementById('nav'), links = doc.getElementById('navLinks'), panel = doc.getElementById('navMorePanel');
+    if (!bar || !links || !panel) return;
+    while (moved.length) { const [a, next] = moved.pop(); links.insertBefore(a, next && next.parentNode === links ? next : links.querySelector(':scope > .nav-more')); }
+    if ((root.innerWidth || 0) <= 1180) return;
+    const limit = (root.innerWidth || 0) - (parseFloat(html.style.getPropertyValue('--app-tb-r')) || 0) - 6;
+    const right = () => Math.max(0, ...[...bar.children].filter(c => c.offsetParent && c.getBoundingClientRect().width).map(c => c.getBoundingClientRect().right));
+    for (const r of SPARE) {
+      if (right() <= limit) break;
+      const a = links.querySelector(`:scope > a[data-route="${r}"]`);
+      if (a) { moved.push([a, a.nextSibling]); panel.insertBefore(a, panel.firstChild); }
+    }
   }
 
   // ═══ «Назад» на Android в приложении: закрыть открытое окно сайта, а не уйти со страницы ═══
@@ -474,7 +494,7 @@
       const b = ev.target.closest?.('[data-share]'); if (!b) return;
       const k = b.dataset.share;
       closeShare();
-      if (k === 'chat') { if (!/^#\/chat(\/|$)/.test(loc().hash || '')) loc().hash = '#/chat'; fillComposer('#chat .mv-in', text, 15000); }
+      if (k === 'chat') { if (!/^#\/chat(\/|$)/.test(loc().hash || '')) loc().hash = '#/chat'; fillComposer('#chat .mv-in', text, 120e3, '#chat .mv-gate'); }
       else if (k === 'dm') {
         const authed = typeof currentUser !== 'undefined' && !!currentUser;
         if (!authed) { copy(text); toast('🔑 Войди в аккаунт — и выбери друга. Текст уже скопирован'); root.openGlobalAuth?.(); return; }
@@ -487,10 +507,12 @@
     track('app_share_in', {});
   }
   function copy(text){ try { nav.clipboard?.writeText?.(text)?.catch?.(() => {}); } catch (e) {} }
-  // Вставить текст в поле сообщения, как только оно появится (чат грузится, друга ещё выбирают). Не появилось — скопировать
-  function fillComposer(sel, text, wait){
-    let done = false, mo = null, t = 0;
+  // Вставить текст в поле сообщения, как только оно появится (чат грузится, друга ещё выбирают, гость ещё не вошёл).
+  // Не появилось за wait — скопировать. gate — «Войти как гость / в аккаунт» вместо поля: подсказать один раз
+  function fillComposer(sel, text, wait, gate){
+    let done = false, mo = null, t = 0, hinted = false;
     const tryFill = () => {
+      if (gate && !hinted) { const g = doc.querySelector(gate); if (g && !g.hidden && g.getClientRects().length) { hinted = true; toast('👤 Нажми «Войти как гость» или войди в аккаунт — текст сам встанет в поле сообщения', 6000); } }
       const el = doc.querySelector(sel);
       if (!el || el.disabled || !el.getClientRects().length) return false;   // нет / выключено / не видно (гость, «обложка»)
       el.value = el.value ? el.value + ' ' + text : text;
