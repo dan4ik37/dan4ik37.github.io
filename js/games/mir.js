@@ -61,6 +61,10 @@
     return -POND.deep * (1 - t * t * (3 - 2 * t));
   };
   const CAMP = { x: 40, z: 50 };   // костёр в парке: огонь, дым, искры, тёплый свет, треск; брёвна — сесть
+  // Графика мира (js/engine/gfx.js E.worldGfx): лёгкая дымка, мягкий туман у земли, сочный цвет; время суток — общее для всех
+  // (E.dayClock: сутки — 40 мин настоящего времени, ночь — пятая часть)
+  const MIR_GFX = { sky: { haze: .2, clouds: .9, stars: 1, moon: true, sun: 1.1 }, fog: { density: .14, height: 0, sun: .7 }, grade: 'vivid', bloom: 1, exposure: 0, water: { clarity: .62, foam: .7 }, shadow: { soft: .3 } };
+  const mirTime = () => window.D37E?.dayClock ? window.D37E.dayClock(Date.now(), 40, .2) : 14;
   // Жители (NPC): стоят на своём месте у всех игроков, поворачиваются к подошедшему и говорят по очереди; [E] — поговорить.
   const FOLK = [
     { id: 'guide', name: '🧭 Гид', x: -5.6, z: 12.4, yaw: 156, seed: 'gid37', info: true, say: ['Привет! Я гид Мира Денчика 👋 Нажми E — расскажу, что тут есть', 'Кафе — на севере: сядь за столик, кто сядет напротив — с тем и сыграешь ♟️', 'В парке пруд — в нём можно плавать! 🏊 «Присесть» — нырнуть', 'Свой участок и дом — в районе за кафе 🏡', 'Игровой клуб с автоматами — на востоке 🕹️'] },
@@ -503,7 +507,12 @@
       st.add(new T.Mesh(g, M.sand));
     }
     P(null, { s: 'ring', x: POND.x, y: .021, z: POND.z, r: 7.4, r2: POND.r - .05, rx: -PI / 2, c: '#8fd17f', m: M.border });
-    disc(POND.x, POND.z, POND.r - .2, '#38bdf8', POND.wl, M.water);
+    {   // вода пруда v2: знает глубину чаши (у берега светлее и пена, в середине темнее)
+      const rect = [POND.x - POND.r, POND.z - POND.r, POND.r * 2, POND.r * 2];
+      const pond = R.water('#2f9fd8', { key: 'pond', fixedColor: true, depth: E.waterDepthTex ? { tex: E.waterDepthTex(R, pondH, rect, 48), rect } : null });
+      pond.side = T.DoubleSide;
+      disc(POND.x, POND.z, POND.r - .2, '#38bdf8', POND.wl, pond);
+    }
     // удочка рыбака: стоит на берегу, леска — в воду
     {
       const f = FOLK.find(f => f.id === 'fisher'), bx = f.x + .45, bz = f.z - .35, yaw = Math.atan2(POND.x - bx, POND.z - bz), tilt = .96, L = 3;
@@ -664,7 +673,8 @@
     const E = window.D37E, wrap = S.wrap;
     const R = S.R = E.renderer(wrap);
     R.r.domElement.classList.add('wld-gl');
-    R.setSky('#5aa7ff', '#cfeaff', '#eaf6ff', 90, 230);
+    // графика v3: время суток — общее для всех игроков (сутки 40 мин, ночь — пятая часть), небо, туман, вода, цвет кадра
+    R.setLighting({ time: mirTime(), brightness: 1.05, ambient: 1.05, fogEnd: 260, shadows: true, gfx: MIR_GFX });
     const ph = S.ph = new E.Phys({ ground: 0 });
     const C = S.C = E.controls({ onKey: () => activity() });
     const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb, .mp' });
@@ -1369,10 +1379,9 @@
     FX?.update(dt);
     NPC?.frame(dt, t, R.camera.position);
     if (S.campLight) S.campLight.src.intensity = 1.65 + Math.sin(t * 13.1) * .14 + Math.sin(t * 7.3 + 1) * .12 + Math.sin(t * 29) * .06;
-    const c = R.camera.position, under = c.y < POND.wl && Math.hypot(c.x - POND.x, c.z - POND.z) < POND.r - .1, fog = R.scene.fog;
-    if (fog && under !== !!S.under) {
-      if (under) { S.under = { c: fog.color.clone(), n: fog.near, f: fog.far }; fog.color.set('#1d6f96'); fog.near = 0; fog.far = 9; }
-      else { fog.color.copy(S.under.c); fog.near = S.under.n; fog.far = S.under.f; S.under = null; }
+    const c = R.camera.position, under = c.y < POND.wl && Math.hypot(c.x - POND.x, c.z - POND.z) < POND.r - .1;
+    if (under !== !!S.under) {
+      S.under = under; R.setUnder?.(under);   // под водой — синий туман (render.js), вынырнул — туман времени суток
       S.wrap.classList.toggle('mir-under', under);
     }
   }
@@ -1595,6 +1604,7 @@
   }
   function housekeeping(){
     if (!S || S.stopped) return;
+    if (S.R && !S.R.dead && S.fixedTime == null) S.R.setLighting({ time: mirTime() });   // время суток идёт (графика v3); S.fixedTime — стоп (проверки)
     if (S.playing) S.idleAt = Date.now();   // игра поверх мира — это не «стоит на месте»
     if (afkDue(S, Date.now())) {
       S.stopped = true;

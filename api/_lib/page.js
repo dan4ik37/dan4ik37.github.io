@@ -70,13 +70,14 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
     <a href="/#/forum">📋 Форум</a>
     <a href="/vip">✨ VIP</a>
     <a href="/shop">💎 Магазин</a>
+    <a href="/#/adv">📣 Реклама на сайте</a>
     <a href="/#/donate">💝 Поддержать dan4ik37</a>
     <a href="/#/profile">👤 Профиль / Войти</a>
   </div></details>
 </header>
 ${body}
 <footer class="foot">
-  <a href="/#/home">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/#/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
+  <a href="/#/home">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/#/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/#/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
@@ -87,10 +88,11 @@ ${script ? `<script>${script}</script>` : ''}
 <script src="/js/core/age.js"></script>
 <script src="/js/core/ads-core.js"></script>
 <script src="/js/core/ad-places.js"></script>
+<script src="/js/core/ad-direct.js"></script>
 <script src="/js/core/surprise.js" defer></script>
 <script src="/js/core/live-badge.js" defer></script>
 <script src="/js/features/secrets.js" defer></script>
-<script>${noAds ? 'window.D37AdPlaces&&D37AdPlaces.ctx("gambling",true);' : ''}window.D37Ads&&D37Ads.fillAll();setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
+<script>${noAds ? 'window.D37AdPlaces&&D37AdPlaces.ctx("gambling",true);' : ''}(function(f){window.D37AdDirect?D37AdDirect.ready(f):f()})(function(){window.D37Ads&&D37Ads.fillAll()});setTimeout(function(){window.D37Ads&&D37Ads.floor()},15000);</script>
 </body>
 </html>`;
 }

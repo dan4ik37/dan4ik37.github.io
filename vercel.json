@@ -186,6 +186,18 @@
       "destination": "/api/pages?page=invite&code=:code"
     },
     {
+      "source": "/go/:id",
+      "destination": "/api/pages?page=go&id=:id"
+    },
+    {
+      "source": "/api/geo",
+      "destination": "/api/pages?page=geo"
+    },
+    {
+      "source": "/ads-terms",
+      "destination": "/api/pages?page=adsterms"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },

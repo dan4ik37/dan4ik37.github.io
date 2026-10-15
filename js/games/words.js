@@ -133,7 +133,7 @@
   }
 
   // ── Подсказка для VIP (и персонала): одна буква на слово. Остальным — как получить VIP ──
-  // VIP даётся за донат или за 30-й уровень (progression.sql) — повод поддержать стрим, игра при этом бесплатна.
+  // VIP даётся за донат или кристаллы 💎 (пробный на 3 дня — за 30-й уровень, economy.sql) — повод поддержать стрим, игра бесплатна.
   function hasHintPerk(){
     try { return typeof currentProfile !== 'undefined' && !!currentProfile && typeof hasPerks === 'function' && hasPerks(currentProfile.role, currentProfile); }
     catch (e) { return false; }
@@ -148,7 +148,7 @@
     if (!W || W.over) return;
     const t = W.el.querySelector('.wd-hinttext');
     if (!hasHintPerk()) {
-      t.innerHTML = 'Подсказки — для VIP: VIP даётся за донат или бесплатно за 30-й уровень — <a href="/vip">что ещё даёт VIP</a>';
+      t.innerHTML = 'Подсказки — для VIP: VIP даётся за донат или кристаллы 💎, а попробовать — за 30-й уровень — <a href="/vip">что ещё даёт VIP</a>';
       if (typeof window.va === 'function') window.va('event', { name: 'words_hint_locked' });
       return;
     }

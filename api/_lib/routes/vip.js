@@ -3,7 +3,7 @@
 //   уровни и пороги — VIP_TIERS (js/features/profile.js): Bronze — любой VIP, Silver — 500₽ донатов, Gold — 1500₽;
 //   закреп 10/20/40 мин, гости 10/30/100, стикеры base/+silver/+gold; невидимка — с Silver (can_be_invisible);
 //   GIF-аватар/фон, форматирование на форуме, тема — VIP (hasPerks/isVipActive); подсказка в «5 букв» — words.js;
-//   VIP за уровень 30/50/100 — progression.sql. Цена — 100₽/мес (vip-auto.sql); за кристаллы 💎 — ITEMS в
+//   VIP за уровень (пробный: 30 — 3 дня, 50 — неделя, 100 — месяц) — level_ladder в economy.sql (FREE ниже). Цена — 100₽/мес (vip-auto.sql); за кристаллы 💎 — ITEMS в
 //   api/_lib/premium.js (premium.sql); сумма поддержки = донаты + покупки кристаллов (premium_credit растит total_donated).
 //   Без рекламы — js/core/ad-places.js (ADS_RULES.vip).
 // Поменялись условия VIP в коде → поправить и здесь.
@@ -12,6 +12,8 @@ import { page } from '../page.js';
 import { ITEMS } from '../premium.js';
 
 const VIP_GEMS = ITEMS.filter(i => i.kind === 'vip');
+// VIP за уровень — как level_ladder() в economy.sql и LEVEL_REWARDS в js/features/xp.js (scripts/economy-test.cjs сверяет)
+const FREE = [[30, '3 дня'], [50, 'неделю'], [100, 'месяц']];
 
 const ROWS = [
   ['Сумма поддержки за всё время (донаты и 💎)', 'любая', 'от 500 ₽', 'от 1500 ₽'],
@@ -33,7 +35,7 @@ export default function handler(req, res) {
     ['Сколько стоит VIP?', '100 ₽ в месяц. Донат больше — больше месяцев, остаток не сгорает, а копится к следующему месяцу.'],
     ['Можно купить VIP за кристаллы?', 'Да, в магазине: ' + VIP_GEMS.map(i => `${i.title.replace('VIP на ', '')} — ${i.price} 💎`).join(', ') + '. Кристаллы покупаются картой Казахстана или через Kaspi, а из России приходят за донат, если в магазине выбрать «донат → кристаллы».'],
     ['Как VIP становится Silver или Gold?', 'Уровень зависит от суммы поддержки за всё время — донаты и покупки кристаллов: от 500 ₽ — Silver, от 1500 ₽ — Gold.'],
-    ['Можно получить VIP бесплатно?', 'Да, за уровень на сайте: 30-й уровень — Bronze VIP на месяц, 50-й — Silver на 3 месяца, 100-й — Gold на год. Опыт дают визиты, чат, игры, задания дня и ачивки.'],
+    ['Можно получить VIP бесплатно?', 'Попробовать — да: за уровень на сайте дают VIP на время — ' + FREE.map(([lv, t]) => `${lv}-й уровень — на ${t}`).join(', ') + '. Это долгая цель: месяцы игры каждый день. Silver и Gold — только за поддержку стрима. Опыт дают визиты, чат, игры, задания дня и ачивки; на других уровнях — рамки, значки, вещи для персонажа и монеты.'],
     ['Через сколько VIP появится после доната?', 'Обычно за пару минут, автоматически. Главное — в поле «Ваше имя» на DonationAlerts вписать свой логин для доната из профиля.'],
     ['Что если ошибся в логине?', 'VIP не потеряется: напиши в чат сайта или админу — выдадут вручную по этому донату.'],
   ];
@@ -45,7 +47,7 @@ export default function handler(req, res) {
     <div>
       <h1>VIP на сайте dan4ik37</h1>
       <p class="lead">Поддержи стрим — и получи плюшки на сайте: сайт без рекламы, цветной ник, GIF-аватарку, стикеры, закреп в чате и не только. <b>100 ₽ в месяц</b> (или 100 💎), а чем больше поддержка за всё время — тем выше уровень.</p>
-      <div class="cta"><a class="btn btn-gold" href="/#/profile/vip">✨ Получить VIP</a><a class="btn btn-ghost" href="/shop">💎 За кристаллы</a><a class="btn btn-ghost" href="#free">🎮 Или бесплатно за уровень</a></div>
+      <div class="cta"><a class="btn btn-gold" href="/#/profile/vip">✨ Получить VIP</a><a class="btn btn-ghost" href="/shop">💎 За кристаллы</a><a class="btn btn-ghost" href="#free">🎮 Пробный VIP за уровень</a></div>
     </div>
   </div>
 
@@ -64,9 +66,10 @@ export default function handler(req, res) {
   </ol>
   <p class="muted small">Или за кристаллы 💎 в <a href="/shop">магазине</a>: ${VIP_GEMS.map(i => `${esc(i.title.replace('VIP на ', ''))} — ${i.price} 💎`).join(' · ')}. Там же — VIP в подарок другу.</p></section>
 
-  <section class="box" id="free"><h2>🎮 VIP бесплатно — за уровень</h2>
-    <div class="vp-free"><div><b>30</b><span>уровень</span><i>🔸 VIP на месяц</i></div><div><b>50</b><span>уровень</span><i>⭐ Silver на 3 месяца</i></div><div><b>100</b><span>уровень</span><i>✨ Gold на год</i></div></div>
-    <p class="muted small">Опыт дают визиты каждый день, чат, игры на сайте, «Задание дня» и ачивки. <a href="/games">Сыграть →</a></p>
+  <section class="box" id="free"><h2>🎮 Пробный VIP — за уровень</h2>
+    <div class="vp-free">${FREE.map(([lv, t]) => `<div><b>${lv}</b><span>уровень</span><i>🔸 VIP на ${esc(t)}</i></div>`).join('')}</div>
+    <p class="muted small">Это долгая цель — месяцы игры каждый день. Опыт дают визиты, чат, игры на сайте, «Задание дня» и ачивки; на других
+      уровнях — рамки аватара, значки, золотой и радужный ник, вещи для персонажа и монеты. Silver и Gold — только за поддержку стрима. <a href="/games">Сыграть →</a></p>
   </section>
 
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
@@ -75,7 +78,7 @@ export default function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
   res.status(200).send(page({
     title: 'VIP на сайте dan4ik37 — что даёт и как получить',
-    description: 'VIP за поддержку стрима dan4ik37: цветной ник, GIF-аватарка, стикеры, закреп в чате, невидимка. 100 ₽ в месяц или бесплатно за 30-й уровень.',
+    description: 'VIP за поддержку стрима dan4ik37: сайт без рекламы, цветной ник, GIF-аватарка, стикеры, закреп в чате, невидимка. 100 ₽ в месяц, пробный — за уровень.',
     url, image: SITE + '/og-image.jpg', body, css: CSS,
     ld: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
   }));

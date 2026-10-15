@@ -1096,6 +1096,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/soundboard" data-route="soundboard">Саундборд</a>
     <a href="#/games" data-route="games">🎮 Игры</a>
     <a href="#/ads" data-route="ads">Реклама</a>
+    <a href="#/adv" data-route="adv">📣 Разместить рекламу</a>
     <a href="/vip" class="nav-vip">✨ VIP</a>
     <a href="#/shop" data-route="shop" class="nav-shop">💎 Магазин</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
@@ -1971,6 +1972,14 @@ body.low .donation-alert-icon{animation:none}
   <div id="shopRoot"></div>
 </div>
 
+<!-- 📣 РЕКЛАМА ЗА 💎 — кабинет рекламодателя (js/features/adcab.js и css/adcab.css грузятся при входе; ads.sql) -->
+<div class="wrap reveal" id="adv-page">
+  <div class="sec-title-row">
+    <h2 class="sec-title">📣 Реклама на сайте</h2>
+  </div>
+  <div id="advRoot"></div>
+</div>
+
 <div class="wrap reveal" id="lfg-page">
   <div class="sec-title-row">
     <h2 class="sec-title">🎮 Поиск тиммейтов</h2>
@@ -2186,6 +2195,16 @@ body.low .donation-alert-icon{animation:none}
   <h2 class="sec-title">Реклама 📢</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem">
 
+    <!-- 📣 Своя реклама на сайте за 💎 — кабинет рекламодателя #/adv (js/features/adcab.js) -->
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid #ffd166">
+        <div style="font-size:1.8rem;margin-bottom:.8rem">📣</div>
+        <div style="font-family:var(--font-display);font-size:1.4rem;letter-spacing:2px;color:#ffd166;margin-bottom:.8rem">Разместить рекламу самостоятельно</div>
+        <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1.2rem">
+          Своя кампания за 💎 без переписки: карточка в ленте, баннер, столбик у игры или щит в 3D-мире. Проверка, статистика по дням, остаток возвращается.
+        </div>
+        <a href="#/adv" style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(255,209,102,.12);border:1.5px solid #ffd166;color:#fff;font-size:.8rem;font-weight:700;text-decoration:none">📣 Открыть кабинет →</a>
+      </div>
+
     <!-- Медиакит: живые цифры канала — серверная страница /reklama (api/_lib/routes/reklama.js) -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1.8rem;border-top:3px solid var(--yt)">
         <div style="font-size:1.8rem;margin-bottom:.8rem">📊</div>
@@ -2320,7 +2339,9 @@ body.low .donation-alert-icon{animation:none}
     <a href="/vip">✨ VIP</a>
     <a href="/games">Игры онлайн</a>
     <a href="#/shop">💎 Магазин</a>
+    <a href="#/adv">📣 Реклама на сайте</a>
     <a href="/privacy" style="opacity:.6">Политика конфиденциальности</a>
+    <a href="/ads-terms" style="opacity:.6">Правила рекламы</a>
     <a href="/terms" style="opacity:.6">Пользовательское соглашение</a>
     <a href="/refund" style="opacity:.6">Возврат</a>
     <a href="/contacts" style="opacity:.6">Реквизиты и контакты</a>
@@ -2551,12 +2572,14 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/core/age.js"></script>
 <script src="js/core/ads-core.js"></script>
 <script src="js/core/ad-places.js"></script>
+<script src="js/core/ad-direct.js"></script>
 <script src="js/core/coins.js"></script>
 <script src="js/core/premium.js"></script>
 <script src="js/core/avatar.js"></script>
 <script src="js/core/surprise.js"></script>
 <script src="js/core/fullscreen.js"></script>
 <script src="js/core/settings.js"></script>
+<script src="js/core/gfx-settings.js"></script>
 <script src="js/core/live-badge.js" defer></script>
 <script src="js/core/state.js"></script>
 <script src="js/ui/tabs-nav.js"></script>

@@ -9,7 +9,7 @@
 // очки — открытые клетки, победа +1000 и бонус за время; 5 минут.
 // Движок без DOM — GAME_IMPL.miner._test.
 (() => {
-  const LEVELS = { 1: { w: 9, h: 9, m: 10, name: 'Новичок', base: 100, ref: 30, coins: 10 }, 2: { w: 16, h: 16, m: 40, name: 'Любитель', base: 400, ref: 150, coins: 30 }, 3: { w: 30, h: 16, m: 99, name: 'Профи', base: 1000, ref: 400, coins: 60 } };
+  const LEVELS = { 1: { w: 9, h: 9, m: 10, name: 'Новичок', base: 100, ref: 30, coins: 5 }, 2: { w: 16, h: 16, m: 40, name: 'Любитель', base: 400, ref: 150, coins: 15 }, 3: { w: 30, h: 16, m: 99, name: 'Профи', base: 1000, ref: 400, coins: 30 } };
   const DUEL_SEC = 300, PREF = 'd37_miner_level';
 
   // ── Движок ──
