@@ -887,6 +887,7 @@ begin
     select count(*) into n from public.ad_creatives where campaign_id = k.id;
     if n = 0 then return jsonb_build_object('ok', false, 'reason', 'creatives'); end if;
     if k.age_rating is null then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+    if k.geo = 'ru' and k.erid = '' then return jsonb_build_object('ok', false, 'reason', 'erid_ru'); end if;   -- «только Россия» без erid не покажется никому
     v_start := coalesce(k.start_date, td);
     if v_start < td then return jsonb_build_object('ok', false, 'reason', 'dates'); end if;
     if v_start > td + 90 then return jsonb_build_object('ok', false, 'reason', 'dates'); end if;
