@@ -58,7 +58,8 @@
   };
   const pick = (v, list, d) => list.includes(v) ? v : d;
   // s — настройки игрока: { preset, shadows, shadowQ, ao, water, refl, aa, fog, dist (0,5…2), grade, fpsCap, res (50…100), battery }
-  // dev — { q: каркас рендерера / устройства (low|mid|high), gl2 }. Возвращает включённое (без лишних полей)
+  // dev — { q: каркас рендерера / устройства (low|mid|high), gl2, mobile — телефон/планшет (E.isMobile), depthFx — глубина
+  // кадра читается точно (post.js: P.depthOK) }. Возвращает включённое (без лишних полей)
   E.gfxResolve = (s = {}, dev = {}) => {
     const q = ['low', 'mid', 'high'].includes(dev.q) ? dev.q : 'mid';
     const preset = pick(s.preset, E.GFX_KEYS.preset, 'auto'), own = preset === 'auto' || preset === 'custom';
@@ -89,6 +90,11 @@
       o.dist = Math.min(o.dist, 1); o.prCap = 1;
     }
     if (o.tier === 'low') { o.shadows = false; o.ao = 'off'; o.aa = 'off'; o.grade = false; o.water = 'simple'; o.refl = false; o.rt = 'off'; o.framegen = false; }   // каркас low: без постобработки
+    // телефон (E.isMobile): «Авто» — без трассировки лучей (её включают сами: «Высокая», «Ультра» или «Своя»)
+    if (dev.mobile && o.auto) o.rt = 'off';
+    // видеокарта читает глубину неточно (post.js: проверка при запуске) — всё, что строится по глубине кадра, выключено:
+    // иначе пятна и полосы на ровном полу
+    if (dev.depthFx === false) { o.ao = 'off'; o.rt = 'off'; o.framegen = false; }
     if (o.aa === 'msaa' && dev.gl2 === false) o.aa = 'fxaa';
     return o;
   };
@@ -425,6 +431,13 @@
 		return shadow;
 	}
 	`;
+  // Точность сэмплеров (15.10.2026, телефон владельца): у sampler2D во фрагментном шейдере по умолчанию lowp, и на телефонах
+  // значение из текстуры приходит в половинной точности (fp16). Карте теней (глубина, упакованная в RGBA8) и карте глубины
+  // воды это мало: кусок теней целиком — в highp, после него — снова как было (lowp: цвету и нормалям хватает, так быстрее).
+  // highp в GLSL ES 3.00 есть всегда; в WebGL1 — если видеокарта умеет. Постобработка — E.POST_PREC (post.js).
+  const PREC_HI = '#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )\nprecision highp sampler2D;\n#endif\n';
+  const PREC_LO = '#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )\nprecision lowp sampler2D;\n#endif\n';
+  E.SAMPLER_PREC = { hi: PREC_HI, lo: PREC_LO };
   // Заменить getShadow в куске three (от «float getShadow(» до «vec2 cubeToUV(») — устойчиво к пробелам сборки
   E.patchShadowChunk = src => {
     const a = src.indexOf('float getShadow('), b = src.indexOf('vec2 cubeToUV(');
@@ -462,7 +475,7 @@ uniform vec4 d37Rt;`;
     const C = T && T.ShaderChunk;
     if (!C || C.__d37) return !!C;
     C.fog_pars_vertex = FOG_PARS_V; C.fog_vertex = FOG_V; C.fog_pars_fragment = FOG_PARS_F; C.fog_fragment = FOG_F;
-    C.shadowmap_pars_fragment = E.patchShadowChunk(C.shadowmap_pars_fragment || '');
+    C.shadowmap_pars_fragment = PREC_HI + E.patchShadowChunk(C.shadowmap_pars_fragment || '') + '\n' + PREC_LO;   // карта теней — highp
     // трассировка лучей: данные — в кусок шероховатости (он есть только у стандартных), мокрое — после нормалей, код блеска — в конце
     if (C.roughnessmap_pars_fragment != null && !C.roughnessmap_pars_fragment.includes('d37Rt')) C.roughnessmap_pars_fragment += RT_PARS;
     if (C.normal_fragment_maps != null && !C.normal_fragment_maps.includes('d37Rt')) C.normal_fragment_maps += RT_WET;
@@ -564,8 +577,8 @@ varying vec3 vD37W;
 uniform float uTime; uniform float uClear; uniform float uFoam; uniform float uWQ;
 uniform vec4 uDepR;
 #ifdef D37_WDEPTH
-uniform sampler2D tDep;
-#endif`)
+${PREC_HI}uniform sampler2D tDep;
+${PREC_LO}#endif`)
         // нормаль: два слоя ряби в мировых координатах (только у горизонтальной поверхности)
         .replace('#include <normal_fragment_maps>', `#ifdef USE_NORMALMAP
   vec2 wq = vD37W.xz;

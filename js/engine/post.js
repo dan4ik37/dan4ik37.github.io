@@ -489,6 +489,14 @@ void main(){
   const FS_COPY = `uniform sampler2D tSrc; varying vec2 vUv;
 void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
   E.FG = { fs: FS_FG, MAXMOV: 8 };
+  // Точность чтения текстур (15.10.2026, телефон владельца: «пятна» на площади и фонтане). В GLSL ES 3.00 у sampler2D во
+  // фрагментном шейдере точность по умолчанию — lowp, и значение из текстуры приходит С ТОЧНОСТЬЮ СЭМПЛЕРА: на телефонах
+  // (Adreno, Mali, Apple) это половинный float (fp16, 11 бит). Глубина 0,98 в fp16 — шаг 0,0005: на 8 м ошибка 0,1–0,3 м →
+  // контактные тени и отражения находили «заслонки» в ровном полу (пятна, полосы), AO — шумел. three r149 точность
+  // сэмплеров не задаёт (новые версии задают highp). На компьютере (ANGLE/Direct3D) всё и так fp32 — поэтому видно только
+  // на телефоне. Каждый шейдер постобработки начинается с этой строки (render-test проверяет). highp в GLSL ES 3.00 есть
+  // всегда; в WebGL1 — только если видеокарта умеет (GL_FRAGMENT_PRECISION_HIGH)
+  E.POST_PREC = '#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )\nprecision highp sampler2D;\n#endif\n';
   E.post = function (R, o = {}){
     const T = R.T, r = R.r, q = R.q, ext = r.extensions, gl2 = r.capabilities.isWebGL2;
     // буфер сцены: половинные float (значения > 1 и маска свечения в альфе); нет — обычный (без свечения)
@@ -521,7 +529,7 @@ void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
     const rtUp = gl2 ? new T.WebGLRenderTarget(1, 1, { depthBuffer: false }) : null, DB = new T.Vector2();   // FSR: EASU → сюда (размер холста)
     let rtAO = null, rtAO2 = null;   // SSAO: расчёт и размытие (RG: свет, глубина)
     const B = [];
-    const mk = (fs, uniforms, add) => new T.ShaderMaterial({ vertexShader: VS, fragmentShader: fs, uniforms, depthTest: false, depthWrite: false, toneMapped: false,
+    const mk = (fs, uniforms, add) => new T.ShaderMaterial({ vertexShader: VS, fragmentShader: E.POST_PREC + fs, uniforms, depthTest: false, depthWrite: false, toneMapped: false,
       blending: add ? T.CustomBlending : T.NoBlending, blendSrc: T.OneFactor, blendDst: T.OneFactor, blendEquation: T.AddEquation });
     const tx = () => ({ tSrc: { value: null }, uTexel: { value: new T.Vector2() } });
     const M = {
@@ -579,6 +587,39 @@ void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
     const pscene = new T.Scene(), pcam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1), quad = new T.Mesh(tri, M.comp);
     quad.frustumCulled = false; quad.matrixAutoUpdate = false; pscene.add(quad); pscene.matrixWorldAutoUpdate = false; pscene.updateMatrixWorld(true);
     function pass(mat, target){ quad.material = mat; r.setRenderTarget(target); r.render(pscene, pcam); P.passes++; }
+
+    // ── Точность глубины на этом устройстве (один раз, ~1 мс): видеокарта рисует плоскость на известной глубине, шейдер с
+    // highp-сэмплером читает её и сравнивает. Неточно (нет highp или драйвер его не дал) — AO, «Трассировка лучей» и
+    // «Генерация кадров» здесь выключены: с грубой глубиной они рисуют пятна и полосы на ровном полу (телефон владельца) ──
+    P.depthOK = !P.canAO || probeDepth();
+    if (!P.depthOK) { P.canAO = false; P.fg.ok = false; }
+    function probeDepth(){
+      try {
+        const gl = typeof r.getContext === 'function' ? r.getContext() : null;
+        if (gl && gl.getShaderPrecisionFormat) {
+          const hp = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, gl.HIGH_FLOAT);
+          P.prec = hp ? hp.precision : 0;
+          if (!hp || hp.precision < 23) return false;   // highp во фрагментном шейдере — не float32
+        }
+        if (typeof r.readRenderTargetPixels !== 'function') return true;   // подставной рендерер (проверки в node)
+        const D = .9876543;   // глубина «метров за 15»: в fp16 здесь шаг 0,0005 — сразу видно
+        const tz = new T.WebGLRenderTarget(4, 4, { depthBuffer: true, stencilBuffer: false });
+        tz.depthTexture = new T.DepthTexture(4, 4); tz.depthTexture.type = T.UnsignedIntType; tz.depthTexture.format = T.DepthFormat;
+        const to = new T.WebGLRenderTarget(1, 1, { depthBuffer: false });
+        const mw = new T.ShaderMaterial({ vertexShader: `void main(){ gl_Position = vec4(position.xy, ${(2 * D - 1).toFixed(7)}, 1.0); }`,
+          fragmentShader: 'void main(){ gl_FragColor = vec4(0.0); }', depthTest: true, depthWrite: true });
+        const mr = mk(`uniform sampler2D tDepth; varying vec2 vUv;
+void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl_FragColor = vec4(e < 4e-6 ? 1.0 : 0.0, clamp(e * 1000.0, 0.0, 1.0), 0.0, 1.0); }`, { tDepth: { value: tz.depthTexture } });
+        r.setRenderTarget(tz); r.clear(true, true, false);
+        pass(mw, tz); pass(mr, to);
+        const px = new Uint8Array(4); r.readRenderTargetPixels(to, 0, 0, 1, 1, px);
+        r.setRenderTarget(null);
+        P.probe = { ok: px[0] > 127, err: px[1] / 255 / 1000 };
+        for (const x of [mw, mr, to, tz.depthTexture, tz]) x.dispose();
+        quad.material = M.comp;
+        return P.probe.ok;
+      } catch (e) { console.warn?.('post: проверка точности глубины не удалась', e); return true; }   // не смогли проверить — как раньше
+    }
 
     // ── Настройки игрока: AO, сглаживание, апскейлер и резкость (размеры буферов — в setSize) ──
     P.setOpts = (op = {}) => {
