@@ -46,7 +46,7 @@ if (want('gen')) {
   // лавовый слой и бесконечная глубина
   const deep = G.genChunk(0, 40, mk()), deeper = G.genChunk(0, 400, mk());
   ok(deep.fg.some(f => f === T.ASH || f === T.DEEPSTONE) && deeper.fg.some(f => f === T.ASH || f === T.DEEPSTONE), 'генерация: глубже 2,5 км и 25 км — мир есть (бесконечно вниз)');
-  ok(deeper.lt.some(v => v === 2), 'генерация: внизу — лава');
+  ok([-1, 0, 1].some(cx => [399, 400, 401].some(cy => G.genChunk(cx, cy, mk()).lt.some(v => v === 2))), 'генерация: внизу — лава (лужи в чашах)');
   // далеко в стороны — тоже мир (бесконечно вбок)
   const far = G.genChunk(1e6, 3, mk()), farL = G.genChunk(-1e6, 3, mk());
   ok(far.fg.some(Boolean) && farL.fg.some(Boolean), 'генерация: на миллион клеток вправо и влево — мир есть');
@@ -250,6 +250,28 @@ if (want('liquid')) {
   w5.set(5, 10, T.SAND);
   const b5 = w5.sum(1); w5.run(600);
   ok(w5.cell(5, 29).c.fg[w5.cell(5, 29).i] === T.SAND && w5.sum(1) === b5, 'песок: тонет в воде, вода не пропадает', [w5.sum(1), b5]);
+  // озёра из генерации — в чашах: подошёл игрок (жидкости ожили) — ничего не утекает, гладь ровная
+  const Gb = PZ.makeGen(12345);
+  let found = [];
+  for (let rx = -12; rx <= 12 && found.length < 4; rx++) for (let ry = 4; ry <= 20 && found.length < 4; ry++) { const b = Gb.basin(rx, ry); if (b && b.lt === 1 && b.cells >= 20) found.push(b); }
+  ok(found.length >= 3, 'озёра: в чашах есть вода (несколько озёр рядом со стартом)', found.length);
+  let leaks = 0, flat = 0, moved = 0;
+  for (const b of found) {
+    const w6 = { W: new Map() }, list = [];
+    for (let cy = Math.floor(b.Y0 / CS) - 1; cy <= Math.floor((b.Y0 + 63) / CS) + 1; cy++) for (let cx = Math.floor(b.X0 / CS) - 1; cx <= Math.floor((b.X0 + 95) / CS) + 1; cx++) {
+      const c = Object.assign(Gb.genChunk(cx, cy, mk()), { cx, cy, awake: 40 }); w6.W.set(cx + ',' + cy, c); list.push(c);
+    }
+    const LW6 = { chunk: (cx, cy) => w6.W.get(cx + ',' + cy), changed(){ moved++; } };
+    const lake = () => { let s = 0; for (let y = b.Y0; y < b.Y0 + 64; y++) for (let x = b.X0; x < b.X0 + 96; x++) if (b.fill[(y - b.Y0) * 96 + (x - b.X0)]) { const c = w6.W.get(Math.floor(x / CS) + ',' + Math.floor(y / CS)); s += c.lq[((y & 63) << 6) | (x & 63)]; } return s; };
+    const l0 = lake();
+    for (let t = 0; t < 600; t++) PZ.liquidStep(LW6, list, t, 1e9);
+    if (lake() !== l0) leaks++;
+    // гладь: верхний ряд чаши — у всех клеток над водой воздух
+    let row = 0; for (let x = b.X0; x < b.X0 + 96; x++) if (b.fill[(b.level - b.Y0) * 96 + (x - b.X0)]) row++;
+    if (row >= 3) flat++;
+  }
+  ok(leaks === 0, 'озёра: 600 шагов жидкостей — из чаш ничего не утекло', { leaks, n: found.length });
+  ok(flat === found.length, 'озёра: у каждой чаши ровная гладь (верхний ряд — 3+ клетки)', flat);
 }
 
 // ═══ 5. Столкновения ═══

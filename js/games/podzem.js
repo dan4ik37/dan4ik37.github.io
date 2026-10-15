@@ -521,7 +521,15 @@
     }
     PT.n = n;
   }
-  function floatText(x, y, text, color){ if (G.texts.length > 40) G.texts.shift(); G.texts.push({ x, y, text: String(text), color: color || '#fff', t: 0 }); }
+  function floatText(x, y, text, color, big){ if (G.texts.length > 40) G.texts.shift(); G.texts.push({ x: x + (rand() - .5) * .5, y, text: String(text), color: color || '#fff', t: 0, big: big ? 1 : 0 }); }
+  // осколки: из всей клетки, разного оттенка, вверх и в стороны (dir — куда сильнее: к игроку)
+  function shade(c, k){ const m = 1 + (rand() - .5) * k; return Math.min(255, (c >> 16 & 255) * m) << 16 | Math.min(255, (c >> 8 & 255) * m) << 8 | Math.min(255, (c & 255) * m); }
+  function debris(x, y, w, h, col, n, speed = 4, dir = 0){
+    for (let k = 0; k < n; k++) {
+      const px = x + rand() * w, py = y + rand() * h;
+      part(px, py, (px - x - w / 2) * speed * .9 + dir * speed * (.4 + rand() * .6) + (rand() - .5) * 1.5, -speed * (.35 + rand() * .65), .45 + rand() * .45, .12 + rand() * .16, shade(col, .45), 1.1);
+    }
+  }
 
   // ═══ Мобы ═══
   // ai: slime | walker | bat | imp | bossSlime | bossOwl; tint — цвет спрайта; drop: [[предмет, от, до, шанс]]
@@ -549,10 +557,13 @@
     const crit = rand() < .05;
     const d = Math.max(1, Math.round(dmg * (crit ? 2 : 1) * (.9 + rand() * .2)));
     m.hp -= d; m.hurt = .2;
-    floatText(m.x + m.w / 2, m.y, d, crit ? '#ffd84a' : '#ffffff');
+    floatText(m.x + m.w / 2, m.y, crit ? d + '!' : d, crit ? '#ffd84a' : '#ffffff', crit);
+    if (crit || d >= 20) G.cam.shake = Math.max(G.cam.shake, crit ? .22 : .12);   // ощутимый удар: камера вздрагивает
+    if (crit) G.hitStop = .045;                                                     // и на миг «замирает» (как в файтингах)
     if (!m.D.boss) { m.vx = kx * 7; m.vy = Math.min(m.vy, -5); }
     snd(m.D.ai === 'slime' || m.D.ai === 'bossSlime' ? 'squish' : 'hit', { x: m.x, y: m.y, vol: .7 });
-    burst(m.x + m.w / 2, m.y + m.h / 2, 5, m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0xb02020, 5, .4, .14);
+    const mc = m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0xb02020;   // брызги — по ходу удара
+    for (let k = 0, n = crit ? 9 : 5; k < n; k++) part(m.x + m.w / 2 - kx * m.w * .25, m.y + m.h * (.3 + rand() * .4), kx * (3 + rand() * 5) + (rand() - .5) * 2.5, -2 - rand() * 4, .35 + rand() * .3, .1 + rand() * .1, shade(mc, .35), 1);
     if (m.D.ai === 'bossSlime' && m.hp > 0) {   // великан: каждые 10 % — малыши
       const step = Math.floor((1 - m.hp / m.maxHp) * 10);
       if (step > m.phase) { m.phase = step; for (let k = 0; k < 2; k++) { const s = spawnMob('slime', m.x + m.w / 2 + (k ? 1 : -1), m.y + m.h * .6); if (s) { s.vy = -10; s.vx = (k ? 4 : -4); } } }
@@ -760,6 +771,7 @@
     if (p.dead || p.iframes > 0 || G.god) return;   // god — только для проверок (_test.god)
     const d = Math.max(1, Math.round(dmg * (.9 + rand() * .2)));
     G.CH.hp -= d; p.iframes = .66; p.hurtT = .3; p.regenT = 0;
+    G.U?.hurt?.(Math.min(1, .45 + d / 60));   // красные края экрана на миг (во всех наборах шейдеров)
     p.vx = kx * 8; p.vy = -7; p.ground = false;
     floatText(p.x + p.w / 2, p.y, d, '#ff5a5a');
     snd('hurt', { vol: .8 }); G.cam.shake = Math.max(G.cam.shake, .25);
@@ -1106,7 +1118,9 @@
     const f = fgAt(tx, ty), stone = layer === 'fg' && (P.GROUP[f] === 2 || P.GROUP[f] === 7 || P.GROUP[f] === 9 || P.TIER[f] >= 1);
     snd(stone ? 'digstone' : 'dig', { x: tx, y: ty, vol: .55, rate: .9 + rand() * .2 });
     const col = tileColor(layer === 'fg' ? f : 0, layer === 'wall' ? wallAt(tx, ty) : 0);
-    burst(tx + .5, ty + .5, 3, col, 3, .35, .12);
+    const ddx = p.x + p.w / 2 - tx - .5, ddy = p.y + p.h / 2 - ty - .5;   // щепки — с той стороны, где игрок
+    if (Math.abs(ddx) >= Math.abs(ddy) * .7) debris(tx + (ddx > 0 ? .75 : 0), ty, .25, 1, col, 3, 3, Math.sign(ddx));
+    else debris(tx, ty + (ddy > 0 ? .75 : 0), 1, .25, col, 3, 3, 0);
     if (p.mine.dmg >= hard) {
       if (layer === 'fg') breakTile(tx, ty); else breakWall(tx, ty);
       p.mine = null;
@@ -1149,7 +1163,7 @@
   }
   function afterBreak(x, y, f, w, h, quiet){
     if (!quiet) {
-      burst(x + w / 2, y + h / 2, 10, tileColor(f, 0), 5, .5, .14);
+      debris(x, y, w, h, tileColor(f, 0), 8 + 4 * Math.min(4, w * h), 4.5);
       snd(P.GROUP[f] === 2 || P.GROUP[f] === 7 ? 'digstone' : 'dig', { x, y, vol: .8 });
       ach('first_dig');
       G.modsEmit?.('tileBreak', { x, y, tile: tileKey(f) });
@@ -1775,6 +1789,29 @@
     GRADE.sat += (sat - GRADE.sat) * a; GRADE.con += (con - GRADE.con) * a;
     return GRADE;
   }
+  // ═══ Звуки места (петли движка synth.js): треск у ближайшего факела, гул лавы, плеск у воды, ветер на поверхности ═══
+  // 4 раза в секунду; сторона и затухание — движок (A.listener — камера), своя громкость — по расстоянию в клетках
+  function ambience(camX, camY){
+    const A = G.audio || (window.D37E?.audio ? (G.audio = window.D37E.audio()) : null); if (!A?.loop || !G.W) return;
+    const M = G.amb || (G.amb = { fire: A.loop('amb_fire', { vol: 0 }), lava: A.loop('amb_fire', { vol: 0 }), water: A.loop('amb_water', { vol: 0 }), wind: A.loop('amb_wind', { vol: 0 }) });
+    if (G.state !== 'play') { for (const k in M) M[k].set({ vol: 0 }); return; }
+    let fx = 0, fy = 0, fd = 14, lx = 0, ly = 0, ld = 34, wx = 0, wy = 0, wd = 22;
+    for (const c of visList) {
+      const ox = c.cx * CS, oy = c.cy * CS;
+      if (c.emiDirty || !c.emi) emissives(c);
+      for (const i of c.emi) if (c.fg[i] === T.TORCH) { const x = ox + (i & CM) + .5, y = oy + (i >> CB) + .5, d = Math.hypot(x - camX, y - camY); if (d < fd) { fd = d; fx = x; fy = y; } }
+      if (!c.hasLq) continue;
+      if (c.lavaDirty || !c.lava) lavaTops(c);
+      for (let k = 0; k < c.lava.length; k += 2) { const i = c.lava[k], x = ox + (i & CM) + .5, y = oy + (i >> CB) + .5, d = Math.hypot(x - camX, y - camY); if (d < ld) { ld = d; lx = x; ly = y; } }
+      for (let i = CS; i < CA; i += 2) if (c.lt[i] === 1 && c.lq[i] > 120 && !c.lq[i - CS] && !c.fg[i - CS]) { const x = ox + (i & CM) + .5, y = oy + (i >> CB), d = Math.hypot(x - camX, y - camY); if (d < wd) { wd = d; wx = x; wy = y; } }   // гладь воды
+    }
+    M.fire.set(fd < 14 ? { x: fx, y: fy, z: 0, vol: .2 * (1 - fd / 14) } : { vol: 0 });
+    M.lava.set(ld < 34 ? { x: lx, y: ly, z: 0, vol: .5 * (1 - ld / 34) } : { vol: 0 });
+    M.water.set(wd < 22 ? { x: wx, y: wy, z: 0, vol: .3 * (1 - wd / 22) } : { vol: 0 });
+    const d = camY - G.gen.colInfo(Math.floor(camX)).h;   // ветер — только наверху, к ночи сильнее
+    M.wind.set({ vol: d < 8 ? (isNight() ? .2 : .12) * Math.min(1, (8 - d) / 10) : 0 });
+  }
+  function ambienceOff(){ if (G?.amb) { for (const k in G.amb) G.amb[k].stop(); G.amb = null; } }
   const visList = [];
   function render(){
     const R = G.R; if (!R || !G.W) return;
@@ -1782,11 +1819,14 @@
     R.frame++;
     gfxQ();
     const [vw, vh] = viewTiles();
-    // камера: за игроком, плавно; чуть вперёд по ходу
-    const p = G.pl;
-    const tx = p.x + p.w / 2 + p.vx * .12, ty = p.y + p.h / 2 - (p.stepOff || 0);
-    const k = 1 - Math.exp(-10 / 60);
-    G.cam.x += (tx - G.cam.x) * k; G.cam.y += (ty - G.cam.y) * k;
+    // камера: за игроком плавно (не зависит от частоты кадров); взгляд вперёд по ходу и вниз при быстром падении —
+    // тоже плавно (без рывка при развороте); вверх в прыжке тянется мягче — меньше качки
+    const p = G.pl, tn = now(), dtr = Math.min(.1, Math.max(.001, (tn - (G.lastRender || tn)) / 1000)); G.lastRender = tn;
+    const leadX = clamp(p.vx * .24, -3.2, 3.2), leadY = p.vy > 12 && !p.inLq ? Math.min(4, (p.vy - 12) * .14) : 0;
+    G.cam.lx = (G.cam.lx || 0) + (leadX - (G.cam.lx || 0)) * (1 - Math.exp(-3 * dtr));
+    G.cam.ly = (G.cam.ly || 0) + (leadY - (G.cam.ly || 0)) * (1 - Math.exp(-4 * dtr));
+    const tx = p.x + p.w / 2 + G.cam.lx, ty = p.y + p.h / 2 - (p.stepOff || 0) + G.cam.ly;
+    G.cam.x += (tx - G.cam.x) * (1 - Math.exp(-9 * dtr)); G.cam.y += (ty - G.cam.y) * (1 - Math.exp(-(p.vy < -1 ? 6 : 11) * dtr));
     if (Math.abs(tx - G.cam.x) > 40 || Math.abs(ty - G.cam.y) > 40) { G.cam.x = tx; G.cam.y = ty; }
     G.cam.y = Math.max(G.cam.y, vh / 2 - 30);
     let sx = 0, sy = 0;
@@ -1811,6 +1851,7 @@
       visList.push(c);
     }
     if (ups < 6) for (const c of G.chunks.values()) { if (ups >= 6) break; if (!c.ready || c.dirty0 || c.dirty1 || c.dirtyL) { upload(c); ups++; } }
+    if ((R.frame & 15) === 0) ambience(camX, camY);   // звуки места — 4 раза в секунду
     R.begin(camX, camY, G.fl);
     R.background(BG);
     R.chunks(visList, CHS, 0);
@@ -1987,16 +2028,17 @@
     o.clearRect(0, 0, W, H);
     const sxOf = x => (x - camX) * s + W / 2 / G.dpr2, syOf = y => (y - camY) * s + H / 2 / G.dpr2;
     o.save(); o.scale(G.dpr2, G.dpr2);
-    o.textAlign = 'center'; o.font = '800 14px system-ui, sans-serif'; o.lineWidth = 3; o.strokeStyle = 'rgba(0,0,0,.75)';
+    o.textAlign = 'center'; o.lineWidth = 3; o.lineJoin = 'round'; o.strokeStyle = 'rgba(0,0,0,.75)';
     for (let n = G.texts.length - 1; n >= 0; n--) {
       const q = G.texts[n]; q.t += 1 / 60;
       if (q.t > 1.1) { G.texts.splice(n, 1); continue; }
-      const x = sxOf(q.x), y = syOf(q.y) - q.t * 28;
+      const x = sxOf(q.x), y = syOf(q.y) - q.t * 28 - q.big * 4, pop = q.t < .1 ? 1.45 - q.t * 4.5 : 1;   // «выпрыгивает» и садится
+      o.font = `800 ${Math.round((q.big ? 19 : 14) * pop)}px Montserrat, system-ui, sans-serif`;
       o.globalAlpha = Math.min(1, (1.1 - q.t) * 3);
       o.strokeText(q.text, x, y); o.fillStyle = q.color; o.fillText(q.text, x, y);
     }
     o.globalAlpha = 1;
-    o.font = '700 12px system-ui, sans-serif';
+    o.font = '700 12px Montserrat, system-ui, sans-serif';
     for (const n of G.npcs) { const x = sxOf(n.x + n.w / 2), y = syOf(n.y) - 16; o.strokeText(n.name, x, y); o.fillStyle = '#ffe6a0'; o.fillText(n.name, x, y); }
     if (G.opt.fps) { const L = G.perf.frames, avg = L.length ? L.reduce((a, b) => a + b, 0) / L.length : 0, cpu = G.perf.cpu.length ? G.perf.cpu.reduce((a, b) => a + b, 0) / G.perf.cpu.length : 0; o.textAlign = 'left'; o.font = '600 12px ui-monospace, monospace'; const txt = `${avg ? (1000 / avg).toFixed(0) : '–'} к/с · кадр ${avg.toFixed(1)} мс · ЦП ${cpu.toFixed(2)} мс · чанков ${G.chunks.size} · вызовов ${G.R.stats.draws} · спрайтов ${G.R.stats.sprites}`; o.strokeText(txt, 8, H / G.dpr2 - 10); o.fillStyle = '#9fffa0'; o.fillText(txt, 8, H / G.dpr2 - 10); }
     o.restore();
@@ -2016,6 +2058,7 @@
         const c0 = now();
         acc += G.state === 'paused' ? 0 : dt;
         let n = 0;
+        if (G.hitStop > 0) { G.hitStop -= dt; acc = 0; }   // миг после сильного удара
         while (acc >= 1 / 60 && n < 5) { step(1 / 60); acc -= 1 / 60; n++; }
         if (n === 5) acc = 0;
         drainInbox(G.state === 'loading' ? 12 : 2);
@@ -2241,6 +2284,7 @@
     G.worker?.stop(); G.worker = null;
     for (const c of G.chunks.values()) G.R?.chunkFree(c);
     G.chunks.clear(); G.W = null; G.CH = null; G.state = 'menu';
+    ambienceOff();
   }
   // рекорд глубины — в таблицу рекордов сайта (без XP), не чаще раза в минуту
   let depthSent = 0, depthAt = 0;
@@ -2394,7 +2438,7 @@
     bindInput();
     on(window, 'resize', resize);
     G.offFs = window.D37Full?.on?.(() => setTimeout(resize, 60));
-    on(document, 'visibilitychange', () => { if (document.hidden) journal(); });
+    on(document, 'visibilitychange', () => { if (document.hidden) { journal(); ambienceOff(); } });   // вкладку спрятали — треск и плеск не играют в фоне
     on(window, 'pagehide', journal);
     resize();
     G.look = window.D37Char?.look?.() || {};
@@ -2420,6 +2464,7 @@
     try { if (g.state !== 'menu') { journal(); reportDepth(); } } catch (e) {}
     g.alive = false;
     g.loop?.stop();
+    try { ambienceOff(); } catch (e) {}
     g.modsStop?.();
     g.worker?.stop();
     for (const [t, ev, f, o] of g.listeners) t.removeEventListener(ev, f, o);

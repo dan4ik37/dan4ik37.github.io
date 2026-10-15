@@ -358,22 +358,64 @@ function PZ_CORE(){
         else wall = b === B.JUNGLE ? WL.MUDWALL : b === B.DESERT && d < C.dd + 48 ? WL.SANDWALL : WL.STONEWALL;
         if (cave && noise2(x * .031, y * .034, S + 9) < -.22) wall = 0;
       }
-      // озёра и лава в пещерах: участок 96×64, уровень жидкости — один на весь участок (гладь ровная:
-      // границы слоёв берём по средней колонке участка, а не по своей — иначе верх озера шёл бы волной)
+      // озёра и лава — в настоящих чашах (basin): гладь ровная, вода не утекает, когда к ней подходишь
       if (cave) {
-        const rx = Math.floor(x / 96), ry = Math.floor(y / 64), lx = x - rx * 96;
-        if (lx > 5 && lx < 90) {
-          const R = colInfo(rx * 96 + 48), top = R.lava - 20;
-          if (y >= top) {
-            const lvl = Math.max(top, ry * 64 + 30 + (hash2(rx, ry, S + 51) % 28));
-            if (rnd2(rx, ry, S + 52) < .5 && y >= lvl) liq = 2;
-          } else if (ry * 64 + 63 < top) {
-            const lvl = ry * 64 + 20 + (hash2(rx, ry, S + 53) % 34);
-            if (rnd2(rx, ry, S + 54) < .3 && lvl > R.h + 32 && d > 8 && y >= lvl) liq = 1;
-          }
-        }
+        const rx = Math.floor(x / RW), ry = Math.floor(y / RH), bs = basin(rx, ry);
+        if (bs && bs.fill[(y - bs.Y0) * RW + (x - bs.X0)]) liq = bs.lt;
       }
       return fg | wall << 8 | liq << 16;
+    }
+    // ── Чаши озёр: участок 96×64; есть ли озеро и какое — по зерну. От дна (пещера, под ней — камень) жидкость «наливается»
+    // ряд за рядом: каждый уровень — все пещерные клетки не выше уровня, до которых дотечёт; дотекла до края участка —
+    // значит, перелилась бы дальше: берём прошлый уровень. Так у чаши твёрдые дно и бока, а сверху — воздух ──
+    const RW = 96, RH = 64, basins = new Map();
+    function basin(rx, ry){
+      const k = rx + ',' + ry;
+      if (basins.has(k)) return basins.get(k);
+      if (basins.size > 600) basins.clear();
+      let res = null;
+      const X0 = rx * RW, Y0 = ry * RH, mid = colInfo(X0 + 48);
+      const lava = Y0 + RH / 2 >= mid.lava - 20, water = !lava && Y0 >= mid.h + 30;
+      if ((lava && rnd2(rx, ry, S + 52) < .55) || (water && rnd2(rx, ry, S + 54) < .5)) {
+        // клетка пещеры (без деревьев и прочего — они на поверхности); 3 — пещера у самой поверхности (туда не наливаем)
+        const grid = new Uint8Array(RW * RH);
+        const kind = (x, y) => { const C = colInfo(x), d = y - C.h; return d > 0 && caveAt(x, y, d, C) ? (d > 8 ? 2 : 3) : 1; };
+        const at = (x, y) => { const i = (y - Y0) * RW + (x - X0); return grid[i] || (grid[i] = kind(x, y)); };
+        for (let t = 0, tries = lava ? 12 : 8; t < tries && !res; t++) {   // у лавы — больше попыток: там пещеры огромные, чаши мельче
+          const sx = X0 + 6 + hash2(rx * 7 + t, ry, S + 51) % (RW - 12);
+          let fy = -1;
+          for (let y = Y0 + 4; y < Y0 + RH - 2; y++) if (at(sx, y) === 2 && at(sx, y + 1) === 1) { fy = y; break; }   // дно: пещера, под ней камень
+          if (fy < 0) continue;
+          const fill = new Uint8Array(RW * RH), Q = [];
+          fill[(fy - Y0) * RW + (sx - X0)] = 1;
+          let level = fy, cells = 1, surf = 1;
+          // налить ещё ряд: новые клетки ряда L = level − 1 над залитыми и всё, куда дотечёт не выше L
+          while (level > Y0 + 1 && fy - level < 18) {
+            const L = level - 1, added = [];
+            for (let x = X0; x < X0 + RW; x++) if (fill[(level - Y0) * RW + (x - X0)] && at(x, L) === 2 && !fill[(L - Y0) * RW + (x - X0)]) { fill[(L - Y0) * RW + (x - X0)] = 1; added.push(x, L); Q.push(x, L); }
+            if (!added.length) break;   // сверху камень — чаша полна
+            let leak = false;
+            while (Q.length && !leak) {
+              const y = Q.pop(), x = Q.pop();
+              for (let n = 0; n < 4 && !leak; n++) {
+                const nx = x + (n === 0 ? 1 : n === 1 ? -1 : 0), ny = y + (n === 2 ? 1 : n === 3 ? -1 : 0);
+                if (ny < L) continue;
+                if (nx < X0 || nx >= X0 + RW || ny >= Y0 + RH) { if (kind(nx, ny) !== 1) leak = true; continue; }   // за краем участка пещера — утекло бы
+                const i = (ny - Y0) * RW + (nx - X0), v = at(nx, ny);
+                if (fill[i] || v === 1) continue;
+                if (v === 3) { leak = true; continue; }   // дотекло до пещеры у поверхности
+                fill[i] = 1; added.push(nx, ny); Q.push(nx, ny);
+              }
+            }
+            if (leak) { for (let j = 0; j < added.length; j += 2) fill[(added[j + 1] - Y0) * RW + (added[j] - X0)] = 0; Q.length = 0; break; }
+            level = L; cells += added.length / 2;
+            surf = 0; for (let x = X0; x < X0 + RW; x++) if (fill[(level - Y0) * RW + (x - X0)]) surf++;
+          }
+          if (cells >= (lava ? 6 : 10) && surf >= (lava ? 3 : 4)) res = { fill, X0, Y0, lt: lava ? 2 : 1, level, cells };
+        }
+      }
+      basins.set(k, res);
+      return res;
     }
     const solidBase = (x, y) => { const f = base(x, y) & 255; return f !== 0 && P.SOLID[f] === 1; };
 
@@ -514,7 +556,7 @@ function PZ_CORE(){
       }
       return { x: 0, y: colInfo(0).h - 1 };
     }
-    return { seed: S, colInfo, base, caveAt, treeOf, treeCells, genChunk, spawnPoint, biomeName: x => BIOME_NAMES[colInfo(x).b] };
+    return { seed: S, colInfo, base, caveAt, treeOf, treeCells, genChunk, spawnPoint, basin, biomeName: x => BIOME_NAMES[colInfo(x).b] };
   }
 
   // ═══ Свет: заливка «по максимуму» (8 соседей), RGB от источников + S от неба — как режим «Цвет» у Террарии ═══
