@@ -1260,6 +1260,23 @@ js/features/games.js и хвост css/premium.css.
   запуска (GameManager.Instance). Не поддерживается: from…select, goto, unsafe, record, операторы приведения; Rigidbody/Input/Physics/UI
   Unity — подсказка при переводе. Тест: node scripts/lang-cs-test.cjs (173). Новый член библиотеки — и в таблицу API (тип для
   перевода), и в объект A в boot() (тест сверяет). Проверено в браузере 13.10: MonoBehaviour, корутина, 7/2 = 3, вращение в Update.
+- Java (js/engine/lang-java.js, агент 15.10.2026; владелец: «интегрировать джаву … чтобы можно было переносить всё») — язык java
+  «☕ Java (как в модах Minecraft)»: свой переводчик Java → JavaScript внутри песочницы (как C#: worker() уходит туда текстом): лексер →
+  парсер → генератор со статическими типами; ошибки и перевода, и игры — по-русски со строкой Java (//# sourceURL=d37java-N.js), опечатки —
+  «может, length?». Числа ровно как в Java: int — 32 бита (|0, Math.imul), long — BigInt (точные 64 бита, но медленнее int — в горячих
+  циклах int/double), float — Math.fround, char — строка из 1 знака ('a' + 1 = 98), печать как Double.toString / Float.toString; порядок
+  HashMap/HashSet, Random(seed), String.hashCode, Collections.shuffle — как в Java. Поля объектов — ключи '#имя'; перегрузки — как javac
+  (3 фазы). Стили: код верхнего уровня (как JShell / Java 25; переменные верхнего уровня — static-поля неявного класса $Main, лямбды
+  могут их менять), public static void main, class X extends Script { start(), update(double dt), onTouched(Part, Player), onClicked(Player),
+  onPlayerAdded(Player) … }. wait(сек) / Thread.sleep / TimeUnit.sleep / WaitForChild / Signal.Wait() — функция становится генератором
+  (2 прохода перевода) и идёт сопрограммой, и в обработчиках событий тоже; в toString/equals/compareTo… ждать нельзя (SYNC_ONLY). Мир —
+  имена как в Roblox, события — .Connect(лямбда); Enum.Material.Neon — мир, а не java.lang.Enum. Лямбда, отданная миру, — через $.js
+  (ошибка внутри — со строкой Java). Классы общие для всех Java-скриптов запуска ($.X("Имя"), скрипт ниже — переводится после).
+  В переведённом коде BigInt/Math/Number/String — локальные имена ($.JS; такие имена Java-переменных переименовываются — JSRES).
+  Не поддерживается: потоки и synchronized, рефлексия, java.io/nio, сеть, Scanner. Отличие: == у Integer сравнивает значения (в Java —
+  объекты; всё равно пиши equals). Библиотека — каталог LIBSRC/STUDIO_SRC (строка «Имя<T> : предки | члены») + объекты в boot();
+  новый член — в оба места (тест сверяет). Тест: node scripts/lang-java-test.cjs (105). Моды «Кубомира»/«Подземья» на Java (фасад
+  Fabric/Forge, крючки загрузчиков) и исследование .jar — НЕ сделаны (владелец 15.10: «только главное» — лимит), план — docs/JAVA.md.
 - Расширения студии (13.10): новые инструменты, набор предметов, ИИ-помощник — своими файлами, studio3d.js не трогая:
   window.D37E.studioExt.push({ id, mount(api), unmount(), select(sel, selSet), play(), stop() }) — можно и после открытия студии
   (сразу mount). api: ed (состояние, ed.SC — сцена), slot (место для кнопок в верхней панели .s3-ext), insert, select, setSel,
