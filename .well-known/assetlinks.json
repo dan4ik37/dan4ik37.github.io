@@ -1,0 +1,23 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.dan4ik37.twa",
+      "sha256_cert_fingerprints": [
+        "ЗАМЕНИТЬ-1: SHA-256 ключа Google Play (Play Console → Тестирование и выпуск → Целостность приложения → Подпись приложений) — см. docs/APPS.md",
+        "ЗАМЕНИТЬ-2: SHA-256 своего ключа из PWABuilder (signing-key-info.txt) — см. docs/APPS.md"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.vercel.dan4ik37.rustore",
+      "sha256_cert_fingerprints": [
+        "ЗАМЕНИТЬ-3: SHA-256 ключа сборки для RuStore (signing-key-info.txt из PWABuilder) — см. docs/APPS.md"
+      ]
+    }
+  }
+]

@@ -79,13 +79,20 @@
   // Окно приложения? (а не вкладка). Считаем один раз при загрузке: полный экран игры потом меняет display-mode на fullscreen
   const DM = ['standalone', 'window-controls-overlay', 'minimal-ui'];
   const SA = DM.some(m => mm(`(display-mode: ${m})`)) || nav.standalone === true;
-  // Откуда запущено: ?app=play | rustore | ms — сборка для магазина (start_url в apps/), android-app:// — приложение Android (TWA)
+  // Откуда запущено: ?app=play | rustore | ms — сборка для магазина (startUrl в apps/), android-app://<пакет> — приложение
+  // Android (TWA; пакет app.vercel.dan4ik37.twa — Google Play, ….rustore — RuStore). Запоминаем до конца сеанса (sessionStorage:
+  // у TWA хранилище общее с Chrome — localStorage спрятал бы магазин и в обычном браузере)
+  const srcOf = (app, ref) => {
+    if (app && /^(play|rustore|ms|twa)$/.test(app)) return app;
+    const m = /^android-app:\/\/([\w.]+)/.exec(ref || '');
+    if (!m) return '';
+    return /\.rustore$/.test(m[1]) ? 'rustore' : /^app\.vercel\.dan4ik37\./.test(m[1]) ? 'play' : 'twa';
+  };
   const bootHref = loc().href;
   (() => {
     let q = null; try { q = new URLSearchParams(loc().search || ''); } catch (e) {}
-    const a = q?.get('app');
-    if (a && /^(play|rustore|ms|twa)$/.test(a)) ssSet(SS_SRC, a);
-    else if (!ssGet(SS_SRC) && /^android-app:\/\//.test(doc?.referrer || '')) ssSet(SS_SRC, 'twa');
+    const s = srcOf(q?.get('app'), doc?.referrer);
+    if (s && (q?.get('app') || !ssGet(SS_SRC))) ssSet(SS_SRC, s);
   })();
   const SRC = ssGet(SS_SRC) || '';
 
@@ -155,7 +162,7 @@
   const pub = {
     standalone: () => SA, source: () => SRC, env: () => ENV,
     state: () => Object.assign({}, st, { standalone: SA, prompt: !!bip, src: SRC, how: ENV.how }),
-    _test: { detect, cardDue, easyHow, badgeCount, shareText, protoTarget, launchAction, OFFLINE_GAMES },
+    _test: { detect, cardDue, easyHow, badgeCount, shareText, protoTarget, launchAction, srcOf, OFFLINE_GAMES },
   };
   root.D37App = pub;
   let bip = null;

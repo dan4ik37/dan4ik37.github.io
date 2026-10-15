@@ -231,6 +231,7 @@ ok(la('https://evil.example/#/chat') === null, 'чужой адрес — нич
   await testUpdateFlow();
   await testSW();
   testOfflinePage();
+  testStores();
   finished = true;
   console.log(`\npwa-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
@@ -497,6 +498,36 @@ async function testSW(){
   await fire('notificationclick', { notification: { data: { url: '/#/games' }, close(){} } });
   ok(opened[0] === ORIGIN + '/#/games', 'окна нет — открывается новое');
   ok(X.SHELL === 'd37-shell-' + X.VERSION && !/^(d37-shell-|d37-rt-|dan4ik37-shell-)/.test('d37-rust-1'), 'версия в имени кэша; кэши Rust — не наши');
+}
+
+// ═══ 13. Магазины: assetlinks.json, конфиги Bubblewrap (Google Play, RuStore), ключи не в репозитории ═══
+function testStores(){
+  let AL = null;
+  try { AL = JSON.parse(src('.well-known/assetlinks.json')); } catch (e) { ok(false, 'assetlinks.json — правильный JSON', e.message); return; }
+  ok(Array.isArray(AL) && AL.every(s => s.relation?.includes('delegate_permission/common.handle_all_urls') && s.target?.namespace === 'android_app' && Array.isArray(s.target.sha256_cert_fingerprints)), 'assetlinks.json: формат Digital Asset Links');
+  const pkgs = AL.map(s => s.target.package_name);
+  const REQ = ['backgroundColor', 'enableNotifications', 'host', 'iconUrl', 'name', 'navigationColor', 'packageId', 'signingKey', 'splashScreenFadeOutDuration', 'startUrl', 'themeColor', 'themeColorDark'];
+  for (const [dir, app] of [['play', 'play'], ['rustore', 'rustore']]) {
+    let M = null;
+    try { M = JSON.parse(src(`apps/android/${dir}/twa-manifest.json`)); } catch (e) { ok(false, `twa-manifest ${dir} — правильный JSON`, e.message); continue; }
+    ok(REQ.every(k => k in M), `twa-manifest ${dir}: все обязательные поля Bubblewrap`, REQ.filter(k => !(k in M)));
+    ok(M.host === 'dan4ik37.vercel.app' && M.startUrl === '/?app=' + app, `twa-manifest ${dir}: сайт и startUrl /?app=${app}`);
+    ok(pkgs.includes(M.packageId), `twa-manifest ${dir}: пакет ${M.packageId} есть в assetlinks.json`);
+    ok(M.fallbackType === 'customtabs', `twa-manifest ${dir}: запасной вариант — Custom Tabs (WebView без SDK — нельзя AdSense)`);
+    ok((M.shortcuts || []).every(s => s.url.includes('?app=' + app)), `twa-manifest ${dir}: ярлыки помечены ?app=${app}`);
+    ok(M.shareTarget?.params?.text === 'share_text' && M.protocolHandlers?.[0]?.protocol === 'web+denchik', `twa-manifest ${dir}: «Поделиться» и web+denchik как в manifest.json`);
+    const T = fakeBrowser().W.D37App._test;
+    ok(T.srcOf(null, 'android-app://' + M.packageId + '/') === app, `запуск из приложения ${M.packageId} → источник «${app}»`);
+  }
+  ok(!/"shortName": "Магазин"/.test(src('apps/android/play/twa-manifest.json')), 'в сборке для Google Play нет ярлыка «Магазин» (покупки — только через Play Billing)');
+  const T = fakeBrowser().W.D37App._test;
+  ok(T.srcOf('play', '') === 'play' && T.srcOf('evil', '') === '' && T.srcOf(null, 'https://google.com/') === '' && T.srcOf(null, 'android-app://com.other.app/') === 'twa', 'srcOf: только известные значения');
+  const gi = src('.gitignore');
+  ok(['*.keystore', '*.jks', '*.apk', '*.aab', 'signing-key-info.txt'].every(x => gi.includes(x)), '.gitignore: ключи подписи и сборки не попадут в репозиторий');
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.name === 'node_modules' || e.name === '.git' ? [] : e.isDirectory() ? walk(path.join(d, e.name)) : [e.name]);
+  ok(!walk(path.join(SITE, 'apps')).some(f => /\.(keystore|jks|apk|aab)$/.test(f)), 'в apps/ нет ключей и сборок');
+  const doc = src('docs/APPS.md');
+  ok(/support\.google\.com\/adsense\/answer\/48182/.test(doc) && /requirement-apps/.test(doc) && /ЗАМЕНИТЬ-1/.test(doc) && /ЗАМЕНИТЬ-3/.test(doc), 'docs/APPS.md: источники и как заполнить assetlinks');
 }
 
 // ═══ 12. Офлайн-страница: те же игры, что OFFLINE_GAMES в app.js; без внешних файлов ═══
