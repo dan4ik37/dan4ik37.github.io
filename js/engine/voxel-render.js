@@ -74,6 +74,17 @@
   V.iconsReset = () => { iconCache.clear(); tileCache.clear(); };
 
   // ═══ Шейдеры (куски для Ламберта движка) ═══
+  // Ветер — движка (наборы шейдеров, docs/SHADERS3D.md): uD37Wind = E.GFXU.wind (x — время, y — сила: у «Обычных» 0 — листва
+  // стоит, zw — направление по миру). Листва и трава (вершины с флагом «качается») сдвигаются по ветру с порывами, у каждого
+  // места — своя дрожь; смещение — в единицах сетки (1/16 блока). Материалы листвы — R.wave (define D37_WAVE ставит движок)
+  const SWAY_FN = `
+vec2 d37Sway( vec3 wp ) {
+  float ph = wp.x * 0.7 + wp.z * 0.9 + wp.y * 0.3;
+  float wd = dot( wp.xz, uD37Wind.zw ) * 0.35 + uD37Wind.x * 1.7;
+  float gu = ( 0.65 + 0.35 * sin( uD37Wind.x * 0.31 + wp.x * 0.021 + wp.z * 0.017 ) ) * uD37Wind.y * uSway;
+  float k = ( sin( wd ) * 0.6 + 0.4 ) * 0.9;
+  return vec2( uD37Wind.z * k + sin( uD37Wind.x * 2.3 + ph ) * 0.35, uD37Wind.w * k + cos( uD37Wind.x * 1.9 + ph ) * 0.3 ) * gu;
+}`;
   // vd.w: AO (0–1) | свечение грани 0…15 (2–5) | флаги (14–15: 1 — качается на ветру); lt: небо, R, G, B — ×4 (0…60)
   const VS_HEAD = `
 attribute vec4 vd;
@@ -85,9 +96,10 @@ varying float vEm;
 uniform float uTime;
 uniform float uFlick;
 uniform float uSway;
+uniform vec4 uD37Wind;
 #ifdef D37_WATER
 varying vec3 vWp;
-#endif
+#endif` + SWAY_FN + `
 vec3 d37N( float i ) {
   if ( i < 0.5 ) return vec3( 1.0, 0.0, 0.0 );
   if ( i < 1.5 ) return vec3( -1.0, 0.0, 0.0 );
@@ -100,8 +112,12 @@ vec3 d37N( float i ) {
   const VS_NORMAL = `
 vec3 objectNormal = d37N( floor( vd.z / 4096.0 ) );`;
   // «вид из глаз» (рука, вещь в руке): глубина — в первом проценте диапазона (ближе любой стены), порядок внутри сохраняется;
-  // свет, тени и туман считаются по настоящему месту
+  // свет, тени и туман считаются по настоящему месту. Ветер движка в project_vertex (для моделей без масштаба) у нас не нужен —
+  // свой (d37Sway, в единицах сетки) уже сдвинул вершины: define снимаем до куска движка
   const VS_FP = `
+#ifdef D37_WAVE
+#undef D37_WAVE
+#endif
 #include <project_vertex>
 #ifdef D37_FP
 gl_Position.z = gl_Position.z * 0.01 - gl_Position.w * 0.99;
@@ -129,25 +145,28 @@ vEm = mod( floor( d37w / 4.0 ), 16.0 ) / 15.0;
 #ifdef D37_WATER
 vWp = d37wp.xyz;
 #endif
+#ifdef D37_WAVE
 if ( d37f > 0.5 && d37f < 1.5 ) {
-  float d37ph = d37wp.x * 0.7 + d37wp.z * 0.9 + d37wp.y * 0.3;
-  transformed.x += sin( uTime * 1.6 + d37ph ) * 0.8 * uSway;
-  transformed.z += cos( uTime * 1.2 + d37ph ) * 0.6 * uSway;
-}`;
-  // тень вырезного (листва, трава, стекло, факелы): по альфе текстуры — дырявая, как сам блок; листва в тени тоже качается
+  vec2 d37sw = d37Sway( d37wp.xyz );
+  transformed.x += d37sw.x;
+  transformed.z += d37sw.y;
+}
+#endif`;
+  // тень вырезного (листва, трава, стекло, факелы): по альфе текстуры — дырявая, как сам блок; листва в тени качается с тем же
+  // ветром (у теней нет define набора — смотрим на силу ветра: 0 — стоит)
   const VSD_HEAD = `
 attribute vec4 vd;
 varying vec3 vUvL;
 uniform float uTime;
-uniform float uSway;`;
+uniform float uSway;
+uniform vec4 uD37Wind;` + SWAY_FN;
   const VSD_BEGIN = `
 vec3 transformed = vec3( position );
 vUvL = vec3( vd.x / 16.0, vd.y / 16.0, mod( vd.z, 4096.0 ) );
-if ( floor( vd.w / 16384.0 ) > 0.5 && floor( vd.w / 16384.0 ) < 1.5 ) {
-  vec4 d37wp = modelMatrix * vec4( transformed, 1.0 );
-  float d37ph = d37wp.x * 0.7 + d37wp.z * 0.9 + d37wp.y * 0.3;
-  transformed.x += sin( uTime * 1.6 + d37ph ) * 0.8 * uSway;
-  transformed.z += cos( uTime * 1.2 + d37ph ) * 0.6 * uSway;
+if ( floor( vd.w / 16384.0 ) > 0.5 && floor( vd.w / 16384.0 ) < 1.5 && uD37Wind.y > 0.0 ) {
+  vec2 d37sw = d37Sway( ( modelMatrix * vec4( transformed, 1.0 ) ).xyz );
+  transformed.x += d37sw.x;
+  transformed.z += d37sw.y;
 }`;
   const FS_COMMON = `
 varying vec3 vUvL;
@@ -200,10 +219,14 @@ reflectedLight.indirectDiffuse *= max( vLt.x, uMinAmb ) * d37ao;
 reflectedLight.indirectDiffuse += diffuseColor.rgb * vLt.yzw * ( uBlockK * ( 1.0 - 0.72 * uDay * vLt.x ) * ( 1.0 - 0.8 * vEm ) ) * d37ao;
 totalEmissiveRadiance += diffuseColor.rgb * vEm * uEmK;`;
   // свечение (bloom) у светящихся граней — метка в альфе, как у R.bloom движка (только на «высокой»: uBloomK > 0)
+  // (запись — целым вектором, без ветвления: так советует страж графики движка — меньше простора драйверу ошибиться)
   const FS_BLOOM = `
 #ifdef OPAQUE
-if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
+gl_FragColor = vec4( gl_FragColor.rgb, ( uBloomK > 0.0 && vEm > 0.01 ) ? 1.0 + vEm * uBloomK : gl_FragColor.a );
 #endif`;
+  // вырезное по альфе (листва, трава, цветы, факелы, стекло) — код травы движка (E.FOLIAGE_GLSL после output_fragment, uniform
+  // d37Rt = E.GFXU.rt): AO и контактные тени его не учитывают — без тёмных пятен вокруг травинок; флаг ставит движок (post.js)
+  const foliageGLSL = () => typeof E.FOLIAGE_GLSL === 'string' && E.GFXU?.rt ? E.FOLIAGE_GLSL : '';
   // вода: рябь по мировым координатам → блик солнца/луны и небо под острым углом (френель)
   const FS_WATER = `
 #ifdef D37_WATER
@@ -270,7 +293,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       U.uTex.value = tex; U.uAtlasN.value = atlasN;
     }
     const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
-      uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 },
+      uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 }, uD37Wind: { value: E.GFXU?.wind || new Float32Array([0, 0, .8, .6]) },
       uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) } };
     VR.U = U;
     // ── материалы ──
@@ -281,7 +304,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     // AO (0…3) | свечение 0…15 << 2 | флаги << 14 (1 — качается, 2 — вода); lt — небо, R, G, B (×4, 0…60); color — цвет биома.
     // В шейдере после наших кусков: vUvL (u, v, слой), vLt (свет: небо, R, G, B — уже по кривой), vAo, vEm (свечение 0…1),
     // d37Tex(vUvL) — цвет текстуры. Свой кусок — VR.onShader(слой | '*', (sh, info) => {…}) (сработает после наших; пересборка
-    // сама), свой материал целиком — VR.setLayerMaterial(слой, материал). Качание листвы движка — VR.U.uSway.value = 0 (наше выкл).
+    // сама), свой материал целиком — VR.setLayerMaterial(слой, материал). Листва и трава качаются ветром движка (R.wave на
+    // материалах foliage и cutout, сила и направление — E.GFXU.wind; VR.U.uSway — свой множитель, 0 — стоят); вырезное по альфе
+    // пишет код травы движка (E.FOLIAGE_GLSL) — AO и контактные тени его не трогают.
     // лампы движка (точечные) — до солнца в куске lights_fragment_begin: запомнить их вклад (d37pt), чтобы «свет неба» их не гасил
     const LFB = String(T.ShaderChunk.lights_fragment_begin || ''), SPOT = '#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )';
     const LFB2 = LFB.includes(SPOT) ? LFB.replace(SPOT, 'd37pt = reflectedLight.directDiffuse;\n' + SPOT) : '';
@@ -298,9 +323,10 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     };
     let hookSeq = 0;
     function patch(m, kind){
-      const simple = VR.safe;
+      const simple = VR.safe, FOL = !simple && (LAYER_OPTS[kind] || {}).alphaTest ? foliageGLSL() : '';
       m.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, U);
+        if (FOL) sh.uniforms.d37Rt = { value: E.GFXU.rt };
         // #include — только с новой строки (иначе шейдер не собирается)
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', '#include <common>\n' + VS_HEAD)
@@ -308,11 +334,12 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           .replace('#include <begin_vertex>', VS_BEGIN(simple))
           .replace('#include <project_vertex>', VS_FP);
         let fs = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (gl2 ? FS_TEX2 : FS_TEX1))
+          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (FOL ? '\nuniform vec4 d37Rt;' : '') + (gl2 ? FS_TEX2 : FS_TEX1))
           .replace('#include <map_fragment>', FS_MAP)
           .replace('#include <color_fragment>', FS_COLOR)
           .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT + (simple ? '' : FS_WATER));
         if (LFB2 && !simple) fs = fs.replace('#include <lights_fragment_begin>', LFB2);
+        if (FOL) fs = fs.replace('#include <output_fragment>', '#include <output_fragment>\n' + FOL);
         if (!simple) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_BLOOM);
         sh.fragmentShader = fs;
         // куски движка (паки шейдеров): после наших; ошибка в куске — без него (кубики важнее)
@@ -321,7 +348,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           try { h.fn(sh, { layer: kind, gl2, material: m, fp: !!m.defines?.D37_FP }); } catch (e) { sh.vertexShader = v0; sh.fragmentShader = f0; console.warn('Кубомир: кусок шейдера «' + h.id + '» —', e); }
         }
       };
-      m.customProgramCacheKey = () => 'd37vox4-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (simple ? '' : hookKey(kind));
+      m.customProgramCacheKey = () => 'd37vox5-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (FOL ? 'F' : '') + (simple ? '' : hookKey(kind));
       return m;
     }
     const LAYER_OPTS = {
@@ -370,6 +397,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     VR.layerMaterial = k => ownMats[k] || mats[k];
     let mats = makeMats();
     VR.mats = mats;
+    // ветер движка: листва и трава (слои foliage и cutout) — R.wave (define D37_WAVE ставит движок, когда набор шейдеров с ветром)
+    const regWave = () => { if (typeof R.wave === 'function') for (const k of ['foliage', 'cutout']) if (mats[k]) R.wave(mats[k], { kind: 'leaves' }); };
+    regWave();
     buildTextures();
     VR.rebuildTextures = () => { buildTextures(); V.iconsReset(); };
 
@@ -620,8 +650,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const swap = new Map(LAYERS.map(k => [old[k], mats[k]]));
       for (const k in oldF) swap.set(oldF[k], fpMat(k));
       R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); });
-      for (const m of Object.values(old)) m.dispose();
+      for (const m of Object.values(old)) { R.waveMats?.delete?.(m); m.dispose(); }
       for (const m of Object.values(oldF)) m.dispose();
+      regWave();
       for (const m of Object.values(oldD)) m.dispose();
       if (ghostMat) { ghostMat.dispose(); ghostMat = null; ghostName = ''; if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); ghost = null; } }
       V.iconsReset();

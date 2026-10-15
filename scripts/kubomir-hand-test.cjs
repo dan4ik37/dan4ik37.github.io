@@ -19,11 +19,13 @@ const near = (a, b, e = 1e-3) => Math.abs(a - b) <= e;
 
 globalThis.window = globalThis; globalThis.self = globalThis; globalThis.THREE = THREE;
 const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js', 'js/games/kubomir-ents.js', 'js/games/kubomir-hand.js']) run(f);
-const T = THREE, V = window.D37E.vox, Lit = window.KubomirEnts.Lit, ID = V.ID;
+for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js', 'js/games/kubomir-ents.js', 'js/games/kubomir-hand.js']) run(f);
+const T = THREE, E = window.D37E, V = E.vox, Lit = window.KubomirEnts.Lit, ID = V.ID;
 
-// ── сцена движка без WebGL: столько, сколько нужно voxel-render ──
-const R = { T, r: { capabilities: { isWebGL2: true }, properties: { get: () => ({}) } }, scene: new T.Scene(), camera: new T.PerspectiveCamera(70, 16 / 9, .2, 500), q: 'high', night: 0, shadowDirty(){} };
+// ── сцена движка без WebGL: столько, сколько нужно voxel-render (R.wave — как у движка: метка на материале) ──
+const waved = [];
+const R = { T, r: { capabilities: { isWebGL2: true }, properties: { get: () => ({}) } }, scene: new T.Scene(), camera: new T.PerspectiveCamera(70, 16 / 9, .2, 500), q: 'high', night: 0, shadowDirty(){},
+  wave(m, o){ waved.push([m, o]); E.waveMaterial?.(m, o); return m; } };
 const VR = V.renderer(R);
 const SH = { toon: T.MeshToonMaterial, lambert: T.MeshLambertMaterial, phong: T.MeshPhongMaterial, basic: T.MeshBasicMaterial };
 const shaderOf = (lib) => ({ uniforms: {}, vertexShader: T.ShaderLib[lib].vertexShader, fragmentShader: T.ShaderLib[lib].fragmentShader });
@@ -109,6 +111,25 @@ function fakeWorld(sky, blk, walls = new Set()){
   const shV = shaderOf('lambert'); it1.material.onBeforeCompile(shV);
   ok(shV.vertexShader.includes('#ifdef D37_FP') && shV.vertexShader.includes('attribute vec4 lt;') && incOk(shV.vertexShader), 'кубики: кусок «из глаз» в вершинном шейдере (под #ifdef)');
   ok(it1.material.customProgramCacheKey() !== it0.material.customProgramCacheKey(), 'кубики: ключ программы «из глаз» свой');
+  // трава и листва: код травы движка (E.FOLIAGE_GLSL) и ветер движка (R.wave, E.GFXU.wind)
+  sec('трава и листва: код травы и ветер движка');
+  ok(typeof E.FOLIAGE_GLSL === 'string' && E.GFXU && E.GFXU.rt && E.GFXU.wind, 'движок дал E.FOLIAGE_GLSL и E.GFXU (rt, wind)');
+  for (const k of V.LAYERS) {
+    const m = VR.mats[k], sh = shaderOf('lambert'); m.onBeforeCompile(sh);
+    const cut = k === 'cutout' || k === 'foliage' || k === 'glass';
+    ok(sh.fragmentShader.includes('#include <output_fragment>\n' + E.FOLIAGE_GLSL) === cut && (sh.uniforms.d37Rt?.value === E.GFXU.rt) === cut, k + ': код травы движка — ' + (cut ? 'после output_fragment, d37Rt — общий E.GFXU.rt' : 'нет (не вырезное)'));
+    ok(!cut || sh.fragmentShader.includes('uniform vec4 d37Rt;'), k + ': d37Rt объявлен');
+    ok(!/gl_FragColor\.a\s*=/.test(sh.fragmentShader), k + ': альфа — целым вектором, без «.a =» (как советует страж графики)');
+    ok(sh.uniforms.uD37Wind.value === E.GFXU.wind, k + ': ветер — общий E.GFXU.wind по ссылке');
+    ok(/#ifdef D37_WAVE\s*\nif \( d37f > 0\.5 && d37f < 1\.5 \)/.test(sh.vertexShader) && /#undef D37_WAVE\s*#endif\s*#include <project_vertex>/.test(sh.vertexShader), k + ': качание — под D37_WAVE набора, кусок ветра движка (для моделей без масштаба) снят');
+    ok(incOk(sh.fragmentShader) && incOk(sh.vertexShader), k + ': #include — своей строкой');
+  }
+  const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
+  ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
+  ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
+  const dm = (() => { const cm = new T.Mesh(); let d = null; VR.setChunk({ cx: 0, cz: 0, key: 't' }, { foliage: { n: 1, pos: new Uint16Array(12), vd: new Uint16Array(16), col: new Uint8Array(12), lt: new Uint8Array(16) } }); for (const c of VR.chunks) d = c.vis.foliage.customDepthMaterial; return d; })();
+  const shD = shaderOf('depth'); dm.onBeforeCompile(shD);
+  ok(shD.vertexShader.includes('uD37Wind.y > 0.0') && shD.uniforms.uD37Wind.value === E.GFXU.wind && incOk(shD.vertexShader), 'тень листвы качается тем же ветром (без ветра — стоит)');
   // свет вещи дробными уровнями
   const g = it0.geometry, lt = g.attributes.lt;
   VR.itemLightF(g, [15, 0, 0, 0]);

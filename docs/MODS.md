@@ -122,8 +122,9 @@
 ### scripts[] — скрипты
 
 `{ "lang": "js", "file": "main.js" }`, `{ "lang": "lua", "file": "main.lua" }` или `{ "lang": "js", "code": "…" }`.
-Язык по расширению файла: `.js` — JavaScript, `.lua` — Lua, `.java` — Java (заработает, когда на сайте появится язык Java:
-в «Кубомире» он подключается одной строкой — таблица `LANGS` в `js/engine/voxel-mods.js`).
+Язык по расширению файла: `.js` — JavaScript, `.lua` — Lua, `.java` — Java (переводчик сайта js/engine/lang-java.js, тот же
+API: `mod.on("chat", e -> player.message("…"))`, `System.out.println` — в журнал мода; в «Кубомире» язык подключён одной строкой —
+таблица `LANGS` в `js/engine/voxel-mods.js`, файл языка грузится, только если мод на нём; фасад Fabric/Forge — docs/JAVA.md).
 
 ## 3. Скрипты: API версии 1
 
@@ -542,7 +543,7 @@ Minecraft»). Файл можно перетащить в окно. Всё пе�
 
 **Моды Java (.jar).** Код мода (`.class`, Fabric/Forge/NeoForge) в браузере не запускается и не переводится — переносятся
 данные. Поведение (что блок делает, когда его ломают, кликают, наступают) можно переписать скриптом мода: JavaScript, Lua или
-Java (когда на сайте появится язык Java — тот же API: `mod.on("tileBreak", …)`, `world.set(…)`, `player.give(…)`). Свет блока
+Java (тот же API: `mod.on("tileBreak", …)`, `world.set(…)`, `player.give(…)`). Свет блока
 берётся по имени (lamp, lantern, glow, light, torch…), прочность — по виду (руда, дерево, земля…), инструмент — из тегов
 `mineable/*` и `needs_*_tool`. Большой мод делится на части (в общем формате — до 64 блоков, 128 предметов, 256 рецептов) —
 включай части вместе.
