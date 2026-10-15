@@ -29,8 +29,10 @@ window.ADS_IDS = {
   // Google H5 Games Ads (adBreak: награда и реклама между партиями) — только после одобрения отдельной заявки
   // в AdSense (developers.google.com/ad-placement). Обычные блоки AdSense за награду показывать НЕЛЬЗЯ — бан.
   h5games: false,
-  // Аудитория — дети и подростки: 1 — «детская» обработка запросов Google (без персонализации, data-tag-for-age-treatment),
-  // 2 — «подростковая», 0 — не указывать. Меньше дохода с Google, зато спокойнее с законами о детях (COPPA, GDPR).
+  // Обработка запросов Google по возрасту — сама, по году рождения посетителя (js/core/age.js, правила — ADS_RULES.age в
+  // ad-places.js). kids — на весь сайт сразу, строже возраста: 1 — всем «детская» (data-tag-for-age-treatment="1"; и без
+  // полноэкранной, полоски и рекламы за награду), 2 — не старше «подростковой», 0 — только по возрасту. Меньше дохода с Google,
+  // зато спокойнее с законами о детях (COPPA, GDPR).
   kids: 0,
   google: {
     game_over:  '5464523123', // «Игры — после партии» (его же берут loading, break, rail, если своих нет)
@@ -86,7 +88,9 @@ window.ADS_IDS = {
       ins.setAttribute('data-ad-slot', g);
       ins.setAttribute('data-ad-format', o.format || 'auto');   // загрузка/перерыв/столбик/лента — свой формат (не растягивать)
       if (!o.format) ins.setAttribute('data-full-width-responsive', 'true');
-      if (window.ADS_IDS.kids) ins.setAttribute('data-tag-for-age-treatment', String(window.ADS_IDS.kids));
+      // возраст: 1 — ребёнок, 2 — подросток (без персональной рекламы и «взрослых» тем у Google); 0 — не указываем
+      const tag = M ? M.googleTag() : +(window.ADS_IDS.kids || 0);
+      if (tag) ins.setAttribute('data-tag-for-age-treatment', String(tag));
       el.appendChild(ins);
       try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
     }
@@ -130,9 +134,12 @@ window.ADS_IDS = {
   // Правила РСЯ: открывать только по кнопке, на которой написано, что будет реклама и что за неё дадут;
   // награда — только если досмотрел (onRewarded(true)); наградой не могут быть деньги.
   const rewardId = () => isTouch() ? window.ADS_IDS.yandex.rewarded : window.ADS_IDS.yandex.rewarded_desktop;
+  // Детям (до 13) реклама за награду не предлагается — только монеты (ADS_RULES.age: off 'reward')
+  const rewardOff = () => !!window.D37AdPlaces?.ageOff?.('reward');
   // Можно ли вообще предложить «за рекламу» (есть блок). Для Google — prepareReward() (кнопка — только когда реклама готова)
-  function rewardReady(){ return !!rewardId() || !!h5Show; }
+  function rewardReady(){ return !rewardOff() && (!!rewardId() || !!h5Show); }
   function prepareReward(name){
+    if (rewardOff()) return Promise.resolve(false);
     if (rewardId()) return Promise.resolve(true);
     if (!window.ADS_IDS.h5games) return Promise.resolve(false);
     if (h5Show) return Promise.resolve(true);
@@ -154,6 +161,7 @@ window.ADS_IDS = {
     return new Promise(resolve => {
       let done = false;
       const finish = ok => { if (!done) { done = true; resolve(ok); } };
+      if (rewardOff()) { finish(false); return; }
       const id = rewardId();
       if (id) {
         loadYandex();

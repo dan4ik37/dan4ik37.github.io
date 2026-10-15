@@ -59,19 +59,22 @@ function showPage(route){
 function finishShowPage(route, activeIds){
   // Твич-плеер и loadYT() — только когда реально открыта #/home (см. initHomeMedia)
   document.body.dataset.route = route;
+  // Возраст (js/core/age.js): раздел не по возрасту (чат и сообщества, форум, тиммейты — 12+) — «обложка» вместо него, сам
+  // раздел не рисуем; зовём на каждом переходе — уходя, обложка убирается
+  const gated = !!window.D37Age?.gateRoute?.(route, activeIds);
   if (route==='home') { initHomeMedia(); if (typeof renderToday==='function') renderToday(); }
   if (typeof onShortsRoute==='function') onShortsRoute(route==='shorts');
   if (typeof fillVisibleAds==='function') fillVisibleAds();
   if (route==='profile' && typeof renderProfilePage==='function') renderProfilePage(currentRouteParam());
-  if (route==='forum' && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
-  if (route==='lfg' && typeof renderLfgPage==='function') renderLfgPage();
+  if (route==='forum' && !gated && typeof renderForumPage==='function') renderForumPage(currentRouteParam());
+  if (route==='lfg' && !gated && typeof renderLfgPage==='function') renderLfgPage();
   if (route==='games' && typeof renderGamesPage==='function') renderGamesPage(currentRouteParam());
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
   if (route==='donate' && typeof renderDonateVipHint==='function') renderDonateVipHint();
   if (route==='shop' && typeof renderShopPage==='function') renderShopPage(currentRouteParam());
   if (route==='adv') window.D37AdDirect?.cabinet?.(currentRouteParam());                            // 📣 реклама за 💎
-  if (route==='chat' && typeof renderChatPage==='function') renderChatPage(currentRouteParam());     // чат «как Дискорд»
+  if (route==='chat' && !gated && typeof renderChatPage==='function') renderChatPage(currentRouteParam());     // чат «как Дискорд»
   if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, currentRouteParam());      // телефон 📱 на странице
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать
   // на то, что блок только что стал видимым — не оставляем его прозрачным

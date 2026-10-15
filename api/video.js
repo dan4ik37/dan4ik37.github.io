@@ -11,6 +11,7 @@ import { page, YT_CHANNEL } from './_lib/page.js';
 import { videoFromSnapshot } from './_lib/video-snap.js';
 import { topicsFor } from './_lib/topics.js';
 import { QUIZZES } from './_lib/quizzes.js';
+import { videoAge, ageBadge, ageAttr } from './_lib/age.js';
 
 export default async function handler(req, res) {
   const id = String(req.query.id || '');
@@ -50,6 +51,8 @@ export default async function handler(req, res) {
   const quiz = QUIZZES.find(q => q.topic && topics.some(t => t.slug === q.topic));
   const noAds = isGambling(sn.title, desc);
   const tags = (sn.tags || []).slice(0, 12);
+  // Возрастная метка (api/_lib/age.js): не по возрасту — браузер накроет страницу обложкой (js/core/age.js, data-age-page)
+  const va = videoAge(sn.title, desc);
 
   const ld = {
     '@context': 'https://schema.org',
@@ -66,7 +69,7 @@ export default async function handler(req, res) {
   };
 
   const body = `
-<main class="wrap">
+<main class="wrap" data-age-page="${va.age}" data-age-why="${esc(va.why)}" data-age-title="${esc(sn.title)}">
   <article class="video">
     <div class="player" id="player" data-id="${esc(id)}">
       <img src="${esc(thumb)}" alt="${esc(sn.title)}" width="1280" height="720" fetchpriority="high">
@@ -75,6 +78,7 @@ export default async function handler(req, res) {
     </div>
     <h1>${esc(sn.title)}</h1>
     <div class="meta">
+      <span>${ageBadge(va.age, { title: va.why })}</span>
       <span>📅 ${esc(dateRu)}</span>
       ${st.viewCount ? `<span>👁 ${esc(fmtCount(st.viewCount))} просмотров</span>` : ''}
       ${st.likeCount ? `<span>❤ ${esc(fmtCount(st.likeCount))}</span>` : ''}
@@ -100,7 +104,7 @@ export default async function handler(req, res) {
   </nav>
 
   ${related.length ? `<section class="more"><h2>${rel.similar ? 'Похожие видео' : 'Ещё видео'}</h2><div class="grid">
-    ${related.map(r => `<a class="card" href="/v/${esc(r.id)}"><img src="${esc(r.thumb)}" alt="${esc(r.title)}" loading="lazy" width="320" height="180"><span>${esc(r.title)}</span></a>`).join('')}
+    ${related.map(r => { const a = videoAge(r.title).age; return `<a class="card" href="/v/${esc(r.id)}"${ageAttr(a)}><img src="${esc(r.thumb)}" alt="${esc(r.title)}" loading="lazy" width="320" height="180">${ageBadge(a, { min: 16 })}<span>${esc(r.title)}</span></a>`; }).join('')}
   </div><p class="all"><a href="/videos">Все видео канала →</a> · <a href="/games">🎮 Игры на сайте</a></p></section>` : ''}
 </main>`;
 

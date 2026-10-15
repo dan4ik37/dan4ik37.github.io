@@ -231,11 +231,12 @@ end; $$;
 revoke execute on function public.premium_extend_vip(uuid, int) from public, anon, authenticated;
 
 -- ═══ 4. Для сайта ═══
--- Состояние: баланс, режим доната, пакеты и товары, лимиты, история. Гостю — только витрина
+-- Состояние: баланс, режим доната, пакеты и товары, лимиты, история. Гостю — только витрина.
+-- Возраст (age.sql → age_shop_caps): 13–17 лет — свои лимиты, до 13 — cards: false (картой нельзя). Нет age.sql — как раньше
 create or replace function public.premium_state()
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare uid uuid := auth.uid(); w public.premium_wallet%rowtype; s public.premium_settings%rowtype;
-  v_day numeric; v_month numeric; v_pending numeric;
+  v_day numeric; v_month numeric; v_pending numeric; v_caps jsonb;
 begin
   select * into s from public.premium_settings where id = 1;
   if uid is null then
@@ -247,11 +248,16 @@ begin
     into v_day, v_month from public.premium_orders
     where user_id = uid and status in ('paid', 'refunded') and created_at > now() - interval '30 days';
   select coalesce(vip_pending_rub, 0) into v_pending from public.profiles where id = uid;
+  if to_regprocedure('public.age_shop_caps(uuid)') is not null then
+    execute 'select public.age_shop_caps($1)' into v_caps using uid;
+  end if;
   return jsonb_build_object('ok', true,
     'balance', coalesce(w.balance, 0), 'debt', coalesce(w.debt, 0), 'mode', coalesce(w.donate_mode, 'vip'),
     'consent', w.consent_at is not null, 'pending_rub', floor(coalesce(v_pending, 0)),
     'rate', s.donate_rate, 'bonus', s.donate_bonus, 'open', s.shop_open,
-    'limits', jsonb_build_object('day_rub', s.day_rub, 'month_rub', s.month_rub, 'used_day', v_day, 'used_month', v_month),
+    'limits', jsonb_build_object('day_rub', coalesce((v_caps->>'day_rub')::int, s.day_rub), 'month_rub', coalesce((v_caps->>'month_rub')::int, s.month_rub),
+      'used_day', v_day, 'used_month', v_month),
+    'cards', coalesce((v_caps->>'cards')::boolean, true),
     'packs', public.premium_packs(), 'items', public.premium_items(),
     'history', coalesce((select jsonb_agg(h order by h.id desc) from (
         select id, amount, balance, kind, ref, note, created_at from public.premium_ledger
@@ -365,19 +371,27 @@ revoke execute on function public.premium_order_status(text) from public, anon;
 grant execute on function public.premium_order_status(text) to authenticated;
 
 -- ═══ 5. Для сервера (api/pay.js, ключ service_role). Клиенту и гостю — нельзя ═══
--- Заказ: пакет, провайдер, валюта; согласие взрослого; лимиты (в рублях: сутки и 30 дней); не больше 10 неоплаченных за час
+-- Заказ: пакет, провайдер, валюта; согласие взрослого; возраст (age.sql → age_shop_caps: до 13 — картой нельзя, 13–17 —
+-- свои лимиты); лимиты (в рублях: сутки и 30 дней); не больше 10 неоплаченных за час
 create or replace function public.premium_order_create(p_user uuid, p_pack text, p_provider text,
   p_currency text default 'KZT', p_consent boolean default false)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare pk jsonb := public.premium_pack(p_pack); s public.premium_settings%rowtype; v_amount numeric; v_rub int;
   v_day numeric; v_month numeric; v_id text; v_cur text := upper(coalesce(p_currency, 'KZT'));
+  v_caps jsonb; v_day_cap int; v_month_cap int;
 begin
   if p_user is null or not exists (select 1 from public.profiles where id = p_user) then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if pk is null then return jsonb_build_object('ok', false, 'reason', 'pack'); end if;
   if p_provider not in ('tiptop', 'freedom', 'kaspi') then return jsonb_build_object('ok', false, 'reason', 'provider'); end if;
   if v_cur not in ('KZT', 'RUB') then return jsonb_build_object('ok', false, 'reason', 'currency'); end if;
   if p_consent is not true then return jsonb_build_object('ok', false, 'reason', 'consent'); end if;
+  if to_regprocedure('public.age_shop_caps(uuid)') is not null then
+    execute 'select public.age_shop_caps($1)' into v_caps using p_user;
+  end if;
+  if not coalesce((v_caps->>'cards')::boolean, true) then return jsonb_build_object('ok', false, 'reason', 'age_child'); end if;
   select * into s from public.premium_settings where id = 1;
+  v_day_cap := coalesce((v_caps->>'day_rub')::int, s.day_rub);
+  v_month_cap := coalesce((v_caps->>'month_rub')::int, s.month_rub);
   v_amount := case v_cur when 'KZT' then (pk->>'kzt')::numeric else (pk->>'rub')::numeric end;
   v_rub := (pk->>'rub')::int;
   -- Один человек — по очереди (два заказа в одну секунду не обойдут лимит)
@@ -385,11 +399,11 @@ begin
   select coalesce(sum(rub) filter (where created_at > now() - interval '1 day'), 0), coalesce(sum(rub), 0)
     into v_day, v_month from public.premium_orders
     where user_id = p_user and status in ('paid', 'refunded') and created_at > now() - interval '30 days';
-  if v_day + v_rub > s.day_rub then
-    return jsonb_build_object('ok', false, 'reason', 'limit_day', 'left', greatest(0, s.day_rub - v_day));
+  if v_day + v_rub > v_day_cap then
+    return jsonb_build_object('ok', false, 'reason', 'limit_day', 'left', greatest(0, v_day_cap - v_day));
   end if;
-  if v_month + v_rub > s.month_rub then
-    return jsonb_build_object('ok', false, 'reason', 'limit_month', 'left', greatest(0, s.month_rub - v_month));
+  if v_month + v_rub > v_month_cap then
+    return jsonb_build_object('ok', false, 'reason', 'limit_month', 'left', greatest(0, v_month_cap - v_month));
   end if;
   if (select count(*) from public.premium_orders where user_id = p_user and status = 'new' and created_at > now() - interval '1 hour') >= 10 then
     return jsonb_build_object('ok', false, 'reason', 'too_many');

@@ -68,8 +68,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
-<!-- VIP и персонал — без рекламы: запросы AdSense на паузе ещё до загрузки скрипта (js/core/ad-places.js, d37_noads) -->
-<script>try{var d37n=JSON.parse(localStorage.getItem('d37_noads')||'null');if(d37n&&d37n.until>Date.now())(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
+<!-- Возраст (js/core/age.js): несовершеннолетнему ролики 18+ спрятаны с первого кадра (d37-h18), возраст не указан — 18+ под
+     обложкой «Мне есть 18» (d37-c18). Сам год — только в браузере, никуда не отправляется -->
+<script>(function(){try{var a=JSON.parse(localStorage.getItem('d37_age')||'null')||{},Y=new Date(Date.now()+108e5).getUTCFullYear(),g=a.y>=Y-100&&a.y<=Y-3?Y-a.y-(a.bd==Y?0:1):null,M={child:12,teen:15,teen16:17}[a.fg];if(M&&a.fu>Date.now()&&(g==null||g>M))g=M;var c=g==null?(a.c18?'':'d37-c18'):g<18?'d37-h18':'';if(c)document.documentElement.classList.add(c)}catch(e){}})()</script>
+<!-- Запросы AdSense на паузе ещё до загрузки скрипта — даже «автоматическая реклама» ждёт, пока js/core/ad-places.js (gate)
+     не узнает VIP (d37_noads: персонал и VIP — без рекламы) и возраст (детям и подросткам — «обработка» Google и без
+     персональной рекламы), и только потом снимает паузу -->
+<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>
 <!-- Vercel Web Analytics — без cookie, без баннера согласия. Требует ОДИН
      раз включить в дашборде: Vercel → проект → вкладка Analytics → Enable -->
@@ -2358,6 +2363,8 @@ body.low .donation-alert-icon{animation:none}
     <a href="#/home">Видео</a><a href="#/shorts">Shorts</a><a href="#/chat">Чат</a><a href="#/forum">Форум</a>
     <a href="#/ideas" data-route="ideas">Идеи</a><a href="#/lfg">Тиммейты</a><a href="#/donate">Топ донатеров</a><a href="#/about">Обо мне</a>
   </nav>
+  <!-- Возрастная метка сайта (js/core/age.js SITE_AGE, api/_lib/page.js AGE_MARK): игры, ролики и разделы — своими метками -->
+  <div class="footer-age"><span class="age-mark" title="Сайт для 12+: игры, видео и разделы помечены своей меткой (0+…18+)">12+</span> Игры, видео и разделы помечены своей меткой — от 0+ до 18+</div>
   <div class="footer-copy">© 2026 dan4ik37 (Денчик37) · Все права защищены · <a href="mailto:dan4ik37k@gmail.com" style="color:inherit;opacity:.6">Контакты</a></div>
 </footer>
 
@@ -2525,6 +2532,7 @@ body.low .donation-alert-icon{animation:none}
       <p><strong style="color:var(--text)">Вводимые вами:</strong> никнейм в чате (хранится локально в браузере), сообщения в чате сайта (хранятся в базе Supabase).</p>
       <p><strong style="color:var(--text)">Cookies:</strong> используются для Google Translate, Google AdSense, Яндекс Метрики и запоминания настроек сайта (режим отображения, ник).</p>
       <p><strong style="color:var(--text)">Покупки кристаллов:</strong> оплату проводит платёжная система (TipTop Pay, Freedom Pay или Kaspi) на своей стороне — номер карты сайт не получает и не хранит. В базе сайта хранятся номер заказа, сумма, валюта, время, статус и номер платежа в платёжной системе — чтобы начислить кристаллы и при необходимости сделать возврат. Донаты через DonationAlerts: имя донатера и сумма — чтобы выдать VIP или кристаллы.</p>
+      <p><strong style="color:var(--text)">Возраст (по желанию):</strong> только год рождения, не дата. Он нужен, чтобы показывать подходящие по возрасту игры, ролики и рекламу и включать защиту детей. Год видит только сам человек — ни другие посетители, ни модераторы, ни администратор; он не публикуется, не попадает в адреса страниц и статистику и не передаётся третьим лицам. Рекламе Google уходит только признак «ребёнок» или «подросток» (без года) — чтобы реклама была без персонализации. У гостя год хранится в браузере, у аккаунта — в базе сайта; удалить его можно в любой момент: ⚙️ Настройки → Сайт → «Удалить», а вместе с аккаунтом он удаляется сам.</p>
 
       <h3>2. Google AdSense</h3>
       <p>Сайт использует Google AdSense для показа рекламы. Google может использовать cookies для персонализации рекламы. Подробнее: <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--accent)">Политика конфиденциальности Google</a>. Вы можете отключить персонализированную рекламу в <a href="https://adssettings.google.com" target="_blank" style="color:var(--accent)">настройках рекламы Google</a>.</p>
@@ -2547,7 +2555,7 @@ body.low .donation-alert-icon{animation:none}
 
       <h3>8. Контакты</h3>
       <p>По вопросам конфиденциальности: <a href="mailto:dan4ik37k@gmail.com" style="color:var(--accent)">dan4ik37k@gmail.com</a></p>
-      <p style="margin-top:1.5rem;opacity:.5;font-size:.72rem">Последнее обновление: июнь 2026</p>
+      <p style="margin-top:1.5rem;opacity:.5;font-size:.72rem">Последнее обновление: октябрь 2026</p>
     </div>
   </div>
 </div>
@@ -2573,6 +2581,7 @@ body.low .donation-alert-icon{animation:none}
      Версия закреплена: «@2» грузил каждый раз последнюю — хуже кэш и риск сломаться от чужого обновления. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="js/core/config.js"></script>
+<script src="js/core/age.js"></script>
 <script src="js/core/ads-core.js"></script>
 <script src="js/core/ad-places.js"></script>
 <script src="js/core/ad-direct.js"></script>

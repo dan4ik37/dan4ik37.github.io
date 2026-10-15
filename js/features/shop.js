@@ -65,12 +65,16 @@ function shopRender(S){
       <b>${shopMoney(price, cur)}</b>
     </button>`;
   }).join('');
+  // Возраст (js/core/age.js, age.sql): до 13 лет оплата картой выключена — покупает только взрослый
+  const kidNoCard = S.cards === false || !!window.D37Age?.kid?.();
   const card = `<section class="shp-way pf-card pf-card-tw" id="shp-buy">
     <div class="shp-way-top"><span class="shp-flag" aria-hidden="true">💳</span><div><h4>Карта Казахстана или Kaspi</h4>
       <p>Visa и Mastercard банков Казахстана, Apple Pay и Google Pay${methods.some(m => m.id === 'kaspi') ? ', Kaspi' : ''}. Кристаллы приходят сразу после оплаты.</p></div></div>
-    <div class="shp-packs">${packCards}</div>
+    ${kidNoCard ? `<div class="shp-kid"><b>👨‍👩‍👧 Покупать картой можно с 13 лет — и только вместе со взрослыми</b>
+      <p>Тебе пока меньше 13, поэтому оплата картой на сайте выключена — так никто не потратит деньги случайно. Если очень хочется кристаллы или VIP, покажи эту страницу родителям: взрослый может купить кристаллы на своём аккаунте и подарить тебе VIP по нику («🎁 VIP в подарок» ниже) или задонатить на твой логин.</p></div>`
+      : `<div class="shp-packs">${packCards}</div>
     ${methods.length ? `<div class="shp-small">Способы: ${methods.map(m => esc(m.title)).join(' · ')}. Карты российских банков здесь не пройдут — для России ниже донат.</div>`
-      : `<div class="shp-soon">🔜 Оплата картой появится скоро. ${on ? "Пока кристаллы можно получить донатом — выбери ниже «донат → кристаллы»" : "А VIP уже сейчас можно получить донатом"} ↓</div>`}
+      : `<div class="shp-soon">🔜 Оплата картой появится скоро. ${on ? "Пока кристаллы можно получить донатом — выбери ниже «донат → кристаллы»" : "А VIP уже сейчас можно получить донатом"} ↓</div>`}`}
   </section>`;
 
   // ── Из России — донатом DonationAlerts ──
@@ -167,7 +171,8 @@ function shopRender(S){
     <ul>
       <li>Кристаллы — цифровая валюта этого сайта, не деньги. Их нельзя вывести или продать, они не передаются другим аккаунтам (кроме подарка VIP).</li>
       <li>Каждая покупка картой — только с отметкой «плачу я (мне есть 18) или взрослый, который разрешил». Детям — пожалуйста, спросите родителей.</li>
-      <li>Лимиты на покупки картой: до ${shopNum(S.limits?.day_rub ?? 3000)} ₽ в сутки и ${shopNum(S.limits?.month_rub ?? 10000)} ₽ за 30 дней — защита от случайных трат.</li>
+      <li>Лимиты на покупки картой: ${kidNoCard ? 'до 13 лет оплата картой выключена' : `до ${shopNum(S.limits?.day_rub ?? 3000)} ₽ в сутки и ${shopNum(S.limits?.month_rub ?? 10000)} ₽ за 30 дней`} — защита от случайных трат.</li>
+      <li>Если указан возраст (⚙️ Настройки → Сайт → 🎂, его видит только сам человек): до 13 лет картой платить нельзя, 13–15 лет — до 1000 ₽ в сутки и 3000 ₽ за 30 дней, 16–17 лет — до 2000 ₽ и 6000 ₽.</li>
       <li>Никаких лутбоксов, «сундуков» и случайных наград — всегда видно, что получаешь и сколько это стоит.</li>
       <li>Ошибся или купил без спроса — напишите нам: неистраченные кристаллы вернём деньгами. <a href="/refund">Политика возврата</a></li>
     </ul>
@@ -200,6 +205,8 @@ function shopLogin(){
   try { sessionStorage.setItem('d37_back', '#/shop'); } catch (e) {}
   openGlobalAuth();
 }
+// Указал / сменил возраст — правила оплаты другие (js/core/age.js)
+window.addEventListener('d37:age', () => { if (document.body.dataset.route === 'shop') renderShopPage(); });
 window.addEventListener('d37:auth', () => {
   let back = null;
   try { back = sessionStorage.getItem('d37_back'); sessionStorage.removeItem('d37_back'); } catch (e) {}
@@ -220,6 +227,7 @@ function shopBuy(packId){
   if (!methods.length) { document.getElementById('shp-donate')?.scrollIntoView({ behavior: 'smooth' }); shopToast(S.ready === true ? 'Оплата картой появится скоро — пока кристаллы можно получить донатом' : 'Оплата картой появится скоро — а VIP уже сейчас можно получить донатом'); return; }
   if (!currentUser) { shopLogin(); return; }
   if (S.ready !== true) { shopToast('Магазин скоро откроется'); return; }
+  if (S.cards === false || window.D37Age?.kid?.()) { shopToast(SHOP_ERR.age_child); return; }   // до 13 — только взрослый
   const cur = shopMethods.currency || 'KZT', price = cur === 'RUB' ? p.rub : p.kzt;
   shopModal(`<h4>${C.icon} ${shopNum(p.gems)} ${G.word(p.gems)} за ${shopMoney(price, cur)}</h4>
     <div class="shp-methods" role="radiogroup" aria-label="Способ оплаты">${methods.map((m, i) => `<label class="shp-method"><input type="radio" name="shpMethod" value="${esc(m.id)}" ${i ? '' : 'checked'}>
@@ -236,6 +244,7 @@ const SHOP_ERR = {
   limit_day: 'Лимит покупок на сегодня исчерпан — это защита от случайных трат. Попробуй завтра.',
   limit_month: 'Лимит покупок за 30 дней исчерпан — это защита от случайных трат.',
   too_many: 'Слишком много неоплаченных заказов — попробуй через час.',
+  age_child: 'Тебе меньше 13 — покупать картой можно только взрослым. Попроси родителей: взрослый может купить на своём аккаунте и подарить тебе VIP по нику.',
   auth: 'Сначала войди на сайт.', off: 'Оплата пока не подключена — скоро.', method: 'Этот способ оплаты сейчас недоступен.',
   provider: 'Платёжная система не ответила — попробуй ещё раз или другой способ.', network: 'Нет связи — проверь интернет.',
 };

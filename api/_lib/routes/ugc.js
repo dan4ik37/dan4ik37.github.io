@@ -5,6 +5,7 @@
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
 import { sbSelect, storeConfigured } from '../store.js';
+import { ageBadge, UGC_AGE } from '../age.js';
 
 const TEMPLATES = [
   ['🏃', 'Раннер', 'беги, прыгай через препятствия и собирай монеты — как динозаврик в браузере'],
@@ -38,6 +39,9 @@ async function gamePage(req, res, id){
   const g = rows && rows[0];
   if (!g) return notFound(res);
   const nick = g.profiles?.nick || 'игрок';
+  // Возрастная метка (age.sql: age_rating — выбрал автор, проверил модератор). Отдельным запросом: до age.sql колонки нет
+  const ar = (await safeSelect('ugc_games', `id=eq.${id}&select=age_rating`))?.[0]?.age_rating;
+  const age = [0, 6, 12, 16, 18].includes(+ar) ? +ar : UGC_AGE;
   const more = (await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&id=neq.${id}&select=id,title,icon,plays,profiles(nick)&order=plays.desc&limit=6`)) || [];
   const authorGames = (await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&select=plays`)) || [];
   const totalPlays = authorGames.reduce((a, x) => a + (x.plays || 0), 0);
@@ -46,18 +50,18 @@ async function gamePage(req, res, id){
   const title = `${g.title} — игра от ${nick}`;
   const description = (g.descr ? g.descr + ' ' : '') + `Играй онлайн бесплатно: «${g.title}» — игру сделал ${nick} в Студии игр на сайте dan4ik37. Сделай и свою — без кода!`;
   const since = new Date(g.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.title, url, description, inLanguage: 'ru', genre: 'Казуальная игра',
+  const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.title, url, description, inLanguage: 'ru', genre: 'Казуальная игра', contentRating: `${age}+`,
     gamePlatform: 'Браузер', applicationCategory: 'Game', operatingSystem: 'Any', datePublished: String(g.created_at).slice(0, 10),
     author: { '@type': 'Person', name: nick }, offers: { '@type': 'Offer', price: '0', priceCurrency: 'RUB' },
     interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/PlayAction', userInteractionCount: g.plays || 0 } };
   const body = `
-<main class="wrap">
+<main class="wrap" data-age-page="${age}" data-age-title="${esc(g.title)}" data-age-why="Игра игрока: метку выбрал автор, проверяет модератор.">
   <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <a href="/studio">Студия игр</a> › <span>${esc(g.title)}</span></nav>
   <section class="ug-hero">
     <span class="ug-big">${esc(g.icon || '🎮')}</span>
     <div class="ug-hero-b">
       <h1>${esc(g.title)}</h1>
-      <p class="ug-meta">👁 ${num(g.plays)} ${plural(g.plays, 'запуск', 'запуска', 'запусков')} · ❤️ ${num(g.likes)} · ${g.kind === 'tpl' ? 'сделана на шаблоне' : g.kind === 'place' ? '3D-мир из «Студии 3D»' : 'своим кодом'} · ${esc(since)}</p>
+      <p class="ug-meta">${ageBadge(age, { title: 'Метку выбрал автор, проверяет модератор' })} 👁 ${num(g.plays)} ${plural(g.plays, 'запуск', 'запуска', 'запусков')} · ❤️ ${num(g.likes)} · ${g.kind === 'tpl' ? 'сделана на шаблоне' : g.kind === 'place' ? '3D-мир из «Студии 3D»' : 'своим кодом'} · ${esc(since)}</p>
       ${g.descr ? `<p class="lead">${esc(g.descr)}</p>` : ''}
       <a class="btn btn-acc ug-play" href="${playUrl}">▶ Играть</a>
     </div>

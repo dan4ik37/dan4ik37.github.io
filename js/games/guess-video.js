@@ -15,7 +15,8 @@
 
   async function videos(){
     if (typeof ensureYT === 'function') { try { await ensureYT(); } catch (e) {} }
-    const list = (typeof allVids !== 'undefined' ? allVids : []).filter(v => v && v.id && v.title);
+    // Ролики 16+ и 18+ (кейсы, стрелялки, мрачные хорроры) в игру не берём — у всех одинаково (соревнование: тот же список)
+    const list = (typeof allVids !== 'undefined' ? allVids : []).filter(v => v && v.id && v.title && (!window.D37Age || D37Age.video(v.title).age < 16));
     const seen = new Set();
     // Сортировка по id — чтобы у двух игроков с одним seed порядок совпал, как бы ни пришёл список
     return list.filter(v => { const k = shorten(v.title).toLowerCase(); if (!k || seen.has(k)) return false; seen.add(k); return true; })

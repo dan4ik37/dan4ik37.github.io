@@ -48,6 +48,12 @@
     } catch (e) { return null; }
   }
   const LIGHT = 'id,title,icon,descr,kind,tpl,status,plays,likes,created_at,updated_at,author,profiles(nick)';
+  // Возрастная метка игры (age.sql: age_rating — выбирает автор, меняет модератор; js/core/age.js → D37Age.ugc). Колонку
+  // спрашиваем, только когда она уже есть на сервере — иначе запрос списка сломался бы
+  const AU = () => window.D37Age?.ugc || null;
+  const ageCol = async () => !!(await AU()?.col('ugc_games'));
+  const light = async (base = LIGHT) => base + ((await ageCol()) ? ',age_rating' : '');
+  const ageB = g => g?.age_rating != null && window.D37Age ? D37Age.badge(g.age_rating, { title: AU().WHY }) : '';
   const playHref = g => g.kind === 'place' ? `#/games/studio3d/play/${esc(g.id)}` : `#/games/studio/play/${esc(g.id)}`;
 
   // ── Персонаж игрока для игр (D37.player в песочнице): 2D-проекция своего 3D-персонажа сбоку — один атлас (data URL) +
@@ -172,7 +178,7 @@
     if (!box) return;
     const local = Object.values(drafts());
     let srv = [];
-    if (authed()) srv = await select(q => q.select(LIGHT).eq('author', currentUser.id).order('updated_at', { ascending: false }).limit(60)) || [];
+    if (authed()) { const L = await light(); srv = await select(q => q.select(L).eq('author', currentUser.id).order('updated_at', { ascending: false }).limit(60)) || []; }
     if (S !== st) return;
     const ids = new Set(srv.map(g => g.id));
     const list = [...srv.map(g => ({ ...g, srv: true })), ...local.filter(d => !ids.has(d.id)).map(d => ({ ...d, status: 'draft', local: true }))]
@@ -181,7 +187,7 @@
     box.innerHTML = `<div class="st-list">${list.map(g => {
       const [si, sn] = STATUS[g.status] || STATUS.draft;
       return `<div class="st-row"><span class="st-row-ic">${esc(g.icon || '🎮')}</span>
-        <div class="st-row-b"><b>${esc(g.title || 'Без названия')}</b><small><span class="st-chip st-${esc(g.status)}">${si} ${sn}</span>${g.srv ? ` · 👁 ${num(g.plays)} · ❤️ ${num(g.likes)}` : g.local ? ' · только в этом браузере' : ''}</small></div>
+        <div class="st-row-b"><b>${esc(g.title || 'Без названия')}${ageB(g)}</b><small><span class="st-chip st-${esc(g.status)}">${si} ${sn}</span>${g.srv ? ` · 👁 ${num(g.plays)} · ❤️ ${num(g.likes)}` : g.local ? ' · только в этом браузере' : ''}</small></div>
         <span class="st-row-a"><a class="st-btn" href="${playHref(g)}">▶</a><a class="st-btn ghost" href="${g.kind === 'place' ? '#/games/studio3d' : `#/games/studio/edit/${esc(g.id)}`}">✏️</a></span></div>`;
     }).join('')}</div>`;
   }
@@ -189,7 +195,8 @@
     const box = root?.querySelector('.st-cat');
     if (!box) return;
     const st = S;
-    const rows = await select(q => q.select(LIGHT).eq('status', 'public').order(sort === 'new' ? 'created_at' : 'plays', { ascending: false }).limit(30));
+    const L = await light();
+    const rows = await select(q => q.select(L).eq('status', 'public').order(sort === 'new' ? 'created_at' : 'plays', { ascending: false }).limit(30));
     if (S !== st || !root) return;
     if (!rows) { box.innerHTML = `<div class="st-empty">${srvMissing ? 'Каталог откроется совсем скоро — сайт обновляется.' : 'Не получилось загрузить — обнови страницу.'}</div>`; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Здесь будут лучшие игры игроков. Сделай свою — может, она будет первой!</div>'; return; }
@@ -198,7 +205,7 @@
     if (typeof xpQueueBadges === 'function') xpQueueBadges();
   }
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
-  const cardHtml = g => `<a class="st-card" href="${playHref(g)}"><span class="st-card-ic">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}</b>${g.kind === 'place' ? '<small class="st-card-3d">🧱 3D-мир</small>' : ''}
+  const cardHtml = g => `<a class="st-card" href="${playHref(g)}"><span class="st-card-ic">${esc(g.icon || '🎮')}</span><b>${esc(g.title)}${ageB(g)}</b>${g.kind === 'place' ? '<small class="st-card-3d">🧱 3D-мир</small>' : ''}
     <small class="st-card-au">👤 ${esc(g.profiles?.nick || 'Игрок')}${g.author ? `<span class="lv-badge" data-lv-uid="${esc(g.author)}"></span>` : ''}</small>
     <small>👁 ${num(g.plays)} · ❤️ ${num(g.likes)}</small></a>`;
 
@@ -215,13 +222,16 @@
     } else {
       g = drafts()[o.id] ? { ...drafts()[o.id], local: true } : null;
       if (!g || authed()) {
-        const row = await select(q => q.select('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author').eq('id', o.id).maybeSingle());
+        const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author');
+        const row = await select(q => q.select(L).eq('id', o.id).maybeSingle());
         if (S !== st) return;
         if (row) { if (authed() && row.author !== currentUser.id && !isStaff()) { go('play/' + o.id); return; } g = { ...row, srv: true }; }
       }
       if (!g) { root.innerHTML = '<div class="st-empty">Игра не найдена. <a href="#/games/studio">В студию</a></div>'; return; }
     }
     st.game = g;
+    st.ageOk = await ageCol();   // метка игры — выбор автора (age.sql)
+    if (S !== st) return;
     const t = g.kind === 'tpl' ? TPL().get(g.tpl) : null;
     root.innerHTML = `<div class="st st-ed">
       <div class="st-top"><a class="st-back" href="#/games/studio">← Студия</a><b>${t ? t.icon + ' ' + esc(t.name) : '💻 Свой код'}</b><span class="st-saved"></span></div>
@@ -442,8 +452,17 @@ let last = performance.now();
   function saveLocal(st){
     if (st !== S) return;
     const g = st.game;
-    putDraft({ id: g.id, kind: g.kind, tpl: g.tpl, data: g.data, html: g.html, title: g.title, icon: g.icon, descr: g.descr, srv: !!g.srv });
+    putDraft({ id: g.id, kind: g.kind, tpl: g.tpl, data: g.data, html: g.html, title: g.title, icon: g.icon, descr: g.descr, srv: !!g.srv, age_pick: g.age_pick });
     markSaved(st, true, 'в браузере');
+  }
+  // 🎂 Возрастная метка: автор выбирает (до 16+), модератор может поменять. Игра ещё не на сайте — запомним и поставим при сохранении
+  async function onAgeRate(st, n){
+    const g = st.game;
+    if (!g.srv) { g.age_pick = n; saveLocal(st); api.toast(`🎂 Метка ${n}+ — поставим, когда сохранишь на сайте`); return; }
+    const r = await AU()?.set('ugc', g.id, n);
+    if (st !== S) return;
+    if (r?.ok) { g.age_rating = n; delete g.age_pick; api.toast(`🎂 Метка игры: ${n}+`); } else api.toast(AU()?.err(r) || 'Не получилось');
+    statusLine(st);
   }
   function markSaved(st, ok, where){
     const el = root?.querySelector('.st-saved');
@@ -459,7 +478,9 @@ let last = performance.now();
       <small>${!authed() ? 'Войди в аккаунт — тогда игру можно сохранить на сайте и дать ссылку друзьям.' : srvMissing ? 'Публикация заработает чуть позже — сайт обновляется. Пока игра хранится в этом браузере.'
         : g.status === 'review' ? 'Игру проверит модератор — после этого она появится в каталоге. По ссылке играть уже можно.'
         : g.status === 'public' ? 'Игра в каталоге! Если изменишь её, она снова уйдёт на проверку.'
-        : g.status === 'banned' ? 'Игру заблокировал модератор — она нарушает правила.' : ''}</small>`;
+        : g.status === 'banned' ? 'Игру заблокировал модератор — она нарушает правила.' : ''}</small>
+      ${st.ageOk && authed() && AU() ? `<label class="age-rate-l" title="${esc(AU().WHY)}">🎂 Для какого возраста ${AU().select(g.age_rating ?? g.age_pick, { staff: isStaff(), attr: 'data-age-rate' })}</label>` : ''}`;
+    el.querySelector('[data-age-rate]')?.addEventListener('change', e => onAgeRate(st, +e.target.value));
   }
   async function saveServer(st, want){
     const g = st.game;
@@ -484,7 +505,9 @@ let last = performance.now();
       if (s2?.ok) g.status = s2.status;
       else api.toast('Статус не поменялся — попробуй ещё раз');
     }
-    putDraft({ id: g.id, kind: g.kind, tpl: g.tpl, data: g.data, html: g.html, title: g.title, icon: g.icon, descr: g.descr, srv: true });
+    // метка, выбранная до первого сохранения (age.sql)
+    if (g.age_pick != null && st.ageOk) { const ar = await AU()?.set('ugc', g.id, g.age_pick); if (ar?.ok) { g.age_rating = g.age_pick; delete g.age_pick; } }
+    putDraft({ id: g.id, kind: g.kind, tpl: g.tpl, data: g.data, html: g.html, title: g.title, icon: g.icon, descr: g.descr, srv: true, age_pick: g.age_pick });
     markSaved(st, true, 'на сайте');
     statusLine(st);
     if (want === 'link' || want === 'review') { copyLink(g.id); }
@@ -502,7 +525,8 @@ let last = performance.now();
     const st = S;
     root.innerHTML = '<div class="st"><div class="st-empty">Загружаем игру…</div></div>';
     let g = null;
-    const row = await select(q => q.select('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles(nick)').eq('id', id).maybeSingle());
+    const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles(nick)');
+    const row = await select(q => q.select(L).eq('id', id).maybeSingle());
     if (S !== st) return;
     if (row?.kind === 'place') { location.replace('#/games/studio3d/play/' + id); return; }   // 3D-мир — в «Студии 3D»
     if (row) g = { ...row, srv: true };
@@ -513,7 +537,7 @@ let last = performance.now();
     root.innerHTML = `<div class="st st-play">
       <div class="st-top"><a class="st-back" href="#/games/studio">← Студия</a></div>
       <div class="st-play-head"><span class="st-play-ic">${esc(g.icon || '🎮')}</span>
-        <div class="st-play-t"><b>${esc(g.title)}</b><small>${g.srv ? `от <a href="#/profile/${esc(g.author)}">${esc(g.profiles?.nick || 'игрока')}</a> · 👁 ${num(g.plays)} · ❤️ <span class="st-likes2">${num(g.likes)}</span>` : 'черновик в этом браузере'} ${g.status !== 'public' && g.srv ? `· <span class="st-chip st-${esc(g.status)}">${(STATUS[g.status] || STATUS.draft).join(' ')}</span>` : ''}</small></div>
+        <div class="st-play-t"><b>${esc(g.title)}${g.srv ? ageB(g) : ''}</b><small>${g.srv ? `от <a href="#/profile/${esc(g.author)}">${esc(g.profiles?.nick || 'игрока')}</a> · 👁 ${num(g.plays)} · ❤️ <span class="st-likes2">${num(g.likes)}</span>` : 'черновик в этом браузере'} ${g.status !== 'public' && g.srv ? `· <span class="st-chip st-${esc(g.status)}">${(STATUS[g.status] || STATUS.draft).join(' ')}</span>` : ''}</small></div>
         <span class="st-play-a">
           ${g.srv ? `<button type="button" class="st-btn ghost" data-act="like">❤️ <span class="st-likes">${num(g.likes)}</span></button><button type="button" class="st-btn ghost" data-act="share">📤</button>` : ''}
           ${mineG || g.local ? `<a class="st-btn ghost" href="#/games/studio/edit/${esc(g.id)}">✏️</a>` : g.srv ? '<button type="button" class="st-btn ghost" data-act="report" title="Пожаловаться">⚠️</button>' : ''}
@@ -528,6 +552,11 @@ let last = performance.now();
       <div class="st-warn">Это игра игрока. Никогда не вводи в играх пароли и личные данные.</div>
     </div>`;
     root.querySelector('.st-play-head').addEventListener('click', e => onPlayClick(st, e));
+    // Возраст (js/core/age.js): чужая игра не по возрасту — «обложка» вместо игры (метка — age_rating; нет — 12+)
+    if (g.srv && !mineG && window.D37Age?.cover(root.querySelector('.st-frame-box'), AU().age(g.age_rating), { why: AU().WHY, title: g.title, back: '#/games/studio', onOpen: () => { if (S === st) play(id); } })) {
+      authorBlock(st, g);
+      return;
+    }
     st.sb = sandbox(root.querySelector('.st-frame-box'), d => onGame(st, d));
     const p = payload(g);
     if (!p) { root.querySelector('.st-frame-box').innerHTML = '<div class="st-empty">Шаблон этой игры пока не поддерживается</div>'; return; }
@@ -542,7 +571,8 @@ let last = performance.now();
   async function authorBlock(st, g){
     let prof = null;
     try { if (typeof sbProfiles === 'function') { const { data } = await (await sbProfiles()).select('*').eq('id', g.author).maybeSingle(); prof = data || null; } } catch (e) {}
-    const games = await select(q => q.select(LIGHT).eq('author', g.author).eq('status', 'public').order('plays', { ascending: false }).limit(13)) || [];
+    const LA = await light();
+    const games = await select(q => q.select(LA).eq('author', g.author).eq('status', 'public').order('plays', { ascending: false }).limit(13)) || [];
     if (S !== st || !root) return;
     const box = root.querySelector('.st-author');
     if (!box) return;
@@ -624,15 +654,24 @@ let last = performance.now();
     const st = S;
     if (!isStaff()) { root.innerHTML = '<div class="st"><div class="st-empty">Только для модераторов. <a href="#/games/studio">В студию</a></div></div>'; return; }
     root.innerHTML = '<div class="st"><div class="st-top"><a class="st-back" href="#/games/studio">← Студия</a><b>🛡️ Модерация игр</b></div><div class="st-modlist"><div class="st-empty">Загружаем…</div></div></div>';
-    const rows = await select(q => q.select(LIGHT + ',reports').or('status.eq.review,reports.gt.0').order('updated_at', { ascending: true }).limit(50));
+    const L = await light(LIGHT + ',reports');
+    const rows = await select(q => q.select(L).or('status.eq.review,reports.gt.0').order('updated_at', { ascending: true }).limit(50));
     if (S !== st) return;
     const box = root.querySelector('.st-modlist');
     if (!rows) { box.innerHTML = '<div class="st-empty">Нет доступа или сайт обновляется</div>'; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Очередь пуста 🎉</div>'; return; }
+    const ageOk = await ageCol();
     box.innerHTML = rows.map(g => `<div class="st-row" data-id="${esc(g.id)}"><span class="st-row-ic">${esc(g.icon || '🎮')}</span>
-      <div class="st-row-b"><b>${esc(g.title)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')} · ${g.kind === 'tpl' ? 'шаблон ' + esc(g.tpl) : g.kind === 'place' ? '🧱 3D-мир (модели в нём — проверка в «Студии 3D» → 🛡)' : 'свой код'}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small><small>${esc(g.descr || '')}</small></div>
+      <div class="st-row-b"><b>${esc(g.title)}${ageB(g)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')} · ${g.kind === 'tpl' ? 'шаблон ' + esc(g.tpl) : g.kind === 'place' ? '🧱 3D-мир (модели в нём — проверка в «Студии 3D» → 🛡)' : 'свой код'}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small><small>${esc(g.descr || '')}</small>
+        ${ageOk && AU() ? `<label class="age-rate-l">🎂 Метка ${AU().select(g.age_rating, { staff: true, attr: 'data-age-rate' })}</label>` : ''}</div>
       <span class="st-row-a"><a class="st-btn ghost" href="${playHref(g)}" target="_blank">▶</a>
         <button type="button" class="st-btn" data-mod="public">✅ В каталог</button><button type="button" class="st-btn ghost" data-mod="link">🔗 Только ссылка</button><button type="button" class="st-btn ghost danger" data-mod="banned">⛔</button></span></div>`).join('');
+    // модератор меняет возрастную метку (age.sql: после него автор может только поднять)
+    box.addEventListener('change', async e => {
+      const s = e.target.closest('[data-age-rate]'); if (!s) return;
+      const r = await AU()?.set('ugc', s.closest('[data-id]').dataset.id, +s.value);
+      api.toast(r?.ok ? `🎂 Метка: ${s.value}+` : AU()?.err(r) || 'Не получилось');
+    });
     box.addEventListener('click', async e => {
       const b = e.target.closest('[data-mod]');
       if (!b) return;

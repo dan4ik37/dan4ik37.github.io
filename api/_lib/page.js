@@ -3,6 +3,12 @@
 import { esc } from './yt.js';
 
 export const YT_CHANNEL = 'https://www.youtube.com/@Dan4ik37Yt';
+// Возраст (js/core/age.js): несовершеннолетнему ролики 18+ спрятаны с первого кадра (d37-h18), возраст не указан — 18+ под
+// обложкой «Мне есть 18» (d37-c18). Год — только в браузере посетителя, сервер его не видит. Тот же код — в <head> index.html
+export const AGE_HEAD = `<script>(function(){try{var a=JSON.parse(localStorage.getItem('d37_age')||'null')||{},Y=new Date(Date.now()+108e5).getUTCFullYear(),g=a.y>=Y-100&&a.y<=Y-3?Y-a.y-(a.bd==Y?0:1):null,M={child:12,teen:15,teen16:17}[a.fg];if(M&&a.fu>Date.now()&&(g==null||g>M))g=M;var c=g==null?(a.c18?'':'d37-c18'):g<18?'d37-h18':'';if(c)document.documentElement.classList.add(c)}catch(e){}})()</script>`;
+// Метка всего сайта (подвал): чат и «Мир Денчика» — общение с незнакомыми; что старше — помечено отдельно (js/core/age.js SITE_AGE)
+export const SITE_AGE = 12;
+export const AGE_MARK = `<span class="age-mark" title="Сайт для ${SITE_AGE}+: игры, видео и разделы помечены своей меткой (0+…18+)">${SITE_AGE}+</span>`;
 
 // noAds — без рекламы на странице: ни скрипта AdSense, ни мест, ни полоски РСЯ (ролики про кейсы/промокоды на депозит —
 // AdSense запрещает рекламу рядом с азартными играми; ad-places.js получает контекст «gambling»)
@@ -32,7 +38,8 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
-${noAds ? '' : `<script>try{var d37n=JSON.parse(localStorage.getItem('d37_noads')||'null');if(d37n&&d37n.until>Date.now())(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
+${AGE_HEAD}
+${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>`}
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
 <script defer src="/_vercel/insights/script.js"></script>
@@ -73,9 +80,11 @@ ${body}
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>
+  <div class="foot-age">${AGE_MARK} <a href="/privacy">Конфиденциальность</a></div>
 </footer>
 ${script ? `<script>${script}</script>` : ''}
 <script>document.addEventListener('click',function(e){var d=document.querySelector('details.mmenu[open]');if(d&&!d.contains(e.target))d.open=false});</script>
+<script src="/js/core/age.js"></script>
 <script src="/js/core/ads-core.js"></script>
 <script src="/js/core/ad-places.js"></script>
 <script src="/js/core/ad-direct.js"></script>
@@ -165,5 +174,13 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 #d37SecretToast.show{opacity:1;transform:translate(-50%,0)}
 .foot{padding:2rem 1rem;text-align:center;font-size:.78rem;color:var(--muted);border-top:1px solid var(--line)}
 .foot a{text-decoration:none}
+.foot-age{margin-top:.8rem}
+.age-mark{display:inline-flex;align-items:center;justify-content:center;min-width:2.4em;height:1.6em;padding:0 .4em;border-radius:6px;border:1.5px solid rgba(240,240,248,.45);font-weight:800;font-size:.72rem;color:#f0f0f8;vertical-align:middle;margin-right:.4rem}
+.age-b{display:inline-flex;align-items:center;justify-content:center;min-width:2.15em;height:1.5em;padding:0 .38em;border-radius:6px;font:800 .66rem/1 Montserrat,system-ui,sans-serif;color:#fff;background:#475569;border:1px solid rgba(255,255,255,.28);vertical-align:middle;white-space:nowrap}
+.age-b0{background:#15803d}.age-b6{background:#0e7490}.age-b12{background:#a16207}.age-b16{background:#c2410c}.age-b18{background:#b91c1c}
+html.d37-h18 [data-age="18"]{display:none!important}
+html.d37-h18 [data-age-page="18"]>:not(.age-page-cover),html.d37-c18 [data-age-page="18"]>:not(.age-page-cover){visibility:hidden}
+.card{position:relative}
+.card>.age-b{position:absolute;top:.45rem;right:.45rem}
 @media(max-width:600px){.top nav a:not(.sub){display:none}.mmenu{display:block}.top{gap:.5rem;padding:.6rem .9rem}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}
 `;
