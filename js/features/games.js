@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '53';
+const GAMES_VER = '54';
 const GAMES = [
   { id: 'world',    icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -48,6 +48,10 @@ const GAMES = [
   { id: 'typing',   icon: '⌨️', title: 'Тест печати',     desc: 'Сколько знаков в минуту ты печатаешь? Короткие тексты про игры, рекорд и вызов другу.', href: '/tools/typing', color: '#a78bfa' },
   { id: 'cps',      icon: '🖱', title: 'CPS тест',        desc: 'Сколько кликов в секунду ты успеешь? 1, 5 или 10 секунд, звание и рекорд — и вызов другу.', href: '/tools/cps', color: '#f59e0b' },
   { id: 'fonts',    icon: '✒️', title: 'Шрифты для ника', desc: 'Сделай ник красивым: 𝓓𝓪𝓷, 𝕯𝖆𝖓, Ⓓⓐⓝ, ꧁ник꧂ и 70+ символов. Нажал — скопировано.', href: '/tools/fonts', color: '#c084fc' },
+];
+// Скрытые страницы: открываются по адресу #/games/<id>, но их нет в каталоге, поиске и рекордах
+const GAMES_HIDDEN = [
+  { id: 'sprites', icon: '🎞', title: '2D-персонажи', scripts: ['js/core/char2d.js', 'js/games/sprite-view.js'] },   // проверка 2D-проекции персонажа
 ];
 // Разделы витрины: у игры может быть несколько. «С друзьями» — есть игра вдвоём/компанией онлайн или на одном экране
 const GAME_CATS = [
@@ -108,7 +112,7 @@ function gamesLoadScript(src){
 // Роутер зовёт при каждом заходе на #/games[/id]
 function renderGamesPage(param){
   const [first, ...rest] = String(param || '').split('/');
-  const id = GAMES.some(g => g.id === first && !g.href) ? first : null;
+  const id = GAMES.some(g => g.id === first && !g.href) || GAMES_HIDDEN.some(g => g.id === first) ? first : null;
   if (id) openGame(id, rest.join('/') || null); else closeGame(true);
 }
 
@@ -201,7 +205,7 @@ async function claimDailyQuest(btn){
 
 let gamesParam = null;
 async function openGame(id, param){
-  const g = GAMES.find(x => x.id === id);
+  const g = GAMES.find(x => x.id === id) || GAMES_HIDDEN.find(x => x.id === id);
   const hub = document.getElementById('gamesHub');
   const stage = document.getElementById('gamesStage');
   const box = document.getElementById('gamesStageBox');
