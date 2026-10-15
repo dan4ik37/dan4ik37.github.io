@@ -10,7 +10,11 @@
 // Шейдер не собрался (бывает на старых телефонах) — VR сам переходит на простой (атлас, без мерцания и бликов): VR.safe.
 // VR.setChunk(c, m) / dropChunk(c) — сетки чанка (m — ответ потока); VR.setOrigin(ox, oz) — сдвиг начала координат (далеко
 // от нуля float32 дрожит: сцена всегда рядом с нулём); VR.select(hit), VR.crack(x, y, z, стадия), VR.itemMesh(имя, свет),
-// VR.itemLight(геометрия, свет клетки) — свет вещи (W.lightAt: небо << 12 | R << 8 | G << 4 | B), V.icon(имя, размер) — значок.
+// VR.itemLight(геометрия, свет клетки) — свет вещи (W.lightAt: небо << 12 | R << 8 | G << 4 | B), VR.itemLightF(геометрия,
+// [небо, R, G, B]) — то же дробными уровнями 0…15 (плавный свет), V.icon(имя, размер) — значок.
+// Существа (человечки world3d, мобы, рука от 1-го лица) — VR.entityMaterial(материал, униформа, { fp }): копия материала
+// с тем же светом, что у кубиков (униформа { value: Vector4(небо, R, G, B) } — уже по кривой, см. KubomirEnts.Lit); fp —
+// «вид из глаз»: глубина сжата к ближней плоскости (рука и вещь не уходят в стену, друг друга закрывают правильно).
 (() => {
   const E = window.D37E = window.D37E || {};
   const V = E.vox = E.vox || {};
@@ -95,6 +99,13 @@ vec3 d37N( float i ) {
 }`;
   const VS_NORMAL = `
 vec3 objectNormal = d37N( floor( vd.z / 4096.0 ) );`;
+  // «вид из глаз» (рука, вещь в руке): глубина — в первом проценте диапазона (ближе любой стены), порядок внутри сохраняется;
+  // свет, тени и туман считаются по настоящему месту
+  const VS_FP = `
+#include <project_vertex>
+#ifdef D37_FP
+gl_Position.z = gl_Position.z * 0.01 - gl_Position.w * 0.99;
+#endif`;
   // свет: кривая «как в играх-кубиках» (l / (4 − 3l)) — там она в гамма-пространстве, а у нас свет линейный: поэтому
   // свет блоков — в квадрате (у факела ярко, хвост тёмный — видно «пятно»), свет неба — в степени 1,5 (тень под деревом,
   // вход в пещеру); у цветного света кривая — по самому яркому каналу (оттенок не меняется); мерцание факелов — своё у
@@ -209,6 +220,28 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
   diffuseColor.a = min( 1.0, diffuseColor.a + d37fr * 0.3 );
 }
 #endif`;
+  // существа (Ламберт / мультяшный / Фонг world3d, коробки мобов): тот же свет, что у кубиков, но одним значением на всё
+  // существо (uD37L — небо и цветной свет блоков в его клетке, плавно); солнце и небо — по «свету неба», лампы движка — везде,
+  // свет блоков — своим цветом; у «плоских» (MeshBasic: глаза, блики) — просто яркость
+  const ENT_FS_HEAD = `
+uniform vec4 uD37L;
+uniform float uMinAmb;
+uniform float uBlockK;
+uniform float uDay;
+vec3 d37pt = vec3( 0.0 );
+vec3 d37ps = vec3( 0.0 );`;
+  const ENT_FS_LIGHT = `
+#ifdef D37_ENT_LIT
+{
+  reflectedLight.directDiffuse = ( reflectedLight.directDiffuse - d37pt ) * uD37L.x + d37pt;
+  reflectedLight.directSpecular = ( reflectedLight.directSpecular - d37ps ) * uD37L.x + d37ps;
+  reflectedLight.indirectDiffuse *= max( uD37L.x, uMinAmb );
+  reflectedLight.indirectSpecular *= max( uD37L.x, uMinAmb );
+  reflectedLight.indirectDiffuse += diffuseColor.rgb * uD37L.yzw * ( uBlockK * ( 1.0 - 0.72 * uDay * uD37L.x ) );
+}
+#else
+reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay ), uMinAmb ) ) + uD37L.yzw * uBlockK, 0.0, 1.0 );
+#endif`;
 
   V.renderer = function (R, opts = {}){
     const T = R.T, gl2real = !!R.r.capabilities.isWebGL2;
@@ -272,7 +305,8 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', '#include <common>\n' + VS_HEAD)
           .replace('#include <beginnormal_vertex>', VS_NORMAL)
-          .replace('#include <begin_vertex>', VS_BEGIN(simple));
+          .replace('#include <begin_vertex>', VS_BEGIN(simple))
+          .replace('#include <project_vertex>', VS_FP);
         let fs = sh.fragmentShader
           .replace('#include <common>', '#include <common>\n' + FS_COMMON + (gl2 ? FS_TEX2 : FS_TEX1))
           .replace('#include <map_fragment>', FS_MAP)
@@ -284,10 +318,10 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
         // куски движка (паки шейдеров): после наших; ошибка в куске — без него (кубики важнее)
         if (!simple) for (const h of [...(shaderHooks.get(kind) || []), ...(shaderHooks.get('*') || [])]) {
           const v0 = sh.vertexShader, f0 = sh.fragmentShader;
-          try { h.fn(sh, { layer: kind, gl2, material: m }); } catch (e) { sh.vertexShader = v0; sh.fragmentShader = f0; console.warn('Кубомир: кусок шейдера «' + h.id + '» —', e); }
+          try { h.fn(sh, { layer: kind, gl2, material: m, fp: !!m.defines?.D37_FP }); } catch (e) { sh.vertexShader = v0; sh.fragmentShader = f0; console.warn('Кубомир: кусок шейдера «' + h.id + '» —', e); }
         }
       };
-      m.customProgramCacheKey = () => 'd37vox4-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (simple ? '' : hookKey(kind));
+      m.customProgramCacheKey = () => 'd37vox4-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (simple ? '' : hookKey(kind));
       return m;
     }
     const LAYER_OPTS = {
@@ -297,17 +331,18 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
       foliage: { alphaTest: .5 },
       glass: { alphaTest: .5 },
     };
-    const makeMats = () => {
-      const o = {};
-      for (const k of LAYERS) {
-        const opt = LAYER_OPTS[k] || { alphaTest: .5 };
-        const m = patch(new T.MeshLambertMaterial({ vertexColors: true, ...opt }), k);
-        m.defines = { D37_VOX: 1, ['D37_' + k.toUpperCase()]: 1 };
-        m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex' };
-        o[k] = m;
-      }
-      return o;
+    const makeMat = (k, fp) => {
+      const opt = LAYER_OPTS[k] || { alphaTest: .5 };
+      const m = patch(new T.MeshLambertMaterial({ vertexColors: true, ...opt }), k);
+      m.defines = { D37_VOX: 1, ['D37_' + k.toUpperCase()]: 1 };
+      if (fp) m.defines.D37_FP = 1;
+      m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex', fp: !!fp };
+      return m;
     };
+    const makeMats = () => { const o = {}; for (const k of LAYERS) o[k] = makeMat(k); return o; };
+    // вещь «из глаз» (в руке от 1-го лица): те же слои с D37_FP — по одной на слой, по первому запросу
+    let fpMats = {};
+    const fpMat = k => fpMats[k] || (fpMats[k] = makeMat(k, true));
     // тень вырезного — по альфе текстуры (одна на слой; пересобирается с простым режимом)
     let depthMats = {};
     function depthMat(k){
@@ -498,18 +533,57 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
     const LTtmp = [0, 0, 0, 0];
     VR.itemLight = (g, L) => {
       if (g.userData.L === L) return;
-      g.userData.L = L;
+      g.userData.L = L; g.userData.Lf = -1;
       const a = g.attributes.lt; if (!a) return;
       ltOf(L, LTtmp);
       for (let i = 0; i < a.count; i++) { a.array[i * 4] = LTtmp[0]; a.array[i * 4 + 1] = LTtmp[1]; a.array[i * 4 + 2] = LTtmp[2]; a.array[i * 4 + 3] = LTtmp[3]; }
       a.needsUpdate = true;
     };
-    VR.itemMesh = (name, L) => {
+    // то же дробными уровнями (0…15): [небо, R, G, B] — плавный свет (KubomirEnts.Lit); в вершинах — четверть уровня
+    VR.itemLightF = (g, lv) => {
+      const s = Math.max(0, Math.min(60, Math.round(lv[0] * 4))), r = Math.max(0, Math.min(60, Math.round(lv[1] * 4))), gg = Math.max(0, Math.min(60, Math.round(lv[2] * 4))), b = Math.max(0, Math.min(60, Math.round(lv[3] * 4)));
+      const key = s * 16777216 + r * 65536 + gg * 256 + b;
+      if (g.userData.Lf === key) return;
+      g.userData.Lf = key; g.userData.L = -1;
+      const a = g.attributes.lt; if (!a) return;
+      for (let i = 0; i < a.count; i++) { a.array[i * 4] = s; a.array[i * 4 + 1] = r; a.array[i * 4 + 2] = gg; a.array[i * 4 + 3] = b; }
+      a.needsUpdate = true;
+    };
+    // o.fp — вещь «из глаз» (рука от 1-го лица): материал с D37_FP
+    VR.itemMesh = (name, L, o) => {
       const g = VR.itemGeo(name, L), it = V.item(name), b = it?.place ? V.block(it.place) : null, s = b ? V.T.stream?.[b.id] : 0;
-      const m = new T.Mesh(g, g.userData.flat ? mats.cutout : s === 3 ? mats.foliage : s === 4 ? mats.glass : mats.solid);   // листва и стекло в руке — по альфе
-      m.userData.item = name;
+      const k = g.userData.flat ? 'cutout' : s === 3 ? 'foliage' : s === 4 ? 'glass' : 'solid';   // листва и стекло в руке — по альфе
+      const m = new T.Mesh(g, o?.fp ? fpMat(k) : mats[k]);
+      m.userData.item = name; m.userData.layer = k;
+      if (o?.fp) m.userData.fp = true;
       return m;
     };
+    // ── существа: копия материала со светом кубиков (см. ENT_FS_*); u — { value: Vector4 } одна на существо ──
+    const lfbEnt = () => {
+      const c = String(T.ShaderChunk.lights_fragment_begin || '');
+      return c.includes(SPOT) ? c.replace(SPOT, 'd37pt = reflectedLight.directDiffuse;\nd37ps = reflectedLight.directSpecular;\n' + SPOT) : c;
+    };
+    VR.entityMaterial = (src, u, o = {}) => {
+      const m = src.clone(), lit = !src.isMeshBasicMaterial, fp = !!o.fp, prev = src.onBeforeCompile;
+      m.defines = Object.assign({}, src.defines || {}, { D37_ENT: 1 });
+      if (lit) m.defines.D37_ENT_LIT = 1;
+      if (fp) m.defines.D37_FP = 1;
+      m.onBeforeCompile = (sh, r) => {
+        if (typeof prev === 'function') try { prev.call(m, sh, r); } catch (e) {}
+        sh.uniforms.uD37L = u; sh.uniforms.uMinAmb = U.uMinAmb; sh.uniforms.uBlockK = U.uBlockK; sh.uniforms.uDay = U.uDay;
+        sh.fragmentShader = sh.fragmentShader
+          .replace('#include <common>', '#include <common>\n' + ENT_FS_HEAD)
+          .replace('#include <lights_fragment_begin>', lfbEnt())
+          .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + ENT_FS_LIGHT);
+        if (fp) sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', VS_FP);
+      };
+      const key0 = typeof src.customProgramCacheKey === 'function' ? String(src.customProgramCacheKey()) : '';
+      m.customProgramCacheKey = () => 'd37ent1' + (lit ? 'L' : 'B') + (fp ? 'f' : '') + key0;
+      m.userData.d37ent = { fp, kind: o.kind || '' };
+      return m;
+    };
+    // материал не собрался (старый телефон) — true: тогда существу — обычная копия без своего куска
+    VR.failed = m => failed(m);
     void LT0;
     // ── «призрак» блока: куда встанет блок из руки (полупрозрачный кубик); VR.ghost(null) — спрятать ──
     let ghostMat = null, ghost = null, ghostName = '';
@@ -537,15 +611,17 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
     function goSafe(){
       if (VR.safe) return;
       VR.safe = true; gl2 = false;
-      const old = mats, oldD = depthMats;
-      mats = VR.mats = makeMats(); depthMats = {};
+      const old = mats, oldD = depthMats, oldF = fpMats;
+      mats = VR.mats = makeMats(); depthMats = {}; fpMats = {};
       buildTextures();
       crackMat.fragmentShader = crackFS1; crackMat.needsUpdate = true;
       for (const c of VR.chunks) for (const k of LAYERS) { const m = c.vis?.[k]; if (m) { m.material = ownMats[k] || mats[k]; m.customDepthMaterial = depthMat(k); } }
       for (const m of meshPool) m.material = mats.solid;
       const swap = new Map(LAYERS.map(k => [old[k], mats[k]]));
+      for (const k in oldF) swap.set(oldF[k], fpMat(k));
       R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); });
       for (const m of Object.values(old)) m.dispose();
+      for (const m of Object.values(oldF)) m.dispose();
       for (const m of Object.values(oldD)) m.dispose();
       if (ghostMat) { ghostMat.dispose(); ghostMat = null; ghostName = ''; if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); ghost = null; } }
       V.iconsReset();
@@ -572,6 +648,7 @@ if ( uBloomK > 0.0 && vEm > 0.01 ) gl_FragColor.a = 1.0 + vEm * uBloomK;
       pool.clear(); meshPool.length = 0;
       for (const m of Object.values(mats)) m.dispose();
       for (const m of Object.values(depthMats)) m.dispose();
+      for (const m of Object.values(fpMats)) m.dispose();
       tex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
       if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();

@@ -242,7 +242,7 @@
     const st = {
       meta, W, G, R, mods: modState, remapIn, remapOut, ox: 0, oz: 0, t: 0, steps: 0, ready: false, dead: false, paused: false, saving: false,
       unsaved: new Set(), savedKeys: await V.store.chunkKeys(meta.id).catch(() => new Set()), lastSave: now(), creative: meta.mode === 'creative',
-      hit: null, mine: { key: '', t: 0, need: 0, st: -1, cool: 0 }, placeCool: 0, swing: 0, hud: {}, keys: { q: false }, raw: new Set(),
+      hit: null, mine: { key: '', t: 0, need: 0, st: -1, cool: 0 }, placeCool: 0, eat: null, hud: {}, keys: { q: false }, raw: new Set(),
       stats: { placed: 0, fps: 0 }, chat: [], achQ: [], dayPrev: null,
     };
     S = st;
@@ -303,6 +303,7 @@
       st.ents.hookPickup = (id, n) => st.modRun?.event('pickup', { item: id, n });   // моды: подобрал вещь, победил моба
       st.ents.hookKill = (m, by) => { if (by === 'player') st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); }; }
     if (meta.ents && st.ents) st.ents.load(meta.ents);
+    st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;   // руки как в Майнкрафте, свет человечков
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
     if (I.touch) touchUI(st);   // кнопки телефона — когда уже есть игрок
     crossUpdate(st);
@@ -340,6 +341,7 @@
     st.offCtx?.();
     try { st.modRun?.stop(); } catch (e) {}
     try { st.ents?.dispose(); } catch (e) {}
+    try { st.hand?.dispose(); } catch (e) {}
     try { st.ui?.dispose(); } catch (e) {}
     try { st.KL?.dispose(); } catch (e) {}
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
@@ -515,11 +517,12 @@
     const hungry = !st.creative && P.food <= 6, fwd = C.move.z > .3;
     if (opts.sprintToggle && K.down('sprint')) st.sprintOn = !st.sprintOn;
     const wantRun = (opts.sprintToggle ? st.sprintOn : K.held('sprint')) || C.doubleTap('forward') || (st.I.touch && C.held('run')) || (!st.K && C.held('run'));
-    if (!P.sprint && wantRun && fwd && !hungry && !P.sneak) P.sprint = true;
-    else if (P.sprint && (!fwd || P.sneak || hungry || (P.onGround && st.wallHit && !P.fly))) P.sprint = false;
+    if (!P.sprint && wantRun && fwd && !hungry && !P.sneak && !st.eat) P.sprint = true;
+    else if (P.sprint && (!fwd || P.sneak || hungry || st.eat || (P.onGround && st.wallHit && !P.fly))) P.sprint = false;
     const inLiquid = P.water > .3 || P.lava > .2;
     let spd = P.fly ? (P.sprint ? SPD.flyFast : SPD.fly) : P.sneak ? SPD.sneak : P.sprint ? SPD.sprint : SPD.walk;
     if (inLiquid && !P.fly) spd = P.lava > .2 ? 1.2 : SPD.swim * (P.sprint ? 1.4 : 1);
+    if (st.eat && !P.fly) spd *= .35;   // ест — идёт медленно (как в Майнкрафте)
     const slip = P.onGround && touch.slip ? touch.slip : 0;
     const acc = P.fly ? 9 : P.onGround ? (slip ? 1.5 : 14) : inLiquid ? 5 : 2.6, k = 1 - Math.exp(-acc * dt);
     P.vx += (wx * spd - P.vx) * k; P.vz += (wz * spd - P.vz) * k;
@@ -693,18 +696,22 @@
       const tp = K.taps.shift(); if (!live) continue;
       const r = aimRay(st, touchTap ? tp : null, reach), h = V.raycast(W, r.ox, r.oy, r.oz, r.dx, r.dy, r.dz, r.max);
       const m = st.ents?.rayMob?.(r.ox, r.oy, r.oz, r.dx, r.dy, r.dz, Math.min(r.max, h ? h.t : r.max));
-      if (m) { attackMob(st, m); st.swing = 1; } else use(st, h);
+      if (m) { attackMob(st, m); st.hand?.act('swing'); } else use(st, h, true);
     }
+    // еда (держать ПКМ / LT; палец — само): пока ест — не копает и не ставит
+    if (st.eat && eatTick(st, dt, live)) { st.hand?.mine(false); st.mine.key = ''; st.mine.t = 0; st.mine.st = -1; st.mine.k = 0; return; }
     // удар по мобу (ЛКМ / RT)
-    if (live && st.mobHit && (C.down('mine') || K.down('mine'))) { attackMob(st, st.mobHit); st.swing = 1; return; }
-    // ломать: ЛКМ (держать), RT, палец держит мир, кнопка ⛏ (режим «прицел»)
+    if (live && st.mobHit && (C.down('mine') || K.down('mine'))) { attackMob(st, st.mobHit); st.hand?.act('swing'); st.hand?.mine(false); return; }
+    // ломать: ЛКМ (держать), RT, палец держит мир, кнопка ⛏ (режим «прицел»); рука машет, пока держишь (и по воздуху — раз)
     const mining = live && (C.held('mine') || K.held('mine') || holding) && hit;
+    st.hand?.mine(!!mining);
+    if (live && !hit && (C.down('mine') || K.down('mine'))) st.hand?.act('swing');
     if (mining) {
       const key = hit.x + ',' + hit.y + ',' + hit.z, b = V.blocks[hit.v & 0xfff];
       if (st.mine.key !== key) { st.mine.key = key; st.mine.t = 0; st.mine.need = breakTime(st, b); st.mine.snd = 0; }
       if (st.creative) { if (st.mine.cool <= 0) { breakBlock(st, hit); st.mine.cool = .18; st.mine.key = ''; } }
       else if (st.mine.need < Infinity) {
-        st.mine.t += dt; st.swing = 1;
+        st.mine.t += dt;
         st.mine.snd -= dt; if (st.mine.snd <= 0) { st.mine.snd = .24; st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .45, rate: .9 + Math.random() * .2 }); }
         if (st.mine.t >= st.mine.need) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; }
       }
@@ -787,29 +794,45 @@
     if (tool) wear(st, st.P.sel, tool.kind === 'sword' ? 1 : 2);
     st.P.exh += .1;
   }
-  // правая кнопка: открыть / дверь / съесть / поставить
-  function use(st, hit){
+  // правая кнопка: открыть / дверь / съесть / поставить; tap — нажатие пальцем (еда тогда доедается сама)
+  function use(st, hit, tap){
     const V = VX(), P = st.P, W = st.W, s = P.inv[P.sel], it = s ? V.item(s.id) : null;
+    if (st.eat) return;
     if (hit && !P.sneak) {
       const b = V.blocks[hit.v & 0xfff];
-      if (b.ui) { st.ui?.open(b.ui, { x: hit.x, y: hit.y, z: hit.z }); st.swing = 1; return; }
-      if (b.shape === V.SHAPE.door) { toggleDoor(st, hit); st.swing = 1; return; }
-      if (st.modRun?.hasUse(b.name) || st.modRun?.hasUse(s?.id)) { st.modRun.event('use', { x: hit.x, y: hit.y, z: hit.z, block: b.name, item: s?.id || '' }); st.swing = 1; return; }
+      if (b.ui) { st.ui?.open(b.ui, { x: hit.x, y: hit.y, z: hit.z }); st.hand?.act('push'); return; }
+      if (b.shape === V.SHAPE.door) { toggleDoor(st, hit); st.hand?.act('push'); return; }
+      if (st.modRun?.hasUse(b.name) || st.modRun?.hasUse(s?.id)) { st.modRun.event('use', { x: hit.x, y: hit.y, z: hit.z, block: b.name, item: s?.id || '' }); st.hand?.act('push'); return; }
     }
     // вещь мода «в воздух» (палочка, свиток) — тоже событие use
-    if (!hit && s && st.modRun?.hasUse(s.id)) { st.modRun.event('use', { x: Math.floor(P.x), y: Math.floor(P.y + 1), z: Math.floor(P.z), block: '', item: s.id }); st.swing = 1; return; }
-    if (it?.food && (P.food < 20 || st.creative)) { eat(st, it); return; }
+    if (!hit && s && st.modRun?.hasUse(s.id)) { st.modRun.event('use', { x: Math.floor(P.x), y: Math.floor(P.y + 1), z: Math.floor(P.z), block: '', item: s.id }); st.hand?.act('push'); return; }
+    // еда — как в Майнкрафте: держать ~1,6 с (рука ко рту); съел — eat()
+    if (it?.food && (P.food < 20 || st.creative)) { st.eat = { t: 0, need: +it.food.t > 0 ? +it.food.t : 1.6, slot: P.sel, id: s.id, auto: !!tap, snd: 0 }; return; }
     // лечебная вещь мода (heal в mod.json)
-    if (it?.heal && P.hp < 20) { P.hp = Math.min(20, P.hp + it.heal); st.AU?.play('kb_eat', { vol: .5, rate: 1.3 }); if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } st.swing = 1; return; }
+    if (it?.heal && P.hp < 20) { P.hp = Math.min(20, P.hp + it.heal); st.AU?.play('kb_eat', { vol: .5, rate: 1.3 }); if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } st.hand?.act('push'); return; }
     if (!hit || !it?.place) return;
-    if (placeBlock(st, hit, s, it)) { st.swing = 1; if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } }
+    if (placeBlock(st, hit, s, it)) { st.hand?.act('push'); if (!st.creative) { s.n--; if (s.n <= 0) P.inv[P.sel] = null; } }
   }
   function eat(st, it){
     const P = st.P;
     P.food = Math.min(20, P.food + it.food.h); P.sat = Math.min(P.food, P.sat + it.food.sat);
     st.AU?.play('kb_eat', { vol: .6 });
     if (!st.creative) { const s = P.inv[P.sel]; s.n--; if (s.n <= 0) P.inv[P.sel] = null; }
-    st.swing = 1;
+  }
+  // идёт еда: держишь ПКМ / LT (палец — нажал, дальше само) — хруст и крошки у рта; отпустил, сменил ячейку, наелся — не съел
+  function eatTick(st, dt, live){
+    const P = st.P, E = st.eat, s = P.inv[P.sel], it = s ? VX().item(s.id) : null;
+    const hold = live && (E.auto || st.C.held('place'));
+    if (!it?.food || s.id !== E.id || P.sel !== E.slot || !hold || P.dead || (P.food >= 20 && !st.creative)) { st.eat = null; return false; }
+    E.t += dt;
+    if ((E.snd -= dt) <= 0 && E.t > .3) {
+      E.snd = .21;
+      st.AU?.play('kb_eat', { vol: .3, rate: .85 + Math.random() * .3 });
+      const [ex, ey, ez] = eye(st), d = lookDir(st);
+      st.ents?.crumbs?.(ex + d.x * 1.05, ey - .45 + d.y * .6, ez + d.z * 1.05, s.id, 2);   // перед лицом, чуть ниже (точки крупные — не у самых глаз)
+    }
+    if (E.t >= E.need) { st.eat = null; eat(st, it); st.placeCool = .3; }
+    return true;
   }
   const FACE_IDX = (nx, nz) => nz > 0 ? 0 : nx < 0 ? 1 : nz < 0 ? 2 : 3;   // как V.FACING
   function placeBlock(st, hit, s, it){
@@ -927,16 +950,15 @@
       if (sp > .5) { const dd = ((Math.atan2(P.vx, P.vz) - lookYaw + PI * 3) % (PI * 2)) - PI; if (Math.abs(dd) < PI / 2) want = lookYaw + clamp(dd, -1.05, 1.05); }
       P.bodyYaw = want;
       A.pose('me', { x: P.x - st.ox, y: P.y, z: P.z - st.oz, yaw: want, moving: sp > .4, speed: sp, air: !P.onGround && !P.climb && !(P.water > .3), crouch: P.sneak ? 1 : 0, swim: P.water > .9, ladder: P.climb && !P.onGround, sit: false });
-      me.hidden = !st.camMode;
+      me.hidden = !st.camMode || st.camD < .95;   // вид сзади/спереди, а камера прижата к стене — не смотреть изнутри головы
       const [ex, ey, ez] = eye(st), d = lookDir(st);
       me.lookAt = me.lookAt || { x: 0, y: 0, z: 0 };
       me.lookAt.x = ex - st.ox + d.x * 8; me.lookAt.y = ey + d.y * 8; me.lookAt.z = ez - st.oz + d.z * 8;
-      if (me.ch && me.ch !== st.meCh) { st.meCh = me.ch; me.ch.root.scale.setScalar(.8); st.handItem = null; heldInHand(st, true); }
+      if (me.ch && me.ch !== st.meCh) { st.meCh = me.ch; me.ch.root.scale.setScalar(.8); }
     }
     A.update(dt, t, R.camera.position);
-    lightEntity(st);
+    st.hand?.frame(dt, t);   // руки и вещь в руке (поверх позы человечка), свет человечков — как у кубиков
     st.ents?.frame(dt, t);
-    heldItem(st, dt);
     VR.select(st.hit && !C.blocked ? st.hit : null);
     if (st.mine.st >= 0 && st.hit) VR.crack(st.hit.x, st.hit.y, st.hit.z, st.mine.st); else VR.crack(0, 0, 0, -1);
     ghostUpdate(st);
@@ -955,46 +977,6 @@
     R.render();
     hudUpdate(st);
     I.frameEnd(); C.frameEnd();
-  }
-  // яркость своего персонажа в пещере (материалы — свои копии)
-  function lightEntity(st){
-    const me = st.A.get('me'); if (!me?.ch) return;
-    const P = st.P, L = st.W.lightAt(P.x, P.y + 1, P.z), lt = window.KubomirEnts?.lightTint?.(L, .06) || [1, 1, 1, 1], k = lt[3];
-    if (Math.abs((st.meK ?? -1) - k) < .02 && st.meL === L && st.meKch === me.ch) return;
-    st.meK = k; st.meL = L;
-    if (st.meKch !== me.ch) { st.meKch = me.ch; me.ch.root.traverse(o => { if (o.isMesh && o.material && !o.material.userData?.kbOwn) { o.material = o.material.clone(); o.material.userData.kbOwn = true; o.material.userData.kbBase = o.material.color ? o.material.color.clone() : null; } }); }
-    me.ch.root.traverse(o => { const m = o.material; if (m?.userData?.kbBase && m.color) { m.color.copy(m.userData.kbBase); m.color.r *= lt[0]; m.color.g *= lt[1]; m.color.b *= lt[2]; } });
-  }
-  // вещь в руке: от 1-го лица — у камеры (взмах при ударе), от 3-го — в кисти персонажа
-  function heldItem(st, dt){
-    const P = st.P, s = P.inv[P.sel], name = s ? s.id : '', R = st.R, VR = st.VR;
-    const L = st.W.lightAt(P.x, P.y + 1.5, P.z);
-    if (st.heldName !== name) {
-      st.heldName = name;
-      if (st.held) { st.held.parent?.remove(st.held); st.held.geometry.dispose(); st.held = null; }
-      if (name) { st.held = VR.itemMesh(name, L); st.held.renderOrder = 20; st.held.frustumCulled = false; }
-      heldInHand(st, true);
-    }
-    if (!st.held) return;
-    VR.itemLight(st.held.geometry, L);
-    st.swing = Math.max(0, st.swing - dt * 4);
-    st.held.visible = !(st.hudHidden && !st.camMode);   // F1 — и руку не видно
-    if (!st.camMode) {
-      if (st.held.parent !== R.camera) { R.camera.add(st.held); if (!R.camera.parent) R.scene.add(R.camera); }
-      const sw = Math.sin(st.swing * PI), flat = st.held.geometry.userData.flat, bob = st.rig.feel ? Math.sin(st.rig.feel.bobPh) * .012 * st.rig.feel.bobW : 0;
-      st.held.position.set(.42 - sw * .12, -.36 - sw * .1 + bob, -.62 + sw * .1);
-      st.held.rotation.set(-sw * .9, flat ? -.6 : .7, flat ? .25 : 0);
-      st.held.scale.setScalar(flat ? .42 : .26);
-    } else heldInHand(st, false);
-  }
-  function heldInHand(st, force){
-    const me = st.A.get('me'), h = st.held;
-    if (!h || !me?.ch?.handR) return;
-    if (h.parent !== me.ch.handR || force) {
-      me.ch.handR.add(h);
-      const flat = h.geometry.userData.flat;
-      h.position.set(0, -.08, .1); h.rotation.set(flat ? -.4 : 0, 0, flat ? -1.2 : 0); h.scale.setScalar(flat ? .38 : .26);
-    }
   }
   // F5: 1-е лицо → сзади → спереди (как в Майнкрафте)
   function cycleCam(to){
@@ -1330,5 +1312,6 @@
   // для проверок (консоль, node): навести взгляд на точку, нажать «поставить/использовать»
   function aim(x, y, z){ const st = S; if (!st) return null; const [ex, ey, ez] = eye(st), dx = x - ex, dy = y - ey, dz = z - ez; st.rig.yaw = Math.atan2(-dx, -dz); st.rig.fp = Math.atan2(-dy, Math.hypot(dx, dz)); st.rig.mode = 'first'; st.camMode = 0; return st.rig; }
   window.GAME_IMPL[ID] = { mount, unmount, _test: { state: () => S, give: s => give(S, s), command: c => command(c), unlock, ACH, save: () => saveAll(S), stop: () => stopWorld(), aim, use: () => use(S, S.hit), dig: () => S?.hit && breakBlock(S, S.hit), menu: () => showMenu(),
-    cam: m => cycleCam(m), hud: v => hideHud(v), pick: () => S?.hit && pickBlock(S, S.hit), drop: all => S && dropSel(S, all), lookDir: () => S && { ...lookDir(S) } } };
+    cam: m => cycleCam(m), hud: v => hideHud(v), pick: () => S?.hit && pickBlock(S, S.hit), drop: all => S && dropSel(S, all), lookDir: () => S && { ...lookDir(S) },
+    hand: () => S?.hand?.state(), act: k => S?.hand?.act(k), eat: () => S?.eat && { ...S.eat } } };
 })();
