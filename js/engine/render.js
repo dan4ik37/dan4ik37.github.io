@@ -261,11 +261,12 @@
       lr.crossVectors(UPV, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
       sun.color.setRGB(M.light[0], M.light[1], M.light[2]);
       sun.intensity = (q === 'low' ? 1.25 : 2.6) * M.lightI * b;
-      // свет неба: цвет — небо (наполовину к белому), сила — по яркости неба (ночью не темнее трети дня — играть можно)
-      const mx = Math.max(M.ambSky[0], M.ambSky[1], M.ambSky[2], 1e-4), lumS = .2126 * M.ambSky[0] + .7152 * M.ambSky[1] + .0722 * M.ambSky[2];
-      hemi.color.setRGB(.5 + .5 * M.ambSky[0] / mx, .5 + .5 * M.ambSky[1] / mx, .5 + .5 * M.ambSky[2] / mx);
+      // свет неба: цвет — небо (днём наполовину к белому, ночью синее), сила — по яркости неба (ночью — как лунный свет:
+      // темно, но играть можно; на low света неба больше — без отражений неба)
+      const mx = Math.max(M.ambSky[0], M.ambSky[1], M.ambSky[2], 1e-4), lumS = .2126 * M.ambSky[0] + .7152 * M.ambSky[1] + .0722 * M.ambSky[2], wh = .5 - .25 * M.night;
+      hemi.color.setRGB(wh + (1 - wh) * M.ambSky[0] / mx, wh + (1 - wh) * M.ambSky[1] / mx, wh + (1 - wh) * M.ambSky[2] / mx);
       hemi.groundColor.setRGB(Math.min(.55, M.ambGnd[0] / mx), Math.min(.55, M.ambGnd[1] / mx), Math.min(.55, M.ambGnd[2] / mx));
-      hemi.intensity = (q === 'low' ? 1 : .42) * Math.max(lumS / .44, .34 + .1 * (1 - M.night)) * amb;
+      hemi.intensity = (q === 'low' ? 1 : .42) * Math.max(lumS / .44, .19 + .2 * (1 - M.night)) * amb;
       R.night = M.night;
       applyFog();
       // облака: цвет по свету (ночью тёмные), сколько видно — облачность мира

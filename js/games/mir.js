@@ -1604,7 +1604,7 @@
   }
   function housekeeping(){
     if (!S || S.stopped) return;
-    if (S.R && !S.R.dead) S.R.setLighting({ time: mirTime() });   // время суток идёт (графика v3)
+    if (S.R && !S.R.dead && S.fixedTime == null) S.R.setLighting({ time: mirTime() });   // время суток идёт (графика v3); S.fixedTime — стоп (проверки)
     if (S.playing) S.idleAt = Date.now();   // игра поверх мира — это не «стоит на месте»
     if (afkDue(S, Date.now())) {
       S.stopped = true;
