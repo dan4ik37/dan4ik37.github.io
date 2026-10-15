@@ -164,5 +164,35 @@ if (want('durak')) {
   ok(eq(sorted, ['6s', 'Qs', '9c', 'Kh', '7d', 'Ad']), 'durak: рука по мастям, козыри в конце', sorted);
 }
 
+// ═══ «Лудо» ═══
+if (want('ludo')) {
+  const T = load('js/games/ludo.js').GAME_IMPL.ludo._test;
+  let errs = 0, stuck = 0, choice = 0;
+  for (let g = 0; g < 2000; g++) {
+    const rand = rng(9000 + g), n = 2 + (g % 3), cols = n === 2 ? [0, 2] : n === 3 ? [0, 1, 2] : [0, 1, 2, 3];
+    const G = T.newGame(Array.from({ length: n }, (_, i) => ({ id: 'b' + i, nick: 'Бот ' + i, bot: true, color: cols[i] })), rand);
+    let steps = 0;
+    while (G.winner < 0 && steps < 20000) {
+      const p = G.turn;
+      if (G.phase === 'roll') { if (T.doRoll(G, p)) { errs++; break; } }
+      else {
+        if (T.choices(G, p, G.roll) > 1) choice++;
+        const i = T.botPick(G, p);
+        if (i < 0 || T.doMove(G, p, i)) { errs++; break; }
+      }
+      steps++;
+    }
+    if (G.winner < 0) stuck++;
+  }
+  ok(errs === 0 && stuck === 0, 'ludo: 2000 партий ботов без ошибок и до конца', { errs, stuck });
+  ok(choice > 1000, 'ludo: выбор из нескольких фишек бывает часто', choice);
+  // выбор фишки: нажал — выбрана; та же (или с той же клетки) — ход; другая — смена
+  const tok = [-1, -1, 12, 20];
+  ok(eq(T.tokPick(-1, 2, tok), { sel: 2, move: -1 }), 'ludo: нажал фишку — выбрана, хода нет');
+  ok(eq(T.tokPick(2, 3, tok), { sel: 3, move: -1 }), 'ludo: другая фишка — выбор сменился');
+  ok(eq(T.tokPick(3, 3, tok), { sel: -1, move: 3 }), 'ludo: та же ещё раз — ход');
+  ok(eq(T.tokPick(0, 1, tok), { sel: -1, move: 0 }), 'ludo: из домика любая — тот же ход');
+}
+
 console.log(`games-test: ${pass} ok, ${fail} fail (${((Date.now() - t0) / 1000).toFixed(1)} с)`);
 process.exit(fail ? 1 : 0);
