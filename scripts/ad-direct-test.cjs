@@ -231,7 +231,7 @@ globalThis.fetch = async (url, o = {}) => {
   const m = /\/rest\/v1\/rpc\/(\w+)$/.exec(url);
   if (m) {
     if (NET.off) return J(404, { code: 'PGRST202', message: 'Could not find the function public.' + m[1] });
-    if (m[1] === 'ad_live') return J(200, NET.live);
+    if (m[1] === 'ad_live') return NET.liveErr ? J(500, { message: 'упал' }) : J(200, NET.live);
     if (m[1] === 'ad_pick') return J(200, typeof NET.pick === 'function' ? NET.pick(b) : NET.pick);
     if (m[1] === 'ad_view') return J(200, { ok: true, counted: true });
     if (m[1] === 'ad_report') return J(200, { ok: true, reports: 1 });
@@ -278,6 +278,13 @@ ok(typeof D.fill === 'function' && typeof M.direct === 'function' && typeof D.bi
   ok(JSON.parse(localStorage.getItem('d37_adlive')).f.native === 2, 'сводка сохранена в браузере (подсказка следующей странице)');
   ok(D.has('feed_games') && D.has('feed_videos') && !D.has('loading') && !D.has('rail'), 'has(): лента — да; баннеров и столбиков сейчас нет');
   ok(!D.has('interstitial') && !D.has('floor') && !D.has('rewarded'), 'полноэкранная, полоска, за награду — не для прямой рекламы');
+  // сервер не отвечает (500) — не долбим: следующий запрос сводки не раньше чем через минуту
+  fresh(); DT.setLive(null); NET.liveErr = true;
+  for (let i = 0; i < 5; i++) { D.has('feed_games'); await flush(); advance(2000); }
+  ok(rpcCalls('ad_live').length === 1 && !D.has('feed_games'), 'ad_live не ответил — повтор не раньше чем через минуту', { n: rpcCalls('ad_live').length, calls: NET.calls.map(c => c.url.slice(-30)), off: D.isOff(), live: D.live() });
+  advance(61e3); D.has('feed_games'); await flush();
+  ok(rpcCalls('ad_live').length === 2, 'через минуту — спросили снова');
+  NET.liveErr = false;
   fresh(); NET.off = true; DT.setLive(null);
   await D.refresh(); await flush();
   ok(D.isOff() && !D.has('feed_games') && sessionStorage.getItem('d37_adoff'), 'ads.sql не выполнен (PGRST202) — тихо выключено до конца визита');

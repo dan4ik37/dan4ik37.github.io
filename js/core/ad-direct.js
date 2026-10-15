@@ -113,20 +113,22 @@
   }
 
   // ── Что сейчас работает (подсказка: спрашивать ли выдачу) ──
+  let liveFail = 0;   // сервер не ответил — снова спросим не раньше чем через минуту (не долбить запросами)
   function loadLive(force){
     if (off) return Promise.resolve(null);
     if (!force && liveP) return liveP;
     liveP = rpc('ad_live').then(v => {
-      if (v && typeof v === 'object') { live = { on: !!v.on, f: v.f || {}, t: now() }; ls.set('d37_adlive', live); }
+      if (v && typeof v === 'object') { live = { on: !!v.on, f: v.f || {}, t: now() }; ls.set('d37_adlive', live); liveFail = 0; }
+      else liveFail = now();
       return live;
-    }).finally(() => { setTimeout(() => { liveP = null; }, 1000); });
+    }).finally(() => { liveP = null; });   // повторы и так сдерживают свежесть сводки (5 мин) и пауза после ошибки (1 мин)
     return liveP;
   }
   {
     const c = ls.get('d37_adlive');
     if (c && c.t && now() - c.t < 10 * 60e3) live = c;
   }
-  function freshLive(){ if (!off && (!live || now() - live.t > 5 * 60e3)) loadLive(); }
+  function freshLive(){ if (!off && (!live || now() - live.t > 5 * 60e3) && now() - liveFail > 60e3) loadLive(); }
   // Ждать подсказку не дольше ms (серверные страницы: места, которые заполняются сразу при загрузке)
   function ready(fn, ms = 700){
     if (off || (live && now() - live.t < 5 * 60e3)) { fn(); return; }
