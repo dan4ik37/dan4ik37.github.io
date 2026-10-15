@@ -251,7 +251,65 @@ const J = o => JSON.stringify(o);
     const mod = await import(pathToFileURL(path.join(tmp, 'api/_lib/routes/raid.js')).href);
     const T = mod._test;
     ok(T && typeof mod.default === 'function', 'маршрут грузится');
-    if (T) await require(path.join(__dirname, 'raid-route-test.cjs'))({ ok, T, S, defs, play, armyFor, typical, mod });
+    const pages = fs.readFileSync(path.join(SITE, 'api/pages.js'), 'utf8'), vj = JSON.parse(fs.readFileSync(path.join(SITE, 'vercel.json'), 'utf8'));
+    ok(/import raid from '\.\/_lib\/routes\/raid\.js'/.test(pages) && /\braid\b[^\n]*};/.test(pages) && vj.rewrites.some(r => r.source === '/api/raid' && r.destination === '/api/pages?page=raid'), 'маршрут подключён: api/pages.js и rewrite /api/raid');
+    ok(fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'серверных функций Vercel — не больше 12 (новой не добавили)');
+    const cfg = { defs, layout: typical(3, 1), army: armyFor(3), hero: 3, seed: 4242 }, live = play(cfg, 7);
+    const id = 'r' + 'a'.repeat(20), token = 'f'.repeat(64), now = 1760000000, secs = Math.ceil(live.res.ticks / 20);
+    const mk = over => ({ ok: true, status: 'active', mode: 'find', seed: cfg.seed, lvl: null, variant: 0, layout: cfg.layout, army: cfg.army, hero: 3, started_at: now - secs - 30, go_at: now - secs - 1, deadline: now + 999, now, result: null, defs, ...over });
+    let calls = [];
+    const rpc = (load, out) => async (fn, args) => { calls.push([fn, args]); if (fn === 'raid_load') { if (load instanceof Error) throw load; return load; } if (fn === 'raid_settle') return out ?? { ok: true, stars: args.p_res.stars, loot: 123 }; throw new Error('?'); };
+    const settled = () => calls.find(c => c[0] === 'raid_settle')?.[1];
+    calls = [];
+    let out = await T.settle({ id, token, inputs: live.ins }, '1.2.3.4', rpc(mk({})));
+    let sr = settled();
+    ok(out.ok && sr && sr.p_res.stars === live.res.stars && sr.p_res.pct === live.res.pct && J(sr.p_res.destroyed) === J(live.res.destroyed) && J(sr.p_res.used) === J(live.res.used) && sr.p_ip === '1.2.3.4' && J(sr.p_inputs) === J(live.ins) && out.sim.stars === live.res.stars,
+      'маршрут сам пересчитал бой: в raid_settle — тот же итог, что был в браузере', { out, p: sr?.p_res });
+    const tryIn = async (inputs, load = mk({})) => { calls = []; const o = await T.settle({ id, token, inputs }, '', rpc(load)); return { o, settled: !!settled() }; };
+    let t = await tryIn([{ t: 0, u: 'fighter', x: 8 * C, z: 8 * C }]);
+    ok(t.o.reason === 'bad_input' && t.o.why === 'zone' && !t.settled, 'высадка внутри участка — отказ, итог в базу не идёт');
+    t = await tryIn(Array.from({ length: cfg.army.fighter + 1 }, (_, i) => ({ t: i, u: 'fighter', x: C, z: C })));
+    ok(t.o.reason === 'bad_input' && t.o.why === 'unit' && !t.settled, 'бойцов больше, чем в армии из базы — отказ');
+    t = await tryIn(live.ins, mk({ go_at: now - 3 }));
+    ok(t.o.reason === 'early' && t.o.wait > 0 && !t.settled, `бой на ${secs} с прислали через 3 с — «рано», ждать ${t.o.wait} с`);
+    t = await tryIn(live.ins, mk({ go_at: null }));
+    ok(t.o.reason === 'nogo' && !t.settled, 'без raid_go (бой не начат) — отказ');
+    t = await tryIn([]);
+    ok(t.o.ok && t.settled && J(calls.find(c => c[0] === 'raid_settle')[1].p_res.used) === '{}', 'никого не высадил — в базу «0 отрядов» (там отмена набега)');
+    t = await tryIn(live.ins, mk({ status: 'done', result: { stars: 2, loot: 77 } }));
+    ok(t.o.ok && t.o.again && t.o.loot === 77 && !t.settled, 'уже засчитан — тот же итог, второй раз не считаем');
+    t = await tryIn(live.ins, mk({ status: 'expired', result: { stars: 0, expired: true } }));
+    ok(t.o.reason === 'expired' && !t.settled, 'просрочен — нет');
+    t = await tryIn(live.ins, { ok: false, reason: 'token' });
+    ok(t.o.reason === 'token' && !t.settled, 'жетон не подошёл — нет');
+    calls = [];
+    ok((await T.settle({ id: 'x', token, inputs: [] }, '', rpc(mk({})))).reason === 'id' && (await T.settle({ id, token: 'zz', inputs: [] }, '', rpc(mk({})))).reason === 'token' && (await T.settle({ id, token, inputs: 'x' }, '', rpc(mk({})))).reason === 'shape' && !calls.length, 'мусор в запросе — без похода в базу');
+    t = await tryIn(live.ins, Object.assign(new Error('rpc raid_load: HTTP 404 {"code":"PGRST202"}')));
+    ok(t.o.reason === 'nosql', 'raids.sql ещё не запущен — nosql');
+    t = await tryIn(live.ins, new Error('timeout'));
+    ok(t.o.reason === 'db', 'база не ответила — db');
+    // разбойники: снимка нет — базу строит тот же код по уровню
+    const bcfg = { defs, layout: S.bot(103, defs, 2), army: armyFor(3), hero: 3, seed: 99 }, blive = play(bcfg, 3), bsecs = Math.ceil(blive.res.ticks / 20);
+    t = await tryIn(blive.ins, mk({ mode: 'bot', lvl: 103, variant: 2, layout: null, seed: 99, go_at: now - bsecs - 1 }));
+    ok(t.o.ok && calls.find(c => c[0] === 'raid_settle')[1].p_res.stars === blive.res.stars, 'разбойники: сервер строит ту же базу по уровню и варианту');
+    // обработчик целиком: метод, нет ключей, настоящий путь через fetch к Supabase (подмена)
+    const mres = () => ({ statusCode: 0, h: {}, setHeader(k, v) { this.h[k.toLowerCase()] = v; }, end(s) { this.body = s; } });
+    let rs = mres(); await mod.default({ method: 'GET', headers: {} }, rs);
+    ok(rs.statusCode === 405, 'GET — 405');
+    delete process.env.SUPABASE_URL; delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    rs = mres(); await mod.default({ method: 'POST', headers: {}, body: { id, token, inputs: [] } }, rs);
+    ok(JSON.parse(rs.body).reason === 'off', 'нет ключей Supabase в Vercel — off');
+    process.env.SUPABASE_URL = 'https://test.supabase.co'; process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key';
+    const seen = [], realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, o) => {
+      seen.push({ url, auth: o.headers.Authorization, body: JSON.parse(o.body) });
+      const fn = url.split('/rpc/')[1], body = fn === 'raid_load' ? mk({}) : { ok: true, stars: JSON.parse(o.body).p_res.stars, loot: 5 };
+      return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+    };
+    rs = mres(); await mod.default({ method: 'POST', headers: { 'x-forwarded-for': '5.6.7.8, 10.0.0.1' }, body: JSON.stringify({ id, token, inputs: live.ins }) }, rs);
+    globalThis.fetch = realFetch;
+    const rb = JSON.parse(rs.body);
+    ok(rs.statusCode === 200 && rb.ok && rb.stars === live.res.stars && rs.h['cache-control'] === 'no-store' && seen.length === 2 && seen.every(s => s.auth === 'Bearer service-key') && seen[1].body.p_ip === '5.6.7.8', 'обработчик: тело строкой (sendBeacon), ключ service_role, IP из заголовка', { rb, seen: seen.map(s => s.url) });
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 

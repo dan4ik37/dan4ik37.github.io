@@ -118,6 +118,10 @@
       "destination": "/api/pages?page=ids"
     },
     {
+      "source": "/api/raid",
+      "destination": "/api/pages?page=raid"
+    },
+    {
       "source": "/api/feed",
       "destination": "/api/pages?page=feed"
     },
