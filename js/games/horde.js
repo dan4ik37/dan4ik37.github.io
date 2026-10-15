@@ -553,11 +553,11 @@
     if (e.d.boss) {
       G.boss = null;
       item(G, 'chest', e.x, e.y);
-      for (let i = 0; i < 6; i++) item(G, 'coin', e.x + (G.rd() - .5) * 90, e.y + (G.rd() - .5) * 90, 5);
+      for (let i = 0; i < 6; i++) item(G, 'coin', e.x + (G.rd() - .5) * 90, e.y + (G.rd() - .5) * 90, 3);
       G.banner = { text: `🏆 ${e.d.name} побеждён!`, t: 2.5 };
     } else if (e.elite) {
       item(G, 'chest', e.x, e.y);
-      item(G, 'coin', e.x + 22, e.y, 10);
+      item(G, 'coin', e.x + 22, e.y, 5);
     } else {
       const L = G.luck, r = G.rd();
       if (r < .03 * L) item(G, 'coin', e.x, e.y, 1);
@@ -620,7 +620,7 @@
   }
   // Сундук: эволюция, если есть что эволюционировать, иначе случайное улучшение; плюс монеты
   function chest(G, p){
-    G.coins += 10;
+    G.coins += 5;
     const evo = p.weapons.find(w => !w.evo && w.lvl >= 5 && (p.pass[WEAPONS[w.id].evo] || 0) > 0);
     let text;
     if (evo) { apply(G, p, { k: 'evo', id: evo.id }); text = `⭐ ${WEAPONS[evo.id].evoE} ${WEAPONS[evo.id].evoName}!`; }
@@ -629,7 +629,7 @@
       if (opts.length) { const f = optInfo(p, opts[0]); apply(G, p, opts[0]); text = `${f.e} ${f.name} ${f.tag}`; }
       else { heal(p, 50); text = '🍗 +50 здоровья'; }
     }
-    G.banner = { text: `📦 Сундук: ${text} · +10 🪙`, t: 2.6 };
+    G.banner = { text: `📦 Сундук: ${text} · +5 🪙`, t: 2.6 };
     G.sfxChest = true;
   }
   function addXp(G, v){
@@ -729,7 +729,7 @@
     else if (o.k === 'evo') { const w = p.weapons.find(x => x.id === o.id); if (w) w.evo = true; }
     else if (o.k === 'p') p.pass[o.id] = Math.min(PASSIVES[o.id].max, (p.pass[o.id] || 0) + 1);
     else if (o.k === 'heal') heal(p, 40);
-    else if (o.k === 'coins') G.coins += 10;
+    else if (o.k === 'coins') G.coins += 5;
     calcStats(p);
     if (p.maxHp > before) p.hp += p.maxHp - before;
     G.luck = Math.max(...G.players.map(x => x.luck));
@@ -749,7 +749,7 @@
       return { e: P.e, name: P.name, tag: l ? `ур. ${l + 1}` : 'новое', text: P.text + (pair ? ` · нужна для ⭐ ${WEAPONS[pair.id].evoName}` : '') };
     }
     if (o.k === 'heal') return { e: '🍗', name: 'Курочка', tag: '', text: '+40 здоровья' };
-    return { e: '🪙', name: 'Монеты', tag: '', text: '+10 монет' };
+    return { e: '🪙', name: 'Монеты', tag: '', text: '+5 монет' };
   }
 
   // ═══ ЭКРАН, УПРАВЛЕНИЕ, МЕНЮ ═══
@@ -1310,7 +1310,8 @@
     if (G.coop) { coopFinish(); return; }
     mode = 'end'; hud.hidden = true;
     const p = G.players[G.me], sc = score(G);
-    const coins = Math.round(G.coins * p.greed) + Math.floor(G.t / 60) * 6 + (G.won ? 50 : 0);
+    // монеты забега (экономика 15.10.2026: вдвое меньше прежнего; потолок — coin_run_cap('horde'))
+    const coins = Math.round(G.coins * p.greed) + Math.floor(G.t / 60) * 2 + (G.won ? 25 : 0);
     if (hooks) { hooks.progress(sc); hooks.done(sc); }
     else api.report('horde', G.t >= WIN_TIME, sc, sc);
     const best = Math.max(api.local().best || 0, sc);
@@ -1770,7 +1771,7 @@
     mode = 'end'; hud.hidden = true;
     cancelAnimationFrame(raf); raf = 0;
     const me = G?.players[G.me];
-    const coins = Math.round(teamCoins * (me?.greed || 1)) + Math.floor(t / 60) * 6 + (won ? 50 : 0);
+    const coins = Math.round(teamCoins * (me?.greed || 1)) + Math.floor(t / 60) * 2 + (won ? 25 : 0);
     api.report('horde_coop', t >= WIN_TIME, sc, 0);
     api.sfx(won ? 'win' : 'bad');
     const dead = wrap?.querySelector('.hd-dead'); if (dead) dead.hidden = true;

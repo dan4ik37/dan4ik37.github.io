@@ -146,10 +146,16 @@ function shopRender(S){
           ${own ? '<small>✅ уже твоё — надень в гардеробе</small>' : `<button type="button" class="pf-btn pf-btn-primary pf-btn-sm" onclick="shopSpend('${it.id}')" ${canSpend(it.price) ? '' : 'disabled'}>Купить</button>`}</div>`;
       }).join('')}</div>` : `<p class="shp-small">Скоро в гардеробе: ${skins.map(x => esc(x.title.toLowerCase())).join(', ')}. Каждая вещь — с понятной ценой, без случайных «сундуков».</p>`}
     </div>
+    <div class="shp-block pf-card pf-card-tw">
+      <div class="shp-block-head"><b>📣 Реклама на сайте</b><span>для блогеров и магазинов</span></div>
+      <p class="shp-small" style="margin-top:0">Своя кампания за ${C.icon}: карточка в ленте, баннер, столбик у игры или щит в 3D-мире — с проверкой и статистикой по дням. Неизрасходованное возвращается.</p>
+      <a class="pf-btn pf-btn-tw pf-btn-sm" href="#/adv" style="text-decoration:none">Открыть кабинет рекламы →</a>
+    </div>
   </section>`;
 
   // ── История ──
-  const KIND = { pay: 'Покупка', donation: 'Донат', convert: 'Остаток доната', grant: 'Подарок от сайта', revoke: 'Списание', spend: 'Покупка в магазине', gift: 'Подарок другу', refund: 'Возврат денег', debt: 'Погашение долга' };
+  const KIND = { pay: 'Покупка', donation: 'Донат', convert: 'Остаток доната', grant: 'Подарок от сайта', revoke: 'Списание', spend: 'Покупка в магазине', gift: 'Подарок другу', refund: 'Возврат денег', debt: 'Погашение долга',
+    ads: 'Реклама на сайте', ads_refund: 'Возврат остатка рекламы' };   // ads — кабинет рекламодателя #/adv (ads.sql)
   const hist = ok ? `<section class="shp-block pf-card pf-card-muted" id="shp-hist">
     <div class="shp-block-head"><b>🧾 История</b><span>последние операции</span></div>
     ${(S.orders || []).filter(o => o.status === 'new' && o.provider === 'kaspi').map(o => `<div class="shp-row shp-wait"><span>⏳ Заказ <b>${esc(o.id)}</b> (Kaspi) — ждёт проверки оплаты</span><span>${C.icon} ${shopNum(o.gems)} · ${shopMoney(o.amount, o.currency)}</span></div>`).join('')}

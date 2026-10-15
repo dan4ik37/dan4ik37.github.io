@@ -11,7 +11,8 @@
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
---  Проверка: select public.game_score_cap('horde'); → 30000
+--  Проверка: select public.game_score_cap('horde'); → 30000; XP за победу — /rpc/game_win_xp {"p_game":"horde"} → 10 (20 — старая версия).
+--  15.10.2026 (экономика, docs/ECONOMY.md): XP за победы примерно вдвое меньше; лимиты — economy.sql (запускать после этого файла).
 -- ═══════════════════════════════════════════════════════════════════
 
 create or replace function public.game_score_cap(p_game text)
@@ -62,38 +63,42 @@ returns int language sql immutable as $$
     else null end;
 $$;
 
+-- XP за победу (экономика 15.10.2026 — примерно вдвое меньше прежнего; лёгкое и быстрое — 1–4, долгое и трудное — 10–20,
+-- слово и судоку дня — чуть щедрее, они раз в день). Сколько побед дают XP — правила economy.sql (game_xp_award):
+-- не больше 3 наград в день за одну игру (horde, horde_duel, horde_coop — одна игра) и не больше 100 XP в день за все игры.
+-- Подписи «+N XP» на клиенте берутся из ответа game_result — менять там нечего.
 create or replace function public.game_win_xp(p_game text)
 returns int language sql immutable as $$
   select case p_game
-    when 'cities_easy' then 8 when 'cities_normal' then 15 when 'cities_hard' then 25 when 'cities_duel' then 10
-    when 'guess' then 15 when '2048' then 30
-    when 'ttt_easy' then 3 when 'ttt_normal' then 10 when 'ttt_hard' then 10
-    when 'reaction' then 5
-    when 'ttt_online' then 5
-    when 'checkers_easy' then 5 when 'checkers_normal' then 15 when 'checkers_hard' then 30 when 'checkers_online' then 10
-    when 'catch' then 10
-    when 'guess_duel' then 10 when '2048_duel' then 10 when 'catch_duel' then 10 when 'reaction_duel' then 10
-    when 'sea_easy' then 5 when 'sea_normal' then 15 when 'sea_hard' then 25 when 'sea_online' then 10
-    when 'snake' then 10 when 'snake_duel' then 10
-    when 'memory' then 10 when 'memory_duel' then 10
-    when 'words' then 15 when 'words_free' then 3 when 'words_duel' then 10
-    when 'emoji' then 10 when 'emoji_duel' then 10
-    when 'horde' then 20 when 'horde_duel' then 15 when 'horde_coop' then 20
-    when 'td' then 20 when 'td_duel' then 15 when 'td_coop' then 20
-    when 'uno' then 10 when 'uno_online' then 15
-    when 'durak' then 10 when 'durak_online' then 15
-    when 'pool_easy' then 3 when 'pool_normal' then 10 when 'pool_hard' then 20 when 'pool_online' then 15
-    when 'ludo' then 10 when 'ludo_online' then 15
-    when 'nardy_easy' then 5 when 'nardy_hard' then 20 when 'nardy_online' then 15
-    when 'arena_easy' then 3 when 'arena_normal' then 10 when 'arena_hard' then 20 when 'arena_online' then 15
-    when 'chess_easy' then 3 when 'chess_normal' then 10 when 'chess_hard' then 30 when 'chess_online' then 15
-    when 'blocks' then 10 when 'blocks_duel' then 10
-    when 'kosynka' then 10 when 'kosynka3' then 15 when 'kosynka_duel' then 10
-    when 'pauk1' then 10 when 'pauk2' then 20 when 'pauk4' then 40
-    when 'freecell' then 15 when 'freecell_duel' then 10
-    when 'miner1' then 5 when 'miner2' then 15 when 'miner3' then 30 when 'miner_duel' then 10
-    when 'mahjong' then 10 when 'mahjong_duel' then 10
-    when 'sudoku1' then 3 when 'sudoku2' then 8 when 'sudoku3' then 15 when 'sudoku4' then 25 when 'sudoku_daily' then 20 when 'sudoku_duel' then 10
+    when 'cities_easy' then 4 when 'cities_normal' then 8 when 'cities_hard' then 12 when 'cities_duel' then 5
+    when 'guess' then 8 when '2048' then 15
+    when 'ttt_easy' then 1 when 'ttt_normal' then 4 when 'ttt_hard' then 5
+    when 'reaction' then 2
+    when 'ttt_online' then 3
+    when 'checkers_easy' then 2 when 'checkers_normal' then 6 when 'checkers_hard' then 15 when 'checkers_online' then 6
+    when 'catch' then 4
+    when 'guess_duel' then 5 when '2048_duel' then 5 when 'catch_duel' then 5 when 'reaction_duel' then 4
+    when 'sea_easy' then 2 when 'sea_normal' then 6 when 'sea_hard' then 12 when 'sea_online' then 6
+    when 'snake' then 4 when 'snake_duel' then 5
+    when 'memory' then 4 when 'memory_duel' then 5
+    when 'words' then 10 when 'words_free' then 1 when 'words_duel' then 5
+    when 'emoji' then 4 when 'emoji_duel' then 5
+    when 'horde' then 10 when 'horde_duel' then 8 when 'horde_coop' then 10
+    when 'td' then 10 when 'td_duel' then 8 when 'td_coop' then 10
+    when 'uno' then 4 when 'uno_online' then 8
+    when 'durak' then 4 when 'durak_online' then 8
+    when 'pool_easy' then 1 when 'pool_normal' then 4 when 'pool_hard' then 10 when 'pool_online' then 8
+    when 'ludo' then 4 when 'ludo_online' then 8
+    when 'nardy_easy' then 2 when 'nardy_hard' then 10 when 'nardy_online' then 8
+    when 'arena_easy' then 1 when 'arena_normal' then 4 when 'arena_hard' then 10 when 'arena_online' then 8
+    when 'chess_easy' then 1 when 'chess_normal' then 5 when 'chess_hard' then 15 when 'chess_online' then 8
+    when 'blocks' then 5 when 'blocks_duel' then 5
+    when 'kosynka' then 5 when 'kosynka3' then 8 when 'kosynka_duel' then 5
+    when 'pauk1' then 5 when 'pauk2' then 10 when 'pauk4' then 20
+    when 'freecell' then 8 when 'freecell_duel' then 5
+    when 'miner1' then 2 when 'miner2' then 6 when 'miner3' then 15 when 'miner_duel' then 5
+    when 'mahjong' then 4 when 'mahjong_duel' then 5
+    when 'sudoku1' then 1 when 'sudoku2' then 4 when 'sudoku3' then 8 when 'sudoku4' then 12 when 'sudoku_daily' then 12 when 'sudoku_duel' then 5
     else 0 end;
 $$;
 

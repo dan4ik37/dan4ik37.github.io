@@ -118,6 +118,14 @@ const ref = JSON.parse(fs.readFileSync(path.join(__dirname, 'char-ref.json'), 'u
     owned.add(`skin:${s}:${id}`); ok(C.owns(s, id), 'купил в магазине — своя', id); owned.delete(`skin:${s}:${id}`);
   }
   ok(C.gemsOf('skin:hat:crown') === 0 && C.gemsOf('skin:pack:robot') === 0 && C.wearable({ hat: 'gemcrown' }).hat === 'none', 'обычные — за монеты; чужую корону за 💎 не надеть');
+  // «за уровень» (экономика 15.10.2026, 7-е поле PARTS): цена 0, не продаётся, своя — с уровня (D37Coins.level)
+  const p = C.part('pet', 'owl'), b = C.buyItem('pet', 'owl');
+  ok(p.lvl === 20 && p.price === 0 && !p.gems && C.levelOf('skin:pet:owl') === 20 && b.lvl === 20 && C.price('skin:pet:owl') === 0, 'Совёнок — за 20 уровень, цена 0', p);
+  ok(C.levelOf('skin:hat:crown') === 0 && C.part('hat', 'crown').lvl === 0, 'обычная вещь — не «за уровень»');
+  ok(!C.owns('pet', 'owl') && C.wearable({ pet: 'owl' }).pet === 'none', 'нет уровня (гость) — не своя, не надевается');
+  globalThis.D37Coins.level = () => 19; ok(!C.owns('pet', 'owl'), '19 уровень — ещё нет');
+  globalThis.D37Coins.level = () => 20; ok(C.owns('pet', 'owl') && C.wearable({ pet: 'owl' }).pet === 'owl', '20 уровень — своя, надевается');
+  delete globalThis.D37Coins.level;
 }
 
 // ═══ 3. Сборка против эталона старой версии ═══
@@ -449,6 +457,7 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   let srv = {}, saves = 0;
   const sb = { rpc: async (name, a) => {
     if (name === 'coins_state') return { data: { ok: true, coins: 0, items: wallet, daily: true, ads: 0, doubles: 0, perks: false, imported: true, look: srv }, error: null };
+    if (name === 'user_level') return { data: 25, error: null };   // старый coins_state уровня не отдаёт — спросят user_level
     if (name !== 'char_save') return { data: null, error: null };
     saves++;
     const clean = {};
@@ -456,7 +465,7 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
       const v = a.p_look[s];
       if (v == null || v === '') continue;
       if (/^x[0-9a-f]{6}$/.test(v)) { clean[s] = v; continue; }
-      if (C.gemsOf(`skin:${s}:${v}`)) return { data: { ok: false, reason: 'item', item: `skin:${s}:${v}` }, error: null };
+      if (C.gemsOf(`skin:${s}:${v}`) || C.levelOf(`skin:${s}:${v}`)) return { data: { ok: false, reason: 'item', item: `skin:${s}:${v}` }, error: null };
       clean[s] = v;
     }
     srv = clean;
@@ -469,14 +478,15 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   for (const f of ['js/core/coins.js', 'js/core/avatar.js']) vm.runInContext(fs.readFileSync(path.join(SITE, f), 'utf8'), ctx, { filename: f });
   const D = ctx.D37Coins, Ch = ctx.D37Char;
   await D.sync();
-  const r = await Ch.set({ color: 'red', body: 'girl', hgt: '3', hat: 'gemcrown', trail: 'gems', back: 'gemwings', psal: 'robot', pcal: 'x00ff00' });
+  ok(D.level() === 25, 'уровень — из user_level, если coins_state его не отдаёт', D.level());
+  const r = await Ch.set({ color: 'red', body: 'girl', hgt: '3', hat: 'gemcrown', trail: 'gems', back: 'gemwings', psal: 'robot', pcal: 'x00ff00', pet: 'owl' });
   ok(r.ok && r.partial, 'старый сервер: сохранилось всё, что он знает', JSON.stringify(r));
-  ok(srv.color === 'red' && srv.body === 'girl' && srv.hgt === '3' && !('hat' in srv) && !('trail' in srv) && !('back' in srv), 'в базе — без вещей за 💎', JSON.stringify(srv));
+  ok(srv.color === 'red' && srv.body === 'girl' && srv.hgt === '3' && !('hat' in srv) && !('trail' in srv) && !('back' in srv) && !('pet' in srv), 'в базе — без вещей за 💎 и «за уровень»', JSON.stringify(srv));
   await D.sync();
   await new Promise(res => setTimeout(res, 0));
   const L = Ch.look();
-  ok(L.hat === 'gemcrown' && L.trail === 'gems' && L.back === 'gemwings' && L.psal === 'robot' && L.pcal === 'x00ff00' && L.color === 'red' && L.body === 'girl',
-    'после синхронизации надето всё: купленное за 💎 и новые части — из браузера', JSON.stringify(L));
+  ok(L.hat === 'gemcrown' && L.trail === 'gems' && L.back === 'gemwings' && L.psal === 'robot' && L.pcal === 'x00ff00' && L.color === 'red' && L.body === 'girl' && L.pet === 'owl',
+    'после синхронизации надето всё: купленное за 💎, «за уровень» и новые части — из браузера', JSON.stringify(L));
   Ch.fromServer({ ...srv, hat: 'none' });
   ok(Ch.look().hat === 'none' && Ch.look().trail === 'gems', 'в базе явно другое — верим базе', JSON.stringify(Ch.look()));
   Ch.fromServer({ color: 'green' });   // совсем старый coins.sql (до 11.10): в базе только 2D-части

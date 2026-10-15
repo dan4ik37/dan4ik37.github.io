@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '63';
+const GAMES_VER = '65';
 const GAMES = [
   { id: 'world',    age: '12+', ageWhy: 'Онлайн-мир: общение с незнакомыми игроками в чате.', icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   age: '6+', ageWhy: 'Конструктор игр; игры других игроков — со своей меткой.', icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -198,16 +198,25 @@ async function renderDailyQuest(){
   let right;
   if (!currentUser) right = `<button class="dq-btn ghost" onclick="openGlobalAuth()">Войти</button>`;
   else if (data.claimed) right = `<span class="dq-done">✅ Награда получена</span>`;
-  else if (data.done) right = `<button class="dq-btn" onclick="claimDailyQuest(this)">🎁 Забрать +50 XP</button>`;
+  else if (data.done) right = `<button class="dq-btn" onclick="claimDailyQuest(this)">🎁 Забрать ${dailyQuestPrize()}</button>`;
   else right = q.game ? `<a class="dq-btn ghost" href="#/games/${q.game}">Играть →</a>` : '';
   box.innerHTML = `<span class="dq-ic">🎯</span>
     <div class="dq-body"><b>Задание дня</b><span>${esc(q.text)}</span><small>${currentUser ? (data.done ? 'Выполнено!' : 'Новое задание — каждый день в полночь по МСК') : 'Войди, чтобы получить награду'}</small></div>
     ${right}`;
 }
+// Награда за задание дня — XP (xp_rule('daily'), economy.sql) и монеты (coin_rule('quest'), coins.sql); числа — XP_NUM / RULES
+function dailyQuestPrize(){
+  const xp = typeof XP_NUM !== 'undefined' ? XP_NUM.daily : 25, c = window.D37Coins?.RULES?.quest;
+  return `+${xp} XP${c ? ` и ${c} 🪙` : ''}`;
+}
 async function claimDailyQuest(btn){
   btn.disabled = true;
   const { data } = await sbClient.rpc('claim_daily_quest');
-  if (data?.ok) { gameToast(`🎯 Задание дня выполнено: +${data.xp} XP`); if (typeof xpLevelCache !== 'undefined') xpLevelCache.delete(currentUser.id); }
+  if (data?.ok) {
+    gameToast(`🎯 Задание дня выполнено: +${data.xp} XP${window.D37Coins?.RULES?.quest ? ` и ${D37Coins.RULES.quest} 🪙` : ''}`);
+    if (typeof xpLevelCache !== 'undefined') xpLevelCache.delete(currentUser.id);
+    window.D37Coins?.sync?.();
+  }
   renderDailyQuest();
 }
 
@@ -348,6 +357,7 @@ function gameBestLabel(id, best){
 
 // ── API для игр ──
 let gamesGuestHint = false;
+const gamesCapHint = new Set();   // подсказки «XP на сегодня — всё» уже показаны ('game' | 'day')
 function gamesApi(id){
   return {
     id,
@@ -370,6 +380,12 @@ function gamesApi(id){
         const parts = [];
         if (data.xp > 0) parts.push(`+${data.xp} XP`);
         if (data.record) parts.push('🏆 рекорд!');
+        // победа без XP — лимит (economy.sql game_xp_award): говорим один раз за визит, почему
+        if (win && !data.xp && data.xp_cap && !gamesCapHint.has(data.xp_cap)) {
+          gamesCapHint.add(data.xp_cap);
+          parts.push(data.xp_cap === 'game' ? `XP за эту игру сегодня — всё (${typeof XP_NUM !== 'undefined' ? XP_NUM.game_family : 3} победы), попробуй другую`
+            : `XP за игры сегодня — всё (${typeof XP_NUM !== 'undefined' ? XP_NUM.game_day : 100}), рекорды и монеты — как обычно`);
+        }
         if (parts.length) gameToast(parts.join(' · '));
         if (data.xp > 0 && typeof xpLevelCache !== 'undefined') xpLevelCache.delete(currentUser.id);
         if (typeof claimAchievements === 'function') setTimeout(claimAchievements, 800);   // игровые ачивки
@@ -525,7 +541,7 @@ async function renderProfileGameStats(uid, isOwn){
 async function dailyQuestHint(){
   try {
     const { data } = await sbClient.rpc('daily_quest');
-    if (data?.done && !data.claimed) setTimeout(() => gameToast('🎯 Задание дня выполнено — забери +50 XP в «Играх»'), 1800);
+    if (data?.done && !data.claimed) setTimeout(() => gameToast(`🎯 Задание дня выполнено — забери ${dailyQuestPrize()} в «Играх»`), 1800);
   } catch (e) {}
 }
 

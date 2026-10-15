@@ -1,17 +1,19 @@
 // Цены частей персонажа и пакетов частей тела, VIP-части и слоты char_save в coins.sql — из js/core/avatar.js
-// (PARTS и PACKS — один источник правды). Запуск: node scripts/gen-skin-sql.mjs (из корня репозитория).
+// (PARTS и PACKS — один источник правды), части «за уровень» — coin_level_item. Запуск: node scripts/gen-skin-sql.mjs (из корня репозитория).
 // Потом — node scripts/char-test.cjs (сверяет coins.sql с PARTS), тест PGlite (сверяет все цены на базе) и «запусти coins.sql ещё раз».
 import fs from 'fs';
 import vm from 'vm';
 const win = {};
 vm.runInNewContext(fs.readFileSync('js/core/avatar.js', 'utf8'), { window: win, document: {}, localStorage: { getItem: () => null }, console });
 const C = win.D37Char, P = C.PARTS;
-const rows = [], vip = [], gems = [];
-for (const slot of C.SLOTS) for (const [id, , price, , isVip, gemPrice] of P[slot].list) {
+const rows = [], vip = [], gems = [], lvls = [];
+for (const slot of C.SLOTS) for (const [id, , price, , isVip, gemPrice, lvl] of P[slot].list) {
   // только за 💎 — цены в монетах нет (coins_buy откажет), char_save наденет купленное в магазине
   if (gemPrice) { gems.push(`'skin:${slot}:${id}'`); continue; }
   rows.push(`('skin:${slot}:${id}', ${price})`);
   if (isVip) vip.push(`'skin:${slot}:${id}'`);
+  // «за уровень» (7-е поле): цена 0, char_save надевает с этого уровня (coin_level_item)
+  if (lvl) lvls.push(`('skin:${slot}:${id}', ${lvl})`);
 }
 // пакеты частей тела: купил пакет — все его части (char_save сверяет владение по пакету)
 for (const [id, [, price, isVip, gemPrice]] of Object.entries(C.PACKS)) {
@@ -34,6 +36,9 @@ const gemsRe = /(coin_gems_item\(p_item text\) returns boolean language sql immu
 if (!vipRe.test(sql) || !gemsRe.test(sql)) throw new Error('не нашёл coin_vip_item / coin_gems_item');
 sql = sql.replace(vipRe, (m, a, b) => a + vip.join(', ') + b);
 sql = sql.replace(gemsRe, (m, a, b) => a + (gems.length ? gems.join(', ') : "''") + b);
+const lvlRe = /(coin_level_item\(p_item text\) returns int language sql immutable as \$\$\n  select v\.l from \(values )[^\n]*(\) v\(i, l\) where v\.i = p_item\n\$\$;)/;
+if (!lvlRe.test(sql)) throw new Error('не нашёл coin_level_item');
+sql = sql.replace(lvlRe, (m, a, b) => a + (lvls.length ? lvls.join(', ') : "('', 0)") + b);
 const loop = /  foreach slot in array array\[[^\]]*\] loop\n/;
 if (!loop.test(sql)) throw new Error('char_save: не нашёл цикл по слотам');
 sql = sql.replace(loop, () => `  foreach slot in array array[${C.SLOTS.map(s => `'${s}'`).join(', ')}] loop\n`);
@@ -42,4 +47,4 @@ const packRe = /if slot = any\(array\[[^\]]*\]\) and public\.coin_price\('skin:p
 if (!packRe.test(sql)) throw new Error('char_save: не нашёл строку пакетов');
 sql = sql.replace(packRe, () => `if slot = any(array[${packSlots.map(s => `'${s}'`).join(', ')}]) and public.coin_price('skin:pack:' || val) is not null then`);
 fs.writeFileSync('coins.sql', crlf ? sql.replace(/\n/g, '\r\n') : sql);
-console.log(`${rows.length} цен (частей и пакетов), ${C.SLOTS.length} слотов, палитра: ${pal.length}, части из пакетов: ${packSlots.length}; VIP: ${vip.join(', ')}; только за 💎: ${gems.join(', ')}`);
+console.log(`${rows.length} цен (частей и пакетов), ${C.SLOTS.length} слотов, палитра: ${pal.length}, части из пакетов: ${packSlots.length}; VIP: ${vip.join(', ')}; только за 💎: ${gems.join(', ')}; за уровень: ${lvls.join(', ')}`);
