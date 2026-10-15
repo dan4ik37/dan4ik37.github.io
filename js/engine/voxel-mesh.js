@@ -7,8 +7,9 @@
 // поэтому соседей на 16 блоков хватает для точного ответа. Свет блоков — три канала R, G, B по 0…255 (уровень × 17; у
 // факела, лавы, лампы свой цвет — V.T.ecol); за шаг самый яркий канал гаснет на уровень (сквозь воду — сильнее), остальные
 // — в той же доле: цвет с расстоянием тускнеет, но не «краснеет»; разные источники смешиваются по наибольшему. Выход —
-// свет центра (Uint16Array: небо << 12 | R << 8 | G << 4 | B, по 0…15), три сетки: solid (непрозрачное), cutout (листва, трава,
-// стекло — отсечение по альфе), water (вода, прозрачная) и lights — светящиеся клетки центра (для настоящих ламп и ореолов).
+// свет центра (Uint16Array: небо << 12 | R << 8 | G << 4 | B, по 0…15), сетки V.LAYERS: solid (непрозрачное), cutout (факелы,
+// лестницы, двери, сундуки, кактусы — отсечение по альфе), water (вода, прозрачная), foliage (листва, трава, цветы — по альфе,
+// качаются), glass (стекло — по альфе) и lights — светящиеся клетки центра (для настоящих ламп и ореолов).
 // Вершина: pos — Uint16 ×3 (1/16 блока; меш масштабирован 1/16), vd — Uint16 ×4: u, v (1/16 блока), слой | нормаль << 12,
 // AO | свечение грани (0…15) << 2 | флаги << 14 (1 — качается на ветру, 2 — вода); lt — Uint8 ×4: небо, R, G, B (×4 — 0…60,
 // плавно: среднее по 4 клеткам у угла); col — Uint8 ×3 (цвет биома).
@@ -20,6 +21,9 @@
   const H = V.H, RW = 48, SZ = H, SX = RW * H, RC = RW * RW * H;
   const TYPE = 0xfff;
   V.REGION = RW;
+  // сетки чанка (по одной на вид материала): непрозрачное, вырезное (факелы, лестницы, двери, сундуки), вода, листва и
+  // трава (качаются на ветру), стекло — V.T.stream[блок] = номер здесь. Новые — только в конец (номера в потоках)
+  V.LAYERS = ['solid', 'cutout', 'water', 'foliage', 'glass'];
 
   // ═══ Свет области ═══
   let Q = null, SKY = null, LR = null, LG = null, LB = null;
@@ -111,7 +115,7 @@
 
   // ═══ Сетка чанка ═══
   // буферы (растут по надобности и переиспользуются между заданиями)
-  const streams = [0, 1, 2].map(() => ({ q: 0, cap: 0, pos: null, vd: null, col: null, lt: null }));
+  const streams = V.LAYERS.map(() => ({ q: 0, cap: 0, pos: null, vd: null, col: null, lt: null }));
   function grow(s, need){
     if (s.cap >= need) return;
     let cap = s.cap || 4096; while (cap < need) cap *= 2;
@@ -169,7 +173,7 @@
   // reg — область 48×48×H (Uint16), light — { sky, r, g, b } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9)
   V.meshChunk = (reg, light, T, tint) => {
     const sky = light.sky, lr = light.r, lg = light.g, lb = light.b, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
-    const glowL = T.glowL || null, emit = T.emit;
+    const glowL = T.glowL || null, emit = T.emit, sT = T.stream || null;
     const gl = l => glowL && l >= 0 && l < glowL.length ? glowL[l] : 0;
     // свет клетки li (и, если надо, наибольший с клеткой li2) → LT4 (вершинам — всё в 0…60: небо × 4, цвет × 60 / 255)
     const cellLt = (li, li2) => {
@@ -227,8 +231,8 @@
           const tk = tintT[t];
           let tq = 0;
           if (tk && !(tk === 1 && d !== 2)) { tintOf(tint, x, z, tk, TC); tq = 0x1000000 | ((TC[0] >> 3) << 10) | ((TC[1] >> 3) << 5) | (TC[2] >> 3); }
-          const lay = layerT[t] === 2 ? 1 : 0, sway = tk === 2 || tk === 4 || tk === 5 ? 1 : 0;
-          MK0[mi] = 0x800000 | layer | (lay << 12) | (sway << 13);
+          const lay = sT ? sT[t] : layerT[t] === 2 ? 1 : 0, sway = tk === 2 || tk === 4 || tk === 5 ? 1 : 0;
+          MK0[mi] = 0x800000 | layer | (lay << 12) | (sway << 15);
           MAO[mi] = CA[0] | (CA[1] << 2) | (CA[2] << 4) | (CA[3] << 6);
           MKS[mi] = CS[0] | (CS[1] << 6) | (CS[2] << 12) | (CS[3] << 18);
           MKR[mi] = CR[0] | (CR[1] << 6) | (CR[2] << 12) | (CR[3] << 18);
@@ -255,7 +259,7 @@
           let x, y, z;
           if (axis === 0) { x = sl; y = u; z = v; } else if (axis === 1) { x = u; y = sl; z = v; } else { x = u; y = v; z = sl; }
           const layer = k0 & 0xfff;
-          emitCube(streams[(k0 >> 12) & 1], d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, (k0 >> 13) & 1, gl(layer));
+          emitCube(streams[(k0 >> 12) & 7], d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, (k0 >> 15) & 1, gl(layer));
           u += w;
         }
       }
@@ -269,7 +273,7 @@
         const st = cv >>> 12;
         if (sh === 2) {   // крест: две диагонали, каждая — с двух сторон
           const tk = tintT[t], c = tk ? tintOf(tint, x, z, tk, TC) : WHITE, lay = T.tex[t * 7 + 2];
-          cross(streams[1], x + .15, y, z + .15, .7, 1, lay, cellLt(ri, -1), c, 1, gl(lay));
+          cross(streams[sT ? sT[t] || 3 : 1], x + .15, y, z + .15, .7, 1, lay, cellLt(ri, -1), c, 1, gl(lay));
         } else if (sh === 4) {   // факел: крест; на стене — прижат к ней и чуть выше; светится сам
           const f = st & 7, dd = f >= 1 && f <= 4 ? V.FACING[f - 1] : null, lay = T.tex[t * 7 + 2];
           cross(streams[1], x + .3 - (dd ? dd[0] * .3 : 0), y + (dd ? .2 : 0), z + .3 - (dd ? dd[2] * .3 : 0), .4, 1, lay, cellLt(ri, -1), WHITE, 0, gl(lay) || emit[t]);
@@ -312,7 +316,7 @@
     }
     // выход: копии нужной длины (буферы потока остаются)
     const out = { yMax };
-    ['solid', 'cutout', 'water'].forEach((k, i) => {
+    V.LAYERS.forEach((k, i) => {
       const s = streams[i];
       out[k] = s.q ? { n: s.q, pos: s.pos.slice(0, s.q * 12), vd: s.vd.slice(0, s.q * 16), col: s.col.slice(0, s.q * 12), lt: s.lt.slice(0, s.q * 16) } : null;
     });

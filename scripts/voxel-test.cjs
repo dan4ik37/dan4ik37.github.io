@@ -121,12 +121,18 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   let r4 = mk(); at(r4, 2, 40, 2, ID.stone); at(r4, 8, 40, 8, ID.dirt);
   ok(q(mesh(r4), 'solid') === 12, 'два отдельных блока — 12 граней');
   let r5 = mk(); at(r5, 2, 40, 2, ID.glass); at(r5, 3, 40, 2, ID.glass);
-  ok(q(mesh(r5), 'cutout') === 6, 'стекло к стеклу — общая грань не рисуется (2 блока → 6 граней)', q(mesh(r5), 'cutout'));
+  ok(q(mesh(r5), 'glass') === 6 && !mesh(r5).cutout, 'стекло к стеклу — общая грань не рисуется (2 блока → 6 граней, своя сетка glass)', q(mesh(r5), 'glass'));
   let r6 = mk(); at(r6, 2, 40, 2, ID.stone); at(r6, 3, 40, 2, ID.glass);
   const m6 = mesh(r6);
-  ok(q(m6, 'solid') === 6 && q(m6, 'cutout') === 5, 'камень рядом со стеклом: камень — 6, стекло — 5', [q(m6, 'solid'), q(m6, 'cutout')]);
+  ok(q(m6, 'solid') === 6 && q(m6, 'glass') === 5, 'камень рядом со стеклом: камень — 6, стекло — 5', [q(m6, 'solid'), q(m6, 'glass')]);
   let r7 = mk(); at(r7, 4, 30, 4, ID.stone); at(r7, 4, 31, 4, ID.tall_grass);
-  ok(q(mesh(r7), 'cutout') === 4, 'трава — крест: 4 квадрата (с двух сторон)');
+  ok(q(mesh(r7), 'foliage') === 4 && !mesh(r7).cutout, 'трава — крест: 4 квадрата (с двух сторон), сетка листвы (foliage)');
+  let rl2 = mk(); at(rl2, 4, 40, 4, ID.leaves_oak); at(rl2, 8, 30, 8, ID.stone); at(rl2, 8, 31, 8, ID.torch);
+  const ml2 = mesh(rl2);
+  ok(q(ml2, 'foliage') === 6 && q(ml2, 'cutout') === 4 && q(ml2, 'solid') === 6, 'листва — в foliage, факел — в cutout, камень — в solid', V.LAYERS.map(k => q(ml2, k)));
+  const swayOf = s => { let n = 0; for (let i = 0; i < s.n * 4; i++) if ((s.vd[i * 4 + 3] >> 14) === 1) n++; return n; };
+  ok(swayOf(ml2.foliage) === 24 && swayOf(ml2.cutout) === 0, 'листва качается (флаг у всех вершин), факел — нет', [swayOf(ml2.foliage), swayOf(ml2.cutout)]);
+  ok(V.LAYERS.join() === 'solid,cutout,water,foliage,glass' && V.T.stream[ID.glass] === 4 && V.T.stream[ID.leaves_birch] === 3 && V.T.stream[ID.water] === 2 && V.T.stream[ID.lava] === 0 && V.T.stream[ID.ladder] === 1, 'сетки чанка: solid, cutout, water, foliage, glass');
   let r8 = mk(); for (let x = 0; x < 2; x++) for (let z = 0; z < 2; z++) { at(r8, x + 4, 30, z + 4, ID.stone); at(r8, x + 4, 31, z + 4, ID.water); }
   const m8 = mesh(r8);
   ok(q(m8, 'water') === 4 * 1 + 8, 'вода 2×2: верх 4 + бока 8 (внутри — нет)', q(m8, 'water'));
@@ -197,9 +203,9 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   ok(lset.some(([x, z, y, t]) => x === 4 && z === 7 && y === 30 && t === ID.torch) && lset.some(([x, z, y, t]) => x === 10 && z === 7 && y === 30 && t === ID.lava), 'список светящихся клеток: факел и лава', lset);
   // грани с подсветкой: у лавы в сетке есть свечение (биты 2…5 vd[3])
   const glowSeen = (m, k) => { const s = m[k]; if (!s) return 0; let g = 0; for (let i = 0; i < s.n * 4; i++) g = Math.max(g, (s.vd[i * 4 + 3] >> 2) & 15); return g; };
-  ok(Math.max(glowSeen(mlt, 'solid'), glowSeen(mlt, 'water'), glowSeen(mlt, 'cutout')) > 0, 'у светящихся блоков в сетке есть свечение граней');
+  ok(Math.max(...V.LAYERS.map(k => glowSeen(mlt, k))) > 0, 'у светящихся блоков в сетке есть свечение граней');
   // плавный свет по вершинам: lt — 4 байта на вершину, значения ×4 (0…60)
-  const anyLt = ['solid', 'cutout', 'water'].filter(k => mlt[k]).every(k => mlt[k].lt && mlt[k].lt.length >= mlt[k].n * 16 && mlt[k].lt.subarray(0, mlt[k].n * 16).every(v => v <= 60));
+  const anyLt = V.LAYERS.filter(k => mlt[k]).every(k => mlt[k].lt && mlt[k].lt.length >= mlt[k].n * 16 && mlt[k].lt.subarray(0, mlt[k].n * 16).every(v => v <= 60));
   ok(anyLt, 'свет вершин: небо, R, G, B в пределах 0…60');
   let rs = mk();
   for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) at(rs, x, 50, z, ID.stone);   // пол
@@ -318,7 +324,7 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
     V.buildRegion((x, z) => map.get(x + ',' + z)?.ids, cx, cz, reg);
     const t0 = performance.now(); const LL = V.lightRegion(reg, V.T); const t1 = performance.now(); const mm = V.meshChunk(reg, LL, V.T, map.get(cx + ',' + cz).tint); const t2 = performance.now();
     tl += t1 - t0; tm += t2 - t1; nm++;
-    quads += (mm.solid?.n || 0) + (mm.cutout?.n || 0) + (mm.water?.n || 0);
+    for (const k of V.LAYERS) quads += mm[k]?.n || 0;
   }
   const perf = { gen: +(tg / n).toFixed(2), light: +(tl / nm).toFixed(2), mesh: +(tm / nm).toFixed(2), quads: Math.round(quads / nm) };
   console.log('  на чанк, мс:', JSON.stringify(perf));

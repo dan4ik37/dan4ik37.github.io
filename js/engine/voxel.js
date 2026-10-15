@@ -103,7 +103,7 @@
   B({ name: 'ore_iron', title: 'Железная руда', tex: 'ore_iron', hard: 3, tool: 'pick', tier: 2 });
   B({ name: 'ore_gold', title: 'Золотая руда', tex: 'ore_gold', hard: 3, tool: 'pick', tier: 3 });
   B({ name: 'ore_diamond', title: 'Алмазная руда', tex: 'ore_diamond', hard: 3, tool: 'pick', tier: 3, drop: 'diamond' });
-  B({ name: 'glass', title: 'Стекло', layer: LAYER.cutout, opaque: false, op: 0, tex: 'glass', hard: .3, sound: 'glass' });
+  B({ name: 'glass', title: 'Стекло', layer: LAYER.cutout, opaque: false, op: 0, tex: 'glass', hard: .3, sound: 'glass', glass: true });
   B({ name: 'cactus', title: 'Кактус', shape: SHAPE.cactus, layer: LAYER.cutout, opaque: false, op: 0, tex: { top: 'cactus_top', side: 'cactus_side', bottom: 'cactus_top' }, hard: .4, hurt: 1, sound: 'wool', cullSelf: false });
   B({ name: 'tall_grass', title: 'Трава', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'tall_grass', tint: TINT.grass, hard: 0, drop: null, replace: true, sound: 'grass' });
   B({ name: 'flower_yellow', title: 'Одуванчик', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'flower_yellow', hard: 0, sound: 'grass' });
@@ -274,6 +274,7 @@
       tint: new Uint8Array(n), cullSelf: new Uint8Array(n), liquid: new Uint8Array(n), climb: new Uint8Array(n), axis: new Uint8Array(n),
       tex: new Int16Array(n * 7),   // top, bottom, side, front, back, extra, (запас)
       ecol: new Uint8Array(n * 3),  // цветной свет блока: R, G, B (0…255 = уровень × 17; самый яркий канал = emit × 17)
+      stream: new Uint8Array(n),    // сетка (V.LAYERS): 0 solid, 1 cutout, 2 water, 3 foliage (листва, трава, цветы), 4 glass
       glowL: new Uint8Array(V.tex.length + 1),   // текстура светится сама (0…15): факел, лава, лампа, «перед» горящей печи
     };
     for (const b of V.blocks) {
@@ -283,6 +284,10 @@
       T.tint[i] = b.tint; T.cullSelf[i] = b.cullSelf ? 1 : 0; T.liquid[i] = b.liquid === 'water' ? 1 : b.liquid === 'lava' ? 2 : 0; T.climb[i] = b.climb ? 1 : 0; T.axis[i] = b.axis ? 1 : 0;
       const f = b.texf;
       if (f) { T.tex[i * 7] = f.top; T.tex[i * 7 + 1] = f.bottom; T.tex[i * 7 + 2] = f.side; T.tex[i * 7 + 3] = f.front; T.tex[i * 7 + 4] = f.back; T.tex[i * 7 + 5] = f.extra; }
+      // сетка: стекло и листва — отдельно (движок может их «улучшать»: отражения, качание), прочее вырезное — cutout
+      T.stream[i] = b.liquid === 'water' ? 2 : b.liquid || b.layer !== LAYER.cutout ? 0
+        : (b.glass || /(^|_)glass($|_)/.test(b.name)) && b.shape === SHAPE.cube ? 4
+        : b.foliage || b.shape === SHAPE.cross || b.tint === TINT.foliage || b.tint === TINT.birch || b.tint === TINT.spruce ? 3 : 1;
       const e = T.emit[i];
       if (e) {
         const c = Array.isArray(b.lcol) && b.lcol.length === 3 ? b.lcol : LCOL0, mx = Math.max(c[0], c[1], c[2], 1e-3);
