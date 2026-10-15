@@ -296,5 +296,42 @@ if (want('chess')) {
   ok(T.myMoves(ca.ms, 'w') === 4 && T.myMoves(ca.ms, 'b') === 3 && T.myMoves([], 'w') === 0, 'chess: счёт своих ходов (с компьютером)');
 }
 
+// ═══ «Шашки»: правила ═══
+if (want('checkers')) {
+  const T = load('js/games/checkers.js').GAME_IMPL.checkers._test;
+  const b0 = T.initial();
+  ok(T.legalMoves(b0, 'w').length === 7 && T.legalMoves(b0, 'b').length === 7, 'checkers: в начале по 7 ходов');
+  const empty = () => Array.from({ length: 8 }, () => Array(8).fill(null));
+  let b = empty(); b[5][2] = 'w'; b[4][3] = 'b'; b[6][7] = 'w';
+  let L = T.legalMoves(b, 'w');
+  ok(L.length === 1 && L[0].caps.length === 1 && eq(L[0].to, [3, 4]), 'checkers: бить обязательно — только взятие', L);
+  b = empty(); b[5][0] = 'w'; b[4][1] = 'b'; b[2][3] = 'b';
+  L = T.legalMoves(b, 'w');
+  ok(L.length === 1 && L[0].caps.length === 2 && eq(L[0].to, [1, 4]), 'checkers: бьют до конца серии', L.map(m => m.to));
+  b = empty(); b[1][0] = 'w';
+  L = T.legalMoves(b, 'w');
+  ok(L.length === 1 && L[0].king && T.apply(b, L[0])[0][1] === 'W', 'checkers: дошла до края — дамка');
+  b = empty(); b[2][1] = 'w'; b[1][2] = 'b'; b[1][4] = 'b';
+  L = T.legalMoves(b, 'w');
+  ok(L.some(m => m.caps.length === 2 && m.king), 'checkers: стала дамкой посреди боя и бьёт дальше как дамка', L.map(m => [m.to, m.caps.length]));
+  b = empty(); b[7][0] = 'W';
+  ok(T.legalMoves(b, 'w').length === 7, 'checkers: дамка ходит на любое расстояние');
+  // боты против ботов: партии кончаются (нет ходов или 40 ходов без взятий)
+  let ended = 0;
+  for (let g = 0; g < 60; g++) {
+    const rand = rng(40 + g);
+    let bd = T.initial(), turn = 'w', quiet = 0, n = 0, over = false;
+    while (!over && n < 600) {
+      const ms = T.legalMoves(bd, turn);
+      if (!ms.length || quiet >= 40) { over = true; break; }
+      const m = ms[Math.floor(rand() * ms.length)];
+      bd = T.apply(bd, m); quiet = m.caps.length ? 0 : quiet + 1; n++;
+      turn = turn === 'w' ? 'b' : 'w';
+    }
+    if (over) ended++;
+  }
+  ok(ended === 60, 'checkers: 60 случайных партий кончаются', ended);
+}
+
 console.log(`games-test: ${pass} ok, ${fail} fail (${((Date.now() - t0) / 1000).toFixed(1)} с)`);
 process.exit(fail ? 1 : 0);

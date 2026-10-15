@@ -1754,6 +1754,7 @@ body.low .ct-city{animation:none}
 .ck-cell.can::after{content:'';position:absolute;inset:0;box-shadow:inset 0 0 0 2px rgba(255,209,102,.55)}
 .ck-cell.sel{background:#b07a3c}
 .ck-cell.last{background:#9c6a3e}
+.ck-cell.pend{background:#4f8f5f;box-shadow:inset 0 0 0 3px #22c55e}
 .ck-cell.tgt{cursor:pointer}
 .ck-cell.tgt::before{content:'';width:32%;height:32%;border-radius:50%;background:rgba(34,197,94,.75);position:absolute}
 .ck-p{width:78%;height:78%;border-radius:50%;position:relative;z-index:1;box-shadow:inset 0 -4px 0 rgba(0,0,0,.25),0 3px 6px rgba(0,0,0,.35)}
