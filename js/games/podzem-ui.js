@@ -10,7 +10,8 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const CSS = `
 .pz [hidden]{display:none!important}
-.pz{position:relative;user-select:none;-webkit-user-select:none;touch-action:none;color:#f2f0fa;font:500 14px/1.35 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+.pz{position:relative;user-select:none;-webkit-user-select:none;touch-action:none;color:#f2f0fa;font:500 14px/1.35 Montserrat,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}
+.pz-hurt{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(150,0,10,0) 50%,rgba(190,12,24,.6) 100%)}
 .pz-wrap{position:relative;width:100%;height:520px;overflow:hidden;border-radius:14px;background:#0b0a14;box-shadow:0 10px 40px -18px rgba(0,0,0,.8)}
 .gs-fs .pz-wrap{border-radius:0}
 .pz-gl,.pz-ov{position:absolute;left:0;top:0;display:block}
@@ -23,23 +24,29 @@
 .pz-slot{--s:30px;position:relative;width:42px;height:42px;border-radius:9px;border:2px solid rgba(255,255,255,.12);background:rgba(30,32,52,.78);display:grid;place-items:center;padding:0;cursor:pointer;color:#fff}
 .pz-slot:hover{border-color:rgba(255,255,255,.35)}
 .pz-slot.sel{border-color:#ffd84a;background:rgba(70,62,30,.85);box-shadow:0 0 0 2px rgba(255,216,74,.25)}
-.pz-slot b{position:absolute;right:3px;bottom:1px;font:800 11px/1 system-ui,sans-serif;text-shadow:0 1px 2px #000,0 0 2px #000}
-.pz-slot i.k{position:absolute;left:3px;top:2px;font:700 9px/1 system-ui,sans-serif;font-style:normal;opacity:.6}
+.pz-slot b{position:absolute;right:3px;bottom:1px;font:800 11px/1 Montserrat,system-ui,sans-serif;text-shadow:0 1px 2px #000,0 0 2px #000}
+.pz-slot i.k{position:absolute;left:3px;top:2px;font:700 9px/1 Montserrat,system-ui,sans-serif;font-style:normal;opacity:.6}
 .pz-slot .pz-ic{--s:30px}
-.pz-sel-name{position:absolute;top:58px;left:50%;transform:translateX(-50%);font:800 13px/1 system-ui,sans-serif;text-shadow:0 1px 3px #000;pointer-events:none;white-space:nowrap;z-index:3}
+.pz-sel-name{position:absolute;top:58px;left:50%;transform:translateX(-50%);font:800 13px/1 Montserrat,system-ui,sans-serif;text-shadow:0 1px 3px #000;pointer-events:none;white-space:nowrap;z-index:3;padding:4px 10px;border-radius:10px;background:rgba(8,8,16,.42)}
+.pz-sel-name:empty{display:none}
 .pz-life{display:flex;flex-direction:column;gap:3px;align-items:flex-start;padding:5px 7px;border-radius:12px;background:rgba(8,8,16,.45)}
 .pz-hearts,.pz-stars{display:flex;flex-wrap:wrap;gap:1px;max-width:230px}
 .pz-hearts .pz-ic,.pz-stars .pz-ic{--s:20px}
-.pz-hp-n{font:800 11px/1 system-ui,sans-serif;opacity:.85}
+.pz-hp-n{font:800 11px/1 Montserrat,system-ui,sans-serif;opacity:.85}
+.pz-buffs{display:flex;gap:4px;flex-wrap:wrap}.pz-buffs:empty{display:none}
+.pz-buff{display:inline-flex;align-items:center;gap:2px;padding:1px 5px 1px 1px;border-radius:8px;background:rgba(255,216,74,.14);font:800 11px/1 Montserrat,system-ui,sans-serif}
+.pz-buff .pz-ic{--s:18px}
+.pz-b.on{background:rgba(255,216,74,.42);box-shadow:0 0 0 2px rgba(255,216,74,.5) inset}
+.pz-invbar{margin:2px 0 6px;gap:6px}.pz-invbar .pz-b{height:30px;font-size:12px;padding:0 9px}
 .pz-btns{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
-.pz-b{border:0;border-radius:10px;background:rgba(20,20,36,.7);color:#fff;min-width:38px;height:38px;padding:0 10px;font:700 15px/1 system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.pz-b{border:0;border-radius:10px;background:rgba(20,20,36,.7);color:#fff;min-width:38px;height:38px;padding:0 10px;font:700 15px/1 Montserrat,system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px}
 .pz-b:hover{background:rgba(60,60,96,.85)}
 .pz-b.pri{background:linear-gradient(135deg,var(--accent,#ff2d55),var(--accent2,#ff6b35))}
 .pz-b.ghost{background:rgba(255,255,255,.07)}
 .pz-b:disabled{opacity:.45;cursor:default}
-.pz-status{position:absolute;left:10px;bottom:8px;font:600 12px/1.2 system-ui,sans-serif;text-shadow:0 1px 3px #000;opacity:.9;pointer-events:none;z-index:3;max-width:70%}
+.pz-status{position:absolute;left:10px;bottom:8px;font:600 12px/1.25 Montserrat,system-ui,sans-serif;text-shadow:0 1px 3px #000;opacity:.92;pointer-events:none;z-index:3;max-width:70%;padding:3px 9px;border-radius:9px;background:rgba(8,8,16,.34)}
 .pz-panel{position:absolute;left:50%;top:60px;transform:translateX(-50%);z-index:5;width:min(560px,calc(100% - 16px));max-height:calc(100% - 72px);overflow:auto;padding:10px;border-radius:14px;background:rgba(12,12,24,.92);border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 50px -12px rgba(0,0,0,.8)}
-.pz-panel h4{margin:0 0 6px;font:800 13px/1.2 system-ui,sans-serif;opacity:.85;display:flex;align-items:center;gap:8px}
+.pz-panel h4{margin:0 0 6px;font:800 13px/1.2 Montserrat,system-ui,sans-serif;opacity:.85;display:flex;align-items:center;gap:8px}
 .pz-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;margin-bottom:8px}
 .pz-grid .pz-slot{width:auto;aspect-ratio:1;height:auto;min-width:0}
 .pz-chest .pz-grid{grid-template-columns:repeat(10,1fr)}
@@ -51,18 +58,18 @@
 .pz-rc .nm{font-weight:800;min-width:0;flex:1}
 .pz-rc .nm small{display:block;font-weight:500;opacity:.75;font-size:11px}
 .pz-rc .ing{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.pz-rc .ing span{display:inline-flex;align-items:center;gap:2px;font:700 11px/1 system-ui,sans-serif}
+.pz-rc .ing span{display:inline-flex;align-items:center;gap:2px;font:700 11px/1 Montserrat,system-ui,sans-serif}
 .pz-rc .ing .pz-ic{--s:18px}
 .pz-rc .ing .lack{color:#ff8080}
 .pz-tabs{display:flex;gap:4px;margin:4px 0}
-.pz-tabs button{border:0;border-radius:8px;padding:5px 9px;background:rgba(255,255,255,.07);color:#fff;font:700 12px/1 system-ui,sans-serif;cursor:pointer}
+.pz-tabs button{border:0;border-radius:8px;padding:5px 9px;background:rgba(255,255,255,.07);color:#fff;font:700 12px/1 Montserrat,system-ui,sans-serif;cursor:pointer}
 .pz-tabs button.on{background:rgba(255,216,74,.25)}
 .pz-hand{position:absolute;z-index:20;pointer-events:none;transform:translate(-50%,-50%)}
-.pz-hand b{position:absolute;right:-4px;bottom:-4px;font:800 12px/1 system-ui,sans-serif;text-shadow:0 1px 2px #000}
+.pz-hand b{position:absolute;right:-4px;bottom:-4px;font:800 12px/1 Montserrat,system-ui,sans-serif;text-shadow:0 1px 2px #000}
 .pz-menu{position:absolute;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(6,6,14,.66);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .pz-card{width:min(720px,100%);max-height:100%;overflow:auto;padding:16px;border-radius:18px;background:rgba(16,16,30,.96);border:1px solid rgba(255,255,255,.1);box-shadow:0 24px 60px -16px rgba(0,0,0,.9)}
-.pz-card h2{margin:0 0 4px;font:900 22px/1.15 system-ui,sans-serif}
-.pz-card h3{margin:12px 0 6px;font:800 14px/1.2 system-ui,sans-serif;opacity:.85}
+.pz-card h2{margin:0 0 6px;font:500 26px/1.1 var(--font-display,'Oswald','Arial Narrow',sans-serif);letter-spacing:.04em;text-transform:uppercase}
+.pz-card h3{margin:12px 0 6px;font:800 14px/1.2 Montserrat,system-ui,sans-serif;opacity:.85}
 .pz-card p{margin:0 0 8px;opacity:.85}
 .pz-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:560px){.pz-cols{grid-template-columns:1fr}.pz-bar{gap:2px;padding:3px}
@@ -85,27 +92,27 @@
 .pz-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .pz-big{font-size:17px!important;height:46px!important;padding:0 22px!important}
 .pz-field{display:flex;flex-direction:column;gap:4px;margin:8px 0}
-.pz-field input,.pz-field select{border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;padding:9px 11px;font:600 14px/1.2 system-ui,sans-serif}
+.pz-field input,.pz-field select{border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.06);color:#fff;padding:9px 11px;font:600 14px/1.2 Montserrat,system-ui,sans-serif}
 .pz-field small{opacity:.7}
 .pz-chk{display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer}
 .pz-toasts{position:absolute;left:50%;top:104px;transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;width:min(520px,94%)}
-.pz-toast{padding:7px 12px;border-radius:10px;background:rgba(12,12,24,.9);border:1px solid rgba(255,255,255,.12);font:700 13px/1.3 system-ui,sans-serif;text-align:center;animation:pzIn .2s ease-out}
+.pz-toast{padding:8px 14px;border-radius:12px;box-shadow:0 8px 24px -10px rgba(0,0,0,.8);background:rgba(12,12,24,.9);border:1px solid rgba(255,255,255,.12);font:700 13px/1.3 Montserrat,system-ui,sans-serif;text-align:center;animation:pzIn .2s ease-out}
 .pz-toast.bad{border-color:rgba(255,90,90,.5)}.pz-toast.good{border-color:rgba(90,255,140,.45)}.pz-toast.ach{border-color:rgba(255,216,74,.7);background:rgba(50,40,10,.92)}.pz-toast.boss{border-color:rgba(200,90,255,.7);font-size:15px}
 @keyframes pzIn{from{opacity:0;transform:translateY(-6px)}}
 .pz-talk{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:6;width:min(480px,92%);padding:10px 12px;border-radius:14px;background:rgba(30,24,10,.93);border:1px solid rgba(255,216,74,.45);box-shadow:0 10px 30px -10px #000}
 .pz-talk b{color:#ffd84a}
 .pz-talk .pz-row{margin-top:6px}
-.pz-boss{position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:4;width:min(420px,80%);text-align:center;font:800 13px/1 system-ui,sans-serif;text-shadow:0 1px 3px #000}
+.pz-boss{position:absolute;left:50%;top:70px;transform:translateX(-50%);z-index:4;width:min(420px,80%);text-align:center;font:800 13px/1 Montserrat,system-ui,sans-serif;text-shadow:0 1px 3px #000}
 .pz-boss div{height:10px;border-radius:6px;background:rgba(0,0,0,.6);margin-top:4px;overflow:hidden;border:1px solid rgba(255,255,255,.2)}
 .pz-boss i{display:block;height:100%;background:linear-gradient(90deg,#c040ff,#ff4070);transition:width .2s}
-.pz-load,.pz-dead{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(6,6,14,.82);font:800 18px/1.3 system-ui,sans-serif;text-align:center;padding:16px}
+.pz-load,.pz-dead{position:absolute;inset:0;z-index:7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(6,6,14,.82);font:800 18px/1.3 Montserrat,system-ui,sans-serif;text-align:center;padding:16px}
 .pz-dead{background:rgba(60,0,0,.45)}
 .pz-spin{width:38px;height:38px;border-radius:50%;border:4px solid rgba(255,255,255,.15);border-top-color:#ffd84a;animation:pzSpin .8s linear infinite}
 @keyframes pzSpin{to{transform:rotate(360deg)}}
 .pz-cmd{position:absolute;left:8px;right:8px;bottom:34px;z-index:9;display:flex;gap:6px}
 .pz-cmd input{flex:1;border:1px solid rgba(255,255,255,.2);border-radius:10px;background:rgba(10,10,20,.92);color:#fff;padding:9px 11px;font:600 14px/1 ui-monospace,monospace}
 .pz-touch{position:absolute;inset:0;z-index:4;pointer-events:none}
-.pz-touch .tb{position:absolute;pointer-events:auto;border:0;border-radius:50%;background:rgba(20,20,40,.55);color:#fff;font:800 22px/1 system-ui,sans-serif;display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.15) inset;opacity:var(--gs-touch-a,1)}
+.pz-touch .tb{position:absolute;pointer-events:auto;border:0;border-radius:50%;background:rgba(20,20,40,.55);color:#fff;font:800 22px/1 Montserrat,system-ui,sans-serif;display:grid;place-items:center;box-shadow:0 0 0 2px rgba(255,255,255,.15) inset;opacity:var(--gs-touch-a,1)}
 .pz-touch .tb.on{background:rgba(255,216,74,.4)}
 .pz-joy{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;background:rgba(255,255,255,.08);box-shadow:0 0 0 2px rgba(255,255,255,.18) inset;pointer-events:none}
 .pz-joy i{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:rgba(255,255,255,.35)}
@@ -125,7 +132,7 @@
 
   function create(G, API){
     const PZ = API.PZ;
-    const U = { touch: { mx: 0, my: 0, jump: false, jumpDown: false, use: false, front: false } };
+    const U = { touch: { mx: 0, my: 0, jump: false, jumpDown: false, use: false, front: false, build: false } };
     let root, hudEl, hotEl, lifeEl, selName, statusEl, panel, menuEl, toastsEl, talkEl, bossEl, loadEl, deadEl, cmdEl, handEl, touchEl;
     let invOpen = false, menuKind = null, hand = null, craftTab = 'ok', atlasUrl = '', selChar = null, selWorld = null, lastHud = '';
     const offs = [];
@@ -164,14 +171,16 @@
       root = r;
       const wrap = root.querySelector('.pz-wrap');
       wrap.insertAdjacentHTML('beforeend', `
+        <div class="pz-hurt"></div>
         <div class="pz-hud">
-          <div class="pz-life"><div class="pz-hearts"></div><div class="pz-stars"></div><span class="pz-hp-n"></span></div>
+          <div class="pz-life"><div class="pz-hearts"></div><div class="pz-stars"></div><span class="pz-hp-n"></span><div class="pz-buffs"></div></div>
           <div class="pz-bar pz-hot"></div>
           <div class="pz-btns">
-            <button type="button" class="pz-b" data-a="inv" title="Вещи и крафт (Tab / I)" aria-label="Вещи и крафт">🎒</button>
+            <button type="button" class="pz-b" data-a="inv" title="Вещи и крафт (Esc / I)" aria-label="Вещи и крафт">🎒</button>
+            <button type="button" class="pz-b" data-a="smart" title="Умный курсор (Ctrl): сам выберет блок к курсору" aria-label="Умный курсор" aria-pressed="false">🎯</button>
             <button type="button" class="pz-b" data-a="zin" title="Ближе (+)" aria-label="Ближе">＋</button>
             <button type="button" class="pz-b" data-a="zout" title="Дальше (−)" aria-label="Дальше">－</button>
-            <button type="button" class="pz-b" data-a="pause" title="Меню (Esc)" aria-label="Меню">⏸</button>
+            <button type="button" class="pz-b" data-a="pause" title="Меню (P)" aria-label="Меню">⏸</button>
           </div>
         </div>
         <div class="pz-sel-name"></div>
@@ -195,6 +204,7 @@
         if (sl && !invOpen) { API.selSlot(+sl.dataset.slot); return; }
         if (sl && invOpen) { slotClick('inv', +sl.dataset.slot, e); return; }
         if (a === 'inv') U.toggleInv();
+        else if (a === 'smart') API.setSmart(!G.opt.smart);
         else if (a === 'zin') API.zoom(1.12); else if (a === 'zout') API.zoom(.89);
         else if (a === 'pause') { if (G.state === 'play') API.pause(); }
       });
@@ -226,13 +236,25 @@
       lastHud = ''; U.hud(); if (invOpen) U.inv();
     };
 
+    // ранили — красные края экрана на миг (k 0…1)
+    U.hurt = k => {
+      const el = root?.querySelector('.pz-hurt'); if (!el) return;
+      el.style.transition = 'none'; el.style.opacity = String(k); void el.offsetWidth;
+      el.style.transition = 'opacity .55s ease-out'; el.style.opacity = '0';
+    };
     // ═══ Панель здоровья и ячеек ═══
+    U.smart = v => { const b = hudEl?.querySelector('[data-a="smart"]'); if (b) { b.classList.toggle('on', !!v); b.setAttribute('aria-pressed', v ? 'true' : 'false'); } };
     U.hud = () => {
       if (!root || !G.CH) return;
-      const CH = G.CH;
-      const key = [CH.hp | 0, CH.maxHp, CH.mana | 0, CH.maxMana, CH.sel, G.A ? 1 : 0, ...CH.inv.slice(0, 10).map(s => s ? s.id + ':' + s.n : '')].join('|');
+      const CH = G.CH, bf = API.buffs(), hook = API.hasHook();
+      const key = [CH.hp | 0, CH.maxHp, CH.mana | 0, CH.maxMana, CH.sel, G.A ? 1 : 0, hook ? 1 : 0, ...Object.keys(bf).map(k => k + Math.ceil(bf[k])), ...CH.inv.slice(0, 10).map(s => s ? s.id + ':' + s.n : '')].join('|');
       if (key === lastHud) return;
       lastHud = key;
+      U.smart(G.opt.smart);
+      // усиления: значок и сколько осталось
+      const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+      lifeEl.querySelector('.pz-buffs').innerHTML = Object.keys(bf).map(k => `<span class="pz-buff" title="${k === 'mine' ? 'Зелье шахтёра: копаешь быстрее' : 'Зелье сияния: светишь вокруг'}">${icon(k === 'mine' ? 'potion_miner' : 'potion_shine')}<b>${mmss(Math.ceil(bf[k]))}</b></span>`).join('');
+      const hb = touchEl?.querySelector('[data-t="hook"]'); if (hb) hb.hidden = !hook;
       // сердца: каждое — 20 здоровья, неполное — бледнее
       const hearts = [], nh = Math.ceil(CH.maxHp / 20);
       for (let i = 0; i < nh; i++) { const f = Math.max(0, Math.min(1, (CH.hp - i * 20) / 20)); hearts.push(`<span style="opacity:${f <= 0 ? .18 : .35 + f * .65}">${icon('lifecrystal')}</span>`); }
@@ -270,7 +292,11 @@
       if (G.chestOpen && G.chests?.get(G.chestOpen)) {
         h += `<div class="pz-chest"><h4>📦 Сундук <button type="button" class="pz-b ghost" data-a="loot" style="height:28px;font-size:12px">Забрать всё</button> <button type="button" class="pz-b ghost" data-a="stash" style="height:28px;font-size:12px">Сложить всё</button></h4>${grid('chest', G.chests.get(G.chestOpen), API.CHEST_N)}</div>`;
       }
-      h += `<h4>🎒 Вещи <span class="pz-note">ПКМ / долгое нажатие — половина, Shift — переложить</span></h4>${grid('inv', G.CH.inv, API.INV_N)}`;
+      h += `<h4>🎒 Вещи <span class="pz-note">ПКМ / долгое нажатие — половина, Shift — переложить</span></h4>
+        <div class="pz-row pz-invbar"><button type="button" class="pz-b ghost" data-a="sort" title="Сложить стопки и разложить по видам (ячейки 1–0 не трогаем)">⇅ Сортировать</button>
+          <button type="button" class="pz-b ghost" data-a="qstack" title="В сундуки рядом — то, что в них уже лежит (как в Террарии)">📦 В сундуки рядом</button>
+          <button type="button" class="pz-b ghost" data-a="menu" title="Меню игры (P)">⚙ Меню</button></div>
+        ${grid('inv', G.CH.inv, API.INV_N)}`;
       const list = API.craftList();
       const ok = list.filter(x => x.ok), near = list.filter(x => !x.ok && x.known);
       h += `<h4>🛠 Крафт <span class="pz-note">станок рядом: верстак, печь, наковальня</span></h4>
@@ -292,6 +318,9 @@
       const a = e.target.closest('[data-a]')?.dataset.a;
       if (a === 'tab-ok' || a === 'tab-all') { craftTab = a.slice(4); U.inv(); return; }
       if (a === 'loot' || a === 'stash') { moveAll(a === 'loot'); return; }
+      if (a === 'sort') { API.sortInv(); return; }
+      if (a === 'qstack') { API.quickStack(); return; }
+      if (a === 'menu') { U.toggleInv(false); API.pause(); return; }
       const rc = e.target.closest('[data-rc]');
       if (rc) {
         const v = rc.dataset.rc, r = v[0] === 'm' ? (G.modRecipes || [])[+v.slice(1)] : API.PZ.RECIPES[+v];
@@ -433,13 +462,16 @@
     }
     function helpHtml(){
       return `<div class="pz-card pz-help"><h2>❓ Как играть</h2>
-        <h3>💻 Клавиатура и мышь</h3><ul>
+        <h3>💻 Клавиатура и мышь (как в Террарии)</h3><ul>
           <li><b>A / D</b> или ←/→ — идти, <b>Пробел</b> — прыжок (держи — выше), <b>W / S</b> — лезть по верёвке и лестнице, <b>S</b> — спрыгнуть с платформы</li>
-          <li><b>ЛКМ</b> — копать / ставить / бить там, где курсор, <b>ПКМ</b> — открыть дверь или сундук, поговорить, съесть</li>
-          <li><b>1…0</b> или колесо — ячейка, <b>Tab / I</b> — вещи и крафт, <b>E</b> — действие рядом, <b>H</b> — лечение, <b>+ / −</b> — масштаб, <b>/</b> — команды, <b>Esc</b> — меню</li></ul>
-        <h3>🎮 Геймпад</h3><ul><li>Левый стик — идти, <b>A</b> — прыжок, правый стик — прицел, <b>RT</b> — копать/бить/ставить, <b>X</b> — действие, <b>Y</b> — вещи, <b>LB/RB</b> — ячейки, <b>LT</b> — лечение, <b>Start</b> — меню</li></ul>
-        <h3>📱 Телефон</h3><ul><li>Левый палец — джойстик (вверх/вниз — лезть), справа — <b>⤒</b> прыжок, <b>⚔</b> бить/копать перед собой, <b>✋</b> действие, <b>🎒</b> вещи.</li>
-          <li>Палец по миру: держи — копать/ставить/бить в этой клетке, короткое нажатие — открыть дверь, сундук, поговорить. Удобнее лёжа и во весь экран ⛶.</li></ul>
+          <li><b>ЛКМ</b> — то, что в руке: кирка копает, блок ставится, меч бьёт. <b>ПКМ</b> — открыть дверь или сундук, поговорить, съесть. Копать и ставить не спорят — решает только предмет в руке</li>
+          <li><b>Ctrl</b> — умный курсор (вкл/выкл, кнопка 🎯): кирка сама берёт ближайший блок к курсору, блок встаёт в ближайшее место, где держится. <b>Shift</b> (держать) — сам возьмёт инструмент под курсор: руда — лучшую кирку, дерево — топор, стена — молоток, в темноте — факел</li>
+          <li>Рамка у курсора: белая — достаёт, красная — далеко; блок в руке — видно, где встанет (зелёный — можно). Пунктирный круг — докуда достаёт рука</li>
+          <li><b>1…0</b> или колесо — ячейка, <b>Esc / I</b> — вещи и крафт (там же ⇅ сортировка и 📦 «в сундуки рядом»), <b>H</b> — лечение, <b>B</b> — зелья-усиления, <b>E</b> — крюк-кошка (без крюка — действие рядом), <b>P</b> — меню, <b>+ / −</b> или Ctrl+колесо — масштаб, <b>/</b> — команды</li></ul>
+        <h3>🎮 Геймпад</h3><ul><li>Левый стик — идти, <b>A</b> — прыжок, правый стик — прицел (умный курсор всегда), <b>RT</b> — копать/бить/ставить, <b>X</b> — действие, <b>B</b> — крюк, <b>Y</b> — вещи, <b>LB/RB</b> — ячейки, <b>LT</b> — лечение, крестовина ↑ — усиления, <b>R3</b> — умный курсор для мыши, <b>Start</b> — меню</li></ul>
+        <h3>📱 Телефон</h3><ul><li>Левый палец — джойстик (вверх/вниз — лезть), справа — <b>⤒</b> прыжок, <b>⚔</b> атака (сама по ближайшему врагу, нет врага — копает перед собой), <b>✋</b> действие, <b>🎒</b> вещи, <b>🪝</b> крюк (когда он есть).</li>
+          <li>Палец по миру: держи — копать/ставить/бить в этом месте (подправится на ближайшую подходящую клетку), коротко — открыть дверь, сундук, поговорить.</li>
+          <li><b>🎯 Режим строителя</b> — точный крестик: двигай его пальцем по экрану, коротко нажми — крестик туда, <b>✓</b> — копать или ставить ровно в крестике. Удобнее лёжа и во весь экран ⛶.</li></ul>
         <h3>🧭 С чего начать</h3><ol>
           <li>Наруби дерева 🪓 → в 🎒 сделай <b>верстак</b>. Рядом с ним — платформы, двери, стены.</li>
           <li>До ночи построй дом: стены сзади, дверь, факел (дерево + гель от слизней).</li>
@@ -453,6 +485,7 @@
       const o = G.opt, chk = (k, t) => `<label class="pz-chk"><input type="checkbox" data-opt="${k}" ${o[k] ? 'checked' : ''}> ${t}</label>`;
       return `<div class="pz-card" style="max-width:460px"><h2>⚙️ Настройки игры</h2>
         <div class="pz-field"><span>Масштаб: <b data-zv>${Math.round(o.zoom * 100)}%</b></span><input type="range" min="60" max="190" step="5" value="${Math.round(o.zoom * 100)}" data-opt="zoom"></div>
+        ${shadersHtml()}
         ${chk('smooth', 'Плавный свет (выкл — свет «клетками», как в старых играх)')}
         ${chk('back', 'Подземный фон в пещерах')}
         ${chk('parts', 'Частицы (крошки, искры)')}
@@ -460,6 +493,15 @@
         ${chk('fps', 'Показывать кадры в секунду и время кадра')}
         <div class="pz-row"><button type="button" class="pz-b" data-a="keys">🎮 Клавиши, звук, интерфейс сайта</button></div>
         <div class="pz-row"><button type="button" class="pz-b pri" data-a="back">← Назад</button></div></div>`;
+    }
+    // «Шейдеры» — та же настройка сайта (⚙️ → Графика → «Шейдеры», js/engine/shade2d.js): меняется сразу, на живую
+    function shadersHtml(){
+      const S = window.D37Settings, SH = window.D37E?.shade2d; if (!S || !SH) return '';
+      const cur = S.get('shaders'), now = cur === 'auto' ? ` — сейчас «${SH.PACKS[SH.pack()]?.name}»` : '';
+      const opts = [['auto', 'Авто'], ['normal', 'Обычные'], ['pretty', 'Красивые'], ['ultra', 'Ультра'], ['retro', 'Ретро']];
+      return `<div class="pz-field"><span>🎨 Шейдеры${now}</span><div class="pz-tabs pz-sh">${opts.map(([v, t]) => `<button type="button" data-shaders="${v}" class="${cur === v ? 'on' : ''}">${t}</button>`).join('')}</div>
+        <small>Обычные — быстро; Красивые — свечение, рябь воды, жар над лавой, цвет края; Ультра — ещё мягче свет и больше искр; Ретро — крупные пиксели.</small>
+        ${cur === 'retro' ? `<label class="pz-chk"><input type="checkbox" data-crt ${S.get('crt') ? 'checked' : ''}> Полоски старого телевизора (CRT)</label>` : ''}</div>`;
     }
     function achHtml(){
       const got = G.CH?.ach || {};
@@ -487,6 +529,8 @@
     const download = (name, obj) => { const b = new Blob([JSON.stringify(obj)], { type: 'application/json' }), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000); };
     const ask = (t, txt) => window.GameKit?.ask ? window.GameKit.ask({ icon: '🗑', title: t, text: txt, yes: 'Удалить', no: 'Отмена', danger: true }) : Promise.resolve(confirm(t));
     async function onMenu(e){
+      const shb = e.target.closest('[data-shaders]');
+      if (shb) { window.D37Settings?.set('shaders', shb.dataset.shaders, { ui: true }); U.menu('opts'); return; }
       const ch = e.target.closest('[data-char]'), w = e.target.closest('[data-world]'), a = e.target.closest('[data-a]')?.dataset.a, id = e.target.closest('[data-id]')?.dataset.id;
       if (!a && ch) { selChar = ch.dataset.char; startMenu(); return; }
       if (!a && w) { selWorld = w.dataset.world; startMenu(); return; }
@@ -539,6 +583,7 @@
     menuEl && 0;
     on(document, 'change', e => {
       if (!menuEl || !menuEl.contains(e.target)) return;
+      if (e.target.matches?.('[data-crt]')) { window.D37Settings?.set('crt', !!e.target.checked, { ui: true }); return; }
       const k = e.target.dataset.opt; if (!k) return;
       if (k === 'zoom') { G.opt.zoom = +e.target.value / 100; menuEl.querySelector('[data-zv]').textContent = e.target.value + '%'; API.resize(); }
       else G.opt[k] = !!e.target.checked;
@@ -547,11 +592,18 @@
     on(document, 'input', e => { if (menuEl?.contains(e.target) && e.target.dataset.opt === 'zoom') { G.opt.zoom = +e.target.value / 100; menuEl.querySelector('[data-zv]').textContent = e.target.value + '%'; API.resize(); } });
 
     // ═══ Управление пальцем ═══
+    // как Террария на телефоне: слева джойстик, справа ⤒ прыжок, ⚔ атака (сама по ближайшему врагу, иначе — перед собой),
+    // ✋ действие, 🎒 вещи, 🪝 крюк (если есть), 🎯 «режим строителя» — точный крестик (двигать пальцем) и ✓ «сюда».
+    // Палец по миру: держи — копать/ставить/бить там (умный курсор подправит на соседнюю подходящую клетку), коротко —
+    // открыть/поговорить.
     function buildTouch(wrap){
       touchEl.innerHTML = `<button type="button" class="tb" data-t="jump" style="right:16px;bottom:22px;width:74px;height:74px" aria-label="Прыжок">⤒</button>
-        <button type="button" class="tb" data-t="use" style="right:100px;bottom:16px;width:62px;height:62px" aria-label="Бить или копать перед собой">⚔</button>
+        <button type="button" class="tb" data-t="use" style="right:100px;bottom:16px;width:62px;height:62px" aria-label="Атака: по ближайшему врагу, иначе — перед собой">⚔</button>
         <button type="button" class="tb" data-t="act" style="right:24px;bottom:108px;width:54px;height:54px;font-size:18px" aria-label="Действие">✋</button>
         <button type="button" class="tb" data-t="inv" style="right:94px;bottom:92px;width:50px;height:50px;font-size:18px" aria-label="Вещи">🎒</button>
+        <button type="button" class="tb" data-t="hook" style="right:156px;bottom:86px;width:50px;height:50px;font-size:19px" aria-label="Крюк-кошка" hidden>🪝</button>
+        <button type="button" class="tb" data-t="build" style="right:30px;bottom:176px;width:44px;height:44px;font-size:17px" aria-label="Режим строителя: точный крестик">🎯</button>
+        <button type="button" class="tb" data-t="put" style="right:168px;bottom:16px;width:62px;height:62px;background:rgba(40,120,60,.6)" aria-label="Использовать там, где крестик" hidden>✓</button>
         <div class="pz-joy" hidden><i></i></div>`;
       const joyEl = touchEl.querySelector('.pz-joy'), knob = joyEl.querySelector('i');
       const ptr = new Map();
@@ -562,13 +614,26 @@
         const t = b.dataset.t;
         try { b.setPointerCapture(e.pointerId); } catch (er) {}
         ptr.set(e.pointerId, { kind: 'btn', t });
-        btn(t, true);
+        if (t !== 'build') btn(t, true);
         if (t === 'jump') { U.touch.jump = true; U.touch.jumpDown = true; }
-        else if (t === 'use') { U.touch.front = true; U.touch.use = true; }
+        else if (t === 'use') { API.attackStart(); U.touch.front = true; U.touch.use = true; }
+        else if (t === 'put') U.touch.use = true;
         else if (t === 'act') API.interactNear();
         else if (t === 'inv') U.toggleInv();
+        else if (t === 'hook') API.toggleHook();
+        else if (t === 'build') {
+          const v = !U.touch.build; API.buildMode(v); btn('build', v);
+          touchEl.querySelector('[data-t="put"]').hidden = !v;
+          API.toast(v ? '🎯 Режим строителя: двигай крестик пальцем, ✓ — копать или ставить там' : 'Режим строителя выключен', 'info');
+        }
       });
-      const endBtn = e => { const q = ptr.get(e.pointerId); if (!q || q.kind !== 'btn') return; ptr.delete(e.pointerId); btn(q.t, false); if (q.t === 'jump') U.touch.jump = false; if (q.t === 'use') { U.touch.use = false; U.touch.front = false; } };
+      const endBtn = e => {
+        const q = ptr.get(e.pointerId); if (!q || q.kind !== 'btn') return;
+        ptr.delete(e.pointerId); if (q.t !== 'build') btn(q.t, false);
+        if (q.t === 'jump') U.touch.jump = false;
+        if (q.t === 'use') { U.touch.use = false; U.touch.front = false; API.attackEnd(); }
+        if (q.t === 'put') U.touch.use = false;
+      };
       touchEl.addEventListener('pointerup', endBtn); touchEl.addEventListener('pointercancel', endBtn);
       // джойстик и палец по миру — на холсте
       const cv = wrap.querySelector('.pz-gl');
@@ -585,6 +650,7 @@
           joyEl.hidden = false; joyEl.style.left = x + 'px'; joyEl.style.top = y + 'px'; knob.style.transform = '';
           return;
         }
+        if (U.touch.build) { ptr.set(e.pointerId, { kind: 'cross', x0: x, y0: y, lx: x, ly: y, t0: performance.now(), moved: false }); return; }   // строитель: палец — крестик
         const q = { kind: 'world', x0: x, y0: y, t0: performance.now(), moved: false, use: false };
         ptr.set(e.pointerId, q);
         API.aimTouch(x, y);
@@ -597,6 +663,10 @@
           const R = 52, dx = (x - q.ox) / R, dy = (y - q.oy) / R, d = Math.hypot(dx, dy), k = d > 1 ? 1 / d : 1;
           U.touch.mx = d < .15 ? 0 : dx * k; U.touch.my = d < .15 ? 0 : dy * k;
           knob.style.transform = `translate(${dx * k * R}px,${dy * k * R}px)`;
+        } else if (q.kind === 'cross') {   // крестик идёт за пальцем «вполсилы» — точно по клетке
+          if (Math.hypot(x - q.x0, y - q.y0) > 8) q.moved = true;
+          if (q.moved) API.buildMove((x - q.lx) * .6, (y - q.ly) * .6);
+          q.lx = x; q.ly = y;
         } else if (q.kind === 'world') {
           if (Math.hypot(x - q.x0, y - q.y0) > 10) q.moved = true;
           API.aimTouch(x, y);
@@ -606,6 +676,7 @@
         const q = ptr.get(e.pointerId); if (!q) return;
         ptr.delete(e.pointerId);
         if (q.kind === 'joy') { U.touch.mx = U.touch.my = 0; joyEl.hidden = true; return; }
+        if (q.kind === 'cross') { if (!q.moved && performance.now() - q.t0 < 300) API.buildSet(q.x0, q.y0); return; }   // короткое касание — крестик сюда
         if (q.kind === 'world') {
           clearTimeout(q.timer);
           if (!q.use && !q.moved && performance.now() - q.t0 < 260 && G.state === 'play') { if (!API.tapTouch(q.x0, q.y0)) API.useItem(); }
