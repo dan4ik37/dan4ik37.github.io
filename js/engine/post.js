@@ -293,7 +293,16 @@ float d37Iw( vec2 uv ){ return 1.0 / max( -perspectiveDepthToViewZ( texture2D( t
     float w0 = d37Iw( vUv ), lap = abs( d37Iw( vUv - vec2( px.x, 0.0 ) ) + d37Iw( vUv + vec2( px.x, 0.0 ) ) + d37Iw( vUv - vec2( 0.0, px.y ) ) + d37Iw( vUv + vec2( 0.0, px.y ) ) - 4.0 * w0 ) / w0;
     c = mix( c, c * 0.16, smoothstep( 0.05, 0.16, lap ) );
   }
-#endif`);
+#endif`)
+    .replace('  gl_FragColor = vec4(c, uLuma > 0.5 ? dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114)) : 1.0); }', `#ifdef D37_CRT
+  {   // «Полоски CRT» (ретро): строки и цветная маска, как у старого телевизора — по точкам экрана (сборка рисует прямо на экран)
+    float cm = mod( floor( gl_FragCoord.x ), 3.0 );
+    vec3 mk = cm < 0.5 ? vec3( 1.0, 0.8, 0.8 ) : cm < 1.5 ? vec3( 0.8, 1.0, 0.8 ) : vec3( 0.8, 0.8, 1.0 );
+    c *= mk * ( 0.8 + 0.2 * step( 0.5, mod( floor( gl_FragCoord.y ), 2.0 ) ) ) * 1.18;
+    c = clamp( c, 0.0, 1.0 );
+  }
+#endif
+  gl_FragColor = vec4(c, uLuma > 0.5 ? dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114)) : 1.0); }`);
   // Лучи солнца (и луны ночью) сквозь листву и окна — в экране: от точки к солнцу шаги по кадру; где небо (глубина = 1)
   // рядом с солнцем — свет, затухает с шагом. Четверть кадра (набор «Ультра» на компьютере — половина). uSun: xy — солнце на
   // экране, z — сила (0 — проход не рисуется), w — ширина/высота кадра; uRay: шагов, длина (доля пути), затухание, вес шага
@@ -915,6 +924,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         if (fx.rays && gl2 && M.rays && P.depth24) defs.D37_RAYS = '';
         if (fx.toon) defs.D37_TOON = '';
         if (fx.retro) defs.D37_RETRO = '';
+        if (fx.retro && fx.crt) defs.D37_CRT = '';
         if (fx.under) defs.D37_UNDER = '';
       }
       P.pack = fx; P.packX = x;
@@ -1197,6 +1207,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         G.seen.add(p);
         const d = p.diagnostics, lb = label(p), pk = packId();
         G.lastLog = String(d.fragmentShader?.log || d.vertexShader?.log || d.programLog || '').replace(/\s+/g, ' ').slice(0, 160);
+        // программа уже никем не рисуется (материал пересобрался — например, набор шейдеров сменился раньше проверки) — она
+        // ничего не портит: только отметить, ничего не выключать (иначе выключили бы невиновное)
+        if (!lb.post && !lb.mat) { G.log.push('orphan:' + (p.name || '')); continue; }
         if (lb.post === 'rays' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
           if (pk) off('pack:' + pk, 'link', lb.post || lb.scene);
           continue;

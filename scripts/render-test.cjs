@@ -1268,6 +1268,11 @@ function boundsOk(R){
   ok(judgeCase([black, black, black], { night: true }).off === '', 'ночью чёрный кадр — это ночь');
   ok(judgeCase([black, black, black], { cave: true }).off === '', 'без R.guardBlack (пещеры «Кубомира», тёмные миры студии) чёрный кадр днём — не поломка');
   ok(judgeCase([{ ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) }, { ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) }]).off === 'codes', 'в сцене «не числа» 2 раза подряд → по ступенькам');
+  // программа не собралась, но её уже никто не рисует (материал пересобрался) — ничего не выключаем, только отметка
+  for (const k in store) delete store[k];
+  progs.length = 0; const Ro = mkG(), po = failProg('ShaderMaterial'); progs.push(po);
+  ticks(Ro.guard, 2);
+  ok(!E.gfxGuardInfo().off.length && Ro.guard.log.includes('orphan:ShaderMaterial'), 'не собралась, но никем не рисуется — ничего не выключено (только отметка)', E.gfxGuardInfo().off);
   // не собралась программа сцены, а коды в альфе включены — коды тут ни при чём (это не текст шейдера): сразу без своих кусков
   for (const k in store) delete store[k];
   progs.length = 0; const Rl = mkG(), ml = new T.MeshStandardMaterial(), pl = failProg('MeshStandardMaterial');
@@ -1314,7 +1319,11 @@ function boundsOk(R){
     ok(res('ultra', { q: 'high', off: { 'pack:ultra': 1 } }) === 'pretty' && res('ultra', { q: 'high', off: { 'pack:ultra': 1, 'pack:pretty': 1 } }) === 'normal' && res('toon', { q: 'high', off: { 'pack:toon': 1 } }) === 'normal',
       'страж запомнил «не работает здесь» — предыдущий набор (ultra → pretty → normal)');
     ok(E.packResolve('normal', { q: 'high' }).lut === false && E.packResolve('pretty', { q: 'high' }).lut === true && E.packResolve('retro', { q: 'high' }).lut === true, 'LUT — только у наборов со своим тоном/цветом');
-    ok(E.gfxResolve({ pack: 'toon' }, { q: 'high' }).pack === 'toon' && E.gfxResolve({}, { q: 'high' }).pack === 'auto' && E.gfxResolve({ pack: '<script>' }, { q: 'high' }).pack === 'auto', 'настройка игрока: набор проверяется');
+    ok(E.gfxResolve({ shaders: 'toon' }, { q: 'high' }).pack === 'toon' && E.gfxResolve({ pack: 'retro' }, { q: 'high' }).pack === 'retro' && E.gfxResolve({}, { q: 'high' }).pack === 'auto' && E.gfxResolve({ shaders: '<script>' }, { q: 'high' }).pack === 'auto' && E.gfxResolve({ shaders: 'retro', crt: true }, { q: 'high' }).crt === true,
+      'настройка игрока: набор (ключ shaders — общий с 2D-наборами; старый pack) и «Полоски CRT» проверяются');
+    ok(res('auto', { q: 'high', preset: 'ultra' }) === 'ultra' && res('auto', { q: 'high', preset: 'mid' }) === 'normal' && res('auto', { q: 'mid', mobile: true, preset: 'high' }) === 'pretty' && res('auto', { q: 'mid', mobile: true, gpu: adreno610, preset: 'auto' }) === 'normal',
+      '«Авто» по пресету графики (как у 2D): ультра → «Ультра», средняя → «Обычные», высокая → «Красивые»; пресет «Авто» — по устройству');
+    ok(E.packResolve('retro', { q: 'high', crt: true }).crt && !E.packResolve('pretty', { q: 'high', crt: true }).crt, '«Полоски CRT» — только у «Ретро»');
     const san = E.packSanitize({ name: 'x'.repeat(99), tone: 'agx', look: { ev: 9, sat: -3, lift: [1, 1, 1] }, rays: 7, glsl: 'void main(){}' });
     ok(san.name.length === 24 && san.look.ev === 1 && san.look.sat === 0 && san.look.lift[0] === .1 && san.rays === 2 && !('glsl' in san), 'набор из данных (мир, мод): только известные поля в пределах, без GLSL');
     // обратный ACES: ACES(обратный(y)) = y
@@ -1371,7 +1380,7 @@ function boundsOk(R){
     P.setPack(E.packResolve('normal', { q: 'high' })); P.setSize(800, 450, 1);
     ok(M.comp.fragmentShader === comp0 && !P.retro && !P._test.rt().scene.d37Nearest && !P._test.rt().rays, 'обратно на «Обычные» — всё как было (буфер лучей убран)');
     // точность uniform/varying для сборки набора и лучей (все define сразу)
-    const allD = [['D37_LUT', ''], ['D37_RAYS', ''], ['D37_TOON', ''], ['D37_UNDER', '']], allR = [...allD.slice(0, 3), ['D37_RETRO', ''], ['D37_UNDER', '']];
+    const allD = [['D37_LUT', ''], ['D37_RAYS', ''], ['D37_TOON', ''], ['D37_UNDER', '']], allR = [...allD.slice(0, 3), ['D37_RETRO', ''], ['D37_CRT', ''], ['D37_UNDER', '']];
     const lx = lint('comp+набор', M.comp.vertexShader, E.POST_PREC + X, [...D0, ...allD]), lr = lint('comp+ретро', M.comp.vertexShader, E.POST_PREC + X, [...D0, ...allR]), ly = lint('лучи', M.rays.vertexShader, M.rays.fragmentShader, D0);
     ok(![...lx.bad, ...lr.bad, ...ly.bad, ...lx.miss].length, 'сборка набора и лучи: точность uniform/varying в обеих стадиях', [...lx.bad, ...lr.bad, ...ly.bad].slice(0, 4));
     ok(!/\bcontinue\b|texelFetch|isnan/.test(X + E.PACK_FS.rays) && E.PACK_FS.rays.includes('textureLod( tDepth'), 'наборы: без continue/texelFetch/isnan; в цикле лучей — textureLod');

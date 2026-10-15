@@ -82,7 +82,9 @@
     o.sharp = cl(Math.round(num(s.sharp, 50)), 0, 100) / 100;
     o.framegen = s.framegen === true;   // «Генерация кадров (×2)» — выключена, пока игрок не включит
     // набор шейдеров (E.PACKS) — какой хочет игрок; что включится на этом устройстве, решает render.js (E.packResolve)
-    o.pack = s.pack === 'auto' || (typeof s.pack === 'string' && E.PACKS && E.PACKS[s.pack]) ? s.pack : 'auto';
+    // ключ настройки — общий с 2D-наборами (js/engine/shade2d.js): 'shaders'; старое имя 'pack' — тоже
+    { const w = s.shaders ?? s.pack; o.pack = w === 'auto' || (typeof w === 'string' && E.PACKS && E.PACKS[w]) ? w : 'auto'; }
+    o.crt = s.crt === true;   // «Полоски CRT» (только у «Ретро»)
     o.battery = !!s.battery;
     o.prCap = o.tier === 'low' ? 1 : o.tier === 'mid' ? 1.5 : 2;
     if (o.battery) {   // экономия батареи: 30 кадров, без AO и трассировки, тени попроще, ближе дальность, плотность пикселей 1
@@ -793,8 +795,16 @@ ${PREC_LO}#endif`)
     const ok = gpu.fam === 'apple' || gpu.fam === 'xclipse' || (gpu.fam === 'adreno' && num >= 730) || (gpu.fam === 'mali' && /g7[1-9]\d|g9\d\d|immortalis/i.test(m));
     return ok && (cores || 8) >= 6;
   };
-  // «Авто»: телефон — «Обычные» (сильный — «Красивые»); компьютер — по основе (высокая — «Красивые»)
-  E.packAuto = (dev = {}) => dev.q === 'low' ? 'normal' : dev.mobile ? (E.strongPhone(dev.gpu, dev.cores) ? 'pretty' : 'normal') : dev.q === 'high' ? 'pretty' : 'normal';
+  // «Авто»: по пресету графики, как у 2D-наборов (ультра → «Ультра», высокая → «Красивые», низкая/средняя → «Обычные»); пресет
+  // «Авто»/«Своя» — по устройству: телефон — «Обычные» (сильный — «Красивые»), компьютер с высокой основой — «Красивые»
+  E.packAuto = (dev = {}) => {
+    if (dev.q === 'low') return 'normal';
+    const p = dev.preset;
+    if (p === 'ultra') return 'ultra';
+    if (p === 'high') return 'pretty';
+    if (p === 'low' || p === 'mid') return 'normal';
+    return dev.mobile ? (E.strongPhone(dev.gpu, dev.cores) ? 'pretty' : 'normal') : dev.q === 'high' ? 'pretty' : 'normal';
+  };
   // Набор → что включить на этом устройстве. want — 'auto' | id; dev — { q, mobile, gpu, cores, off (решения стража), post: false —
   // без постобработки }. Не работает здесь (страж) — предыдущий по лесенке; low / без постобработки — «Обычные»
   E.packResolve = (want = 'auto', dev = {}) => {
@@ -808,7 +818,7 @@ ${PREC_LO}#endif`)
       rays: Math.min(p.rays | 0, cap), clouds: Math.min(p.clouds | 0, cap), sky: p.sky | 0, wave: p.wave ? 1 : 0, water: p.water ? 1 : 0, under: p.under ? 1 : 0,
       toon: p.toon ? { bands: cl(p.toon.bands | 0, 2, 8), line: p.toon.line ? 1 : 0 } : null,
       retro: p.retro ? { pixel: cl(p.retro.pixel | 0, 2, 6), dither: p.retro.dither ? 1 : 0, levels: cl(p.retro.levels | 0, 2, 8) } : null,
-      dof: dev.mobile ? 0 : p.dof | 0, mblur: dev.mobile ? 0 : p.mblur | 0 };
+      dof: dev.mobile ? 0 : p.dof | 0, mblur: dev.mobile ? 0 : p.mblur | 0, crt: !!(p.retro && dev.crt) };
     fx.lut = fx.tone !== 'aces' || !!fx.retro || JSON.stringify(look) !== JSON.stringify(LOOK0);
     return fx;
   };

@@ -463,7 +463,7 @@
     // что из набора включить сейчас: на low и без постобработки — «Обычные»; автокачество (packLite) снимает дорогое первым
     function packOf(op){
       if (!E.packResolve) return { id: 'normal' };
-      const fx = E.packResolve(op.pack || 'auto', { ...devInfo(), off: E.gfxGuardState?.().off || {}, post: !!(R.post && R.post.on) });
+      const fx = E.packResolve(op.pack || 'auto', { ...devInfo(), preset: op.preset, crt: !!op.crt, off: E.gfxGuardState?.().off || {}, post: !!(R.post && R.post.on) });
       if (op.packLite >= 1) { fx.rays = 0; fx.clouds = Math.min(fx.clouds, 1); }
       if (op.packLite >= 2) { fx.clouds = 0; fx.wave = 0; }
       return fx;
