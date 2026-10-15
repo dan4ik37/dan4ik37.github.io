@@ -160,8 +160,9 @@ reflectedLight.directDiffuse *= d37sk * d37ao;
 reflectedLight.indirectDiffuse *= max( d37sk, uMinAmb ) * d37ao;
 reflectedLight.indirectDiffuse += diffuseColor.rgb * uTorch * d37bl * d37ao;`;
     // Вырезанное по альфе (листва, трава, цветы, факелы, стекло) — код травы E.FOLIAGE_A в альфе буфера сцены, пока включены AO или
-    // трассировка (d37Rt.y, gfx.js): затенение углов и контактные тени их не учитывают — иначе вокруг травинок тёмные пятна
-    const FOLIAGE = (E.FOLIAGE_A || (1 + 4 / 1024)).toFixed(8), RTU = E.GFXU?.rt || null;
+    // трассировка (d37Rt.y, gfx.js): затенение углов и контактные тени их не учитывают — иначе вокруг травинок тёмные пятна.
+    // Только если движок знает этот код (E.FOLIAGE_A): в main его откатили 15.10 — тогда альфу не трогаем
+    const FOLIAGE = E.FOLIAGE_A ? E.FOLIAGE_A.toFixed(8) : '', RTU = FOLIAGE ? E.GFXU?.rt || null : null;
     function patch(m, kind){
       m.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, U);
