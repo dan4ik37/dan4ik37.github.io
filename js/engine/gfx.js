@@ -131,6 +131,21 @@
       shadow: { soft: cl(num(sh.soft, WG.shadow.soft), 0, 1) },
     };
   };
+  // Освещение мира: cur — R.lighting, L — новое (R.setLighting). Полный объект (есть time, brightness и fogEnd: мир загрузили
+  // из файла, шаблон, блок world гостю) — графика мира заново из L.gfx (нет — по умолчанию: от прошлого мира ничего не тянется);
+  // частичный (ползунок, смена суток) — дописывается. Меняет cur, возвращает его же
+  E.mergeLighting = (cur, L) => {
+    if (!L || typeof L !== 'object') return cur;
+    const g0 = cur.gfx || E.worldGfx();
+    for (const k in L) if (k !== 'gfx') cur[k] = L[k];
+    if ('time' in L && 'brightness' in L && 'fogEnd' in L) cur.gfx = E.worldGfx(L.gfx);
+    else if (L.gfx && typeof L.gfx === 'object') {
+      const b = L.gfx, o = { ...g0, ...b };
+      for (const k of ['sky', 'fog', 'water', 'shadow']) if (b[k] && typeof b[k] === 'object') o[k] = { ...g0[k], ...b[k] };
+      cur.gfx = E.worldGfx(o);
+    } else if (!cur.gfx) cur.gfx = g0;
+    return cur;
+  };
   // Готовые настроения мира (панель «🎨 Графика» студии): свет (как Lighting в Roblox) + графика
   E.WORLD_PRESETS = {
     day: { name: 'Солнечный день', icon: '☀️', lighting: { time: 13, brightness: 1.1, ambient: 1, fogEnd: 420 },

@@ -60,8 +60,8 @@
   function tierTo(t){
     if (S.get('gfx') === t) return;
     S.set('gfx', t);
-    const R = liveR(), E = root.D37E, now = E?.gfxQuality ? E.gfxQuality() : null;
-    if (R && now && now !== R.q) { try { gctx?.gfx?.(t); } catch (e) { console.error(e); } }
+    const R = liveR(); if (!R) return;
+    try { const now = root.D37E?.gfxQuality?.(); if (now && now !== R.q) gctx?.gfx?.(t); } catch (e) { console.error(e); }
   }
   let busy = false;
   S.on(d => {

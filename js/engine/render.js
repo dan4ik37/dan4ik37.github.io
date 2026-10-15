@@ -232,15 +232,11 @@
     R.night = 0;
     let skyOver = null, under = null, skyT = 0;
     // полный объект освещения (мир загрузили из файла, шаблон, блок world гостю) — графика мира заново (не тянется
-    // от прошлого мира); частичный (ползунок, смена суток) — дописывается
-    const isFull = L => 'time' in L && 'brightness' in L && 'fogEnd' in L;
-    const mergeGfx = (a, b) => { const o = { ...a, ...b }; for (const k of ['sky', 'fog', 'water', 'shadow']) if (b[k] && typeof b[k] === 'object') o[k] = { ...a[k], ...b[k] }; return o; };
+    // от прошлого мира); частичный (ползунок, смена суток) — дописывается (gfx.js E.mergeLighting)
     R.setLighting = (L = {}) => {
       if (!L || typeof L !== 'object') L = {};
-      const g0 = R.lighting.gfx;
-      for (const k in L) if (k !== 'gfx') R.lighting[k] = L[k];
-      if (isFull(L)) { R.lighting.gfx = E.worldGfx(L.gfx); skyOver = null; }
-      else if (L.gfx && typeof L.gfx === 'object') R.lighting.gfx = E.worldGfx(mergeGfx(g0, L.gfx));
+      if ('time' in L && 'brightness' in L && 'fogEnd' in L) skyOver = null;
+      E.mergeLighting(R.lighting, L);
       applyLighting();
     };
     // Старый способ (цвета неба вручную): верх, горизонт, низ; туман до far
