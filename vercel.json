@@ -198,6 +198,18 @@
       "destination": "/api/pages?page=adsterms"
     },
     {
+      "source": "/auth/:p/start",
+      "destination": "/api/pages?page=oauth&a=start&p=:p"
+    },
+    {
+      "source": "/auth/:p/callback",
+      "destination": "/api/pages?page=oauth&a=callback&p=:p"
+    },
+    {
+      "source": "/api/oauth",
+      "destination": "/api/pages?page=oauth"
+    },
+    {
       "source": "/games",
       "destination": "/api/game"
     },
