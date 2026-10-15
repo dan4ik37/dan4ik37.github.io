@@ -3,7 +3,8 @@
 //  покрасить → ▶ сыграть → 📤 выложить. Подсказки — под то, чем управляют (мышь и клавиатура / палец / геймпад),
 //  нужная кнопка обведена; любой шаг можно пропустить, окно — закрыть; вернуть — кнопка «🎓 Обучение».
 // ═══════════════════════════════════════
-// Первый раз в студии — начинается само (вместо старого списка «Первые шаги»): localStorage d37_s3_learn = 'done'.
+// Первый раз в студии — начинается само (вместо старого списка «Первые шаги»; кто его прошёл — только по кнопке):
+// localStorage d37_s3_learn = 'done'.
 (() => {
   const E = window.D37E = window.D37E || {};
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -117,7 +118,9 @@
       off.push(e.SC.on('add', o => on('add', o)), e.SC.on('change', d => on('change', d)));
       off.push(E.inputKind?.on(() => draw()) || (() => {}));
       ringT = setInterval(() => { if (++tick % 2 === 0) ringNow(); }, 250);
-      if (!seen()) setTimeout(() => { if (api === a && !a.ed?.player) start(); }, 600);
+      // само — только новичкам (старый список «Первые шаги» не пройден): опытным — кнопка «🎓 Обучение»
+      let old = false; try { old = localStorage.getItem('d37_s3_tut') === '1'; } catch (er) {}
+      if (!seen() && !old) setTimeout(() => { if (api === a && !a.ed?.player) start(); }, 600);
     },
     unmount(){ clearInterval(ringT); for (const f of off) { try { f?.(); } catch (e) {} } off = []; stop(false); api = null; },
     act(a){
