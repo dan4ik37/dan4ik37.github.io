@@ -339,6 +339,8 @@ Players.PlayerAdded.Connect(player => {
     ed.autosave = setInterval(() => { if (ed.dirty && !ed.playing) save(true); }, 15000);
     // настройки (js/core/settings.js): FSR, тени, звук, клавиши, камера — сами; вид — в игре; Esc закрыл ⚙️ — игру не останавливать
     ed.offCtx = window.D37Settings?.context({ engine: true, R: () => ED?.R, view: v => { const pl = ED?.playing; if (pl && pl.rig.mode !== v) playView(pl); }, onClose: () => ED?.playing?.C?.reset_state() });
+    // страж графики (js/engine/post.js): без своих кусков шейдеров / «низкая» — заработает с новым рендерером (студию — перезапустить)
+    { const onFb = e => { if (ED === ed && e.detail?.rebuild && e.detail.k !== 'reset') msg('🛡 Графика: на этом устройстве — безопасный режим. Заработает после перезапуска студии', false); }; window.addEventListener('d37:gfxfallback', onFb); ed.offFb = () => window.removeEventListener('d37:gfxfallback', onFb); }
     if (!ed.playId) ext('mount', STUDIO_API);   // в режиме игрока (чужой мир) расширения редактора не нужны
     // закрыли/обновили вкладку — сохраняем сразу, без сжатия ландшафта
     window.addEventListener('pagehide', ed.onHide = () => {
@@ -2188,7 +2190,7 @@ Players.PlayerAdded.Connect(player => {
     ext('unmount');
     try { mpClose(); } catch (e) {}   // комната и канал Supabase — сразу (и до SC.dispose: сеть обёрнута вокруг сцены)
     ED = null;
-    try { ed.offCtx?.(); window.D37Full?.release(ed.box); } catch (e) {}   // настройки/полный экран
+    try { ed.offCtx?.(); ed.offFb?.(); window.D37Full?.release(ed.box); } catch (e) {}   // настройки/полный экран, страж графики
     try { if (ed.playing) { const pl = ed.playing; pplug('stop'); pl.phoneOff?.(); pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
     clearInterval(ed.autosave);
