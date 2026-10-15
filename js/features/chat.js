@@ -545,13 +545,19 @@ function onlineMeta(){
   }
   return meta;
 }
-// Обновить своё «кто онлайн»: каждое обновление получают все на сайте — поэтому не чаще раза в 15 с (и лимит presence 5 за 30 с)
-let onlineTrackT = 0, onlineTrackAt = 0;
+// Обновить своё «кто онлайн»: каждое обновление получают все на сайте (сообщения Supabase — квота) — поэтому не чаще раза
+// в 15 с (и лимит presence 5 за 30 с) и только если что-то поменялось (гость перешёл в другой раздел — никому не шлём)
+let onlineTrackT = 0, onlineTrackAt = 0, onlineSig = '';
+const onlineMetaSig = m => JSON.stringify(Object.assign({}, m, { ts: 0 }));
 function trackOnline(){
   if (!onlineChannel) return;
   clearTimeout(onlineTrackT);
   const wait = Math.max(400, 15000 - (Date.now() - onlineTrackAt));
-  onlineTrackT = setTimeout(() => { onlineTrackAt = Date.now(); onlineChannel?.track(onlineMeta()).catch(() => {}); }, wait);
+  onlineTrackT = setTimeout(() => {
+    const m = onlineMeta(), sig = onlineMetaSig(m);
+    if (sig === onlineSig) return;
+    onlineSig = sig; onlineTrackAt = Date.now(); onlineChannel?.track(m).catch(() => {});
+  }, wait);
 }
 function subscribeOnline(){
   if (!sbClient || onlineChannel) return;
@@ -567,7 +573,7 @@ function subscribeOnline(){
       clearTimeout(syncT); syncT = setTimeout(() => window.dispatchEvent(new Event('d37:presence')), 300);
     })
     .subscribe(async status => {
-      if (status === 'SUBSCRIBED') { onlineTrackAt = Date.now(); await onlineChannel.track(onlineMeta()); }
+      if (status === 'SUBSCRIBED') { const m = onlineMeta(); onlineSig = onlineMetaSig(m); onlineTrackAt = Date.now(); await onlineChannel.track(m); }
     });
 }
 // Онлайн сейчас: вошедшие (по id, без повторов) и сколько гостей
