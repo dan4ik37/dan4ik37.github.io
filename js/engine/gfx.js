@@ -309,7 +309,8 @@
   // sh: x — выборок PCF (каждая — 2×2 текселя с весами), y — поиск заслонок (0 — без PCSS), z — тексели полутени на 1 ед.
   // глубины карты, w — 2: без наклона приёмника (для проверок), иначе с ним
   // rt: x — мокрые поверхности мира 0…1 (пол глаже и темнее), y — 1: метить блестящее в альфе буфера сцены для отражений
-  // (только пока рисуется буфер постобработки с трассировкой — на холст альфа < 1 не попадает), z, w — запас
+  // (только пока рисуется буфер постобработки с трассировкой — на холст альфа < 1 не попадает), z — 1: трава и листва (вырез по
+  // альфе) пишут свой код 1 + 4/1024 — для AO (только пока рисуется буфер постобработки с AO), w — запас
   const U = E.GFXU = E.GFXU || { fogA: new Float32Array(4), fogB: new Float32Array(4), fogC: new Float32Array(4), sh: new Float32Array(4) };
   U.rt = U.rt || new Float32Array(4);
 
@@ -460,20 +461,48 @@ uniform vec4 d37Rt;`;
 		diffuseColor.rgb *= 1.0 - 0.35 * d37Wt;
 	}
 #endif`;
+  // Трава и листва (вырезанное по альфе: кустики травы mir.js, листья и сетки моделей — glTF MASK) — свой код 1 + 4/1024
+  // (16.10.2026, «мерцание у травы»): AO и контактные тени их не учитывают ни как заслонку, ни как то, что затеняется (тонкие
+  // травинки в глубине кадра давали вокруг каждого кустика тёмное пятно). Код чуть больше 1: край травинки при MSAA (среднее с
+  // соседом 1) — 1,001…1,004, в коды блеска [0,75; 0,999) не попадает; в половинном float записывается точно. Свечение — от 1,01.
+  // Пишется только пока d37Rt.z = 1 (post.js: AO или трассировка включены и страж графики не выключил) — у остального
+  // ничего не меняется (после «чёрной земли» на телефоне 15.10: путь блеска — как был, только пока d37Rt.y = 1).
+  // Запись — целым вектором без ветвления (не «.a = …» внутри if): так меньше простора драйверу ошибиться; страж графики
+  // (post.js) проверяет, что цвет с кодами и без них одинаковый.
+  // smoothstep — только с edge0 < edge1 (иначе по стандарту GLSL результат не определён — телефоны вправе вернуть что угодно)
+  E.FOLIAGE_A = 1 + 4 / 1024;
   const RT_OUT = `
 #if defined( STANDARD ) && defined( OPAQUE )
+	#ifdef USE_ALPHATEST
+	gl_FragColor = vec4( gl_FragColor.rgb, d37Rt.z > 0.5 ? ${E.FOLIAGE_A.toFixed(8)} : gl_FragColor.a );
+	#else
 	if ( d37Rt.y > 0.5 ) {
-		float d37G = smoothstep( 0.55, 0.12, roughnessFactor );
+		float d37G = 1.0 - smoothstep( 0.12, 0.55, roughnessFactor );
 		if ( d37G > 0.01 ) gl_FragColor.a = ( metalnessFactor > 0.5 ? 0.875 : 0.75 ) + 0.12 * d37G;
 	}
+	#endif
 #endif`;
-  // код блеска из альфы (как читает post.js) — для проверок: { kind: 'clear' | 'gloss' | 'metal' | null, gloss }
-  E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) } : { kind: null, gloss: 0 };
+  // код из альфы (как читает post.js) — для проверок: { kind: 'clear' | 'gloss' | 'metal' | 'foliage' | null, gloss }
+  // (null — обычное и светящееся: не блестит; 'foliage' — трава и листва: не блестит и без AO)
+  E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) }
+    : a > 1.0005 && a < 1.01 ? { kind: 'foliage', gloss: 0 } : { kind: null, gloss: 0 };
   E.rtEncode = (rough, metal) => { const t = Math.max(0, Math.min(1, (rough - .55) / (.12 - .55))), g = t * t * (3 - 2 * t); return g > .01 ? (metal > .5 ? .875 : .75) + .12 * g : 1; };
   const LIT = ['basic', 'lambert', 'phong', 'standard', 'physical', 'toon', 'matcap', 'points', 'sprite', 'dashed'];
+  // куски three до правки — для безопасного режима (страж графики, post.js: программа сцены не собралась → E.gfxUnpatch)
+  const PATCHED = ['fog_pars_vertex', 'fog_vertex', 'fog_pars_fragment', 'fog_fragment', 'shadowmap_pars_fragment', 'roughnessmap_pars_fragment', 'normal_fragment_maps', 'output_fragment'];
+  let ORIG = null;
+  E.gfxUnpatch = T => {
+    const C = T && T.ShaderChunk;
+    if (!C || !C.__d37 || !ORIG) return false;
+    for (const k of PATCHED) if (k in ORIG) C[k] = ORIG[k];
+    C.__d37 = 0;
+    return true;
+  };
   E.gfxPatch = T => {
     const C = T && T.ShaderChunk;
     if (!C || C.__d37) return !!C;
+    if (E.gfxSafe?.()) return false;   // страж запомнил: на этом устройстве — без своих кусков (сброс — новая версия сайта)
+    if (!ORIG) { ORIG = {}; for (const k of PATCHED) ORIG[k] = C[k]; }
     C.fog_pars_vertex = FOG_PARS_V; C.fog_vertex = FOG_V; C.fog_pars_fragment = FOG_PARS_F; C.fog_fragment = FOG_F;
     C.shadowmap_pars_fragment = PREC_HI + E.patchShadowChunk(C.shadowmap_pars_fragment || '') + '\n' + PREC_LO;   // карта теней — highp
     // трассировка лучей: данные — в кусок шероховатости (он есть только у стандартных), мокрое — после нормалей, код блеска — в конце
@@ -486,7 +515,7 @@ uniform vec4 d37Rt;`;
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
       if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };
     }
-    try { Object.defineProperty(C, '__d37', { value: 1, enumerable: false }); } catch (e) { C.__d37 = 1; }
+    try { Object.defineProperty(C, '__d37', { value: 1, enumerable: false, writable: true, configurable: true }); } catch (e) { C.__d37 = 1; }
     return true;
   };
 
@@ -498,7 +527,7 @@ uniform vec4 d37Rt;`;
       uP: { value: new T.Vector4(1, .25, 0, 0) }, uM: { value: new T.Vector4(0, 0, 0, 0) },
     };
     return new T.ShaderMaterial({
-      uniforms: u, depthWrite: false, depthTest: !env, fog: false, side: T.BackSide, toneMapped: false, extensions: { derivatives: true },
+      name: 'sky', uniforms: u, depthWrite: false, depthTest: !env, fog: false, side: T.BackSide, toneMapped: false, extensions: { derivatives: true },
       vertexShader: `varying vec3 vDir;
 void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p;${env ? '' : ' gl_Position.z = p.w * 0.99999;'} }`,
       // #include — только с новой строки (иначе шейдер не собирается)
@@ -562,6 +591,7 @@ void main(){
     }, 2.2);
     const m = new T.MeshStandardMaterial({ color: c, roughness: .08, metalness: 0, transparent: true, opacity: .9, normalMap: nm, envMapIntensity: 1.1 });
     m.normalScale = new T.Vector2(.5, .5);
+    m.name = 'water';   // имя — для стража графики (какая программа не собралась)
     m.userData.tile = 4 * (E.UNIT || 1); m.userData.noCast = true; m.userData.noAO = true; m.userData.water = true;
     const dep = opts.depth || null;
     const own = { tDep: { value: dep?.tex || null }, uDepR: { value: new T.Vector4(...(dep?.rect || [0, 0, 1, 1])) } };

@@ -34,7 +34,11 @@
   const PI = Math.PI, TAU = PI * 2;
   const TEX_DIR = 'img/tex/';
 
-  E.gfxQuality = () => { try { const v = localStorage.getItem('d37_gfx'); if (['low', 'mid', 'high'].includes(v)) return v; } catch (e) {} return E.quality(); };
+  E.gfxQuality = () => {
+    if (E.gfxSafe?.('tier')) return 'low';   // страж графики (post.js): на этом устройстве выше «низкой» не рисовалось
+    try { const v = localStorage.getItem('d37_gfx'); if (['low', 'mid', 'high'].includes(v)) return v; } catch (e) {}
+    return E.quality();
+  };
   // FSR (как режимы DLSS): кадр рисуется в доле разрешения, AMD FSR 1 в post.js чётко растягивает до экрана (d37_fsr).
   // «авто» — доля меняется сама (динамическое разрешение), растягивает тоже FSR
   E.FSR = { quality: .77, balanced: .67, performance: .59 };
@@ -530,9 +534,10 @@
       ST.shadowNow = shadowTick(t0);
       r.info.reset();
       if (GU.rt) GU.rt[0] = q !== 'low' ? R.lighting.gfx.rt?.wet || 0 : 0;   // мокрое — мира (данные общие на страницу: после кадра — 0)
-      if (R.post && R.post.on) R.post.render(scene, camera);
+      if (R.post && R.post.on) { if (R.guard?.due()) R.guard.test(scene, camera); else R.post.render(scene, camera); }   // страж графики: иногда — кадр с самопроверкой
       else { r.render(scene, camera); ST.scene = r.info.render.calls; ST.post = 0; }
       if (GU.rt) GU.rt[0] = 0;
+      R.guard?.tick();
       const inf = r.info.render;
       ST.calls = inf.calls; ST.tris = inf.triangles;
       if (ST.shadowNow) { ST.shadowUpd++; if (ST.sceneNoSh) ST.shadow = Math.max(0, ST.scene - ST.sceneNoSh); } else ST.sceneNoSh = ST.scene;
@@ -1057,6 +1062,10 @@
       if (R.post && !R.post.ok) { R.post.dispose(); R.post = null; }
       if (!R.post) r.setPixelRatio(PR0);
     }
+    // страж графики (post.js E.gfxGuard): шейдер не собрался / кадр рисуется не так — выключить только это и запомнить;
+    // запомненное — сразу (до настроек игрока и первого кадра)
+    try { R.guard = E.gfxGuard ? E.gfxGuard(R) : null; } catch (e) { console.warn('страж графики:', e); R.guard = null; }
+    R.reapplyGfx = () => { if (R.optBase) R.applyGfx(R.optBase); };
     if (window.D37Opt?.fps && E.perf && !E.perf.on) E.perf.toggle(true);   // настройки: «Счётчик FPS» — сразу при входе в 3D
     // графика игрока (настройки) и свет по умолчанию — сразу, до первого кадра
     { const O = window.D37Opt; if (O) optSync(O); else R.applyGfx(E.gfxResolve({}, devInfo())); }

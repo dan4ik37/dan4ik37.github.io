@@ -5,6 +5,8 @@
 // (E.worldGfx, сброс при загрузке мира — E.mergeLighting), цвет кадра, модель неба и время суток, правка кусков шейдеров
 // three (туман, тени: #if/#endif, скобки, общие uniform по ссылке), купол неба и вода v2 (#include с новой строки),
 // вкладка «Графика» (js/core/gfx-settings.js: перенос d37_gfx, «Своя», пресеты → D37Opt.gfx), лимит FPS (core.js).
+// 21: «чёрная земля» — smoothstep без перевёрнутых краёв, точность uniform/varying в обеих стадиях (свой препроцессор GLSL),
+// коды в альфе только по флагам, страж графики (post.js E.gfxGuard: не собралось / рисует не то → выключить только это).
 // Нужен three.js r149 (в репозитории его нет — сайт берёт его с jsDelivr):
 //   npm i three@0.149.0 во временной папке, затем: node scripts/render-test.cjs <путь к node_modules/three>
 //   (или переменная THREE_PATH). Запуск из корня сайта. Выход с кодом 1, если есть ошибки.
@@ -985,7 +987,7 @@ function boundsOk(R){
   const bad = ms.filter(([, m]) => !m.fragmentShader.startsWith(PREC)).map(([k]) => k);
   ok(ms.length >= 12 && !bad.length, 'постобработка: КАЖДЫЙ шейдер (AO, отражения, генерация кадров, сборка, FSR, NIS…) начинается со строки точности', { n: ms.length, bad });
   const depthReaders = ms.filter(([, m]) => /tDepth/.test(m.fragmentShader)).map(([k]) => k).sort().join();
-  ok(depthReaders === 'ao,comp,fg,ssr', 'глубину читают ao, ssr, fg, comp — все с highp', depthReaders);
+  ok(depthReaders === 'ao,comp,fg,health,ssr', 'глубину читают ao, ssr, fg, comp и самопроверка — все с highp', depthReaders);
   ok(P0.depthOK === true && P0.canAO, 'подставной рендерер без чтения пикселей — проверка глубины не мешает (как раньше)');
   P0.dispose();
   // проверка глубины при запуске: видеокарта без highp (precision < 23) или неточная глубина — AO, трассировка, генерация кадров выключены
@@ -1040,6 +1042,257 @@ function boundsOk(R){
   ];
   const wrong = cases.filter(([got, want]) => got !== want).map(c => c[2]);
   ok(!wrong.length, 'E.isMobile: Android, телефон в «версии для ПК», iPad — телефон/планшет; компьютер, Mac, ноутбук с сенсором — нет', wrong);
+}
+
+// ═══ 21. «Чёрная земля» (15.10.2026: после правки травы на телефоне владельца земля и небо стали чёрными; причина на самом
+//     телефоне не доказана): чего в шейдерах не делаем — smoothstep с перевёрнутыми краями (по стандарту GLSL «не определено»),
+//     запись кода в альфу кусками внутри if, continue/texelFetch в цикле AO; точность uniform/varying одинаковая в обеих
+//     стадиях (иначе программа не связывается — на телефонах проверка строже); коды в альфе — только по флагам ═══
+{
+  // (а) smoothstep с перевёрнутыми краями — нигде в js/ (шейдеры — строки в .js)
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.js') ? [path.join(d, e.name)] : []);
+  const rev = [];
+  for (const f of walk(path.join(SITE, 'js'))) {
+    const s = fs.readFileSync(f, 'utf8'), re = /smoothstep\(\s*(-?\d*\.?\d+)\s*,\s*(-?\d*\.?\d+)\s*,/g; let m;
+    while ((m = re.exec(s))) if (+m[1] >= +m[2]) rev.push(path.relative(SITE, f) + ': ' + m[0]);
+  }
+  ok(!rev.length, 'smoothstep: везде edge0 < edge1 (перевёрнутые края по стандарту — «не определено»: телефон вправе вернуть что угодно)', rev.slice(0, 6));
+  // (б) коды в альфе: трава — целым вектором и только по флагу d37Rt.z; блеск — как раньше, только по d37Rt.y
+  const OF = T.ShaderChunk.output_fragment, iA = OF.indexOf('#ifdef USE_ALPHATEST'), iE = OF.indexOf('#else', iA), iEnd = OF.indexOf('#endif', iE);
+  const folSrc = OF.slice(iA, iE), glossSrc = OF.slice(iE, iEnd);
+  ok(iA > 0 && folSrc.includes('gl_FragColor = vec4( gl_FragColor.rgb, d37Rt.z > 0.5 ? 1.00390625 : gl_FragColor.a );') && !/gl_FragColor\.a\s*=/.test(folSrc) && !/\bif\b/.test(folSrc),
+    'трава и листва: код — целым вектором, без if и без «.a = …», только пока d37Rt.z = 1', folSrc);
+  ok(glossSrc.includes('if ( d37Rt.y > 0.5 )') && glossSrc.includes('1.0 - smoothstep( 0.12, 0.55, roughnessFactor )') && !glossSrc.includes('d37Rt.z'), 'блеск: только пока трассировка (d37Rt.y), формула та же');
+  ok(E.FOLIAGE_A === 1 + 4 / 1024 && E.rtDecode(E.FOLIAGE_A).kind === 'foliage' && E.rtDecode(1.002).kind === 'foliage' && E.rtDecode(1).kind === null && E.rtDecode(1.02).kind === null && E.rtDecode(.9).kind === 'metal',
+    'код травы 1 + 4/1024 (в fp16 — точно): не блеск, не свечение; край при MSAA (1,002) — тоже трава');
+  let encOk = true; for (let i = 0; i <= 100; i++) { const ro = i / 100, a = E.rtEncode(ro, 0), t = Math.max(0, Math.min(1, (ro - .12) / (.55 - .12))), g = 1 - t * t * (3 - 2 * t); if (Math.abs(a - (g > .01 ? .75 + .12 * g : 1)) > 1e-9) encOk = false; }
+  ok(encOk, 'код блеска: E.rtEncode = формула шейдера (1 − smoothstep(0,12; 0,55; шероховатость))');
+
+  // (в) точность uniform и varying: в вершинном и фрагментном шейдере — одинаковая (материалы three с нашими кусками,
+  //     постобработка, купол неба). Свой маленький препроцессор: #include, #if/#ifdef/#elif/#else, #define
+  const resolve = (src, miss, d = 0) => d > 8 ? src : src.replace(/^[ \t]*#include +<([\w./]+)>/gm, (m, k) => { const c = T.ShaderChunk[k]; if (c == null) { miss.push(k); return ''; } return resolve(c, miss, d + 1); });
+  const cond = (ex, defs) => {
+    let e = ex.replace(/\/\/.*$/, '').replace(/defined\s*\(\s*(\w+)\s*\)|defined\s+(\w+)/g, (m, a, b) => defs.has(a || b) ? '1' : '0');
+    for (let k = 0; k < 3; k++) e = e.replace(/\b[A-Za-z_]\w*\b/g, n => defs.has(n) ? (defs.get(n) === '' ? '1' : defs.get(n)) : '0');
+    if (!/^[\d\s()+\-*/%<>=!&|.]*$/.test(e)) throw new Error('#if ' + ex);
+    return !!Function('return (' + e + ');')();
+  };
+  const pre = (src, defs0) => {
+    const defs = new Map(defs0), out = [], st = []; let on = true;
+    for (const line of src.split('\n')) {
+      const m = /^\s*#\s*(\w+)\s*(.*)$/.exec(line);
+      if (!m) { if (on) out.push(line); continue; }
+      const [, d, rest] = m;
+      if (d === 'if' || d === 'ifdef' || d === 'ifndef') { const c = d === 'ifdef' ? defs.has(rest.trim()) : d === 'ifndef' ? !defs.has(rest.trim()) : cond(rest, defs); st.push({ par: on, taken: c }); on = on && c; }
+      else if (d === 'elif') { const t = st[st.length - 1]; if (t.taken) on = false; else { const c = cond(rest, defs); t.taken = c; on = t.par && c; } }
+      else if (d === 'else') { const t = st[st.length - 1]; on = t.par && !t.taken; t.taken = true; }
+      else if (d === 'endif') on = st.pop().par;
+      else if (on && d === 'define') { const mm = /^(\w+)(\(.*)?\s*(.*)$/.exec(rest.trim()); if (mm && !mm[2]) defs.set(mm[1], (mm[3] || '').trim()); }
+      else if (on && d === 'undef') defs.delete(rest.trim());
+    }
+    return out.join('\n');
+  };
+  const PCLASS = t => /^(float|vec[234]|mat[234](x[234])?)$/.test(t) ? 'float' : /^(u?int|[iu]vec[234])$/.test(t) ? 'int' : /^b(ool|vec[234])$/.test(t) ? '' : /^[iu]?sampler/.test(t) ? t : 'struct';
+  const decls = (src, stage) => {
+    const dp = stage === 'v' ? { float: 'highp', int: 'highp', sampler2D: 'lowp', samplerCube: 'lowp' } : { int: 'mediump', sampler2D: 'lowp', samplerCube: 'lowp' };
+    const U = new Map(), V = new Map();
+    for (const line of src.split('\n')) {
+      let m = /^\s*precision\s+(lowp|mediump|highp)\s+(\w+)\s*;/.exec(line);
+      if (m) { dp[m[2]] = m[1]; continue; }
+      m = /^\s*(uniform|varying|out|in)\s+(?:(lowp|mediump|highp)\s+)?(\w+)\s+([\w\s,[\]]+);/.exec(line);
+      if (!m || (m[1] === 'out' && stage === 'f') || (m[1] === 'in' && stage === 'v')) continue;
+      const kind = m[1] === 'uniform' ? U : V, cls = PCLASS(m[3]);
+      for (const nm of m[4].split(',').map(s => s.replace(/\[.*$/, '').trim()).filter(Boolean)) kind.set(nm, { type: m[3], prec: cls === '' || cls === 'struct' ? cls : m[2] || dp[cls] || 'НЕТ' });
+    }
+    return { U, V };
+  };
+  const VPRE = 'precision highp float;\nprecision highp int;\nuniform mat4 modelMatrix;\nuniform mat4 modelViewMatrix;\nuniform mat4 projectionMatrix;\nuniform mat4 viewMatrix;\nuniform mat3 normalMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\n';
+  const FPRE = 'precision highp float;\nprecision highp int;\nuniform mat4 viewMatrix;\nuniform vec3 cameraPosition;\nuniform bool isOrthographic;\n';
+  const lint = (name, vs, fsrc, defs) => {
+    const miss = [], fpp = pre(FPRE + resolve(fsrc, miss), defs), v = decls(pre(VPRE + resolve(vs, miss), defs), 'v'), f = decls(fpp, 'f'), bad = [];
+    for (const [k, a] of f.U) { const b = v.U.get(k); if (b && (b.type !== a.type || b.prec !== a.prec)) bad.push(`${name}: uniform ${k} ${b.prec} ${b.type} / ${a.prec} ${a.type}`); if (a.prec === 'НЕТ') bad.push(`${name}: uniform ${k} без точности`); }
+    // varying: точность — одна в обеих стадиях; нет в вершинном — ошибка, только если фрагментный им пользуется (у three basic
+    // объявлен, но не используется vNormal — это можно)
+    for (const [k, a] of f.V) {
+      const b = v.V.get(k);
+      if (!b) { if ((fpp.match(new RegExp('\\b' + k + '\\b', 'g')) || []).length > 1) bad.push(`${name}: varying ${k} нет в вершинном`); }
+      else if (b.type !== a.type || b.prec !== a.prec) bad.push(`${name}: varying ${k} ${b.prec} ${b.type} / ${a.prec} ${a.type}`);
+    }
+    return { bad, miss, nU: v.U.size + f.U.size, nV: f.V.size };
+  };
+  const D0 = [['__VERSION__', '300'], ['GL_FRAGMENT_PRECISION_HIGH', '1']];
+  const SETS = [
+    [],
+    [['USE_FOG', ''], ['OPAQUE', '']],
+    [['USE_FOG', ''], ['FOG_EXP2', ''], ['USE_SHADOWMAP', ''], ['SHADOWMAP_TYPE_PCF_SOFT', ''], ['NUM_DIR_LIGHTS', '1'], ['NUM_DIR_LIGHT_SHADOWS', '1'], ['NUM_POINT_LIGHTS', '2'], ['NUM_HEMI_LIGHTS', '1'], ['OPAQUE', '']],
+    [['USE_FOG', ''], ['USE_MAP', ''], ['USE_UV', ''], ['USE_NORMALMAP', ''], ['TANGENTSPACE_NORMALMAP', ''], ['USE_ALPHATEST', ''], ['OPAQUE', ''], ['USE_SHADOWMAP', ''], ['SHADOWMAP_TYPE_PCF', ''], ['NUM_DIR_LIGHTS', '1'], ['NUM_DIR_LIGHT_SHADOWS', '1'], ['USE_ENVMAP', ''], ['ENVMAP_TYPE_CUBE_UV', ''], ['ENVMAP_MODE_REFLECTION', ''], ['USE_COLOR', ''], ['DOUBLE_SIDED', '']],
+    [['USE_FOG', ''], ['USE_INSTANCING', ''], ['USE_INSTANCING_COLOR', ''], ['USE_ROUGHNESSMAP', ''], ['USE_METALNESSMAP', ''], ['USE_UV', ''], ['USE_EMISSIVEMAP', ''], ['USE_AOMAP', ''], ['USE_UV2', ''], ['FLAT_SHADED', '']],
+  ];
+  const bad = [], miss = []; let nU = 0, nLint = 0;
+  for (const k of ['standard', 'physical', 'lambert', 'phong', 'basic', 'toon', 'matcap', 'points', 'sprite']) {
+    const L = T.ShaderLib[k]; if (!L) continue;
+    for (const s of SETS) { const r0 = lint(k, L.vertexShader, L.fragmentShader, [...D0, ...s]); bad.push(...r0.bad); miss.push(...r0.miss); nU += r0.nU; nLint++; }
+  }
+  const sky = E.skyMaterial(T);
+  for (const s of SETS.slice(0, 2)) { const r0 = lint('sky', sky.vertexShader, sky.fragmentShader, [...D0, ...s]); bad.push(...r0.bad); miss.push(...r0.miss); nLint++; }
+  const rP = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } }, getDrawingBufferSize: v => v.set(800, 450), setRenderTarget(){}, render(){} };
+  const PL = E.post({ T, r: rP, q: 'high', stats: {}, pr0: 1 });
+  for (const [k, m] of Object.entries(PL._test.M)) for (const s of [[], Object.entries(m.defines || {}).map(([a, b]) => [a, String(b)])]) { const r0 = lint('post.' + k, m.vertexShader, m.fragmentShader, [...D0, ...s]); bad.push(...r0.bad); miss.push(...r0.miss); nLint++; }
+  ok(nLint > 50 && nU > 1000 && !miss.length, 'проверка точности: все #include находятся (материалы three с нашими кусками, небо, постобработка)', { nLint, nU, miss: [...new Set(miss)].slice(0, 5) });
+  ok(!bad.length, 'точность uniform и varying одинаковая в обеих стадиях — программа связывается и на телефонах', [...new Set(bad)].slice(0, 6));
+  // наши общие данные (туман, тени, трассировка) — только во фрагментном шейдере, varying тумана — одной точности
+  const dS = decls(pre(VPRE + resolve(T.ShaderLib.standard.vertexShader, []), new Map([...D0, ['USE_FOG', '']])), 'v'), fS = decls(pre(FPRE + resolve(T.ShaderLib.standard.fragmentShader, []), new Map([...D0, ['USE_FOG', '']])), 'f');
+  ok(!['d37FogA', 'd37FogB', 'd37FogC', 'd37Sh', 'd37Rt'].some(k => dS.U.has(k)) && ['d37FogA', 'd37Rt'].every(k => fS.U.has(k)) && dS.V.get('vD37Fog')?.prec === fS.V.get('vD37Fog')?.prec, 'общие данные шейдеров — только во фрагментном, varying тумана — highp в обоих');
+
+  // (г) AO с травой: без continue и texelFetch; без D37_FOL — ровно прежний шейдер (fol() = 0)
+  const fsAO = PL._test.M.ao.fragmentShader;
+  ok(fsAO.includes('#ifdef D37_FOL') && !/\bcontinue\b/.test(fsAO) && !/texelFetch/.test(fsAO) && fsAO.includes('float fol(vec2 uv){ float a = textureLod(tColor, uv, 0.0).a;') && fsAO.includes('#else\nfloat fol(vec2 uv){ return 0.0; }\n#endif'),
+    'AO и трава: без continue и texelFetch (чтение кода — textureLod, как глубина), без D37_FOL fol() — ноль');
+  ok('D37_FOL' in PL._test.M.ao.defines && PL.fol, 'трава в AO — включена по умолчанию');
+  const v0 = PL._test.M.ao.version; PL.setFol(false);
+  ok(!('D37_FOL' in PL._test.M.ao.defines) && PL._test.M.ao.version > v0 && !PL.fol, 'P.setFol(false): AO пересобирается без травы');
+  PL.setFol(true); ok('D37_FOL' in PL._test.M.ao.defines && PL.fol, 'и обратно');
+  const fsH = PL._test.M.health.fragmentShader;
+  ok(fsH.startsWith(E.POST_PREC) && fsH.includes('(floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u') && !/isnan|isinf/.test(fsH) && !/texture2D|for \(/.test(fsH) && E.HEALTH.w * E.HEALTH.h === 192, 'самопроверка: 16×12 точек, «не числа» — по битам (isnan Direct3D выкидывает), textureLod, без циклов');
+  PL.dispose();
+
+  // (д) коды пишутся только при отрисовке сцены в буфер и только когда нужны
+  const cam = new T.PerspectiveCamera(50, 16 / 9, .2, 400); cam.position.set(0, 3, 8); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+  let cur = null; const rec = [];
+  const mkR = (o = {}) => ({ extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 }, programs: o.programs || [] },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; }, clear(){},
+    render: s => { const m = s.children[0]?.material; rec.push({ t: cur, kind: m?.fragmentShader ? (m.fragmentShader.includes('floatBitsToUint(x)') ? 'health' : 'pass') : 'scene', gl: E.GFXU.rt[1], fol: E.GFXU.rt[2], m }); },
+    ...o });
+  const R1 = { T, r: mkR(), q: 'high', stats: {}, pr0: 1, sunDir: new T.Vector3(.3, .8, .2).normalize(), sky: { lightI: 1, night: 0 }, lighting: { brightness: 1, ambient: 1, gfx: E.worldGfx() } };
+  const P1 = E.post(R1);
+  const frame = () => { rec.length = 0; P1.render(new T.Scene(), cam); return rec.slice(); };
+  P1.setOpts({ ao: 'on', aa: 'fxaa' }); P1.setSize(800, 450, 1);
+  let F = frame();
+  ok(F[0].kind === 'scene' && F[0].gl === 0 && F[0].fol === 1 && F.slice(1).every(x => !x.gl && !x.fol) && P1.codesOn(), 'AO без трассировки: трава пишет код, блеск — нет (как до правки травы); после сцены оба — 0');
+  P1.setOpts({ ao: 'on', aa: 'fxaa', rt: 'on' }); F = frame();
+  ok(F[0].gl === 1 && F[0].fol === 1, 'с трассировкой: и блеск, и трава');
+  P1.setOpts({ ao: 'off', aa: 'fxaa', rt: 'off' }); F = frame();
+  ok(F[0].gl === 0 && F[0].fol === 0 && !P1.codesOn(), 'без AO и трассировки кодов нет вовсе');
+  P1.setOpts({ ao: 'on', aa: 'fxaa' }); P1.setFol(false); F = frame();
+  ok(F[0].fol === 0 && !P1.codesOn(), 'трава в AO выключена — и код травы не пишется');
+  P1.setFol(true); P1.dispose();
+
+  // (е) самопроверка кадра: сцена без кодов → с кодами → AO → сборка в свой буфер → кадр на экран как обычно
+  const reads = [];
+  const R2 = { ...R1, r: mkR({ readRenderTargetPixels: (t, x, y, w, h, b) => { reads.push(w + '×' + h); b.fill(255); } }) };
+  const P2 = E.post(R2);
+  P2.setOpts({ ao: 'on', aa: 'fxaa' }); P2.setSize(800, 450, 1);
+  rec.length = 0; reads.length = 0;
+  const rep = P2.selfTest(new T.Scene(), cam);
+  const seq = rec.map(x => x.kind === 'scene' ? `сцена${x.fol ? '+код' : ''}` : x.kind === 'health' ? 'проверка' : x.m === P2._test.M.ao ? 'ao' : x.m === P2._test.M.comp ? (x.t ? 'сборка' : 'сборка→экран') : x.m === P2._test.M.fxaa ? (x.t ? 'fxaa' : 'fxaa→экран') : '·').filter(x => x !== '·').join(' ');
+  ok(seq === 'сцена проверка сцена+код проверка ao проверка сборка проверка ao сборка fxaa→экран' && reads.length === 4 && reads.every(x => x === '16×12') && rep.A && rep.B && rep.AO && rep.F && !rep.err,
+    'самопроверка: сцена без кодов и с кодами, AO, сборка — по 16×12 точек; потом кадр как обычно', seq);
+  P2.dispose();
+
+  // (ж) страж графики: не собралось → выключить только это, запомнить, сообщить (без личных данных)
+  for (const k in store) delete store[k];
+  store.d37_gfx = 'high';   // E.gfxQuality без document.body (в node)
+  const warn0 = console.warn; console.warn = () => {};   // «🛡 Страж графики: выключено …» — здесь ожидаемо
+  const va = [], ym = [], evs = [];
+  globalThis.va = (...a) => va.push(a); globalThis.ym = (...a) => ym.push(a);
+  globalThis.dispatchEvent = e => evs.push(e);
+  const gl = { getExtension: n => n === 'WEBGL_debug_renderer_info' ? { UNMASKED_RENDERER_WEBGL: 37446 } : null, getParameter: p => p === 37446 ? 'ANGLE (ARM, Mali-G57 MC2, OpenGL ES 3.2)' : 'WebKit WebGL', getError: () => 0, RENDERER: 7937, CONTEXT_LOST_WEBGL: 37442 };
+  const props = new Map(), progs = [];
+  const mkG = () => {
+    const r = mkR({ programs: progs, getContext: () => gl, debug: { checkShaderErrors: false }, properties: { get: m => { if (!props.has(m)) props.set(m, {}); return props.get(m); } }, readRenderTargetPixels: (t, x, y, w, h, b) => b.fill(255) });
+    const R = { ...R1, r, scene: new T.Scene(), applyGfx(){}, optBase: {} };
+    R.post = E.post(R); R.post.setOpts({ ao: 'on', aa: 'fxaa' }); R.post.setSize(800, 450, 1);
+    R.guard = E.gfxGuard(R); return R;
+  };
+  const failProg = name => ({ name, diagnostics: { runnable: false, programLog: '', vertexShader: { log: '' }, fragmentShader: { log: "ERROR: 0:1: 'x' : syntax error" } } });
+  const ticks = (G, n) => { for (let i = 0; i < n; i++) G.tick(); };
+  let Rg = mkG();
+  ok(Rg.r.debug.checkShaderErrors === true && Rg.guard.gpu.fam === 'mali' && Rg.guard.gpu.model === 'Mali-G57', 'страж: проверка шейдеров включена, видеокарта — семейство и модель', Rg.guard.gpu);
+  const pAO = failProg('ShaderMaterial'); progs.push(pAO); props.set(Rg.post._test.M.ao, { currentProgram: pAO });
+  ticks(Rg.guard, 2);
+  ok(!Rg.post.fol && Rg.post.ao.on && E.gfxGuardState().off.fol === 1, 'AO с травой не собрался → сначала без травы (AO остаётся)');
+  const ev = va.find(a => a[0] === 'event' && a[1].name === 'gfx_fallback');
+  ok(ev && JSON.stringify(Object.keys(ev[1].data).sort()) === JSON.stringify(['gpu', 'prog', 'q', 'v', 'what', 'why']) && ev[1].data.what === 'fol' && ev[1].data.why === 'link' && ev[1].data.prog === 'ao' && ev[1].data.gpu === 'Mali-G57'
+    && ym.some(a => a[0] === 113596397 && a[1] === 'reachGoal' && a[2] === 'gfx_fallback'), 'сообщение: только что, почему, программа, видеокарта, качество, версия (Vercel Analytics + цель Метрики)', ev && ev[1]);
+  const pAO2 = failProg('ShaderMaterial'); progs.push(pAO2); props.set(Rg.post._test.M.ao, { currentProgram: pAO2 });
+  ticks(Rg.guard, 8);
+  ok(!Rg.post.canAO && !Rg.post.ao.on && Rg.post.ao.mode === 'off' && E.gfxGuardState().off.ao === 1, 'и без травы не собрался → AO выключен совсем');
+  const pC = failProg('ShaderMaterial'); progs.push(pC); props.set(Rg.post._test.M.easu, { currentProgram: pC });
+  ticks(Rg.guard, 30);
+  Rg.post.setUpscaler('fsr', .5);
+  ok(Rg.post.noFSR && Rg.post.upscaler === 'nis', 'FSR не собрался → апскейлер NIS (и его нет — просто растянуть)');
+  // программа сцены → без своих кусков шейдеров (мир пересобирается), не помогло → «низкая»
+  const mat = new T.MeshStandardMaterial(), pS = failProg('MeshStandardMaterial'); mat.name = 'земля';
+  Rg.scene.add(new T.Mesh(new T.PlaneGeometry(), mat)); props.set(mat, { currentProgram: pS }); progs.push(pS);
+  evs.length = 0; ticks(Rg.guard, 300 - Rg.guard.n);
+  ok(E.gfxGuardState().off.patch === 1 && !T.ShaderChunk.__d37 && !T.ShaderChunk.output_fragment.includes('d37Rt') && evs.some(e => e.type === 'd37:gfxfallback' && e.detail.rebuild && e.detail.k === 'patch') && Rg.guard.wait,
+    'шейдер сцены не собрался → свои куски шейдеров сняты, мир пересобирается');
+  ok(va.some(a => a[1].data?.what === 'patch' && a[1].data.prog === 'земля'), 'в сообщении — имя материала');
+  ok(E.gfxPatch(T) === false && !T.ShaderChunk.__d37 && E.gfxQuality() !== 'low', 'новый рендерер: свои куски не ставятся (страж запомнил)');
+  const pS2 = failProg('MeshStandardMaterial'); progs.length = 0; progs.push(pS2);   // у нового рендерера — свои программы
+  Rg = mkG(); Rg.scene.add(new T.Mesh(new T.PlaneGeometry(), mat)); props.set(mat, { currentProgram: pS2 });
+  ok(!Rg.post.canAO && !Rg.post.fol, 'запомненное — сразу (новый рендерер: без травы и AO)');
+  ticks(Rg.guard, 2);
+  ok(E.gfxGuardState().off.tier === 1 && E.gfxQuality() === 'low', 'и без своих кусков не собрался → «низкая» графика');
+  // версия сайта сменилась — страж проверяет заново
+  globalThis.GAMES_VER = '99';
+  ok(!E.gfxSafe('patch') && !E.gfxSafe('tier') && E.gfxGuardState().v === '99', 'новая версия сайта — решения забыты');
+  delete globalThis.GAMES_VER;
+  ok(E.gfxSafe('tier'), 'та же версия — помнит');
+  E.gfxGuardReset(); store.d37_gfx = 'high';
+  ok(!E.gfxSafe('patch') && E.gfxPatch(T) === true && T.ShaderChunk.output_fragment.includes('d37Rt') && E.gfxQuality() !== 'low', '«↺ Вернуть всё»: всё снова (свои куски шейдеров — тоже)');
+
+  // (з) самопроверка: решения по числам (подменённый P.selfTest)
+  const B = f => { const b = new Uint8Array(192 * 4); for (let i = 0; i < 192; i++) b.set(f(i), i * 4); return b; };
+  const GOOD = { A: B(i => i < 40 ? [150, 190, 230, 128] : [60, 140, 60, 255]), AO: B(i => i < 40 ? [255, 0, 255, 128] : [225, 0, 255, 255]), F: B(i => i < 40 ? [170, 200, 240, 255] : [95, 160, 95, 255]) };
+  const judgeCase = (rep, opt = {}) => {
+    for (const k in store) delete store[k];
+    progs.length = 0;
+    const R = mkG(); if (opt.night) R.sky = { lightI: 0, night: 1 }; if (opt.rt) R.post.setOpts({ ao: 'on', aa: 'fxaa', rt: 'on' });
+    const reps = Array.isArray(rep) ? rep : [rep]; let n = 0;
+    R.post.selfTest = () => ({ codes: R.post.codesOn(), ...reps[Math.min(n++, reps.length - 1)] });
+    for (let i = 0; i < reps.length; i++) R.guard.test(R.scene, cam);
+    return { off: E.gfxGuardInfo().off.sort().join(','), P: R.post };
+  };
+  ok(judgeCase({ ...GOOD, B: GOOD.A }).off === '', 'обычный кадр — ничего не выключается');
+  ok(judgeCase([{ ...GOOD, B: GOOD.A }, { ...GOOD, B: GOOD.A }, { ...GOOD, B: GOOD.A }], { night: true }).off === '', 'и ночью тоже');
+  const diffB = B(i => i % 16 === 3 ? [10, 10, 10, 255] : i < 40 ? [150, 190, 230, 128] : [60, 140, 60, 255]);
+  const cc = judgeCase({ ...GOOD, B: diffB });
+  ok(cc.off === 'codes' && cc.P.off.codes && !cc.P.fol && cc.P.noRT && !cc.P.codesOn(), 'коды в альфе изменили ЦВЕТ (так сломалась «чёрная земля») → без кодов: трава без AO, без трассировки');
+  ok(judgeCase({ ...GOOD, AO: B(i => i < 40 ? [255, 0, 255, 128] : [0, 0, 255, 255]) }).off === 'fol', 'AO почти весь чёрный → сначала без травы в AO');
+  ok(judgeCase([{ ...GOOD, AO: B(() => [0, 0, 0, 0]) }, { ...GOOD, AO: B(() => [0, 0, 0, 0]) }]).off === 'ao,fol', 'AO — «не числа» и без травы → без AO');
+  ok(judgeCase({ ...GOOD, SSR: B(i => i < 30 ? [0, 0, 0, 0] : [10, 10, 10, 255]) }, { rt: true }).off === 'rt', 'отражения — «не числа» → без трассировки');
+  ok(judgeCase([{ ...GOOD, F: B(() => [2, 2, 2, 255]) }, { ...GOOD, F: B(() => [2, 2, 2, 255]) }, { ...GOOD, F: B(() => [2, 2, 2, 255]) }]).off === 'ao,fol,post', 'сборка гасит яркое → без травы → без AO → без постобработки');
+  const black = { ...GOOD, A: B(() => [0, 0, 0, 255]), F: B(() => [0, 0, 0, 255]) };
+  ok(judgeCase([black]).off === '' && judgeCase([black, black]).off === 'codes', 'днём весь кадр чёрный — 2 проверки подряд → без кодов (дальше — без своих кусков, «низкая»)');
+  ok(judgeCase([black, black, black], { night: true }).off === '', 'ночью чёрный кадр — это ночь');
+  ok(judgeCase([{ ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) }, { ...GOOD, A: B(i => i < 10 ? [0, 0, 0, 0] : [60, 140, 60, 255]) }]).off === 'codes', 'в сцене «не числа» 2 раза подряд → по ступенькам');
+  // не собралась программа сцены, а коды в альфе включены — коды тут ни при чём (это не текст шейдера): сразу без своих кусков
+  for (const k in store) delete store[k];
+  progs.length = 0; const Rl = mkG(), ml = new T.MeshStandardMaterial(), pl = failProg('MeshStandardMaterial');
+  Rl.scene.add(new T.Mesh(new T.PlaneGeometry(), ml)); props.set(ml, { currentProgram: pl }); progs.push(pl);
+  ok(Rl.post.codesOn(), 'коды включены (AO и трава)');
+  ticks(Rl.guard, 2);
+  ok(E.gfxGuardInfo().off.join() === 'patch' && Rl.post.codesOn(), 'не собралось в сцене — без своих кусков шейдеров, коды не трогаем', E.gfxGuardInfo().off);
+  E.gfxPatch(T) || (E.gfxGuardReset(), E.gfxPatch(T));   // куски — обратно (дальше проверки с ними)
+  // ⚙️ «🩺 Проверить»: проверка на следующем кадре, итог — в отчёт
+  for (const k in store) delete store[k];
+  progs.length = 0; const Rc = mkG(); let got = null;
+  Rc.post.selfTest = () => ({ codes: true, ...GOOD, B: GOOD.A });
+  Rc.guard.check(x => { got = x; }); Rc.guard.tick();
+  if (Rc.guard.due()) Rc.guard.test(Rc.scene, cam);
+  ok(got && got.tests === 1 && got.sum?.codes?.bad === 0 && got.sum.ao?.mean > .8 && got.gpu.model === 'Mali-G57', '«🩺 Проверить»: проверка на следующем кадре, отчёт для окна', got && got.sum);
+  // видеокарты: семейство и модель из строки рендерера
+  const gi = s => E.gpuInfo({ getExtension: () => ({ UNMASKED_RENDERER_WEBGL: 1 }), getParameter: () => s });
+  const GPUS = [['ANGLE (Qualcomm, Adreno (TM) 619, OpenGL ES 3.2)', 'adreno', 'Adreno 619'], ['Mali-G52 MC2', 'mali', 'Mali-G52'], ['PowerVR Rogue GE8320', 'powervr', 'PowerVR Rogue GE8320'],
+    ['Apple GPU', 'apple', 'Apple GPU'], ['ANGLE (NVIDIA, NVIDIA GeForce RTX 5060 Ti (0x00002D04) Direct3D11 vs_5_0 ps_5_0, D3D11)', 'nvidia', 'GeForce RTX 5060 Ti'],
+    ['ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)', 'intel', 'Intel UHD Graphics 620'], ['ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)', 'soft', 'soft'],
+    ['Samsung Xclipse 920', 'xclipse', 'Xclipse 920']];
+  const gw = GPUS.filter(([s, f, m]) => { const g = gi(s); return g.fam !== f || g.model !== m; }).map(([s]) => [s, gi(s)]);
+  ok(!gw.length, 'видеокарта: семейство и модель (без версии драйвера)', gw);
+  delete globalThis.va; delete globalThis.ym; delete globalThis.dispatchEvent;
+  console.warn = warn0;
+  for (const k in store) delete store[k];
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);

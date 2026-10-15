@@ -22,8 +22,9 @@
   const E = window.D37E = window.D37E || {};
   const VS = 'varying vec2 vUv;\nvoid main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
   // яркое: 4 выборки (каждая — среднее 2×2) только по пикселям с меткой свечения
+  // (метка свечения — альфа ≥ 1,01: трава 1,004 не светится; NaN в буфере сцены не расползается по свечению на весь кадр)
   const FS_PRE = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
-vec3 tap(vec2 o){ vec4 c = texture2D(tSrc, vUv + o * uTexel); return c.rgb * clamp(c.a - 1.0, 0.0, 1.0); }
+vec3 tap(vec2 o){ vec4 c = texture2D(tSrc, vUv + o * uTexel); return c.a >= 1.01 ? clamp(c.rgb, 0.0, 65000.0) * clamp(c.a - 1.0, 0.0, 1.0) : vec3(0.0); }
 void main(){ gl_FragColor = vec4((tap(vec2(-1.0, -1.0)) + tap(vec2(1.0, -1.0)) + tap(vec2(-1.0, 1.0)) + tap(vec2(1.0, 1.0))) * 0.25, 1.0); }`;
   // вниз: центр ×4 + 4 угла (двойной фильтр Кавасе)
   const FS_DOWN = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
@@ -41,19 +42,30 @@ void main(){ vec2 d = uTexel; vec3 c = texture2D(tSrc, vUv).rgb * 4.0;
   // глубине 1. Тут же — контактные тени «Трассировки лучей»: луч к солнцу по глубине экрана (uCS: направление на солнце в
   // координатах камеры, длина луча; 0 — выкл), 10 шагов без шума — края мягчит то же размытие по плоскости, что и AO.
   // Результат: R — свет AO (1 — без затенения), G — глубина (ед., для размытия и подъёма), B — свет контактной тени
+  // Трава и листва (код в альфе буфера сцены 1 + 4/1024, gfx.js E.FOLIAGE_A; D37_FOL) — не заслонка и сами без AO: тонкие
+  // травинки давали тёмное пятно вокруг каждого кустика. Только «телефонно-безопасное»: чтение кода — textureLod (как глубина,
+  // уже проверено на телефонах), без continue и texelFetch, вклад травы — умножением на маску (после «чёрной земли» 15.10).
+  // Без D37_FOL (страж графики выключил: P.setFol(false)) fol() — ноль, и шейдер — ровно прежний, проверенный на телефонах
   const FS_AO = `#include <packing>
 uniform sampler2D tDepth; uniform vec2 uFull; uniform vec4 uProj; uniform vec4 uAO; uniform vec4 uCS; uniform float uPx; varying vec2 vUv;
 float vz(vec2 uv){ return perspectiveDepthToViewZ(textureLod(tDepth, uv, 0.0).x, uProj.z, uProj.w); }   // textureLod: в циклах с выходом — без производных
 vec3 vpos(vec2 uv){ float z = vz(uv); return vec3((uv * 2.0 - 1.0) * uProj.xy * -z, z); }
+#ifdef D37_FOL
+uniform sampler2D tColor;
+float fol(vec2 uv){ float a = textureLod(tColor, uv, 0.0).a; return (a > 1.0005 && a < 1.01) ? 1.0 : 0.0; }   // 1 — трава/листва
+#else
+float fol(vec2 uv){ return 0.0; }
+#endif
 void main(){
   float d = texture2D(tDepth, vUv).x;
   if (d >= 0.99999) { gl_FragColor = vec4(1.0, 1e4, 1.0, 1.0); return; }
   float z = perspectiveDepthToViewZ(d, uProj.z, uProj.w);
+  if (fol(vUv) > 0.5) { gl_FragColor = vec4(1.0, -z, 1.0, 1.0); return; }
   vec3 p = vec3((vUv * 2.0 - 1.0) * uProj.xy * -z, z);
   vec3 pr = vpos(vUv + vec2(uFull.x, 0.0)), pl = vpos(vUv - vec2(uFull.x, 0.0)), pu = vpos(vUv + vec2(0.0, uFull.y)), pd = vpos(vUv - vec2(0.0, uFull.y));
   vec3 dx = abs(pr.z - p.z) < abs(p.z - pl.z) ? pr - p : p - pl;
   vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
-  vec3 n = normalize(cross(dx, dy));
+  vec3 cr = cross(dx, dy), n = dot(cr, cr) > 1e-24 ? normalize(cr) : vec3(0.0, 0.0, 1.0);   // нормаль нуля (normalize → NaN) — к камере
   float ao = 1.0, rPx = uAO.x * uPx / -z;
   if (uAO.z > 0.0 && rPx >= 1.5) {
     rPx = min(rPx, uAO.w > 10.0 ? 64.0 : 48.0);
@@ -63,9 +75,10 @@ void main(){
     for (int i = 0; i < 16; i++) {
       if (float(i) >= ns) break;
       float t = (float(i) + 0.5) / ns, a = ang + t * 43.98;
-      vec3 v = vpos(vUv + vec2(cos(a), sin(a)) * t * rPx * uFull) - p;
+      vec2 su = vUv + vec2(cos(a), sin(a)) * t * rPx * uFull;
+      vec3 v = vpos(su) - p;
       float vv = dot(v, v), f = max(r2 - vv, 0.0);
-      occ += f * f * f * max((dot(v, n) - bias) / (vv + 0.01), 0.0);
+      occ += (1.0 - fol(su)) * f * f * f * max((dot(v, n) - bias) / (vv + 0.01), 0.0);   // травинка — не заслонка
     }
     ao = clamp(1.0 - occ * uAO.z * 5.0 / (r2 * r2 * r2 * ns), 0.0, 1.0);
   }
@@ -81,7 +94,7 @@ void main(){
       vec2 uv = q.xy / (-q.z * uProj.xy) * 0.5 + 0.5;
       if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
       float dz = vz(uv) - q.z;
-      if (dz > 0.002 * -q.z + 0.004 && dz < 0.5 + len * 0.35) { sh = 1.0 - t * t; break; }
+      if (fol(uv) < 0.5 && dz > 0.002 * -q.z + 0.004 && dz < 0.5 + len * 0.35) { sh = 1.0 - t * t; break; }   // трава — не заслонка (её тень — в карте теней)
     }
     cs = 1.0 - sh;
   }
@@ -109,7 +122,7 @@ void main(){
   vec3 pr = vpos(vUv + vec2(uFull.x, 0.0)), pl = vpos(vUv - vec2(uFull.x, 0.0)), pu = vpos(vUv + vec2(0.0, uFull.y)), pd = vpos(vUv - vec2(0.0, uFull.y));
   vec3 dx = abs(pr.z - p.z) < abs(p.z - pl.z) ? pr - p : p - pl;
   vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
-  vec3 n = normalize(cross(dx, dy)), v = normalize(p);
+  vec3 cr = cross(dx, dy), n = dot(cr, cr) > 1e-24 ? normalize(cr) : vec3(0.0, 0.0, 1.0), v = normalize(p);
   if (dot(n, v) > 0.0) n = -n;
   if (clear) {   // вода: рябь по миру (два слоя волн), только у горизонтальной поверхности
     vec3 up = (uView * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
@@ -192,9 +205,10 @@ vec2 aoUp(){   // x — AO, y — контактная тень
   float iw = 1.0 / dot(w, vec4(1.0));
   return vec2(dot(w, vec4(s0.x, s1.x, s2.x, s3.x)), dot(w, vec4(s0.z, s1.z, s2.z, s3.z))) * iw;
 }
-void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0)); float gm = clamp(s.a - 1.0, 0.0, 1.0);
+void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0)); float gm = s.a >= 1.01 ? clamp(s.a - 1.0, 0.0, 1.0) : 0.0;
   if (uSSRk > 0.0) { vec4 rf = texture2D(tSSR, vUv); c = mix(c, rf.rgb, rf.a); }   // отражения (трассировка лучей)
-  if (uAOk > 0.0) { vec2 a = aoUp(); float cs = mix(1.0, a.y, uCSk * (1.0 - gm)); c *= mix(1.0, a.x, uAOk * (1.0 - gm)) * cs; if (uAOk > 1.5) c = vec3(a.x * cs); }
+  if (uAOk > 0.0) { vec2 a = aoUp(); if (!(a.x >= 0.0 && a.x <= 1.0)) a.x = 1.0; if (!(a.y >= 0.0 && a.y <= 1.0)) a.y = 1.0;   // NaN из AO — не «чёрное», а без затенения
+    float cs = mix(1.0, a.y, uCSk * (1.0 - gm)); c *= mix(1.0, a.x, uAOk * (1.0 - gm)) * cs; if (uAOk > 1.5) c = vec3(a.x * cs); }
   if (uBloom > 0.0) { vec3 b = texture2D(tBloom, vUv).rgb * uBloom * (1.0 - 0.75 * gm); c += b * clamp(1.0 - c, 0.0, 1.0); }
   c *= uGain;
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -489,6 +503,26 @@ void main(){
   const FS_COPY = `uniform sampler2D tSrc; varying vec2 vUv;
 void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
   E.FG = { fs: FS_FG, MAXMOV: 8 };
+  // Самопроверка кадра (страж графики, E.gfxGuard): буфер 16×12 RGBA8 — каждая точка читает одну точку источника. uMode:
+  // 0 — цвет сцены (HDR → x/(1+x)), 1 — AO (r — свет AO, b — контактная тень; небо — g ≥ 9000), 2 — отражения (rgb → x/(1+x),
+  // a — вес), 3 — готовый кадр (0…1). a: 1 — точка в порядке, 0,5 — небо, 0 — не число / бесконечность / вне диапазона.
+  // «Не число» — по битам (экспонента вся из единиц): isnan() компилятор Direct3D выкидывает («value cannot be NaN», X3577),
+  // целые операции — нет
+  const FS_HEALTH = `uniform sampler2D tSrc; uniform sampler2D tDepth; uniform float uMode; uniform float uDep; varying vec2 vUv;
+float bad(float x){ return ((floatBitsToUint(x) & 0x7f800000u) == 0x7f800000u || x < -0.01 || x > 65000.0) ? 1.0 : 0.0; }
+void main(){
+  vec4 c = textureLod(tSrc, vUv, 0.0);
+  float b = max(max(bad(c.r), bad(c.g)), max(bad(c.b), bad(c.a)));
+  float sky = 0.0;
+  if (uMode > 0.5 && uMode < 1.5) sky = c.g > 9000.0 ? 1.0 : 0.0;
+  else if (uDep > 0.5) sky = textureLod(tDepth, vUv, 0.0).x >= 0.99999 ? 1.0 : 0.0;
+  vec3 v = max(c.rgb, vec3(0.0));
+  if (uMode > 0.5 && uMode < 1.5) v = vec3(clamp(c.r, 0.0, 1.0), 0.0, clamp(c.b, 0.0, 1.0));
+  else if (uMode > 2.5) v = clamp(v, 0.0, 1.0);
+  else v = v / (1.0 + v);
+  gl_FragColor = b > 0.5 ? vec4(0.0) : vec4(v, sky > 0.5 ? 0.5 : 1.0);
+}`;
+  E.HEALTH = { fs: FS_HEALTH, w: 16, h: 12 };
   // Точность чтения текстур (15.10.2026, телефон владельца: «пятна» на площади и фонтане). В GLSL ES 3.00 у sampler2D во
   // фрагментном шейдере точность по умолчанию — lowp, и значение из текстуры приходит С ТОЧНОСТЬЮ СЭМПЛЕРА: на телефонах
   // (Adreno, Mali, Apple) это половинный float (fp16, 11 бит). Глубина 0,98 в fp16 — шаг 0,0005: на 8 м ошибка 0,1–0,3 м →
@@ -516,7 +550,9 @@ void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
       // «Трассировка лучей» (WebGL2 + HDR): off / on (отражения: шаг 3 px, до 40 шагов; контактные тени) / high (шаг 1,5 px,
       // до 96 шагов, луч длиннее)
       rt: { mode: 'off', on: false, steps: 40, len: 40 * (E.UNIT || 1), contact: .55 },
-      bloom: { on: o.bloom !== false && half, strength: q === 'high' ? 1 : .9, levels: q === 'high' ? 5 : 4 } };
+      bloom: { on: o.bloom !== false && half, strength: q === 'high' ? 1 : .9, levels: q === 'high' ? 5 : 4 },
+      // трава и листва не заслоняют AO (код в альфе — gfx.js E.FOLIAGE_A); страж графики (ниже) может выключить и это, и любой проход
+      fol: true, noRT: false, noNIS: false, noFSR: false, noFXAA: false, off: {} };
     const sceneOpt = { type, depthBuffer: true, stencilBuffer: false };
     // буфер сцены: с MSAA или без, с текстурой глубины (для SSAO) или без — пересоздаётся, когда это меняется
     const sceneRT = (w, h, ms, dep) => {
@@ -557,7 +593,9 @@ void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
       M.nisS = mk(FS_NIS_SHARP, nu());
     }
     if (P.canAO) {
-      M.ao = mk(FS_AO, { tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uAO: { value: new T.Vector4() }, uCS: { value: new T.Vector4() }, uPx: { value: 1 } });
+      M.ao = mk(FS_AO, { tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uAO: { value: new T.Vector4() }, uCS: { value: new T.Vector4() }, uPx: { value: 1 },
+        tColor: { value: null } });
+      M.ao.defines = { D37_FOL: '' };   // трава и листва — без AO (P.setFol)
       M.aob = mk(FS_AOB, tx());
       M.ssr = mk(FS_SSR, { tColor: { value: null }, tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uSSR: { value: new T.Vector4() },
         uStride: { value: 3 }, uView: { value: new T.Matrix4() }, uViewInv: { value: new T.Matrix4() } });
@@ -570,6 +608,7 @@ void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
       M.fg = mk(FS_FG, { tColor: { value: null }, tDepth: { value: null }, uInvVP: { value: new T.Matrix4() }, uVP: { value: new T.Matrix4() }, uSize: { value: new T.Vector2(1, 1) },
         uMovA: mu(), uMovB: mu(), uMovN: { value: 0 } });
       M.copy = mk(FS_COPY, { tSrc: { value: null } });
+      M.health = mk(FS_HEALTH, { tSrc: { value: null }, tDepth: { value: null }, uMode: { value: 0 }, uDep: { value: 0 } });   // страж графики
     }
     // fg.on — включена (render.js); movers — подвижные настоящего кадра: ключ → [x, y, z, r, h]
     P.fg = { ok: !!gl2, on: false, have: false, vp: new T.Matrix4(), ivp: new T.Matrix4(), gen: 0, real: 0 };
@@ -625,7 +664,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     P.setOpts = (op = {}) => {
       if ('upscaler' in op || 'sharp' in op) P.setUpscaler(op.upscaler ?? P.upscaler, op.sharp ?? P.sharp);
       const ao = P.canAO && ['on', 'high'].includes(op.ao) ? op.ao : 'off', aa = ['off', 'fxaa', 'msaa'].includes(op.aa) ? op.aa : P.aa;
-      const rt = !('rt' in op) ? P.rt.mode : P.canAO && ['on', 'high'].includes(op.rt) ? op.rt : 'off';
+      const rt = !('rt' in op) ? P.rt.mode : P.canAO && !P.noRT && ['on', 'high'].includes(op.rt) ? op.rt : 'off';
       if (ao === P.ao.mode && aa === P.aa && rt === P.rt.mode) return;
       P.ao.mode = ao; P.aa = aa; P.rt.mode = rt;
       P.rt.steps = rt === 'high' ? 96 : 40; P.rt.len = (rt === 'high' ? 60 : 40) * (E.UNIT || 1);
@@ -636,6 +675,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     // NVScalerUpdateConfig. Без WebGL2 FSR и NIS нет — просто растяжение
     P.setUpscaler = (up, sharp) => {
       P.upscaler = gl2 && ['fsr', 'nis', 'off'].includes(up) ? up : gl2 ? 'fsr' : 'off';
+      if (P.upscaler === 'nis' && P.noNIS) P.upscaler = P.noFSR ? 'off' : 'fsr';   // страж выключил (не собрался на этой видеокарте)
+      if (P.upscaler === 'fsr' && P.noFSR) P.upscaler = P.noNIS ? 'off' : 'nis';
       P.sharp = Math.max(0, Math.min(1, Number.isFinite(+sharp) ? +sharp : .5));
       if (!gl2) return;
       M.rcas.uniforms.uSharp.value = Math.pow(2, -Math.max(0, Math.min(2, 1.6 * (1 - P.sharp) - .6)));
@@ -660,7 +701,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
       else rtScene.setSize(w, h);   // текстуру глубины three пересоздаст сам (размер буфера сменился)
       P.msaa = ms;
-      P.fxaa = !ms && P.aa !== 'off';   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено
+      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено
       rtLdr.setSize(w, h);
       let bw = Math.max(1, w >> (q === 'high' ? 1 : 2)), bh = Math.max(1, h >> (q === 'high' ? 1 : 2));
       for (let i = 0; i < P.bloom.levels; i++) {
@@ -698,6 +739,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     function aoPasses(camera){
       const u = M.ao.uniforms, pm = camera.projectionMatrix.elements, A = P.ao;
       u.tDepth.value = rtScene.depthTexture; u.uFull.value.set(1 / P.w, 1 / P.h);
+      u.tColor.value = rtScene.texture;   // код травы и листвы — в альфе (D37_FOL)
       u.uProj.value.set(1 / pm[0], 1 / pm[5], camera.near, camera.far);
       u.uAO.value.set(A.radius, A.bias, A.mode !== 'off' ? A.strength : 0, A.mode === 'high' ? 14 : 8);
       u.uPx.value = P.h * pm[5] / 2;
@@ -721,26 +763,47 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       u.uView.value.copy(camera.matrixWorldInverse); u.uViewInv.value.copy(camera.matrixWorld);
       pass(M.ssr, rtSSR);
     }
-    P.render = (scene, camera) => {
-      const st = R.stats, ac = r.autoClear;
-      P.passes = 0;
+    // ── Кадр по частям: сцена в буфер (коды в альфе — только сюда) → проходы и вывод (finish) ──
+    // Коды в альфе: блеск — только с «Трассировкой лучей» (как было до 16.10), трава и листва — пока считается AO (он же —
+    // контактные тени трассировки) и страж графики их не выключил. Включены — только на время отрисовки буфера сцены
+    P.codesOn = () => !P.off.codes && !!E.GFXU?.rt && (P.rt.on || (P.fol && P.ao.on));
+    function sceneTo(scene, camera, codes){
+      r.setRenderTarget(rtScene); r.autoClear = true;
+      const GU = E.GFXU;
+      if (codes && GU?.rt && !P.off.codes) { if (P.rt.on) GU.rt[1] = 1; if (P.fol && P.ao.on) GU.rt[2] = 1; }
+      r.render(scene, camera);
+      if (GU?.rt) { GU.rt[1] = 0; GU.rt[2] = 0; }
+    }
+    function hideOver(scene){
       over.length = 0;
       if (P.ao.on) { const ch = scene.children; for (let i = 0; i < ch.length; i++) { const c = ch[i]; if (c.renderOrder >= 990 && c.visible) { over.push(c); c.visible = false; } } }
-      r.setRenderTarget(rtScene); r.autoClear = true;
-      const GU = E.GFXU; if (GU?.rt && P.rt.on) GU.rt[1] = 1;   // блестящее пишет код в альфу (только в этот буфер)
-      r.render(scene, camera);
-      if (GU?.rt) GU.rt[1] = 0;
-      st.scene = r.info.render.calls;
-      r.autoClear = false;   // проходы закрашивают весь кадр — чистить нечего
-      const ssrOn = P.rt.on && (R.lighting?.gfx?.rt?.refl ?? 1) > .001;
-      if (ssrOn) ssrPass(camera);
-      if (P.ao.on) aoPasses(camera);
-      const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
+    }
+    const ssrWanted = () => P.rt.on && (R.lighting?.gfx?.rt?.refl ?? 1) > .001;
+    function compSet(camera, ssrOn, k){
       const U = M.comp.uniforms; U.tScene.value = rtScene.texture; U.tBloom.value = B[0]?.texture || null; U.uBloom.value = k; U.uLuma.value = P.fxaa ? 1 : 0;
       U.uAOk.value = P.ao.on ? (P.ao.debug ? 2 : 1) : 0; U.tAO.value = P.ao.on ? rtAO.texture : null; U.tDepth.value = P.ao.on ? rtScene.depthTexture : null;
       if (P.ao.on) { U.uAOSize.value.set(P.ao.aw, P.ao.ah); U.uNF.value.set(camera.near, camera.far); }
       U.uSSRk.value = ssrOn ? 1 : 0; U.tSSR.value = ssrOn ? rtSSR.texture : null;
       U.uCSk.value = P.rt.on ? P.rt.contact * sunK() : 0;
+      return U;
+    }
+    P.render = (scene, camera) => {
+      const st = R.stats, ac = r.autoClear;
+      P.passes = 0;
+      hideOver(scene);
+      sceneTo(scene, camera, true);
+      st.scene = r.info.render.calls;
+      finish(camera);
+      r.autoClear = ac;
+      st.post = r.info.render.calls - st.scene;
+    };
+    function finish(camera){
+      r.autoClear = false;   // проходы закрашивают весь кадр — чистить нечего
+      const ssrOn = ssrWanted();
+      if (ssrOn) ssrPass(camera);
+      if (P.ao.on) aoPasses(camera);
+      const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
+      const U = compSet(camera, ssrOn, k);
       const out = P.fg.on && rtOut ? rtOut : null;   // генерация кадров: сначала в свой буфер, потом копией на экран
       const nisK = (m, src, w, h, ow, oh) => { const u = m.uniforms; u.tSrc.value = src; u.uIn.value.set(w, h); u.uOut.value.set(ow, oh); };
       if (P.scaled && P.upscaler === 'nis' && M.nis) {   // NIS: сборка в уменьшенный буфер → NVScaler (увеличение + резкость) на экран
@@ -767,8 +830,68 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       }
       P.lastOver = over.length;   // стрелки редактора (их в промежуточном кадре нет — тогда render.js генерацию не включает)
       if (over.length) { for (let i = 0; i < over.length; i++) { const c = over[i]; c.visible = true; r.render(c, camera); } over.length = 0; }
+    }
+
+    // ── Самопроверка кадра (страж графики E.gfxGuard; ~1 раз в минуту в начале, после смены настроек): тот же кадр —
+    // сцена без кодов и с кодами в альфе (цвет обязан совпасть: коды пишут только альфу), AO, отражения, сборка → по сетке
+    // 16×12 точек в маленький буфер RGBA8 и одно чтение на каждую проверку. Кадр на экран — как обычно (finish) ──
+    let hRT = null;
+    function health(src, mode, dep){
+      if (!hRT) hRT = new T.WebGLRenderTarget(E.HEALTH.w, E.HEALTH.h, { depthBuffer: false });
+      const u = M.health.uniforms; u.tSrc.value = src; u.tDepth.value = dep || null; u.uMode.value = mode; u.uDep.value = dep ? 1 : 0;
+      pass(M.health, hRT);
+      const b = new Uint8Array(E.HEALTH.w * E.HEALTH.h * 4);
+      r.readRenderTargetPixels(hRT, 0, 0, E.HEALTH.w, E.HEALTH.h, b);
+      return b;
+    }
+    P.canTest = () => !!M.health && typeof r.readRenderTargetPixels === 'function' && P.on;
+    P.selfTest = (scene, camera) => {
+      const st = R.stats, ac = r.autoClear, rep = { codes: P.codesOn(), ao: P.ao.on, fol: P.fol && P.ao.on, rt: P.rt.on, A: null, B: null, AO: null, SSR: null, F: null };
+      P.passes = 0;
+      hideOver(scene);
+      try {
+        if (rep.codes) { sceneTo(scene, camera, false); rep.B = health(rtScene.texture, 0, rtScene.depthTexture); }
+        sceneTo(scene, camera, true);
+        st.scene = r.info.render.calls;
+        rep.A = health(rtScene.texture, 0, rtScene.depthTexture);
+        r.autoClear = false;
+        const ssrOn = ssrWanted();
+        if (ssrOn) { ssrPass(camera); rep.SSR = health(rtSSR.texture, 2, null); }
+        if (P.ao.on) { aoPasses(camera); rep.AO = health(rtAO.texture, 1, null); }
+        const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
+        compSet(camera, ssrOn, k).uLuma.value = 0; pass(M.comp, rtLdr);   // сборка — в свой буфер (на экран — ниже, как обычно)
+        rep.F = health(rtLdr.texture, 3, null);
+      } catch (e) { rep.err = String(e && e.message || e).slice(0, 120); }
+      finish(camera);
       r.autoClear = ac;
       st.post = r.info.render.calls - st.scene;
+      return rep;
+    };
+    // трава и листва в AO: выкл — проход AO собирается без них (D37_FOL), и сцена кодов травы не пишет
+    P.setFol = on => {
+      on = !!on && !P.off.fol && !P.off.codes;
+      if (on === P.fol) return;
+      P.fol = on;
+      if (M.ao) { if (on) M.ao.defines.D37_FOL = ''; else delete M.ao.defines.D37_FOL; M.ao.needsUpdate = true; }
+    };
+    // страж графики: выключить то, что на этом устройстве не работает (не собралось, рисует не то) — до новой версии сайта
+    // codes — коды в альфе (трава в AO и блеск для отражений), fol — трава в AO, ao — AO (и контактные тени), rt — трассировка,
+    // fg — генерация кадров, nis / fsr — апскейлеры, fxaa, bloom — свечение, post — вся постобработка (кадр — прямо на холст)
+    P.disable = k => {
+      P.off[k] = true;
+      if (k === 'fol' || k === 'codes') P.setFol(false);
+      if (k === 'codes' || k === 'rt' || k === 'ao') P.noRT = true;
+      if (k === 'ao') P.canAO = false;
+      if (k === 'fg') { P.fg.ok = false; P.setFg(false); }
+      if (k === 'nis') P.noNIS = true;
+      if (k === 'fsr') P.noFSR = true;
+      if (k === 'fxaa') P.noFXAA = true;
+      if (k === 'bloom') P.bloom.on = false;
+      if (k === 'post') P.on = false;
+      if (P.noRT && P.rt.mode !== 'off') { P.rt.mode = 'off'; R.rtMarkAll?.(false); }
+      if (!P.canAO) P.ao.mode = 'off';
+      P.setUpscaler(P.upscaler, P.sharp);
+      if (P.w > 1) P.setSize(P.w, P.h, P.pr);
     };
     // Промежуточный кадр: прошлый готовый кадр под новую камеру. movers — [[x, y, z, r, h, dx, dy, dz], …] (центр низа
     // цилиндра на настоящем кадре, радиус, высота, сдвиг с тех пор). false — нечего перекладывать (нужен настоящий кадр)
@@ -790,10 +913,205 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     P._test = { M, pass, rt: () => ({ scene: rtScene, ldr: rtLdr, up: rtUp, ao: rtAO, ssr: rtSSR, out: rtOut }) };   // проверки: шейдеры и проходы
     P.dispose = () => {
       rtScene.dispose(); rtScene.depthTexture?.dispose(); rtLdr.dispose(); rtUp?.dispose(); rtAO?.dispose(); rtAO2?.dispose(); for (const b of B) b.dispose();
-      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose();
+      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose();
       for (const k in M) M[k].dispose();
       tri.dispose();
     };
     return P;
+  };
+
+  // ═══ Страж графики (16.10.2026; после «чёрной земли» на телефоне владельца 15.10) ═══
+  // Драйверы шейдеров на телефонах строже и с ошибками (компьютер — ANGLE на Direct3D — многое прощает), а узнать о поломке
+  // можно было только по скриншоту. Теперь движок проверяет себя сам (E.gfxGuard(R) — render.js, R.guard):
+  //  • программа шейдера не собралась (three r149: program.diagnostics.runnable === false; смотрим r.info.programs): проход
+  //    постобработки → выключаем только его (трава в AO → AO, трассировка, генерация кадров, NIS, FSR, FXAA, свечение;
+  //    сборка кадра → без постобработки); программа сцены → без своих кусков шейдеров (E.gfxUnpatch; мир пересобирается),
+  //    не помогло → «низкая» графика (событие d37:gfxfallback { rebuild } — игра пересобирает мир, mir.js);
+  //  • самопроверка кадра (P.selfTest: 45-й кадр, через 15 с, через 1,5 мин и после смены настроек): коды в альфе меняют
+  //    ЦВЕТ сцены (должны — только альфу) → без кодов; AO — «не числа» или почти весь чёрный → без травы в AO, потом без AO;
+  //    отражения — «не числа» → без трассировки; сборка гасит яркую сцену → без AO, потом без постобработки; днём весь кадр
+  //    чёрный или в сцене «не числа» (2 проверки подряд) → без кодов → без своих кусков → «низкая»;
+  //  • решения помнятся (localStorage d37_gfx_guard) до новой версии сайта (GAMES_VER) или «↺ Вернуть всё» в ⚙️ → Графика;
+  //  • сообщает — без личных данных: Vercel Analytics и цель Метрики 'gfx_fallback' { what, why, prog, gpu, q, v } (что,
+  //    почему, какая программа/проверка, видеокарта — семейство и модель, качество, версия); 'gfx_dark' — днём тёмная земля
+  //    (только сообщить).
+  const GKEY = 'd37_gfx_guard';
+  const POSTK = ['codes', 'fol', 'ao', 'rt', 'fg', 'nis', 'fsr', 'fxaa', 'bloom', 'post', 'test'];
+  const PROGK = { pre: 'bloom', down: 'bloom', up: 'bloom', comp: 'post', fxaa: 'fxaa', easu: 'fsr', rcas: 'fsr', nis: 'nis', nisS: 'nis', ao: 'ao', aob: 'ao', ssr: 'rt', fg: 'fg', copy: 'fg', health: 'test' };
+  E.GUARD = { KEY: GKEY, POSTK, PROGK };
+  const gVer = () => { try { return typeof GAMES_VER !== 'undefined' ? String(GAMES_VER) : ''; } catch (e) { return ''; } };   // eslint-disable-line no-undef
+  E.gfxGuardState = () => {
+    let s = null;
+    try { s = JSON.parse(localStorage.getItem(GKEY) || 'null'); } catch (e) {}
+    if (!s || typeof s !== 'object' || s.v !== gVer() || !s.off || typeof s.off !== 'object' || Array.isArray(s.off)) s = { v: gVer(), off: {}, why: [] };
+    if (!Array.isArray(s.why)) s.why = [];
+    return s;
+  };
+  const gSave = s => { try { localStorage.setItem(GKEY, JSON.stringify(s)); } catch (e) {} };
+  E.gfxSafe = (k = 'patch') => !!E.gfxGuardState().off[k];
+  // что выключено и почему (⚙️ → Графика): { off: [ключи], why: [{ k, why, prog, t }] }
+  E.gfxGuardInfo = () => { const s = E.gfxGuardState(); return { off: Object.keys(s.off).filter(k => s.off[k]), why: s.why.slice() }; };
+  // «↺ Вернуть всё»: забыть решения; игра пересобирает мир (свои куски шейдеров — снова, gfx.js E.gfxPatch)
+  E.gfxGuardReset = () => {
+    try { localStorage.removeItem(GKEY); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k: 'reset', rebuild: true } })); } catch (e) {}
+  };
+  // видеокарта: семейство и модель (без версии драйвера) — для отчёта
+  E.gpuInfo = gl => {
+    let s = '';
+    try { const x = gl.getExtension('WEBGL_debug_renderer_info'); s = String(gl.getParameter(x ? x.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || ''); } catch (e) {}
+    s = s.replace(/\((?:tm|r)\)/gi, ' ');
+    const l = s.toLowerCase();
+    const fam = /adreno/.test(l) ? 'adreno' : /mali/.test(l) ? 'mali' : /powervr|img tec/.test(l) ? 'powervr' : /xclipse/.test(l) ? 'xclipse' : /maleoon/.test(l) ? 'maleoon'
+      : /swiftshader|llvmpipe|software/.test(l) ? 'soft' : /apple/.test(l) ? 'apple' : /nvidia|geforce|quadro|rtx/.test(l) ? 'nvidia' : /radeon|amd/.test(l) ? 'amd' : /intel/.test(l) ? 'intel' : 'other';
+    const m = s.match(/adreno\s*\d{3}[a-z]?|mali-[a-z]*\d+[a-z0-9]*|powervr [a-z]+[ -]?[a-z0-9]*|xclipse \d+|maleoon \d+|apple [a-z0-9]+(?: gpu)?|geforce [a-z]+ \d+(?: ti)?|radeon(?: [a-z]+)? ?[a-z]*\d+[a-z]*|intel[^,(]*graphics(?: \d+)?/i);
+    return { fam, model: (fam === 'soft' || !m ? fam : m[0]).replace(/\s+/g, ' ').trim().slice(0, 32) };
+  };
+  const gSent = new Set();
+  const gSend = (name, data) => {
+    const key = [name, data.what, data.why, data.prog].join('|');
+    if (gSent.has(key) || gSent.size > 24) return;
+    gSent.add(key);
+    try { if (typeof window.va === 'function') window.va('event', { name, data }); } catch (e) {}
+    try { if (typeof window.ym === 'function') window.ym(113596397, 'reachGoal', name, data); } catch (e) {}   // счётчик Метрики сайта (index.html)
+  };
+  E.gfxGuard = R => {
+    const r = R.r, T = R.T, P = R.post, gl = typeof r.getContext === 'function' ? r.getContext() : null;
+    if (!gl) return null;
+    const G = { n: 0, st: E.gfxGuardState(), seen: new WeakSet(), testAt: 45, tests: 0, last: null, sig: '', black: 0, nanN: 0, wait: false,
+      gpu: E.gpuInfo(gl), log: [], cb: null };
+    try { r.debug.checkShaderErrors = true; } catch (e) {}
+    if (P) for (const k of POSTK) if (G.st.off[k]) P.disable(k);   // запомненное — сразу, до первого кадра
+    const on = k => !G.st.off[k];
+    const base = () => ({ gpu: G.gpu.model, q: R.q, v: gVer() });
+    function off(k, why, prog = ''){
+      const s = E.gfxGuardState();
+      if (s.off[k] || G.st.off[k]) { G.st = s; G.st.off[k] = 1; return false; }
+      s.off[k] = 1; s.why.push({ k, why, prog: String(prog).slice(0, 40), t: Date.now() });
+      if (s.why.length > 20) s.why.splice(0, s.why.length - 20);
+      G.st = s; gSave(s);
+      G.log.push(k + ':' + why + (prog ? ':' + prog : ''));
+      try { console.warn(`🛡 Страж графики: выключено «${k}» (${why}${prog ? ': ' + prog : ''}) — ${G.gpu.model}`); } catch (e) {}
+      gSend('gfx_fallback', { what: k, why, prog: String(prog).slice(0, 40), ...base() });
+      let rebuild = false;
+      if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
+      else { if (k === 'patch') E.gfxUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
+      try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k, why, prog, rebuild } })); } catch (e) {}
+      return true;
+    }
+    // сцена: по ступеньке — коды в альфе → свои куски шейдеров → «низкая» (не собралось — коды не помогут: это не текст шейдера)
+    function ladder(why, prog = ''){
+      if (G.wait) return;
+      if (why !== 'link' && P?.codesOn?.() && on('codes')) { off('codes', why, prog); return; }
+      if (on('patch') && T.ShaderChunk?.__d37) { off('patch', why, prog); return; }
+      if (on('tier') && R.q !== 'low') { off('tier', why, prog); return; }
+      gSend('gfx_fallback', { what: 'none', why, prog: String(prog).slice(0, 40), ...base() });
+    }
+    // чья программа: прохода постобработки (материалы P) или сцены (имя материала: sky, water… или тип)
+    function label(p){
+      const M = P?._test?.M || {};
+      for (const k in M) if (r.properties.get(M[k])?.currentProgram === p) return { post: k };
+      let name = p.name || 'scene';
+      try { R.scene.traverse(o => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) if (r.properties.get(m)?.currentProgram === p) name = m.name || m.type || name; }); } catch (e) {}
+      return { scene: name };
+    }
+    function scan(){
+      const L = r.info?.programs || [];
+      for (const p of L) {
+        if (!p || G.seen.has(p) || !p.diagnostics || p.diagnostics.runnable !== false) continue;
+        G.seen.add(p);
+        const d = p.diagnostics, lb = label(p);
+        G.lastLog = String(d.fragmentShader?.log || d.vertexShader?.log || d.programLog || '').replace(/\s+/g, ' ').slice(0, 160);
+        if (lb.post) off(lb.post === 'ao' && P?.fol && on('fol') ? 'fol' : PROGK[lb.post] || 'post', 'link', lb.post);
+        else ladder('link', lb.scene);
+      }
+    }
+    G.scan = scan;
+    // ── разбор самопроверки (байты 16×12×4: rgb, a — 255 точка / ~128 небо / 0 «не число») ──
+    const L8 = (b, i, hdr) => {
+      let x = b[i] / 255, y = b[i + 1] / 255, z = b[i + 2] / 255;
+      if (hdr) { x /= Math.max(1e-3, 1 - x); y /= Math.max(1e-3, 1 - y); z /= Math.max(1e-3, 1 - z); }
+      return .2126 * x + .7152 * y + .0722 * z;
+    };
+    const sums = (b, hdr) => {
+      const o = { total: b.length / 4, bad: 0, n: 0, sky: 0, ground: 0, black: 0, gblack: 0 };
+      for (let i = 0; i < b.length; i += 4) {
+        const f = b[i + 3]; if (!f) { o.bad++; continue; }
+        o.n++; const L = L8(b, i, hdr);
+        if (L < .003) o.black++;
+        if (f < 192) o.sky++; else { o.ground++; if (L < .004) o.gblack++; }
+      }
+      return o;
+    };
+    const codesDiff = (A, B) => {   // цвет с кодами и без — должен совпасть (коды пишут только альфу)
+      let n = 0, bad = 0;
+      for (let i = 0; i < A.length; i += 4) {
+        if (!B[i + 3]) continue;
+        n++;
+        if (!A[i + 3] || Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) > 4) bad++;
+      }
+      return { n, bad };
+    };
+    const aoSums = b => {
+      const o = { total: b.length / 4, bad: 0, n: 0, mean: 1, low: 0 }; let s = 0;
+      for (let i = 0; i < b.length; i += 4) { const f = b[i + 3]; if (!f) { o.bad++; continue; } if (f < 192) continue; const a = b[i] / 255; o.n++; s += a; if (a < .08) o.low++; }
+      if (o.n) o.mean = s / o.n;
+      return o;
+    };
+    const crushed = (A, F) => {   // яркое в сцене (≥ 0,05) → в готовом кадре почти чёрное (< 0,03 в sRGB)
+      let n = 0, bad = 0;
+      for (let i = 0; i < A.length; i += 4) { if (A[i + 3] < 192 || L8(A, i, true) < .05) continue; n++; if (L8(F, i, false) < .03) bad++; }
+      return { n, bad };
+    };
+    const dayLike = () => { const M = R.sky, Lg = R.lighting || {}; return !!M && M.lightI > .4 && (Lg.brightness ?? 1) >= .5 && (Lg.ambient ?? 1) >= .3; };
+    function judge(rep){
+      G.tests++; G.last = rep;
+      const out = rep.sum = {};
+      if (rep.err || !rep.A) { off('test', 'error', rep.err || 'нет данных'); return; }
+      const A = out.A = sums(rep.A, true);
+      if (rep.B) { const d = out.codes = codesDiff(rep.A, rep.B); if (d.bad >= 2 && d.bad >= d.n * .01) { off('codes', 'color', `${d.bad}/${d.n}`); return; } }
+      if (A.bad >= 4 && A.bad >= A.total * .02) { if (++G.nanN >= 2) { ladder('nan', `${A.bad}/${A.total}`); return; } } else G.nanN = 0;
+      if (rep.AO) {
+        const a = out.ao = aoSums(rep.AO);
+        if (a.bad >= Math.max(3, a.total * .02) || (a.n >= 24 && (a.mean < .35 || a.low > a.n * .4))) { off(P.fol && on('fol') ? 'fol' : 'ao', 'ao', `${a.mean.toFixed(2)}/${a.low}/${a.bad}`); return; }
+      }
+      if (rep.SSR) { const s = out.ssr = sums(rep.SSR, true); if (s.bad >= Math.max(3, s.total * .02)) { off('rt', 'nan', 'ssr'); return; } }
+      if (rep.F) {
+        const c = out.comp = crushed(rep.A, rep.F);
+        if (c.n >= 12 && c.bad > c.n * .25) { off(P.ao.on && on('ao') ? (P.fol && on('fol') ? 'fol' : 'ao') : 'post', 'crush', `${c.bad}/${c.n}`); return; }
+      }
+      const day = out.day = dayLike();
+      if (day && A.n >= 96 && A.black >= A.n * .9) { if (++G.black >= 2) ladder('black', `${A.black}/${A.n}`); } else G.black = 0;
+      if (day && A.ground >= 48 && A.gblack >= A.ground * .5) gSend('gfx_dark', { what: 'ground', why: 'day', prog: `${A.gblack}/${A.ground}`, ...base() });
+    }
+    // render.js: пора ли проверить кадр (вместо обычного P.render)
+    G.due = () => !G.wait && !!P && P.on && on('test') && !!P.canTest?.() && G.n >= G.testAt && G.tests < 12;
+    G.test = (scene, camera) => {
+      const k = G.tests, rep = P.selfTest(scene, camera);
+      G.testAt = k === 0 ? G.n + 900 : k === 1 ? G.n + 5400 : Infinity;   // через 15 с и через 1,5 мин; дальше — после смены настроек
+      const n0 = G.log.length;
+      try { scan(); } catch (e) {}   // не собравшаяся программа — главнее чисел (её проход ничего не нарисовал)
+      if (G.log.length > n0) { G.tests++; G.last = rep; rep.sum = { link: G.log.slice(n0) }; }
+      else try { judge(rep); } catch (e) { console.warn('страж графики:', e); }
+      if (G.cb) { const f = G.cb; G.cb = null; try { f(G.report()); } catch (e) {} }
+      return rep;
+    };
+    // ⚙️ «🩺 Проверить»: проверка на следующем кадре, f(отчёт)
+    G.check = f => { G.cb = f || null; G.testAt = G.n + 1; if (G.tests >= 12) G.tests = 11; try { scan(); } catch (e) {} };
+    G.report = () => ({ tests: G.tests, programs: (r.info?.programs || []).length, failed: (r.info?.programs || []).filter(p => p?.diagnostics?.runnable === false).length,
+      sum: G.last?.sum || null, err: G.last?.err || '', log: G.log.slice(), off: E.gfxGuardInfo().off, gpu: G.gpu, lastLog: G.lastLog || '' });
+    // после каждого настоящего кадра (render.js)
+    G.tick = () => {
+      if (R.dead) return;
+      G.n++;
+      if (G.n === 2 || G.n === 10 || G.n === 40 || G.n === G.scanAt || G.n % 300 === 0) { try { scan(); } catch (e) {} }
+      if (G.n === 60) { try { const e = gl.getError(); if (e && e !== gl.CONTEXT_LOST_WEBGL) gSend('gfx_glerror', { what: 'gl', why: String(e), prog: '', ...base() }); } catch (e) {} }
+      if (P) {   // включили/выключили AO, трассировку, траву, свечение, постобработку — проверить кадр заново (чуть позже)
+        const sig = `${P.on}|${P.ao.on}|${P.rt.on}|${P.fol}|${P.bloom.on}`, sig2 = `${P.upscaler}|${P.fxaa}|${P.scaled}|${P.fg.on}`;
+        if (sig !== G.sig) { if (G.sig) G.testAt = Math.min(G.testAt, G.n + 20); G.sig = sig; }
+        if (sig + sig2 !== G.sig2) { if (G.sig2) G.scanAt = G.n + 2; G.sig2 = sig + sig2; }   // новые проходы — их программы проверить сразу
+      }
+    };
+    return G;
   };
 })();

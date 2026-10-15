@@ -143,10 +143,46 @@
       + (R && R.r?.capabilities?.isWebGL2 ? row('📸 Фото с трассировкой пути', '<button type="button" class="gs-btn" data-ptphoto="1">📸 Снять</button>', 'Снимок того, что видно сейчас: честные лучи света (тени, отражения, отскоки), картинка уточняется на глазах. «💾 Сохранить» — PNG.') : '')
       + row('Плоский «Мир Денчика»', sw('world2d'), 'Мир без 3D — для очень слабых телефонов.')
       + note('Графику своего мира (время суток, небо, туман, цвет, вода) автор задаёт в «Студии 3D» → «🎨 Графика». Твои настройки — потолок: на слабом устройстве тяжёлое само выключается. Анимации сайта — во вкладке «🌐 Сайт».')
+      + guardBlock(R)
       + head('Технологии')
       + TECH.map(t => `<p class="gs-note"><b>${esc(t.name)}</b> — ${esc(t.who)}, лицензия ${esc(t.lic)} · <a href="${t.url}" target="_blank" rel="noopener noreferrer">лицензия и код</a></p>`).join('');
     return h;
   }
+  // ── 🛡 Страж графики (js/engine/post.js E.gfxGuard): что на этом устройстве выключено само и почему, «Проверить», «Вернуть» ──
+  const GNAME = { codes: 'коды в кадре (трава без затенения, блеск для отражений)', fol: 'трава и листва без затенения', ao: 'затенение в углах (AO)', rt: 'трассировка лучей',
+    fg: 'генерация кадров', nis: 'NIS', fsr: 'FSR 1', fxaa: 'FXAA', bloom: 'свечение', post: 'постобработка', test: 'самопроверка', patch: 'туман и тени v3', tier: 'графика выше низкой' };
+  const GWHY = { link: 'шейдер не собрался', color: 'менял цвет картинки', ao: 'затенение считалось неверно', nan: 'в кадре были «не числа»', crush: 'кадр гас', black: 'кадр был чёрным', error: 'проверка не удалась' };
+  let gLast = null;   // итог последней «🩺 Проверить»
+  function guardBlock(R){
+    const E = root.D37E; if (!E?.gfxGuardInfo) return '';
+    const g = E.gfxGuardInfo(), last = {};
+    for (const w of g.why) last[w.k] = w;
+    const list = g.off.map(k => (GNAME[k] || k) + (last[k] ? ` (${GWHY[last[k].why] || last[k].why})` : ''));
+    const btn = (R?.guard ? '<button type="button" class="gs-btn" data-gguard="check">🩺 Проверить</button> ' : '') + (g.off.length ? '<button type="button" class="gs-btn" data-gguard="reset">↺ Вернуть всё</button>' : '');
+    const hint = g.off.length ? `На этом устройстве само выключилось: ${list.join('; ')}. «Вернуть всё» — включить снова (с новой версией сайта страж проверит всё заново сам).`
+      : 'Движок сам проверяет, что картинка рисуется правильно: шейдеры собрались, кадр не чёрный, затенение и отражения — числа. Сломалось на этом устройстве — выключит только это и запомнит.';
+    return head('🛡 Страж графики') + row('Проверка графики', btn || '—', esc(hint)) + (gLast ? note(esc(gLast)) : '');
+  }
+  function guardText(rep){
+    if (!rep) return 'Проверка не прошла: игра на паузе? Закрой настройки и попробуй ещё раз.';
+    const s = rep.sum || {}, bad = rep.log.length ? ' Выключено сейчас: ' + rep.log.map(x => GNAME[x.split(':')[0]] || x).join(', ') + '.' : '';
+    const parts = [`шейдеров ${rep.programs}${rep.failed ? `, не собралось ${rep.failed}` : ', все собрались'}`];
+    if (s.codes) parts.push(s.codes.bad ? `коды меняли цвет в ${s.codes.bad} точках` : 'коды в кадре — без следов');
+    if (s.ao) parts.push(`затенение ${Math.round(s.ao.mean * 100)}%`);
+    if (s.comp) parts.push(s.comp.bad ? `кадр гас в ${s.comp.bad} из ${s.comp.n} точек` : 'кадр собирается правильно');
+    return `${rep.failed || bad ? '⚠️' : '✅'} ${rep.gpu?.model || ''}: ${parts.join(', ')}.${bad}${rep.err ? ' Ошибка: ' + rep.err : ''}`;
+  }
+  root.document?.addEventListener?.('click', e => {
+    const b = e.target?.closest?.('[data-gguard]'); if (!b) return;
+    const E = root.D37E, R = liveR();
+    if (b.dataset.gguard === 'reset') { gLast = null; E?.gfxGuardReset?.(); S.refresh(); return; }
+    if (!R?.guard) return;
+    b.disabled = true; b.textContent = '⏳ Проверяем…';
+    let done = false;
+    const fin = rep => { if (done) return; done = true; gLast = guardText(rep); S.refresh(); };
+    R.guard.check(fin);
+    setTimeout(() => fin(null), 4000);   // кадров нет (пауза, панель скрыта) — честно сказать
+  });
   // благодарности: чужой код в графике (лицензии требуют сохранить уведомление — оно в js/engine/post.js)
   const TECH = [
     { name: 'AMD FidelityFX Super Resolution 1 (FSR 1)', who: '© Advanced Micro Devices, Inc.', lic: 'MIT', url: 'https://github.com/GPUOpen-Effects/FidelityFX-FSR/blob/master/license.txt' },

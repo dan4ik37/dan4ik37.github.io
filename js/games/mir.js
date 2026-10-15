@@ -725,6 +725,8 @@
     // ── настройки/полный экран: своя панель вместо шапки игры; окну ⚙️ — пересобрать мир (качество), 2D, вид; вид при входе ──
     S.stage = S.el.closest('#gamesStage'); S.stage?.classList.add('gm-own-bar');
     S.offCtx = window.D37Settings?.context({ engine: true, R: () => S?.R, gfx: () => setTimeout(() => { if (S) onAct('gfx-apply'); }, 60), world2d: v => setTimeout(() => { if (S && v) switch2d(true); }, 60), view: v => { if (S?.rig && S.rig.mode !== v) toggleView(); }, onClose: () => S?.C?.reset_state() });
+    // страж графики (js/engine/post.js): без своих кусков шейдеров / «низкая» / «↺ Вернуть всё» — только с новым рендерером: мир пересобирается
+    { const onFb = e => { if (S && e.detail?.rebuild) setTimeout(() => { if (S) onAct('gfx-apply'); }, 60); }; window.addEventListener('d37:gfxfallback', onFb); S.offFb = () => window.removeEventListener('d37:gfxfallback', onFb); }
     if (window.D37Settings?.get('view') === 'first') { rig.mode = 'first'; H.crosshair(true); }
     // район участков: свой участок, чужие базы, стройка (mir-base.js)
     try { S.base = window.MirBase?.start?.(S, { send, retrack, panel, closePops, go }) || null; } catch (e) { console.error(e); S.base = null; }
@@ -1695,7 +1697,7 @@
     s.stopped = true;
     clearInterval(s.tick); clearTimeout(s.invT); clearTimeout(s.rejoinT);
     if (s.mySeat) { s.mySeat = null; }
-    try { s.menu?.close(); s.offCtx?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран
+    try { s.menu?.close(); s.offCtx?.(); s.offFb?.(); s.stage?.classList.remove('gm-own-bar'); } catch (e) {}   // настройки/полный экран, страж графики
     leaveChannel();
     try { s.loop?.stop(); } catch (e) {}
     try { s.unfollow?.(); } catch (e) {}
