@@ -45,6 +45,7 @@
   const toast = t => { if (typeof xpToast === 'function') xpToast(t); else if (typeof gameToast === 'function') gameToast(t); else root.console?.log?.(t); };
   const b64u = bytes => root.btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const rnd = () => { const a = new Uint8Array(32); root.crypto.getRandomValues(a); return b64u(a); };
+  const oaNonce = () => rnd().slice(0, 22);   // метка входа Google / Discord… в адресе возврата (?oa=…), 128+ бит
   async function shaB64(s) { return b64u(new Uint8Array(await root.crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))); }
   function b64json(s) {
     try {
@@ -243,9 +244,12 @@
     if (typeof root.va === 'function') { try { root.va('event', { name: 'oauth_click', data: { provider: p } }); } catch (e) {} }
     if (BUILTIN.includes(p)) {
       if (!sb()) return showErr('server', p, mode);
-      setPending({ p, m: mode, uid: opts.uid || null, then: opts.then || null });
+      // одноразовая метка этого входа в адресе возврата (?oa=…): auth-guard.js примет токены молча, только если метка совпала —
+      // подсунутую ссылку с чужим аккаунтом (даже во время своего незаконченного входа) без неё не примет
+      const n = oaNonce();
+      setPending({ p, m: mode, uid: opts.uid || null, then: opts.then || null, n });
       if (mode === 'login') lsSet('d37_after_login', '#/profile');   // как раньше: после входа — свой профиль (chat.js)
-      const { error } = await sb().auth.signInWithOAuth({ provider: p, options: { redirectTo: root.location.origin + '/' } });
+      const { error } = await sb().auth.signInWithOAuth({ provider: p, options: { redirectTo: root.location.origin + '/?oa=' + n } });
       if (error) { clearPending(); showErr(sbCode(error, 'login'), p, mode); }
       return;
     }
@@ -455,8 +459,9 @@
     if (BUILTIN.includes(p)) {
       const r = await rpc('auth_link_intent', { p_provider: p });   // null — нет auth-links.sql: без разрешения (и без защиты в базе)
       if (r && !r.ok) { if (r.reason === 'reauth') { showReauth(p); methodsStatus(''); return; } return methodsStatus(errText(r.reason, p), true); }
-      setPending({ p, m: 'link', uid: me()?.id || null });
-      const { error } = await sb().auth.linkIdentity({ provider: p, options: { redirectTo: root.location.origin + '/' } });
+      const n = oaNonce();
+      setPending({ p, m: 'link', uid: me()?.id || null, n });
+      const { error } = await sb().auth.linkIdentity({ provider: p, options: { redirectTo: root.location.origin + '/?oa=' + n } });
       if (error) { clearPending(); methodsStatus(errText(sbCode(error, 'link'), p), true); }
       return;
     }

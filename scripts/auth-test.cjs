@@ -518,15 +518,17 @@ async function guardTests() {
   ok(p('#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid').err.code === 'otp_expired', 'ошибка письма (otp_expired) распознаётся');
   ok(p('#/profile') === null && p('') === null && p('#d37auth=xxx') === null, 'обычные разделы и пропуски VK/Яндекс/Telegram — не сюда');
   const D = T.decide, A = '11111111-1111-1111-1111-111111111111', B = '22222222-2222-2222-2222-222222222222';
-  const pendG = { p: 'google', m: 'login' };
-  ok(D({ type: '', uid: A, cur: null, pend: pendG, providers: ['google'] }) === 'silent', 'свой вход Google (кнопку жали здесь) — молча');
+  const pendG = { p: 'google', m: 'login', n: 'nonce' };
+  ok(D({ type: '', uid: A, cur: null, pend: pendG, nonceOk: true, providers: ['google'] }) === 'silent', 'свой вход Google (кнопку жали здесь, метка ?oa= совпала) — молча');
+  ok(D({ type: '', uid: A, cur: null, pend: pendG, nonceOk: false, providers: ['google'] }) === 'ask',
+    'кнопку жали, но в ссылке нет метки этого входа (подсунули во время незаконченного входа) — спросить');
   ok(D({ type: '', uid: A, cur: null, pend: null, providers: ['google'] }) === 'ask', 'ссылка Google без нажатия кнопки здесь — спросить');
-  ok(D({ type: '', uid: A, cur: null, pend: { p: 'discord', m: 'login' }, providers: ['google'] }) === 'ask', 'жали Discord, а пришёл аккаунт без Discord — спросить');
-  ok(D({ type: '', uid: A, cur: null, pend: { p: 'google', m: 'link' }, providers: ['google'] }) === 'ask', 'отметка «привязка» без открытого аккаунта — спросить');
+  ok(D({ type: '', uid: A, cur: null, pend: { p: 'discord', m: 'login' }, nonceOk: true, providers: ['google'] }) === 'ask', 'жали Discord, а пришёл аккаунт без Discord — спросить');
+  ok(D({ type: '', uid: A, cur: null, pend: { p: 'google', m: 'link' }, nonceOk: true, providers: ['google'] }) === 'ask', 'отметка «привязка» без открытого аккаунта — спросить');
   ok(D({ type: 'signup', uid: A, cur: null, mark: true }) === 'silent' && D({ type: 'signup', uid: A, cur: null, mark: false }) === 'ask',
     'подтверждение почты: регистрировался здесь — молча, на другом устройстве — спросить');
   ok(D({ type: 'recovery', uid: A, cur: null, mark: true }) === 'silent' && D({ type: 'recovery', uid: A, cur: null }) === 'ask', 'смена пароля: просил здесь — молча, иначе — спросить');
-  ok(D({ type: 'recovery', uid: A, cur: B, mark: true }) === 'ask' && D({ type: '', uid: A, cur: B, pend: pendG, providers: ['google'] }) === 'ask',
+  ok(D({ type: 'recovery', uid: A, cur: B, mark: true }) === 'ask' && D({ type: '', uid: A, cur: B, pend: pendG, nonceOk: true, providers: ['google'] }) === 'ask',
     'открыт ДРУГОЙ аккаунт — спрашиваем всегда, даже со своей отметкой');
   ok(D({ type: '', uid: A, cur: A }) === 'silent' && D({ type: 'email_change', uid: A, cur: A }) === 'silent', 'тот же аккаунт (привязка входа, смена своего пароля) — молча');
   ok(D({ type: 'invite', uid: A, cur: null, mark: true }) === 'ask' && D({ type: 'email_change', uid: A, cur: null }) === 'ask', 'приглашение, смена почты и прочее — только с согласия');
@@ -546,11 +548,18 @@ async function guardTests() {
   const idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const iGuard = idx.indexOf('window.__d37AuthHash=h'), iYm = idx.indexOf("ym(113596397,'init'"), iAds = idx.indexOf('pagead2.googlesyndication.com/pagead/js/adsbygoogle.js');
   ok(iGuard > 0 && iGuard < iYm && iGuard < iAds, 'index.html: токены из адреса стираются ДО Метрики и AdSense', { iGuard, iYm, iAds });
-  const m0 = idx.match(/<script>\(function\(\)\{try\{var h=location\.hash;([\s\S]*?)<\/script>/);
-  const run = h => { const w = { location: { hash: h, pathname: '/', search: '' }, history: { replaceState() { w.wiped = true; } } }; new Function('window', 'location', 'history', m0[0].replace(/^<script>|<\/script>$/g, ''))(w, w.location, w.history); return w; };
+  const m0 = idx.match(/<script>\(function\(\)\{try\{var h=location\.hash,([\s\S]*?)<\/script>/);
+  const run = (h, s = '') => { const w = { location: { hash: h, pathname: '/', search: s }, history: { replaceState(a, b, u) { w.wiped = true; w.url = u; } } };
+    new Function('window', 'location', 'history', m0[0].replace(/^<script>|<\/script>$/g, ''))(w, w.location, w.history); return w; };
   ok(!!m0 && run('#access_token=x&refresh_token=y').wiped && run('#d37auth=' + 'A'.repeat(40)).wiped && run('#tgAuthResult=eyJ9').wiped && run('#error=a&error_description=b').wiped,
     'скрипт в <head>: забирает #access_token, #d37auth, #tgAuthResult и ошибки входа');
   ok(!run('#/profile').wiped && !run('#/games/horde').wiped && !run('').wiped, 'обычные разделы (#/…) не трогает');
+  let w1 = run('#access_token=x&refresh_token=y', '?oa=AbCdEfGh12345678_-xy');
+  ok(w1.__d37OA === 'AbCdEfGh12345678_-xy' && w1.url === '/' && w1.__d37AuthHash.startsWith('#access_token'), 'метка своего входа ?oa=… забрана, адрес — чистый «/»', w1.url);
+  w1 = run('#/games', '?ref=abc&oa=AbCdEfGh12345678&x=1');
+  ok(w1.__d37OA === 'AbCdEfGh12345678' && w1.url === '/?ref=abc&x=1#/games', 'чужие параметры (?ref=…) и раздел остаются, убирается только oa', w1.url);
+  w1 = run('', '?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid');
+  ok(w1.__d37AuthHash === '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid' && w1.url === '/', 'ошибка входа в ?query — тоже забрана (как фрагмент)', w1);
   ok(/createClient\(SB_URL, SB_KEY, \{ auth: \{ detectSessionInUrl: false \} \}\)/.test(fs.readFileSync(path.join(ROOT, 'js/features/chat.js'), 'utf8')), 'chat.js: supabase-js сам ссылки не принимает (detectSessionInUrl: false)');
   ok(/social-login\.js"><\/script>\s*<script src="js\/features\/auth-guard\.js">/.test(idx) && idx.indexOf('auth-guard.js') < idx.indexOf('js/init.js'), 'index.html: auth-guard.js — после social-login.js, до init.js и роутера');
 }

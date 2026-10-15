@@ -8,8 +8,8 @@
 //  • фрагмент забирает и сразу стирает из адреса крошечный скрипт в <head> index.html — ДО Метрики (у неё url: location.href) и
 //    рекламы, иначе токены ушли бы в чужие счётчики → window.__d37AuthHash; supabase-js — detectSessionInUrl: false (chat.js);
 //  • молча входим, только если вход начинали В ЭТОМ браузере: отметка d37_authmark (регистрация по почте и «Забыли пароль?» —
-//    отпечаток почты, сутки) или d37_oauth (кнопка Google / Discord / Twitch / GitHub, 15 мин, social-login.js) — и если на этом
-//    устройстве сейчас не открыт ДРУГОЙ аккаунт (тогда спрашиваем всегда);
+//    отпечаток почты, сутки) или d37_oauth (кнопка Google / Discord / Twitch / GitHub, 15 мин, social-login.js) + совпавшая
+//    одноразовая метка ?oa=… в адресе возврата — и если на этом устройстве сейчас не открыт ДРУГОЙ аккаунт (тогда спрашиваем всегда);
 //  • иначе — окно «Войти как <ник>?» (ник — по самому токену: /auth/v1/user → profiles_public): «Да, это я» / «Нет, не входить»
 //    и подсказка детям: такие ссылки присылает только сайт, на твою почту — не бери их у других людей;
 //  • после «да» — как раньше делал supabase-js: смена пароля → форма нового пароля, подтверждение почты / вход → d37:auth (и
@@ -91,9 +91,9 @@
     if (o.cur && o.cur === o.uid) return 'silent';   // тот же аккаунт (привязка входа, смена своего пароля) — ничего не меняется
     const t = o.type || '';
     if (KINDS[t]) return o.mark ? 'silent' : 'ask';
-    if (!t) {   // Google / Discord / Twitch / GitHub: кнопку нажимали здесь, недавно, и у аккаунта есть этот вход
+    if (!t) {   // Google / Discord / Twitch / GitHub: кнопку нажимали здесь, недавно, метка ?oa=… этого входа совпала, у аккаунта есть этот вход
       const p = o.pend;
-      return p && p.m === 'login' && BUILTIN.includes(p.p) && (o.providers || []).includes(p.p) ? 'silent' : 'ask';
+      return p && p.m === 'login' && o.nonceOk && BUILTIN.includes(p.p) && (o.providers || []).includes(p.p) ? 'silent' : 'ask';
     }
     return 'ask';   // invite, email_change и прочее — только с согласия
   }
@@ -241,7 +241,8 @@
     const cur = cs?.id || null;
     const m = !cur && KINDS[link.type] ? await findMark(link.type, user.email) : null;
     const pend = pending();
-    const decision = decide({ type: link.type, uid: user.id, cur, mark: !!m, pend, providers: (user.identities || []).map(i => i.provider) });
+    const nonceOk = !!(pend && pend.n && root.__d37OA && pend.n === root.__d37OA);   // метка из адреса возврата (?oa=…) — своего входа
+    const decision = decide({ type: link.type, uid: user.id, cur, mark: !!m, pend, nonceOk, providers: (user.identities || []).map(i => i.provider) });
     if (decision === 'silent') return accept(link, user, { cur, mark: m });
     const nick = await fetchNick(user.id, link.at);
     const curNick = cur && cur !== user.id

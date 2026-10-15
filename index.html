@@ -12,9 +12,10 @@
 <!-- Главный адрес — dan4ik37.vercel.app. Копия на GitHub Pages (тот же репозиторий)
      без серверных функций и дублирует контент для поисковиков — уводим оттуда. -->
 <script>if(/\.github\.io$/.test(location.hostname))location.replace('https://dan4ik37.vercel.app/'+location.hash);</script>
-<!-- Вход по ссылке: токены во фрагменте (#access_token… — письма Supabase и Google/Discord/Twitch/GitHub; #d37auth… — VK/Яндекс/Telegram)
-     забрать и СРАЗУ стереть из адреса — до Метрики (url: location.href) и рекламы. Разбирают js/features/auth-guard.js и social-login.js -->
-<script>(function(){try{var h=location.hash;if(/(?:^#|&)(?:access_token|refresh_token|error_description|error_code|d37auth|d37auth_err|d37link|tgAuthResult)=/.test(h)){window.__d37AuthHash=h;history.replaceState(null,'',location.pathname+location.search)}}catch(e){}})()</script>
+<!-- Вход по ссылке: токены во фрагменте (#access_token… — письма Supabase и Google/Discord/Twitch/GitHub; #d37auth… — VK/Яндекс/Telegram),
+     метку своего входа ?oa=… и ошибки входа в адресе забрать и СРАЗУ стереть из адреса — до Метрики (url: location.href) и рекламы.
+     Разбирают js/features/auth-guard.js и social-login.js -->
+<script>(function(){try{var h=location.hash,s=location.search,m=s.match(/[?&]oa=([\w-]{8,64})/),t=/(?:^#|&)(?:access_token|refresh_token|error_description|error_code|d37auth|d37auth_err|d37link|tgAuthResult)=/.test(h),e=!t&&/[?&]error_(?:description|code)=/.test(s);if(m)window.__d37OA=m[1];if(t)window.__d37AuthHash=h;if(e){window.__d37AuthHash='#'+s.slice(1);s=''}if(m)s=s.replace(/([?&])oa=[^&]*&?/,'$1').replace(/[?&]$/,'');if(m||t||e)history.replaceState(null,'',location.pathname+s+(t?'':h))}catch(x){}})()</script>
 <link rel="manifest" href="/manifest.json">
 <!-- Приложение 📲 (js/features/app.js): на iPhone «На экран «Домой»» открывает сайт своим окном с чёрной строкой состояния -->
 <meta name="mobile-web-app-capable" content="yes">
