@@ -10,7 +10,8 @@
 const NOTIF_ICON = {
   forum_reply: '💬', mention: '@', friend_request: '🤝', friend_accept: '🤝',
   idea_planned: '💡', idea_done: '🎬', idea_rejected: '💭', idea_votes: '🔥', referral: '🔗',
-  level_up: '⬆️', level_reward: '🎁'
+  level_up: '⬆️', level_reward: '🎁',
+  ref_join: '🎉', ref_reward: '🎁', ref_hold: '⏳', ref_bonus: '💎'   // 👥 приглашения (referrals2.sql)
 };
 let notifItems = [];
 let notifUnread = 0;

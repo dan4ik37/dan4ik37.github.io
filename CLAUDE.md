@@ -25,6 +25,17 @@
    / ad_get / ad_terms_accept / ad_report / ad_admin_*; закрытое хранилище ads). Нужен premium.sql (применён); от age.sql и
    economy.sql не зависит. Проверка: `/rpc/ad_prices` гостем → {"enabled":true,…}, `/rpc/ad_live` → {"on":true,"f":{}}, `/rpc/ad_go`
    гостем → отказ в правах (PGRST202 = не применён). До запуска кабинет пишет «откроется, когда сайт обновится». PGlite: 259 (pg/test-ads.mjs).
+5. `auth-links.sql` (15.10.2026) — вход через VK ID / Яндекс ID / Telegram и защита всех входов: auth_links, auth_link_bans, auth_ip_log,
+   auth_once, auth_link_intents, auth_secret; auth_social_begin/bind, auth_link_add, auth_login_methods, auth_link_remove/hide/intent,
+   auth_links_staff; триггеры на banned_nicks и auth.identities. Нужны только profiles, banned_nicks, pgcrypto. Проверка:
+   `/rpc/auth_login_methods` гостем {} → {"ok":false,"reason":"auth"} (PGRST202 = не применён). До запуска кнопок VK/Яндекс/Telegram нет.
+   «Allow manual linking» в Supabase включать ТОЛЬКО после этого файла. PGlite: 130 (pg/test-authlinks.mjs).
+6. `referrals2.sql` (15.10.2026) — «Приглашения 2.0» (ref_codes, ref_links, ref_marks, ref_payouts, ref_secret; ref_claim / ref_ping /
+   ref_me / ref_set / ref_public / ref_top / ref_frames / ref_admin_*; триггеры на profiles, level_progress, premium_ledger,
+   vip_donation_log). После economy.sql (можно и без него). Проверка: `/rpc/ref_rule` гостем {"p_key":"pct"} → 10 (PGRST202 = не
+   применён); `/rpc/ref_public` гостем {"p_code":"zzzzzz"} → {"ok":false,"reason":"not_found"}. До запуска: ссылка — старая ?ref=<ник>,
+   «награды появятся, когда сайт обновится». Перезапустил referrals.sql, xp.sql или notifications.sql — потом снова referrals2.sql.
+   PGlite: 168 (pg/test-referrals2.mjs).
 age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
 поменять пока не могу» — напоминать 1–4 списком. premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
@@ -71,6 +82,9 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 8. **Оплата 💎 картой** (владелец 15.10: «узнай, как делать, потом подскажешь»): ИП на упрощёнке → счёт → касса/ОФД (уточнить у
    бухгалтера) → TipTop Pay / Freedom Pay / Kaspi → ключи в Vercel → реквизиты в api/_lib/seller.js — пошагово в
    docs/PAYMENTS_SETUP.md. Ключи и реквизиты вводит ТОЛЬКО владелец.
+10. **Вход через VK / Яндекс / Telegram / Google / Discord / Twitch / GitHub** — пошагово docs/LOGIN_PROVIDERS.md (приложения в
+   кабинетах сервисов и ключи в Vercel/Supabase заводит владелец; сначала auth-links.sql). Капча Turnstile: СНАЧАЛА ключ в
+   js/core/config.js (TURNSTILE_SITE_KEY), ПОТОМ CAPTCHA в Supabase.
    15.10 владелец: «пока оставим донаты, там видно будет» — оплату картой не торопить, не напоминать без повода.
 9. **Маркировка рекламы** (проверено 15.10 по нескольким источникам): РФ (ОРД/erid) — важна аудитория, а не страна владельца; реклама
    сетей (РСЯ/Google) — маркируют сами сети; своё промо на своём сайте — не реклама; прямая продажа спонсору (щит в мире, реклама на
@@ -440,6 +454,46 @@ js/features/games.js и хвост css/premium.css.
   scripts/pwa-test.cjs (254) и node scripts/pwa-e2e.cjs (настоящий Chrome). Магазины: .well-known/assetlinks.json (ЗАМЕНИТЬ-1/2/3 —
   отпечатки ключей), apps/android/{play,rustore}/twa-manifest.json; ключи подписи и .apk/.aab/.msix — НЕ в репозиторий.
   На проде в обычном Chrome ещё проверить: установку, заголовок окна, значок, «Поделиться» на Android, push на iPhone, «Обновить».
+
+## 👥 Приглашения друзей (referrals2.sql, js/core/ref.js, js/features/invite.js; агент 15.10.2026, подробно — docs/REFERRALS.md)
+- Код — 6 знаков, ref_codes; ссылка /r/<код> (api/_lib/routes/ref.js в pages.js + rewrite; превью img/share/invite.png, noindex, без
+  рекламы; ?to=<маршрут> — сразу в игру/комнату/мир). Старые ?ref=<ник> работают. «👥 Мои приглашения» — #/invite (ссылка, Telegram/VK/
+  WhatsApp/«Скопировать», QR-код js/core/qr.js, кто пришёл, награды, топ), админ — #/invite/admin.
+- Код ловится на любой странице (ref.js в SPA, REF_HEAD в api/_lib/page.js): localStorage d37_ref2 (+ зеркало d37_ref для почты), 30 дней,
+  первое касание, свой код не ловится. Привязка: почта — сразу (метаданные → триггер ref_on_profile), вход через сервис — по d37:signup
+  или следующему d37:auth → ref_claim (аккаунт ≤ 7 дней, один раз). В окне входа — строка #gauthRef над #gauthOauth.
+- Любая ссылка «позвать/поделиться» — через (window.D37Ref?.wrap || (u => u))(url) (дописывает мой код). Новое место — так же.
+- Числа — ОДНО место на сервере: ref_rule() / ref_ladder(), копия — RULES/LADDER в ref.js (referral-test сверяет). Награды только за игру
+  друга: его 3/5/10 уровень → пригласившему +25 XP +30 🪙 / +25 XP +50 🪙 / +100 🪙; новичку на 3 уровне — 50 🪙 + след «Конфетти»;
+  ступени: 1/3/5 друзей с 5 ур. — попугай / мегафон / рамка «Посол» (lv-frame-ref), 10 друзей с 10 ур. — след «Салют» + 500 🪙. Вещи «за
+  друзей» — 8-е поле PARTS (ref: 1), не продаются (gen-skin-sql пропускает).
+- Бонус за поддержку: 10 % 💎 друга за настоящие деньги (premium_ledger 'pay' не тест и 'donation'; донат «VIP сразу» — по donate_rate),
+  12 месяцев, до 500 💎 в месяц (МСК); возврат — бонус назад пропорционально, потрачено — долгом. Дети — без бонуса. Деньгами — никогда.
+- Защита: свой код / по кругу / то же устройство (d37_dev) — «сам себя», без наград; тот же IP за 30 дней, устройство у другого аккаунта,
+  3+ друзей с одного IP — «на проверку» (награды ждут админа); 10 наград в сутки и 60 за 30 дней. IP/устройство — только хеш (90 дней).
+  Приватность: пригласивший видит у друга ник и уровень; дети и скрытые — «🕶 Аноним» в топе. referrals2.sql переопределяет
+  referral_count, top_referrers, prevent_referred_by_tamper и убирает старые триггеры xp_on_referral / notif_on_referral. Тесты: node
+  scripts/referral-test.cjs (125), PGlite pg/test-referrals2.mjs (168).
+
+## Вход через другие сервисы (auth-links.sql, api/_lib/social.js, routes/oauth.js, js/features/social-login.js; агент 15.10.2026)
+- Владелец: «вход через другие сервисы, но чтобы не было обходов и вредных действий для сайта и ботов». Кнопки «Войти через…» в окне
+  входа (#gauthOauth, блок ▼▲) — только включённые: VK ID, Telegram, Яндекс ID (свои, через сервер; /api/oauth?a=providers = переменные
+  Vercel + auth-links.sql) и Google, Discord, Twitch, GitHub (Supabase /auth/v1/settings). Пошагово — docs/LOGIN_PROVIDERS.md.
+- Свой вход: /auth/<p>/start (rewrite → api/pages.js?page=oauth; функций по-прежнему 10): state + PKCE в подписанной куке (HttpOnly,
+  только /auth, 10 мин) → сервис → /auth/<p>/callback: state одноразовый (auth_once), код → токен (секрет — в Vercel), берём только
+  номер, имя и аватарку, токены не храним. Номер → аккаунт: auth_links; нет — новый аккаунт admin API со служебной почтой
+  <p>-<номер>-<hex>@id.invalid (писем нет, в профиле не видна). Вход без письма: generate_link magiclink → hashed_token в зашифрованном
+  пропуске во фрагменте #d37auth=… → /api/oauth?a=finish (+ секрет вкладки) → verifyOtp({ token_hash, type: 'magiclink' }); 3 мин,
+  один раз. Telegram: виджет (TELEGRAM_BOT_TOKEN + NAME, подпись HMAC, auth_date ≤ 5 мин, один раз) или OpenID (TELEGRAM_CLIENT_SECRET).
+- Привязка — профиль → «Способы входа» (#/profile/logins): только со свежим входом (≤ 15 мин, иначе «Подтверди, что это ты»).
+  Последний способ не отвязать (клиент, SQL, триггер). О каждой привязке — 🔔. По почте НЕ склеиваем (VK/Яндекс/Telegram почту не
+  спрашивают; триггер auth.identities — авто-привязка только Google и только к аккаунту с этой же своей подтверждённой почтой).
+- Боты: новые аккаунты через VK/Яндекс/Telegram — ≤ 3 в сутки с одного интернета (отпечаток HMAC за день, адрес не храним) и ≤ 60 в час
+  на сайт — auth_limits(). Turnstile (D37Captcha): TURNSTILE_SITE_KEY в config.js. Бан ника → отпечатки всех входов в auth_link_bans
+  (через них не создать новый аккаунт). Модератору — «🔗 Входы (N): …». Новый аккаунт → событие d37:signup { provider, userId }
+  (для рефералов). Классы lgn-* (sl-* — пасьянсы!). Тесты: node scripts/auth-test.cjs (141); PGlite pg/test-authlinks.mjs (130).
+- Известный хвост (было и раньше): клиент Supabase принимает любую ссылку #access_token= (неявный поток) — чужой ссылкой можно
+  войти в ЧУЖОЙ (атакующего) аккаунт. Лечится flowType: 'pkce' (меняет поведение писем подтверждения/сброса) — сделать отдельно.
 
 ## Push-уведомления (новое видео / начало стрима, даже при закрытом сайте)
 - Клиент: `js/features/push-pwa.js` (`togglePush`, `syncPush`) — `pushManager.subscribe` с ключом из

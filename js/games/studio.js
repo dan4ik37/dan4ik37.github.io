@@ -514,7 +514,7 @@ let last = performance.now();
     else api.toast('💾 Сохранено');
   }
   function copyLink(id){
-    const url = SITE + '/g/' + id;
+    const url = (window.D37Ref?.wrap || (u => u))(SITE + '/g/' + id);   // 👥 с кодом приглашения (js/core/ref.js)
     if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) { navigator.share({ title: 'Моя игра', text: 'Сыграй в мою игру!', url }).catch(() => {}); return; }
     navigator.clipboard?.writeText(url).then(() => api.toast('🔗 Ссылка скопирована: ' + url), () => prompt('Ссылка на игру:', url));
   }
@@ -643,7 +643,7 @@ let last = performance.now();
     if (d.t === 'again') { const box = root.querySelector('.st-result'); if (box) box.hidden = true; }
   }
   function shareResult(g, score){
-    const url = SITE + '/g/' + g.id, text = `Я набрал ${score} в игре «${g.title}» — побьёшь?`;
+    const url = (window.D37Ref?.wrap || (u => u))(SITE + '/g/' + g.id), text = `Я набрал ${score} в игре «${g.title}» — побьёшь?`;
     if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) { navigator.share({ title: g.title, text, url }).catch(() => {}); return; }
     navigator.clipboard?.writeText(text + ' ' + url).then(() => api.toast('📣 Скопировано — отправь другу'), () => prompt('Отправь другу:', text + ' ' + url));
   }

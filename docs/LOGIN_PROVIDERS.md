@@ -1,0 +1,185 @@
+# Вход через другие сервисы — пошагово
+
+Владелец 15.10.2026: «можно сделать вход через другие сервисы, но чтобы не было обходов и вредных действий для сайта и ботов».
+
+Всё уже готово в коде и **выключено**, пока ты не включишь сервис. Кнопка появляется в окне «Вход» сама — ровно для тех
+сервисов, которые включены. Ничего не включил — сайт работает как раньше (вход по почте).
+
+| Сервис | Где включается | Что нужно |
+|---|---|---|
+| Google | Supabase | шаг 1 (подробно — [GOOGLE_LOGIN.md](GOOGLE_LOGIN.md)) |
+| Discord | Supabase | шаг 2 |
+| Twitch | Supabase | шаг 3 |
+| GitHub (для тех, кто делает игры в студии) | Supabase | шаг 4 |
+| VK ID | Vercel + `auth-links.sql` | шаги 5, 6 |
+| Яндекс ID | Vercel + `auth-links.sql` | шаги 5, 7 |
+| Telegram | Vercel + `auth-links.sql` | шаги 5, 8 |
+| «Я не робот» (защита от ботов) | Cloudflare + сайт + Supabase | шаг 10 — СТРОГО по порядку |
+
+Можно включать по одному — в любом порядке (кроме шага 10). Сделал шаг — напиши мне, я проверю с сервера.
+
+---
+
+## Шаг 0. Общие настройки Supabase (один раз)
+
+1. Открой https://supabase.com/dashboard → проект сайта → слева **Authentication**.
+2. **URL Configuration**:
+   - **Site URL**: `https://dan4ik37.vercel.app`
+   - **Redirect URLs** → «Add URL» → `https://dan4ik37.vercel.app/**` → **Save**.
+3. **Sign In / Providers** → раздел пользователей → включи **«Allow manual linking»** (может называться «Enable Manual Linking»).
+   Без него в профиле не получится *привязать* Google / Discord / Twitch / GitHub к уже существующему аккаунту
+   (входить ими можно и без этого).
+   ⚠️ Включай **только после** того, как выполнен `auth-links.sql` (шаг 5): у Supabase есть известная дыра в ручной привязке
+   (по чужой почте можно «приклеить» чужой вход к своему аккаунту) — наш файл её закрывает.
+4. **Rate Limits** (ограничения от ботов; лишнего не трогай):
+   - «Rate limit for sign ups and sign ins» — **20** на 5 минут с одного адреса (если стоит больше);
+   - «Rate limit for sending emails» — оставь как есть (письма — самое дорогое);
+   - «Rate limit for verifying OTPs» / token verifications — оставь как есть.
+
+## Шаг 1. Google
+
+Пошагово — [GOOGLE_LOGIN.md](GOOGLE_LOGIN.md). Адрес возврата (redirect) там тот же, что ниже у Discord/Twitch/GitHub.
+Google — единственный сервис, который Supabase сам «склеивает» с аккаунтом по почте: если у человека аккаунт на почту
+`ivan@gmail.com` и он нажал «Войти через Google» с той же почтой — войдёт в свой аккаунт. Остальные сервисы так не умеют
+(специально): их привязывают из профиля.
+
+## Шаг 2. Discord
+
+1. Открой https://discord.com/developers/applications → **New Application** → название `dan4ik37` → **Create**.
+2. Слева **OAuth2** → **Redirects** → **Add Redirect** → вставь ровно:
+   `https://zdisuowyjgqirhvcyjfq.supabase.co/auth/v1/callback` → **Save Changes**.
+3. Там же («Client information») скопируй **Client ID**; нажми **Reset Secret** → скопируй **Client Secret**.
+4. Supabase → Authentication → **Sign In / Providers** → **Discord** → включи → вставь Client ID и Client Secret → **Save**.
+
+## Шаг 3. Twitch
+
+1. На Twitch должна быть включена двухэтапная защита: https://www.twitch.tv/settings/security (иначе Twitch не даст создать приложение).
+2. Открой https://dev.twitch.tv/console → **Register Your Application**:
+   - Name: `dan4ik37`;
+   - **OAuth Redirect URLs**: `https://zdisuowyjgqirhvcyjfq.supabase.co/auth/v1/callback`;
+   - Category: **Website Integration**; Client Type (если спросит): **Confidential** → **Create**.
+3. В списке нажми **Manage** → скопируй **Client ID** → **New Secret** → скопируй **Client Secret**.
+4. Supabase → Authentication → Sign In / Providers → **Twitch** → включи → вставь оба → **Save**.
+
+## Шаг 4. GitHub
+
+1. Открой https://github.com/settings/developers → **OAuth Apps** → **New OAuth App**:
+   - Application name: `dan4ik37`; Homepage URL: `https://dan4ik37.vercel.app`;
+   - **Authorization callback URL**: `https://zdisuowyjgqirhvcyjfq.supabase.co/auth/v1/callback` → **Register application**.
+2. Скопируй **Client ID** → **Generate a new client secret** → скопируй секрет.
+3. Supabase → Authentication → Sign In / Providers → **GitHub** → включи → вставь оба → **Save**.
+
+## Шаг 5. Файл `auth-links.sql` (нужен для VK, Яндекса и Telegram и для защиты всех входов)
+
+Supabase → **SQL Editor** → New query → вставь весь файл `auth-links.sql` → **Run**. Можно запускать повторно.
+Что он делает: хранит «VK-номер → аккаунт сайта», банит входы вместе с баном ника, считает новые аккаунты с одного
+интернета, не даёт привязать чужой вход и отвязать последний. Проверка (сделаю сам): `/rpc/auth_login_methods` гостем →
+`{"ok":false,"reason":"auth"}`.
+
+Ключи для VK / Яндекса / Telegram вписываются в **Vercel** (не в Supabase): https://vercel.com → проект сайта →
+**Settings → Environment Variables** → «Add» (Environment: Production) → после всех переменных — **Deployments → … → Redeploy**.
+
+## Шаг 6. VK ID
+
+1. Открой https://id.vk.ru/about/business/go (VK ID для бизнеса; старый адрес id.vk.com тоже ведёт туда) → войди →
+   **Создать приложение**.
+2. Платформа — **Web** (сайт). Название `dan4ik37`, домен `dan4ik37.vercel.app`.
+3. **Доверенный Redirect URL**: `https://dan4ik37.vercel.app/auth/vk/callback` (ровно так).
+4. Доступы: только базовые («имя, фамилия, фото» — `vkid.personal_info`). Почту и телефон **не** включай.
+5. Приложение оставь **обычным** (не «конфиденциальным»): конфиденциальное требует запросов с постоянных адресов
+   серверов, а у Vercel адреса меняются. Включи приложение (статус «Включено»), если VK спросит.
+6. Скопируй **ID приложения** → в Vercel переменная **`VK_ID_CLIENT_ID`**.
+   (`VK_ID_SECRET` — не нужен; только если когда-нибудь сделаешь приложение конфиденциальным — тогда «Сервисный ключ доступа».)
+
+## Шаг 7. Яндекс ID
+
+1. Открой https://oauth.yandex.ru/client/new → название `dan4ik37` (можно иконку).
+2. Платформа — **Веб-сервисы**. **Redirect URI**: `https://dan4ik37.vercel.app/auth/yandex/callback`;
+   Suggest Hostname: `dan4ik37.vercel.app`.
+3. Доступы: «**Доступ к логину, имени и фамилии, полу**» и «**Доступ к портрету пользователя**». Почту, телефон, дату
+   рождения — **не** отмечай.
+4. **Создать приложение** → скопируй **ClientID** → Vercel **`YANDEX_CLIENT_ID`**; **Client secret** → **`YANDEX_CLIENT_SECRET`**.
+
+## Шаг 8. Telegram (один из двух вариантов)
+
+**Вариант А — виджет «Войти через Telegram» (проще):**
+1. В Telegram открой **@BotFather** → `/newbot` → имя `Денчик37`, адрес вроде `dan4ik37_login_bot` (должен кончаться на `bot`).
+2. BotFather пришлёт **токен** (`123456789:AA…`) → Vercel **`TELEGRAM_BOT_TOKEN`**. Адрес бота без `@` → **`TELEGRAM_BOT_NAME`**.
+3. `/setdomain` → выбери бота → отправь `dan4ik37.vercel.app`.
+
+**Вариант Б — новый вход Telegram (OpenID, без всплывающего окна, удобнее на телефоне):**
+1. @BotFather → открой мини-приложение BotFather → выбери бота → **Login Widget** → **Allowed URLs**: добавь
+   `https://dan4ik37.vercel.app` и `https://dan4ik37.vercel.app/auth/tg/callback`.
+2. Скопируй **Client Secret** → Vercel **`TELEGRAM_CLIENT_SECRET`**. Client ID = номер бота: если задан `TELEGRAM_BOT_TOKEN`,
+   сайт возьмёт его сам; иначе — **`TELEGRAM_CLIENT_ID`**.
+Если задан `TELEGRAM_CLIENT_SECRET` — работает вариант Б (виджет выключается сам).
+
+Токен бота — **секрет** (с ним можно управлять ботом). Только в Vercel, никому не отправляй.
+
+## Шаг 9. Все переменные Vercel
+
+| Переменная | Зачем | Обязательна |
+|---|---|---|
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | уже есть (оплата, донаты) | да |
+| `VK_ID_CLIENT_ID` | VK ID — номер приложения | для VK |
+| `VK_ID_SECRET` | только для «конфиденциального» приложения VK | нет |
+| `YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET` | Яндекс ID | для Яндекса |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_NAME` | Telegram, вариант А | для Telegram |
+| `TELEGRAM_CLIENT_SECRET` (+ `TELEGRAM_CLIENT_ID`) | Telegram, вариант Б | нет |
+| `AUTH_SECRET` | свой секрет подписей (любые 40+ случайных символов); нет — берётся из ключа Supabase | нет |
+| `SITE_URL` | адрес сайта, если когда-нибудь сменится домен (по умолчанию `https://dan4ik37.vercel.app`) | нет |
+
+После добавления — **Redeploy**. Проверка: `https://dan4ik37.vercel.app/api/oauth?a=providers` → `"vk":true` и т. д.
+
+## Шаг 10. «Я не робот» — Cloudflare Turnstile (бесплатно) — СТРОГО ПО ПОРЯДКУ
+
+Зачем: боты массово регистрируют аккаунты по почте (спам в чат, накрутка). Галочка Cloudflare почти всегда проходит
+сама (без картинок), людям не мешает.
+
+1. https://dash.cloudflare.com → зарегистрируйся (бесплатно) → слева **Turnstile** → **Add widget**:
+   название `dan4ik37`, hostname `dan4ik37.vercel.app`, Widget Mode — **Managed** → **Create**.
+2. Скопируй **Site Key** и **пришли мне** — я впишу его в сайт (`TURNSTILE_SITE_KEY` в `js/core/config.js`) и выложу.
+3. **Только после того, как я напишу «выложено»**: Supabase → Authentication → **Attack Protection**
+   (или «Bot and Abuse Protection») → **Enable CAPTCHA protection** → провайдер **Turnstile** → вставь **Secret Key** → **Save**.
+
+⚠️ Если включить в Supabase раньше, чем ключ появится на сайте, — вход и регистрация по почте перестанут работать
+(Supabase будет требовать проверку, которую сайт ещё не показывает). Если так случилось — выключи CAPTCHA в Supabase.
+
+Как работает: при регистрации галочка видна всегда; при входе проверка невидимая, а после 2 неудачных попыток входа
+галочка появляется. Вход через сервисы (VK, Google…) проверку не требует — у них своя защита.
+
+---
+
+## Как это защищено (коротко)
+
+- **Чужой аккаунт не забрать.** Вход через VK / Яндекс / Telegram не «склеивается» с аккаунтом по почте никогда (почту у
+  них даже не спрашиваем). Привязать сервис к аккаунту можно только изнутри аккаунта и только сразу после входа
+  (не старше 15 минут) — иначе «Подтверди, что это ты». О каждой привязке приходит 🔔.
+- **Подделать вход нельзя.** Каждый вход — одноразовый, живёт минуты и открывается только в той вкладке, где нажали кнопку.
+- **Боты.** С одного интернета — не больше 3 новых аккаунтов в сутки через VK / Яндекс / Telegram и не больше 60 в час на весь
+  сайт; храним отпечаток адреса, а не адрес. Плюс «я не робот» для почты и лимиты Supabase.
+- **Бан не обойти.** Бан ника банит и все входы человека (VK, Telegram, Google…): создать новый аккаунт через тот же VK
+  нельзя, даже если его отвязать. Снял бан ника — сняты и они. Модератор на профиле видит «🔗 Входы (2): VK ID, почта» —
+  без номеров и почты.
+- **Новые аккаунты — как все.** Ник по умолчанию, окошко возраста, заявки в друзья с 5 уровня, правила магазина по
+  возрасту, мут и баны в чате — всё как у аккаунтов по почте.
+- **Последний способ войти** отвязать нельзя (и в профиле, и на сервере).
+- **Что храним:** номер в сервисе, имя (имя + первая буква фамилии) и аватарку — их можно стереть кнопкой «Скрыть имя».
+  Пароли и токены сервисов — нигде. Аккаунт, созданный через VK / Яндекс / Telegram, получает служебную почту вида
+  `vk-123…@id.invalid` — на неё никогда не уходят письма (домен `.invalid` не существует), в профиле она не показывается.
+
+## Частые вопросы
+
+- **«У меня аккаунт по почте, хочу входить через VK».** Войди по почте → Профиль → «Способы входа» → **Привязать** у VK.
+  Если сначала нажать «Войти через VK» — получится *второй* аккаунт (окно регистрации об этом предупреждает).
+- **«Вход устарел / открыт в другой вкладке».** Вход надо закончить в той же вкладке браузера, где нажали кнопку.
+- **«С твоего интернета сегодня уже создали много аккаунтов».** Лимит 3 в сутки с одного интернета (школа, общий Wi-Fi).
+  Число меняется в `auth-links.sql` → `auth_limits()` (`ip_day`).
+- **Аккаунту из VK добавить вход по почте** пока нельзя (у него служебная почта) — можно привязать другие сервисы.
+
+## Что написать мне, чтобы я проверил с сервера
+
+«Включил Discord» / «добавил ключи VK» / «выполнил auth-links.sql» — я проверю:
+- `/auth/v1/settings` → `discord: true` (и т. п.);
+- `/api/oauth?a=providers` → `vk: true`, `yandex: true`, `tg: …`;
+- `/rpc/auth_login_methods` гостем → `{"ok":false,"reason":"auth"}` (файл применён).
