@@ -4,13 +4,14 @@
 // Один файл и для SPA (index.html), и для серверных страниц (/videos, /v/<id>, /topic/…).
 // Список id — /api/ids (кэш CDN 6 ч, квоту YouTube не тратит). Недавно выпавшие (последние 50)
 // не повторяются — localStorage. Нет списка (локально /api не работает) — берём allVids с главной.
+// Возраст (js/core/age.js): несовершеннолетнему ролики 18+ (кейсы, промокоды на депозит — список g из /api/ids) не выпадают.
 (() => {
-  let ids = null;
+  let ids = null, adult = new Set();
   async function load(){
     if (ids) return ids;
     try {
       const r = await fetch('/api/ids');
-      if (r.ok) { const d = await r.json(); if (d.ids) return (ids = d.ids.match(/.{11}/g)); }
+      if (r.ok) { const d = await r.json(); if (d.ids) { adult = new Set(String(d.g || '').match(/.{11}/g) || []); return (ids = d.ids.match(/.{11}/g)); } }
     } catch (e) {}
     if (typeof allVids !== 'undefined' && allVids?.length) return allVids.map(v => v.id);
     return [];
@@ -18,7 +19,8 @@
   window.d37Surprise = async function(btn){
     const old = btn?.innerHTML;
     if (btn) { btn.disabled = true; btn.innerHTML = '🎲 Выбираю…'; }
-    const list = await load();
+    let list = await load();
+    if (window.D37Age && !window.D37Age.listOk(18)) list = list.filter(id => !adult.has(id));
     if (!list.length) { location.href = '/videos'; return; }
     let seen = [];
     try { seen = JSON.parse(localStorage.getItem('d37_surprise_seen')) || []; } catch (e) {}
