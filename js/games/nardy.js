@@ -152,8 +152,51 @@
     if (t < 24) G.cnt[p][t]++; else G.off[p]++;
     if (f === 0) G.headUsed++;
     G.left.splice(G.left.indexOf(d), 1);
-    if (G.off[p] === 15) { G.winner = p; G.mars = G.off[1 - p] === 0; G.phase = 'over'; G.log = `${G.players[p].nick} выбросил все шашки — ${G.mars ? 'МАРС! Двойная победа' : 'победа'}!`; G.v++; return null; }
+    if (G.off[p] === 15) { win(G, p); return null; }
     if (!G.left.length || !legalNow(G, p).length) endTurn(G);
+    G.v++;
+    return null;
+  }
+  function win(G, p){ G.winner = p; G.mars = G.off[1 - p] === 0; G.phase = 'over'; G.log = `${G.players[p].nick} выбросил все шашки — ${G.mars ? 'МАРС! Двойная победа' : 'победа'}!`; G.v++; }
+
+  // ═══ ХОД ИЗ НЕСКОЛЬКИХ ШАГОВ: черновик у себя, «↩ Отменить» по шагу, «✅ Готово» — весь ход разом ═══
+  // draft(src, p) — копия того, что нужно правилам хода (src — G или публичное состояние: там есть first и headUsed).
+  // Шаги проверяются теми же legalNow, что и настоящий ход, поэтому собранный ход хозяин примет (applySeq).
+  function draft(src, p){
+    return { cnt: [src.cnt[0].slice(), src.cnt[1].slice()], off: src.off.slice(), dice: src.dice.slice(), left: src.left.slice(),
+      headUsed: src.headUsed || 0, first: src.first ? src.first.slice() : [false, false], turn: p, seq: [], hist: [] };
+  }
+  function draftStep(D, p, f, d){
+    if (!legalNow(D, p).some(s => s.f === f && s.d === d)) return 'Так ходить нельзя';
+    D.hist.push({ cnt: [D.cnt[0].slice(), D.cnt[1].slice()], off: D.off.slice(), left: D.left.slice(), headUsed: D.headUsed });
+    const t = f + d;
+    D.cnt[p][f]--;
+    if (t < 24) D.cnt[p][t]++; else D.off[p]++;
+    if (f === 0) D.headUsed++;
+    D.left.splice(D.left.indexOf(d), 1);
+    D.seq.push({ f, d });
+    return null;
+  }
+  // «↩ Отменить» — назад на один шаг (позиция, кубики, голова — ровно как было)
+  function draftUndo(D){
+    const h = D.hist.pop();
+    if (!h) return false;
+    D.cnt = h.cnt; D.off = h.off; D.left = h.left; D.headUsed = h.headUsed;
+    D.seq.pop();
+    return true;
+  }
+  // ход доделан: кубиков не осталось, ходить ими больше нельзя или все шашки выброшены
+  const draftDone = (D, p) => D.off[p] === 15 || !D.left.length || !legalNow(D, p).length;
+  // Хозяин стола: весь ход разом — каждый шаг по правилам, и ход доделан (кубики по максимуму); иначе ничего не меняем
+  function applySeq(G, p, seq){
+    if (G.winner >= 0 || G.turn !== p || G.phase !== 'move') return 'Сейчас нельзя ходить';
+    if (!Array.isArray(seq) || seq.length > 4) return 'Непонятный ход';
+    const D = draft(G, p);
+    for (const s of seq) { const e = draftStep(D, p, (s?.f) | 0, (s?.d) | 0); if (e) return e; }
+    if (!draftDone(D, p)) return 'Ход не доделан: кубики нужно использовать по максимуму';
+    G.cnt = D.cnt; G.off = D.off; G.left = D.left; G.headUsed = D.headUsed;
+    if (G.off[p] === 15) { win(G, p); return null; }
+    endTurn(G);
     G.v++;
     return null;
   }
@@ -180,10 +223,15 @@
     if (level === 'easy') return scored[Math.floor(G.rand() * Math.min(4, scored.length))].seq;
     return scored[0].seq;
   }
-  const pub = G => ({ players: G.players.map(pl => ({ id: pl.id, nick: pl.nick, bot: !!pl.bot })), cnt: G.cnt.map(c => c.slice()), off: G.off.slice(), turn: G.turn, dice: G.dice.slice(), left: G.left.slice(), phase: G.phase, winner: G.winner, mars: G.mars, log: G.log, v: G.v, legal: G.phase === 'move' ? legalNow(G, G.turn) : [] });
+  // headUsed и first — чтобы гость сам собирал свой ход (черновик) по тем же правилам
+  const pub = G => ({ players: G.players.map(pl => ({ id: pl.id, nick: pl.nick, bot: !!pl.bot })), cnt: G.cnt.map(c => c.slice()), off: G.off.slice(), turn: G.turn, dice: G.dice.slice(), left: G.left.slice(), headUsed: G.headUsed, first: G.first.slice(), phase: G.phase, winner: G.winner, mars: G.mars, log: G.log, v: G.v, legal: G.phase === 'move' ? legalNow(G, G.turn) : [] });
 
   // ═══ ЭКРАН ═══
+  // Свой ход собирается в черновике D (только у себя — сопернику ничего не уходит): шаги, «↩ Отменить», «✅ Готово» — и
+  // только тогда ход целиком уходит хозяину стола (applySeq). Бот ходит по шагам, как раньше.
+  const TURN_MS = 60000;   // онлайн: столько думает человек (с отменами), потом ход за него
   let root, api, G = null, P = null, meIdx = 0, mode = 'menu', room = null, timers = [], botT = 0, tickT = 0, level = 'hard', vs = 'bot', cv, ctx, sel = -1;
+  let D = null, turnUntil = 0, lastV = -1, sent = false;
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
   const isHost = () => !room || room.isHost;
   const hostId = () => room?.seats[0]?.id;
@@ -219,8 +267,10 @@
         <div class="nd-top"><div class="nd-pl" id="ndP0"></div></div>
         <div class="un-log" aria-live="polite"></div>
         <div class="ld-ctl"><button type="button" class="ld-die nd-roll" data-act="roll" aria-label="Бросить кубики">🎲</button><div class="un-status"></div></div>
-        <div class="un-acts"></div>
+        <div class="un-acts nd-acts"></div>
+        <div class="gk-hint"></div>
       </div>`;
+    D = null; sel = -1; sent = false;
     cv = root.querySelector('.nd-cv'); ctx = cv.getContext('2d');
     cv.addEventListener('pointerdown', onTap);
     resize();
@@ -236,8 +286,8 @@
     if (!G) return;
     P = pub(G);
     if (room) G.players.forEach(pl => { if (!pl.bot && pl.id !== room.myId) room.sendTo(pl.id, { type: 'up', pub: P }); });
+    schedule();   // раньше рисования: отсчёт хода онлайн (turnUntil) уже свежий
     render();
-    schedule();
   }
   function schedule(){
     clearTimeout(botT); clearTimeout(tickT);
@@ -254,21 +304,29 @@
       }, 700);
       return;
     }
-    if (room) tickT = later(() => {
-      if (!G || G.v !== v) return;
-      if (G.phase === 'roll') roll(G, p);
-      else for (const s of botTurn(G, p, 'easy')) move(G, p, s.f, s.d);
-      sync();
-    }, 40000);
+    if (room) {
+      turnUntil = Date.now() + TURN_MS;
+      tickT = later(() => {
+        if (!G || G.v !== v) return;
+        if (G.phase === 'roll') roll(G, p);
+        else for (const s of botTurn(G, p, 'easy')) move(G, p, s.f, s.d);
+        sync();
+      }, TURN_MS);
+    }
   }
+  // a: { a: 'roll' } | { a: 'seq', seq } — ход целиком (после «Готово»)
   function doAct(a){
     if (!P || P.winner >= 0) return;
     if (isHost()) {
-      const err = a.a === 'roll' ? roll(G, meIdx) : move(G, meIdx, a.f, a.d);
-      if (err) { api.toast(err); return; }
+      const err = a.a === 'roll' ? roll(G, meIdx) : applySeq(G, meIdx, a.seq);
+      if (err) { api.toast(err); D = null; render(); return; }
       api.sfx(a.a === 'roll' ? 'tick' : 'move');
+      D = null;
       sync();
-    } else room.sendTo(hostId(), { type: 'act', act: a });
+    } else {
+      room.sendTo(hostId(), { type: 'act', act: a });
+      if (a.a === 'seq') { sent = true; render(); }   // ждём хозяина: ход ушёл, кнопок больше нет
+    }
   }
 
   // ── Доска: точки abs 0…11 — верхний ряд справа налево, 12…23 — нижний слева направо ──
@@ -298,14 +356,19 @@
       ctx.fill();
     }
     if (!P) return;
-    const r = Math.min(pw * .46, (Hd - pad * 2) * .045), mine = P.turn === meIdx && P.phase === 'move' && P.winner < 0;
-    const srcs = new Set(mine ? P.legal.map(s => absOf(meIdx, s.f)) : []);
+    const V = view(), mine = V.mine;
+    const r = Math.min(pw * .46, (Hd - pad * 2) * .045);
+    const srcs = new Set(mine ? V.legal.map(s => absOf(meIdx, s.f)) : []);
     const dests = new Map();
-    if (mine && sel >= 0) for (const s of P.legal) if (s.f === sel) { const t = s.f + s.d; dests.set(t < 24 ? absOf(meIdx, t) : 'off', s); }
+    if (mine && sel >= 0) for (const s of V.legal) if (s.f === sel) { const t = s.f + s.d; dests.set(t < 24 ? absOf(meIdx, t) : 'off', s); }
+    // шаги этого хода (черновик): откуда ушли — пунктир, куда пришли — точка
+    const moved = new Set(), came = new Set();
+    if (mine && D) for (const s of D.seq) { moved.add(absOf(meIdx, s.f)); if (s.f + s.d < 24) came.add(absOf(meIdx, s.f + s.d)); }
     for (let abs = 0; abs < 24; abs++) {
       const x = pointX(g, abs), top = abs < 12;
+      if (moved.has(abs) || came.has(abs)) { ctx.fillStyle = came.has(abs) ? 'rgba(34,197,94,.22)' : 'rgba(255,255,255,.16)'; ctx.fillRect(x - pw / 2, top ? pad : Hd / 2, pw, Hd / 2 - pad); }
       for (const p of [0, 1]) {
-        const n = P.cnt[p][relOf(p, abs)];
+        const n = V.cnt[p][relOf(p, abs)];
         if (!n) continue;
         const show = Math.min(n, 5);
         for (let i = 0; i < show; i++) {
@@ -322,22 +385,37 @@
     // выброшенные
     const ox = Wd - pad - Wd * .08 + Wd * .04;
     for (const p of [0, 1]) {
-      const n = P.off[p], top = p === 1;
+      const n = V.off[p], top = p === 1;
       for (let i = 0; i < n; i++) { const y = top ? pad + 4 + i * (r * .45) : Hd - pad - 4 - i * (r * .45); ctx.fillStyle = p === 0 ? '#f5f5f4' : '#1f2937'; ctx.fillRect(ox - Wd * .025, y - r * .18, Wd * .05, r * .36); }
     }
     if (dests.has('off')) { ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 4; ctx.strokeRect(Wd - pad - Wd * .08 + Wd * .01, meIdx === 0 ? Hd / 2 : pad, Wd * .06, Hd / 2 - pad); }
     // кубики посередине
     if (P.dice.length) {
       const cy = Hd / 2, sz = Math.min(pw * 1.1, Hd * .12);
+      // сыгранные кубики — бледные (у дубля: сколько ходов осталось — ×N)
+      const left = (mine ? V.left : P.phase === 'move' ? P.left : []).slice(), dbl = P.dice[0] === P.dice[1];
       P.dice.forEach((d, i) => {
         const x = pad + 3 * pw - sz - 4 + i * (sz + 8) + (P.turn === 1 ? 6 * pw + g.bar : 0);
+        const li = left.indexOf(d), used = P.phase === 'move' && (dbl ? !left.length : li < 0);
+        if (!dbl && li >= 0) left.splice(li, 1);
+        ctx.globalAlpha = used ? .35 : 1;
         ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, cy - sz / 2, sz, sz, sz * .18) : ctx.rect(x, cy - sz / 2, sz, sz); ctx.fill(); ctx.stroke();
         ctx.fillStyle = '#111';
         const pips = { 1: [[.5, .5]], 2: [[.25, .25], [.75, .75]], 3: [[.25, .25], [.5, .5], [.75, .75]], 4: [[.25, .25], [.75, .25], [.25, .75], [.75, .75]], 5: [[.25, .25], [.75, .25], [.5, .5], [.25, .75], [.75, .75]], 6: [[.25, .25], [.75, .25], [.25, .5], [.75, .5], [.25, .75], [.75, .75]] }[d];
         for (const [px, py] of pips) { ctx.beginPath(); ctx.arc(x + px * sz, cy - sz / 2 + py * sz, sz * .08, 0, Math.PI * 2); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        if (dbl && i === 1 && P.phase === 'move' && left.length) { ctx.fillStyle = '#ffd166'; ctx.font = `900 ${Math.round(sz * .45)}px Montserrat,sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('×' + left.length, x + sz + 4, cy); }
       });
     }
+  }
+  // Что сейчас на доске: во время своего хода — черновик (сделанные шаги видны сразу, сопернику — после «Готово»)
+  function view(){
+    const mine = !!P && P.turn === meIdx && P.phase === 'move' && P.winner < 0 && !sent && mode === 'play';
+    if (!mine) D = null;
+    else if (!D || D.v !== P.v) { D = draft(P, meIdx); D.v = P.v; sel = -1; }
+    const legal = mine ? legalNow(D, meIdx) : [];
+    return { mine, legal, cnt: mine ? D.cnt : P.cnt, off: mine ? D.off : P.off, left: mine ? D.left : P.left, done: mine && draftDone(D, meIdx) };
   }
   function render(){
     if (!P || !cv) return;
@@ -350,11 +428,37 @@
     const rb = root.querySelector('.nd-roll');
     rb.disabled = !(myTurn && P.phase === 'roll');
     rb.classList.toggle('go', myTurn && P.phase === 'roll');
-    root.querySelector('.un-status').innerHTML = P.winner >= 0 ? (P.winner === me ? `🏆 <b>Победа${P.mars ? ' с марсом' : ''}!</b>` : `😔 Победил ${esc(P.players[P.winner].nick)}`)
-      : myTurn ? (P.phase === 'roll' ? '🟢 Брось кубики' : `🟢 Ходи: осталось ${P.left.map(d => DIE[d]).join(' ')} — нажми шашку, потом точку`) : `⏳ Ходит ${esc(P.players[P.turn].nick)}…`;
-    if (!myTurn || P.phase !== 'move') sel = -1;
+    const V = view();
+    if (!V.mine) sel = -1;
+    else if (sel < 0 && !V.done) { const s = new Set(V.legal.map(m => m.f)); if (s.size === 1) sel = [...s][0]; }   // ходить можно одной — сразу выбрана
+    const txt = P.winner >= 0 ? (P.winner === me ? `🏆 <b>Победа${P.mars ? ' с марсом' : ''}!</b>` : `😔 Победил ${esc(P.players[P.winner].nick)}`)
+      : !myTurn ? `⏳ Ходит ${esc(P.players[P.turn].nick)}…` : P.phase === 'roll' ? '🟢 Брось кубики'
+      : sent ? '⏳ Ход отправлен…' : V.done ? '✅ Ход собран — «Готово»?' : `🟢 Ходи: ${V.left.map(d => DIE[d]).join(' ')}`;
+    root.querySelector('.un-status').innerHTML = (P.winner >= 0 || !window.GameKit ? txt : GameKit.turn(myTurn && !sent, txt)) + (room && myTurn && !sent ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : '');
+    const steps = V.mine && D ? D.seq.length : 0;
+    if (P.winner < 0) root.querySelector('.nd-acts').innerHTML = V.mine
+      ? `<button type="button" class="un-btn" data-act="undo"${steps ? '' : ' disabled'}>↩ Отменить</button><button type="button" class="un-btn gk-go${V.done ? ' pulse' : ''}" data-act="done"${V.done ? '' : ' disabled'}>✅ Готово</button>` : '';
+    const hint = root.querySelector('.gk-hint');
+    if (hint) hint.innerHTML = !V.mine ? '' : V.done ? `Проверь ход. «↩ Отменить» — вернуть шаг, «✅ Готово» — ${room ? 'отдать ход сопернику (потом не отменить)' : 'передать ход'}`
+      : sel >= 0 ? 'Нажми точку с зелёным кругом — туда пойдёт шашка. Другая шашка — нажми её' : 'Нажми свою шашку (жёлтая метка), потом точку';
     draw();
+    window.GameKit?.cd();
     if (P.winner >= 0 && mode === 'play') over();
+  }
+  // Шаг в черновике; доделал ход до конца и все шашки выброшены — победа сразу, без «Готово»
+  function step(f, d){
+    if (!D) return;
+    const err = draftStep(D, meIdx, f, d);
+    if (err) { api.toast(err); return; }
+    sel = -1; api.sfx('move');
+    if (D.off[meIdx] === 15) { doAct({ a: 'seq', seq: D.seq.slice() }); return; }
+    render();
+  }
+  function undoStep(){ if (D && draftUndo(D)) { sel = -1; api.sfx('tick'); render(); } }
+  function done(){
+    const V = view();
+    if (!V.mine || !V.done) return;
+    doAct({ a: 'seq', seq: D.seq.slice() });
   }
   function over(){
     mode = 'over';
@@ -364,25 +468,27 @@
       + `<button type="button" class="un-btn" data-act="leave">${room ? '🚪 Выйти' : '🏠 Меню'}</button>`;
     api.report(room ? 'nardy_online' : 'nardy_' + level, win, win ? (P.mars ? 2 : 1) : 0, (api.local().wins || 0) + (win ? 1 : 0));
   }
-  // Тап: по своей точке — выбрать шашку; по подсвеченной — сходить
+  // Тап: по своей точке — выбрать шашку; по подсвеченной — шаг (в черновике: до «Готово» можно отменить)
   function onTap(e){
-    if (!P || P.turn !== meIdx || P.phase !== 'move' || P.winner >= 0) return;
+    const V = P ? view() : null;
+    if (!V?.mine) return;
     const r = cv.getBoundingClientRect(), k = cv.width / r.width, x = (e.clientX - r.left) * k, y = (e.clientY - r.top) * k;
     const g = geom();
     if (x > g.Wd - g.pad - g.Wd * .08) {   // лоток выброса
-      const s = P.legal.find(m => m.f === sel && m.f + m.d >= 24);
-      if (s) { doAct({ a: 'move', f: s.f, d: s.d }); sel = -1; }
+      const s = V.legal.find(m => m.f === sel && m.f + m.d >= 24) || (sel < 0 && V.legal.filter(m => m.f + m.d >= 24).length === 1 ? V.legal.find(m => m.f + m.d >= 24) : null);
+      if (s) step(s.f, s.d);
       return;
     }
     let abs = -1, bd = 1e9;
     for (let a = 0; a < 24; a++) { const top = a < 12; if ((y < g.Hd / 2) !== top) continue; const d = Math.abs(pointX(g, a) - x); if (d < bd) { bd = d; abs = a; } }
-    if (abs < 0 || bd > g.pw * .6) return;
+    if (abs < 0 || bd > g.pw * .6) { if (sel >= 0) { sel = -1; render(); } return; }
     const pos = relOf(meIdx, abs);
     if (sel >= 0) {
-      const s = P.legal.find(m => m.f === sel && m.f + m.d === pos);
-      if (s) { doAct({ a: 'move', f: s.f, d: s.d }); sel = -1; return; }
+      const s = V.legal.find(m => m.f === sel && m.f + m.d === pos);
+      if (s) { step(s.f, s.d); return; }
     }
-    if (P.legal.some(m => m.f === pos)) { sel = sel === pos ? -1 : pos; draw(); }
+    if (V.legal.some(m => m.f === pos)) { sel = sel === pos ? -1 : pos; api.sfx('tick'); render(); }
+    else if (sel >= 0) { sel = -1; render(); }   // нажал мимо — выбор снят
   }
   function onClick(e){
     const b = e.target.closest('[data-act]');
@@ -392,6 +498,8 @@
     if (a === 'bot') { startBot(); return; }
     if (a === 'online') { location.hash = '#/games/nardy/' + GameRoom.newCode(); return; }
     if (a === 'roll') { doAct({ a: 'roll' }); return; }
+    if (a === 'undo') { undoStep(); return; }
+    if (a === 'done') { done(); return; }
     if (a === 'again') { if (room) hostStart(); else startBot(); return; }
     if (a === 'leave') { if (room) location.hash = '#/games/nardy'; else menu(); return; }
     if (a === 'copy') { const inp = root.querySelector('.ct-link input'); navigator.clipboard?.writeText(inp.value).then(() => { b.textContent = '✅ Скопировано'; }, () => inp.select()); return; }
@@ -428,8 +536,9 @@
         if (room.isHost) {
           if (m.type !== 'act' || !G || G.players[1].id !== from) return;
           const a = m.act || {};
-          const err = a.a === 'roll' ? roll(G, 1) : move(G, 1, a.f | 0, a.d | 0);
-          if (err) { room.sendTo(from, { type: 'err', text: err }); return; }
+          // ход целиком (после «Готово»); по шагу — старые версии сайта
+          const err = a.a === 'roll' ? roll(G, 1) : a.a === 'seq' ? applySeq(G, 1, a.seq) : move(G, 1, a.f | 0, a.d | 0);
+          if (err) { room.sendTo(from, { type: 'err', text: err }); sync(); return; }
           sync();
           return;
         }
@@ -438,18 +547,27 @@
           const first = !P || mode !== 'play';
           P = m.pub; meIdx = 1;
           if (first && P.winner < 0) { mode = 'play'; build(); }
+          if (P.v !== lastV) { lastV = P.v; sent = false; turnUntil = Date.now() + TURN_MS - 600; }   // новое состояние — ход принят (или сделан за меня)
           render();
-        } else if (m.type === 'err') api.toast(m.text);
+        } else if (m.type === 'err') { sent = false; api.toast(m.text); render(); }
       },
     });
     if (!room) root.innerHTML = GameRoom.errorHtml;
   }
 
+  // Клавиши: Esc — снять выбор шашки, Ctrl+Z — отменить шаг (раньше выхода из полного экрана: он смотрит defaultPrevented)
+  function onKey(e){
+    if (!D || window.GameKit?.isOpen?.() || e.target?.closest?.('input,textarea,select,[contenteditable]')) return;
+    if (e.key === 'Escape' && sel >= 0) { e.preventDefault(); sel = -1; render(); }
+    else if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'я' || e.code === 'KeyZ')) { e.preventDefault(); undoStep(); }
+  }
+
   window.GAME_IMPL.nardy = {
     mount(el, gameApi){
-      root = el; api = gameApi;
+      root = el; api = gameApi; D = null; sel = -1; sent = false; lastV = -1;
       root.addEventListener('click', onClick);
       window.addEventListener('resize', resize);
+      window.addEventListener('keydown', onKey, true);
       if (GameRoom.validCode(gameApi.param)) joinTable(gameApi.param); else menu();
     },
     unmount(){
@@ -457,10 +575,11 @@
       clearTimeout(botT); clearTimeout(tickT);
       root?.removeEventListener('click', onClick);
       window.removeEventListener('resize', resize);
+      window.removeEventListener('keydown', onKey, true);
       room?.leave(); room = null;
-      G = null; P = null; mode = 'menu';
+      G = null; P = null; D = null; mode = 'menu';
       root = null; cv = null; ctx = null;
     },
-    _test: { newGame, roll, move, sequences, legalNow, botTurn, badBlock, canStep, absOf, relOf },
+    _test: { newGame, roll, move, sequences, legalNow, botTurn, badBlock, canStep, absOf, relOf, draft, draftStep, draftUndo, draftDone, applySeq, pub },
   };
 })();

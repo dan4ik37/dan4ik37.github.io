@@ -194,5 +194,61 @@ if (want('ludo')) {
   ok(eq(T.tokPick(0, 1, tok), { sel: -1, move: 0 }), 'ludo: из домика любая — тот же ход');
 }
 
+// ═══ «Нарды»: ход из шагов с отменой, «Готово» — весь ход разом ═══
+if (want('nardy')) {
+  const T = load('js/games/nardy.js').GAME_IMPL.nardy._test;
+  const players = [{ id: 'a', nick: 'Белые' }, { id: 'b', nick: 'Чёрные' }];
+  const snap = X => JSON.stringify([X.cnt, X.off, X.left, X.headUsed]);
+  // первый ход: 3 и 5, с головы — одна шашка
+  let G = T.newGame(players, rng(1)); T.roll(G, 0, 3, 5);
+  let D = T.draft(G, 0);
+  const s0 = snap(D);
+  ok(T.legalNow(D, 0).length > 0 && !T.draftDone(D, 0), 'nardy: после броска есть ходы, ход не доделан');
+  ok(!T.draftStep(D, 0, 0, 3), 'nardy: шаг с головы на 3');
+  ok(D.cnt[0][0] === 14 && D.cnt[0][3] === 1 && eq(D.left, [5]) && D.headUsed === 1, 'nardy: черновик сдвинул шашку и кубик');
+  ok(T.draftStep(D, 0, 0, 5) === 'Так ходить нельзя', 'nardy: вторая с головы — нельзя (только одна за ход)');
+  ok(T.draftUndo(D) && snap(D) === s0 && D.seq.length === 0, 'nardy: «Отменить» вернул позицию, кубики и голову ровно как было');
+  ok(!T.draftUndo(D), 'nardy: отменять больше нечего');
+  ok(snap(G) === s0 && G.turn === 0, 'nardy: черновик не трогает настоящую партию');
+  T.draftStep(D, 0, 0, 5); T.draftStep(D, 0, 5, 3);
+  ok(T.draftDone(D, 0), 'nardy: оба кубика сыграны — ход доделан');
+  ok(T.applySeq(G, 0, [{ f: 0, d: 5 }]) === 'Ход не доделан: кубики нужно использовать по максимуму' && snap(G) === s0, 'nardy: недоделанный ход хозяин не принимает, партия не тронута');
+  ok(T.applySeq(G, 0, [{ f: 0, d: 5 }, { f: 0, d: 3 }]) === 'Так ходить нельзя' && snap(G) === s0, 'nardy: ход не по правилам — отказ, партия не тронута');
+  ok(!T.applySeq(G, 0, D.seq) && G.turn === 1 && G.phase === 'roll' && G.cnt[0][8] === 1 && G.cnt[0][0] === 14, 'nardy: «Готово» — ход принят, очередь соперника');
+  ok(T.applySeq(G, 0, D.seq) === 'Сейчас нельзя ходить', 'nardy: второй раз тот же ход — нельзя');
+  // дубль 6-6 на первом ходу — с головы две
+  G = T.newGame(players, rng(2)); T.roll(G, 0, 6, 6); D = T.draft(T.pub(G), 0);
+  ok(!T.draftStep(D, 0, 0, 6) && !T.draftStep(D, 0, 0, 6) && T.draftStep(D, 0, 0, 6) === 'Так ходить нельзя', 'nardy: 6-6 первым ходом — с головы две, третья нельзя (черновик из публичного состояния)');
+  // свойство: случайные ходы со случайными отменами → «Готово» → хозяин принимает; итог — один из законных ходов (sequences)
+  let games = 0, turns = 0, bad = 0, undos = 0, notFinal = 0, errs = 0;
+  for (let g = 0; g < 60 && !bad; g++) {
+    const rand = rng(300 + g);
+    G = T.newGame(players, rand);
+    for (let k = 0; k < 400 && G.winner < 0; k++) {
+      const p = G.turn;
+      if (G.phase === 'roll') { T.roll(G, p); continue; }
+      if (p === 1) { for (const s of T.botTurn(G, p, 'hard')) if (T.move(G, p, s.f, s.d)) { errs++; break; } continue; }
+      const finals = new Set(T.sequences(G, p).seqs.map(seq => { const c = [G.cnt[0].slice(), G.cnt[1].slice()], o = G.off.slice(); for (const { f, d } of seq) { c[p][f]--; if (f + d < 24) c[p][f + d]++; else o[p]++; } return c[p].join(',') + '|' + o[p]; }));
+      D = T.draft(T.pub(G), p);
+      let guard = 0;
+      while (!T.draftDone(D, p) && guard++ < 40) {
+        const L = T.legalNow(D, p);
+        if (D.seq.length && rand() < .3) { T.draftUndo(D); undos++; continue; }
+        const m = L[Math.floor(rand() * L.length)];
+        if (T.draftStep(D, p, m.f, m.d)) { bad++; break; }
+      }
+      if (!finals.has(D.cnt[p].join(',') + '|' + D.off[p])) notFinal++;
+      const e = T.applySeq(G, p, D.seq);
+      if (e) { bad++; console.log('отказ', e, JSON.stringify(D.seq)); break; }
+      turns++;
+    }
+    if (G.winner >= 0) games++;
+  }
+  ok(bad === 0 && errs === 0, 'nardy: ходы с отменами хозяин всегда принимает', { bad, errs });
+  ok(notFinal === 0, 'nardy: собранный ход — всегда один из законных (как у бота)', notFinal);
+  ok(turns > 1000 && undos > 300, 'nardy: проверено много ходов и отмен', { turns, undos, games });
+  ok(games >= 40, 'nardy: партии доходят до конца', games);
+}
+
 console.log(`games-test: ${pass} ok, ${fail} fail (${((Date.now() - t0) / 1000).toFixed(1)} с)`);
 process.exit(fail ? 1 : 0);

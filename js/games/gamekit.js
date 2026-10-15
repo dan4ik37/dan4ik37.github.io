@@ -91,6 +91,7 @@ body.high .gk-turn.me{animation:gkTurn 1.6s ease-in-out infinite}
 .gk-go{border:none!important;color:#fff!important;background:linear-gradient(135deg,#16a34a,#22c55e)!important}
 .gk-armed{border-color:#f59e0b!important;background:rgba(245,158,11,.2)!important;color:#fde68a!important}
 body.high .gk-go.pulse{animation:gkTurn 1.4s ease-in-out infinite}
+.un-btn:disabled,.ct-actions button:disabled{opacity:.4;cursor:default;filter:saturate(.3);animation:none}
 /* пальцу — не меньше 40 px (было 28–36) */
 .ct-opt,.un-n,.un-btn,.ct-actions button,.g2-new,.td-b,.ct-link button,.sl-btns button{min-height:40px}
 .ct-opt{padding:.45rem .85rem}
