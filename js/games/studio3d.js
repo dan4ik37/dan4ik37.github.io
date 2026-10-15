@@ -1789,7 +1789,9 @@ Players.PlayerAdded.Connect(player => {
     mp.S = E.net.session({ transport: tr, scene: ed.SC, nick: pl.nick, info: { look }, extra: NET_EXTRA,
       onHost: live(mpOnHost), onPlayer: live(mpOnPlayer), onGuestEvent: live(mpGuestEvent), onEvent: live(mpEvent),
       onBlob: live((name, u, text) => { if (name === 'world') mpWorld(text()); }), onReady: live(mpReadyCheck),
-      onTeleport: live(mpTeleport), onCheat: live(mpCheat) });
+      onTeleport: live(mpTeleport), onCheat: live(mpCheat),
+      // сам прыгнул (возрождение): к точке появления, как в net.js, — или куда разрешил режим игры (чекпоинт гонки)
+      validTeleport: (id, wp) => nearSpawn(ed.SC, wp) || !!pplugAny('validTeleport', id, wp) });
     // мой человечек — под номером в комнате: у не выбранных частей тела «отпечаток» ключа, пусть он будет как у других
     const a = pl.A.get(pl.meKey);
     pl.A.remove(pl.meKey); pl.meKey = mp.S.myId; pl.A.add(pl.meKey, look, { x: a?.x ?? pl.P.ch.x, y: a?.y ?? pl.P.ch.y, z: a?.z ?? pl.P.ch.z, yaw: pl.P.yaw });
@@ -1797,6 +1799,11 @@ Players.PlayerAdded.Connect(player => {
     if (pl.role === 'wait') mpWait('👥 Подключаемся к комнате…', `Код комнаты: ${code}`);
     mpPanel(); renderPInfo(); drawStats();
     return true;
+  }
+  function nearSpawn(SC, wp){
+    const sp = SC.all().filter(x => x.cls === 'Spawn' && Array.isArray(x.pos));
+    if (!sp.length) return true;
+    return sp.some(s => Math.hypot(s.pos[0] - wp[0], s.pos[2] - wp[2]) < Math.max(s.size?.[0] || 4, s.size?.[2] || 4) / 2 + 3 && Math.abs(s.pos[1] - wp[1]) < 8);
   }
   function mpClose(){
     const ed = ED, mp = ed?.mp; if (!mp) return;

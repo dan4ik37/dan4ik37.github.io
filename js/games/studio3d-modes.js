@@ -159,7 +159,7 @@ script.Parent.Touched.Connect((hit, player) => {
   const settings = (SC2, game, camera) => { SC2.settings = { game: { mode: game, ...E.modes.MODES[game].def }, age: E.modes.PVP.has(game) ? 12 : 6 }; if (camera) SC2.settings.camera = typeof camera === 'string' ? { mode: camera } : camera; };
   T['m-obby'] = { name: 'Обби: полоса препятствий', icon: '🏃', build(S){
     B(S, 'Старт', [0, -.5, 0], [16, 1, 16], '#4b974b', 'grass');
-    S.add('Spawn', { name: 'Старт', pos: [0, .2, 0] });
+    S.add('Spawn', { name: 'Старт', pos: [0, .2, 0], rot: [0, 180, 0] });   // лицом к полосе (−Z)
     let z = -10; const plat = [[0, 1.2], [3, 2.2], [-2, 3.2], [1, 4], [-1, 4.8]];
     plat.forEach(([x, y], i) => { z -= 4.2; B(S, 'Платформа ' + (i + 1), [x, y, z], [3, .6, 3], ['#0d69ac', '#00ffff', '#6e99ca'][i % 3], 'smooth'); });
     B(S, 'Лава', [0, .05, -24], [20, .2, 30], '#ff4b1f', 'neon', { touch: 'kill' });
@@ -178,7 +178,7 @@ script.Parent.Touched.Connect((hit, player) => {
     B(S, 'Поворот 1', [-L / 2, -.05, 0], [w, .1, Wd + w], '#3a3d48', 'asphalt'); B(S, 'Поворот 2', [L / 2, -.05, 0], [w, .1, Wd + w], '#3a3d48', 'asphalt');
     for (const [x, z] of [[-L / 2 - 6, 0], [L / 2 + 6, 0]]) B(S, 'Отбойник', [x, .6, z], [1, 1.2, Wd + 22], '#c4281c', 'plastic');
     for (const z of [-Wd / 2 - 6, Wd / 2 + 6]) B(S, 'Отбойник', [0, .6, z], [L + 12, 1.2, 1], '#f2f3f3', 'plastic');
-    S.add('Spawn', { name: 'Старт', pos: [-6, .2, Wd / 2], size: [5, .4, 8] });
+    S.add('Spawn', { name: 'Старт', pos: [-6, .2, Wd / 2], size: [5, .4, 8], rot: [0, 90, 0] });   // лицом вдоль трассы (+X)
     B(S, 'Финиш', [0, 2.5, Wd / 2], [.6, 5, w], '#f5cd30', 'neon', { alpha: .45, collide: false, shadow: false, touch: 'finish' });
     B(S, 'Чекпоинт 1', [L / 2, 2.5, 0], [w, 5, .6], '#22c55e', 'neon', { alpha: .55, collide: false, shadow: false, touch: 'check', order: 1 });
     B(S, 'Чекпоинт 2', [0, 2.5, -Wd / 2], [.6, 5, w], '#22c55e', 'neon', { alpha: .55, collide: false, shadow: false, touch: 'check', order: 2 });
@@ -194,7 +194,7 @@ script.Parent.Touched.Connect((hit, player) => {
     for (const [x, z, sx, sz] of [[0, -22, 44, 1], [0, 22, 44, 1], [-22, 0, 1, 44], [22, 0, 1, 44]]) B(S, 'Стена', [x, 2, z], [sx, 4, sz], '#635f62', 'brick');
     for (const [x, z] of [[-8, -8], [8, 8], [-8, 8], [8, -8]]) B(S, 'Укрытие', [x, 1, z], [4, 2, 1], '#7c5c46', 'wood');
     B(S, 'Центр', [0, .5, 0], [6, 1, 6], '#da8541', 'cobble');
-    for (const [x, z, n] of [[-17, -17, 1], [17, 17, 2], [-17, 17, 3], [17, -17, 4]]) S.add('Spawn', { name: 'Спавн ' + n, pos: [x, .2, z], size: [4, .4, 4] });
+    for (const [x, z, n] of [[-17, -17, 1], [17, 17, 2], [-17, 17, 3], [17, -17, 4]]) S.add('Spawn', { name: 'Спавн ' + n, pos: [x, .2, z], size: [4, .4, 4], rot: [0, +(Math.atan2(-x, -z) / DEG).toFixed(1), 0] });   // лицом к центру
     settings(S, 'ffa', 'shoulder');
     return { time: 16 };
   } };
@@ -203,8 +203,8 @@ script.Parent.Touched.Connect((hit, player) => {
     B(S, 'База красных', [-30, .1, 0], [10, .2, 34], '#ef4444', 'plastic'); B(S, 'База синих', [30, .1, 0], [10, .2, 34], '#3b82f6', 'plastic');
     for (const [x, z] of [[-12, -6], [-12, 8], [0, 0], [12, 6], [12, -8], [0, -12], [0, 12]]) B(S, 'Укрытие', [x, 1.2, z], [2, 2.4, 5], '#a3a2a5', 'concrete');
     for (const z of [-17.5, 17.5]) B(S, 'Забор', [0, 1, z], [70, 2, 1], '#7c5c46', 'wood');
-    S.add('Spawn', { name: 'Точка: Красные', pos: [-31, .3, -6], team: 1, color: '#ef4444' }); S.add('Spawn', { name: 'Точка: Красные', pos: [-31, .3, 6], team: 1, color: '#ef4444' });
-    S.add('Spawn', { name: 'Точка: Синие', pos: [31, .3, -6], team: 2, color: '#3b82f6' }); S.add('Spawn', { name: 'Точка: Синие', pos: [31, .3, 6], team: 2, color: '#3b82f6' });
+    S.add('Spawn', { name: 'Точка: Красные', pos: [-31, .4, -6], team: 1, color: '#ef4444', rot: [0, 90, 0] }); S.add('Spawn', { name: 'Точка: Красные', pos: [-31, .4, 6], team: 1, color: '#ef4444', rot: [0, 90, 0] });
+    S.add('Spawn', { name: 'Точка: Синие', pos: [31, .4, -6], team: 2, color: '#3b82f6', rot: [0, -90, 0] }); S.add('Spawn', { name: 'Точка: Синие', pos: [31, .4, 6], team: 2, color: '#3b82f6', rot: [0, -90, 0] });
     settings(S, 'teams');
     return { time: 15 };
   } };
@@ -212,7 +212,7 @@ script.Parent.Touched.Connect((hit, player) => {
     B(S, 'Земля', [0, -.5, 0], [60, 1, 60], '#a4bd47', 'grass');
     [[24, 0], [18, 1], [12, 2], [7, 3]].forEach(([s, i]) => B(S, 'Ступень ' + (i + 1), [0, i + .5, 0], [s, 1, s], ['#d7c59a', '#cc8e69', '#da8541', '#c4281c'][i], 'rock'));
     B(S, 'Зона холма', [0, 4.15, 0], [7, .3, 7], '#22c55e', 'neon', { alpha: .5, collide: false, shadow: false, touch: 'hill' });
-    for (const [x, z, n] of [[-24, 0, 1], [24, 0, 2], [0, -24, 3], [0, 24, 4]]) S.add('Spawn', { name: 'Спавн ' + n, pos: [x, .2, z], size: [5, .4, 5] });
+    for (const [x, z, n] of [[-24, 0, 1], [24, 0, 2], [0, -24, 3], [0, 24, 4]]) S.add('Spawn', { name: 'Спавн ' + n, pos: [x, .2, z], size: [5, .4, 5], rot: [0, +(Math.atan2(-x, -z) / DEG).toFixed(1), 0] });   // лицом к холму
     settings(S, 'koth');
     return { time: 12 };
   } };
@@ -242,8 +242,9 @@ script.Parent.Touched.Connect((hit, player) => {
   T['m-survival'] = { name: 'Выживание: ночь зомби', icon: '🧟', build(S){
     B(S, 'Двор', [0, -.5, 0], [56, 1, 56], '#635f62', 'dirt');
     for (const [x, z, sx, sz] of [[0, -28, 56, 1], [0, 28, 56, 1], [-28, 0, 1, 56], [28, 0, 1, 56]]) B(S, 'Забор', [x, 1.5, z], [sx, 3, sz], '#7c5c46', 'wood');
-    B(S, 'Крыша дома', [0, 4.2, 0], [10, .4, 10], '#635f62', 'concrete');
-    for (const [x, z] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) B(S, 'Столб', [x, 2, z], [1, 4, 1], '#7c5c46', 'wood');
+    // укрытие без крыши (камера сверху-сбоку не должна терять игрока): низкие стенки и ящики
+    for (const [x, z, sx, sz] of [[0, -5, 10, .6], [-5, 0, .6, 10], [5, 2.5, .6, 5]]) B(S, 'Стенка', [x, .6, z], [sx, 1.2, sz], '#7c5c46', 'wood');
+    for (const [x, z] of [[-12, 8], [10, -10], [14, 12], [-14, -12]]) B(S, 'Ящик', [x, .75, z], [1.5, 1.5, 1.5], '#da8541', 'wood');
     S.add('Spawn', { name: 'Убежище', pos: [0, .2, 0], size: [6, .4, 6] });
     for (const [x, z] of [[-22, -22], [22, 22], [-22, 22], [22, -22]]) B(S, 'Зона зомби', [x, .05, z], [6, .2, 6], '#ef4444', 'neon', { alpha: .6, collide: false, shadow: false, touch: 'zspawn' });
     S.add('Light', { name: 'Фонарь', pos: [0, 6, 0], color: '#ffd9a0', range: 30, power: 3 });
@@ -253,7 +254,7 @@ script.Parent.Touched.Connect((hit, player) => {
   } };
   T['m-side'] = { name: 'Платформер сбоку (2D)', icon: '🎮', build(S){
     B(S, 'Пол', [-6, -.5, 0], [30, 1, 6], '#4b974b', 'grass');
-    S.add('Spawn', { name: 'Старт', pos: [-16, .2, 0], size: [4, .4, 4] });
+    S.add('Spawn', { name: 'Старт', pos: [-16, .2, 0], size: [4, .4, 4], rot: [0, 90, 0] });
     const steps = [[2, 1.2, 4], [7, 2.4, 3], [12, 3.6, 3], [17, 2.4, 3], [22, 3.8, 2.5], [27, 5.2, 2.5], [33, 4, 4]];
     steps.forEach(([x, y, w], i) => B(S, 'Платформа ' + (i + 1), [x, y, 0], [w, .6, 4], ['#0d69ac', '#6b327c', '#da8541'][i % 3], 'smooth'));
     B(S, 'Лава', [16, .05, 0], [30, .2, 6], '#ff4b1f', 'neon', { touch: 'kill' });

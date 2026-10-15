@@ -198,6 +198,7 @@
 .s3x-win .s3x-row{justify-content:center}
 .s3 .s3x-win button{min-height:44px;padding:8px 16px;font-size:14px}
 .s3-compact.s3-playing .s3-stats{top:auto;bottom:96px;right:8px}
+.s3x-moded .s3-stats{top:auto;bottom:110px}   /* режим игры: своё табло сверху справа, таблица скриптов — ниже */
 .s3-view:has(.s3x-mhud) .s3-labels{top:74px}
 
 /* ── Обучение «Первый мир за 5 минут» ── */

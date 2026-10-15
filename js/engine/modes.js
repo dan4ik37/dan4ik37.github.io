@@ -172,6 +172,7 @@
       }
       if (w.id && ps.get(w.id)) ps.get(w.id).wins++;
       if (w.team) for (const p of ps.values()) if (p.team === w.team) p.wins++;
+      if (w.side) for (const p of ps.values()) if (w.side === 'seek' ? p.role === 'seeker' : w.side === 'hide' ? p.role === 'hider' : w.side === 'p' && !p.out) p.wins++;   // прятки, выживание — победа стороны
       for (const p of ps.values()) { p.total += Math.round(p.score); freeze(p, true); blind(p, false); }
       w.text = w.text || (w.team ? `🏆 Победили ${team(w.team)}!` : `🏆 Победил ${nm(ps.get(w.id))}!`);
       M.winner = w; M.phase = 'end'; M.t = 0;

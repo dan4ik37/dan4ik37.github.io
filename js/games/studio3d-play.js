@@ -36,7 +36,9 @@
     if (!list.length) return A.spawnPoint();
     const s = list[k % list.length], n = Math.floor(k / list.length);
     const r = n ? Math.min(Math.min(s.size[0], s.size[2]) / 2 - .4, .9 + .7 * Math.floor((n - 1) / 6)) : 0, a = (n - 1) * Math.PI / 3;
-    return [+(s.pos[0] + Math.cos(a) * Math.max(0, r)).toFixed(3), +(s.pos[1] + s.size[1] / 2 + .05).toFixed(3), +(s.pos[2] + Math.sin(a) * Math.max(0, r)).toFixed(3)];
+    const p = [+(s.pos[0] + Math.cos(a) * Math.max(0, r)).toFixed(3), +(s.pos[1] + s.size[1] / 2 + .05).toFixed(3), +(s.pos[2] + Math.sin(a) * Math.max(0, r)).toFixed(3)];
+    p.yaw = (s.rot?.[1] || 0) * DEG;   // смотрит, куда повёрнута точка появления (старт гонки — вдоль трассы)
+    return p;
   }
   // чекпоинты гонки: детали «🚩» по номеру (order), потом по порядку в мире — у хозяина и гостей одинаково
   const checksOf = () => SC().all().filter(o => o.cls === 'Part' && o.touch === 'check').sort((a, b) => ((a.order | 0) - (b.order | 0)));
@@ -72,9 +74,11 @@
     coinTaken(){},
   };
   function spawnOne(id, at){
-    if (id === myId()) { const P = pl(); P.sp = at.slice(); P.dead = 0; A.respawn(); applyMe(); }
-    else A.sendTo(id, 'mode', { cmd: 'spawn', at });
+    if (id === myId()) { const P = pl(); P.sp = at.slice(); P.dead = 0; A.respawn(); face(at.yaw); applyMe(); }
+    else A.sendTo(id, 'mode', { cmd: 'spawn', at: at.slice(0, 3), yaw: at.yaw || 0 });
   }
+  // повернуть себя (и камеру за спину) — при появлении на старте
+  function face(yaw){ const P = pl(); if (!P || !Number.isFinite(yaw)) return; P.P.yaw = yaw; if (P.rig) P.rig.yaw = yaw + Math.PI; }   // камера смотрит туда же (и от 1-го лица)
   // свой персонаж: заморожен (отсчёт, ищущий с закрытыми глазами, итоги раунда) — стоит
   // только на переходе «заморожен → свободен» (иначе разбудим ждущего комнату или мёртвого)
   function applyMe(){ const P = pl(); if (!P || !st) return; if (st.frozen) { P.P.enabled = false; st.fzOn = true; } else if (st.fzOn) { st.fzOn = false; if (!P.dead && P.role !== 'wait') P.P.enabled = true; } }
@@ -222,8 +226,9 @@
         w?.remove(); w = document.createElement('div'); w.className = 's3x-win'; w.dataset.k = key; viewEl.appendChild(w);
         const live = !!M, last = v.ph === 'over';
         const rows = v.ps.slice(0, 8).map((p, i) => `<tr class="${p.id === myId() ? 'me' : ''}"><td>${i + 1}. ${p.tm && TEAM(p.tm) ? TEAM(p.tm)[0] + ' ' : ''}${esc(p.n)}</td><td>${esc(unit(p))}${v.c.rounds > 1 ? ` · 🏆${p.w}` : ''}</td></tr>`).join('');
-        w.innerHTML = `<div><h3>${esc(v.w?.text || (last ? 'Конец игры' : 'Раунд окончен'))}</h3><p>${last ? (v.c.rounds > 1 ? `Сыграно раундов: ${v.c.rounds}` : '') : `Раунд ${v.r} из ${v.c.rounds} · следующий сейчас начнётся`}</p><table>${rows}</table>`
-          + `<div class="s3x-row">${live && last ? '<button type="button" class="s3-play" data-w="again">🔁 Ещё раз</button>' : ''}${live && !last ? '<button type="button" data-w="next">▶ Дальше</button>' : ''}${!live && last ? '<p>Ждём, когда хозяин начнёт заново…</p>' : ''}<button type="button" data-w="hide">✕</button></div></div>`;
+        const lastR = !last && v.r >= v.c.rounds;
+        w.innerHTML = `<div><h3>${esc(v.w?.text || (last ? 'Конец игры' : 'Раунд окончен'))}</h3><p>${last ? (v.c.rounds > 1 ? `Сыграно раундов: ${v.c.rounds}` : 'Игра окончена') : lastR ? (v.c.rounds > 1 ? 'Это был последний раунд' : 'Раунд окончен') : `Раунд ${v.r} из ${v.c.rounds} · следующий сейчас начнётся`}</p><table>${rows}</table>`
+          + `<div class="s3x-row">${live && last ? '<button type="button" class="s3-play" data-w="again">🔁 Ещё раз</button>' : ''}${live && !last ? `<button type="button" data-w="next">▶ ${lastR ? 'К итогам' : 'Дальше'}</button>` : ''}${!live && last ? '<p>Ждём, когда хозяин начнёт заново…</p>' : ''}<button type="button" data-w="hide" title="Спрятать">✕</button></div></div>`;
         w.addEventListener('click', ev => { const k = ev.target.closest('[data-w]')?.dataset.w; if (!k) return; if (k === 'hide') w.hidden = true; else if (k === 'again' && M) { M.start(); broadcast(true); } else if (k === 'next' && M && M.phase === 'end') { M.t = 99; } });
       }
     } else w?.remove();
@@ -367,6 +372,11 @@
       return null;
     },
     join(p){ if (M && A.live()) { M.join(p.id, p.nick); broadcast(true); } },
+    // гонка: возродился у чекпоинта — хозяин такой прыжок разрешает
+    validTeleport(id, wp){
+      const v = view(); if (!v || v.m !== 'race') return false;
+      return checksOf().some(o => Math.hypot(o.pos[0] - wp[0], o.pos[2] - wp[2]) < Math.max(o.size?.[0] || 4, o.size?.[2] || 4) / 2 + 2 && Math.abs(o.pos[1] - wp[1]) < (o.size?.[1] || 4) + 3);
+    },
     leave(p){ if (M) M.leave(p.id); },
     // у хозяина: удар гостя, его смерть
     hostEvent(ty, d, from){
@@ -380,8 +390,16 @@
       if (!st) return false;
       if (ty === 'coin') { A.sound('coin'); return true; }
       if (ty !== 'mode') return false;
-      if ('v' in d) { st.view = d.v && typeof d.v === 'object' ? d.v : null; st.viewAt = performance.now(); }
-      if (d.cmd === 'spawn' && Array.isArray(d.at) && d.at.length === 3 && d.at.every(Number.isFinite)) { const P = pl(); P.sp = d.at.slice(); P.dead = 0; A.respawn(); applyMe(); }
+      if ('v' in d) {
+        st.view = d.v && typeof d.v === 'object' ? d.v : null; st.viewAt = performance.now();
+        // пришёл посреди раунда в командах — к своей команде (хозяин разрешает прыжок к точке появления)
+        const v = st.view, me = meIn(v);
+        if (!st.teamPlaced && v?.c?.teams && me?.tm && (v.ph === 'play' || v.ph === 'count') && A.mp?.spawned && !pl()?.dead) {
+          st.teamPlaced = true;
+          const at = spawnPos(me.tm, Math.random() * 3 | 0, v.m); pl().sp = at.slice(); A.teleport('me', at, at.yaw); face(at.yaw);
+        }
+      }
+      if (d.cmd === 'spawn' && Array.isArray(d.at) && d.at.length === 3 && d.at.every(Number.isFinite)) { const P = pl(); P.sp = d.at.slice(); P.dead = 0; A.respawn(); face(+d.yaw || 0); applyMe(); }
       else if (d.cmd === 'hurt') { const P = pl(); if (+d.dmg > 0) A.hurt(Math.min(200, +d.dmg)); P.P.push(Math.max(-2, Math.min(2, +d.kx || 0)) * 9, 5.5, Math.max(-2, Math.min(2, +d.kz || 0)) * 9); P.rig.kick?.(1); }
       else if (d.cmd === 'say') toast(String(d.text || ''));
       else if (d.cmd === 'cam') setCamMode(String(d.mode || ''));
@@ -419,5 +437,5 @@
       broadcast(true);
     },
   });
-  E.s3play = { _test: { leftOf, spawnPos: (t, k, m) => spawnPos(t, k, m), state: () => ({ M, V, st }) } };
+  E.s3play = { _test: { leftOf, spawnPos: (t, k, m) => spawnPos(t, k, m), state: () => ({ M, V, st }), attack: (from, yaw) => attack(from ?? myId(), yaw) } };
 })();

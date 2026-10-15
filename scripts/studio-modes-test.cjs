@@ -172,6 +172,7 @@ const run = (M, sec, ctx = {}, dt = 1 / 60) => { const n = Math.round(sec / dt);
   run(M, 1 / 60, { near: [[hiders[0].id, hiders[1].id]] });
   run(M, 1 / 60);
   ok(M.phase === 'end' && M.winner.side === 'seek', 'прятки: нашли всех — ищущие победили', M.winner);
+  ok(M.players().every(p => p.wins === 1), 'прятки: победа раунда — всем ищущим (и найденным, ставшим ищущими)', M.players().map(p => p.wins));
   run(M, 5.1);
   const s2 = M.players().find(p => p.role === 'seeker');
   ok(M.phase === 'play' && M.round === 2 && s2.id !== seeker.id, 'прятки: следующий раунд — ищет другой', [M.round, s2.id, seeker.id]);
