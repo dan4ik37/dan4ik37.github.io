@@ -118,6 +118,8 @@ function currentRouteParam(){
   const slash = raw.indexOf('/');
   return slash === -1 ? null : raw.slice(slash + 1) || null;
 }
-window.addEventListener('hashchange', ()=>showPage(currentRoute()));
+// «Игра поверх мира»: пока партия из «Мира Денчика» открыта окном поверх мира, её переходы (онлайн, «выйти») ведёт
+// js/games/mir-play.js — мир не выгружаем и страницу не меняем
+window.addEventListener('hashchange', e=>{ if (window.MirPlay?.onHash?.(e)) return; showPage(currentRoute()); });
 showPage(currentRoute());
 

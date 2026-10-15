@@ -6,9 +6,9 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '57';
+const GAMES_VER = '58';
 const GAMES = [
-  { id: 'world',    icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
+  { id: 'world',    icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
   { id: 'studio3d', icon: '🧱', title: 'Студия 3D',       desc: 'Построй свой 3D-мир, как в Roblox Studio: детали, деревья и фонари, материалы, холмы и вода, время суток. Оживи детали скриптами — двери, монетки, лава, платформы — и пройди свой мир персонажем.', scripts: ['js/games/room.js', 'js/games/netplay.js', 'js/games/world3d.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/batch.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/engine/model.js', 'js/engine/scene.js', 'js/engine/rigid.js', 'js/engine/gizmo.js', 'js/engine/terrain.js', 'js/engine/script.js', 'js/engine/lang-lua.js', 'js/engine/lang-cs.js', 'js/engine/lang-wasm.js', 'js/engine/net.js', 'js/engine/net-transport.js', 'js/games/studio3d.js'], color: '#f59e0b' },
   { id: 'unity',    icon: '🕹️', title: 'Unity-игры',      desc: 'Игры, которые игроки сделали в Unity: играй прямо на сайте и зови друзей в комнату по ссылке — кто зашёл первым, тот хост. Делаешь игры в Unity? Добавь свою.', scripts: ['js/games/netplay.js', 'js/games/unity-host.js'], color: '#7dd3fc' },
@@ -174,7 +174,8 @@ window.D37Gems?.on(() => { if (D37Gems.isOn() && !document.getElementById('games
 // Есть диспетчер (ad-places.js) — он: на компьютере каждая 3-я партия — «☕ Перерыв», Google без обновлений, VIP без рекламы
 let gamesAdAt = 0;
 function gamesAdAfterRound(){
-  const stage = document.getElementById('gamesStage');
+  // «Игра поверх мира» (js/games/mir-play.js): партия в окне поверх мира — реклама в его полоске итога, а не под миром
+  const stage = window.MirPlay?.adStage?.() || document.getElementById('gamesStage');
   if (window.D37AdPlaces) { window.D37AdPlaces.afterRound(stage); return; }
   if (!stage || stage.hidden || !window.D37Ads || Date.now() - gamesAdAt < 90000) return;
   let box = document.getElementById('gamesAd');
@@ -223,6 +224,8 @@ async function openGame(id, param){
   stage.dataset.game = id; gamesSyncMute();
   window.D37Full?.auto(stage);
   if (window.D37Settings?.get('autoFull') && !window.D37Full?.active()) window.D37Full?.enter(stage);
+  // «Игра поверх мира»: пришли сюда из «Мира Денчика» (и после перезагрузки) — в шапке «↩ В мир» (js/games/mir-play.js)
+  try { if (id !== 'world' && sessionStorage.getItem('d37_from_world')) gamesLoadScript('js/games/mir-play.js').then(() => window.MirPlay?.shell(), () => {}); } catch (e) {}
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
   const adL = window.D37AdPlaces?.loading({ anchor: box.firstChild, game: id, param: gamesParam });   // реклама, если грузится дольше 1,5 с (ad-places.js)
   try {
