@@ -10,6 +10,7 @@
 .s3-playing .s3x-hints{display:none}
 .s3-msg{bottom:52px}
 .s3x-keysbtn span{margin-left:2px}
+@media (max-width:1560px){.s3 .s3-ext button span{display:none}}   /* кнопки расширений — значками (подсказка — title) */
 
 /* ── Лист (окно) расширений: на компьютере — окно справа, на телефоне — снизу / сбоку ── */
 .s3x-sheet{position:absolute;z-index:8;right:12px;top:56px;width:min(380px,calc(100% - 24px));max-height:calc(100% - 70px);display:flex;flex-direction:column;border-radius:14px;background:#23252d;border:1px solid #3a3d48;box-shadow:0 16px 44px rgba(0,0,0,.5);opacity:0;transform:translateY(8px);transition:opacity .16s,transform .16s}
@@ -216,7 +217,7 @@
 .s3x-tut .dots i.cur{background:#fbbf24}
 .s3 .s3x-tut button{min-height:38px;padding:6px 12px}
 .s3-port .s3x-tut{left:8px;right:8px;width:auto;bottom:calc(var(--s3x-bar,74px) + 8px)}
-.s3-land .s3x-tut{left:80px;bottom:10px}
+.s3-land .s3x-tut{left:10px;bottom:44px;width:min(340px,calc(100% - 20px))}
 .s3-playing .s3x-tut{bottom:auto;top:56px}
 .s3x-ring{position:fixed;z-index:100002;border:3px solid #fbbf24;border-radius:14px;box-shadow:0 0 0 4px rgba(251,191,36,.25),0 0 22px rgba(251,191,36,.6);pointer-events:none;animation:s3xRing 1.2s ease-in-out infinite}
 @keyframes s3xRing{50%{box-shadow:0 0 0 9px rgba(251,191,36,.12),0 0 30px rgba(251,191,36,.75)}}

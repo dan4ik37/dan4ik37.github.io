@@ -1261,8 +1261,8 @@ Players.PlayerAdded.Connect(player => {
         else SC2.set(o2, key, val);
         if (el.type === 'range') { const b = el.closest('label')?.querySelector('b'); if (b) b.textContent = (+val).toFixed(key === 'alpha' ? 2 : 1); }
         updateGizmo();
-        if (key === 'shape' || key === 'kind' || key === 'enabled') renderProps();
-        if (key === 'kind' || key === 'locked' || key === 'look') renderTree();
+        if (key === 'shape' || key === 'kind' || key === 'enabled' || key === 'touch') renderProps();   // touch: «чекпоинт» — появится номер
+        if (key === 'kind' || key === 'locked' || key === 'look' || key === 'team' || key === 'touch') renderTree();   // значок в Проводнике (команда, чекпоинт, зона)
         if (key === 'act') renderProps();
       };
       P.addEventListener('input', e => onIn(e, false));
