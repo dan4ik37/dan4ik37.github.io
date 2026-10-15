@@ -291,6 +291,20 @@ mod.on('use', 'b', e => { player.launch(0, 999, 0); player.teleport(e.x, 300, e.
     g.R.event('chat', { x: 8, y, z: 8, text: '' }); await tick(250);
     ok(g.log.log.some(t => t.includes(V.blocks[g.W.get(8, y - 1, 8)].name + '|bedrock|null')), 'world.get — рядом сразу, world.read — дальше через ожидание', g.log.log);
     g.R.stop(); }
+  // Lua: world:read ждёт само, mod.storage и команды через двоеточие, task.wait
+  { const g = mkGame([{ manifest: { id: 'luard', name: 'luard', scripts: [{ file: 'a.lua' }] }, files: { 'a.lua': `
+mod:on("chat", function(e)
+  local far = world:read(e.x + 20, 0, e.z)
+  task.wait(0.05)
+  mod.storage:set("n", (mod.storage:get("n") or 0) + 1)
+  player:message("lua " .. tostring(far) .. " " .. tostring(world:get(e.x, 0, e.z)) .. " n=" .. mod.storage:get("n"))
+end)
+mod:command("hi", function(args, p) p:message("привет, " .. p.name .. " " .. #args) end)` } }]); await waitReady(g.R);
+    g.R.event('chat', { x: 8, y: 2, z: 8, text: '' }); await tick(300);
+    ok(g.log.log.some(t => /lua bedrock bedrock n=1/.test(t)), 'Lua: world:read ждёт ответ, task.wait, mod.storage', g.log.log);
+    g.R.command('hi', ['a', 'b']); await tick(150);
+    ok(g.log.log.some(t => /привет, Игрок 2/.test(t)), 'Lua: команда мода с аргументами', g.log.log);
+    g.R.stop(); }
 
   // ═══ 6. Рамка песочницы: «пинг» с номером ═══
   sec('моды: рамка песочницы (зависание)');
