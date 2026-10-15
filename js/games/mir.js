@@ -97,6 +97,8 @@
       out += bad ? '*'.repeat(Math.min(6, j - i)) : chars.slice(i, j).join('');
       i = j;
     }
+    // Ребёнку до 13 (js/core/age.js) — строже: телефоны, почта, соцсети и «скинь фото / где живёшь» закрыты (как в world.js)
+    if (window.D37Age?.kid?.()) out = window.D37Age.kidText(out);
     return out;
   }
   // ── Подпись сообщений (ECDSA P-256), как в world.js ──

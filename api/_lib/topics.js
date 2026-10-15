@@ -2,45 +2,59 @@
 // Список собран по реальным названиям роликов (03.10.2026, ~6000 видео): в тему попадают ролики,
 // в названии которых есть re. Темы с < 30 роликами не заводить — пустые страницы поиску не нужны.
 // Новая игра на канале → добавить запись; порядок = порядок на странице /topics.
+//
+// Возрастные метки роликов (436-ФЗ: 0+, 6+, 12+, 16+, 18+; age — у каждой темы, why — почему): ролик получает НАИБОЛЬШУЮ метку
+// из совпавших тем и AGE_EXTRA; ни одна не совпала — VIDEO_AGE_DEFAULT; кейсы и промокоды на депозит (isGambling) — 18+.
+// Метка — по тому, что видно в игре: мультяшные бои без крови — 6+; эпизодическое насилие, скримеры и страшилки, стрельба по
+// зомби и мультяшным противникам — 12+; реалистичная стрельба по людям, мрачные хорроры с жестокостью, криминал — 16+.
+// 18+ — только то, что детям запрещено законом (азартные игры). Те же правила — VIDEO_RULES в js/core/age.js (тест сверяет).
 
 export const TOPICS = [
-  { slug: 'roblox', name: 'Roblox', re: /roblox|роблокс/i,
+  { slug: 'roblox', name: 'Roblox', re: /roblox|роблокс/i, age: 6, ageWhy: 'Мультяшная игра.',
     about: 'Roblox — платформа с тысячами режимов от игроков. На канале — режимы с подписчиками, ивенты, хорроры и смешные моменты.' },
-  { slug: 'cs2', name: 'Counter-Strike (CS2 и CS:GO)', re: /\bcs\s?2\b|кс\s?2|counter[\s-]?strike|#кс\b|csgo|cs:go|#cs\b/i,
+  { slug: 'cs2', name: 'Counter-Strike (CS2 и CS:GO)', re: /\bcs\s?2\b|кс\s?2|counter[\s-]?strike|#кс\b|csgo|cs:go|#cs\b/i, age: 16, ageWhy: 'Реалистичная стрельба по людям.',
     about: 'Counter-Strike 2 (раньше CS:GO) — командный шутер от Valve. Здесь — катки, моменты, клатчи и тесты железа.' },
-  { slug: 'minecraft', name: 'Minecraft', re: /minecraft|майнкрафт/i,
+  { slug: 'minecraft', name: 'Minecraft', re: /minecraft|майнкрафт/i, age: 6, ageWhy: 'Кубический мир: бои с мобами без крови.',
     about: 'Minecraft — песочница про кубический мир: выживание, постройки, моды и сервера.' },
-  { slug: 'dead-rails', name: 'Dead Rails (Мёртвые рельсы)', re: /dead\s*rails|мёртвые\s*рельсы|мертвые\s*рельсы|мёртвыерельсы/i,
+  { slug: 'dead-rails', name: 'Dead Rails (Мёртвые рельсы)', re: /dead\s*rails|мёртвые\s*рельсы|мертвые\s*рельсы|мёртвыерельсы/i, age: 12, ageWhy: 'Стрельба по зомби (Роблокс).',
     about: 'Dead Rails («Мёртвые рельсы») — режим Roblox: поезд, дикий запад и зомби по пути до конечной станции.' },
-  { slug: 'silksong', name: 'Hollow Knight: Silksong', re: /silksong|hollow\s*knight|хорнет/i,
+  { slug: 'silksong', name: 'Hollow Knight: Silksong', re: /silksong|hollow\s*knight|хорнет/i, age: 6, ageWhy: 'Рисованные бои с жуками без крови.',
     about: 'Hollow Knight: Silksong — метроидвания от Team Cherry, продолжение Hollow Knight, где играем за Хорнет.' },
-  { slug: 'fnaf', name: 'FNAF (Five Nights at Freddy’s)', re: /fnaf|фнаф|five\s*nights/i,
+  { slug: 'fnaf', name: 'FNAF (Five Nights at Freddy’s)', re: /fnaf|фнаф|five\s*nights/i, age: 12, ageWhy: 'Хоррор: скримеры и страшные аниматроники.',
     about: 'Five Nights at Freddy’s — серия хорроров про аниматроников. На канале — сама серия и FNAF-режимы.' },
-  { slug: 'terraria', name: 'Terraria', re: /terraria|террари/i,
+  { slug: 'terraria', name: 'Terraria', re: /terraria|террари/i, age: 6, ageWhy: '2D-песочница: бои с монстрами без крови.',
     about: 'Terraria — 2D-песочница: копаем, строим, сражаемся с боссами.' },
-  { slug: '99-nights', name: '99 ночей в лесу', re: /99\s*nights|99\s*ноч/i,
+  { slug: '99-nights', name: '99 ночей в лесу', re: /99\s*nights|99\s*ноч/i, age: 12, ageWhy: 'Выживание в лесу с монстрами.',
     about: '«99 ночей в лесу» (99 Nights in the Forest) — режим Roblox на выживание: продержаться 99 ночей.' },
-  { slug: 'apex', name: 'Apex Legends', re: /apex/i,
+  { slug: 'apex', name: 'Apex Legends', re: /apex/i, age: 16, ageWhy: 'Стрельба по другим игрокам.',
     about: 'Apex Legends — королевская битва с героями и способностями.' },
-  { slug: 'poppy-playtime', name: 'Poppy Playtime', re: /poppy\s*playtime|haggy|хагги/i,
+  { slug: 'poppy-playtime', name: 'Poppy Playtime', re: /poppy\s*playtime|haggy|хагги/i, age: 12, ageWhy: 'Хоррор про игрушки: скримеры.',
     about: 'Poppy Playtime — хоррор про заброшенную фабрику игрушек и Хагги Вагги.' },
-  { slug: 'tiny-bunny', name: 'Tiny Bunny (Зайчик)', re: /tiny\s*bunny|tinybunny/i,
+  { slug: 'tiny-bunny', name: 'Tiny Bunny (Зайчик)', re: /tiny\s*bunny|tinybunny/i, age: 16, ageWhy: 'Мрачная хоррор-новелла: пропавшие дети, жестокость.',
     about: 'Tiny Bunny («Зайчик») — русская хоррор-новелла про мальчика Антона и зимний лес.' },
-  { slug: 'metro', name: 'Metro 2033', re: /metro\s*(2033|redux|last\s*light|exodus)|метро\s*2033|метро\s*исход/i,
+  { slug: 'metro', name: 'Metro 2033', re: /metro\s*(2033|redux|last\s*light|exodus)|метро\s*2033|метро\s*исход/i, age: 16, ageWhy: 'Постапокалипсис: стрельба, мутанты, страшные сцены.',
     about: 'Серия Metro по романам Дмитрия Глуховского: постапокалипсис в московском метро.' },
-  { slug: 'fortnite', name: 'Fortnite', re: /fortnite|фортнайт/i,
+  { slug: 'fortnite', name: 'Fortnite', re: /fortnite|фортнайт/i, age: 12, ageWhy: 'Королевская битва: стрельба без крови.',
     about: 'Fortnite — королевская битва со строительством и коллаборациями.' },
-  { slug: 'spider-man', name: 'Spider-Man', re: /spider[\s-]?man|человек[\s-]паук/i,
+  { slug: 'spider-man', name: 'Spider-Man', re: /spider[\s-]?man|человек[\s-]паук/i, age: 12, ageWhy: 'Супергерой дерётся с бандитами.',
     about: 'Игры Marvel’s Spider-Man — приключения Человека-паука в Нью-Йорке.' },
-  { slug: 'not-a-human', name: 'No, I’m not a Human', re: /not\s*a\s*human|notahuman/i,
+  { slug: 'not-a-human', name: 'No, I’m not a Human', re: /not\s*a\s*human|notahuman/i, age: 16, ageWhy: 'Хоррор: насилие и жуткие сцены.',
     about: 'No, I’m not a Human — хоррор, где нужно понять, кто стучится в дверь: человек или нет.' },
-  { slug: 'repo', name: 'R.E.P.O.', re: /\brepo\b/i,
+  { slug: 'repo', name: 'R.E.P.O.', re: /\brepo\b/i, age: 12, ageWhy: 'Хоррор с монстрами (вместе с друзьями).',
     about: 'R.E.P.O. — кооперативный хоррор: вытаскиваем ценности из жутких локаций.' },
-  { slug: 'homura-hime', name: 'Homura Hime', re: /homura/i,
+  { slug: 'homura-hime', name: 'Homura Hime', re: /homura/i, age: 12, ageWhy: 'Аниме-экшен с драками.',
     about: 'Ролики dan4ik37 по игре Homura Hime — смешные и эпичные моменты.' },
-  { slug: 'horror', name: 'Хорроры', re: /horror|хоррор|ужастик/i,
+  { slug: 'horror', name: 'Хорроры', re: /horror|хоррор|ужастик/i, age: 12, ageWhy: 'Хоррор: скримеры и страшные моменты.',
     about: 'Все хорроры канала: страшные игры, скримеры и истории.' },
 ];
+
+// Ролики не своей темы, но с меткой: GTA и похожие (GTA 5, SAMP, MTA, CRMP, Radmir, Black Russia) — 16+
+export const AGE_EXTRA = [
+  { re: /gta|(?:^|[^а-яё])гта(?![а-яё])|grand\s*theft|(?:^|[^а-яё])самп(?![а-яё])|\bsamp\b|\bmta\b|крмп|crmp|радмир|radmir|black\s*russia|блэк\s*раша/i, age: 16, ageWhy: 'Криминальный мир как в GTA: стрельба и погони.' },
+];
+// Ни одна тема не совпала: игровой ролик — бывают стрелялки и страшилки
+export const VIDEO_AGE_DEFAULT = 12;
+export const VIDEO_AGE_DEFAULT_WHY = 'Игровой ролик: бывают стрелялки и страшилки.';
 
 // Подробнее о теме — абзац под заголовком на /topic/<slug> (страницы игр — главные для поиска, одной строки мало).
 // Только общеизвестное об игре + что видно по названиям роликов канала; ничего не выдумывать.

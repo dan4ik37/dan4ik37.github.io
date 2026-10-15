@@ -64,11 +64,20 @@ function shareCurrentVid(){
 }
 
 function openVid(id,title,date,views){
-  if(typeof markVidWatched==='function') markVidWatched(id);
   modalVidId = id;
   const pageLink = document.getElementById('mPage'); if (pageLink) pageLink.href = '/v/' + id;
   document.getElementById('mTitle').textContent=title;
   document.getElementById('mMeta').textContent=`YouTube · @Dan4ik37Yt${date?' · '+date:''}${views?' · 👁 '+views:''}`;
+  // Возраст (js/core/age.js): ролик не по возрасту — вместо плеера «обложка» (метка — по названию, как на /v/<id>)
+  const va = window.D37Age?.video(title), box = document.getElementById('mVid');
+  box.classList.remove('age-on');
+  if (va) document.getElementById('mMeta').insertAdjacentHTML('afterbegin', D37Age.badge(va.age, { title: va.why }) + ' ');
+  if (va && D37Age.cover(box, va.age, { why: va.why, compact: true, back: closeModal, onOpen: () => openVid(id, title, date, views) })) {
+    document.getElementById('modal').classList.add('open'); document.body.style.overflow='hidden';
+    trapModalFocus(document.getElementById('modal'));
+    return;
+  }
+  if(typeof markVidWatched==='function') markVidWatched(id);
   // enablejsapi+origin — чтобы xp.js видел реальное время воспроизведения (XP за просмотр)
   document.getElementById('mVid').innerHTML=`<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0&enablejsapi=1&origin=${encodeURIComponent(location.origin)}" allowfullscreen allow="autoplay;encrypted-media"></iframe>`;
   if (typeof xpTrackIframe === 'function') xpTrackIframe(document.querySelector('#mVid iframe'), id, 60);
@@ -78,6 +87,7 @@ function openVid(id,title,date,views){
 function closeModal(){
   document.getElementById('modal').classList.remove('open');
   document.getElementById('mVid').innerHTML='';
+  document.getElementById('mVid').classList.remove('age-on');
   document.body.style.overflow='';
   releaseModalFocus();
   // Показываем баннер подписки после просмотра видео

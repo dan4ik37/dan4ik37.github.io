@@ -494,6 +494,12 @@
     } catch (e) { return null; }
   }
   const LIGHT = 'id,title,icon,descr,url,origin,aspect,players,status,plays,likes,created_at,updated_at,author,profiles(nick)';
+  // Возрастная метка игры (age.sql: age_rating — выбирает автор, меняет модератор; js/core/age.js → D37Age.ugc). Колонку
+  // спрашиваем, только когда она уже есть на сервере — иначе запрос списка сломался бы
+  const AU = () => window.D37Age?.ugc || null;
+  const ageCol = async () => !!(await AU()?.col('unity_games'));
+  const light = async (base = LIGHT) => base + ((await ageCol()) ? ',age_rating' : '');
+  const ageB = g => g?.age_rating != null && window.D37Age ? D37Age.badge(g.age_rating, { title: AU().WHY }) : '';
   const go = p => { location.hash = '#/games/unity' + (p ? '/' + p : ''); };
   const playLink = (id, code) => location.origin + location.pathname + '#/games/unity/play/' + id + (code ? '/' + code : '');
   function newCode(){ let c = ''; for (let i = 0; i < 6; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; }
@@ -541,7 +547,7 @@
   async function mine(st){
     const local = Object.values(drafts());
     let srv = [];
-    if (authed()) srv = await select(q => q.select(LIGHT).eq('author', currentUser.id).order('updated_at', { ascending: false }).limit(60)) || [];
+    if (authed()) { const L = await light(); srv = await select(q => q.select(L).eq('author', currentUser.id).order('updated_at', { ascending: false }).limit(60)) || []; }
     if (S !== st || !root) return;
     const box = root.querySelector('.un-mine');
     const ids = new Set(srv.map(g => g.id));
@@ -551,16 +557,17 @@
     box.innerHTML = `<div class="st-list">${list.map(g => {
       const [si, sn] = STATUS[g.status] || STATUS.draft;
       return `<div class="st-row"><span class="st-row-ic">${esc(g.icon || '🕹️')}</span>
-        <div class="st-row-b"><b>${esc(g.title || 'Без названия')}</b><small><span class="st-chip st-${esc(g.status)}">${si} ${sn}</span>${g.srv ? ` · 👁 ${num(g.plays)} · ❤️ ${num(g.likes)}` : ' · только в этом браузере'}</small></div>
+        <div class="st-row-b"><b>${esc(g.title || 'Без названия')}${ageB(g)}</b><small><span class="st-chip st-${esc(g.status)}">${si} ${sn}</span>${g.srv ? ` · 👁 ${num(g.plays)} · ❤️ ${num(g.likes)}` : ' · только в этом браузере'}</small></div>
         <span class="st-row-a"><a class="st-btn" href="#/games/unity/play/${esc(g.id)}">▶</a><a class="st-btn ghost" href="#/games/unity/edit/${esc(g.id)}">✏️</a></span></div>`;
     }).join('')}</div>`;
   }
-  const cardHtml = g => `<a class="st-card" href="#/games/unity/play/${esc(g.id)}"><span class="st-card-ic">${esc(g.icon || '🕹️')}</span><b>${esc(g.title)}</b>
+  const cardHtml = g => `<a class="st-card" href="#/games/unity/play/${esc(g.id)}"><span class="st-card-ic">${esc(g.icon || '🕹️')}</span><b>${esc(g.title)}${ageB(g)}</b>
     ${g.players > 1 ? `<small class="un-badge">👥 до ${g.players | 0}</small>` : ''}
     <small class="st-card-au">👤 ${esc(g.profiles?.nick || 'Игрок')}${g.author ? `<span class="lv-badge" data-lv-uid="${esc(g.author)}"></span>` : ''}</small>
     <small>👁 ${num(g.plays)} · ❤️ ${num(g.likes)}</small></a>`;
   async function catalog(st, sort){
-    const rows = await select(q => q.select(LIGHT).eq('status', 'public').order(sort === 'new' ? 'created_at' : 'plays', { ascending: false }).limit(30));
+    const L = await light();
+    const rows = await select(q => q.select(L).eq('status', 'public').order(sort === 'new' ? 'created_at' : 'plays', { ascending: false }).limit(30));
     if (S !== st || !root) return;
     const box = root.querySelector('.un-cat');
     if (!rows) { box.innerHTML = `<div class="st-empty">${srvMissing ? 'Каталог откроется совсем скоро — сайт обновляется.' : 'Не получилось загрузить — обнови страницу.'}</div>`; return; }
@@ -578,12 +585,15 @@
     if (o.isNew) g = { id: 'l' + Date.now().toString(36), title: '', icon: '🕹️', descr: '', url: '', aspect: '16:9', players: 1, status: 'draft', local: true };
     else {
       g = drafts()[o.id] ? { ...drafts()[o.id], local: true } : null;
-      const row = await select(q => q.select('id,title,icon,descr,url,origin,aspect,players,status,plays,likes,author').eq('id', o.id).maybeSingle());
+      const L = await light('id,title,icon,descr,url,origin,aspect,players,status,plays,likes,author');
+      const row = await select(q => q.select(L).eq('id', o.id).maybeSingle());
       if (S !== st) return;
       if (row) { if (!authed() || row.author !== currentUser.id) { go('play/' + o.id); return; } g = { ...row, srv: true }; }
       if (!g) { root.innerHTML = '<div class="st"><div class="st-empty">Игра не найдена. <a href="#/games/unity">К Unity-играм</a></div></div>'; return; }
     }
     st.game = g;
+    st.ageOk = await ageCol();   // метка игры — выбор автора (age.sql)
+    if (S !== st) return;
     root.innerHTML = `<div class="st un-ed">
       <div class="st-top"><a class="st-back" href="#/games/unity">← Unity-игры</a><b>🕹️ ${o.isNew ? 'Новая игра из Unity' : 'Игра из Unity'}</b><span class="st-saved"></span></div>
       <div class="st-ed-grid">
@@ -650,8 +660,17 @@
   function saveLocal(st){
     if (st !== S) return;
     const g = st.game;
-    putDraft({ id: g.id, title: g.title, icon: g.icon, descr: g.descr, url: g.url, aspect: g.aspect, players: g.players, srv: !!g.srv });
+    putDraft({ id: g.id, title: g.title, icon: g.icon, descr: g.descr, url: g.url, aspect: g.aspect, players: g.players, srv: !!g.srv, age_pick: g.age_pick });
     const s = root?.querySelector('.st-saved'); if (s) s.textContent = '✓ сохранено в браузере';
+  }
+  // 🎂 Возрастная метка: автор выбирает (до 16+), модератор может поменять. Игры ещё нет на сайте — поставим при сохранении
+  async function onAgeRate(st, n){
+    const g = st.game;
+    if (!g.srv) { g.age_pick = n; saveLocal(st); api.toast(`🎂 Метка ${n}+ — поставим, когда сохранишь на сайте`); return; }
+    const r = await AU()?.set('unity', g.id, n);
+    if (st !== S) return;
+    if (r?.ok) { g.age_rating = n; delete g.age_pick; api.toast(`🎂 Метка игры: ${n}+`); } else api.toast(AU()?.err(r) || 'Не получилось');
+    statusLine(st);
   }
   function statusLine(st){
     const el = root?.querySelector('.st-status');
@@ -663,7 +682,9 @@
       <small>${!authed() ? 'Войди в аккаунт — тогда игру можно сохранить на сайте и дать ссылку друзьям.' : srvMissing ? 'Публикация заработает чуть позже — сайт обновляется. Пока игра хранится в этом браузере.'
         : g.status === 'review' ? 'Игру проверит модератор — после этого она появится в каталоге. По ссылке играть уже можно.'
         : g.status === 'public' ? 'Игра в каталоге! Если изменишь её, она снова уйдёт на проверку.'
-        : g.status === 'banned' ? 'Игру заблокировал модератор — она нарушает правила.' : ''}</small>`;
+        : g.status === 'banned' ? 'Игру заблокировал модератор — она нарушает правила.' : ''}</small>
+      ${st.ageOk && authed() && AU() ? `<label class="age-rate-l" title="${esc(AU().WHY)}">🎂 Для какого возраста ${AU().select(g.age_rating ?? g.age_pick, { staff: isStaff(), attr: 'data-age-rate' })}</label>` : ''}`;
+    el.querySelector('[data-age-rate]')?.addEventListener('change', e => onAgeRate(st, +e.target.value));
   }
   function testRun(st){
     if (st !== S) return;
@@ -710,7 +731,9 @@
       const s2 = await rpc('unity_status', { p_id: g.id, p_status: want });
       if (s2?.ok) g.status = s2.status; else api.toast('Статус не поменялся — попробуй ещё раз');
     }
-    putDraft({ id: g.id, title: g.title, icon: g.icon, descr: g.descr, url: g.url, aspect: g.aspect, players: g.players, srv: true });
+    // метка, выбранная до первого сохранения (age.sql)
+    if (g.age_pick != null && st.ageOk) { const ar = await AU()?.set('unity', g.id, g.age_pick); if (ar?.ok) { g.age_rating = g.age_pick; delete g.age_pick; } }
+    putDraft({ id: g.id, title: g.title, icon: g.icon, descr: g.descr, url: g.url, aspect: g.aspect, players: g.players, srv: true, age_pick: g.age_pick });
     const s = root?.querySelector('.st-saved'); if (s) s.textContent = '✓ сохранено на сайте';
     statusLine(st);
     if (want === 'link' || want === 'review') share(g, null); else api.toast('💾 Сохранено');
@@ -722,7 +745,8 @@
     const st = S;
     root.innerHTML = '<div class="st"><div class="st-empty">Загружаем игру…</div></div>';
     let g = null;
-    const row = await select(q => q.select(LIGHT).eq('id', id).maybeSingle());
+    const L = await light();
+    const row = await select(q => q.select(L).eq('id', id).maybeSingle());
     if (S !== st) return;
     if (row) g = { ...row, srv: true };
     else if (drafts()[id]) g = { ...drafts()[id], status: 'draft', local: true };
@@ -737,7 +761,7 @@
     root.innerHTML = `<div class="st un-play">
       <div class="st-top"><a class="st-back" href="#/games/unity">← Unity-игры</a></div>
       <div class="st-play-head"><span class="st-play-ic">${esc(g.icon || '🕹️')}</span>
-        <div class="st-play-t"><b>${esc(g.title)}</b><small>${g.srv ? `от <a href="#/profile/${esc(g.author)}">${esc(g.profiles?.nick || 'игрока')}</a> · 👁 ${num(g.plays)} · ❤️ <span class="un-likes2">${num(g.likes)}</span>` : 'черновик в этом браузере'}${g.players > 1 ? ` · 👥 до ${g.players | 0}` : ''} ${g.status !== 'public' && g.srv ? `· <span class="st-chip st-${esc(g.status)}">${(STATUS[g.status] || STATUS.draft).join(' ')}</span>` : ''}</small></div>
+        <div class="st-play-t"><b>${esc(g.title)}${g.srv ? ageB(g) : ''}</b><small>${g.srv ? `от <a href="#/profile/${esc(g.author)}">${esc(g.profiles?.nick || 'игрока')}</a> · 👁 ${num(g.plays)} · ❤️ <span class="un-likes2">${num(g.likes)}</span>` : 'черновик в этом браузере'}${g.players > 1 ? ` · 👥 до ${g.players | 0}` : ''} ${g.status !== 'public' && g.srv ? `· <span class="st-chip st-${esc(g.status)}">${(STATUS[g.status] || STATUS.draft).join(' ')}</span>` : ''}</small></div>
         <span class="st-play-a">
           ${g.srv ? `<button type="button" class="st-btn ghost" data-act="like">❤️ <span class="un-likes">${num(g.likes)}</span></button><button type="button" class="st-btn ghost" data-act="share">📤</button>` : ''}
           ${mineG || g.local ? `<a class="st-btn ghost" href="#/games/unity/edit/${esc(g.id)}">✏️</a>` : g.srv ? '<button type="button" class="st-btn ghost" data-act="report" title="Пожаловаться">⚠️</button>' : ''}
@@ -750,6 +774,8 @@
     </div>`;
     root.querySelector('.st-play-head').addEventListener('click', e => onPlayClick(st, e));
     const stage = root.querySelector('.un-stage');
+    // Возраст (js/core/age.js): чужая игра не по возрасту — «обложка» вместо игры (метка — age_rating; нет — 12+)
+    if (g.srv && !mineG && window.D37Age?.cover(stage, AU().age(g.age_rating), { why: AU().WHY, title: g.title, back: '#/games/unity', onOpen: () => { if (S === st) play(id, code); } })) return;
     stage.innerHTML = `<div class="un-box"><div class="un-load">🕹️ Загружаем игру…<small>Unity-игры грузятся до минуты</small></div></div>
       <div class="un-bar"><button type="button" class="st-btn ghost" data-act="fs">⛶ На весь экран</button><span class="un-sdk"></span><span class="st-score un-score"></span></div>
       <div class="un-note" hidden></div><div class="un-room" hidden></div><div class="st-result" hidden></div><div class="st-ad" hidden></div>`;
@@ -1047,17 +1073,26 @@
     const st = S;
     if (!isStaff()) { root.innerHTML = '<div class="st"><div class="st-empty">Только для модераторов. <a href="#/games/unity">К Unity-играм</a></div></div>'; return; }
     root.innerHTML = '<div class="st"><div class="st-top"><a class="st-back" href="#/games/unity">← Unity-игры</a><b>🛡️ Модерация Unity-игр</b></div><div class="st-modlist"><div class="st-empty">Загружаем…</div></div></div>';
-    const rows = await select(q => q.select(LIGHT + ',reports').or('status.eq.review,reports.gt.0').order('updated_at', { ascending: true }).limit(50));
+    const L = await light(LIGHT + ',reports');
+    const rows = await select(q => q.select(L).or('status.eq.review,reports.gt.0').order('updated_at', { ascending: true }).limit(50));
     if (S !== st) return;
     const box = root.querySelector('.st-modlist');
     if (!rows) { box.innerHTML = '<div class="st-empty">Нет доступа или сайт обновляется</div>'; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Очередь пуста 🎉</div>'; return; }
+    const ageOk = await ageCol();
     box.innerHTML = rows.map(g => `<div class="st-row" data-id="${esc(g.id)}"><span class="st-row-ic">${esc(g.icon || '🕹️')}</span>
-      <div class="st-row-b"><b>${esc(g.title)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')}${g.players > 1 ? ` · 👥 до ${g.players | 0}` : ''}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small>
-        <small class="un-mod-url">🌐 ${esc(g.url)}</small><small>${esc(g.descr || '')}</small></div>
+      <div class="st-row-b"><b>${esc(g.title)}${ageB(g)}</b><small>👤 <a href="#/profile/${esc(g.author)}" target="_blank">${esc(g.profiles?.nick || '')}</a> · ${(STATUS[g.status] || STATUS.draft).join(' ')}${g.players > 1 ? ` · 👥 до ${g.players | 0}` : ''}${g.reports ? ` · ⚠️ жалоб: ${g.reports}` : ''}</small>
+        <small class="un-mod-url">🌐 ${esc(g.url)}</small><small>${esc(g.descr || '')}</small>
+        ${ageOk && AU() ? `<label class="age-rate-l">🎂 Метка ${AU().select(g.age_rating, { staff: true, attr: 'data-age-rate' })}</label>` : ''}</div>
       <span class="st-row-a"><a class="st-btn ghost" href="#/games/unity/play/${esc(g.id)}" target="_blank">▶</a>
         <button type="button" class="st-btn" data-mod="public">✅ В каталог</button><button type="button" class="st-btn ghost" data-mod="link">🔗 Только ссылка</button><button type="button" class="st-btn ghost danger" data-mod="banned">⛔</button></span></div>`).join('')
       + '<div class="st-rules">Сборка лежит на сайте автора — он может поменять её и после проверки. Поэтому смотри и на автора, и на жалобы.</div>';
+    // модератор меняет возрастную метку (age.sql: после него автор может только поднять)
+    box.addEventListener('change', async e => {
+      const s = e.target.closest('[data-age-rate]'); if (!s) return;
+      const r = await AU()?.set('unity', s.closest('[data-id]').dataset.id, +s.value);
+      api.toast(r?.ok ? `🎂 Метка: ${s.value}+` : AU()?.err(r) || 'Не получилось');
+    });
     box.addEventListener('click', async e => {
       const b = e.target.closest('[data-mod]');
       if (!b) return;
