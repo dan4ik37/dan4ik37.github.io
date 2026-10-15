@@ -18,7 +18,7 @@
   const E = root.D37E = root.D37E || {};
 
   const PARAMS = {
-    time: { label: 'Время раунда', unit: 'с', min: 0, max: 1800, step: 15, zero: 'без ограничения' },
+    time: { label: 'Время раунда', unit: 'с', min: 0, max: 1800, step: 5, zero: 'без ограничения' },
     goal: { label: 'Очков для победы', min: 0, max: 500, step: 1, zero: 'нет — до конца времени' },
     teams: { label: 'Команды', list: [[0, 'Каждый сам'], [2, '2 команды'], [3, '3 команды'], [4, '4 команды']] },
     laps: { label: 'Кругов', min: 1, max: 10, step: 1 },
@@ -44,9 +44,9 @@
     race: { icon: '🏎️', name: 'Гонка', desc: 'Круги по трассе: проедь 🚩 чекпоинты по порядку и пересеки 🏁 финиш. Лучший круг запоминается.',
       params: ['laps', 'time', 'rounds', 'count', 'respawn', 'min'], def: { laps: 3, time: 300, rounds: 1, count: 3, respawn: 1, min: 1 }, needs: ['spawn', 'finish', 'check'] },
     ffa: { icon: '⚔️', name: 'Каждый сам за себя', desc: 'Бей других (F, RT или 👊). Выбил соперника — очко. Можно с жизнями: кто остался последним — победил.',
-      params: ['goal', 'time', 'lives', 'dmg', 'respawn', 'rounds', 'count', 'min'], def: { goal: 10, time: 180, lives: 0, dmg: 34, respawn: 3, rounds: 1, count: 3, min: 2 }, needs: ['spawn'] },
+      params: ['goal', 'time', 'lives', 'dmg', 'respawn', 'rounds', 'count', 'min'], def: { goal: 10, time: 180, lives: 0, dmg: 35, respawn: 3, rounds: 1, count: 3, min: 2 }, needs: ['spawn'] },
     teams: { icon: '🛡️', name: 'Команды', desc: '2–4 команды, у каждой свои точки появления. Своих бить нельзя. Очки команды — сумма побед её игроков.',
-      params: ['teams', 'goal', 'time', 'dmg', 'respawn', 'rounds', 'count', 'min'], def: { teams: 2, goal: 20, time: 240, dmg: 34, respawn: 3, rounds: 1, count: 3, min: 2 }, needs: ['tspawn'] },
+      params: ['teams', 'goal', 'time', 'dmg', 'respawn', 'rounds', 'count', 'min'], def: { teams: 2, goal: 20, time: 240, dmg: 35, respawn: 3, rounds: 1, count: 3, min: 2 }, needs: ['tspawn'] },
     koth: { icon: '👑', name: 'Царь горы', desc: 'Стой в 🟩 зоне холма один (или только своей командой) — капают очки. Сталкивай других!',
       params: ['teams', 'goal', 'time', 'dmg', 'respawn', 'rounds', 'count', 'min'], def: { teams: 0, goal: 60, time: 240, dmg: 0, respawn: 2, rounds: 1, count: 3, min: 1 }, needs: ['spawn', 'hill'] },
     hide: { icon: '🙈', name: 'Прятки', desc: 'Одни прячутся, другие ищут. Ищущий нашёл (подбежал вплотную) — найденный тоже ищет. Не нашли до конца времени — прятавшиеся победили.',
@@ -54,7 +54,7 @@
     coins: { icon: '💰', name: 'Сбор монет', desc: 'Собирай 💰 монетки — кто больше. Собранные появляются снова.',
       params: ['goal', 'time', 'coinBack', 'teams', 'rounds', 'count', 'min'], def: { goal: 20, time: 180, coinBack: 10, teams: 0, rounds: 1, count: 3, min: 1 }, needs: ['spawn', 'coin'] },
     survival: { icon: '🧟', name: 'Выживание', desc: 'Волны зомби. Отбивайся (F, RT или 👊) и продержись все волны. Зомби появляются в 🟥 зонах (или вокруг).',
-      params: ['waves', 'zombies', 'grow', 'zdmg', 'lives', 'respawn', 'count', 'min'], def: { waves: 5, zombies: 3, grow: 2, zdmg: 15, lives: 3, respawn: 4, count: 3, min: 1, dmg: 34 }, needs: ['spawn', 'zspawn'] },
+      params: ['waves', 'zombies', 'grow', 'zdmg', 'lives', 'respawn', 'count', 'min'], def: { waves: 5, zombies: 3, grow: 2, zdmg: 15, lives: 3, respawn: 4, count: 3, min: 1, dmg: 35 }, needs: ['spawn', 'zspawn'] },
   };
   const LIST = ['none', 'obby', 'race', 'ffa', 'teams', 'koth', 'hide', 'coins', 'survival'];
   const TEAMS = [null, ['🔴', 'Красные', '#ef4444'], ['🔵', 'Синие', '#3b82f6'], ['🟢', 'Зелёные', '#22c55e'], ['🟡', 'Жёлтые', '#eab308']];
@@ -73,7 +73,7 @@
       out[k] = v;
     }
     if (M === 'teams' && out.teams < 2) out.teams = 2;
-    if (!PVP.has(M)) out.dmg = 0; else if (own?.dmg === undefined && D.def.dmg !== undefined) out.dmg = D.def.dmg;
+    if (!PVP.has(M)) out.dmg = 0;
     if (M !== 'teams' && M !== 'koth' && M !== 'coins') out.teams = 0;
     return out;
   }
@@ -253,6 +253,8 @@
       return p;
     };
     M.leave = id => { if (ps.delete(id)) changed(); };
+    // свой номер сменился (открыли комнату посреди игры: был 'me', стал номер в комнате)
+    M.rename = (a, b) => { const p = ps.get(a); if (!p || a === b || ps.has(b)) return; ps.delete(a); p.id = b; ps.set(b, p); if (M.seekCnt.has(a)) { M.seekCnt.set(b, M.seekCnt.get(a)); M.seekCnt.delete(a); } changed(); };
     M.player = id => ps.get(id) || null;
     M.players = list;
     // касания: true — режим забрал (студия ничего своего не делает)
