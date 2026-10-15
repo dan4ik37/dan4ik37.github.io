@@ -332,6 +332,13 @@
     if (!id) { renderHome(); return; }
     const app = APPS.find(a => a.id === id) || (id === 'incall' ? { id, mod: 'calls', t: 'Звонок' } : null);
     if (!app) { renderHome(); return; }
+    // Возраст (js/core/age.js): сообщества — как чат (12+); не по возрасту — «обложка» (ЛС и звонки — только друзья, их не трогаем)
+    const AG = window.D37Age, area = AG?.area('chat');
+    if (id === 'comm' && area && !AG.canOpen(area.age)) {
+      view.innerHTML = `<div class="ph-app">${P.head(app.t)}<div class="ph-agec"></div></div>`;
+      AG.cover(view.querySelector('.ph-agec'), area.age, { why: area.why, title: app.t, compact: true, back: () => P.open(''), onOpen: () => show(path) });
+      return;
+    }
     if (!defs.has(id)) {
       view.innerHTML = `<div class="ph-app"><div class="ph-load"><i></i>Загружаем…</div></div>`;
       try { await P.need(app.mod); } catch (e) {

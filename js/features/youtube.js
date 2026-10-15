@@ -120,11 +120,21 @@ let newestVids = [];
 let vidSort = 'new';
 // Shorts живут в своём ряду и ленте (shorts.js) — в сетке «Видео» только обычные ролики.
 // Если обычных нет совсем — показываем всё, чтобы сетка не была пустой.
+// Возраст (js/core/age.js): несовершеннолетнему ролики 18+ (кейсы, промокоды на депозит) в ленте не показываем
+const vidAgeOk = v => !window.D37Age || D37Age.listOk(D37Age.video(v.title).age);
 function longVids(){
   const isShort = typeof isShortVid === 'function' ? isShortVid : () => false;
-  const list = newestVids.filter(v => !isShort(v));
-  return list.length ? list : [...newestVids];
+  const list = newestVids.filter(v => !isShort(v) && vidAgeOk(v));
+  return list.length ? list : newestVids.filter(vidAgeOk);
 }
+// Указал / сменил возраст — ленту и Shorts пересобрать
+window.addEventListener('d37:age', () => {
+  if (!newestVids.length) return;
+  allVids = sortedVids(vidSort);
+  renderFeatured(longVids()[0]);
+  if (document.getElementById('yt-grid')) renderCurrentVids();
+  if (typeof onVideosLoaded === 'function') onVideosLoaded();
+});
 function sortedVids(mode){
   const list=longVids();
   if(mode==='top') return list.sort((a,b)=>(b.viewsN||0)-(a.viewsN||0));
@@ -346,15 +356,18 @@ function renderVids(vids){
   vids.forEach((v,i)=>{
     if(!v.id)return;
     const liked=likedIds.has(v.id),sel=selectedIds.has(v.id),watched=watchedIds.has(v.id);
+    const va=window.D37Age?D37Age.video(v.title).age:0;   // возрастная метка: на карточке — от 16+ (иначе шумно)
     const card=document.createElement('div');
     card.className='vcard'+(selMode?' selectable':'')+(sel?' selected':'');
     card.dataset.id=v.id;card.style.animationDelay=(i*.04)+'s';
+    if(va>=12) card.dataset.age=va;
     card.innerHTML=`
       <div class="sel-check">${sel?'✓':''}</div>
       ${v.rec?'<div class="rec-badge">🔥 Рекомендация</div>':''}
       <div class="vthumb">
         ${v.thumb?`<img src="${esc(cardThumb(v.thumb))}" alt="${esc(v.title)}" loading="lazy" decoding="async" width="320" height="180">`:'<div class="vthumb-ph">▶</div>'}
         <div class="pdot pd-yt">YT</div>
+        ${va>=16?D37Age.badge(va):''}
         ${isNewVid(v)&&!watched?'<div class="vnew">NEW</div>':''}
         ${v.duration?`<div class="vduration">${v.duration}</div>`:''}
         ${watched?'<div class="vwatched" title="Просмотрено">✓ Просмотрено</div>':''}

@@ -444,6 +444,26 @@
     if (act === 'soft') { const n = num(b.dataset.n); ssSet(SOFT, Math.max(n, +ssGet(SOFT) || 0)); reopen(host, o); return; }
   }
 
+  // ═══ Игры и миры игроков: метка age_rating (age.sql; автор выбирает до 16+, модератор — любую) ═══
+  const UGC_WHY = 'Игра игрока: метку выбрал автор, проверяет модератор.';
+  const RATE_HINT = { 0: 'для всех', 6: 'мультяшные драки', 12: 'страшилки, стрельба без крови', 16: 'кровь, мрачные хорроры', 18: 'только взрослым' };
+  const ugcAge = r => r != null && LEVELS.includes(+r) ? +r : UGC_AGE;
+  const ugcCols = {};
+  // Есть ли колонка age_rating (до age.sql — нет; тогда её и не спрашиваем — иначе запрос списка сломается). Один раз на таблицу
+  function ugcCol(table){
+    if (ugcCols[table]) return ugcCols[table];
+    if (typeof sbClient === 'undefined' || !sbClient) return Promise.resolve(false);
+    return ugcCols[table] = (async () => { try { const { error } = await sbClient.from(table).select('age_rating').limit(0); return !error; } catch (e) { return false; } })();
+  }
+  // Поставить метку: kind 'ugc' (Студия игр и Студия 3D) | 'unity'
+  async function ugcSet(kind, id, n){
+    if (!authed()) return { ok: false, reason: 'auth' };
+    return rpc('age_set_rating', { p_kind: kind, p_id: id, p_age: num(n) });
+  }
+  const ugcSelect = (cur, o = {}) => `<select class="age-rate"${o.attr ? ' ' + o.attr : ''} aria-label="Возрастная метка">${(o.staff ? LEVELS : [0, 6, 12, 16])
+    .map(n => `<option value="${n}"${n === ugcAge(cur) ? ' selected' : ''}>${n}+ — ${RATE_HINT[n]}</option>`).join('')}</select>`;
+  const ugcErr = r => r?.reason === 'mod' ? `Метку ${r.age}+ поставил модератор — ниже нельзя` : r?.reason === 'age18' ? '18+ ставит только модератор' : r?.reason === 'missing' ? 'Метки заработают, когда сайт обновится' : 'Метка не сохранилась — попробуй ещё раз';
+
   // ═══ Серверные страницы: <main data-age-page="16" data-age-why="…"> — обложка; карточки [data-age="18"] прячет CSS ═══
   function scanPage(){
     for (const el of doc.querySelectorAll('[data-age-page]')) {
@@ -468,6 +488,10 @@
 .age-b{display:inline-flex;align-items:center;justify-content:center;min-width:2.15em;height:1.5em;padding:0 .38em;border-radius:6px;font:800 .66rem/1 Montserrat,system-ui,sans-serif;letter-spacing:.02em;color:#fff;background:#475569;border:1px solid rgba(255,255,255,.28);vertical-align:middle;white-space:nowrap;box-sizing:border-box}
 .age-b0{background:#15803d}.age-b6{background:#0e7490}.age-b12{background:#a16207}.age-b16{background:#c2410c}.age-b18{background:#b91c1c}
 html.d37-h18 [data-age="18"]{display:none!important}
+.gm-card>.age-b{position:absolute;top:.75rem;right:.75rem}
+#gamesStageTitle .age-b{margin-left:.35rem;font-size:.6rem}
+.vthumb .age-b{position:absolute;top:32px;right:8px;z-index:3}
+.age-chip{display:inline-flex;align-items:center;gap:.35rem}
 .age-mark{display:inline-flex;align-items:center;justify-content:center;min-width:2.4em;height:1.6em;padding:0 .4em;border-radius:6px;border:1.5px solid rgba(240,240,248,.45);font:800 .72rem/1 Montserrat,system-ui,sans-serif;color:#f0f0f8;vertical-align:middle;margin-right:.35rem}
 .footer-age{font-size:.68rem;color:var(--muted,#8d8daa);margin:0 0 .9rem}
 .age-sheet{position:fixed;right:16px;bottom:16px;z-index:9250;width:min(390px,calc(100vw - 32px));color:#f0f0f8;font-family:Montserrat,system-ui,sans-serif}
@@ -500,6 +524,9 @@ html.d37-h18 [data-age="18"]{display:none!important}
 .age-cover-s{display:block;margin-top:.8rem;font-size:.72rem;color:#9a9ab5}
 .age-link{border:0;background:none;padding:0;color:var(--accent,#ff2d55);font:inherit;font-weight:800;cursor:pointer;text-decoration:underline}
 .age-gate{padding:5.5rem 16px 3rem}
+.age-rate{max-width:100%;height:34px;padding:0 .5rem;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:#0d0c15;color:#f0f0f8;font:700 .74rem Montserrat,system-ui,sans-serif}
+.age-rate-l{display:inline-flex;align-items:center;gap:.4rem;font-size:.74rem;font-weight:700;flex-wrap:wrap}
+.st-card .age-b,.st-play-t .age-b,.st-row-b .age-b{margin-left:.3rem;font-size:.58rem}
 .modal-vid.age-on{padding-bottom:0;min-height:0;background:transparent}
 .age-hidden>:not(.age-page-cover){display:none!important}
 .age-page-cover{padding:2rem 0}
@@ -531,6 +558,7 @@ html.d37-h18 [data-age="18"]{display:none!important}
     area: route => AREAS[route] || null,
     video, isGambling, kidText,
     cover, coverHtml, uncover, gateRoute, scanPage, settingsRow,
+    ugc: { WHY: UGC_WHY, age: ugcAge, col: ugcCol, set: ugcSet, select: ugcSelect, err: ugcErr },
     _test: { S: () => S, reset(){ S = {}; save(); srv = null; }, read, yearNow, rawGroup, groupOfAge, VIDEO_RULES, GAMBLING_RE, WHY18, KID_RE, localSet, onAuth, fromServer, srv: () => srv, setSrv: v => { srv = v; }, maybeAsk, regField, marks, softOk },
   };
 })();

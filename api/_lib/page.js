@@ -177,6 +177,7 @@ h2{font-family:Oswald,sans-serif;font-weight:600;font-size:1.3rem;text-transform
 .age-b{display:inline-flex;align-items:center;justify-content:center;min-width:2.15em;height:1.5em;padding:0 .38em;border-radius:6px;font:800 .66rem/1 Montserrat,system-ui,sans-serif;color:#fff;background:#475569;border:1px solid rgba(255,255,255,.28);vertical-align:middle;white-space:nowrap}
 .age-b0{background:#15803d}.age-b6{background:#0e7490}.age-b12{background:#a16207}.age-b16{background:#c2410c}.age-b18{background:#b91c1c}
 html.d37-h18 [data-age="18"]{display:none!important}
+html.d37-h18 [data-age-page="18"]>:not(.age-page-cover),html.d37-c18 [data-age-page="18"]>:not(.age-page-cover){visibility:hidden}
 .card{position:relative}
 .card>.age-b{position:absolute;top:.45rem;right:.45rem}
 @media(max-width:600px){.top nav a:not(.sub){display:none}.mmenu{display:block}.top{gap:.5rem;padding:.6rem .9rem}.play{width:68px;height:68px;margin:-34px 0 0 -34px}.cta .btn{flex:1 1 100%;justify-content:center}}
