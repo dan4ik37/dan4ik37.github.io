@@ -487,11 +487,82 @@ const cookieOf = res => String(res.headers['set-cookie'] || '').split(';')[0];
 
   // ═══ 14. Страница (js/features/social-login.js): разбор возврата, кнопки, «последний способ» ═══
   await clientTests();
+  // ═══ 15. Вход по ссылке #access_token… (js/features/auth-guard.js): только свой — молча, чужой — спросить ═══
+  await guardTests();
 
   console.log(`\nauth-test: ${n - fails} ок, ${fails} ошибок`);
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
   process.exit(fails ? 1 : 0);
 })().catch(e => { console.error('✗ СБОЙ ТЕСТА:', e); process.exit(1); });
+
+// ── Вход по ссылке: auth-guard.js в песочнице node (чистые функции D37AuthUrl._test) + запись в index.html / chat.js ──
+async function guardTests() {
+  const file = path.join(ROOT, 'js/features/auth-guard.js');
+  if (!fs.existsSync(file)) { ok(false, 'нет js/features/auth-guard.js'); return; }
+  const store = {};
+  const ls = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+  const ctx = { console, setTimeout, clearTimeout, URLSearchParams, TextEncoder, TextDecoder, crypto: crypto.webcrypto, localStorage: ls, sessionStorage: ls,
+    location: { hash: '#access_token=a.b.c&refresh_token=r', search: '', pathname: '/' }, history: { replaceState: () => { ctx.__wiped = true; } }, addEventListener() {} };
+  ctx.window = ctx; ctx.globalThis = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: 'auth-guard.js' });
+  const G = ctx.D37AuthUrl, T = G && G._test;
+  ok(!!T, 'auth-guard.js: D37AuthUrl._test есть');
+  if (!T) return;
+  ok(ctx.__wiped === true, 'без скрипта в <head> (старая страница из кэша) токены всё равно стираются из адреса');
+  const p = T.parse;
+  const J = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2ln';
+  let r = p(`#access_token=${J}&expires_in=3600&refresh_token=rt123&token_type=bearer&type=recovery&provider_token=SECRET`);
+  ok(r && r.at === J && r.rt === 'rt123' && r.type === 'recovery' && !JSON.stringify(r).includes('SECRET'), 'разбор: токены и тип; токен сервиса (provider_token) даже не берём', r);
+  ok(p(`#access_token=${J}`).bad === true && p('#access_token=не-jwt&refresh_token=x').bad === true, 'без refresh_token / не JWT — плохая ссылка');
+  ok(p('#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid').err.code === 'otp_expired', 'ошибка письма (otp_expired) распознаётся');
+  ok(p('#/profile') === null && p('') === null && p('#d37auth=xxx') === null, 'обычные разделы и пропуски VK/Яндекс/Telegram — не сюда');
+  const D = T.decide, A = '11111111-1111-1111-1111-111111111111', B = '22222222-2222-2222-2222-222222222222';
+  const pendG = { p: 'google', m: 'login', n: 'nonce' };
+  ok(D({ type: '', uid: A, cur: null, pend: pendG, nonceOk: true, providers: ['google'] }) === 'silent', 'свой вход Google (кнопку жали здесь, метка ?oa= совпала) — молча');
+  ok(D({ type: '', uid: A, cur: null, pend: pendG, nonceOk: false, providers: ['google'] }) === 'ask',
+    'кнопку жали, но в ссылке нет метки этого входа (подсунули во время незаконченного входа) — спросить');
+  ok(D({ type: '', uid: A, cur: null, pend: null, providers: ['google'] }) === 'ask', 'ссылка Google без нажатия кнопки здесь — спросить');
+  ok(D({ type: '', uid: A, cur: null, pend: { p: 'discord', m: 'login' }, nonceOk: true, providers: ['google'] }) === 'ask', 'жали Discord, а пришёл аккаунт без Discord — спросить');
+  ok(D({ type: '', uid: A, cur: null, pend: { p: 'google', m: 'link' }, nonceOk: true, providers: ['google'] }) === 'ask', 'отметка «привязка» без открытого аккаунта — спросить');
+  ok(D({ type: 'signup', uid: A, cur: null, mark: true }) === 'silent' && D({ type: 'signup', uid: A, cur: null, mark: false }) === 'ask',
+    'подтверждение почты: регистрировался здесь — молча, на другом устройстве — спросить');
+  ok(D({ type: 'recovery', uid: A, cur: null, mark: true }) === 'silent' && D({ type: 'recovery', uid: A, cur: null }) === 'ask', 'смена пароля: просил здесь — молча, иначе — спросить');
+  ok(D({ type: 'recovery', uid: A, cur: B, mark: true }) === 'ask' && D({ type: '', uid: A, cur: B, pend: pendG, nonceOk: true, providers: ['google'] }) === 'ask',
+    'открыт ДРУГОЙ аккаунт — спрашиваем всегда, даже со своей отметкой');
+  ok(D({ type: '', uid: A, cur: A }) === 'silent' && D({ type: 'email_change', uid: A, cur: A }) === 'silent', 'тот же аккаунт (привязка входа, смена своего пароля) — молча');
+  ok(D({ type: 'invite', uid: A, cur: null, mark: true }) === 'ask' && D({ type: 'email_change', uid: A, cur: null }) === 'ask', 'приглашение, смена почты и прочее — только с согласия');
+  // отметки: отпечаток почты, сутки, только своя почта
+  await G.mark('recovery', ' Kid@Mail.RU ');
+  const ms = T.marks();
+  ok(ms.length === 1 && ms[0].k === 'recovery' && /^[0-9a-f]{64}$/.test(ms[0].e) && !JSON.stringify(store).includes('kid@mail'), 'отметка — отпечаток почты, не сама почта');
+  ok(!!(await T.findMark('recovery', 'kid@mail.ru')) && !(await T.findMark('recovery', 'evil@mail.ru')) && !(await T.findMark('signup', 'kid@mail.ru')),
+    'отметка подходит только к своей почте и своему письму (смена пароля ≠ регистрация)');
+  await G.mark('signup', 'new@mail.ru');
+  ok(!!(await T.findMark('magiclink', 'new@mail.ru')), 'вход по письму принимает и отметку регистрации');
+  T.dropMark(await T.findMark('recovery', 'kid@mail.ru'));
+  ok(!(await T.findMark('recovery', 'kid@mail.ru')) && !!(await T.findMark('signup', 'new@mail.ru')), 'принятая отметка стирается, остальные — на месте');
+  const old = JSON.parse(store.d37_authmark); old[0].at -= 25 * 3600e3; store.d37_authmark = JSON.stringify(old);
+  ok(!(await T.findMark('signup', 'new@mail.ru')), 'отметке больше суток — не действует');
+  // разметка: скрипт в <head> раньше Метрики и рекламы; supabase-js не принимает ссылки сам
+  const idx = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const iGuard = idx.indexOf('window.__d37AuthHash=h'), iYm = idx.indexOf("ym(113596397,'init'"), iAds = idx.indexOf('pagead2.googlesyndication.com/pagead/js/adsbygoogle.js');
+  ok(iGuard > 0 && iGuard < iYm && iGuard < iAds, 'index.html: токены из адреса стираются ДО Метрики и AdSense', { iGuard, iYm, iAds });
+  const m0 = idx.match(/<script>\(function\(\)\{try\{var h=location\.hash,([\s\S]*?)<\/script>/);
+  const run = (h, s = '') => { const w = { location: { hash: h, pathname: '/', search: s }, history: { replaceState(a, b, u) { w.wiped = true; w.url = u; } } };
+    new Function('window', 'location', 'history', m0[0].replace(/^<script>|<\/script>$/g, ''))(w, w.location, w.history); return w; };
+  ok(!!m0 && run('#access_token=x&refresh_token=y').wiped && run('#d37auth=' + 'A'.repeat(40)).wiped && run('#tgAuthResult=eyJ9').wiped && run('#error=a&error_description=b').wiped,
+    'скрипт в <head>: забирает #access_token, #d37auth, #tgAuthResult и ошибки входа');
+  ok(!run('#/profile').wiped && !run('#/games/horde').wiped && !run('').wiped, 'обычные разделы (#/…) не трогает');
+  let w1 = run('#access_token=x&refresh_token=y', '?oa=AbCdEfGh12345678_-xy');
+  ok(w1.__d37OA === 'AbCdEfGh12345678_-xy' && w1.url === '/' && w1.__d37AuthHash.startsWith('#access_token'), 'метка своего входа ?oa=… забрана, адрес — чистый «/»', w1.url);
+  w1 = run('#/games', '?ref=abc&oa=AbCdEfGh12345678&x=1');
+  ok(w1.__d37OA === 'AbCdEfGh12345678' && w1.url === '/?ref=abc&x=1#/games', 'чужие параметры (?ref=…) и раздел остаются, убирается только oa', w1.url);
+  w1 = run('', '?error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid');
+  ok(w1.__d37AuthHash === '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid' && w1.url === '/', 'ошибка входа в ?query — тоже забрана (как фрагмент)', w1);
+  ok(/createClient\(SB_URL, SB_KEY, \{ auth: \{ detectSessionInUrl: false \} \}\)/.test(fs.readFileSync(path.join(ROOT, 'js/features/chat.js'), 'utf8')), 'chat.js: supabase-js сам ссылки не принимает (detectSessionInUrl: false)');
+  ok(/social-login\.js"><\/script>\s*<script src="js\/features\/auth-guard\.js">/.test(idx) && idx.indexOf('auth-guard.js') < idx.indexOf('js/init.js'), 'index.html: auth-guard.js — после social-login.js, до init.js и роутера');
+}
 
 // ── Клиент в песочнице node: только чистые функции D37Login._test (DOM не нужен) ──
 async function clientTests() {
