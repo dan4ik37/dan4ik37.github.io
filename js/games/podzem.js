@@ -148,7 +148,8 @@
     const inner = lx > 0 && lx < CM && ly > 0 && ly < CM;
     const leafy = P.LEAFY[f];
     let m0 = 0, same = 0, wm = 0;
-    if ((f && (P.KIND[f] === 0 || leafy)) || w) {
+    // соседи нужны твёрдым блокам (края), стенам и фону пещер (тень от блоков на стене за ними)
+    if ((f && (P.KIND[f] === 0 || leafy)) || w || y > c.ugH[lx]) {
       for (let n = 0; n < 8; n++) {
         const dx = NB[n][0], dy = NB[n][1];
         let nf, nw;
@@ -180,7 +181,7 @@
   function newChunk(d){
     const c = { cx: d.cx, cy: d.cy, k: kOf(d.cx, d.cy), fg: d.fg, wall: d.wall, st: d.st, lq: d.lq, lt: d.lt, light: d.light,
       m0: new Uint8Array(CA), m1: new Uint8Array(CA), ugH: new Int32Array(CS), awake: 0, hasLq: false, mod: false,
-      dirty0: true, dirty1: true, dirtyL: true, ready: false, gl: null, vis: false };
+      dirty0: true, dirty1: true, dirtyL: true, ready: false, gl: null, vis: false, emi: null, emiDirty: true, lava: null, lavaDirty: true };
     for (let lx = 0; lx < CS; lx++) c.ugH[lx] = G.gen.colInfo(c.cx * CS + lx).h + 2;
     for (let i = 0; i < CA; i++) if (c.lq[i]) { c.hasLq = true; break; }
     c.awake = c.hasLq ? 40 : 0;
@@ -214,7 +215,7 @@
     if (c.dirty0) {
       const fg = c.fg, wall = c.wall, m0 = c.m0, m1 = c.m1;
       for (let i = 0, o = 0; i < CA; i++, o += 4) { T0[o] = fg[i]; T0[o + 1] = m0[i]; T0[o + 2] = wall[i]; T0[o + 3] = m1[i]; }
-      R.upload0(c, T0); c.dirty0 = false;
+      R.upload0(c, T0); c.dirty0 = false; c.emiDirty = true;
     }
     if (c.dirty1) {
       const up = chunk(c.cx, c.cy - 1), st = c.st, lq = c.lq, lt = c.lt, y0 = c.cy * CS;
@@ -226,7 +227,7 @@
         if (lq[i]) any = true;
       }
       c.hasLq = any;
-      R.upload1(c, T1); c.dirty1 = false;
+      R.upload1(c, T1); c.dirty1 = false; c.lavaDirty = true;
     }
     if (c.dirtyL) {
       // 66×66: середина — свет чанка, рамка — соседи (нет соседа — край своего)
@@ -1368,39 +1369,121 @@
   }
 
   // ═══ Рисование ═══
-  const SKY = [   // [доля суток, верх, низ, свет неба]
-    [0, [.42, .55, .82], [.98, .66, .5], [.75, .62, .6]],
-    [.06, [.3, .58, .92], [.7, .84, .98], [1, .97, .93]],
-    [.5, [.28, .55, .9], [.66, .82, .97], [1, .98, .95]],
-    [.58, [.36, .38, .66], [1, .58, .38], [.9, .62, .5]],
-    [.64, [.07, .08, .2], [.2, .17, .32], [.16, .17, .3]],
-    [.8, [.02, .03, .1], [.07, .08, .18], [.1, .12, .24]],
-    [.97, [.1, .12, .28], [.4, .3, .4], [.2, .2, .32]],
-    [1, [.42, .55, .82], [.98, .66, .5], [.75, .62, .6]],
+  const SKY = [   // [доля суток, верх, низ, свет неба (ночью — луна), заря у горизонта]
+    [0, [.3, .42, .72], [1, .62, .42], [.86, .68, .56], [.5, .22, .06]],
+    [.06, [.27, .52, .9], [.68, .84, .98], [1, .96, .9], [.12, .06, 0]],
+    [.3, [.2, .47, .88], [.62, .8, .97], [1, .98, .95], [0, 0, 0]],
+    [.5, [.24, .46, .86], [.7, .8, .95], [1, .95, .88], [.04, .02, 0]],
+    [.58, [.3, .3, .62], [1, .52, .32], [1, .66, .46], [.55, .2, .04]],
+    [.64, [.08, .08, .22], [.3, .18, .34], [.4, .36, .52], [.18, .05, .08]],
+    [.7, [.02, .03, .1], [.06, .08, .2], [.25, .3, .5], [0, 0, 0]],
+    [.92, [.03, .04, .12], [.08, .1, .22], [.25, .3, .5], [0, 0, 0]],
+    [.97, [.1, .12, .28], [.42, .28, .4], [.42, .4, .52], [.22, .08, .08]],
+    [1, [.3, .42, .72], [1, .62, .42], [.86, .68, .56], [.5, .22, .06]],
+  ];
+  // горы края: [даль, середина, ближе (цвета днём), [острота, деревья (1 круглые, 2 ели, 3 джунгли, 4 кактусы), неровность, дымка]]
+  const BIOME_BG = [
+    [[.36, .52, .64], [.2, .42, .3], [.1, .26, .16], [.25, 1, .5, .45]],   // лес
+    [[.86, .72, .54], [.78, .58, .34], [.56, .38, .2], [.04, 4, .2, .55]],  // пустыня
+    [[.6, .68, .82], [.42, .52, .66], [.16, .25, .3], [.9, 2, .7, .3]],    // снега
+    [[.3, .5, .44], [.13, .36, .22], [.04, .19, .08], [.35, 3, .6, .6]],   // джунгли
   ];
   const mix3 = (a, b, t, o) => { o[0] = a[0] + (b[0] - a[0]) * t; o[1] = a[1] + (b[1] - a[1]) * t; o[2] = a[2] + (b[2] - a[2]) * t; return o; };
-  const skyTop = [0, 0, 0], skyBot = [0, 0, 0], skyL = [0, 0, 0], sunV = new Float32Array(4), h1 = [0, 0, 0], h2 = [0, 0, 0], h3 = [0, 0, 0];
-  const BG = { top: skyTop, bot: skyBot, hill1: h1, hill2: h2, hill3: h3, sun: sunV, night: 0, surf: PZ.SURF, time: 0 };
-  const CHS = { sky: skyL, amb: .045, time: 0, smooth: true, back: true };
+  const skyTop = [0, 0, 0], skyBot = [0, 0, 0], skyL = [0, 0, 0], horiz = new Float32Array(3), sunV = new Float32Array(4), h1 = [0, 0, 0], h2 = [0, 0, 0], h3 = [0, 0, 0];
+  const shapeA = new Float32Array(4), shapeB = new Float32Array(4);
+  const BG = { top: skyTop, bot: skyBot, hill1: h1, hill2: h2, hill3: h3, sun: sunV, night: 0, surf: PZ.SURF, time: 0, horizon: horiz, shape: shapeA, shape2: shapeB, blend: 0, q: 1 };
+  const CHS = { sky: skyL, amb: .012, time: 0, smooth: true, back: true, q: 1 };
+  // плавный переход между краями: цвета гор тянутся к цели, рисунок (деревья) — смешиванием двух стилей
+  const bgPal = { b: -1, from: -1, k: 1, c1: [0, 0, 0], c2: [0, 0, 0], c3: [0, 0, 0], sh: [0, 0, 0, 0] };
+  function bgBiome(b, dt){
+    if (bgPal.b < 0) { bgPal.b = b; bgPal.from = b; bgPal.k = 1; const P0 = BIOME_BG[b]; mix3(P0[0], P0[0], 0, bgPal.c1); mix3(P0[1], P0[1], 0, bgPal.c2); mix3(P0[2], P0[2], 0, bgPal.c3); }
+    if (b !== bgPal.b) { bgPal.from = bgPal.b; bgPal.b = b; bgPal.k = 0; }
+    bgPal.k = Math.min(1, bgPal.k + dt * .5);
+    const T = BIOME_BG[bgPal.b], a = Math.min(1, dt * 1.6);
+    mix3(bgPal.c1, T[0], a, bgPal.c1); mix3(bgPal.c2, T[1], a, bgPal.c2); mix3(bgPal.c3, T[2], a, bgPal.c3);
+    const F = BIOME_BG[bgPal.from][3], S = T[3];
+    for (let i = 0; i < 4; i++) { shapeA[i] = F[i]; shapeB[i] = S[i]; }
+    BG.blend = bgPal.k * bgPal.k * (3 - 2 * bgPal.k);
+  }
   function skyAt(t){
     let i = 0; while (i < SKY.length - 2 && SKY[i + 1][0] <= t) i++;
     const a = SKY[i], b = SKY[i + 1], k = (t - a[0]) / (b[0] - a[0] || 1);
-    mix3(a[1], b[1], k, skyTop); mix3(a[2], b[2], k, skyBot); mix3(a[3], b[3], k, skyL);
+    mix3(a[1], b[1], k, skyTop); mix3(a[2], b[2], k, skyBot); mix3(a[3], b[3], k, skyL); mix3(a[4], b[4], k, horiz);
     const night = t > .6 ? clamp((t - .6) / .05, 0, 1) * (t > .95 ? clamp((1 - t) / .05, 0, 1) : 1) : 0;
     BG.night = night;
-    // холмы: даль — в цвет неба
-    mix3([.36, .52, .62], skyBot, .45, h1); h1[0] *= 1 - night * .7; h1[1] *= 1 - night * .7; h1[2] *= 1 - night * .6;
-    mix3([.2, .42, .3], skyBot, .25, h2); h2[0] *= 1 - night * .75; h2[1] *= 1 - night * .75; h2[2] *= 1 - night * .7;
-    h3[0] = .1 * (1 - night * .7); h3[1] = .26 * (1 - night * .75); h3[2] = .16 * (1 - night * .7);
+    // горы края: даль — в цвет неба (дымка), ночью темнее и синее
+    mix3(bgPal.c1, skyBot, .42, h1); h1[0] *= 1 - night * .72; h1[1] *= 1 - night * .7; h1[2] *= 1 - night * .58;
+    mix3(bgPal.c2, skyBot, .22, h2); h2[0] *= 1 - night * .76; h2[1] *= 1 - night * .74; h2[2] *= 1 - night * .66;
+    mix3(bgPal.c3, skyBot, .06, h3); h3[0] *= 1 - night * .74; h3[1] *= 1 - night * .74; h3[2] *= 1 - night * .66;
     // солнце днём (0…0,62), луна ночью
     if (t < NIGHT0) { const u = t / NIGHT0; sunV[0] = .08 + u * .84; sunV[1] = .2 + Math.pow((u - .5) * 2, 2) * .5; sunV[2] = .045; sunV[3] = 1; }
     else { const u = (t - NIGHT0) / (1 - NIGHT0); sunV[0] = .1 + u * .8; sunV[1] = .18 + Math.pow((u - .5) * 2, 2) * .45; sunV[2] = .035; sunV[3] = 0; }
+  }
+  // ═══ Качество картинки — из настроек сайта (⚙️ → Графика): низкое 0, среднее 1, высокое 2, ультра 3 ═══
+  // («Авто» и «Своя» — по устройству: D37E.quality(); перечитываем при смене настроек и раз в полсекунды)
+  let qRev = -1, qAt = 0;
+  function gfxQ(){
+    const O = window.D37Opt, fr = G.R ? G.R.frame : 0;
+    if (G.q != null && O?.rev === qRev && fr - qAt < 30) return G.q;
+    qRev = O ? O.rev : 0; qAt = fr;
+    let p = O?.gfx?.preset || 'auto';
+    if (p === 'auto' || p === 'custom') { try { p = window.D37E?.quality?.() || 'mid'; } catch (e) { p = 'mid'; } }
+    G.q = p === 'low' ? 0 : p === 'mid' ? 1 : p === 'ultra' ? 3 : 2;
+    return G.q;
+  }
+  // ═══ Ореолы у источников света (среднее и выше): факелы мерцают; на высоком — ещё руда и гладь лавы ═══
+  function emissives(c){   // светящиеся клетки чанка (пересчёт — когда менялись клетки)
+    const out = [];
+    for (let i = 0; i < CA; i++) { const f = c.fg[i]; if (f && (P.LR[f] | P.LG[f] | P.LB[f]) && !(P.KIND[f] === 1 && (c.st[i] >> 4) !== 0)) out.push(i); }
+    c.emi = out; c.emiDirty = false;
+    return out;
+  }
+  function lavaTops(c){
+    const out = [];
+    for (let i = 0; i < CA; i++) if (c.lt[i] === 2 && c.lq[i] > 90 && !(i >= CS && c.lt[i - CS] === 2 && c.lq[i - CS])) out.push(i);
+    c.lava = out; c.lavaDirty = false;
+    return out;
+  }
+  function drawGlows(camX, camY, vw, vh){
+    const R = G.R, q = G.q;
+    if (q < 1 || !R.glow) return;
+    const t = G.t, x0 = camX - vw / 2 - 3, x1 = camX + vw / 2 + 3, y0 = camY - vh / 2 - 3, y1 = camY + vh / 2 + 3;
+    let n = 0;
+    R.glowBegin();
+    for (const c of visList) {
+      if (c.emiDirty || !c.emi) emissives(c);
+      const ox = c.cx * CS, oy = c.cy * CS;
+      for (let k = 0; k < c.emi.length && n < 400; k++) {
+        const i = c.emi[k], x = ox + (i & CM), y = oy + (i >> CB);
+        if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+        const f = c.fg[i];
+        let rad, a, gx = x + .5, gy = y + .5;
+        if (f === T.TORCH) { const fl = .8 + .2 * Math.sin(t * 9.1 + x * 1.7 + y * 2.3) * Math.sin(t * 5.3 + x); rad = 3 + .35 * fl; a = .4 * fl; gy = y + .3; R.glow(gx, gy, .85, 255, 225, 160, .5 * fl * 255 | 0); n++; }   // + яркая сердцевина
+        else if (P.KIND[f] === 1) { rad = 1.9; a = .2; gx = x + P.W[f] / 2; gy = y + P.H[f] / 2; }
+        else if (P.SOLID[f] === 1) { if (q < 2) continue; rad = .95; a = .13 + .04 * Math.sin(t * 2 + x * 3.1 + y); }   // руда
+        else { rad = 1.5; a = .22 + .04 * Math.sin(t * 1.5 + x + y); }   // светогрибы, кристаллы
+        R.glow(gx, gy, rad, P.LR[f], P.LG[f], P.LB[f], a * 255 | 0);
+        if (q >= 3 && f === T.TORCH) R.glow(gx, gy, 6.5, P.LR[f], P.LG[f], P.LB[f], 22);   // ультра: широкая дымка вокруг огня
+        n++;
+      }
+      if (q >= 2) {
+        if (c.lavaDirty || !c.lava) lavaTops(c);
+        for (let k = 0; k < c.lava.length && n < 560; k += 2) {
+          const i = c.lava[k], x = ox + (i & CM), y = oy + (i >> CB);
+          if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+          R.glow(x + .5, y + .7, 1.8, 255, 118, 36, (.1 + .04 * Math.sin(t * 1.3 + x * .7)) * 255 | 0);
+          n++;
+        }
+      }
+    }
+    R.glowEnd();
   }
   const visList = [];
   function render(){
     const R = G.R; if (!R || !G.W) return;
     const t0 = now();
     R.frame++;
+    gfxQ();
     const [vw, vh] = viewTiles();
     // камера: за игроком, плавно; чуть вперёд по ходу
     const p = G.pl;
@@ -1413,10 +1496,12 @@
     if (G.cam.shake > 0) { G.cam.shake = Math.max(0, G.cam.shake - 1 / 60); sx = (rand() - .5) * G.cam.shake; sy = (rand() - .5) * G.cam.shake; }
     // кратно пикселю — без «дрожи» клеток
     const camX = Math.round((G.cam.x + sx) * G.cam.tile) / G.cam.tile, camY = Math.round((G.cam.y + sy) * G.cam.tile) / G.cam.tile;
+    bgBiome(G.gen.colInfo(Math.floor(camX)).b, 1 / 60);
     skyAt(G.W.time);
     BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth; CHS.back = G.opt.back;
+    CHS.q = BG.q = G.q; CHS.amb = G.q === 0 ? .025 : .012;
     // тусклый свет вокруг героя — чтобы в пещере без факела было видно хоть что-то рядом
-    CHS.glowX = p.x + p.w / 2; CHS.glowY = p.y + p.h * .45; CHS.glow = p.dead ? 0 : .26;
+    CHS.glowX = p.x + p.w / 2; CHS.glowY = p.y + p.h * .45; CHS.glow = p.dead ? 0 : .3;
     window.D37E?._audio?.listener?.(camX, camY, 0, 0);
     // видимые чанки → на видеокарту (не больше 14 загрузок за кадр)
     visList.length = 0;
@@ -1434,18 +1519,28 @@
     drawSprites();
     R.flush();
     R.chunks(visList, CHS, 1);
+    drawGlows(camX, camY, vw, vh);
     drawOverlay(camX, camY);
     if ((R.frame & 255) === 0) R.gc();
     G.perf.renderMs = now() - t0;
   }
-  // свет в точке мира (для спрайтов): RGB источников + небо × цвет неба
+  // свет в точке мира (для спрайтов) — как в шейдере: середины клеток, между ними плавно; огонь или небо × цвет неба
   const LT = [0, 0, 0];
   function lightAt(x, y){
-    const c = cAt(Math.floor(x), Math.floor(y));
-    if (!c) { LT[0] = LT[1] = LT[2] = .1; return LT; }
-    const i = idx(Math.floor(x), Math.floor(y)) << 2, L = c.light, s = L[i + 3] / 255;
-    const p = G.pl, g = p && !p.dead ? .26 * Math.max(0, 1 - Math.hypot(x - CHS.glowX, y - CHS.glowY) / 6.5) : 0;
-    LT[0] = Math.min(1, Math.max(L[i] / 230, s * skyL[0], g) + .06); LT[1] = Math.min(1, Math.max(L[i + 1] / 230, s * skyL[1], g * .92) + .06); LT[2] = Math.min(1, Math.max(L[i + 2] / 230, s * skyL[2], g * .8) + .06);
+    const fx = x - .5, fy = y - .5, ix = Math.floor(fx), iy = Math.floor(fy), ax = fx - ix, ay = fy - iy;
+    let r = 0, g = 0, b = 0, s = 0, any = false;
+    for (let k = 0; k < 4; k++) {
+      const cx = ix + (k & 1), cy = iy + (k >> 1), w = (k & 1 ? ax : 1 - ax) * (k >> 1 ? ay : 1 - ay);
+      const c = cAt(cx, cy); if (!c) continue;
+      const i = idx(cx, cy) << 2, L = c.light; any = true;
+      r += L[i] * w; g += L[i + 1] * w; b += L[i + 2] * w; s += L[i + 3] * w;
+    }
+    if (!any) { LT[0] = LT[1] = LT[2] = .1; return LT; }
+    s /= 255;
+    const p = G.pl, d = p && !p.dead ? Math.max(0, 1 - Math.hypot(x - CHS.glowX, y - CHS.glowY) / 7.5) : 0, gw = CHS.glow * d * d;
+    const amb = CHS.amb + .03;
+    s = Math.pow(s, .75); r = Math.pow(r / 255, .75) * 1.16; g = Math.pow(g / 255, .75) * 1.16; b = Math.pow(b / 255, .75) * 1.16;   // та же кривая, что в шейдере
+    LT[0] = Math.min(1, Math.max(r, s * skyL[0], gw) + amb); LT[1] = Math.min(1, Math.max(g, s * skyL[1], gw * .9) + amb); LT[2] = Math.min(1, Math.max(b, s * skyL[2], gw * .78) + amb);   // не больше 1: цвет спрайта — байт
     return LT;
   }
   function spr(name, f, x, y, w, h, flip, rot, tint, a, ox, oy, lit = true){

@@ -75,8 +75,8 @@ function PZ_CORE(){
     [12, 'iron', 'Железная руда', { s: 1, h: 140, t: 1, pat: 'ore', c: ['#7d7d86', '#b8a59a', '#e8dcd2'], g: 2 }],
     [13, 'silver', 'Серебряная руда', { s: 1, h: 170, t: 2, pat: 'ore', c: ['#7d7d86', '#c9d4de', '#ffffff'], g: 2 }],
     [14, 'gold', 'Золотая руда', { s: 1, h: 190, t: 2, pat: 'ore', c: ['#7d7d86', '#f2c230', '#fff1a0'], g: 2 }],
-    [15, 'deepore', 'Глубинит', { s: 1, h: 240, t: 3, pat: 'ore', c: ['#3e4256', '#4f7cff', '#a8c4ff'], g: 7, l: [16, 30, 70], emis: 70 }],
-    [16, 'fireore', 'Жарит', { s: 1, h: 300, t: 4, pat: 'ore', c: ['#3a2a2e', '#ff5a1a', '#ffd070'], g: 8, l: [110, 40, 8], emis: 120 }],
+    [15, 'deepore', 'Глубинит', { s: 1, h: 240, t: 3, pat: 'ore', c: ['#3e4256', '#4f7cff', '#a8c4ff'], g: 7, l: [22, 52, 125], emis: 90 }],
+    [16, 'fireore', 'Жарит', { s: 1, h: 300, t: 4, pat: 'ore', c: ['#3a2a2e', '#ff5a1a', '#ffd070'], g: 8, l: [160, 66, 14], emis: 150 }],
     [17, 'obsidian', 'Обсидиан', { s: 1, h: 260, t: 3, pat: 'obsid', c: ['#2a1f3d', '#1a1328', '#6b4fa0'], g: 9 }],
     [18, 'deepstone', 'Глубинный камень', { s: 1, h: 150, t: 2, pat: 'stone', c: ['#4a4c5e', '#383a4a', '#62657a'], g: 7 }],
     [19, 'ash', 'Пепел', { s: 1, h: 60, t: 2, pat: 'sand', c: ['#5a5452', '#47413f', '#6e6866'], g: 8 }],
@@ -85,12 +85,12 @@ function PZ_CORE(){
     [22, 'brick', 'Кирпич', { s: 1, h: 120, t: 1, pat: 'brick', c: ['#b4523a', '#d8c8b8', '#cc6a50'], g: 12 }],
     [23, 'glass', 'Стекло', { s: 1, op: 2, h: 30, pat: 'glass', c: ['#bfe6ff', '#ffffff', '#7fb8dd'], g: 13 }],
     [24, 'platform', 'Платформа', { s: 2, op: 0, h: 20, d: 'platform', pat: 'platform', c: ['#a8743e', '#86592c', '#c48e54'], k: 'plat' }],
-    [25, 'torch', 'Факел', { h: 1, tool: 'any', pat: 'torch', c: ['#7a4b26', '#ffb347', '#fff2a8'], k: 'torch', l: [255, 190, 110], emis: 255, sup: 'any' }],
+    [25, 'torch', 'Факел', { h: 1, tool: 'any', pat: 'torch', c: ['#7a4b26', '#ffb347', '#fff2a8'], k: 'torch', l: [255, 168, 76], emis: 255, sup: 'any' }],
     [26, 'door', 'Дверь', { s: 3, h: 40, tool: 'any', pat: 'door', c: ['#9b6a38', '#6e4824', '#d4b070'], k: 'obj', sz: [1, 3] }],
     [27, 'dooropen', 'Дверь (открыта)', { h: 40, tool: 'any', d: 'door', pat: 'dooropen', c: ['#9b6a38', '#6e4824', '#d4b070'], k: 'obj', sz: [1, 3] }],
     [28, 'chest', 'Сундук', { h: 40, tool: 'any', pat: 'chest', c: ['#9b6a38', '#5e3c1c', '#e0b840'], k: 'obj', sz: [2, 2], sup: 'floor' }],
     [29, 'workbench', 'Верстак', { s: 2, h: 30, tool: 'any', pat: 'workbench', c: ['#a8743e', '#6e4824', '#c48e54'], k: 'obj', sz: [2, 1], sup: 'floor' }],
-    [30, 'furnace', 'Печь', { h: 60, tool: 'any', pat: 'furnace', c: ['#7d7d86', '#4c4c55', '#ff8a2a'], k: 'obj', sz: [3, 2], sup: 'floor', l: [180, 90, 30], emis: 60 }],
+    [30, 'furnace', 'Печь', { h: 60, tool: 'any', pat: 'furnace', c: ['#7d7d86', '#4c4c55', '#ff8a2a'], k: 'obj', sz: [3, 2], sup: 'floor', l: [225, 125, 45], emis: 70 }],
     [31, 'anvil', 'Наковальня', { s: 2, h: 60, tool: 'any', pat: 'anvil', c: ['#6b6f7d', '#41444f', '#a8adbd'], k: 'obj', sz: [2, 1], sup: 'floor' }],
     [32, 'trunk', 'Ствол', { h: 70, tool: 'axe', d: 'wood', pat: 'trunk', c: ['#7a5232', '#5a3a20', '#9a6a42'], k: 'plant' }],
     [33, 'leaves', 'Листва', { op: 2, h: 1, tool: 'any', d: '', pat: 'leaves', c: ['#3a9a42', '#236e2c', '#6ccc5e'], k: 'plant', leafy: 1 }],
@@ -103,9 +103,9 @@ function PZ_CORE(){
     [40, 'rope', 'Верёвка', { h: 1, tool: 'any', pat: 'rope', c: ['#c9a26a', '#9a7840', '#e8c890'], k: 'plant', climb: 1 }],
     [41, 'ladder', 'Лестница', { h: 20, tool: 'any', pat: 'ladder', c: ['#a8743e', '#7a5028', '#c48e54'], k: 'plant', climb: 1 }],
     [42, 'mushroom', 'Гриб', { h: 0, tool: 'any', pat: 'mushroom', c: ['#e8e0d0', '#d8382a', '#ffffff'], k: 'plant', sup: 'floor' }],
-    [43, 'glowshroom', 'Светогриб', { h: 0, tool: 'any', pat: 'glowshroom', c: ['#9ab8e0', '#3a8cff', '#c8f0ff'], k: 'plant', sup: 'floor', l: [30, 80, 220], emis: 230 }],
-    [44, 'crystal', 'Кристалл', { h: 60, tool: 'any', pat: 'crystal', c: ['#c040c8', '#ff8af0', '#ffe0ff'], k: 'plant', sup: 'any', l: [150, 40, 160], emis: 220 }],
-    [45, 'lifecrystal', 'Кристалл жизни', { h: 80, tool: 'any', pat: 'lifecrystal', c: ['#d8203c', '#ff6a80', '#ffd0d8'], k: 'obj', sz: [2, 2], sup: 'floor', l: [200, 40, 70], emis: 200 }],
+    [43, 'glowshroom', 'Светогриб', { h: 0, tool: 'any', pat: 'glowshroom', c: ['#9ab8e0', '#3a8cff', '#c8f0ff'], k: 'plant', sup: 'floor', l: [40, 112, 245], emis: 230 }],
+    [44, 'crystal', 'Кристалл', { h: 60, tool: 'any', pat: 'crystal', c: ['#c040c8', '#ff8af0', '#ffe0ff'], k: 'plant', sup: 'any', l: [190, 70, 235], emis: 220 }],
+    [45, 'lifecrystal', 'Кристалл жизни', { h: 80, tool: 'any', pat: 'lifecrystal', c: ['#d8203c', '#ff6a80', '#ffd0d8'], k: 'obj', sz: [2, 2], sup: 'floor', l: [235, 52, 92], emis: 200 }],
     [46, 'pot', 'Горшок', { h: 1, tool: 'any', d: '', pat: 'pot', c: ['#a8603a', '#7a4024', '#d8905a'], k: 'plant', sup: 'floor' }],
     [47, 'bed', 'Кровать', { h: 30, tool: 'any', pat: 'bed', c: ['#9b6a38', '#d8383a', '#f0f0f0'], k: 'obj', sz: [3, 1], sup: 'floor' }],
     [48, 'loot', 'Сундук с сокровищами', { h: 40, tool: 'any', d: 'chest', pat: 'chest', c: ['#7a5a30', '#3e2a14', '#f0c840'], k: 'obj', sz: [2, 2], sup: 'floor' }],
@@ -509,13 +509,19 @@ function PZ_CORE(){
     return { seed: S, colInfo, base, caveAt, treeOf, treeCells, genChunk, spawnPoint, biomeName: x => BIOME_NAMES[colInfo(x).b] };
   }
 
-  // ═══ Свет: заливка «по максимуму» с затуханием (8 соседей, диагональ ×1,41), RGB от источников + S от неба ═══
-  // Затухание за клетку — по прозрачности той клетки, КУДА идёт свет: воздух 15 (небо 12), полупрозрачное 26 (20),
-  // твёрдое 60. Дальность факела — ~16 клеток. Пересчёт — коробкой вокруг правки (радиус LR): за коробку правка не влияет.
-  const LR = 18;
-  const DEC = [[15, 12], [44, 40], [26, 20]];   // [блоки, небо] по классу OPC
+  // ═══ Свет: заливка «по максимуму» (8 соседей), RGB от источников + S от неба — как режим «Цвет» у Террарии ═══
+  // Клетка пропускает ДОЛЮ света (умножение), а не «минус N»: яркое ядро и долгий мягкий хвост. Доля — по той клетке,
+  // КУДА идёт свет: воздух 0,89, полупрозрачное 0,76, твёрдое 0,56 (свет заходит в камень на 2–3 клетки), вода — по
+  // цветам 0,78 / 0,84 / 0,89 (красный гаснет быстрее синего — под водой свет синеет), лава 0,7. Диагональ — в степени √2.
+  // Меньше LCUT — темно. Дальше LR клеток свет не достаёт ни через что (самая большая доля — воздух: 255 → 0 за 31 клетку) —
+  // поэтому пересчёт — коробкой ±LR вокруг правки (tiles-test это проверяет).
+  const LR = 32, LCUT = 4;
+  // класс клетки для света: 0 воздух, 1 твёрдое, 2 полупрозрачное, 3 вода, 4 лава; [r, g, b, небо] × 256
+  const LMUL = [[228, 228, 228, 228], [143, 143, 143, 143], [195, 195, 195, 195], [200, 215, 228, 215], [179, 179, 179, 179]];
+  const LMULD = LMUL.map(a => a.map(m => Math.round(256 * Math.pow(m / 256, Math.SQRT2))));
   const LMAX = 300 * 300;
-  const L = { r: new Uint8Array(LMAX), g: new Uint8Array(LMAX), b: new Uint8Array(LMAX), s: new Uint8Array(LMAX), dA: new Uint8Array(LMAX), dS: new Uint8Array(LMAX), fix: new Uint8Array(LMAX), op: new Uint8Array(LMAX), Q: new Int32Array(LMAX * 4) };
+  const L = { r: new Uint8Array(LMAX), g: new Uint8Array(LMAX), b: new Uint8Array(LMAX), s: new Uint8Array(LMAX), cls: new Uint8Array(LMAX), fix: new Uint8Array(LMAX), op: new Uint8Array(LMAX), Q: new Int32Array(LMAX * 4) };
+  const lightCls = (f, lq, lt) => lq > 127 ? (lt === 2 ? 4 : 3) : P.OPC[f] === 1 ? 1 : P.OPC[f] === 2 ? 2 : 0;
   // W — источник клеток: { chunk(cx, cy) → { fg, wall, st, lq, lt, light } | undefined, colTop(x) → y первой непрозрачной сверху }
   // Пересчитать [x0…x1] × [y0…y1] (включительно); вернёт множество ключей тронутых чанков
   function relight(W, x0, y0, x1, y1, touched){
@@ -526,32 +532,30 @@ function PZ_CORE(){
     if (x1 - x0 + 3 > maxW) { const m = x0 + maxW - 4; relight(W, x0, y0, m, y1, touched); return relight(W, m + 1, y0, x1, y1, touched); }
     if (y1 - y0 + 3 > maxH) { const m = y0 + maxH - 4; relight(W, x0, y0, x1, m, touched); return relight(W, x0, m + 1, x1, y1, touched); }
     const X0 = x0 - 1, Y0 = y0 - 1, w = x1 - x0 + 3, h = y1 - y0 + 3;
-    const R = L.r, G = L.g, Bc = L.b, Sk = L.s, dA = L.dA, dS = L.dS, fix = L.fix, op = L.op, Q = L.Q;
+    const R = L.r, G = L.g, Bc = L.b, Sk = L.s, cls = L.cls, fix = L.fix, op = L.op, Q = L.Q;
     let qn = 0;
     // сбор
     for (let j = 0; j < h; j++) {
       const wy = Y0 + j, ring = j === 0 || j === h - 1;
-      if (wy < 0) { for (let i = 0; i < w; i++) { const k = j * w + i; R[k] = G[k] = Bc[k] = 0; Sk[k] = 255; fix[k] = 1; dA[k] = 15; dS[k] = 12; op[k] = 0; Q[qn++] = k; } continue; }
+      if (wy < 0) { for (let i = 0; i < w; i++) { const k = j * w + i; R[k] = G[k] = Bc[k] = 0; Sk[k] = 255; fix[k] = 1; cls[k] = 0; op[k] = 0; Q[qn++] = k; } continue; }
       const cy = wy >> CB, ly = wy & CM;
       let lastCx = 1e9, ch = null;
       for (let i = 0; i < w; i++) {
         const wx = X0 + i, cx = wx >> CB, k = j * w + i;
         if (cx !== lastCx) { lastCx = cx; ch = W.chunk(cx, cy); }
         const isRing = ring || i === 0 || i === w - 1;
-        if (!ch) { R[k] = G[k] = Bc[k] = Sk[k] = 0; fix[k] = 1; dA[k] = 255; dS[k] = 255; op[k] = 1; continue; }
-        const ci = ly << CB | (wx & CM), f = ch.fg[ci];
-        const o = P.OPC[f];
-        op[k] = o; dA[k] = DEC[o][0]; dS[k] = DEC[o][1];
+        if (!ch) { R[k] = G[k] = Bc[k] = Sk[k] = 0; fix[k] = 1; cls[k] = 1; op[k] = 1; continue; }
+        const ci = ly << CB | (wx & CM), f = ch.fg[ci], lq = ch.lq[ci], lt = ch.lt[ci];
+        op[k] = P.OPC[f]; cls[k] = lightCls(f, lq, lt);
         if (isRing) {
-          const li = ci << 2, lt = ch.light;
-          R[k] = lt[li]; G[k] = lt[li + 1]; Bc[k] = lt[li + 2]; Sk[k] = lt[li + 3]; fix[k] = 1;
+          const li = ci << 2, lgt = ch.light;
+          R[k] = lgt[li]; G[k] = lgt[li + 1]; Bc[k] = lgt[li + 2]; Sk[k] = lgt[li + 3]; fix[k] = 1;
           if (R[k] | G[k] | Bc[k] | Sk[k]) Q[qn++] = k;
           continue;
         }
         fix[k] = 0;
         let r = P.LR[f], g = P.LG[f], b = P.LB[f];
-        const lq = ch.lq[ci];
-        if (lq && ch.lt[ci] === 2) { const a = 80 + (lq >> 1); if (a > r) r = a; const ag = a * .45 | 0; if (ag > g) g = ag; const ab = a * .1 | 0; if (ab > b) b = ab; }
+        if (lq && lt === 2) { const a = 110 + (lq * 145 >> 8); if (a > r) r = a; const ag = a * .46 | 0; if (ag > g) g = ag; const ab = a * .13 | 0; if (ab > b) b = ab; }
         R[k] = r; G[k] = g; Bc[k] = b;
         const wl = ch.wall[ci];
         Sk[k] = wy < SKY_LIMIT && wy < W.colTop(wx) && (wl === 0 || P.WSKY[wl]) ? 255 : 0;
@@ -575,13 +579,14 @@ function PZ_CORE(){
         if (ni < 0 || nj < 0 || ni >= w || nj >= h) continue;
         const nk = nj * w + ni;
         if (fix[nk]) continue;
-        let da = dA[nk], ds = dS[nk];
+        let m;
         if (n >= 4) {
           if (op[j * w + ni] === 1 && op[nj * w + i] === 1) continue;   // по диагонали сквозь угол стен — нет
-          da = da * 1.42 | 0; ds = ds * 1.42 | 0;
-        }
+          m = LMULD[cls[nk]];
+        } else m = LMUL[cls[nk]];
         let up = false;
-        const nr = r - da, ng = g - da, nb = b - da, ns = s - ds;
+        let nr = (r * m[0]) >> 8, ng = (g * m[1]) >> 8, nb = (b * m[2]) >> 8, ns = (s * m[3]) >> 8;
+        if (nr < LCUT) nr = 0; if (ng < LCUT) ng = 0; if (nb < LCUT) nb = 0; if (ns < LCUT) ns = 0;
         if (nr > R[nk]) { R[nk] = nr; up = true; }
         if (ng > G[nk]) { G[nk] = ng; up = true; }
         if (nb > Bc[nk]) { Bc[nk] = nb; up = true; }
@@ -1021,7 +1026,7 @@ function PZ_CORE(){
   function workerSource(){ return '(' + PZ_CORE.toString() + ')().worldWorker(self);'; }
 
   return {
-    CS, CB, CM, CA, SURF, SKY_LIMIT, MOD_ID0, LR, key,
+    CS, CB, CM, CA, SURF, SKY_LIMIT, MOD_ID0, LR, LCUT, LMUL, LMULD, key,
     hash2, rnd2, rnd1, noise1, noise2, fbm1, smooth,
     P, TILES, TILE, WALLS, WALL, T, WL, B, BIOME_NAMES, ITEMS, ITEM_LIST, RECIPES, KINDS, TOOLS, SUPS,
     defTile, defWall, defItem, applyProps, setFeats, featsChunk,
