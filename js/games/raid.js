@@ -23,7 +23,15 @@
   const fmtT = s => { s = Math.max(0, Math.ceil(s)); if (s < 60) return s + ' с'; const m = Math.floor(s / 60); if (m < 60) return m + ' мин' + (m < 10 && s % 60 ? ' ' + (s % 60) + ' с' : ''); const h = Math.floor(m / 60); return h + ' ч' + (m % 60 ? ' ' + (m % 60) + ' мин' : ''); };
   const clock = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   const stars = n => '★'.repeat(n) + '☆'.repeat(3 - n);
-  function dev(){ let d = null; try { d = localStorage.getItem(LS_DEV); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem(LS_DEV, d); } } catch (e) {} return d; }
+  // ключ браузера — общий с приглашениями (js/core/ref.js, тот же d37_dev)
+  function dev(){ const r = root.D37Ref?.device?.(); if (r) return r; let d = null; try { d = localStorage.getItem(LS_DEV); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem(LS_DEV, d); } } catch (e) {} return d; }
+  // поделиться ссылкой на раздел набегов — с кодом приглашения (js/core/ref.js)
+  async function share(path, text){
+    const url = (root.D37Ref?.wrap || (u => u))(location.origin + '/#/games/raid/' + path);
+    if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) { navigator.share({ title: 'Набеги', text, url }).catch(() => {}); return; }
+    try { await navigator.clipboard.writeText(text + ' ' + url); toast('📣 Ссылка скопирована — отправь другу'); }
+    catch (e) { prompt('Скопируй и отправь другу:', text + ' ' + url); }
+  }
 
   // ═══ Звуки боя (свои, короткие; общая громкость и «без звука» — как у игр сайта) ═══
   let actx = null, sndT = 0, sndN = 0;
@@ -358,7 +366,7 @@
 .rd-row .e{font-size:1.5rem;flex:none;width:2.1rem;text-align:center}
 .rd-row .acts{display:flex;gap:.3rem;flex-wrap:wrap;justify-content:flex-end}
 .rd-row .acts .rd-b{min-height:38px;padding:.35rem .55rem}
-.rd-units{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.5rem}
+.rd-units{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.5rem}
 .rd-unit{padding:.6rem;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);display:grid;gap:.25rem}
 .rd-unit.lock{opacity:.5}
 .rd-unit b{font-size:.9rem}
@@ -375,18 +383,18 @@
 .rd-pill.big{font-size:1.05rem;text-align:center;min-width:76px}
 .rd-pill .rd-stars{font-size:1.1rem}
 .rd-sp{flex:1}
-.rd-barB{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:.35rem;padding:.45rem;background:linear-gradient(0deg,rgba(6,6,14,.85),rgba(6,6,14,0));overflow-x:auto;scrollbar-width:none}
+.rd-barB{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:flex-end;gap:.35rem;padding:.45rem;padding-right:min(42%,340px);background:linear-gradient(0deg,rgba(6,6,14,.85),rgba(6,6,14,0));overflow-x:auto;scrollbar-width:none}
 .rd-barB::-webkit-scrollbar{display:none}
 .rd-u{flex:none;position:relative;width:58px;height:62px;border-radius:12px;border:2px solid rgba(255,255,255,.18);background:rgba(20,20,34,.85);color:#fff;font-size:1.55rem;display:grid;place-items:center;cursor:pointer;padding:0}
 .rd-u i{position:absolute;right:3px;bottom:2px;font-style:normal;font-size:.72rem;font-weight:900;background:rgba(0,0,0,.6);border-radius:6px;padding:0 .25rem}
 .rd-u.on{border-color:#4ade80;box-shadow:0 0 0 3px rgba(74,222,128,.35)}
 .rd-u:disabled{opacity:.35}
 .rd-u.ab{background:linear-gradient(135deg,#7c3aed,#db2777)}
-.rd-act{flex:none;margin-left:auto;display:flex;gap:.35rem}
+.rd-act{position:absolute;right:.45rem;bottom:.45rem;display:flex;gap:.35rem;z-index:2}
 .rd-act .rd-b{min-height:48px;background:rgba(20,20,34,.85)}
 .rd-tip{position:absolute;left:50%;top:58px;transform:translateX(-50%);max-width:min(92%,520px);background:rgba(17,24,39,.92);border:1px solid rgba(250,204,21,.5);color:#fef3c7;border-radius:12px;padding:.5rem .75rem;font-size:.82rem;font-weight:700;text-align:center;pointer-events:none}
 .rd-tip[hidden]{display:none}
-.rd-res{position:absolute;inset:0;display:grid;place-items:center;background:rgba(5,5,12,.6);padding:1rem}
+.rd-res{position:absolute;inset:0;z-index:3;display:grid;place-items:center;background:rgba(5,5,12,.6);padding:1rem}
 .rd-res .box{width:min(420px,100%);background:var(--card,#111119);border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:1rem;text-align:center;box-shadow:0 30px 80px -20px rgba(0,0,0,.8)}
 .rd-res .big{font-size:2.4rem;color:#facc15;letter-spacing:4px}
 .rd-res .ln{font-size:.9rem;margin:.35rem 0}
@@ -396,7 +404,7 @@
 .rd-league span.on{border-color:#facc15;background:rgba(250,204,21,.12)}
 .rd-help p,.rd-help li{font-size:.84rem;line-height:1.5}
 @media (max-width:760px){.rd-grid{grid-template-columns:1fr}.rd-base{height:250px}}
-@media (max-width:640px){.rd-field{height:calc(62vw + 230px);min-height:380px;max-height:calc(100vh - 70px)}}
+@media (max-width:640px){.rd-field{height:calc(62vw + 230px);min-height:380px;max-height:calc(100vh - 70px)}.rd-barB{padding-right:.45rem}.rd-act{bottom:82px}.rd-act .rd-b{min-height:40px;padding:.3rem .55rem;font-size:.74rem}.rd-field.rp .rd-act{bottom:.45rem}}
 @media (max-width:420px){.rd-btns{grid-template-columns:repeat(2,minmax(0,1fr))}.rd-u{width:52px;height:56px;font-size:1.35rem}.rd-head h2{font-size:1.08rem}}
 `;
   function css(){ if (document.getElementById('rdCss')) return; const s = document.createElement('style'); s.id = 'rdCss'; s.textContent = CSS; document.head.appendChild(s); }
@@ -486,7 +494,8 @@
       const q = b?.queue || [], qEnd = q.length ? q[q.length - 1].ue : 0;
       left = `<div class="rd-card"><div class="rd-base"><canvas class="rdHubCv"></canvas></div>
         <div class="rd-sub">Участок №${b.plot} · 🏛️ ратуша ${MBx.Rules.th(b)} ур.${S.base.skin && MBx.SKINS[S.base.skin] ? ` · ${MBx.SKINS[S.base.skin].e} ${MBx.SKINS[S.base.skin].n}` : ''} · нажми постройку — что она умеет</div>
-        <div class="rd-btns" style="grid-template-columns:1fr 1fr"><button type="button" class="rd-b" data-a="build">🔨 Строить оборону</button><button type="button" class="rd-b" data-a="log">🛡️ Защита${st?.log?.some(x => x.t > (lsGet('d37_raid_logseen') || 0)) ? '<span class="rd-dot"></span>' : ''}</button></div></div>`;
+        <div class="rd-btns" style="grid-template-columns:1fr 1fr"><button type="button" class="rd-b" data-a="build">🔨 Строить оборону</button><button type="button" class="rd-b" data-a="log">🛡️ Защита${st?.log?.some(x => x.t > (lsGet('d37_raid_logseen') || 0)) ? '<span class="rd-dot"></span>' : ''}</button>
+          <button type="button" class="rd-b" data-a="invite" style="grid-column:1/-1" title="Дружеский бой: без добычи и кубков">🤝 Позвать друга штурмовать мою базу</button></div></div>`;
       const bl = barracksLv();
       right = `<div class="rd-card"><h3>🪖 Армия ${used}/${cap || '—'}</h3>
         ${bl ? `<div class="rd-cap"><i style="width:${cap ? Math.round(used * 100 / cap) : 0}%"></i></div><div class="rd-army">${Object.entries(a).filter(([, v]) => v > 0).map(([u, v]) => `<span>${MBx.UNITS[u]?.e || '?'} ×${v}</span>`).join('') || '<span>пусто</span>'}<span>🦸 герой ${MBx.Rules.th(b)} ур.</span></div>
@@ -545,6 +554,7 @@
     else if (a === 'shop') showShop();
     else if (a === 'chest') { btn.disabled = true; const r = await rpc('raid_chest'); toast(r?.ok ? `🎁 Сундук недели: +${num(r.got)} 🧱` : why(r)); await refresh(); }
     else if (a === 'build') goBuild();
+    else if (a === 'invite' && S.base) share('friendly/' + S.base.plot, `Возьмёшь мою базу? 🏰 Ратуша ${MB().Rules.th(S.base)} ур. — дружеский бой в «Набегах» на сайте Денчика37, без потерь.`);
   }
   // строить — в мире: участок, режим стройки
   function goBuild(){
@@ -656,14 +666,14 @@
     if (!S) return;
     if (!info) { toast('Участок не найден'); return showHub(); }
     const a = armyN(army()) ? { ...army() } : { ...defs().raid.tutArmy };
-    enterBattle('friendly', { layout: MB().Rules.sanitize({ layout: info.layout, room: [], plot }).layout, army: a, hero: S.base ? MB().Rules.th(S.base) : 1, seed: plot * 31 + 7, defs: defs(), local: true, def: { nick: info.nick, skin: info.skin } });
+    enterBattle('friendly', { layout: MB().Rules.sanitize({ layout: info.layout, room: [], plot }).layout, army: a, hero: S.base ? MB().Rules.th(S.base) : 1, seed: plot * 31 + 7, defs: defs(), local: true, def: { nick: info.nick, skin: info.skin, plot } });
   }
   async function openReplay(id){
     const r = await rpc('raid_replay', { p_id: id });
     if (!S) return;
     if (!r?.ok) { toast('Повтор не найден'); return showHub(); }
     if (!r.same) toast('Цифры игры с тех пор поменялись — повтор может немного отличаться');
-    enterBattle('replay', { layout: r.layout, lvl: r.lvl, variant: r.variant, army: r.army, hero: r.hero, seed: r.seed, defs: r.defs, inputs: r.inputs, def: r.def, att: r.att, result: r.result, attSkin: r.att.skin, defSkin: r.def.skin, heroLook: {} });
+    enterBattle('replay', { id: r.id || id, layout: r.layout, lvl: r.lvl, variant: r.variant, army: r.army, hero: r.hero, seed: r.seed, defs: r.defs, inputs: r.inputs, def: r.def, att: r.att, result: r.result, attSkin: r.att.skin, defSkin: r.def.skin, heroLook: {} });
   }
   // продолжить набег после перезагрузки (d37_raid_cur)
   async function resume(){
@@ -697,12 +707,12 @@
     const def = data.def || {}, L = def.tr != null ? MBx.LEAGUES[MBx.league(def.tr)] : null;
     const title = kind === 'replay' ? `🎬 ${esc(data.att?.nick || '')} → ${esc(def.nick || '')}` : kind === 'tut' ? '🎓 Учебный набег' : kind === 'friendly' ? `🤝 Дружеский бой: ${esc(def.nick || '')}` : data.mode === 'camp' ? `🏴‍☠️ Лагерь ${data.lvl}` : data.mode === 'bot' ? '🏴‍☠️ Разбойники' : `🆚 ${esc(def.nick || 'Игрок')}${L ? ` ${L[1]} ${num(def.tr)}` : ''} · 🏛️ ${def.th || ''}`;
     const types = Object.keys(bt.B.left).filter(u => U[u]);
-    setHTML(`<div class="rd"><div class="rd-field"><canvas class="rdCv"></canvas>
+    setHTML(`<div class="rd"><div class="rd-field${kind === 'replay' ? ' rp' : ''}"><canvas class="rdCv"></canvas>
       <div class="rd-top"><div class="rd-pill">${title}<div class="rdLoot" style="font-weight:700;opacity:.9"></div></div><div class="rd-sp"></div><div class="rd-pill big"><div class="rdTimer">—</div><div class="rd-stars rdStars">☆☆☆</div><div class="rdPct" style="font-size:.7rem">0 %</div></div></div>
       <div class="rd-tip rdTip" hidden></div>
-      <div class="rd-barB">${kind === 'replay' ? '' : types.map(u => `<button type="button" class="rd-u" data-u="${u}" title="${esc(U[u].n)}">${U[u].e}<i>${bt.B.left[u]}</i></button>`).join('') + (bt.B.hero ? '<button type="button" class="rd-u" data-u="hero" title="Герой — твой персонаж">🦸<i>1</i></button><button type="button" class="rd-u ab" data-ab="1" title="«Удар» героя" disabled>💥</button>' : '')}
-        <div class="rd-act">${kind === 'replay' ? '<button type="button" class="rd-b" data-a="pause">⏸</button><button type="button" class="rd-b" data-a="speed">×1</button><button type="button" class="rd-b" data-a="restart">⏮</button><button type="button" class="rd-b" data-a="hub">🏠</button>'
-          : `<button type="button" class="rd-b rdNext" data-a="next"${kind === 'raid' && data.mode === 'find' ? '' : ' hidden'}>⏭ Следующий 🧱${num(R().next[(data.hero || 1) - 1])}</button><button type="button" class="rd-b rdHome" data-a="home">🏠 Домой</button><button type="button" class="rd-b rdEnd" data-a="end" hidden>🏳 Закончить</button>`}</div></div></div></div>`);
+      <div class="rd-barB">${kind === 'replay' ? '' : types.map(u => `<button type="button" class="rd-u" data-u="${u}" title="${esc(U[u].n)}">${U[u].e}<i>${bt.B.left[u]}</i></button>`).join('') + (bt.B.hero ? '<button type="button" class="rd-u" data-u="hero" title="Герой — твой персонаж">🦸<i>1</i></button><button type="button" class="rd-u ab" data-ab="1" title="«Удар» героя" disabled>💥</button>' : '')}</div>
+      <div class="rd-act">${kind === 'replay' ? `<button type="button" class="rd-b" data-a="pause">⏸</button><button type="button" class="rd-b" data-a="speed">×1</button><button type="button" class="rd-b" data-a="restart">⏮</button>${data.id ? '<button type="button" class="rd-b" data-a="share" title="Поделиться повтором">🔗</button>' : ''}<button type="button" class="rd-b" data-a="hub">🏠</button>`
+          : `<button type="button" class="rd-b rdNext" data-a="next"${kind === 'raid' && data.mode === 'find' ? '' : ' hidden'}>⏭ Следующий 🧱${num(R().next[(data.hero || 1) - 1])}</button><button type="button" class="rd-b rdHome" data-a="home">🏠 Домой</button><button type="button" class="rd-b rdEnd" data-a="end" hidden>🏳️ Закончить</button>`}</div></div></div>`);
     const cv = $('.rdCv'), V = makeView(cv, { full: true });
     S.views = [V]; bt.V = V;
     S.ro = new ResizeObserver(() => V.resize()); S.ro.observe(cv);
@@ -713,9 +723,18 @@
     else if (kind === 'raid' && bt.phase === 'scout') tip(bt, '👀 Разведка: посмотри базу. Нажми на зелёную полосу — высадка начнёт бой (3 минуты).');
     else if (kind === 'friendly') tip(bt, '🤝 Тренировка: без добычи и кубков, армия не тратится.');
     loadSprites().then(() => { for (const u of [...types, 'hero']) spriteFor(u, u === 'hero' ? '' : bt.skinA, bt.heroLook); });
+    S.timers.push(setTimeout(fitField, 450));   // после прокрутки openGame
     bt.last = performance.now();
     const loop = () => { if (!S || S.bt !== bt) return; S.raf = requestAnimationFrame(loop); frame(bt); };
     S.raf = requestAnimationFrame(loop);
+  }
+  // поле боя целиком на экране: низ с отрядами виден, верх — не под шапкой сайта
+  function fitField(){
+    const f = $('.rd-field'); if (!f || document.fullscreenElement) return;
+    const r = f.getBoundingClientRect(), head = 64, vh = root.innerHeight || 0;
+    let dy = r.bottom > vh ? r.bottom - vh + 6 : 0;
+    if (r.top - dy < head) dy = r.top - head;
+    if (Math.abs(dy) > 2) root.scrollBy({ top: dy, behavior: 'smooth' });
   }
   function tip(bt, html, ms = 0){ const t = $('.rdTip'); if (!t) return; t.innerHTML = html; t.hidden = !html; clearTimeout(bt.tipT); if (ms) bt.tipT = setTimeout(() => { if (t) t.hidden = true; }, ms); }
   function select(bt, u){ bt.sel = u; S.root.querySelectorAll('.rd-u[data-u]').forEach(b => b.classList.toggle('on', b.dataset.u === u)); }
@@ -761,13 +780,17 @@
       return leave(bt);
     }
     if (a === 'next') { b.disabled = true; lsSet(LS_CUR, null); const r = await rpc('raid_start', { p_mode: 'next', p_dev: dev() }); if (!S) return; if (r?.ok) return enterBattle('raid', r); toast(why(r)); if (r?.reason === 'nobody') { await refresh(); return showHub(); } b.disabled = false; return; }
-    if (a === 'end') { if (!(await ask({ icon: '🏳', title: 'Закончить бой?', text: 'Засчитают то, что уже разрушено. Невысаженные отряды вернутся в казарму.', yes: '🏳 Закончить', no: 'Продолжить' }))) return; return surrender(bt); }
+    if (a === 'end') { if (!(await ask({ icon: '🏳️', title: 'Закончить бой?', text: 'Засчитают то, что уже разрушено. Невысаженные отряды вернутся в казарму.', yes: '🏳️ Закончить', no: 'Продолжить' }))) return; return surrender(bt); }
     if (a === 'hub') return leave(bt);
     if (a === 'pause') { bt.paused = !bt.paused; b.textContent = bt.paused ? '▶' : '⏸'; return; }
     if (a === 'speed') { bt.speed = bt.speed >= 4 ? 1 : bt.speed * 2; b.textContent = '×' + bt.speed; return; }
     if (a === 'restart') return enterBattle('replay', bt.data);
     if (a === 'again') { if (bt.kind === 'tut') return startTut(); if (bt.kind === 'friendly') return friendly(bt.data.def?.plot || 0); return findBattle(null, bt.data.mode === 'camp' ? 'camp' : bt.data.mode === 'bot' ? 'bot' : 'find', bt.data.mode === 'camp' ? String(bt.data.lvl) : null); }
-    if (a === 'replay') return enterBattle('replay', { ...bt.data, inputs: bt.ins.slice(), att: { nick: 'Я' }, attSkin: bt.skinA });
+    if (a === 'replay') return enterBattle('replay', { ...bt.data, id: bt.kind === 'raid' && bt.server?.ok && !bt.server.canceled ? bt.data.id : undefined, inputs: bt.ins.slice(), att: { nick: (typeof currentProfile !== 'undefined' && currentProfile?.nick) || 'Я' }, attSkin: bt.skinA });
+    if (a === 'share' && bt.data.id) {
+      const r = bt.server?.ok && bt.server.stars != null ? bt.server : bt.result || bt.data.result || {}, who = bt.data.def?.nick;
+      return share('replay/' + bt.data.id, bt.kind === 'replay' ? `Смотри повтор набега в «Набегах»: ${bt.data.att?.nick || 'Игрок'} → ${who || 'база'} ⚔️` : `Смотри, как я ${r.stars ? 'взял' : 'штурмовал'} ${who ? 'базу ' + who : 'лагерь разбойников'}: ${stars(r.stars || 0)} ${r.pct || 0} % ⚔️`);
+    }
   }
   async function leave(bt){
     if (bt.kind === 'raid' && bt.phase === 'fight' && !bt.B.over) {
@@ -1002,8 +1025,10 @@
     } else if (bt.kind === 'friendly') lines = '<div class="ln">Дружеский бой — без добычи и кубков</div>';
     else if (bt.kind === 'tut') lines = '<div class="ln">Учебный набег пройден! Теперь — в бой по-настоящему.</div>';
     const st = bt.kind !== 'raid' ? '' : srv?.ok ? '✓ Засчитано сервером' : srv ? '⚠️ ' + why(srv) : '⏳ Засчитываем…';
+    const canShare = bt.data.id && (bt.kind === 'replay' || (bt.kind === 'raid' && srv?.ok && !srv.canceled));   // повтор есть у засчитанного набега
     box.innerHTML = `<div class="box"><div class="big">${stars(r.stars)}</div><div class="ln">Разрушено ${r.pct} %${r.th ? ' · ратуша пала' : ''}</div>${lines}<div class="srv rdSrv">${st}</div>
-      <div class="rd-btns" style="grid-template-columns:repeat(${bt.kind === 'replay' ? 2 : 3},minmax(0,1fr))">${bt.kind !== 'replay' ? '<button type="button" class="rd-b" data-a="replay">🎬 Повтор</button>' : '<button type="button" class="rd-b" data-a="restart">⏮ Ещё раз</button>'}<button type="button" class="rd-b" data-a="hub">🏠 Штаб</button>${bt.kind !== 'replay' ? `<button type="button" class="rd-b pri" data-a="again">${bt.kind === 'tut' ? '🎓 Ещё' : '⚔️ Ещё'}</button>` : ''}</div></div>`;
+      <div class="rd-btns" style="grid-template-columns:repeat(${bt.kind === 'replay' ? 2 : 3},minmax(0,1fr))">${bt.kind !== 'replay' ? '<button type="button" class="rd-b" data-a="replay">🎬 Повтор</button>' : '<button type="button" class="rd-b" data-a="restart">⏮ Ещё раз</button>'}<button type="button" class="rd-b" data-a="hub">🏠 Штаб</button>${bt.kind !== 'replay' ? `<button type="button" class="rd-b pri" data-a="again">${bt.kind === 'tut' ? '🎓 Ещё' : '⚔️ Ещё'}</button>` : ''}</div>
+      ${canShare ? '<div class="rd-btns" style="grid-template-columns:1fr"><button type="button" class="rd-b" data-a="share">🔗 Поделиться повтором</button></div>' : ''}</div>`;
     if (bt.kind === 'raid' && srv?.ok) S.st = null;
   }
 
@@ -1108,5 +1133,5 @@
   }
 
   root.GAME_IMPL = root.GAME_IMPL || {};
-  root.GAME_IMPL.raid = { mount, unmount, _test: { state: () => S, makeView, layoutBs, newBattle, lootNow, LOOKS, input, endBattle, showHub, WHY } };
+  root.GAME_IMPL.raid = { mount, unmount, _test: { state: () => S, makeView, layoutBs, newBattle, lootNow, LOOKS, input, endBattle, showHub, WHY, drawScene, draw, events, applyIn } };
 })();

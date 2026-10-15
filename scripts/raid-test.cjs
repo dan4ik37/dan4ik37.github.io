@@ -313,6 +313,60 @@ const J = o => JSON.stringify(o);
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 
+  // ═══ 7. Картинка 2.5D (js/games/raid.js): все постройки всех уровней, обломки, стройка, целый бой с отрядами — без ошибок и NaN ═══
+  {
+    let bad = 0;
+    const grad = { addColorStop(){} };
+    const g2d = new Proxy({}, {
+      get(t, k){
+        if (k in t) return t[k];
+        if (k === 'measureText') return s => ({ width: String(s).length * 7 });
+        if (/^create(Linear|Radial|Conic)Gradient$|^createPattern$/.test(k)) return () => grad;
+        return (...a) => { if (a.some(v => typeof v === 'number' && !Number.isFinite(v))) { bad++; if (bad < 4) console.log('  не число в', k, a); } };
+      },
+      set(t, k, v){ t[k] = v; return true; },
+    });
+    const cv = { width: 0, height: 0, clientWidth: 900, clientHeight: 600, style: {}, getContext: () => g2d, getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 600 }) };
+    const rc = vm.createContext({ console, setTimeout, clearTimeout, performance: { now: () => Date.now() }, devicePixelRatio: 1 });
+    rc.window = rc;
+    for (const f of ['js/games/mir-base.js', 'js/games/raid-sim.js', 'js/games/raid.js']) vm.runInContext(fs.readFileSync(path.join(SITE, f), 'utf8'), rc, { filename: f });
+    const T = rc.GAME_IMPL?.raid?._test;
+    ok(!!(T && T.drawScene && T.draw && T.makeView), 'raid.js загружается без браузера, рисование доступно для проверки');
+    if (T) {
+      const V = T.makeView(cv, { full: true });
+      ok(V.W === 900 && V.H === 600 && V.tw > 10, 'вид 2.5D по размеру холста', { W: V.W, H: V.H, tw: V.tw });
+      for (const [k, D] of Object.entries(MB.DEFS)) {
+        if (D.g === 'deco') continue;
+        for (let l = 0; l <= D.lv; l++) {
+          const bs = T.layoutBs([{ i: 1, k, x: 4, z: 4, r: 1, l }]);
+          let err = null;
+          try {
+            T.drawScene(V, bs, [], { showTraps: true, hub: true, bars: true, tint: MB.SKINS.gold });
+            Object.assign(bs[0], { alive: false, hp: 0 });
+            T.drawScene(V, bs, [], { bars: true, ring: true });
+          } catch (e) { err = e.message; }
+          ok(!err, `2.5D: ${k} ${l} ур. — целая, в облике, обломки`, err);
+        }
+      }
+      // целый бой ботом на базе 5-й ратуши: картинка каждые 5 шагов, итог обёртки = итог сервера
+      const cfg = { defs, layout: S.bot(105, defs, 1), army: armyFor(5), hero: 5, seed: 4242 }, live = play(cfg, 5);
+      const bt = T.newBattle('replay', { layout: cfg.layout, army: cfg.army, hero: 5, seed: cfg.seed, inputs: live.ins, defs });
+      bt.V = V;
+      let ri = 0, err = null;
+      try {
+        while (!bt.B.over && bt.B.tick < 4000) {
+          while (ri < live.ins.length && live.ins[ri].t === bt.B.tick) T.applyIn(bt, live.ins[ri++]);
+          if (!bt.B.over) { bt.B.step(); T.events(bt); }
+          if (bt.B.tick % 5 === 0) T.draw(bt, .5);
+        }
+      } catch (e) { err = e.stack; }
+      const res = bt.B.result();
+      ok(!err && res.stars === live.res.stars && res.pct === live.res.pct, 'бой в обёртке raid.js: картинка без ошибок, итог как у сервера', err || { res, live: live.res });
+      ok(bt.fx.length > 0 || res.ticks > 0, 'эффекты боя (выстрелы, взрывы) собираются');
+    }
+    ok(bad === 0, '2.5D: в рисование не попало ни одного NaN/бесконечности', bad);
+  }
+
   console.log(`${pass} ок, ${fail} ошибок`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

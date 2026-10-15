@@ -472,5 +472,33 @@ var r;
   ok(!log.find(([, t]) => t >= 5) || log.find(([, t]) => t >= 5)[0] >= 10, 'ратуша 5 — не раньше 10-го дня (есть куда расти)');
 }
 
+// ═══ Отрисовка: каждая постройка каждого уровня собирается из деталей без ошибок, числа конечные, тела годные ═══
+{
+  const { DRAW } = MB._draw;
+  const V3 = () => ({ x: 0, y: 0, z: 0, set(x, y, z){ this.x = x; this.y = y; this.z = z; return this; } });
+  class G { constructor(){ this.children = []; this.position = V3(); this.scale = V3(); this.rotation = V3(); this.userData = {}; } add(c){ this.children.push(c); } }
+  const x0 = () => ({ T: { Group: G }, R: { prefab: () => new G(), mat: () => ({}), water: () => new G() }, glass: {}, tvMat: {}, boardMat: {} });
+  const fin = v => v === undefined || (typeof v === 'number' && Number.isFinite(v));
+  for (const [k, D] of Object.entries(DEFS)) {
+    if (k === 'wall') continue;   // забор — drawWall (соседи)
+    ok(typeof DRAW[k] === 'function', `${k}: есть отрисовка`);
+    if (typeof DRAW[k] !== 'function') continue;
+    for (let l = 1; l <= D.lv; l++) {
+      const parts = [], bd = [], x = x0();
+      let h, err = null;
+      try { h = DRAW[k]((g, o) => { parts.push(o); return new G(); }, new G(), { i: 1, k, x: 2, z: 2, r: 0, l }, bd, x); } catch (e) { err = e.message; }
+      ok(!err, `${k} ${l} ур.: рисуется`, err);
+      ok(parts.every(o => ['x', 'y', 'z', 'w', 'h', 'd', 'r', 'yaw', 'rx', 'rz'].every(f => fin(o[f]))), `${k} ${l} ур.: размеры деталей — числа`);
+      ok(h === undefined || (Number.isFinite(h) && h > 0 && h < 20), `${k} ${l} ур.: высота`, h);
+      ok(bd.every(b => (b.t === 'cyl' ? b.r > 0 : b.w > 0 && b.d > 0) && b.h > 0 && fin(b.y0) && fin(b.x) && fin(b.z)), `${k} ${l} ур.: тела`, bd);
+    }
+  }
+  // вышка растёт с уровнем, у обороны есть тело (в неё не пройти насквозь), ловушки — без тел
+  const hOf = (k, l) => DRAW[k]((g, o) => new G(), new G(), { i: 1, k, x: 2, z: 2, r: 0, l }, [], x0());
+  ok([1, 2, 3, 4, 5].map(l => hOf('tower', l)).every((h, i, a) => i === 0 || h >= a[i - 1]), 'вышка выше с уровнем');
+  for (const k of ['cannon', 'mortar', 'barracks']) { const bd = []; DRAW[k](() => new G(), new G(), { i: 1, k, x: 2, z: 2, r: 0, l: 1 }, bd, x0()); ok(bd.length > 0, `${k}: есть тело`); }
+  for (const k of ['bomb', 'airmine']) { const bd = []; DRAW[k](() => new G(), new G(), { i: 1, k, x: 2, z: 2, r: 0, l: 1 }, bd, x0()); ok(bd.length === 0, `${k}: ловушка без тела`); }
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);
