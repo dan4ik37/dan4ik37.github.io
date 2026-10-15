@@ -514,7 +514,7 @@
       } else { AQ = null; applyOpts(base); }
       return R.opt;
     };
-    R.autoQ = () => AQ ? { step: AQ.i, steps: AQ.L.length, off: AQ.off } : null;
+    R.autoQ = () => AQ ? { step: AQ.i, steps: AQ.L.length, off: AQ.off, D: AQ.D } : null;   // D — автомат (для проверок)
     R.setAuto = on => { if (AQ) { AQ.off = !on; if (!on && AQ.i) { AQ.i = 0; AQ.D.set(1); applyOpts(AQ.L[0]); } } };   // замер — на лучшей ступени
     const gradeU = { gain: [1, 1, 1], sat: 1, con: 0, vig: 0 };
     function applyOpts(op){
