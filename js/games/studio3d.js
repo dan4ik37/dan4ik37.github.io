@@ -102,6 +102,7 @@ Players.PlayerAdded.Connect(player => {
 - игрок: player.Name, player.Position, player.Humanoid.WalkSpeed (16 обычно), .JumpPower (50), .Health / .MaxHealth (100), .TakeDamage(n), player.Teleport(Vector3), player.SetStat(имя, число) / AddStat / GetStat (таблица очков), player.Message(текст, секунды)
 - TweenService.Create(obj, { Time, EasingStyle: 'quad'|'sine'|'linear'|'back'|'bounce', Reverses, RepeatCount (-1 бесконечно), DelayTime }, { Position, Size, Orientation, Color, Transparency }).Play() — плавно
 - task.wait(сек) (с await), task.delay(сек, fn), task.spawn(fn), random(a, b), print(...), gui.message(текст, сек), gui.text(ключ, текст), sound.play('coin'|'jump'|'hit'|'click'|'pickup'|'buzz'|'door_wood_open'|'build_wood'|'break')
+- режим игры и камера: Game.Mode ('obby'|'race'|'ffa'|'teams'|'koth'|'hide'|'coins'|'survival'|''), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart.Connect(r => …), Game.RoundEnd.Connect((winner, text) => …), Game.AddScore(player, n), Game.GetScore(player), Game.GetTeam(player), Game.EndRound(player); Camera.Mode = 'third'|'first'|'shoulder'|'top'|'iso'|'side'|'fixed', Camera.SetMode('top', player), Camera.Shake(сила, сек)
 Нельзя: сеть, document, window, localStorage. Код выполняется сразу (можно await на верхнем уровне).
 Задача: `;
 
@@ -799,7 +800,7 @@ Players.PlayerAdded.Connect(player => {
       <label class="s3-lbl">Название<input type="text" class="s3p-t" maxlength="60" value="${esc(ed.q('.s3-name').value.trim() || 'Мой мир')}"></label>
       <label class="s3-lbl">Описание — что делать в мире<textarea class="s3p-d" maxlength="300" rows="3"></textarea></label>
       <label class="s3-lbl">Значок<input type="text" class="s3p-i" maxlength="4" value="🧱"></label>
-      ${window.D37Age ? `<label class="s3-lbl">🎂 Для какого возраста${D37Age.ugc.select(ed.pubAge ?? 12, { staff: isStaff(), attr: 'data-s3p-age' })}</label>` : ''}
+      ${window.D37Age ? `<label class="s3-lbl">🎂 Для какого возраста${D37Age.ugc.select(ed.pubAge ?? ed.SC.settings?.age ?? 12, { staff: isStaff(), attr: 'data-s3p-age' })}</label>` : ''}
       <label class="s3-chk"><input type="radio" name="s3p-v" value="link" checked> 🔗 По ссылке — играют те, кому дашь ссылку</label>
       <label class="s3-chk"><input type="radio" name="s3p-v" value="review"> 🌍 В каталог — после проверки модератором</label>
       ${own.length ? `<p class="s3-note">🧩 Своих моделей: ${own.length}. Они уйдут на проверку — пока модератор не одобрит, у других на их месте будет пустая коробка.</p>` : ''}

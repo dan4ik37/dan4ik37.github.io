@@ -2031,7 +2031,7 @@
       G('utf8', utf8Lib()); G('bit32', bitLib()); G('debug', dbgLib()); G('Random', randomLib());
       G('_G', new LT()); G('shared', new LT()); G('_VERSION', 'Luau');
       for (const k of ['game', 'workspace', 'Instance', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'gui', 'sound', 'random']) G(k, fromJS(env[k]));
-      G('Game', env.game); G('Workspace', env.workspace);
+      G('Game', fromJS(env.Game || env.game)); G('Camera', env.Camera ? fromJS(env.Camera) : null); G('Workspace', env.workspace);   // Game — и режим игры (Game.Mode), и прежний game
       for (const k of ['Vector3', 'CFrame', 'BrickColor']) if (typeof env[k] === 'function') G(k, classTable(env[k]));
       ENVMT = tab({ __index: BASE });
     }
@@ -2188,6 +2188,7 @@ end)`],
 - TweenService:Create(деталь, TweenInfo.new(время, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, повторы (-1 — всегда), туда-обратно), {Position = …, Size = …, Color = …, Transparency = …, CFrame = …}):Play(); tween.Completed:Wait()
 - task.wait(сек), task.spawn(f), task.delay(сек, f), Debris:AddItem(obj, сек), print(…), warn(…), gui.message(текст, сек) — надпись всем, gui.text(ключ, текст) — строка на экране, sound.play("coin" | "jump" | "hit" | "click" | "pickup" | "buzz" | "door_wood_open" | "door_wood_close" | "build_wood" | "break")
 - язык Luau: local, function, if/elseif/else, for i = 1, 10 do, for k, v in pairs(t) do, while, repeat … until, +=, continue, строки \`Привет {name}\`, string.format, table.insert, pcall, coroutine
+- режим игры и камера: Game.Mode ("obby" | "race" | "ffa" | "teams" | "koth" | "hide" | "coins" | "survival" | ""), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart:Connect(function(r) … end), Game.RoundEnd:Connect(function(winner, text) … end), Game:AddScore(player, n), Game:GetTeam(player), Game:EndRound(player); Camera.Mode = "third" | "first" | "shoulder" | "top" | "iso" | "side" | "fixed", Camera:SetMode("top", player), Camera:Shake(сила, сек)
 Нельзя: сеть, HttpService, RemoteEvent, require, LocalScript, ScreenGui и другие GUI-объекты, DataStore. Скрипт работает «на сервере».
 Задача: `;
   const DEF = { label: 'Lua (как в Roblox)', short: 'Lua', icon: '🌙', kind: 'text', worker, examples: EXAMPLES, ai: AI,
