@@ -113,8 +113,12 @@
     }
     // лететь и смотреть (чувствительность и инверсия — из ⚙️)
     const O = window.D37Opt || {}, sens = O.sens || 1, inv = O.invertY ? -1 : 1, sp = (out.fast ? 60 : 20) * dt;
-    if (out.fly.x || out.fly.y || out.fly.z) core().fly(out.fly.x * sp, out.fly.y * sp, out.fly.z * sp);
-    if (out.look.x || out.look.y) { const c = e.cam; c.yaw -= out.look.x * Math.abs(out.look.x) * 2.6 * sens * dt; c.pitch = Math.max(-1.45, Math.min(1.45, c.pitch + out.look.y * Math.abs(out.look.y) * 2 * sens * inv * dt)); }
+    if (S3X.ortho?.on) {   // вид «сверху/сбоку»: стики двигают, курки — ближе/дальше
+      const px = (out.fast ? 1500 : 600) * dt;
+      if (out.fly.x || out.fly.z || out.look.x || out.look.y) S3X.ortho.pan(-(out.fly.x + out.look.x) * px, (out.fly.z - out.look.y) * px);
+      if (out.fly.y) S3X.ortho.zoom(1 - out.fly.y * dt * 1.5);
+    } else if (out.fly.x || out.fly.y || out.fly.z) core().fly(out.fly.x * sp, out.fly.y * sp, out.fly.z * sp);
+    if (!S3X.ortho?.on && (out.look.x || out.look.y)) { const c = e.cam; c.yaw -= out.look.x * Math.abs(out.look.x) * 2.6 * sens * dt; c.pitch = Math.max(-1.45, Math.min(1.45, c.pitch + out.look.y * Math.abs(out.look.y) * 2 * sens * inv * dt)); }
     if (grab) grabStep(dt, out.lift);
     for (const a of out.actions) act(a);
   }

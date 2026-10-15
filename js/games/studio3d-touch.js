@@ -75,6 +75,7 @@
       if (!drag) return;
       if (drag.kind === 'gizmo') C.gizmoDrag(C.rayAt(ev.x, ev.y));
       else if (drag.kind === 'part') C.dragPart(C.rayAt(ev.x, ev.y), drag.st);
+      else if (S3X.ortho?.on) S3X.ortho.pan(ev.dx, ev.dy);   // вид «сверху/сбоку» — палец двигает, а не крутит
       else orbit(drag.P, -ev.dx * .0065, ev.dy * .0055);
     } else if (ev.type === 'dragend') {
       if (drag?.kind === 'gizmo') C.gizmoUp(); else if (drag?.kind === 'part') C.dragEnd(drag.st);
@@ -90,6 +91,7 @@
       if (hit) { if (!e.selSet.has(hit.obj)) api.select(hit.obj, multi); openCtx(ev.x, ev.y, true); }
       else openCtx(ev.x, ev.y, false);
     } else if (ev.type === 'twostart') { if (drag?.kind === 'gizmo') C.gizmoUp(); drag = null; two = { P: pivotPoint() }; }
+    else if (ev.type === 'two' && two && S3X.ortho?.on) { S3X.ortho.pan(ev.dx, ev.dy); if (ev.scale !== 1) S3X.ortho.zoom(1 / ev.scale); }
     else if (ev.type === 'two' && two) {
       pan(two.P, ev.dx, ev.dy);
       if (ev.scale !== 1) dolly(two.P, ev.scale);
