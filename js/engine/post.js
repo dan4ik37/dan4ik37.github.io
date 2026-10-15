@@ -23,7 +23,7 @@
   const VS = 'varying vec2 vUv;\nvoid main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
   // яркое: 4 выборки (каждая — среднее 2×2) только по пикселям с меткой свечения
   const FS_PRE = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
-vec3 tap(vec2 o){ vec4 c = texture2D(tSrc, vUv + o * uTexel); return c.rgb * clamp(c.a - 1.0, 0.0, 1.0); }
+vec3 tap(vec2 o){ vec4 c = texture2D(tSrc, vUv + o * uTexel); return c.a >= 1.01 ? c.rgb * clamp(c.a - 1.0, 0.0, 1.0) : vec3(0.0); }   // < 1,01 — не свечение (трава 1,004)
 void main(){ gl_FragColor = vec4((tap(vec2(-1.0, -1.0)) + tap(vec2(1.0, -1.0)) + tap(vec2(-1.0, 1.0)) + tap(vec2(1.0, 1.0))) * 0.25, 1.0); }`;
   // вниз: центр ×4 + 4 угла (двойной фильтр Кавасе)
   const FS_DOWN = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
@@ -41,14 +41,19 @@ void main(){ vec2 d = uTexel; vec3 c = texture2D(tSrc, vUv).rgb * 4.0;
   // глубине 1. Тут же — контактные тени «Трассировки лучей»: луч к солнцу по глубине экрана (uCS: направление на солнце в
   // координатах камеры, длина луча; 0 — выкл), 10 шагов без шума — края мягчит то же размытие по плоскости, что и AO.
   // Результат: R — свет AO (1 — без затенения), G — глубина (ед., для размытия и подъёма), B — свет контактной тени
+  // Листва и трава (вырез по альфе, код в альфе буфера сцены 1 + 4/1024 — gfx.js E.FOLIAGE_A) — не заслонка и не затеняется:
+  // тонкие травинки давали тёмное пятно вокруг каждого кустика, а в низком разрешении AO (телефон) оно мерцало
   const FS_AO = `#include <packing>
 uniform sampler2D tDepth; uniform vec2 uFull; uniform vec4 uProj; uniform vec4 uAO; uniform vec4 uCS; uniform float uPx; varying vec2 vUv;
+uniform sampler2D tColor; uniform vec2 uCSize;
 float vz(vec2 uv){ return perspectiveDepthToViewZ(textureLod(tDepth, uv, 0.0).x, uProj.z, uProj.w); }   // textureLod: в циклах с выходом — без производных
 vec3 vpos(vec2 uv){ float z = vz(uv); return vec3((uv * 2.0 - 1.0) * uProj.xy * -z, z); }
+bool fol(vec2 uv){ float a = texelFetch(tColor, ivec2(clamp(uv, 0.0, 0.99999) * uCSize), 0).a; return a > 1.0005 && a < 1.01; }   // трава, листва
 void main(){
   float d = texture2D(tDepth, vUv).x;
   if (d >= 0.99999) { gl_FragColor = vec4(1.0, 1e4, 1.0, 1.0); return; }
   float z = perspectiveDepthToViewZ(d, uProj.z, uProj.w);
+  if (fol(vUv)) { gl_FragColor = vec4(1.0, -z, 1.0, 1.0); return; }
   vec3 p = vec3((vUv * 2.0 - 1.0) * uProj.xy * -z, z);
   vec3 pr = vpos(vUv + vec2(uFull.x, 0.0)), pl = vpos(vUv - vec2(uFull.x, 0.0)), pu = vpos(vUv + vec2(0.0, uFull.y)), pd = vpos(vUv - vec2(0.0, uFull.y));
   vec3 dx = abs(pr.z - p.z) < abs(p.z - pl.z) ? pr - p : p - pl;
@@ -63,7 +68,9 @@ void main(){
     for (int i = 0; i < 16; i++) {
       if (float(i) >= ns) break;
       float t = (float(i) + 0.5) / ns, a = ang + t * 43.98;
-      vec3 v = vpos(vUv + vec2(cos(a), sin(a)) * t * rPx * uFull) - p;
+      vec2 su = vUv + vec2(cos(a), sin(a)) * t * rPx * uFull;
+      if (fol(su)) continue;   // травинка — не заслонка
+      vec3 v = vpos(su) - p;
       float vv = dot(v, v), f = max(r2 - vv, 0.0);
       occ += f * f * f * max((dot(v, n) - bias) / (vv + 0.01), 0.0);
     }
@@ -80,6 +87,7 @@ void main(){
       if (q.z > -uProj.z) break;
       vec2 uv = q.xy / (-q.z * uProj.xy) * 0.5 + 0.5;
       if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) break;
+      if (fol(uv)) continue;   // трава: её тень даёт карта теней, не луч по кадру
       float dz = vz(uv) - q.z;
       if (dz > 0.002 * -q.z + 0.004 && dz < 0.5 + len * 0.35) { sh = 1.0 - t * t; break; }
     }
@@ -192,7 +200,7 @@ vec2 aoUp(){   // x — AO, y — контактная тень
   float iw = 1.0 / dot(w, vec4(1.0));
   return vec2(dot(w, vec4(s0.x, s1.x, s2.x, s3.x)), dot(w, vec4(s0.z, s1.z, s2.z, s3.z))) * iw;
 }
-void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0)); float gm = clamp(s.a - 1.0, 0.0, 1.0);
+void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0)); float gm = s.a >= 1.01 ? clamp(s.a - 1.0, 0.0, 1.0) : 0.0;
   if (uSSRk > 0.0) { vec4 rf = texture2D(tSSR, vUv); c = mix(c, rf.rgb, rf.a); }   // отражения (трассировка лучей)
   if (uAOk > 0.0) { vec2 a = aoUp(); float cs = mix(1.0, a.y, uCSk * (1.0 - gm)); c *= mix(1.0, a.x, uAOk * (1.0 - gm)) * cs; if (uAOk > 1.5) c = vec3(a.x * cs); }
   if (uBloom > 0.0) { vec3 b = texture2D(tBloom, vUv).rgb * uBloom * (1.0 - 0.75 * gm); c += b * clamp(1.0 - c, 0.0, 1.0); }
@@ -557,7 +565,8 @@ void main(){ gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0); }`;
       M.nisS = mk(FS_NIS_SHARP, nu());
     }
     if (P.canAO) {
-      M.ao = mk(FS_AO, { tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uAO: { value: new T.Vector4() }, uCS: { value: new T.Vector4() }, uPx: { value: 1 } });
+      M.ao = mk(FS_AO, { tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uAO: { value: new T.Vector4() }, uCS: { value: new T.Vector4() }, uPx: { value: 1 },
+        tColor: { value: null }, uCSize: { value: new T.Vector2(1, 1) } });
       M.aob = mk(FS_AOB, tx());
       M.ssr = mk(FS_SSR, { tColor: { value: null }, tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uSSR: { value: new T.Vector4() },
         uStride: { value: 3 }, uView: { value: new T.Matrix4() }, uViewInv: { value: new T.Matrix4() } });
@@ -678,7 +687,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       // SSAO: половина кадра (с «ретины» — четверть), 8 / 14 выборок
       const aoOn = P.ao.on = P.canAO && (P.ao.mode !== 'off' || rtOn) && !!rtScene.depthTexture;
       if (aoOn) {
-        const k = pr > 1.3 ? 2 : 1, aw = Math.max(1, w >> k), ah = Math.max(1, h >> k);
+        // четверть — только для больших кадров («ретина» компьютера); телефон (кадр ~1 Мп) — половина: в четверти края AO
+        // у кроны, ножек, бордюров шли «лесенкой» по 4 пикселя и ползали при движении
+        const k = pr > 1.3 && w * h > 1.2e6 ? 2 : 1, aw = Math.max(1, w >> k), ah = Math.max(1, h >> k);
         const opt = { type, depthBuffer: false, minFilter: T.NearestFilter, magFilter: T.NearestFilter };
         if (!rtAO) { rtAO = new T.WebGLRenderTarget(aw, ah, opt); rtAO2 = new T.WebGLRenderTarget(aw, ah, opt); } else { rtAO.setSize(aw, ah); rtAO2.setSize(aw, ah); }
         P.ao.aw = aw; P.ao.ah = ah;
@@ -698,6 +709,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     function aoPasses(camera){
       const u = M.ao.uniforms, pm = camera.projectionMatrix.elements, A = P.ao;
       u.tDepth.value = rtScene.depthTexture; u.uFull.value.set(1 / P.w, 1 / P.h);
+      u.tColor.value = rtScene.texture; u.uCSize.value.set(P.w, P.h);   // код в альфе: трава и листва — без AO
       u.uProj.value.set(1 / pm[0], 1 / pm[5], camera.near, camera.far);
       u.uAO.value.set(A.radius, A.bias, A.mode !== 'off' ? A.strength : 0, A.mode === 'high' ? 14 : 8);
       u.uPx.value = P.h * pm[5] / 2;
@@ -727,7 +739,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       over.length = 0;
       if (P.ao.on) { const ch = scene.children; for (let i = 0; i < ch.length; i++) { const c = ch[i]; if (c.renderOrder >= 990 && c.visible) { over.push(c); c.visible = false; } } }
       r.setRenderTarget(rtScene); r.autoClear = true;
-      const GU = E.GFXU; if (GU?.rt && P.rt.on) GU.rt[1] = 1;   // блестящее пишет код в альфу (только в этот буфер)
+      // коды в альфу (только в этот буфер): блеск — для отражений, трава/листва — для AO и контактных теней
+      const GU = E.GFXU; if (GU?.rt && (P.rt.on || P.ao.on)) GU.rt[1] = 1;
       r.render(scene, camera);
       if (GU?.rt) GU.rt[1] = 0;
       st.scene = r.info.render.calls;
