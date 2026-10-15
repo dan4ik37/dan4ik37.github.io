@@ -31,7 +31,12 @@
       </div>`;
     M = { el, opt, deck, open: [], found: 0, moves: 0, t0: 0, timer: 0, lock: false, done: false };
     el.querySelectorAll('.mm-card').forEach(b => b.onclick = () => flip(+b.dataset.i));
-    el.querySelector('.mmAgain')?.addEventListener('click', () => render(el, opt));
+    // «↻ Новая раскладка» посреди игры — спросить (открытые пары пропадут)
+    el.querySelector('.mmAgain')?.addEventListener('click', async () => {
+      const m0 = M;
+      if (M && !M.done && M.moves > 0 && window.GameKit && !await GameKit.ask({ icon: '🃏', title: 'Новая раскладка?', text: 'Эта игра не закончена — найденные пары пропадут.', yes: '↻ Новая', no: 'Играть дальше' })) return;
+      if (M === m0) render(el, opt);
+    });
     el.querySelector('.mmDuel')?.addEventListener('click', () => { location.hash = '#/games/memory/' + GameRoom.newCode(); });
   }
 

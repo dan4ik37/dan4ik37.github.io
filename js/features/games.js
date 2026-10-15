@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '67';
+const GAMES_VER = '68';
 const GAMES = [
   { id: 'world',    age: '12+', ageWhy: 'Онлайн-мир: общение с незнакомыми игроками в чате.', icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   age: '6+', ageWhy: 'Конструктор игр; игры других игроков — со своей меткой.', icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -96,15 +96,19 @@ let gamesTopKey = 'cities_hard';
 let gamesTopWeek = true;       // рекорды за 7 дней (иначе — за всё время)
 const gamesScriptCache = new Map();
 
+// js/games/gamekit.js — общее для игр («точно?», правила, «чей ход»): грузится раньше любого файла игры (и в окне поверх мира)
+const GAMES_KIT = 'js/games/gamekit.js';
 function gamesLoadScript(src){
   if (gamesScriptCache.has(src)) return gamesScriptCache.get(src);
-  const p = new Promise((res, rej) => {
+  const kit = src !== GAMES_KIT && src.startsWith('js/games/') ? gamesLoadScript(GAMES_KIT) : null;
+  const p = (kit || Promise.resolve()).then(() => new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = src + '?v=' + GAMES_VER;
     s.onload = res;
-    s.onerror = () => { gamesScriptCache.delete(src); rej(new Error('Не загрузилось: ' + src)); };
+    s.onerror = () => rej(new Error('Не загрузилось: ' + src));
     document.head.appendChild(s);
-  });
+  }));
+  p.catch(() => { if (gamesScriptCache.get(src) === p) gamesScriptCache.delete(src); });   // не загрузилось — в другой раз ещё попытка
   gamesScriptCache.set(src, p);
   return p;
 }
@@ -233,7 +237,8 @@ async function openGame(id, param){
   gamesParam = param || null;
   hub.hidden = true; stage.hidden = false;
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
-  document.getElementById('gamesStageTitle').innerHTML = `${g.icon} ${esc(g.title)}${window.D37Age && g.age ? ' ' + D37Age.badge(g.age, { title: g.ageWhy || 'Без ограничений' }) : ''}`;
+  // узкий телефон — без названия, только значок и возраст (.gm-tt — gamekit.js)
+  document.getElementById('gamesStageTitle').innerHTML = `${g.icon} <span class="gm-tt">${esc(g.title)}</span>${window.D37Age && g.age ? ' ' + D37Age.badge(g.age, { title: g.ageWhy || 'Без ограничений' }) : ''}`;
   // полный экран и настройки (js/core/fullscreen.js, settings.js): телефон лёжа — игра во весь экран; «во весь экран при запуске»
   stage.dataset.game = id; gamesSyncMute();
   window.D37Full?.auto(stage);

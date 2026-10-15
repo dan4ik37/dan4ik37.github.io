@@ -355,7 +355,12 @@
       } else if (a === 'end') gameOver();
       else if (a === 'next') { b.disabled = true; try { await window.D37Ads?.interstitial?.('mahjong'); } catch (err) {} if (!stopped) o.onLevel?.(G.n + 1, G.score); }
       else if (a === 'again' || a === 'restart') {
-        if (a === 'restart' && G.done && !ended && !confirm('Начать с первого уровня? Текущая игра засчитается.')) return;
+        // «↻ Сначала» посреди игры (пары на уровне или пройденные уровни) — спросить окном игры, а не confirm браузера
+        if (a === 'restart' && !ended && (G.done || G.n > 1)) {
+          const g0 = G;
+          const yes = window.GameKit ? await GameKit.ask({ icon: '🀄', title: 'Начать с первого уровня?', text: `Текущая игра (уровень ${G.n}, ${G.score} очков) засчитается и закончится.`, yes: '↻ Сначала', no: 'Играть дальше' }) : confirm('Начать с первого уровня? Текущая игра засчитается.');
+          if (!yes || G !== g0 || stopped) return;
+        }
         if (a === 'restart' && !ended) api.report('mahjong', false, G.score, G.score);
         try { localStorage.removeItem(SAVE + '_lv'); localStorage.removeItem(SAVE + '_sc'); } catch (err) {}
         dropSave();

@@ -77,8 +77,10 @@
   function status(text){
     const el = root.querySelector('#tStatus');
     if (text) { el.innerHTML = text; return; }
-    if (T.online) el.textContent = T.turn === T.online.mark ? `Твой ход ${T.online.mark === 'X' ? '❌' : '⭕'}` : `Ход ${R?.opp?.nick || 'соперника'}…`;
-    else el.textContent = T.level === 'duo' ? `Ходит ${T.turn === 'X' ? '❌' : '⭕'}` : T.turn === 'X' ? 'Твой ход ❌' : '🤖 думает…';
+    // плашка «чей ход» (js/games/gamekit.js): твой — зелёная, ждём — серая
+    const pill = (mine, t) => { if (window.GameKit) el.innerHTML = GameKit.turn(mine, esc(t)); else el.textContent = t; };
+    if (T.online) pill(T.turn === T.online.mark, T.turn === T.online.mark ? `Твой ход ${T.online.mark === 'X' ? '❌' : '⭕'}` : `Ход ${R?.opp?.nick || 'соперника'}…`);
+    else pill(T.level === 'duo' || T.turn === 'X', T.level === 'duo' ? `Ходит ${T.turn === 'X' ? '❌' : '⭕'}` : T.turn === 'X' ? 'Твой ход ❌' : '🤖 думает…');
   }
 
   function place(i, who){

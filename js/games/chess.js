@@ -222,8 +222,23 @@
     return best.m;
   }
 
+  // Партия из списка ходов («Отменить ход»): позиция, очередь, права рокировки, взятие на проходе, счётчики и повторы —
+  // ровно как были (проверяется в node)
+  function replay(moves){
+    let Q = newPos();
+    const h = [];
+    for (const m of moves) { h.push(san(Q, m)); Q.keys = Q.keys.concat([posKey(Q)]); Q = make(Q, m); }
+    return { P: Q, hist: h };
+  }
+  // Сколько моих ходов в партии с компьютером (белые ходят первыми — их ходы на чётных местах)
+  const myMoves = (moves, col) => moves.filter((m, i) => (i % 2 ? 'b' : 'w') === col).length;
+
   // ═══ ЭКРАН ═══
+  // Отмена с компьютером: одна за партию — на случай промаха; дальше можно, но партия становится тренировочной
+  // (победа без XP и рекорда — иначе отменами обыгрывают «Мастера» и таблица рекордов теряет смысл).
+  // Вдвоём на экране — отменяй сколько угодно. Онлайн — нельзя: ход надо подтвердить «✅ Сходить», после этого он у соперника.
   let root, api, P = null, hist = [], mode = 'menu', vs = 'bot', level = 'normal', myCol = 'w', sel = -1, lastMv = null, over = null, room = null, timers = [], pendingPromo = null, flip = false, names = { w: 'Белые', b: 'Чёрные' };
+  let takebacks = 0, practice = false, pend = null, sentMv = null, oppGone = false;
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
   const isHost = () => !room || room.isHost;
   const hostId = () => room?.seats[0]?.id;
@@ -241,7 +256,7 @@
   const movesLog = [];   // ходы партии — для «Отменить ход»
   function start(kind, col){
     vs = kind; myCol = col; P = newPos(); hist = []; sel = -1; lastMv = null; over = null; pendingPromo = null; mode = 'play';
-    movesLog.length = 0;
+    movesLog.length = 0; takebacks = 0; practice = false; pend = null; sentMv = null; oppGone = false;
     flip = myCol === 'b';
     if (kind === 'bot') names = myCol === 'w' ? { w: 'Ты', b: '🤖 ' + LEVELS[level].label } : { w: '🤖 ' + LEVELS[level].label, b: 'Ты' };
     if (kind === 'duo') names = { w: 'Белые', b: 'Чёрные' };
@@ -268,25 +283,34 @@
     if (!ms.length) return false;
     if (ms[0].promo && !promo) { pendingPromo = { f, t }; render(); return true; }
     const m = ms.find(x => !x.promo || x.promo === promo) || ms[0];
-    if (vs === 'online' && !isHost()) { room.sendTo(hostId(), { type: 'mv', f, t, promo: m.promo || null }); sel = -1; pendingPromo = null; return true; }
-    apply(m); pendingPromo = null;
+    pendingPromo = null;
+    // онлайн ход сначала показываем на доске — «✅ Сходить» (или та же клетка ещё раз), «↩ Отмена» — передумать
+    if (vs === 'online') { pend = m; sel = -1; api.sfx('tick'); render(); return true; }
+    commit(m);
+    return true;
+  }
+  function commit(m){
+    pend = null;
+    // гость: ход ушёл хозяину — показываем его на доске, пока не придёт ответ (второй ход не отправить)
+    if (vs === 'online' && !isHost()) { room.sendTo(hostId(), { type: 'mv', f: m.f, t: m.t, promo: m.promo || null }); sentMv = m; sel = -1; render(); return; }
+    apply(m);
     if (vs === 'online') syncOnline();
     render();
     if (vs === 'bot' && !over) later(botMove, 350);
-    return true;
   }
-  function myTurn(){ return P && !over && (vs === 'duo' || P.turn === myCol); }
+  function myTurn(){ return P && !over && !sentMv && !oppGone && (vs === 'duo' || P.turn === myCol); }
   function render(){
     if (!P) return;
-    const ms = myTurn() ? legal(P) : [];
+    const ms = myTurn() && !pend ? legal(P) : [];
     const targets = new Set(sel >= 0 ? ms.filter(m => m.f === sel).map(m => m.t) : []);
-    const checkSq = inCheck(P, P.turn) ? kingAt(P.b, P.turn) : -1;
+    const show = pend || sentMv, B = show ? make(P, show).b : P.b;   // онлайн: ход до ответа — уже на доске
+    const checkSq = !show && inCheck(P, P.turn) ? kingAt(P.b, P.turn) : -1;
     const cells = [];
     for (let k = 0; k < 64; k++) {
-      const i = flip ? 63 - k : k, r = Math.floor(i / 8), c = i % 8, p = P.b[i];
+      const i = flip ? 63 - k : k, r = Math.floor(i / 8), c = i % 8, p = B[i];
       const cls = ['ch-sq', (r + c) % 2 ? 'dark' : 'light'];
       if (i === sel) cls.push('sel');
-      if (lastMv && (i === lastMv.f || i === lastMv.t)) cls.push('last');
+      if (show ? (i === show.f || i === show.t) : lastMv && (i === lastMv.f || i === lastMv.t)) cls.push(show ? 'pend' : 'last');
       if (i === checkSq) cls.push('check');
       if (targets.has(i)) cls.push(p !== '.' ? 'cap' : 'dot');
       const coord = (flip ? r === 0 : r === 7) ? `<i class="ch-f">${'abcdefgh'[c]}</i>` : '';
@@ -294,8 +318,19 @@
       cells.push(`<button type="button" class="${cls.join(' ')}" data-sq="${i}" aria-label="${sq(i)}">${p !== '.' ? piece(p.toLowerCase(), isW(p) ? 'w' : 'b') : ''}${coord}${rank}</button>`);
     }
     const turnName = names[P.turn];
-    let statusTxt = over ? (over.result === 'draw' ? `🤝 Ничья: ${over.why}` : `🏆 ${over.why === 'мат' ? 'Мат!' : ''} Победили ${over.result === 'w' ? 'белые' : 'чёрные'} (${esc(names[over.result])})`)
+    const practiceTag = practice ? '<span class="gk-prac" title="Были отмены ходов — победа без XP и рекорда">🎓 тренировка</span>' : '';
+    let statusTxt = over ? (over.result === 'draw' ? `🤝 Ничья: ${over.why}` : `🏆 ${over.why === 'мат' ? 'Мат!' : ''} Победили ${over.result === 'w' ? 'белые' : 'чёрные'} (${esc(names[over.result])})`) + practiceTag
+      : pend ? `Ход ${esc(san(P, pend))} — подтверди: «✅ Сходить» или нажми клетку ещё раз`
+      : sentMv ? '⏳ Ход отправлен…'
       : `${inCheck(P, P.turn) ? '⚠️ Шах! ' : ''}${myTurn() ? (vs === 'duo' ? `Ходят ${P.turn === 'w' ? 'белые' : 'чёрные'}` : '🟢 Твой ход') : `⏳ Ходит ${esc(turnName)}…`}`;
+    if (!over && !pend && window.GameKit) statusTxt = GameKit.turn(myTurn() && !sentMv, statusTxt) + practiceTag;
+    if (oppGone && !over) statusTxt = '🚪 Соперник вышел — партию не доиграть. Можно выйти и позвать его снова.';
+    // кнопки: онлайн-ход ждёт подтверждения → «Сходить / Отмена»; с компьютером и вдвоём — «Отменить ход»; «Сдаться» спросит «Точно?»
+    const canUndo = vs === 'duo' ? hist.length > 0 : vs === 'bot' ? myMoves(movesLog, myCol) > 0 : false;
+    const undoTxt = vs === 'bot' && takebacks >= 1 && !practice ? '↩ Отменить ещё' : '↩ Отменить ход';
+    const acts = over ? `${vs === 'online' && !isHost() ? '<span class="un-sub">Ждём реванша…</span>' : '<button type="button" class="ct-start" data-act="again">↻ Ещё партия</button>'}<button type="button" class="un-btn" data-act="leave">${vs === 'online' ? '🚪 Выйти' : '🏠 Меню'}</button>`
+      : pend ? '<button type="button" class="un-btn gk-go" data-act="commit">✅ Сходить</button><button type="button" class="un-btn" data-act="uncommit">↩ Отмена</button>'
+      : `${vs !== 'online' ? `<button type="button" class="un-btn" data-act="undo"${canUndo ? '' : ' disabled'}>${undoTxt}</button>` : ''}<button type="button" class="un-btn" data-act="resign">🏳️ Сдаться</button>${oppGone ? '<button type="button" class="un-btn" data-act="leave">🚪 Выйти</button>' : ''}`;
     const capW = START.split('').filter(x => x !== '.' && isW(x)), capB = START.split('').filter(x => x !== '.' && !isW(x));
     const lost = (all, col) => { const now = P.b.filter(x => x !== '.' && colorOf(x) === col); const cnt = {}; for (const x of now) cnt[x] = (cnt[x] || 0) + 1; return all.filter(x => !(cnt[x]-- > 0)).map(x => piece(x.toLowerCase(), isW(x) ? 'w' : 'b', 'mini')).join(''); };
     root.innerHTML = `<div class="ch">
@@ -304,9 +339,8 @@
         <div class="ch-pl"><b>${esc(names[flip ? 'b' : 'w'])}</b><span class="ch-lost">${lost(flip ? capB : capW, flip ? 'b' : 'w')}</span></div>
         <div class="un-status">${statusTxt}</div>
         <div class="ch-moves">${hist.map((s, i) => i % 2 ? `${s} ` : `<b>${i / 2 + 1}.</b> ${s} `).join('')}</div>
-        <div class="un-acts">${over ? `${vs === 'online' && !isHost() ? '<span class="un-sub">Ждём реванша…</span>' : '<button type="button" class="ct-start" data-act="again">↻ Ещё партия</button>'}<button type="button" class="un-btn" data-act="leave">${vs === 'online' ? '🚪 Выйти' : '🏠 Меню'}</button>`
-          : `${vs !== 'online' && hist.length ? '<button type="button" class="un-btn" data-act="undo">↶ Отменить ход</button>' : ''}<button type="button" class="un-btn" data-act="resign">🏳️ Сдаться</button>`}</div>
-        ${pendingPromo ? `<div class="ch-promo"><div>Во что превратить пешку?</div><div>${'qrbn'.split('').map(q => `<button type="button" data-act="promo:${q}" aria-label="${NAME[q]}">${piece(q, P.turn === 'w' ? 'w' : 'b')}</button>`).join('')}</div></div>` : ''}
+        <div class="un-acts">${acts}</div>
+        ${pendingPromo ? `<div class="ch-promo"><div>Во что превратить пешку?</div><div>${'qrbn'.split('').map(q => `<button type="button" data-act="promo:${q}" aria-label="${NAME[q]}">${piece(q, P.turn === 'w' ? 'w' : 'b')}</button>`).join('')}</div><button type="button" class="un-btn ch-promo-back" data-act="unpromo">← Назад — другой ход</button></div>` : ''}
       </div>`;
     if (over && mode === 'play') finish();
   }
@@ -314,18 +348,21 @@
     mode = 'over';
     if (vs === 'duo') return;
     const win = over.result === myCol, draw = over.result === 'draw';
-    if (vs === 'bot') api.report('chess_' + level, win, win ? 1 : 0, (api.local().wins || 0) + (win ? 1 : 0));
+    // тренировочная (были лишние отмены) — партия сыграна, но без победы в зачёт: ни XP, ни рекорда
+    const counted = win && !practice;
+    if (vs === 'bot') api.report('chess_' + level, counted, counted ? 1 : 0, (api.local().wins || 0) + (counted ? 1 : 0));
     else api.report('chess_online', win, win ? 1 : 0, (api.local().wins || 0) + (win ? 1 : 0));
     if (!draw) api.sfx(win ? 'win' : 'bad');
   }
-  // Отменить ход (против компьютера — сразу свой и его)
-  const snapshots = [];
   function onClick(e){
     const b = e.target.closest('[data-act],[data-sq]');
     if (!b) return;
     if (b.dataset.sq != null) {
+      const i = +b.dataset.sq;
+      // онлайн-ход ждёт подтверждения: та же клетка — сходить, другая — передумал
+      if (pend) { if (i === pend.t) commit(pend); else { pend = null; render(); } return; }
       if (!myTurn() || pendingPromo) return;
-      const i = +b.dataset.sq, p = P.b[i];
+      const p = P.b[i];
       if (sel >= 0 && tryMove(sel, i)) return;
       sel = colorOf(p) === P.turn ? (sel === i ? -1 : i) : -1;
       render();
@@ -339,25 +376,43 @@
     else if (a === 'online') location.hash = '#/games/chess/' + GameRoom.newCode();
     else if (a === 'go') hostStart();   // «▶ Начать» за онлайн-столом (хозяин)
     else if (a.startsWith('promo:')) { const { f, t } = pendingPromo || {}; if (f != null) tryMove(f, t, a.slice(6)); }
+    else if (a === 'unpromo') { pendingPromo = null; render(); }   // передумал превращать — пешка на месте, выбор фигуры остаётся
+    else if (a === 'commit') { if (pend) commit(pend); }
+    else if (a === 'uncommit') { pend = null; render(); }
     else if (a === 'again') { if (vs === 'online') hostStart(); else start(vs, vs === 'bot' ? myCol : 'w'); }
     else if (a === 'leave') { if (vs === 'online') location.hash = '#/games/chess'; else menu(); }
-    else if (a === 'resign') {
-      if (over || !P) return;
-      const loser = vs === 'duo' ? P.turn : myCol;
-      if (vs === 'online' && !isHost()) { room.sendTo(hostId(), { type: 'resign' }); return; }
-      over = { result: loser === 'w' ? 'b' : 'w', why: 'сдача' };
-      if (vs === 'online') syncOnline();
-      render();
-    } else if (a === 'undo') undo();
+    else if (a === 'resign') resign();
+    else if (a === 'undo') undo();
   }
-  // Отменить ход: партия переигрывается из журнала без последних ходов (против компьютера — до твоего хода)
-  function undo(){
-    if (!movesLog.length || vs === 'online') return;
+  async function resign(){
+    if (over || !P) return;
+    const ok = window.GameKit ? await GameKit.ask({ icon: '🏳️', title: 'Сдаться?', text: vs === 'duo' ? `Сдаются ${P.turn === 'w' ? 'белые' : 'чёрные'} — партия закончится.` : 'Партия закончится поражением.', yes: '🏳️ Сдаться', no: 'Играть дальше', danger: true }) : true;
+    if (!ok || over || !P || mode !== 'play') return;
+    const loser = vs === 'duo' ? P.turn : myCol;
+    if (vs === 'online' && !isHost()) { room.sendTo(hostId(), { type: 'resign' }); return; }
+    over = { result: loser === 'w' ? 'b' : 'w', why: 'сдача' };
+    if (vs === 'online') syncOnline();
+    render();
+  }
+  // Отменить ход: партия переигрывается из журнала без последних ходов (с компьютером — твой ход и его ответ)
+  async function undo(){
+    if (!movesLog.length || vs === 'online' || over || mode !== 'play') return;
+    if (vs === 'bot') {
+      if (!myMoves(movesLog, myCol)) return;   // своих ходов ещё нет — отменять нечего
+      if (takebacks >= 1 && !practice) {
+        const n0 = movesLog.length;
+        const ok = window.GameKit ? await GameKit.ask({ icon: '🎓', title: 'Отменить ещё ход?', text: 'Одна отмена за партию — на случай промаха — уже была. Отменишь ещё — партия станет тренировочной: победа не даст XP и не попадёт в рекорды.', yes: '↩ Отменить', no: 'Играть дальше' }) : true;
+        if (!ok || over || movesLog.length !== n0 || mode !== 'play') return;
+        practice = true;
+      }
+      takebacks++;
+    }
     const n = vs === 'bot' ? (P.turn === myCol ? 2 : 1) : 1;
     const keep = movesLog.slice(0, Math.max(0, movesLog.length - n));
-    P = newPos(); hist = []; lastMv = null; over = null; sel = -1; pendingPromo = null; mode = 'play';
-    movesLog.length = 0;
-    for (const m of keep) apply(m);
+    const R = replay(keep);
+    P = R.P; hist = R.hist; lastMv = keep[keep.length - 1] || null; over = null; sel = -1; pendingPromo = null; mode = 'play';
+    movesLog.length = 0; movesLog.push(...keep);
+    api.sfx('tick');
     render();
     if (vs === 'bot' && P.turn !== myCol) later(botMove, 400);
   }
@@ -390,7 +445,14 @@
       max: 2,
       onError: () => { root.innerHTML = GameRoom.errorHtml; },
       onFull: () => { root.innerHTML = GameRoom.fullHtml('chess'); },
-      onSeats: seats => { if (mode === 'play' || mode === 'over') { if (seats.length < 2) api.toast('Соперник вышел'); return; } lobby(); },
+      onSeats: seats => {
+        if (mode === 'play' || mode === 'over') {
+          const gone = seats.length < 2;
+          if (gone !== oppGone) { oppGone = gone; pend = null; if (gone) api.toast('Соперник вышел'); render(); }
+          return;
+        }
+        lobby();
+      },
       onMessage: (m, from) => { if (m.type === 'go') lobby(); },
       onPrivate: (m, from) => {
         if (room.isHost) {
@@ -403,9 +465,9 @@
         const first = mode !== 'play';
         P = { b: m.b, turn: m.turn, cast: m.cast, ep: m.ep, half: m.half, full: m.full, keys: m.keys || [] };
         hist = m.hist || []; lastMv = m.last; over = m.over;
-        if (first) { vs = 'online'; myCol = 'b'; flip = true; mode = 'play'; names = { w: room.seats[0]?.nick || 'Соперник', b: 'Ты' }; }
+        if (first) { vs = 'online'; myCol = 'b'; flip = true; mode = 'play'; names = { w: room.seats[0]?.nick || 'Соперник', b: 'Ты' }; oppGone = false; }
         if (over && mode === 'over') mode = 'play';
-        sel = -1; pendingPromo = null;
+        sel = -1; pendingPromo = null; pend = null; sentMv = null;
         if (P.turn === myCol && !over) api.sfx('tick');
         render();
       },
@@ -413,19 +475,28 @@
     if (!room) root.innerHTML = GameRoom.errorHtml;
   }
 
+  // Esc: превращение пешки — назад; онлайн-ход — отмена; выбранная фигура — снять (раньше выхода из полного экрана)
+  function onKey(e){
+    if (e.key !== 'Escape' || mode !== 'play' || window.GameKit?.isOpen?.()) return;
+    if (pendingPromo) pendingPromo = null; else if (pend) pend = null; else if (sel >= 0) sel = -1; else return;
+    e.preventDefault(); render();
+  }
+
   window.GAME_IMPL.chess = {
     mount(el, gameApi){
-      root = el; api = gameApi;
+      root = el; api = gameApi; pend = null; sentMv = null; oppGone = false;
       root.addEventListener('click', onClick);
+      window.addEventListener('keydown', onKey, true);
       if (GameRoom.validCode(gameApi.param)) joinTable(gameApi.param); else menu();
     },
     unmount(){
       timers.forEach(clearTimeout); timers = [];
       root?.removeEventListener('click', onClick);
+      window.removeEventListener('keydown', onKey, true);
       room?.leave(); room = null;
       P = null; mode = 'menu';
       root = null;
     },
-    _test: { newPos, legal, make, status, bestMove, san, inCheck, posKey },
+    _test: { newPos, legal, make, status, bestMove, san, inCheck, posKey, replay, myMoves },
   };
 })();

@@ -220,14 +220,19 @@
       const b = e.target.closest('[data-act]');
       if (!b || !el.contains(b) || stopped) return;
       const a = b.dataset.act;
-      if (a === 'face') { if (!o.duel) newGame2(o.lv); }
+      if (a === 'face') { if (!o.duel && await sureNew()) newGame2(o.lv); }
       else if (a === 'flag') { flagMode = !flagMode; b.classList.toggle('on', flagMode); }
-      else if (a.startsWith('lv:')) newGame2(+a.slice(3));
+      else if (a.startsWith('lv:')) { if (await sureNew()) newGame2(+a.slice(3)); }
       else if (a === 'again') { b.disabled = true; try { await window.D37Ads?.interstitial?.('miner'); } catch (err) {} newGame2(o.lv); }
       else if (a === 'look') { ov.hidden = true; }
       else if (a === 'duel') location.hash = '#/games/miner/' + GameRoom.newCode();
       else if (a === 'share') share(b);
     });
+    // Смайлик и уровень посреди партии — спросить: брошенная партия засчитается как проигрыш (F2 — сразу, как в Windows)
+    async function sureNew(){
+      if (!(G.started && !G.over && G.opened > 0) || !window.GameKit) return true;
+      return GameKit.ask({ icon: '💣', title: 'Новая игра?', text: 'Это поле не разминировано — партия засчитается как проигрыш.', yes: '🙂 Новая игра', no: 'Играть дальше' });
+    }
     function newGame2(lv){
       if (G.started && !G.over && G.opened > 0) api.report('miner' + o.lv, false, 0, 0);
       try { localStorage.setItem(PREF, String(lv)); } catch (e) {}
