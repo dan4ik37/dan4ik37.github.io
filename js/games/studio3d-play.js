@@ -263,6 +263,9 @@
     start(papi){
       A = papi; M = null;
       E.s3ui?.css?.();
+      // чужой мир по ссылке (редактор и его раскладка не подключались): узкий экран — компактное табло
+      const box = papi.ed?.box;
+      if (box && papi.ed.player && (box.clientWidth <= 760 || box.clientHeight <= 500)) box.classList.add('s3-compact', box.clientWidth > box.clientHeight ? 's3-land' : 's3-port');
       st = { now: 0, view: null, viewAt: performance.now(), frozen: false, blind: false, coins: [], zIds: new Set(), zhp: new Map(), atk: new Map(), checks: [], sentAt: 0, camT: 0, hudT: 0, myIdWas: myId() };
       const P = pl();
       V = E.views?.create(papi.R.camera, P.rig, { T: papi.R.T }) || null;
@@ -271,6 +274,15 @@
       const g = gameCfg();
       if (P.I.touch && g && E.modes.PVP.has(g.mode)) P.H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'attack', action: 'attack', icon: '👊', label: 'удар' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
       if (g) setTimeout(() => { if (A === papi && pl()) toast(`${E.modes.MODES[g.mode].icon} ${E.modes.MODES[g.mode].name}: ${E.modes.MODES[g.mode].desc}`); }, 900);
+      // как играть — под то, чем управляют (студия пишет про клавиатуру)
+      setTimeout(() => {
+        if (A !== papi || !pl() || pl().role !== 'solo') return;
+        const k = E.inputKind?.kind === 'pad' ? 'pad' : P.I.touch ? 'touch' : 'kb', pvp = g && E.modes.PVP.has(g.mode), side = V?.mode === 'side';
+        const t = k === 'pad' ? `🎮 Левый стик — идти${side ? '' : ', правый — смотреть'}, Ⓐ — прыжок, Ⓧ — действие${pvp ? ', RT — удар' : ''}, Start — стоп`
+          : k === 'touch' ? `👆 Левый палец — идти${side || V?.mode === 'top' || V?.mode === 'iso' ? '' : ', правый — смотреть'}, ⤒ — прыжок, ✋ — действие${pvp ? ', 👊 — удар' : ''}`
+          : pvp ? '▶ WASD — идти, Пробел — прыжок, E — действие, F — удар. ■ Стоп — назад' : null;
+        if (t) A.msg(t, true);
+      }, 60);
     },
     world(restore){ if (st) startMode(restore); },
     unworld(){ M = null; },

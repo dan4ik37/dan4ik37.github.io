@@ -282,8 +282,19 @@ script.Parent.Touched.Connect((hit, player) => {
   } };
   E.studioTemplates = Object.assign(E.studioTemplates || {}, T);
 
+  // весь мир в кадре: камера редактора по диагонали сверху на коробку всех объектов
+  function frameAll(){
+    const e = ed(); if (!e?.SC) return;
+    const T3 = e.R.T, b = new T3.Box3();
+    for (const o of e.SC.all()) if (o.cls === 'Part' || o.cls === 'Spawn' || o.cls === 'Prefab' || o.cls === 'Model') b.union(e.SC.box(o));
+    if (b.isEmpty()) return;
+    const c = b.getCenter(new T3.Vector3()), s = b.getSize(new T3.Vector3()), r = Math.max(12, Math.min(160, Math.hypot(s.x, s.z) * .62 + s.y)), yaw = .7, pitch = .62;
+    Object.assign(e.cam, { yaw, pitch, x: c.x + Math.sin(yaw) * Math.cos(pitch) * r, y: c.y + Math.sin(pitch) * r, z: c.z + Math.cos(yaw) * Math.cos(pitch) * r });
+  }
+  S3X.frameAll = frameAll;
+
   // ═══ Подключение к студии ═══
-  const ICONS = { check: '🚩', hill: '🟩', zspawn: '🟥', finish: '🏁', coin: '💰' };
+  const ICONS ={ check: '🚩', hill: '🟩', zspawn: '🟥', finish: '🏁', coin: '💰' };
   const TOUCH_MORE = [['check', '🚩 Чекпоинт гонки'], ['hill', '🟩 Зона «Царя горы»'], ['zspawn', '🟥 Здесь появляются зомби']];
   E.studioExt = E.studioExt || [];
   E.studioExt.push({
@@ -304,7 +315,11 @@ script.Parent.Touched.Connect((hit, player) => {
       if (a === 's3g:camzone') { const o = ed().sel; if (o?.cls !== 'Camera') return true; api.pushHist(); const z = SC().add('Part', { name: 'Зона камеры', pos: [o.pos[0], Math.max(3, o.pos[1] - 2), o.pos[2] - 10], size: [12, 6, 12], color: '#f472b6', mat: 'neon', alpha: 1, collide: false, shadow: false }, o); core().renderTree(); api.select(z); api.markDirty(); return true; }
       return false;
     },
-    menu(a){ if (!a.startsWith('s3g:')) return false; addItem(a.slice(4)); return true; },
+    menu(a){
+      // новый мир из заготовки — камеру редактора сверху-сбоку на весь мир (когда студия его построит)
+      if (a.startsWith('new:m-')) { const was = ed()?.placeId; let n = 0; const t = setInterval(() => { const e = ed(); if (!e || ++n > 30) { clearInterval(t); return; } if (e.placeId !== was) { clearInterval(t); frameAll(); } }, 100); return false; }
+      if (!a.startsWith('s3g:')) return false; addItem(a.slice(4)); return true;
+    },
     menuHtml(html, kind){
       if (kind === 'part') return html + '<div class="s3-mh">🎮 Для игры (режимы без кода)</div>' + ITEMS.map(([k, i, n]) => `<button type="button" data-m="s3g:${k}">${i} ${n}</button>`).join('');
       if (kind === 'file') return html + '<div class="s3-mh">🎮 Режимы игры — готовые миры</div>' + Object.entries(T).map(([k, t]) => `<button type="button" data-m="new:${k}">${t.icon} ${esc(t.name)}</button>`).join('');
