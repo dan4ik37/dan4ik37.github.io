@@ -278,7 +278,7 @@
       applyShadowQ();
       // вода мира: прозрачность, пена, свой цвет
       R.waterU.uClear.value = G.water.clarity; R.waterU.uFoam.value = G.water.foam;
-      for (const m of R.waters) if (!m.userData.fixedColor) m.color.set(G.water.color || m.userData.baseColor);
+      for (const m of R.waters) { const wc = m.userData.fixedColor ? m.userData.baseColor : G.water.color || m.userData.baseColor; if (m.userData._wc !== wc) { m.userData._wc = wc; m.color.set(wc); } }
       // отражения неба: заново, когда свет устоялся; в смене суток — если солнце сдвинулось на ~2° и прошло 2/4 с
       const now = performance.now(), dSun = envSun.distanceToSquared(skyMat.uniforms.uSun.value);
       if (!envDue && dSun > 1e-3) envDue = Math.max(now + 250, envAt + (q === 'high' ? 2000 : 4000));

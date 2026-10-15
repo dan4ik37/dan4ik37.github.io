@@ -78,9 +78,10 @@
           tierTo(p === 'auto' ? 'auto' : v.tier);
         }
       } else if (d?.ui && DETAIL.includes(k) && S.get('gfxPreset') !== 'custom') {   // тронул мелочь — «Своя» с прежними значениями
+        // ui: окно не перерисовывается посреди перетаскивания ползунка (перерисуем, когда отпустят — 'change' ниже)
         const v = presetOf(S.get('gfxPreset'));
-        for (const key of DETAIL) if (key !== k) S.set(key, key === 'shadows' ? S.get('shadows') && v.shadows !== false : v[key]);
-        S.set('gfxPreset', 'custom');
+        for (const key of DETAIL) if (key !== k) S.set(key, key === 'shadows' ? S.get('shadows') && v.shadows !== false : v[key], { ui: true });
+        S.set('gfxPreset', 'custom', { ui: true });
       }
     } finally { busy = false; }
     publish();
@@ -88,11 +89,13 @@
   publish();
 
   // ── Вкладка ──
+  // что показывать: в пресете — его значения (мелочи хранятся для «Своя»), «Тени: выкл» — как выбрал игрок
+  const val = k => { const p = S.get('gfxPreset'); return p !== 'custom' && DETAIL.includes(k) && k !== 'shadows' ? presetOf(p)[k] : S.get(k); };
   const row = (label, ctl, hint, o = {}) => `<div class="gs-row${o.dis ? ' dis' : ''}"><div class="gs-lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
-  const seg = (k, opts, o = {}) => `<div class="gs-seg" role="radiogroup">${opts.map(([v, t]) => { const on = S.get(k) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-set="${k}" data-v="${esc(v)}"${o.dis ? ' disabled' : ''}>${t}</button>`; }).join('')}</div>`;
-  const sw = (k, o = {}) => `<label class="gs-sw"><input type="checkbox" data-sw="${k}"${S.get(k) ? ' checked' : ''}${o.dis ? ' disabled' : ''}><i aria-hidden="true"></i></label>`;
+  const seg = (k, opts, o = {}) => `<div class="gs-seg" role="radiogroup">${opts.map(([v, t]) => { const on = val(k) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-set="${k}" data-v="${esc(v)}"${o.dis ? ' disabled' : ''}>${t}</button>`; }).join('')}</div>`;
+  const sw = (k, o = {}) => `<label class="gs-sw"><input type="checkbox" data-sw="${k}"${val(k) ? ' checked' : ''}${o.dis ? ' disabled' : ''}><i aria-hidden="true"></i></label>`;
   const FMT = { dist: v => Math.round(v * 100) + '%', res: v => Math.round(v) + '%' };
-  const range = (k, min, max, step, mul = 1, o = {}) => `<div class="gs-range"><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.round(S.get(k) * mul)}" data-range="${k}" data-mul="${mul}" aria-label="${k}"${o.dis ? ' disabled' : ''}><output data-out="${k}">${FMT[k] ? FMT[k](S.get(k)) : S.get(k)}</output></div>`;
+  const range = (k, min, max, step, mul = 1, o = {}) => `<div class="gs-range"><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.round(val(k) * mul)}" data-range="${k}" data-mul="${mul}" aria-label="${k}"${o.dis ? ' disabled' : ''}><output data-out="${k}">${FMT[k] ? FMT[k](val(k)) : val(k)}</output></div>`;
   const head = t => `<div class="gs-sec">${t}</div>`;
   const note = t => `<p class="gs-note">${t}</p>`;
   const QN = { low: 'низкое', mid: 'среднее', high: 'высокое' };
@@ -134,5 +137,7 @@
     const t = e.target, k = t?.dataset?.range; if (!FMT[k]) return;
     const out = t.closest('.gs-range')?.querySelector(`[data-out="${k}"]`); if (out) out.textContent = FMT[k](S.get(k));
   });
+  // отпустили ползунок графики — перерисовать (пресет мог стать «Своя»)
+  root.document?.addEventListener?.('change', e => { const k = e.target?.dataset?.range; if (k && (DETAIL.includes(k) || FMT[k])) S.refresh(); });
   S.gfxExt = { PRESETS, DETAIL, publish, presetOf };
 })();
