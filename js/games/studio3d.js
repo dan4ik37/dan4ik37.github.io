@@ -221,7 +221,7 @@ Players.PlayerAdded.Connect(player => {
     el.innerHTML = `<div class="s3-stub"><b>🧱 Студия 3D</b><p>Редактор открыт поверх сайта. Закрыл — нажми, чтобы вернуться.</p><button type="button" class="ct-start" data-s3="reopen">Открыть редактор</button></div>`;
     el.querySelector('[data-s3="reopen"]').onclick = () => { if (!ED) mount(el, gapi); };
     const box = document.createElement('div');
-    box.className = 's3';
+    box.className = 's3 gs-noesc';   // gs-noesc: Esc — студии (стоп игры, снять выбор), из полного экрана — кнопкой ⛶
     box.innerHTML = `
       <div class="s3-top">
         <button type="button" data-a="exit" title="Выйти из студии">←</button>
@@ -248,6 +248,7 @@ Players.PlayerAdded.Connect(player => {
         <div class="s3-dd s3-staff" hidden><button type="button" data-a="menu:mod" title="Модели на проверке">🛡</button></div>
         <button type="button" data-a="mp:test" title="Проверить мир вдвоём: вторая вкладка или друг заходят по ссылке">👥<span> Тест вдвоём</span></button>
         <button type="button" data-a="publish" class="s3-pubbtn" title="Выложить мир — по ссылке или в каталог">📤<span> Выложить</span></button>
+        <span class="gs-s3"><button type="button" data-gs-set title="Настройки: графика, звук, управление, камера" aria-label="Настройки">⚙️</button>${window.D37Full ? window.D37Full.btn('.s3', { esc: false }) : ''}</span>
         <button type="button" class="s3-play" data-a="play">▶ Играть</button>
       </div>
       <div class="s3-main">
@@ -269,7 +270,9 @@ Players.PlayerAdded.Connect(player => {
     if (pm.playId) { ED.playId = pm.playId; ED.roomCode = pm.room; box.classList.add('s3-player'); }
     else if (pm.join) { ED.joinCode = pm.join; box.classList.add('s3-player'); }
     const st = ED;
+    const adL = window.D37AdPlaces?.loading({ anchor: q('.s3-loading'), tip: 'studio', ugc: !!(ED.playId || ED.joinCode) });   // реклама на экране загрузки (ad-places.js); чужой мир — без неё
     E.load().then(ok => {
+      adL?.done();
       if (ED !== st) return;
       if (!ok || !E.supported?.()) { q('.s3-loading').textContent = 'Нужен браузер с WebGL (3D) — открой на компьютере или в Chrome'; return; }
       try { start(); } catch (e) { console.error(e); q('.s3-loading').textContent = 'Ошибка: ' + (e.message || e); }
@@ -326,6 +329,8 @@ Players.PlayerAdded.Connect(player => {
     let seen = '1'; try { seen = localStorage.getItem('d37_s3_tut') || ''; } catch (e) {}
     if (!seen && !ed.player) { ed.tut = new Set(); const t = document.createElement('div'); t.className = 's3-tut'; view.appendChild(t); renderTut(); }
     ed.autosave = setInterval(() => { if (ed.dirty && !ed.playing) save(true); }, 15000);
+    // настройки (js/core/settings.js): FSR, тени, звук, клавиши, камера — сами; вид — в игре; Esc закрыл ⚙️ — игру не останавливать
+    ed.offCtx = window.D37Settings?.context({ engine: true, R: () => ED?.R, view: v => { const pl = ED?.playing; if (pl && pl.rig.mode !== v) playView(pl); }, onClose: () => ED?.playing?.C?.reset_state() });
     if (!ed.playId) ext('mount', STUDIO_API);   // в режиме игрока (чужой мир) расширения редактора не нужны
     // закрыли/обновили вкладку — сохраняем сразу, без сжатия ландшафта
     window.addEventListener('pagehide', ed.onHide = () => {
@@ -1034,8 +1039,9 @@ Players.PlayerAdded.Connect(player => {
     if (!o.src.trim()) { msg('Сначала напиши код', false); return; }
     ed.building = true; const btn = ed.q('.s3-build'); btn.disabled = true;
     print(`⚙️ Сборка «${o.name}» (${L.label})…`, 'sys');
+    const adL = window.D37AdPlaces?.loading({ host: ed.q('.s3-view'), card: `⚙️ Сборка ${L.label}`, tip: 'compile' });   // компилятор качается долго — карточка с рекламой в углу (ad-places.js)
     try {
-      const r = await L.compile(o.src, { name: o.name, onStep: t => { btn.textContent = '⚙️ ' + t; } });
+      const r = await L.compile(o.src, { name: o.name, onStep: t => { btn.textContent = '⚙️ ' + t; adL?.step(t); } });
       const u8 = r instanceof Uint8Array ? r : r.wasm;
       if (r.log) for (const line of String(r.log).split('\n').filter(Boolean).slice(0, 40)) print(line, 'warn');
       let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
@@ -1046,7 +1052,7 @@ Players.PlayerAdded.Connect(player => {
       const log = String(e && (e.log || e.message) || e);
       for (const line of log.split('\n').filter(Boolean).slice(0, 60)) print(line, 'err');
       setBottom('out'); msg('❌ Не собралось — ошибки во «Выводе»', false);
-    } finally { ed.building = false; btn.disabled = false; btn.textContent = '⚙️ Собрать'; if (ED === ed && ed.codeFor === o) fillLangUI(o); }
+    } finally { adL?.done(); ed.building = false; btn.disabled = false; btn.textContent = '⚙️ Собрать'; if (ED === ed && ed.codeFor === o) fillLangUI(o); }
   }
   function showCode(obj){
     const ed = ED;
@@ -1262,6 +1268,7 @@ Players.PlayerAdded.Connect(player => {
     const unf = rig.follow(P);
     const H = E.ui(R.r.domElement.parentElement, C);
     if (I.touch) H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
+    if (window.D37Settings?.get('view') === 'first') { rig.mode = 'first'; H.crosshair(true); }   // настройка «Вид»
     const AU = E.audio();
     P.on('step', e => AU.step(e.floor, e.run, e.x, e.y, e.z)); P.on('jump', e => AU.play('jump', e)); P.on('land', e => AU.play('land', { ...e, vol: .35 + e.k * .65 }));
     P.on('splash', e => AU.play('step_water' + ((Math.random() * 3) | 0), { x: e.x, y: e.y, z: e.z, vol: Math.min(1, .55 + e.v * .06), rate: .85 }));
@@ -1587,8 +1594,10 @@ Players.PlayerAdded.Connect(player => {
     pl.cmds = 0;
     const Lg = ed.R.lighting;
     if (Lg.cycle > 0) { pl.cycT = (pl.cycT || 0) + dt; if (pl.cycT >= 1.5) { ed.R.setLighting({ time: (Lg.time + pl.cycT * 24 / (Lg.cycle * 60)) % 24 }); pl.cycT = 0; } }
+    C.blocked = !!window.D37Settings?.isOpen?.();   // открыто окно ⚙️ — персонаж стоит
     C.step(dt);
-    if (C.down('pause') && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
+    if (C.down('pause') && !C.blocked && !(mp && ed.player)) { stopPlay(); return; }   // в комнате по ссылке Esc не выкидывает из игры
+    if (C.down('view')) playView(pl);   // V — вид от 1-го / 3-го лица (как в «Мире»)
     // едем на движущейся детали
     const on = P.ch.grounded ? P.ch.onCol?.data?.part : null, onObj = on && SC.get(on);
     if (onObj?.pos && pl.onId === on && pl.onPos) { const dx = onObj.pos[0] - pl.onPos[0], dy = onObj.pos[1] - pl.onPos[1], dz = onObj.pos[2] - pl.onPos[2]; if (dx || dy || dz) { P.ch.x += dx; P.ch.y += dy; P.ch.z += dz; } }
@@ -1647,10 +1656,19 @@ Players.PlayerAdded.Connect(player => {
     ed.NPC.step(dt, gp.length ? me.concat(gp) : me);
     if (pl.hasScripts) SH.tick(dt, [{ id: 'me', pos: [P.ch.x, P.ch.y, P.ch.z] }, ...gp.map(g => ({ id: g.id, pos: [g.x, g.y, g.z] }))]);
   }
+  // Вид от 1-го / 3-го лица (V, настройка «Вид»): прицел, свой человечек прячется, на компьютере — захват мыши
+  function playView(pl){
+    const m = pl.rig.toggle();
+    pl.H.crosshair(m === 'first');
+    if (m !== 'first') pl.I.unlock();
+    msg(m === 'first' ? '👁 Вид от 1-го лица (V — обратно)' : '🎥 Вид от 3-го лица', true);
+  }
   function playFrame(dt){
     const ed = ED, pl = ed?.playing; if (!pl) return;
     const { P, A, rig, I, C, H } = pl, R = ed.R, t = performance.now() / 1000;
+    I.wantLock = rig.mode === 'first' && !I.touch && !window.D37Settings?.isOpen?.();
     A.pose(pl.meKey, P.pose());
+    const meA = A.get?.(pl.meKey); if (meA) meA.hidden = rig.mode === 'first';
     if (ed.mp) mpFrame(dt);   // чужие игроки (по сети) — плавно, со своей внешностью
     rig.update(dt, P, { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom }, ed.ph, C);
     A.update(dt, t, R.camera.position);
@@ -2096,6 +2114,7 @@ Players.PlayerAdded.Connect(player => {
     ext('unmount');
     try { mpClose(); } catch (e) {}   // комната и канал Supabase — сразу (и до SC.dispose: сеть обёрнута вокруг сцены)
     ED = null;
+    try { ed.offCtx?.(); window.D37Full?.release(ed.box); } catch (e) {}   // настройки/полный экран
     try { if (ed.playing) { const pl = ed.playing; pl.phoneOff?.(); pl.loop.stop(); pl.SH.stop(); pl.I.dispose(); pl.C.dispose(); pl.H.dispose(); pl.A.dispose(); for (const l of pl.amb || []) l.h.stop(); } } catch (e) {}
     if (ed.dirty && ed.SC && !ed.playing) save(true, ed);
     clearInterval(ed.autosave);

@@ -30,7 +30,8 @@
   // FSR (как режимы DLSS): кадр рисуется в доле разрешения, AMD FSR 1 в post.js чётко растягивает до экрана (d37_fsr).
   // «авто» — доля меняется сама (динамическое разрешение), растягивает тоже FSR
   E.FSR = { quality: .77, balanced: .67, performance: .59 };
-  E.fsrMode = () => { try { const v = localStorage.getItem('d37_fsr'); if (E.FSR[v]) return v; } catch (e) {} return 'auto'; };
+  // 'native' — всегда 100% (без динамического разрешения): выбор в окне ⚙️ Настройки (js/core/settings.js)
+  E.fsrMode = () => { try { const v = localStorage.getItem('d37_fsr'); if (E.FSR[v] || v === 'native') return v; } catch (e) {} return 'auto'; };
 
   // ── Динамическое разрешение — автомат без DOM (проверяется в node): D = E.dynRes({ target (мс кадра), min, step });
   // каждый кадр D.tick(интервал мс, ЦП кадра мс, now) → масштаб min…1. Решает 2 раза в секунду по среднему без худших 10%.
@@ -241,7 +242,7 @@ gl_FragColor = vec4(c, 1.0);
       const fe = Math.max(40, +Lg.fogEnd || 320);
       scene.fog = new T.Fog(U.mid.value.clone(), fe * .34, fe);
       scene.background = U.mid.value.clone();
-      sun.castShadow = shadows && Lg.shadows !== false;
+      sun.castShadow = shadows && Lg.shadows !== false && R.userShadows !== false;   // настройки: «Тени» выкл — без теней
       SH.dirty = true;
       r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * wn);
       clearTimeout(envT); envT = setTimeout(() => { if (!R.dead) makeEnv(); }, 250);   // отражения неба — когда перестали крутить ползунок
@@ -413,6 +414,23 @@ gl_FragColor = vec4(c, 1.0);
       if (dt > 0 && dt < 1000) { ST.frames++; ST.sumDt += dt; if (dt > ST.maxDt) ST.maxDt = dt; ST.sumCpu += ST.cpuFrame; if (ST.cpuFrame > ST.maxCpu) ST.maxCpu = ST.cpuFrame; ST.sumR += cpu; }
       if (DR.on && dt > 0 && DR.tick(dt, ST.cpuFrame, t0) !== scaleNow) applyScale();
       if (E.perf?.on) E.perf.frame(R);
+      const O = window.D37Opt; if (O && O.rev !== optRev) optSync(O);   // настройки поменялись (js/core/settings.js)
+    };
+    // ── Настройки «на живую» (окно ⚙️, js/core/settings.js → window.D37Opt): FSR / разрешение и тени ──
+    let optRev = -1;
+    function optSync(O){
+      optRev = O.rev;
+      const want = O.fsr || 'auto';
+      if (want !== optFsr) { optFsr = want; if (R.w > 1) R.setFsr(want); }
+      R.setShadows(O.shadows !== false);
+    }
+    let optFsr = E.fsrMode();
+    R.userShadows = true;
+    R.setShadows = on => {
+      if (R.userShadows === !!on) return;
+      R.userShadows = !!on;
+      sun.castShadow = shadows && R.lighting.shadows !== false && R.userShadows;
+      SH.dirty = true;
     };
     // Разрешение вручную (замер, настройки): s — доля от плотности качества; dynRes выключается, пока не включат снова
     R.setRes = (s, auto = false) => { DR.on = !!auto; DR.set(s); applyScale(); };
@@ -421,8 +439,9 @@ gl_FragColor = vec4(c, 1.0);
     R.fsr = 'auto';
     R.setFsr = (mode, apply = true) => {
       const s = E.FSR[mode];
-      R.fsr = s && wantPost ? mode : 'auto';
+      R.fsr = s && wantPost ? mode : mode === 'native' ? 'native' : 'auto';   // native — всегда 100% (настройки)
       if (R.fsr === 'auto') { DR.on = o.dynRes !== false; DR.set(1); }
+      else if (R.fsr === 'native') { DR.on = false; DR.set(1); }
       else { DR.min = Math.min(DR.min, s); DR.on = false; DR.set(s); }
       if (apply && R.w > 1) applyScale();
       return R.fsr;
@@ -824,6 +843,7 @@ gl_FragColor = vec4(c, 1.0);
       if (R.post && !R.post.ok) { R.post.dispose(); R.post = null; }
       if (!R.post) r.setPixelRatio(PR0);
     }
+    if (window.D37Opt?.fps && E.perf && !E.perf.on) E.perf.toggle(true);   // настройки: «Счётчик FPS» — сразу при входе в 3D
     return R;
   };
 

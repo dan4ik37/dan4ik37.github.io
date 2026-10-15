@@ -264,7 +264,7 @@
       const adOk = !!window.D37Ads?.rewardReady?.(), price = C()?.RULES?.revive ?? 30, coins = C()?.coins?.() ?? 0;
       const txt = what === 'hint' ? 'Подсказки кончились' : 'Перемешивания кончились';
       showOv(`<div class="sl-t">${txt}</div><div class="sl-s">Ещё одна — за рекламу или за монеты.</div>
-        <div class="sl-col">${adOk ? `<button type="button" class="ct-start" data-act="buy-ad:${what}">📺 Посмотреть рекламу → ещё одна</button>` : ''}
+        <div class="sl-col">${adOk ? `<button type="button" class="ct-start" data-act="buy-ad:${what}">📺 Посмотреть рекламу → ${what === 'hint' ? 'ещё одна подсказка' : 'ещё одно перемешивание'}</button>` : ''}
         ${C() ? `<button type="button" class="${adOk ? 'hd-alt' : 'ct-start'}" data-act="buy-coins:${what}"${coins >= price ? '' : ' disabled'}>🪙 За ${price} монет</button>` : ''}
         <button type="button" class="hd-alt" data-act="close">↩ Играть дальше</button></div>`);
     }

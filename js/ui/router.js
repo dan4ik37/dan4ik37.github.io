@@ -20,6 +20,7 @@ const PAGES = {
   forum:      ['forum-page'],
   lfg:        ['lfg-page'],
   games:      ['games-page'],
+  shop:       ['shop-page'],
   ads:        ['ad-bottom','ads'],
   phone:      ['phone-page']     // телефон 📱 на странице (js/features/phone.js)
 };
@@ -67,6 +68,7 @@ function finishShowPage(route, activeIds){
   if (route==='ideas' && typeof renderIdeasPage==='function') renderIdeasPage();
   if (route==='poll' && typeof openPollPage==='function') openPollPage();
   if (route==='donate' && typeof renderDonateVipHint==='function') renderDonateVipHint();
+  if (route==='shop' && typeof renderShopPage==='function') renderShopPage(currentRouteParam());
   if (route==='chat' && typeof renderChatPage==='function') renderChatPage(currentRouteParam());     // чат «как Дискорд»
   if (route==='phone' && typeof phoneRoute==='function') phoneRoute(route, currentRouteParam());      // телефон 📱 на странице
   // Подстраховка: если IntersectionObserver ещё не успел отреагировать

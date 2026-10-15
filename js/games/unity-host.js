@@ -566,6 +566,7 @@
     if (!rows) { box.innerHTML = `<div class="st-empty">${srvMissing ? 'Каталог откроется совсем скоро — сайт обновляется.' : 'Не получилось загрузить — обнови страницу.'}</div>`; return; }
     if (!rows.length) { box.innerHTML = '<div class="st-empty">Здесь будут игры игроков из Unity. Сделай свою — может, она будет первой!</div>'; return; }
     box.innerHTML = `<div class="st-grid">${rows.map(cardHtml).join('')}</div>`;
+    window.D37AdPlaces?.feed(box.firstChild, { place: 'feed_ugc', every: 8, row: true, max: 2 });   // реклама — только в каталоге (игры прошли проверку)
     if (typeof xpQueueBadges === 'function') xpQueueBadges();
   }
 
@@ -836,7 +837,9 @@
     const onBar = e => {
       const b = e.target.closest('[data-act="fs"]');
       if (!b || X.dead) return;
-      (stage.requestFullscreen || stage.webkitRequestFullscreen)?.call(stage);
+      // общий полный экран (js/core/fullscreen.js): и на iPhone (там у окна нет своего — «как полный экран» + кнопка выхода)
+      if (window.D37Full) window.D37Full.toggle(stage, { exitBtn: true });
+      else (stage.requestFullscreen || stage.webkitRequestFullscreen)?.call(stage);
       setTimeout(() => { try { X.frame?.focus(); } catch (er) {} }, 200);
     };
     const onRoomClick = e => {
@@ -1030,6 +1033,7 @@
         window.removeEventListener('pagehide', onLeave);
         q('.un-bar')?.removeEventListener('click', onBar);
         q('.un-room')?.removeEventListener('click', onRoomClick);
+        window.D37Full?.release(stage);   // игра закрылась — из полного экрана
         try { X.frame?.remove(); } catch (e) {}
         X.frame = null;
       },

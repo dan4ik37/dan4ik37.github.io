@@ -10,7 +10,7 @@ function isTypingContext(){
   return false;
 }
 function isModalOpen(){
-  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal','settingsAdminModal','d37Phone'].some(id=>{
+  return ['modal','perfPopup','pollAdminModal','globalAuthModal','privacyModal','confirmModal','settingsAdminModal','gsSettings','d37Phone'].some(id=>{
     const el=document.getElementById(id);
     return el && getComputedStyle(el).display!=='none';
   });
@@ -71,6 +71,8 @@ function collectRoutes(){
 const SITE_PAGES = [
   { kind:'page', label:'👤 Кто такой dan4ik37', sub:'о авторе денчик ютубер стример канал подписчики', href:'/about' },
   { kind:'page', label:'✨ VIP — что даёт и как получить', sub:'вип донат подписка цветной ник стикеры', href:'/vip' },
+  { kind:'page', label:'💎 Магазин кристаллов', sub:'кристаллы купить валюта донат робуксы магазин оплата', href:'/shop' },
+  { kind:'page', label:'📄 Соглашение, возврат, контакты', sub:'пользовательское соглашение возврат денег реквизиты контакты', href:'/terms' },
   { kind:'page', label:'🏆 Самые популярные видео', sub:'топ лучшие популярные просмотры шортсы', href:'/top' },
   { kind:'page', label:'🎬 Все видео канала — архив', sub:'архив все ролики по годам старые видео', href:'/videos' },
   { kind:'page', label:'🗂 Игры канала — ролики по играм', sub:'темы майнкрафт роблокс хоррор гта', href:'/topics' },
