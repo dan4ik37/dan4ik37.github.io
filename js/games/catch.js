@@ -145,7 +145,7 @@
   function pointer(e){
     if (!st?.running) return;
     const r = cv.getBoundingClientRect();
-    const x = (e.touches ? e.touches[0].clientX : e.clientX) - r.left;
+    const x = ((e.touches ? e.touches[0].clientX : e.clientX) - r.left) * (st.W / (r.width || st.W));   // доля — верно и у уменьшенной игры (gamesFit)
     st.px = Math.max(st.pw / 2, Math.min(st.W - st.pw / 2, x));
   }
 

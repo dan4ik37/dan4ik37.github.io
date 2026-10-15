@@ -44,23 +44,29 @@
 
     function shakeNow(){
       const left = F.shUntil - F.t;
-      if (left <= 0) { SHK.x = SHK.y = SHK.z = 0; return SHK; }
+      if (left <= 0 || rig.noShake) { SHK.x = SHK.y = SHK.z = 0; return SHK; }
       const k = F.shStr * E.clamp(left / Math.min(1.2, F.shDur), 0, 1) * E.lerp(.35, 1, rig.motion), t = F.t * 18 + F.shSeed;
       SHK.x = (E.noise(t, 1) - .5) * 2 * k; SHK.y = (E.noise(t, 2) - .5) * 2 * k * .6; SHK.z = (E.noise(t, 3) - .5) * 2 * k * .8;
       return SHK;
     }
 
+    // настройки (окно ⚙️, js/core/settings.js → window.D37Opt): чувствительность, инверсия, покачивание, тряска, угол обзора
+    rig.invY = false; rig.noShake = false; rig.fovAdd = 0;
+    let optRev = -1;
+    const optSync = O => { optRev = O.rev; rig.sens = E.clamp(+O.sens || 1, .2, 3); rig.motion = E.clamp(O.motion ?? 1, 0, 1); rig.invY = !!O.invertY; rig.noShake = O.shake === false; rig.fovAdd = +O.fovAdd || 0; };
     rig.update = (dt, P, look, phys, C) => {
       F.t += dt;
+      const O = window.D37Opt; if (O && O.rev !== optRev) optSync(O);
       const ch = P?.ch || P || CH0, isP = !!P?.ch, first = rig.mode === 'first', sy = isP ? P.stepOff || 0 : 0;   // sy — плавная ступенька
       // поворот: мышь/палец + правый стик
       if (look) {
+        const ly = (look.dy || 0) * (rig.invY ? -1 : 1);
         if (first) {
           rig.yaw -= (look.dx || 0) * .0045 * rig.sens;
-          rig.fp = E.clamp(rig.fp + (look.dy || 0) * .0045 * rig.sens, -rig.maxLook, rig.maxLook);
+          rig.fp = E.clamp(rig.fp + ly * .0045 * rig.sens, -rig.maxLook, rig.maxLook);
         } else {
           rig.yaw -= (look.dx || 0) * .0065 * rig.sens;
-          rig.pitch = E.clamp(rig.pitch + (look.dy || 0) * .0048 * rig.sens, rig.minP, rig.maxP);
+          rig.pitch = E.clamp(rig.pitch + ly * .0048 * rig.sens, rig.minP, rig.maxP);
           if (look.zoom && look.zoom !== 1) rig.dist = E.clamp(rig.dist * look.zoom, rig.minD, rig.maxD);
         }
       }
@@ -78,7 +84,7 @@
       F.kick = E.moveTo(F.kick, 0, dt * 12); F.kickRoll = E.moveTo(F.kickRoll, 0, dt * 8);
       const sh = shakeNow();
       // угол обзора: на бегу шире на 8°
-      const base = first ? (camera.aspect < 1 ? rig.fovFirst + 12 : rig.fovFirst) : camera.userData.fov0 || 50;
+      const base = (first ? (camera.aspect < 1 ? rig.fovFirst + 12 : rig.fovFirst) : camera.userData.fov0 || 50) + rig.fovAdd;   // fovAdd — настройка «Угол обзора»
       const tf = base + (running ? 8 * rig.motion : 0);
       if (Math.abs(camera.fov - tf) > .01) { camera.fov = E.lerp(camera.fov, tf, Math.min(1, dt * 5)); camera.updateProjectionMatrix(); }
 

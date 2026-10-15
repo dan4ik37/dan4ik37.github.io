@@ -6,7 +6,7 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '54';
+const GAMES_VER = '55';
 const GAMES = [
   { id: 'world',    icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
@@ -219,6 +219,10 @@ async function openGame(id, param){
   hub.hidden = true; stage.hidden = false;
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
   document.getElementById('gamesStageTitle').textContent = `${g.icon} ${g.title}`;
+  // полный экран и настройки (js/core/fullscreen.js, settings.js): телефон лёжа — игра во весь экран; «во весь экран при запуске»
+  stage.dataset.game = id; gamesSyncMute();
+  window.D37Full?.auto(stage);
+  if (window.D37Settings?.get('autoFull') && !window.D37Full?.active()) window.D37Full?.enter(stage);
   box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>';
   const adL = window.D37AdPlaces?.loading({ anchor: box.firstChild, game: id, param: gamesParam });   // реклама, если грузится дольше 1,5 с (ad-places.js)
   try {
@@ -226,6 +230,7 @@ async function openGame(id, param){
     if (gamesActive !== id) return;   // пока грузилось, ушли на другую игру
     box.innerHTML = '';
     GAME_IMPL[id].mount(box, { ...gamesApi(id), param: gamesParam });
+    gamesFitSoon();   // телефон лёжа во весь экран — игру подогнать по высоте
     window.scrollTo({ top: document.getElementById('games-page').offsetTop - 70, behavior: 'smooth' });
   } catch (e) {
     box.innerHTML = `<div class="empty-state"><span class="empty-state-icon">😵</span><div class="empty-state-title">Игра не загрузилась</div><div class="empty-state-text">Проверь интернет и обнови страницу.</div></div>`;
@@ -238,6 +243,7 @@ function closeGame(fromRouter){
   document.body.classList.remove('game-on');
   const hub = document.getElementById('gamesHub');
   const stage = document.getElementById('gamesStage');
+  gamesFullOff(stage);
   if (hub) hub.hidden = false;
   if (stage) stage.hidden = true;
   const grid = document.getElementById('gamesGrid');
@@ -252,12 +258,54 @@ function unmountActiveGame(){
   }
   const box = document.getElementById('gamesStageBox');
   if (box) box.innerHTML = '';
+  document.getElementById('gamesStage')?.classList.remove('gm-own-bar');   // своя панель игры (мир) — снова шапка игры
 }
 // Ушли со страницы игр — останавливаем таймеры/анимации игры
 window.addEventListener('hashchange', () => {
   if (gamesActive && !/^#\/games/.test(location.hash)) { unmountActiveGame(); gamesActive = null; }
-  if (!/^#\/games\/./.test(location.hash)) document.body.classList.remove('game-on');
+  if (!/^#\/games\/./.test(location.hash)) { document.body.classList.remove('game-on'); gamesFullOff(document.getElementById('gamesStage')); }
 });
+// Игру закрыли — выйти из полного экрана и не ждать поворота телефона (js/core/fullscreen.js)
+function gamesFullOff(stage){
+  window.D37Full?.auto(null);
+  if (stage) { window.D37Full?.release(stage); delete stage.dataset.game; }
+}
+// Полный экран на телефоне лёжа (html.gs-compact): игра выше экрана — уменьшаем её целиком (transform: на нажатия не
+// влияет — игры считают их по getBoundingClientRect), чтобы влезла без прокрутки. У 3D-мира, Студии, «Орды» и Unity размер свой.
+const GAMES_NOFIT = new Set(['world', 'studio3d', 'horde', 'unity']);
+let gamesFitT = 0, gamesFitRO = null, gamesFitMO = null;
+function gamesFit(){
+  const box = document.getElementById('gamesStageBox'), stage = document.getElementById('gamesStage');
+  if (!box || !stage) return;
+  box.style.transform = ''; box.classList.remove('gm-fit');
+  if (!document.documentElement.classList.contains('gs-compact') || !stage.classList.contains('gs-fs') || !gamesActive || GAMES_NOFIT.has(gamesActive)) return;
+  // размер игры — по её верхним блокам (scrollHeight врёт из-за спрятанных окошек внутри), место — по рамке (без полос прокрутки)
+  const r0 = box.getBoundingClientRect(), st = box.scrollTop, sl = box.scrollLeft;
+  let bottom = 0, right = 0;
+  for (const c of box.children) {
+    const r = c.getBoundingClientRect(); if (!r.width && !r.height) continue;
+    bottom = Math.max(bottom, r.bottom - r0.top + st + (parseFloat(getComputedStyle(c).marginBottom) || 0));
+    right = Math.max(right, r.right - r0.left + sl);
+  }
+  if (!bottom || !r0.height) return;
+  const s = Math.min(1, r0.height / bottom, r0.width / Math.max(right, 1));
+  if (s > .985) return;
+  if (s < .45) return;   // совсем не влезает — пусть прокручивается, мелко не делаем
+  box.scrollTop = 0; box.scrollLeft = 0;
+  box.style.transform = `scale(${s.toFixed(4)})`; box.classList.add('gm-fit');
+}
+function gamesFitSoon(){
+  clearTimeout(gamesFitT); gamesFitT = setTimeout(gamesFit, 90);
+  // игра перерисовалась (другой уровень, раздача) — подогнать заново; следим за размерами верхних блоков игры
+  const box = document.getElementById('gamesStageBox');
+  if (!box || !window.ResizeObserver) return;
+  if (!gamesFitRO) gamesFitRO = new ResizeObserver(() => { clearTimeout(gamesFitT); gamesFitT = setTimeout(gamesFit, 90); });
+  gamesFitRO.disconnect();
+  if (document.documentElement.classList.contains('gs-compact')) for (const c of box.children) gamesFitRO.observe(c);
+  if (!gamesFitMO && window.MutationObserver) { gamesFitMO = new MutationObserver(() => { if (document.documentElement.classList.contains('gs-compact')) gamesFitSoon(); }); gamesFitMO.observe(box, { childList: true }); }
+}
+window.addEventListener('d37:fullscreen', gamesFitSoon);
+window.addEventListener('resize', () => { if (document.documentElement.classList.contains('gs-compact') || document.getElementById('gamesStageBox')?.classList.contains('gm-fit')) gamesFitSoon(); });
 
 // ── Локальная статистика (работает и без входа) ──
 function gameLocalStats(id){
@@ -481,13 +529,15 @@ let gameAudioCtx = null;
 function gameSfx(kind){
   try {
     if (localStorage.getItem('d37_games_mute') === '1') return;
+    const k = window.D37Settings ? D37Settings.sfxGain() : 1;   // громкость: ⚙️ Настройки → Звук (общая × эффекты)
+    if (k < .01) return;
     gameAudioCtx = gameAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
     const ctx = gameAudioCtx, o = ctx.createOscillator(), g = ctx.createGain();
     const map = { ok: [660, .08], bad: [180, .18], win: [880, .25], tick: [520, .03], move: [420, .04] };
     const [f, d] = map[kind] || map.tick;
     o.type = kind === 'bad' ? 'sawtooth' : 'sine';
     o.frequency.value = f;
-    g.gain.setValueAtTime(.07, ctx.currentTime);
+    g.gain.setValueAtTime(.07 * k, ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(.0001, ctx.currentTime + d);
     o.connect(g); g.connect(ctx.destination);
     o.start(); o.stop(ctx.currentTime + d);
@@ -496,9 +546,18 @@ function gameSfx(kind){
 }
 function toggleGamesMute(btn){
   const muted = localStorage.getItem('d37_games_mute') === '1';
-  try { localStorage.setItem('d37_games_mute', muted ? '0' : '1'); } catch (e) {}
-  btn.textContent = muted ? '🔊' : '🔇';
+  if (window.D37Settings) D37Settings.set('mute', !muted);   // то же, что «Звук в играх» в ⚙️ Настройках
+  else try { localStorage.setItem('d37_games_mute', muted ? '0' : '1'); } catch (e) {}
+  gamesSyncMute();
 }
+// Кнопка 🔊/🔇 в шапке игры — по настоящему состоянию (раньше при входе всегда показывала 🔊)
+function gamesSyncMute(){
+  const b = document.getElementById('gamesMuteBtn'); if (!b) return;
+  let m = false; try { m = localStorage.getItem('d37_games_mute') === '1'; } catch (e) {}
+  b.textContent = m ? '🔇' : '🔊';
+  b.title = m ? 'Звук выключен — включить' : 'Звук включён — выключить';
+}
+window.addEventListener('d37:settings', e => { if (['mute', '*'].includes(e.detail?.key)) gamesSyncMute(); });
 
 // Побед в дуэлях с живыми соперниками (все игры) — за 7 дней или за всё время
 async function renderDuelTop(list){

@@ -86,6 +86,7 @@
       try { root.localStorage?.setItem(STORE, JSON.stringify(out)); } catch (e) {}
     }
     loadBinds();
+    let keysRev = root.D37Opt?.keysRev;
     for (const id of INFO.keys()) st.set(id, { held: false, down: false, up: false, t0: 0, ht: 0, lastDown: -9, dbl: false, dblUsed: false, holdFired: false, tapUp: false });
 
     // Клавиши, общие с действием «с удержанием» (у тапа тогда — срабатывание при отпускании)
@@ -148,6 +149,7 @@
     // ── Шаг: превратить накопленные нажатия в состояние действий ──
     C.step = (dt = 1 / 60) => {
       C.now += dt;
+      const O = root.D37Opt; if (O && O.keysRev !== keysRev) { keysRev = O.keysRev; loadBinds(); }   // клавиши сменили в окне ⚙️ (settings.js)
       pollPad(dt);
       const now = C.now;
       for (const [id, s] of st) {

@@ -368,7 +368,7 @@
   function railSpot(){
     if (!/^#\/games\/./.test(location.hash || '') || isTouch()) return null;
     const html = document.documentElement;
-    if (['s3-open', 'wld-editing', 'hd-lock'].some(c => html.classList.contains(c)) || document.fullscreenElement) return null;   // окно поверх / игра на весь экран
+    if (['s3-open', 'wld-editing', 'hd-lock', 'gs-full'].some(c => html.classList.contains(c)) || document.fullscreenElement) return null;   // окно поверх / игра на весь экран
     const page = $('#games-page'), stage = $('#gamesStage');
     if (!page || !stage || stage.hidden || page.style.display === 'none') return null;
     const W = vw();
