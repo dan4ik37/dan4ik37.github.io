@@ -39,7 +39,7 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
 ${AGE_HEAD}
-${noAds ? '' : `<script>try{var d37n=JSON.parse(localStorage.getItem('d37_noads')||'null');if(d37n&&d37n.until>Date.now())(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
+${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>`}
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>
 <script defer src="/_vercel/insights/script.js"></script>

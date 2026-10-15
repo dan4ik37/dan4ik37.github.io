@@ -71,8 +71,10 @@
 <!-- Возраст (js/core/age.js): несовершеннолетнему ролики 18+ спрятаны с первого кадра (d37-h18), возраст не указан — 18+ под
      обложкой «Мне есть 18» (d37-c18). Сам год — только в браузере, никуда не отправляется -->
 <script>(function(){try{var a=JSON.parse(localStorage.getItem('d37_age')||'null')||{},Y=new Date(Date.now()+108e5).getUTCFullYear(),g=a.y>=Y-100&&a.y<=Y-3?Y-a.y-(a.bd==Y?0:1):null,M={child:12,teen:15,teen16:17}[a.fg];if(M&&a.fu>Date.now()&&(g==null||g>M))g=M;var c=g==null?(a.c18?'':'d37-c18'):g<18?'d37-h18':'';if(c)document.documentElement.classList.add(c)}catch(e){}})()</script>
-<!-- VIP и персонал — без рекламы: запросы AdSense на паузе ещё до загрузки скрипта (js/core/ad-places.js, d37_noads) -->
-<script>try{var d37n=JSON.parse(localStorage.getItem('d37_noads')||'null');if(d37n&&d37n.until>Date.now())(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
+<!-- Запросы AdSense на паузе ещё до загрузки скрипта — даже «автоматическая реклама» ждёт, пока js/core/ad-places.js (gate)
+     не узнает VIP (d37_noads: персонал и VIP — без рекламы) и возраст (детям и подросткам — «обработка» Google и без
+     персональной рекламы), и только потом снимает паузу -->
+<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>
 <!-- Vercel Web Analytics — без cookie, без баннера согласия. Требует ОДИН
      раз включить в дашборде: Vercel → проект → вкладка Analytics → Enable -->
