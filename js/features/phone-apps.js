@@ -234,9 +234,47 @@
   ];
   const BLD = [['Кафе', 0, -36, 22, 14, '#9a3412'], ['Клуб', 36, -2, 16, 20, '#4c1d95'], ['Гардероб', -22, 24, 9, 8, '#db2777'], ['Сцена', -38, -1, 7, 13, '#3b2a5a'],
     ['', -12, 30, 9, 9, '#b91c1c'], ['', 12, 30, 9, 9, '#1d4ed8'], ['', -12.5, 52, 10, 11, '#15803d'], ['', 12, 52, 9, 9, '#7e22ce']];
+  // Мир с зонами (js/games/mir-zones.js → MirMap): тот же рисунок, что окно «🗺️ Карта» (M) в мире — лобби, Солнечный городок,
+  // Большой город, Боевая зона, метки возраста; «Весь мир» / «Центр». Возраст зоны проверяет сам мир (h.tp → ворота).
+  const CENTER = { x0: -84, x1: 84, z0: -70, z1: 92 };
+  let mapZoom = 'all';
+  function mapZones(el, h, inWorld, MM){
+    const pts = MM.points(), age = p => (p.age ? `<b class="ph-age a${p.age}">${p.age}+</b>` : '');
+    const grp = [['Лобби и старый мир', p => !p.zone], ...MM.ZLIST.map(Z => [`${Z.icon} ${Z.name}${Z.age ? ' · ' + Z.age + '+' : ''}`, p => p.zone === Z.id])];
+    el.innerHTML = P.head('🗺️ Карта мира') + `<div class="ph-body"><div class="ph-mapv" role="radiogroup">${[['all', '🌍 Весь мир'], ['center', '⛲ Центр']].map(([v, t]) => `<button type="button" role="radio" aria-checked="${mapZoom === v}" class="ph-chip${mapZoom === v ? ' on' : ''}" data-z="${v}">${t}</button>`).join('')}</div>
+      <div class="ph-map"><canvas width="640" height="620" aria-label="Карта Мира Денчика"></canvas></div>
+      ${inWorld ? '' : '<div class="ph-row" style="margin:10px 0"><a class="ph-btn" href="#/games/world">🌍 Открыть Мир Денчика</a></div><small class="ph-dim">Телепорт работает в мире.</small>'}
+      ${grp.map(([t, f]) => { const L = pts.filter(f); return L.length ? `<div class="ph-sec">${e(t)}</div><div class="ph-pts">${L.map(p => `<button type="button" class="ph-pt" data-p="${e(p.id)}"${inWorld ? '' : ' disabled'}><i>${p.icon}</i><span>${e(p.name)}</span>${age(p)}</button>`).join('')}</div>` : ''; }).join('')}</div>`;
+    const cv = el.querySelector('canvas'), g = cv.getContext('2d');
+    let view = null;
+    const draw = () => {
+      const o = { points: pts };
+      if (inWorld) { o.players = (h.players?.() || []).map(p => ({ x: p.x, z: p.z, friend: p.friend })); o.me = h.where?.() || null; }
+      view = MM.draw(g, cv.width, cv.height, mapZoom === 'center' ? CENTER : null, o);
+    };
+    draw();
+    const t = inWorld ? setInterval(draw, 700) : 0;
+    const tp = id => {
+      const p = pts.find(x => x.id === id); if (!p || !inWorld) return;
+      h.tp(p.x, p.z, p.yaw);
+      P.toast(`${p.icon} ${p.name}`, true); P.tone([[880, .06], [1320, .1]], .5);
+      setTimeout(() => P.close(), 350);
+    };
+    el.querySelector('.ph-mapv').addEventListener('click', ev => { const b = ev.target.closest('[data-z]'); if (!b || b.dataset.z === mapZoom) return; mapZoom = b.dataset.z; el.querySelectorAll('.ph-mapv [data-z]').forEach(x => { const on = x.dataset.z === mapZoom; x.classList.toggle('on', on); x.setAttribute('aria-checked', on); }); draw(); });
+    el.querySelector('.ph-body').addEventListener('click', ev => { const b = ev.target.closest('[data-p]'); if (b) tp(b.dataset.p); });
+    cv.addEventListener('click', ev => {
+      if (!inWorld || !view) return;
+      const r = cv.getBoundingClientRect(), [x, z] = view.inv((ev.clientX - r.left) / r.width * cv.width, (ev.clientY - r.top) / r.height * cv.height);
+      let best = null, bd = 26 / Math.max(.2, view.sc) + 4;
+      for (const p of pts) { const d = Math.hypot(p.lx - x, p.lz - z); if (d < bd) { bd = d; best = p; } }
+      if (best) tp(best.id);
+    });
+    return () => clearInterval(t);
+  }
   P.define('map', {
     render(el){
       const h = P.ctx(), inWorld = P.ctxName() === 'world' && h?.tp;
+      if (window.MirMap?.draw) return mapZones(el, h, inWorld, window.MirMap);
       el.innerHTML = P.head('🗺️ Карта мира') + `<div class="ph-body"><div class="ph-map"><canvas width="640" height="620" aria-label="Карта Мира Денчика"></canvas></div>
         ${inWorld ? '<div class="ph-sec">Телепорт</div>' : '<div class="ph-row" style="margin:10px 0"><a class="ph-btn" href="#/games/world">🌍 Открыть Мир Денчика</a></div><small class="ph-dim">Телепорт работает в мире.</small>'}
         <div class="ph-pts">${PTS.map((p, i) => `<button type="button" class="ph-pt" data-p="${i}"${inWorld ? '' : ' disabled'}><i>${p[0]}</i>${e(p[1])}</button>`).join('')}</div></div>`;

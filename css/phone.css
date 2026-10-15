@@ -164,6 +164,10 @@ html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 .ph-pt{display:flex;align-items:center;gap:7px;padding:9px 10px;border:0;border-radius:11px;background:rgba(255,255,255,.06);color:var(--text);font:700 12.5px 'Montserrat',sans-serif;cursor:pointer;text-align:left}
 .ph-pt:hover{background:rgba(255,255,255,.12)}
 .ph-pt i{font-style:normal;font-size:17px}
+.ph-pt .ph-age{margin-left:auto;padding:1px 5px;border-radius:6px;background:#a16207;color:#fff;font:900 10px 'Montserrat',sans-serif}
+.ph-pt .ph-age.a16{background:#c2410c}.ph-pt .ph-age.a18{background:#b91c1c}
+.ph-mapv{display:flex;gap:6px;margin:0 0 8px}
+.ph-mapv .ph-chip.on{background:var(--accent);color:#fff}
 /* сообщения внутри телефона */
 .ds-ph{padding:0}
 .ds-ph .ds-pane{padding:14px 12px 30px}

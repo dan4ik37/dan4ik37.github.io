@@ -157,6 +157,8 @@
     buzz(){ return make(.38, 62, t => Math.sign(Math.sin(PI2 * 118 * t)) * .6 * Math.min(1, t / .01) * (1 - t / .38), .09, .03); },
     coin(){ return make(.32, 63, t => (Math.sin(PI2 * 1320 * t) * (t < .08 ? 1 : 0) + Math.sin(PI2 * 1760 * t) * (t >= .07 ? 1 : 0)) * exp(-Math.max(0, t - .07) * 9) * Math.min(1, t / .003), .08, .05); },
     click(){ let hp = 0; return make(.03, 64, (t, r) => { const w = N(r); hp += (w - hp) * .5; return (w - hp) * exp(-t * 400); }, .05, .005); },
+    // сигнал машины (транспорт): два гудка-«квадрата» с хрипом диафрагмы
+    horn(){ const d = new Bp(900, 2); return make(.42, 65, (t, r) => { const w = N(r), on = t < .18 || (t > .24 && t < .42) ? 1 : 0, sq = Math.sign(Math.sin(PI2 * 392 * t)) * .5 + Math.sign(Math.sin(PI2 * 494 * t)) * .5; return (sq * .55 + d.do(w) * .4) * on * Math.min(1, t / .006); }, .1, .03); },
     // телефон 📱 (как в ГТА): шорох ткани кармана — достал/убрал, мягкое касание стекла — экран включился/выключился,
     // щелчок камеры — «шторка» (два коротких щелчка механизма)
     ph_pocket(){ const f = new Bp(1700, .7), f2 = new Bp(3800, .9), lo = new Bp(420, .8);
@@ -192,6 +194,26 @@
       const s = new Bp(700, .8), sp = new Bp(2600, 3); let lp = 0;
       return loopMake(4, 74, (t, r) => { const w = N(r); lp += (w - lp) * .06; const wave = Math.pow(Math.max(0, Math.sin(t * PI2 / 2)), 3);
         return (lp * .9 + s.do(w) * .5) * (.25 + wave) + sp.do(w) * wave * .2; }, .05);
+    },
+    veh_car(){   // мотор машины: низкий гул, «вспышки» 30 раз в секунду, шорох воздуха
+      const lo = new Bp(90, 2), mid = new Bp(185, 3), air = new Bp(800, .9); let lp = 0;
+      return loopMake(2, 76, (t, r) => { const w = N(r); lp += (w - lp) * .02; const pulse = .55 + .45 * Math.pow(Math.max(0, Math.sin(PI2 * 30 * t)), 2);
+        return (lo.do(w) * 1.6 + mid.do(w) * .8 + lp * .8) * pulse + air.do(w) * .12; }, .07);
+    },
+    veh_boat(){   // лодочный мотор: выше и злее, плеск воды
+      const lo = new Bp(160, 2), whine = new Bp(1250, 3), spl = new Bp(600, .7);
+      return loopMake(2, 77, (t, r) => { const w = N(r), pulse = .5 + .5 * Math.pow(Math.max(0, Math.sin(PI2 * 45 * t)), 2), wave = .5 + .5 * Math.sin(PI2 * t);
+        return lo.do(w) * 1.3 * pulse + whine.do(w) * .25 + spl.do(w) * .3 * wave; }, .07);
+    },
+    veh_rotor(){   // вертолёт: «вух-вух» лопастей 5 раз в секунду, низкий гул турбины
+      const deep = new Bp(70, 1), body = new Bp(300, 1.2), tur = new Bp(2200, 4); let lp = 0;
+      return loopMake(2, 78, (t, r) => { const w = N(r); lp += (w - lp) * .03; const blade = Math.pow(Math.max(0, Math.sin(PI2 * 5 * t)), 6);
+        return (deep.do(w) * 1.4 + lp * 1.2) * (.25 + blade) + body.do(w) * .5 * blade + tur.do(w) * .1; }, .08);
+    },
+    veh_prop(){   // винтовой самолёт: ровный рокот винта 22 раза в секунду и свист
+      const lo = new Bp(110, 2), hi = new Bp(220, 2), wh = new Bp(1600, 2.5);
+      return loopMake(2, 79, (t, r) => { const w = N(r), pulse = .6 + .4 * Math.pow(Math.max(0, Math.sin(PI2 * 22 * t)), 2);
+        return (lo.do(w) * 1.3 + hi.do(w) * .7) * pulse + wh.do(w) * .15; }, .07);
     },
     amb_magic(){   // волшебство: тихий звон-переливы (полосы шума, не чистые тоны)
       const bells = [1900, 2530, 3170, 3800].map(f => new Bp(f, 40)); let ev = 0, k = 0;
@@ -249,7 +271,8 @@
       const k = d <= 3 ? 1 : Math.max(0, 1 - (d - 3) / 37), rx = Math.cos(A.lyaw), rz = -Math.sin(A.lyaw), dl = Math.hypot(dx, dz) || 1;
       return [g * k * k, Math.max(-1, Math.min(1, (dx * rx + dz * rz) / dl)) * Math.min(1, d / 2) * .8];
     };
-    // Петли окружения: h = A.loop('amb_fire', { x, y, z, vol }) → h.set({ x, y, z, vol }), h.stop(). Без x — со всех сторон.
+    // Петли окружения: h = A.loop('amb_fire', { x, y, z, vol, rate }) → h.set({ x, y, z, vol, rate }), h.stop(). Без x — со всех сторон;
+    // rate — скорость проигрывания (моторы транспорта: veh_car, veh_boat, veh_rotor, veh_prop — выше на оборотах).
     // Звук разрешён только после первого нажатия — петля ждёт и включается сама; громкость пересчитывается в A.listener.
     const loops = new Set();
     A.loop = (name, o = {}) => {
@@ -270,6 +293,7 @@
       }
       const [g, p] = place(h.o, muted() ? 0 : (h.o.vol ?? .6) * kAmb()), t = ctx.currentTime;
       h.gain.gain.setTargetAtTime(g, t, .08);
+      if (h.o.rate) h.src.playbackRate.setTargetAtTime(Math.max(.25, Math.min(3, h.o.rate)), t, .1);   // мотор: обороты
       if (h.pan) h.pan.pan.setTargetAtTime(p, t, .08);
     }
     A.listener = (x, y, z, yaw) => { A.lx = x; A.ly = y; A.lz = z; A.lyaw = yaw || 0; for (const h of loops) tick(h); };

@@ -25,7 +25,7 @@
 // Тесты: node scripts/mirplay-test.cjs.
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
-  const NO = new Set(['world', 'studio', 'studio3d', 'unity', 'wardrobe']);   // поверх мира не открываются
+  const NO = new Set(['world', 'studio', 'studio3d', 'unity', 'wardrobe', 'kubomir', 'podzem']);   // поверх мира не открываются (большие песочницы — своей страницей)
   const FLAG = 'd37_from_world', FLAG_TTL = 3 * 3600e3;
   const VOLUNTARY = new Set(['back', 'auto', 'leave', 'exit', 'world', 'editor']);   // закрыли сами — свои записи истории убрать
   const AGAIN_ACT = /^(again|rematch|restart|retry|replay|co-again|co-go|next)$/;   // next — «▶ Уровень N» (маджонг)

@@ -51,10 +51,12 @@
       e.home = e.o.pos.slice();
       e.C = pad();
       e.P = E.player(ph, { x: e.home[0], z: e.home[2], yaw: (e.o.rot?.[1] || 0) * Math.PI / 180 });
-      e.P.place(e.home[0], null, e.home[2], e.P.yaw);
+      e.P.place(e.home[0], homeY(e), e.home[2], e.P.yaw);   // опора под точкой дома — не крыша над ней (житель в доме)
       if (e.home[1] > e.P.ch.y + .3) e.P.place(e.home[0], e.home[1], e.home[2], e.P.yaw);   // стоит на чём-то — не на земле
       e.P.canRun = true; e.waitT = Math.random() * 2; e.homeYaw = e.P.yaw;
     }
+    // высота опоры под домом жителя: самое высокое не выше его точки (+ ступенька) — P.place(…, null) поставил бы на крышу
+    const homeY = e => ph.supportAt(e.home[0], e.home[2], (e.P?.ch.r || .42) * .5, (e.home[1] || 0) + .7).y;
     N.remove = o => { const e = list.get(o.id); if (!e) return; A.remove(e.key); list.delete(o.id); };
     // в редакторе: подвинули, повернули, сменили внешность
     N.sync = o => {
@@ -108,7 +110,7 @@
         if (near && !e.near && o.text && e.sayT <= 0) { N.cb?.onSay?.(e, String(o.text).slice(0, 80)); e.sayT = 8; }
         e.sayT = Math.max(0, e.sayT - dt); e.near = near;
         // упал за край мира — домой
-        if (ch.y < -60) P.place(e.home[0], null, e.home[2]);
+        if (ch.y < -60) P.place(e.home[0], homeY(e), e.home[2]);
       }
     };
     N.frame = (dt, t, cam) => {
