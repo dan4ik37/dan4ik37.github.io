@@ -32,7 +32,18 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   ok(V.items.every(it => !it.tex || V.texIdx.has(it.tex)), 'у вещей с картинкой есть слой текстуры');
   ok(V.blocks.filter(b => b.texf).every(b => [b.texf.top, b.texf.bottom, b.texf.side].every(l => l >= 0 && l < V.tex.length)), 'грани блоков указывают на существующие слои');
   const painted = V.paintAll();
-  ok(painted.length === V.tex.length && painted.every(d => d.length === 1024), 'все текстуры рисуются 16×16 RGBA', painted.length);
+  ok(V.TEX === 32 && painted.length === V.tex.length && painted.every(d => d.length === V.TEX * V.TEX * 4), 'все текстуры рисуются 32×32 RGBA', painted.length);
+  { // вещи — пиксель-арт 16×16, увеличенный вдвое (каждый пиксель — квадрат 2×2); поверхности — свои 32×32 (не «квадратами»)
+    const blocky = d => { for (let y = 0; y < 32; y += 2) for (let x = 0; x < 32; x += 2) { const a = (y * 32 + x) * 4; for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) { const b = ((y + dy) * 32 + x + dx) * 4; for (let c = 0; c < 4; c++) if (d[a + c] !== d[b + c]) return false; } } return true; };
+    ok(blocky(V.paint('item_pick_iron')) && blocky(V.paint('torch')), 'вещи и факел — чёткий пиксель-арт ×2');
+    ok(!blocky(V.paint('stone')) && !blocky(V.paint('planks_oak')) && !blocky(V.paint('cobble')), 'камень, доски, булыжник — настоящие 32×32');
+    const px16 = new Uint8Array(1024).fill(90), up = V.paint('x', { rgba: px16 });
+    ok(up.length === 4096 && up.every(v => v === 90), 'картинка 16×16 (мод, старый пакет текстур) увеличивается до 32×32');
+    const lv = V.paint('leaves_oak'); let holes = 0; for (let i = 3; i < lv.length; i += 4) if (!lv[i]) holes++;
+    ok(holes > 30 && holes < 400, 'листва — с дырками (вырез по альфе)', holes);
+    const st = V.paint('stone'); let mn = 255, mx = 0; for (let i = 0; i < st.length; i += 4) { mn = Math.min(mn, st[i]); mx = Math.max(mx, st[i]); }
+    ok(mx - mn > 25 && mx - mn < 140, 'камень: заметная, но спокойная фактура', [mn, mx]);
+  }
   ok(painted.every((d, i) => { let s = 0; for (let k = 3; k < d.length; k += 4) s += d[k]; return s > 0 || /^destroy_0$/.test(V.tex[i].name); }), 'текстуры не пустые');
   const missingLike = V.tex.filter((t, i) => !V.TEX_SPECS[t.name]).map(t => t.name);
   ok(missingLike.length === 0, 'у каждой текстуры ванили есть рисунок', missingLike);

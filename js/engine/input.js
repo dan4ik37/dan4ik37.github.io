@@ -32,8 +32,11 @@
     on(el, 'pointerdown', e => {
       if (!I.enabled || (opts.ignore && e.target.closest?.(opts.ignore))) return;
       const mouse = e.pointerType === 'mouse';
-      if (mouse && I.wantLock && !I.locked && el.requestPointerLock) { try { el.requestPointerLock(); } catch (er) {} }
-      if (mouse) C?.mouse(e.button, true);
+      // нажатие, которым возвращают мышь в мир, — только захват (блок не ломается, выстрела нет — как в Майнкрафте);
+      // браузер в захвате отказал (I.lockFail) — нажатие идёт в игру как обычно
+      const grab = mouse && I.wantLock && !I.locked && !!el.requestPointerLock;
+      if (grab) I.lock();
+      if (mouse && !(grab && !I.lockFail)) C?.mouse(e.button, true);
       if (I.locked) return;
       try { el.setPointerCapture(e.pointerId); } catch (er) {}
       const b = el.getBoundingClientRect(), lefty = !!window.D37Opt?.lefty, lx = lefty ? b.right - e.clientX : e.clientX - b.left;   // левша (настройки) — джойстик справа
@@ -80,9 +83,19 @@
       return l.length >= 2 ? Math.hypot(l[0].x - l[1].x, l[0].y - l[1].y) : 0;
     }
     // Захват мыши (вид от 1-го лица): движение мыши — поворот без нажатия
-    on(document, 'pointerlockchange', () => { I.locked = document.pointerLockElement === el; });
+    // захвачено на el ИЛИ на чём-то внутри него (холст игры): раньше игра захватывала мышь холстом, а здесь ждали el —
+    // мышь пропадала, камера не крутилась («Кубомир» после «Продолжить» и после окна вещей)
+    const mine = () => { const p = document.pointerLockElement; return !!p && (p === el || !!el.contains?.(p)); };
+    on(document, 'pointerlockchange', () => { I.locked = mine(); if (I.locked) I.lockFail = false; });
+    on(document, 'pointerlockerror', () => { I.lockFail = true; });
     on(document, 'mousemove', e => { if (I.locked && I.enabled) { I.look.dx += e.movementX || 0; I.look.dy += e.movementY || 0; } });
-    I.unlock = () => { if (document.pointerLockElement === el) document.exitPointerLock?.(); };
+    // захватить мышь (кнопка «Продолжить», закрыли окно) — всегда этим, а не requestPointerLock у своего элемента.
+    // Браузер может отказать (сразу после Esc или без нажатия) — тогда I.lockFail, игра показывает «нажми на мир»
+    I.lock = () => {
+      if (I.locked || !el.requestPointerLock) return;
+      try { const r = el.requestPointerLock(); r?.catch?.(() => { I.lockFail = true; }); } catch (er) { I.lockFail = true; }
+    };
+    I.unlock = () => { if (mine()) document.exitPointerLock?.(); };
     on(window, 'blur', () => { joy = null; hideJoy(); updJoy(); ptrs.clear(); });
 
     // ── Джойстик на экране (появляется там, где коснулся палец) ──

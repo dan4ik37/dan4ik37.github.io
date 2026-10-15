@@ -51,7 +51,8 @@
 
   function create(o){
     const C = o.C, el = o.el;
-    const K = { ctrl: false, pad: false, finger: null, taps: [], binds: load(), capturing: null, sneakToggle: false };
+    // padLast — последним трогали геймпад (а не мышь/клавиатуру): тогда прицел виден и без захвата мыши, подсказки «нажми на мир» нет
+    const K = { ctrl: false, pad: false, padLast: false, finger: null, taps: [], binds: load(), capturing: null, sneakToggle: false };
     const down = new Set(), edge = new Set(), upEdge = new Set(), st = new Map(), virt = new Set(), vEdge = new Set();
     for (const [id] of ACTS) st.set(id, { held: false, down: false, up: false, t0: 0 });
     let now = 0, padDown = new Set(), guard = false;
@@ -70,6 +71,7 @@
         return;
       }
       if (typing(e.target) || e.metaKey || C.capturing) return;
+      K.padLast = false;
       if (e.code === 'ControlLeft' || e.code === 'ControlRight') setCtrl(true);
       const win = blockedWin();   // открыто окно (вещи, меню, ⚙️): клавиши всё равно считаем — E закрывает вещи
       // Ctrl + клавиша: controls.js такие нажатия пропускает — передать самим (бег: Ctrl + W, прыжок с Ctrl)
@@ -89,6 +91,8 @@
       if (down.delete(e.code)) upEdge.add(e.code);
     }, true);
     on(window, 'blur', () => { down.clear(); setCtrl(false); K.finger = null; });
+    on(window, 'mousedown', () => { K.padLast = false; }, true);
+    on(window, 'mousemove', e => { if (K.padLast && Math.abs(e.movementX || 0) + Math.abs(e.movementY || 0) > 4) K.padLast = false; }, true);
     // Ctrl зажат — закрыть вкладку (Ctrl+W) случайно нельзя: браузер спросит
     const beforeUnload = e => { e.preventDefault(); e.returnValue = ''; return ''; };
     function setCtrl(v){
@@ -108,12 +112,14 @@
     // ── геймпад ──
     function pollPad(){
       const pads = navigator.getGamepads ? navigator.getGamepads() : null, gp = pads && [...pads].find(p => p && p.connected);
-      if (!gp) { if (K.pad) { for (const c of padDown) down.delete(c); padDown.clear(); K.pad = false; } return; }
+      if (!gp) { if (K.pad) { for (const c of padDown) down.delete(c); padDown.clear(); K.pad = false; K.padLast = false; } return; }
       K.pad = true;
+      // стики (только «стандартная» раскладка: у других курки бывают осями, которые в покое = −1)
+      if (!K.padLast && gp.mapping === 'standard') for (let i = 0; i < 4 && i < gp.axes.length; i++) if (Math.abs(gp.axes[i]) > .5) { K.padLast = true; break; }
       gp.buttons.forEach((b, i) => {
         const code = 'Pad' + i, p = (b.value ?? (b.pressed ? 1 : 0)) > .5;
         if (p && !padDown.has(code)) {
-          padDown.add(code);
+          padDown.add(code); K.padLast = true;
           if (K.capturing) { const cb = K.capturing; K.capturing = null; cb(code); return; }
           down.add(code); edge.add(code);
         } else if (!p && padDown.has(code)) { padDown.delete(code); down.delete(code); }

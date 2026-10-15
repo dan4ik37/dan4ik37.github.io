@@ -34,6 +34,9 @@
 .pz-hearts .pz-ic,.pz-stars .pz-ic{--s:20px}
 .pz-hp-n{font:800 11px/1 Montserrat,system-ui,sans-serif;opacity:.85}
 .pz-buffs{display:flex;gap:4px;flex-wrap:wrap}.pz-buffs:empty{display:none}
+.pz-goal{display:flex;align-items:center;gap:6px;max-width:260px;padding:4px 8px;border-radius:10px;background:rgba(40,32,8,.62);border:1px solid rgba(255,216,74,.35);font:700 12px/1.25 Montserrat,system-ui,sans-serif;cursor:pointer;pointer-events:auto}
+.pz-goal b{color:#ffd84a;font-weight:800;white-space:nowrap}.pz-goal:empty{display:none}
+.pz-goal.done{animation:pzIn .4s ease-out}
 .pz-buff{display:inline-flex;align-items:center;gap:2px;padding:1px 5px 1px 1px;border-radius:8px;background:rgba(255,216,74,.14);font:800 11px/1 Montserrat,system-ui,sans-serif}
 .pz-buff .pz-ic{--s:18px}
 .pz-b.on{background:rgba(255,216,74,.42);box-shadow:0 0 0 2px rgba(255,216,74,.5) inset}
@@ -97,7 +100,7 @@
 .pz-chk{display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer}
 .pz-toasts{position:absolute;left:50%;top:104px;transform:translateX(-50%);z-index:9;display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;width:min(520px,94%)}
 .pz-toast{padding:8px 14px;border-radius:12px;box-shadow:0 8px 24px -10px rgba(0,0,0,.8);background:rgba(12,12,24,.9);border:1px solid rgba(255,255,255,.12);font:700 13px/1.3 Montserrat,system-ui,sans-serif;text-align:center;animation:pzIn .2s ease-out}
-.pz-toast.bad{border-color:rgba(255,90,90,.5)}.pz-toast.good{border-color:rgba(90,255,140,.45)}.pz-toast.ach{border-color:rgba(255,216,74,.7);background:rgba(50,40,10,.92)}.pz-toast.boss{border-color:rgba(200,90,255,.7);font-size:15px}
+.pz-toast.info{white-space:pre-line;text-align:left}.pz-toast.bad{border-color:rgba(255,90,90,.5)}.pz-toast.good{border-color:rgba(90,255,140,.45)}.pz-toast.ach{border-color:rgba(255,216,74,.7);background:rgba(50,40,10,.92)}.pz-toast.boss{border-color:rgba(200,90,255,.7);font-size:15px}
 @keyframes pzIn{from{opacity:0;transform:translateY(-6px)}}
 .pz-talk{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);z-index:6;width:min(480px,92%);padding:10px 12px;border-radius:14px;background:rgba(30,24,10,.93);border:1px solid rgba(255,216,74,.45);box-shadow:0 10px 30px -10px #000}
 .pz-talk b{color:#ffd84a}
@@ -125,6 +128,7 @@
 .pz-mods .pz-it{cursor:default}
 .pz-err{color:#ff9a9a;font-size:12px}
 @media (max-width:560px){.pz-boss{top:112px}.pz-toasts{top:140px}}
+@media (max-width:560px){.pz-goal{position:absolute;left:0;top:84px;padding:2px 6px}.pz-goal span{display:none}}
 `;
   function addCss(){ if (document.getElementById('pz-css')) return; const s = document.createElement('style'); s.id = 'pz-css'; s.textContent = CSS; document.head.appendChild(s); }
   const isTouch = () => { try { return matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window; } catch (e) { return false; } };
@@ -173,7 +177,7 @@
       wrap.insertAdjacentHTML('beforeend', `
         <div class="pz-hurt"></div>
         <div class="pz-hud">
-          <div class="pz-life"><div class="pz-hearts"></div><div class="pz-stars"></div><span class="pz-hp-n"></span><div class="pz-buffs"></div></div>
+          <div class="pz-life"><div class="pz-hearts"></div><div class="pz-stars"></div><span class="pz-hp-n"></span><div class="pz-buffs"></div><div class="pz-goal" title="Цель — нажми, чтобы увидеть все"></div></div>
           <div class="pz-bar pz-hot"></div>
           <div class="pz-btns">
             <button type="button" class="pz-b" data-a="inv" title="Вещи и крафт (Esc / I)" aria-label="Вещи и крафт">🎒</button>
@@ -207,6 +211,12 @@
         else if (a === 'smart') API.setSmart(!G.opt.smart);
         else if (a === 'zin') API.zoom(1.12); else if (a === 'zout') API.zoom(.89);
         else if (a === 'pause') { if (G.state === 'play') API.pause(); }
+      });
+      // цель → весь список: ✅ сделано, 👉 сейчас, дальше
+      lifeEl.querySelector('.pz-goal').addEventListener('click', e => {
+        e.stopPropagation();
+        const gl = API.goal(), cur = gl ? gl.i : API.GOALS.length;
+        U.toast(API.GOALS.map((g, i) => (i < cur ? '✅ ' : i === cur ? '👉 ' : '▫️ ') + g[1]).join('\n'), 'info');
       });
       hotEl.addEventListener('contextmenu', e => { const sl = e.target.closest('[data-slot]'); if (sl && invOpen) { e.preventDefault(); slotClick('inv', +sl.dataset.slot, e, true); } });
       panel.addEventListener('click', onPanel);
@@ -247,6 +257,15 @@
     U.hud = () => {
       if (!root || !G.CH) return;
       const CH = G.CH, bf = API.buffs(), hook = API.hasHook();
+      // цель: что сделать сейчас (выполнил — короткий «✅» и следующая); проверяется каждый раз (4 раза в секунду)
+      const gl = API.goal(), ge = lifeEl.querySelector('.pz-goal'), gk = gl ? gl.i : -1;
+      if (ge && gl !== undefined && ge.dataset.k !== String(gk)) {   // undefined — мир ещё не готов
+        if (ge.dataset.k && gl && +ge.dataset.k < gk) U.toast('✅ Цель выполнена! Дальше: ' + gl.text, 'good');
+        else if (ge.dataset.k && +ge.dataset.k >= 0 && gk < 0) U.toast('✅ Все первые цели выполнены — дальше глубины, боссы и свои постройки', 'good');
+        ge.dataset.k = String(gk);
+        ge.innerHTML = gl ? `${gl.icon} <span>${esc(gl.text)}</span> <b>${gl.i + 1}/${gl.n}</b>` : '';
+        ge.classList.remove('done'); void ge.offsetWidth; ge.classList.add('done');
+      }
       const key = [CH.hp | 0, CH.maxHp, CH.mana | 0, CH.maxMana, CH.sel, G.A ? 1 : 0, hook ? 1 : 0, ...Object.keys(bf).map(k => k + Math.ceil(bf[k])), ...CH.inv.slice(0, 10).map(s => s ? s.id + ':' + s.n : '')].join('|');
       if (key === lastHud) return;
       lastHud = key;
@@ -388,7 +407,15 @@
       clearInterval(deadT);
       deadEl.hidden = !by;
       if (!by) return;
-      const tick = () => { deadEl.innerHTML = `<div style="font-size:42px">💀</div><div>Ты погиб${by ? ' — ' + esc(by) : ''}</div><div class="pz-note">Возрождение через ${Math.max(0, Math.ceil(G.pl?.dead || 0))} с…</div>`; };
+      // совет по тому, кто победил (и что вещи целы) — смерть учит, а не только наказывает
+      const tip = /лава/i.test(by) ? 'Лава жжёт даже в обсидиановой яме — ставь блоки мостиком и обходи с краю.'
+        : /падени|высот/i.test(by) ? 'С высоты лучше спускаться по верёвке или лестнице; вода гасит падение.'
+        : /филин/i.test(by) ? 'Филин кричит «!» перед пикированием — в этот миг отпрыгни в сторону.'
+        : /великан/i.test(by) ? 'Великан сжимается перед прыжком — уходи из-под него и бей с края. Зелья лечения — H.'
+        : /зомби/i.test(by) ? 'Ночью зомби много: построй дом с дверью — они её не открывают.'
+        : 'Броня и меч получше — у наковальни. Зелья лечения — H, кристаллы жизни — +20 к здоровью.';
+      const home = G.W?.bed ? 'у кровати' : 'у точки старта';
+      const tick = () => { deadEl.innerHTML = `<div style="font-size:42px">💀</div><div>Ты погиб${by ? ' — ' + esc(by) : ''}</div><div class="pz-note">Вещи с тобой. Появишься ${home} через ${Math.max(0, Math.ceil(G.pl?.dead || 0))} с…</div><div class="pz-note" style="max-width:420px">💡 ${esc(tip)}</div>`; };
       tick(); deadT = setInterval(() => { if (!G.pl?.dead) { clearInterval(deadT); deadEl.hidden = true; } else tick(); }, 250);
     };
     U.loading = (v, t) => { if (!loadEl) return; loadEl.hidden = !v; if (t) loadEl.querySelector('span').textContent = t; };

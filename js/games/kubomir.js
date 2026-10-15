@@ -129,11 +129,11 @@
       <label>Название<input type="text" class="kb-in" data-f="name" maxlength="40" value="Мой мир"></label>
       <label>Зерно <small>(число или слово — один и тот же мир у всех, оставь пустым — случайный)</small><input type="text" class="kb-in" data-f="seed" maxlength="32" placeholder="случайное"></label>
       <div class="kb-seg" data-f="mode"><button type="button" class="on" data-v="survival">⚔️ Выживание</button><button type="button" data-v="creative">🎨 Творчество</button></div>
-      <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button></div>
+      <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button><button type="button" data-v="hard">💀 Сложно</button></div>
       <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после смерти вещи остаются.</p>
       ${mods.length ? `<div class="kb-modpick"><b>🧩 Моды в этом мире</b>${mods.map(m => `<label class="kb-chk"><input type="checkbox" data-mod="${esc(m.id)}"> ${esc(m.manifest?.name || m.id)} <small>${esc(m.manifest?.version || '')}</small></label>`).join('')}</div>` : '<p class="kb-note">🧩 Моды можно добавить в меню миров → «Моды».</p>'}
       <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-n="go">🌍 Создать мир</button><button type="button" class="kb-btn" data-n="back">← Назад</button></div></div>`;
-    const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после смерти вещи остаются.', normal: 'Обычно: после смерти вещи выпадают — успей их подобрать.' };
+    const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после смерти вещи остаются.', normal: 'Обычно: после смерти вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может убить, вещи после смерти выпадают.' };
     sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; }));
     sc.querySelector('[data-n="back"]').onclick = showMenu;
     sc.querySelector('[data-n="go"]').onclick = async () => {
@@ -347,7 +347,7 @@
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
     try { st.R?.dispose(); } catch (e) {}
-    st.hudEl?.remove(); st.modWin?.remove(); st.tbar?.el?.remove(); st.ringEl?.remove();
+    st.hudEl?.remove(); st.modWin?.remove(); st.tbar?.el?.remove(); st.ringEl?.remove(); st.lockEl?.remove();
     wrap()?.classList.remove('kb-nohud', 'kb-touchtap');
     settingsTab(true);
   }
@@ -470,7 +470,7 @@
       L._t = ((t0 + 24 * dt / DAY_SEC) % 24 + 24) % 24;
       const prevNight = t0 > 19 || t0 < 5.5, nowDay = L._t >= 5.5 && L._t < 19;
       if (prevNight && nowDay && !st.creative && st.nightSeen) unlock('night');
-      if (!nowDay) st.nightSeen = true;
+      if (!prevNight && !nowDay) st.nightSeen = true;   // сумерки при тебе: ночь началась — дожить до утра (смерть сбрасывает)
       if (L._t < t0) st.meta.day = (st.meta.day || 1) + 1;   // полночь — новый день (счётчик дней для модов: world.day())
       L.time = L._t;
     }
@@ -624,7 +624,7 @@
     P.exh += dt * .012;   // жизнь тоже тратит силы (медленно)
     if (P.food >= 18 && P.hp < 20) { P.regT += dt; if (P.regT >= 3) { P.regT = 0; P.hp = Math.min(20, P.hp + 1); P.exh += 3; } } else P.regT = 0;
     if (diff === 'peaceful' && P.hp < 20) { P.regT += dt * .5; if (P.regT >= 3) { P.regT = 0; P.hp++; } }
-    if (P.food <= 0 && diff !== 'peaceful') { P.starveT += dt; if (P.starveT >= 4) { P.starveT = 0; if (P.hp > (diff === 'easy' ? 10 : 1)) hurt(st, 1, 'starve'); } }
+    if (P.food <= 0 && diff !== 'peaceful') { P.starveT += dt; if (P.starveT >= 4) { P.starveT = 0; if (P.hp > (diff === 'easy' ? 10 : diff === 'hard' ? 0 : 1)) hurt(st, 1, 'starve'); } }   // «сложно» — голод убивает (как в Майнкрафте)
     // воздух под водой
     if (P.eyeWater) { P.air = Math.max(0, P.air - dt); if (P.air <= 0) { P.drownT = (P.drownT || 0) + dt; if (P.drownT >= 1) { P.drownT = 0; hurt(st, 2, 'drown'); } } }
     else P.air = Math.min(15, P.air + dt * 4);
@@ -644,12 +644,16 @@
   function die(st, why){
     const P = st.P; P.dead = true;
     st.I.unlock();
-    const keep = (st.meta.diff || 'easy') !== 'normal';
+    const keep = !['normal', 'hard'].includes(st.meta.diff || 'easy');
     if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { st.ents?.addItem(P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } }
+    st.lastDeath = { x: P.x, y: P.y, z: P.z, t: now(), drop: !keep && !!st.ents };
+    st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра, не погибнув
+    const xyz = `X ${Math.floor(P.x)}, Y ${Math.floor(P.y)}, Z ${Math.floor(P.z)}`;
     const box = document.createElement('div'); box.className = 'kb-dead kb-ui';
-    box.innerHTML = `<div><b>💀 Ты ${esc(DEATH[why] || 'погиб')}</b><small>${keep ? 'Вещи остались с тобой.' : 'Вещи выпали там, где ты погиб, — успей забрать.'}</small><button type="button" class="kb-btn primary">↺ Возродиться</button></div>`;
+    box.innerHTML = `<div><b>💀 Ты ${esc(DEATH[why] || 'погиб')}</b><small>${keep ? 'Вещи остались с тобой (сложность «мирно» или «легко»).' : `Вещи выпали там, где ты погиб (${xyz}), и лежат 5 минут — подсказка вверху покажет, куда идти.`}</small><small class="kb-where">Возродишься ${st.meta.bed ? 'у своей кровати' : 'в начале мира'} с полным здоровьем и сытостью.</small><div class="kb-btns"><button type="button" class="kb-btn primary" data-r="1">↺ Возродиться</button><button type="button" class="kb-btn" data-m="1">🏠 В меню</button></div></div>`;
     wrap().appendChild(box);
-    box.querySelector('button').onclick = () => {
+    box.querySelector('[data-m]').onclick = () => { box.remove(); P.dead = false; P.hp = 20; P.food = Math.max(P.food, 6); const sp = st.meta.bed || st.meta.spawn; Object.assign(P, { x: sp.x, y: sp.y, z: sp.z, vx: 0, vy: 0, vz: 0, fallTop: sp.y }); stopWorld().then(() => showMenu()); };
+    box.querySelector('[data-r]').onclick = () => {
       box.remove(); const sp = st.meta.bed || st.meta.spawn;
       Object.assign(P, { x: sp.x, y: sp.y, z: sp.z, vx: 0, vy: 0, vz: 0, hp: 20, food: 20, sat: 5, air: 15, dead: false, fallTop: sp.y });
       placeSafe(st); rebase(true); st.C.reset_state();
@@ -941,7 +945,14 @@
     camApply(st, dt);
     I.wantLock = !I.touch && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
     if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
+    const padNow = !!st.K?.padLast;
+    if (st.wasLocked !== I.locked || st.padWas !== padNow) { st.padWas = padNow; crossUpdate(st); }   // мышь отпущена — прицел прячем (иначе «кружок» висит посреди экрана)
     st.wasLocked = I.locked;
+    // мышь не захвачена и окон нет (закрыл меню паузы Esc, браузер не вернул мышь после «Продолжить», только вошёл) — подсказка;
+    // через 0,3 с, чтобы не мигала, пока браузер захватывает мышь после «Продолжить»
+    const free = st.ready && !I.touch && !I.locked && !padNow && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
+    st.freeT = free ? (st.freeT || 0) + dt : 0;
+    lockHint(st, st.freeT > .3);
     // персонаж: тело — по взгляду (на ходу поворачивается к движению, но не больше чем на 60°), голова — туда, куда смотрит игрок
     const me = A.get('me');
     if (me) {
@@ -999,7 +1010,16 @@
     cam.updateMatrixWorld();
   }
   // прицел: виден от 1-го лица и сзади; не виден спереди, без интерфейса (F1) и на телефоне в режиме «под пальцем»
-  function crossUpdate(st){ st.H.crosshair(st.camMode !== 2 && !st.hudHidden && !(st.I.touch && opts.touchMode !== 'cross')); }
+  function crossUpdate(st){ st.H.crosshair(st.camMode !== 2 && !st.hudHidden && !(st.I.touch && opts.touchMode !== 'cross') && (st.I.touch || st.I.locked || !!st.K?.padLast)); }
+  // «🖱 Нажми на мир, чтобы играть» — щелчок проходит сквозь подсказку в мир, мир сам захватывает мышь (input.js, wantLock)
+  function lockHint(st, on){
+    if (!st.lockEl) {
+      if (!on) return;
+      const el = document.createElement('div'); el.className = 'kb-lockhint'; el.textContent = '🖱 Нажми на мир, чтобы играть';
+      const w = wrap(); if (!w) return; w.appendChild(el); st.lockEl = el; return;
+    }
+    if (st.lockEl.hidden !== !on) st.lockEl.hidden = !on;
+  }
   // F1: спрятать всё (для снимков), ещё раз — вернуть
   function hideHud(on){
     const st = S; if (!st) return;
@@ -1058,12 +1078,13 @@
   // ═══ Экран: полоски здоровья и еды, панель вещей, отладка ═══
   function hudBuild(wr){
     const h = document.createElement('div'); h.className = 'kb-hud';
-    h.innerHTML = `<div class="kb-dbg" hidden></div><div class="kb-log"></div>
+    h.innerHTML = `<div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
       <div class="kb-bottom"><div class="kb-bars"><div class="kb-hp"></div><div class="kb-food"></div></div><div class="kb-air"></div><div class="kb-iname"></div>
       <div class="kb-hotbar">${Array.from({ length: 9 }, (_, i) => `<div class="kb-slot" data-s="${i}"><i></i><b></b><u></u></div>`).join('')}</div></div>
       <div class="kb-loadbar" hidden><div class="spinner"></div><b>Строим мир вокруг…</b><small></small></div>`;
     // панель вещей: нажал — выбрать; провёл пальцем — выбор едет за пальцем; подержал (палец) — выбросить по одной
     const hb = h.querySelector('.kb-hotbar');
+    h.querySelector('.kb-tip button').addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (S) { S.meta.tips = false; tipsUpdate(S); S.H?.toast('Подсказки скрыты (вернуть — ⚙️ «🧊 Кубомир»)'); } });
     let hp = null;
     const slotAt = (x, y) => { const s = document.elementFromPoint(x, y)?.closest?.('.kb-hotbar [data-s]'); return s ? +s.dataset.s : -1; };
     const holdDrop = () => { if (!hp || !S) return; dropSel(S, false); hp.timer = setTimeout(holdDrop, 220); };
@@ -1137,9 +1158,40 @@
   function housekeeping(){
     const st = S; if (!st) return;
     if (st.ready) st.hudEl.querySelector('.kb-loadbar').hidden = true;
+    tipsUpdate(st);
     // награды: очередь достижений (сервер — не чаще раза в 20 с)
     if (st.achQ.length && (!st.achAt || now() - st.achAt > 21000)) { const a = st.achQ.shift(); st.achAt = now(); rewardAch(a); }
     st.modRun?.second?.();
+  }
+
+  // ═══ Подсказки новичку (выживание): следующий шаг — по достижениям этого мира и вещам; после смерти — где лежат вещи ═══
+  const hasItem = (st, re) => st.P.inv.some(s => s && re.test(s.id));
+  const ARROWS = ['⬆', '↗', '➡', '↘', '⬇', '↙', '⬅', '↖'];
+  function tipText(st){
+    const A = st.meta.ach || {}, P = st.P, t = st.R.lighting.time, touch = !!st.I?.touch, K = st.K || NOK;
+    const D = st.lastDeath;
+    if (D && D.drop && now() - D.t < 300000) {
+      const dx = D.x - P.x, dz = D.z - P.z, d = Math.hypot(dx, dz);
+      if (d > 4) { const f = lookDir(st), a = Math.atan2(dx * f.z - dz * f.x, dx * f.x + dz * f.z), i = ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8; return `📍 Твои вещи — в ${Math.round(d)} блоках ${ARROWS[i]} (X ${Math.floor(D.x)}, Z ${Math.floor(D.z)}). Лежат ещё ${Math.ceil((300000 - (now() - D.t)) / 60000)} мин`; }
+      if (d <= 4) st.lastDeath = null;
+    }
+    if (P.food <= 6) return `🍗 Ты голоден и не можешь бежать: возьми еду в руку и ${touch ? 'нажми на экран' : 'держи ПКМ'} — съешь`;
+    if (!A.log && !hasItem(st, /^log_/)) return `🪵 Подойди к дереву и ${touch ? 'держи палец на стволе' : 'держи ЛКМ на стволе'} — добудешь брёвна`;
+    if (!A.table && !hasItem(st, /^planks_/) && !hasItem(st, /^crafting_table$/)) return `🎒 Открой вещи (${touch ? '🎒' : K.label('inventory') || 'E'}) и в «📖 Можно сделать» нажми доски`;
+    if (!A.table) return '🛠️ Сделай верстак из 4 досок (📖 в окне вещей), поставь его и открой — там сетка 3×3';
+    if (!A.pick) return '⛏️ На верстаке сделай деревянную кирку — «📖 Можно сделать» подскажет, чего не хватает';
+    if (!A.stone_pick) return '🪨 Накопай камня (серые блоки, нужна кирка) и сделай каменную кирку — копает быстрее и берёт железо';
+    if (!A.night && t > 16.8 && t < 19) return '🌙 Скоро ночь — придут зомби. Построй укрытие или выкопай нору и поставь факелы';
+    if (!A.coal) return '⚫ Найди уголь — чёрные пятна в камне; из угля и палки делают факелы';
+    if (!A.torch) return '🔥 Поставь факел: рядом со светом монстры не появляются';
+    if (!A.furnace) return '🧱 Сделай печь из 8 булыжников — в ней плавят руду и жарят мясо';
+    if (!A.iron) return '🔩 Железная руда — рыжие пятна в камне. Выплавь её в печи (топливо — уголь или доски)';
+    return '';
+  }
+  function tipsUpdate(st){
+    const box = st.hudEl?.querySelector('.kb-tip'); if (!box) return;
+    const txt = !st.creative && st.meta.tips !== false && !st.P.dead && st.ready ? tipText(st) : '';
+    if (st.tipNow !== txt) { st.tipNow = txt; box.hidden = !txt; if (txt) box.querySelector('span').textContent = txt; }
   }
 
   // ═══ Достижения ═══
@@ -1186,7 +1238,7 @@
   function closeMenu(){ S?.menu?.close(); }
   async function menuPick(id){
     const st = S; if (!st) return;
-    if (id === 'resume') { closeMenu(); if (!st.I.touch) { try { wrap().querySelector('.kb-gl')?.requestPointerLock?.()?.catch?.(() => {}); } catch (e) {} } }
+    if (id === 'resume') { closeMenu(); if (!st.I.touch) st.I.lock?.(); }   // не вышло (браузер не дал сразу после Esc) — «🖱 Нажми на мир»
     else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine', tab: 'kubomir' });
     else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap(), { restart: ids => { if (S !== st) return; st.meta.mods = ids; restartWorld(); } }); }
     else if (id === 'mc') { closeMenu(); mcWindow(st); }
@@ -1258,6 +1310,7 @@
         <div class="gs-row"><div class="gs-lbl">Красться<small>Держать Shift — как в Майнкрафте по умолчанию; «Нажал — отжал» — один раз нажать, ещё раз — встать.</small></div><div class="gs-ctl">${seg('sneakToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sneakToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Бег<small>Держать Ctrl или один раз нажать.</small></div><div class="gs-ctl">${seg('sprintToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sprintToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">«Призрак» блока<small>Полупрозрачный кубик там, куда встанет блок из руки.</small></div><div class="gs-ctl">${seg('ghost', [[1, 'Вкл'], [0, 'Выкл']], opts.ghost === false ? 0 : 1)}</div></div>
+        ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после смерти.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
         ${K ? K.keysHtml(K.capId) : '<p class="gs-note">Клавиши «Кубомира» можно поменять, когда открыт мир.</p>'}
         ${st ? `<p class="gs-note">Мир: ${esc(st.meta.name)} · зерно ${esc(st.meta.seed)} · потоков: ${st.ST.inline ? 'нет (всё в кадре)' : st.ST.workers.length}. F3 — сведения о мире и скорости.</p>` : ''}`;
       body.onclick = e => {
@@ -1270,6 +1323,7 @@
         if (k === 'sneakToggle') { opts.sneakToggle = v === '1'; if (S) S.sneakOn = false; }
         if (k === 'sprintToggle') { opts.sprintToggle = v === '1'; if (S) S.sprintOn = false; }
         if (k === 'ghost') opts.ghost = v === '1';
+        if (k === 'tips' && S) { S.meta.tips = v === '1'; tipsUpdate(S); }
         lsSet(LS_OPT, opts); D.refresh();
       };
     } });

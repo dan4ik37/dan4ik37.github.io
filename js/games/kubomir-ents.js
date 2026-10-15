@@ -67,7 +67,10 @@
       return out;
     },
   };
-  window.KubomirEnts = { MOBS, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice(), Lit, mobView: null, boxMobView: c => boxMobView(c) };
+  // Сложность: враги рядом не больше cap, попытка появиться — раз в every с (только в темноте, свет ≤ 6), урон × dmg
+  // (зомби: «легко» 2, «обычно» 3, «сложно» 4,5 — как в Майнкрафте). Шаг логики — 20 раз в секунду от часов игры, не от частоты кадров.
+  const DIFF = { peaceful: { cap: 0, every: 2, dmg: 0 }, easy: { cap: 4, every: 4, dmg: .67 }, normal: { cap: 6, every: 3, dmg: 1 }, hard: { cap: 9, every: 2, dmg: 1.5 } };
+  window.KubomirEnts = { MOBS, DIFF, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice(), Lit, mobView: null, boxMobView: c => boxMobView(c) };
   // цвет освещения существа по свету клетки: небо — белым, факелы и лава — своим цветом (как у кубиков) → [r, g, b, яркость]
   // (запасной путь, если свой кусок шейдера не собрался)
   const LTC = [1, 1, 1, 1];
@@ -296,7 +299,7 @@
         const hostile = !M.passive && !S.creative && !P.dead && S.meta.diff !== 'peaceful';
         if (hostile && dp < 18 && Math.abs(P.y - m.y) < 8) {
           wx = dxp / (dp || 1); wz = dzp / (dp || 1); m.state = 'chase';
-          if (dp < (M.w / 2 + .75) && Math.abs(P.y + .9 - (m.y + M.h / 2)) < 1.6 && m.atkT <= 0) { m.atkT = 1; S.ents.hookHurt?.(M.dmg); }
+          if (dp < (M.w / 2 + .75) && Math.abs(P.y + .9 - (m.y + M.h / 2)) < 1.6 && m.atkT <= 0) { m.atkT = 1; const D = DIFF[S.meta.diff] || DIFF.easy; X.hits = (X.hits || 0) + 1; S.ents.hookHurt?.(Math.max(1, Math.round(M.dmg * D.dmg))); }
         } else if (m.flee > 0) {
           m.flee -= dt; wx = -dxp / (dp || 1); wz = -dzp / (dp || 1); sp *= 1.8; m.state = 'flee';
         } else {
@@ -369,7 +372,10 @@
           }
         }
       }
-      if (hostile < 8 && !S.creative && S.meta.diff !== 'peaceful') {
+      const D = DIFF[S.meta.diff] || DIFF.easy;
+      X.hostT = (X.hostT ?? D.every) - 2;   // spawnTick — раз в 2 с; врагам — раз в D.every с
+      if (X.hostT <= 0 && hostile < D.cap && !S.creative) {
+        X.hostT = D.every;
         const q = tryAt(16, 40);
         if (q) {
           // ищем пол со светом ≤ 6 (ночью — и под открытым небом)
