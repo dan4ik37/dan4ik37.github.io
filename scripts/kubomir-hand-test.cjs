@@ -283,6 +283,47 @@ function fakeWorld(sky, blk, walls = new Set()){
   ok(cob.join() === '64,16' && inv[10]?.id === 'cobble', 'булыжник склеился в стопку 64 + 16, сразу после инструментов', cob);
   ok(inv.slice(9).filter(Boolean).length === 4 && inv.slice(13).every(s => !s), 'дыр нет — всё подряд с начала рюкзака');
 
+  // ═══ 6. Баланс выживания (цифры — в вывод): враги ночью по сложности, скорость копания, руды, награды ═══
+  sec('баланс: ночь по сложности, копание, руды, награды');
+  {
+    // ровное поле (земля до y 10), небо везде 15 — ночью вся поверхность «тёмная» (как в игре: свет неба × 0,25)
+    const flat = { seed: 7, raw(x, y, z){ return y < 10 ? ID.stone : 0; }, get(x, y, z){ return this.raw(x, y, z); }, lightAt(x, y, z){ return y < 10 ? 0 : 15 << 12; }, loaded: () => true, heightAt: () => 10, chunk: () => null };
+    const night = (diff, time = 22, sec2 = 120) => {
+      const S2 = { R: Object.assign({}, R, { lighting: { time } }), VR, W: flat, P: { x: 0.5, y: 10, z: 0.5, dead: false, vx: 0, vz: 0 }, ox: 0, oz: 0, meta: { diff }, ST: { rd: 6 }, creative: false };
+      const X3 = window.KubomirEnts.create(S2);
+      let dmg = 0, spawned = 0, maxAlive = 0; const sp0 = X3.spawn; X3.spawn = (...a) => { const m = sp0(...a); if (m && !window.KubomirEnts.MOBS[m.type].passive) spawned++; return m; };
+      S2.ents = X3; X3.hookHurt = n => { dmg += n; };
+      for (let i = 0; i < sec2 * 20; i++) { X3.tick(1 / 20); maxAlive = Math.max(maxAlive, X3.mobs.filter(m => !window.KubomirEnts.MOBS[m.type].passive).length); }
+      X3.dispose();
+      return { spawnedPerMin: +(spawned / (sec2 / 60)).toFixed(1), maxAlive, dmgPerMin: +(dmg / (sec2 / 60)).toFixed(1) };
+    };
+    const N0 = night('peaceful'), N1 = night('easy'), N2 = night('normal'), D2 = night('normal', 12, 60);
+    console.log('  ночь, стоишь на месте (2 мин):', JSON.stringify({ мирно: N0, легко: N1, обычно: N2, деньОбычно: D2 }));
+    ok(N0.spawnedPerMin === 0 && N0.dmgPerMin === 0, '«мирно» — врагов нет');
+    ok(N1.maxAlive <= 4 && N1.spawnedPerMin <= 15 && N2.maxAlive <= 6 && N2.spawnedPerMin <= 20, 'ночью врагов рядом не больше 4 («легко») и 6 («обычно»); появляются не чаще раза в 4 и 3 с', [N1, N2]);
+    ok(N1.dmgPerMin < N2.dmgPerMin, '«легко» — бьют слабее (урон × 0,67)', [N1.dmgPerMin, N2.dmgPerMin]);
+    ok(D2.spawnedPerMin === 0, 'днём на свету — враги не появляются');
+    ok(window.KubomirEnts.DIFF.easy.dmg * window.KubomirEnts.MOBS.zombie.dmg >= 1.9 && window.KubomirEnts.DIFF.easy.dmg * window.KubomirEnts.MOBS.zombie.dmg <= 2.1, 'зомби на «легко» — 2 (как в Майнкрафте), «обычно» — 3');
+    // копание (секунды): формула игры — прочность × (можно добыть ? 1,5 : 5) / скорость инструмента
+    const bt = (blk, tool) => { const b = V.blocks[ID[blk]], t = tool ? V.item(tool).tool : null, right = !!(t && b.tool && t.kind === b.tool), can = !b.tier || (right && t.tier >= b.tier); return +(b.hard * (can ? 1.5 : 5) / (right ? t.speed : 1)).toFixed(2); };
+    const table = {}; for (const blk of ['stone', 'ore_iron', 'log_oak', 'dirt']) { table[blk] = {}; for (const tl of [null, 'pick_wood', 'pick_stone', 'pick_iron', 'pick_diamond', 'axe_wood', 'shovel_wood']) table[blk][tl || 'рука'] = bt(blk, tl); }
+    console.log('  копание, с:', JSON.stringify(table));
+    ok(table.stone.рука === 7.5 && table.stone.pick_wood === 1.13 && table.log_oak.рука === 3 && table.log_oak.axe_wood === 1.5 && table.dirt.shovel_wood === .38, 'копание как в Майнкрафте: камень рукой 7,5 с, деревянной киркой 1,1 с; бревно рукой 3 с, топором 1,5 с');
+    ok(table.ore_iron.pick_wood === 7.5 && table.ore_iron.рука === 15 && table.ore_iron.pick_stone === 1.13, 'железо: рукой 15 с, деревянной киркой 7,5 с — и ничего не выпадет (как в Майнкрафте), каменной — 1,1 с');
+    // руды: сколько в среднем на чанк (64 чанка)
+    const G = V.genInit('баланс'), cnt = { ore_coal: 0, ore_iron: 0, ore_gold: 0, ore_diamond: 0 }, deep = { ore_diamond: [99, 0] };
+    for (let cx = 0; cx < 8; cx++) for (let cz = 0; cz < 8; cz++) { const g = V.genChunk(G, cx, cz); for (let i = 0; i < g.ids.length; i++) { const n = V.blocks[g.ids[i] & 0xfff]?.name; if (n in cnt) { cnt[n]++; if (n === 'ore_diamond') { const y = i & 127; deep.ore_diamond[0] = Math.min(deep.ore_diamond[0], y); deep.ore_diamond[1] = Math.max(deep.ore_diamond[1], y); } } } }
+    for (const k in cnt) cnt[k] = +(cnt[k] / 64).toFixed(1);
+    console.log('  руды на чанк:', JSON.stringify(cnt), 'алмазы на высоте', deep.ore_diamond.join('…'));
+    ok(cnt.ore_coal > cnt.ore_iron && cnt.ore_iron > cnt.ore_gold && cnt.ore_gold > cnt.ore_diamond && cnt.ore_diamond > .5 && cnt.ore_diamond < 8, 'уголь > железо > золото > алмазы; алмазов 0,5…8 на чанк', cnt);
+    ok(deep.ore_diamond[1] <= 18, 'алмазы — только глубоко (y ≤ 16, жила может зайти на 1–2 выше)', deep.ore_diamond);
+    // награды: монеты за достижение — не больше потолка сервера (coin_run_cap 15), достижений ≤ game_score_cap 30
+    const src = fs.readFileSync(path.join(SITE, 'js/games/kubomir.js'), 'utf8'), ach = [...src.matchAll(/\['(\w+)', '[^']*', '[^']*', '[^']*', (\d+)\]/g)].map(m => [m[1], +m[2]]);
+    const total = ach.reduce((a, b) => a + b[1], 0);
+    console.log('  достижений', ach.length, '· монет за все', total, '· больше всего за одно', Math.max(...ach.map(a => a[1])));
+    ok(ach.length >= 15 && ach.length <= 30 && ach.every(a => a[1] >= 1 && a[1] <= 15) && total <= 120, 'монеты за достижения — в потолке сервера (≤ 15 за раз, ≤ 120 за все), достижений ≤ 30');
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
