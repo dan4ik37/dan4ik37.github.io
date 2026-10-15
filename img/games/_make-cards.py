@@ -43,6 +43,7 @@ GAMES = [
     ('balda', 'draw:balda', 'Балда', '#f59e0b'),
     ('domino', 'draw:domino', 'Домино', '#e5e7eb'),
     ('fillword', 'draw:fillword', 'Филворд', '#a855f7'),
+    ('podzem', 'draw:podzem', 'Подземье', '#d9783a'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
     ('studio3d', '🧱', 'Студия 3D', '#f59e0b'),
@@ -201,6 +202,67 @@ def draw_fillword():
             d.text((pad + c * cs + cs / 2, pad + r * cs + cs / 2 + 2), rows[r][c], font=f, fill=(30, 27, 75), anchor='mm')
     return im
 
+# «Подземье»: срез мира — небо, трава, земля, камень, пещера с факелом, руда, лава внизу, дерево и герой с киркой
+def draw_podzem():
+    import math, random
+    T, WN, HN = 16, 24, 22
+    R = random.Random(37)
+    im = Image.new('RGBA', (WN * T, HN * T), (0, 0, 0, 255))
+    d = ImageDraw.Draw(im)
+    for y in range(HN * T):
+        k = y / (HN * T)
+        d.line([(0, y), (WN * T, y)], fill=(int(60 + 70 * (1 - k)), int(120 + 80 * (1 - k)), 230, 255))
+    surf = [7 + int(round(1.6 * math.sin(x * .55) + .8 * math.sin(x * 1.7))) for x in range(WN)]
+    cave = lambda x, y: ((x - 14) / 5.5) ** 2 + ((y - 14) / 2.6) ** 2 < 1 or ((x - 6) / 3) ** 2 + ((y - 16.5) / 1.8) ** 2 < 1
+    def tile(x, y, base, dark, light, ore=None):
+        X, Y = x * T, y * T
+        d.rectangle((X, Y, X + T - 1, Y + T - 1), fill=base)
+        for _ in range(10):
+            px, py = X + R.randrange(T), Y + R.randrange(T)
+            d.point((px, py), fill=dark if R.random() < .6 else light)
+        if ore:
+            for _ in range(3):
+                px, py = X + 2 + R.randrange(T - 6), Y + 2 + R.randrange(T - 6)
+                d.rectangle((px, py, px + 2, py + 2), fill=ore)
+        d.line([(X, Y + T - 1), (X + T - 1, Y + T - 1)], fill=dark); d.line([(X + T - 1, Y), (X + T - 1, Y + T - 1)], fill=dark)
+    for x in range(WN):
+        for y in range(HN):
+            s = surf[x]
+            if y < s: continue
+            if cave(x, y):
+                d.rectangle((x * T, y * T, x * T + T - 1, y * T + T - 1), fill=(40, 34, 40, 255)); continue
+            if y >= HN - 3 and 3 < x < 12:
+                d.rectangle((x * T, y * T, x * T + T - 1, y * T + T - 1), fill=(255, 110 + R.randrange(60), 20, 255)); continue
+            if y == s: tile(x, y, (139, 90, 52), (108, 66, 36), (163, 113, 74)); d.rectangle((x * T, y * T, x * T + T - 1, y * T + 4), fill=(79, 174, 60))
+            elif y < s + 4: tile(x, y, (139, 90, 52), (108, 66, 36), (163, 113, 74))
+            else:
+                ore = None
+                r = R.random()
+                if r < .07: ore = (217, 120, 58)
+                elif r < .1: ore = (242, 194, 48)
+                elif r < .12 and y > 15: ore = (79, 124, 255)
+                tile(x, y, (125, 125, 134), (98, 98, 108), (154, 154, 164), ore)
+    # факел в пещере и тёплый свет
+    glow = Image.new('RGBA', im.size, (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for r in range(90, 0, -6): gd.ellipse((14 * T - r, 14 * T - r, 14 * T + r, 14 * T + r), fill=(255, 190, 110, int(70 * (1 - r / 90))))
+    im.alpha_composite(glow)
+    d = ImageDraw.Draw(im)
+    d.rectangle((14 * T + 7, 14 * T + 6, 14 * T + 9, 15 * T + 2), fill=(122, 75, 38)); d.rectangle((14 * T + 5, 14 * T, 14 * T + 11, 14 * T + 6), fill=(255, 179, 71)); d.rectangle((14 * T + 7, 14 * T + 2, 14 * T + 9, 14 * T + 5), fill=(255, 242, 168))
+    # дерево слева
+    tx = 3; ty = surf[tx]
+    d.rectangle((tx * T + 4, (ty - 5) * T, tx * T + 12, ty * T), fill=(122, 82, 50))
+    d.ellipse((tx * T - 22, (ty - 9) * T, tx * T + 38, (ty - 4) * T), fill=(47, 143, 58)); d.ellipse((tx * T - 10, (ty - 10) * T, tx * T + 28, (ty - 6) * T), fill=(92, 192, 90))
+    # герой с киркой
+    hx = 9; hy = surf[hx] * T
+    d.rectangle((hx * T + 2, hy - 44, hx * T + 13, hy - 33), fill=(240, 200, 160)); d.rectangle((hx * T + 2, hy - 46, hx * T + 13, hy - 41), fill=(90, 58, 32))
+    d.rectangle((hx * T, hy - 33, hx * T + 15, hy - 16), fill=(79, 141, 247)); d.rectangle((hx * T + 2, hy - 16, hx * T + 6, hy), fill=(58, 74, 106)); d.rectangle((hx * T + 9, hy - 16, hx * T + 13, hy), fill=(58, 74, 106))
+    d.line([(hx * T + 14, hy - 26), (hx * T + 28, hy - 44)], fill=(120, 80, 45), width=3); d.line([(hx * T + 20, hy - 50), (hx * T + 36, hy - 40)], fill=(217, 120, 58), width=4)
+    im = im.resize((im.width * 2, im.height * 2), Image.NEAREST)
+    mask = Image.new('L', im.size, 0); ImageDraw.Draw(mask).rounded_rectangle((0, 0, im.width - 1, im.height - 1), 40, fill=255)
+    out = Image.new('RGBA', im.size, (0, 0, 0, 0)); out.paste(im, (0, 0), mask)
+    return out
+
 W, H = 1200, 630
 for gid, ic, title, color in GAMES:
     if ONLY and gid not in ONLY: continue
@@ -225,6 +287,9 @@ for gid, ic, title, color in GAMES:
     elif ic in ('draw:kroko', 'draw:balda', 'draw:domino', 'draw:fillword'):
         em = {'draw:kroko': draw_kroko, 'draw:balda': draw_balda, 'draw:domino': draw_domino, 'draw:fillword': draw_fillword}[ic]()
         em.thumbnail((400, 400), Image.LANCZOS)
+    elif ic == 'draw:podzem':
+        em = draw_podzem()
+        em.thumbnail((420, 420), Image.LANCZOS)
     else:
         em = Image.new('RGBA', (700, 700), (0, 0, 0, 0))
         ImageDraw.Draw(em).text((120, 120), ic, font=emoji, embedded_color=True)
@@ -238,7 +303,7 @@ for gid, ic, title, color in GAMES:
     while d.textlength(title, font=bold(size)) > 660: size -= 4
     d.text((80, 190), title, font=bold(size), fill=(255, 255, 255))
     sub = {'games': 'С ботом или с другом по ссылке', 'studio3d': 'Построй свой мир, как в Roblox', 'unity': 'Выложи свою игру из Unity',
-           'krokodil': 'Рисуй и угадывай с друзьями', 'raid': 'Строй базу и нападай'}.get(gid, 'Побьёшь мой рекорд?')
+           'krokodil': 'Рисуй и угадывай с друзьями', 'raid': 'Строй базу и нападай', 'podzem': 'Копай, строй, сражайся'}.get(gid, 'Побьёшь мой рекорд?')
     d.text((84, 200 + size + 20), sub, font=reg(48), fill=c if sum(c) > 300 else (200, 200, 220))
     # кнопка
     bx, by = 84, 470
