@@ -42,7 +42,7 @@
 
     // Переносим САМИ <a> (а не копии): на них уже висят обработчики из
     // tabs-nav.js, а router.js находит их по .nav-links a[data-route]
-    ['lfg', 'about', 'donate', 'poll', 'soundboard', 'clicker', 'ads'].forEach(r => {
+    ['lfg', 'about', 'donate', 'poll', 'soundboard', 'clicker', 'ads', 'adv'].forEach(r => {   // adv — 📣 кабинет рекламодателя
       const a = $('a[data-route="' + r + '"]', links);
       if (a) panel.appendChild(a);
     });

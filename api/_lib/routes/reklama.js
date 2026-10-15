@@ -4,6 +4,7 @@
 import { SITE, ALL_UPLOADS, getUploads, getChannelStats, getVideoStats, esc, fmtCount } from '../yt.js';
 import { page, YT_CHANNEL } from '../page.js';
 import { TOPICS } from '../topics.js';
+import { FORMATS, DEF } from '../ad-rules.js';   // кабинет рекламодателя #/adv: форматы и цены по умолчанию
 
 const TG = 'https://t.me/+LE25p4pQojkyYjli';
 const VK = 'https://vk.com/dan4ik37';
@@ -63,6 +64,13 @@ export default async function handler(req, res) {
     <p class="muted small">Стоимость и даты — по договорённости.</p>
   </section>
 
+  <section class="box mk-self"><h2>📣 Разместить рекламу самостоятельно</h2>
+    <p>Без переписки: зайдите в кабинет рекламодателя, загрузите картинку, текст и ссылку — превью сразу покажет, как это будет выглядеть. После проверки реклама сама показывается зрителям сайта, статистика (показы, клики, CTR, расход) — по дням, неизрасходованный бюджет возвращается.</p>
+    <div class="mk-formats">${FORMATS.map(f => `<div><b>${esc(f.t)}</b><span>${esc(f.d)}</span><span class="mk-price">от ${DEF.prices[f.g].cpm} 💎 за 1000 показов${DEF.prices[f.g].day ? ` · ${DEF.prices[f.g].day} 💎 в день` : ''}</span></div>`).join('')}</div>
+    <p class="muted small">Оплата — 💎 кристаллами сайта (1 💎 ≈ 1 ₽). Показ засчитывается, только когда реклама видна хотя бы наполовину не меньше секунды. Для показа в России нужен erid из ОРД — без него реклама идёт в другие страны. Аудитория — дети и подростки: азартные игры, ставки, алкоголь, табак, 18+, крипта и т. п. запрещены.</p>
+    <div class="mk-cta"><a class="btn btn-acc" href="/#/adv">📣 Открыть кабинет</a><a class="btn btn-ghost" href="/ads-terms">Правила рекламы</a><a class="btn btn-ghost" href="/shop">💎 Где взять кристаллы</a></div>
+  </section>
+
   <aside class="join"><div><b>Обсудить сотрудничество</b><span>Напишите, что хотите прорекламировать и в каком формате — ответим с условиями.</span></div>
     <div class="mk-cta"><a class="btn btn-acc" href="${TG}" target="_blank" rel="noopener">✈ Telegram</a><a class="btn btn-ghost" href="${VK}" target="_blank" rel="noopener">ВКонтакте</a><a class="btn btn-ghost" href="mailto:${MAIL}?subject=%D0%A0%D0%B5%D0%BA%D0%BB%D0%B0%D0%BC%D0%B0">📧 ${MAIL}</a></div></aside>
   <p class="all"><a href="${YT_CHANNEL}" target="_blank" rel="noopener">Канал на YouTube →</a> · <a href="/history">История канала</a> · <a href="/videos">Все видео</a></p>
@@ -93,4 +101,8 @@ const CSS = `
 .mk-formats span{font-size:.8rem;color:var(--muted)}
 .card small{padding:0 .8rem .8rem;margin-top:-.4rem;font-size:.72rem;color:var(--muted)}
 .mk-cta{display:flex;gap:.5rem;flex-wrap:wrap}
+.mk-self{border-color:rgba(255,209,102,.35);background:linear-gradient(180deg,rgba(255,209,102,.06),transparent),var(--card)}
+.mk-self>p{font-size:.88rem;color:rgba(240,240,248,.85);margin-bottom:.8rem}
+.mk-price{color:#ffe08a!important;font-weight:700}
+.mk-self .mk-cta{margin-top:.9rem}
 `;
