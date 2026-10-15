@@ -70,10 +70,11 @@
   async function renderInvitePage(param){
     const root = document.getElementById('inviteRoot');
     if (!root) return;
-    if (param === 'admin') return renderAdmin(root);
+    if (param === 'admin') { root.className = 'rf-adm-root'; return renderAdmin(root); }
     root.innerHTML = '<div class="rf-wait">Загружаем…</div>';
     if (me()) await load(true);
     if (!document.getElementById('inviteRoot') || location.hash.replace(/^#\/?/, '').split('/')[0] !== 'invite') return;
+    root.className = me() ? 'rf-in' : 'rf-out';
     root.innerHTML = page();
     bind(root);
     showTop(root, ST.tab);
@@ -84,17 +85,22 @@
     const L = R()?.LADDER, m = ST.me, logged = !!me();
     const steps = L ? L.m.map(x => `<li><b>${x.lv} уровень</b><span>${gift(x)}</span></li>`).join('') : '';
     const hero = `<section class="rf-hero pf-card pf-card-accent">
-      <div class="rf-hero-t"><span class="rf-hero-ic" aria-hidden="true">👥</span><div><h3>Позови друзей — получай награды</h3>
+      <div class="rf-hero-t"><span class="rf-hero-ic" aria-hidden="true">🎁</span><div><h3>Позови друзей — получай награды</h3>
         <p>Друг пришёл по твоей ссылке и играет — тебе XP и монеты на каждом шаге. Дошёл до 5 уровня — питомец, а за 5 таких друзей — рамка «Посол».${kid() ? '' : ' Поддержал сайт — 10 % его кристаллов 💎 твои.'}</p></div></div>
       <ol class="rf-steps">${steps}</ol>
       <p class="rf-small">Награды — когда друг правда играет, а не просто зарегистрировался. Новичку по ссылке — свой подарок на ${L?.w.lv || 3} уровне: ${num(L?.w.coins)} 🪙 и ${esc(L?.w.text || '')}.</p>
     </section>`;
+    // колонки .rf-col: на компьютере — слева и справа, на телефоне — одной лентой (css/invite.css)
+    const cols = (l, r) => `<div class="rf-col rf-col-l">${l}</div><div class="rf-col rf-col-r">${r}</div>`;
     if (!logged) {
-      return hero + `<section class="pf-card pf-card-tw rf-login"><b>Войди, чтобы получить свою ссылку</b><span>Аккаунт бесплатный — почта, Google и другие способы.</span>
+      return hero + cols(`<section class="pf-card pf-card-tw rf-login"><b>Войди, чтобы получить свою ссылку</b><span>Аккаунт бесплатный — почта, Google и другие способы.</span>
         <div class="rf-row"><button type="button" class="pf-btn pf-btn-primary" data-a="register">✍️ Создать профиль</button><button type="button" class="pf-btn pf-btn-ghost" data-a="login">Войти</button></div></section>`
-        + invitedCard() + topCard() + rules();
+        + invitedCard(), topCard()) + rules();
     }
-    return hero + linkCard() + (ST.off ? offCard() : ST.err ? errCard() : progressCard() + statsCard() + listCard()) + invitedCard() + topCard() + rules()
+    // вошёл — сначала ссылка (главное действие), потом что за неё дают
+    const left = linkCard() + (ST.off ? offCard() : ST.err ? errCard() : statsCard() + listCard());
+    const right = (ST.off || ST.err ? '' : progressCard()) + invitedCard() + topCard();
+    return cols(left, right) + hero + rules()
       + (isAdmin() ? `<div class="rf-adm-go"><a class="pf-btn pf-btn-ghost pf-btn-sm" href="#/invite/admin">🛡 Проверка приглашений</a></div>` : '');
   }
 
@@ -166,7 +172,7 @@
       const name = f.id ? `<a href="#/profile/${esc(f.id)}">${esc(f.nick)}</a>` : `<span>${esc(f.nick)}</span>`;
       const st = f.st === 'hold' ? '<em class="rf-st hold" title="Проверяем, что это другой человек">⏳ проверка</em>' : f.st === 'no' ? '<em class="rf-st no" title="Похоже на второй аккаунт или то же устройство">🚫 не засчитан</em>' : '';
       const when = f.at ? `<small>${new Date(f.at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</small>` : f.hid ? '<small title="Профиль скрыт — видно только ник и уровень">🔒</small>' : '';
-      return `<li>${ava}<span class="rf-fn">${name}${when}</span><span class="rf-lv">Lv ${num(f.lv)}</span><span class="rf-ms">${chip(f.m?.l3, 3)}${chip(f.m?.l5, 5)}${chip(f.m?.l10, 10)}</span>${st}</li>`;
+      return `<li>${ava}<span class="rf-fn">${name}${when}</span><span class="rf-rt"><span class="rf-lv">Lv ${num(f.lv)}</span><span class="rf-ms">${chip(f.m?.l3, 3)}${chip(f.m?.l5, 5)}${chip(f.m?.l10, 10)}</span>${st}</span></li>`;
     }).join('');
     return `<section class="pf-card rf-list"><div class="pf-kicker">👥 Мои приглашения · ${list.length}</div><ul>${rows}</ul></section>`;
   }
@@ -346,12 +352,14 @@
   }
 
   // ═══ Плашка новичку: «<ник> зовёт тебя» ═══
-  let bannerShown = false;
+  let bannerShown = false, bannerT = 0;
   async function banner(){
     const p = R()?.pending();
-    if (!p || me() || bannerShown || document.body.classList.contains('game-on')) return;
+    if (!p || me() || bannerShown) return;
     try { if (sessionStorage.getItem('d37_ref_bn')) return; } catch (e) {}
-    if (/^#\/(games\/|chat)/.test(location.hash) && location.hash !== '#/games') return;
+    // не поверх игры, чата, своей страницы и других окошек (возраст, «установить приложение», вход)
+    if (/^#\/(games\/|chat|invite)/.test(location.hash) || document.body.classList.contains('game-on')) return;
+    if (document.querySelector('.age-sheet, .apc.on, #globalAuthModal.open')) { clearTimeout(bannerT); bannerT = setTimeout(banner, 15000); return; }
     bannerShown = true;
     const info = await R().publicInfo(p.c);
     if (me()) return;
@@ -392,6 +400,7 @@
     if (location.hash.startsWith('#/invite')) renderInvitePage(location.hash.split('/')[2] || null);
   });
   setTimeout(banner, 2500);
+  window.addEventListener('hashchange', () => { clearTimeout(bannerT); bannerT = setTimeout(banner, 1200); });
 
   window.renderInvitePage = renderInvitePage;
   window.renderInviteCard = renderInviteCard;

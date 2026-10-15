@@ -19,7 +19,7 @@
   // Лестница — как ref_ladder() в referrals2.sql (m — уровни друга, w — подарок новичку, t — ступени пригласившего)
   const LADDER = {
     m: [{ id: 'l3', lv: 3, xp: 25, coins: 30 }, { id: 'l5', lv: 5, xp: 25, coins: 50 }, { id: 'l10', lv: 10, coins: 100 }],
-    w: { lv: 3, coins: 50, part: 'trail:confetti', text: 'След «Конфетти»' },
+    w: { lv: 3, coins: 50, part: 'trail:confetti', text: 'след «Конфетти»' },
     t: [{ id: 't1', n: 1, lv: 5, part: 'pet:parrot', text: 'Питомец «Попугай»' },
         { id: 't2', n: 3, lv: 5, part: 'item:megaphone', text: '«Мегафон» в руку' },
         { id: 't3', n: 5, lv: 5, frame: 1, text: 'Рамка аватара «Посол»' },

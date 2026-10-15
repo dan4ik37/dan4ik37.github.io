@@ -11,7 +11,7 @@ const IMG = `${SITE}/img/share/invite.png`;
 const CODE = /^[2-9bcdfghjkmnpqrstvwz]{6}$/;   // как CODE_RE в js/core/ref.js и ref_new_code в referrals2.sql
 const PLACE = /^[A-Za-z0-9/_-]{1,80}$/;
 // как ref_ladder() -> 'w' (на случай, если сервер не ответил)
-const GIFT = { lv: 3, coins: 50, text: 'След «Конфетти»' };
+const GIFT = { lv: 3, coins: 50, text: 'след «Конфетти»' };
 
 // Куда позвали → «сыграть в «Шахматы»»
 function placeText(to){
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
   const where = placeText(to);
   const go = `/?ref=${code}#/${to || 'home'}`;
   const title = nick ? `${nick} зовёт тебя на сайт Денчика37` : 'Тебя зовут на сайт Денчика37';
-  const description = `${where ? 'Зовут ' + where + '. ' : ''}Игры с друзьями, «Мир Денчика», чат и ролики dan4ik37. Новичку по приглашению — подарок на ${gift.lv} уровне: ${gift.coins} монет и ${String(gift.text || '').toLowerCase()}.`;
+  const description = `${where ? 'Зовут ' + where + '. ' : ''}Игры с друзьями, «Мир Денчика», чат и ролики dan4ik37. Новичку по приглашению — подарок на ${gift.lv} уровне: ${gift.coins} монет и ${String(gift.text || '')}.`;
   const body = `
 <main class="wrap">
   <section class="rf-card">
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     <h1>${nick ? `<b>${esc(nick)}</b> зовёт тебя на сайт Денчика37` : 'Тебя зовут на сайт Денчика37'}</h1>
     ${where ? `<p class="rf-where">Зовут ${esc(where)}</p>` : ''}
     <a class="btn btn-acc rf-go" href="${esc(go)}" id="rfGo">▶ Зайти${to ? '' : ' на сайт'}</a>
-    <p class="rf-gift">🎊 Новичку по приглашению — подарок на ${esc(gift.lv)} уровне: <b>${esc(gift.coins)} монет</b> и <b>${esc(String(gift.text || '').toLowerCase())}</b> для твоего персонажа.</p>
+    <p class="rf-gift">🎊 Новичку по приглашению — подарок на ${esc(gift.lv)} уровне: <b>${esc(gift.coins)} монет</b> и <b>${esc(String(gift.text || ''))}</b> для твоего персонажа.</p>
   </section>
   <ul class="rf-what">
     <li><span>🎮</span><b>40+ игр</b><small>шахматы, «Дурак», «Орда», бильярд — с ботом или с друзьями онлайн</small></li>
