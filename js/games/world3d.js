@@ -1297,11 +1297,12 @@
           if (i === 3) n.set(0, .35, -1).normalize();
           else if (i < 0) n.set(1, 0, .2).normalize();
           else n.subVectors(headPt(ch, he, 0, -.08, D.hz, eye), H[1]).normalize();
-          if (i === 0) u.set(0, .3, 1); else if (i < 0) u.set(0, 1, .25); else u.set(-1, 0, 0);
+          // боком: верх — к левому плечу смотрящего (как от 1-го лица: картинка игры у него ровная), правая держит верхний конец
+          if (i === 0) u.set(0, .3, 1); else if (i < 0) u.set(0, 1, .25); else u.set(1, 0, 0);
           u.addScaledVector(n, -u.dot(n)).normalize();
         }
         x.crossVectors(u, n);
-        const g = d.two ? .135 : d.ear ? .09 : i < 0 ? .025 : .11, gn = d.two ? .036 : .04;   // кисть держит низ (двумя — концы)
+        const g = d.two ? -.135 : d.ear ? .09 : i < 0 ? .025 : .11, gn = d.two ? .036 : .04;   // кисть держит низ (двумя — концы)
         c.copy(H[1]).addScaledVector(n, gn).addScaledVector(u, g);   // центр телефона — у кисти (телефон не отрывается)
         // залез в голову или в грудь (большая голова, короткие руки) — кисть наружу, руку заново
         if (i >= 0) for (let it = 0; it < 6; it++) {
@@ -1447,14 +1448,16 @@
           g.fillStyle = '#65a30d'; g.fillRect(0, 104, W2, 24); g.fillStyle = '#a16207'; g.fillRect(0, 112, W2, 16);
           dot(112, 56, 10, '#facc15'); dot(116, 52, 3.5, '#fff'); dot(117, 52, 1.6, '#111'); g.fillStyle = '#f97316'; g.beginPath(); g.moveTo(121, 56); g.lineTo(129, 58); g.lineTo(121, 61); g.fill();
           g.fillStyle = '#fff'; g.font = '900 22px sans-serif'; g.fillText('37', W2 / 2, 18);
-        } else if (name === 'camera') {
-          g.fillStyle = lin(0, 0, 0, 200, [[0, '#7dd3fc'], [1, '#e0f2fe']]); g.fillRect(0, 0, w, h);
-          dot(98, 58, 13, '#fde047'); g.fillStyle = '#4ade80'; g.beginPath(); g.ellipse(40, 190, 90, 50, 0, 0, TAU); g.fill(); g.fillStyle = '#22c55e'; g.beginPath(); g.ellipse(120, 200, 80, 44, 0, 0, TAU); g.fill();
-          g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1; for (const k of [1, 2]) { g.beginPath(); g.moveTo(w * k / 3, 22); g.lineTo(w * k / 3, 200); g.stroke(); g.beginPath(); g.moveTo(0, 22 + 178 * k / 3); g.lineTo(w, 22 + 178 * k / 3); g.stroke(); }
-          g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(0, 0, w, 22); g.fillRect(0, 200, w, 56);
-          g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.arc(64, 228, 17, 0, TAU); g.stroke(); dot(64, 228, 12.5, '#fff');
-          g.fillStyle = '#9ca3af'; rr(18, 220, 16, 16, 4); g.fill(); dot(104, 228, 8, 'rgba(255,255,255,.3)');
-          g.fillStyle = '#facc15'; g.font = '700 10px sans-serif'; g.fillText('ФОТО', 64, 210);
+        } else if (name === 'camera') {   // видоискатель — тоже боком (снимают, держа телефон горизонтально)
+          g.translate(w, 0); g.rotate(PI / 2);
+          const W2 = h, H2 = w, X1 = 210;
+          g.fillStyle = lin(0, 0, 0, H2, [[0, '#7dd3fc'], [1, '#e0f2fe']]); g.fillRect(0, 0, W2, H2);
+          dot(150, 30, 12, '#fde047'); g.fillStyle = '#4ade80'; g.beginPath(); g.ellipse(60, 128, 100, 44, 0, 0, TAU); g.fill(); g.fillStyle = '#22c55e'; g.beginPath(); g.ellipse(170, 134, 90, 40, 0, 0, TAU); g.fill();
+          g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 1; for (const k of [1, 2]) { g.beginPath(); g.moveTo(X1 * k / 3, 0); g.lineTo(X1 * k / 3, H2); g.stroke(); g.beginPath(); g.moveTo(0, H2 * k / 3); g.lineTo(X1, H2 * k / 3); g.stroke(); }
+          g.fillStyle = 'rgba(0,0,0,.82)'; g.fillRect(X1, 0, W2 - X1, H2);
+          g.strokeStyle = '#fff'; g.lineWidth = 3; g.beginPath(); g.arc(233, 64, 16, 0, TAU); g.stroke(); dot(233, 64, 11.5, '#fff');
+          g.fillStyle = '#9ca3af'; rr(225, 100, 16, 16, 4); g.fill(); dot(233, 20, 7, 'rgba(255,255,255,.3)');
+          g.fillStyle = '#facc15'; g.font = '700 10px sans-serif'; g.fillText('ФОТО', 105, 12);
         }
       });
     }
