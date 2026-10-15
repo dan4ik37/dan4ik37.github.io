@@ -26,6 +26,11 @@
    `/rpc/xp_rule` {"p_key":"visit"} → 5 (PGRST202 — не применён), `/rpc/achievement_xp` {"p_code":"creator"} → 250 (500 — старая).
    До запуска сервер считает по старым числам, подписи на сайте уже новые. Перезапустил xp.sql, games.sql, progression.sql,
    secrets.sql или unity.sql — после них снова economy.sql. Тесты PGlite: pg/eco/test-economy.mjs (86), pg/eco/test-coins-eco.mjs.
+5. `ads.sql` (15.10.2026) — реклама за 💎, кабинет рекламодателя #/adv (ad_settings, ad_campaigns, ad_creatives, ad_stats, ad_seen,
+   ad_log, ad_reports, ad_advertisers; ad_prices / ad_live / ad_pick / ad_view / ad_go (только service_role) / ad_save / ad_act / ad_my
+   / ad_get / ad_terms_accept / ad_report / ad_admin_*; закрытое хранилище ads). Нужен premium.sql (применён); от age.sql и
+   economy.sql не зависит. Проверка: `/rpc/ad_prices` гостем → {"enabled":true,…}, `/rpc/ad_live` → {"on":true,"f":{}}, `/rpc/ad_go`
+   гостем → отказ в правах (PGRST202 = не применён). До запуска кабинет пишет «откроется, когда сайт обновится». PGlite: 259 (pg/test-ads.mjs).
 premium.sql, coins.sql (части тела), community.sql применены 15.10.2026 (проверено с сервера: premium_state гостем → reason auth,
 premium_credit гостем → 42501, coin_price(skin:pack:robot) = 700, coin_price(skin:hat:gemcrown) = null (только за 💎),
 cm_invite_info → null, chat_info → каналы general/games/lfg/memes/voice, messages.channel/reply_to/edited_at → 200).
@@ -304,6 +309,19 @@ js/features/games.js и хвост css/premium.css.
   реклама сетей (её в 3D рисовать нельзя). `ADS_IDS.kids` = 0 (1 — запросы Google «для детей»: меньше дохода, меньше риска —
   решает владелец). Отладка: `?adsdebug=1` рамки вместо рекламы, 2 — без лимитов, 3 — настоящая с обводкой, 0 — выкл;
   `D37AdPlaces.state()`. Тест: `node scripts/ads-test.cjs` (227). Старые AdSense-блоки — `AD_SLOTS` в config.js + `js/features/ads.js`.
+- 📣 Реклама за 💎 — кабинет рекламодателя (#/adv, ads.sql; агент 15.10.2026; владелец: «оплатил — выставил рекламу, и она показывается
+  как гугл»). Любой вошедший, принявший /ads-terms, делает кампанию: карточка в ленте, баннер 300×250/728×90, столбик 160/300×600, щит в
+  3D-мире; https-ссылка; рекламодатель, ИНН/БИН, erid; возрастная метка (обязательно); разделы, устройства, возраст, Россия/не Россия,
+  даты; CPM или пакет «по дням». Кабинет — js/features/adcab.js + css/adcab.css; админ #/adv/admin — очередь, одобрить/отклонить с
+  причиной, блок, метка, итоги, цены. Деньги: отправка → premium_add(−бюджет, 'ads', id) в копилку; показ CPM — bid/1000, пакет — день
+  при первом засчитанном показе (МСК); отказ/стоп/конец/бюджет/блок → остаток сам назад ('ads_refund'). Цены (💎, CPM/день): карточка
+  70/60, баннер 50/50, столбик 60/40, щит 100/100; бюджет от 200 (ads.sql = js/core/ad-direct.js DEF = api/_lib/ad-rules.js, тесты
+  сверяют). Показ: ad-direct.js через D37AdPlaces — своя кампания раньше сети; ad_live (нет кампаний — ни одного лишнего запроса),
+  ad_pick (вес по ставке, частота 6/день); без erid — только зрителям вне России (/api/geo; неизвестно = Россия); метка не старше
+  группы, детям щита нет. Засчитывание: видно ≥ 50 % ≥ 1 с → ad_view (подпись выдачи, раз в 30 мин, свои/роботы/флуд не считаются).
+  Клик — /go/<id> (api/_lib/routes/adgo.js → ad_go, 302). На рекламе — «Реклама 12+ · рекламодатель · erid», «ⓘ О рекламе» (жалоба:
+  3 — пауза до админа). Картинки — закрытое хранилище ads. Закон — docs/ADS_CABINET.md (показать юристу). Тесты: ad-direct-test (149),
+  PGlite test-ads.mjs (259). Во встроенном браузере IntersectionObserver стоит — показы проверять в node.
 - Чат (`#/chat`, chat.js): на телефоне окно от шапки до нижнего меню (premium.css, `body[data-route="chat"]`); кнопка ⛶ —
   `toggleChatFull()` (body.chat-full, Wake Lock — экран не гаснет; у #chat свой слой z-index:1 — в полноэкранном его поднимаем).
   Вкладка Twitch грузится по `dataset.loaded`, НЕ по `iframe.src` (у пустого iframe src = адрес страницы — так Twitch не грузился годами).
