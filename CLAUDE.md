@@ -963,7 +963,7 @@ js/features/games.js и хвост css/premium.css.
   starfall (Lua). Песочница: iframe (CSP без сети) → Worker; Lua — js/engine/lang-lua.js. 400 действий на событие, 600/с; завис > 3 с
   или 5 ошибок — мод выключен, игра работает. Моды — на мир.
 - Сайт: ключи podzem (рекорд глубины, без XP), podzem_boss1/2 (XP 6/10), монеты за босса 10/20 (coin_run_cap 20). SEO /games/podzem
-  («игра как Террария онлайн»), без интернета, 12+. Кооп — план docs/PODZEM_COOP_PLAN.md. Тест: node scripts/tiles-test.cjs (157);
+  («игра как Террария онлайн»), без интернета, 12+. Кооп — план docs/PODZEM_COOP_PLAN.md. Тест: node scripts/tiles-test.cjs (158);
   в браузере GAME_IMPL.podzem._test (state, tp, give, time, god, boss, mob, perf).
 - Свет (фаза 2, 15.10; владелец: «красивое освещение, реалистичное, сквозь блоки, и от факелов настоящее»): relight() в podzem-core.js —
   цветной свет волной от источников, каждая клетка пропускает долю (LMUL: воздух 0,89, твёрдое 0,56, полублок 0,76, вода — синий

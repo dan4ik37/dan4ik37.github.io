@@ -38,8 +38,10 @@
     if (p === 'low' || p === 'mid') return 'normal';
     return device() === 'high' ? 'pretty' : 'normal';
   }
+  // наборы 3D, которых нет в 2D (ключ настройки общий), → ближайший 2D-набор; незнакомое — как «Авто»
+  const ALIAS = { toon: 'pretty', cartoon: 'pretty' };
   function pack(){
-    const g = root.D37Opt?.gfx || {}, v = g.shaders;
+    const g = root.D37Opt?.gfx || {}, v = ALIAS[g.shaders] || g.shaders;
     return PACKS[v] ? v : autoPack(g);
   }
   function flags(){

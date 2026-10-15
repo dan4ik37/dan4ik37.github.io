@@ -557,6 +557,7 @@ if (want('shade2d')) {
   globalThis.D37Opt.gfx = { shaders: 'ultra' }; const fu = S2.flags();
   ok(fu.q === 3 && fu.bloomBlur > fp.bloomBlur && fu.particles > fp.particles, 'шейдеры 2D: «Ультра» — больше выборок и частиц', fu);
   globalThis.D37Opt.gfx = { shaders: 'чужое' }; ok(S2.pack() === 'pretty', 'шейдеры 2D: неизвестное значение — как «Авто»');
+  dev = 'mid'; globalThis.D37Opt.gfx = { shaders: 'toon' }; ok(S2.pack() === 'pretty', 'шейдеры 2D: набор 3D «Мультяшные» (toon, ключ общий) — как «Красивые»', S2.pack()); dev = 'high';
   const off = S2.use(); ok(S2.users === 1, 'шейдеры 2D: игра отметилась (вкладка «Графика» в её ⚙️)'); off(); off(); ok(S2.users === 0, 'шейдеры 2D: закрыли — счётчик назад (дважды — не уходит в минус)');
   // GLSL для телефонов: highp у сэмплеров, smoothstep(a, b, x) с числами — только a < b
   const glsl = Object.values(S2.GLSL).join('\n'), gl2 = fs.readFileSync(path.join(SITE, 'js/games/podzem-gl.js'), 'utf8'), s2src = fs.readFileSync(path.join(SITE, 'js/engine/shade2d.js'), 'utf8');
