@@ -281,7 +281,7 @@
     st.camMode = window.D37Settings?.get('view') === 'third' ? 1 : 0; st.camD = 0;
     st.H = Ex.ui(wr, C);
     st.AU = Ex.audio(); sounds();
-    st.hudEl = hudBuild(wr);
+    st.hudEl = hudBuild(wr); st.hurtEl = st.hudEl.querySelector('.kb-hurt');
     // свои клавиши «Кубомира» (как в Майнкрафте), геймпад, палец по миру; кнопки телефона — как в Bedrock
     st.K = window.KubomirInput ? window.KubomirInput.create({ el: wr, C, isOpen: () => !!(S && (S.ui?.isOpen() || S.menu || S.modWin || S.chatEl)) }) : null;
     // игрок
@@ -299,8 +299,8 @@
     st.A.add('me', look, { x: P.x - st.ox, y: P.y, z: P.z - st.oz, yaw: 0 });
     // сущности и окна
     st.ents = window.KubomirEnts ? window.KubomirEnts.create(st) : null;
-    if (st.ents) { st.ents.hookHurt = n => hurt(st, n, 'mob'); st.ents.hookUnlock = id => unlock(id); st.ents.give = s => give(st, s);
-      st.ents.hookPickup = (id, n) => st.modRun?.event('pickup', { item: id, n });   // моды: подобрал вещь, победил моба
+    if (st.ents) { st.ents.hookHurt = (n, m) => hurt(st, n, 'mob', m); st.ents.hookUnlock = id => unlock(id); st.ents.give = s => give(st, s); st.ents.room = s => room(st, s);
+      st.ents.hookPickup = (id, n) => { popSlot(st, id); st.modRun?.event('pickup', { item: id, n }); };   // моды: подобрал вещь, победил моба
       st.ents.hookKill = (m, by) => { if (by === 'player') st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); }; }
     if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;   // руки как в Майнкрафте, свет человечков
@@ -579,19 +579,37 @@
       const d = P.fallTop - P.y;
       if (d > 3.4 && !st.creative && !touch.bounce && !P.modFall) hurt(st, Math.ceil(d - 3.4), 'fall');   // modFall — подбросил мод (батут): приземление без урона
       if (d > 1.2) st.AU?.play('land', { vol: Math.min(1, .25 + d * .08) });
+      // пыль кольцом (обычный прыжок — чуть-чуть), камера «приседает», с высоты — ещё и вздрагивает (⚙️ «Камера»)
+      if (d > 1.15) {
+        const fv = W.raw(P.x, P.y - .1, P.z);
+        if (fv > 0) st.ents?.dust?.(P.x, P.y, P.z, fv & 0xfff, Math.min(14, Math.round(2 + (d - 1.15) * 3)), { ring: true, sp: 1.2 + Math.min(2, d * .15), s: .22, s1: .6, a: .5, vy: .25 });
+        if (camFx(st) > 0) st.rig.land?.(-vy0 * (E().UNIT || 1));
+        if (d > 2.5 && shakeOK(st)) st.rig.shake?.(Math.min(2.4, .45 * (d - 2)), .25);
+      }
       P.fallTop = P.y; P.modFall = false;
     }
     if (P.onGround || inLiquid || P.climb || P.fly) P.fallTop = P.y;
-    // шаги и усталость от бега
+    // шаги и усталость от бега: звук по полу (песок, гравий, снег — свои), на сыпучем и траве — облачко пыли у ног
     const moved = Math.hypot(P.x - P.lastStepX, P.z - P.lastStepZ);
     if (P.onGround && moved > (P.sprint ? 2.1 : 1.6)) {
       P.lastStepX = P.x; P.lastStepZ = P.z;
       const fv = W.raw(P.x, P.y - .1, P.z);
-      if (fv > 0) st.AU?.step(floorSound(fv & 0xfff), P.sprint, P.x - st.ox, P.y, P.z - st.oz);
+      if (fv > 0) {
+        const fb = V.blocks[fv & 0xfff], ks = STEP_KB[fb?.sound];
+        if (ks) st.AU?.play(ks, { x: P.x - st.ox, y: P.y, z: P.z - st.oz, vol: P.sprint ? .7 : .5, rate: .9 + Math.random() * .2 });
+        else st.AU?.step(floorSound(fv & 0xfff), P.sprint, P.x - st.ox, P.y, P.z - st.oz);
+        if (DUSTY[fb?.sound] && (P.sprint || (st.ents?.fxQ || 0) > .5)) st.ents?.dust?.(P.x - P.vx * .06, P.y, P.z - P.vz * .06, fv & 0xfff, P.sprint ? 2 : 1, { w: .3, sp: .5, s: .16, s1: .38, a: .38, life: .45, vy: .3 });
+      }
       if (P.sprint) P.exh += .1 * moved;
     } else if (!P.onGround) { P.lastStepX = P.x; P.lastStepZ = P.z; }
     // плавание: брызги
     if (inLiquid && Math.hypot(P.vx, P.vz) > 1 && (P.swimT -= dt) < 0) { P.swimT = .7; st.AU?.play('step_water' + ((Math.random() * 3) | 0), { vol: .35 }); }
+    // вода: прыгнул — всплеск, плывёшь у поверхности — след, под водой — пузыри у лица
+    const inW = P.water > .3;
+    if (inW && !st.inW && vy0 < -4 && !P.fly) { st.ents?.splash?.(P.x, waterTop(st), P.z, Math.min(1.5, -vy0 / 10)); st.AU?.play('kb_splash', { vol: Math.min(1, .3 + -vy0 * .05), rate: .9 + Math.random() * .2 }); }
+    st.inW = inW;
+    if (inW && !P.eyeWater && Math.hypot(P.vx, P.vz) > 1.2 && ((st.wakeT = (st.wakeT || 0) - dt) < 0)) { st.wakeT = .14; st.ents?.wake?.(P.x - P.vx * .1, waterTop(st), P.z - P.vz * .1); }
+    if (P.eyeWater && ((st.bubT = (st.bubT || 0) - dt) < 0)) { st.bubT = .5 + Math.random() * .6; const [ex, ey, ez] = eye(st), d = lookDir(st); st.ents?.bubbles?.(ex + d.x * .45, ey - .15, ez + d.z * .45, 1 + (Math.random() * 2 | 0)); }
     // лава и кактус: урон
     if (!st.creative) {
       if (touch.hurt) { P.hurtSrc = (P.hurtSrc || 0) + dt * touch.hurt; if (P.hurtSrc >= 1) { const n = Math.floor(P.hurtSrc); P.hurtSrc -= n; hurt(st, n, P.lava > .2 ? 'lava' : 'cactus'); } }
@@ -606,6 +624,32 @@
   }
   const SND_FLOOR = { stone: 'concrete', metal: 'metal', wood: 'wood', grass: 'grass', dirt: 'grass', sand: 'carpet', gravel: 'concrete', snow: 'carpet', glass: 'tile', water: 'water', wool: 'carpet' };
   function floorSound(t){ return SND_FLOOR[VX().blocks[t]?.sound] || 'concrete'; }
+  const STEP_KB = { sand: 'kb_step_sand', gravel: 'kb_step_gravel', snow: 'kb_step_snow' };   // свои шаги (хруст, шорох)
+  const DUSTY = { sand: 1, gravel: 1, dirt: 1, grass: 1, snow: 1 };   // где из-под ног летит пыль
+  // поверхность воды над игроком (всплеск и след — на ней)
+  function waterTop(st){
+    const V = VX(), W = st.W, P = st.P, x = P.x, z = P.z;
+    let y = Math.floor(P.y + .3), v = W.raw(x, y, z);
+    if (!(v > 0 && V.T.liquid[v & 0xfff])) return P.y + .5;
+    for (let n = 0; n < 6; n++) { const u = W.raw(x, y + 1, z); if (!(u > 0 && V.T.liquid[u & 0xfff])) break; y++; v = u; }
+    return y + V.liquidHeight(v);
+  }
+  // ⚙️ «Камера»: покачивание 0 или «меньше движения» в системе (если сайт не в режиме «Мощное») — без крена и тряски
+  let rmq = null;
+  function camFx(st){
+    const O = window.D37Opt, mo = O && O.motion != null ? +O.motion : st.rig?.motion ?? 1;
+    if (!rmq) try { rmq = window.matchMedia?.('(prefers-reduced-motion: reduce)') || { matches: false }; } catch (e) { rmq = { matches: false }; }
+    return mo <= 0 || (rmq.matches && !document.body.classList.contains('high')) ? 0 : Math.min(1, mo);
+  }
+  const shakeOK = st => camFx(st) > 0 && window.D37Opt?.shake !== false && !st.rig?.noShake;
+  // есть ли место в вещах (иначе выпавшая вещь к игроку не тянется)
+  function room(st, s){ const it = VX().item(s.id), P = st.P; if (!it) return false; for (let i = 0; i < 36; i++) { const q = P.inv[i]; if (!q || (q.id === s.id && q.n < it.stack && !it.tool)) return true; } return false; }
+  // подобрал — ячейка панели с этой вещью «подпрыгивает»
+  function popSlot(st, id){
+    const i = st.P.inv.findIndex((s, k) => k < 9 && s && s.id === id); if (i < 0) return;
+    const d = st.hudEl?.querySelectorAll('.kb-slot')[i]; if (!d) return;
+    d.classList.remove('pop'); void d.offsetWidth; d.classList.add('pop');
+  }
   // сдвиг начала координат сцены (далеко от нуля float32 дрожит)
   function rebase(force){
     const st = S, P = st.P;
@@ -629,7 +673,9 @@
     if (P.eyeWater) { P.air = Math.max(0, P.air - dt); if (P.air <= 0) { P.drownT = (P.drownT || 0) + dt; if (P.drownT >= 1) { P.drownT = 0; hurt(st, 2, 'drown'); } } }
     else P.air = Math.min(15, P.air + dt * 4);
   }
-  function hurt(st, n, why){
+  // ранили: звук, кивок камеры, крен в сторону удара (как в Майнкрафте; src — кто ударил, без него — в другую сторону, чем
+  // прошлый раз), красные края экрана — сильнее от сильного удара
+  function hurt(st, n, why, src){
     const P = st.P;
     if (st.creative || P.dead || n <= 0) return;
     if ((P.hurtT || 0) > now() - 450 && why !== 'drown' && why !== 'starve' && why !== 'void') return;
@@ -637,7 +683,14 @@
     P.hp = Math.max(0, P.hp - n);
     st.AU?.play('kb_hurt', { vol: .7 });
     st.rig.kick?.(1.2);
-    st.hudEl?.classList.remove('kb-hit'); void st.hudEl?.offsetWidth; st.hudEl?.classList.add('kb-hit');
+    const k = camFx(st);
+    if (k > 0) {
+      let side = st.hurtSide = -(st.hurtSide || 1);
+      if (src && Number.isFinite(src.x)) { const r = st.rig.right(), dx = src.x - P.x, dz = src.z - P.z, s = dx * r.x + dz * r.z; if (Math.abs(s) > .2 * Math.hypot(dx, dz)) side = s > 0 ? 1 : -1; }
+      st.roll = { t: 0, a: -side * (6 + Math.min(6, n * 1.5)) * k };
+    }
+    const he = st.hurtEl;
+    if (he) { he.style.transition = 'none'; he.style.opacity = String(Math.min(1, .5 + n * .1)); void he.offsetWidth; he.style.transition = 'opacity .6s ease-out'; he.style.opacity = '0'; }
     if (P.hp <= 0) die(st, why);
   }
   const DEATH = { fall: 'разбился', lava: 'сгорел в лаве', cactus: 'укололся о кактус', starve: 'умер от голода', drown: 'утонул', void: 'упал в бездну', mob: 'не справился с монстром' };
@@ -716,7 +769,7 @@
       if (st.creative) { if (st.mine.cool <= 0) { breakBlock(st, hit); st.mine.cool = .18; st.mine.key = ''; } }
       else if (st.mine.need < Infinity) {
         st.mine.t += dt;
-        st.mine.snd -= dt; if (st.mine.snd <= 0) { st.mine.snd = .24; st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .45, rate: .9 + Math.random() * .2 }); }
+        st.mine.snd -= dt; if (st.mine.snd <= 0) { st.mine.snd = .24; st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .45, rate: .9 + Math.random() * .2 }); st.ents?.hitFx?.(hit.x, hit.y, hit.z, b.id, hit.nx | 0, hit.ny | 0, hit.nz | 0); }
         if (st.mine.t >= st.mine.need) { breakBlock(st, hit); st.mine.key = ''; st.mine.t = 0; st.mine.cool = .05; }
       }
     } else { st.mine.key = ''; st.mine.t = 0; }
@@ -754,7 +807,7 @@
     if (b.shape === V.SHAPE.door) { const oy = st2 & 8 ? -1 : 1, o = W.raw(hit.x, hit.y + oy, hit.z); if (o > 0 && (o & 0xfff) === b.id) W.set(hit.x, hit.y + oy, hit.z, 0); }
     W.set(hit.x, hit.y, hit.z, 0, { urgent: 3 });
     st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .8 });
-    st.ents?.debris(hit.x, hit.y, hit.z, b.id);
+    if (st.ents?.breakFx) st.ents.breakFx(hit.x, hit.y, hit.z, b.id); else st.ents?.debris(hit.x, hit.y, hit.z, b.id);   // осколки кувыркаются и прыгают
     st.modRun?.event('blockBreak', { x: hit.x, y: hit.y, z: hit.z, block: b.name });
     if (st.creative) return;
     // вещь выпала
@@ -868,6 +921,7 @@
       W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
       W.set(x, y + 1, z, V.cell(b.id, state | 8), { urgent: 3 });
       st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5 });
+      st.ents?.placeFx?.(x, y, z, b.id);
       unlock('door'); countPlaced(st);
       return true;
     } else if (b.axis) state = hit.nx ? 1 : hit.nz ? 2 : 0;
@@ -876,7 +930,8 @@
     // нельзя ставить твёрдое туда, где стоит игрок или моб
     if (b.solid && (boxOverlap(P, x, y, z, 1) || st.ents?.blocked?.(x, y, z))) return false;
     W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
-    st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .7 });
+    st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .7, rate: .92 + Math.random() * .16 });
+    st.ents?.placeFx?.(x, y, z, b.id);   // блок «пружинит» и пыль у основания
     st.modRun?.event('blockPlace', { x, y, z, block: b.name });
     if (b.name === 'torch') unlock('torch');
     countPlaced(st);
@@ -927,22 +982,27 @@
   // ═══ Кадр: подгрузка, камера, персонаж, вещь в руке, экран ═══
   const CAMP = { ch: { x: 0, y: 0, z: 0, vx: 0, vz: 0, h: PH, grounded: true }, mode: 'move', running: false, crouchW: 0, stepOff: 0 };
   const PHYS = { raycast(ox, oy, oz, dx, dy, dz, maxT){ const st = S; if (!st) return null; const V = VX(); const h = V.raycast(st.W, ox + st.ox, oy, oz + st.oz, dx, dy, dz, maxT, t => V.T.opaque[t] === 1); return h ? { t: h.t } : null; } };
-  function frame(dt){
+  function frame(dt, alpha){
     const st = S; if (!st) return;
     const { R, P, rig, I, C, VR, A } = st, V = VX(), t = now() / 1000;
+    // мобы, вещи и песок считаются 20 раз в секунду (каждый 3-й шаг логики) — рисуем их плавно: доля пути до следующего такта
+    if (st.ents) st.ents.frac = P.dead || !st.ready ? 1 : Math.min(1, ((st.steps % 3) + (alpha || 0)) / 3);   // такты стоят — рисуем как есть
     const f = rig.fwd();
     st.ST.update(P.x, P.z, -f.x, -f.z);
     if (!st.ready) { loadingInfo(st); }
     // камера: мышь, палец, правый стик; колесо мыши — ячейки (щипок пальцами — нет)
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: 1 };
     if (I.zoom !== 1 && !I.touch && !st.ui?.isOpen()) { P.sel = (P.sel + (I.zoom > 1 ? 1 : 8)) % 9; }
-    const ch = CAMP.ch;
-    ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx; ch.vz = P.vz; ch.h = P.sneak ? 1.5 : 1.85; ch.grounded = P.onGround;
+    const ch = CAMP.ch, U = E().UNIT || 1;
+    // скорость — в единицах движка (1 м = UNIT): камера по ней узнаёт бег (шире обзор на 8°) и темп покачивания
+    ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx * U; ch.vz = P.vz * U; ch.h = P.sneak ? 1.5 : 1.85; ch.grounded = P.onGround;
     CAMP.running = P.sprint; CAMP.crouchW = P.sneak ? 1 : 0;
     const over = st.ui?.isOpen() || st.menu || st.modWin;   // открыто окно поверх мира
     rig.mode = 'first';
     rig.update(dt, CAMP, over ? null : look, PHYS, C);
     camApply(st, dt);
+    // ранили — крен камеры: быстро в сторону удара, плавно обратно (0,5 с)
+    if (st.roll) { const r = st.roll, q = (r.t += dt); if (q > .5) st.roll = null; else R.camera.rotateZ(r.a * (q < .06 ? Math.sin(q / .06 * PI / 2) : (1 - (q - .06) / .44) ** 2) * PI / 180); }
     I.wantLock = !I.touch && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
     if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
     const padNow = !!st.K?.padLast;
@@ -1078,7 +1138,7 @@
   // ═══ Экран: полоски здоровья и еды, панель вещей, отладка ═══
   function hudBuild(wr){
     const h = document.createElement('div'); h.className = 'kb-hud';
-    h.innerHTML = `<div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
+    h.innerHTML = `<div class="kb-hurt"></div><div class="kb-lowhp"></div><div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
       <div class="kb-bottom"><div class="kb-bars"><div class="kb-hp"></div><div class="kb-food"></div></div><div class="kb-air"></div><div class="kb-iname"></div>
       <div class="kb-hotbar">${Array.from({ length: 9 }, (_, i) => `<div class="kb-slot" data-s="${i}"><i></i><b></b><u></u></div>`).join('')}</div></div>
       <div class="kb-loadbar" hidden><div class="spinner"></div><b>Строим мир вокруг…</b><small></small></div>`;
@@ -1129,6 +1189,7 @@
       C.bars = bars;
       const icons = (n, full, half, empty) => { let s = ''; for (let i = 0; i < 10; i++) s += n >= (i + 1) * 2 ? full : n === i * 2 + 1 ? half : empty; return s; };
       h.querySelector('.kb-bars').hidden = !surv;
+      h.classList.toggle('kb-low', surv && P.hp <= 6 && !P.dead);   // мало здоровья — края экрана красноватые
       if (surv) {
         h.querySelector('.kb-hp').innerHTML = icons(P.hp, '<i class="f">❤</i>', '<i class="h">❤</i>', '<i class="e">❤</i>');
         h.querySelector('.kb-food').innerHTML = icons(P.food, '<i class="f">🍗</i>', '<i class="h">🍗</i>', '<i class="e">🍗</i>');
@@ -1346,6 +1407,12 @@
     Sy.add('kb_groan', k => { const a = new k.Bp(110, 4), b = new k.Bp(230, 3), c = new k.Bp(480, 2); return k.make(1.1, 212, (t, r) => { const w = k.N(r), e = Math.sin(Math.min(1, t / 1.1) * Math.PI); return (a.do(w) * 3 + b.do(w) * 2 + c.do(w) * .6) * e * (.7 + .3 * Math.sin(t * 5)); }, .09, .1); });
     Sy.add('kb_squish', k => { const a = new k.Bp(240, 3), b = new k.Bp(900, 2); let lp = 0; return k.make(.3, 213, (t, r) => { const w = k.N(r); lp += (w - lp) * .2; return (a.do(w) * 2 + lp * 1.2 + b.do(w) * .5) * k.exp(-t * 14); }, .1); });
     Sy.add('kb_pop', k => { const a = new k.Bp(2100, 3); return k.make(.08, 214, (t, r) => a.do(k.N(r)) * k.exp(-t * 70), .07, .01); });
+    // шаги: песок — мягкий шорох, гравий — хруст камешков, снег — скрип; всплеск; «пуф» (моб исчез облачком)
+    Sy.add('kb_step_sand', k => { const a = new k.Bp(900, .7), b = new k.Bp(2600, .9); let lp = 0; return k.make(.2, 215, (t, r) => { const w = k.N(r); lp += (w - lp) * .15; return (a.do(w) * 1.3 + b.do(w) * .7) * k.exp(-Math.abs(t - .03) * 28) + lp * k.exp(-t * 30) * .8; }, .07); });
+    Sy.add('kb_step_gravel', k => { const a = new k.Bp(1500, 1.4), b = new k.Bp(500, 1.2); return k.make(.22, 216, (t, r) => { const w = k.N(r), c = r() < .03 ? k.N(r) * 3 : 0; return (a.do(w + c) * 1.4 + b.do(w) * 1.1) * k.exp(-t * 18); }, .08); });
+    Sy.add('kb_step_snow', k => { const a = new k.Bp(1100, 1.8), b = new k.Bp(3400, 1.2); return k.make(.22, 217, (t, r) => { const w = k.N(r), e = Math.sin(Math.min(1, t / .2) * Math.PI); return (a.do(w) * 1.4 + b.do(w) * .5) * e; }, .07); });
+    Sy.add('kb_splash', k => { const a = new k.Bp(700, .8), b = new k.Bp(2200, 1), c = new k.Bp(5000, 1.2); return k.make(.6, 218, (t, r) => { const w = k.N(r); return a.do(w) * k.exp(-t * 7) * 1.6 + b.do(w) * k.exp(-t * 9) * 1.2 + c.do(w) * k.exp(-t * 14) * .6; }, .1, .08); });
+    Sy.add('kb_poof', k => { const a = new k.Bp(500, .9), b = new k.Bp(1400, 1.1); return k.make(.3, 219, (t, r) => { const w = k.N(r), e = Math.min(1, t / .02) * k.exp(-t * 11); return (a.do(w) * 1.6 + b.do(w)) * e; }, .09, .05); });
   }
 
   // ── связь с окнами и сущностями ──

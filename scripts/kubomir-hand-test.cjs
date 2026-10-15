@@ -327,6 +327,139 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(ach.length >= 15 && ach.length <= 30 && ach.every(a => a[1] >= 1 && a[1] <= 15) && total <= 120, 'монеты за достижения — в потолке сервера (≤ 15 за раз, ≤ 120 за все), достижений ≤ 30');
   }
 
+  // ═══ 7. Физика и «оживление»: падающий песок, выпавшие вещи, замах и смерть мобов, частицы (такт — 1/20 с, от часов игры) ═══
+  sec('физика: песок падает и давит факелы и цветы; вещи прыгают, плавают, тянутся; мобы — замах, смерть; частицы');
+  {
+    // мир-коробка: ниже y 10 — камень, выше — воздух; правки — Map, слушатели — как у настоящего мира
+    const boxWorld = () => {
+      const cells = new Map(), key = (x, y, z) => x + ',' + y + ',' + z;
+      return { seed: 11, listeners: [], cells,
+        raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < 10 ? ID.stone : 0) : v; },
+        get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; },
+        set(x, y, z, v, o = {}){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); const was = this.raw(x, y, z); if (was === v) return false; cells.set(key(x, y, z), v); if (!o.silent) for (const f of this.listeners) f(x, y, z, was, v, o); return true; },
+        lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => 10, chunk: () => null };
+    };
+    const mk = (o = {}) => {
+      const W = boxWorld(), S7 = { R: Object.assign({}, R, { lighting: { time: o.time ?? 12 }, night: o.night ?? 0 }), VR, W, P: Object.assign({ x: 200.5, y: 10, z: 200.5, dead: false, vx: 0, vz: 0, sneak: false }, o.P || {}), ox: 0, oz: 0, meta: { diff: o.diff || 'normal' }, ST: { rd: 6 }, creative: o.creative ?? true };
+      const X = window.KubomirEnts.create(S7); S7.ents = X; X.spawnT = 1e9;
+      W.listeners.push((x, y, z, was, v) => X.onBlockChanged(x, y, z, was, v));
+      return { W, S: S7, X };
+    };
+    // песок с высоты 15 — на камень (встаёт в y 10); такт приземления одинаковый при любой частоте кадров
+    const fallRun = frames => {
+      const { W, X } = mk(); W.set(5, 15, 5, ID.sand);
+      let landed = -1;
+      for (let i = 0; i < 80 && landed < 0; i++) { X.tick(1 / 20); if (frames) for (let k = 0; k < frames(i); k++) { X.frac = (k + 1) / (frames(i) + 1); X.frame(1 / 144, i / 20); } if (W.get(5, 10, 5) === ID.sand) landed = i; }
+      const out = { landed, top: W.get(5, 15, 5), at: W.get(5, 10, 5), falling: X.falling.length };
+      X.tick(1 / 20); out.after = X.falling.length; X.dispose(); return out;
+    };
+    const F1 = fallRun(null), F2 = fallRun(i => 1 + (i * 7) % 5);
+    ok(F1.at === ID.sand && F1.top === 0 && F1.landed > 5 && F1.landed < 30, 'песок без опоры падает сущностью и встаёт блоком на камень', F1);
+    ok(F2.landed === F1.landed && F2.at === ID.sand, 'приземление — по тактам игры: кадры (1…5 между тактами) ничего не меняют', [F1.landed, F2.landed]);
+    ok(F1.after === 0, 'приземлился — сущность убрана (копия держится, только пока поток пересобирает сетку)');
+    for (const [nm, item] of [['torch', 'torch'], ['flower_red', 'flower_red']]) {
+      const { W, X } = mk(); W.set(8, 10, 8, ID[nm]); W.set(8, 14, 8, ID.sand);
+      for (let i = 0; i < 60; i++) X.tick(1 / 20);
+      ok(W.get(8, 10, 8) === ID.sand && X.items.some(e => e.s.id === item), `песок упал на ${nm === 'torch' ? 'факел' : 'цветок'} — тот выпал вещью, песок встал на его место`, { at: V.blocks[W.get(8, 10, 8)]?.name, items: X.items.map(e => e.s.id) });
+      X.dispose();
+    }
+    { // поставил песок прямо на факел — падает и давит; гравий в воду — тонет до дна; столбик песка — весь
+      const { W, X } = mk();
+      W.set(3, 10, 3, ID.torch); W.set(3, 11, 3, ID.sand);
+      for (const y of [10, 11, 12]) W.set(12, y, 12, ID.water, { silent: true });
+      W.set(12, 15, 12, ID.gravel);
+      for (const y of [13, 14, 15]) W.set(20, y, 20, ID.sand);
+      for (let i = 0; i < 90; i++) X.tick(1 / 20);
+      ok(W.get(3, 10, 3) === ID.sand && X.items.some(e => e.s.id === 'torch'), 'песок, поставленный на факел, падает и выбивает его');
+      ok(W.get(12, 10, 12) === ID.gravel, 'гравий тонет в воде до дна', V.blocks[W.get(12, 10, 12)]?.name);
+      ok(W.get(20, 10, 20) === ID.sand && W.get(20, 11, 20) === ID.sand && W.get(20, 12, 20) === ID.sand && W.get(20, 13, 20) === 0, 'столбик песка падает целиком и встаёт стопкой');
+      X.dispose();
+    }
+    // вещи: брошенная — дуга, отскок, скользит и встаёт; на воде — держится у поверхности
+    {
+      const { W, X } = mk();
+      const e = X.addItem(30.5, 12, 30.5, { id: 'cobble', n: 1 }, false, [3, 4, 0]);
+      let fell = false, bounced = false;
+      for (let i = 0; i < 100; i++) { const vy = e.vy; X.tick(1 / 20); if (vy < -3) fell = true; if (fell && e.vy > .5) bounced = true; }
+      ok(bounced, 'упала быстро — подпрыгнула');
+      ok(Math.abs(e.y - 10) < .02 && e.ground && e.vx === 0 && e.x > 32, 'потом легла на камень и проскользила до остановки', { y: +e.y.toFixed(3), x: +e.x.toFixed(2), vx: e.vx });
+      for (const y of [10, 11, 12]) W.set(40, y, 40, ID.water, { silent: true });
+      const w = X.addItem(40.5, 10.3, 40.5, { id: 'planks_oak', n: 1 }, false, [0, 0, 0]);
+      for (let i = 0; i < 80; i++) X.tick(1 / 20);
+      ok(w.float && Math.abs(w.y + .12 - (12 + V.liquidHeight(ID.water))) < .25, 'в воде всплыла и качается у поверхности', { y: +w.y.toFixed(3), float: w.float });
+      X.dispose();
+    }
+    // магнит и подбор: есть место — тянется и «влетает» (летит к груди), места нет — лежит; своя (Q) — только через 2 с
+    {
+      const pickup = (room, thrown) => {
+        const { X } = mk({ P: { x: 60.5, y: 10, z: 60.5 } }); let got = 0;
+        X.give = s => { got += s.n; return 0; }; X.room = () => room;
+        const e = thrown ? X.addItem(60.5, 11, 60.5, { id: 'stick', n: 1 }, false, [0, 2, 0]) : X.addItem(62.6, 10.4, 60.5, { id: 'stick', n: 1 });   // без скорости — выпала из блока (подобрать через 0,5 с)
+        if (!thrown) { e.vx = e.vz = 0; }
+        let at = -1, fly = 0;
+        for (let i = 0; i < 80 && at < 0; i++) { X.tick(1 / 20); if (!X.items.includes(e)) { at = i; fly = X.fxStats().flyers; } }
+        for (let k = 0; k < 20; k++) X.frame(1 / 60, k / 60);
+        const out = { at, got, fly, flyAfter: X.fxStats().flyers }; X.dispose(); return out;
+      };
+      const A = pickup(true, false), B = pickup(false, false), C = pickup(true, true);
+      ok(A.at >= 9 && A.at < 40 && A.got === 1 && A.fly === 1 && A.flyAfter === 0, 'место есть — вещь подтянулась (с 2,1 блока) и влетела в игрока', A);
+      ok(B.at < 0 && B.got === 0, 'места нет — вещь не тянется и лежит', B);
+      ok(C.at >= 39 && C.got === 1, 'брошенную (Q) подобрать — только через 2 с', C);
+    }
+    // мобы: удар с замахом (не сразу), удар сбивает замах, в hookHurt — кто ударил; смерть — завалился, «пуф», исчез
+    {
+      const { X, S: S7 } = mk({ creative: false, time: 22, night: 1, P: { x: 70.5, y: 10, z: 70.5 } });
+      const hits = [];
+      X.hookHurt = (n, m) => hits.push({ n, m, t: X.tickN });
+      const z = X.spawn('zombie', 71.4, 10, 70.5, { quiet: true });
+      let wound = false, armsUp = false, armsIdle = 9;
+      X.frame(1 / 60, 0); armsIdle = z.parts.arms[0].rotation.x;
+      for (let i = 0; i < 40 && !hits.length; i++) { X.tick(1 / 20); for (let k = 0; k < 3; k++) X.frame(1 / 60, i / 20); if (z.wind > 0) wound = true; if (z.parts.arms[0].rotation.x < -.5) armsUp = true; }
+      ok(wound && hits.length === 1 && hits[0].t >= 8 && hits[0].m === z && hits[0].n === 3, 'зомби бьёт после замаха (≥ 0,35 с), урон 3 на «обычно», в удар передан сам моб', { t: hits[0]?.t, n: hits[0]?.n });
+      ok(Math.abs(armsIdle) < .3 && armsUp, 'руки зомби — вперёд (не вверх), на замахе поднимаются', { armsIdle });
+      for (let i = 0; i < 40 && !(z.wind > 0); i++) X.tick(1 / 20);
+      const wasWind = z.wind > 0; X.damage(z, 1, 1, 0, 'player');
+      ok(wasWind && z.wind === 0, 'удар по зомби сбивает его замах');
+      X.damage(z, 999, 1, 0, 'player');
+      ok(!X.mobs.includes(z) && X.dying.includes(z) && !X.rayMob(70.5, 11, 70.5, 1, 0, 0, 5), 'умер — больше не моб (не бьёт, не мешает, по нему не попасть), но ещё виден');
+      let maxRoll = 0, puffed = 0;
+      for (let k = 0; k < 70; k++) { if (k % 3 === 0) X.tick(1 / 20); X.frame(1 / 60, k / 60); if (z.parts.g.parent) maxRoll = Math.max(maxRoll, Math.abs(z.parts.g.rotation.z)); puffed = Math.max(puffed, X.fxStats().puffs); }
+      ok(maxRoll > 1.4 && puffed > 0 && !X.dying.length && !z.parts.g.parent, 'смерть: завалился набок, исчез облачком «пуф»', { maxRoll: +maxRoll.toFixed(2), puffed });
+      // плавно между тактами: место — между прошлым и новым
+      const c = X.spawn('cow', 72.5, 10, 74.5, { quiet: true }); c.vx = 2;
+      X.tick(1 / 20); X.frac = .5; X.frame(1 / 60, 1);
+      ok(c.px !== c.x || c.pz !== c.z ? Math.abs(c.rx - (c.px + c.x) / 2) < 1e-9 && Math.abs(c.rz - (c.pz + c.z) / 2) < 1e-9 : true, 'моб рисуется между тактами (X.frac)', { px: c.px, x: c.x, rx: c.rx });
+      X.dispose();
+      void S7;
+    }
+    // частицы: пулы не растут, всё конечное (без «не чисел»), ни одной живой — объект спрятан (нет вызова отрисовки)
+    {
+      const { X } = mk({ P: { x: 90.5, y: 10, z: 90.5 } });
+      for (let i = 0; i < 40; i++) X.breakFx(90 + (i % 4), 10, 92, ID.dirt);
+      for (let i = 0; i < 30; i++) X.smoke(90, 11, 90, 12);
+      X.glow('ember', 90, 11, 90, 100); X.splash(91, 10, 91, 1.5); X.bubbles(90, 10, 90, 5); X.dust(90, 10, 90, ID.grass, 30, { ring: true });
+      X.placeFx(95, 10, 95, ID.planks_oak);
+      X.frame(1 / 60, 0);
+      const O = X.fxObjects(), st0 = X.fxStats();
+      { const sh = shaderOf('points'); O.puffs.material.onBeforeCompile(sh); const k1 = O.puffs.material.customProgramCacheKey(), k2 = O.glows.material.customProgramCacheKey();
+        ok(/attribute float aSize;/.test(sh.vertexShader) && /gl_PointSize = size \* aSize;/.test(sh.vertexShader) && incOk(sh.vertexShader) && k1 !== k2 && /^kbpts/.test(k1), 'точки клубов: свой размер у каждой — кусок шейдера three r149 на месте, свой ключ программы', [k1, k2]); }
+      ok(st0.shards <= 96 && st0.shards > 0 && st0.puffs <= 160 && st0.glows <= 72 && O.shards.visible && O.puffs.visible, 'пулы ограничены (осколков ≤ 96, клубов ≤ 160, искр ≤ 72)', st0);
+      let finite = true;
+      for (let k = 0; k < 30; k++) {
+        X.frame(1 / 60, k / 60);
+        const m = O.shards.instanceMatrix.array, n = O.shards.count * 16; for (let i = 0; i < n; i++) if (!Number.isFinite(m[i])) finite = false;
+        for (const p of [O.puffs, O.glows]) { const g = p.geometry, n2 = g.drawRange.count; for (const nm of ['position', 'aSize']) { const a = g.attributes[nm].array, w = g.attributes[nm].itemSize; for (let i = 0; i < n2 * w; i++) if (!Number.isFinite(a[i])) finite = false; } }
+      }
+      ok(finite, 'места, размеры и повороты частиц — конечные числа');
+      let shardsMinY = 99;
+      for (let k = 0; k < 400; k++) { X.frame(1 / 60, k / 60); const m = O.shards.instanceMatrix.array; for (let i = 0; i < O.shards.count; i++) shardsMinY = Math.min(shardsMinY, m[i * 16 + 13]); }
+      ok(shardsMinY > 9.9, 'осколки лежат на камне, а не проваливаются', shardsMinY);
+      const st1 = X.fxStats();
+      ok(st1.shards === 0 && st1.puffs === 0 && st1.pops === 0 && !O.shards.visible && !O.puffs.visible, 'всё отжило — объекты спрятаны (нет лишних вызовов отрисовки)', st1);
+      X.dispose();
+    }
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
