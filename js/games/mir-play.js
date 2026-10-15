@@ -216,6 +216,8 @@ body:not(.high) .mp-panel{animation:none}
   function loading(s){ if (s.box) s.box.innerHTML = '<div class="gm-loading"><div class="spinner"></div>Загружаем игру…</div>'; }
   async function mountGame(s){
     const gen = ++s.gen, g = info(s.g);
+    // возраст (age.js): игра старше игрока — обложка в окне, как на странице игры; «Взрослый разрешил» → запускаем
+    if (g && root.D37Age?.cover?.(s.box, g.age, { why: g.ageWhy, title: `${g.icon} ${g.title}`, back: () => close('back'), onOpen: () => { if (cur === s) mountGame(s); } })) { s.phase = 'age'; return true; }
     s.phase = 'loading';
     let adL = null;   // реклама под «Загружаем игру…», если грузится дольше 1,5 с (ad-places.js, как на странице игры)
     try { adL = root.D37AdPlaces?.loading?.({ anchor: s.box?.firstChild, game: s.g, param: s.param }) || null; } catch (e) {}

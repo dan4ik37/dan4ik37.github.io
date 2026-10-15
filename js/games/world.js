@@ -26,12 +26,12 @@
   ].map(p => ({ ...p, x: Math.round(CX + 900 * Math.cos(p.a * Math.PI / 180)), y: Math.round(CY + 560 * Math.sin(p.a * Math.PI / 180)) }));
   const MODES = {
     horde: ['horde'], arena: ['arena'], td: ['td'],
-    cards: ['uno', 'durak', 'chess', 'nardy', 'ludo', 'pool', 'checkers', 'sea', 'ttt'],
-    puzzles: ['blocks', 'sudoku', 'mahjong', 'kosynka', 'freecell', 'pauk', 'miner', '2048', 'words', 'snake'],
+    cards: ['uno', 'durak', 'domino', 'chess', 'nardy', 'ludo', 'pool', 'checkers', 'sea', 'ttt', 'balda', 'krokodil'],
+    puzzles: ['blocks', 'sudoku', 'fillword', 'mahjong', 'kosynka', 'freecell', 'pauk', 'miner', '2048', 'words', 'snake'],
   };
   const NO_ROOM = new Set(['pauk', 'wardrobe', 'clicker', 'quiz', 'wheel', 'random', 'typing', 'cps', 'fonts', 'world']);
   const COOP = new Set(['horde', 'td']);
-  const QUICK = ['chess', 'uno', 'durak', 'arena', 'horde', 'td', 'sea', 'checkers', 'blocks', 'sudoku'];
+  const QUICK = ['chess', 'uno', 'durak', 'domino', 'balda', 'arena', 'horde', 'td', 'sea', 'checkers', 'blocks', 'sudoku'];
   const STAGE = { x: 564 - 150, y: 404 - 245, w: 300, h: 150 };   // экран сцены над порталом «Сцена»
 
   function rng(seed){ let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
