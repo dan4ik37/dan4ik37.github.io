@@ -23,8 +23,9 @@ function captureReferralCode(){
 // браузере и переходит по ссылке "забыл пароль", всё равно должна
 // открыться форма нового пароля, а не увести его на страницу профиля.
 // Вход через Google (и др.) — кнопка видна, только если провайдер включён в Supabase: /auth/v1/settings → external.
-// Включить: docs/GOOGLE_LOGIN.md. Поток implicit, как у сброса пароля: токены приходят в #хэше на корень сайта,
-// supabase-js их забирает (detectSessionInUrl), роутер на непонятном хэше показывает главную — затем onAuthStateChange.
+// Включить: docs/GOOGLE_LOGIN.md. Поток implicit, как у сброса пароля: токены приходят в #хэше на корень сайта; их забирает
+// js/features/auth-guard.js (supabase-js сам — нет: detectSessionInUrl: false) — свой вход молча, чужую ссылку — только с согласия.
+// Поэтому перед письмом (регистрация, «Забыли пароль?») ставим отметку D37AuthUrl.mark — ссылку из этого письма в ЭТОМ браузере примем молча.
 let oauthProvidersPromise = null;
 function oauthProviders() {
   if (!oauthProvidersPromise) oauthProvidersPromise = fetch(`${SB_URL}/auth/v1/settings`, { headers: { apikey: SB_KEY } })
@@ -121,6 +122,8 @@ async function doForgotPassword() {
     window.D37Captcha?.done('login', true, false);
     // ▲ ▲
     if (error) throw error;
+    // ссылку из этого письма, открытую в этом же браузере, auth-guard.js примет молча (на другом устройстве — спросит)
+    window.D37AuthUrl?.mark('recovery', email);
     errEl.style.color = 'var(--tw)';
     errEl.textContent = '✅ Письмо отправлено. Перейди по ссылке в нём, чтобы задать новый пароль.';
   } catch(e) {
@@ -247,6 +250,8 @@ async function doGlobalRegister() {
       // дефолтный (из email) через триггер — досохраняем настоящий ник
       // локально и попробуем дописать его в профиль при первом входе.
       try { localStorage.setItem('d37_pending_nick', nick); } catch(e) {}
+      // ссылку «подтверди почту», открытую в этом же браузере, auth-guard.js примет молча (на другом устройстве — спросит)
+      window.D37AuthUrl?.mark('signup', email);
       errEl.style.color = 'var(--tw)';
       errEl.textContent = '✅ Проверь почту — перейди по ссылке в письме, чтобы подтвердить регистрацию.';
     }
