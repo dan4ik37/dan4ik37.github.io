@@ -143,12 +143,14 @@
   function myStyle(){ try { const s = localStorage.getItem(LS_STYLE); return STYLES[s] ? s : 'auto'; } catch (e) { return 'auto'; } }
   function setMyStyle(s){ try { localStorage.setItem(LS_STYLE, STYLES[s] ? s : 'auto'); } catch (e) {} }
   function styleFor(def){ const s = myStyle(); return s !== 'auto' ? s : STYLES[def] ? def : 'toon'; }
-  // Ключ своего персонажа — как в редакторе (charedit) и мире: аккаунт или гость вкладки
+  // Ключ своего персонажа — как в редакторе (charedit), мире и комнатах (GameRoom.guestId): аккаунт или гость вкладки.
+  // Невыбранные части человечка выбираются по этому ключу — везде должен быть один и тот же
   function myKey(){
     try { if (typeof currentUser !== 'undefined' && currentUser?.id) return 'u:' + currentUser.id; } catch (e) {}
     let id = '';
     try { id = sessionStorage.getItem('d37_room_gid') || ''; } catch (e) {}
-    return id ? 'g:' + id : 'me';
+    if (!id) { id = 'g-' + Math.random().toString(36).slice(2, 10); try { sessionStorage.setItem('d37_room_gid', id); } catch (e) {} }
+    return 'g:' + id;
   }
 
   // ═══ Память: листы по ключу, порядок Map = давность (первый — давно не нужен), бюджет в байтах ═══

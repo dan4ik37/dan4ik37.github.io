@@ -432,6 +432,8 @@
     q('.wldMode').innerHTML = force2d ? '🗺️<span> 2D</span>' : '🧊<span> 3D</span>';
     const st0 = S;
     if (!force2d && window.World3D?.supported()) window.World3D.load().then(ok => { if (ok && S === st0 && !S.stopped && !S.g3) enable3D(); });
+    // 2D-мир: игроки — проекция настоящих 3D-персонажей (js/core/char2d.js), 8 сторон; пока не загрузилось — старые человечки
+    else if (typeof gamesLoadScript === 'function') gamesLoadScript('js/core/char2d.js').then(() => { if (S === st0) S.spr = true; }).catch(() => {});
     clearInterval(S.tick);
     S.tick = setInterval(housekeeping, 1000);
   }
@@ -780,6 +782,7 @@
       return;
     }
     for (const [key, p] of S.players) if (p.leaving && now() - p.leaving > 600) S.players.delete(key);
+    if (S.spr) S.sprN = [S.me, ...S.players.values()].filter(p => p._spr).length;   // сколько игроков рисуется 2D-проекцией
     if (S.pending.length) flushPending();
   }
 
@@ -790,12 +793,13 @@
     while (left > 0 && p.path.length) {
       const [tx, ty] = p.path[0], d = dist(p.x, p.y, tx, ty);
       if (d <= left) { p.x = tx; p.y = ty; p.path.shift(); left -= d; }
-      else { p.dir = tx < p.x ? -1 : tx > p.x ? 1 : p.dir; p.face = faceOf(tx - p.x, ty - p.y, p.face); p.x += (tx - p.x) / d * left; p.y += (ty - p.y) / d * left; left = 0; }
+      else { p.dir = tx < p.x ? -1 : tx > p.x ? 1 : p.dir; p.face = faceOf(tx - p.x, ty - p.y, p.face); p.d8 = dir8(tx - p.x, ty - p.y, p.d8); p.x += (tx - p.x) / d * left; p.y += (ty - p.y) / d * left; left = 0; }
     }
     p.moving = p.path.length > 0;
   }
-  // Куда смотрит: 0 — к нам (вниз), 1 — вправо, 2 — от нас (вверх), 3 — влево
+  // Куда смотрит: 0 — к нам (вниз), 1 — вправо, 2 — от нас (вверх), 3 — влево; d8 — 8 сторон для 2D-персонажа (как D37Sprite.dir8)
   const faceOf = (dx, dy, cur) => Math.abs(dx) < .01 && Math.abs(dy) < .01 ? cur : Math.abs(dx) > Math.abs(dy) * 1.15 ? (dx > 0 ? 1 : 3) : (dy > 0 ? 0 : 2);
+  const dir8 = (dx, dy, cur = 0) => Math.abs(dx) < .01 && Math.abs(dy) < .01 ? cur : ((Math.round(Math.atan2(dx, dy) / (Math.PI / 4)) % 8) + 8) % 8;
   function stepKeys(dt){
     if (!S.keysDown.size) return;
     let dx = 0, dy = 0;
@@ -809,6 +813,7 @@
     if (free(me.x, me.y + vy)) me.y = clampY(me.y + vy);
     if (dx) me.dir = dx < 0 ? -1 : 1;
     me.face = faceOf(dx, dy, me.face);
+    me.d8 = dir8(dx, dy, me.d8);
     me.moving = true;
     if (Date.now() - S.kbAt > 500) { S.kbAt = Date.now(); sendMove(me.x + dx / l * 140, me.y + dy / l * 140); }
   }
@@ -988,9 +993,20 @@
     ctx.fillStyle = '#4b3621'; ctx.fillRect(-26, 4, 5, 8); ctx.fillRect(21, 4, 5, 8);
     ctx.restore();
   }
+  // Эмоции, у которых есть анимация 2D-персонажа
+  const EMO_ANIM = { '👋': 'wave', '💃': 'dance', '🎉': 'cheer', '🔥': 'cheer' };
+  const SPR_MAX = 24;   // больше игроков на экране — остальные старыми человечками (память и выпечка)
   function drawPlayer(ctx, p, time){
     if (!window.D37Char) return;
     const fade = p.leaving ? Math.max(0, 1 - (now() - p.leaving) / 600) : Math.min(1, (now() - p.born) / 400);
+    const SP = S.spr && window.D37Sprite;
+    if (SP && (p._spr || S.sprN < SPR_MAX)) {
+      if (!p._spr) { S.sprN = (S.sprN || 0) + 1; p._spr = SP.handle(p.look, { view: 'iso8', size: p.isMe ? 64 : 52, key: p.key, anims: ['idle', 'walk'], style: SP.styleFor('toon'), pin: !!p.isMe }); p._sprLook = p.look; }
+      else if (p._sprLook !== p.look) { p._spr.set(p.look); p._sprLook = p.look; }
+      const emo = p.emo && EMO_ANIM[p.emo.e] && now() - p.emo.t < 2200 ? EMO_ANIM[p.emo.e] : '';
+      p._spr.draw(ctx, emo || (p.moving ? 'walk' : 'idle'), emo ? (now() - p.emo.t) / 1000 : time + p.phase, p.x, p.y, { dir: p.d8 ?? 0, h: 62, alpha: fade });
+      return;
+    }
     const bob = p.moving ? -Math.abs(Math.sin(time * 12 + p.phase)) * 4 : 0;
     // шагающий персонаж (avatar.js: walker — 4 стороны и анимация шага); старый кэш скрипта — обычный спрайт
     const C = window.D37Char, s = C.walker ? C.walker(p.look, 54, { face: p.face, moving: p.moving, t: time + p.phase }) : C.sprite(p.look, 54, { t: time, dir: p.dir });
@@ -1060,6 +1076,6 @@
     mount(el, gameApi){ root = el; api = gameApi; mount(el); },
     unmount(){ unmount(); root = null; },
     get state(){ return S; },
-    _test: { buildMap, findPath, lineFree, cellOf, clean, freeLook, PORTALS, W, H, CELL, GW, GH, CX, CY, makeKeys, sign, verify, importPub },
+    _test: { buildMap, findPath, lineFree, cellOf, clean, freeLook, PORTALS, W, H, CELL, GW, GH, CX, CY, makeKeys, sign, verify, importPub, state: () => S },
   };
 })();
