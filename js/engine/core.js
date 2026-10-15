@@ -59,12 +59,21 @@
   E.isTouch = () => matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
   // ── Цикл: update(step) — ровно 60 раз в секунду (не больше 5 шагов за кадр), frame(dt, alpha) — каждый кадр ──
+  // E.fpsCap — лимит кадров (настройки «Лимит FPS» / «Экономия батареи», render.js): лишние кадры экрана пропускаются
+  // целиком (логика догонит шагами в следующем)
+  E.fpsCap = 0;
   E.loop = (update, frame, step = 1 / 60) => {
-    let acc = 0, last = performance.now(), raf = 0, on = true, paused = false;
+    let acc = 0, last = performance.now(), raf = 0, on = true, paused = false, nextF = 0;
     const f = now => {
       if (!on) return;
-      E.frameT0 = performance.now();   // начало кадра — render.js считает ЦП всего кадра (логика + отрисовка)
       raf = requestAnimationFrame(f);
+      const cap = E.fpsCap;
+      if (cap > 0) {   // кадр — не раньше срока (допуск 2 мс: таймер кадров неровный)
+        const iv = 1000 / cap;
+        if (now < nextF - 2) return;
+        nextF = Math.max(nextF + iv, now - iv);
+      }
+      E.frameT0 = performance.now();   // начало кадра — render.js считает ЦП всего кадра (логика + отрисовка)
       const dt = Math.min(.1, Math.max(0, (now - last) / 1000)); last = now;
       if (paused || document.hidden) return;
       acc += dt;
