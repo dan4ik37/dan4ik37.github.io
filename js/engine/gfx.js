@@ -99,12 +99,13 @@
     step(o => { o.shadows = false; });
     return L;
   };
-  // Тени по качеству: карта, коробка (полуразмер, ед.), выборок PCF, поиск заслонок (PCSS), радиус (тексели), как часто при движении
+  // Тени по качеству: карта, коробка (полуразмер, ед.), выборок PCF (каждая — 2×2 текселя), поиск заслонок (PCSS), радиус
+  // (тексели), как часто при движении
   E.SHADOW_Q = {
-    low: { map: 1024, box: 22, taps: 6, blk: 0, radius: 1.2, every: 3 },
-    mid: { map: 1024, box: 26, taps: 8, blk: 0, radius: 1.5, every: 2 },
-    high: { map: 2048, box: 34, taps: 14, blk: 8, radius: 2, every: 1 },
-    ultra: { map: 4096, box: 44, taps: 24, blk: 12, radius: 2.5, every: 1 },
+    low: { map: 1024, box: 22, taps: 4, blk: 0, radius: 1.2, every: 3 },
+    mid: { map: 1024, box: 26, taps: 5, blk: 0, radius: 1.5, every: 2 },
+    high: { map: 2048, box: 34, taps: 9, blk: 6, radius: 2, every: 1 },
+    ultra: { map: 4096, box: 44, taps: 16, blk: 10, radius: 2.5, every: 1 },
   };
 
   // ═══ Настройки графики мира (R.lighting.gfx; сохраняются в файле мира, едут гостям в блоке world) ═══
@@ -286,7 +287,8 @@
   // ═══ Общие данные для шейдеров (Float32Array — общие для всех материалов) ═══
   // fogA: xyz — направление на солнце (мир), w — сила свечения тумана к солнцу; fogB: rgb — цвет тумана у солнца,
   // a — плотность высотного тумана; fogC: x — высота «пола» тумана, y — спад с высотой, z, w — запас;
-  // sh: x — выборок PCF, y — поиск заслонок (0 — без PCSS), z — тексели полутени на 1 ед. глубины карты, w — шум 0/1
+  // sh: x — выборок PCF (каждая — 2×2 текселя с весами), y — поиск заслонок (0 — без PCSS), z — тексели полутени на 1 ед.
+  // глубины карты, w — 2: без наклона приёмника (для проверок), иначе с ним
   const U = E.GFXU = E.GFXU || { fogA: new Float32Array(4), fogB: new Float32Array(4), fogC: new Float32Array(4), sh: new Float32Array(4) };
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
@@ -334,33 +336,45 @@
 	}
 	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );
 #endif`;
-  // мягкие тени: выборки по спирали Фогеля (+ поворот шумом), PCSS-lite — полутень шире, чем дальше заслонка
-  // спираль Фогеля без синусов на каждую выборку: поворот на «золотой угол» — умножением на постоянную матрицу
+  // Мягкие тени без шума и «ряби» (15.10.2026: на полу была рябь — шум поворота выборок по пикселям экрана ползал при
+  // движении, на склонах к солнцу ядро затеняло само себя):
+  // • каждая выборка — 2×2 текселя с весами по положению (как билинейная): край тени плавный и без поворота-шума;
+  // • наклон приёмника (receiver plane depth bias): глубину приёмника для каждого текселя берём по его плоскости в карте
+  //   (производные координат тени по экрану) — широкое ядро и низкое солнце не дают «самозатенения» (acne);
+  // • PCSS-lite: заслонки ищем так же по плоскости, полутень шире, чем дальше заслонка; спираль Фогеля постоянная.
+  // Спираль без синусов на каждую выборку: поворот на «золотой угол» — умножением на постоянную матрицу.
   const SH_FN = `uniform vec4 d37Sh;
-	float d37Ign( vec2 p ) { return fract( 52.9829189 * fract( dot( p, vec2( 0.06711056, 0.00583715 ) ) ) ); }
-	float d37Pcf( sampler2D map, vec2 size, float radius, vec3 c ) {
+	float d37Cmp( sampler2D map, vec2 uv, float z ) { return step( z, unpackRGBAToDepth( texture2D( map, uv ) ) ); }
+	// 4 соседних текселя: у каждого — глубина приёмника по плоскости (g — изменение глубины на 1 по uv), смесь по весам
+	float d37Bil( sampler2D map, vec2 size, vec2 uv, vec3 c, vec2 g ) {
+		vec2 e = 1.0 / size, tc = uv * size - 0.5, f = fract( tc ), b = ( floor( tc ) + 0.5 ) * e;
+		float z0 = c.z + dot( g, b - c.xy ), gx = g.x * e.x, gy = g.y * e.y;
+		float s00 = d37Cmp( map, b, z0 ), s10 = d37Cmp( map, b + vec2( e.x, 0.0 ), z0 + gx );
+		float s01 = d37Cmp( map, b + vec2( 0.0, e.y ), z0 + gy ), s11 = d37Cmp( map, b + e, z0 + gx + gy );
+		return mix( mix( s00, s10, f.x ), mix( s01, s11, f.x ), f.y );
+	}
+	float d37Pcf( sampler2D map, vec2 size, float radius, vec3 c, vec2 g ) {
 		vec2 texel = 1.0 / size;
-		float n = d37Sh.x > 0.5 ? d37Sh.x : 12.0;
-		float rot = d37Sh.w > 0.5 ? d37Ign( gl_FragCoord.xy ) * 6.2831853 : 0.0;
-		float rad = max( radius, 1.0 );
+		float n = d37Sh.x > 0.5 ? d37Sh.x : 6.0, rad = max( radius, 0.5 );
 		mat2 ga = mat2( -0.7373688, 0.6754904, -0.6754904, -0.7373688 );
-		vec2 d0 = vec2( cos( rot ), sin( rot ) ), d = d0;
+		vec2 d = vec2( 0.8660254, 0.5 );
 		if ( d37Sh.y > 0.5 ) {
-			float sum = 0.0, cnt = 0.0, sr = rad * 4.0;
+			float sum = 0.0, cnt = 0.0, sr = rad * 3.0;
 			for ( int i = 0; i < 16; i ++ ) {
 				if ( float( i ) >= d37Sh.y ) break;
-				float z = unpackRGBAToDepth( texture2D( map, c.xy + d * sqrt( ( float( i ) + 0.5 ) / d37Sh.y ) * sr * texel ) );
-				if ( z < c.z ) { sum += z; cnt += 1.0; }
+				vec2 o = d * sqrt( ( float( i ) + 0.5 ) / d37Sh.y ) * sr * texel;
+				float zr = c.z + dot( g, o ), z = unpackRGBAToDepth( texture2D( map, c.xy + o ) );
+				if ( z < zr ) { sum += zr - z; cnt += 1.0; }
 				d = ga * d;
 			}
 			if ( cnt < 0.5 ) return 1.0;
-			rad = clamp( ( c.z - sum / cnt ) * d37Sh.z, 1.0, rad * 4.0 );
-			d = d0;
+			rad = clamp( sum / cnt * d37Sh.z, rad * 0.5, rad * 2.5 );   // не уже полрадиуса: у самой заслонки — без «лесенки» текселей
+			d = vec2( 0.8660254, 0.5 );
 		}
 		float s = 0.0;
 		for ( int i = 0; i < 32; i ++ ) {
 			if ( float( i ) >= n ) break;
-			s += texture2DCompare( map, c.xy + d * sqrt( ( float( i ) + 0.5 ) / n ) * rad * texel, c.z );
+			s += d37Bil( map, size, c.xy + d * sqrt( ( float( i ) + 0.5 ) / n ) * rad * texel, c, g );
 			d = ga * d;
 		}
 		return s / n;
@@ -369,11 +383,23 @@
 		float shadow = 1.0;
 		shadowCoord.xyz /= shadowCoord.w;
 		shadowCoord.z += shadowBias;
+		// наклон приёмника в карте теней — до ветвлений (производные — только в общем для всех пикселей коде)
+		// (WebGL1 — без наклона: производные там только с расширением, которое three включает не всем материалам)
+		vec2 g = vec2( 0.0 );
+		#if __VERSION__ >= 300
+		if ( d37Sh.w < 1.5 ) {
+			vec3 cx = dFdx( shadowCoord.xyz ), cy = dFdy( shadowCoord.xyz );
+			float det = cx.x * cy.y - cx.y * cy.x;
+			if ( abs( det ) > 1e-14 ) g = vec2( cy.y * cx.z - cx.y * cy.z, cx.x * cy.z - cy.x * cx.z ) / det;
+			float gm = length( g );
+			if ( gm > 16.0 ) g *= 16.0 / gm;   // почти вдоль луча (солнце ниже ~1°, силуэт) — не дальше разумного
+		}
+		#endif
 		bool inFrustum = shadowCoord.x >= 0.0 && shadowCoord.x <= 1.0 && shadowCoord.y >= 0.0 && shadowCoord.y <= 1.0;
 		bool frustumTest = inFrustum && shadowCoord.z <= 1.0;
 		if ( frustumTest ) {
 		#if defined( SHADOWMAP_TYPE_PCF ) || defined( SHADOWMAP_TYPE_PCF_SOFT )
-			shadow = d37Pcf( shadowMap, shadowMapSize, shadowRadius, shadowCoord.xyz );
+			shadow = d37Pcf( shadowMap, shadowMapSize, shadowRadius, shadowCoord.xyz, g );
 		#elif defined( SHADOWMAP_TYPE_VSM )
 			shadow = VSMShadow( shadowMap, shadowCoord.xy, shadowCoord.z );
 		#else
