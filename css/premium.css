@@ -2732,6 +2732,11 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 .ch-svg.b .ch-dt{stroke:#e8e8e8}
 .ch-svg.mini{width:16px;height:16px;margin-right:-3px}
 .ch-promo button .ch-svg{width:80%;height:80%}
+.ch-promo .ch-promo-back{width:auto;height:auto;min-height:42px;padding:.5rem 1rem;background:#24202f;color:var(--text);border:1px solid var(--border)}
+/* онлайн: ход на доске ждёт «✅ Сходить» */
+.ch-sq.pend.light{background:#a7e3b8}.ch-sq.pend.dark{background:#6fbf88}
+.ch-sq.pend{box-shadow:inset 0 0 0 3px #16a34a}
+.ch .un-status{text-align:center}
 
 /* ── «Блоки» (js/games/blocks.js) ── */
 .bl{display:flex;flex-direction:column;align-items:center}

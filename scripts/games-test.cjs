@@ -250,5 +250,51 @@ if (want('nardy')) {
   ok(games >= 40, 'nardy: партии доходят до конца', games);
 }
 
+// ═══ «Шахматы»: правила (perft) и «Отменить ход» ═══
+if (want('chess')) {
+  const T = load('js/games/chess.js').GAME_IMPL.chess._test;
+  const fen = f => {
+    const [rows, turn, cast, ep, half, full] = f.split(' ');
+    const b = [];
+    for (const ch of rows.replace(/\//g, '')) { if (/\d/.test(ch)) for (let i = 0; i < +ch; i++) b.push('.'); else b.push(ch); }
+    const epI = ep && ep !== '-' ? (8 - +ep[1]) * 8 + 'abcdefgh'.indexOf(ep[0]) : -1;
+    return { b, turn, cast: { K: cast.includes('K'), Q: cast.includes('Q'), k: cast.includes('k'), q: cast.includes('q') }, ep: epI, half: +half || 0, full: +full || 1, keys: [] };
+  };
+  const perft = (P, d) => { if (!d) return 1; let n = 0; for (const m of T.legal(P)) n += d === 1 ? 1 : perft(T.make(P, m), d - 1); return n; };
+  const cases = [
+    ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', [20, 400, 8902, 197281]],
+    ['r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1', [48, 2039, 97862]],
+    ['8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1', [14, 191, 2812, 43238]],
+    ['r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1', [6, 264, 9467]],
+  ];
+  for (const [f, want] of cases) { const got = want.map((_, i) => perft(fen(f), i + 1)); ok(eq(got, want), 'chess: perft ' + f.split(' ')[0].slice(0, 20), got); }
+  // «Отменить ход» = партия заново из журнала без последних ходов: всё ровно как было
+  const clone = P => JSON.parse(JSON.stringify(P));
+  let mism = 0, plies = 0;
+  for (let g = 0; g < 40; g++) {
+    const rand = rng(700 + g), moves = [], snaps = [];
+    let P = T.newPos();
+    snaps.push(clone(P));
+    for (let k = 0; k < 120 && !T.status(P); k++) {
+      const L = T.legal(P), m = L[Math.floor(rand() * L.length)];
+      moves.push(m); P.keys = P.keys.concat([T.posKey(P)]); P = T.make(P, m); snaps.push(clone(P)); plies++;
+    }
+    for (let t = 0; t < 6; t++) {
+      const k = Math.floor(rand() * (moves.length + 1)), R = T.replay(moves.slice(0, k));
+      if (!eq(clone(R.P), snaps[k])) mism++;
+    }
+  }
+  ok(mism === 0 && plies > 2000, 'chess: отмена восстанавливает позицию, очередь, рокировки, взятие на проходе, повторы', { mism, plies });
+  const play = (sans) => { let P = T.newPos(); const ms = []; for (const s of sans) { const m = T.legal(P).find(x => T.san(P, x).replace(/[+#]/, '') === s); if (!m) throw new Error('нет хода ' + s); ms.push(m); P.keys = P.keys.concat([T.posKey(P)]); P = T.make(P, m); } return { P, ms }; };
+  const ep = play(['e4', 'a6', 'e5', 'd5']);
+  ok(ep.P.ep === 19, 'chess: после d7-d5 можно брать на проходе (d6)', ep.P.ep);
+  const ep2 = play(['e4', 'a6', 'e5', 'd5', 'Кf3']);
+  ok(ep2.P.ep === -1 && T.replay(ep2.ms.slice(0, 4)).P.ep === 19 && T.legal(T.replay(ep2.ms.slice(0, 4)).P).some(m => m.ep), 'chess: отмена вернула право взять на проходе');
+  const ca = play(['e4', 'e5', 'Кf3', 'Кc6', 'Сc4', 'Сc5', 'Крe2']);
+  const back = T.replay(ca.ms.slice(0, 6)).P;
+  ok(!ca.P.cast.K && !ca.P.cast.Q && back.cast.K && back.cast.Q && T.legal(back).some(m => m.castle === 'K'), 'chess: отмена хода королём вернула рокировку');
+  ok(T.myMoves(ca.ms, 'w') === 4 && T.myMoves(ca.ms, 'b') === 3 && T.myMoves([], 'w') === 0, 'chess: счёт своих ходов (с компьютером)');
+}
+
 console.log(`games-test: ${pass} ok, ${fail} fail (${((Date.now() - t0) / 1000).toFixed(1)} с)`);
 process.exit(fail ? 1 : 0);
