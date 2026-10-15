@@ -972,5 +972,75 @@ function boundsOk(R){
   ok(fsP.includes('int st[40]') && fsP.includes('sp < 38') && fsP.includes('if (mm.w > 0.5)') && fsP.includes('.a < 0.5) return false;'), 'шейдер: стек 40, вырез по альфе в hitTri');
 }
 
+// ═══ 20. Телефоны (15.10.2026: «пятна» на площади и фонтане у владельца): точность сэмплеров, проверка глубины при запуске,
+//     безопасная графика по умолчанию. У sampler2D во фрагментном шейдере по умолчанию lowp — на телефонах значение текстуры
+//     приходит в fp16; глубина 0,98 в fp16 — шаг 0,0005 (на 8 м — десятки см): контактные тени и отражения рисовали пятна ═══
+{
+  const PREC = E.POST_PREC;
+  ok(typeof PREC === 'string' && /#if __VERSION__ >= 300 \|\| defined\( GL_FRAGMENT_PRECISION_HIGH \)\nprecision highp sampler2D;\n#endif/.test(PREC), 'постобработка: строка точности — highp-сэмплеры (WebGL2 всегда, WebGL1 — если умеет)');
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget(){}, render(){} };
+  const P0 = E.post({ T, r, q: 'high', stats: {}, pr0: 1 });
+  const ms = Object.entries(P0._test.M).filter(([, m]) => m && m.fragmentShader);
+  const bad = ms.filter(([, m]) => !m.fragmentShader.startsWith(PREC)).map(([k]) => k);
+  ok(ms.length >= 12 && !bad.length, 'постобработка: КАЖДЫЙ шейдер (AO, отражения, генерация кадров, сборка, FSR, NIS…) начинается со строки точности', { n: ms.length, bad });
+  const depthReaders = ms.filter(([, m]) => /tDepth/.test(m.fragmentShader)).map(([k]) => k).sort().join();
+  ok(depthReaders === 'ao,comp,fg,ssr', 'глубину читают ao, ssr, fg, comp — все с highp', depthReaders);
+  ok(P0.depthOK === true && P0.canAO, 'подставной рендерер без чтения пикселей — проверка глубины не мешает (как раньше)');
+  P0.dispose();
+  // проверка глубины при запуске: видеокарта без highp (precision < 23) или неточная глубина — AO, трассировка, генерация кадров выключены
+  const mockGL = (prec, px0) => {
+    const calls = [];
+    const gl = { FRAGMENT_SHADER: 35632, HIGH_FLOAT: 36338, getShaderPrecisionFormat: () => ({ rangeMin: 127, rangeMax: 127, precision: prec }) };
+    return { calls, r: { ...r, getContext: () => gl, clear: () => calls.push('clear'), setRenderTarget: t => calls.push(t ? 'rt' + t.width : 'null'),
+      render: (s) => calls.push(s.children[0].material.fragmentShader.includes('tDepth') ? 'read' : 'write'),
+      readRenderTargetPixels: (t, x, y, w, h, buf) => { buf[0] = px0; buf[1] = px0 ? 0 : 90; calls.push('px'); } } };
+  };
+  const A = mockGL(23, 255), PA = E.post({ T, r: A.r, q: 'high', stats: {}, pr0: 1 });
+  ok(PA.depthOK && PA.canAO && PA.fg.ok && PA.probe.ok && A.calls.join() === 'rt4,clear,rt4,write,rt1,read,px,null', 'точная глубина: рисуем плоскость на известной глубине → читаем highp-сэмплером → всё включается', A.calls.join());
+  const Bm = mockGL(23, 0), PB = E.post({ T, r: Bm.r, q: 'high', stats: {}, pr0: 1 });
+  PB.setOpts({ ao: 'on', rt: 'high', aa: 'fxaa' }); PB.setFg(true); PB.setSize(800, 450, 1);
+  ok(!PB.depthOK && !PB.canAO && !PB.fg.ok && PB.ao.mode === 'off' && PB.rt.mode === 'off' && !PB.fg.on && !PB._test.rt().ao && !PB._test.rt().ssr, 'глубина неточная (драйвер не дал highp): AO, трассировка и генерация кадров выключены, буферов нет', { probe: PB.probe });
+  const Cm = mockGL(10, 255), PC = E.post({ T, r: Cm.r, q: 'high', stats: {}, pr0: 1 });
+  ok(!PC.depthOK && PC.prec === 10 && !Cm.calls.includes('read'), 'нет highp во фрагментном шейдере (fp16) — выключено сразу, без отрисовки', Cm.calls.join());
+  for (const P of [PA, PB, PC]) P.dispose();
+  // карта теней и глубина воды — highp; после куска теней — снова lowp (цвету и нормалям хватает, так быстрее)
+  const shc = T.ShaderChunk.shadowmap_pars_fragment, hi = E.SAMPLER_PREC.hi, lo = E.SAMPLER_PREC.lo;
+  ok(shc.startsWith(hi) && shc.trimEnd().endsWith(lo.trimEnd()) && shc.indexOf('precision highp sampler2D') < shc.indexOf('uniform sampler2D directionalShadowMap'), 'тени: карта теней (глубина в RGBA8) читается highp, потом точность — как была');
+  const Rw = { T, waterU: { uTime: { value: 0 }, uClear: { value: 0 }, uFoam: { value: 0 }, uWQ: { value: 1 } }, normalFrom: () => new T.DataTexture(new Uint8Array(4), 1, 1) };
+  const wm = E.waterMaterial(Rw, '#3080a0', { depth: { tex: new T.DataTexture(new Float32Array(4), 1, 1, T.RedFormat, T.FloatType), rect: [0, 0, 1, 1] } });
+  const sh = { uniforms: {}, vertexShader: T.ShaderLib.standard.vertexShader, fragmentShader: T.ShaderLib.standard.fragmentShader };
+  wm.onBeforeCompile(sh);
+  const fw = sh.fragmentShader, iT = fw.indexOf('uniform sampler2D tDep');
+  ok(iT > 0 && fw.lastIndexOf('precision highp sampler2D', iT) > fw.lastIndexOf('#ifdef D37_WDEPTH', iT) && fw.indexOf('precision lowp sampler2D', iT) > iT, 'вода: карта глубины дна — highp');
+  // безопасная графика по умолчанию: телефон «Авто» — без трассировки; выбрал сам — есть; неточная глубина — нет ни в каком пресете
+  const g1 = E.gfxResolve({ preset: 'auto' }, { q: 'high', gl2: true, mobile: true }), g2 = E.gfxResolve({ preset: 'auto' }, { q: 'high', gl2: true, mobile: false });
+  const g3 = E.gfxResolve({ preset: 'ultra' }, { q: 'mid', gl2: true, mobile: true }), g4 = E.gfxResolve({ preset: 'ultra', framegen: true }, { q: 'high', gl2: true, depthFx: false });
+  const g5 = E.gfxResolve({ preset: 'custom', ao: 'high', rt: 'high', framegen: true }, { q: 'high', gl2: true, depthFx: false });
+  ok(g1.rt === 'off' && g2.rt === 'on' && g3.rt === 'high' && g4.ao === 'off' && g4.rt === 'off' && !g4.framegen && g5.ao === 'off' && g5.rt === 'off' && !g5.framegen,
+    'телефон в «Авто» — без трассировки; «Ультра» выбрал сам — с ней; глубина неточная — ни AO, ни трассировки, ни генерации кадров', { g1: g1.rt, g3: g3.rt, g4: [g4.ao, g4.rt, g4.framegen] });
+  // телефон — не только по строке браузера («версия для ПК» на телефоне, iPad)
+  const env = (o) => {
+    const keep = {}; for (const k of ['navigator', 'matchMedia', 'screen']) keep[k] = Object.getOwnPropertyDescriptor(globalThis, k);
+    Object.defineProperty(globalThis, 'navigator', { value: { userAgent: o.ua, maxTouchPoints: o.touch || 0, userAgentData: o.uad, hardwareConcurrency: 8 }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'matchMedia', { value: q => ({ matches: q === '(pointer: coarse)' ? !!o.coarse : q === '(any-pointer: fine)' ? !!o.fine : false }), configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'screen', { value: { width: o.sw || 1920, height: o.sh || 1080 }, configurable: true, writable: true });
+    let v; try { v = E.isMobile(); } finally { for (const k in keep) { if (keep[k]) Object.defineProperty(globalThis, k, keep[k]); else delete globalThis[k]; } }
+    return v;
+  };
+  const DESK = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+  const cases = [
+    [env({ ua: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36', coarse: true, sw: 412, sh: 915 }), true, 'Android'],
+    [env({ ua: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36', coarse: true, touch: 5, sw: 412, sh: 915 }), true, 'телефон, «версия для ПК»'],
+    [env({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', touch: 5, coarse: true, sw: 820, sh: 1180 }), true, 'iPad'],
+    [env({ ua: DESK, uad: { mobile: true } }), true, 'userAgentData.mobile'],
+    [env({ ua: DESK, coarse: true, fine: true, touch: 10, sw: 1280, sh: 800 }), false, 'ноутбук с сенсорным экраном и мышью'],
+    [env({ ua: DESK, sw: 1920, sh: 1080 }), false, 'компьютер'],
+    [env({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', sw: 1512, sh: 982 }), false, 'Mac'],
+  ];
+  const wrong = cases.filter(([got, want]) => got !== want).map(c => c[2]);
+  ok(!wrong.length, 'E.isMobile: Android, телефон в «версии для ПК», iPad — телефон/планшет; компьютер, Mac, ноутбук с сенсором — нет', wrong);
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);
