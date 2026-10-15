@@ -23,8 +23,9 @@ function captureReferralCode(){
 // браузере и переходит по ссылке "забыл пароль", всё равно должна
 // открыться форма нового пароля, а не увести его на страницу профиля.
 // Вход через Google (и др.) — кнопка видна, только если провайдер включён в Supabase: /auth/v1/settings → external.
-// Включить: docs/GOOGLE_LOGIN.md. Поток implicit, как у сброса пароля: токены приходят в #хэше на корень сайта,
-// supabase-js их забирает (detectSessionInUrl), роутер на непонятном хэше показывает главную — затем onAuthStateChange.
+// Включить: docs/GOOGLE_LOGIN.md. Поток implicit, как у сброса пароля: токены приходят в #хэше на корень сайта; их забирает
+// js/features/auth-guard.js (supabase-js сам — нет: detectSessionInUrl: false) — свой вход молча, чужую ссылку — только с согласия.
+// Поэтому перед письмом (регистрация, «Забыли пароль?») ставим отметку D37AuthUrl.mark — ссылку из этого письма в ЭТОМ браузере примем молча.
 let oauthProvidersPromise = null;
 function oauthProviders() {
   if (!oauthProvidersPromise) oauthProvidersPromise = fetch(`${SB_URL}/auth/v1/settings`, { headers: { apikey: SB_KEY } })
@@ -32,6 +33,9 @@ function oauthProviders() {
   return oauthProvidersPromise;
 }
 async function signInWithProvider(provider) {
+  // ▼ вход через сервисы — js/features/social-login.js (VK ID, Telegram, Яндекс ID, Google, Discord, Twitch, GitHub) ▼
+  if (window.D37Login) return window.D37Login.start(provider);
+  // ▲ ▲
   if (!sbClient) return;
   try { localStorage.setItem('d37_after_login', '#/profile'); } catch (e) {}
   if (typeof window.va === 'function') window.va('event', { name: 'oauth_click', data: { provider } });
@@ -42,7 +46,9 @@ async function signInWithProvider(provider) {
 function openLoginModal(mode) {
   const modal = document.getElementById('globalAuthModal');
   modal.classList.add('open');
-  oauthProviders().then(p => { const box = document.getElementById('gauthOauth'); if (box) box.hidden = !p.google; });
+  // ▼ «Войти через…» рисует js/features/social-login.js (switchAuthTab ниже зовёт D37Login.renderModal); без него — как раньше, только Google ▼
+  if (!window.D37Login) oauthProviders().then(p => { const box = document.getElementById('gauthOauth'); if (box) box.hidden = !p.google; });
+  // ▲ ▲
   switchAuthTab(mode === 'register' ? 'register' : 'login');
   document.getElementById('gauthLogin').style.display = 'block';
   trapModalFocus(modal);
@@ -94,6 +100,9 @@ function switchAuthTab(mode) {
   document.getElementById('gauthErr').textContent = '';
   document.getElementById('gauthRegErr').textContent = '';
   document.getElementById('gauthResetErr').textContent = '';
+  // ▼ вход через сервисы: кнопки «Войти через…» и «я не робот» под эту вкладку (js/features/social-login.js) ▼
+  window.D37Login?.renderModal?.(isReset ? 'reset' : isReg ? 'register' : 'login');
+  // ▲ ▲
 }
 
 // ─── Забыл пароль ───
@@ -105,10 +114,16 @@ async function doForgotPassword() {
   errEl.style.color = '';
   errEl.textContent = 'Отправляем письмо...';
   try {
+    // ▼ «я не робот» (D37Captcha, js/features/social-login.js; выключено, пока нет TURNSTILE_SITE_KEY) ▼
+    const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('login') : null;
     const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-      redirectTo: location.origin + location.pathname,
+      redirectTo: location.origin + location.pathname, ...(captchaToken ? { captchaToken } : {}),
     });
+    window.D37Captcha?.done('login', true, false);
+    // ▲ ▲
     if (error) throw error;
+    // ссылку из этого письма, открытую в этом же браузере, auth-guard.js примет молча (на другом устройстве — спросит)
+    window.D37AuthUrl?.mark('recovery', email);
     errEl.style.color = 'var(--tw)';
     errEl.textContent = '✅ Письмо отправлено. Перейди по ссылке в нём, чтобы задать новый пароль.';
   } catch(e) {
@@ -159,7 +174,11 @@ async function doGlobalLogin() {
 
   try {
     if (!sbClient) throw new Error('Нет связи с сервером — обнови страницу');
-    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass });
+    // ▼ «я не робот»: невидимо, после 2 неудачных входов — галочка (D37Captcha, js/features/social-login.js) ▼
+    const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('login') : null;
+    const { data, error } = await sbClient.auth.signInWithPassword({ email, password: pass, options: captchaToken ? { captchaToken } : undefined });
+    window.D37Captcha?.done('login', !error);
+    // ▲ ▲
     if (error) throw error;
     await onAuthStateChange(data.user);
     goToOwnProfile();
@@ -193,7 +212,12 @@ async function doGlobalRegister() {
     // его читает handle_new_user() из referrals.sql. Раньше не передавался вовсе.
     let ref = '';
     try { ref = localStorage.getItem('d37_ref') || ''; } catch(e) {}
-    const { data, error } = await sbClient.auth.signUp({ email, password: pass, options: ref ? { data: { ref } } : undefined });
+    // ▼ «я не робот» при регистрации (D37Captcha, js/features/social-login.js; выключено, пока нет TURNSTILE_SITE_KEY) ▼
+    const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('register') : null;
+    const signOpts = { ...(ref ? { data: { ref } } : {}), ...(captchaToken ? { captchaToken } : {}) };
+    const { data, error } = await sbClient.auth.signUp({ email, password: pass, options: Object.keys(signOpts).length ? signOpts : undefined });
+    window.D37Captcha?.done('register', !error);
+    // ▲ ▲
     if (error) throw error;
 
     if (data.session && data.user) {
@@ -226,6 +250,8 @@ async function doGlobalRegister() {
       // дефолтный (из email) через триггер — досохраняем настоящий ник
       // локально и попробуем дописать его в профиль при первом входе.
       try { localStorage.setItem('d37_pending_nick', nick); } catch(e) {}
+      // ссылку «подтверди почту», открытую в этом же браузере, auth-guard.js примет молча (на другом устройстве — спросит)
+      window.D37AuthUrl?.mark('signup', email);
       errEl.style.color = 'var(--tw)';
       errEl.textContent = '✅ Проверь почту — перейди по ссылке в письме, чтобы подтвердить регистрацию.';
     }

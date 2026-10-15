@@ -1,7 +1,7 @@
 # Картинки-превью 1200×630 для ссылок на тесты и инструменты (img/share/<id>.png) — их показывают Telegram, ВК,
 # Discord, когда ссылку отправляют другу. Как img/games/_make-cards.py: Pillow + шрифты Windows (Segoe UI, Segoe UI Emoji).
-# Запуск: python -X utf8 img/share/_make-cards.py   (новый тест/инструмент → строка в CARDS и перезапуск)
-import os
+# Запуск: python -X utf8 img/share/_make-cards.py [id …]   (новый тест/инструмент → строка в CARDS и перезапуск; с id — только эти картинки)
+import os, sys
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 OUT = os.path.dirname(os.path.abspath(__file__))
@@ -33,6 +33,7 @@ CARDS = [
     ('top', '🏆', 'Лучшие видео dan4ik37', 'Топ по просмотрам из ~6000 роликов', 'Смотреть', '#ffd166'),
     ('about', '👤', 'Кто такой dan4ik37', 'Ютубер и стример · Денчик37', 'Узнать', '#ff2d55'),
     ('community', '🏰', 'Приглашение в сообщество', 'Чат, голосовой и друзья', 'Вступить', '#818cf8'),
+    ('invite', '🎁', 'Тебя зовут на сайт Денчика37', 'Игры, 3D-мир и подарок новичку', 'Зайти', '#ffd166'),
 ]
 
 def hex2rgb(h):
@@ -48,7 +49,9 @@ def wrap(d, text, font, width):
     return lines
 
 W, H = 1200, 630
+ONLY = set(sys.argv[1:])
 for cid, ic, title, sub, btn, color in CARDS:
+    if ONLY and cid not in ONLY: continue
     c = hex2rgb(color)
     glow = Image.new('RGB', (W, H), (8, 8, 14))
     d = ImageDraw.Draw(glow)

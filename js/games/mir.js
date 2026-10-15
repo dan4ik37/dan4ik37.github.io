@@ -673,6 +673,8 @@
     const E = window.D37E, wrap = S.wrap;
     const R = S.R = E.renderer(wrap);
     R.r.domElement.classList.add('wld-gl');
+    // генерация кадров (×2): другие игроки — подвижные (свой персонаж движок знает сам — по R.follow)
+    R.fgMovers = () => { const L = []; if (S?.players) for (const p of S.players.values()) if (p.ch) L.push([p.key, p.ch.x, p.ch.y, p.ch.z]); return L; };
     // графика v3: время суток — общее для всех игроков (сутки 40 мин, ночь — пятая часть), небо, туман, вода, цвет кадра
     R.setLighting({ time: mirTime(), brightness: 1.05, ambient: 1.05, fogEnd: 260, shadows: true, gfx: MIR_GFX });
     const ph = S.ph = new E.Phys({ ground: 0 });
@@ -1250,7 +1252,7 @@
     }
     else if (a === 'go') startGame(tb, my.c);
     else if (a === 'link') {
-      const url = `${location.origin}/#/games/${tb.game}/${my.c}`;
+      const url = (window.D37Ref?.wrap || (u => u))(`${location.origin}/#/games/${tb.game}/${my.c}`);   // 👥 с кодом приглашения (js/core/ref.js)
       navigator.clipboard?.writeText(url).then(() => toast('🔗 Ссылка скопирована — отправь другу'), () => prompt('Ссылка на эту партию:', url));
     } else if (a === 'invite') {
       const sub = S.q('.mir-tb .wld-sub'), free = [...S.players.values()].filter(p => !p.leaving && !p.seat);

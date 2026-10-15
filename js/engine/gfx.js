@@ -44,20 +44,22 @@
   // tier — «каркас» рендерера (low — Ламберт без теней и постобработки; mid; high — MSAA, рельеф текстур, 8 ламп): меняется
   // только пересборкой мира. Остальное меняется на живую (R.applyGfx).
   const SHQ = ['low', 'mid', 'high', 'ultra'];
+  // rt — «Трассировка лучей» (post.js): off; on — отражения в экране + контактные тени; high — больше шагов луча и цветной отскок
   const P = E.GFX_PRESETS = {
-    low: { tier: 'low', shadows: false, shadowQ: 'low', ao: 'off', water: 'simple', refl: false, aa: 'off', fog: true, dist: .8, grade: false },
-    mid: { tier: 'mid', shadows: true, shadowQ: 'mid', ao: 'off', water: 'good', refl: true, aa: 'fxaa', fog: true, dist: 1, grade: true },
-    high: { tier: 'high', shadows: true, shadowQ: 'high', ao: 'on', water: 'good', refl: true, aa: 'msaa', fog: true, dist: 1.25, grade: true },
-    ultra: { tier: 'high', shadows: true, shadowQ: 'ultra', ao: 'high', water: 'good', refl: true, aa: 'msaa', fog: true, dist: 1.6, grade: true },
+    low: { tier: 'low', shadows: false, shadowQ: 'low', ao: 'off', water: 'simple', refl: false, aa: 'off', fog: true, dist: .8, grade: false, rt: 'off' },
+    mid: { tier: 'mid', shadows: true, shadowQ: 'mid', ao: 'off', water: 'good', refl: true, aa: 'fxaa', fog: true, dist: 1, grade: true, rt: 'off' },
+    high: { tier: 'high', shadows: true, shadowQ: 'high', ao: 'on', water: 'good', refl: true, aa: 'msaa', fog: true, dist: 1.25, grade: true, rt: 'on' },
+    ultra: { tier: 'high', shadows: true, shadowQ: 'ultra', ao: 'high', water: 'good', refl: true, aa: 'msaa', fog: true, dist: 1.6, grade: true, rt: 'high' },
   };
   // Значения настроек игрока (js/core/gfx-settings.js кладёт их в window.D37Opt.gfx)
   E.GFX_KEYS = {
     preset: ['auto', 'low', 'mid', 'high', 'ultra', 'custom'], shadowQ: SHQ, ao: ['off', 'on', 'high'], water: ['simple', 'good'],
-    aa: ['off', 'fxaa', 'msaa'], fpsCap: [0, 30, 45, 60, 90, 120],
+    aa: ['off', 'fxaa', 'msaa'], fpsCap: [0, 30, 45, 60, 90, 120], upscaler: ['fsr', 'nis', 'off'], rt: ['off', 'on', 'high'],
   };
   const pick = (v, list, d) => list.includes(v) ? v : d;
   // s — настройки игрока: { preset, shadows, shadowQ, ao, water, refl, aa, fog, dist (0,5…2), grade, fpsCap, res (50…100), battery }
-  // dev — { q: каркас рендерера / устройства (low|mid|high), gl2 }. Возвращает включённое (без лишних полей)
+  // dev — { q: каркас рендерера / устройства (low|mid|high), gl2, mobile — телефон/планшет (E.isMobile), depthFx — глубина
+  // кадра читается точно (post.js: P.depthOK) }. Возвращает включённое (без лишних полей)
   E.gfxResolve = (s = {}, dev = {}) => {
     const q = ['low', 'mid', 'high'].includes(dev.q) ? dev.q : 'mid';
     const preset = pick(s.preset, E.GFX_KEYS.preset, 'auto'), own = preset === 'auto' || preset === 'custom';
@@ -68,28 +70,41 @@
       o.shadowQ = pick(s.shadowQ, SHQ, o.shadowQ); o.ao = pick(s.ao, E.GFX_KEYS.ao, o.ao); o.water = pick(s.water, E.GFX_KEYS.water, o.water);
       if (typeof s.refl === 'boolean') o.refl = s.refl;
       o.aa = pick(s.aa, E.GFX_KEYS.aa, o.aa);
+      o.rt = pick(s.rt, E.GFX_KEYS.rt, o.rt);
       if (typeof s.fog === 'boolean') o.fog = s.fog;
       if (s.dist !== undefined) o.dist = cl(num(s.dist, o.dist), .5, 2);
       if (typeof s.grade === 'boolean') o.grade = s.grade;
     } else if (s.shadows === false) o.shadows = false;   // «Тени: выкл» в любом пресете (как было до пресетов)
     o.fpsCap = E.GFX_KEYS.fpsCap.includes(+s.fpsCap) ? +s.fpsCap : 0;
     o.res = cl(Math.round(num(s.res, 100)), 50, 100);
+    // апскейлер уменьшенного кадра (FSR 1 — AMD, NIS — NVIDIA, выкл) и резкость 0…1 — не зависят от пресета
+    o.upscaler = pick(s.upscaler, E.GFX_KEYS.upscaler, 'fsr');
+    o.sharp = cl(Math.round(num(s.sharp, 50)), 0, 100) / 100;
+    o.framegen = s.framegen === true;   // «Генерация кадров (×2)» — выключена, пока игрок не включит
     o.battery = !!s.battery;
     o.prCap = o.tier === 'low' ? 1 : o.tier === 'mid' ? 1.5 : 2;
-    if (o.battery) {   // экономия батареи: 30 кадров, без AO, тени попроще, ближе дальность, плотность пикселей 1
+    if (o.battery) {   // экономия батареи: 30 кадров, без AO и трассировки, тени попроще, ближе дальность, плотность пикселей 1
       o.fpsCap = o.fpsCap ? Math.min(o.fpsCap, 30) : 30;
-      o.ao = 'off'; if (SHQ.indexOf(o.shadowQ) > 1) o.shadowQ = 'mid';
+      o.ao = 'off'; o.rt = 'off'; if (SHQ.indexOf(o.shadowQ) > 1) o.shadowQ = 'mid';
       if (o.aa === 'msaa') o.aa = 'fxaa';
       o.dist = Math.min(o.dist, 1); o.prCap = 1;
     }
-    if (o.tier === 'low') { o.shadows = false; o.ao = 'off'; o.aa = 'off'; o.grade = false; o.water = 'simple'; o.refl = false; }   // каркас low: без постобработки
+    if (o.tier === 'low') { o.shadows = false; o.ao = 'off'; o.aa = 'off'; o.grade = false; o.water = 'simple'; o.refl = false; o.rt = 'off'; o.framegen = false; }   // каркас low: без постобработки
+    // телефон (E.isMobile): «Авто» — без трассировки лучей (её включают сами: «Высокая», «Ультра» или «Своя»)
+    if (dev.mobile && o.auto) o.rt = 'off';
+    // видеокарта читает глубину неточно (post.js: проверка при запуске) — всё, что строится по глубине кадра, выключено:
+    // иначе пятна и полосы на ровном полу
+    if (dev.depthFx === false) { o.ao = 'off'; o.rt = 'off'; o.framegen = false; }
     if (o.aa === 'msaa' && dev.gl2 === false) o.aa = 'fxaa';
     return o;
   };
-  // Лесенка автокачества (пресет «Авто»): [0] — лучшее, дальше — по ступеньке дешевле (AO → тени → MSAA → дальность → тени выкл)
+  // Лесенка автокачества (пресет «Авто»): [0] — лучшее, дальше — по ступеньке дешевле (трассировка → AO → тени → MSAA →
+  // дальность → тени выкл)
   E.autoSteps = base => {
     const L = [{ ...base }], same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     const step = f => { const o = { ...L[L.length - 1] }; f(o); if (!same(o, L[L.length - 1])) L.push(o); };
+    step(o => { if (o.rt === 'high') o.rt = 'on'; });
+    step(o => { o.rt = 'off'; });
     step(o => { if (o.ao === 'high') o.ao = 'on'; });
     step(o => { o.ao = 'off'; });
     step(o => { const i = SHQ.indexOf(o.shadowQ); if (i > 1) o.shadowQ = SHQ[i - 1]; });
@@ -116,12 +131,15 @@
     grade: 'neutral', bloom: 1, exposure: 0,
     water: { color: '', clarity: .55, foam: .6 },
     shadow: { soft: .35 },
+    // «Трассировка лучей» мира: сила отражений (у игроков, у кого она включена) и мокрые поверхности (для всех)
+    rt: { refl: 1, wet: 0 },
   };
   const G01 = v => cl(num(v, 0), 0, 1);
   E.worldGfx = (d = {}) => {
     d = d && typeof d === 'object' ? d : {};
     const s = d.sky && typeof d.sky === 'object' ? d.sky : {}, f = d.fog && typeof d.fog === 'object' ? d.fog : {};
     const w = d.water && typeof d.water === 'object' ? d.water : {}, sh = d.shadow && typeof d.shadow === 'object' ? d.shadow : {};
+    const rt = d.rt && typeof d.rt === 'object' ? d.rt : {};
     return {
       preset: typeof d.preset === 'string' && E.WORLD_PRESETS[d.preset] ? d.preset : '',
       sky: { haze: cl(num(s.haze, WG.sky.haze), 0, 1), sun: cl(num(s.sun, WG.sky.sun), .3, 3), moon: s.moon !== false, stars: cl(num(s.stars, WG.sky.stars), 0, 1), clouds: cl(num(s.clouds, WG.sky.clouds), 0, 1) },
@@ -130,6 +148,7 @@
       bloom: cl(num(d.bloom, WG.bloom), 0, 2.5), exposure: cl(num(d.exposure, WG.exposure), -1, 1),
       water: { color: isHex(w.color) ? w.color.toLowerCase() : '', clarity: cl(num(w.clarity, WG.water.clarity), 0, 1), foam: cl(num(w.foam, WG.water.foam), 0, 1) },
       shadow: { soft: cl(num(sh.soft, WG.shadow.soft), 0, 1) },
+      rt: { refl: cl(num(rt.refl, WG.rt.refl), 0, 2), wet: cl(num(rt.wet, WG.rt.wet), 0, 1) },
     };
   };
   // Освещение мира: cur — R.lighting, L — новое (R.setLighting). Полный объект (есть time, brightness и fogEnd: мир загрузили
@@ -142,7 +161,7 @@
     if ('time' in L && 'brightness' in L && 'fogEnd' in L) cur.gfx = E.worldGfx(L.gfx);
     else if (L.gfx && typeof L.gfx === 'object') {
       const b = L.gfx, o = { ...g0, ...b };
-      for (const k of ['sky', 'fog', 'water', 'shadow']) if (b[k] && typeof b[k] === 'object') o[k] = { ...g0[k], ...b[k] };
+      for (const k of ['sky', 'fog', 'water', 'shadow', 'rt']) if (b[k] && typeof b[k] === 'object') o[k] = { ...g0[k], ...b[k] };
       cur.gfx = E.worldGfx(o);
     } else if (!cur.gfx) cur.gfx = g0;
     return cur;
@@ -156,9 +175,9 @@
     night: { name: 'Ночь', icon: '🌙', lighting: { time: .5, brightness: 1, ambient: 1.2, fogEnd: 240 },
       gfx: { sky: { haze: .1, stars: 1, moon: true, clouds: .6 }, fog: { density: .18, height: 0, sun: .3 }, grade: 'cold', bloom: 1.5, exposure: .2, water: { clarity: .4, foam: .4 }, shadow: { soft: .4 } } },
     foggy: { name: 'Туманный лес', icon: '🌫️', lighting: { time: 8.6, brightness: .75, ambient: 1.25, fogEnd: 150 },
-      gfx: { sky: { haze: .9, clouds: 1 }, fog: { density: .75, height: 1, sun: .6 }, grade: 'soft', bloom: .7, exposure: .05, water: { clarity: .3, foam: .3 }, shadow: { soft: .85 } } },
+      gfx: { sky: { haze: .9, clouds: 1 }, fog: { density: .75, height: 1, sun: .6 }, grade: 'soft', bloom: .7, exposure: .05, water: { clarity: .3, foam: .3 }, shadow: { soft: .85 }, rt: { refl: 1, wet: .35 } } },
     neon: { name: 'Неон-город', icon: '🌃', lighting: { time: 22.4, brightness: .6, ambient: .85, fogEnd: 260 },
-      gfx: { sky: { haze: .35, stars: .35, clouds: .4 }, fog: { density: .35, height: 0, sun: .1, color: '#2a1b4d' }, grade: 'neon', bloom: 2, exposure: .12, water: { clarity: .45, foam: .3 }, shadow: { soft: .45 } } },
+      gfx: { sky: { haze: .35, stars: .35, clouds: .4 }, fog: { density: .35, height: 0, sun: .1, color: '#2a1b4d' }, grade: 'neon', bloom: 2, exposure: .12, water: { clarity: .45, foam: .3 }, shadow: { soft: .45 }, rt: { refl: 1.3, wet: .75 } } },
   };
 
   // ═══ Цветокоррекция (последний проход post.js): экспозиция, контраст, насыщенность, температура, оттенок, виньетка ═══
@@ -289,7 +308,10 @@
   // a — плотность высотного тумана; fogC: x — высота «пола» тумана, y — спад с высотой, z, w — запас;
   // sh: x — выборок PCF (каждая — 2×2 текселя с весами), y — поиск заслонок (0 — без PCSS), z — тексели полутени на 1 ед.
   // глубины карты, w — 2: без наклона приёмника (для проверок), иначе с ним
+  // rt: x — мокрые поверхности мира 0…1 (пол глаже и темнее), y — 1: метить блестящее в альфе буфера сцены для отражений
+  // (только пока рисуется буфер постобработки с трассировкой — на холст альфа < 1 не попадает), z, w — запас
   const U = E.GFXU = E.GFXU || { fogA: new Float32Array(4), fogB: new Float32Array(4), fogC: new Float32Array(4), sh: new Float32Array(4) };
+  U.rt = U.rt || new Float32Array(4);
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
   const FOG_PARS_V = `#ifdef USE_FOG
@@ -409,22 +431,60 @@
 		return shadow;
 	}
 	`;
+  // Точность сэмплеров (15.10.2026, телефон владельца): у sampler2D во фрагментном шейдере по умолчанию lowp, и на телефонах
+  // значение из текстуры приходит в половинной точности (fp16). Карте теней (глубина, упакованная в RGBA8) и карте глубины
+  // воды это мало: кусок теней целиком — в highp, после него — снова как было (lowp: цвету и нормалям хватает, так быстрее).
+  // highp в GLSL ES 3.00 есть всегда; в WebGL1 — если видеокарта умеет. Постобработка — E.POST_PREC (post.js).
+  const PREC_HI = '#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )\nprecision highp sampler2D;\n#endif\n';
+  const PREC_LO = '#if __VERSION__ >= 300 || defined( GL_FRAGMENT_PRECISION_HIGH )\nprecision lowp sampler2D;\n#endif\n';
+  E.SAMPLER_PREC = { hi: PREC_HI, lo: PREC_LO };
   // Заменить getShadow в куске three (от «float getShadow(» до «vec2 cubeToUV(») — устойчиво к пробелам сборки
   E.patchShadowChunk = src => {
     const a = src.indexOf('float getShadow('), b = src.indexOf('vec2 cubeToUV(');
     if (a < 0 || b < a || src.includes('d37Pcf')) return src;
     return src.slice(0, a) + SH_FN + src.slice(b);
   };
+  // ── «Трассировка лучей»: что блестит (для отражений в экране, post.js) и мокрые поверхности ──
+  // Стандартные материалы (PBR) пишут в альфу буфера сцены код блеска: [0,75 … 0,87] — гладкое (не металл), [0,875 … 0,995] —
+  // металл; доля внутри — глянец (по шероховатости: 0,55 — ещё нет, 0,12 — зеркало). Вода и стекло (прозрачные) пишут 0
+  // (смешивание альфы — ноль, post.js). Обычное — 1, светящееся — 1 + сила (свечение). Код — только пока d37Rt.y = 1.
+  const RT_PARS = `
+uniform vec4 d37Rt;`;
+  // мокрое: на горизонтальном (нормаль поверхности вверх) — гладче и темнее, как после дождя (на любом качестве, кроме low)
+  const RT_WET = `
+#ifdef STANDARD
+	if ( d37Rt.x > 0.0 ) {
+		float d37Up = dot( geometryNormal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) );
+		float d37Wt = d37Rt.x * smoothstep( 0.55, 0.85, d37Up );
+		roughnessFactor = mix( roughnessFactor, 0.07, d37Wt );
+		diffuseColor.rgb *= 1.0 - 0.35 * d37Wt;
+	}
+#endif`;
+  const RT_OUT = `
+#if defined( STANDARD ) && defined( OPAQUE )
+	if ( d37Rt.y > 0.5 ) {
+		float d37G = smoothstep( 0.55, 0.12, roughnessFactor );
+		if ( d37G > 0.01 ) gl_FragColor.a = ( metalnessFactor > 0.5 ? 0.875 : 0.75 ) + 0.12 * d37G;
+	}
+#endif`;
+  // код блеска из альфы (как читает post.js) — для проверок: { kind: 'clear' | 'gloss' | 'metal' | null, gloss }
+  E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) } : { kind: null, gloss: 0 };
+  E.rtEncode = (rough, metal) => { const t = Math.max(0, Math.min(1, (rough - .55) / (.12 - .55))), g = t * t * (3 - 2 * t); return g > .01 ? (metal > .5 ? .875 : .75) + .12 * g : 1; };
   const LIT = ['basic', 'lambert', 'phong', 'standard', 'physical', 'toon', 'matcap', 'points', 'sprite', 'dashed'];
   E.gfxPatch = T => {
     const C = T && T.ShaderChunk;
     if (!C || C.__d37) return !!C;
     C.fog_pars_vertex = FOG_PARS_V; C.fog_vertex = FOG_V; C.fog_pars_fragment = FOG_PARS_F; C.fog_fragment = FOG_F;
-    C.shadowmap_pars_fragment = E.patchShadowChunk(C.shadowmap_pars_fragment || '');
+    C.shadowmap_pars_fragment = PREC_HI + E.patchShadowChunk(C.shadowmap_pars_fragment || '') + '\n' + PREC_LO;   // карта теней — highp
+    // трассировка лучей: данные — в кусок шероховатости (он есть только у стандартных), мокрое — после нормалей, код блеска — в конце
+    if (C.roughnessmap_pars_fragment != null && !C.roughnessmap_pars_fragment.includes('d37Rt')) C.roughnessmap_pars_fragment += RT_PARS;
+    if (C.normal_fragment_maps != null && !C.normal_fragment_maps.includes('d37Rt')) C.normal_fragment_maps += RT_WET;
+    if (C.output_fragment != null && !C.output_fragment.includes('d37Rt')) C.output_fragment += RT_OUT;
     for (const k of LIT) {
       const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
       L.uniforms.d37FogA = { value: U.fogA }; L.uniforms.d37FogB = { value: U.fogB }; L.uniforms.d37FogC = { value: U.fogC };
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
+      if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };
     }
     try { Object.defineProperty(C, '__d37', { value: 1, enumerable: false }); } catch (e) { C.__d37 = 1; }
     return true;
@@ -517,8 +577,8 @@ varying vec3 vD37W;
 uniform float uTime; uniform float uClear; uniform float uFoam; uniform float uWQ;
 uniform vec4 uDepR;
 #ifdef D37_WDEPTH
-uniform sampler2D tDep;
-#endif`)
+${PREC_HI}uniform sampler2D tDep;
+${PREC_LO}#endif`)
         // нормаль: два слоя ряби в мировых координатах (только у горизонтальной поверхности)
         .replace('#include <normal_fragment_maps>', `#ifdef USE_NORMALMAP
   vec2 wq = vD37W.xz;
@@ -554,6 +614,16 @@ uniform sampler2D tDep;
   gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, fr * 0.6 ), 0.0, 1.0 );`);
     };
     m.customProgramCacheKey = () => 'd37-water2' + (dep?.tex ? 'd' : '');
+    return m;
+  };
+  // Вода и стекло для отражений (post.js): пока трассировка включена, их смешивание пишет в альфу буфера сцены 0 (цвет —
+  // как обычно, по их прозрачности) — так отражения знают, где «прозрачное блестящее». Выключена — обычное смешивание.
+  // Смешивание — состояние GL, шейдер не пересобирается
+  E.rtMark = (T, m, on) => {
+    if (!m || !m.transparent) return m;
+    if (on) Object.assign(m, { blending: T.CustomBlending, blendEquation: T.AddEquation, blendSrc: T.SrcAlphaFactor, blendDst: T.OneMinusSrcAlphaFactor,
+      blendEquationAlpha: T.AddEquation, blendSrcAlpha: T.ZeroFactor, blendDstAlpha: T.ZeroFactor });
+    else Object.assign(m, { blending: T.NormalBlending, blendEquationAlpha: null, blendSrcAlpha: null, blendDstAlpha: null });
     return m;
   };
   // Текстура высот дна для воды: f(x, z) → высота дна, прямоугольник [x0, z0, w, d], n×n точек (половинные float, WebGL2)

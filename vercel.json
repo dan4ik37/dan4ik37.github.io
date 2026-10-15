@@ -118,6 +118,10 @@
       "destination": "/api/pages?page=ids"
     },
     {
+      "source": "/api/raid",
+      "destination": "/api/pages?page=raid"
+    },
+    {
       "source": "/api/feed",
       "destination": "/api/pages?page=feed"
     },
@@ -186,6 +190,10 @@
       "destination": "/api/pages?page=invite&code=:code"
     },
     {
+      "source": "/r/:code",
+      "destination": "/api/pages?page=r&code=:code"
+    },
+    {
       "source": "/go/:id",
       "destination": "/api/pages?page=go&id=:id"
     },
@@ -196,6 +204,18 @@
     {
       "source": "/ads-terms",
       "destination": "/api/pages?page=adsterms"
+    },
+    {
+      "source": "/auth/:p/start",
+      "destination": "/api/pages?page=oauth&a=start&p=:p"
+    },
+    {
+      "source": "/auth/:p/callback",
+      "destination": "/api/pages?page=oauth&a=callback&p=:p"
+    },
+    {
+      "source": "/api/oauth",
+      "destination": "/api/pages?page=oauth"
     },
     {
       "source": "/games",

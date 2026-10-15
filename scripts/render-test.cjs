@@ -412,9 +412,10 @@ function boundsOk(R){
   // лесенка автокачества: от лучшего к дешёвому, каждая ступень не дороже прошлой
   const L = E.autoSteps(R0({ preset: 'ultra' })), SQ = ['low', 'mid', 'high', 'ultra'], AO = ['off', 'on', 'high'];
   ok(L.length >= 6 && JSON.stringify(L[0]) === JSON.stringify(R0({ preset: 'ultra' })) && !L[L.length - 1].shadows, 'лесенка: от пресета до «без теней»', L.length);
-  let mono = true;
-  for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i]; if (AO.indexOf(b.ao) > AO.indexOf(a.ao) || SQ.indexOf(b.shadowQ) > SQ.indexOf(a.shadowQ) || b.dist > a.dist || (b.shadows && !a.shadows)) mono = false; }
+  let mono = true; const RTO = ['off', 'on', 'high'];
+  for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i]; if (AO.indexOf(b.ao) > AO.indexOf(a.ao) || SQ.indexOf(b.shadowQ) > SQ.indexOf(a.shadowQ) || RTO.indexOf(b.rt) > RTO.indexOf(a.rt) || b.dist > a.dist || (b.shadows && !a.shadows)) mono = false; }
   ok(mono, 'каждая ступень не дороже прошлой');
+  ok(L[0].rt === 'high' && L[1].rt === 'on' && L[2].rt === 'off' && L[2].ao === L[0].ao, 'лесенка: сначала трассировка лучей (high → on → выкл), потом AO', L.slice(0, 3).map(x => x.rt + '/' + x.ao));
   ok(E.autoSteps(E.gfxResolve({}, { q: 'low' })).length === 1, 'на low упрощать нечего');
   // тени по качеству
   ok(['low', 'mid', 'high', 'ultra'].every((k, i, a) => !i || (E.SHADOW_Q[k].map >= E.SHADOW_Q[a[i - 1]].map && E.SHADOW_Q[k].taps > E.SHADOW_Q[a[i - 1]].taps)), 'качество теней растёт: карта и выборки');
@@ -628,6 +629,417 @@ function boundsOk(R){
     ok(Math.abs(edge - keep) < .01, 'AO: через край предмета не размывает', { edge, keep });
   }
   P.dispose();
+}
+
+// ═══ 16. NVIDIA Image Scaling (NIS) — перенос NVScaler / NVSharpen (post.js): таблицы фильтров сверены с таблицами NVIDIA
+//     в половинной точности (NIS_Config.h coef_scale_fp16 / coef_usm_fp16 — MIT © 2022 NVIDIA CORPORATION & AFFILIATES),
+//     константы NVScalerUpdateConfig, шейдеры, проходы; эталон на JS (scripts/nis-ref.cjs) — свойства картинки ═══
+{
+  const N = E.NIS, ROWS = 64;
+  ok(N && N.scale.length === ROWS * 6 && N.usm.length === ROWS * 6, 'NIS: таблицы 64 фазы × 6 отводов');
+  // fp16 (биты half) из NIS_Config.h — 6 отводов на фазу (7-й и 8-й — нули)
+  const F16S = [[0, 0, 15360, 0, 0, 0], [6640, 41601, 15360, 8898, 39671, 0], [7796, 42592, 15357, 9955, 40695, 0], [8321, 43167, 15351, 10576, 41286, 4121], [8702, 43537, 15346, 11058, 41797, 4121],
+    [9029, 43871, 15339, 11408, 42146, 4121], [9280, 44112, 15328, 11672, 42402, 5145], [9411, 44256, 15316, 11944, 42690, 5669], [9535, 44401, 15304, 12216, 42979, 6169], [9667, 44528, 15288, 12396, 43137, 6378],
+    [9758, 44656, 15273, 12540, 43282, 6640], [9857, 44768, 15255, 12688, 43423, 6903], [9922, 44872, 15235, 12844, 43583, 7297], [10014, 44959, 15213, 13000, 43744, 7429], [10079, 45048, 15190, 13156, 43888, 7691],
+    [10112, 45092, 15167, 13316, 44040, 7796], [10178, 45124, 15140, 13398, 44120, 8058], [10211, 45152, 15112, 13482, 44201, 8256], [10211, 45180, 15085, 13566, 44279, 8387], [10242, 45200, 15054, 13652, 44360, 8518],
+    [10242, 45216, 15023, 13738, 44440, 8636], [10242, 45228, 14990, 13826, 44520, 8767], [10242, 45236, 14955, 13912, 44592, 8964], [10211, 45244, 14921, 14002, 44673, 9082], [10178, 45244, 14885, 14090, 44745, 9213],
+    [10145, 45244, 14849, 14178, 44817, 9280], [10112, 45236, 14810, 14266, 44887, 9378], [10079, 45228, 14770, 14346, 44953, 9437], [10014, 45216, 14731, 14390, 45017, 9503], [9981, 45204, 14689, 14434, 45064, 9601],
+    [9922, 45188, 14649, 14478, 45096, 9667], [9857, 45168, 14607, 14521, 45120, 9726], [9791, 45144, 14564, 14564, 45144, 9791]];
+  const F16U = [[0, 47309, 15565, 47309, 0, 0], [6640, 47326, 15563, 47289, 39408, 0], [7429, 47339, 15560, 47266, 40695, 4121], [8058, 47349, 15554, 47239, 41286, 0], [8387, 47357, 15545, 47209, 41915, 0],
+    [8636, 47363, 15534, 47176, 42238, 4121], [8767, 47364, 15522, 47141, 42657, 4121], [9029, 47367, 15509, 47105, 43023, 4121], [9213, 47363, 15490, 47018, 43249, 4121], [9280, 47357, 15472, 46928, 43472, 5145],
+    [9345, 47347, 15450, 46836, 43727, 5145], [9378, 47337, 15427, 46736, 43999, 5669], [9437, 47323, 15401, 46630, 44152, 5669], [9470, 47310, 15376, 46520, 44312, 6169], [9503, 47294, 15338, 46402, 44479, 6378],
+    [9503, 47272, 15274, 46280, 44648, 6640], [9503, 47253, 15215, 46158, 44817, 6903], [9503, 47231, 15150, 45972, 45017, 7165], [9535, 47206, 15082, 45708, 45132, 7297], [9503, 47180, 15012, 45432, 45232, 7429],
+    [9470, 47153, 14939, 45152, 45332, 7560], [9470, 47126, 14868, 44681, 45444, 7691], [9437, 47090, 14793, 44071, 45560, 7796], [9411, 47030, 14714, 42847, 45668, 7927], [9411, 46968, 14635, 8387, 45788, 8058],
+    [9345, 46902, 14552, 10786, 45908, 8256], [9313, 46846, 14478, 11647, 46036, 8321], [9247, 46776, 14394, 12292, 46120, 8453], [9247, 46714, 14288, 12620, 46184, 8518], [9147, 46648, 14130, 12936, 46248, 8570],
+    [9029, 46576, 13956, 13268, 46312, 8702], [8964, 46512, 13792, 13456, 46378, 8767], [8898, 46446, 13624, 13624, 46446, 8898]];
+  const half = b => { const s = b & 0x8000 ? -1 : 1, e = (b >> 10) & 31, m = b & 1023; return e === 0 ? s * m * Math.pow(2, -24) : s * (1 + m / 1024) * Math.pow(2, e - 15); };
+  let worst = 0, sym = 0, sumS = 0, sumU = 0;
+  for (let ph = 0; ph < ROWS; ph++) {
+    // фазы 33…63 у NVIDIA — зеркало 31…1 (проверяем и это)
+    const src = ph <= 32 ? ph : 64 - ph, rev = ph > 32;
+    for (let t = 0; t < 6; t++) {
+      const tt = rev ? 5 - t : t;
+      worst = Math.max(worst, Math.abs(N.scale[ph * 6 + t] - half(F16S[src][tt])), Math.abs(N.usm[ph * 6 + t] - half(F16U[src][tt])));
+      if (ph >= 1) sym = Math.max(sym, Math.abs(N.scale[ph * 6 + t] - N.scale[(64 - ph) % 64 * 6 + 5 - t] * (ph === 0 ? 0 : 1)));
+    }
+    let s = 0, u = 0; for (let t = 0; t < 6; t++) { s += N.scale[ph * 6 + t]; u += N.usm[ph * 6 + t]; }
+    sumS = Math.max(sumS, Math.abs(s - 1)); sumU = Math.max(sumU, Math.abs(u));
+  }
+  ok(worst < 6e-4, 'NIS: таблицы = таблицы NVIDIA (сверка с fp16 из NIS_Config.h)', worst);
+  ok(sym < 1e-9, 'NIS: фазы зеркальны (64 − k = k наоборот)', sym);
+  ok(sumS < .0025 && sumU < .0025, 'NIS: увеличение сохраняет яркость (сумма = 1), резкость — без сдвига (сумма = 0)', { sumS, sumU });
+  // константы (NVScalerUpdateConfig, SDR)
+  const c5 = E.nisConfig(.5), c0 = E.nisConfig(0), c1 = E.nisConfig(1), near = (a, b) => Math.abs(a - b) < 1e-6;
+  ok(near(c5.kDetectRatio, 2 * 1127 / 1024) && near(c5.kDetectThres, 64 / 1024) && near(c5.kRatioNorm, 1 / 8) && near(c5.kEps, 1 / 255) && near(c5.kSharpScaleY, 1 / .45), 'NIS: постоянные как у NVIDIA');
+  ok(near(c5.kSharpStrengthMin, .4) && near(c5.kSharpStrengthScale, 1.2) && near(c5.kSharpLimitMin, .14) && near(c5.kSharpLimitScale, .36), 'NIS: резкость 50% — середина шкалы NVIDIA', c5);
+  ok(near(c0.kSharpStrengthMin, 0) && near(c0.kSharpStrengthScale, 1.6 - .5 * 1.75 * 1.8) && near(c0.kSharpLimitMin, .1) && near(c1.kSharpStrengthMin, .4 + .5 * 1.25 * 1.2) && near(c1.kSharpLimitScale, .5 + .5 * 1.25 * .6 - (.14 + .5 * 1.25 * .32)), 'NIS: 0% и 100% — по формулам NVScalerUpdateConfig', { c0, c1 });
+  ok(E.nisConfig(-3).kSharpStrengthMin === c0.kSharpStrengthMin && E.nisConfig(9).kSharpStrengthMin === c1.kSharpStrengthMin, 'NIS: резкость за пределами 0…1 — по краю');
+  // шейдеры: окно 6×6 / 5×5, карта краёв, 4 направления, таблицы — из текстуры
+  const fsN = N.fs.scaler, fsS = N.fs.sharpen;
+  ok((fsN.match(/= nL\(b \+ ivec2/g) || []).length === 36 && (fsN.match(/nEdge\(p/g) || []).length === 4 && fsN.includes('texelFetch(tCoef') && ['if (w.x > 0.0)', 'if (w.y > 0.0)', 'if (w.z > 0.0)', 'if (w.w > 0.0)'].every(s => fsN.includes(s)), 'NIS-шейдер: окно 6×6, края в 4 точках, 4 направления, таблицы — текстурой');
+  ok((fsS.match(/= nL\(b \+ ivec2/g) || []).length === 25 && (fsS.match(/nUsm\(/g) || []).length >= 5 && fsS.includes('nEdge(p11, p12, p13, p21, p22, p23, p31, p32, p33)'), 'NIS-резкость: окно 5×5, 4 направления USM, края по середине');
+  const bal = (s, a, b) => (s.match(a) || []).length === (s.match(b) || []).length;
+  ok(bal(fsN, /\{/g, /\}/g) && bal(fsN, /\(/g, /\)/g) && bal(fsS, /\{/g, /\}/g) && bal(fsS, /\(/g, /\)/g), 'NIS-шейдеры: скобки сходятся');
+  // эталон NVIDIA на JS: ровное остаётся ровным, резкость ограничена и растёт с ползунком
+  const ref = require('./nis-ref.cjs')(E);
+  const W = 24, H = 16, flat = new Float32Array(W * H * 3).fill(.42);
+  const fl = ref.scale(flat, W, H, 37, 25, 1), fs2 = ref.sharpen(flat, W, H, 1);
+  ok(fl.every(v => Math.abs(v - .42) < 1e-4) && fs2.every(v => Math.abs(v - .42) < 1e-6), 'NIS: ровная картинка остаётся ровной (и при 100% резкости)');
+  const step = new Float32Array(W * H * 3); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) step.fill(x < 12 ? .2 : .8, (y * W + x) * 3, (y * W + x) * 3 + 3);
+  const prof = s => { const o = ref.scale(step, W, H, 36, 24, s), row = []; for (let x = 0; x < 36; x++) row.push(o[(12 * 36 + x) * 3 + 1]); return row; };
+  const p0 = prof(0), p1 = prof(1), over = r => Math.max(...r) - .8, under = r => .2 - Math.min(...r);
+  ok(over(p1) > over(p0) - 1e-6 && over(p1) < .2 && under(p1) < .2 && p1.every(v => v >= 0 && v <= 1), 'NIS: край ступеньки — резче на 100%, но без «звона» больше предела', { over0: over(p0), over1: over(p1) });
+  ok(Math.abs(p1[2] - .2) < .01 && Math.abs(p1[33] - .8) < .01, 'NIS: вдали от края цвет не меняется');
+  // проходы на подставном рендерере: уменьшенный кадр → NIS / FSR / просто; полный — резкость NIS
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(1000, 500), setRenderTarget: t => { cur = t; }, render: s => { log.push({ t: cur, fs: s.children[0]?.material?.fragmentShader || '' }); } };
+  const R0 = { T, r, q: 'high', stats: {}, pr0: 1 }, P = E.post(R0);
+  const cam = new T.PerspectiveCamera(50, 2, .2, 400); cam.updateProjectionMatrix();
+  const passes = (up, sharp, scaled) => { P.setOpts({ ao: 'off', aa: 'fxaa', upscaler: up, sharp }); P.setSize(scaled ? 670 : 1000, scaled ? 335 : 500, scaled ? .67 : 1); log.length = 0; P.render(new T.Scene(), cam); return log.slice(1); };
+  const kind = x => x.fs.includes('nPoly(') ? 'nis' : x.fs.includes('nUsm(') ? 'nisS' : x.fs.includes('eTap(') ? 'easu' : x.fs.includes('hitMin') ? 'rcas' : x.fs.includes('dir = clamp(dir * rcp') ? 'fxaa' : x.fs.includes('aoUp()') ? 'comp' : 'другое';
+  const seq = (up, sh, sc) => passes(up, sh, sc).filter(x => kind(x) !== 'другое').map(x => kind(x) + (x.t ? '' : '→экран')).join(' ');
+  ok(seq('nis', .5, true) === 'comp nis→экран', 'уменьшенный кадр + NIS: сборка → NVScaler на экран', seq('nis', .5, true));
+  ok(seq('fsr', .5, true) === 'comp easu rcas→экран' && seq('fsr', 0, true) === 'comp easu→экран', 'уменьшенный кадр + FSR: EASU → RCAS (резкость 0 — без RCAS)', seq('fsr', 0, true));
+  ok(seq('off', .5, true) === 'comp fxaa→экран', 'апскейлер выключен — просто растянуть (сглаживание FXAA)', seq('off', .5, true));
+  ok(seq('nis', .5, false) === 'comp fxaa nisS→экран' && seq('nis', 0, false) === 'comp fxaa→экран' && seq('fsr', .5, false) === 'comp fxaa→экран', 'полный кадр: у NIS — резкость после FXAA (0% — без неё), у FSR — как было', seq('nis', .5, false));
+  P.setOpts({ upscaler: 'nis', sharp: .5 }); P.setSize(670, 335, .67); log.length = 0; P.render(new T.Scene(), cam);
+  const nisPass = P._test.M.nis.uniforms;
+  ok(nisPass.uIn.value.x === 670 && nisPass.uOut.value.x === 1000 && Math.abs(nisPass.uK2.value.x - .4) < 1e-6, 'NIS: размеры входа/выхода и резкость — в шейдер');
+  const g = E.gfxResolve({ upscaler: 'nis', sharp: 80 }, { q: 'high' }), g2 = E.gfxResolve({ upscaler: 'dlss', sharp: 500 }, { q: 'mid' });
+  ok(g.upscaler === 'nis' && g.sharp === .8 && g2.upscaler === 'fsr' && g2.sharp === 1, 'настройки: апскейлер и резкость проверяются');
+  P.dispose();
+}
+
+// ═══ 17. «Трассировка лучей» (gfx.js + post.js): код блеска в альфе, мокрое, отражения в экране, контактные тени ═══
+{
+  const C = T.ShaderChunk;
+  ok(C.output_fragment.includes('#if defined( STANDARD ) && defined( OPAQUE )') && C.output_fragment.includes('d37Rt.y > 0.5'), 'код блеска: только стандартные непрозрачные и только пока трассировка рисует свой буфер');
+  ok(C.normal_fragment_maps.includes('#ifdef STANDARD') && C.normal_fragment_maps.includes('geometryNormal') && C.roughnessmap_pars_fragment.includes('uniform vec4 d37Rt;'), 'мокрое: по геометрической нормали, данные — только у стандартных');
+  ok(T.ShaderLib.standard.uniforms.d37Rt?.value === E.GFXU.rt && T.ShaderLib.physical.uniforms.d37Rt?.value === E.GFXU.rt && !T.ShaderLib.lambert.uniforms.d37Rt, 'данные трассировки — общий массив у стандартных материалов');
+  // код блеска: туда и обратно, и пороги — как в шейдере отражений
+  let rtOk = true;
+  for (const [ro, me] of [[.1, 0], [.3, 1], [.5, 0], [.05, 1], [.2, 0]]) { const a = E.rtEncode(ro, me), d = E.rtDecode(a); if (!d.kind || (me > .5) !== (d.kind === 'metal') || d.gloss <= 0) rtOk = false; }
+  ok(rtOk && E.rtEncode(.9, 0) === 1 && E.rtDecode(1).kind === null && E.rtDecode(0).kind === 'clear' && E.rtDecode(1.5).kind === null, 'код блеска: гладкое / металл / вода и стекло / обычное / свечение различаются');
+  ok(E.rtDecode(.5).kind === null, 'край воды при MSAA (альфа ~0,5) — не блестит (зазор в коде)');
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  const fsS = E.RT_FS.ssr;
+  ok(fsS.includes('a < 0.25') && fsS.includes('a >= 0.875') && fsS.includes('/ 0.12') && fsS.includes('uStride') && !/gl_FragCoord|fract\(52\.98/.test(fsS), 'шейдер отражений: те же пороги кода; шаги ровные, без шума по экрану');
+  ok(!/texture2D\(tDepth, uv\)/.test(fsS) && fsS.includes('textureLod(tDepth'), 'глубина в циклах — textureLod (без производных в цикле)');
+  // вода и стекло: метка в альфе — смешиванием (ноль), обратно — обычное
+  const wm = new T.MeshStandardMaterial({ transparent: true });
+  E.rtMark(T, wm, true);
+  ok(wm.blending === T.CustomBlending && wm.blendSrc === T.SrcAlphaFactor && wm.blendDst === T.OneMinusSrcAlphaFactor && wm.blendSrcAlpha === T.ZeroFactor && wm.blendDstAlpha === T.ZeroFactor, 'вода/стекло: цвет смешивается как обычно, альфа буфера — 0');
+  E.rtMark(T, wm, false); ok(wm.blending === T.NormalBlending, 'трассировка выключена — обычное смешивание');
+  ok(E.rtMark(T, new T.MeshStandardMaterial(), true).blending === T.NormalBlending, 'непрозрачное не трогаем');
+  // проходы на подставном рендерере
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; },
+    render: s => { const m = s.children[0]?.material; log.push({ t: cur, fs: m?.fragmentShader || '', mark: E.GFXU.rt[1], u: m?.uniforms }); } };
+  const marks = [];
+  const R0 = { T, r, q: 'high', stats: {}, pr0: 1, sunDir: new T.Vector3(.3, .8, .2).normalize(), sky: { lightI: 1, night: 0 }, lighting: { gfx: E.worldGfx({ rt: { refl: 1.5 } }) }, rtMarkAll: on => marks.push(on) };
+  const P = E.post(R0);
+  const cam = new T.PerspectiveCamera(50, 16 / 9, .2, 400); cam.position.set(0, 3, 8); cam.lookAt(0, 0, 0); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+  P.setOpts({ ao: 'off', aa: 'fxaa', rt: 'on' }); P.setSize(800, 450, 1);
+  ok(P.rt.on && P.ao.on && marks[marks.length - 1] === true, 'трассировка: отражения + проход контактных теней (и без AO); вода и стекло помечены');
+  log.length = 0; P.render(new T.Scene(), cam);
+  const kind = x => x.fs.includes('uniform float uStride') ? 'ssr' : x.fs.includes('uniform vec4 uCS') ? 'ao' : x.fs.includes('s += a.xz * wa') ? 'blur' : x.fs.includes('aoUp()') ? 'comp' : x.fs ? 'другое' : 'сцена';
+  const seq = log.map(kind).filter(k => k !== 'другое');
+  ok(seq.join(' ').startsWith('сцена ssr ao blur blur') && seq.includes('comp'), 'проходы: сцена → отражения → AO с контактными тенями → размытие ×2 → сборка', seq.join(' '));
+  ok(log[0].mark === 1 && log.slice(1).every(x => x.mark === 0) && E.GFXU.rt[1] === 0, 'код блеска пишется только при рисовании сцены в буфер (потом — 0: холст и другие рендереры не трогает)');
+  const ssrL = log.find(x => kind(x) === 'ssr'), aoL = log.find(x => kind(x) === 'ao'), comp = log.find(x => kind(x) === 'comp');
+  ok(ssrL.u.uSSR.value.z === 1.5 && ssrL.u.uSSR.value.x === P.rt.steps && ssrL.u.uStride.value === 3, 'сила отражений — из графики мира, шаг 3 пикселя');
+  const cs = aoL.u.uCS.value, sv = R0.sunDir.clone().transformDirection(cam.matrixWorldInverse);
+  ok(Math.abs(cs.x - sv.x) < 1e-6 && Math.abs(cs.y - sv.y) < 1e-6 && cs.w > 0 && aoL.u.uAO.value.z === 0, 'контактные тени: солнце в координатах камеры; AO выключен — сила AO 0');
+  ok(comp.u.uSSRk.value === 1 && comp.u.tSSR.value === P._test.rt().ssr.texture && comp.u.uCSk.value > .3, 'сборка: отражения и контактные тени днём');
+  R0.sky = { lightI: 0, night: 1 }; log.length = 0; P.render(new T.Scene(), cam);
+  ok(log.find(x => kind(x) === 'comp').u.uCSk.value === 0, 'ночью без света — контактных теней нет');
+  P.setOpts({ rt: 'high' }); log.length = 0; P.render(new T.Scene(), cam);
+  ok(P.rt.steps === 96 && log.find(x => kind(x) === 'ssr').u.uStride.value === 1.5, '«Высокая»: шаг 1,5 пикселя, до 96 шагов');
+  R0.lighting.gfx.rt.refl = 0; log.length = 0; P.render(new T.Scene(), cam);
+  ok(!log.some(x => kind(x) === 'ssr') && log.find(x => kind(x) === 'comp').u.uSSRk.value === 0, 'отражения мира выключены (сила 0) — прохода отражений нет');
+  P.setOpts({ rt: 'off', ao: 'off' });
+  ok(!P.rt.on && !P.ao.on && marks[marks.length - 1] === false && !P._test.rt().ssr, 'трассировка выключена — буфер отражений убран, метка воды снята');
+  // настройки и мир
+  ok(E.gfxResolve({ preset: 'ultra' }, { q: 'high' }).rt === 'high' && E.gfxResolve({ preset: 'high' }, { q: 'high' }).rt === 'on' && E.gfxResolve({ preset: 'mid' }, { q: 'mid' }).rt === 'off', 'пресеты: «Ультра» — высокая, «Высокая» — вкл, «Средняя» — выкл');
+  ok(E.gfxResolve({ preset: 'custom', rt: 'high' }, { q: 'mid' }).rt === 'high' && E.gfxResolve({ preset: 'ultra', battery: true }, { q: 'high' }).rt === 'off' && E.gfxResolve({ preset: 'custom', rt: 'high' }, { q: 'low' }).rt === 'off', '«Своя» — как выбрано; батарея и low — выкл');
+  const wg = E.worldGfx({ rt: { refl: 9, wet: -1 } });
+  ok(wg.rt.refl === 2 && wg.rt.wet === 0 && E.worldGfx().rt.refl === 1 && E.worldGfx().rt.wet === 0, 'графика мира: отражения 0…2, мокрое 0…1');
+  const lt = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, gfx: E.worldGfx() };
+  E.mergeLighting(lt, { gfx: { rt: { wet: .4 } } });
+  ok(lt.gfx.rt.wet === .4 && lt.gfx.rt.refl === 1, 'мокрое мира дописывается (сила отражений остаётся)');
+  ok(E.WORLD_PRESETS.neon.gfx.rt.wet > .5, 'настроение «Неон-город» — мокрые улицы');
+  P.dispose();
+}
+
+// ═══ 18. «Генерация кадров (×2)» (post.js): перекладка прошлого кадра под новую камеру — сходимость поиска (тот же
+//     алгоритм, что в шейдере: 4 шага, второй старт «как будто далеко», не сошлось — дальний), подвижные, проходы ═══
+{
+  const fsF = E.FG.fs;
+  ok((fsF.match(/for \(int k = 0; k < 4; k\+\+\)/g) || []).length === 1 && fsF.includes('solve(uv, uv + (uv - toNew(wOld(uv, 0.99995))))') && fsF.includes('dOld(s1) >= dOld(s2) ? s1 : s2'), 'шейдер перекладки: 4 шага, два старта, иначе — дальний');
+  // сцена «пол + ящик» и две камеры; глубина «старого кадра» считается точно (как буфер глубины без ошибок)
+  const camA = new T.PerspectiveCamera(50, 16 / 9, .2, 300); camA.position.set(0, 3, 9); camA.lookAt(0, .6, 0); camA.updateMatrixWorld();
+  const box = { min: [-1, 0, -1], max: [1, 2, 1] };
+  const hit = (o, d, shift) => {   // луч: ближайшее из пола y=0 и ящика (сдвинут на shift)
+    let tBest = Infinity;
+    if (d.y < -1e-6) tBest = -o.y / d.y;
+    let t0 = 0, t1 = Infinity;
+    for (let a = 0; a < 3; a++) { const k = 'xyz'[a], mn = box.min[a] + (shift ? shift[a] : 0), mx = box.max[a] + (shift ? shift[a] : 0);
+      if (Math.abs(d[k]) < 1e-9) { if (o[k] < mn || o[k] > mx) { t0 = Infinity; break; } continue; }
+      let ta = (mn - o[k]) / d[k], tb = (mx - o[k]) / d[k]; if (ta > tb) [ta, tb] = [tb, ta]; t0 = Math.max(t0, ta); t1 = Math.min(t1, tb); }
+    if (t0 <= t1 && t0 > 0 && t0 < tBest) return { t: t0, box: true };
+    return { t: tBest, box: false };
+  };
+  const vp = c => new T.Matrix4().multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse);
+  const ray = (c, uv) => { const o = c.position.clone(), p = new T.Vector3(uv[0] * 2 - 1, uv[1] * 2 - 1, .5).unproject(c); return { o, d: p.sub(o).normalize() }; };
+  const depthAt = (c, uv, shift) => { const { o, d } = ray(c, uv), h = hit(o, d, shift); if (!isFinite(h.t)) return .99995; const p = o.clone().addScaledVector(d, h.t).project(c); return Math.min((p.z + 1) / 2, .99995); };
+  const run = (camB, mov) => {
+    const ivpA = vp(camA).invert(), vpB = vp(camB), W = 160, H = 90;
+    const wOld = (uv, d) => new T.Vector4(uv[0] * 2 - 1, uv[1] * 2 - 1, d * 2 - 1, 1).applyMatrix4(ivpA);
+    const mv = p => { if (mov) { const q = [p.x - mov.c[0], p.z - mov.c[2]]; if (q[0] * q[0] + q[1] * q[1] < mov.r * mov.r && p.y > mov.c[1] - .2 && p.y < mov.c[1] + mov.h) return new T.Vector3(p.x + mov.d[0], p.y + mov.d[1], p.z + mov.d[2]); } return p; };
+    const toNew = p => { const c = new T.Vector4(p.x, p.y, p.z, 1).applyMatrix4(vpB); return [c.x / c.w * .5 + .5, c.y / c.w * .5 + .5]; };
+    const dOld = uv => depthAt(camA, [Math.min(1, Math.max(0, uv[0])), Math.min(1, Math.max(0, uv[1]))], null);
+    const W3 = (uv) => { const h = wOld(uv, dOld(uv)); return new T.Vector3(h.x / h.w, h.y / h.w, h.z / h.w); };
+    const solve = (uv, s) => { s = s.slice(); for (let k = 0; k < 4; k++) { const q = toNew(mv(W3(s))); s[0] += uv[0] - q[0]; s[1] += uv[1] - q[1]; } return s; };
+    const err = (uv, s) => { const q = toNew(mv(W3(s))); return Math.hypot((q[0] - uv[0]) * W, (q[1] - uv[1]) * H); };
+    let good = 0, all = 0;
+    for (let y = 4; y < H - 4; y += 3) for (let x = 4; x < W - 4; x += 3) {
+      const uv = [(x + .5) / W, (y + .5) / H];
+      // правда: что видит новая камера (ящик сдвинут, если подвижный) — и где эта точка была в старом кадре
+      const { o, d } = ray(camB, uv), h = hit(o, d, mov ? mov.d : null); if (!isFinite(h.t)) continue;
+      let pw = o.clone().addScaledVector(d, h.t); if (mov && h.box) pw = pw.sub(new T.Vector3(...mov.d));
+      const pa = pw.clone().project(camA), su = [pa.x * .5 + .5, pa.y * .5 + .5];
+      if (su[0] < .02 || su[0] > .98 || su[1] < .02 || su[1] > .98) continue;
+      if (Math.abs(depthAt(camA, su, null) - (pa.z + 1) / 2) > 1e-4) continue;   // в старом кадре точку закрывало — открывшееся, пропускаем
+      const far =(() => { const h2 = wOld(uv, .99995); const q = toNew(new T.Vector3(h2.x / h2.w, h2.y / h2.w, h2.z / h2.w)); return [uv[0] + (uv[0] - q[0]), uv[1] + (uv[1] - q[1])]; })();
+      const s1 = solve(uv, uv), s2 = solve(uv, far), e1 = err(uv, s1), e2 = err(uv, s2);
+      const s = e1 <= 1 ? s1 : e2 <= 1 ? s2 : (dOld(s1) >= dOld(s2) ? s1 : s2);
+      all++; if (Math.hypot((s[0] - su[0]) * W, (s[1] - su[1]) * H) < .75) good++;
+    }
+    return { share: good / Math.max(1, all), all };
+  };
+  const camB = camA.clone(); camB.rotateOnWorldAxis(new T.Vector3(0, 1, 0), .035); camB.position.add(new T.Vector3(.12, 0, -.15)); camB.updateMatrixWorld();
+  const a = run(camB, null);
+  ok(a.all > 500 && a.share > .97, 'перекладка: поворот 2° и шаг — 97%+ пикселей точно на месте (< 0,75 px)', a);
+  const camC = camA.clone(); camC.rotateOnWorldAxis(new T.Vector3(0, 1, 0), .1); camC.updateMatrixWorld();
+  const b = run(camC, null);
+  ok(b.share > .95, 'перекладка: поворот 6° — 95%+ пикселей на месте', b);
+  const c = run(camB, { c: [0, 0, 0], r: 1.6, h: 2.5, d: [.12, 0, -.15] });
+  ok(c.share > .95, 'подвижный (ящик едет вместе с камерой, как свой персонаж) — на месте', c);
+  // проходы
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8'), { filename: 'post.js' });
+  let cur = null; const log = [];
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget: t => { cur = t; }, render: s => { const m = s.children[0]?.material; log.push({ t: cur, fs: m?.fragmentShader || '', u: m?.uniforms }); } };
+  const P = E.post({ T, r, q: 'high', stats: {}, pr0: 1 });
+  P.setOpts({ ao: 'off', aa: 'fxaa' }); P.setSize(800, 450, 1);
+  ok(P.renderGen(camA, []) === false, 'генерация выключена — промежуточного кадра нет');
+  P.setFg(true);
+  ok(P.fg.on && P._test.rt().out && P._test.rt().out.width === 800 && P.renderGen(camA, []) === false, 'включена: буфер готового кадра размером холста; до первого настоящего — нечего перекладывать');
+  log.length = 0; P.render(new T.Scene(), camA);
+  const last = log[log.length - 1], prev = log[log.length - 2];
+  ok(last.t === null && last.fs.includes('gl_FragColor = vec4(texture2D(tSrc, vUv).rgb, 1.0)') && prev.t === P._test.rt().out && P.fg.have, 'настоящий кадр: в свой буфер, копией — на экран');
+  log.length = 0;
+  ok(P.renderGen(camB, [[0, 0, 0, .7, 2.6, .1, 0, -.1]]) === true && log.length === 1 && log[0].t === null && log[0].fs.includes('uMovA'), 'промежуточный кадр — один проход перекладки прямо на экран');
+  const u = log[0].u;
+  ok(u.uMovN.value === 1 && u.uMovA.value[0].w === .7 && u.uMovB.value[0].x === .1 && u.uMovB.value[0].w === 2.6 && u.tDepth.value === P._test.rt().scene.depthTexture, 'подвижные и глубина настоящего кадра — в шейдер');
+  const ivp = vp(camA).invert();
+  ok(u.uInvVP.value.elements.every((v, i) => Math.abs(v - ivp.elements[i]) < 1e-6), 'камера настоящего кадра — обратная матрица запомнена');
+  P.setFg(false);
+  ok(!P.fg.on && !P._test.rt().out && P.renderGen(camB, []) === false, 'выключили — буфер убран');
+  const g0 = E.gfxResolve({}, { q: 'high' }), g1 = E.gfxResolve({ framegen: true }, { q: 'high' }), g2 = E.gfxResolve({ framegen: true }, { q: 'low' });
+  ok(g0.framegen === false && g1.framegen === true && g2.framegen === false, 'генерация кадров: выключена по умолчанию, на low — нет');
+  P.dispose();
+}
+
+// ═══ 19. «📸 Фото с трассировкой пути» (pathtrace.js): BVH; данные для видеокарты, обойдённые так же, как в шейдере, = перебор
+//     всех треугольников; сцена → треугольники (экземпляры, материалы, бюджет); шейдер без «сэмплера параметром» (грабли ANGLE) ═══
+{
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/pathtrace.js'), 'utf8'), { filename: 'pathtrace.js' });
+  let sd = 12345; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  // пол, 2000 мелких треугольников, 300 одинаковых (один центр — делить нечем), 40 длинных тонких поперёк всего
+  const list = [[-50, 0, -50, 50, 0, -50, 50, 0, 50], [-50, 0, -50, 50, 0, 50, -50, 0, 50]];
+  for (let i = 0; i < 2000; i++) { const c = [rnd() * 20 - 10, rnd() * 6, rnd() * 20 - 10], s = .2 + rnd() * .8; list.push([0, 1, 2].flatMap(() => [c[0] + (rnd() - .5) * s, c[1] + (rnd() - .5) * s, c[2] + (rnd() - .5) * s])); }
+  for (let i = 0; i < 300; i++) list.push([1, 1, 1, 2, 1, 1, 1, 2, 1]);
+  for (let i = 0; i < 40; i++) { const z = rnd() * 20 - 10; list.push([-30, rnd() * 4, z, 30, rnd() * 4, z + .05, 0, 5, z]); }
+  const build = (list, maxD) => {
+    const N = list.length, tris = new Float32Array(N * 9); list.forEach((t, i) => tris.set(t, i * 9));
+    const bvh = E.ptBuild(tris, N, 4, maxD), B = bvh.nodes;
+    const seen = new Uint8Array(N); let dup = 0; for (const t of bvh.order) { if (seen[t]) dup++; seen[t] = 1; }
+    let inside = true, maxLeaf = 0;
+    const walk = id => { const k = id * 8;
+      if (B[k + 7] < 0) { const s = B[k + 3], c = -B[k + 7]; maxLeaf = Math.max(maxLeaf, c);
+        for (let i = s; i < s + c; i++) { const q = bvh.order[i] * 9; for (let v = 0; v < 3; v++) for (let a = 0; a < 3; a++) { const x = tris[q + v * 3 + a]; if (x < B[k + a] - 1e-4 || x > B[k + 4 + a] + 1e-4) inside = false; } }
+        return; }
+      for (const ch of [B[k + 3], B[k + 7]]) { const c = ch * 8; for (let a = 0; a < 3; a++) if (B[c + a] < B[k + a] - 1e-4 || B[c + 4 + a] > B[k + 4 + a] + 1e-4) inside = false; walk(ch); } };
+    walk(0);
+    return { N, tris, bvh, dup, all: seen.every(x => x), inside, maxLeaf };
+  };
+  const A = build(list);
+  ok(!A.dup && A.all && A.inside && A.bvh.depth <= 36, 'BVH: каждый треугольник ровно один раз, всё внутри своих коробок, глубина ≤ 36', { dup: A.dup, inside: A.inside, depth: A.bvh.depth, maxLeaf: A.maxLeaf });
+  // обход упакованных данных — строка в строку как trace()/hitTri() шейдера (fNode/fTri, лист [s, e) — номера слотов, стек 40)
+  const gpuTrace = (pd, o, d) => {
+    const fN = i => pd.nodes.subarray(i * 4, i * 4 + 4), fT = i => pd.tri.subarray(i * 4, i * 4 + 4), inv = d.map(x => 1 / x), st = [0];
+    let best = 1e20, hit = -1, maxSp = 1, over = 0;
+    while (st.length) {
+      const n = st.pop(), a = fN(n * 2), b = fN(n * 2 + 1);
+      let ne = 0, fa = best;
+      for (let k = 0; k < 3; k++) { const t0 = (a[k] - o[k]) * inv[k], t1 = (b[k] - o[k]) * inv[k]; ne = Math.max(ne, Math.min(t0, t1)); fa = Math.min(fa, Math.max(t0, t1)); }
+      if (ne > fa) continue;
+      if (b[3] < 0) {
+        for (let i = a[3], e = a[3] - b[3]; i < e; i++) { const t = mt(fT(i * 8), fT(i * 8 + 1), fT(i * 8 + 2), o, d); if (t > 1e-4 && t < best) { best = t; hit = i; } }
+      } else if (st.length < 38) { st.push(b[3], a[3]); maxSp = Math.max(maxSp, st.length); } else over++;
+    }
+    return { t: hit < 0 ? Infinity : best, hit, maxSp, over };
+  };
+  // Мёллер — Трумбор, как в hitTri
+  function mt(a, b, c, o, d){
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const p = [d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0]], det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+    if (Math.abs(det) < 1e-10) return -1;
+    const id = 1 / det, s = [o[0] - a[0], o[1] - a[1], o[2] - a[2]], u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) * id;
+    if (u < 0 || u > 1) return -1;
+    const q = [s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0]], v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * id;
+    if (v < 0 || u + v > 1) return -1;
+    return (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * id;
+  }
+  const brute = (X, o, d) => { let best = Infinity, tri = -1; for (let i = 0; i < X.N; i++) { const q = i * 9, t = mt(X.tris.subarray(q, q + 3), X.tris.subarray(q + 3, q + 6), X.tris.subarray(q + 6, q + 9), o, d); if (t > 1e-4 && t < best) { best = t; tri = i; } } return { t: best, tri }; };
+  const scOf = (X, cols) => ({ n: X.N, tris: X.tris, nrm: new Float32Array(X.N * 9), col: cols || new Float32Array(X.N * 9).fill(.5), uvs: new Float32Array(X.N * 6), mid: new Uint16Array(X.N), mats: [{ type: 0, rough: .8, metal: 0, layer: -1 }] });
+  const cols = new Float32Array(A.N * 9).map(() => rnd());
+  const pdA = E.ptPack(scOf(A, cols), A.bvh);
+  const rays = (X, pd, n) => { let same = 0, hits = 0, js = 0, maxSp = 0, over = 0, bad = null;
+    for (let i = 0; i < n; i++) {
+      const o = [rnd() * 30 - 15, .5 + rnd() * 8, rnd() * 30 - 15], u = rnd() * 2 - 1, ph = rnd() * 6.2832, r = Math.sqrt(1 - u * u), d = [r * Math.cos(ph), u, r * Math.sin(ph)];
+      const g = gpuTrace(pd, o, d), b = brute(X, o, d), j = E.ptTrace(X.bvh, X.tris, o, d);
+      maxSp = Math.max(maxSp, g.maxSp); over += g.over;
+      const eq = (t1, t2) => (t1 === Infinity && t2 === Infinity) || Math.abs(t1 - t2) <= 1e-6 * Math.max(1, t2);
+      if (eq(g.t, b.t)) same++; else if (!bad) bad = { o, d, g: g.t, b: b.t };
+      if ((j ? j.t : Infinity) === b.t || eq(j ? j.t : Infinity, b.t)) js++;
+      if (b.tri >= 0) hits++;
+    }
+    return { same, hits, js, maxSp, over, bad, n };
+  };
+  const R1 = rays(A, pdA, 3000);
+  ok(R1.same === R1.n && R1.js === R1.n && R1.hits > 1500, 'обход как в шейдере и ptTrace = перебор всех треугольников (3000 лучей)', R1);
+  ok(R1.over === 0 && R1.maxSp <= A.bvh.depth + 1 && R1.maxSp < 38, 'стек обхода: занято не больше глубины + 1, не переполняется', { maxSp: R1.maxSp, depth: A.bvh.depth });
+  // данные: слот i = треугольник order[i]; цвет вершины — 3 байта в одном float32 (как unpackC в шейдере)
+  let packOk = true;
+  for (let i = 0; i < A.N && packOk; i += 7) {
+    const src = A.bvh.order[i];
+    for (let v = 0; v < 3; v++) {
+      for (let k = 0; k < 3; k++) if (pdA.tri[i * 32 + v * 4 + k] !== A.tris[src * 9 + v * 3 + k]) packOk = false;
+      const f = pdA.tri[i * 32 + v * 4 + 3], un = [f % 256, Math.floor(f / 256) % 256, Math.floor(f / 65536)];
+      for (let k = 0; k < 3; k++) if (un[k] !== Math.round(cols[src * 9 + v * 3 + k] * 255)) packOk = false;
+    }
+  }
+  ok(packOk, 'упаковка: слоты в порядке листьев, цвет вершин 3 байта в float без потерь');
+  // предел глубины (в шейдере стек на 40): глубже предела — один большой лист, обход всё равно верный (предел 3 — для проверки)
+  const Ch = build(list, 3), pdC = E.ptPack(scOf(Ch), Ch.bvh), R2 = rays(Ch, pdC, 600);
+  ok(Ch.bvh.depth === 3 && !Ch.dup && Ch.all && Ch.inside && Ch.maxLeaf > 100 && R2.same === R2.n, 'предел глубины BVH: дальше — большой лист, попадания те же', { depth: Ch.bvh.depth, maxLeaf: Ch.maxLeaf, same: R2.same });
+  ok(E.ptBuild(A.tris, A.N, 4, 99).depth <= 36, 'предел глубины не больше 36 (стек шейдера), что бы ни попросили');
+  console.log(`  трассировка пути: ${A.N} треугольников — глубина BVH ${A.bvh.depth}, лист до ${A.maxLeaf}, стек до ${R1.maxSp}, попаданий ${R1.hits}/${R1.n}`);
+  // сцена → треугольники
+  const scene = new T.Scene(), cam = new T.PerspectiveCamera(60, 16 / 9, .1, 1000); cam.position.set(0, 2, 10); cam.updateMatrixWorld();
+  const box = new T.Mesh(new T.BoxGeometry(2, 2, 2), new T.MeshStandardMaterial({ color: 0xff0000, roughness: .3, metalness: .8 })); box.position.set(0, 1, 0); scene.add(box);
+  const grass = new T.InstancedMesh(new T.PlaneGeometry(1, 1), new T.MeshStandardMaterial({ alphaTest: .5, side: T.DoubleSide }), 3);
+  for (let i = 0; i < 3; i++) { grass.setMatrixAt(i, new T.Matrix4().makeTranslation(5 + i, .5, 0)); grass.setColorAt(i, new T.Color(i === 1 ? 0x00ff00 : 0xffffff)); } scene.add(grass);
+  const lamp = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ color: 0xffeeaa })); lamp.position.set(-4, 3, 0); scene.add(lamp);
+  const waterM = new T.MeshStandardMaterial({ transparent: true, opacity: .8, roughness: .05 }); waterM.userData.water = true;
+  const water = new T.Mesh(new T.PlaneGeometry(4, 4), waterM); water.rotation.x = -Math.PI / 2; water.position.set(0, .05, 4); scene.add(water);
+  scene.add(new T.Mesh(new T.PlaneGeometry(3, 3), new T.MeshStandardMaterial({ transparent: true, opacity: .4, roughness: .9 })));   // дым — без него
+  const skyM = new T.Mesh(new T.SphereGeometry(500, 8, 4), new T.MeshBasicMaterial({ side: T.BackSide })); skyM.userData.sky = true; scene.add(skyM);
+  const far = new T.Mesh(new T.SphereGeometry(1, 16, 8), new T.MeshStandardMaterial()); far.position.set(0, 0, -400); scene.add(far);
+  const farN = far.geometry.index.count / 3;
+  const Rm = { T, scene, camera: cam };
+  const S1 = E.ptScene(Rm), S2 = E.ptScene(Rm, 22);
+  const types = S1.mats.map(m => m.type).sort().join('');
+  const gx = []; for (let t = 0; t < S1.n; t++) { const m = S1.mats[S1.mid[t]]; if (m.cut) for (let v = 0; v < 3; v++) gx.push(S1.tris[t * 9 + v * 3]); }
+  ok(S1.n === 12 + 6 + 2 + 2 + farN && S1.skipped === 0, 'сцена: ящик 12 + трава 3×2 + лампа 2 + вода 2 + дальний шар; дым и небо — без них', { n: S1.n, farN });
+  ok(S2.n === 22 && S2.skipped === 1, 'бюджет треугольников: дальнее выбрасывается первым', { n: S2.n, skipped: S2.skipped });
+  const mBox = S1.mats.find(m => m.type === 0 && Math.abs(m.metal - .8) < 1e-6), mW = S1.mats.find(m => m.type === 2);
+  ok(types.includes('0') && types.includes('1') && types.includes('2') && mBox && Math.abs(mBox.rough - .3) < 1e-6 && mW && mW.ior === 1.33, 'материалы: PBR (шероховатость, металл), свет (MeshBasic), вода — преломление 1,33', types);
+  ok(gx.length === 18 && Math.min(...gx) >= 4.49 && Math.max(...gx) <= 7.51, 'экземпляры: матрица каждого применена (трава на x 4,5…7,5)', [Math.min(...gx), Math.max(...gx)]);
+  let green = false; for (let t = 0; t < S1.n; t++) if (S1.mats[S1.mid[t]].cut && S1.col[t * 9] < .01 && S1.col[t * 9 + 1] > .99) green = true;
+  ok(green, 'цвет экземпляра умножается на цвет вершин');
+  const pd1 = E.ptPack(S1, E.ptBuild(S1.tris, S1.n)), cutI = S1.mats.findIndex(m => m.cut);
+  ok(cutI >= 0 && pd1.mats[cutI * 8 + 7] === 0 && pd1.mats[cutI * 8 + 5] === -1, 'вырез по альфе — только у материала с текстурой (без неё — сплошной)');
+  // шейдер
+  const fsP = E.ptShaders.fs;
+  ok(!/\w+\s*\([^)]*\bsampler\w*\s+\w+/.test(fsP) && fsP.includes('vec4 fTri(int i){ return texelFetch(tTri') && fsP.includes('vec4 fMat(int i){ return texelFetch(tMat'), 'шейдер: у каждой текстуры данных своя функция чтения, сэмплер параметром не передаётся (ANGLE путал текстуры)');
+  ok(/bool hitTri\([^)]*inout vec2 bc\)/.test(fsP) && /int trace\([^)]*inout vec2 bc,/.test(fsP) && !/[^n]out vec2 bc/.test(fsP), 'шейдер: bc — inout (при «мимо» прошлое попадание не портится)');
+  ok(fsP.includes('int st[40]') && fsP.includes('sp < 38') && fsP.includes('if (mm.w > 0.5)') && fsP.includes('.a < 0.5) return false;'), 'шейдер: стек 40, вырез по альфе в hitTri');
+}
+
+// ═══ 20. Телефоны (15.10.2026: «пятна» на площади и фонтане у владельца): точность сэмплеров, проверка глубины при запуске,
+//     безопасная графика по умолчанию. У sampler2D во фрагментном шейдере по умолчанию lowp — на телефонах значение текстуры
+//     приходит в fp16; глубина 0,98 в fp16 — шаг 0,0005 (на 8 м — десятки см): контактные тени и отражения рисовали пятна ═══
+{
+  const PREC = E.POST_PREC;
+  ok(typeof PREC === 'string' && /#if __VERSION__ >= 300 \|\| defined\( GL_FRAGMENT_PRECISION_HIGH \)\nprecision highp sampler2D;\n#endif/.test(PREC), 'постобработка: строка точности — highp-сэмплеры (WebGL2 всегда, WebGL1 — если умеет)');
+  const r = { extensions: { has: () => true }, capabilities: { isWebGL2: true }, autoClear: true, info: { render: { calls: 0 } },
+    getDrawingBufferSize: v => v.set(800, 450), setRenderTarget(){}, render(){} };
+  const P0 = E.post({ T, r, q: 'high', stats: {}, pr0: 1 });
+  const ms = Object.entries(P0._test.M).filter(([, m]) => m && m.fragmentShader);
+  const bad = ms.filter(([, m]) => !m.fragmentShader.startsWith(PREC)).map(([k]) => k);
+  ok(ms.length >= 12 && !bad.length, 'постобработка: КАЖДЫЙ шейдер (AO, отражения, генерация кадров, сборка, FSR, NIS…) начинается со строки точности', { n: ms.length, bad });
+  const depthReaders = ms.filter(([, m]) => /tDepth/.test(m.fragmentShader)).map(([k]) => k).sort().join();
+  ok(depthReaders === 'ao,comp,fg,ssr', 'глубину читают ao, ssr, fg, comp — все с highp', depthReaders);
+  ok(P0.depthOK === true && P0.canAO, 'подставной рендерер без чтения пикселей — проверка глубины не мешает (как раньше)');
+  P0.dispose();
+  // проверка глубины при запуске: видеокарта без highp (precision < 23) или неточная глубина — AO, трассировка, генерация кадров выключены
+  const mockGL = (prec, px0) => {
+    const calls = [];
+    const gl = { FRAGMENT_SHADER: 35632, HIGH_FLOAT: 36338, getShaderPrecisionFormat: () => ({ rangeMin: 127, rangeMax: 127, precision: prec }) };
+    return { calls, r: { ...r, getContext: () => gl, clear: () => calls.push('clear'), setRenderTarget: t => calls.push(t ? 'rt' + t.width : 'null'),
+      render: (s) => calls.push(s.children[0].material.fragmentShader.includes('tDepth') ? 'read' : 'write'),
+      readRenderTargetPixels: (t, x, y, w, h, buf) => { buf[0] = px0; buf[1] = px0 ? 0 : 90; calls.push('px'); } } };
+  };
+  const A = mockGL(23, 255), PA = E.post({ T, r: A.r, q: 'high', stats: {}, pr0: 1 });
+  ok(PA.depthOK && PA.canAO && PA.fg.ok && PA.probe.ok && A.calls.join() === 'rt4,clear,rt4,write,rt1,read,px,null', 'точная глубина: рисуем плоскость на известной глубине → читаем highp-сэмплером → всё включается', A.calls.join());
+  const Bm = mockGL(23, 0), PB = E.post({ T, r: Bm.r, q: 'high', stats: {}, pr0: 1 });
+  PB.setOpts({ ao: 'on', rt: 'high', aa: 'fxaa' }); PB.setFg(true); PB.setSize(800, 450, 1);
+  ok(!PB.depthOK && !PB.canAO && !PB.fg.ok && PB.ao.mode === 'off' && PB.rt.mode === 'off' && !PB.fg.on && !PB._test.rt().ao && !PB._test.rt().ssr, 'глубина неточная (драйвер не дал highp): AO, трассировка и генерация кадров выключены, буферов нет', { probe: PB.probe });
+  const Cm = mockGL(10, 255), PC = E.post({ T, r: Cm.r, q: 'high', stats: {}, pr0: 1 });
+  ok(!PC.depthOK && PC.prec === 10 && !Cm.calls.includes('read'), 'нет highp во фрагментном шейдере (fp16) — выключено сразу, без отрисовки', Cm.calls.join());
+  for (const P of [PA, PB, PC]) P.dispose();
+  // карта теней и глубина воды — highp; после куска теней — снова lowp (цвету и нормалям хватает, так быстрее)
+  const shc = T.ShaderChunk.shadowmap_pars_fragment, hi = E.SAMPLER_PREC.hi, lo = E.SAMPLER_PREC.lo;
+  ok(shc.startsWith(hi) && shc.trimEnd().endsWith(lo.trimEnd()) && shc.indexOf('precision highp sampler2D') < shc.indexOf('uniform sampler2D directionalShadowMap'), 'тени: карта теней (глубина в RGBA8) читается highp, потом точность — как была');
+  const Rw = { T, waterU: { uTime: { value: 0 }, uClear: { value: 0 }, uFoam: { value: 0 }, uWQ: { value: 1 } }, normalFrom: () => new T.DataTexture(new Uint8Array(4), 1, 1) };
+  const wm = E.waterMaterial(Rw, '#3080a0', { depth: { tex: new T.DataTexture(new Float32Array(4), 1, 1, T.RedFormat, T.FloatType), rect: [0, 0, 1, 1] } });
+  const sh = { uniforms: {}, vertexShader: T.ShaderLib.standard.vertexShader, fragmentShader: T.ShaderLib.standard.fragmentShader };
+  wm.onBeforeCompile(sh);
+  const fw = sh.fragmentShader, iT = fw.indexOf('uniform sampler2D tDep');
+  ok(iT > 0 && fw.lastIndexOf('precision highp sampler2D', iT) > fw.lastIndexOf('#ifdef D37_WDEPTH', iT) && fw.indexOf('precision lowp sampler2D', iT) > iT, 'вода: карта глубины дна — highp');
+  // безопасная графика по умолчанию: телефон «Авто» — без трассировки; выбрал сам — есть; неточная глубина — нет ни в каком пресете
+  const g1 = E.gfxResolve({ preset: 'auto' }, { q: 'high', gl2: true, mobile: true }), g2 = E.gfxResolve({ preset: 'auto' }, { q: 'high', gl2: true, mobile: false });
+  const g3 = E.gfxResolve({ preset: 'ultra' }, { q: 'mid', gl2: true, mobile: true }), g4 = E.gfxResolve({ preset: 'ultra', framegen: true }, { q: 'high', gl2: true, depthFx: false });
+  const g5 = E.gfxResolve({ preset: 'custom', ao: 'high', rt: 'high', framegen: true }, { q: 'high', gl2: true, depthFx: false });
+  ok(g1.rt === 'off' && g2.rt === 'on' && g3.rt === 'high' && g4.ao === 'off' && g4.rt === 'off' && !g4.framegen && g5.ao === 'off' && g5.rt === 'off' && !g5.framegen,
+    'телефон в «Авто» — без трассировки; «Ультра» выбрал сам — с ней; глубина неточная — ни AO, ни трассировки, ни генерации кадров', { g1: g1.rt, g3: g3.rt, g4: [g4.ao, g4.rt, g4.framegen] });
+  // телефон — не только по строке браузера («версия для ПК» на телефоне, iPad)
+  const env = (o) => {
+    const keep = {}; for (const k of ['navigator', 'matchMedia', 'screen']) keep[k] = Object.getOwnPropertyDescriptor(globalThis, k);
+    Object.defineProperty(globalThis, 'navigator', { value: { userAgent: o.ua, maxTouchPoints: o.touch || 0, userAgentData: o.uad, hardwareConcurrency: 8 }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'matchMedia', { value: q => ({ matches: q === '(pointer: coarse)' ? !!o.coarse : q === '(any-pointer: fine)' ? !!o.fine : false }), configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'screen', { value: { width: o.sw || 1920, height: o.sh || 1080 }, configurable: true, writable: true });
+    let v; try { v = E.isMobile(); } finally { for (const k in keep) { if (keep[k]) Object.defineProperty(globalThis, k, keep[k]); else delete globalThis[k]; } }
+    return v;
+  };
+  const DESK = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+  const cases = [
+    [env({ ua: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36', coarse: true, sw: 412, sh: 915 }), true, 'Android'],
+    [env({ ua: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36', coarse: true, touch: 5, sw: 412, sh: 915 }), true, 'телефон, «версия для ПК»'],
+    [env({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', touch: 5, coarse: true, sw: 820, sh: 1180 }), true, 'iPad'],
+    [env({ ua: DESK, uad: { mobile: true } }), true, 'userAgentData.mobile'],
+    [env({ ua: DESK, coarse: true, fine: true, touch: 10, sw: 1280, sh: 800 }), false, 'ноутбук с сенсорным экраном и мышью'],
+    [env({ ua: DESK, sw: 1920, sh: 1080 }), false, 'компьютер'],
+    [env({ ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', sw: 1512, sh: 982 }), false, 'Mac'],
+  ];
+  const wrong = cases.filter(([got, want]) => got !== want).map(c => c[2]);
+  ok(!wrong.length, 'E.isMobile: Android, телефон в «версии для ПК», iPad — телефон/планшет; компьютер, Mac, ноутбук с сенсором — нет', wrong);
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);
