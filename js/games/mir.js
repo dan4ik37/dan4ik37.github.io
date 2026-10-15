@@ -16,7 +16,7 @@
 (() => {
   const OLD = window.GAME_IMPL?.world;
   const MAX_ROOM = 20, SHARDS = 6, IDLE_MS = 15 * 60e3, HIDDEN_MS = 10 * 60e3, CHAN = 'mir-';
-  const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃'];
+  const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃', '👏', '🤔', '😮', '😡', '🙇', '🤸'];   // как World3D.EMOTES
   const NO_ROOM = new Set(['pauk', 'wardrobe', 'clicker', 'quiz', 'wheel', 'random', 'typing', 'cps', 'fonts', 'world', 'studio']);
   const COOP = new Set(['horde', 'td']);
   const QUICK = ['chess', 'durak', 'uno', 'checkers', 'pool', 'nardy', 'arena', 'horde', 'td', 'sea'];
