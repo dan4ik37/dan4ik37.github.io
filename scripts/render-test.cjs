@@ -1,7 +1,11 @@
 // Тесты графики движка D37E в node (без браузера): склейка сцены (js/engine/batch.js) — чанки, склеенная геометрия
 // и экземпляры дают ровно те же треугольники (места, нормали, цвета), что и отдельные меши; правки в редакторе и в игре,
 // видимость, удаление, выбор мышью по вынутым мешам, свет в постоянный набор; автомат динамического разрешения и выбор
-// ламп (render.js). Нужен three.js r149 (в репозитории его нет — сайт берёт его с jsDelivr):
+// ламп (render.js). Графика v3 (gfx.js): пресеты и настройки игрока (E.gfxResolve), лесенка автокачества, графика мира
+// (E.worldGfx, сброс при загрузке мира — E.mergeLighting), цвет кадра, модель неба и время суток, правка кусков шейдеров
+// three (туман, тени: #if/#endif, скобки, общие uniform по ссылке), купол неба и вода v2 (#include с новой строки),
+// вкладка «Графика» (js/core/gfx-settings.js: перенос d37_gfx, «Своя», пресеты → D37Opt.gfx), лимит FPS (core.js).
+// Нужен three.js r149 (в репозитории его нет — сайт берёт его с jsDelivr):
 //   npm i three@0.149.0 во временной папке, затем: node scripts/render-test.cjs <путь к node_modules/three>
 //   (или переменная THREE_PATH). Запуск из корня сайта. Выход с кодом 1, если есть ошибки.
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -19,7 +23,7 @@ const ctx2d = new Proxy({}, { get: (o, k) => k in o ? o[k] : () => ({ addColorSt
 globalThis.document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d }) };
 const store = {};
 globalThis.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
-for (const f of ['core', 'physics', 'render', 'scene', 'batch'])
+for (const f of ['core', 'physics', 'gfx', 'render', 'scene', 'batch'])
   vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine', f + '.js'), 'utf8'), { filename: f + '.js' });
 const E = globalThis.D37E, T = THREE;
 if (T.ColorManagement && 'legacyMode' in T.ColorManagement) T.ColorManagement.legacyMode = false;   // как World3D.kit
@@ -381,6 +385,180 @@ function boundsOk(R){
   const p = SC.all().find(o => o.cls === 'Part');
   const t1 = Date.now(); SC.set(p, 'pos', [p.pos[0] + .5, p.pos[1], p.pos[2]]); clock += 1000; B.update(); const ms1 = Date.now() - t1;
   ok(B.recOf(p.id).state === 'batched' && ms1 < 200, `правка → пересборка чанка ${ms1} мс`, ms1);
+}
+
+// ═══ 11. Графика v3 (js/engine/gfx.js): пресеты и настройки игрока, лесенка автокачества, графика мира, небо, цвет кадра ═══
+{
+  const P = E.GFX_PRESETS, R0 = s => E.gfxResolve(s, { q: 'high', gl2: true });
+  let o = E.gfxResolve({}, { q: 'mid' });
+  ok(o.preset === 'auto' && o.auto && o.tier === 'mid' && o.ao === 'off' && o.shadows, 'пресет «Авто» = по устройству (mid)', o);
+  o = R0({ preset: 'ultra' });
+  ok(o.tier === 'high' && o.shadowQ === 'ultra' && o.ao === 'high' && o.aa === 'msaa' && o.dist > 1.25 && !o.auto, 'Ультра: основа high, тени 4096, AO выше', o);
+  o = R0({ preset: 'high', shadows: false });
+  ok(!o.shadows && o.ao === 'on', '«Тени: выкл» в любом пресете');
+  o = R0({ preset: 'custom', shadows: true, shadowQ: 'low', ao: 'high', water: 'simple', refl: false, aa: 'off', fog: false, dist: 3, grade: false });
+  ok(o.shadowQ === 'low' && o.ao === 'high' && o.water === 'simple' && !o.refl && o.aa === 'off' && !o.fog && o.dist === 2 && !o.grade, '«Своя»: значения игрока (дальность не больше 200%)', o);
+  o = R0({ preset: 'custom', shadowQ: 'mega', ao: 1, aa: 'ssaa' });
+  ok(o.shadowQ === 'high' && o.ao === 'on' && o.aa === 'msaa', '«Своя»: неверное — как в основе', o);
+  o = R0({ preset: 'ultra', battery: true });
+  ok(o.fpsCap === 30 && o.ao === 'off' && o.shadowQ === 'mid' && o.prCap === 1 && o.aa === 'fxaa' && o.dist <= 1, 'экономия батареи: 30 кадров, без AO, тени проще, плотность 1', o);
+  o = R0({ preset: 'mid', fpsCap: 45, res: 30 });
+  ok(o.fpsCap === 45 && o.res === 50, 'лимит FPS и масштаб разрешения (не меньше 50%)', o);
+  o = E.gfxResolve({ preset: 'high' }, { q: 'low' });
+  ok(o.tier === 'high', 'пресет задаёт основу, а не устройство');
+  o = E.gfxResolve({ preset: 'auto' }, { q: 'low' });
+  ok(o.tier === 'low' && !o.shadows && o.ao === 'off' && o.aa === 'off' && !o.grade && o.water === 'simple', 'основа low: без теней, AO, сглаживания и цвета кадра', o);
+  ok(E.gfxResolve({ preset: 'high' }, { q: 'high', gl2: false }).aa === 'fxaa', 'без WebGL2 — MSAA → FXAA');
+  // лесенка автокачества: от лучшего к дешёвому, каждая ступень не дороже прошлой
+  const L = E.autoSteps(R0({ preset: 'ultra' })), SQ = ['low', 'mid', 'high', 'ultra'], AO = ['off', 'on', 'high'];
+  ok(L.length >= 6 && JSON.stringify(L[0]) === JSON.stringify(R0({ preset: 'ultra' })) && !L[L.length - 1].shadows, 'лесенка: от пресета до «без теней»', L.length);
+  let mono = true;
+  for (let i = 1; i < L.length; i++) { const a = L[i - 1], b = L[i]; if (AO.indexOf(b.ao) > AO.indexOf(a.ao) || SQ.indexOf(b.shadowQ) > SQ.indexOf(a.shadowQ) || b.dist > a.dist || (b.shadows && !a.shadows)) mono = false; }
+  ok(mono, 'каждая ступень не дороже прошлой');
+  ok(E.autoSteps(E.gfxResolve({}, { q: 'low' })).length === 1, 'на low упрощать нечего');
+  // тени по качеству
+  ok(['low', 'mid', 'high', 'ultra'].every((k, i, a) => !i || (E.SHADOW_Q[k].map >= E.SHADOW_Q[a[i - 1]].map && E.SHADOW_Q[k].taps > E.SHADOW_Q[a[i - 1]].taps)), 'качество теней растёт: карта и выборки');
+  // графика мира: по умолчанию, проверка, пресеты
+  const g = E.worldGfx();
+  ok(g.grade === 'neutral' && g.bloom === 1 && g.sky.moon && g.fog.color === '' && g.water.color === '' && g.shadow.soft === E.WORLD_GFX.shadow.soft, 'графика мира по умолчанию', g);
+  const bad = E.worldGfx({ sky: { haze: 9, sun: -1, moon: 0 }, fog: { density: 'x', height: 1e6, color: 'red' }, grade: 'nope', bloom: 99, exposure: -5, water: { color: '#ABCDEF', clarity: 2 }, shadow: { soft: -1 }, preset: 'zzz', junk: 1 });
+  ok(bad.sky.haze === 1 && bad.sky.sun === .3 && bad.sky.moon === true && bad.fog.density === E.WORLD_GFX.fog.density && bad.fog.height === 80 && bad.fog.color === '' && bad.grade === 'neutral'
+    && bad.bloom === 2.5 && bad.exposure === -1 && bad.water.color === '#abcdef' && bad.water.clarity === 1 && bad.shadow.soft === 0 && bad.preset === '' && !('junk' in bad), 'графика мира: всё проверено и в пределах', bad);
+  ok(Object.keys(E.WORLD_PRESETS).join() === 'day,sunset,night,foggy,neon', 'пресеты мира: день, закат, ночь, туман, неон');
+  for (const [k, p] of Object.entries(E.WORLD_PRESETS)) {
+    const w = E.worldGfx({ ...p.gfx, preset: k });
+    ok(w.preset === k && JSON.stringify(E.worldGfx(w)) === JSON.stringify(w) && ['time', 'brightness', 'ambient', 'fogEnd'].every(x => Number.isFinite(p.lighting[x])), 'пресет мира ' + k + ' проходит проверку без изменений');
+  }
+  // освещение мира: полный объект сбрасывает графику (не тянется от прошлого мира), частичный — дописывает
+  const lt = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, shadows: true, gfx: E.worldGfx() };
+  E.mergeLighting(lt, { gfx: { grade: 'neon', sky: { haze: .8 } } });
+  ok(lt.gfx.grade === 'neon' && lt.gfx.sky.haze === .8 && lt.gfx.sky.sun === 1, 'частичная графика дописывается (вложенное — тоже)');
+  E.mergeLighting(lt, { time: 20 });
+  ok(lt.time === 20 && lt.gfx.grade === 'neon', 'смена времени графику не трогает');
+  E.mergeLighting(lt, { time: 9, brightness: 1, ambient: 1, fogEnd: 300, shadows: true });   // старый мир без gfx
+  ok(lt.gfx.grade === 'neutral' && lt.gfx.sky.haze === E.WORLD_GFX.sky.haze, 'мир без графики загрузили — графика по умолчанию, не от прошлого мира');
+  E.mergeLighting(lt, { time: 9, brightness: 1, ambient: 1, fogEnd: 300, gfx: { grade: 'warm' } });
+  ok(lt.gfx.grade === 'warm' && lt.gfx.bloom === 1, 'мир с графикой загрузили — его графика');
+  ok(JSON.parse(JSON.stringify({ ...lt })).gfx.grade === 'warm', 'графика мира сохраняется в файле (как SC.toJSON)');
+  // цвет кадра
+  let u = E.gradeUniforms(E.gradeOf('neutral'));
+  ok(Math.abs(u.gain[0] - 1) < 1e-9 && Math.abs(u.gain[2] - 1) < 1e-9 && u.sat === 1 && u.con === 0, 'обычный цвет кадра — без изменений');
+  u = E.gradeUniforms(E.gradeOf('warm'));
+  ok(u.gain[0] > 1 && u.gain[2] < 1, 'тёплый: красного больше, синего меньше');
+  u = E.gradeUniforms(E.gradeOf('neon'), false);
+  ok(u.gain.every(x => x === 1) && u.sat === 1 && u.con === 0 && u.vig === 0, 'цвет кадра выключен игроком — без изменений');
+  ok(E.gradeOf('нет такого') === E.GRADES.neutral, 'неизвестная цветокоррекция — обычная');
+  // солнце и время суток
+  ok(Math.abs(E.sunAt(12)[1] - Math.sin(64 * Math.PI / 180)) < 1e-9 && Math.abs(E.sunAt(6)[1]) < 1e-9 && Math.abs(E.sunAt(18)[1]) < 1e-9 && E.sunAt(0)[1] < -.8, 'солнце: восход 6, полдень выше всего (64°), закат 18');
+  const circ = (a, b) => { const d = Math.abs(a - b) % 24; return Math.min(d, 24 - d); };
+  ok(E.dayClock(0, 40, .2) === 6 && circ(E.dayClock(40 * 60000 * .8, 40, .2), 18) < 1e-6 && circ(E.dayClock(40 * 60000 * .9, 40, .2), 0) < 1e-6, 'общие сутки мира: ночь — пятая часть');
+  let clk = true; for (let s = 0; s < 40 * 60; s += 7) { const a = E.dayClock(s * 1000, 40, .2), b = E.dayClock((s + 7) * 1000, 40, .2), d = ((b - a) % 24 + 24) % 24; if (!(d > 0 && d < 1)) clk = false; }
+  ok(clk, 'время суток идёт вперёд без скачков');
+  // модель неба: день, ночь, закат, без скачков
+  const D = E.skyModel(13), N = E.skyModel(.5), S = E.skyModel(17.8);
+  ok(D.day > .99 && D.night < .01 && D.lightI > .8 && D.light[2] > .7 && D.zen[2] > D.zen[0] && D.stars === 0 && D.sun[1] > .5, 'день: солнце высоко, свет белый, небо синее, звёзд нет', { lightI: D.lightI, light: D.light });
+  ok(N.night > .99 && N.lightDir[1] >= .25 && N.lightI > .05 && N.lightI < .3 && N.stars > .5 && N.moonI > .5 && N.light[2] > N.light[0], 'ночь: светит луна (голубая, слабая), звёзды', { lightI: N.lightI, stars: N.stars });
+  ok(S.dusk01 > .4 && S.light[0] > S.light[2] * 2 && S.lightI < D.lightI, 'закат: тёплый слабый свет, заря', { light: S.light, dusk: S.dusk01 });
+  let smooth = true, prev = E.skyModel(0, undefined), pl = prev.lightI, ph = prev.hor.slice();
+  for (let i = 1; i <= 1200; i++) { const t = i * .02, m = E.skyModel(t); if (Math.abs(m.lightI - pl) > .06 || Math.abs(m.hor[0] - ph[0]) + Math.abs(m.hor[1] - ph[1]) + Math.abs(m.hor[2] - ph[2]) > .08) { smooth = false; console.log('  скачок в', t.toFixed(2)); break; } pl = m.lightI; ph = m.hor.slice(); }
+  ok(smooth, 'небо и свет меняются плавно (шаг 1,2 мин игрового времени)');
+  const hz = E.skyModel(13, { haze: 1 }), clear = E.skyModel(13, { haze: 0 });
+  ok(hz.hor[2] - hz.hor[0] < clear.hor[2] - clear.hor[0] && hz.glow[0] > clear.glow[0], 'дымка: горизонт белее, свечение у солнца шире');
+  ok(E.skyModel(.5, { moon: false }).moonI === 0, 'без луны — нет луны');
+  const out = [0, 0, 0]; E.skyColor(D, [-D.sun[0], 0, -D.sun[2]], out);
+  ok(Math.abs(out[0] - D.hor[0]) < .02 && Math.abs(out[2] - D.hor[2]) < .02, 'цвет неба у горизонта (от солнца) = цвет тумана');
+  ok(E.lin('#ffffff').every(x => Math.abs(x - 1) < 1e-9) && E.lin('#000000').every(x => x === 0) && Math.abs(E.lin('#808080')[0] - .2158605) < 1e-5, 'sRGB → линейный');
+  const ac = E.aces([1, 1, 1], 1); ok(ac[0] > .75 && ac[0] < .85 && Math.abs(ac[0] - ac[2]) < .02, 'ACES как в three (белый → ~0,8)', ac);
+}
+
+// ═══ 12. Шейдеры three (E.gfxPatch): туман и тени — свои куски; общие данные — по ссылке у всех материалов ═══
+{
+  const C = T.ShaderChunk, sh0 = C.shadowmap_pars_fragment;
+  ok(E.gfxPatch(T) === true && E.gfxPatch(T) === true, 'правка кусков шейдеров — один раз, повтор безопасен');
+  ok(C.fog_fragment.includes('d37FogA') && C.fog_pars_fragment.includes('uniform vec4 d37FogB') && C.fog_vertex.includes('vD37Fog = mvPosition.xyz') && C.fog_pars_vertex.includes('varying vec3 vD37Fog'), 'туман: высотный и к солнцу');
+  const shp = C.shadowmap_pars_fragment;
+  ok(shp.includes('d37Pcf') && shp.split('float getShadow(').length === 2 && shp.split('vec2 cubeToUV(').length === 2 && shp.includes('getPointShadow') && shp.length > sh0.length * .5, 'тени: getShadow заменена один раз, остальное на месте');
+  ok(E.patchShadowChunk(shp) === shp, 'повторная правка теней ничего не меняет');
+  for (const k of ['standard', 'physical', 'lambert', 'phong', 'toon', 'basic', 'sprite', 'points']) ok(T.ShaderLib[k].uniforms.d37FogA?.value === E.GFXU.fogA, 'общие данные тумана у ' + k);
+  ok(T.ShaderLib.standard.uniforms.d37Sh.value === E.GFXU.sh && !T.ShaderLib.basic.uniforms.d37Sh, 'данные теней — у материалов со светом');
+  const cl = T.UniformsUtils.clone(T.ShaderLib.standard.uniforms);
+  ok(cl.d37FogA.value === E.GFXU.fogA && cl.d37Sh.value === E.GFXU.sh, 'копия uniform (как в three при сборке) — тот же массив: одно обновление на все материалы');
+  // GLSL: #if/#endif и скобки сходятся; #include — только с новой строки (иначе шейдер не собирается)
+  const bal = (s, a, b) => (s.match(a) || []).length === (s.match(b) || []).length;
+  const ifs = s => bal(s, /#if(n?def)?\b/g, /#endif\b/g);
+  for (const [n, s] of [['fog_fragment', C.fog_fragment], ['fog_pars_fragment', C.fog_pars_fragment], ['fog_vertex', C.fog_vertex], ['fog_pars_vertex', C.fog_pars_vertex], ['shadowmap_pars_fragment', shp]])
+    ok(ifs(s) && bal(s, /\{/g, /\}/g) && bal(s, /\(/g, /\)/g), 'GLSL ' + n + ': #if/#endif и скобки');
+  const sky = E.skyMaterial(T), env = E.skyMaterial(T, true);
+  const inc = s => s.split('\n').every(l => !l.includes('#include') || /^\s*#include <\w+>\s*$/.test(l));
+  ok(inc(sky.fragmentShader) && inc(sky.vertexShader) && bal(sky.fragmentShader, /\{/g, /\}/g) && bal(sky.fragmentShader, /\(/g, /\)/g), 'купол неба: #include с новой строки, скобки');
+  ok(sky.vertexShader.includes('p.w * 0.99999') && !env.vertexShader.includes('0.99999') && sky.depthTest && !env.depthTest, 'купол — на дальней плоскости; для отражений — без этого');
+  const M = E.skyModel(13); E.skyUniforms(sky.uniforms, M, 5);
+  ok(Math.abs(sky.uniforms.uZen.value.b - M.zen[2]) < 1e-6 && sky.uniforms.uP.value.w === 5, 'модель неба → uniform купола');
+  // вода v2: правка стандартного материала (сборка шейдера — как в three, кусками)
+  const fakeR = { T, waterU: { uTime: { value: 0 }, uClear: { value: .5 }, uFoam: { value: .5 }, uWQ: { value: 1 } }, normalFrom: () => new T.Texture() };
+  const wm = E.waterMaterial(fakeR, '#3aa6dc', { depth: { tex: new T.Texture(), rect: [0, 0, 10, 10] } });
+  const shd = { uniforms: {}, vertexShader: T.ShaderLib.standard.vertexShader, fragmentShader: T.ShaderLib.standard.fragmentShader };
+  wm.onBeforeCompile(shd);
+  ok(shd.fragmentShader.includes('wDepth') && shd.fragmentShader.includes('foam') && shd.fragmentShader.includes('tDep'), 'вода: глубина, пена, дно в шейдере');
+  ok(!shd.fragmentShader.includes('#include <normal_fragment_maps>') && shd.fragmentShader.includes('vD37W.xz'), 'вода: нормаль — своя (рябь по миру)');
+  ok(shd.fragmentShader.includes('#include <alphamap_fragment>\n') && shd.fragmentShader.includes('#include <output_fragment>\n') && shd.vertexShader.includes('vD37W ='), 'вода: куски three на месте, #include — с новой строки');
+  ok(shd.uniforms.uWQ === fakeR.waterU.uWQ && shd.uniforms.tDep && wm.defines.D37_WDEPTH && wm.userData.water && wm.userData.noCast, 'вода: общие данные мира (качество, пена) и дно');
+}
+
+// ═══ 13. Настройки игрока (js/core/settings.js + gfx-settings.js): перенос d37_gfx, «Своя», пресеты, D37Opt.gfx ═══
+{
+  store.d37_gfx = 'high'; store.d37_settings = JSON.stringify({ _v: 1, shadows: true });
+  globalThis.D37Opt = undefined;
+  for (const f of ['js/core/settings.js', 'js/core/gfx-settings.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
+  const S = globalThis.D37Settings, O = () => globalThis.D37Opt;
+  ok(S && S.gfxExt && JSON.stringify(S.gfxExt.PRESETS) === JSON.stringify(E.GFX_PRESETS), 'пресеты в настройках = пресеты движка');
+  ok(S.get('gfxPreset') === 'high' && O().gfx.preset === 'high', 'перенос: был d37_gfx = high — пресет «Высокая»');
+  const rev0 = O().rev;
+  S.set('ao', 'high', { ui: true });
+  ok(S.get('gfxPreset') === 'custom' && S.get('ao') === 'high' && S.get('shadowQ') === 'high' && S.get('aa') === 'msaa' && S.get('dist') === 1.25, 'тронул AO — «Своя» с остальным как было в «Высокой»');
+  ok(O().gfx.preset === 'custom' && O().gfx.ao === 'high' && O().rev > rev0, 'на живую: D37Opt.gfx и rev');
+  let r = E.gfxResolve({ ...O().gfx, shadows: O().shadows }, { q: 'high' });
+  ok(r.ao === 'high' && r.shadowQ === 'high' && r.preset === 'custom', 'движок получает «Своя» как выбрано');
+  S.set('gfxPreset', 'low', { ui: true });
+  ok(S.get('gfx') === 'low' && store.d37_gfx === 'low' && S.get('ao') === 'off' && S.get('water') === 'simple', 'пресет «Низкая»: основа low (d37_gfx), мелочи — как в пресете');
+  S.set('gfxPreset', 'ultra', { ui: true });
+  ok(S.get('gfx') === 'high' && S.get('shadowQ') === 'ultra' && S.get('shadows') === true, 'пресет «Ультра»: основа high');
+  S.set('gfxPreset', 'auto', { ui: true });
+  ok(S.get('gfx') === 'auto' && store.d37_gfx === undefined, 'пресет «Авто»: основа по устройству (d37_gfx убран)');
+  S.set('fpsCap', '60', { ui: true }); S.set('battery', true, { ui: true }); S.set('res', 70, { ui: true });
+  ok(O().gfx.fpsCap === 60 && O().gfx.battery === true && O().gfx.res === 70 && S.get('gfxPreset') === 'auto', 'лимит FPS, батарея, масштаб — не делают пресет «Своим»');
+  r = E.gfxResolve({ ...O().gfx, shadows: O().shadows }, { q: 'mid' });
+  ok(r.fpsCap === 30 && r.res === 70 && r.prCap === 1, 'экономия батареи сильнее лимита 60', r);
+  S.set('fpsCap', 'x'); ok(S.get('fpsCap') === '0', 'лимит FPS: неверное — без лимита');
+  S.reset();
+  ok(O().gfx.preset === 'auto' && O().gfx.battery === false && S.get('gfx') === 'auto', '«Сбросить всё» — графика по умолчанию');
+}
+
+// ═══ 14. Лимит FPS (core.js E.loop) и автоматы разрешения: потолок и пауза ═══
+{
+  const q0 = globalThis.requestAnimationFrame;
+  let cb = null; globalThis.requestAnimationFrame = f => { cb = f; return 1; }; globalThis.cancelAnimationFrame = () => { cb = null; };
+  const run = (cap, hz, secs) => {
+    E.fpsCap = cap; let frames = 0, steps = 0, now = 0;
+    const lp = E.loop(() => { steps++; }, () => { frames++; });
+    for (let i = 0; i < hz * secs; i++) { now += 1000 / hz; const f = cb; cb = null; f(now); }
+    lp.stop(); E.fpsCap = 0;
+    return { frames, steps };
+  };
+  let rr = run(30, 60, 10);
+  ok(Math.abs(rr.frames - 300) <= 3 && Math.abs(rr.steps - 600) <= 6, 'лимит 30 на экране 60 Гц: 30 кадров/с, логика — 60 шагов/с', rr);
+  rr = run(60, 144, 10);
+  ok(rr.frames >= 560 && rr.frames <= 640, 'лимит 60 на экране 144 Гц ≈ 60 кадров/с', rr);
+  rr = run(0, 60, 5);
+  ok(rr.frames === 300, 'без лимита — каждый кадр');
+  globalThis.requestAnimationFrame = q0;
+  const D = E.dynRes({ max: .8 });
+  D.set(1); ok(D.scale === .8, 'масштаб разрешения — потолок динамического');
+  let t = 0; for (let i = 0; i < 600; i++) { t += 16.7; D.tick(16.7, 3, t); }
+  ok(D.scale <= .8, 'запас есть — но не выше потолка', D.scale);
+  const D2 = E.dynRes(); D2.hold(3000, 0); t = 0; for (let i = 0; i < 150; i++) { t += 30; D2.tick(30, 3, t); }
+  ok(D2.scale === 1, 'пока «ждём» (второй автомат сменил своё) — не меняем', D2.scale);
+  const D3 = E.dynRes({ min: 0, step: 1 / 6 }); D3.set(0); ok(D3.scale === 0, 'ступени автокачества: 0 — самая дешёвая');
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);

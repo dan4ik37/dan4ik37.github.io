@@ -581,6 +581,32 @@
     const random = (a, b) => b === undefined ? (a === undefined ? Math.random() : Math.floor(Math.random() * a) + 1) : Math.floor(Math.random() * (b - a + 1)) + a;
     const game = { Name: 'Game', ClassName: 'DataModel', Workspace: workspace, Players, GetService: n => ({ Players, RunService, TweenService, Workspace: workspace, Debris })[n] || null, get workspace(){ return workspace; },
       IsA(c){ return c === 'DataModel' || c === 'Instance'; }, toString(){ return 'Game'; } };
+    // ── Режим игры (Game.*) и камера (Camera.*) — их ведёт хозяин мира (studio3d-play.js): сюда приходит состояние, отсюда — команды.
+    // Game — ещё и прежний game (Game:GetService в Lua), свои члены — сверху
+    const GS = { mode: '', phase: '', round: 0, rounds: 1, left: -1, scores: {}, teams: {}, cam: 'third' };
+    const pidOf = p => (p && (p.__pid || p.__player)) || null;
+    const gameMode = {
+      get Mode(){ return GS.mode; }, set Mode(v){ send('mode', { cmd: 'set', mode: String(v ?? '').slice(0, 20) }); },
+      get State(){ return GS.phase; }, get Round(){ return GS.round; }, get Rounds(){ return GS.rounds; }, get TimeLeft(){ return GS.left; },
+      RoundStart: signal(), RoundEnd: signal(), MatchEnd: signal(),
+      AddScore(p, n){ const pid = pidOf(p); if (pid) send('mode', { cmd: 'score', pid, n: Math.max(-1000, Math.min(1000, +n || 0)) }); },
+      GetScore(p){ return GS.scores[pidOf(p)] ?? 0; },
+      GetTeam(p){ return GS.teams[pidOf(p)] ?? 0; },
+      SetTeam(p, n){ const pid = pidOf(p); if (pid) send('mode', { cmd: 'team', pid, n: n | 0 }); },
+      EndRound(winner){ send('mode', { cmd: 'end', pid: pidOf(winner) }); },
+      StartMatch(){ send('mode', { cmd: 'start' }); },
+    };
+    const Game = new Proxy(gameMode, {
+      get(t, k){ return k in t ? t[k] : game[k]; },
+      set(t, k, v){ if (k === 'Mode') { t.Mode = v; return true; } throw new Error('Game: нельзя менять ' + String(k)); },
+      has(t, k){ return k in t || k in game; },
+    });
+    const Camera = {
+      get Mode(){ return GS.cam; }, set Mode(v){ send('camera', { mode: String(v ?? '').slice(0, 20) }); },
+      SetMode(v, p){ send('camera', { mode: String(v ?? '').slice(0, 20), pid: pidOf(p) }); },
+      Shake(s, sec){ send('camera', { shake: [Math.max(0, Math.min(5, +s || 1)), Math.max(0, Math.min(3, +sec || .4))] }); },
+      toString(){ return 'Camera'; },
+    };
     const scriptObj = s => ({ Name: s.name, Parent: s.parent ? proxyOf(s.parent) : workspace, ClassName: 'Script', Disabled: false,
       IsA(c){ return c === 'Script' || c === 'BaseScript' || c === 'LuaSourceContainer' || c === 'Instance'; },
       FindFirstChild(){ return null; }, GetChildren(){ return []; }, Destroy(){}, GetFullName(){ return (s.parent && proxyOf(s.parent) ? proxyOf(s.parent).GetFullName() : 'Workspace') + '.' + s.name; }, toString(){ return s.name; } });
@@ -598,7 +624,7 @@
         // библиотеки языков (lang-*.js) приходят текстом — регистрируются в globalThis.D37Lang
         globalThis.D37Lang = globalThis.D37Lang || {};
         for (const id of Object.keys(d.libs || {})) { try { (0, eval)(d.libs[id]); } catch (e5) { send('error', { script: '', line: 0, msg: 'Язык ' + id + ': ' + String(e5 && e5.message || e5).slice(0, 200) }); } }
-        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame };
+        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera };
         for (const s of d.scripts) {
           curScript = s.name;
           if (s.lang && s.lang !== 'js') {
@@ -611,10 +637,10 @@
             continue;
           }
           try {
-            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame',
+            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera',
               'return (async () => {\n' + s.code + '\n})();');
             const scr = scriptObj(s);
-            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame);
+            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera);
             const nm = s.name; if (r && r.catch) r.catch(e3 => err(nm, e3));
           } catch (e4) { err(s.name, e4); }
         }
@@ -659,6 +685,11 @@
         else if (d.ev === 'playerRemoving') { const p = playerOf(d.id); if (p) Players.PlayerRemoving._fire(p); for (const o of [...objs.values()]) if (o.pl === d.id) destroy(o.id); players.delete(d.id); }
         else if (d.ev === 'died') { const P = players.get(d.player); if (P) { P.health = 0; P.died && P.died._fire(); } }
         else if (d.ev === 'respawned') { const P = players.get(d.player); if (P) { P.health = P.maxHealth ?? 100; charAdded(d.player); } }
+        // режим игры: состояние и события раундов (studio3d-play.js)
+        else if (d.ev === 'game') { if (d.s && typeof d.s === 'object') Object.assign(GS, d.s); }
+        else if (d.ev === 'roundStart') gameMode.RoundStart._fire(d.round | 0);
+        else if (d.ev === 'roundEnd') gameMode.RoundEnd._fire(String(d.winner || ''), String(d.text || ''));
+        else if (d.ev === 'matchEnd') gameMode.MatchEnd._fire(String(d.winner || ''), String(d.text || ''));
         return;
       }
     };

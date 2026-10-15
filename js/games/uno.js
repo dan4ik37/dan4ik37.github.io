@@ -153,8 +153,46 @@
       winner: G.winner, pts: G.pts, log: G.log, v: G.v };
   }
 
+  // ═══ ВЫБОР КАРТЫ: нажал — поднялась, ещё раз / «Сходить» — ход; передумал — другая карта, «Отмена», мимо, Esc ═══
+  // Чистая функция (проверяется в node): s = { pick, pickC, wild, arm } — выбранная карта (номер в руке и сама карта),
+  // открыт выбор цвета, до какого времени колода ждёт второго нажатия; ev — что нажали; ctx = { hand, canPlay, myTurn, drew, now }.
+  // Вернёт { s, act, msg }: act — ход для отправки (до него всё — только у себя, по сети ничего не уходит).
+  const NOSEL = { pick: -1, pickC: '', wild: false, arm: 0 };
+  function pickReduce(s, ev, ctx){
+    const clear = { ...NOSEL };
+    const valid = i => i >= 0 && !!ctx.myTurn && !!ctx.canPlay[i];
+    // стол обновился: выбранная — та же карта и её ещё можно сыграть? колода ещё ждёт?
+    const cur = s.pick >= 0 && (ctx.hand[s.pick] !== s.pickC || !valid(s.pick)) ? { ...clear, arm: s.arm } : { ...s };
+    if (cur.arm && (ctx.now > cur.arm || !ctx.myTurn || ctx.drew)) cur.arm = 0;
+    const confirm = c => colorOf(ctx.hand[c.pick]) ? { s: clear, act: { a: 'play', i: c.pick } } : { s: { ...c, wild: true, arm: 0 }, act: null };
+    switch (ev.t) {
+      case 'sync': return { s: cur, act: null };
+      case 'card':
+        if (!ctx.myTurn) return { s: cur, act: null, msg: 'wait' };
+        if (!valid(ev.i)) return { s: { ...cur, arm: 0 }, act: null, msg: 'bad' };
+        if (cur.pick === ev.i) return confirm(cur);
+        return { s: { pick: ev.i, pickC: ctx.hand[ev.i], wild: false, arm: 0 }, act: null };
+      case 'go': return cur.pick >= 0 ? confirm(cur) : { s: cur, act: null };
+      case 'color': return cur.pick >= 0 && cur.wild && COLORS.includes(ev.c) ? { s: clear, act: { a: 'play', i: cur.pick, color: ev.c } } : { s: cur, act: null };
+      case 'back': return { s: { ...cur, wild: false }, act: null };
+      case 'cancel': case 'bg': return { s: clear, act: null };
+      case 'esc': return { s: cur.wild ? { ...cur, wild: false } : clear, act: null };
+      case 'deck':
+        if (!ctx.myTurn || ctx.drew) return { s: cur, act: null };
+        // есть чем ходить — колода сначала спрашивает «Точно взять?» (второе нажатие за 4 с)
+        if (!ctx.canPlay.some(Boolean) || cur.arm) return { s: clear, act: { a: 'draw' } };
+        return { s: { ...clear, arm: ctx.now + 4000 }, act: null, msg: 'arm' };
+    }
+    return { s: cur, act: null };
+  }
+  // Порядок карт в руке на экране: по цвету, внутри — по значению, дикие — в конце (в данных порядок свой)
+  const ORDER_C = { r: 0, y: 1, g: 2, b: 3 }, ORDER_V = { S: 10, R: 11, D: 12, W: 20, F: 21 };
+  const sortKey = c => (colorOf(c) ? ORDER_C[colorOf(c)] : 4) * 100 + (ORDER_V[valOf(c)] ?? +valOf(c));
+
   // ═══ ЭКРАН ═══
-  let root, api, G = null, P = null, hand = [], meIdx = 0, mode = 'menu', room = null, timers = [], botT = 0, tickT = 0, nBots = 2, wildPick = -1, seatsCache = [];
+  const TURN_MS = 30000;   // онлайн: столько думает человек, потом ход за него
+  let root, api, G = null, P = null, hand = [], meIdx = 0, mode = 'menu', room = null, timers = [], botT = 0, tickT = 0, nBots = 2, seatsCache = [];
+  let S = { ...NOSEL }, armT = 0, turnUntil = 0, lastV = -1;
   const later = (fn, ms) => { const t = setTimeout(fn, ms); timers.push(t); return t; };
   const nickMe = () => GameRoom.nick();
   const online = () => !!room;
@@ -163,7 +201,7 @@
   function cardHtml(c, i, opts = {}){
     const col = colorOf(c), v = valOf(c);
     const label = SYM[v] || v;
-    return `<button type="button" class="uc ${col ? 'c-' + col : 'c-w'}${opts.ok ? ' ok' : ''}${opts.dim ? ' dim' : ''}${opts.big ? ' big' : ''}" ${i != null ? `data-act="play:${i}"` : ''} aria-label="${cardName(c)}"${opts.disabled ? ' disabled' : ''}>
+    return `<button type="button" class="uc ${col ? 'c-' + col : 'c-w'}${opts.ok ? ' ok' : ''}${opts.dim ? ' dim' : ''}${opts.big ? ' big' : ''}${opts.sel ? ' sel' : ''}" ${i != null ? `data-act="play:${i}"` : ''} aria-label="${cardName(c)}"${opts.sel ? ' aria-pressed="true"' : ''}${opts.disabled ? ' disabled' : ''}>
       <span class="uc-c">${label}</span><span class="uc-t">${label}</span><span class="uc-b">${label}</span></button>`;
   }
 
@@ -190,7 +228,7 @@
     const players = [{ id: 'me', nick: nickMe(), look: window.D37Char?.look() || null }];
     for (let i = 0; i < nBots; i++) players.push({ id: 'bot' + i, nick: BOTS[i], bot: true });
     G = newGame(players, Math.random);
-    meIdx = 0; mode = 'play';
+    meIdx = 0; mode = 'play'; S = { ...NOSEL };
     sync();
   }
 
@@ -200,8 +238,8 @@
     P = pub(G);
     hand = G.hands[meIdx].slice();
     if (room) G.players.forEach((pl, i) => { if (!pl.bot && pl.id !== room.myId) room.sendTo(pl.id, { type: 'up', pub: P, hand: G.hands[i] }); });
+    scheduleBot();   // раньше рисования: отсчёт хода онлайн (turnUntil) уже свежий
     render();
-    scheduleBot();
     if (G.winner >= 0) over();
   }
   function scheduleBot(){
@@ -227,17 +265,19 @@
     clearTimeout(tickT);
     if (!room || !G || G.winner >= 0) return;
     const p = G.turn, v = G.v;
+    turnUntil = Date.now() + TURN_MS;
     tickT = later(() => {
       if (!G || G.turn !== p || G.v !== v) return;
       act(G, p, G.drew != null ? { a: 'pass' } : { a: 'draw' }, Date.now());
       if (G.turn === p && G.drew != null) act(G, p, { a: 'pass' }, Date.now());
       sync();
-    }, 30000);
+    }, TURN_MS);
   }
 
   // Свой ход (и у хозяина, и у гостя)
   function doAct(a){
     if (!P || P.winner >= 0) return;
+    if (a.a === 'play' || a.a === 'draw' || a.a === 'pass') S = { ...NOSEL };   // «Одна!» и «Поймал» выбор не снимают
     if (isHost()) {
       const err = act(G, meIdx, a, Date.now());
       if (err) { api.toast(err); return; }
@@ -249,34 +289,64 @@
     }
   }
 
+  const ctxOf = () => {
+    const myTurn = !!P && P.turn === meIdx && P.winner < 0 && mode === 'play';
+    return { hand, myTurn, drew: P?.drew != null, now: Date.now(), canPlay: myTurn ? hand.map((c, i) => (P.drew == null || i === P.drew) && playable(c, P.top, P.color)) : [] };
+  };
+  // Нажатие → новое состояние выбора; ход (если подтверждён) — отправить; потом перерисовать
+  function pickEv(ev){
+    if (!P || mode !== 'play') return;
+    const r = pickReduce(S, ev, ctxOf());
+    S = r.s;
+    clearTimeout(armT);
+    if (S.arm) armT = later(() => { if (S.arm && Date.now() >= S.arm) { S = { ...S, arm: 0 }; render(); } }, S.arm - Date.now() + 30);
+    if (r.msg === 'bad') { api.sfx('bad'); root.querySelector('.uc[data-act="play:' + ev.i + '"]')?.classList.add('no'); setTimeout(() => render(), 260); return; }
+    if (r.act) { doAct(r.act); return; }
+    if (ev.t === 'card' && S.pick >= 0) api.sfx('tick');
+    render();
+  }
+
   function render(){
     if (!P || mode !== 'play') return;
-    const myTurn = P.turn === meIdx && P.winner < 0;
+    S = pickReduce(S, { t: 'sync' }, ctxOf()).s;   // стол обновился — выбор ещё в силе?
+    const { myTurn, canPlay } = ctxOf();
     const others = P.order.map((o, i) => ({ ...o, i })).filter(o => o.i !== meIdx);
     // соперники — по кругу от меня
     others.sort((a, b) => ((a.i - meIdx + P.order.length) % P.order.length) - ((b.i - meIdx + P.order.length) % P.order.length));
-    const canPlay = myTurn ? hand.map((c, i) => (P.drew == null || i === P.drew) && playable(c, P.top, P.color)) : [];
     const exposedMe = P.exposed === meIdx;
     const canCatch = P.exposed >= 0 && P.exposed !== meIdx;
+    const any = canPlay.some(Boolean), sel = S.pick >= 0;
+    const order = hand.map((c, i) => i).sort((a, b) => sortKey(hand[a]) - sortKey(hand[b]) || a - b);
+    const turnTxt = P.winner >= 0 ? '' : myTurn ? (P.drew != null ? '🃏 Сыграй взятую карту или пропусти ход' : '🟢 Твой ход') : `⏳ Ходит ${esc(P.order[P.turn].nick)}…`;
+    const hint = P.winner >= 0 || !myTurn ? '' : S.arm ? '⚠️ Тебе есть чем ходить. Нажми колоду <b>ещё раз</b>, если всё равно берёшь'
+      : sel ? `Нажми карту ещё раз или «Сходить». Передумал — другая карта или «Отмена»${online() ? ' · сходил — отменить нельзя' : ''}`
+      : P.drew != null ? '' : any ? 'Нажми карту, которой хочешь сходить' : 'Нечем ходить — нажми колоду, возьми карту';
+    const keep = root.querySelector('.un-hand')?.scrollLeft || 0;   // рука шире экрана — прокрутку не сбрасываем
     root.innerHTML = `<div class="un">
         <div class="un-opps">${others.map(o => `<div class="un-opp${P.turn === o.i ? ' turn' : ''}">
             ${o.bot ? '<span class="un-av">🤖</span>' : o.look && window.D37Char ? `<img class="un-av" alt="" src="${window.D37Char.img(o.look, 56)}">` : '<span class="un-av">🙂</span>'}
             <b>${esc(o.nick)}</b><span class="un-cnt"><i class="un-mini"></i>×${o.n}</span>${o.n === 1 && o.said ? '<i class="un-said">Одна!</i>' : ''}</div>`).join('')}</div>
         <div class="un-table">
-          <button type="button" class="uc c-back un-deck" data-act="draw"${myTurn && P.drew == null ? '' : ' disabled'} aria-label="Взять карту"><span class="uc-c un-logo-t">Одна!</span><small>${P.deckN}</small></button>
+          <button type="button" class="uc c-back un-deck${S.arm ? ' gk-armed' : ''}" data-act="draw"${myTurn && P.drew == null ? '' : ' disabled'} aria-label="${S.arm ? 'Точно взять карту?' : 'Взять карту'}"><span class="uc-c un-logo-t">${S.arm ? 'Взять?' : 'Одна!'}</span><small>${P.deckN}</small></button>
           <div class="un-top">${cardHtml(P.top, null, { big: true })}</div>
           <div class="un-info"><span class="un-dot c-${P.color}" title="Цвет: ${CNAME[P.color]}"></span><span class="un-dir">${P.dir > 0 ? '↻' : '↺'}</span></div>
         </div>
         <div class="un-log" aria-live="polite">${esc(P.log)}</div>
-        <div class="un-status">${P.winner >= 0 ? '' : myTurn ? (P.drew != null ? '🃏 Сыграй взятую карту или пропусти ход' : '🟢 Твой ход') : `⏳ Ходит ${esc(P.order[P.turn].nick)}…`}</div>
+        <div class="un-status">${turnTxt ? (window.GameKit ? GameKit.turn(myTurn, turnTxt) : turnTxt) : ''}${online() && myTurn ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : ''}</div>
         <div class="un-acts">
+          ${sel ? `<button type="button" class="un-btn gk-go" data-act="commit">${colorOf(hand[S.pick]) ? '✅ Сходить' : '🎨 Выбрать цвет'}</button><button type="button" class="un-btn" data-act="cancel">✕ Отмена</button>` : ''}
           ${hand.length <= 2 && !P.order[meIdx].said && P.winner < 0 ? `<button type="button" class="un-btn uno${exposedMe ? ' urgent' : ''}" data-act="uno">📢 Одна!</button>` : ''}
           ${canCatch ? `<button type="button" class="un-btn catch" data-act="catch">🫵 Поймал ${esc(P.order[P.exposed].nick)}!</button>` : ''}
-          ${myTurn && P.drew != null ? '<button type="button" class="un-btn" data-act="pass">Пропустить ход</button>' : ''}
+          ${myTurn && P.drew != null && !sel ? '<button type="button" class="un-btn" data-act="pass">Пропустить ход</button>' : ''}
         </div>
-        <div class="un-hand${myTurn ? ' my' : ''}${hand.length > 9 ? ' many' : ''}">${hand.map((c, i) => cardHtml(c, i, { ok: canPlay[i], dim: myTurn && !canPlay[i] })).join('')}</div>
-        <div class="un-wild" hidden><div class="un-wt">Выбери цвет</div><div class="un-wc">${COLORS.map(c => `<button type="button" class="un-dot big c-${c}" data-act="color:${c}" aria-label="${CNAME[c]}"></button>`).join('')}</div></div>
+        <div class="gk-hint">${hint}</div>
+        <div class="un-hand${myTurn ? ' my' : ''}${hand.length > 9 ? ' many' : ''}${sel ? ' picking' : ''}">${order.map(i => cardHtml(hand[i], i, { ok: canPlay[i], dim: myTurn && !canPlay[i], sel: S.pick === i })).join('')}</div>
+        <div class="un-wild"${S.wild && sel ? '' : ' hidden'}><div class="un-wt">Выбери цвет</div><div class="un-wc">${COLORS.map(c => `<button type="button" class="un-dot big c-${c}" data-act="color:${c}" aria-label="${CNAME[c]}"></button>`).join('')}</div>
+          <button type="button" class="un-btn" data-act="back">← Назад — выбрать другую карту</button></div>
       </div>`;
+    const h = root.querySelector('.un-hand');
+    if (h && keep) h.scrollLeft = keep;
+    window.GameKit?.cd();
   }
 
   function over(){
@@ -296,25 +366,25 @@
 
   function onClick(e){
     const b = e.target.closest('[data-act]');
-    if (!b || b.disabled) return;
+    if (!b || b.disabled) {
+      // нажал мимо карт и кнопок: в окне цвета — «назад», на столе — снять выбор
+      if (mode === 'play' && (S.pick >= 0 || S.arm) && !e.target.closest('.un-hand')) pickEv({ t: S.wild ? 'back' : 'bg' });
+      return;
+    }
     const a = b.dataset.act;
     if (a.startsWith('nb:')) { nBots = +a.slice(3); menu(); return; }
     if (a === 'solo') { startSolo(); return; }
     if (a === 'online') { location.hash = '#/games/uno/' + GameRoom.newCode(); return; }
     if (a === 'again') { if (online()) hostStart(); else startSolo(); return; }
     if (a === 'leave') { if (online()) location.hash = '#/games/uno'; else menu(); return; }
-    if (a === 'draw') { doAct({ a: 'draw' }); return; }
+    if (a === 'draw') { pickEv({ t: 'deck' }); return; }
     if (a === 'pass') { doAct({ a: 'pass' }); return; }
     if (a === 'uno') { doAct({ a: 'uno' }); return; }
     if (a === 'catch') { doAct({ a: 'catch' }); return; }
-    if (a.startsWith('play:')) {
-      const i = +a.slice(5), c = hand[i];
-      if (!c) return;
-      if (!colorOf(c)) { wildPick = i; const w = root.querySelector('.un-wild'); if (w) w.hidden = false; return; }
-      doAct({ a: 'play', i });
-      return;
-    }
-    if (a.startsWith('color:')) { const w = root.querySelector('.un-wild'); if (w) w.hidden = true; if (wildPick >= 0) doAct({ a: 'play', i: wildPick, color: a.slice(6) }); wildPick = -1; return; }
+    if (a.startsWith('play:')) { pickEv({ t: 'card', i: +a.slice(5) }); return; }
+    if (a === 'commit') { pickEv({ t: 'go' }); return; }   // «Сходить» (не 'go' — это «▶ Начать» за столом)
+    if (a === 'cancel' || a === 'back') { pickEv({ t: a }); return; }
+    if (a.startsWith('color:')) { pickEv({ t: 'color', c: a.slice(6) }); return; }
     // лобби стола
     if (a === 'copy') { const inp = root.querySelector('.ct-link input'); navigator.clipboard?.writeText(inp.value).then(() => { b.textContent = '✅ Скопировано'; }, () => inp.select()); return; }
     if (a === 'bot') { bots++; lobby(); return; }
@@ -343,7 +413,7 @@
     if (players.length < 2) { api.toast('Нужно хотя бы двое: позови друга или добавь бота'); return; }
     G = newGame(players, Math.random);
     meIdx = players.findIndex(p => p.id === room.myId);
-    mode = 'play';
+    mode = 'play'; S = { ...NOSEL };
     sync();
   }
   function joinTable(c){
@@ -382,7 +452,8 @@
           P = m.pub; hand = m.hand || [];
           meIdx = P.order.findIndex(o => o.id === room.myId);
           if (meIdx < 0) return;
-          if (first && P.winner < 0) mode = 'play';
+          if (first && P.winner < 0) { mode = 'play'; S = { ...NOSEL }; }
+          if (P.v !== lastV) { lastV = P.v; turnUntil = Date.now() + TURN_MS - 600; }   // хозяин заводит отсчёт на каждое изменение стола
           render();
           if (P.winner >= 0) over();
         } else if (m.type === 'err') api.toast(m.text);
@@ -391,20 +462,29 @@
     if (!room) root.innerHTML = GameRoom.errorHtml;
   }
 
+  // Esc — закрыть выбор цвета / снять выбор карты (раньше выхода из полного экрана: он смотрит defaultPrevented)
+  function onKey(e){
+    if (e.key !== 'Escape' || mode !== 'play' || window.GameKit?.isOpen?.() || !(S.pick >= 0 || S.arm)) return;
+    e.preventDefault();
+    pickEv({ t: 'esc' });
+  }
+
   window.GAME_IMPL.uno = {
     mount(el, gameApi){
-      root = el; api = gameApi;
+      root = el; api = gameApi; S = { ...NOSEL }; lastV = -1;
       root.addEventListener('click', onClick);
+      window.addEventListener('keydown', onKey, true);
       if (GameRoom.validCode(gameApi.param)) joinTable(gameApi.param); else menu();
     },
     unmount(){
       timers.forEach(clearTimeout); timers = [];
-      clearTimeout(botT); clearTimeout(tickT);
+      clearTimeout(botT); clearTimeout(tickT); clearTimeout(armT);
       root?.removeEventListener('click', onClick);
+      window.removeEventListener('keydown', onKey, true);
       room?.leave(); room = null;
-      G = null; P = null; hand = []; bots = 0; mode = 'menu';
+      G = null; P = null; hand = []; bots = 0; mode = 'menu'; S = { ...NOSEL };
       root = null;
     },
-    _test: { deck, newGame, act, botMove, playable, pub, points, colorOf, valOf },
+    _test: { deck, newGame, act, botMove, playable, pub, points, colorOf, valOf, pickReduce, sortKey, NOSEL },
   };
 })();

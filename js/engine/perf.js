@@ -47,6 +47,8 @@
       `Разрешение: ${f1((D?.scale ?? 1) * 100)}% × ${f1(R.pr0 || 1)}${D && !D.on ? ' (ручное)' : ''}` + (post ? ` · ${post.msaa ? 'MSAA ' + post.msaa + '×' : ''}${post.fxaa ? (post.msaa ? ' + ' : '') + 'FXAA' : ''}${post.bloom.on ? ' · свечение' : ''}` : ' · без постобработки'),
       `Тени: ${R.shadow ? f1(shPerSec) + ' раз/с' : 'нет'} · лампы ${R.lights ? R.lights.lit + '/' + R.lights.list.length + ' (макс ' + R.lights.max + ')' : '—'} · качество ${R.q}`,
     ];
+    const o = R.opt, aq = R.autoQ?.();   // графика v3: пресет, ступень автокачества, что включено
+    if (o) lines.push(`Графика: ${o.preset}${aq ? ` (ступень ${aq.step}/${aq.steps - 1})` : ''} · тени ${o.shadows ? o.shadowQ : 'выкл'} · AO ${o.ao} · вода ${o.water} · ${o.aa} · дальность ${f1(o.dist * 100)}%${o.fpsCap ? ' · ≤' + o.fpsCap + ' FPS' : ''}${o.battery ? ' · 🔋' : ''}`);
     for (const [name, fn] of P.stats) { let v; try { v = fn(); } catch (e) { v = '—'; } lines.push(`${name}: ${typeof v === 'number' ? f1(v) : v}`); }
     box().textContent = lines.join('\n');
     S.frames = S.sumDt = S.maxDt = S.sumCpu = S.maxCpu = S.sumR = 0;
@@ -139,7 +141,7 @@
     if (ed.playing) return 'Сначала ■ Стоп';
     const { SC, R } = ed, BT = SC.batch, frames = o.frames || 60, rows = [];
     const dyn = R.dynRes, dynOn = dyn?.on;
-    R.setRes?.(1);
+    R.setRes?.(1); R.setAuto?.(false);   // замер — на полном разрешении и лучшей ступени автокачества
     const t0 = performance.now(), list = fill(SC, n, o.seed, ed.TR), tFill = performance.now() - t0;
     try {
       if (BT) { BT.setEnabled(false); rows.push(await measure(R, `${n} — как раньше (отдельно)`, frames)); rows.push(await measure(R, `${n} — как раньше, тени каждый кадр`, frames, true)); BT.setEnabled(true); }
@@ -154,6 +156,7 @@
       if (o.keep !== true) for (const x of list) if (SC.get(x.id)) SC.remove(x);
       BT?.flush();
       if (dyn) dyn.on = dynOn;
+      R.setAuto?.(true);
     }
   };
   // Открытый «Мир Денчика»: кадры как есть и с тенями каждый кадр
@@ -161,11 +164,11 @@
     const S = window.GAME_IMPL?.world?._test?.state?.();
     if (!S?.R) return 'Открой «Мир Денчика» (#/games/world) в 3D';
     const R = S.R, dyn = R.dynRes, dynOn = dyn?.on;
-    R.setRes?.(1);
+    R.setRes?.(1); R.setAuto?.(false);
     try {
       const rows = [await measure(R, 'мир', o.frames || 60), await measure(R, 'мир, тени каждый кадр', o.frames || 60, true)];
       console.table(rows);
       return { rows };
-    } finally { if (dyn) dyn.on = dynOn; }
+    } finally { if (dyn) dyn.on = dynOn; R.setAuto?.(true); }
   };
 })();

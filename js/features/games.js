@@ -6,11 +6,11 @@
 // Игра регистрирует себя: GAME_IMPL[id] = { mount(el, api), unmount() }.
 // Результаты — games.sql (game_result: XP за победы, рекорды); без входа —
 // только локальная статистика в localStorage.
-const GAMES_VER = '63';
+const GAMES_VER = '68';
 const GAMES = [
-  { id: 'world',    age: '12+', ageWhy: 'Онлайн-мир: общение с незнакомыми игроками в чате.', icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
+  { id: 'world',    age: '12+', ageWhy: 'Онлайн-мир: общение с незнакомыми игроками в чате.', icon: '🌍', title: 'Мир Денчика',     desc: 'Онлайн-мир сайта в 3D, как в Роблоксе: бегай, прыгай и лазай своим персонажем, заходи в кафе и домики, садись за столик — и партия в шахматы, «Дурака» или бильярд начнётся с тем, кто сел напротив.', scripts: ['js/games/room.js', 'js/games/world3d.js', 'js/games/charedit.js', 'js/games/world.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/games/mir-play.js', 'js/games/mir-base.js', 'js/games/mir.js'], color: '#22c55e' },
   { id: 'studio',   age: '6+', ageWhy: 'Конструктор игр; игры других игроков — со своей меткой.', icon: '🛠️', title: 'Студия игр',      desc: 'Сделай свою игру: раннер, ловилка, летун, викторина, космобой — без кода. Или своим кодом с помощью ИИ. Зови друзей играть по ссылке!', scripts: ['js/games/studio-tpl.js', 'js/games/studio.js'], color: '#38bdf8' },
-  { id: 'studio3d', age: '6+', ageWhy: 'Конструктор 3D-миров; миры других игроков — со своей меткой.', icon: '🧱', title: 'Студия 3D',       desc: 'Построй свой 3D-мир, как в Roblox Studio: детали, деревья и фонари, материалы, холмы и вода, время суток. Оживи детали скриптами — двери, монетки, лава, платформы — и пройди свой мир персонажем.', scripts: ['js/games/room.js', 'js/games/netplay.js', 'js/games/world3d.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/batch.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/engine/model.js', 'js/engine/scene.js', 'js/engine/rigid.js', 'js/engine/gizmo.js', 'js/engine/terrain.js', 'js/engine/script.js', 'js/engine/lang-lua.js', 'js/engine/lang-cs.js', 'js/engine/lang-wasm.js', 'js/engine/net.js', 'js/engine/net-transport.js', 'js/games/studio3d.js'], color: '#f59e0b' },
+  { id: 'studio3d', age: '6+', ageWhy: 'Конструктор 3D-миров; миры других игроков — со своей меткой.', icon: '🧱', title: 'Студия 3D',       desc: 'Построй свой 3D-мир, как в Roblox Studio: детали, деревья и фонари, материалы, холмы и вода, время суток. Оживи детали скриптами — двери, монетки, лава, платформы — и пройди свой мир персонажем.', scripts: ['js/games/room.js', 'js/games/netplay.js', 'js/games/world3d.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/interact.js', 'js/engine/synth.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/batch.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/fx.js', 'js/engine/npc.js', 'js/engine/model.js', 'js/engine/scene.js', 'js/engine/rigid.js', 'js/engine/gizmo.js', 'js/engine/terrain.js', 'js/engine/script.js', 'js/engine/lang-lua.js', 'js/engine/lang-cs.js', 'js/engine/lang-wasm.js', 'js/engine/net.js', 'js/engine/net-transport.js', 'js/engine/edit-input.js', 'js/engine/modes.js', 'js/engine/views.js', 'js/games/studio3d.js', 'js/games/studio3d-gfx.js', 'js/games/studio3d-ui.js', 'js/games/studio3d-touch.js', 'js/games/studio3d-pad.js', 'js/games/studio3d-tools.js', 'js/games/studio3d-modes.js', 'js/games/studio3d-play.js', 'js/games/studio3d-learn.js'], color: '#f59e0b' },
   { id: 'unity',    age: '12+', ageWhy: 'Игры игроков с других сайтов: модератор проверяет, но автор может обновить игру.', icon: '🕹️', title: 'Unity-игры',      desc: 'Игры, которые игроки сделали в Unity: играй прямо на сайте и зови друзей в комнату по ссылке — кто зашёл первым, тот хост. Делаешь игры в Unity? Добавь свою.', scripts: ['js/games/netplay.js', 'js/games/unity-host.js'], color: '#7dd3fc' },
   { id: 'krokodil', age: '12+', ageWhy: 'Онлайн-игра компанией: чат и рисунки других игроков (мат и ссылки закрыты, есть жалобы на рисунок).', icon: '🐊', title: 'Крокодил', desc: 'Рисуй загаданное слово — остальные угадывают в чате. Компанией до 10 человек онлайн по ссылке, против бота или просто порисовать.', scripts: ['js/games/room.js', 'js/games/netplay.js', 'js/games/krokodil.js'], top: 'krokodil', topLabel: 'очков в «Угадай рисунок бота»', color: '#22c55e' },
   { id: 'horde',    age: '12+', ageWhy: 'Сражения с мультяшными монстрами, боссы «Дракон» и «Жнец».', icon: '🧟', title: 'Орда',            desc: 'Выживи 10 минут против орды монстров, как в Vampire Survivors: оружие бьёт само, ты выбираешь улучшения. Герои, боссы, монеты — и дуэль с другом.', scripts: ['js/games/room.js', 'js/games/versus.js', 'js/games/netplay.js', 'js/games/horde.js'], top: 'horde', topLabel: 'очков за забег', color: '#a855f7' },
@@ -99,15 +99,19 @@ let gamesTopKey = 'cities_hard';
 let gamesTopWeek = true;       // рекорды за 7 дней (иначе — за всё время)
 const gamesScriptCache = new Map();
 
+// js/games/gamekit.js — общее для игр («точно?», правила, «чей ход»): грузится раньше любого файла игры (и в окне поверх мира)
+const GAMES_KIT = 'js/games/gamekit.js';
 function gamesLoadScript(src){
   if (gamesScriptCache.has(src)) return gamesScriptCache.get(src);
-  const p = new Promise((res, rej) => {
+  const kit = src !== GAMES_KIT && src.startsWith('js/games/') ? gamesLoadScript(GAMES_KIT) : null;
+  const p = (kit || Promise.resolve()).then(() => new Promise((res, rej) => {
     const s = document.createElement('script');
     s.src = src + '?v=' + GAMES_VER;
     s.onload = res;
-    s.onerror = () => { gamesScriptCache.delete(src); rej(new Error('Не загрузилось: ' + src)); };
+    s.onerror = () => rej(new Error('Не загрузилось: ' + src));
     document.head.appendChild(s);
-  });
+  }));
+  p.catch(() => { if (gamesScriptCache.get(src) === p) gamesScriptCache.delete(src); });   // не загрузилось — в другой раз ещё попытка
   gamesScriptCache.set(src, p);
   return p;
 }
@@ -236,7 +240,8 @@ async function openGame(id, param){
   gamesParam = param || null;
   hub.hidden = true; stage.hidden = false;
   document.body.classList.add('game-on');   // телефон: нижнее меню прячем (CSS) — под ним была клавиша «ВВОД» в «5 букв»
-  document.getElementById('gamesStageTitle').innerHTML = `${g.icon} ${esc(g.title)}${window.D37Age && g.age ? ' ' + D37Age.badge(g.age, { title: g.ageWhy || 'Без ограничений' }) : ''}`;
+  // узкий телефон — без названия, только значок и возраст (.gm-tt — gamekit.js)
+  document.getElementById('gamesStageTitle').innerHTML = `${g.icon} <span class="gm-tt">${esc(g.title)}</span>${window.D37Age && g.age ? ' ' + D37Age.badge(g.age, { title: g.ageWhy || 'Без ограничений' }) : ''}`;
   // полный экран и настройки (js/core/fullscreen.js, settings.js): телефон лёжа — игра во весь экран; «во весь экран при запуске»
   stage.dataset.game = id; gamesSyncMute();
   window.D37Full?.auto(stage);

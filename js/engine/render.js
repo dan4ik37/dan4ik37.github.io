@@ -21,6 +21,14 @@
 // на high каждый кадр, на mid через кадр), коробка теней уехала; плюс страховка раз в 1,5 с.
 // Свечение (bloom): R.bloom(материал, сила) — неон и лампочки светятся ореолом (js/engine/post.js).
 // Перед кадром — R.preRender (склейка сцены js/engine/batch.js); счётчики кадра — R.stats (F3 — js/engine/perf.js).
+// Графика v3 (js/engine/gfx.js, 15.10.2026): небо по времени суток (E.skyModel: солнце, луна, звёзды, заря, дымка) — купол
+// рисуется последним из непрозрачного; свет неба (полусфера) и отражения (PMREM из купола 64–128 px, не чаще раза в 2–6 с);
+// туман: по расстоянию + высотный + тёплый к солнцу (куски шейдеров three — E.gfxPatch); мягкие тени (PCSS-lite);
+// вода v2 (R.water: рябь двумя слоями, глубина, пена, френель). R.lighting.gfx — настройки графики мира (E.worldGfx;
+// полный объект освещения — мир загрузили — сбрасывает их, частичный — дописывает). Настройки игрока (window.D37Opt.gfx,
+// js/core/gfx-settings.js) → E.gfxResolve → R.applyGfx(o): тени и их качество, AO, вода, отражения, сглаживание, туман,
+// дальность (camera.far), цвет кадра, лимит FPS (E.fpsCap — core.js E.loop), масштаб разрешения, экономия батареи;
+// пресет «Авто» сам снижает/поднимает ступени (E.autoSteps) по времени кадра. R.setUnder(вкл) — туман под водой.
 (() => {
   const E = window.D37E = window.D37E || {};
   const PI = Math.PI, TAU = PI * 2;
@@ -39,14 +47,17 @@
   // Ровно ≥ 4 с — пробуем шаг вверх; стало медленно — назад и ждём (8 с, 16 с … до 2 мин): без «дёрганья».
   E.dynRes = (o = {}) => {
     const N = 48, buf = new Float32Array(N), cpu = new Float32Array(N), tmp = new Float32Array(N);
-    const D = { on: o.on !== false, scale: 1, min: o.min ?? .6, step: o.step ?? .1, target: o.target ?? 1000 / 60, changes: 0, avg: 0, cpuAvg: 0, why: '' };
-    let n = 0, i = 0, next = 0, slow = 0, good = 0, upBack = 8000, downBack = 30000, noUp = 0, noDown = 0, probe = 0, probeEnd = 0, downFrom = 0, downAvg = 0;
+    const D = { on: o.on !== false, scale: 1, min: o.min ?? .6, max: o.max ?? 1, step: o.step ?? .1, target: o.target ?? 1000 / 60, changes: 0, avg: 0, cpuAvg: 0, why: '' };
+    let n = 0, i = 0, next = 0, slow = 0, good = 0, upBack = 8000, downBack = 30000, noUp = 0, noDown = 0, probe = 0, probeEnd = 0, downFrom = 0, downAvg = 0, holdTo = 0;
     const r2 = v => Math.round(v * 100) / 100;
     const fresh = now => { n = 0; i = 0; next = now + 500; slow = 0; good = 0; };
-    D.set = (s, now = 0) => { D.scale = Math.max(D.min, Math.min(1, +s || 1)); probe = 0; downFrom = 0; fresh(now); return D.scale; };
+    D.set = (s, now = 0) => { D.scale = Math.max(D.min, Math.min(D.max, s === 0 ? 0 : +s || 1)); probe = 0; downFrom = 0; fresh(now); return D.scale; };
+    // подождать (второй автомат только что сменил своё — кадры до смены не считать)
+    D.hold = (ms, now) => { holdTo = now + ms; fresh(now); };
     D.tick = (dt, c, now) => {
       if (!D.on || !(dt > 0)) return D.scale;
       if (dt > 250) { n = 0; i = 0; return D.scale; }   // пауза, вкладка в фоне — историю заново
+      if (now < holdTo) { n = 0; i = 0; return D.scale; }
       buf[i] = dt; cpu[i] = c || 0; i = (i + 1) % N; if (n < N) n++;
       if (n < 24 || now < next) return D.scale;
       next = now + 500;
@@ -72,7 +83,7 @@
         if (++slow >= 3 && D.scale > D.min + .001 && now >= noDown) { downFrom = D.scale; downAvg = avg; D.scale = r2(Math.max(D.min, D.scale - D.step)); D.changes++; D.why = 'медленно'; fresh(now); }
       } else if (isOk) {
         slow = 0;
-        if (++good >= 8 && D.scale < .999 && now >= noUp) { probe = D.scale; probeEnd = now + 3000; D.scale = r2(Math.min(1, D.scale + D.step)); D.changes++; D.why = 'запас'; fresh(now); }
+        if (++good >= 8 && D.scale < D.max - .001 && now >= noUp) { probe = D.scale; probeEnd = now + 3000; D.scale = r2(Math.min(D.max, D.scale + D.step)); D.changes++; D.why = 'запас'; fresh(now); }
       } else { slow = Math.max(0, slow - 1); good = 0; }
       return D.scale;
     };
@@ -97,11 +108,13 @@
   };
 
   E.renderer = function (container, o = {}){
-    const T = window.THREE, q = o.quality || E.gfxQuality(), K = window.World3D.kit(T, { q });   // человечки — по качеству
+    const T = window.THREE, q = o.quality || E.gfxQuality();
+    E.gfxPatch?.(T);   // туман и тени v3 — до первого материала (gfx.js)
+    const K = window.World3D.kit(T, { q });   // человечки — по качеству
     // постобработка (post.js): сцена — в буфер HDR, сглаживает она (MSAA буфера или FXAA) — холсту своё не нужно
     const wantPost = q !== 'low' && o.post !== false && typeof E.post === 'function';
     const r = new T.WebGLRenderer({ antialias: q !== 'low' && !wantPost, powerPreference: 'high-performance' });
-    const PR0 = Math.min(window.devicePixelRatio || 1, q === 'low' ? 1 : q === 'mid' ? 1.5 : 2);   // плотность пикселей качества
+    let PR0 = Math.min(window.devicePixelRatio || 1, q === 'low' ? 1 : q === 'mid' ? 1.5 : 2);   // плотность пикселей качества (R.applyGfx: prCap)
     r.setPixelRatio(PR0);
     r.outputEncoding = T.sRGBEncoding;
     r.toneMapping = T.ACESFilmicToneMapping;
@@ -118,8 +131,8 @@
     // счётчики кадра (perf.js читает и сбрасывает суммы): вызовы отрисовки, треугольники, время
     const ST = R.stats = { calls: 0, tris: 0, scene: 0, sceneNoSh: 0, post: 0, shadow: 0, shadowNow: false, cpu: 0, cpuFrame: 0, dt: 0, frames: 0, sumDt: 0, maxDt: 0, sumCpu: 0, maxCpu: 0, sumR: 0, shadowUpd: 0 };
 
-    // ═══ Свет: небо + солнце с тенями ═══
-    const SUN_DIR = new T.Vector3(-.55, .78, .3).normalize();
+    // ═══ Свет: небо (полусфера) + солнце днём / луна ночью, с тенями ═══
+    const SUN_DIR = new T.Vector3(-.55, .78, .3).normalize();   // направление на источник (солнце или луна)
     const hemi = new T.HemisphereLight('#d4eaff', '#7d6a4a', q === 'low' ? 1.0 : .42);
     scene.add(hemi);
     const sun = new T.DirectionalLight('#ffeccf', q === 'low' ? 1.25 : 2.6);
@@ -131,14 +144,14 @@
       Object.assign(sun.shadow.camera, { left: -e, right: e, top: e, bottom: -e, near: 10, far: 200 });
       sun.shadow.camera.updateProjectionMatrix();
       sun.shadow.bias = -.00035; sun.shadow.normalBias = .035;
-      if (q === 'high') sun.shadow.radius = 3;
+      sun.shadow.radius = q === 'high' ? 2 : 1.5;   // мягкость (тексели) — R.applyGfx / мягкость теней мира
     }
     scene.add(sun); scene.add(sun.target);
     R.sun = sun; R.hemi = hemi; R.sunDir = SUN_DIR;
 
     // ═══ Тени: карта солнца перерисовывается по делу (на неподвижной сцене — почти никогда) ═══
     // every — раз в сколько кадров, пока что-то движется; idle — страховка (мс); step — на сколько уехала коробка теней
-    const SH = R.shadow = { every: q === 'high' ? 1 : 2, idle: 1500, step: q === 'high' ? 1.5 : 2, dirty: true, dyn: 0, n: 0, last: 0, updates: 0 };
+    const SH = R.shadow = { every: q === 'high' ? 1 : 2, idle: 1500, step: q === 'high' ? 1.5 : 2, dirty: true, dyn: 0, n: 0, last: 0, updates: 0, ahead: .65 };
     R.shadowDirty = moving => { if (moving) SH.dyn = SH.every + 1; else SH.dirty = true; };
     function shadowTick(now){
       if (!shadows || !sun.castShadow) return false;
@@ -150,14 +163,24 @@
       shTgt.copy(tgt);
       return true;
     }
-    // Коробка теней едет за игроком; шаг — ровно на тексель (иначе тени «дрожат» при ходьбе). Пока карта не перерисована,
+    // Коробка теней едет за игроком и сдвинута туда, куда смотрит камера (SH.ahead — доля полуразмера впереди: за спиной
+    // камеры тени почти не видно); шаг — ровно на тексель (иначе тени «дрожат» при ходьбе). Пока карта не перерисована,
     // приёмники берут старую матрицу тени — тени верные, просто коробка догонит при следующей перерисовке
-    const lr = new T.Vector3(), lu = new T.Vector3(), tgt = new T.Vector3(), shTgt = new T.Vector3(1e9, 0, 0);
-    lr.crossVectors(new T.Vector3(0, 1, 0), SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
+    const lr = new T.Vector3(), lu = new T.Vector3(), tgt = new T.Vector3(), shTgt = new T.Vector3(1e9, 0, 0), camFw = new T.Vector3(), UPV = new T.Vector3(0, 1, 0);
+    lr.crossVectors(UPV, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
     R.follow = (x, z, y = 0) => {
       tgt.set(x, y, z);
       if (shadows) {
-        const tex = (sun.shadow.camera.right * 2) / sun.shadow.mapSize.x;
+        const e = sun.shadow.camera.right;
+        if (SH.ahead > 0) {
+          camera.getWorldDirection(camFw); camFw.y = 0;
+          const l = camFw.length();
+          if (l > .2) {
+            const fx = camFw.x / l, fz = camFw.z / l, along = (x - camera.position.x) * fx + (z - camera.position.z) * fz, k = Math.max(0, e * SH.ahead - along);
+            tgt.x += fx * k; tgt.z += fz * k;
+          }
+        }
+        const tex = (e * 2) / sun.shadow.mapSize.x;
         const a = tgt.dot(lr), b = tgt.dot(lu), da = Math.round(a / tex) * tex - a, db = Math.round(b / tex) * tex - b;
         tgt.addScaledVector(lr, da).addScaledVector(lu, db);
         if (tgt.distanceToSquared(shTgt) > SH.step * SH.step) SH.dirty = true;
@@ -166,92 +189,132 @@
       sun.position.copy(tgt).addScaledVector(SUN_DIR, 100);
     };
 
-    // ═══ Небо: переход цвета, солнце, свечение у горизонта; туман того же цвета ═══
-    const skyMat = new T.ShaderMaterial({
-      side: T.BackSide, depthWrite: false, fog: false,
-      uniforms: { top: { value: new T.Color('#4f9cf5') }, mid: { value: new T.Color('#bfe3ff') }, bot: { value: new T.Color('#e8f5ff') }, sunDir: { value: SUN_DIR }, sunC: { value: new T.Color('#fff4d6') } },
-      vertexShader: 'varying vec3 vP; void main(){ vP = (modelMatrix * vec4(position, 1.0)).xyz - cameraPosition; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      // #include — только с новой строки (иначе шейдер не собирается)
-      fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 bot; uniform vec3 sunDir; uniform vec3 sunC; varying vec3 vP;
-void main(){ vec3 d = normalize(vP); float h = d.y; vec3 c = h > 0.0 ? mix(mid, top, pow(h, 0.55)) : mix(mid, bot, min(1.0, -h * 4.0));
-float s = max(dot(d, sunDir), 0.0); c += sunC * (pow(s, 900.0) * 6.0 + pow(s, 24.0) * 0.28 + pow(s, 4.0) * 0.06);
-gl_FragColor = vec4(c, 1.0);
-#include <encodings_fragment>
-}`,
-    });
-    const sky = new T.Mesh(new T.SphereGeometry(450, 32, 16), skyMat);
-    sky.renderOrder = -1; sky.frustumCulled = false;
+    // ═══ Небо: купол по модели неба (gfx.js E.skyModel) — рисуется последним из непрозрачного, на дальней плоскости:
+    //     пиксели под зданиями и землёй не считаются. Туман — цвета горизонта, к солнцу — теплее ═══
+    const skyMat = E.skyMaterial(T);
+    const sky = new T.Mesh(new T.SphereGeometry(10, 32, 16), skyMat);
+    sky.renderOrder = 900; sky.frustumCulled = false; sky.userData.sky = true;
     scene.add(sky);
-    R.setSky = (top, mid, bot, near = 110, far = 320) => {
-      skyMat.uniforms.top.value.set(top); skyMat.uniforms.mid.value.set(mid); skyMat.uniforms.bot.value.set(bot || mid);
-      scene.fog = new T.Fog(mid, near, far);
-      scene.background = new T.Color(mid);
-      makeEnv();
-    };
-    // Освещение и отражения от неба (IBL): купол + яркое солнце → PMREM
-    let envTex = null;
+    scene.fog = new T.Fog('#bfe3ff', 110, 320);
+    scene.background = new T.Color('#bfe3ff');
+    // Освещение и отражения от неба (IBL): купол (+ земля) → кубическая карта 64/128 → PMREM; пересборка — по делу
+    // (сменили свет — через 0,25 с; во время смены суток — не чаще раза в 2/4 с и если солнце сдвинулось)
+    let envOut = null, envRT = null, envCam = null, envScene = null, envGnd = null, pmrem = null, envDue = 0, envAt = -1e9;
+    const envSun = new T.Vector3(9, 9, 9);
+    const hdr = r.capabilities.isWebGL2 ? r.extensions.has('EXT_color_buffer_float') || r.extensions.has('EXT_color_buffer_half_float') : false;
     function makeEnv(){
-      if (q === 'low') return;
-      const pm = new T.PMREMGenerator(r), es = new T.Scene();
-      const m = skyMat.clone(); m.uniforms = T.UniformsUtils.clone(skyMat.uniforms); m.uniforms.sunDir.value = SUN_DIR;
-      es.add(new T.Mesh(new T.SphereGeometry(10, 32, 16), m));
-      const ground = new T.Mesh(new T.CircleGeometry(9, 24), new T.MeshBasicMaterial({ color: '#7d8f5c' }));
-      ground.rotation.x = -PI / 2; ground.position.y = -1.5; es.add(ground);
-      const rt = pm.fromScene(es, .03);
-      envTex?.dispose(); envTex = rt.texture;
-      scene.environment = envTex;
-      pm.dispose(); m.dispose(); ground.geometry.dispose(); ground.material.dispose();
+      if (q === 'low' || R.dead) return;
+      if (!pmrem) {
+        pmrem = new T.PMREMGenerator(r);
+        envRT = new T.WebGLCubeRenderTarget(q === 'high' ? 128 : 64, { type: hdr ? T.HalfFloatType : T.UnsignedByteType });
+        envCam = new T.CubeCamera(.1, 50, envRT);
+        envScene = new T.Scene();
+        const em = E.skyMaterial(T, true); em.uniforms = skyMat.uniforms;
+        envScene.add(new T.Mesh(new T.SphereGeometry(10, 32, 16), em));
+        envGnd = new T.Mesh(new T.CircleGeometry(9, 24), new T.MeshBasicMaterial({ color: '#6f7f55', toneMapped: false }));
+        envGnd.rotation.x = -PI / 2; envGnd.position.y = -1.5; envScene.add(envGnd);
+        R.own.push(em, envGnd.geometry, envGnd.material, envScene.children[0].geometry);
+      }
+      envGnd.material.color.setRGB(M.gnd[0] * .5 + M.ambGnd[0] * .5, M.gnd[1] * .5 + M.ambGnd[1] * .5, M.gnd[2] * .5 + M.ambGnd[2] * .5);
+      envCam.update(r, envScene);
+      const rt = pmrem.fromCubemap(envRT.texture);
+      envOut?.dispose(); envOut = rt;
+      if (R.opt.refl) scene.environment = rt.texture;
+      envAt = performance.now(); envSun.copy(skyMat.uniforms.uSun.value);
     }
-    R.setSky('#4f9cf5', '#bfe3ff', '#e8f5ff');
+    R.envNow = () => { envDue = 0; makeEnv(); };
 
-    // ═══ Время суток (как Lighting в Roblox): time 0–24, brightness, ambient, fogEnd, shadows ═══
-    const stars = (() => {
-      const n = 1100, g = new T.BufferGeometry(), p = new Float32Array(n * 3), rnd = E.rng(77);
-      for (let i = 0; i < n; i++) { const u = rnd(), a = rnd() * TAU, el = Math.asin(u * .98 + .02), cr = Math.cos(el); p.set([Math.cos(a) * cr * 400, Math.sin(el) * 400, Math.sin(a) * cr * 400], i * 3); }
-      g.setAttribute('position', new T.BufferAttribute(p, 3));
-      const m = new T.PointsMaterial({ color: '#ffffff', size: 1.7, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false });
-      const s = new T.Points(g, m); s.frustumCulled = false; s.renderOrder = -1; s.visible = false; scene.add(s); R.own.push(g, m);
-      return s;
-    })();
-    const UP = new T.Vector3(0, 1, 0), cA = new T.Color(), cB = new T.Color();
-    const mix3 = (day, dusk, night, wd, wn, out) => out.set(day).lerp(cA.set(dusk), wd).lerp(cB.set(night), wn);
-    const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
-    let envT = 0;
-    R.lighting = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, shadows: true };
+    // ═══ Время суток (как Lighting в Roblox): time 0–24, brightness, ambient, fogEnd, shadows + gfx — графика мира ═══
+    const M = R.sky = E.skyModel(14);   // модель неба — один объект, без мусора
+    const GU = E.GFXU, c3 = [0, 0, 0];
+    const num = (v, d) => Number.isFinite(+v) ? +v : d;
+    R.lighting = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, shadows: true, gfx: E.worldGfx() };
+    R.night = 0;
+    let skyOver = null, under = null, skyT = 0;
+    // полный объект освещения (мир загрузили из файла, шаблон, блок world гостю) — графика мира заново (не тянется
+    // от прошлого мира); частичный (ползунок, смена суток) — дописывается (gfx.js E.mergeLighting)
     R.setLighting = (L = {}) => {
-      Object.assign(R.lighting, L);
-      const Lg = R.lighting, t = ((+Lg.time % 24) + 24) % 24;
-      const el = Math.sin((t - 6) / 12 * PI);            // высота солнца: 6 ч — восход, 12 — зенит, 18 — закат
-      const az = PI * .25 + (t - 12) / 12 * PI * .9;     // с востока на запад
-      const day = el > -.04, e = day ? Math.max(.07, el) : Math.max(.25, -el), ce = Math.cos(Math.asin(e)), sgn = day ? 1 : -1;
-      SUN_DIR.set(Math.cos(az) * ce * sgn, e, Math.sin(az) * ce * sgn).normalize();   // ночью светит луна с другой стороны
-      lr.crossVectors(UP, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
-      const wd = clamp01(1 - Math.abs(el) / .3), wn = clamp01(-el / .22);   // закат/рассвет, ночь
-      R.night = wn;   // для ореолов ламп
-      const U = skyMat.uniforms;
-      mix3('#4f9cf5', '#4b5fa8', '#050a1c', wd, wn, U.top.value);
-      mix3('#bfe3ff', '#ffb27a', '#0f1a3a', wd, wn, U.mid.value);
-      mix3('#e8f5ff', '#ffd3a3', '#0a1330', wd, wn, U.bot.value);
-      mix3('#fff4d6', '#ffb070', '#dfe8ff', wd, wn, U.sunC.value);
-      const num = (v, d) => Number.isFinite(+v) ? +v : d, b = Math.max(0, num(Lg.brightness, 1)), amb = Math.max(0, num(Lg.ambient, 1));
-      mix3('#ffeccf', '#ff9b5c', '#8fa8ff', wd, wn, sun.color);
-      sun.intensity = (day ? (q === 'low' ? 1.25 : 2.6) * clamp01(el * 3.2 + .3) : .4) * b;
-      mix3('#d4eaff', '#ffcfa8', '#3a4d8a', wd, wn, hemi.color);
-      hemi.intensity = (q === 'low' ? 1 : .42) * (1 - .55 * wn) * amb;
-      stars.visible = wn > .02; stars.material.opacity = wn * .95;
-      const fe = Math.max(40, +Lg.fogEnd || 320);
-      scene.fog = new T.Fog(U.mid.value.clone(), fe * .34, fe);
-      scene.background = U.mid.value.clone();
-      sun.castShadow = shadows && Lg.shadows !== false && R.userShadows !== false;   // настройки: «Тени» выкл — без теней
-      SH.dirty = true;
-      r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * wn);
-      clearTimeout(envT); envT = setTimeout(() => { if (!R.dead) makeEnv(); }, 250);   // отражения неба — когда перестали крутить ползунок
-      for (const f of R.onLight) f(Lg, { day, night: wn, dusk: wd });
+      if (!L || typeof L !== 'object') L = {};
+      if ('time' in L && 'brightness' in L && 'fogEnd' in L) skyOver = null;
+      E.mergeLighting(R.lighting, L);
+      applyLighting();
     };
+    // Старый способ (цвета неба вручную): верх, горизонт, низ; туман до far
+    R.setSky = (top, mid, bot, near = 110, far = 320) => {
+      skyOver = { zen: E.lin(top), hor: E.lin(mid), gnd: E.lin(bot || mid) };
+      R.lighting.fogEnd = far;
+      applyLighting();
+    };
+    function applyLighting(){
+      const Lg = R.lighting, G = Lg.gfx, O = R.opt;
+      E.skyModel(Lg.time, G.sky, M);
+      if (skyOver) for (let j = 0; j < 3; j++) { M.zen[j] = skyOver.zen[j]; M.hor[j] = skyOver.hor[j]; M.gnd[j] = skyOver.gnd[j]; M.fogSun[j] = skyOver.hor[j]; }
+      if (G.fog.color) {   // свой цвет тумана мира: и горизонт к нему
+        E.lin(G.fog.color, c3);
+        for (let j = 0; j < 3; j++) { M.hor[j] = M.hor[j] * .4 + c3[j] * .6; M.fogSun[j] = M.fogSun[j] * .5 + c3[j] * .5; M.gnd[j] = M.gnd[j] * .5 + c3[j] * .3; }
+      }
+      E.skyUniforms(skyMat.uniforms, M, skyT);
+      // свет: солнце/луна
+      const b = Math.max(0, num(Lg.brightness, 1)), amb = Math.max(0, num(Lg.ambient, 1));
+      const moved = SUN_DIR.x !== M.lightDir[0] || SUN_DIR.y !== M.lightDir[1] || SUN_DIR.z !== M.lightDir[2];
+      SUN_DIR.set(M.lightDir[0], M.lightDir[1], M.lightDir[2]);
+      lr.crossVectors(UPV, SUN_DIR).normalize(); lu.crossVectors(SUN_DIR, lr).normalize();
+      sun.color.setRGB(M.light[0], M.light[1], M.light[2]);
+      sun.intensity = (q === 'low' ? 1.25 : 2.6) * M.lightI * b;
+      // свет неба: цвет — небо (днём наполовину к белому, ночью синее), сила — по яркости неба (ночью — как лунный свет:
+      // темно, но играть можно; на low света неба больше — без отражений неба)
+      const mx = Math.max(M.ambSky[0], M.ambSky[1], M.ambSky[2], 1e-4), lumS = .2126 * M.ambSky[0] + .7152 * M.ambSky[1] + .0722 * M.ambSky[2], wh = .5 - .25 * M.night;
+      hemi.color.setRGB(wh + (1 - wh) * M.ambSky[0] / mx, wh + (1 - wh) * M.ambSky[1] / mx, wh + (1 - wh) * M.ambSky[2] / mx);
+      hemi.groundColor.setRGB(Math.min(.55, M.ambGnd[0] / mx), Math.min(.55, M.ambGnd[1] / mx), Math.min(.55, M.ambGnd[2] / mx));
+      hemi.intensity = (q === 'low' ? 1 : .42) * Math.max(lumS / .44, .19 + .2 * (1 - M.night)) * amb;
+      R.night = M.night;
+      applyFog();
+      // облака: цвет по свету (ночью тёмные), сколько видно — облачность мира
+      const cn = Math.round(clouds.length * G.sky.clouds);
+      for (let i = 0; i < clouds.length; i++) { const s = clouds[i]; s.visible = i < cn; s.material.color.setRGB(M.cloud[0], M.cloud[1], M.cloud[2]); s.material.opacity = .9 * (1 - .35 * M.night); }
+      sun.castShadow = shadows && Lg.shadows !== false && O.shadows && M.lightI > .02;   // ночью без луны — теней нет
+      if (moved) SH.dirty = true;
+      r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * M.night) * Math.pow(2, G.exposure);
+      applyGrade();
+      applyShadowQ();
+      // вода мира: прозрачность, пена, свой цвет
+      R.waterU.uClear.value = G.water.clarity; R.waterU.uFoam.value = G.water.foam;
+      for (const m of R.waters) { const wc = m.userData.fixedColor ? m.userData.baseColor : G.water.color || m.userData.baseColor; if (m.userData._wc !== wc) { m.userData._wc = wc; m.color.set(wc); } }
+      // отражения неба: заново, когда свет устоялся; в смене суток — если солнце сдвинулось на ~2° и прошло 2/4 с
+      const now = performance.now(), dSun = envSun.distanceToSquared(skyMat.uniforms.uSun.value);
+      if (!envDue && dSun > 1e-3) envDue = Math.max(now + 250, envAt + (q === 'high' ? 2000 : 4000));
+      for (const f of R.onLight) f(Lg, { day: M.day > .5, night: M.night, dusk: M.dusk01 });
+    }
     R.onLight = [];
+    // Туман: обычный по расстоянию (дальность — настройка игрока × туман мира), высотный, тёплый к солнцу; под водой — свой
+    function applyFog(){
+      const Lg = R.lighting, G = Lg.gfx, O = R.opt, fog = scene.fog;
+      const fe = Math.max(40, num(Lg.fogEnd, 320)) * O.dist * (O.fog ? 1 : 1.6);
+      const far = Math.min(3000, Math.max(160, fe * 1.08 + 30));
+      if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+      cloudsFit(far);
+      if (under) {
+        fog.color.set(under); fog.near = 0; fog.far = 9; scene.background.copy(fog.color);
+        GU.fogA[3] = 0; GU.fogB[3] = 0;
+        return;
+      }
+      fog.color.setRGB(M.hor[0], M.hor[1], M.hor[2]); fog.near = fe * (O.fog ? .3 : .6); fog.far = fe;
+      scene.background.copy(fog.color);
+      const sl = Math.hypot(M.sun[0], M.sun[2]) || 1, fx = O.fog && q !== 'low';   // low — только обычный туман (легко)
+      GU.fogA[0] = M.sun[0] / sl; GU.fogA[1] = 0; GU.fogA[2] = M.sun[2] / sl; GU.fogA[3] = fx && !skyOver ? G.fog.sun : 0;   // к солнцу — по горизонтали
+      GU.fogB[0] = M.fogSun[0]; GU.fogB[1] = M.fogSun[1]; GU.fogB[2] = M.fogSun[2]; GU.fogB[3] = fx ? G.fog.density * G.fog.density * .03 : 0;
+      GU.fogC[0] = G.fog.height; GU.fogC[1] = .05 + .06 * (1 - G.fog.density); fogCam();
+    }
+    // высотный туман: плотность на высоте камеры — один раз за кадр (а не в каждом пикселе)
+    function fogCam(){ GU.fogC[2] = GU.fogB[3] > 0 ? GU.fogB[3] * Math.exp(-GU.fogC[1] * Math.max(camera.position.y - GU.fogC[0], -20)) : 0; }
+    // Под водой (mir.js: камера ниже уровня пруда): синий густой туман, вышли — как было
+    R.setUnder = (on, color = '#1d6f96') => { const was = under; under = on ? color : null; if (was !== under) applyFog(); };
 
-    // ═══ Облака: мягкие спрайты кодом, медленно плывут ═══
-    const clouds = [];
+    // ═══ Облака: мягкие спрайты кодом, медленно плывут; группа ездит с камерой (как небо), при малой дальности — ближе
+    //     и меньше (тот же вид); цвет — по свету (applyLighting), сколько видно — облачность мира ═══
+    const clouds = [], cloudG = new T.Group();
+    scene.add(cloudG);
+    const cloudsFit = far => { const k = Math.min(1, far * .8 / 250); if (cloudG.scale.x !== k) cloudG.scale.setScalar(k); };
     R.clouds = (n = 14, seed = 7) => {
       const rnd = E.rng(seed), tex = cloudTex();
       for (let i = 0; i < n; i++) {
@@ -260,8 +323,9 @@ gl_FragColor = vec4(c, 1.0);
         s.position.set(Math.cos(a) * d, 34 + rnd() * 34, Math.sin(a) * d);
         s.scale.set(k * 1.9, k * .75, 1);
         s.userData.v = 1.2 + rnd() * 1.6;
-        scene.add(s); clouds.push(s); R.own.push(s.material);
+        cloudG.add(s); clouds.push(s); R.own.push(s.material);
       }
+      if (R.opt) applyLighting();
     };
     function cloudTex(){
       const c = document.createElement('canvas'); c.width = 256; c.height = 128;
@@ -377,6 +441,7 @@ gl_FragColor = vec4(c, 1.0);
     let scaleNow = 1;
     function applyScale(){
       const s = scaleNow = DR.scale;
+      R.pr0 = PR0;
       if (R.post) R.post.setSize(Math.max(1, Math.round(R.w * PR0 * s)), Math.max(1, Math.round(R.h * PR0 * s)), PR0 * s);
       else { r.setPixelRatio(PR0 * s); r.setSize(R.w, R.h, false); }
       R.renderH = Math.max(1, Math.round(R.h * PR0 * s));
@@ -392,15 +457,19 @@ gl_FragColor = vec4(c, 1.0);
     };
     R.update = dt => {
       for (let i = 0; i < clouds.length; i++) { const s = clouds[i]; s.position.x += s.userData.v * dt; if (s.position.x > 300) s.position.x = -300; }
+      R.waterU.uTime.value += dt; skyT += dt; skyMat.uniforms.uP.value.w = skyT % 1000;
       for (let i = 0; i < R.anims.length; i++) R.anims[i](dt);
     };
-    // ═══ Кадр: склейка/лампы → тени по делу → сцена (через постобработку или прямо) → счётчики и разрешение ═══
+    // ═══ Кадр: склейка/лампы → отражения неба (если пора) → тени по делу → сцена (через постобработку или прямо) →
+    //     счётчики, разрешение и автокачество ═══
     let lastT = 0;
     R.render = () => {
       const t0 = performance.now(), dt = lastT ? t0 - lastT : 0;
       lastT = t0;
       for (let i = 0; i < R.preRender.length; i++) R.preRender[i](R, t0);
-      sky.position.copy(camera.position); stars.position.copy(camera.position);
+      sky.position.copy(camera.position); cloudG.position.set(camera.position.x, 0, camera.position.z);
+      if (GU.fogB[3] > 0) fogCam();
+      if (envDue && t0 >= envDue) { envDue = 0; makeEnv(); }
       L.update(Math.min(.1, dt / 1000), camera);
       ST.shadowNow = shadowTick(t0);
       r.info.reset();
@@ -412,37 +481,91 @@ gl_FragColor = vec4(c, 1.0);
       const t1 = performance.now(), cpu = t1 - t0, f0 = E.frameT0 && t0 - E.frameT0 < 50 ? E.frameT0 : t0;
       ST.cpu = cpu; ST.cpuFrame = t1 - f0; ST.dt = dt;
       if (dt > 0 && dt < 1000) { ST.frames++; ST.sumDt += dt; if (dt > ST.maxDt) ST.maxDt = dt; ST.sumCpu += ST.cpuFrame; if (ST.cpuFrame > ST.maxCpu) ST.maxCpu = ST.cpuFrame; ST.sumR += cpu; }
-      if (DR.on && dt > 0 && DR.tick(dt, ST.cpuFrame, t0) !== scaleNow) applyScale();
+      if (DR.on && dt > 0 && DR.tick(dt, ST.cpuFrame, t0) !== scaleNow) { applyScale(); AQ?.D.hold(2500, t0); }
+      if (AQ && !AQ.off && dt > 0) {   // автокачество: ступень лесенки по времени кадра (разрешение и ступени — по очереди)
+        const s = AQ.D.tick(dt, ST.cpuFrame, t0), i = Math.round((1 - s) * (AQ.L.length - 1));
+        if (i !== AQ.i) { AQ.i = i; applyOpts(AQ.L[i]); DR.hold(2500, t0); }
+      }
       if (E.perf?.on) E.perf.frame(R);
       const O = window.D37Opt; if (O && O.rev !== optRev) optSync(O);   // настройки поменялись (js/core/settings.js)
     };
-    // ── Настройки «на живую» (окно ⚙️, js/core/settings.js → window.D37Opt): FSR / разрешение и тени ──
+    // ── Настройки «на живую» (окно ⚙️, js/core/settings.js + gfx-settings.js → window.D37Opt): FSR, тени, графика ──
     let optRev = -1;
     function optSync(O){
       optRev = O.rev;
       const want = O.fsr || 'auto';
       if (want !== optFsr) { optFsr = want; if (R.w > 1) R.setFsr(want); }
-      R.setShadows(O.shadows !== false);
+      R.userShadows = O.shadows !== false;
+      R.applyGfx(E.gfxResolve({ ...(O.gfx || {}), shadows: O.shadows !== false }, { q, gl2: r.capabilities.isWebGL2 }));
     }
     let optFsr = E.fsrMode();
     R.userShadows = true;
-    R.setShadows = on => {
-      if (R.userShadows === !!on) return;
-      R.userShadows = !!on;
-      sun.castShadow = shadows && R.lighting.shadows !== false && R.userShadows;
-      SH.dirty = true;
+    R.setShadows = on => { R.userShadows = !!on; applyShadowQ(); };
+    // ── Графика игрока: base — E.gfxResolve(…). Пресет «Авто» — лесенка E.autoSteps (сам снижает и поднимает ступени) ──
+    let AQ = null;
+    R.applyGfx = base => {
+      R.optBase = base;
+      const tgt = 1000 / Math.min(60, base.fpsCap || 60);
+      DR.target = tgt;
+      if (base.auto) {
+        const L = E.autoSteps(base);
+        if (!AQ || JSON.stringify(AQ.L) !== JSON.stringify(L)) AQ = L.length > 1 ? { L, i: 0, off: false, D: E.dynRes({ min: 0, max: 1, step: 1 / (L.length - 1), target: tgt }) } : null;
+        else AQ.D.target = tgt;
+        applyOpts(AQ ? AQ.L[AQ.i] : base);
+      } else { AQ = null; applyOpts(base); }
+      return R.opt;
     };
+    R.autoQ = () => AQ ? { step: AQ.i, steps: AQ.L.length, off: AQ.off, D: AQ.D } : null;   // D — автомат (для проверок)
+    R.setAuto = on => { if (AQ) { AQ.off = !on; if (!on && AQ.i) { AQ.i = 0; AQ.D.set(1); applyOpts(AQ.L[0]); } } };   // замер — на лучшей ступени
+    const gradeU = { gain: [1, 1, 1], sat: 1, con: 0, vig: 0 };
+    function applyOpts(op){
+      R.opt = op;
+      const pr = Math.min(window.devicePixelRatio || 1, op.prCap || 2);
+      if (pr !== PR0) { PR0 = pr; if (R.w > 1) { r.setPixelRatio(PR0); r.setSize(R.w, R.h, false); } }
+      DR.max = Math.max(.5, Math.min(1, (op.res || 100) / 100));
+      R.setFsr(optFsr, false);
+      E.fpsCap = op.fpsCap || 0;
+      applyShadowQ();
+      scene.environment = op.refl && q !== 'low' ? envOut?.texture || null : null;
+      R.waterU.uWQ.value = op.water === 'good' ? 1 : 0;
+      R.post?.setOpts?.({ ao: op.ao, aa: op.aa });
+      applyGrade();
+      applyFog();
+      if (R.w > 1) applyScale();
+    }
+    // Тени по качеству (E.SHADOW_Q) и мягкости мира: карта, коробка, выборки, PCSS-lite, как часто при движении
+    function applyShadowQ(){
+      if (!shadows || !R.opt) return;
+      const op = R.opt, Q = E.SHADOW_Q[op.shadowQ] || E.SHADOW_Q.mid, soft = R.lighting.gfx.shadow.soft, cam = sun.shadow.camera;
+      const map = Math.min(Q.map, r.capabilities.maxTextureSize || 4096);
+      if (sun.shadow.mapSize.x !== map) { sun.shadow.mapSize.set(map, map); sun.shadow.map?.dispose(); sun.shadow.map = null; SH.dirty = true; }
+      if (cam.right !== Q.box) { cam.left = -Q.box; cam.right = Q.box; cam.top = Q.box; cam.bottom = -Q.box; cam.updateProjectionMatrix(); SH.dirty = true; }
+      sun.shadow.radius = Q.radius * (.6 + 1.6 * soft);
+      GU.sh[0] = Q.taps; GU.sh[1] = Q.blk; GU.sh[2] = (cam.far - cam.near) * (.006 + .05 * soft) / (Q.box * 2 / map); GU.sh[3] = 1;
+      SH.every = Q.every; SH.step = Q.box > 30 ? 1.5 : 2;
+      const on = op.shadows && R.lighting.shadows !== false && R.userShadows !== false;   // castShadow меняет шейдеры — только по настройке
+      if (sun.castShadow !== on) { sun.castShadow = on; SH.dirty = true; }
+    }
+    // Цвет кадра (post.js): цветокоррекция мира (если у игрока не выключена), свечение — сила мира
+    function applyGrade(){
+      if (!R.post || !R.opt) return;
+      const G = R.lighting.gfx;
+      E.gradeUniforms(E.gradeOf(G.grade), R.opt.grade, 0, gradeU);
+      gradeU.sat *= 1 - .35 * M.night;   // ночью цвета блёкнут (как видит глаз в темноте)
+      R.post.setGrade?.(gradeU);
+      R.post.bloom.strength = (q === 'high' ? 1 : .9) * G.bloom;
+    }
     // Разрешение вручную (замер, настройки): s — доля от плотности качества; dynRes выключается, пока не включат снова
     R.setRes = (s, auto = false) => { DR.on = !!auto; DR.set(s); applyScale(); };
     // Режим FSR: quality / balanced / performance — постоянная доля кадра; auto — динамическое разрешение (без постобработки
-    // FSR нет — тогда только меньше пикселей). Возвращает режим, который включился.
+    // FSR нет — тогда только меньше пикселей); масштаб разрешения игрока (DR.max) — потолок. Возвращает режим, который включился.
     R.fsr = 'auto';
     R.setFsr = (mode, apply = true) => {
-      const s = E.FSR[mode];
+      const s = E.FSR[mode], mx = DR.max;
       R.fsr = s && wantPost ? mode : mode === 'native' ? 'native' : 'auto';   // native — всегда 100% (настройки)
-      if (R.fsr === 'auto') { DR.on = o.dynRes !== false; DR.set(1); }
-      else if (R.fsr === 'native') { DR.on = false; DR.set(1); }
-      else { DR.min = Math.min(DR.min, s); DR.on = false; DR.set(s); }
+      if (R.fsr === 'auto') { DR.on = o.dynRes !== false; DR.set(mx); }
+      else if (R.fsr === 'native') { DR.on = false; DR.set(mx); }
+      else { DR.min = Math.min(DR.min, s, mx); DR.on = false; DR.set(Math.min(s, mx)); }
       if (apply && R.w > 1) applyScale();
       return R.fsr;
     };
@@ -468,7 +591,9 @@ gl_FragColor = vec4(c, 1.0);
       for (const m of mats.values()) m.dispose();
       for (const t of texCache.values()) t.dispose();
       for (const x of R.own) x.dispose?.();
-      envTex?.dispose();
+      envOut?.dispose(); envRT?.dispose(); pmrem?.dispose();
+      sky.geometry.dispose(); skyMat.dispose();
+      GU.fogA.fill(0); GU.fogB.fill(0); GU.fogC.fill(0); GU.sh.fill(0); E.fpsCap = 0;   // общие данные шейдеров — как без движка
       r.dispose(); r.forceContextLoss?.(); r.domElement.remove();
     };
 
@@ -583,6 +708,25 @@ gl_FragColor = vec4(c, 1.0);
       };
       return (P[name] || P.grass)();
     };
+    // Материалы v2: рельеф для текстур кодом — карта нормалей из их же яркости (кирпич, камень, рифлёнка выпуклые); только high
+    const PROC_N = { grass: 1.1, sand: 1.4, rock: 2.6, brick: 3, snow: .9, dirt: 1.6, diamond: 3.2 };
+    R.procN = name => {
+      if (q !== 'high' || !PROC_N[name]) return null;
+      const src = R.proc(name).image;
+      if (!src?.getContext) return null;
+      return R.normalFrom('pN:' + name, src.width, n => {
+        const d = src.getContext('2d').getImageData(0, 0, n, n).data, H = new Float32Array(n * n);
+        for (let i = 0; i < n * n; i++) H[i] = (d[i * 4] * .3 + d[i * 4 + 1] * .59 + d[i * 4 + 2] * .11) / 255;
+        return H;
+      }, PROC_N[name]);
+    };
+    // Стекло, лёд: френель — под углом отражают сильнее и меньше просвечивают (прозрачные не склеиваются — правка шейдера можно)
+    R.fresnel = (m, k = .7) => {
+      if (q === 'low' || !m?.transparent || !m.isMeshStandardMaterial) return m;
+      m.onBeforeCompile = sh => { sh.fragmentShader = sh.fragmentShader.replace('#include <output_fragment>', '#include <output_fragment>\n  gl_FragColor.a = clamp( mix( gl_FragColor.a, 1.0, pow( 1.0 - clamp( abs( dot( normal, normalize( vViewPosition ) ) ), 0.0, 1.0 ), 4.0 ) * ' + (+k).toFixed(2) + ' ), 0.0, 1.0 );'); };
+      m.customProgramCacheKey = () => 'd37-fr' + (+k).toFixed(2);
+      return m;
+    };
     R.texMat = (key, map, o = {}) => cache('cm' + key + (o.tint || ''), () => {
       if (q === 'low') return new T.MeshLambertMaterial({ color: o.flatColor || o.tint || '#ffffff', map: o.lowMap ? map : null });
       const m = new T.MeshStandardMaterial({ color: o.tint || '#ffffff', map, roughness: o.rough ?? .9, metalness: 0, envMapIntensity: .8 });
@@ -590,18 +734,16 @@ gl_FragColor = vec4(c, 1.0);
       m.userData.tile = (o.tile || 2) * (E.UNIT || 1);
       return m;
     });
-    // Вода: блестящая, рябь движется (нормали кодом), чуть прозрачная
-    R.water = (c = '#3fa9e0') => cache('water' + c, () => {
-      if (q === 'low') return new T.MeshLambertMaterial({ color: c, transparent: true, opacity: .9 });
-      const nm = R.normalFrom('waterN', 256, n => {
-        const H = new Float32Array(n * n), rnd = E.rng(21), waves = Array.from({ length: 9 }, () => [1 + (rnd() * 5 | 0), 1 + (rnd() * 5 | 0), rnd() * TAU, .3 + rnd() * .7]);
-        for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { let h = 0; for (const [a, b, p, k] of waves) h += Math.sin((a * x + b * y) / n * TAU + p) * k; H[y * n + x] = h * .06; }
-        return H;
-      }, 3);
-      const m = new T.MeshStandardMaterial({ color: c, roughness: .06, metalness: .05, transparent: true, opacity: .88, normalMap: nm, envMapIntensity: 1.4 });
-      m.normalScale = new T.Vector2(.6, .6);
-      m.userData.tile = 4 * (E.UNIT || 1); m.userData.noCast = true; m.userData.noAO = true;
-      R.anims.push(dt => { nm.offset.x += dt * .018; nm.offset.y += dt * .011; });
+    // Вода v2 (gfx.js E.waterMaterial): рябь двумя слоями по миру, френель (у горизонта — зеркало неба), по глубине — цвет
+    // и прозрачность, пена у берега. wo — { key (свой материал), depth: { tex, rect } (дно — E.waterDepthTex), fixedColor }.
+    // Общие для мира: R.waterU (время, прозрачность и пена мира, uWQ — «Вода: простая/красивая» игрока). На low — простая.
+    R.waterU = { uTime: { value: 0 }, uClear: { value: .55 }, uFoam: { value: .6 }, uWQ: { value: 1 } };
+    R.waters = [];
+    R.water = (c = '#3fa9e0', wo = {}) => cache('water' + c + (wo.key || ''), () => {
+      const m = q === 'low' ? new T.MeshLambertMaterial({ color: c, transparent: true, opacity: .9 }) : E.waterMaterial(R, c, wo);
+      m.userData.baseColor = c; m.userData.fixedColor = !!wo.fixedColor; m.userData.noCast = true;
+      R.waters.push(m);
+      if (R.opt && !m.userData.fixedColor && R.lighting.gfx.water.color) m.color.set(R.lighting.gfx.water.color);
       return m;
     });
 
@@ -844,6 +986,10 @@ gl_FragColor = vec4(c, 1.0);
       if (!R.post) r.setPixelRatio(PR0);
     }
     if (window.D37Opt?.fps && E.perf && !E.perf.on) E.perf.toggle(true);   // настройки: «Счётчик FPS» — сразу при входе в 3D
+    // графика игрока (настройки) и свет по умолчанию — сразу, до первого кадра
+    { const O = window.D37Opt; if (O) optSync(O); else R.applyGfx(E.gfxResolve({}, { q, gl2: r.capabilities.isWebGL2 })); }
+    applyLighting();
+    R.envNow();   // отражения неба — до первого кадра (иначе шейдеры соберутся дважды: без них и с ними)
     return R;
   };
 

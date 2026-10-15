@@ -5,6 +5,7 @@
 // G = D37E.gizmo(R); G.setMode('move' | 'rotate' | 'scale' | null); G.attach({ pos, rot, size, model }) или null;
 // каждый кадр G.update(); мышь/палец: G.hover(raycaster), G.down(raycaster) → true, если взялись за ручку;
 // G.drag(raycaster) → { pos?, rot?, size? } (новые значения, уже с привязкой); G.up() → были ли изменения.
+// G.k — множитель размера ручек (палец — крупнее), G.handleAt(raycaster) — есть ли ручка под лучом (без захвата).
 // G.snap — шаг сетки (0 — свободно), G.rsnap — шаг угла в градусах (0 — свободно). Двигать и вращать — по осям мира,
 // размер — по осям самой детали и только с одной стороны (как в Roblox: тянешь грань — сдвигается только она).
 (() => {
@@ -20,7 +21,7 @@
     const hitMat = new T.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false, depthWrite: false, colorWrite: false });
     const own = [hitMat];
     const mk = (geo, mat, parent) => { const m = new T.Mesh(geo, mat); m.renderOrder = 999; parent.add(m); own.push(geo); if (mat !== hitMat) own.push(mat); return m; };
-    const G = { mode: null, target: null, snap: 1, rsnap: 15, dragging: false, changed: false, hot: null };
+    const G = { mode: null, target: null, snap: 1, rsnap: 15, dragging: false, changed: false, hot: null, k: 1 };
 
     // ── Двигать: стрелки ──
     const moveG = new T.Group(); root.add(moveG);
@@ -70,7 +71,9 @@
       root.position.copy(center);
       // модель вращается только вокруг вертикали
       rotG.children.forEach((m, k) => { m.visible = !t.model || (k >> 1) === 1; });
-      const cam = R.camera.position, s = Math.max(.25, center.distanceTo(cam) * .085);
+      // размер на экране один и тот же: и при узком угле обзора (виды «сверху/сбоку»), G.k — крупнее для пальца (studio3d-touch.js)
+      const fk = Math.tan((R.camera.fov || 50) * DEG / 2) / Math.tan(25 * DEG);
+      const cam = R.camera.position, s = Math.max(.25, center.distanceTo(cam) * .085 * fk) * (G.k || 1);
       root.scale.setScalar(s);
       // ручки размера — по осям детали и у её граней
       if (scaleG.visible) {
@@ -157,6 +160,7 @@
       return { size, pos };
     };
     G.up = () => { const ch = G.changed; D = null; G.dragging = false; G.changed = false; return ch; };
+    G.handleAt = ray => !!pickHandle(ray);   // ручка под пальцем/прицелом — без подсветки и захвата
     G.dispose = () => { R.scene.remove(root); own.forEach(x => x.dispose?.()); };
     return G;
   };

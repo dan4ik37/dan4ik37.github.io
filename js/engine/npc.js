@@ -44,7 +44,17 @@
       const e = { o, key: keyOf(o), home: o.pos.slice(), P: null, C: null, tgt: null, waitT: 0, stuckT: 0, hitT: 0, sayT: 0, near: false, phH: null };
       A.add(e.key, lookOf(o), { x: o.pos[0], y: o.pos[1], z: o.pos[2], yaw: (o.rot?.[1] || 0) * Math.PI / 180 });
       list.set(o.id, e);
+      if (N.playing) wake(e);   // появился во время игры (волна зомби «Выживания», скрипт) — сразу с мозгами
     };
+    // «мозги» и тело (player.js) — при старте игры и для появившихся по ходу
+    function wake(e){
+      e.home = e.o.pos.slice();
+      e.C = pad();
+      e.P = E.player(ph, { x: e.home[0], z: e.home[2], yaw: (e.o.rot?.[1] || 0) * Math.PI / 180 });
+      e.P.place(e.home[0], null, e.home[2], e.P.yaw);
+      if (e.home[1] > e.P.ch.y + .3) e.P.place(e.home[0], e.home[1], e.home[2], e.P.yaw);   // стоит на чём-то — не на земле
+      e.P.canRun = true; e.waitT = Math.random() * 2; e.homeYaw = e.P.yaw;
+    }
     N.remove = o => { const e = list.get(o.id); if (!e) return; A.remove(e.key); list.delete(o.id); };
     // в редакторе: подвинули, повернули, сменили внешность
     N.sync = o => {
@@ -55,14 +65,7 @@
     };
     N.start = (cb = {}) => {
       N.playing = true; N.cb = cb;
-      for (const e of list.values()) {
-        e.home = e.o.pos.slice();
-        e.C = pad();
-        e.P = E.player(ph, { x: e.home[0], z: e.home[2], yaw: (e.o.rot?.[1] || 0) * Math.PI / 180 });
-        e.P.place(e.home[0], null, e.home[2], e.P.yaw);
-        if (e.home[1] > e.P.ch.y + .3) e.P.place(e.home[0], e.home[1], e.home[2], e.P.yaw);   // стоит на чём-то — не на земле
-        e.P.canRun = true; e.waitT = Math.random() * 2; e.homeYaw = e.P.yaw;
-      }
+      for (const e of list.values()) wake(e);
     };
     N.stop = () => {
       N.playing = false; N.cb = null;
