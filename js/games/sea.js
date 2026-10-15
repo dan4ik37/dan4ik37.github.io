@@ -323,7 +323,8 @@
     if (!el) return;
     if (text) { el.innerHTML = text; return; }
     const who = G.online ? esc(R?.opp?.nick || 'соперника') : 'бота';
-    el.innerHTML = G.turn === 'me' ? '🎯 Твой выстрел' : `⏳ Стреляет ${G.online ? who : '🤖'}…`;
+    const t = G.turn === 'me' ? '🎯 Твой выстрел' : `⏳ Стреляет ${G.online ? who : '🤖'}…`;
+    el.innerHTML = window.GameKit ? GameKit.turn(G.turn === 'me', t) : t;   // плашка «чей ход» (gamekit.js)
     root.querySelector('#sEnemy')?.classList.toggle('active', G.turn === 'me');
   }
 
