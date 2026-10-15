@@ -394,7 +394,7 @@ up({ t: 'frame' });
           const id = pal[f.block]; if (!id) continue;
           const toIds = list => list.map(k => (PZ.TILE[k] || PZ.TILE[k.includes(':') ? k : M.id + ':' + k])?.id).filter(Boolean);
           const minY = Math.round(PZ.SURF + f.minDepth * 2), maxY = Math.round(PZ.SURF + f.maxDepth * 2);   // глубина в метрах → клетки (1 клетка = 0,5 м)
-          if (f.type === 'ore') feats.push({ type: 'ore', id, minY, maxY, scale: 1 / f.size * .9, thr: .82 - f.rarity * .2, seed: 1000 + id, host: toIds(f.in) });
+          if (f.type === 'ore') feats.push({ type: 'ore', id, minY, maxY, scale: 1 / f.size * .9, thr: .52 - f.rarity * .14, seed: 1000 + id, host: toIds(f.in) });   // как руды игры: 0,38 (часто) … 0,52 (редко)
           else feats.push({ type: 'scatter', id, minY, maxY, chance: f.chance, seed: 2000 + id, on: toIds(f.on) });
         }
       }

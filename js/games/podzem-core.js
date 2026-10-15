@@ -325,21 +325,21 @@ function PZ_CORE(){
         else if (b === B.DESERT && d < C.dd + 48) fg = T.SANDSTONE;
         else if (b === B.JUNGLE && d < 520) fg = noise2(x * .05, y * .05, S + 31) > .3 ? T.STONE : T.MUD;
         else fg = T.STONE;
-        // вкрапления
+        // вкрапления (шум ≈ −0,7…0,7: 0,29 — 10 % клеток, 0,37 — 5 %, 0,47 — 1 %)
         if (fg === T.STONE || fg === T.DEEPSTONE) {
           const p = noise2(x * .083, y * .083, S + 32);
-          if (p > .55 && y < 600) fg = b === B.SNOW ? T.ICE : T.DIRT;
-          else if (p < -.62 && d < 160) fg = T.CLAY;
-          else if (b === B.SNOW && p < -.5 && d < 300) fg = T.SNOW;
+          if (p > .42 && y < 600) fg = b === B.SNOW ? T.ICE : T.DIRT;
+          else if (p < -.4 && d < 160) fg = T.CLAY;
+          else if (b === B.SNOW && p < -.32 && d < 300) fg = T.SNOW;
         }
-        // руды
+        // руды: жилы по шуму, чем глубже — тем ценнее (≈3 % камня — медь, ≈1,5 % — золото)
         if (fg === T.STONE || fg === T.DEEPSTONE || fg === T.SANDSTONE || fg === T.ICE || fg === T.ASH) {
-          if (y >= C.lava + 20 && noise2(x * .15, y * .15, S + 46) > .62) fg = T.FIREORE;
-          else if (y >= C.deep + 30 && fg === T.DEEPSTONE && noise2(x * .17, y * .17, S + 45) > .66) fg = T.DEEPORE;
-          else if (y >= 470 && noise2(x * .18, y * .18, S + 44) > .7) fg = T.GOLD;
-          else if (y >= 320 && noise2(x * .18, y * .18, S + 43) > .69) fg = T.SILVER;
-          else if (d >= 18 && noise2(x * .17, y * .17, S + 42) > .67) fg = T.IRON;
-          else if (d >= 5 && y < 950 && noise2(x * .16, y * .16, S + 41) > .64) fg = T.COPPER;
+          if (y >= C.lava + 20 && noise2(x * .15, y * .15, S + 46) > .4) fg = T.FIREORE;
+          else if (y >= C.deep + 30 && fg === T.DEEPSTONE && noise2(x * .17, y * .17, S + 45) > .43) fg = T.DEEPORE;
+          else if (y >= 470 && noise2(x * .18, y * .18, S + 44) > .45) fg = T.GOLD;
+          else if (y >= 320 && noise2(x * .18, y * .18, S + 43) > .43) fg = T.SILVER;
+          else if (d >= 18 && noise2(x * .17, y * .17, S + 42) > .41) fg = T.IRON;
+          else if (d >= 5 && y < 950 && noise2(x * .16, y * .16, S + 41) > .39) fg = T.COPPER;
         }
       }
       // стена фона (у пещер местами нет — видно подземный фон)

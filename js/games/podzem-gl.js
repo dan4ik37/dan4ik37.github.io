@@ -341,7 +341,7 @@
     }
     const objImg = {};
     for (const t of PZ.TILES) {
-      if (!t || !t.id) continue;
+      if (!t || !t.id || t.id >= PZ.MOD_ID0) continue;   // блоки модов — ниже (с их картинками)
       const n = t.k === 'obj' ? t.sz[0] * t.sz[1] : 4;
       const c0 = take(n); out.tile[t.id] = c0;
       const im = tileTex(t, c0); if (im) objImg[t.key] = im;
@@ -466,8 +466,8 @@ void main(){
     if (wp.y > 1150) tint = vec3(0.65, 0.36, 0.3);
     col = vec4(w.rgb * tint * 0.42, 1.0);
   }
-  if (fg != 0u) {
-    uvec4 fi = texelFetch(uProps, ivec2(int(fg), 0), 0);
+  uvec4 fi = texelFetch(uProps, ivec2(int(fg), 0), 0);
+  if (fg != 0u && fi.a != 3u) {
     uvec4 fx = texelFetch(uProps, ivec2(int(fg), 1), 0);
     int base = int(fi.r | (fi.g << 8u));
     uint fl = fi.b, kind = fi.a;
@@ -649,7 +649,8 @@ void main(){
     R.setProps = (PZ, A) => {
       const d = new Uint8Array(256 * 3 * 4);
       for (let id = 1; id < 256; id++) {
-        const c = A.tile[id]; if (c < 0) continue;
+        const c = A.tile[id];
+        if (c < 0) { d[id * 4 + 3] = 3; continue; }   // неизвестный (мод удалён) — не рисуем, данные в мире целы
         const t = PZ.TILES[id] || {};
         d[id * 4] = c & 255; d[id * 4 + 1] = c >> 8; d[id * 4 + 2] = (PZ.P.GRASSY[id] ? 1 : 0) | (PZ.P.LEAFY[id] ? 2 : 0); d[id * 4 + 3] = PZ.P.KIND[id] === 1 ? 1 : PZ.P.KIND[id] === 0 || PZ.P.LEAFY[id] ? 0 : 2;
         const gc = hex(t.grass || '#000000'), o = 1024 + id * 4;
