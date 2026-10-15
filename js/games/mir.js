@@ -1250,7 +1250,7 @@
     }
     else if (a === 'go') startGame(tb, my.c);
     else if (a === 'link') {
-      const url = `${location.origin}/#/games/${tb.game}/${my.c}`;
+      const url = (window.D37Ref?.wrap || (u => u))(`${location.origin}/#/games/${tb.game}/${my.c}`);   // 👥 с кодом приглашения (js/core/ref.js)
       navigator.clipboard?.writeText(url).then(() => toast('🔗 Ссылка скопирована — отправь другу'), () => prompt('Ссылка на эту партию:', url));
     } else if (a === 'invite') {
       const sub = S.q('.mir-tb .wld-sub'), free = [...S.players.values()].filter(p => !p.leaving && !p.seat);

@@ -54,10 +54,11 @@
   function grid(){
     const box = root.querySelector('.wr-grid'), wear = wearing();
     const P = C().PARTS[slot];
-    box.innerHTML = P.list.map(([id, name, price, v, vip, gems, lvl]) => {
+    box.innerHTML = P.list.map(([id, name, price, v, vip, gems, lvl, ref]) => {
       const own = C().owns(slot, id), on = wear[slot] === id, tr = trying[slot] === id && !on;
       const tag = on ? '<span class="wr-tag on">надето</span>' : own ? '<span class="wr-tag">есть</span>'
         : gems ? `<span class="wr-tag price">💎 ${num(gems)}</span>` : lvl ? `<span class="wr-tag price">🔒 ур. ${lvl}</span>`
+        : ref ? '<span class="wr-tag price" title="Награда за приглашения друзей">🤝 друзья</span>'
         : `<span class="wr-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</span>`;
       return `<button type="button" class="wr-card${on ? ' on' : ''}${tr ? ' trying' : ''}${own ? '' : ' locked'}" data-part="${id}" title="${name}">
         <canvas width="88" height="88" data-mini="${id}"></canvas><b>${name}</b>${tag}</button>`;
@@ -86,6 +87,11 @@
     if (p.gems) {   // только за 💎 — купить в магазине
       bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — только за 💎 кристаллы</div>
         <div class="wr-try-row"><a class="wr-btn gold" href="#/shop">💎 ${num(p.gems)} — в магазин</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
+      return;
+    }
+    if (p.ref) {   // награда за приглашения друзей — не продаётся (js/core/ref.js)
+      bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — награда за приглашения друзей</div>
+        <div class="wr-try-row"><a class="wr-btn gold" href="#/invite">👥 Как получить</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
       return;
     }
     if (p.lvl) {   // награда за уровень — не продаётся

@@ -6,6 +6,43 @@ export const YT_CHANNEL = 'https://www.youtube.com/@Dan4ik37Yt';
 // Возраст (js/core/age.js): несовершеннолетнему ролики 18+ спрятаны с первого кадра (d37-h18), возраст не указан — 18+ под
 // обложкой «Мне есть 18» (d37-c18). Год — только в браузере посетителя, сервер его не видит. Тот же код — в <head> index.html
 export const AGE_HEAD = `<script>(function(){try{var a=JSON.parse(localStorage.getItem('d37_age')||'null')||{},Y=new Date(Date.now()+108e5).getUTCFullYear(),g=a.y>=Y-100&&a.y<=Y-3?Y-a.y-(a.bd==Y?0:1):null,M={child:12,teen:15,teen16:17}[a.fg];if(M&&a.fu>Date.now()&&(g==null||g>M))g=M;var c=g==null?(a.c18?'':'d37-c18'):g<18?'d37-h18':'';if(c)document.documentElement.classList.add(c)}catch(e){}})()</script>`;
+// 👥 Приглашения: ?ref=<код> на любой серверной странице (игра, ролик, /g/, /c/) — запомнить, как js/core/ref.js (первое касание,
+// 30 дней, свой код — нет), и убрать из адреса. d37RefStore — и для страницы /r/<код> (routes/ref.js). Код уходит в браузер через
+// toString() — снаружи функции ничего не видно; scripts/referral-test.cjs сверяет поведение с D37Ref
+function refHead(){
+  try {
+    var K = 2592e6, C = /^[2-9bcdfghjkmnpqrstvwz]{6}$/, N;
+    try { N = new RegExp('^[\\p{L}\\p{N} _.-]{1,24}$', 'u'); } catch (e) { N = /^[\wЀ-ӿ _.-]{1,24}$/; }
+    var g = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    var s = function (k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
+    var j = function (k) { try { return JSON.parse(g(k) || 'null'); } catch (e) { return null; } };
+    var src = function (p) {
+      return /^games\/world(\/|$)/.test(p) ? 'world' : /^(games\/studio3?d?\/play\/|g\/)/.test(p) ? 'studio'
+        : /^games\/[a-z0-9_-]+\/(coop\/)?[a-z0-9]{4,12}$/.test(p) ? 'room' : /^games(\/|$)/.test(p) ? 'game'
+        : /^v\//.test(p) ? 'video' : /^(c|chat\/join)\//.test(p) ? 'community' : 'link';
+    };
+    window.d37RefStore = function (raw, from, place) {
+      var c = String(raw == null ? '' : raw).trim().toLowerCase(), x = c.replace(/[\s-]/g, ''), k;
+      if (C.test(x)) { c = x; k = 'code'; } else if (N.test(c)) k = 'nick'; else return null;
+      var m = j('d37_ref_my');
+      if (m && m.c === c) return null;
+      var r = j('d37_ref2'), t = Date.now();
+      if (r && typeof r.c === 'string' && r.t && t - r.t < K && t >= r.t - 864e5) return r;
+      place = /^[A-Za-z0-9/_-]{1,80}$/.test(place || '') ? place : '';
+      r = { c: c, k: k, t: t, s: /^[a-z0-9_]{1,16}$/.test(from || '') ? from : src(place), p: place };
+      s('d37_ref2', JSON.stringify(r)); s('d37_ref', c);
+      return r;
+    };
+    var u = new URL(location.href), v = u.searchParams.get('ref');
+    if (v != null) {
+      var p = ((u.hash || '').replace(/^#\/?/, '') || u.pathname.replace(/^\/+/, '')).replace(/[^A-Za-z0-9/_-]/g, '').slice(0, 80);
+      window.d37RefStore(v, src(p), p);
+      u.searchParams.delete('ref');
+      history.replaceState(history.state, '', u.pathname + u.search + u.hash);
+    }
+  } catch (e) {}
+}
+export const REF_HEAD = `<script>(${refHead.toString()})()</script>`;
 // Метка всего сайта (подвал): чат и «Мир Денчика» — общение с незнакомыми; что старше — помечено отдельно (js/core/age.js SITE_AGE)
 export const SITE_AGE = 12;
 export const AGE_MARK = `<span class="age-mark" title="Сайт для ${SITE_AGE}+: игры, видео и разделы помечены своей меткой (0+…18+)">${SITE_AGE}+</span>`;
@@ -40,6 +77,7 @@ ${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;600;700;800&family=Oswald:wght@500;600&display=swap" rel="stylesheet">
 ${AGE_HEAD}
+${REF_HEAD}
 ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.adsbygoogle||[]).pauseAdRequests=1}catch(e){}</script>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7940480593743401" crossorigin="anonymous"></script>`}
 <script>window.va=window.va||function(){(window.vaq=window.vaq||[]).push(arguments)};</script>

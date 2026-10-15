@@ -155,7 +155,8 @@ function shopRender(S){
 
   // ── История ──
   const KIND = { pay: 'Покупка', donation: 'Донат', convert: 'Остаток доната', grant: 'Подарок от сайта', revoke: 'Списание', spend: 'Покупка в магазине', gift: 'Подарок другу', refund: 'Возврат денег', debt: 'Погашение долга',
-    ads: 'Реклама на сайте', ads_refund: 'Возврат остатка рекламы' };   // ads — кабинет рекламодателя #/adv (ads.sql)
+    ads: 'Реклама на сайте', ads_refund: 'Возврат остатка рекламы',   // ads — кабинет рекламодателя #/adv (ads.sql)
+    ref: 'Бонус за друзей', ref_back: 'Друг вернул деньги — бонус списан' };   // 👥 приглашения (referrals2.sql)
   const hist = ok ? `<section class="shp-block pf-card pf-card-muted" id="shp-hist">
     <div class="shp-block-head"><b>🧾 История</b><span>последние операции</span></div>
     ${(S.orders || []).filter(o => o.status === 'new' && o.provider === 'kaspi').map(o => `<div class="shp-row shp-wait"><span>⏳ Заказ <b>${esc(o.id)}</b> (Kaspi) — ждёт проверки оплаты</span><span>${C.icon} ${shopNum(o.gems)} · ${shopMoney(o.amount, o.currency)}</span></div>`).join('')}
