@@ -802,7 +802,7 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'd37-ads-'));
   fs.mkdirSync(path.join(tmp, 'api/_lib/routes'), { recursive: true });
   fs.writeFileSync(path.join(tmp, 'package.json'), '{"type":"module"}');
-  for (const f of ['yt.js', 'page.js', 'topics.js', 'uploads-snapshot.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
+  for (const f of ['yt.js', 'page.js', 'topics.js', 'age.js', 'uploads-snapshot.js', 'routes/videos.js']) fs.copyFileSync(path.join(SITE, 'api/_lib', f), path.join(tmp, 'api/_lib', f));
   globalThis.fetch = async () => { throw new Error('нет сети'); };   // свежих роликов нет — только снимок
   try {
     const { page } = await import(pathToFileURL(path.join(tmp, 'api/_lib/page.js')).href);

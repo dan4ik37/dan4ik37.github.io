@@ -28,6 +28,20 @@
       rail:         { first: 15, gap: 60, max: 12, desk: true, minW: 1400 },
       feed:         { max: 16 },
     },
+    // Реклама по возрасту (js/core/age.js → D37Age.group()). Google: tfat — «обработка» запроса (data-tag-for-age-treatment:
+    // 1 — ребёнок, 2 — подросток; support.google.com/adsense/answer/3248194), npa — без персональной рекламы
+    // (adsbygoogle.requestNonPersonalizedAds). У РСЯ в коде блока «детского» параметра нет — поэтому детям меньше мест:
+    // off — каких мест у группы нет (reward — реклама за награду, sponsor — спонсор щитов мира), budget — свой лимит за визит.
+    // unknown — как считать тех, кто возраст не указал: 'teen' — без персональной рекламы (Google платит меньше, зато спокойно с
+    // законами о детях: аудитория — в основном дети); 'adult' — больше дохода, но дети без возраста получат персональную рекламу;
+    // 'child' — строже всего. ADS_IDS.kids (ads-core.js) — весь сайт «для детей»: 1 — всем как ребёнку, 2 — не старше подростка.
+    age: {
+      unknown: 'teen',
+      child:  { tfat: 1, npa: 1, off: ['interstitial', 'floor', 'reward', 'sponsor'], budget: 20 },
+      teen:   { tfat: 2, npa: 1, off: [] },
+      teen16: { tfat: 2, npa: 1, off: [] },
+      adult:  { tfat: 0, npa: 0, off: [] },
+    },
   }, window.ADS_RULES || {});
   // «Рядом нельзя»: что каждое состояние запрещает ('*' — всё, кроме рекламы за награду по кнопке)
   const CTX = { gambling: '*', ugc: ['loading', 'break', 'rail', 'feed'], playing: ['break'] };
@@ -94,9 +108,31 @@
   function syncPerk(){
     const p = typeof currentUser !== 'undefined' && currentUser ? perkFromProfile() : false;
     try { if (p) localStorage.setItem(NK, JSON.stringify({ until: p.until })); else if (p === false) localStorage.removeItem(NK); } catch (e) {}
+    if (gate()) purge();
+  }
+
+  // ── Возраст: группа для рекламы и её правила (RULES.age) ──
+  function adAge(){
+    const A = RULES.age || {};
+    let g = (window.D37Age && typeof window.D37Age.group === 'function' && window.D37Age.group()) || 'unknown';
+    if (g === 'unknown' || !A[g]) g = A[A.unknown] ? A.unknown : 'teen';
+    const k = +((window.ADS_IDS && window.ADS_IDS.kids) || 0);   // весь сайт «для детей» — строже, чем по возрасту
+    if (k === 1) g = 'child'; else if (k === 2 && g === 'adult') g = 'teen';
+    return g;
+  }
+  const ageRule = () => (RULES.age || {})[adAge()] || {};
+  const ageOff = what => (ageRule().off || []).includes(what);
+  const budget = () => ageRule().budget ?? RULES.budget;
+  // Запросы Google: без персональной рекламы по возрасту; пауза — у VIP. В <head> запросы на паузе с самого начала (index.html,
+  // page.js) — здесь решаем и снимаем, поэтому даже «автоматическая реклама» не уйдёт раньше, чем узнаем возраст. → VIP ли
+  function gate(){
     const on = noAdsPerk();
-    try { if (on || window.__d37Paused) { (window.adsbygoogle = window.adsbygoogle || []).pauseAdRequests = on ? 1 : 0; window.__d37Paused = on; } } catch (e) {}
-    if (on) purge();
+    try {
+      const A = window.adsbygoogle = window.adsbygoogle || [];
+      A.requestNonPersonalizedAds = ageRule().npa ? 1 : 0;
+      if (on || window.__d37Paused) { A.pauseAdRequests = on ? 1 : 0; window.__d37Paused = on; }
+    } catch (e) {}
+    return on;
   }
   // Всё, что уже показано, — убрать (вошёл VIP)
   function purge(){
@@ -135,6 +171,7 @@
     const b = base(key), R = rule(key), t = now(), s = st(), p = s.p[b] || {};
     if (!o.ignoreId && !hasId(key)) return 'id';
     if (noAdsPerk()) return 'vip';
+    if (ageOff(b)) return 'age';   // этого места у возрастной группы нет (детям — без полноэкранной и полоски)
     for (const c in CTX) if ((CTX[c] === '*' || CTX[c].includes(b)) && isOn(c)) return c;
     if (o.ugc && CTX.ugc.includes(b)) return 'ugc';
     const touch = isTouch(), w = vw();
@@ -146,7 +183,7 @@
     if (R.first && t - s.t0 < R.first * 1e3) return 'first';
     if (R.gap && p.at && t - p.at < R.gap * 1e3) return 'gap';
     if (R.max != null && (p.n || 0) >= R.max) return 'max';
-    if (RULES.budget && s.n >= RULES.budget) return 'budget';
+    if (budget() && s.n >= budget()) return 'budget';
     return '';
   }
   function mark(key){
@@ -322,7 +359,7 @@
     if (r) { log(place, r); return 0; }
     if (!hasId(place) && !dbg.frames) { log(place, 'id'); return 0; }
     const s = st(), p = s.p.feed || {}, R = rule(place);
-    let left = Math.min(o.max ?? 3, dbg.nocaps ? 99 : (R.max ?? 99) - (p.n || 0), dbg.nocaps || !RULES.budget ? 99 : RULES.budget - s.n);
+    let left = Math.min(o.max ?? 3, dbg.nocaps ? 99 : (R.max ?? 99) - (p.n || 0), dbg.nocaps || !budget() ? 99 : budget() - s.n);
     let n = 0;
     for (let i = start; i < items.length && n < left; i += every) {
       const c = document.createElement('div');
@@ -486,7 +523,7 @@
   }
   let sponsorP = null, sponsorAt = 0;
   function sponsor(){
-    if (noAdsPerk()) return Promise.resolve(null);
+    if (noAdsPerk() || ageOff('sponsor')) return Promise.resolve(null);   // детям — только свои промо сайта
     if (sponsorP && now() - sponsorAt < 10 * 60e3) return sponsorP;
     sponsorAt = now();
     sponsorP = (async () => {
@@ -629,8 +666,9 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
   function init(){
     css();
     if (dbg.on) document.documentElement.classList.add('d37-ads-debug');
-    if (noAdsPerk()) try { (window.adsbygoogle = window.adsbygoogle || []).pauseAdRequests = 1; window.__d37Paused = true; } catch (e) {}
+    gate();   // VIP — пауза; остальным — снять паузу из <head>, без персональной рекламы — по возрасту
     window.addEventListener('d37:auth', () => setTimeout(syncPerk, 50));
+    window.addEventListener('d37:age', () => setTimeout(() => { gate(); railTick(); }, 0));   // указал / сменил возраст
     document.addEventListener('pointerdown', onGameInput, true);
     document.addEventListener('keydown', onGameInput, true);
     document.addEventListener('click', e => { const b = e.target?.closest?.('[data-d37-reward="coins"]'); if (!b) return; e.preventDefault(); e.stopPropagation(); onCoinAd(b); }, true);
@@ -657,9 +695,10 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
   window.D37AdPlaces = {
     RULES, why, mark, show, ids, hasId, net, loading, afterRound, interRound, feed, coinOffer, worldPromo, sponsor, fillAll, noAdsPerk,
     placeholder, gambling, railTick,
+    adAge, ageOff, gate, googleTag: () => ageRule().tfat || 0,   // возраст: группа рекламы, место выключено, «обработка» Google
     ctx(name, on){ if (on) ctxOn.add(name); else ctxOn.delete(name); if (on && name !== 'playing') { railOff(); } },
     debug: () => dbg.on, frames: () => dbg.frames,
-    state: () => ({ visit: JSON.parse(JSON.stringify(st())), vip: noAdsPerk(), ugc: ugcRoute(), playing: G.playing, ctx: [...ctxOn], rail: RAIL.el ? RAIL.w : 0, log: dbg.log.slice(-30) }),
+    state: () => ({ visit: JSON.parse(JSON.stringify(st())), vip: noAdsPerk(), age: adAge(), ugc: ugcRoute(), playing: G.playing, ctx: [...ctxOn], rail: RAIL.el ? RAIL.w : 0, log: dbg.log.slice(-30) }),
     _test: { st: () => st(), reset(){ ST = null; try { sessionStorage.removeItem(SK); } catch (e) {} loadT0 = 0; railOff(); G.playing = false; ctxOn.clear(); }, dbg, G, railSpot, gameRect, cleanSponsor, safeUrl, refreshOk, GAMBLING_RE, TIPS, RAIL, ugcRoute, cdLeft },
   };
   init();

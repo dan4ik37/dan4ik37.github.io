@@ -42,7 +42,9 @@ function fillVisibleAds(){
     box.classList.remove('ad-empty');
     if (!ins.offsetWidth) return; // скрыт роутером — заполним, когда откроют этот раздел
     ins.setAttribute('data-ad-slot', slotId);
-    if (window.ADS_IDS?.kids) ins.setAttribute('data-tag-for-age-treatment', String(window.ADS_IDS.kids));
+    // возраст (ad-places.js → ADS_RULES.age): 1 — ребёнок, 2 — подросток
+    const tag = M ? M.googleTag() : +(window.ADS_IDS?.kids || 0);
+    if (tag) ins.setAttribute('data-tag-for-age-treatment', String(tag));
     ins.dataset.adFilled = '1';
     M?.mark(ins.dataset.slotKey);
     try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
