@@ -87,7 +87,7 @@
     // уровень — до fromServer: от него зависит, что из образа можно носить (вещи «за уровень»); старый coins.sql его
     // не отдаёт — спросим user_level (progression.sql)
     let lv = d.level;
-    if (lv == null) lv = await rpc('user_level', { uid: currentUser.id });
+    if (lv == null) { try { const u = await sbClient.rpc('user_level', { uid: currentUser.id }); lv = u.error ? null : u.data; } catch (e) {} }   // не через rpc(): та отключает кошелёк, если функции нет
     S = { coins: d.coins, items: d.items || [], daily: d.daily, ads: d.ads, doubles: d.doubles, perks: !!d.perks, level: +lv || 1 };
     window.D37Char?.fromServer(d.look);
     // Монеты, накопленные без входа, — в аккаунт (один раз на аккаунт, до 1000)
