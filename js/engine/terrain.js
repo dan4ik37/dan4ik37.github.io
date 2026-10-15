@@ -53,7 +53,7 @@
           .replace('#include <common>', '#include <common>\nuniform sampler2D tG; uniform sampler2D tS; uniform sampler2D tR; uniform sampler2D tW; uniform float tile; varying vec4 vSplat; varying vec3 vWPos; varying vec3 vWNor;')
           .replace('#include <map_fragment>', `vec2 tuv = vWPos.xz / tile;
 vec4 w = vSplat;
-w.z = max(w.z, smoothstep(0.84, 0.62, vWNor.y));
+w.z = max(w.z, (1.0 - smoothstep(0.62, 0.84, vWNor.y)));
 w /= max(1e-3, w.x + w.y + w.z + w.w);
 vec3 tc = texture2D(tG, tuv).rgb * w.x + texture2D(tS, tuv).rgb * w.y + texture2D(tR, tuv * 0.8).rgb * w.z + texture2D(tW, tuv).rgb * w.w;
 diffuseColor.rgb *= tc;`);

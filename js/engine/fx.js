@@ -39,10 +39,10 @@ void main(){
   vec2 p = gl_PointCoord * 2.0 - 1.0;
   float c = cos(vSpin), s = sin(vSpin); p = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
   float r = length(p), a;
-  if (uShape < .5) a = smoothstep(1.0, .15, r);
+  if (uShape < .5) a = (1.0 - smoothstep(.15, 1.0, r));
   else if (uShape < 1.5) a = step(max(abs(p.x), abs(p.y) * 1.7), .75);
-  else if (uShape < 2.5) a = smoothstep(.55, .75, r) * smoothstep(1.0, .85, r) + smoothstep(.45, .0, length(p - vec2(-.3, -.3))) * .5;
-  else a = max(smoothstep(.35, .0, abs(p.x) * 2.5 + abs(p.y) * .35), smoothstep(.35, .0, abs(p.y) * 2.5 + abs(p.x) * .35)) + smoothstep(.5, .0, r) * .6;
+  else if (uShape < 2.5) a = smoothstep(.55, .75, r) * (1.0 - smoothstep(.85, 1.0, r)) + (1.0 - smoothstep(.0, .45, length(p - vec2(-.3, -.3)))) * .5;
+  else a = max((1.0 - smoothstep(.0, .35, abs(p.x) * 2.5 + abs(p.y) * .35)), (1.0 - smoothstep(.0, .35, abs(p.y) * 2.5 + abs(p.x) * .35))) + (1.0 - smoothstep(.0, .5, r)) * .6;
   a *= vColor.a;
   if (a < .01) discard;
   gl_FragColor = vec4(vColor.rgb, a);
