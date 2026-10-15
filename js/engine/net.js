@@ -155,10 +155,13 @@
 
   // ═══ Персонаж: снимок ~22 байта ═══
   // slot, t (время хозяина, мс), флаги, tp (счётчик телепортов: сменился — не тянуть, а переставить), on (деталь под ногами:
-  // тогда x, y, z — от её центра, и чужие видят нас на ней, а не рядом), x y z см, yaw, скорость см/с, поза для человечка
+  // тогда x, y, z — от её центра, и чужие видят нас на ней, а не рядом), x y z см, yaw, скорость см/с, поза для человечка.
+  // Телефон 📱 (phone 0…4: нет, в руке, у уха, играет, снимает) — в старших битах байта паркура (pk + phone·16): есть телефон —
+  // есть и «расширенная» часть (+5 байт); старый клиент прочтёт «без паркура», размер прежний
   const PK = ['', 'vault', 'mantle', 'climb', 'hang', 'pullup'];
+  const phoneQ = v => (Number.isInteger(v) && v >= 0 && v <= 4 ? v : 0);
   function writeChar(w, c){
-    const ext = c.roll >= 0 || !!c.pk || c.seatY != null || !!c.hang || !!c.ladder;
+    const ph = phoneQ(c.phone), ext = c.roll >= 0 || !!c.pk || c.seatY != null || !!c.hang || !!c.ladder || ph > 0;
     w.u8(c.slot); w.u32(Math.round(c.t));
     w.u8((c.moving ? 1 : 0) | (c.air ? 2 : 0) | (c.sit ? 4 : 0) | (c.hang ? 8 : 0) | (c.ladder ? 16 : 0) | (c.rollBack ? 32 : 0) | (c.on ? 64 : 0) | (ext ? 128 : 0));
     w.u8(c.tp & 255);
@@ -168,7 +171,7 @@
     w.vs((c.vx || 0) * 100); w.vs((c.vy || 0) * 100); w.vs((c.vz || 0) * 100);
     w.u8(Math.min(255, Math.round((c.speed || 0) * 10))); w.u8(Math.round(Math.max(0, Math.min(1, c.crouch || 0)) * 255));
     if (ext) {
-      w.u8(c.roll >= 0 ? Math.round(Math.min(1, c.roll) * 254) : 255); w.u8(Math.max(0, PK.indexOf(c.pk || ''))); w.u8(Math.round(Math.max(0, Math.min(1, c.pkK || 0)) * 255));
+      w.u8(c.roll >= 0 ? Math.round(Math.min(1, c.roll) * 254) : 255); w.u8(Math.max(0, PK.indexOf(c.pk || '')) | (ph << 4)); w.u8(Math.round(Math.max(0, Math.min(1, c.pkK || 0)) * 255));
       w.u8(Math.round((((c.climbPh || 0) % PI2) + PI2) % PI2 / PI2 * 255) & 255); w.vs(c.seatY == null ? 0 : Math.round(c.seatY * 100) + (c.seatY >= 0 ? 1 : -1));
     }
   }
@@ -178,8 +181,8 @@
     c.x = r.vs() / 100; c.y = r.vs() / 100; c.z = r.vs() / 100; c.yaw = r.u16() / 65536 * PI2;
     c.vx = r.vs() / 100; c.vy = r.vs() / 100; c.vz = r.vs() / 100; c.speed = r.u8() / 10; c.crouch = r.u8() / 255;
     c.moving = !!(f & 1); c.air = !!(f & 2); c.sit = !!(f & 4); c.hang = !!(f & 8); c.ladder = !!(f & 16); c.rollBack = !!(f & 32);
-    c.roll = -1; c.pk = ''; c.pkK = 0; c.climbPh = 0; c.seatY = null;
-    if (f & 128) { const ro = r.u8(); c.roll = ro === 255 ? -1 : ro / 254; c.pk = PK[r.u8()] || ''; c.pkK = r.u8() / 255; c.climbPh = r.u8() / 255 * PI2; const sy = r.vs(); c.seatY = sy === 0 ? null : (sy > 0 ? sy - 1 : sy + 1) / 100; }
+    c.roll = -1; c.pk = ''; c.pkK = 0; c.climbPh = 0; c.seatY = null; c.phone = 0;
+    if (f & 128) { const ro = r.u8(), pb = r.u8(); c.roll = ro === 255 ? -1 : ro / 254; c.pk = PK[pb & 15] || ''; c.phone = phoneQ(pb >> 4); c.pkK = r.u8() / 255; c.climbPh = r.u8() / 255 * PI2; const sy = r.vs(); c.seatY = sy === 0 ? null : (sy > 0 ? sy - 1 : sy + 1) / 100; }
     return c;
   }
   const wrapA = a => { a %= PI2; if (a > Math.PI) a -= PI2; else if (a < -Math.PI) a += PI2; return a; };
@@ -261,7 +264,7 @@
     const s = e.s, n = e.n, k2 = e.k;
     rc.pose = { x: e.p[0] + rc.off[0], y: e.p[1] + rc.off[1], z: e.p[2] + rc.off[2], yaw: e.yaw, moving: s.moving, speed: s.speed + (n.speed - s.speed) * k2, air: s.air,
       crouch: s.crouch + (n.crouch - s.crouch) * k2, sit: s.sit, seatY: s.seatY, roll: s.roll >= 0 && n.roll >= 0 ? s.roll + (n.roll - s.roll) * k2 : s.roll, rollBack: s.rollBack,
-      hang: s.hang, ladder: s.ladder, climbPh: s.climbPh, pk: s.pk, pkK: s.pk && n.pk === s.pk ? s.pkK + (n.pkK - s.pkK) * k2 : s.pkK };
+      hang: s.hang, ladder: s.ladder, climbPh: s.climbPh, pk: s.pk, pkK: s.pk && n.pk === s.pk ? s.pkK + (n.pkK - s.pkK) * k2 : s.pkK, phone: s.phone || 0 };
     rc.ex = !!e.ex;
     return rc.pose;
   }
@@ -643,7 +646,7 @@
       ship(L, w, rec);
     }
     const myChanged = prev => !prev || !my || Math.abs(my.x - prev.x) + Math.abs(my.y - prev.y) + Math.abs(my.z - prev.z) > .01 || Math.abs(wrapA((my.yaw || 0) - (prev.yaw || 0))) > .01 || flagsOf(my) !== flagsOf(prev) || my.on !== prev.on;
-    const flagsOf = c => (c.moving ? 1 : 0) | (c.air ? 2 : 0) | (c.sit ? 4 : 0) | (c.hang ? 8 : 0) | (c.ladder ? 16 : 0) | (c.roll >= 0 ? 32 : 0) | (c.pk ? 64 : 0);
+    const flagsOf = c => (c.moving ? 1 : 0) | (c.air ? 2 : 0) | (c.sit ? 4 : 0) | (c.hang ? 8 : 0) | (c.ladder ? 16 : 0) | (c.roll >= 0 ? 32 : 0) | (c.pk ? 64 : 0) | (phoneQ(c.phone) << 7);   // телефон сменился — снимок сразу
     // свой снимок (общий вид для хозяина и гостя): позиция от детали под ногами, если она в копии мира
     function mySample(t){
       const p = players.get(S.myId), c = Object.assign({}, my, { slot: p ? p.slot : 0, t, tp: myTp, on: 0 });
@@ -1090,7 +1093,7 @@
       if (!st) { my = null; return; }
       my = { x: +st.x || 0, y: +st.y || 0, z: +st.z || 0, yaw: +st.yaw || 0, vx: +st.vx || 0, vy: +st.vy || 0, vz: +st.vz || 0, moving: !!st.moving, speed: +st.speed || 0, air: !!st.air,
         crouch: +st.crouch || 0, sit: !!st.sit, seatY: st.seatY ?? null, roll: st.roll ?? -1, rollBack: !!st.rollBack, hang: !!st.hang, ladder: !!st.ladder, climbPh: +st.climbPh || 0,
-        pk: st.pk || '', pkK: +st.pkK || 0, on: typeof st.on === 'string' ? st.on : null };
+        pk: st.pk || '', pkK: +st.pkK || 0, on: typeof st.on === 'string' ? st.on : null, phone: phoneQ(st.phone) };
     };
     S.teleported = () => { myTp = (myTp + 1) & 255; };
     // rt — какой момент показываем (по часам владельца), buffer — запас сверх самого быстрого пути, мс

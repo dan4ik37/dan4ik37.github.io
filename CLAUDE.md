@@ -364,6 +364,28 @@ js/features/games.js и хвост css/premium.css.
   ключом мира, ник из world_check.
 - Тесты: node scripts/community-test.cjs (99); PGlite community.sql — 239 проверок (scratchpad pg/test-community.mjs).
 
+## Телефон в руке персонажа 📱 (как в ГТА; агент 15.10.2026)
+- world3d.js (kit): слой телефона поверх любой позы (идёт/бежит, сидит, присел, прыжок — ноги свои; вода, лестница, вис, кувырок,
+  паркур — телефон сразу в карман). Режимы: use (у груди, голова к экрану, палец стучит), call (у уха, плечо поднято, свободная рука
+  жестикулирует), play (боком двумя руками), photo (двумя руками боком, «щёлк» со вспышкой). «Достать/убрать» — ch.phS.o 0…2 (1 — рука у
+  кармана: телефон появляется, предмет из руки прячется; 2 — поза режима); убрать — тот же путь назад. Позы рук — двухзвенная рука
+  (armIK/armFK) по размерам этого человечка (ch.phC). Корпус — общие геометрия/материалы, экран — картинка кодом (home/call/game/camera),
+  свечение — только mid/high. API: o.phone ('' | use | call | play | photo | код 0…4; при snap — o.phoneK, спрайтам — o.phonePh),
+  World3D.phonePose(ch, s), phoneSnap(ch, t), phoneCode/phoneName, K.phoneKeep(старый, новый), K.phoneView(ch) — от 1-го лица. Звуки —
+  synth ph_pocket / ph_tap / ph_shutter (события ch.phS.ev). CHAR_VERSION 3 (кэш спрайтов перепечётся). Плечи — в ch.phS, не в позе
+  (28 суставов, эталон char-test не трогать).
+- actors.js: a.phone; a.fp = rig (1-е лицо → кисть с телефоном у камеры). phone.js: handFor(открыт, путь, звонок) → что в руке (camera →
+  photo, game → play, разговор 1 на 1 → call и с закрытым экраном; компания/голосовой — без телефона). hooks.hand(s) → true, если
+  показывает человечком: экран выезжает через 0,33 с (.ph-rise), закрыли — сначала экран, через 0,19 с персонаж убирает; события
+  d37:hand (phone.js), d37:callstate (calls.js). Мини-игра «🐤 Птичка» (phone-apps.js, путь game). Телефон открыт в мире/студии — можно
+  только идти (controls.js C.walk). Версия приложений телефона VER '2' (phone.js).
+- Сеть: мир — поле ph (1…4) в 'st' (при смене; нет поля — 0) и 6-й элемент snap; presence не трогаем. Студия — net.js: телефон в
+  старших битах байта паркура (pk | phone<<4) → «расширенная» часть снимка. Плоский мир (world.js) — сообщение 'ph' {s}, 📱/📞 у ника.
+- Жители (npc.js, obj.phone; в мире — все FOLK): по расписанию от seed смотрят, говорят, играют; подошёл игрок — убирают
+  (E.npcs.phoneAt). 2D-спрайты: анимации phone и call (char2d VER 2).
+- Ограничения: у чиби короткие руки — у «малыша» (рост 0 + голова 4) телефон на щеке; фото — у груди, не у глаз; со спины телефон
+  закрывает голова. Тесты: char-test (5274, в т. ч. --alloc-phone ≤ 32 байт), sprite-test, engine-test, net-test, community-test.
+
 ## Push-уведомления (новое видео / начало стрима, даже при закрытом сайте)
 - Клиент: `js/features/push-pwa.js` (`togglePush`, `syncPush`) — `pushManager.subscribe` с ключом из
   `GET /api/push-check?pubkey=1`, сохранение через RPC `push_subscribe` / `push_unsubscribe` (обычный fetch, без SDK).

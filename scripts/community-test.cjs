@@ -172,6 +172,16 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(P.keyName('Backquote') === 'Ё' && P.keyName('KeyV') === 'V' && P.keyName('ShiftLeft') === 'Shift' && P.keyName('Digit5') === '5', 'названия клавиш рации');
   ok(P.openSettings() === true && setOpened?.tab === 'phone', '⚙️ в телефоне открывает окно настроек на вкладке «📱 Телефон»');
 
+  // ═══ 12. Телефон в руке персонажа (как в ГТА): что держит — по экрану и звонку ═══
+  const H = P.handFor, live = { kind: 'call', state: 'live' };
+  ok(H(false, '', null) === '' && H(true, '', null) === 'use' && H(true, 'msgs/x', null) === 'use', 'закрыт — убран, открыт — смотрит в экран');
+  ok(H(true, 'camera', null) === 'photo' && H(true, 'game', null) === 'play', 'камера — снимает, «Птичка» — играет боком');
+  ok(H(true, 'incall', live) === 'call' && H(false, 'incall', live) === 'call' && H(false, '', { kind: 'call', state: 'out' }) === 'call', 'разговор 1 на 1 — у уха, и с закрытым экраном');
+  ok(H(true, 'incall', { kind: 'call', state: 'in' }) === 'use' && H(false, '', { kind: 'call', state: 'ended' }) === '', 'звонят — смотрит, кто; положил — убирает');
+  ok(H(false, '', { kind: 'party', state: 'live' }) === '' && H(false, '', { kind: 'voice', state: 'live' }) === '', 'компания и голосовой канал — без телефона у уха (как наушники)');
+  ok(H(true, 'calls', live) === 'use', 'во время разговора смотрит другое приложение — в руке перед собой');
+  ok(P._test.APPS.some(a => a.id === 'game' && a.mod === 'apps'), 'в телефоне есть мини-игра');
+
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);
   process.exitCode = fail ? 1 : 0;

@@ -344,6 +344,14 @@ function linkStats(sim, a, b){
   const ww = new NT.W(); NT.writeChar(ww, c); const cb = NT.readChar(new NT.R(ww.out()));
   ok(ww.n <= 30 && cb.slot === 3 && cb.t === 123456789 && cb.tp === 7 && Math.abs(cb.x - c.x) <= .005 && Math.abs(cb.z - c.z) <= .005 && Math.abs(cb.yaw - (c.yaw + Math.PI * 2)) < .001 && cb.air && cb.moving && cb.pk === 'mantle' && Math.abs(cb.roll - .25) < .01 && Math.abs(cb.vx - 8.17) < .006, 'персонаж: снимок ≤ 30 байт, туда-обратно', ww.n);
   const w2 = new NT.W(); NT.writeChar(w2, { slot: 1, t: 5, tp: 0, on: 0, x: 1, y: 0, z: 1, yaw: 0, vx: 0, vy: 0, vz: 0, speed: 0, crouch: 0, roll: -1, seatY: null }); ok(w2.n <= 22, 'стоящий персонаж ≤ 22 байт', w2.n);
+  // телефон 📱 (0…4): в старших битах байта паркура — туда-обратно, вместе с паркуром, мусор не проходит
+  for (const ph of [1, 2, 3, 4]) {
+    const w3 = new NT.W(); NT.writeChar(w3, { slot: 2, t: 9, tp: 0, on: 0, x: 1, y: 0, z: 1, yaw: 0, vx: 0, vy: 0, vz: 0, speed: 0, crouch: 0, roll: -1, seatY: null, phone: ph });
+    const r3 = NT.readChar(new NT.R(w3.out()));
+    ok(r3.phone === ph && r3.pk === '' && r3.roll === -1 && r3.seatY === null && w3.n <= 27, 'телефон в снимке: туда-обратно, стоящий с телефоном ≤ 27 байт', ph + ' ' + w3.n);
+  }
+  { const w4 = new NT.W(); NT.writeChar(w4, Object.assign({}, c, { phone: 2 })); const r4 = NT.readChar(new NT.R(w4.out())); ok(r4.phone === 2 && r4.pk === 'mantle' && Math.abs(r4.roll - .25) < .01 && w4.n === ww.n, 'телефон и паркур вместе, размер прежний', w4.n); }
+  { const w5 = new NT.W(); NT.writeChar(w5, Object.assign({}, c, { phone: 9 })); ok(NT.readChar(new NT.R(w5.out())).phone === 0 && cb.phone === 0, 'странный телефон — «нет», без телефона — 0'); }
 }
 
 // ═══ 1. Основной: напрямую RTT 150 ± 30 мс, 3 % потерь, 3 % перестановок; B — через Supabase (5 пакетов/с);
