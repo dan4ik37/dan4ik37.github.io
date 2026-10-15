@@ -699,6 +699,8 @@ js/features/games.js и хвост css/premium.css.
   (`MirPlay.adStage()`). Размер окна — от inset, не height: AdSense ставит предкам `height:auto!important`.
 - Не открылось (world/studio/studio3d/unity, ссылки, ошибка загрузки) — по-старому на страницу игры, в шапке «↩ В мир»
   (sessionStorage d37_from_world).
+- Телефон 📱 во время партии: клавиша P — игре (hotkey мира выключен, пока окно открыто), телефон — кнопкой 📱 в шапке окна;
+  Esc — сначала телефону и окну ⚙️, потом окну партии.
 - Presence Supabase: НЕ БОЛЬШЕ 5 track/untrack за 30 с на клиента — иначе сервер закрывает канал («Client presence rate limit
   exceeded», мир молча оставался без связи). В mir.js `retrack` — не чаще 4 раз за 31 с (`presGate`), лишнее — одним свежим
   состоянием; канал закрыли — переподключение. Это же правило — для любых новых presence-каналов.
