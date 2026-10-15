@@ -14,7 +14,7 @@
 //  • Значок на иконке (setAppBadge): непрочитанные ЛС + пропущенные звонки + 🔔 — по событиям d37:dm-unread, d37:notif,
 //    d37:badges (phone.js), d37:callstate; своих опросов нет. Выключить — ⚙️ Настройки → Сайт.
 //  • Запуск: «Поделиться» из других приложений (share_target → ?share_title / share_text / share_url → общий чат или другу),
-//    ссылки web+dan4ik37:… (?proto=), ярлыки и ссылки в уже открытом окне (launch_handler focus-existing → launchQueue).
+//    ссылки web+denchik:… (?proto=), ярлыки и ссылки в уже открытом окне (launch_handler focus-existing → launchQueue).
 //  • Обновления: новая версия sw.js ждёт → «✨ Доступна новая версия — Обновить» (SKIP_WAITING → перезагрузка). Игры без
 //    интернета: установленному приложению файлы игр OFFLINE_GAMES уходят в кэш sw.js — один раз на GAMES_VER.
 //  • Сборка для Google Play (TWA, ?app=play): html.app-play — покупки скрыты (правила Play о цифровых товарах), docs/APPS.md.
@@ -122,12 +122,12 @@
     return parts.join('\n').slice(0, 1000);
   }
 
-  // ═══ Ссылки web+dan4ik37:<путь> → адрес на сайте (только свои разделы; что не узнали — главная) ═══
+  // ═══ Ссылки web+denchik:<путь> → адрес на сайте (только свои разделы; что не узнали — главная) ═══
   const HASH_ROOTS = /^(chat|games|phone|profile|forum|shop|home|ideas|lfg|shorts|donate)$/;
   function protoTarget(raw){
     let s = String(raw || '');
     try { s = decodeURIComponent(s); } catch (e) {}
-    s = s.trim().replace(/^web\+dan4ik37:/i, '').replace(/^\/+/, '').split(/[?#]/)[0].replace(/\/+$/, '');
+    s = s.trim().replace(/^web\+(?:denchik|dan4ik37):/i, '').replace(/^\/+/, '').split(/[?#]/)[0].replace(/\/+$/, '');
     let m;
     if ((m = /^c\/([a-z0-9]{4,16})$/i.exec(s))) return '/#/chat/join/' + m[1].toLowerCase();
     if ((m = /^g\/([A-Za-z0-9]{4,16})$/.exec(s))) return '/g/' + m[1];
@@ -139,7 +139,7 @@
     return '/#/home';
   }
 
-  // ═══ Адрес запуска (ярлык, «Поделиться», web+dan4ik37:, ссылка в уже открытом окне) → что сделать ═══
+  // ═══ Адрес запуска (ярлык, «Поделиться», web+denchik:, ссылка в уже открытом окне) → что сделать ═══
   // → { share: {title, text, url} } | { go: '#/…' } | { open: '/путь' } | { focus: true } (просто показать окно) | null (чужой адрес)
   function launchAction(href, origin){
     let u; try { u = new URL(href, origin || ORIGIN); } catch (e) { return null; }
@@ -407,7 +407,7 @@
     root.addEventListener('popstate', backPop);
   }
 
-  // ═══ Запуск: «Поделиться», web+dan4ik37:, ярлыки ═══
+  // ═══ Запуск: «Поделиться», web+denchik:, ярлыки ═══
   function takeLaunch(){
     const a = launchAction(bootHref, loc().origin);
     let q = null; try { q = new URLSearchParams(loc().search || ''); } catch (e) {}

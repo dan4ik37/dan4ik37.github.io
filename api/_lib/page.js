@@ -25,6 +25,7 @@ ${url ? `<link rel="canonical" href="${esc(url)}">` : ''}
 <meta name="theme-color" content="#ff2d55">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
 ${url ? `<meta property="og:type" content="${esc(ogType)}">
 <meta property="og:site_name" content="dan4ik37">
 <meta property="og:title" content="${esc(title)}">

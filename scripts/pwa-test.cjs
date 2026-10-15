@@ -1,5 +1,5 @@
 // Тесты приложения (PWA) в node, без браузера: js/features/app.js (где открыт сайт и какие шаги показать, разовая карточка,
-// «Поделиться», web+dan4ik37:, адреса запуска, значок на иконке), js/features/app-guide.js (шаги и картинки).
+// «Поделиться», web+denchik:, адреса запуска, значок на иконке), js/features/app-guide.js (шаги и картинки).
 // Запуск из корня сайта: node scripts/pwa-test.cjs
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
@@ -123,26 +123,27 @@ ok(T.shareText({ text: 'a' + String.fromCharCode(0) + 'b' + String.fromCharCode(
 ok(T.shareText({ text: 'я'.repeat(3000) }).length === 1000, 'не длиннее 1000');
 ok(T.shareText({}) === '', 'пусто → пусто');
 
-// ═══ 4. web+dan4ik37: → адрес ═══
-ok(T.protoTarget('web+dan4ik37://c/AbC123') === '/#/chat/join/abc123', 'приглашение в сообщество');
-ok(T.protoTarget(encodeURIComponent('web+dan4ik37://c/abc123')) === '/#/chat/join/abc123', 'закодированная ссылка');
-ok(T.protoTarget('web+dan4ik37:games/chess/k3j9x2') === '/#/games/chess/k3j9x2', 'комната игры');
-ok(T.protoTarget('web+dan4ik37://games/horde/coop/ab12cd') === '/#/games/horde/coop/ab12cd', 'кооп «Орды»');
-ok(T.protoTarget('web+dan4ik37://world') === '/#/games/world', 'мир');
-ok(T.protoTarget('web+dan4ik37://g/Ab12Cd34') === '/g/Ab12Cd34', 'игра игрока');
-ok(T.protoTarget('web+dan4ik37://v/dQw4w9WgXcQ') === '/v/dQw4w9WgXcQ', 'ролик');
-ok(T.protoTarget('web+dan4ik37://call/abcd1234ef') === '/#/phone/call/abcd1234ef', 'звонок');
-ok(T.protoTarget('web+dan4ik37://evil.com/x') === '/#/home', 'чужое — на главную');
-ok(T.protoTarget('web+dan4ik37://games/../../x') === '/#/home', '«..» не пропускаем');
-ok(T.protoTarget('web+dan4ik37://chat/<script>') === '/#/home', 'странные символы — на главную');
-ok(T.protoTarget('web+dan4ik37:javascript:alert(1)') === '/#/home', 'javascript: — на главную');
+// ═══ 4. web+denchik: → адрес ═══
+ok(T.protoTarget('web+denchik://c/AbC123') === '/#/chat/join/abc123', 'приглашение в сообщество');
+ok(T.protoTarget(encodeURIComponent('web+denchik://c/abc123')) === '/#/chat/join/abc123', 'закодированная ссылка');
+ok(T.protoTarget('web+denchik:games/chess/k3j9x2') === '/#/games/chess/k3j9x2', 'комната игры');
+ok(T.protoTarget('web+denchik://games/horde/coop/ab12cd') === '/#/games/horde/coop/ab12cd', 'кооп «Орды»');
+ok(T.protoTarget('web+denchik://world') === '/#/games/world', 'мир');
+ok(T.protoTarget('web+denchik://g/Ab12Cd34') === '/g/Ab12Cd34', 'игра игрока');
+ok(T.protoTarget('web+denchik://v/dQw4w9WgXcQ') === '/v/dQw4w9WgXcQ', 'ролик');
+ok(T.protoTarget('web+denchik://call/abcd1234ef') === '/#/phone/call/abcd1234ef', 'звонок');
+ok(T.protoTarget('web+denchik://evil.com/x') === '/#/home', 'чужое — на главную');
+ok(T.protoTarget('web+denchik://games/../../x') === '/#/home', '«..» не пропускаем');
+ok(T.protoTarget('web+denchik://chat/<script>') === '/#/home', 'странные символы — на главную');
+ok(T.protoTarget('web+denchik:javascript:alert(1)') === '/#/home', 'javascript: — на главную');
+ok(T.protoTarget('web+dan4ik37://c/abc123') === '/#/chat/join/abc123', 'старое написание web+dan4ik37 тоже понимаем');
 
 // ═══ 5. Адрес запуска ═══
 const O = 'https://dan4ik37.vercel.app';
 const la = h => T.launchAction(h, O);
 ok(JSON.stringify(la(O + '/?share_title=T&share_text=Hi&share_url=https%3A%2F%2Fx.ru')) === JSON.stringify({ share: { title: 'T', text: 'Hi', url: 'https://x.ru' } }), '«Поделиться» → share');
-ok(la(O + '/?proto=web%2Bdan4ik37%3A%2F%2Fc%2Fabc123').go === '#/chat/join/abc123', 'web+dan4ik37 → переход');
-ok(la(O + '/?proto=web%2Bdan4ik37%3A%2F%2Fv%2FdQw4w9WgXcQ').open === '/v/dQw4w9WgXcQ', 'web+dan4ik37 → серверная страница');
+ok(la(O + '/?proto=web%2Bdan4ik37%3A%2F%2Fc%2Fabc123').go === '#/chat/join/abc123', 'web+denchik → переход');
+ok(la(O + '/?proto=web%2Bdan4ik37%3A%2F%2Fv%2FdQw4w9WgXcQ').open === '/v/dQw4w9WgXcQ', 'web+denchik → серверная страница');
 ok(la(O + '/#/chat').go === '#/chat', 'ярлык «Чат» → переход в том же окне');
 ok(la(O + '/').focus === true && la(O + '/#/').focus === true, 'значок приложения → просто показать окно');
 ok(la(O + '/games/sudoku').open === '/games/sudoku', 'страница сервера → открыть');
@@ -211,6 +212,93 @@ ok(la('https://evil.example/#/chat') === null, 'чужой адрес — нич
   const seen = new Set(Object.values(UA).map(u => how(u)).concat(how(UA.ipadMac, { platform: 'MacIntel', touch: 5 })));
   ok([...seen].every(h => AG.STEPS[h]), 'все способы из detect() описаны', [...seen].filter(h => !AG.STEPS[h]));
 
+  testManifest();
   console.log(`\npwa-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })();
+
+// ═══ 9. manifest.json: обязательное, значки, снимки, ярлыки, «Поделиться», ссылки web+denchik ═══
+function imgSize(file){
+  const b = fs.readFileSync(path.join(SITE, file.replace(/^\//, '')));
+  if (b.slice(1, 4).toString() === 'PNG') return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  if (b.slice(0, 4).toString() === 'RIFF' && b.slice(8, 12).toString() === 'WEBP') {
+    const kind = b.slice(12, 16).toString();
+    if (kind === 'VP8X') return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
+    if (kind === 'VP8 ') return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+    if (kind === 'VP8L') { const v = b.readUInt32LE(21); return [1 + (v & 0x3fff), 1 + ((v >> 14) & 0x3fff)]; }
+  }
+  return null;
+}
+function testManifest(){
+  let M = null;
+  try { M = JSON.parse(src('manifest.json')); } catch (e) { ok(false, 'manifest.json — правильный JSON', e.message); return; }
+  const hex = c => /^#[0-9a-f]{6}$/i.test(c || '');
+  ok(M.id === '/' && M.start_url === '/' && M.scope === '/', 'id / start_url / scope — «/» (прежние установки — то же приложение)');
+  ok(!!M.name && !!M.short_name && M.short_name.length <= 12, 'name и короткое имя (≤ 12 знаков под значком)', M.short_name);
+  ok(M.lang === 'ru' && hex(M.background_color) && hex(M.theme_color), 'язык и цвета');
+  ok(M.display === 'standalone' && Array.isArray(M.display_override) && M.display_override[0] === 'window-controls-overlay' && M.display_override.includes('standalone'), 'standalone + window-controls-overlay');
+  ok(M.display_override.every(d => ['window-controls-overlay', 'standalone', 'minimal-ui', 'fullscreen', 'browser', 'tabbed'].includes(d)), 'display_override — только известные значения');
+  ok(Array.isArray(M.categories) && M.categories.includes('games'), 'категории');
+  const icons = M.icons || [];
+  const has = (size, purpose) => icons.some(i => i.sizes === size && (i.purpose || 'any').split(' ').includes(purpose));
+  ok(has('192x192', 'any') && has('512x512', 'any'), 'значки any 192 и 512 (нужны для установки)');
+  ok(has('192x192', 'maskable') && has('512x512', 'maskable'), 'маскируемые 192 и 512');
+  ok(has('512x512', 'monochrome'), 'одноцветный значок');
+  ok(!icons.some(i => /any maskable|maskable any/.test(i.purpose || '')), 'без «any maskable» в одном значке');
+  for (const i of icons) {
+    const s = imgSize(i.src);
+    ok(s && `${s[0]}x${s[1]}` === i.sizes, `значок ${i.src}: размер файла = ${i.sizes}`, s);
+  }
+  // снимки: wide — для ПК, narrow — для телефона; в каждой группе один размер; 320…3840, стороны не больше 2,3:1
+  const shots = M.screenshots || [];
+  ok(shots.some(s => s.form_factor === 'wide') && shots.some(s => s.form_factor === 'narrow'), 'снимки для ПК и телефона');
+  for (const ff of ['wide', 'narrow']) ok(new Set(shots.filter(s => s.form_factor === ff).map(s => s.sizes)).size === 1, `снимки ${ff} — одного размера`);
+  for (const s of shots) {
+    const z = imgSize(s.src), [w, h] = (s.sizes || '').split('x').map(Number);
+    ok(z && z[0] === w && z[1] === h, `снимок ${s.src}: файл ${z} = ${s.sizes}`);
+    ok(w >= 320 && h >= 320 && w <= 3840 && h <= 3840 && Math.max(w, h) / Math.min(w, h) <= 2.3, `снимок ${s.src}: размеры в правилах Chrome`);
+    ok(s.form_factor === 'wide' ? w > h : h > w, `снимок ${s.src}: ориентация как form_factor`);
+    ok(!!s.label && s.type === 'image/webp', `снимок ${s.src}: подпись и тип`);
+  }
+  // ярлыки: Мир, Чат, Игры, Слово дня, Магазин — в своей области, значки ≥ 96
+  const sc = M.shortcuts || [];
+  ok(sc.length >= 5 && sc.length <= 10, 'ярлыков 5…10', sc.length);
+  const urls = sc.map(s => s.url);
+  ok(['/#/games/world', '/#/chat', '/#/games', '/#/games/words', '/#/shop'].every(u => urls.includes(u)), 'ярлыки: Мир, Чат, Игры, Слово дня, Магазин', urls);
+  for (const s of sc) {
+    ok(!!s.name && s.url.startsWith('/'), `ярлык «${s.name}»: имя и адрес на сайте`);
+    ok((s.icons || []).some(i => +String(i.sizes).split('x')[0] >= 96) && (s.icons || []).every(i => { const z = imgSize(i.src); return z && `${z[0]}x${z[1]}` === i.sizes; }), `ярлык «${s.name}»: значки ≥ 96 и размеры верны`);
+  }
+  // «Поделиться»: GET на «/» с параметрами, которые понимает app.js (launchAction)
+  const st = M.share_target || {};
+  ok(st.action === '/' && (st.method || 'GET').toUpperCase() === 'GET', 'share_target: GET на главную');
+  const p = st.params || {};
+  ok(p.title === 'share_title' && p.text === 'share_text' && p.url === 'share_url', 'share_target: свои имена параметров (их ждёт app.js)');
+  const T2 = fakeBrowser().W.D37App._test;
+  const shareUrl = 'https://dan4ik37.vercel.app/?' + new URLSearchParams({ [p.title]: 'Т', [p.text]: 'Привет', [p.url]: 'https://x.ru' });
+  ok(!!T2.launchAction(shareUrl, 'https://dan4ik37.vercel.app')?.share, 'адрес «Поделиться» из manifest → окошко «Поделиться» в app.js');
+  // web+denchik:
+  const ph = (M.protocol_handlers || [])[0] || {};
+  ok(/^web\+[a-z]+$/.test(ph.protocol) && ph.protocol === 'web+denchik' && /%s/.test(ph.url) && ph.url.startsWith('/?proto='), 'protocol_handlers: web+denchik → /?proto=%s');
+  ok(T2.launchAction('https://dan4ik37.vercel.app' + ph.url.replace('%s', encodeURIComponent('web+denchik://c/abc123')), 'https://dan4ik37.vercel.app').go === '#/chat/join/abc123', 'web+denchik://c/<код> → приглашение');
+  const lh = M.launch_handler || {};
+  ok([].concat(lh.client_mode)[0] === 'focus-existing', 'launch_handler: focus-existing (ярлык — в уже открытом окне)');
+  ok(M.handle_links === 'preferred', 'handle_links: preferred');
+  ok((M.related_applications || []).some(a => a.platform === 'webapp' && /\/manifest\.json$/.test(a.url)) && M.prefer_related_applications === false, 'related_applications: сам сайт (getInstalledRelatedApps), магазины не навязываем');
+  // подключение на страницах
+  const idx = src('index.html');
+  ok(/<link rel="manifest" href="\/manifest\.json">/.test(idx) && /css\/app\.css/.test(idx) && /js\/features\/app\.js/.test(idx), 'index.html: manifest, app.css, app.js');
+  ok(!/pwaBanner/.test(idx) && !/pwaBanner/.test(src('js/features/push-pwa.js')), 'старой полоски #pwaBanner больше нет');
+  ok(/apple-mobile-web-app-status-bar-style/.test(idx) && /apple-mobile-web-app-title/.test(idx), 'iPhone: строка состояния и подпись значка');
+  ok(/data-app-install data-app-act="install" data-from="profile"/.test(idx), 'кнопка в профиле');
+  ok(/rel="manifest" href="\/manifest\.json"/.test(src('api/_lib/page.js')), 'серверные страницы тоже с manifest (ставится и с /games/<id>)');
+  ok(/d37:badges/.test(src('js/features/phone.js')), 'phone.js шлёт d37:badges (значок на иконке)');
+  ok(/D37App\?\.settingsRow/.test(src('js/core/settings.js')), '⚙️ Настройки → Сайт: строка «Приложение»');
+  // vercel.json: заголовки для manifest, sw.js, assetlinks
+  const V = JSON.parse(src('vercel.json'));
+  const hdr = (s, k) => (V.headers.find(h => h.source === s)?.headers || []).find(h => h.key.toLowerCase() === k.toLowerCase())?.value;
+  ok(/manifest\+json/.test(hdr('/manifest.json', 'Content-Type') || ''), 'vercel.json: manifest — application/manifest+json');
+  ok(hdr('/sw.js', 'Cache-Control') === 'no-cache', 'vercel.json: sw.js — no-cache');
+  ok(hdr('/.well-known/assetlinks.json', 'Content-Type') === 'application/json', 'vercel.json: assetlinks.json — application/json');
+  ok(Object.keys(V.functions || {}).length <= 12 && fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'функций Vercel не больше 12');
+}
