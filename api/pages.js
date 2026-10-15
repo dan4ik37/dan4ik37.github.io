@@ -22,9 +22,10 @@ import ugc from './_lib/routes/ugc.js';
 import shop from './_lib/routes/shop.js';
 import legal from './_lib/routes/legal.js';
 import invite from './_lib/routes/invite.js';
+import adgo, { geo } from './_lib/routes/adgo.js';   // реклама за 💎: переход /go/<id> и страна /api/geo
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal, invite };
+  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo };
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];
