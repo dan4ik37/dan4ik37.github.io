@@ -1788,6 +1788,20 @@ body.low .ct-city{animation:none}
 .sb-cell.sunk{background:#b91c1c}
 .sb-cell.aim{background:rgba(255,209,102,.5)}
 .sb-cell.last{box-shadow:inset 0 0 0 2px #ffd166}
+/* расстановка руками (sea.js): «рука» с кораблями, призрак под мышью, нельзя — красным */
+#sMine .sb-cell:not(:disabled){cursor:pointer}
+.sb-cell.ghost{background:rgba(34,197,94,.45)}
+.sb-cell.ghost.no,.sb-cell.bad{background:rgba(239,68,68,.55)}
+.sb-cell.bad{animation:unNo .26s ease-in-out}
+.sb-hand{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.35rem .7rem;min-height:2.2rem;margin-bottom:.5rem;font-size:.76rem;color:var(--muted)}
+.sb-hand b{color:var(--text)}
+.sb-hand-ok{color:#86efac;font-weight:700}
+.sb-ship{display:inline-flex;align-items:center;gap:2px;padding:.2rem .35rem;border-radius:8px;border:1px solid transparent}
+.sb-ship i{width:12px;height:12px;border-radius:2px;background:#64748b}
+.sb-ship em{font-style:normal;font-weight:800;margin-left:.25rem;color:var(--text)}
+.sb-ship.next{border-color:#22c55e;background:rgba(34,197,94,.12)}
+.sb-ship.next i{background:#22c55e}
+.sb-edit button:disabled,#sGo:disabled{opacity:.4;cursor:default}
 /* Змейка */
 .sn{max-width:420px;margin:0 auto}
 .sn-wrap{position:relative;touch-action:none}

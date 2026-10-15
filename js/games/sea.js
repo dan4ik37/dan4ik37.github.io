@@ -41,6 +41,34 @@
     throw new Error('fleet');
   }
 
+  // ── Расстановка руками (чистые функции — проверяются в node) ──
+  // Корабль: { r, c, len, hor } — нос в (r, c), дальше вправо (hor) или вниз
+  const shipCells = s => Array.from({ length: s.len }, (_, i) => s.hor ? [s.r, s.c + i] : [s.r + i, s.c]);
+  // Влезает ли корабль и не касается ли других (даже углами); list — уже поставленные
+  function canPlace(list, s){
+    const sc = shipCells(s);
+    if (!sc.every(([y, x]) => inside(y, x))) return false;
+    const busy = new Set(list.flatMap(o => shipCells(o).map(([y, x]) => y * N + x)));
+    return sc.every(([y, x]) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (busy.has((y + dy) * N + x + dx) && inside(y + dy, x + dx)) return false; return true; });
+  }
+  // Нажали клетку: нос корабля — там, у края сдвигаем внутрь
+  const fitAt = (r, c, len, hor) => ({ r: hor ? r : Math.min(r, N - len), c: hor ? Math.min(c, N - len) : c, len, hor });
+  // Какой корабль ставим следующим: самый большой из ещё не поставленных (null — все на месте)
+  function nextLen(list){
+    const need = LENS.slice();
+    for (const s of list) { const i = need.indexOf(s.len); if (i >= 0) need.splice(i, 1); }
+    return need.length ? need[0] : null;
+  }
+  const shipAt = (list, r, c) => list.findIndex(s => shipCells(s).some(([y, x]) => y === r && x === c));
+  // Флот для боя из списка кораблей (тот же вид, что у makeFleet)
+  function fleetOf(list){
+    const cells = grid(-1), ships = [];
+    list.forEach((s, i) => { const sc = shipCells(s); sc.forEach(([y, x]) => { cells[y][x] = i; }); ships.push({ cells: sc, hits: 0 }); });
+    return { cells, ships, left: list.reduce((n, s) => n + s.len, 0) };
+  }
+  // Случайный флот → список кораблей (чтобы потом двигать руками)
+  const listOf = fleet => fleet.ships.map(s => ({ r: s.cells[0][0], c: s.cells[0][1], len: s.cells.length, hor: s.cells.length > 1 && s.cells[1][0] === s.cells[0][0] }));
+
   // Выстрел по своему флоту → { res: 'miss'|'hit'|'sunk', ship?: [[r,c]...], over? }
   function fire(fleet, r, c){
     const i = fleet.cells[r][c];
@@ -170,34 +198,118 @@
     if (id === 'sEnemy') el.disabled = v !== 0;
   }
 
-  // Расстановка: случайная, можно перемешать
+  // Расстановка: сначала случайная — можно сразу в бой. Корабли можно переставить: нажал корабль — он «в руке»,
+  // нажал свободную клетку — ставится самый большой из руки (нос в этой клетке, у края — сдвиг внутрь). «🔄» — вдоль/поперёк,
+  // «↩ Убрать последний», «🗑 Очистить» (все в руку — расставить самому), «🔀 Случайно». В бой — когда в руке пусто.
   function place(level, online){
-    G = { level, online: online || null, fleet: makeFleet(), inc: grid(0), shots: grid(0), enemy: null, turn: null, over: false, myShots: 0, sunkLens: [], botSunk: [], ready: false };
+    const list = listOf(makeFleet());
+    G = { level, online: online || null, list, hor: true, fleet: fleetOf(list), inc: grid(0), shots: grid(0), enemy: null, turn: null, over: false, myShots: 0, sunkLens: [], botSunk: [], ready: false };
     root.innerHTML = `<div class="sb">
         <div class="ct-top"><span class="ct-badge">${online ? '👥 против ' + esc(R?.opp?.nick || 'соперника') : LEVELS[level]}</span><span class="ct-status" id="sStatus">Расставь флот</span></div>
+        <div class="sb-hand" id="sHand"></div>
         <div class="sb-boards">${boardHtml('sMine', 'Твой флот')}</div>
+        <div class="ct-actions sb-edit" id="sEdit">
+          <button data-s="rot" id="sRot"></button><button data-s="undo">↩ Убрать последний</button><button data-s="clear">🗑 Очистить</button><button data-s="rand">🔀 Случайно</button>
+        </div>
         <div class="ct-actions" id="sActions">
-          <button id="sShuffle">🔀 Перемешать</button>
           <button class="ct-start" id="sGo">⚓ В бой!</button>
           ${online ? '' : '<button id="sSetup">⚙ Соперник</button>'}
         </div>
       </div>`;
-    paintOwn();
-    root.querySelector('#sShuffle').onclick = () => { G.fleet = makeFleet(); paintOwn(); api.sfx('move'); };
+    root.querySelector('#sEdit').onclick = e => { const b = e.target.closest('[data-s]'); if (b) editAct(b.dataset.s); };
+    const mine = root.querySelector('#sMine');
+    mine.onclick = e => { const c = e.target.closest('.sb-cell'); if (c) editCell(+c.dataset.r, +c.dataset.c); };
+    mine.onpointermove = e => { if (e.pointerType !== 'mouse') return; const c = e.target.closest('.sb-cell'); ghost(c ? [+c.dataset.r, +c.dataset.c] : null); };
+    mine.onpointerleave = () => ghost(null);
     root.querySelector('#sSetup')?.addEventListener('click', renderSetup);
-    root.querySelector('#sGo').onclick = () => online ? onlineReady() : battle();
+    root.querySelector('#sGo').onclick = () => { if (nextLen(G.list) != null) return; G.fleet = fleetOf(G.list); online ? onlineReady() : battle(); };
+    paintSetup();
+  }
+  // Свой флот при расстановке: корабли, «рука», кнопки
+  function paintSetup(msg){
+    if (!G || G.ready) return;
+    G.fleet = fleetOf(G.list);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const el = cellEl('sMine', r, c);
+      el.className = 'sb-cell' + (G.fleet.cells[r][c] >= 0 ? ' ship' : '');
+      el.disabled = false;
+    }
+    const nl = nextLen(G.list), left = LENS.length - G.list.length;
+    // в руке: сколько каких кораблей ещё не поставлено (следующий — подсвечен)
+    const need = {};
+    for (const l of LENS) need[l] = (need[l] || 0) + 1;
+    for (const s of G.list) need[s.len]--;
+    const hand = Object.keys(need).map(Number).sort((a, b) => b - a).filter(l => need[l] > 0)
+      .map(l => `<span class="sb-ship${l === nl ? ' next' : ''}" title="${l}-палубный">${'<i></i>'.repeat(l)}<em>×${need[l]}</em></span>`).join('');
+    root.querySelector('#sHand').innerHTML = nl == null ? '<span class="sb-hand-ok">✅ Флот на месте. Нажми корабль, чтобы переставить</span>'
+      : `<span>В руке: <b>${left}</b></span>${hand}`;
+    root.querySelector('#sRot').textContent = G.hor ? '🔄 Вдоль ↔' : '🔄 Поперёк ↕';
+    root.querySelector('#sEdit [data-s="undo"]').disabled = !G.list.length;
+    root.querySelector('#sEdit [data-s="clear"]').disabled = !G.list.length;
+    root.querySelector('#sGo').disabled = nl != null;
+    status(msg || (nl == null ? 'Флот готов — «⚓ В бой!»' : `Нажми клетку — поставлю ${nl}-палубный (нос в клетке)`));
+  }
+  function editAct(a){
+    if (!G || G.ready) return;
+    if (a === 'rot') G.hor = !G.hor;
+    else if (a === 'undo') G.list.pop();
+    else if (a === 'clear') G.list = [];
+    else if (a === 'rand') G.list = listOf(makeFleet());
+    api.sfx('move');
+    paintSetup();
+  }
+  function editCell(r, c){
+    if (!G || G.ready) return;
+    const i = shipAt(G.list, r, c);
+    if (i >= 0) {   // нажал корабль — он снова «в руке», ставить так же, как стоял
+      const s = G.list.splice(i, 1)[0];
+      if (s.len > 1) G.hor = s.hor;
+      api.sfx('tick');
+      paintSetup(`Корабль снят (${s.len}-палубный). Нажми клетку, куда поставить`);
+      return;
+    }
+    const len = nextLen(G.list);
+    if (len == null) { paintSetup('Все корабли на месте. Нажми корабль, чтобы переставить'); return; }
+    const s = fitAt(r, c, len, G.hor);
+    if (!canPlace(G.list, s)) {
+      api.sfx('bad');
+      paintSetup('Сюда нельзя: корабли не касаются друг друга даже углами');
+      shipCells(s).forEach(([y, x]) => { if (inside(y, x)) cellEl('sMine', y, x)?.classList.add('bad'); });
+      return;
+    }
+    G.list.push(s);
+    api.sfx('move');
+    paintSetup();
+  }
+  // Мышью: куда встанет корабль (зелёный — можно, красный — нельзя)
+  function ghost(at){
+    if (!G || G.ready) return;
+    root.querySelectorAll('#sMine .sb-cell.ghost').forEach(el => el.classList.remove('ghost', 'no'));
+    const len = nextLen(G.list);
+    if (!at || len == null || shipAt(G.list, at[0], at[1]) >= 0) return;
+    const s = fitAt(at[0], at[1], len, G.hor), okk = canPlace(G.list, s);
+    shipCells(s).forEach(([y, x]) => { const el = cellEl('sMine', y, x); if (el) { el.classList.add('ghost'); if (!okk) el.classList.add('no'); } });
   }
 
   function battle(){
     G.ready = true;
+    root.querySelector('#sHand')?.remove(); root.querySelector('#sEdit')?.remove();
+    const mine = root.querySelector('#sMine');
+    if (mine) { mine.onclick = null; mine.onpointermove = null; }
     const boards = root.querySelector('.sb-boards');
     boards.insertAdjacentHTML('beforeend', boardHtml('sEnemy', G.online ? 'Флот ' + esc(R?.opp?.nick || 'соперника') : 'Флот бота'));
     paintOwn();
     root.querySelectorAll('#sEnemy .sb-cell').forEach(el => el.onclick = () => shoot(+el.dataset.r, +el.dataset.c));
     const acts = root.querySelector('#sActions');
     acts.innerHTML = G.online ? '' : '<button id="sAgain">↻ Заново</button><button id="sSetup">⚙ Соперник</button>';
-    acts.querySelector('#sAgain')?.addEventListener('click', () => place(G.level));
-    acts.querySelector('#sSetup')?.addEventListener('click', renderSetup);
+    // посреди боя — не потерять партию от случайного нажатия
+    const sure = async (title, yes) => {
+      const g0 = G;
+      if (!G.over && G.myShots > 0 && window.GameKit && !await GameKit.ask({ icon: '⚓', title, text: 'Бой не закончен — эта партия пропадёт.', yes, no: 'Играть дальше' })) return false;
+      return G === g0;
+    };
+    acts.querySelector('#sAgain')?.addEventListener('click', async () => { if (await sure('Начать заново?', '↻ Заново')) { G.over = true; timers.forEach(clearTimeout); timers = []; place(G.level); } });
+    acts.querySelector('#sSetup')?.addEventListener('click', async () => { if (await sure('Сменить соперника?', '⚙ Сменить')) { G.over = true; timers.forEach(clearTimeout); timers = []; renderSetup(); } });
     if (!G.online) {
       G.enemy = makeFleet();
       G.turn = 'me';
@@ -377,6 +489,6 @@
       if (GameRoom.validCode(gameApi.param)) online(gameApi.param); else renderSetup();
     },
     unmount(){ timers.forEach(clearTimeout); timers = []; if (G) G.over = true; R?.leave(); R = null; root = null; },
-    _test: { makeFleet, fire, mark, botPick, N, TOTAL },
+    _test: { makeFleet, fire, mark, botPick, N, TOTAL, LENS, canPlace, fitAt, nextLen, shipAt, shipCells, fleetOf, listOf },
   };
 })();

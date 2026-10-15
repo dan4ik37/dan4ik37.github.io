@@ -333,5 +333,46 @@ if (want('checkers')) {
   ok(ended === 60, 'checkers: 60 случайных партий кончаются', ended);
 }
 
+// ═══ «Морской бой»: расстановка руками ═══
+if (want('sea')) {
+  const T = load('js/games/sea.js').GAME_IMPL.sea._test;
+  const N = T.N;
+  // случайный флот → список → флот: те же клетки, правила соблюдены
+  let okAll = true;
+  for (let g = 0; g < 300; g++) {
+    const f = T.makeFleet(rng(g)), list = T.listOf(f), f2 = T.fleetOf(list);
+    const cnt = f2.cells.flat().filter(x => x >= 0).length;
+    const same = f.cells.every((row, r) => row.every((v, c) => (v >= 0) === (f2.cells[r][c] >= 0)));
+    const valid = list.every((s, i) => T.canPlace(list.filter((_, j) => j !== i), s));
+    if (!same || cnt !== T.TOTAL || f2.left !== T.TOTAL || !valid || T.nextLen(list) !== null) { okAll = false; break; }
+  }
+  ok(okAll, 'sea: случайный флот → список кораблей → тот же флот, правила соблюдены');
+  // ставим руками: от большого к маленькому
+  const list = [];
+  ok(T.nextLen(list) === 4, 'sea: первым ставим 4-палубный');
+  const s1 = T.fitAt(0, 8, 4, true);
+  ok(eq(s1, { r: 0, c: 6, len: 4, hor: true }), 'sea: у края корабль сдвигается внутрь', s1);
+  ok(T.canPlace(list, s1), 'sea: на пустое поле — можно');
+  list.push(s1);
+  ok(T.nextLen(list) === 3, 'sea: дальше 3-палубный');
+  ok(!T.canPlace(list, T.fitAt(1, 5, 3, false)), 'sea: касается углом — нельзя');
+  ok(!T.canPlace(list, T.fitAt(1, 7, 3, false)), 'sea: касается бортом — нельзя');
+  ok(T.canPlace(list, T.fitAt(2, 6, 3, true)), 'sea: через клетку — можно');
+  ok(T.shipAt(list, 0, 7) === 0 && T.shipAt(list, 5, 5) === -1, 'sea: корабль под пальцем находится');
+  const vert = T.fitAt(9, 0, 3, false);
+  ok(eq(vert, { r: 7, c: 0, len: 3, hor: false }) && eq(T.shipCells(vert), [[7, 0], [8, 0], [9, 0]]), 'sea: поперёк у нижнего края — сдвиг вверх');
+  // полный флот руками жадно по клеткам: всегда получается, бой с ботом идёт
+  let built = 0;
+  for (let g = 0; g < 50; g++) {
+    const L = [], rand = rng(900 + g);
+    for (let k = 0; k < 2000 && T.nextLen(L) !== null; k++) {
+      const s = T.fitAt(Math.floor(rand() * N), Math.floor(rand() * N), T.nextLen(L), rand() < .5);
+      if (T.canPlace(L, s)) L.push(s);
+    }
+    if (T.nextLen(L) === null && T.fleetOf(L).left === T.TOTAL) built++;
+  }
+  ok(built >= 45, 'sea: флот руками собирается', built);
+}
+
 console.log(`games-test: ${pass} ok, ${fail} fail (${((Date.now() - t0) / 1000).toFixed(1)} с)`);
 process.exit(fail ? 1 : 0);
