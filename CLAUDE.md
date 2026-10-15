@@ -410,6 +410,26 @@ js/features/games.js и хвост css/premium.css.
 - Ограничения: у чиби короткие руки — у «малыша» (рост 0 + голова 4) телефон на щеке; фото — у груди, не у глаз; со спины телефон
   закрывает голова. Тесты: char-test (5274, в т. ч. --alloc-phone ≤ 32 байт), sprite-test, engine-test, net-test, community-test.
 
+## Приложение (PWA) на ПК и телефонах — js/features/app.js, sw.js, docs/APPS.md (агент 15.10.2026)
+- Владелец: «полноценные приложения на ПК и другие устройства… но реклама же будет?» — сайт ставится как программа (PWA): реклама
+  AdSense/РСЯ работает (это веб-страница). Electron/Tauri — НЕЛЬЗЯ: AdSense запрещает код «в программах». Таблица рекламы по
+  платформам, Google Play / RuStore (TWA) / Microsoft Store (MSIX) / iOS — docs/APPS.md (аккаунты заводит владелец).
+- app.js (D37App): кнопка браузера (beforeinstallprompt), «📲 Установить приложение» в «Ещё» (в ☰ — плитка), в профиле
+  ([data-app-install]) и в ⚙️ Настройки → Сайт; разовая карточка с 3-го захода (не вместе с окошком возраста, не поверх игры/окон/
+  звонка, ≤ 2 показов); окно «Как установить» с SVG-картинками — app-guide.js (поменял — VER в app.js); #/app — сразу оно (ссылка
+  для соцсетей). В окне приложения: html.app-standalone (+ app-wco, app-ios/android/desktop), «⟳ Обновить» в меню, «Назад» на
+  Android закрывает окна сайта, на ПК шапка — заголовок окна (window-controls-overlay), в тесном окне лишние пункты шапки уезжают в
+  «Ещё». Значок на иконке = ЛС + пропущенные звонки + 🔔 (d37:dm-unread, d37:notif, d37:badges из phone.js). «Поделиться»
+  (share_target) → общий чат или ЛС; ссылки web+denchik: (с цифрами по правилам HTML нельзя); launch_handler focus-existing.
+  ?app=play|rustore|ms → D37App.source(); app-play прячет покупки (правила Play Billing).
+- sw.js: поменял — подними VERSION (у всех «✨ Доступна новая версия — Обновить»). Кэши только свои: d37-shell-<VERSION> и d37-rt-v1
+  (раньше старый sw.js стирал ВСЕ кэши, в т. ч. 38 МБ кэша сборки Rust). НИКОГДА не кэширует: /api/*, /go/*, /studio/*, Supabase,
+  рекламу, Метрику, YouTube, Twitch. Главная и скрипты без ?v= — сначала сеть. Офлайн-игры — OFFLINE_GAMES в app.js = список в
+  offline.html (тест сверяет). Значки — python -X utf8 scripts/make-app-icons.py; снимки — node scripts/app-shots.cjs. Тесты: node
+  scripts/pwa-test.cjs (254) и node scripts/pwa-e2e.cjs (настоящий Chrome). Магазины: .well-known/assetlinks.json (ЗАМЕНИТЬ-1/2/3 —
+  отпечатки ключей), apps/android/{play,rustore}/twa-manifest.json; ключи подписи и .apk/.aab/.msix — НЕ в репозиторий.
+  На проде в обычном Chrome ещё проверить: установку, заголовок окна, значок, «Поделиться» на Android, push на iPhone, «Обновить».
+
 ## Push-уведомления (новое видео / начало стрима, даже при закрытом сайте)
 - Клиент: `js/features/push-pwa.js` (`togglePush`, `syncPush`) — `pushManager.subscribe` с ключом из
   `GET /api/push-check?pubkey=1`, сохранение через RPC `push_subscribe` / `push_unsubscribe` (обычный fetch, без SDK).
