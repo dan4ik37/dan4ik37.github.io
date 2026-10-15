@@ -19,7 +19,10 @@
 // переход игры внутри окна полный экран не сбрасывает (popstate такого перехода до D37Full не доходит). Esc: после партии —
 // в мир; во время партии — игре (меню мира не открывается: мир на паузе). Реклама (js/core/ad-places.js): пока партия —
 // D37AdPlaces.ctx('playing'); после партии gamesAdAfterRound (games.js) кладёт рекламу / «☕ Перерыв» в полоску итога
-// (MirPlay.adStage), а не под мир — показ только между партиями. Тесты: node scripts/mirplay-test.cjs.
+// (MirPlay.adStage), а не под мир — показ только между партиями. Телефон 📱 (js/features/phone.js): кнопка в шапке окна, его
+// слой выше; открыт — Esc его (наш Esc молчит); клавиша P во время партии — игре (mir.js: hotkey мира выключен, пока играешь);
+// друзьям — «играет в …» и куда прийти (phoneAct → D37Phone.setActivity, после каждого mount; закрыли — null).
+// Тесты: node scripts/mirplay-test.cjs.
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const NO = new Set(['world', 'studio', 'studio3d', 'unity', 'wardrobe']);   // поверх мира не открываются
@@ -76,6 +79,7 @@ html.mir-playing:not(.gs-full) #games-page{z-index:9000!important;transform:none
 .mp-head b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-display,Oswald,sans-serif);letter-spacing:1px;font-size:1.08rem;color:var(--text,#f0f0f8)}
 .mp-head button{flex:none;min-height:38px;min-width:38px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--text,#f0f0f8);border-radius:10px;padding:.4rem .7rem;font:700 .76rem Montserrat,system-ui,sans-serif;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:.3rem}
 .mp-head .gs-fullbtn.on{border-color:#4ade80}
+.mp-head .mp-phone{position:relative}
 .mp-head .mp-back{border-color:rgba(34,197,94,.6);background:rgba(34,197,94,.16)}
 .mp-head button:hover{border-color:#4ade80}
 .mp-where{flex:none;font-size:.7rem;color:var(--muted,#8d8daa);white-space:nowrap}
@@ -121,6 +125,13 @@ body:not(.high) .mp-panel{animation:none}
     // ⚙️ настройки и ⛶ / 🔄 полный экран — свои обработчики у settings.js / fullscreen.js (по data-атрибутам); во весь экран
     // уходит #gamesStage — окно внутри него
     if (root.D37Settings) { const b = el('button', 'gs-setbtn'); b.type = 'button'; b.setAttribute('data-gs-set', ''); b.title = 'Настройки: звук, графика, управление'; b.setAttribute('aria-label', 'Настройки'); b.textContent = '⚙️'; head.appendChild(b); }
+    // 📱 телефон (js/features/phone.js) — его слой выше окна; клавиша P во время партии — игре, поэтому кнопкой
+    if (root.D37Phone?.toggle) {
+      const b = el('button', 'mp-phone', '📱<em class="ph-bdg" data-ph-badge="total" hidden></em>'); b.type = 'button'; b.title = 'Телефон: друзья, звонки, сообщения'; b.setAttribute('aria-label', 'Телефон');
+      b.addEventListener('click', ev => { ev.stopPropagation(); root.D37Phone.toggle(); });
+      head.appendChild(b);
+      try { root.D37Phone.renderBadges?.(); } catch (e) {}
+    }
     head.appendChild(snd);
     const F = root.D37Full;
     if (F?.btn && s.o.wrap?.closest?.('#gamesStage')) head.insertAdjacentHTML('beforeend', F.rotBtn('#gamesStage') + F.btn('#gamesStage', { esc: false, cls: 'gs-fullbtn' }));
@@ -340,6 +351,7 @@ body:not(.high) .mp-panel{animation:none}
   // (меню мира по Esc не откроется: мир на паузе)
   function onKey(e){
     const s = cur; if (!s) return;
+    if (root.D37Settings?.isOpen?.() || root.D37Phone?.isOpen?.()) return;   // поверх — окно ⚙️ или телефон 📱: Esc у них
     if (e.key === 'Escape' && s.phase === 'ended' && !typing(e.target)) { e.preventDefault(); e.stopPropagation(); close('back'); return; }
     if (s.phase !== 'ended' || ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape'].includes(e.key)) return;
     resume(s);

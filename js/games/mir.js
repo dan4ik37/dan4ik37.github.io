@@ -1419,7 +1419,7 @@
     const c = /^[a-z0-9]{4,12}$/.test(param || '') ? param : null;
     st.playing = { g, c, tb: o.tb || null, t: Date.now() };
     playPause(true);
-    retrack();
+    retrack();   // друзьям «играет в …» (телефон 📱) сообщает само окно — mir-play.js phoneAct
     MP.open(g, param || null, {
       wrap: st.wrap, auto: o.auto || null,
       where: o.tb ? '🌍 Мир Денчика · за столом' : '🌍 Мир Денчика',
@@ -1440,7 +1440,7 @@
       if (st.AU?.volume) { st.vol0 = st.AU.vol; st.AU.volume(0); }
     } else {
       if (st.C) { st.C.off = false; st.C.reset_state(); }
-      if (st.I) { st.I.reset?.(); st.I.enabled = true; }
+      if (st.I) { st.I.reset?.(); st.I.enabled = !st.phoneOn; }   // телефон 📱 ещё открыт — мышь пока его
       if (st.AU?.volume && st.vol0 != null) { st.AU.volume(st.vol0); st.vol0 = null; }
       st.idleAt = Date.now();
       if (!st.stopped && !st.editing) st.loop?.pause(false);
@@ -1697,7 +1697,8 @@
     const st = S;
     const tp = (x, z, yaw) => { if (!S?.P) return; if (S.mySeat) S.P.standUp(); S.P.place(x, null, z, yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); if (S.rig) S.rig.yaw = yaw - PI; S.forceSend = true; savePos(); };
     S.phoneOff = Ph.attach('world', {
-      title: '🌍 Мир Денчика', hotkey: true,
+      title: '🌍 Мир Денчика',
+      get hotkey(){ return !S?.playing; },   // игра поверх мира (mir-play.js): клавиша P — игре («5 букв»), телефон — кнопкой 📱 окна
       pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
       activity: () => (S ? Object.assign({ w: S.shard }, S.mySeat?.tb ? { g: S.mySeat.tb.game, j: S.mySeat.c ? `games/${S.mySeat.tb.game}/${S.mySeat.c}` : '' } : {}) : {}),
       shot: () => { S.R.render(); return Ph.snap(S.R.r.domElement); },
