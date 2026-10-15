@@ -1,0 +1,34 @@
+{
+  "id": "ruby-glow",
+  "name": "Светящиеся рубины",
+  "version": "1.0.0",
+  "game": "both",
+  "api": 1,
+  "author": "dan4ik37",
+  "description": "Глубже 75 м в камне — рубиновая руда, она светится красным. Из рубинов — рубиновые лампы и рубиновый меч. Пример мода на JavaScript.",
+  "textures": {
+    "ruby_ore": { "draw": { "pattern": "ore", "base": "#6f6f7a", "color2": "#e0204a", "color3": "#ffb0c0" } },
+    "ruby": { "draw": { "pattern": "gem", "base": "#e0204a" } },
+    "ruby_lamp": { "draw": { "pattern": "lamp", "base": "#e0204a", "color2": "#5a2a1a", "color3": "#ffd0d8" } },
+    "ruby_sword": { "draw": { "pattern": "sword", "base": "#e8305a" } }
+  },
+  "blocks": [
+    { "id": "ruby_ore", "name": "Рубиновая руда", "texture": "ruby_ore", "hardness": 180, "tier": 2, "light": "#901028", "drop": "ruby" },
+    { "id": "ruby_lamp", "name": "Рубиновая лампа", "texture": "ruby_lamp", "hardness": 20, "solid": false, "tool": "any", "light": "#ff4060" }
+  ],
+  "items": [
+    { "id": "ruby", "name": "Рубин", "texture": "ruby", "stack": 99 },
+    { "id": "ruby_lamp", "name": "Рубиновая лампа", "texture": "ruby_lamp", "places": "ruby_lamp" },
+    { "id": "ruby_sword", "name": "Рубиновый меч", "texture": "ruby_sword", "weapon": { "damage": 24, "speed": 0.27, "reach": 2.9 } }
+  ],
+  "recipes": [
+    { "result": "ruby_lamp", "count": 2, "ingredients": [["ruby", 1], ["torch", 2]], "station": "workbench" },
+    { "result": "ruby_sword", "ingredients": [["ruby", 8], ["bar_silver", 4]], "station": "anvil" }
+  ],
+  "worldgen": [
+    { "type": "ore", "block": "ruby_ore", "minDepth": 75, "maxDepth": 1000000, "size": 5, "rarity": 0.5, "in": ["stone", "deepstone"] }
+  ],
+  "scripts": [
+    { "lang": "js", "file": "main.js" }
+  ]
+}
