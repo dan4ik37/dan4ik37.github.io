@@ -510,6 +510,7 @@
     R.render = () => {
       const t0 = performance.now(), dt = lastT ? t0 - lastT : 0;
       lastT = t0;
+      if (R.photo) { R.photo(); return; }   // «📸 Фото с трассировкой пути» (pathtrace.js): пока окно открыто, кадр — его
       if (fgGen()) {   // промежуточный кадр: ни теней, ни сцены — одна перекладка (логика игры и интерфейс шли как обычно)
         r.info.reset();
         R.post.renderGen(camera, FG.movers);

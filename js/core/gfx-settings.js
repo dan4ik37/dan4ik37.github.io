@@ -138,6 +138,7 @@
       + row('Лимит FPS', seg('fpsCap', [['0', 'Нет'], ['30', '30'], ['45', '45'], ['60', '60'], ['90', '90'], ['120', '120']]), 'Меньше кадров — телефон меньше греется.')
       + row('Экономия батареи', sw('battery'), '30 кадров, без AO, тени попроще, плотность пикселей ×1.')
       + row('Счётчик FPS', sw('fps'), 'Кадры в секунду и нагрузка — поверх 3D (клавиша F3).')
+      + (R && R.r?.capabilities?.isWebGL2 ? row('📸 Фото с трассировкой пути', '<button type="button" class="gs-btn" data-ptphoto="1">📸 Снять</button>', 'Снимок того, что видно сейчас: честные лучи света (тени, отражения, отскоки), картинка уточняется на глазах. «💾 Сохранить» — PNG.') : '')
       + row('Плоский «Мир Денчика»', sw('world2d'), 'Мир без 3D — для очень слабых телефонов.')
       + note('Графику своего мира (время суток, небо, туман, цвет, вода) автор задаёт в «Студии 3D» → «🎨 Графика». Твои настройки — потолок: на слабом устройстве тяжёлое само выключается. Анимации сайта — во вкладке «🌐 Сайт».')
       + head('Технологии')
@@ -158,5 +159,16 @@
   });
   // отпустили ползунок графики — перерисовать (пресет мог стать «Своя»)
   root.document?.addEventListener?.('change', e => { const k = e.target?.dataset?.range; if (k && (DETAIL.includes(k) || FMT[k])) S.refresh(); });
+  // «📸 Фото с трассировкой пути»: трассировщик грузится только по кнопке (js/engine/pathtrace.js)
+  root.document?.addEventListener?.('click', e => {
+    const b = e.target?.closest?.('[data-ptphoto]'); if (!b) return;
+    const R = liveR(); if (!R) return;
+    b.disabled = true; b.textContent = '⏳ Загружаем…';
+    const go = () => { S.close(); try { root.D37E.pathPhoto(R); } catch (er) { console.error(er); } };
+    if (root.D37E?.pathPhoto) { go(); return; }
+    const load = typeof root.gamesLoadScript === 'function' ? root.gamesLoadScript('js/engine/pathtrace.js')
+      : new Promise((res, rej) => { const s = root.document.createElement('script'); s.src = 'js/engine/pathtrace.js'; s.onload = res; s.onerror = rej; root.document.head.appendChild(s); });
+    Promise.resolve(load).then(go, () => { b.disabled = false; b.textContent = '📸 Снять'; });
+  });
   S.gfxExt = { PRESETS, DETAIL, publish, presetOf };
 })();

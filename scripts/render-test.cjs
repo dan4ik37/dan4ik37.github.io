@@ -854,5 +854,123 @@ function boundsOk(R){
   P.dispose();
 }
 
+// ═══ 19. «📸 Фото с трассировкой пути» (pathtrace.js): BVH; данные для видеокарты, обойдённые так же, как в шейдере, = перебор
+//     всех треугольников; сцена → треугольники (экземпляры, материалы, бюджет); шейдер без «сэмплера параметром» (грабли ANGLE) ═══
+{
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/pathtrace.js'), 'utf8'), { filename: 'pathtrace.js' });
+  let sd = 12345; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  // пол, 2000 мелких треугольников, 300 одинаковых (один центр — делить нечем), 40 длинных тонких поперёк всего
+  const list = [[-50, 0, -50, 50, 0, -50, 50, 0, 50], [-50, 0, -50, 50, 0, 50, -50, 0, 50]];
+  for (let i = 0; i < 2000; i++) { const c = [rnd() * 20 - 10, rnd() * 6, rnd() * 20 - 10], s = .2 + rnd() * .8; list.push([0, 1, 2].flatMap(() => [c[0] + (rnd() - .5) * s, c[1] + (rnd() - .5) * s, c[2] + (rnd() - .5) * s])); }
+  for (let i = 0; i < 300; i++) list.push([1, 1, 1, 2, 1, 1, 1, 2, 1]);
+  for (let i = 0; i < 40; i++) { const z = rnd() * 20 - 10; list.push([-30, rnd() * 4, z, 30, rnd() * 4, z + .05, 0, 5, z]); }
+  const build = (list, maxD) => {
+    const N = list.length, tris = new Float32Array(N * 9); list.forEach((t, i) => tris.set(t, i * 9));
+    const bvh = E.ptBuild(tris, N, 4, maxD), B = bvh.nodes;
+    const seen = new Uint8Array(N); let dup = 0; for (const t of bvh.order) { if (seen[t]) dup++; seen[t] = 1; }
+    let inside = true, maxLeaf = 0;
+    const walk = id => { const k = id * 8;
+      if (B[k + 7] < 0) { const s = B[k + 3], c = -B[k + 7]; maxLeaf = Math.max(maxLeaf, c);
+        for (let i = s; i < s + c; i++) { const q = bvh.order[i] * 9; for (let v = 0; v < 3; v++) for (let a = 0; a < 3; a++) { const x = tris[q + v * 3 + a]; if (x < B[k + a] - 1e-4 || x > B[k + 4 + a] + 1e-4) inside = false; } }
+        return; }
+      for (const ch of [B[k + 3], B[k + 7]]) { const c = ch * 8; for (let a = 0; a < 3; a++) if (B[c + a] < B[k + a] - 1e-4 || B[c + 4 + a] > B[k + 4 + a] + 1e-4) inside = false; walk(ch); } };
+    walk(0);
+    return { N, tris, bvh, dup, all: seen.every(x => x), inside, maxLeaf };
+  };
+  const A = build(list);
+  ok(!A.dup && A.all && A.inside && A.bvh.depth <= 36, 'BVH: каждый треугольник ровно один раз, всё внутри своих коробок, глубина ≤ 36', { dup: A.dup, inside: A.inside, depth: A.bvh.depth, maxLeaf: A.maxLeaf });
+  // обход упакованных данных — строка в строку как trace()/hitTri() шейдера (fNode/fTri, лист [s, e) — номера слотов, стек 40)
+  const gpuTrace = (pd, o, d) => {
+    const fN = i => pd.nodes.subarray(i * 4, i * 4 + 4), fT = i => pd.tri.subarray(i * 4, i * 4 + 4), inv = d.map(x => 1 / x), st = [0];
+    let best = 1e20, hit = -1, maxSp = 1, over = 0;
+    while (st.length) {
+      const n = st.pop(), a = fN(n * 2), b = fN(n * 2 + 1);
+      let ne = 0, fa = best;
+      for (let k = 0; k < 3; k++) { const t0 = (a[k] - o[k]) * inv[k], t1 = (b[k] - o[k]) * inv[k]; ne = Math.max(ne, Math.min(t0, t1)); fa = Math.min(fa, Math.max(t0, t1)); }
+      if (ne > fa) continue;
+      if (b[3] < 0) {
+        for (let i = a[3], e = a[3] - b[3]; i < e; i++) { const t = mt(fT(i * 8), fT(i * 8 + 1), fT(i * 8 + 2), o, d); if (t > 1e-4 && t < best) { best = t; hit = i; } }
+      } else if (st.length < 38) { st.push(b[3], a[3]); maxSp = Math.max(maxSp, st.length); } else over++;
+    }
+    return { t: hit < 0 ? Infinity : best, hit, maxSp, over };
+  };
+  // Мёллер — Трумбор, как в hitTri
+  function mt(a, b, c, o, d){
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const p = [d[1] * e2[2] - d[2] * e2[1], d[2] * e2[0] - d[0] * e2[2], d[0] * e2[1] - d[1] * e2[0]], det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+    if (Math.abs(det) < 1e-10) return -1;
+    const id = 1 / det, s = [o[0] - a[0], o[1] - a[1], o[2] - a[2]], u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) * id;
+    if (u < 0 || u > 1) return -1;
+    const q = [s[1] * e1[2] - s[2] * e1[1], s[2] * e1[0] - s[0] * e1[2], s[0] * e1[1] - s[1] * e1[0]], v = (d[0] * q[0] + d[1] * q[1] + d[2] * q[2]) * id;
+    if (v < 0 || u + v > 1) return -1;
+    return (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) * id;
+  }
+  const brute = (X, o, d) => { let best = Infinity, tri = -1; for (let i = 0; i < X.N; i++) { const q = i * 9, t = mt(X.tris.subarray(q, q + 3), X.tris.subarray(q + 3, q + 6), X.tris.subarray(q + 6, q + 9), o, d); if (t > 1e-4 && t < best) { best = t; tri = i; } } return { t: best, tri }; };
+  const scOf = (X, cols) => ({ n: X.N, tris: X.tris, nrm: new Float32Array(X.N * 9), col: cols || new Float32Array(X.N * 9).fill(.5), uvs: new Float32Array(X.N * 6), mid: new Uint16Array(X.N), mats: [{ type: 0, rough: .8, metal: 0, layer: -1 }] });
+  const cols = new Float32Array(A.N * 9).map(() => rnd());
+  const pdA = E.ptPack(scOf(A, cols), A.bvh);
+  const rays = (X, pd, n) => { let same = 0, hits = 0, js = 0, maxSp = 0, over = 0, bad = null;
+    for (let i = 0; i < n; i++) {
+      const o = [rnd() * 30 - 15, .5 + rnd() * 8, rnd() * 30 - 15], u = rnd() * 2 - 1, ph = rnd() * 6.2832, r = Math.sqrt(1 - u * u), d = [r * Math.cos(ph), u, r * Math.sin(ph)];
+      const g = gpuTrace(pd, o, d), b = brute(X, o, d), j = E.ptTrace(X.bvh, X.tris, o, d);
+      maxSp = Math.max(maxSp, g.maxSp); over += g.over;
+      const eq = (t1, t2) => (t1 === Infinity && t2 === Infinity) || Math.abs(t1 - t2) <= 1e-6 * Math.max(1, t2);
+      if (eq(g.t, b.t)) same++; else if (!bad) bad = { o, d, g: g.t, b: b.t };
+      if ((j ? j.t : Infinity) === b.t || eq(j ? j.t : Infinity, b.t)) js++;
+      if (b.tri >= 0) hits++;
+    }
+    return { same, hits, js, maxSp, over, bad, n };
+  };
+  const R1 = rays(A, pdA, 3000);
+  ok(R1.same === R1.n && R1.js === R1.n && R1.hits > 1500, 'обход как в шейдере и ptTrace = перебор всех треугольников (3000 лучей)', R1);
+  ok(R1.over === 0 && R1.maxSp <= A.bvh.depth + 1 && R1.maxSp < 38, 'стек обхода: занято не больше глубины + 1, не переполняется', { maxSp: R1.maxSp, depth: A.bvh.depth });
+  // данные: слот i = треугольник order[i]; цвет вершины — 3 байта в одном float32 (как unpackC в шейдере)
+  let packOk = true;
+  for (let i = 0; i < A.N && packOk; i += 7) {
+    const src = A.bvh.order[i];
+    for (let v = 0; v < 3; v++) {
+      for (let k = 0; k < 3; k++) if (pdA.tri[i * 32 + v * 4 + k] !== A.tris[src * 9 + v * 3 + k]) packOk = false;
+      const f = pdA.tri[i * 32 + v * 4 + 3], un = [f % 256, Math.floor(f / 256) % 256, Math.floor(f / 65536)];
+      for (let k = 0; k < 3; k++) if (un[k] !== Math.round(cols[src * 9 + v * 3 + k] * 255)) packOk = false;
+    }
+  }
+  ok(packOk, 'упаковка: слоты в порядке листьев, цвет вершин 3 байта в float без потерь');
+  // предел глубины (в шейдере стек на 40): глубже предела — один большой лист, обход всё равно верный (предел 3 — для проверки)
+  const Ch = build(list, 3), pdC = E.ptPack(scOf(Ch), Ch.bvh), R2 = rays(Ch, pdC, 600);
+  ok(Ch.bvh.depth === 3 && !Ch.dup && Ch.all && Ch.inside && Ch.maxLeaf > 100 && R2.same === R2.n, 'предел глубины BVH: дальше — большой лист, попадания те же', { depth: Ch.bvh.depth, maxLeaf: Ch.maxLeaf, same: R2.same });
+  ok(E.ptBuild(A.tris, A.N, 4, 99).depth <= 36, 'предел глубины не больше 36 (стек шейдера), что бы ни попросили');
+  console.log(`  трассировка пути: ${A.N} треугольников — глубина BVH ${A.bvh.depth}, лист до ${A.maxLeaf}, стек до ${R1.maxSp}, попаданий ${R1.hits}/${R1.n}`);
+  // сцена → треугольники
+  const scene = new T.Scene(), cam = new T.PerspectiveCamera(60, 16 / 9, .1, 1000); cam.position.set(0, 2, 10); cam.updateMatrixWorld();
+  const box = new T.Mesh(new T.BoxGeometry(2, 2, 2), new T.MeshStandardMaterial({ color: 0xff0000, roughness: .3, metalness: .8 })); box.position.set(0, 1, 0); scene.add(box);
+  const grass = new T.InstancedMesh(new T.PlaneGeometry(1, 1), new T.MeshStandardMaterial({ alphaTest: .5, side: T.DoubleSide }), 3);
+  for (let i = 0; i < 3; i++) { grass.setMatrixAt(i, new T.Matrix4().makeTranslation(5 + i, .5, 0)); grass.setColorAt(i, new T.Color(i === 1 ? 0x00ff00 : 0xffffff)); } scene.add(grass);
+  const lamp = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ color: 0xffeeaa })); lamp.position.set(-4, 3, 0); scene.add(lamp);
+  const waterM = new T.MeshStandardMaterial({ transparent: true, opacity: .8, roughness: .05 }); waterM.userData.water = true;
+  const water = new T.Mesh(new T.PlaneGeometry(4, 4), waterM); water.rotation.x = -Math.PI / 2; water.position.set(0, .05, 4); scene.add(water);
+  scene.add(new T.Mesh(new T.PlaneGeometry(3, 3), new T.MeshStandardMaterial({ transparent: true, opacity: .4, roughness: .9 })));   // дым — без него
+  const skyM = new T.Mesh(new T.SphereGeometry(500, 8, 4), new T.MeshBasicMaterial({ side: T.BackSide })); skyM.userData.sky = true; scene.add(skyM);
+  const far = new T.Mesh(new T.SphereGeometry(1, 16, 8), new T.MeshStandardMaterial()); far.position.set(0, 0, -400); scene.add(far);
+  const farN = far.geometry.index.count / 3;
+  const Rm = { T, scene, camera: cam };
+  const S1 = E.ptScene(Rm), S2 = E.ptScene(Rm, 22);
+  const types = S1.mats.map(m => m.type).sort().join('');
+  const gx = []; for (let t = 0; t < S1.n; t++) { const m = S1.mats[S1.mid[t]]; if (m.cut) for (let v = 0; v < 3; v++) gx.push(S1.tris[t * 9 + v * 3]); }
+  ok(S1.n === 12 + 6 + 2 + 2 + farN && S1.skipped === 0, 'сцена: ящик 12 + трава 3×2 + лампа 2 + вода 2 + дальний шар; дым и небо — без них', { n: S1.n, farN });
+  ok(S2.n === 22 && S2.skipped === 1, 'бюджет треугольников: дальнее выбрасывается первым', { n: S2.n, skipped: S2.skipped });
+  const mBox = S1.mats.find(m => m.type === 0 && Math.abs(m.metal - .8) < 1e-6), mW = S1.mats.find(m => m.type === 2);
+  ok(types.includes('0') && types.includes('1') && types.includes('2') && mBox && Math.abs(mBox.rough - .3) < 1e-6 && mW && mW.ior === 1.33, 'материалы: PBR (шероховатость, металл), свет (MeshBasic), вода — преломление 1,33', types);
+  ok(gx.length === 18 && Math.min(...gx) >= 4.49 && Math.max(...gx) <= 7.51, 'экземпляры: матрица каждого применена (трава на x 4,5…7,5)', [Math.min(...gx), Math.max(...gx)]);
+  let green = false; for (let t = 0; t < S1.n; t++) if (S1.mats[S1.mid[t]].cut && S1.col[t * 9] < .01 && S1.col[t * 9 + 1] > .99) green = true;
+  ok(green, 'цвет экземпляра умножается на цвет вершин');
+  const pd1 = E.ptPack(S1, E.ptBuild(S1.tris, S1.n)), cutI = S1.mats.findIndex(m => m.cut);
+  ok(cutI >= 0 && pd1.mats[cutI * 8 + 7] === 0 && pd1.mats[cutI * 8 + 5] === -1, 'вырез по альфе — только у материала с текстурой (без неё — сплошной)');
+  // шейдер
+  const fsP = E.ptShaders.fs;
+  ok(!/\w+\s*\([^)]*\bsampler\w*\s+\w+/.test(fsP) && fsP.includes('vec4 fTri(int i){ return texelFetch(tTri') && fsP.includes('vec4 fMat(int i){ return texelFetch(tMat'), 'шейдер: у каждой текстуры данных своя функция чтения, сэмплер параметром не передаётся (ANGLE путал текстуры)');
+  ok(/bool hitTri\([^)]*inout vec2 bc\)/.test(fsP) && /int trace\([^)]*inout vec2 bc,/.test(fsP) && !/[^n]out vec2 bc/.test(fsP), 'шейдер: bc — inout (при «мимо» прошлое попадание не портится)');
+  ok(fsP.includes('int st[40]') && fsP.includes('sp < 38') && fsP.includes('if (mm.w > 0.5)') && fsP.includes('.a < 0.5) return false;'), 'шейдер: стек 40, вырез по альфе в hitTri');
+}
+
 console.log(`${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);
