@@ -16,8 +16,10 @@
 --     не создаст новый аккаунт и не привяжется к другому; сняли бан ника — сняты и они;
 --   • Google / Discord / Twitch / GitHub (встроенные входы Supabase) — триггеры на auth.identities: забаненный вход не проходит;
 --     к существующему аккаунту вход привязывается только из профиля со свежим входом (разрешение auth_link_intent); сам Supabase
---     «по совпадению подтверждённой почты» привязывает только Google (auth_autolink_ok); последний способ войти не отвязать; о новой
---     привязке — 🔔;
+--     «по совпадению подтверждённой почты» привязывает только Google и только к аккаунту с ЭТОЙ ЖЕ собственной подтверждённой
+--     почтой (закрывает дыру ручной привязки Supabase ANT-2026-7WJV60DR); вручную нельзя привязать вход с почтой другого
+--     аккаунта; последний способ войти не отвязать; о новой привязке — 🔔;
+--  ВАЖНО: «Allow manual linking» в Supabase включать ТОЛЬКО после этого файла (docs/LOGIN_PROVIDERS.md).
 --   • модераторам — «связанные входы» (какие сервисы и сколько, без номеров и почты): auth_links_staff.
 --  Проверка после запуска: /rpc/auth_login_methods гостем {} → {"ok":false,"reason":"auth"} (PGRST202 = не применён).
 -- ═══════════════════════════════════════════════════════════════════
@@ -397,9 +399,13 @@ create trigger d37_ban_logins after insert or delete on public.banned_nicks
 -- ═══ Встроенные входы Supabase (auth.identities): Google, Discord, Twitch, GitHub ═══
 -- Перед добавлением входа: забаненный — нет (ни новым аккаунтом, ни к другому); к существующему аккаунту — только по
 -- разрешению из профиля (свежий вход) или «по почте» для auth_autolink_ok(). Сбой самой проверки вход не ломает.
+-- Почта (известная дыра ручной привязки Supabase, ANT-2026-7WJV60DR: злоумышленник привязывает к СВОЕМУ аккаунту Discord с
+-- чужой неподтверждённой почтой, потом жертва входит через Google — и Supabase «по почте» приклеивает её Google к его аккаунту):
+--  • «по почте» Google приклеивается, только если это СОБСТВЕННАЯ подтверждённая почта аккаунта (не почта другого входа);
+--  • вручную нельзя привязать вход, чья почта — почта ДРУГОГО аккаунта сайта.
 create or replace function public.auth_identity_guard()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare v_block text; v_intent text;
+declare v_block text; v_intent text; v_mail text := lower(nullif(btrim(new.identity_data ->> 'email'), ''));
 begin
   if new.provider is null or new.provider in ('email', 'phone', 'anonymous') then return new; end if;
   begin
@@ -408,8 +414,12 @@ begin
     elsif exists (select 1 from auth.identities i where i.user_id = new.user_id) then
       delete from public.auth_link_intents where user_id = new.user_id and provider = new.provider and until > now()
         returning provider into v_intent;
-      if v_intent is null and not (new.provider = any (public.auth_autolink_ok())) then
+      if v_intent is null and (not (new.provider = any (public.auth_autolink_ok())) or v_mail is null
+          or not exists (select 1 from auth.users u where u.id = new.user_id and u.email_confirmed_at is not null and lower(u.email) = v_mail)) then
         v_block := 'autolink';
+      elsif v_intent is not null and v_mail is not null
+          and exists (select 1 from auth.users u where lower(u.email) = v_mail and u.id <> new.user_id) then
+        v_block := 'email';
       elsif public.auth_user_banned(new.user_id) then
         insert into public.auth_link_bans (key, provider, user_id, reason)
           values (public.auth_link_key(new.provider, new.provider_id), new.provider, new.user_id, 'бан ника') on conflict (key) do nothing;
@@ -421,6 +431,7 @@ begin
   end;
   if v_block = 'banned' then raise exception 'd37_login_banned: этот вход заблокирован на сайте' using errcode = '42501'; end if;
   if v_block = 'autolink' then raise exception 'd37_login_link: привязать этот вход можно только из профиля' using errcode = '42501'; end if;
+  if v_block = 'email' then raise exception 'd37_login_email: почта этого входа — почта другого аккаунта' using errcode = '42501'; end if;
   return new;
 end $$;
 drop trigger if exists d37_identity_guard on auth.identities;
