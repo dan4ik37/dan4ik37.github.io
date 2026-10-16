@@ -11,10 +11,12 @@
 // Что уже разослано, хранится в push_state (push.sql): последнее видео и был ли эфир.
 // Первый запуск ничего не рассылает — только запоминает текущее состояние.
 // Мёртвые подписки (404/410 от push-сервиса) удаляются.
+// «Денчик-бот» (community2.sql): тот же эфир / новый ролик — ещё и сообщением в канал «📢 новости» сервера «Денчик37»
+// (bot_post — только с ключом сервера; нет функции — молча). События сообществ: напоминание 🔔 за 15 минут (bot_event_remind).
 //
 // Переменные окружения: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET,
 // VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (см. api/_lib/webpush.js).
-import { storeConfigured, sbSelect, sbUpsert, sbDelete, timedFetch } from './_lib/store.js';
+import { storeConfigured, sbSelect, sbUpsert, sbDelete, sbRpc, timedFetch } from './_lib/store.js';
 import { vapidConfigured, sendPush } from './_lib/webpush.js';
 import { getUploads, SITE } from './_lib/yt.js';
 import { indexNow } from './_lib/indexnow.js';
@@ -31,10 +33,11 @@ export default async function handler(req, res) {
   if (url.searchParams.get('pubkey') === '1') {
     return res.status(200).json({ key: process.env.VAPID_PUBLIC_KEY || null });
   }
-  if (!storeConfigured() || !vapidConfigured()) {
-    return res.status(200).json({ ok: false, reason: 'not_configured' });
+  if (!storeConfigured()) return res.status(200).json({ ok: false, reason: 'not_configured' });
+  if (url.searchParams.get('test') === '1') {
+    if (!vapidConfigured()) return res.status(200).json({ ok: false, reason: 'not_configured' });
+    return handleTest(req, res);
   }
-  if (url.searchParams.get('test') === '1') return handleTest(req, res);
 
   const authorized = !!process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   if (!authorized) return res.status(401).json({ ok: false, reason: 'unauthorized' });
@@ -55,6 +58,7 @@ export default async function handler(req, res) {
   catch (e) { out.stream = { error: String(e?.message || e) }; console.error('[push stream]', e); }
   try { out.words = await checkWords(state.words, deadline); }
   catch (e) { out.words = { error: String(e?.message || e) }; console.error('[push words]', e); }   // push-words.sql не выполнен — ошибка только здесь
+  out.events = await eventReminders();
   return res.status(200).json(out);
 }
 
@@ -80,6 +84,7 @@ async function checkVideo(prev, deadline) {
   try { indexed = await indexNow([`${SITE}/v/${latest.id}`, `${SITE}/videos`, `${SITE}/`]); } catch (e) { indexed = 'error'; }
   if (now - Date.parse(latest.publishedAt) > VIDEO_MAX_AGE_MS) return { status: 'too_old', id: latest.id, indexed };
 
+  const bot = await botPost(`🎬 Новое видео: ${oneLine(latest.title) || 'смотри на сайте'} → ${SITE}/v/${latest.id}`, 'video:' + latest.id);
   const sent = await broadcast('want_videos', {
     title: '🎬 Новое видео на канале dan4ik37',
     body: latest.title,
@@ -87,7 +92,7 @@ async function checkVideo(prev, deadline) {
     image: latest.thumb || undefined,
     tag: 'video-' + latest.id,
   }, deadline);
-  return { status: 'sent', id: latest.id, indexed, ...sent };
+  return { status: 'sent', id: latest.id, indexed, bot, ...sent };
 }
 
 // ── Начало стрима ──
@@ -109,13 +114,14 @@ async function checkStream(prev, deadline) {
   if (recent) return { status: 'live_again_quiet' };
 
   const title = await twitchTitle();
+  const bot = await botPost(`🔴 Денчик в эфире: ${oneLine(title) || 'стрим начался — залетай!'} → ${SITE}/#/chat/twitch`, 'stream:' + now);
   const sent = await broadcast('want_streams', {
     title: '🔴 dan4ik37 в эфире!',
     body: title || 'Стрим начался — залетай!',
     url: '/#/home',
     tag: 'stream-' + new Date().toISOString().slice(0, 10),
   }, deadline);
-  return { status: 'sent', ...sent };
+  return { status: 'sent', bot, ...sent };
 }
 
 // Тот же разбор ответа decapi, что в js/features/twitch.js
@@ -154,8 +160,21 @@ async function checkWords(prev, deadline) {
   return { status: 'sent', day, ...sent };
 }
 
+// ── «Денчик-бот»: сообщение в канал «📢 новости» (community2.sql → bot_post). Ошибка рассылку не останавливает ──
+async function botPost(text, key) {
+  try { const r = await sbRpc('bot_post', { p_channel: 'news', p_text: text.slice(0, 500), p_key: key }); return r?.dup ? 'dup' : r?.ok ? 'posted' : (r?.reason || 'no'); }
+  catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? 'no_sql' : 'error'; }
+}
+// ── События сообществ: 🔔 «через 15 минут» тем, кто нажал «✅ Пойду» (community2.sql → bot_event_remind) ──
+async function eventReminders() {
+  try { const n = await sbRpc('bot_event_remind', {}); return { reminded: n || 0 }; }
+  catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? { status: 'no_sql' } : { error: String(e?.message || e).slice(0, 120) }; }
+}
+const oneLine = t => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+
 // ── Рассылка всем подписчикам темы (want_videos / want_streams / want_words) ──
 async function broadcast(column, data, deadline) {
+  if (!vapidConfigured()) return { sent: 0, skipped: 'no_vapid' };
   let sent = 0, failed = 0, removed = 0, offset = 0;
   const PAGE = 500, PARALLEL = 25;
   while (Date.now() < deadline) {

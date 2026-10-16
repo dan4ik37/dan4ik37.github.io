@@ -7,6 +7,8 @@
 // Адреса: #/chat[/<канал сайта>] (general, games, lfg, memes, voice, twitch, reports), #/chat/c/<id>[/<канал>|members|settings|reports],
 // #/chat/find, #/chat/new, #/chat/join/<код>, приглашение #/c/<код> → join. В телефоне: comm, comm/<сервер>[/<канал>…] (сервер d37 или id).
 // Сообщества без community.sql: «появятся, когда сайт обновится», общий чат работает как раньше.
+// community2.js (community2.sql) дописывает экраны через DS.x: special — свои адреса #/chat/<k>/… (события, обзор),
+// sub — экраны сервера #/chat[/c/<id>]/<k> (события, роли, буст), chanTop — строки над каналами («📅 События»).
 (() => {
   const P = window.D37Phone, MV = window.MsgView;
   const DS = window.D37DS = window.D37DS || {};
@@ -20,7 +22,7 @@
     full: 'в сообществе уже 500 человек', owner: 'владелец не может выйти — передай сообщество или удали его', rights: 'нет прав', member: 'сначала вступи',
     muted: 'тебя заглушили', mods_only: 'здесь пишут только модераторы', len: 'слишком длинно (до 1000 символов)', rate: 'слишком часто — подожди', slow: 'медленный режим',
     repeat: 'не повторяй одно и то же', flood: 'флуд запрещён', old: 'изменять можно 48 часов', emoji: 'такой реакции нет', many: 'слишком много разных реакций',
-    self: 'с собой так нельзя', last: 'последний текстовый канал не удалить', kind: 'неверный тип', role: 'неверная роль', minutes: 'неверный срок', private: 'сообщество закрытое — вступить можно только по приглашению',
+    self: 'с собой так нельзя', last: 'последний текстовый канал не удалить', age: 'не подходит по возрасту', category: 'выбери категорию', kind: 'неверный тип', role: 'неверная роль', minutes: 'неверный срок', private: 'сообщество закрытое — вступить можно только по приглашению',
   };
   const why = (r, def = 'не получилось') => r?.error ? (r.missing ? 'появится, когда сайт обновится' : P.err(r.error)) : REASON[r?.data?.reason] || r?.data?.reason || def;
 
@@ -205,7 +207,7 @@
       return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
     };
     const text = ch.filter(c => c.kind !== 'voice'), voice = ch.filter(c => c.kind === 'voice');
-    return `<div class="ds-cat">Текстовые каналы</div>${text.map(row).join('')}${voice.length ? `<div class="ds-cat">Голосовые каналы</div>${voice.map(row).join('')}` : ''}`;
+    return `${DS.x?.chanTop?.(mode, srv, selCh) || ''}<div class="ds-cat">Текстовые каналы</div>${text.map(row).join('')}${voice.length ? `<div class="ds-cat">Голосовые каналы</div>${voice.map(row).join('')}` : ''}`;
   }
   function headHtml(mode, srv){
     const acts = [];
@@ -292,6 +294,7 @@
       <label class="ds-lbl">Название<input class="ds-in" data-f="name" maxlength="40" placeholder="Например: Клан Денчика"></label>
       <label class="ds-lbl">О чём (необязательно)<textarea class="ds-in" data-f="about" maxlength="300" rows="3" placeholder="Во что играем, правила…"></textarea></label>
       <label class="ds-chk"><input type="checkbox" data-f="pub" checked> Открытое — видно в поиске, вступить может любой. Иначе — только по приглашению.</label>
+      ${DS.x?.metaHtml?.() || ''}
       <p class="ds-dim">Правила: без мата, оскорблений, рекламы и ссылок. Не проси и не пиши личные данные (адрес, телефон, школу). Нарушение — жалоба команде сайта.</p>
       <div class="ds-row"><button type="button" class="ds-btn" data-ds="create">Создать</button></div><div class="ds-err" hidden></div></div>`;
     el.querySelector('.ds-icons').onclick = ev => { const b = ev.target.closest('[data-ic]'); if (!b) return; icon = b.dataset.ic; el.querySelectorAll('[data-ic]').forEach(x => x.classList.toggle('on', x === b)); };
@@ -299,7 +302,7 @@
       const b = btn.currentTarget || btn.target; b.disabled = true;
       const r = await P.rpc('cm_create', { p_name: el.querySelector('[data-f="name"]').value, p_about: el.querySelector('[data-f="about"]').value, p_icon: icon, p_public: el.querySelector('[data-f="pub"]').checked });
       b.disabled = false;
-      if (r.data?.ok) { S.myAt = 0; await loadMy(true); go(mode, link(mode, r.data.id)); return; }
+      if (r.data?.ok) { await DS.x?.metaSave?.(el, r.data.id); S.myAt = 0; await loadMy(true); go(mode, link(mode, r.data.id)); return; }
       const er = el.querySelector('.ds-err'); er.hidden = false; er.textContent = '⚠️ ' + why(r);
     };
   }
@@ -311,8 +314,9 @@
     if (!c) { el.innerHTML = '<div class="ds-pane"><h3>Приглашение не работает</h3><p class="ds-dim">Ссылка устарела или сообщество закрыто. Попроси новую.</p></div>'; return; }
     await loadMy();
     const already = S.my.some(x => x.id === c.id);
-    el.innerHTML = `<div class="ds-pane ds-join"><span class="ds-big">${e(c.icon)}</span><h3>${e(c.name)}</h3><p class="ds-dim">${c.members} ${P.plural(c.members, 'участник', 'участника', 'участников')} · ${c.public ? 'открытое' : 'по приглашению'}</p>${c.about ? `<p>${e(c.about)}</p>` : ''}
-      ${already ? `<a class="ds-btn" href="${link(mode, c.id)}">Открыть</a>` : P.me() ? '<button type="button" class="ds-btn" data-ds="join">Вступить</button>' : '<button type="button" class="ds-btn" data-ds="login">Войти, чтобы вступить</button>'}<div class="ds-err" hidden></div></div>`;
+    const ageNo = c.age && window.D37Age && !window.D37Age.canOpen(c.age);   // метка сообщества (community2.sql)
+    el.innerHTML = `<div class="ds-pane ds-join"><span class="ds-big">${e(c.icon)}</span><h3>${e(c.name)}</h3><p class="ds-dim">${c.members} ${P.plural(c.members, 'участник', 'участника', 'участников')} · ${c.public ? 'открытое' : 'по приглашению'}${c.age ? ' · ' + (window.D37Age?.badge ? window.D37Age.badge(c.age) : e(c.age) + '+') : ''}</p>${c.about ? `<p>${e(c.about)}</p>` : ''}
+      ${already ? `<a class="ds-btn" href="${link(mode, c.id)}">Открыть</a>` : ageNo ? '<p class="ds-dim">🔞 Не подходит по возрасту</p>' : P.me() ? '<button type="button" class="ds-btn" data-ds="join">Вступить</button>' : '<button type="button" class="ds-btn" data-ds="login">Войти, чтобы вступить</button>'}<div class="ds-err" hidden></div></div>`;
     el.querySelector('[data-ds="join"]')?.addEventListener('click', async () => {
       const j = await P.rpc('cm_join', { p_id: null, p_code: code });
       if (j.data?.ok) { S.myAt = 0; await loadMy(true); go(mode, link(mode, j.data.id)); return; }
@@ -331,7 +335,9 @@
         <label class="ds-lbl">Название<input class="ds-in" data-f="name" maxlength="40" value="${e(C.c.name)}"></label>
         <label class="ds-lbl">О чём<textarea class="ds-in" data-f="about" maxlength="300" rows="2">${e(C.c.about || '')}</textarea></label>
         <label class="ds-chk"><input type="checkbox" data-f="pub"${C.c.public ? ' checked' : ''}> Открытое (видно в поиске)</label>
+        ${DS.x?.metaHtml?.(srv.id) || ''}
         <button type="button" class="ds-btn" data-ds="save">Сохранить</button></div>` : ''}
+      ${DS.x?.settingsMore?.(srv, mode) || ''}
       <div class="ds-sect"><b>Приглашение</b><div class="ds-row"><input class="ds-in" readonly value="${e(url)}" aria-label="Ссылка-приглашение"><button type="button" class="ds-btn ghost" data-ds="copy">📋</button><button type="button" class="ds-btn ghost" data-ds="newcode" title="Новая ссылка — старая перестанет работать">🔄</button></div></div>
       <div class="ds-sect"><b>Каналы</b>${C.channels.map(c => `<div class="ds-chrow" data-chid="${c.id}"><span>${c.kind === 'voice' ? '🔊' : '#'} ${e(c.name)}</span>
         ${c.kind === 'text' ? `<select class="ds-in ds-sm" data-chf="slow" aria-label="Медленный режим">${[0, 5, 10, 30, 60, 300, 900].map(s => `<option value="${s}"${c.slow === s ? ' selected' : ''}>${s ? '🐢 ' + (s >= 60 ? s / 60 + ' мин' : s + ' с') : 'без задержки'}</option>`).join('')}</select>
@@ -355,7 +361,7 @@
       const b = ev.target.closest('[data-ds],[data-unban]'); if (!b) return;
       const k = b.dataset.ds, row = b.closest('[data-chid]'), ch = row && C.channels.find(c => String(c.id) === row.dataset.chid);
       if (b.dataset.unban) { const r = await P.rpc('cm_unban', { p_community: srv.id, p_user: b.dataset.unban }); if (r.data?.ok) b.closest('.ds-chrow').remove(); else err(why(r)); return; }
-      if (k === 'save') { const r = await P.rpc('cm_update', { p_id: srv.id, p_name: el.querySelector('[data-f="name"]').value, p_about: el.querySelector('[data-f="about"]').value, p_icon: icon, p_public: el.querySelector('[data-f="pub"]').checked }); if (r.data?.ok) { dropC(srv.id); S.myAt = 0; DS.reroute(); } else err(why(r)); }
+      if (k === 'save') { const r = await P.rpc('cm_update', { p_id: srv.id, p_name: el.querySelector('[data-f="name"]').value, p_about: el.querySelector('[data-f="about"]').value, p_icon: icon, p_public: el.querySelector('[data-f="pub"]').checked }); const m = r.data?.ok ? await DS.x?.metaSave?.(el, srv.id) : null; if (r.data?.ok && !m?.err) { dropC(srv.id); S.myAt = 0; DS.reroute(); } else err(m?.err || why(r)); }
       else if (k === 'copy') { try { await navigator.clipboard.writeText(url); b.textContent = '✅'; } catch (er) { prompt('Ссылка-приглашение:', url); } }
       else if (k === 'newcode') { const r = await P.rpc('cm_invite_reset', { p_id: srv.id }); if (r.data?.ok) { dropC(srv.id); DS.reroute(); } else err(why(r)); }
       else if (k === 'chren' && ch) { const n = prompt('Новое название канала:', ch.name); if (!n) return; const r = await P.rpc('cm_channel_save', { p_community: srv.id, p_id: ch.id, p_name: n, p_kind: ch.kind, p_slow: ch.slow, p_mods_only: ch.mods_only }); if (r.data?.ok) { dropC(srv.id); DS.reroute(); } else err(why(r)); }
@@ -471,16 +477,18 @@
     root.classList.remove('l-open', 'r-open');
     await loadMy();
     // особые экраны
-    if (srvId === OFF_ID && ['find', 'new', 'join'].includes(rest[0])) {
+    const xs = srvId === OFF_ID && DS.x?.special?.[rest[0]];
+    if (srvId === OFF_ID && (['find', 'new', 'join'].includes(rest[0]) || xs)) {
       page.srv = null; page.ch = null;
-      root.querySelector('.ds-rail').innerHTML = railHtml('page', rest[0] === 'find' ? 'find' : '');
+      root.querySelector('.ds-rail').innerHTML = railHtml('page', rest[0] === 'find' || rest[0] === 'explore' ? 'find' : '');
       dropView();
       const srv = await server(OFF_ID);
       paintSide(root, 'page', srv, null);
-      setTop(root, rest[0] === 'find' ? '🧭 Найти сообщество' : rest[0] === 'new' ? '＋ Новое сообщество' : '🏰 Приглашение', '', true);
+      setTop(root, xs ? xs.title : rest[0] === 'find' ? '🧭 Обзор сообществ' : rest[0] === 'new' ? '＋ Новое сообщество' : '🏰 Приглашение', '', true);
       const body = root.querySelector('.ds-body');
       body.innerHTML = '<div class="ds-scroll"></div>';
-      if (rest[0] === 'find') screenFind(body.firstChild, 'page');
+      if (xs) xs.render(body.firstChild, 'page', rest.slice(1));
+      else if (rest[0] === 'find') (DS.x?.find || screenFind)(body.firstChild, 'page');
       else if (rest[0] === 'new') screenCreate(body.firstChild, 'page');
       else screenJoin(body.firstChild, 'page', (rest[1] || '').toLowerCase());
       return;
@@ -498,18 +506,21 @@
       return;
     }
     let sub = rest[0] || '', ch = null;
-    if (['settings', 'reports', 'members'].includes(sub)) {
-      paintSide(root, 'page', srv, null);
+    const xsub = DS.x?.sub?.[sub];
+    if (['settings', 'reports', 'members'].includes(sub) || xsub) {
+      paintSide(root, 'page', srv, xsub ? 'x:' + sub : null);
       dropView();
-      setTop(root, sub === 'settings' ? '⚙️ Настройки' : sub === 'reports' ? '🚩 Жалобы' : '👥 Участники', '', true);
+      setTop(root, xsub ? xsub.title : sub === 'settings' ? '⚙️ Настройки' : sub === 'reports' ? '🚩 Жалобы' : '👥 Участники', '', true);
       const body = root.querySelector('.ds-body'); body.innerHTML = '<div class="ds-scroll"></div>';
-      if (sub === 'settings') screenSettings(body.firstChild, 'page', srv);
+      if (xsub) xsub.render(body.firstChild, 'page', srv, rest.slice(1));
+      else if (sub === 'settings') screenSettings(body.firstChild, 'page', srv);
       else if (sub === 'reports') screenReports(body.firstChild, 'page', srv);
       else { body.firstChild.innerHTML = '<div class="ds-mlist"></div>'; membersRender(body.firstChild.firstChild, srv); }
       membersRender(root.querySelector('.ds-mbody'), srv);
       return;
     }
-    ch = srv.channels.find(c => String(c.id) === sub && !c.soon) || srv.channels.find(c => c.kind === 'text' && !c.soon);
+    // по умолчанию — #общий (канал «📢 новости» стоит выше, но в нём пишут только бот и команда)
+    ch = srv.channels.find(c => String(c.id) === sub && !c.soon) || (srv.official && srv.channels.find(c => c.id === 'general')) || srv.channels.find(c => c.kind === 'text' && !c.soon);
     page.ch = ch;
     paintSide(root, 'page', srv, ch?.id);
     if (!ch) { dropView(); root.querySelector('.ds-body').innerHTML = '<div class="ds-scroll"><div class="ds-pane"><div class="ds-dim">Каналов нет</div></div></div>'; return; }
@@ -550,7 +561,7 @@
   // новое сообщение / прочитано / закреп / онлайн / голосовой — перерисовать боковые панели (не чаще раза в 400 мс)
   let sideT = 0;
   const sideSoon = () => { clearTimeout(sideT); sideT = setTimeout(() => { refreshSide(); commBadge(); }, 400); };
-  ['d37:chatmsg', 'd37:read', 'd37:chatinfo', 'd37:voice'].forEach(ev => window.addEventListener(ev, sideSoon));
+  ['d37:chatmsg', 'd37:read', 'd37:chatinfo', 'd37:voice', 'd37:events'].forEach(ev => window.addEventListener(ev, sideSoon));
   window.addEventListener('d37:chatpin', () => { if (page?.srv && page.root.isConnected) paintPin(page.root, page.srv, page.ch); });
   let memT = 0;
   window.addEventListener('d37:presence', () => { clearTimeout(memT); memT = setTimeout(() => { if (page?.srv && page.root.isConnected && currentRoute() === 'chat') membersRender(page.root.querySelector('.ds-mbody'), page.srv); }, 800); });
@@ -599,10 +610,12 @@
       const parts = String(arg || '').split('/').filter(Boolean);
       let disposed = false;
       const draw = async () => {
-        if (parts[0] === 'find' || parts[0] === 'new' || parts[0] === 'join') {
-          el.innerHTML = P.head(parts[0] === 'find' ? '🧭 Найти' : parts[0] === 'new' ? '＋ Новое' : '🏰 Приглашение') + '<div class="ph-body ds-ph"></div>';
+        const xs = DS.x?.special?.[parts[0]];
+        if (parts[0] === 'find' || parts[0] === 'new' || parts[0] === 'join' || xs) {
+          el.innerHTML = P.head(xs ? xs.title : parts[0] === 'find' ? '🧭 Найти' : parts[0] === 'new' ? '＋ Новое' : '🏰 Приглашение') + '<div class="ph-body ds-ph"></div>';
           const b = el.querySelector('.ph-body');
-          if (parts[0] === 'find') screenFind(b, 'phone'); else if (parts[0] === 'new') screenCreate(b, 'phone'); else screenJoin(b, 'phone', parts[1] || '');
+          if (xs) xs.render(b, 'phone', parts.slice(1));
+          else if (parts[0] === 'find') (DS.x?.find || screenFind)(b, 'phone'); else if (parts[0] === 'new') screenCreate(b, 'phone'); else screenJoin(b, 'phone', parts[1] || '');
           return;
         }
         await loadMy();
@@ -622,10 +635,12 @@
           return;
         }
         if (!srv.ok) { P.back(); return; }
-        if (sub === 'members' || sub === 'settings' || sub === 'reports') {
-          el.innerHTML = P.head(sub === 'members' ? '👥 Участники' : sub === 'settings' ? '⚙️ Настройки' : '🚩 Жалобы') + '<div class="ph-body ds-ph"></div>';
+        const xsub = DS.x?.sub?.[sub];
+        if (sub === 'members' || sub === 'settings' || sub === 'reports' || xsub) {
+          el.innerHTML = P.head(xsub ? xsub.title : sub === 'members' ? '👥 Участники' : sub === 'settings' ? '⚙️ Настройки' : '🚩 Жалобы') + '<div class="ph-body ds-ph"></div>';
           const b = el.querySelector('.ph-body');
-          if (sub === 'members') { b.innerHTML = '<div class="ds-mlist"></div>'; membersRender(b.firstChild, srv); b.addEventListener('click', ev => { const m = ev.target.closest('.ds-mem'); if (m) location.hash = '#/profile/' + m.dataset.uid; }); }
+          if (xsub) xsub.render(b, 'phone', srv, parts.slice(2));
+          else if (sub === 'members') { b.innerHTML = '<div class="ds-mlist"></div>'; membersRender(b.firstChild, srv); b.addEventListener('click', ev => { const m = ev.target.closest('.ds-mem'); if (m) location.hash = '#/profile/' + m.dataset.uid; }); }
           else if (sub === 'settings') screenSettings(b, 'phone', srv);
           else screenReports(b, 'phone', srv);
           return;
@@ -639,13 +654,15 @@
       };
       draw();
       const onSide = () => { if (!parts[1] && !disposed) draw(); };
-      window.addEventListener('d37:voice', onSide);
-      return () => { disposed = true; window.removeEventListener('d37:voice', onSide); if (mvHost && el.contains(mvHost)) dropView(); };
+      window.addEventListener('d37:voice', onSide); window.addEventListener('d37:events', onSide);
+      return () => { disposed = true; window.removeEventListener('d37:voice', onSide); window.removeEventListener('d37:events', onSide); if (mvHost && el.contains(mvHost)) dropView(); };
     },
   });
 
   // Приглашение #/c/<код> → страница чата с экраном вступления
   DS._test = { cmMsg, link, REASON, canMod, railHtml: () => railHtml('page', OFF_ID) };
+  // для community2.js: адреса, данные сообществ, переходы
+  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS });
   commBadge();
   window.addEventListener('d37:auth', () => { S.my = []; S.myAt = 0; S.cache.clear(); S.members.clear(); if (P.me()) loadMy(true); });
 })();

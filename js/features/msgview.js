@@ -13,7 +13,8 @@
 //   canPin(m), canDel(m), modActions(m) → [[k, текст]], mod(k, m), userMod(uid, nick) → [[k, текст]], onJoin()
 // Сообщение: { id, uid, nick, text, at, reply, edited, deleted, hidden, sticker, role, vip, reactions, pinned, sys, mine }
 // Ссылки на сайт превращаются в карточки: ролик /v/<id>, игра /games/<id>, комната #/games/<id>/<код> («позвать в игру»),
-// игра игрока /g/<id>, приглашение в сообщество #/c/<код>. Чужие ссылки — «[ссылка]», мат закрывается (как в мире).
+// игра игрока /g/<id>, приглашение в сообщество #/c/<код>, событие #/chat/ev/<id> (community2.sql: «✅ Пойду» прямо в карточке),
+// эфир #/chat/twitch (так пишет «Денчик-бот»). Чужие ссылки — «[ссылка]», мат закрывается (как в мире).
 (() => {
   const P = window.D37Phone;
   const MV = window.MsgView = window.MsgView || {};
@@ -81,6 +82,8 @@
     if ((m = /^\/g\/([0-9a-f]{8})\/?$/.exec(path))) return { t: 'ugc', id: m[1] };
     if ((m = /^(?:#\/c|\/c)\/([a-z0-9]{6,12})\/?$/.exec(path))) return { t: 'invite', code: m[1] };
     if ((m = /^#\/phone\/call\/([a-z0-9]{8,16})$/.exec(path))) return { t: 'call', code: m[1] };
+    if ((m = /^#\/chat\/ev\/(\d{1,12})\/?$/.exec(path))) return { t: 'event', id: +m[1] };
+    if (/^#\/chat\/twitch\/?$/.test(path)) return { t: 'live' };
     return null;
   };
   const gameOf = id => (typeof GAMES !== 'undefined' && GAMES.find(g => g.id === id)) || null;
@@ -90,6 +93,8 @@
     if (card?.t === 'ugc') return '🛠️ игра игрока';
     if (card?.t === 'invite') return '🏰 приглашение';
     if (card?.t === 'call') return '📞 звонок';
+    if (card?.t === 'event') return '📅 событие';
+    if (card?.t === 'live') return '🔴 эфир';
     return '🔗 ' + path.replace(/^#?\//, '').slice(0, 32);
   }
   const hrefOf = path => path.startsWith('#') ? path : path;
@@ -110,7 +115,7 @@
       const path = sitePath(w);
       if (path) {
         const card = MV.cardOf(path);
-        if (kid && !(card && (card.t === 'video' || card.t === 'game'))) return '<span class="mv-dim">[ссылка]</span>';
+        if (kid && !(card && (card.t === 'video' || card.t === 'game' || card.t === 'event'))) return '<span class="mv-dim">[ссылка]</span>';
         if (card && cards.length < 2 && !cards.some(c => JSON.stringify(c) === JSON.stringify(card))) cards.push(card); return `<a class="mv-link" href="${e(hrefOf(path))}">${e(linkLabel(path, card))}</a>`;
       }
       if (EXT_RE.test(w)) return '<span class="mv-dim">[ссылка]</span>';
@@ -139,10 +144,73 @@
     }
     if (c.t === 'ugc') return `<a class="mv-card" href="/g/${e(c.id)}"><i>🛠️</i><span><b data-ugc="${e(c.id)}">${e(ugcCache.get(c.id)?.title || 'Игра игрока')}</b><small>Студия игр — играть по ссылке</small></span></a>`;
     if (c.t === 'call') return `<div class="mv-card mv-call" style="--gc:#16a34a"><i>📞</i><span><b>Голосовой звонок</b><small>Разговор напрямую — до 6 друзей</small></span><a class="mv-cbtn" href="#/phone/call/${e(c.code)}">Войти</a></div>`;
+    if (c.t === 'live') return `<div class="mv-card mv-live" style="--gc:#9147ff"><i>🔴</i><span><b>Денчик в эфире на Twitch</b><small>Стрим идёт — смотри и пиши в чат трансляции</small></span><a class="mv-cbtn" href="https://www.twitch.tv/${typeof TWITCH !== 'undefined' ? e(TWITCH) : 'dan4ik37'}" target="_blank" rel="noopener">▶ Смотреть</a></div>`;
+    if (c.t === 'event') return MV.evCardHtml(c.id);
     if (c.t === 'invite') { const i = invCache.get(c.code); return `<div class="mv-card mv-inv" data-inv="${e(c.code)}"><i>${e(i?.icon || '🏰')}</i><span><b>${i ? e(i.name) : 'Приглашение в сообщество'}</b><small>${i ? `${i.members} ${P.plural(i.members, 'участник', 'участника', 'участников')}${i.about ? ' · ' + e(i.about.slice(0, 60)) : ''}` : 'Сообщество на сайте dan4ik37'}</small></span><a class="mv-cbtn" href="#/c/${e(c.code)}">Вступить</a></div>`; }
     return '';
   };
-  // дозагрузка названий для карточек (игры игроков, приглашения)
+  // ── События (community2.sql): карточка в ленте, «✅ Пойду» прямо в ней ──
+  // evCache: id → событие (как cm_event_get) | false (нет, отменено или не видно); пусто — ещё грузим
+  const evCache = new Map();
+  MV.evSet = ev => { if (ev && ev.id) evCache.set(+ev.id, ev); };
+  MV.evGet = id => evCache.get(+id);
+  MV.evLive = ev => !!ev && ev.status === 'active' && Date.parse(ev.starts_at) <= Date.now() && Date.now() < Date.parse(ev.ends_at);
+  MV.evWhen = ev => {
+    const s = Date.parse(ev.starts_at), en = Date.parse(ev.ends_at), now = Date.now();
+    if (ev.status === 'cancelled') return '❌ отменено';
+    if (now >= en) return 'закончилось';
+    if (now >= s) return '🔴 Сейчас идёт';
+    const d = new Date(s), t = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const days = Math.round((new Date(s).setHours(0, 0, 0, 0) - d0) / 864e5);
+    if (days === 0) return s - now < 3600e3 ? `через ${Math.max(1, Math.round((s - now) / 60e3))} мин` : `сегодня в ${t}`;
+    if (days === 1) return `завтра в ${t}`;
+    return d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + t;
+  };
+  // Где проходит: { label, href, ext } (ссылка на Twitch детям не показывается)
+  MV.evPlace = ev => {
+    const k = ev.place_kind, p = String(ev.place || '');
+    if (k === 'text' || k === 'voice') return { label: (k === 'voice' ? '🔊 ' : '#') + (ev.place_name || p), href: ev.community ? `#/chat/c/${ev.community}/${p}` : `#/chat/${p}` };
+    if (k === 'world') return { label: '🌍 Мир Денчика', href: '#/games/world' };
+    if (k === 'game') { const g = gameOf(p); return { label: g ? `${g.icon} ${g.title}` : '🎮 игра', href: `#/games/${p}` }; }
+    if (k === 'stream') return { label: '📺 Стрим на Twitch', href: window.D37Age?.kid?.() ? '' : `https://www.twitch.tv/${typeof TWITCH !== 'undefined' ? TWITCH : 'dan4ik37'}`, ext: true };
+    return { label: '', href: '' };
+  };
+  MV.evAgeOk = ev => !window.D37Age || !ev.age || window.D37Age.canOpen(ev.age);
+  MV.evCardHtml = id => {
+    const ev = evCache.get(+id);
+    if (ev === undefined) return `<div class="mv-card mv-ev" data-ev="${e(id)}"><i>📅</i><span><b>Событие</b><small>Загружаем…</small></span></div>`;
+    if (!ev) return `<div class="mv-card mv-ev off" data-ev="${e(id)}"><i>📅</i><span><b>Событие недоступно</b><small>Его отменили или оно только для участников сообщества</small></span></div>`;
+    if (!MV.evAgeOk(ev)) return `<div class="mv-card mv-ev off" data-ev="${e(id)}"><i>🔞</i><span><b>Событие ${e(ev.age)}+</b><small>Не по возрасту</small></span></div>`;
+    const live = MV.evLive(ev), pl = MV.evPlace(ev), over = Date.now() >= Date.parse(ev.ends_at) || ev.status !== 'active';
+    const btn = over ? '' : live && pl.href ? `<a class="mv-cbtn" href="${e(pl.href)}"${pl.ext ? ' target="_blank" rel="noopener"' : ''}>▶ Зайти</a>`
+      : `<button type="button" class="mv-cbtn${ev.mine ? ' on' : ''}" data-evgo="${e(ev.id)}">${ev.mine ? '✓ Иду' : '✅ Пойду'}</button>`;
+    return `<div class="mv-card mv-ev${live ? ' live' : ''}${over ? ' off' : ''}" data-ev="${e(ev.id)}"><i>${live ? '🔴' : '📅'}</i><span><b><a href="#/chat/ev/${e(ev.id)}">${e(P.clean(ev.title))}</a></b><small>${e(MV.evWhen(ev))}${pl.label ? ' · ' + e(pl.label) : ''}${ev.age ? ` · ${e(ev.age)}+` : ''} · ✅ ${e(ev.going || 0)}</small></span>${btn}</div>`;
+  };
+  MV.evRefresh = id => document.querySelectorAll(`.mv-ev[data-ev="${+id}"]`).forEach(x => { x.outerHTML = MV.evCardHtml(+id); });
+  const EV_REASON = { auth: 'нужно войти', member: 'сначала вступи в сообщество', age: 'не по возрасту', over: 'событие уже закончилось', rate: 'слишком часто — подожди', not_found: 'событие не найдено' };
+  // «✅ Пойду» / «отменить»: → { ok, on, going } | { ok: false, err }
+  MV.evRsvp = async id => {
+    if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return { ok: false, err: 'auth' }; }
+    const cur = evCache.get(+id);
+    const r = await P.rpc('cm_event_rsvp', { p_id: +id, p_on: !(cur && cur.mine) });
+    if (r.data?.ok) {
+      if (cur) { cur.mine = r.data.on; cur.going = r.data.going; }
+      MV.evRefresh(id);
+      window.dispatchEvent(new CustomEvent('d37:event', { detail: { id: +id, on: r.data.on, going: r.data.going } }));
+      return { ok: true, on: r.data.on, going: r.data.going };
+    }
+    return { ok: false, err: r.missing ? 'события появятся, когда сайт обновится' : r.error ? P.err(r.error) : EV_REASON[r.data?.reason] || 'не получилось' };
+  };
+  MV.evLoad = async (id, fresh) => {
+    if (!fresh && evCache.has(+id)) return evCache.get(+id);
+    const r = await P.rpc('cm_event_get', { p_id: +id });
+    const ev = r.data?.ok ? r.data.ev : r.data || r.missing ? false : null;   // null — нет связи: спросим ещё раз
+    if (ev !== null) evCache.set(+id, ev);
+    return ev;
+  };
+
+  // дозагрузка названий для карточек (игры игроков, приглашения, события)
   async function fillCards(root){
     const ugc = [...root.querySelectorAll('[data-ugc]')].map(x => x.dataset.ugc).filter(id => !ugcCache.has(id));
     if (ugc.length && typeof sbClient !== 'undefined' && sbClient) {
@@ -156,10 +224,17 @@
       const { data } = await P.rpc('cm_invite_info', { p_code: code });
       if (data) { invCache.set(code, data); root.querySelectorAll(`.mv-inv[data-inv="${code}"]`).forEach(x => { x.outerHTML = MV.cardHtml({ t: 'invite', code }); }); }
     }
+    for (const el of root.querySelectorAll('.mv-ev[data-ev]')) {
+      const id = +el.dataset.ev; if (evCache.has(id)) continue;
+      const ev = await MV.evLoad(id);
+      if (ev !== null) MV.evRefresh(id);
+    }
   }
 
   // ── Цвет и значки автора ──
-  const ROLE = { admin: ['ADMIN', '255,45,85'], moderator: ['MOD', '145,71,255'], helper: ['HELPER', '34,197,94'], owner: ['👑', '250,204,21'], mod: ['🛡', '96,165,250'] };
+  const ROLE = { admin: ['ADMIN', '255,45,85'], moderator: ['MOD', '145,71,255'], helper: ['HELPER', '34,197,94'], bot: ['🤖 БОТ', '88,101,242'], owner: ['👑', '250,204,21'], mod: ['🛡', '96,165,250'] };
+  // «Денчик-бот» (community2.sql → bot_post): роль 'bot' ставит только сервер — браузер её подделать не может (vip-balance.sql)
+  const isBot = m => !!m && m.role === 'bot' && !m.uid;
   function authorStyle(m){
     const p = m.uid ? P.prof(m.uid) : null;
     const role = m.role && ROLE[m.role] ? m.role : p?.role && ROLE[p.role] ? p.role : null;
@@ -227,7 +302,8 @@
       const hl = !mine && me && (new RegExp('@' + me.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}0-9_])', 'iu').test(m.text || '') || (m.reply && V.msgs.get(m.reply)?.mine));
       const color = st.rgb ? `color:rgb(${st.rgb})` : st.color ? `color:${e(st.color)}` : '';
       const prof = m.uid ? P.prof(m.uid) : null;
-      const ava = P.avatar(prof || (st.rgb ? { nick: m.nick, role: st.role } : null), m.nick, opt.compact ? 32 : 38).replace('class="ph-ava"', `class="ph-ava mv-ava" data-u="${e(m.uid || '')}" data-n="${e(m.nick)}"`);
+      const ava = isBot(m) ? `<span class="ph-ava mv-ava mv-botava" data-u="" data-n="${e(m.nick)}" style="width:${opt.compact ? 32 : 38}px;height:${opt.compact ? 32 : 38}px">🤖</span>`
+        : P.avatar(prof || (st.rgb ? { nick: m.nick, role: st.role } : null), m.nick, opt.compact ? 32 : 38).replace('class="ph-ava"', `class="ph-ava mv-ava" data-u="${e(m.uid || '')}" data-n="${e(m.nick)}"`);
       const rq = m.reply ? replyQuote(m.reply) : '';
       const crole = V.A?.roleOf?.(m.uid) || null;
       const tools = `<div class="mv-tools">${V.A.caps.react ? '<button type="button" data-a="react" title="Реакция">😊</button>' : ''}${V.A.caps.reply && V.canWrite ? '<button type="button" data-a="reply" title="Ответить">↩</button>' : ''}<button type="button" data-a="more" title="Ещё">⋯</button></div>`;
@@ -695,6 +771,12 @@
     // ── Карточка человека: профиль, друзья, ЛС, звонок, блок, модерация ──
     V.userCard = async (uid, nick, anchor, m) => {
       closeMenu();
+      if (isBot(m)) {   // карточка бота: что он делает, без дружбы и жалоб
+        openOver('', `<div class="mv-user"><span class="ph-ava mv-botava" style="width:56px;height:56px;font-size:30px">🤖</span><div><b>Денчик-бот</b><span>Бот сайта: пишет в «📢 новости», когда Денчик в эфире и когда выходит новое видео</span></div></div>
+          <div class="mv-uacts"><a class="mv-ubtn" href="#/chat/news">📢 Новости</a><a class="mv-ubtn" href="#/chat/events">📅 События</a></div>`);
+        over.classList.add('mv-over-user');
+        return;
+      }
       const p = uid ? (await P.profiles([uid]))[uid] : null;
       const me = P.me(), self = uid && uid === me;
       const acts = [];
@@ -746,6 +828,7 @@
         return;
       }
       const ins = t.closest('[data-ins]'); if (ins) { insertAt(ins.dataset.ins); return; }
+      const evb = t.closest('[data-evgo]'); if (evb) { evb.disabled = true; MV.evRsvp(+evb.dataset.evgo).then(r => { evb.disabled = false; if (!r.ok && r.err !== 'auth') note('⚠️ ' + r.err); }); return; }
       const stk = t.closest('[data-stk]');
       if (stk) { if (stk.classList.contains('lock')) { location.href = '/vip'; return; } closePanel(); V.A.sendSticker?.(stk.dataset.stk).then(r => { if (r && !r.ok) note('⚠️ ' + (r.err || 'Стикер не отправился')); else if (r?.m) onEvent({ t: 'ins', m: r.m }); }); return; }
       const acb = t.closest('[data-ac]'); if (acb) { acPick(+acb.dataset.ac); return; }

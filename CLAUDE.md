@@ -40,6 +40,14 @@
    "cannon" и "u"); 8) `raids.sql` — новый, после bases.sql и premium.sql (проверка: `/rpc/raid_state` гостем → {"ok":false,"reason":"auth"},
    PGRST202 = не применён; `/rpc/raid_settle` гостем → отказ в правах). До запуска — только обучение и дружеские бои; оборона и казарма —
    пробные в браузере. PGlite: test-raids.mjs (105), test-bases.mjs (77).
+9. `community2.sql` (16.10.2026, ПОСЛЕ community.sql и premium.sql; от остальных не зависит) — «Денчик-бот» и канал «📢 новости»,
+   события 📅, обзор сообществ 🧭 + колонка messages.is_sticker. ВАЖНО: на живой базе is_sticker нет (chat-stickers.sql не применён),
+   а триггер vip-balance.sql пишет new.is_sticker; vip-balance.sql на живой базе применён (16.10: vip_tier_of(uid) есть) → похоже, НИ ОДНО
+   сообщение общего чата из браузера не проходит («record new has no field is_sticker»; на PGlite воспроизведено; последнее сообщение
+   в messages — 20.09) — этот файл чинит первой строкой, запускать в первую очередь. Проверка: `/rest/v1/messages?select=is_sticker&limit=0` → 200;
+   `/rest/v1/chat_channels?id=eq.news` → [{…"mods_only":true}]; `/rpc/cm_events` гостем {"p_community":null} → {"ok":true,"can":false,"list":[]};
+   `/rpc/cm_catalog` гостем {} → []; `/rpc/bot_post` гостем → 401 permission denied (PGRST202 = не применён). Переопределяет cm_join и
+   cm_invite_info — перезапустил community.sql → потом снова community2.sql. PGlite: E:\claude-tmp\community2	est-community2.mjs (87).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -675,7 +683,21 @@ js/features/games.js и хвост css/premium.css.
   «📍 К другу» — его сервер мира рядом с ним, комната игры, мир игрока. Игра поверх мира: D37Phone.setActivity({ g, j }) / (null).
 - «🌍 Весь мир» (js/features/worldchat.js): 🏠/🌍 у чата мира, канал 'mir-all' (broadcast, не чаще раза в 2 с с человека), подписи
   ключом мира, ник из world_check.
-- Тесты: node scripts/community-test.cjs (99); PGlite community.sql — 239 проверок (scratchpad pg/test-community.mjs).
+- Тесты: node scripts/community-test.cjs (129); PGlite community.sql — 239 проверок (scratchpad pg/test-community.mjs).
+- Сообщества 2 (community2.sql + js/features/community2.js — грузится третьим в MODS.ds, phone.js VER '4'; агент 16.10.2026):
+  «Денчик-бот» — сообщения в канал «📢 новости» (#news, mods_only, position −1; по умолчанию сайт открывает #общий) пишет ТОЛЬКО сервер:
+  api/push-check.js → bot_post(channel, text, key) с ключом service_role (повод — один раз: bot_posts), роль 'bot' (браузер её не
+  подделает — vip-balance.sql ставит свою), в ленте 🤖 БОТ, своя карточка; «🔴 Денчик в эфире: … → /#/chat/twitch» (карточка «▶ Смотреть»,
+  детям — [ссылка]) и «🎬 Новое видео: … → /v/<id>». Без VAPID крон всё равно пишет бота. Праздничные поздравления ботом — не сделаны.
+  События 📅 (comm_events, comm_event_rsvp): строка «📅 События» над каналами (DS.x.chanTop), #/chat[/c/<id>]/events[/new|/edit/<id>],
+  страница #/chat/ev/<id> (в телефоне comm/ev/<id>); ссылка #/chat/ev/<id> в тексте → карточка (msgview MV.evCardHtml, «✅ Пойду» прямо
+  в ней; детям — можно, если метка по возрасту). Создают: сервер сайта — admin/moderator (карточка — их сообщением в «📢 новости»),
+  сообщество — владелец/модератор (comm_perm, бит 8 — под будущие свои роли). 🔔 «через N мин» за 15 минут тем, кто идёт: крон
+  push-check (bot_event_remind) + запасом при чтении (cm_events / cm_event_get). Лимиты: 15 будущих на сервер, 6 новых в час от человека.
+  Обзор 🧭 (#/chat/find → DS.x.find): cm_catalog (поиск, категории games/art/chat/study/stream, members/active/new, по 24), метка
+  возраста сообщества (cm_set_meta — владелец; 18+ — персонал); не по возрасту (age_group_of → comm_age_cap) — не видно и cm_join → 'age'.
+  Без файла: «📅 События — скоро», обзор — старый поиск. Не сделаны (очередь): свои роли (perms-биты уже в comm_perm), «🚀 Буст» за 💎
+  (premium_add напрямую из своей функции — premium_items не трогать), полировка голосовых.
 
 ## Телефон в руке персонажа 📱 (как в ГТА; агент 15.10.2026)
 - world3d.js (kit): слой телефона поверх любой позы (идёт/бежит, сидит, присел, прыжок — ноги свои; вода, лестница, вис, кувырок,

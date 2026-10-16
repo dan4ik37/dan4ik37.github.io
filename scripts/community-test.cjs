@@ -30,7 +30,7 @@ const timers = []; const _si = setInterval; globalThis.setInterval = (f, ms) => 
 // окно «⚙️ Настройки» (js/core/settings.js) — заглушка: телефон добавляет туда свою вкладку
 const setTabs = []; let setOpened = null;
 window.D37Settings = { addTab(t){ setTabs.push(t); }, open(o){ setOpened = o; }, isOpen: () => false };
-for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/worldchat.js', 'js/features/chat.js'])
+for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/worldchat.js', 'js/features/chat.js'])
   vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 const P = window.D37Phone, MV = window.MsgView, C = window.D37Calls._test, DS = window.D37DS._test, W = window.D37WorldChat, CH = window.D37Chat._test;
 
@@ -181,6 +181,82 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(H(false, '', { kind: 'party', state: 'live' }) === '' && H(false, '', { kind: 'voice', state: 'live' }) === '', 'компания и голосовой канал — без телефона у уха (как наушники)');
   ok(H(true, 'calls', live) === 'use', 'во время разговора смотрит другое приложение — в руке перед собой');
   ok(P._test.APPS.some(a => a.id === 'game' && a.mod === 'apps'), 'в телефоне есть мини-игра');
+
+  // ═══ 13. «Денчик-бот» и карточки эфира / событий (community2.sql) ═══
+  ok(card('#/chat/twitch')?.t === 'live' && card('#/chat/ev/12')?.t === 'event' && card('#/chat/ev/12').id === 12, 'эфир и событие — карточки');
+  ok(card('#/chat/ev/abc') === null && card('#/chat/ev/1234567890123') === null, 'кривой номер события — без карточки');
+  r = MV.rich('🔴 Денчик в эфире: Играем! → https://dan4ik37.vercel.app/#/chat/twitch', '');
+  ok(r.cards.length === 1 && r.cards[0].t === 'live' && /🔴 эфир/.test(r.html), 'сообщение бота об эфире → карточка «Смотреть»', r);
+  ok(/twitch\.tv\/dan4ik37/.test(MV.cardHtml({ t: 'live' })) && /rel="noopener"/.test(MV.cardHtml({ t: 'live' })), 'карточка эфира ведёт на Twitch');
+  r = MV.rich('🎬 Новое видео: Обзор → https://dan4ik37.vercel.app/v/dQw4w9WgXcQ', '');
+  ok(r.cards.length === 1 && r.cards[0].t === 'video', 'сообщение бота о ролике → карточка ролика');
+  window.D37Age = { kid: () => true, kidText: t => t, canOpen: n => n <= 6 };
+  r = MV.rich('эфир https://dan4ik37.vercel.app/#/chat/twitch и событие #/chat/ev/5', '', { kid: true });
+  ok(/\[ссылка\]/.test(r.html) && r.cards.length === 1 && r.cards[0].t === 'event', 'ребёнку: эфир (Twitch 13+) — [ссылка], событие сайта — карточка', r);
+  ok(/Загружаем/.test(MV.cardHtml({ t: 'event', id: 5 })), 'карточка события до загрузки');
+  const soon = new Date(Date.now() + 2 * 3600e3).toISOString(), soonEnd = new Date(Date.now() + 4 * 3600e3).toISOString();
+  MV.evSet({ id: 5, title: 'Турнир хуйня', starts_at: soon, ends_at: soonEnd, status: 'active', place_kind: 'game', place: 'chess', age: 0, going: 3, mine: false });
+  let ec = MV.cardHtml({ t: 'event', id: 5 });
+  ok(/data-evgo="5"/.test(ec) && /✅ Пойду/.test(ec) && /Шахматы/.test(ec) && /✅ 3/.test(ec) && !/хуйня/.test(ec), 'карточка события: «Пойду», место, сколько идут, мат закрыт', ec);
+  MV.evSet({ id: 6, title: 'Ночной стрим', starts_at: soon, ends_at: soonEnd, status: 'active', place_kind: 'stream', age: 16, going: 0 });
+  ok(/Не по возрасту/.test(MV.cardHtml({ t: 'event', id: 6 })), 'событие 16+ ребёнку — «не по возрасту»');
+  delete window.D37Age;
+  MV.evSet({ id: 7, title: 'Идёт сейчас', starts_at: new Date(Date.now() - 60e3).toISOString(), ends_at: soonEnd, status: 'active', place_kind: 'world', going: 2, mine: true });
+  ec = MV.cardHtml({ t: 'event', id: 7 });
+  ok(/mv-ev live/.test(ec) && /Сейчас идёт/.test(ec) && /href="#\/games\/world"/.test(ec) && /▶ Зайти/.test(ec), 'идёт сейчас: красная рамка и «▶ Зайти» в место', ec);
+  MV.evSet({ id: 8, title: 'Было', starts_at: new Date(Date.now() - 7200e3).toISOString(), ends_at: new Date(Date.now() - 3600e3).toISOString(), status: 'active', place_kind: 'none', going: 1 });
+  ok(/закончилось/.test(MV.cardHtml({ t: 'event', id: 8 })) && !/data-evgo/.test(MV.cardHtml({ t: 'event', id: 8 })), 'закончилось — без кнопки');
+  ok(MV.evPlace({ place_kind: 'voice', place: '12', place_name: 'Голос', community: 3 }).href === '#/chat/c/3/12' && MV.evPlace({ place_kind: 'text', place: 'games' }).href === '#/chat/games', 'место: канал сообщества / сервера сайта');
+  ok(/через \d+ мин/.test(MV.evWhen({ status: 'active', starts_at: new Date(Date.now() + 20 * 60e3).toISOString(), ends_at: soonEnd })), 'скоро: «через N мин»');
+
+  // ═══ 14. «📅 События» (community2.js): строка над каналами, список, форма, без SQL — «скоро» ═══
+  const X = window.D37DS.x, rpc0 = P.rpc;
+  const fakeEl = () => Object.assign(document.createElement('div'), { isConnected: true, querySelector: () => null, querySelectorAll: () => [] });
+  let calls = [];
+  P.rpc = async (name, args) => { calls.push(name); return { error: { code: 'PGRST202', message: 'Could not find the function' }, missing: true }; };
+  const off = { ok: true, official: true, id: 'd37', name: 'Денчик37', channels: [{ id: 'general', name: 'общий', kind: 'text' }, { id: 'voice', name: 'Голосовой', kind: 'voice' }] };
+  let box2 = fakeEl();
+  await X.sub.events.render(box2, 'page', off, []);
+  ok(/Появится, когда сайт обновится/.test(box2.innerHTML), 'без community2.sql: «Появится, когда сайт обновится»', box2.innerHTML);
+  ok(/<span>События<\/span>/.test(X.chanTop('page', off, '')) && /скоро/.test(X.chanTop('page', off, '')), 'строка «📅 События» — «скоро»');
+  const later = new Date(Date.now() + 86400e3).toISOString(), later2 = new Date(Date.now() + 90000e3).toISOString();
+  P.rpc = async (name, args) => {
+    calls.push(name);
+    if (name === 'cm_events') return { data: { ok: true, can: true, list: [
+      { id: 11, title: 'Стрим Денчика', about: 'Играем', starts_at: new Date(Date.now() - 60e3).toISOString(), ends_at: later, place_kind: 'stream', place: '', age: 12, going: 5, mine: true, status: 'active', can: true },
+      { id: 12, title: 'Взрослый турнир', starts_at: later, ends_at: later2, place_kind: 'game', place: 'chess', age: 18, going: 0, status: 'active', can: true }] } };
+    return { data: null };
+  };
+  calls = []; box2 = fakeEl();
+  await X.sub.events.render(box2, 'page', off, []);
+  ok(calls.includes('cm_events') && /＋ Создать событие/.test(box2.innerHTML) && /✓ Иду · 5/.test(box2.innerHTML) && /▶ Зайти/.test(box2.innerHTML) && /href="#\/chat\/ev\/11"/.test(box2.innerHTML), 'список: «Создать», «✓ Иду · 5», идёт — «▶ Зайти», ссылка на событие', box2.innerHTML.slice(0, 400));
+  ok(/ds-evlive/.test(X.chanTop('page', off, 'x:events')) && /ds-evrow on/.test(X.chanTop('page', off, 'x:events')), 'строка над каналами: «идёт», выбрана');
+  window.D37Age = { listOk: n => n < 18, canOpen: n => n < 18, kid: () => false, badge: n => `<i>${n}+</i>` };
+  box2 = fakeEl(); await X.sub.events.render(box2, 'page', off, []);
+  ok(!/Взрослый турнир/.test(box2.innerHTML) && /Стрим Денчика/.test(box2.innerHTML), 'событие 18+ несовершеннолетнему не показываем');
+  delete window.D37Age;
+  window.currentUser = null;
+  box2 = fakeEl(); let logged = '';
+  const login0 = P.login; P.login = (el, t) => { logged = t; };
+  await X.sub.events.render(box2, 'page', off, ['new']);
+  ok(/вошедшие/.test(logged), 'создать событие — сначала войти');
+  P.login = login0; P.rpc = rpc0;
+
+  // ═══ 15. «🧭 Обзор сообществ» (community2.js): карточки, возраст, старый поиск без community2.sql ═══
+  const cc = X.ccard({ id: 7, name: 'Клан хуйни', about: 'Играем', icon: '🎮', members: 12, category: 'games', age: 12, active_at: new Date().toISOString() }, 'page');
+  ok(/data-join="7"/.test(cc) && /🎮 Игры/.test(cc) && /href="#\/chat\/c\/7"/.test(cc) && !/хуйни/.test(cc), 'карточка: «Вступить», категория, ссылка, мат закрыт', cc);
+  window.D37Age = { listOk: n => n < 18, canOpen: n => n <= 6, kid: () => true, kidText: t => t, badge: n => `<i>${n}+</i>` };
+  ok(/Не по возрасту/.test(X.ccard({ id: 8, name: 'Подростки', icon: '🔥', members: 3, category: 'chat', age: 12 }, 'page')) && !/data-join/.test(X.ccard({ id: 8, name: 'П', icon: '🔥', members: 3, age: 12 }, 'page')), 'ребёнку 12+ — без «Вступить»');
+  ok(X.ccard({ id: 9, name: 'Взрослые', icon: '🔞', members: 3, age: 18 }, 'page') === '', '18+ несовершеннолетнему — не показываем');
+  delete window.D37Age;
+  let catCalls = [];
+  P.rpc = async (name, args) => { catCalls.push([name, args]); if (name === 'cm_catalog') return { error: { code: 'PGRST202' }, missing: true }; if (name === 'cm_list_public') return { data: [{ id: 3, name: 'Старое', icon: '💬', members: 2 }] }; return { data: null }; };
+  const fq = () => ({ value: '', hidden: false, addEventListener(){}, querySelectorAll: () => [] });
+  const fbox = { innerHTML: '', isConnected: true, addEventListener(){}, querySelector: s => (fbox._q[s] = fbox._q[s] || fq()), _q: {} };
+  X.find(fbox, 'page');
+  await new Promise(res => setTimeout(res, 20));
+  ok(catCalls.map(c => c[0]).join() === 'cm_catalog,cm_list_public' && /Старое/.test(fbox._q['[data-f="list"]'].innerHTML) && fbox._q['.ds-oldnote'].hidden === false, 'без community2.sql — старый поиск и подсказка «появятся, когда сайт обновится»');
+  P.rpc = rpc0;
 
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);

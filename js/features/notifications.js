@@ -12,7 +12,8 @@ const NOTIF_ICON = {
   idea_planned: '💡', idea_done: '🎬', idea_rejected: '💭', idea_votes: '🔥', referral: '🔗',
   level_up: '⬆️', level_reward: '🎁',
   ref_join: '🎉', ref_reward: '🎁', ref_hold: '⏳', ref_bonus: '💎',   // 👥 приглашения (referrals2.sql)
-  raid: '⚔️'   // набеги: «на тебя напали» / «отбился» (raids.sql)
+  raid: '⚔️',   // набеги: «на тебя напали» / «отбился» (raids.sql)
+  cm_event: '📅', cm_mention: '@', cm_reply: '↩️', cm_report: '🚩', cm_mod: '🛡', cm_boost: '🚀'   // сообщества (community.sql, community2.sql)
 };
 let notifItems = [];
 let notifUnread = 0;
