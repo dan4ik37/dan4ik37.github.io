@@ -850,6 +850,7 @@
     W.set(hit.x, hit.y, hit.z, 0, { urgent: 3 });
     st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .8 });
     if (st.ents?.breakFx) st.ents.breakFx(hit.x, hit.y, hit.z, b.id); else st.ents?.debris(hit.x, hit.y, hit.z, b.id);   // осколки кувыркаются и прыгают
+    if (opts.fell !== false && /^log_/.test(b.name)) st.ents?.fellTree?.(hit.x, hit.y, hit.z, st.P);   // подрубил дерево — валится (kubomir-ents.js)
     st.modRun?.event('blockBreak', { x: hit.x, y: hit.y, z: hit.z, block: b.name });
     if (st.creative) return;
     // вещь выпала
@@ -1430,6 +1431,7 @@
         <div class="gs-row"><div class="gs-lbl">Красться<small>Держать Shift — как в Майнкрафте по умолчанию; «Нажал — отжал» — один раз нажать, ещё раз — встать.</small></div><div class="gs-ctl">${seg('sneakToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sneakToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Бег<small>Держать Ctrl или один раз нажать.</small></div><div class="gs-ctl">${seg('sprintToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sprintToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">«Призрак» блока<small>Полупрозрачный кубик там, куда встанет блок из руки.</small></div><div class="gs-ctl">${seg('ghost', [[1, 'Вкл'], [0, 'Выкл']], opts.ghost === false ? 0 : 1)}</div></div>
+        <div class="gs-row"><div class="gs-lbl">Деревья падают<small>Подрубил ствол — дерево валится от тебя и рассыпается на брёвна (только настоящие деревья, не постройки).</small></div><div class="gs-ctl">${seg('fell', [[1, 'Вкл'], [0, 'Выкл']], opts.fell === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Погода<small>Дождь и снег по месту (в пустыне — сухо): небо темнее, капли и хлопья вокруг, шум дождя. На «низкой» графике — без капель.</small></div><div class="gs-ctl">${seg('weather', [[1, 'Вкл'], [0, 'Выкл']], opts.weather === false ? 0 : 1)}</div></div>
         ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после смерти.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
         ${K ? K.keysHtml(K.capId) : '<p class="gs-note">Клавиши «Кубомира» можно поменять, когда открыт мир.</p>'}
@@ -1444,6 +1446,7 @@
         if (k === 'sneakToggle') { opts.sneakToggle = v === '1'; if (S) S.sneakOn = false; }
         if (k === 'sprintToggle') { opts.sprintToggle = v === '1'; if (S) S.sprintOn = false; }
         if (k === 'ghost') opts.ghost = v === '1';
+        if (k === 'fell') opts.fell = v === '1';
         if (k === 'weather') { opts.weather = v === '1'; if (S) S.weatherOff = !opts.weather; }
         if (k === 'tips' && S) { S.meta.tips = v === '1'; tipsUpdate(S); }
         lsSet(LS_OPT, opts); D.refresh();
@@ -1481,6 +1484,9 @@
       for (let i = 0; i < 6; i++) bub.push([.5 + r0() * 7, new k.Bp(300 + r0() * 380, 8), .5 + r0() * .5]);
       return k.make(8, 222, (t, r) => { const w = k.N(r); lp += (w - lp) * .03; let s = lo.do(w) * 2.2 + mid.do(w) * .5 + lp * 1.2; for (const b of bub) { const d = t - b[0]; if (d > 0 && d < .14) s += b[1].do(w) * k.exp(-d * 34) * 1.3 * b[2]; } return s; }, .05, .03);
     });
+    // дерево: скрип (трещит, кренясь) и глухой удар о землю
+    Sy.add('kb_creak', k => { const a = new k.Bp(240, 6), b = new k.Bp(520, 5); return k.make(.9, 223, (t, r) => { const w = k.N(r), e = Math.sin(Math.min(1, t / .9) * Math.PI), tick = (Math.sin(t * 38 + Math.sin(t * 7) * 3) > .6 ? 1 : .25); return (a.do(w) * 2.2 + b.do(w) * 1.1) * e * tick; }, .07, .05); });
+    Sy.add('kb_thud', k => { const a = new k.Bp(70, 1.1), b = new k.Bp(180, 1.4), c = new k.Bp(900, 1); let lp = 0; return k.make(.7, 224, (t, r) => { const w = k.N(r); lp += (w - lp) * .04; return (a.do(w) * 3 + b.do(w) * 1.5 + lp * 2) * k.exp(-t * 7) + c.do(w) * k.exp(-t * 30) * .6; }, .13, .06); });
     Sy.add('kb_poof', k => { const a = new k.Bp(500, .9), b = new k.Bp(1400, 1.1); return k.make(.3, 219, (t, r) => { const w = k.N(r), e = Math.min(1, t / .02) * k.exp(-t * 11); return (a.do(w) * 1.6 + b.do(w)) * e; }, .09, .05); });
   }
 

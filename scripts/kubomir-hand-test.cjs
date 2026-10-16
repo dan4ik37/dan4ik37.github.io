@@ -563,6 +563,49 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(VR.itemGeo('torch').attributes.position.count === 8, 'факел и растения (блоки) — как были: две плоскости');
   }
 
+  // ═══ 11. Падающие деревья (V.component + X.fallGroup): валятся только настоящие, лёг — брёвна вещами ═══
+  sec('деревья: подрубил — валится только настоящее дерево; лёг — брёвна вещами; время падения — по тактам');
+  {
+    const key = (x, y, z) => x + ',' + y + ',' + z;
+    const mkW = () => { const cells = new Map(); return { seed: 5, listeners: [], cells,
+      raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < 10 ? ID.stone : 0) : v; },
+      get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; }, set(x, y, z, v){ cells.set(key(Math.floor(x), Math.floor(y), Math.floor(z)), v); return true; },
+      lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => 10, chunkAt: () => null, chunk: () => null }; };
+    const tree = (W, x, z, h = 5, r = 2, layers = 3) => {
+      for (let y = 10; y < 10 + h; y++) W.cells.set(key(x, y, z), ID.log_oak);
+      const top = 10 + h - 1;
+      for (let y = top - layers + 1; y <= top + 1; y++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) if (W.raw(x + dx, y, z + dz) === 0 && (y <= top || (Math.abs(dx) <= 1 && Math.abs(dz) <= 1))) W.cells.set(key(x + dx, y, z + dz), ID.leaves_oak);
+    };
+    const mk = (W, diff = 'easy') => { const S11 = { R: Object.assign({}, R, { lighting: { time: 12 }, night: 0 }), VR, W, P: { x: 47.5, y: 10, z: 50.5, vx: 0, vy: 0, vz: 0, dead: false }, ox: 0, oz: 0, meta: { diff }, ST: { rd: 6 }, creative: false }; const X = window.KubomirEnts.create(S11); S11.ents = X; X.spawnT = 1e9; return { X, S11 }; };
+    const fell = (frames) => {
+      const W = mkW(); tree(W, 50, 50); const { X, S11 } = mk(W);
+      W.set(50, 10, 50, 0);   // подрубил нижнее бревно
+      const g = X.fellTree(50, 10, 50, S11.P);
+      const res = { ok: !!g, removed: W.get(50, 12, 50) === 0 && W.get(51, 13, 51) === 0 && W.get(52, 12, 52) === 0, ticks: -1, logs: 0, dir: g ? [g.dx, g.dz] : null };
+      for (let i = 0; i < 200 && X.groups.length; i++) { X.tick(1 / 20); if (frames) for (let k = 0; k < frames(i); k++) { X.frac = (k + 1) / (frames(i) + 1); X.frame(1 / 144, i / 20); } if (!X.groups.length) res.ticks = i; }
+      res.logs = X.items.filter(e => e.s.id === 'log_oak').reduce((a, e) => a + e.s.n, 0);
+      res.items = X.items.length; X.dispose(); return res;
+    };
+    const A = fell(null), B = fell(i => 1 + (i * 5) % 4);
+    ok(A.ok && A.removed, 'подрубил дерево — стволы и листва убраны из мира (обычные правки), падает одна сетка', A);
+    ok(A.dir && A.dir[0] > .9, 'валится от игрока (игрок с запада — дерево на восток)', A.dir);
+    ok(A.ticks > 5 && A.ticks < 80 && B.ticks === A.ticks, 'время падения — по тактам игры, кадры не влияют', [A.ticks, B.ticks]);
+    ok(A.logs === 4, 'лёг — каждое бревно стало вещью (4 над срезом)', A.logs);
+    // не валится: голый столб, дом из брёвен, дерево у досок, слишком большое
+    const none = (build, cut) => { const W = mkW(); build(W); const { X, S11 } = mk(W); W.set(cut[0], cut[1], cut[2], 0); const g = X.fellTree(cut[0], cut[1], cut[2], S11.P); const st = W.get(cut[0], cut[1] + 1, cut[2]); X.dispose(); return !g && st === ID.log_oak; };
+    ok(none(W => { for (let y = 10; y < 15; y++) W.cells.set(key(50, y, 50), ID.log_oak); }, [50, 10, 50]), 'голый столб из брёвен (без листвы) — стоит');
+    ok(none(W => { for (let y = 10; y < 13; y++) for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) if (x === 48 || x === 52 || z === 48 || z === 52) W.cells.set(key(x, y, z), ID.log_oak); for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) W.cells.set(key(x, 13, z), ID.leaves_oak); }, [50, 10, 48]), 'дом из брёвен (даже с крышей из листвы) — стоит: стены держатся за землю');
+    ok(none(W => { tree(W, 50, 50); W.cells.set(key(51, 12, 50), ID.planks_oak); }, [50, 10, 50]), 'дерево касается досок (постройка) — не валится');
+    ok(none(W => tree(W, 50, 50, 10, 4, 8), [50, 10, 50]), 'слишком большое (больше 220 блоков) — как в Майнкрафте, ничего не падает');
+    // не больше 3 сразу
+    { const W = mkW(); for (let k = 0; k < 4; k++) tree(W, 50 + k * 8, 50); const { X, S11 } = mk(W); let n = 0; for (let k = 0; k < 4; k++) { W.set(50 + k * 8, 10, 50, 0); if (X.fellTree(50 + k * 8, 10, 50, S11.P)) n++; } ok(n === 3 && X.groups.length === 3, 'падает не больше 3 деревьев сразу', n); X.dispose(); }
+    // V.component: опора и «чужое»
+    { const W = mkW(); for (let y = 10; y < 13; y++) W.cells.set(key(5, y, 5), ID.log_oak);
+      const c = V.component(W, [[5, 11, 5]], { take: v => (v & 0xfff) === ID.log_oak, edge: (v, x, y, z, dy) => v === ID.stone && dy < 0 ? 1 : 0, max: 10 });
+      ok(c && c.n === 3 && c.grounded && c.box[1] === 10 && c.box[4] === 12, 'V.component: кусок, опора снизу, рамка', c && { n: c.n, g: c.grounded, box: c.box });
+      ok(V.component(W, [[5, 11, 5]], { take: v => (v & 0xfff) === ID.log_oak, max: 2 }) === null && V.stabilityOf(V.blocks[ID.log_oak]).base > 0, 'V.component: больше предела — null; запас прочности (на будущее) — данные есть'); }
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
