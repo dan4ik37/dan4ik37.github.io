@@ -66,7 +66,7 @@
     mountain: { name: 'горы', t: -1, amp: 13, dayA: 6, wet: 1.3, snowy: 1.4, fog: 1.3, wind: [5, 12], thunder: .9, heat: 0, cloud: .8, rh: 60 },
     desert: { name: 'пустыня', t: 20, amp: 13, dayA: 9, wet: .15, snowy: .2, fog: .15, wind: [3, 8], thunder: .3, heat: 1.6, cloud: .25, rh: 25 },
     sea: { name: 'море', t: 11, amp: 8, dayA: 2.5, wet: 1.1, snowy: .7, fog: 2, wind: [6, 12], thunder: .9, heat: .3, cloud: .8, rh: 80 },
-    snow: { name: 'снега', t: -8, amp: 11, dayA: 4, wet: .9, snowy: 1.5, fog: .9, wind: [4, 10], thunder: .1, heat: 0, cloud: .7, rh: 70 },
+    snow: { name: 'снега', t: -11, amp: 9, dayA: 4, wet: .9, snowy: 1.5, fog: .9, wind: [4, 10], thunder: .1, heat: 0, cloud: .7, rh: 70 },
     tropic: { name: 'тропики', t: 26, amp: 3, dayA: 5, wet: 1.6, snowy: 0, fog: .8, wind: [2, 7], thunder: 1.5, heat: .8, cloud: .75, rh: 85 },
   };
   const clim = k => C.CLIMATES[k] || C.CLIMATES.temperate;

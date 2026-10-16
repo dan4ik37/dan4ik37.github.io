@@ -1230,13 +1230,16 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       let rebuild = false;
       if (k.startsWith('pack:')) { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // набор шейдеров — предыдущий (render.js сам выберет)
       else if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
-      else { if (k === 'patch') E.gfxUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
+      else if (k === 'clim' && why !== 'link') { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // погода на поверхностях: данные шейдеров больше не ставятся (precip.js) — сразу
+      else { if (k === 'patch') E.gfxUnpatch?.(T); if (k === 'clim') E.climUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
       try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k, why, prog, rebuild } })); } catch (e) {}
       return true;
     }
     // сцена: по ступеньке — коды в альфе → свои куски шейдеров → «низкая» (не собралось — коды не помогут: это не текст шейдера)
     function ladder(why, prog = ''){
       if (G.wait) return;
+      // погода на поверхностях (gfx.js D37_CLIM) — новее всего: кадр с ней чернеет / «не числа» — сначала без неё
+      if (why !== 'link' && R.wxOn && E.climShaders && on('clim')) { off('clim', why, prog); return; }
       if (why !== 'link' && P?.codesOn?.() && on('codes')) { off('codes', why, prog); return; }
       if (on('patch') && T.ShaderChunk?.__d37) { off('patch', why, prog); return; }
       if (on('tier') && R.q !== 'low') { off('tier', why, prog); return; }
@@ -1269,6 +1272,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
           continue;
         }
         if (lb.post) off(lb.post === 'ao' && P?.fol && on('fol') ? 'fol' : PROGK[lb.post] || 'post', 'link', lb.post);
+        // не собралась программа с куском погоды (материалы со светом, вода, купол с радугой) — сначала без погоды
+        else if (E.climShaders && on('clim') && lb.mat && (lb.mat.isMeshStandardMaterial || lb.mat.isMeshLambertMaterial || lb.mat.defines?.D37_RBOW !== undefined)) off('clim', 'link', lb.scene);
         else ladder('link', lb.scene);
       }
     }
@@ -1356,7 +1361,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (G.n === 2 || G.n === 10 || G.n === 40 || G.n === G.scanAt || G.n % 300 === 0) { try { scan(); } catch (e) {} }
       if (G.n === 60) { try { const e = gl.getError(); if (e && e !== gl.CONTEXT_LOST_WEBGL) gSend('gfx_glerror', { what: 'gl', why: String(e), prog: '', ...base() }); } catch (e) {} }
       if (P) {   // включили/выключили AO, трассировку, траву, свечение, постобработку — проверить кадр заново (чуть позже)
-        const sig = `${P.on}|${P.ao.on}|${P.rt.on}|${P.fol}|${P.bloom.on}|${P.pack?.id}`, sig2 = `${P.upscaler}|${P.fxaa}|${P.scaled}|${P.fg.on}|${R.pack?.wave}`;
+        const sig = `${P.on}|${P.ao.on}|${P.rt.on}|${P.fol}|${P.bloom.on}|${P.pack?.id}|${R.wxOn ? 1 : 0}`, sig2 = `${P.upscaler}|${P.fxaa}|${P.scaled}|${P.fg.on}|${R.pack?.wave}`;
         if (sig !== G.sig) { if (G.sig) G.testAt = Math.min(G.testAt, G.n + 20); G.sig = sig; }
         if (sig + sig2 !== G.sig2) { if (G.sig2) G.scanAt = G.n + 2; G.sig2 = sig + sig2; }   // новые проходы — их программы проверить сразу
       }

@@ -63,7 +63,8 @@
     const skyTop = typeof o.skyTop === 'function' ? o.skyTop : null;
     const waterAt = typeof o.water === 'function' ? o.water : null;
     const A = o.sound || null;
-    const qBase = R.q === 'low' ? 0 : (E.isMobile?.() || R.q === 'mid') ? .45 : 1;
+    // particles: false — свои частицы у игры («Кубомир»); sky: false — небо и туман игра темнит сама; occlusion: false — без карты сверху
+    const qBase = o.particles === false || R.q === 'low' ? 0 : (E.isMobile?.() || R.q === 'mid') ? .45 : 1, useSky = o.sky !== false;
     const FR = E.rng ? E.rng((C.seedOf('precip') ^ (Date.now() & 0xffff)) >>> 0 || 7) : Math.random;
     const KEYS = ['cloud', 'rain', 'snow', 'hail', 'fog', 'heat', 'thunder', 'wet', 'puddle', 'snowCover', 'ice', 'autumn', 'bare', 'fresh', 'wind'];
     const X = { W, R, state: C.blank(), vis: {}, opts: PR.opts(), q: qBase, label: 'clear', rainbow: 0, rainMem: 0, occ: null, t: 0 };
@@ -224,8 +225,9 @@ void main(){
     const shadersOn = () => X.opts.fx && E.climShaders && !E.gfxSafe?.('clim');
     R.wx = {
       pre(now){
-        if (!shadersOn()) return;
+        if (!shadersOn()) { R.wxOn = false; return; }
         const V = X.vis, p = cam.position, [ox, oz] = origin();
+        R.wxOn = V.snowCover + V.wet + V.puddle + V.ice + V.autumn + V.bare + V.fresh > .02;   // страж графики: проверить кадр с погодой
         const need = V.snowCover > .01 || V.wet > .01 || V.puddle > .01;
         if (need && o.occlusion !== false) { occInit(); occUpdate(now); }
         GU.cl[0] = V.snowCover; GU.cl[1] = V.wet; GU.cl[2] = V.puddle; GU.cl[3] = V.ice;
@@ -266,15 +268,15 @@ void main(){
       // радуга: дождь недавно кончился, солнце светит и не высоко, туч мало
       X.rainMem = Math.max(X.rainMem * Math.exp(-d / 150), V.rain);
       const M = R.sky, sunY = M?.sun ? M.sun[1] : 1, sunOk = M && M.lightI > .3 && sunY > .05 && sunY < .62 ? 1 : 0;
-      X.rainbow += ((fx ? sm(.25, .6, X.rainMem) * (1 - sm(.04, .14, V.rain)) * (1 - sm(.45, .75, V.cloud)) * sunOk : 0) - X.rainbow) * k1;
+      X.rainbow += ((fx && useSky ? sm(.25, .6, X.rainMem) * (1 - sm(.04, .14, V.rain)) * (1 - sm(.45, .75, V.cloud)) * sunOk : 0) - X.rainbow) * k1;
       // небо, свет, туман — когда заметно сдвинулось (не чаще 4 раз в секунду)
-      if (now - pushAt > 250) {
+      if (useSky && now - pushAt > 250) {
         const wx = { cloud: V.cloud, rain: V.rain, snow: V.snow, fog: V.fog, heat: V.heat, storm: V.thunder, rainbow: X.rainbow };
         let ch = false; for (const k in wx) if (Math.abs((sent[k] ?? -1) - wx[k]) > .015) ch = true;
         if (ch) { pushAt = now; Object.assign(sent, wx); R.setWeather(fx && (wx.cloud + wx.rain + wx.snow + wx.fog + wx.heat > .005 || wx.rainbow > .005) ? wx : null); }
       }
-      particles(d, now);
-      sound(d);
+      if (qBase) particles(d, now);
+      if (A) sound(d);
     };
 
     function particles(d, now){
@@ -402,8 +404,9 @@ void main(){
     X.dispose = () => {
       hR?.stop(); hW?.stop(); hR = hW = null;
       if (R.wx) { R.wx.post?.(); R.wx = null; }
+      R.wxOn = false;
       R.flashK = 0;
-      try { R.setWeather?.(null); } catch (e) {}
+      if (useSky) try { R.setWeather?.(null); } catch (e) {}
       for (const ob of [rainO, snowO, ripO, splO]) if (ob) { R.occHide?.delete(ob); R.scene.remove(ob); ob.geometry.dispose(); ob.material.dispose(); }
       flakeTex?.dispose(); dotTex?.dispose(); X.occ?.mat.dispose(); cols.clear();
       if (C.current() === W) C.use(null);

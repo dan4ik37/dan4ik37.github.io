@@ -477,7 +477,11 @@
     const v = W.raw(x, y, z);
     if (v < 0) { out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 1; out[4] = 1; out[5] = 1; return true; }
     const t = v & TYPE;
-    if (!V.T.solid[t]) return false;
+    if (!V.T.solid[t]) {
+      // лёд (погода, kubomir-weather.js): верхний блок воды — твёрдый до глади, блок мира не меняется
+      if (V.iceTest && V.T.liquid[t] === 1 && V.iceTest(W, x, y, z, v)) { out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 1; out[4] = V.liquidHeight(v); out[5] = 1; return true; }
+      return false;
+    }
     const bx = V.boxOf(v, true); if (!bx) return false;
     for (let i = 0; i < 6; i++) out[i] = bx[i];
     return true;
