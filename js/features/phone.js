@@ -23,9 +23,9 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '3';
+  const VER = '4';
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
-  const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js'], wchat: ['js/features/worldchat.js'] };
+  const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js'], wchat: ['js/features/worldchat.js'] };
   const APPS = [
     { id: 'msgs', ic: '💬', t: 'Сообщения', bg: '#22c55e,#15803d', mod: 'apps', b: 'msgs' },
     { id: 'calls', ic: '📞', t: 'Звонки', bg: '#34d399,#059669', mod: 'calls', b: 'calls' },

@@ -30,7 +30,7 @@ const timers = []; const _si = setInterval; globalThis.setInterval = (f, ms) => 
 // окно «⚙️ Настройки» (js/core/settings.js) — заглушка: телефон добавляет туда свою вкладку
 const setTabs = []; let setOpened = null;
 window.D37Settings = { addTab(t){ setTabs.push(t); }, open(o){ setOpened = o; }, isOpen: () => false };
-for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/worldchat.js', 'js/features/chat.js'])
+for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/worldchat.js', 'js/features/chat.js'])
   vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 const P = window.D37Phone, MV = window.MsgView, C = window.D37Calls._test, DS = window.D37DS._test, W = window.D37WorldChat, CH = window.D37Chat._test;
 
@@ -181,6 +181,33 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(H(false, '', { kind: 'party', state: 'live' }) === '' && H(false, '', { kind: 'voice', state: 'live' }) === '', 'компания и голосовой канал — без телефона у уха (как наушники)');
   ok(H(true, 'calls', live) === 'use', 'во время разговора смотрит другое приложение — в руке перед собой');
   ok(P._test.APPS.some(a => a.id === 'game' && a.mod === 'apps'), 'в телефоне есть мини-игра');
+
+  // ═══ 13. «Денчик-бот» и карточки эфира / событий (community2.sql) ═══
+  ok(card('#/chat/twitch')?.t === 'live' && card('#/chat/ev/12')?.t === 'event' && card('#/chat/ev/12').id === 12, 'эфир и событие — карточки');
+  ok(card('#/chat/ev/abc') === null && card('#/chat/ev/1234567890123') === null, 'кривой номер события — без карточки');
+  r = MV.rich('🔴 Денчик в эфире: Играем! → https://dan4ik37.vercel.app/#/chat/twitch', '');
+  ok(r.cards.length === 1 && r.cards[0].t === 'live' && /🔴 эфир/.test(r.html), 'сообщение бота об эфире → карточка «Смотреть»', r);
+  ok(/twitch\.tv\/dan4ik37/.test(MV.cardHtml({ t: 'live' })) && /rel="noopener"/.test(MV.cardHtml({ t: 'live' })), 'карточка эфира ведёт на Twitch');
+  r = MV.rich('🎬 Новое видео: Обзор → https://dan4ik37.vercel.app/v/dQw4w9WgXcQ', '');
+  ok(r.cards.length === 1 && r.cards[0].t === 'video', 'сообщение бота о ролике → карточка ролика');
+  window.D37Age = { kid: () => true, kidText: t => t, canOpen: n => n <= 6 };
+  r = MV.rich('эфир https://dan4ik37.vercel.app/#/chat/twitch и событие #/chat/ev/5', '', { kid: true });
+  ok(/\[ссылка\]/.test(r.html) && r.cards.length === 1 && r.cards[0].t === 'event', 'ребёнку: эфир (Twitch 13+) — [ссылка], событие сайта — карточка', r);
+  ok(/Загружаем/.test(MV.cardHtml({ t: 'event', id: 5 })), 'карточка события до загрузки');
+  const soon = new Date(Date.now() + 2 * 3600e3).toISOString(), soonEnd = new Date(Date.now() + 4 * 3600e3).toISOString();
+  MV.evSet({ id: 5, title: 'Турнир хуйня', starts_at: soon, ends_at: soonEnd, status: 'active', place_kind: 'game', place: 'chess', age: 0, going: 3, mine: false });
+  let ec = MV.cardHtml({ t: 'event', id: 5 });
+  ok(/data-evgo="5"/.test(ec) && /✅ Пойду/.test(ec) && /Шахматы/.test(ec) && /✅ 3/.test(ec) && !/хуйня/.test(ec), 'карточка события: «Пойду», место, сколько идут, мат закрыт', ec);
+  MV.evSet({ id: 6, title: 'Ночной стрим', starts_at: soon, ends_at: soonEnd, status: 'active', place_kind: 'stream', age: 16, going: 0 });
+  ok(/Не по возрасту/.test(MV.cardHtml({ t: 'event', id: 6 })), 'событие 16+ ребёнку — «не по возрасту»');
+  delete window.D37Age;
+  MV.evSet({ id: 7, title: 'Идёт сейчас', starts_at: new Date(Date.now() - 60e3).toISOString(), ends_at: soonEnd, status: 'active', place_kind: 'world', going: 2, mine: true });
+  ec = MV.cardHtml({ t: 'event', id: 7 });
+  ok(/mv-ev live/.test(ec) && /Сейчас идёт/.test(ec) && /href="#\/games\/world"/.test(ec) && /▶ Зайти/.test(ec), 'идёт сейчас: красная рамка и «▶ Зайти» в место', ec);
+  MV.evSet({ id: 8, title: 'Было', starts_at: new Date(Date.now() - 7200e3).toISOString(), ends_at: new Date(Date.now() - 3600e3).toISOString(), status: 'active', place_kind: 'none', going: 1 });
+  ok(/закончилось/.test(MV.cardHtml({ t: 'event', id: 8 })) && !/data-evgo/.test(MV.cardHtml({ t: 'event', id: 8 })), 'закончилось — без кнопки');
+  ok(MV.evPlace({ place_kind: 'voice', place: '12', place_name: 'Голос', community: 3 }).href === '#/chat/c/3/12' && MV.evPlace({ place_kind: 'text', place: 'games' }).href === '#/chat/games', 'место: канал сообщества / сервера сайта');
+  ok(/через \d+ мин/.test(MV.evWhen({ status: 'active', starts_at: new Date(Date.now() + 20 * 60e3).toISOString(), ends_at: soonEnd })), 'скоро: «через N мин»');
 
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);

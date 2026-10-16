@@ -380,7 +380,7 @@ function chatAdapter(chId){
       if (bannedNicks.has(chatNick.toLowerCase())) return { mode: 'muted', note: '🔨 Ты заблокирован в чате' };
       const until = OFF.info?.muted_until;
       if (until && Date.parse(until) > Date.now() && !isChatStaff()) return { mode: 'muted', note: `🔇 Тебя заглушили до ${new Date(until).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` };
-      if (ch.mods_only && !isChatStaff()) return { mode: 'readonly', note: '📢 Здесь пишут только админ и модераторы' };
+      if (ch.mods_only && !isChatStaff()) return { mode: 'readonly', note: id === 'news' ? '📢 Сюда пишут Денчик-бот (эфиры, новые видео) и команда сайта' : '📢 Здесь пишут только админ и модераторы' };
       return { mode: 'write', slow: !isChatStaff() && ch.slow ? ch.slow : 0 };
     },
     guest: async () => { enterAsGuest(); },

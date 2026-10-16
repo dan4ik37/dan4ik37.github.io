@@ -509,7 +509,8 @@
       membersRender(root.querySelector('.ds-mbody'), srv);
       return;
     }
-    ch = srv.channels.find(c => String(c.id) === sub && !c.soon) || srv.channels.find(c => c.kind === 'text' && !c.soon);
+    // по умолчанию — #общий (канал «📢 новости» стоит выше, но в нём пишут только бот и команда)
+    ch = srv.channels.find(c => String(c.id) === sub && !c.soon) || (srv.official && srv.channels.find(c => c.id === 'general')) || srv.channels.find(c => c.kind === 'text' && !c.soon);
     page.ch = ch;
     paintSide(root, 'page', srv, ch?.id);
     if (!ch) { dropView(); root.querySelector('.ds-body').innerHTML = '<div class="ds-scroll"><div class="ds-pane"><div class="ds-dim">Каналов нет</div></div></div>'; return; }
