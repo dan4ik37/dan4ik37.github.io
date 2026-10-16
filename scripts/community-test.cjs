@@ -30,7 +30,7 @@ const timers = []; const _si = setInterval; globalThis.setInterval = (f, ms) => 
 // окно «⚙️ Настройки» (js/core/settings.js) — заглушка: телефон добавляет туда свою вкладку
 const setTabs = []; let setOpened = null;
 window.D37Settings = { addTab(t){ setTabs.push(t); }, open(o){ setOpened = o; }, isOpen: () => false };
-for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/worldchat.js', 'js/features/chat.js'])
+for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js', 'js/features/worldchat.js', 'js/features/chat.js'])
   vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 const P = window.D37Phone, MV = window.MsgView, C = window.D37Calls._test, DS = window.D37DS._test, W = window.D37WorldChat, CH = window.D37Chat._test;
 
@@ -187,7 +187,7 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(card('#/chat/ev/abc') === null && card('#/chat/ev/1234567890123') === null, 'кривой номер события — без карточки');
   r = MV.rich('🔴 Денчик в эфире: Играем! → https://dan4ik37.vercel.app/#/chat/twitch', '');
   ok(r.cards.length === 1 && r.cards[0].t === 'live' && /🔴 эфир/.test(r.html), 'сообщение бота об эфире → карточка «Смотреть»', r);
-  ok(/twitch\.tv\/dan4ik37/.test(MV.cardHtml({ t: 'live' })) && /rel="noopener"/.test(MV.cardHtml({ t: 'live' })), 'карточка эфира ведёт на Twitch');
+  ok(/data-play="tw"/.test(MV.cardHtml({ t: 'live' })) || /twitch\.tv\/dan4ik37/.test(MV.cardHtml({ t: 'live' })), 'карточка эфира: «▶ Здесь» в плеере чата (без плеера — ссылка на Twitch)');
   r = MV.rich('🎬 Новое видео: Обзор → https://dan4ik37.vercel.app/v/dQw4w9WgXcQ', '');
   ok(r.cards.length === 1 && r.cards[0].t === 'video', 'сообщение бота о ролике → карточка ролика');
   window.D37Age = { kid: () => true, kidText: t => t, canOpen: n => n <= 6 };
@@ -308,6 +308,37 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(/ds-cc boost/.test(bc) && /#ef4444/.test(bc) && /ds-ccic anim/.test(bc) && /title="Буст"/.test(bc), 'обзор: рамка буста, баннер, анимированный значок, 🚀');
   ok(/linear-gradient\(135deg,#7c3aed,#2563eb\)/.test(X.ccard({ id: 10, name: 'Обычные', icon: '🎮', members: 5, category: 'games', banner: 'lava' }, 'page')), 'без буста баннер не показывается — цвет категории');
   P.rpc = rpc0;
+
+  // ═══ 18. Плеер в чате (chatplayer.js): возраст, кейсы, карточки, реклама под плеером ═══
+  const PLR = window.D37Player;
+  globalThis.allVids = [{ id: 'aaaaaaaaaaa', title: 'Строим город в Кубомире' }, { id: 'bbbbbbbbbbb', title: 'Открываю кейсы GGDROP промокод на депозит' }];
+  globalThis.HOST = 'dan4ik37.vercel.app';
+  const AGE = (grp, ages) => ({ group: () => grp, kid: () => grp === 'child', minor: () => grp !== 'adult', canOpen: n => n <= ages, listOk: n => n < 18 || grp === 'adult',
+    video: t => /кейс|депозит/i.test(t) ? { age: 18 } : { age: 12 }, isGambling: t => /кейс|депозит/i.test(t), kidText: t => t, badge: n => `<i>${n}+</i>` });
+  window.D37Age = AGE('adult', 18);
+  ok(PLR.videoOk('aaaaaaaaaaa').ok && PLR.videoOk('bbbbbbbbbbb').ok && PLR.videoOk('bbbbbbbbbbb').gamb, 'взрослому: обычный ролик и кейсы — можно, кейсы помечены');
+  ok(!PLR.videoOk('../evil').ok && !PLR.videoOk('').ok, 'кривой номер ролика — нет');
+  window.D37Age = AGE('teen', 13);
+  ok(PLR.videoOk('aaaaaaaaaaa').ok && !PLR.videoOk('bbbbbbbbbbb').ok, 'подростку: 12+ — можно, 18+ (кейсы) — нет');
+  ok(!PLR.videoOk('ccccccccccc').ok && PLR.videoOk('ccccccccccc').unknown, 'ролика нет в ленте сайта — несовершеннолетним не здесь (вдруг кейсы)');
+  ok(/data-play="aaaaaaaaaaa"/.test(MV.cardHtml({ t: 'video', id: 'aaaaaaaaaaa' })) && !/data-play/.test(MV.cardHtml({ t: 'video', id: 'bbbbbbbbbbb' })) && /href="\/v\/bbbbbbbbbbb"/.test(MV.cardHtml({ t: 'video', id: 'bbbbbbbbbbb' })), 'карточка ролика: «▶ Здесь» — только по возрасту, иначе ссылка на страницу');
+  ok(/data-play="tw"/.test(MV.cardHtml({ t: 'live' })) && PLR.liveOk(), 'карточка эфира — «▶ Здесь»; подростку эфир можно');
+  window.D37Age = AGE('child', 6);
+  ok(!PLR.liveOk() && PLR.open({ kind: 'tw' }) === false, 'ребёнку эфир Twitch (13+) не открывается');
+  delete window.D37Age;
+  ok(/player\.twitch\.tv\/\?channel=dan4ik37&parent=dan4ik37\.vercel\.app/.test(PLR.src({ kind: 'tw' })) && /youtube-nocookie\.com\/embed\/aaaaaaaaaaa\?/.test(PLR.src({ kind: 'yt', id: 'aaaaaaaaaaa' })), 'плеер: Twitch с parent сайта, YouTube — nocookie');
+  ok(PLR.adWhy() === 'closed', 'реклама под плеером: плеер закрыт — нет');
+  PLR._test.setS({ kind: 'yt', id: 'aaaaaaaaaaa', at: Date.now(), mini: false, gamb: false });
+  ok(PLR.adWhy() === 'early', 'первую минуту — нет (вдруг реклама самого плеера)');
+  PLR._test.setS({ kind: 'yt', id: 'aaaaaaaaaaa', at: Date.now() - 61e3, mini: true, gamb: false });
+  ok(PLR.adWhy() === 'mini', 'плеер свёрнут — нет');
+  PLR._test.setS({ kind: 'yt', id: 'bbbbbbbbbbb', at: Date.now() - 61e3, mini: false, gamb: true });
+  ok(PLR.adWhy() === 'gambling', 'кейсы в плеере — нет');
+  window.D37AdPlaces = { why: k => k === 'chat_player' ? '' : 'x' };
+  PLR._test.setS({ kind: 'yt', id: 'aaaaaaaaaaa', at: Date.now() - 61e3, mini: false, gamb: false });
+  ok(PLR.adWhy() === '', 'через минуту, развёрнут, не кейсы — решает D37AdPlaces (VIP, возраст, лимиты)');
+  PLR.close(); delete window.D37AdPlaces;
+  ok(PLR.state() === null, 'закрыт — состояния нет');
 
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);

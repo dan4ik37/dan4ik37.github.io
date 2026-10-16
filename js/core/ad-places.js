@@ -29,6 +29,7 @@
       floor:        { first: 12, max: 3, mob: true, minW: 320, maxW: 420 },   // РСЯ: overlay — только экраны 320–420 px
       rail:         { first: 15, gap: 60, max: 12, desk: true, minW: 1400 },
       feed:         { max: 16 },
+      chat_player:  { first: 30, gap: 120, max: 8, desk: true, minW: 900 },   // под плеером в чате (chatplayer.js): не поверх, не на телефоне
     },
     // Реклама по возрасту (js/core/age.js → D37Age.group()). Google: tfat — «обработка» запроса (data-tag-for-age-treatment:
     // 1 — ребёнок, 2 — подросток; support.google.com/adsense/answer/3248194), npa — без персональной рекламы
@@ -48,9 +49,9 @@
   // «Рядом нельзя»: что каждое состояние запрещает ('*' — всё, кроме рекламы за награду по кнопке)
   const CTX = { gambling: '*', ugc: ['loading', 'break', 'rail', 'feed'], playing: ['break'] };
   // Номера блоков: своё место → общее (Яндекс: перерыв — тот же блок, что под игрой; Google — запасные готовые блоки)
-  const YA_FB = { break: 'game_over', interstitial: 'fullscreen' };
-  const G_FB = { break: 'game_over', loading: 'game_over', rail: 'game_over', feed: 'games_hub' };
-  const SIZE = { loading: 'до 728×250, адаптивный', break: '728×90 / 300×250', rail: '160×600 или 300×600', feed: 'карточка ~300×250', game_over: 'адаптивный', games_hub: 'адаптивный' };
+  const YA_FB = { break: 'game_over', interstitial: 'fullscreen', chat_player: 'game_over' };
+  const G_FB = { break: 'game_over', loading: 'game_over', rail: 'game_over', feed: 'games_hub', chat_player: 'game_over' };
+  const SIZE = { loading: 'до 728×250, адаптивный', break: '728×90 / 300×250', rail: '160×600 или 300×600', feed: 'карточка ~300×250', game_over: 'адаптивный', games_hub: 'адаптивный', chat_player: '728×90, адаптивный' };
   const base = k => /^feed/.test(k) ? 'feed' : k;
   const rule = k => RULES.places[base(k)] || {};
   const $ = s => document.querySelector(s);
@@ -203,7 +204,7 @@
     return true;
   }
   // Формат блока Google по месту (РСЯ адаптивный — по размеру контейнера)
-  const FORMAT = { loading: 'rectangle, horizontal', break: 'horizontal, rectangle', rail: 'vertical', feed: 'rectangle' };
+  const FORMAT = { loading: 'rectangle, horizontal', break: 'horizontal, rectangle', rail: 'vertical', feed: 'rectangle', chat_player: 'horizontal' };
   // Показать в el (проверки уже пройдены или делаются тут). → true, если место занято рекламой (или рамкой в отладке)
   function show(el, key, o = {}){
     if (!el) return false;

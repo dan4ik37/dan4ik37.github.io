@@ -507,6 +507,7 @@
       else if (rest[0] === 'find') (DS.x?.find || screenFind)(body.firstChild, 'page');
       else if (rest[0] === 'new') screenCreate(body.firstChild, 'page');
       else screenJoin(body.firstChild, 'page', (rest[1] || '').toLowerCase());
+      window.D37Player?.mount?.(root, srv, null);
       return;
     }
     const srv = await server(srvId);
@@ -528,6 +529,7 @@
       dropView();
       setTop(root, xsub ? xsub.title : sub === 'settings' ? '⚙️ Настройки' : sub === 'reports' ? '🚩 Жалобы' : '👥 Участники', '', true);
       const body = root.querySelector('.ds-body'); body.innerHTML = '<div class="ds-scroll"></div>';
+      window.D37Player?.mount?.(root, srv, null);
       if (xsub) xsub.render(body.firstChild, 'page', srv, rest.slice(1));
       else if (sub === 'settings') screenSettings(body.firstChild, 'page', srv);
       else if (sub === 'reports') screenReports(body.firstChild, 'page', srv);
@@ -545,6 +547,7 @@
     paintPin(root, srv, ch);
     if (srv.official && ch.kind === 'text' && !srv.c) hideChatBadgeSafe();
     showChannel(root.querySelector('.ds-body'), 'page', srv, ch);
+    window.D37Player?.mount?.(root, srv, ch);   // плеер в чате и полоска «🔴 в эфире» (chatplayer.js)
     membersRender(root.querySelector('.ds-mbody'), srv);
   };
   const hideChatBadgeSafe = () => { if (typeof hideChatBadge === 'function') hideChatBadge(); };

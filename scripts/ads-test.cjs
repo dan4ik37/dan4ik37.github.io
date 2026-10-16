@@ -286,6 +286,14 @@ ok(typeof A.render === 'function' && typeof M.why === 'function' && typeof M.loa
   ENV.coarse = true;
   ok(M.why('break') === 'desk', 'перерыв — только компьютер');
   ENV.coarse = false;
+  // под плеером в чате (chatplayer.js): тот же блок, что под игрой; только компьютер; раз в 2 минуты, до 8; кейсы — нельзя
+  ok(M.why('chat_player') === '', 'место под плеером чата — можно (запасной блок game_over)', M.why('chat_player'));
+  M.mark('chat_player'); advance(60e3);
+  ok(M.why('chat_player') === 'gap', 'под плеером — не чаще раза в 2 минуты');
+  advance(61e3);
+  ok(M.why('chat_player') === '', 'через 2 минуты — снова можно');
+  ENV.coarse = true; ok(M.why('chat_player') === 'desk', 'под плеером — только компьютер (на телефоне плеер и так сверху)'); ENV.coarse = false;
+  M.ctx('gambling', true); ok(M.why('chat_player') === 'gambling', 'в плеере кейсы — рекламы нет'); M.ctx('gambling', false);
   // общий лимит визита
   fresh(); window.ADS_IDS.yandex.games_hub = 'R-A-1-2';
   for (let i = 0; i < 40; i++) M.mark('games_hub');
