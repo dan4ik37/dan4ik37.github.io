@@ -278,7 +278,7 @@
     const me = P.me(), nick = (typeof chatNick !== 'undefined' && chatNick) || P.myNick();
     const v = window.D37Calls?.voiceInfo?.();
     const voice = v ? `<div class="ds-vbar"><span><b>🔊 ${e(v.title)}</b><small>${v.state === 'ok' ? 'голос подключён' : v.state === 'full' ? 'канал полон' : 'подключаемся…'}</small></span><button type="button" data-ds="vmute" title="Микрофон">${v.mute ? '🔇' : '🎙'}</button><button type="button" data-ds="vdeaf" title="Звук">${v.deaf ? '🔈' : '🎧'}</button><button type="button" class="bad" data-ds="vleave" title="Выйти из голосового">✕</button></div>` : '';
-    if (!nick) return voice + `<div class="ds-me"><span class="ds-dim">Ты не в чате</span><button type="button" class="ds-btn" data-ds="guest">👤 Гостем</button><button type="button" class="ds-btn ghost" data-ds="login">Войти</button></div>`;
+    if (!nick) return voice + `<div class="ds-me guest"><span class="ds-dim">Ты не в чате</span><button type="button" class="ds-btn" data-ds="guest">👤 Гостем</button><button type="button" class="ds-btn ghost" data-ds="login">Войти</button></div>`;
     const p = me ? P.prof(me) || (typeof currentProfile !== 'undefined' ? currentProfile : null) : null;
     const role = typeof currentRole !== 'undefined' ? currentRole : null;
     return voice + `<div class="ds-me">${P.avatar(p, nick, 32)}<span><b>${e(nick)}</b><small>${role === 'admin' ? '👑 админ' : role === 'moderator' ? '🛡 модератор' : role === 'helper' ? '🧹 хелпер' : me ? '🟢 в сети' : '👤 гость'}</small></span>${me ? '' : '<button type="button" class="ds-btn ghost" data-ds="login">Войти</button>'}<button type="button" class="ds-hb" data-ds="phone" title="Телефон 📱 — звонки, друзья, личные сообщения">📱</button></div>`;
@@ -288,7 +288,7 @@
   async function screenFind(el, mode){
     el.innerHTML = `<div class="ds-pane"><h3>🧭 Найти сообщество</h3><p class="ds-dim">Открытые сообщества игроков сайта. Своё — кнопкой «＋».</p>
       <div class="ds-row"><input type="search" class="ds-in" data-f="q" placeholder="Название…" aria-label="Поиск сообщества"><a class="ds-btn" href="${special(mode, 'new')}">＋ Создать</a></div>
-      <div class="ds-row"><input type="text" class="ds-in" data-f="code" placeholder="Код приглашения (8 знаков)" maxlength="12" aria-label="Код приглашения"><button type="button" class="ds-btn ghost" data-ds="bycode">Войти по коду</button></div>
+      <div class="ds-row"><input type="text" class="ds-in" data-f="code" placeholder="Код приглашения" title="Код приглашения — 8 знаков" maxlength="12" aria-label="Код приглашения"><button type="button" class="ds-btn ghost" data-ds="bycode">Войти по коду</button></div>
       <div class="ds-list" data-f="list"><div class="ds-dim">Загружаем…</div></div></div>`;
     const list = el.querySelector('[data-f="list"]'), qi = el.querySelector('[data-f="q"]');
     const load = async () => {
@@ -480,6 +480,7 @@
             <header class="ds-top"><button type="button" class="ds-hb ds-burger" data-ds="left" aria-label="Каналы">☰</button><b class="ds-ttl"></b><span class="ds-topic"></span>
               <span class="ds-tools"><button type="button" class="ds-hb" data-ds="search" title="Поиск по каналу" aria-label="Поиск">🔍</button><button type="button" class="ds-hb" data-ds="pins" title="Закреплённые" aria-label="Закреплённые">📌</button><button type="button" class="ds-hb" data-ds="right" title="Участники" aria-label="Участники">👥</button><button type="button" class="ds-hb ds-full" id="chatFullBtn" onclick="toggleChatFull()" title="Чат на весь экран (экран не будет гаснуть)" aria-label="Чат на весь экран">⛶</button></span></header>
             <div class="ds-pin" hidden></div>
+            <div class="ds-tip" hidden></div>
             <div class="ds-body"></div>
           </main>
           <aside class="ds-members" aria-label="Участники"><div class="ds-mbody"></div></aside>
@@ -491,6 +492,7 @@
     }
     const root = page.root;
     root.classList.remove('l-open', 'r-open');
+    paintTip(root, false);
     await loadMy();
     // особые экраны
     const xs = srvId === OFF_ID && DS.x?.special?.[rest[0]];
@@ -547,10 +549,20 @@
     paintPin(root, srv, ch);
     if (srv.official && ch.kind === 'text' && !srv.c) hideChatBadgeSafe();
     showChannel(root.querySelector('.ds-body'), 'page', srv, ch);
+    paintTip(root, ch.kind === 'text');
     window.D37Player?.mount?.(root, srv, ch);   // плеер в чате и полоска «🔴 в эфире» (chatplayer.js)
     membersRender(root.querySelector('.ds-mbody'), srv);
   };
   const hideChatBadgeSafe = () => { if (typeof hideChatBadge === 'function') hideChatBadge(); };
+  // подсказка новичку над лентой — один раз (d37_ds_tip): где каналы, где участники, как писать
+  function paintTip(root, on){
+    const el = root.querySelector('.ds-tip'); if (!el) return;
+    let seen = true; try { seen = !!localStorage.getItem('d37_ds_tip'); } catch (e) {}
+    el.hidden = !on || seen;
+    if (el.hidden) return;
+    const phone = matchMedia('(max-width: 860px)').matches;
+    el.innerHTML = `<span>👋 ${phone ? 'Каналы — ☰ или нажми на название, участники — 👥.' : 'Слева — серверы и каналы, справа — участники. Пиши внизу: Enter — отправить, Shift+Enter — новая строка.'}</span><button type="button" class="ds-btn ds-sm" data-ds="tipok">Понятно</button>`;
+  }
   function setTop(root, title, topic, noTools){
     root.querySelector('.ds-ttl').innerHTML = title;
     root.querySelector('.ds-topic').innerHTML = topic || '';
@@ -599,6 +611,8 @@
     const b = ev.target.closest('[data-ds]');
     const root = page?.root || ev.currentTarget;
     if (ev.target.closest('.ds-ch, .ds-srv, .ds-card, a.ds-hb')) root.classList.remove('l-open', 'r-open');
+    // телефон: нажал на название канала — открылись каналы (как ☰)
+    if (!b && ev.target.closest('.ds-ttl') && matchMedia('(max-width: 860px)').matches) { root.classList.add('l-open'); return; }
     const mem = ev.target.closest('.ds-mem');
     if (mem) { root.classList.remove('r-open'); if (mv && mvHost && root.contains(mvHost)) mv.userCard(mem.dataset.uid, mem.dataset.nick, mem, null); else location.hash = '#/profile/' + mem.dataset.uid; return; }
     if (!b) return;
@@ -608,6 +622,7 @@
     else if (k === 'close') root.classList.remove('l-open', 'r-open');
     else if (k === 'search') mv?.search();
     else if (k === 'pins') mv?.pins();
+    else if (k === 'tipok') { try { localStorage.setItem('d37_ds_tip', '1'); } catch (e) {} b.closest('.ds-tip').hidden = true; }
     else await commonAct(k, page?.srv, 'page');
   }
   async function commonAct(k, srv, mode){

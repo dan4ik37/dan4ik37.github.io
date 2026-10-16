@@ -309,7 +309,7 @@ function chatAdapter(chId){
     key: 'o:' + id, title: '#' + ch.name, maxLen: MAX_MSG_LEN, official: true, ch,
     placeholder: `Написать в #${ch.name}`,
     startText: id === 'general' ? 'Это начало общего чата сайта dan4ik37 👋' : `Это начало канала #${ch.name}. ${ch.about || ''}`,
-    emptyText: 'Пока тихо — напиши первым! 👋',
+    emptyText: ch.mods_only ? (id === 'news' ? 'Новостей пока нет — здесь появятся эфиры, новые видео и события 📢' : 'Пока пусто — здесь пишут только админ и модераторы 📢') : 'Пока тихо — напиши первым! 👋',
     pinsEmpty: 'Закреплённых сообщений нет. VIP и команда сайта могут закреплять свои сообщения (кнопка «⋯» → 📌)',
     get caps(){ const nw = chatHasNew(); return { reply: nw, edit: nw && !!currentUser, del: nw && !!currentUser, react: 'site', pin: true, report: nw && !!currentUser, typing: true, search: true, stickers: true }; },
     async load({ before }){
@@ -376,11 +376,11 @@ function chatAdapter(chId){
     },
     state(){
       if (!sbClient) return { mode: 'readonly', note: 'Нет связи с сервером — чат только для чтения' };
+      if (ch.mods_only && !isChatStaff()) return { mode: 'readonly', note: id === 'news' ? '📢 Сюда пишут Денчик-бот (эфиры, новые видео) и команда сайта' : '📢 Здесь пишут только админ и модераторы' };
       if (!chatNick) return { mode: 'guest' };
       if (bannedNicks.has(chatNick.toLowerCase())) return { mode: 'muted', note: '🔨 Ты заблокирован в чате' };
       const until = OFF.info?.muted_until;
       if (until && Date.parse(until) > Date.now() && !isChatStaff()) return { mode: 'muted', note: `🔇 Тебя заглушили до ${new Date(until).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` };
-      if (ch.mods_only && !isChatStaff()) return { mode: 'readonly', note: id === 'news' ? '📢 Сюда пишут Денчик-бот (эфиры, новые видео) и команда сайта' : '📢 Здесь пишут только админ и модераторы' };
       return { mode: 'write', slow: !isChatStaff() && ch.slow ? ch.slow : 0 };
     },
     guest: async () => { enterAsGuest(); },
