@@ -66,6 +66,9 @@ coin_run_cap 20) и rp (coin_run_cap 10). Владельцу ЕЩЁ РАЗ, по
 Проверено с сервера 16.10 вечером: ПРИМЕНЕНЫ community2.sql (messages.is_sticker есть → чат снова принимает сообщения;
 chat_channels news, cm_events, cm_catalog), games-more.sql (game_win_xp mirwar → 3), coins.sql (coin_run_cap mirwar 20, rp 10).
 НЕ применён только community3.sql (cm_roles / cm_boost_info — PGRST202; файл отправлен 16.10 позже остальных).
+Позже 16.10: community3.sql ПРИМЕНЁН (cm_roles гостем → private, cm_boost_info → not_found, cm_boost_buy → 42501). Теперь применено ВСЁ,
+кроме bases.sql / raids.sql (их ещё не давали — набеги переезжают в военные базы, п. 31). Чат: последнее сообщение всё ещё 20.09 —
+владелец должен написать одно сообщение в #общий, проверить запросом messages order=created_at.desc.
 Раньше (13:05 UTC): 1–8 ещё НЕ применены (game_win_xp(horde) = 20, остальные — PGRST202). 7–8 (bases.sql,
 raids.sql) — давать владельцу только после того, как агент набегов закончит переделку (3D, большие базы): файлы ещё меняются.
 age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
