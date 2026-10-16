@@ -201,223 +201,224 @@
   // ═══ ПОСТРОЙКА ═══
   const WB = id => W_BLD.find(b => b.id === id);
   function* buildWar(K){
-    const { R } = K, M = K.M, rnd = (K.E.rng || (s => Math.random))(4242);
-    K.nBags = 0; K.nCrate = 0; K.nBlock = 0;   // номера укрытий — по порядку постройки (одинаковые у всех)
-    K.spots = {};
-    const spot = (id, x, y, z) => (K.spots[id] = { x, y, z });
-    K.M.mil = R.tex('sidewalk', { tint: '#c7c1a8', tile: 3, flatColor: '#a8a07c' });
+    // постройка — кусочками: после каждого оператора — yield (бюджет кадра считает stepBuild в mir-zones.js; одна зона за раз)
+    const { R } = K, M = K.M, rnd = (K.E.rng || (s => Math.random))(4242); yield;
+    K.nBags = 0; yield; K.nCrate = 0; yield; K.nBlock = 0; yield;   // номера укрытий — по порядку постройки (одинаковые у всех)
+    K.spots = {}; yield;
+    const spot = (id, x, y, z) => (K.spots[id] = { x, y, z }); yield;
+    K.M.mil = R.tex('sidewalk', { tint: '#c7c1a8', tile: 3, flatColor: '#a8a07c' }); yield;
     // ограда: столбики через 4 м, три жерди, тело (камеру не держит)
     const fence = (x1, z1, x2, z2, c = '#57534e') => { const dx = x2 - x1, dz = z2 - z1, L = Math.hypot(dx, dz), yaw = Math.atan2(dx, dz), n = Math.ceil(L / 4);
       if (L < .3) return;
       for (let i = 0; i <= n; i++) K.part({ s: 'box', x: x1 + dx * i / n, y: 1.1, z: z1 + dz * i / n, w: .18, h: 2.2, d: .18, c });
       for (const y of [.7, 1.5, 2.1]) K.part({ s: 'box', x: (x1 + x2) / 2, y, z: (z1 + z2) / 2, w: .06, h: .06, d: L, yaw, c: '#a8a29e' });
-      K.body({ x: (x1 + x2) / 2, z: (z1 + z2) / 2, y: 1.2, hx: .1, hy: 1.2, hz: L / 2, yaw, tag: 'fence', data: { cam: false } }); };
+      K.body({ x: (x1 + x2) / 2, z: (z1 + z2) / 2, y: 1.2, hx: .1, hy: 1.2, hz: L / 2, yaw, tag: 'fence', data: { cam: false } }); }; yield;
     // ── земля зоны (песок вокруг дыры бункера), дороги, ограда с воротами ──
-    K.chunk('ground');
-    const sand = (x0, x1, z0, z1) => K.part({ s: 'box', x: (x0 + x1) / 2, y: .012, z: (z0 + z1) / 2, w: x1 - x0, h: .02, d: z1 - z0, m: M.sand });
-    sand(SEA.x1, WZ.x1, WZ.z0, BK.z0); sand(SEA.x1, WZ.x1, BK.z1, WZ.z1); sand(SEA.x1, BK.x0, BK.z0, BK.z1); sand(BK.x1, WZ.x1, BK.z0, BK.z1);
+    K.chunk('ground'); yield;
+    const sand = (x0, x1, z0, z1) => K.part({ s: 'box', x: (x0 + x1) / 2, y: .012, z: (z0 + z1) / 2, w: x1 - x0, h: .02, d: z1 - z0, m: M.sand }); yield;
+    sand(SEA.x1, WZ.x1, WZ.z0, BK.z0); yield; sand(SEA.x1, WZ.x1, BK.z1, WZ.z1); yield; sand(SEA.x1, BK.x0, BK.z0, BK.z1); yield; sand(BK.x1, WZ.x1, BK.z0, BK.z1); yield;
     // дороги: с севера на юг — чуть ниже, с запада на восток — чуть выше (перекрёстки не мерцают)
-    for (const r of W_ROADS) { const [[ax, az], [bx, bz]] = r.pts, ns = ax === bx; K.road(ax, az, bx, bz, r.w, { walk: false, y: ns ? .03 : .045 }); }
-    for (let z = 115; z < 450; z += 30) K.lamp(EX - 4.6, z);
+    for (const r of W_ROADS) { const [[ax, az], [bx, bz]] = r.pts, ns = ax === bx; yield; K.road(ax, az, bx, bz, r.w, { walk: false, y: ns ? .03 : .045 }); yield; }
+    for (let z = 115; z < 450; z += 30) K.lamp(EX - 4.6, z); yield;
     // ограда всей зоны: север, юг, запад (за морем) и восток с проёмом ворот
-    fence(WZ.x0 + .5, WZ.z0 + .5, WZ.x1 - .5, WZ.z0 + .5); fence(WZ.x0 + .5, WZ.z1 - .5, WZ.x1 - .5, WZ.z1 - .5);
-    fence(WZ.x0 + .5, WZ.z0 + .5, WZ.x0 + .5, WZ.z1 - .5);
-    fence(WZ.x1 - .5, WZ.z0 + .5, WZ.x1 - .5, 125); fence(WZ.x1 - .5, 135, WZ.x1 - .5, WZ.z1 - .5);
+    fence(WZ.x0 + .5, WZ.z0 + .5, WZ.x1 - .5, WZ.z0 + .5); yield; fence(WZ.x0 + .5, WZ.z1 - .5, WZ.x1 - .5, WZ.z1 - .5); yield;
+    fence(WZ.x0 + .5, WZ.z0 + .5, WZ.x0 + .5, WZ.z1 - .5); yield;
+    fence(WZ.x1 - .5, WZ.z0 + .5, WZ.x1 - .5, 125); yield; fence(WZ.x1 - .5, 135, WZ.x1 - .5, WZ.z1 - .5); yield;
     yield;
     // ── КПП: будка, шлагбаум, предупреждение, щит режима, телепорт в лобби ──
-    K.chunk('gate');
-    K.mbuilding({ id: 'w_gate', x: -78, z: 122, w: 3, d: 3, h: 3, wall: '#e7e5e4', trim: '#b91c1c', roofC: '#b91c1c', floorC: '#a8a29e', windows: [{ side: 's', at: 0, w: 2, h: .9 }], interior: false });
-    for (let i = 0; i < 6; i++) K.part({ s: 'box', x: -76, y: 1.1, z: 125.4 + i * .8, w: .12, h: .16, d: .8, c: i % 2 ? '#f8fafc' : '#dc2626' });
-    K.board(-86, 2.4, 124.2, 5, 2.2, 0, '⚠️ Боевая зона 12+: здесь можно сражаться', { bg: '#7f1d1d' });
-    K.box(-86, 0, 124, .2, 1.3, .2, '#57534e', { solid: true });
-    K.board(-94, 2.2, 124.2, 3.4, 1.6, 0, '⚔️ Режим боя', { bg: '#1e3a8a' });
-    K.box(-94, 0, 124, .16, 1.4, .16, '#57534e', { solid: true });
-    K.item({ x: -94, y: 1.6, z: 125.2, r: 1.2, prompt: () => '⚔️ Режим боя, команды и счёт', act: () => K.rt.war?.board() });
-    K.item({ x: -86, y: 1.6, z: 125.2, r: 1.2, prompt: () => '⚠️ Правила боевой зоны', act: () => K.rt.war?.rules() });
+    K.chunk('gate'); yield;
+    K.mbuilding({ id: 'w_gate', x: -78, z: 122, w: 3, d: 3, h: 3, wall: '#e7e5e4', trim: '#b91c1c', roofC: '#b91c1c', floorC: '#a8a29e', windows: [{ side: 's', at: 0, w: 2, h: .9 }], interior: false }); yield;
+    for (let i = 0; i < 6; i++) K.part({ s: 'box', x: -76, y: 1.1, z: 125.4 + i * .8, w: .12, h: .16, d: .8, c: i % 2 ? '#f8fafc' : '#dc2626' }); yield;
+    K.board(-86, 2.4, 124.2, 5, 2.2, 0, '⚠️ Боевая зона 12+: здесь можно сражаться', { bg: '#7f1d1d' }); yield;
+    K.box(-86, 0, 124, .2, 1.3, .2, '#57534e', { solid: true }); yield;
+    K.board(-94, 2.2, 124.2, 3.4, 1.6, 0, '⚔️ Режим боя', { bg: '#1e3a8a' }); yield;
+    K.box(-94, 0, 124, .16, 1.4, .16, '#57534e', { solid: true }); yield;
+    K.item({ x: -94, y: 1.6, z: 125.2, r: 1.2, prompt: () => '⚔️ Режим боя, команды и счёт', act: () => K.rt.war?.board() }); yield;
+    K.item({ x: -86, y: 1.6, z: 125.2, r: 1.2, prompt: () => '⚠️ Правила боевой зоны', act: () => K.rt.war?.rules() }); yield;
     yield;
     // ── Лагерь у КПП (нейтральный): штаб, казарма, оружейная, вышки, флаг, палатка наёмников ──
-    K.chunk('base');
-    const hq = WB('w_hq'), ba = WB('w_barracks'), ar = WB('w_armory');
-    K.part({ s: 'box', x: -100, y: .02, z: 174, w: 40, h: .02, d: 70, m: K.M.mil });   // плац
+    K.chunk('base'); yield;
+    const hq = WB('w_hq'), ba = WB('w_barracks'), ar = WB('w_armory'); yield;
+    K.part({ s: 'box', x: -100, y: .02, z: 174, w: 40, h: .02, d: 70, m: K.M.mil }); yield;   // плац
     K.mbuilding({ id: 'w_hq', x: hq.x, z: hq.z, w: hq.w, d: hq.d, h: hq.h, wall: hq.wall, trim: '#3f6212', roofC: hq.roof, floorC: '#a8a29e', floorType: 'concrete',
-      doors: [{ side: 'n', at: 0, w: 3 }], windows: [{ side: 'n', at: -7, w: 2.4 }, { side: 'n', at: 7, w: 2.4 }, { side: 'w', at: 0, w: 2.4 }], sign: '🪖 Штаб', signBg: '#3f6212' });
-    K.table(hq.x, hq.z + 2, 5, 3, '#365314', .9); K.part({ s: 'box', x: hq.x, y: .92, z: hq.z + 2, w: 4.6, h: .02, d: 2.6, c: '#84cc16' });
-    for (const [i, [dx, dz]] of [[2, 1.4], [-2, 2.6], [.6, 3]].entries()) K.part({ s: 'cone', x: hq.x + dx, y: 1.05, z: hq.z + dz, r: .12, h: .25, c: ['#dc2626', '#2563eb', '#facc15'][i] });
-    for (let i = 0; i < 3; i++) { K.box(hq.x + 10.4, .12, hq.z - 3 + i * 3, .4, 2.2, 2.4, '#1f2937', { solid: true }); K.part({ s: 'box', x: hq.x + 10.18, y: 1.5, z: hq.z - 3 + i * 3, w: .02, h: 1.4, d: 2.1, c: '#22c55e', m: 'glow' }); }
-    K.npc({ id: 'w_general', name: '🎖️ Генерал', x: hq.x, z: hq.z + 5.5, yaw: 180, seed: 'general', say: ['Боец! Захвати точки A, B и C 🚩', 'Вокруг — участки военных баз: скоро сможешь основать свою!', 'Наёмники — в палатке у КПП, 30 🪙'] });
-    spot('w_map', hq.x, 1.2, hq.z - .4);
+      doors: [{ side: 'n', at: 0, w: 3 }], windows: [{ side: 'n', at: -7, w: 2.4 }, { side: 'n', at: 7, w: 2.4 }, { side: 'w', at: 0, w: 2.4 }], sign: '🪖 Штаб', signBg: '#3f6212' }); yield;
+    K.table(hq.x, hq.z + 2, 5, 3, '#365314', .9); yield; K.part({ s: 'box', x: hq.x, y: .92, z: hq.z + 2, w: 4.6, h: .02, d: 2.6, c: '#84cc16' }); yield;
+    for (const [i, [dx, dz]] of [[2, 1.4], [-2, 2.6], [.6, 3]].entries()) K.part({ s: 'cone', x: hq.x + dx, y: 1.05, z: hq.z + dz, r: .12, h: .25, c: ['#dc2626', '#2563eb', '#facc15'][i] }); yield;
+    for (let i = 0; i < 3; i++) { K.box(hq.x + 10.4, .12, hq.z - 3 + i * 3, .4, 2.2, 2.4, '#1f2937', { solid: true }); yield; K.part({ s: 'box', x: hq.x + 10.18, y: 1.5, z: hq.z - 3 + i * 3, w: .02, h: 1.4, d: 2.1, c: '#22c55e', m: 'glow' }); yield; }
+    K.npc({ id: 'w_general', name: '🎖️ Генерал', x: hq.x, z: hq.z + 5.5, yaw: 180, seed: 'general', say: ['Боец! Захвати точки A, B и C 🚩', 'Вокруг — участки военных баз: скоро сможешь основать свою!', 'Наёмники — в палатке у КПП, 30 🪙'] }); yield;
+    spot('w_map', hq.x, 1.2, hq.z - .4); yield;
     // казарма
     K.mbuilding({ id: 'w_barracks', x: ba.x, z: ba.z, w: ba.w, d: ba.d, h: ba.h, wall: ba.wall, trim: '#365314', roofC: ba.roof, floorC: '#78716c', floorType: 'concrete',
-      doors: [{ side: 'w', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4, w: 2 }, { side: 'n', at: 4, w: 2 }] });
-    for (let i = 0; i < 4; i++) K.bed(ba.x - 5 + i * 3.4, ba.z + 3, PI, '#4d7c0f');
+      doors: [{ side: 'w', at: 0, w: 2.4 }], windows: [{ side: 'n', at: -4, w: 2 }, { side: 'n', at: 4, w: 2 }] }); yield;
+    for (let i = 0; i < 4; i++) K.bed(ba.x - 5 + i * 3.4, ba.z + 3, PI, '#4d7c0f'); yield;
     // оружейная
     K.mbuilding({ id: 'w_armory', x: ar.x, z: ar.z, w: ar.w, d: ar.d, h: ar.h, wall: ar.wall, trim: '#292524', roofC: ar.roof, floorC: '#78716c', floorType: 'concrete',
-      doors: [{ side: 'w', at: 0, w: 2.4 }], sign: '🔫 Оружейная', signBg: '#292524' });
-    for (let i = 0; i < 4; i++) { K.box(ar.x + 5.4, .12, ar.z - 3.5 + i * 2.3, .5, 2, 1.8, '#44403c', { solid: true }); for (let k = 0; k < 3; k++) K.part({ s: 'box', x: ar.x + 5.1, y: .9 + k * .5, z: ar.z - 3.5 + i * 2.3, w: .1, h: .14, d: 1.4, c: ['#38bdf8', '#f472b6', '#60a5fa'][k] }); }
-    K.item({ x: ar.x + 2.5, y: 1.2, z: ar.z, r: 1.6, prompt: () => '🔫 Оружейная: аптечка и полный заряд', act: () => K.rt.war?.armory() });
-    K.npc({ id: 'w_armorer', name: '🔧 Оружейник', x: ar.x + 2, z: ar.z + 3, yaw: 270, seed: 'oruzh1', say: ['Пена, краска, вода — выбирай! 🔫', 'Клавиши 1–5 — оружие, F — стрелять'] });
+      doors: [{ side: 'w', at: 0, w: 2.4 }], sign: '🔫 Оружейная', signBg: '#292524' }); yield;
+    for (let i = 0; i < 4; i++) { K.box(ar.x + 5.4, .12, ar.z - 3.5 + i * 2.3, .5, 2, 1.8, '#44403c', { solid: true }); yield; for (let k = 0; k < 3; k++) K.part({ s: 'box', x: ar.x + 5.1, y: .9 + k * .5, z: ar.z - 3.5 + i * 2.3, w: .1, h: .14, d: 1.4, c: ['#38bdf8', '#f472b6', '#60a5fa'][k] }); yield; }
+    K.item({ x: ar.x + 2.5, y: 1.2, z: ar.z, r: 1.6, prompt: () => '🔫 Оружейная: аптечка и полный заряд', act: () => K.rt.war?.armory() }); yield;
+    K.npc({ id: 'w_armorer', name: '🔧 Оружейник', x: ar.x + 2, z: ar.z + 3, yaw: 270, seed: 'oruzh1', say: ['Пена, краска, вода — выбирай! 🔫', 'Клавиши 1–5 — оружие, F — стрелять'] }); yield;
     // вышки (с лестницей наверх)
     for (const [i, [x, z]] of [[-80, 146], [-80, 222], [-117, 222]].entries()) {
-      const id = 'w_watch' + (i + 1), pc = (kind, n, o) => K.piece({ id: `${id}:${kind}:${n}`, kind, b: id, ...o });
-      [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]].forEach(([sx, sz], k) => pc('pillar', k + 1, { x: x + sx, y: 3, z: z + sz, w: .25, h: 6, d: .25, c: '#78350f', solid: false }));
-      pc('floor', 1, { x, y: 6.125, z, w: 3.2, h: .25, d: 3.2, c: '#92400e', floor: 'wood' });
-      [[3.2, .12, 0, -1.6], [3.2, .12, 0, 1.6], [.12, 3.2, -1.6, 0]].forEach(([w, d, ox, oz], k) => pc('wall', k + 1, { x: x + ox, y: 6.7, z: z + oz, w, h: .9, d, c: '#78350f' }));
-      pc('roof', 1, { x, y: 7.7, z, w: 3.6, h: .2, d: 3.6, c: '#365314', solid: false });
-      if (K.E.ladder) { K.part({ s: 'box', x: x + 1.75, y: 3.1, z, w: .08, h: 6.2, d: .7, c: '#a16207' }); K.E.ladder(K.ph, { x: x + 2, z, yaw: -PI / 2, top: 6.25, w: .8 }); }
+      const id = 'w_watch' + (i + 1), pc = (kind, n, o) => K.piece({ id: `${id}:${kind}:${n}`, kind, b: id, ...o }); yield;
+      [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]].forEach(([sx, sz], k) => pc('pillar', k + 1, { x: x + sx, y: 3, z: z + sz, w: .25, h: 6, d: .25, c: '#78350f', solid: false })); yield;
+      pc('floor', 1, { x, y: 6.125, z, w: 3.2, h: .25, d: 3.2, c: '#92400e', floor: 'wood' }); yield;
+      [[3.2, .12, 0, -1.6], [3.2, .12, 0, 1.6], [.12, 3.2, -1.6, 0]].forEach(([w, d, ox, oz], k) => pc('wall', k + 1, { x: x + ox, y: 6.7, z: z + oz, w, h: .9, d, c: '#78350f' })); yield;
+      pc('roof', 1, { x, y: 7.7, z, w: 3.6, h: .2, d: 3.6, c: '#365314', solid: false }); yield;
+      if (K.E.ladder) { K.part({ s: 'box', x: x + 1.75, y: 3.1, z, w: .08, h: 6.2, d: .7, c: '#a16207' }); yield; K.E.ladder(K.ph, { x: x + 2, z, yaw: -PI / 2, top: 6.25, w: .8 }); yield; }
     }
     // флаг
-    K.cyl(-116, 0, 140, .1, 9, '#d6d3d1', { solid: true }); K.part({ s: 'box', x: -117.4, y: 8.2, z: 140, w: 2.6, h: 1.5, d: .05, c: '#dc2626' });
+    K.cyl(-116, 0, 140, .1, 9, '#d6d3d1', { solid: true }); yield; K.part({ s: 'box', x: -117.4, y: 8.2, z: 140, w: 2.6, h: 1.5, d: .05, c: '#dc2626' }); yield;
     // палатка наёмников (к дороге въезда)
-    K.part({ s: 'cone', x: -108, y: 1.6, z: 116, r: 3.4, h: 3.2, seg: 4, yaw: PI / 4, c: '#4d7c0f', flat: true });
-    K.body({ x: -108, z: 116, y: 1, hx: 2.2, hy: 1, hz: 2.2, data: { cam: false } });
-    K.label.sign('🪖 Наёмники', -108, 3.4, 118.6, 3.4, .55, 0, { bg: '#365314', w: 512, h: 84 });
-    K.item({ x: -108, y: 1.4, z: 119.6, r: 1.6, prompt: () => `🪖 Нанять наёмника (${MERC.price} 🪙, до ${MERC.max})`, act: () => K.rt.war?.hire() });
-    K.npc({ id: 'w_recruiter', name: '🪖 Вербовщик', x: -104.2, z: 120.2, yaw: 0, seed: 'verbov', say: [`Наёмник — ${MERC.price} 🪙. Пойдёт за тобой и прикроет!`, 'Наёмники служат, пока ты в боевой зоне'] });
+    K.part({ s: 'cone', x: -108, y: 1.6, z: 116, r: 3.4, h: 3.2, seg: 4, yaw: PI / 4, c: '#4d7c0f', flat: true }); yield;
+    K.body({ x: -108, z: 116, y: 1, hx: 2.2, hy: 1, hz: 2.2, data: { cam: false } }); yield;
+    K.label.sign('🪖 Наёмники', -108, 3.4, 118.6, 3.4, .55, 0, { bg: '#365314', w: 512, h: 84 }); yield;
+    K.item({ x: -108, y: 1.4, z: 119.6, r: 1.6, prompt: () => `🪖 Нанять наёмника (${MERC.price} 🪙, до ${MERC.max})`, act: () => K.rt.war?.hire() }); yield;
+    K.npc({ id: 'w_recruiter', name: '🪖 Вербовщик', x: -104.2, z: 120.2, yaw: 0, seed: 'verbov', say: [`Наёмник — ${MERC.price} 🪙. Пойдёт за тобой и прикроет!`, 'Наёмники служат, пока ты в боевой зоне'] }); yield;
     // мешки с песком у штаба
-    for (const [x, z, yaw] of [[-86, 166, PI / 2], [-86, 188, PI / 2], [-114, 166, PI / 2], [-114, 206, 0], [-86, 206, 0]]) sandbags(K, x, z, yaw);
+    for (const [x, z, yaw] of [[-86, 166, PI / 2], [-86, 188, PI / 2], [-114, 166, PI / 2], [-114, 206, 0], [-86, 206, 0]]) sandbags(K, x, z, yaw); yield;
     yield;
     // ── Бункер (под землёй, нейтральный центр): плита-крыша (прячется изнутри), стены, лестница вниз, комнаты, свет ──
-    K.chunk('bunker');
+    K.chunk('bunker'); yield;
     {
-      const x0 = BK.x0, x1 = BK.x1, z0 = BK.z0, z1 = BK.z1, F = BK.floor, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, D = z1 - z0;
-      const stair = { x0: x1 - 10, x1: x1, z0: cz - 2.2, z1: cz + 2.2 };   // лестница вдоль восточной стены, вниз — на запад
-      K.part({ s: 'box', x: cx, y: F + .01, z: cz, w: W, h: .02, d: D, m: M.concrete });
+      const x0 = BK.x0, x1 = BK.x1, z0 = BK.z0, z1 = BK.z1, F = BK.floor, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0, D = z1 - z0; yield;
+      const stair = { x0: x1 - 10, x1: x1, z0: cz - 2.2, z1: cz + 2.2 }; yield;   // лестница вдоль восточной стены, вниз — на запад
+      K.part({ s: 'box', x: cx, y: F + .01, z: cz, w: W, h: .02, d: D, m: M.concrete }); yield;
       // стены по краю (от пола до земли)
-      const bp = (kind, n, o) => K.piece({ id: `w_bunker:${kind}:${n}`, kind, b: 'w_bunker', destructible: false, ...o });
-      [[cx, z0 + .2, W, .4], [cx, z1 - .2, W, .4], [x0 + .2, cz, .4, D], [x1 - .2, cz, .4, D]].forEach(([x, z, w, d], k) => bp('wall', k + 1, { x, y: F / 2, z, w, h: -F, d, c: '#78716c', cam: true }));
+      const bp = (kind, n, o) => K.piece({ id: `w_bunker:${kind}:${n}`, kind, b: 'w_bunker', destructible: false, ...o }); yield;
+      [[cx, z0 + .2, W, .4], [cx, z1 - .2, W, .4], [x0 + .2, cz, .4, D], [x1 - .2, cz, .4, D]].forEach(([x, z, w, d], k) => bp('wall', k + 1, { x, y: F / 2, z, w, h: -F, d, c: '#78716c', cam: true })); yield;
       // плита-крыша: всё, кроме проёма над лестницей (детали; изнутри прячутся — группа деталей)
-      const roofP = [];
-      const slab = (ax0, ax1, az0, az1) => { if (ax1 - ax0 < .05 || az1 - az0 < .05) return; roofP.push(bp('roof', roofP.length + 1, { x: (ax0 + ax1) / 2, y: BK.roof / 2, z: (az0 + az1) / 2, w: ax1 - ax0, h: -BK.roof, d: az1 - az0, c: '#b5ad8f' })); };
-      slab(x0, stair.x0, z0, z1); slab(stair.x0, x1, z0, stair.z0); slab(stair.x0, x1, stair.z1, z1);
-      const roof = MZ.pieceGroup(roofP);
-      K.body({ x: cx, z: cz, y: F / 2, hx: W / 2 - .4, hy: -F / 2 + .2, hz: D / 2 - .4, trigger: true, tag: 'room', data: { room: 'w_bunker', roof } });
+      const roofP = []; yield;
+      const slab = (ax0, ax1, az0, az1) => { if (ax1 - ax0 < .05 || az1 - az0 < .05) return; roofP.push(bp('roof', roofP.length + 1, { x: (ax0 + ax1) / 2, y: BK.roof / 2, z: (az0 + az1) / 2, w: ax1 - ax0, h: -BK.roof, d: az1 - az0, c: '#b5ad8f' })); }; yield;
+      slab(x0, stair.x0, z0, z1); yield; slab(stair.x0, x1, z0, stair.z0); yield; slab(stair.x0, x1, stair.z1, z1); yield;
+      const roof = MZ.pieceGroup(roofP); yield;
+      K.body({ x: cx, z: cz, y: F / 2, hx: W / 2 - .4, hy: -F / 2 + .2, hz: D / 2 - .4, trigger: true, tag: 'room', data: { room: 'w_bunker', roof } }); yield;
       // лестница: 12 ступеней от земли вниз на запад, по бокам — стенки
-      const n = 12, step = -F / n, len = stair.x1 - stair.x0;
-      for (let i = 0; i < n; i++) { const h = (n - i) * step; K.box(stair.x1 - (i + .5) * len / n, F, (stair.z0 + stair.z1) / 2, len / n + .02, h, stair.z1 - stair.z0, '#a8a29e', { solid: true, floor: 'concrete' }); }
-      for (const z of [stair.z0 - .15, stair.z1 + .15]) K.box((stair.x0 + stair.x1) / 2, F, z, len, -F, .3, '#78716c', { solid: true, cam: true });
+      const n = 12, step = -F / n, len = stair.x1 - stair.x0; yield;
+      for (let i = 0; i < n; i++) { const h = (n - i) * step; yield; K.box(stair.x1 - (i + .5) * len / n, F, (stair.z0 + stair.z1) / 2, len / n + .02, h, stair.z1 - stair.z0, '#a8a29e', { solid: true, floor: 'concrete' }); yield; }
+      for (const z of [stair.z0 - .15, stair.z1 + .15]) K.box((stair.x0 + stair.x1) / 2, F, z, len, -F, .3, '#78716c', { solid: true, cam: true }); yield;
       // входной домик над лестницей
-      K.box(x1 + .9, 0, cz - 2.5, 2, 2.8, .3, '#57534e', { solid: true, cam: true }); K.box(x1 + .9, 0, cz + 2.5, 2, 2.8, .3, '#57534e', { solid: true, cam: true });
-      K.part({ s: 'box', x: x1 - 1, y: 2.95, z: cz, w: 4.2, h: .3, d: 5.4, c: '#3f6212' });
-      K.label.sign('🕳️ Бункер', x1 + 1.95, 2.3, cz, 3, .6, PI / 2, { bg: '#292524', w: 512, h: 100 });
+      K.box(x1 + .9, 0, cz - 2.5, 2, 2.8, .3, '#57534e', { solid: true, cam: true }); yield; K.box(x1 + .9, 0, cz + 2.5, 2, 2.8, .3, '#57534e', { solid: true, cam: true }); yield;
+      K.part({ s: 'box', x: x1 - 1, y: 2.95, z: cz, w: 4.2, h: .3, d: 5.4, c: '#3f6212' }); yield;
+      K.label.sign('🕳️ Бункер', x1 + 1.95, 2.3, cz, 3, .6, PI / 2, { bg: '#292524', w: 512, h: 100 }); yield;
       // комнаты: командная (запад), оружейная (север), спальни (юг), лампы
-      K.box(x0 + 7, F, cz, .3, 3.6, D - 6, '#a8a29e', { solid: true, cam: true });
-      K.table(x0 + 3.5, cz, 3, 2, '#365314', .9); K.part({ s: 'box', x: x0 + 3.5, y: F + .93, z: cz, w: 2.8, h: .02, d: 1.8, c: '#65a30d' });
-      for (let i = 0; i < 3; i++) { K.box(x0 + .55, F, cz - 4 + i * 4, .3, 2, 2.4, '#111827', { solid: true }); K.part({ s: 'box', x: x0 + .72, y: F + 1.3, z: cz - 4 + i * 4, w: .02, h: 1.2, d: 2, c: '#4ade80', m: 'glow' }); }
-      for (let i = 0; i < 4; i++) K.part({ s: 'ball', x: x0 + 4 + i * 6, y: -.8, z: cz, r: .22, c: '#fef9c3', m: 'glow', seg: 8 });
-      for (let i = 0; i < 3; i++) { K.box(x0 + 11 + i * 3, F, z1 - 1.6, 1.4, 1, 2.4, '#78716c', { solid: true }); K.part({ s: 'box', x: x0 + 11 + i * 3, y: F + 1.6, z: z1 - 1.6, w: 1.4, h: .1, d: 2.4, c: '#57534e' }); K.seat(x0 + 11 + i * 3, F + 1.1, z1 - 1.6, PI, { bed: true }); }
-      for (let i = 0; i < 4; i++) K.box(x0 + 10 + i * 2.2, F, z0 + .9, 1.4, 1, 1.2, ['#3f6212', '#57534e', '#78350f', '#3f6212'][i], { solid: true });
-      spot('w_bunker_med', x0 + 12, F + 1.2, z0 + 2.4);
-      K.item({ x: x0 + 12, y: F + 1.2, z: z0 + 2.4, r: 1.5, prompt: () => '🩹 Аптечки и заряд (бункер)', act: () => K.rt.war?.armory() });
-      K.npc({ id: 'w_bunkerguard', name: '🎖️ Связист', x: x0 + 3.5, y: F, z: cz - 2.4, yaw: 0, seed: 'svyaz1', say: ['Бункер — самое безопасное место 🕳️', 'Связь со штабом есть!'] });
+      K.box(x0 + 7, F, cz, .3, 3.6, D - 6, '#a8a29e', { solid: true, cam: true }); yield;
+      K.table(x0 + 3.5, cz, 3, 2, '#365314', .9); yield; K.part({ s: 'box', x: x0 + 3.5, y: F + .93, z: cz, w: 2.8, h: .02, d: 1.8, c: '#65a30d' }); yield;
+      for (let i = 0; i < 3; i++) { K.box(x0 + .55, F, cz - 4 + i * 4, .3, 2, 2.4, '#111827', { solid: true }); yield; K.part({ s: 'box', x: x0 + .72, y: F + 1.3, z: cz - 4 + i * 4, w: .02, h: 1.2, d: 2, c: '#4ade80', m: 'glow' }); yield; }
+      for (let i = 0; i < 4; i++) K.part({ s: 'ball', x: x0 + 4 + i * 6, y: -.8, z: cz, r: .22, c: '#fef9c3', m: 'glow', seg: 8 }); yield;
+      for (let i = 0; i < 3; i++) { K.box(x0 + 11 + i * 3, F, z1 - 1.6, 1.4, 1, 2.4, '#78716c', { solid: true }); yield; K.part({ s: 'box', x: x0 + 11 + i * 3, y: F + 1.6, z: z1 - 1.6, w: 1.4, h: .1, d: 2.4, c: '#57534e' }); yield; K.seat(x0 + 11 + i * 3, F + 1.1, z1 - 1.6, PI, { bed: true }); yield; }
+      for (let i = 0; i < 4; i++) K.box(x0 + 10 + i * 2.2, F, z0 + .9, 1.4, 1, 1.2, ['#3f6212', '#57534e', '#78350f', '#3f6212'][i], { solid: true }); yield;
+      spot('w_bunker_med', x0 + 12, F + 1.2, z0 + 2.4); yield;
+      K.item({ x: x0 + 12, y: F + 1.2, z: z0 + 2.4, r: 1.5, prompt: () => '🩹 Аптечки и заряд (бункер)', act: () => K.rt.war?.armory() }); yield;
+      K.npc({ id: 'w_bunkerguard', name: '🎖️ Связист', x: x0 + 3.5, y: F, z: cz - 2.4, yaw: 0, seed: 'svyaz1', say: ['Бункер — самое безопасное место 🕳️', 'Связь со штабом есть!'] }); yield;
     }
     yield;
     // ── Порт (юго-запад, нейтральный): площадка, причалы, контейнеры, кран, корабли; места у причалов — для баз без берега ──
-    K.chunk('port');
+    K.chunk('port'); yield;
     {
-      const PCX = (PORT.x0 + PORT.x1) / 2, PCZ = (PORT.z0 + PORT.z1) / 2;
-      K.part({ s: 'box', x: PCX, y: .03, z: PCZ, w: PORT.x1 - PORT.x0, h: .02, d: PORT.z1 - PORT.z0, m: M.concrete });
+      const PCX = (PORT.x0 + PORT.x1) / 2, PCZ = (PORT.z0 + PORT.z1) / 2; yield;
+      K.part({ s: 'box', x: PCX, y: .03, z: PCZ, w: PORT.x1 - PORT.x0, h: .02, d: PORT.z1 - PORT.z0, m: M.concrete }); yield;
       for (const pz of PIERS) {
-        K.box(SEA.x1 - 15, 0, pz, 30, .3, 6, '#78350f', { solid: true, floor: 'wood', m: M.planks });
-        for (let i = 0; i < 6; i++) for (const s of [-1, 1]) K.cyl(SEA.x1 - 2 - i * 5, -7, pz + s * 2.6, .25, 7.2, '#57534e', { solid: true });
+        K.box(SEA.x1 - 15, 0, pz, 30, .3, 6, '#78350f', { solid: true, floor: 'wood', m: M.planks }); yield;
+        for (let i = 0; i < 6; i++) for (const s of [-1, 1]) K.cyl(SEA.x1 - 2 - i * 5, -7, pz + s * 2.6, .25, 7.2, '#57534e', { solid: true }); yield;
       }
-      for (let i = 0; i < 10; i++) { const c = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed'][i % 5]; K.piece({ id: `w_port:container:${i + 1}`, kind: 'container', b: 'w_port', x: PORT.x1 - 14 - (i % 2) * 3, y: (i > 5 ? 2.6 : 0) + 1.3, z: PORT.z0 + 8 + (i % 6) * 7, w: 2.6, h: 2.6, d: 6, c, hp: 200, cam: true }); }
-      K.cyl(-346, 0, 410, .5, 16, '#facc15', { solid: true }); K.part({ s: 'box', x: -356, y: 16, z: 410, w: 22, h: .6, d: .6, c: '#facc15' }); K.part({ s: 'cyl', x: -364, y: 13, z: 410, r: .03, h: 6, c: '#374151' });
-      warship(K, -440, 406, 0);
-      K.npc({ id: 'w_harbor', name: '⚓ Капитан порта', x: -350, z: 372, yaw: 270, seed: 'kapitan', say: ['Корабли и катера — у причалов ⚓', 'У баз без своего берега — места у этих причалов', 'В море можно плавать — у причалов есть лестницы'] });
-      if (K.E.ladder) for (const z of [370, 400, 446]) { K.part({ s: 'box', x: SEA.x1 - .3, y: -3.2, z, w: .1, h: 6.4, d: .8, c: '#e5e7eb' }); K.E.ladder(K.ph, { x: SEA.x1 - 1, z, yaw: PI / 2, top: .02, w: .9 }); }
+      for (let i = 0; i < 10; i++) { const c = ['#dc2626', '#2563eb', '#16a34a', '#f59e0b', '#7c3aed'][i % 5]; yield; K.piece({ id: `w_port:container:${i + 1}`, kind: 'container', b: 'w_port', x: PORT.x1 - 14 - (i % 2) * 3, y: (i > 5 ? 2.6 : 0) + 1.3, z: PORT.z0 + 8 + (i % 6) * 7, w: 2.6, h: 2.6, d: 6, c, hp: 200, cam: true }); yield; }
+      K.cyl(-346, 0, 410, .5, 16, '#facc15', { solid: true }); yield; K.part({ s: 'box', x: -356, y: 16, z: 410, w: 22, h: .6, d: .6, c: '#facc15' }); yield; K.part({ s: 'cyl', x: -364, y: 13, z: 410, r: .03, h: 6, c: '#374151' }); yield;
+      warship(K, -440, 406, 0); yield;
+      K.npc({ id: 'w_harbor', name: '⚓ Капитан порта', x: -350, z: 372, yaw: 270, seed: 'kapitan', say: ['Корабли и катера — у причалов ⚓', 'У баз без своего берега — места у этих причалов', 'В море можно плавать — у причалов есть лестницы'] }); yield;
+      if (K.E.ladder) for (const z of [370, 400, 446]) { K.part({ s: 'box', x: SEA.x1 - .3, y: -3.2, z, w: .1, h: 6.4, d: .8, c: '#e5e7eb' }); yield; K.E.ladder(K.ph, { x: SEA.x1 - 1, z, yaw: PI / 2, top: .02, w: .9 }); yield; }
     }
     yield;
     // ── Аэродром (юг, нейтральный): перрон со стоянками баз, полоса с запада на восток (небо над ней свободно), ангары, вышка ──
-    K.chunk('air');
+    K.chunk('air'); yield;
     {
-      const RW = AIR.runway, AP = AIR.apron, RZ = (RW.z0 + RW.z1) / 2;
-      K.part({ s: 'box', x: (AP.x0 + AP.x1) / 2, y: .03, z: (AP.z0 + AP.z1) / 2, w: AP.x1 - AP.x0, h: .02, d: AP.z1 - AP.z0, m: M.concrete });
-      K.part({ s: 'box', x: (RW.x0 + RW.x1) / 2, y: .03, z: RZ, w: RW.x1 - RW.x0, h: .02, d: RW.z1 - RW.z0, m: M.asphalt });
-      for (let x = RW.x0 + 6; x < RW.x1 - 4; x += 9) K.part({ s: 'box', x, y: .045, z: RZ, w: 4.5, h: .01, d: .5, c: '#f8fafc' });
-      for (const s of [-1, 1]) for (let x = RW.x0 + 2; x < RW.x1; x += 6) K.part({ s: 'ball', x, y: .12, z: RZ + s * 8.2, r: .12, c: s < 0 ? '#facc15' : '#4ade80', m: 'glow', seg: 6 });
+      const RW = AIR.runway, AP = AIR.apron, RZ = (RW.z0 + RW.z1) / 2; yield;
+      K.part({ s: 'box', x: (AP.x0 + AP.x1) / 2, y: .03, z: (AP.z0 + AP.z1) / 2, w: AP.x1 - AP.x0, h: .02, d: AP.z1 - AP.z0, m: M.concrete }); yield;
+      K.part({ s: 'box', x: (RW.x0 + RW.x1) / 2, y: .03, z: RZ, w: RW.x1 - RW.x0, h: .02, d: RW.z1 - RW.z0, m: M.asphalt }); yield;
+      for (let x = RW.x0 + 6; x < RW.x1 - 4; x += 9) K.part({ s: 'box', x, y: .045, z: RZ, w: 4.5, h: .01, d: .5, c: '#f8fafc' }); yield;
+      for (const s of [-1, 1]) for (let x = RW.x0 + 2; x < RW.x1; x += 6) K.part({ s: 'ball', x, y: .12, z: RZ + s * 8.2, r: .12, c: s < 0 ? '#facc15' : '#4ade80', m: 'glow', seg: 6 }); yield;
       // стоянки баз — жёлтая «П» (открыта к полосе)
-      for (const sl of AIR.slots) { K.part({ s: 'box', x: sl.x, y: .045, z: sl.z - 5.5, w: 11, h: .01, d: .25, c: '#facc15' }); for (const s of [-1, 1]) K.part({ s: 'box', x: sl.x + s * 5.5, y: .045, z: sl.z, w: .25, h: .01, d: 11, c: '#facc15' }); }
+      for (const sl of AIR.slots) { K.part({ s: 'box', x: sl.x, y: .045, z: sl.z - 5.5, w: 11, h: .01, d: .25, c: '#facc15' }); yield; for (const s of [-1, 1]) K.part({ s: 'box', x: sl.x + s * 5.5, y: .045, z: sl.z, w: .25, h: .01, d: 11, c: '#facc15' }); yield; }
       for (const id of ['w_hangar1', 'w_hangar2']) {
-        const b = WB(id);
+        const b = WB(id); yield;
         K.mbuilding({ id, x: b.x, z: b.z, w: b.w, d: b.d, h: b.h, wall: b.wall, trim: '#4b5563', roofC: b.roof, floorC: '#6b7280', floorType: 'concrete',
-          doors: [{ side: 's', at: 0, w: 12, h: 6 }], sign: id === 'w_hangar2' ? '✈️ Ангар 2' : '✈️ Ангар 1', signBg: '#374151' });
+          doors: [{ side: 's', at: 0, w: 12, h: 6 }], sign: id === 'w_hangar2' ? '✈️ Ангар 2' : '✈️ Ангар 1', signBg: '#374151' }); yield;
       }
-      planeModel(K, WB('w_hangar1').x, WB('w_hangar1').z + 1, 0);
-      const ct = WB('w_control'), pc = (kind, n, o) => K.piece({ id: `w_control:${kind}:${n}`, kind, b: 'w_control', ...o });
-      [[0, -2.85, 6, .3], [0, 2.85, 6, .3], [-2.85, 0, .3, 5.4], [2.85, 0, .3, 5.4]].forEach(([dx, dz, w, d], k) => pc('wall', k + 1, { x: ct.x + dx, y: 5, z: ct.z + dz, w, h: 10, d, c: '#e5e7eb', cam: true }));
-      pc('floor', 1, { x: ct.x, y: 10.1, z: ct.z, w: 8, h: .2, d: 8, c: '#9ca3af' });
-      [[0, -3.95, 8, .1], [0, 3.95, 8, .1], [-3.95, 0, .1, 8], [3.95, 0, .1, 8]].forEach(([dx, dz, w, d], k) => pc('window', k + 1, { x: ct.x + dx, y: 11.6, z: ct.z + dz, w, h: 2.8, d, glass: true }));
-      pc('roof', 1, { x: ct.x, y: 13.2, z: ct.z, w: 8.6, h: .4, d: 8.6, c: ct.roof });
-      K.label.sign('🛫 Аэродром', ct.x, 6, ct.z + 3.1, 5, .8, 0, { bg: '#1e3a8a', w: 640, h: 100 });
-      K.npc({ id: 'w_pilot', name: '🧑‍✈️ Пилот', x: -244, z: 396, yaw: 90, seed: 'pilot7', say: ['Полоса — общая, у каждой базы своя стоянка ✈️', 'Взлетай на запад — над морем простор'] });
+      planeModel(K, WB('w_hangar1').x, WB('w_hangar1').z + 1, 0); yield;
+      const ct = WB('w_control'), pc = (kind, n, o) => K.piece({ id: `w_control:${kind}:${n}`, kind, b: 'w_control', ...o }); yield;
+      [[0, -2.85, 6, .3], [0, 2.85, 6, .3], [-2.85, 0, .3, 5.4], [2.85, 0, .3, 5.4]].forEach(([dx, dz, w, d], k) => pc('wall', k + 1, { x: ct.x + dx, y: 5, z: ct.z + dz, w, h: 10, d, c: '#e5e7eb', cam: true })); yield;
+      pc('floor', 1, { x: ct.x, y: 10.1, z: ct.z, w: 8, h: .2, d: 8, c: '#9ca3af' }); yield;
+      [[0, -3.95, 8, .1], [0, 3.95, 8, .1], [-3.95, 0, .1, 8], [3.95, 0, .1, 8]].forEach(([dx, dz, w, d], k) => pc('window', k + 1, { x: ct.x + dx, y: 11.6, z: ct.z + dz, w, h: 2.8, d, glass: true })); yield;
+      pc('roof', 1, { x: ct.x, y: 13.2, z: ct.z, w: 8.6, h: .4, d: 8.6, c: ct.roof }); yield;
+      K.label.sign('🛫 Аэродром', ct.x, 6, ct.z + 3.1, 5, .8, 0, { bg: '#1e3a8a', w: 640, h: 100 }); yield;
+      K.npc({ id: 'w_pilot', name: '🧑‍✈️ Пилот', x: -244, z: 396, yaw: 90, seed: 'pilot7', say: ['Полоса — общая, у каждой базы своя стоянка ✈️', 'Взлетай на запад — над морем простор'] }); yield;
     }
     // вертолётные площадки лагеря
     for (const [x, z] of VEH.heli) {
-      K.cyl(x, 0, z, 6, .12, '#374151', { solid: true, seg: 24 }); K.part({ s: 'ring', x, y: .14, z, r: 5.4, r2: 5, rx: -PI / 2, c: '#facc15' });
-      K.label.sign('H', x, .15, z, 4, 4, 0, { bg: '#374151', w: 128, h: 128, border: false });
+      K.cyl(x, 0, z, 6, .12, '#374151', { solid: true, seg: 24 }); yield; K.part({ s: 'ring', x, y: .14, z, r: 5.4, r2: 5, rx: -PI / 2, c: '#facc15' }); yield;
+      K.label.sign('H', x, .15, z, 4, 4, 0, { bg: '#374151', w: 128, h: 128, border: false }); yield;
     }
     yield;
     // ── Точки захвата, руины, полигон, укрытия (только в нейтральном центре и в порту) ──
-    K.chunk('points');
+    K.chunk('points'); yield;
     for (const P of POINTS) {
-      const h = P.id === 'A' ? 2 : P.id === 'B' ? .3 : 1.5;
-      if (h > .5) { K.box(P.x, 0, P.z, 14, h, 14, '#a8a29e', { solid: true, floor: 'concrete' }); K.wedge({ x: P.x + 10, z: P.z, y: h / 2, hx: 3, hy: h / 2, hz: 3, yaw: PI / 2 }); K.part({ s: 'box', x: P.x + 10, y: h / 2, z: P.z, w: 6, h: .05, d: 6, rz: Math.atan2(h, 6), c: '#a8a29e' }); }
-      K.cyl(P.x, h, P.z, .1, 7, '#e5e7eb', { solid: true });
-      K.part({ s: 'ring', x: P.x, y: h + .05, z: P.z, r: CAP_R, r2: CAP_R - .35, rx: -PI / 2, c: '#f8fafc', m: 'glow' });
-      K.label.sign(`🚩 ${P.id} · ${P.name}`, P.x, h + 7.6, P.z, 3.6, .7, 0, { bg: '#111827', w: 512, h: 100 });
-      K.label.sign(`🚩 ${P.id} · ${P.name}`, P.x, h + 7.6, P.z, 3.6, .7, PI, { bg: '#111827', w: 512, h: 100 });
-      P.h = h;
+      const h = P.id === 'A' ? 2 : P.id === 'B' ? .3 : 1.5; yield;
+      if (h > .5) { K.box(P.x, 0, P.z, 14, h, 14, '#a8a29e', { solid: true, floor: 'concrete' }); yield; K.wedge({ x: P.x + 10, z: P.z, y: h / 2, hx: 3, hy: h / 2, hz: 3, yaw: PI / 2 }); yield; K.part({ s: 'box', x: P.x + 10, y: h / 2, z: P.z, w: 6, h: .05, d: 6, rz: Math.atan2(h, 6), c: '#a8a29e' }); yield; }
+      K.cyl(P.x, h, P.z, .1, 7, '#e5e7eb', { solid: true }); yield;
+      K.part({ s: 'ring', x: P.x, y: h + .05, z: P.z, r: CAP_R, r2: CAP_R - .35, rx: -PI / 2, c: '#f8fafc', m: 'glow' }); yield;
+      K.label.sign(`🚩 ${P.id} · ${P.name}`, P.x, h + 7.6, P.z, 3.6, .7, 0, { bg: '#111827', w: 512, h: 100 }); yield;
+      K.label.sign(`🚩 ${P.id} · ${P.name}`, P.x, h + 7.6, P.z, 3.6, .7, PI, { bg: '#111827', w: 512, h: 100 }); yield;
+      P.h = h; yield;
     }
     // руины у точки B
-    { const B = POINTS[1]; [[-8, -6, 6, .5, 3], [-6, 7, .5, 5, 2.4], [7, -7, .5, 4, 3.4], [6, 6, 5, .5, 2], [0, -9, 3, .5, 1.6]].forEach(([dx, dz, w, d, hh], k) => K.piece({ id: `w_point_b:wall:${k + 1}`, kind: 'wall', b: 'w_point_b', x: B.x + dx, y: hh / 2, z: B.z + dz, w, h: hh, d, c: '#78716c', cam: true })); }
+    { const B = POINTS[1]; yield; [[-8, -6, 6, .5, 3], [-6, 7, .5, 5, 2.4], [7, -7, .5, 4, 3.4], [6, 6, 5, .5, 2], [0, -9, 3, .5, 1.6]].forEach(([dx, dz, w, d, hh], k) => K.piece({ id: `w_point_b:wall:${k + 1}`, kind: 'wall', b: 'w_point_b', x: B.x + dx, y: hh / 2, z: B.z + dz, w, h: hh, d, c: '#78716c', cam: true })); yield; }
     // полигон: мишени, щит
     {
-      const A = ROBOT.area, ax = (A.x0 + A.x1) / 2;
-      K.part({ s: 'box', x: ax, y: .02, z: (A.z0 + A.z1) / 2, w: A.x1 - A.x0, h: .02, d: A.z1 - A.z0, m: M.dirt });
-      for (let i = 0; i < 6; i++) { const x = A.x0 + 4 + i * 4.4; K.cyl(x, 0, A.z1 - 2, .08, 1.2, '#78350f'); K.part({ s: 'cyl', x, y: 1.6, z: A.z1 - 2, r: .7, h: .1, rx: PI / 2, c: '#f8fafc' }); K.part({ s: 'cyl', x, y: 1.6, z: A.z1 - 2.06, r: .45, h: .1, rx: PI / 2, c: '#dc2626' }); }
-      K.board(ax, 2.2, A.z0 - .4, 4, 1.6, PI, '🤖 Полигон: роботы-мишени', { bg: '#78350f' });
-      K.box(ax, 0, A.z0 - .6, .2, 1.4, .2, '#57534e', { solid: true });
+      const A = ROBOT.area, ax = (A.x0 + A.x1) / 2; yield;
+      K.part({ s: 'box', x: ax, y: .02, z: (A.z0 + A.z1) / 2, w: A.x1 - A.x0, h: .02, d: A.z1 - A.z0, m: M.dirt }); yield;
+      for (let i = 0; i < 6; i++) { const x = A.x0 + 4 + i * 4.4; yield; K.cyl(x, 0, A.z1 - 2, .08, 1.2, '#78350f'); yield; K.part({ s: 'cyl', x, y: 1.6, z: A.z1 - 2, r: .7, h: .1, rx: PI / 2, c: '#f8fafc' }); yield; K.part({ s: 'cyl', x, y: 1.6, z: A.z1 - 2.06, r: .45, h: .1, rx: PI / 2, c: '#dc2626' }); yield; }
+      K.board(ax, 2.2, A.z0 - .4, 4, 1.6, PI, '🤖 Полигон: роботы-мишени', { bg: '#78350f' }); yield;
+      K.box(ax, 0, A.z0 - .6, .2, 1.4, .2, '#57534e', { solid: true }); yield;
     }
     // укрытия: мешки, ящики, бетонные блоки — в центре кольца (поле боя между базами)
     for (let k = 0; k < 60; k++) {
-      const x = CENTER.x0 + 4 + rnd() * (CENTER.x1 - CENTER.x0 - 8), z = CENTER.z0 + 4 + rnd() * (CENTER.z1 - CENTER.z0 - 8);
-      if (MZ.inRect(BK, x, z, 7) || POINTS.some(P => Math.hypot(P.x - x, P.z - z) < 11) || SPAWNS.ffa.some(([sx, sz]) => Math.hypot(sx - x, sz - z) < 4)) continue;
-      const t = rnd();
+      const x = CENTER.x0 + 4 + rnd() * (CENTER.x1 - CENTER.x0 - 8), z = CENTER.z0 + 4 + rnd() * (CENTER.z1 - CENTER.z0 - 8); yield;
+      if (MZ.inRect(BK, x, z, 7) || POINTS.some(P => Math.hypot(P.x - x, P.z - z) < 11) || SPAWNS.ffa.some(([sx, sz]) => Math.hypot(sx - x, sz - z) < 4)) continue; yield;
+      const t = rnd(); yield;
       if (t < .4) sandbags(K, x, z, rnd() * PI);
       else if (t < .75) K.piece({ id: `w_cover:crate:${++K.nCrate}`, kind: 'crate', b: 'w_cover', x, y: .8, z, w: 1.6, h: 1.6, d: 1.6, c: '#a16207', hp: 40 });
-      else K.piece({ id: `w_cover:block:${++K.nBlock}`, kind: 'block', b: 'w_cover', x, y: .6, z, w: 3.2, h: 1.2, d: .9, yaw: rnd() * PI, c: '#9ca3af', hp: 150 });
+      else K.piece({ id: `w_cover:block:${++K.nBlock}`, kind: 'block', b: 'w_cover', x, y: .6, z, w: 3.2, h: 1.2, d: .9, yaw: rnd() * PI, c: '#9ca3af', hp: 150 }); yield;
     }
-    for (let k = 0; k < 16; k++) { const x = CENTER.x0 + 3 + rnd() * (CENTER.x1 - CENTER.x0 - 6), z = CENTER.z0 + 3 + rnd() * (CENTER.z1 - CENTER.z0 - 6); if (!MZ.inRect(BK, x, z, 9) && !POINTS.some(P => Math.hypot(P.x - x, P.z - z) < 12)) K.tree(x, z, 1, -1); }
+    for (let k = 0; k < 16; k++) { const x = CENTER.x0 + 3 + rnd() * (CENTER.x1 - CENTER.x0 - 6), z = CENTER.z0 + 3 + rnd() * (CENTER.z1 - CENTER.z0 - 6); yield; if (!MZ.inRect(BK, x, z, 9) && !POINTS.some(P => Math.hypot(P.x - x, P.z - z) < 12)) K.tree(x, z, 1, -1); yield; }
     yield;
     // ── Участки военных баз: земля, ограда с въездом (у береговых — без ограды со стороны моря), щит, командный пункт ──
-    K.chunk('plots');
+    K.chunk('plots'); yield;
     for (const P of PLOTS) {
-      K.flat(P.cx, P.cz, P.x1 - P.x0, P.z1 - P.z0, '#9c8f69', .025);
-      const G = P.gate, half = G.w / 2;
-      const sides = { n: [P.x0, P.z0, P.x1, P.z0], s: [P.x0, P.z1, P.x1, P.z1], w: [P.x0, P.z0, P.x0, P.z1], e: [P.x1, P.z0, P.x1, P.z1] };
+      K.flat(P.cx, P.cz, P.x1 - P.x0, P.z1 - P.z0, '#9c8f69', .025); yield;
+      const G = P.gate, half = G.w / 2; yield;
+      const sides = { n: [P.x0, P.z0, P.x1, P.z0], s: [P.x0, P.z1, P.x1, P.z1], w: [P.x0, P.z0, P.x0, P.z1], e: [P.x1, P.z0, P.x1, P.z1] }; yield;
       for (const [sd, [ax, az, bx, bz]] of Object.entries(sides)) {
-        if (P.coast && sd === 'w') continue;   // берег — под доки
-        if (sd !== G.side) { fence(ax, az, bx, bz, '#4d5b2a'); continue; }
-        const alongX = az === bz, c0 = alongX ? G.x : G.z;
-        if (alongX) { fence(ax, az, c0 - half, bz, '#4d5b2a'); fence(c0 + half, az, bx, bz, '#4d5b2a'); }
-        else { fence(ax, az, bx, c0 - half, '#4d5b2a'); fence(ax, c0 + half, bx, bz, '#4d5b2a'); }
+        if (P.coast && sd === 'w') continue; yield;   // берег — под доки
+        if (sd !== G.side) { fence(ax, az, bx, bz, '#4d5b2a'); yield; continue; yield; }
+        const alongX = az === bz, c0 = alongX ? G.x : G.z; yield;
+        if (alongX) { fence(ax, az, c0 - half, bz, '#4d5b2a'); yield; fence(c0 + half, az, bx, bz, '#4d5b2a'); yield; }
+        else { fence(ax, az, bx, c0 - half, '#4d5b2a'); yield; fence(ax, c0 + half, bx, bz, '#4d5b2a'); yield; }
         // столбы въезда
-        for (const s of [-1, 1]) K.box(alongX ? c0 + s * half : ax, 0, alongX ? az : c0 + s * half, .5, 2.8, .5, '#3f4a22', { solid: true });
+        for (const s of [-1, 1]) K.box(alongX ? c0 + s * half : ax, 0, alongX ? az : c0 + s * half, .5, 2.8, .5, '#3f4a22', { solid: true }); yield;
       }
       // щит у въезда (снаружи, лицом к дороге)
-      const ox = Math.sin(G.yaw), oz = Math.cos(G.yaw);   // наружу
-      const lx = oz, lz = -ox;                              // вдоль ограды — в сторону, противоположную КП
-      const bx = r2(G.x + lx * 7.6 + ox * .6), bz = r2(G.z + lz * 7.6 + oz * .6);
-      K.board(bx, 2.15, bz, 4.2, 1.2, G.yaw, `🏯 ${P.name} · ${P.code}`, { bg: '#3f6212' });
-      K.box(bx - ox * .1, 0, bz - oz * .1, .16, 1.5, .16, '#57534e', { solid: true });
-      K.item({ x: bx + ox * .9, y: 1.4, z: bz + oz * .9, r: 1.6, prompt: () => `🏯 ${P.name}: участок свободен`, act: () => K.rt.war?.plotInfo(P) });
+      const ox = Math.sin(G.yaw), oz = Math.cos(G.yaw); yield;   // наружу
+      const lx = oz, lz = -ox; yield;                              // вдоль ограды — в сторону, противоположную КП
+      const bx = r2(G.x + lx * 7.6 + ox * .6), bz = r2(G.z + lz * 7.6 + oz * .6); yield;
+      K.board(bx, 2.15, bz, 4.2, 1.2, G.yaw, `🏯 ${P.name} · ${P.code}`, { bg: '#3f6212' }); yield;
+      K.box(bx - ox * .1, 0, bz - oz * .1, .16, 1.5, .16, '#57534e', { solid: true }); yield;
+      K.item({ x: bx + ox * .9, y: 1.4, z: bz + oz * .9, r: 1.6, prompt: () => `🏯 ${P.name}: участок свободен`, act: () => K.rt.war?.plotInfo(P) }); yield;
       // командный пункт (из деталей с номерами — как всё в зоне)
       K.mbuilding({ id: P.id + '_cp', x: P.cp.x, z: P.cp.z, w: P.cp.w, d: P.cp.d, h: 3.2, wall: '#a8a29e', trim: '#3f6212', roofC: WB(P.id + '_cp').roof, floorC: '#a8a29e', floorType: 'concrete',
-        doors: [{ side: P.cp.door, at: 0, w: 1.6 }], windows: [{ side: P.cp.win, at: 0, w: 1.6, h: 1 }], sign: '🏯 КП', signBg: '#3f6212' });
+        doors: [{ side: P.cp.door, at: 0, w: 1.6 }], windows: [{ side: P.cp.win, at: 0, w: 1.6, h: 1 }], sign: '🏯 КП', signBg: '#3f6212' }); yield;
     }
     yield;
-    K.flush();
-    K.done = true;
+    K.flush(); yield;
+    K.done = true; yield;
   }
   // мешки с песком: каждый мешок — деталь с номером (укрытие можно будет разбить по мешку)
   function sandbags(K, x, z, yaw){

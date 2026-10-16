@@ -426,15 +426,21 @@
     }
     return true;
   }
-  function merge(R, grp, o = {}){
+  // склейка: merge() — сразу целиком; mergeIt() — по шагам (зона строится кусочками, не больше бюджета за кадр)
+  function merge(R, grp, o){ const it = mergeIt(R, grp, o); let r; do r = it.next(); while (!r.done); return r.value; }
+  function* mergeIt(R, grp, o = {}){
     const T = R.T, M = sharedMats(R), low = R.q === 'low', CH = o.chunk || 0;
     grp.updateMatrixWorld(true);
     const inv = new T.Matrix4().copy(grp.matrixWorld).invert(), m4 = new T.Matrix4(), sph = new T.Sphere();
-    const buckets = new Map(), drop = [];
+    const buckets = new Map(), drop = [], list = [];
     grp.traverse(x => {
       if (!x.isMesh || x.isInstancedMesh || x.userData.dyn || x.userData.mzOwn) return;
       for (let p = x.parent; p && p !== grp; p = p.parent) if (p.userData.dyn) return;
-      const mat = x.material; if (Array.isArray(mat)) return;
+      if (!Array.isArray(x.material)) list.push(x);
+    });
+    let n = 0, kv = 0;
+    for (const x of list) {
+      const mat = x.material;
       const plain = !mat.map && !mat.transparent && !mat.normalMap && !(mat.metalness > .01) && !(mat.emissive && mat.emissive.r + mat.emissive.g + mat.emissive.b > 0);
       let ck = '';
       if (CH > 0) { if (!x.geometry.boundingSphere) x.geometry.computeBoundingSphere(); sph.copy(x.geometry.boundingSphere).applyMatrix4(x.matrixWorld); if (sph.radius < CH * .75) ck = Math.floor(sph.center.x / CH) + ',' + Math.floor(sph.center.z / CH); }
@@ -448,12 +454,14 @@
       let brk = x.userData.brk; for (let p = x.parent; !brk && p && p !== grp; p = p.parent) brk = p.userData.brk;
       b.list.push({ g, c: mat.color, brk }); b.n += g.attributes.position.count;
       drop.push(x);
-    });
+      kv += g.attributes.position.count;
+      if (++n % 24 === 0 || kv > 6000) { kv = 0; yield; }
+    }
     const out = [];
     for (const b of buckets.values()) {
       const pos = new Float32Array(b.n * 3), nor = new Float32Array(b.n * 3), col = b.plain ? new Float32Array(b.n * 3) : null, uv = b.plain ? null : new Float32Array(b.n * 2);
       const tile = !b.plain && b.mat.userData?.tile;
-      let k = 0; const ranges = [];
+      let k = 0, j = 0; const ranges = [];
       for (const { g, c, brk } of b.list) {
         const gp = g.attributes.position, gn = g.attributes.normal, gu = g.attributes.uv;
         if (brk) ranges.push({ id: brk, start: k, count: gp.count });
@@ -466,6 +474,8 @@
           else if (gu) { uv[(k + i) * 2] = gu.getX(i); uv[(k + i) * 2 + 1] = gu.getY(i); }
         }
         k += gp.count; g.dispose();
+        kv += gp.count;
+        if (++j % 32 === 0 || kv > 9000) { kv = 0; yield; }
       }
       const mg = new T.BufferGeometry();
       mg.setAttribute('position', new T.BufferAttribute(pos, 3)); mg.setAttribute('normal', new T.BufferAttribute(nor, 3));
@@ -478,6 +488,7 @@
       for (const r of ranges) { let L = BRK.get(r.id); if (!L) BRK.set(r.id, L = []); L.push({ mesh, start: r.start, count: r.count, orig: null }); }
       if (ranges.length) mesh.geometry.attributes.position.setUsage?.(T.DynamicDrawUsage);
       grp.add(mesh); out.push(mesh);
+      yield;
     }
     for (const x of drop) x.parent?.remove(x);
     return out;
@@ -535,7 +546,8 @@
     let vis = true;
     return { isPieceGroup: true, list, get visible(){ return vis; }, set visible(v){ v = !!v; if (v === vis) return; vis = v; for (const p of list) setPieceVis(p, v && !p.broken); } };
   }
-  function flushPieces(R, K, grp){
+  function flushPieces(R, K, grp){ const it = flushPiecesIt(R, K, grp); let r; do r = it.next(); while (!r.done); return r.value; }
+  function* flushPiecesIt(R, K, grp){
     const T = R.T, L = K.pieceList; if (!L.length) return [];
     const CH = 96, low = R.q === 'low';
     let sm = SHARED_P.get(R);
@@ -567,6 +579,7 @@
       if (!low && !glass) { mesh.castShadow = true; mesh.receiveShadow = true; }
       if (glass) mesh.renderOrder = 2;
       grp.add(mesh); out.push(mesh);
+      yield;
     }
     return out;
   }
@@ -576,25 +589,42 @@
 
   // ═══ Надписи: холст на зону (атлас) — все вывески одной сеткой; места мало — следующая страница (ещё одна сетка) ═══
   function atlas(R, size = 1024){
-    const T = R.T, pages = [], A = {};
+    const T = R.T, pages = [], A = {}, jobs = [], same = new Map();
+    // страница — обычный (ускоренный) холст: рисует процесс видеокарты, в текстуру — копией в видеокарте. Замер 16.10 (телефон ×4):
+    // OffscreenCanvas рисует «потом» — весь холст разом при загрузке в текстуру (60–160 мс на страницу), холст без ускорения —
+    // переворот и копия на процессоре; у ускоренного дорого только первое рисование (~80 мс на страницу) — страниц 1–3 на зону
     const page = () => { const c = document.createElement('canvas'); c.width = c.height = size; const P = { c, g: c.getContext('2d'), x: 0, y: 0, rowH: 0, quads: [] }; pages.push(P); return P; };
     let cur = page();
+    // место на холсте — сразу, рисунок — потом (A.drain: постройка зоны рисует по кусочку за кадр; A.mesh — что осталось)
     A.add = (text, o = {}) => {
       const w = Math.min(size, o.w || 512), h = Math.min(size, o.h || 96);
+      const key = [text, w, h, o.bg, o.fg, o.border].join('|'), was = same.get(key);
+      if (was) return was;   // та же надпись (табличка с двух сторон, повтор) — тот же кусок холста
       if (cur.x + w > size) { cur.x = 0; cur.y += cur.rowH + 2; cur.rowH = 0; }
       if (cur.y + h > size) cur = page();   // место кончилось — новая страница
-      const { g, x, y } = cur;
+      const x = cur.x, y = cur.y, r = { page: cur, u0: x / size, v0: 1 - (y + h) / size, u1: (x + w) / size, v1: 1 - y / size };
+      jobs.push([cur, x, y, w, h, String(text), o]); same.set(key, r);
+      cur.x += w + 2; cur.rowH = Math.max(cur.rowH, h);
+      return r;
+    };
+    // ширина надписи — оценкой по буквам (measureText с эмодзи — до 1,5 мс на ПК, на телефоне ×4: рывки при подгрузке зоны);
+    // если оценка ошиблась — fillText с maxWidth сам сожмёт строку по ширине
+    const est = (text, fs) => { let n = 0; for (const ch of text) { const c = ch.codePointAt(0); if (c === 0xfe0f || c === 0x200d) continue; n += c > 0x2000 ? 1.25 : ch === ' ' ? .3 : /[A-ZА-ЯЁ0-9]/.test(ch) ? .78 : .64; } return n * fs; };
+    const draw = ([P, x, y, w, h, text, o]) => {
+      const g = P.g;
       g.fillStyle = o.bg || '#7c3aed'; g.fillRect(x, y, w, h);
       if (o.border !== false) { g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 4; g.strokeRect(x + 3, y + 3, w - 6, h - 6); }
       g.fillStyle = o.fg || '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      // размер шрифта — сразу по одному замеру (раньше — подбор по 2 px: до 25 замеров на вывеску, на телефоне это рывки при подгрузке зоны)
-      let fs = h * .56; g.font = `900 ${fs}px Montserrat, Arial, sans-serif`;
-      const tw = g.measureText(text).width;
-      if (tw > w * .9) { fs = Math.max(10, Math.floor(fs * w * .9 / tw)); g.font = `900 ${fs}px Montserrat, Arial, sans-serif`; }
-      g.fillText(text, x + w / 2, y + h / 2 + 2);
-      const r = { page: cur, u0: x / size, v0: 1 - (y + h) / size, u1: (x + w) / size, v1: 1 - y / size };
-      cur.x += w + 2; cur.rowH = Math.max(cur.rowH, h);
-      return r;
+      let fs = h * .56; const tw = est(text, fs);
+      if (tw > w * .9) fs = Math.max(10, Math.floor(fs * w * .9 / tw));
+      g.font = `900 ${fs}px Montserrat, Arial, sans-serif`;
+      g.fillText(text, x + w / 2, y + h / 2 + 2, w * .94);
+    };
+    A.pending = () => jobs.length;
+    A.drain = until => {
+      const LS = root.__d37lbl;   // замер (world-perf lbl): сколько стоит каждая надпись
+      while (jobs.length) { const t = LS ? performance.now() : 0, j = jobs.shift(); draw(j); if (LS) LS.push([+(performance.now() - t).toFixed(2), pages.indexOf(j[0]), j[5].slice(0, 14)]); if (until && performance.now() > until) break; }
+      return !jobs.length;
     };
     // табличка в мире: центр (px, py, pz), размер ww × hh, поворот yaw (лицом к +z при yaw 0)
     A.quad = (r, px, py, pz, ww, hh, yaw = 0) => { if (r) r.page.quads.push({ r, px, py, pz, ww, hh, yaw }); };
@@ -619,6 +649,7 @@
       return m;
     };
     A.mesh = () => {
+      A.drain();
       const L = pages.filter(P => P.quads.length).map(meshOf);
       if (!L.length) return null;
       if (L.length === 1) return L[0];
@@ -763,6 +794,8 @@
       if (canBreak) { const id = `z:${zs.Z.id}:l${++brkN}`; for (const m of ms) if (m) m.userData.brk = id; K.brk.push({ id, zone: zs.Z.id, kind: 'lamp', x, y: 0, z, h: 3.4, r: .16, c: '#2d2a3a', bodies: [body], obj: null }); }
     };
     K.label = atlas(R);
+    // постройка — кусочками: K.due() — бюджет кадра кончился (stepBuild ставит t0/bud), тогда «if (K.due()) yield;»
+    K.t0 = 0; K.bud = 1e9; K.due = () => performance.now() - K.t0 > K.bud;
     // взаимодействие (X) — запоминаем, чтобы зона могла выключать
     K.item = it => { if (K.yo) it = { ...it, y: (it.y || 0) + K.yo }; const x = X.add(it); K.items.push(x); return x; };
     // место: сесть / лечь (своё — без presence; другим — через zx: a + sl)
@@ -1088,6 +1121,11 @@
     K.chunk = name => { if (K.cur) K.flush(); K.cur = new T.Group(); K.cur.name = name || ''; grp.add(K.cur); return K.cur; };
     // склейка — потом, всей зоной по клеткам (prepMerge в start): куски одной улицы и разных зданий в одной клетке — одна сетка
     K.flush = () => { K.cur = null; };
+    const PK = root.__d37profK;   // замер (scripts/world-perf.cjs kprof): сколько стоят функции набора — с вложенными
+    if (PK) for (const k of Object.keys(K)) if (typeof K[k] === 'function' && !['due', 'chunk', 'flush'].includes(k)) {
+      const f = K[k]; K[k] = function(...a){ const t = performance.now(); try { return f.apply(this, a); } finally { PK[k] = (PK[k] || 0) + performance.now() - t; PK['#' + k] = (PK['#' + k] || 0) + 1; } };
+    }
+    if (PK && K.label) for (const k of ['add', 'sign', 'mesh']) { const f = K.label[k]; K.label[k] = function(...a){ const t = performance.now(); try { return f.apply(this, a); } finally { PK['label.' + k] = (PK['label.' + k] || 0) + performance.now() - t; } }; }
     return K;
   }
 
@@ -1220,8 +1258,79 @@
   }
 
   // ═══ Игра: подгрузка зон, ворота, телепорты, карта, роли, действия, сеть ═══
+  // ═══ Прогрев шейдеров зоны (до показа) ═══
+  // three r149 собирает программу шейдера синхронно: в первом кадре показа ждёт видеокарту (проверка ошибок, список uniform). На
+  // D3D11 одна новая программа «стандартного» материала с тенями — до 300 мс (замер 16.10: InstancedMesh деталей боевой зоны —
+  // 313 мс, это и был рывок «на въезде»). Поэтому, пока зона спрятана: compile() только её объектов (свет — тот, что видит кадр;
+  // буфер — как у сцены: с постобработкой — не экран) без проверки ошибок и с пустым списком uniform у новой программы → видеокарта
+  // собирает в своих потоках (KHR_parallel_shader_compile — Chrome/Edge, ANGLE) → готово (COMPLETION_STATUS_KHR, без ожидания) →
+  // настоящий список uniform и проверка ошибок, как у three (страж графики видит diagnostics). Расширения нет — просто заранее.
+  function warmer(R){
+    const r = R?.r, gl = r?.getContext?.();
+    if (!gl || typeof r.compile !== 'function' || !r.info?.programs || !r.properties) return null;
+    let ext = null; try { ext = gl.getExtension('KHR_parallel_shader_compile'); } catch (e) {}
+    const W = { ext: !!ext, wait: [], n: 0, log: [] }, DUMMY = { seq: [], map: {} };
+    let rt1 = null;
+    W.compile = list => {
+      const sc = R.scene, progs = r.info.programs, fresh = [];
+      if (!list.length || gl.isContextLost()) return fresh;
+      const tl = performance.now();   // свет сцены (как его видит кадр) — обход всей сцены, не чаще раза в 0,2 с
+      if (!W.lights || tl - W.lt > 200) { W.lights = []; W.lt = tl; sc.traverseVisible(o => { if (o.isLight) W.lights.push(o); }); }
+      const lights = W.lights;
+      const ch = sc.children, chk = r.debug.checkShaderErrors, rt0 = r.getRenderTarget();
+      let on = true;
+      progs.push = function(...a){   // новая программа: пока идёт compile — пустой список uniform (настоящий ждал бы видеокарту)
+        for (const pg of a) { const gu = pg.getUniforms; pg.d37gu = gu; pg.getUniforms = function(){ return on ? DUMMY : gu.call(this); }; fresh.push(pg); }
+        return Array.prototype.push.apply(this, a);
+      };
+      try {
+        r.debug.checkShaderErrors = false;
+        if (R.post && R.post.on) { if (!rt1) rt1 = new R.T.WebGLRenderTarget(1, 1); r.setRenderTarget(rt1); } else r.setRenderTarget(null);
+        sc.children = lights.concat(list);
+        r.compile(sc, R.camera);
+      } catch (e) { console.error('прогрев шейдеров', e); }
+      finally { sc.children = ch; on = false; delete progs.push; r.debug.checkShaderErrors = chk; r.setRenderTarget(rt0); }
+      if (fresh.length) {   // у материалов с новой программой список uniform — заново при первом настоящем кадре
+        const F = new Set(fresh);
+        for (const o of list) for (const m of Array.isArray(o.material) ? o.material : [o.material]) { const mp = r.properties.get(m); if (F.has(mp.currentProgram)) { mp.lightsStateVersion = -1; m.needsUpdate = true; } }
+        const t = performance.now(); for (const pg of fresh) W.wait.push({ pg, t });
+        W.n += fresh.length;
+        for (const pg of fresh) { W.log.push(pg.name + ' ' + pg.cacheKey.slice(0, 90)); if (W.log.length > 40) W.log.shift(); }
+      }
+      return fresh;
+    };
+    // всё ли собрано (без ожидания)
+    let nextPoll = 0;
+    W.poll = () => {
+      const L = W.wait; if (!L.length) return true;
+      if (gl.isContextLost()) { L.length = 0; return true; }   // после восстановления three соберёт всё заново сам
+      const progs = r.info.programs, tn = performance.now();
+      if (tn < nextPoll || tn - L[0].t < 250) return false;   // опрос — синхронный вызов в процесс видеокарты: не чаще 5 раз в секунду
+      nextPoll = tn + 200;
+      while (L.length) {
+        const { pg, t } = L[0];
+        let done = !progs.includes(pg) || tn - t > 4000;   // программу выбросили / слишком долго — дальше без ожидания
+        if (!done) { try { done = ext ? gl.getProgramParameter(pg.program, ext.COMPLETION_STATUS_KHR) !== false : tn - t > 100; } catch (e) { done = true; } }
+        if (!done) return false;
+        L.shift(); ready(pg);
+      }
+      return true;
+    };
+    function ready(pg){
+      if (pg.d37gu) { pg.getUniforms = pg.d37gu; delete pg.d37gu; }
+      if (!r.debug.checkShaderErrors || gl.isContextLost()) return;
+      try {   // проверка ошибок — как у three с checkShaderErrors (уже собрано — без ожидания; журнал — только при ошибке)
+        if (gl.getProgramParameter(pg.program, gl.LINK_STATUS) === false) {
+          const log = (gl.getProgramInfoLog(pg.program) || '').trim();
+          pg.diagnostics = { runnable: false, programLog: log, vertexShader: { log: '', prefix: '' }, fragmentShader: { log: '', prefix: '' } };
+          console.error('THREE.WebGLProgram: Shader Error (прогрев) ' + pg.name + '\n' + log);
+        }
+      } catch (e) {}
+    }
+    return W;
+  }
   // от края зоны: строить (по кусочку за кадр) — ближе LOAD_D, показывать — ближе SHOW_D, прятать — дальше HIDE_D (дальше — силуэт)
-  const LOAD_D = 105, SHOW_D = 85, HIDE_D = 115;
+  const LOAD_D = 125, SHOW_D = 85, HIDE_D = 115;
   function start(S, H){
     const E = root.D37E, R = S.R, T = R.T, ph = S.ph, X = S.X;
     const rt = { S, H, R, T, ph, X, E, zones: new Map(), area: null, zx: {}, zxSig: '', mods: [], t: 0, stopped: false, safe: null, modal: null, gateFor: null };
@@ -1257,41 +1366,59 @@
         if (Array.isArray(o.say) && o.say.length > 1) { o._si = ((o._si || 0) + 1) % o.say.length; o.text = o.say[o._si]; }
       };
     }
+    // бюджет постройки за кадр (мс): компьютер — 3,5, телефон и «низкая» — 2; прогрев шейдеров — warmer() (внизу файла)
+    const BUD = R.q === 'low' || E?.isMobile?.() ? 3 : 3.5;
+    rt.warm = warmer(R);
     function beginBuild(zs){
       if (zs.it || zs.built || !zs.D?.build) return;
-      const grp = new T.Group(); grp.name = 'mz-' + zs.Z.id; grp.visible = false; R.scene.add(grp);
+      const grp = new T.Group(); grp.name = 'mz-' + zs.Z.id; grp.visible = false;   // в сцену — только при показе (setShown)
       zs.grp = grp; zs.K = kit(rt, zs, grp);
       zs.it = zs.D.build(zs.K);
     }
-    // постройка по кусочку → склейка по клеткам (по одной за раз) → готово
+    // постройка по кусочку → раскладка по клеткам → склейка клеток (тоже по кусочку) → доделка → прогрев шейдеров → можно
+    // показывать. budget — мс за кадр (длинные куски постройки делятся сами: K.due()); в кадре строится одна зона (rt.frame)
+    const busy = zs => !!(zs.it || zs.pm || zs.mq || zs.mi || zs.fin || (zs.built && !zs.ready));
+    rt.busy = busy;
+    const step = (it, what, zs) => { try { return it.next().done; } catch (e) { console.error(what, zs.Z.id, e); return true; } };
     function stepBuild(zs, budget){
       const t0 = now();
-      while (now() - t0 < budget) {
-        if (zs.it) {
-          let r;
-          try { r = zs.it.next(); } catch (e) { console.error('зона', zs.Z.id, e); r = { done: true }; }
-          if (r.done) { zs.it = null; zs.K.flush(); prepMerge(zs); }
-          continue;
+      if (zs.K) { zs.K.t0 = t0; zs.K.bud = budget; }
+      do {
+        const s0 = rt.prof ? now() : 0;
+        let what;
+        if (zs.K?.label?.pending()) { what = 'labels'; zs.K.label.drain(t0 + budget); }
+        else if (zs.it) { what = 'step'; if (step(zs.it, 'зона', zs)) { zs.it = null; zs.K.flush(); zs.pm = prepIt(zs); } }
+        else if (zs.pm) { what = 'prep'; if (step(zs.pm, 'клетки', zs)) zs.pm = null; }
+        else if (zs.mi || zs.mq) {
+          what = 'merge';
+          if (!zs.mi) {
+            const it = zs.mq.shift(); zs.mname = it.name || 'roof';
+            if (it.roof) { try { merge(R, it.roof, { chunk: 0 }); R.shadowsOn?.(it.roof); } catch (e) { console.error('склейка', zs.Z.id, e); } }
+            else zs.mi = mergeIt(R, it, { chunk: 0 });
+          }
+          if (zs.mi && step(zs.mi, 'склейка', zs)) zs.mi = null;
+          if (!zs.mi && !zs.mq.length) { zs.mq = null; zs.fin = finishIt(zs); }
         }
-        if (zs.mq) {
-          const it = zs.mq.shift();
-          try { if (it.roof) { merge(R, it.roof, { chunk: 0 }); R.shadowsOn?.(it.roof); } else merge(R, it, { chunk: 0 }); } catch (e) { console.error('склейка', zs.Z.id, e); }
-          if (!zs.mq.length) { zs.mq = null; finishBuild(zs); }
-          continue;
-        }
-        break;
-      }
+        else if (zs.fin) { what = 'finish'; if (step(zs.fin, 'доделка', zs)) zs.fin = null; }
+        else if (zs.built && !zs.ready) { what = 'warm'; warmStep(zs); if (rt.prof) what += zs.wst ? zs.wst.wait ? '-poll' : zs.wst.tex.length || zs.wst.did ? '-tex' : '-compile' : '-done'; if (zs.wst) zs.wst.did = 1; }
+        else break;
+        if (rt.prof && now() - s0 > .3) rt.prof.push([what, zs.Z.id, what === 'step' ? zs.K?.cur?.name || '' : what === 'merge' ? zs.mname : '', +(now() - s0).toFixed(1), rt.frameNo]);
+        if (what === 'warm' && !zs.ready && zs.wst?.wait) break;   // ждём видеокарту — кадр не держим
+      } while (now() - t0 < budget);
     }
     // все детали зоны (кроме прячущихся групп: крыши, этажи, ленивые интерьеры) — в группы клеток 96 × 96 с сохранением места
+    // (по шагам; перенос — без remove/add по одной: у групп кусков тысячи детей, indexOf + splice на каждую — десятки мс)
     const CELL = 96;
-    function prepMerge(zs){
-      const grp = zs.grp, cells = new Map(), sph = new T.Sphere(), list = [];
+    function* prepIt(zs){
+      const grp = zs.grp, cells = new Map(), sph = new T.Sphere(), list = [], moved = new Set();
       grp.updateMatrixWorld(true);
       grp.traverse(x => {
         if (!x.isMesh || x.isInstancedMesh || x.userData.dyn || x.userData.mzOwn) return;
         for (let q = x.parent; q && q !== grp; q = q.parent) if (q.userData.dyn) return;
         list.push(x);
       });
+      const fix = () => { for (const p of moved) p.children = p.children.filter(c => c.parent === p); moved.clear(); };
+      let n = 0;
       for (const x of list) {
         if (!x.geometry.boundingSphere) x.geometry.computeBoundingSphere();
         sph.copy(x.geometry.boundingSphere).applyMatrix4(x.matrixWorld);
@@ -1299,14 +1426,16 @@
         let g = cells.get(key);
         if (!g) { g = new T.Group(); g.name = 'cell ' + key; g.userData.cell = true; cells.set(key, g); }
         x.matrixWorld.decompose(x.position, x.quaternion, x.scale);
-        x.parent.remove(x); g.add(x);
+        moved.add(x.parent); x.parent = g; g.children.push(x);
+        if (++n % 400 === 0) { fix(); yield; }
       }
+      fix();
       // опустевшие группы кусков — прочь (прячущиеся группы и надписи остаются)
       const keep = c => c.userData.dyn || c.userData.mzOwn || c.isMesh || c.children.some(keep);
       for (const c of [...grp.children]) if (!keep(c)) grp.remove(c);
       for (const g of cells.values()) grp.add(g);
       zs.mq = [...cells.values(), ...zs.K.roofs.map(r => ({ roof: r }))];
-      if (!zs.mq.length) { zs.mq = null; finishBuild(zs); }
+      if (!zs.mq.length) { zs.mq = null; zs.fin = finishIt(zs); }
     }
     function flushPortals(K, grp){
       const L = K.portals; if (!L.length) return;
@@ -1323,13 +1452,15 @@
       R.own.push(geo, mat);
       grp.add(mesh);
     }
-    function finishBuild(zs){
+    function* finishIt(zs){
       const K = zs.K;
       for (const Rs of residents(zs.Z.id)) K.npc({ id: Rs.id, name: '🙂 ' + Rs.name, x: Rs.hs[0], z: Rs.hs[1], yaw: 0, seed: Rs.seed, act: 'wander', radius: 3, speed: .8, say: Rs.says, sched: Rs });
       const lm = K.label.mesh(); if (lm) zs.grp.add(lm);
-      flushPieces(R, K, zs.grp);   // детали с номерами (боевая зона) — InstancedMesh
+      yield;
+      yield* flushPiecesIt(R, K, zs.grp);   // детали с номерами (боевая зона) — InstancedMesh
       flushPortals(K, zs.grp);   // тёмные проёмы входов
       for (const p of K.pieceList) PIECES.set(p.id, p);
+      yield;
       const DS = rt.destruct;
       if (DS && zs.Z.id !== 'kids') {
         for (const b of K.brk || []) DS.add({ ...b, hide: on => { if (!brkHide(b.id, on) && b.obj) b.obj.visible = !on; } });
@@ -1340,20 +1471,57 @@
             bodies: p.body ? [p.body] : [], hide: on => { p.broken = !!on; setPieceVis(p, !on); } });
         }
       }
-      zs.built = true;
+      yield;
+      zs.built = true; zs.builtAt = now();
       R.shadowDirty?.();
       try { zs.mod = zs.D.start?.(rt, K) || null; } catch (e) { console.error(e); }
       if (!rt.mods.includes(zs)) rt.mods.push(zs);
     }
-    // построить сразу (телепорт в зону): кусочками с ожиданием кадра, пока не готово
+    // ── Прогрев (после постройки, пока зона спрятана): новые программы шейдеров — в фоне видеокарты, картинки — заранее ──
+    function warmStep(zs){
+      const W = rt.warm;
+      if (!W) { zs.ready = true; return; }
+      if (!zs.wst) {   // по одному «представителю» на материал и вид объекта (обычный / InstancedMesh / цвета вершин …)
+        const reps = new Map(), tex = new Set();
+        zs.grp.traverse(x => {
+          const m = x.material; if (!m) return;
+          const a = x.geometry?.attributes || {}, v = (x.isInstancedMesh ? (x.instanceColor ? 'ic' : 'i') : '') + (a.color ? a.color.itemSize : 0) + (a.uv ? 'u' : '') + (a.tangent ? 't' : '') + (x.isPoints ? 'p' : x.isLine ? 'l' : x.isSprite ? 's' : '');
+          for (const mm of Array.isArray(m) ? m : [m]) {
+            if (!reps.has(mm.uuid + v)) reps.set(mm.uuid + v, x);
+            for (const t of [mm.map, mm.emissiveMap, mm.normalMap, mm.roughnessMap, mm.metalnessMap, mm.alphaMap, mm.aoMap, mm.bumpMap]) if (t && !t.isRenderTargetTexture && !t.isCubeTexture && !t.isVideoTexture) tex.add(t);
+          }
+        });
+        zs.wst = { t: now(), progs: W.compile([...reps.values()]).length, tex: [...tex], wait: false };
+        return;
+      }
+      const st = zs.wst;
+      if (st.tex.length) {   // картинки (вывески, фасады) — в видеокарту по одной за шаг, а не все в первом кадре показа
+        // файл-картинка: сначала расшифровать в фоне (img.decode — не в главном потоке; иначе texImage2D расшифрует сам: на
+        // телефоне до 80 мс на картинку), пока ждём — другие; остались только ждущие — кадр не держим
+        const i = st.tex.findIndex(t => t.image?.d37dec !== 1 || now() - st.t > 3000);
+        if (i < 0) { st.wait = true; return; }
+        st.wait = false;
+        const t = st.tex[i], im = t.image;
+        if (im && im.nodeName === 'IMG' && !im.d37dec && typeof im.decode === 'function') { im.d37dec = 1; im.decode().then(() => { im.d37dec = 2; }, () => { im.d37dec = 2; }); return; }
+        st.tex.splice(i, 1);
+        try { if (t.version > 0 && im && R.r.properties.get(t).__version !== t.version) R.r.initTexture(t); } catch (e) {}
+        return;
+      }
+      st.wait = true;
+      if (W.poll() || now() - st.t > 4000) { zs.ready = true; zs.wst = null; }
+    }
+    // построить сразу (телепорт в зону, под «Загружаем…»): кусочками с ожиданием кадра, пока не готово (и прогрето)
     rt.buildNow = zs => new Promise(res => {
       beginBuild(zs);
-      const tick = () => { if (rt.stopped) return res(false); stepBuild(zs, 24); if (zs.built || (!zs.it && !zs.mq)) res(true); else setTimeout(tick, 0); };
+      const tick = () => { if (rt.stopped) return res(false); stepBuild(zs, 24); if (!busy(zs)) res(true); else setTimeout(tick, zs.built ? 16 : 0); };
       tick();
     });
     function setShown(zs, on){
       zs.shown = on;
-      if (zs.grp) zs.grp.visible = on;
+      if (zs.grp) {   // спрятанная — вне сцены (матрицы её тысяч деталей не пересчитываются каждый кадр)
+        zs.grp.visible = on;
+        if (on && !zs.grp.parent) R.scene.add(zs.grp); else if (!on && zs.grp.parent) zs.grp.parent.remove(zs.grp);
+      }
       if (zs.proxy) zs.proxy.visible = !on;
       R.shadowDirty?.();
       zs.npcOn = on;   // жители — только пока видно и только рядом (npcTick)
@@ -1363,6 +1531,7 @@
     // ── Жители зон — по расстоянию (как PopulationDirector в Backrooms: рядом — появляются, далеко — уходят), не больше NPC_CAP ──
     const NPC_NEAR = 62, NPC_FAR = 82, NPC_CAP = R.q === 'low' || E?.isMobile?.() ? 8 : 16;
     const RES_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 7;   // из них — жителей по расписанию (человечек — 7–18 вызовов отрисовки)
+    const NPC_ADD = R.q === 'low' || E?.isMobile?.() ? 1 : 2;   // новых за проверку (4 раза в секунду): сборка человечка — несколько мс
     const hourNow = () => S.fixedTime ?? (E?.dayClock ? E.dayClock(Date.now(), 40, .2) : 14);
     rt.hourNow = hourNow;
     function npcTick(){
@@ -1382,11 +1551,11 @@
         L.push([d, o, !home && !!zs.npcOn && (o._on ? d < NPC_FAR : d < NPC_NEAR)]);
       }
       L.sort((a, b) => a[0] - b[0]);
-      let n = 0, nr = 0;
+      let n = 0, nr = 0, add = NPC_ADD;
       for (const [, o, want] of L) {
         const res = !!o.mz?.sched, on = want && n < NPC_CAP && (!res || nr < RES_CAP);
         if (on) { n++; if (res) nr++; }
-        if (on && !o._on) { S.NPC.add(o); o._on = true; }
+        if (on && !o._on) { if (add-- > 0) { const a0 = rt.prof ? now() : 0; S.NPC.add(o); o._on = true; if (rt.prof) rt.prof.push(['npc', o.id, '', +(now() - a0).toFixed(1), rt.frameNo]); } }
         else if (!on && o._on) { S.NPC.remove(o); o._on = false; }
       }
     }
@@ -2017,7 +2186,7 @@
         for (const zs of rt.zones.values()) {
           const d = Math.min(distRect(zs.Z, c.x, c.z), distRect(zs.Z, p.x, p.z));
           if (!zs.built && !zs.it && d < LOAD_D) beginBuild(zs);
-          if (zs.built) { const want = d < (zs.shown ? HIDE_D : SHOW_D); if (want !== zs.shown) setShown(zs, want); }
+          if (zs.built && (zs.ready || zs.shown)) { const want = d < (zs.shown ? HIDE_D : SHOW_D); if (want !== zs.shown) setShown(zs, want); }
         }
         lazyTick();   // интерьеры этажей, магазинов ТЦ, номеров — рядом с игроком
         npcTick();    // жители — только рядом
@@ -2052,10 +2221,20 @@
     try { const wm = worldMap(); if (wm) rt.wmv = wm.view(R, { far: () => R.camera.far * .98 }); } catch (e) { console.error(e); }
     rt.frame = (dt, t) => {
       if (rt.stopped) return;
+      rt.frameNo = (rt.frameNo || 0) + 1;
       if (rt.wmv) { const c = R.camera.position, p = S.P.ch; try { rt.wmv.update(c.x, c.z, { ph: S.ph, px: p.x, pz: p.z }); } catch (e) { console.error(e); rt.wmv = null; } }
       if (rt.destruct) { try { rt.destruct.update(dt); } catch (e) { console.error(e); } }
       if (S.NPC?.list) { const tn = performance.now(); for (const e of S.NPC.list.values()) if (e.o._fleeT && tn > e.o._fleeT) { e.o.act = e.o._act0 || 'wander'; e.o._fleeT = 0; e.o._act0 = null; } }
-      for (const zs of rt.zones.values()) if (zs.it || zs.mq) { stepBuild(zs, R.q === 'high' ? 4 : 3); if (zs.built && !zs.shown) { const c = R.camera.position; if (distRect(zs.Z, c.x, c.z) < SHOW_D) setShown(zs, true); } }
+      {
+        const c = R.camera.position, p = S.P.ch;
+        let job = null, jd = Infinity;
+        for (const zs of rt.zones.values()) if (busy(zs)) { const d = Math.min(distRect(zs.Z, c.x, c.z), distRect(zs.Z, p.x, p.z)); if (d < jd) { jd = d; job = zs; } }
+        if (job) {
+          // игрок уже рядом, а зоны нет — достраиваем быстрее (телефон ×4: кадр ~30 мс, запас до «рывка» 50 мс — ~20 мс)
+          stepBuild(job, BUD * (jd < 25 ? 6 : jd < SHOW_D ? 3 : 1));
+          if (job.ready && !job.shown && distRect(job.Z, c.x, c.z) < SHOW_D) setShown(job, true);
+        }
+      }
       for (const zs of rt.mods) { try { zs.mod?.frame?.(dt, t); } catch (e) { console.error(e); } }
       try { rt.veh?.frame?.(dt, t); } catch (e) { console.error(e); }
       drawNpcTags();

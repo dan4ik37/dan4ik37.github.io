@@ -361,12 +361,19 @@
     const VIEW_IN = 150, VIEW_OUT = 190;
     VS.frame = dt => {
       const cam = R.camera.position;
+      let made = 0;   // новых видов — один за кадр (свой / с водителем — сразу): стоянка у зоны — не все разом
       for (const v of VS.list.values()) {
         const d = Math.hypot(v.x - cam.x, v.z - cam.z);
         // стоит без мотора — склеенный вид (колёса и винты не крутятся); едет, винт крутится, рядом — живой (колёса, винты)
         const live = d < (v.view && !v.view.still ? 80 : 70) && (v.local || !!v.by || v.eng || v.rotor > .02 || Math.abs(v.spd) > .05 || v.hp < v.def.hp);
         if (v.view && (d > VIEW_OUT || v.view.still === live)) { v.view.dispose(); v.view = null; }
-        if (!v.view && d < VIEW_IN) { v.view = VE.view(R, v.def, { merge: (R2, g) => Z.merge(R2, g, { chunk: 0 }), glass: glass(), still: !live }); R.scene.add(v.view.g); }
+        if (!v.view && d < VIEW_IN && (made++ < 1 || v.local || v.by)) {
+          const a0 = rt.prof ? now() : 0;
+          v.view = VE.view(R, v.def, { merge: (R2, g) => Z.merge(R2, g, { chunk: 0 }), glass: glass(), still: !live });
+          if (!v.local && !v.by && rt.warm?.compile([v.view.g]).length) v.view.warm = true; else R.scene.add(v.view.g);
+          if (rt.prof) rt.prof.push(['vview', v.id, live ? 'live' : 'still', +(now() - a0).toFixed(1), rt.frameNo]);
+        }
+        if (v.view?.warm && (v.local || v.by || rt.warm.poll())) { v.view.warm = false; R.scene.add(v.view.g); }
         if (v.view) {
           if (!v.local && !v.by && v.kind === 'boat') { const tt = now() / 1000 + v.home.x; v.pitch = Math.sin(tt * 1.3) * .02; v.roll = Math.sin(tt * 1.7 + 1) * .03; }   // стоит — качается
           v.view.update(v, dt);
