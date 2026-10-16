@@ -235,10 +235,12 @@
   const ROLE = { admin: ['ADMIN', '255,45,85'], moderator: ['MOD', '145,71,255'], helper: ['HELPER', '34,197,94'], bot: ['🤖 БОТ', '88,101,242'], owner: ['👑', '250,204,21'], mod: ['🛡', '96,165,250'] };
   // «Денчик-бот» (community2.sql → bot_post): роль 'bot' ставит только сервер — браузер её подделать не может (vip-balance.sql)
   const isBot = m => !!m && m.role === 'bot' && !m.uid;
-  function authorStyle(m){
+  // rc — цвет своей роли в сообществе (community3.sql): после ролей сайта, раньше VIP
+  function authorStyle(m, rc){
     const p = m.uid ? P.prof(m.uid) : null;
     const role = m.role && ROLE[m.role] ? m.role : p?.role && ROLE[p.role] ? p.role : null;
     let rgb = role ? ROLE[role][1] : null, vip = null;
+    if (!rgb && rc && /^#[0-9a-f]{6}$/i.test(rc)) return { color: rc, role, vip };
     if (!rgb && typeof VIP_TIERS !== 'undefined') {
       vip = m.vip ? VIP_TIERS.find(t => t.key === m.vip) : (p && typeof getVipTier === 'function' ? getVipTier(p) : null);
       if (vip) rgb = vip.rgb;
@@ -295,7 +297,7 @@
     // ── Отрисовка одного сообщения ──
     function html(m, prev){
       if (m.sys) return `<div class="mv-sys" data-id="${e(m.id)}">${e(m.text)}</div>`;
-      const st = authorStyle(m), blocked = m.uid && MV.blocked.has(m.uid);
+      const st = authorStyle(m, m.uid ? V.A?.colorOf?.(m.uid) : null), blocked = m.uid && MV.blocked.has(m.uid);
       const first = !prev || prev.sys || prev.uid !== m.uid || prev.nick !== m.nick || m.reply || Date.parse(m.at) - Date.parse(prev.at) > GROUP_MS || dayName(prev.at) !== dayName(m.at);
       const me = myNick(), mine = m.mine || (m.uid ? m.uid === myUid() : !!me && m.nick === me && !myUid());
       const r = blocked ? { html: '', cards: [] } : MV.rich(m.text, me, { kid: kidView() });

@@ -385,3 +385,10 @@ button.mv-cbtn:disabled{opacity:.6;cursor:wait}
 .ds-meta{gap:8px;flex-wrap:wrap}
 .ds-meta .ds-lbl{flex:1;min-width:140px}
 .ds-pane [hidden]{display:none!important}
+/* свои роли 🎭 */
+.ds-role{padding:12px;border-radius:12px;background:#14141e;border:1px solid rgba(255,255,255,.08);margin:10px 0;display:flex;flex-direction:column;gap:8px}
+.ds-rc{width:42px;height:38px;padding:2px;border:1px solid rgba(255,255,255,.15);border-radius:9px;background:none;cursor:pointer;flex:none}
+.ds-num{width:64px}
+.ds-perms{display:flex;flex-wrap:wrap;gap:4px 14px}
+.ds-rchip{border:0;border-radius:999px;padding:3px 9px;background:rgba(255,255,255,.07);color:var(--rc,#99aab5);font:700 12px 'Montserrat',sans-serif;cursor:pointer}
+.ds-rchip:hover{background:rgba(239,68,68,.18)}

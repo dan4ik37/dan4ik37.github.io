@@ -4,6 +4,7 @@
 //  страница события #/chat/ev/<id> (карточка в ленте — msgview.js MV.evCardHtml). «Денчик-бот» и «📢 новости» — api/push-check.js.
 //  🧭 обзор сообществ (#/chat/find): поиск, категории, «большие / активные / новые», метка возраста, «Вступить»;
 //  категория и метка — при создании и в настройках сообщества (владелец).
+//  community3.sql: 🎭 свои роли (#/chat/c/<id>/roles — цвет, место, права, кому выдать; цвет ника и группы участников — community.js).
 //  Адреса: #/chat[/c/<id>]/events[/new | /edit/<id>], #/chat/ev/<id>; в телефоне — comm/<сервер>/events…, comm/ev/<id>.
 //  Грузится вместе с community.js (phone.js → MODS.ds). Пока community2.sql не выполнен — «появится, когда сайт обновится».
 // ═══════════════════════════════════════
@@ -274,5 +275,69 @@
     if (!c || !a) return {};
     const r = await P.rpc('cm_set_meta', { p_id: +id, p_category: c.value, p_age: +a.value });
     return r.data?.ok || r.missing ? {} : { err: DS.why(r) };
+  };
+
+  // ═══ 🎭 Свои роли (community3.sql): цвет ника, место, права; выдаёт владелец ═══
+  // roleData: { roles: [{ id, name, color, position, perms }] (выше — первой), byId, my (мои права), top (моё место), missing }
+  const RD = new Map();
+  const PERMS = [[1, '📁 Каналы'], [2, '🔨 Модерация'], [4, '📌 Закреп'], [8, '📅 События'], [16, '📣 @everyone']];
+  X.roleSync = cid => RD.get(String(cid))?.d || null;
+  X.roleData = (cid, fresh) => {
+    const k = String(cid), c = RD.get(k);
+    if (!fresh && c?.d && Date.now() - c.d.t < (c.d.missing ? 600000 : 60000)) return Promise.resolve(c.d);
+    if (c?.p) return c.p;
+    const p = P.rpc('cm_roles', { p_id: +cid }).then(r => {
+      const roles = (r.data?.ok && Array.isArray(r.data.roles) ? r.data.roles : []).filter(x => /^#[0-9a-f]{6}$/i.test(x.color || ''));
+      const d = { t: Date.now(), roles, byId: new Map(roles.map(x => [x.id, x])), my: +r.data?.my || 0, top: +r.data?.top || 0, missing: !!r.missing };
+      RD.set(k, { d });
+      if (roles.length || d.my) window.dispatchEvent(new CustomEvent('d37:roles', { detail: k }));
+      return d;
+    });
+    RD.set(k, { d: c?.d || null, p });
+    return p;
+  };
+  // в настройках сообщества — переход к ролям (владелец)
+  X.settingsMore = (srv, mode) => srv.role === 'owner' || srv.staff ? `<div class="ds-sect"><b>🎭 Роли</b><p class="ds-dim">Свои роли, как в Дискорде: цвет ника, место в списке и права (каналы, модерация, закреп, события, @everyone).</p>
+    <a class="ds-btn ghost" href="${DS.link(mode, srv.id, 'roles')}">Настроить роли →</a></div>` : '';
+  X.sub.roles = {
+    title: '🎭 Роли',
+    async render(el, mode, srv){
+      el.innerHTML = '<div class="ds-pane"><div class="ds-dim">Загружаем роли…</div></div>';
+      const owner = srv.role === 'owner' || srv.staff;
+      const R = await X.roleData(srv.id, true);
+      if (!el.isConnected) return;
+      if (R.missing) { el.innerHTML = `<div class="ds-pane"><h3>🎭 Роли</h3>${SOON}</div>`; return; }
+      if (!owner) { el.innerHTML = '<div class="ds-pane"><h3>🎭 Роли</h3><p class="ds-dim">Роли настраивает и выдаёт владелец сообщества.</p></div>'; return; }
+      const members = (await DS.membersOf(srv.id, true)).filter(m => m.role !== 'owner');
+      const next = R.roles.reduce((a, x) => Math.max(a, x.position), 0) + 1;
+      const roleRow = x => `<div class="ds-role" data-rid="${x ? e(x.id) : ''}">
+        <div class="ds-row"><input type="color" class="ds-rc" data-rf="color" value="${e(x?.color || '#99aab5')}" aria-label="Цвет роли"><input class="ds-in" data-rf="name" maxlength="24" value="${e(x?.name || '')}" placeholder="Название роли" aria-label="Название роли">
+          <label class="ds-chk ds-sm" title="Выше — главнее">Место <input type="number" class="ds-in ds-num" data-rf="pos" min="1" max="99" value="${x ? e(x.position) : Math.min(99, next)}"></label></div>
+        <div class="ds-perms">${PERMS.map(([b, t]) => `<label class="ds-chk ds-sm"><input type="checkbox" data-pb="${b}"${x && x.perms & b ? ' checked' : ''}> ${t}</label>`).join('')}</div>
+        <div class="ds-row"><button type="button" class="ds-btn ds-sm" data-ra="save">${x ? '💾 Сохранить' : '＋ Добавить роль'}</button>${x ? '<button type="button" class="ds-btn bad ds-sm" data-ra="del">🗑 Удалить</button>' : ''}</div></div>`;
+      const chip = id => { const x = R.byId.get(id); return x ? `<button type="button" class="ds-rchip" data-ra="take" data-rid="${e(id)}" style="--rc:${e(x.color)}" title="Снять роль">● ${e(x.name)} ✕</button>` : ''; };
+      el.innerHTML = `<div class="ds-pane"><h3>🎭 Роли «${e(srv.name)}»</h3>
+        <p class="ds-dim">Цвет ника — по верхней роли. Роль с «🔨 Модерацией» глушит, выгоняет и банит только участников, у кого роль ниже. Владелец и модераторы — как раньше.</p>
+        ${R.roles.map(roleRow).join('')}<div class="ds-sect"><b>Новая роль</b>${R.roles.length >= 20 ? '<p class="ds-dim">Не больше 20 ролей.</p>' : roleRow(null)}</div>
+        <div class="ds-sect"><b>Кому какая роль</b>${members.length ? members.map(m => `<div class="ds-chrow" data-uid="${e(m.id)}"><span>${e(m.nick)}${m.role === 'mod' ? ' 🛡' : ''}</span>${(m.roles || []).map(chip).join('')}
+          ${R.roles.length ? `<select class="ds-in ds-sm" data-ra="give" aria-label="Выдать роль"><option value="">＋ роль…</option>${R.roles.filter(x => !(m.roles || []).includes(x.id)).map(x => `<option value="${e(x.id)}">${e(x.name)}</option>`).join('')}</select>` : ''}</div>`).join('') : '<div class="ds-dim">Пока никого, кроме тебя</div>'}</div>
+        <div class="ds-err" hidden></div></div>`;
+      const err = t => { const x = el.querySelector('.ds-err'); x.hidden = !t; x.textContent = t ? '⚠️ ' + t : ''; };
+      const done = async r => { if (r.data?.ok) { DS.dropC(srv.id); await X.roleData(srv.id, true); X.sub.roles.render(el, mode, srv); } else err(DS.why(r)); };
+      el.onclick = async ev => {
+        const b = ev.target.closest('[data-ra]'); if (!b || b.tagName === 'SELECT') return;
+        const box = b.closest('.ds-role'), uid = b.closest('[data-uid]')?.dataset.uid;
+        if (b.dataset.ra === 'save' && box) {
+          const perms = [...box.querySelectorAll('[data-pb]')].reduce((a, x) => a | (x.checked ? +x.dataset.pb : 0), 0);
+          done(await P.rpc('cm_role_save', { p_community: srv.id, p_id: box.dataset.rid ? +box.dataset.rid : null, p_name: box.querySelector('[data-rf="name"]').value,
+            p_color: box.querySelector('[data-rf="color"]').value, p_position: +box.querySelector('[data-rf="pos"]').value, p_perms: perms }));
+        } else if (b.dataset.ra === 'del' && box) { if (confirm('Удалить роль? У всех, у кого она есть, она пропадёт.')) done(await P.rpc('cm_role_delete', { p_id: +box.dataset.rid })); }
+        else if (b.dataset.ra === 'take' && uid) done(await P.rpc('cm_role_assign', { p_community: srv.id, p_user: uid, p_role: +b.dataset.rid, p_on: false }));
+      };
+      el.onchange = async ev => {
+        const s = ev.target.closest('select[data-ra="give"]'); if (!s || !s.value) return;
+        done(await P.rpc('cm_role_assign', { p_community: srv.id, p_user: s.closest('[data-uid]').dataset.uid, p_role: +s.value, p_on: true }));
+      };
+    },
   };
 })();

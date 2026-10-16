@@ -258,6 +258,38 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(catCalls.map(c => c[0]).join() === 'cm_catalog,cm_list_public' && /Старое/.test(fbox._q['[data-f="list"]'].innerHTML) && fbox._q['.ds-oldnote'].hidden === false, 'без community2.sql — старый поиск и подсказка «появятся, когда сайт обновится»');
   P.rpc = rpc0;
 
+  // ═══ 16. «🎭 Свои роли» (community3.sql): права кнопок, цвет ника, группы участников ═══
+  const MEMS = [{ id: 'o', nick: 'Владелец', role: 'owner', roles: [] }, { id: 'h', nick: 'Хелпер', role: 'member', roles: [21] }, { id: 'v', nick: 'Ветеран', role: 'member', roles: [22] },
+    { id: 'n', nick: 'Новичок', role: 'member', roles: [] }, { id: 'h2', nick: 'Хелпер2', role: 'member', roles: [21, 22] }];
+  P.rpc = async (name, args) => {
+    if (name === 'cm_roles') return { data: { ok: true, roles: [{ id: 21, name: 'Хелпер', color: '#22c55e', position: 10, perms: 6 }, { id: 22, name: 'Ветеран', color: '#f59e0b', position: 5, perms: 0 }, { id: 23, name: 'Плохой', color: 'red;x', position: 1, perms: 0 }], my: 6, top: 10 } };
+    if (name === 'cm_members') return { data: MEMS };
+    return { data: null };
+  };
+  window.currentUser = { id: 'h' };
+  const R0 = await X.roleData(77, true);
+  ok(R0.roles.length === 2 && R0.my === 6 && R0.top === 10 && X.roleSync(77) === R0, 'роли: кривой цвет отброшен, мои права и место', R0);
+  const A = DS.commAdapter({ c: { id: 77, name: 'Клан' }, role: 'member', staff: false, rt: null }, { id: 5, name: 'общий', kind: 'text' });
+  await new Promise(res => setTimeout(res, 10));
+  ok(A.canPin() === true && A.colorOf('v') === '#f59e0b' && A.colorOf('h2') === '#22c55e' && A.colorOf('n') === null, 'закреп по праву роли; цвет ника — по верхней роли');
+  ok(A.modActions({ uid: 'v' }).length > 0 && A.modActions({ uid: 'n' }).length > 0, 'роль с модерацией: участников ниже — можно');
+  ok(A.modActions({ uid: 'h2' }).length === 0 && A.modActions({ uid: 'o' }).length === 0 && A.modActions({ uid: 'h' }).length === 0, 'равного по роли, владельца и себя — нельзя');
+  ok(A.canDel({ uid: 'n' }) === true && A.canDel({ uid: 'h2' }) === false, 'удалить сообщение — тоже по месту роли');
+  const mbox = { innerHTML: '' };
+  window.D37Chat.online = () => ({ users: MEMS.map(m => ({ id: m.id, nick: m.nick })), guests: 0, total: 5 });
+  await DS.membersRender(mbox, { ok: true, id: 77, role: 'member', c: { members: 5 } });
+  const hi = mbox.innerHTML.indexOf('Хелпер</span> — 2'), vi = mbox.innerHTML.indexOf('Ветеран</span> — 1'), ni = mbox.innerHTML.indexOf('🟢 В сети — 1');
+  ok(hi > 0 && vi > hi && ni > vi && /color:#22c55e">Хелпер2</.test(mbox.innerHTML), 'участники: группы по верхней роли (выше — раньше), ник цветом роли', mbox.innerHTML.slice(0, 300));
+  const rbox = fakeEl();
+  await X.sub.roles.render(rbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'member' });
+  ok(/настраивает и выдаёт владелец/.test(rbox.innerHTML), 'экран ролей — только владельцу');
+  await X.sub.roles.render(rbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner' });
+  ok(/＋ Добавить роль/.test(rbox.innerHTML) && /data-pb="16"/.test(rbox.innerHTML) && /data-ra="take" data-rid="21"/.test(rbox.innerHTML) && /＋ роль…/.test(rbox.innerHTML), 'владельцу: роли с правами, новая роль, кому какая (снять / выдать)');
+  P.rpc = async () => ({ error: { code: 'PGRST202' }, missing: true });
+  await X.sub.roles.render(rbox, 'page', { ok: true, id: 78, name: 'Клан', role: 'owner' });
+  ok(/Появится, когда сайт обновится/.test(rbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
+  P.rpc = rpc0; delete window.currentUser;
+
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);
   process.exitCode = fail ? 1 : 0;

@@ -74,7 +74,13 @@
     const cid = C.c.id, chId = ch.id, me = P.me();
     const isMod = C.role === 'owner' || C.role === 'mod' || !!C.staff;
     const roles = new Map();
-    membersOf(cid).then(list => list.forEach(m => roles.set(m.id, m.role)));
+    // свои роли (community3.sql): у кого какие (номера, выше — первой), мои права и место — DS.x.roleSync
+    const cr = new Map();
+    membersOf(cid).then(list => list.forEach(m => { roles.set(m.id, m.role); if (Array.isArray(m.roles)) cr.set(m.id, m.roles); }));
+    const rd = () => DS.x?.roleSync?.(cid) || null, bits = () => rd()?.my || 0;
+    const topOf = uid => { const ids = cr.get(uid), R = rd(); return ids?.length && R ? R.byId.get(ids[0]) || null : null; };
+    // роль с правом «модерация» — только участников без своих ролей выше или равных моей верхней
+    const xMod = uid => C.role === 'member' && !!(bits() & 2) && (roles.get(uid) || 'member') === 'member' && (rd()?.top || 0) > (topOf(uid)?.position || 0);
     const myReacts = async ids => {
       if (!me || !ids.length) return new Map();
       const { data } = await sbClient.from('community_reactions').select('message_id, emoji').in('message_id', ids);
@@ -84,7 +90,7 @@
     const withMine = async list => { const mine = await myReacts(list.map(x => x.id)); list.forEach(x => { x.myReacts = mine.get(x.id) || new Set(); }); return list; };
     const rpcOk = async (fn, args, okMsg) => { const r = await P.rpc(fn, args); return r.data?.ok ? { ok: true, msg: okMsg, data: r.data } : { ok: false, msg: '⚠️ ' + why(r), err: why(r) }; };
     const modList = uid => {
-      if (!uid || uid === me || !canMod(C.role, roles.get(uid) || 'member', !!C.staff)) return [];
+      if (!uid || uid === me || !(canMod(C.role, roles.get(uid) || 'member', !!C.staff) || xMod(uid))) return [];
       return [['mute10', '🔇 Мут 10 мин'], ['mute60', '🔇 Мут 1 час'], ['mute1440', '🔇 Мут 1 день'], ['kick', '👢 Выгнать'], ['ban', '⛔ Забанить'], ['banpurge', '⛔ Бан + удалить сообщения за сутки']];
     };
     const doMod = async (k, uid, nick) => {
@@ -125,9 +131,10 @@
       },
       edit: async (m, text) => { const r = await P.rpc('cm_edit', { p_id: m.id, p_text: text }); return r.data?.ok ? { ok: true } : { ok: false, err: why(r) }; },
       del: async m => { const r = await P.rpc('cm_delete_msg', { p_id: m.id }); return r.data?.ok ? { ok: true } : { ok: false, err: why(r) }; },
-      canDel: m => isMod && m.uid !== me && (C.role === 'owner' || C.staff || (roles.get(m.uid) || 'member') === 'member'),
+      canDel: m => m.uid !== me && ((isMod && (C.role === 'owner' || C.staff || (roles.get(m.uid) || 'member') === 'member')) || xMod(m.uid)),
       react: async (m, em) => { const r = await P.rpc('cm_react', { p_id: m.id, p_emoji: em }); return r.data?.ok ? { ok: true, on: r.data.on, n: r.data.n } : { ok: false, err: why(r) }; },
-      canPin: () => isMod,
+      canPin: () => isMod || !!(bits() & 4),
+      colorOf: uid => topOf(uid)?.color || null,   // цвет ника — по верхней своей роли
       pin: async (m, on) => { const r = await P.rpc('cm_pin', { p_id: m.id, p_on: on }); return r.data?.ok ? { ok: true } : { ok: false, err: why(r) }; },
       report: async (m, w) => { const r = await P.rpc('cm_report', { p_msg: m.id, p_reason: w, p_community: null }); return r.data?.ok ? { ok: true, hidden: r.data.hidden } : { ok: false, err: why(r) }; },
       async fetch(ids){ const { data } = await sbClient.from('community_messages').select('*').in('id', ids.filter(x => typeof x === 'number')); return (data || []).map(cmMsg); },
@@ -177,6 +184,7 @@
       return { ok: true, id: OFF_ID, official: true, name: 'Денчик37', icon: '<img src="/icon-192.png" alt="">', about: 'Официальный сервер сайта: общий чат, игры, мемы и голосовой', channels: chans, staff, role: null };
     }
     const d = await openC(id, fresh);
+    if (d?.ok) DS.x?.roleData?.(id);   // свои роли — фоном (цвета ников, группы участников)
     if (!d || !d.ok) return { ok: false, id, reason: d?.reason, err: d?.err, name: d?.name, until: d?.until };
     const my = S.my.find(x => x.id === id);
     return { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0 };
@@ -215,7 +223,7 @@
       if (srv.staff === 'admin' || srv.staff === 'moderator') acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Жалобы">🚩</a>`, `<a class="ds-hb" href="${link(mode, OFF_ID, 'settings')}" title="Настройки каналов">⚙️</a>`);
     } else {
       if (srv.role) acts.push(`<button type="button" class="ds-hb" data-ds="invite" title="Пригласить">🔗</button>`);
-      if (srv.role === 'owner' || srv.role === 'mod' || srv.staff) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'settings')}" title="Настройки">⚙️</a>`);
+      if (srv.role === 'owner' || srv.role === 'mod' || srv.staff || (DS.x?.roleSync?.(srv.id)?.my & 3)) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'settings')}" title="Настройки">⚙️</a>`);
       if (srv.role === 'owner' || srv.role === 'mod' || srv.staff) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'reports')}" title="Жалобы">🚩</a>`);
     }
     return `<div class="ds-sh"><span class="ds-shi">${srv.icon}</span><b title="${e(srv.about || '')}">${e(srv.name)}</b><span class="ds-shacts">${acts.join('')}</span></div>`;
@@ -226,7 +234,8 @@
     const C = window.D37Chat, on = C?.online?.() || { users: [], guests: 0 };
     const onlineIds = new Set(on.users.map(u => u.id));
     const group = (t, list) => list.length ? `<div class="ds-mg">${t} — ${list.length}</div>${list.map(row).join('')}` : '';
-    const row = u => `<button type="button" class="ds-mem${u.off ? ' off' : ''}" data-uid="${e(u.id)}" data-nick="${e(u.nick)}">${P.avatar(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick, 30)}<span>${P.nick(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick)}${u.sub ? `<small>${e(u.sub)}</small>` : ''}</span>${u.crole === 'owner' ? '<i title="Владелец">👑</i>' : u.crole === 'mod' ? '<i title="Модератор">🛡</i>' : ''}</button>`;
+    const nickOf = u => u.top && !['admin', 'moderator', 'helper'].includes(u.role) ? `<span class="ph-nick" style="color:${e(u.top.color)}">${e(u.nick)}</span>` : P.nick(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick);
+    const row = u => `<button type="button" class="ds-mem${u.off ? ' off' : ''}" data-uid="${e(u.id)}" data-nick="${e(u.nick)}">${P.avatar(P.prof(u.id) || { nick: u.nick, role: u.role }, u.nick, 30)}<span>${nickOf(u)}${u.sub ? `<small>${e(u.sub)}</small>` : ''}</span>${u.crole === 'owner' ? '<i title="Владелец">👑</i>' : u.crole === 'mod' ? '<i title="Модератор">🛡</i>' : ''}</button>`;
     on.users.forEach(x => { x.sub = x.a ? P.actText(P.actParse(x.a)) : ''; });   // чем занят («в Мире, сервер 2»…)
     const actOf = new Map(on.users.map(x => [x.id, x.sub]));
     if (srv.official) {
@@ -243,10 +252,14 @@
     if (!srv.role && !srv.staff) { box.innerHTML = `<div class="ds-dim">Участники видны после вступления. Всего: ${srv.c?.members || 0}</div>`; return; }
     const list = await membersOf(srv.id);
     await P.profiles(list.map(m => m.id));
-    const all = list.map(m => ({ id: m.id, nick: m.nick, crole: m.role, role: P.prof(m.id)?.role, sub: m.muted_until ? '🔇 заглушён' : actOf.get(m.id) || '', off: !onlineIds.has(m.id) }));
+    const R = DS.x?.roleSync?.(srv.id);
+    const all = list.map(m => ({ id: m.id, nick: m.nick, crole: m.role, role: P.prof(m.id)?.role, sub: m.muted_until ? '🔇 заглушён' : actOf.get(m.id) || '', off: !onlineIds.has(m.id),
+      top: R && Array.isArray(m.roles) && m.roles.length ? R.byId.get(m.roles[0]) || null : null }));
+    // в сети — группами по верхней своей роли (как в Дискорде), без роли — «В сети»
+    const rgroups = R ? R.roles.map(r => group(`<span style="color:${e(r.color)}">${e(r.name)}</span>`, all.filter(x => !x.off && x.crole === 'member' && x.top?.id === r.id))).join('') : '';
     const onl = all.filter(x => !x.off), off = all.filter(x => x.off);
     box.innerHTML = `<div class="ds-mtitle">Участники — ${list.length}</div>` + group('👑 Владелец', onl.filter(x => x.crole === 'owner')) + group('🛡 Модераторы', onl.filter(x => x.crole === 'mod'))
-      + group('🟢 В сети', onl.filter(x => x.crole === 'member')) + group('⚪ Не в сети', off);
+      + rgroups + group('🟢 В сети', onl.filter(x => x.crole === 'member' && !x.top)) + group('⚪ Не в сети', off);
   }
   // Голосовой канал: кто сейчас в нём (под названием канала) — calls.js сообщает
   function voicePeople(root){
@@ -325,7 +338,7 @@
   }
   async function screenSettings(el, mode, srv){
     if (srv.official) return screenOfficialSettings(el, mode, srv);
-    const C = srv.raw, owner = srv.role === 'owner' || srv.staff, mod = owner || srv.role === 'mod';
+    const C = srv.raw, owner = srv.role === 'owner' || srv.staff, mod = owner || srv.role === 'mod' || !!(DS.x?.roleSync?.(srv.id)?.my & 3);
     if (!mod) { el.innerHTML = '<div class="ds-pane"><div class="ds-dim">Настройки — для владельца и модераторов</div></div>'; return; }
     const bans = (await P.rpc('cm_bans', { p_id: srv.id })).data || [];
     const url = `${location.origin}/c/${C.c.code}`;
@@ -660,9 +673,15 @@
   });
 
   // Приглашение #/c/<код> → страница чата с экраном вступления
-  DS._test = { cmMsg, link, REASON, canMod, railHtml: () => railHtml('page', OFF_ID) };
+  DS._test = { cmMsg, link, REASON, canMod, railHtml: () => railHtml('page', OFF_ID), membersRender, commAdapter };
   // для community2.js: адреса, данные сообществ, переходы
-  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS });
+  Object.assign(DS, { OFF_ID, link, special, go, server, loadMy, dropC, why, mine: () => S.my, ICONS, membersOf });
+  // свои роли загрузились — перерисовать участников и цвета ников в открытой ленте
+  window.addEventListener('d37:roles', ev => {
+    if (!page?.srv || String(page.srv.id) !== String(ev.detail) || !page.root.isConnected) return;
+    membersRender(page.root.querySelector('.ds-mbody'), page.srv);
+    if (mv && mvHost && page.root.contains(mvHost)) mv.refreshAll();
+  });
   commBadge();
   window.addEventListener('d37:auth', () => { S.my = []; S.myAt = 0; S.cache.clear(); S.members.clear(); if (P.me()) loadMy(true); });
 })();
