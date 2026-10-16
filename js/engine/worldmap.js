@@ -296,6 +296,7 @@
     const own = [];
     const mat = low ? new T.MeshLambertMaterial({ vertexColors: true }) : new T.MeshStandardMaterial({ vertexColors: true, roughness: .96, metalness: 0 });
     mat.polygonOffset = true; mat.polygonOffsetFactor = 1; mat.polygonOffsetUnits = 4;   // ровные площадки городов (своя земля) — поверх
+    E.leafMaterial?.(mat, 'grass');   // погода (climate.js): трава осенью желтеет, зимой — бурая; скалы, песок и снег — как были
     own.push(mat);
     const cache = new Map();   // ключ узла → { mesh, used }
     const col = [0, 0, 0];
@@ -473,6 +474,7 @@
     const leafG = new T.IcosahedronGeometry(2.1, 0); leafG.translate(0, 4.2, 0);
     own.push(trunkG, pineG, leafG);
     const trunkM = R.mat('#6b4423', { rough: .9 }), pineM = R.mat('#2f6b3a', { rough: .9 }), leafM = R.mat('#4f9a45', { rough: .9 });
+    E.leafMaterial?.(leafM, 'leaves'); E.leafMaterial?.(pineM, 'needles');   // погода: листва по сезону, хвоя осенью не желтеет
     const mkI = (g, m) => { const im = new T.InstancedMesh(g, m, TMAX); im.count = 0; im.castShadow = !low; im.receiveShadow = !low; im.frustumCulled = false; im.userData.dyn = true; grp.add(im); return im; };
     const iTrunk = mkI(trunkG, trunkM), iPine = mkI(pineG, pineM), iLeaf = mkI(leafG, leafM);
     const tm = new T.Matrix4(), tq = new T.Quaternion(), ts = new T.Vector3(), tp = new T.Vector3(), te = new T.Euler(), tc = new T.Color();
