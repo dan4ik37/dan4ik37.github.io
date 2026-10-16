@@ -35,7 +35,14 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   ok(V.TEX === 32 && painted.length === V.tex.length && painted.every(d => d.length === V.TEX * V.TEX * 4), 'все текстуры рисуются 32×32 RGBA', painted.length);
   { // вещи — пиксель-арт 16×16, увеличенный вдвое (каждый пиксель — квадрат 2×2); поверхности — свои 32×32 (не «квадратами»)
     const blocky = d => { for (let y = 0; y < 32; y += 2) for (let x = 0; x < 32; x += 2) { const a = (y * 32 + x) * 4; for (const [dx, dy] of [[1, 0], [0, 1], [1, 1]]) { const b = ((y + dy) * 32 + x + dx) * 4; for (let c = 0; c < 4; c++) if (d[a + c] !== d[b + c]) return false; } } return true; };
-    ok(blocky(V.paint('item_pick_iron')) && blocky(V.paint('torch')), 'вещи и факел — чёткий пиксель-арт ×2');
+    ok(blocky(V.paint('item_iron_ingot')) && blocky(V.paint('torch')), 'вещи и факел — чёткий пиксель-арт ×2');
+    { // инструменты (16.10) — свой пиксель-арт 32×32: фон прозрачный, обводка темнее материала (не чёрная), у дерева голова светлее ручки
+      const pk = V.paint('item_pick_iron'), pw = V.paint('item_pick_wood');
+      const alpha0 = pk[3] === 0 && pk[(31 * 32 + 31) * 4 + 3] === 0, op = pk.filter((v, i) => (i & 3) === 3 && v > 0).length;
+      let black = 0; for (let i = 0; i < pk.length; i += 4) if (pk[i + 3] && pk[i] + pk[i + 1] + pk[i + 2] < 40) black++;
+      const lum = (d, x, y) => { const i = (y * 32 + x) * 4; return d[i] + d[i + 1] + d[i + 2]; };
+      ok(!blocky(pk) && alpha0 && op > 120 && black === 0 && lum(pw, 6, 26) < lum(pw, 22, 5), 'инструменты — пиксель-арт 32×32: прозрачный фон, без чёрного, голова деревянной кирки светлее ручки', { op, black });
+    }
     ok(!blocky(V.paint('stone')) && !blocky(V.paint('planks_oak')) && !blocky(V.paint('cobble')), 'камень, доски, булыжник — настоящие 32×32');
     const px16 = new Uint8Array(1024).fill(90), up = V.paint('x', { rgba: px16 });
     ok(up.length === 4096 && up.every(v => v === 90), 'картинка 16×16 (мод, старый пакет текстур) увеличивается до 32×32');
