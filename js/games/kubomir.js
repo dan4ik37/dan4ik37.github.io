@@ -355,6 +355,11 @@
       R.setUnder?.(true, UWC, UWO);
       st.uwOn = true;
     } else if (st.uwOn) { st.uwOn = false; R.setUnder?.(false); fogNear(st); st.KL?.afterSky(); }
+    // звук под водой: всё глуше и тише (фильтр в движке), тихий подводный фон — гул и редкие пузыри
+    const A = st.AU; if (!A) return;
+    A.muffle?.(st.uwK);
+    if (st.uwK > 0 && !st.uwLoop && A.loop) st.uwLoop = A.loop('kb_underwater', { vol: 0 });
+    if (st.uwLoop) { if (st.uwK > 0) st.uwLoop.set({ vol: .5 * st.uwK }); else { st.uwLoop.stop(); st.uwLoop = null; } }
   }
   // яркость солнца и неба: днём мягче, чем у движка по умолчанию (иначе трава и песок выгорают в белёсое), ночью луна чуть
   // тусклее движковой (темно, но видно дорогу) — свет факелов от этого не зависит: ночью и в пещерах он заметен пятнами
@@ -378,6 +383,7 @@
     try { st.ui?.dispose(); } catch (e) {}
     try { st.KL?.dispose(); } catch (e) {}
     try { st.WX?.dispose(); } catch (e) {}
+    try { st.AU?.muffle?.(0); st.uwLoop?.stop(); st.uwLoop = null; } catch (e) {}   // звук — снова чистый (движок общий для игр)
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
     try { st.R?.dispose(); } catch (e) {}
@@ -631,14 +637,15 @@
       const fv = W.raw(P.x, P.y - .1, P.z);
       if (fv > 0) {
         const fb = V.blocks[fv & 0xfff], ks = STEP_KB[fb?.sound];
-        if (ks) st.AU?.play(ks, { x: P.x - st.ox, y: P.y, z: P.z - st.oz, vol: P.sprint ? .7 : .5, rate: .9 + Math.random() * .2 });
+        if (st.uw) st.AU?.play('step_carpet' + ((Math.random() * 3) | 0), { vol: .22 });   // по дну — мягко (и так глушь)
+        else if (ks) st.AU?.play(ks, { x: P.x - st.ox, y: P.y, z: P.z - st.oz, vol: P.sprint ? .7 : .5, rate: .9 + Math.random() * .2 });
         else st.AU?.step(floorSound(fv & 0xfff), P.sprint, P.x - st.ox, P.y, P.z - st.oz);
         if (DUSTY[fb?.sound] && (P.sprint || (st.ents?.fxQ || 0) > .5)) st.ents?.dust?.(P.x - P.vx * .06, P.y, P.z - P.vz * .06, fv & 0xfff, P.sprint ? 2 : 1, { w: .3, sp: .5, s: .16, s1: .38, a: .38, life: .45, vy: .3 });
       }
       if (P.sprint) P.exh += .1 * moved;
     } else if (!P.onGround) { P.lastStepX = P.x; P.lastStepZ = P.z; }
     // плавание: брызги
-    if (inLiquid && Math.hypot(P.vx, P.vz) > 1 && (P.swimT -= dt) < 0) { P.swimT = .7; st.AU?.play('step_water' + ((Math.random() * 3) | 0), { vol: .35 }); }
+    if (inLiquid && Math.hypot(P.vx, P.vz) > 1 && (P.swimT -= dt) < 0) { P.swimT = .7; if (!st.uw) st.AU?.play('step_water' + ((Math.random() * 3) | 0), { vol: .35 }); }   // под водой — без плеска (был резкий)
     // вода: прыгнул — всплеск, плывёшь у поверхности — след, под водой — пузыри у лица
     const inW = P.water > .3;
     if (inW && !st.inW && vy0 < -4 && !P.fly) { st.ents?.splash?.(P.x, waterTop(st), P.z, Math.min(1.5, -vy0 / 10)); st.AU?.play('kb_splash', { vol: Math.min(1, .3 + -vy0 * .05), rate: .9 + Math.random() * .2 }); }
@@ -1468,6 +1475,12 @@
     Sy.add('kb_splash', k => { const a = new k.Bp(700, .8), b = new k.Bp(2200, 1), c = new k.Bp(5000, 1.2); return k.make(.6, 218, (t, r) => { const w = k.N(r); return a.do(w) * k.exp(-t * 7) * 1.6 + b.do(w) * k.exp(-t * 9) * 1.2 + c.do(w) * k.exp(-t * 14) * .6; }, .1, .08); });
     // гром вдалеке: низкий рокот, нарастает и долго затихает (мягко — не пугать)
     Sy.add('kb_thunder', k => { const a = new k.Bp(55, 1.2), b = new k.Bp(110, 1.4), c = new k.Bp(260, 1.6); let lp = 0; return k.make(2.6, 220, (t, r) => { const w = k.N(r); lp += (w - lp) * .02; const e = Math.min(1, t / .25) * k.exp(-t * 1.3) * (1 + .5 * Math.sin(t * 7.3) * k.exp(-t * 2)); return (a.do(w) * 2.4 + b.do(w) * 1.6 + c.do(w) * .5 + lp * 2) * e; }, .12, .3); });
+    // под водой: тихий низкий гул и редкие мягкие пузыри (петля 8 с)
+    Sy.add('kb_underwater', k => {
+      const lo = new k.Bp(70, .7), mid = new k.Bp(150, 1.1), r0 = k.rng(221), bub = []; let lp = 0;
+      for (let i = 0; i < 6; i++) bub.push([.5 + r0() * 7, new k.Bp(300 + r0() * 380, 8), .5 + r0() * .5]);
+      return k.make(8, 222, (t, r) => { const w = k.N(r); lp += (w - lp) * .03; let s = lo.do(w) * 2.2 + mid.do(w) * .5 + lp * 1.2; for (const b of bub) { const d = t - b[0]; if (d > 0 && d < .14) s += b[1].do(w) * k.exp(-d * 34) * 1.3 * b[2]; } return s; }, .05, .03);
+    });
     Sy.add('kb_poof', k => { const a = new k.Bp(500, .9), b = new k.Bp(1400, 1.1); return k.make(.3, 219, (t, r) => { const w = k.N(r), e = Math.min(1, t / .02) * k.exp(-t * 11); return (a.do(w) * 1.6 + b.do(w)) * e; }, .09, .05); });
   }
 
