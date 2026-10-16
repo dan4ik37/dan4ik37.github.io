@@ -392,3 +392,18 @@ button.mv-cbtn:disabled{opacity:.6;cursor:wait}
 .ds-perms{display:flex;flex-wrap:wrap;gap:4px 14px}
 .ds-rchip{border:0;border-radius:999px;padding:3px 9px;background:rgba(255,255,255,.07);color:var(--rc,#99aab5);font:700 12px 'Montserrat',sans-serif;cursor:pointer}
 .ds-rchip:hover{background:rgba(239,68,68,.18)}
+/* буст 🚀 */
+.ds-bhero{border-radius:16px;padding:22px 16px 14px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#fff;text-align:center;margin-bottom:6px}
+.ds-bhero>span{font-size:40px;line-height:1}
+.ds-bhero b{font-size:18px}
+.ds-bhero small{opacity:.9;font-size:12.5px}
+.ds-perks{margin:6px 0;padding-left:18px;line-height:1.7;font-size:14px}
+.ds-banners{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.ds-banners button{width:58px;height:34px;border-radius:9px;border:2px solid transparent;cursor:pointer}
+.ds-banners button.on{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+.ds-sh.ds-shb{background-size:cover;border-radius:0 0 10px 10px}
+.ds-hb.ds-boosted{filter:drop-shadow(0 0 6px rgba(236,72,153,.8))}
+.ds-anim{display:inline-block}
+body.high .ds-anim{animation:dsBoost 2.6s ease-in-out infinite}
+@keyframes dsBoost{0%,100%{transform:scale(1) rotate(0)}25%{transform:scale(1.12) rotate(-6deg)}50%{transform:scale(1) rotate(0)}75%{transform:scale(1.12) rotate(6deg)}}
+body.high .ds-ccic.anim{animation:dsBoost 2.6s ease-in-out infinite}

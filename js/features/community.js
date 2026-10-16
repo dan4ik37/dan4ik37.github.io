@@ -187,7 +187,8 @@
     if (d?.ok) DS.x?.roleData?.(id);   // свои роли — фоном (цвета ников, группы участников)
     if (!d || !d.ok) return { ok: false, id, reason: d?.reason, err: d?.err, name: d?.name, until: d?.until };
     const my = S.my.find(x => x.id === id);
-    return { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0 };
+    return { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0,
+      boost: !!my?.boost, banner: my?.boost ? my.banner || '' : '', anim: !!my?.anim };   // буст (community3.sql → cm_my)
   }
 
   // ═══ Куски интерфейса (одни и те же для страницы и телефона) ═══
@@ -200,7 +201,7 @@
     const item = (id, icon, name, unread, ment, href) => `<a class="ds-srv${String(sel) === String(id) ? ' on' : ''}${unread ? ' unread' : ''}" href="${href}" title="${e(name)}" aria-label="${e(name)}"><span class="ds-pill"></span><span class="ds-sic">${icon}</span>${ment ? `<em class="ds-ment">${ment > 9 ? '9+' : ment}</em>` : ''}</a>`;
     return item(OFF_ID, '<img src="/icon-192.png" alt="">', 'Денчик37 — сервер сайта', offUnread, offMent, link(mode, OFF_ID))
       + '<i class="ds-rsep"></i>'
-      + S.my.map(c => item(c.id, e(c.icon), c.name, commUnread(c) && String(sel) !== String(c.id), 0, link(mode, c.id))).join('')
+      + S.my.map(c => item(c.id, c.anim ? `<b class="ds-anim">${e(c.icon)}</b>` : e(c.icon), c.name, commUnread(c) && String(sel) !== String(c.id), 0, link(mode, c.id))).join('')
       + `<a class="ds-srv ds-add" href="${special(mode, 'new')}" title="Создать сообщество" aria-label="Создать сообщество"><span class="ds-sic">＋</span></a>`
       + `<a class="ds-srv ds-find" href="${special(mode, 'find')}" title="Найти сообщество" aria-label="Найти сообщество"><span class="ds-sic">🧭</span></a>`;
   }
@@ -223,10 +224,12 @@
       if (srv.staff === 'admin' || srv.staff === 'moderator') acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Жалобы">🚩</a>`, `<a class="ds-hb" href="${link(mode, OFF_ID, 'settings')}" title="Настройки каналов">⚙️</a>`);
     } else {
       if (srv.role) acts.push(`<button type="button" class="ds-hb" data-ds="invite" title="Пригласить">🔗</button>`);
+      if ((srv.role || srv.staff) && DS.x?.sub?.boost) acts.push(`<a class="ds-hb${srv.boost ? ' ds-boosted' : ''}" href="${link(mode, srv.id, 'boost')}" title="${srv.boost ? 'Буст включён' : 'Буст сообщества'}">🚀</a>`);
       if (srv.role === 'owner' || srv.role === 'mod' || srv.staff || (DS.x?.roleSync?.(srv.id)?.my & 3)) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'settings')}" title="Настройки">⚙️</a>`);
       if (srv.role === 'owner' || srv.role === 'mod' || srv.staff) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'reports')}" title="Жалобы">🚩</a>`);
     }
-    return `<div class="ds-sh"><span class="ds-shi">${srv.icon}</span><b title="${e(srv.about || '')}">${e(srv.name)}</b><span class="ds-shacts">${acts.join('')}</span></div>`;
+    const bg = srv.boost && DS.x?.BANNERS?.[srv.banner];   // баннер буста — над каналами
+    return `<div class="ds-sh${bg ? ' ds-shb' : ''}"${bg ? ` style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.55)),${bg}"` : ''}><span class="ds-shi${srv.anim ? ' ds-anim' : ''}">${srv.icon}</span><b title="${e(srv.about || '')}">${e(srv.name)}</b><span class="ds-shacts">${acts.join('')}</span></div>`;
   }
   // Участники: на сервере сайта — кто онлайн (по группам) и кто писал недавно; в сообществе — все участники (онлайн — сверху)
   async function membersRender(box, srv){

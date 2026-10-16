@@ -290,6 +290,25 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(/Появится, когда сайт обновится/.test(rbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
   P.rpc = rpc0; delete window.currentUser;
 
+  globalThis.location = { origin: 'https://dan4ik37.vercel.app', host: 'dan4ik37.vercel.app', hash: '' };
+  // ═══ 17. «🚀 Буст» (community3.sql): экран, оформление, карточка в обзоре ═══
+  const binfo = { ok: true, boost: true, until: new Date(Date.now() + 20 * 864e5).toISOString(), banner: 'neon', anim: true, vanity: 'denchik37', prices: { 1: 100, 3: 270 }, boosters: 3 };
+  P.rpc = async name => name === 'cm_boost_info' ? { data: binfo } : { data: null };
+  const bbox = fakeEl();
+  await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner', c: { icon: '🎮' } });
+  ok(/data-bb="1"/.test(bbox.innerHTML) && /100 💎/.test(bbox.innerHTML) && /270 💎/.test(bbox.innerHTML) && /бустили: 3/.test(bbox.innerHTML), 'буст: две кнопки с ценами, сколько бустили');
+  ok(/data-bn="neon"/.test(bbox.innerHTML) && /class="on" data-bn="neon"/.test(bbox.innerHTML) && /value="denchik37"/.test(bbox.innerHTML) && /\/c\/denchik37/.test(bbox.innerHTML), 'владельцу: баннеры, выбранный отмечен, красивая ссылка');
+  await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: null, c: { icon: '🎮' } });
+  ok(/Бустить могут участники/.test(bbox.innerHTML) && !/data-bb=/.test(bbox.innerHTML) && !/data-bn=/.test(bbox.innerHTML), 'не участнику — без кнопок и оформления');
+  P.rpc = async () => ({ error: { code: 'PGRST202' }, missing: true });
+  await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner' });
+  ok(/Появится, когда сайт обновится/.test(bbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
+  ok(Object.values(X.BANNERS).every(v => /^linear-gradient\(135deg,#[0-9a-f]{6},#[0-9a-f]{6}\)$/.test(v)), 'баннеры — только свои градиенты');
+  const bc = X.ccard({ id: 9, name: 'Бустанутые', icon: '🚀', members: 5, category: 'chat', age: 0, boost: true, banner: 'lava', anim: true }, 'page');
+  ok(/ds-cc boost/.test(bc) && /#ef4444/.test(bc) && /ds-ccic anim/.test(bc) && /title="Буст"/.test(bc), 'обзор: рамка буста, баннер, анимированный значок, 🚀');
+  ok(/linear-gradient\(135deg,#7c3aed,#2563eb\)/.test(X.ccard({ id: 10, name: 'Обычные', icon: '🎮', members: 5, category: 'games', banner: 'lava' }, 'page')), 'без буста баннер не показывается — цвет категории');
+  P.rpc = rpc0;
+
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);
   process.exitCode = fail ? 1 : 0;
