@@ -307,6 +307,7 @@
     if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
+    st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
     st.WX = window.KubomirWeather ? window.KubomirWeather.create(st) : null;   // дождь и снег по биому (расписание — от зерна и дня)
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
     if (I.touch) touchUI(st);   // кнопки телефона — когда уже есть игрок
@@ -1431,6 +1432,7 @@
         <div class="gs-row"><div class="gs-lbl">Красться<small>Держать Shift — как в Майнкрафте по умолчанию; «Нажал — отжал» — один раз нажать, ещё раз — встать.</small></div><div class="gs-ctl">${seg('sneakToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sneakToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Бег<small>Держать Ctrl или один раз нажать.</small></div><div class="gs-ctl">${seg('sprintToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sprintToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">«Призрак» блока<small>Полупрозрачный кубик там, куда встанет блок из руки.</small></div><div class="gs-ctl">${seg('ghost', [[1, 'Вкл'], [0, 'Выкл']], opts.ghost === false ? 0 : 1)}</div></div>
+        <div class="gs-row"><div class="gs-lbl">Времена года<small>«Как в общем мире» — как у всех на сайте: быстрые сезоны (около недели), декабрь–январь — зима, ноябрь — осень. «По игровым дням» — 3 суток игры на сезон. Зимой снег на блоках и лёд на озёрах (по нему можно ходить), осенью желтеет листва. «Выкл» — всегда лето.</small></div><div class="gs-ctl">${seg('seasons', [['calendar', 'Как в общем мире'], ['cycle', 'По игровым дням'], ['off', 'Выкл']], opts.seasons || 'calendar')}</div></div>
         <div class="gs-row"><div class="gs-lbl">Деревья падают<small>Подрубил ствол — дерево валится от тебя и рассыпается на брёвна (только настоящие деревья, не постройки).</small></div><div class="gs-ctl">${seg('fell', [[1, 'Вкл'], [0, 'Выкл']], opts.fell === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Погода<small>Дождь и снег по месту (в пустыне — сухо): небо темнее, капли и хлопья вокруг, шум дождя. На «низкой» графике — без капель.</small></div><div class="gs-ctl">${seg('weather', [[1, 'Вкл'], [0, 'Выкл']], opts.weather === false ? 0 : 1)}</div></div>
         ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после смерти.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
@@ -1448,6 +1450,7 @@
         if (k === 'ghost') opts.ghost = v === '1';
         if (k === 'fell') opts.fell = v === '1';
         if (k === 'weather') { opts.weather = v === '1'; if (S) S.weatherOff = !opts.weather; }
+        if (k === 'seasons') { opts.seasons = ['calendar', 'cycle', 'off'].includes(v) ? v : 'calendar'; if (S) S.WX?.setSeasons?.(opts.seasons); }
         if (k === 'tips' && S) { S.meta.tips = v === '1'; tipsUpdate(S); }
         lsSet(LS_OPT, opts); D.refresh();
       };

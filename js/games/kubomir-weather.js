@@ -14,11 +14,31 @@
 // Частицы — пулы вокруг камеры: дождь — отрезки (LineSegments, сверху прозрачные), снег — точки, круги на воде —
 // InstancedMesh колец (сложение); ни одной — объект спрятан. «Низкая» графика — без частиц (только небо, туман, звук),
 // телефон и «средняя» — 45 %. ⚙️ «🧊 Кубомир» → «Погода» выкл — st.weatherOff (сила 0).
+// Времена года (16.10.2026, движок — js/engine/climate.js, docs/SEASONS.md): погода и сезон — у движка (W.at: климат по биому —
+// пустыня сухая, снега и горы холодные, море ветреное; дождь или снег — по температуре в точке), частицы под крышей — свои.
+// ⚙️ «Времена года»: как в общем мире (calendar, по умолчанию) / по игровым дням (3 суток на сезон) / выкл (всегда лето, погода
+// идёт). Зимой на верхних гранях снег (по свету неба блока — в пещерах и домах нет; кусок шейдера движка D37_CLIM), осенью
+// листва и трава желтеют (цвет биома, крючок VR.onShader), озёра под открытым небом замерзают: вид льда + по льду можно ходить
+// (V.iceTest — без правки блоков мира), весной тает. Без движка погоды (нет climate.js) — прежнее расписание по зерну и дню.
 (() => {
   const V = () => window.D37E.vox;
   const P_RAIN = .25, SLOT = 6, RAMP = .4, RAD = 13;
   const sm = q => q * q * (3 - 2 * q);
+  const CLIM = () => window.D37E?.climate || null;
+  // Биом «Кубомира» → климат движка
+  const BIOME_CLIM = { ocean: 'sea', beach: 'sea', plains: 'temperate', forest: 'temperate', birch: 'temperate', desert: 'desert', snow: 'snow', mountains: 'mountain', swamp: 'temperate', river: 'temperate' };
+  const wCache = new Map();
+  // Сила непогоды 0…1 в сутки day и час hour (по игровым дням, 3 суток на сезон; умеренный климат) — у всех одинаково
   function at(seed, day, hour){
+    const C = CLIM(); if (!C) return atOld(seed, day, hour);
+    const k = String(seed);
+    let w = wCache.get(k);
+    if (!w) { const g = { day: 1, hour: 0 }; w = { g, W: C.world({ seed: 'kb:' + k, mode: 'cycle', days: 3, front: 0, gameTime: () => w.g }) }; if (wCache.size > 8) wCache.clear(); wCache.set(k, w); }
+    w.g.day = day | 0; w.g.hour = hour;
+    const s = w.W.at(0, 0, 0, 60);
+    return Math.max(s.rain, s.snow);
+  }
+  function atOld(seed, day, hour){
     const s = V().seedOf(seed), T = (day | 0) * 24 + hour, k = Math.floor(T / SLOT);
     let w = 0;
     for (let j = k - 1; j <= k; j++) {   // дождь прошлой части может зайти в эту
@@ -31,7 +51,7 @@
     return w;
   }
   const kindAt = (b, y) => b === 'desert' ? '' : b === 'snow' || (b === 'mountains' && y > 95) ? 'snow' : 'rain';
-  window.KubomirWeather = { at, kindAt, create };
+  window.KubomirWeather = { at, atOld, kindAt, create, BIOME_CLIM };
 
   function create(st){
     const R = st.R, T = R.T, W = st.W, Vx = V(), E = window.D37E, TT = Vx.T, SH = Vx.SHAPE;
@@ -40,6 +60,55 @@
     const FR = Vx.rng((Vx.hash(Vx.seedOf(W.seed), 0x77e3) >>> 0) || 5);
     const wa = (Vx.hash(Vx.seedOf(W.seed), 0x77e4) & 1023) / 1023 * 6.283, windX = Math.cos(wa) * 1.1, windZ = Math.sin(wa) * 1.1;   // ветер мира
     let tq = 0, tb = 0;
+    // ── движок погоды (времена года): мир по зерну, климат по биому; картинка поверхностей — attach без своих частиц ──
+    const C = CLIM();
+    const seasonsMode = () => st.seasons || 'calendar';
+    const worldCfg = () => { const m = seasonsMode(); return { seed: 'kb:' + W.seed, mode: m === 'off' ? 'fixed' : m === 'cycle' ? 'cycle' : 'calendar', season: 'summer', days: 3, lapse: -.12, seaY: Vx.SEA || 52, front: 0,
+      climateAt: (x, z) => BIOME_CLIM[X.biome] || 'temperate', hourAt: () => R.lighting.time, gameTime: () => ({ day: st.meta?.day || 1, hour: R.lighting.time || 0 }) }; };
+    if (C?.attach) {
+      try {
+        X.clim = C.attach(R, { world: worldCfg(), where: () => [st.P.x - st.ox, st.P.y, st.P.z - st.oz], origin: () => [st.ox, st.oz], particles: false, sky: false, occlusion: false });
+      } catch (e) { console.warn('Кубомир: погода движка', e); X.clim = null; }
+    }
+    X.setSeasons = m => { st.seasons = m; X.clim?.setWorld(worldCfg()); tq = 0; };
+    // осень и зима — цвет биома (трава, листва) по сезону; лёд — у воды под открытым небом (крючок шейдеров движка)
+    const VR = st.VR, offShader = [];
+    if (VR?.onShader && C && window.D37E?.climShaders) {
+      offShader.push(VR.onShader('*', sh => {
+        if (!window.D37E?.climShaders) return;   // страж графики снял погоду — без крючка
+        sh.fragmentShader = sh.fragmentShader.replace('diffuseColor.rgb *= vColor * vColor;', `vec3 d37bc = vColor;
+#ifdef D37_CLIM
+if ( d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
+  vec3 d37Vk = - vViewPosition;
+  vec2 d37Qk = d37ClO.xy + vec2( dot( viewMatrix[ 0 ].xyz, d37Vk ), dot( viewMatrix[ 2 ].xyz, d37Vk ) );
+  d37bc = d37Leaf( vColor, d37Cn( d37Qk * 0.0625, 16.0 ), 2.0 );
+}
+#endif
+diffuseColor.rgb *= d37bc * d37bc;`);
+      }, 'clim-leaf'));
+      offShader.push(VR.onShader('water', sh => {
+        if (!window.D37E?.climShaders) return;
+        sh.fragmentShader = sh.fragmentShader.replace('d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );', 'd37uv.xy += vec2( uTime * 0.03, uTime * 0.05 ) * ( 1.0 - step( 0.3, d37Cl.w ) );')
+          .replace('#include <emissivemap_fragment>', `#ifdef D37_CLIM
+if ( d37Cl.w > 0.0 ) {
+  vec3 d37Vi = - vViewPosition;
+  vec2 d37Qi = d37ClO.xy + vec2( dot( viewMatrix[ 0 ].xyz, d37Vi ), dot( viewMatrix[ 2 ].xyz, d37Vi ) );
+  float d37i1 = d37Cn( d37Qi * 0.5, 128.0 ), d37i2 = d37Cn( d37Qi * 2.0, 512.0 );
+  vec3 d37ic = mix( vec3( 0.66, 0.8, 0.9 ), vec3( 0.88, 0.94, 0.99 ), d37i2 ) * ( 1.0 - 0.2 * ( 1.0 - smoothstep( 0.0, 0.05, abs( d37i1 - 0.5 ) ) ) );
+  d37ic = mix( d37ic, vec3( 0.88, 0.91, 0.96 ), smoothstep( d37i2 - 0.1, d37i2 + 0.1, d37Cl.x ) * 0.85 );
+  float d37ik = smoothstep( 0.0, 0.35, d37Cl.w ) * smoothstep( 0.5, 0.9, vLt.x );
+  diffuseColor = vec4( mix( diffuseColor.rgb, d37ic, d37ik ), mix( diffuseColor.a, 0.97, d37ik ) );
+}
+#endif
+#include <emissivemap_fragment>`);
+      }, 'clim-ice'));
+    }
+    // по льду можно ходить: верхний блок воды под открытым небом — твёрдый до глади (блоки мира не меняются)
+    Vx.iceTest = (Wd, x, y, z) => {
+      if (!X.clim || X.clim.vis.ice < .8 || st.weatherOff) return false;
+      const up = Wd.raw(x, y + 1, z); if (up < 0 || TT.liquid[up & 0xfff]) return false;
+      return !Wd.lightAt || Vx.lSky(Wd.lightAt(x, y + 1, z)) >= 13;
+    };
 
     // ── столбы: где кончается небо (код: верх × 8 · 2 + вода) ──
     const cols = new Map();
@@ -141,6 +210,12 @@
       tq = .5;
       const L = R.lighting, P = st.P;
       if ((tb -= .5) <= 0) { tb = 2; try { X.biome = X.biomeOf(P.x, P.z); } catch (e) {} }
+      if (X.clim && X.force == null) {
+        const s = X.clim.state, off = st.weatherOff;
+        X.wantR = off ? 0 : Math.min(1, s.rain || 0); X.wantS = off ? 0 : Math.min(1, s.snow || 0);
+        X.season = s.season; X.temp = s.temp;
+        return;
+      }
       const w = st.weatherOff ? 0 : X.force != null ? X.force : at(W.seed, st.meta?.day || 1, L.time || 0), kind = kindAt(X.biome, P.y);
       X.wantR = kind === 'rain' ? w : 0; X.wantS = kind === 'snow' ? w : 0;
     };
@@ -148,6 +223,7 @@
     // ── кадр: сила — плавно, частицы вокруг камеры, звук, гром ──
     let hR = null, hS = null, thT = 20, thS = -1, fillR = true, fillS = true, naW = 0, nsW = 0;
     X.frame = (dt, t) => {
+      try { X.clim?.frame(dt); } catch (e) {}   // состояние погоды, сезон, снег/лёд/листва для шейдеров (данные — на время кадра)
       const d = Math.min(.05, Math.max(0, dt)), P = st.P;
       X.rain += (X.wantR - X.rain) * Math.min(1, d * .7); if (X.rain < .003 && !X.wantR) X.rain = 0;
       X.snow += (X.wantS - X.snow) * Math.min(1, d * .7); if (X.snow < .003 && !X.wantS) X.snow = 0;
@@ -243,10 +319,13 @@
         if (thS > 0 && (thS -= d) <= 0) { thS = -1; A.play('kb_thunder', { vol: .38 + .2 * FR(), rate: .85 + FR() * .3 }); }
       }
     };
-    X.stats = () => ({ biome: X.biome, rain: +X.rain.toFixed(2), snow: +X.snow.toFixed(2), drops: rainO?.visible ? rainO.geometry.drawRange.count / 2 : 0, flakes: snowO?.visible ? snowO.geometry.drawRange.count : 0, ripples: ripO?.visible ? ripO.count : 0, cols: cols.size });
+    X.stats = () => ({ biome: X.biome, season: X.clim?.state.season || '', temp: X.clim ? Math.round(X.clim.state.temp) : null, cover: X.clim ? +X.clim.vis.snowCover.toFixed(2) : 0, ice: X.clim ? +X.clim.vis.ice.toFixed(2) : 0, rain: +X.rain.toFixed(2), snow: +X.snow.toFixed(2), drops: rainO?.visible ? rainO.geometry.drawRange.count / 2 : 0, flakes: snowO?.visible ? snowO.geometry.drawRange.count : 0, ripples: ripO?.visible ? ripO.count : 0, cols: cols.size });
     X.objects = () => ({ rain: rainO, snow: snowO, ripples: ripO, rainPos: rPos, snowPos: sPos, drops: { rx, ry, rz, rt, live: rlive, n: RN }, flakes: { sx, sy, sz, stp, live: slive, n: SN } });
     X.dispose = () => {
       hR?.stop(); hS?.stop(); hR = hS = null;
+      try { X.clim?.dispose(); } catch (e) {}
+      X.clim = null; for (const f of offShader) try { f(); } catch (e) {}
+      if (Vx.iceTest) Vx.iceTest = null;
       const i = W.listeners ? W.listeners.indexOf(onEdit) : -1; if (i >= 0) W.listeners.splice(i, 1);
       for (const o of [rainO, snowO, ripO]) if (o) { R.scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
       flakeTex?.dispose(); cols.clear();

@@ -25,6 +25,7 @@
       const sig = JSON.stringify(look || {});
       if (a.ch && a.sig === sig && !force) return;
       const ch = K.build(look, a.key, { lod: a.lod });
+      ch.root.userData.actor = true; if (ch.pet) ch.pet.userData.actor = true;   // погода (precip.js): человечек — не крыша
       R.scene.add(ch.root);
       if (ch.pet) R.scene.add(ch.pet);
       if (a.vm) { a.vm.dispose(); a.vm = null; }   // кисть от 1-го лица — другого цвета

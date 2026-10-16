@@ -523,6 +523,15 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(L8.X.k > .5, '…но небо темнеет (сила для неба есть)', L8.X.k);
     L8.X.dispose();
     ok(!listeners.length, 'закрыли мир — слушатель правок снят');
+    // движок погоды (js/engine/climate.js): то же расписание по зерну и дню — от него, времена года по игровым дням
+    run('js/engine/climate.js');
+    const B1e = series('погода', 40), B2e = series('погода', 40), Ce = series(12345, 40);
+    ok(B1e.every((v, i) => v === B2e[i]) && B1e.some((v, i) => Math.abs(v - Ce[i]) > .3), 'движок погоды: одно зерно и день — та же сила, другое зерно — другая');
+    const wetE = B1e.filter(v => v > .05).length / B1e.length;
+    let jumpE = 0; for (let i = 1; i < B1e.length; i++) jumpE = Math.max(jumpE, Math.abs(B1e[i] - B1e[i - 1]));
+    ok(wetE > .05 && wetE < .35 && jumpE < .2 && Math.max(...B1e) >= .6 && Math.max(...B1e) <= 1, 'движок погоды: чаще ясно, плавно, сила до 0,6…1', { wet: +wetE.toFixed(3), jump: +jumpE.toFixed(3) });
+    ok(Math.abs(KW.at('погода', 3, 23.99) - KW.at('погода', 4, 0)) < .05, 'движок погоды: через полночь — без скачка');
+    ok(KW.BIOME_CLIM.desert === 'desert' && KW.BIOME_CLIM.snow === 'snow' && KW.BIOME_CLIM.mountains === 'mountain' && KW.BIOME_CLIM.ocean === 'sea', 'биомы → климаты движка: пустыня, снега, горы, море');
   }
 
   // ═══ 9. Генератор: старые миры (genVer нет / 1) — блоки ровно как раньше, новые (2) — извилистые границы и пятна снега ═══

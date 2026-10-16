@@ -60,6 +60,7 @@ diffuseColor.rgb *= tc;`);
       };
       mat.customProgramCacheKey = () => 'd37-terrain';
     }
+    E.leafMaterial?.(mat, 'grass');   // погода: трава ландшафта осенью желтеет, зимой — бурая (песок и камень не трогаются — только зелёное)
     const mesh = new T.Mesh(g, mat);
     mesh.userData.terrain = true;
     if (R.r.shadowMap.enabled) { mesh.receiveShadow = true; mesh.castShadow = true; }

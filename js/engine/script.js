@@ -607,6 +607,15 @@
       Shake(s, sec){ send('camera', { shake: [Math.max(0, Math.min(5, +s || 1)), Math.max(0, Math.min(3, +sec || .4))] }); },
       toString(){ return 'Camera'; },
     };
+    // ── Погода (Weather.*) — её ведёт хозяин мира (studio3d-weather.js, js/engine/climate.js): сюда — состояние и события ──
+    const WS = { state: 'clear', season: 'summer', temp: 20, feels: 20, wind: 0, rain: 0, snow: 0, holiday: '' };
+    const Weather = {
+      get State(){ return WS.state; }, get Season(){ return WS.season; }, get Temperature(){ return WS.temp; }, get FeelsLike(){ return WS.feels; },
+      get Wind(){ return WS.wind; }, get Rain(){ return WS.rain; }, get Snow(){ return WS.snow; }, get Today(){ return WS.holiday; },
+      Changed: signal(), Holiday: signal(),
+      Set(state){ send('mode', { cmd: 'weather', state: String(state ?? '').slice(0, 20) }); },   // только у хозяина мира; '' / 'auto' — по расписанию
+      toString(){ return 'Weather'; },
+    };
     const scriptObj = s => ({ Name: s.name, Parent: s.parent ? proxyOf(s.parent) : workspace, ClassName: 'Script', Disabled: false,
       IsA(c){ return c === 'Script' || c === 'BaseScript' || c === 'LuaSourceContainer' || c === 'Instance'; },
       FindFirstChild(){ return null; }, GetChildren(){ return []; }, Destroy(){}, GetFullName(){ return (s.parent && proxyOf(s.parent) ? proxyOf(s.parent).GetFullName() : 'Workspace') + '.' + s.name; }, toString(){ return s.name; } });
@@ -624,7 +633,7 @@
         // библиотеки языков (lang-*.js) приходят текстом — регистрируются в globalThis.D37Lang
         globalThis.D37Lang = globalThis.D37Lang || {};
         for (const id of Object.keys(d.libs || {})) { try { (0, eval)(d.libs[id]); } catch (e5) { send('error', { script: '', line: 0, msg: 'Язык ' + id + ': ' + String(e5 && e5.message || e5).slice(0, 200) }); } }
-        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera };
+        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather };
         for (const s of d.scripts) {
           curScript = s.name;
           if (s.lang && s.lang !== 'js') {
@@ -637,10 +646,10 @@
             continue;
           }
           try {
-            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera',
+            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera', 'Weather',
               'return (async () => {\n' + s.code + '\n})();');
             const scr = scriptObj(s);
-            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera);
+            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather);
             const nm = s.name; if (r && r.catch) r.catch(e3 => err(nm, e3));
           } catch (e4) { err(s.name, e4); }
         }
@@ -690,6 +699,9 @@
         else if (d.ev === 'roundStart') gameMode.RoundStart._fire(d.round | 0);
         else if (d.ev === 'roundEnd') gameMode.RoundEnd._fire(String(d.winner || ''), String(d.text || ''));
         else if (d.ev === 'matchEnd') gameMode.MatchEnd._fire(String(d.winner || ''), String(d.text || ''));
+        // погода: состояние (раз в несколько секунд и при смене), смена погоды, праздник
+        else if (d.ev === 'weather') { if (d.s && typeof d.s === 'object') for (const k of Object.keys(WS)) if (d.s[k] !== undefined) WS[k] = typeof WS[k] === 'number' ? +d.s[k] || 0 : String(d.s[k]).slice(0, 30); if (d.changed) Weather.Changed._fire(WS.state, WS.season); }
+        else if (d.ev === 'holiday') { WS.holiday = String(d.id || '').slice(0, 30); Weather.Holiday._fire(WS.holiday, String(d.greet || '').slice(0, 80)); }
         return;
       }
     };

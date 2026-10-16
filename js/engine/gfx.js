@@ -310,6 +310,40 @@
     return out;
   };
 
+  // ═══ Погода → небо, свет, облака (render.js R.setWeather; чистая функция). wx: { cloud, rain, snow, fog, heat, storm } 0…1 ═══
+  // Пасмурно — небо серее и темнее, солнце за тучами (диск и ореол гаснут, прямой свет слабее — но не до нуля: castShadow не
+  // меняется, иначе пересборка шейдеров), свет неба — почти как был (рассеянный); снег — белёсый горизонт; зной — дымка и тепло
+  const lumA = a => .2126 * a[0] + .7152 * a[1] + .0722 * a[2];
+  E.weatherSky = (M, wx) => {
+    if (!M || !wx) return M;
+    const cloud = cl(num(wx.cloud, 0), 0, 1), rain = cl(num(wx.rain, 0), 0, 1), snow = cl(num(wx.snow, 0), 0, 1), fog = cl(num(wx.fog, 0), 0, 1);
+    const heat = cl(num(wx.heat, 0), 0, 1), storm = cl(num(wx.storm, 0), 0, 1), over = cloud * cloud;
+    const dark = .3 * over + .16 * rain + .26 * storm, oc = cl(over * .85 + .1 * rain + .4 * fog, 0, 1);
+    const lz = lumA(M.zen), lh = lumA(M.hor);
+    const GZ = [.92, .96, 1.04], GH = [.96, .98, 1.01];
+    for (let j = 0; j < 3; j++) {
+      M.zen[j] = (M.zen[j] + (lz * GZ[j] * .95 - M.zen[j]) * oc) * (1 - dark);
+      M.hor[j] = (M.hor[j] + (lh * GH[j] - M.hor[j]) * oc) * (1 - dark * .75);
+      M.hor[j] += ([.8, .84, .9][j] * Math.max(lh, .05) * 1.4 - M.hor[j]) * snow * .35;
+      M.hor[j] += [.05, .025, 0][j] * heat * (M.day || 0);
+      M.gnd[j] *= 1 - dark;
+      M.glow[j] *= 1 - over * .9;
+      M.sunC[j] *= 1 - Math.min(1, over * 1.05 + fog * .5);
+      M.dusk[j] *= 1 - over * .75;
+      M.cloud[j] = (M.cloud[j] + (lumA(M.cloud) * [.86, .88, .92][j] * .78 - M.cloud[j]) * Math.min(1, over * 1.2)) * (1 - dark * .55);
+      M.fogSun[j] += (M.hor[j] - M.fogSun[j]) * over;
+      M.ambSky[j] *= 1 - .3 * dark;
+    }
+    M.stars *= 1 - cloud;
+    M.moonI *= 1 - over * .9;
+    const li = M.lightI;
+    M.lightI = li * (1 - .78 * over - .1 * fog);
+    if (li > .021) M.lightI = Math.max(.021, M.lightI);   // тени не выключаются (castShadow — пересборка шейдеров)
+    M.haze = Math.max(M.haze, .3 * cloud + .45 * fog + .35 * heat + .25 * rain);
+    M.wx = { over, dark, fog, rain, snow, storm, heat };
+    return M;
+  };
+
   // ═══ Общие данные для шейдеров (Float32Array — общие для всех материалов) ═══
   // fogA: xyz — направление на солнце (мир), w — сила свечения тумана к солнцу; fogB: rgb — цвет тумана у солнца,
   // a — плотность высотного тумана; fogC: x — высота «пола» тумана, y — спад с высотой, z, w — запас;
@@ -322,6 +356,15 @@
   const U = E.GFXU = E.GFXU || { fogA: new Float32Array(4), fogB: new Float32Array(4), fogC: new Float32Array(4), sh: new Float32Array(4) };
   U.rt = U.rt || new Float32Array(4);
   U.wind = U.wind || new Float32Array([0, 0, .8, .6]);
+  // Погода на поверхностях (js/engine/climate.js + precip.js; только на время кадра — после кадра нули, как rt.x):
+  // cl: x — снег на земле 0…1, y — мокро, z — лужи, w — лёд на воде; cl2: x — осень листвы, y — зима (листва тусклая),
+  // z — весна (свежая), w — дождь сейчас; clO: xy — начало шума (камера по миру mod 256: узор не плывёт), z — время (с),
+  // w — 1: карта «что над головой» готова; clM: xy — центр карты минус камера (x, z), z — 1 / ширина карты, w — низ высот
+  // карты минус высота камеры (высоты в карте — 16 бит на 256 единиц)
+  U.cl = U.cl || new Float32Array(4);
+  U.cl2 = U.cl2 || new Float32Array(4);
+  U.clO = U.clO || new Float32Array(4);
+  U.clM = U.clM || new Float32Array(4);
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
   // Ветер (шейдеры-наборы, 16.10.2026): у материала с define D37_WAVE (R.wave / E.waveMaterial: 1 — трава, верх качается,
@@ -526,15 +569,93 @@ uniform vec4 d37Rt;`;
   E.rtDecode = a => a < .25 ? { kind: 'clear', gloss: 1 - a * 4 } : a >= .75 && a < .999 ? { kind: a >= .875 ? 'metal' : 'gloss', gloss: Math.max(0, Math.min(1, (a - (a >= .875 ? .875 : .75)) / .12)) }
     : a > 1.0005 && a < 1.01 ? { kind: 'foliage', gloss: 0 } : { kind: null, gloss: 0 };
   E.rtEncode = (rough, metal) => { const t = Math.max(0, Math.min(1, (rough - .55) / (.12 - .55))), g = t * t * (3 - 2 * t); return g > .01 ? (metal > .5 ? .875 : .75) + .12 * g : 1; };
+  // ── Погода на поверхностях (16.10.2026, docs/SEASONS.md): снег на смотрящем вверх (шумный край, растёт и тает), мокро и
+  // лужи-зеркала на ровном, листва по сезону (D37_LEAF у материала: 1 — трава, 2 — листва, 3 — хвоя), лёд на воде (вода
+  // движка). Только STANDARD и LAMBERT (человечки — toon/phong — не трогаются), только непрозрачное, без D37_NOCLIM.
+  // Где «над головой» что-то есть (крыша, крона, потолок) — ни снега, ни мокрого: карта высот сверху (precip.js рисует её
+  // раз в ~2 с), у «Кубомира» (D37_VOX) — свет неба блока. Весь кусок — под D37_CLIM (страж графики, ключ 'clim', снимает
+  // его: без него программы — прежние). Внутри — только ветвление по uniform (одинаково для всех пикселей), без циклов,
+  // texelFetch и continue; smoothstep — edge0 < edge1; шум — хешем без синуса (как у неба).
+  const CLIM_PARS = `
+#define D37_CLIM
+uniform vec4 d37Cl;
+uniform vec4 d37Cl2;
+uniform vec4 d37ClO;
+uniform vec4 d37ClM;
+${PREC_HI}uniform sampler2D d37ClTex;
+${PREC_LO}float d37Ch( vec2 p ){ vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
+float d37Cn( vec2 p, float per ){
+	vec2 i = floor( p ), f = fract( p ), i0 = mod( i, per ), i1 = mod( i + 1.0, per );
+	f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( d37Ch( i0 ), d37Ch( vec2( i1.x, i0.y ) ), f.x ), mix( d37Ch( vec2( i0.x, i1.y ) ), d37Ch( i1 ), f.x ), f.y );
+}
+vec3 d37Leaf( vec3 c, float n, float kind ){
+	float g = clamp( ( c.g - max( c.r, c.b ) * 0.85 ) / max( c.g, 0.001 ), 0.0, 1.0 ), gk = smoothstep( 0.0, 0.25, g );
+	float lum = dot( c, vec3( 0.3, 0.59, 0.11 ) );
+	vec3 au = mix( vec3( 1.0, 0.7, 0.16 ), vec3( 0.95, 0.32, 0.1 ), n ) * lum * 2.0;
+	float k = kind > 2.5 ? 0.0 : d37Cl2.x * gk * ( 0.62 + 0.38 * n );
+	c = mix( c, au, k );
+	c = mix( c, vec3( dot( c, vec3( 0.3, 0.59, 0.11 ) ) ) * vec3( 0.95, 0.86, 0.7 ), d37Cl2.y * ( kind > 2.5 ? 0.3 : 0.72 ) * gk );
+	return mix( c, c * vec3( 0.95, 1.12, 0.88 ) + vec3( 0.015, 0.035, 0.0 ), d37Cl2.z * 0.5 * gk );
+}`;
+  const CLIM_FRAG = `
+#ifdef D37_CLIM
+#if ( defined( STANDARD ) || defined( LAMBERT ) ) && defined( OPAQUE ) && ! defined( D37_NOCLIM )
+	if ( d37Cl.x + d37Cl.y + d37Cl.z + d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
+		vec3 d37Vp = - vViewPosition;
+		vec3 d37Rw = vec3( dot( viewMatrix[ 0 ].xyz, d37Vp ), dot( viewMatrix[ 1 ].xyz, d37Vp ), dot( viewMatrix[ 2 ].xyz, d37Vp ) );
+		vec2 d37Q = d37ClO.xy + d37Rw.xz;
+		float d37Up = dot( geometryNormal, normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz ) );
+		#ifdef D37_VOX
+		float d37Op = smoothstep( 0.8, 0.97, vLt.x );
+		#else
+		vec2 d37Ou = vec2( d37Rw.x - d37ClM.x, d37ClM.y - d37Rw.z ) * d37ClM.z + 0.5;
+		vec4 d37Oc = texture2D( d37ClTex, clamp( d37Ou, 0.001, 0.999 ) );
+		float d37Top = d37ClM.w + ( d37Oc.r * 65280.0 + d37Oc.g * 255.0 ) / 65535.0 * 256.0;
+		float d37In = step( 0.001, d37Ou.x ) * step( d37Ou.x, 0.999 ) * step( 0.001, d37Ou.y ) * step( d37Ou.y, 0.999 ) * step( 0.5, d37ClO.w ) * step( 0.5, d37Oc.b );
+		float d37Op = 1.0 - d37In * ( 1.0 - smoothstep( -0.7, -0.2, d37Rw.y - d37Top ) );
+		#endif
+		#ifdef D37_LEAF
+		diffuseColor = vec4( d37Leaf( diffuseColor.rgb, d37Cn( d37Q * 0.0625, 16.0 ), float( D37_LEAF ) ), diffuseColor.a );
+		#endif
+		float d37S = 0.0;
+		if ( d37Cl.x > 0.0 ) {
+			float d37Nz = d37Cn( d37Q * 0.5, 128.0 ) * 0.62 + d37Cn( d37Q * 2.0, 512.0 ) * 0.38;
+			d37S = smoothstep( 0.42, 0.82, d37Up ) * d37Op * smoothstep( d37Nz - 0.09, d37Nz + 0.09, d37Cl.x * 1.12 );
+			diffuseColor = vec4( mix( diffuseColor.rgb, vec3( 0.86, 0.9, 0.96 ) * ( 0.94 + 0.06 * d37Nz ), d37S ), diffuseColor.a );
+		}
+		float d37W = d37Cl.y * d37Op * smoothstep( 0.3, 0.75, d37Up ) * ( 1.0 - d37S ), d37P = 0.0;
+		if ( d37Cl.z > 0.0 ) {
+			float d37Pn = d37Cn( d37Q * 0.125, 32.0 ) * 0.7 + d37Cn( d37Q * 0.5, 128.0 ) * 0.3;
+			d37P = d37Cl.z * d37Op * smoothstep( 0.9, 0.98, d37Up ) * ( 1.0 - d37S ) * smoothstep( d37Pn - 0.06, d37Pn + 0.06, d37Cl.z * 0.75 );
+		}
+		diffuseColor = vec4( diffuseColor.rgb * ( 1.0 - 0.3 * d37W ) * ( 1.0 - 0.35 * d37P ), diffuseColor.a );
+		#ifdef STANDARD
+		roughnessFactor = mix( mix( mix( roughnessFactor, 0.85, d37S ), 0.14 + 0.25 * roughnessFactor, d37W * 0.85 ), 0.03, d37P );
+		metalnessFactor = mix( metalnessFactor, 0.0, max( d37S, d37P ) );
+		#endif
+	}
+#endif
+#endif`;
+  E.CLIM_GLSL = { pars: CLIM_PARS, frag: CLIM_FRAG };
+  E.climShaders = false;   // кусок погоды установлен (E.gfxPatch); страж графики снимает — E.climUnpatch
   const LIT = ['basic', 'lambert', 'phong', 'standard', 'physical', 'toon', 'matcap', 'points', 'sprite', 'dashed'];
   // куски three до правки — для безопасного режима (страж графики, post.js: программа сцены не собралась → E.gfxUnpatch)
-  const PATCHED = ['fog_pars_vertex', 'fog_vertex', 'fog_pars_fragment', 'fog_fragment', 'shadowmap_pars_fragment', 'roughnessmap_pars_fragment', 'normal_fragment_maps', 'output_fragment', 'project_vertex'];
+  const PATCHED = ['fog_pars_vertex', 'fog_vertex', 'fog_pars_fragment', 'fog_fragment', 'shadowmap_pars_fragment', 'roughnessmap_pars_fragment', 'normal_fragment_maps', 'output_fragment', 'project_vertex', 'normal_pars_fragment'];
   let ORIG = null;
   E.gfxUnpatch = T => {
     const C = T && T.ShaderChunk;
     if (!C || !C.__d37 || !ORIG) return false;
     for (const k of PATCHED) if (k in ORIG) C[k] = ORIG[k];
-    C.__d37 = 0;
+    C.__d37 = 0; E.climShaders = false;
+    return true;
+  };
+  E.climUnpatch = T => {
+    const C = T && T.ShaderChunk;
+    if (!C || !E.climShaders) return false;
+    C.normal_pars_fragment = C.normal_pars_fragment.replace(CLIM_PARS, ''); C.normal_fragment_maps = C.normal_fragment_maps.replace(CLIM_FRAG, '');
+    E.climShaders = false;
+    for (const k of ['cl', 'cl2', 'clO', 'clM']) U[k].fill(0);
     return true;
   };
   E.gfxPatch = T => {
@@ -549,12 +670,27 @@ uniform vec4 d37Rt;`;
     if (C.normal_fragment_maps != null && !C.normal_fragment_maps.includes('d37Rt')) C.normal_fragment_maps += RT_WET;
     if (C.output_fragment != null && !C.output_fragment.includes('d37Rt')) C.output_fragment += RT_OUT;
     if (C.project_vertex != null) C.project_vertex = E.patchWave(C.project_vertex);   // ветер — только у материалов с D37_WAVE
+    // погода на поверхностях: объявления — в normal_pars_fragment (до main), сам кусок — после нормалей (до света)
+    if (!E.gfxSafe?.('clim') && C.normal_pars_fragment != null && C.normal_fragment_maps != null && !C.normal_pars_fragment.includes('D37_CLIM')) {
+      C.normal_pars_fragment += CLIM_PARS; C.normal_fragment_maps += CLIM_FRAG; E.climShaders = true;
+    }
+    // карта «что над головой» — одна текстура на всю страницу: three копирует текстуры uniform при сборке (clone) — эта
+    // отдаёт себя же (рисует в неё precip.js); не нарисована — чтение даёт 0 (небо открыто)
+    if (!U.occRT && T.WebGLRenderTarget) {
+      U.occRT = new T.WebGLRenderTarget(256, 256, { depthBuffer: true, stencilBuffer: false });
+      const ot = U.occRT.texture; ot.minFilter = ot.magFilter = T.NearestFilter; ot.generateMipmaps = false; ot.name = 'd37occ';
+      ot.clone = function (){ return this; };
+    }
     for (const k of LIT) {
       const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
       L.uniforms.d37FogA = { value: U.fogA }; L.uniforms.d37FogB = { value: U.fogB }; L.uniforms.d37FogC = { value: U.fogC };
       L.uniforms.d37Wind = { value: U.wind };
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
       if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };
+      if (k === 'standard' || k === 'physical' || k === 'lambert' || k === 'phong' || k === 'toon') {
+        L.uniforms.d37Cl = { value: U.cl }; L.uniforms.d37Cl2 = { value: U.cl2 }; L.uniforms.d37ClO = { value: U.clO }; L.uniforms.d37ClM = { value: U.clM };
+        if (U.occRT) L.uniforms.d37ClTex = { value: U.occRT.texture };
+      }
     }
     try { Object.defineProperty(C, '__d37', { value: 1, enumerable: false, writable: true, configurable: true }); } catch (e) { C.__d37 = 1; }
     return true;
@@ -568,6 +704,7 @@ uniform vec4 d37Rt;`;
       uP: { value: new T.Vector4(1, .25, 0, 0) }, uM: { value: new T.Vector4(0, 0, 0, 0) },
       // небо v2 (наборы шейдеров, define D37_SKY2): облака слоем по небу — x облачность, y время, z слоёв (1/2), w — сила зари
       uCl: { value: new T.Vector4(0, 0, 1, 1) }, uClC: { value: new T.Color(1, 1, 1) }, uClD: { value: new T.Color(.6, .65, .72) },
+      uRb: { value: new T.Vector4(0, 0, 0, 0) },   // радуга (погода, D37_RBOW): x — сила
     };
     return new T.ShaderMaterial({
       name: 'sky', uniforms: u, depthWrite: false, depthTest: !env, fog: false, side: T.BackSide, toneMapped: false, extensions: { derivatives: true },
@@ -576,6 +713,9 @@ void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4
       // #include — только с новой строки (иначе шейдер не собирается)
       fragmentShader: `uniform vec3 uSun; uniform vec3 uMoon; uniform vec3 uZen; uniform vec3 uHor; uniform vec3 uGnd; uniform vec3 uGlow; uniform vec3 uDusk; uniform vec3 uSunC;
 uniform vec4 uP; uniform vec4 uM; varying vec3 vDir;
+#ifdef D37_RBOW
+uniform vec4 uRb;
+#endif
 float d37Hash( vec3 p ){ p = fract( p * 0.1031 ); p += dot( p, p.zyx + 31.32 ); return fract( ( p.x + p.y ) * p.z ); }
 #ifdef D37_SKY2
 uniform vec4 uCl; uniform vec3 uClC; uniform vec3 uClD;
@@ -654,6 +794,14 @@ void main(){
     glow *= 1.0 - cov;
   }
 #endif
+#ifdef D37_RBOW
+  // радуга: дуга вокруг точки напротив солнца, ~40–42° (снаружи красный, внутри фиолетовый); после дождя, солнце за спиной
+  if ( uRb.x > 0.001 && h > 0.0 ) {
+    float ra = acos( clamp( dot( d, - uSun ), -1.0, 1.0 ) ) * 57.29578, rt = ( ra - 40.2 ) / 2.4;
+    vec3 rc = clamp( abs( fract( ( 1.0 - clamp( rt, 0.0, 1.0 ) ) * 0.78 + vec3( 0.0, 0.6667, 0.3333 ) ) * 6.0 - 3.0 ) - 1.0, 0.0, 1.0 );
+    c += rc * smoothstep( -0.2, 0.08, rt ) * ( 1.0 - smoothstep( 0.92, 1.2, rt ) ) * uRb.x * 0.3 * smoothstep( 0.0, 0.1, h );
+  }
+#endif
   gl_FragColor = vec4( max( c, vec3( 0.0 ) ), 1.0 + glow );
 #include <encodings_fragment>
 }`,
@@ -714,7 +862,13 @@ ${PREC_LO}#endif`)
   vec3 up = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
   float flatK = smoothstep( 0.6, 0.9, abs( dot( normal, up ) ) );
   vec3 wv = normalize( ( viewMatrix * vec4( wn, 0.0 ) ).xyz ) * ( dot( normal, up ) < 0.0 ? -1.0 : 1.0 );
+#ifdef D37_CLIM
+  flatK *= 1.0 - smoothstep( 0.0, 0.35, d37Cl.w );   // лёд: ряби нет
+#endif
   normal = normalize( mix( normal, wv, flatK ) );
+#endif
+#ifdef D37_CLIM
+  roughnessFactor = mix( roughnessFactor, 0.32, smoothstep( 0.0, 0.35, d37Cl.w ) );
 #endif`)
         // цвет и прозрачность по глубине, пена у берега
         .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>
@@ -732,6 +886,17 @@ ${PREC_LO}#endif`)
     diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.95 ), foam );
     diffuseColor.a = max( diffuseColor.a, foam * 0.9 );
   }
+#ifdef D37_CLIM
+  if ( d37Cl.w > 0.0 ) {   // лёд (погода): белёсый, с трещинами и пятнами, вода под ним не видна; сверху — снег
+    vec2 iq = d37ClO.xy + ( vD37W.xz - cameraPosition.xz );
+    float in1 = d37Cn( iq * 0.5, 128.0 ), in2 = d37Cn( iq * 2.0, 512.0 );
+    float icr = 1.0 - smoothstep( 0.0, 0.05, abs( in1 - 0.5 ) );
+    vec3 ice = mix( vec3( 0.66, 0.8, 0.9 ), vec3( 0.88, 0.94, 0.99 ), in2 ) * ( 1.0 - 0.2 * icr );
+    ice = mix( ice, vec3( 0.88, 0.91, 0.96 ), smoothstep( in2 - 0.1, in2 + 0.1, d37Cl.x ) * 0.85 );
+    float ik = smoothstep( 0.0, 0.35, d37Cl.w );
+    diffuseColor = vec4( mix( diffuseColor.rgb, ice, ik ), mix( diffuseColor.a, 0.97, ik ) );
+  }
+#endif
 #ifdef D37_WATER3
   {   // вода v3 (наборы шейдеров): каустика — свет «пляшет» по мелкому дну, вода чище и бирюзовее у берега
     vec2 cq = vD37W.xz * 0.33;
@@ -933,10 +1098,21 @@ ${PREC_LO}#endif`)
     }
     return data;
   };
+  // Листва для погоды (осенью желтеет, зимой тусклая, весной свежая): 'grass' | 'leaves' | 'needles' (хвоя — не желтеет)
+  // — define D37_LEAF (кусок погоды); лучше до первого кадра (иначе — одна пересборка программы)
+  E.LEAF_KINDS = { grass: 1, leaves: 2, needles: 3 };
+  E.leafMaterial = (m, kind = 'leaves') => {
+    if (!m || !m.isMaterial) return m;
+    const v = E.LEAF_KINDS[kind] || 2;
+    if (m.defines?.D37_LEAF === v) return m;
+    m.defines = { ...(m.defines || {}), D37_LEAF: v }; m.userData.leaf = v; m.needsUpdate = true;
+    return m;
+  };
   // для своих материалов (игры, «Кубомир»): ветер — трава/листва (без R — те же define и данные, что у R.wave)
   E.waveMaterial = (m, o = {}) => {
     if (!m || !m.isMaterial) return m;
-    m.userData.wave = { kind: o.kind === 'leaves' ? 2 : 1, h: o.h > 0 ? +o.h : .5 };
+    m.userData.wave = { kind: o.kind === 'leaves' || o.kind === 'needles' ? 2 : 1, h: o.h > 0 ? +o.h : .5 };
+    E.leafMaterial(m, o.kind);
     return m;
   };
 })();

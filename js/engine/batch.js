@@ -43,7 +43,7 @@
     function matKey(m){
       if (m._bk && m._bkv === m.version) return m._bk;
       const p = [m.type, m.side, m.flatShading ? 1 : 0, m.fog ? 1 : 0, m.toneMapped ? 1 : 0, m.depthTest ? 1 : 0, m.depthWrite ? 1 : 0, m.alphaTest, m.colorWrite ? 1 : 0,
-        uid(m.map), uid(m.alphaMap), m.userData?.bloom || 0, m.userData?.tile || 0, m.polygonOffset ? m.polygonOffsetFactor + ',' + m.polygonOffsetUnits : ''];
+        uid(m.map), uid(m.alphaMap), m.userData?.bloom || 0, m.userData?.tile || 0, m.polygonOffset ? m.polygonOffsetFactor + ',' + m.polygonOffsetUnits : '', m.userData?.leaf || 0];   // leaf — листва (погода: осенью желтеет)
       if (m.isMeshStandardMaterial) p.push(m.roughness, m.metalness, m.envMapIntensity, uid(m.envMap), uid(m.normalMap), m.normalMap ? m.normalScale.x + ',' + m.normalScale.y : '', uid(m.roughnessMap), uid(m.metalnessMap), m.isMeshPhysicalMaterial ? 'ph' : '');
       if (m.emissive) p.push(m.emissive.getHexString(), m.emissiveIntensity, uid(m.emissiveMap));
       if (m.isMeshPhongMaterial) p.push(m.shininess, m.specular.getHexString(), uid(m.specularMap));
@@ -83,6 +83,7 @@ vUv = ( uvTransform * vec3( uv, 1 ) ).xy;
       m.vertexColors = kind === 'm';
       const bloom = base.userData?.bloom || 0, uvTile = kind === 'u' ? base.userData?.tile || 0 : 0;
       m.userData = { tile: base.userData?.tile || 0, bloom, uvTile, batch: 1 };
+      if (base.userData?.leaf) { m.defines = { ...(m.defines || {}), D37_LEAF: base.userData.leaf }; m.userData.leaf = base.userData.leaf; }   // листва (погода): clone define не копирует
       if (bloom || uvTile) { const key = 'd37b' + (bloom ? 'g' : '') + (uvTile ? 'u' : ''); m.onBeforeCompile = batchPatch; m.customProgramCacheKey = () => key; }
       bmats.set(k, m);
       return m;

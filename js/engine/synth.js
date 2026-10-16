@@ -170,6 +170,17 @@
       return make(.06, 82, (t, r) => { const w = N(r); hp += (w - hp) * .45; return (b.do(w) * 1.6 + b2.do(w) * .6) * exp(-t * 90) + (w - hp) * exp(-t * 600) * .4; }, .05, .01); },
     ph_shutter(){ const m = new Bp(2400, 4), m2 = new Bp(5200, 2); let hp = 0;
       return make(.16, 83, (t, r) => { const w = N(r); hp += (w - hp) * .5; let s = 0; for (const at of [0, .07]) if (t >= at) { const e = exp(-(t - at) * 160); s += (m.do(w) * 1.5 + m2.do(w) * .8 + (w - hp) * .7) * e; } return s; }, .07, .02); },
+    // погода (js/engine/precip.js): далёкий мягкий гром — низкий раскат с «перекатами» (сайт для детей: без треска над ухом)
+    wx_thunder(){ const a = new Bp(48, 1.1), b = new Bp(95, 1.3), c = new Bp(210, 1.5); let lp = 0;
+      return make(3.2, 71, (t, r) => { const w = N(r); lp += (w - lp) * .02; const e = Math.min(1, t / .35) * exp(-t * 1.05) * (1 + .55 * Math.sin(t * 6.1) * exp(-t * 1.6) + .3 * Math.sin(t * 2.3 + 1)); return (a.do(w) * 2.6 + b.do(w) * 1.5 + c.do(w) * .4 + lp * 2.2) * e; }, .11, .4); },
+    // салют (js/core/celebrate.js — там свой маленький синтез, этот — для игр через A.play): свист взлёта (полоса шума ползёт
+    // вверх), хлопок с раскатом, треск искр
+    fw_launch(){ let ph = 0, z1 = 0, z2 = 0; return make(.9, 72, (t, r) => { const w = N(r), f = 900 + 2600 * (t / .9) ** 1.4, q = 9; ph = Math.min(f, 9000) / RATE * PI2;
+      const k = 2 * Math.sin(ph / 2), y = z2 + k * z1; z1 = z1 + k * (w - y - z1 / q); z2 = y; return y * Math.sin(Math.min(1, t / .9) * Math.PI) * .5 + w * .04 * exp(-t * 6); }, .05, .06); },
+    fw_boom(){ const a = new Bp(70, .9), b = new Bp(180, 1.2), c = new Bp(900, .9); let hp = 0;
+      return make(1.6, 73, (t, r) => { const w = N(r); hp += (w - hp) * .35; return (a.do(w) * 3 * exp(-t * 3.2) + b.do(w) * 1.6 * exp(-t * 5) + c.do(w) * .7 * exp(-t * 14) + (w - hp) * exp(-t * 60) * .9); }, .13, .3); },
+    fw_crackle(){ const c = new Bp(3200, 2.5), lo = new Bp(1100, 2); const at = Array.from({ length: 28 }, (_, i) => .02 + i * .045 + ((i * 37) % 11) / 400);
+      return make(1.4, 74, (t, r) => { const w = N(r); let s = 0; for (const a of at) if (t >= a && t < a + .03) s += exp(-(t - a) * 140); return (c.do(w) * 1.4 + lo.do(w) * .5) * s * exp(-t * 1.2); }, .06, .1); },
   };
   // ── Звуки-петли окружения (A.loop): тот же шум через резонаторы; края сшиты наплывом — петля без щелчка ──
   function loopMake(sec, seed, fn, rms){
