@@ -29,6 +29,10 @@
 // js/core/gfx-settings.js) → E.gfxResolve → R.applyGfx(o): тени и их качество, AO, вода, отражения, сглаживание, туман,
 // дальность (camera.far), цвет кадра, лимит FPS (E.fpsCap — core.js E.loop), масштаб разрешения, экономия батареи;
 // пресет «Авто» сам снижает/поднимает ступени (E.autoSteps) по времени кадра. R.setUnder(вкл) — туман под водой.
+// Погода (16.10.2026, js/engine/climate.js + precip.js, docs/SEASONS.md): R.setWeather({ cloud, rain, snow, fog, heat, storm,
+// rainbow }) — небо серее и темнее, солнце за тучами, туман ближе (null — как без погоды); R.flashK — вспышка молнии (кадр
+// светлее); R.wx = { pre(t0), post() } — precip.js ставит общие данные шейдеров погоды только на время кадра; R.renderOcc(cam,
+// цель, материал) — карта «что над головой» (без неба, облаков, ореолов и R.occHide).
 (() => {
   const E = window.D37E = window.D37E || {};
   const PI = Math.PI, TAU = PI * 2;
@@ -240,7 +244,7 @@
     const num = (v, d) => Number.isFinite(+v) ? +v : d;
     R.lighting = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, shadows: true, gfx: E.worldGfx() };
     R.night = 0;
-    let skyOver = null, under = null, skyT = 0;
+    let skyOver = null, under = null, skyT = 0, wxSky = null, expo0 = 1;
     // полный объект освещения (мир загрузили из файла, шаблон, блок world гостю) — графика мира заново (не тянется
     // от прошлого мира); частичный (ползунок, смена суток) — дописывается (gfx.js E.mergeLighting)
     R.setLighting = (L = {}) => {
@@ -249,6 +253,9 @@
       E.mergeLighting(R.lighting, L);
       applyLighting();
     };
+    // Погода (precip.js): части 0…1 — небо, свет, туман, облака; null — без погоды. Зовут не чаще ~4 раз в секунду
+    R.setWeather = wx => { wxSky = wx && typeof wx === 'object' ? { ...wx } : null; applyLighting(); };
+    R.weatherSky = () => wxSky;
     // Старый способ (цвета неба вручную): верх, горизонт, низ; туман до far
     R.setSky = (top, mid, bot, near = 110, far = 320) => {
       skyOver = { zen: E.lin(top), hor: E.lin(mid), gnd: E.lin(bot || mid) };
@@ -263,7 +270,9 @@
         E.lin(G.fog.color, c3);
         for (let j = 0; j < 3; j++) { M.hor[j] = M.hor[j] * .4 + c3[j] * .6; M.fogSun[j] = M.fogSun[j] * .5 + c3[j] * .5; M.gnd[j] = M.gnd[j] * .5 + c3[j] * .3; }
       }
+      if (wxSky && E.weatherSky) E.weatherSky(M, wxSky);   // погода: небо серее и темнее, солнце за тучами
       E.skyUniforms(skyMat.uniforms, M, skyT);
+      if (skyMat.uniforms.uRb) skyMat.uniforms.uRb.value.x = wxSky ? Math.max(0, Math.min(1, +wxSky.rainbow || 0)) : 0;
       // свет: солнце/луна
       const b = Math.max(0, num(Lg.brightness, 1)), amb = Math.max(0, num(Lg.ambient, 1));
       const moved = SUN_DIR.x !== M.lightDir[0] || SUN_DIR.y !== M.lightDir[1] || SUN_DIR.z !== M.lightDir[2];
@@ -280,12 +289,14 @@
       R.night = M.night;
       applyFog();
       // облака: цвет по свету (ночью тёмные), сколько видно — облачность мира
-      const cn = Math.round(clouds.length * G.sky.clouds);
-      for (let i = 0; i < clouds.length; i++) { const s = clouds[i]; s.visible = i < cn; s.material.color.setRGB(M.cloud[0], M.cloud[1], M.cloud[2]); s.material.opacity = .9 * (1 - .35 * M.night); }
-      skyMat.uniforms.uCl.value.x = R.pack?.clouds ? Math.max(0, Math.min(1, G.sky.clouds)) : 0;   // небо v2 (набор шейдеров): облачность мира
+      const wc = wxSky ? Math.max(0, Math.min(1, +wxSky.cloud || 0)) : 0, cov = Math.max(G.sky.clouds, wc);   // погода: облаков больше
+      const cn = Math.round(clouds.length * cov);
+      for (let i = 0; i < clouds.length; i++) { const s = clouds[i]; s.visible = i < cn; s.material.color.setRGB(M.cloud[0], M.cloud[1], M.cloud[2]); s.material.opacity = Math.min(1, .9 * (1 - .35 * M.night) + .1 * wc); }
+      skyMat.uniforms.uCl.value.x = R.pack?.clouds ? Math.max(0, Math.min(1, cov)) : 0;   // небо v2 (набор шейдеров): облачность мира
       sun.castShadow = shadows && Lg.shadows !== false && O.shadows && M.lightI > .02;   // ночью без луны — теней нет
       if (moved) SH.dirty = true;
-      r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * M.night) * Math.pow(2, G.exposure);
+      r.toneMappingExposure = (q === 'low' ? 1 : .98) * (1 + .25 * M.night) * Math.pow(2, G.exposure) * (wxSky ? 1 - .1 * Math.max(0, Math.min(1, +wxSky.storm || 0)) : 1);
+      expo0 = r.toneMappingExposure;
       applyGrade();
       applyShadowQ();
       // вода мира: прозрачность, пена, свой цвет
@@ -300,7 +311,8 @@
     // Туман: обычный по расстоянию (дальность — настройка игрока × туман мира), высотный, тёплый к солнцу; под водой — свой
     function applyFog(){
       const Lg = R.lighting, G = Lg.gfx, O = R.opt, fog = scene.fog;
-      const fe = Math.max(40, num(Lg.fogEnd, 320)) * O.dist * (O.fog ? 1 : 1.6);
+      const wv = wxSky ? Math.max(.18, 1 - .42 * (+wxSky.rain || 0) - .5 * (+wxSky.snow || 0) - .78 * (+wxSky.fog || 0) - .2 * (+wxSky.storm || 0) - .12 * (+wxSky.cloud || 0) ** 2) : 1;   // погода: видно ближе
+      const fe = Math.max(40, num(Lg.fogEnd, 320) * wv) * O.dist * (O.fog ? 1 : 1.6);
       const far = Math.min(3000, Math.max(160, fe * 1.08 + 30));
       if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
       cloudsFit(far);
@@ -313,8 +325,9 @@
       scene.background.copy(fog.color);
       const sl = Math.hypot(M.sun[0], M.sun[2]) || 1, fx = O.fog && q !== 'low';   // low — только обычный туман (легко)
       GU.fogA[0] = M.sun[0] / sl; GU.fogA[1] = 0; GU.fogA[2] = M.sun[2] / sl; GU.fogA[3] = fx && !skyOver ? G.fog.sun : 0;   // к солнцу — по горизонтали
-      GU.fogB[0] = M.fogSun[0]; GU.fogB[1] = M.fogSun[1]; GU.fogB[2] = M.fogSun[2]; GU.fogB[3] = fx ? G.fog.density * G.fog.density * .03 : 0;
-      GU.fogC[0] = G.fog.height; GU.fogC[1] = .05 + .06 * (1 - G.fog.density); fogCam();
+      const wfd = wxSky ? Math.min(1, G.fog.density + .55 * (+wxSky.fog || 0) + .2 * (+wxSky.rain || 0) + .25 * (+wxSky.snow || 0)) : G.fog.density;   // погода: туман у земли гуще
+      GU.fogB[0] = M.fogSun[0]; GU.fogB[1] = M.fogSun[1]; GU.fogB[2] = M.fogSun[2]; GU.fogB[3] = fx ? wfd * wfd * .03 : 0;
+      GU.fogC[0] = G.fog.height; GU.fogC[1] = .05 + .06 * (1 - wfd); fogCam();
     }
     // высотный туман: плотность на высоте камеры — один раз за кадр (а не в каждом пикселе)
     function fogCam(){ GU.fogC[2] = GU.fogB[3] > 0 ? GU.fogB[3] * Math.exp(-GU.fogC[1] * Math.max(camera.position.y - GU.fogC[0], -20)) : 0; }
@@ -326,6 +339,20 @@
     const clouds = [], cloudG = new T.Group();
     scene.add(cloudG);
     const cloudsFit = far => { const k = Math.min(1, far * .8 / 250); if (cloudG.scale.x !== k) cloudG.scale.setScalar(k); };
+    R.occHide = new Set();
+    R.renderOcc = (cam, target, mat) => {
+      const hid = [];
+      const hide = o => { if (o && o.visible) { o.visible = false; hid.push(o); } };
+      hide(sky); hide(cloudG); hide(halo); for (const o of R.occHide) hide(o);
+      const bg = scene.background, fog = scene.fog, om = scene.overrideMaterial, su = r.shadowMap.needsUpdate, cc = r.getClearColor(new T.Color()), ca = r.getClearAlpha();
+      scene.background = null; scene.fog = null; scene.overrideMaterial = mat; r.shadowMap.needsUpdate = false;
+      r.setRenderTarget(target); r.setClearColor(0x000000, 0); r.clear(true, true, false);
+      try { r.render(scene, cam); } finally {
+        r.setRenderTarget(null); r.setClearColor(cc, ca);
+        scene.background = bg; scene.fog = fog; scene.overrideMaterial = om; r.shadowMap.needsUpdate = su;
+        for (const o of hid) o.visible = true;
+      }
+    };
     R.clouds = (n = 14, seed = 7) => {
       const rnd = E.rng(seed), tex = cloudTex();
       for (let i = 0; i < n; i++) {
@@ -580,10 +607,15 @@
       L.update(Math.min(.1, dt / 1000), camera);
       ST.shadowNow = shadowTick(t0);
       r.info.reset();
+      if (R.wx) { try { R.wx.pre(t0); } catch (e) { R.wx = null; console.warn('погода:', e); } }   // погода: данные шейдеров, карта «что над головой»
+      const fl = R.flashK > .001 ? Math.min(2, R.flashK) : 0, hemi0 = hemi.intensity;
+      if (fl) { r.toneMappingExposure = expo0 * (1 + .9 * fl); hemi.intensity = hemi0 * (1 + 2 * fl); }   // молния
       if (GU.rt) GU.rt[0] = q !== 'low' ? R.lighting.gfx.rt?.wet || 0 : 0;   // мокрое — мира (данные общие на страницу: после кадра — 0)
       if (R.post && R.post.on) { if (R.guard?.due()) R.guard.test(scene, camera); else R.post.render(scene, camera); }   // страж графики: иногда — кадр с самопроверкой
       else { r.render(scene, camera); ST.scene = r.info.render.calls; ST.post = 0; }
       if (GU.rt) GU.rt[0] = 0;
+      if (R.wx) R.wx.post?.();
+      if (fl) { r.toneMappingExposure = expo0; hemi.intensity = hemi0; }
       R.guard?.tick();
       const inf = r.info.render;
       ST.calls = inf.calls; ST.tris = inf.triangles;
@@ -661,7 +693,7 @@
     // Тени по качеству (E.SHADOW_Q) и мягкости мира: карта, коробка, выборки, PCSS-lite, как часто при движении
     function applyShadowQ(){
       if (!shadows || !R.opt) return;
-      const op = R.opt, Q = E.SHADOW_Q[op.shadowQ] || E.SHADOW_Q.mid, soft = R.lighting.gfx.shadow.soft, cam = sun.shadow.camera;
+      const op = R.opt, Q = E.SHADOW_Q[op.shadowQ] || E.SHADOW_Q.mid, soft = Math.min(1, R.lighting.gfx.shadow.soft + .6 * ((wxSky?.cloud || 0) ** 2)), cam = sun.shadow.camera;
       const map = Math.min(Q.map, r.capabilities.maxTextureSize || 4096);
       if (sun.shadow.mapSize.x !== map) { sun.shadow.mapSize.set(map, map); sun.shadow.map?.dispose(); sun.shadow.map = null; SH.dirty = true; }
       if (cam.right !== Q.box) { cam.left = -Q.box; cam.right = Q.box; cam.top = Q.box; cam.bottom = -Q.box; cam.updateProjectionMatrix(); SH.dirty = true; }
@@ -948,7 +980,7 @@
       pine(o, ph){
         const g = R.group(o.parent, o.x, 0, o.z), k = o.k || 1;
         R.part(g, { s: 'cyl', r: .26 * k, h: 1.2 * k, y: .6 * k, c: '#6b4426', seg: 6 });
-        [[1.5, 1.6, 1.6], [1.15, 1.4, 2.6], [.78, 1.2, 3.45]].forEach(([rr, hh, y]) => R.part(g, { s: 'cone', r: rr * k, h: hh * k, y: y * k, c: o.c || '#2f7d4a', seg: 8, flat: true, wave: 'leaves' }));
+        [[1.5, 1.6, 1.6], [1.15, 1.4, 2.6], [.78, 1.2, 3.45]].forEach(([rr, hh, y]) => R.part(g, { s: 'cone', r: rr * k, h: hh * k, y: y * k, c: o.c || '#2f7d4a', seg: 8, flat: true, wave: 'needles' }));   // хвоя: осенью не желтеет
         ph?.addCyl({ x: o.x, z: o.z, y: 1.2 * k, r: .32 * k, hy: 1.2 * k, tag: 'tree' });
         return g;
       },
