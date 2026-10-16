@@ -141,8 +141,13 @@ X = D37E.climate.attach(R, {
   sound: D37E.audio(),                    // шум дождя, ветер, гром
   occlusion: true,                        // карта «что над головой» для снега и мокрого на поверхностях (крыши, интерьеры)
 });
-X.frame(dt) каждый кадр (до R.render); X.state; X.force(state | null); X.setWorld(W); X.dispose()
+X.frame(dt) каждый кадр (до R.render); X.state; X.vis (сглаженное); X.force(state | null); X.setWorld(W); X.iceAt(x, z);
+X.stats(); X.dispose()
+// ещё: particles: false — свои частицы у игры («Кубомир»), sky: false — небо и туман игра темнит сама; D37E.precip.physTop(ph, yTop)
+// — skyTop из физики движка (луч сверху, кэш по клеткам); D37E.climate.leaf(материал, 'grass' | 'leaves' | 'needles')
 ```
+Настройки игрока (⚙️ «🌦 Погода», js/core/celebrate.js): `wxFx` (эффекты погоды), `wxAmt` (частицы, %), `holidays` (салют и
+поздравления; новогоднее задание остаётся).
 
 ## 6. Картинка (все 3D-игры)
 
@@ -158,10 +163,11 @@ X.frame(dt) каждый кадр (до R.render); X.state; X.force(state | null
   листва (`D37_LEAF`: R.wave / `wave: 'leaves'`, трава) — осенью желтеет и краснеет, зимой тусклее; хвоя (`needles`) — нет.
   Где «над головой» что-то есть (крыша, крона, потолок) — ни снега, ни мокрого: карта высот сверху 256² (рисуется раз в
   ~2 с и при уходе камеры, в остальных кадрах — 0 работы), у «Кубомира» — свет неба блока.
-- Лёд: вода (`D37_WATER`) при `ice` > 0 — белёсая, матовая, с трещинами, не прозрачная; ходить — игра спрашивает `W.at(…).ice`.
+- Лёд: вода движка (`E.waterMaterial`, кусок под `D37_CLIM`) при `ice` > 0 — белёсая, матовая, с трещинами, без ряби, не прозрачная,
+  сверху снег; ходить — игра спрашивает `X.iceAt(x, z)` / `W.at(…).ice` (от 0,8).
 - Молния: вспышка (экспозиция на 0,15 с) + гром через 1–3 с (synth `wx_thunder`), только в сильную грозу, раз в 25–60 с.
 - Радуга: после дождя днём, солнце за спиной — дуга на куполе (кусок купола, только наборы с небом v2 и «Обычные» на mid+).
-- Всё новое в шейдерах — под define (`D37_CLIM`, `D37_LEAF`, `D37_ICE`); страж графики (post.js, ключ `clim`): программа
+- Всё новое в шейдерах — под define (`D37_CLIM`, `D37_LEAF`, `D37_RBOW`); страж графики (post.js, ключ `clim`): программа
   не собралась — без погоды на поверхностях (пересборка мира), кадр с погодой чернеет/«не числа» — без неё (сразу).
   «Обычные» — ровно прежний вид, кроме самой погоды.
 
@@ -219,7 +225,7 @@ kubomir-weather.js берёт сезон и погоду у движка (`W.at`
    ```js
    S.wx = D37E.climate.attach(R, {
      world: { seed: 'mir', mode: 'calendar', climateAt: (x, z) => mirClimate(x, z), seaY: 0, lapse: -.12 },
-     where: () => [P.ch.x, P.ch.y, P.ch.z],
+     where: () => [x, y, z своего персонажа],   // в координатах сцены
      skyTop: D37E.precip.physTop(ph, 400),          // крыши и навесы — из физики (у крыш есть тела, 15.10)
      water: (x, z) => ph.waterLevel ? ph.waterLevel(x, z) : -Infinity,   // пруд, фонтан, море карты
      hour: () => R.lighting.time, sound: AU,
@@ -227,9 +233,9 @@ kubomir-weather.js берёт сезон и погоду у движка (`W.at`
    ```
    `mirClimate`: детский городок, столица — `temperate`; взрослый город — `temperate`; боевая зона на побережье — `sea`;
    горы карты (worldmap.js: высота > 60) — `mountain`; степь/равнины — `steppe`; пустыня (если есть биом) — `desert`.
-3. В кадре, до `R.render()`: `S.wx?.frame(dt)`; при выходе: `S.wx?.dispose()`.
-4. Пруд и фонтан: `R.water(...)` уже знает лёд (`D37_ICE` у воды движка); ходить по льду — в `ph.waterLevel` вернуть
-   `-Infinity`, а коллайдер-пол на уровне воды включать, когда `S.wx.state.ice >= .8` (`S.wx.iceAt(x, z)`).
+3. Кадр attach считает сам (R.preRender — нет: зовите `S.wx.frame(dt)` в кадре до `R.render()`); при выходе: `S.wx?.dispose()`.
+4. Пруд и фонтан: `R.water(...)` уже знает лёд (кусок `D37_CLIM` у воды движка); ходить по льду — в `ph.waterLevel` вернуть
+   `-Infinity` и включить коллайдер-пол на уровне воды, когда `S.wx.iceAt(x, z) >= .8`.
 5. Листва: деревья и кусты через `R.prefab('tree'|'bush')` и `R.wave` желтеют сами; свои материалы листвы —
    `D37E.climate.leaf(material, 'leaves'|'grass'|'needles')` (до первого кадра).
 6. Детский городок (0+): всё как везде, но `storm: false` в `world` (грозы там без грома — только дождь).
@@ -242,5 +248,9 @@ kubomir-weather.js берёт сезон и погоду у движка (`W.at`
   годы для Энкутаташ), детерминизм, температура в пределах, накопители, режимы.
 - `node scripts/render-test.cjs <three r149>` — кусок шейдера погоды (#if/#endif, скобки, точность uniform/varying, smoothstep
   без перевёрнутых краёв, без texelFetch/continue/isnan), лёд воды, сборка программ.
-- Остальные: engine-test, kubomir-hand-test, voxel-test, studio-modes-test, settings-test, mirplay-test, lang-lua-test,
-  studio-net-test.
+- Остальные: engine-test, kubomir-hand-test (погода движка), voxel-test, studio-modes-test, settings-test, mirplay-test,
+  lang-lua-test, lang-cs-test, lang-java-test, studio-net-test.
+- `node scripts/climate-e2e.cjs [d3d11|swiftshader|gl] [high|mid|low]` — настоящий Chrome: студия и «Кубомир» до/после (снег, дождь,
+  осень), все программы собрались, страж чист, замер, салют и новогоднее задание; `CLIM_OFF=1` — без куска погоды (сравнение).
+  Снимки — E:\claude-tmp\climate\shots. Замер 16.10 (ПК, 1280×720, «высокая»): студия 0,96 мс / 53 вызова → снег 1,16 / 57,
+  дождь 1,20 / 57; «Кубомир» 3,15 / 583 → снег 3,44 / 585.
