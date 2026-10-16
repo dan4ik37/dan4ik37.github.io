@@ -47,7 +47,7 @@
    в messages — 20.09) — этот файл чинит первой строкой, запускать в первую очередь. Проверка: `/rest/v1/messages?select=is_sticker&limit=0` → 200;
    `/rest/v1/chat_channels?id=eq.news` → [{…"mods_only":true}]; `/rpc/cm_events` гостем {"p_community":null} → {"ok":true,"can":false,"list":[]};
    `/rpc/cm_catalog` гостем {} → []; `/rpc/bot_post` гостем → 401 permission denied (PGRST202 = не применён). Переопределяет cm_join и
-   cm_invite_info — перезапустил community.sql → потом снова community2.sql. PGlite: E:\claude-tmp\community2	est-community2.mjs (87).
+   cm_invite_info — перезапустил community.sql → потом снова community2.sql. PGlite: E:\claude-tmp\community2\test-community2.mjs (87).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
