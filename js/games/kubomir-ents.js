@@ -594,6 +594,150 @@
       }
     }
 
+    // ═══ Падающие куски (общее: X.fallGroup) и падающие деревья (X.fellTree), 16.10.2026 ═══
+    // fallGroup(cells, pivot, dir, o): cells — [x, y, z, v, …] (уже убраны из мира), pivot — { x, y, z } (ось — горизонталь через
+    // точку, поперёк dir), dir — { x, z } (куда валится, единичный). Одна сетка (склейка кубиков VR.itemGeo, материал листвы
+    // движка: вырез по альфе, без качания), свет — как у вещей (Lit → VR.itemLightF). Логика — такт игры (20 раз в секунду,
+    // плавно между тактами): угловое ускорение как у падающего столба (g · sin угла / высоту центра масс), по дуге проверяются
+    // точки (стволы и крайние листья) — упёрлась в землю или блок: отскок и лёг; лёг совсем — o.onLand(группа, мир-место
+    // клетки) раскладывает на вещи. Под ним моб или игрок — толчок (урон — только «обычно» и «сложно»). Не больше 3 сразу.
+    const groups = X.groups = [];
+    const GQ = new T.Quaternion(), GA = new T.Vector3(), GV = { x: 0, y: 0, z: 0 };
+    // повернуть точку r (от оси) на угол th вокруг оси a (Родриг) → GV (общий объект: читать сразу)
+    function rot(g, rx, ry, rz, th){
+      const c = Math.cos(th), s = Math.sin(th), ax = g.ax, az = g.az, dot = ax * rx + az * rz;   // ось горизонтальная (ay = 0)
+      const cx = -az * ry, cy = az * rx - ax * rz, cz = ax * ry;   // a × r
+      GV.x = g.px + rx * c + cx * s + ax * dot * (1 - c); GV.y = g.py + ry * c + cy * s; GV.z = g.pz + rz * c + cz * s + az * dot * (1 - c);
+      return GV;
+    }
+    X.fallGroup = (cells, pivot, dir, o = {}) => {
+      if (groups.length >= (o.cap || 3) || !cells.length) return null;
+      const Vx = V(), n = cells.length / 4;
+      // склейка кубиков в одну сетку (координаты — от оси)
+      const parts = []; let nv = 0, ni = 0;
+      for (let i = 0; i < n; i++) {
+        const b = Vx.blocks[cells[i * 4 + 3] & 0xfff]; if (!b || !Vx.item(b.name)) continue;
+        const gq = VR.itemGeo(b.name, 15 << 12); parts.push([gq, cells[i * 4] + .5 - pivot.x, cells[i * 4 + 1] + .5 - pivot.y, cells[i * 4 + 2] + .5 - pivot.z]);
+        nv += gq.attributes.position.count; ni += gq.index.count;
+      }
+      if (!parts.length) return null;
+      const pos = new Float32Array(nv * 3), vd = new Uint16Array(nv * 4), cl = new Uint8Array(nv * 3), lt = new Uint8Array(nv * 4), idx = new Uint32Array(ni);
+      let ov = 0, oi = 0;
+      for (const [gq, dx, dy, dz] of parts) {
+        const p = gq.attributes.position.array, m = gq.attributes.position.count;
+        for (let k = 0; k < m; k++) { pos[(ov + k) * 3] = p[k * 3] + dx; pos[(ov + k) * 3 + 1] = p[k * 3 + 1] + dy; pos[(ov + k) * 3 + 2] = p[k * 3 + 2] + dz; }
+        vd.set(gq.attributes.vd.array, ov * 4); cl.set(gq.attributes.color.array, ov * 3); lt.set(gq.attributes.lt.array, ov * 4);
+        const ia = gq.index.array; for (let k = 0; k < ia.length; k++) idx[oi + k] = ia[k] + ov;
+        ov += m; oi += ia.length; gq.dispose();
+      }
+      const geo = new T.BufferGeometry();
+      geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('vd', new T.BufferAttribute(vd, 4)); geo.setAttribute('color', new T.BufferAttribute(cl, 3, true)); geo.setAttribute('lt', new T.BufferAttribute(lt, 4, false));
+      geo.setIndex(new T.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
+      const mesh = new T.Mesh(geo, VR.mats?.foliage || VR.mats?.solid); mesh.castShadow = true; mesh.frustumCulled = false; R.scene.add(mesh);
+      // центр масс, точки для удара: все стволы (до 48) и самые дальние от оси листья (до 24)
+      let hc = 0, far = [];
+      for (let i = 0; i < n; i++) { const ry = cells[i * 4 + 1] + .5 - pivot.y; hc += ry; far.push(i); }
+      hc = Math.max(1, hc / n);
+      const isTrunk = i => o.trunk ? o.trunk(cells[i * 4 + 3]) : true, dist = i => { const rx = cells[i * 4] + .5 - pivot.x, ry = cells[i * 4 + 1] + .5 - pivot.y, rz = cells[i * 4 + 2] + .5 - pivot.z; return rx * rx + ry * ry + rz * rz; };
+      const smp = far.filter(isTrunk).slice(0, 48).concat(far.filter(i => !isTrunk(i)).sort((a, b) => dist(b) - dist(a)).slice(0, 24));
+      const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0 };
+      groups.push(g);
+      S.AU?.play('kb_creak', { x: pivot.x - S.ox, y: pivot.y + 2, z: pivot.z - S.oz, vol: .7, rate: .9 + FR() * .2 });
+      return g;
+    };
+    const solidHit = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff, Tt = V().T; return Tt.solid[t] === 1 && Tt.shape[t] !== V().SHAPE.cross; };
+    function groupsTick(dt){
+      for (let gi = groups.length - 1; gi >= 0; gi--) {
+        const g = groups[gi];
+        g.pth = g.th; g.t += dt;
+        if (g.done) { g.done += dt; if (g.done > .3) { landGroup(g); groups.splice(gi, 1); } continue; }
+        g.w += 9.8 * 1.5 / g.hc * Math.sin(Math.max(.12, g.th)) * dt;
+        const nth = g.th + g.w * dt;
+        let hit = nth >= 1.62;   // лёг совсем (чуть ниже горизонта — склон)
+        for (let k = 0; k < g.smp.length && !hit; k++) {
+          const i = g.smp[k], p = rot(g, g.cells[i * 4] + .5 - g.px, g.cells[i * 4 + 1] + .5 - g.py, g.cells[i * 4 + 2] + .5 - g.pz, nth);
+          if (solidHit(p.x, p.y - .45, p.z)) hit = true;
+        }
+        if (hit) {
+          if (!g.bounced && g.w > .9) { g.bounced = true; g.w = -g.w * .22; S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py + 1, z: g.pz - S.oz, vol: .8, rate: .95 }); }
+          else { g.done = 1e-6; g.w = 0; }
+          continue;
+        }
+        g.th = Math.max(0, nth);
+        // под деревом моб или игрок — толкнуть в сторону падения (урон — только «обычно» / «сложно»)
+        const hurtK = S.meta?.diff === 'normal' || S.meta?.diff === 'hard' ? 2 : 0;
+        for (let k = 0; k < g.smp.length; k++) {
+          const i = g.smp[k], p = rot(g, g.cells[i * 4] + .5 - g.px, g.cells[i * 4 + 1] + .5 - g.py, g.cells[i * 4 + 2] + .5 - g.pz, g.th);
+          for (const m of X.mobs) {
+            const M = MOBS[m.type]; if (g.hitIds.has(m.id) || Math.abs(m.x - p.x) > M.w / 2 + .5 || Math.abs(m.z - p.z) > M.w / 2 + .5 || p.y < m.y - .3 || p.y > m.y + M.h + .3) continue;
+            g.hitIds.add(m.id); m.vx += g.dx * 5; m.vz += g.dz * 5; m.vy = Math.max(m.vy, 4); if (hurtK) X.damage(m, hurtK, g.dx, g.dz, 'tree'); else m.hurtT = .35;
+          }
+          const P = S.P;
+          if (P && !P.dead && !g.hitIds.has(-1) && Math.abs(P.x - p.x) < .8 && Math.abs(P.z - p.z) < .8 && p.y > P.y - .3 && p.y < P.y + 2.1) {
+            g.hitIds.add(-1); P.vx += g.dx * 6; P.vz += g.dz * 6; P.vy = Math.max(P.vy, 4.5); P.onGround = false;
+            if (hurtK && !S.creative) S.ents?.hookHurt?.(hurtK, { x: g.px, y: g.py, z: g.pz });
+          }
+        }
+      }
+    }
+    // лёг: пыль, листья, стук — и на вещи (o.onLand); сетка убрана
+    function landGroup(g){
+      const n = g.n, Vx = V();
+      for (let i = 0; i < n; i++) {
+        const p = rot(g, g.cells[i * 4] + .5 - g.px, g.cells[i * 4 + 1] + .5 - g.py, g.cells[i * 4 + 2] + .5 - g.pz, g.th), v = g.cells[i * 4 + 3], x = p.x, y = p.y, z = p.z;
+        g.o.onLand?.(v, x, y, z, i);
+        if ((i & 1) === 0) { const b = Vx.blocks[v & 0xfff]; if (g.o.trunk?.(v)) X.dust(x, Math.floor(y - .3) + 1, z, v & 0xfff, 2, { w: .8, sp: 1, s: .25, s1: .6, a: .45, vy: .4 }); else if (b) X.debris(Math.floor(x), Math.floor(y), Math.floor(z), b.id, 3); }
+      }
+      S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py + 1, z: g.pz - S.oz, vol: 1, rate: .8 });
+      R.scene.remove(g.mesh); g.geo.dispose();
+    }
+    function groupsFrame(dt, a){
+      for (const g of groups) {
+        const th = g.pth + (g.th - g.pth) * a;
+        GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, th);
+        g.mesh.quaternion.copy(GQ); g.mesh.position.set(g.px - S.ox, g.py, g.pz - S.oz);
+        const c = rot(g, 0, g.hc, 0, th); Lit.update(g.lit, S, c.x, c.y, c.z, dt); VR.itemLightF(g.geo, g.lit.lv);
+      }
+    }
+    // Дерево: сломал бревно — стволы над ним (только брёвна, связь по 6 соседям, до 48) не касаются ничего твёрдого, кроме
+    // листвы (земля, доски, камень рядом — «держится» или постройка: как в Майнкрафте, ничего не падает), листва вокруг (до 4 шагов
+    // от стволов, не меньше 3 листьев) — и всего не больше 220 блоков. Тогда всё это убирается из мира (обычные правки — сохранятся)
+    // и валится от игрока одной сеткой; легло — брёвна вещами (каждое), из листвы — ростки, палки, яблоки по случаю
+    let LOGF = null, LEAFF = null, flagsN = 0;
+    function treeFlags(){ const Vx = V(); if (LOGF && flagsN === Vx.blocks.length) return; flagsN = Vx.blocks.length; LOGF = new Uint8Array(flagsN); LEAFF = new Uint8Array(flagsN); for (const b of Vx.blocks) { if (/^log_/.test(b.name)) LOGF[b.id] = 1; else if (/^leaves_/.test(b.name)) LEAFF[b.id] = 1; } }
+    X.fellTree = (x, y, z, P) => {
+      if (groups.length >= 3) return null;
+      treeFlags();
+      const Vx = V(), Tt = Vx.T, up = W.raw(x, y + 1, z);
+      if (!(up > 0) || !LOGF[up & 0xfff]) return null;
+      const soft = t => !Tt.solid[t] || LEAFF[t] || Tt.liquid[t] || Tt.shape[t] === Vx.SHAPE.cross || Tt.shape[t] === Vx.SHAPE.torch;
+      const C = Vx.component(W, [[x, y + 1, z]], { take: v => LOGF[v & 0xfff] === 1, edge: v => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) ? 0 : 2), max: 48 });
+      if (!C || C.touch || C.grounded) return null;
+      const inC = new Set(); for (let i = 0; i < C.cells.length; i += 4) inC.add(Vx.supportKey(C.cells[i], C.cells[i + 1], C.cells[i + 2]));
+      const seeds = []; for (let i = 0; i < C.cells.length; i += 4) seeds.push([C.cells[i], C.cells[i + 1], C.cells[i + 2]]);
+      const Lf = Vx.component(W, seeds, { take: (v, a, b, c) => LEAFF[v & 0xfff] === 1 || (LOGF[v & 0xfff] === 1 && inC.has(Vx.supportKey(a, b, c))), depth: 4, max: 220 });
+      if (!Lf) return null;
+      const leaves = Lf.n - C.n;
+      if (leaves < 3) return null;   // голый столб из брёвен — не дерево
+      const cells = Lf.cells;
+      for (let i = 0; i < cells.length; i += 4) W.set(cells[i], cells[i + 1], cells[i + 2], 0, { urgent: 2 });
+      // куда валится: от игрока (по горизонтали); игрок прямо у ствола — по взгляду
+      let dx = x + .5 - (P ? P.x : x), dz = z + .5 - (P ? P.z : z), dl = Math.hypot(dx, dz);
+      if (dl < .2) { dx = 1; dz = 0; dl = 1; }
+      dx /= dl; dz /= dl;
+      const sap = n => 'sapling_' + n.slice(7);
+      return X.fallGroup(cells, { x: x + .5 + dx * .5, y: y + 1, z: z + .5 + dz * .5 }, { x: dx, z: dz }, {
+        trunk: v => LOGF[v & 0xfff] === 1,
+        onLand: (v, wx, wy, wz) => {
+          const b = Vx.blocks[v & 0xfff], r = X.rng();
+          if (LOGF[b.id]) { X.addItem(wx, wy, wz, { id: b.drop || b.name, n: 1 }); return; }
+          if (r < .05 && Vx.item(sap(b.name))) X.addItem(wx, wy, wz, { id: sap(b.name), n: 1 });
+          else if (r < .07) X.addItem(wx, wy, wz, { id: 'stick', n: 1 });
+          else if (r < .08 && b.name === 'leaves_oak') X.addItem(wx, wy, wz, { id: 'apple', n: 1 });
+        },
+      });
+    };
+
     // ═══ Мобы ═══
     // как моб рисуется — одно место: view (по умолчанию коробки — boxMobView ниже; KubomirEnts.mobView — свой вид);
     // свет — m.lit (Lit, тот же, что у кубиков), удар — m.hurtT, замах — m.wind, выпад — m.lunge, смерть — m.dying (с с начала);
@@ -936,6 +1080,7 @@
       X.tickN++;
       itemsTick(dt);
       fallingTick(dt);
+      groupsTick(dt);
       mobsTick(dt);
       dyingTick(dt);
       updatesTick();
@@ -947,11 +1092,11 @@
       const a = X.frac >= 0 && X.frac <= 1 ? X.frac : 1;
       itemsFrame(t, dt, a); mobsFrame(dt, t, a); debrisFrame(dt);
       for (const f of X.falling) { const y = f.py + (f.y - f.py) * a; f.m.position.set(f.x - S.ox, y + .5, f.z - S.oz); Lit.update(f.lit, S, f.x, y + .5, f.z, dt); VR.itemLightF(f.m.geometry, f.lit.lv); }
-      flyersFrame(dt); popsFrame(dt); shardsFrame(dt);
+      flyersFrame(dt); popsFrame(dt); shardsFrame(dt); groupsFrame(dt, a);
       ambient(dt);
       poolFrame(PF, dt, t); poolFrame(GL, dt, t, S.KL?.recs?.size && FXQ >= .5 ? halos : null);
     };
-    X.fxStats = () => ({ shards: sLive, puffs: PF.live, glows: GL.live, items: X.items.length, falling: X.falling.length, dying: X.dying.length, pops: pops.length, flyers: flyers.length });
+    X.fxStats = () => ({ shards: sLive, puffs: PF.live, glows: GL.live, items: X.items.length, falling: X.falling.length, dying: X.dying.length, pops: pops.length, flyers: flyers.length, trees: groups.length });
     X.fxObjects = () => ({ shards: shMesh, puffs: PF.o, glows: GL.o });   // для проверок
     // звери мира сохраняются (враги — нет)
     X.save = () => X.mobs.filter(m => MOBS[m.type].passive).slice(0, 48).map(m => ({ t: m.type, x: +m.x.toFixed(2), y: +m.y.toFixed(2), z: +m.z.toFixed(2), hp: m.hp }));
@@ -966,6 +1111,7 @@
       for (const e of X.items) { R.scene.remove(e.mesh); e.mesh.geometry.dispose(); }
       for (const f of X.falling) { R.scene.remove(f.m); f.m.geometry.dispose(); }
       for (const o of [...flyers, ...pops]) { R.scene.remove(o.m); o.m.geometry.dispose(); }
+      for (const g of groups) { R.scene.remove(g.mesh); g.geo.dispose(); } groups.length = 0;
       for (const m of [...X.mobs]) removeMob(m);
       for (const m of X.dying) view.remove(m);
       view.dispose();
