@@ -51,6 +51,8 @@
 .kb-hud.kb-low .kb-lowhp{opacity:1}
 body.high .kb-hud.kb-low .kb-lowhp{animation:kbLow 1.5s ease-in-out infinite}
 @keyframes kbLow{50%{opacity:.4}}
+/* молния вдалеке (гром в сильный дождь) — мягкая вспышка */
+.kb-flash{position:absolute;inset:0;pointer-events:none;opacity:0;background:#eef3ff;mix-blend-mode:screen}
 /* подобрал вещь — ячейка панели подпрыгивает */
 .kb-slot.pop{animation:kbPop .24s ease-out}
 @keyframes kbPop{40%{transform:translateY(-3px) scale(1.2)}}

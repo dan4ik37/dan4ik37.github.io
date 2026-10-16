@@ -94,7 +94,10 @@
         const col = st.G ? V().genColumn(st.G, Math.floor(st.P.x), Math.floor(st.P.z), {}) : null, id = col ? V().BIOME_IDS[col.b] : '', bt = BIOME_FOG[id];
         if (bt) { const k = .22 * (1 - (R.night || 0)); c.r += (bt[0] * c.r * 1.4 - c.r) * k; c.g += (bt[1] * c.g * 1.4 - c.g) * k; c.b += (bt[2] * c.b * 1.4 - c.b) * k; }
       } catch (e) {}
-      X.base = { c, near: f.near, far: f.far };
+      // непогода (kubomir-weather.js, W.k 0…1): туман серее, темнее и ближе
+      const wk = st.WX?.k || 0;
+      if (wk > 0) { const g = (c.r + c.g + c.b) / 3; for (const ch of ['r', 'g', 'b']) c[ch] = (c[ch] + (g * .9 - c[ch]) * .65 * wk) * (1 - .38 * wk); }
+      X.base = { c, near: f.near * (1 - .55 * wk), far: f.far * (1 - .4 * wk) };
       applyFog();
     };
     function applyFog(){

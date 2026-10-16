@@ -282,6 +282,8 @@
     st.H = Ex.ui(wr, C);
     st.AU = Ex.audio(); sounds();
     st.hudEl = hudBuild(wr); st.hurtEl = st.hudEl.querySelector('.kb-hurt');
+    // вспышка молнии (гром вдалеке): мягко, k ≤ 0,22
+    st.flash = k => { const f = st.hudEl?.querySelector('.kb-flash'); if (!f) return; f.style.transition = 'none'; f.style.opacity = String(Math.min(.22, k)); void f.offsetWidth; f.style.transition = 'opacity .45s ease-out'; f.style.opacity = '0'; };
     // свои клавиши «Кубомира» (как в Майнкрафте), геймпад, палец по миру; кнопки телефона — как в Bedrock
     st.K = window.KubomirInput ? window.KubomirInput.create({ el: wr, C, isOpen: () => !!(S && (S.ui?.isOpen() || S.menu || S.modWin || S.chatEl)) }) : null;
     // игрок
@@ -304,6 +306,8 @@
       st.ents.hookKill = (m, by) => { if (by === 'player') st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); }; }
     if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;   // руки как в Майнкрафте, свет человечков
+    st.weatherOff = opts.weather === false;
+    st.WX = window.KubomirWeather ? window.KubomirWeather.create(st) : null;   // дождь и снег по биому (расписание — от зерна и дня)
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
     if (I.touch) touchUI(st);   // кнопки телефона — когда уже есть игрок
     crossUpdate(st);
@@ -326,7 +330,8 @@
   function fogNear(st){ const f = st.R.scene.fog; if (f && !st.P.eyeWater && f.far > 20) f.near = f.far * .6; }
   // яркость солнца и неба: днём мягче, чем у движка по умолчанию (иначе трава и песок выгорают в белёсое), ночью луна чуть
   // тусклее движковой (темно, но видно дорогу) — свет факелов от этого не зависит: ночью и в пещерах он заметен пятнами
-  function dayLight(R){ const n = Math.max(0, Math.min(1, R.night || 0)); R.lighting.brightness = .66 - .16 * n; R.lighting.ambient = .82 - .12 * n; }
+  // w — сила непогоды (0…1): в дождь солнце и небо тусклее
+  function dayLight(R, w = 0){ const n = Math.max(0, Math.min(1, R.night || 0)); R.lighting.brightness = (.66 - .16 * n) * (1 - .34 * w); R.lighting.ambient = (.82 - .12 * n) * (1 - .2 * w); }
   function fogFor(R){ const O = R.opt || { dist: 1, fog: true }; return Math.max(40, (opts.rd * 16 - 10) / (O.dist || 1) / (O.fog === false ? 1.6 : 1)); }
   function giveStart(P){ P.inv[0] = null; }
   function invLoad(inv, arr){ if (!Array.isArray(arr)) return; for (let i = 0; i < inv.length; i++) { const s = arr[i]; inv[i] = s && VX().item(s.id) && s.n > 0 ? { id: s.id, n: Math.min(s.n | 0, VX().item(s.id).stack), d: s.d | 0 } : null; } }
@@ -344,6 +349,7 @@
     try { st.hand?.dispose(); } catch (e) {}
     try { st.ui?.dispose(); } catch (e) {}
     try { st.KL?.dispose(); } catch (e) {}
+    try { st.WX?.dispose(); } catch (e) {}
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
     try { st.R?.dispose(); } catch (e) {}
@@ -474,6 +480,7 @@
       if (L._t < t0) st.meta.day = (st.meta.day || 1) + 1;   // полночь — новый день (счётчик дней для модов: world.day())
       L.time = L._t;
     }
+    st.WX?.step(dt);
     if (now() - st.lastSave > 12000) saveAll(st).catch(() => {});
   }
   function spawnReady(st){
@@ -1030,6 +1037,7 @@
     A.update(dt, t, R.camera.position);
     st.hand?.frame(dt, t);   // руки и вещь в руке (поверх позы человечка), свет человечков — как у кубиков
     st.ents?.frame(dt, t);
+    st.WX?.frame(dt, t);   // дождь / снег вокруг камеры, шум, гром
     VR.select(st.hit && !C.blocked ? st.hit : null);
     if (st.mine.st >= 0 && st.hit) VR.crack(st.hit.x, st.hit.y, st.hit.z, st.mine.st); else VR.crack(0, 0, 0, -1);
     ghostUpdate(st);
@@ -1037,7 +1045,23 @@
     if (st.tbar && st.flyWas !== P.fly) { st.flyWas = P.fly; st.tbarSync?.(); }   // в полёте: ⤒ вверх, ⤓ вниз
     VR.update(dt, t);
     // небо и туман: время суток — раз в 0,25 с
-    if ((st.skyT = (st.skyT || 0) - dt) <= 0) { st.skyT = .25; dayLight(R); R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R) }); fogNear(st); st.KL?.afterSky(); }
+    if ((st.skyT = (st.skyT || 0) - dt) <= 0) {
+      st.skyT = .25;
+      const wk = st.WX?.k || 0, wq = Math.round(wk * 20) / 20, hq = Math.round(R.lighting.time * 2) / 2, key = wq * 1000 + hq;
+      dayLight(R, wk);
+      // непогода: небо в дымке, солнце бледнее, горизонт серый (свой цвет тумана мира — плавно от цвета неба к серому),
+      // кадр темнее; меняем, только когда сила или время (по 0,5 ч) заметно сдвинулись
+      if (key !== st.wxQ) {
+        st.wxQ = key;
+        let fc = '';
+        if (wq > .02) {
+          const M = st.skyM = E().skyModel(R.lighting.time, { haze: .2, sun: 1, clouds: .9 }, st.skyM), h = M.hor, g = (.2126 * h[0] + .7152 * h[1] + .0722 * h[2]) * .4, k = .85 * wq;
+          fc = '#' + [g * .94, g, g * 1.08].map((v, i) => Math.round(Math.min(1, Math.pow(Math.max(0, h[i] * (1 - k) + v * k), 1 / 2.2)) * 255).toString(16).padStart(2, '0')).join('');
+        }
+        R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R), gfx: { sky: { haze: .2 + .65 * wq, sun: Math.max(.3, 1 - .7 * wq), clouds: .9 + .1 * wq }, fog: { color: fc }, exposure: -.3 * wq } });
+      } else R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R) });
+      fogNear(st); st.KL?.afterSky();
+    }
     // под водой — синий туман
     const uw = !!st.P.eyeWater; R.setUnder?.(uw, '#1f5f9e');
     if (st.uwWas !== uw) { st.uwWas = uw; if (!uw) { fogNear(st); st.KL?.afterSky(); } }
@@ -1138,7 +1162,7 @@
   // ═══ Экран: полоски здоровья и еды, панель вещей, отладка ═══
   function hudBuild(wr){
     const h = document.createElement('div'); h.className = 'kb-hud';
-    h.innerHTML = `<div class="kb-hurt"></div><div class="kb-lowhp"></div><div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
+    h.innerHTML = `<div class="kb-flash"></div><div class="kb-hurt"></div><div class="kb-lowhp"></div><div class="kb-dbg" hidden></div><div class="kb-log"></div><div class="kb-tip" hidden><div><b>ПОДСКАЗКА</b><span></span></div><button type="button" aria-label="Скрыть подсказки" title="Скрыть подсказки в этом мире">✕</button></div>
       <div class="kb-bottom"><div class="kb-bars"><div class="kb-hp"></div><div class="kb-food"></div></div><div class="kb-air"></div><div class="kb-iname"></div>
       <div class="kb-hotbar">${Array.from({ length: 9 }, (_, i) => `<div class="kb-slot" data-s="${i}"><i></i><b></b><u></u></div>`).join('')}</div></div>
       <div class="kb-loadbar" hidden><div class="spinner"></div><b>Строим мир вокруг…</b><small></small></div>`;
@@ -1205,7 +1229,7 @@
         const s = st.ST.stats, r = st.VR.count(), c = st.G ? V.genColumn(st.G, Math.floor(P.x), Math.floor(P.z), {}) : null, L = st.W.lightAt(P.x, P.y + 1, P.z), rs = st.R.stats;
         d.innerHTML = `XYZ ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)} · чанк ${Math.floor(P.x) >> 4}, ${Math.floor(P.z) >> 4}<br>биом ${c ? V.BIOMES[c.b] : '—'} · свет небо ${V.lSky(L)} блоки ${V.lR(L)}/${V.lG(L)}/${V.lB(L)} · время ${st.R.lighting.time.toFixed(1)} ч<br>`
           + `чанков ${s.chunks} · сетка ${s.mesh} (${(s.meshMs / Math.max(1, s.mesh)).toFixed(1)} мс) · ген ${s.gen} (${(s.genMs / Math.max(1, s.gen)).toFixed(1)} мс) · в работе ${s.jobs} · ждут ${s.pend}<br>`
-          + `мешей ${r.meshes} · квадов ${(r.quads / 1000).toFixed(0)} тыс. · пул ${r.poolFree} · ~${(r.bytes / 1048576).toFixed(0)} МБ · вызовов ${rs.calls} · ${st.ST.inline ? 'без потоков' : st.ST.workers.length + ' поток(а)'} · дальность ${opts.rd}`;
+          + (st.WX ? `погода: ${st.WX.biome} · дождь ${st.WX.rain.toFixed(2)} · снег ${st.WX.snow.toFixed(2)}<br>` : '') + `мешей ${r.meshes} · квадов ${(r.quads / 1000).toFixed(0)} тыс. · пул ${r.poolFree} · ~${(r.bytes / 1048576).toFixed(0)} МБ · вызовов ${rs.calls} · ${st.ST.inline ? 'без потоков' : st.ST.workers.length + ' поток(а)'} · дальность ${opts.rd}`;
       }
     }
   }
@@ -1344,8 +1368,9 @@
     const [cmd, ...a] = line.slice(1).split(/\s+/), P = st.P, V = VX();
     const cheat = st.creative || st.meta.cheats;
     switch (cmd) {
-      case 'help': log('Команды: /time day|night|<часы>, /gamemode survival|creative, /tp x y z, /seed, /give <вещь> [сколько], /spawn, /where'); for (const c of st.modRun?.commandInfo?.() || []) log(`🧩 /${c.name}${c.desc ? ' — ' + c.desc : ''} (${c.mod})`); return;
+      case 'help': log('Команды: /time day|night|<часы>, /weather clear|rain|auto, /gamemode survival|creative, /tp x y z, /seed, /give <вещь> [сколько], /spawn, /where'); for (const c of st.modRun?.commandInfo?.() || []) log(`🧩 /${c.name}${c.desc ? ' — ' + c.desc : ''} (${c.mod})`); return;
       case 'seed': log('🌱 Зерно мира: ' + st.meta.seed); return;
+      case 'weather': { if (!cheat || !st.WX) break; const f = a[0] === 'rain' || a[0] === 'snow' ? 1 : a[0] === 'clear' ? 0 : null; st.WX.force = f; log(f == null ? '🌦 Погода — по расписанию мира' : f ? '🌧 Непогода (дождь, в снегах — снег)' : '☀️ Ясно'); return; }
       case 'where': log(`📍 ${Math.floor(P.x)} ${Math.floor(P.y)} ${Math.floor(P.z)}`); return;
       case 'time': { if (!cheat) break; const h = a[0] === 'day' ? 8 : a[0] === 'night' ? 21 : a[0] === 'noon' ? 12 : +a[0]; if (Number.isFinite(h)) { st.R.lighting.time = ((h % 24) + 24) % 24; log('🕐 Время: ' + st.R.lighting.time + ' ч'); } return; }
       case 'gamemode': { if (!cheat && a[0] !== 'survival') break; const c = a[0] === 'creative' || a[0] === 'c' || a[0] === '1'; st.creative = c; st.meta.mode = c ? 'creative' : 'survival'; if (c) st.meta.cheats = true; P.fly = false; log(c ? '🎨 Творчество (достижения в этом мире больше не засчитываются)' : '⚔️ Выживание'); setWhere(st.meta.name + (c ? ' · 🎨' : '')); return; }
@@ -1371,6 +1396,7 @@
         <div class="gs-row"><div class="gs-lbl">Красться<small>Держать Shift — как в Майнкрафте по умолчанию; «Нажал — отжал» — один раз нажать, ещё раз — встать.</small></div><div class="gs-ctl">${seg('sneakToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sneakToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Бег<small>Держать Ctrl или один раз нажать.</small></div><div class="gs-ctl">${seg('sprintToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sprintToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">«Призрак» блока<small>Полупрозрачный кубик там, куда встанет блок из руки.</small></div><div class="gs-ctl">${seg('ghost', [[1, 'Вкл'], [0, 'Выкл']], opts.ghost === false ? 0 : 1)}</div></div>
+        <div class="gs-row"><div class="gs-lbl">Погода<small>Дождь и снег по месту (в пустыне — сухо): небо темнее, капли и хлопья вокруг, шум дождя. На «низкой» графике — без капель.</small></div><div class="gs-ctl">${seg('weather', [[1, 'Вкл'], [0, 'Выкл']], opts.weather === false ? 0 : 1)}</div></div>
         ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после смерти.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
         ${K ? K.keysHtml(K.capId) : '<p class="gs-note">Клавиши «Кубомира» можно поменять, когда открыт мир.</p>'}
         ${st ? `<p class="gs-note">Мир: ${esc(st.meta.name)} · зерно ${esc(st.meta.seed)} · потоков: ${st.ST.inline ? 'нет (всё в кадре)' : st.ST.workers.length}. F3 — сведения о мире и скорости.</p>` : ''}`;
@@ -1384,6 +1410,7 @@
         if (k === 'sneakToggle') { opts.sneakToggle = v === '1'; if (S) S.sneakOn = false; }
         if (k === 'sprintToggle') { opts.sprintToggle = v === '1'; if (S) S.sprintOn = false; }
         if (k === 'ghost') opts.ghost = v === '1';
+        if (k === 'weather') { opts.weather = v === '1'; if (S) S.weatherOff = !opts.weather; }
         if (k === 'tips' && S) { S.meta.tips = v === '1'; tipsUpdate(S); }
         lsSet(LS_OPT, opts); D.refresh();
       };
@@ -1412,6 +1439,8 @@
     Sy.add('kb_step_gravel', k => { const a = new k.Bp(1500, 1.4), b = new k.Bp(500, 1.2); return k.make(.22, 216, (t, r) => { const w = k.N(r), c = r() < .03 ? k.N(r) * 3 : 0; return (a.do(w + c) * 1.4 + b.do(w) * 1.1) * k.exp(-t * 18); }, .08); });
     Sy.add('kb_step_snow', k => { const a = new k.Bp(1100, 1.8), b = new k.Bp(3400, 1.2); return k.make(.22, 217, (t, r) => { const w = k.N(r), e = Math.sin(Math.min(1, t / .2) * Math.PI); return (a.do(w) * 1.4 + b.do(w) * .5) * e; }, .07); });
     Sy.add('kb_splash', k => { const a = new k.Bp(700, .8), b = new k.Bp(2200, 1), c = new k.Bp(5000, 1.2); return k.make(.6, 218, (t, r) => { const w = k.N(r); return a.do(w) * k.exp(-t * 7) * 1.6 + b.do(w) * k.exp(-t * 9) * 1.2 + c.do(w) * k.exp(-t * 14) * .6; }, .1, .08); });
+    // гром вдалеке: низкий рокот, нарастает и долго затихает (мягко — не пугать)
+    Sy.add('kb_thunder', k => { const a = new k.Bp(55, 1.2), b = new k.Bp(110, 1.4), c = new k.Bp(260, 1.6); let lp = 0; return k.make(2.6, 220, (t, r) => { const w = k.N(r); lp += (w - lp) * .02; const e = Math.min(1, t / .25) * k.exp(-t * 1.3) * (1 + .5 * Math.sin(t * 7.3) * k.exp(-t * 2)); return (a.do(w) * 2.4 + b.do(w) * 1.6 + c.do(w) * .5 + lp * 2) * e; }, .12, .3); });
     Sy.add('kb_poof', k => { const a = new k.Bp(500, .9), b = new k.Bp(1400, 1.1); return k.make(.3, 219, (t, r) => { const w = k.N(r), e = Math.min(1, t / .02) * k.exp(-t * 11); return (a.do(w) * 1.6 + b.do(w)) * e; }, .09, .05); });
   }
 
