@@ -37,6 +37,8 @@
     el.hidden = hiddenHere();
   }
   function run() { check().then(render); }
+  // для чата (js/features/chatplayer.js): тот же статус и тот же кэш — без лишних запросов к decapi
+  window.D37Live = { check: check };
   if (!document.getElementById('d37LiveCss')) {
     var st = document.createElement('style');
     st.id = 'd37LiveCss';

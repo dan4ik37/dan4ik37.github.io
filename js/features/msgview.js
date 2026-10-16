@@ -135,7 +135,9 @@
   MV.cardHtml = c => {
     if (c.t === 'video') {
       const v = typeof allVids !== 'undefined' && Array.isArray(allVids) ? allVids.find(x => x.id === c.id) : null;
-      return `<a class="mv-card mv-vid" href="/v/${e(c.id)}"><img src="https://i.ytimg.com/vi/${e(c.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>${e(v?.title || 'Видео dan4ik37')}</b><small>▶ Смотреть на сайте</small></span></a>`;
+      // «▶ Здесь» — в плеере чата (chatplayer.js), если ролик по возрасту; иначе — страница ролика
+      const here = window.D37Player?.videoOk?.(c.id)?.ok;
+      return `<div class="mv-card mv-vid"><a href="/v/${e(c.id)}"><img src="https://i.ytimg.com/vi/${e(c.id)}/mqdefault.jpg" alt="" loading="lazy"></a><span><b><a href="/v/${e(c.id)}">${e(v?.title || 'Видео dan4ik37')}</a></b><small>${here ? 'Смотри здесь — чат не закроется' : '▶ Смотреть на сайте'}</small></span>${here ? `<button type="button" class="mv-cbtn" data-play="${e(c.id)}" style="--gc:#ef4444">▶ Здесь</button>` : ''}</div>`;
     }
     if (c.t === 'game' || c.t === 'room') {
       const g = gameOf(c.g); if (!g) return '';
@@ -144,7 +146,7 @@
     }
     if (c.t === 'ugc') return `<a class="mv-card" href="/g/${e(c.id)}"><i>🛠️</i><span><b data-ugc="${e(c.id)}">${e(ugcCache.get(c.id)?.title || 'Игра игрока')}</b><small>Студия игр — играть по ссылке</small></span></a>`;
     if (c.t === 'call') return `<div class="mv-card mv-call" style="--gc:#16a34a"><i>📞</i><span><b>Голосовой звонок</b><small>Разговор напрямую — до 6 друзей</small></span><a class="mv-cbtn" href="#/phone/call/${e(c.code)}">Войти</a></div>`;
-    if (c.t === 'live') return `<div class="mv-card mv-live" style="--gc:#9147ff"><i>🔴</i><span><b>Денчик в эфире на Twitch</b><small>Стрим идёт — смотри и пиши в чат трансляции</small></span><a class="mv-cbtn" href="https://www.twitch.tv/${typeof TWITCH !== 'undefined' ? e(TWITCH) : 'dan4ik37'}" target="_blank" rel="noopener">▶ Смотреть</a></div>`;
+    if (c.t === 'live') return `<div class="mv-card mv-live" style="--gc:#9147ff"><i>🔴</i><span><b>Денчик в эфире на Twitch</b><small>Стрим идёт — смотри прямо в чате</small></span>${window.D37Player ? '<button type="button" class="mv-cbtn" data-play="tw">▶ Здесь</button>' : `<a class="mv-cbtn" href="https://www.twitch.tv/${typeof TWITCH !== 'undefined' ? e(TWITCH) : 'dan4ik37'}" target="_blank" rel="noopener">▶ Смотреть</a>`}</div>`;
     if (c.t === 'event') return MV.evCardHtml(c.id);
     if (c.t === 'invite') { const i = invCache.get(c.code); return `<div class="mv-card mv-inv" data-inv="${e(c.code)}"><i>${e(i?.icon || '🏰')}</i><span><b>${i ? e(i.name) : 'Приглашение в сообщество'}</b><small>${i ? `${i.members} ${P.plural(i.members, 'участник', 'участника', 'участников')}${i.about ? ' · ' + e(i.about.slice(0, 60)) : ''}` : 'Сообщество на сайте dan4ik37'}</small></span><a class="mv-cbtn" href="#/c/${e(c.code)}">Вступить</a></div>`; }
     return '';
@@ -235,10 +237,12 @@
   const ROLE = { admin: ['ADMIN', '255,45,85'], moderator: ['MOD', '145,71,255'], helper: ['HELPER', '34,197,94'], bot: ['🤖 БОТ', '88,101,242'], owner: ['👑', '250,204,21'], mod: ['🛡', '96,165,250'] };
   // «Денчик-бот» (community2.sql → bot_post): роль 'bot' ставит только сервер — браузер её подделать не может (vip-balance.sql)
   const isBot = m => !!m && m.role === 'bot' && !m.uid;
-  function authorStyle(m){
+  // rc — цвет своей роли в сообществе (community3.sql): после ролей сайта, раньше VIP
+  function authorStyle(m, rc){
     const p = m.uid ? P.prof(m.uid) : null;
     const role = m.role && ROLE[m.role] ? m.role : p?.role && ROLE[p.role] ? p.role : null;
     let rgb = role ? ROLE[role][1] : null, vip = null;
+    if (!rgb && rc && /^#[0-9a-f]{6}$/i.test(rc)) return { color: rc, role, vip };
     if (!rgb && typeof VIP_TIERS !== 'undefined') {
       vip = m.vip ? VIP_TIERS.find(t => t.key === m.vip) : (p && typeof getVipTier === 'function' ? getVipTier(p) : null);
       if (vip) rgb = vip.rgb;
@@ -295,7 +299,7 @@
     // ── Отрисовка одного сообщения ──
     function html(m, prev){
       if (m.sys) return `<div class="mv-sys" data-id="${e(m.id)}">${e(m.text)}</div>`;
-      const st = authorStyle(m), blocked = m.uid && MV.blocked.has(m.uid);
+      const st = authorStyle(m, m.uid ? V.A?.colorOf?.(m.uid) : null), blocked = m.uid && MV.blocked.has(m.uid);
       const first = !prev || prev.sys || prev.uid !== m.uid || prev.nick !== m.nick || m.reply || Date.parse(m.at) - Date.parse(prev.at) > GROUP_MS || dayName(prev.at) !== dayName(m.at);
       const me = myNick(), mine = m.mine || (m.uid ? m.uid === myUid() : !!me && m.nick === me && !myUid());
       const r = blocked ? { html: '', cards: [] } : MV.rich(m.text, me, { kid: kidView() });
@@ -828,6 +832,7 @@
         return;
       }
       const ins = t.closest('[data-ins]'); if (ins) { insertAt(ins.dataset.ins); return; }
+      const pl = t.closest('[data-play]'); if (pl && window.D37Player) { const v = pl.dataset.play; window.D37Player.open(v === 'tw' ? { kind: 'tw' } : { kind: 'yt', id: v }); return; }
       const evb = t.closest('[data-evgo]'); if (evb) { evb.disabled = true; MV.evRsvp(+evb.dataset.evgo).then(r => { evb.disabled = false; if (!r.ok && r.err !== 'auth') note('⚠️ ' + r.err); }); return; }
       const stk = t.closest('[data-stk]');
       if (stk) { if (stk.classList.contains('lock')) { location.href = '/vip'; return; } closePanel(); V.A.sendSticker?.(stk.dataset.stk).then(r => { if (r && !r.ok) note('⚠️ ' + (r.err || 'Стикер не отправился')); else if (r?.m) onEvent({ t: 'ins', m: r.m }); }); return; }

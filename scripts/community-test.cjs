@@ -30,7 +30,7 @@ const timers = []; const _si = setInterval; globalThis.setInterval = (f, ms) => 
 // окно «⚙️ Настройки» (js/core/settings.js) — заглушка: телефон добавляет туда свою вкладку
 const setTabs = []; let setOpened = null;
 window.D37Settings = { addTab(t){ setTabs.push(t); }, open(o){ setOpened = o; }, isOpen: () => false };
-for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/worldchat.js', 'js/features/chat.js'])
+for (const f of ['js/features/phone.js', 'js/features/msgview.js', 'js/features/calls.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js', 'js/features/worldchat.js', 'js/features/chat.js'])
   vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 const P = window.D37Phone, MV = window.MsgView, C = window.D37Calls._test, DS = window.D37DS._test, W = window.D37WorldChat, CH = window.D37Chat._test;
 
@@ -187,7 +187,7 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(card('#/chat/ev/abc') === null && card('#/chat/ev/1234567890123') === null, 'кривой номер события — без карточки');
   r = MV.rich('🔴 Денчик в эфире: Играем! → https://dan4ik37.vercel.app/#/chat/twitch', '');
   ok(r.cards.length === 1 && r.cards[0].t === 'live' && /🔴 эфир/.test(r.html), 'сообщение бота об эфире → карточка «Смотреть»', r);
-  ok(/twitch\.tv\/dan4ik37/.test(MV.cardHtml({ t: 'live' })) && /rel="noopener"/.test(MV.cardHtml({ t: 'live' })), 'карточка эфира ведёт на Twitch');
+  ok(/data-play="tw"/.test(MV.cardHtml({ t: 'live' })) || /twitch\.tv\/dan4ik37/.test(MV.cardHtml({ t: 'live' })), 'карточка эфира: «▶ Здесь» в плеере чата (без плеера — ссылка на Twitch)');
   r = MV.rich('🎬 Новое видео: Обзор → https://dan4ik37.vercel.app/v/dQw4w9WgXcQ', '');
   ok(r.cards.length === 1 && r.cards[0].t === 'video', 'сообщение бота о ролике → карточка ролика');
   window.D37Age = { kid: () => true, kidText: t => t, canOpen: n => n <= 6 };
@@ -257,6 +257,88 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   await new Promise(res => setTimeout(res, 20));
   ok(catCalls.map(c => c[0]).join() === 'cm_catalog,cm_list_public' && /Старое/.test(fbox._q['[data-f="list"]'].innerHTML) && fbox._q['.ds-oldnote'].hidden === false, 'без community2.sql — старый поиск и подсказка «появятся, когда сайт обновится»');
   P.rpc = rpc0;
+
+  // ═══ 16. «🎭 Свои роли» (community3.sql): права кнопок, цвет ника, группы участников ═══
+  const MEMS = [{ id: 'o', nick: 'Владелец', role: 'owner', roles: [] }, { id: 'h', nick: 'Хелпер', role: 'member', roles: [21] }, { id: 'v', nick: 'Ветеран', role: 'member', roles: [22] },
+    { id: 'n', nick: 'Новичок', role: 'member', roles: [] }, { id: 'h2', nick: 'Хелпер2', role: 'member', roles: [21, 22] }];
+  P.rpc = async (name, args) => {
+    if (name === 'cm_roles') return { data: { ok: true, roles: [{ id: 21, name: 'Хелпер', color: '#22c55e', position: 10, perms: 6 }, { id: 22, name: 'Ветеран', color: '#f59e0b', position: 5, perms: 0 }, { id: 23, name: 'Плохой', color: 'red;x', position: 1, perms: 0 }], my: 6, top: 10 } };
+    if (name === 'cm_members') return { data: MEMS };
+    return { data: null };
+  };
+  window.currentUser = { id: 'h' };
+  const R0 = await X.roleData(77, true);
+  ok(R0.roles.length === 2 && R0.my === 6 && R0.top === 10 && X.roleSync(77) === R0, 'роли: кривой цвет отброшен, мои права и место', R0);
+  const A = DS.commAdapter({ c: { id: 77, name: 'Клан' }, role: 'member', staff: false, rt: null }, { id: 5, name: 'общий', kind: 'text' });
+  await new Promise(res => setTimeout(res, 10));
+  ok(A.canPin() === true && A.colorOf('v') === '#f59e0b' && A.colorOf('h2') === '#22c55e' && A.colorOf('n') === null, 'закреп по праву роли; цвет ника — по верхней роли');
+  ok(A.modActions({ uid: 'v' }).length > 0 && A.modActions({ uid: 'n' }).length > 0, 'роль с модерацией: участников ниже — можно');
+  ok(A.modActions({ uid: 'h2' }).length === 0 && A.modActions({ uid: 'o' }).length === 0 && A.modActions({ uid: 'h' }).length === 0, 'равного по роли, владельца и себя — нельзя');
+  ok(A.canDel({ uid: 'n' }) === true && A.canDel({ uid: 'h2' }) === false, 'удалить сообщение — тоже по месту роли');
+  const mbox = { innerHTML: '' };
+  window.D37Chat.online = () => ({ users: MEMS.map(m => ({ id: m.id, nick: m.nick })), guests: 0, total: 5 });
+  await DS.membersRender(mbox, { ok: true, id: 77, role: 'member', c: { members: 5 } });
+  const hi = mbox.innerHTML.indexOf('Хелпер</span> — 2'), vi = mbox.innerHTML.indexOf('Ветеран</span> — 1'), ni = mbox.innerHTML.indexOf('🟢 В сети — 1');
+  ok(hi > 0 && vi > hi && ni > vi && /color:#22c55e">Хелпер2</.test(mbox.innerHTML), 'участники: группы по верхней роли (выше — раньше), ник цветом роли', mbox.innerHTML.slice(0, 300));
+  const rbox = fakeEl();
+  await X.sub.roles.render(rbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'member' });
+  ok(/настраивает и выдаёт владелец/.test(rbox.innerHTML), 'экран ролей — только владельцу');
+  await X.sub.roles.render(rbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner' });
+  ok(/＋ Добавить роль/.test(rbox.innerHTML) && /data-pb="16"/.test(rbox.innerHTML) && /data-ra="take" data-rid="21"/.test(rbox.innerHTML) && /＋ роль…/.test(rbox.innerHTML), 'владельцу: роли с правами, новая роль, кому какая (снять / выдать)');
+  P.rpc = async () => ({ error: { code: 'PGRST202' }, missing: true });
+  await X.sub.roles.render(rbox, 'page', { ok: true, id: 78, name: 'Клан', role: 'owner' });
+  ok(/Появится, когда сайт обновится/.test(rbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
+  P.rpc = rpc0; delete window.currentUser;
+
+  globalThis.location = { origin: 'https://dan4ik37.vercel.app', host: 'dan4ik37.vercel.app', hash: '' };
+  // ═══ 17. «🚀 Буст» (community3.sql): экран, оформление, карточка в обзоре ═══
+  const binfo = { ok: true, boost: true, until: new Date(Date.now() + 20 * 864e5).toISOString(), banner: 'neon', anim: true, vanity: 'denchik37', prices: { 1: 100, 3: 270 }, boosters: 3 };
+  P.rpc = async name => name === 'cm_boost_info' ? { data: binfo } : { data: null };
+  const bbox = fakeEl();
+  await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner', c: { icon: '🎮' } });
+  ok(/data-bb="1"/.test(bbox.innerHTML) && /100 💎/.test(bbox.innerHTML) && /270 💎/.test(bbox.innerHTML) && /бустили: 3/.test(bbox.innerHTML), 'буст: две кнопки с ценами, сколько бустили');
+  ok(/data-bn="neon"/.test(bbox.innerHTML) && /class="on" data-bn="neon"/.test(bbox.innerHTML) && /value="denchik37"/.test(bbox.innerHTML) && /\/c\/denchik37/.test(bbox.innerHTML), 'владельцу: баннеры, выбранный отмечен, красивая ссылка');
+  await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: null, c: { icon: '🎮' } });
+  ok(/Бустить могут участники/.test(bbox.innerHTML) && !/data-bb=/.test(bbox.innerHTML) && !/data-bn=/.test(bbox.innerHTML), 'не участнику — без кнопок и оформления');
+  P.rpc = async () => ({ error: { code: 'PGRST202' }, missing: true });
+  await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner' });
+  ok(/Появится, когда сайт обновится/.test(bbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
+  ok(Object.values(X.BANNERS).every(v => /^linear-gradient\(135deg,#[0-9a-f]{6},#[0-9a-f]{6}\)$/.test(v)), 'баннеры — только свои градиенты');
+  const bc = X.ccard({ id: 9, name: 'Бустанутые', icon: '🚀', members: 5, category: 'chat', age: 0, boost: true, banner: 'lava', anim: true }, 'page');
+  ok(/ds-cc boost/.test(bc) && /#ef4444/.test(bc) && /ds-ccic anim/.test(bc) && /title="Буст"/.test(bc), 'обзор: рамка буста, баннер, анимированный значок, 🚀');
+  ok(/linear-gradient\(135deg,#7c3aed,#2563eb\)/.test(X.ccard({ id: 10, name: 'Обычные', icon: '🎮', members: 5, category: 'games', banner: 'lava' }, 'page')), 'без буста баннер не показывается — цвет категории');
+  P.rpc = rpc0;
+
+  // ═══ 18. Плеер в чате (chatplayer.js): возраст, кейсы, карточки, реклама под плеером ═══
+  const PLR = window.D37Player;
+  globalThis.allVids = [{ id: 'aaaaaaaaaaa', title: 'Строим город в Кубомире' }, { id: 'bbbbbbbbbbb', title: 'Открываю кейсы GGDROP промокод на депозит' }];
+  globalThis.HOST = 'dan4ik37.vercel.app';
+  const AGE = (grp, ages) => ({ group: () => grp, kid: () => grp === 'child', minor: () => grp !== 'adult', canOpen: n => n <= ages, listOk: n => n < 18 || grp === 'adult',
+    video: t => /кейс|депозит/i.test(t) ? { age: 18 } : { age: 12 }, isGambling: t => /кейс|депозит/i.test(t), kidText: t => t, badge: n => `<i>${n}+</i>` });
+  window.D37Age = AGE('adult', 18);
+  ok(PLR.videoOk('aaaaaaaaaaa').ok && PLR.videoOk('bbbbbbbbbbb').ok && PLR.videoOk('bbbbbbbbbbb').gamb, 'взрослому: обычный ролик и кейсы — можно, кейсы помечены');
+  ok(!PLR.videoOk('../evil').ok && !PLR.videoOk('').ok, 'кривой номер ролика — нет');
+  window.D37Age = AGE('teen', 13);
+  ok(PLR.videoOk('aaaaaaaaaaa').ok && !PLR.videoOk('bbbbbbbbbbb').ok, 'подростку: 12+ — можно, 18+ (кейсы) — нет');
+  ok(!PLR.videoOk('ccccccccccc').ok && PLR.videoOk('ccccccccccc').unknown, 'ролика нет в ленте сайта — несовершеннолетним не здесь (вдруг кейсы)');
+  ok(/data-play="aaaaaaaaaaa"/.test(MV.cardHtml({ t: 'video', id: 'aaaaaaaaaaa' })) && !/data-play/.test(MV.cardHtml({ t: 'video', id: 'bbbbbbbbbbb' })) && /href="\/v\/bbbbbbbbbbb"/.test(MV.cardHtml({ t: 'video', id: 'bbbbbbbbbbb' })), 'карточка ролика: «▶ Здесь» — только по возрасту, иначе ссылка на страницу');
+  ok(/data-play="tw"/.test(MV.cardHtml({ t: 'live' })) && PLR.liveOk(), 'карточка эфира — «▶ Здесь»; подростку эфир можно');
+  window.D37Age = AGE('child', 6);
+  ok(!PLR.liveOk() && PLR.open({ kind: 'tw' }) === false, 'ребёнку эфир Twitch (13+) не открывается');
+  delete window.D37Age;
+  ok(/player\.twitch\.tv\/\?channel=dan4ik37&parent=dan4ik37\.vercel\.app/.test(PLR.src({ kind: 'tw' })) && /youtube-nocookie\.com\/embed\/aaaaaaaaaaa\?/.test(PLR.src({ kind: 'yt', id: 'aaaaaaaaaaa' })), 'плеер: Twitch с parent сайта, YouTube — nocookie');
+  ok(PLR.adWhy() === 'closed', 'реклама под плеером: плеер закрыт — нет');
+  PLR._test.setS({ kind: 'yt', id: 'aaaaaaaaaaa', at: Date.now(), mini: false, gamb: false });
+  ok(PLR.adWhy() === 'early', 'первую минуту — нет (вдруг реклама самого плеера)');
+  PLR._test.setS({ kind: 'yt', id: 'aaaaaaaaaaa', at: Date.now() - 61e3, mini: true, gamb: false });
+  ok(PLR.adWhy() === 'mini', 'плеер свёрнут — нет');
+  PLR._test.setS({ kind: 'yt', id: 'bbbbbbbbbbb', at: Date.now() - 61e3, mini: false, gamb: true });
+  ok(PLR.adWhy() === 'gambling', 'кейсы в плеере — нет');
+  window.D37AdPlaces = { why: k => k === 'chat_player' ? '' : 'x' };
+  PLR._test.setS({ kind: 'yt', id: 'aaaaaaaaaaa', at: Date.now() - 61e3, mini: false, gamb: false });
+  ok(PLR.adWhy() === '', 'через минуту, развёрнут, не кейсы — решает D37AdPlaces (VIP, возраст, лимиты)');
+  PLR.close(); delete window.D37AdPlaces;
+  ok(PLR.state() === null, 'закрыт — состояния нет');
 
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);

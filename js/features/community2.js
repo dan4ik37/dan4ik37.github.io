@@ -4,6 +4,7 @@
 //  страница события #/chat/ev/<id> (карточка в ленте — msgview.js MV.evCardHtml). «Денчик-бот» и «📢 новости» — api/push-check.js.
 //  🧭 обзор сообществ (#/chat/find): поиск, категории, «большие / активные / новые», метка возраста, «Вступить»;
 //  категория и метка — при создании и в настройках сообщества (владелец).
+//  community3.sql: 🎭 свои роли (#/chat/c/<id>/roles — цвет, место, права, кому выдать; цвет ника и группы участников — community.js).
 //  Адреса: #/chat[/c/<id>]/events[/new | /edit/<id>], #/chat/ev/<id>; в телефоне — comm/<сервер>/events…, comm/ev/<id>.
 //  Грузится вместе с community.js (phone.js → MODS.ds). Пока community2.sql не выполнен — «появится, когда сайт обновится».
 // ═══════════════════════════════════════
@@ -202,7 +203,7 @@
     const ag = +c.age || 0;
     if (window.D37Age && !window.D37Age.listOk(ag)) return '';
     const okAge = !window.D37Age || window.D37Age.canOpen(ag), mine = c.mine || DS.mine().some(x => x.id === c.id);
-    const bg = c.banner && X.BANNERS?.[c.banner] || `linear-gradient(135deg,${CAT_BG[c.category] || CAT_BG.chat})`;
+    const bg = c.boost && c.banner && X.BANNERS?.[c.banner] || `linear-gradient(135deg,${CAT_BG[c.category] || CAT_BG.chat})`;
     return `<div class="ds-cc${c.boost ? ' boost' : ''}" data-cid="${e(c.id)}"><div class="ds-ccban" style="background:${bg}"></div>
       <span class="ds-ccic${c.anim ? ' anim' : ''}">${e(c.icon)}</span>
       <div class="ds-ccb"><a class="ds-cct" href="${DS.link(mode, c.id)}">${e(P.clean(c.name))}${c.boost ? ' <i title="Буст">🚀</i>' : ''}</a>
@@ -274,5 +275,134 @@
     if (!c || !a) return {};
     const r = await P.rpc('cm_set_meta', { p_id: +id, p_category: c.value, p_age: +a.value });
     return r.data?.ok || r.missing ? {} : { err: DS.why(r) };
+  };
+
+  // ═══ 🎭 Свои роли (community3.sql): цвет ника, место, права; выдаёт владелец ═══
+  // roleData: { roles: [{ id, name, color, position, perms }] (выше — первой), byId, my (мои права), top (моё место), missing }
+  const RD = new Map();
+  const PERMS = [[1, '📁 Каналы'], [2, '🔨 Модерация'], [4, '📌 Закреп'], [8, '📅 События'], [16, '📣 @everyone']];
+  X.roleSync = cid => RD.get(String(cid))?.d || null;
+  X.roleData = (cid, fresh) => {
+    const k = String(cid), c = RD.get(k);
+    if (!fresh && c?.d && Date.now() - c.d.t < (c.d.missing ? 600000 : 60000)) return Promise.resolve(c.d);
+    if (c?.p) return c.p;
+    const p = P.rpc('cm_roles', { p_id: +cid }).then(r => {
+      const roles = (r.data?.ok && Array.isArray(r.data.roles) ? r.data.roles : []).filter(x => /^#[0-9a-f]{6}$/i.test(x.color || ''));
+      const d = { t: Date.now(), roles, byId: new Map(roles.map(x => [x.id, x])), my: +r.data?.my || 0, top: +r.data?.top || 0, missing: !!r.missing };
+      RD.set(k, { d });
+      if (roles.length || d.my) window.dispatchEvent(new CustomEvent('d37:roles', { detail: k }));
+      return d;
+    });
+    RD.set(k, { d: c?.d || null, p });
+    return p;
+  };
+  // в настройках сообщества — переход к ролям (владелец) и к бусту
+  X.settingsMore = (srv, mode) => (srv.role === 'owner' || srv.staff ? `<div class="ds-sect"><b>🎭 Роли</b><p class="ds-dim">Свои роли, как в Дискорде: цвет ника, место в списке и права (каналы, модерация, закреп, события, @everyone).</p>
+    <a class="ds-btn ghost" href="${DS.link(mode, srv.id, 'roles')}">Настроить роли →</a></div>` : '')
+    + `<div class="ds-sect"><b>🚀 Буст</b><p class="ds-dim">Баннер, анимированный значок, красивая ссылка, до 40 каналов.</p><a class="ds-btn ghost" href="${DS.link(mode, srv.id, 'boost')}">Буст →</a></div>`;
+
+  // ═══ 🚀 Буст (community3.sql): 30 дней — 100 💎 / 90 — 270 💎, сроки складываются, можно в подарок; оформление — владелец ═══
+  X.BANNERS = { sunset: 'linear-gradient(135deg,#f97316,#db2777)', ocean: 'linear-gradient(135deg,#0ea5e9,#6366f1)', forest: 'linear-gradient(135deg,#16a34a,#065f46)',
+    neon: 'linear-gradient(135deg,#22d3ee,#a855f7)', gold: 'linear-gradient(135deg,#fbbf24,#b45309)', night: 'linear-gradient(135deg,#1e3a8a,#0f172a)',
+    candy: 'linear-gradient(135deg,#f472b6,#a78bfa)', lava: 'linear-gradient(135deg,#ef4444,#7f1d1d)' };
+  const BANNER_NAME = { sunset: 'Закат', ocean: 'Океан', forest: 'Лес', neon: 'Неон', gold: 'Золото', night: 'Ночь', candy: 'Конфета', lava: 'Лава' };
+  const BOOST_REASON = { member: 'бустить могут участники сообщества', gems: 'не хватает 💎', months: 'неверный срок', closed: 'магазин на паузе — попробуй позже',
+    rate: 'слишком часто — попробуй завтра', gems_off: 'кристаллы появятся, когда сайт обновится', rights: 'оформляет владелец', boost: 'сначала нужен буст',
+    vanity: 'ссылка — от 6 до 12 латинских букв и цифр', taken: 'такая ссылка уже занята', bad: 'без мата, пожалуйста', banner: 'неизвестный баннер', auth: 'нужно войти', not_found: 'не найдено' };
+  const boostWhy = r => (r.missing ? 'появится, когда сайт обновится' : r.error ? P.err(r.error) : BOOST_REASON[r.data?.reason] || 'не получилось');
+  X.sub.boost = {
+    title: '🚀 Буст',
+    async render(el, mode, srv){
+      el.innerHTML = '<div class="ds-pane"><div class="ds-dim">Загружаем…</div></div>';
+      const r = await P.rpc('cm_boost_info', { p_id: srv.id });
+      if (!el.isConnected) return;
+      if (r.missing) { el.innerHTML = `<div class="ds-pane"><h3>🚀 Буст</h3>${SOON}</div>`; return; }
+      const b = r.data?.ok ? r.data : null;
+      if (!b) { el.innerHTML = `<div class="ds-pane"><div class="ds-dim">⚠️ ${e(boostWhy(r))}</div></div>`; return; }
+      const owner = srv.role === 'owner' || srv.staff, member = !!srv.role || !!srv.staff;
+      const gems = window.D37Gems?.isOn?.() ? window.D37Gems.balance() : null;
+      const until = b.until ? new Date(b.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : '';
+      const van = b.vanity ? `${location.origin}/c/${b.vanity}` : '';
+      el.innerHTML = `<div class="ds-pane"><div class="ds-bhero" style="background:${b.boost && X.BANNERS[b.banner] || 'linear-gradient(135deg,#ec4899,#8b5cf6)'}"><span class="${b.boost && b.anim ? 'ds-anim' : ''}">${e(srv.c?.icon || '🚀')}</span><b>${e(srv.name)}</b><small>${b.boost ? '🚀 Буст до ' + e(until) : 'Без буста'}${b.boosters ? ` · бустили: ${e(b.boosters)}` : ''}</small></div>
+        <h3>🚀 Буст сообщества</h3>
+        <ul class="ds-perks"><li>🖼 Баннер — в обзоре и над каналами</li><li>✨ Анимированный значок</li><li>🔗 Красивая ссылка-приглашение /c/имя</li><li>📁 До 40 каналов (голосовых — до 10)</li><li>🚀 Значок буста в обзоре</li></ul>
+        <p class="ds-dim">Только красота и удобство: место в обзоре буст не поднимает. Сроки складываются, бустить можно и в подарок любимому сообществу.</p>
+        ${member ? `<div class="ds-row"><button type="button" class="ds-btn" data-bb="1">🚀 30 дней — ${e(b.prices['1'])} 💎</button><button type="button" class="ds-btn ghost" data-bb="3">🚀 90 дней — ${e(b.prices['3'])} 💎</button></div>
+          <p class="ds-dim">${gems !== null ? `У тебя ${e(gems)} 💎 · ` : ''}<a href="#/shop">💎 Кристаллы — в магазине</a></p>` : '<p class="ds-dim">Бустить могут участники сообщества.</p>'}
+        ${van ? `<div class="ds-row"><input class="ds-in" readonly value="${e(van)}" aria-label="Красивая ссылка"><button type="button" class="ds-btn ghost" data-bs="copy">📋</button></div>` : ''}
+        ${owner ? b.boost ? `<div class="ds-sect"><b>Оформление</b>
+          <div class="ds-banners">${Object.keys(X.BANNERS).map(k => `<button type="button" class="${k === b.banner ? 'on' : ''}" data-bn="${k}" style="background:${X.BANNERS[k]}" title="${BANNER_NAME[k]}" aria-label="Баннер «${BANNER_NAME[k]}»"></button>`).join('')}</div>
+          <label class="ds-chk"><input type="checkbox" data-f="anim"${b.anim ? ' checked' : ''}> ✨ Анимированный значок</label>
+          <label class="ds-lbl">Красивая ссылка (6–12 латинских букв и цифр)<div class="ds-row"><span class="ds-dim">${e(location.host)}/c/</span><input class="ds-in" data-f="van" maxlength="12" value="${e(b.vanity || '')}" placeholder="например, denchik37"></div></label>
+          <button type="button" class="ds-btn" data-bs="save">Сохранить оформление</button></div>`
+          : '<p class="ds-dim">Когда буст включится, здесь появится оформление: баннер, анимация и красивая ссылка.</p>' : ''}
+        <div class="ds-err" hidden></div></div>`;
+      let banner = b.banner || '';
+      const err = t => { const x = el.querySelector('.ds-err'); x.hidden = !t; x.innerHTML = t ? '⚠️ ' + t : ''; };
+      el.onclick = async ev => {
+        const t = ev.target.closest('[data-bb],[data-bn],[data-bs]'); if (!t) return;
+        if (t.dataset.bn) { banner = t.dataset.bn; el.querySelectorAll('[data-bn]').forEach(x => x.classList.toggle('on', x === t)); return; }
+        if (t.dataset.bs === 'copy') { try { await navigator.clipboard.writeText(van); P.toast?.('🔗 Ссылка скопирована', true); } catch (er) { prompt('Ссылка:', van); } return; }
+        if (t.dataset.bb) {
+          if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return; }
+          const m = +t.dataset.bb, price = b.prices[String(m)];
+          if (!confirm(`Потратить ${price} 💎 на буст «${srv.name}» на ${m * 30} дней?`)) return;
+          t.disabled = true;
+          const r2 = await P.rpc('cm_boost_buy', { p_community: srv.id, p_months: m });
+          t.disabled = false;
+          if (!r2.data?.ok) { err(r2.data?.reason === 'gems' ? `не хватает 💎 — нужно ${e(r2.data.need)}. <a href="#/shop">Пополнить</a>` : e(boostWhy(r2))); return; }
+          P.toast?.('🚀 Спасибо за буст!', true);
+          window.D37Gems?.sync?.();
+        } else if (t.dataset.bs === 'save') {
+          const r2 = await P.rpc('cm_boost_set', { p_community: srv.id, p_banner: banner, p_anim: !!el.querySelector('[data-f="anim"]')?.checked, p_vanity: el.querySelector('[data-f="van"]')?.value || '' });
+          if (!r2.data?.ok) { err(e(boostWhy(r2))); return; }
+          P.toast?.('✅ Оформление сохранено', true);
+        }
+        DS.dropC(srv.id); await DS.loadMy(true);
+        X.sub.boost.render(el, mode, srv);
+        window.dispatchEvent(new Event('d37:events'));   // перерисовать список серверов и шапку
+      };
+    },
+  };
+  X.sub.roles = {
+    title: '🎭 Роли',
+    async render(el, mode, srv){
+      el.innerHTML = '<div class="ds-pane"><div class="ds-dim">Загружаем роли…</div></div>';
+      const owner = srv.role === 'owner' || srv.staff;
+      const R = await X.roleData(srv.id, true);
+      if (!el.isConnected) return;
+      if (R.missing) { el.innerHTML = `<div class="ds-pane"><h3>🎭 Роли</h3>${SOON}</div>`; return; }
+      if (!owner) { el.innerHTML = '<div class="ds-pane"><h3>🎭 Роли</h3><p class="ds-dim">Роли настраивает и выдаёт владелец сообщества.</p></div>'; return; }
+      const members = (await DS.membersOf(srv.id, true)).filter(m => m.role !== 'owner');
+      const next = R.roles.reduce((a, x) => Math.max(a, x.position), 0) + 1;
+      const roleRow = x => `<div class="ds-role" data-rid="${x ? e(x.id) : ''}">
+        <div class="ds-row"><input type="color" class="ds-rc" data-rf="color" value="${e(x?.color || '#99aab5')}" aria-label="Цвет роли"><input class="ds-in" data-rf="name" maxlength="24" value="${e(x?.name || '')}" placeholder="Название роли" aria-label="Название роли">
+          <label class="ds-chk ds-sm" title="Выше — главнее">Место <input type="number" class="ds-in ds-num" data-rf="pos" min="1" max="99" value="${x ? e(x.position) : Math.min(99, next)}"></label></div>
+        <div class="ds-perms">${PERMS.map(([b, t]) => `<label class="ds-chk ds-sm"><input type="checkbox" data-pb="${b}"${x && x.perms & b ? ' checked' : ''}> ${t}</label>`).join('')}</div>
+        <div class="ds-row"><button type="button" class="ds-btn ds-sm" data-ra="save">${x ? '💾 Сохранить' : '＋ Добавить роль'}</button>${x ? '<button type="button" class="ds-btn bad ds-sm" data-ra="del">🗑 Удалить</button>' : ''}</div></div>`;
+      const chip = id => { const x = R.byId.get(id); return x ? `<button type="button" class="ds-rchip" data-ra="take" data-rid="${e(id)}" style="--rc:${e(x.color)}" title="Снять роль">● ${e(x.name)} ✕</button>` : ''; };
+      el.innerHTML = `<div class="ds-pane"><h3>🎭 Роли «${e(srv.name)}»</h3>
+        <p class="ds-dim">Цвет ника — по верхней роли. Роль с «🔨 Модерацией» глушит, выгоняет и банит только участников, у кого роль ниже. Владелец и модераторы — как раньше.</p>
+        ${R.roles.map(roleRow).join('')}<div class="ds-sect"><b>Новая роль</b>${R.roles.length >= 20 ? '<p class="ds-dim">Не больше 20 ролей.</p>' : roleRow(null)}</div>
+        <div class="ds-sect"><b>Кому какая роль</b>${members.length ? members.map(m => `<div class="ds-chrow" data-uid="${e(m.id)}"><span>${e(m.nick)}${m.role === 'mod' ? ' 🛡' : ''}</span>${(m.roles || []).map(chip).join('')}
+          ${R.roles.length ? `<select class="ds-in ds-sm" data-ra="give" aria-label="Выдать роль"><option value="">＋ роль…</option>${R.roles.filter(x => !(m.roles || []).includes(x.id)).map(x => `<option value="${e(x.id)}">${e(x.name)}</option>`).join('')}</select>` : ''}</div>`).join('') : '<div class="ds-dim">Пока никого, кроме тебя</div>'}</div>
+        <div class="ds-err" hidden></div></div>`;
+      const err = t => { const x = el.querySelector('.ds-err'); x.hidden = !t; x.textContent = t ? '⚠️ ' + t : ''; };
+      const done = async r => { if (r.data?.ok) { DS.dropC(srv.id); await X.roleData(srv.id, true); X.sub.roles.render(el, mode, srv); } else err(DS.why(r)); };
+      el.onclick = async ev => {
+        const b = ev.target.closest('[data-ra]'); if (!b || b.tagName === 'SELECT') return;
+        const box = b.closest('.ds-role'), uid = b.closest('[data-uid]')?.dataset.uid;
+        if (b.dataset.ra === 'save' && box) {
+          const perms = [...box.querySelectorAll('[data-pb]')].reduce((a, x) => a | (x.checked ? +x.dataset.pb : 0), 0);
+          done(await P.rpc('cm_role_save', { p_community: srv.id, p_id: box.dataset.rid ? +box.dataset.rid : null, p_name: box.querySelector('[data-rf="name"]').value,
+            p_color: box.querySelector('[data-rf="color"]').value, p_position: +box.querySelector('[data-rf="pos"]').value, p_perms: perms }));
+        } else if (b.dataset.ra === 'del' && box) { if (confirm('Удалить роль? У всех, у кого она есть, она пропадёт.')) done(await P.rpc('cm_role_delete', { p_id: +box.dataset.rid })); }
+        else if (b.dataset.ra === 'take' && uid) done(await P.rpc('cm_role_assign', { p_community: srv.id, p_user: uid, p_role: +b.dataset.rid, p_on: false }));
+      };
+      el.onchange = async ev => {
+        const s = ev.target.closest('select[data-ra="give"]'); if (!s || !s.value) return;
+        done(await P.rpc('cm_role_assign', { p_community: srv.id, p_user: s.closest('[data-uid]').dataset.uid, p_role: +s.value, p_on: true }));
+      };
+    },
   };
 })();
