@@ -63,6 +63,9 @@ coin_run_cap 20) и rp (coin_run_cap 10). Владельцу ЕЩЁ РАЗ, по
 Проверено с сервера 16.10: economy.sql ПРИМЕНЁН (xp_rule visit → 5, achievement_xp creator → 250). games-more.sql и coins.sql —
 прошлые версии (game_win_xp mirwar → 0, coin_run_cap mirwar / rp → null): владельцу ещё раз ТОЛЬКО games-more.sql → coins.sql
 (свежие файлы отправлены 16.10); economy.sql после них НЕ нужен — общих функций у трёх файлов нет (проверено).
+Проверено с сервера 16.10 вечером: ПРИМЕНЕНЫ community2.sql (messages.is_sticker есть → чат снова принимает сообщения;
+chat_channels news, cm_events, cm_catalog), games-more.sql (game_win_xp mirwar → 3), coins.sql (coin_run_cap mirwar 20, rp 10).
+НЕ применён только community3.sql (cm_roles / cm_boost_info — PGRST202; файл отправлен 16.10 позже остальных).
 Раньше (13:05 UTC): 1–8 ещё НЕ применены (game_win_xp(horde) = 20, остальные — PGRST202). 7–8 (bases.sql,
 raids.sql) — давать владельцу только после того, как агент набегов закончит переделку (3D, большие базы): файлы ещё меняются.
 age.sql применён 15.10.2026 (проверено: my_age_group гостем → reason auth, ugc_games/unity_games.age_rating → 200). Владелец: «остальные
