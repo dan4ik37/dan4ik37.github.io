@@ -68,6 +68,31 @@ const run = (DS, sec, dt = 1 / 30) => { for (let t = 0; t < sec; t += dt) DS.upd
   ok(ma.every((v, i) => Math.abs(v - mb[i]) < 1e-9), 'одинаковое зерно — одинаковые обломки у всех');
   a.DS.dispose(); ok(!a.R.scene.children.some(g => g.name === 'destruct'), 'после выхода — ни сетки обломков');
 }
+{
+  // этап 2: стены зданий из деталей (боевая зона) — выбитый кусок = дыра (спрятан, тела нет), здание стоит; машина упирается,
+  // танк пробивает обычную стену; прочные (бункер, базы) — только взрывами; Большой город — стены не ломаются; всё назад
+  const { ph, DS } = mk();
+  const hidden = new Map(), hide = id => on => hidden.set(id, on);
+  const box = x => ph.addBox({ x, y: 1.9, z: 0, hx: 1.2, hy: 1.9, hz: .15, tag: 'piece' });
+  const wb = box(0), tb = box(10), w2 = box(30);
+  DS.add({ id: 'p:w1', zone: 'war', kind: 'wall', x: 0, y: 0, z: 0, w: 2.4, d: .3, h: 3.8, c: '#a8a29e', bodies: [wb], hide: hide('w1') });
+  DS.add({ id: 'p:t1', zone: 'war', kind: 'wall', x: 10, y: 0, z: 0, w: 2.4, d: .3, h: 3.8, hp: 20, power: 3, bodies: [tb], hide: hide('t1') });
+  DS.add({ id: 'p:w2', zone: 'war', kind: 'wall', x: 30, y: 0, z: 0, w: 2.4, d: .3, h: 3.8, bodies: [w2], hide: hide('w2') });
+  DS.add({ id: 'p:m1', zone: 'metro', kind: 'wall', x: 20, y: 0, z: 0, w: 2.4, d: .3, h: 3.8, bodies: [], hide: hide('m1') });
+  ok(DS.ahead(0, -1.5, 1.2, 1, 0, 1).n === 0 && DS.blocking(0, -1.5, 1.2, 1)?.id === 'p:w1', 'машина стену не пробивает (упирается)');
+  let n = 0; for (let k = 0; k < 4; k++) n += DS.hit(0, -.2, .9, 1, { y: 1.5 });
+  ok(n === 0 && !DS.broken.has('p:w1'), 'пули: стена держит несколько попаданий');
+  ok(DS.hit(0, -.2, .9, 1, { y: 1.5 }) === 1 && hidden.get('w1') === true && !ph.cols.has(wb), 'выбита: кусок спрятан, тело убрано — дыра');
+  ok(DS.stats().box >= 4, 'обломки стены', DS.stats());
+  ok(DS.ahead(30, -1.5, 1.2, 2, 0, 1).n === 1 && DS.broken.has('p:w2'), 'танк пробивает обычную стену');
+  ok(DS.ahead(10, -1.5, 1.2, 2, 0, 1).n === 0 && DS.blocking(10, -1.5, 1.2, 2)?.id === 'p:t1', 'прочная стена базы: танк не пробивает');
+  let k2 = 0; while (!DS.broken.has('p:t1') && k2++ < 20) DS.hit(10, -.2, 2.4, 3, { y: 1.5 });
+  ok(DS.broken.has('p:t1') && k2 === 7, 'прочная — только взрывами (7)', k2);
+  ok(DS.hit(20, -.2, .9, 9, { y: 1.5 }) === 0 && !DS.broken.has('p:m1'), 'Большой город: стены не ломаются');
+  run(DS, 13);
+  ok(!DS.broken.has('p:w1') && hidden.get('w1') === false && ph.cols.has(wb) && ph.cols.has(tb), 'восстановились: куски и тела на месте');
+}
+ok(E.destruct.POWER.wall === 2 && E.destruct.POWER.block === 3, 'стены: сила танка, блоки — только взрывы');
 ok(E.destruct.POWER.tree === 2 && E.destruct.POWER.lamp === 1 && E.destruct.SMALL.has('bench') && !E.destruct.SMALL.has('glass'), 'таблица силы и «мелочи»');
 console.log(`destruct-test: ${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);

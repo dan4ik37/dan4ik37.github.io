@@ -584,6 +584,7 @@
     return out;
   }
   const SHARED_P = new WeakMap();
+  const TOUGH = /bunker|^wb\d/;   // прочные здания: бункер, постройки военных баз (wb01…: командный пункт и всё, что там построят)
   const PIECES = new Map();   // все построенные детали с номерами: id → деталь (реестр для будущих разрушений)
   const MZ_ACCESS = [];   // правила дверей: f(door, rt) → true (пустить) | 'причина' (нет) | undefined (не моё) — для РП и будущих владельцев
 
@@ -1464,11 +1465,19 @@
       const DS = rt.destruct;
       if (DS && zs.Z.id !== 'kids') {
         for (const b of K.brk || []) DS.add({ ...b, hide: on => { if (!brkHide(b.id, on) && b.obj) b.obj.visible = !on; } });
+        let nb = 0;
         for (const p of K.pieceList) {
-          const kind = p.kind === 'window' ? 'glass' : ['bag', 'crate', 'barrel', 'fence'].includes(p.kind) ? p.kind : null;
+          // стены зданий из деталей (этап 2): стена, перемычка, подоконник, бортик крыши — выбиваются (дыра), пол, крыша и углы —
+          // нет (здание стоит, ничего не рушится); бункер и базы — прочные (в 4 раза крепче, танк не пробьёт)
+          const wallish = p.destructible && ['wall', 'lintel', 'sill', 'parapet'].includes(p.kind);
+          const kind = p.kind === 'window' ? 'glass' : wallish ? 'wall' : ['bag', 'crate', 'barrel', 'fence', 'block'].includes(p.kind) ? p.kind : null;
           if (!kind) continue;
-          DS.add({ id: 'p:' + p.id, zone: zs.Z.id, kind, x: p.x, y: kind === 'glass' ? p.y : p.y - p.h / 2, z: p.z, w: Math.max(p.w, p.d), d: Math.min(p.w, p.d), h: p.h, c: p.c,
+          const tough = (kind === 'wall' || kind === 'block') && TOUGH.test(p.b || '');
+          DS.add({ id: 'p:' + p.id, zone: zs.Z.id, kind, x: p.x, y: kind === 'glass' ? p.y : p.y - p.h / 2, z: p.z, yaw: p.yaw || 0,
+            w: kind === 'wall' || kind === 'block' ? p.w : Math.max(p.w, p.d), d: kind === 'wall' || kind === 'block' ? p.d : Math.min(p.w, p.d), h: p.h, c: p.c,
+            hp: tough ? 20 : undefined, power: tough ? 3 : undefined,
             bodies: p.body ? [p.body] : [], hide: on => { p.broken = !!on; setPieceVis(p, !on); } });
+          if (++nb % 300 === 0) yield;
         }
       }
       yield;
@@ -2301,7 +2310,7 @@
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
     def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, BIG_GATES,
-    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES, BRK, brkHide,
+    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES, BRK, brkHide, TOUGH,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
   };

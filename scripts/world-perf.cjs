@@ -50,6 +50,30 @@ const server = http.createServer((req, res) => {
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_mir_pos');}catch(e){}` });
+    if (MODE === 'brk') {   // разрушения, этап 2 в настоящем мире: стена здания боевой зоны → дыра (кусок спрятан, тела нет) → назад
+      await send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 700, deviceScaleFactor: 1, mobile: false });
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok8 = false; for (let i = 0; i < 240 && !ok8; i++) { await sleep(500); try { ok8 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      const r = await ev(`(async () => {
+        const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
+        const S = GAME_IMPL.world._test.state(), z = S.zones, zs = z.zoneState('war'), DS = z.destruct;
+        S.fixedTime = 13; S.P.place(-120, MirZones.terrain(-120, 150) + .3, 150, 0);
+        if (!zs.ready) await z.buildNow(zs);
+        const walls = [...DS.list.values()].filter(b => b.kind === 'wall'), tough = walls.filter(b => b.power === 3);
+        const w = walls.find(b => b.power !== 3 && b.id.startsWith('p:w_hq:wall')) || walls.find(b => b.power !== 3);
+        const body = w.bodies[0], had = S.ph.cols.has(body);
+        S.P.place(w.x, MirZones.terrain(w.x, w.z) + .3, w.z + 7, Math.PI); await new Promise(res => setTimeout(res, 1500));
+        let n = 0; for (let k = 0; k < 8 && !DS.broken.has(w.id); k++) n += DS.hit(w.x, w.z, .9, 1, { y: w.y + 1.5 });
+        const broke = DS.broken.has(w.id), gone = !S.ph.cols.has(body), st = DS.stats();
+        await new Promise(res => setTimeout(res, 600));
+        return { walls: walls.length, tough: tough.length, id: w.id, had, broke, gone, debris: st.box, n };
+      })()`, 180000);
+      const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 72 });
+      fs.mkdirSync(path.join(TMP, 'world', 'shots'), { recursive: true }); fs.writeFileSync(path.join(TMP, 'world', 'shots', 'brk-wall.jpg'), Buffer.from(data, 'base64'));
+      const r2 = await ev(`(() => { const z = GAME_IMPL.world._test.state().zones, DS = z.destruct, id = ${JSON.stringify('')} || [...DS.broken.keys()][0]; DS.restore(id); const b = DS.list.get(id); return { restored: !DS.broken.has(id), body: GAME_IMPL.world._test.state().ph.cols.has(b.bodies[0]) }; })()`);
+      console.log('стена', JSON.stringify({ ...r, ...r2 }));
+      throw new Error('проверка стены готова');
+    }
     if (MODE === 'btime') {   // сколько времени строится каждая зона целиком (buildNow: 24 мс за раз), ЦП замедлен — как телефон
       await send('Page.navigate', { url: BASE + '/#/games/world' });
       let ok7 = false; for (let i = 0; i < 240 && !ok7; i++) { await sleep(500); try { ok7 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }

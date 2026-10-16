@@ -651,7 +651,7 @@
         if (!MZ.inRect(WZ, nx, nz, 2)) end = true;   // снаряды не вылетают из зоны
         s.x = nx; s.y = ny; s.z = nz;
         if (end || s.life <= 0) {
-          if (end && s.own) rt.destruct?.hit(hx, hz, WP.splash ? 2.4 : .9, WP.dmg >= 20 ? 2 : 1, { y: hy, by: 'shot', dx: s.vx, dz: s.vz });
+          if (end && s.own) rt.destruct?.hit(hx, hz, WP.splash ? 2.4 : .9, WP.splash ? 3 : WP.dmg >= 20 ? 2 : 1, { y: hy, by: 'shot', dx: s.vx, dz: s.vz });
           if (WP.splash && (s.own || s.robot)) splash(s, hx, hz);
           puff(WP.fx || 'sparkles', hx, hy, hz, WP.color);
           shots.splice(i, 1);
