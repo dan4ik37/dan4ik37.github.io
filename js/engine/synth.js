@@ -312,6 +312,17 @@
     A.listener = (x, y, z, yaw) => { A.lx = x; A.ly = y; A.lz = z; A.lyaw = yaw || 0; for (const h of loops) tick(h); };
     A.stopLoops = () => { for (const h of [...loops]) h.stop(); };
     A.volume = v => { A.vol = Math.max(0, Math.min(1, v)); if (A.master) A.master.gain.value = A.vol; };
+    // Глушь (под водой, «Кубомир»): k 0…1 — фильтр низких частот (22 кГц → ~450 Гц) и тише на 45 %; фильтр встаёт в цепочку
+    // только при первом k > 0 (без вызова звук как был); k 0 — фильтр прозрачный
+    A.muffle = k => {
+      k = Math.max(0, Math.min(1, +k || 0));
+      const ctx = A.ctx; if (!ctx || k === A.mufK) return;
+      A.mufK = k;
+      if (!A.lp) { if (!k) return; A.lp = ctx.createBiquadFilter(); A.lp.type = 'lowpass'; A.lp.Q.value = .6; A.lp.frequency.value = 22000; A.master.disconnect(); A.master.connect(A.lp); A.lp.connect(ctx.destination); }
+      const t = ctx.currentTime;
+      A.lp.frequency.setTargetAtTime(k ? 22000 * Math.pow(450 / 22000, k) : 22000, t, .05);
+      A.master.gain.setTargetAtTime(A.vol * (1 - .45 * k), t, .05);
+    };
     A.play = (name, o = {}) => {
       if (muted() || A.vol <= 0) return;
       const ctx = A.ctx; if (!ctx || ctx.state !== 'running') { ensure(); return; }

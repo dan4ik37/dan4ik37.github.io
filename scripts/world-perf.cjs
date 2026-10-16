@@ -7,7 +7,7 @@
 // (Chrome — переменная CHROME или стандартный путь Windows; временная папка — D37_TMP, иначе E:\claude-tmp, иначе системная)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
-const [RATE = '4', Q = 'mid', DSF = '2'] = process.argv.slice(2);
+const [RATE = '4', Q = 'mid', DSF = '2', MODE = ''] = process.argv.slice(2);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -15,8 +15,10 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p === '/') p = '/index.html';
-  const f = path.join(SITE, p);
+  let f = path.join(SITE, p);
   if (!f.startsWith(SITE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('404'); return; }
+  // D37_OVERRIDE=папка — файлы оттуда вместо сайта (замер «до»: старые версии нескольких файлов)
+  if (process.env.D37_OVERRIDE) { const o = path.join(process.env.D37_OVERRIDE, p); if (fs.existsSync(o)) f = o; }
   res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
   fs.createReadStream(f).pipe(res);
 });
@@ -47,7 +49,196 @@ const server = http.createServer((req, res) => {
     await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
-    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}}catch(e){}` });
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_mir_pos');}catch(e){}` });
+    if (MODE === 'brk') {   // разрушения, этап 2 в настоящем мире: стена здания боевой зоны → дыра (кусок спрятан, тела нет) → назад
+      await send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 700, deviceScaleFactor: 1, mobile: false });
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok8 = false; for (let i = 0; i < 240 && !ok8; i++) { await sleep(500); try { ok8 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      const r = await ev(`(async () => {
+        const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
+        const S = GAME_IMPL.world._test.state(), z = S.zones, zs = z.zoneState('war'), DS = z.destruct;
+        S.fixedTime = 13; S.P.place(-120, MirZones.terrain(-120, 150) + .3, 150, 0);
+        if (!zs.ready) await z.buildNow(zs);
+        const walls = [...DS.list.values()].filter(b => b.kind === 'wall'), tough = walls.filter(b => b.power === 3);
+        const w = walls.find(b => b.power !== 3 && b.id.startsWith('p:w_hq:wall')) || walls.find(b => b.power !== 3);
+        const body = w.bodies[0], had = S.ph.cols.has(body);
+        S.P.place(w.x, MirZones.terrain(w.x, w.z) + .3, w.z + 7, Math.PI); await new Promise(res => setTimeout(res, 1500));
+        let n = 0; for (let k = 0; k < 8 && !DS.broken.has(w.id); k++) n += DS.hit(w.x, w.z, .9, 1, { y: w.y + 1.5 });
+        const broke = DS.broken.has(w.id), gone = !S.ph.cols.has(body), st = DS.stats();
+        await new Promise(res => setTimeout(res, 600));
+        return { walls: walls.length, tough: tough.length, id: w.id, had, broke, gone, debris: st.box, n };
+      })()`, 180000);
+      const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 72 });
+      fs.mkdirSync(path.join(TMP, 'world', 'shots'), { recursive: true }); fs.writeFileSync(path.join(TMP, 'world', 'shots', 'brk-wall.jpg'), Buffer.from(data, 'base64'));
+      const r2 = await ev(`(() => { const z = GAME_IMPL.world._test.state().zones, DS = z.destruct, id = ${JSON.stringify('')} || [...DS.broken.keys()][0]; DS.restore(id); const b = DS.list.get(id); return { restored: !DS.broken.has(id), body: GAME_IMPL.world._test.state().ph.cols.has(b.bodies[0]) }; })()`);
+      console.log('стена', JSON.stringify({ ...r, ...r2 }));
+      throw new Error('проверка стены готова');
+    }
+    if (MODE === 'btime') {   // сколько времени строится каждая зона целиком (buildNow: 24 мс за раз), ЦП замедлен — как телефон
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok7 = false; for (let i = 0; i < 240 && !ok7; i++) { await sleep(500); try { ok7 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      const r = await ev(`(async () => {
+        const S = GAME_IMPL.world._test.state(), z = S.zones, out = {};
+        S.P.place(0, 30, -900, 0); await new Promise(res => setTimeout(res, 1500));
+        for (const id of ['kids', 'metro', 'war']) { const zs = z.zoneState(id); const t0 = performance.now(); z.prof = []; if (!zs.ready) await z.buildNow(zs);
+          const by = {}; for (const p of z.prof) by[p[0]] = Math.round((by[p[0]] || 0) + p[3]);
+          out[id] = { ms: Math.round(performance.now() - t0), was: zs.ready && !z.prof.length ? 'уже' : '', by }; }
+        z.prof = null; return out;
+      })()`, 240000);
+      console.log('постройка', JSON.stringify(r));
+      throw new Error('замер постройки готов');
+    }
+    if (MODE === 'lbl') {   // надписи зоны в настоящей постройке: сколько стоит каждая (телефон — замедление ЦП)
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__d37lbl = [];' });
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok6 = false; for (let i = 0; i < 240 && !ok6; i++) { await sleep(500); try { ok6 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      const r = await ev(`(async () => {
+        const S = GAME_IMPL.world._test.state(), z = S.zones; window.__d37lbl.length = 0;
+        const zs = z.zoneState('kids'); if (!zs.built) await z.buildNow(zs);
+        const L = window.__d37lbl, ms = L.map(x => x[0]);
+        return { n: L.length, sum: Math.round(ms.reduce((a, b) => a + b, 0)), top: L.slice().sort((a, b) => b[0] - a[0]).slice(0, 10), oc: typeof OffscreenCanvas };
+      })()`, 240000);
+      console.log('надписи зоны', JSON.stringify(r));
+      throw new Error('замер надписей зоны готов');
+    }
+    if (MODE === 'text') {   // сколько стоит одна надпись на холсте (как вывеска зоны): обычный холст / ускоренный / OffscreenCanvas
+      await send('Page.navigate', { url: BASE + '/#/games' }); await sleep(4000);
+      await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      const r = await ev(`(async () => {
+        const T = ['🏛️ Работа — в мэрии', '🚒 Пожарная часть', '🏫 Школа', 'Сити-1', '🛍️ ТЦ «Галерея»', '🚩 A · Северная точка', '2 + 2 = 4   🍎 Урок!', '🏯 Застава · WB01'];
+        const run = (g, n) => { const t = performance.now(); for (let i = 0; i < n; i++) { const x = (i % 2) * 512, y = (i >> 1) * 100 % 900; g.fillStyle = '#7c3aed'; g.fillRect(x, y, 512, 96); g.strokeStyle = 'rgba(255,255,255,.45)'; g.lineWidth = 4; g.strokeRect(x + 3, y + 3, 506, 90); g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = '900 53px Montserrat, Arial, sans-serif'; g.fillText(T[i % T.length] + ' ' + i, x + 256, y + 50, 480); } return +((performance.now() - t) / n).toFixed(2); };
+        const out = {}, gc = document.createElement('canvas'), gl = gc.getContext('webgl2');
+        // как three r149 (WebGL2): texStorage2D + texSubImage2D, переворот по Y, мипмапы; дважды (второй раз — без разовых затрат)
+        const up = (src, flip = true) => { const t = performance.now(), tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flip); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texStorage2D(gl.TEXTURE_2D, 11, gl.SRGB8_ALPHA8, 1024, 1024); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src); gl.generateMipmap(gl.TEXTURE_2D); return +(performance.now() - t).toFixed(1); };
+        up(document.createElement('canvas'));   // разовые затраты контекста
+        for (const [k, opt] of [['обычный', {}], ['willRead', { willReadFrequently: true }]]) { const c = document.createElement('canvas'); c.width = c.height = 1024; const g = c.getContext('2d', opt); out[k + ' первые 8'] = run(g, 8); out[k + ' ещё 40'] = run(g, 40); out[k + ' в текстуру'] = up(c) + ' / ' + up(c); }
+        const oc = new OffscreenCanvas(1024, 1024), og = oc.getContext('2d'); out['offscreen первые 8'] = run(og, 8); out['offscreen ещё 40'] = run(og, 40); out['offscreen в текстуру'] = up(oc) + ' / ' + up(oc);
+        const ob = new OffscreenCanvas(1024, 1024), obg = ob.getContext('2d'); run(obg, 48); const t1 = performance.now(), bm = ob.transferToImageBitmap(); out['bitmap перенос'] = +(performance.now() - t1).toFixed(2); out['bitmap в текстуру'] = up(bm, false) + ' / ' + up(bm, false);
+        return out;
+      })()`, 120000);
+      console.log('надписи', JSON.stringify(r));
+      throw new Error('замер надписей готов');
+    }
+    if (MODE === 'shot') {   // снимки вывесок зон (проверка надписей и показа зон): E:\claude-tmp\world\shots\zone-*.jpg
+      await send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 700, deviceScaleFactor: 1, mobile: false });
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok5 = false; for (let i = 0; i < 240 && !ok5; i++) { await sleep(500); try { ok5 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      const dir = path.join(TMP, 'world', 'shots'); fs.mkdirSync(dir, { recursive: true });
+      for (const [zid, x, z, yaw] of [['kids', 117, -27, Math.PI], ['metro', 96, 133, 0], ['war', -90, 132, Math.PI]]) {
+        await ev(`(async () => {
+          const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
+          const S = GAME_IMPL.world._test.state(), z = S.zones, zs = z.zoneState('${zid}');
+          S.fixedTime = 13; S.P.place(${x}, MirZones.terrain(${x}, ${z}) + .3, ${z}, ${yaw});
+          if (!zs.built || !zs.ready) await z.buildNow(zs);
+          await new Promise(r => setTimeout(r, 2500)); return zs.shown;
+        })()`, 120000);
+        const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 72 });
+        fs.writeFileSync(path.join(dir, 'zone-' + zid + '.jpg'), Buffer.from(data, 'base64'));
+        console.log('снимок', zid);
+      }
+      throw new Error('снимки готовы');
+    }
+    if (MODE === 'kprof') {   // сколько стоят функции набора постройки зон (все три зоны, без спешки)
+      await send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__d37profK = {};' });
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok4 = false; for (let i = 0; i < 240 && !ok4; i++) { await sleep(500); try { ok4 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      const r = await ev(`(async () => {
+        const S = GAME_IMPL.world._test.state(), z = S.zones;
+        for (const id of ['kids', 'metro', 'war']) { const zs = z.zoneState(id); if (!zs.built) await z.buildNow(zs); }
+        const P = window.__d37profK, L = Object.keys(P).filter(k => k[0] !== '#').map(k => [k, Math.round(P[k]), P['#' + k] || 0]).sort((a, b) => b[1] - a[1]);
+        return L.slice(0, 30);
+      })()`, 240000);
+      console.log('набор', JSON.stringify(r));
+      throw new Error('замер набора готов');
+    }
+    if (MODE === 'progs') {   // сколько стоят новые программы шейдеров зоны: построить спрятанной → показать → один кадр
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let ok3 = false; for (let i = 0; i < 240 && !ok3; i++) { await sleep(500); try { ok3 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      const r = await ev(`(async () => {
+        const S = GAME_IMPL.world._test.state(), z = S.zones, R = S.R, r = R.r, gl = r.getContext();
+        const dbg = gl.getExtension('WEBGL_debug_renderer_info'), out = { gpu: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : '?', par: !!gl.getExtension('KHR_parallel_shader_compile'), zones: [] };
+        const orig = gl.getProgramInfoLog.bind(gl), calls = [];
+        gl.getProgramInfoLog = p => { const t = performance.now(), s = orig(p); calls.push(+(performance.now() - t).toFixed(1)); return s; };
+        S.P.place(0, 30, -900, 0); await new Promise(res => setTimeout(res, 1500));
+        for (const id of ['kids', 'metro', 'war']) {
+          const zs = z.zoneState(id); if (!zs.built) await z.buildNow(zs);
+          if (z.warmNow) await z.warmNow(zs);
+          calls.length = 0; const p0 = r.info.programs.length, old = new Set(r.info.programs), t0 = performance.now();
+          zs.grp.visible = true; if (zs.proxy) zs.proxy.visible = false; R.render();
+          const ms = Math.round(performance.now() - t0), fresh = r.info.programs.filter(p => !old.has(p));
+          const who = fresh.map(pg => { const L = []; zs.grp.traverse(o => { if (o.material && !Array.isArray(o.material) && r.properties.get(o.material).currentProgram === pg && L.length < 4) L.push((o.isInstancedMesh ? 'inst ' : '') + o.material.type + ' ' + (o.name || o.parent?.name || '')); }); return pg.name + ' | ' + L.join('; ') + ' | ' + pg.cacheKey.slice(0, 300); });
+          out.zones.push({ id, ms, progs: r.info.programs.length - p0, calls: calls.slice(), who });
+          zs.grp.visible = false; if (zs.proxy) zs.proxy.visible = true;
+        }
+        return out;
+      })()`, 240000);
+      console.log('программы', JSON.stringify(r));
+      throw new Error('замер программ готов');
+    }
+    if (MODE === 'approach') {   // въезд в каждую зону — на свежей странице (зона строится один раз)
+      for (const [zid, from] of [['metro', [650, 225]], ['war', [-288, 720]], ['kids', [230, -330]]].filter(([k]) => !process.env.ZONES || process.env.ZONES.split(',').includes(k))) {
+        await send('Page.navigate', { url: 'about:blank' }); await sleep(300);
+        await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        await send('Page.navigate', { url: BASE + '/#/games/world' });
+        let ok2 = false; for (let i = 0; i < 240 && !ok2; i++) { await sleep(500); try { ok2 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+        if (!ok2) { console.log('мир не открылся'); continue; }
+        await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+        await send('Profiler.enable'); await send('Profiler.setSamplingInterval', { interval: 250 });
+        const t0p = await ev(`performance.now()`); await send('Profiler.start');
+        const r = await ev(`(async () => {
+          const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
+          const S = GAME_IMPL.world._test.state(), z = S.zones, Zn = MirZones.ZONES['${zid}'], P = S.P;
+          S.fixedTime = 13; z.prof = [];
+          const cx = (Zn.x0 + Zn.x1) / 2, cz = (Zn.z0 + Zn.z1) / 2, sx = ${from[0]}, sz = ${from[1]};
+          const L = Math.hypot(cx - sx, cz - sz), dx = (cx - sx) / L, dz = (cz - sz) / L;
+          // сначала — 8 с у появления в столице (зоны рядом строятся в фоне): рывки при старте мира
+          const sfn = [];
+          const st = await new Promise(done => { const a = []; let l = 0, t0 = 0; const f = t => { a.push(t - l); sfn.push(z.frameNo || 0); l = t; if (t - t0 < 8000) requestAnimationFrame(f); else done(a); }; requestAnimationFrame(t => { l = t0 = t; requestAnimationFrame(f); }); });
+          const stL = st.filter(x => x > 50), start = { frames: st.length, long: stL.length, worst: Math.round(Math.max(...st)), stutter: Math.round(stL.reduce((a, b) => a + b, 0)),
+            why: st.map((x, i) => [x, i]).filter(([x]) => x > 50).map(([x, i]) => [Math.round(x), z.prof.filter(p => p[4] === sfn[i] || p[4] === sfn[i] - 1).map(p => p[0] + ':' + p[1] + ':' + p[2] + ':' + p[3]).slice(0, 5)]) };
+          P.place(sx, MirZones.terrain(sx, sz) + .3, sz, Math.atan2(dx, dz)); await new Promise(r => setTimeout(r, 2500));
+          const dts = []; let last = performance.now(), d = 0, heap0 = performance.memory?.usedJSHeapSize || 0;
+          const gl = S.R.r.getContext(), oil = gl.getProgramInfoLog.bind(gl), plog = [];   // синхронная сборка программ (сколько ждали)
+          const nm = p => { try { for (const sh of gl.getAttachedShaders(p) || []) { const m = /#define SHADER_NAME (\S+)/.exec(gl.getShaderSource(sh) || ''); if (m) return m[1]; } } catch (e) {} return '?'; };
+          gl.getProgramInfoLog = p => { const t = performance.now(), s = oil(p); plog.push([z.frameNo || 0, +(performance.now() - t).toFixed(1) + ' ' + nm(p)]); return s; };
+          const zs0 = z.zoneState('${zid}'), ev = [], fno = [], prg = [], tex = [], geo = [], ends = []; let wasB = false, wasS = false, wasR = false; const tA = performance.now(); let tReady = null;
+          await new Promise(done => { const tick = t => { const dt = t - last; last = t; dts.push(dt); ends.push(t); fno.push(z.frameNo || 0); prg.push(S.R.r.info.programs?.length || 0); tex.push(S.R.r.info.memory.textures); geo.push(S.R.r.info.memory.geometries); d += 18 * Math.min(dt, 100) / 1000;
+            if (zs0.built !== wasB) { wasB = zs0.built; ev.push(['built', dts.length]); } if (zs0.shown !== wasS) { wasS = zs0.shown; ev.push(['shown', dts.length]); }
+            if (!!zs0.ready !== wasR) { wasR = !!zs0.ready; ev.push(['ready', dts.length]); if (wasR && tReady == null) tReady = Math.round((t - tA) / 100) / 10; }
+            if (d < L - 10) { const x = sx + dx * d, zz = sz + dz * d; P.place(x, MirZones.terrain(x, zz) + .3, zz, Math.atan2(dx, dz)); requestAnimationFrame(tick); } else setTimeout(done, 3000); };
+            requestAnimationFrame(t => { last = t; requestAnimationFrame(tick); }); });
+          const longT = []; { let tt = 0; } 
+          const long = dts.filter(x => x > 50), prof = z.prof.filter(p => p[3] > 8).sort((a, b) => b[3] - a[3]).slice(0, 8);
+          // что было в долгих кадрах (по номеру кадра мира)
+          const D = (a, i) => (a[i] || 0) - (a[i - 1] || a[i] || 0);
+          const why = dts.map((x, i) => [x, i]).filter(([x]) => x > 50).map(([x, i]) => [Math.round(x), 'prog+' + D(prg, i) + '/' + D(prg, i + 1) + ' tex+' + D(tex, i) + '/' + D(tex, i + 1) + ' geo+' + D(geo, i) + '/' + D(geo, i + 1),
+            z.prof.filter(p => p[4] === fno[i] || p[4] === fno[i] - 1).map(p => p[0] + ':' + p[1] + ':' + p[2] + ':' + p[3]).slice(0, 6), plog.filter(p => p[0] === fno[i] || p[0] === fno[i] - 1).map(p => p[1]),
+            'кадр ' + i + ' / показ ' + (ev.find(e => e[0] === 'shown')?.[1] ?? '-')]);
+          gl.getProgramInfoLog = oil;
+          z.prof = null;
+          const around = ev.map(([k, i]) => [k, dts.slice(Math.max(0, i - 2), i + 3).map(Math.round)]);
+          const longW = dts.map((x, i) => [x, i]).filter(([x]) => x > 50).map(([x, i]) => [ends[i] - x, ends[i]]);
+          return { zone: '${zid}', start, tReady, plogAll: plog.filter(p => parseFloat(p[1]) > 10).slice(0, 12), longW, why, around, frames: dts.length, long: long.length, worst: Math.round(Math.max(...dts)), stutter: Math.round(long.reduce((a, b) => a + b, 0)), built: z.zoneState('${zid}').built, shown: z.zoneState('${zid}').shown, prof, warm: z.warm ? { ext: z.warm.ext, n: z.warm.n, log: z.warm.log } : null };
+        })()`, 240000);
+        const { profile: pr } = await send('Profiler.stop');
+        if (r && r.longW && pr) {   // что считал процессор в долгих кадрах (по своему времени функций)
+          const byId = new Map(pr.nodes.map(n => [n.id, n])); let tt = pr.startTime; const self = new Map();
+          for (let i = 0; i < pr.samples.length; i++) {
+            tt += pr.timeDeltas[i] || 0; const pageT = (tt - pr.startTime) / 1000 + t0p;
+            if (!r.longW.some(([a, b]) => pageT >= a && pageT <= b)) continue;
+            const n = byId.get(pr.samples[i]), cf = n.callFrame, k = (cf.functionName || '(анон)') + ' ' + (cf.url || '').split('/').pop().split('?')[0] + ':' + (cf.lineNumber + 1);
+            self.set(k, (self.get(k) || 0) + (pr.timeDeltas[i + 1] || 250) / 1000);
+          }
+          r.hot = [...self].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([k, v]) => k + ' ' + Math.round(v) + 'мс');
+          delete r.longW;
+        }
+        console.log('въезд', JSON.stringify(r));
+        rows.push(r);
+      }
+      throw new Error('замер въездов готов');
+    }
     await send('Page.navigate', { url: BASE + '/#/games/world' });
     let up = false;
     for (let i = 0; i < 240 && !up; i++) { await sleep(500); try { up = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }

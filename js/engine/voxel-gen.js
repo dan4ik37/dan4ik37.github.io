@@ -76,7 +76,10 @@
     seed = V.seedOf(seed);
     const mk = k => makeNoise(V.hash(seed, k, 7919));
     const G = { seed, nC: mk(1), nE: mk(2), nP: mk(3), nH: mk(4), nD: mk(5), nR: mk(6), nT: mk(7), nM: mk(8), nC1: mk(9), nC2: mk(10), nC3: mk(11), nRv: mk(12), nRm: mk(13), nDune: mk(14), nFl: mk(15),
-      features: Array.isArray(o.features) ? o.features : [], ores: null, id: V.ID || {}, oc: new Map() };
+      features: Array.isArray(o.features) ? o.features : [], ores: null, id: V.ID || {}, oc: new Map(),
+      // версия генератора (meta.genVer мира; нет — 1): 2 — границы биомов извилистые (сдвиг шума), у снегов — переходная полоса
+      // (снег пятнами, смешанные деревья). Старые миры остаются на 1 — несохранённые чанки иначе выросли бы другими
+      ver: o.ver >= 2 ? 2 : 1, nW1: mk(16), nW2: mk(17), nPt: mk(18) };
     const ID = G.id;
     // руды: блок, замена, высота, размер жилы, попыток на чанк
     G.ores = [
@@ -101,7 +104,9 @@
     // реки: узкая полоса около нуля шума — долина к уровню моря − 3
     const rn = Math.abs(fbm2(G.nR, x / 340, z / 340, 2)), river = (1 - ss(.018, .055, rn)) * land * (1 - mk * .85);
     h = lerp(h, SEA - 3 + det, river);
-    let T = fbm2(G.nT, x / 940, z / 940, 2), M = fbm2(G.nM, x / 820, z / 820, 2);
+    let tx = x, tz = z;
+    if (G.ver >= 2) { tx += fbm2(G.nW1, x / 90, z / 90, 2) * 34; tz += fbm2(G.nW2, x / 90, z / 90, 2) * 34; }   // v2: извилистые границы
+    let T = fbm2(G.nT, tx / 940, tz / 940, 2), M = fbm2(G.nM, tx / 820, tz / 820, 2);
     T -= Math.max(0, h - SEA - 30) / 70;   // выше — холоднее
     // болото: почти ровно у воды; пустыня: дюны
     const swamp = ss(.24, .42, M) * ss(-.22, -.02, T) * land * (1 - mk);
@@ -182,7 +187,7 @@
       if (c.h <= SEA || V.caveAt(G, x, c.h - 1, z, c.h) || ravineCut(G, x, z, c.h - 1, c.h)) continue;
       if (c.mk > .3 && b === BI.mountains && c.h > SEA + 40) continue;
       if (b === BI.desert) { out.push({ t: 'cactus', x, z, y: c.h, n: 1 + Math.floor(hgt * 3) }); continue; }
-      const sp = b === BI.snow || b === BI.mountains, bi = b === BI.birch || (b === BI.forest && kind < .2);
+      const sp = b === BI.mountains || (G.ver >= 2 ? 1 - kind < ss(-.27, -.4, c.T) : b === BI.snow), bi = !sp && (b === BI.birch || (b === BI.forest && kind < .2));   // v2: у снегов ели и лиственные вперемешку
       out.push({ t: sp ? 'spruce' : bi ? 'birch' : 'oak', x, z, y: c.h, n: sp ? 6 + Math.floor(hgt * 4) : bi ? 5 + Math.floor(hgt * 3) : 4 + Math.floor(hgt * 3), apple: kind > .985 });
     }
     // озеро: редко, на равнине/в лесу; край не ниже середины (иначе вода повиснет)
@@ -234,12 +239,15 @@
       cg[j * 9 + i] = lx >= -1 && lx <= 16 && lz >= -1 && lz <= 16 ? bb[(lz + 1) * 18 + lx + 1] : column(G, x0 + lx, z0 + lz, col).b;
     }
     for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
+      // вес — «шатёр» по расстоянию до точки сетки (до 8 блоков): цвет меняется плавно, без ступенек по 4 блока
       const gi = (x + 8) / 4, gj = (z + 8) / 4, s = [0, 0, 0, 0, 0, 0, 0, 0, 0];
       let n = 0;
       for (let dj = -1; dj <= 2; dj++) for (let di = -1; di <= 2; di++) {
-        const a = Math.min(8, Math.max(0, Math.floor(gi) + di)), c = Math.min(8, Math.max(0, Math.floor(gj) + dj)), t = TINTS[cg[c * 9 + a]];
-        for (let q = 0; q < 3; q++) { s[q * 3] += t[q][0]; s[q * 3 + 1] += t[q][1]; s[q * 3 + 2] += t[q][2]; }
-        n++;
+        const ia = Math.floor(gi) + di, ic = Math.floor(gj) + dj, wq = Math.max(0, 2 - Math.abs(gi - ia)) * Math.max(0, 2 - Math.abs(gj - ic));
+        if (wq <= 0) continue;
+        const t = TINTS[cg[Math.min(8, Math.max(0, ic)) * 9 + Math.min(8, Math.max(0, ia))]];
+        for (let q = 0; q < 3; q++) { s[q * 3] += t[q][0] * wq; s[q * 3 + 1] += t[q][1] * wq; s[q * 3 + 2] += t[q][2] * wq; }
+        n += wq;
       }
       const o = (x * 16 + z) * 9;
       for (let q = 0; q < 9; q++) tint[o + q] = Math.round(s[q] / n);
@@ -267,6 +275,8 @@
       else if (b === BI.snow) { top = ID.snow_grass; }
       else if (b === BI.mountains) { if (slope >= 3) { top = ID.stone; fill = ID.stone; } else if (h > SEA + 54) { top = ID.snow; fill = ID.snow; deep = 2; } else if (h > SEA + 40) top = ID.snow_grass; }
       else if (h <= SEA && b !== BI.swamp) { top = ID.sand; fill = ID.sand; }
+      // v2: у снегов — переходная полоса: снег пятнами (доля по «температуре» −0,25…−0,42), без прямой линии
+      if (G.ver >= 2 && (top === ID.grass || top === ID.snow_grass) && b !== BI.mountains) { const f = ss(-.25, -.42, tmp[x * 16 + z]); if (f > 0 && f < 1) top = n2(G.nPt, wx / 7, wz / 7) * .5 + .5 < f ? ID.snow_grass : ID.grass; }
       const base = (x << 11) | (z << 7);
       const rvw = rv[x * 16 + z], rvf = rvF[x * 16 + z];
       // слои: коренная порода, камень, наполнитель, верх, вода (лёд)

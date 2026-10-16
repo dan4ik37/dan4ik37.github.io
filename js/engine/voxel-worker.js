@@ -18,7 +18,7 @@
     try {
       if (d.t === 'init') {
         if (d.T) { V.T = d.T; V.compiled = true; }
-        G = V.genInit(d.seed, { features: d.features || [] });
+        G = V.genInit(d.seed, { features: d.features || [], ver: d.ver || 1 });
         self.postMessage({ t: 'ready' });
         return;
       }

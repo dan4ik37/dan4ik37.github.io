@@ -559,4 +559,43 @@
   V.lSky = L => (L >>> 12) & 15; V.lR = L => (L >>> 8) & 15; V.lG = L => (L >>> 4) & 15; V.lB = L => L & 15;
   V.lBlk = L => Math.max((L >>> 8) & 15, (L >>> 4) & 15, L & 15);
   V.liquidHeight = v => { const s = v >>> 12; if (s === 0 || s >= 8) return .875; return Math.max(.1, .875 * (8 - s) / 8); };
+
+  // ═══ Опора и обрушение (16.10.2026): общее для движков; первое применение — падающие деревья «Кубомира» ═══
+  // V.component(W, seeds, o) — связный кусок: обход в ширину по 6 соседям от клеток seeds ([[x, y, z], …]).
+  //   o.take(v, x, y, z) — входит ли клетка в кусок; o.edge(v, x, y, z, dy) — сосед не из куска: 0 — ничего (воздух, листва…),
+  //   1 — опора (кусок держится: grounded), 2 — чужое (постройка игрока: touch); o.max — клеток больше — null («слишком большое —
+  //   не трогаем»); o.depth — не дальше стольких шагов от seeds (листва вокруг ствола). seeds в кусок не входят, если o.take их
+  //   не берёт. → { cells: [x, y, z, v, …], n, grounded, touch, box: [x0, y0, z0, x1, y1, z1] }
+  const SK = (x, y, z) => ((x + 1048576) * 2097152 + (z + 1048576)) * 256 + y;
+  V.supportKey = SK;
+  V.component = (W, seeds, o = {}) => {
+    const max = o.max || 256, depth = o.depth ?? 1e9, seen = new Set(), cells = [], q = [];
+    let n = 0, grounded = false, touch = false, x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9;
+    for (const s of seeds) { const k = SK(s[0], s[1], s[2]); if (!seen.has(k)) { seen.add(k); q.push(s[0], s[1], s[2], 0); } }
+    for (let h = 0; h < q.length; h += 4) {
+      const x = q[h], y = q[h + 1], z = q[h + 2], d = q[h + 3], v = W.raw(x, y, z);
+      if (!(v > 0) || !o.take(v, x, y, z)) continue;
+      if (++n > max) return null;
+      cells.push(x, y, z, v);
+      if (x < x0) x0 = x; if (y < y0) y0 = y; if (z < z0) z0 = z; if (x > x1) x1 = x; if (y > y1) y1 = y; if (z > z1) z1 = z;
+      for (let i = 0; i < 6; i++) {
+        const nx = x + (i === 0 ? 1 : i === 1 ? -1 : 0), ny = y + (i === 2 ? 1 : i === 3 ? -1 : 0), nz = z + (i === 4 ? 1 : i === 5 ? -1 : 0), k = SK(nx, ny, nz);
+        if (seen.has(k)) continue;
+        const nv = W.raw(nx, ny, nz);
+        if (nv > 0 && o.take(nv, nx, ny, nz)) { if (d < depth) { seen.add(k); q.push(nx, ny, nz, d + 1); } continue; }
+        const e = o.edge ? o.edge(nv, nx, ny, nz, ny - y) : 0;
+        if (e === 1) grounded = true; else if (e === 2) touch = true;
+      }
+    }
+    return { cells, n, grounded, touch, box: [x0, y0, z0, x1, y1, z1] };
+  };
+  // Запас прочности (на будущее, как в Valheim — обрушение построек; пока только данные, ничего не обрушается): у блока на опоре
+  // (земля, коренная порода) — base; каждый шаг вверх теряет up, вбок (над пустотой) — side; стало ≤ 0 — не держится.
+  // Материал — по звуку блока (b.sound). Пока падают только деревья (kubomir-ents.js fellTree).
+  V.STABILITY = {
+    stone: { base: 100, up: 6, side: 18 }, metal: { base: 100, up: 4, side: 12 }, wood: { base: 100, up: 10, side: 20 },
+    glass: { base: 60, up: 15, side: 30 }, dirt: { base: 60, up: 20, side: 40 }, grass: { base: 60, up: 20, side: 40 },
+    sand: { base: 40, up: 40, side: 100 }, gravel: { base: 40, up: 40, side: 100 }, snow: { base: 40, up: 25, side: 50 }, wool: { base: 50, up: 15, side: 30 },
+  };
+  V.stabilityOf = b => V.STABILITY[b && b.sound] || V.STABILITY.stone;
 })();

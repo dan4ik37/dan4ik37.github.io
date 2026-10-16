@@ -19,8 +19,10 @@
   // что считается «мелочью» (во взрослом городе ломается только она)
   const SMALL = new Set(['tree', 'pine', 'pole', 'lamp', 'bench', 'fence', 'sign', 'crate', 'bag', 'barrel', 'prop']);
   // сколько нужно силы машины: деревья — только танк/грузовик (2), остальное — любая машина на скорости (1)
-  const POWER = { tree: 2, pine: 2, pole: 1, lamp: 1, bench: 1, fence: 1, sign: 1, crate: 1, bag: 1, barrel: 1, prop: 1, glass: 1 };
-  const HP = { tree: 4, pine: 4, pole: 2, lamp: 2, bench: 2, fence: 1, sign: 1, crate: 2, bag: 2, barrel: 2, prop: 2, glass: 1 };
+  // wall — кусок стены здания из деталей (боевая зона): выбит — дыра, здание стоит (крыша — на углах), тело куска убрано;
+  // block — бетонный блок-укрытие. «Прочные» (бункер, базы) — свои b.hp и b.power при добавлении (танк не пробьёт, только взрывы)
+  const POWER = { tree: 2, pine: 2, pole: 1, lamp: 1, bench: 1, fence: 1, sign: 1, crate: 1, bag: 1, barrel: 1, prop: 1, glass: 1, wall: 2, block: 3 };
+  const HP = { tree: 4, pine: 4, pole: 2, lamp: 2, bench: 2, fence: 1, sign: 1, crate: 2, bag: 2, barrel: 2, prop: 2, glass: 1, wall: 5, block: 8 };
 
   E.destruct = function (R, ph, o = {}){
     const T = R.T, low = R.q === 'low', mob = !!E.isMobile?.();
@@ -161,6 +163,14 @@
           for (let k = 0; k < n; k++) { Qa.setFromAxisAngle(AX.set(r() - .5, r() - .5, r() - .5).normalize(), r() * PI); piece('shard', { x: b.x + (r() - .5) * w, y: base + (r() - .5) * h, z: b.z + (r() - .5) * (b.d || .1), sx: .15 + r() * .3, sy: .2 + r() * .35, sz: .02, q: Qa, ...kick(.7), life: 6 }); }
           burst('glass', b.x, base, b.z, 18); o.sfx?.('glass', { x: b.x, y: base, z: b.z, vol: .8 }); break;
         }
+        case 'wall': case 'block': {   // обломки по размеру куска (кирпичи, плиты), пыль; на месте — дыра
+          const w = b.w || 2, h = b.h || 3, d = b.d || .3, n = low ? 4 : 8, yw = b.yaw || 0, c = Math.cos(yw), s = Math.sin(yw);
+          for (let k = 0; k < n; k++) {
+            const lx = (r() - .5) * w * .9, lz = (r() - .5) * d;
+            piece('box', { x: b.x + lx * c + lz * s, y: base + r() * h * .9 + .1, z: b.z - lx * s + lz * c, sx: w * (.14 + r() * .18), sy: h * (.08 + r() * .12), sz: Math.max(.14, d * (.6 + r() * .4)), c: b.c || '#a8a29e', ...kick(.8) });
+          }
+          burst('dust', b.x, base + h * .45, b.z, low ? 12 : 22); o.sfx?.('break', { x: b.x, y: base + 1, z: b.z, vol: .9 }); break;
+        }
         default: piece('box', { x: b.x, y: base + .5, z: b.z, sx: .5, sy: .5, sz: .5, c: b.c, ...kick() });
       }
     }
@@ -174,7 +184,8 @@
     };
     DS.remove = id => { const b = DS.list.get(id); if (!b) return; DS.list.delete(id); const L = DS.grid.get(cellOf(b.x, b.z)); if (L) L.splice(L.indexOf(b), 1); };
     function near(x, z, r, cb){
-      for (let i = Math.floor((x - r) / 24); i <= Math.floor((x + r) / 24); i++) for (let j = Math.floor((z - r) / 24); j <= Math.floor((z + r) / 24); j++)
+      const m = r + 3;   // клетки — с запасом на размер вещи (в клетке — по центру: кусок стены 2,4 м мог попасть в соседнюю)
+      for (let i = Math.floor((x - m) / 24); i <= Math.floor((x + m) / 24); i++) for (let j = Math.floor((z - m) / 24); j <= Math.floor((z + m) / 24); j++)
         for (const b of DS.grid.get(i + ',' + j) || []) if (Math.hypot(b.x - x, b.z - z) <= r + (b.r || Math.max(b.w || 0, b.d || 0) / 2 || .4)) cb(b);
     }
     const allowed = b => { const ru = DS.rule(b); return ru === 'all' || (ru === 'small' && b.small); };
@@ -214,12 +225,12 @@
       let slow = 1, n = 0;
       o.provide?.(x, z, r + 4, DS);
       near(x, z, r, b => {
-        if (DS.broken.has(b.id) || !allowed(b) || (POWER[b.kind] ?? 1) > power) return;
+        if (DS.broken.has(b.id) || !allowed(b) || (b.power ?? POWER[b.kind] ?? 1) > power) return;
         if (DS.breakId(b.id, (Math.random() * 1e9) | 0, dx, dz)) { n++; slow *= b.kind === 'tree' || b.kind === 'pine' ? .7 : .88; }
       });
       return { n, slow };
     };
-    DS.blocking = (x, z, r, power) => { let hard = null; near(x, z, r, b => { if (!DS.broken.has(b.id) && (POWER[b.kind] ?? 1) > power) hard = b; }); return hard; };
+    DS.blocking = (x, z, r, power) => { let hard = null; near(x, z, r, b => { if (!DS.broken.has(b.id) && (b.power ?? POWER[b.kind] ?? 1) > power) hard = b; }); return hard; };
 
     // ── Кадр: обломки летят, ложатся, засыпают, тают; падающие падают; сломанное восстанавливается ──
     DS.update = dt => {

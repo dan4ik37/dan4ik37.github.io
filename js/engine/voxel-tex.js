@@ -238,6 +238,60 @@
     }
     outline(d);
   };
+  // ── инструменты 32×32 (pixel art, 16.10.2026): ручка снизу слева → голова сверху справа (как в Майнкрафте); свет — сверху слева:
+  // край к свету светлее, к тени темнее, обводка — темнее материала (не чёрная). У материала 4 тона: основа, свет, тень, обводка;
+  // у деревянных голова светлее ручки (иначе «палка»). Та же картинка — вещь в руке (voxel-render.js выдавливает её по пикселям)
+  const TOOL_PAL = {
+    wood: ['#c39457', '#e2b877', '#8f6634', '#3e2810'], stone: ['#8f9095', '#b9babe', '#626368', '#2b2c30'], iron: ['#d3d6db', '#f6f8fa', '#9aa0a8', '#3b3f46'],
+    gold: ['#f3c740', '#fff1a6', '#c18a1c', '#5a3806'], diamond: ['#45dccf', '#b9fff6', '#1c9b91', '#0c4744'],
+  };
+  const HANDLE_PAL = ['#8a5c30', '#b17e48', '#5d3b1b', '#2c1a0a'];
+  P.tool32 = (d, s) => {
+    const pal = (TOOL_PAL[s.m] || TOOL_PAL.iron).map(hx), hp = HANDLE_PAL.map(hx), M = new Uint8Array(N * N);   // 0 — пусто, 1 — ручка, 2 — металл
+    const sc = N / 32, seg = (x0, y0, x1, y1, w, v) => {   // толстая линия (в клетках 32×32)
+      x0 *= sc; y0 *= sc; x1 *= sc; y1 *= sc; w *= sc;
+      const dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const px = x + .5, py = y + .5, t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / L2)), qx = x0 + dx * t - px, qy = y0 + dy * t - py; if (qx * qx + qy * qy <= w * w / 4) M[y * N + x] = v; }
+    };
+    const poly = (pts, v) => {   // многоугольник (точки в клетках 32×32)
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const px = (x + .5) / sc, py = (y + .5) / sc; let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; }
+        if (inside) M[y * N + x] = v;
+      }
+    };
+    if (s.tool === 'sword') {
+      seg(4.5, 27.5, 9.5, 22.5, 3.2, 1); seg(3, 29, 4.5, 27.5, 3.4, 1);                       // рукоять и навершие
+      seg(5.5, 17.5, 14.5, 26.5, 3, 2);                                                      // гарда
+      poly([[9, 21], [11, 23], [27.5, 6.5], [28.5, 3.5], [25.5, 4.5]], 2);                   // клинок с острием
+    } else if (s.tool === 'pick') {
+      seg(4.5, 27.5, 20, 7, 3.2, 1);
+      const A = [[8.95, 2.6], [15.1, 1.9], [19.9, 3.8], [23.4, 7.5], [25, 12.4], [24.3, 17.4]];   // дуга поперёк ручки, выпуклая от неё
+      for (let i = 0; i < A.length - 1; i++) seg(A[i][0], A[i][1], A[i + 1][0], A[i + 1][1], i === 0 || i === A.length - 2 ? 3 : 3.8, 2);
+    } else if (s.tool === 'axe') {
+      seg(4.5, 27.5, 22, 6, 3.2, 1);
+      poly([[12.2, 10.2], [11.5, 5.9], [12.8, 3], [15.7, 1.7], [19.9, 3.8], [21.7, 6.3], [23.3, 7.9], [18.3, 12.8], [15.3, 12.7]], 2);   // лезвие сбоку от ручки
+    } else {   // лопата
+      seg(4.5, 27.5, 17.5, 14.5, 3.2, 1);
+      poly([[16, 12.5], [19, 8], [23, 4.5], [27, 4.5], [27.5, 8.5], [24, 13], [19.5, 16]], 2);                     // штык
+    }
+    // тон: к свету (сверху слева пусто) — светлее, к тени (снизу справа пусто) — темнее; блик на ребре металла
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const v = M[y * N + x]; if (!v) continue;
+      const P4 = v === 1 ? hp : pal, e = (xx, yy) => xx < 0 || yy < 0 || xx >= N || yy >= N || !M[yy * N + xx];
+      let c = P4[0];
+      if (e(x - 1, y) || e(x, y - 1) || e(x - 1, y - 1)) c = P4[1];
+      else if (e(x + 1, y) || e(x, y + 1) || e(x + 1, y + 1)) c = P4[2];
+      if (v === 2 && !e(x - 1, y - 1) && e(x - 2, y - 2) && ((x + y) & 3) === 0) c = shade(P4[1], 1.08);
+      put(d, x, y, c);
+    }
+    // обводка — цвет обводки соседа (ручка — своя, металл — свой)
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (M[y * N + x]) continue;
+      let v = 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < N && yy < N && M[yy * N + xx]) { v = Math.max(v, M[yy * N + xx]); } }
+      if (v) put(d, x, y, (v === 1 ? hp : pal)[3]);
+    }
+  };
   P.ingot = (d, s) => { const c = hx(s.c), lt = shade(c, 1.2), dk = shade(c, .7); for (let y = 6; y < 11; y++) for (let x = 2; x < 14; x++) { const top = y === 6, edge = x === 2 || x === 13 || y === 10; if ((x < 3 || x > 12) && (y === 6)) continue; put(d, x, y, top ? lt : edge ? dk : c); } put(d, 4, 7, shade(c, 1.45)); put(d, 5, 7, shade(c, 1.3)); outline(d); };
   P.gem = (d, s) => {
     const c = hx(s.c), lt = shade(c, 1.35), dk = shade(c, .65);
@@ -348,6 +402,7 @@
     }
   };
   const SPRITE = new Set(['stick', 'tool', 'ingot', 'gem', 'lump', 'food', 'feather', 'plant', 'torch', 'ladder']);
+  const SPRITE32 = new Set(['tool32']);   // вещи, нарисованные сразу в полный размер (фон прозрачный)
   // Ваниль: имя → рисунок (цвета — свои; никаких чужих картинок)
   const S = V.TEX_SPECS = {
     stone: { k: 'stone', c: '#7d7d80', a: .1 }, cobble: { k: 'cobble', c: '#808083', m: '#4e4e52' }, dirt: { k: 'dirt', c: '#7a5634', a: .15 },
@@ -377,7 +432,7 @@
     item_slime_ball: { k: 'lump', c: '#7bd36a' }, item_door: { k: 'door' },
   };
   for (let i = 0; i < 8; i++) S['destroy_' + i] = { k: 'destroy', st: i };
-  for (const [m, M] of Object.entries(V.TOOL_MATS || {})) for (const k of ['pick', 'axe', 'shovel', 'sword']) S[`item_${k}_${m}`] = { k: 'tool', tool: k, c: M.color };
+  for (const [m, M] of Object.entries(V.TOOL_MATS || {})) for (const k of ['pick', 'axe', 'shovel', 'sword']) S[`item_${k}_${m}`] = { k: 'tool32', tool: k, m, c: M.color };
 
   // готовые пиксели (PNG мода, пакет текстур): 16×16 или 32×32 → размер текущего рисунка
   function pixels(rgba){
@@ -409,7 +464,7 @@
       if (!s) { P.missing(d); return N === TS ? d : upscale(d, N, TS); }
       const px = pixels(s.rgba);
       if (px) { d.set(px); return N === TS ? d : upscale(d, N, TS); }
-      const a0 = SPRITE.has(s.k) ? 0 : 255;
+      const a0 = SPRITE.has(s.k) || SPRITE32.has(s.k) ? 0 : 255;
       for (let i = 0; i < N * N * 4; i += 4) d[i + 3] = a0;
       const nm = noiseMap(hs(name) ^ (s.seed | 0));
       try { (P[s.k] || P.noise)(d, s, nm, name); } catch (e) { P.missing(d); }
