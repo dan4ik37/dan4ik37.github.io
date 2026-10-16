@@ -242,6 +242,22 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(/вошедшие/.test(logged), 'создать событие — сначала войти');
   P.login = login0; P.rpc = rpc0;
 
+  // ═══ 15. «🧭 Обзор сообществ» (community2.js): карточки, возраст, старый поиск без community2.sql ═══
+  const cc = X.ccard({ id: 7, name: 'Клан хуйни', about: 'Играем', icon: '🎮', members: 12, category: 'games', age: 12, active_at: new Date().toISOString() }, 'page');
+  ok(/data-join="7"/.test(cc) && /🎮 Игры/.test(cc) && /href="#\/chat\/c\/7"/.test(cc) && !/хуйни/.test(cc), 'карточка: «Вступить», категория, ссылка, мат закрыт', cc);
+  window.D37Age = { listOk: n => n < 18, canOpen: n => n <= 6, kid: () => true, kidText: t => t, badge: n => `<i>${n}+</i>` };
+  ok(/Не по возрасту/.test(X.ccard({ id: 8, name: 'Подростки', icon: '🔥', members: 3, category: 'chat', age: 12 }, 'page')) && !/data-join/.test(X.ccard({ id: 8, name: 'П', icon: '🔥', members: 3, age: 12 }, 'page')), 'ребёнку 12+ — без «Вступить»');
+  ok(X.ccard({ id: 9, name: 'Взрослые', icon: '🔞', members: 3, age: 18 }, 'page') === '', '18+ несовершеннолетнему — не показываем');
+  delete window.D37Age;
+  let catCalls = [];
+  P.rpc = async (name, args) => { catCalls.push([name, args]); if (name === 'cm_catalog') return { error: { code: 'PGRST202' }, missing: true }; if (name === 'cm_list_public') return { data: [{ id: 3, name: 'Старое', icon: '💬', members: 2 }] }; return { data: null }; };
+  const fq = () => ({ value: '', hidden: false, addEventListener(){}, querySelectorAll: () => [] });
+  const fbox = { innerHTML: '', isConnected: true, addEventListener(){}, querySelector: s => (fbox._q[s] = fbox._q[s] || fq()), _q: {} };
+  X.find(fbox, 'page');
+  await new Promise(res => setTimeout(res, 20));
+  ok(catCalls.map(c => c[0]).join() === 'cm_catalog,cm_list_public' && /Старое/.test(fbox._q['[data-f="list"]'].innerHTML) && fbox._q['.ds-oldnote'].hidden === false, 'без community2.sql — старый поиск и подсказка «появятся, когда сайт обновится»');
+  P.rpc = rpc0;
+
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);
   process.exitCode = fail ? 1 : 0;

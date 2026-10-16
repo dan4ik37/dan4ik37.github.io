@@ -13,11 +13,15 @@
 --     название, описание, начало, длительность, место (канал, голосовой, «Мир Денчика», игра, стрим), возрастная метка;
 --     карточка в канале («📢 новости» / первый текстовый), «✅ Пойду» со счётчиком, «🔴 Сейчас идёт»,
 --     🔔 «скоро начнётся» за 15 минут — api/push-check.js раз в 5 минут (bot_event_remind) и запасом при чтении событий
+--   • обзор сообществ 🧭: категория (игры, творчество, общение, учёба, стримы) и возрастная метка сообщества, поиск,
+--     «большие / активные / новые»; не по возрасту — не видно и не вступить (cm_join переопределён — если перезапускал
+--     community.sql, после него снова этот файл)
 --
 --  Проверка после запуска (гостем, publishable-ключ):
 --   /rest/v1/chat_channels?id=eq.news → [{"id":"news",…,"mods_only":true}]
 --   /rpc/bot_post гостем {"p_channel":"news","p_text":"x"} → 401 «permission denied» (PGRST202 = файл не применён)
 --   /rpc/cm_events гостем {"p_community":null} → {"ok":true,"can":false,"list":[]}
+--   /rpc/cm_catalog гостем {} → [] или список с "category" и "age"
 -- ═══════════════════════════════════════════════════════════════════
 
 -- chat-stickers.sql на живой базе не применён, а триггер messages_enforce_status (vip-balance.sql) пишет new.is_sticker
@@ -329,4 +333,112 @@ begin
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;
   execute 'grant execute on function public.bot_event_remind() to service_role';
+end $$;
+
+-- ═══ 3. Обзор сообществ 🧭: категории, возрастная метка, «большие / активные / новые» ═══
+alter table public.communities add column if not exists category text not null default 'chat';
+alter table public.communities add column if not exists age int not null default 0;
+alter table public.communities add column if not exists active_at timestamptz;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'communities_category_chk') then
+    alter table public.communities add constraint communities_category_chk check (category in ('games', 'art', 'chat', 'study', 'stream'));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'communities_age_chk') then
+    alter table public.communities add constraint communities_age_chk check (age in (0, 6, 12, 16, 18));
+  end if;
+end $$;
+create index if not exists idx_comm_new on public.communities (created_at desc) where status = 'active' and is_public;
+create index if not exists idx_comm_active on public.communities (active_at desc nulls last) where status = 'active' and is_public;
+
+-- «Живость»: время последнего сообщения (пишется не чаще раза в минуту)
+create or replace function public.comm_touch_active()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.communities set active_at = now() where id = new.community_id and (active_at is null or active_at < now() - interval '1 minute');
+  return null;
+end $$;
+drop trigger if exists comm_touch_active on public.community_messages;
+create trigger comm_touch_active after insert on public.community_messages for each row execute function public.comm_touch_active();
+revoke all on function public.comm_touch_active() from public, anon, authenticated;
+update public.communities c set active_at = (select max(m.created_at) from public.community_messages m where m.community_id = c.id) where c.active_at is null;
+
+-- Категория и возрастная метка сообщества — владелец (18+ — только персонал сайта)
+create or replace function public.cm_set_meta(p_id bigint, p_category text, p_age int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if coalesce(public.comm_role(p_id), '') <> 'owner' and not public.comm_is_staff() then return jsonb_build_object('ok', false, 'reason', 'rights'); end if;
+  if coalesce(p_category, '') not in ('games', 'art', 'chat', 'study', 'stream') then return jsonb_build_object('ok', false, 'reason', 'category'); end if;
+  if coalesce(p_age, -1) not in (0, 6, 12, 16, 18) or (p_age = 18 and not public.comm_is_staff()) then return jsonb_build_object('ok', false, 'reason', 'age'); end if;
+  update public.communities set category = p_category, age = p_age where id = p_id;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- Обзор: открытые сообщества по поиску, категории и сортировке (members — большие, active — живые, new — новые); по 24.
+-- Не по возрасту (age.sql: группа вошедшего; гость — «не указан», до 16+) — не показываем
+create or replace function public.cm_catalog(p_q text default null, p_cat text default null, p_sort text default 'members', p_offset int default 0)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid(); cap int := public.comm_age_cap(auth.uid());
+  q text := replace(replace(replace(left(btrim(coalesce(p_q, '')), 40), '%', ''), '_', ''), '\', '');
+begin
+  return (select coalesce(jsonb_agg(to_jsonb(x) - 'srt' order by x.srt desc, x.id desc), '[]'::jsonb) from (
+    select c.id, c.name, c.about, c.icon, c.members, c.category, c.age, c.created_at, c.active_at,
+      exists (select 1 from public.community_members m where m.community_id = c.id and m.user_id = uid) as mine,
+      case when p_sort = 'new' then extract(epoch from c.created_at)::float8
+           when p_sort = 'active' then coalesce(extract(epoch from c.active_at)::float8, 0)
+           else c.members::float8 end as srt
+    from public.communities c
+    where c.status = 'active' and c.is_public and c.age <= cap
+      and (coalesce(p_cat, '') = '' or c.category = p_cat)
+      and (q = '' or c.name ilike '%' || q || '%' or c.about ilike '%' || q || '%')
+    order by srt desc, c.id desc
+    limit 24 offset greatest(0, least(coalesce(p_offset, 0), 480))) x);
+end $$;
+
+-- Приглашение: + категория и метка (страница /c/<код>, карточка в ленте)
+create or replace function public.cm_invite_info(p_code text)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', c.id, 'name', c.name, 'about', c.about, 'icon', c.icon, 'members', c.members, 'public', c.is_public,
+    'category', c.category, 'age', c.age)
+  from public.communities c where c.invite_code = lower(btrim(coalesce(p_code, ''))) and c.status = 'active';
+$$;
+
+-- Вступить (как в community.sql) + возрастная метка: не по возрасту — 'age'
+create or replace function public.cm_join(p_id bigint, p_code text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); c record; b record;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if p_code is not null and btrim(p_code) <> '' then
+    select * into c from public.communities where invite_code = lower(btrim(p_code));
+  else
+    select * into c from public.communities where id = p_id and is_public;
+  end if;
+  if not found or c.status <> 'active' then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if exists (select 1 from public.community_members where community_id = c.id and user_id = uid) then
+    return jsonb_build_object('ok', true, 'id', c.id, 'already', true); end if;
+  if c.age > public.comm_age_cap(uid) and not public.comm_is_staff(uid) then return jsonb_build_object('ok', false, 'reason', 'age', 'age', c.age); end if;
+  select * into b from public.community_bans where community_id = c.id and user_id = uid;
+  if found then
+    if b.until is null or b.until > now() then return jsonb_build_object('ok', false, 'reason', 'banned', 'until', b.until); end if;
+    delete from public.community_bans where community_id = c.id and user_id = uid;
+  end if;
+  if c.members >= 500 then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+  if (select count(*) from public.community_members where user_id = uid) >= 50 then return jsonb_build_object('ok', false, 'reason', 'joined'); end if;
+  if (select count(*) from public.community_members where user_id = uid and joined_at > now() - interval '1 hour') >= 15 then
+    return jsonb_build_object('ok', false, 'reason', 'too_fast'); end if;
+  insert into public.community_members (community_id, user_id, role) values (c.id, uid, 'member');
+  return jsonb_build_object('ok', true, 'id', c.id);
+end $$;
+
+do $$
+begin
+  execute 'revoke all on function public.cm_set_meta(bigint,text,integer) from public, anon';
+  execute 'grant execute on function public.cm_set_meta(bigint,text,integer) to authenticated';
+  execute 'grant execute on function public.cm_catalog(text,text,text,integer) to anon, authenticated';
+  execute 'grant execute on function public.cm_invite_info(text) to anon, authenticated';
+  execute 'revoke all on function public.cm_join(bigint,text) from public, anon';
+  execute 'grant execute on function public.cm_join(bigint,text) to authenticated';
 end $$;

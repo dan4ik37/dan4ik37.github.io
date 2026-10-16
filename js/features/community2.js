@@ -2,6 +2,8 @@
 //  СООБЩЕСТВА 2 (community2.sql) — поверх community.js (D37DS) и ленты msgview.js:
 //  📅 события (как Discord Events): список «📅 События» над каналами, создать / изменить / отменить, «✅ Пойду», «🔴 Сейчас идёт»,
 //  страница события #/chat/ev/<id> (карточка в ленте — msgview.js MV.evCardHtml). «Денчик-бот» и «📢 новости» — api/push-check.js.
+//  🧭 обзор сообществ (#/chat/find): поиск, категории, «большие / активные / новые», метка возраста, «Вступить»;
+//  категория и метка — при создании и в настройках сообщества (владелец).
 //  Адреса: #/chat[/c/<id>]/events[/new | /edit/<id>], #/chat/ev/<id>; в телефоне — comm/<сервер>/events…, comm/ev/<id>.
 //  Грузится вместе с community.js (phone.js → MODS.ds). Пока community2.sql не выполнен — «появится, когда сайт обновится».
 // ═══════════════════════════════════════
@@ -20,7 +22,8 @@
   const evKey = srv => (srv.official ? 'o' : String(srv.id));
   function evLoad(srv, fresh){
     const k = evKey(srv), c = EV.get(k);
-    if (!fresh && c && c.d && Date.now() - c.d.t < 60000) return Promise.resolve(c.d);
+    // нет community2.sql — сами не спрашиваем 10 минут (каждый запрос — лишняя 404 в консоли); открыл экран — спросим
+    if (!fresh && c && c.d && Date.now() - c.d.t < (c.d.missing ? 600000 : 60000)) return Promise.resolve(c.d);
     if (c?.p) return c.p;
     const p = P.rpc('cm_events', { p_community: srv.official ? null : srv.id }).then(r => {
       const d = { t: Date.now(), list: r.data?.list || [], can: !!r.data?.can, missing: !!r.missing,
@@ -39,7 +42,7 @@
   // Строка «📅 События» над каналами: сколько впереди, «идёт» — красным
   X.chanTop = (mode, srv, selCh) => {
     const c = EV.get(evKey(srv))?.d;
-    if (!c || Date.now() - c.t > 60000) evLoad(srv).catch(() => {});
+    if (!c || Date.now() - c.t > (c.missing ? 600000 : 60000)) evLoad(srv).catch(() => {});
     const live = c && c.list.some(MV.evLive), n = c ? c.list.length : 0;
     return `<a class="ds-ch ds-evrow${selCh === 'x:events' ? ' on' : ''}" href="${DS.link(mode, srv.id, 'events')}"><i>📅</i><span>События</span>${live ? '<small class="ds-evlive">идёт</small>' : n ? `<em class="ds-evn">${n}</em>` : c?.missing ? '<small>скоро</small>' : ''}</a>`;
   };
@@ -188,4 +191,88 @@
   };
   // свежая карточка в ленте после «Пойду» в списке — и наоборот
   window.addEventListener('d37:event', () => EV.clear());
+
+  // ═══ 🧭 Обзор сообществ (cm_catalog). Без community2.sql — старый поиск по названию (cm_list_public) ═══
+  const CATS = [['', 'Все'], ['games', '🎮 Игры'], ['art', '🎨 Творчество'], ['chat', '💬 Общение'], ['study', '📚 Учёба'], ['stream', '📺 Стримы']];
+  const CAT_NAME = Object.fromEntries(CATS.slice(1));
+  const CAT_BG = { games: '#7c3aed,#2563eb', art: '#db2777,#f59e0b', chat: '#0ea5e9,#22c55e', study: '#16a34a,#0d9488', stream: '#9147ff,#ef4444' };
+  const SORTS = [['members', '👥 Большие'], ['active', '🔥 Активные'], ['new', '🆕 Новые']];
+  X.CATS = CATS;
+  X.ccard = (c, mode) => {
+    const ag = +c.age || 0;
+    if (window.D37Age && !window.D37Age.listOk(ag)) return '';
+    const okAge = !window.D37Age || window.D37Age.canOpen(ag), mine = c.mine || DS.mine().some(x => x.id === c.id);
+    const bg = c.banner && X.BANNERS?.[c.banner] || `linear-gradient(135deg,${CAT_BG[c.category] || CAT_BG.chat})`;
+    return `<div class="ds-cc${c.boost ? ' boost' : ''}" data-cid="${e(c.id)}"><div class="ds-ccban" style="background:${bg}"></div>
+      <span class="ds-ccic${c.anim ? ' anim' : ''}">${e(c.icon)}</span>
+      <div class="ds-ccb"><a class="ds-cct" href="${DS.link(mode, c.id)}">${e(P.clean(c.name))}${c.boost ? ' <i title="Буст">🚀</i>' : ''}</a>
+        <small>👥 ${e(c.members)}${c.category ? ' · ' + e(CAT_NAME[c.category] || '') : ''}${ag ? ' · ' + ageBadge(ag) : ''}${c.active_at ? ' · 💬 ' + e(P.ago(c.active_at)) : ''}</small>
+        ${c.about ? `<em>${e(P.clean(kidAbout(c.about)))}</em>` : ''}</div>
+      <div class="ds-ccacts">${mine ? `<a class="ds-btn ghost ds-sm" href="${DS.link(mode, c.id)}">✓ Ты здесь — открыть</a>`
+        : !okAge ? '<span class="ds-dim">🔞 Не по возрасту</span>'
+        : `<a class="ds-btn ghost ds-sm" href="${DS.link(mode, c.id)}">Посмотреть</a><button type="button" class="ds-btn ds-sm" data-join="${e(c.id)}">Вступить</button>`}</div></div>`;
+  };
+  X.find = (el, mode) => {
+    const st = { q: '', cat: '', sort: 'members', off: 0, list: [], old: !!X.oldCatalog, seq: 0 };
+    el.innerHTML = `<div class="ds-pane ds-wide"><h3>🧭 Обзор сообществ</h3><p class="ds-dim">Открытые сообщества игроков сайта: найди своих или создай своё.</p>
+      <div class="ds-row"><input type="search" class="ds-in" data-f="q" placeholder="Название или о чём…" aria-label="Поиск сообщества"><a class="ds-btn" href="${DS.special(mode, 'new')}">＋ Создать</a></div>
+      <div class="ds-chips" data-f="cats">${CATS.map(([k, t]) => `<button type="button" class="${k ? '' : 'on'}" data-cat="${k}">${t}</button>`).join('')}</div>
+      <div class="ds-chips ds-sort" data-f="sort">${SORTS.map(([k, t]) => `<button type="button" class="${k === 'members' ? 'on' : ''}" data-sort="${k}">${t}</button>`).join('')}</div>
+      <div class="ds-dim ds-oldnote" hidden>Категории и сортировка появятся, когда сайт обновится — пока только поиск по названию.</div>
+      <div class="ds-grid" data-f="list"><div class="ds-dim">Загружаем…</div></div>
+      <div class="ds-row" data-f="morebox" hidden><button type="button" class="ds-btn ghost" data-ds="more">Показать ещё</button></div>
+      <div class="ds-row ds-bycode"><input type="text" class="ds-in" data-f="code" placeholder="Код приглашения (8 знаков)" maxlength="12" aria-label="Код приглашения"><button type="button" class="ds-btn ghost" data-ds="bycode">Войти по коду</button></div></div>`;
+    const q = s => el.querySelector(`[data-f="${s}"]`), box = q('list');
+    const load = async reset => {
+      const my = ++st.seq;
+      if (reset) { st.off = 0; st.list = []; }
+      let r = st.old ? null : await P.rpc('cm_catalog', { p_q: st.q || null, p_cat: st.cat || null, p_sort: st.sort, p_offset: st.off });
+      if (r?.missing) X.oldCatalog = st.old = true;
+      if (st.old) { el.querySelector('.ds-oldnote').hidden = false; q('cats').hidden = q('sort').hidden = true; }
+      if (st.old) r = await P.rpc('cm_list_public', { p_q: st.q || null });
+      if (my !== st.seq || !el.isConnected) return;
+      if (r.error) { box.innerHTML = r.missing ? '<div class="ds-soon">🛠️ Сообщества появятся, когда сайт обновится. Общий чат — уже работает (сервер «Денчик37» слева).</div>' : `<div class="ds-dim">⚠️ ${e(P.err(r.error))}</div>`; q('morebox').hidden = true; return; }
+      const rows = Array.isArray(r.data) ? r.data : [];
+      st.list = st.list.concat(rows); st.off += rows.length;
+      const html = st.list.map(c => X.ccard(c, mode)).join('');
+      box.innerHTML = html || `<div class="ds-dim">Ничего не нашли${st.q || st.cat ? '' : ' — пока пусто'}. Создай своё!</div>`;
+      q('morebox').hidden = st.old || rows.length < 24;
+    };
+    let t = 0;
+    q('q').addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { st.q = q('q').value.trim(); load(true); }, 350); });
+    el.addEventListener('click', async ev => {
+      const b = ev.target.closest('[data-cat],[data-sort],[data-ds],[data-join]'); if (!b || !el.contains(b)) return;
+      if (b.dataset.cat !== undefined) { st.cat = b.dataset.cat; q('cats').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); load(true); }
+      else if (b.dataset.sort) { st.sort = b.dataset.sort; q('sort').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); load(true); }
+      else if (b.dataset.join) {
+        if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return; }
+        b.disabled = true;
+        const r = await P.rpc('cm_join', { p_id: +b.dataset.join, p_code: null });
+        if (r.data?.ok) { await DS.loadMy(true); DS.go(mode, DS.link(mode, r.data.id)); return; }
+        b.disabled = false; alert('Не получилось: ' + DS.why(r));
+      } else if (b.dataset.ds === 'more') load(false);
+      else if (b.dataset.ds === 'bycode') { const c = q('code').value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); if (c.length >= 6) DS.go(mode, DS.special(mode, 'join/' + c)); }
+    });
+    load(true);
+  };
+
+  // ═══ Категория и возраст сообщества: при создании и в настройках (владелец) ═══
+  X.metaHtml = id => {
+    const staff = typeof currentRole !== 'undefined' && ['admin', 'moderator'].includes(currentRole);
+    if (id) setTimeout(() => metaFill(id), 0);
+    return `<div class="ds-row ds-meta" data-meta="${e(id || '')}"><label class="ds-lbl">Категория<select class="ds-in" data-f="mcat">${CATS.slice(1).map(([k, t]) => `<option value="${k}"${k === 'chat' ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label class="ds-lbl">Возраст<select class="ds-in" data-f="mage">${[0, 6, 12, 16].concat(staff ? [18] : []).map(n => `<option value="${n}">${n}+</option>`).join('')}</select></label></div>`;
+  };
+  async function metaFill(id){
+    const box = document.querySelector(`.ds-meta[data-meta="${+id}"]`); if (!box || typeof sbClient === 'undefined' || !sbClient) return;
+    const { data, error } = await sbClient.from('communities').select('category, age').eq('id', +id).maybeSingle();
+    if (error) { box.innerHTML = '<div class="ds-dim">Категория и возраст появятся, когда сайт обновится.</div>'; return; }
+    if (data) { box.querySelector('[data-f="mcat"]').value = data.category; box.querySelector('[data-f="mage"]').value = String(data.age); }
+  }
+  X.metaSave = async (el, id) => {
+    const c = el.querySelector('[data-f="mcat"]'), a = el.querySelector('[data-f="mage"]');
+    if (!c || !a) return {};
+    const r = await P.rpc('cm_set_meta', { p_id: +id, p_category: c.value, p_age: +a.value });
+    return r.data?.ok || r.missing ? {} : { err: DS.why(r) };
+  };
 })();
