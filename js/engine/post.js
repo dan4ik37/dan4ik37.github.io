@@ -220,7 +220,7 @@ void main(){ vec4 s = texture2D(tScene, vUv); vec3 c = max(s.rgb, vec3(0.0)); fl
   // Сборка для наборов шейдеров (16.10.2026; gfx.js E.PACKS): та же сборка + куски по define — LUT (тон AgX и цвет набора),
   // лучи солнца/луны, мультяшный (полосы света, контуры по глубине), ретро (точечный узор под крупные пиксели), под водой (тон,
   // колыхание). Набор «Обычные» собирает ПРЕЖНИЙ FS_COMP (текст тот же до буквы) — новых программ у него нет.
-  // uPackA: x — под водой (0/1), y — время (с), zw — 1/размер буфера сцены; uPackB: x — полос света, y — контур (0/1),
+  // uPackA: x — под водой (0…1, доля), y — время (с), zw — 1/размер буфера сцены; uPackB: x — полос света, y — контур (0/1),
   // z — узор ретро (0/1), w — уровней цвета ретро; uRayC — цвет лучей (0 — нет)
   const FS_COMP_X = FS_COMP
     .replace('uniform vec3 uGain; uniform vec3 uGrade;', `uniform vec3 uGain; uniform vec3 uGrade;
@@ -256,7 +256,7 @@ float d37Iw( vec2 uv ){ return 1.0 / max( -perspectiveDepthToViewZ( texture2D( t
     .replace('void main(){ vec4 s = texture2D(tScene, vUv);', `void main(){
   vec2 uv = vUv;
 #ifdef D37_UNDER
-  if ( uPackA.x > 0.5 ) uv += vec2( sin( vUv.y * 31.0 + uPackA.y * 2.1 ), cos( vUv.x * 27.0 + uPackA.y * 1.7 ) ) * 0.0022;
+  if ( uPackA.x > 0.001 ) uv += vec2( sin( vUv.y * 31.0 + uPackA.y * 2.1 ), cos( vUv.x * 27.0 + uPackA.y * 1.7 ) ) * ( 0.0022 * uPackA.x );
 #endif
   vec4 s = texture2D(tScene, uv);`)
     .replace('c += b * clamp(1.0 - c, 0.0, 1.0); }', `c += b * clamp(1.0 - c, 0.0, 1.0); }
@@ -267,9 +267,9 @@ float d37Iw( vec2 uv ){ return 1.0 / max( -perspectiveDepthToViewZ( texture2D( t
   if ( uDofOn > 0.5 ) { vec4 df = texture2D( tDof, vUv ); c = mix( c, df.rgb, clamp( df.a * 1.6, 0.0, 1.0 ) ); }   // глубина резкости («Ультра»)
 #endif
 #ifdef D37_UNDER
-  if ( uPackA.x > 0.5 ) {
+  if ( uPackA.x > 0.001 ) {   // доля «под водой» (R.setUnder с k: плавный вход и выход; 1 — как раньше)
     float cau = pow( max( 0.0, sin( vUv.x * 40.0 + uPackA.y * 1.3 ) * sin( vUv.y * 37.0 - uPackA.y * 1.1 ) ), 3.0 );
-    c = c * vec3( 0.42, 0.78, 0.88 ) + vec3( 0.0, 0.02, 0.035 ) + cau * 0.06 * vec3( 0.6, 0.9, 1.0 );
+    c = mix( c, c * vec3( 0.42, 0.78, 0.88 ) + vec3( 0.0, 0.02, 0.035 ) + cau * 0.06 * vec3( 0.6, 0.9, 1.0 ), uPackA.x );
   }
 #endif
 #ifdef D37_TOON
@@ -933,7 +933,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       U.uCSk.value = P.rt.on ? P.rt.contact * sunK() : 0;
       if (P.packX) {   // набор шейдеров: свои числа (у «Обычных» сборка прежняя — этих uniform в ней нет)
         const pk = P.pack;
-        U.uPackA.value.set(P.under ? 1 : 0, (performance.now() / 1000) % 1000, 1 / P.w, 1 / P.h);
+        U.uPackA.value.set(P.under ? (P.underK ?? 1) : 0, (performance.now() / 1000) % 1000, 1 / P.w, 1 / P.h);
         U.uPackB.value.set(pk.toon ? pk.toon.bands : 4, line ? 1 : 0, pk.retro && pk.retro.dither ? 1 : 0, pk.retro ? pk.retro.levels : 4);
         U.tRays.value = P.rays.drawn && rtRays ? rtRays.texture : null;
         if (!P.rays.drawn) U.uRayC.value.set(0, 0, 0);
@@ -948,7 +948,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     P.rays = { tier: 0, drawn: false, color: new T.Vector3(), sun: new T.Vector3(), str: 0, asp: 1 };
     let lutTex = null, lutKey = '', rtRays = null, rtDof = null;
     P.dofOn = false; P.dofDrawn = false;
-    P.setUnder = on => { P.under = !!on; };
+    P.setUnder = (on, k) => { P.under = !!on; P.underK = on ? (k == null ? 1 : Math.max(0, Math.min(1, +k || 0))) : 0; };
     P.setPack = (fx = {}) => {
       const id = fx.id || 'normal', x = id !== 'normal' && P.on !== false;
       const defs = {};

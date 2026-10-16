@@ -87,7 +87,7 @@
     }
     // ── туман: основа — туман движка (небо по времени суток), в пещере — к тёмному и ближе, по биому — чуть цвета ──
     X.afterSky = () => {
-      const f = R.scene.fog; if (!f || st.P.eyeWater) { X.base = null; return; }
+      const f = R.scene.fog; if (!f || st.uwK > 0) { X.base = null; return; }   // под водой туман ведёт R.setUnder
       const c = f.color.clone();
       // биом (днём; ночью туман и так тёмный)
       try {
@@ -101,7 +101,7 @@
       applyFog();
     };
     function applyFog(){
-      const f = R.scene.fog, B = X.base; if (!f || !B || st.P.eyeWater) return;
+      const f = R.scene.fog, B = X.base; if (!f || !B || st.uwK > 0) return;
       const k = X.caveK;
       f.color.setRGB(B.c.r + (CAVE[0] - B.c.r) * k, B.c.g + (CAVE[1] - B.c.g) * k, B.c.b + (CAVE[2] - B.c.b) * k);
       f.near = B.near + (Math.min(B.near, 8) - B.near) * k;
@@ -120,7 +120,7 @@
         }
       }
       // пещера: свет неба у глаз мал — туман тёмный и ближе (плавно)
-      const P = st.P, Ls = V().lSky(W.lightAt(P.x, P.y + 1.6, P.z)), want = st.P.eyeWater ? 0 : Ls <= 2 ? 1 : Ls >= 9 ? 0 : (9 - Ls) / 7;
+      const P = st.P, Ls = V().lSky(W.lightAt(P.x, P.y + 1.6, P.z)), want = st.uwK > 0 ? 0 : Ls <= 2 ? 1 : Ls >= 9 ? 0 : (9 - Ls) / 7;
       const k0 = X.caveK;
       X.caveK += (want - X.caveK) * Math.min(1, dt * 1.6);
       if (Math.abs(X.caveK - k0) > .002) applyFog();

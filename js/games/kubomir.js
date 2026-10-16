@@ -327,7 +327,35 @@
     if (modState.loaded.length) unlock('mod');
   }
   // туман движка начинается с 30 % дальности — у кубиков видно дальше: начало тумана — 60 % (конец прячет край мира)
-  function fogNear(st){ const f = st.R.scene.fog; if (f && !st.P.eyeWater && f.far > 20) f.near = f.far * .6; }
+  function fogNear(st){ const f = st.R.scene.fog; if (f && !(st.uwK > 0) && f.far > 20) f.near = f.far * .6; }
+  // глубина глаз под гладью воды (м; над водой — меньше 0, воды нет — −9)
+  function eyeDepth(st){
+    const V = VX(), W = st.W, P = st.P, ey = P.y + (P.sneak ? 1.27 : 1.62), Tl = V.T.liquid;
+    let y = Math.floor(ey), v = W.raw(P.x, y, P.z);
+    if (!(v > 0 && Tl[v & 0xfff] === 1)) { y--; v = W.raw(P.x, y, P.z); if (!(v > 0 && Tl[v & 0xfff] === 1)) return -9; }
+    for (let n = 0; n < 24; n++) { const u = W.raw(P.x, y + 1, P.z); if (!(u > 0 && Tl[u & 0xfff] === 1)) break; y++; v = u; }
+    return y + V.liquidHeight(v) - ey;
+  }
+  // Под водой — вид (и звук — ниже): с запасом по глубине глаз (нырнул — глубже 0,08, вынырнул — выше 0,05: на плаву глаза
+  // качаются у самой глади, и без запаса туман и цвет кадра переключались каждый кадр — «моргало») и плавно за 0,25 с
+  // (R.setUnder с { near, far, k }: туман смешивается с обычным). Видно 16–24 блока: днём у поверхности — дальше, глубже и ночью —
+  // ближе и темнее. Пока k > 0, туман неба (раз в 0,25 с, погода, пещера) его не перебивает: render.js применяет подводный поверх.
+  let UWC = null, UWB = null;
+  const UWO = { near: 1, far: 20, k: 0 };
+  function underwater(st, dt){
+    const R = st.R, dep = eyeDepth(st);
+    st.uw = st.uw ? dep > -.05 : dep > .08;
+    st.uwK = clamp((st.uwK || 0) + (st.uw ? dt : -dt) / .25, 0, 1);
+    if (st.uwK > 0) {
+      if (!UWC) { UWC = new R.T.Color(); UWB = new R.T.Color('#1f6aa6'); }
+      const P = st.P, day = 1 - clamp(R.night || 0, 0, 1), sky = VX().lSky(st.W.lightAt(P.x, P.y + 1.6, P.z)) / 15, d = Math.max(0, dep);
+      const lum = (.22 + .78 * day) * (.4 + .6 * sky) * (1 - Math.min(.45, d * .025));
+      UWC.copy(UWB).multiplyScalar(lum);
+      UWO.far = 16 + 8 * day * sky * (1 - Math.min(1, d / 30)); UWO.near = 1; UWO.k = st.uwK * st.uwK * (3 - 2 * st.uwK);
+      R.setUnder?.(true, UWC, UWO);
+      st.uwOn = true;
+    } else if (st.uwOn) { st.uwOn = false; R.setUnder?.(false); fogNear(st); st.KL?.afterSky(); }
+  }
   // яркость солнца и неба: днём мягче, чем у движка по умолчанию (иначе трава и песок выгорают в белёсое), ночью луна чуть
   // тусклее движковой (темно, но видно дорогу) — свет факелов от этого не зависит: ночью и в пещерах он заметен пятнами
   // w — сила непогоды (0…1): в дождь солнце и небо тусклее
@@ -1063,8 +1091,7 @@
       fogNear(st); st.KL?.afterSky();
     }
     // под водой — синий туман
-    const uw = !!st.P.eyeWater; R.setUnder?.(uw, '#1f5f9e');
-    if (st.uwWas !== uw) { st.uwWas = uw; if (!uw) { fogNear(st); st.KL?.afterSky(); } }
+    underwater(st, dt);
     // лампы у факелов, лавы и ламп, факел в руке, туман в пещере
     st.KL?.frame(dt, t);
     st.AU?.listener(R.camera.position.x, R.camera.position.y, R.camera.position.z, rig.yaw);
