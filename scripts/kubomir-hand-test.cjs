@@ -460,6 +460,71 @@ function fakeWorld(sky, blk, walls = new Set()){
     }
   }
 
+  // ═══ 8. Погода: расписание от зерна и дня (то же после перезагрузки), под крышей не идёт ═══
+  sec('погода: расписание по зерну и дню, биомы, крыша, «низкая» без частиц');
+  {
+    run('js/games/kubomir-weather.js');
+    const KW = window.KubomirWeather;
+    const series = (seed, days) => { const a = []; for (let d = 1; d <= days; d++) for (let h = 0; h < 24; h += .05) a.push(KW.at(seed, d, h)); return a; };
+    const A1 = series('погода', 40), A2 = series('погода', 40), B1 = series(12345, 40);
+    ok(A1.every((v, i) => v === A2[i]), 'одно зерно, день и час — та же сила (перезагрузка — та же погода)');
+    ok(A1.some((v, i) => Math.abs(v - B1[i]) > .3), 'другое зерно — другое расписание');
+    const wet = A1.filter(v => v > .05).length / A1.length;
+    ok(wet > .05 && wet < .35, 'чаще ясно: непогода — 5…35 % времени', +wet.toFixed(3));
+    let jump = 0; for (let i = 1; i < A1.length; i++) jump = Math.max(jump, Math.abs(A1[i] - A1[i - 1]));
+    ok(jump < .2 && Math.max(...A1) >= .6 && Math.max(...A1) <= 1, 'начинается и кончается плавно (за 3 мин игры — меньше 0,2), сила до 0,6…1', +jump.toFixed(3));
+    ok(Math.abs(KW.at('погода', 3, 23.99) - KW.at('погода', 4, 0)) < .05, 'через полночь — без скачка');
+    ok(KW.kindAt('desert', 70) === '' && KW.kindAt('snow', 70) === 'snow' && KW.kindAt('mountains', 120) === 'snow' && KW.kindAt('mountains', 70) === 'rain' && KW.kindAt('forest', 70) === 'rain' && KW.kindAt('swamp', 60) === 'rain', 'биомы: пустыня — сухо, снега и высокие горы — снег, лес и болото — дождь');
+    // мир: камень ниже y 10; стеклянный домик 6×6 с крышей на y 14 (стекло — не «непрозрачное», но капли держит), факел на земле
+    const cells = new Map(), key = (x, y, z) => x + ',' + y + ',' + z, listeners = [];
+    const W8 = { seed: 9, listeners, raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < 10 ? ID.stone : 0) : v; },
+      get(x, y, z){ return this.raw(x, y, z) & 0xfff; }, set(x, y, z, v){ cells.set(key(x, y, z), v); for (const f of listeners) f(x, y, z, 0, v, {}); return true; },
+      lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => 10, chunkAt: () => ({ gen: true, maxY: 20 }) };
+    for (let x = 0; x < 6; x++) for (let z = 0; z < 6; z++) cells.set(key(x, 14, z), ID.glass);
+    cells.set(key(9, 10, 9), ID.torch);
+    for (let x = 12; x < 15; x++) for (let z = 0; z < 3; z++) for (const y of [10, 11]) cells.set(key(x, y, z), ID.water);
+    const R8 = Object.assign({}, R, { lighting: { time: 12 }, night: 0, camera: new T.PerspectiveCamera(70, 1, .1, 200) });
+    const mk8 = q => { const st8 = { R: Object.assign({}, R8, { q }), W: W8, P: { x: 2.5, y: 10, z: 2.5 }, ox: 0, oz: 0, meta: { day: 1 } }; const X = KW.create(st8); st8.WX = X; return { st8, X }; };
+    const { st8, X } = mk8('high');
+    ok(X.top(2, 2) === 15 && X.top(8, 8) === 10 && X.top(9, 9) === 10 && Math.abs(X.top(13, 1) - (11 + V.liquidHeight(ID.water))) < .2, 'где кончается небо: стеклянная крыша — 15, земля — 10, факел капли не держит, у воды — её гладь', [X.top(2, 2), X.top(8, 8), X.top(9, 9), X.top(13, 1)]);
+    W8.set(8, 16, 8, ID.planks_oak);
+    ok(X.top(8, 8) === 17, 'поставил блок над столбом — столб заново (крыша новая)', X.top(8, 8));
+    X.force = 1; X.step(1); st8.R.camera.position.set(2.5, 11.6, 2.5);
+    let under = 0, outside = 0, onRoof = 0;
+    for (let f = 0; f < 150; f++) {
+      X.frame(1 / 60, f / 60);
+      const D = X.objects().drops;
+      for (let i = 0; i < D.n; i++) if (D.live[i]) { const inX = D.rx[i] >= 0 && D.rx[i] < 6 && D.rz[i] >= 0 && D.rz[i] < 6; if (inX && D.ry[i] < 14.99) under++; else if (inX) onRoof++; else outside++; }
+    }
+    ok(X.rain > .5 && outside > 1000 && onRoof > 0 && under === 0, 'дождь идёт вокруг, капли бьют в стеклянную крышу, под крышей — ни одной', { rain: +X.rain.toFixed(2), under, onRoof, outside });
+    const st0 = X.stats();
+    ok(st0.drops > 200 && st0.drops <= 560 && X.objects().rain.visible, 'капель не больше пула (560), видно один объект отрезков', st0);
+    let pf = true; const rp = X.objects().rainPos; for (let i = 0; i < st0.drops * 6; i++) if (!Number.isFinite(rp[i])) pf = false;
+    ok(pf, 'места капель — конечные числа');
+    // снег: в снегах, медленные хлопья; тоже не под крышей
+    X.biomeOf = () => 'snow'; X.step(1); X.step(1); X.step(1); X.step(1);
+    let fUnder = 0, fy0 = null, fy1 = null;
+    for (let f = 0; f < 600; f++) {
+      X.frame(1 / 60, f / 60);
+      const Fl = X.objects().flakes;
+      for (let i = 0; i < Fl.n; i++) if (Fl.live[i] && Fl.sx[i] >= 0 && Fl.sx[i] < 6 && Fl.sz[i] >= 0 && Fl.sz[i] < 6 && Fl.sy[i] < 14.99) fUnder++;
+      if (f === 300) fy0 = Fl.sy[0]; if (f === 330) fy1 = Fl.sy[0];
+    }
+    const s1 = X.stats();
+    ok(s1.snow > .5 && s1.rain < .1 && s1.flakes > 100 && fUnder === 0, 'в снегах — снег вместо дождя, под крышей хлопьев нет', s1);
+    ok(fy0 != null && fy1 != null && (fy0 - fy1) > 0 && (fy0 - fy1) < 1.5, 'хлопья падают медленно (меньше 3 блоков в секунду)', [fy0, fy1]);
+    // выключили погоду — сила к нулю
+    st8.weatherOff = true; X.step(1); for (let f = 0; f < 600; f++) X.frame(1 / 60, f / 60);
+    ok(X.k < .05 && !X.objects().snow.visible && !X.objects().rain.visible, '⚙️ «Погода» выкл — непогоды нет, частицы спрятаны', X.stats());
+    X.dispose();
+    const L8 = mk8('low');
+    ok(!L8.X.objects().rain && !L8.X.objects().snow && !L8.X.objects().ripples, '«низкая» графика — без частиц (только небо и туман)');
+    L8.X.force = 1; L8.X.step(1); for (let f = 0; f < 120; f++) L8.X.frame(1 / 60, f / 60);
+    ok(L8.X.k > .5, '…но небо темнеет (сила для неба есть)', L8.X.k);
+    L8.X.dispose();
+    ok(!listeners.length, 'закрыли мир — слушатель правок снят');
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
