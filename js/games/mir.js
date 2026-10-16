@@ -64,7 +64,21 @@
   // Графика мира (js/engine/gfx.js E.worldGfx): лёгкая дымка, мягкий туман у земли, сочный цвет; время суток — общее для всех
   // (E.dayClock: сутки — 40 мин настоящего времени, ночь — пятая часть)
   const MIR_GFX = { sky: { haze: .2, clouds: .9, stars: 1, moon: true, sun: 1.1 }, fog: { density: .14, height: 0, sun: .7 }, grade: 'vivid', bloom: 1, exposure: 0, water: { clarity: .62, foam: .7 }, shadow: { soft: .3 } };
-  const mirTime = () => window.D37E?.dayClock ? window.D37E.dayClock(Date.now(), 40, .2) : 14;
+  const mirHour = ms => window.D37E?.dayClock ? window.D37E.dayClock(ms, 40, .2) : 14;
+  const mirTime = () => mirHour(Date.now());
+  // Погода (движок climate.js + precip.js, docs/SEASONS.md §10): климат места — столица и оба города умеренные, боевая зона
+  // (побережье) и море — морской, горы карты (выше 60) — горный, остальная равнина — степь (как в Казахстане)
+  function mirClimate(x, z){
+    const MZ = window.MirZones; if (!MZ?.zoneAt) return 'temperate';
+    const Z = MZ.zoneAt(x, z);
+    if (Z) return Z.id === 'war' ? 'sea' : 'temperate';
+    if (MZ.inRect(MZ.clusterRect(), x, z)) return 'temperate';   // столица, район участков, места роста городов
+    const h = MZ.worldMap?.()?.height(x, z);
+    return h == null ? 'temperate' : h > 60 ? 'mountain' : h < MZ.SEA.wl + .1 ? 'sea' : 'steppe';
+  }
+  // Солнечный городок (0+) с запасом 40 и местом роста: грозы там нет — только дождь (storm: false)
+  const mirKids = (x, z) => { const MZ = window.MirZones; return !!MZ?.ZONES?.kids && (MZ.inRect(MZ.ZONES.kids, x, z, 40) || MZ.EXPAND.some(e => e.zone === 'kids' && MZ.inRect(e, x, z, 40))); };
+  const ICE_PTS = [[0, 0], [2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5]];
   // Жители (NPC): стоят на своём месте у всех игроков, поворачиваются к подошедшему и говорят по очереди; [E] — поговорить.
   const FOLK = [
     { id: 'guide', name: '🧭 Гид', x: -5.6, z: 12.4, yaw: 156, seed: 'gid37', info: true, say: ['Привет! Я гид Мира Денчика 👋 Нажми E — расскажу, что тут есть', 'Кафе — на севере: сядь за столик, кто сядет напротив — с тем и сыграешь ♟️', 'В парке пруд — в нём можно плавать! 🏊 «Присесть» — нырнуть', 'Свой участок и дом — в районе за кафе 🏡', 'Игровой клуб с автоматами — на востоке 🕹️', 'Круги у фонтана — телепорты: города и Боевая зона 🌀', 'Карта мира — клавиша M или кнопка 🗺️'] },
@@ -152,6 +166,7 @@
       sand: R.texMat('pondsand', R.proc('sand'), { tile: 1.6, tint: '#bba27a', flatColor: '#a8936a', rough: .95 }),
     };
     M.water.side = T.DoubleSide;   // из-под воды видно поверхность
+    E.climate?.leaf?.(M.grass, 'grass');   // погода: трава осенью желтеет, зимой — бурая (только зелёное)
     const wallMat = c => R.tex('plaster', { tint: c, tile: 2.6, flatColor: c, rough: .92, ns: .7 });
     const roofMat = (c, vert) => R.texMat('roof' + c + (vert ? 'v' : ''), shingles('sh' + (vert ? 'v' : 'h'), vert), { tint: c, tile: 1.6, flatColor: c, rough: .7 });
     const rooms = [], screens = {}, seats = new Map();
@@ -752,6 +767,47 @@
     try { mirPhone(); } catch (e) { console.error(e); }   // телефон 📱 и «🌍 Весь мир» (phone.js, worldchat.js)
     // зоны мира: лобби с телепортами, карта (M), города и боевая зона — подгрузка рядом, возраст, роли, действия (mir-zones.js)
     try { S.zones = window.MirZones?.start?.(S, { send, retrack, panel, closePops, go, emote, addLog, savePos, showInfo, sign, verify }) || null; } catch (e) { console.error(e); S.zones = null; }
+    S.wx = startWeather(R, ph, P, AU);   // погода, времена года, праздники (движок climate.js + precip.js; docs/SEASONS.md §10)
+  }
+
+  // ═══ Погода: у всех одна (зерно 'mir' + реальное время, без сети); кадр — wxFrame до R.render() ═══
+  function startWeather(R, ph, P, AU){
+    const C = window.D37E?.climate; if (!C?.attach) return null;
+    const ch = P.ch, WH = [0, 0, 0];
+    try {
+      return C.attach(R, {
+        world: { seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour },
+        // где игрок: не выше 6 над землёй (своя крыша — да; небоскрёб и самолёт — как у земли, иначе снег на весь город)
+        where: () => { const g = ph.groundAt(ch.x, ch.z); WH[0] = ch.x; WH[1] = Math.max(g, Math.min(ch.y, g + 6)); WH[2] = ch.z; return WH; },
+        // где кончается небо: верх самого высокого тела в столбе (крыши, навесы, машины) или земля — без луча по рельефу (дорого)
+        skyTop: (x, z) => ph.supportAt(x, z, 0, 1e4).y,
+        water: (x, z) => ph.waterLevel ? ph.waterLevel(x, z) : -Infinity,
+        sound: AU,
+      });
+    } catch (e) { console.error(e); return null; }
+  }
+  function wxFrame(dt){
+    try {
+      const wx = S.wx, ch = S.P.ch, storm = !mirKids(ch.x, ch.z);
+      if (wx.W.storm !== storm) wx.W.set({ storm });   // детский городок — без гроз
+      iceTick();
+      wx.frame(dt);
+    } catch (e) { console.error('погода мира:', e); try { S.wx.dispose(); if (S.ice?.body) S.ph.remove(S.ice.body); } catch (er) {} S.wx = S.ice = null; }   // сломалась — мир живёт без неё
+  }
+  // Лёд: по замёрзшей воде можно ходить — плита на уровне воды под игроком (одна, едет за ним; растаяло — убрана).
+  // Плывёшь или в воде глубже колена — плиты нет (подо льдом не запирает); в машине — нет
+  function iceTick(){
+    const ph = S.ph, P = S.P, ch = P.ch, I = S.ice || (S.ice = { body: null, x: 1e9, z: 1e9 });
+    const on = S.wx.iceAt(ch.x, ch.z) >= (I.body ? .75 : .8) && !P.swim && !S.zones?.veh?.inVeh?.();
+    if (!on) { if (I.body) { ph.remove(I.body); I.body = null; } I.x = 1e9; return; }
+    if (Math.abs(ch.x - I.x) < 1.5 && Math.abs(ch.z - I.z) < 1.5) return;
+    let wl = -Infinity;
+    for (const [dx, dz] of ICE_PTS) { const w = ph.waterLevel(ch.x + dx, ch.z + dz); if (w > wl) wl = w; }
+    I.x = ch.x; I.z = ch.z;
+    if (wl > -Infinity && ch.y >= wl - .45) {
+      const o = { x: ch.x, z: ch.z, y: wl - .2, hx: 4.5, hz: 4.5, hy: .2 };
+      if (I.body) ph.update(I.body, o); else I.body = ph.addBox({ ...o, tag: 'ice', data: { floor: 'tile' } });
+    } else if (I.body) { ph.remove(I.body); I.body = null; }
   }
 
   // ── Шаг логики (1/60 с) ──
@@ -835,6 +891,7 @@
     lifeFrame(dt, t);
     S.zones?.frame(dt, t);   // зоны мира: постройка по кусочку, подписи жителей, эффекты
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
+    if (S.wx) wxFrame(dt);   // погода: небо, осадки, лёд
     R.render();
     drawTags(); drawFolk();
     // на телефоне вместо «[E]» — значок кнопки ✋
@@ -1763,6 +1820,7 @@
     try { s.phoneOff?.(); s.allChat?.stop(); } catch (e) {}   // телефон 📱 и «🌍 Весь мир»
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
+    try { s.wx?.dispose(); s.wx = null; } catch (e) { console.error(e); }   // погода
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
     if (!s.leavingTo && !seatedPlay) savePos();
     S = null;
