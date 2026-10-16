@@ -222,7 +222,7 @@
       <div class="ds-dim ds-oldnote" hidden>Категории и сортировка появятся, когда сайт обновится — пока только поиск по названию.</div>
       <div class="ds-grid" data-f="list"><div class="ds-dim">Загружаем…</div></div>
       <div class="ds-row" data-f="morebox" hidden><button type="button" class="ds-btn ghost" data-ds="more">Показать ещё</button></div>
-      <div class="ds-row ds-bycode"><input type="text" class="ds-in" data-f="code" placeholder="Код приглашения (8 знаков)" maxlength="12" aria-label="Код приглашения"><button type="button" class="ds-btn ghost" data-ds="bycode">Войти по коду</button></div></div>`;
+      <div class="ds-row ds-bycode"><input type="text" class="ds-in" data-f="code" placeholder="Код приглашения" title="Код приглашения — 8 знаков" maxlength="12" aria-label="Код приглашения"><button type="button" class="ds-btn ghost" data-ds="bycode">Войти по коду</button></div></div>`;
     const q = s => el.querySelector(`[data-f="${s}"]`), box = q('list');
     const load = async reset => {
       const my = ++st.seq;

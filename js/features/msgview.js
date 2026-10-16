@@ -285,12 +285,15 @@
           <textarea class="mv-in" rows="1" aria-label="Сообщение"></textarea>
           <button type="button" class="mv-send" data-c="send" aria-label="Отправить">➤</button>
         </div>
+        <div class="mv-hint" aria-hidden="true">Enter — отправить · Shift+Enter — новая строка</div>
         <div class="mv-gate" hidden></div>
       </div>
       <div class="mv-over" hidden></div>
       <div class="mv-menu" hidden></div>`;
     const q = s => root.querySelector(s);
     const list = q('.mv-list'), input = q('.mv-in'), over = q('.mv-over'), menu = q('.mv-menu');
+    // «↓ к последним» — всегда над полем ввода любой высоты (плашка входа, ответ, правка)
+    if (window.ResizeObserver) { const comp = q('.mv-comp'), typ = q('.mv-typing'); new ResizeObserver(() => { if (comp.isConnected && comp.offsetHeight) root.style.setProperty('--mvcomp', (comp.offsetHeight + typ.offsetHeight) + 'px'); }).observe(comp); }
     const myNick = () => V.A?.me?.()?.nick || P.myNick() || (typeof chatNick !== 'undefined' ? chatNick : '');
     const myUid = () => V.A?.me?.()?.uid || P.me();
     // ребёнок (js/core/age.js) в общем канале или сообществе — строгий вид; ЛС (только друзья) — как у всех
@@ -381,7 +384,8 @@
     function downBtn(){
       const b = q('.mv-down');
       const divEl = list.querySelector('.mv-new');
-      const show = !V.atBottom && (V.newCount > 0 || !!divEl);
+      const far = list.scrollHeight - list.scrollTop - list.clientHeight > list.clientHeight * 1.5;   // листает историю далеко — тоже «↓»
+      const show = !V.atBottom && (V.newCount > 0 || !!divEl || far);
       b.hidden = !show;
       if (show) b.querySelector('span').textContent = V.newCount ? `${V.newCount} ${P.plural(V.newCount, 'новое сообщение', 'новых сообщения', 'новых сообщений')}` : divEl && divEl.offsetTop > list.scrollTop + list.clientHeight ? 'К новым сообщениям' : 'Вниз, к последним';
     }

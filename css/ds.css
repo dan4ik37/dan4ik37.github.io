@@ -433,3 +433,64 @@ body.high .ds-ccic.anim{animation:dsBoost 2.6s ease-in-out infinite}
   .ds-plframe{height:auto;aspect-ratio:16/9;max-height:38vh}
   .ds-plgrip,.ds-plad{display:none}
 }
+
+/* ═══ Полировка 16.10.2026: удобство на телефоне и компьютере ═══ */
+/* «спрятанные» кнопки шапки (🔍 и 📌 на экранах «Обзор», «События», настройки): у .ds-hb свой display — [hidden] его не перебивал */
+.ds-hb[hidden]{display:none}
+/* компьютер: заголовок раздела поменьше — поле ввода видно сразу, без прокрутки страницы */
+@media (min-width:769px){
+  body[data-route="chat"] #chat{padding-top:72px!important}
+  body[data-route="chat"] #chat>.divider{display:none}
+  body[data-route="chat"] #chat>.sec-title{font-size:clamp(1.5rem,2.3vw,2.1rem);margin:0 0 .75rem}
+}
+/* «Ты не в чате» + «Гостем» / «Войти»: надпись строкой сверху, кнопки поровну (было по слову в строке) */
+.ds-me.guest{flex-wrap:wrap;gap:6px 8px;padding:8px 10px 10px}
+.ds-me.guest>.ds-dim{flex:1 1 100%;flex-direction:row;padding:0 2px;font-size:12px}
+.ds-me.guest>.ds-btn{flex:1 1 0;padding:9px 10px}
+/* подсказка новичку над лентой (один раз; community.js paintTip, d37_ds_tip) */
+.ds-tip{flex:none;display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--ac-10,rgba(255,45,85,.1));border-bottom:1px solid var(--line);font-size:13px;line-height:1.4}
+.ds-tip[hidden]{display:none}
+.ds-tip>span{flex:1;min-width:0}
+/* читаемость второстепенного */
+.mv-in::placeholder{color:#8b8ba6}
+.ds-mem.off{opacity:.62}
+.mv-m.mv-sel .mv-t2{opacity:1}
+/* сообщение из одних своих эмодзи — крупно, как обычные эмодзи (.mv-big) */
+.mv-text.mv-big .custom-emoji-img{width:44px;height:44px;vertical-align:middle}
+/* подсказка «Enter — отправить» (компьютер, пока в поле есть текст) */
+.mv-hint{position:absolute;right:22px;top:-17px;font-size:11px;color:var(--muted);pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap}
+@media (hover:hover) and (pointer:fine){.mv-comp:has(.mv-in:focus:not(:placeholder-shown)) .mv-hint{opacity:1}}
+@media (hover:none),(pointer:coarse){.mv-hint{display:none}}
+/* выдвижные панели: затемнение появляется и исчезает плавно */
+@media (max-width:1180px){
+  .ds-scrim{display:block;position:absolute;inset:0;background:rgba(0,0,0,.55);z-index:5;opacity:0;visibility:hidden;transition:opacity .2s,visibility .2s}
+  .ds.r-open .ds-scrim,.ds.l-open .ds-scrim{opacity:1;visibility:visible}
+}
+@media (prefers-reduced-motion:reduce){body:not(.high) .ds-rail,body:not(.high) .ds-side,body:not(.high) .ds-members,body:not(.high) .ds-scrim{transition:none}}
+/* телефон: под названием канала — его описание; нажал на название — открылись каналы */
+@media (max-width:860px){
+  .ds-top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-rows:auto auto;align-content:center;align-items:center;column-gap:4px;row-gap:1px;padding:0 4px}
+  .ds-burger{grid-column:1;grid-row:1/-1;color:var(--text)}
+  /* min-height: у элемента с overflow:hidden «минимум» в сетке — 0, без него строки наезжали друг на друга */
+  .ds-ttl{grid-column:2;grid-row:1;min-width:0;min-height:1.25em;max-width:none;line-height:1.25;cursor:pointer}
+  .ds-ttl::after{content:' ▾';font-size:11px;opacity:.55}
+  .ds-topic{display:block;grid-column:2;grid-row:2;min-height:1.3em;border:0;padding:0;font-size:11.5px;line-height:1.3}
+  .ds-topic:empty{display:none}
+  .ds-top:has(.ds-topic:empty) .ds-ttl{grid-row:1/-1}
+  .ds-tools{grid-column:3;grid-row:1/-1;margin:0}
+}
+/* пальцем: кнопки и строки не меньше 40 px */
+@media (pointer:coarse){
+  .ds-hb{min-width:40px;height:40px;font-size:18px}
+  .ds-ch{min-height:42px;padding:8px 10px}
+  .ds-mem{min-height:44px}
+  .ds-btn{min-height:40px}
+  .mv-cb{width:40px;height:40px}
+  .mv-send{width:44px;height:42px}
+  .mv-bar button,.ds-pin button{min-width:40px;min-height:36px}
+  .mv-ohead button{width:40px;height:40px}
+  .ds-plbtns a,.ds-plbtns button{width:40px;height:36px}
+  .ds-vbar button{width:40px;height:40px}
+  .ds-chips button{min-height:38px}
+  .mv-older,.mv-retry{min-height:40px}
+}

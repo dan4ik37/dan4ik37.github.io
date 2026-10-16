@@ -100,6 +100,8 @@ body.low .amb{will-change:auto}
 }
 .nav-links a:hover,.nav-more-btn:hover,.nav-more.open .nav-more-btn{color:var(--text)}
 .nav-links a.active-route{color:#fff}
+/* 1181–1599 px: пункты шапки плотнее — иначе «Войти» уезжал за правый край (16.10.2026) */
+@media(min-width:1181px) and (max-width:1599px){.nav-links a,.nav-more-btn{padding:.5rem .58rem;letter-spacing:.06em}}
 .nav-links a.nav-donate{
   margin-left:.5rem;padding:.55rem 1.15rem;color:#fff!important;
   background:linear-gradient(135deg,var(--accent),var(--accent2));
