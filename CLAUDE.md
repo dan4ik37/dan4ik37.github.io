@@ -48,6 +48,11 @@
    `/rest/v1/chat_channels?id=eq.news` → [{…"mods_only":true}]; `/rpc/cm_events` гостем {"p_community":null} → {"ok":true,"can":false,"list":[]};
    `/rpc/cm_catalog` гостем {} → []; `/rpc/bot_post` гостем → 401 permission denied (PGRST202 = не применён). Переопределяет cm_join и
    cm_invite_info — перезапустил community.sql → потом снова community2.sql. PGlite: E:\claude-tmp\community2\test-community2.mjs (87).
+10. `community3.sql` (16.10.2026, ПОСЛЕ community2.sql; нужен premium.sql — применён) — свои роли 🎭 и «🚀 Буст» за 💎. Переопределяет
+   comm_perm, comm_can_mod, cm_pin, cm_unban, cm_bans, cm_channel_save, cm_members, cm_my, cm_join, cm_invite_info, cm_catalog —
+   перезапустил community.sql или community2.sql → потом снова community3.sql. Проверка: `/rpc/cm_roles` гостем {"p_id":0} →
+   {"ok":false,"reason":"private"}; `/rpc/cm_boost_info` гостем {"p_id":0} → {"ok":false,"reason":"not_found"}; `/rpc/cm_boost_buy` гостем →
+   401 permission denied (PGRST202 = не применён). PGlite: E:\claude-tmp\community2\test-community3.mjs (59).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -696,8 +701,25 @@ js/features/games.js и хвост css/premium.css.
   push-check (bot_event_remind) + запасом при чтении (cm_events / cm_event_get). Лимиты: 15 будущих на сервер, 6 новых в час от человека.
   Обзор 🧭 (#/chat/find → DS.x.find): cm_catalog (поиск, категории games/art/chat/study/stream, members/active/new, по 24), метка
   возраста сообщества (cm_set_meta — владелец; 18+ — персонал); не по возрасту (age_group_of → comm_age_cap) — не видно и cm_join → 'age'.
-  Без файла: «📅 События — скоро», обзор — старый поиск. Не сделаны (очередь): свои роли (perms-биты уже в comm_perm), «🚀 Буст» за 💎
-  (premium_add напрямую из своей функции — premium_items не трогать), полировка голосовых.
+  Без файла: «📅 События — скоро», обзор — старый поиск.
+- Сообщества 3 (community3.sql, тот же community2.js; агент 16.10.2026): свои роли 🎭 — comm_roles (название, цвет, место 1–99, права-биты:
+  1 каналы, 2 модерация, 4 закреп, 8 события, 16 @everyone) и comm_member_roles (до 20 ролей, у человека до 5); создаёт и выдаёт владелец
+  (#/chat/c/<id>/roles); роль с модерацией — только участников с верхней ролью ниже своей (comm_can_mod); ник — цветом верхней роли
+  (adapter.colorOf → msgview authorStyle, после ролей сайта, раньше VIP), участники — группами по ролям; @everyone/@все → 🔔 всем, раз в
+  10 минут (communities.everyone_at). «🚀 Буст»: cm_boost_buy → premium_add(−100/−270 💎, 'spend', 'boost:<id>') — 30/90 дней,
+  складывается, любой участник (подарок); баннер (X.BANNERS — только свои градиенты), анимированный значок (только body.high),
+  красивая ссылка /c/<имя> (6–12 [a-z0-9], как код приглашения — invite.js и роутер не менялись; comm_by_code), до 40 каналов /
+  10 голосовых; место в обзоре НЕ поднимает. «Больше своих эмодзи» не продаём — у сообществ картинок нет (детская аудитория).
+- Плеер в чате (js/features/chatplayer.js, D37Player; грузится в MODS.ds, phone.js VER '7'; агент 16.10.2026, владелец: «смотреть ролики в
+  чате и рекламу со стримом удобно»): эфир — player.twitch.tv (parent = HOST; реклама Twitch внутри — доход Денчика), ролики —
+  youtube-nocookie; в .ds-main над лентой (переходы по каналам не закрывают, ушёл из #/chat — закрылся); компьютер — высота тянется
+  (d37_player_h), телефон — 16:9 сверху, «▾» — окошко над полем ввода. «▶ Здесь» — в карточке ролика (только если D37Age.video по
+  возрасту; ролика нет в allVids — несовершеннолетним нет) и эфира; полоска «🔴 Денчик в эфире — ▶ Смотреть здесь» сверху #общий и
+  «📢 новости» (D37Live.check — кэш live-badge.js; название — decapi, sessionStorage 2 мин). Детям Twitch (13+) нет. Кейсы в плеере →
+  D37AdPlaces.ctx('gambling'). Реклама — место chat_player под плеером (ad-places.js: компьютер ≥ 900 px, первые 30 с визита нет,
+  раз в 2 мин, до 8; плеер сам ждёт минуту после включения — не поверх рекламы плеера; свёрнут — нет). Проверка в Chrome:
+  E:\claude-tmp\community2\player-e2e.cjs (18; нужен serve.py на :5577). «📺 Смотреть вместе» (синхронно) — не сделано.
+- Голосовые: говорит (кольцо), микрофон/звук, рация (клавиша — ⚙️ «📱 Телефон»), переподключение пиров — уже были (calls.js).
 
 ## Телефон в руке персонажа 📱 (как в ГТА; агент 15.10.2026)
 - world3d.js (kit): слой телефона поверх любой позы (идёт/бежит, сидит, присел, прыжок — ноги свои; вода, лестница, вис, кувырок,
