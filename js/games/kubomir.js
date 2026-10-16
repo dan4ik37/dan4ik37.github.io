@@ -143,7 +143,7 @@
       if (!seed) seed = String(Math.floor(Math.random() * 2e9));
       const mode = f('mode').querySelector('.on')?.dataset.v || 'survival', diff = f('diff').querySelector('.on')?.dataset.v || 'easy';
       const modIds = [...sc.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
-      const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1 };
+      const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: 2 };
       await V.store.putWorld(w);
       playWorld(w);
     };
@@ -238,7 +238,7 @@
     const R = Ex.renderer(wr, { quality: Ex.gfxQuality() });
     R.r.domElement.classList.add('kb-gl');
     const W = new V.World({ seed: meta.seed });
-    const G = V.genInit(W.seed, { features: modState.features });
+    const G = V.genInit(W.seed, { features: modState.features, ver: meta.genVer || 1 });   // genVer: старые миры — 1 (как были), новые — 2
     const st = {
       meta, W, G, R, mods: modState, remapIn, remapOut, ox: 0, oz: 0, t: 0, steps: 0, ready: false, dead: false, paused: false, saving: false,
       unsaved: new Set(), savedKeys: await V.store.chunkKeys(meta.id).catch(() => new Set()), lastSave: now(), creative: meta.mode === 'creative',
@@ -264,7 +264,7 @@
     st.KL = window.KubomirLight ? window.KubomirLight.create(st) : null;   // настоящие лампы, факел в руке, туман в пещере
     // подгрузка мира
     const url = 'js/engine/voxel-worker.js?v=' + ver();
-    st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features,
+    st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features, genVer: meta.genVer || 1,
       load: c => st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
       applySaved: (c, rec) => applySaved(c, rec),
       onGen: c => { st.ents?.onChunkTiles?.(c); },
