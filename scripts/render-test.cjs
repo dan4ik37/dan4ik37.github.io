@@ -1225,6 +1225,12 @@ function boundsOk(R){
   const mat = new T.MeshStandardMaterial(), pS = failProg('MeshStandardMaterial'); mat.name = 'земля';
   Rg.scene.add(new T.Mesh(new T.PlaneGeometry(), mat)); props.set(mat, { currentProgram: pS }); progs.push(pS);
   evs.length = 0; ticks(Rg.guard, 300 - Rg.guard.n);
+  // погода на поверхностях (кусок D37_CLIM) — новее всего: сначала без неё (мир пересобирается), не помогло — без своих кусков
+  ok(E.gfxGuardState().off.clim === 1 && !E.climShaders && !T.ShaderChunk.normal_fragment_maps.includes('D37_CLIM') && !T.ShaderChunk.normal_pars_fragment.includes('D37_CLIM')
+    && evs.some(e => e.type === 'd37:gfxfallback' && e.detail.rebuild && e.detail.k === 'clim') && T.ShaderChunk.__d37, 'шейдер сцены не собрался → сначала без погоды на поверхностях (свои куски остаются), мир пересобирается');
+  const pSc = failProg('MeshStandardMaterial'); progs.length = 0; progs.push(pSc);
+  Rg = mkG(); Rg.scene.add(new T.Mesh(new T.PlaneGeometry(), mat)); props.set(mat, { currentProgram: pSc });
+  evs.length = 0; ticks(Rg.guard, 2);
   ok(E.gfxGuardState().off.patch === 1 && !T.ShaderChunk.__d37 && !T.ShaderChunk.output_fragment.includes('d37Rt') && evs.some(e => e.type === 'd37:gfxfallback' && e.detail.rebuild && e.detail.k === 'patch') && Rg.guard.wait,
     'шейдер сцены не собрался → свои куски шейдеров сняты, мир пересобирается');
   ok(va.some(a => a[1].data?.what === 'patch' && a[1].data.prog === 'земля'), 'в сообщении — имя материала');
@@ -1278,8 +1284,9 @@ function boundsOk(R){
   progs.length = 0; const Rl = mkG(), ml = new T.MeshStandardMaterial(), pl = failProg('MeshStandardMaterial');
   Rl.scene.add(new T.Mesh(new T.PlaneGeometry(), ml)); props.set(ml, { currentProgram: pl }); progs.push(pl);
   ok(Rl.post.codesOn(), 'коды включены (AO и трава)');
+  const hadClim = E.climShaders;
   ticks(Rl.guard, 2);
-  ok(E.gfxGuardInfo().off.join() === 'patch' && Rl.post.codesOn(), 'не собралось в сцене — без своих кусков шейдеров, коды не трогаем', E.gfxGuardInfo().off);
+  ok(E.gfxGuardInfo().off.join() === (hadClim ? 'clim' : 'patch') && Rl.post.codesOn(), 'не собралось в сцене — без своих кусков шейдеров, коды не трогаем', E.gfxGuardInfo().off);
   E.gfxPatch(T) || (E.gfxGuardReset(), E.gfxPatch(T));   // куски — обратно (дальше проверки с ними)
   // ⚙️ «🩺 Проверить»: проверка на следующем кадре, итог — в отчёт
   for (const k in store) delete store[k];
@@ -1460,6 +1467,45 @@ function boundsOk(R){
     console.warn = warn1; delete globalThis.va;
     for (const k in store) delete store[k];
   }
+}
+
+// ═══ 23. Погода на поверхностях (16.10.2026; gfx.js D37_CLIM, E.weatherSky, лёд воды, листва; docs/SEASONS.md) ═══
+{
+  for (const k in store) delete store[k];
+  E.gfxUnpatch(T); E.gfxPatch(T);
+  const C = T.ShaderChunk, bal = (x, a, b) => (x.match(a) || []).length === (x.match(b) || []).length;
+  const P = E.CLIM_GLSL.pars, F = E.CLIM_GLSL.frag;
+  ok(E.climShaders && C.normal_pars_fragment.includes('#define D37_CLIM') && C.normal_fragment_maps.includes('d37ClimApply') === false && C.normal_fragment_maps.endsWith(F), 'кусок погоды установлен: объявления — в normal_pars_fragment, сам — в конце normal_fragment_maps');
+  ok([P, F].every(x => bal(x, /#if(n?def)?/g, /#endif/g) && bal(x, /\{/g, /\}/g) && bal(x, /\(/g, /\)/g)), 'GLSL погоды: #if/#endif и скобки');
+  ok(![P, F].some(x => /texelFetch|continue|isnan|isinf|for\s*\(|while|gl_FragColor/.test(x)), 'погода: без циклов, texelFetch, continue, isnan и записи в gl_FragColor (только diffuseColor/шероховатость до света)');
+  ok(F.includes('#if ( defined( STANDARD ) || defined( LAMBERT ) ) && defined( OPAQUE ) && ! defined( D37_NOCLIM )'), 'погода — только STANDARD/LAMBERT, непрозрачное (человечки toon/phong — нет), D37_NOCLIM — выкл');
+  ok(P.includes(E.SAMPLER_PREC.hi + 'uniform sampler2D d37ClTex;') && P.includes(E.SAMPLER_PREC.lo), 'карта «что над головой» — highp-сэмплер (как карта теней)');
+  for (const k of ['standard', 'lambert', 'physical']) ok(T.ShaderLib[k].uniforms.d37Cl?.value === E.GFXU.cl && T.ShaderLib[k].uniforms.d37ClTex?.value === E.GFXU.occRT.texture, 'общие данные погоды у ' + k);
+  const cu = T.UniformsUtils.clone(T.ShaderLib.standard.uniforms);
+  ok(cu.d37Cl.value === E.GFXU.cl && cu.d37ClTex.value === E.GFXU.occRT.texture, 'копия uniform при сборке — те же массив и текстура (одна карта на страницу)');
+  // вода: лёд под D37_CLIM
+  const fakeR = { T, waterU: { uTime: { value: 0 }, uClear: { value: .5 }, uFoam: { value: .5 }, uWQ: { value: 1 } }, normalFrom: () => new T.Texture() };
+  const wm = E.waterMaterial(fakeR, '#3aa6dc'), shd = { uniforms: {}, vertexShader: T.ShaderLib.standard.vertexShader, fragmentShader: T.ShaderLib.standard.fragmentShader };
+  wm.onBeforeCompile(shd);
+  ok(shd.fragmentShader.includes('if ( d37Cl.w > 0.0 )') && shd.fragmentShader.includes('flatK *= 1.0 - smoothstep( 0.0, 0.35, d37Cl.w )') && bal(shd.fragmentShader, /#if(n?def)?/g, /#endif/g), 'вода: лёд (цвет, трещины, снег сверху) и без ряби — под D37_CLIM');
+  // небо: погода темнит и прячет солнце, свет не до нуля (castShadow не меняется)
+  const M0 = E.skyModel(13), M1 = E.weatherSky(E.skyModel(13), { cloud: 1, rain: .8, storm: .5 }), lum = a => .2126 * a[0] + .7152 * a[1] + .0722 * a[2];
+  ok(lum(M1.zen) < lum(M0.zen) * .8 && M1.sunC[0] < M0.sunC[0] * .1 && M1.lightI < M0.lightI * .4 && M1.lightI >= .021 && M1.haze > M0.haze, 'пасмурно в грозу: небо темнее, солнце за тучами, прямой свет слабее, но > 0,02', [lum(M0.zen), lum(M1.zen), M0.lightI, M1.lightI]);
+  const M2 = E.weatherSky(E.skyModel(13), null);
+  ok(JSON.stringify(M2.zen) === JSON.stringify(M0.zen) && M2.lightI === M0.lightI, 'без погоды — небо как было');
+  // листва: define до первого кадра, хвоя — 3; склейка переносит метку
+  const lm = new T.MeshStandardMaterial(); E.leafMaterial(lm, 'needles');
+  const lw = new T.MeshStandardMaterial(); E.waveMaterial(lw, { kind: 'leaves' });
+  ok(lm.defines.D37_LEAF === 3 && lm.userData.leaf === 3 && lw.defines.D37_LEAF === 2 && lw.userData.wave.kind === 2, 'листва: D37_LEAF (2 — листва, 3 — хвоя, у ветра — сама)');
+  { const { R: Rb, SC: SCb } = world(); const p0 = SCb.add('Part', { pos: [0, .5, 0], size: [2, 1, 2], color: '#3f8f3a' }), p1 = SCb.add('Part', { pos: [3, .5, 0], size: [2, 1, 2], color: '#3f8f3a' });
+    E.leafMaterial(p1._mesh.material === p0._mesh.material ? (p1._mesh.material = p1._mesh.material.clone()) : p1._mesh.material, 'leaves');
+    const Bb = E.batcher(SCb, { now }); Rb.preRender[0](Rb, clock);
+    const ms = batchMeshes(Rb).map(m => m.material);
+    ok(ms.some(m => m.defines?.D37_LEAF === 2) && ms.some(m => !m.defines?.D37_LEAF), 'склейка: листва и не листва — разные пачки, у листвы D37_LEAF остаётся', ms.map(m => m.defines?.D37_LEAF || 0)); }
+  // снять только погоду (страж графики): кусок уходит, данные — нули, свои куски остаются
+  E.GFXU.cl[0] = .5; ok(E.climUnpatch(T) && !E.climShaders && !C.normal_fragment_maps.includes('D37_CLIM') && C.__d37 && E.GFXU.cl[0] === 0, 'E.climUnpatch: без погоды, остальное — как было');
+  E.gfxUnpatch(T); E.gfxPatch(T);
+  ok(E.climShaders, 'новый рендерер — погода снова (страж не запоминал)');
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);
