@@ -240,7 +240,8 @@
     const num = (v, d) => Number.isFinite(+v) ? +v : d;
     R.lighting = { time: 14, brightness: 1, ambient: 1, fogEnd: 320, shadows: true, gfx: E.worldGfx() };
     R.night = 0;
-    let skyOver = null, under = null, skyT = 0;
+    let skyOver = null, under = null, underO = null, skyT = 0;
+    const UC = new T.Color();
     // полный объект освещения (мир загрузили из файла, шаблон, блок world гостю) — графика мира заново (не тянется
     // от прошлого мира); частичный (ползунок, смена суток) — дописывается (gfx.js E.mergeLighting)
     R.setLighting = (L = {}) => {
@@ -304,7 +305,7 @@
       const far = Math.min(3000, Math.max(160, fe * 1.08 + 30));
       if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
       cloudsFit(far);
-      if (under) {
+      if (under && !underO) {
         fog.color.set(under); fog.near = 0; fog.far = 9; scene.background.copy(fog.color);
         GU.fogA[3] = 0; GU.fogB[3] = 0;
         return;
@@ -315,11 +316,20 @@
       GU.fogA[0] = M.sun[0] / sl; GU.fogA[1] = 0; GU.fogA[2] = M.sun[2] / sl; GU.fogA[3] = fx && !skyOver ? G.fog.sun : 0;   // к солнцу — по горизонтали
       GU.fogB[0] = M.fogSun[0]; GU.fogB[1] = M.fogSun[1]; GU.fogB[2] = M.fogSun[2]; GU.fogB[3] = fx ? G.fog.density * G.fog.density * .03 : 0;
       GU.fogC[0] = G.fog.height; GU.fogC[1] = .05 + .06 * (1 - G.fog.density); fogCam();
+      if (under && underO) {   // под водой плавно (R.setUnder с o): обычный туман → свой подводный по доле k
+        const k = Math.max(0, Math.min(1, num(underO.k, 1)));
+        UC.set(under); fog.color.lerp(UC, k);
+        fog.near += (num(underO.near, 0) - fog.near) * k; fog.far += (num(underO.far, 9) - fog.far) * k;
+        scene.background.copy(fog.color);
+        GU.fogA[3] *= 1 - k; GU.fogB[3] *= 1 - k; fogCam();
+      }
     }
     // высотный туман: плотность на высоте камеры — один раз за кадр (а не в каждом пикселе)
     function fogCam(){ GU.fogC[2] = GU.fogB[3] > 0 ? GU.fogB[3] * Math.exp(-GU.fogC[1] * Math.max(camera.position.y - GU.fogC[0], -20)) : 0; }
-    // Под водой (mir.js: камера ниже уровня пруда): синий густой туман, вышли — как было
-    R.setUnder = (on, color = '#1d6f96') => { const was = under; under = on ? color : null; if (was !== under) applyFog(); R.post?.setUnder?.(!!under); };
+    // Под водой (mir.js: камера ниже уровня пруда): синий густой туман, вышли — как было. o (по желанию; «Кубомир») —
+    // { far, near, k }: своя дальность и доля 0…1 — плавный вход и выход (туман смешивается с обычным, эффект кадра — по k),
+    // цвет — строка или THREE.Color (каждый кадр — без разбора строки); без o — как раньше (near 0, far 9, сразу)
+    R.setUnder = (on, color = '#1d6f96', o) => { const was = under, wo = underO; under = on ? color : null; underO = on && o ? o : null; if (was !== under || wo || underO) applyFog(); R.post?.setUnder?.(!!under, underO ? num(underO.k, 1) : 1); };
 
     // ═══ Облака: мягкие спрайты кодом, медленно плывут; группа ездит с камерой (как небо), при малой дальности — ближе
     //     и меньше (тот же вид); цвет — по свету (applyLighting), сколько видно — облачность мира ═══

@@ -585,9 +585,24 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         }
       } else {
         const layer = it?.texL ?? b?.texf?.side ?? 0, col = b && b.tint === V.TINT.grass ? [124, 189, 90] : [255, 255, 255];
-        const P = [[-.5, -.5, 0], [-.5, .5, 0], [.5, .5, 0], [.5, -.5, 0]], UV = [[0, 1], [0, 0], [1, 0], [1, 1]];
+        // плоская вещь — толщиной в 1/16 (как в Майнкрафте): лицо и спина по картинке, бока — по краю непрозрачных пикселей своим
+        // цветом (слой «снег» почти белый — цвет даёт вершина; боковые грани шейдер затеняет сам). Без бортов вещь с ребра — чёрная нитка
+        const th = it && !b ? 1 / 32 : 0, P = [[-.5, -.5, th], [-.5, .5, th], [.5, .5, th], [.5, -.5, th]], UV = [[0, 1], [0, 0], [1, 0], [1, 1]];
         quads.push(P.map((p, i) => ({ p, uv: UV[i], layer, nrm: 4, col })));
-        quads.push([3, 2, 1, 0].map(i => ({ p: [P[i][0], P[i][1], -.001], uv: UV[i], layer, nrm: 5, col })));
+        quads.push([3, 2, 1, 0].map(i => ({ p: [P[i][0], P[i][1], th ? -th : -.001], uv: UV[i], layer, nrm: 5, col })));
+        const tx = th ? V.tex[layer] : null, snow = V.texIdx?.get('snow');
+        if (tx && snow != null) {
+          const px = V.paint(tx.name, V.specOf ? V.specOf(tx.name) : tx.spec), n = Math.round(Math.sqrt(px.length / 4)), op = (x, y) => x >= 0 && y >= 0 && x < n && y < n && px[(y * n + x) * 4 + 3] > 100;
+          for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+            if (!op(x, y)) continue;
+            const o = (y * n + x) * 4, c = [px[o], px[o + 1], px[o + 2]], X0 = x / n - .5, X1 = (x + 1) / n - .5, Y0 = .5 - (y + 1) / n, Y1 = .5 - y / n;
+            const side = (pp, nrm) => quads.push(pp.map((p, k) => ({ p, uv: UV[k], layer: snow, nrm, col: c })));
+            if (!op(x + 1, y)) side([[X1, Y0, th], [X1, Y0, -th], [X1, Y1, -th], [X1, Y1, th]], 0);
+            if (!op(x - 1, y)) side([[X0, Y0, -th], [X0, Y0, th], [X0, Y1, th], [X0, Y1, -th]], 1);
+            if (!op(x, y - 1)) side([[X0, Y1, -th], [X0, Y1, th], [X1, Y1, th], [X1, Y1, -th]], 2);
+            if (!op(x, y + 1)) side([[X0, Y0, th], [X0, Y0, -th], [X1, Y0, -th], [X1, Y0, th]], 3);
+          }
+        }
       }
       const n = quads.length, pos = new Float32Array(n * 12), vd = new Uint16Array(n * 16), cl = new Uint8Array(n * 12), lta = new Uint8Array(n * 16), idx = [];
       quads.forEach((q, qi) => q.forEach((v, k) => {

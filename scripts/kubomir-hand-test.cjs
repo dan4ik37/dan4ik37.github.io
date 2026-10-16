@@ -525,6 +525,44 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(!listeners.length, 'закрыли мир — слушатель правок снят');
   }
 
+  // ═══ 9. Генератор: старые миры (genVer нет / 1) — блоки ровно как раньше, новые (2) — извилистые границы и пятна снега ═══
+  sec('генератор: v1 — как было, v2 — извилистые границы биомов и переходная полоса у снегов');
+  {
+    const sumIds = ver => { let h = 0; for (const seed of ['test-v1', 12345]) { const G = V.genInit(seed, { ver }); for (let cx = -3; cx <= 3; cx++) for (let cz = -3; cz <= 3; cz++) { const r = V.genChunk(G, cx * 7, cz * 5); for (let i = 0; i < r.ids.length; i++) h = (Math.imul(h, 31) + r.ids[i]) | 0; } } return h; };
+    const s1 = sumIds(1);
+    ok(s1 === 1214627954, 'v1 (миры до 16.10): блоки ровно как раньше — несохранённые чанки не вырастут другими', s1);
+    ok(sumIds(2) !== s1, 'v2 (новые миры) — свой рельеф у границ');
+    const strip = ver => {
+      const G = V.genInit('kubik', { ver }); let mixed = 0, cells = 0;
+      for (let cx = -1; cx <= 3; cx++) for (let cz = 9; cz <= 12; cz++) {
+        const r = V.genChunk(G, cx, cz);
+        for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
+          let top = 0; for (let y = 127; y > 0; y--) { const v = r.ids[(x << 11) | (z << 7) | y] & 0xfff; if (v) { top = v; break; } }
+          if (top !== ID.grass && top !== ID.snow_grass) continue;
+          cells++; if ((top === ID.snow_grass) !== (r.biome[x * 16 + z] === 6)) mixed++;
+        }
+      }
+      return { mixed, cells };
+    };
+    const a1 = strip(1), a2 = strip(2);
+    ok(a1.mixed === 0 && a2.mixed > 40 && a2.cells > 1000, 'у границы снегов: v1 — ровная смена по биому, v2 — снег и трава пятнами (переходная полоса)', [a1, a2]);
+    // цвет травы — плавно (шатёр по 8 блоков): у соседних столбцов разница маленькая и в v1
+    const G1 = V.genInit('kubik', { ver: 1 }); let dmax = 0;
+    for (let cz = 9; cz <= 12; cz++) { const r = V.genChunk(G1, 1, cz); for (let x = 0; x < 16; x++) for (let z = 0; z < 15; z++) { const o = (x * 16 + z) * 9, o2 = (x * 16 + z + 1) * 9; for (let q = 0; q < 3; q++) dmax = Math.max(dmax, Math.abs(r.tint[o + q] - r.tint[o2 + q])); } }
+    ok(dmax <= 12, 'цвет травы между соседними столбцами меняется плавно (≤ 12 из 255)', dmax);
+  }
+
+  // ═══ 10. Вещь в руке и на земле: выдавлена по пикселям (бока — своим цветом), не «бумажная» и не чёрная ═══
+  sec('вещь в руке: толщина 1/16, бока по краю пикселей своим цветом');
+  {
+    const g = VR.itemGeo('pick_wood'), pos = g.attributes.position.array, cl = g.attributes.color.array, n = g.attributes.position.count / 4;
+    let zmin = 9, zmax = -9, dark = 0;
+    for (let i = 2; i < pos.length; i += 3) { zmin = Math.min(zmin, pos[i]); zmax = Math.max(zmax, pos[i]); }
+    for (let i = 0; i < cl.length; i += 3) if (cl[i] + cl[i + 1] + cl[i + 2] < 30) dark++;
+    ok(g.userData.flat && n > 60 && zmax - zmin > .05 && zmax - zmin < .08 && dark === 0, 'кирка: лицо, спина и борта по краю (больше 60 граней), толщина 1/16, без чёрных граней', { n, th: +(zmax - zmin).toFixed(3), dark });
+    ok(VR.itemGeo('torch').attributes.position.count === 8, 'факел и растения (блоки) — как были: две плоскости');
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

@@ -35,7 +35,7 @@
           w.n = 0;   // заданий в работе
           w.onmessage = e => onResult(e.data, w);
           w.onerror = e => { S.stats.errors++; o.log?.('поток: ' + (e.message || 'ошибка')); try { e.preventDefault(); } catch (er) {} fallback(); };
-          w.postMessage({ t: 'init', T, seed: W.seed, features: o.features || [] });
+          w.postMessage({ t: 'init', T, seed: W.seed, features: o.features || [], ver: o.genVer || 1 });
           S.workers.push(w);
         }
       } catch (e) { o.log?.('без потоков: ' + (e.message || e)); S.workers.forEach(w => w.terminate()); S.workers = []; }
@@ -51,7 +51,7 @@
       jobs.clear();
     }
     function inlineRun(j){
-      if (!G) G = V.genInit(W.seed, { features: o.features || [] });
+      if (!G) G = V.genInit(W.seed, { features: o.features || [], ver: o.genVer || 1 });
       const t0 = now();
       if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, ms: now() - t0 }); }
       else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
@@ -202,7 +202,7 @@
     S.pending = () => jobs.size + results.length;
     S.close = () => { S.dead = true; S.workers.forEach(w => w.terminate()); S.workers = []; jobs.clear(); results.length = 0; };
     // переинициализация потоков (моды поменялись): таблицы и фичи генерации
-    S.reinit = (features) => { o.features = features || []; G = null; for (const w of S.workers) w.postMessage({ t: 'init', T: V.T, seed: W.seed, features: o.features }); };
+    S.reinit = (features) => { o.features = features || []; G = null; for (const w of S.workers) w.postMessage({ t: 'init', T: V.T, seed: W.seed, features: o.features, ver: o.genVer || 1 }); };
     return S;
   };
 })();
