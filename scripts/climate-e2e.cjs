@@ -50,7 +50,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     const base = preset === 'ultra' ? 'high' : preset;
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_gfx: base, d37_settings: JSON.stringify({ gfxPreset: preset, gfx: base, shaders: 'normal' }), d37_s3_learn: '1' };
-    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_gfx_guard');}catch(e){}` });
+    // CLIM_OFF=1 — без куска погоды в шейдерах (как будто страж его снял): сравнить предупреждения компилятора «до/после»
+    const ver = (/const GAMES_VER = '(\d+)'/.exec(fs.readFileSync(path.join(SITE, 'js/features/games.js'), 'utf8')) || [])[1] || '';
+    const guard = process.env.CLIM_OFF ? `localStorage.setItem('d37_gfx_guard',${JSON.stringify(JSON.stringify({ v: ver, off: { clim: 1 }, why: [] }))});` : `localStorage.removeItem('d37_gfx_guard');`;
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}${guard}}catch(e){}` });
 
     // ═══ 1. «Студия 3D»: до (погода выкл) и после (зима со снегом, дождь летом, осень) ═══
     await send('Page.navigate', { url: BASE + '/#/games/studio3d' });
@@ -97,14 +100,18 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const wait = ms => new Promise(r => setTimeout(r, ms));
       const ED = GAME_IMPL.studio3d._test.state(), X = D37E.studioWeather.X();
       const set = w => { ED.SC.settings.weather = w; D37E.studioWeather.play.settings(); };
+      await wait(10); const _ = 0;
       set({ mode: 'fixed', season: 'autumn', weather: 'clear', seed: 'e2e' }); await wait(12000);
-      return { st: X.stats(), autumn: +X.vis.autumn.toFixed(2), guard: D37E.gfxGuardInfo().off, shaders: D37E.climShaders };
+      const r = { st: X.stats(), autumn: +X.vis.autumn.toFixed(2), guard: D37E.gfxGuardInfo().off, shaders: D37E.climShaders };
+      set({ mode: 'off' }); await wait(8000);   // честный замер «выкл» — после прогрева (первый — сразу после постройки мира)
+      r.off2 = await (${MEASURE})(ED.R);
+      return r;
     })()`, 120000);
     res.studioAutumn = studio4;
     await shot('studio-after-autumn');
     ok(!res.studioProgs.bad.length, 'студия: все программы шейдеров собрались (с погодой)', res.studioProgs);
-    if (res.studioProgs.warn.length) console.log('  предупреждения компилятора (студия):', JSON.stringify(res.studioProgs.warn).slice(0, 900));
-    ok(studio4.shaders && !studio4.guard.length, 'студия: кусок погоды в шейдерах, страж ничего не выключил', studio4);
+    if (res.studioProgs.warn.length) console.log('  предупреждения компилятора (студия; X3595 — и без погоды):', JSON.stringify(res.studioProgs.warn).slice(0, 900));
+    ok(process.env.CLIM_OFF ? !studio4.shaders : studio4.shaders && !studio4.guard.length, process.env.CLIM_OFF ? 'студия: кусок погоды снят (CLIM_OFF)' : 'студия: кусок погоды в шейдерах, страж ничего не выключил', studio4);
     ok(res.studioWinterSt.cover > .5 && res.studioWinterSt.flakes > 50 && res.studioWinterSt.occ > 0, 'студия зимой: снег лежит, хлопья вокруг, карта «что над головой» нарисована', res.studioWinterSt);
     ok(res.studioRainSt.drops > 50 && res.studioRainSt.wet > .3, 'студия летом в дождь: капли, мокро', res.studioRainSt);
     ok(studio4.autumn > .5, 'студия осенью: листва желтеет', studio4.autumn);
@@ -161,7 +168,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await shot('lunar-lanterns');
     const ui = await ev(`({ adv: !!document.querySelector('.cel-adv'), canvas: !!document.querySelector('.cel-fx'), card: !!document.querySelector('.cel-card') })`);
     ok(ui.adv && ui.canvas && ui.card, 'праздник: карточка задания, холст салюта, поздравление', ui);
-    const bad = logs.filter(l => /WebGLProgram|Shader Error|страж графики|exception|погода/i.test(l));
+    // X3595 (Direct3D: «производная в цикле») — было и до погоды: тот же ShaderMaterial и с CLIM_OFF=1 (без куска погоды)
+    const bad = logs.filter(l => /WebGLProgram|Shader Error|страж графики|exception|погода/i.test(l) && !/X3595/.test(l));
     ok(!bad.length, 'в консоли — без ошибок шейдеров и погоды', bad.slice(0, 5));
   } catch (e) {
     fail++; console.log('ОШИБКА', e.message);
