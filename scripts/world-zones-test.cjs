@@ -397,6 +397,11 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
     ok(!res[z].err, `${z}: постройка без ошибок`, res[z].err && String(res[z].err.stack || res[z].err).split('\n').slice(0, 3).join(' | '));
   }
   ok(res.kids.pieces.length === 0 && res.metro.pieces.length === 0, 'детский и взрослый город — без разрушаемых деталей');
+  // разрушения, этап 2: стены зданий боевой зоны выбиваются (дыра), бункер — никогда, базы (wbNN) — прочные
+  { const W = res.war.pieces.filter(p => p.destructible && ['wall', 'lintel', 'sill', 'parapet'].includes(p.kind));
+    ok(W.length > 100, 'боевая зона: стены зданий выбиваются', W.length);
+    ok(!res.war.pieces.some(p => /bunker/.test(p.b || '') && p.kind === 'wall' && p.destructible), 'стены бункера — не выбиваются');
+    ok(W.some(p => MZ.TOUGH.test(p.b)) && W.some(p => !MZ.TOUGH.test(p.b)), 'постройки баз — прочные, остальные — обычные'); }
   const W = res.war.pieces, wid = W.map(p => p.id);
   ok(W.length > 300 && new Set(wid).size === W.length, 'боевая зона — сотни деталей с разными номерами', W.length);
   ok(W.every(p => inRect(ZONES.war, p.x, p.z, 1)), 'детали — внутри боевой зоны');
