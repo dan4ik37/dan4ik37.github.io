@@ -552,6 +552,17 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(dmax <= 12, 'цвет травы между соседними столбцами меняется плавно (≤ 12 из 255)', dmax);
   }
 
+  // ═══ 10. Вещь в руке и на земле: выдавлена по пикселям (бока — своим цветом), не «бумажная» и не чёрная ═══
+  sec('вещь в руке: толщина 1/16, бока по краю пикселей своим цветом');
+  {
+    const g = VR.itemGeo('pick_wood'), pos = g.attributes.position.array, cl = g.attributes.color.array, n = g.attributes.position.count / 4;
+    let zmin = 9, zmax = -9, dark = 0;
+    for (let i = 2; i < pos.length; i += 3) { zmin = Math.min(zmin, pos[i]); zmax = Math.max(zmax, pos[i]); }
+    for (let i = 0; i < cl.length; i += 3) if (cl[i] + cl[i + 1] + cl[i + 2] < 30) dark++;
+    ok(g.userData.flat && n > 60 && zmax - zmin > .05 && zmax - zmin < .08 && dark === 0, 'кирка: лицо, спина и борта по краю (больше 60 граней), толщина 1/16, без чёрных граней', { n, th: +(zmax - zmin).toFixed(3), dark });
+    ok(VR.itemGeo('torch').attributes.position.count === 8, 'факел и растения (блоки) — как были: две плоскости');
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });
