@@ -209,6 +209,39 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(MV.evPlace({ place_kind: 'voice', place: '12', place_name: 'Голос', community: 3 }).href === '#/chat/c/3/12' && MV.evPlace({ place_kind: 'text', place: 'games' }).href === '#/chat/games', 'место: канал сообщества / сервера сайта');
   ok(/через \d+ мин/.test(MV.evWhen({ status: 'active', starts_at: new Date(Date.now() + 20 * 60e3).toISOString(), ends_at: soonEnd })), 'скоро: «через N мин»');
 
+  // ═══ 14. «📅 События» (community2.js): строка над каналами, список, форма, без SQL — «скоро» ═══
+  const X = window.D37DS.x, rpc0 = P.rpc;
+  const fakeEl = () => Object.assign(document.createElement('div'), { isConnected: true, querySelector: () => null, querySelectorAll: () => [] });
+  let calls = [];
+  P.rpc = async (name, args) => { calls.push(name); return { error: { code: 'PGRST202', message: 'Could not find the function' }, missing: true }; };
+  const off = { ok: true, official: true, id: 'd37', name: 'Денчик37', channels: [{ id: 'general', name: 'общий', kind: 'text' }, { id: 'voice', name: 'Голосовой', kind: 'voice' }] };
+  let box2 = fakeEl();
+  await X.sub.events.render(box2, 'page', off, []);
+  ok(/Появится, когда сайт обновится/.test(box2.innerHTML), 'без community2.sql: «Появится, когда сайт обновится»', box2.innerHTML);
+  ok(/<span>События<\/span>/.test(X.chanTop('page', off, '')) && /скоро/.test(X.chanTop('page', off, '')), 'строка «📅 События» — «скоро»');
+  const later = new Date(Date.now() + 86400e3).toISOString(), later2 = new Date(Date.now() + 90000e3).toISOString();
+  P.rpc = async (name, args) => {
+    calls.push(name);
+    if (name === 'cm_events') return { data: { ok: true, can: true, list: [
+      { id: 11, title: 'Стрим Денчика', about: 'Играем', starts_at: new Date(Date.now() - 60e3).toISOString(), ends_at: later, place_kind: 'stream', place: '', age: 12, going: 5, mine: true, status: 'active', can: true },
+      { id: 12, title: 'Взрослый турнир', starts_at: later, ends_at: later2, place_kind: 'game', place: 'chess', age: 18, going: 0, status: 'active', can: true }] } };
+    return { data: null };
+  };
+  calls = []; box2 = fakeEl();
+  await X.sub.events.render(box2, 'page', off, []);
+  ok(calls.includes('cm_events') && /＋ Создать событие/.test(box2.innerHTML) && /✓ Иду · 5/.test(box2.innerHTML) && /▶ Зайти/.test(box2.innerHTML) && /href="#\/chat\/ev\/11"/.test(box2.innerHTML), 'список: «Создать», «✓ Иду · 5», идёт — «▶ Зайти», ссылка на событие', box2.innerHTML.slice(0, 400));
+  ok(/ds-evlive/.test(X.chanTop('page', off, 'x:events')) && /ds-evrow on/.test(X.chanTop('page', off, 'x:events')), 'строка над каналами: «идёт», выбрана');
+  window.D37Age = { listOk: n => n < 18, canOpen: n => n < 18, kid: () => false, badge: n => `<i>${n}+</i>` };
+  box2 = fakeEl(); await X.sub.events.render(box2, 'page', off, []);
+  ok(!/Взрослый турнир/.test(box2.innerHTML) && /Стрим Денчика/.test(box2.innerHTML), 'событие 18+ несовершеннолетнему не показываем');
+  delete window.D37Age;
+  window.currentUser = null;
+  box2 = fakeEl(); let logged = '';
+  const login0 = P.login; P.login = (el, t) => { logged = t; };
+  await X.sub.events.render(box2, 'page', off, ['new']);
+  ok(/вошедшие/.test(logged), 'создать событие — сначала войти');
+  P.login = login0; P.rpc = rpc0;
+
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);
   process.exitCode = fail ? 1 : 0;

@@ -337,3 +337,28 @@ body.chat-full #chat .chat-wrap.ds-wrap{max-height:none}
 .mv-cbtn.on{background:#16a34a}
 button.mv-cbtn{border:0;cursor:pointer}
 button.mv-cbtn:disabled{opacity:.6;cursor:wait}
+/* события 📅: строка над каналами, список, страница события */
+.ds-evrow{margin-bottom:6px}
+.ds-evn{font-style:normal;margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:rgba(245,158,11,.22);color:#fbbf24;font:800 11px/18px 'Montserrat',sans-serif;text-align:center}
+.ds-ch small.ds-evlive{margin-left:auto;padding:1px 6px;border-radius:6px;background:#ef4444;color:#fff;font-weight:800;opacity:1}
+.ds-evlist{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.ds-ev{display:flex;gap:12px;padding:12px;border-radius:14px;background:#14141e;border:1px solid rgba(255,255,255,.08);border-left:3px solid #f59e0b}
+.ds-ev.live{border-left-color:#ef4444;box-shadow:inset 0 0 0 1px rgba(239,68,68,.3)}
+.ds-ev.off{opacity:.6}
+.ds-evd{flex:none;width:48px;height:52px;border-radius:10px;background:rgba(245,158,11,.14);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.ds-evd b{font-size:20px;color:#fbbf24}
+.ds-evd small{font-size:11px;color:var(--muted);margin-top:3px;text-transform:uppercase}
+.ds-ev.live .ds-evd{background:rgba(239,68,68,.16)}
+.ds-ev.live .ds-evd b{color:#f87171}
+.ds-evb{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ds-evt{font-weight:800;font-size:15px;color:var(--text);text-decoration:none;overflow-wrap:anywhere}
+.ds-evt:hover{text-decoration:underline}
+.ds-evb>small{font-size:12.5px;color:var(--muted)}
+.ds-evb p{margin:2px 0 0;font-size:13.5px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere}
+.ds-evb p.ds-clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.ds-evacts{margin-top:4px;gap:6px;flex-wrap:wrap}
+.ds-btn.on{background:#16a34a}
+.ds-evtime{gap:8px;flex-wrap:wrap}
+.ds-evtime .ds-lbl{flex:1;min-width:120px}
+.ds-evsrv{display:inline-flex;gap:6px;align-items:center;font-weight:700;color:var(--muted);text-decoration:none;font-size:13px}
+.ds-evsrv:hover{color:var(--text)}

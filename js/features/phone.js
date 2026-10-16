@@ -298,6 +298,8 @@
         if (h.startsWith('#/phone/')) { e.preventDefault(); P.go(h.slice(8)); return; }
         const inv = /^#\/c\/([a-z0-9]{6,12})$/.exec(h);   // приглашение в сообщество — прямо в телефоне
         if (inv) { e.preventDefault(); P.go('comm/join/' + inv[1]); return; }
+        const evm = /^#\/chat\/ev\/(\d{1,12})$/.exec(h);   // событие (community2.sql) — тоже в телефоне
+        if (evm) { e.preventDefault(); P.go('comm/ev/' + evm[1]); return; }
         if (h.startsWith('#/') && !docked) setTimeout(() => P.close(), 0);   // переход по сайту — телефон убираем
       }
     });
