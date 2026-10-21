@@ -1,5 +1,5 @@
 // Проверка погоды, времён года и праздников движка (js/engine/climate.js) без браузера: node scripts/climate-test.cjs
-// Календарь владельца (ноябрь — осень, декабрь–январь — зима, февраль–октябрь — 38 быстрых сезонов, фаза непрерывна), праздники
+// Календарь владельца (ноябрь — осень, декабрь–февраль — зима, март–ноябрь — 7 сезонов по ≈ 39 суток, фаза непрерывна), праздники
 // (местная полночь, отсчёт, таблицы 2026–2040, Наурыз, Энкутаташ в високосные), новогоднее задание, детерминизм погоды,
 // температура в пределах, накопители (снег, лёд, мокро), режимы мира, «ощущается», холод для персонажей, события.
 const path = require('path');
@@ -14,40 +14,41 @@ const H = 3600000, D = 86400000, MSK = 180;
 const mskMs = (y, m, d, h = 0) => Date.UTC(y, m - 1, d, h) - MSK * 60000;
 
 // ═══ 1. Календарь владельца ═══
-sec('календарь: ноябрь — осень, декабрь–январь — зима, февраль–октябрь — 38 быстрых сезонов');
+sec('календарь: ноябрь — осень, декабрь–февраль — зима, март–ноябрь — 7 сезонов по ≈ 39 суток (не меньше месяца)');
 {
-  let badNov = 0, badWin = 0, jumps = 0, maxStep = 0, years = 0;
+  let badNov = 0, badWin = 0, badNauryz = 0, jumps = 0, maxStep = 0, years = 0, minLen = 1e9, maxLen = 0;
   for (let y = 2026; y <= 2040; y++) {
     years++;
-    let prev = null, changes = 0, first = '', last = '', lens = [], segStart = mskMs(y, 2, 1);
+    let prev = null, changes = 0, first = '', last = '', segStart = mskMs(y, 3, 1);
     for (let t = mskMs(y, 1, 1); t < mskMs(y + 1, 1, 1); t += 3 * H) {
-      const ph = C.phaseCal(t), s = C.seasonOf(ph), m = new Date(t + MSK * 60000).getUTCMonth() + 1;
+      const ph = C.phaseCal(t), s = C.seasonOf(ph), dt = new Date(t + MSK * 60000), m = dt.getUTCMonth() + 1;
       if (m === 11 && s !== 'autumn') badNov++;
-      if ((m === 12 || m === 1) && s !== 'winter') badWin++;
+      if ((m === 12 || m <= 2) && s !== 'winter') badWin++;
+      if (m === 3 && dt.getUTCDate() >= 21 && dt.getUTCDate() <= 23 && s !== 'spring') badNauryz++;
       if (prev) { const d = Math.abs(((ph - prev.ph + 6) % 4) - 2); maxStep = Math.max(maxStep, d); if (d > .1) jumps++; }
-      if (m >= 2 && m <= 10) {
+      if (m >= 3 && m <= 11) {
         if (!first) first = s;
         last = s;
-        if (prev && prev.m >= 2 && prev.s !== s) { changes++; lens.push((t - segStart) / D); segStart = t; }
+        if (prev && prev.m >= 3 && prev.s !== s) { changes++; const l = (t - segStart) / D; minLen = Math.min(minLen, l); maxLen = Math.max(maxLen, l); segStart = t; }
       }
       prev = { ph, s, m };
     }
     if (y === 2026) {
-      ok(first === 'spring' && last === 'summer', '1 февраля — весна (сразу после зимы), конец октября — лето (дальше ноябрьская осень)', { first, last });
-      ok(changes === 37, 'февраль–октябрь: 38 сезонов (37 смен)', changes);
-      const mid = lens.slice(1);   // первый отрезок — от 1 февраля
-      ok(mid.every(l => l > 7.05 && l < 7.35), 'быстрый сезон — около недели (7,18 суток)', [Math.min(...mid).toFixed(2), Math.max(...mid).toFixed(2)]);
+      ok(first === 'spring' && last === 'autumn', '1 марта — весна (сразу после зимы), конец ноября — осень (дальше зима)', { first, last });
+      ok(changes === 6, 'март–ноябрь: 7 сезонов (6 смен)', changes);
     }
   }
+  ok(minLen > 39 && maxLen < 39.6, 'сезон — около 39 суток, не меньше месяца (2026–2040)', [minLen.toFixed(2), maxLen.toFixed(2)]);
   ok(!badNov, 'ноябрь — всегда осень (2026–2040)', badNov);
-  ok(!badWin, 'декабрь и январь — всегда зима (2026–2040)', badWin);
+  ok(!badWin, 'декабрь, январь и февраль — всегда зима (2026–2040)', badWin);
+  ok(!badNauryz, 'Наурыз (21–23 марта) — всегда весна (2026–2040)', badNauryz);
   ok(!jumps && maxStep < .1, 'фаза года непрерывна (за 3 ч сдвиг < 0,1 на всех стыках)', { jumps, maxStep: +maxStep.toFixed(4), years });
   // стыки точно
-  ok(C.seasonOf(C.phaseCal(mskMs(2027, 2, 1) - 1000)) === 'winter' && C.seasonOf(C.phaseCal(mskMs(2027, 2, 1) + 1000)) === 'spring', '31 января 23:59:59 МСК — зима, 1 февраля 00:00:01 — весна');
-  ok(C.seasonOf(C.phaseCal(mskMs(2027, 11, 1) - 1000)) === 'summer' && C.seasonOf(C.phaseCal(mskMs(2027, 11, 1) + 1000)) === 'autumn', '31 октября — лето, 1 ноября — осень');
-  ok(C.seasonOf(C.phaseCal(mskMs(2027, 12, 1) + 1000)) === 'winter' && Math.abs(C.phaseCal(mskMs(2028, 1, 1)) - 3.5) < .01, '1 декабря — зима, 1 января — середина зимы (самый холод)', C.phaseCal(mskMs(2028, 1, 1)));
-  const leapLen = (mskMs(2028, 11, 1) - mskMs(2028, 2, 1)) / D, normLen = (mskMs(2027, 11, 1) - mskMs(2027, 2, 1)) / D;
-  ok(leapLen === 274 && normLen === 273, 'високосный год: февраль–октябрь 274 суток, обычный 273', [leapLen, normLen]);
+  ok(C.seasonOf(C.phaseCal(mskMs(2027, 3, 1) - 1000)) === 'winter' && C.seasonOf(C.phaseCal(mskMs(2027, 3, 1) + 1000)) === 'spring', '28 февраля 23:59:59 МСК — зима, 1 марта 00:00:01 — весна');
+  ok(C.seasonOf(C.phaseCal(mskMs(2027, 10, 22))) === 'summer' && C.seasonOf(C.phaseCal(mskMs(2027, 10, 24))) === 'autumn', '22 октября — ещё лето, с 23 октября — осень');
+  ok(C.seasonOf(C.phaseCal(mskMs(2027, 12, 1) - 1000)) === 'autumn' && C.seasonOf(C.phaseCal(mskMs(2027, 12, 1) + 1000)) === 'winter' && Math.abs(C.phaseCal(mskMs(2028, 1, 15)) - 3.5) < .01, '1 декабря — зима, середина января — середина зимы (самый холод)', C.phaseCal(mskMs(2028, 1, 15)));
+  const leapLen = (mskMs(2028, 3, 1) - mskMs(2027, 12, 1)) / D, normLen = (mskMs(2027, 3, 1) - mskMs(2026, 12, 1)) / D, cycLen = (mskMs(2028, 12, 1) - mskMs(2028, 3, 1)) / D;
+  ok(leapLen === 91 && normLen === 90 && cycLen === 275, 'зима 90 суток (в високосный 91), март–ноябрь — всегда 275', [leapLen, normLen, cycLen]);
   // листва: осенью желтеет, зимой тусклая, весной свежая, летом обычная
   const L2 = C.leafOf(2.7), L3 = C.leafOf(3.5), L0 = C.leafOf(.3), L1 = C.leafOf(1.4);
   ok(L2.autumn > .9 && L3.bare > .9 && L3.autumn < .05 && L0.fresh > .9 && L1.autumn === 0 && L1.bare === 0 && L1.fresh === 0, 'листва: осень — жёлтая, зима — голая, весна — свежая, лето — как есть', { L2, L3, L0, L1 });
@@ -134,9 +135,9 @@ sec('климаты: горы холоднее и снежнее, пустыня
   ok(T1.t < 0 && D1.t > T1.t + 10 && M1.t < T1.t, 'зимой: в умеренном — ниже нуля, в пустыне — заметно теплее, в горах — холоднее', { d: D1.t.toFixed(1), t: T1.t.toFixed(1), m: M1.t.toFixed(1) });
   ok(M1.snow > T1.snow * .9 && D1.snow < T1.snow * .5, 'снег: в горах не меньше, в пустыне — почти нет', { m: M1.snow, t: T1.snow, d: D1.snow });
   ok(S1.wind > T1.wind + 2 && S1.fog >= T1.fog, 'море — ветренее и туманнее', { s: S1.wind.toFixed(1), t: T1.wind.toFixed(1), sf: S1.fog, tf: T1.fog });
-  // лето: быстрое лето в июле (фаза 1…2)
-  let sumStart = 0; for (let t = Date.UTC(2026, 6, 1); t < Date.UTC(2026, 7, 1); t += H) if (C.seasonOf(C.phaseCal(t)) === 'summer') { sumStart = t; break; }
-  const T2 = stat(500, sumStart + 2 * D, 60, H), D2 = stat(-500, sumStart + 2 * D, 60, H);
+  // лето: первое лето года — апрель–май (фаза 1…2), меряем в его середине
+  let sumStart = 0; for (let t = Date.UTC(2026, 3, 1); t < Date.UTC(2026, 5, 1); t += H) if (C.seasonOf(C.phaseCal(t)) === 'summer') { sumStart = t; break; }
+  const T2 = stat(500, sumStart + 15 * D, 60, H), D2 = stat(-500, sumStart + 15 * D, 60, H);
   ok(T2.t > 12 && D2.t > 25, 'летом: в умеренном тепло, в пустыне жарко', { t: T2.t.toFixed(1), d: D2.t.toFixed(1) });
   // высота: выше — холоднее
   const lo = W.at(500, 0, win, 0).temp, hi = W.at(500, 0, win, 150).temp;
@@ -153,15 +154,15 @@ sec('накопители: снег на земле, лёд на воде, мо�
   ok(deep.snowCover > .8 && deep.ice > .8, 'середина зимы: снег лежит, озёра во льду', { s: deep.snowCover, i: deep.ice });
   ok(summer.snowCover === 0 && summer.ice === 0, 'лето: ни снега, ни льда', { s: summer.snowCover, i: summer.ice });
   // после дождя мокро, потом высыхает
-  let rainT = 0; for (let t = Date.UTC(2026, 6, 1); t < Date.UTC(2026, 8, 1); t += 10 * 60000) { const s = W.at(0, 0, t); if (s.rain > .6 && s.temp > 5) { rainT = t; break; } }
+  let rainT = 0; for (let t = Date.UTC(2026, 3, 10); t < Date.UTC(2026, 5, 1); t += 10 * 60000) { const s = W.at(0, 0, t); if (s.rain > .6 && s.temp > 5) { rainT = t; break; } }
   ok(rainT > 0, 'летом бывает сильный дождь');
   let endT = rainT; while (W.at(0, 0, endT).rain > .02 && endT < rainT + 6 * H) endT += 60000;   // дождь кончился
   const wetNow = W.at(0, 0, endT).wet, pudNow = W.at(0, 0, endT).puddle; let dryAt = 0;
   for (let t = endT; t < endT + 12 * H; t += 60000) { const s = W.at(0, 0, t); if (s.rain > .02) break; if (s.wet < .05) { dryAt = t; break; } }
   ok(wetNow > .7 && pudNow > .2, 'дождь кончился — мокро и лужи', { wetNow, pudNow });
   ok(dryAt > endT + 8 * 60000 && dryAt < endT + 40 * 60000, 'высыхает за 10–40 минут (общий мир: 1,5–5 погодных часов)', dryAt ? ((dryAt - endT) / 60000).toFixed(0) + ' мин' : 'снова дождь');
-  // весна: снег тает (первая весна февраля — φ 0…1 — снег уходит)
-  const feb = W.at(0, 0, mskMs(2027, 2, 6, 14));
+  // весна: снег тает (первая весна — с 1 марта; к Наурызу, φ ≈ 0,5, снег уходит)
+  const feb = W.at(0, 0, mskMs(2027, 3, 21, 14));
   ok(feb.season === 'spring' && feb.snowCover < deep.snowCover, 'весной снег тает', { s: feb.snowCover });
   ok(W.iceAt(0, 0, mskMs(2027, 1, 5, 12)) === deep.ice, 'W.iceAt — для «можно ли ходить по льду»');
 }
@@ -208,7 +209,7 @@ sec('события: праздник и смена сезона');
   const tz = 300, mid = Date.UTC(2027, 0, 1) - tz * 60000;
   for (const dt of [-20000, -9000, -1000, 500, 200000, 3 * D]) C.tick(mid + dt, { tz });
   ok(got.includes('newyear:pre') && got.includes('newyear:burst') && got.includes('newyear:day') && got.includes('newyear:end'), 'Новый год: pre → burst → day → end', got);
-  C.tick(mskMs(2027, 2, 1) - 1000, { tz }); C.tick(mskMs(2027, 2, 1) + 1000, { tz });
+  C.tick(mskMs(2027, 3, 1) - 1000, { tz }); C.tick(mskMs(2027, 3, 1) + 1000, { tz });
   ok(got.includes('season:spring'), 'смена сезона — событие', got.slice(-3));
   off(); const n = got.length; C.tick(mid + 20000, { tz }); ok(got.filter(x => x.startsWith('newyear')).length === got.slice(0, n).filter(x => x.startsWith('newyear')).length, 'отписка работает');
   let threw = false; C.on('weather', () => { throw new Error('x'); }); const w0 = console.warn; console.warn = () => {}; try { C.emit('weather', {}); } catch (e) { threw = true; } console.warn = w0;
