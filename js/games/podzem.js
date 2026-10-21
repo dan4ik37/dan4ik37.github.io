@@ -70,7 +70,7 @@
       cam: { x: 0, y: 0, tile: 24, zoom: 1, shake: 0 }, mouse: { sx: -1, sy: -1, wx: 0, wy: 0, l: false, r: false, in: false, moved: 0 },
       pad: { on: false, cx: 3, cy: -1, lb: false, rb: false, y: false, lt: false }, aim: { x: 0, y: 0, src: 'mouse' },
       t: 0, tick: 0, liqTick: 0, saveT: 0, streamT: 0, spawnT: 0, modT: 0, hudT: 0, frame: 0, perf: { frames: [], cpu: [], last: 0 },
-      opt: Object.assign({ zoom: 1, smooth: true, back: true, parts: true, autosave: true, fps: false, smart: false }, (() => { try { return JSON.parse(lsGet(LS_OPT) || '{}'); } catch (e) { return {}; } })()),
+      opt: Object.assign({ zoom: 1, smooth: true, back: true, parts: true, autosave: true, fps: false, smart: false, ledge: true }, (() => { try { return JSON.parse(lsGet(LS_OPT) || '{}'); } catch (e) { return {}; } })()),
       chestOpen: null, talk: null, cheats: false, listeners: [], loop: null,
       hook: null,          // крюк: { state: fly | latched | back, x, y, dx, dy, … }
       target: null,        // куда сейчас подействует предмет в руке: { x, y, ok, kind } (умный курсор, превью)
@@ -386,7 +386,7 @@
   function newPlayer(x, feet){
     return { x: x - PL_W / 2, y: feet - PL_H, w: PL_W, h: PL_H, vx: 0, vy: 0, ground: false, stepUp: 1.05, dir: 1, drop: false, dropT: 0,
       coyote: 0, jumpBuf: 0, jumpHold: 0, jumps: 0, climb: false, inLq: 0, lqT: 0, fallY: feet - PL_H, iframes: 0, hurtT: 0, useT: 0, swing: 0, swingId: 0, swingDur: .3,
-      mine: null, anim: 'idle', animT: 0, stepOff: 0, regenT: 0, manaT: 0, potionT: 0, recallT: 0, dead: 0, airT: 0, lastStep: 0 };
+      mine: null, anim: 'idle', animT: 0, stepOff: 0, regenT: 0, manaT: 0, potionT: 0, recallT: 0, dead: 0, airT: 0, lastStep: 0, ledge: null, ledgeCD: 0 };
   }
   const hasAcc = key => G.CH.inv.some(s => s && s.id === key);
   const selItem = () => G.CH.inv[G.CH.sel] || null;
@@ -796,6 +796,7 @@
     if (p.dead || p.iframes > 0 || G.god) return;   // god — только для проверок (_test.god)
     const d = Math.max(1, Math.round(dmg * (.9 + rand() * .2)));
     G.CH.hp -= d; p.iframes = .66; p.hurtT = .3; p.regenT = 0;
+    if (p.ledge) ledgeDrop(p, false);
     G.U?.hurt?.(Math.min(1, .45 + d / 60));   // красные края экрана на миг (во всех наборах шейдеров)
     p.vx = kx * 8; p.vy = -7; p.ground = false;
     floatText(p.x + p.w / 2, p.y, d, '#ff5a5a');
@@ -814,7 +815,7 @@
   // точки (W.spawn, W.bed): x — клетка, y — где ноги
   function respawn(){
     const p = G.pl, s = G.W.bed || G.W.spawn;
-    p.x = s.x + .5 - p.w / 2; p.y = s.y - p.h; p.vx = p.vy = 0; p.dead = 0; p.iframes = 2; p.fallY = p.y;
+    p.x = s.x + .5 - p.w / 2; p.y = s.y - p.h; p.vx = p.vy = 0; p.dead = 0; p.iframes = 2; p.fallY = p.y; p.ledge = null;
     G.CH.hp = G.CH.maxHp; G.CH.mana = G.CH.maxMana; G.spawnGrace = SPAWN_GRACE;   // после возрождения — передышка
     G.cam.x = p.x; G.cam.y = p.y;
     stream(true);
@@ -954,6 +955,7 @@
     if (!count('hook')) { hint('Крюк-кошку делают на наковальне: 3 железных слитка + 10 верёвок'); return false; }
     if (G.hook && G.hook.state !== 'back') { G.hook.state = 'back'; return true; }   // ещё раз — отцепиться
     const p = G.pl, it = ITEMS.hook, [dx, dy] = hookDir();
+    if (p.ledge) ledgeDrop(p, false);
     G.hook = { state: 'fly', x: p.x + p.w / 2, y: p.y + p.h * .35, dx, dy, range: it.range, speed: it.speed, tx: 0, ty: 0 };
     snd('swing', { vol: .5, rate: .7 });
     return true;
@@ -987,6 +989,64 @@
     return true;
   }
 
+  // ═══ Цепляться за край (владелец 22.10: «цепляния везде»): в прыжке (на излёте) или в падении у стены, край которой на
+  // уровне рук, герой хватается (держа к стене) и подтягивается наверх, если там есть место встать — в щель ниже роста
+  // никогда. Держать к стене / вверх / прыжок — подтянуться; от стены или вниз — отпустить; ничего не жать — висеть.
+  // Клавиатура, геймпад и палец (джойстик к стене). ⚙️ «Цепляться за края» (G.opt.ledge). Только шаг логики 1/60 с —
+  // одинаково при любой частоте экрана ═══
+  const LEDGE_UP = .32, LEDGE_CATCH = .1, LEDGE_HANG = .5;   // подтягивание (с), «поймал» (с), руки над головой (клетки)
+  function ledgeFind(p, s){
+    const tx = s > 0 ? Math.floor(p.x + p.w + .06) : Math.floor(p.x - .06);
+    if (s > 0 ? tx - (p.x + p.w) > .12 : p.x - (tx + 1) > .12) return null;   // стена не вплотную
+    let best = null, bd = 9;
+    for (let ty = Math.floor(p.y - .3); ty <= Math.floor(p.y + 1); ty++) {
+      const sh = shapeAt(tx, ty); if (sh !== 1 && sh !== 2) continue;   // край — целый блок или полублок
+      const above = shapeAt(tx, ty - 1); if (above && above !== 5) continue;   // над краем пусто (платформа — не мешает)
+      const top = sh === 2 ? ty + .5 : ty;
+      if (top < p.y - .3 || top > p.y + 1) continue;
+      const xf = s > 0 ? tx + .04 : tx + .96 - p.w, yf = top - p.h;
+      // встать наверху целиком и подняться вдоль стены — есть место (в щель ниже роста — нет)
+      if (PZ.overlapSolid(p, xf, yf, shapeAt) || PZ.overlapSolid(p, p.x, yf, shapeAt)) continue;
+      const d = Math.abs(top - (p.y + .2));
+      if (d < bd) { bd = d; best = { s, tx, top, ty, sh, xf, yf }; }
+    }
+    return best;
+  }
+  function ledgeGrab(p, L){
+    p.ledge = Object.assign(L, { t: 0, u: 0, up: false, yh: L.top + LEDGE_HANG });
+    p.vx = 0; p.vy = 0; p.dir = L.s; p.jumpHold = 0; p.mine = null; p.fallY = p.y;
+    snd('place', { vol: .3, rate: 1.7 });
+  }
+  function ledgeDrop(p, push){
+    const s = p.ledge ? p.ledge.s : p.dir;
+    p.ledge = null; p.ledgeCD = .4;
+    if (push) { p.vx = -s * 2.2; p.vy = .5; }
+  }
+  function ledgeStep(p, I, dt){
+    const L = p.ledge, s = L.s;
+    L.t += dt;
+    const away = s > 0 ? I.mx < -.3 : I.mx > .3, toward = s > 0 ? I.mx > .3 : I.mx < -.3;
+    if (shapeAt(L.tx, L.ty) !== L.sh || (shapeAt(L.tx, L.ty - 1) && shapeAt(L.tx, L.ty - 1) !== 5)) { ledgeDrop(p, false); return; }   // край сломали / заставили
+    p.vx = 0; p.vy = 0; p.fallY = p.y;
+    if (!L.up) {   // висит: руки на краю
+      if (away || I.down) { ledgeDrop(p, true); return; }
+      if (!PZ.overlapSolid(p, p.x, L.yh, shapeAt)) p.y += (L.yh - p.y) * Math.min(1, dt / .06);
+      if (L.t >= LEDGE_CATCH && (toward || I.up || I.jump)) {
+        if (PZ.overlapSolid(p, L.xf, L.yf, shapeAt) || PZ.overlapSolid(p, p.x, L.yf, shapeAt)) return;   // места наверху не стало — висим
+        L.up = true; L.t = 0; L.xs = p.x; L.ys = p.y; snd('swing', { vol: .3, rate: .75 });
+      }
+      return;
+    }
+    // подтягивается: сначала вверх вдоль стены, потом на край
+    const u = Math.min(1, L.t / LEDGE_UP); L.u = u;
+    let nx, ny;
+    if (u < .5) { const k = u / .5, e = 1 - (1 - k) * (1 - k); nx = L.xs; ny = L.ys + (L.yf - L.ys) * e; }
+    else { const k = (u - .5) / .5, e = k * k * (3 - 2 * k); nx = L.xs + (L.xf - L.xs) * e; ny = L.yf; }
+    if (PZ.overlapSolid(p, nx, ny, shapeAt)) { ledgeDrop(p, false); return; }   // мир поменялся (поставили блок)
+    p.x = nx; p.y = ny;
+    if (u >= 1) { p.ledge = null; p.ground = true; p.wasGround = true; p.vx = s * 1.5; p.coyote = .1; p.fallY = p.y; snd('land', { vol: .25 }); }
+  }
+
   // ═══ Шаг игрока ═══
   function updPlayer(dt){
     const p = G.pl, CH = G.CH;
@@ -1006,47 +1066,57 @@
     for (let y = Math.floor(p.y + .2); y <= Math.floor(p.y + p.h - .2); y++) if (P.CLIMB[fgAt(cx, y)]) canClimb = true;
     if (!canClimb) p.climb = false;
     else if ((I.up || I.down) && !p.climb) p.climb = true;
-    // движение
-    const acc = p.ground ? 46 : 26, maxV = inLq ? 5 : 8.6, slip = p.ground && P.SLIP[fgAt(cx, feetY + 1)];
-    const dir = I.mx > .3 ? 1 : I.mx < -.3 ? -1 : 0;
-    const target = dir * maxV * Math.min(1, Math.abs(I.mx) + .2);
-    if (dir) { p.vx += clamp(target - p.vx, -acc * dt, acc * dt); p.dir = dir; }
-    else { const fr = (p.ground ? (slip ? 5 : 48) : 8) * dt; p.vx = Math.abs(p.vx) <= fr ? 0 : p.vx - Math.sign(p.vx) * fr; }
-    if (p.climb) {
-      p.vy = I.up ? -7 : I.down ? 7 : 0; p.vx *= .6;
-      if (I.jumpDown) { p.climb = false; p.vy = -12; }
-    } else {
-      // прыжок: «койот» 0,1 с после края, запомненное нажатие 0,12 с, выше — если держать
-      if (p.ground) { p.coyote = .1; p.jumps = 0; } else p.coyote -= dt;
-      if (I.jumpDown) p.jumpBuf = .12; else p.jumpBuf -= dt;
-      const boots = hasAcc('boots'), wings = hasAcc('wings');
-      const jv = 19 * (boots ? 1.22 : 1);
-      if (inLq) {
-        if (I.jump) p.vy = Math.max(p.vy - 46 * dt, -8);
-        p.vy = Math.min(p.vy + GRAV * .28 * dt, 6);
-        if (p.jumpBuf > 0 && inLq === 1 && p.coyote > 0) { p.vy = -jv * .8; p.jumpBuf = 0; }
+    // на краю — своё движение (висит / подтягивается)
+    if (p.ledge) ledgeStep(p, I, dt);
+    else {
+      // движение
+      const acc = p.ground ? 46 : 26, maxV = inLq ? 5 : 8.6, slip = p.ground && P.SLIP[fgAt(cx, feetY + 1)];
+      const dir = I.mx > .3 ? 1 : I.mx < -.3 ? -1 : 0;
+      const target = dir * maxV * Math.min(1, Math.abs(I.mx) + .2);
+      if (dir) { p.vx += clamp(target - p.vx, -acc * dt, acc * dt); p.dir = dir; }
+      else { const fr = (p.ground ? (slip ? 5 : 48) : 8) * dt; p.vx = Math.abs(p.vx) <= fr ? 0 : p.vx - Math.sign(p.vx) * fr; }
+      if (p.climb) {
+        p.vy = I.up ? -7 : I.down ? 7 : 0; p.vx *= .6;
+        if (I.jumpDown) { p.climb = false; p.vy = -12; }
       } else {
-        if (p.jumpBuf > 0 && (p.coyote > 0)) { p.vy = -jv; p.jumpBuf = 0; p.coyote = 0; p.jumpHold = .18; snd('jump', { vol: .4 }); }
-        else if (p.jumpBuf > 0 && wings && p.jumps < 1 && !p.ground) { p.vy = -jv * .9; p.jumps++; p.jumpBuf = 0; p.jumpHold = .12; burst(p.x + p.w / 2, p.y + p.h, 10, 0xd8c8a8, 4, .4, .16); snd('swing', { vol: .5 }); }
-        if (p.jumpHold > 0) { p.jumpHold -= dt; if (!I.jump) p.jumpHold = 0; }
-        const g = p.jumpHold > 0 && p.vy < 0 ? GRAV * .32 : GRAV;
-        p.vy = Math.min(p.vy + g * dt, wings && I.jump && p.vy > 0 ? 3.5 : MAXFALL);
+        // прыжок: «койот» 0,1 с после края, запомненное нажатие 0,12 с, выше — если держать
+        if (p.ground) { p.coyote = .1; p.jumps = 0; } else p.coyote -= dt;
+        if (I.jumpDown) p.jumpBuf = .12; else p.jumpBuf -= dt;
+        const boots = hasAcc('boots'), wings = hasAcc('wings');
+        const jv = 19 * (boots ? 1.22 : 1);
+        if (inLq) {
+          if (I.jump) p.vy = Math.max(p.vy - 46 * dt, -8);
+          p.vy = Math.min(p.vy + GRAV * .28 * dt, 6);
+          if (p.jumpBuf > 0 && inLq === 1 && p.coyote > 0) { p.vy = -jv * .8; p.jumpBuf = 0; }
+        } else {
+          if (p.jumpBuf > 0 && (p.coyote > 0)) { p.vy = -jv; p.jumpBuf = 0; p.coyote = 0; p.jumpHold = .18; snd('jump', { vol: .4 }); }
+          else if (p.jumpBuf > 0 && wings && p.jumps < 1 && !p.ground) { p.vy = -jv * .9; p.jumps++; p.jumpBuf = 0; p.jumpHold = .12; burst(p.x + p.w / 2, p.y + p.h, 10, 0xd8c8a8, 4, .4, .16); snd('swing', { vol: .5 }); }
+          if (p.jumpHold > 0) { p.jumpHold -= dt; if (!I.jump) p.jumpHold = 0; }
+          const g = p.jumpHold > 0 && p.vy < 0 ? GRAV * .32 : GRAV;
+          p.vy = Math.min(p.vy + g * dt, wings && I.jump && p.vy > 0 ? 3.5 : MAXFALL);
+        }
+      }
+      hookPull(p, I);
+      // сквозь платформу — вниз (зажать «вниз»)
+      if (I.down && !p.climb) p.dropT = .25; else p.dropT -= dt;
+      p.drop = p.dropT > 0;
+      const wasGround = p.ground, vy0 = p.vy;
+      PZ.moveBody(p, dt, shapeAt);
+      // приземление: урон от падения (в воде — нет)
+      if (!wasGround && p.ground) {
+        const fall = p.y - p.fallY;
+        if (vy0 > 12) { snd('land', { vol: Math.min(1, vy0 / 30) }); burst(p.x + p.w / 2, p.y + p.h, 5, 0x9a8a7a, 3, .3, .12); }
+        if (fall > 24 && !p.inLq && !hasAcc('wings')) hurtPlayer(Math.round((fall - 24) * 3.2), 0, 'падение');
+      }
+      if (p.ground || p.climb || p.inLq) p.fallY = p.y;
+      else if (p.vy < 0) p.fallY = Math.min(p.fallY, p.y);
+      // зацепиться за край: в воздухе, на излёте прыжка или в падении, держа к стене, в которую упёрся
+      p.ledgeCD -= dt;
+      if (G.opt.ledge !== false && !p.ground && !p.climb && p.ledgeCD <= 0 && p.vy > -3 && !I.down && !(G.hook && G.hook.state === 'latched')) {
+        const s = I.mx > .3 ? 1 : I.mx < -.3 ? -1 : 0;
+        if (s && (s > 0 ? p.wallR : p.wallL)) { const L = ledgeFind(p, s); if (L) ledgeGrab(p, L); }
       }
     }
-    hookPull(p, I);
-    // сквозь платформу — вниз (зажать «вниз»)
-    if (I.down && !p.climb) p.dropT = .25; else p.dropT -= dt;
-    p.drop = p.dropT > 0;
-    const wasGround = p.ground, vy0 = p.vy;
-    PZ.moveBody(p, dt, shapeAt);
-    // приземление: урон от падения (в воде — нет)
-    if (!wasGround && p.ground) {
-      const fall = p.y - p.fallY;
-      if (vy0 > 12) { snd('land', { vol: Math.min(1, vy0 / 30) }); burst(p.x + p.w / 2, p.y + p.h, 5, 0x9a8a7a, 3, .3, .12); }
-      if (fall > 24 && !p.inLq && !hasAcc('wings')) hurtPlayer(Math.round((fall - 24) * 3.2), 0, 'падение');
-    }
-    if (p.ground || p.climb || p.inLq) p.fallY = p.y;
-    else if (p.vy < 0) p.fallY = Math.min(p.fallY, p.y);
     // шаги
     if (p.ground && Math.abs(p.vx) > 1 && G.t - p.lastStep > .32) { p.lastStep = G.t; const f = fgAt(cx, feetY + 1); window.D37E?._audio?.step?.(P.GROUP[f] === 2 || P.GROUP[f] === 7 ? 'concrete' : f === T.PLANKS || f === T.PLATFORM ? 'wood' : f === T.SNOW || f === T.SAND ? 'carpet' : 'grass', false); }
     p.stepOff = Math.max(0, (p.stepOff || 0) - dt * 9);
@@ -1061,7 +1131,7 @@
     }
     // анимация
     p.animT += dt;
-    const a = p.swing > 0 ? 'use' : p.climb ? 'climb' : p.inLq === 2 ? 'swim' : !p.ground ? (p.vy < 0 ? 'jump' : 'fall') : Math.abs(p.vx) > 5 ? 'run' : Math.abs(p.vx) > .4 ? 'walk' : 'idle';
+    const a = p.ledge ? (p.ledge.up ? 'ledge' : 'hang') : p.swing > 0 ? 'use' : p.climb ? 'climb' : p.inLq === 2 ? 'swim' : !p.ground ? (p.vy < 0 ? 'jump' : 'fall') : Math.abs(p.vx) > 5 ? 'run' : Math.abs(p.vx) > .4 ? 'walk' : 'idle';
     if (a !== p.anim) { p.anim = a; p.animT = 0; }
     useInput(dt, I);
     // глубина и путь
@@ -1073,7 +1143,7 @@
   // ═══ Использовать предмет в руке ═══
   function useInput(dt, I){
     const U = G.U;
-    if (I.blocked || G.pl.recallT > 0) { G.pl.mine = null; return; }
+    if (I.blocked || G.pl.recallT > 0 || G.pl.ledge) { G.pl.mine = null; return; }
     const wantUse = G.mouse.l || G.C.held('attack') || !!U?.touch?.use;
     if (!wantUse) { G.pl.handLock = false; if (G.pl.mine) G.pl.mine.t += dt; if (G.pl.mine && G.pl.mine.t > 2) G.pl.mine = null; return; }
     if (G.pl.useT > 0) return;
@@ -2175,7 +2245,9 @@
       const s = selItem(), held = s ? s.id : null, it = held ? itemDef(held) : null;
       const swingK = p.swing > 0 && it && (it.kind === 'tool' || it.kind === 'melee') ? 1 - p.swing / (it.speed || .3) : null;
       const blink = p.iframes > 0 && Math.floor(t * 20) % 2 === 0;
-      if (!blink) drawChar(G.H, p.anim, p.anim === 'use' ? (1 - p.swing / (p.swingDur || .3)) * .32 : p.animT, p.x + p.w / 2, p.y + p.h + (p.stepOff || 0), p.dir < 0, p.hurtT > 0, held, swingK);
+      const at = p.anim === 'use' ? (1 - p.swing / (p.swingDur || .3)) * .32 : p.anim === 'ledge' ? (p.ledge?.u ?? 1) * .32 : p.animT;
+      const L = p.ledge, lx = L ? L.s * (L.up ? .38 * Math.sin(Math.PI * L.u) : .12) : 0;   // на краю: прижат к стене, подтягиваясь — наклонился через край
+      if (!blink) drawChar(G.H, p.anim, at, p.x + p.w / 2 + lx, p.y + p.h + (p.stepOff || 0), p.dir < 0, p.hurtT > 0, L ? null : held, swingK);
     }
     // снаряды
     for (const q of G.projs) { const fr = A.spr[q.spr]; if (!fr) continue; const [, , w, h] = fr[0], sw = w / 16, sh = h / 16; spr(q.spr, Math.floor(q.t * 10), q.x - sw / 2, q.y - sh / 2, sw, sh, false, Math.atan2(q.vy, q.vx), null, 1, sw / 2, sh / 2, q.spr === 'arrowp'); }
@@ -2274,6 +2346,7 @@
       if (dtms > 0 && dtms < 500) { G.perf.frames.push(dtms); if (G.perf.frames.length > 120) G.perf.frames.shift(); }
       if (G.state === 'play' || G.state === 'paused' || G.state === 'loading') {
         const c0 = now();
+        if (G.accReset) { G.accReset = false; acc = 0; }   // новый мир — с чистого такта (одинаково при любой частоте экрана)
         acc += G.state === 'paused' ? 0 : dt;
         let n = 0;
         if (G.hitStop > 0) { G.hitStop -= dt; acc = 0; }   // миг после сильного удара
@@ -2465,7 +2538,7 @@
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
     G.mobs.length = 0; G.items.length = 0; G.projs.length = 0; G.npcs.length = 0; G.texts.length = 0; G.boss = null; PT.n = 0;
     G.edits.length = 0; G.editIdx.clear(); G.cheats = !!W.cheats;
-    G.spawnGrace = SPAWN_GRACE; G.spawnT = 1; G.srand = mulberry((W.seed ^ Math.floor(W.playtime || 0)) >>> 0);   // мобы — не сразу после входа
+    G.spawnGrace = SPAWN_GRACE; G.spawnT = 1; G.accReset = true; G.srand = mulberry((W.seed ^ Math.floor(W.playtime || 0)) >>> 0);   // мобы — не сразу после входа
     lastC = null; inbox.length = 0;
     G.U?.loading(true, 'Мир строится…');
     // моды мира
@@ -2665,7 +2738,7 @@
     const sprites = () => {
       const SP = window.D37Sprite; if (!SP || !SP.supported()) return;
       const size = clamp(Math.round(G.cam.tile / G.res * PL_SPR / 8) * 8, 32, 128);
-      G.H = SP.handle(G.look, { view: 'side', size, noItem: true, pin: true, key: SP.myKey(), style: SP.styleFor('pixel'), anims: ['idle', 'walk', 'run', 'jump', 'fall', 'use', 'climb', 'swim', 'hurt'] });
+      G.H = SP.handle(G.look, { view: 'side', size, noItem: true, pin: true, key: SP.myKey(), style: SP.styleFor('pixel'), anims: ['idle', 'walk', 'run', 'jump', 'fall', 'use', 'climb', 'swim', 'hurt', 'hang', 'ledge'] });
       G.guideLook = { body: 'boy', tone: 't4', hair: 'side', hairc: 'brown', top: 'sweater', color: 'green', botc: 'khaki', shoes: 'boots', hat: 'none', item: 'none', pet: 'none', trail: 'none' };
       G.guideH = SP.handle(G.guideLook, { view: 'side', size, noItem: true, key: 'pz-guide', style: SP.styleFor('pixel'), anims: ['idle', 'walk', 'jump'] });
     };
@@ -2712,7 +2785,7 @@
     mount, unmount, api: API,
     _test: {
       state: () => G && { state: G.state, world: G.W && { id: G.W.id, seed: G.W.seed, time: +G.W.time.toFixed(3), maxDepth: G.W.maxDepth, mods: G.W.mods }, pl: G.pl && { x: +G.pl.x.toFixed(2), y: +G.pl.y.toFixed(2), ground: G.pl.ground, hp: G.CH?.hp, dead: G.pl.dead }, chunks: G.chunks.size, pending: G.pending.size, mobs: G.mobs.length, items: G.items.length, boss: G.boss && G.boss.type, worker: G.worker?.kind, fps: G.perf.frames.length ? +(1000 / (G.perf.frames.reduce((a, b) => a + b, 0) / G.perf.frames.length)).toFixed(1) : 0, cpu: G.perf.cpu.length ? +(G.perf.cpu.reduce((a, b) => a + b, 0) / G.perf.cpu.length).toFixed(2) : 0, draws: G.R?.stats.draws, sprites: G.R?.stats.sprites },
-      tp(x, y){ if (!G?.pl) return; G.pl.x = x; G.pl.y = y; G.pl.vx = G.pl.vy = 0; G.pl.fallY = y; G.cam.x = x; G.cam.y = y; stream(true); },
+      tp(x, y){ if (!G?.pl) return; G.pl.x = x; G.pl.y = y; G.pl.vx = G.pl.vy = 0; G.pl.fallY = y; G.pl.ledge = null; G.cam.x = x; G.cam.y = y; stream(true); },
       give: (id, n) => give(id, n), time(v){ if (G?.W) G.W.time = v; }, god(v = true){ if (G) G.god = v; }, step, render, stream, shapeAt, fgAt, setCell, breakTile, placeTile: (id, x, y) => placeTile(itemDef(id), x, y),
       boss: k => spawnBoss(k), mob: (k, x, y) => spawnMob(k, x, y), save: () => saveAll(), get G(){ return G; }, perf: () => G && { frames: G.perf.frames.slice(), cpu: G.perf.cpu.slice() },
       lootFor: (x, y) => lootFor(x, y), PT, chunk, upload,
