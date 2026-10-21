@@ -86,6 +86,30 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   const seen = new Set(), col = {};
   for (let x = -3000; x <= 3000; x += 97) for (let z = -3000; z <= 3000; z += 97) seen.add(V.genColumn(G1, x, z, col).b);
   ok(['ocean', 'plains', 'forest', 'birch', 'desert', 'snow', 'mountains', 'swamp', 'beach', 'river'].every(n => seen.has(V.BIOME_IDS.indexOf(n))), 'все биомы встречаются', [...seen].map(i => V.BIOME_IDS[i]));
+  // климатические зоны (погода «Кубомира»): снега и вершины гор — всегда зима, пустыня и болото — зимы нет; в чанке — то же
+  {
+    const zn = [0, 0, 0]; let bad = 0;
+    for (let x = -3000; x <= 3000; x += 97) for (let z = -3000; z <= 3000; z += 97) {
+      const c0 = V.genColumn(G1, x, z, col), zz = V.climZoneAt(G1, x, z, col), bn = V.BIOME_IDS[c0.b];
+      zn[zz]++;
+      if ((c0.T < -.42 && zz !== 1) || ((bn === 'desert' || bn === 'swamp') && c0.h <= V.SEA + 40 && zz !== 2) || (c0.h > V.SEA + 40 && zz !== 1) || (c0.T > -.25 && c0.T < .2 && bn !== 'desert' && bn !== 'swamp' && c0.h <= V.SEA + 40 && zz !== 0)) bad++;
+    }
+    ok(bad === 0 && zn[0] > zn[1] && zn[0] > zn[2] && zn[1] > 50 && zn[2] > 50, 'зоны: обычная — больше всех, «всегда зима» и «зимы нет» — есть; снега, пустыня, болото, вершины — в своих', zn);
+    let zm = 0;
+    for (const [k, ch] of area) { const [cx, cz] = k.split(',').map(Number); for (let i = 0; i < 256; i += 7) if (ch.zone[i] !== V.climZoneAt(G1, cx * 16 + (i >> 4), cz * 16 + (i & 15), col)) zm++; }
+    ok(zm === 0 && a.zone instanceof Uint8Array && a.zone.length === 256 && hashArr(a.zone) === hashArr(b.zone), 'зона столба в чанке = зона генератора (то же зерно — те же зоны)', zm);
+    // v2: где генератор положил снег пятнами (граница снегов), там и «всегда зима» — снег на кронах и земле совпадает
+    const G5 = V.genInit('kubik', { ver: 2 }); let same = 0, diff = 0;
+    for (let cx = -1; cx <= 3; cx++) for (let cz = 9; cz <= 12; cz++) {
+      const r = V.genChunk(G5, cx, cz);
+      for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
+        let top = 0, y = 127; for (; y > 0; y--) { const v = r.ids[(x << 11) | (z << 7) | y] & 0xfff; if (v && !V.T.liquid[v] && V.T.shape[v] === 1) { top = v; break; } }
+        if ((top !== ID.grass && top !== ID.snow_grass) || r.biome[x * 16 + z] === 7 || y > V.SEA + 40) continue;
+        if ((top === ID.snow_grass) === (r.zone[x * 16 + z] === 1)) same++; else diff++;
+      }
+    }
+    ok(same > 800 && diff === 0, 'v2: снег пятнами у границы снегов = зона «всегда зима» (столбец за столбцом)', { same, diff });
+  }
   // пещеры: пустоты под землёй есть, точка = чанк (одинаковая арифметика)
   let mism = 0, checks = 0;
   for (let i = 0; i < 400; i++) {
@@ -136,6 +160,16 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   let r3 = mk(); for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) at(r3, x, 30, z, ID.stone);
   const m3 = mesh(r3), d3 = byDir(m3);
   ok(d3[0] === 1 && d3[1] === 1 && d3[2] === 1 && d3[4] === 1 && d3[5] === 1, 'плита 16×1×16 — верх 1 квадрат, бока по 1', d3);
+  {   // климатические зоны в сетке: у вершин свет неба + 64 × зона; разные зоны не склеиваются; без зон — как было
+    const meshZ = (reg, zone) => { const L = V.lightRegion(reg, V.T); return V.meshChunk(reg, L, V.T, null, zone); };
+    const tops = m => { const o = []; for (let i = 0; i < m.solid.n; i++) if ((m.solid.vd[i * 16 + 2] >> 12) === 2) o.push(m.solid.lt[i * 16]); return o; };
+    const z1 = new Uint8Array(256).fill(1), zh = new Uint8Array(256); for (let i = 0; i < 128; i++) zh[i] = 2;
+    const t0 = tops(m3), t1 = tops(meshZ(r3, z1)), th = tops(meshZ(r3, zh));
+    ok(t0.length === 1 && t0[0] <= 60 && t1.length === 1 && t1[0] === t0[0] + 64 && th.length === 2 && th.some(v => v >= 128) && th.some(v => v <= 60), 'зоны в сетке: свет неба + 64 × зона, граница зон — два квадрата', { t0, t1, th });
+    let rw = mk(); for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) { at(rw, x, 29, z, ID.stone); at(rw, x, 30, z, ID.water); }
+    const mw = meshZ(rw, z1); let wz = 0; for (let i = 0; i < mw.water.n * 4; i++) if (mw.water.lt[i * 4] >= 64) wz++;
+    ok(mw.water && wz === mw.water.n * 4, 'вода (не кубы) — тоже с зоной', [wz, mw.water && mw.water.n]);
+  }
   let r4 = mk(); at(r4, 2, 40, 2, ID.stone); at(r4, 8, 40, 8, ID.dirt);
   ok(q(mesh(r4), 'solid') === 12, 'два отдельных блока — 12 граней');
   let r5 = mk(); at(r5, 2, 40, 2, ID.glass); at(r5, 3, 40, 2, ID.glass);

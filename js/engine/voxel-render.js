@@ -85,12 +85,14 @@ vec2 d37Sway( vec3 wp ) {
   float k = ( sin( wd ) * 0.6 + 0.4 ) * 0.9;
   return vec2( uD37Wind.z * k + sin( uD37Wind.x * 2.3 + ph ) * 0.35, uD37Wind.w * k + cos( uD37Wind.x * 1.9 + ph ) * 0.3 ) * gu;
 }`;
-  // vd.w: AO (0–1) | свечение грани 0…15 (2–5) | флаги (14–15: 1 — качается на ветру); lt: небо, R, G, B — ×4 (0…60)
+  // vd.w: AO (0–1) | свечение грани 0…15 (2–5) | флаги (14–15: 1 — качается на ветру); lt: небо, R, G, B — ×4 (0…60);
+  // у неба ещё + 64 × климатическая зона столба (V.climZone: 0 / 1 — всегда зима / 2 — зимы нет) → vD37Z (погода, D37_VOXZ)
   const VS_HEAD = `
 attribute vec4 vd;
 attribute vec4 lt;
 varying vec3 vUvL;
 varying vec4 vLt;
+varying float vD37Z;
 varying float vAo;
 varying float vEm;
 uniform float uTime;
@@ -131,7 +133,9 @@ vec3 transformed = vec3( position );
 float d37w = vd.w;
 float d37f = floor( d37w / 16384.0 );
 vUvL = vec3( vd.x / 16.0, vd.y / 16.0, mod( vd.z, 4096.0 ) );
-vec4 d37l = clamp( lt / 60.0, 0.0, 1.0 );
+float d37zn = floor( lt.x / 64.0 + 0.001 );
+vD37Z = d37zn;
+vec4 d37l = clamp( vec4( lt.x - 64.0 * d37zn, lt.yzw ) / 60.0, 0.0, 1.0 );
 float d37m = max( max( d37l.y, d37l.z ), d37l.w );
 float d37s = d37l.x / ( 4.0 - 3.0 * d37l.x );
 float d37k = 4.0 - 3.0 * d37m;
@@ -171,6 +175,7 @@ if ( floor( vd.w / 16384.0 ) > 0.5 && floor( vd.w / 16384.0 ) < 1.5 && uD37Wind.
   const FS_COMMON = `
 varying vec3 vUvL;
 varying vec4 vLt;
+varying float vD37Z;
 varying float vAo;
 varying float vEm;
 uniform float uTime;
@@ -298,6 +303,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     // ── текстуры ──
     let tex = null, atlasN = 1, ntex = null;
     const nmapOn = () => gl2 && !VR.safe && R.q === 'high' && opts.nmap !== false;
+    const aniso = () => R.q === 'low' ? 1 : Math.max(1, Math.min(R.q === 'high' ? 16 : 8, R.r.capabilities.getMaxAnisotropy?.() || 1));
+    VR.aniso = aniso;
     function buildTextures(){
       const all = V.paintAll(), L = all.length, TS = V.TEX || 16;
       if (tex) tex.dispose();
@@ -307,7 +314,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         tex = new T.DataArrayTexture(data, TS, TS, L);
         tex.format = T.RGBAFormat; tex.type = T.UnsignedByteType;
         tex.magFilter = T.NearestFilter; tex.minFilter = T.NearestMipmapLinearFilter; tex.generateMipmaps = true;
-        tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.encoding = T.sRGBEncoding; tex.anisotropy = 1;
+        // анизотропия (21.10.2026, «всё мылит»): земля под углом без неё — каша из усреднённых пикселей; на средней и высокой — сколько
+        // умеет видеокарта (до 16; дёшево), увеличение — «по пикселям» (Nearest), как в Майнкрафте
+        tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.encoding = T.sRGBEncoding; tex.anisotropy = aniso();
       } else {
         atlasN = Math.ceil(Math.sqrt(L));
         const S = atlasN * TS, data = new Uint8Array(S * S * 4), RW = TS * 4;
@@ -331,13 +340,16 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         });
         ntex = new T.DataArrayTexture(nd, TS, TS, L);
         ntex.format = T.RGBAFormat; ntex.type = T.UnsignedByteType; ntex.magFilter = T.NearestFilter; ntex.minFilter = T.LinearMipmapLinearFilter; ntex.generateMipmaps = true;
-        ntex.wrapS = ntex.wrapT = T.RepeatWrapping; ntex.needsUpdate = true;
+        ntex.wrapS = ntex.wrapT = T.RepeatWrapping; ntex.anisotropy = aniso(); ntex.needsUpdate = true;
       }
       U.uNTex.value = ntex;
     }
     const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTS: { value: V.TEX || 16 }, uNTex: { value: null }, uNStr: { value: .75 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
       uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 }, uD37Wind: { value: E.GFXU?.wind || new Float32Array([0, 0, .8, .6]) },
-      uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) } };
+      uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) },
+      // погода по климатическим зонам (кусок D37_CLIM движка, D37_VOXZ): x — снег в «всегда зима», y, z — мокрое и лужи в «зимы
+      // нет» (снега там нет), w — 1: зоны учитываются (0 — всё как обычная зона; ставит игра)
+      d37ClZ: { value: new Float32Array([0, 0, 0, 0]) } };
     VR.U = U;
     // ── материалы ──
     // Для «паков» шейдеров движка (своих правок этого файла им не нужно): у каждой сетки V.LAYERS свой материал VR.mats[слой]
@@ -398,14 +410,16 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const LAYER_OPTS = {
       solid: {},
       cutout: { alphaTest: .5 },
-      water: { transparent: true, opacity: .82, depthWrite: false },
+      // вода пишет глубину (21.10.2026): иначе AO, контактные тени и отражения в экране считались по дну — по льду и воде шли
+      // тёмные полосы и «призраки» от того, что под водой
+      water: { transparent: true, opacity: .82, depthWrite: true },
       foliage: { alphaTest: .5 },
       glass: { alphaTest: .5 },
     };
     const makeMat = (k, fp) => {
       const opt = LAYER_OPTS[k] || { alphaTest: .5 };
       const m = patch(new T.MeshLambertMaterial({ vertexColors: true, ...opt }), k);
-      m.defines = { D37_VOX: 1, ['D37_' + k.toUpperCase()]: 1 };
+      m.defines = { D37_VOX: 1, D37_VOXZ: 1, ['D37_' + k.toUpperCase()]: 1 };
       if (fp) m.defines.D37_FP = 1;
       if (nmapOn() && k !== 'water') m.defines.D37_NMAP = 1;   // рельеф текстур — на «высокой» (WebGL2)
       m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex', fp: !!fp };
@@ -442,6 +456,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     VR.layerMaterial = k => ownMats[k] || mats[k];
     let mats = makeMats();
     VR.mats = mats;
+    // отражения в экране («Трассировка лучей» движка): вода — блестящее прозрачное (код в альфе пишет E.rtMark, пока она включена)
+    const regRt = () => { R.rtAdd?.(mats.water); };
+    regRt();
     // ветер движка: листва и трава (слои foliage и cutout) — R.wave (define D37_WAVE ставит движок, когда набор шейдеров с ветром)
     const regWave = () => { if (typeof R.wave === 'function') for (const k of ['foliage', 'cutout']) if (mats[k]) R.wave(mats[k], { kind: 'leaves' }); };
     regWave();
@@ -542,7 +559,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     sel.visible = false; sel.renderOrder = 6; R.scene.add(sel);
     VR.select = hit => {
       if (!hit) { sel.visible = false; return; }
-      const b = V.boxOf(hit.v, false) || [0, 0, 0, 1, 1, 1], e = .004;
+      const b = hit.box || V.boxOf(hit.v, false) || [0, 0, 0, 1, 1, 1], e = .004;   // box — своя рамка (лёд на озере — до глади)
       sel.scale.set(b[3] - b[0] + e * 2, b[4] - b[1] + e * 2, b[5] - b[2] + e * 2);
       sel.position.set(hit.x - VR.ox + (b[0] + b[3]) / 2, hit.y + (b[1] + b[4]) / 2, hit.z - VR.oz + (b[2] + b[5]) / 2);
       sel.visible = true;
@@ -557,10 +574,13 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const crack = new T.Mesh(new T.BoxGeometry(1.004, 1.004, 1.004), crackMat);
     crack.visible = false; crack.renderOrder = 7; R.scene.add(crack);
     const D0 = V.texIdx.get('destroy_0');
-    VR.crack = (x, y, z, st) => {
+    // b — рамка в долях блока (лёд на озере — до глади 0,875); нет — целый кубик
+    VR.crack = (x, y, z, st, b) => {
       if (st < 0 || st == null) { crack.visible = false; return; }
       crackMat.uniforms.uLayer.value = D0 + Math.max(0, Math.min(7, st | 0));
-      crack.position.set(x - VR.ox + .5, y + .5, z - VR.oz + .5); crack.visible = true;
+      if (b) { crack.scale.set(b[3] - b[0], b[4] - b[1], b[5] - b[2]); crack.position.set(x - VR.ox + (b[0] + b[3]) / 2, y + (b[1] + b[4]) / 2, z - VR.oz + (b[2] + b[5]) / 2); }
+      else { crack.scale.set(1, 1, 1); crack.position.set(x - VR.ox + .5, y + .5, z - VR.oz + .5); }
+      crack.visible = true;
     };
 
     // ── вещь в 3D (в руке, на земле): тот же формат вершин, что у чанков ──
@@ -692,6 +712,44 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       ghost.visible = true;
     };
 
+    // ── рамка «куда встанет блок» (21.10.2026, вместо полупрозрачного «призрака»): двойная — тёмные планки по рёбрам клетки и
+    // светлые чуть внутри; видна на снегу и в тёмной пещере. Планки — объёмные (несколько точек экрана даже вдали; линии WebGL —
+    // всегда в 1 точку), без света и тона, поверх соседних граней (сдвиг глубины), глубину не пишут. VR.preview({ x, y, z, h }) —
+    // клетка (h — высота: дверь — 2); null — спрятать ──
+    const prevGeo = new Map(), DARK = [.06, .06, .07], LIGHT = [.97, .97, .95];
+    function frameGeo(h){
+      if (prevGeo.has(h)) return prevGeo.get(h);
+      const pos = [], col = [], idx = [];
+      const bar = (a, b, t, c) => {   // планка — коробка от a до b (по одной оси), толщина t
+        const lo = [0, 1, 2].map(k => Math.min(a[k], b[k]) - t / 2), hi = [0, 1, 2].map(k => Math.max(a[k], b[k]) + t / 2);
+        const v0 = pos.length / 3;
+        for (let i = 0; i < 8; i++) { pos.push(i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]); col.push(c[0], c[1], c[2]); }
+        for (const q of [[0, 2, 6, 4], [1, 5, 7, 3], [0, 4, 5, 1], [2, 3, 7, 6], [0, 1, 3, 2], [4, 6, 7, 5]]) idx.push(v0 + q[0], v0 + q[1], v0 + q[2], v0 + q[0], v0 + q[2], v0 + q[3]);
+      };
+      const edges = (x0, y0, z0, x1, y1, z1, t, c) => {
+        for (const y of [y0, y1]) for (const z of [z0, z1]) bar([x0, y, z], [x1, y, z], t, c);
+        for (const x of [x0, x1]) for (const z of [z0, z1]) bar([x, y0, z], [x, y1, z], t, c);
+        for (const x of [x0, x1]) for (const y of [y0, y1]) bar([x, y, z0], [x, y, z1], t, c);
+      };
+      edges(-.004, -.004, -.004, 1.004, h + .004, 1.004, .026, DARK);   // снаружи — тёмная
+      edges(.026, .026, .026, .974, h - .026, .974, .012, LIGHT);       // внутри — светлая
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+      prevGeo.set(h, g);
+      return g;
+    }
+    const prevMat = new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false, transparent: true, depthWrite: false, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    let prev = null;
+    VR.preview = c => {
+      if (!c) { if (prev) prev.visible = false; return; }
+      const h = c.h > 1 ? 2 : 1;
+      if (!prev) { prev = new T.Mesh(frameGeo(h), prevMat); prev.renderOrder = 8; prev.frustumCulled = false; prev.matrixAutoUpdate = true; prev.name = 'vox:preview'; R.scene.add(prev); }
+      else if (prev.geometry !== frameGeo(h)) prev.geometry = frameGeo(h);
+      prev.position.set(c.x - VR.ox, c.y, c.z - VR.oz);
+      prev.visible = true;
+    };
+    VR.previewMesh = () => prev;
+
     // ── простой режим: шейдер не собрался (старый телефон) — пересобрать без мерцания, бликов и массива текстур ──
     let checkN = 0;
     function failed(m){
@@ -710,7 +768,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const swap = new Map(LAYERS.map(k => [old[k], mats[k]]));
       for (const k in oldF) swap.set(oldF[k], fpMat(k));
       R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); });
-      for (const m of Object.values(old)) { R.waveMats?.delete?.(m); m.dispose(); }
+      for (const m of Object.values(old)) { R.waveMats?.delete?.(m); R.rtClear?.delete?.(m); m.dispose(); }
+      regRt();
       for (const m of Object.values(oldF)) m.dispose();
       regWave();
       for (const m of Object.values(oldD)) m.dispose();
@@ -737,12 +796,13 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       for (const c of [...VR.chunks]) VR.dropChunk(c);
       for (const list of pool.values()) for (const g of list) g.dispose();
       pool.clear(); meshPool.length = 0;
-      for (const m of Object.values(mats)) m.dispose();
+      for (const m of Object.values(mats)) { R.rtClear?.delete?.(m); m.dispose(); }
       for (const m of Object.values(depthMats)) m.dispose();
       for (const m of Object.values(fpMats)) m.dispose();
       tex?.dispose(); ntex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
       if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();
+      if (prev) R.scene.remove(prev); for (const g of prevGeo.values()) g.dispose(); prevGeo.clear(); prevMat.dispose();
     };
     return VR;
   };

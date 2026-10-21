@@ -4,7 +4,8 @@
 // ═══════════════════════════════════════
 // Только + − × ÷ floor sqrt (без sin/pow/exp): один и тот же чанк одинаков в любом браузере и в node — по зерну можно
 // не хранить мир, а сохранять только правки игрока. G = V.genInit(зерно, { features }) → V.genChunk(G, cx, cz) →
-// { ids: Uint16Array, biome: Uint8Array(256), tint: Uint8Array(256 × 9) (трава, листва, вода — RGB) }.
+// { ids: Uint16Array, biome: Uint8Array(256), tint: Uint8Array(256 × 9) (трава, листва, вода — RGB), zone: Uint8Array(256) }.
+// zone — климат столба для погоды игры (V.climZone): 0 — времена года, 1 — всегда зима, 2 — зимы не бывает.
 // Деревья, валуны, озёра пересекают границы чанков: чанк смотрит «происхождения» соседей 3×3 и пишет свою часть.
 // Биомы: 0 океан, 1 пляж, 2 равнина, 3 лес, 4 березняк, 5 пустыня, 6 снега, 7 горы, 8 болото, 9 река.
 (() => {
@@ -22,6 +23,7 @@
     ['#6d7a3f', '#5c6e32', '#4f6b5a'], ['#7cbd5a', '#5fa83e', '#3f76e4'],
   ].map(r => r.map(h => { const v = parseInt(h.slice(1), 16); return [v >> 16 & 255, v >> 8 & 255, v & 255]; }));
   V.BIOME_TINTS = TINTS;
+  V.ZONES = { normal: 0, cold: 1, warm: 2 };
 
   // ═══ Шум: симплекс 2D/3D (по статье С. Густавсона), перестановки — от зерна ═══
   const F2 = .5 * (Math.sqrt(3) - 1), G2 = (3 - Math.sqrt(3)) / 6, F3 = 1 / 3, G3 = 1 / 6;
@@ -130,6 +132,22 @@
   }
   V.genColumn = column;
 
+  // Климатическая зона столба (21.10.2026, владелец: «где-то всегда зима, где-то зимы нет»): 0 — обычная (времена года),
+  // 1 — всегда зима (холодный край, вершины гор выше снеговой линии SEA + 40 — там генератор кладёт снег), 2 — зимы не бывает
+  // (пустыня, болото, жаркий край). T — температура столба из V.genColumn (с поправкой на высоту), h — высота, b — биом,
+  // p — «пятна» 0…1 (шум v2 — тот же, что у снега на границе снегов: где генератор положил снег пятнами, там и «всегда
+  // зима»; у тёплого края так же — граница без прямой линии); нет p (миры v1) — граница ровная, как у их биомов.
+  // Чистая функция генератора: у всех одинаково, не хранится
+  V.climZone = (T, h, b, p) => {
+    const fc = ss(-.25, -.42, T);
+    if (h > SEA + 40 || (p == null ? T < -.34 : fc >= 1 || p < fc)) return 1;
+    if (b === BI.desert || b === BI.swamp) return 2;
+    const fw = ss(.2, .32, T);
+    return (p == null ? T > .26 : fw >= 1 || p < fw) ? 2 : 0;
+  };
+  const patch = (G, x, z) => G.ver >= 2 ? n2(G.nPt, x / 7, z / 7) * .5 + .5 : null;
+  V.climZoneAt = (G, x, z, col) => { if (G.void) return 0; const c = column(G, x, z, col || {}); return V.climZone(c.T, c.h, c.b, patch(G, x, z)); };
+
   // ── Пещеры: шум на сетке 4×4×4 + трилинейно (точка считается так же, как в чанке — деревья не повиснут) ──
   const CG = 4, CGY = 4;
   function caveSample(G, gx, gy, gz){
@@ -222,7 +240,7 @@
 
   // ═══ Чанк ═══
   V.genChunk = (G, cx, cz) => {
-    const ID = G.id, ids = new Uint16Array(V.CELLS), biome = new Uint8Array(256), tint = new Uint8Array(256 * 9);
+    const ID = G.id, ids = new Uint16Array(V.CELLS), biome = new Uint8Array(256), tint = new Uint8Array(256 * 9), zone = new Uint8Array(256);
     const x0 = cx * 16, z0 = cz * 16;
     // высоты 18×18 (с полями — для крутизны склонов) и биомы
     const hh = new Int16Array(324), bb = new Uint8Array(324), col = {};
@@ -252,6 +270,7 @@
       const o = (x * 16 + z) * 9;
       for (let q = 0; q < 9; q++) tint[o + q] = Math.round(s[q] / n);
       biome[x * 16 + z] = bb[(z + 1) * 18 + x + 1];
+      zone[x * 16 + z] = V.climZone(tmp[x * 16 + z], hh[(z + 1) * 18 + x + 1], bb[(z + 1) * 18 + x + 1], patch(G, x0 + x, z0 + z));
     }
     // пещеры: сетка шума на чанк
     const GX = 16 / CG + 1, GY = H / CGY + 1, cs = new Float64Array(GX * GY * GX * 3);
@@ -355,8 +374,8 @@
     }
     // деревья, кактусы, озёра — из своего чанка и соседей
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const f of originsOf(G, cx + dx, cz + dz)) placeFeature(G, ids, x0, z0, f);
-    if (G.void) ids.fill(0);   // «пустой» мир (перенос из Minecraft): только то, что лежит в сохранении; цвета биомов — как обычно
-    return { ids, biome, tint };
+    if (G.void) { ids.fill(0); zone.fill(0); }   // «пустой» мир (перенос из Minecraft): только то, что лежит в сохранении; цвета биомов — как обычно, климат — обычный
+    return { ids, biome, tint, zone };
   };
 
   // Записать в чанк (x0, z0) то, что от фичи попадает в его границы

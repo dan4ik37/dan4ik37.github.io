@@ -97,7 +97,7 @@
       // непогода (kubomir-weather.js, W.k 0…1): туман серее, темнее и ближе
       const wk = st.WX?.k || 0;
       if (wk > 0) { const g = (c.r + c.g + c.b) / 3; for (const ch of ['r', 'g', 'b']) c[ch] = (c[ch] + (g * .9 - c[ch]) * .65 * wk) * (1 - .38 * wk); }
-      X.base = { c, near: f.near * (1 - .55 * wk), far: f.far * (1 - .4 * wk) };
+      X.base = { c, near: f.near * (1 - .4 * wk), far: f.far * (1 - .25 * wk) };   // дымка в непогоду — мягче (не «мыло»)
       applyFog();
     };
     function applyFog(){

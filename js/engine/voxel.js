@@ -423,8 +423,18 @@
     }
   };
 
+  // ═══ Лёд времён года (21.10.2026: владелец застрял подо льдом и не мог его сломать). V.iceTest(W, x, y, z, v) ставит игра
+  // («Кубомир»: kubomir-weather.js — мороз, проруби, климат места): верхняя клетка воды под открытым небом — лёд, но блок мира
+  // не меняется (вода). Лёд держит СВЕРХУ: на него можно встать (до глади, 0,875), сбоку он стенка (у края — залезть, E.grip),
+  // а СНИЗУ — нет: всплываешь — проламываешь (прорубь — игра), подо льдом не запереть. Луч прицела его видит — можно разбить ═══
+  const iceAt = (W, x, y, z, v) => !!V.iceTest && V.T.liquid[v & TYPE] === 1 && !!V.iceTest(W, x, y, z, v);
+  V.isIce = (W, x, y, z, v) => { x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (v === undefined) v = W.raw(x, y, z); return v > 0 && iceAt(W, x, y, z, v); };
+  const ICE_BOX = [];   // рамки льда по высоте глади — общие (только читать)
+  V.iceBox = v => { const h = V.liquidHeight(v), k = Math.round(h * 64); return ICE_BOX[k] || (ICE_BOX[k] = [0, 0, 0, 1, h, 1]); };
+
   // ═══ Луч по блокам (DDA): первый блок, у которого есть рамка (и pick(тип) не против) ═══
-  // → { x, y, z, nx, ny, nz, t, v } или null. Вода и воздух пропускаются (pick может разрешить воду).
+  // → { x, y, z, nx, ny, nz, t, v } или null. Вода и воздух пропускаются (pick может разрешить воду). Без pick лёд времён
+  // года — цель (прицел: разбить, поставить блок на лёд): тогда ещё ice: true и box — его рамка.
   V.raycast = (W, ox, oy, oz, dx, dy, dz, maxT, pick) => {
     const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
     let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
@@ -437,11 +447,12 @@
       if (v > 0) {
         const tp = v & TYPE;
         if (!pick || pick(tp, v)) {
-          const bx = V.boxOf(v, false) || (pick && V.T.liquid[tp] ? [0, 0, 0, 1, .875, 1] : null);
+          let bx = V.boxOf(v, false) || (pick && V.T.liquid[tp] ? [0, 0, 0, 1, .875, 1] : null), ice = false;
+          if (!bx && !pick && V.iceTest && iceAt(W, x, y, z, v)) { bx = V.iceBox(v); ice = true; }
           if (bx) {
             if (bx === FULL) return { x, y, z, nx, ny, nz, t, v };
             const h = rayBox(ox - x, oy - y, oz - z, dx, dy, dz, bx);
-            if (h && h.t <= maxT) return { x, y, z, nx: h.nx, ny: h.ny, nz: h.nz, t: h.t, v };
+            if (h && h.t <= maxT) { const r = { x, y, z, nx: h.nx, ny: h.ny, nz: h.nz, t: h.t, v }; if (ice) { r.ice = true; r.box = bx; if (!(h.nx || h.ny || h.nz)) r.ny = oy >= y + bx[4] ? 1 : -1; } return r; }
           }
         }
       } else if (v < 0) return null;   // не загружено
@@ -473,22 +484,24 @@
   // ═══ Столкновения: коробка (x, y, z — центр низа; w — ширина, h — высота) против блоков ═══
   // V.moveBox(W, b, dx, dy, dz) двигает b по осям (сначала y, потом x и z), упёрся — скорость по оси в 0; b.ground — стоит,
   // b.hitX / hitZ / hitY — упёрся. Незагруженное — стена (не падаем в непрогруженный чанк).
-  const solidBox = (W, x, y, z, out) => {
+  // ice — лёд времён года (V.iceTest) считается твёрдым: при падении на него сверху (стоять) и сбоку (стенка у края);
+  // снизу (всплыл) — нет: подо льдом не запереть (прорубь делает игра), V.boxHits его тоже не считает (не «застрял в блоке»)
+  const solidBox = (W, x, y, z, out, ice) => {
     const v = W.raw(x, y, z);
     if (v < 0) { out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 1; out[4] = 1; out[5] = 1; return true; }
     const t = v & TYPE;
     if (!V.T.solid[t]) {
-      // лёд (погода, kubomir-weather.js): верхний блок воды — твёрдый до глади, блок мира не меняется
-      if (V.iceTest && V.T.liquid[t] === 1 && V.iceTest(W, x, y, z, v)) { out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 1; out[4] = V.liquidHeight(v); out[5] = 1; return true; }
+      if (ice && iceAt(W, x, y, z, v)) { out[0] = 0; out[1] = 0; out[2] = 0; out[3] = 1; out[4] = V.liquidHeight(v); out[5] = 1; return true; }
       return false;
     }
     const bx = V.boxOf(v, true); if (!bx) return false;
     for (let i = 0; i < 6; i++) out[i] = bx[i];
     return true;
   };
+  V.solidBox = solidBox;
   const BX = [0, 0, 0, 0, 0, 0];
   V.moveBox = (W, b, dx, dy, dz) => {
-    const hw = b.w / 2, EPS = 1e-4;
+    const hw = b.w / 2, EPS = 1e-4, ice = !!V.iceTest;
     b.hitX = b.hitY = b.hitZ = false;
     // по y
     if (dy) {
@@ -496,7 +509,7 @@
       let ny = b.y + dy;
       const ya = Math.floor(Math.min(b.y, ny) - 1), yb = Math.floor(Math.max(b.y + b.h, ny + b.h) + 1);
       for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) for (let y = ya; y <= yb; y++) {
-        if (!solidBox(W, x, y, z, BX)) continue;
+        if (!solidBox(W, x, y, z, BX, ice && dy < 0)) continue;
         if (b.x + hw <= x + BX[0] + EPS || b.x - hw >= x + BX[3] - EPS || b.z + hw <= z + BX[2] + EPS || b.z - hw >= z + BX[5] - EPS) continue;
         const top = y + BX[4], bot = y + BX[1];
         if (dy < 0 && b.y >= top - EPS && ny < top) { ny = top; b.hitY = true; }
@@ -504,8 +517,8 @@
       }
       b.y = ny;
     }
-    // по x и z — по очереди
-    for (const ax of [0, 2]) {
+    // по x и z — по очереди (ax 0, потом 2; без массива на каждый вызов)
+    for (let ax = 0; ax <= 2; ax += 2) {
       const d = ax === 0 ? dx : dz; if (!d) continue;
       const y0 = Math.floor(b.y + EPS), y1 = Math.floor(b.y + b.h - EPS);
       const p = ax === 0 ? b.x : b.z, q = ax === 0 ? b.z : b.x;
@@ -513,7 +526,7 @@
       const pa = Math.floor(Math.min(p, np) - hw - 1), pb = Math.floor(Math.max(p, np) + hw + 1), q0 = Math.floor(q - hw + EPS), q1 = Math.floor(q + hw - EPS);
       for (let a = pa; a <= pb; a++) for (let c = q0; c <= q1; c++) for (let y = y0; y <= y1; y++) {
         const x = ax === 0 ? a : c, z = ax === 0 ? c : a;
-        if (!solidBox(W, x, y, z, BX)) continue;
+        if (!solidBox(W, x, y, z, BX, ice)) continue;
         if (b.y + b.h <= y + BX[1] + EPS || b.y >= y + BX[4] - EPS) continue;
         const qlo = (ax === 0 ? z + BX[2] : x + BX[0]), qhi = (ax === 0 ? z + BX[5] : x + BX[3]);
         if (q + hw <= qlo + EPS || q - hw >= qhi - EPS) continue;
@@ -525,12 +538,13 @@
     }
     return b;
   };
-  // Пересекается ли коробка с твёрдым (нельзя поставить блок туда, где стоит игрок; встать после приседа)
-  V.boxHits = (W, x, y, z, w, h) => {
-    const hw = w / 2, EPS = 1e-3;
+  // Пересекается ли коробка с твёрдым (нельзя поставить блок туда, где стоит игрок; встать после приседа); ice — и лёд времён
+  // года (есть ли опора под ногами — красться у края проруби); без него лёд не «застрял в блоке»
+  V.boxHits = (W, x, y, z, w, h, ice) => {
+    const hw = w / 2, EPS = 1e-3, ic = !!ice && !!V.iceTest;
     for (let bx = Math.floor(x - hw + EPS); bx <= Math.floor(x + hw - EPS); bx++) for (let bz = Math.floor(z - hw + EPS); bz <= Math.floor(z + hw - EPS); bz++)
       for (let by = Math.floor(y + EPS); by <= Math.floor(y + h - EPS); by++) {
-        if (!solidBox(W, bx, by, bz, BX)) continue;
+        if (!solidBox(W, bx, by, bz, BX, ic)) continue;
         if (x + hw > bx + BX[0] + EPS && x - hw < bx + BX[3] - EPS && z + hw > bz + BX[2] + EPS && z - hw < bz + BX[5] - EPS && y + h > by + BX[1] + EPS && y < by + BX[4] - EPS) return true;
       }
     return false;
@@ -549,9 +563,11 @@
         if (b.hurt) out.hurt = Math.max(out.hurt, b.hurt);
         if (b.mod) out.blocks.push(t);
       }
-    // под ногами: подброс / скользко / свой блок мода
-    const fv = W.raw(Math.floor(x), Math.floor(y - .05), Math.floor(z));
-    if (fv > 0) { const b = V.blocks[fv & TYPE]; out.under = fv & TYPE; if (b.bounce) out.bounce = b.bounce; out.slip = b.slip || 0; if (b.mod && !out.blocks.includes(out.under)) out.blocks.push(out.under); } else { out.under = 0; out.slip = 0; }
+    // под ногами: подброс / скользко / свой блок мода; стоит на льду времён года — как на блоке льда (скользко, звук стекла)
+    const fx = Math.floor(x), fy = Math.floor(y - .05), fz = Math.floor(z), fv = W.raw(fx, fy, fz);
+    out.onIce = false;
+    if (fv > 0 && T.liquid[fv & TYPE] === 1 && V.iceTest && y >= fy + V.liquidHeight(fv) - .06 && iceAt(W, fx, fy, fz, fv)) { const ib = V.byName.get('ice'); out.under = ib ? ib.id : 0; out.slip = ib ? ib.slip || 0 : 0; out.onIce = true; }
+    else if (fv > 0) { const b = V.blocks[fv & TYPE]; out.under = fv & TYPE; if (b.bounce) out.bounce = b.bounce; out.slip = b.slip || 0; if (b.mod && !out.blocks.includes(out.under)) out.blocks.push(out.under); } else { out.under = 0; out.slip = 0; }
     return out;
   };
   // Высота жидкости в блоке (0…1): источник и падающая — 0,875, течение — меньше с расстоянием
@@ -559,6 +575,84 @@
   V.lSky = L => (L >>> 12) & 15; V.lR = L => (L >>> 8) & 15; V.lG = L => (L >>> 4) & 15; V.lB = L => L & 15;
   V.lBlk = L => Math.max((L >>> 8) & 15, (L >>> 4) & 15, L & 15);
   V.liquidHeight = v => { const s = v >>> 12; if (s === 0 || s >= 8) return .875; return Math.max(.1, .875 * (8 - s) / 8); };
+
+  // ═══ Паркур движка на кубиках (21.10.2026, «один движок»): E.grip из player.js (findLedge, ledgeAt, roomOnTop, findVault)
+  // спрашивает у мира три вещи — луч, «влезет ли тело», опору. G = V.gripPhys(W) → { raycast, blocked, supportAt } отвечает
+  // по рамкам столкновений блоков, как V.moveBox: незагруженное — стена; лёд времён года — опора сверху и стенка сбоку (за край
+  // проруби можно зацепиться и вылезти), снизу и как потолок его нет. Ответы — как у physics.js: raycast → { t, x, y, z, nx, ny,
+  // nz, col } (рамку, внутри которой луч начался, не видит — как в Unity), blocked(x, z, y0, y1, r) — есть ли твёрдое в
+  // вертикальном цилиндре, supportAt(x, z, r, yMax) → { y, col } — самый высокий верх рамки не выше yMax под кругом (r × 0,7) ═══
+  V.gripPhys = W => {
+    const B = [0, 0, 0, 0, 0, 0], COL = { voxel: 1 }, SH = { t: 0, nx: 0, ny: 0, nz: 0 }, SUP = { y: 0, col: null };   // ответ опоры — общий (читать сразу)
+    // луч против рамки клетки (в её координатах): вход t ≥ 0 — попал; начался внутри (t < 0) — не видит
+    function slab(ox, oy, oz, dx, dy, dz, b){
+      let t0 = -Infinity, t1 = Infinity, ax = 0, sg = 0;
+      for (let k = 0; k < 3; k++) {
+        const o = k === 0 ? ox : k === 1 ? oy : oz, d = k === 0 ? dx : k === 1 ? dy : dz, lo = b[k], hi = b[k + 3];
+        if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) return null; continue; }
+        let a = (lo - o) / d, c = (hi - o) / d, s = -1;
+        if (a > c) { const q = a; a = c; c = q; s = 1; }
+        if (a > t0) { t0 = a; ax = k; sg = d > 0 ? -1 : 1; }
+        if (c < t1) t1 = c;
+        if (t0 > t1) return null;
+        void s;
+      }
+      if (t0 < 0 || t1 < 0) return null;
+      SH.t = t0; SH.nx = ax === 0 ? sg : 0; SH.ny = ax === 1 ? sg : 0; SH.nz = ax === 2 ? sg : 0;
+      return SH;
+    }
+    const raycast = (ox, oy, oz, dx, dy, dz, maxT = 64) => {
+      const l = Math.hypot(dx, dy, dz) || 1; dx /= l; dy /= l; dz /= l;
+      let x = Math.floor(ox), y = Math.floor(oy), z = Math.floor(oz);
+      const sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
+      const tdx = dx ? Math.abs(1 / dx) : Infinity, tdy = dy ? Math.abs(1 / dy) : Infinity, tdz = dz ? Math.abs(1 / dz) : Infinity;
+      let tx = dx ? (dx > 0 ? x + 1 - ox : ox - x) * tdx : Infinity, ty = dy ? (dy > 0 ? y + 1 - oy : oy - y) * tdy : Infinity, tz = dz ? (dz > 0 ? z + 1 - oz : oz - z) * tdz : Infinity;
+      const ice = !!V.iceTest && dy < .5;   // лёд — не потолок: снизу его нет
+      // начался внутри твёрдого — вся сплошная толща по лучу (стена из блоков = одно тело движка) не видна, пока луч не выйдет
+      // в пустоту: иначе в стене нашлись бы ложные «верхи» (верх блока под соседним блоком)
+      let skip = solidBox(W, x, y, z, B, ice) && inBox(ox - x, oy - y, oz - z, B), t = 0;
+      for (let n = 0; n < 400; n++) {
+        const sol = n === 0 ? skip || solidBox(W, x, y, z, B, ice) : solidBox(W, x, y, z, B, ice);
+        if (skip && n > 0) skip = sol && inBox(ox + dx * t - x, oy + dy * t - y, oz + dz * t - z, B);
+        if (sol && !skip) {
+          const h = slab(ox - x, oy - y, oz - z, dx, dy, dz, B);
+          if (h && h.t <= maxT) return { t: h.t, x: ox + dx * h.t, y: oy + dy * h.t, z: oz + dz * h.t, nx: h.nx, ny: h.ny, nz: h.nz, col: COL };
+        }
+        if (Math.min(tx, ty, tz) > maxT) return null;
+        if (tx <= ty && tx <= tz) { x += sx; t = tx; tx += tdx; } else if (ty <= tz) { y += sy; t = ty; ty += tdy; } else { z += sz; t = tz; tz += tdz; }
+        if (y < -2 || y > H + 1) return null;
+      }
+      return null;
+    };
+    // точка (в долях клетки) внутри рамки — с запасом на грань (вход в соседнюю клетку — ровно на грани)
+    function inBox(px, py, pz, b){ const e = 1e-6; return px >= b[0] - e && px <= b[3] + e && py >= b[1] - e && py <= b[4] + e && pz >= b[2] - e && pz <= b[5] + e; }
+    const circle = (x, z, r, bx, bz) => { const cx = Math.max(bx + B[0], Math.min(bx + B[3], x)), cz = Math.max(bz + B[2], Math.min(bz + B[5], z)); return (x - cx) * (x - cx) + (z - cz) * (z - cz) < r * r - 1e-9; };
+    const blocked = (x, z, y0, y1, r) => {
+      const ice = !!V.iceTest;
+      for (let bx = Math.floor(x - r); bx <= Math.floor(x + r); bx++) for (let bz = Math.floor(z - r); bz <= Math.floor(z + r); bz++)
+        for (let by = Math.floor(y0); by <= Math.floor(y1 - 1e-3); by++) {
+          if (!solidBox(W, bx, by, bz, B, ice)) continue;
+          if (by + B[4] <= y0 + 1e-3 || by + B[1] >= y1 - 1e-3) continue;
+          if (circle(x, z, r, bx, bz)) return true;
+        }
+      return false;
+    };
+    const supportAt = (x, z, r, yMax) => {
+      const rr = r * .7, ice = !!V.iceTest, y1 = Math.floor(yMax);
+      let best = -Infinity;
+      for (let y = y1; y >= y1 - 48 && y >= -1; y--) {
+        for (let bx = Math.floor(x - rr); bx <= Math.floor(x + rr); bx++) for (let bz = Math.floor(z - rr); bz <= Math.floor(z + rr); bz++) {
+          if (!solidBox(W, bx, y, bz, B, ice)) continue;
+          const top = y + B[4];
+          if (top <= yMax + 1e-4 && top > best && (rr <= 0 ? x >= bx + B[0] && x <= bx + B[3] && z >= bz + B[2] && z <= bz + B[5] : circle(x, z, Math.max(rr, 1e-3), bx, bz))) best = top;
+        }
+        if (best > -Infinity) break;   // нижние слои выше этого не бывают
+      }
+      SUP.y = best; SUP.col = best > -Infinity ? COL : null;
+      return SUP;
+    };
+    return { W, raycast, blocked, supportAt, voxel: true };
+  };
 
   // ═══ Опора и обрушение (16.10.2026): общее для движков; первое применение — падающие деревья «Кубомира» ═══
   // V.component(W, seeds, o) — связный кусок: обход в ширину по 6 соседям от клеток seeds ([[x, y, z], …]).

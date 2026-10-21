@@ -106,7 +106,7 @@ void main(){
   // uSSR: шагов не больше, длина луча (ед.), сила мира, время (рябь); uStride — шаг в пикселях (короткий в экране луч —
   // мельче и точнее, длинный — до предела шагов). Результат: rgb — отражённый цвет (HDR), a — вес смешивания
   const FS_SSR = `#include <packing>
-uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 uFull; uniform vec4 uProj; uniform vec4 uSSR; uniform float uStride;
+uniform sampler2D tColor; uniform sampler2D tDepth; uniform vec2 uFull; uniform vec4 uProj; uniform vec4 uSSR; uniform float uStride; uniform vec4 uSSR2;
 uniform mat4 uView; uniform mat4 uViewInv; varying vec2 vUv;
 float vz(vec2 uv){ return perspectiveDepthToViewZ(textureLod(tDepth, uv, 0.0).x, uProj.z, uProj.w); }   // textureLod: в циклах с выходом — без производных
 vec3 vpos(vec2 uv){ float z = vz(uv); return vec3((uv * 2.0 - 1.0) * uProj.xy * -z, z); }
@@ -124,11 +124,11 @@ void main(){
   vec3 dy = abs(pu.z - p.z) < abs(p.z - pd.z) ? pu - p : p - pd;
   vec3 cr = cross(dx, dy), n = dot(cr, cr) > 1e-24 ? normalize(cr) : vec3(0.0, 0.0, 1.0), v = normalize(p);
   if (dot(n, v) > 0.0) n = -n;
-  if (clear) {   // вода: рябь по миру (два слоя волн), только у горизонтальной поверхности
+  if (clear && uSSR2.x > 0.001) {   // вода: рябь по миру (два слоя волн), только у горизонтальной поверхности (лёд — без ряби: uSSR2.x = 0)
     vec3 up = (uView * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
     if (dot(n, up) > 0.85) {
       vec3 w = (uViewInv * vec4(p, 1.0)).xyz; float t = uSSR.w;
-      vec2 g = vec2(sin(w.x * 1.3 + t * 1.1) + 0.6 * sin(w.x * 2.9 - w.z * 1.7 + t * 1.7), cos(w.z * 1.2 - t * 0.9) + 0.6 * cos(w.z * 3.1 + w.x * 1.3 - t * 1.5)) * 0.018;
+      vec2 g = vec2(sin(w.x * 1.3 + t * 1.1) + 0.6 * sin(w.x * 2.9 - w.z * 1.7 + t * 1.7), cos(w.z * 1.2 - t * 0.9) + 0.6 * cos(w.z * 3.1 + w.x * 1.3 - t * 1.5)) * (0.018 * uSSR2.x);
       n = normalize(n + (uView * vec4(g.x, 0.0, g.y, 0.0)).xyz);
     }
   }
@@ -160,10 +160,18 @@ void main(){
     if (vz(s0 + ds * mid) + 1.0 / mix(w0, w1, mid) > 0.0) hi = mid; else lo = mid;
   }
   vec2 h = s0 + ds * hi;
-  if (texture2D(tDepth, h).x >= 0.99999) { gl_FragColor = vec4(0.0); return; }
+  float hd = texture2D(tDepth, h).x;
+  if (hd >= 0.99999 || hd < 0.012) { gl_FragColor = vec4(0.0); return; }   // небо — нечего отражать; рука «из глаз» (глубина у ближней плоскости) — не отражаем
   vec2 ed = min(h, 1.0 - h);
   float fade = smoothstep(0.0, 0.07, min(ed.x, ed.y)) * (1.0 - smoothstep(0.7, 1.0, hi)) * (1.0 - smoothstep(0.15, 0.65, r.z));
-  gl_FragColor = vec4(max(texture2D(tColor, h).rgb, vec3(0.0)), clamp(F * gloss * uSSR.z * fade, 0.0, 1.0));
+  vec3 rc = texture2D(tColor, h).rgb;
+  if (uSSR2.y > 0.001) {   // мягкое отражение (лёд, матовое стекло): 8 соседей по кругу, радиус растёт с длиной луча
+    vec2 o = uFull * (1.5 + 9.0 * hi) * uSSR2.y, o2 = o * 0.7071;
+    rc = rc * 0.2 + 0.1 * (texture2D(tColor, h + vec2(o.x, 0.0)).rgb + texture2D(tColor, h - vec2(o.x, 0.0)).rgb + texture2D(tColor, h + vec2(0.0, o.y)).rgb
+      + texture2D(tColor, h - vec2(0.0, o.y)).rgb + texture2D(tColor, h + o2).rgb + texture2D(tColor, h - o2).rgb + texture2D(tColor, h + vec2(o2.x, -o2.y)).rgb
+      + texture2D(tColor, h - vec2(o2.x, -o2.y)).rgb);
+  }
+  gl_FragColor = vec4(max(rc, vec3(0.0)), clamp(F * gloss * uSSR.z * fade, 0.0, 1.0));
 }`;
   // размытие — два прохода (вдоль и поперёк, uTexel — шаг), 9 выборок по Гауссу с весом по плоскости: глубину соседа
   // сравниваем не с глубиной середины, а с плоскостью через неё (1/глубины меняется по экрану линейно). Раньше было 4×4
@@ -733,7 +741,7 @@ void main(){
       M.ao.defines = { D37_FOL: '' };   // трава и листва — без AO (P.setFol)
       M.aob = mk(FS_AOB, tx());
       M.ssr = mk(FS_SSR, { tColor: { value: null }, tDepth: { value: null }, uFull: { value: new T.Vector2() }, uProj: { value: new T.Vector4() }, uSSR: { value: new T.Vector4() },
-        uStride: { value: 3 }, uView: { value: new T.Matrix4() }, uViewInv: { value: new T.Matrix4() } });
+        uStride: { value: 3 }, uSSR2: { value: new T.Vector4(1, 0, 0, 0) }, uView: { value: new T.Matrix4() }, uViewInv: { value: new T.Matrix4() } });
     }
     let rtSSR = null;   // отражения: rgb — цвет, a — вес (полный размер кадра)
     // генерация кадров: готовый настоящий кадр (размер холста) — для перекладки в промежуточном
@@ -841,7 +849,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture || !!P.retro !== !!rtScene.d37Nearest) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
       else rtScene.setSize(w, h);   // текстуру глубины three пересоздаст сам (размер буфера сменился)
       P.msaa = ms;
-      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA && !P.retro;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено
+      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA && !P.retro && !P.pixelArt;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено и не пиксельная графика
       rtLdr.setSize(w, h);
       let bw = Math.max(1, w >> (q === 'high' ? 1 : 2)), bh = Math.max(1, h >> (q === 'high' ? 1 : 2));
       for (let i = 0; i < P.bloom.levels; i++) {
@@ -899,12 +907,16 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     }
     // стрелки редактора, рамки, кольцо кисти (renderOrder ≥ 990, прямо в сцене): с AO — поверх готового кадра
     const over = [];
+    const c01 = (v, d) => Number.isFinite(+v) ? Math.max(0, Math.min(1, +v)) : d;
     function ssrPass(camera){
       const u = M.ssr.uniforms, pm = camera.projectionMatrix.elements, G = R.lighting?.gfx?.rt;
       u.tColor.value = rtScene.texture; u.tDepth.value = rtScene.depthTexture; u.uFull.value.set(1 / P.w, 1 / P.h);
       u.uProj.value.set(1 / pm[0], 1 / pm[5], camera.near, camera.far);
       u.uSSR.value.set(P.rt.steps, P.rt.len, G ? G.refl : 1, R.waterU ? R.waterU.uTime.value : performance.now() / 1000);
       u.uStride.value = P.rt.mode === 'high' ? 1.5 : 3;
+      // вид прозрачного блестящего (вода, лёд) — игра на ходу, в файл мира не пишется: R.ssrLook = { ripple: 0…1, soft: 0…1 }
+      const SL = R.ssrLook;
+      u.uSSR2.value.set(SL ? c01(SL.ripple, 1) : 1, SL ? c01(SL.soft, 0) : 0, 0, 0);
       u.uView.value.copy(camera.matrixWorldInverse); u.uViewInv.value.copy(camera.matrixWorld);
       pass(M.ssr, rtSSR);
     }
@@ -949,6 +961,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     let lutTex = null, lutKey = '', rtRays = null, rtDof = null;
     P.dofOn = false; P.dofDrawn = false;
     P.setUnder = (on, k) => { P.under = !!on; P.underK = on ? (k == null ? 1 : Math.max(0, Math.min(1, +k || 0))) : 0; };
+    // пиксельная графика («Кубомир»: текстуры 32×32 без сглаживания внутри): FXAA размывает рисунок — не включать (MSAA можно)
+    P.pixelArt = false;
+    P.setPixelArt = on => { on = !!on; if (on === P.pixelArt) return; P.pixelArt = on; if (P.w > 1) P.setSize(P.w, P.h, P.pr); };
     P.setPack = (fx = {}) => {
       const id = fx.id || 'normal', x = id !== 'normal' && P.on !== false;
       const defs = {};
@@ -979,14 +994,17 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (P.w > 1) P.setSize(P.w, P.h, P.pr);
       return P.pack;
     };
-    // глубина резкости: фокус — на своём персонаже (R.focus — точка, за которой едет камера); нет его (редактор) — прохода нет
+    // глубина резкости: фокус — на своём персонаже (R.focus — точка, за которой едет камера); нет его (редактор) — прохода нет.
+    // R.dofSet = { k, dist, depth } — игра решает сама (21.10.2026, «Кубомир»: от 1-го лица фокус «на себе» был в камере — весь
+    // мир в мыле): k — сила 0…1 (0 — без глубины резкости), dist — расстояние фокуса, depth — сколько вокруг него резко
     function dofPass(camera){
       P.dofDrawn = false;
-      const F = R.focus; if (!rtDof || !F || !F.ok) return;
-      const fd = Math.hypot(camera.position.x - F.x, camera.position.y - F.y - 1.2, camera.position.z - F.z);
+      const F = R.focus, O = R.dofSet; if (!rtDof || !F || !F.ok) return;
+      if (O && !(O.k > 0)) return;
+      const fd = O && O.dist > 0 ? O.dist : Math.hypot(camera.position.x - F.x, camera.position.y - F.y - 1.2, camera.position.z - F.z);
       const u = M.dof.uniforms;
       u.tSrc.value = rtScene.texture; u.tDepth.value = rtScene.depthTexture; u.uNF.value.set(camera.near, camera.far); u.uTexel.value.set(1 / rtDof.width, 1 / rtDof.height);
-      u.uDof.value.set(fd, Math.max(4, fd * 1.2), Math.max(3, rtDof.height / 140), 1);   // мягко: резко — свой персонаж и всё рядом, размыта даль
+      u.uDof.value.set(fd, O && O.depth > 0 ? O.depth : Math.max(4, fd * 1.2), Math.max(3, rtDof.height / 140), O ? Math.min(1, O.k) : 1);   // мягко: резко — свой персонаж и всё рядом, размыта даль
       pass(M.dof, rtDof);
       P.dofDrawn = true;
     }

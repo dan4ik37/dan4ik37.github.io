@@ -760,6 +760,16 @@ function boundsOk(R){
   ok(log.find(x => kind(x) === 'comp').u.uCSk.value === 0, 'ночью без света — контактных теней нет');
   P.setOpts({ rt: 'high' }); log.length = 0; P.render(new T.Scene(), cam);
   ok(P.rt.steps === 96 && log.find(x => kind(x) === 'ssr').u.uStride.value === 1.5, '«Высокая»: шаг 1,5 пикселя, до 96 шагов');
+  {   // вид воды и льда в отражениях (игра на ходу, R.ssrLook): по умолчанию рябь есть, мягкости нет; лёд — без ряби и мягко
+    const u0 = log.find(x => kind(x) === 'ssr').u.uSSR2.value.clone();
+    R0.ssrLook = { ripple: 0, soft: .85 }; log.length = 0; P.render(new T.Scene(), cam);
+    const u1 = log.find(x => kind(x) === 'ssr').u.uSSR2.value.clone();
+    R0.ssrLook = { ripple: 'x', soft: 9 }; log.length = 0; P.render(new T.Scene(), cam);
+    const u2 = log.find(x => kind(x) === 'ssr').u.uSSR2.value.clone();
+    R0.ssrLook = null;
+    ok(u0.x === 1 && u0.y === 0 && u1.x === 0 && Math.abs(u1.y - .85) < 1e-9 && u2.x === 1 && u2.y === 1 && E.RT_FS.ssr.includes('uSSR2.y > 0.001') && E.RT_FS.ssr.includes('hd < 0.012'),
+      'отражения: рябь и мягкость — из R.ssrLook (лёд — без ряби, мягко; мусор — по умолчанию/в пределах); руку «из глаз» не отражаем', [u0, u1, u2]);
+  }
   R0.lighting.gfx.rt.refl = 0; log.length = 0; P.render(new T.Scene(), cam);
   ok(!log.some(x => kind(x) === 'ssr') && log.find(x => kind(x) === 'comp').u.uSSRk.value === 0, 'отражения мира выключены (сила 0) — прохода отражений нет');
   P.setOpts({ rt: 'off', ao: 'off' });
@@ -1396,6 +1406,16 @@ function boundsOk(R){
     ok(M.comp.defines.D37_DOF !== undefined && P._test.rt().dof && log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 1 && Math.abs(M.dof.uniforms.uDof.value.x - Math.hypot(0, 3 - 1.2, 8 + 12)) < 1e-3,
       '«Ультра»: глубина резкости (половина кадра), фокус — расстояние до своего персонажа');
     ok(!E.packResolve('ultra', { q: 'high', mobile: true }).dof, '…на телефоне — без глубины резкости');
+    // игра решает сама (R.dofSet): «Кубомир» от 1-го лица — без глубины резкости (фокус «на себе» был в камере — весь мир в мыле)
+    Rs.dofSet = { k: 0 }; log.length = 0; P.render(new T.Scene(), cam);
+    ok(!log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 0, 'игра выключила глубину резкости (R.dofSet.k = 0) — прохода нет');
+    Rs.dofSet = { k: .5, dist: 6, depth: 20 }; log.length = 0; P.render(new T.Scene(), cam);
+    { const ud = M.dof.uniforms.uDof.value; ok(log.some(x => x.m === M.dof) && ud.x === 6 && ud.y === 20 && ud.w === .5, 'игра задала фокус, глубину и силу (R.dofSet) — так и рисует', [ud.x, ud.y, ud.w]); }
+    Rs.dofSet = null;
+    // пиксельная графика (P.setPixelArt): без FXAA — рисунок текстур не размывается; выключили — снова как было
+    P.setOpts({ ao: 'off', aa: 'fxaa' }); P.setPixelArt(true); P.setSize(800, 450, 1);
+    const fxPix = P.fxaa; P.setPixelArt(false);
+    ok(!fxPix && P.fxaa, 'пиксельная графика — без FXAA; выключили — FXAA снова', [fxPix, P.fxaa]);
     Rs.focus = { ok: false }; log.length = 0; P.render(new T.Scene(), cam);
     ok(!log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 0, 'нет своего персонажа (редактор) — прохода нет');
     P.setPack(E.packResolve('toon', { q: 'high' }));
