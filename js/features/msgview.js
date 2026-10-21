@@ -887,8 +887,10 @@
     V.addLocal = m => { const id = 'tmp' + Date.now(); const x = Object.assign({ at: new Date().toISOString(), mine: true }, m, { id }); V.msgs.set(id, x); V.order.push(id); appendOne(x); toBottom(); return id; };
     V.focus = () => input.focus();
     V.refreshAll = () => renderAll();
-    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
-    window.addEventListener('d37:blocks', () => { if (!V.destroyed && V.A) renderAll(); });
+    // чёрный список поменялся — перерисовать; закрыли ленту — слушатель снять (раньше оставался на каждое открытие чата и держал ленту в памяти)
+    const onBlocks = () => { if (!V.destroyed && V.A) renderAll(); };
+    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
+    window.addEventListener('d37:blocks', onBlocks);
     if (opt.adapter) V.setAdapter(opt.adapter);
     return V;
   };

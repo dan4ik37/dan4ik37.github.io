@@ -280,7 +280,9 @@ const D37Route = (() => {
 })();
 if (typeof window !== 'undefined') window.D37Route = D37Route;
 
+let routerStarted = false;   // роутер грузится раньше разделов: до routerStart() показывать нечего (age.js и др. зовут showPage сами)
 function showPage(route){
+  if (!routerStarted) return;
   // Приглашение в сообщество /c/<код> → экран вступления в чате «как Дискорд» (community.js); в режиме адресов сюда не доходит
   if(route==='c'){ D37Route.go('#/chat/join/' + String(currentRouteParam()||'').replace(/[^a-z0-9]/gi,'').toLowerCase(), { replace: true }); return; }
   if(!PAGES[route]) route='home';
@@ -375,6 +377,8 @@ function currentRouteParam(){
 // «Игра поверх мира»: пока партия из «Мира Денчика» открыта окном поверх мира, её переходы (онлайн, «выйти») ведёт
 // js/games/mir-play.js — мир не выгружаем и страницу не меняем
 function routerStart(){
+  if (routerStarted) return;
+  routerStarted = true;
   D37Route.start();
   window.addEventListener('d37:route', e=>{ if (window.MirPlay?.onHash?.(e)) return; showPage(currentRoute()); });
   showPage(currentRoute());
