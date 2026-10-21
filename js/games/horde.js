@@ -1397,7 +1397,7 @@
   const c16 = v => Math.max(-32767, Math.min(32767, Math.round(v)));
   const upsNow = () => Object.fromEntries(UPS.map(([id]) => [id, C().upLevel(id)]));
 
-  function coopLink(){ return location.origin + location.pathname + '#/games/horde/coop/' + CO.code; }
+  function coopLink(){ return (window.D37Route ? D37Route.abs('#/games/horde/coop/' + CO.code) : location.origin + location.pathname + '#/games/horde/coop/' + CO.code); }
   function coopLobby(){
     if (!CO || CO.state !== 'lobby') return;
     const hero = HEROES.find(x => x.id === selHero());

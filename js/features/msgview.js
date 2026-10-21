@@ -70,7 +70,12 @@
   const EXT_RE = /^(?:https?:\/\/|www\.)\S+$|^[a-z0-9-]{2,}\.(?:ru|com|net|org|io|gg|me|xyz|su|ly|cc|top|link|рф)(?:\/\S*)?$/i;
   function sitePath(w){
     let m = SITE_RE.exec(w);
-    if (m) { let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1); return p; }
+    if (m) {
+      let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1);
+      // настоящий адрес раздела (/play/chess/abcd, /chat/ev/5 — js/ui/router.js) → как старая ссылка #/…: карточки и переход без перезагрузки
+      const h = p[0] === '/' && p !== '/' && window.D37Route ? window.D37Route.toHash(p) : null;
+      return h || p;
+    }
     if (HASH_RE.test(w)) return w;
     return null;
   }

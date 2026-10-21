@@ -103,7 +103,7 @@
         let text, go;
         if (gid === 'world') {
           const a = P.activity(), shard = a.w || 1;
-          text = `🌍 Заходи ко мне в «Мир Денчика»${a.w ? `, я на сервере ${shard}` : ''}! ${SITE}/#/games/world`;
+          text = `🌍 Заходи ко мне в «Мир Денчика»${a.w ? `, я на сервере ${shard}` : ''}! ${window.D37Route ? D37Route.abs('#/games/world', SITE) : SITE + '/#/games/world'}`;
           go = a.w ? null : '#/games/world';
         } else {
           const code = window.GameRoom?.newCode?.() || rid(6);
@@ -207,7 +207,7 @@
           if (!P.me()) { P.toast('Войди, чтобы звать друзей', false); return; }
           pickFriend('📍 Кого позвать сюда?', async id => {
             const a = P.activity(), where = h.placeName?.() || '';
-            const text = a.j ? `📍 Иди ко мне! ${SITE}/#/${a.j}` : `📍 Иди ко мне в «Мир Денчика»${a.w ? `, сервер ${a.w}` : ''}${where ? ` — я ${where}` : ''}! ${SITE}/#/games/world`;
+            const text = a.j ? `📍 Иди ко мне! ${window.D37Route ? D37Route.abs('#/' + a.j, SITE) : SITE + '/#/' + a.j}` : `📍 Иди ко мне в «Мир Денчика»${a.w ? `, сервер ${a.w}` : ''}${where ? ` — я ${where}` : ''}! ${window.D37Route ? D37Route.abs('#/games/world', SITE) : SITE + '/#/games/world'}`;
             const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: id, text }]);
             P.toast(error ? '⚠️ ' + P.err(error) : '📨 Позвал(а)!', !error);
           });

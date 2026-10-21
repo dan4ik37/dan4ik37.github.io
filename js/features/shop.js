@@ -311,7 +311,7 @@ async function shopWaitPaid(orderId, gems){
   shopRender(D37Gems.state());
 }
 function shopAfterRedirect(orderId, failed){
-  history.replaceState(null, '', '#/shop');
+  D37Route.setUrl('#/shop');
   if (failed) { shopToast('Оплата не прошла — деньги не списаны'); return; }
   if (currentUser) { shopWaitPaid(orderId, 0); return; }
   // Вернулись со страницы оплаты — вход ещё поднимается (Supabase восстанавливает сессию после загрузки)

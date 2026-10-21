@@ -174,7 +174,7 @@ function closeNotifPanel(){
 }
 document.addEventListener('click', e => { if (!e.target.closest('#notifWrap')) closeNotifPanel(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNotifPanel(); });
-window.addEventListener('hashchange', closeNotifPanel);
+window.addEventListener('d37:route', closeNotifPanel);
 
 // Всплывашка о новом уведомлении (панель закрыта)
 function notifToast(n){

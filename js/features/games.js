@@ -295,9 +295,9 @@ function unmountActiveGame(){
   document.getElementById('gamesStage')?.classList.remove('gm-own-bar');   // своя панель игры (мир) — снова шапка игры
 }
 // Ушли со страницы игр — останавливаем таймеры/анимации игры
-window.addEventListener('hashchange', () => {
-  if (gamesActive && !/^#\/games/.test(location.hash)) { unmountActiveGame(); gamesActive = null; }
-  if (!/^#\/games\/./.test(location.hash)) { document.body.classList.remove('game-on'); gamesFullOff(document.getElementById('gamesStage')); }
+window.addEventListener('d37:route', () => {
+  if (gamesActive && !/^#\/games/.test(D37Route.hash())) { unmountActiveGame(); gamesActive = null; }
+  if (!/^#\/games\/./.test(D37Route.hash())) { document.body.classList.remove('game-on'); gamesFullOff(document.getElementById('gamesStage')); }
 });
 // Игру закрыли — выйти из полного экрана и не ждать поворота телефона (js/core/fullscreen.js)
 function gamesFullOff(stage){
@@ -456,7 +456,7 @@ async function gamesChallenge(btn, id = gamesActive){
 }
 
 // Уходим из игры — плашку прячем
-window.addEventListener('hashchange', () => { ['gamesSupport', 'gamesAd'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; }); gamesAdAt = 0; });
+window.addEventListener('d37:route', () => { ['gamesSupport', 'gamesAd'].forEach(id => { const b = document.getElementById(id); if (b) b.hidden = true; }); gamesAdAt = 0; });
 
 // ── «Сегодня на сайте» (главная) и точка на «Игры» в нижнем меню ──
 // Слово дня «5 букв»: номер дня — как в js/games/words.js (день №1 = 03.10.2026, смена в полночь МСК).

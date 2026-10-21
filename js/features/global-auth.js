@@ -71,7 +71,7 @@ function goToOwnProfile() {
   closeGlobalAuth();
   // Уже на своём профиле (вход с плашки «Войди…» или по ссылке #/profile/vip со страницы /vip):
   // хэш не меняется — hashchange не придёт, перерисовываем сами
-  if (/^#\/profile(\/vip)?$/.test(location.hash) && typeof renderProfilePage === 'function') renderProfilePage(location.hash.endsWith('/vip') ? 'vip' : undefined);
+  if (/^#\/profile(\/vip)?$/.test(D37Route.hash()) && typeof renderProfilePage === 'function') renderProfilePage(D37Route.hash().endsWith('/vip') ? 'vip' : undefined);
   else location.hash = '#/profile';
 }
 
@@ -117,7 +117,7 @@ async function doForgotPassword() {
     // ▼ «я не робот» (D37Captcha, js/features/social-login.js; выключено, пока нет TURNSTILE_SITE_KEY) ▼
     const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('login') : null;
     const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-      redirectTo: location.origin + location.pathname, ...(captchaToken ? { captchaToken } : {}),
+      redirectTo: location.origin + '/',   // как раньше (сайт был только на «/»): адрес из «Redirect URLs» Supabase ...(captchaToken ? { captchaToken } : {}),
     });
     window.D37Captcha?.done('login', true, false);
     // ▲ ▲

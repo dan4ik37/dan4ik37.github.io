@@ -369,7 +369,7 @@
     if (!room || mode === 'play' || mode === 'over') return;
     mode = 'lobby';
     const seats = seatList();
-    root.innerHTML = TableRoom.lobbyHtml(location.origin + location.pathname + '#/games/ludo/' + code, seats, 4, { title: '🎲 Лудо — стол', host: room.isHost, canStart: seats.length >= 2 });
+    root.innerHTML = TableRoom.lobbyHtml((window.D37Route ? D37Route.abs('#/games/ludo/' + code) : location.origin + location.pathname + '#/games/ludo/' + code), seats, 4, { title: '🎲 Лудо — стол', host: room.isHost, canStart: seats.length >= 2 });
   }
   function hostStart(){
     if (!room?.isHost) return;

@@ -266,7 +266,7 @@ async function testUpdateFlow(){
   await tick(1000);
   ok(!U3.doc.getElementById('appUpdate'), 'идёт игра — полоски нет');
   U3.doc.body.classList.remove('game-on');
-  U3.W.dispatchEvent(new Event('hashchange'));
+  U3.W.dispatchEvent(new Event('d37:route'));   // переход раздела (js/ui/router.js)
   await tick(1000);
   ok(!!U3.doc.getElementById('appUpdate'), 'вышел из игры — полоска появилась');
   // установленное приложение: файлы игр без интернета → sw.js (один раз на GAMES_VER)

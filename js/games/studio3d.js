@@ -1766,7 +1766,9 @@ Players.PlayerAdded.Connect(player => {
     return pm ? { playId: pm[1], room: pm[2] ? pm[2].toLowerCase() : null } : jm ? { join: jm[1].toLowerCase() } : {};
   }
   const newRoomCode = () => window.GameRoom?.newCode?.() || Array.from({ length: 6 }, () => 'abcdefghjkmnpqrstuvwxyz23456789'[Math.random() * 31 | 0]).join('');
-  const mpLink = mp => location.origin + location.pathname + (mp.kind === 'play' && ED?.playId ? `#/games/studio3d/play/${ED.playId}/${mp.code}` : `#/games/studio3d/join/${mp.code}`);
+  const mpHash = mp => (mp.kind === 'play' && ED?.playId ? `#/games/studio3d/play/${ED.playId}/${mp.code}` : `#/games/studio3d/join/${mp.code}`);
+  const mpLink = mp => (window.D37Route ? D37Route.abs(mpHash(mp)) : location.origin + location.pathname + mpHash(mp));   // настоящий адрес (js/ui/router.js)
+  const s3Url = h => { if (window.D37Route) D37Route.setUrl(h); else history.replaceState(null, '', h); };   // адрес без перехода
   // Чужая внешность — только бесплатные части (платное «надеть» можно подделкой), свои цвета — бесплатные (как в mir.js)
   function freeLook(look){
     const C = window.D37Char;
@@ -2010,7 +2012,7 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED, pl = ed?.playing; if (!pl) return;
     pl.role = 'solo'; ed.q('.s3-mpwait')?.remove();
     runWorld(pl); pl.P.enabled = true; pl.t0 = performance.now();
-    if (ed.playId) { ed.roomCode = null; try { history.replaceState(null, '', '#/games/studio3d/play/' + ed.playId); if (typeof gamesParam !== 'undefined') gamesParam = 'play/' + ed.playId; } catch (e) {} }
+    if (ed.playId) { ed.roomCode = null; try { s3Url('#/games/studio3d/play/' + ed.playId); if (typeof gamesParam !== 'undefined') gamesParam = 'play/' + ed.playId; } catch (e) {} }
     msg(text, false);
   }
   function mpFail(kind, text){
@@ -2032,7 +2034,7 @@ Players.PlayerAdded.Connect(player => {
     const ed = ED; if (!ed?.player?.row || ed.mp) return;
     if (!ed.playing) startPlay();
     const code = newRoomCode();
-    try { history.replaceState(null, '', `#/games/studio3d/play/${ed.playId}/${code}`); if (typeof gamesParam !== 'undefined') gamesParam = `play/${ed.playId}/${code}`; } catch (e) {}
+    try { s3Url(`#/games/studio3d/play/${ed.playId}/${code}`); if (typeof gamesParam !== 'undefined') gamesParam = `play/${ed.playId}/${code}`; } catch (e) {}
     ed.roomCode = code;
     if (mpOpen(code, 'play')) mpCopyLink('👥 Комната создана — ссылка скопирована, отправь друзьям');
   }

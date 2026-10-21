@@ -439,7 +439,7 @@
     if (!room || mode === 'play' || mode === 'over') return;
     mode = 'lobby';
     const seats = seatList();
-    root.innerHTML = TableRoom.lobbyHtml(location.origin + location.pathname + '#/games/durak/' + code, seats, 4, { title: '🃏 Дурак — стол', host: room.isHost, canStart: seats.length >= 2 });
+    root.innerHTML = TableRoom.lobbyHtml((window.D37Route ? D37Route.abs('#/games/durak/' + code) : location.origin + location.pathname + '#/games/durak/' + code), seats, 4, { title: '🃏 Дурак — стол', host: room.isHost, canStart: seats.length >= 2 });
   }
   function hostStart(){
     if (!room?.isHost) return;
