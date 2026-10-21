@@ -531,7 +531,73 @@ function fakeWorld(sky, blk, walls = new Set()){
     let jumpE = 0; for (let i = 1; i < B1e.length; i++) jumpE = Math.max(jumpE, Math.abs(B1e[i] - B1e[i - 1]));
     ok(wetE > .05 && wetE < .35 && jumpE < .2 && Math.max(...B1e) >= .6 && Math.max(...B1e) <= 1, 'движок погоды: чаще ясно, плавно, сила до 0,6…1', { wet: +wetE.toFixed(3), jump: +jumpE.toFixed(3) });
     ok(Math.abs(KW.at('погода', 3, 23.99) - KW.at('погода', 4, 0)) < .05, 'движок погоды: через полночь — без скачка');
-    ok(KW.BIOME_CLIM.desert === 'desert' && KW.BIOME_CLIM.snow === 'snow' && KW.BIOME_CLIM.mountains === 'mountain' && KW.BIOME_CLIM.ocean === 'sea', 'биомы → климаты движка: пустыня, снега, горы, море');
+    ok(KW.climKey('desert', 2) === 'kb_desert' && KW.climKey('swamp', 2) === 'kb_swamp' && KW.climKey('forest', 2) === 'kb_warm' && KW.climKey('snow', 1) === 'kb_snow' && KW.climKey('mountains', 1) === 'kb_snow'
+      && KW.climKey('plains', 0) === 'temperate' && KW.climKey('ocean', 0) === 'temperate', 'зона и биом → климат: всегда зима, пустыня, болото, тёплый край; обычная зона — один умеренный (что идёт, то и ложится)');
+  }
+
+  // ═══ 8б. Климатические зоны и снег по времени (21.10.2026: «снег идёт, а блоки не меняются»; «где-то всегда зима, где-то зимы нет») ═══
+  sec('погода по зонам: вечная зима — только снег, пустыня — сухо и без снега, снег ложится за минуты и тает');
+  {
+    const KW = window.KubomirWeather, Cl = window.D37E.climate;
+    for (const k in KW.KB_CLIMATES) if (!Cl.CLIMATES[k]) Cl.CLIMATES[k] = KW.KB_CLIMATES[k];
+    // целый год по календарю (замер раз в 2 ч): доля дождя и снега, крайние температуры
+    const year = key => {
+      const Wc = Cl.world({ seed: 'kb:зоны', mode: 'calendar', lapse: 0, seaY: 52, front: 0, climateAt: () => key });
+      let rain = 0, snow = 0, n = 0, tmax = -99, tmin = 99; const t0 = Date.UTC(2026, 0, 1);
+      for (let h = 0; h < 365 * 24; h += 2) { const q = Wc.at(0, 0, t0 + h * 3600e3, 60); n++; if (q.rain > .05) rain++; if (q.snow > .05) snow++; tmax = Math.max(tmax, q.temp); tmin = Math.min(tmin, q.temp); }
+      return { rain: +(rain / n).toFixed(3), snow: +(snow / n).toFixed(3), tmax: +tmax.toFixed(1), tmin: +tmin.toFixed(1) };
+    };
+    const yS = year('kb_snow'), yD = year('kb_desert'), yW = year('kb_warm'), yB = year('kb_swamp'), yT = year('temperate');
+    ok(yS.rain === 0 && yS.snow > .02 && yS.tmax < .5, 'вечная зима: весь год только снег, теплее −0,5° не бывает', yS);
+    ok(yD.snow === 0 && yD.rain < .03 && yD.tmin > 2.5, 'пустыня: снега нет никогда, дождь — редкость', yD);
+    ok(yW.snow === 0 && yB.snow === 0 && yW.tmin > 2.5 && yB.tmin > 2.5, 'тёплый край и болото: зимы нет — снега нет', { yW, yB });
+    ok(yB.rain > yT.rain && yT.rain > yD.rain && yT.snow > .003 && yT.rain > .02, 'болото — дождь чаще всех, в обычной зоне есть и дождь, и снег (зимой)', { yB, yT, yD });
+    // снег ложится по реальному времени (секунды): заметно — за 2–3 мин, бело — за 15–20 мин, тает в тепло, в мороз лежит
+    const until = (c, goal, snow, temp, lim = 3600) => { let t = 0; const up = goal > c; while ((up ? c < goal : c > goal) && t < lim) { c = KW.coverStep(c, .5, snow, temp, 0, 1, 0); t += .5; } return t; };
+    const tVis = until(0, .25, .7, -3), tFull = until(0, .97, .7, -3), tStrong = until(0, .97, 1, -6), tMelt = until(1, 0, 0, 5), tMeltHot = until(1, 0, 0, 15);
+    ok(tVis >= 100 && tVis <= 180 && tFull >= 13 * 60 && tFull <= 20 * 60 && tStrong < tFull, 'снегопад: заметно за 2–3 мин, бело за 15–20 мин (сильный — быстрее)', { tVis, tFull, tStrong });
+    ok(tMelt >= 3 * 60 && tMelt <= 12 * 60 && tMeltHot < tMelt && KW.coverStep(.6, 600, 0, -5) === .6 && KW.coverStep(.6, 60, 0, 2, 1) < KW.coverStep(.6, 60, 0, 2, 0), 'тает при +5° за 3–12 мин (в жару и под дождём — быстрее), в мороз лежит', { tMelt, tMeltHot });
+    // в мире: обычная зона копит снег по времени; «всегда зима» — снег и лёд всегда; «зимы нет» — ни снега, ни льда
+    const cells = new Map(), key = (x, y, z) => x + ',' + y + ',' + z, zones = new Map();
+    const Wz = { seed: 'зоны', listeners: [], raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < 50 ? ID.stone : 0) : v; },
+      get(x, y, z){ return this.raw(x, y, z) & 0xfff; }, set(){ return true; }, lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => 50, chunkAt: () => ({ gen: true, maxY: 60 }),
+      chunk(cx, cz){ const zn = zones.get(cx + ',' + cz); return zn === undefined ? null : { zone: new Uint8Array(256).fill(zn) }; } };
+    zones.set('0,0', 0); zones.set('1,0', 1); zones.set('2,0', 2);
+    for (const cx of [0, 1, 2]) for (let x = 2; x < 6; x++) for (let z = 2; z < 6; z++) cells.set(key(cx * 16 + x, 50, z), ID.water);
+    const Rz = Object.assign({}, R, { lighting: { time: 12 }, night: 0, camera: new T.PerspectiveCamera(70, 1, .1, 200) });
+    const stz = { R: Object.assign({}, Rz, { q: 'high' }), W: Wz, P: { x: 3.5, y: 51, z: 3.5 }, ox: 0, oz: 0, meta: { day: 1 }, VR: { U: { d37ClZ: { value: new Float32Array([0, 0, .5, 0]) } } } };
+    const XZ = KW.create(stz); stz.WX = XZ;
+    const fakeClim = { state: Cl.blank(), vis: { snowCover: 0, wet: 0, puddle: 0, ice: 0 }, opts: { fx: true }, frame(){}, dispose(){},
+      W: { at: () => ({ snow: XZ._sn, rain: 0, temp: XZ._tp, sun: 0, cloud: 1, snowCover: 0, wet: 0, puddle: 0, ice: XZ._ice }) } };
+    XZ.clim = fakeClim; XZ._sn = .8; XZ._tp = -4; XZ._ice = 0;
+    const climOn = window.D37E.climShaders; window.D37E.climShaders = true;
+    const now0 = Date.now; let fakeNow = now0();
+    Date.now = () => fakeNow;
+    try {
+      for (let i = 0; i < 2; i++) { XZ.step(1); fakeNow += 500; }
+      const c0 = XZ.cover;
+      for (let i = 0; i < 360; i++) { fakeNow += 500; XZ.step(.5); }   // 3 мин снегопада
+      const c3 = XZ.cover;
+      XZ.frame(1 / 60, 0);
+      ok(c0 < .02 && c3 > .25 && c3 < .5 && stz.meta.snow && Math.abs(stz.meta.snow.c - XZ.cover) < .002, 'снегопад в обычной зоне: за 3 мин снег пятнами (в мире — meta.snow)', { c0, c3, m: stz.meta.snow });
+      const zu = stz.VR.U.d37ClZ.value;
+      ok(zu[3] === 1 && zu[0] === 1 && zu[1] === 0, 'шейдеру: зоны включены, «всегда зима» — снег всегда, «зимы нет» — без снега', [...zu]);
+      // лёд: обычная зона — по погоде (ещё нет), «всегда зима» — есть, «зимы нет» — нет
+      XZ.iceTick();
+      ok(!V.isIce(Wz, 3, 50, 3) && V.isIce(Wz, 19, 50, 3) && !V.isIce(Wz, 35, 50, 3), 'лёд: обычная зона — по погоде, «всегда зима» — всегда, «зимы нет» — никогда', [V.isIce(Wz, 3, 50, 3), V.isIce(Wz, 19, 50, 3), V.isIce(Wz, 35, 50, 3)]);
+      XZ._ice = 1; fakeNow += 500; XZ.step(.5); XZ.iceTick();
+      ok(V.isIce(Wz, 3, 50, 3) && !V.isIce(Wz, 35, 50, 3), 'мороз в обычной зоне — лёд и там; в тёплой — всё равно нет');
+      // прорубь в «всегда зима» не замерзает сразу, когда в обычной зоне тает
+      XZ.hole(19, 50, 3); XZ._ice = 0; fakeNow += 500; XZ.step(.5); XZ.iceTick(); XZ.iceTick();
+      ok(XZ.isHole(19, 50, 3) && !V.isIce(Wz, 19, 50, 3) && V.isIce(Wz, 20, 50, 3) && !V.isIce(Wz, 3, 50, 3), 'прорубь в вечной зиме живёт своё время, хоть в обычной зоне и оттаяло');
+      // тепло — тает; погоду выключили — снега нет
+      XZ._sn = 0; XZ._tp = 8; for (let i = 0; i < 1200; i++) { fakeNow += 500; XZ.step(.5); }
+      ok(XZ.cover === 0, 'потеплело (+8°) — за 10 мин растаял', XZ.cover);
+      XZ._sn = .8; XZ._tp = -4; for (let i = 0; i < 200; i++) { fakeNow += 500; XZ.step(.5); }
+      stz.weatherOff = true; fakeNow += 500; XZ.step(.5); XZ.iceTick(); XZ.frame(1 / 60, 0);
+      ok(XZ.cover === 0 && !V.isIce(Wz, 19, 50, 3) && zu[0] === 0, '⚙️ «Погода» выкл — ни снега, ни льда (и в вечной зиме)', { cover: XZ.cover, z: [...zu] });
+    } finally { Date.now = now0; window.D37E.climShaders = climOn; XZ.clim = null; XZ.dispose(); }
+    ok(stz.VR.U.d37ClZ.value[3] === 0 && !V.iceTest, 'закрыли мир — зоны в шейдере выключены, лёд не проверяется');
   }
 
   // ═══ 9. Генератор: старые миры (genVer нет / 1) — блоки ровно как раньше, новые (2) — извилистые границы и пятна снега ═══

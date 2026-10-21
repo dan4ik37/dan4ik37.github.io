@@ -163,7 +163,7 @@
 
       // ── от 1-го лица ──
       const first = !st.camMode;
-      fp.visible = first && !!H.arm && !P.dead && !(st.hudHidden);
+      fp.visible = first && !!H.arm && !P.dead && !(st.hudHidden) && !P.pk && !P.hang;   // залезает, висит — руки на краю
       if (fp.visible) {
         const cam = R.camera;
         if (fp.parent !== cam) { cam.add(fp); if (!cam.parent) R.scene.add(cam); }

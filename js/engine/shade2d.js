@@ -70,11 +70,14 @@ float s2noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 *
   float a = float(s2hash(q) & 1023u), b = float(s2hash(q + ivec2(1, 0)) & 1023u), c = float(s2hash(q + ivec2(0, 1)) & 1023u), d = float(s2hash(q + ivec2(1, 1)) & 1023u);
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y) / 1023.0; }
 float s2lum(vec3 c){ return dot(c, vec3(0.3, 0.5, 0.2)); }`,
-    // свет клетки → яркость: кривая (середина хвоста светлее, у огня пересвет), мерцание огня по месту и времени
-    light: `vec3 s2light(vec3 block, float sky, vec3 skyCol, vec2 pw, float t, int q){
+    // свет клетки → яркость: кривая (середина хвоста светлее, у огня пересвет), мерцание огня по месту и времени;
+    // s2scatter — свет, рассеянный в воздухе (ореол вокруг огня): только там, где свет есть по карте, — стены его ограничивают
+    light: `float s2flick(vec2 pw, float t){ return 1.0 + 0.10 * (s2noise(pw * 0.21 + vec2(t * 2.3, t * 1.7)) - 0.5) + 0.06 * (s2noise(pw * 0.83 + vec2(-t * 5.3, t * 4.1)) - 0.5); }
+vec3 s2light(vec3 block, float sky, vec3 skyCol, vec2 pw, float t, int q){
   vec3 blk = pow(block, vec3(0.75)) * 1.16;
-  if (q >= 1) blk *= 1.0 + 0.10 * (s2noise(pw * 0.21 + vec2(t * 2.3, t * 1.7)) - 0.5) + 0.06 * (s2noise(pw * 0.83 + vec2(-t * 5.3, t * 4.1)) - 0.5);
-  return max(blk, skyCol * pow(sky, 0.75)); }`,
+  if (q >= 1) blk *= s2flick(pw, t);
+  return max(blk, skyCol * pow(sky, 0.75)); }
+vec3 s2scatter(vec3 block, float flick, float k){ float m = max(block.r, max(block.g, block.b)), m2 = m * m; return block / max(m, 0.001) * (m2 * m2 * k * flick); }`,
     // тень от блоков на стене за ними: m — 8 соседей (вверх, вправо, вниз, влево, ↗, ↘, ↙, ↖), f — точка в клетке 0…1
     aoWall: `float s2ao(uint m, vec2 f){ float a = 0.0, r = 0.5;
   if ((m & 1u) != 0u) a += 1.0 - smoothstep(0.0, r, f.y); if ((m & 2u) != 0u) a += 1.0 - smoothstep(0.0, r, 1.0 - f.x);

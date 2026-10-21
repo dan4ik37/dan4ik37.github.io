@@ -53,11 +53,11 @@
     function inlineRun(j){
       if (!G) G = V.genInit(W.seed, { features: o.features || [], ver: o.genVer || 1 });
       const t0 = now();
-      if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, ms: now() - t0 }); }
-      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
+      if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, zone: r.zone, ms: now() - t0 }); }
+      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
     }
     function send(j, msg, tr){
-      if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; inlineRun(j); return; }
+      if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; j.zone = msg.zone; inlineRun(j); return; }
       let w = S.workers[0];
       for (const x of S.workers) if (x.n < w.n) w = x;
       w.n++; j.w = w;
@@ -91,7 +91,7 @@
       const id = ++seq, j = { id, t: 'mesh', c, rev: c.rev };
       c.meshJob = id; c.urgent = 0; jobs.set(id, j);
       const reg = V.buildRegion((x, z) => { const n = W.chunk(x, z); return n && n.ready ? n.ids : null; }, c.cx, c.cz, regions.pop());
-      send(j, { t: 'mesh', id, reg, tint: c.tint }, S.inline ? null : [reg.buffer]);
+      send(j, { t: 'mesh', id, reg, tint: c.tint, zone: c.zone }, S.inline ? null : [reg.buffer]);
     }
 
     // ── применить готовое (по бюджету) ──
@@ -100,7 +100,7 @@
       if (W.chunk(c.cx, c.cz) !== c) return 0;   // успели выгрузить
       if (j.t === 'gen') {
         c.genJob = 0;
-        c.ids = d.ids; c.biome = d.biome; c.tint = d.tint; c.gen = true;
+        c.ids = d.ids; c.biome = d.biome; c.tint = d.tint; c.zone = d.zone || null; c.gen = true;
         S.stats.gen++; S.stats.genMs += d.ms || 0;
         const fin = saved => {
           if (W.chunk(c.cx, c.cz) !== c) return;
