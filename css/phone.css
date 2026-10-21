@@ -142,6 +142,8 @@ html.ph-open:has(.ph:not(.docked)) .chat-toast{display:none}
 .ph-ibtns{display:flex;gap:4px;flex:none}
 .ph-ib{width:36px;height:36px;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:#fff;font-size:16px;cursor:pointer;display:grid;place-items:center;text-decoration:none}
 .ph-ib:hover{background:rgba(255,255,255,.15)}
+.ph-ib.ph-off,.ph-hbtn.ph-off{opacity:.38;filter:grayscale(1)}
+.ph-kid{display:block;margin-top:4px;font-size:11px;line-height:1.35;color:#ffd166}
 .ph-ib.call{background:#16a34a}
 .ph-sec{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:14px 6px 4px}
 .ph-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 2px #0b0b13;position:relative;margin:-14px 0 0 -16px;flex:none;align-self:flex-end}

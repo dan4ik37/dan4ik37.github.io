@@ -377,6 +377,8 @@ function chatAdapter(chId){
     state(){
       if (!sbClient) return { mode: 'readonly', note: 'Нет связи с сервером — чат только для чтения' };
       if (ch.mods_only && !isChatStaff()) return { mode: 'readonly', note: id === 'news' ? '📢 Сюда пишут Денчик-бот (эфиры, новые видео) и команда сайта' : '📢 Здесь пишут только админ и модераторы' };
+      // до 9 лет — только читать и реакции (сервер не примет и сам: community.sql chat_guard)
+      if (window.D37Age?.chatRO?.() && !isChatStaff()) return { mode: 'readonly', react: true, note: window.D37Age.kidMsg('u9chat') };
       if (!chatNick) return { mode: 'guest' };
       if (bannedNicks.has(chatNick.toLowerCase())) return { mode: 'muted', note: '🔨 Ты заблокирован в чате' };
       const until = OFF.info?.muted_until;
@@ -541,7 +543,8 @@ function onlineMeta(){
     if (currentRole && currentRole !== 'user') meta.r = currentRole;
     const t = typeof getVipTier === 'function' && currentProfile ? getVipTier(currentProfile) : null;
     if (t) meta.v = t.key;
-    if ((currentProfile?.profile_visibility || 'all') === 'all' && window.D37Phone?.activity) {
+    // ребёнок до 13 (безопасность детей) — «чем занят» и код комнаты всем не рассылаем: друзьям — через friends_online (сервер)
+    if ((currentProfile?.profile_visibility || 'all') === 'all' && window.D37Phone?.activity && !(window.D37Age?.kid?.() && window.D37Age?.kidsafe?.())) {
       const a = window.D37Phone.actCode(window.D37Phone.activity());
       if (a) meta.a = a.slice(0, 160);
     }

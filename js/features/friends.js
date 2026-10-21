@@ -11,10 +11,14 @@ let dmUnreadCount = 0;
 
 // ─── ДРУЗЬЯ ───
 
+// Безопасность детей (js/core/age.js → community.sql): ребёнку до 13 — не со взрослыми и не с теми, кто не указал возраст
+const kidSafeMsg = k => (window.D37Age?.kidMsg ? window.D37Age.kidMsg(k) : '🚫 Нельзя написать этому игроку');
+
 async function sendFriendRequest(targetId){
   if (!currentUser) { openGlobalAuth(); return; }
   if (targetId === currentUser.id) return;
   try {
+    if (await window.D37Age?.friendBlock?.(targetId)) { alert(kidSafeMsg('agefriend')); return; }
     const { error } = await sbClient.from('friendships').insert([{ requester_id: currentUser.id, addressee_id: targetId }]);
     if (error) {
       // Отказ базы (progression.sql): уровень, лимит друзей или человек не принимает заявки
@@ -23,6 +27,7 @@ async function sendFriendRequest(targetId){
         alert(why || '🚫 Этот человек не принимает заявки в друзья');
         return;
       }
+      if (/[а-яё]/i.test(error.message || '')) { alert(error.message); return; }   // отказ сервера по-русски (возраст — community.sql)
       throw error;
     }
     alert('Заявка в друзья отправлена');
@@ -38,8 +43,8 @@ async function acceptFriendRequest(requesterId){
     const { error } = await sbClient.from('friendships').update({ status: 'accepted' }).eq('requester_id', requesterId).eq('addressee_id', currentUser.id);
     if (error) {
       alert(/row-level security/i.test(error.message || '')
-        ? '👥 Не получилось: у тебя или у него уже максимум друзей. Лимит растёт с уровнем и VIP'
-        : 'Не получилось: ' + humanErr(error));
+        ? '👥 Не получилось: у тебя или у него уже максимум друзей (лимит растёт с уровнем и VIP) — или эту заявку принять нельзя'
+        : /[а-яё]/i.test(error.message || '') ? error.message : 'Не получилось: ' + humanErr(error));
     }
     if (typeof myFriendStatusCache !== 'undefined') myFriendStatusCache = null;
     renderFriendsPanel();
@@ -134,10 +139,17 @@ async function renderFriendsPanel(){
 
 // ─── ЛИЧНЫЕ СООБЩЕНИЯ ───
 
+let dmKidBlock = null;   // ребёнку со взрослым / до 9: переписку видно, писать нельзя (js/core/age.js)
 function openDmWith(friendId, nick){
   dmCurrentFriendId = friendId;
   document.getElementById('dmModal').style.display = 'flex';
   document.getElementById('dmModalNick').textContent = nick;
+  const input = document.getElementById('dmInput');
+  dmKidBlock = null; input.disabled = false; input.placeholder = 'Сообщение...';
+  Promise.resolve(window.D37Age?.contact?.(friendId)).then(b => {
+    if (!b || dmCurrentFriendId !== friendId) return;
+    dmKidBlock = b; input.disabled = true; input.placeholder = kidSafeMsg(b); input.title = kidSafeMsg(b);
+  }).catch(() => {});
   loadDmConversation(friendId);
   trapModalFocus(document.getElementById('dmModal'));
 }
@@ -184,13 +196,16 @@ async function sendDm(){
   const input = document.getElementById('dmInput');
   const text = input.value.trim();
   if (!text || !dmCurrentFriendId) return;
+  if (dmKidBlock) { alert(kidSafeMsg(dmKidBlock)); return; }
   try {
     const { error } = await sbClient.from('direct_messages').insert([{ sender_id: currentUser.id, recipient_id: dmCurrentFriendId, text }]);
     if (error) throw error;
     input.value = '';
     loadDmConversation(dmCurrentFriendId);
   } catch(e) {
-    alert('Не удалось отправить — возможно, вы больше не друзья: ' + humanErr(e));
+    const m = String(e?.message || '');
+    alert(/row-level|42501/i.test(m) || e?.code === '42501' ? '🚫 Нельзя написать этому игроку (писать можно только друзьям)'
+      : /[а-яё]/i.test(m) ? m : 'Не удалось отправить: ' + humanErr(e));
   }
 }
 
