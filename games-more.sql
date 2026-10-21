@@ -13,6 +13,9 @@
 --  «Кубомир» (kubomir — достижение в «Выживании»: счёт — сколько достижений, XP — как за победу, в общем лимите игр).
 --  «Подземье» (podzem — рекорд глубины в метрах, без XP; podzem_boss1 / podzem_boss2 — победа над боссом).
 --  «Мир Денчика», Боевая зона (mirwar — раунд: очки = выбитые, победа — команда/первое место; 3 XP, одна «игра» в лимите 3 побед).
+--  «Клеточки» (kletochki — с ботами, kletochki_online — 2+ человека; очки — лучшая масса за жизнь, победа — 1-е место в раунде)
+--  и «Червячки» (chervyachki, chervyachki_online; очки — лучшая длина) — io-игры 22.10.2026: 4 XP с ботами, 6 онлайн.
+--  Проверка (22.10): /rpc/game_win_xp {"p_game":"kletochki"} → 4, {"p_game":"chervyachki_online"} → 6 (0 — старая версия файла).
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно. Нужен games.sql (он уже применён).
 --  Функции целиком скопированы из games.sql + новые ключи (заменяет games-emoji.sql — тот можно не запускать).
 --  До запуска игры работают, просто без XP и таблицы рекордов.
@@ -75,6 +78,8 @@ returns int language sql immutable as $$
     when p_game = 'podzem' then 100000                       -- «Подземье»: рекорд глубины, метры (без XP)
     when p_game in ('podzem_boss1', 'podzem_boss2') then 600 -- победа над боссом: 600 − секунд боя
     when p_game = 'mirwar' then 200                          -- «Мир Денчика», Боевая зона: выбитые за раунд (mir-war.js)
+    when p_game in ('kletochki', 'kletochki_online') then 50000       -- «Клеточки»: лучшая масса за жизнь (kletochki.js)
+    when p_game in ('chervyachki', 'chervyachki_online') then 50000   -- «Червячки»: лучшая длина за жизнь (chervyachki.js)
     else null end;
 $$;
 
@@ -121,6 +126,8 @@ returns int language sql immutable as $$
     when 'kubomir' then 4
     when 'podzem_boss1' then 6 when 'podzem_boss2' then 10
     when 'mirwar' then 3
+    when 'kletochki' then 4 when 'kletochki_online' then 6
+    when 'chervyachki' then 4 when 'chervyachki_online' then 6
     else 0 end;
 $$;
 
