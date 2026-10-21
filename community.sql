@@ -2,7 +2,7 @@
 --  СООБЩЕСТВА («как Дискорд»), ОБЩИЙ ЧАТ «Денчик37», ЗВОНКИ И ТЕЛЕФОН 📱 — ВЕСЬ SQL ЧАТА В ОДНОМ ФАЙЛЕ
 --  (js/features/phone.js, phone-apps.js, community.js, community2.js, msgview.js, chat.js, calls.js, api/push-check.js)
 --  Выполнить целиком в Supabase → SQL Editor. Идемпотентно — можно запускать сколько угодно раз, в том числе поверх старых
---  community.sql + community2.sql + community3.sql (16.10.2026 они слиты сюда, отдельных файлов больше нет; данные не трогаются).
+--  community.sql + community2.sql + community3.sql (21.10.2026 они слиты сюда, отдельных файлов больше нет; данные не трогаются).
 --  Нужны: profiles, friendships (friends-dm.sql), premium.sql (буст за 💎). notifications.sql — по желанию (без него просто без 🔔).
 --  pgcrypto — в Supabase уже есть (схема extensions). Писать в таблицы напрямую нельзя — только функциями (они всё проверяют).
 --
@@ -20,7 +20,7 @@
 --   /rpc/cm_events {"p_community":null} → {"ok":true,"can":false,"list":[…]}   (ч. 2)
 --   /rpc/cm_roles {"p_id":0} → {"ok":false,"reason":"private"}                 (ч. 3)
 --   /rpc/cm_modlog {"p_community":null} → {"ok":false,"reason":"rights"}       (ч. 4)
---   /rpc/cm_automod_get {"p_community":null} → {"ok":true,"cfg":{},"can":false}
+--   /rpc/cm_automod_get {"p_community":null} → {"ok":true,"can":false,"cfg":{}}
 --   /rest/v1/chat_channels?select=id,archived,category_id&limit=1 → 200 (400 «does not exist» — ч. 4 не применилась)
 -- ═══════════════════════════════════════════════════════════════════
 
@@ -1197,7 +1197,7 @@ end $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════
---  ЧАСТЬ 2. «Денчик-бот», 📢 новости, 📅 события, 🧭 обзор (до 16.10.2026 — community2.sql)
+--  ЧАСТЬ 2. «Денчик-бот», 📢 новости, 📅 события, 🧭 обзор (до 21.10.2026 — community2.sql)
 -- ═══════════════════════════════════════════════════════════════════
 
 -- chat-stickers.sql на живой базе не применён, а триггер messages_enforce_status (vip-balance.sql) пишет new.is_sticker
@@ -1621,7 +1621,7 @@ end $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════
---  ЧАСТЬ 3. 🎭 свои роли, @everyone, 🚀 буст (до 16.10.2026 — community3.sql)
+--  ЧАСТЬ 3. 🎭 свои роли, @everyone, 🚀 буст (до 21.10.2026 — community3.sql)
 -- ═══════════════════════════════════════════════════════════════════
 
 -- ═══ 1. Свои роли 🎭 ═══
