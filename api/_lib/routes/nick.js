@@ -23,7 +23,7 @@ export default function handler(req, res) {
   const opt = (name, map, def) => Object.entries(map).map(([k, v]) => `<button type="button" class="nk-opt${k === def ? ' on' : ''}" data-${name}="${k}">${esc(v.label)}</button>`).join('');
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Генератор ников</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Генератор ников</span></nav>
   <h1>Генератор ников для игр</h1>
   <p class="lead">Придумай ник для Roblox, Standoff 2, Minecraft, CS2 или Discord за секунду: выбери стиль — крутой, милый, страшный, аниме или по-русски. Нажми на ник, чтобы скопировать.</p>
   <section class="nk">

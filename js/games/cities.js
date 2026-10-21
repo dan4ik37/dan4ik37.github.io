@@ -305,7 +305,7 @@
     duelLeave();
     const myId = (typeof currentUser !== 'undefined' && currentUser?.id) || 'g-' + Math.random().toString(36).slice(2, 10);
     D = { code, myId, joinedAt: Date.now(), host: false, oppId: null, oppNick: 'соперник', round: 0, started: false, rematch: { me: false, opp: false } };
-    const link = location.origin + location.pathname + '#/games/cities/' + code;
+    const link = (window.D37Route ? D37Route.abs('#/games/cities/' + code) : location.origin + location.pathname + '#/games/cities/' + code);
     root.innerHTML = `<div class="ct-lobby">
         <div class="gv-big">👥</div>
         <p id="ctLobbyText">Подключаемся к комнате…</p>

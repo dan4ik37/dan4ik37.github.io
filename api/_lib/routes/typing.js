@@ -42,7 +42,7 @@ export default function handler(req, res) {
   ] };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>Тест скорости печати</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <span>Тест скорости печати</span></nav>
   <h1>Тест скорости печати</h1>
   ${challenge ? `<p class="tp-chal">📣 ${esc(challenge)}</p>` : ''}
   <p class="lead">Сколько знаков в минуту ты печатаешь? Набери текст ниже как можно быстрее и без ошибок — тест посчитает скорость и точность. Тексты короткие и про игры.</p>

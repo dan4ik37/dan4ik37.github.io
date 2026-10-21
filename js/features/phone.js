@@ -23,7 +23,7 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '9';
+  const VER = '10';   // 10 — настоящие адреса (js/ui/router.js): msgview, community, chatplayer, calls, phone-apps
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
   const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'] };
   const APPS = [
@@ -425,8 +425,8 @@
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-ph="back"]'); if (b && root?.contains(b)) { P.sfx('tap'); P.back(); return; }
     // ссылки #/phone/… на странице (карточка звонка в чате и т.п.) — телефон поверх, со страницы не уходим
-    const a = e.target.closest('a[href^="#/phone/"]');
-    if (a && !root?.contains(a) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); P.open(a.getAttribute('href').slice(8)); }
+    const a = e.target.closest('a[href^="#/phone/"], a[href^="/phone/"]');
+    if (a && !root?.contains(a) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); P.open(a.getAttribute('href').replace(/^#?\/phone\//, '')); }
   });
 
   // ── Домашний экран ──
@@ -570,8 +570,8 @@
     isOpen = false;
     P.open(route === 'c' ? 'comm/join/' + String(param || '').replace(/[^a-z0-9]/gi, '').toLowerCase() : decodeURIComponent(param || ''));
   };
-  window.addEventListener('hashchange', () => {
-    if (!docked || /^#\/(phone|c)(\/|$)/.test(location.hash)) return;
+  window.addEventListener('d37:route', () => {
+    if (!docked || /^#\/(phone|c)(\/|$)/.test(D37Route.hash())) return;
     docked = false;
     root.classList.remove('docked', 'on');
     isOpen = false; root.hidden = true; runCleanup(); view.innerHTML = '';
@@ -580,7 +580,7 @@
 
   // ── Входящий звонок: личное сообщение со ссылкой #/phone/call/<код> (ЛС может прислать только друг — так устроены
   //    правила ЛС на сервере, новых таблиц не нужно). Слышно на любой странице сайта, в мире и в играх, пока вошёл. ──
-  const CALL_RE = /#\/phone\/call\/([a-z0-9]{8,16})/;
+  const CALL_RE = /(?:#|\.app|^|\s)\/phone\/call\/([a-z0-9]{8,16})/;
   P.callCode = text => (CALL_RE.exec(String(text || '')) || [])[1] || null;
   window.addEventListener('d37:dm', ev => {
     const m = ev.detail; if (!m || m.sender_id === P.me()) return;
@@ -611,7 +611,7 @@
     const ga = typeof gamesActive !== 'undefined' ? gamesActive : null;
     if (ga && ga !== 'world' && ga !== 'studio3d' && !a.g) {
       a.g = ga;
-      const path = location.hash.replace(/^#\//, '');
+      const path = D37Route.hash().replace(/^#\//, '');
       if (JOIN_RE.test(path) && path.split('/')[1] === ga && path.split('/').length > 2) a.j = path;
     }
     Object.assign(a, extraAct);
@@ -682,7 +682,7 @@
   }
   P.actNow = () => lastAct;
   setInterval(() => actCheck(false), 5000);
-  window.addEventListener('hashchange', () => setTimeout(() => actCheck(false), 1500));
+  window.addEventListener('d37:route', () => setTimeout(() => actCheck(false), 1500));
 
   // ── «Я онлайн» для друзей (community.sql): раз в минуту, пока вкладка видна ──
   let pingOff = false, lastPing = 0, lastPlace = '';
@@ -699,7 +699,7 @@
   P.ping = ping;
   setInterval(() => ping(false), 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(false); });
-  window.addEventListener('hashchange', () => setTimeout(() => ping(true), 1200));
+  window.addEventListener('d37:route', () => setTimeout(() => ping(true), 1200));
 
   // ── Счётчики при входе и открытии ──
   async function refreshCounts(){

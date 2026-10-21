@@ -59,7 +59,7 @@ function openGlobalAuth(mode) {
   // Уже залогинен — открываем полноценную страницу профиля, а не
   // дублирующую мини-модалку. Модалка теперь только для входа/регистрации.
   if (currentUser) {
-    location.hash = '#/profile';
+    if (!/^#\/profile\/?$/.test(D37Route.hash())) location.hash = '#/profile';   // уже в профиле — без лишней записи «Назад»
     return;
   }
   openLoginModal(mode);
@@ -71,7 +71,7 @@ function goToOwnProfile() {
   closeGlobalAuth();
   // Уже на своём профиле (вход с плашки «Войди…» или по ссылке #/profile/vip со страницы /vip):
   // хэш не меняется — hashchange не придёт, перерисовываем сами
-  if (/^#\/profile(\/vip)?$/.test(location.hash) && typeof renderProfilePage === 'function') renderProfilePage(location.hash.endsWith('/vip') ? 'vip' : undefined);
+  if (/^#\/profile(\/vip)?$/.test(D37Route.hash()) && typeof renderProfilePage === 'function') renderProfilePage(D37Route.hash().endsWith('/vip') ? 'vip' : undefined);
   else location.hash = '#/profile';
 }
 
@@ -117,7 +117,7 @@ async function doForgotPassword() {
     // ▼ «я не робот» (D37Captcha, js/features/social-login.js; выключено, пока нет TURNSTILE_SITE_KEY) ▼
     const captchaToken = window.D37Captcha?.on() ? await window.D37Captcha.token('login') : null;
     const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-      redirectTo: location.origin + location.pathname, ...(captchaToken ? { captchaToken } : {}),
+      redirectTo: location.origin + '/',   // как раньше (сайт был только на «/»): адрес из «Redirect URLs» Supabase ...(captchaToken ? { captchaToken } : {}),
     });
     window.D37Captcha?.done('login', true, false);
     // ▲ ▲
@@ -199,6 +199,8 @@ async function doGlobalRegister() {
 
   if (!nick) { errEl.textContent = 'Придумай ник'; return; }
   if (nick.length > 24) { errEl.textContent = 'Ник слишком длинный (макс. 24 символа)'; return; }
+  // «Аноним», «гость», «без имени»… — заняты системой (premium.sql: так подписаны анонимные донаты и гости)
+  if (window.D37Donor?.reserved(nick)) { errEl.textContent = 'Такой ник занят системой (так подписаны анонимные донаты и гости) — придумай другой'; return; }
   if (!email || !pass) { errEl.textContent = 'Введи email и пароль'; return; }
   if (pass.length < 6) { errEl.textContent = 'Пароль минимум 6 символов'; return; }
   if (pass !== pass2) { errEl.textContent = 'Пароли не совпадают'; return; }

@@ -27,7 +27,7 @@
       el = document.createElement('div');
       el.id = 'd37Live';
       el.className = spa ? 'd37-live d37-live-spa' : 'd37-live d37-live-bar';
-      el.innerHTML = '<a href="/#/home" class="d37-live-go"><i></i><b>dan4ik37 сейчас в эфире</b><span>смотреть ›</span></a>' +
+      el.innerHTML = '<a href="/" class="d37-live-go"><i></i><b>dan4ik37 сейчас в эфире</b><span>смотреть ›</span></a>' +
         '<button type="button" class="d37-live-x" aria-label="Скрыть">✕</button>';
       el.querySelector('.d37-live-x').onclick = function () { try { sessionStorage.setItem('d37_live_x', '1'); } catch (e) {} el.remove(); };
       el.querySelector('.d37-live-go').onclick = function () { if (window.va) window.va('event', { name: 'live_badge_click' }); };
@@ -61,5 +61,5 @@
   run();
   setInterval(run, 3 * 60e3);
   // SPA: смена раздела — показать/спрятать (на главной и в чате не нужна)
-  window.addEventListener('hashchange', function () { setTimeout(function () { var el = document.getElementById('d37Live'); if (el) el.hidden = hiddenHere(); }, 200); });
+  window.addEventListener('d37:route', function () { setTimeout(function () { var el = document.getElementById('d37Live'); if (el) el.hidden = hiddenHere(); }, 200); });
 })();

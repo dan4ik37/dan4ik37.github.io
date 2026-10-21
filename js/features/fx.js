@@ -89,7 +89,7 @@
     const place = () => requestAnimationFrame(placeIndicator);
     new MutationObserver(place).observe(links, { attributes: true, attributeFilter: ['class'], subtree: true });
     window.addEventListener('resize', place);
-    window.addEventListener('hashchange', place);
+    window.addEventListener('d37:route', place);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
     place();
   }
@@ -116,7 +116,7 @@
       // Реальный статус с Twitch (twitch.js → checkTwitchLive) важнее расписания
       if (window.__twLive) {
         pill.classList.add('is-live');
-        pill.href = '#/home'; pill.removeAttribute('target'); pill.removeAttribute('rel');
+        pill.href = '/'; pill.removeAttribute('target'); pill.removeAttribute('rel');
         txt.innerHTML = 'Стрим идёт прямо сейчас — <b>смотреть</b>';
         pill.hidden = false;
         return;
@@ -139,7 +139,7 @@
         }
       }
       pill.classList.remove('is-live');
-      pill.href = '#/about'; pill.removeAttribute('target'); pill.removeAttribute('rel');
+      pill.href = '/about'; pill.removeAttribute('target'); pill.removeAttribute('rel');
 
       for (let add = 0; add < 8; add++) {
         const day = (now.getDay() + add) % 7;
@@ -476,7 +476,7 @@
   safe('marquee', () => {
     const run = () => safe('marquee2', initMarquee);
     (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(run);
-    window.addEventListener('hashchange', () => setTimeout(run, 400));   // если сайт открыли не с #/home
+    window.addEventListener('d37:route', () => setTimeout(run, 400));   // если сайт открыли не с главной
   });
   safe('heroPointer', initHeroPointer);
   safe('constellation', initConstellation);

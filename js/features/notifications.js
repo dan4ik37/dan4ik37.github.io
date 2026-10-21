@@ -144,6 +144,7 @@ async function openNotif(n){
   const vid = link.match(/^\/v\/([A-Za-z0-9_-]{11})$/);
   if (vid && typeof openVid === 'function') openVid(vid[1], (n.body || '').replace(/^«|»$/g, ''), '', '');
   else if (link.startsWith('#')) location.hash = link;
+  else if (link.startsWith('/') && !link.startsWith('//') && window.D37Route) D37Route.go(link);   // свой адрес: раздел — без перезагрузки, серверная страница — переходом
   else if (link) location.href = link;
 }
 
@@ -174,7 +175,7 @@ function closeNotifPanel(){
 }
 document.addEventListener('click', e => { if (!e.target.closest('#notifWrap')) closeNotifPanel(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNotifPanel(); });
-window.addEventListener('hashchange', closeNotifPanel);
+window.addEventListener('d37:route', closeNotifPanel);
 
 // Всплывашка о новом уведомлении (панель закрыта)
 function notifToast(n){

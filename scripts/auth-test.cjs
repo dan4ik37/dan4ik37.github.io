@@ -483,7 +483,9 @@ const cookieOf = res => String(res.headers['set-cookie'] || '').split(';')[0];
   ok(rw['/auth/:p/start'] === '/api/pages?page=oauth&a=start&p=:p' && rw['/auth/:p/callback'] === '/api/pages?page=oauth&a=callback&p=:p' && rw['/api/oauth'] === '/api/pages?page=oauth',
     'vercel.json: /auth/<p>/start, /auth/<p>/callback и /api/oauth → api/pages.js');
   const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
-  ok(/req\.mode === 'navigate'\) return p === '\/' \|\| p === '\/index\.html' \? 'shell' : 'page'/.test(swSrc), 'sw.js: переходы на /auth/… идут в сеть (page), не из кэша');
+  // разделы сайта по настоящим адресам (SPA_PATH, js/ui/router.js) — оболочка; /auth/… в SPA_PATH не входит
+  ok(/req\.mode === 'navigate'\) return p === '\/' \|\| p === '\/index\.html'( \|\| SPA_PATH\.test\(p\))? \? 'shell' : 'page'/.test(swSrc)
+    && !new RegExp((/const SPA_PATH = \/(.+)\/;/.exec(swSrc) || [, '^$'])[1]).test('/auth/vk/callback'), 'sw.js: переходы на /auth/… идут в сеть (page), не из кэша');
 
   // ═══ 14. Страница (js/features/social-login.js): разбор возврата, кнопки, «последний способ» ═══
   await clientTests();

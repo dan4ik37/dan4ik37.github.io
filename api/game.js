@@ -1,8 +1,8 @@
 // api/game.js — страницы игр для поисковиков: /games (все игры) и /games/<id> (rewrite в vercel.json)
 //
-// Зачем: сами игры живут в SPA на #/games/<id> — поисковик их не видит. Здесь на каждую
+// Зачем: сами игры живут в SPA на /play/<id> (раньше #/games/<id>) — там почти нет текста для поиска. Здесь на каждую
 // игру готовый HTML с правилами, советами, FAQ и JSON-LD под запросы вида
-// «играть в города онлайн», «шашки с другом». Кнопка «Играть» ведёт в SPA (/#/games/<id>).
+// «играть в города онлайн», «шашки с другом». Кнопка «Играть» ведёт в SPA (/play/<id>; js/ui/router.js).
 // Тексты — api/_lib/games-seo.js.
 import { SITE, esc } from './_lib/yt.js';
 import { page } from './_lib/page.js';
@@ -81,10 +81,10 @@ function hubPage() {
   };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Игры</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Игры</span></nav>
   <h1>${esc(HUB.h1)}</h1>
   <p class="lead">${esc(HUB.lead)}</p>
-  <div class="cta"><a class="btn btn-acc big" href="/#/games">▶ Открыть игры</a></div>
+  <div class="cta"><a class="btn btn-acc big" href="/play">▶ Открыть игры</a></div>
   <section class="more"><h2>Во что поиграть</h2><div class="ggrid">${GAME_PAGES.map(card).join('')}</div></section>
   <div data-ad="seo_game" hidden></div>
   <section class="more"><h2>Ещё на сайте</h2><div class="ggrid">${MORE.map(([href, ic, name, about]) =>
@@ -104,7 +104,7 @@ function hubPage() {
 
 function gamePage(g, ch) {
   const url = `${SITE}/games/${g.id}`;
-  const play = `/#/games/${g.id}`;
+  const play = `/play/${g.id}`;   // раздел игр сайта (js/ui/router.js); /games/<id> — эта страница для поиска
   const others = GAME_PAGES.filter(x => x.id !== g.id);
   const [age, ageWhy] = ageOf(g.id);
   const ld = {
@@ -134,7 +134,7 @@ function gamePage(g, ch) {
   };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>${esc(g.name)}</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <span>${esc(g.name)}</span></nav>
   ${ch ? `<div class="challenge">⚔️ <b>${esc(ch.nick)}</b> ${g.id === 'words' ? 'угадал слово' : 'набрал'} ${esc(scoreLabel(g.id, ch.score))} в «${esc(g.name)}». <span>Сможешь лучше?</span></div>` : ''}
   <div class="ghero">
     <span class="gbig">${g.icon}</span>
@@ -175,7 +175,7 @@ function joinBlock() {
       <b>Играешь с аккаунтом — получаешь больше</b>
       <span>Опыт за победы, задание дня на +50 XP, таблица рекордов и ачивки. А ещё — видео, стримы и живой чат dan4ik37.</span>
     </div>
-    <a class="btn btn-acc" href="/#/home">На сайт →</a>
+    <a class="btn btn-acc" href="/">На сайт →</a>
   </aside>`;
 }
 

@@ -189,7 +189,7 @@ function activateShort(item){
     title="Short" allow="autoplay;encrypted-media;picture-in-picture;fullscreen" allowfullscreen></iframe>`;
   if (typeof xpTrackIframe === 'function') xpTrackIframe(box.querySelector('iframe'), id, 15);
   // Адрес без перезагрузки — ссылку можно скопировать из строки браузера
-  if (location.hash !== '#/shorts/' + id) history.replaceState(null, '', '#/shorts/' + id);
+  if (D37Route.hash() !== '#/shorts/' + id) D37Route.setUrl('#/shorts/' + id);
   if (typeof markVidWatched === 'function') markVidWatched(id);
 }
 function deactivateShort(item){

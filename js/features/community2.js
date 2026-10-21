@@ -87,7 +87,7 @@
       if (!r.ok) { if (r.err !== 'auth') { if (P.toast) P.toast('⚠️ ' + r.err); else alert(r.err); } return; }
       P.toast?.(r.on ? '✅ Ты идёшь! Напомним за 15 минут 🔔' : 'Ок, не идёшь', true);
     } else if (k === 'share') {
-      const url = (window.D37Ref?.wrap || (u => u))(`${location.origin}/#/chat/ev/${id}`);
+      const url = (window.D37Ref?.wrap || (u => u))(window.D37Route ? D37Route.abs(`#/chat/ev/${id}`) : `${location.origin}/#/chat/ev/${id}`);
       try { await navigator.clipboard.writeText(url); P.toast?.('🔗 Ссылка на событие скопирована — вставь её в чат', true); } catch (er) { prompt('Ссылка на событие:', url); }
       return;
     } else if (k === 'cancel') {

@@ -1,4 +1,25 @@
 User-agent: *
 Allow: /
+# Служебное и личное (js/ui/router.js: у этих разделов и так noindex): API, вход, переходы по рекламе, профиль, телефон,
+# кабинет рекламодателя, приглашения, каналы и личка чата, заказы магазина, правка и проверка игр игроков.
+# /api/feed и /api/ids — открыты: из них главная берёт ролики (поисковик рисует страницу с ними).
+Disallow: /api/
+Allow: /api/feed
+Allow: /api/ids
+Disallow: /auth/
+Disallow: /go/
+Disallow: /profile
+Disallow: /phone
+Disallow: /adv
+Disallow: /invite
+Disallow: /chat/
+Disallow: /shop/
+Disallow: /play/studio/edit/
+Disallow: /play/studio/mod
+Disallow: /play/unity/edit/
+Disallow: /play/unity/mod
+
+# Яндекс: ?ref=<код приглашения> не меняет страницу
+Clean-param: ref /
 
 Sitemap: https://dan4ik37.vercel.app/sitemap.xml

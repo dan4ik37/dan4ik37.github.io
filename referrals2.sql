@@ -666,11 +666,13 @@ do $$ begin
 end $$;
 
 -- Донат в режиме «VIP сразу» (кристаллов не было) — бонус по курсу доната (premium_settings.donate_rate, 1 ₽ = 1 💎)
+-- 22.10.2026: статус «Донатер» (reward = 'status', premium.sql) — без бонуса; та же функция есть в premium.sql
 create or replace function public.ref_on_donation() returns trigger language plpgsql security definer set search_path = public as $$
 declare v_rate numeric := 1; v_gems int := 0;
 begin
   begin
     if new.matched is true and new.profile_id is not null and upper(coalesce(new.currency, 'RUB')) = 'RUB' and coalesce(new.amount, 0) > 0
+       and coalesce(to_jsonb(new)->>'reward', '') <> 'status'
        and (tg_op = 'INSERT' or old.matched is distinct from true) then
       begin v_gems := coalesce(new.gems_granted, 0); exception when others then v_gems := 0; end;
       if v_gems = 0 then   -- донат пришёл кристаллами — бонус уже дал журнал кристаллов (ref_on_ledger)

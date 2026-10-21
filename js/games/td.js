@@ -570,7 +570,7 @@
   }
 
   // ═══ «🤝 ВМЕСТЕ»: одна карта, детерминированная симуляция у обоих ═══
-  function coopLink(){ return location.origin + location.pathname + '#/games/td/coop/' + MP.code; }
+  function coopLink(){ return (window.D37Route ? D37Route.abs('#/games/td/coop/' + MP.code) : location.origin + location.pathname + '#/games/td/coop/' + MP.code); }
   function coopLobby(){
     if (!MP || MP.state !== 'lobby') return;
     const net = MP.np?.mode();

@@ -191,10 +191,12 @@ alter table public.vip_donation_log
   add column if not exists amount numeric,
   add column if not exists currency text,
   add column if not exists donated_at timestamptz;
+-- 22.10.2026: статус «Донатер» (reward = 'status', premium.sql) — без XP; та же функция есть в premium.sql
 create or replace function public.xp_on_donation()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.matched is true and new.profile_id is not null and coalesce(new.currency, 'RUB') = 'RUB'
+     and coalesce(to_jsonb(new)->>'reward', '') <> 'status'
      and (tg_op = 'INSERT' or old.matched is distinct from true) then
     begin
       perform public.xp_award(new.profile_id, 'donation', new.donation_id::text,
