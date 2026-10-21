@@ -313,13 +313,32 @@
     return out;
   }
   function drawScene(V, bs, us, o = {}){
-    ground(V, o);
     const walls = new Set(bs.filter(b => b.wall && b.alive).map(b => b.x0 + ',' + b.z0));
+    // фон — земля и целые стены — одной картинкой: у большой базы стен до 160, это ~1500 многоугольников в кадр.
+    // Перерисовка — когда вид сдвинули / приблизили или упала стена (стены низкие: отряды за ними — поверх, это не мешает)
+    const doc = V.cv?.ownerDocument, bgOn = !!doc && V.cv.width > 0;
+    if (bgOn) {
+      const key = `${V.cv.width}x${V.cv.height}|${V.tw}|${V.ox}|${V.oy}|${walls.size}|${o.ring ? 1 : 0}|${o.tint ? o.tint.k : 0}|${o.night ? 1 : 0}`;
+      if (!V.bg || V.bgKey !== key) {
+        if (!V.bg) V.bg = doc.createElement('canvas');
+        if (V.bg.width !== V.cv.width || V.bg.height !== V.cv.height) { V.bg.width = V.cv.width; V.bg.height = V.cv.height; }
+        const main = V.ctx, bctx = V.bg.getContext('2d');
+        V.ctx = bctx; bctx.setTransform(1, 0, 0, 1, 0, 0); bctx.clearRect(0, 0, V.bg.width, V.bg.height); bctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+        try {
+          ground(V, o);
+          const wl = bs.filter(b => b.wall && b.alive).sort((a, c) => (a.x0 + a.z0) - (c.x0 + c.z0));
+          for (const b of wl) paintB(V, b, { tint: o.tint, nx: walls.has((b.x0 + 1) + ',' + b.z0), nz: walls.has(b.x0 + ',' + (b.z0 + 1)) });
+        } finally { V.ctx = main; }
+        V.bgKey = key;
+      }
+      V.ctx.drawImage(V.bg, 0, 0, V.W, V.H);
+    } else ground(V, o);
     const list = [];
-    for (const b of bs) list.push({ key: b.x0 + b.w / 2 + b.z0 + b.d / 2 + (b.alive || b.trap ? 0 : -50), b });
+    for (const b of bs) if (!(bgOn && b.wall && b.alive)) list.push({ key: b.x0 + b.w / 2 + b.z0 + b.d / 2 + (b.alive || b.trap ? 0 : -50), b });
     for (const u of us || []) list.push({ key: u.cx + u.cz + .05 + (u.air ? 30 : 0), u });
     list.sort((a, c) => a.key - c.key);
     const g = V.ctx;
+    if (bgOn && o.bars) for (const b of bs) if (b.wall && b.alive && b.mhp && b.hp < b.mhp) hpBar(V, b.x0 + b.w / 2, b.z0 + b.d / 2, .9, b.hp / b.mhp, V.tw * Math.min(1.4, b.w * .6));
     for (const e of list) {
       if (e.b) {
         const b = e.b;

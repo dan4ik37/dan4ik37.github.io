@@ -7,6 +7,7 @@
   const C = 256, OFF = 2, HALF = C >> 1;
   const DIAG = 362;   // 256·√2
   const MAX_IN = 400;
+  const PATH_MAX = 8;   // расчётов пути за шаг боя (остальные ждут шаг-другой): без рывков, когда разом упала стена или цель
   // поход: зёрна лагерей подобраны ботом (scripts/raid-test.cjs, «Поход»): сложность растёт плавно
   const CAMP_SEED = [1011, 1037, 1004, 1024, 1038, 1003, 1044, 1034, 1026, 1009, 1055, 1003];
 
@@ -160,10 +161,10 @@
 
     // ── Путь по клеткам (Дейкстра; цена — шаги: идти или ломать то, что на пути) ──
     const dist = new Int32Array(NC), prev = new Int16Array(NC), done = new Uint8Array(NC);
+    // куча — числа d·4096 + клетка (клеток ≤ 36·36 < 4096): порядок тот же, что у пар [d, клетка], а мусора за кадр нет
     const heap = [];
-    const hless = (a, b) => (a[0] !== b[0] ? a[0] < b[0] : a[1] < b[1]);
-    function hpush(e){ heap.push(e); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (!hless(heap[i], heap[p])) break; [heap[i], heap[p]] = [heap[p], heap[i]]; i = p; } }
-    function hpop(){ const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && hless(heap[l], heap[m])) m = l; if (r < heap.length && hless(heap[r], heap[m])) m = r; if (m === i) break; [heap[i], heap[m]] = [heap[m], heap[i]]; i = m; } } return top; }
+    function hpush(e){ heap.push(e); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[i] >= heap[p]) break; const t = heap[i]; heap[i] = heap[p]; heap[p] = t; i = p; } }
+    function hpop(){ const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l] < heap[m]) m = l; if (r < heap.length && heap[r] < heap[m]) m = r; if (m === i) break; const t = heap[i]; heap[i] = heap[m]; heap[m] = t; i = m; } } return top; }
     const dmgVs = (D, b) => (b.wall && D.wdmg ? D.wdmg : D.dmg);
     function breakCost(D, b){ const dm = dmgVs(D, b); return dm > 0 ? Math.ceil(b.hp / dm) * D.cd : 1e6; }
     const N8 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [1, 1, 1], [-1, 1, 1], [1, -1, 1], [-1, -1, 1]];
@@ -171,11 +172,11 @@
       const D = o.D, so = Math.ceil(C / D.spd), sd = Math.ceil(DIAG / D.spd), r2 = D.rng * D.rng;
       const sx = Math.min(MAP - 1, tr(o.x / C)), sz = Math.min(MAP - 1, tr(o.z / C)), s = sz * MAP + sx;
       dist.fill(0x3fffffff); prev.fill(-1); done.fill(0); heap.length = 0;
-      dist[s] = 0; hpush([0, s]);
+      dist[s] = 0; hpush(s);
       const goal = c => d2rect((c % MAP) * C + HALF, tr(c / MAP) * C + HALF, T) <= r2;
       let g = -1;
       while (heap.length) {
-        const [dc, c] = hpop();
+        const e = hpop(), c = e % 4096, dc = (e - c) / 4096;
         if (done[c]) continue;
         done[c] = 1;
         if (goal(c)) { g = c; break; }
@@ -191,7 +192,7 @@
             cost = sd;
           } else cost = so + (ob >= 0 ? breakCost(D, bs[ob]) : 0);
           const nd = dc + cost;
-          if (nd < dist[nc]) { dist[nc] = nd; prev[nc] = c; hpush([nd, nc]); }
+          if (nd < dist[nc]) { dist[nc] = nd; prev[nc] = c; hpush(nd * 4096 + nc); }
         }
       }
       if (g < 0) return null;
@@ -234,7 +235,10 @@
       if (!T || !T.alive) { T = pick(o); o.tg = T ? T.n : -1; o.path = null; if (!T) return; }
       if (inRange(o, T)) { if (!o.cdl) hitB(o, T); return; }
       if (o.air) { moveTo(o, T.cx, T.cz); return; }
-      if (!o.path || (o.ob >= 0 && o.pv !== B.mapv)) { o.path = findPath(o, T); o.pi = 0; o.pv = B.mapv; o.ob = -1; if (!o.path) return; }
+      if (!o.path || (o.ob >= 0 && o.pv !== B.mapv)) {
+        if (B.pl > 0) { B.pl--; o.path = findPath(o, T); o.pi = 0; o.pv = B.mapv; o.ob = -1; if (!o.path) return; }
+        else if (!o.path) return;   // ждёт своей очереди на расчёт пути (старый путь — пока годится)
+      }
       const c = o.path[o.pi];
       if (c === undefined) { o.path = null; return; }
       const ob = occ[c];
@@ -330,6 +334,7 @@
       shellStep();
       for (const b of bs) if (b.alive && b.trap) trapStep(b);
       for (const b of bs) if (b.alive && b.def && !b.busy) defStep(b);
+      B.pl = PATH_MAX;
       for (const o of B.us) if (o.alive) unitStep(o);
       B.tick++;
       if (B.dead >= B.total) finish('all');
