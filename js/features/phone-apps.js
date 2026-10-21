@@ -202,7 +202,7 @@
           shots.unshift({ url, t: new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') }); if (shots.length > 9) shots.pop();
           P.tone([[2200, .03], [1400, .05]], .5); draw();
         } else if (k === 'share') {
-          try { const blob = await (await fetch(shots[0].url)).blob(); const f = new File([blob], 'dan4ik37.jpg', { type: 'image/jpeg' }); if (navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'Снимок из «Мира Денчика»', text: SITE + '/#/games/world' }); } catch (er) {}
+          try { const blob = await (await fetch(shots[0].url)).blob(); const f = new File([blob], 'dan4ik37.jpg', { type: 'image/jpeg' }); if (navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'Снимок из «Мира Денчика»', text: SITE + '/play/world' }); } catch (er) {}
         } else if (k === 'invite') {
           if (!P.me()) { P.toast('Войди, чтобы звать друзей', false); return; }
           pickFriend('📍 Кого позвать сюда?', async id => {

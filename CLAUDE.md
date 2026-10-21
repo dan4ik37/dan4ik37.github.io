@@ -148,6 +148,7 @@ secrets.sql, games.sql, progression.sql применены (03.10.2026, пров
 2. **Google: «Запросить индексирование»** (Search Console, вход есть во встроенном браузере; лимит ~10/день, обновляется
    в 10:00 МСК): /, /about, /games, /quiz, /tools/fonts, /tools/wheel, /tools/random, /tools/typing, /tools/nick, /games/words,
    потом /top, /quiz/<тесты>. 09–10.10 дважды «квота превышена». Карта /sitemap-pages.xml отправлена 09.10 («Не получено» на 10.10).
+   С 22.10 (настоящие адреса, T-007) ещё: /forum, /ideas, /chat, /shorts, /donate, /lfg; карту /sitemap.xml — «отправить ещё раз».
 3. По желанию: Bing Webmaster Tools → «Импорт из Google Search Console» (аккаунт заводит сам владелец).
 4. По желанию: факты о себе для /about (имя, с какого года стримит, откуда) — сейчас там только данные канала.
 5. AdSense: сайт на проверке; платёжные данные — когда одобрят.
@@ -604,13 +605,23 @@ js/features/games.js и хвост css/premium.css.
   файлами (как `referrals.sql`, `streaks-achievements.sql`), идемпотентными (`create or replace`, `if not exists`).
 
 ## Локальный запуск
-`python scripts/serve.py 5500` в корне → `http://localhost:5500/#/home` (как `python -m http.server`, но с заголовками
-из vercel.json — без них не работает сборка Rust в студии).
-`/api/*` локально отдают 404 — это нормально (это Vercel-функции).
+`python scripts/serve.py 5500` в корне → `http://localhost:5500/` (как `python -m http.server`, но с заголовками и переадресациями
+из vercel.json: /chat, /play/… → index.html, мусор — 404.html со статусом 404; без заголовков не работает сборка Rust в студии).
+`/api/*` и серверные страницы (/forum, /games/<id>, /videos…) локально отдают 404 — это нормально (это Vercel-функции).
 
 ## Как устроено
-- Роутер: `js/ui/router.js`, объект `PAGES` — какие блоки (`id`) показывать на каждом `#/route`.
-  Новый блок на странице = добавить его `id` в `PAGES`.
+- Роутер: `js/ui/router.js`, объект `PAGES` — какие блоки (`id`) показывать в каждом разделе. С 22.10 (T-007) адреса НАСТОЯЩИЕ:
+  /chat, /forum/42, /profile/vip, /play/chess/abcd (игры — /play: /games и /games/<id> — страницы для поиска); откат одной строкой —
+  `ROUTING = 'hash'` в js/core/config.js. Карта адресов — `D37Route` (toPath/toHash, тест routes-test) и docs/progress.md «Фаза 1 —
+  адреса». Правила: раздел читать `D37Route.hash()` / `currentRoute()` / `currentRouteParam()` ('#/games/chess/abcd' в обоих режимах),
+  НЕ `location.hash` (в режиме адресов он пустой); переход раздела слушать событием `'d37:route'` (не hashchange); писать
+  `location.hash = '#/…'` и ссылки `href="#/…"` можно — роутер сам ставит настоящий адрес, но видимые ссылки лучше сразу настоящие
+  (`/chat`, `D37Route.href('#/…')`); адрес без перехода — `D37Route.setUrl('#/…')`, ссылка «поделиться» — `D37Route.abs('#/…')`;
+  свой адрес, открыть перезагрузкой (серверная страница с тем же адресом, что раздел) — `data-server`. Новый раздел = `id` в `PAGES`
+  + rewrite в vercel.json (→ /index.html, после серверных страниц) + SPA_PATH в sw.js. /about, /shop, /forum…, /ideas… — общий адрес
+  у серверной страницы и раздела: из серверной страницы в раздел — ссылкой `/#/раздел` (page({ spa }) — вкладка-приложение уходит
+  в раздел сама). `<base href="/">` в index.html — относительные адреса файлов от корня. Заголовок, описание, canonical, noindex —
+  `ROUTE_META` в router.js (раздел уточняет `D37Route.meta({ title })`). Тест в Chrome — scripts/routes-e2e.cjs.
 - Режимы производительности: `body.high` / `body.low` (`js/features/performance-mode.js`, `fx.js`).
   Всё, что анимируется непрерывно, — только под `body.high`. Правила `prefers-reduced-motion` написаны под
   `body:not(.high)`, чтобы явный выбор «Мощное» побеждал системную настройку.
@@ -653,7 +664,11 @@ js/features/games.js и хвост css/premium.css.
 - «🔴 в эфире» — js/core/live-badge.js на всех страницах (decapi, кэш 2 мин в sessionStorage; SPA — кнопка в углу, кроме #/home,
   #/chat и игры; серверные — полоска под шапкой). «🟢 Сейчас на сайте: N» на главной — presence чата → событие d37:online.
 - /topic/<slug>: «🔥 Самые популярные» (просмотры из снимка) и кнопка теста по игре; /games — блок «Ещё на сайте» (тесты, инструменты).
-- Все серверные страницы — одна функция api/pages.js (ROUTES) + rewrite в vercel.json. Функций сейчас 9 из 12.
+- Все серверные страницы — одна функция api/pages.js (ROUTES) + rewrite в vercel.json. Функций сейчас 10 из 12.
+- Форум и идеи для поиска (T-007): /forum, /forum/<id>, /ideas, /ideas/<id> — api/_lib/routes/forum.js (JSON-LD DiscussionForumPosting,
+  ItemList, BreadcrumbList; текст игроков — publicText(): чужие ссылки, телефоны, почта, @ники скрыты, мат закрыт — список как в
+  phone.js; без рекламы; метка 12+). В карте сайта — темы и идеи (кроме отклонённых) и разделы /chat, /shorts, /donate, /lfg…;
+  robots.txt закрывает /api/ (кроме /api/feed, /api/ids), /auth/, /go/, /profile, /phone, /adv, /invite, /chat/…, /shop/….
 - «Генератор ников для игр»: `/tools/nick` → `api/tool-nick.js` (SEO: «генератор ников», «ник для роблокс»), словари и
   генерация — `api/_lib/nicks.js` (тот же код уходит в браузер через toString(); примеры в HTML — с зерном, не меняются).
 - Поиск по сайту: `js/ui/hotkeys.js` (Ctrl+K, «/», кнопка 🔍 в шапке) — разделы + `SITE_PAGES` (серверные страницы: /vip,
@@ -865,6 +880,9 @@ js/features/games.js и хвост css/premium.css.
   «Ещё». Значок на иконке = ЛС + пропущенные звонки + 🔔 (d37:dm-unread, d37:notif, d37:badges из phone.js). «Поделиться»
   (share_target) → общий чат или ЛС; ссылки web+denchik: (с цифрами по правилам HTML нельзя); launch_handler focus-existing.
   ?app=play|rustore|ms → D37App.source(); app-play прячет покупки (правила Play Billing).
+- Настоящие адреса (T-007): sw.js v5 — разделы по настоящим адресам (SPA_PATH = rewrites → index.html) открываются оболочкой и без
+  сети; ярлыки manifest — /play/world, /chat, /play, /play/words (Магазин — /#/shop: у /shop своя страница); ссылка, открытая в уже
+  запущенном приложении (launchQueue), по настоящему адресу раздела — тоже без перезагрузки (app.js launchAction).
 - sw.js: поменял — подними VERSION (у всех «✨ Доступна новая версия — Обновить»). Кэши только свои: d37-shell-<VERSION> и d37-rt-v1
   (раньше старый sw.js стирал ВСЕ кэши, в т. ч. 38 МБ кэша сборки Rust). НИКОГДА не кэширует: /api/*, /go/*, /studio/*, Supabase,
   рекламу, Метрику, YouTube, Twitch. Главная и скрипты без ?v= — сначала сеть. Офлайн-игры — OFFLINE_GAMES в app.js = список в
