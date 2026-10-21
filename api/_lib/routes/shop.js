@@ -84,7 +84,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: 'Магазин кристаллов 💎 — dan4ik37',
     description: 'Кристаллы — валюта сайта dan4ik37: VIP, подарки друзьям, монеты и вещи для персонажа. Цены пакетов, оплата картой Казахстана, Kaspi или донатом из России.',
-    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true,
+    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, spa: '#/shop',   // вкладка с сайтом-приложением — сразу в магазин (раздел)
     ld: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
   }));
 }

@@ -341,6 +341,12 @@ function browser(startUrl, routing){
     ok(r.body.includes('href="/v/dQw4w9WgXcQ"') && r.body.includes('href="/#/ideas/9"') && !/adsbygoogle\.js/.test(r.body), '/ideas/9: «Смотреть ролик», «Поддержать» → раздел, без рекламы');
     r = await call(pages, { page: 'ideas', id: '404' });
     ok(r.code === 404, 'нет идеи — 404');
+    r = await call(pages, { page: 'shop' });
+    ok(r.code === 200 && r.body.includes('location.replace("/#/shop")') && r.body.includes('href="/#/shop"'), '/shop: вкладка-приложение — сразу в раздел, «Открыть магазин» → раздел');
+    r = await call(pages, { page: 'about' });
+    ok(!/d37_spa/.test(r.body), '/about: без перехода в раздел (раздел «Обо мне» сам ссылается на эту страницу)');
+    r = await call(pages, { page: 'shop', o: 'D37-abc123', r: 'ok' });
+    ok(r.body.includes('location.replace("/shop/o/D37-abc123")'), 'возврат с оплаты → /shop/o/<заказ> (раздел приложения)');
     // карта сайта
     const sitemap = (await import(pathToFileURL(path.join(tmp, 'api/sitemap.js')).href)).default;
     r = await call(sitemap, { part: 'pages' });
