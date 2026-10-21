@@ -429,7 +429,8 @@
   // а СНИЗУ — нет: всплываешь — проламываешь (прорубь — игра), подо льдом не запереть. Луч прицела его видит — можно разбить ═══
   const iceAt = (W, x, y, z, v) => !!V.iceTest && V.T.liquid[v & TYPE] === 1 && !!V.iceTest(W, x, y, z, v);
   V.isIce = (W, x, y, z, v) => { x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (v === undefined) v = W.raw(x, y, z); return v > 0 && iceAt(W, x, y, z, v); };
-  V.iceBox = v => [0, 0, 0, 1, V.liquidHeight(v), 1];
+  const ICE_BOX = [];   // рамки льда по высоте глади — общие (только читать)
+  V.iceBox = v => { const h = V.liquidHeight(v), k = Math.round(h * 64); return ICE_BOX[k] || (ICE_BOX[k] = [0, 0, 0, 1, h, 1]); };
 
   // ═══ Луч по блокам (DDA): первый блок, у которого есть рамка (и pick(тип) не против) ═══
   // → { x, y, z, nx, ny, nz, t, v } или null. Вода и воздух пропускаются (pick может разрешить воду). Без pick лёд времён
@@ -516,8 +517,8 @@
       }
       b.y = ny;
     }
-    // по x и z — по очереди
-    for (const ax of [0, 2]) {
+    // по x и z — по очереди (ax 0, потом 2; без массива на каждый вызов)
+    for (let ax = 0; ax <= 2; ax += 2) {
       const d = ax === 0 ? dx : dz; if (!d) continue;
       const y0 = Math.floor(b.y + EPS), y1 = Math.floor(b.y + b.h - EPS);
       const p = ax === 0 ? b.x : b.z, q = ax === 0 ? b.z : b.x;
@@ -582,7 +583,7 @@
   // nz, col } (рамку, внутри которой луч начался, не видит — как в Unity), blocked(x, z, y0, y1, r) — есть ли твёрдое в
   // вертикальном цилиндре, supportAt(x, z, r, yMax) → { y, col } — самый высокий верх рамки не выше yMax под кругом (r × 0,7) ═══
   V.gripPhys = W => {
-    const B = [0, 0, 0, 0, 0, 0], COL = { voxel: 1 }, SH = { t: 0, nx: 0, ny: 0, nz: 0 };
+    const B = [0, 0, 0, 0, 0, 0], COL = { voxel: 1 }, SH = { t: 0, nx: 0, ny: 0, nz: 0 }, SUP = { y: 0, col: null };   // ответ опоры — общий (читать сразу)
     // луч против рамки клетки (в её координатах): вход t ≥ 0 — попал; начался внутри (t < 0) — не видит
     function slab(ox, oy, oz, dx, dy, dz, b){
       let t0 = -Infinity, t1 = Infinity, ax = 0, sg = 0;
@@ -647,7 +648,8 @@
         }
         if (best > -Infinity) break;   // нижние слои выше этого не бывают
       }
-      return { y: best, col: best > -Infinity ? COL : null };
+      SUP.y = best; SUP.col = best > -Infinity ? COL : null;
+      return SUP;
     };
     return { W, raycast, blocked, supportAt, voxel: true };
   };

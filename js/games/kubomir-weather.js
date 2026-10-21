@@ -367,13 +367,16 @@ if ( d37IZ > 0.0 ) {
       X.ice1K += ((X.ice1On ? 1 : 0) - X.ice1K) * Math.min(1, d * 1.5); if (Math.abs(X.ice1K - (X.ice1On ? 1 : 0)) < .002) X.ice1K = X.ice1On ? 1 : 0;
       uIce.value.x = X.iceK; uIce.value.y = X.ice1K; uIce.value.z = X.clim ? 1 : 0;
       // поверхности по зонам (кусок D37_CLIM движка, у вершин — зона): обычная — снег, мокрое и лужи умеренного климата,
-      // «всегда зима» — снег всегда, «зимы нет» — без снега, мокрое вполовину
+      // «всегда зима» — снег всегда, «зимы нет» — без снега; мокрое там — своё, пока игрок в этой зоне (дождь на болоте), иначе сухо
       if (X.clim) {
-        const vis = X.clim.vis, tz = X.tz, fx = X.clim.opts?.fx !== false, k3 = 1 - Math.exp(-d / 3);
+        const vis = X.clim.vis, tz = X.tz, fx = X.clim.opts?.fx !== false, k3 = 1 - Math.exp(-d / 3), S0 = X.clim.state, warm = fx && X.zone === 2;
         if (X.cover >= 0) vis.snowCover += ((fx ? X.cover : 0) - vis.snowCover) * k3;
         if (tz) { vis.wet += ((fx ? tz.wet || 0 : 0) - vis.wet) * k3 * .5; vis.puddle += ((fx ? tz.puddle || 0 : 0) - vis.puddle) * k3 * .5; }
         const zu = VR?.U?.d37ClZ?.value;
-        if (zu) { zu[0] = fx && X.ice1On ? 1 : 0; zu[1] = 0; zu[2] = .5; zu[3] = 1; }
+        if (zu) {
+          zu[0] = fx && X.ice1On ? 1 : 0;
+          zu[1] += ((warm ? S0.wet || 0 : 0) - zu[1]) * k3; zu[2] += ((warm ? S0.puddle || 0 : 0) - zu[2]) * k3; zu[3] = 1;
+        }
       }
       if (holesDirty || (holesT -= d) <= 0) { holesT = .5; holesUniform(); }
       // отражения в экране: вода — как зеркало по френелю (с рябью), лёд — чуть блестит, мягко и без ряби (слабее),

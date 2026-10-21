@@ -235,8 +235,26 @@ KB.opts({});
     ok(!st.P.hang && near(st.P.y, 46, 1e-6) && st.P.onGround, '«красться» в висе — отпустил, стоит внизу', { y: st.P.y });
     st = hangNow();
     st.W.fill(2, 46, -4, 5, 48, 4, null);      // стену сломали целиком — сорвался
-    steps(st, 3);
-    ok(!st.P.hang, 'край сломали — сорвался (не висит в воздухе)');
+    steps(st, 1);
+    ok(!st.P.hang, 'край сломали — сорвался сразу (не висит в воздухе)');
+  }
+  {
+    // край ищется, только если впереди стена: в прыжке и в воде с «прыжком» без стены — ни одного поиска; у высокой стены — не чаще 8–9 раз в секунду
+    let n = 0; const f0 = E.grip.findLedge; E.grip.findLedge = (...a) => { n++; return f0(...a); };
+    const st = mkSt(mkWorld(), { x: .5, y: 46, z: .5 }); faceX(st);
+    st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 120); st.C.key('Space', false); st.C.key('KeyW', false);
+    const nOpen = n; n = 0;
+    const st2 = mkSt(wallWorld(5), { x: 1.5, y: 46, z: .5 }); faceX(st2);
+    st2.C.key('KeyW', true); st2.C.key('Space', true); steps(st2, 120); st2.C.key('Space', false); st2.C.key('KeyW', false);
+    const nWall = n; n = 0;
+    // поиск края сломался (ошибка) — игра идёт: паркура нет, тело — обычная физика; трижды — паркур выключен до конца игры
+    E.grip.findLedge = () => { n++; throw new Error('проверка'); };
+    const st3 = mkSt(wallWorld(2), { x: .5, y: 46, z: .5 }); faceX(st3);
+    const warn0 = console.warn; console.warn = () => {};
+    st3.C.key('KeyW', true); st3.C.key('Space', true); steps(st3, 200); st3.C.key('Space', false); st3.C.key('KeyW', false); steps(st3, 30);
+    console.warn = warn0; E.grip.findLedge = f0;
+    ok(nOpen === 0 && nWall > 0 && nWall <= 18, 'поиск края — только у стены: в открытую — 0 раз за 2 с, у высокой стены — не чаще ~8 в секунду', { nOpen, nWall });
+    ok(st3.pkOff && n === 3 && !st3.P.pk && !st3.P.hang && st3.P.onGround && Number.isFinite(st3.P.y), 'ошибка паркура — игра идёт (обычный прыжок), после 3 ошибок паркур выключен', { n, off: st3.pkOff, y: st3.P.y });
   }
   {
     const st = mkSt(wallWorld(4), { x: 1.5, y: 46, z: .5 }); faceX(st);

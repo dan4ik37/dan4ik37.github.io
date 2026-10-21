@@ -4,9 +4,15 @@
 // Запуск из корня сайта: node scripts/kubomir-e2e.cjs [метка] [ultra|high|mid] [d3d11|swiftshader]
 //   SITE_DIR=папка — снимать другую копию сайта (например, выгрузку прошлого коммита: «до»)
 // Снимки — <D37_TMP или E:\claude-tmp>\kubomir2\shots\<метка>-<пресет>-*.jpg
+// KB_MODE=perf — замер в профиле телефона (412 × 915, ЦП ×4 медленнее, пресет из аргумента — «средняя» = mid): ясно, снег, дождь —
+//   ЦП мс на кадр (среднее, 95 %, худший), FPS, вызовы, память JS; «до» — SITE_DIR=выгрузка прошлого коммита
+// KB_MODE=soak — 10 мин игры (KB_MIN — другое число минут): ходит, прыгает, плавает и лезет на стены, ставит и ломает блоки,
+//   погода и время суток меняются, телепорты — ошибок и исключений в консоли нет, память JS после сборки мусора — не растёт
+// KB_MODE=reopen — мир закрыть и открыть 8 раз: память JS после сборки мусора — не растёт
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2);
+const MODE = process.env.KB_MODE || '';
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, 'kubomir2', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
@@ -26,7 +32,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const BASE = 'http://localhost:' + server.address().port, port = 9300 + Math.floor(Math.random() * 400);
   const profile = fs.mkdtempSync(path.join(TMP, 'kubomir2', 'chrome-'));
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio',
-    `--use-angle=${angle}`, '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP: path.join(TMP, 'kubomir2'), TEMP: path.join(TMP, 'kubomir2') } });
+    `--use-angle=${angle}`, '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-gpu-rasterization', '--enable-precise-memory-info', '--js-flags=--expose-gc', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP: path.join(TMP, 'kubomir2'), TEMP: path.join(TMP, 'kubomir2') } });
   let page = null;
   for (let i = 0; i < 80 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }
   if (!page) { console.log('Chrome не запустился'); proc.kill(); server.close(); process.exit(1); }
@@ -43,9 +49,92 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const shot = async name => { const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 92 }); const f = path.join(SHOTS, `${label}-${preset}-${name}.jpg`); fs.writeFileSync(f, Buffer.from(r.data, 'base64')); console.log('  снимок', f); return f; };
   const progsOk = `R => { const L = R.r.info.programs || []; return { n: L.length, bad: L.filter(p => p.diagnostics && p.diagnostics.runnable === false).map(p => p.name + ': ' + (p.diagnostics.fragmentShader.log || p.diagnostics.vertexShader.log || '').slice(0, 300)) }; }`;
   const res = {};
+  const heap = async () => ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 300)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
+  const idle = () => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); for (let i = 0; i < 160; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await new Promise(r => setTimeout(r, 500)); } return true; })()`, 120000);
+  async function runMode(){
+    if (MODE === 'perf') {
+      await idle(); await sleep(8000);
+      await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      const CL = { mode: 'fixed', season: 'summer', weather: 'clear' }, SN = { mode: 'fixed', season: 'winter', weather: 'snow' }, RN = { mode: 'fixed', season: 'summer', weather: 'rain' };
+      const Y0 = await ev(`GAME_IMPL.kubomir._test.state().rig.yaw`);
+      for (const [name, w] of [['прогрев', CL], ['ясно', CL], ['снег', SN], ['дождь', RN], ['ясно 2', CL], ['снег 2', SN], ['дождь 2', RN]]) {
+        const r = await ev(`(async () => {
+          const S = GAME_IMPL.kubomir._test.state(), wait = ms => new Promise(r => setTimeout(r, ms));
+          S.R.lighting.time = 12;
+          try { S.WX.clim.setWorld(Object.assign({ seed: 'kb', lapse: 0, seaY: 52 }, ${JSON.stringify(w)})); if ('cover' in S.WX) S.WX.cover = -1; } catch (e) {}
+          await wait(7000);
+          const cpu = [], dts = []; let run = true;
+          S.rig.yaw = ${Y0}; S.rig.fp = .15;   // камера стоит (одни и те же чанки в кадре — сравнимо «до» и «после»)
+          const tick = () => { if (!run) return; const st = S.R.stats; cpu.push(st.cpuFrame); dts.push(st.dt); requestAnimationFrame(tick); };
+          requestAnimationFrame(tick);
+          await wait(15000); run = false;
+          cpu.sort((a, b) => a - b);
+          const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
+          return { frames: cpu.length, cpu: +avg(cpu).toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), max: +cpu[cpu.length - 1].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: S.R.stats.calls, q: S.R.q, wx: S.WX.stats?.() };
+        })()`, 90000);
+        res['perf ' + name] = r; console.log('ЗАМЕР', name, JSON.stringify({ ...r, wx: undefined }));
+      }
+      await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      res.heapMB = await heap(); console.log('память JS, МБ', res.heapMB);
+      return;
+    }
+    if (MODE === 'soak') {
+      const MIN = +process.env.KB_MIN || 10, t0 = Date.now(), h0 = await heap(), ex0 = logs.length;
+      await idle();
+      let n = 0;
+      while (Date.now() - t0 < MIN * 60000) {
+        n++;
+        const r = await ev(`(async () => {
+          const n = ${n}, S = GAME_IMPL.kubomir._test.state(), T = GAME_IMPL.kubomir._test, wait = ms => new Promise(r => setTimeout(r, ms)), C = S.C, rnd = Math.random;
+          if (!S || !S.ready) { await wait(2000); return { n, wait: true }; }
+          const dead = document.querySelector('.kb-dead [data-m]'); if (dead) { dead.click(); await wait(1500); }
+          if (n % 6 === 0) { const W = [{ mode: 'fixed', season: 'winter', weather: 'snow' }, { mode: 'fixed', season: 'summer', weather: 'rain' }, { mode: 'fixed', season: 'summer', weather: 'clear' }, { mode: 'fixed', season: 'winter', weather: 'clear' }][(n / 6) % 4 | 0]; try { S.WX.clim.setWorld(Object.assign({ seed: 'kb', lapse: 0, seaY: 52 }, W)); } catch (e) {} }
+          if (n % 9 === 0) S.R.lighting.time = [6, 12, 18.5, 23, 2][(n / 9) % 5 | 0];
+          if (n % 15 === 0) { S.dbg = !S.dbg; }
+          if (n % 20 === 0) T.cam?.((n / 20) % 3 | 0);
+          if (n % 25 === 0) { const P = S.P, x = P.x + (rnd() - .5) * 500, z = P.z + (rnd() - .5) * 500; if (T.teleport) T.teleport(x, 110, z); else T.command('/tp ' + x.toFixed(1) + ' 110 ' + z.toFixed(1)); await wait(3000); for (let i = 0; i < 40 && !S.ready; i++) await wait(500); }
+          // ходит, прыгает (у стен — лезет, в воде — плывёт и вылезает), смотрит по сторонам
+          S.rig.yaw += (rnd() - .5) * 2.5; S.rig.fp = (rnd() - .4) * .5;
+          C.press('forward', true); if (rnd() < .6) C.press('jump', true); if (rnd() < .3) C.press('run', true);
+          await wait(3500);
+          C.press('jump', false); C.press('run', false); C.press('forward', false);
+          // ставит и ломает
+          if (n % 3 === 0) { T.give?.({ id: ['planks_oak', 'stone', 'torch', 'glass'][n % 4], n: 16 }); S.P.sel = 0; for (let i = 0; i < 3; i++) { T.use?.(); await wait(150); T.dig?.(); await wait(150); } }
+          await wait(800);
+          return { n, x: Math.round(S.P.x), y: Math.round(S.P.y), z: Math.round(S.P.z), hp: S.P.hp, pk: !!S.P.pk, hang: !!S.P.hang, water: S.P.water > .3, wx: S.WX.stats?.().zone };
+        })()`, 60000).catch(e => ({ n, err: e.message }));
+        if (n % 10 === 0) console.log('  шаг', JSON.stringify(r), Math.round((Date.now() - t0) / 1000) + ' с');
+      }
+      const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
+      res.soak = { minutes: MIN, steps: n, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6) };
+      console.log('ЗАМЕР soak', JSON.stringify(res.soak));
+      ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
+      return;
+    }
+    if (MODE === 'reopen') {
+      const hs = [];
+      for (let i = 0; i < 8; i++) {
+        await idle(); await new Promise(r => setTimeout(r, 2000));
+        hs.push(await heap());
+        await ev(`(async () => { await GAME_IMPL.kubomir._test.stop(); GAME_IMPL.kubomir._test.menu(); return true; })()`, 60000);
+        for (let k = 0; k < 60; k++) { await sleep(500); if (await ev(`!!document.querySelector('.kb-world [data-w="play"]')`, 3000).catch(() => false)) break; }
+        await ev(`(() => { const b = document.querySelector('.kb-world [data-w="play"]'); b && b.click(); return !!b; })()`);
+        let up = false; for (let k = 0; k < 240 && !up; k++) { await sleep(500); up = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready)`, 3000).catch(() => false); }
+        if (!up) { ok(false, 'мир снова открылся (' + (i + 1) + ')'); break; }
+      }
+      await idle(); await new Promise(r => setTimeout(r, 2000)); hs.push(await heap());
+      res.reopen = hs; console.log('ЗАМЕР reopen, память JS после сборки мусора (МБ):', hs.join(' → '));
+      ok(hs.length >= 8 && hs[hs.length - 1] - hs[1] < 25, 'закрыть/открыть мир 8 раз — память не растёт', hs);
+      return;
+    }
+  }
   try {
     await send('Page.enable'); await send('Runtime.enable');
-    await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
+    if (MODE === 'perf') {   // профиль телефона
+      await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 2, mobile: true });
+      await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
+      await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+    } else await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     const base = preset === 'ultra' ? 'high' : preset;
     // настройки как у владельца: пресет графики, наборы шейдеров — «Авто» (у «Ультра» — «Ультра»), без генерации кадров
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_gfx: base, d37_settings: JSON.stringify({ gfxPreset: preset, gfx: base, shaders: 'auto' }), d37_s3_learn: '1', d37_fsr: 'native',
@@ -55,12 +144,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     for (let i = 0; i < 120; i++) { await sleep(500); const okm = await ev(`!!document.querySelector('.kb-menu')`, 3000).catch(() => false); if (okm) break; }
     await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`);
     await sleep(500);
-    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="creative"]'); c && c.click(); const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
+    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' ? 'survival' : 'creative'}"]'); c && c.click(); const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
     let kb = false;
     for (let i = 0; i < 240 && !kb; i++) { await sleep(500); kb = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready && GAME_IMPL.kubomir._test.state().WX)`, 3000).catch(() => false); }
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }
     ok(kb, '«Кубомир»: мир открылся');
     if (!kb) throw new Error('мир не открылся');
+    if (MODE) { await runMode(); throw new Error('__готово'); }
     // ── сцена: ровная площадка, озеро, берёзы (одинаково «до» и «после»: только публичное — st.W, st.P, st.rig) ──
     // сцена — в обычной климатической зоне (снег и лёд зимой; у новых версий — зоны «всегда зима» / «зимы нет»), рядом с началом
     res.place = await ev(`(async () => {
@@ -164,7 +254,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     const bad = logs.filter(l => /WebGLProgram|Shader Error|exception/i.test(l) && !/X3595/.test(l));
     ok(!bad.length, 'в консоли — без ошибок шейдеров и исключений', bad.slice(0, 5));
   } catch (e) {
-    fail++; console.log('ОШИБКА', e.message);
+    if (e.message !== '__готово') { fail++; console.log('ОШИБКА', e.message); }
     for (const l of logs.slice(-8)) console.log('  консоль:', l.slice(0, 240));
   } finally {
     console.log('ЗАМЕР', JSON.stringify(res, null, 1).slice(0, 3000));

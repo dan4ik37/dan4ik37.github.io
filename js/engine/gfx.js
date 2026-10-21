@@ -611,8 +611,8 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
 #if ( defined( STANDARD ) || defined( LAMBERT ) ) && defined( OPAQUE ) && ! defined( D37_NOCLIM ) && ! defined( D37_FP )
 	vec4 d37C = d37Cl;
 	#if defined( D37_VOX ) && defined( D37_VOXZ )
-	float d37Zv = d37Zn();   // зоны «Кубомира»: всегда зима — снег не меньше d37ClZ.x, без луж; зимы нет — снег d37ClZ.y, мокрое × d37ClZ.z
-	if ( d37Zv > 0.5 ) d37C = d37Zv < 1.5 ? vec4( max( d37Cl.x, d37ClZ.x ), 0.0, 0.0, d37Cl.w ) : vec4( d37ClZ.y, d37Cl.y * d37ClZ.z, d37Cl.z * d37ClZ.z, 0.0 );
+	float d37Zv = d37Zn();   // зоны «Кубомира»: всегда зима — снег не меньше d37ClZ.x, без луж; зимы нет — без снега, мокрое и лужи — d37ClZ.y / .z
+	if ( d37Zv > 0.5 ) d37C = d37Zv < 1.5 ? vec4( max( d37Cl.x, d37ClZ.x ), 0.0, 0.0, d37Cl.w ) : vec4( 0.0, d37ClZ.y, d37ClZ.z, 0.0 );
 	#endif
 	if ( d37C.x + d37C.y + d37C.z + d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
 		vec3 d37Vp = - vViewPosition;

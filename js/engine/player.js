@@ -160,10 +160,11 @@
     return out;
   };
   // Вис: ноги — на drop ниже края, тело — на r + 6 см от стенки; не ниже опоры под ним
-  PK.hangSpot = (ph, L, r, drop) => {
+  PK.hangSpot = (ph, L, r, drop, out) => {
     const x = L.lip.x + L.face.x * (r + .06), z = L.lip.z + L.face.z * (r + .06);
-    const floor = ph.supportAt(x, z, r * .5, L.lip.y - .2).y;
-    return { x, y: Math.max(L.lip.y - drop, floor + .02), z };
+    const floor = ph.supportAt(x, z, r * .5, L.lip.y - .2).y, y = Math.max(L.lip.y - drop, floor + .02);
+    if (out) { out.x = x; out.y = y; out.z = z; return out; }
+    return { x, y, z };
   };
 
   // ═══ Лестница: тонкая стенка (рисует игра) + зона перед ней; наверху — выход ═══

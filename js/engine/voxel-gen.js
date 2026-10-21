@@ -146,7 +146,7 @@
     return (p == null ? T > .26 : fw >= 1 || p < fw) ? 2 : 0;
   };
   const patch = (G, x, z) => G.ver >= 2 ? n2(G.nPt, x / 7, z / 7) * .5 + .5 : null;
-  V.climZoneAt = (G, x, z, col) => { const c = column(G, x, z, col || {}); return V.climZone(c.T, c.h, c.b, patch(G, x, z)); };
+  V.climZoneAt = (G, x, z, col) => { if (G.void) return 0; const c = column(G, x, z, col || {}); return V.climZone(c.T, c.h, c.b, patch(G, x, z)); };
 
   // ── Пещеры: шум на сетке 4×4×4 + трилинейно (точка считается так же, как в чанке — деревья не повиснут) ──
   const CG = 4, CGY = 4;
@@ -374,7 +374,7 @@
     }
     // деревья, кактусы, озёра — из своего чанка и соседей
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const f of originsOf(G, cx + dx, cz + dz)) placeFeature(G, ids, x0, z0, f);
-    if (G.void) ids.fill(0);   // «пустой» мир (перенос из Minecraft): только то, что лежит в сохранении; цвета биомов — как обычно
+    if (G.void) { ids.fill(0); zone.fill(0); }   // «пустой» мир (перенос из Minecraft): только то, что лежит в сохранении; цвета биомов — как обычно, климат — обычный
     return { ids, biome, tint, zone };
   };
 

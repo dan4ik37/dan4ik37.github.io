@@ -347,9 +347,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTS: { value: V.TEX || 16 }, uNTex: { value: null }, uNStr: { value: .75 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
       uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 }, uD37Wind: { value: E.GFXU?.wind || new Float32Array([0, 0, .8, .6]) },
       uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) },
-      // погода по климатическим зонам (кусок D37_CLIM движка, D37_VOXZ): x — снег в «всегда зима», y — снег в «зимы нет»,
-      // z — мокрое и лужи там же (доля), w — 1: зоны учитываются (0 — всё как обычная зона; ставит игра)
-      d37ClZ: { value: new Float32Array([0, 0, .5, 0]) } };
+      // погода по климатическим зонам (кусок D37_CLIM движка, D37_VOXZ): x — снег в «всегда зима», y, z — мокрое и лужи в «зимы
+      // нет» (снега там нет), w — 1: зоны учитываются (0 — всё как обычная зона; ставит игра)
+      d37ClZ: { value: new Float32Array([0, 0, 0, 0]) } };
     VR.U = U;
     // ── материалы ──
     // Для «паков» шейдеров движка (своих правок этого файла им не нужно): у каждой сетки V.LAYERS свой материал VR.mats[слой]

@@ -562,8 +562,8 @@
     P.pkCD = Math.max(0, (P.pkCD || 0) - dt);
     const dropDown = K.down('sneak') || (!st.K && C.down('crouch')) || (!!st.touchSneak && !st.hangSneak);
     st.hangSneak = !!st.touchSneak;
-    if (P.pk) { pkStep(st, dt); rebase(st, false); return; }
-    if (P.hang && hangStep(st, dt, wx, wz, jumpDown, dropDown)) { rebase(st, false); return; }
+    if (P.pk) { try { pkStep(st, dt); rebase(st, false); return; } catch (e) { pkFail(st, e); } }
+    if (P.hang) { try { if (hangStep(st, dt, wx, wz, jumpDown, dropDown)) { rebase(st, false); return; } } catch (e) { pkFail(st, e); } }
     const touch = V.touching(W, P.x, P.y, P.z, P.w, P.h, TCH);
     P.water = touch.water; P.lava = touch.lava; P.climb = touch.climb;
     // глаза под водой: ниже глади своей клетки — или над клеткой ещё вода (верхняя 1/8 полной клетки — тоже под водой)
@@ -586,9 +586,16 @@
     if (st.eat && !P.fly) spd *= .35;   // ест — идёт медленно (как в Майнкрафте)
     // паркур: прыжок у стены, а прыжком край не достать — залезть (край до 2 блоков над ногами) или схватиться (до 2,6 — в прыжке);
     // в воде у берега (край до 1,25 над водой, держишь «прыжок») — вылезти. ⚙️ «🧊 Кубомир» → «Цепляться за края»
-    if (!P.pkCD && opts.climb !== false && !P.fly && !P.climb && !P.sneak && !st.eat && wl > .3 && (jumpDown || jump)) {
+    P.pkTry = Math.max(0, (P.pkTry || 0) - dt);
+    if (!P.pkCD && !P.pkTry && !st.pkOff && opts.climb !== false && !P.fly && !P.climb && !P.sneak && !st.eat && wl > .3 && (jumpDown || jump)) {
       const wn = Math.hypot(wx, wz), dx = wx / wn, dz = wz / wn;
-      if (inLiquid ? P.lava <= .2 && tryClimbOut(st, dx, dz) : ((jumpDown && P.onGround) || (jump && !P.onGround && !(P.wetT > 0))) && tryLedge(st, dx, dz)) { rebase(st, false); return; }
+      // впереди (полшага) у тела — твёрдое? Нет — искать край незачем (держишь «прыжок» в воде или в прыжке — луч не каждый кадр)
+      try {
+        if (V.boxHits(W, P.x + dx * .5, P.y + .25, P.z + dz * .5, P.w, P.h - .25, true)) {
+          if (inLiquid ? P.lava <= .2 && tryClimbOut(st, dx, dz) : ((jumpDown && P.onGround) || (jump && !P.onGround && !(P.wetT > 0))) && tryLedge(st, dx, dz)) { rebase(st, false); return; }
+          P.pkTry = .12;
+        }
+      } catch (e) { pkFail(st, e); }
     }
     P.wetT = P.water > 0 || P.lava > 0 ? .6 : Math.max(0, (P.wetT || 0) - dt);   // только что из воды — за край в прыжке не схватиться (из воды — до 1,25 над гладью)
     const slip = P.onGround && touch.slip ? touch.slip : 0;
@@ -766,27 +773,40 @@
     if (camFx(st) > 0) st.rig.land?.(4.5 * (E().UNIT || 1));   // от 1-го лица — короткий «присед» камеры в конце
   }
   // вис: край ещё есть (сломали блок — сорвался), отпустить, наверх, по краю; тело — под краем
+  const HSP = { x: 0, y: 0, z: 0 }, HQ = { x: 0, y: 0, z: 0 };
   function hangStep(st, dt, wx, wz, jumpDown, dropDown){
     const P = st.P, Eg = E().grip, PK = E().parkour, G = grip(st), V = VX();
-    const L = Eg.ledgeAt(G, P.hang.lip, P.hang.face, KS);
-    if (!L || Math.abs(L.lip.y - P.hang.lip.y) > .1) { letGo(st); return false; }
-    P.hang = L; P.hangYaw = Math.atan2(-L.face.x, -L.face.z);
+    let L = P.hang;
+    if ((P.hangChk = (P.hangChk || 0) - dt) <= 0 || P.hangRev !== st.W.rev) {   // край ещё есть? (сломали блок — сорвался): мир изменился — сразу, иначе 6 раз в секунду
+      P.hangChk = 1 / 6; P.hangRev = st.W.rev;
+      L = Eg.ledgeAt(G, P.hang.lip, P.hang.face, KS);
+      if (!L || Math.abs(L.lip.y - P.hang.lip.y) > .1) { letGo(st); return false; }
+      P.hang = L; P.hangYaw = Math.atan2(-L.face.x, -L.face.z);
+    }
     const toward = wx * -L.face.x + wz * -L.face.z, side = wx * L.along.x + wz * L.along.z;
     if (dropDown || toward < -.5) { letGo(st); return false; }
     if (jumpDown || toward > .5) { const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (top) { startMantle(st, L, top, 'climb'); return true; } }
     const shimmy = Math.abs(side) > .3;
     P.shimmyNow = false;
     if (shimmy) {
-      const d = Math.sign(side) * SHIMMY * dt, nL = Eg.ledgeAt(G, { x: L.lip.x + L.along.x * d, y: L.lip.y, z: L.lip.z + L.along.z * d }, L.face, KS);
+      const d = Math.sign(side) * SHIMMY * dt;
+      HQ.x = L.lip.x + L.along.x * d; HQ.y = L.lip.y; HQ.z = L.lip.z + L.along.z * d;
+      const nL = Eg.ledgeAt(G, HQ, L.face, KS);
       if (nL && Math.abs(nL.lip.y - L.lip.y) < .1) {
-        const np = PK.hangSpot(G, nL, P.w / 2, HANG_DROP);
-        if (!V.boxHits(st.W, np.x, np.y, np.z, P.w, P.h)) { P.hang = nL; P.climbPh = (P.climbPh || 0) + dt * 9; P.shimmyNow = true; }
+        const np = PK.hangSpot(G, nL, P.w / 2, HANG_DROP, HSP);
+        if (!V.boxHits(st.W, np.x, np.y, np.z, P.w, P.h)) { P.hang = nL; P.hangChk = 1 / 6; P.climbPh = (P.climbPh || 0) + dt * 9; P.shimmyNow = true; }
       }
     }
-    const hp = PK.hangSpot(G, P.hang, P.w / 2, HANG_DROP);
+    const hp = PK.hangSpot(G, P.hang, P.w / 2, HANG_DROP, HSP);
     P.x = hp.x; P.y = hp.y; P.z = hp.z; P.vx = P.vy = P.vz = 0; P.onGround = false; P.fallTop = P.y;
     if (!st.creative) P.exh += dt * (shimmy ? .12 : .08);
     return true;
+  }
+  // паркур сломался (ошибка в коде края) — отпустить, обычная физика; трижды — выключить до конца игры (игра идёт дальше)
+  function pkFail(st, e){
+    const P = st.P; P.pk = null; P.hang = null; P.h = PH; P.pkCD = 1;
+    if ((st.pkErrN = (st.pkErrN || 0) + 1) >= 3) st.pkOff = true;
+    if (st.pkErrN === 1) console.warn('Кубомир: паркур —', e);
   }
   function letGo(st){
     const P = st.P, L = P.hang; P.hang = null;
@@ -871,7 +891,8 @@
     const t = now();
     if (st.unstuckAt && t - st.unstuckAt < 5000) { st.H?.toast('🆘 Подожди пару секунд'); return false; }
     st.unstuckAt = t;
-    let p = safeSpot(st, P.x, P.y, P.z), far = false;
+    let p = null, far = false;
+    try { p = safeSpot(st, P.x, P.y, P.z); } catch (e) { console.warn('Кубомир: «Я застрял» —', e); }
     if (!p) { const sp = st.meta.bed || st.meta.spawn; p = sp ? { x: sp.x, y: sp.y, z: sp.z } : null; far = true; }
     if (!p) return false;
     Object.assign(P, { x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, fallTop: p.y, pk: null, hang: null, onGround: true });
@@ -975,7 +996,8 @@
   }
 
   // ═══ Прицел: ломать, ставить, открывать, есть ═══
-  function eye(st){ const P = st.P; return [P.x, P.y + (P.sneak ? 1.27 : 1.62), P.z]; }
+  const EYE = [0, 0, 0];
+  function eye(st){ const P = st.P; EYE[0] = P.x; EYE[1] = P.y + (P.sneak ? 1.27 : 1.62); EYE[2] = P.z; return EYE; }   // общий массив — разбирать сразу
   const DIR = { x: 0, y: 0, z: 0 };
   // куда смотрит игрок (по повороту головы, а не по камере: в виде спереди камера смотрит на него самого)
   function lookDir(st){
@@ -1172,7 +1194,9 @@
   const FACE_IDX = (nx, nz) => nz > 0 ? 0 : nx < 0 ? 1 : nz < 0 ? 2 : 3;   // как V.FACING
   // Куда встанет блок b по прицелу hit — без правок мира (то же решает и подсказка постройки): { x, y, z, state, h } или null
   // (h — высота в блоках: дверь — 2). Лёд на озере — опора снизу (факел, дверь), сам — как вода (ставится на него сверху)
-  function placeTarget(st, hit, b){
+  const PLANT_ON = /grass|dirt|snow_grass|sand/;
+  const ptRes = (out, x, y, z, state, h) => { if (!out) return { x, y, z, state, h }; out.x = x; out.y = y; out.z = z; out.state = state; out.h = h; return out; };
+  function placeTarget(st, hit, b, out){
     const V = VX(), W = st.W, P = st.P;
     if (!hit || !b) return null;
     const hv = hit.v, hb = V.blocks[hv & 0xfff];
@@ -1185,7 +1209,7 @@
     let state = 0, h = 1;
     const f = lookDir(st), toward = Math.abs(f.x) >= Math.abs(f.z) ? FACE_IDX(f.x > 0 ? -1 : 1, 0) : FACE_IDX(0, f.z > 0 ? -1 : 1);   // лицом к игроку
     if (b.shape === V.SHAPE.cross) {
-      if (!(below > 0 && /grass|dirt|snow_grass|sand/.test(V.blocks[below].name)) || (b.name === 'cactus')) return null;
+      if (!(below > 0 && PLANT_ON.test(V.blocks[below].name)) || (b.name === 'cactus')) return null;
     } else if (b.shape === V.SHAPE.torch) {
       if (hit.ny === 1 && solidBelow) state = 0;
       else if (!hit.ny && !hit.ice && V.T.solid[hb.id] && V.T.shape[hb.id] === V.SHAPE.cube) state = 1 + FACE_IDX(hit.nx, hit.nz);
@@ -1198,13 +1222,13 @@
       if (!solidBelow || up < 0 || !V.blocks[up].replace) return null;
       state = toward; h = 2;
       if (boxOverlap(P, x, y, z, 2) || st.ents?.blocked?.(x, y, z) || st.ents?.blocked?.(x, y + 1, z)) return null;
-      return { x, y, z, state, h };
+      return ptRes(out, x, y, z, state, h);
     } else if (b.axis) state = hit.nx ? 1 : hit.nz ? 2 : 0;
     else if (b.ui || b.shape === V.SHAPE.chest) state = toward;
     else if (b.shape === V.SHAPE.cactus) { if (!(below === V.ID.sand || below === V.ID.cactus)) return null; }
     // нельзя ставить твёрдое туда, где стоит игрок или моб
     if (b.solid && (boxOverlap(P, x, y, z, 1) || st.ents?.blocked?.(x, y, z))) return null;
-    return { x, y, z, state, h };
+    return ptRes(out, x, y, z, state, h);
   }
   function placeBlock(st, hit, s, it){
     const V = VX(), W = st.W, b = V.block(it.place);
@@ -1312,8 +1336,11 @@
       if (P.pk || P.hang) want = P.pk ? P.pk.yaw : P.hangYaw;   // паркур — лицом к стене (позы — те же, что в «Мире Денчика»)
       P.bodyYaw = want;
       const pkm = P.pk ? (P.pk.move === 'swim' ? 'mantle' : P.pk.move) : '';
-      A.pose('me', { x: P.x - st.ox, y: P.y, z: P.z - st.oz, yaw: want, moving: P.hang ? !!P.shimmyNow : sp > .4, speed: sp, air: !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang, crouch: P.sneak && !P.pk ? 1 : 0, swim: P.water > .9 && !P.pk, ladder: P.climb && !P.onGround, sit: false,
-        hang: !!P.hang, pk: pkm, pkK: P.pk ? P.pk.k : 0, climbPh: P.climbPh || 0 });
+      const Q = POSE;   // общий объект: A.pose копирует поля (без мусора каждый кадр)
+      Q.x = P.x - st.ox; Q.y = P.y; Q.z = P.z - st.oz; Q.yaw = want; Q.moving = P.hang ? !!P.shimmyNow : sp > .4; Q.speed = sp;
+      Q.air = !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang; Q.crouch = P.sneak && !P.pk ? 1 : 0; Q.swim = P.water > .9 && !P.pk;
+      Q.ladder = P.climb && !P.onGround; Q.sit = false; Q.hang = !!P.hang; Q.pk = pkm; Q.pkK = P.pk ? P.pk.k : 0; Q.climbPh = P.climbPh || 0;
+      A.pose('me', Q);
       me.hidden = !st.camMode || st.camD < .95;   // вид сзади/спереди, а камера прижата к стене — не смотреть изнутри головы
       const [ex, ey, ez] = eye(st), d = lookDir(st);
       me.lookAt = me.lookAt || { x: 0, y: 0, z: 0 };
@@ -1327,7 +1354,7 @@
     st.WX?.frame(dt, t);   // дождь / снег вокруг камеры, шум, гром
     VR.select(st.hit && !C.blocked ? st.hit : null);
     if (st.mine.st >= 0 && st.hit) VR.crack(st.hit.x, st.hit.y, st.hit.z, st.mine.st, st.hit.box); else VR.crack(0, 0, 0, -1);
-    ghostUpdate(st);
+    if (!st.previewOff) try { ghostUpdate(st); } catch (e) { st.previewOff = true; try { st.VR.preview?.(null); st.VR.ghost?.(null); } catch (e2) {} console.warn('Кубомир: подсказка постройки —', e); }
     ringUpdate(st);
     if (st.tbar && st.flyWas !== P.fly) { st.flyWas = P.fly; st.tbarSync?.(); }   // в полёте: ⤒ вверх, ⤓ вниз
     VR.update(dt, t);
@@ -1411,14 +1438,17 @@
   // «рамка» (по умолчанию) — чёткая двойная рамка клетки, куда встанет блок из руки (тёмная снаружи, светлая внутри — видна и на
   // снегу, и в тёмной пещере), для любого блока, который сейчас можно поставить (дверь — на 2 клетки); «призрак» — как было:
   // полупрозрачный кубик (только кубы); «выкл». ⚙️ «🧊 Кубомир» → «Подсказка постройки» (старое «призрак выкл» — «выкл»)
-  const previewMode = () => ['frame', 'ghost', 'off'].includes(opts.preview) ? opts.preview : opts.ghost === false ? 'off' : 'frame';
+  const PREVIEW_MODES = ['frame', 'ghost', 'off'];
+  const previewMode = () => PREVIEW_MODES.includes(opts.preview) ? opts.preview : opts.ghost === false ? 'off' : 'frame';
+  const PT_OUT = { x: 0, y: 0, z: 0, state: 0, h: 1 };
+  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, swim: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };   // своя поза — общий объект
   function ghostUpdate(st){
     const VR = st.VR, V = VX(), P = st.P, s = P.inv[P.sel], it = s && V.item(s.id), b = it?.place && V.block(it.place), hit = st.hit, mode = previewMode();
     let T = null;
     if (hit && b && mode !== 'off' && !st.hudHidden && !st.C.blocked) {
       const hb = V.blocks[hit.v & 0xfff];
       const usable = !P.sneak && !hit.ice && (hb.ui || hb.shape === V.SHAPE.door || st.modRun?.hasUse(hb.name));   // откроется, а не поставится
-      if (!usable) T = placeTarget(st, hit, b);
+      if (!usable) T = placeTarget(st, hit, b, PT_OUT);
     }
     const ghost = T && mode === 'ghost' && b.shape === V.SHAPE.cube, frame = T && mode === 'frame';
     if (VR.ghost) VR.ghost(ghost ? b.name : null, ghost ? T.x : 0, ghost ? T.y : 0, ghost ? T.z : 0, it?.name);
