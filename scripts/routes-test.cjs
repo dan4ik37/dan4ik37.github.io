@@ -379,7 +379,7 @@ function browser(startUrl, routing){
   for (const p of ['/', '/chat', '/chat/c/5', '/play', '/play/sudoku', '/profile/vip', '/shop/o/D37-1', '/app', '/donate']) ok(nav(p) === 'shell', `sw.js: ${p} — оболочка (без сети — приложение)`);
   for (const p of ['/forum', '/forum/5', '/ideas', '/about', '/shop', '/games/chess', '/videos', '/v/abc']) ok(nav(p) === 'page', `sw.js: ${p} — серверная страница`);
   ok(vj.rewrites.filter(r => r.destination === '/index.html').every(r => X.SPA_PATH.test(r.source.replace(/\/:path\+$/, '/x'))), 'sw.js SPA_PATH = разделы из vercel.json');
-  ok(/const VERSION = 'v5'/.test(src('sw.js')), 'sw.js: VERSION поднят (v5)');
+  ok(+(/const VERSION = 'v(\d+)'/.exec(src('sw.js')) || [])[1] >= 5, 'sw.js: VERSION поднят (не ниже v5 — настоящие адреса)');
   const man = JSON.parse(src('manifest.json'));
   ok(man.start_url === '/' && man.scope === '/' && man.share_target?.action === '/', 'manifest: start_url, scope, «Поделиться» — «/»');
   ok(man.shortcuts.every(s => { const u = new URL(s.url, 'https://dan4ik37.vercel.app'); return R.toHash(u.pathname) || u.hash.startsWith('#/'); }) && !man.shortcuts.some(s => s.url.startsWith('/#/games')), 'manifest: ярлыки — разделы (настоящие адреса)', man.shortcuts.map(s => s.url));
