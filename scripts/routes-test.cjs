@@ -193,6 +193,9 @@ function browser(startUrl, routing){
     ok(B.cur().pathname === '/forum/42' && B.cur().hash === '' && B.history.length === 2, 'location.hash = «#/forum/42» → /forum/42, одна новая запись', [B.cur().href, B.history.length]);
     ok(B.routes.length === 1 && B.routes[0].to === '#/forum/42' && B.routes[0].from === '#/games/chess/abcd', 'событие d37:route: откуда и куда (старый вид)', B.routes);
     ok(/\/#\/games\/chess\/abcd$/.test(B.routes[0].oldURL) && /\/#\/forum\/42$/.test(B.routes[0].newURL), 'oldURL/newURL как у hashchange (их читает «игра поверх мира»)', B.routes[0]);
+    B.location.hash = '#/forum/42';   // тот же раздел ещё раз (в старом режиме — ничего не происходило)
+    await tick();
+    ok(B.cur().pathname === '/forum/42' && B.cur().hash === '' && B.routes.length === 1, 'location.hash = тот же раздел — адрес чистый, раздел не перерисовывается', B.routes.length);
     // переход D37Route.go и клик по ссылке
     B.R.go('#/chat');
     ok(B.cur().pathname === '/chat' && B.routes.length === 1, 'go(#/chat): адрес сразу, раздел — следующей задачей (как hashchange)');

@@ -134,9 +134,11 @@ const D37Route = (() => {
     if (MODE === 'hash') { last = key(); emit(lastHash, h, e); return; }
     e.stopImmediatePropagation();   // Метрика (trackHash) и прочие не увидят: просмотр засчитает trackView
     if (!h.startsWith('#/')) return;
+    const was = last;
     try { root.history.replaceState(root.history.state, '', toPath(h)); } catch (er) { return; }
     clearTimeout(pend); pend = 0;
     last = key();
+    if (last === was) return;   // тот же раздел (как location.hash = тот же хэш в старом режиме) — не перерисовываем
     emit(lastHash, hash());
   }
   // «Назад»/«Вперёд» в режиме адресов (решётки нет — hashchange не придёт); тот же адрес (свои записи полного экрана,

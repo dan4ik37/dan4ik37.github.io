@@ -110,5 +110,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if os.environ.get('D37_SERVE_QUIET') != '1':
             super().log_message(fmt, *args)
 
+class Server(http.server.ThreadingHTTPServer):
+    # очередь соединений побольше (по умолчанию 5): страница сайта грузит ~80 файлов разом — иначе изредка «обрыв» скрипта
+    request_queue_size = 128
+
 if __name__ == '__main__':
-    http.server.ThreadingHTTPServer(('', PORT), Handler).serve_forever()
+    Server(('', PORT), Handler).serve_forever()

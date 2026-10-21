@@ -59,7 +59,7 @@ function openGlobalAuth(mode) {
   // Уже залогинен — открываем полноценную страницу профиля, а не
   // дублирующую мини-модалку. Модалка теперь только для входа/регистрации.
   if (currentUser) {
-    location.hash = '#/profile';
+    if (!/^#\/profile\/?$/.test(D37Route.hash())) location.hash = '#/profile';   // уже в профиле — без лишней записи «Назад»
     return;
   }
   openLoginModal(mode);
