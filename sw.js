@@ -10,8 +10,9 @@
 //  • pass — мимо sw.js, всегда сеть: не GET, /api/* (и /api/geo), /go/* (переходы по рекламе), /_vercel/*, /studio/*, /sdk/*,
 //    /.well-known/*, Supabase (и картинки рекламы из его хранилища), YouTube, Twitch, реклама (AdSense, РСЯ), Метрика и любые
 //    чужие адреса — живые данные и реклама НИКОГДА не кэшируются;
-//  • shell — открыть главную: сеть (свежая версия сайта); нет сети или ждём дольше 8 с — копия; нет копии — офлайн-страница;
-//  • page — серверные страницы (/v/…, /games/…, /vip…): сеть, без сети — офлайн-страница (сами страницы не храним);
+//  • shell — открыть главную или раздел сайта по настоящему адресу (/chat, /play/sudoku… — SPA_PATH, как rewrites → index.html
+//    в vercel.json; тест сверяет): сеть (свежая версия сайта); нет сети или ждём дольше 8 с — копия; нет копии — офлайн-страница;
+//  • page — серверные страницы (/v/…, /games/…, /vip…, /forum…, /shop): сеть, без сети — офлайн-страница (сами страницы не храним);
 //  • net — скрипты и стили без номера версии: сеть, без сети — копия (index.html и скрипты не разъезжаются по версиям);
 //  • swr — файлы с ?v=, картинки, шрифты: сразу из кэша и тихо обновить (stale-while-revalidate, не чаще раза в час);
 //    новый ?v= — новый адрес, старые номера того же файла удаляются;
@@ -19,12 +20,15 @@
 // Обновление: новая версия ставится и ЖДЁТ — app.js показывает «Доступна новая версия — Обновить» и шлёт SKIP_WAITING.
 // Самая первая установка и переход со старого sw.js (кэши dan4ik37-shell-v1/v2) — сразу, без кнопки.
 // Поменял этот файл — подними VERSION (у всех откроется «Доступна новая версия»). Тест: node scripts/pwa-test.cjs.
-const VERSION = 'v4';
+const VERSION = 'v5';   // v5 — настоящие адреса разделов (/chat, /play/…) открываются оболочкой и без сети
 const SHELL = 'd37-shell-' + VERSION;
 const RT = 'd37-rt-v1';
 const MINE = /^(d37-shell-|d37-rt-|dan4ik37-shell-)/;
 const LEGACY = ['dan4ik37-shell-v1', 'dan4ik37-shell-v2'];
 const OFFLINE = '/offline.html';
+// Разделы сайта по настоящим адресам (js/ui/router.js) — та же index.html (vercel.json → rewrites). /about, /shop, /forum, /ideas —
+// у них своя серверная страница (поиск), её не подменяем; /shop/<заказ> — уже приложение
+const SPA_PATH = /^\/(?:play|chat|profile|phone|shorts|invite|adv|donate|poll|soundboard|clicker|lfg|ads|app)(?:\/|$)|^\/shop\/./;
 const SHELL_FILES = ['/', OFFLINE, '/manifest.json', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/favicon.ico',
   '/img/app/maskable-192.png', '/img/app/maskable-512.png', '/img/app/badge-96.png'];
 const RT_MAX = 400;          // записей в d37-rt — лишние, самые старые, удаляются
@@ -46,7 +50,7 @@ function route(req){
     // /api/* (и /api/geo), /go/* — переходы по рекламе кабинета, /_vercel — статистика: только сеть
     if (/^\/(api|go)(\/|$)/.test(p) || /^\/(_vercel|studio|sdk|\.well-known)\//.test(p) || p === '/sw.js') return 'pass';
     if (/^\/(ads\.txt|robots\.txt|llms\.txt|sitemap[\w-]*\.xml|[0-9a-f]{32}\.txt|yandex_[0-9a-f]+\.html)$/.test(p)) return 'pass';
-    if (req.mode === 'navigate') return p === '/' || p === '/index.html' ? 'shell' : 'page';
+    if (req.mode === 'navigate') return p === '/' || p === '/index.html' || SPA_PATH.test(p) ? 'shell' : 'page';
     if (u.searchParams.has('v')) return 'swr';
     if (/\.(png|jpe?g|webp|gif|svg|ico|avif|woff2?|ttf|otf|glb|gltf|mp3|ogg|wav)$/i.test(p)) return 'swr';
     return 'net';
@@ -212,14 +216,14 @@ self.addEventListener('push', (event) => {
       // не всплывая, — renotify заставляет показать его заново
       tag: d.tag || undefined,
       renotify: !!d.tag,
-      data: { url: d.url || '/#/home' },
+      data: { url: d.url || '/' },
     })
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url = new URL((event.notification.data && event.notification.data.url) || '/#/home', self.location.origin).href;
+  const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
@@ -233,4 +237,4 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 // для scripts/pwa-test.cjs
-self.__d37sw = { route, shellAssets, VERSION, SHELL, RT, NEVER, OFFLINE };
+self.__d37sw = { route, shellAssets, VERSION, SHELL, RT, NEVER, OFFLINE, SPA_PATH };

@@ -11,6 +11,8 @@
 //   Kaspi — открытого API для сайтов нет: заказ + ссылка на оплату в Kaspi (KASPI_PAY_LINK), админ подтверждает вручную.
 // Общие: PAY_CURRENCY (KZT по умолчанию; RUB — только если провайдер его принимает), PAY_DISABLED=1 — выключить всё,
 // PAY_SITE_URL (по умолчанию https://dan4ik37.vercel.app). Плюс SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY (уже есть).
+// 22.10.2026 (владелец: «пока только для Kaspi»): карты (TipTop Pay, Freedom Pay) выключены, даже если ключи заданы, —
+// включаются только переменной PAY_CARDS=1 (код и тесты остаются).
 import crypto from 'node:crypto';
 
 export const SITE_URL = (env = process.env) => (env.PAY_SITE_URL || 'https://dan4ik37.vercel.app').replace(/\/+$/, '');
@@ -19,9 +21,10 @@ export const TIPTOP_WIDGET = 'https://widget.tiptoppay.kz/bundles/widget.js';
 // ── Что включено ──
 export function payConfig(env = process.env) {
   const off = env.PAY_DISABLED === '1';
+  const cards = env.PAY_CARDS === '1';
   const cfg = {
-    tiptop: !off && !!(env.TIPTOP_PUBLIC_ID && env.TIPTOP_API_SECRET),
-    freedom: !off && !!(env.FREEDOM_MERCHANT_ID && env.FREEDOM_SECRET_KEY),
+    tiptop: !off && cards && !!(env.TIPTOP_PUBLIC_ID && env.TIPTOP_API_SECRET),
+    freedom: !off && cards && !!(env.FREEDOM_MERCHANT_ID && env.FREEDOM_SECRET_KEY),
     kaspi: !off && /^https:\/\/\S+$/.test(env.KASPI_PAY_LINK || ''),
     currency: String(env.PAY_CURRENCY || 'KZT').toUpperCase() === 'RUB' ? 'RUB' : 'KZT',
   };

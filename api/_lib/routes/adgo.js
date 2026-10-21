@@ -20,7 +20,7 @@ function gone(res, code) {
     noindex: true, noAds: true,
     body: `<main class="wrap narrow"><h1>Реклама больше не показывается</h1>
   <p class="muted">Эта реклама закончилась или снята с показа. Ничего страшного — загляни на сайт.</p>
-  <p class="cta" style="justify-content:center"><a class="btn btn-acc" href="/#/home">На главную</a><a class="btn btn-ghost" href="/games">Игры</a></p></main>`,
+  <p class="cta" style="justify-content:center"><a class="btn btn-acc" href="/">На главную</a><a class="btn btn-ghost" href="/games">Игры</a></p></main>`,
   }));
 }
 

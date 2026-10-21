@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   const card = (big, small) => `<div class="mk-stat"><b>${big}</b><small>${small}</small></div>`;
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Реклама и сотрудничество</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Реклама и сотрудничество</span></nav>
   <h1>Реклама у dan4ik37</h1>
   <p class="lead">Игровой стример и ютубер с ${since} года: шортсы и стримы по Roblox, CS2, Minecraft, хоррорам и новинкам. Ниже — живые цифры канала (обновляются автоматически) и форматы сотрудничества.</p>
   ${ch ? `<section class="mk-stats">
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     <p>Без переписки: зайдите в кабинет рекламодателя, загрузите картинку, текст и ссылку — превью сразу покажет, как это будет выглядеть. После проверки реклама сама показывается зрителям сайта, статистика (показы, клики, CTR, расход) — по дням, неизрасходованный бюджет возвращается.</p>
     <div class="mk-formats">${FORMATS.map(f => `<div><b>${esc(f.t)}</b><span>${esc(f.d)}</span><span class="mk-price">от ${DEF.prices[f.g].cpm} 💎 за 1000 показов${DEF.prices[f.g].day ? ` · ${DEF.prices[f.g].day} 💎 в день` : ''}</span></div>`).join('')}</div>
     <p class="muted small">Оплата — 💎 кристаллами сайта (1 💎 ≈ 1 ₽). Показ засчитывается, только когда реклама видна хотя бы наполовину не меньше секунды. Для показа в России нужен erid из ОРД — без него реклама идёт в другие страны. Аудитория — дети и подростки: азартные игры, ставки, алкоголь, табак, 18+, крипта и т. п. запрещены.</p>
-    <div class="mk-cta"><a class="btn btn-acc" href="/#/adv">📣 Открыть кабинет</a><a class="btn btn-ghost" href="/ads-terms">Правила рекламы</a><a class="btn btn-ghost" href="/shop">💎 Где взять кристаллы</a></div>
+    <div class="mk-cta"><a class="btn btn-acc" href="/adv">📣 Открыть кабинет</a><a class="btn btn-ghost" href="/ads-terms">Правила рекламы</a><a class="btn btn-ghost" href="/shop">💎 Где взять кристаллы</a></div>
   </section>
 
   <aside class="join"><div><b>Обсудить сотрудничество</b><span>Напишите, что хотите прорекламировать и в каком формате — ответим с условиями.</span></div>

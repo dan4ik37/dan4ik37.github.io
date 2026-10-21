@@ -18,7 +18,7 @@ export default function handler(req, res) {
   ] };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>Генератор случайных чисел</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <span>Генератор случайных чисел</span></nav>
   <h1>Генератор случайных чисел</h1>
   <p class="lead">Рандомайзер онлайн: случайное число в любом диапазоне, несколько чисел без повторов для розыгрыша, монетка «орёл или решка» и кубики. Честно и бесплатно.</p>
   <section class="rn">

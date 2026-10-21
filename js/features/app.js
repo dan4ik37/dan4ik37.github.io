@@ -24,6 +24,9 @@
   if (root.D37App) return;
   const doc = root.document, nav = root.navigator || {};
   const loc = () => root.location || { href: '', hash: '', search: '', pathname: '/', origin: '' };
+  // Раздел сайта (js/ui/router.js): '#/…' при любых адресах (/chat и #/chat); без роутера (тесты) — решётка
+  const routeHash = () => (root.D37Route ? root.D37Route.hash() : loc().hash || '');
+  const goRoute = (h, replace) => { if (root.D37Route) root.D37Route.go(h, { replace: !!replace }); else if (replace) loc().replace(h); else loc().hash = h; };
   const VER = '1';                 // js/features/app-guide.js?v=VER — поменял инструкцию, подними
   const LS = 'd37_app';            // { v: заходов, first, last, n: показов карточки, sv: на каком заходе, x: закрыта, inst, nb: без значка, ao: запусков приложения }
   const SS_VISIT = 'd37_app_v', SS_SRC = 'd37_app_src', SS_OPEN = 'd37_app_open';
@@ -158,6 +161,8 @@
     if (q.has('share_title') || q.has('share_text') || q.has('share_url')) return { share: { title: q.get('share_title') || '', text: q.get('share_text') || '', url: q.get('share_url') || '' } };
     if (q.has('proto')) { const t = protoTarget(q.get('proto')); return t.startsWith('/#') ? { go: t.slice(1) } : { open: t }; }
     if (u.pathname === '/' || u.pathname === '/index.html') return u.hash && u.hash.length > 2 ? { go: u.hash } : { focus: true };
+    const h = root.D37Route?.toHash?.(u.pathname);   // раздел по настоящему адресу (/chat, /play/world) — тоже без перезагрузки
+    if (h) return h === '#/home' ? { focus: true } : { go: h };
     return { open: u.pathname + u.search + u.hash };
   }
 
@@ -433,7 +438,7 @@
     const later = () => setTimeout(backSync, 0);
     doc.addEventListener('click', later, true);
     doc.addEventListener('keyup', later, true);
-    root.addEventListener('hashchange', later);
+    root.addEventListener('d37:route', later);
     root.addEventListener('popstate', backPop);
   }
 
@@ -446,10 +451,10 @@
       // служебные параметры — прочь из адреса (закладки, «скопировать ссылку», Метрика)
       const keep = new URLSearchParams(); q.forEach((v, k) => { if (!/^(app|proto|share_title|share_text|share_url)$/.test(k)) keep.set(k, v); });
       const rest = keep.toString();
-      try { root.history.replaceState(root.history.state, '', '/' + (rest ? '?' + rest : '') + (loc().hash || '')); } catch (e) {}
+      try { root.history.replaceState(root.history.state, '', (loc().pathname || '/') + (rest ? '?' + rest : '') + (loc().hash || '')); } catch (e) {}
     }
     if (a?.share) setTimeout(() => shareSheet(a.share), 400);
-    else if (q?.has('proto')) { if (a?.go) { if (loc().hash !== a.go) loc().hash = a.go; } else if (a?.open) loc().assign(a.open); }
+    else if (q?.has('proto')) { if (a?.go) { if (routeHash() !== a.go) goRoute(a.go); } else if (a?.open) loc().assign(a.open); }
   }
   function launchQ(){
     const L = root.launchQueue; if (!L?.setConsumer) return;
@@ -460,15 +465,15 @@
       const a = launchAction(url, loc().origin); if (!a) return;
       // в уже открытом окне — без перезагрузки: звонок, чат и мир не рвутся
       if (a.share) shareSheet(a.share);
-      else if (a.go) { if (loc().hash !== a.go) loc().hash = a.go; }
+      else if (a.go) { if (routeHash() !== a.go) goRoute(a.go); }
       else if (a.open) loc().assign(a.open);
       try { root.focus(); } catch (e) {}
     });
   }
-  // #/app — инструкция (ссылка для соцсетей); роутер такого раздела не знает и показывает главную
+  // /app (#/app) — инструкция (ссылка для соцсетей); роутер такого раздела не знает и показывает главную
   function hashApp(){
-    if (!/^#\/app\/?$/.test(loc().hash || '')) return;
-    try { root.history.replaceState(root.history.state, '', '#/home'); } catch (e) {}
+    if (!/^#\/app\/?$/.test(routeHash())) return;
+    try { if (root.D37Route) root.D37Route.setUrl('#/home', { state: root.history.state }); else root.history.replaceState(root.history.state, '', '#/home'); } catch (e) {}
     if (SA) toast('✅ Ты уже в приложении dan4ik37'); else setTimeout(() => guide(), 300);
     track('app_link_open', { how: ENV.how });
   }
@@ -533,8 +538,8 @@
   pub.share = shareSheet;
 
   // ═══ Сборка для Google Play: цифровые товары в приложении из Play — только через Google Play Billing ═══
-  root.addEventListener('hashchange', () => {
-    if (SRC === 'play' && /^#\/shop(\/|$)/.test(loc().hash || '')) { try { loc().replace('#/home'); } catch (e) {} toast('💎 Магазин недоступен в этой версии приложения'); }
+  root.addEventListener('d37:route', () => {
+    if (SRC === 'play' && /^#\/shop(\/|$)/.test(routeHash())) { try { goRoute('#/home', true); } catch (e) {} toast('💎 Магазин недоступен в этой версии приложения'); }
   });
 
   // ═══ Service Worker (sw.js): регистрация, «Доступна новая версия», игры без интернета ═══
@@ -586,7 +591,7 @@
       });
     }, 800);
   }
-  root.addEventListener('hashchange', () => { if (swWaiting && updLater) waiting(swWaiting); });
+  root.addEventListener('d37:route', () => { if (swWaiting && updLater) waiting(swWaiting); });
   // установленное приложение: файлы игр без интернета — в кэш (один раз на GAMES_VER)
   function offlineGames(){
     if (!SA || !reg || typeof GAMES === 'undefined' || typeof GAMES_VER === 'undefined') return;
@@ -630,7 +635,7 @@
   };
   swInit();
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
-  root.addEventListener('hashchange', () => { hashApp(); if (!SA) maybeCard(2500); });
+  root.addEventListener('d37:route', () => { hashApp(); if (!SA) maybeCard(2500); });
   doc.addEventListener('visibilitychange', () => { if (!SA && doc.visibilityState === 'visible') maybeCard(4000); });
   root.addEventListener('d37:fullscreen', e => { if (e.detail?.on) hideCard(); });
 })();

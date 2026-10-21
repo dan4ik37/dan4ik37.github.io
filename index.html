@@ -2,16 +2,19 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<!-- Настоящие адреса разделов (/chat, /play/chess…): относительные адреса файлов (js/…, css/…, img/…, studio/…) — от корня сайта.
+     Ссылки «#/…» с base уходят на «/#/…» — их клик ловит роутер (js/ui/router.js) -->
+<base href="/">
 <meta name="google-site-verification" content="xBEFO0FCrVcM1KuCaw7CnJ-8d88p4cJS_BK_tS_kAJs" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dan4ik37 — игровые видео, стримы и онлайн-игры с друзьями</title>
 <meta name="google-adsense-account" content="ca-pub-7940480593743401">
 <meta name="description" content="Сайт стримера dan4ik37: почти 6000 игровых видео (Roblox, CS2, Minecraft, Silksong), стримы, живой чат и бесплатные онлайн-игры — «5 букв», морской бой, города, шашки с другом по ссылке.">
 <meta name="theme-color" content="#ff2d55">
-<link rel="canonical" href="https://dan4ik37.vercel.app/">
+<!-- canonical, og:url, заголовок, описание и noindex — у каждого раздела свои: ставит js/ui/router.js (D37Route.meta) -->
 <!-- Главный адрес — dan4ik37.vercel.app. Копия на GitHub Pages (тот же репозиторий)
      без серверных функций и дублирует контент для поисковиков — уводим оттуда. -->
-<script>if(/\.github\.io$/.test(location.hostname))location.replace('https://dan4ik37.vercel.app/'+location.hash);</script>
+<script>if(/\.github\.io$/.test(location.hostname))location.replace('https://dan4ik37.vercel.app'+location.pathname+location.search+location.hash);</script>
 <!-- Вход по ссылке: токены во фрагменте (#access_token… — письма Supabase и Google/Discord/Twitch/GitHub; #d37auth… — VK/Яндекс/Telegram),
      метку своего входа ?oa=… и ошибки входа в адресе забрать и СРАЗУ стереть из адреса — до Метрики (url: location.href) и рекламы.
      Разбирают js/features/auth-guard.js и social-login.js -->
@@ -29,7 +32,6 @@
 <meta property="og:title" content="dan4ik37 — видео, стримы и игры с друзьями">
 <meta property="og:description" content="Игровые видео и стримы dan4ik37, живой чат и бесплатные онлайн-игры: «5 букв», морской бой, города, шашки — с ботом или с другом по ссылке.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://dan4ik37.vercel.app/">
 <meta property="og:image" content="https://dan4ik37.vercel.app/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -90,7 +92,8 @@
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
 <!-- Яндекс Метрика: счётчик 113596397 (данные принимает только с dan4ik37.vercel.app, Вебвизор выключен).
-     trackHash — разделы SPA (#/games, #/chat…) считаются отдельными страницами. Нужна и для модерации РСЯ. -->
+     Разделы SPA — отдельные страницы: при настоящих адресах (/chat) роутер шлёт hit сам (D37Route.trackView), при ROUTING = 'hash'
+     (#/chat) их ловит trackHash. Нужна и для модерации РСЯ. -->
 <script>
 (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};m[i].l=1*new Date();
 for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
@@ -1085,34 +1088,34 @@ body.low .donation-alert-icon{animation:none}
 
 <!-- NAV -->
 <nav id="nav">
-  <a class="nav-logo" href="#/home">dan4ik37</a>
+  <a class="nav-logo" href="/">dan4ik37</a>
   <div class="nav-links" id="navLinks">
-    <a href="#/home" data-route="home">Видео<span class="new-count" id="navNewCount" hidden></span></a>
-    <a href="#/shorts" data-route="shorts">⚡ Shorts</a>
-    <a href="#/chat" data-route="chat">Чат<span class="chat-badge" id="navChatBadge"></span></a>
-    <a href="#/games/world" data-route="world">🌍 Мир</a>
-    <a href="#/forum" data-route="forum">Форум</a>
-    <a href="#/ideas" data-route="ideas">💡 Идеи</a>
-    <a href="#/profile" data-route="profile">Профиль<span class="chat-badge dm-unread-badge" style="display:none"></span></a>
+    <a href="/" data-route="home">Видео<span class="new-count" id="navNewCount" hidden></span></a>
+    <a href="/shorts" data-route="shorts">⚡ Shorts</a>
+    <a href="/chat" data-route="chat">Чат<span class="chat-badge" id="navChatBadge"></span></a>
+    <a href="/play/world" data-route="world">🌍 Мир</a>
+    <a href="/forum" data-route="forum">Форум</a>
+    <a href="/ideas" data-route="ideas">💡 Идеи</a>
+    <a href="/profile" data-route="profile">Профиль<span class="chat-badge dm-unread-badge" style="display:none"></span></a>
     <!-- Ниже — уезжают в «Ещё ▾» (fx.js → initNav) -->
-    <a href="#/lfg" data-route="lfg">🤝 Тиммейты</a>
-    <a href="#/about" data-route="about">Обо мне</a>
-    <a href="#/donate" data-route="donate">Топ донатеров</a>
-    <a href="#/poll" data-route="poll">Опрос</a>
-    <a href="#/soundboard" data-route="soundboard">Саундборд</a>
-    <a href="#/games" data-route="games">🎮 Игры</a>
-    <a href="#/invite" data-route="invite">👥 Позвать друзей</a>
-    <a href="#/ads" data-route="ads">Реклама</a>
-    <a href="#/adv" data-route="adv">📣 Разместить рекламу</a>
+    <a href="/lfg" data-route="lfg">🤝 Тиммейты</a>
+    <a href="/about" data-route="about">Обо мне</a>
+    <a href="/donate" data-route="donate">Топ донатеров</a>
+    <a href="/poll" data-route="poll">Опрос</a>
+    <a href="/soundboard" data-route="soundboard">Саундборд</a>
+    <a href="/play" data-route="games">🎮 Игры</a>
+    <a href="/invite" data-route="invite">👥 Позвать друзей</a>
+    <a href="/ads" data-route="ads">Реклама</a>
+    <a href="/adv" data-route="adv">📣 Разместить рекламу</a>
     <a href="/vip" class="nav-vip">✨ VIP</a>
-    <a href="#/shop" data-route="shop" class="nav-shop">💎 Магазин</a>
+    <a href="/shop" data-route="shop" class="nav-shop">💎 Магазин</a>
     <a href="https://www.donationalerts.com/r/dan4ik37" target="_blank" class="nav-donate">💝 Донат</a>
   </div>
   <!-- ТЕЛЕФОН 📱 (js/features/phone.js): сообщения, звонки, сообщества, друзья, камера, карта -->
   <button type="button" class="phone-btn" id="phoneBtn" onclick="window.D37Phone&&D37Phone.toggle()" aria-label="Телефон" title="Телефон: сообщения, звонки, друзья, сообщества">📱<em class="ph-bdg" data-ph-badge="total" hidden></em></button>
   <button class="site-search-btn" onclick="openCmdPalette()" aria-label="Поиск по сайту" title="Поиск по сайту (Ctrl+K или /)">🔍</button>
   <!-- 💎 Кристаллы: баланс и вход в магазин (js/core/premium.js, js/features/shop.js) -->
-  <a id="navGems" class="nav-gems" href="#/shop" hidden title="Магазин: 💎 кристаллы" aria-label="Магазин кристаллов">💎<b class="js-gems"></b></a>
+  <a id="navGems" class="nav-gems" href="/shop" hidden title="Магазин: 💎 кристаллы" aria-label="Магазин кристаллов">💎<b class="js-gems"></b></a>
   <div class="lang-wrap" id="langWrap">
     <button class="lang-btn" onclick="toggleLang(event)">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
@@ -1148,10 +1151,10 @@ body.low .donation-alert-icon{animation:none}
 
 <!-- НИЖНИЙ ТАБ-БАР (мобиле) -->
 <nav class="bottom-tabbar" id="bottomTabbar">
-  <a href="#/home" class="bt-item" data-route="home"><span class="bt-icon" style="position:relative">▶<span class="new-dot" id="btNewDot" hidden></span></span><span class="bt-label">Видео</span></a>
-  <a href="#/chat" class="bt-item" data-route="chat"><span class="bt-icon" style="position:relative">💬<span class="chat-badge" id="btChatBadge"></span></span><span class="bt-label">Чат</span></a>
-  <a href="#/games/world" class="bt-item" data-route="world"><span class="bt-icon">🌍</span><span class="bt-label">Мир</span></a>
-  <a href="#/games" class="bt-item" data-route="games"><span class="bt-icon" style="position:relative">🎮<span class="new-dot" id="btGamesDot" hidden></span></span><span class="bt-label">Игры</span></a>
+  <a href="/" class="bt-item" data-route="home"><span class="bt-icon" style="position:relative">▶<span class="new-dot" id="btNewDot" hidden></span></span><span class="bt-label">Видео</span></a>
+  <a href="/chat" class="bt-item" data-route="chat"><span class="bt-icon" style="position:relative">💬<span class="chat-badge" id="btChatBadge"></span></span><span class="bt-label">Чат</span></a>
+  <a href="/play/world" class="bt-item" data-route="world"><span class="bt-icon">🌍</span><span class="bt-label">Мир</span></a>
+  <a href="/play" class="bt-item" data-route="games"><span class="bt-icon" style="position:relative">🎮<span class="new-dot" id="btGamesDot" hidden></span></span><span class="bt-label">Игры</span></a>
   <button type="button" class="bt-item" id="btMore" onclick="toggleNav()"><span class="bt-icon">☰</span><span class="bt-label">Ещё</span></button>
 </nav>
 <!-- ЧАТ-ТОСТ -->
@@ -1206,7 +1209,7 @@ body.low .donation-alert-icon{animation:none}
   <div class="hero-inner">
   <div class="hero-main">
   <!-- Ближайший эфир (считается из блока «Когда стримим?», см. fx.js) -->
-  <a class="hero-pill hx" id="heroPill" href="#/about" style="--d:.05s" hidden>
+  <a class="hero-pill hx" id="heroPill" href="/about" style="--d:.05s" hidden>
     <span class="pill-dot" aria-hidden="true"></span>
     <span id="heroPillText">Расписание эфиров</span>
   </a>
@@ -1236,7 +1239,7 @@ body.low .donation-alert-icon{animation:none}
   </p>
   <p class="hero-desc hx" style="--d:.65s">Привет! Я dan4ik37 — делаю видосы, стримлю и общаюсь с людьми. Подписывайся, чтобы не пропустить!</p>
 
-  <a class="hero-new hx" style="--d:.7s" href="#/games/words"><b>НОВОЕ</b><span class="hn-l">🔤 «5 букв» — слово дня и ещё 12 игр с друзьями</span><span class="hn-s">🔤 Слово дня и 12 игр с друзьями</span><i aria-hidden="true">→</i></a>
+  <a class="hero-new hx" style="--d:.7s" href="/play/words"><b>НОВОЕ</b><span class="hn-l">🔤 «5 букв» — слово дня и ещё 12 игр с друзьями</span><span class="hn-s">🔤 Слово дня и 12 игр с друзьями</span><i aria-hidden="true">→</i></a>
   <div class="hero-cta hx" style="--d:.75s">
     <a class="hero-btn is-yt magnetic"  href="https://www.youtube.com/@Dan4ik37Yt?sub_confirmation=1" target="_blank" rel="noopener"><span class="hb-ic">▶</span>Подписаться на YouTube</a>
     <a class="hero-btn is-tw magnetic"  href="https://www.twitch.tv/dan4ik37"      target="_blank" rel="noopener"><span class="hb-ic">◉</span>Twitch</a>
@@ -1280,13 +1283,13 @@ body.low .donation-alert-icon{animation:none}
   <nav class="hero-marquee hx" style="--d:1s" aria-label="Разделы сайта">
     <div class="mq-track">
       <div class="mq-group">
-        <a class="mq-item" href="#/chat">Живой чат</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/forum">Форум</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/lfg">Тиммейты</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/soundboard">Саундборд</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/games">Мини-игры</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/poll">Опросы</a><i class="mq-sep"></i>
-        <a class="mq-item" href="#/donate">Зал славы</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/chat">Живой чат</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/forum">Форум</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/lfg">Тиммейты</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/soundboard">Саундборд</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/play">Мини-игры</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/poll">Опросы</a><i class="mq-sep"></i>
+        <a class="mq-item" href="/donate">Зал славы</a><i class="mq-sep"></i>
       </div>
     </div>
   </nav>
@@ -1308,7 +1311,7 @@ body.low .donation-alert-icon{animation:none}
       <div class="tw-actions">
         <button type="button" class="tw-btn" id="twToggle" onclick="toggleTwitchPlayer()" aria-expanded="false">Показать плеер</button>
         <a class="tw-btn tw-btn-ghost" href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch ↗</a>
-        <a class="tw-btn tw-btn-ghost tw-chat" href="#/chat">💬 Чат</a>
+        <a class="tw-btn tw-btn-ghost tw-chat" href="/chat">💬 Чат</a>
       </div>
     </div>
     <div class="tw-player" id="twPlayer">
@@ -1329,7 +1332,7 @@ body.low .donation-alert-icon{animation:none}
       <div class="sh-row-nav">
         <button type="button" class="sh-arrow" onclick="scrollShortsRow(-1)" aria-label="Назад">‹</button>
         <button type="button" class="sh-arrow" onclick="scrollShortsRow(1)" aria-label="Вперёд">›</button>
-        <a class="sh-row-play" href="#/shorts">▶ Смотреть подряд</a>
+        <a class="sh-row-play" href="/shorts">▶ Смотреть подряд</a>
       </div>
     </div>
     <div class="sh-row-track" id="shortsRowTrack"></div>
@@ -1402,27 +1405,27 @@ body.low .donation-alert-icon{animation:none}
   <div class="divider"></div>
   <h2 class="sec-title">Тусуемся тут</h2>
   <div class="cm-grid">
-    <a class="cm-card" href="#/chat" style="--cc:var(--accent)">
+    <a class="cm-card" href="/chat" style="--cc:var(--accent)">
       <span class="cm-ic">💬</span><span class="cm-title">Живой чат</span>
       <span class="cm-text">Болтаем во время стримов и между ними. Стикеры, реакции, VIP-ники.</span>
       <span class="cm-go">Зайти →</span>
     </a>
-    <a class="cm-card" href="#/ideas" data-route="ideas" style="--cc:#ffd166">
+    <a class="cm-card" href="/ideas" data-route="ideas" style="--cc:#ffd166">
       <span class="cm-ic">💡</span><span class="cm-title">Идеи для видео</span>
       <span class="cm-text">Предложи, что снять или во что сыграть на стриме, и голосуй за лучшие идеи.</span>
       <span class="cm-go">Предложить →</span>
     </a>
-    <a class="cm-card" href="#/forum" style="--cc:var(--tg)">
+    <a class="cm-card" href="/forum" style="--cc:var(--tg)">
       <span class="cm-ic">🗂️</span><span class="cm-title">Форум</span>
       <span class="cm-text">Гайды, обсуждения игр и всё, что не уместилось в чат.</span>
       <span class="cm-go">Читать →</span>
     </a>
-    <a class="cm-card" href="#/lfg" style="--cc:var(--tw)">
+    <a class="cm-card" href="/lfg" style="--cc:var(--tw)">
       <span class="cm-ic">🎮</span><span class="cm-title">Тиммейты</span>
       <span class="cm-text">Найди, с кем поиграть: создай заявку или откликнись на чужую.</span>
       <span class="cm-go">Найти →</span>
     </a>
-    <a class="cm-card" href="#/games" style="--cc:#22c55e">
+    <a class="cm-card" href="/play" style="--cc:#22c55e">
       <span class="cm-ic">🕹️</span><span class="cm-title">Мини-игры</span>
       <span class="cm-text">Города против бота, «Угадай видео», 2048, реакция — с рекордами и XP за победы.</span>
       <span class="cm-go">Играть →</span>
@@ -1451,7 +1454,7 @@ body.low .donation-alert-icon{animation:none}
 <div class="wrap reveal" id="about">
   <div class="divider"></div>
   <h2 class="sec-title">Кто такой dan4ik37?</h2>
-  <p class="about-more"><a href="/about">Подробно: канал, цифры, во что играет, где найти →</a></p>
+  <p class="about-more"><a href="/about" data-server>Подробно: канал, цифры, во что играет, где найти →</a></p>
   <div class="about-grid">
     <div class="about-card"><span class="about-icon">🎮</span><div class="about-title">Игровой контент</div><div class="about-text">Стримлю и снимаю видео с играми. Весёлая атмосфера и живое общение с чатом!</div></div>
     <div class="about-card"><span class="about-icon">📱</span><div class="about-title">TikTok & Shorts</div><div class="about-text">Короткие клипы, мемы и нарезки лучших моментов выходят регулярно.</div></div>
@@ -1535,9 +1538,9 @@ body.low .donation-alert-icon{animation:none}
 
   </div>
   <div class="donate-vip" id="donateVipHint">
-    <div class="dv-ic">✨</div>
-    <div class="dv-body"><b>VIP за донат — 100 ₽ = месяц</b><span id="donateVipText">Впиши свой <b>логин для доната</b> в поле «Ваше имя» на DonationAlerts — VIP включится сам. Логин задаётся в профиле.</span></div>
-    <div class="dv-act" id="donateVipAct"><a class="dv-btn ghost" href="/vip">Что даёт VIP</a></div>
+    <div class="dv-ic">💛</div>
+    <div class="dv-body"><b id="donateVipTitle">💛 Донатер — статус за поддержку стрима, с бонусами</b><span id="donateVipText">Донат — это поддержка стрима, а не покупка. Взамен — спасибо и статус «💛 Донатер» на 30 дней. Чтобы донат засчитался тебе, впиши свой <b>логин для доната</b> в поле «Ваше имя» на DonationAlerts — логин задаётся в профиле.</span></div>
+    <div class="dv-act" id="donateVipAct"><a class="dv-btn ghost" href="/vip">Что даёт статус</a></div>
   </div>
 </div>
 
@@ -1751,25 +1754,11 @@ body.low .donation-alert-icon{animation:none}
         <button onclick="saveDonateLogin()" style="padding:.5rem 1rem;border-radius:8px;border:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-weight:800;font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">Сохранить</button>
       </div>
       <div id="donateLoginErr" style="font-size:.7rem;color:var(--accent);margin-top:.4rem"></div>
-      <div style="font-size:.68rem;color:var(--muted);margin-top:.5rem;line-height:1.5">Это НЕ ник — отдельный служебный логин, вводится один раз, потом просто вставляешь его в форму доната. Нужен и новым, и уже действующим VIP (чтобы продлевать).</div>
+      <div style="font-size:.68rem;color:var(--muted);margin-top:.5rem;line-height:1.5">Это НЕ ник — отдельный служебный логин, вводится один раз, потом просто вставляешь его в поле «Ваше имя» на DonationAlerts. Засчитываются донаты, сделанные после того, как логин задан.</div>
     </div>
 
-    <div id="profileVipPromo" class="pf-card pf-card-gold" style="display:none;margin-top:1rem">
-      <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.6rem">
-        ✨ <b style="color:var(--text)">VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится) или за 💎 кристаллы в <a href="#/shop" style="color:#ffd166">магазине</a>.
-        Всем VIP: анимированные аватар и фон, цветной ник в чате и на форуме, своя тема сайта,
-        форматирование постов, стикеры, закреп сообщения и список гостей профиля.
-        Уровень растёт с суммой поддержки (донаты и кристаллы) за всё время:
-      </div>
-      <div id="vipPromoTiers" style="margin-bottom:.9rem"></div>
-
-      <input type="hidden" id="vipBuyMonths" value="3">
-      <div id="vipMonthBtns" class="vip-month-btns" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.7rem"></div>
-      <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap">
-        <div id="vipCalcTotal" style="font-size:.85rem;font-weight:800;color:var(--text)"></div>
-        <button onclick="openVipBuyGuide()" class="pf-btn pf-btn-gold">✨ Хочу купить VIP</button>
-      </div>
-    </div>
+    <!-- Как получить бонусы: «💛 Донатер» (статус за поддержку) и VIP (за уровень / 💎) — содержимое рисует renderVipPromo() в profile.js -->
+    <div id="profileVipPromo" class="pf-card pf-card-gold" style="display:none;margin-top:1rem"></div>
 
     <!-- Мой VIP-уровень: что даёт и сколько до следующего -->
     <div id="profileVipPerksPanel" class="pf-card pf-card-gold" style="display:none;margin-top:1rem"></div>
@@ -1792,17 +1781,10 @@ body.low .donation-alert-icon{animation:none}
     <div id="vipBuyModal" onclick="if(event.target===this)closeVipBuyGuide()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(10px);z-index:9550;align-items:center;justify-content:center;padding:1.2rem">
       <div style="background:var(--card);border:1px solid rgba(255,215,0,.3);border-radius:18px;max-width:420px;width:100%;padding:1.6rem;position:relative">
         <button onclick="closeVipBuyGuide()" aria-label="Закрыть" style="position:absolute;top:.8rem;right:.8rem;width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);cursor:pointer;font-size:1rem">✕</button>
-        <div style="font-size:1.1rem;font-weight:800;margin-bottom:.9rem">✨ Как получить VIP</div>
-        <ol style="padding-left:1.2rem;font-size:.82rem;line-height:1.9;color:var(--text)">
-          <li>Жми «Перейти к донату» ниже — откроется страница DonationAlerts</li>
-          <li>В поле <b>«Ваше имя»</b> введи <b>ровно</b> свой логин для доната (не ник! уже скопирован в буфер обмена — просто вставь, <kbd style="background:rgba(255,255,255,.1);padding:.1rem .3rem;border-radius:4px">Ctrl+V</kbd>): <span id="vipGuideNick" style="color:#ffd700;font-weight:700"></span></li>
-          <li>Сумма — <span id="vipGuideAmount" style="color:#ffd700;font-weight:700"></span> (любая, не обязательно кратно 100₽ — остаток копится к следующему месяцу)</li>
-          <li>После доната VIP применится автоматически в течение пары минут — обнови страницу профиля</li>
-        </ol>
-        <div style="font-size:.72rem;color:var(--muted);margin-top:.9rem;line-height:1.5">
-          ⚠ Если логин не совпадёт (опечатка, донат под ником вместо логина) — VIP не подставится
-          сам, но не потеряется: просто напиши в чат или админу, выдадут вручную по этому донату.
-        </div>
+        <div id="vipGuideTitle" style="font-size:1.1rem;font-weight:800;margin-bottom:.9rem">💛 Как стать донатером</div>
+        <!-- шаги и пояснение — openVipBuyGuide() в profile.js (что даёт донат — по выключателю premium.sql) -->
+        <ol id="vipGuideSteps" style="padding-left:1.2rem;font-size:.82rem;line-height:1.9;color:var(--text)"></ol>
+        <div id="vipGuideNote" style="font-size:.72rem;color:var(--muted);margin-top:.9rem;line-height:1.5"></div>
         <button id="vipGuideGoBtn" onclick="proceedToVipDonate()" style="width:100%;margin-top:1.1rem;padding:.8rem;border-radius:10px;border:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-weight:800;cursor:pointer;font-family:'Montserrat',sans-serif">Скопировать логин и перейти к донату →</button>
       </div>
     </div>
@@ -1841,7 +1823,7 @@ body.low .donation-alert-icon{animation:none}
         <button onclick="openSettingsAdmin()" class="profile-admin-btn">⚙ Настройки сайта</button>
         <button onclick="openPollAdmin()" class="profile-admin-btn">🗳️ Опросы</button>
         <button onclick="document.getElementById('roleSearchInput')?.focus();openSettingsAdmin()" class="profile-admin-btn">👥 Роли и VIP</button>
-        <a href="#/donate" class="profile-admin-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center">💝 Донаты и цель</a>
+        <a href="/donate" class="profile-admin-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center">💝 Донаты и цель</a>
         <button onclick="openDonationLog()" class="profile-admin-btn">📋 Лог донатов/VIP</button>
       </div>
       </details>
@@ -1851,7 +1833,7 @@ body.low .donation-alert-icon{animation:none}
     <div id="profileStaffPanel" class="pf-card pf-card-tw" style="display:none;margin-top:1rem">
       <div class="pf-kicker" style="color:var(--tw);margin-bottom:.7rem">🛡 Твои права модерации</div>
       <div id="profileStaffPerms" style="display:flex;flex-direction:column;gap:.4rem;font-size:.78rem"></div>
-      <a href="#/chat" style="display:inline-block;margin-top:.8rem;font-size:.75rem;color:var(--tw);text-decoration:underline">Перейти в чат →</a>
+      <a href="/chat" style="display:inline-block;margin-top:.8rem;font-size:.75rem;color:var(--tw);text-decoration:underline">Перейти в чат →</a>
     </div>
 
     <!-- Настройки аккаунта — только на своём профиле -->
@@ -2223,7 +2205,7 @@ body.low .donation-alert-icon{animation:none}
         <div style="font-size:.82rem;color:var(--muted);line-height:1.8;margin-bottom:1.2rem">
           Своя кампания за 💎 без переписки: карточка в ленте, баннер, столбик у игры или щит в 3D-мире. Проверка, статистика по дням, остаток возвращается.
         </div>
-        <a href="#/adv" style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(255,209,102,.12);border:1.5px solid #ffd166;color:#fff;font-size:.8rem;font-weight:700;text-decoration:none">📣 Открыть кабинет →</a>
+        <a href="/adv" style="display:inline-flex;align-items:center;gap:.5rem;padding:.65rem 1.3rem;border-radius:50px;background:rgba(255,209,102,.12);border:1.5px solid #ffd166;color:#fff;font-size:.8rem;font-weight:700;text-decoration:none">📣 Открыть кабинет →</a>
       </div>
 
     <!-- Медиакит: живые цифры канала — серверная страница /reklama (api/_lib/routes/reklama.js) -->
@@ -2355,12 +2337,12 @@ body.low .donation-alert-icon{animation:none}
     <a href="/tools/wheel">Колесо фортуны</a>
     <a href="/tools/random">Генератор случайных чисел</a>
     <a href="/tools/typing">Тест скорости печати</a>
-    <a href="/about">Кто такой dan4ik37</a>
+    <a href="/about" data-server>Кто такой dan4ik37</a>
     <a href="/top">Самые популярные видео</a>
     <a href="/vip">✨ VIP</a>
     <a href="/games">Игры онлайн</a>
-    <a href="#/shop">💎 Магазин</a>
-    <a href="#/adv">📣 Реклама на сайте</a>
+    <a href="/shop">💎 Магазин</a>
+    <a href="/adv">📣 Реклама на сайте</a>
     <a href="/privacy" style="opacity:.6">Политика конфиденциальности</a>
     <a href="/ads-terms" style="opacity:.6">Правила рекламы</a>
     <a href="/terms" style="opacity:.6">Пользовательское соглашение</a>
@@ -2369,8 +2351,8 @@ body.low .donation-alert-icon{animation:none}
   </div>
   <!-- Ссылки на разделы сайта: удобно внизу страницы и помогают поисковикам обходить сайт -->
   <nav class="footer-links footer-site" aria-label="Разделы сайта">
-    <a href="#/home">Видео</a><a href="#/shorts">Shorts</a><a href="#/chat">Чат</a><a href="#/forum">Форум</a>
-    <a href="#/ideas" data-route="ideas">Идеи</a><a href="#/lfg">Тиммейты</a><a href="#/donate">Топ донатеров</a><a href="#/about">Обо мне</a>
+    <a href="/">Видео</a><a href="/shorts">Shorts</a><a href="/chat">Чат</a><a href="/forum">Форум</a>
+    <a href="/ideas" data-route="ideas">Идеи</a><a href="/lfg">Тиммейты</a><a href="/donate">Топ донатеров</a><a href="/about">Обо мне</a>
   </nav>
   <!-- Возрастная метка сайта (js/core/age.js SITE_AGE, api/_lib/page.js AGE_MARK): игры, ролики и разделы — своими метками -->
   <div class="footer-age"><span class="age-mark" title="Сайт для 12+: игры, видео и разделы помечены своей меткой (0+…18+)">12+</span> Игры, видео и разделы помечены своей меткой — от 0+ до 18+</div>
@@ -2593,6 +2575,8 @@ body.low .donation-alert-icon{animation:none}
      Версия закреплена: «@2» грузил каждый раз последнюю — хуже кэш и риск сломаться от чужого обновления. -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="js/core/config.js"></script>
+<!-- роутер: карта адресов (D37Route) нужна всем скриптам ниже; разделы показывает routerStart() — после init.js -->
+<script src="js/ui/router.js"></script>
 <script src="js/core/age.js"></script>
 <script src="js/core/ads-core.js"></script>
 <script src="js/core/ad-places.js"></script>
@@ -2652,7 +2636,7 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/shop.js"></script>
 <script src="js/features/invite.js"></script>
 <script src="js/init.js"></script>
-<script src="js/ui/router.js"></script>
+<script>routerStart()</script>
 <script src="js/features/secrets.js"></script>
 <script src="js/features/donation-claims.js"></script>
 <script src="js/ui/hotkeys.js"></script>

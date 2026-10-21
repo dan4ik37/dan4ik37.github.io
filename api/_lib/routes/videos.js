@@ -59,7 +59,7 @@ export default async function handler(req, res) {
   const feed = () => !noAds && ++k % 30 === 0 && k < slice.length ? '<div class="d37-feed" data-ad="feed_videos" data-ad-lazy hidden></div>' : '';
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Все видео</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Все видео</span></nav>
   <h1>Все видео dan4ik37</h1>
   <p class="lead">Архив YouTube-канала dan4ik37 — ${n.toLocaleString('ru')} ${plural}, от новых к старым. Нажми на ролик — откроется его страница с описанием и похожими видео.</p>
   <div class="cta">

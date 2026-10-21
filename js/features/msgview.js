@@ -70,7 +70,12 @@
   const EXT_RE = /^(?:https?:\/\/|www\.)\S+$|^[a-z0-9-]{2,}\.(?:ru|com|net|org|io|gg|me|xyz|su|ly|cc|top|link|рф)(?:\/\S*)?$/i;
   function sitePath(w){
     let m = SITE_RE.exec(w);
-    if (m) { let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1); return p; }
+    if (m) {
+      let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1);
+      // настоящий адрес раздела (/play/chess/abcd, /chat/ev/5 — js/ui/router.js) → как старая ссылка #/…: карточки и переход без перезагрузки
+      const h = p[0] === '/' && p !== '/' && window.D37Route ? window.D37Route.toHash(p) : null;
+      return h || p;
+    }
     if (HASH_RE.test(w)) return w;
     return null;
   }
@@ -254,8 +259,10 @@
   function badgeHtml(m, st, extra){
     let b = '';
     if (st.role && !['owner', 'mod'].includes(st.role)) b += `<i class="mv-role" style="--rc:${ROLE[st.role][1]}">${ROLE[st.role][0]}</i>`;
-    else if (st.vip) b += `<i class="mv-role" style="--rc:${st.vip.rgb}">${st.vip.key === 'gold' ? '✨' : st.vip.key === 'silver' ? '⭐' : '🔸'} ${st.vip.key.toUpperCase()}</i>`;
+    else if (st.vip) b += `<i class="mv-role" data-vrank="${st.vip.key === 'gold' ? 3 : st.vip.key === 'silver' ? 2 : 1}" style="--rc:${st.vip.rgb}">${st.vip.key === 'gold' ? '✨' : st.vip.key === 'silver' ? '⭐' : '🔸'} ${st.vip.key.toUpperCase()}</i>`;
     if (extra && ROLE[extra]) b += `<i class="mv-crole" title="${extra === 'owner' ? 'Владелец' : 'Модератор'}">${ROLE[extra][0]}</i>`;
+    // «💛 Донатер N» — заполняет js/core/premium.js (D37Donor.fill) пачкой; VIP-значок прячется, если статус донатера не ниже
+    if (m.uid && !(st.role && !['owner', 'mod'].includes(st.role))) b += `<span class="dn-badge" data-dn-uid="${e(m.uid)}" hidden></span>`;
     if (m.uid) b += `<span class="lv-badge" data-lv-uid="${e(m.uid)}"></span>`;
     return b;
   }
@@ -798,7 +805,7 @@
       if (uid && me && !self) acts.push(`<button type="button" class="mv-ubtn" data-u="block">${MV.blocked.has(uid) ? '✅ Разблокировать' : '🚫 Заблокировать'}</button>`);
       if (m && V.A.caps.report && me && !self) acts.push('<button type="button" class="mv-ubtn" data-u="report">🚩 Пожаловаться</button>');
       const mods = !self && V.A.userMod ? V.A.userMod(uid, nick) : [];
-      const bx = openOver('', `<div class="mv-user">${P.avatar(p, nick, 56)}<div><b>${P.nick(p, nick)}</b><span>${uid ? (p?.role === 'admin' ? 'Администратор сайта' : p?.role === 'moderator' ? 'Модератор сайта' : 'Игрок') : 'Гость (без аккаунта)'}${uid ? `<span class="lv-badge" data-lv-uid="${e(uid)}"></span>` : ''}</span>${onl ? `<span>${e(P.actText(act))}</span>` : ''}</div></div>
+      const bx = openOver('', `<div class="mv-user">${P.avatar(p, nick, 56)}<div><b>${P.nick(p, nick)}</b><span>${uid ? (p?.role === 'admin' ? 'Администратор сайта' : p?.role === 'moderator' ? 'Модератор сайта' : 'Игрок') : 'Гость (без аккаунта)'}${uid ? `<span class="dn-badge" data-dn-uid="${e(uid)}" hidden></span><span class="lv-badge" data-lv-uid="${e(uid)}"></span>` : ''}</span>${onl ? `<span>${e(P.actText(act))}</span>` : ''}</div></div>
         <div class="mv-uacts">${acts.join('')}</div>${mods.length ? `<div class="mv-msep">Модерация</div><div class="mv-uacts">${mods.map(([k, t]) => `<button type="button" class="mv-ubtn warn" data-um="${e(k)}">${t}</button>`).join('')}</div>` : ''}${!me && uid ? '<div class="mv-dim">Войди, чтобы дружить, писать и звонить</div>' : ''}`);
       over.classList.add('mv-over-user');
       if (typeof xpQueueBadges === 'function') xpQueueBadges();
@@ -882,8 +889,10 @@
     V.addLocal = m => { const id = 'tmp' + Date.now(); const x = Object.assign({ at: new Date().toISOString(), mine: true }, m, { id }); V.msgs.set(id, x); V.order.push(id); appendOne(x); toBottom(); return id; };
     V.focus = () => input.focus();
     V.refreshAll = () => renderAll();
-    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
-    window.addEventListener('d37:blocks', () => { if (!V.destroyed && V.A) renderAll(); });
+    // чёрный список поменялся — перерисовать; закрыли ленту — слушатель снять (раньше оставался на каждое открытие чата и держал ленту в памяти)
+    const onBlocks = () => { if (!V.destroyed && V.A) renderAll(); };
+    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
+    window.addEventListener('d37:blocks', onBlocks);
     if (opt.adapter) V.setAdapter(opt.adapter);
     return V;
   };

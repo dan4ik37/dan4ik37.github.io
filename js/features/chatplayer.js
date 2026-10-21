@@ -157,6 +157,6 @@
   const closedBar = () => { try { return sessionStorage.getItem('d37_livebar_x') === '1'; } catch (er) { return false; } };
 
   // ушёл из чата — плеер закрывается (звук не играет за спиной)
-  window.addEventListener('hashchange', () => { if (S && !pending && typeof currentRoute === 'function' && currentRoute() !== 'chat') PL.close(); });
+  window.addEventListener('d37:route', () => { if (S && !pending && typeof currentRoute === 'function' && currentRoute() !== 'chat') PL.close(); });
   PL._test = { setS: v => { S = v; }, render };
 })();

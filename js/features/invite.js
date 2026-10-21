@@ -15,6 +15,9 @@
   const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
   const friends = n => n + ' ' + plural(n, 'друг', 'друга', 'друзей');
   const ST = { me: null, at: 0, off: false, err: false, top: {}, tab: 'week', place: '', qr: false, adm: 'review', loading: null };
+  // Раздел сайта (js/ui/router.js): '#/invite/admin' при любых адресах (/invite/admin и #/invite/admin); без роутера — решётка
+  const routeHash = () => (typeof D37Route !== 'undefined' ? D37Route.hash() : (typeof location !== 'undefined' && location.hash) || '');
+  const routeSeg = i => routeHash().replace(/^#\/?/, '').split('/')[i] || null;
 
   // Вещь персонажа из лестницы → «🦜 Попугай»
   function partName(id){
@@ -55,7 +58,8 @@
     if (c) return R().link(c, ST.place);
     const nick = typeof currentProfile !== 'undefined' ? currentProfile?.nick : '';
     if (!nick || /^user_[0-9a-f]{6,32}$/.test(nick)) return '';
-    return `${location.origin}/?ref=${encodeURIComponent(nick)}${ST.place ? '#/' + ST.place : ''}`;
+    const to = ST.place ? (typeof D37Route !== 'undefined' ? D37Route.href('#/' + ST.place) : '#/' + ST.place) : '/', q = '?ref=' + encodeURIComponent(nick);   // /play/chess?ref=… (или /?ref=…#/games/chess)
+    return to[0] === '#' ? `${location.origin}/${q}${to}` : `${location.origin}${to}${q}`;
   }
   function shareText(){
     const g = /^games\/([a-z0-9_]+)$/.exec(ST.place || '');
@@ -73,7 +77,7 @@
     if (param === 'admin') { root.className = 'rf-adm-root'; return renderAdmin(root); }
     root.innerHTML = '<div class="rf-wait">Загружаем…</div>';
     if (me()) await load(true);
-    if (!document.getElementById('inviteRoot') || location.hash.replace(/^#\/?/, '').split('/')[0] !== 'invite') return;
+    if (!document.getElementById('inviteRoot') || routeSeg(0) !== 'invite') return;
     root.className = me() ? 'rf-in' : 'rf-out';
     root.innerHTML = page();
     bind(root);
@@ -215,7 +219,7 @@
     return `<section class="pf-card pf-card-muted rf-rules"><div class="pf-kicker">❓ Как это работает</div>
       <details><summary>Когда засчитывается друг?</summary><p>Друг открыл твою ссылку и в течение ${r.keepDays} дней создал аккаунт — любым способом: почта, Google и другие. Ссылку можно открыть на любой странице сайта: он попадёт туда, куда ты звал. Аккаунт должен быть новым — не старше ${r.claimDays} дней.</p></details>
       <details><summary>Что я получу?</summary><p>За каждого друга: ${L ? L.m.map(x => `${x.lv} уровень — ${gift(x)}`).join(', ') : ''}. Ступени: ${L ? L.t.map(t => `${friends(t.n)} до ${t.lv} уровня — ${t.text}`).join('; ') : ''}. Не больше ${r.dayCap} наград за друзей в сутки — остальные придут позже.</p></details>
-      ${kid() ? '' : `<details><summary>Бонус за поддержку — как это?</summary><p>Если друг купит кристаллы 💎 или задонатит, тебе — ${r.pct} % его кристаллов (донат в режиме «VIP сразу» считается по курсу 1 ₽ = 1 💎). ${r.months} месяцев после его регистрации, не больше ${num(r.gemsMonth)} 💎 в месяц. Кто именно и сколько заплатил, мы не показываем. Друг вернул деньги — бонус за ту покупку списывается.</p></details>`}
+      ${kid() ? '' : `<details><summary>Бонус за поддержку — как это?</summary><p>Если друг купит кристаллы 💎, тебе — ${r.pct} % его кристаллов. Донат на DonationAlerts — это поддержка стрима, а не покупка: кристаллов за него нет ни другу, ни тебе. ${r.months} месяцев после его регистрации, не больше ${num(r.gemsMonth)} 💎 в месяц. Кто именно и сколько заплатил, мы не показываем. Друг вернул деньги — бонус за ту покупку списывается.</p></details>`}
       <details><summary>Что не засчитывается?</summary><p>Свои вторые аккаунты, вход со своего же телефона или компьютера, «друзья», которые не играют. Если похоже на накрутку (тот же интернет, одно устройство на несколько аккаунтов, много «друзей» с одного адреса) — награды ждут проверки админом. Зови настоящих друзей — так честно для всех.</p></details>
       <details><summary>Что видит тот, кто меня позвал?</summary><p>Твой ник и уровень. Дату регистрации и профиль — только если профиль открыт. Сколько ты потратил, возраст, почту — никогда.</p></details></section>`;
   }
@@ -358,7 +362,7 @@
     if (!p || me() || bannerShown) return;
     try { if (sessionStorage.getItem('d37_ref_bn')) return; } catch (e) {}
     // не поверх игры, чата, своей страницы и других окошек (возраст, «установить приложение», вход)
-    if (/^#\/(games\/|chat|invite)/.test(location.hash) || document.body.classList.contains('game-on')) return;
+    if (/^#\/(games\/|chat|invite)/.test(routeHash()) || document.body.classList.contains('game-on')) return;
     if (document.querySelector('.age-sheet, .apc.on, #globalAuthModal.open')) { clearTimeout(bannerT); bannerT = setTimeout(banner, 15000); return; }
     bannerShown = true;
     const info = await R().publicInfo(p.c);
@@ -390,17 +394,17 @@
   R()?.on((type, d) => {
     if (type !== 'claim' || !d) return;
     const L = R().LADDER;
-    if (d.ok && !d.already) toast(`🎉 Ты пришёл(ла) по приглашению <b>${esc(d.inviter || 'друга')}</b>! На ${L.w.lv} уровне — подарок: ${num(L.w.coins)} 🪙 и ${esc(L.w.text)}. <a href="#/invite">Подробнее</a>`);
+    if (d.ok && !d.already) toast(`🎉 Ты пришёл(ла) по приглашению <b>${esc(d.inviter || 'друга')}</b>! На ${L.w.lv} уровне — подарок: ${num(L.w.coins)} 🪙 и ${esc(L.w.text)}. <a href="/invite">Подробнее</a>`);
     else if (d.reason === 'self_device') toast('Приглашение не засчитано: ссылку открыли там же, где входит пригласивший. Зови других людей — и всё получится 🙂');
     ST.at = 0;
-    if (location.hash.startsWith('#/invite')) renderInvitePage(location.hash.split('/')[2] || null);
+    if (routeSeg(0) === 'invite') renderInvitePage(routeSeg(1));
   });
   window.addEventListener('d37:auth', () => {
     ST.me = null; ST.at = 0; ST.off = false; ST.err = false;
-    if (location.hash.startsWith('#/invite')) renderInvitePage(location.hash.split('/')[2] || null);
+    if (routeSeg(0) === 'invite') renderInvitePage(routeSeg(1));
   });
   setTimeout(banner, 2500);
-  window.addEventListener('hashchange', () => { clearTimeout(bannerT); bannerT = setTimeout(banner, 1200); });
+  window.addEventListener('d37:route', () => { clearTimeout(bannerT); bannerT = setTimeout(banner, 1200); });
 
   // ═══ Окно входа: «🎁 Тебя пригласил(а) <ник>» над кнопками «Войти через…» (#gauthRef в index.html; само окно — global-auth.js) ═══
   async function authLine(){

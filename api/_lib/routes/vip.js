@@ -1,28 +1,32 @@
-// /vip → api/pages.js?page=vip — публичная страница «Что даёт VIP» (раньше это было видно только внутри
-// своего профиля, и только тем, кто вошёл без VIP). Все цифры — из кода сайта, не выдумывать:
-//   уровни и пороги — VIP_TIERS (js/features/profile.js): Bronze — любой VIP, Silver — 500₽ донатов, Gold — 1500₽;
-//   закреп 10/20/40 мин, гости 10/30/100, стикеры base/+silver/+gold; невидимка — с Silver (can_be_invisible);
-//   GIF-аватар/фон, форматирование на форуме, тема — VIP (hasPerks/isVipActive); подсказка в «5 букв» — words.js;
-//   VIP за уровень (пробный: 30 — 3 дня, 50 — неделя, 100 — месяц) — level_ladder в economy.sql (FREE ниже). Цена — 100₽/мес (vip-auto.sql); за кристаллы 💎 — ITEMS в
-//   api/_lib/premium.js (premium.sql); сумма поддержки = донаты + покупки кристаллов (premium_credit растит total_donated).
-//   Без рекламы — js/core/ad-places.js (ADS_RULES.vip).
-// Поменялись условия VIP в коде → поправить и здесь.
+// /vip → api/pages.js?page=vip — публичная страница «💛 Донатер и ✨ VIP»: что даёт и как получить. Все цифры — из кода сайта:
+//   «Донатер» — статус за поддержку стрима (premium.sql, 22.10.2026): уровень — сумма донатов за последние DONOR_RULES.days дней,
+//     пороги — DONOR_LEVELS (api/_lib/premium.js = js/core/premium.js = premium.sql donor_levels; ПРЕДЛОЖЕНИЕ — решает владелец);
+//     донат — поддержка, а не покупка: VIP и 💎 за него не начисляются (выключатель site_config 'donate_rewards' = off).
+//   VIP — отдельная ветка: пробный за уровень (level_ladder в economy.sql — FREE ниже) или за 💎 (ITEMS), Silver/Gold — по сумме
+//     покупок 💎 (total_donated). Бонусы — VIP_TIERS (js/features/profile.js): закреп 10/20/40 мин, гости 10/30/100, стикеры
+//     base/+silver/+gold, невидимка — с Silver (can_be_invisible), без рекламы — js/core/ad-places.js. У кого обе ветки — лучшее.
+//   Бонусы не меняют итоги игр: подсказка «5 букв», отмены «2048» сверх двух, 4-й вариант «Орды» — игра без рекорда.
+// Поменялись условия в коде → поправить и здесь.
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
-import { ITEMS } from '../premium.js';
+import { ITEMS, DONOR_LEVELS, DONOR_RULES } from '../premium.js';
 
 const VIP_GEMS = ITEMS.filter(i => i.kind === 'vip');
 // VIP за уровень — как level_ladder() в economy.sql и LEVEL_REWARDS в js/features/xp.js (scripts/economy-test.cjs сверяет)
 const FREE = [[30, '3 дня'], [50, 'неделю'], [100, 'месяц']];
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
+const PERK = { bronze: '🔸 как VIP', silver: '⭐ как Silver', gold: '✨ как Gold' };
+const byPerk = k => DONOR_LEVELS.filter(l => l.perk === k).map(l => ROMAN[l.lv]).join('–');
 
 const ROWS = [
-  ['Сумма поддержки за всё время (донаты и 💎)', 'любая', 'от 500 ₽', 'от 1500 ₽'],
+  ['💛 Донатер (донаты за ' + DONOR_RULES.days + ' дней)', byPerk('bronze') || '—', byPerk('silver') || '—', byPerk('gold') || '—'],
+  ['✨ VIP: сумма покупок 💎 за всё время', 'любая', 'от 500 ₽', 'от 1500 ₽'],
   ['🚫 Сайт без рекламы (за награду — только по своей кнопке)', '✓', '✓', '✓'],
   ['Цветной ник и значок в чате и на форуме', '✓', '✓', '✓'],
   ['Анимированные аватарка и фон (GIF)', '✓', '✓', '✓'],
   ['Своя тема (цвет) сайта', '✓', '✓', '✓'],
   ['Форматирование постов на форуме', '✓', '✓', '✓'],
-  ['💡 Подсказка-буква в «5 букв»', '✓', '✓', '✓'],
+  ['💡 Подсказка-буква в «5 букв» (слово — без рекорда)', '✓', '✓', '✓'],
   ['Закреп своего сообщения в чате', '10 мин', '20 мин', '40 мин'],
   ['Наборы стикеров в чате', 'базовый', '+ серебряный', '+ золотой'],
   ['«Кто заходил» в профиль', 'до 10', 'до 30', 'до 100'],
@@ -31,45 +35,51 @@ const ROWS = [
 
 export default function handler(req, res) {
   const url = `${SITE}/vip`;
+  const days = DONOR_RULES.days;
   const faq = [
-    ['Сколько стоит VIP?', '100 ₽ в месяц. Донат больше — больше месяцев, остаток не сгорает, а копится к следующему месяцу.'],
-    ['Можно купить VIP за кристаллы?', 'Да, в магазине: ' + VIP_GEMS.map(i => `${i.title.replace('VIP на ', '')} — ${i.price} 💎`).join(', ') + '. Кристаллы покупаются картой Казахстана или через Kaspi, а из России приходят за донат, если в магазине выбрать «донат → кристаллы».'],
-    ['Как VIP становится Silver или Gold?', 'Уровень зависит от суммы поддержки за всё время — донаты и покупки кристаллов: от 500 ₽ — Silver, от 1500 ₽ — Gold.'],
-    ['Можно получить VIP бесплатно?', 'Попробовать — да: за уровень на сайте дают VIP на время — ' + FREE.map(([lv, t]) => `${lv}-й уровень — на ${t}`).join(', ') + '. Это долгая цель: месяцы игры каждый день. Silver и Gold — только за поддержку стрима. Опыт дают визиты, чат, игры, задания дня и ачивки; на других уровнях — рамки, значки, вещи для персонажа и монеты.'],
-    ['Через сколько VIP появится после доната?', 'Обычно за пару минут, автоматически. Главное — в поле «Ваше имя» на DonationAlerts вписать свой логин для доната из профиля.'],
-    ['Что если ошибся в логине?', 'VIP не потеряется: напиши в чат сайта или админу — выдадут вручную по этому донату.'],
+    ['Что такое «Донатер»?', `Статус за поддержку стрима: донат на DonationAlerts с твоим логином для доната — и на ${days} дней у тебя «💛 Донатер» с бонусами как у VIP. Уровень — по сумме донатов за последние ${days} дней: ` + DONOR_LEVELS.map(l => `${ROMAN[l.lv]} — от ${l.min} ₽`).join(', ') + '. Статус временный: каждый донат считается ' + days + ' дней.'],
+    ['Можно купить VIP или кристаллы донатом?', 'Нет. Донат — это поддержка стрима, а не покупка: взамен — спасибо и статус «💛 Донатер». VIP — отдельно: пробный за уровень на сайте или за кристаллы 💎 (когда откроется оплата через Kaspi).'],
+    ['Чем «Донатер» отличается от VIP?', 'Бонусы почти те же. Донатер — за донаты последних ' + days + ' дней, VIP — за уровень или 💎 на срок. У кого есть и то, и другое, действует лучшее, а у ника — его значок.'],
+    ['Бонусы помогают в играх?', 'Нет — на итоги игр и рейтинги бонусы не влияют: слово с подсказкой в «5 букв», игра «2048» с отменами сверх двух и забег «Орды» с 4-м вариантом улучшения идут без рекорда.'],
+    ['Через сколько статус появится после доната?', 'Обычно за пару минут, сам. Главное — в поле «Ваше имя» на DonationAlerts вписать свой логин для доната из профиля. Засчитываются донаты, сделанные после того, как логин задан.'],
+    ['Почему мой донат не засчитался?', 'Анонимные донаты («Аноним», без имени) ни к кому не привязываются. Опечатка в имени — в профиле есть «Задонатил — не засчиталось?»: небольшой донат с похожим на логин именем привяжется сам, остальное проверит админ.'],
+    ['Можно получить VIP бесплатно?', 'Попробовать — да: за уровень на сайте дают VIP на время — ' + FREE.map(([lv, t]) => `${lv}-й уровень — на ${t}`).join(', ') + '. Опыт дают визиты, чат, игры, задания дня и ачивки.'],
   ];
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>VIP</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Донатер и VIP</span></nav>
   <div class="vp-hero">
-    <span class="vp-gem">✨</span>
+    <span class="vp-gem">💛</span>
     <div>
-      <h1>VIP на сайте dan4ik37</h1>
-      <p class="lead">Поддержи стрим — и получи плюшки на сайте: сайт без рекламы, цветной ник, GIF-аватарку, стикеры, закреп в чате и не только. <b>100 ₽ в месяц</b> (или 100 💎), а чем больше поддержка за всё время — тем выше уровень.</p>
-      <div class="cta"><a class="btn btn-gold" href="/#/profile/vip">✨ Получить VIP</a><a class="btn btn-ghost" href="/shop">💎 За кристаллы</a><a class="btn btn-ghost" href="#free">🎮 Пробный VIP за уровень</a></div>
+      <h1>«Донатер» и VIP на сайте dan4ik37</h1>
+      <p class="lead"><b>💛 Донатер</b> — статус за поддержку стрима, с бонусами: сайт без рекламы, цветной ник, GIF-аватарка, стикеры, закреп в чате и не только. Донат — это поддержка, а не покупка: взамен — спасибо и статус на ${days} дней. <b>✨ VIP</b> — отдельно: пробный за уровень или за кристаллы 💎.</p>
+      <div class="cta"><a class="btn btn-gold" href="/profile/vip">💛 Как стать донатером</a><a class="btn btn-ghost" href="#free">🎮 Пробный VIP за уровень</a><a class="btn btn-ghost" href="/shop">💎 VIP за кристаллы</a></div>
     </div>
   </div>
 
   <section class="box vp-table-wrap">
     <table class="vp-table">
-      <thead><tr><th></th><th class="b">🔸 VIP</th><th class="s">⭐ Silver</th><th class="g">✨ Gold</th></tr></thead>
+      <thead><tr><th></th><th class="b">🔸 VIP · 💛 ${esc(byPerk('bronze'))}</th><th class="s">⭐ Silver · 💛 ${esc(byPerk('silver'))}</th><th class="g">✨ Gold · 💛 ${esc(byPerk('gold'))}</th></tr></thead>
       <tbody>${ROWS.map(([name, ...v]) => `<tr><td>${esc(name)}</td>${v.map(x => `<td>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>
   </section>
 
-  <section class="box"><h2>Как получить</h2><ol class="vp-steps">
-    <li><a href="/#/profile/vip">Войди на сайт</a> и в профиле придумай <b>логин для доната</b> — один раз.</li>
-    <li>Нажми «Хочу купить VIP» в профиле — откроется DonationAlerts, логин уже будет скопирован.</li>
-    <li>В поле «Ваше имя» вставь логин, сумма — от 100 ₽ (100 ₽ = месяц).</li>
-    <li>Через пару минут VIP включится сам — обнови профиль.</li>
-  </ol>
-  <p class="muted small">Или за кристаллы 💎 в <a href="/shop">магазине</a>: ${VIP_GEMS.map(i => `${esc(i.title.replace('VIP на ', ''))} — ${i.price} 💎`).join(' · ')}. Там же — VIP в подарок другу.</p></section>
+  <section class="box"><h2>💛 Уровни «Донатер» — по донатам за ${days} дней</h2>
+    <div class="vp-free">${DONOR_LEVELS.map(l => `<div><b>${ROMAN[l.lv]}</b><span>от ${l.min} ₽</span><i>${esc(PERK[l.perk] || '')}</i></div>`).join('')}</div>
+    <p class="muted small">Статус временный: каждый донат считается ${days} дней, потом уровень пересчитывается сам. Донат — поддержка стрима, а не покупка; кристаллы и VIP за него не начисляются.</p>
+  </section>
 
-  <section class="box" id="free"><h2>🎮 Пробный VIP — за уровень</h2>
+  <section class="box"><h2>Как стать донатером</h2><ol class="vp-steps">
+    <li><a href="/profile/vip">Войди на сайт</a> и в профиле придумай <b>логин для доната</b> — один раз.</li>
+    <li>Нажми «Как стать донатером» в профиле — откроется DonationAlerts, логин уже будет скопирован.</li>
+    <li>В поле «Ваше имя» вставь логин (не ник!), сумма — любая.</li>
+    <li>Через пару минут статус «💛 Донатер» включится сам — обнови профиль.</li>
+  </ol>
+  <p class="muted small">Засчитываются донаты, сделанные после регистрации и после того, как задан логин. Анонимные донаты ни к кому не привязываются — так никто не выдаст себя за чужого донатера.</p></section>
+
+  <section class="box" id="free"><h2>✨ VIP — за уровень или за кристаллы</h2>
     <div class="vp-free">${FREE.map(([lv, t]) => `<div><b>${lv}</b><span>уровень</span><i>🔸 VIP на ${esc(t)}</i></div>`).join('')}</div>
-    <p class="muted small">Это долгая цель — месяцы игры каждый день. Опыт дают визиты, чат, игры на сайте, «Задание дня» и ачивки; на других
-      уровнях — рамки аватара, значки, золотой и радужный ник, вещи для персонажа и монеты. Silver и Gold — только за поддержку стрима. <a href="/games">Сыграть →</a></p>
+    <p class="muted small">Пробный VIP за уровень — долгая цель: месяцы игры каждый день. За кристаллы 💎 в <a href="/shop">магазине</a>: ${VIP_GEMS.map(i => `${esc(i.title.replace('VIP на ', ''))} — ${i.price} 💎`).join(' · ')}; там же — VIP в подарок другу. Silver и Gold — по сумме покупок кристаллов. <a href="/games">Сыграть →</a></p>
   </section>
 
   <section class="box faq"><h2>Частые вопросы</h2>${faq.map(([q, a]) => `<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
@@ -77,8 +87,8 @@ export default function handler(req, res) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
   res.status(200).send(page({
-    title: 'VIP на сайте dan4ik37 — что даёт и как получить',
-    description: 'VIP за поддержку стрима dan4ik37: сайт без рекламы, цветной ник, GIF-аватарка, стикеры, закреп в чате, невидимка. 100 ₽ в месяц, пробный — за уровень.',
+    title: '«Донатер» и VIP на сайте dan4ik37 — что даёт и как получить',
+    description: '«💛 Донатер» — статус за поддержку стрима dan4ik37 с бонусами: сайт без рекламы, цветной ник, GIF-аватарка, стикеры, закреп в чате. VIP — пробный за уровень или за кристаллы.',
     url, image: SITE + '/og-image.jpg', body, css: CSS,
     ld: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
   }));
@@ -105,7 +115,7 @@ const CSS = `
 .vp-table td:last-child{background:rgba(255,195,40,.05)}
 .vp-steps{padding-left:1.2rem;display:flex;flex-direction:column;gap:.45rem;font-size:.9rem}
 .vp-steps a{color:var(--accent)}
-.vp-free{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
+.vp-free{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem}
 .vp-free div{display:flex;flex-direction:column;align-items:center;padding:.9rem .5rem;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid var(--line);text-align:center}
 .vp-free b{font-family:Oswald,sans-serif;font-size:2rem;line-height:1}
 .vp-free span{font-size:.7rem;color:var(--muted)}
@@ -114,5 +124,5 @@ const CSS = `
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
 .faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
-@media(max-width:600px){.vp-table{min-width:0;font-size:.7rem}.vp-table th,.vp-table td{padding:.5rem .25rem}.vp-table th{font-size:.78rem}.vp-table td:first-child{width:42%}.vp-table-wrap{padding:.3rem}.vp-hero{flex-direction:column;gap:.4rem}.vp-gem{font-size:3rem}.vp-free{grid-template-columns:1fr}}
+@media(max-width:600px){.vp-table{min-width:0;font-size:.7rem}.vp-table th,.vp-table td{padding:.5rem .25rem}.vp-table th{font-size:.78rem}.vp-table td:first-child{width:42%}.vp-table-wrap{padding:.3rem}.vp-hero{flex-direction:column;gap:.4rem}.vp-gem{font-size:3rem}.vp-free{grid-template-columns:repeat(2,1fr)}}
 `;

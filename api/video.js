@@ -97,10 +97,10 @@ export default async function handler(req, res) {
   </article>
 
   <nav class="next3" aria-label="Что ещё на сайте">
-    <a href="/#/games/words"><span>🔤</span><b>Слово дня</b><small>Угадай слово из 5 букв за 6 попыток</small></a>
+    <a href="/play/words"><span>🔤</span><b>Слово дня</b><small>Угадай слово из 5 букв за 6 попыток</small></a>
     ${quiz ? `<a href="/quiz/${quiz.slug}"><span>${quiz.icon}</span><b>${esc(quiz.title)}</b><small>Тест: 8 вопросов — поделись результатом</small></a>`
       : '<a href="/quiz/game"><span>🕹</span><b>Какая ты игра?</b><small>Тест: 8 вопросов — поделись результатом</small></a>'}
-    <a href="/#/home"><span>💬</span><b>Сайт dan4ik37</b><small>Чат, стримы, игры с друзьями и все видео</small></a>
+    <a href="/"><span>💬</span><b>Сайт dan4ik37</b><small>Чат, стримы, игры с друзьями и все видео</small></a>
   </nav>
 
   ${related.length ? `<section class="more"><h2>${rel.similar ? 'Похожие видео' : 'Ещё видео'}</h2><div class="grid">
@@ -122,7 +122,7 @@ function notFound(res) {
     title: 'Видео не найдено — dan4ik37',
     body: `<main class="wrap narrow"><h1>Такого видео нет</h1>
       <p class="muted">Возможно, ссылка неполная или ролик удалён.</p>
-      <p><a class="btn btn-acc" href="/#/home">Смотреть все видео →</a></p></main>`,
+      <p><a class="btn btn-acc" href="/">Смотреть все видео →</a></p></main>`,
     noindex: true
   }));
 }

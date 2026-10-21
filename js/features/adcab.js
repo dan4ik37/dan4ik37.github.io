@@ -135,7 +135,7 @@
     if (sec === 'c' && id) return campaign(root, id, seq);
     home(root, sec === 'how');
   }
-  const rerender = () => render((location.hash.match(/^#\/adv\/?(.*)$/) || [])[1] || '');
+  const rerender = () => render((D37Route.hash().match(/^#\/adv\/?(.*)$/) || [])[1] || '');
 
   // ═══ Гостю и до запуска SQL: что это, форматы, цены, как работает ═══
   function intro(root, mode){
@@ -601,12 +601,12 @@
       E.id = data.id; E.status = data.status;
       if (!submit) {
         toast(data.status === 'review' && E.locked ? '✏️ Сохранено — кампания снова на проверке' : '💾 Сохранено');
-        history.replaceState(null, '', '#/adv/edit/' + data.id);
+        D37Route.setUrl('#/adv/edit/' + data.id);
         return;
       }
       const r = (await api('ad_act', { p_id: data.id, p_act: 'submit' })).data;
       if (!r?.ok) {
-        history.replaceState(null, '', '#/adv/edit/' + data.id);
+        D37Route.setUrl('#/adv/edit/' + data.id);
         if (r?.reason === 'gems') { gemsModal(r.need); return; }
         showErr(errText(r)); return;
       }

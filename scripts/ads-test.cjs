@@ -216,7 +216,7 @@ globalThis.console = console;
 const yaCalls = [], YA = { fill: false };
 globalThis.Ya = { Context: { AdvManager: { render: (p, alt) => { yaCalls.push({ p, alt }); if (YA.fill && p.renderTo) doc.getElementById(p.renderTo)?.appendChild(new El('iframe')); } } } };
 const flushYa = () => { const q = window.yaContextCb || []; while (q.length) q.shift()(); };
-const setHash = h => { location.hash = h; (winListeners.hashchange || []).forEach(fn => fn({ type: 'hashchange' })); };
+const setHash = h => { location.hash = h; ['hashchange', 'd37:route'].forEach(t => (winListeners[t] || []).forEach(fn => fn({ type: t }))); };   // переход раздела — событие 'd37:route' (js/ui/router.js)
 
 // профиль (как в js/features/profile.js)
 globalThis.currentUser = null; globalThis.currentProfile = null; globalThis.currentRole = null;
