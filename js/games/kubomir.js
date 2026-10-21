@@ -237,6 +237,10 @@
     view = 'world';
     const R = Ex.renderer(wr, { quality: Ex.gfxQuality() });
     R.r.domElement.classList.add('kb-gl');
+    // чёткость (21.10.2026, владелец: «сильная постобработка всё мылит»): пиксельные текстуры — без FXAA (MSAA можно); на компьютере
+    // кадр не уменьшать ниже 85 % (сначала автокачество снимает эффекты); глубина резкости — сама (R.dofSet в frame)
+    R.post?.setPixelArt?.(true);
+    if (!Ex.isMobile?.() && R.dynRes) R.dynRes.min = Math.max(R.dynRes.min, .85);
     const W = new V.World({ seed: meta.seed });
     const G = V.genInit(W.seed, { features: modState.features, ver: meta.genVer || 1 });   // genVer: старые миры — 1 (как были), новые — 2
     const st = {
@@ -1316,6 +1320,7 @@
       if (me.ch && me.ch !== st.meCh) { st.meCh = me.ch; me.ch.root.scale.setScalar(.8); }
     }
     A.update(dt, t, R.camera.position);
+    dofFor(st);   // глубина резкости набора «Ультра»: от 1-го лица — нет, сзади — мягко только даль
     st.hand?.frame(dt, t);   // руки и вещь в руке (поверх позы человечка), свет человечков — как у кубиков
     st.ents?.frame(dt, t);
     st.WX?.frame(dt, t);   // дождь / снег вокруг камеры, шум, гром
@@ -1339,7 +1344,7 @@
           const M = st.skyM = E().skyModel(R.lighting.time, { haze: .2, sun: 1, clouds: .9 }, st.skyM), h = M.hor, g = (.2126 * h[0] + .7152 * h[1] + .0722 * h[2]) * .4, k = .85 * wq;
           fc = '#' + [g * .94, g, g * 1.08].map((v, i) => Math.round(Math.min(1, Math.pow(Math.max(0, h[i] * (1 - k) + v * k), 1 / 2.2)) * 255).toString(16).padStart(2, '0')).join('');
         }
-        R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R), gfx: { sky: { haze: .2 + .65 * wq, sun: Math.max(.3, 1 - .7 * wq), clouds: .9 + .1 * wq }, fog: { color: fc }, exposure: -.3 * wq } });
+        R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R), gfx: { sky: { haze: .2 + .45 * wq, sun: Math.max(.35, 1 - .6 * wq), clouds: .9 + .1 * wq }, fog: { color: fc }, exposure: -.2 * wq } });
       } else R.setLighting({ time: R.lighting.time, fogEnd: fogFor(R) });
       fogNear(st); st.KL?.afterSky();
     }
@@ -1352,6 +1357,16 @@
     R.render();
     hudUpdate(st);
     I.frameEnd(); C.frameEnd();
+  }
+  // Глубина резкости («Ультра», post.js): у движка фокус — на своём персонаже, а от 1-го лица он в камере — весь мир размыт.
+  // Здесь: от 1-го лица — без неё (у кубиков даль должна быть чёткой), сзади и спереди — фокус на персонаже, резко до ~4 его
+  // расстояний, дальше — мягко (сила 0,55)
+  const DOF0 = { k: 0 }, DOF3 = { k: .55, dist: 4, depth: 16 };
+  function dofFor(st){
+    const R = st.R;
+    if (!st.camMode) { R.dofSet = DOF0; return; }
+    const d = Math.max(1.5, st.camD || 4);
+    DOF3.dist = d; DOF3.depth = Math.max(14, d * 4); R.dofSet = DOF3;
   }
   // F5: 1-е лицо → сзади → спереди (как в Майнкрафте)
   function cycleCam(to){

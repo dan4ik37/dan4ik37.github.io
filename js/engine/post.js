@@ -841,7 +841,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture || !!P.retro !== !!rtScene.d37Nearest) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
       else rtScene.setSize(w, h);   // текстуру глубины three пересоздаст сам (размер буфера сменился)
       P.msaa = ms;
-      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA && !P.retro;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено
+      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA && !P.retro && !P.pixelArt;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено и не пиксельная графика
       rtLdr.setSize(w, h);
       let bw = Math.max(1, w >> (q === 'high' ? 1 : 2)), bh = Math.max(1, h >> (q === 'high' ? 1 : 2));
       for (let i = 0; i < P.bloom.levels; i++) {
@@ -949,6 +949,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     let lutTex = null, lutKey = '', rtRays = null, rtDof = null;
     P.dofOn = false; P.dofDrawn = false;
     P.setUnder = (on, k) => { P.under = !!on; P.underK = on ? (k == null ? 1 : Math.max(0, Math.min(1, +k || 0))) : 0; };
+    // пиксельная графика («Кубомир»: текстуры 32×32 без сглаживания внутри): FXAA размывает рисунок — не включать (MSAA можно)
+    P.pixelArt = false;
+    P.setPixelArt = on => { on = !!on; if (on === P.pixelArt) return; P.pixelArt = on; if (P.w > 1) P.setSize(P.w, P.h, P.pr); };
     P.setPack = (fx = {}) => {
       const id = fx.id || 'normal', x = id !== 'normal' && P.on !== false;
       const defs = {};
@@ -979,14 +982,17 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (P.w > 1) P.setSize(P.w, P.h, P.pr);
       return P.pack;
     };
-    // глубина резкости: фокус — на своём персонаже (R.focus — точка, за которой едет камера); нет его (редактор) — прохода нет
+    // глубина резкости: фокус — на своём персонаже (R.focus — точка, за которой едет камера); нет его (редактор) — прохода нет.
+    // R.dofSet = { k, dist, depth } — игра решает сама (21.10.2026, «Кубомир»: от 1-го лица фокус «на себе» был в камере — весь
+    // мир в мыле): k — сила 0…1 (0 — без глубины резкости), dist — расстояние фокуса, depth — сколько вокруг него резко
     function dofPass(camera){
       P.dofDrawn = false;
-      const F = R.focus; if (!rtDof || !F || !F.ok) return;
-      const fd = Math.hypot(camera.position.x - F.x, camera.position.y - F.y - 1.2, camera.position.z - F.z);
+      const F = R.focus, O = R.dofSet; if (!rtDof || !F || !F.ok) return;
+      if (O && !(O.k > 0)) return;
+      const fd = O && O.dist > 0 ? O.dist : Math.hypot(camera.position.x - F.x, camera.position.y - F.y - 1.2, camera.position.z - F.z);
       const u = M.dof.uniforms;
       u.tSrc.value = rtScene.texture; u.tDepth.value = rtScene.depthTexture; u.uNF.value.set(camera.near, camera.far); u.uTexel.value.set(1 / rtDof.width, 1 / rtDof.height);
-      u.uDof.value.set(fd, Math.max(4, fd * 1.2), Math.max(3, rtDof.height / 140), 1);   // мягко: резко — свой персонаж и всё рядом, размыта даль
+      u.uDof.value.set(fd, O && O.depth > 0 ? O.depth : Math.max(4, fd * 1.2), Math.max(3, rtDof.height / 140), O ? Math.min(1, O.k) : 1);   // мягко: резко — свой персонаж и всё рядом, размыта даль
       pass(M.dof, rtDof);
       P.dofDrawn = true;
     }

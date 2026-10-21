@@ -298,6 +298,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     // ── текстуры ──
     let tex = null, atlasN = 1, ntex = null;
     const nmapOn = () => gl2 && !VR.safe && R.q === 'high' && opts.nmap !== false;
+    const aniso = () => R.q === 'low' ? 1 : Math.max(1, Math.min(R.q === 'high' ? 16 : 8, R.r.capabilities.getMaxAnisotropy?.() || 1));
+    VR.aniso = aniso;
     function buildTextures(){
       const all = V.paintAll(), L = all.length, TS = V.TEX || 16;
       if (tex) tex.dispose();
@@ -307,7 +309,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         tex = new T.DataArrayTexture(data, TS, TS, L);
         tex.format = T.RGBAFormat; tex.type = T.UnsignedByteType;
         tex.magFilter = T.NearestFilter; tex.minFilter = T.NearestMipmapLinearFilter; tex.generateMipmaps = true;
-        tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.encoding = T.sRGBEncoding; tex.anisotropy = 1;
+        // анизотропия (21.10.2026, «всё мылит»): земля под углом без неё — каша из усреднённых пикселей; на средней и высокой — сколько
+        // умеет видеокарта (до 16; дёшево), увеличение — «по пикселям» (Nearest), как в Майнкрафте
+        tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.encoding = T.sRGBEncoding; tex.anisotropy = aniso();
       } else {
         atlasN = Math.ceil(Math.sqrt(L));
         const S = atlasN * TS, data = new Uint8Array(S * S * 4), RW = TS * 4;
@@ -331,7 +335,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         });
         ntex = new T.DataArrayTexture(nd, TS, TS, L);
         ntex.format = T.RGBAFormat; ntex.type = T.UnsignedByteType; ntex.magFilter = T.NearestFilter; ntex.minFilter = T.LinearMipmapLinearFilter; ntex.generateMipmaps = true;
-        ntex.wrapS = ntex.wrapT = T.RepeatWrapping; ntex.needsUpdate = true;
+        ntex.wrapS = ntex.wrapT = T.RepeatWrapping; ntex.anisotropy = aniso(); ntex.needsUpdate = true;
       }
       U.uNTex.value = ntex;
     }
