@@ -85,9 +85,11 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       while (Date.now() - t0 < MIN * 60000) {
         n++;
         const r = await ev(`(async () => {
-          const n = ${n}, S = GAME_IMPL.kubomir._test.state(), T = GAME_IMPL.kubomir._test, wait = ms => new Promise(r => setTimeout(r, ms)), C = S.C, rnd = Math.random;
-          if (!S || !S.ready) { await wait(2000); return { n, wait: true }; }
-          const dead = document.querySelector('.kb-dead [data-m]'); if (dead) { dead.click(); await wait(1500); }
+          const n = ${n}, S = GAME_IMPL.kubomir._test.state(), T = GAME_IMPL.kubomir._test, wait = ms => new Promise(r => setTimeout(r, ms)), rnd = Math.random;
+          if (!S) return { n, closed: true };
+          if (!S.ready) { await wait(2000); return { n, wait: true }; }
+          const C = S.C;
+          const dead = document.querySelector('.kb-dead [data-r]'); if (dead) { dead.click(); await wait(1500); }   // нокаут — «Прийти в себя»
           if (n % 6 === 0) { const W = [{ mode: 'fixed', season: 'winter', weather: 'snow' }, { mode: 'fixed', season: 'summer', weather: 'rain' }, { mode: 'fixed', season: 'summer', weather: 'clear' }, { mode: 'fixed', season: 'winter', weather: 'clear' }][(n / 6) % 4 | 0]; try { S.WX.clim.setWorld(Object.assign({ seed: 'kb', lapse: 0, seaY: 52 }, W)); } catch (e) {} }
           if (n % 9 === 0) S.R.lighting.time = [6, 12, 18.5, 23, 2][(n / 9) % 5 | 0];
           if (n % 15 === 0) { S.dbg = !S.dbg; }
@@ -103,7 +105,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           await wait(800);
           return { n, x: Math.round(S.P.x), y: Math.round(S.P.y), z: Math.round(S.P.z), hp: S.P.hp, pk: !!S.P.pk, hang: !!S.P.hang, water: S.P.water > .3, wx: S.WX.stats?.().zone };
         })()`, 60000).catch(e => ({ n, err: e.message }));
-        if (n % 10 === 0) console.log('  шаг', JSON.stringify(r), Math.round((Date.now() - t0) / 1000) + ' с');
+        if (n % 10 === 0 || r?.err || r?.closed) console.log('  шаг', JSON.stringify(r), Math.round((Date.now() - t0) / 1000) + ' с');
+        if (r?.closed) { ok(false, 'мир закрылся сам во время игры'); break; }
+        if (r?.err) { await sleep(1000); if ((res.soakErr = (res.soakErr || 0) + 1) > 5) { ok(false, 'шаг игры падает', r.err); break; } }
       }
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
       res.soak = { minutes: MIN, steps: n, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6) };
