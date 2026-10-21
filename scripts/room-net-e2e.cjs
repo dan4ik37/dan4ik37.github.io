@@ -16,6 +16,10 @@ const ONLY = (process.argv[2] || 'ABC').toUpperCase();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 600)); } };
+// Шум, не относящийся к проверке: сеть/реклама; renderXpTop — сайт зовёт sbClient.rpc, пока мы нарочно прячем клиент (сценарий A);
+// adsbygoogle — исключение самого скрипта Google; load — в части C страницы грузятся без сети
+const NOISE = /Failed to fetch|NetworkError|_vercel|ERR_|net::|ResizeObserver|adsbygoogle|renderXpTop/;
+const NOISE_OFFLINE = new RegExp(NOISE.source + '|load|Load');
 const rnd = () => Math.random().toString(36).slice(2, 8).replace(/[^a-z0-9]/g, 'x');
 
 // ── сервер: файлы сайта + настоящие адреса из vercel.json; down — «нет интернета» ──
@@ -135,7 +139,7 @@ const hasTopic = (t) => `sbClient.getChannels().some(c => c.topic === 'realtime:
         await B.load(BASE + '/play');
         await B.until(siteReady, 20000);
       }
-      ok(B.errors.filter(e => !/Failed to fetch|NetworkError|_vercel|ERR_|net::|ResizeObserver|adsbygoogle/.test(e)).length === 0, 'A: без ошибок в консоли', B.errors.slice(0, 6));
+      ok(B.errors.filter(e => !NOISE.test(e)).length === 0, 'A: без ошибок в консоли', B.errors.slice(0, 6));
       await B.close(); B = null;
     }
 
@@ -177,7 +181,7 @@ const hasTopic = (t) => `sbClient.getChannels().some(c => c.topic === 'realtime:
         ok(ph1 <= ph0, `B ${cycle.id}: слушателей pagehide не прибавилось (${ph0} → ${ph1})`);
         ok(h1 - h0 < 3000, `B ${cycle.id}: память после 20 входов/выходов (${h0} → ${h1} КБ)`);
       }
-      ok(B.errors.filter(e => !/Failed to fetch|NetworkError|_vercel|ERR_|net::|ResizeObserver|adsbygoogle/.test(e)).length === 0, 'B: без ошибок в консоли', B.errors.slice(0, 6));
+      ok(B.errors.filter(e => !NOISE.test(e)).length === 0, 'B: без ошибок в консоли', B.errors.slice(0, 6));
       await B.close(); B = null;
     }
 
@@ -217,7 +221,7 @@ const hasTopic = (t) => `sbClient.getChannels().some(c => c.topic === 'realtime:
       ok(offl.length === 2 && offl.every(a => !a.off), 'C: на офлайн-странице «Клеточки» и «Червячки» доступны (файлы в кэше)', offl);
       await B.send('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
       S.down = false;
-      ok(B.errors.filter(e => !/Failed to fetch|NetworkError|_vercel|ERR_|net::|ResizeObserver|adsbygoogle|load|Load/.test(e)).length === 0, 'C: без ошибок в консоли', B.errors.slice(0, 6));
+      ok(B.errors.filter(e => !NOISE_OFFLINE.test(e)).length === 0, 'C: без ошибок в консоли', B.errors.slice(0, 6));
       await B.close(); B = null;
     }
   } catch (e) {

@@ -614,7 +614,9 @@ function miniEl(){
       const s = read('js/games/' + f);
       if (/sbClient\s*\.\s*channel\s*\(/.test(s.replace(/\/\/.*$/gm, ''))) left.push(f);
     }
-    ok(JSON.stringify(left.sort()) === JSON.stringify(['mir-war.js', 'mir.js', 'room.js', 'world.js']), 'страж: sbClient.channel( только в room.js (GameRoom.channel) и у миров / зоны — остальные игры идут через GameRoom.channel (io-игры — своя очередь, IoKit.supaTransport)', left);
+    // разрешено: room.js (сам GameRoom.channel), миры и боевая зона (канал заводят после загрузки мира, join ждёт whenNet), io-игры (свой транспорт с очередью)
+    const allowed = new Set(['room.js', 'mir.js', 'world.js', 'mir-war.js', 'iokit.js']);
+    ok(left.every(f => allowed.has(f)), 'страж: игры не заводят sbClient.channel( мимо GameRoom.channel — новая комната только через него (иначе до появления sbClient она молча не работает, а сообщения до подписки уходят через REST)', left.filter(f => !allowed.has(f)));
     for (const f of ['mir.js', 'world.js']) {
       const s = read('js/games/' + f), j = s.slice(s.indexOf('async function join('), s.indexOf('async function join(') + 900);
       ok(/GameRoom\??\.whenNet\(/.test(j) && /Нет связи с сервером — проверь интернет/.test(j), `${f}: join() ждёт GameRoom.whenNet и честно пишет «Нет связи…»`);
