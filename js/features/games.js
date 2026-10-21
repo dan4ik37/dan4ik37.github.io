@@ -145,7 +145,7 @@ function renderGamesHub(){
   grid.innerHTML = list.map(g => {
     const st = gameLocalStats(g.id);
     const rec = st.best ? `<span class="gm-rec">🏆 ${esc(gameBestLabel(g.id, st.best))}</span>` : '';
-    return `<a class="gm-card" href="${g.href || '#/games/' + g.id}" style="--gc:${g.color}">
+    return `<a class="gm-card" href="${g.href ? D37Route.href(g.href) : '/play/' + g.id}" style="--gc:${g.color}">
       ${window.D37Age ? D37Age.badge(g.age, { title: g.ageWhy || 'Без ограничений' }) : ''}
       <span class="gm-ic">${g.icon}</span>
       <span class="gm-title">${esc(g.title)}</span>
@@ -171,11 +171,11 @@ function renderGamesMe(){
   const box = document.getElementById('gamesMe');
   if (!box || !window.D37Char || !window.D37Coins) return;
   box.hidden = false;
-  box.innerHTML = `<a class="gm-me-char" href="#/games/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
-    <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет${window.D37Gems?.isOn() ? ` · <a class="gm-gems" href="#/shop" title="Магазин кристаллов">💎 <b class="js-gems">${D37Gems.num(D37Gems.balance())}</b></a>` : ''}</span></div>
+  box.innerHTML = `<a class="gm-me-char" href="/play/wardrobe" title="Мой персонаж — гардероб" aria-label="Мой персонаж"><canvas width="112" height="112"></canvas></a>
+    <div class="gm-me-body"><b>Мой персонаж</b><span>🪙 <b class="js-coins">${Number(D37Coins.coins()).toLocaleString('ru')}</b> монет${window.D37Gems?.isOn() ? ` · <a class="gm-gems" href="/shop" title="Магазин кристаллов">💎 <b class="js-gems">${D37Gems.num(D37Gems.balance())}</b></a>` : ''}</span></div>
     ${D37Coins.canDaily() ? '<button type="button" class="gm-me-btn" onclick="gamesDailyBonus(this)">🎁 Бонус дня</button>' : ''}
     ${window.D37AdPlaces?.coinOffer?.('hub') || ''}
-    <a class="gm-me-btn ghost" href="#/games/wardrobe">🎭 Гардероб</a>`;
+    <a class="gm-me-btn ghost" href="/play/wardrobe">🎭 Гардероб</a>`;
   D37Char.draw(box.querySelector('canvas').getContext('2d'), D37Char.look(), 56, 106, 88, { t: 0 });
 }
 async function gamesDailyBonus(btn){
@@ -213,7 +213,7 @@ async function renderDailyQuest(){
   if (!currentUser) right = `<button class="dq-btn ghost" onclick="openGlobalAuth()">Войти</button>`;
   else if (data.claimed) right = `<span class="dq-done">✅ Награда получена</span>`;
   else if (data.done) right = `<button class="dq-btn" onclick="claimDailyQuest(this)">🎁 Забрать ${dailyQuestPrize()}</button>`;
-  else right = q.game ? `<a class="dq-btn ghost" href="#/games/${q.game}">Играть →</a>` : '';
+  else right = q.game ? `<a class="dq-btn ghost" href="/play/${q.game}">Играть →</a>` : '';
   box.innerHTML = `<span class="dq-ic">🎯</span>
     <div class="dq-body"><b>Задание дня</b><span>${esc(q.text)}</span><small>${currentUser ? (data.done ? 'Выполнено!' : 'Новое задание — каждый день в полночь по МСК') : 'Войди, чтобы получить награду'}</small></div>
     ${right}`;
@@ -486,7 +486,7 @@ const WHATSNEW = [['#/games/podzem', '⛏', 'Подземье — копай, с
 function whatsNewHtml(){
   let seen = ''; try { seen = localStorage.getItem('d37_whatsnew') || ''; } catch (e) {}
   if (seen === WHATSNEW_VER) return '';
-  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.slice(0, 10).map(([h, ic, t]) => `<a href="${h}">${ic} ${esc(t)}</a>`).join('')}<a href="#/games">🎮 Все игры →</a></div>
+  return `<div class="whatsnew" id="whatsNew"><b>🆕 Новое на сайте</b><div class="wn-links">${WHATSNEW.slice(0, 10).map(([h, ic, t]) => `<a href="${D37Route.href(h)}">${ic} ${esc(t)}</a>`).join('')}<a href="/play">🎮 Все игры →</a></div>
     <button type="button" class="wn-x" aria-label="Скрыть" onclick="hideWhatsNew()">✕</button></div>`;
 }
 function hideWhatsNew(){ try { localStorage.setItem('d37_whatsnew', WHATSNEW_VER); } catch (e) {} document.getElementById('whatsNew')?.remove(); }
@@ -503,11 +503,11 @@ function renderToday(){
     : `Попытка ${s.rows.length + 1} из 6 — доиграй!`;
   const qz = QUIZ_DAY[wordsDayNo() % QUIZ_DAY.length], sd = sudokuToday(), fw = fillwordToday();
   const mmss = sec => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
-  box.innerHTML = whatsNewHtml() + `<a class="today-online" id="todayOnline" href="#/chat" hidden></a><div class="today-grid">
-      <a class="today-card hot-slot${s?.done ? '' : ' hot'}" href="#/games/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
+  box.innerHTML = whatsNewHtml() + `<a class="today-online" id="todayOnline" href="/chat" hidden></a><div class="today-grid">
+      <a class="today-card hot-slot${s?.done ? '' : ' hot'}" href="/play/words"><span class="ti">🔤</span><span class="tt"><b>Слово дня #${wordsDayNo()}</b><small>${esc(state)}</small></span></a>
       <a class="today-card" href="/quiz/${qz[0]}"><span class="ti">${qz[1]}</span><span class="tt"><b>Тест дня</b><small>${esc(qz[2])}</small></span></a>
-      <a class="today-card${fw ? '' : ' hot'}" href="#/games/fillword/daily"><span class="ti">🔎</span><span class="tt"><b>Филворд дня #${fillwordDayNo()}</b><small>${fw ? `✅ Решён за ${mmss(fw.sec)} · завтра новый` : 'Найди все слова — одно поле на всех'}</small></span></a>
-      <a class="today-card${sd ? '' : ' hot'}" href="#/games/sudoku"><span class="ti">🔢</span><span class="tt"><b>Судоку дня #${sudokuDayNo()}</b><small>${sd ? (sd.won ? `✅ Решено за ${mmss(sd.sec)} · завтра новое` : '❌ Не решено · завтра новое') : 'Одно на всех — кто решит быстрее?'}</small></span></a>
+      <a class="today-card${fw ? '' : ' hot'}" href="/play/fillword/daily"><span class="ti">🔎</span><span class="tt"><b>Филворд дня #${fillwordDayNo()}</b><small>${fw ? `✅ Решён за ${mmss(fw.sec)} · завтра новый` : 'Найди все слова — одно поле на всех'}</small></span></a>
+      <a class="today-card${sd ? '' : ' hot'}" href="/play/sudoku"><span class="ti">🔢</span><span class="tt"><b>Судоку дня #${sudokuDayNo()}</b><small>${sd ? (sd.won ? `✅ Решено за ${mmss(sd.sec)} · завтра новое` : '❌ Не решено · завтра новое') : 'Одно на всех — кто решит быстрее?'}</small></span></a>
       ${window.__d37Daily ? `<a class="today-card today-vid" href="/v/${esc(window.__d37Daily.id)}"><span class="ti">🎬</span><span class="tt"><b>Видео дня</b><small>${esc(window.__d37Daily.title)}</small></span></a>`
         : '<a class="today-card" href="/top"><span class="ti">🏆</span><span class="tt"><b>Лучшие видео</b><small>Самые популярные ролики канала</small></span></a>'}
       <button type="button" class="today-card" onclick="d37Surprise(this)"><span class="ti">🎲</span><span class="tt"><b>Удиви меня</b><small>Случайное видео из почти 6000</small></span></button>
@@ -554,10 +554,10 @@ async function renderProfileGameStats(uid, isOwn){
   card.hidden = false;
   const box = document.getElementById('profileGameStats');
   document.getElementById('profileGameStatsSum').textContent = plays ? `${plays} ${plays % 10 === 1 && plays % 100 !== 11 ? 'партия' : [2, 3, 4].includes(plays % 10) && ![12, 13, 14].includes(plays % 100) ? 'партии' : 'партий'} · ${wins} побед` : '';
-  box.innerHTML = rows.length ? rows.sort((a, b) => b.p - a.p).map(r => `<a class="pgs-item" href="#/games/${r.g.id}" style="--gc:${r.g.color}">
+  box.innerHTML = rows.length ? rows.sort((a, b) => b.p - a.p).map(r => `<a class="pgs-item" href="/play/${r.g.id}" style="--gc:${r.g.color}">
       <span class="pgs-ic">${r.g.icon}</span>
       <span class="pgs-txt"><b>${esc(r.g.title)}</b><small>${r.p} игр · ${r.w} побед${r.best ? ' · 🏆 ' + esc(r.best) : ''}</small></span></a>`).join('')
-    : '<div class="pgs-empty">Ещё не играл. <a href="#/games">Сыграй во что-нибудь</a> — за победы дают XP, а рекорды попадут сюда.</div>';
+    : '<div class="pgs-empty">Ещё не играл. <a href="/play">Сыграй во что-нибудь</a> — за победы дают XP, а рекорды попадут сюда.</div>';
 }
 
 // После партии: если задание дня выполнено и не забрано — напомнить

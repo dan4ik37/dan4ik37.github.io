@@ -34,7 +34,7 @@ document.addEventListener('keydown', e=>{
   const routes = Object.keys(PAGES);
   if(e.key>='1' && e.key<='8'){
     const route = routes[+e.key-1];
-    if(route){ e.preventDefault(); location.hash='#/'+route; }
+    if(route){ e.preventDefault(); D37Route.go('#/'+route); }
     return;
   }
   if(e.key==='ArrowRight' || e.key==='ArrowLeft'){
@@ -42,7 +42,7 @@ document.addEventListener('keydown', e=>{
     if(cur===-1) return;
     e.preventDefault();
     const dir = e.key==='ArrowRight' ? 1 : -1;
-    location.hash = '#/'+routes[(cur+dir+routes.length)%routes.length];
+    D37Route.go('#/'+routes[(cur+dir+routes.length)%routes.length]);
   }
 });
 
@@ -63,7 +63,7 @@ function collectRoutes(){
     const c = a.cloneNode(true);
     c.querySelectorAll('.chat-badge,.new-count').forEach(b=>b.remove());
     const label = c.textContent.trim().replace(/\s+/g,' ');
-    if(label) items.push({ kind:'page', label, href:'#/'+route });
+    if(label) items.push({ kind:'page', label, href:a.getAttribute('href') || '#/'+route });
   });
   return items;
 }
@@ -166,7 +166,7 @@ function ensureCmdPaletteEl(){
 
 function itemHtml(it, active){
   const ic = it.kind==='video' ? (it.thumb ? `<img src="${esc(it.thumb)}" alt="" loading="lazy">` : '▶') : it.kind==='page' ? '↪' : it.kind==='random' ? '🎲' : '';
-  return `<a class="cmdp-item${active?' active':''}" href="${esc(it.href)}" data-kind="${it.kind}">
+  return `<a class="cmdp-item${active?' active':''}" href="${esc(it.href[0]==='#' && it.href[1]==='/' ? D37Route.href(it.href) : it.href)}" data-kind="${it.kind}">
       ${ic ? `<span class="cmdp-ic">${ic}</span>` : ''}
       <span class="cmdp-txt"><span class="cmdp-item-label">${esc(it.label)}</span>${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</span>
       <span class="cmdp-item-go">↵</span></a>`;

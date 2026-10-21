@@ -394,7 +394,7 @@
   R()?.on((type, d) => {
     if (type !== 'claim' || !d) return;
     const L = R().LADDER;
-    if (d.ok && !d.already) toast(`🎉 Ты пришёл(ла) по приглашению <b>${esc(d.inviter || 'друга')}</b>! На ${L.w.lv} уровне — подарок: ${num(L.w.coins)} 🪙 и ${esc(L.w.text)}. <a href="#/invite">Подробнее</a>`);
+    if (d.ok && !d.already) toast(`🎉 Ты пришёл(ла) по приглашению <b>${esc(d.inviter || 'друга')}</b>! На ${L.w.lv} уровне — подарок: ${num(L.w.coins)} 🪙 и ${esc(L.w.text)}. <a href="/invite">Подробнее</a>`);
     else if (d.reason === 'self_device') toast('Приглашение не засчитано: ссылку открыли там же, где входит пригласивший. Зови других людей — и всё получится 🙂');
     ST.at = 0;
     if (routeSeg(0) === 'invite') renderInvitePage(routeSeg(1));

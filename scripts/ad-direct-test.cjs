@@ -619,7 +619,7 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
   has('js/features/fx.js', /'ads', 'adv'\]/, 'fx.js: кабинет в «Ещё ▾»');
   has('js/features/shop.js', /href="#\/adv"/, 'магазин: ссылка на кабинет');
   has('js/features/shop.js', /ads: 'Реклама на сайте', ads_refund: 'Возврат остатка рекламы'/, 'магазин: подписи в истории 💎');
-  has('api/_lib/page.js', /href="\/#\/adv"/, 'серверные страницы: кабинет в меню и подвале');
+  has('api/_lib/page.js', /href="\/(#\/)?adv"/, 'серверные страницы: кабинет в меню и подвале');
   for (const f of ['js/features/adcab.js', 'css/adcab.css']) ok(fs.existsSync(path.join(SITE, f)), 'есть ' + f);
   ok(fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'функций Vercel не больше 12');
 }
