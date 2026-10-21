@@ -18,6 +18,11 @@
   const ICE = () => [...STUN, ...(Array.isArray(window.D37_TURN) ? window.D37_TURN : [])];
   const MAX = 6, RING_MS = 40000, DIAL_MS = 35000, CONNECT_MS = 30000;
   const e = s => esc(s);
+  // Безопасность детей (community.sql ч. 5, js/core/age.js): до 9 — звонков нет; ребёнку до 13 — не со взрослыми и не с «без возраста»
+  const kidMsg = k => window.D37Age?.kidMsg?.(k) || '🚫 Нельзя позвонить этому игроку';
+  const kidBlock = uid => (window.D37Age?.contact ? window.D37Age.contact(uid).catch(() => null) : Promise.resolve(null));
+  const u9 = () => !!window.D37Age?.u9?.();
+  const dmErr = error => /row-level|42501/i.test(error?.message || '') || error?.code === '42501' ? kidMsg('nocall') : P.err(error);
   const rid = n => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const b = crypto.getRandomValues(new Uint8Array(n)); for (const x of b) s += a[x % a.length]; return s; };
 
   // ═══ Чистые части (проверяются в node: scripts/community-test.cjs) ═══
@@ -383,9 +388,31 @@
   const readLog = () => { try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]') || []; } catch (er) { return []; } };
   function logCall(x){ const l = readLog(); l.unshift(Object.assign({ at: Date.now() }, x)); try { localStorage.setItem(LOG_KEY, JSON.stringify(l.slice(0, 40))); } catch (er) {} }
 
+  // ═══ Пропуск в звонок (community.sql ч. 5: call_pass / call_check), как у голосовых каналов ═══
+  // Соседи по комнате call-<код> проверяют пропуск на сервере: ник — из базы, ребёнок до 13 и взрослый / «без возраста» друг друга не
+  // проходят (браузер соединяется только с прошедшими), до 9 лет — пропуска нет. Нет функции на сервере (SQL не запущен) или нет
+  // связи — как раньше, без пропуска (а у того, кто с пропуском, «без пропуска» не пройдёт — ребёнка это не откроет).
+  async function callSpec(code){
+    if (u9()) return { err: kidMsg('u9') };
+    let keys; try { keys = await myKeys(); } catch (er) { return {}; }
+    const pr = await P.rpc('call_pass', { p_code: code, p_pub: keys.pub });
+    if (pr.error || !pr.data) return {};
+    if (!pr.data.ok) return pr.data.reason === 'u9' ? { err: kidMsg('u9') } : {};
+    return { pass: pr.data.pass, verify: async m => {
+      if (typeof m.pass !== 'string' || typeof m.pub !== 'string') return null;
+      const { data } = await P.rpc('call_check', { p_code: code, p_pass: m.pass, p_pub: m.pub });
+      if (data?.ok && data.uid === m.uid) return { uid: data.uid, nick: data.nick };
+      if (data?.ok === false && (data.reason === 'age' || data.reason === 'u9') && S?.code === code && !S.kidBlocked) { S.kidBlocked = data.reason; render(); }
+      return null;
+    } };
+  }
+  const withSpec = (opt, sp) => (sp.pass ? Object.assign(opt, { pass: sp.pass, verify: sp.verify }) : opt);
+
   // ═══ Позвонить другу ═══
   C.call = async (uid, nick) => {
     if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return; }
+    const kb = await kidBlock(uid);
+    if (kb) { P.toast(kidMsg(kb), false); return; }
     if (S && S.state !== 'ended') {
       if (S.kind === 'party' || S.kind === 'call') { const ok = await P.ask(`Ты уже в разговоре. Позвать <b>${e(nick)}</b> к вам?`, [{ k: 'yes', t: '➕ Позвать', cls: 'ok' }]); if (ok) C.invite(uid, nick); return; }
       if (await P.ask('Выйти из голосового канала и позвонить?', [{ k: 'yes', t: '📞 Позвонить' }]) !== 'yes') return; C.leave(); await new Promise(r => setTimeout(r, 300));
@@ -396,16 +423,19 @@
     P.open('incall', { byCall: !P.isOpen() });
     ring(true, 'back');
     // код комнаты знает только тот, кому отправили вызов (личным сообщением), — в звонок можно позвать ещё друзей
-    const r = await startRoom({ topic: S.topic, max: MAX,
+    const sp = await callSpec(code);
+    if (!S || S.code !== code) return;
+    if (sp.err) { S.reason = 'dm'; S.err = sp.err; setState('failed'); return; }
+    const r = await startRoom(withSpec({ topic: S.topic, max: MAX,
       onEmpty: () => { if (S?.room && S.state === 'live') { S.reason = 'hangup'; setState('hangup'); } },
-      onDecline: () => { if (S?.state === 'out') { S.reason = 'declined'; setState('declined'); } } });
+      onDecline: () => { if (S?.state === 'out') { S.reason = 'declined'; setState('declined'); } } }, sp));
     if (!S || S.code !== code) { if (r.R) closeRoom(r.R, false); return; }
     if (r.err) { S.reason = 'mic'; S.err = r.err; setState('failed'); return; }
     S.room = r.R;
-    // вызов — личным сообщением (его может прислать только друг)
+    // вызов — личным сообщением (его может прислать только друг; ребёнку взрослый — нет: сервер, community.sql ч. 5)
     const link = `https://dan4ik37.vercel.app/#/phone/call/${code}`;
     const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text: `📞 Звоню тебе! ${link}` }]);
-    if (error) { S.reason = 'dm'; S.err = /row-level|42501/i.test(error.message || '') ? 'Звонить можно только друзьям (и если вы не заблокировали друг друга)' : P.err(error); setState('failed'); return; }
+    if (error) { S.reason = 'dm'; S.err = dmErr(error); setState('failed'); return; }
     S.timer = setTimeout(() => { if (S?.code === code && S.state === 'out') { S.reason = 'noanswer'; setState('timeout'); } }, DIAL_MS);
     // друг вошёл в комнату — разговор
     const watch = setInterval(() => {
@@ -427,18 +457,24 @@
   C.invite = async (uid, nick) => {
     if (!S || !S.code) return;
     const n = people().length; if (n >= MAX) { P.toast('В разговоре уже 6 человек — больше нельзя', false); return; }
+    const kb = await kidBlock(uid);
+    if (kb) { P.toast(kidMsg(kb), false); return; }
     const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text: `🎧 Зову в голосовой чат! https://dan4ik37.vercel.app/#/phone/call/${S.code}` }]);
-    P.toast(error ? '⚠️ ' + (/row-level|42501/i.test(error.message || '') ? 'звать можно только друзей' : P.err(error)) : `📨 Позвал(а) ${nick}`, !error);
+    P.toast(error ? dmErr(error) : `📨 Позвал(а) ${nick}`, !error);
   };
   // Голосовая компания: своя комната, зовёшь друзей
   C.party = async () => {
     if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return; }
     if (S && S.state !== 'ended') { P.go('incall'); return; }
+    if (u9()) { P.toast(kidMsg('u9'), false); return; }
     const code = rid(10);
     S = { kind: 'party', dir: 'out', state: 'idle', code, topic: 'call-' + code, title: '🎧 Голосовая компания', at: Date.now() };
     setState('join');
     P.go('incall');
-    const r = await startRoom({ topic: S.topic, max: MAX });
+    const sp = await callSpec(code);
+    if (!S || S.code !== code) return;
+    if (sp.err) { S.reason = 'dm'; S.err = sp.err; setState('failed'); return; }
+    const r = await startRoom(withSpec({ topic: S.topic, max: MAX }, sp));
     if (!S || S.code !== code) { if (r.R) closeRoom(r.R, false); return; }
     if (r.err) { S.reason = 'mic'; S.err = r.err; setState('failed'); return; }
     S.room = r.R; S.t0 = Date.now(); S.state = 'live'; armConnect(); render(); pill();
@@ -452,8 +488,11 @@
     S = { kind: opt.kind || 'party', dir: 'in', state: 'idle', code, topic: 'call-' + code, title: opt.title || '📞 Звонок', peer: opt.peer || null, at: Date.now() };
     setState('join');
     P.go('incall');
-    const r = await startRoom({ topic: S.topic, max: MAX,
-      onEmpty: () => { if (S?.room && S.state === 'live' && S.kind === 'call') { S.reason = 'hangup'; setState('hangup'); } } });
+    const sp = await callSpec(code);
+    if (!S || S.code !== code) return;
+    if (sp.err) { S.reason = 'dm'; S.err = sp.err; setState('failed'); return; }
+    const r = await startRoom(withSpec({ topic: S.topic, max: MAX,
+      onEmpty: () => { if (S?.room && S.state === 'live' && S.kind === 'call') { S.reason = 'hangup'; setState('hangup'); } } }, sp));
     if (!S || S.code !== code) { if (r.R) closeRoom(r.R, false); return; }
     if (r.err) { S.reason = 'mic'; S.err = r.err; setState('failed'); return; }
     S.room = r.R;
@@ -496,7 +535,10 @@
     const s = S; clearTimeout(s.timer); ring(false);
     if (s.watch) { closeRoom(s.watch, false); s.watch = null; }
     setState('accept');
-    const r = await startRoom({ topic: s.topic, max: MAX, onEmpty: () => { if (S === s && s.state === 'live' && s.kind === 'call') { s.reason = 'hangup'; setState('hangup'); } } });
+    const sp = await callSpec(s.code);
+    if (S !== s) return;
+    if (sp.err) { s.reason = 'dm'; s.err = sp.err; setState('failed'); return; }
+    const r = await startRoom(withSpec({ topic: s.topic, max: MAX, onEmpty: () => { if (S === s && s.state === 'live' && s.kind === 'call') { s.reason = 'hangup'; setState('hangup'); } } }, sp));
     if (S !== s) { if (r.R) closeRoom(r.R, false); return; }
     if (r.err) { s.reason = 'mic'; s.err = r.err; setState('failed'); return; }
     s.room = r.R; s.t0 = Date.now();
@@ -526,6 +568,7 @@
   // ═══ Голосовой канал (сервер «Денчик37» — канал 0, сообщество — номер канала): пропуск выдаёт база ═══
   C.voiceJoin = async spec => {
     if (!P.me()) { if (typeof openGlobalAuth === 'function') openGlobalAuth('login'); return { err: 'login' }; }
+    if (u9()) return { err: kidMsg('u9voice') };   // до 9 — голосовых нет (сервер не даст пропуск и сам: cv_pass)
     if (S && S.state !== 'ended') {
       if (S.kind === 'voice' && S.spec.kind === spec.kind && String(S.spec.channel) === String(spec.channel)) return { ok: true };
       if (await P.ask('Ты уже разговариваешь. Выйти и зайти в этот канал?', [{ k: 'yes', t: '🔊 Перейти' }]) !== 'yes') return { err: 'busy' };
@@ -534,7 +577,7 @@
     const keys = await myKeys();
     const pr = await P.rpc('cv_pass', { p_channel: spec.channel, p_pub: keys.pub });
     if (pr.error) return { err: pr.missing ? 'soon' : P.err(pr.error) };
-    if (!pr.data?.ok) return { err: { member: 'Сначала вступи в сообщество', banned: 'Тебя забанили', muted: 'Тебя заглушили в чате', new: 'Голосовой канал сайта — для аккаунтов старше суток', not_found: 'Канал не найден' }[pr.data?.reason] || 'Не получилось' };
+    if (!pr.data?.ok) return { err: { member: 'Сначала вступи в сообщество', banned: 'Тебя забанили', muted: 'Тебя заглушили в чате', new: 'Голосовой канал сайта — для аккаунтов старше суток', not_found: 'Канал не найден', u9: kidMsg('u9voice') }[pr.data?.reason] || 'Не получилось' };
     const code = 'v' + spec.channel;
     S = { kind: 'voice', dir: 'out', state: 'idle', code: null, topic: pr.data.topic, title: spec.title, spec, at: Date.now() };
     setState('join');
@@ -608,6 +651,7 @@
     const bad = S.netWarn || ps.some(p => p.state === 'fail');
     return `<div class="vc"><div class="vc-head"><b>${e(S.title)}</b><small>${S.t0 ? clock() + ' · ' : ''}${ps.length} из ${MAX}</small></div>
       ${S.full ? '<div class="vc-note bad">Канал полон (6 человек) — подожди, пока кто-нибудь выйдет.</div>' : ''}
+      ${S.kidBlocked ? `<div class="vc-note bad">${e(kidMsg(S.kidBlocked === 'u9' ? 'u9' : 'agecall'))}</div>` : ''}
       ${bad ? `<div class="vc-note bad">${TURN_NOTE}</div>` : ''}
       <div class="vc-grid">${ps.map(p => `<div class="vc-tile${p.speaking ? ' spk' : ''}${p.state === 'fail' ? ' bad' : ''}">${P.avatar(P.prof(p.uid) || null, p.nick, 64)}<b>${e(p.nick)}${p.me ? ' (ты)' : ''}</b><small>${p.state === 'fail' ? '⚠️ нет связи' : p.state === 'connecting' ? 'соединяем…' : p.speaking ? 'говорит' : ' '}</small><span class="vc-ic">${p.deaf ? '🔈' : p.mute ? '🔇' : ''}</span></div>`).join('')}</div>
       <div class="vc-ctrl">
@@ -637,7 +681,8 @@
     const f = await P.friends(true);
     const st = await P.friendStatus(f.list);
     const inside = new Set(people().map(p => p.uid));
-    const list = f.list.filter(id => !inside.has(id)).sort((a, b) => (st.has(b) ? 1 : 0) - (st.has(a) ? 1 : 0));
+    const kb = window.D37Age?.contacts ? await window.D37Age.contacts(f.list).catch(() => new Map()) : new Map();   // ребёнку — без взрослых
+    const list = f.list.filter(id => !inside.has(id) && !kb.has(id)).sort((a, b) => (st.has(b) ? 1 : 0) - (st.has(a) ? 1 : 0));
     P.sheet(`<b>➕ Позвать в разговор</b><div class="ph-list">${list.length ? list.map(id => { const p = P.prof(id) || {}; return `<button type="button" class="ph-item" data-s="${e(id)}">${P.avatar(p, p.nick, 34)}<span><b>${e(p.nick || 'друг')}</b><small>${st.has(id) ? e(P.actText(st.get(id).a)) : 'не в сети'}</small></span>➕</button>`; }).join('') : '<div class="ph-dim">Друзей нет — найди их в чате или в мире</div>'}</div>`,
       (k) => { const p = P.prof(k); P.closeSheet(); C.invite(k, p?.nick || 'друг'); });
   }

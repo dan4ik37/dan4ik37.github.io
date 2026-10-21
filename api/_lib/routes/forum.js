@@ -5,10 +5,13 @@
 // (page({ spa }) в api/_lib/page.js) — перезагрузка не выкидывает из приложения.
 // Текст игроков — только экранированный и через publicText(): чужие ссылки — «[ссылка]», телефоны, почта, @ники — «[скрыто]»,
 // мат закрыт (как в чате для детей: страницу видит кто угодно, возраст сервер не знает). Рекламы нет (текст не проверен
-// модератором заранее — правила AdSense), как у noAds-страниц. Данные — по service-ключу, только публичные поля (ник, роль).
+// модератором заранее — правила AdSense), как у noAds-страниц. Данные — по service-ключу, только публичные поля (ник, роль);
+// ник ребёнка до 13 — «Игрок» (age.sql: age_public_kids — сервер узнаёт только «прятать или нет», без возраста).
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
 import { sbSelect, sbRpc, storeConfigured } from '../store.js';
+import { publicKids as kidsOf, publicNick } from '../age.js';   // ники детей до 13 — «Игрок» (страницы индексирует поиск)
+const publicKids = ids => kidsOf(ids, sbRpc, storeConfigured);
 
 const num = n => Number(n || 0).toLocaleString('ru-RU');
 const plural = (n, a, b, c) => n % 10 === 1 && n % 100 !== 11 ? a : [2, 3, 4].includes(n % 10) && ![12, 13, 14].includes(n % 100) ? b : c;
@@ -78,8 +81,8 @@ async function safe(fn){ if (!storeConfigured()) return null; try { return await
 async function nicks(ids){
   const list = [...new Set(ids.filter(x => /^[0-9a-f-]{36}$/i.test(String(x || ''))))];
   if (!list.length) return {};
-  const rows = await safe(() => sbSelect('profiles', `id=in.(${list.join(',')})&select=id,nick,role`)) || [];
-  return Object.fromEntries(rows.map(p => [p.id, p]));
+  const [rows, kids] = await Promise.all([safe(() => sbSelect('profiles', `id=in.(${list.join(',')})&select=id,nick,role`)), publicKids(list)]);
+  return Object.fromEntries((rows || []).map(p => [p.id, { ...p, nick: publicNick(kids, p.id, p.nick, p.role) }]));
 }
 const who = p => `${esc(p?.nick || 'игрок')}${ROLE[p?.role] ? ` <span class="fr-role">${ROLE[p.role]}</span>` : ''}`;
 const person = p => ({ '@type': 'Person', name: p?.nick || 'игрок' });
@@ -183,8 +186,9 @@ async function ideasPage(res){
   const url = `${SITE}/ideas`;
   const rows = await safe(() => sbRpc('list_ideas', { p_status: null, p_sort: 'top', p_limit: 100 }));
   const list = (Array.isArray(rows) ? rows : []).filter(r => r.status !== 'rejected');
+  const kids = await publicKids(list.map(r => r.author_id));
   const items = list.map(r => ({ id: r.id, title: plain(r.title, 140) || 'Идея', body: short(r.body, 200), st: r.status, votes: r.votes || 0, video: r.video_id,
-    a: { nick: r.author_nick, role: r.author_role }, at: r.created_at }));
+    a: { nick: publicNick(kids, r.author_id, r.author_nick, r.author_role), role: r.author_role }, at: r.created_at }));
   const done = items.filter(i => i.st === 'done').length, planned = items.filter(i => i.st === 'planned').length;
   const card = i => `<li><a class="fr-row id-row" href="/ideas/${i.id}"><span class="id-votes" title="Голосов">▲ ${num(i.votes)}</span>
       <span class="fr-t">${esc(i.title)} <span class="id-st id-${esc(i.st)}">${stOf(i.st).join(' ')}</span></span>

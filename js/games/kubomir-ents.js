@@ -123,12 +123,14 @@
         if (e.age > 300) { dropItem(i); continue; }
         if (!W.loaded(e.x, e.z)) continue;
         // вода: всплывает к поверхности и качается на ней (пружина), течёт медленнее; иначе — падает
-        const wv = W.raw(e.x, e.y + .12, e.z);
-        e.float = wv > 0 && Tl[wv & 0xfff] === 1;
+        const wv = W.raw(e.x, e.y + .12, e.z), cy = Math.floor(e.y + .12);
+        // лёд на озере (времена года): лежит на нём сверху — не плавает; подо льдом — всплывает до льда, не сквозь
+        e.float = wv > 0 && Tl[wv & 0xfff] === 1 && !(Vx.iceTest && e.y >= cy + Vx.liquidHeight(wv) - .05 && Vx.isIce(W, e.x, cy, e.z, wv));
         if (e.float) {
-          let top = Math.floor(e.y + .12), tv = wv;
+          let top = cy, tv = wv;
           for (let n = 0; n < 4; n++) { const u = W.raw(e.x, top + 1, e.z); if (!(u > 0 && Tl[u & 0xfff] === 1)) break; top++; tv = u; }
-          const dep = Math.min(1.5, top + Vx.liquidHeight(tv) - (e.y + .12));
+          const surf = Vx.iceTest && Vx.isIce(W, e.x, top, e.z, tv) ? top - .14 : top + Vx.liquidHeight(tv);
+          const dep = Math.min(1.5, surf - (e.y + .12));
           e.vy += (dep * 34 - e.vy * 5) * dt;
           const f = Math.exp(-dt * 2.2); e.vx *= f; e.vz *= f;
         } else e.vy = Math.max(-30, e.vy - 20 * dt);
@@ -859,6 +861,8 @@
         MB.x = m.x; MB.y = m.y; MB.z = m.z; MB.w = M.w; MB.h = M.h;
         const vy0 = m.vy;
         Vx.moveBox(W, MB, m.vx * dt, m.vy * dt, m.vz * dt);
+        // всплыл подо льдом — проломил (как игрок: подо льдом не запереть; прорубь и звук — игра, hookIce)
+        if (inWater && Vx.iceTest && m.vy > 0) { const hw = M.w / 2, by = Math.floor(MB.y + M.h - .05); for (let bx = Math.floor(MB.x - hw); bx <= Math.floor(MB.x + hw); bx++) for (let bz = Math.floor(MB.z - hw); bz <= Math.floor(MB.z + hw); bz++) { const v = W.raw(bx, by, bz); if (v > 0 && Vx.T.liquid[v & 0xfff] === 1 && MB.y < by + Vx.liquidHeight(v) - .02 && Vx.isIce(W, bx, by, bz, v)) X.hookIce?.(bx, by, bz); } }
         // упёрся в ступеньку — прыжок
         if ((MB.hitX || MB.hitZ) && m.ground && !M.hop && (wx || wz)) m.vy = 8.2;
         m.ground = MB.hitY && vy0 <= 0; if (MB.hitY) m.vy = 0;
