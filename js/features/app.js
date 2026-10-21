@@ -32,7 +32,7 @@
   const SS_VISIT = 'd37_app_v', SS_SRC = 'd37_app_src', SS_OPEN = 'd37_app_open';
   const ORIGIN = 'https://dan4ik37.vercel.app';
   // Игры, которым не нужен интернет (бот, свои правила, всё в браузере) — их файлы приложение держит в кэше
-  const OFFLINE_GAMES = ['sudoku', '2048', 'kosynka', 'freecell', 'pauk', 'blocks', 'miner', 'mahjong', 'snake', 'memory', 'reaction', 'ttt', 'checkers', 'chess', 'sea', 'words', 'catch', 'balda', 'domino', 'fillword', 'podzem'];
+  const OFFLINE_GAMES = ['sudoku', '2048', 'kosynka', 'freecell', 'pauk', 'blocks', 'miner', 'mahjong', 'snake', 'memory', 'reaction', 'ttt', 'checkers', 'chess', 'sea', 'words', 'catch', 'balda', 'domino', 'fillword', 'podzem', 'kletochki', 'chervyachki'];
   const now = () => Date.now();
   const lsGet = k => { try { return root.localStorage ? root.localStorage.getItem(k) : null; } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (!root.localStorage) return; if (v == null) root.localStorage.removeItem(k); else root.localStorage.setItem(k, String(v)); } catch (e) {} };
