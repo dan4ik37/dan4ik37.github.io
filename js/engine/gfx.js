@@ -589,19 +589,32 @@ float d37Cn( vec2 p, float per ){
 	f = f * f * ( 3.0 - 2.0 * f );
 	return mix( mix( d37Ch( i0 ), d37Ch( vec2( i1.x, i0.y ) ), f.x ), mix( d37Ch( vec2( i0.x, i1.y ) ), d37Ch( i1 ), f.x ), f.y );
 }
+#if defined( D37_VOX ) && defined( D37_VOXZ )
+uniform vec4 d37ClZ;
+float d37Zn(){ return d37ClZ.w > 0.5 ? floor( vD37Z + 0.5 ) : 0.0; }   // климатическая зона столба «Кубомира»: 0 / 1 — всегда зима / 2 — зимы нет
+#endif
 vec3 d37Leaf( vec3 c, float n, float kind ){
+	vec3 d37L2 = d37Cl2.xyz;
+	#if defined( D37_VOX ) && defined( D37_VOXZ )
+	if ( d37Zn() > 0.5 ) d37L2 = vec3( 0.0 );   // «всегда зима» и «зимы нет» — листва без осени (вечнозелёная)
+	#endif
 	float g = clamp( ( c.g - max( c.r, c.b ) * 0.85 ) / max( c.g, 0.001 ), 0.0, 1.0 ), gk = smoothstep( 0.0, 0.25, g );
 	float lum = dot( c, vec3( 0.3, 0.59, 0.11 ) );
 	vec3 au = mix( vec3( 1.0, 0.7, 0.16 ), vec3( 0.95, 0.32, 0.1 ), n ) * lum * 2.0;
-	float k = kind > 2.5 ? 0.0 : d37Cl2.x * gk * ( 0.62 + 0.38 * n );
+	float k = kind > 2.5 ? 0.0 : d37L2.x * gk * ( 0.62 + 0.38 * n );
 	c = mix( c, au, k );
-	c = mix( c, vec3( dot( c, vec3( 0.3, 0.59, 0.11 ) ) ) * vec3( 0.95, 0.86, 0.7 ), d37Cl2.y * ( kind > 2.5 ? 0.3 : 0.72 ) * gk );
-	return mix( c, c * vec3( 0.95, 1.12, 0.88 ) + vec3( 0.015, 0.035, 0.0 ), d37Cl2.z * 0.5 * gk );
+	c = mix( c, vec3( dot( c, vec3( 0.3, 0.59, 0.11 ) ) ) * vec3( 0.95, 0.86, 0.7 ), d37L2.y * ( kind > 2.5 ? 0.3 : 0.72 ) * gk );
+	return mix( c, c * vec3( 0.95, 1.12, 0.88 ) + vec3( 0.015, 0.035, 0.0 ), d37L2.z * 0.5 * gk );
 }`;
   const CLIM_FRAG = `
 #ifdef D37_CLIM
 #if ( defined( STANDARD ) || defined( LAMBERT ) ) && defined( OPAQUE ) && ! defined( D37_NOCLIM ) && ! defined( D37_FP )
-	if ( d37Cl.x + d37Cl.y + d37Cl.z + d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
+	vec4 d37C = d37Cl;
+	#if defined( D37_VOX ) && defined( D37_VOXZ )
+	float d37Zv = d37Zn();   // зоны «Кубомира»: всегда зима — снег не меньше d37ClZ.x, без луж; зимы нет — снег d37ClZ.y, мокрое × d37ClZ.z
+	if ( d37Zv > 0.5 ) d37C = d37Zv < 1.5 ? vec4( max( d37Cl.x, d37ClZ.x ), 0.0, 0.0, d37Cl.w ) : vec4( d37ClZ.y, d37Cl.y * d37ClZ.z, d37Cl.z * d37ClZ.z, 0.0 );
+	#endif
+	if ( d37C.x + d37C.y + d37C.z + d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
 		vec3 d37Vp = - vViewPosition;
 		vec3 d37Rw = vec3( dot( viewMatrix[ 0 ].xyz, d37Vp ), dot( viewMatrix[ 1 ].xyz, d37Vp ), dot( viewMatrix[ 2 ].xyz, d37Vp ) );
 		vec2 d37Q = d37ClO.xy + d37Rw.xz;
@@ -619,15 +632,15 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
 		diffuseColor = vec4( d37Leaf( diffuseColor.rgb, d37Cn( d37Q * 0.0625, 16.0 ), float( D37_LEAF ) ), diffuseColor.a );
 		#endif
 		float d37S = 0.0;
-		if ( d37Cl.x > 0.0 ) {
+		if ( d37C.x > 0.0 ) {
 			float d37Nz = d37Cn( d37Q * 0.5, 128.0 ) * 0.62 + d37Cn( d37Q * 2.0, 512.0 ) * 0.38;
-			d37S = smoothstep( 0.42, 0.82, d37Up ) * d37Op * smoothstep( d37Nz - 0.09, d37Nz + 0.09, d37Cl.x * 1.12 );
+			d37S = smoothstep( 0.42, 0.82, d37Up ) * d37Op * smoothstep( d37Nz - 0.09, d37Nz + 0.09, d37C.x * 1.12 );
 			diffuseColor = vec4( mix( diffuseColor.rgb, vec3( 0.86, 0.9, 0.96 ) * ( 0.94 + 0.06 * d37Nz ), d37S ), diffuseColor.a );
 		}
-		float d37W = d37Cl.y * d37Op * smoothstep( 0.3, 0.75, d37Up ) * ( 1.0 - d37S ), d37P = 0.0;
-		if ( d37Cl.z > 0.0 ) {
+		float d37W = d37C.y * d37Op * smoothstep( 0.3, 0.75, d37Up ) * ( 1.0 - d37S ), d37P = 0.0;
+		if ( d37C.z > 0.0 ) {
 			float d37Pn = d37Cn( d37Q * 0.125, 32.0 ) * 0.7 + d37Cn( d37Q * 0.5, 128.0 ) * 0.3;
-			d37P = d37Cl.z * d37Op * smoothstep( 0.9, 0.98, d37Up ) * ( 1.0 - d37S ) * smoothstep( d37Pn - 0.06, d37Pn + 0.06, d37Cl.z * 0.75 );
+			d37P = d37C.z * d37Op * smoothstep( 0.9, 0.98, d37Up ) * ( 1.0 - d37S ) * smoothstep( d37Pn - 0.06, d37Pn + 0.06, d37C.z * 0.75 );
 		}
 		diffuseColor = vec4( diffuseColor.rgb * ( 1.0 - 0.3 * d37W ) * ( 1.0 - 0.35 * d37P ), diffuseColor.a );
 		#ifdef STANDARD

@@ -2,8 +2,8 @@
 //  ДВИЖОК ДЕНЧИКА — поток «Кубомира»: генерация чанков, свет и сетки (чтобы кадр не ждал)
 // ═══════════════════════════════════════
 // new Worker('js/engine/voxel-worker.js?v=…') — сам подгружает voxel.js, voxel-gen.js, voxel-mesh.js с тем же ?v=.
-// Сообщения: { t: 'init', T, seed, features } · { t: 'gen', id, cx, cz } → { id, ids, biome, tint, ms }
-// · { t: 'mesh', id, reg, tint } → { id, reg (вернули — переиспользовать), light, lights, сетки V.LAYERS (solid, cutout,
+// Сообщения: { t: 'init', T, seed, features } · { t: 'gen', id, cx, cz } → { id, ids, biome, tint, zone, ms }
+// · { t: 'mesh', id, reg, tint, zone } → { id, reg (вернули — переиспользовать), light, lights, сетки V.LAYERS (solid, cutout,
 // water, foliage, glass), yMax, ms }.
 // Ошибка → { id, err }. Подключён обычным <script> в окне (список файлов игры — для кэша приложения) — ничего не делает.
 (() => {
@@ -24,11 +24,11 @@
       }
       if (d.t === 'gen') {
         const t0 = now(), r = V.genChunk(G, d.cx, d.cz);
-        self.postMessage({ id: d.id, ids: r.ids, biome: r.biome, tint: r.tint, ms: now() - t0 }, [r.ids.buffer, r.biome.buffer, r.tint.buffer]);
+        self.postMessage({ id: d.id, ids: r.ids, biome: r.biome, tint: r.tint, zone: r.zone, ms: now() - t0 }, [r.ids.buffer, r.biome.buffer, r.tint.buffer, r.zone.buffer]);
         return;
       }
       if (d.t === 'mesh') {
-        const t0 = now(), L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint);
+        const t0 = now(), L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone);
         const tr = [d.reg.buffer, m.light.buffer], out = { id: d.id, reg: d.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: 0 };
         for (const k of V.LAYERS) { out[k] = m[k]; if (m[k]) tr.push(m[k].pos.buffer, m[k].vd.buffer, m[k].col.buffer, m[k].lt.buffer); }
         if (m.lights) tr.push(m.lights.buffer);

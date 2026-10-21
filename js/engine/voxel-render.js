@@ -85,12 +85,14 @@ vec2 d37Sway( vec3 wp ) {
   float k = ( sin( wd ) * 0.6 + 0.4 ) * 0.9;
   return vec2( uD37Wind.z * k + sin( uD37Wind.x * 2.3 + ph ) * 0.35, uD37Wind.w * k + cos( uD37Wind.x * 1.9 + ph ) * 0.3 ) * gu;
 }`;
-  // vd.w: AO (0–1) | свечение грани 0…15 (2–5) | флаги (14–15: 1 — качается на ветру); lt: небо, R, G, B — ×4 (0…60)
+  // vd.w: AO (0–1) | свечение грани 0…15 (2–5) | флаги (14–15: 1 — качается на ветру); lt: небо, R, G, B — ×4 (0…60);
+  // у неба ещё + 64 × климатическая зона столба (V.climZone: 0 / 1 — всегда зима / 2 — зимы нет) → vD37Z (погода, D37_VOXZ)
   const VS_HEAD = `
 attribute vec4 vd;
 attribute vec4 lt;
 varying vec3 vUvL;
 varying vec4 vLt;
+varying float vD37Z;
 varying float vAo;
 varying float vEm;
 uniform float uTime;
@@ -131,7 +133,9 @@ vec3 transformed = vec3( position );
 float d37w = vd.w;
 float d37f = floor( d37w / 16384.0 );
 vUvL = vec3( vd.x / 16.0, vd.y / 16.0, mod( vd.z, 4096.0 ) );
-vec4 d37l = clamp( lt / 60.0, 0.0, 1.0 );
+float d37zn = floor( lt.x / 64.0 + 0.001 );
+vD37Z = d37zn;
+vec4 d37l = clamp( vec4( lt.x - 64.0 * d37zn, lt.yzw ) / 60.0, 0.0, 1.0 );
 float d37m = max( max( d37l.y, d37l.z ), d37l.w );
 float d37s = d37l.x / ( 4.0 - 3.0 * d37l.x );
 float d37k = 4.0 - 3.0 * d37m;
@@ -171,6 +175,7 @@ if ( floor( vd.w / 16384.0 ) > 0.5 && floor( vd.w / 16384.0 ) < 1.5 && uD37Wind.
   const FS_COMMON = `
 varying vec3 vUvL;
 varying vec4 vLt;
+varying float vD37Z;
 varying float vAo;
 varying float vEm;
 uniform float uTime;
@@ -341,7 +346,10 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     }
     const U = { uTex: { value: null }, uAtlasN: { value: 1 }, uTS: { value: V.TEX || 16 }, uNTex: { value: null }, uNStr: { value: .75 }, uTime: { value: 0 }, uFlick: { value: 1 }, uMinAmb: { value: .055 }, uBlockK: { value: 1.7 }, uEmK: { value: 1.25 },
       uDay: { value: 1 }, uBloomK: { value: 0 }, uSway: { value: 1 }, uD37Wind: { value: E.GFXU?.wind || new Float32Array([0, 0, .8, .6]) },
-      uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) } };
+      uSunV: { value: new T.Vector3(0, 1, 0) }, uSunC: { value: new T.Color(0, 0, 0) }, uSkyC: { value: new T.Color(.5, .6, .8) },
+      // погода по климатическим зонам (кусок D37_CLIM движка, D37_VOXZ): x — снег в «всегда зима», y — снег в «зимы нет»,
+      // z — мокрое и лужи там же (доля), w — 1: зоны учитываются (0 — всё как обычная зона; ставит игра)
+      d37ClZ: { value: new Float32Array([0, 0, .5, 0]) } };
     VR.U = U;
     // ── материалы ──
     // Для «паков» шейдеров движка (своих правок этого файла им не нужно): у каждой сетки V.LAYERS свой материал VR.mats[слой]
@@ -411,7 +419,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const makeMat = (k, fp) => {
       const opt = LAYER_OPTS[k] || { alphaTest: .5 };
       const m = patch(new T.MeshLambertMaterial({ vertexColors: true, ...opt }), k);
-      m.defines = { D37_VOX: 1, ['D37_' + k.toUpperCase()]: 1 };
+      m.defines = { D37_VOX: 1, D37_VOXZ: 1, ['D37_' + k.toUpperCase()]: 1 };
       if (fp) m.defines.D37_FP = 1;
       if (nmapOn() && k !== 'water') m.defines.D37_NMAP = 1;   // рельеф текстур — на «высокой» (WebGL2)
       m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex', fp: !!fp };

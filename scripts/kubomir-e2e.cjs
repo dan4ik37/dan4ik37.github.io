@@ -62,6 +62,26 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     ok(kb, '«Кубомир»: мир открылся');
     if (!kb) throw new Error('мир не открылся');
     // ── сцена: ровная площадка, озеро, берёзы (одинаково «до» и «после»: только публичное — st.W, st.P, st.rig) ──
+    // сцена — в обычной климатической зоне (снег и лёд зимой; у новых версий — зоны «всегда зима» / «зимы нет»), рядом с началом
+    res.place = await ev(`(async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, G = S.G, P = S.P;
+      if (!G || !V.climZoneAt) return { moved: false, why: 'старая версия' };
+      const col = {}, good = (x, z) => { for (let dx = -18; dx <= 30; dx += 4) for (let dz = -20; dz <= 20; dz += 4) { if (V.climZoneAt(G, x + dx, z + dz, col) !== 0) return false; const c = V.genColumn(G, x + dx, z + dz, col); if (c.h <= V.SEA + 1 || c.h > V.SEA + 24) return false; } return true; };
+      const x0 = Math.floor(P.x), z0 = Math.floor(P.z);
+      if (good(x0, z0)) return { moved: false };
+      for (let r = 48; r < 3000; r += 48) for (let a = 0; a < 32; a++) {
+        const x = Math.round(x0 + r * Math.cos(a / 32 * 6.2832)), z = Math.round(z0 + r * Math.sin(a / 32 * 6.2832));
+        if (!good(x, z)) continue;
+        const h = V.genColumn(G, x, z, col).h;
+        GAME_IMPL.kubomir._test.command('/tp ' + (x + .5) + ' ' + (h + 2) + ' ' + (z + .5));
+        for (let i = 0; i < 80 && !S.ready; i++) await wait(500);
+        await wait(5000);
+        for (let i = 0; i < 40 && !P.onGround; i++) await wait(250);
+        return { moved: true, x, z, h, ready: S.ready };
+      }
+      return { moved: false, why: 'нет места' };
+    })()`, 120000);
     const scene = await ev(`(async () => {
       const wait = ms => new Promise(r => setTimeout(r, ms));
       const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, ID = V.ID;
@@ -80,6 +100,11 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       return { cx, cz, gy };
     })()`, 120000);
     res.scene = scene;
+    // зоны климата вокруг (по чанкам: какие зоны в чанке; '-' — чанка нет / без зон)
+    res.zoneMap = await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, cx = Math.floor(S.P.x) >> 4, cz = Math.floor(S.P.z) >> 4, rows = [];
+      for (let dz = -2; dz <= 2; dz++) { let r = ''; for (let dx = -2; dx <= 2; dx++) { const c = W.chunk(cx + dx, cz + dz); r += (c && c.zone ? [...new Set(c.zone)].sort().join('') : '-').padEnd(4); } rows.push(r); }
+      const G = S.G, col = {}; let mism = 0; if (G && V.climZoneAt) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { const c = W.chunk(cx + dx, cz + dz); if (!c || !c.zone) continue; for (let i = 0; i < 256; i += 5) if (c.zone[i] !== V.climZoneAt(G, (cx + dx) * 16 + (i >> 4), (cz + dz) * 16 + (i & 15), col)) mism++; }
+      return { rows, mism, wx: S.WX.stats() }; })()`);
     // во весь окно (без шапки сайта), без подсказок поверх (тост, «нажми на мир») — чтобы на снимке был только мир
     await ev(`(async () => { const st = document.createElement('style'); st.textContent = '.kb-lockhint,.e-toast,.kb-tip{display:none!important}'; document.head.appendChild(st); window.D37Full?.toggle(document.querySelector('#gamesStage'), { esc: false }); await new Promise(r => setTimeout(r, 1500)); return !!document.querySelector('.gs-fs'); })()`, 20000);
     // время и погода: низкое солнце, зима со снегом (вид «как у владельца»)
@@ -87,7 +112,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const wait = ms => new Promise(r => setTimeout(r, ms));
       const S = GAME_IMPL.kubomir._test.state();
       S.R.lighting.time = ${time}; S.paused = true;
-      try { S.WX.clim.setWorld(${JSON.stringify(w)}); } catch (e) {}
+      try { S.WX.clim.setWorld(${JSON.stringify(w)}); if ('cover' in S.WX) S.WX.cover = -1; } catch (e) {}   // снег на земле — заново по новой погоде
       await wait(9000);
       return { st: S.WX.stats?.(), pack: S.R.packFx?.()?.id, opt: { ao: S.R.opt?.ao, rt: S.R.opt?.rt, aa: S.R.opt?.aa }, res: S.R.pixelRatio?.(), scaled: !!S.R.post?.scaled, dof: !!S.R.post?.dofOn };
     })()`, 60000);
@@ -110,6 +135,27 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     res.rain = await setup(13, { seed: 'kb', mode: 'fixed', season: 'summer', weather: 'rain', lapse: -.12, seaY: 52 });
     await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, x0 = Math.floor(P.x), z0 = Math.floor(P.z), y0 = Math.floor(P.y); for (let x = x0 - 4; x <= x0 + 4; x++) for (let z = z0 - 4; z <= z0 + 4; z++) for (let y = y0; y <= y0 + 3; y++) W.set(x, y, z, 0, { urgent: 1 }); await new Promise(r => setTimeout(r, 4000)); return true; })()`, 30000);
     await view(-Math.PI / 2 - .2, .1, 0); await shot('summer-rain-fp');
+    // климатические зоны (летом, ясно): граница «всегда зима» (снег на кронах и земле) и обычной (зелено) — сверху
+    res.zones = await ev(`(async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, G = S.G, P = S.P;
+      if (!G || !V.climZone || !('cover' in S.WX)) return { none: 'старая версия' };
+      const col = {}, x0 = Math.floor(P.x), z0 = Math.floor(P.z); let best = null;
+      for (let r = 32; r < 2400 && !best; r += 24) for (let a = 0; a < 48 && !best; a++) {
+        const x = Math.round(x0 + r * Math.cos(a / 48 * 6.2832)), z = Math.round(z0 + r * Math.sin(a / 48 * 6.2832));
+        const c1 = V.genColumn(G, x, z, col); if (V.climZone(c1.T, c1.h, c1.b) !== 1 || c1.h > V.SEA + 30 || c1.h <= V.SEA) continue;
+        for (const [dx, dz] of [[16, 0], [-16, 0], [0, 16], [0, -16]]) { const c2 = V.genColumn(G, x + dx, z + dz, col); if (V.climZone(c2.T, c2.h, c2.b) === 0 && c2.h > V.SEA && c2.h <= V.SEA + 30) { best = { x, z, dx, dz, h: c1.h }; break; } }
+      }
+      if (!best) return { none: 'нет границы' };
+      S.WX.clim.setWorld({ seed: 'kb', mode: 'fixed', season: 'summer', weather: 'clear', lapse: 0, seaY: 52 }); S.WX.cover = 0;
+      S.R.lighting.time = 12; P.fly = true;
+      GAME_IMPL.kubomir._test.command('/tp ' + (best.x - best.dx) + ' ' + (best.h + 24) + ' ' + (best.z - best.dz));
+      for (let i = 0; i < 60 && !S.ready; i++) await wait(500);
+      await wait(8000);
+      S.rig.yaw = Math.atan2(-best.dx, -best.dz);
+      return { best, ready: S.ready, st: S.WX.stats() };
+    })()`, 90000);
+    if (res.zones && res.zones.best) { await view(Math.atan2(-res.zones.best.dx, -res.zones.best.dz), .55, 0); await shot('zones-summer'); }
     const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`);
     const guard = await ev(`D37E.gfxGuardInfo ? D37E.gfxGuardInfo().off : []`);
     res.progs = pr; res.guard = guard;

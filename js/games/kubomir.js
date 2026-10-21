@@ -97,6 +97,7 @@
     const V = VX(), [list] = await Promise.all([V.store.worlds().catch(() => []), window.KubomirMods?.ready?.()?.catch?.(() => {})]);
     if (view !== 'menu' || !el) return;
     const box = sc.querySelector('.kb-worlds');
+    if (!box) return;   // пока грузился список, меню сменилось (нажали «Новый мир» и т. п.)
     if (!V.store.persistent()) box.insertAdjacentHTML('beforebegin', '<div class="kb-warn">⚠️ Браузер не даёт сохранять в базу (приватный режим?) — мир сохранится, только пока открыта вкладка. Выгружай мир в файл.</div>');
     if (!list.length) { box.innerHTML = '<div class="kb-empty">Миров пока нет. Нажми «➕ Новый мир» — и вперёд!</div>'; return; }
     box.innerHTML = list.map(w => `<div class="kb-world" data-id="${esc(w.id)}">
@@ -458,7 +459,7 @@
     const st = S; if (!st || !st.ready) return;
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
-    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice };
+    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow };
     V.store.journal(st.meta.id, { recs, meta });
     saveAll(st).catch(() => {});
   }
@@ -1525,7 +1526,7 @@
         const s = st.ST.stats, r = st.VR.count(), c = st.G ? V.genColumn(st.G, Math.floor(P.x), Math.floor(P.z), {}) : null, L = st.W.lightAt(P.x, P.y + 1, P.z), rs = st.R.stats;
         d.innerHTML = `XYZ ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)} · чанк ${Math.floor(P.x) >> 4}, ${Math.floor(P.z) >> 4}<br>биом ${c ? V.BIOMES[c.b] : '—'} · свет небо ${V.lSky(L)} блоки ${V.lR(L)}/${V.lG(L)}/${V.lB(L)} · время ${st.R.lighting.time.toFixed(1)} ч<br>`
           + `чанков ${s.chunks} · сетка ${s.mesh} (${(s.meshMs / Math.max(1, s.mesh)).toFixed(1)} мс) · ген ${s.gen} (${(s.genMs / Math.max(1, s.gen)).toFixed(1)} мс) · в работе ${s.jobs} · ждут ${s.pend}<br>`
-          + (st.WX ? `погода: ${st.WX.biome} · дождь ${st.WX.rain.toFixed(2)} · снег ${st.WX.snow.toFixed(2)}<br>` : '') + `мешей ${r.meshes} · квадов ${(r.quads / 1000).toFixed(0)} тыс. · пул ${r.poolFree} · ~${(r.bytes / 1048576).toFixed(0)} МБ · вызовов ${rs.calls} · ${st.ST.inline ? 'без потоков' : st.ST.workers.length + ' поток(а)'} · дальность ${opts.rd}`;
+          + (st.WX ? `погода: ${st.WX.biome} · зона ${['обычная', 'всегда зима', 'зимы нет'][st.WX.zone | 0] || '—'} · дождь ${st.WX.rain.toFixed(2)} · снег ${st.WX.snow.toFixed(2)}${st.WX.cover >= 0 ? ' · снег на земле ' + st.WX.cover.toFixed(2) : ''}${st.WX.iceOn ? ' · лёд' : ''}<br>` : '') + `мешей ${r.meshes} · квадов ${(r.quads / 1000).toFixed(0)} тыс. · пул ${r.poolFree} · ~${(r.bytes / 1048576).toFixed(0)} МБ · вызовов ${rs.calls} · ${st.ST.inline ? 'без потоков' : st.ST.workers.length + ' поток(а)'} · дальность ${opts.rd}`;
       }
     }
   }
