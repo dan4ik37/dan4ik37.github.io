@@ -600,10 +600,12 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
   has('js/features/phone.js', /id === 'comm' && area && !AG\.canOpen/, 'телефон: сообщества — как чат (12+)');
   has('privacy.html', /Возраст \(по желанию\)/, 'политика конфиденциальности (/privacy): про год рождения');
   has('index.html', /Возраст \(по желанию\):<\/strong>/, 'политика конфиденциальности (окно): про год рождения');
-  // age.sql и premium.sql — одни и те же функции магазина
-  const fn = (s, name) => { const i = s.indexOf('create or replace function public.' + name + '('); return s.slice(i, s.indexOf('$$;', i) + 3); };
+  // Функции магазина — только в premium.sql (22.10): оплата по возрасту — premium_pay_age (до 14 — нельзя), лимиты — age_shop_caps
+  const fn = (s, name) => { const i = s.indexOf('create or replace function public.' + name + '('); return i < 0 ? '' : s.slice(i, s.indexOf('$$;', i) + 3); };
   const AS = read('age.sql'), PS = read('premium.sql');
-  ok(fn(AS, 'premium_state') === fn(PS, 'premium_state') && fn(AS, 'premium_order_create') === fn(PS, 'premium_order_create'), 'premium_state и premium_order_create: age.sql = premium.sql');
+  ok(!fn(AS, 'premium_state') && !fn(AS, 'premium_order_create') && /premium_pay_age/.test(fn(PS, 'premium_order_create'))
+    && /age_shop_caps/.test(fn(PS, 'premium_order_create')) && /v_age < 14/.test(fn(PS, 'premium_pay_age')),
+    'магазин: функции только в premium.sql, оплата с 14 лет (premium_pay_age), лимиты по возрасту — age_shop_caps (age.sql)');
   ok(!/to authenticated|to anon/.test(AS.slice(AS.indexOf('function public.age_group_of'), AS.indexOf('$$;', AS.indexOf('function public.age_group_of')))) && /revoke execute on function public\.age_group_of\(uuid\) from public, anon, authenticated;/.test(AS), 'age.sql: age_group_of закрыта от клиентов');
   ok(/create policy "Свой возраст видит только сам" on public\.user_age for select to authenticated using \(auth\.uid\(\) = user_id\);/.test(AS) && !/user_age[^;]*(moderator|admin)/.test(AS), 'age.sql: свой год видит только сам (без исключений для персонала)');
 
