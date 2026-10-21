@@ -39,7 +39,8 @@ function shopRender(S){
   const bal = S.balance || 0;
   const canSpend = p => ok && bal >= p;
   const login = currentProfile?.donate_login || '';
-  const donOff = (S.donate_rewards || (S.ready === false ? 'vip' : 'off')) === 'off';
+  // Что даёт донат — как donateMode() в profile.js: пока на базе старый premium.sql, сервер по-старому даёт VIP/💎
+  const donOff = (typeof donateMode === 'function' ? donateMode() : (S.donate_rewards || 'vip')) === 'off';
 
   // ── Шапка: что это и сколько у меня ──
   const head = `<div class="shp-head pf-card pf-card-gold">

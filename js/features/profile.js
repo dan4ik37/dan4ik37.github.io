@@ -342,9 +342,11 @@ async function copyDonateLogin(btn){
 // Что даёт донат сейчас (premium.sql, выключатель site_config 'donate_rewards'): 'off' — статус «💛 Донатер» (по умолчанию),
 // 'vip' / 'gems' — как до 22.10. premium.sql (22.10) ещё не применён на базе — сервер по-старому даёт VIP: 'vip'
 function donateMode(){
-  const D = window.D37Donor;
-  if (D && D.ready() === false) return 'vip';
-  return D?.me?.()?.mode || window.D37Gems?.state?.()?.donate_rewards || 'off';
+  const D = window.D37Donor, S = window.D37Gems?.state?.();
+  if (D && D.ready() === false) return 'vip';                  // donor_me нет — сервер по-старому даёт VIP за донат
+  if (D?.me?.()?.mode) return D.me().mode;
+  if (S && S.ready === true) return S.donate_rewards || 'vip';  // premium_state без donate_rewards — тоже старый premium.sql
+  return 'off';
 }
 // Уровни донатера одной строкой: «I — от 100 ₽ · II — от 300 ₽ …»
 function donorLevelsLine(){
@@ -1200,7 +1202,7 @@ async function renderProfileGems(){
   if (!S.ok) { box.innerHTML = `<a class="dl-copy dl-go" href="#/shop">${C.icon} Магазин кристаллов</a>`; return; }
   const row = `<div class="pg-row"><span>${C.icon} <b class="js-gems">${D37Gems.num(S.balance)}</b> ${D37Gems.word(S.balance)}</span><a class="dl-copy dl-go" href="#/shop">Магазин →</a></div>`;
   // Донат не даёт ни VIP, ни 💎 (premium.sql, 'off') — выбирать нечего: статус «💛 Донатер»
-  if ((S.donate_rewards || 'off') === 'off') { box.innerHTML = row; return; }
+  if (donateMode() === 'off') { box.innerHTML = row; return; }
   box.innerHTML = row + `
     <div class="pg-mode" role="radiogroup" aria-label="Что даёт донат"><span>Донат даёт:</span>
       <button type="button" role="radio" aria-checked="${S.mode === 'vip'}" class="${S.mode === 'vip' ? 'on' : ''}" onclick="profileGemsMode('vip')">✨ VIP сразу</button>
