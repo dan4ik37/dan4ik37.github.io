@@ -22,6 +22,7 @@
 --  игровое, поэтому накрутка в рамках лимитов ничего не ломает.
 --  Проверка после запуска: select public.coin_price('hero:ninja'); → 400; /rpc/coin_rule {"p_key":"daily"} → 20
 --  (PGRST202 — старая версия файла); /rpc/coin_level_item {"p_item":"skin:pet:owl"} → 20.
+--  22.10.2026 — io-игры: /rpc/coin_run_cap {"p_game":"kletochki"} → 10, {"p_game":"chervyachki"} → 10 (null — старая версия).
 -- ═══════════════════════════════════════════════════════════════════
 
 create table if not exists public.coin_wallet (
@@ -229,7 +230,8 @@ grant execute on function public.coin_level_item(text) to anon, authenticated;
 create or replace function public.coin_run_cap(p_game text) returns int language sql immutable as $$
   select case p_game when 'horde' then 150 when 'td' then 150 when 'blocks' then 80 when 'kosynka' then 20 when 'pauk' then 50 when 'freecell' then 15 when 'miner' then 30 when 'mahjong' then 20 when 'sudoku' then 30
     when 'krokodil' then 10 when 'fillword' then 15 when 'podzem' then 20 when 'kubomir' then 15
-    when 'rp' then 10 when 'mirwar' then 20 end   -- «Мир Денчика»: работа в городах (mir-city.js), раунд Боевой зоны и наёмник (revive) — mir-war.js
+    when 'rp' then 10 when 'mirwar' then 20   -- «Мир Денчика»: работа в городах (mir-city.js), раунд Боевой зоны и наёмник (revive) — mir-war.js
+    when 'kletochki' then 10 when 'chervyachki' then 10 end   -- io-игры (22.10.2026): очки/100 за жизнь, до 10
 $$;
 
 -- ── Состояние кошелька (для витрины) ──

@@ -30,6 +30,29 @@ import { getAccessToken, fetchDonationPages, fetchDonationPagesFrom, buildSnapsh
 
 const DAY = 86400000;
 
+// Один донат → SQL credit_donation (идемпотентно по номеру). С 22.10 передаём и текст доната (p_message: его хранят только у
+// непривязанных — доказательство для админа). Пока на базе старый premium.sql (функции с p_message нет — PGRST202) —
+// без текста, как раньше; анонимный донат старая функция не примет ('invalid') — это не ошибка
+let noMessage = false;
+async function creditDonation(d) {
+  const useRub = d.amountRub != null;
+  const args = {
+    p_id: d.id,
+    p_username: d.username || '',
+    p_amount: useRub ? d.amountRub : d.amount,
+    p_currency: useRub ? 'RUB' : d.currency,
+    // Время САМОГО доната (из DonationAlerts), а не время, когда сервер
+    // его увидел — иначе шкала цели с фильтром "с даты X" была бы неточной
+    // на несколько минут (обычно) или на весь бэкфилл при первом запуске.
+    p_donated_at: d.created,
+  };
+  if (!noMessage) {
+    try { return await sbRpc('credit_donation', { ...args, p_message: d.message || null }); }
+    catch (e) { if (!/PGRST202|Could not find the function/i.test(String(e?.message || e))) throw e; noMessage = true; }
+  }
+  return sbRpc('credit_donation', args);
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', 'https://dan4ik37.vercel.app');
@@ -78,7 +101,8 @@ export default async function handler(req, res) {
     // «вдруг» начислилась бы вся давняя история людям, которые зарегистрировались
     // позже и заняли чей-то ник.
     const lookback = (Number(process.env.VIP_SYNC_LOOKBACK_DAYS) || 14) * DAY;
-    const fresh = donations.filter(d => d.id && d.username && !(d.createdMs < Date.now() - lookback));
+    // Анонимные (без имени) тоже пишутся в журнал — для шкалы цели; привязать их ни к кому нельзя (premium.sql, 22.10)
+    const fresh = donations.filter(d => d.id && !(d.createdMs < Date.now() - lookback));
 
     // Один запрос в лог вместо вызова функции на каждый донат при каждом запуске
     let known = new Set();
@@ -92,17 +116,7 @@ export default async function handler(req, res) {
 
     for (const d of todo) {
       if (Date.now() > deadline) break;   // остаток доберём в следующий запуск
-      const useRub = d.amountRub != null;
-      const r = await sbRpc('credit_donation', {
-        p_id: d.id,
-        p_username: d.username,
-        p_amount: useRub ? d.amountRub : d.amount,
-        p_currency: useRub ? 'RUB' : d.currency,
-        // Время САМОГО доната (из DonationAlerts), а не время, когда сервер
-        // его увидел — иначе шкала цели с фильтром "с даты X" была бы неточной
-        // на несколько минут (обычно) или на весь бэкфилл при первом запуске.
-        p_donated_at: d.created,
-      });
+      const r = await creditDonation(d);
       if (r?.status === 'credited') credited++;
     }
 
@@ -175,19 +189,13 @@ async function handleBackfill(req, res, url) {
     // дальше идём строго по links.next, вглубь истории, без ограничения по дате.
     const { donations, pages, nextUrl } = await fetchDonationPagesFrom(tok.token, state.backfill_cursor || null, { maxPages, deadline });
 
-    const usable = donations.filter(d => d.id && d.username);
+    const usable = donations.filter(d => d.id);
     let imported = 0;
     for (const d of usable) {
       if (Date.now() > deadline) break;   // остаток — со следующего клика, курсор мы всё равно продвинем только до сюда
-      const useRub = d.amountRub != null;
-      const r = await sbRpc('credit_donation', {
-        p_id: d.id,
-        p_username: d.username,
-        p_amount: useRub ? d.amountRub : d.amount,
-        p_currency: useRub ? 'RUB' : d.currency,
-        p_donated_at: d.created,
-      });
-      if (r?.status === 'credited' || r?.status === 'unmatched') imported++;   // "unmatched" тоже реально донат — просто не привёл к VIP
+      // Старые донаты: с 22.10 привязываются, только если сделаны после регистрации и логина (иначе — решает админ)
+      const r = await creditDonation(d);
+      if (r?.status === 'credited' || r?.status === 'unmatched') imported++;   // "unmatched" тоже реально донат — просто ни к кому не привязан
     }
 
     const done = !nextUrl;

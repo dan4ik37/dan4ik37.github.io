@@ -17,6 +17,7 @@ function refHead(){
     var s = function (k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
     var j = function (k) { try { return JSON.parse(g(k) || 'null'); } catch (e) { return null; } };
     var src = function (p) {
+      p = p.replace(/^play(\/|$)/, 'games$1');   // /play/… — настоящий адрес игр (js/ui/router.js)
       return /^games\/world(\/|$)/.test(p) ? 'world' : /^(games\/studio3?d?\/play\/|g\/)/.test(p) ? 'studio'
         : /^games\/[a-z0-9_-]+\/(coop\/)?[a-z0-9]{4,12}$/.test(p) ? 'room' : /^games(\/|$)/.test(p) ? 'game'
         : /^v\//.test(p) ? 'video' : /^(c|chat\/join)\//.test(p) ? 'community' : 'link';
@@ -35,7 +36,7 @@ function refHead(){
     };
     var u = new URL(location.href), v = u.searchParams.get('ref');
     if (v != null) {
-      var p = ((u.hash || '').replace(/^#\/?/, '') || u.pathname.replace(/^\/+/, '')).replace(/[^A-Za-z0-9/_-]/g, '').slice(0, 80);
+      var p = ((u.hash || '').replace(/^#\/?/, '') || u.pathname.replace(/^\/+/, '')).replace(/^play(\/|$)/, 'games$1').replace(/[^A-Za-z0-9/_-]/g, '').slice(0, 80);
       window.d37RefStore(v, src(p), p);
       u.searchParams.delete('ref');
       history.replaceState(history.state, '', u.pathname + u.search + u.hash);
@@ -49,12 +50,16 @@ export const AGE_MARK = `<span class="age-mark" title="Сайт для ${SITE_AG
 
 // noAds — без рекламы на странице: ни скрипта AdSense, ни мест, ни полоски РСЯ (ролики про кейсы/промокоды на депозит —
 // AdSense запрещает рекламу рядом с азартными играми; ad-places.js получает контекст «gambling»)
-export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false }) {
+// spa — у страницы есть раздел сайта-приложения с тем же адресом (/forum/42 ↔ '#/forum/42', js/ui/router.js): вкладка, где сайт уже
+// открыт как приложение (sessionStorage d37_spa ставит роутер), сразу уходит в раздел — перезагрузка не выкидывает из приложения.
+// Поисковики и новые посетители видят эту страницу. ld — объект или массив объектов JSON-LD
+export function page({ title, description = '', url = '', image = '', ld = null, body, noindex = false, script = '', ogType = 'website', css = '', noAds = false, spa = '' }) {
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+${/^#\/[\w/-]+$/.test(spa) ? `<script>try{if(sessionStorage.getItem('d37_spa'))location.replace(${JSON.stringify('/' + spa)})}catch(e){}</script>` : ''}
 <title>${esc(title)}</title>
 ${description ? `<meta name="description" content="${esc(description)}">` : ''}
 ${noindex ? '<meta name="robots" content="noindex">' : ''}
@@ -87,35 +92,36 @@ ${noAds ? '' : `<script>try{window.__d37Paused=true;(window.adsbygoogle=window.a
 </head>
 <body>
 <header class="top">
-  <a class="logo" href="/#/home">DAN4IK<span>37</span></a>
+  <a class="logo" href="/">DAN4IK<span>37</span></a>
   <nav>
-    <a href="/#/home">Видео</a>
+    <a href="/">Видео</a>
     <a href="/games">Игры</a>
-    <a href="/#/chat">Чат</a>
-    <a href="/#/forum">Форум</a>
+    <a href="/chat">Чат</a>
+    <a href="/forum">Форум</a>
     <a class="vip" href="/vip">✨ VIP</a>
     <a class="sub" href="${YT_CHANNEL}?sub_confirmation=1" target="_blank" rel="noopener">Подписаться</a>
   </nav>
   <details class="mmenu"><summary aria-label="Меню">☰</summary><div class="mm">
-    <a href="/#/home">🏠 Главная</a>
+    <a href="/">🏠 Главная</a>
     <a href="/videos">🎬 Все видео</a>
     <a href="/topics">🗂 Игры канала</a>
     <a href="/games">🎮 Игры онлайн</a>
     <a href="/quiz">🧩 Тесты</a>
     <a href="/studio">🛠️ Сделать свою игру</a>
-    <a href="/#/games/words">🔤 Слово дня</a>
-    <a href="/#/chat">💬 Чат</a>
-    <a href="/#/forum">📋 Форум</a>
+    <a href="/play/words">🔤 Слово дня</a>
+    <a href="/chat">💬 Чат</a>
+    <a href="/forum">📋 Форум</a>
+    <a href="/ideas">💡 Идеи для видео</a>
     <a href="/vip">✨ VIP</a>
     <a href="/shop">💎 Магазин</a>
-    <a href="/#/adv">📣 Реклама на сайте</a>
-    <a href="/#/donate">💝 Поддержать dan4ik37</a>
-    <a href="/#/profile">👤 Профиль / Войти</a>
+    <a href="/adv">📣 Реклама на сайте</a>
+    <a href="/donate">💝 Поддержать dan4ik37</a>
+    <a href="/profile">👤 Профиль / Войти</a>
   </div></details>
 </header>
 ${body}
 <footer class="foot">
-  <a href="/#/home">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/#/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/#/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
+  <a href="/">dan4ik37 (Денчик37)</a> · <a href="/about">Кто такой dan4ik37</a> · <a href="/videos">Все видео</a> · <a href="/top">Популярное</a> · <a href="/topics">Игры канала</a> · <a href="/history">История канала</a> · <a href="/games">Игры онлайн</a> · <a href="/tools/nick">Генератор ников</a> · <a href="/tools/fonts">Шрифты для ника</a> · <a href="/tools/cps">CPS тест</a> · <a href="/quiz">Тесты</a> · <a href="/studio">Студия игр</a> · <a href="/forum">Форум</a> · <a href="/ideas">Идеи для видео</a> · <a href="/tools/wheel">Колесо фортуны</a> · <a href="/tools/random">Рандомайзер</a> · <a href="/tools/typing">Тест печати</a> · <a href="/vip">VIP</a> · <a href="/shop">💎 Магазин</a> · <a href="/donate">💝 Поддержать</a> · <a href="/reklama">Реклама</a> · <a href="/adv">Разместить рекламу</a> · <a href="/ads-terms">Правила рекламы</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> ·<a href="${YT_CHANNEL}" target="_blank" rel="noopener">YouTube</a> ·
   <a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch</a> ·
   <a href="https://t.me/+LE25p4pQojkyYjli" target="_blank" rel="noopener">Telegram</a> ·
   <a href="https://vk.com/dan4ik37" target="_blank" rel="noopener">ВКонтакте</a>

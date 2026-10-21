@@ -155,7 +155,7 @@
     return p === '/' || p === '/index.html' ? 'videos' : 'other';
   }
   function section(){
-    const h = String(location.hash || '').toLowerCase(), p = String(location.pathname || '/').toLowerCase();
+    const h = String((window.D37Route ? D37Route.hash() : location.hash || '')).toLowerCase(), p = String(location.pathname || '/').toLowerCase();
     if (/^#\/games\/world\b/.test(h)) return 'world';
     if (/^#\/games\/(studio|studio3d|unity)\b/.test(h)) return 'studio';
     if (/^#\/games\b/.test(h)) return 'games';
@@ -195,7 +195,7 @@
     shown.add(p.id);
     return p;
   }
-  addEventListener?.('hashchange', () => shown.clear());
+  addEventListener?.('d37:route', () => shown.clear());   // переход раздела (js/ui/router.js)
 
   // ── Картинки: подписанная ссылка на час (хранилище закрытое) ──
   const IMG = new Map(Object.entries(ss.get('d37_adimg') || {}));

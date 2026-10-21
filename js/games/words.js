@@ -132,8 +132,8 @@
     }
   }
 
-  // ── Подсказка для VIP (и персонала): одна буква на слово. Остальным — как получить VIP ──
-  // VIP даётся за донат или кристаллы 💎 (пробный на 3 дня — за 30-й уровень, economy.sql) — повод поддержать стрим, игра бесплатна.
+  // ── Подсказка — бонус VIP, донатеров и персонала: одна буква на слово. Остальным — как получить ──
+  // Честно для всех (22.10.2026): слово с подсказкой не идёт в рекорды, задания и опыт (report не зовём), в «Поделиться» — 💡.
   function hasHintPerk(){
     try { return typeof currentProfile !== 'undefined' && !!currentProfile && typeof hasPerks === 'function' && hasPerks(currentProfile.role, currentProfile); }
     catch (e) { return false; }
@@ -141,14 +141,14 @@
   function showHint(h){
     W.hint = h;
     const t = W.el.querySelector('.wd-hinttext');
-    if (t) t.innerHTML = `Буква №${h.i + 1} — <b>«${h.ch.toUpperCase()}»</b>`;
+    if (t) t.innerHTML = `Буква №${h.i + 1} — <b>«${h.ch.toUpperCase()}»</b> · это слово — без рекорда`;
     const b = W.el.querySelector('.wd-hint'); if (b) b.disabled = true;
   }
   function hint(){
     if (!W || W.over) return;
     const t = W.el.querySelector('.wd-hinttext');
     if (!hasHintPerk()) {
-      t.innerHTML = 'Подсказки — для VIP: VIP даётся за донат или кристаллы 💎, а попробовать — за 30-й уровень — <a href="/vip">что ещё даёт VIP</a>';
+      t.innerHTML = 'Подсказки — бонус VIP и донатеров («💛 Донатер» — статус за поддержку стрима; VIP — за уровень или 💎). Слово с подсказкой идёт без рекорда — <a href="/vip">что ещё даёт статус</a>';
       if (typeof window.va === 'function') window.va('event', { name: 'words_hint_locked' });
       return;
     }
@@ -173,7 +173,9 @@
     if (W.opt.mode === 'duel') { if (!restored) W.opt.onEnd(win, tries, sec); return; }
     if (!restored) {
       if (W.opt.mode === 'daily') addStats(win, tries);
-      W.opt.onEnd(win, tries, sec);
+      // Подсказка (бонус VIP/донатера) — в рекорды, задание дня и опыт не идёт: на результат игры бонусы не влияют
+      if (!W.hint) W.opt.onEnd(win, tries, sec);
+      else status((win ? 'Угадал с подсказкой 💡' : `Не угадал. Это было слово «${W.word.toUpperCase()}»`) + ' — без рекорда', win ? 'win' : 'err');
     }
     const end = W.el.querySelector('.wd-end');
     end.hidden = false;

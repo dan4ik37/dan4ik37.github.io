@@ -309,7 +309,7 @@ const stored = e => { try { const r = JSON.parse(e.store.d37_ref2 || 'null'); if
     r = await call({ code: 'k7m2qz' }, { ok: false, reason: 'not_found' });
     ok(r.code === 404, '/r/<неизвестный код> — 404');
     const pages = src('api/pages.js'), vj = JSON.parse(src('vercel.json'));
-    ok(/r: ref \}/.test(pages) && vj.rewrites.some(x => x.source === '/r/:code' && x.destination === '/api/pages?page=r&code=:code'), 'маршрут /r/:code → api/pages.js (новой функции нет)');
+    ok(/r: ref[,\s}]/.test(pages) && vj.rewrites.some(x => x.source === '/r/:code' && x.destination === '/api/pages?page=r&code=:code'), 'маршрут /r/:code → api/pages.js (новой функции нет)');
     ok(fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'функций Vercel — не больше 12');
     ok(fs.existsSync(path.join(SITE, 'img/share/invite.png')), 'картинка превью img/share/invite.png');
   }

@@ -8,12 +8,16 @@
 <meta name="theme-color" content="#ff2d55">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <script>
-// Разделы сайта открываются через #/… (/chat → /#/chat): кто ввёл адрес без решётки — сразу туда.
-// Vercel отдаёт эту страницу на любой несуществующий адрес (404.html в корне).
+// Vercel отдаёт эту страницу (со статусом 404) на любой несуществующий адрес. Разделы сайта — настоящие адреса (/chat, /forum,
+// /play/chess — vercel.json → index.html), сюда не попадают. Копия на GitHub Pages — на главный адрес с тем же путём;
+// раздел с заглавными буквами (/Chat) — на свой адрес; комната игры без решётки (/games/chess/abcd) — в игру (/play/chess/abcd).
 (function () {
+  if (/\.github\.io$/.test(location.hostname)) { location.replace('https://dan4ik37.vercel.app' + location.pathname + location.search + location.hash); return; }
   var p = location.pathname.replace(/\/+$/, '');
-  var m = /^\/(home|chat|profile|shorts|forum|donate|ideas|lfg|poll|soundboard|ads)(\/.*)?$/i.exec(p);
-  if (m) location.replace('/#/' + m[1].toLowerCase() + (m[2] || '') + location.search);
+  var g = /^\/games\/([a-z0-9_-]+)\/(.+)$/i.exec(p);
+  if (g) { location.replace('/play/' + g[1].toLowerCase() + '/' + g[2] + location.search); return; }
+  var m = /^\/(home|chat|profile|shorts|forum|donate|ideas|lfg|poll|soundboard|ads|adv|invite|phone|play|clicker|about|shop|app)(\/.*)?$/i.exec(p);
+  if (m && m[1] !== m[1].toLowerCase()) location.replace('/' + m[1].toLowerCase() + (m[2] || '') + location.search);
 })();
 </script>
 <style>
@@ -40,7 +44,8 @@ p{color:var(--muted);max-width:420px}
     <a class="main" href="/">🏠 На главную</a>
     <a href="/videos">🎬 Все видео</a>
     <a href="/games">🎮 Игры онлайн</a>
-    <a href="/#/chat">💬 Чат</a>
+    <a href="/chat">💬 Чат</a>
+    <a href="/forum">📋 Форум</a>
     <a href="/vip">✨ VIP</a>
   </div>
 </body>

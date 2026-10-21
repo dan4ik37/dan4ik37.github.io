@@ -427,7 +427,7 @@
     if (!room || mode === 'play' || mode === 'over') return;
     mode = 'lobby';
     const seats = (room.seats || []).map(s => ({ id: s.id, nick: s.nick, me: s.me }));
-    root.innerHTML = TableRoom.lobbyHtml(location.origin + location.pathname + '#/games/chess/' + code, seats, 2, { title: '♞ Шахматы — стол', host: room.isHost, canStart: seats.length === 2 });
+    root.innerHTML = TableRoom.lobbyHtml((window.D37Route ? D37Route.abs('#/games/chess/' + code) : location.origin + location.pathname + '#/games/chess/' + code), seats, 2, { title: '♞ Шахматы — стол', host: room.isHost, canStart: seats.length === 2 });
   }
   function hostStart(){
     if (!room?.isHost || room.seats.length < 2) return;

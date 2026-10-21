@@ -240,7 +240,7 @@ globalThis.fetch = async (url, o = {}) => {
   return J(404, {});
 };
 const rpcCalls = fn => NET.calls.filter(c => c.url.endsWith('/rpc/' + fn));
-const setHash = h => { location.hash = h; (winListeners.hashchange || []).forEach(fn => fn({ type: 'hashchange' })); };
+const setHash = h => { location.hash = h; ['hashchange', 'd37:route'].forEach(t => (winListeners[t] || []).forEach(fn => fn({ type: t }))); };   // переход раздела — событие 'd37:route' (js/ui/router.js)
 
 globalThis.currentUser = null; globalThis.currentProfile = null; globalThis.currentRole = null;
 globalThis.isVipActive = p => !!p?.is_vip;
@@ -594,7 +594,7 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
     ok(/0\+, 6\+, 12\+, 16\+ или 18\+/.test(tb) && /до 13 лет — только 0\+ и 6\+/.test(tb), '/ads-terms: возрастные метки');
     ok(/Возврат неизрасходованного бюджета/.test(tb) && new RegExp(`Минимальный бюджет — ${D.DEF.min_budget}`).test(tb) && /noindex/.test(tb) === false && !/adsbygoogle\.js/.test(tb), '/ads-terms: возврат, цены из правил, без рекламы');
     const rk = await run({ page: 'reklama' });
-    ok(rk.code === 200 && /Разместить рекламу самостоятельно/.test(rk.body) && /href="\/#\/adv"/.test(rk.body) && /href="\/ads-terms"/.test(rk.body), '/reklama: блок «Разместить рекламу самостоятельно» → кабинет и правила');
+    ok(rk.code === 200 && /Разместить рекламу самостоятельно/.test(rk.body) && /href="\/(#\/)?adv"/.test(rk.body) && /href="\/ads-terms"/.test(rk.body), '/reklama: блок «Разместить рекламу самостоятельно» → кабинет и правила');
     globalThis.fetch = realFetch; globalThis.setTimeout = fakeST; globalThis.clearTimeout = fakeCT;
   } catch (e) { ok(false, 'сервер сайта', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });
@@ -613,13 +613,13 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
   const vj = JSON.parse(read('vercel.json'));
   ok(vj.rewrites.some(r => r.source === '/go/:id' && r.destination === '/api/pages?page=go&id=:id') && vj.rewrites.some(r => r.source === '/api/geo') && vj.rewrites.some(r => r.source === '/ads-terms' && r.destination === '/api/pages?page=adsterms'), 'vercel.json: /go/:id, /api/geo, /ads-terms');
   has('js/ui/router.js', /adv:\s*\['adv-page'\]/, 'router.js: раздел #/adv');
-  has('js/ui/router.js', /route==='adv'\) window\.D37AdDirect\?\.cabinet\?\.\(currentRouteParam\(\)\)/, 'router.js: кабинет грузится при входе');
+  has('js/ui/router.js', /route==='adv'\) window\.D37AdDirect\?\.cabinet\?\.\((currentRouteParam\(\)|param)\)/, 'router.js: кабинет грузится при входе');
   has('index.html', /id="adv-page"[\s\S]{0,400}id="advRoot"/, 'index.html: блок кабинета');
-  has('index.html', /href="#\/adv" data-route="adv"/, 'index.html: кабинет в меню сайта');
+  has('index.html', /href="#?\/adv" data-route="adv"/, 'index.html: кабинет в меню сайта');
   has('js/features/fx.js', /'ads', 'adv'\]/, 'fx.js: кабинет в «Ещё ▾»');
   has('js/features/shop.js', /href="#\/adv"/, 'магазин: ссылка на кабинет');
   has('js/features/shop.js', /ads: 'Реклама на сайте', ads_refund: 'Возврат остатка рекламы'/, 'магазин: подписи в истории 💎');
-  has('api/_lib/page.js', /href="\/#\/adv"/, 'серверные страницы: кабинет в меню и подвале');
+  has('api/_lib/page.js', /href="\/(#\/)?adv"/, 'серверные страницы: кабинет в меню и подвале');
   for (const f of ['js/features/adcab.js', 'css/adcab.css']) ok(fs.existsSync(path.join(SITE, f)), 'есть ' + f);
   ok(fs.readdirSync(path.join(SITE, 'api')).filter(f => f.endsWith('.js')).length <= 12, 'функций Vercel не больше 12');
 }

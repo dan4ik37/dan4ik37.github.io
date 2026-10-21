@@ -42,6 +42,8 @@
     fall:   { name: 'Падает', n: 2, dur: .4, loop: 1 },
     crouch: { name: 'Присел', n: 2, lo: 1, dur: 2.6, loop: 1 },
     climb:  { name: 'Лезет', n: 4, dur: .8, loop: 1 },
+    hang:   { name: 'Висит на краю', n: 4, lo: 2, dur: 2.4, loop: 1 },          // зацепился: руки вверх, ноги болтаются (паркур world3d «вис»)
+    ledge:  { name: 'Подтягивается', n: 6, lo: 4, dur: .32, loop: 0 },         // с края — наверх (паркур world3d «up»); «Подземье» и другие 2D
     swim:   { name: 'Плывёт', n: 6, lo: 4, dur: TAU / 3.4, loop: 1 },
     sit:    { name: 'Сидит', n: 1, dur: 1, loop: 1 },
     hurt:   { name: 'Больно', n: 3, dur: .3, loop: 0 },
@@ -402,6 +404,8 @@
       else if (anim === 'jump' || anim === 'fall') o.air = true;
       else if (anim === 'crouch') o.crouch = 1;
       else if (anim === 'climb') { o.ladder = true; o.climbPh = TAU * k; }
+      else if (anim === 'hang') o.hang = true;
+      else if (anim === 'ledge') { o.pk = 'up'; o.pkK = k; }
       else if (anim === 'swim') { o.swim = true; mv = true; t = T0 + k * A.dur; }
       else if (anim === 'sit') o.sit = true;
       else if (anim === 'phone' || anim === 'call') { o.phone = anim === 'phone' ? 'use' : 'call'; o.phonePh = TAU * k; }   // телефон 📱: фаза — своя, цикл замкнут
@@ -427,6 +431,13 @@
       } else if (anim === 'swim') {   // ноги «ножницами» — ровно 3 удара за гребок, чтобы цикл замкнулся
         const q = Math.sin(TAU * 3 * k);
         rx(legL, q * .28); rx(legR, -q * .28); rx(kneeL, .12 + .25 * Math.max(0, -q)); rx(kneeR, .12 + .25 * Math.max(0, q));
+      } else if (anim === 'hang') {   // вис на краю: руки вверх-вперёд к краю (прямо вверх у чиби прячутся за головой), ноги болтаются
+        set(armL, -1.85, 0, -.12); set(armR, -2.0, 0, .12); rx(elbowL, -.5); rx(elbowR, -.42);
+        rx(legL, .2 * s); rx(legR, -.2 * s); rx(kneeL, .28 + .14 * Math.max(0, s)); rx(kneeR, .28 + .14 * Math.max(0, -s));
+        rx(torso, -.06); if (headP) headP.rotation.x = -.16;
+      } else if (anim === 'ledge' && k < .62) {   // подтягивается: руки к краю видны (как у «вис»), дальше — поза world3d «up»
+        const w = k < .38 ? 1 : 1 - (k - .38) / .24;
+        if (armL) armL.rotation.x += 1.0 * w; if (armR) armR.rotation.x += .88 * w;
       } else if (anim === 'hurt') {   // отпрянул назад и «отходит»
         const a = 1 - .8 * k;
         rx(torso, -.42 * a);

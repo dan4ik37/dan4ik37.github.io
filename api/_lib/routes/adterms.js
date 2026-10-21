@@ -16,11 +16,11 @@ const ru = d => { const [y, m, dd] = String(d).split('-'); return `${dd}.${m}.${
 export default function handler(req, res) {
   const P = DEF.prices;
   const body = `<main class="wrap lg">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/reklama">Реклама</a> › <span>Правила рекламы</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/reklama">Реклама</a> › <span>Правила рекламы</span></nav>
   <h1>Правила рекламы на сайте</h1>
   <div class="lg-body">
 <p class="lg-draft">Это шаблон правил, написанный простыми словами. Перед тем как принимать оплату за рекламу, его стоит показать юристу${sellerReady() ? '' : '; реквизиты сайта появятся здесь после регистрации ИП'}.</p>
-<p>Эти правила — условия, на которых любой зарегистрированный пользователь (дальше — «рекламодатель») сам размещает рекламу на сайте <a href="${SITE}">${SITE.replace('https://', '')}</a> через <a href="/#/adv">кабинет рекламодателя</a>. Сайт ведёт ${esc(sv(S.name, 'владелец сайта'))} (дальше — «мы»). Перед первой кампанией рекламодатель ставит галочку «прочитал(а) и согласен(на)» — это и есть согласие с правилами (редакция ${esc(ru(DEF.terms))}). Остальное — <a href="/terms">пользовательское соглашение</a>.</p>
+<p>Эти правила — условия, на которых любой зарегистрированный пользователь (дальше — «рекламодатель») сам размещает рекламу на сайте <a href="${SITE}">${SITE.replace('https://', '')}</a> через <a href="/adv">кабинет рекламодателя</a>. Сайт ведёт ${esc(sv(S.name, 'владелец сайта'))} (дальше — «мы»). Перед первой кампанией рекламодатель ставит галочку «прочитал(а) и согласен(на)» — это и есть согласие с правилами (редакция ${esc(ru(DEF.terms))}). Остальное — <a href="/terms">пользовательское соглашение</a>.</p>
 
 <h2>1. Что можно разместить и где</h2>
 <ul>${FORMATS.map(f => `<li><b>${esc(f.t)}</b> — ${esc(f.d)}.</li>`).join('')}</ul>
@@ -101,7 +101,7 @@ export default function handler(req, res) {
 <p>Вопросы о рекламе, статистике, данных для ОРД и возвратах — ${mail()}. Новая редакция правил публикуется на этой странице; для новых кампаний её нужно принять заново.</p>
 <p class="lg-ed">Редакция от ${esc(ru(DEF.terms))}.</p>
   </div>
-  <div class="lg-nav"><a href="/#/adv">📣 Кабинет рекламодателя</a> · <a href="/reklama">Медиакит</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> · <a href="/privacy">Конфиденциальность</a></div>
+  <div class="lg-nav"><a href="/adv">📣 Кабинет рекламодателя</a> · <a href="/reklama">Медиакит</a> · <a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> · <a href="/privacy">Конфиденциальность</a></div>
 </main>`;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');

@@ -152,7 +152,24 @@ if (want('light')) {
   ok(Math.max(...PZ.LMUL.map(a => Math.max(...a))) === PZ.LMUL[0][0] && chain(255, PZ.LR) === 0 && PZ.LMUL.every((a, i) => a.every((m, j) => PZ.LMULD[i][j] <= m)), 'свет: дальше LR не достаёт (коробка пересчёта правки — честная)', PZ.LR);
   ok(at(-7) === at(7) && w.L(cx0, cy0 - 3)[0] === at(3), 'свет: одинаково во все стороны', [at(-7), at(7), w.L(cx0, cy0 - 3)[0], at(3)]);
   ok(w.L(cx0 + 4, cy0 + 3)[0] >= at(7) && w.L(cx0 + 4, cy0 + 3)[0] <= at(4), 'свет: по диагонали — не больше, чем по прямой', [w.L(cx0 + 4, cy0 + 3)[0], at(4), at(7)]);
-  ok(at(14) > 0 && at(14) <= 60 && w.L(cx0 + 16, cy0)[0] < at(15) * .6 && w.L(cx0 + 17, cy0)[0] < at(15) * .4, 'свет: в камень заходит на 2–3 клетки и гаснет', [at(14), at(15), w.L(cx0 + 16, cy0)[0], w.L(cx0 + 17, cy0)[0]]);
+  // камень освещается только гранью (владелец 22.10: «огонь выходит за пещеру»): первая клетка — доля LFACE, вторая — почти темно, третья — 0
+  const face = w.L(cx0 + 16, cy0)[0], deep1 = w.L(cx0 + 17, cy0)[0], deep2 = w.L(cx0 + 18, cy0)[0];
+  ok(at(14) > 0 && at(14) <= 60 && face === (at(15) * PZ.LMUL[1][0] >> 8) && deep1 <= face * .25 && deep2 === 0, 'свет: в камне — только освещённая грань (дальше 2 клеток — темно)', [at(15), face, deep1, deep2]);
+  // сквозь стену в 1 блок — не проходит: справа за камнем (cx0 + 16) — закрытая комната
+  const room2 = [];
+  for (let y = cy0 - 5; y <= cy0 + 5; y++) for (let x = cx0 + 17; x <= cx0 + 27; x++) room2.push([x, y, y === cy0 - 5 || y === cy0 + 5 || x === cx0 + 27 ? T.STONE : 0, 2]);
+  w.edit(room2);
+  ok([1, 3, 6].every(d => w.L(cx0 + 16 + d, cy0).slice(0, 3).every(v => v === 0)), 'свет: за стеной в 1 блок — темно (свет сквозь камень не проходит)', [w.L(cx0 + 17, cy0), w.L(cx0 + 19, cy0)]);
+  // светящаяся руда в стене светит в воздух; та же руда за слоем камня — нет (отдельная закрытая комната в толще камня)
+  const oy = cy0 + 20, shell = [];
+  for (let y = oy - 7; y <= oy + 7; y++) for (let x = cx0 - 12; x <= cx0 + 12; x++) shell.push([x, y, Math.abs(y - oy) <= 2 && Math.abs(x - cx0) <= 6 ? 0 : T.STONE, 2]);
+  w.edit(shell);
+  w.edit([[cx0 + 7, oy, T.DEEPORE, 2]]);
+  const blue = w.L(cx0 + 6, oy)[2];
+  ok(blue >= (PZ.P.LB[T.DEEPORE] * PZ.LMUL[0][2] >> 8) - 1, 'свет: светящаяся руда в стене освещает пещеру', [blue, w.L(cx0 + 6, oy)]);
+  w.edit([[cx0 + 7, oy, T.STONE, 2], [cx0 + 8, oy, T.DEEPORE, 2]]);
+  ok(w.L(cx0 + 6, oy)[2] === 0, 'свет: руда за слоем камня в пещеру не светит', [w.L(cx0 + 6, oy), blue]);
+  w.edit([[cx0 + 8, oy, T.STONE, 2]]);
   ok(w.L(cx0, cy0)[1] === PZ.P.LG[T.TORCH] && w.L(cx0, cy0)[2] === PZ.P.LB[T.TORCH] && PZ.P.LR[T.TORCH] > PZ.P.LG[T.TORCH] && PZ.P.LG[T.TORCH] > PZ.P.LB[T.TORCH], 'свет: цвет факела тёплый (R > G > B)', w.L(cx0, cy0));
   ok(w.L(cx0 + 7, cy0)[1] / w.L(cx0 + 7, cy0)[0] > .6, 'свет: вдали от факела цвет тот же (каналы гаснут одинаково)', w.L(cx0 + 7, cy0));
   // факел у границы чанка: соседний чанк освещён так же
@@ -180,6 +197,9 @@ if (want('light')) {
   ok(w.L(sx, top + 15)[3] === 255, 'свет: в шахте без стен до неба — солнце до дна', w.L(sx, top + 15));
   w.edit([[sx, top, T.STONE, 0], [sx + 1, top, T.STONE, 0]]);
   ok(w.L(sx, top + 15)[3] < 120, 'свет: накрыли шахту — солнца на дне нет (только рассеянный)', w.L(sx, top + 15));
+  // днём земля у поверхности видна на 5–6 клеток вглубь (как раньше), дальше — темно
+  const gx = sp.x - 3, gt = G.colInfo(gx).h, S0 = w.L(gx, gt)[3], S2 = w.L(gx, gt + 2)[3], S8 = w.L(gx, gt + 8)[3];
+  ok(S0 >= 150 && S2 > 30 && S2 < 80 && S8 === 0, 'свет: небо освещает верх земли, глубже 7 клеток — темно', [S0, S2, S8]);
 }
 
 // ═══ 4. Жидкости и песок: оседают и успокаиваются ═══
@@ -759,6 +779,83 @@ async function gameTests(){
     ok(sim.G.state === 'play' && A.fgAt(bx, by) === PZ.TILE.brick.id && A.count('gold') === gold, 'сохранение: блок и вещи на месте после выхода и входа');
     const data = await A.exportWorld(wid), w2 = await A.importWorld(JSON.parse(JSON.stringify(data)));
     ok(Object.keys(data.chunks).length > 0 && w2.id !== wid && w2.seed === data.world.seed, 'экспорт → импорт: копия мира с теми же чанками', Object.keys(data.chunks).length);
+  }
+  // ── цепляться за край (владелец 22.10: «цепляния везде»): стена выше прыжка — зацепился и подтянулся; места наверху
+  // нет — не цепляется; от стены — отпустил; выключено в ⚙️ — не цепляется; падая у края — хватается ──
+  {
+    await A.stopWorld(false);
+    await sim.newWorld('pz-test-ledge'); const G = sim.G, PZ = A.PZ, ST = PZ.TILE.stone.id; T.god(true); G.npcs.length = 0; G.spawnGrace = 1e9; await sim.frames(1);
+    const p = G.pl, px = Math.floor(p.x + p.w / 2), gy = Math.floor(p.y + p.h - .01) + 1;   // gy — ряд пола (верх земли)
+    const C = sim.C, hold = (mx, keys = []) => { C.move.x = mx; C.held.clear(); for (const k of keys) C.held.add(k); };
+    const build = (H, room) => {   // уступ высотой H справа (x ∈ [px + 3, px + 16]); room — сколько клеток пусто над краем
+      for (let x = px - 14; x <= px + 18; x++) { for (let y = gy - 14; y < gy; y++) T.setCell(x, y, 0, 0, 0); T.setCell(x, gy, ST, 0); }
+      for (let x = px + 3; x <= px + 16; x++) for (let y = gy - H; y < gy; y++) T.setCell(x, y, ST, 0);
+      if (room) for (let x = px + 1; x <= px + 9; x++) T.setCell(x, gy - H - room - 1, ST, 0);
+    };
+    const put = (x = px, feet = gy) => { p.x = x - p.w / 2; p.y = feet - p.h; p.vx = p.vy = 0; p.ledge = null; p.ledgeCD = 0; p.ground = false; p.fallY = p.y; };
+    const jumpAt = async (sec = 2.4) => {   // держать вправо, прыгнуть (держа прыжок 0,4 с)
+      hold(1); await sim.frames(.3); C.downs.add('jump'); hold(1, ['jump']); await sim.frames(.4); hold(1); await sim.frames(sec - .7); hold(0); await sim.frames(.3);
+    };
+    const feet = () => p.y + p.h;
+    G.opt.ledge = true;
+    build(6); put(); await sim.frames(.3);
+    let grabbed = false; sim.onFrame = () => { if (p.ledge) grabbed = true; };
+    await jumpAt(); sim.onFrame = null;
+    ok(grabbed && Math.abs(feet() - (gy - 6)) < .05 && p.x + p.w / 2 > px + 3, 'край: стена в 6 клеток (выше прыжка) — зацепился и подтянулся наверх', { grabbed, feet: feet(), top: gy - 6, x: p.x - px });
+    build(6, 2); put(); await sim.frames(.3); grabbed = false; sim.onFrame = () => { if (p.ledge) grabbed = true; };
+    await jumpAt(); sim.onFrame = null;
+    ok(!grabbed && Math.abs(feet() - gy) < .05, 'край: над краем 2 клетки (ниже роста) — не цепляется и не лезет в щель', { grabbed, feet: feet(), gy });
+    build(6); put(); await sim.frames(.3);
+    hold(1); await sim.frames(.3); C.downs.add('jump'); hold(1, ['jump']);
+    for (let i = 0; i < 90 && !p.ledge; i++) await sim.frames(1 / 60);
+    const had = !!p.ledge; hold(-1); await sim.frames(1.2); hold(0); await sim.frames(.3);
+    ok(had && !p.ledge && Math.abs(feet() - gy) < .05 && p.x + p.w < px + 3.01, 'край: держать от стены — отпустил и упал вниз', { had, feet: feet(), x: p.x - px });
+    G.opt.ledge = false; build(6); put(); await sim.frames(.3); grabbed = false; sim.onFrame = () => { if (p.ledge) grabbed = true; };
+    await jumpAt(); sim.onFrame = null; G.opt.ledge = true;
+    ok(!grabbed && Math.abs(feet() - gy) < .05, 'край: выключено в ⚙️ — не цепляется', { grabbed, feet: feet() });
+    // обрыв: падает вдоль края (держит к нему) — хватается и вылезает обратно
+    for (let x = px - 14; x <= px + 14; x++) { for (let y = gy - 14; y < gy + 12; y++) T.setCell(x, y, x <= px ? (y >= gy ? ST : 0) : 0, 0, 0); T.setCell(x, gy + 12, ST, 0); }
+    put(px + 1 + p.w / 2 + .01, gy + 2); p.vy = 2; hold(-1); grabbed = false; sim.onFrame = () => { if (p.ledge) grabbed = true; };
+    await sim.frames(1.2); hold(0); await sim.frames(.3); sim.onFrame = null;
+    ok(grabbed && Math.abs(feet() - gy) < .05 && p.x + p.w / 2 < px + 1, 'край: падая у обрыва (держит к нему) — схватился и вылез', { grabbed, feet: feet(), gy, x: p.x - px });
+    hold(0);
+  }
+  // ── одно и то же управление при 30, 60 и 144 кадрах в секунду — герой в одном месте (ходьба, зацеп за край, плавание,
+  // падение): логика идёт шагом 1/60 с, от частоты экрана не зависит (владелец 22.10: «одинаково на телефоне и ПК») ──
+  {
+    const course = async hz => {
+      await A.stopWorld(false);
+      await sim.newWorld('pz-test-fps'); const G = sim.G, PZ = A.PZ, ST = PZ.TILE.stone.id; T.god(true); G.npcs.length = 0; G.spawnGrace = 1e9; G.mobs.length = 0;
+      await sim.frames(.5, hz);
+      const p = G.pl, px = Math.floor(p.x + p.w / 2), gy = Math.floor(p.y + p.h - .01) + 1, C = sim.C;
+      // трасса: пол; уступ 6 клеток (x ∈ [px + 5, px + 18]) с бассейном (x ∈ [px + 9, px + 13], глубина 4); за уступом — обрыв на пол
+      for (let x = px - 3; x <= px + 44; x++) { for (let y = gy - 16; y < gy; y++) T.setCell(x, y, 0, 0, 0); for (let y = gy; y <= gy + 2; y++) T.setCell(x, y, ST, 0); }
+      for (let y = gy - 16; y < gy; y++) T.setCell(px + 45, y, ST, 0);   // стена в конце трассы
+      for (let x = px + 5; x <= px + 18; x++) for (let y = gy - 6; y < gy; y++) T.setCell(x, y, ST, 0);
+      for (let x = px + 9; x <= px + 13; x++) for (let y = gy - 6; y < gy - 2; y++) T.setCell(x, y, 0, 0, 0, 255, 1);
+      p.x = px - p.w / 2; p.y = gy - p.h; p.vx = p.vy = 0; p.ledge = null; p.fallY = p.y; G.accReset = true;
+      await sim.frames(.5, hz);
+      // управление по времени (кратно 1/6 с — кадры при 30/60/144 Гц на этих отметках совпадают)
+      const plan = [[0, 1, []], [.5, 1, ['jump'], 'jump'], [1, 1, []], [2.5, 1, ['jump'], 'jump'], [3, 1, []], [3.5, 1, ['jump'], 'jump'], [4, 1, []], [4.5, 0, []], [6, 0, []]];
+      const log = [], fl = { ledge: 0, swim: 0 };
+      sim.onFrame = () => { if (p.ledge) fl.ledge++; if (p.inLq) fl.swim++; };
+      for (let k = 0; k < plan.length; k++) {
+        const [t0, mx, keys, down] = plan[k], t1 = plan[k + 1] ? plan[k + 1][0] : t0 + 1;
+        C.move.x = mx; C.held.clear(); for (const q of keys) C.held.add(q); if (down) C.downs.add(down);
+        await sim.frames(t1 - t0, hz);
+        log.push([+(p.x - px).toFixed(3), +(p.y + p.h - gy).toFixed(3), p.inLq, !!p.ledge]);
+      }
+      C.move.x = 0; C.held.clear(); sim.onFrame = null;
+      return { x: p.x - px, y: p.y + p.h - gy, log, fl };
+    };
+    const runs = {};
+    for (const hz of [30, 60, 144]) runs[hz] = await course(hz);
+    const R0 = runs[60];
+    const dev = Math.max(...[30, 144].map(hz => Math.hypot(runs[hz].x - R0.x, runs[hz].y - R0.y)));
+    console.log(`  трасса при 30/60/144 Гц: ${[30, 60, 144].map(hz => runs[hz].x.toFixed(2) + ',' + runs[hz].y.toFixed(2)).join(' / ')}; отклонение ${dev.toFixed(3)}`);
+    const went = R0.fl.ledge > 0 && R0.fl.swim > 0 && R0.x > 20 && Math.abs(R0.y) < .05;
+    ok(went, 'частота кадров: трасса пройдена — зацеп за уступ, бассейн, спрыгнул вниз', { fl: R0.fl, log: R0.log });
+    ok(dev < .1, 'частота кадров: при 30, 60 и 144 Гц герой там же (меньше 0,1 клетки)', { dev, r30: runs[30].log, r60: runs[60].log, r144: runs[144].log });
   }
   await A.stopWorld(false);
 }

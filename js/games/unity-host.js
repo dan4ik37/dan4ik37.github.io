@@ -501,7 +501,9 @@
   const light = async (base = LIGHT) => base + ((await ageCol()) ? ',age_rating' : '');
   const ageB = g => g?.age_rating != null && window.D37Age ? D37Age.badge(g.age_rating, { title: AU().WHY }) : '';
   const go = p => { location.hash = '#/games/unity' + (p ? '/' + p : ''); };
-  const playLink = (id, code) => location.origin + location.pathname + '#/games/unity/play/' + id + (code ? '/' + code : '');
+  const playHash = (id, code) => '#/games/unity/play/' + id + (code ? '/' + code : '');
+  const playLink = (id, code) => (window.D37Route ? D37Route.abs(playHash(id, code)) : location.origin + location.pathname + playHash(id, code));
+  const unUrl = h => { if (window.D37Route) D37Route.setUrl(h); else history.replaceState(null, '', h); };   // адрес без перехода (js/ui/router.js)
   function newCode(){ let c = ''; for (let i = 0; i < 6; i++) c += ABC[Math.floor(Math.random() * ABC.length)]; return c; }
   const roundRef = () => (Date.now().toString(36) + Math.random().toString(36).slice(2, 8)).slice(0, 24);
   const arOf = a => { const m = /^(\d+):(\d+)$/.exec(a || ''); return m ? [+m[1], +m[2]] : null; };
@@ -725,7 +727,7 @@
       statusLine(st);
       return;
     }
-    if (!g.srv) { dropDraft(g.id); g.id = r.id; g.srv = true; g.local = false; history.replaceState(null, '', '#/games/unity/edit/' + r.id); }
+    if (!g.srv) { dropDraft(g.id); g.id = r.id; g.srv = true; g.local = false; unUrl('#/games/unity/edit/' + r.id); }
     g.url = r.url || r0.url; g.origin = r.origin || r0.origin; g.status = r.status || g.status;
     if (want && want !== g.status) {
       const s2 = await rpc('unity_status', { p_id: g.id, p_status: want });
@@ -779,7 +781,7 @@
     stage.innerHTML = `<div class="un-box"><div class="un-load">🕹️ Загружаем игру…<small>Unity-игры грузятся до минуты</small></div></div>
       <div class="un-bar"><button type="button" class="st-btn ghost" data-act="fs">⛶ На весь экран</button><span class="un-sdk"></span><span class="st-score un-score"></span></div>
       <div class="un-note" hidden></div><div class="un-room" hidden></div><div class="st-result" hidden></div><div class="st-ad" hidden></div>`;
-    if (code && g.players < 2) history.replaceState(null, '', '#/games/unity/play/' + g.id);
+    if (code && g.players < 2) unUrl('#/games/unity/play/' + g.id);
     st.session = session(stage, g, { preview: false, code: g.players > 1 ? code : '', own: mineG, onTop: () => topList(st, g),
       onLoad: () => { if (g.srv) rpc('unity_play', { p_id: g.id }); } });   // запуск = страница сборки открылась (сервер: раз в 30 мин с человека)
     topList(st, g);
@@ -814,7 +816,7 @@
     }
   }
   function share(g, code){
-    const url = code ? playLink(g.id, code) : SITE + '/#/games/unity/play/' + g.id;
+    const url = code ? playLink(g.id, code) : (window.D37Route ? D37Route.abs(playHash(g.id), SITE) : SITE + '/#/games/unity/play/' + g.id);
     const text = code ? `Заходи ко мне в «${g.title}» — играем вместе!` : `Сыграй в «${g.title}» — игра из Unity на сайте dan4ik37`;
     if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) { navigator.share({ title: g.title, text, url }).catch(() => {}); return; }
     navigator.clipboard?.writeText(url).then(() => api.toast('🔗 Ссылка скопирована'), () => prompt('Ссылка:', url));
@@ -973,7 +975,7 @@
 
     // ── Комнаты ──
     function roomState(){ const s = X.room.state(); return { ...s, link: playLink(g.id, s.code) }; }
-    function setUrl(code){ if (!opt.preview) history.replaceState(null, '', '#/games/unity/play/' + g.id + (code ? '/' + code : '')); }
+    function setUrl(code){ if (!opt.preview) unUrl(playHash(g.id, code)); }
     function createRoomCmd(){
       if ((g.players | 0) < 2) { roomErr('single'); return; }
       if (X.room?.joined && X.room.isHost && X.room.players.length === 1) { send({ t: 'room.state', ...roomState() }); return; }   // уже ждём друзей

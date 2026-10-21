@@ -94,7 +94,7 @@
     find(el.dataset.secret);
   }, true);
   window.addEventListener('d37:auth', () => { sync(); window.d37NickFx?.reload(); });
-  window.addEventListener('hashchange', () => setTimeout(paint, 300));
+  window.addEventListener('d37:route', () => setTimeout(paint, 300));
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', paint); else paint();
   setTimeout(sync, 2500);
 

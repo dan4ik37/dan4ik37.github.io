@@ -1217,7 +1217,7 @@
     if (!lobby) return;
     if (!R.joined) return;
     const host = R.isHost, set = S?.set || { r: 3, t: 80, mode: 'all', own: 0 };
-    const link = location.origin + location.pathname + '#/games/krokodil/' + ON.code;
+    const link = (window.D37Route ? D37Route.abs('#/games/krokodil/' + ON.code) : location.origin + location.pathname + '#/games/krokodil/' + ON.code);
     const n = R.players.length;
     const opt = (k, v, label, on) => `<button type="button" class="ct-opt${on ? ' active' : ''}" data-act="${k}:${v}"${host ? '' : ' disabled'}>${label}</button>`;
     const focused = el.lobby.querySelector('textarea') === document.activeElement;

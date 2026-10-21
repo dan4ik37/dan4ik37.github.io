@@ -1,5 +1,5 @@
 // /studio — «Студия игр»: страница для поиска («конструктор игр онлайн», «сделать свою игру») + лучшие игры игроков.
-// /g/<id> — ссылка на игру игрока для друзей и мессенджеров: название, автор, запуски, «▶ Играть» (SPA #/games/studio/play/<id>).
+// /g/<id> — ссылка на игру игрока для друзей и мессенджеров: название, автор, запуски, «▶ Играть» (SPA /play/studio/play/<id>).
 // Данные — ugc_games (ugc.sql) по service-ключу: только игры по ссылке / на проверке / в каталоге. В поиск (index) — только
 // игры «в каталоге» (прошли модерацию); у остальных noindex и без рекламы. Пока ugc.sql не выполнен — студия без списка игр.
 import { SITE, esc } from '../yt.js';
@@ -46,7 +46,7 @@ async function gamePage(req, res, id){
   const authorGames = (await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&select=plays`)) || [];
   const totalPlays = authorGames.reduce((a, x) => a + (x.plays || 0), 0);
   const pub = g.status === 'public';
-  const url = `${SITE}/g/${id}`, playUrl = g.kind === 'place' ? `/#/games/studio3d/play/${id}` : `/#/games/studio/play/${id}`;
+  const url = `${SITE}/g/${id}`, playUrl = g.kind === 'place' ? `/play/studio3d/play/${id}` : `/play/studio/play/${id}`;
   const title = `${g.title} — игра от ${nick}`;
   const description = (g.descr ? g.descr + ' ' : '') + `Играй онлайн бесплатно: «${g.title}» — игру сделал ${nick} в Студии игр на сайте dan4ik37. Сделай и свою — без кода!`;
   const since = new Date(g.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -56,7 +56,7 @@ async function gamePage(req, res, id){
     interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/PlayAction', userInteractionCount: g.plays || 0 } };
   const body = `
 <main class="wrap" data-age-page="${age}" data-age-title="${esc(g.title)}" data-age-why="Игра игрока: метку выбрал автор, проверяет модератор.">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <a href="/studio">Студия игр</a> › <span>${esc(g.title)}</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <a href="/studio">Студия игр</a> › <span>${esc(g.title)}</span></nav>
   <section class="ug-hero">
     <span class="ug-big">${esc(g.icon || '🎮')}</span>
     <div class="ug-hero-b">
@@ -68,9 +68,9 @@ async function gamePage(req, res, id){
   </section>
   <section class="ug-author">
     <span class="ug-au-ava">👤</span>
-    <div><span class="ug-au-lbl">Автор игры</span><a class="ug-au-nick" href="/#/profile/${esc(g.author)}">${esc(nick)}</a>${ROLE[g.profiles?.role] ? ` <span class="ug-role">${ROLE[g.profiles.role]}</span>` : ''}
+    <div><span class="ug-au-lbl">Автор игры</span><a class="ug-au-nick" href="/profile/${esc(g.author)}">${esc(nick)}</a>${ROLE[g.profiles?.role] ? ` <span class="ug-role">${ROLE[g.profiles.role]}</span>` : ''}
       <small>${authorGames.length ? `${num(authorGames.length)} ${plural(authorGames.length, 'игра', 'игры', 'игр')} в каталоге · ${num(totalPlays)} ${plural(totalPlays, 'запуск', 'запуска', 'запусков')}` : 'первая игра автора'}</small></div>
-    <a class="btn btn-ghost" href="/#/profile/${esc(g.author)}">Профиль</a>
+    <a class="btn btn-ghost" href="/profile/${esc(g.author)}">Профиль</a>
   </section>
   ${pub ? '<div data-ad="seo_game" hidden></div>' : ''}
   ${more.length ? `<section class="box"><h2>Ещё игры автора</h2><div class="ug-grid">${more.map(card).join('')}</div></section>` : ''}
@@ -99,16 +99,16 @@ async function studioPage(req, res){
   ] };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>Студия игр</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <span>Студия игр</span></nav>
   <h1>Конструктор игр онлайн: сделай свою игру бесплатно</h1>
   <p class="lead">Студия игр на сайте Денчика: выбери шаблон, поставь своего героя, предметы и цвета — и игра готова. Без кода и без скачивания, прямо в браузере, на телефоне и компьютере. А можно и своим кодом: опиши идею — ИИ напишет игру, студия её запустит.</p>
-  <a class="btn btn-acc ug-play" href="/#/games/studio">🛠️ Открыть студию</a>
+  <a class="btn btn-acc ug-play" href="/play/studio">🛠️ Открыть студию</a>
   <section class="box"><h2>Как это работает</h2><ol class="ug-steps">
     <li><b>Выбери шаблон</b> — или режим «Свой код + ИИ».</li>
     <li><b>Настрой игру</b>: герой, враги, бонусы, цвета, скорость, жизни, свои вопросы в викторине.</li>
     <li><b>Позови друзей</b> по ссылке и соревнуйтесь в рекордах. Лучшие игры попадают в каталог.</li>
   </ol></section>
-  <section class="box"><h2>Шаблоны игр</h2><div class="ug-tpls">${TEMPLATES.map(([i, n, d]) => `<a class="ug-tpl" href="/#/games/studio"><span>${i}</span><b>${n}</b><small>${d}</small></a>`).join('')}</div></section>
+  <section class="box"><h2>Шаблоны игр</h2><div class="ug-tpls">${TEMPLATES.map(([i, n, d]) => `<a class="ug-tpl" href="/play/studio"><span>${i}</span><b>${n}</b><small>${d}</small></a>`).join('')}</div></section>
   ${top.length ? `<section class="box"><h2>Популярные игры игроков</h2><div class="ug-grid">${top.map(card).join('')}</div></section>` : ''}
   ${fresh.length ? `<section class="box"><h2>Новые игры</h2><div class="ug-grid">${fresh.map(card).join('')}</div></section>` : ''}
   <div data-ad="seo_game" hidden></div>

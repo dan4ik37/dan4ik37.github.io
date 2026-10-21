@@ -597,7 +597,7 @@
     };
     upd(); pillT = setInterval(upd, 1000);
   }
-  window.addEventListener('hashchange', () => setTimeout(pill, 50));
+  window.addEventListener('d37:route', () => setTimeout(pill, 50));
   C.pill = pill;
 
   // ═══ Экран разговора (телефон: incall) ═══

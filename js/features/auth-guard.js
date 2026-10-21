@@ -197,7 +197,8 @@
   }
 
   // ═══ После входа — то же, что раньше делал supabase-js ═══
-  const go = h => { if (root.location.hash !== h) root.location.hash = h; else if (/^#\/profile/.test(h) && typeof renderProfilePage === 'function') renderProfilePage(); };
+  // раздел (js/ui/router.js) — '#/…' при любых адресах; другой раздел — переход, тот же — перерисовать
+  const go = h => { if ((root.D37Route ? root.D37Route.hash() : root.location.hash) !== h) root.location.hash = h; else if (/^#\/profile/.test(h) && typeof renderProfilePage === 'function') renderProfilePage(); };
   function afterAccept(a, user) {
     if (a.t === 'recovery') {   // было: событие PASSWORD_RECOVERY → форма нового пароля (chat.js)
       if (typeof openLoginModal === 'function') { try { openLoginModal(); switchAuthTab('reset'); } catch (e) {} }

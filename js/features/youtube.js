@@ -80,7 +80,7 @@ window.addEventListener('d37:videos', () => {
   updateNewBadges();
   if (document.body.dataset.route === 'home') markVideosSeen();
 });
-window.addEventListener('hashchange', () => { if ((location.hash || '#/home').startsWith('#/home')) markVideosSeen(); });
+window.addEventListener('d37:route', () => { if ((D37Route.hash() || '#/home').startsWith('#/home')) markVideosSeen(); });
 
 let watchedIds = new Set();
 try{ watchedIds = new Set(JSON.parse(localStorage.getItem('d37_watched')||'[]')); }catch(e){}

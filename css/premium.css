@@ -1313,6 +1313,7 @@ body.no-ideas [data-route="ideas"]{display:none!important}
 .id-card.st-planned{--st:var(--tw)}
 .id-card.st-done{--st:#2ecc71}
 .id-card.st-rejected{--st:#555;opacity:.7}
+.id-card.id-focus{border-color:#ffd166;box-shadow:0 0 0 2px rgba(255,209,102,.35)}   /* /ideas/<номер> — эта идея (ideas.js focusIdea) */
 .id-vote{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;width:54px;height:62px;border-radius:12px;cursor:pointer;
   font:inherit;color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--line);transition:all .2s}
 .id-vote:hover:not(:disabled){color:#fff;border-color:var(--ac-55)}
@@ -3807,3 +3808,23 @@ html.gs-set-open,html.gs-set-open body{overflow:hidden}
 @keyframes gsRot{0%,20%{transform:rotate(0)}50%,80%{transform:rotate(-90deg)}100%{transform:rotate(0)}}
 .gs-rothint-x{margin-top:.3rem;border:0;border-radius:12px;padding:.65rem 1.4rem;background:var(--accent,#7c3aed);color:#fff;font:800 .9rem 'Montserrat',system-ui,sans-serif;cursor:pointer}
 @media(orientation:landscape){.gs-rothint{display:none}}
+
+/* ═══ 💛 Донатер (premium.sql, js/core/premium.js D37Donor, profile.js renderVipPromo; 22.10.2026) ═══ */
+#profileVipPromo .vp-lead{font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.6rem}
+#profileVipPromo .vp-lead b{color:var(--text)}
+#profileVipPromo .vp-sep{margin:.9rem 0 0;padding-top:.7rem;border-top:1px solid rgba(255,255,255,.08)}
+#profileVipPromo .vp-rows{margin-bottom:.7rem}
+#profileVipPromo .vp-row{display:flex;gap:.5rem;align-items:baseline;padding:.3rem 0;border-top:1px solid rgba(255,255,255,.06)}
+#profileVipPromo .vp-row>span:first-child{flex:0 0 5.2rem;font-weight:800}
+#profileVipPromo .vp-row>span:last-child{flex:1;font-size:.72rem;color:var(--muted)}
+#profileVipPromo .vp-note{font-size:.7rem;color:var(--muted);line-height:1.5;margin-bottom:.7rem}
+#profileVipPromo .vp-act{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
+.dn-badge{display:inline-block;margin-left:.3rem;padding:.06rem .38rem;border-radius:5px;font-size:.62rem;font-weight:800;line-height:1.4;vertical-align:middle;white-space:nowrap;
+  background:rgba(var(--dn,255,205,70),.18);color:rgb(var(--dn,255,205,70))}
+.dn-badge[hidden],.mv-role[hidden]{display:none}
+.lb-dn{display:inline-block;margin-left:.35rem;padding:.04rem .34rem;border-radius:5px;font-size:.6rem;font-weight:800;vertical-align:middle;background:rgba(255,205,70,.16);color:#ffcd46}
+.lb-anon .lb-name{opacity:.75;font-style:italic}
+.dc-admin .dc-sub{margin:.9rem 0 .4rem}
+.dc-admin .dc-msg{display:block;font-size:.72rem;color:var(--muted);font-style:italic;word-break:break-word}
+.shp-adm-period{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .6rem}
+@media(max-width:480px){#profileVipPromo .vp-row{flex-direction:column;gap:.1rem}#profileVipPromo .vp-row>span:first-child{flex:none}}

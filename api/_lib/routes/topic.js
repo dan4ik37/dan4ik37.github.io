@@ -55,7 +55,7 @@ function hubPage(counts){
     hasPart: list.map(x => ({ '@type': 'CollectionPage', name: x.name, url: `${SITE}/topic/${x.slug}` })) };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/videos">Все видео</a> › <span>Игры</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/videos">Все видео</a> › <span>Игры</span></nav>
   <h1>Во что играет dan4ik37</h1>
   <p class="lead">Все ролики канала, разложенные по играм. Выбери игру — откроются все видео по ней, от новых к старым.</p>
   <div class="tgrid">${list.map(x => `<a class="tcard" href="/topic/${x.slug}"><b>${esc(x.name)} ${ageBadge(x.age, { title: x.ageWhy })}</b><small>${vids(counts.get(x.slug))}</small><span>${esc(x.about)}</span></a>`).join('')}</div>
@@ -94,7 +94,7 @@ function topicPage(t, all, counts, req){
   const pager = pages > 1 ? `<nav class="pager">${p > 1 ? `<a href="${href(p - 1)}" rel="prev">← Новее</a>` : '<span></span>'}<b>Страница ${p} из ${pages}</b>${p < pages ? `<a href="${href(p + 1)}" rel="next">Старее →</a>` : '<span></span>'}</nav>` : '';
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/topics">Игры канала</a> › <span>${esc(t.name)}</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/topics">Игры канала</a> › <span>${esc(t.name)}</span></nav>
   <h1>${esc(t.name)} — видео dan4ik37</h1>
   <p class="lead">${ageBadge(t.age, { title: t.ageWhy })} ${esc(t.about)} На канале — ${vids(n)}${first && first !== last ? `, с ${first} по ${last} год` : ''}. От новых к старым.</p>
   ${p === 1 && TOPIC_INTRO[t.slug] ? `<p class="intro">${esc(TOPIC_INTRO[t.slug])}</p>` : ''}
