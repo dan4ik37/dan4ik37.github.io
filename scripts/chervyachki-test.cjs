@@ -157,14 +157,15 @@ function runAtFps(fps, steps){
   SIM.setHumans(W, 1);
   const steps = (FAST ? 5 : 15) * 60 * 30;
   let err = null, ends = 0, starts = 0, kos = 0, bad = '', maxL = 0, lives = 0, lifeSum = 0, early = 0, hunted = 0, worst = 0;
-  const t0 = process.hrtime.bigint();
+  const t0 = performance.now(), IA = new Float64Array(4), DTS = new Float32Array(steps);
   let ang = 0;
   for (let k = 0; k < steps; k++) {
     if (k % 75 === 0) ang = ((k * 2654435761) % 1000) / 1000 * Math.PI * 2;
-    SIM.setInput(W, hu, inp(ang));
-    const a = process.hrtime.bigint();
+    IA[0] = ang;
+    SIM.setInput(W, hu, IA);
+    const a = performance.now();
     try { SIM.step(W); } catch (e) { err = e; break; }
-    const d = Number(process.hrtime.bigint() - a) / 1e6; if (d > worst) worst = d;
+    const d = performance.now() - a; DTS[k] = d; if (d > worst) worst = d;
     for (const e of W.ev.splice(0)) {
       if (e.k === 'end') ends++; else if (e.k === 'start') starts++;
       else if (e.k === 'ko') {
@@ -179,7 +180,7 @@ function runAtFps(fps, steps){
     }
     if (k % 300 === 0) { const s = sane(W); if (s && !bad) bad = s; for (const o of W.owners) if (o && o.alive && o.L > maxL) maxL = o.L; }
   }
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  const ms = performance.now() - t0, p99 = Array.from(DTS).sort((x, y) => x - y)[Math.floor(steps * .99)];
   ok(!err, 'боты: без ошибок', err && String(err.stack).slice(0, 400));
   ok(!bad, 'координаты — числа, всё внутри арены', bad);
   const expEnds = Math.floor(steps / (C.ROUND + C.END)) + (steps % (C.ROUND + C.END) >= C.ROUND ? 1 : 0);
@@ -188,7 +189,7 @@ function runAtFps(fps, steps){
   ok(maxL > 150 && maxL < 30000, 'кто-то вырастает', Math.round(maxL));
   ok(hunted === 0, 'боты не охотятся на новичка (первые 20 с)', hunted);
   ok(early <= Math.max(1, lives * .2), 'гуляка редко врезается сразу после появления', [early, lives]);
-  console.log(`  боты ${steps / 1800} мин: шаг в среднем ${(ms / steps).toFixed(3)} мс, худший ${worst.toFixed(2)} мс; нокаутов ${kos}; гуляка: ${lives} жизней, в среднем ${lives ? (lifeSum / lives).toFixed(0) : '-'} с; макс. длина ${Math.round(maxL)}`);
+  console.log(`  боты ${steps / 1800} мин: шаг в среднем ${(ms / steps).toFixed(3)} мс, 99 % — до ${p99.toFixed(2)} мс, худший ${worst.toFixed(2)} мс; нокаутов ${kos}; гуляка: ${lives} жизней, в среднем ${lives ? (lifeSum / lives).toFixed(0) : '-'} с; макс. длина ${Math.round(maxL)}`);
 }
 
 // ═══ 4. Память за 20 раундов ═══

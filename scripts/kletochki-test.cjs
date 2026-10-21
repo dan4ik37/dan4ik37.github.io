@@ -205,14 +205,15 @@ function runAtFps(fps, steps, seed){
   SIM.setHumans(W, 1);
   const steps = (FAST ? 5 : 15) * 60 * 30;
   let err = null, ends = 0, starts = 0, kos = 0, earlyKo = 0, maxMass = 0, minPel = 1e9, bad = 0, wx = 1, wy = 0, lifeSum = 0, lives = 0;
-  const t0 = process.hrtime.bigint();
+  const t0 = performance.now(), IA = new Float64Array(6), DTS = new Float32Array(steps);
   let worst = 0;
   for (let k = 0; k < steps; k++) {
     if (k % 90 === 0) { const a = (k * 2654435761 % 1000) / 1000 * Math.PI * 2; wx = Math.cos(a); wy = Math.sin(a); }
-    SIM.setInput(W, hu, inp(wx, wy));
-    const a = process.hrtime.bigint();
+    IA[0] = wx; IA[1] = wy;
+    SIM.setInput(W, hu, IA);
+    const a = performance.now();
     try { SIM.step(W); } catch (e) { err = e; break; }
-    const dt = Number(process.hrtime.bigint() - a) / 1e6; if (dt > worst) worst = dt;
+    const dt = performance.now() - a; DTS[k] = dt; if (dt > worst) worst = dt;
     for (const e of W.ev.splice(0)) {
       if (e.k === 'end') ends++;
       else if (e.k === 'start') starts++;
@@ -224,7 +225,7 @@ function runAtFps(fps, steps, seed){
       for (const o of W.owners) if (o && o.alive && o.mass > maxMass) maxMass = o.mass;
     }
   }
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  const ms = performance.now() - t0, p99 = Array.from(DTS).sort((x, y) => x - y)[Math.floor(steps * .99)];
   ok(!err, 'боты: без ошибок', err && String(err.stack).slice(0, 400));
   ok(bad === 0, 'координаты и массы — числа, все внутри арены', bad);
   const expEnds = Math.floor(steps / (C.ROUND + C.END)) + (steps % (C.ROUND + C.END) >= C.ROUND ? 1 : 0);
@@ -234,7 +235,7 @@ function runAtFps(fps, steps, seed){
   ok(maxMass > 300 && maxMass < 40000, 'кто-то вырастает, но не бесконечно', Math.round(maxMass));
   ok(minPel > C.NP * .5, 'еды на арене хватает', minPel);
   ok(W.cN <= 256 && W.bN <= 192 && W.vN <= 24, 'пулы не переполнены', [W.cN, W.bN, W.vN]);
-  console.log(`  боты ${steps / 1800} мин: шаг в среднем ${(ms / steps).toFixed(3)} мс, худший ${worst.toFixed(2)} мс; съедено ${kos}; гуляка: ${lives} жизней, в среднем ${lives ? (lifeSum / lives).toFixed(0) : '-'} с; макс. масса ${Math.round(maxMass)}`);
+  console.log(`  боты ${steps / 1800} мин: шаг в среднем ${(ms / steps).toFixed(3)} мс, 99 % — до ${p99.toFixed(2)} мс, худший ${worst.toFixed(2)} мс; съедено ${kos}; гуляка: ${lives} жизней, в среднем ${lives ? (lifeSum / lives).toFixed(0) : '-'} с; макс. масса ${Math.round(maxMass)}`);
 }
 
 // ═══ 4. Память за 20 раундов (раунд укорочен) ═══
