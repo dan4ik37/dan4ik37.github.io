@@ -531,7 +531,7 @@
   function encode(W, i, g){
     const w = g.w || (g.w = K.writer(4096));
     w.o = 0;
-    if (!g.kf) { g.kf = new Int32Array(MAXO).fill(-1e9); g.seen = new Uint8Array(MAXO); g.sp = new Int32Array(MAXO).fill(-1); g.known = new Uint16Array(FCAP); g.zv = new Uint16Array(ZN * ZN).fill(65535); g.sn = 0; }
+    if (!g.kf) { g.kf = new Int32Array(MAXO).fill(-1e9); g.seen = new Uint8Array(MAXO); g.sp = new Int32Array(MAXO).fill(-1); g.known = new Uint16Array(FCAP); g.zv = new Uint16Array(ZN * ZN).fill(65535); g.sn = (kfSeq * 7) % 30; g.kfo = kfSeq++ % 11; }
     const echo = g.inTs >= 0;
     const o = W.owners[i];
     const cx = o ? (o.alive ? o.x : o.deadX) : 0, cy = o ? (o.alive ? o.y : o.deadY) : 0;
@@ -552,7 +552,8 @@
       const q = W.owners[j];
       const vis = q && q.alive && q.bx1 > cx - hw && q.bx0 < cx + hw && q.by1 > cy - hh && q.by0 < cy + hh;
       if (!vis) { g.seen[j] = 0; continue; }
-      const kf = !g.seen[j] || W.step - g.kf[j] >= 45 || g.sp[j] !== q.spawnStep || ((g.kfReq | 0) & (1 << j)) !== 0;
+      // ключевой кадр раз в 40–50 шагов: у каждой пары «гость — червячок» свой срок, чтобы тела всех не шли в одном шаге
+      const kf = !g.seen[j] || W.step - g.kf[j] >= 40 + ((j * 7 + g.kfo * 3) % 11) || g.sp[j] !== q.spawnStep || ((g.kfReq | 0) & (1 << j)) !== 0;
       g.seen[j] = 1;
       w.u8(j); w.i16(q.x * 4); w.i16(q.y * 4); w.u16(((wrapA(q.a) + Math.PI) / TAU) * 65535); w.u16(Math.min(65535, q.L));
       w.u8((q.boost ? 1 : 0) | (q.prot > W.step ? 2 : 0) | (kf ? 4 : 0));
@@ -624,6 +625,7 @@
     return w.view();
   }
 
+  let kfSeq = 0;   // разный сдвиг ключевых кадров и сверки еды у разных гостей
   // ── Зеркало гостя ──
   const MQ = 1024, MF = 2048;
   function mirror(old){
@@ -845,6 +847,7 @@
   const mouse = { on: false, x: 0, y: 0, down: false }, keys = { l: 0, r: 0, b: 0 };
   let stick = null, boostBtn = false, padPrevB = false;
   const listeners = [];
+  let PERF = null;   // замер по частям (только _test.stress)
   const on = (t, ev, fn, o) => { t.addEventListener(ev, fn, o); listeners.push([t, ev, fn, o]); };
   const names = new Array(MAXO).fill(''), skins = new Array(MAXO).fill(null), bots = new Uint8Array(MAXO);
   const FONTS = [], EFONTS = [];
@@ -1075,7 +1078,9 @@
     if (!V || (guest && !V.ready)) { me.alive = false; }
     else if (guest) prepGuest(V, t, dtf); else prepHost(V, S.alpha);
     camera(dtf);
+    const d0 = PERF ? performance.now() : 0;
     draw(t, V, guest, dtf);
+    if (PERF && PERF.n < 4000) PERF.dr[PERF.n] = performance.now() - d0;
     if (t - hudAt > 250) { hudAt = t; hud(V, guest); }
     if (api?.sfx && me.L > soundL + 6 && t - soundAt > 200 && soundL > 0) { api.sfx('tick'); soundAt = t; }
     soundL = me.L;
@@ -1172,14 +1177,25 @@
     c.arc(ex + px * r * .48 + lx, ey + py * r * .48 + ly, er * .5, 0, TAU); c.moveTo(ex - px * r * .48 + lx + er * .5, ey - py * r * .48 + ly); c.arc(ex - px * r * .48 + lx, ey - py * r * .48 + ly, er * .5, 0, TAU); c.fill();
   }
   // Путь в c: от головы (hx, hy) по кольцу точек (X, Y, base, h, n, cap), каждую step-ю, пока не наберётся длина maxLen
-  function pathFrom(c, ox, oy, z, hx, hy, X, Y, base, h, n, cap, step, maxLen, skip){
-    c.moveTo(ox + hx * z, oy + hy * z);
-    let len = 0, lx = hx, ly = hy;
+  // Видимая часть мира с запасом (ставит draw): отрезки тела, оба конца которых вне её, в путь не попадают (длинные червячки)
+  let CX0 = -1e9, CX1 = 1e9, CY0 = -1e9, CY1 = 1e9;
+  function pathFrom(c, ox, oy, z, hx, hy, X, Y, base, h, n, cap, step, maxLen, skip, cont){
+    if (!cont) c.moveTo(ox + hx * z, oy + hy * z);
+    let len = 0, lx = hx, ly = hy, out = !(hx >= CX0 && hx <= CX1 && hy >= CY0 && hy <= CY1);
     for (let k = skip; k < n; k += step) {
       const s = base + ((h - k + cap) % cap), x = X[s], y = Y[s], dx = x - lx, dy = y - ly, d = Math.sqrt(dx * dx + dy * dy);
-      if (len + d > maxLen) { const f = (maxLen - len) / (d || 1); c.lineTo(ox + (lx + dx * f) * z, oy + (ly + dy * f) * z); break; }
-      len += d; lx = x; ly = y;
+      if (len + d > maxLen) {
+        const f = (maxLen - len) / (d || 1);
+        if (out) c.moveTo(ox + lx * z, oy + ly * z);
+        c.lineTo(ox + (lx + dx * f) * z, oy + (ly + dy * f) * z);
+        break;
+      }
+      len += d;
+      const o2 = !(x >= CX0 && x <= CX1 && y >= CY0 && y <= CY1);
+      if (o2 && out) { lx = x; ly = y; continue; }
+      if (out) c.moveTo(ox + lx * z, oy + ly * z);
       c.lineTo(ox + x * z, oy + y * z);
+      out = o2; lx = x; ly = y;
     }
   }
   function draw(t, V, guest, dtf){
@@ -1235,6 +1251,8 @@
     for (let j = 0; j < MAXO; j++) if (guest ? (V.on[j] && V.qn[j]) : (V.owners[j] && V.owners[j].alive)) order[n++] = j;
     for (let a = 1; a < n; a++) { const v = order[a], lv = Lof(V, v, guest); let b = a - 1; while (b >= 0 && Lof(V, order[b], guest) > lv) { order[b + 1] = order[b]; b--; } order[b + 1] = v; }
     const step = z * SP > 5 ? 1 : z * SP > 2.5 ? 2 : 3;
+    const mg = 230;   // запас: самое толстое тело (длина 30000 — радиус ~100)
+    CX0 = vx0 - mg; CX1 = vx1 + mg; CY0 = vy0 - mg; CY1 = vy1 + mg;
     for (let q = 0; q < n; q++) {
       const j = order[q], sk = skins[j] || PRESET0;
       const L = Lof(V, j, guest), rw = rwOf(L), bl = bodyLen(L);
@@ -1252,7 +1270,7 @@
           for (let k = predN - 2; k >= 0; k--) c.lineTo(ox + PRED[k * 2] * z, oy + PRED[k * 2 + 1] * z);
           const base = j * MQ, h = V.qh[j];
           c.lineTo(ox + V.qx[base + h] * z, oy + V.qy[base + h] * z);
-          pathFromCont(c, ox, oy, z, V.qx[base + h], V.qy[base + h], V.qx, V.qy, base, h, V.qn[j], MQ, 1, bl, 1);
+          pathFrom(c, ox, oy, z, V.qx[base + h], V.qy[base + h], V.qx, V.qy, base, h, V.qn[j], MQ, 1, bl, 1, true);
         } else pathFrom(c, ox, oy, z, hx, hy, V.qx, V.qy, j * MQ, V.qh[j], V.qn[j], MQ, 1, bl, 1);
       } else pathFrom(c, ox, oy, z, hx, hy, V.wx, V.wy, j * MAXP, V.wh[j], V.wn[j], MAXP, step, bl, 0);
       strokeBody(c, sk, rw, z, boost, t);
@@ -1263,7 +1281,7 @@
       const sr = rw * z;
       const nm = names[j];
       if (nm && sr > 3 * dpr) {
-        const fs = Math.min(40 * dpr, Math.max(10 * dpr, sr * 1.1)) | 0;
+        const fs = ((Math.min(40 * dpr, Math.max(10 * dpr, sr * 1.1)) / 2) | 0) * 2;   // чётные размеры — меньше разных шрифтов при приближении
         c.font = FONTS[fs > 96 ? 96 : fs]; c.textAlign = 'center'; c.textBaseline = 'bottom';
         c.lineWidth = Math.max(2, fs * .18); c.strokeStyle = 'rgba(0,0,0,.6)'; c.fillStyle = '#fff';
         c.strokeText(nm, ox + hx * z, oy + hy * z - sr * 1.6); c.fillText(nm, ox + hx * z, oy + hy * z - sr * 1.6);
@@ -1278,16 +1296,6 @@
     if (me.alive) { c.fillStyle = '#fde68a'; c.beginPath(); c.arc(mx + me.x / R * ms / 2, my + me.y / R * ms / 2, 3 * dpr, 0, TAU); c.fill(); }
     if (stick) K.drawStick(c, stick.st, dpr, 'rgba(168,85,247,.6)');
     if (koAt) { c.globalAlpha = clamp((performance.now() - koAt) / 700, 0, 1) * .55; c.fillStyle = '#020208'; c.fillRect(0, 0, W2, H2); c.globalAlpha = 1; }
-  }
-  // как pathFrom, но без moveTo (продолжение пути)
-  function pathFromCont(c, ox, oy, z, hx, hy, X, Y, base, h, n, cap, step, maxLen, skip){
-    let len = 0, lx = hx, ly = hy;
-    for (let k = skip; k < n; k += step) {
-      const s = base + ((h - k + cap) % cap), x = X[s], y = Y[s], dx = x - lx, dy = y - ly, d = Math.sqrt(dx * dx + dy * dy);
-      if (len + d > maxLen) { const f = (maxLen - len) / (d || 1); c.lineTo(ox + (lx + dx * f) * z, oy + (ly + dy * f) * z); break; }
-      len += d; lx = x; ly = y;
-      c.lineTo(ox + x * z, oy + y * z);
-    }
   }
   const ORD = new Int8Array(MAXO);
   const Lof = (V, j, guest) => (guest ? V.L[j] : V.owners[j].L);
@@ -1379,8 +1387,11 @@
         const gs = [];
         for (let i = 0; i < MAXO && gs.length < (o.guests ?? 9); i++) if (W.owners[i] && i !== S.me) gs.push({ i, g: { aspect: .45, inTs: 1, hold: 5 } });
         const st = { bytes: 0, snaps: 0, ms: new Float32Array(4000), t: new Float64Array(4000), n: 0 };
-        S.afterStep = W2 => { if (W2.step % 2) return; for (const x of gs) { const v = SIM.encode(W2, x.i, x.g); st.bytes += v.byteLength; st.snaps++; } };
-        S.onWork = (ms, t) => { if (st.n < 4000) { st.ms[st.n] = ms; st.t[st.n] = t; st.n++; } };
+        st.dr = new Float32Array(4000); st.en = new Float32Array(4000); st.st = new Float32Array(4000);
+        PERF = st;
+        let enAcc = 0;
+        S.afterStep = W2 => { if (W2.step % 2) return; const a = performance.now(); for (const x of gs) { const v = SIM.encode(W2, x.i, x.g); st.bytes += v.byteLength; st.snaps++; } enAcc += performance.now() - a; };
+        S.onWork = (ms, t) => { if (st.n < 4000) { st.ms[st.n] = ms; st.t[st.n] = t; st.en[st.n] = enAcc; st.st[st.n] = ms - st.dr[st.n] - enAcc; enAcc = 0; st.n++; } };
         return st;
       } },
   };

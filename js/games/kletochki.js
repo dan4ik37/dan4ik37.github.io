@@ -971,6 +971,7 @@
   const mouse = { on: false, x: 0, y: 0, t: 0 }, keys = { u: 0, d: 0, l: 0, r: 0 };
   let stick = null, padPrev = { a: false, b: false, y: false }, padEjAt = 0, ejAt = 0;
   const listeners = [];
+  let PERF = null;   // замер по частям (только _test.stress)
   const on = (t, ev, fn, o) => { t.addEventListener(ev, fn, o); listeners.push([t, ev, fn, o]); };
   // Рисование: общие массивы (хозяин — из мира, гость — из зеркала)
   const RC = 512;
@@ -1193,7 +1194,9 @@
     R.n = R.vn = R.bn = 0;
     if (V && (guest ? V.ready : true)) { if (guest) prepGuest(V, t, dtf); else prepHost(V, S.alpha); }
     camera(dtf);
+    const d0 = PERF ? performance.now() : 0;
     draw(t, V, guest);
+    if (PERF && PERF.n < 4000) PERF.dr[PERF.n] = performance.now() - d0;
     if (t - hudAt > 250) { hudAt = t; hud(V, guest); }
     sounds(t);
   }
@@ -1336,7 +1339,7 @@
       if (sr > 13 * dpr) {
         const nm = names[R.o[j]];
         if (nm) {
-          const fs = Math.min(96, Math.max(10 * dpr, sr * .34)) | 0;
+          const fs = ((Math.min(96, Math.max(10 * dpr, sr * .34)) / 2) | 0) * 2;   // чётные размеры — меньше разных шрифтов при приближении
           c.font = fontPx(fs); c.textAlign = 'center'; c.textBaseline = 'middle';
           c.lineWidth = Math.max(2, fs * .16); c.strokeStyle = 'rgba(0,0,0,.6)'; c.fillStyle = '#fff';
           const ty = oy + y * z + (sk.p === 5 ? sr * .55 : 0);
@@ -1467,8 +1470,11 @@
         const gs = [];
         for (let i = 0; i < MAXO && gs.length < (o.guests ?? 9); i++) if (W.owners[i] && i !== S.me) gs.push({ i, g: { aspect: .45, inTs: 1, hold: 5 } });
         const st = { bytes: 0, snaps: 0, ms: new Float32Array(4000), t: new Float64Array(4000), n: 0 };
-        S.afterStep = W2 => { if (W2.step % 2) return; for (const x of gs) { const v = SIM.encode(W2, x.i, x.g); st.bytes += v.byteLength; st.snaps++; } };
-        S.onWork = (ms, t) => { if (st.n < 4000) { st.ms[st.n] = ms; st.t[st.n] = t; st.n++; } };
+        st.dr = new Float32Array(4000); st.en = new Float32Array(4000); st.st = new Float32Array(4000);
+        PERF = st;
+        let enAcc = 0;
+        S.afterStep = W2 => { if (W2.step % 2) return; const a = performance.now(); for (const x of gs) { const v = SIM.encode(W2, x.i, x.g); st.bytes += v.byteLength; st.snaps++; } enAcc += performance.now() - a; };
+        S.onWork = (ms, t) => { if (st.n < 4000) { st.ms[st.n] = ms; st.t[st.n] = t; st.en[st.n] = enAcc; st.st[st.n] = ms - st.dr[st.n] - enAcc; enAcc = 0; st.n++; } };
         return st;
       } },
   };

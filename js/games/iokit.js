@@ -668,7 +668,11 @@
     ctx.restore();
   }
   // Геймпад: левый стик и кнопки (A — 0, B — 1, X — 2, Y — 3, RT — 7, LT — 6)
+  // getGamepads() каждый раз — новый массив: опрашиваем, только когда геймпад подключили (событие gamepadconnected)
+  let padSeen = false;
+  try { root.addEventListener?.('gamepadconnected', () => { padSeen = true; }); } catch (e) {}
   function pad(){
+    if (!padSeen) return null;
     try {
       const list = root.navigator?.getGamepads?.() || [];
       for (const g of list) {

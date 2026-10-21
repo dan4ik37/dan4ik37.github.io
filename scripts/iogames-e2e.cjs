@@ -72,7 +72,8 @@ fs.mkdirSync(OUT, { recursive: true });
       const P = await ev(`(() => { const s = window.__st, a = Array.from(s.ms.subarray(0, s.n)).sort((x, y) => x - y), q = k => a[Math.min(a.length - 1, Math.floor(a.length * k))];
         const dur = (s.t[s.n - 1] - s.t[0]) / 1000; const V = GAME_IMPL.${g}._test.S.W;
         return { frames: s.n, fps: +(s.n / dur).toFixed(1), avg: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(2), p50: +q(.5).toFixed(2), p95: +q(.95).toFixed(2), p99: +q(.99).toFixed(2), max: +a[a.length - 1].toFixed(2),
-          snapAvg: Math.round(s.bytes / Math.max(1, s.snaps)), kbps9: +(s.bytes / 1024 / dur).toFixed(1), owners: V.owners.filter(Boolean).length }; })()`);
+          snapAvg: Math.round(s.bytes / Math.max(1, s.snaps)), kbps9: +(s.bytes / 1024 / dur).toFixed(1), owners: V.owners.filter(Boolean).length,
+          part: ['dr', 'en', 'st'].map(k => { const b = Array.from(s[k].subarray(0, s.n)).sort((x, y) => x - y); return k + ' avg ' + (b.reduce((x, y) => x + y, 0) / b.length).toFixed(2) + ' p99 ' + b[Math.floor(b.length * .99)].toFixed(1) + ' max ' + b[b.length - 1].toFixed(1); }) }; })()`);
       await send('Emulation.setCPUThrottlingRate', { rate: 1 });
       R.shots.push(await shot(`${g}-stress-phone.png`));
       await send('HeapProfiler.collectGarbage');
