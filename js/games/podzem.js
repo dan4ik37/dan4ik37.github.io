@@ -2648,6 +2648,7 @@
     G.state = 'loading'; G.loadT = 0;
     stream(true);
     G.U?.hud(); G.U?.inv();
+    G.U?.warm?.();   // окна — заранее, под экраном загрузки (первое «Вещи» и пауза — без задержки)
     lsSet(LS_LAST, JSON.stringify({ w: W.id, c: CH.id }));
     G.api?.toast && 0;
   }

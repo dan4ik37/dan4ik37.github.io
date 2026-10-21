@@ -493,9 +493,9 @@
       touchEl?.querySelector('[data-t="act"]')?.classList.toggle('near', !!near);
       if (bossEl && !bossEl.hidden && G.boss) bossEl.querySelector('i').style.width = Math.max(0, G.boss.hp / G.boss.maxHp * 100) + '%';
     };
-    U.status = t => {
-      if (statusEl) statusEl.textContent = t;
-      const ck = boxEl?.querySelector('.pz-clock'); if (ck && API.clockText) ck.textContent = API.clockText();
+    U.status = t => {   // 4 раза в секунду: текст меняем, только если он другой (иначе лишняя раскладка)
+      if (statusEl && statusEl.textContent !== t) statusEl.textContent = t;
+      const ck = boxEl?.querySelector('.pz-clock'), ct = ck && API.clockText ? API.clockText() : null; if (ct !== null && ck.textContent !== ct) ck.textContent = ct;
       if (G.boss && bossEl && !bossEl.hidden) bossEl.querySelector('i').style.width = Math.max(0, G.boss.hp / G.boss.maxHp * 100) + '%';
     };
     function goalsToggle(v){
@@ -752,6 +752,25 @@
       if (menuKind && menuKind !== 'start') { U.menu(G.state === 'menu' ? 'start' : 'pause'); return; }
     };
     U.invOpen = () => invOpen;
+    // прогрев: пока виден экран загрузки мира — один раз разложить невидимо «Вещи» (обе вкладки) и меню паузы. Первое открытие
+    // иначе тратит на телефоне ~0,2–0,4 с (шрифт значков, код, стили — один раз), дальше ~20 мс
+    U.warm = () => {
+      if (!root || !G.CH || invOpen || U.warmed) return;
+      U.warmed = true;
+      const t0 = performance.now(), tab = invTab;
+      try {
+        invEl.style.visibility = 'hidden'; invEl.hidden = false; invOpen = true;
+        invTab = 'items'; U.inv(); void invEl.offsetWidth;
+        invTab = 'craft'; U.inv(); void invEl.offsetWidth;
+      } catch (e) { console.warn('[podzem] прогрев «Вещей»', e); }
+      invOpen = false; invTab = tab; invEl.hidden = true; invEl.style.visibility = '';
+      const S = window.D37Settings;
+      if (S?.menu && !pauseMenu) {
+        try { const m = S.menu(wrap, { title: '⏸ Пауза', sub: ' ', items: pauseItems }); m.el.style.visibility = 'hidden'; void m.el.offsetWidth; m.quiet = true; m.close(); }
+        catch (e) { console.warn('[podzem] прогрев паузы', e); }
+      }
+      G.perf.warmMs = performance.now() - t0;
+    };
     // Esc на паузе и в окнах меню (во время игры Esc разбирает сама игра); вещи открыты — Esc закрывает их (escKey игры)
     on(window, 'keydown', e => {
       if (e.key !== 'Escape' || !menuKind || G.state === 'play' || e.target?.closest?.('input, textarea')) return;
