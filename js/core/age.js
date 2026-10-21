@@ -23,6 +23,10 @@
 //  adult   │ обычная                                      │ всё                                │ как у всех                        │ галочка + 3000 ₽/сутки, 10000/30 дн
 //  unknown │ как ADS_RULES.age.unknown (подросток)        │ метки; 18+ — разово «Мне есть 18»  │ как у всех                        │ как раньше (галочка + 3000/10000)
 // ЛС — только друзьям у всех (friends-dm.sql). Обложка 12+/16+ мягкая («Взрослый разрешил» — до конца визита), 18+ подростку — нет.
+// Безопасность детей (22.10.2026, docs/REALMS.md «лёгкий вариант»; решает сервер — age.sql + community.sql, выключатель site_config
+// 'kidsafe'): ребёнок до 13 ↔ взрослый или «без возраста» — ни ЛС, ни звонков, ни дружбы, ни приглашений; до 9 лет — чаты только
+// читать и реакции, ЛС и звонков нет. Здесь — только подсказки: u9(), chatRO(), contacts(ids) (кого ребёнку нельзя — kid_contact),
+// KID_MSG (те же тексты, что у сервера). Взрослому сервер про возраст других не говорит — отказ у него общий.
 // Метки: игры — GAMES[].age (games.js), разделы — AREAS, ролики — VIDEO_RULES (как api/_lib/topics.js — тест сверяет), игры
 // игроков — колонка age_rating (age.sql; автор выбирает, модератор меняет; по умолчанию 12+). Сайт целиком — SITE_AGE.
 (() => {
@@ -89,7 +93,8 @@
 
   // ═══ Хранилище: { y — год, no — «не хочу указывать», s — 'g' гость / 'a' копия аккаунта, fa — когда указал впервые,
   //     ch — когда менял (30 дней), fg/fu — «остывание» (группа и до когда), c18 — «Мне есть 18», bd — «день рождения в этом году уже
-  //     был» (год), mig — гостевой год уже переносили в аккаунт } ═══
+  //     был» (год), mig — гостевой год уже переносили в аккаунт, u9 — до когда ещё «до 9 лет» после смены года, ks — 0: сервер
+  //     сказал, что безопасность детей выключена (site_config 'kidsafe') } ═══
   const RANK = { child: 0, teen: 1, teen16: 2, adult: 3 };
   const MAXAGE = { child: 12, teen: 15, teen16: 17, adult: 99 };
   const groupOfAge = a => a < 13 ? 'child' : a < 16 ? 'teen' : a < 18 ? 'teen16' : 'adult';
@@ -113,6 +118,11 @@
   const known = () => group() !== 'unknown';
   const minor = () => ['child', 'teen', 'teen16'].includes(group());
   const kid = () => group() === 'child';
+  // До 9 лет (как age_u9 в age.sql): по году или «остывание» после смены года; kidsafe — выключатель сервера (по умолчанию включено)
+  const rawU9 = y => validYear(y) && yearNow() - y - 1 < 9;
+  const kidsafe = () => S.ks !== 0;
+  const u9raw = () => rawU9(S.y) || +S.u9 > now();
+  const u9 = () => kidsafe() && u9raw();
   // Можно ли по возрасту (строго). Возраст не указан — всё, кроме 18+ (пока не нажал «Мне есть 18»)
   function allows(r){
     const n = num(r);
@@ -171,6 +181,8 @@
     if (validYear(+d.year)) n.y = +d.year; else if (S.no || d.cleared) n.no = 1;
     if (d.first_at) n.fa = ts(d.first_at);
     if (d.floor_group && ts(d.floor_until) > now()) { n.fg = d.floor_group; n.fu = ts(d.floor_until); }
+    if (ts(d.u9_until) > now()) n.u9 = ts(d.u9_until);
+    if (d.kidsafe === false) n.ks = 0;
     if (S.c18) n.c18 = 1;
     if (S.bd) n.bd = S.bd;
     if (S.mig) n.mig = 1;
@@ -198,6 +210,7 @@
   }
   // Вышел — копию года аккаунта из браузера стираем (общий компьютер: следующий не получит чужой возраст)
   function onAuth(){
+    CC.clear();   // другой аккаунт — другие ответы kid_contact
     if (authed()) { sync(); return; }
     if (S.s === 'a') { S = {}; save(); lsSet(SNOOZE, now() + DAY); emit(); }
   }
@@ -227,8 +240,9 @@
     }
     const nw = rawGroup(y), n = { ...S, y, s: S.s || 'g', fa: S.fa || t, ch };
     delete n.no; delete n.bd;
-    // стал «старше» — 30 дней правила прежней группы (кроме опечатки в первые сутки)
+    // стал «старше» — 30 дней правила прежней группы (кроме опечатки в первые сутки); был «до 9» — ещё 30 дней «до 9» (как age.sql)
     if (old !== 'unknown' && old !== 'adult' && RANK[nw] > RANK[old] && !typo) { n.fg = old; n.fu = t + MONTH; }
+    if (u9raw() && !rawU9(y) && !typo) n.u9 = t + MONTH;
     S = n; save();
     return { ok: true, cooling: n.fu > t && n.fg ? new Date(n.fu).toISOString() : null };
   }
@@ -243,6 +257,8 @@
     if (S.fa) n.fa = S.fa;
     if (['child', 'teen', 'teen16'].includes(old) && !typo) { n.fg = old; n.fu = t + MONTH; }
     else if (floorOn()) { n.fg = S.fg; n.fu = S.fu; }
+    if (u9raw() && !typo) n.u9 = Math.max(+S.u9 || 0, t + MONTH); else if (+S.u9 > t) n.u9 = S.u9;
+    if (S.ks === 0) n.ks = 0;
     S = n; save(); emit();
     return { ok: true };
   }
@@ -270,6 +286,49 @@
     for (const re of o.at === false ? KID_RE : [...KID_RE, AT_RE]) out = out.replace(new RegExp(re.source, re.flags), m => (/^[\s.,!?:;()"'«»-]/.test(m) ? m[0] : '') + '[скрыто]');
     return out;
   }
+
+  // ═══ Безопасность детей: кому мне нельзя лично (подсказки интерфейсу; запрещает сервер — community.sql) ═══
+  // Тексты — как у сервера (u9, age, agefriend, u9chat — те же строки в community.sql; тест сверяет)
+  const KID_MSG = {
+    u9: '✉️ Личные сообщения и звонки — с 9 лет',
+    u9chat: '👀 Писать в чат можно с 9 лет — пока можно читать и ставить реакции',
+    u9voice: '🎧 Голосовые каналы — с 9 лет',
+    age: '🔒 В твоём возрасте это недоступно: писать, звонить и звать в игру можно только тех, кому меньше 18 и кто указал свой возраст',
+    agefriend: '🔒 В твоём возрасте это недоступно: дружить на сайте можно с теми, кому меньше 18 и кто указал свой возраст',
+    agecall: '🔒 В этом звонке есть взрослые или те, кто не указал возраст, — в твоём возрасте такие звонки недоступны',
+    no: '🚫 Нельзя написать этому игроку',
+    nocall: '🚫 Нельзя позвонить этому игроку',
+    noinv: '🚫 Нельзя позвать этого игрока',
+  };
+  const kidMsg = k => KID_MSG[k] || KID_MSG.no;
+  // Ответ kid_contact: uid → { v: 'age' | null, t }; на 5 минут. Взрослому и «без возраста» сервер отвечает пустым списком — так что
+  // спрашиваем только ребёнку (остальным — пусто сразу, без запроса)
+  const CC = new Map();
+  async function kidRpc(args){
+    try { const { data, error } = await sbClient.rpc('kid_contact', args); return error ? null : data; } catch (e) { return null; }
+  }
+  // → Map(uid → 'u9' | 'age'): кому мне нельзя писать, звонить и звать в игру (кого нет — можно или решит сервер).
+  // o.pair — только правило пары «ребёнок ↔ взрослый / без возраста» (для дружбы: до 9 дружить с ребятами можно)
+  async function contacts(ids, o = {}){
+    const out = new Map();
+    const list = [...new Set((ids || []).filter(x => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x)))];
+    if (!list.length || !kidsafe()) return out;
+    if (u9() && !o.pair) { for (const id of list) out.set(id, 'u9'); return out; }   // до 9 — ЛС и звонков нет ни с кем
+    if (!kid() || !authed()) return out;
+    const t = now(), need = list.filter(id => { const c = CC.get(id); return !c || t - c.t > 5 * 60e3; });
+    for (let i = 0; i < need.length; i += 300) {
+      const part = need.slice(i, i + 300), d = await kidRpc({ p_ids: part });
+      if (!d?.ok) break;   // нет age.sql / нет связи — решит сервер при отправке
+      if (d.on === false) { S.ks = 0; save(); return out; }
+      const no = new Set(Array.isArray(d.age) ? d.age : []);
+      for (const id of part) CC.set(id, { v: no.has(id) ? 'age' : null, t });
+      if (CC.size > 2000) CC.clear();
+    }
+    for (const id of list) { const c = CC.get(id); if (c?.v) out.set(id, c.v); }
+    return out;
+  }
+  const contact = async id => (await contacts([id])).get(id) || null;
+  const friendBlock = async id => (await contacts([id], { pair: true })).get(id) || null;   // 'age' — дружить нельзя (ребёнку)
 
   // ═══ Вид ═══
   const GROUP_NAME = { child: 'до 13 лет', teen: '13–15 лет', teen16: '16–17 лет', adult: '18+', unknown: 'не указан' };
@@ -567,8 +626,9 @@ html.d37-h18 [data-age="18"]{display:none!important}
     on(f){ subs.add(f); return () => subs.delete(f); },
     area: route => AREAS[route] || null,
     video, isGambling, kidText,
+    u9, kidsafe, chatRO: u9, contacts, contact, friendBlock, KID_MSG, kidMsg,
     cover, coverHtml, uncover, gateRoute, scanPage, settingsRow,
     ugc: { WHY: UGC_WHY, age: ugcAge, col: ugcCol, set: ugcSet, select: ugcSelect, err: ugcErr },
-    _test: { S: () => S, reset(){ S = {}; save(); srv = null; }, read, yearNow, rawGroup, groupOfAge, VIDEO_RULES, GAMBLING_RE, WHY18, KID_RE, localSet, onAuth, fromServer, srv: () => srv, setSrv: v => { srv = v; }, maybeAsk, regField, marks, softOk },
+    _test: { S: () => S, reset(){ S = {}; save(); srv = null; CC.clear(); }, read, yearNow, rawGroup, rawU9, groupOfAge, VIDEO_RULES, GAMBLING_RE, WHY18, KID_RE, localSet, onAuth, fromServer, srv: () => srv, setSrv: v => { srv = v; }, maybeAsk, regField, marks, softOk },
   };
 })();

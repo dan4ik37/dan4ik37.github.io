@@ -45,6 +45,8 @@ GAMES = [
     ('fillword', 'draw:fillword', 'Филворд', '#a855f7'),
     ('podzem', 'draw:podzem', 'Подземье', '#d9783a'),
     ('kubomir', 'draw:kubomir', 'Кубомир', '#4f8cff'),
+    ('kletochki', 'draw:cells', 'Клеточки', '#22c55e'),
+    ('chervyachki', 'draw:worms', 'Червячки', '#a855f7'),
     ('catch', '💰', 'Лови донаты', '#ffd166'),
     ('guess', '🎬', 'Угадай видео', '#ff2d55'),
     ('studio3d', '🧱', 'Студия 3D', '#f59e0b'),
@@ -319,6 +321,88 @@ def draw_kubomir():
     d.line([(x + 10, y - 40), (x + 30, y - 62)], fill=(120, 80, 45), width=4); d.line([(x + 18, y - 70), (x + 40, y - 56)], fill=(95, 240, 230), width=6)
     return im.crop(im.getbbox())
 
+
+# «Клеточки»: арена с клетками разного размера, колючка и точки еды
+def draw_cells():
+    W2, H2 = 560, 470
+    im = Image.new('RGBA', (W2, H2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, W2 - 1, H2 - 1), 34, fill=(11, 17, 32, 255))
+    for x in range(30, W2, 44):
+        d.line((x, 14, x, H2 - 14), fill=(28, 38, 60, 255), width=2)
+    for y in range(30, H2, 44):
+        d.line((14, y, W2 - 14, y), fill=(28, 38, 60, 255), width=2)
+    import random
+    R = random.Random(37)
+    cols = [(248, 113, 113), (251, 146, 60), (250, 204, 21), (74, 222, 128), (34, 211, 238), (96, 165, 250), (167, 139, 250), (244, 114, 182)]
+    for i in range(60):
+        x, y = R.randint(25, W2 - 25), R.randint(25, H2 - 25)
+        d.ellipse((x - 7, y - 7, x + 7, y + 7), fill=cols[i % 8])
+    # колючка
+    import math
+    cx, cy, r = 430, 330, 62
+    pts = []
+    for i in range(44):
+        a = i * math.pi / 22
+        q = r * (1.14 if i % 2 == 0 else 1)
+        pts.append((cx + math.cos(a) * q, cy + math.sin(a) * q))
+    d.polygon(pts, fill=(34, 197, 94), outline=(20, 83, 45))
+    def cell(cx, cy, r, c1, c2, eyes=False):
+        d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=c1, outline=tuple(int(v * .6) for v in c1), width=max(3, r // 12))
+        if eyes:
+            for sx in (-1, 1):
+                ex, ey = cx + sx * r * .3, cy - r * .18
+                d.ellipse((ex - r * .22, ey - r * .22, ex + r * .22, ey + r * .22), fill=(255, 255, 255))
+                d.ellipse((ex - r * .1 + r * .06, ey - r * .1, ex + r * .1 + r * .06, ey + r * .1), fill=(17, 17, 17))
+            d.arc((cx - r * .3, cy - r * .2, cx + r * .3, cy + r * .42), 20, 160, fill=c2, width=max(3, r // 10))
+        else:
+            d.ellipse((cx - r * .42, cy - r * .42, cx + r * .42, cy + r * .42), fill=c2)
+    cell(230, 200, 120, (74, 222, 128), (22, 101, 52), True)
+    cell(110, 360, 46, (96, 165, 250), (30, 58, 138))
+    cell(430, 110, 58, (244, 114, 182), (255, 255, 255))
+    cell(390, 245, 26, (250, 204, 21), (249, 115, 22))
+    cell(75, 90, 30, (167, 139, 250), (253, 230, 138))
+    return im
+
+# «Червячки»: круглая арена, светящиеся огоньки и два червячка
+def draw_worms():
+    import math, random
+    W2, H2 = 560, 470
+    im = Image.new('RGBA', (W2, H2), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, W2 - 1, H2 - 1), 34, fill=(13, 15, 34, 255))
+    R = random.Random(7)
+    cols = [(248, 113, 113), (250, 204, 21), (74, 222, 128), (34, 211, 238), (167, 139, 250), (244, 114, 182), (255, 255, 255)]
+    glow = Image.new('RGBA', (W2, H2), (0, 0, 0, 0))
+    g = ImageDraw.Draw(glow)
+    for i in range(55):
+        x, y, c = R.randint(25, W2 - 25), R.randint(25, H2 - 25), cols[i % 7]
+        g.ellipse((x - 13, y - 13, x + 13, y + 13), fill=c + (110,))
+    glow = glow.filter(ImageFilter.GaussianBlur(5))
+    im.alpha_composite(glow)
+    R2 = random.Random(7)
+    for i in range(55):
+        x, y, c = R2.randint(25, W2 - 25), R2.randint(25, H2 - 25), cols[i % 7]
+        d.ellipse((x - 5, y - 5, x + 5, y + 5), fill=(255, 255, 255))
+    def worm(pts, w, c1, c2):
+        for k in range(len(pts) - 1, -1, -1):
+            x, y = pts[k]
+            col = c1 if (k // 2) % 2 == 0 else c2
+            d.ellipse((x - w, y - w, x + w, y + w), fill=col)
+        x, y = pts[0]
+        x2, y2 = pts[1]
+        a = math.atan2(y - y2, x - x2)
+        px, py = -math.sin(a), math.cos(a)
+        for s in (-1, 1):
+            ex, ey = x + math.cos(a) * w * .35 + px * s * w * .5, y + math.sin(a) * w * .35 + py * s * w * .5
+            d.ellipse((ex - w * .38, ey - w * .38, ex + w * .38, ey + w * .38), fill=(255, 255, 255))
+            d.ellipse((ex - w * .18 + math.cos(a) * w * .12, ey - w * .18 + math.sin(a) * w * .12, ex + w * .18 + math.cos(a) * w * .12, ey + w * .18 + math.sin(a) * w * .12), fill=(17, 17, 17))
+    a = [(400 - k * 9, 150 + math.sin(k * .22) * 55) for k in range(36)]
+    worm(a, 26, (168, 85, 247), (253, 230, 138))
+    b = [(150 + math.cos(k * .12) * 90, 340 - math.sin(k * .12) * 70 + k * .5) for k in range(30)]
+    worm(b, 18, (34, 197, 94), (20, 83, 45))
+    return im
+
 W, H = 1200, 630
 for gid, ic, title, color in GAMES:
     if ONLY and gid not in ONLY: continue
@@ -349,6 +433,9 @@ for gid, ic, title, color in GAMES:
     elif ic == 'draw:kubomir':
         em = draw_kubomir()
         em.thumbnail((440, 440), Image.LANCZOS)
+    elif ic in ('draw:cells', 'draw:worms'):
+        em = draw_cells() if ic == 'draw:cells' else draw_worms()
+        em.thumbnail((440, 440), Image.LANCZOS)
     else:
         em = Image.new('RGBA', (700, 700), (0, 0, 0, 0))
         ImageDraw.Draw(em).text((120, 120), ic, font=emoji, embedded_color=True)
@@ -363,7 +450,8 @@ for gid, ic, title, color in GAMES:
     d.text((80, 190), title, font=bold(size), fill=(255, 255, 255))
     sub = {'games': 'С ботом или с другом по ссылке', 'studio3d': 'Построй свой мир, как в Roblox', 'unity': 'Выложи свою игру из Unity',
            'krokodil': 'Рисуй и угадывай с друзьями', 'raid': 'Строй базу и нападай', 'podzem': 'Копай, строй, сражайся',
-           'kubomir': 'Свой мир из кубиков', 'world': 'Город, машины, вертолёты'}.get(gid, 'Побьёшь мой рекорд?')
+           'kubomir': 'Свой мир из кубиков', 'world': 'Город, машины, вертолёты',
+           'kletochki': 'Ешь и расти — онлайн', 'chervyachki': 'Расти и подрезай'}.get(gid, 'Побьёшь мой рекорд?')
     d.text((84, 200 + size + 20), sub, font=reg(48), fill=c if sum(c) > 300 else (200, 200, 220))
     # кнопка
     bx, by = 84, 470

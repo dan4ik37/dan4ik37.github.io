@@ -125,7 +125,8 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   ok(MZ.gateOf(ZONES.war, fake(true, 10)).why === 'young', 'ребёнку до 12 — вежливый отказ в боевую зону');
   ok(MZ.gateOf(ZONES.war, fake(true, 10, 12)).ok, '«Взрослый разрешил» (canOpen 12) — пускает в боевую');
   ok(MZ.gateOf(ZONES.war, fake(true, 13)).ok && MZ.gateOf(ZONES.metro, fake(true, 13)).why === 'young', '13 лет: боевая — да, взрослый город — нет');
-  ok(!MZ.gateOf(ZONES.metro, fake(true, 15, 18)).ok, '18+ «взрослый разрешил» не открывает (canOpen так устроен)');
+  ok(MZ.ADULT_AGE >= 18 ? !MZ.gateOf(ZONES.metro, fake(true, 15, 18)).ok : MZ.gateOf(ZONES.metro, fake(true, 15, MZ.ADULT_AGE)).ok && !MZ.gateOf(ZONES.metro, fake(true, 15)).ok,
+    MZ.ADULT_AGE >= 18 ? '18+ «взрослый разрешил» не открывает (canOpen так устроен)' : `${MZ.ADULT_AGE}+: в 15 — только если «взрослый разрешил» (как у всех ${MZ.ADULT_AGE}+ на сайте)`);
   ok(MZ.gateOf(ZONES.metro, fake(true, MZ.ADULT_AGE)).ok, `с ${MZ.ADULT_AGE} — во взрослый город`);
   ok(MZ.gateOf(ZONES.war, null).ok, 'нет D37Age (старая страница) — без ворот');
 }

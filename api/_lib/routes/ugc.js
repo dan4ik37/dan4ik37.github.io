@@ -4,8 +4,15 @@
 // игры «в каталоге» (прошли модерацию); у остальных noindex и без рекламы. Пока ugc.sql не выполнен — студия без списка игр.
 import { SITE, esc } from '../yt.js';
 import { page } from '../page.js';
-import { sbSelect, storeConfigured } from '../store.js';
-import { ageBadge, UGC_AGE } from '../age.js';
+import { sbSelect, sbRpc, storeConfigured } from '../store.js';
+import { ageBadge, UGC_AGE, publicKids as kidsOf, publicNick, KID_NICK } from '../age.js';
+// ники детей до 13 — «Игрок» (страницы индексирует поиск; age.sql: age_public_kids — только «прятать или нет»)
+const publicKids = ids => kidsOf(ids, sbRpc, storeConfigured);
+async function maskAuthors(rows){
+  const kids = await publicKids(rows.map(g => g.author));
+  for (const g of rows) if (g.profiles) g.profiles = { ...g.profiles, nick: publicNick(kids, g.author, g.profiles.nick, g.profiles.role) };
+  return rows;
+}
 
 const TEMPLATES = [
   ['🏃', 'Раннер', 'беги, прыгай через препятствия и собирай монеты — как динозаврик в браузере'],
@@ -38,17 +45,18 @@ async function gamePage(req, res, id){
   const rows = await safeSelect('ugc_games', `id=eq.${id}&status=in.(link,review,public)&select=id,title,descr,icon,kind,tpl,status,plays,likes,created_at,author,profiles(nick,role)`);
   const g = rows && rows[0];
   if (!g) return notFound(res);
-  const nick = g.profiles?.nick || 'игрок';
+  const kid = publicNick(await publicKids([g.author]), g.author, '', g.profiles?.role) === KID_NICK;   // автор — ребёнок до 13: без ника и профиля
+  const nick = kid ? KID_NICK : g.profiles?.nick || 'игрок';
   // Возрастная метка (age.sql: age_rating — выбрал автор, проверил модератор). Отдельным запросом: до age.sql колонки нет
   const ar = (await safeSelect('ugc_games', `id=eq.${id}&select=age_rating`))?.[0]?.age_rating;
   const age = [0, 6, 12, 16, 18].includes(+ar) ? +ar : UGC_AGE;
-  const more = (await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&id=neq.${id}&select=id,title,icon,plays,profiles(nick)&order=plays.desc&limit=6`)) || [];
+  const more = await maskAuthors((await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&id=neq.${id}&select=id,title,icon,plays,author,profiles(nick,role)&order=plays.desc&limit=6`)) || []);
   const authorGames = (await safeSelect('ugc_games', `author=eq.${g.author}&status=eq.public&select=plays`)) || [];
   const totalPlays = authorGames.reduce((a, x) => a + (x.plays || 0), 0);
   const pub = g.status === 'public';
   const url = `${SITE}/g/${id}`, playUrl = g.kind === 'place' ? `/play/studio3d/play/${id}` : `/play/studio/play/${id}`;
-  const title = `${g.title} — игра от ${nick}`;
-  const description = (g.descr ? g.descr + ' ' : '') + `Играй онлайн бесплатно: «${g.title}» — игру сделал ${nick} в Студии игр на сайте dan4ik37. Сделай и свою — без кода!`;
+  const title = kid ? `${g.title} — игра игрока` : `${g.title} — игра от ${nick}`;
+  const description = (g.descr ? g.descr + ' ' : '') + `Играй онлайн бесплатно: «${g.title}» — игру сделал ${kid ? 'игрок сайта' : nick} в Студии игр на сайте dan4ik37. Сделай и свою — без кода!`;
   const since = new Date(g.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   const ld = { '@context': 'https://schema.org', '@type': 'VideoGame', name: g.title, url, description, inLanguage: 'ru', genre: 'Казуальная игра', contentRating: `${age}+`,
     gamePlatform: 'Браузер', applicationCategory: 'Game', operatingSystem: 'Any', datePublished: String(g.created_at).slice(0, 10),
@@ -68,9 +76,9 @@ async function gamePage(req, res, id){
   </section>
   <section class="ug-author">
     <span class="ug-au-ava">👤</span>
-    <div><span class="ug-au-lbl">Автор игры</span><a class="ug-au-nick" href="/profile/${esc(g.author)}">${esc(nick)}</a>${ROLE[g.profiles?.role] ? ` <span class="ug-role">${ROLE[g.profiles.role]}</span>` : ''}
+    <div><span class="ug-au-lbl">Автор игры</span>${kid ? `<span class="ug-au-nick">${esc(nick)}</span>` : `<a class="ug-au-nick" href="/profile/${esc(g.author)}">${esc(nick)}</a>`}${ROLE[g.profiles?.role] ? ` <span class="ug-role">${ROLE[g.profiles.role]}</span>` : ''}
       <small>${authorGames.length ? `${num(authorGames.length)} ${plural(authorGames.length, 'игра', 'игры', 'игр')} в каталоге · ${num(totalPlays)} ${plural(totalPlays, 'запуск', 'запуска', 'запусков')}` : 'первая игра автора'}</small></div>
-    <a class="btn btn-ghost" href="/profile/${esc(g.author)}">Профиль</a>
+    ${kid ? '' : `<a class="btn btn-ghost" href="/profile/${esc(g.author)}">Профиль</a>`}
   </section>
   ${pub ? '<div data-ad="seo_game" hidden></div>' : ''}
   ${more.length ? `<section class="box"><h2>Ещё игры автора</h2><div class="ug-grid">${more.map(card).join('')}</div></section>` : ''}
@@ -82,8 +90,9 @@ async function gamePage(req, res, id){
 }
 
 async function studioPage(req, res){
-  const top = (await safeSelect('ugc_games', 'status=eq.public&select=id,title,icon,plays,profiles(nick)&order=plays.desc&limit=12')) || [];
-  const fresh = (await safeSelect('ugc_games', 'status=eq.public&select=id,title,icon,plays,profiles(nick)&order=created_at.desc&limit=6')) || [];
+  const top = (await safeSelect('ugc_games', 'status=eq.public&select=id,title,icon,plays,author,profiles(nick,role)&order=plays.desc&limit=12')) || [];
+  const fresh = (await safeSelect('ugc_games', 'status=eq.public&select=id,title,icon,plays,author,profiles(nick,role)&order=created_at.desc&limit=6')) || [];
+  await maskAuthors([...top, ...fresh]);
   const url = `${SITE}/studio`;
   const faq = [
     ['Нужно ли уметь программировать?', 'Нет. Выбери шаблон — раннер, ловилку, летуна, тапалку, викторину или космобой — и поменяй героя, предметы, цвета, скорость и надписи. Игра собирается сама, а изменения видны сразу.'],

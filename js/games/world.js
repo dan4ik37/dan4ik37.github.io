@@ -315,6 +315,7 @@
     S.me.v = null;
     if (!isGuest) q('.wld-say input').placeholder = 'Написать всем…';
     else { q('.wld-say input').placeholder = 'Войди, чтобы писать в чат'; q('.wld-say input').readOnly = true; }
+    if (!isGuest && window.D37Age?.chatRO?.()) { S.chatRO = true; q('.wld-say input').placeholder = '👀 Писать в чат — с 9 лет (читать можно)'; q('.wld-say input').readOnly = true; }   // безопасность детей
 
     function resize(){
       const r = wrap.getBoundingClientRect();
@@ -399,7 +400,7 @@
     q('.wld-say').addEventListener('submit', e => {
       e.preventDefault();
       const i = q('.wld-say input');
-      if (i.readOnly) { if (typeof openGlobalAuth === 'function') openGlobalAuth(); return; }
+      if (i.readOnly) { roHint(); return; }
       const t = i.value.trim();
       if (!t) return;
       if (Date.now() - (S.lastSay || 0) < 1500) { toast('Не так быстро 🙂'); return; }
@@ -409,7 +410,7 @@
       say(S.me, t);
       send({ t: 'say', text: t.slice(0, 120) });
     });
-    q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly && typeof openGlobalAuth === 'function') openGlobalAuth(); });
+    q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly) roHint(); });
     el.addEventListener('click', e => {
       const b = e.target.closest('[data-act]');
       if (!b || !el.contains(b)) return;
@@ -447,12 +448,21 @@
     return { key: o.key, uid: o.uid || null, nick: o.nick || 'Игрок', look: o.look || {}, x: o.x, y: o.y, path: [], dir: 1, face: 0, moving: false, bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, at: o.at || 0, born: now(), leaving: 0, rate: [], phase: Math.random() * 6, phone: 0 };
   }
   const toast = t => api?.toast?.(t);
+  // чат только для чтения: до 9 лет — почему (безопасность детей), гость — войти
+  const roHint = () => { if (S?.chatRO) toast(window.D37Age?.kidMsg?.('u9chat') || 'Писать в чат можно с 9 лет'); else if (typeof openGlobalAuth === 'function') openGlobalAuth(); };
+  // приглашение в игру — лично: ребёнку до 13 — не со взрослыми, не с «без возраста» и не с гостями (js/core/age.js → kid_contact)
+  const kidOk = async uid => !(window.D37Age?.kid?.() && window.D37Age?.kidsafe?.()) || (!!uid && !(await window.D37Age.friendBlock(uid).catch(() => null)));
   const activity = () => { S.idleAt = Date.now(); };
 
   // ── Сеть ──
   async function join(shard = 1){
-    if (typeof sbClient === 'undefined' || !sbClient) { status('Нет связи с сервером — обнови страницу'); return; }
     const st = S;
+    if (typeof sbClient === 'undefined' || !sbClient) {
+      // мир открыт по ссылке раньше, чем сайт подключил Supabase: ждём клиента (GameRoom.whenNet, room.js — до 8 с), потом заходим
+      status('Подключаемся к серверу…');
+      window.GameRoom?.whenNet(ok => { if (S !== st || st.stopped) return; if (ok) join(shard); else status('Нет связи с сервером — проверь интернет и обнови страницу'); });
+      return;
+    }
     try { st.keys = st.keys || await makeKeys(); } catch (e) { status('Браузер не поддерживает защищённые сообщения — обнови его'); return; }
     if (st.me.uid && !st.pass) {
       try { const { data, error } = await sbClient.rpc('world_pass', { p_pub: st.keys.pub }); if (!error && data) st.pass = data; } catch (e) {}
@@ -607,7 +617,8 @@
     } else if (d.t === 'inv') {
       if (d.to !== S.key || S.muted.has(p.key) || typeof d.g !== 'string' || typeof d.code !== 'string') return;
       if (!/^[a-z0-9]{4,12}$/.test(d.code) || !(typeof GAMES !== 'undefined' && GAMES.some(g => g.id === d.g)) || NO_ROOM.has(d.g)) return;
-      showInvite(p, d.g, d.code, !!d.coop);
+      const st = S;
+      kidOk(p.v?.uid || null).then(okk => { if (okk && S === st) showInvite(p, d.g, d.code, !!d.coop); });
     } else if (d.t === 'mute') {
       if (!p.v || !['admin', 'moderator'].includes(p.v.role) || typeof d.to !== 'string') return;
       S.muted.add(d.to);
@@ -754,9 +765,13 @@
     else if (a === 'invite' && p) inviteMenu(p);
     else if (a.startsWith('inv:') && p) {
       const g = a.slice(4), coop = COOP.has(g), code = newCode();
-      send({ t: 'inv', to: p.key, g, code, coop });
-      addLog(null, `📨 Позвал(а) ${p.nick} в «${gameInfo(g).title}» — ждём в комнате`);
-      setTimeout(() => { location.hash = roomUrl(g, code, coop); }, 400);
+      kidOk(p.v?.uid || p.uid).then(okk => {
+        if (!okk) { toast(window.D37Age?.kidMsg?.('age') || 'Нельзя позвать этого игрока'); return; }
+        if (!S) return;
+        send({ t: 'inv', to: p.key, g, code, coop });
+        addLog(null, `📨 Позвал(а) ${p.nick} в «${gameInfo(g).title}» — ждём в комнате`);
+        setTimeout(() => { location.hash = roomUrl(g, code, coop); }, 400);
+      });
     }
     else if (a === 'mutelocal' && p) { if (S.muted.has(p.key)) S.muted.delete(p.key); else { S.muted.add(p.key); p.bubble = null; } openCard(p); }
     else if (a === 'mute' && p) { if (confirm(`Заглушить ${p.nick} для всех в этом мире до конца визита?`)) { send({ t: 'mute', to: p.key }); S.muted.add(p.key); p.bubble = null; closePops(); } }

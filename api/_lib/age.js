@@ -15,6 +15,8 @@ export const GAME_AGE = {
   studio3d: [6, 'Конструктор 3D-миров; миры других игроков — со своей меткой.'],
   unity: [12, 'Игры игроков с других сайтов: модератор проверяет, но автор может обновить игру.'],
   kubomir: [6, 'Мультяшные монстры ночью (зомби, слизни) и падение с высоты — без крови.'],
+  kletochki: [6, 'Онлайн с другими игроками (без чата, только эмодзи); клетки «съедают» друг друга — мультяшно, без крови.'],
+  chervyachki: [6, 'Онлайн с другими игроками (без чата, только эмодзи); червячки «рассыпаются на огоньки» — мультяшно, без крови.'],
   krokodil: [12, 'Онлайн-игра компанией: чат и рисунки других игроков (мат и ссылки закрыты, есть жалобы на рисунок).'],
   horde: [12, 'Сражения с мультяшными монстрами, боссы «Дракон» и «Жнец».'],
   arena: [12, 'Перестрелка двух персонажей (мультяшная, без крови).'],
@@ -47,3 +49,24 @@ export function ageBadge(n, o = {}) {
 }
 // Атрибут карточки в списке: 18+ браузер несовершеннолетнего прячет (html.d37-h18 [data-age="18"])
 export const ageAttr = n => +n >= 12 ? ` data-age="${+n}"` : '';
+
+// ═══ Ники детей до 13 на публичных страницах (форум, идеи, игры игроков — их индексирует поиск): вместо ника — «Игрок» ═══
+// Сервер сайта спрашивает age.sql (age_public_kids — только service_role): наружу только номера аккаунтов, ни года, ни группы.
+// Нет функции (age.sql не запущен) — ники как раньше; база не ответила — «Игрок» у всех, кроме команды сайта (лучше спрятать лишнее).
+// rpc, configured — sbRpc / storeConfigured из store.js (передаёт страница: этот файл без сети — его берут и тесты, и page.js)
+export const KID_NICK = 'Игрок';
+const STAFF = ['admin', 'moderator', 'helper'];
+export async function publicKids(ids, rpc, configured){
+  const list = [...new Set((ids || []).map(x => String(x || '')).filter(x => /^[0-9a-f-]{36}$/i.test(x)))];
+  if (!list.length || !configured()) return { has: () => false };
+  try {
+    const r = await rpc('age_public_kids', { p_ids: list.slice(0, 1000) });
+    const set = new Set(Array.isArray(r) ? r : []);
+    return { has: id => set.has(id) };
+  } catch (e) {
+    if (/PGRST202|HTTP 404/.test(String(e?.message || ''))) return { has: () => false };
+    return { has: () => true, failed: true };
+  }
+}
+// Ник для публичной страницы: ребёнок до 13 — «Игрок» (у команды сайта — всегда свой)
+export const publicNick = (kids, id, nick, role) => (kids.has(id) && !STAFF.includes(role) ? KID_NICK : nick);

@@ -536,6 +536,7 @@
     function gate(){
       const st = V.A?.state?.() || { mode: 'write' };
       V.canWrite = st.mode === 'write';
+      V.canReact = V.canWrite || !!st.react;   // «только читать и реакции» (до 9 лет — js/core/age.js chatRO)
       const g = q('.mv-gate'), row = q('.mv-row'), note = q('.mv-note');
       g.hidden = V.canWrite || st.mode === 'muted' || st.mode === 'readonly';
       row.hidden = !V.canWrite;
@@ -707,7 +708,7 @@
     function openMenu(m, anchor){
       const A = V.A, mine = m.uid ? m.uid === myUid() : m.mine, logged = !!P.me();
       const items = [];
-      if (A.caps.react === 'count' && V.canWrite) items.push(`<div class="mv-qr">${(A.reactSet || ['👍', '❤️', '😂', '🔥', '😮', '🎉']).map(x => `<button type="button" data-m="react:${e(x)}">${x}</button>`).join('')}</div>`);
+      if (A.caps.react === 'count' && V.canReact) items.push(`<div class="mv-qr">${(A.reactSet || ['👍', '❤️', '😂', '🔥', '😮', '🎉']).map(x => `<button type="button" data-m="react:${e(x)}">${x}</button>`).join('')}</div>`);
       if (A.caps.react === 'site') items.push(`<button type="button" data-m="reactpick">😊 Реакция</button>`);
       if (A.caps.reply && V.canWrite) items.push('<button type="button" data-m="reply">↩ Ответить</button>');
       if (mine && A.caps.edit && !m.sticker) items.push('<button type="button" data-m="edit">✏️ Изменить</button>');
@@ -822,11 +823,17 @@
         else if (k === 'report' && m) { closeOver(); reportFlow(m); }
       });
       if (uid && me && !self && typeof getFriendshipStatus === 'function') {
-        const st = await getFriendshipStatus(uid), b = bx.querySelector('[data-u="…"],[data-u=""]') || bx.querySelector('.mv-ubtn:not([href]):not([data-u="block"]):not([data-u="report"])');
+        const A = window.D37Age;
+        // безопасность детей (js/core/age.js): ребёнку со взрослым / без возраста — ни личных каналов, ни «📍 К нему»; до 9 — ЛС и звонков нет
+        const [st, kb, kp] = await Promise.all([getFriendshipStatus(uid), A?.contact ? A.contact(uid).catch(() => null) : null, A?.friendBlock ? A.friendBlock(uid).catch(() => null) : null]);
+        const b = bx.querySelector('[data-u="…"],[data-u=""]') || bx.querySelector('.mv-ubtn:not([href]):not([data-u="block"]):not([data-u="report"])');
+        if (kp) bx.querySelector('[data-u="join"]')?.remove();
         if (!b) return;
-        if (st === 'friends') { b.textContent = '✉ Написать'; b.dataset.u = 'dm'; b.insertAdjacentHTML('afterend', '<button type="button" class="mv-ubtn" data-u="call">📞 Позвонить</button>'); }
-        else if (st === 'pending_received') { b.textContent = '✅ Принять в друзья'; b.dataset.u = 'friend-acc'; }
+        const kidNote = k => { b.textContent = '🔒 ' + (st === 'friends' ? 'Только дружба' : 'Нельзя'); b.dataset.u = ''; b.disabled = true; (b.closest('.mv-uacts') || b).insertAdjacentHTML('afterend', `<div class="mv-dim">${e(A.kidMsg(k))}</div>`); };
+        if (st === 'friends') { if (kb) kidNote(kb); else { b.textContent = '✉ Написать'; b.dataset.u = 'dm'; b.insertAdjacentHTML('afterend', '<button type="button" class="mv-ubtn" data-u="call">📞 Позвонить</button>'); } }
+        else if (st === 'pending_received') { if (kp) kidNote('agefriend'); else { b.textContent = '✅ Принять в друзья'; b.dataset.u = 'friend-acc'; } }
         else if (st === 'pending_sent') { b.textContent = '⏳ Заявка отправлена'; b.dataset.u = ''; }
+        else if (kp) kidNote('agefriend');
         else { b.textContent = '➕ В друзья'; b.dataset.u = 'friend-add'; }
       }
     };

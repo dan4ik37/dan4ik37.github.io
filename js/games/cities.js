@@ -297,11 +297,9 @@
     location.hash = '#/games/cities/' + code;
   }
 
+  // Канал — GameRoom.channel (room.js): ждёт sbClient, если игру открыли по ссылке раньше, чем сайт подключил Supabase
+  // (нет связи — «Нет связи — попробуй ещё раз»), и копит сообщения до подписки
   function duelJoin(code){
-    if (typeof sbClient === 'undefined' || !sbClient) {
-      root.innerHTML = '<div class="empty-state"><span class="empty-state-icon">📡</span><div class="empty-state-title">Нет связи с сервером</div><div class="empty-state-text">Онлайн-игра недоступна — обнови страницу.</div></div>';
-      return;
-    }
     duelLeave();
     const myId = (typeof currentUser !== 'undefined' && currentUser?.id) || 'g-' + Math.random().toString(36).slice(2, 10);
     D = { code, myId, joinedAt: Date.now(), host: false, oppId: null, oppNick: 'соперник', round: 0, started: false, rematch: { me: false, opp: false } };
@@ -317,7 +315,7 @@
       try { await navigator.clipboard.writeText(link); root.querySelector('#ctCopy').textContent = '✅ Скопировано'; }
       catch (e) { root.querySelector('#ctLink').select(); }
     };
-    const ch = sbClient.channel('cities-duel-' + code, { config: { broadcast: { self: false }, presence: { key: myId } } });
+    const ch = window.GameRoom.channel('cities-duel-' + code, { config: { broadcast: { self: false }, presence: { key: myId } } });
     D.ch = ch;
     ch.on('broadcast', { event: 'm' }, ({ payload }) => duelOnMessage(payload));
     ch.on('presence', { event: 'sync' }, duelOnPresence);
@@ -325,7 +323,7 @@
       if (status === 'SUBSCRIBED') await ch.track({ nick: duelNick(), t: D.joinedAt });
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         const el = root?.querySelector('#ctLobbyText');
-        if (el) el.textContent = '⚠ Не удалось подключиться к комнате. Попробуй обновить страницу.';
+        if (el) el.innerHTML = '⚠ Нет связи — не удалось подключиться к комнате. Проверь интернет и попробуй ещё раз.<br>' + window.GameRoom.retryBtn;
       }
     });
   }
@@ -389,7 +387,7 @@
   }
 
   function duelSend(payload){
-    if (D?.ch) D.ch.send({ type: 'broadcast', event: 'm', payload: { ...payload, from: D.myId } }).catch(() => {});
+    if (D?.ch) D.ch.send({ type: 'broadcast', event: 'm', payload: { ...payload, from: D.myId } }).catch(() => {});   // до подписки — в очередь
   }
 
   function duelOnMessage(m){
@@ -422,7 +420,7 @@
   }
 
   function duelLeave(){
-    if (D?.ch) { try { D.ch.untrack(); sbClient.removeChannel(D.ch); } catch (e) {} }
+    if (D?.ch) { try { D.ch.close(); } catch (e) {} }
     D = null;
   }
 

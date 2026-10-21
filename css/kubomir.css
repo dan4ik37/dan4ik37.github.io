@@ -84,7 +84,9 @@ body.high .kb-hud.kb-low .kb-lowhp{animation:kbLow 1.5s ease-in-out infinite}
 .kb-log div.old{opacity:0}
 .kb-chat{position:absolute;left:10px;right:10px;bottom:calc(var(--kb-s) + 40px);z-index:9}
 .kb-chat input{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--kb-line);background:rgba(0,0,0,.72);color:#fff;font:15px Montserrat,system-ui,sans-serif}
-.kb-dead{position:absolute;inset:0;z-index:9;display:grid;place-items:center;background:rgba(120,0,0,.45);font-family:Montserrat,system-ui,sans-serif;color:#fff}
+.kb-dead{position:absolute;inset:0;z-index:9;display:grid;place-items:center;background:rgba(8,10,22,.6);-webkit-backdrop-filter:blur(5px) grayscale(.55) brightness(.7);backdrop-filter:blur(5px) grayscale(.55) brightness(.7);font-family:Montserrat,system-ui,sans-serif;color:#fff;animation:kbKO .7s ease-out}
+@keyframes kbKO{from{background:rgba(8,10,22,0);-webkit-backdrop-filter:blur(0) grayscale(0) brightness(1);backdrop-filter:blur(0) grayscale(0) brightness(1)}}
+.kb-dead small.kb-ko{font-size:1rem;color:#e6ecff}
 .kb-dead>div{display:flex;flex-direction:column;align-items:center;gap:10px;padding:20px;border-radius:16px;background:var(--kb-bg);text-align:center}
 .kb-dead b{font-size:1.4rem}
 /* ── окна вещей ── */
@@ -188,7 +190,7 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 .kb-tip b{display:block;font-size:12px;color:#ffd23f;letter-spacing:.3px}
 .kb-tip button{flex:none;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;cursor:pointer}
 @keyframes kbTip{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-.kb-dead small.kb-where{color:#ffd9d9}
+.kb-dead small.kb-where{color:#d9e4ff}
 .kb-dead .kb-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 /* телефон стоя: кнопки (вещи, красться, прыжок) — выше полосок здоровья и еды, подсказка — компактнее */
 @media (max-width:640px){

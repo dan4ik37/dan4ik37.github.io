@@ -170,16 +170,19 @@
   // клетки маски склеиваются, только если совпадает всё: вид, AO, свет неба и R, G, B по углам, цвет биома
   const same = (j, mi) => MK0[j] === MK0[mi] && MAO[j] === MAO[mi] && MKS[j] === MKS[mi] && MKR[j] === MKR[mi] && MKG[j] === MKG[mi] && MKB[j] === MKB[mi] && MK3[j] === MK3[mi];   // свет «одной клеткой» для не-кубов: небо, R, G, B (×4)
 
-  // reg — область 48×48×H (Uint16), light — { sky, r, g, b } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9)
-  V.meshChunk = (reg, light, T, tint) => {
+  // reg — область 48×48×H (Uint16), light — { sky, r, g, b } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9),
+  // zone — климатические зоны столбов (256, V.climZone; нет — все 0): у вершин в свет неба (lt.x, 0…60) добавляется 64 × зона —
+  // шейдер погоды знает, где «всегда зима» и где «зимы нет»; грани разных зон не склеиваются
+  V.meshChunk = (reg, light, T, tint, zone) => {
     const sky = light.sky, lr = light.r, lg = light.g, lb = light.b, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
     const glowL = T.glowL || null, emit = T.emit, sT = T.stream || null;
     const gl = l => glowL && l >= 0 && l < glowL.length ? glowL[l] : 0;
     // свет клетки li (и, если надо, наибольший с клеткой li2) → LT4 (вершинам — всё в 0…60: небо × 4, цвет × 60 / 255)
+    let ZA = 0;   // 64 × зона текущего столба (не кубы)
     const cellLt = (li, li2) => {
       let s = sky[li], r = lr[li], g = lg[li], b = lb[li];
       if (li2 >= 0) { if (sky[li2] > s) s = sky[li2]; if (lr[li2] > r) r = lr[li2]; if (lg[li2] > g) g = lg[li2]; if (lb[li2] > b) b = lb[li2]; }
-      LT4[0] = s * 4; LT4[1] = (r * 60 + 127) / 255 | 0; LT4[2] = (g * 60 + 127) / 255 | 0; LT4[3] = (b * 60 + 127) / 255 | 0;
+      LT4[0] = s * 4 + ZA; LT4[1] = (r * 60 + 127) / 255 | 0; LT4[2] = (g * 60 + 127) / 255 | 0; LT4[3] = (b * 60 + 127) / 255 | 0;
       return LT4;
     };
     for (const s of streams) s.q = 0;
@@ -232,7 +235,7 @@
           let tq = 0;
           if (tk && !(tk === 1 && d !== 2)) { tintOf(tint, x, z, tk, TC); tq = 0x1000000 | ((TC[0] >> 3) << 10) | ((TC[1] >> 3) << 5) | (TC[2] >> 3); }
           const lay = sT ? sT[t] : layerT[t] === 2 ? 1 : 0, sway = tk === 2 || tk === 4 || tk === 5 ? 1 : 0;
-          MK0[mi] = 0x800000 | layer | (lay << 12) | (sway << 15);
+          MK0[mi] = 0x800000 | layer | (lay << 12) | (sway << 15) | ((zone ? zone[x * 16 + z] & 3 : 0) << 16);
           MAO[mi] = CA[0] | (CA[1] << 2) | (CA[2] << 4) | (CA[3] << 6);
           MKS[mi] = CS[0] | (CS[1] << 6) | (CS[2] << 12) | (CS[3] << 18);
           MKR[mi] = CR[0] | (CR[1] << 6) | (CR[2] << 12) | (CR[3] << 18);
@@ -259,7 +262,7 @@
           let x, y, z;
           if (axis === 0) { x = sl; y = u; z = v; } else if (axis === 1) { x = u; y = sl; z = v; } else { x = u; y = v; z = sl; }
           const layer = k0 & 0xfff;
-          emitCube(streams[(k0 >> 12) & 7], d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, (k0 >> 15) & 1, gl(layer));
+          emitCube(streams[(k0 >> 12) & 7], d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, (k0 >> 15) & 1, gl(layer), ((k0 >> 16) & 3) * 64);
           u += w;
         }
       }
@@ -267,6 +270,7 @@
     // ── не кубы: трава и цветы, факелы, лестницы, двери, кактусы, сундуки, жидкости ──
     for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
       const b0 = ((x + 16) * RW + (z + 16)) * H;
+      ZA = zone ? (zone[x * 16 + z] & 3) * 64 : 0;
       for (let y = 0; y <= yMax; y++) {
         const ri = b0 + y, cv = reg[ri], t = cv & TYPE, sh = shape[t];
         if (sh <= 1) continue;
@@ -375,7 +379,7 @@
   }
 
   // Квадрат «жадной» грани: клетка (x, y, z), w × h по осям (ua, va)
-  function emitCube(s, d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, sway, glow){
+  function emitCube(s, d, x, y, z, w, h, layer, ka, ks, kr, kg, kb, k3, sway, glow, za){
     grow(s, s.q + 1);
     const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt;
     const a0 = ka & 3, a1 = (ka >> 2) & 3, a2 = (ka >> 4) & 3, a3 = (ka >> 6) & 3;
@@ -393,7 +397,7 @@
       P[o * 3] = X * 16; P[o * 3 + 1] = Y * 16; P[o * 3 + 2] = Z * 16;
       VD[o * 4] = U * 16; VD[o * 4 + 1] = Vv * 16; VD[o * 4 + 2] = layer | (d << 12);
       VD[o * 4 + 3] = ak | (glow << 2) | (sway << 14);
-      LT[o * 4] = (ks >> sh) & 63; LT[o * 4 + 1] = (kr >> sh) & 63; LT[o * 4 + 2] = (kg >> sh) & 63; LT[o * 4 + 3] = (kb >> sh) & 63;
+      LT[o * 4] = ((ks >> sh) & 63) + za; LT[o * 4 + 1] = (kr >> sh) & 63; LT[o * 4 + 2] = (kg >> sh) & 63; LT[o * 4 + 3] = (kb >> sh) & 63;
       C[o * 3] = r; C[o * 3 + 1] = g; C[o * 3 + 2] = b;
     }
   }
