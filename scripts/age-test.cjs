@@ -596,7 +596,7 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
   has('js/games/studio.js', /AU\(\)\.age\(g\.age_rating\)/, 'Студия игр: обложка чужой игры');
   has('js/games/studio3d.js', /AG\.cover\(L, n/, 'Студия 3D: обложка чужого мира');
   has('js/games/unity-host.js', /AU\(\)\.age\(g\.age_rating\)/, 'Unity-игры: обложка чужой игры');
-  has('js/features/shop.js', /S\.cards === false \|\| window\.D37Age\?\.kid\?\.\(\)/, 'магазин: до 13 — без оплаты картой');
+  has('js/features/shop.js', /pa === 'age_child' \|\| pa === 'age_unknown'/, 'магазин: до 14 и без года — без оплаты (premium_pay_age)');
   has('js/features/phone.js', /id === 'comm' && area && !AG\.canOpen/, 'телефон: сообщества — как чат (12+)');
   has('privacy.html', /Возраст \(по желанию\)/, 'политика конфиденциальности (/privacy): про год рождения');
   has('index.html', /Возраст \(по желанию\):<\/strong>/, 'политика конфиденциальности (окно): про год рождения');

@@ -432,7 +432,7 @@ function gamesSupport(id, record){
   const g = GAMES.find(x => x.id === id);
   box.hidden = false;
   box.innerHTML = `<div>${record ? '🏆 <b>Новый рекорд!</b>' : '🎉 <b>Победа!</b>'} Нравятся игры? Их делает стример dan4ik37 —
-      поддержи стрим донатом (за донаты на сайте даётся <a href="/vip">VIP</a>) или позови друга сыграть.</div>
+      поддержи стрим донатом (взамен — спасибо и статус <a href="/vip">«💛 Донатер»</a>) или позови друга сыграть.</div>
     <a class="sp-don" href="https://www.donationalerts.com/r/dan4ik37" target="_blank" rel="noopener">💜 Поддержать</a>
     <button class="sp-share" type="button">🔗 Позвать друга</button>
     <button class="sp-x" type="button" aria-label="Скрыть">✕</button>`;

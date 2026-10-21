@@ -103,7 +103,7 @@
     if (!t) return { ok: false, reason: 'auth' };
     try {
       const r = await fetch('/api/pay?a=order', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
-        body: JSON.stringify({ pack, method, consent: true }) });
+        body: JSON.stringify({ pack, method, consent: true, pd: true }) });   // pd — согласие на обработку данных (галочка в окне оплаты)
       const j = await r.json().catch(() => null);
       return j || { ok: false, reason: 'server' };
     } catch (e) { return { ok: false, reason: 'network' }; }

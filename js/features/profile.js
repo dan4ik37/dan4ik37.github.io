@@ -1285,7 +1285,7 @@ async function openDonationLog(){
         <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(255,255,255,.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">
           <div>
             <div style="font-weight:700">${esc(row.donor_username || '(без имени)')} — ${row.amount ?? '?'} ${esc(row.currency || 'RUB')}</div>
-            <div style="color:var(--muted);font-size:.7rem">${date}</div>
+            <div style="color:var(--muted);font-size:.7rem">${date} · №${esc(String(row.donation_id))}</div>
           </div>
           <div>${status}</div>
         </div>`;

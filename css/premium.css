@@ -3823,4 +3823,7 @@ html.gs-set-open,html.gs-set-open body{overflow:hidden}
 .dn-badge[hidden],.mv-role[hidden]{display:none}
 .lb-dn{display:inline-block;margin-left:.35rem;padding:.04rem .34rem;border-radius:5px;font-size:.6rem;font-weight:800;vertical-align:middle;background:rgba(255,205,70,.16);color:#ffcd46}
 .lb-anon .lb-name{opacity:.75;font-style:italic}
+.dc-admin .dc-sub{margin:.9rem 0 .4rem}
+.dc-admin .dc-msg{display:block;font-size:.72rem;color:var(--muted);font-style:italic;word-break:break-word}
+.shp-adm-period{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.4rem 0 .6rem}
 @media(max-width:480px){#profileVipPromo .vp-row{flex-direction:column;gap:.1rem}#profileVipPromo .vp-row>span:first-child{flex:none}}

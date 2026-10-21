@@ -288,10 +288,10 @@ async function renderVipSyncStatus(){
       html = '⚪ <b>Автоначисление VIP:</b> ещё не запускалось. Проверь переменные <code>SUPABASE_URL</code> и <code>SUPABASE_SERVICE_ROLE_KEY</code> в Vercel и войди через DonationAlerts.';
     } else if (st.last_error && (!st.last_ok_at || new Date(st.last_error_at) >= new Date(st.last_ok_at))) {
       const key = Object.keys(VIP_SYNC_HELP).find(k => st.last_error.includes(k)) || (/refresh_failed/.test(st.last_error) ? 'da_unauthorized' : null);
-      html = `🔴 <b>Автоначисление VIP: сбой</b> (${timeAgoShort(st.last_error_at)}) — ${esc(key ? VIP_SYNC_HELP[key] : st.last_error)}` +
+      html = `🔴 <b>Привязка донатов: сбой</b> (${timeAgoShort(st.last_error_at)}) — ${esc(key ? VIP_SYNC_HELP[key] : st.last_error)}` +
              (key && key !== 'env_missing_da' && key !== 'db_unavailable' ? ' <button class="lb-login-btn" onclick="lbLogin()" style="margin-left:.4rem">💝 Войти через DonationAlerts</button>' : '');
     } else {
-      html = `🟢 <b>Автоначисление VIP работает</b> · последняя успешная проверка ${timeAgoShort(st.last_ok_at)} · начислено донатов за всё время: ${st.total_credited || 0}`;
+      html = `🟢 <b>Привязка донатов работает</b> · последняя успешная проверка ${timeAgoShort(st.last_ok_at)} · привязано донатов за всё время: ${st.total_credited || 0}`;
     }
   } catch(e) {
     html = '⚪ <b>Автоначисление VIP:</b> таблицы ещё нет — выполни <code>server-hardening.sql</code> в Supabase.';
