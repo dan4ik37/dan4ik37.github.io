@@ -294,8 +294,12 @@ async function renderProfilePage(viewUserId){
     if (status === 'none' && profile.accepts_friend_requests === false) {
       buttons.none = `<span style="color:var(--muted);font-size:.8rem">🚫 Не принимает заявки в друзья</span>`;
     } else if (status === 'none') {
-      const why = await friendBlockReason();
-      if (why) buttons.none = `<span style="color:var(--muted);font-size:.8rem">${why}</span>`;
+      const why = (await window.D37Age?.friendBlock?.(targetId)) ? D37Age.kidMsg('agefriend') : await friendBlockReason();
+      if (why) buttons.none = `<span style="color:var(--muted);font-size:.8rem">${esc(why)}</span>`;
+    } else if (status === 'friends' || status === 'pending_received') {
+      // ребёнку до 13 со взрослым / до 9 — личные каналы закрыты (сервер не пропустит; дружба остаётся)
+      const kb = status === 'friends' ? await window.D37Age?.contact?.(targetId) : await window.D37Age?.friendBlock?.(targetId);
+      if (kb) buttons[status] = `<span style="color:var(--muted);font-size:.8rem">${esc(D37Age.kidMsg(status === 'friends' ? kb : 'agefriend'))}</span>`;
     }
     addFriendWrap.innerHTML = buttons[status] || '';
     addFriendWrap.style.display = 'block';
@@ -1402,8 +1406,11 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
       if (status === 'none' && p.accepts_friend_requests === false) {
         buttons.none = `<span style="font-size:.72rem;color:var(--muted)">🚫 Не принимает заявки</span>`;
       } else if (status === 'none') {
-        const why = await friendBlockReason();
-        if (why) buttons.none = `<span style="font-size:.68rem;color:var(--muted);line-height:1.4;display:block">${why}</span>`;
+        const why = (await window.D37Age?.friendBlock?.(userId)) ? D37Age.kidMsg('agefriend') : await friendBlockReason();
+        if (why) buttons.none = `<span style="font-size:.68rem;color:var(--muted);line-height:1.4;display:block">${esc(why)}</span>`;
+      } else if (status === 'friends' || status === 'pending_received') {
+        const kb = status === 'friends' ? await window.D37Age?.contact?.(userId) : await window.D37Age?.friendBlock?.(userId);
+        if (kb) buttons[status] = `<span style="font-size:.68rem;color:var(--muted);line-height:1.4;display:block">${esc(D37Age.kidMsg(status === 'friends' ? kb : 'agefriend'))}</span>`;
       }
       actionEl.innerHTML = buttons[status] || '';
     } else {

@@ -18,7 +18,12 @@
     await sbClient.from('direct_messages').update({ read_at: new Date().toISOString() }).eq('sender_id', uid).eq('recipient_id', me).is('read_at', null);
     if (typeof updateDmUnreadBadge === 'function') updateDmUnreadBadge();
   }
-  function dmAdapter(uid, nick){
+  // Безопасность детей (js/core/age.js): ребёнку — кому нельзя лично ('age'), до 9 — никому ('u9'); остальным решает сервер
+  const kidBlock = async uid => (window.D37Age?.contact ? window.D37Age.contact(uid).catch(() => null) : null);
+  const kidMsg = k => window.D37Age?.kidMsg?.(k) || '🚫 Нельзя написать этому игроку';
+  // Отказ сервера на ЛС / вызов / приглашение: свой текст сервера (ребёнку, до 9) — как есть; общий отказ прав — «нельзя»
+  const dmErr = (error, kind = 'no') => /row-level|42501/i.test(error?.message || '') || error?.code === '42501' ? kidMsg(kind) : P.err(error);
+  function dmAdapter(uid, nick, block){
     const me = P.me();
     return {
       key: 'dm:' + uid, title: nick, maxLen: 1000, placeholder: `Написать ${nick}…`,
@@ -41,8 +46,9 @@
       },
       async send(text){
         if (window.MsgView?.blocked?.has(uid)) return { ok: false, err: 'ты заблокировал(а) этого человека' };
+        if (block) return { ok: false, err: kidMsg(block) };
         const { data, error } = await sbClient.from('direct_messages').insert([{ sender_id: me, recipient_id: uid, text }]).select().single();
-        if (error) return { ok: false, err: /row-level|42501/i.test(error.message || '') ? 'писать можно только друзьям' : P.err(error) };
+        if (error) return { ok: false, err: dmErr(error) };
         return { ok: true, m: dmMsg(data) };
       },
       async fetch(){ return []; },
@@ -51,7 +57,7 @@
         const { data } = await sbClient.from('direct_messages').select('*').or(`and(sender_id.eq.${me},recipient_id.eq.${uid}),and(sender_id.eq.${uid},recipient_id.eq.${me})`).ilike('text', `%${s}%`).order('id', { ascending: false }).limit(40);
         return (data || []).map(dmMsg);
       },
-      state: () => (P.me() ? { mode: 'write' } : { mode: 'login', note: 'Войди, чтобы писать друзьям' }),
+      state: () => (!P.me() ? { mode: 'login', note: 'Войди, чтобы писать друзьям' } : block ? { mode: 'readonly', note: kidMsg(block) } : { mode: 'write' }),
       me: () => ({ uid: me, nick: P.myNick() }),
     };
   }
@@ -85,16 +91,25 @@
     const p = P.prof(uid);
     el.innerHTML = P.head(`<span class="ph-chathead">${P.avatar(p, p?.nick, 26)} ${e(p?.nick || 'друг')}</span>`, `<button type="button" class="ph-hbtn" data-k="call" title="Позвонить">📞</button><button type="button" class="ph-hbtn" data-k="game" title="Позвать в игру">🎮</button><a class="ph-hbtn" href="#/profile/${e(uid)}" title="Профиль" style="display:inline-grid;place-items:center;text-decoration:none">👤</a>`) + '<div class="ph-body ph-mvhost"><div class="ds-mv"></div></div>';
     const view = MV.mount(el.querySelector('.ds-mv'), { compact: true });
-    P.profiles([uid]).then(r => { const pp = r[uid]; const h = el.querySelector('.ph-chathead'); if (pp && h) h.innerHTML = `${P.avatar(pp, pp.nick, 26)} ${e(pp.nick)}`; view.setAdapter(dmAdapter(uid, pp?.nick || 'друг')); });
-    el.querySelector('[data-k="call"]').onclick = async () => { await P.need('calls'); window.D37Calls.call(uid, P.prof(uid)?.nick || 'друг'); };
-    el.querySelector('[data-k="game"]').onclick = () => gameInvite(uid);
+    let block = null;
+    Promise.all([P.profiles([uid]), kidBlock(uid)]).then(([r, b]) => {
+      const pp = r[uid]; const h = el.querySelector('.ph-chathead'); if (pp && h) h.innerHTML = `${P.avatar(pp, pp.nick, 26)} ${e(pp.nick)}`;
+      block = b;
+      // ребёнку со взрослым / до 9: переписку видно, но писать, звонить и звать нельзя
+      if (b) el.querySelectorAll('[data-k="call"],[data-k="game"]').forEach(x => { x.classList.add('ph-off'); x.title = kidMsg(b); });
+      view.setAdapter(dmAdapter(uid, pp?.nick || 'друг', b));
+    });
+    el.querySelector('[data-k="call"]').onclick = async () => { if (block) { P.toast(kidMsg(block), false); return; } await P.need('calls'); window.D37Calls.call(uid, P.prof(uid)?.nick || 'друг'); };
+    el.querySelector('[data-k="game"]').onclick = () => { if (block) { P.toast(kidMsg(block), false); return; } gameInvite(uid); };
     return () => view.destroy();
   }
 
   // ═══ Позвать в игру: комната с кодом → ЛС со ссылкой (у друга — карточка «Войти») → сам туда ═══
   const QUICK = ['world', 'chess', 'durak', 'uno', 'checkers', 'pool', 'nardy', 'ludo', 'arena', 'horde', 'td', 'sea', 'ttt'];
   const COOP = new Set(['horde', 'td']);
-  function gameInvite(uid){
+  async function gameInvite(uid){
+    const b = await kidBlock(uid);
+    if (b) { P.toast(kidMsg(b), false); return; }
     const games = QUICK.map(id => typeof GAMES !== 'undefined' && GAMES.find(g => g.id === id)).filter(Boolean);
     P.sheet(`<b>🎮 Во что позвать?</b><div class="ph-chips">${games.map(g => `<button type="button" class="ph-chip" data-s="${g.id}">${g.icon} ${e(g.title)}${COOP.has(g.id) ? ' (вместе)' : ''}</button>`).join('')}</div><small class="ph-dim">Другу придёт сообщение с кнопкой «Войти», а ты сразу окажешься в комнате.</small>`,
       async gid => {
@@ -112,7 +127,7 @@
           go = path;
         }
         const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: uid, text }]);
-        if (error) { P.toast('⚠️ ' + (/row-level|42501/i.test(error.message || '') ? 'звать можно только друзей' : P.err(error)), false); return; }
+        if (error) { P.toast(dmErr(error, 'noinv'), false); return; }
         P.toast('📨 Позвал(а)!', true);
         if (go) setTimeout(() => { if (!P.isDocked()) P.close(); location.hash = go; }, 500);
       });
@@ -137,12 +152,13 @@
       const draw = async () => {
         const f = await P.friends(!drawn); drawn = true;
         const st = await P.friendStatus(f.list);
+        const kb = window.D37Age?.contacts ? await window.D37Age.contacts(f.list).catch(() => new Map()) : new Map();   // ребёнку / до 9: с кем нельзя лично
         if (!alive) return;
         const on = f.list.filter(id => st.has(id)), off = f.list.filter(id => !st.has(id));
         const row = id => {
-          const p = P.prof(id) || {}, s = st.get(id), j = s ? P.actJoin(s.a) : null;
-          return `<div class="ph-item">${P.avatar(p, p.nick, 42)}${s ? '<i class="ph-dot"></i>' : ''}<span><b>${e(p.nick || 'друг')}</b><small>${s ? e(P.actText(s.a)) : 'не в сети'}</small>${j ? `<button type="button" class="ph-chip" data-j="${e(id)}" style="margin-top:5px;align-self:flex-start">${e(j.label)}</button>` : ''}</span>
-            <span class="ph-ibtns"><button type="button" class="ph-ib" data-dm="${e(id)}" aria-label="Написать">✉</button><button type="button" class="ph-ib" data-game="${e(id)}" aria-label="Позвать в игру">🎮</button><button type="button" class="ph-ib call" data-call="${e(id)}" aria-label="Позвонить">📞</button></span></div>`;
+          const p = P.prof(id) || {}, s = st.get(id), k = kb.get(id), j = s && k !== 'age' ? P.actJoin(s.a) : null, x = k ? ` ph-off" title="${e(kidMsg(k))}` : '';
+          return `<div class="ph-item">${P.avatar(p, p.nick, 42)}${s ? '<i class="ph-dot"></i>' : ''}<span><b>${e(p.nick || 'друг')}</b><small>${s ? e(P.actText(s.a)) : 'не в сети'}</small>${k === 'age' ? '<small class="ph-kid">🔒 Только дружба: писать и звонить нельзя</small>' : ''}${j ? `<button type="button" class="ph-chip" data-j="${e(id)}" style="margin-top:5px;align-self:flex-start">${e(j.label)}</button>` : ''}</span>
+            <span class="ph-ibtns"><button type="button" class="ph-ib${x}" data-dm="${e(id)}" aria-label="Написать">✉</button><button type="button" class="ph-ib${x}" data-game="${e(id)}" aria-label="Позвать в игру">🎮</button><button type="button" class="ph-ib call${x}" data-call="${e(id)}" aria-label="Позвонить">📞</button></span></div>`;
         };
         b.innerHTML = `${f.incoming.length ? `<div class="ph-sec">Заявки в друзья — ${f.incoming.length}</div>${f.incoming.map(id => { const p = P.prof(id) || {}; return `<div class="ph-item">${P.avatar(p, p.nick, 40)}<span><b>${e(p.nick || 'игрок')}</b><small>хочет дружить</small></span><span class="ph-ibtns"><button type="button" class="ph-ib call" data-acc="${e(id)}" aria-label="Принять">✓</button><button type="button" class="ph-ib" data-dec="${e(id)}" aria-label="Отклонить">✕</button></span></div>`; }).join('')}` : ''}
           ${on.length ? `<div class="ph-sec">В сети — ${on.length}</div>${on.map(row).join('')}` : ''}
@@ -155,7 +171,7 @@
         if (x.dataset.j) { const st = await P.friendStatus([x.dataset.j]); const s = st.get(x.dataset.j); if (s) P.goJoin(x.dataset.j, s.a); }
         else if (x.dataset.dm) P.go('msgs/' + x.dataset.dm);
         else if (x.dataset.game) gameInvite(x.dataset.game);
-        else if (x.dataset.call) { await P.need('calls'); window.D37Calls.call(x.dataset.call, P.prof(x.dataset.call)?.nick || 'друг'); }
+        else if (x.dataset.call) { const b = await kidBlock(x.dataset.call); if (b) { P.toast(kidMsg(b), false); return; } await P.need('calls'); window.D37Calls.call(x.dataset.call, P.prof(x.dataset.call)?.nick || 'друг'); }
         else if (x.dataset.acc) { if (typeof acceptFriendRequest === 'function') await acceptFriendRequest(x.dataset.acc); P.dropFriends(); draw(); }
         else if (x.dataset.dec) { await sbClient.from('friendships').delete().eq('requester_id', x.dataset.dec).eq('addressee_id', P.me()); P.dropFriends(); draw(); }
       });
@@ -208,8 +224,9 @@
           pickFriend('📍 Кого позвать сюда?', async id => {
             const a = P.activity(), where = h.placeName?.() || '';
             const text = a.j ? `📍 Иди ко мне! ${window.D37Route ? D37Route.abs('#/' + a.j, SITE) : SITE + '/#/' + a.j}` : `📍 Иди ко мне в «Мир Денчика»${a.w ? `, сервер ${a.w}` : ''}${where ? ` — я ${where}` : ''}! ${window.D37Route ? D37Route.abs('#/games/world', SITE) : SITE + '/#/games/world'}`;
+            const b = await kidBlock(id); if (b) { P.toast(kidMsg(b), false); return; }
             const { error } = await sbClient.from('direct_messages').insert([{ sender_id: P.me(), recipient_id: id, text }]);
-            P.toast(error ? '⚠️ ' + P.err(error) : '📨 Позвал(а)!', !error);
+            P.toast(error ? dmErr(error, 'noinv') : '📨 Позвал(а)!', !error);
           });
         }
         const g = ev.target.closest('[data-g]'); if (g) { const s = shots.splice(+g.dataset.g, 1)[0]; shots.unshift(s); draw(); }

@@ -419,7 +419,7 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
     const src = read('js/core/age.js');
     ok(!/\bfetch\(|XMLHttpRequest|sendBeacon|\bym\(|window\.va\(|\bva\(|\.track\(/.test(src), 'age.js: никакой сети, кроме своих RPC (нет fetch, Метрики, Vercel, presence)');
     const rpcs = [...src.matchAll(/rpc\('([a-z_]+)'/g)].map(m => m[1]);
-    ok(rpcs.every(n => ['my_age_group', 'age_set', 'age_clear', 'age_set_rating'].includes(n)), 'age.js: только RPC age.sql', rpcs);
+    ok(rpcs.every(n => ['my_age_group', 'age_set', 'age_clear', 'age_set_rating', 'kid_contact'].includes(n)), 'age.js: только RPC age.sql', rpcs);
     ok(!/location\.(href|hash)\s*=\s*[^;]*(S\.y|year|age\(\))/.test(src) && !/pushState|replaceState/.test(src), 'age.js: возраст не попадает в адрес');
     ok(/detail: \{ group: group\(\) \}/.test(src) && !/detail:[^}]*\by\b/.test(src), 'событие d37:age — только группа, без года');
     // presence / broadcast / аналитика в остальных файлах — без возраста
@@ -608,6 +608,75 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
     'магазин: функции только в premium.sql, оплата с 14 лет (premium_pay_age), лимиты по возрасту — age_shop_caps (age.sql)');
   ok(!/to authenticated|to anon/.test(AS.slice(AS.indexOf('function public.age_group_of'), AS.indexOf('$$;', AS.indexOf('function public.age_group_of')))) && /revoke execute on function public\.age_group_of\(uuid\) from public, anon, authenticated;/.test(AS), 'age.sql: age_group_of закрыта от клиентов');
   ok(/create policy "Свой возраст видит только сам" on public\.user_age for select to authenticated using \(auth\.uid\(\) = user_id\);/.test(AS) && !/user_age[^;]*(moderator|admin)/.test(AS), 'age.sql: свой год видит только сам (без исключений для персонала)');
+
+  // ═══ 10. Безопасность детей (T-010, docs/REALMS.md «лёгкий вариант»): до 9, ребёнок ↔ взрослый, тексты = сервер, подключено ═══
+  {
+    const c = makeCtx(); c.__run('js/core/age.js'); c.__advance(5);
+    const A = c.D37Age, T = A._test, DAY = 864e5;
+    T.reset(); T.localSet(YEAR - 8);
+    ok(A.u9() && A.chatRO() && A.kid(), 'до 9 (7 лет): u9, чат только читать, ребёнок');
+    T.reset(); T.localSet(YEAR - 10);
+    ok(!A.u9() && A.kid(), '9 лет: не «до 9», но ребёнок');
+    T.reset(); T.localSet(YEAR - 8); T.localSet(YEAR - 11);
+    ok(!A.u9(), 'опечатка в первые сутки: из «до 9» сразу 10 лет');
+    T.reset(); T.localSet(YEAR - 8); c.__advance(2 * DAY); T.localSet(YEAR - 11);
+    ok(A.u9() && A.group() === 'child', 'после суток сменил год на 10 лет — ещё 30 дней «до 9»');
+    c.__advance(31 * DAY);
+    ok(!A.u9(), 'через 30 дней — уже не «до 9»');
+    T.reset(); T.localSet(YEAR - 8); c.__advance(2 * DAY); await A.clear();
+    ok(A.u9() && A.year() === null, 'стёр год — ещё 30 дней «до 9»');
+    T.reset(); T.fromServer({ year: YEAR - 10, u9_until: new Date(c.__clock.t + 5 * DAY).toISOString(), kidsafe: true });
+    ok(A.u9(), 'с сервера: «остывание» до 9 (u9_until)');
+    T.fromServer({ year: YEAR - 8, kidsafe: false });
+    ok(!A.u9() && !A.kidsafe(), "с сервера: выключатель kidsafe = 'off' — правил нет");
+    // кому нельзя лично (kid_contact): спрашивает только ребёнок; взрослому — без запроса (возраст других сервер не раскрывает)
+    const ids = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
+    const sb = { calls: [], rpc: async (name, args) => { sb.calls.push([name, args]); return name === 'kid_contact' ? { data: { ok: true, on: true, u9: false, child: true, age: [ids[1]] }, error: null } : { data: null, error: { message: 'нет' } }; } };
+    T.reset(); T.localSet(YEAR - 30); c.sbClient = sb; c.currentUser = { id: 'me' };
+    let m = await A.contacts(ids);
+    ok(m.size === 0 && !sb.calls.length, 'взрослый: пусто и без запроса');
+    T.reset(); T.localSet(YEAR - 11);
+    m = await A.contacts(ids);
+    ok(m.get(ids[1]) === 'age' && !m.has(ids[0]) && sb.calls.length === 1, 'ребёнок: взрослый из списка — нельзя (kid_contact)', [...m]);
+    await A.contacts(ids);
+    ok(sb.calls.length === 1, 'ответ kid_contact — из кэша (5 минут)');
+    ok(await A.friendBlock(ids[1]) === 'age' && !(await A.friendBlock(ids[0])), 'дружба: правило пары (ребёнок ↔ взрослый)');
+    T.reset(); T.localSet(YEAR - 7);
+    m = await A.contacts(ids);
+    ok(m.get(ids[0]) === 'u9' && m.get(ids[1]) === 'u9', 'до 9: ЛС и звонков нет ни с кем');
+    ok(await A.friendBlock(ids[0]) === null && await A.friendBlock(ids[1]) === 'age', 'до 9: дружить с ребятами — можно (правило пары)');
+    c.currentUser = null; T.reset(); T.localSet(YEAR - 11);
+    ok((await A.contacts(ids)).size === 0, 'гость: подсказок нет (ЛС и дружба — только вошедшим)');
+    // тексты — те же, что у сервера (отказ старых вкладок тоже понятный)
+    const CS = read('community.sql');
+    for (const k of ['u9', 'age', 'agefriend']) ok(CS.includes(A.KID_MSG[k]), `текст «${k}» — тот же, что в community.sql`);
+    ok(CS.includes(A.KID_MSG.u9chat.split(' — ')[0]), 'текст «u9chat» — как в chat_guard');
+    // подключено
+    has('js/features/chat.js', /D37Age\?\.chatRO\?\.\(\) && !isChatStaff\(\)\) return \{ mode: 'readonly', react: true/, 'чат: до 9 — только читать и реакции');
+    has('js/features/chat.js', /!\(window\.D37Age\?\.kid\?\.\(\) && window\.D37Age\?\.kidsafe\?\.\(\)\)/, 'кто онлайн: ребёнок не рассылает всем код комнаты');
+    has('js/features/community.js', /D37Age\?\.chatRO\?\.\(\) && !C\.staff\) return \{ mode: 'readonly', react: true/, 'сообщества: до 9 — только читать и реакции');
+    has('js/features/msgview.js', /V\.canReact = V\.canWrite \|\| !!st\.react/, 'лента: реакции при «только читать»');
+    has('js/features/calls.js', /P\.rpc\('call_pass'/, 'звонки: пропуск с сервера (call_pass / call_check)');
+    has('js/features/phone-apps.js', /block \? \{ mode: 'readonly', note: kidMsg\(block\) \}/, 'ЛС в телефоне: ребёнку со взрослым — только читать');
+    has('js/features/friends.js', /D37Age\?\.friendBlock\?\.\(targetId\)/, 'заявка в друзья: подсказка ребёнку');
+    has('js/games/mir.js', /S\.chatRO = true/, 'мир 3D: чат до 9 — только читать');
+    has('js/games/mir.js', /kidOk\(p\.v\?\.uid \|\| null\)/, 'мир 3D: приглашение ребёнку — только от тех, кого пускает сервер');
+    has('js/games/world.js', /S\.chatRO = true/, 'мир 2D: чат до 9 — только читать');
+    // ники детей на публичных страницах (api/_lib/age.js): только «прятать или нет», без возраста
+    const AJ = await import(pathToFileURL(path.join(SITE, 'api/_lib/age.js')).href);
+    const conf = () => true;
+    let k = await AJ.publicKids([ids[0], ids[1], 'x'], async (fn, a) => (fn === 'age_public_kids' && a.p_ids.length === 2 ? [ids[1]] : []), conf);
+    ok(!k.has(ids[0]) && k.has(ids[1]) && AJ.publicNick(k, ids[1], 'Петя', 'user') === 'Игрок' && AJ.publicNick(k, ids[0], 'Вася', 'user') === 'Вася', 'публичные страницы: ник ребёнка — «Игрок»');
+    ok(AJ.publicNick(k, ids[1], 'Денчик', 'admin') === 'Денчик', 'публичные страницы: у команды сайта — свой ник');
+    k = await AJ.publicKids(ids, async () => { throw new Error('rpc age_public_kids: HTTP 404 {"code":"PGRST202"}'); }, conf);
+    ok(!k.has(ids[1]), 'нет age.sql — ники как раньше');
+    k = await AJ.publicKids(ids, async () => { throw new Error('rpc age_public_kids: HTTP 503'); }, conf);
+    ok(k.has(ids[0]) && k.failed, 'база не ответила — «Игрок» у всех (кроме команды)');
+    k = await AJ.publicKids(ids, async () => [ids[0]], () => false);
+    ok(!k.has(ids[0]), 'без ключей сервера (локально) — без запроса');
+    for (const [f, re] of [['api/_lib/routes/forum.js', /publicNick\(kids, p\.id, p\.nick, p\.role\)/], ['api/_lib/routes/forum.js', /publicNick\(kids, r\.author_id, r\.author_nick, r\.author_role\)/], ['api/_lib/routes/ugc.js', /maskAuthors\(\[\.\.\.top, \.\.\.fresh\]\)/]])
+      has(f, re, f + ': ники детей прячутся');
+  }
 
   console.log(`\nage-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
