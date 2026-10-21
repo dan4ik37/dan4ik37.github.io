@@ -7,8 +7,8 @@
 // Адреса: #/chat[/<канал сайта>] (general, games, lfg, memes, voice, twitch, reports), #/chat/c/<id>[/<канал>|members|settings|reports],
 // #/chat/find, #/chat/new, #/chat/join/<код>, приглашение #/c/<код> → join. В телефоне: comm, comm/<сервер>[/<канал>…] (сервер d37 или id).
 // Сообщества без community.sql: «появятся, когда сайт обновится», общий чат работает как раньше.
-// community2.js (community2.sql) дописывает экраны через DS.x: special — свои адреса #/chat/<k>/… (события, обзор),
-// sub — экраны сервера #/chat[/c/<id>]/<k> (события, роли, буст), chanTop — строки над каналами («📅 События»).
+// community2.js (community.sql) дописывает экраны через DS.x: special — свои адреса #/chat/<k>/… (события, обзор),
+// sub — экраны сервера #/chat[/c/<id>]/<k> (события, роли, буст, 📁 каналы, 🛡 модерация), chanTop — строки над каналами («📅 События»).
 (() => {
   const P = window.D37Phone, MV = window.MsgView;
   const DS = window.D37DS = window.D37DS || {};
@@ -22,7 +22,7 @@
     full: 'в сообществе уже 500 человек', owner: 'владелец не может выйти — передай сообщество или удали его', rights: 'нет прав', member: 'сначала вступи',
     muted: 'тебя заглушили', mods_only: 'здесь пишут только модераторы', len: 'слишком длинно (до 1000 символов)', rate: 'слишком часто — подожди', slow: 'медленный режим',
     repeat: 'не повторяй одно и то же', flood: 'флуд запрещён', old: 'изменять можно 48 часов', emoji: 'такой реакции нет', many: 'слишком много разных реакций',
-    self: 'с собой так нельзя', last: 'последний текстовый канал не удалить', age: 'не подходит по возрасту', category: 'выбери категорию', kind: 'неверный тип', role: 'неверная роль', minutes: 'неверный срок', private: 'сообщество закрытое — вступить можно только по приглашению',
+    self: 'с собой так нельзя', last: 'последний текстовый канал не удалить', age: 'не подходит по возрасту', category: 'выбери категорию', kind: 'неверный тип', role: 'неверная роль', minutes: 'неверный срок', archived: 'канал в архиве — писать нельзя', automod: '🤖 автомодерация', private: 'сообщество закрытое — вступить можно только по приглашению',
   };
   const why = (r, def = 'не получилось') => r?.error ? (r.missing ? 'появится, когда сайт обновится' : P.err(r.error)) : REASON[r?.data?.reason] || r?.data?.reason || def;
 
@@ -58,7 +58,7 @@
   // Точка «есть новое» у сообщества: последнее сообщение новее, чем когда открывал его в последний раз
   const commUnread = c => c.last_id && c.last_id > MV.lastRead('cc:' + c.id);
   function commBadge(){
-    const n = S.my.filter(commUnread).length + Object.values(window.D37Chat?.mentions || {}).reduce((a, b) => a + b, 0);
+    const n = S.my.filter(c => commUnread(c) && !DS.muteOf?.(c.id)).length + Object.values(window.D37Chat?.mentions || {}).reduce((a, b) => a + b, 0);
     P.badge('comm', n);
   }
   DS.refreshBadge = () => loadMy(true).then(commBadge);
@@ -74,7 +74,7 @@
     const cid = C.c.id, chId = ch.id, me = P.me();
     const isMod = C.role === 'owner' || C.role === 'mod' || !!C.staff;
     const roles = new Map();
-    // свои роли (community3.sql): у кого какие (номера, выше — первой), мои права и место — DS.x.roleSync
+    // свои роли (community.sql): у кого какие (номера, выше — первой), мои права и место — DS.x.roleSync
     const cr = new Map();
     membersOf(cid).then(list => list.forEach(m => { roles.set(m.id, m.role); if (Array.isArray(m.roles)) cr.set(m.id, m.roles); }));
     const rd = () => DS.x?.roleSync?.(cid) || null, bits = () => rd()?.my || 0;
@@ -126,6 +126,7 @@
         const r = await P.rpc('cm_send', { p_channel: chId, p_text: text, p_reply: typeof reply === 'number' ? reply : null });
         if (r.data?.ok) return { ok: true, m: Object.assign(cmMsg(r.data.msg), { myReacts: new Set() }) };
         if (r.data?.reason === 'slow') return { ok: false, err: `🐢 медленный режим — ещё ${r.data.wait} с` };
+        if (r.data?.reason === 'automod') return { ok: false, err: r.data.why || '🤖 автомодерация' };   // объяснение сервера (ч. 4)
         if (r.data?.reason === 'muted') return { ok: false, err: `🔇 тебя заглушили до ${P.hm(r.data.until)}` };
         return { ok: false, err: why(r) };
       },
@@ -181,14 +182,14 @@
       const info = C?.info?.(), staff = info?.staff || (typeof currentRole !== 'undefined' && ['admin', 'moderator', 'helper'].includes(currentRole) ? currentRole : null);
       let chans = (C?.channels?.() || []).map(c => ({ ...c }));
       if (!C?.hasNew?.()) chans = [chans[0], ...PLANNED.map(([id, name, kind]) => ({ id, name, kind: kind || 'text', soon: true })), chans.find(c => c.kind === 'twitch')].filter(Boolean);
-      return { ok: true, id: OFF_ID, official: true, name: 'Денчик37', icon: '<img src="/icon-192.png" alt="">', about: 'Официальный сервер сайта: общий чат, игры, мемы и голосовой', channels: chans, staff, role: null };
+      return { ok: true, id: OFF_ID, official: true, name: 'Денчик37', icon: '<img src="/icon-192.png" alt="">', about: 'Официальный сервер сайта: общий чат, игры, мемы и голосовой', channels: chans, cats: C?.info?.()?.cats || [], staff, role: null };
     }
     const d = await openC(id, fresh);
     if (d?.ok) DS.x?.roleData?.(id);   // свои роли — фоном (цвета ников, группы участников)
     if (!d || !d.ok) return { ok: false, id, reason: d?.reason, err: d?.err, name: d?.name, until: d?.until };
     const my = S.my.find(x => x.id === id);
-    return { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0,
-      boost: !!my?.boost, banner: my?.boost ? my.banner || '' : '', anim: !!my?.anim };   // буст (community3.sql → cm_my)
+    return { ok: true, id, official: false, name: d.c.name, icon: e(d.c.icon), about: d.c.about, channels: d.channels || [], cats: d.cats || [], manage: !!d.manage, role: d.role, staff: d.staff, muted_until: d.muted_until, rt: d.rt, c: d.c, raw: d, lastMax: my?.last_id || 0,
+      boost: !!my?.boost, banner: my?.boost ? my.banner || '' : '', anim: !!my?.anim };   // буст (community.sql → cm_my)
   }
 
   // ═══ Куски интерфейса (одни и те же для страницы и телефона) ═══
@@ -196,37 +197,41 @@
   const link = (mode, srv, rest = '') => mode === 'phone' ? `#/phone/comm/${srv}${rest ? '/' + rest : ''}` : srv === OFF_ID ? `#/chat${rest ? '/' + rest : ''}` : `#/chat/c/${srv}${rest ? '/' + rest : ''}`;
   const special = (mode, k) => mode === 'phone' ? `#/phone/comm/${k}` : `#/chat/${k}`;
   function railHtml(mode, sel){
-    const offUnread = (window.D37Chat?.channels?.() || []).some(c => c.kind === 'text' && (window.D37Chat.lastId(c.id) || 0) > MV.lastRead('o:' + c.id));
+    const offUnread = !DS.muteOf?.(OFF_ID) && (window.D37Chat?.channels?.() || []).some(c => c.kind === 'text' && !c.archived && !DS.muteOf?.(OFF_ID, c) && (window.D37Chat.lastId(c.id) || 0) > MV.lastRead('o:' + c.id));
     const offMent = Object.values(window.D37Chat?.mentions || {}).reduce((a, b) => a + b, 0);
     const item = (id, icon, name, unread, ment, href) => `<a class="ds-srv${String(sel) === String(id) ? ' on' : ''}${unread ? ' unread' : ''}" href="${href}" title="${e(name)}" aria-label="${e(name)}"><span class="ds-pill"></span><span class="ds-sic">${icon}</span>${ment ? `<em class="ds-ment">${ment > 9 ? '9+' : ment}</em>` : ''}</a>`;
     return item(OFF_ID, '<img src="/icon-192.png" alt="">', 'Денчик37 — сервер сайта', offUnread, offMent, link(mode, OFF_ID))
       + '<i class="ds-rsep"></i>'
-      + S.my.map(c => item(c.id, c.anim ? `<b class="ds-anim">${e(c.icon)}</b>` : e(c.icon), c.name, commUnread(c) && String(sel) !== String(c.id), 0, link(mode, c.id))).join('')
+      + S.my.map(c => item(c.id, c.anim ? `<b class="ds-anim">${e(c.icon)}</b>` : e(c.icon), c.name, commUnread(c) && !DS.muteOf?.(c.id) && String(sel) !== String(c.id), 0, link(mode, c.id))).join('')
       + `<a class="ds-srv ds-add" href="${special(mode, 'new')}" title="Создать сообщество" aria-label="Создать сообщество"><span class="ds-sic">＋</span></a>`
       + `<a class="ds-srv ds-find" href="${special(mode, 'find')}" title="Найти сообщество" aria-label="Найти сообщество"><span class="ds-sic">🧭</span></a>`;
   }
   function channelsHtml(mode, srv, selCh){
     const ch = srv.channels || [];
-    const unread = c => srv.official ? (window.D37Chat.lastId(c.id) || 0) > MV.lastRead('o:' + c.id) : (c.last_id || 0) > MV.lastRead('c:' + c.id);
+    // ч. 4: заглушённый (🔕) — без точки «новое»; ⚙ — настройки канала тому, кто управляет каналами
+    const mng = srv.official ? ['admin', 'moderator'].includes(srv.staff) : !!srv.manage, muted = c => !!DS.muteOf?.(srv, c);
+    const unread = c => !muted(c) && !c.archived && (srv.official ? (window.D37Chat.lastId(c.id) || 0) > MV.lastRead('o:' + c.id) : (c.last_id || 0) > MV.lastRead('c:' + c.id));
     const row = c => {
       const ic = c.kind === 'voice' ? '🔊' : c.kind === 'twitch' ? '📺' : '#';
       if (c.soon) return `<span class="ds-ch soon" title="Канал появится, когда сайт обновится"><i>${ic}</i><span>${e(c.name)}</span><small>скоро</small></span>`;
       const ment = srv.official ? window.D37Chat.mentions[c.id] || 0 : 0;
       const voiceIn = c.kind === 'voice' ? `<div class="ds-vppl" data-vch="${e(srv.official ? 'o' : c.id)}"></div>` : '';
-      return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
+      return `<a class="ds-ch${String(selCh) === String(c.id) ? ' on' : ''}${muted(c) ? ' muted' : ''}${c.kind !== 'voice' && c.kind !== 'twitch' && unread(c) ? ' unread' : ''}" href="${link(mode, srv.id, c.id)}"><i>${ic}</i><span>${e(c.name)}</span>${c.slow ? '<small title="Медленный режим">🐢</small>' : ''}${c.mods_only ? '<small title="Пишут только модераторы">📢</small>' : ''}${muted(c) ? '<small title="Заглушён">🔕</small>' : ''}${mng && c.kind !== 'twitch' ? `<b class="ds4-chg" data-ds4="chset" data-mode="${mode}" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(c.id)}" title="Настройки канала">⚙</b>` : ''}${ment ? `<em class="ds-ment">${ment}</em>` : ''}</a>${voiceIn}`;
     };
     const text = ch.filter(c => c.kind !== 'voice'), voice = ch.filter(c => c.kind === 'voice');
-    return `${DS.x?.chanTop?.(mode, srv, selCh) || ''}<div class="ds-cat">Текстовые каналы</div>${text.map(row).join('')}${voice.length ? `<div class="ds-cat">Голосовые каналы</div>${voice.map(row).join('')}` : ''}`;
+    const lay = DS.x?.chanLayout?.(mode, srv, selCh, row);   // ч. 4: папки и архив (null — их нет, как раньше)
+    return `${DS.x?.chanTop?.(mode, srv, selCh) || ''}${lay != null ? lay : `<div class="ds-cat">Текстовые каналы</div>${text.map(row).join('')}${voice.length ? `<div class="ds-cat">Голосовые каналы</div>${voice.map(row).join('')}` : ''}`}`;
   }
   function headHtml(mode, srv){
     const acts = [];
+    if (srv.official || srv.role) acts.push(`<button type="button" class="ds-hb" data-ds4="notif" data-srv="${srv.official ? 'o' : e(srv.id)}" title="Уведомления и «прочитано»" aria-label="Уведомления">${DS.muteOf?.(srv) ? '🔕' : '🔔'}</button>`);
     if (srv.official) {
-      if (srv.staff === 'admin' || srv.staff === 'moderator') acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Жалобы">🚩</a>`, `<a class="ds-hb" href="${link(mode, OFF_ID, 'settings')}" title="Настройки каналов">⚙️</a>`);
+      if (srv.staff === 'admin' || srv.staff === 'moderator') acts.push(`<a class="ds-hb" href="${link(mode, OFF_ID, 'reports')}" title="Модерация: жалобы, журнал, автомодерация">🛡</a>`, `<a class="ds-hb" href="${link(mode, OFF_ID, 'settings')}" title="Настройки каналов">⚙️</a>`);
     } else {
       if (srv.role) acts.push(`<button type="button" class="ds-hb" data-ds="invite" title="Пригласить">🔗</button>`);
       if ((srv.role || srv.staff) && DS.x?.sub?.boost) acts.push(`<a class="ds-hb${srv.boost ? ' ds-boosted' : ''}" href="${link(mode, srv.id, 'boost')}" title="${srv.boost ? 'Буст включён' : 'Буст сообщества'}">🚀</a>`);
       if (srv.role === 'owner' || srv.role === 'mod' || srv.staff || (DS.x?.roleSync?.(srv.id)?.my & 3)) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'settings')}" title="Настройки">⚙️</a>`);
-      if (srv.role === 'owner' || srv.role === 'mod' || srv.staff) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'reports')}" title="Жалобы">🚩</a>`);
+      if (srv.role === 'owner' || srv.role === 'mod' || srv.staff || (DS.x?.roleSync?.(srv.id)?.my & 2)) acts.push(`<a class="ds-hb" href="${link(mode, srv.id, 'reports')}" title="Модерация: жалобы, журнал, автомодерация">🛡</a>`);
     }
     const bg = srv.boost && DS.x?.BANNERS?.[srv.banner];   // баннер буста — над каналами
     return `<div class="ds-sh${bg ? ' ds-shb' : ''}"${bg ? ` style="background-image:linear-gradient(rgba(0,0,0,.35),rgba(0,0,0,.55)),${bg}"` : ''}><span class="ds-shi${srv.anim ? ' ds-anim' : ''}">${srv.icon}</span><b title="${e(srv.about || '')}">${e(srv.name)}</b><span class="ds-shacts">${acts.join('')}</span></div>`;
@@ -330,7 +335,7 @@
     if (!c) { el.innerHTML = '<div class="ds-pane"><h3>Приглашение не работает</h3><p class="ds-dim">Ссылка устарела или сообщество закрыто. Попроси новую.</p></div>'; return; }
     await loadMy();
     const already = S.my.some(x => x.id === c.id);
-    const ageNo = c.age && window.D37Age && !window.D37Age.canOpen(c.age);   // метка сообщества (community2.sql)
+    const ageNo = c.age && window.D37Age && !window.D37Age.canOpen(c.age);   // метка сообщества (community.sql)
     el.innerHTML = `<div class="ds-pane ds-join"><span class="ds-big">${e(c.icon)}</span><h3>${e(c.name)}</h3><p class="ds-dim">${c.members} ${P.plural(c.members, 'участник', 'участника', 'участников')} · ${c.public ? 'открытое' : 'по приглашению'}${c.age ? ' · ' + (window.D37Age?.badge ? window.D37Age.badge(c.age) : e(c.age) + '+') : ''}</p>${c.about ? `<p>${e(c.about)}</p>` : ''}
       ${already ? `<a class="ds-btn" href="${link(mode, c.id)}">Открыть</a>` : ageNo ? '<p class="ds-dim">🔞 Не подходит по возрасту</p>' : P.me() ? '<button type="button" class="ds-btn" data-ds="join">Вступить</button>' : '<button type="button" class="ds-btn" data-ds="login">Войти, чтобы вступить</button>'}<div class="ds-err" hidden></div></div>`;
     el.querySelector('[data-ds="join"]')?.addEventListener('click', async () => {
@@ -390,7 +395,7 @@
     if (!(srv.staff === 'admin' || srv.staff === 'moderator')) { el.innerHTML = '<div class="ds-pane"><div class="ds-dim">Настройки каналов — для админа и модераторов</div></div>'; return; }
     if (!window.D37Chat.hasNew()) { el.innerHTML = '<div class="ds-pane"><div class="ds-soon">🛠️ Медленный режим и каналы появятся, когда сайт обновится (community.sql).</div></div>'; return; }
     const chans = srv.channels.filter(c => c.kind === 'text');
-    el.innerHTML = `<div class="ds-pane"><h3>⚙️ Каналы сервера «Денчик37»</h3>${chans.map(c => `<div class="ds-chrow" data-ch="${e(c.id)}"><span># ${e(c.name)}</span>
+    el.innerHTML = `<div class="ds-pane"><h3>⚙️ Каналы сервера «Денчик37»</h3>${DS.x?.officialMore?.(srv, mode) || ''}${chans.map(c => `<div class="ds-chrow" data-ch="${e(c.id)}"><span># ${e(c.name)}</span>
       <select class="ds-in ds-sm" data-chf="slow" aria-label="Медленный режим">${[0, 5, 10, 30, 60, 300].map(s => `<option value="${s}"${c.slow === s ? ' selected' : ''}>${s ? '🐢 ' + (s >= 60 ? s / 60 + ' мин' : s + ' с') : 'без задержки'}</option>`).join('')}</select>
       <label class="ds-chk ds-sm"><input type="checkbox" data-chf="mods"${c.mods_only ? ' checked' : ''}> 📢 только команда</label></div>`).join('')}<div class="ds-err" hidden></div></div>`;
     el.addEventListener('change', async ev => {
@@ -445,7 +450,7 @@
         .catch(() => { host.firstChild.innerHTML = '<div class="ds-dim">Не загрузилось — проверь интернет</div>'; });
       return;
     }
-    const A = srv.official ? window.D37Chat.adapter(ch.id) : commAdapter(srv.raw, ch);
+    const A0 = srv.official ? window.D37Chat.adapter(ch.id) : commAdapter(srv.raw, ch), A = DS.x?.wrapAdapter ? DS.x.wrapAdapter(A0, srv, ch) : A0;   // ч. 4: модерация с причиной
     if (!srv.official) A.lastMax = srv.lastMax;
     if (!mv || mvHost !== host || !host.contains(mvHost?.firstChild)) {
       dropView();
@@ -478,7 +483,7 @@
           <aside class="ds-side" aria-label="Каналы"><div class="ds-shost"></div><div class="ds-chans"></div><div class="ds-mehost"></div></aside>
           <main class="ds-main">
             <header class="ds-top"><button type="button" class="ds-hb ds-burger" data-ds="left" aria-label="Каналы">☰</button><b class="ds-ttl"></b><span class="ds-topic"></span>
-              <span class="ds-tools"><button type="button" class="ds-hb" data-ds="search" title="Поиск по каналу" aria-label="Поиск">🔍</button><button type="button" class="ds-hb" data-ds="pins" title="Закреплённые" aria-label="Закреплённые">📌</button><button type="button" class="ds-hb" data-ds="right" title="Участники" aria-label="Участники">👥</button><button type="button" class="ds-hb ds-full" id="chatFullBtn" onclick="toggleChatFull()" title="Чат на весь экран (экран не будет гаснуть)" aria-label="Чат на весь экран">⛶</button></span></header>
+              <span class="ds-tools"><button type="button" class="ds-hb" data-ds="search" title="Поиск по каналу" aria-label="Поиск">🔍</button><button type="button" class="ds-hb" data-ds="pins" title="Закреплённые" aria-label="Закреплённые">📌</button><button type="button" class="ds-hb" data-ds4="notif" title="Уведомления сервера и канала" aria-label="Уведомления">🔔</button><button type="button" class="ds-hb" data-ds="right" title="Участники" aria-label="Участники">👥</button><button type="button" class="ds-hb ds-full" id="chatFullBtn" onclick="toggleChatFull()" title="Чат на весь экран (экран не будет гаснуть)" aria-label="Чат на весь экран">⛶</button></span></header>
             <div class="ds-pin" hidden></div>
             <div class="ds-tip" hidden></div>
             <div class="ds-body"></div>
@@ -589,6 +594,7 @@
     voicePeople(page.root);
   }
   DS.refreshSide = refreshSide;
+  DS.cur = () => (page?.root?.isConnected ? { srv: page.srv, ch: page.ch } : null);   // открытые сервер и канал страницы #/chat
   // новое сообщение / прочитано / закреп / онлайн / голосовой — перерисовать боковые панели (не чаще раза в 400 мс)
   let sideT = 0;
   const sideSoon = () => { clearTimeout(sideT); sideT = setTimeout(() => { refreshSide(); commBadge(); }, 400); };
@@ -681,7 +687,7 @@
         }
         const ch = srv.channels.find(c => String(c.id) === sub && !c.soon);
         if (!ch) { P.back(); return; }
-        el.innerHTML = P.head(`${ch.kind === 'voice' ? '🔊' : ch.kind === 'twitch' ? '📺' : '#'} ${e(ch.name)}`, ch.kind === 'text' ? '<button type="button" class="ph-hbtn" data-ds="search" title="Поиск">🔍</button><button type="button" class="ph-hbtn" data-ds="pins" title="Закреплённые">📌</button>' : '') + '<div class="ph-body ph-mvhost"></div>';
+        el.innerHTML = P.head(`${ch.kind === 'voice' ? '🔊' : ch.kind === 'twitch' ? '📺' : '#'} ${e(ch.name)}`, ch.kind === 'text' ? '<button type="button" class="ph-hbtn" data-ds="search" title="Поиск">🔍</button><button type="button" class="ph-hbtn" data-ds="pins" title="Закреплённые">📌</button>' + `<button type="button" class="ph-hbtn" data-ds4="notif" data-srv="${srv.official ? 'o' : e(srv.id)}" data-ch="${e(ch.id)}" title="Уведомления">🔔</button>` : '') + '<div class="ph-body ph-mvhost"></div>';
         const view = showChannel(el.querySelector('.ph-body'), 'phone', srv, ch);
         el.querySelector('[data-ds="search"]')?.addEventListener('click', () => view?.search());
         el.querySelector('[data-ds="pins"]')?.addEventListener('click', () => view?.pins());

@@ -23,7 +23,7 @@
 //   состояние) — всем (плоский мир рисует 📱 над игроком). Чистая функция: D37Phone.handFor(открыт, путь, звонок).
 // Приложение: D37Phone.define(id, { render(el, arg, ctx) → функция уборки (необязательно), title }).
 (() => {
-  const VER = '8';
+  const VER = '9';
   // файлы приложений (грузятся при первом открытии); лента сообщений msgview.js — общая для чата, сообществ и ЛС
   const MODS = { mv: ['js/features/msgview.js'], apps: ['js/features/msgview.js', 'js/features/phone-apps.js'], calls: ['js/features/calls.js'], ds: ['js/features/msgview.js', 'js/features/community.js', 'js/features/community2.js', 'js/features/chatplayer.js'], wchat: ['js/features/worldchat.js'] };
   const APPS = [
@@ -298,7 +298,7 @@
         if (h.startsWith('#/phone/')) { e.preventDefault(); P.go(h.slice(8)); return; }
         const inv = /^#\/c\/([a-z0-9]{6,12})$/.exec(h);   // приглашение в сообщество — прямо в телефоне
         if (inv) { e.preventDefault(); P.go('comm/join/' + inv[1]); return; }
-        const evm = /^#\/chat\/ev\/(\d{1,12})$/.exec(h);   // событие (community2.sql) — тоже в телефоне
+        const evm = /^#\/chat\/ev\/(\d{1,12})$/.exec(h);   // событие (community.sql) — тоже в телефоне
         if (evm) { e.preventDefault(); P.go('comm/ev/' + evm[1]); return; }
         if (h.startsWith('#/') && !docked) setTimeout(() => P.close(), 0);   // переход по сайту — телефон убираем
       }

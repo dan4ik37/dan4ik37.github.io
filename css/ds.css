@@ -326,7 +326,7 @@ body.chat-full #chat .chat-wrap.ds-wrap{max-height:none}
 }
 @media (prefers-reduced-motion:reduce){.mv-m.mv-flash{animation:none}.mv-dots b{animation:none}}
 
-/* ═══ community2.sql: «Денчик-бот», карточки эфира и событий ═══ */
+/* ═══ community.sql: «Денчик-бот», карточки эфира и событий ═══ */
 .mv-botava{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:50%;background:linear-gradient(135deg,#5865f2,#7c3aed);font-size:19px;line-height:1}
 .mv-live{border-left-color:#9147ff}
 .mv-ev{border-left-color:#f59e0b}
@@ -494,3 +494,51 @@ body.high .ds-ccic.anim{animation:dsBoost 2.6s ease-in-out infinite}
   .ds-chips button{min-height:38px}
   .mv-older,.mv-retry{min-height:40px}
 }
+
+/* ═══ Сообщества 4 (community.sql, ч. 4; community2.js): папки каналов, листы, «📁 Каналы», «🛡 Модерация» ═══ */
+.ds4-cat{display:flex;align-items:center;gap:4px;width:100%;min-height:34px;background:none;border:0;cursor:pointer;text-align:left;font:inherit;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);padding:12px 8px 4px}
+.ds4-cat i{font-style:normal;display:inline-block;transition:transform .15s}
+.ds4-cat.fold i{transform:rotate(-90deg)}
+.ds4-cat span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds4-cat small{font-size:10px;opacity:.8}
+.ds4-cat:hover{color:#fff}
+.ds-ch.muted{opacity:.55}
+.ds-ch .ds4-chg{margin-left:auto;padding:2px 6px;border-radius:6px;font-weight:400;opacity:0;flex:none}
+.ds-ch:hover .ds4-chg,.ds-ch.on .ds4-chg{opacity:.75}
+.ds-ch .ds4-chg:hover{opacity:1;background:rgba(255,255,255,.1)}
+@media (hover:none){.ds-ch .ds4-chg{display:none}}
+@media (max-width:860px){.ds4-cat{min-height:40px}}
+.ds4-sh{position:fixed;inset:0;z-index:100500;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;padding:12px}
+@media (min-width:641px){.ds4-sh{align-items:center}}
+.ds4-box{background:#1e1f22;color:#f2f3f5;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:16px;width:min(440px,100%);max-height:86vh;overflow:auto;display:flex;flex-direction:column;gap:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.ds4-t{font-size:15px;line-height:1.35;margin-bottom:2px}
+.ds4-wide{min-height:44px;border-radius:10px;border:0;background:rgba(255,255,255,.08);color:#fff;font:700 14px 'Montserrat',sans-serif;cursor:pointer;padding:8px 12px;text-align:left}
+.ds4-wide:hover{background:rgba(255,255,255,.14)}
+.ds4-wide.bad{background:#b91c1c}
+.ds4-wide.bad:hover{background:#dc2626}
+.ds4-wide.ghost{background:none;text-align:center;color:var(--muted)}
+.ds4-opts,.ds4-chips{display:flex;flex-wrap:wrap;gap:6px}
+.ds4-opt,.ds4-chip{min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:none;color:#fff;font:600 13px 'Montserrat',sans-serif;cursor:pointer}
+.ds4-chip{opacity:.85}
+.ds4-opt.on{background:var(--accent);border-color:transparent}
+.ds4-box .ds-lbl,.ds4-set .ds-lbl{display:flex;flex-direction:column;gap:4px}
+.ds4-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.ds4-tabs a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:999px;background:rgba(255,255,255,.06);color:var(--muted);font-weight:700;text-decoration:none}
+.ds4-tabs a.on{background:var(--accent);color:#fff}
+.ds4-log{display:flex;flex-direction:column;gap:6px}
+.ds4-li{display:flex;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.04);font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
+.ds4-li small{flex:none;color:var(--muted);min-width:96px}
+@media (max-width:640px){.ds4-li{flex-direction:column;gap:2px}}
+.ds4-am{min-height:40px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ds4-tree{display:flex;flex-direction:column;gap:4px;margin:10px 0}
+.ds4-row{display:flex;align-items:center;gap:4px;padding:2px 4px 2px 8px;border-radius:10px;background:rgba(255,255,255,.04);min-height:44px}
+.ds4-row.cat{background:rgba(255,255,255,.09);font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:.4px;margin-top:6px}
+.ds4-row.arch{opacity:.65}
+.ds4-row>span:not(.ds4-h){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds4-row .ds-hb{min-width:40px;height:40px}
+.ds4-row.drag{opacity:.4}
+.ds4-row.over{outline:2px dashed var(--accent);outline-offset:-2px}
+.ds4-h{cursor:grab;color:var(--muted);padding:0 4px;user-select:none}
+.ds4-set{padding:12px;border-radius:10px;background:rgba(0,0,0,.22);display:flex;flex-direction:column;gap:8px;margin:0 0 6px}
+.ds4-links,.ds4-acts{flex-wrap:wrap}
+.ds4-acts .ds-btn,.ds4-links .ds-btn{min-height:40px}

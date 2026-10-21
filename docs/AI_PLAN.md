@@ -154,3 +154,15 @@ Haiku — примерно в 20 раз дешевле, Opus — примерн�
    - замок и обби по описанию;
    - скрипт двери на каждом языке;
    - ▶ Играть.
+
+## Tool pipeline for AI (owner 22.10: «чтобы система была рабочей для ИИ — делать работу между двумя функциями, например фотошоп сразу отправить в другое, чтобы было быстрее и удобнее»)
+Design rule for EVERY creative tool (photo T-017, video T-018, Studio 3D, character editor, chat/communities, autoclips later):
+- One shared asset store in the browser (IndexedDB, typed assets: image / video / audio / model / text / project; id, name, size,
+  source tool, license/owner) — tools never pass files through downloads; «📤 Отправить в…» puts an asset into another tool
+  (photo → video timeline / Studio 3D texture / avatar decal / chat post (with the chat's rules), video frame → photo, etc.).
+- One command format «d37 v1» for all tools (replaces separate d37img / d37cut / d37build drafts): each tool registers its commands
+  with a JSON schema in a registry (D37Tools.register(tool, { commands, describe() })); the AI bridge (js/core/ai-bridge.js; modes:
+  copy-task / local Ollama / WebLLM / cloud with owner keys) runs multi-step chains across tools, e.g. «remove background → place on a
+  1080×1920 template → add title → send to video at 0:05 → export short», showing each step with undo.
+- Every command is also a button (people and AI use the same path); long jobs run in Workers with progress and cancel; memory
+  budgets for phones; failures leave the source asset intact.
