@@ -182,7 +182,7 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(H(true, 'calls', live) === 'use', 'во время разговора смотрит другое приложение — в руке перед собой');
   ok(P._test.APPS.some(a => a.id === 'game' && a.mod === 'apps'), 'в телефоне есть мини-игра');
 
-  // ═══ 13. «Денчик-бот» и карточки эфира / событий (community2.sql) ═══
+  // ═══ 13. «Денчик-бот» и карточки эфира / событий (community.sql) ═══
   ok(card('#/chat/twitch')?.t === 'live' && card('#/chat/ev/12')?.t === 'event' && card('#/chat/ev/12').id === 12, 'эфир и событие — карточки');
   ok(card('#/chat/ev/abc') === null && card('#/chat/ev/1234567890123') === null, 'кривой номер события — без карточки');
   r = MV.rich('🔴 Денчик в эфире: Играем! → https://dan4ik37.vercel.app/#/chat/twitch', '');
@@ -217,7 +217,7 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   const off = { ok: true, official: true, id: 'd37', name: 'Денчик37', channels: [{ id: 'general', name: 'общий', kind: 'text' }, { id: 'voice', name: 'Голосовой', kind: 'voice' }] };
   let box2 = fakeEl();
   await X.sub.events.render(box2, 'page', off, []);
-  ok(/Появится, когда сайт обновится/.test(box2.innerHTML), 'без community2.sql: «Появится, когда сайт обновится»', box2.innerHTML);
+  ok(/Появится, когда сайт обновится/.test(box2.innerHTML), 'без community.sql: «Появится, когда сайт обновится»', box2.innerHTML);
   ok(/<span>События<\/span>/.test(X.chanTop('page', off, '')) && /скоро/.test(X.chanTop('page', off, '')), 'строка «📅 События» — «скоро»');
   const later = new Date(Date.now() + 86400e3).toISOString(), later2 = new Date(Date.now() + 90000e3).toISOString();
   P.rpc = async (name, args) => {
@@ -242,7 +242,7 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(/вошедшие/.test(logged), 'создать событие — сначала войти');
   P.login = login0; P.rpc = rpc0;
 
-  // ═══ 15. «🧭 Обзор сообществ» (community2.js): карточки, возраст, старый поиск без community2.sql ═══
+  // ═══ 15. «🧭 Обзор сообществ» (community2.js): карточки, возраст, старый поиск без community.sql ═══
   const cc = X.ccard({ id: 7, name: 'Клан хуйни', about: 'Играем', icon: '🎮', members: 12, category: 'games', age: 12, active_at: new Date().toISOString() }, 'page');
   ok(/data-join="7"/.test(cc) && /🎮 Игры/.test(cc) && /href="#\/chat\/c\/7"/.test(cc) && !/хуйни/.test(cc), 'карточка: «Вступить», категория, ссылка, мат закрыт', cc);
   window.D37Age = { listOk: n => n < 18, canOpen: n => n <= 6, kid: () => true, kidText: t => t, badge: n => `<i>${n}+</i>` };
@@ -255,10 +255,10 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   const fbox = { innerHTML: '', isConnected: true, addEventListener(){}, querySelector: s => (fbox._q[s] = fbox._q[s] || fq()), _q: {} };
   X.find(fbox, 'page');
   await new Promise(res => setTimeout(res, 20));
-  ok(catCalls.map(c => c[0]).join() === 'cm_catalog,cm_list_public' && /Старое/.test(fbox._q['[data-f="list"]'].innerHTML) && fbox._q['.ds-oldnote'].hidden === false, 'без community2.sql — старый поиск и подсказка «появятся, когда сайт обновится»');
+  ok(catCalls.map(c => c[0]).join() === 'cm_catalog,cm_list_public' && /Старое/.test(fbox._q['[data-f="list"]'].innerHTML) && fbox._q['.ds-oldnote'].hidden === false, 'без community.sql — старый поиск и подсказка «появятся, когда сайт обновится»');
   P.rpc = rpc0;
 
-  // ═══ 16. «🎭 Свои роли» (community3.sql): права кнопок, цвет ника, группы участников ═══
+  // ═══ 16. «🎭 Свои роли» (community.sql): права кнопок, цвет ника, группы участников ═══
   const MEMS = [{ id: 'o', nick: 'Владелец', role: 'owner', roles: [] }, { id: 'h', nick: 'Хелпер', role: 'member', roles: [21] }, { id: 'v', nick: 'Ветеран', role: 'member', roles: [22] },
     { id: 'n', nick: 'Новичок', role: 'member', roles: [] }, { id: 'h2', nick: 'Хелпер2', role: 'member', roles: [21, 22] }];
   P.rpc = async (name, args) => {
@@ -287,11 +287,11 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(/＋ Добавить роль/.test(rbox.innerHTML) && /data-pb="16"/.test(rbox.innerHTML) && /data-ra="take" data-rid="21"/.test(rbox.innerHTML) && /＋ роль…/.test(rbox.innerHTML), 'владельцу: роли с правами, новая роль, кому какая (снять / выдать)');
   P.rpc = async () => ({ error: { code: 'PGRST202' }, missing: true });
   await X.sub.roles.render(rbox, 'page', { ok: true, id: 78, name: 'Клан', role: 'owner' });
-  ok(/Появится, когда сайт обновится/.test(rbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
+  ok(/Появится, когда сайт обновится/.test(rbox.innerHTML), 'без community.sql — «Появится, когда сайт обновится»');
   P.rpc = rpc0; delete window.currentUser;
 
   globalThis.location = { origin: 'https://dan4ik37.vercel.app', host: 'dan4ik37.vercel.app', hash: '' };
-  // ═══ 17. «🚀 Буст» (community3.sql): экран, оформление, карточка в обзоре ═══
+  // ═══ 17. «🚀 Буст» (community.sql): экран, оформление, карточка в обзоре ═══
   const binfo = { ok: true, boost: true, until: new Date(Date.now() + 20 * 864e5).toISOString(), banner: 'neon', anim: true, vanity: 'denchik37', prices: { 1: 100, 3: 270 }, boosters: 3 };
   P.rpc = async name => name === 'cm_boost_info' ? { data: binfo } : { data: null };
   const bbox = fakeEl();
@@ -302,7 +302,7 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(/Бустить могут участники/.test(bbox.innerHTML) && !/data-bb=/.test(bbox.innerHTML) && !/data-bn=/.test(bbox.innerHTML), 'не участнику — без кнопок и оформления');
   P.rpc = async () => ({ error: { code: 'PGRST202' }, missing: true });
   await X.sub.boost.render(bbox, 'page', { ok: true, id: 77, name: 'Клан', role: 'owner' });
-  ok(/Появится, когда сайт обновится/.test(bbox.innerHTML), 'без community3.sql — «Появится, когда сайт обновится»');
+  ok(/Появится, когда сайт обновится/.test(bbox.innerHTML), 'без community.sql — «Появится, когда сайт обновится»');
   ok(Object.values(X.BANNERS).every(v => /^linear-gradient\(135deg,#[0-9a-f]{6},#[0-9a-f]{6}\)$/.test(v)), 'баннеры — только свои градиенты');
   const bc = X.ccard({ id: 9, name: 'Бустанутые', icon: '🚀', members: 5, category: 'chat', age: 0, boost: true, banner: 'lava', anim: true }, 'page');
   ok(/ds-cc boost/.test(bc) && /#ef4444/.test(bc) && /ds-ccic anim/.test(bc) && /title="Буст"/.test(bc), 'обзор: рамка буста, баннер, анимированный значок, 🚀');
@@ -339,6 +339,46 @@ const ok = (cond, name, extra) => { if (cond) pass++; else { fail++; console.log
   ok(PLR.adWhy() === '', 'через минуту, развёрнут, не кейсы — решает D37AdPlaces (VIP, возраст, лимиты)');
   PLR.close(); delete window.D37AdPlaces;
   ok(PLR.state() === null, 'закрыт — состояния нет');
+
+  // ═══ 18. Сообщества 4 (community.sql, ч. 4; community2.js): папки каналов, заглушка, модерация в меню, экраны, один SQL ═══
+  {
+    const X4 = window.D37DS.x, MD = window.D37DS.muteOf;
+    const row = c => `[${c.id}]`;
+    const srvA = { official: false, id: 77, channels: [{ id: 1, name: 'a', kind: 'text', cat: null }, { id: 2, name: 'b', kind: 'text', cat: 5 },
+      { id: 3, name: 'c', kind: 'voice', cat: 5 }, { id: 4, name: 'old', kind: 'text', archived: true }], cats: [{ id: 5, name: 'Игры', pos: 0 }] };
+    const h1 = X4.chanLayout('page', srvA, 2, row);
+    ok(/\[1\].*Игры.*\[2\]\[3\].*Архив/.test(h1) && !/\[4\]/.test(h1), 'папки: без папки — сверху, потом папка с каналами, архив свёрнут', h1);
+    X4.fold('77', '5');
+    const h2 = X4.chanLayout('page', srvA, 2, row);
+    ok(/Игры/.test(h2) && /\[2\]/.test(h2) && !/\[3\]/.test(h2) && /aria-expanded="false"/.test(h2), 'свёрнутая папка показывает только открытый канал', h2);
+    ok(JSON.parse(localStorage.getItem('d37_ds_fold'))['77:5'] === 1, 'свёрнутое запоминается (d37_ds_fold)');
+    ok(X4.chanLayout('page', { official: false, id: 78, channels: [{ id: 9, kind: 'text' }], cats: [] }, 9, row) === null, 'без папок и архива — список как раньше');
+    X4.prefSet('77', { level: 'mentions', muted: false, ch: ['2'] });
+    ok(MD({ id: 77 }, { id: 2 }) && !MD({ id: 77 }, { id: 1 }) && !MD(77) && JSON.parse(localStorage.getItem('d37_ds_notif'))['77'].level === 'mentions', 'заглушить канал — запоминается');
+    X4.prefSet('77', { level: 'all', muted: true, ch: [] });
+    ok(MD(77) && MD(77, 1) && MD({ id: 77 }, { id: 9 }), 'заглушить сервер — все каналы без точек «новое»');
+    X4.prefSet('77', { level: 'all', muted: false, ch: [] });
+    ok(!MD(77) && !JSON.parse(localStorage.getItem('d37_ds_notif'))['77'], '«все» без заглушки — запись убрана');
+    // модерация: кого можно трогать — решают старые права адаптера, кнопки — новые (с причиной)
+    const A0 = { modActions: m => (m.uid === 'u2' ? [['mute10', 'x']] : []), mod: async () => ({ ok: true }) };
+    const W = X4.wrapAdapter(A0, { official: false, id: 77 }, { id: 1, name: 'a', kind: 'text' });
+    const keys = W.modActions({ id: 5, uid: 'u2', nick: 'Тролль' }).map(x => x[0]).join();
+    ok(keys === 'warn,timeout,delr,purge,kick,ban' && W.modActions({ id: 6, uid: 'u3' }).length === 0, 'меню модератора: предупредить, тайм-аут, удалить с причиной, чистка, кик, бан', keys);
+    ok(W.userMod('u2', 'Тролль').map(x => x[0]).join() === 'warn,timeout,purge,kick,ban', 'карточка человека — без «удалить это сообщение»');
+    const Wo = X4.wrapAdapter({ modActions: () => [['mute10', 'x'], ['ban', 'y']] }, { official: true, id: 'd37' }, { id: 'general', name: 'общий', kind: 'text' });
+    ok(Wo.modActions({ id: 7, uid: 'u2' }).map(x => x[0]).join() === 'warn,timeout,delr,purge,ban', 'сервер сайта: бан по нику остаётся');
+    ok(typeof X4.sub.channels?.render === 'function' && X4.sub.reports?.title === '🛡 Модерация' && typeof X4.officialMore === 'function', 'экраны «📁 Каналы» и «🛡 Модерация»');
+    // SQL чата — один файл; каждая функция, которую зовёт сайт, в нём есть
+    const sql = fs.readFileSync(path.join(SITE, 'community.sql'), 'utf8');
+    ok(['community2.sql', 'community3.sql', 'community4.sql'].every(f => !fs.existsSync(path.join(SITE, f))), 'community2/3/4.sql слиты в community.sql');
+    const has = f => new RegExp('function public\\.' + f + '\\(').test(sql);
+    const srcs = ['js/features/community.js', 'js/features/community2.js', 'js/features/msgview.js', 'js/features/chat.js'].map(f => fs.readFileSync(path.join(SITE, f), 'utf8')).join('\n');
+    const calls = [...new Set([...srcs.matchAll(/(?:P\.rpc|sbClient\.rpc)\('((?:cm|chat|comm)_[a-z_]+)'/g)].map(m => m[1]))];
+    const miss = calls.filter(f => !has(f));
+    ok(calls.length > 30 && !miss.length, 'каждый вызов cm_* / chat_* сайта есть в community.sql', miss);
+    ok(['cm_mod', 'cm_mod_delete', 'cm_purge', 'chat_mod', 'chat_mod_delete', 'chat_purge', 'chat_chan_delete', 'cm_modlog', 'bot_post', 'cm_boost_buy'].every(has), 'модерация, журнал, бот и буст — в одном файле');
+    ok(/ЧАСТЬ 2/.test(sql) && /ЧАСТЬ 3/.test(sql) && /ЧАСТЬ 4/.test(sql) && !/drop table/i.test(sql) && !/truncate/i.test(sql), 'части 1–4 по порядку, без удаления таблиц');
+  }
 
   timers.forEach(t => clearInterval(t));
   console.log(`community-test: ${pass} ок, ${fail} ошибок`);
