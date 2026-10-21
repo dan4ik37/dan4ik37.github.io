@@ -90,6 +90,15 @@
    comm_has_link ловит и чужие .app; фильтр мата comm_bad не ловит «страхует», «застрахуй», «педикюр» («ху…» — только с начала
    слова или после приставки). PGlite: E:\claude-tmp\community2\test-community.mjs (собирает gen-test.mjs из test-community.tpl.mjs) — 1034.
    PGlite: E:\claude-tmp\community2\test-community.mjs (1024 — части 1–4 × 2 базы).
+10. `premium.sql` (ЕЩЁ РАЗ, 22.10.2026) — донаты → статус «💛 Донатер» (без VIP/💎/XP за донат; выключатель site_config
+   'donate_rewards'), привязка донатов без абуза, оплата только Kaspi + согласие на данные + возраст с 14, налог и «🧾 Доход».
+   Один файл, идемпотентно (PGlite: на чистой базе дважды и поверх старых premium.sql + age.sql — E:\claude-tmp\donate\test-donor.mjs,
+   96; test-referrals2.mjs — 169). При запуске сам переведёт остатки vip_pending_rub в дни VIP. progression.sql / referrals2.sql /
+   age.sql тоже менялись, но перезапускать их НЕ нужно (те же функции — в premium.sql). Проверка гостем (PGRST202 = не применён):
+   `/rpc/donor_levels` → [{"lv":1,"min":100,"perk":"bronze"},…]; `/rpc/donor_me` {} → {"ok":false,"reason":"auth","mode":"off",…};
+   `/rpc/donor_name_reserved` {"t":"Аноним"} → true; `/rest/v1/vip_donation_log?select=reward,excluded,hold,message&limit=0` → 200
+   (400 «does not exist» = не применён); `/rpc/premium_state` → в ответе "donate_rewards":"off". До запуска сайт показывает старые
+   тексты (VIP за донат) — так и работает сервер.
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -1001,10 +1010,12 @@ js/features/games.js и хвост css/premium.css.
   аватарке, easter-egg.js), footer, games (под рекордами), archive (последняя страница /videos), horror (/topic/horror),
   levels («Что даёт уровень»), words (итог слова дня). Находки — localStorage, при входе уходят в secret_found().
   Все 7 → радужный ник на 30 дней (`.nick-rainbow`, в чате `.cu-nick`, в профиле #profileNick) + 100 XP. Панель — #secretHunt в «Играх».
-- «Задонатил, а VIP не пришёл?»: `js/features/donation-claims.js` + `vip-claims.sql`. Форма — в блоке «Логин для доната» своего
-  профиля; авто-привязка несопоставленного доната, если имя в DonationAlerts ≤ 2 опечатки от логина/ника заявителя (`d37_lev`),
-  иначе — заявка админу (уведомление; список и кнопки — в «Панели администратора»). Похожих донатов несколько → «Выдал вручную».
-  Лимит 5 заявок/сутки, донат привязывается один раз. Тест — PGlite (все сценарии, включая одобрение админом).
+- «Задонатил — не засчиталось?»: `js/features/donation-claims.js` + claim_donation (с 22.10 — в premium.sql). Форма — в блоке
+  «Логин для доната» своего профиля. Само привязывается, только если: один такой донат, меньше donor_rule('auto_max') (300 ₽), имя
+  ≤ 2 опечатки от ЛОГИНА для доната (ник — только подсказка админу), донат после регистрации и после того, как логин стал твоим
+  (reserved_donate_logins.reserved_at); анонимные — никогда. Иначе — заявка админу с причинами (flags). Админ — «💸 Донаты: проверка»
+  (donor_admin_state: заявки с доказательствами и текстом доната, «ждут решения», подозрительные старые привязки — «в порядке» /
+  «не считать в статус», занятые системой ники), привязать по номеру доната — donor_admin_assign. Один донат — один аккаунт.
 - Профиль: настройки аккаунта — внизу; «О себе» на чужом профиле без текста скрыт; ачивки — полученные + 8 закрытых,
   остальные по кнопке; карточка «🎮 Игры на сайте» (`renderProfileGameStats` в games.js, по game_stats).
 - Пока открыта игра, горячие клавиши страниц (`hotkeys.js`) отключены — стрелки/цифры принадлежат игре.
@@ -1074,15 +1085,33 @@ js/features/games.js и хвост css/premium.css.
   10 000 ₽/30 дней, выключатель — меняет админ в магазине). Оплата → premium_credit (только service_role, после проверки подписи,
   сумма и валюта сверяются с заказом); возврат → premium_refund (потратил — долг). Покупки за деньги растят total_donated
   (уровень VIP) и XP, тестовые — нет. Заказ — только с галочкой «платит взрослый или разрешил» (дата первого согласия хранится).
-- Донат: premium_wallet.donate_mode 'vip' (по умолчанию, как раньше: 100 ₽ = месяц) или 'gems' (1 ₽ = 1 💎, от 500/1000/2000 ₽
-  +10/20/30 %); при переходе на 💎 остаток vip_pending_rub становится 💎.
+- Донат (22.10, владелец: «просто будет донатер»): выключатель site_config 'donate_rewards' — 'off' (по умолчанию, строки нет):
+  донат НЕ даёт VIP, 💎, XP (xp_on_donation) и 💎 пригласившему (ref_on_donation), а даёт статус «💛 Донатер» (ниже); 'vip' — как до
+  22.10 (premium_wallet.donate_mode 'vip': 100 ₽ = месяц, или 'gems': 1 ₽ = 1 💎 + бонус); 'gems' — все донаты в 💎. Переключает
+  админ: магазин → «🛠 Админ» → «💛 Что даёт донат» (donor_admin_set; на 'off' остатки vip_pending_rub → ⌈× 30 / 100⌉ дней VIP).
+  credit_donation (6 параметров, + p_message) привязывает сам, только если имя не «аноним» (donor_name_reserved: регистр, ё, латиница-
+  двойники), логин совпал, донат после регистрации и после reserved_donate_logins.reserved_at; иначе — hold (reserved / before_reg /
+  before_login / no_profile / currency) + hold_profile + текст доната — админу. Анонимные (пустое имя) тоже пишутся — для цели.
+- «💛 Донатер» (premium.sql раздел 6–8, js/core/premium.js D37Donor): уровень = сумма донатов reward 'status' за последние 30 дней
+  (скользящее окно, считается при чтении — без расписаний; индекс idx_vip_donation_log_status), уровни donor_levels() = D37Donor.LEVELS
+  = api/_lib/premium.js DONOR_LEVELS (I 100 / II 300 / III 700 / IV 1500 ₽ — ПРЕДЛОЖЕНИЕ, решает владелец; pay-test сверяет), до
+  какого числа — donor_status (until / until_any). Бонусы = VIP того же ранга (perk: bronze/silver/gold); лучшая ветка — perk_tier_of
+  (has_perks, pin_own_message, can_be_invisible, can_send_friend_requests, friend_limit переопределены в premium.sql; клиент —
+  getPerkTier / statusOf / hasPerks в profile.js, без рекламы — ad-places.js). Значки: чат (msgview .dn-badge → D37Donor.fill пачкой
+  donor_badges, VIP-значок прячется, если статус не ниже), профиль, мини-профиль, топ донатеров (api/donations.js → donor_names_levels).
+  Скрывшие донаты (privacy_hide_donations) — без значка для других. В играх бонус = без рекорда: подсказка «5 букв», 3-я+ отмена
+  «2048», 4-й вариант «Орды». PGlite: E:\claude-tmp\donate\test-donor.mjs (96, с замером на 100 000 донатов: has_perks ≈ 0,8 мс).
 - api/pay.js (одна функция; функций 10 из 12): ?a=config; ?a=order (Bearer-токен Supabase → /auth/v1/user, согласие взрослого);
   ?a=tiptop&n=check|pay|fail|refund — TipTop Pay (бывший CloudPayments Kazakhstan): HMAC-SHA256 base64 ключом API Secret, Vercel
   сам разбирает форму → проверка по X-Content-HMAC; формат уведомлений в кабинете — «TipTop Pay», не JSON; ?a=freedom — Freedom Pay:
   init_payment.php → переход, pg_sig = md5(«pay;значения по алфавиту;ключ»), ответ — подписанный XML. У Kaspi API для сайтов нет:
   KASPI_PAY_LINK + номер заказа D37-…, админ сверяет сумму/время и жмёт «✓ Оплачено». Адаптеры — api/_lib/pay.js.
 - Env в Vercel: TIPTOP_PUBLIC_ID, TIPTOP_API_SECRET, FREEDOM_MERCHANT_ID, FREEDOM_SECRET_KEY, FREEDOM_TEST=1, KASPI_PAY_LINK,
-  PAY_CURRENCY (KZT), PAY_DISABLED=1 (+ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Нет ключей — способа нет; нет premium.sql — «скоро».
+  PAY_CURRENCY (KZT), PAY_DISABLED=1, PAY_CARDS=1 (+ SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). Нет ключей — способа нет; нет premium.sql — «скоро».
+  22.10 («пока только Kaspi»): карты включаются только PAY_CARDS=1. Заказ — две галочки (взрослый разрешил + согласие на обработку
+  данных, p_pd; /privacy#pay — место для юриста) и возраст premium_pay_age: до 14 — нельзя, год не указан — сначала указать, 14–17 —
+  лимиты age_shop_caps. Функции магазина — только в premium.sql (копии из age.sql убраны). Цены окончательные («налоги включены»).
+  Налог: premium_settings.tax_pct / tax_period (пусто — «не указано»), отчёт premium_admin_income (магазин → «🧾 Доход и налог», CSV).
 - Магазин js/features/shop.js (#shop-page, PAGES.shop; shop.js грузится ДО router.js, иначе прямая ссылка /#/shop пустая): пакеты,
   «из России — донатом» (российские карты казахстанские эквайеры не принимают), что даёт донат, траты, история, блок для родителей,
   админ (найти, ±💎 с причиной, история, Kaspi «Оплачено», проблемные платежи, «Вернул деньги», настройки). #/shop/o/<заказ> —
