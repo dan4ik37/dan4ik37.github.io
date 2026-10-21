@@ -86,29 +86,90 @@ if ( d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
 #endif
 diffuseColor.rgb *= d37bc * d37bc;`);
       }, 'clim-leaf'));
+      // лёд на воде: виден ровно тогда, когда по нему можно ходить (uKbIce.x — X.iceK, плавно за X.iceOn); проруби (uKbHoles:
+      // клетка и сколько ещё открыта) — открытая вода, к концу срока затягиваются
       offShader.push(VR.onShader('water', sh => {
         if (!window.D37E?.climShaders) return;
-        sh.fragmentShader = sh.fragmentShader.replace('d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );', 'd37uv.xy += vec2( uTime * 0.03, uTime * 0.05 ) * ( 1.0 - step( 0.3, d37Cl.w ) );')
+        sh.uniforms.uKbIce = uIce; sh.uniforms.uKbHoles = uHoles;
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+uniform vec4 uKbIce;
+uniform vec4 uKbHoles[ ${HN} ];`)
+          .replace('d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );', 'd37uv.xy += vec2( uTime * 0.03, uTime * 0.05 ) * ( 1.0 - step( 0.3, uKbIce.x ) );')
           .replace('#include <emissivemap_fragment>', `#ifdef D37_CLIM
-if ( d37Cl.w > 0.0 ) {
+if ( uKbIce.x > 0.0 ) {
   vec3 d37Vi = - vViewPosition;
   vec2 d37Qi = d37ClO.xy + vec2( dot( viewMatrix[ 0 ].xyz, d37Vi ), dot( viewMatrix[ 2 ].xyz, d37Vi ) );
   float d37i1 = d37Cn( d37Qi * 0.5, 128.0 ), d37i2 = d37Cn( d37Qi * 2.0, 512.0 );
   vec3 d37ic = mix( vec3( 0.66, 0.8, 0.9 ), vec3( 0.88, 0.94, 0.99 ), d37i2 ) * ( 1.0 - 0.2 * ( 1.0 - smoothstep( 0.0, 0.05, abs( d37i1 - 0.5 ) ) ) );
   d37ic = mix( d37ic, vec3( 0.88, 0.91, 0.96 ), smoothstep( d37i2 - 0.1, d37i2 + 0.1, d37Cl.x ) * 0.85 );
-  float d37ik = smoothstep( 0.0, 0.35, d37Cl.w ) * smoothstep( 0.5, 0.9, vLt.x );
+  float d37h = 0.0;
+  for ( int i = 0; i < ${HN}; i ++ ) {
+    vec4 hq = uKbHoles[ i ];
+    vec3 dd = vWp - hq.xyz;
+    d37h = max( d37h, step( 0.0, dd.x ) * step( dd.x, 1.0 ) * step( 0.0, dd.z ) * step( dd.z, 1.0 ) * step( abs( dd.y - 0.5 ), 0.6 ) * hq.w );
+  }
+  float d37ik = uKbIce.x * smoothstep( 0.5, 0.9, vLt.x ) * ( 1.0 - d37h );
   diffuseColor = vec4( mix( diffuseColor.rgb, d37ic, d37ik ), mix( diffuseColor.a, 0.97, d37ik ) );
 }
 #endif
 #include <emissivemap_fragment>`);
-      }, 'clim-ice'));
+      }, 'clim-ice2'));
     }
-    // по льду можно ходить: верхний блок воды под открытым небом — твёрдый до глади (блоки мира не меняются)
+    // ── лёд (21.10.2026: владелец застрял подо льдом и не мог его сломать). Верхний блок воды под открытым небом — лёд (блоки
+    // мира не меняются): держит сверху и сбоку, снизу — нет (voxel.js). X.iceOn — мороз: включается, когда лёд по погоде ≥ 0,8,
+    // гаснет ниже 0,72 (без мигания на границе); вид льда в шейдере идёт за ним же (X.iceK — плавно за 2 с): что видно, по тому
+    // и можно ходить. Проруби (разбил, проломил снизу) — X.holes, в мире (meta.ice, переживают перезагрузку): открыта ICE_REFREEZE
+    // реального времени и замерзает снова, если ещё мороз; кончился мороз — все проруби забыты ──
+    const ICE_REFREEZE = 5 * 60000, ICE_FADE = 20000, HOLES_MAX = 256;
+    X.iceOn = false; X.iceK = 0; X.iceForce = null;   // iceForce — проверки (node): true / false — мороз «вручную»
+    X.ICE_REFREEZE = ICE_REFREEZE;
+    const holes = X.holes = new Map();   // клетка → время, когда разбили (Date.now())
+    let holesDirty = true, holesT = 0;
+    const hkey = (x, y, z) => (x + 5e5) * 1e6 * 128 + (z + 5e5) * 128 + y;
+    {   // проруби из мира
+      const h = st.meta?.ice?.h;
+      if (Array.isArray(h)) for (const r of h) if (Array.isArray(r) && r.length >= 4 && r.slice(0, 4).every(Number.isFinite)) holes.set(hkey(r[0] | 0, r[1] | 0, r[2] | 0), [r[0] | 0, r[1] | 0, r[2] | 0, +r[3]]);
+    }
+    const holesSave = () => { if (st.meta) st.meta.ice = holes.size ? { h: [...holes.values()] } : undefined; };
+    X.hole = (x, y, z, t = Date.now()) => {
+      x = Math.floor(x); y = Math.floor(y); z = Math.floor(z);
+      const k = hkey(x, y, z), had = holes.has(k);
+      holes.set(k, [x, y, z, t]);
+      if (holes.size > HOLES_MAX) holes.delete(holes.keys().next().value);   // самая старая — замёрзла
+      holesSave(); holesDirty = true;
+      return !had;
+    };
+    X.isHole = (x, y, z) => holes.has(hkey(Math.floor(x), Math.floor(y), Math.floor(z)));
+    // мороз по погоде: с запасом (вкл ≥ 0,8, выкл < 0,72); выключили погоду или страж графики снял кусок погоды в шейдерах
+    // (льда не видно) — льда нет: что видно, по тому и ходишь
+    X.iceTick = () => {
+      const v = st.weatherOff || !X.clim || !window.D37E?.climShaders ? 0 : X.clim.vis.ice || 0;
+      if (X.iceForce != null) X.iceOn = !!X.iceForce;
+      else if (!X.iceOn && v >= .8) X.iceOn = true;
+      else if (X.iceOn && v < .72) X.iceOn = false;
+      if (!X.iceOn && holes.size) { holes.clear(); holesSave(); holesDirty = true; }   // оттаяло — проруби не нужны
+      else if (holes.size) { const now = Date.now(); let ch = false; for (const [k, r] of holes) if (now - r[3] > ICE_REFREEZE) { holes.delete(k); ch = true; } if (ch) { holesSave(); holesDirty = true; } }
+    };
     Vx.iceTest = (Wd, x, y, z) => {
-      if (!X.clim || X.clim.vis.ice < .8 || st.weatherOff) return false;
+      if (!X.iceOn) return false;
       const up = Wd.raw(x, y + 1, z); if (up < 0 || TT.liquid[up & 0xfff]) return false;
+      if (holes.size && holes.has(hkey(x, y, z))) return false;
       return !Wd.lightAt || Vx.lSky(Wd.lightAt(x, y + 1, z)) >= 13;
     };
+    // проруби — в шейдер воды (до 16 ближних к игроку): клетка (x − ox, y, z − oz) и сколько открыта (1 — вода, к концу — тонкий лёд)
+    const HN = 16, uHoles = { value: Array.from({ length: HN }, () => new T.Vector4(0, -999, 0, 0)) }, uIce = { value: new T.Vector4(0, 0, 0, 0) };
+    function holesUniform(){
+      const P = st.P, now = Date.now(), list = [];
+      for (const r of holes.values()) { const d = Math.abs(r[0] + .5 - P.x) + Math.abs(r[2] + .5 - P.z); if (d < 96) list.push([d, r]); }
+      list.sort((a, b) => a[0] - b[0]);
+      for (let i = 0; i < HN; i++) {
+        const r = list[i]?.[1], v = uHoles.value[i];
+        if (!r) { v.set(0, -999, 0, 0); continue; }
+        const left = ICE_REFREEZE - (now - r[3]);
+        v.set(r[0] - st.ox, r[1], r[2] - st.oz, Math.max(0, Math.min(1, left / ICE_FADE)));
+      }
+      holesDirty = false;
+    }
 
     // ── столбы: где кончается небо (код: верх × 8 · 2 + вода) ──
     const cols = new Map();
@@ -225,6 +286,11 @@ if ( d37Cl.w > 0.0 ) {
     X.frame = (dt, t) => {
       try { X.clim?.frame(dt); } catch (e) {}   // состояние погоды, сезон, снег/лёд/листва для шейдеров (данные — на время кадра)
       const d = Math.min(.05, Math.max(0, dt)), P = st.P;
+      // лёд: мороз (с запасом), вид — плавно за ним, проруби — в шейдер (раз в 0,5 с или сразу, если новая)
+      X.iceTick();
+      X.iceK += ((X.iceOn ? 1 : 0) - X.iceK) * Math.min(1, d * 1.5); if (Math.abs(X.iceK - (X.iceOn ? 1 : 0)) < .002) X.iceK = X.iceOn ? 1 : 0;
+      uIce.value.x = X.iceK;
+      if (holesDirty || (holesT -= d) <= 0) { holesT = .5; holesUniform(); }
       X.rain += (X.wantR - X.rain) * Math.min(1, d * .7); if (X.rain < .003 && !X.wantR) X.rain = 0;
       X.snow += (X.wantS - X.snow) * Math.min(1, d * .7); if (X.snow < .003 && !X.wantS) X.snow = 0;
       X.k = Math.max(X.rain, X.snow * .5);
@@ -319,7 +385,7 @@ if ( d37Cl.w > 0.0 ) {
         if (thS > 0 && (thS -= d) <= 0) { thS = -1; A.play('kb_thunder', { vol: .38 + .2 * FR(), rate: .85 + FR() * .3 }); }
       }
     };
-    X.stats = () => ({ biome: X.biome, season: X.clim?.state.season || '', temp: X.clim ? Math.round(X.clim.state.temp) : null, cover: X.clim ? +X.clim.vis.snowCover.toFixed(2) : 0, ice: X.clim ? +X.clim.vis.ice.toFixed(2) : 0, rain: +X.rain.toFixed(2), snow: +X.snow.toFixed(2), drops: rainO?.visible ? rainO.geometry.drawRange.count / 2 : 0, flakes: snowO?.visible ? snowO.geometry.drawRange.count : 0, ripples: ripO?.visible ? ripO.count : 0, cols: cols.size });
+    X.stats = () => ({ biome: X.biome, season: X.clim?.state.season || '', temp: X.clim ? Math.round(X.clim.state.temp) : null, cover: X.clim ? +X.clim.vis.snowCover.toFixed(2) : 0, ice: X.clim ? +X.clim.vis.ice.toFixed(2) : 0, iceOn: X.iceOn, holes: holes.size, rain: +X.rain.toFixed(2), snow: +X.snow.toFixed(2), drops: rainO?.visible ? rainO.geometry.drawRange.count / 2 : 0, flakes: snowO?.visible ? snowO.geometry.drawRange.count : 0, ripples: ripO?.visible ? ripO.count : 0, cols: cols.size });
     X.objects = () => ({ rain: rainO, snow: snowO, ripples: ripO, rainPos: rPos, snowPos: sPos, drops: { rx, ry, rz, rt, live: rlive, n: RN }, flakes: { sx, sy, sz, stp, live: slive, n: SN } });
     X.dispose = () => {
       hR?.stop(); hS?.stop(); hR = hS = null;

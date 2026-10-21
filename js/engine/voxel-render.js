@@ -542,7 +542,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     sel.visible = false; sel.renderOrder = 6; R.scene.add(sel);
     VR.select = hit => {
       if (!hit) { sel.visible = false; return; }
-      const b = V.boxOf(hit.v, false) || [0, 0, 0, 1, 1, 1], e = .004;
+      const b = hit.box || V.boxOf(hit.v, false) || [0, 0, 0, 1, 1, 1], e = .004;   // box — своя рамка (лёд на озере — до глади)
       sel.scale.set(b[3] - b[0] + e * 2, b[4] - b[1] + e * 2, b[5] - b[2] + e * 2);
       sel.position.set(hit.x - VR.ox + (b[0] + b[3]) / 2, hit.y + (b[1] + b[4]) / 2, hit.z - VR.oz + (b[2] + b[5]) / 2);
       sel.visible = true;
@@ -557,10 +557,13 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const crack = new T.Mesh(new T.BoxGeometry(1.004, 1.004, 1.004), crackMat);
     crack.visible = false; crack.renderOrder = 7; R.scene.add(crack);
     const D0 = V.texIdx.get('destroy_0');
-    VR.crack = (x, y, z, st) => {
+    // b — рамка в долях блока (лёд на озере — до глади 0,875); нет — целый кубик
+    VR.crack = (x, y, z, st, b) => {
       if (st < 0 || st == null) { crack.visible = false; return; }
       crackMat.uniforms.uLayer.value = D0 + Math.max(0, Math.min(7, st | 0));
-      crack.position.set(x - VR.ox + .5, y + .5, z - VR.oz + .5); crack.visible = true;
+      if (b) { crack.scale.set(b[3] - b[0], b[4] - b[1], b[5] - b[2]); crack.position.set(x - VR.ox + (b[0] + b[3]) / 2, y + (b[1] + b[4]) / 2, z - VR.oz + (b[2] + b[5]) / 2); }
+      else { crack.scale.set(1, 1, 1); crack.position.set(x - VR.ox + .5, y + .5, z - VR.oz + .5); }
+      crack.visible = true;
     };
 
     // ── вещь в 3D (в руке, на земле): тот же формат вершин, что у чанков ──

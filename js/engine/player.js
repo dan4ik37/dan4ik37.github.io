@@ -131,6 +131,40 @@
   }
   E.grip = { findLedge, findVault, ledgeAt, roomOnTop };
   E.parkour = PK;
+  // ── Общие для всех игр куски паркура (21.10.2026: «Кубомир» цепляется тем же движком — физика своя, по кубикам: V.gripPhys) ──
+  // Путь «залезть на край» (PkLerp из Unity): руки на край и тело чуть вниз (вес перед рывком) → грудь к краю → таз к краю →
+  // колено на край и наверх. st — ноги сейчас, L — край (findLedge), top — где встать (roomOnTop), dur — секунды, s — масштаб
+  // тела, u — единиц на метр (E.UNIT; у кубиков — тот же, а s = 1 / U: метры Unity становятся блоками)
+  PK.mantleSegs = (st, L, top, dur, s = 1, u = U) => {
+    const f = L.face;
+    const dip = { x: st.x + f.x * .02, y: st.y - .05 * u * s, z: st.z + f.z * .02 };
+    const chest = { x: st.x, y: Math.max(st.y, L.lip.y - 1.05 * u * s), z: st.z };
+    const hip = { x: st.x, y: L.lip.y - .35 * u * s, z: st.z };
+    return [
+      { a: st, b: dip, dur: dur * .15 },
+      { a: dip, b: chest, dur: dur * .25 },
+      { a: chest, b: hip, dur: dur * .25, arc: { x: -f.x * .04, y: 0, z: -f.z * .04 } },
+      { a: hip, b: top, dur: dur * .35, arc: { x: 0, y: .08 * u * s, z: 0 } },
+    ];
+  };
+  // Где тело на пути в момент t (с от начала): out — { x, y, z, i (отрезок), k (доля пути 0…1), done }
+  PK.pathAt = (segs, t, out = {}) => {
+    let i = 0;
+    while (i < segs.length && t >= segs[i].dur) { t -= segs[i].dur; i++; }
+    if (i >= segs.length) { const b = segs[segs.length - 1].b; out.x = b.x; out.y = b.y; out.z = b.z; out.i = segs.length; out.k = 1; out.done = true; return out; }
+    const s = segs[i], k = smooth(t / s.dur), arc = Math.sin(k * Math.PI);
+    out.x = s.a.x + (s.b.x - s.a.x) * k + (s.arc?.x || 0) * arc;
+    out.y = s.a.y + (s.b.y - s.a.y) * k + (s.arc?.y || 0) * arc;
+    out.z = s.a.z + (s.b.z - s.a.z) * k + (s.arc?.z || 0) * arc;
+    out.i = i; out.k = (i + t / s.dur) / segs.length; out.done = false;
+    return out;
+  };
+  // Вис: ноги — на drop ниже края, тело — на r + 6 см от стенки; не ниже опоры под ним
+  PK.hangSpot = (ph, L, r, drop) => {
+    const x = L.lip.x + L.face.x * (r + .06), z = L.lip.z + L.face.z * (r + .06);
+    const floor = ph.supportAt(x, z, r * .5, L.lip.y - .2).y;
+    return { x, y: Math.max(L.lip.y - drop, floor + .02), z };
+  };
 
   // ═══ Лестница: тонкая стенка (рисует игра) + зона перед ней; наверху — выход ═══
   // { x, z } — середина лестницы у стены, yaw — куда смотрит лицевая сторона (откуда лезут), top — высота верха,
@@ -386,17 +420,12 @@
       const s = P.scale, dur = (move === 'climb' ? PK.ClimbFromHangTime : PK.MantleTime) * P.timeMul, f = L.face;
       const st = { x: ch.x, y: ch.y, z: ch.z };
       // 1) руки на край, тело чуть вниз (вес перед рывком); 2) грудь к краю; 3) таз к краю; 4) колено на край — наверх (присев)
-      const dip = { x: st.x + f.x * .02, y: st.y - .05 * U * s, z: st.z + f.z * .02 };
-      const chest = { x: st.x, y: Math.max(st.y, L.lip.y - 1.05 * U * s), z: st.z };
-      const hip = { x: st.x, y: L.lip.y - .35 * U * s, z: st.z };
+      // (путь — общий PK.mantleSegs: тот же у «Кубомира»)
       P.yaw = Math.atan2(-f.x, -f.z);
       P.spendPartial(PK.cost(move) * P.staminaMul);
-      script(move, [
-        { a: st, b: dip, dur: dur * .15 },
-        { a: dip, b: chest, dur: dur * .25 },
-        { a: chest, b: hip, dur: dur * .25, arc: { x: -f.x * .04, y: 0, z: -f.z * .04 } },
-        { a: hip, b: top, dur: dur * .35, arc: { x: 0, y: .08 * U * s, z: 0 }, on: () => { P.crouch = true; ch.h = P.crouchH; } },
-      ], finishPk);
+      const segs = PK.mantleSegs(st, L, top, dur, s);
+      segs[3].on = () => { P.crouch = true; ch.h = P.crouchH; };
+      script(move, segs, finishPk);
       emit('parkour', { move, x: L.lip.x, y: L.lip.y, z: L.lip.z });
     }
     function pkVault(v){
@@ -412,12 +441,8 @@
       ], finishPk);
       emit('parkour', { move: 'vault', x: v.lip.x, y: v.lip.y, z: v.lip.z });
     }
-    // Вис: руки на краю, ноги ниже на 2 м (не ниже пола под нами)
-    const hangPos = L => {
-      const x = L.lip.x + L.face.x * (ch.r + .06), z = L.lip.z + L.face.z * (ch.r + .06);
-      const floor = ph.supportAt(x, z, ch.r * .5, L.lip.y - .2).y;
-      return { x, y: Math.max(L.lip.y - PK.HangDrop * U * P.scale, floor + .02), z };
-    };
+    // Вис: руки на краю, ноги ниже на 2 м (не ниже пола под нами) — общий PK.hangSpot
+    const hangPos = L => PK.hangSpot(ph, L, ch.r, PK.HangDrop * U * P.scale);
     function pkHang(L){
       const st = { x: ch.x, y: ch.y, z: ch.z }, hp = hangPos(L);
       P.yaw = Math.atan2(-L.face.x, -L.face.z);
