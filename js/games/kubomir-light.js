@@ -76,11 +76,11 @@
       }
       for (const r of [...X.recs.values()]) if (!r.own && !keep.has(r.key)) drop(r);
     }
-    // факел (или другой светящийся блок) в руке — лампа у игрока
+    // факел (или другой светящийся блок) в руке — лампа у игрока; в левой руке (P.off) — тоже, светит то, что ярче
+    const emitOf = s => { const it = s ? V().item(s.id) : null, b = it?.place ? V().block(it.place) : null; return b && V().T.emit[b.id] > 0 ? b : null; };
     function handLight(){
-      const P = st.P, s = P.inv[P.sel], it = s ? V().item(s.id) : null, b = it?.place ? V().block(it.place) : null;
-      const e = b ? V().T.emit[b.id] : 0;
-      const want = !P.dead && e > 0 ? b.id : 0;
+      const P = st.P, bm = emitOf(P.inv[P.sel]), bo = emitOf(P.off), b = bm && bo ? (V().T.emit[bo.id] > V().T.emit[bm.id] ? bo : bm) : bm || bo;
+      const want = !P.dead && b ? b.id : 0;
       if (X.hand && X.hand.t !== want) { drop(X.hand); X.hand = null; }
       if (want && !X.hand) { const k = kindOf(want); X.hand = add('hand', P.x, P.y + 1.4, P.z, k, want, true); X.hand.t = want; X.hand.base *= .85; X.hand.src.distance = KIND[k].d + 1; }
       if (X.hand) { X.hand.x = P.x; X.hand.y = P.y + 1.35; X.hand.z = P.z; X.hand.sky = V().lSky(W.lightAt(P.x, P.y + 1.4, P.z)) / 15; }

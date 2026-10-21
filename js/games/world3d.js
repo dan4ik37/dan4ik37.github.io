@@ -186,6 +186,91 @@
   ];
   // рука у кармана (сбоку у бедра, чуть назад), голова глянула туда же
   const PH_POCKET = { h: [.16, .22, 0], t: [.08, .1, 0], sh: [0, 0], r: [.12, -.95, -.28, .97], mt: .5, mh: .6, ml: 0 };
+
+  // ── Руки и предметы (бой, инструменты — D37E.combat, docs/COMBAT.md): слой поверх позы, только если игра дала o.hold ──
+  //    o.hold = { r, l, m, mh, v, g, d, p }: что в правой и левой (номер HOLDS), движение (MOTIONS) правой (mh 0) или левой (mh 1),
+  //    его фаза v 0…3 (0…1 — замах, 1…2 — удар, 2…3 — возврат), щит поднят g 0…1, лук натянут d 0…1, наклон взгляда p (рад, «+» —
+  //    вверх). Номера — те же, что CB.HOLDS / CB.MOTIONS (только дописывать в конец; combat-test сверяет). Без o.hold позы — как были.
+  //    Углы руки — как у суставов позы: a — плечо вперёд-вверх (−), b — поворот вокруг вертикали (−: к груди), c — в сторону (+:
+  //    наружу), e — локоть (−: кисть вперёд); для левой руки b и c — с другим знаком (зеркало). ty — поворот плеч, tx — наклон
+  const HOLDS = ['', 'fist', 'tool', 'sword', 'axe', 'pick', 'shovel', 'block', 'item', 'torch', 'food', 'shield', 'bow'];
+  const MOTIONS = ['', 'jab', 'slash', 'back', 'thrust', 'chop', 'dig', 'scoop', 'swing', 'push', 'eat', 'shoot', 'bash'];
+  // держит: [a, b, c, e, вес] (вес < 1 — руке остаётся немного шага)
+  const HOLD_TOOL = [-.45, 0, .12, -.62, .72];
+  // (углы подобраны под точку кисти у человечка обычного роста: факел — у плеча вверху, щит — перед животом, лук — перед собой)
+  const HOLD_P = [null, null, HOLD_TOOL, [-.5, -.08, .14, -.72, .75], HOLD_TOOL, HOLD_TOOL, HOLD_TOOL, [-.58, 0, .1, -.8, .75], HOLD_TOOL,
+    [-2.36, -.22, .2, -.25, .85], HOLD_TOOL, [-.65, -1.04, .19, -.63, .8], [.09, -1.5, .9, -.19, .8]];
+  const GUARD_P = [-1.16, 0, -.42, -.83, 1];                 // щит поднят (левая — зеркально): перед грудью
+  const BOW_L = [-1.53, 0, .11, -.14, 1];                    // лук натянут: левая вытянута вперёд (a — ещё и по наклону взгляда)
+  const BOW_R = [-2.11, 0, -.89, 0, 1];                      // правая тянет тетиву к подбородку
+  const BOW_IDLE_R = [-.83, 0, -.76, -.13, .8];              // лук в руках, не натянут: правая — у тетивы
+  // движения: [замах, конец удара] × [a, b, c, e, ty, tx]
+  const MOT_P = [null,
+    [[-.85, -.25, .3, -1.75, .22, 0], [-1.55, .05, .06, -.08, -.28, .05]],     // jab — кулак назад и вперёд
+    [[-1.84, .7, .28, -1.71, .45, 0], [-1.15, 0, -.41, -.02, -.5, .08]],      // slash — справа налево
+    [[-1.77, 0, -.54, -.01, -.5, 0], [-.85, .56, .2, -1.18, .45, .06]],       // back — слева направо
+    [[-.96, .7, -.11, -2.43, .35, -.04], [-1.47, 0, -.08, 0, -.25, .1]],      // thrust — укол
+    [[-3.3, 0, -.06, -.05, .1, -.1], [-.99, 0, -.1, -.05, -.08, .22]],        // chop — сверху вниз
+    [[-2.4, .1, .12, -.9, .05, -.05], [-.75, .05, .1, -.3, -.05, .15]],        // dig — дуга кирки
+    [[-.35, 0, .1, -.3, 0, .1], [-1.65, 0, .1, -.6, 0, -.05]],                 // scoop — лопатой снизу вверх
+    [[-2.1, .5, .1, -.6, .05, 0], [-.6, .15, .05, -.4, -.05, .08]],            // swing — копает (как в Майнкрафте)
+    [[-1.0, 0, .1, -.6, 0, 0], [-1.35, 0, .05, -.05, 0, .04]],                 // push — поставить, нажать
+    null,                                                                      // eat — отдельно (рука у рта)
+    [[-2.11, 0, -.89, 0, .25, 0], [-1.6, .3, .2, -.6, .2, 0]],                // shoot — тетива отпущена: кисть назад
+    [[-.65, -1.04, .19, -.63, -.15, 0], [-1.54, 0, -.62, 0, -.3, .06]],       // bash — толчок щитом
+  ];
+  const EAT_P = [-2.32, 0, -.48, -.01, 1];
+  const hsm = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+  const HJ = [[J.ARX, J.ARY, J.ARZ, J.ER], [J.ALX, J.ALY, J.ALZ, J.EL]];
+  // плечо руки s (0 правая, 1 левая) — к углам A (a, b, c, e) с весом w; левой — зеркально
+  function holdArm(Pt, s, A, w){
+    if (!A || w <= 0) return;
+    const j = HJ[s], m = s ? -1 : 1;
+    Pt[j[0]] += (A[0] - Pt[j[0]]) * w; Pt[j[1]] += (A[1] * m - Pt[j[1]]) * w; Pt[j[2]] += (A[2] * m - Pt[j[2]]) * w; Pt[j[3]] += (A[3] - Pt[j[3]]) * w;
+  }
+  const HA = new Float32Array(5), HB = new Float32Array(5);
+  // Слой: держит (плавно при смене вещи — ch.hdS), щит, лук, еда; движение — по фазе (без сглаживания: фаза идёт от боя)
+  function holdLayer(ch, Pt, dt, t, H, snap, cat, emw){
+    let S = ch.hdS;
+    if (!S) S = ch.hdS = { w: new Float32Array(2), c: new Int8Array(2), on: 0 };
+    const cap = (cat === 0 || cat === 6 || cat === 7 ? 1 : 0) * (1 - emw);   // земля, прыжок, сидит; эмоция — руки ей
+    S.on = snap ? cap : S.on + (cap - S.on) * Math.min(1, dt * 12);
+    const k = S.on; if (k < .001) return;
+    const two = H.r === 12 && H.l === 12;   // лук — обеими
+    // держит (смена вещи: вес к нулю — и к новой позе)
+    for (let s = 0; s < 2; s++) {
+      const code = s ? H.l : H.r, want = HOLD_P[code] ? 1 : 0;
+      if (S.c[s] !== code) { if (snap || S.w[s] < .05 || !HOLD_P[S.c[s]]) S.c[s] = code; else { S.w[s] = Math.max(0, S.w[s] - dt / .12); continue; } }
+      S.w[s] = snap ? want : Math.min(1, Math.max(0, S.w[s] + (want ? dt : -dt) / .18));
+      const P0 = HOLD_P[S.c[s]];
+      if (!P0) continue;
+      let A = P0;
+      if (two) { A = s ? BOW_L : BOW_R; const d = H.d || 0; for (let i = 0; i < 4; i++) HA[i] = (s ? HOLD_P[12] : BOW_IDLE_R)[i] + (A[i] - (s ? HOLD_P[12] : BOW_IDLE_R)[i]) * hsm(d); if (s) HA[0] -= (H.p || 0) * hsm(d); else HA[0] -= (H.p || 0) * .6 * hsm(d); A = HA; }
+      else if (S.c[s] === 11 && H.g > 0) { const g = hsm(H.g); for (let i = 0; i < 4; i++) HA[i] = P0[i] + (GUARD_P[i] - P0[i]) * g; HA[0] -= (H.p || 0) * .5 * g; A = HA; }
+      holdArm(Pt, s, A, S.w[s] * (two ? 1 : P0[4]) * k);
+    }
+    if (two) { const d = hsm(H.d || 0); Pt[J.TY] += .25 * d * k; Pt[J.HY] -= .25 * d * k; }
+    else if (H.l === 11 && H.g > 0) Pt[J.TY] += -.15 * hsm(H.g) * k;
+    // движение
+    const m = H.m | 0, s = H.mh ? 1 : 0, v = Math.max(0, Math.min(3, H.v || 0));
+    if (m === 10) {   // еда: рука у рта (v — 0…1 насколько), жуёт
+      const e = hsm(v) * k, ch2 = Math.abs(Math.sin(t * 14)) * e;
+      holdArm(Pt, s, EAT_P, e);
+      const j = HJ[s]; Pt[j[0]] -= .1 * ch2; Pt[j[3]] += .15 * ch2; Pt[J.HX] += .12 * e;
+      return;
+    }
+    const K = MOT_P[m]; if (!K) return;
+    // от «держит» к замаху, к концу удара, обратно; края — плавно (вес)
+    const seg = v < 1 ? 0 : v < 2 ? 1 : 2, u = hsm(v - seg), w = hsm(Math.min(1, v * 5, (3 - v) * 5)) * k;
+    const j = HJ[s], mm = s ? -1 : 1;
+    // «держит» — то, что сейчас в позе (уже со слоем держания)
+    HB[0] = Pt[j[0]]; HB[1] = Pt[j[1]] * mm; HB[2] = Pt[j[2]] * mm; HB[3] = Pt[j[3]];
+    const A0 = seg === 0 ? HB : K[seg - 1], A1 = seg === 2 ? HB : K[seg];
+    for (let i = 0; i < 4; i++) HA[i] = A0[i] + (A1[i] - A0[i]) * u;
+    holdArm(Pt, s, HA, w);
+    const ty0 = seg === 0 ? 0 : K[seg - 1][4], ty1 = seg === 2 ? 0 : K[seg][4], tx0 = seg === 0 ? 0 : K[seg - 1][5], tx1 = seg === 2 ? 0 : K[seg][5];
+    Pt[J.TY] += (ty0 + (ty1 - ty0) * u) * mm * w; Pt[J.TX] += (tx0 + (tx1 - tx0) * u) * w;
+  }
   const wrapA = a => { a = (a + PI) % TAU; if (a < 0) a += TAU; return a - PI; };
   const autoQ = () => { try { return window.D37E?.gfxQuality?.() || (document.body?.classList.contains('low') ? 'low' : 'high'); } catch (e) { return 'high'; } };
 
@@ -1754,6 +1839,8 @@
       const kl = snap ? 1 : Math.min(1, dt * 5);
       ch.lookY += (ly - ch.lookY) * kl; ch.lookX += (lx - ch.lookX) * kl;
       Pt[J.HY] += ch.lookY * .75; Pt[J.TY] += ch.lookY * .25 * (1 - ch.wMove); Pt[J.HX] += ch.lookX;
+      // руки и предметы (бой, инструменты): только если игра дала o.hold — иначе позы как были
+      if (o && o.hold) holdLayer(ch, Pt, dt, t, o.hold, snap, cat, emw);
       // телефон 📱: руки, голова, плечи — поверх позы (ноги свои: идёт и пишет, как в ГТА)
       if (ch.phS || (o && o.phone) || ch.phWant) phoneLayer(ch, Pt, t, dt, o, snap, cat, emw);
       // плавный переход между состояниями
@@ -2212,5 +2299,5 @@
   const phoneSnap = (ch, t) => { if (ch?.phS) { ch.phS.snapT = t; ch.phS.manual = true; } };
   const phoneCode = s => phIdx(s) + 1;
   const phoneName = c => PH_MODES[phIdx(c)] || '';
-  window.World3D = { supported, load, create, preview, resolve, kit, frameOf, PART_DEF, EMOTES, HEADS, CHAR_VERSION, PH_MODES, phonePose, phoneSnap, phoneCode, phoneName };
+  window.World3D = { supported, load, create, preview, resolve, kit, frameOf, PART_DEF, EMOTES, HEADS, CHAR_VERSION, PH_MODES, phonePose, phoneSnap, phoneCode, phoneName, HOLDS, MOTIONS };
 })();
