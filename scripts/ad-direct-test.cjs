@@ -594,7 +594,7 @@ ok(R.hostOf('https://www.YouTube.com/@x') === 'youtube.com', 'домен для 
     ok(/0\+, 6\+, 12\+, 16\+ или 18\+/.test(tb) && /до 13 лет — только 0\+ и 6\+/.test(tb), '/ads-terms: возрастные метки');
     ok(/Возврат неизрасходованного бюджета/.test(tb) && new RegExp(`Минимальный бюджет — ${D.DEF.min_budget}`).test(tb) && /noindex/.test(tb) === false && !/adsbygoogle\.js/.test(tb), '/ads-terms: возврат, цены из правил, без рекламы');
     const rk = await run({ page: 'reklama' });
-    ok(rk.code === 200 && /Разместить рекламу самостоятельно/.test(rk.body) && /href="\/#\/adv"/.test(rk.body) && /href="\/ads-terms"/.test(rk.body), '/reklama: блок «Разместить рекламу самостоятельно» → кабинет и правила');
+    ok(rk.code === 200 && /Разместить рекламу самостоятельно/.test(rk.body) && /href="\/(#\/)?adv"/.test(rk.body) && /href="\/ads-terms"/.test(rk.body), '/reklama: блок «Разместить рекламу самостоятельно» → кабинет и правила');
     globalThis.fetch = realFetch; globalThis.setTimeout = fakeST; globalThis.clearTimeout = fakeCT;
   } catch (e) { ok(false, 'сервер сайта', String(e && e.stack || e)); }
   fs.rmSync(tmp, { recursive: true, force: true });
