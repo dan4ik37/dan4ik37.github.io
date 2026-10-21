@@ -784,16 +784,18 @@
     R._links = links;
     return R;
   }
-  // Транспорт — Supabase Realtime (как room.js / table.js)
+  // Транспорт — Supabase Realtime (как room.js / table.js). Канал — GameRoom.channel: ждёт sbClient (ссылка-приглашение открывает
+  // игру раньше, чем сайт подключил Supabase; нет связи за 8 с — статус 'TIMED_OUT' → fail('offline')) и копит сообщения до подписки.
+  // Статус не приходит прямо из open(): createRoom вешает onStatus сразу после него
   function supaTransport(name, key){
-    const ch = sbClient.channel(name, { config: { broadcast: { self: false }, presence: { key } } });
+    const ch = root.GameRoom.channel(name, { config: { broadcast: { self: false }, presence: { key } } });
     const T = { onStatus: null, onSync: null, onMsg: null };
     ch.on('broadcast', { event: 'm' }, ({ payload }) => T.onMsg?.(payload));
     ch.on('presence', { event: 'sync' }, () => T.onSync?.(ch.presenceState()));
     ch.subscribe(st => T.onStatus?.(st));
     T.track = meta => ch.track(meta);
     T.send = payload => { ch.send({ type: 'broadcast', event: 'm', payload }).catch(() => {}); };
-    T.close = () => { try { ch.untrack(); sbClient.removeChannel(ch); } catch (e) {} };
+    T.close = () => { try { ch.close(); } catch (e) {} };
     return T;
   }
 
@@ -952,7 +954,6 @@
   function online(code){
     leaveAll();
     mode = 'online';
-    if (typeof sbClient === 'undefined' || !sbClient) { rootEl.innerHTML = root.GameRoom?.errorHtml || 'Нет связи'; return; }
     const key = (typeof currentUser !== 'undefined' && currentUser?.id) || root.GameRoom.guestId();
     ON = { code, S: null, H: null, myWord: '', opts: null, pic: makePic(), q: 0, lastQ: 0, waitFull: false, needAt: 0, fullAt: 0, ops: [], flushT: 0, pendD: [],
       deadline: 0, muted: new Set(), hidden: false, voted: 0, reported: 0, tickN: 0, lastTn: -1, chatN: 0, sentWordTo: '', lastFinal: 0, settingsDirty: false };
@@ -1613,6 +1614,6 @@ body:not(.high) .kr-col.on{transform:none}
     },
     get _on(){ return ON; },
     get _bot(){ return BOT; },
-    _test: { W, H, PAL, SIZES, MAX_PTS, LISTS, PICS, PIC_KEYS, norm, letters, clean, judge, lev, maskOf, makeRaster, makePic, mergeD, picActs, actsOps, botPen, newHost, hostFrom, hostStep, ranking, createRoom, CHOOSE_MS, REVEAL_MS, WORD_WAIT, RELAY_MS },
+    _test: { W, H, PAL, SIZES, MAX_PTS, LISTS, PICS, PIC_KEYS, norm, letters, clean, judge, lev, maskOf, makeRaster, makePic, mergeD, picActs, actsOps, botPen, newHost, hostFrom, hostStep, ranking, createRoom, supaTransport, CHOOSE_MS, REVEAL_MS, WORD_WAIT, RELAY_MS },
   };
 })();

@@ -370,16 +370,18 @@
     return R;
   }
 
-  // Транспорт комнаты — Supabase Realtime (как room.js / table.js)
+  // Транспорт комнаты — Supabase Realtime (как room.js / table.js). Канал — GameRoom.channel (room.js грузится раньше): ждёт
+  // sbClient (игру открыли по ссылке раньше, чем сайт подключил Supabase; нет связи за 8 с — статус 'TIMED_OUT' → fail('offline')
+  // → «Нет связи… ↻ Ещё раз») и копит сообщения до подписки (иначе supabase-js шлёт их через REST)
   function supaTransport(name, key){
-    const ch = sbClient.channel(name, { config: { broadcast: { self: false }, presence: { key } } });
+    const ch = window.GameRoom.channel(name, { config: { broadcast: { self: false }, presence: { key } } });
     const T = { onStatus: null, onSync: null, onMsg: null };
     ch.on('broadcast', { event: 'm' }, ({ payload }) => T.onMsg?.(payload));
     ch.on('presence', { event: 'sync' }, () => T.onSync?.(ch.presenceState()));
     ch.subscribe(st => T.onStatus?.(st));
     T.track = meta => ch.track(meta);
     T.send = payload => { ch.send({ type: 'broadcast', event: 'm', payload }).catch(() => {}); };
-    T.close = () => { try { ch.untrack(); sbClient.removeChannel(ch); } catch (e) {} };
+    T.close = () => { try { ch.close(); } catch (e) {} };
     return T;
   }
 
@@ -987,7 +989,6 @@
       if (X.room && X.room.code === code && !X.room.closed) { if (X.room.joined) send({ t: 'room.state', ...roomState() }); return; }
       leaveRoom(false);
       X.wantCode = code; X.roomErr = '';
-      if (typeof sbClient === 'undefined' || !sbClient) { X.roomErr = 'offline'; roomErr('offline'); roomUi(); return; }
       const was = { host: '', ids: new Set() };
       X.room = createRoom({
         open: supaTransport, game: g.id, code, max: g.players, me: me(g.id), net: window.NetPlay || null,
@@ -1151,7 +1152,7 @@ D37.AddCoins(5);           // монеты за раунд (до 50)</pre>
   window.GAME_IMPL.unity = {
     mount(el, gameApi){ root = el; api = gameApi; show(gameApi.param); },
     unmount(){ stopScreen(); root = null; },
-    _test: { PROTO, LIMITS, RELAY, INBOX, MAX_DATA, OUT_TYPES, IN_TYPES: Object.keys(IN), SANDBOX, ALLOW, SDK_FILES, hash36, pid, uidOf, normUrl, cleanIn, cleanWire, limiter, createBridge, createRoom, crc32, zip, validCode, newCode, sameOriginFrame,
+    _test: { PROTO, LIMITS, RELAY, INBOX, MAX_DATA, OUT_TYPES, IN_TYPES: Object.keys(IN), SANDBOX, ALLOW, SDK_FILES, hash36, pid, uidOf, normUrl, cleanIn, cleanWire, limiter, createBridge, createRoom, supaTransport, crc32, zip, validCode, newCode, sameOriginFrame,
       session, setApi(a){ api = a; } },
   };
 })();

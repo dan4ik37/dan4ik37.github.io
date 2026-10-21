@@ -17,14 +17,15 @@
   const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const newest = metas => (metas || []).reduce((a, b) => ((b?.t || 0) > (a?.t || 0) ? b : a), (metas || [])[0] || {});
 
+  // Комната возвращается сразу, даже если сайт ещё не подключил Supabase (ссылка-приглашение): GameRoom.channel ждёт sbClient,
+  // нет связи — onError() чуть позже, не из самого join() (room.js, T-039)
   function join(game, code, h){
-    if (typeof sbClient === 'undefined' || !sbClient) { h.onError?.(); return null; }
     const key = (typeof currentUser !== 'undefined' && currentUser?.id) || GameRoom.guestId();
     const joinedAt = Date.now(), myId = key + '~' + joinedAt;
     const room = { game, code, myId, nick: GameRoom.nick(), joinedAt, isHost: false, seats: [], closed: false, max: h.max || 4, synced: false };
     const keys = new Map();
     let kp = null, myPub = null;
-    const ch = sbClient.channel(`${game}-table-${code}`, { config: { broadcast: { self: false }, presence: { key } } });
+    const ch = GameRoom.channel(`${game}-table-${code}`, { config: { broadcast: { self: false }, presence: { key } } });
 
     room.send = m => { if (!room.closed) ch.send({ type: 'broadcast', event: 'm', payload: { ...m, _by: myId } }).catch(() => {}); };
     async function sharedFor(id){
@@ -106,7 +107,7 @@
       room.closed = true;
       clearTimeout(room.seatT);
       window.removeEventListener('pagehide', room.leave);
-      try { ch.untrack(); sbClient.removeChannel(ch); } catch (e) {}
+      ch.close();
     };
     window.addEventListener('pagehide', room.leave);
     return room;
