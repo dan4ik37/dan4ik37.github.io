@@ -535,22 +535,35 @@
     P.y = y; P.vy = 0; P.fallTop = y;
   }
 
-  // ── Игрок: ходьба, бег, присед, прыжок, полёт, вода, лестницы, удар о землю ──
+  // ── Игрок: ходьба, бег, присед, прыжок, полёт, вода, лестницы, удар о землю, паркур ──
   const BOX = { x: 0, y: 0, z: 0, w: PW, h: PH, hitX: false, hitY: false, hitZ: false }, TCH = {};
+  // паркур (21.10.2026, владелец: «нельзя выпрыгнуть из воды, подцепиться, хотя мы делаем вроде один движок!»): метры Unity →
+  // блоки (тело 1,8 м = 1,8 блока, KS = 1 / E.UNIT), высоты края — в блоках над ногами. Плавучесть: погружён на 3/4 — равновесие
+  // (голова над водой, не тонешь), глубже — выталкивает, мельче — тянет вниз; «прыжок» — вверх, «красться» — нырнуть
+  const KS = 1.8 / 2.1, MANTLE_MAX = 2.05, HANG_MAX = 2.6, HANG_DROP = 2, SWIM_OUT = 1.25, SHIMMY = .9, JUMP_APEX = JUMP_V * JUMP_V / (2 * G_ACC);
+  const SUB_EQ = .74, BUOY = 16;
   function physics(st, dt){
     const { C, P, W, rig } = st, V = VX();
-    const touch = V.touching(W, P.x, P.y, P.z, P.w, P.h, TCH);
-    P.water = touch.water; P.lava = touch.lava; P.climb = touch.climb;
-    const eyeY = P.y + (P.sneak ? 1.27 : 1.62), ev = W.raw(P.x, eyeY, P.z);
-    P.eyeWater = ev > 0 && V.T.liquid[ev & 0xfff] === 1 && eyeY < Math.floor(eyeY) + V.liquidHeight(ev);
     // ввод → направление
     const f = rig.fwd(), r = rig.right();
     let wx = f.x * C.move.z + r.x * C.move.x, wz = f.z * C.move.z + r.z * C.move.x;
     const wl = Math.hypot(wx, wz); if (wl > 1) { wx /= wl; wz /= wl; }
-    const K = st.K || NOK, jump = C.held('jump');
+    const K = st.K || NOK, jump = C.held('jump'), jumpDown = C.down('jump');
     // красться — Shift (держать; в настройках — «нажал/отжал»), на телефоне — кнопка-переключатель
     if (opts.sneakToggle && K.down('sneak')) st.sneakOn = !st.sneakOn;
     const sneak = (opts.sneakToggle ? st.sneakOn : K.held('sneak')) || !!st.touchSneak || (!st.K && C.held('crouch'));
+    // паркур по сценарию (залезть, вылезти из воды, схватиться за край) и вис — своё движение (как у человечка движка);
+    // отпустить край — «красться» (нажал; на телефоне — включил кнопку)
+    P.pkCD = Math.max(0, (P.pkCD || 0) - dt);
+    const dropDown = K.down('sneak') || (!st.K && C.down('crouch')) || (!!st.touchSneak && !st.hangSneak);
+    st.hangSneak = !!st.touchSneak;
+    if (P.pk) { pkStep(st, dt); rebase(st, false); return; }
+    if (P.hang && hangStep(st, dt, wx, wz, jumpDown, dropDown)) { rebase(st, false); return; }
+    const touch = V.touching(W, P.x, P.y, P.z, P.w, P.h, TCH);
+    P.water = touch.water; P.lava = touch.lava; P.climb = touch.climb;
+    // глаза под водой: ниже глади своей клетки — или над клеткой ещё вода (верхняя 1/8 полной клетки — тоже под водой)
+    const eyeY = P.y + (P.sneak ? 1.27 : 1.62), ev = W.raw(P.x, eyeY, P.z), ea = ev > 0 && V.T.liquid[ev & 0xfff] === 1 ? W.raw(P.x, eyeY + 1, P.z) : 0;
+    P.eyeWater = ev > 0 && V.T.liquid[ev & 0xfff] === 1 && (eyeY < Math.floor(eyeY) + V.liquidHeight(ev) || (ea > 0 && V.T.liquid[ea & 0xfff] === 1));
     // полёт в «Творчестве»: двойной прыжок
     if (st.creative && C.doubleTap('jump')) { P.fly = !P.fly; P.vy = 0; st.H.toast(P.fly ? '🕊 Полёт (два раза «прыжок» — выключить)' : '🚶 Полёт выключен'); st.tbarSync?.(); }
     if (!st.creative) P.fly = false;
@@ -566,6 +579,13 @@
     let spd = P.fly ? (P.sprint ? SPD.flyFast : SPD.fly) : P.sneak ? SPD.sneak : P.sprint ? SPD.sprint : SPD.walk;
     if (inLiquid && !P.fly) spd = P.lava > .2 ? 1.2 : SPD.swim * (P.sprint ? 1.4 : 1);
     if (st.eat && !P.fly) spd *= .35;   // ест — идёт медленно (как в Майнкрафте)
+    // паркур: прыжок у стены, а прыжком край не достать — залезть (край до 2 блоков над ногами) или схватиться (до 2,6 — в прыжке);
+    // в воде у берега (край до 1,25 над водой, держишь «прыжок») — вылезти. ⚙️ «🧊 Кубомир» → «Цепляться за края»
+    if (!P.pkCD && opts.climb !== false && !P.fly && !P.climb && !P.sneak && !st.eat && wl > .3 && (jumpDown || jump)) {
+      const wn = Math.hypot(wx, wz), dx = wx / wn, dz = wz / wn;
+      if (inLiquid ? P.lava <= .2 && tryClimbOut(st, dx, dz) : ((jumpDown && P.onGround) || (jump && !P.onGround && !(P.wetT > 0))) && tryLedge(st, dx, dz)) { rebase(st, false); return; }
+    }
+    P.wetT = P.water > 0 || P.lava > 0 ? .6 : Math.max(0, (P.wetT || 0) - dt);   // только что из воды — за край в прыжке не схватиться (из воды — до 1,25 над гладью)
     const slip = P.onGround && touch.slip ? touch.slip : 0;
     const acc = P.fly ? 9 : P.onGround ? (slip ? 1.5 : 14) : inLiquid ? 5 : 2.6, k = 1 - Math.exp(-acc * dt);
     P.vx += (wx * spd - P.vx) * k; P.vz += (wz * spd - P.vz) * k;
@@ -578,10 +598,19 @@
       else if (P.sneak) P.vy = 0;
       else P.vy = Math.max(P.vy - G_ACC * dt, -2.4);
       P.fallTop = P.y;
-    } else if (inLiquid) {
-      P.vy -= (P.lava > .2 ? 4 : 6) * dt;
-      P.vy *= 1 - Math.min(1, 2.2 * dt);
-      if (jump) P.vy = Math.min(P.vy + 18 * dt, P.eyeWater ? 3.2 : 4.6);
+    } else if (P.lava > .2) {   // лава: тонет медленно, «прыжок» — вверх (как было)
+      P.vy -= 4 * dt;
+      P.vy *= Math.exp(-2.2 * dt);
+      if (jump) P.vy = Math.min(P.vy + 18 * dt, 4.6);
+      P.vy = Math.max(P.vy, -3.2);
+      P.fallTop = P.y;
+    } else if (inLiquid) {   // вода: плавучесть по глубине (точное затухание — от шага не зависит)
+      const sub = Math.min(1, P.water / P.h);
+      P.vy += BUOY * (sub - SUB_EQ) * dt;
+      if (jump) P.vy += 14 * dt;
+      if (sneak) P.vy -= 10 * dt;
+      P.vy *= Math.exp(-2.4 * dt);
+      if (jump) P.vy = Math.min(P.vy, P.eyeWater ? 3.2 : 4.6);
       P.vy = Math.max(P.vy, -3.2);
       P.fallTop = P.y;
     } else {
@@ -594,9 +623,9 @@
     st.bounceCD = (st.bounceCD || 0) - dt;
     // присел на краю — не падать
     let mx = P.vx * dt, mz = P.vz * dt;
-    if (P.sneak && P.onGround) {
-      if (mx && !V.boxHits(W, P.x + mx, P.y - .6, P.z, P.w, .55)) mx = 0;
-      if (mz && !V.boxHits(W, P.x + mx, P.y - .6, P.z + mz, P.w, .55)) mz = 0;
+    if (P.sneak && P.onGround) {   // опора — и лёд на озере
+      if (mx && !V.boxHits(W, P.x + mx, P.y - .6, P.z, P.w, .55, true)) mx = 0;
+      if (mz && !V.boxHits(W, P.x + mx, P.y - .6, P.z + mz, P.w, .55, true)) mz = 0;
     }
     // высота: присел — ниже (если есть куда встать)
     const wantH = P.sneak ? PHS : PH;
@@ -618,6 +647,8 @@
     if (BOX.hitY) P.vy = 0;
     P.x = BOX.x; P.y = BOX.y; P.z = BOX.z;
     if (P.fly && P.onGround) P.fly = false;
+    // в воде упёрся в стену (берег, край проруби) — выталкивает вверх, как в Майнкрафте: на берег в 1 блок — само
+    if (P.water > 0 && P.lava <= .2 && !P.fly && !P.onGround && (BOX.hitX || BOX.hitZ) && wl > .3 && !V.boxHits(W, P.x, P.y + .6, P.z, P.w, P.h)) P.vy = Math.max(P.vy, 4.2);
     // всплыл подо льдом (или лёд замёрз вокруг) — проломил: подо льдом не запереть (voxel.js: лёд держит только сверху и сбоку)
     if (V.iceTest) iceOverlap(st);
     // упал: урон от высоты (не в воде, не на лестнице, не в творчестве)
@@ -669,6 +700,93 @@
     // моды: «встал на блок мода»
     if (st.modRun && touch.blocks.length) st.modRun.stepOn(touch.blocks, P);
     rebase(st, false);
+  }
+  // ── Паркур «Кубомира» — тот же, что у человечка «Мира Денчика» и «Студии 3D» (player.js): край ищет E.grip (findLedge, ledgeAt,
+  //    roomOnTop) по кубикам через V.gripPhys, путь «залезть» — PK.mantleSegs / PK.pathAt, вис — PK.hangSpot. Своё — только когда:
+  //    прыжок у стены, а прыжком до края не достать — залезть (край до 2 блоков над ногами) или схватиться (до 2,6 — в прыжке);
+  //    в воде у берега (край до 1,25 над водой) — вылезти. В висе: в стороны — по краю, к стене или «прыжок» — наверх, от стены
+  //    или «красться» — отпустить. Голод — немного (как прыжок с разбега) ──
+  const grip = st => st.grip && st.grip.W === st.W ? st.grip : (st.grip = VX().gripPhys(st.W));
+  const PKP = { x: 0, y: 0, z: 0, i: 0, k: 0, done: false };
+  function tryLedge(st, dx, dz){
+    const P = st.P, Eg = E().grip; if (!Eg) return false;
+    const G = grip(st), L = Eg.findLedge(G, { x: P.x, y: P.y, z: P.z }, { x: dx, z: dz }, .5, HANG_MAX, KS);
+    if (!L) return false;
+    const apex = P.y + (P.onGround ? JUMP_APEX : Math.max(0, P.vy) ** 2 / (2 * G_ACC));
+    if (L.lip.y <= apex + .02) return false;   // прыжком и так достанет — обычный прыжок (как в Майнкрафте)
+    if (L.height <= MANTLE_MAX) { const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (!top) return false; startMantle(st, L, top, 'mantle'); return true; }
+    if (P.onGround) return false;   // повиснуть — только в прыжке
+    startHang(st, L); return true;
+  }
+  function tryClimbOut(st, dx, dz){
+    const P = st.P, Eg = E().grip; if (!Eg || P.water <= .3) return false;
+    const surf = waterTop(st);
+    if (surf - (P.y + 1.62) > .7) return false;   // глубоко — сначала всплыть
+    const G = grip(st), L = Eg.findLedge(G, { x: P.x, y: P.y, z: P.z }, { x: dx, z: dz }, .2, surf + SWIM_OUT - P.y, KS);
+    if (!L || L.lip.y < surf - .25) return false;
+    const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (!top) return false;
+    startMantle(st, L, top, 'swim'); return true;
+  }
+  function startMantle(st, L, top, move){
+    const P = st.P, PK = E().parkour, dur = move === 'climb' ? PK.ClimbFromHangTime : move === 'swim' ? .72 : PK.MantleTime;
+    P.pk = { move, segs: PK.mantleSegs({ x: P.x, y: P.y, z: P.z }, L, top, dur, KS), t: 0, k: 0, low: false, yaw: Math.atan2(-L.face.x, -L.face.z) };
+    P.hang = null; P.vx = P.vy = P.vz = 0; P.onGround = false; P.sprint = false;
+    if (!st.creative) P.exh += move === 'climb' ? .35 : move === 'swim' ? .2 : .25;
+    st.AU?.play('kb_grab', { vol: .5, rate: .9 + Math.random() * .2 });
+    if (move === 'swim') st.ents?.splash?.(P.x, waterTop(st), P.z, .6);
+    st.pkN = (st.pkN || 0) + 1;
+    return true;
+  }
+  function startHang(st, L){
+    const P = st.P, PK = E().parkour, hp = PK.hangSpot(grip(st), L, P.w / 2, HANG_DROP);
+    P.pk = { move: 'hang', segs: [{ a: { x: P.x, y: P.y, z: P.z }, b: hp, dur: PK.HangEnterTime, arc: { x: -L.face.x * .03, y: 0, z: -L.face.z * .03 } }], t: 0, k: 0, L, yaw: Math.atan2(-L.face.x, -L.face.z) };
+    P.vx = P.vy = P.vz = 0; P.onGround = false; P.sprint = false;
+    if (!st.creative) P.exh += .1;
+    st.AU?.play('kb_grab', { vol: .55 });
+    st.pkN = (st.pkN || 0) + 1;
+  }
+  // шаг сценария: тело — по пути; колено на край — присел (как у движка); конец — стоит (или висит)
+  function pkStep(st, dt){
+    const P = st.P, K = P.pk, PK = E().parkour;
+    K.t += dt;
+    const p = PK.pathAt(K.segs, K.t, PKP);
+    P.x = p.x; P.y = p.y; P.z = p.z; K.k = p.k;
+    P.vx = P.vy = P.vz = 0; P.onGround = false; P.fallTop = P.y;
+    if (K.move !== 'hang' && p.i >= 3 && !K.low) { K.low = true; P.h = PHS; }
+    if (!p.done) return;
+    P.pk = null; P.pkCD = .35; P.jumpCD = .3;
+    if (K.move === 'hang') { P.hang = K.L; P.hangYaw = K.yaw; return; }
+    P.onGround = true; P.fallTop = P.y; P.lastStepX = P.x; P.lastStepZ = P.z;
+    const ft = floorType(st); if (ft > 0) st.AU?.step?.(floorSound(ft), false, P.x - st.ox, P.y, P.z - st.oz);
+    if (camFx(st) > 0) st.rig.land?.(4.5 * (E().UNIT || 1));   // от 1-го лица — короткий «присед» камеры в конце
+  }
+  // вис: край ещё есть (сломали блок — сорвался), отпустить, наверх, по краю; тело — под краем
+  function hangStep(st, dt, wx, wz, jumpDown, dropDown){
+    const P = st.P, Eg = E().grip, PK = E().parkour, G = grip(st), V = VX();
+    const L = Eg.ledgeAt(G, P.hang.lip, P.hang.face, KS);
+    if (!L || Math.abs(L.lip.y - P.hang.lip.y) > .1) { letGo(st); return false; }
+    P.hang = L; P.hangYaw = Math.atan2(-L.face.x, -L.face.z);
+    const toward = wx * -L.face.x + wz * -L.face.z, side = wx * L.along.x + wz * L.along.z;
+    if (dropDown || toward < -.5) { letGo(st); return false; }
+    if (jumpDown || toward > .5) { const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (top) { startMantle(st, L, top, 'climb'); return true; } }
+    const shimmy = Math.abs(side) > .3;
+    P.shimmyNow = false;
+    if (shimmy) {
+      const d = Math.sign(side) * SHIMMY * dt, nL = Eg.ledgeAt(G, { x: L.lip.x + L.along.x * d, y: L.lip.y, z: L.lip.z + L.along.z * d }, L.face, KS);
+      if (nL && Math.abs(nL.lip.y - L.lip.y) < .1) {
+        const np = PK.hangSpot(G, nL, P.w / 2, HANG_DROP);
+        if (!V.boxHits(st.W, np.x, np.y, np.z, P.w, P.h)) { P.hang = nL; P.climbPh = (P.climbPh || 0) + dt * 9; P.shimmyNow = true; }
+      }
+    }
+    const hp = PK.hangSpot(G, P.hang, P.w / 2, HANG_DROP);
+    P.x = hp.x; P.y = hp.y; P.z = hp.z; P.vx = P.vy = P.vz = 0; P.onGround = false; P.fallTop = P.y;
+    if (!st.creative) P.exh += dt * (shimmy ? .12 : .08);
+    return true;
+  }
+  function letGo(st){
+    const P = st.P, L = P.hang; P.hang = null;
+    if (L) { P.x += L.face.x * .08; P.z += L.face.z * .08; }
+    P.vx = P.vy = P.vz = 0; P.onGround = false; P.fallTop = P.y; P.pkCD = .4; P.jumpCD = .3;
   }
   // что под ногами (вид блока): стоит на льду времён года — «лёд» (звук стекла, крошки льда), иначе — блок мира
   function floorType(st){
@@ -782,7 +900,7 @@
   }
   const DEATH = { fall: 'разбился', lava: 'сгорел в лаве', cactus: 'укололся о кактус', starve: 'умер от голода', drown: 'утонул', void: 'упал в бездну', mob: 'не справился с монстром' };
   function die(st, why){
-    const P = st.P; P.dead = true;
+    const P = st.P; P.dead = true; P.pk = null; P.hang = null;
     st.I.unlock();
     const keep = !['normal', 'hard'].includes(st.meta.diff || 'easy');
     if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { st.ents?.addItem(P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } }
@@ -824,6 +942,8 @@
   }
   function interact(st, dt){
     const { C, P, W } = st, V = VX(), K = st.K || NOK;
+    // залезает или висит на краю — руки заняты: ни ломать, ни ставить (прицела нет)
+    if (P.pk || P.hang) { st.hit = null; st.mobHit = null; st.hand?.mine(false); st.mine.key = ''; st.mine.t = 0; st.mine.st = -1; st.mine.k = 0; K.taps.length = 0; return; }
     const reach = st.creative ? REACH_C : REACH;
     // телефон: «нажал — поставить, держишь — ломать» под пальцем (или в режиме «прицел» — по центру экрана)
     const touchTap = st.I.touch && opts.touchMode !== 'cross', holding = st.I.touch && !C.blocked && K.fingerHolding();
@@ -1098,7 +1218,7 @@
     const ch = CAMP.ch, U = E().UNIT || 1;
     // скорость — в единицах движка (1 м = UNIT): камера по ней узнаёт бег (шире обзор на 8°) и темп покачивания
     ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx * U; ch.vz = P.vz * U; ch.h = P.sneak ? 1.5 : 1.85; ch.grounded = P.onGround;
-    CAMP.running = P.sprint; CAMP.crouchW = P.sneak ? 1 : 0;
+    CAMP.running = P.sprint; CAMP.crouchW = P.sneak ? 1 : 0; CAMP.mode = P.pk || P.hang ? 'pk' : 'move';   // залезает / висит — без покачивания
     const over = st.ui?.isOpen() || st.menu || st.modWin;   // открыто окно поверх мира
     rig.mode = 'first';
     rig.update(dt, CAMP, over ? null : look, PHYS, C);
@@ -1121,8 +1241,11 @@
       const sp = Math.hypot(P.vx, P.vz), lookYaw = rig.yaw + PI;
       let want = lookYaw;
       if (sp > .5) { const dd = ((Math.atan2(P.vx, P.vz) - lookYaw + PI * 3) % (PI * 2)) - PI; if (Math.abs(dd) < PI / 2) want = lookYaw + clamp(dd, -1.05, 1.05); }
+      if (P.pk || P.hang) want = P.pk ? P.pk.yaw : P.hangYaw;   // паркур — лицом к стене (позы — те же, что в «Мире Денчика»)
       P.bodyYaw = want;
-      A.pose('me', { x: P.x - st.ox, y: P.y, z: P.z - st.oz, yaw: want, moving: sp > .4, speed: sp, air: !P.onGround && !P.climb && !(P.water > .3), crouch: P.sneak ? 1 : 0, swim: P.water > .9, ladder: P.climb && !P.onGround, sit: false });
+      const pkm = P.pk ? (P.pk.move === 'swim' ? 'mantle' : P.pk.move) : '';
+      A.pose('me', { x: P.x - st.ox, y: P.y, z: P.z - st.oz, yaw: want, moving: P.hang ? !!P.shimmyNow : sp > .4, speed: sp, air: !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang, crouch: P.sneak && !P.pk ? 1 : 0, swim: P.water > .9 && !P.pk, ladder: P.climb && !P.onGround, sit: false,
+        hang: !!P.hang, pk: pkm, pkK: P.pk ? P.pk.k : 0, climbPh: P.climbPh || 0 });
       me.hidden = !st.camMode || st.camD < .95;   // вид сзади/спереди, а камера прижата к стене — не смотреть изнутри головы
       const [ex, ey, ez] = eye(st), d = lookDir(st);
       me.lookAt = me.lookAt || { x: 0, y: 0, z: 0 };
@@ -1468,8 +1591,8 @@
       case 'where': log(`📍 ${Math.floor(P.x)} ${Math.floor(P.y)} ${Math.floor(P.z)}`); return;
       case 'time': { if (!cheat) break; const h = a[0] === 'day' ? 8 : a[0] === 'night' ? 21 : a[0] === 'noon' ? 12 : +a[0]; if (Number.isFinite(h)) { st.R.lighting.time = ((h % 24) + 24) % 24; log('🕐 Время: ' + st.R.lighting.time + ' ч'); } return; }
       case 'gamemode': { if (!cheat && a[0] !== 'survival') break; const c = a[0] === 'creative' || a[0] === 'c' || a[0] === '1'; st.creative = c; st.meta.mode = c ? 'creative' : 'survival'; if (c) st.meta.cheats = true; P.fly = false; log(c ? '🎨 Творчество (достижения в этом мире больше не засчитываются)' : '⚔️ Выживание'); setWhere(st.meta.name + (c ? ' · 🎨' : '')); return; }
-      case 'tp': { if (!cheat) break; const x = +a[0], y = +a[1], z = +a[2]; if ([x, y, z].every(Number.isFinite) && Math.abs(x) < V.LIMIT && Math.abs(z) < V.LIMIT) { P.x = x; P.y = clamp(y, 1, V.H + 20); P.z = z; P.vy = 0; P.fallTop = P.y; rebase(st, true); st.ready = false; log('✨ Телепорт'); } return; }
-      case 'spawn': { const sp = st.meta.spawn; P.x = sp.x; P.y = sp.y; P.z = sp.z; P.vy = 0; rebase(st, true); st.ready = false; return; }
+      case 'tp': { if (!cheat) break; const x = +a[0], y = +a[1], z = +a[2]; if ([x, y, z].every(Number.isFinite) && Math.abs(x) < V.LIMIT && Math.abs(z) < V.LIMIT) { P.x = x; P.y = clamp(y, 1, V.H + 20); P.z = z; P.vy = 0; P.fallTop = P.y; P.pk = P.hang = null; rebase(st, true); st.ready = false; log('✨ Телепорт'); } return; }
+      case 'spawn': { const sp = st.meta.spawn; P.x = sp.x; P.y = sp.y; P.z = sp.z; P.vy = 0; P.pk = P.hang = null; rebase(st, true); st.ready = false; return; }
       case 'give': { if (!cheat) break; const it = V.item(a[0]) || V.items.find(i => i.title.toLowerCase() === (a.join(' ') || '').toLowerCase()); if (!it) { log('Нет такой вещи'); return; } const n = clamp(+a[1] || it.stack, 1, 640); give(st, { id: it.name, n }); log('🎁 ' + it.title + ' × ' + n); return; }
       default: if (st.modRun?.command(cmd, a)) return; log('Нет такой команды. /help — список'); return;
     }
@@ -1491,6 +1614,7 @@
         <div class="gs-row"><div class="gs-lbl">Бег<small>Держать Ctrl или один раз нажать.</small></div><div class="gs-ctl">${seg('sprintToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sprintToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">«Призрак» блока<small>Полупрозрачный кубик там, куда встанет блок из руки.</small></div><div class="gs-ctl">${seg('ghost', [[1, 'Вкл'], [0, 'Выкл']], opts.ghost === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Времена года<small>«Как в общем мире» — как у всех на сайте: быстрые сезоны (около недели), декабрь–январь — зима, ноябрь — осень. «По игровым дням» — 3 суток игры на сезон. Зимой снег на блоках и лёд на озёрах (по нему можно ходить), осенью желтеет листва. «Выкл» — всегда лето.</small></div><div class="gs-ctl">${seg('seasons', [['calendar', 'Как в общем мире'], ['cycle', 'По игровым дням'], ['off', 'Выкл']], opts.seasons || 'calendar')}</div></div>
+        <div class="gs-row"><div class="gs-lbl">Цепляться за края<small>Как в «Мире Денчика»: прыгни у стены в 2 блока, держа «вперёд», — залезешь; выше — схватишься за край (в стороны — по краю, «вперёд» или «прыжок» — наверх, «красться» — отпустить). В воде у берега — «прыжок», и вылезешь.</small></div><div class="gs-ctl">${seg('climb', [[1, 'Вкл'], [0, 'Выкл']], opts.climb === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Деревья падают<small>Подрубил ствол — дерево валится от тебя и рассыпается на брёвна (только настоящие деревья, не постройки).</small></div><div class="gs-ctl">${seg('fell', [[1, 'Вкл'], [0, 'Выкл']], opts.fell === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Погода<small>Дождь и снег по месту (в пустыне — сухо): небо темнее, капли и хлопья вокруг, шум дождя. На «низкой» графике — без капель.</small></div><div class="gs-ctl">${seg('weather', [[1, 'Вкл'], [0, 'Выкл']], opts.weather === false ? 0 : 1)}</div></div>
         ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после смерти.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
@@ -1507,6 +1631,7 @@
         if (k === 'sprintToggle') { opts.sprintToggle = v === '1'; if (S) S.sprintOn = false; }
         if (k === 'ghost') opts.ghost = v === '1';
         if (k === 'fell') opts.fell = v === '1';
+        if (k === 'climb') opts.climb = v === '1';
         if (k === 'weather') { opts.weather = v === '1'; if (S) S.weatherOff = !opts.weather; }
         if (k === 'seasons') { opts.seasons = ['calendar', 'cycle', 'off'].includes(v) ? v : 'calendar'; if (S) S.WX?.setSeasons?.(opts.seasons); }
         if (k === 'tips' && S) { S.meta.tips = v === '1'; tipsUpdate(S); }
@@ -1548,6 +1673,8 @@
     // дерево: скрип (трещит, кренясь) и глухой удар о землю
     Sy.add('kb_creak', k => { const a = new k.Bp(240, 6), b = new k.Bp(520, 5); return k.make(.9, 223, (t, r) => { const w = k.N(r), e = Math.sin(Math.min(1, t / .9) * Math.PI), tick = (Math.sin(t * 38 + Math.sin(t * 7) * 3) > .6 ? 1 : .25); return (a.do(w) * 2.2 + b.do(w) * 1.1) * e * tick; }, .07, .05); });
     Sy.add('kb_thud', k => { const a = new k.Bp(70, 1.1), b = new k.Bp(180, 1.4), c = new k.Bp(900, 1); let lp = 0; return k.make(.7, 224, (t, r) => { const w = k.N(r); lp += (w - lp) * .04; return (a.do(w) * 3 + b.do(w) * 1.5 + lp * 2) * k.exp(-t * 7) + c.do(w) * k.exp(-t * 30) * .6; }, .13, .06); });
+    // схватился за край / залезает: шорох одежды и глухой хлопок ладоней
+    Sy.add('kb_grab', k => { const a = new k.Bp(700, 1.2), b = new k.Bp(2400, 1.4); let lp = 0; return k.make(.24, 226, (t, r) => { const w = k.N(r); lp += (w - lp) * .12; return (a.do(w) * 1.4 + lp * 1.6) * k.exp(-t * 26) + b.do(w) * k.exp(-Math.abs(t - .05) * 40) * .7; }, .09, .01); });
     // лёд: треск и звон осколков (прорубь)
     Sy.add('kb_ice', k => { const a = new k.Bp(3400, 2.6), b = new k.Bp(5600, 3.2), c = new k.Bp(1100, 1.6); return k.make(.5, 225, (t, r) => { const w = k.N(r); let s = 0; for (const at of [0, .045, .1, .19]) if (t >= at) s += (a.do(w) * 1.5 + b.do(w)) * k.exp(-(t - at) * 36); return s + c.do(w) * k.exp(-t * 20) * 1.3; }, .1, .01); });
     Sy.add('kb_poof', k => { const a = new k.Bp(500, .9), b = new k.Bp(1400, 1.1); return k.make(.3, 219, (t, r) => { const w = k.N(r), e = Math.min(1, t / .02) * k.exp(-t * 11); return (a.do(w) * 1.6 + b.do(w)) * e; }, .09, .05); });
@@ -1560,7 +1687,7 @@
       log, toast: (t, ok) => S?.H.toast(t, ok),
       player: () => S?.P, give: s => give(S, s), hurt: n => hurt(S, n, 'mob'), heal: n => { if (S) S.P.hp = clamp(S.P.hp + n, 0, 20); },
       launch: (vx, vy, vz) => { if (!S) return; const P = S.P; P.vx += vx; P.vy = vy; P.vz += vz; P.onGround = false; P.fallTop = P.y; P.modFall = true; },
-      teleport: (x, y, z) => { if (!S) return; Object.assign(S.P, { x, y, z, vx: 0, vy: 0, vz: 0, fallTop: y }); rebase(S, true); },
+      teleport: (x, y, z) => { if (!S) return; Object.assign(S.P, { x, y, z, vx: 0, vy: 0, vz: 0, fallTop: y, pk: null, hang: null }); rebase(S, true); },
       particles: (kind, x, y, z, n, color) => S?.ents?.particles?.(kind, x, y, z, n, color), sound: (n, x, y, z, vol) => S?.AU?.play(n, { x: x - S.ox, y, z: z - S.oz, vol: vol ?? 1 }),
       text: (x, y, z, t) => log('✨ ' + t), shake: p => S?.rig?.shake?.(1 + p * 4, .25 + p * .4),
       spawn: (type, x, y, z) => { const M = window.KubomirEnts?.MOBS?.[type]; if (!S || !M || (S.meta.diff === 'peaceful' && !M.passive)) return; S.ents?.spawn?.(type, x, y, z); },

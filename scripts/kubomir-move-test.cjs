@@ -185,6 +185,175 @@ KB.opts({});
     X.dispose(); V.iceTest = null;
   }
 
+  // ═══ 2. Паркур — тот же движок, что у человечка «Мира Денчика» (E.grip по кубикам через V.gripPhys) ═══
+  sec('паркур: залезть на 2 блока, повиснуть на 3, по краю, наверх, отпустить; 1 блок — обычный прыжок; 4 — не достать');
+  const wallWorld = h => { const W = mkWorld(); W.fill(2, 46, -4, 5, 45 + h, 4, 'stone'); return W; };
+  const faceX = st => { st.rig.yaw = -Math.PI / 2; };   // смотрим на +x
+  {
+    // гриф (V.gripPhys) отвечает как физика движка
+    const W = wallWorld(2), G = V.gripPhys(W);
+    const h = G.raycast(.5, 47, .5, 1, 0, 0, 5);
+    ok(h && near(h.x, 2, 1e-9) && h.nx === -1 && h.col, 'V.gripPhys: луч в стену — грань стены, нормаль к нам', h);
+    ok(!G.raycast(2.5, 46.5, .5, 1, 0, 0, 5) || G.raycast(2.5, 46.5, .5, 1, 0, 0, 5).x >= 6, 'луч, начатый внутри блока, этот блок не видит (как в Unity)');
+    ok(G.blocked(1.9, .5, 46.1, 47.5, .3) && !G.blocked(1.5, .5, 46.1, 47.5, .3), 'blocked — цилиндр тела задевает стену / не задевает');
+    ok(near(G.supportAt(3.5, .5, .3, 60).y, 48, 1e-9) && near(G.supportAt(.5, .5, .3, 60).y, 46, 1e-9), 'supportAt — верх стены 48, пол 46');
+    const L = E.grip.findLedge(G, { x: 1.3, y: 46, z: .5 }, { x: 1, z: 0 }, .5, 2.6, 1.8 / 2.1);
+    ok(L && near(L.lip.y, 48, 1e-6) && near(L.height, 2, 1e-6) && L.face.x === -1, 'E.grip.findLedge нашёл край стены в 2 блока', L && { lip: L.lip, h: L.height, face: L.face });
+  }
+  {
+    const st = mkSt(wallWorld(2), { x: .5, y: 46, z: .5 }); faceX(st);
+    let maxPk = 0;
+    st.C.key('KeyW', true); steps(st, 20); st.C.key('Space', true); steps(st, 80, () => { if (st.P.pk) maxPk = Math.max(maxPk, st.P.pk.k); }); st.C.key('Space', false); st.C.key('KeyW', false); steps(st, 20);
+    ok(near(st.P.y, 48, 1e-6) && st.P.x > 2 && st.P.onGround && st.pkN === 1 && maxPk > .9, 'стена в 2 блока: «вперёд» + «прыжок» — залез наверх (путь движка)', { y: st.P.y, x: +st.P.x.toFixed(2), pkN: st.pkN });
+    ok(st.sounds.includes('kb_grab') && st.P.exh > .2 && st.P.exh < .6, 'залезть — шорох рук и немного голода', st.P.exh);
+  }
+  {
+    const st = mkSt(wallWorld(1), { x: .5, y: 46, z: .5 }); faceX(st);
+    st.C.key('KeyW', true); steps(st, 20); st.C.key('Space', true); steps(st, 60); st.C.key('Space', false); st.C.key('KeyW', false); steps(st, 20);
+    ok(near(st.P.y, 47, 1e-6) && !st.pkN, 'ступенька в 1 блок — обычный прыжок (как в Майнкрафте), без паркура', { y: st.P.y, pkN: st.pkN });
+  }
+  {
+    // стена в 3 блока: прыжок с «вперёд» — схватился, держишь «вперёд» — залез
+    const st = mkSt(wallWorld(3), { x: 1.5, y: 46, z: .5 }); faceX(st);
+    let hung = false, done = false;
+    st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 160, () => { if (st.P.hang) hung = true; if (!done && st.P.onGround && st.P.y > 48.9) { done = true; st.C.key('Space', false); st.C.key('KeyW', false); } }); steps(st, 20);
+    ok(hung && near(st.P.y, 49, 1e-6) && st.P.x > 2, 'стена в 3 блока: схватился за край и залез наверх', { hung, y: st.P.y, x: +st.P.x.toFixed(2) });
+  }
+  {
+    // вис без «вперёд»: висит, по краю вбок, «прыжок» — наверх; другой раз — «красться» — отпустил и упал
+    const hangNow = () => { const st = mkSt(wallWorld(3), { x: 1.5, y: 46, z: .5 }); faceX(st); st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 60, i => { if (st.P.hang || st.P.pk?.move === 'hang') st.C.key('KeyW', false); }); st.C.key('Space', false); steps(st, 30); return st; };
+    let st = hangNow();
+    ok(st.P.hang && near(st.P.y, 47, .05) && near(st.P.x, 2 - .36, .05), 'висит: руки на краю (48), ноги на 2 ниже, у стены', { hang: !!st.P.hang, y: +st.P.y.toFixed(3), x: +st.P.x.toFixed(3) });
+    const z0 = st.P.z; st.C.key('KeyD', true); steps(st, 60); st.C.key('KeyD', false); steps(st, 5);
+    ok(st.P.hang && Math.abs(st.P.z - z0) > .5 && near(st.P.y, 47, .05), 'вбок — идёт по краю', { dz: +(st.P.z - z0).toFixed(2) });
+    const za = st.P.z; st.C.key('KeyD', true); steps(st, 400); st.C.key('KeyD', false);
+    ok(st.P.hang && st.P.z > za && st.P.z < 4.85 && st.P.z > 4.5, 'по краю — до конца стены (стена до z 5, руки — по 0,2 от середины), дальше не уходит', { z: +st.P.z.toFixed(2) });
+    st.C.key('Space', true); steps(st, 2); st.C.key('Space', false); steps(st, 80);
+    ok(!st.P.hang && near(st.P.y, 49, 1e-6), '«прыжок» в висе — залез наверх', { y: st.P.y });
+    st = hangNow();
+    st.C.key('KeyC', true); steps(st, 2); st.C.key('KeyC', false); steps(st, 60);   // «красться» (в игре — Shift, здесь — общее «присесть»)
+    ok(!st.P.hang && near(st.P.y, 46, 1e-6) && st.P.onGround, '«красться» в висе — отпустил, стоит внизу', { y: st.P.y });
+    st = hangNow();
+    st.W.fill(2, 46, -4, 5, 48, 4, null);      // стену сломали целиком — сорвался
+    steps(st, 3);
+    ok(!st.P.hang, 'край сломали — сорвался (не висит в воздухе)');
+  }
+  {
+    const st = mkSt(wallWorld(4), { x: 1.5, y: 46, z: .5 }); faceX(st);
+    st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 120); st.C.key('Space', false); st.C.key('KeyW', false); steps(st, 60);
+    ok(near(st.P.y, 46, 1e-6) && !st.pkN, 'стена в 4 блока — не достать (не залез, не висит)', { y: st.P.y, pkN: st.pkN });
+  }
+  {
+    // выключено в ⚙️ — как раньше (стена в 2 блока — не залезть)
+    KB.opts({ climb: false });
+    const st = mkSt(wallWorld(2), { x: .5, y: 46, z: .5 }); faceX(st);
+    st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 90); st.C.key('Space', false); st.C.key('KeyW', false);
+    ok(st.P.y < 47.5 && !st.pkN, '⚙️ «Цепляться за края» выкл — как раньше', st.P.y);
+    KB.opts({});
+  }
+
+  // ═══ 3. Вода: плавучесть, вылезти на берег ═══
+  sec('вода: держишься на плаву (голова над водой), «красться» — нырнуть, вылезти на берег, из проруби — на лёд');
+  {
+    const W = mkWorld(); lake(W, -6, -6, 6, 6, 40, 51);
+    const st = mkSt(W, { x: .5, y: 44, z: .5 });
+    steps(st, 600);
+    const eye = st.P.y + 1.62;
+    ok(eye > 51.875 + .05 && !st.P.eyeWater && Math.abs(st.P.vy) < .2, 'ничего не жмёшь — всплыл и держится: голова над водой (не тонет)', { eye: +eye.toFixed(2), vy: +st.P.vy.toFixed(3) });
+    st.P.air = 15;
+    st.C.key('KeyC', true); steps(st, 120); st.C.key('KeyC', false);
+    ok(st.P.eyeWater && st.P.y < 49, '«красться» — нырнул', +st.P.y.toFixed(2));
+    steps(st, 600);
+    ok(!st.P.eyeWater, 'отпустил — снова всплыл');
+  }
+  {
+    // берег в 1 блок над водой (край 1/8 над гладью) — просто плыви к нему («вперёд»): выталкивает, вышел сам
+    const W = mkWorld(); lake(W, -6, -6, 6, 6, 40, 51); W.fill(7, 40, -9, 30, 51, 9, 'stone');
+    const st = mkSt(W, { x: 4.5, y: 50.5, z: .5 }); faceX(st);
+    st.C.key('KeyW', true); steps(st, 240, () => { if (st.P.onGround && st.P.x > 8) st.C.key('KeyW', false); });
+    ok(st.P.x > 7.2 && near(st.P.y, 52, 1e-6), 'низкий берег: плывёшь «вперёд» — выталкивает (как в Майнкрафте), вышел', { x: +st.P.x.toFixed(2), y: st.P.y });
+  }
+  {
+    // берег на 1 блок выше гладь (+1,125): «вперёд» + «прыжок» — вылез (путь «залезть»)
+    const W = mkWorld(); lake(W, -6, -6, 6, 6, 40, 51); W.fill(7, 40, -9, 30, 52, 9, 'stone');
+    const st = mkSt(W, { x: 4.5, y: 50.4, z: .5 }); faceX(st);
+    st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 240, () => { if (st.P.onGround && st.P.x > 7.5) { st.C.key('Space', false); st.C.key('KeyW', false); } }); steps(st, 20);
+    ok(st.P.x > 7.2 && near(st.P.y, 53, 1e-6) && st.pkN >= 1, 'берег на блок выше воды: «вперёд» + «прыжок» — вылез', { x: +st.P.x.toFixed(2), y: st.P.y, pkN: st.pkN });
+    // слишком высокий (2 блока над водой) — не вылезти (ищи место пониже)
+    const W2 = mkWorld(); lake(W2, -6, -6, 6, 6, 40, 51); W2.fill(7, 40, -9, 30, 53, 9, 'stone');
+    const s2 = mkSt(W2, { x: 4.5, y: 50.4, z: .5 }); faceX(s2);
+    s2.C.key('KeyW', true); s2.C.key('Space', true); steps(s2, 200); s2.C.key('Space', false); s2.C.key('KeyW', false);
+    ok(s2.P.x < 7 && !s2.pkN, 'берег в 2 блока над водой — не вылезти', { x: +s2.P.x.toFixed(2) });
+  }
+  {
+    // прорубь: лёд вокруг, вылез на лёд
+    const W = mkWorld(); lake(W, -6, -6, 6, 6, 40, 51);
+    const st = mkSt(W, { x: .5, y: 50.3, z: .5 }); st.WX.iceForce = true; st.WX.iceTick();
+    steps(st, 3);   // лёд вокруг пловца проломан — он в проруби
+    faceX(st); st.C.key('KeyW', true); st.C.key('Space', true); steps(st, 160, () => { if (st.P.onGround && st.P.water === 0 && st.P.x > 1.2) { st.C.key('Space', false); st.C.key('KeyW', false); } }); steps(st, 20);
+    ok(near(st.P.y, 51.875, 1e-6) && st.P.x > 1 && st.P.onGround && st.P.water === 0, 'из проруби — на лёд («вперёд» + «прыжок»)', { x: +st.P.x.toFixed(2), y: st.P.y });
+    st.WX.dispose();
+  }
+
+  // ═══ 4. Одинаково при 30, 60 и 144 кадрах (на телефоне плыву, на ПК тону — так не будет) ═══
+  sec('частота кадров: тот же ввод при 33,3 / 16,7 / 6,9 мс на кадр — те же места (цикл движка с шагом 1/60)');
+  {
+    // настоящий E.loop: подставные requestAnimationFrame и часы; ввод — по времени игры (шагам) и по времени кадров (как события DOM)
+    const loopRun = (frameMs, sec2, update) => {
+      let now = 0; const q = [];
+      const raf0 = globalThis.requestAnimationFrame, perf0 = globalThis.performance, doc0 = globalThis.document;
+      globalThis.requestAnimationFrame = cb => { q.push(cb); return q.length; }; globalThis.cancelAnimationFrame = () => {};
+      globalThis.performance = { now: () => now }; globalThis.document = { hidden: false };
+      try { const L = E.loop(update, () => {}); while (now < sec2 * 1000) { now += frameMs; for (const cb of q.splice(0)) cb(now); } L.stop(); }
+      finally { globalThis.requestAnimationFrame = raf0; globalThis.performance = perf0; globalThis.document = doc0; }
+    };
+    // «Кубомир»: прыжок в озеро с берега, плывём к другому берегу, вылезаем; ввод — по шагам (точно) и по кадрам (как DOM)
+    const kbRun = (frameMs, byFrame) => {
+      const W = mkWorld(); lake(W, -6, -6, 6, 6, 40, 51); W.fill(-9, 40, -9, -7, 53, 9, 'stone'); W.fill(7, 40, -9, 40, 52, 9, 'stone');
+      const st = mkSt(W, { x: -8.5, y: 54, z: .5 }); faceX(st);
+      let n = 0, tGame = 0, frameT = 0;
+      const plan = t => { st.C.key('KeyW', t >= .2); st.C.key('Space', t >= 4 && t < 9); };
+      loopRun(frameMs, 12, dt => { if (!byFrame) plan(tGame); st.C.step(dt); st.WX.iceTick(); KB.physics(st, dt); n++; tGame += dt; });
+      void frameT;
+      st.WX.dispose();
+      return { x: st.P.x, y: st.P.y, z: st.P.z, n };
+    };
+    const A = kbRun(1000 / 60), B = kbRun(1000 / 144), C3 = kbRun(1000 / 30);
+    ok(A.n === B.n && A.n === C3.n && near(A.x, B.x, 1e-9) && near(A.y, B.y, 1e-9) && near(A.x, C3.x, 1e-9) && near(A.y, C3.y, 1e-9), '«Кубомир» (ввод по шагам): 60, 144 и 30 кадров — одинаково до 1e-9', { A, B, C3 });
+    ok(A.x > 7 && near(A.y, 53, 1e-6), '…и сценарий честный: спрыгнул в озеро, переплыл, вылез на берег', A);
+    // ввод «как события DOM» — между кадрами: разница — не больше пути за один кадр
+    const kbRunDom = frameMs => {
+      const W = mkWorld(); lake(W, -6, -6, 6, 6, 40, 51); W.fill(-9, 40, -9, -7, 53, 9, 'stone'); W.fill(7, 40, -9, 40, 52, 9, 'stone');
+      const st = mkSt(W, { x: -8.5, y: 54, z: .5 }); faceX(st);
+      let now = 0; const q = [];
+      const raf0 = globalThis.requestAnimationFrame, perf0 = globalThis.performance, doc0 = globalThis.document;
+      globalThis.requestAnimationFrame = cb => { q.push(cb); return q.length; }; globalThis.performance = { now: () => now }; globalThis.document = { hidden: false };
+      try {
+        const L = E.loop(dt => { st.C.step(dt); st.WX.iceTick(); KB.physics(st, dt); }, () => {});
+        while (now < 12000) { now += frameMs; const t = now / 1000; st.C.key('KeyW', t >= .2); st.C.key('Space', t >= 4 && t < 9); for (const cb of q.splice(0)) cb(now); }
+        L.stop();
+      } finally { globalThis.requestAnimationFrame = raf0; globalThis.performance = perf0; globalThis.document = doc0; }
+      st.WX.dispose();
+      return { x: st.P.x, y: st.P.y, z: st.P.z };
+    };
+    const D1 = kbRunDom(1000 / 60), D2 = kbRunDom(1000 / 144), D3 = kbRunDom(1000 / 30);
+    ok(Math.hypot(D1.x - D2.x, D1.y - D2.y) < .15 && Math.hypot(D1.x - D3.x, D1.y - D3.y) < .25 && near(D1.y, 53, 1e-6) && near(D3.y, 53, 1e-6), '«Кубомир» (ввод между кадрами): все вылезли на тот же берег, разница — меньше шага за кадр', { D1, D2, D3 });
+    // движок («Мир Денчика», «Студия 3D»): плавание человечка (player.js) — то же
+    const engRun = frameMs => {
+      const ph = new E.Phys({ ground: -4 }), U = E.UNIT;
+      ph.addBox({ x: -10, y: -2, z: 0, hx: 12, hy: 2, hz: 20 });   // суша слева: верх 0, до x = 2
+      ph.addBox({ x: 42, y: -2, z: 0, hx: 12, hy: 2, hz: 20 });    // суша справа: от x = 30
+      ph.waterLevel = (x, z) => x > 2 && x < 30 ? 0 : -Infinity;
+      const P = E.player(ph, { x: 0, y: 0, z: 0 }), C = E.controls({ listen: false }), cam = { yaw: -Math.PI / 2 };
+      let t = 0;
+      loopRun(frameMs, 8, dt => { C.key('KeyW', t >= .2 && t < 5); C.step(dt); P.update(dt, C, cam); t += dt; });
+      void U;
+      return { x: P.ch.x, y: P.ch.y, swim: P.swim };
+    };
+    const e1 = engRun(1000 / 60), e2 = engRun(1000 / 144), e3 = engRun(1000 / 30);
+    ok(near(e1.x, e2.x, 1e-9) && near(e1.y, e2.y, 1e-9) && near(e1.x, e3.x, 1e-9) && near(e1.y, e3.y, 1e-9) && e1.swim && e1.x > 3, 'движок (player.js): плывёт одинаково при 60, 144 и 30 кадрах', { e1, e2, e3 });
+  }
+
   console.log(`\nkubomir-move-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

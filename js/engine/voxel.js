@@ -537,12 +537,13 @@
     }
     return b;
   };
-  // Пересекается ли коробка с твёрдым (нельзя поставить блок туда, где стоит игрок; встать после приседа)
-  V.boxHits = (W, x, y, z, w, h) => {
-    const hw = w / 2, EPS = 1e-3;
+  // Пересекается ли коробка с твёрдым (нельзя поставить блок туда, где стоит игрок; встать после приседа); ice — и лёд времён
+  // года (есть ли опора под ногами — красться у края проруби); без него лёд не «застрял в блоке»
+  V.boxHits = (W, x, y, z, w, h, ice) => {
+    const hw = w / 2, EPS = 1e-3, ic = !!ice && !!V.iceTest;
     for (let bx = Math.floor(x - hw + EPS); bx <= Math.floor(x + hw - EPS); bx++) for (let bz = Math.floor(z - hw + EPS); bz <= Math.floor(z + hw - EPS); bz++)
       for (let by = Math.floor(y + EPS); by <= Math.floor(y + h - EPS); by++) {
-        if (!solidBox(W, bx, by, bz, BX)) continue;
+        if (!solidBox(W, bx, by, bz, BX, ic)) continue;
         if (x + hw > bx + BX[0] + EPS && x - hw < bx + BX[3] - EPS && z + hw > bz + BX[2] + EPS && z - hw < bz + BX[5] - EPS && y + h > by + BX[1] + EPS && y < by + BX[4] - EPS) return true;
       }
     return false;
@@ -606,17 +607,24 @@
       const tdx = dx ? Math.abs(1 / dx) : Infinity, tdy = dy ? Math.abs(1 / dy) : Infinity, tdz = dz ? Math.abs(1 / dz) : Infinity;
       let tx = dx ? (dx > 0 ? x + 1 - ox : ox - x) * tdx : Infinity, ty = dy ? (dy > 0 ? y + 1 - oy : oy - y) * tdy : Infinity, tz = dz ? (dz > 0 ? z + 1 - oz : oz - z) * tdz : Infinity;
       const ice = !!V.iceTest && dy < .5;   // лёд — не потолок: снизу его нет
+      // начался внутри твёрдого — вся сплошная толща по лучу (стена из блоков = одно тело движка) не видна, пока луч не выйдет
+      // в пустоту: иначе в стене нашлись бы ложные «верхи» (верх блока под соседним блоком)
+      let skip = solidBox(W, x, y, z, B, ice) && inBox(ox - x, oy - y, oz - z, B), t = 0;
       for (let n = 0; n < 400; n++) {
-        if (solidBox(W, x, y, z, B, ice)) {
+        const sol = n === 0 ? skip || solidBox(W, x, y, z, B, ice) : solidBox(W, x, y, z, B, ice);
+        if (skip && n > 0) skip = sol && inBox(ox + dx * t - x, oy + dy * t - y, oz + dz * t - z, B);
+        if (sol && !skip) {
           const h = slab(ox - x, oy - y, oz - z, dx, dy, dz, B);
           if (h && h.t <= maxT) return { t: h.t, x: ox + dx * h.t, y: oy + dy * h.t, z: oz + dz * h.t, nx: h.nx, ny: h.ny, nz: h.nz, col: COL };
         }
         if (Math.min(tx, ty, tz) > maxT) return null;
-        if (tx <= ty && tx <= tz) { x += sx; tx += tdx; } else if (ty <= tz) { y += sy; ty += tdy; } else { z += sz; tz += tdz; }
+        if (tx <= ty && tx <= tz) { x += sx; t = tx; tx += tdx; } else if (ty <= tz) { y += sy; t = ty; ty += tdy; } else { z += sz; t = tz; tz += tdz; }
         if (y < -2 || y > H + 1) return null;
       }
       return null;
     };
+    // точка (в долях клетки) внутри рамки — с запасом на грань (вход в соседнюю клетку — ровно на грани)
+    function inBox(px, py, pz, b){ const e = 1e-6; return px >= b[0] - e && px <= b[3] + e && py >= b[1] - e && py <= b[4] + e && pz >= b[2] - e && pz <= b[5] + e; }
     const circle = (x, z, r, bx, bz) => { const cx = Math.max(bx + B[0], Math.min(bx + B[3], x)), cz = Math.max(bz + B[2], Math.min(bz + B[5], z)); return (x - cx) * (x - cx) + (z - cz) * (z - cz) < r * r - 1e-9; };
     const blocked = (x, z, y0, y1, r) => {
       const ice = !!V.iceTest;
