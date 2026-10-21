@@ -2563,14 +2563,19 @@
       cellar.back = { x: hx + Math.sin(v.lot.yaw + it.r * PI / 2) * 2.2, z: hz + Math.cos(v.lot.yaw + it.r * PI / 2) * 2.2, yaw: v.lot.yaw + it.r * PI / 2 };
       S.P.place(cellar.spawn.x, C0.floor + .05, cellar.spawn.z, cellar.spawn.yaw);
       S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z);
+      // камера от 3-го лица не опускается ниже земли (camera.js) — в подвале смотрим глазами персонажа, на выходе вид возвращается
+      if (S.rig && S.rig.mode !== 'first' && !cellar.view) { cellar.view = S.rig.mode; const m = S.rig.toggle(); S.H?.crosshair?.(m === 'first'); }
+      if (S.rig) { S.rig.yaw = cellar.spawn.yaw + PI; S.rig.fp = 0; }   // лицом к штабному столу
       S.forceSend = true; sfx('door_metal_open');
       toast('🕳️ Штабной зал базы. Лестница наверх — у стены', true);
     }
     function leaveBunker(quiet){
       const c = cellar; if (!c) return;
+      if (c.view && S.rig?.mode === 'first') { const m = S.rig.toggle(); S.H?.crosshair?.(m === 'first'); if (m !== 'first') S.I?.unlock?.(); }
       if (!quiet && c.back) { S.P.place(c.back.x, null, c.back.z, c.back.yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); S.forceSend = true; sfx('door_metal_close'); }
       for (const b of c.bodies) ph.remove(b);
       for (const i of c.items) X.remove(i);
+      for (const l of c.lamps || []) { try { R.lights.remove(l); } catch (e) {} }
       disposeTree(c.root);
       cellar = null;
     }
@@ -2578,16 +2583,20 @@
       const g = R.group(R.scene, 0, 0, 0, 0), src = new T.Group(); g.add(src);
       const bodies = [], items = [], y0 = C0.floor, H = 3.3, top = y0 + H, cx = (C0.x0 + C0.x1) / 2, cz = (C0.z0 + C0.z1) / 2, w = C0.x1 - C0.x0, d = C0.z1 - C0.z0, t = .3;
       const box = (x, y, z, bw, bh, bd, c, o = {}) => { P(src, { s: 'box', x, y, z, w: bw, h: bh, d: bd, c, ...o }); if (o.solid !== false) bodies.push(ph.addBox({ x, y, z, hx: bw / 2, hy: bh / 2, hz: bd / 2, tag: 'mb', data: { cam: !!o.cam, floor: o.floor } })); };
-      box(cx, y0 + .02, cz, w, .04, d, '#57534e', { solid: false });                        // пол (опора — рельеф подвала)
-      box(cx, top + .1, cz, w + .6, .2, d + .6, '#44403c', { cam: true });                  // потолок
-      box(cx, y0 + H / 2, C0.z0 - t / 2, w + .6, H, t, '#78716c', { cam: true }); box(cx, y0 + H / 2, C0.z1 + t / 2, w + .6, H, t, '#78716c', { cam: true });
-      box(C0.x0 - t / 2, y0 + H / 2, cz, t, H, d, '#78716c', { cam: true }); box(C0.x1 + t / 2, y0 + H / 2, cz, t, H, d, '#78716c', { cam: true });
+      box(cx, y0 + .02, cz, w, .04, d, '#8b8478', { solid: false });                        // пол (опора — рельеф подвала)
+      box(cx, top + .1, cz, w + .6, .2, d + .6, '#a8a29e', { cam: true });                  // потолок
+      box(cx, y0 + H / 2, C0.z0 - t / 2, w + .6, H, t, '#c4bdb0', { cam: true }); box(cx, y0 + H / 2, C0.z1 + t / 2, w + .6, H, t, '#c4bdb0', { cam: true });
+      box(C0.x0 - t / 2, y0 + H / 2, cz, t, H, d, '#c4bdb0', { cam: true }); box(C0.x1 + t / 2, y0 + H / 2, cz, t, H, d, '#c4bdb0', { cam: true });
       // штабной стол с картой, койки, ящики, флаг базы, лампы
       box(cx, y0 + .45, cz, 3.2, .9, 2, '#4d5b2a'); P(src, { s: 'box', x: cx, y: y0 + .92, z: cz, w: 3, h: .03, d: 1.8, c: '#86efac' });
       for (let i = 0; i < 3; i++) { const bx = C0.x0 + 1.2 + i * 2.2; box(bx, y0 + .35, C0.z1 - 1.1, 1.9, .5, .9, '#57534e'); P(src, { s: 'box', x: bx, y: y0 + .64, z: C0.z1 - 1.1, w: 1.8, h: .12, d: .8, c: '#a3a3a3' }); }
       box(C0.x1 - 1, y0 + .4, C0.z0 + 1, .8, .8, .8, '#a16207'); box(C0.x1 - 1.9, y0 + .3, C0.z0 + .9, .6, .6, .6, '#854d0e');
       P(src, { s: 'box', x: C0.x1 - .2, y: y0 + 2.1, z: cz, w: .04, h: .8, d: 1.3, c: color || '#ef4444' });
-      for (const lx of [cx - w / 4, cx + w / 4]) P(src, { s: 'ball', x: lx, y: top - .15, z: cz, r: .18, c: '#fef9c3', m: 'glow' });
+      const lamps = [];
+      for (const lx of [cx - w / 4, cx + w / 4]) {
+        P(src, { s: 'ball', x: lx, y: top - .15, z: cz, r: .18, c: '#fef9c3', m: 'glow' });
+        if (R.lights?.add) lamps.push(R.lights.add({ position: new T.Vector3(lx, top - .4, cz), color: new T.Color('#fff1c1'), intensity: 2.2, distance: 12, decay: 1.6 }));   // настоящий свет в зале (на low — только ореол)
+      }
       // лестница наверх (выход) — у западной стены
       const lx = C0.x0 + .45;
       for (const s2 of [-1, 1]) P(src, { s: 'box', x: lx, y: y0 + H / 2, z: cz + s2 * .4, w: .08, h: H, d: .08, c: '#9ca3af' });
@@ -2598,7 +2607,7 @@
       g.traverse(o => { if (o.isMesh) o.castShadow = false; });   // сверху — плита участка: тени солнца в зал не пускаем
       // «внутри»: камера ближе и ниже (как в домах), крыши нет — пустышка
       bodies.push(ph.addBox({ x: cx, y: y0 + H / 2, z: cz, hx: w / 2, hy: H / 2, hz: d / 2, trigger: true, tag: 'room', data: { room: 'wbc' + j, roof: new T.Group(), minP: .1, pitch: .3 } }));
-      return { j, root: g, bodies, items, spawn: { x: cx - w / 4, z: cz, yaw: PI / 2 }, back: null };
+      return { j, root: g, bodies, items, lamps, spawn: { x: cx - w / 4, z: cz, yaw: PI / 2 }, back: null };
     }
 
     // ── Клики (data-wb) ──
@@ -2759,7 +2768,7 @@
       const fab = q('.mb-fab'), canB = canEdit() && !W.bm && BM.onMyLot();
       if (fab.hidden === canB) fab.hidden = !canB;
       BM.frame(t);
-      if (W.near || W.bm) { tags.draw(W.views, W.me, nowS(), true); drawNames(); } else { tags.clear(); for (const el of nameEls.values()) el.remove(); nameEls.clear(); }
+      if ((W.near || W.bm) && !cellar) { tags.draw(W.views, W.me, nowS(), true); drawNames(); } else { tags.clear(); for (const el of nameEls.values()) el.remove(); nameEls.clear(); }   // в подвале надписи баз сверху не видны
     };
     // Чужие из другого сектора — на участках баз не видны (и в бою зоны не цели — mir-war.js смотрит p.wbHide)
     function hideOthers(){
