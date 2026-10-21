@@ -48,7 +48,7 @@
         if (window.MsgView?.blocked?.has(uid)) return { ok: false, err: 'ты заблокировал(а) этого человека' };
         if (block) return { ok: false, err: kidMsg(block) };
         const { data, error } = await sbClient.from('direct_messages').insert([{ sender_id: me, recipient_id: uid, text }]).select().single();
-        if (error) return { ok: false, err: /row-level|42501/i.test(error.message || '') ? '🚫 Нельзя написать этому игроку (писать можно только друзьям)' : P.err(error) };
+        if (error) return { ok: false, err: dmErr(error) };
         return { ok: true, m: dmMsg(data) };
       },
       async fetch(){ return []; },

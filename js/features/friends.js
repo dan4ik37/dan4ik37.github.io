@@ -204,7 +204,7 @@ async function sendDm(){
     loadDmConversation(dmCurrentFriendId);
   } catch(e) {
     const m = String(e?.message || '');
-    alert(/row-level|42501/i.test(m) || e?.code === '42501' ? '🚫 Нельзя написать этому игроку (писать можно только друзьям)'
+    alert(/row-level|42501/i.test(m) || e?.code === '42501' ? kidSafeMsg('no')
       : /[а-яё]/i.test(m) ? m : 'Не удалось отправить: ' + humanErr(e));
   }
 }

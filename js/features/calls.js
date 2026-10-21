@@ -22,7 +22,7 @@
   const kidMsg = k => window.D37Age?.kidMsg?.(k) || '🚫 Нельзя позвонить этому игроку';
   const kidBlock = uid => (window.D37Age?.contact ? window.D37Age.contact(uid).catch(() => null) : Promise.resolve(null));
   const u9 = () => !!window.D37Age?.u9?.();
-  const dmErr = error => /row-level|42501/i.test(error?.message || '') || error?.code === '42501' ? '🚫 Нельзя позвонить этому игроку (звонить можно только друзьям)' : P.err(error);
+  const dmErr = error => /row-level|42501/i.test(error?.message || '') || error?.code === '42501' ? kidMsg('nocall') : P.err(error);
   const rid = n => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const b = crypto.getRandomValues(new Uint8Array(n)); for (const x of b) s += a[x % a.length]; return s; };
 
   // ═══ Чистые части (проверяются в node: scripts/community-test.cjs) ═══
