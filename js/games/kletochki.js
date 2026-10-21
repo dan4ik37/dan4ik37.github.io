@@ -992,6 +992,7 @@
 
   // ── Меню ──
   function menu(){
+    flushLife();
     mode = 'menu';
     stopSession();
     ui.hud.hidden = true;
@@ -1016,7 +1017,7 @@
   }
 
   // ── Сеанс ──
-  function stopSession(){ if (S) { S.leave(); S = null; } myIdx = -1; }
+  function stopSession(){ netWait?.(); netWait = null; if (S) { S.leave(); S = null; } myIdx = -1; }
   function newSession(){
     stopSession();
     S = K.session({ game: GAME, sim: SIM, max: 10, me: { key: K.myKey(), nick: myName(), skin: cfg.skin, aspect: (cssW || 400) / (cssH || 600) },
@@ -1025,11 +1026,18 @@
     return S;
   }
   function startBots(){ newSession(); enterGame(); hideOv(); S.offline(); }
+  let netWait = null;
   function startOnline(code, pub){
-    if (!K.netOk()) { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(); return; }
     newSession(); enterGame();
     showOv(K.connHtml(pub));
-    S.online(code, { pub });
+    const s0 = S;
+    netWait?.();
+    netWait = K.whenNet(ok => {
+      netWait = null;
+      if (S !== s0 || !S) return;
+      if (ok) S.online(code, { pub });
+      else { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(); }
+    });
   }
   function enterGame(){
     mode = 'play'; koAt = 0; cam.ok = false; reported.clear(); soundMass = 0; namesVer = -1;
@@ -1038,6 +1046,7 @@
   function onRole(){ if (ui && ui.ov.querySelector('.io-logo')?.textContent === '🌐') hideOv(); namesVer = -1; }
   function onStatus(kind, v){
     if (!ui) return;
+    if (kind === 'joining' && mode === 'play' && ui.ov.hidden) showOv(K.connHtml(false));
     if (kind === 'error' && S?.pub && v === 'offline') { api.toast?.('📡 Не получилось подключиться — играем с ботами'); startBots(); }
     else if (kind === 'error') showOv(K.errHtml(v));
     else if (kind === 'handover') api.toast?.('Ты свернул вкладку — арену ведёт другой игрок');
@@ -1064,12 +1073,18 @@
   }
   function onRound(e){
     if (!S || !ui) return;
-    if (e.k === 'start') { hideOv(); koAt = 0; reported.clear(); return; }
+    if (e.k === 'start') { hideOv(); koAt = 0; reported.clear(); lifeBest = 0; return; }
     const mine = e.rank.findIndex(r => r[0] === S.me);
     if (mine >= 0 && !koAt) reportLife(e.rank[mine][2], mine === 0 && e.total >= 3 && e.rank[mine][3] >= 60, e.rank[mine][3]);
     showOv(K.podiumHtml(e, S.me));
     if (mine === 0) api.sfx?.('win');
     try { window.D37Ads?.interstitial?.(GAME); } catch (er) {}
+  }
+  // Ушёл посреди жизни (меню, другая игра) — рекорд этой жизни всё равно засчитать
+  let lifeBest = 0, lifeAt = 0;
+  function flushLife(){
+    if (S && mode === 'play' && !koAt && lifeBest >= 30) reportLife(lifeBest, false, (performance.now() - lifeAt) / 1000);
+    lifeBest = 0;
   }
   function reportLife(best, win, life){
     const runKey = (S?.role || 'x') + ':' + (S?.view()?.round || 0) + ':' + Math.round(life);
@@ -1369,6 +1384,7 @@
     const mass = guest ? V.mass : (V.owners[S.me]?.alive ? V.owners[S.me].mass : 0);
     const sc = K.num(mass);
     if (ui.sc.textContent !== sc) ui.sc.textContent = sc;
+    if (mass > 0) { if (!lifeBest) lifeAt = performance.now(); if (mass > lifeBest) lifeBest = mass; } else if (koAt) lifeBest = 0;
     const left = Math.max(0, Math.ceil(V.left / SPS));
     const tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`;
     if (ui.time.textContent !== tt) ui.time.textContent = tt;
@@ -1424,6 +1440,7 @@
       else menu();
     },
     unmount(){
+      try { flushLife(); } catch (e) {}
       stopSession();
       for (const [t, ev, fn, o] of listeners.splice(0)) t.removeEventListener(ev, fn, o);
       ro?.disconnect(); ro = null;

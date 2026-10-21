@@ -28,4 +28,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
 
-http.server.ThreadingHTTPServer(('', PORT), Handler).serve_forever()
+class Server(http.server.ThreadingHTTPServer):
+    # очередь подключений побольше: браузер тянет ~120 файлов разом, при очереди 5 (по умолчанию) Windows сбрасывает
+    # лишние подключения — часть скриптов не грузится (две вкладки / два браузера в тестах — тем более)
+    request_queue_size = 128
+    daemon_threads = True
+
+Server(('', PORT), Handler).serve_forever()

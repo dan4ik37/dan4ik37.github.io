@@ -310,7 +310,7 @@ function gamesFullOff(stage){
 }
 // Полный экран на телефоне лёжа (html.gs-compact): игра выше экрана — уменьшаем её целиком (transform: на нажатия не
 // влияет — игры считают их по getBoundingClientRect), чтобы влезла без прокрутки. У 3D-мира, Студии, «Орды» и Unity размер свой.
-const GAMES_NOFIT = new Set(['world', 'studio3d', 'horde', 'unity', 'podzem']);
+const GAMES_NOFIT = new Set(['world', 'studio3d', 'horde', 'unity', 'podzem', 'kletochki', 'chervyachki']);
 let gamesFitT = 0, gamesFitRO = null, gamesFitMO = null;
 function gamesFit(){
   const box = document.getElementById('gamesStageBox'), stage = document.getElementById('gamesStage');

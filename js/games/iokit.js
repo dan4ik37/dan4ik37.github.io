@@ -329,13 +329,28 @@
     const T = { onStatus: null, onSync: null, onMsg: null };
     ch.on('broadcast', { event: 'm' }, ({ payload }) => T.onMsg?.(payload));
     if (opts?.presence) ch.on('presence', { event: 'sync' }, () => T.onSync?.(ch.presenceState()));
-    ch.subscribe(st => T.onStatus?.(st));
+    // до подписки сообщения копим (иначе supabase-js шлёт их через REST — медленнее и «устаревший» путь)
+    let ready = false, queue = [];
+    ch.subscribe(st => {
+      if (st === 'SUBSCRIBED' && !ready) { ready = true; const q = queue; queue = []; for (const p of q) ch.send({ type: 'broadcast', event: 'm', payload: p }).catch(() => {}); }
+      T.onStatus?.(st);
+    });
     T.track = meta => ch.track(meta);
-    T.send = payload => { ch.send({ type: 'broadcast', event: 'm', payload }).catch(() => {}); };
+    T.send = payload => {
+      if (!ready) { if (queue.length < 30) queue.push(payload); return; }
+      ch.send({ type: 'broadcast', event: 'm', payload }).catch(() => {});
+    };
     T.close = () => { try { if (opts?.presence) ch.untrack(); sb.removeChannel(ch); } catch (e) {} };
     return T;
   }
   const netOk = () => { try { return !!(typeof sbClient !== 'undefined' ? sbClient : root.sbClient); } catch (e) { return false; } };
+  // Сразу по ссылке-приглашению игра открывается раньше, чем сайт подключит Supabase (init.js → initChat): подождать до ms
+  function whenNet(fn, ms = 8000){
+    if (netOk()) { fn(true); return () => {}; }
+    const t0 = Date.now();
+    let t = setInterval(() => { if (netOk() || Date.now() - t0 > ms) { clearInterval(t); t = 0; fn(netOk()); } }, 100);
+    return () => { if (t) { clearInterval(t); t = 0; } };
+  }
 
   // ═══ СЕАНС: без сети / хозяин / гость ═══
   // c: { game, sim, max, me: { key, nick, skin, aspect }, open, net, now, setT, clearT, raf, caf, autoLoop (по умолчанию true),
@@ -349,7 +364,7 @@
     const DTms = sim.DT * 1000;
     const S = { role: 'none', W: null, G: null, me: -1, P: null, code: '', pub: false, pubN: 1, alpha: 0, rtt: 0, closed: false,
       inLog: inputLog(sim.IN), seq: 0, sentIn: new Float64Array(sim.IN), sentOk: false, inAt: -1e9, hiAt: -1e9, gotYou: false, guests: new Map(), claimWait: new Map(), caps: null,
-      L: { t0: 0, n: 0 }, raf: 0, lastFrame: 0, plVer: -1, plAt: 0, err: '', hiddenAt: 0, handT: 0, migrated: 0 };
+      L: { t0: 0, n: 0 }, raf: 0, lastFrame: 0, plVer: -1, plAt: 0, err: '', hiddenAt: 0, handT: 0, migrated: 0, nBin: 0, nBinOk: 0, nSent: 0, binErr: '' };
     const cb = (k, ...a) => { try { return c[k]?.(...a); } catch (e) { console.error(e); } };
     const meName = () => cleanName(c.me.nick, 1);
 
@@ -413,7 +428,7 @@
         g.hold = Math.round(t - g.inAt);
         let buf = null;
         try { buf = sim.encode(W, g.idx, g); } catch (e) { console.error(e); }
-        if (buf) P.bin(id, buf);
+        if (buf) { P.bin(id, buf); S.nSent++; }
       }
       const v = sim.ownersVer(W);
       if (v !== S.plVer && t - S.plAt > 300) { S.plVer = v; S.plAt = t; const l = sim.owners(W); for (const id of S.guests.keys()) P.send(id, { t: 'pl', l }); }
@@ -427,7 +442,7 @@
       if (inp && t - S.inAt >= 45) {
         let same = S.sentOk;
         for (let i = 0; same && i < inp.length; i++) if (inp[i] !== S.sentIn[i]) same = false;
-        if (!same || t - S.inAt >= 250) {   // 20/с, пока меняется; иначе раз в 0,25 с (жив ли гость)
+        if (!same || t - S.inAt >= (P.fast(P.host) ? 250 : 1000)) {   // 20/с, пока меняется; иначе раз в 0,25 с (через Supabase — раз в 1 с)
           S.inAt = t; S.sentIn.set(inp); S.sentOk = true;
           const pk = sim.packIn(inp);
           pk.unshift(S.seq++ & 0xffff, Math.round(t) % 2147483647);
@@ -527,9 +542,11 @@
       sim.setInput(S.W, g.idx, inp);
     }
     function onBin(from, buf){
+      S.nBin++;
       if (S.closed || S.role !== 'guest' || !S.G) return;
       let ok = false;
-      try { ok = sim.decode(S.G, buf, now()); } catch (e) { ok = false; }
+      try { ok = sim.decode(S.G, buf, now()); } catch (e) { ok = false; S.binErr = String(e && e.message || e); }
+      if (ok) S.nBinOk++;
       if (!ok) return;
       if (S.G.echoTs >= 0) { const r = now() - S.G.echoTs - S.G.hold; if (r >= 0 && r < 5000) S.rtt = S.rtt ? S.rtt * .8 + r * .2 : r; }
       if (S.G.me >= 0 && S.me !== S.G.me && S.gotYou) { S.me = S.G.me; cb('onYou', S.me); }
@@ -880,6 +897,6 @@ body.low .io-ov{-webkit-backdrop-filter:none;backdrop-filter:none}
   function css(){ if (!root.document || document.getElementById('ioCss')) return; const s = document.createElement('style'); s.id = 'ioCss'; s.textContent = CSS; document.head.appendChild(s); }
 
   root.IoKit = { TAU, clamp, lerp, rnd, hash3, hashNums, writer, reader, toB64, fromB64, cleanName, hasBad, showName, EMOTES, inputLog,
-    party, supaTransport, netOk, session, pubCode, myKey, myNick, touchStick, drawStick, pad, viewBox, shell, fitHeight, lbHtml, linkFor, share,
+    party, supaTransport, netOk, whenNet, session, pubCode, myKey, myNick, touchStick, drawStick, pad, viewBox, shell, fitHeight, lbHtml, linkFor, share,
     myColors, shade, okColor, escH, num, ru, css, RELAY_MS, inviteNew, menuHtml, koHtml, podiumHtml, connHtml, errHtml, netLabel, reportLife };
 })();
