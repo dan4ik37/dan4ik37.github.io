@@ -16,11 +16,15 @@ const ok = (c, name, extra) => { if (c) pass++; else { fail++; console.log('FAIL
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.ico': 'image/x-icon', '.svg': 'image/svg+xml', '.txt': 'text/plain', '.woff2': 'font/woff2', '.jpg': 'image/jpeg' };
 const S = { sw: null, down: false };
+const SWV = /const VERSION = '([^']+)'/.exec(fs.readFileSync(path.join(SITE, 'sw.js'), 'utf8'))[1];   // кэш оболочки — d37-shell-<VERSION>
+// разделы сайта по настоящим адресам (/play/sudoku, /chat…) — index.html, как rewrites в vercel.json (js/ui/router.js)
+const SPA = JSON.parse(fs.readFileSync(path.join(SITE, 'vercel.json'), 'utf8')).rewrites.filter(r => r.destination === '/index.html')
+  .map(r => new RegExp('^' + r.source.replace(/\/:path\+$/, '/.+') + '$'));
 const OLD_SW = (() => { try { return execSync('git show 64206b0:sw.js', { cwd: SITE, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { return null; } })();
 const server = http.createServer((req, res) => {
   if (S.down) { req.socket.destroy(); return; }
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  if (p === '/') p = '/index.html';
+  if (p === '/' || SPA.some(rx => rx.test(p))) p = '/index.html';
   if (p === '/sw.js' && S.sw) { res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-cache' }); res.end(S.sw); return; }
   const f = path.join(SITE, p);
   if (!f.startsWith(SITE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('404'); return; }
@@ -32,7 +36,7 @@ const server = http.createServer((req, res) => {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const BASE = 'http://localhost:' + server.address().port;
   const port = 9600 + Math.floor(Math.random() * 300);
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'd37-e2e-'));
+  const profile = fs.mkdtempSync(path.join(process.env.D37_TMP || os.tmpdir(), 'd37-e2e-'));   // диск C полный — D37_TMP=E:\\claude-tmp\\…
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', 'about:blank'], { stdio: 'ignore' });
   let page = null;
   for (let i = 0; i < 60 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }
@@ -59,12 +63,12 @@ const server = http.createServer((req, res) => {
       ok(await until(`navigator.serviceWorker.controller && caches.has('dan4ik37-shell-v2')`), 'старый sw.js встал (кэш dan4ik37-shell-v2)');
       S.sw = null;   // дальше — sw.js из репозитория
       await ev(`navigator.serviceWorker.getRegistration().then(r => r.update())`);
-      ok(await until(`caches.keys().then(k => k.includes('d37-shell-v3') && !k.includes('dan4ik37-shell-v2'))`, 20000), 'новый sw.js встал сам (без кнопки), старый кэш удалён', await cacheNames());
+      ok(await until(`caches.keys().then(k => k.includes('d37-shell-${SWV}') && !k.includes('dan4ik37-shell-v2'))`, 20000), 'новый sw.js встал сам (без кнопки), старый кэш удалён', await cacheNames());
       ok(!(await ev(`!!document.getElementById('appUpdate')`)), 'при переходе со старого sw.js полоски «Новая версия» нет');
     } else {
       console.log('(git show 64206b0:sw.js недоступен — переход со старого sw.js не проверяем)');
       await load(BASE + '/#/home');
-      ok(await until(`navigator.serviceWorker.controller && caches.has('d37-shell-v3')`, 20000), 'sw.js встал');
+      ok(await until(`navigator.serviceWorker.controller && caches.has('d37-shell-${SWV}')`, 20000), 'sw.js встал');
     }
     // 2) оболочка
     await load(BASE + '/?r=1#/games/sudoku');
@@ -84,6 +88,8 @@ const server = http.createServer((req, res) => {
     ok(await until(`typeof showPage === 'function' && document.body.dataset.route === 'home'`, 15000), 'без сети главная открылась из кэша, сайт живой');
     await ev(`location.hash = '#/games/sudoku'; 1`);
     ok(await until(`!!(window.GAME_IMPL && GAME_IMPL.sudoku) && !!document.querySelector('#gamesStage .sd-grid')`, 15000), 'без сети судоку открылось и рисуется');
+    await load(BASE + '/play/sudoku');
+    ok(await until(`location.pathname === '/play/sudoku' && !!(window.GAME_IMPL && GAME_IMPL.sudoku) && !!document.querySelector('#gamesStage .sd-grid')`, 15000), 'без сети /play/sudoku (настоящий адрес) — приложение из кэша, судоку играется');
     await load(BASE + '/videos');
     ok(await until(`/Нет интернета/.test(document.body.innerText)`, 10000), 'серверная страница без сети → офлайн-страница');
     ok(await until(`document.querySelectorAll('.g:not(.off)').length >= 1`, 5000), 'офлайн-страница видит игры в кэше');
