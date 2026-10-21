@@ -498,7 +498,7 @@ let last = performance.now();
       statusLine(st);
       return;
     }
-    if (!g.srv) { dropDraft(g.id); g.id = r.id; g.srv = true; history.replaceState(null, '', '#/games/studio/edit/' + r.id); }
+    if (!g.srv) { dropDraft(g.id); g.id = r.id; g.srv = true; if (window.D37Route) D37Route.setUrl('#/games/studio/edit/' + r.id); else history.replaceState(null, '', '#/games/studio/edit/' + r.id); }
     g.status = r.status || g.status;
     if (want && want !== g.status) {
       const s2 = await rpc('ugc_status', { p_id: g.id, p_status: want });
@@ -528,7 +528,7 @@ let last = performance.now();
     const L = await light('id,title,icon,descr,kind,tpl,data,html,status,plays,likes,author,created_at,profiles(nick)');
     const row = await select(q => q.select(L).eq('id', id).maybeSingle());
     if (S !== st) return;
-    if (row?.kind === 'place') { location.replace('#/games/studio3d/play/' + id); return; }   // 3D-мир — в «Студии 3D»
+    if (row?.kind === 'place') { if (window.D37Route) D37Route.go('#/games/studio3d/play/' + id, { replace: true }); else location.replace('#/games/studio3d/play/' + id); return; }   // 3D-мир — в «Студии 3D»
     if (row) g = { ...row, srv: true };
     else if (drafts()[id]) g = { ...drafts()[id], status: 'draft', local: true };
     if (!g) { root.innerHTML = '<div class="st"><div class="st-empty">Игра не найдена или скрыта автором. <a href="#/games/studio">Другие игры</a></div></div>'; return; }

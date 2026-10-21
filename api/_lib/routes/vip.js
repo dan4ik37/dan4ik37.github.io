@@ -41,13 +41,13 @@ export default function handler(req, res) {
   ];
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>VIP</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>VIP</span></nav>
   <div class="vp-hero">
     <span class="vp-gem">✨</span>
     <div>
       <h1>VIP на сайте dan4ik37</h1>
       <p class="lead">Поддержи стрим — и получи плюшки на сайте: сайт без рекламы, цветной ник, GIF-аватарку, стикеры, закреп в чате и не только. <b>100 ₽ в месяц</b> (или 100 💎), а чем больше поддержка за всё время — тем выше уровень.</p>
-      <div class="cta"><a class="btn btn-gold" href="/#/profile/vip">✨ Получить VIP</a><a class="btn btn-ghost" href="/shop">💎 За кристаллы</a><a class="btn btn-ghost" href="#free">🎮 Пробный VIP за уровень</a></div>
+      <div class="cta"><a class="btn btn-gold" href="/profile/vip">✨ Получить VIP</a><a class="btn btn-ghost" href="/shop">💎 За кристаллы</a><a class="btn btn-ghost" href="#free">🎮 Пробный VIP за уровень</a></div>
     </div>
   </div>
 
@@ -59,7 +59,7 @@ export default function handler(req, res) {
   </section>
 
   <section class="box"><h2>Как получить</h2><ol class="vp-steps">
-    <li><a href="/#/profile/vip">Войди на сайт</a> и в профиле придумай <b>логин для доната</b> — один раз.</li>
+    <li><a href="/profile/vip">Войди на сайт</a> и в профиле придумай <b>логин для доната</b> — один раз.</li>
     <li>Нажми «Хочу купить VIP» в профиле — откроется DonationAlerts, логин уже будет скопирован.</li>
     <li>В поле «Ваше имя» вставь логин, сумма — от 100 ₽ (100 ₽ = месяц).</li>
     <li>Через пару минут VIP включится сам — обнови профиль.</li>

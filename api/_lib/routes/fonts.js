@@ -31,7 +31,7 @@ export default function handler(req, res) {
   const rowHtml = r => `<button type="button" class="ft-row" data-id="${r.id}"><small>${esc(r.name)}${r.latinOnly ? '' : ' · и для русских букв'}</small><span>${esc(r.out)}</span></button>`;
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/tools/nick">Генератор ников</a> › <span>Шрифты для ника</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/tools/nick">Генератор ников</a> › <span>Шрифты для ника</span></nav>
   <h1>Шрифты для ника — красивые буквы и символы</h1>
   <p class="lead">Впиши ник — и получи его 24 красивыми шрифтами: ${esc(show('boldScript'))}, ${esc(show('boldFraktur'))}, ${esc(show('circled'))}, ${esc(show('smallCaps'))} и другими.
     Нажми на вариант — он скопируется. Подходит для Telegram, Discord, TikTok, ВКонтакте и многих игр.</p>

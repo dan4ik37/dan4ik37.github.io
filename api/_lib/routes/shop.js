@@ -1,6 +1,7 @@
 // /shop → api/pages.js?page=shop — «Магазин кристаллов 💎»: что это, цены пакетов, на что тратить, как оплатить,
 // вопросы (FAQ + JSON-LD). Её смотрят и поисковики, и платёжные системы при подключении сайта (цены, способ
-// получения, возврат, реквизиты). Покупка — в SPA: /#/shop (js/features/shop.js).
+// получения, возврат, реквизиты). Покупка — в SPA (js/features/shop.js): адрес тот же (/shop), поэтому кнопки отсюда — /#/shop
+// (корень отдаёт приложение, роутер сам поставит /shop); /shop/o/<заказ> — уже только приложение (vercel.json).
 // /shop?o=<заказ>&r=ok|fail — сюда возвращает страница оплаты Freedom Pay: переводим в магазин, он ждёт зачисления.
 // Цифры — api/_lib/premium.js (как js/core/premium.js и premium.sql).
 import { SITE, esc } from '../yt.js';
@@ -16,7 +17,7 @@ export default function handler(req, res) {
   // Возврат со страницы оплаты
   if (/^D37-[\w-]{4,40}$/.test(order)) {
     const fail = req.query.r === 'fail';
-    const to = `/#/shop/${fail ? 'fail' : 'o'}/${encodeURIComponent(order)}`;
+    const to = `/shop/${fail ? 'fail' : 'o'}/${encodeURIComponent(order)}`;
     res.setHeader('Cache-Control', 'no-store');
     return res.status(200).send(page({
       title: fail ? 'Оплата не прошла — dan4ik37' : 'Проверяем оплату — dan4ik37', noindex: true, noAds: true,
@@ -39,7 +40,7 @@ export default function handler(req, res) {
   ];
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Магазин</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Магазин</span></nav>
   <div class="sp-hero">
     <span class="sp-gem">${GEMS.icon}</span>
     <div>
@@ -83,7 +84,7 @@ export default function handler(req, res) {
   res.status(200).send(page({
     title: 'Магазин кристаллов 💎 — dan4ik37',
     description: 'Кристаллы — валюта сайта dan4ik37: VIP, подарки друзьям, монеты и вещи для персонажа. Цены пакетов, оплата картой Казахстана, Kaspi или донатом из России.',
-    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true,
+    url, image: SITE + '/og-image.jpg', body, css: CSS, noAds: true, spa: '#/shop',   // вкладка с сайтом-приложением — сразу в магазин (раздел)
     ld: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
   }));
 }

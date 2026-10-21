@@ -116,7 +116,7 @@ async function renderProfilePage(viewUserId){
   const loggedOutEl = document.getElementById('profileLoggedOut');
   const contentEl = document.getElementById('profileContent');
   // #/profile/invites — «👥 Мои приглашения» (страница #/invite, js/features/invite.js)
-  if (viewUserId === 'invites') { location.replace('#/invite'); return; }
+  if (viewUserId === 'invites') { D37Route.go('#/invite', { replace: true }); return; }
   // #/profile/vip — свой профиль сразу на блоках «Логин для доната» и «Хочу купить VIP» (кнопка со страницы /vip)
   const focusVip = viewUserId === 'vip';
   if (focusVip) viewUserId = null;
@@ -506,7 +506,7 @@ function renderReferralPanel(profile, isOwn){
   if (typeof renderInviteCard === 'function') return renderInviteCard(panel, isOwn);
   if (!isOwn || !profile?.nick) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
-  const link = `${location.origin}${location.pathname}?ref=${encodeURIComponent(profile.nick)}`;
+  const link = `${location.origin}/?ref=${encodeURIComponent(profile.nick)}`;
   const input = document.getElementById('profileReferralLink');
   if (input) input.value = link;
 }

@@ -24,7 +24,7 @@ export default function handler(req, res) {
   ] };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>Колесо фортуны</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <span>Колесо фортуны</span></nav>
   <h1>Колесо фортуны онлайн</h1>
   <p class="lead">Впиши варианты — по одному на строку — и крути колесо. Решай, во что поиграть, кто моет посуду или кто выиграл приз. Бесплатно и честно: у каждого варианта равный шанс.</p>
   <section class="wh">

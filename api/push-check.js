@@ -114,11 +114,11 @@ async function checkStream(prev, deadline) {
   if (recent) return { status: 'live_again_quiet' };
 
   const title = await twitchTitle();
-  const bot = await botPost(`🔴 Денчик в эфире: ${oneLine(title) || 'стрим начался — залетай!'} → ${SITE}/#/chat/twitch`, 'stream:' + now);
+  const bot = await botPost(`🔴 Денчик в эфире: ${oneLine(title) || 'стрим начался — залетай!'} → ${SITE}/chat/twitch`, 'stream:' + now);
   const sent = await broadcast('want_streams', {
     title: '🔴 dan4ik37 в эфире!',
     body: title || 'Стрим начался — залетай!',
-    url: '/#/home',
+    url: '/',
     tag: 'stream-' + new Date().toISOString().slice(0, 10),
   }, deadline);
   return { status: 'sent', bot, ...sent };
@@ -154,7 +154,7 @@ async function checkWords(prev, deadline) {
   const sent = await broadcast('want_words', {
     title: '🔤 Новое слово дня',
     body: 'Угадай слово из 5 букв за 6 попыток — пока друзья не опередили!',
-    url: '/#/games/words',
+    url: '/play/words',
     tag: 'words-day',
   }, deadline);
   return { status: 'sent', day, ...sent };
@@ -220,7 +220,7 @@ async function handleTest(req, res) {
   const r = await sendPush(sub, {
     title: 'dan4ik37',
     body: '✅ Уведомления включены! Сообщим о новом видео и о начале стрима.',
-    url: '/#/home',
+    url: '/',
     tag: 'welcome',
   }, { ttl: 600, urgency: 'normal' });
   if (r.gone) { try { await sbDelete('push_subscriptions', `endpoint=eq.${encodeURIComponent(endpoint)}`); } catch (e) {} }

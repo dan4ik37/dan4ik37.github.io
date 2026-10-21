@@ -47,7 +47,7 @@ export default async function handler(req, res) {
   const url = `${SITE}/history`;
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/videos">Все видео</a> › <span>История канала</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/videos">Все видео</a> › <span>История канала</span></nav>
   <h1>История канала dan4ik37</h1>
   <p class="lead">Канал на YouTube — с ${year(first)} года: ${vids.length.toLocaleString('ru')} ${ru(vids.length, 'ролик', 'ролика', 'роликов')}. Год за годом — сколько вышло видео и во что больше всего играли. Всё посчитано по самим роликам.</p>
   <a class="hy-origin" href="/v/${esc(first.id)}"><img src="${esc(first.thumb)}" alt="${esc(first.title)}" width="320" height="180"><span><small>С чего всё началось · ${esc(date(first))}</small><b>${esc(first.title)}</b></span></a>

@@ -1,5 +1,5 @@
 // /c/<код> — ссылка-приглашение в сообщество (чат «как Дискорд», community.sql): значок, название, участники, о чём — для
-// превью ссылки в Telegram / ВК и для того, кто её открыл. «Вступить» → SPA #/c/<код> (там экран вступления, нужен вход).
+// превью ссылки в Telegram / ВК и для того, кто её открыл. «Вступить» → SPA /chat/join/<код> (там экран вступления, нужен вход).
 // Данные — cm_invite_info (то же, что видит гость). Пока community.sql не выполнен или код неверный — «приглашение не найдено».
 // Не для поиска (noindex) и без рекламы: содержимое игроков без модерации.
 import { SITE, esc } from '../yt.js';
@@ -21,12 +21,12 @@ export default async function handler(req, res) {
   if (!c || !c.name) return notFound(res, soon);
   const n = Number(c.members) || 0;
   const name = String(c.name).slice(0, 40), about = String(c.about || '').slice(0, 300), icon = String(c.icon || '🏰').slice(0, 8);
-  const url = `${SITE}/c/${code}`, join = `/#/c/${code}`;
+  const url = `${SITE}/c/${code}`, join = `/chat/join/${code}`;
   const title = `«${name}» — приглашение в сообщество`;
   const description = `${about ? about + ' · ' : ''}${n} ${plural(n, 'участник', 'участника', 'участников')}. Сообщество на сайте Денчика: чат, голосовой канал и друзья — вступай!`;
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/#/chat">Чат и сообщества</a> › <span>Приглашение</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/chat">Чат и сообщества</a> › <span>Приглашение</span></nav>
   <section class="iv-card">
     <span class="iv-ic">${esc(icon)}</span>
     <small class="iv-lbl">Тебя зовут в сообщество</small>
@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     <a class="btn btn-acc iv-go" href="${join}">🏰 Вступить</a>
     <p class="iv-note">Нужен аккаунт на сайте — войти или зарегистрироваться можно на следующем шаге. Бесплатно.</p>
   </section>
-  <aside class="join"><div><b>Что внутри</b><span>Текстовые каналы, голосовой канал, ответы и упоминания, а ещё общий чат сайта, друзья, звонки и «Мир Денчика» — всё в одном месте.</span></div><a class="btn btn-ghost" href="/#/chat">💬 Общий чат сайта</a></aside>
+  <aside class="join"><div><b>Что внутри</b><span>Текстовые каналы, голосовой канал, ответы и упоминания, а ещё общий чат сайта, друзья, звонки и «Мир Денчика» — всё в одном месте.</span></div><a class="btn btn-ghost" href="/chat">💬 Общий чат сайта</a></aside>
   <p class="iv-warn">Сообщество создал игрок сайта. Никогда не сообщай в чатах пароли и личные данные. Нарушение — пожалуйся на сообщение (⋯ → 🚩).</p>
 </main>`;
   res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -47,7 +47,7 @@ function notFound(res, soon){
   res.status(404).setHeader('Content-Type', 'text/html; charset=utf-8');
   const text = soon ? 'Сообщества скоро появятся на сайте — загляни чуть позже. А пока есть общий чат сайта.' : 'Ссылку поменяли, сообщество удалили или в ссылке опечатка. Попроси у друга новую.';
   res.send(page({ title: 'Приглашение не найдено — сообщества на сайте Денчика', description: text,
-    body: `<main class="wrap"><section class="iv-card"><span class="iv-ic">🏰</span><h1>Приглашение не найдено</h1><p class="lead">${esc(text)}</p><a class="btn btn-acc iv-go" href="/#/chat">💬 В чат сайта</a></section></main>`,
+    body: `<main class="wrap"><section class="iv-card"><span class="iv-ic">🏰</span><h1>Приглашение не найдено</h1><p class="lead">${esc(text)}</p><a class="btn btn-acc iv-go" href="/chat">💬 В чат сайта</a></section></main>`,
     noindex: true, noAds: true, css: CSS }));
 }
 

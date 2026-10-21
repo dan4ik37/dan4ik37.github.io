@@ -150,7 +150,8 @@
   const ctxOn = new Set();
   const G = { playing: false };
   // Чужие игры и миры, пока не знаем, что они прошли проверку: страница игры игрока, редактор, модерация, вход по ссылке
-  const ugcRoute = () => /^#\/games\/(?:studio|unity)\/(?:play|edit|new|mod)\b|^#\/games\/studio3d\/(?:play|join)\b/.test(location.hash || '');
+  const routeHash = () => (window.D37Route ? D37Route.hash() : location.hash || '');   // раздел SPA (js/ui/router.js): '#/games/…' в обоих режимах адресов
+  const ugcRoute = () => /^#\/games\/(?:studio|unity)\/(?:play|edit|new|mod)\b|^#\/games\/studio3d\/(?:play|join)\b/.test(routeHash());
   const isOn = c => c === 'ugc' ? ugcRoute() || ctxOn.has(c) : c === 'playing' ? G.playing || ctxOn.has(c) : ctxOn.has(c);
   // Ролики про кейсы/промокоды на депозит — как GAMBLING_RE в api/_lib/yt.js (тест сверяет)
   const GAMBLING_RE = /ggdrop|ггдроп|case\s*battle|casebattle|кейс\s*батл|кейсбатл|казино|casino|промокод на деп|\bдеп\b|депозит|рулетк|ставк[аиу]/i;
@@ -342,7 +343,7 @@
   }
   // Снова играет (нажал в игре): «перерыв» гаснет — реклама остаётся обычным местом под игрой, без перезагрузки
   function onGameInput(e){
-    if (!/^#\/games\/./.test(location.hash || '')) return;
+    if (!/^#\/games\/./.test(routeHash())) return;
     if (e.type === 'pointerdown' && !e.target?.closest?.('#gamesStageBox')) return;
     G.playing = true;
     const b = document.querySelector('#gamesAd .d37-break'), box = b?.parentNode;
@@ -361,8 +362,8 @@
   // feed(список, { place, every, start, max, row, cls, titles }) — после каждой every-й карточки (начиная со start-й), не
   // последней в списке; row — на всю строку сетки (у мелких карточек). titles — названия роликов: есть «азартные» — без
   // рекламы во всём списке. Реклама грузится, только когда карточка подъезжает к экрану; нет рекламы — своя подсказка.
-  const HOUSE = [['🧟', 'Орда', 'Выживи 10 минут против орды монстров', '#/games/horde'], ['🌍', 'Мир Денчика', 'Онлайн-мир в 3D: кафе, столики, свой дом', '#/games/world'],
-    ['🔤', 'Слово дня', 'Угадай слово из 5 букв — новое каждый день', '#/games/words'], ['🧱', 'Студия 3D', 'Построй свой мир со скриптами, как в Roblox', '#/games/studio3d'],
+  const HOUSE = [['🧟', 'Орда', 'Выживи 10 минут против орды монстров', '/play/horde'], ['🌍', 'Мир Денчика', 'Онлайн-мир в 3D: кафе, столики, свой дом', '/play/world'],
+    ['🔤', 'Слово дня', 'Угадай слово из 5 букв — новое каждый день', '/play/words'], ['🧱', 'Студия 3D', 'Построй свой мир со скриптами, как в Roblox', '/play/studio3d'],
     ['✨', 'VIP', 'Цветной ник, стикеры и сайт без рекламы', '/vip']];
   const spaHref = h => h[0] === '#' && location.pathname !== '/' && location.pathname !== '/index.html' ? '/' + h : h;
   function house(c){
@@ -432,7 +433,7 @@
   }
   // Где можно поставить столбик ({ left, top, height, w } от раздела игр) или null
   function railSpot(){
-    if (!/^#\/games\/./.test(location.hash || '') || isTouch()) return null;
+    if (!/^#\/games\/./.test(routeHash()) || isTouch()) return null;
     const html = document.documentElement;
     if (['s3-open', 'wld-editing', 'hd-lock', 'gs-full'].some(c => html.classList.contains(c)) || document.fullscreenElement) return null;   // окно поверх / игра на весь экран
     const page = $('#games-page'), stage = $('#gamesStage');
@@ -701,7 +702,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
     document.addEventListener('pointerdown', onGameInput, true);
     document.addEventListener('keydown', onGameInput, true);
     document.addEventListener('click', e => { const b = e.target?.closest?.('[data-d37-reward="coins"]'); if (!b) return; e.preventDefault(); e.stopPropagation(); onCoinAd(b); }, true);
-    window.addEventListener('hashchange', () => {
+    window.addEventListener('d37:route', () => {   // переход раздела (js/ui/router.js)
       G.playing = false;
       const b = document.getElementById('gamesAd');   // ушли из игры — рекламу под ней убираем совсем (а не прячем)
       if (b) { b.innerHTML = ''; b.className = ''; delete b.dataset.net; delete b.dataset.at; }

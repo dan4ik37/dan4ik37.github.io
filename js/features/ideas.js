@@ -16,6 +16,7 @@ let ideasSort = 'top', ideasFilter = '';
 let ideasRows = [];
 let myIdeaVotes = new Set();
 let ideasLoading = false;
+let ideasFocus = null;   // /ideas/<номер> (#/ideas/<номер>) — показать и подсветить эту идею
 
 function ideasMissing(err){
   // функции/таблицы нет — ideas.sql ещё не запускали
@@ -33,7 +34,8 @@ setTimeout(async () => {
 
 window.addEventListener('d37:auth', () => { if (document.body.dataset.route === 'ideas') renderIdeasPage(); });
 
-async function renderIdeasPage(){
+async function renderIdeasPage(param){
+  ideasFocus = /^\d{1,12}$/.test(String(param || '')) ? +param : null;
   const logged = !!(typeof currentUser !== 'undefined' && currentUser);
   document.getElementById('ideasForm').hidden = !logged;
   document.getElementById('ideasGuest').hidden = logged;
@@ -72,6 +74,7 @@ async function loadIdeas(){
     }
     statusEl.textContent = ideasRows.length ? '' : (ideasFilter ? 'Здесь пока пусто.' : 'Идей пока нет — предложи первую!');
     listEl.innerHTML = ideasRows.map(ideaCardHtml).join('');
+    focusIdea();
   } catch (e) {
     if (ideasMissing(e)) {
       setup.hidden = false;
@@ -87,6 +90,17 @@ async function loadIdeas(){
   } finally {
     ideasLoading = false;
   }
+}
+
+// Ссылка /ideas/<номер>: подсветить идею, заголовок вкладки — её название (страница идеи для поиска — api/_lib/routes/forum.js)
+function focusIdea(){
+  if (ideasFocus == null || document.body.dataset.route !== 'ideas') return;
+  const row = ideasRows.find(r => r.id === ideasFocus), el = document.querySelector(`.id-card[data-id="${ideasFocus}"]`);
+  document.querySelectorAll('.id-card.id-focus').forEach(c => c.classList.remove('id-focus'));
+  if (!row || !el) { const st = document.getElementById('ideasStatus'); if (st && ideasRows.length) st.textContent = ideasFilter ? 'Этой идеи нет среди выбранных — нажми «Все».' : 'Этой идеи нет в списке — её могли удалить.'; return; }
+  el.classList.add('id-focus');
+  setTimeout(() => el.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+  window.D37Route?.meta?.({ title: `${row.title} — идея для видео dan4ik37`, description: row.body || `Идея для видео dan4ik37: «${row.title}».` });
 }
 
 function ideaCardHtml(r){
@@ -108,7 +122,7 @@ function ideaCardHtml(r){
     <div class="id-main">
       <div class="id-top">
         <span class="id-badge">${st.label}</span>
-        <h3 class="id-title">${esc(r.title)}</h3>
+        <h3 class="id-title"><a href="/ideas/${r.id}" style="color:inherit;text-decoration:none">${esc(r.title)}</a></h3>
       </div>
       ${r.body ? `<p class="id-body">${esc(r.body)}</p>` : ''}
       ${r.status === 'done' && r.video_id ? `<a class="id-watch" href="/v/${esc(r.video_id)}" data-vid="${esc(r.video_id)}">▶ Смотреть ролик</a>` : ''}

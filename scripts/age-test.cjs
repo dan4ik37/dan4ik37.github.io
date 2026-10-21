@@ -586,7 +586,7 @@ const YEAR = 2026, NOW = Date.UTC(2026, 9, 15, 9, 0, 0);
 
   // ═══ 9. Подключено, где надо (если кто-то сотрёт строку при слиянии) ═══
   const has = (f, re, name) => ok(re.test(read(f)), name);
-  has('index.html', /<script src="js\/core\/config\.js"><\/script>\s*<script src="js\/core\/age\.js"><\/script>\s*<script src="js\/core\/ads-core\.js">/, 'index.html: age.js перед рекламой');
+  has('index.html', /<script src="js\/core\/config\.js"><\/script>\s*(?:<!--[^>]*-->\s*<script src="js\/ui\/router\.js"><\/script>\s*)?<script src="js\/core\/age\.js"><\/script>\s*<script src="js\/core\/ads-core\.js">/, 'index.html: age.js перед рекламой (роутер — только карта адресов, рекламы не трогает)');
   has('index.html', /window\.__d37Paused=true;\(window\.adsbygoogle=window\.adsbygoogle\|\|\[\]\)\.pauseAdRequests=1/, 'index.html: запросы AdSense на паузе с самого начала');
   has('js/ui/router.js', /D37Age\?\.gateRoute\?\.\(route, activeIds\)/, 'router.js: разделы по возрасту');
   has('js/features/games.js', /D37Age\?\.cover\(box, g\.age/, 'games.js: обложка игры не по возрасту');

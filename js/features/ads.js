@@ -53,6 +53,6 @@ function fillVisibleAds(){
 
 // Полоска рекламы внизу экрана на телефоне (Floor Ad РСЯ) — через 25 с на сайте, не поверх игры
 setTimeout(function tryFloor(){
-  if (/^#\/games\//.test(location.hash)) { setTimeout(tryFloor, 30000); return; }
+  if (/^#\/games\//.test(D37Route.hash())) { setTimeout(tryFloor, 30000); return; }
   window.D37Ads?.floor();
 }, 25000);

@@ -70,7 +70,12 @@
   const EXT_RE = /^(?:https?:\/\/|www\.)\S+$|^[a-z0-9-]{2,}\.(?:ru|com|net|org|io|gg|me|xyz|su|ly|cc|top|link|рф)(?:\/\S*)?$/i;
   function sitePath(w){
     let m = SITE_RE.exec(w);
-    if (m) { let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1); return p; }
+    if (m) {
+      let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1);
+      // настоящий адрес раздела (/play/chess/abcd, /chat/ev/5 — js/ui/router.js) → как старая ссылка #/…: карточки и переход без перезагрузки
+      const h = p[0] === '/' && p !== '/' && window.D37Route ? window.D37Route.toHash(p) : null;
+      return h || p;
+    }
     if (HASH_RE.test(w)) return w;
     return null;
   }
@@ -882,8 +887,10 @@
     V.addLocal = m => { const id = 'tmp' + Date.now(); const x = Object.assign({ at: new Date().toISOString(), mine: true }, m, { id }); V.msgs.set(id, x); V.order.push(id); appendOne(x); toBottom(); return id; };
     V.focus = () => input.focus();
     V.refreshAll = () => renderAll();
-    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
-    window.addEventListener('d37:blocks', () => { if (!V.destroyed && V.A) renderAll(); });
+    // чёрный список поменялся — перерисовать; закрыли ленту — слушатель снять (раньше оставался на каждое открытие чата и держал ленту в памяти)
+    const onBlocks = () => { if (!V.destroyed && V.A) renderAll(); };
+    V.destroy = () => { V.destroyed = true; V.unsub?.(); V.typOff?.(); clearInterval(V.slowT); clearTimeout(V.typT); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('d37:blocks', onBlocks); root.innerHTML = ''; root.classList.remove('mv', 'mv-compact'); };
+    window.addEventListener('d37:blocks', onBlocks);
     if (opt.adapter) V.setAdapter(opt.adapter);
     return V;
   };

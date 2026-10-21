@@ -349,7 +349,7 @@ body.cel-ban-on .cel-adv{display:none}
   // события сайта → задание дня
   if (root.addEventListener) {
     root.addEventListener('d37:game', e => advCheck('game', e.detail || {}));
-    root.addEventListener('hashchange', () => { advCheck('route', { hash: root.location?.hash || '' }); setTimeout(() => { try { banner(Date.now(), C()?.holidays(Date.now()) || []); } catch (e) {} }, 60); });
+    root.addEventListener('d37:route', () => { advCheck('route', { hash: (root.D37Route ? root.D37Route.hash() : root.location?.hash) || '' }); setTimeout(() => { try { banner(Date.now(), C()?.holidays(Date.now()) || []); } catch (e) {} }, 60); });
     root.addEventListener('d37:chatmsg', e => { const m = e.detail || {}; try { if (typeof currentUser !== 'undefined' && currentUser && m.uid === currentUser.id) advCheck('chat'); } catch (er) {} });   // eslint-disable-line no-undef
     root.addEventListener('d37:advent', e => advCheck('kind', e.detail || {}));
   }

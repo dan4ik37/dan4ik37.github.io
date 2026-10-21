@@ -506,7 +506,7 @@
     if (!room || mode === 'play') return;
     mode = 'lobby';
     const seats = seatList();
-    rootEl.innerHTML = root.TableRoom.lobbyHtml(location.origin + location.pathname + '#/games/domino/' + code, seats, 4, { title: '🐐 Домино — стол', host: room.isHost, canStart: seats.length >= 2 })
+    rootEl.innerHTML = root.TableRoom.lobbyHtml((window.D37Route ? D37Route.abs('#/games/domino/' + code) : location.origin + location.pathname + '#/games/domino/' + code), seats, 4, { title: '🐐 Домино — стол', host: room.isHost, canStart: seats.length >= 2 })
       + (room.isHost ? `<div class="dn-lset"><span class="ct-opts"><button type="button" class="ct-opt${opts.target === 51 ? ' active' : ''}" data-act="otg:51">до 51</button><button type="button" class="ct-opt${opts.target === 101 ? ' active' : ''}" data-act="otg:101">до 101</button><button type="button" class="ct-opt${opts.yard ? ' active' : ''}" data-act="oyd:1">с базаром</button><button type="button" class="ct-opt${!opts.yard ? ' active' : ''}" data-act="oyd:0">без базара</button></span></div>` : '');
     rootEl.querySelectorAll('[data-act^="otg:"],[data-act^="oyd:"]').forEach(b => b.addEventListener('click', ev => {
       ev.stopPropagation();

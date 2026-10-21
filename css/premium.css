@@ -1313,6 +1313,7 @@ body.no-ideas [data-route="ideas"]{display:none!important}
 .id-card.st-planned{--st:var(--tw)}
 .id-card.st-done{--st:#2ecc71}
 .id-card.st-rejected{--st:#555;opacity:.7}
+.id-card.id-focus{border-color:#ffd166;box-shadow:0 0 0 2px rgba(255,209,102,.35)}   /* /ideas/<номер> — эта идея (ideas.js focusIdea) */
 .id-vote{flex:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.1rem;width:54px;height:62px;border-radius:12px;cursor:pointer;
   font:inherit;color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--line);transition:all .2s}
 .id-vote:hover:not(:disabled){color:#fff;border-color:var(--ac-55)}

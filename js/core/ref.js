@@ -67,7 +67,7 @@
 
   // Откуда и куда звали — по адресу, куда пришёл (сервер проверит сам)
   function sourceOf(path){
-    const p = String(path || '').replace(/^#?\/+/, '');
+    const p = String(path || '').replace(/^#?\/+/, '').replace(/^play(\/|$)/, 'games$1');   // /play/… — настоящий адрес игр (js/ui/router.js)
     if (/^games\/world(\/|$)/.test(p)) return 'world';
     if (/^games\/studio3?d?\/play\//.test(p) || /^games\/studio\/play\//.test(p) || /^g\//.test(p)) return 'studio';
     if (/^games\/[a-z0-9_-]+\/(coop\/)?[a-z0-9]{4,12}$/.test(p)) return 'room';
@@ -112,7 +112,7 @@
       const u = new URL(loc.href);
       const raw = u.searchParams.get('ref');
       if (raw != null) {
-        const place = (u.hash || '').replace(/^#\/?/, '') || u.pathname.replace(/^\/+/, '');
+        const place = ((u.hash || '').replace(/^#\/?/, '') || u.pathname.replace(/^\/+/, '')).replace(/^play(\/|$)/, 'games$1');
         rec = store(raw, sourceOf(place || ''), place.replace(/[^A-Za-z0-9/_-]/g, '').slice(0, 80));
         u.searchParams.delete('ref');
         if (hist?.replaceState) hist.replaceState(hist.state, '', u.pathname + u.search + u.hash);
