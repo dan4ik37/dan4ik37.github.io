@@ -760,6 +760,16 @@ function boundsOk(R){
   ok(log.find(x => kind(x) === 'comp').u.uCSk.value === 0, 'ночью без света — контактных теней нет');
   P.setOpts({ rt: 'high' }); log.length = 0; P.render(new T.Scene(), cam);
   ok(P.rt.steps === 96 && log.find(x => kind(x) === 'ssr').u.uStride.value === 1.5, '«Высокая»: шаг 1,5 пикселя, до 96 шагов');
+  {   // вид воды и льда в отражениях (игра на ходу, R.ssrLook): по умолчанию рябь есть, мягкости нет; лёд — без ряби и мягко
+    const u0 = log.find(x => kind(x) === 'ssr').u.uSSR2.value.clone();
+    R0.ssrLook = { ripple: 0, soft: .85 }; log.length = 0; P.render(new T.Scene(), cam);
+    const u1 = log.find(x => kind(x) === 'ssr').u.uSSR2.value.clone();
+    R0.ssrLook = { ripple: 'x', soft: 9 }; log.length = 0; P.render(new T.Scene(), cam);
+    const u2 = log.find(x => kind(x) === 'ssr').u.uSSR2.value.clone();
+    R0.ssrLook = null;
+    ok(u0.x === 1 && u0.y === 0 && u1.x === 0 && Math.abs(u1.y - .85) < 1e-9 && u2.x === 1 && u2.y === 1 && E.RT_FS.ssr.includes('uSSR2.y > 0.001') && E.RT_FS.ssr.includes('hd < 0.012'),
+      'отражения: рябь и мягкость — из R.ssrLook (лёд — без ряби, мягко; мусор — по умолчанию/в пределах); руку «из глаз» не отражаем', [u0, u1, u2]);
+  }
   R0.lighting.gfx.rt.refl = 0; log.length = 0; P.render(new T.Scene(), cam);
   ok(!log.some(x => kind(x) === 'ssr') && log.find(x => kind(x) === 'comp').u.uSSRk.value === 0, 'отражения мира выключены (сила 0) — прохода отражений нет');
   P.setOpts({ rt: 'off', ao: 'off' });

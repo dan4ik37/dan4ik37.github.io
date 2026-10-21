@@ -600,7 +600,7 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
 }`;
   const CLIM_FRAG = `
 #ifdef D37_CLIM
-#if ( defined( STANDARD ) || defined( LAMBERT ) ) && defined( OPAQUE ) && ! defined( D37_NOCLIM )
+#if ( defined( STANDARD ) || defined( LAMBERT ) ) && defined( OPAQUE ) && ! defined( D37_NOCLIM ) && ! defined( D37_FP )
 	if ( d37Cl.x + d37Cl.y + d37Cl.z + d37Cl2.x + d37Cl2.y + d37Cl2.z > 0.0 ) {
 		vec3 d37Vp = - vViewPosition;
 		vec3 d37Rw = vec3( dot( viewMatrix[ 0 ].xyz, d37Vp ), dot( viewMatrix[ 1 ].xyz, d37Vp ), dot( viewMatrix[ 2 ].xyz, d37Vp ) );

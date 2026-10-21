@@ -895,6 +895,7 @@
     R.rtClear = new Set();
     R.rtMarkAll = on => { R.rtOn = !!on; for (const m of R.rtClear) E.rtMark?.(T, m, R.rtOn); };
     const rtAdd = m => { if (m?.transparent && E.rtMark) { R.rtClear.add(m); if (R.rtOn) E.rtMark(T, m, true); } return m; };
+    R.rtAdd = rtAdd;   // свой прозрачный блестящий материал игры (вода «Кубомира») — отражения в экране, пока трассировка включена
     // Стекло, лёд: френель — под углом отражают сильнее и меньше просвечивают (прозрачные не склеиваются — правка шейдера можно)
     R.fresnel = (m, k = .7) => {
       if (q === 'low' || !m?.transparent || !m.isMeshStandardMaterial) return m;

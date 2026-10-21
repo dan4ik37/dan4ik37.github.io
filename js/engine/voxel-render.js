@@ -402,7 +402,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const LAYER_OPTS = {
       solid: {},
       cutout: { alphaTest: .5 },
-      water: { transparent: true, opacity: .82, depthWrite: false },
+      // вода пишет глубину (21.10.2026): иначе AO, контактные тени и отражения в экране считались по дну — по льду и воде шли
+      // тёмные полосы и «призраки» от того, что под водой
+      water: { transparent: true, opacity: .82, depthWrite: true },
       foliage: { alphaTest: .5 },
       glass: { alphaTest: .5 },
     };
@@ -446,6 +448,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     VR.layerMaterial = k => ownMats[k] || mats[k];
     let mats = makeMats();
     VR.mats = mats;
+    // отражения в экране («Трассировка лучей» движка): вода — блестящее прозрачное (код в альфе пишет E.rtMark, пока она включена)
+    const regRt = () => { R.rtAdd?.(mats.water); };
+    regRt();
     // ветер движка: листва и трава (слои foliage и cutout) — R.wave (define D37_WAVE ставит движок, когда набор шейдеров с ветром)
     const regWave = () => { if (typeof R.wave === 'function') for (const k of ['foliage', 'cutout']) if (mats[k]) R.wave(mats[k], { kind: 'leaves' }); };
     regWave();
@@ -755,7 +760,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const swap = new Map(LAYERS.map(k => [old[k], mats[k]]));
       for (const k in oldF) swap.set(oldF[k], fpMat(k));
       R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); });
-      for (const m of Object.values(old)) { R.waveMats?.delete?.(m); m.dispose(); }
+      for (const m of Object.values(old)) { R.waveMats?.delete?.(m); R.rtClear?.delete?.(m); m.dispose(); }
+      regRt();
       for (const m of Object.values(oldF)) m.dispose();
       regWave();
       for (const m of Object.values(oldD)) m.dispose();
@@ -782,7 +788,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       for (const c of [...VR.chunks]) VR.dropChunk(c);
       for (const list of pool.values()) for (const g of list) g.dispose();
       pool.clear(); meshPool.length = 0;
-      for (const m of Object.values(mats)) m.dispose();
+      for (const m of Object.values(mats)) { R.rtClear?.delete?.(m); m.dispose(); }
       for (const m of Object.values(depthMats)) m.dispose();
       for (const m of Object.values(fpMats)) m.dispose();
       tex?.dispose(); ntex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();

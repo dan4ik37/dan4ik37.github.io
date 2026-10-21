@@ -101,7 +101,7 @@ if ( uKbIce.x > 0.0 ) {
   vec2 d37Qi = d37ClO.xy + vec2( dot( viewMatrix[ 0 ].xyz, d37Vi ), dot( viewMatrix[ 2 ].xyz, d37Vi ) );
   float d37i1 = d37Cn( d37Qi * 0.5, 128.0 ), d37i2 = d37Cn( d37Qi * 2.0, 512.0 );
   vec3 d37ic = mix( vec3( 0.66, 0.8, 0.9 ), vec3( 0.88, 0.94, 0.99 ), d37i2 ) * ( 1.0 - 0.2 * ( 1.0 - smoothstep( 0.0, 0.05, abs( d37i1 - 0.5 ) ) ) );
-  d37ic = mix( d37ic, vec3( 0.88, 0.91, 0.96 ), smoothstep( d37i2 - 0.1, d37i2 + 0.1, d37Cl.x ) * 0.85 );
+  d37ic = mix( d37ic, vec3( 0.88, 0.91, 0.96 ), smoothstep( d37i2 - 0.1, d37i2 + 0.1, d37Cl.x ) * 0.45 );   // снег на льду — пятнами (лёд видно)
   float d37h = 0.0;
   for ( int i = 0; i < ${HN}; i ++ ) {
     vec4 hq = uKbHoles[ i ];
@@ -122,6 +122,7 @@ if ( uKbIce.x > 0.0 ) {
     // реального времени и замерзает снова, если ещё мороз; кончился мороз — все проруби забыты ──
     const ICE_REFREEZE = 5 * 60000, ICE_FADE = 20000, HOLES_MAX = 256;
     X.iceOn = false; X.iceK = 0; X.iceForce = null;   // iceForce — проверки (node): true / false — мороз «вручную»
+    const ssrLook = R.ssrLook = { ripple: 1, soft: 0 };   // вид воды и льда в отражениях движка (post.js), только пока мир открыт
     X.ICE_REFREEZE = ICE_REFREEZE;
     const holes = X.holes = new Map();   // клетка → время, когда разбили (Date.now())
     let holesDirty = true, holesT = 0;
@@ -148,8 +149,12 @@ if ( uKbIce.x > 0.0 ) {
       else if (!X.iceOn && v >= .8) X.iceOn = true;
       else if (X.iceOn && v < .72) X.iceOn = false;
       if (!X.iceOn && holes.size) { holes.clear(); holesSave(); holesDirty = true; }   // оттаяло — проруби не нужны
-      else if (holes.size) { const now = Date.now(); let ch = false; for (const [k, r] of holes) if (now - r[3] > ICE_REFREEZE) { holes.delete(k); ch = true; } if (ch) { holesSave(); holesDirty = true; } }
+      else if (holes.size) {   // замёрзшие снова (без мусора: forEach с готовой функцией)
+        refNow = Date.now(); refCh = false; holes.forEach(refCb); if (refCh) { holesSave(); holesDirty = true; }
+      }
     };
+    let refNow = 0, refCh = false;
+    const refCb = (r, k) => { if (refNow - r[3] > ICE_REFREEZE) { holes.delete(k); refCh = true; } };
     Vx.iceTest = (Wd, x, y, z) => {
       if (!X.iceOn) return false;
       const up = Wd.raw(x, y + 1, z); if (up < 0 || TT.liquid[up & 0xfff]) return false;
@@ -158,16 +163,23 @@ if ( uKbIce.x > 0.0 ) {
     };
     // проруби — в шейдер воды (до 16 ближних к игроку): клетка (x − ox, y, z − oz) и сколько открыта (1 — вода, к концу — тонкий лёд)
     const HN = 16, uHoles = { value: Array.from({ length: HN }, () => new T.Vector4(0, -999, 0, 0)) }, uIce = { value: new T.Vector4(0, 0, 0, 0) };
+    // ближние 16 — выбором (прорубей ≤ 256), без массивов на каждый вызов
+    const hList = new Array(HOLES_MAX + 1).fill(null), hDist = new Float64Array(HOLES_MAX + 1);
+    let hN = 0, hPx = 0, hPz = 0;
+    const hAdd = r => { const d = Math.abs(r[0] + .5 - hPx) + Math.abs(r[2] + .5 - hPz); if (d < 96 && hN <= HOLES_MAX) { hList[hN] = r; hDist[hN] = d; hN++; } };
     function holesUniform(){
-      const P = st.P, now = Date.now(), list = [];
-      for (const r of holes.values()) { const d = Math.abs(r[0] + .5 - P.x) + Math.abs(r[2] + .5 - P.z); if (d < 96) list.push([d, r]); }
-      list.sort((a, b) => a[0] - b[0]);
+      const now = Date.now();
+      hN = 0; hPx = st.P.x; hPz = st.P.z;
+      if (holes.size) holes.forEach(hAdd);
       for (let i = 0; i < HN; i++) {
-        const r = list[i]?.[1], v = uHoles.value[i];
-        if (!r) { v.set(0, -999, 0, 0); continue; }
-        const left = ICE_REFREEZE - (now - r[3]);
+        const v = uHoles.value[i];
+        if (i >= hN) { v.set(0, -999, 0, 0); continue; }
+        let b = i; for (let j = i + 1; j < hN; j++) if (hDist[j] < hDist[b]) b = j;
+        if (b !== i) { const tr = hList[i], td = hDist[i]; hList[i] = hList[b]; hDist[i] = hDist[b]; hList[b] = tr; hDist[b] = td; }
+        const r = hList[i], left = ICE_REFREEZE - (now - r[3]);
         v.set(r[0] - st.ox, r[1], r[2] - st.oz, Math.max(0, Math.min(1, left / ICE_FADE)));
       }
+      for (let i = 0; i < hN; i++) hList[i] = null;
       holesDirty = false;
     }
 
@@ -291,6 +303,11 @@ if ( uKbIce.x > 0.0 ) {
       X.iceK += ((X.iceOn ? 1 : 0) - X.iceK) * Math.min(1, d * 1.5); if (Math.abs(X.iceK - (X.iceOn ? 1 : 0)) < .002) X.iceK = X.iceOn ? 1 : 0;
       uIce.value.x = X.iceK;
       if (holesDirty || (holesT -= d) <= 0) { holesT = .5; holesUniform(); }
+      // отражения в экране: вода — как зеркало по френелю (с рябью), лёд — чуть блестит, мягко и без ряби (слабее),
+      // снег и блоки — матовые (кода блеска нет)
+      const rf = Math.round((1 - .7 * X.iceK) * 20) / 20;
+      if (rf !== X.reflNow && R.setLighting) { X.reflNow = rf; R.setLighting({ gfx: { rt: { refl: rf } } }); }
+      ssrLook.ripple = 1 - X.iceK; ssrLook.soft = .85 * X.iceK;
       X.rain += (X.wantR - X.rain) * Math.min(1, d * .7); if (X.rain < .003 && !X.wantR) X.rain = 0;
       X.snow += (X.wantS - X.snow) * Math.min(1, d * .7); if (X.snow < .003 && !X.wantS) X.snow = 0;
       X.k = Math.max(X.rain, X.snow * .5);
@@ -395,6 +412,7 @@ if ( uKbIce.x > 0.0 ) {
       const i = W.listeners ? W.listeners.indexOf(onEdit) : -1; if (i >= 0) W.listeners.splice(i, 1);
       for (const o of [rainO, snowO, ripO]) if (o) { R.scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
       flakeTex?.dispose(); cols.clear();
+      if (R.ssrLook === ssrLook) R.ssrLook = null;
     };
     return X;
   }
