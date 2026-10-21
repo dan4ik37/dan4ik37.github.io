@@ -158,7 +158,7 @@
     let RL = null, relayDropT = 0, annT = 0, tracked = false, flushT = 0, lastFlush = -1e9, pend = [];
     let bundle = null, fastStash = null;
     const T = o.open(`${o.game}-io-${o.code}`, o.me.key, { presence: true });
-    const subT = setT(() => { if (!P.joined) fail('offline'); }, 12000);
+    const subT = setT(() => { if (!P.joined) fail('offline'); }, o.joinMs || 12000);
     T.onStatus = async st => {
       if (P.closed) return;
       if (st === 'SUBSCRIBED') {
@@ -543,7 +543,7 @@
     }
     function join(code){
       S.code = code;
-      S.P = party({ game: c.game, code, max: c.max || 10, me: { key: c.me.key || guestKey(), nick: meName() }, open: c.open || supaTransport,
+      S.P = party({ game: c.game, code, max: c.max || 10, me: { key: c.me.key || guestKey(), nick: meName() }, open: c.open || supaTransport, joinMs: S.pub ? 7000 : 12000,
         net: c.net === undefined ? (root.NetPlay || null) : c.net, now: c.pnow || (() => Date.now()), setT, clearT,
         onState, onMsg, onFast, onBin, onError, onMode: () => cb('onStatus', 'mode') });
       cb('onStatus', 'joining', code);
@@ -707,6 +707,13 @@
     return list.map((r, k) => `<li class="${r.me ? 'me' : ''}"><i>${k + 1}</i><span>${r.bot ? '<em title="Бот">🤖</em>' : ''}${escH(showName(r.name))}</span><b>${num(r.score)}</b></li>`).join('');
   }
   function linkFor(game, code){ return (root.D37Ref?.wrap || (u => u))((root.location ? location.origin + location.pathname : 'https://dan4ik37.vercel.app/') + `#/games/${game}/${code}`); }
+  // Новая комната: ссылку — другу сразу (в том же нажатии), сами — в комнату по адресу #/games/<игра>/<код>
+  function inviteNew(game, title, toast){
+    const code = root.GameRoom?.newCode?.() || Math.random().toString(36).slice(2, 8);
+    share(game, code, title, toast);
+    try { location.hash = `#/games/${game}/${code}`; } catch (e) {}
+    return code;
+  }
   async function share(game, code, title, toast){
     const url = linkFor(game, code), text = `Залетай ко мне в «${title}»! Комната ${code}`;
     if (root.navigator?.share) { try { await navigator.share({ title, text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
@@ -874,5 +881,5 @@ body.low .io-ov{-webkit-backdrop-filter:none;backdrop-filter:none}
 
   root.IoKit = { TAU, clamp, lerp, rnd, hash3, hashNums, writer, reader, toB64, fromB64, cleanName, hasBad, showName, EMOTES, inputLog,
     party, supaTransport, netOk, session, pubCode, myKey, myNick, touchStick, drawStick, pad, viewBox, shell, fitHeight, lbHtml, linkFor, share,
-    myColors, shade, okColor, escH, num, ru, css, RELAY_MS, menuHtml, koHtml, podiumHtml, connHtml, errHtml, netLabel, reportLife };
+    myColors, shade, okColor, escH, num, ru, css, RELAY_MS, inviteNew, menuHtml, koHtml, podiumHtml, connHtml, errHtml, netLabel, reportLife };
 })();

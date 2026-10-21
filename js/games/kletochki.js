@@ -1038,7 +1038,8 @@
   function onRole(){ if (ui && ui.ov.querySelector('.io-logo')?.textContent === '🌐') hideOv(); namesVer = -1; }
   function onStatus(kind, v){
     if (!ui) return;
-    if (kind === 'error') showOv(K.errHtml(v));
+    if (kind === 'error' && S?.pub && v === 'offline') { api.toast?.('📡 Не получилось подключиться — играем с ботами'); startBots(); }
+    else if (kind === 'error') showOv(K.errHtml(v));
     else if (kind === 'handover') api.toast?.('Ты свернул вкладку — арену ведёт другой игрок');
   }
   function syncNames(){
@@ -1123,12 +1124,12 @@
     const a = b.dataset.io, t = e.timeStamp || performance.now();
     if (a === 'play') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); startOnline('', true); }
     else if (a === 'bots') startBots();
-    else if (a === 'friend') { const code = root.GameRoom?.newCode?.() || Math.random().toString(36).slice(2, 8); location.hash = `#/games/${GAME}/${code}`; }
+    else if (a === 'friend') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); K.inviteNew(GAME, TITLE, api.toast); }
     else if (a === 'menu') menu();
     else if (a === 'again') { hideOv(); koAt = 0; S?.respawn(); }
     else if (a === 'emo') ui.emos.hidden = !ui.emos.hidden;
     else if (/^e\d$/.test(a)) emote(+a.slice(1), t);
-    else if (a === 'invite') { if (S && S.code && S.role !== 'off') K.share(GAME, S.code, TITLE, api.toast); else { const code = root.GameRoom?.newCode?.() || 'r' + Math.random().toString(36).slice(2, 7); location.hash = `#/games/${GAME}/${code}`; } }
+    else if (a === 'invite') { if (S && S.code && S.role !== 'off') K.share(GAME, S.code, TITLE, api.toast); else K.inviteNew(GAME, TITLE, api.toast); }
     else if (a.startsWith('sk')) { cfg.skin = presetSkin(+a.slice(2)); cfg.mine = false; saveCfg(); paintSkins(); S?.setMe({ skin: cfg.skin }); }
     else if (a === 'mine') { const m = K.myColors(); if (m) { cfg.skin = { p: m.rainbow ? 6 : 5, a: m.c1, b: m.c2 }; cfg.mine = true; saveCfg(); paintSkins(); } }
   }

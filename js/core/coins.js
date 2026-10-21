@@ -16,7 +16,7 @@
 (() => {
   // как coin_rule в coins.sql: daily, quest, win/winPerDay, ad/adPerDay/adGap, doublePerDay, runDay/runGap, import, revive
   const RULES = { daily: 20, quest: 30, win: 3, winPerDay: 15, ad: 25, adPerDay: 6, adGap: 45, doublePerDay: 3, runDay: 600, runGap: 20, import: 500, revive: 30 };
-  const RUN_CAP = { horde: 150, td: 150, blocks: 80, kosynka: 20, pauk: 50, freecell: 15, miner: 30, mahjong: 20, sudoku: 30, krokodil: 10, fillword: 15, podzem: 20, kubomir: 15, rp: 10, mirwar: 20 };
+  const RUN_CAP = { horde: 150, td: 150, blocks: 80, kosynka: 20, pauk: 50, freecell: 15, miner: 30, mahjong: 20, sudoku: 30, krokodil: 10, fillword: 15, podzem: 20, kubomir: 15, rp: 10, mirwar: 20, kletochki: 10, chervyachki: 10 };
   const HERO_PRICES = { ninja: 400, knight: 400, vampire: 800, robot: 1200, streamer: 2500 };
   const UP_PRICES = [100, 200, 400, 700, 1000], ARMOR_PRICES = [150, 400, 800];
   const LS = 'd37_coins';
