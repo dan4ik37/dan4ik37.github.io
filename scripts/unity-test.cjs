@@ -28,6 +28,7 @@ globalThis.history = { replaceState: (a, b, u) => urls.push(u) };
 const winListeners = {};
 globalThis.addEventListener = (t, fn) => { (winListeners[t] = winListeners[t] || []).push(fn); };
 globalThis.removeEventListener = (t, fn) => { winListeners[t] = (winListeners[t] || []).filter(f => f !== fn); };
+vm.runInThisContext(read('js/games/room.js'), { filename: 'room.js' });   // GameRoom.channel — канал комнаты (ждёт sbClient, копит сообщения до подписки)
 vm.runInThisContext(read('js/games/netplay.js'), { filename: 'netplay.js' });
 vm.runInThisContext(read('js/games/unity-host.js'), { filename: 'unity-host.js' });
 const U = window.GAME_IMPL.unity._test;
@@ -509,6 +510,24 @@ function checkWire(msg){
 }
 
 async function e2e(){
+  // 0) T-039: ссылка-приглашение открыла игру раньше, чем сайт подключил Supabase — транспорт комнаты ждёт sbClient (room.js,
+  //    GameRoom.channel), сообщения до подписки копит; не дождался — 'TIMED_OUT' (комната скажет «Нет связи… ↻ Ещё раз»)
+  {
+    delete globalThis.sbClient;
+    const sent = [], removed = [], st = [];
+    const ch = { on(){ return ch; }, subscribe(cb){ setTimeout(() => cb('SUBSCRIBED'), 20); return ch; }, send(m){ sent.push(m.payload); return Promise.resolve('ok'); }, track: () => Promise.resolve('ok'), untrack: () => Promise.resolve('ok'), presenceState: () => ({}) };
+    const T = U.supaTransport('unity-late-abc123', 'k-late');
+    T.onStatus = s => st.push(s);
+    T.send({ k: 'm', d: 'до подписки' });
+    await sleep(350);
+    ok(st.length === 0 && sent.length === 0, 'комната без sbClient: ждёт, ничего не отправлено (ни по сокету, ни через REST)', [st, sent]);
+    globalThis.sbClient = { channel: () => ch, removeChannel: c => { removed.push(c); return Promise.resolve(); } };
+    await sleep(350);
+    ok(st.join() === 'SUBSCRIBED' && sent.length === 1 && sent[0].d === 'до подписки', 'sbClient появился — канал подписан, сообщение до подписки ушло после неё', [st, sent]);
+    T.close();
+    ok(removed.length === 1, 'transport.close() снимает канал');
+    delete globalThis.sbClient;
+  }
   // «Supabase» сайта: тот же подменный канал, доставка — асинхронно, как по сети
   const hub = makeHub();
   let pumping = false;

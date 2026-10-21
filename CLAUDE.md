@@ -914,7 +914,8 @@ js/features/games.js и хвост css/premium.css.
 - sw.js: поменял — подними VERSION (у всех «✨ Доступна новая версия — Обновить»). Кэши только свои: d37-shell-<VERSION> и d37-rt-v1
   (раньше старый sw.js стирал ВСЕ кэши, в т. ч. 38 МБ кэша сборки Rust). НИКОГДА не кэширует: /api/*, /go/*, /studio/*, Supabase,
   рекламу, Метрику, YouTube, Twitch. Главная и скрипты без ?v= — сначала сеть. Офлайн-игры — OFFLINE_GAMES в app.js = список в
-  offline.html (тест сверяет). Значки — python -X utf8 scripts/make-app-icons.py; снимки — node scripts/app-shots.cjs. Тесты: node
+  offline.html (тест сверяет; с 22.10, sw.js v6, — и «Клеточки» с «Червячками»: с ботами без сети; без интернета «▶ Играть» в них
+  уходит к ботам за ~1 с; проверено в Chrome: `node scripts/room-net-e2e.cjs C`). Значки — python -X utf8 scripts/make-app-icons.py; снимки — node scripts/app-shots.cjs. Тесты: node
   scripts/pwa-test.cjs (254) и node scripts/pwa-e2e.cjs (настоящий Chrome). Магазины: .well-known/assetlinks.json (ЗАМЕНИТЬ-1/2/3 —
   отпечатки ключей), apps/android/{play,rustore}/twa-manifest.json; ключи подписи и .apk/.aab/.msix — НЕ в репозиторий.
   На проде в обычном Chrome ещё проверить: установку, заголовок окна, значок, «Поделиться» на Android, push на iPhone, «Обновить».
@@ -1548,7 +1549,8 @@ js/features/games.js и хвост css/premium.css.
   память за 20 раундов, снимки, комната на подменной сети: напрямую и через «-r», смена хозяина, 8 приходов/уходов — общая часть
   scripts/iogames-net.cjs); Chrome: scripts/iogames-e2e.cjs (снимки, телефон с CPU ×4, полная комната) и scripts/iogames-online-e2e.cjs
   (два настоящих Chrome, Supabase и WebRTC). Снимки — E:\claude-tmp\iogames\shots.
-- Грабли: игра по ссылке открывается раньше, чем init.js создаёт sbClient — онлайн ждёт его (IoKit.whenNet, 8 с); сообщения до
+- Грабли: игра по ссылке может открыться раньше, чем появится sbClient — онлайн ждёт его (IoKit.whenNet, 8 с; без интернета — сразу;
+  то же для всех комнат — GameRoom.channel, раздел «Комнаты для игр вдвоём»); сообщения до
   подписки канала копятся (иначе supabase-js шлёт через REST); в headless две вкладки одного окна — вторая «в фоне», у неё стоит
   requestAnimationFrame (проверять двумя процессами Chrome); scripts/serve.py — очередь подключений 128 (при 5 браузер терял скрипты).
 
@@ -2187,6 +2189,22 @@ js/features/games.js и хвост css/premium.css.
 - Честность: хост — создатель комнаты (кто первым вошёл), игра считается у него в браузере, сайт только знакомит игроков.
   В пошаговых и lockstep-играх каждая сторона сама проверяет ходы/сверяет суммы; награды (XP, монеты, рекорды) выдаёт сервер с
   лимитами — взломав игру у себя, больше лимита не получить.
+- **Канал комнаты — только через `GameRoom.channel(имя, opts)`** (room.js; T-039, 22.10), НЕ `sbClient.channel`: он ждёт sbClient до 8 с
+  (`GameRoom.whenNet(fn, ms)`; браузер без интернета и без клиента — сразу), копит сообщения до первого SUBSCRIBED (до 50; иначе
+  supabase-js шлёт их через REST — медленно, с предупреждением) и при отсутствии связи отдаёт статус 'TIMED_OUT' → onError игры →
+  `GameRoom.errorHtml` («Нет связи — … попробуй ещё раз» + кнопка = перезагрузка). Методы как у настоящего канала + `close()`
+  (untrack + removeChannel + снять ожидание). `GameRoom.join` / `TableRoom.join` возвращают комнату СРАЗУ (не null), onError приходит
+  позже, не из самого вызова. Так устроены room.js, table.js, versus (через room), «Города», «Крокодил» и Unity-игры (supaTransport
+  → GameRoom.channel; у cities и unity в `scripts` игры добавлен room.js ПЕРЕД файлом игры). Свои очередь и ожидание: io-игры
+  (IoKit.supaTransport + K.whenNet: по ссылке друга без связи — «Нет связи» + «🔄 Ещё раз» `data-io="retry"`, с общей арены — боты и тост),
+  миры mir.js / world.js (join() ждёт GameRoom.whenNet; их сообщения до подписки идут через REST — не менялось). Не тронуты: mir-war.js,
+  D37E.net.room (движок; студия 3D пишет «Сеть не загрузилась»), calls.js / сообщества. В обычной загрузке sbClient создаётся ДО
+  routerStart() (init.js → initChat(); проверено: к исполнению файла игры он уже есть) — защита нужна, если SDK Supabase когда-нибудь
+  станет грузиться позже (ленивая загрузка ради скорости) или упадёт init.js. Тесты: `node scripts/room-net-test.cjs` (207; подменные
+  часы и Supabase, sbClient появляется через 1/2/3 с или никогда, 20 входов/выходов — каналы, слушатели pagehide, таймеры; страж: новые
+  игры не заводят sbClient.channel мимо GameRoom.channel); Chrome — `node scripts/room-net-e2e.cjs [A|B|C]` (A: 12 игр, sbClient
+  прячется на 1,5–3 с; B: 20 входов/выходов на настоящем Supabase; C: приложение без интернета). Известный хвост: ник/ключ в комнате
+  берутся при входе (`currentProfile` может ещё не загрузиться у вошедшего, открывшего ссылку в новой вкладке → «Гость NNN»).
 
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —

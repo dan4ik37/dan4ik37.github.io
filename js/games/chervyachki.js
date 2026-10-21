@@ -926,8 +926,9 @@
     return S;
   }
   function startBots(){ newSession(); enterGame(); hideOv(); S.offline(); }
-  let netWait = null;
+  let netWait = null, lastOnline = null;
   function startOnline(code, pub){
+    lastOnline = { code, pub };
     newSession(); enterGame();
     showOv(K.connHtml(pub));
     const s0 = S;
@@ -936,7 +937,9 @@
       netWait = null;
       if (S !== s0 || !S) return;
       if (ok) S.online(code, { pub });
-      else { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(); }
+      // общая арена («▶ Играть») без связи — с ботами, и так и сказано; по ссылке друга — честное «нет связи» и «Ещё раз»
+      else if (pub) { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(); }
+      else showOv(K.errHtml('offline'));
     });
   }
   function enterGame(){
@@ -1034,6 +1037,7 @@
     const a = b.dataset.io, t = e.timeStamp || performance.now();
     if (a === 'play') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); startOnline('', true); }
     else if (a === 'bots') startBots();
+    else if (a === 'retry') { if (lastOnline) startOnline(lastOnline.code, lastOnline.pub); else menu(); }
     else if (a === 'friend') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); K.inviteNew(GAME, TITLE, api.toast); }
     else if (a === 'menu') menu();
     else if (a === 'again') { hideOv(); koAt = 0; S?.respawn(); }

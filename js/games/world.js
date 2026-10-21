@@ -456,8 +456,13 @@
 
   // ── Сеть ──
   async function join(shard = 1){
-    if (typeof sbClient === 'undefined' || !sbClient) { status('Нет связи с сервером — обнови страницу'); return; }
     const st = S;
+    if (typeof sbClient === 'undefined' || !sbClient) {
+      // мир открыт по ссылке раньше, чем сайт подключил Supabase: ждём клиента (GameRoom.whenNet, room.js — до 8 с), потом заходим
+      status('Подключаемся к серверу…');
+      window.GameRoom?.whenNet(ok => { if (S !== st || st.stopped) return; if (ok) join(shard); else status('Нет связи с сервером — проверь интернет и обнови страницу'); });
+      return;
+    }
     try { st.keys = st.keys || await makeKeys(); } catch (e) { status('Браузер не поддерживает защищённые сообщения — обнови его'); return; }
     if (st.me.uid && !st.pass) {
       try { const { data, error } = await sbClient.rpc('world_pass', { p_pub: st.keys.pub }); if (!error && data) st.pass = data; } catch (e) {}
