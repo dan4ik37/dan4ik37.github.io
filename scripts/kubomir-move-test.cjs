@@ -354,6 +354,34 @@ KB.opts({});
     ok(near(e1.x, e2.x, 1e-9) && near(e1.y, e2.y, 1e-9) && near(e1.x, e3.x, 1e-9) && near(e1.y, e3.y, 1e-9) && e1.swim && e1.x > 3, 'движок (player.js): плывёт одинаково при 60, 144 и 30 кадрах', { e1, e2, e3 });
   }
 
+  // ═══ 5. «🆘 Я застрял» и нокаут вместо смерти ═══
+  sec('«🆘 Я застрял»: ближайшее место, где можно стоять; нет — начало мира; без штрафа, не чаще раза в 5 с. Нокаут — без «умер»');
+  {
+    // замурован в камне (вокруг — сплошной камень до 50, сверху — воздух): переносит на ближайший верх
+    const W = mkWorld(); W.fill(-4, 46, -4, 4, 50, 4, 'stone');
+    const st = mkSt(W, { x: .5, y: 47, z: .5, hp: 13, food: 9 }); st.meta.spawn = { x: 30.5, y: 46, z: 30.5 };
+    const p = KB.safeSpot(st, st.P.x, st.P.y, st.P.z);
+    ok(p && p.y === 51 && Math.abs(p.x - .5) <= 1 && Math.abs(p.z - .5) <= 1, 'замурован в камне — ближайшее место: сверху над ним', p);
+    ok(KB.unstuck(st) && st.P.y === 51 && st.P.hp === 13 && st.P.food === 9, 'перенёс — здоровье и еда те же (без штрафа)', { y: st.P.y, hp: st.P.hp });
+    ok(!KB.unstuck(st), 'второй раз сразу — «подожди пару секунд»');
+    // подо льдом в озере: на берег (на воду и лёд не ставит)
+    const W2 = mkWorld(); lake(W2, -6, -6, 6, 6, 40, 51);
+    const s2 = mkSt(W2, { x: .5, y: 44, z: .5 }); s2.WX.iceForce = true; s2.WX.iceTick();
+    const p2 = KB.safeSpot(s2, s2.P.x, s2.P.y, s2.P.z);
+    ok(p2 && p2.y === 52 && (Math.abs(p2.x) > 6 || Math.abs(p2.z) > 6), 'в озере подо льдом — на берег (не в воду)', p2);
+    s2.WX.dispose();
+    // посреди большой воды — рядом негде стоять: в начало мира
+    const W3 = mkWorld(); W3.fill(-40, 46, -40, 40, 51, 40, 'water');
+    const s3 = mkSt(W3, { x: .5, y: 49, z: .5 }); s3.meta.spawn = { x: 45.5, y: 46, z: 45.5 };
+    ok(KB.unstuck(s3) && s3.P.x === 45.5 && s3.P.z === 45.5, 'посреди моря — в начало мира', { x: s3.P.x, z: s3.P.z });
+    const reasons = ['fall', 'lava', 'cactus', 'starve', 'drown', 'void', 'mob'].map(k => KB.deathText(k));
+    ok(reasons.every(t => t && !/умер|погиб|смерт|сгорел|утонул|разбил/i.test(t)), 'нокаут: причины — без «умер», «погиб», «сгорел», «утонул»', reasons);
+    const src = fs.readFileSync(path.join(SITE, 'js/games/kubomir.js'), 'utf8');
+    ok(/😵 Нокаут!/.test(src) && /Ты без сил/.test(src) && !/Ты \$\{esc\(DEATH/.test(src) && !/Возродиться/.test(src), 'экран: «😵 Нокаут! Ты без сил: …», кнопка «Прийти в себя»');
+    const css = fs.readFileSync(path.join(SITE, 'css/kubomir.css'), 'utf8');
+    ok(/\.kb-dead\{[^}]*backdrop-filter:blur/.test(css) && !/\.kb-dead\{[^}]*rgba\(120,0,0/.test(css), 'экран нокаута — темнеет и мутнеет (без красного)');
+  }
+
   console.log(`\nkubomir-move-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

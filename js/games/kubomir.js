@@ -130,10 +130,10 @@
       <label>Зерно <small>(число или слово — один и тот же мир у всех, оставь пустым — случайный)</small><input type="text" class="kb-in" data-f="seed" maxlength="32" placeholder="случайное"></label>
       <div class="kb-seg" data-f="mode"><button type="button" class="on" data-v="survival">⚔️ Выживание</button><button type="button" data-v="creative">🎨 Творчество</button></div>
       <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button><button type="button" data-v="hard">💀 Сложно</button></div>
-      <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после смерти вещи остаются.</p>
+      <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после нокаута вещи остаются.</p>
       ${mods.length ? `<div class="kb-modpick"><b>🧩 Моды в этом мире</b>${mods.map(m => `<label class="kb-chk"><input type="checkbox" data-mod="${esc(m.id)}"> ${esc(m.manifest?.name || m.id)} <small>${esc(m.manifest?.version || '')}</small></label>`).join('')}</div>` : '<p class="kb-note">🧩 Моды можно добавить в меню миров → «Моды».</p>'}
       <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-n="go">🌍 Создать мир</button><button type="button" class="kb-btn" data-n="back">← Назад</button></div></div>`;
-    const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после смерти вещи остаются.', normal: 'Обычно: после смерти вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может убить, вещи после смерти выпадают.' };
+    const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после нокаута вещи остаются.', normal: 'Обычно: после нокаута вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может довести до нокаута, вещи после нокаута выпадают.' };
     sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; }));
     sc.querySelector('[data-n="back"]').onclick = showMenu;
     sc.querySelector('[data-n="go"]').onclick = async () => {
@@ -827,6 +827,55 @@
     if (st.ents?.breakFx) st.ents.breakFx(x, y, z, V.ID.ice); else st.ents?.debris?.(x, y, z, V.ID.ice);
     return true;
   }
+  // ── «🆘 Я застрял»: ближайшее место, где можно стоять — под ногами твёрдое (не кактус), тело влезает, не в воде и не в лаве и не
+  //    рядом с лавой; кольцами вокруг (до 24 блоков), по высоте ±12 от ног; своя клетка — нет (раз застрял). Нет — кровать или начало
+  //    мира. Без штрафа, не чаще раза в 5 с ──
+  function safeSpot(st, x0, y0, z0, R = 24){
+    const V = VX(), W = st.W, P = st.P, TT = V.T, TC0 = {};
+    const okAt = (x, y, z) => {
+      const fb = W.raw(x, y - 1, z); if (!(fb > 0)) return false;
+      const ft = fb & 0xfff; if (!TT.solid[ft] || V.blocks[ft].hurt) return false;
+      const fx = V.boxOf(fb, true); if (!fx || fx[4] < 1) return false;   // стоять на целом верху (не на двери, не на сундуке)
+      if (V.boxHits(W, x + .5, y, z + .5, P.w, PH)) return false;
+      const T = V.touching(W, x + .5, y, z + .5, P.w, PH, TC0); if (T.water > 0 || T.lava > 0 || T.hurt) return false;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) { const v = W.raw(x + dx, y + dy, z + dz); if (v > 0 && TT.liquid[v & 0xfff] === 2) return false; }
+      return true;
+    };
+    const bx = Math.floor(x0), by = Math.floor(y0), bz = Math.floor(z0);
+    for (let r = 0; r <= R; r++) {
+      let best = null, bd = Infinity;
+      for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+        const x = bx + dx, z = bz + dz;
+        if (!W.loaded(x, z)) continue;
+        for (let k = 0; k <= 24; k++) {
+          const dy = k & 1 ? -((k + 1) >> 1) : k >> 1, y = by + dy;
+          if (y < 1 || y > V.H - 3 || (!r && !dy)) continue;
+          if (!okAt(x, y, z)) continue;
+          const d = dx * dx + dz * dz + dy * dy * .5;
+          if (d < bd) { bd = d; best = { x: x + .5, y, z: z + .5 }; }
+          break;
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+  function unstuck(st){
+    const P = st.P; if (!st || P.dead) return false;
+    const t = now();
+    if (st.unstuckAt && t - st.unstuckAt < 5000) { st.H?.toast('🆘 Подожди пару секунд'); return false; }
+    st.unstuckAt = t;
+    let p = safeSpot(st, P.x, P.y, P.z), far = false;
+    if (!p) { const sp = st.meta.bed || st.meta.spawn; p = sp ? { x: sp.x, y: sp.y, z: sp.z } : null; far = true; }
+    if (!p) return false;
+    Object.assign(P, { x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, fallTop: p.y, pk: null, hang: null, onGround: true });
+    P.h = PH;
+    if (far) placeSafe(st);
+    rebase(st, true); st.C?.reset_state?.();
+    st.H?.toast(far ? '🆘 Рядом негде стоять — перенесли ' + (st.meta.bed ? 'к кровати' : 'в начало мира') : '🆘 Перенесли на безопасное место рядом');
+    return true;
+  }
   const SND_FLOOR = { stone: 'concrete', metal: 'metal', wood: 'wood', grass: 'grass', dirt: 'grass', sand: 'carpet', gravel: 'concrete', snow: 'carpet', glass: 'tile', water: 'water', wool: 'carpet' };
   function floorSound(t){ return SND_FLOOR[VX().blocks[t]?.sound] || 'concrete'; }
   const STEP_KB = { sand: 'kb_step_sand', gravel: 'kb_step_gravel', snow: 'kb_step_snow' };   // свои шаги (хруст, шорох)
@@ -898,17 +947,19 @@
     if (he) { he.style.transition = 'none'; he.style.opacity = String(Math.min(1, .5 + n * .1)); void he.offsetWidth; he.style.transition = 'opacity .6s ease-out'; he.style.opacity = '0'; }
     if (P.hp <= 0) die(st, why);
   }
-  const DEATH = { fall: 'разбился', lava: 'сгорел в лаве', cactus: 'укололся о кактус', starve: 'умер от голода', drown: 'утонул', void: 'упал в бездну', mob: 'не справился с монстром' };
+  // «Нокаут» вместо смерти (21.10.2026, правило сайта: без насилия на экране): экран темнеет и мутнеет, «Ты без сил», дальше —
+  // как раньше (вещи по сложности, появляешься у кровати или в начале мира). Внутри кода — по-старому (die, P.dead)
+  const DEATH = { fall: 'упал с высоты', lava: 'обжёгся о лаву', cactus: 'укололся о кактус', starve: 'совсем ослаб от голода', drown: 'наглотался воды', void: 'выпал за край мира', mob: 'не справился с монстром' };
   function die(st, why){
     const P = st.P; P.dead = true; P.pk = null; P.hang = null;
     st.I.unlock();
     const keep = !['normal', 'hard'].includes(st.meta.diff || 'easy');
     if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { st.ents?.addItem(P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } }
     st.lastDeath = { x: P.x, y: P.y, z: P.z, t: now(), drop: !keep && !!st.ents };
-    st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра, не погибнув
+    st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра без нокаута
     const xyz = `X ${Math.floor(P.x)}, Y ${Math.floor(P.y)}, Z ${Math.floor(P.z)}`;
     const box = document.createElement('div'); box.className = 'kb-dead kb-ui';
-    box.innerHTML = `<div><b>💀 Ты ${esc(DEATH[why] || 'погиб')}</b><small>${keep ? 'Вещи остались с тобой (сложность «мирно» или «легко»).' : `Вещи выпали там, где ты погиб (${xyz}), и лежат 5 минут — подсказка вверху покажет, куда идти.`}</small><small class="kb-where">Возродишься ${st.meta.bed ? 'у своей кровати' : 'в начале мира'} с полным здоровьем и сытостью.</small><div class="kb-btns"><button type="button" class="kb-btn primary" data-r="1">↺ Возродиться</button><button type="button" class="kb-btn" data-m="1">🏠 В меню</button></div></div>`;
+    box.innerHTML = `<div><b>😵 Нокаут!</b><small class="kb-ko">Ты без сил: ${esc(DEATH[why] || 'устал')}.</small><small>${keep ? 'Вещи остались с тобой (сложность «мирно» или «легко»).' : `Вещи выпали там, где ты упал без сил (${xyz}), и лежат 5 минут — подсказка вверху покажет, куда идти.`}</small><small class="kb-where">Придёшь в себя ${st.meta.bed ? 'у своей кровати' : 'в начале мира'} — с полным здоровьем и сытостью.</small><div class="kb-btns"><button type="button" class="kb-btn primary" data-r="1">↺ Прийти в себя</button><button type="button" class="kb-btn" data-m="1">🏠 В меню</button></div></div>`;
     wrap().appendChild(box);
     box.querySelector('[data-m]').onclick = () => { box.remove(); P.dead = false; P.hp = 20; P.food = Math.max(P.food, 6); const sp = st.meta.bed || st.meta.spawn; Object.assign(P, { x: sp.x, y: sp.y, z: sp.z, vx: 0, vy: 0, vz: 0, fallTop: sp.y }); stopWorld().then(() => showMenu()); };
     box.querySelector('[data-r]').onclick = () => {
@@ -1531,6 +1582,7 @@
         { id: 'export', icon: '📤', text: 'Сохранить файл мира' },
         { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
         { id: 'help', icon: '❓', text: 'Как играть' },
+        { id: 'unstuck', icon: '🆘', text: 'Я застрял' },
         { id: 'exit', icon: '🏠', text: 'Сохранить и выйти в меню', warn: true },
       ],
       onPick: id => menuPick(id),
@@ -1547,6 +1599,7 @@
     else if (id === 'export') { await saveAll(st); exportWorld(st.meta.id); }
     else if (id === 'full') { window.D37Full?.toggle(el.closest('#gamesStage') || wrap(), { esc: false }); setTimeout(() => S?.menu?.redraw(), 80); }
     else if (id === 'help') help();
+    else if (id === 'unstuck') { closeMenu(); unstuck(st); if (!st.I.touch) st.I.lock?.(); }
     else if (id === 'exit') { closeMenu(); const sc = screen(); await stopWorld(); if (sc) showMenu(); }
   }
   // «📥 Импорт из Minecraft» в игре: окно поверх мира (постройку — перед собой, мир — новым миром)
@@ -1617,7 +1670,8 @@
         <div class="gs-row"><div class="gs-lbl">Цепляться за края<small>Как в «Мире Денчика»: прыгни у стены в 2 блока, держа «вперёд», — залезешь; выше — схватишься за край (в стороны — по краю, «вперёд» или «прыжок» — наверх, «красться» — отпустить). В воде у берега — «прыжок», и вылезешь.</small></div><div class="gs-ctl">${seg('climb', [[1, 'Вкл'], [0, 'Выкл']], opts.climb === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Деревья падают<small>Подрубил ствол — дерево валится от тебя и рассыпается на брёвна (только настоящие деревья, не постройки).</small></div><div class="gs-ctl">${seg('fell', [[1, 'Вкл'], [0, 'Выкл']], opts.fell === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Погода<small>Дождь и снег по месту (в пустыне — сухо): небо темнее, капли и хлопья вокруг, шум дождя. На «низкой» графике — без капель.</small></div><div class="gs-ctl">${seg('weather', [[1, 'Вкл'], [0, 'Выкл']], opts.weather === false ? 0 : 1)}</div></div>
-        ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после смерти.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
+        ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после нокаута.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
+        ${st ? `<div class="gs-row"><div class="gs-lbl">Застрял?<small>Перенесёт на ближайшее место, где можно стоять (не в воде и не в лаве), — без штрафа. Нет такого рядом — к кровати или в начало мира.</small></div><div class="gs-ctl"><button type="button" class="gs-btn" data-kbo="unstuck:1">🆘 Я застрял</button></div></div>` : ''}
         ${K ? K.keysHtml(K.capId) : '<p class="gs-note">Клавиши «Кубомира» можно поменять, когда открыт мир.</p>'}
         ${st ? `<p class="gs-note">Мир: ${esc(st.meta.name)} · зерно ${esc(st.meta.seed)} · потоков: ${st.ST.inline ? 'нет (всё в кадре)' : st.ST.workers.length}. F3 — сведения о мире и скорости.</p>` : ''}`;
       body.onclick = e => {
@@ -1632,6 +1686,7 @@
         if (k === 'ghost') opts.ghost = v === '1';
         if (k === 'fell') opts.fell = v === '1';
         if (k === 'climb') opts.climb = v === '1';
+        if (k === 'unstuck') { if (S) { unstuck(S); D.close?.(); } return; }
         if (k === 'weather') { opts.weather = v === '1'; if (S) S.weatherOff = !opts.weather; }
         if (k === 'seasons') { opts.seasons = ['calendar', 'cycle', 'off'].includes(v) ? v : 'calendar'; if (S) S.WX?.setSeasons?.(opts.seasons); }
         if (k === 'tips' && S) { S.meta.tips = v === '1'; tipsUpdate(S); }
@@ -1701,5 +1756,5 @@
     cam: m => cycleCam(m), hud: v => hideHud(v), pick: () => S?.hit && pickBlock(S, S.hit), drop: all => S && dropSel(S, all), lookDir: () => S && { ...lookDir(S) },
     hand: () => S?.hand?.state(), act: k => S?.hand?.act(k), eat: () => S?.eat && { ...S.eat },
     // проверки в node (scripts/kubomir-move-test.cjs): шаг тела игрока на своём st, настройки, прицел, сломать — без мира в браузере
-    physics: (st, dt) => physics(st, dt), opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b) } };
+    physics: (st, dt) => physics(st, dt), safeSpot: (st, x, y, z) => safeSpot(st, x, y, z), unstuck: st => unstuck(st), deathText: why => DEATH[why], opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b) } };
 })();
