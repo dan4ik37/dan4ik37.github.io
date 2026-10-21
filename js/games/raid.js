@@ -1,11 +1,13 @@
 // ═══════════════════════════════════════
-//  «НАБЕГИ» ⚔️ — нападения на участки «Мира Денчика» (docs/RAIDS.md). Каталог и правила стройки — js/games/mir-base.js
-//  (MirBase), бой — js/games/raid-sim.js (RaidSim: тот же код считает сервер, api/_lib/raid-sim.js), сервер — raids.sql
-//  (raid_*) и /api/raid (api/_lib/routes/raid.js). Открывается и на странице игры (#/games/raid[/log|camp|top|train|
-//  replay/<id>|friendly/<участок>]), и окном поверх мира (MirPlay: казарма [E], меню участка).
+//  «НАБЕГИ» ⚔️ — нападения на ВОЕННЫЕ БАЗЫ боевой зоны «Мира Денчика» (docs/RAIDS.md; 12+). Каталог и правила стройки —
+//  js/games/mir-base.js (MirBase: WDEFS, WRules), бой — js/games/raid-sim.js (RaidSim: тот же код считает сервер,
+//  api/_lib/raid-sim.js), сервер — raids.sql (raid_*), bases.sql (war_*: база, армия, состав) и /api/raid (api/_lib/routes/raid.js).
+//  Открывается и на странице игры (#/games/raid[/log|camp|top|train|shop|replay/<id>|friendly/<база>|join/<код>]), и окном поверх
+//  мира (MirPlay: казарма базы [E], меню базы). В набег армию базы ведут главарь и офицеры (или все — если главарь разрешил).
 // ═══════════════════════════════════════
-// Экраны: штаб (свой участок в 2.5D, армия, «⚔️ В бой!»), казарма (тренировка по времени — base_act), бой (разведка → высадка
-// у края → 3 минуты), итог (засчитывает сервер), журнал защиты (повтор, «⚔️ Месть»), поход, лиги и топ, улучшения (💎/🪙), учебный.
+// Экраны: штаб (своя база в 2.5D, армия, «⚔️ В бой!»), казарма (тренировка по времени — war_act), бой (разведка → высадка
+// у края → 3 минуты), итог (засчитывает сервер), журнал защиты базы (повтор, «⚔️ Месть»), поход, лиги и топ баз, улучшения
+// (💎/🪙 — только время и красота), учебный, приглашение в базу (join/<код>).
 // Честность: браузер только РИСУЕТ бой и пишет ввод {t, u, x, z}; итог считает сервер по тому же вводу. Ушёл после высадки —
 // ввод уходит sendBeacon'ом, бой засчитан как есть. Ничего не сохранилось — набег сохранён в localStorage (d37_raid_cur) и
 // продолжается после перезагрузки.
@@ -117,45 +119,48 @@
     } catch (e) { return { ok: false, reason: 'net' }; }
   }
   const WHY = {
-    auth: 'Войди на сайт — набеги идут на настоящих игроков', none: 'Сначала займи участок в «Мире Денчика»', nosql: 'Набеги откроются, когда сайт обновится',
-    army: 'Армия пуста — потренируй отряды в казарме ⚔️', limit: 'На сегодня боёв хватит — приходи завтра', limit_search: 'На сегодня поисков хватит — приходи завтра',
-    active: 'Набег уже идёт', bricks: 'Не хватает кирпичей 🧱', busy: 'На этого игрока сейчас уже нападают — попробуй ещё раз', nobody: 'Сейчас некого грабить',
-    locked: 'Сначала пройди предыдущий лагерь', shield: 'У него щит 🛡️ — месть позже', revenged: 'Месть уже была', id: 'Не найдено', late: 'Время разведки вышло',
-    net: 'Нет связи — попробуй ещё раз', off: 'Сервер набегов не отвечает — бой сохранён, засчитаем позже', week: 'Щит можно купить раз в неделю', max: 'Щит и так долгий',
-    owned: 'Уже есть', gems: 'Не хватает 💎', coins: 'Не хватает монет 🪙', closed: 'Магазин закрыт', noq: 'Очередь пуста', idle: 'Сейчас ничего не строится', item: 'Нет такого',
-    wins: 'Нужно больше побед за неделю', done: 'Уже забрал', args: 'Не получилось', bad_input: 'Сервер не принял бой', expired: 'Бой не засчитан — слишком поздно', early: 'Засчитываем…',
     ...(MB()?.WHY || {}),
+    auth: 'Войди на сайт — набеги идут на настоящие базы игроков', none: 'Вступи в военную базу или основай свою в Боевой зоне «Мира Денчика»', nosql: 'Набеги откроются, когда сайт обновится',
+    army: 'Армия базы пуста — потренируйте отряды в казарме ⚔️', limit: 'На сегодня боёв хватит — приходи завтра', limit_search: 'На сегодня поисков хватит — приходи завтра',
+    active: 'Набег уже идёт', bricks: 'Не хватает кирпичей 🧱 в казне', busy: 'На эту базу сейчас уже нападают — попробуй ещё раз', nobody: 'Сейчас некого грабить',
+    locked: 'Сначала пройди предыдущий лагерь', shield: 'У них щит 🛡️ — месть позже', revenged: 'Месть уже была', id: 'Не найдено', late: 'Время разведки вышло',
+    net: 'Нет связи — попробуй ещё раз', off: 'Сервер набегов не отвечает — бой сохранён, засчитаем позже', week: 'Щит базе можно купить раз в неделю', max: 'Щит и так долгий',
+    owned: 'Уже есть', gems: 'Не хватает 💎', coins: 'Не хватает монет 🪙', closed: 'Магазин закрыт', noq: 'Очередь пуста', idle: 'Сейчас ничего не строится', item: 'Нет такого',
+    wins: 'Нужно больше побед базы за неделю', done: 'Уже забрали', args: 'Не получилось', bad_input: 'Сервер не принял бой', expired: 'Бой не засчитан — слишком поздно', early: 'Засчитываем…',
+    rank: 'В набеги армию базы водят главарь и офицеры (главарь может разрешить всем)', army_out: 'Армию базы сейчас ведёт другой из состава — подожди конца боя',
+    age: 'Набеги и военные базы — с 12 лет (укажи возраст в ⚙️ Настройках → Сайт)', th: 'Нужен штаб выше уровнем', place: 'Сюда не встанет: место занято или край базы',
+    full: 'Казна полна — постройте или улучшите склад 📦',
   };
   const why = r => WHY[r?.reason] || WHY.args;
 
   // ═══ Состояние ═══
   let S = null;
   function toast(t){ try { if (S?.api?.toast) S.api.toast(t); else if (typeof gameToast === 'function') gameToast(t); } catch (e) {} }
-  const defs = () => S?.defs || MB()?.SERVER;
+  const defs = () => S?.defs || MB()?.WSERVER;
   const R = () => defs().raid;
 
-  // ═══ Вид 2.5D (изометрия 2:1): клетки карты 16×16, участок — со сдвигом 2 ═══
+  // ═══ Вид 2.5D (изометрия 2:1): карта боя n×n клеток (открытая часть базы + полоса высадки 2 клетки) ═══
   function makeView(cv, o = {}){
-    const V = { cv, ctx: cv.getContext('2d'), dpr: 1, W: 300, H: 300, zoom: 1, px: 0, py: 0, tw0: 24 };
+    const V = { cv, ctx: cv.getContext('2d'), dpr: 1, W: 300, H: 300, zoom: 1, px: 0, py: 0, tw0: 24, n: o.n || 16, zmax: Math.max(3, (o.n || 16) / 7) };
     V.resize = () => {
       const r = cv.getBoundingClientRect();
       V.dpr = Math.min(2, root.devicePixelRatio || 1);
       V.W = Math.max(160, r.width || cv.clientWidth || 300); V.H = Math.max(140, r.height || cv.clientHeight || 300);
       cv.width = Math.round(V.W * V.dpr); cv.height = Math.round(V.H * V.dpr);
-      V.tw0 = Math.min(V.W / (o.full ? 16.6 : 12.8), (V.H - 10) / ((o.full ? 8.3 : 6.4) + 1.6));
+      V.tw0 = Math.min(V.W / ((o.full ? 1.0375 : .8) * V.n), (V.H - 10) / ((o.full ? .519 : .4) * V.n + 1.6));
       V.apply();
     };
     V.apply = () => {
       V.tw = V.tw0 * V.zoom; V.hw = V.tw / 2; V.hh = V.tw / 4; V.vh = V.tw * .52;
       const lim = (V.zoom - 1) * V.W * .6;
       V.px = Math.max(-lim, Math.min(lim, V.px)); V.py = Math.max(-lim, Math.min(lim, V.py));
-      V.ox = V.W / 2 + V.px; V.oy = V.H / 2 - 16 * V.hh + V.vh * .55 + V.py;
+      V.ox = V.W / 2 + V.px; V.oy = V.H / 2 - V.n * V.hh + V.vh * .55 + V.py;
     };
     V.p = (cx, cz, h = 0) => [V.ox + (cx - cz) * V.hw, V.oy + (cx + cz) * V.hh - h * V.vh];
     V.un = (sx, sy) => { const a = (sx - V.ox) / V.hw, b = (sy - V.oy) / V.hh; return [(a + b) / 2, (b - a) / 2]; };
     V.zoomAt = (k, sx, sy) => {
       const [mx, mz] = V.un(sx, sy);
-      V.zoom = Math.max(1, Math.min(3, V.zoom * k)); V.apply();
+      V.zoom = Math.max(1, Math.min(V.zmax, V.zoom * k)); V.apply();
       const [nx, ny] = V.p(mx, mz); V.px += sx - nx; V.py += sy - ny; V.apply();
     };
     V.resize();
@@ -258,6 +263,12 @@
         if (o.nz) box(V, x + .36, z + .5, .28, .78, 0, h, S0, t);
         break;
       }
+      case 'factory': box(V, x + .2, z + .2, w - .4, d - .4, 0, 1, ['#b45309', '#9a3412', '#7c2d12', '#57534e'][Math.min(3, i)], t); for (let k = 0; k < 3; k++) gable(V, x + .2, z + .2 + k * (d - .4) / 3, w - .4, (d - .4) / 3, 1, .35, '#6b7280', t); cyl(V, x + w - .6, z + .55, .22, 1, 1.3, '#78716c', t); break;
+      case 'garage': box(V, x + .15, z + .15, w - .3, d - .3, 0, 1.15, ['#a8a29e', '#94a3b8', '#78716c'][Math.min(2, i)], t); box(V, x + .1, z + .1, w - .2, d - .2, 1.15, .1, '#3f4a22', t); box(V, cx - .7, z + d - .2, 1.4, .05, 0, .9, '#1f2937'); break;
+      case 'helipad': box(V, x + .1, z + .1, w - .2, d - .2, 0, .08, '#4b5563', t); { const [sx, sy] = V.p(cx, cz, .09), g = V.ctx; g.strokeStyle = '#facc15'; g.lineWidth = Math.max(1.5, V.tw * .06); g.beginPath(); g.ellipse(sx, sy, 1.1 * Math.SQRT2 * V.hw, 1.1 * Math.SQRT2 * V.hh, 0, 0, 2 * PI); g.stroke(); } emo(V, cx, cz, .3, V.tw * .55, '🚁'); break;
+      case 'hangar': box(V, x + .15, z + .15, w - .3, d - .3, 0, .9, L >= 2 ? '#64748b' : '#78716c', t); gable(V, x + .1, z + .1, w - .2, d - .2, .9, .8, L >= 2 ? '#475569' : '#57534e', t); emo(V, cx, cz, 2, V.tw * .5, '✈️'); break;
+      case 'dock': box(V, x + .1, z + .1, w - .2, d - .2, 0, .2, '#a0673a', t); for (const [px, pz] of [[x + .2, z + .2], [x + w - .35, z + .2], [x + .2, z + d - .35], [x + w - .35, z + d - .35]]) box(V, px, pz, .15, .15, 0, .45, '#6b4426'); emo(V, cx, cz, .5, V.tw * .45, '⚓'); break;
+      case 'bunker': box(V, x + .25, z + .25, w - .5, d - .5, 0, .45, '#a8a29e', t); box(V, x + .2, z + .2, w - .4, d - .4, .45, .06, '#78716c', t); emo(V, cx, cz, .75, V.tw * .45, '🕳️'); break;
       case 'bomb': if (o.showTraps || b.arm >= 0) emo(V, cx, cz, .15, V.tw * .45, '💣'); break;
       case 'airmine': if (o.showTraps) emo(V, cx, cz, .35, V.tw * .45, '🎇'); break;
       default: box(V, x + .2, z + .2, w - .4, d - .4, 0, .5, '#9ca3af', t);
@@ -271,25 +282,33 @@
   }
   // Земля: трава, участок, полоса высадки (зелёная, когда можно высаживать)
   function ground(V, o = {}){
-    const g = V.ctx, P = V.p;
+    const g = V.ctx, P = V.p, N = V.n, E = N - 2;
     g.fillStyle = o.night ? '#0b1020' : '#1b2a1f'; g.fillRect(0, 0, V.W, V.H);
-    poly(g, [P(0, 0), P(16, 0), P(16, 16), P(0, 16)], '#4f8a3f');
-    poly(g, [P(2, 2), P(14, 2), P(14, 14), P(2, 14)], o.skinGround || '#7fbf68');
+    poly(g, [P(0, 0), P(N, 0), P(N, N), P(0, N)], '#4f8a3f');
+    poly(g, [P(2, 2), P(E, 2), P(E, E), P(2, E)], o.skinGround || '#a39d6e');
+    for (const [a, b, c, d] of V.block || []) poly(g, [P(a, b), P(c, b), P(c, d), P(a, d)], 'rgba(120,113,108,.85)');   // КП зоны и проезд к воротам
     if (o.ring) {
       g.fillStyle = 'rgba(134,239,172,.28)';
-      for (const [a, b, c, d] of [[0, 0, 16, 2], [0, 14, 16, 16], [0, 2, 2, 14], [14, 2, 16, 14]]) poly(g, [P(a, b), P(c, b), P(c, d), P(a, d)], g.fillStyle);
+      for (const [a, b, c, d] of [[0, 0, N, 2], [0, E, N, N], [0, 2, 2, E], [E, 2, N, E]]) poly(g, [P(a, b), P(c, b), P(c, d), P(a, d)], g.fillStyle);
     }
     g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1;
-    for (let k = 2; k <= 14; k++) { let [a1, b1] = P(k, 2), [a2, b2] = P(k, 14); g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke(); [a1, b1] = P(2, k); [a2, b2] = P(14, k); g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke(); }
-    if (o.ring) { g.strokeStyle = 'rgba(187,247,208,.85)'; g.lineWidth = 2; g.setLineDash([6, 5]); const p = [P(2, 2), P(14, 2), P(14, 14), P(2, 14)]; g.beginPath(); p.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.stroke(); g.setLineDash([]); }
+    for (let k = 2; k <= E; k++) { let [a1, b1] = P(k, 2), [a2, b2] = P(k, E); g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke(); [a1, b1] = P(2, k); [a2, b2] = P(E, k); g.beginPath(); g.moveTo(a1, b1); g.lineTo(a2, b2); g.stroke(); }
+    if (o.ring) { g.strokeStyle = 'rgba(187,247,208,.85)'; g.lineWidth = 2; g.setLineDash([6, 5]); const p = [P(2, 2), P(E, 2), P(E, E), P(2, E)]; g.beginPath(); p.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.stroke(); g.setLineDash([]); }
   }
-  // Участок без боя (штаб, разведка): постройки из layout (клетки участка → карта)
+  // Сетка боя по layout (кольцо штаба) и занятые клетки участка — в клетках карты
+  function gridOf(layout){
+    const RSim = RS(), dd = defs(), G = RSim?.grid ? RSim.grid(dd, layout || []) : { n: 16, S: 12, o: 0, MAP: 16 };
+    const sh = 2 - G.o, block = (dd.block || []).map(([x, z, w, d]) => [x + sh, z + sh, x + sh + w, z + sh + d]).filter(([a, b, c, d]) => c > 2 && d > 2 && a < 2 + G.S && b < 2 + G.S)
+      .map(([a, b, c, d]) => [Math.max(2, a), Math.max(2, b), Math.min(2 + G.S, c), Math.min(2 + G.S, d)]);
+    return { ...G, sh, block };
+  }
+  // База без боя (штаб): постройки из layout (клетки участка → карта боя: открытая часть по штабу со сдвигом 2)
   function layoutBs(layout){
-    const D = defs().k, out = [];
+    const D = defs().k, out = [], G = gridOf(layout);
     for (const it of layout || []) {
       const d = D[it.k]; if (!d || d.g === 'deco') continue;
-      const [w, dd] = it.r & 1 ? [d.d, d.w] : [d.w, d.d];
-      out.push({ n: out.length, id: it.i, k: it.k, x0: it.x + 2, z0: it.z + 2, w, d: dd, x1: it.x + 2 + w, z1: it.z + 2 + dd, l: it.l, alive: true, wall: it.k === 'wall', trap: !!d.trap, building: it.l < 1, upg: it.ue != null && it.l >= 1, hp: 1, mhp: 1, arm: -1 });
+      const [w, dd] = it.r & 1 ? [d.d, d.w] : [d.w, d.d], x0 = it.x + G.sh, z0 = it.z + G.sh;
+      out.push({ n: out.length, id: it.i, k: it.k, x0, z0, w, d: dd, x1: x0 + w, z1: z0 + dd, l: it.l, alive: true, wall: it.k === 'wall', trap: !!d.trap, building: it.l < 1, upg: it.ue != null && it.l >= 1, hp: 1, mhp: 1, arm: -1 });
     }
     return out;
   }
@@ -414,17 +433,20 @@
     const st = S;
     st.loading = true;
     if (!authed() || !sb()) { st.base = null; st.st = null; st.mode = 'guest'; st.loading = false; return; }
-    const [b, r] = await Promise.all([rpc('base_state'), rpc('raid_state', { p_dev: dev() })]);
+    const [b, r] = await Promise.all([rpc('war_state'), rpc('raid_state', { p_dev: dev() })]);
     if (S !== st) return;
     st.base = b?.ok ? b : null;
-    st.mode = !b?.ok ? (b?.reason === 'none' ? 'noplot' : b?.reason === 'nosql' ? 'nosql' : 'net') : !('army' in b) ? 'old' : r?.reason === 'nosql' ? 'noraids' : r?.ok ? 'ok' : r?.reason === 'none' ? 'noplot' : 'net';
+    st.mode = !b?.ok ? (b?.reason === 'none' ? (b.age === false ? 'age' : 'nobase') : b?.reason === 'nosql' ? 'nosql' : b?.reason === 'auth' ? 'guest' : 'net')
+      : r?.reason === 'nosql' ? 'noraids' : r?.ok ? 'ok' : r?.reason === 'none' ? 'nobase' : 'net';
     st.st = r?.ok ? r : null;
     if (b?.ok) st.off = (b.now || r?.now || Date.now() / 1000) - Date.now() / 1000;
     st.loading = false;
   }
   const army = () => S?.base?.army || {};
   const armyN = a => Object.values(a || {}).reduce((s, n) => s + n, 0);
-  const barracksLv = () => (S?.base ? MB().Rules.barracksLv(S.base) : 0);
+  const barracksLv = () => (S?.base ? MB().WRules.barracksLv(S.base) : 0);
+  const canEdit = () => S?.base?.rank === 'leader' || S?.base?.rank === 'officer';   // строить и тренировать — главарь и офицеры
+  const baseTitle = b => (b ? MB().baseName(b.name_k, b.name_n) : '');
 
   // ═══ Монтирование ═══
   function mount(el, api){
@@ -432,7 +454,7 @@
     S = { el, api, param: api?.param || null, screen: 'hub', off: 0, timers: [], views: [], st: null, base: null, mode: 'load', loading: true };
     el.innerHTML = '<div class="rd"><div class="gm-loading"><div class="spinner"></div>Загружаем набеги…</div></div>';
     S.root = el;   // каждый экран сам начинается с <div class="rd">
-    S.onAuth = () => { if (S && S.screen !== 'battle') refresh(); };
+    S.onAuth = () => { if (S && S.screen !== 'battle') { if (S.screen === 'join') start(); else refresh(); } };
     root.addEventListener('d37:auth', S.onAuth);
     S.onHide = () => { if (document.visibilityState === 'hidden') flushBeacon(); };
     document.addEventListener('visibilitychange', S.onHide);
@@ -454,6 +476,7 @@
     if (p === 'shop') return showShop();
     if (p.startsWith('replay/')) return openReplay(p.slice(7));
     if (p.startsWith('friendly/')) return friendly(+p.slice(9));
+    if (p.startsWith('join/')) return showJoin(p.slice(5));
     if (!lsGet(LS_SEEN)) { lsSet(LS_SEEN, 1); return showHelp(true); }
     showHub();
   }
@@ -468,7 +491,7 @@
     root.removeEventListener('pagehide', flushBeacon);
     st.ro?.disconnect?.();
     S = null;
-    try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (e) {}   // мир перечитает свой участок (армия, добыча)
+    try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (e) {}   // мир перечитает свою базу (армия, добыча)
   }
   const $ = s => S?.root?.querySelector(s);
   function setHTML(html){ cancelAnimationFrame(S.raf); S.ro?.disconnect?.(); S.ro = null; S.views = []; S.prevBt?.off?.(); S.prevBt = S.bt; S.root.innerHTML = html; }
@@ -480,46 +503,50 @@
     const st = S.st, b = S.base, mode = S.mode, MBx = MB();
     const L = st ? MBx.LEAGUES[st.league] : MBx.LEAGUES[0];
     const sh = st && st.shield > sNow() ? st.shield - sNow() : 0;
-    const ok = mode === 'ok', a = army(), n = armyN(a), cap = b ? MBx.Rules.armyCap(b) : 0, used = b ? MBx.Rules.armySpace(b) : 0;
-    const head = `<div class="rd-head"><h2>⚔️ Набеги</h2>${st ? `<span class="rd-chip">${L[1]} ${L[0]} · 🏆 ${num(st.trophies)}</span>` : ''}${sh ? `<span class="rd-chip sh" title="Пока щит — на тебя не нападут">🛡️ <span data-cd="${st.shield}">${fmtT(sh)}</span></span>` : ''}${b ? `<span class="rd-chip">🧱 ${num(b.bricks)}</span>` : ''}</div>`;
+    const ok = mode === 'ok', a = army(), n = armyN(a), cap = b ? MBx.WRules.armyCap(b) : 0, used = b ? MBx.WRules.armySpace(b) : 0;
+    const can = ok && !!st?.can && !st?.busy, R0 = b ? MBx.RANKS[b.rank] : null;
+    const head = `<div class="rd-head"><h2>⚔️ Набеги</h2>${b ? `<span class="rd-chip" style="border-color:${MBx.COLORS[b.color] || '#ef4444'}">🏯 ${esc(baseTitle(b))}${R0 ? ' · ' + R0.e : ''}</span>` : ''}${st ? `<span class="rd-chip">${L[1]} ${L[0]} · 🏆 ${num(st.trophies)}</span>` : ''}${sh ? `<span class="rd-chip sh" title="Пока щит — на базу не нападут">🛡️ <span data-cd="${st.shield}">${fmtT(sh)}</span></span>` : ''}${b ? `<span class="rd-chip" title="Казна базы">🧱 ${num(b.bricks)}</span>` : ''}</div>`;
     let left, right;
-    if (mode === 'guest' || mode === 'noplot' || mode === 'net' || mode === 'nosql') {
-      const t = mode === 'guest' ? '<b>Войди на сайт</b> — и нападай на участки других игроков, защищай свой, собирай кубки и лиги. А пока — учебный набег: армия выдаётся бесплатно.'
-        : mode === 'noplot' ? 'Набеги идут за участки «Мира Денчика». <b>Займи участок</b> — ратуша, дом и шахта уже стоят. Потом построй казарму и пушки — и в бой!'
-        : 'Нет связи с сервером. Можно сыграть учебный набег.';
+    if (mode === 'guest' || mode === 'nobase' || mode === 'age' || mode === 'net' || mode === 'nosql') {
+      const t = mode === 'guest' ? '<b>Войди на сайт</b> — вступай в военную базу Боевой зоны или основывай свою, защищайте её вместе и ходите в набеги на другие базы: кубки, лиги, добыча в казну. А пока — учебный набег: армия выдаётся бесплатно.'
+        : mode === 'nobase' ? 'Набеги идут между <b>военными базами</b> Боевой зоны «Мира Денчика» (12+). Основай свою базу у таблички свободного участка — или вступи в базу друга по ссылке-приглашению. Потом казарма, пушки и вышки — и в бой!'
+        : mode === 'age' ? esc(WHY.age)
+        : mode === 'nosql' ? 'Военные базы и набеги откроются, когда сайт обновится. Пока можно сыграть учебный набег.' : 'Нет связи с сервером. Можно сыграть учебный набег.';
       left = `<div class="rd-card"><h3>Как это устроено</h3><p class="rd-sub" style="font-size:.85rem">${t}</p>
-        <div class="rd-btns" style="grid-template-columns:1fr 1fr">${mode === 'guest' ? '<button type="button" class="rd-b pri" data-a="login">🔑 Войти</button>' : mode === 'noplot' ? '<button type="button" class="rd-b pri" data-a="claim">🏘️ Занять участок</button>' : ''}<button type="button" class="rd-b" data-a="tut">🎓 Учебный набег</button><button type="button" class="rd-b" data-a="help">❓ Как играть</button>${root.MirPlay?.isOpen?.() ? '' : '<button type="button" class="rd-b" data-a="world">🌍 В мир</button>'}</div></div>`;
+        <div class="rd-btns" style="grid-template-columns:1fr 1fr">${mode === 'guest' ? '<button type="button" class="rd-b pri" data-a="login">🔑 Войти</button>' : mode === 'nobase' ? '<button type="button" class="rd-b pri" data-a="claim">🏯 К военным базам</button>' : ''}<button type="button" class="rd-b" data-a="tut">🎓 Учебный набег</button><button type="button" class="rd-b" data-a="help">❓ Как играть</button>${root.MirPlay?.isOpen?.() ? '' : '<button type="button" class="rd-b" data-a="world">🌍 В мир</button>'}</div></div>`;
       right = '';
     } else {
       const q = b?.queue || [], qEnd = q.length ? q[q.length - 1].ue : 0;
       left = `<div class="rd-card"><div class="rd-base"><canvas class="rdHubCv"></canvas></div>
-        <div class="rd-sub">Участок №${b.plot} · 🏛️ ратуша ${MBx.Rules.th(b)} ур.${S.base.skin && MBx.SKINS[S.base.skin] ? ` · ${MBx.SKINS[S.base.skin].e} ${MBx.SKINS[S.base.skin].n}` : ''} · нажми постройку — что она умеет</div>
-        <div class="rd-btns" style="grid-template-columns:1fr 1fr"><button type="button" class="rd-b" data-a="build">🔨 Строить оборону</button><button type="button" class="rd-b" data-a="log">🛡️ Защита${st?.log?.some(x => x.t > (lsGet('d37_raid_logseen') || 0)) ? '<span class="rd-dot"></span>' : ''}</button>
-          <button type="button" class="rd-b" data-a="invite" style="grid-column:1/-1" title="Дружеский бой: без добычи и кубков">🤝 Позвать друга штурмовать мою базу</button></div></div>`;
+        <div class="rd-sub">🏯 Штаб ${MBx.WRules.th(b)} ур. · 👥 ${(b.members || []).length}${b.skin && MBx.SKINS[b.skin] ? ` · ${MBx.SKINS[b.skin].e} ${MBx.SKINS[b.skin].n}` : ''} · нажми постройку — что она умеет</div>
+        <div class="rd-btns" style="grid-template-columns:1fr 1fr">${canEdit() ? '<button type="button" class="rd-b" data-a="build">🔨 Строить оборону</button>' : '<button type="button" class="rd-b" data-a="world">🌍 К базе</button>'}<button type="button" class="rd-b" data-a="log">🛡️ Защита${st?.log?.some(x => x.t > (lsGet('d37_raid_logseen') || 0)) ? '<span class="rd-dot"></span>' : ''}</button>
+          <button type="button" class="rd-b" data-a="invite" style="grid-column:1/-1" title="Дружеский бой: без добычи и кубков">🤝 Позвать друга штурмовать нашу базу</button></div></div>`;
       const bl = barracksLv();
-      right = `<div class="rd-card"><h3>🪖 Армия ${used}/${cap || '—'}</h3>
-        ${bl ? `<div class="rd-cap"><i style="width:${cap ? Math.round(used * 100 / cap) : 0}%"></i></div><div class="rd-army">${Object.entries(a).filter(([, v]) => v > 0).map(([u, v]) => `<span>${MBx.UNITS[u]?.e || '?'} ×${v}</span>`).join('') || '<span>пусто</span>'}<span>🦸 герой ${MBx.Rules.th(b)} ур.</span></div>
+      right = `<div class="rd-card"><h3>🪖 Армия базы ${used}/${cap || '—'}</h3>
+        ${bl ? `<div class="rd-cap"><i style="width:${cap ? Math.round(used * 100 / cap) : 0}%"></i></div><div class="rd-army">${Object.entries(a).filter(([, v]) => v > 0).map(([u, v]) => `<span>${MBx.UNITS[u]?.e || '?'} ×${v}</span>`).join('') || '<span>пусто</span>'}<span>🦸 герой ${MBx.WRules.th(b)} ур.</span></div>
           ${q.length ? `<div class="rd-sub">⏳ Тренируется ${q.length} — готово через <span data-cd="${qEnd}">${fmtT(qEnd - sNow())}</span></div>` : ''}`
-          : `<div class="rd-note">Нет казармы. Построй её — она тренирует армию.</div><button type="button" class="rd-b pri" data-a="mkbarracks" style="width:100%">⚔️ Построить казарму (🧱 ${num(MBx.DEFS.barracks.cost[0])})</button>`}
+          : canEdit() ? `<div class="rd-note">Нет казармы. Построй её — она тренирует армию базы.</div><button type="button" class="rd-b pri" data-a="mkbarracks" style="width:100%">⚔️ Построить казарму (🧱 ${num(MBx.WDEFS.barracks.cost[0])})</button>` : '<div class="rd-note">В базе ещё нет казармы — её строят главарь и офицеры.</div>'}
         <div class="rd-btns" style="grid-template-columns:1fr"><button type="button" class="rd-b" data-a="train">⚔️ Казарма: тренировать</button></div>
-        <div style="margin-top:.7rem"><button type="button" class="rd-go" data-a="find" ${ok ? '' : 'disabled'}>⚔️ В БОЙ!</button></div>
-        ${!ok ? `<div class="rd-note">${mode === 'old' || mode === 'noraids' ? '📝 Бои с игроками откроются, когда сайт обновится. Пока — учебный и дружеский бой.' : 'Нет связи с сервером набегов.'}</div>` : ''}
+        <div style="margin-top:.7rem"><button type="button" class="rd-go" data-a="find" ${can ? '' : 'disabled'}>⚔️ В БОЙ!</button></div>
+        ${!ok ? `<div class="rd-note">${mode === 'noraids' ? '📝 Бои с базами откроются, когда сайт обновится. Пока — учебный и дружеский бой.' : 'Нет связи с сервером набегов.'}</div>`
+          : st?.busy ? `<div class="rd-note">⚔️ Армию базы сейчас ведёт ${esc(st.busy.nick)} — бой идёт.</div>` : !st?.can ? `<div class="rd-note">${esc(WHY.rank)}</div>` : ''}
         <div class="rd-btns"><button type="button" class="rd-b" data-a="camp">🏴‍☠️ Поход${st ? ` ${Object.values(st.camp || {}).reduce((s, v) => s + v, 0)}★` : ''}</button><button type="button" class="rd-b" data-a="top">🏆 Лиги</button><button type="button" class="rd-b" data-a="shop">💎 Улучшения</button>
           <button type="button" class="rd-b" data-a="tut">🎓 Учебный</button><button type="button" class="rd-b" data-a="help">❓ Как играть</button>${st?.week?.chest ? '<button type="button" class="rd-b pri" data-a="chest">🎁 Сундук недели</button>' : `<button type="button" class="rd-b" data-a="attacks">📜 Мои набеги</button>`}</div>
         ${st ? `<div class="rd-day"><span>Боёв сегодня: ${st.day.battles}/${R().day.battles}</span><span>Добыча: 🧱 ${num(st.day.loot)}/${num(st.day.lootCap)}</span><span>Неделя: ★ ${st.week.stars} · побед ${st.week.wins}/${R().chestWins}</span>${st.newbie > sNow() ? `<span>🐣 Новичок: защита ещё ${fmtT(st.newbie - sNow())}</span>` : ''}</div>` : ''}</div>`;
     }
     setHTML(`<div class="rd">${head}<div class="rd-grid">${left}${right}</div></div>`);
     S.root.firstChild.addEventListener('click', onHubClick);
-    if (b && (mode !== 'guest')) hubBase();
+    if (b && mode !== 'guest') hubBase();
     retryPending();
   }
   function paintTimers(){
     S?.root?.querySelectorAll('[data-cd]').forEach(e => { const left = +e.dataset.cd - sNow(); e.textContent = left > 0 ? fmtT(left) : 'готово'; if (left <= 0 && !e.dataset.done) { e.dataset.done = 1; S.timers.push(setTimeout(() => refresh(), 800)); } });
   }
-  // свой участок в 2.5D (ловушки видны — свои), нажал постройку — подсказка
+  // своя база в 2.5D (ловушки видны — свои), нажал постройку — подсказка
   function hubBase(){
     const cv = $('.rdHubCv'); if (!cv) return;
-    const V = makeView(cv, { full: true });
+    const G = gridOf(S.base.layout), V = makeView(cv, { full: true, n: G.MAP });
+    V.block = G.block;
     const bs = layoutBs(S.base.layout), tint = MB().SKINS[S.base.skin] || null;
     const draw = () => { if (!S || S.screen !== 'hub') return; V.ctx.setTransform(V.dpr, 0, 0, V.dpr, 0, 0); drawScene(V, bs, [], { tint, showTraps: true, hub: true }); };
     S.ro = new ResizeObserver(() => { V.resize(); draw(); }); S.ro.observe(cv);
@@ -527,7 +554,7 @@
     cv.onclick = e => {
       const r = cv.getBoundingClientRect(), [cx, cz] = V.un(e.clientX - r.left, e.clientY - r.top);
       const b = bs.find(x => cx >= x.x0 && cx < x.x1 && cz >= x.z0 && cz < x.z1); if (!b) return;
-      const D = MB().DEFS[b.k], L = Math.max(1, b.l);
+      const D = MB().WDEFS[b.k], L = Math.max(1, b.l);
       const parts = [`${D.e} ${D.n}${D.lv > 1 ? ` · ${b.l} ур.` : ''}`];
       if (D.hp) parts.push(`❤️ ${num(D.hp[L - 1])}`);
       if (D.atk) parts.push(`⚔️ ${D.atk.dmg[L - 1]} за выстрел, дальность ${String(D.atk.rng).replace('.', ',')}`);
@@ -542,8 +569,8 @@
     if (a === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
     else if (a === 'help') showHelp();
     else if (a === 'tut') startTut();
-    else if (a === 'world') { location.hash = '#/games/world'; }
-    else if (a === 'claim') claimPlot(btn);
+    else if (a === 'world') goWar();
+    else if (a === 'claim') goWar();
     else if (a === 'mkbarracks') mkBarracks(btn);
     else if (a === 'train') showTrain();
     else if (a === 'find') findBattle(btn);
@@ -554,39 +581,30 @@
     else if (a === 'shop') showShop();
     else if (a === 'chest') { btn.disabled = true; const r = await rpc('raid_chest'); toast(r?.ok ? `🎁 Сундук недели: +${num(r.got)} 🧱` : why(r)); await refresh(); }
     else if (a === 'build') goBuild();
-    else if (a === 'invite' && S.base) share('friendly/' + S.base.plot, `Возьмёшь мою базу? 🏰 Ратуша ${MB().Rules.th(S.base)} ур. — дружеский бой в «Набегах» на сайте Денчика37, без потерь.`);
+    else if (a === 'invite' && S.base) share('friendly/' + S.base.id, `Возьмёшь нашу военную базу «${baseTitle(S.base)}»? 🏯 Штаб ${MB().WRules.th(S.base)} ур. — дружеский бой в «Набегах» на сайте Денчика37, без потерь.`);
   }
-  // строить — в мире: участок, режим стройки
+  // строить — в мире: своя база, режим стройки (вкладка «Оборона»)
   function goBuild(){
     try { sessionStorage.setItem('d37_mb_go', 'build'); } catch (e) {}
     if (S?.api?.inWorld && S.api.exit) { S.api.exit(); setTimeout(() => root.dispatchEvent(new CustomEvent('d37:mb', { detail: 'build' })), 80); }
     else location.hash = '#/games/world';
   }
-  async function claimPlot(btn){
-    btn.disabled = true;
-    let plot = 0;
-    for (let s = 0; s < 20 && !plot; s++) {
-      const r = await rpc('base_street', { p_street: s });
-      if (!r?.ok) break;
-      const used = new Set((r.plots || []).map(p => p.p));
-      for (let j = 1; j <= 6; j++) if (!used.has(s * 6 + j)) { plot = s * 6 + j; break; }
-    }
-    if (!plot) { toast('Не нашли свободный участок — займи в «Мире Денчика»'); btn.disabled = false; return; }
-    const r = await rpc('base_claim', { p_plot: plot, p_import: null });
-    toast(r?.ok ? `🏘️ Участок №${plot} — твой!` : why(r));
-    try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (e) {}
-    await refresh();
+  // к военным базам Боевой зоны (своя база — к ней; нет — к свободному участку и меню «основать»)
+  function goWar(){
+    try { sessionStorage.setItem('d37_mb_go', 'wb'); } catch (e) {}
+    if (S?.api?.inWorld && S.api.exit) { S.api.exit(); setTimeout(() => root.dispatchEvent(new CustomEvent('d37:mb', { detail: 'wb' })), 80); }
+    else location.hash = '#/games/world';
   }
-  // казарма — сама находит место рядом с ратушей
+  // казарма — сама находит место рядом со штабом (в открытой части базы)
   async function mkBarracks(btn){
-    const b = S.base, RU = MB().Rules, D = MB().DEFS.barracks;
+    const b = S.base, RU = MB().WRules, D = MB().WDEFS.barracks;
     if (b.bricks < D.cost[0]) { toast(WHY.bricks); return; }
-    const th = b.layout.find(it => it.k === 'th'), tx = th ? th.x + 1 : 5, tz = th ? th.z + 1 : 5, spots = [];
-    for (let z = 0; z <= 10; z++) for (let x = 0; x <= 10; x++) if (RU.fits(b.layout, x, z, D.w, D.d, 0)) spots.push([Math.abs(x - tx) + Math.abs(z - tz), x, z]);
-    if (!spots.length) { toast('Нет места 2×2 — освободи на участке (в мире)'); return; }
+    const th = b.layout.find(it => it.k === 'th'), tx = th ? th.x + 1 : 15, tz = th ? th.z + 1 : 15, spots = [], [lo, hi] = RU.boxOf(b);
+    for (let z = lo; z <= hi - D.d; z++) for (let x = lo; x <= hi - D.w; x++) if (RU.fits(b.layout, x, z, D.w, D.d, 0)) spots.push([Math.abs(x - tx) + Math.abs(z - tz), x, z]);
+    if (!spots.length) { toast('Нет места 2×2 — освободите на базе (в мире)'); return; }
     spots.sort((p, q) => p[0] - q[0]);
     btn.disabled = true;
-    const r = await rpc('base_act', { p_act: 'place', p_a: { k: 'barracks', x: spots[0][1], z: spots[0][2], r: 0 } });
+    const r = await rpc('war_act', { p_act: 'place', p_a: { k: 'barracks', x: spots[0][1], z: spots[0][2], r: 0 } });
     toast(r?.ok ? `⚔️ Казарма строится — ${fmtT(D.time[0])}` : why(r));
     try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (e) {}
     await refresh();
@@ -598,23 +616,23 @@
     if (!S || S.screen !== 'train') return;
     const b = S.base, MBx = MB(), U = MBx.UNITS, ok = S.mode === 'ok' || S.mode === 'noraids';
     if (quiet) { paintTimers(); return; }
-    if (!b || !ok) { setHTML(`<div class="rd"><div class="rd-head"><button type="button" class="rd-back" data-a="hub">← Штаб</button><h2>⚔️ Казарма</h2></div><div class="rd-note">${S.mode === 'guest' ? 'Войди на сайт — армия тренируется на сервере.' : S.mode === 'old' ? 'Казарма откроется, когда сайт обновится.' : 'Сначала займи участок и построй казарму.'}</div></div>`); S.root.firstChild.onclick = e => { if (e.target.closest('[data-a="hub"]')) showHub(); }; return; }
-    const bl = MBx.Rules.barracksLv(b), cap = MBx.Rules.armyCap(b), used = MBx.Rules.armySpace(b), q = b.queue || [];
+    if (!b || !ok) { setHTML(`<div class="rd"><div class="rd-head"><button type="button" class="rd-back" data-a="hub">← Штаб</button><h2>⚔️ Казарма</h2></div><div class="rd-note">${S.mode === 'guest' ? 'Войди на сайт — армия тренируется на сервере.' : S.mode === 'nosql' ? 'Казарма откроется, когда сайт обновится.' : 'Сначала вступи в военную базу (или основай свою) и постройте казарму.'}</div></div>`); S.root.firstChild.onclick = e => { if (e.target.closest('[data-a="hub"]')) showHub(); }; return; }
+    const bl = MBx.WRules.barracksLv(b), cap = MBx.WRules.armyCap(b), used = MBx.WRules.armySpace(b), q = b.queue || [], edit = canEdit();
     const qEnd = q.length ? q[q.length - 1].ue : 0, coinCost = q.length ? Math.max(1, Math.ceil((qEnd - sNow()) / 120)) : 0, gemCost = q.length ? Math.max(1, Math.ceil((qEnd - sNow()) / R().shop.fin)) : 0;
     const qGroups = []; for (const it of q) { const g = qGroups[qGroups.length - 1]; if (g && g.u === it.u) g.n++; else qGroups.push({ u: it.u, n: 1 }); }
     const cards = Object.entries(U).map(([k, u]) => {
       const lock = u.lv > bl, have = b.army?.[k] || 0;
       const stat = u.tgt === 'heal' ? `лечит ${u.heal}/с вокруг` : `урон ${u.wdmg ? u.wdmg + ' стенам' : u.dmg}${u.cd !== 1 && !u.wdmg ? ` за ${String(u.cd).replace('.', ',')} с` : ''}${u.rng >= 2 ? ` · дальность ${u.rng}` : ''}`;
-      return `<div class="rd-unit${lock ? ' lock' : ''}"><b>${u.e} ${esc(u.n)}${have ? ` <span class="rd-chip">×${have}</span>` : ''}</b><div class="s">${esc(u.info || '')}<br>❤️ ${u.hp} · ${stat}${u.air ? ' · летает' : ''}<br>место ${u.sp} · 🧱 ${u.cost} · ⏱ ${fmtT(b.q2 ? Math.ceil(u.time / 2) : u.time)}</div>
-        ${lock ? `<div class="s">🔒 казарма ${u.lv} ур.</div>` : `<div class="r"><button type="button" class="rd-b" data-t="${k}:1">+1</button><button type="button" class="rd-b" data-t="${k}:5">+5</button>${qGroups.some(g => g.u === k) ? `<button type="button" class="rd-b" data-un="${k}" title="Убрать из очереди (кирпичи назад)">−</button>` : ''}</div>`}</div>`;
+      return `<div class="rd-unit${lock ? ' lock' : ''}"><b>${u.e} ${esc(u.n)}${have ? ` <span class="rd-chip">×${have}</span>` : ''}</b><div class="s">${esc(u.info || '')}<br>❤️ ${u.hp} · ${stat}${u.air ? ' · летает' : ''}<br>место ${u.sp} · 🧱 ${u.cost} · ⏱ ${fmtT(MBx.WRules.trainT(b, u))}</div>
+        ${lock ? `<div class="s">🔒 казарма ${u.lv} ур.</div>` : !edit ? '' : `<div class="r"><button type="button" class="rd-b" data-t="${k}:1">+1</button><button type="button" class="rd-b" data-t="${k}:5">+5</button>${qGroups.some(g => g.u === k) ? `<button type="button" class="rd-b" data-un="${k}" title="Убрать из очереди (кирпичи назад)">−</button>` : ''}</div>`}</div>`;
     }).join('');
-    setHTML(`<div class="rd"><div class="rd-head"><button type="button" class="rd-back" data-a="hub">← Штаб</button><h2>⚔️ Казарма ${bl ? bl + ' ур.' : ''}</h2><span class="rd-chip">🧱 ${num(b.bricks)}</span><span class="rd-chip">🪖 ${used}/${cap}</span>${b.q2 ? '<span class="rd-chip">⚡ вторая казарма</span>' : ''}</div>
-      ${!bl ? `<div class="rd-note">Нет готовой казармы. ${b.layout.some(it => it.k === 'barracks') ? 'Она ещё строится.' : 'Построй её в штабе.'}</div>` : ''}
+    setHTML(`<div class="rd"><div class="rd-head"><button type="button" class="rd-back" data-a="hub">← Штаб</button><h2>⚔️ Казарма базы ${bl ? bl + ' ур.' : ''}</h2><span class="rd-chip" title="Казна базы">🧱 ${num(b.bricks)}</span><span class="rd-chip">🪖 ${used}/${cap}</span>${MBx.WRules.barracksN(b) >= 2 ? '<span class="rd-chip" title="Две готовые казармы — отряды учатся вдвое быстрее">⚡ две казармы</span>' : ''}</div>
+      ${!bl ? `<div class="rd-note">Нет готовой казармы. ${b.layout.some(it => it.k === 'barracks') ? 'Она ещё строится.' : 'Её строят главарь и офицеры (в штабе или в мире).'}</div>` : !edit ? '<div class="rd-note">Тренируют армию главарь и офицеры. Ускорить очередь может любой из базы.</div>' : ''}
       <div class="rd-cap"><i style="width:${cap ? Math.round(used * 100 / cap) : 0}%"></i></div>
       ${q.length ? `<div class="rd-card" style="margin-bottom:.6rem"><b>⏳ Очередь</b> — всё готово через <span data-cd="${qEnd}">${fmtT(qEnd - sNow())}</span><div class="rd-q">${qGroups.map(g => `<span>${U[g.u].e} ×${g.n}</span>`).join('')}</div>
         <div class="rd-btns" style="grid-template-columns:1fr 1fr"><button type="button" class="rd-b" data-a="tfin">⚡ Сразу за ${coinCost} 🪙</button>${root.D37Gems?.isOn?.() ? `<button type="button" class="rd-b" data-a="tfing">💎 Сразу за ${gemCost}</button>` : ''}</div></div>` : ''}
       <div class="rd-units">${cards}</div>
-      <div class="rd-sub">Отряды тренируются по очереди, даже когда тебя нет. Казарма выше — больше места и новые отряды. Высаженные в бою тратятся, остальные вернутся.</div></div>`);
+      <div class="rd-sub">Отряды тренируются по очереди, даже когда никого нет. Казарма выше — больше места и новые отряды; вторая казарма (со штаба 3) — учатся вдвое быстрее. Высаженные в бою тратятся, остальные вернутся.</div></div>`);
     S.root.firstChild.addEventListener('click', onTrainClick);
   }
   async function onTrainClick(e){
@@ -627,10 +645,11 @@
     else if (el.dataset.a === 'tfing') { if (!(await ask({ icon: '💎', title: 'Дотренировать сразу?', text: 'Кристаллы тратятся только на время — армия будет такой же.', yes: '💎 Да' }))) return; const r = await rpc('raid_buy', { p_item: 'tfin' }); toast(r?.ok ? `⚡ Армия готова (−${r.gems} 💎)` : why(r)); root.D37Gems?.sync?.(); await refresh(); return; }
     if (!act) return;
     // сразу проверяем по тем же правилам (Rules.act), сервер подтверждает
-    const pre = MB().Rules.act(MB().Rules.clone(S.base), act, args, Math.floor(sNow()), act === 'tfinish' ? { coins: root.D37Coins?.coins?.() ?? 0 } : undefined);
-    if (!pre.ok) { toast(MB().WHY[pre.reason] || why(pre)); try { gameSfx('bad'); } catch (er) {} return; }
+    if (act !== 'tfinish' && !canEdit()) { toast(WHY.rank); return; }
+    const pre = MB().WRules.act(MB().WRules.clone(S.base), act, args, Math.floor(sNow()), act === 'tfinish' ? { coins: root.D37Coins?.coins?.() ?? 0 } : undefined);
+    if (!pre.ok) { toast(WHY[pre.reason] || why(pre)); try { gameSfx('bad'); } catch (er) {} return; }
     el.disabled = true;
-    const r = await rpc('base_act', { p_act: act, p_a: args });
+    const r = await rpc('war_act', { p_act: act, p_a: args });
     if (r?.ok) { S.base = r; if (act === 'tfinish') root.D37Coins?.sync?.(); try { gameSfx('ok'); } catch (er) {} }
     else toast(why(r));
     renderTrain();
@@ -639,7 +658,9 @@
 
   // ═══ Бой ═══
   async function findBattle(btn, mode = 'find', ref = null){
-    if (S.mode !== 'ok') { toast(WHY.nosql); return; }
+    if (S.mode !== 'ok') { toast(S.mode === 'nobase' ? WHY.none : S.mode === 'age' ? WHY.age : WHY.nosql); return; }
+    if (mode !== 'tut' && !S.st?.can) { toast(WHY.rank); return; }
+    if (mode !== 'tut' && S.st?.busy) { toast(WHY.army_out); return; }
     if (!armyN(army()) && mode !== 'tut') { toast(WHY.army); showTrain(); return; }
     btn && (btn.disabled = true);
     const r = await rpc('raid_start', { p_mode: mode, p_ref: ref, p_dev: dev() });
@@ -656,17 +677,35 @@
   function startTut(){
     const RSim = RS(), dd = defs();
     if (S.mode === 'ok' && !S.st?.tut) return findBattle(null, 'tut');
-    enterBattle('tut', { lvl: 0, variant: 0, army: { ...dd.raid.tutArmy }, hero: Math.max(1, S.base ? MB().Rules.th(S.base) : 1), seed: 7 + (Date.now() % 1000), defs: dd, local: true, def: { nick: 'Учебный лагерь' } });
+    enterBattle('tut', { lvl: 0, variant: 0, army: { ...dd.raid.tutArmy }, hero: Math.max(1, S.base ? MB().WRules.th(S.base) : 1), seed: 7 + (Date.now() % 1000), defs: dd, local: true, def: { nick: 'Учебный лагерь' } });
     void RSim;
   }
-  async function friendly(plot){
+  // дружеский бой по базе id (из мира — снимок в sessionStorage; по ссылке — war_sector, без ловушек): без добычи и кубков, армия не тратится
+  async function friendly(id){
     let info = null;
-    try { const f = JSON.parse(sessionStorage.getItem('d37_raid_friendly') || 'null'); if (f && f.plot === plot) info = f; } catch (e) {}
-    if (!info && plot > 0) { const r = await rpc('base_street', { p_street: Math.floor((plot - 1) / 6) }); const p = r?.plots?.find(x => x.p === plot); if (p) info = { plot, nick: p.nick, layout: p.layout, skin: p.skin }; }
+    try { const f = JSON.parse(sessionStorage.getItem('d37_raid_friendly') || 'null'); if (f && f.base === id) info = f; } catch (e) {}
+    if (!info && id > 0) { const r = await rpc('war_sector', { p_sector: Math.floor((id - 1) / 12) }); const p = r?.bases?.find(x => x.id === id); if (p) info = { base: id, name: MB().baseName(p.name_k, p.name_n), layout: p.layout, skin: p.skin }; }
     if (!S) return;
-    if (!info) { toast('Участок не найден'); return showHub(); }
+    if (!info) { toast('База не найдена'); return showHub(); }
     const a = armyN(army()) ? { ...army() } : { ...defs().raid.tutArmy };
-    enterBattle('friendly', { layout: MB().Rules.sanitize({ layout: info.layout, room: [], plot }).layout, army: a, hero: S.base ? MB().Rules.th(S.base) : 1, seed: plot * 31 + 7, defs: defs(), local: true, def: { nick: info.nick, skin: info.skin, plot } });
+    const lay = MB().WRules.sanitize({ layout: info.layout, plot: id })?.layout || [];
+    enterBattle('friendly', { layout: lay.filter(it => !defs().k[it.k]?.trap), army: a, hero: S.base ? MB().WRules.th(S.base) : 1, seed: id * 31 + 7, defs: defs(), local: true, def: { nick: info.name || info.nick || 'База', skin: info.skin, base: id } });
+  }
+  // приглашение в базу по ссылке (/play/raid/join/<код>): что за база — и «Вступить» (war_join)
+  async function showJoin(code){
+    if (!S) return;
+    S.screen = 'join';
+    const info = await rpc('war_invite_info', { p_code: code });
+    if (!S) return;
+    const MBx = MB();
+    if (!info?.ok) return page('🏯 Приглашение', `<div class="rd-note">${info?.reason === 'nosql' ? esc(WHY.nosql) : 'Приглашение не найдено или устарело — попроси у главаря новую ссылку.'}</div>`);
+    const name = MBx.baseName(info.name_k, info.name_n), color = MBx.COLORS[info.color] || '#ef4444', lg = MBx.LEAGUES[MBx.league(info.tr)];
+    page('🏯 Приглашение в базу', `<div class="rd-card"><h3 style="color:${color}">🏯 ${esc(name)}</h3><p class="rd-sub" style="font-size:.86rem">👑 Главарь: ${esc(info.nick)} · 👥 ${info.n} · штаб ${info.th} ур. · ${lg[1]} 🏆 ${num(info.tr)}</p>
+      <p class="rd-sub">Вступишь бойцом: собирай кирпичи в казну, дари их со своего участка района, бери технику базы, защищай базу — и (если главарь разрешит) води армию в набеги. Военные базы — с 12 лет, бои мультяшные, без крови.</p>
+      ${!authed() ? '<div class="rd-btns" style="grid-template-columns:1fr"><button type="button" class="rd-b pri" data-a="login">🔑 Войти и вступить</button></div>'
+        : S.base ? `<div class="rd-note">Ты уже в базе «${esc(baseTitle(S.base))}». Чтобы перейти, сначала выйди из неё (меню базы в мире).</div>`
+        : S.mode === 'age' ? `<div class="rd-note">${esc(WHY.age)}</div>`
+        : `<div class="rd-btns" style="grid-template-columns:1fr"><button type="button" class="rd-b pri" data-join="${esc(code)}">🏯 Вступить в базу</button></div>`}</div>`);
   }
   async function openReplay(id){
     const r = await rpc('raid_replay', { p_id: id });
@@ -704,8 +743,8 @@
       }
     }
     if (kind === 'replay') { bt.phase = 'fight'; bt.t0 = performance.now(); }
-    const def = data.def || {}, L = def.tr != null ? MBx.LEAGUES[MBx.league(def.tr)] : null;
-    const title = kind === 'replay' ? `🎬 ${esc(data.att?.nick || '')} → ${esc(def.nick || '')}` : kind === 'tut' ? '🎓 Учебный набег' : kind === 'friendly' ? `🤝 Дружеский бой: ${esc(def.nick || '')}` : data.mode === 'camp' ? `🏴‍☠️ Лагерь ${data.lvl}` : data.mode === 'bot' ? '🏴‍☠️ Разбойники' : `🆚 ${esc(def.nick || 'Игрок')}${L ? ` ${L[1]} ${num(def.tr)}` : ''} · 🏛️ ${def.th || ''}`;
+    const def = data.def || {}, L = def.tr != null ? MBx.LEAGUES[MBx.league(def.tr)] : null, bn = o => (o && o.k != null ? MBx.baseName(o.k, o.n) : o?.name_k != null ? MBx.baseName(o.name_k, o.name_n) : '');
+    const title = kind === 'replay' ? `🎬 ${esc(data.att?.nick || '')}${bn(data.att?.base) ? ' (' + esc(bn(data.att.base)) + ')' : ''} → ${esc(bn(def.base) || def.nick || '')}` : kind === 'tut' ? '🎓 Учебный набег' : kind === 'friendly' ? `🤝 Дружеский бой: ${esc(def.nick || '')}` : data.mode === 'camp' ? `🏴‍☠️ Лагерь ${data.lvl}` : data.mode === 'bot' ? '🏴‍☠️ Разбойники' : `🆚 🏯 ${esc(bn(def) || def.nick || 'База')}${L ? ` ${L[1]} ${num(def.tr)}` : ''} · штаб ${def.th || ''}`;
     const types = Object.keys(bt.B.left).filter(u => U[u]);
     setHTML(`<div class="rd"><div class="rd-field${kind === 'replay' ? ' rp' : ''}"><canvas class="rdCv"></canvas>
       <div class="rd-top"><div class="rd-pill">${title}<div class="rdLoot" style="font-weight:700;opacity:.9"></div></div><div class="rd-sp"></div><div class="rd-pill big"><div class="rdTimer">—</div><div class="rd-stars rdStars">☆☆☆</div><div class="rdPct" style="font-size:.7rem">0 %</div></div></div>
@@ -713,14 +752,15 @@
       <div class="rd-barB">${kind === 'replay' ? '' : types.map(u => `<button type="button" class="rd-u" data-u="${u}" title="${esc(U[u].n)}">${U[u].e}<i>${bt.B.left[u]}</i></button>`).join('') + (bt.B.hero ? '<button type="button" class="rd-u" data-u="hero" title="Герой — твой персонаж">🦸<i>1</i></button><button type="button" class="rd-u ab" data-ab="1" title="«Удар» героя" disabled>💥</button>' : '')}</div>
       <div class="rd-act">${kind === 'replay' ? `<button type="button" class="rd-b" data-a="pause">⏸</button><button type="button" class="rd-b" data-a="speed">×1</button><button type="button" class="rd-b" data-a="restart">⏮</button>${data.id ? '<button type="button" class="rd-b" data-a="share" title="Поделиться повтором">🔗</button>' : ''}<button type="button" class="rd-b" data-a="hub">🏠</button>`
           : `<button type="button" class="rd-b rdNext" data-a="next"${kind === 'raid' && data.mode === 'find' ? '' : ' hidden'}>⏭ Следующий 🧱${num(R().next[(data.hero || 1) - 1])}</button><button type="button" class="rd-b rdHome" data-a="home">🏠 Домой</button><button type="button" class="rd-b rdEnd" data-a="end" hidden>🏳️ Закончить</button>`}</div></div></div>`);
-    const cv = $('.rdCv'), V = makeView(cv, { full: true });
+    const cv = $('.rdCv'), V = makeView(cv, { full: true, n: bt.B.MAP });
+    V.block = gridOf(bt.cfg.layout).block;
     S.views = [V]; bt.V = V;
     S.ro = new ResizeObserver(() => V.resize()); S.ro.observe(cv);
     bindField(bt, cv);
     S.root.firstChild.addEventListener('click', e => onBattleClick(e, bt));
     if (types.length) select(bt, types[0]);
     if (kind === 'tut') tip(bt, '🎓 Это лагерь разбойников. Выбери отряд внизу и нажми на <b>зелёную полосу</b> у края — там высадка.');
-    else if (kind === 'raid' && bt.phase === 'scout') tip(bt, '👀 Разведка: посмотри базу. Нажми на зелёную полосу — высадка начнёт бой (3 минуты).');
+    else if (kind === 'raid' && bt.phase === 'scout') tip(bt, '👀 Разведка: посмотри базу (колесо или два пальца — ближе). Нажми на зелёную полосу — высадка начнёт бой (3 минуты).');
     else if (kind === 'friendly') tip(bt, '🤝 Тренировка: без добычи и кубков, армия не тратится.');
     loadSprites().then(() => { for (const u of [...types, 'hero']) spriteFor(u, u === 'hero' ? '' : bt.skinA, bt.heroLook); });
     S.timers.push(setTimeout(fitField, 450));   // после прокрутки openGame
@@ -785,11 +825,11 @@
     if (a === 'pause') { bt.paused = !bt.paused; b.textContent = bt.paused ? '▶' : '⏸'; return; }
     if (a === 'speed') { bt.speed = bt.speed >= 4 ? 1 : bt.speed * 2; b.textContent = '×' + bt.speed; return; }
     if (a === 'restart') return enterBattle('replay', bt.data);
-    if (a === 'again') { if (bt.kind === 'tut') return startTut(); if (bt.kind === 'friendly') return friendly(bt.data.def?.plot || 0); return findBattle(null, bt.data.mode === 'camp' ? 'camp' : bt.data.mode === 'bot' ? 'bot' : 'find', bt.data.mode === 'camp' ? String(bt.data.lvl) : null); }
+    if (a === 'again') { if (bt.kind === 'tut') return startTut(); if (bt.kind === 'friendly') return friendly(bt.data.def?.base || 0); return findBattle(null, bt.data.mode === 'camp' ? 'camp' : bt.data.mode === 'bot' ? 'bot' : 'find', bt.data.mode === 'camp' ? String(bt.data.lvl) : null); }
     if (a === 'replay') return enterBattle('replay', { ...bt.data, id: bt.kind === 'raid' && bt.server?.ok && !bt.server.canceled ? bt.data.id : undefined, inputs: bt.ins.slice(), att: { nick: (typeof currentProfile !== 'undefined' && currentProfile?.nick) || 'Я' }, attSkin: bt.skinA });
     if (a === 'share' && bt.data.id) {
-      const r = bt.server?.ok && bt.server.stars != null ? bt.server : bt.result || bt.data.result || {}, who = bt.data.def?.nick;
-      return share('replay/' + bt.data.id, bt.kind === 'replay' ? `Смотри повтор набега в «Набегах»: ${bt.data.att?.nick || 'Игрок'} → ${who || 'база'} ⚔️` : `Смотри, как я ${r.stars ? 'взял' : 'штурмовал'} ${who ? 'базу ' + who : 'лагерь разбойников'}: ${stars(r.stars || 0)} ${r.pct || 0} % ⚔️`);
+      const r = bt.server?.ok && bt.server.stars != null ? bt.server : bt.result || bt.data.result || {}, d = bt.data.def || {}, who = d.name_k != null ? MB().baseName(d.name_k, d.name_n) : d.base?.k != null ? MB().baseName(d.base.k, d.base.n) : d.nick;
+      return share('replay/' + bt.data.id, bt.kind === 'replay' ? `Смотри повтор набега в «Набегах»: ${bt.data.att?.nick || 'Игрок'} → ${who || 'база'} ⚔️` : `Смотри, как мы ${r.stars ? 'взяли' : 'штурмовали'} ${who ? 'базу «' + who + '»' : 'лагерь разбойников'}: ${stars(r.stars || 0)} ${r.pct || 0} % ⚔️`);
     }
   }
   async function leave(bt){
@@ -810,8 +850,8 @@
     const tryDeploy = (sx, sy) => {
       if (!bt.sel || bt.kind === 'replay') return false;
       const [x, z] = toMap(sx, sy);
-      if (x < 0 || z < 0 || x >= 4096 || z >= 4096) return false;
-      if (!RS().inRing(x, z)) { bt.flash = { x, z, t: performance.now() }; tip(bt, '🚫 Сюда нельзя — высаживай на <b>зелёной полосе</b> за оградой участка', 2200); return false; }
+      if (x < 0 || z < 0 || x >= bt.B.W || z >= bt.B.W) return false;
+      if (!bt.B.inRing(x, z)) { bt.flash = { x, z, t: performance.now() }; tip(bt, '🚫 Сюда нельзя — высаживай на <b>зелёной полосе</b> за краем базы', 2200); return false; }
       const r = input(bt, bt.sel === 'hero' ? { u: 'hero', x, z } : { u: bt.sel, x, z });
       if (r && r !== 'unit') return false;
       return !r;
@@ -822,8 +862,9 @@
       if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), z: V.zoom }; paint = null; pan = null; return; }
       if (e.button === 2 || e.button === 1) { pan = { x: p[0], y: p[1], px: V.px, py: V.py }; return; }
       const [mx, mz] = toMap(p[0], p[1]);
-      if (bt.kind !== 'replay' && !bt.B.over && RS().inRing(Math.max(0, mx), Math.max(0, mz)) && mx >= 0 && mz >= 0 && mx < 4096 && mz < 4096) { if (tryDeploy(p[0], p[1])) paint = { x: p[0], y: p[1], t: performance.now() }; }
-      else { if (bt.kind !== 'replay' && !bt.B.over && mx >= 512 && mz >= 512 && mx < 3584 && mz < 3584) tryDeploy(p[0], p[1]); pan = { x: p[0], y: p[1], px: V.px, py: V.py }; }
+      const MW = bt.B.W, IN = (bt.B.MAP - 2) * 256;
+      if (bt.kind !== 'replay' && !bt.B.over && bt.B.inRing(Math.max(0, mx), Math.max(0, mz)) && mx >= 0 && mz >= 0 && mx < MW && mz < MW) { if (tryDeploy(p[0], p[1])) paint = { x: p[0], y: p[1], t: performance.now() }; }
+      else { if (bt.kind !== 'replay' && !bt.B.over && mx >= 512 && mz >= 512 && mx < IN && mz < IN) tryDeploy(p[0], p[1]); pan = { x: p[0], y: p[1], px: V.px, py: V.py }; }
     });
     cv.addEventListener('pointermove', e => {
       if (!ptrs.has(e.pointerId)) return;
@@ -850,8 +891,8 @@
   function pad(bt){
     const gp = navigator.getGamepads?.()?.find(g => g && g.connected);
     if (!gp || bt.kind === 'replay') return;
-    const ax = gp.axes[0] || 0, az = gp.axes[1] || 0, P = bt.pad = bt.pad || { x: 2048, z: 200, prev: [] };
-    if (Math.abs(ax) > .2 || Math.abs(az) > .2) { P.x = Math.max(0, Math.min(4095, P.x + (ax + az) * 40)); P.z = Math.max(0, Math.min(4095, P.z + (az - ax) * 40)); P.show = performance.now(); }
+    const MW = bt.B.W, ax = gp.axes[0] || 0, az = gp.axes[1] || 0, P = bt.pad = bt.pad || { x: MW >> 1, z: 200, prev: [] };
+    if (Math.abs(ax) > .2 || Math.abs(az) > .2) { P.x = Math.max(0, Math.min(MW - 1, P.x + (ax + az) * 40)); P.z = Math.max(0, Math.min(MW - 1, P.z + (az - ax) * 40)); P.show = performance.now(); }
     const pr = i => gp.buttons[i]?.pressed && !P.prev[i];
     const types = [...S.root.querySelectorAll('.rd-u[data-u]')].map(b => b.dataset.u);
     if (pr(0) && bt.sel) { const r = input(bt, bt.sel === 'hero' ? { u: 'hero', x: Math.round(P.x), z: Math.round(P.z) } : { u: bt.sel, x: Math.round(P.x), z: Math.round(P.z) }); if (r === 'zone') tip(bt, '🚫 Только на зелёной полосе', 1500); }
@@ -888,7 +929,7 @@
       const h = B.us[B.heroIdx];
       if (bt.tut === 1 && bt.ins.length >= 4) { bt.tut = 2; tip(bt, B.heroUsed ? '' : '🦸 Выпусти героя — кнопка с героем внизу. Это твой персонаж!', 0); }
       if (bt.tut <= 2 && h && h.alive) { bt.tut = 3; tip(bt, '💥 Нажми «Удар», когда герой рядом с постройками — он ударит по всем вокруг', 0); }
-      if (bt.tut === 3 && B.abUsed) { bt.tut = 4; tip(bt, '⭐ Звёзды: за 50 % построек, за ратушу и за всё. Разрушь ратушу!', 6000); }
+      if (bt.tut === 3 && B.abUsed) { bt.tut = 4; tip(bt, '⭐ Звёзды: за 50 % построек, за штаб и за всё. Разрушь штаб!', 6000); }
     }
     draw(bt, Math.max(0, Math.min(1, bt.kind === 'replay' ? (bt.acc || 0) : (Date.now() - bt.t0) / 50 - B.tick)));
     hud(bt);
@@ -1020,13 +1061,13 @@
     let lines = '';
     if (bt.kind === 'raid') {
       if (srv?.ok && srv.canceled) lines = '<div class="ln">Никого не высадил — набег не состоялся</div>';
-      else if (srv?.ok) lines = `<div class="ln">🧱 +${num(srv.added)}${srv.bonus ? ` <small>(в т. ч. бонус лиги ${num(srv.bonus)})</small>` : ''}${srv.added < (srv.loot || 0) + (srv.bonus || 0) ? ' <small>— склад полон</small>' : ''}</div>${srv.tr ? `<div class="ln">🏆 ${srv.tr > 0 ? '+' : ''}${srv.tr}</div>` : ''}${srv.zero ? '<div class="ln"><small>С этого игрока сегодня уже брал — без добычи и кубков</small></div>' : ''}`;
+      else if (srv?.ok) lines = `<div class="ln">🧱 +${num(srv.added)} в казну${srv.bonus ? ` <small>(в т. ч. бонус лиги ${num(srv.bonus)})</small>` : ''}${srv.added < (srv.loot || 0) + (srv.bonus || 0) ? ' <small>— казна полна</small>' : ''}</div>${srv.tr ? `<div class="ln">🏆 ${srv.tr > 0 ? '+' : ''}${srv.tr}</div>` : ''}${srv.zero ? '<div class="ln"><small>С этой базы недавно уже брали (или там «похожий» аккаунт) — без добычи и кубков</small></div>' : ''}${srv.gone ? '<div class="ln"><small>Базу распустили во время боя — добычу класть некуда</small></div>' : ''}`;
       else lines = off ? `<div class="ln">🧱 ~${num(lootNow(bt))}</div>` : pv ? `<div class="ln">🧱 до ${num(pv.loot)}</div>` : '';
     } else if (bt.kind === 'friendly') lines = '<div class="ln">Дружеский бой — без добычи и кубков</div>';
     else if (bt.kind === 'tut') lines = '<div class="ln">Учебный набег пройден! Теперь — в бой по-настоящему.</div>';
     const st = bt.kind !== 'raid' ? '' : srv?.ok ? '✓ Засчитано сервером' : srv ? '⚠️ ' + why(srv) : '⏳ Засчитываем…';
     const canShare = bt.data.id && (bt.kind === 'replay' || (bt.kind === 'raid' && srv?.ok && !srv.canceled));   // повтор есть у засчитанного набега
-    box.innerHTML = `<div class="box"><div class="big">${stars(r.stars)}</div><div class="ln">Разрушено ${r.pct} %${r.th ? ' · ратуша пала' : ''}</div>${lines}<div class="srv rdSrv">${st}</div>
+    box.innerHTML = `<div class="box"><div class="big">${stars(r.stars)}</div><div class="ln">Разрушено ${r.pct} %${r.th ? ' · штаб пал' : ''}</div>${lines}<div class="srv rdSrv">${st}</div>
       <div class="rd-btns" style="grid-template-columns:repeat(${bt.kind === 'replay' ? 2 : 3},minmax(0,1fr))">${bt.kind !== 'replay' ? '<button type="button" class="rd-b" data-a="replay">🎬 Повтор</button>' : '<button type="button" class="rd-b" data-a="restart">⏮ Ещё раз</button>'}<button type="button" class="rd-b" data-a="hub">🏠 Штаб</button>${bt.kind !== 'replay' ? `<button type="button" class="rd-b pri" data-a="again">${bt.kind === 'tut' ? '🎓 Ещё' : '⚔️ Ещё'}</button>` : ''}</div>
       ${canShare ? '<div class="rd-btns" style="grid-template-columns:1fr"><button type="button" class="rd-b" data-a="share">🔗 Поделиться повтором</button></div>' : ''}</div>`;
     if (bt.kind === 'raid' && srv?.ok) S.st = null;
@@ -1041,14 +1082,15 @@
   function showLog(tab = 'in'){
     if (!S) return;
     S.screen = 'log';
-    if (!S.st) return page('🛡️ Защита', `<div class="rd-note">${S.mode === 'guest' ? 'Войди на сайт — тут будет журнал набегов на твой участок.' : 'Журнал откроется, когда сайт обновится.'}</div>`);
+    if (!S.st) return page('🛡️ Защита', `<div class="rd-note">${S.mode === 'guest' ? 'Войди на сайт — тут будет журнал набегов на твою базу.' : S.mode === 'nobase' ? esc(WHY.none) : 'Журнал откроется, когда сайт обновится.'}</div>`);
     lsSet('d37_raid_logseen', Math.floor(sNow()));
     const list = tab === 'in' ? S.st.log : S.st.attacks;
-    const rows = list.length ? list.map(x => `<div class="rd-row"><span class="e">${tab === 'in' ? (x.stars ? '⚔️' : '🛡️') : x.mode === 'camp' || x.mode === 'bot' || x.mode === 'tut' ? '🏴‍☠️' : '⚔️'}</span><div class="t"><b>${tab === 'in' ? esc(x.nick) + ' напал(а)' : x.nick ? 'На ' + esc(x.nick) : x.mode === 'camp' ? 'Лагерь ' + x.lvl : x.mode === 'tut' ? 'Учебный' : 'Разбойники'}</b> · <span class="rd-stars">${stars(x.stars)}</span> ${x.pct} %
+    const bn = o => (o && o.k != null ? MB().baseName(o.k, o.n) : '');
+    const rows = list.length ? list.map(x => `<div class="rd-row"><span class="e">${tab === 'in' ? (x.stars ? '⚔️' : '🛡️') : x.mode === 'camp' || x.mode === 'bot' || x.mode === 'tut' ? '🏴‍☠️' : '⚔️'}</span><div class="t"><b>${tab === 'in' ? esc(x.nick) + (bn(x.base) ? ' («' + esc(bn(x.base)) + '»)' : '') + ' напал(а)' : bn(x.base) ? 'На «' + esc(bn(x.base)) + '» · ' + esc(x.who || '') : x.mode === 'camp' ? 'Лагерь ' + x.lvl + ' · ' + esc(x.who || '') : x.mode === 'tut' ? 'Учебный · ' + esc(x.who || '') : 'Разбойники · ' + esc(x.who || '')}</b> · <span class="rd-stars">${stars(x.stars)}</span> ${x.pct} %
         <small>${ago(x.t)}${x.status === 'expired' ? ' · ушёл из боя' : ''} · 🧱 ${tab === 'in' ? '−' : '+'}${num(x.loot)}${x.tr ? ` · 🏆 ${x.tr > 0 ? '+' : ''}${x.tr}` : ''}</small></div>
         <div class="acts">${x.status === 'done' ? `<button type="button" class="rd-b" data-rp="${esc(x.id)}">🎬 Повтор</button>` : ''}${tab === 'in' && x.revenge ? `<button type="button" class="rd-b pri" data-rv="${esc(x.id)}">⚔️ Месть</button>` : ''}</div></div>`).join('')
-      : `<div class="rd-note">${tab === 'in' ? 'На тебя ещё не нападали. Строй пушки и вышки — и смотри здесь повторы набегов.' : 'Ты ещё не ходил в набеги.'}</div>`;
-    page(tab === 'in' ? '🛡️ Защита' : '📜 Мои набеги', `<div class="rd-btns" style="grid-template-columns:1fr 1fr;margin-bottom:.6rem"><button type="button" class="rd-b${tab === 'in' ? ' on' : ''}" data-a="log">🛡️ На меня</button><button type="button" class="rd-b${tab === 'out' ? ' on' : ''}" data-a="attacks">📜 Мои</button></div>
+      : `<div class="rd-note">${tab === 'in' ? 'На базу ещё не нападали. Стройте пушки и вышки — и смотрите здесь повторы набегов.' : 'База ещё не ходила в набеги.'}</div>`;
+    page(tab === 'in' ? '🛡️ Защита базы' : '📜 Набеги базы', `<div class="rd-btns" style="grid-template-columns:1fr 1fr;margin-bottom:.6rem"><button type="button" class="rd-b${tab === 'in' ? ' on' : ''}" data-a="log">🛡️ На нас</button><button type="button" class="rd-b${tab === 'out' ? ' on' : ''}" data-a="attacks">📜 Наши</button></div>
       <div class="rd-sub" style="margin-bottom:.5rem">🏆 Защит: ${S.st.stats.def_won} отбито · ${S.st.stats.def_lost} проиграно${S.st.shield > sNow() ? ` · 🛡️ щит ещё ${fmtT(S.st.shield - sNow())}` : ''}</div><div class="rd-list">${rows}</div>`);
   }
   function showCamp(){
@@ -1058,9 +1100,9 @@
     const rows = Rr.camp.map((loot, i) => {
       const lv = i + 1, best = camp[lv] || 0, open = lv === 1 || (camp[lv - 1] || 0) >= 1, left = Math.floor(loot * 3 / 3) - Math.floor(loot * best / 3);
       const name = ['Хижина на опушке', 'Лагерь у ручья', 'Мельница', 'Старый мост', 'Каменный двор', 'Форт у оврага', 'Застава', 'Башни у реки', 'Крепость на холме', 'Тайный склад', 'Замок разбойников', 'Цитадель атамана'][i] || 'Лагерь ' + lv;
-      return `<div class="rd-row"><span class="e">${open ? '🏴‍☠️' : '🔒'}</span><div class="t"><b>${lv}. ${name}</b> · 🏛️ ${Rr.campTh[i]} · <span class="rd-stars">${stars(best)}</span><small>${left > 0 ? `осталось добычи: 🧱 ${num(left)}` : 'добыча собрана — можно для тренировки'}</small></div><div class="acts"><button type="button" class="rd-b${open ? ' pri' : ''}" data-camp="${lv}"${open && S.mode === 'ok' ? '' : ' disabled'}>⚔️</button></div></div>`;
+      return `<div class="rd-row"><span class="e">${open ? '🏴‍☠️' : '🔒'}</span><div class="t"><b>${lv}. ${name}</b> · 🏯 ${Rr.campTh[i]} · <span class="rd-stars">${stars(best)}</span><small>${left > 0 ? `осталось добычи: 🧱 ${num(left)}` : 'добыча собрана — можно для тренировки'}</small></div><div class="acts"><button type="button" class="rd-b${open ? ' pri' : ''}" data-camp="${lv}"${open && S.mode === 'ok' ? '' : ' disabled'}>⚔️</button></div></div>`;
     }).join('');
-    page('🏴‍☠️ Поход', `<div class="rd-sub" style="margin-bottom:.5rem">Лагеря разбойников: добыча — один раз за каждую новую звезду. Нужна своя армия; следующий лагерь откроется после звезды в предыдущем.${S.mode !== 'ok' ? '<br>📝 Откроется, когда сайт обновится.' : ''}</div><div class="rd-list">${rows}</div>`);
+    page('🏴‍☠️ Поход базы', `<div class="rd-sub" style="margin-bottom:.5rem">Лагеря разбойников: добыча в казну — один раз за каждую новую звезду базы. Нужна армия базы; следующий лагерь откроется после звезды в предыдущем.${S.mode !== 'ok' ? '<br>📝 Откроется, когда ты в базе и сайт обновится.' : ''}</div><div class="rd-list">${rows}</div>`);
   }
   async function showTop(){
     if (!S) return;
@@ -1068,28 +1110,27 @@
     const MBx = MB(), Rr = R(), st = S.st;
     const me = st ? MBx.league(st.trophies) : 0;
     const ladder = MBx.LEAGUES.map(([n, e], i) => `<span class="${i === me && st ? 'on' : ''}">${e} ${n}<br><b>${num(Rr.league[i])}+</b><br><small>бонус ${Rr.bonus[i]} 🧱</small></span>`).join('');
-    page('🏆 Лиги и топ', `<div class="rd-card"><h3>Лиги по кубкам</h3><div class="rd-league">${ladder}</div><div class="rd-sub">Победа даёт кубки и бонус лиги, поражение — отнимает. «Сундук недели» — за ${Rr.chestWins} победы над игроками за неделю.</div></div>
+    page('🏆 Лиги и топ баз', `<div class="rd-card"><h3>Лиги по кубкам базы</h3><div class="rd-league">${ladder}</div><div class="rd-sub">Победа даёт базе кубки и бонус лиги, поражение — отнимает. «Сундук недели» — за ${Rr.chestWins} победы базы над другими базами за неделю.</div></div>
       <div class="rd-grid" style="margin-top:.7rem"><div class="rd-card"><h3>⭐ Топ недели</h3><div class="rd-list rdTopW"><div class="gm-loading"><div class="spinner"></div></div></div></div><div class="rd-card"><h3>🏆 Все времена</h3><div class="rd-list rdTopA"><div class="gm-loading"><div class="spinner"></div></div></div></div></div>`);
     const [w, a] = await Promise.all([rpc('raid_top', { p_kind: 'week' }), rpc('raid_top', { p_kind: 'all' })]);
     if (!S || S.screen !== 'top') return;
-    const fill = (sel, list, f) => { const el = $(sel); if (el) el.innerHTML = Array.isArray(list) && list.length ? list.map((x, i) => `<div class="rd-row"><span class="e">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span><div class="t"><b>${esc(x.nick)}</b><small>${MBx.LEAGUES[x.league]?.[1] || ''} ${f(x)}</small></div></div>`).join('') : '<div class="rd-sub">Пока пусто — стань первым!</div>'; };
+    const fill = (sel, list, f) => { const el = $(sel); if (el) el.innerHTML = Array.isArray(list) && list.length ? list.map((x, i) => `<div class="rd-row"><span class="e">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span><div class="t"><b style="color:${MBx.COLORS[x.color] || 'inherit'}">🏯 ${esc(MBx.baseName(x.name_k, x.name_n))}</b><small>👑 ${esc(x.nick)} · ${MBx.LEAGUES[x.league]?.[1] || ''} ${f(x)}</small></div></div>`).join('') : '<div class="rd-sub">Пока пусто — будьте первыми!</div>'; };
     fill('.rdTopW', w, x => `★ ${x.stars} · побед ${x.wins} · 🏆 ${num(x.tr)}`);
     fill('.rdTopA', a, x => `🏆 ${num(x.tr)}`);
   }
   function showShop(){
     if (!S) return;
     S.screen = 'shop';
-    const Sh = R().shop, MBx = MB(), st = S.st, owned = new Set(st?.skins || []), gemsOn = !!root.D37Gems?.isOn?.();
+    const Sh = R().shop, MBx = MB(), st = S.st, owned = new Set([...(st?.skins || []), ...(st?.base_skins || [])]), gemsOn = !!root.D37Gems?.isOn?.(), lead = st?.rank === 'leader' || st?.rank === 'officer';
     const nextSh = st ? st.shield_buy + Sh.shWeek * 86400 : 0;
-    const item = (id, e, n, txt, g, c, extra = '') => `<div class="rd-row"><span class="e">${e}</span><div class="t"><b>${n}</b><small>${txt}</small></div><div class="acts">${extra}${g ? `<button type="button" class="rd-b" data-buy="${id}"${owned.has(id) || !st || !gemsOn ? ' disabled' : ''}>${owned.has(id) ? '✓ есть' : `💎 ${g}`}</button>` : ''}${c ? `<button type="button" class="rd-b" data-buy="${id === 'q2' ? 'q2c' : id}"${owned.has(id) || !st ? ' disabled' : ''}>${owned.has(id) ? '✓ есть' : `🪙 ${num(c)}`}</button>` : ''}</div></div>`;
-    const skins = Object.entries(Sh.skin).map(([k, p]) => item('skin:' + k, MBx.SKINS[k].e, `Облик участка «${MBx.SKINS[k].n}»`, 'Цвет всех построек — в мире и в бою. Только красота, сила не меняется.', p.g, p.c, owned.has('skin:' + k) ? `<button type="button" class="rd-b${S.base?.skin === k ? ' on' : ''}" data-skin="skin:${S.base?.skin === k ? '' : k}">${S.base?.skin === k ? 'надет' : 'надеть'}</button>` : '')).join('');
+    const item = (id, e, n, txt, g, c, extra = '') => `<div class="rd-row"><span class="e">${e}</span><div class="t"><b>${n}</b><small>${txt}</small></div><div class="acts">${extra}${g ? `<button type="button" class="rd-b" data-buy="${id}"${owned.has(id) || !st || !gemsOn ? ' disabled' : ''}>${owned.has(id) ? '✓ есть' : `💎 ${g}`}</button>` : ''}${c ? `<button type="button" class="rd-b" data-buy="${id}"${owned.has(id) || !st ? ' disabled' : ''}>${owned.has(id) ? '✓ есть' : `🪙 ${num(c)}`}</button>` : ''}</div></div>`;
+    const skins = Object.entries(Sh.skin).map(([k, p]) => item('skin:' + k, MBx.SKINS[k].e, `Облик базы «${MBx.SKINS[k].n}»`, 'Цвет всех построек базы — в мире и в бою. Покупка — в подарок базе; надевают главарь и офицеры. Только красота, сила не меняется.', p.g, p.c, owned.has('skin:' + k) && lead ? `<button type="button" class="rd-b${st?.skin === k ? ' on' : ''}" data-skin="skin:${st?.skin === k ? '' : k}">${st?.skin === k ? 'надет' : 'надеть'}</button>` : '')).join('');
     const army2 = Object.entries(Sh.army).map(([k, p]) => item('army:' + k, k === 'knight' ? '🛡️' : '🤖', `Облик армии «${k === 'knight' ? 'Рыцари' : 'Роботы'}»`, 'Отряды в доспехах — видно в бою и в повторах у защитника.', p.g, p.c, owned.has('army:' + k) ? `<button type="button" class="rd-b${st?.army_skin === k ? ' on' : ''}" data-skin="army:${st?.army_skin === k ? '' : k}">${st?.army_skin === k ? 'надет' : 'надеть'}</button>` : '')).join('');
     page('💎 Улучшения', `${!st ? '<div class="rd-note">Откроется после входа и обновления сайта.</div>' : ''}
-      <div class="rd-sub" style="margin-bottom:.5rem">Честно: кристаллы экономят время и дают красоту. Кубки, звёзды, кирпичи и силу армии не продаём. ${gemsOn ? `💎 ${num(root.D37Gems.balance())} · <a href="#/shop">купить кристаллы</a>` : ''}</div>
+      <div class="rd-sub" style="margin-bottom:.5rem">Честно: кристаллы экономят время и дают красоту. Кубки, звёзды, кирпичи и силу армии не продаём — вторая казарма строится со штаба 3 (кирпичами). ${gemsOn ? `💎 ${num(root.D37Gems.balance())} · <a href="#/shop">купить кристаллы</a>` : ''}</div>
       <div class="rd-list">
-        ${item('sh1', '🛡️', `Щит на ${Sh.sh1.h} ч`, `Отдых от набегов. Не чаще раза в ${Sh.shWeek} дней${nextSh > sNow() ? ` (следующий — через ${fmtT(nextSh - sNow())})` : ''}.`, Sh.sh1.g, 0)}
-        ${item('sh2', '🛡️', `Щит на ${Sh.sh2.h} ч`, `Не дольше ${Sh.shMax} ч всего.`, Sh.sh2.g, 0)}
-        ${S.base?.q2 ? item('q2x', '⚡', 'Вторая казарма', 'Уже есть: отряды учатся вдвое быстрее.', 0, 0) : item('q2', '⚡', 'Вторая казарма', 'Отряды учатся вдвое быстрее. Можно и за монеты.', Sh.q2.g, Sh.q2.c)}
+        ${item('sh1', '🛡️', `Щит базы на ${Sh.sh1.h} ч`, `Отдых от набегов для всей базы. Не чаще раза в ${Sh.shWeek} дней${nextSh > sNow() ? ` (следующий — через ${fmtT(nextSh - sNow())})` : ''}.`, Sh.sh1.g, 0)}
+        ${item('sh2', '🛡️', `Щит базы на ${Sh.sh2.h} ч`, `Не дольше ${Sh.shMax} ч всего.`, Sh.sh2.g, 0)}
         ${skins}${army2}
       </div><div class="rd-sub">Дотренировать армию сразу — в казарме (🪙 или 💎). Достроить сразу — в мире, у постройки (🪙).</div>`);
   }
@@ -1098,24 +1139,26 @@
     S.screen = 'help';
     const Rr = R();
     page('❓ Как играть', `<div class="rd-card rd-help"><ol>
-      <li><b>Строй оборону</b> в «Мире Денчика» на своём участке: 🗼 вышка с лучниками, 💥 пушка, 🎯 мортира, ловушки 💣 и 🎇, заборы — они держат удар.</li>
-      <li><b>Казарма</b> ⚔️ тренирует армию — даже когда тебя нет. Выше уровень — больше места и новые отряды.</li>
-      <li><b>⚔️ В бой!</b> — сервер подберёт соперника по ратуше и кубкам. 30 секунд разведки, потом 3 минуты боя.</li>
+      <li><b>Военная база</b> — в Боевой зоне «Мира Денчика» (12+): основай свою у таблички свободного участка или вступи в базу друга по ссылке. Главарь и офицеры строят, бойцы помогают кирпичами.</li>
+      <li><b>Стройте оборону</b>: 🗼 вышки с лучниками, 💥 пушки, 🎯 мортиры, ловушки 💣 и 🎇, стены — они держат удар.</li>
+      <li><b>Казарма</b> ⚔️ тренирует армию базы — даже когда никого нет. Выше уровень — больше места и новые отряды; вторая казарма (штаб 3) — вдвое быстрее.</li>
+      <li><b>⚔️ В бой!</b> — сервер подберёт базу по штабу и кубкам. 30 секунд разведки, потом 3 минуты боя. Армию ведут главарь и офицеры (главарь может разрешить всем).</li>
       <li><b>Высаживай</b> отряды на зелёной полосе у края — нажатием или ведя пальцем. Герой 🦸 — твой персонаж, у него «💥 Удар».</li>
-      <li><b>Звёзды</b>: ★ за 50 % построек, ★ за ратушу, ★ за всё. Победа — кирпичи 🧱 и кубки 🏆, поражение — минус кубки.</li>
-      <li><b>Защита</b>: после сильного набега — щит (${Rr.shield.s2}–${Rr.shield.s3} ч). Смотри повтор и мсти!</li>
-      <li>Нападаешь на игрока — твой щит снимается. Первые ${Rr.shield.newbie} дня на новичков не нападают.</li></ol>
-      <p class="rd-sub">Монеты из кошелька в набегах не отнимают никогда — только кирпичи участка, и то не все: часть защищают ратуша и склады.</p>
+      <li><b>Звёзды</b>: ★ за 50 % построек, ★ за штаб, ★ за всё. Победа — кирпичи 🧱 в казну и кубки 🏆 базе, поражение — минус кубки.</li>
+      <li><b>Защита</b>: после сильного набега — щит базе (${Rr.shield.s2}–${Rr.shield.s3} ч). Смотрите повтор и мстите!</li>
+      <li>Нападаете на базу — свой щит снимается. Первые ${Rr.shield.newbie} дня на новые базы не нападают.</li></ol>
+      <p class="rd-sub">Монеты из кошелька в набегах не отнимают никогда — только кирпичи казны базы, и то не все: часть защищают штаб и склады.</p>
       <div class="rd-btns" style="grid-template-columns:1fr 1fr"><button type="button" class="rd-b pri" data-a="tut">🎓 Учебный набег</button><button type="button" class="rd-b" data-a="hub">${first ? 'Понятно!' : '← Штаб'}</button></div></div>`);
   }
   async function onPageClick(e){
-    const el = e.target.closest('[data-a],[data-rp],[data-rv],[data-camp],[data-buy],[data-skin]'); if (!el || !S) return;
+    const el = e.target.closest('[data-a],[data-rp],[data-rv],[data-camp],[data-buy],[data-skin],[data-join]'); if (!el || !S) return;
     if (el.dataset.rp) return openReplay(el.dataset.rp);
     if (el.dataset.rv) return findBattle(el, 'revenge', el.dataset.rv);
     if (el.dataset.camp) return findBattle(el, 'camp', el.dataset.camp);
+    if (el.dataset.join) { el.disabled = true; const r = await rpc('war_join', { p_code: el.dataset.join }); toast(r?.ok ? `🏯 Ты в базе «${baseTitle(r)}» — добро пожаловать!` : why(r)); try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (er) {} if (!r?.ok) { el.disabled = false; return; } S.param = null; await refresh(); return showHub(); }
     if (el.dataset.skin != null) { const [kind, id] = el.dataset.skin.split(':'); el.disabled = true; const r = await rpc('raid_skin', { p_kind: kind, p_id: id || '' }); toast(r?.ok ? '✓ Готово' : why(r)); await loadAll(); try { root.dispatchEvent(new CustomEvent('d37:base')); } catch (er) {} return showShop(); }
     if (el.dataset.buy) {
-      const id = el.dataset.buy, g = /^(sh1|sh2|q2|skin|army)/.test(id) && !/c$/.test(id) && !(R().shop.skin[id.split(':')[1]]?.c);
+      const id = el.dataset.buy, g = /^(sh1|sh2|skin|army)/.test(id) && !(R().shop.skin[id.split(':')[1]]?.c);
       if (!(await ask({ icon: g ? '💎' : '🪙', title: 'Купить?', text: el.closest('.rd-row').querySelector('b').textContent + ' — ' + el.textContent.trim(), yes: 'Купить' }))) return;
       el.disabled = true;
       const r = await rpc('raid_buy', { p_item: id });
@@ -1130,8 +1173,9 @@
     if (a === 'log') return showLog('in');
     if (a === 'attacks') return showLog('out');
     if (a === 'tut') return startTut();
+    if (a === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
   }
 
   root.GAME_IMPL = root.GAME_IMPL || {};
-  root.GAME_IMPL.raid = { mount, unmount, _test: { state: () => S, makeView, layoutBs, newBattle, lootNow, LOOKS, input, endBattle, showHub, WHY, drawScene, draw, events, applyIn } };
+  root.GAME_IMPL.raid = { mount, unmount, _test: { state: () => S, makeView, layoutBs, gridOf, newBattle, lootNow, LOOKS, input, endBattle, showHub, showJoin, WHY, drawScene, draw, events, applyIn } };
 })();

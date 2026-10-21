@@ -85,7 +85,7 @@
     store: { n: 'Склад', e: '📦', w: 2, d: 2, lv: 5, cost: [150, 400, 1200, 3500, 9000], time: [20, 180, 1500, 5400, 18000], max: [1, 2, 3, 4, 5], keep: [1000, 2500, 5000, 8000, 12000],
       hp: [550, 620, 700, 790, 880], info: 'Больше места в казне: дорогие улучшения без склада не накопить. Часть кирпичей склад прячет от набегов.' },
     shop: { n: 'Мастерская', e: '🛠️', w: 2, d: 2, lv: 1, cost: [1000], time: [600], max: [0, 1, 1, 2, 2], hp: [650], info: 'Ещё один строитель: каждая мастерская — плюс стройка сразу.' },
-    barracks: { n: 'Казарма', e: '⚔️', w: 2, d: 2, lv: 5, cost: [200, 600, 1800, 4500, 10000], time: [60, 600, 3600, 10800, 21600], max: [1, 1, 2, 2, 2], army: [18, 38, 76, 110, 155],
+    barracks: { n: 'Казарма', e: '⚔️', w: 2, d: 2, lv: 5, cost: [200, 600, 1800, 4500, 10000], time: [60, 600, 3600, 10800, 21600], max: [1, 1, 2, 2, 2], army: [20, 38, 70, 92, 120],
       hp: [550, 620, 700, 790, 880], info: 'Тренирует армию базы. Выше уровень — больше места и новые отряды. Вторая казарма (со штаба 3) — отряды учатся вдвое быстрее.' },
     tower: { n: 'Вышка', e: '🗼', w: 2, d: 2, lv: 5, cost: [400, 1200, 3000, 7000, 14000], time: [120, 1200, 5400, 14400, 28800], max: [1, 2, 3, 4, 5],
       hp: [520, 580, 650, 730, 800], atk: { dmg: [26, 31, 35, 42, 48], cd: .6, rng: 5.5, min: 0, sp: 0, fly: 0, gnd: 1, air: 1 },
@@ -2181,7 +2181,11 @@
     const nowS = () => Math.floor(Date.now() / 1000 + W.off);
     const toast = (t, ok) => S.H?.toast(t, ok);
     const sfx = n => { try { S.AU?.play(n); } catch (e) {} };
-    const why = r => WHY[r?.reason || r] || WHY.args;
+    // у базы — штаб и казна (общие тексты WHY говорят про ратушу и склад участка)
+    const WW = { ...WHY, th: 'Нужен штаб выше уровнем', max: 'Больше нельзя — улучшите штаб', lvcap: 'Сначала улучшите штаб', none: 'Сначала вступи в базу или основай свою',
+      full: 'Казна полна — постройте или улучшите склад 📦', place: 'Сюда не встанет: место занято, край базы или проезд к воротам', taken: 'Этот участок уже занят',
+      done: 'Сегодня уже забрали — приходите завтра', self: 'Это ваша база 🙂' };
+    const why = r => WW[r?.reason || r] || WHY.args;
     const ageOk = () => { const A = root.D37Age; return !A || (A.known?.() !== false && (A.canOpen ? A.canOpen(12) : true)); };
     const canEdit = () => !!W.me && (W.me.rank === 'leader' || W.me.rank === 'officer');
     const isLeader = () => W.me?.rank === 'leader';
@@ -2429,7 +2433,7 @@
       if (!canEdit()) { toast('Позвать могут главарь и офицеры — попроси у них ссылку'); return; }
       if (!me.invite) { const r = await rpc('war_set', { p_a: { code: true } }); if (r.ok) W.me = fromServer(r); }
       if (!W.me?.invite) { toast(WHY.net, false); return; }
-      const url = (root.D37Ref?.wrap || (u => u))(location.origin + '/#/games/raid/join/' + W.me.invite);
+      const url = (root.D37Ref?.wrap || (u => u))(root.D37Route ? root.D37Route.abs('#/games/raid/join/' + W.me.invite) : location.origin + '/#/games/raid/join/' + W.me.invite);
       const text = `Вступай в мою военную базу «${baseName(me.name_k, me.name_n)}» в «Мире Денчика» ⚔️ —`;
       try { if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) { await navigator.share({ title: 'Военная база', text, url }); return; } await navigator.clipboard.writeText(text + ' ' + url); toast('🔗 Ссылка скопирована — отправь друзьям', true); }
       catch (e) { prompt('Скопируй и отправь друзьям:', text + ' ' + url); }
@@ -2783,7 +2787,9 @@
     const onBase = () => { if (!W.stopped && W.me) refreshOwn(); };
     root.addEventListener('d37:base', onBase);
     const goBuild = () => { if (W.stopped || !W.me) return; goHome(); setTimeout(() => { if (!W.stopped && !W.bm && enterBuild() && W.bm) { W.bm.tab = 'o'; BM.renderCat(); } }, 500); };
-    const onMb = e => { if (e?.detail === 'build') goBuild(); };
+    // «🏯 К военным базам» из «Набегов»: своя база — к ней; нет — к свободному участку; и меню базы
+    const goWb = () => { if (W.stopped) return; if (W.me) goHome(); else { const j = PLS.slice(0, PERW).findIndex((_, k) => !lotInfo(k)); goPlot(j >= 0 ? j : 0); } setTimeout(() => { if (!W.stopped) openMenu(); }, 400); };
+    const onMb = e => { if (e?.detail === 'build') goBuild(); else if (e?.detail === 'wb') goWb(); };
     root.addEventListener('d37:mb', onMb);
     let mbGo = null; try { mbGo = sessionStorage.getItem('d37_mb_go'); sessionStorage.removeItem('d37_mb_go'); } catch (e) {}
     W.dispose = () => {
@@ -2808,7 +2814,7 @@
         W.near = true; rebuildAll(); while (W.queue.size) { buildNext(); await new Promise(r => setTimeout(r, 0)); } return W.views.filter(v => v?.root).length; },
       me: m => { W.me = m ? fromServer(m) : null; rebuildAll(); renderHud(); },
     };
-    init().then(() => { if (mbGo === 'build') goBuild(); });
+    init().then(() => { if (mbGo === 'build') goBuild(); else if (mbGo === 'wb') goWb(); });
     return W;
   }
 
