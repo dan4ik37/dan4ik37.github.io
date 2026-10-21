@@ -920,14 +920,19 @@ begin
     where public.comm_online.seen_at < now() - interval '15 seconds' or public.comm_online.place is distinct from excluded.place;
 end $$;
 
--- ч. 5: ребёнок до 13 и взрослый / «без возраста» друг друга здесь не видят (дружба остаётся, «📍 К другу» в его комнату — нет)
+-- ч. 5: ребёнок до 13 и взрослый / «без возраста» друг друга здесь не видят (дружба остаётся, «📍 К другу» в его комнату — нет).
+-- Сначала мои друзья (по индексам дружбы), потом их отметки (по ключу) — а не перебор всех, кто в сети (22.10.2026)
+create index if not exists idx_friendships_addressee on public.friendships (addressee_id);
 create or replace function public.friends_online()
 returns jsonb language sql stable security definer set search_path = public as $$
+  with fr as (
+    select f.addressee_id as uid from public.friendships f where f.requester_id = auth.uid() and f.status = 'accepted'
+    union
+    select f.requester_id from public.friendships f where f.addressee_id = auth.uid() and f.status = 'accepted')
   select coalesce(jsonb_agg(jsonb_build_object('id', o.user_id, 'seen', o.seen_at, 'place', o.place)), '[]'::jsonb)
-  from public.comm_online o join public.profiles p on p.id = o.user_id
+  from fr join public.comm_online o on o.user_id = fr.uid join public.profiles p on p.id = o.user_id
   where o.seen_at > now() - interval '3 minutes' and not coalesce(p.privacy_invisible, false) and coalesce(p.privacy_profile, 'all') <> 'nobody'
-    and public.comm_friends(auth.uid(), o.user_id) and not public.comm_blocked(auth.uid(), o.user_id)
-    and public.kid_pair_ok(auth.uid(), o.user_id);
+    and not public.comm_blocked(auth.uid(), o.user_id) and public.kid_pair_ok(auth.uid(), o.user_id);
 $$;
 
 -- ═══ Общий чат сайта = сервер «Денчик37»: таблица messages (как раньше) + каналы chat_channels ═══
