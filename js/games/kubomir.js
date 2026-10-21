@@ -1165,43 +1165,55 @@
     return true;
   }
   const FACE_IDX = (nx, nz) => nz > 0 ? 0 : nx < 0 ? 1 : nz < 0 ? 2 : 3;   // как V.FACING
-  function placeBlock(st, hit, s, it){
-    const V = VX(), W = st.W, P = st.P, b = V.block(it.place);
-    if (!b) return false;
+  // Куда встанет блок b по прицелу hit — без правок мира (то же решает и подсказка постройки): { x, y, z, state, h } или null
+  // (h — высота в блоках: дверь — 2). Лёд на озере — опора снизу (факел, дверь), сам — как вода (ставится на него сверху)
+  function placeTarget(st, hit, b){
+    const V = VX(), W = st.W, P = st.P;
+    if (!hit || !b) return null;
     const hv = hit.v, hb = V.blocks[hv & 0xfff];
     let x = hit.x, y = hit.y, z = hit.z;
     if (!(hb.replace && !hb.liquid && hb.id !== b.id)) { x += hit.nx; y += hit.ny; z += hit.nz; }
-    if (y < 1 || y >= V.H - 1) return false;
+    if (y < 1 || y >= V.H - 1) return null;
     const cur = W.get(x, y, z);
-    if (cur < 0 || !V.blocks[cur].replace) return false;
-    const below = W.get(x, y - 1, z), solidBelow = below > 0 && V.T.solid[below] && V.T.shape[below] === V.SHAPE.cube;
-    let state = 0;
+    if (cur < 0 || !V.blocks[cur].replace) return null;
+    const below = W.get(x, y - 1, z), solidBelow = (below > 0 && V.T.solid[below] && V.T.shape[below] === V.SHAPE.cube) || (V.iceTest && V.isIce(W, x, y - 1, z));
+    let state = 0, h = 1;
     const f = lookDir(st), toward = Math.abs(f.x) >= Math.abs(f.z) ? FACE_IDX(f.x > 0 ? -1 : 1, 0) : FACE_IDX(0, f.z > 0 ? -1 : 1);   // лицом к игроку
     if (b.shape === V.SHAPE.cross) {
-      if (!(below > 0 && /grass|dirt|snow_grass|sand/.test(V.blocks[below].name)) || (b.name === 'cactus')) return false;
+      if (!(below > 0 && /grass|dirt|snow_grass|sand/.test(V.blocks[below].name)) || (b.name === 'cactus')) return null;
     } else if (b.shape === V.SHAPE.torch) {
       if (hit.ny === 1 && solidBelow) state = 0;
-      else if (!hit.ny && V.T.solid[hb.id] && V.T.shape[hb.id] === V.SHAPE.cube) state = 1 + FACE_IDX(hit.nx, hit.nz);
-      else return false;
+      else if (!hit.ny && !hit.ice && V.T.solid[hb.id] && V.T.shape[hb.id] === V.SHAPE.cube) state = 1 + FACE_IDX(hit.nx, hit.nz);
+      else return null;
     } else if (b.shape === V.SHAPE.ladder) {
-      if (hit.ny || !(V.T.solid[hb.id] && V.T.shape[hb.id] === V.SHAPE.cube)) return false;
+      if (hit.ny || hit.ice || !(V.T.solid[hb.id] && V.T.shape[hb.id] === V.SHAPE.cube)) return null;
       state = FACE_IDX(hit.nx, hit.nz);
     } else if (b.shape === V.SHAPE.door) {
       const up = W.get(x, y + 1, z);
-      if (!solidBelow || up < 0 || !V.blocks[up].replace) return false;
-      state = toward;
-      if (boxOverlap(P, x, y, z, 2) || st.ents?.blocked?.(x, y, z) || st.ents?.blocked?.(x, y + 1, z)) return false;
+      if (!solidBelow || up < 0 || !V.blocks[up].replace) return null;
+      state = toward; h = 2;
+      if (boxOverlap(P, x, y, z, 2) || st.ents?.blocked?.(x, y, z) || st.ents?.blocked?.(x, y + 1, z)) return null;
+      return { x, y, z, state, h };
+    } else if (b.axis) state = hit.nx ? 1 : hit.nz ? 2 : 0;
+    else if (b.ui || b.shape === V.SHAPE.chest) state = toward;
+    else if (b.shape === V.SHAPE.cactus) { if (!(below === V.ID.sand || below === V.ID.cactus)) return null; }
+    // нельзя ставить твёрдое туда, где стоит игрок или моб
+    if (b.solid && (boxOverlap(P, x, y, z, 1) || st.ents?.blocked?.(x, y, z))) return null;
+    return { x, y, z, state, h };
+  }
+  function placeBlock(st, hit, s, it){
+    const V = VX(), W = st.W, b = V.block(it.place);
+    if (!b) return false;
+    const T = placeTarget(st, hit, b); if (!T) return false;
+    const { x, y, z, state } = T;
+    if (b.shape === V.SHAPE.door) {
       W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
       W.set(x, y + 1, z, V.cell(b.id, state | 8), { urgent: 3 });
       st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5 });
       st.ents?.placeFx?.(x, y, z, b.id);
       unlock('door'); countPlaced(st);
       return true;
-    } else if (b.axis) state = hit.nx ? 1 : hit.nz ? 2 : 0;
-    else if (b.ui || b.shape === V.SHAPE.chest) state = toward;
-    else if (b.shape === V.SHAPE.cactus) { if (!(below === V.ID.sand || below === V.ID.cactus)) return false; }
-    // нельзя ставить твёрдое туда, где стоит игрок или моб
-    if (b.solid && (boxOverlap(P, x, y, z, 1) || st.ents?.blocked?.(x, y, z))) return false;
+    }
     W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
     st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .7, rate: .92 + Math.random() * .16 });
     st.ents?.placeFx?.(x, y, z, b.id);   // блок «пружинит» и пыль у основания
@@ -1379,22 +1391,23 @@
     wrap()?.classList.toggle('kb-nohud', st.hudHidden);
     crossUpdate(st);
   }
-  // «призрак» блока: куда встанет блок из руки (ПКМ) — полупрозрачный, только для обычных кубиков
+  // Подсказка постройки (21.10.2026, владелец: «нужно просто показывать, куда он поставится, не прозрачным делать его!»):
+  // «рамка» (по умолчанию) — чёткая двойная рамка клетки, куда встанет блок из руки (тёмная снаружи, светлая внутри — видна и на
+  // снегу, и в тёмной пещере), для любого блока, который сейчас можно поставить (дверь — на 2 клетки); «призрак» — как было:
+  // полупрозрачный кубик (только кубы); «выкл». ⚙️ «🧊 Кубомир» → «Подсказка постройки» (старое «призрак выкл» — «выкл»)
+  const previewMode = () => ['frame', 'ghost', 'off'].includes(opts.preview) ? opts.preview : opts.ghost === false ? 'off' : 'frame';
   function ghostUpdate(st){
-    const VR = st.VR; if (!VR.ghost) return;
-    const V = VX(), P = st.P, s = P.inv[P.sel], it = s && V.item(s.id), b = it?.place && V.block(it.place), hit = st.hit;
-    let pos = null;
-    if (hit && b && b.shape === V.SHAPE.cube && !st.hudHidden && !st.C.blocked && opts.ghost !== false) {
+    const VR = st.VR, V = VX(), P = st.P, s = P.inv[P.sel], it = s && V.item(s.id), b = it?.place && V.block(it.place), hit = st.hit, mode = previewMode();
+    let T = null;
+    if (hit && b && mode !== 'off' && !st.hudHidden && !st.C.blocked) {
       const hb = V.blocks[hit.v & 0xfff];
-      const usable = !P.sneak && (hb.ui || hb.shape === V.SHAPE.door || st.modRun?.hasUse(hb.name));
-      if (!usable) {
-        let x = hit.x, y = hit.y, z = hit.z;
-        if (!(hb.replace && !hb.liquid && hb.id !== b.id)) { x += hit.nx; y += hit.ny; z += hit.nz; }
-        const cur = st.W.get(x, y, z);
-        if (y >= 1 && y < V.H - 1 && cur >= 0 && V.blocks[cur].replace && !(b.solid && boxOverlap(P, x, y, z, 1))) pos = [x, y, z];
-      }
+      const usable = !P.sneak && !hit.ice && (hb.ui || hb.shape === V.SHAPE.door || st.modRun?.hasUse(hb.name));   // откроется, а не поставится
+      if (!usable) T = placeTarget(st, hit, b);
     }
-    VR.ghost(pos ? b.name : null, pos ? pos[0] : 0, pos ? pos[1] : 0, pos ? pos[2] : 0, it?.name);
+    const ghost = T && mode === 'ghost' && b.shape === V.SHAPE.cube, frame = T && mode === 'frame';
+    if (VR.ghost) VR.ghost(ghost ? b.name : null, ghost ? T.x : 0, ghost ? T.y : 0, ghost ? T.z : 0, it?.name);
+    if (VR.preview) VR.preview(frame ? T : null);
+    st.placeAt = T;   // для проверок
   }
   // кольцо ломания вокруг пальца (телефон): сколько осталось до «сломал»
   function ringUpdate(st){
@@ -1665,7 +1678,7 @@
         <div class="gs-row"><div class="gs-lbl">Автопрыжок на телефоне<small>Упёрся в ступеньку в один блок — прыгнет сам.</small></div><div class="gs-ctl">${seg('autoJump', [[1, 'Вкл'], [0, 'Выкл']], opts.autoJump === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Красться<small>Держать Shift — как в Майнкрафте по умолчанию; «Нажал — отжал» — один раз нажать, ещё раз — встать.</small></div><div class="gs-ctl">${seg('sneakToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sneakToggle ? 1 : 0)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Бег<small>Держать Ctrl или один раз нажать.</small></div><div class="gs-ctl">${seg('sprintToggle', [[0, 'Держать'], [1, 'Нажал — отжал']], opts.sprintToggle ? 1 : 0)}</div></div>
-        <div class="gs-row"><div class="gs-lbl">«Призрак» блока<small>Полупрозрачный кубик там, куда встанет блок из руки.</small></div><div class="gs-ctl">${seg('ghost', [[1, 'Вкл'], [0, 'Выкл']], opts.ghost === false ? 0 : 1)}</div></div>
+        <div class="gs-row"><div class="gs-lbl">Подсказка постройки<small>Где встанет блок из руки: «рамка» — чёткая рамка клетки (видна и на снегу, и в пещере), «призрак» — полупрозрачный кубик, «выкл» — без подсказки.</small></div><div class="gs-ctl">${seg('preview', [['frame', 'Рамка'], ['ghost', 'Призрак'], ['off', 'Выкл']], previewMode())}</div></div>
         <div class="gs-row"><div class="gs-lbl">Времена года<small>«Как в общем мире» — как у всех на сайте: быстрые сезоны (около недели), декабрь–январь — зима, ноябрь — осень. «По игровым дням» — 3 суток игры на сезон. Зимой снег на блоках и лёд на озёрах (по нему можно ходить), осенью желтеет листва. «Выкл» — всегда лето.</small></div><div class="gs-ctl">${seg('seasons', [['calendar', 'Как в общем мире'], ['cycle', 'По игровым дням'], ['off', 'Выкл']], opts.seasons || 'calendar')}</div></div>
         <div class="gs-row"><div class="gs-lbl">Цепляться за края<small>Как в «Мире Денчика»: прыгни у стены в 2 блока, держа «вперёд», — залезешь; выше — схватишься за край (в стороны — по краю, «вперёд» или «прыжок» — наверх, «красться» — отпустить). В воде у берега — «прыжок», и вылезешь.</small></div><div class="gs-ctl">${seg('climb', [[1, 'Вкл'], [0, 'Выкл']], opts.climb === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Деревья падают<small>Подрубил ствол — дерево валится от тебя и рассыпается на брёвна (только настоящие деревья, не постройки).</small></div><div class="gs-ctl">${seg('fell', [[1, 'Вкл'], [0, 'Выкл']], opts.fell === false ? 0 : 1)}</div></div>
@@ -1683,7 +1696,7 @@
         if (k === 'touchMode') { opts.touchMode = v; if (S?.I.touch) { touchUI(S); crossUpdate(S); } }
         if (k === 'sneakToggle') { opts.sneakToggle = v === '1'; if (S) S.sneakOn = false; }
         if (k === 'sprintToggle') { opts.sprintToggle = v === '1'; if (S) S.sprintOn = false; }
-        if (k === 'ghost') opts.ghost = v === '1';
+        if (k === 'preview') { opts.preview = ['frame', 'ghost', 'off'].includes(v) ? v : 'frame'; delete opts.ghost; }
         if (k === 'fell') opts.fell = v === '1';
         if (k === 'climb') opts.climb = v === '1';
         if (k === 'unstuck') { if (S) { unstuck(S); D.close?.(); } return; }
@@ -1756,5 +1769,5 @@
     cam: m => cycleCam(m), hud: v => hideHud(v), pick: () => S?.hit && pickBlock(S, S.hit), drop: all => S && dropSel(S, all), lookDir: () => S && { ...lookDir(S) },
     hand: () => S?.hand?.state(), act: k => S?.hand?.act(k), eat: () => S?.eat && { ...S.eat },
     // проверки в node (scripts/kubomir-move-test.cjs): шаг тела игрока на своём st, настройки, прицел, сломать — без мира в браузере
-    physics: (st, dt) => physics(st, dt), safeSpot: (st, x, y, z) => safeSpot(st, x, y, z), unstuck: st => unstuck(st), deathText: why => DEATH[why], opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b) } };
+    physics: (st, dt) => physics(st, dt), placeTarget: (st, hit, b) => placeTarget(st, hit, b), previewMode: () => previewMode(), ghostUpdate: st => ghostUpdate(st), safeSpot: (st, x, y, z) => safeSpot(st, x, y, z), unstuck: st => unstuck(st), deathText: why => DEATH[why], opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b) } };
 })();

@@ -695,6 +695,44 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       ghost.visible = true;
     };
 
+    // ── рамка «куда встанет блок» (21.10.2026, вместо полупрозрачного «призрака»): двойная — тёмные планки по рёбрам клетки и
+    // светлые чуть внутри; видна на снегу и в тёмной пещере. Планки — объёмные (несколько точек экрана даже вдали; линии WebGL —
+    // всегда в 1 точку), без света и тона, поверх соседних граней (сдвиг глубины), глубину не пишут. VR.preview({ x, y, z, h }) —
+    // клетка (h — высота: дверь — 2); null — спрятать ──
+    const prevGeo = new Map(), DARK = [.06, .06, .07], LIGHT = [.97, .97, .95];
+    function frameGeo(h){
+      if (prevGeo.has(h)) return prevGeo.get(h);
+      const pos = [], col = [], idx = [];
+      const bar = (a, b, t, c) => {   // планка — коробка от a до b (по одной оси), толщина t
+        const lo = [0, 1, 2].map(k => Math.min(a[k], b[k]) - t / 2), hi = [0, 1, 2].map(k => Math.max(a[k], b[k]) + t / 2);
+        const v0 = pos.length / 3;
+        for (let i = 0; i < 8; i++) { pos.push(i & 1 ? hi[0] : lo[0], i & 2 ? hi[1] : lo[1], i & 4 ? hi[2] : lo[2]); col.push(c[0], c[1], c[2]); }
+        for (const q of [[0, 2, 6, 4], [1, 5, 7, 3], [0, 4, 5, 1], [2, 3, 7, 6], [0, 1, 3, 2], [4, 6, 7, 5]]) idx.push(v0 + q[0], v0 + q[1], v0 + q[2], v0 + q[0], v0 + q[2], v0 + q[3]);
+      };
+      const edges = (x0, y0, z0, x1, y1, z1, t, c) => {
+        for (const y of [y0, y1]) for (const z of [z0, z1]) bar([x0, y, z], [x1, y, z], t, c);
+        for (const x of [x0, x1]) for (const z of [z0, z1]) bar([x, y0, z], [x, y1, z], t, c);
+        for (const x of [x0, x1]) for (const y of [y0, y1]) bar([x, y, z0], [x, y, z1], t, c);
+      };
+      edges(-.004, -.004, -.004, 1.004, h + .004, 1.004, .032, DARK);   // снаружи — тёмная
+      edges(.03, .03, .03, .97, h - .03, .97, .014, LIGHT);             // внутри — светлая
+      const g = new T.BufferGeometry();
+      g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.setIndex(idx);
+      prevGeo.set(h, g);
+      return g;
+    }
+    const prevMat = new T.MeshBasicMaterial({ vertexColors: true, toneMapped: false, fog: false, transparent: true, depthWrite: false, side: T.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    let prev = null;
+    VR.preview = c => {
+      if (!c) { if (prev) prev.visible = false; return; }
+      const h = c.h > 1 ? 2 : 1;
+      if (!prev) { prev = new T.Mesh(frameGeo(h), prevMat); prev.renderOrder = 8; prev.frustumCulled = false; prev.matrixAutoUpdate = true; prev.name = 'vox:preview'; R.scene.add(prev); }
+      else if (prev.geometry !== frameGeo(h)) prev.geometry = frameGeo(h);
+      prev.position.set(c.x - VR.ox, c.y, c.z - VR.oz);
+      prev.visible = true;
+    };
+    VR.previewMesh = () => prev;
+
     // ── простой режим: шейдер не собрался (старый телефон) — пересобрать без мерцания, бликов и массива текстур ──
     let checkN = 0;
     function failed(m){
@@ -746,6 +784,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       tex?.dispose(); ntex?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
       if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();
+      if (prev) R.scene.remove(prev); for (const g of prevGeo.values()) g.dispose(); prevGeo.clear(); prevMat.dispose();
     };
     return VR;
   };

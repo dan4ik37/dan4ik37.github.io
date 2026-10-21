@@ -354,6 +354,39 @@ KB.opts({});
     ok(near(e1.x, e2.x, 1e-9) && near(e1.y, e2.y, 1e-9) && near(e1.x, e3.x, 1e-9) && near(e1.y, e3.y, 1e-9) && e1.swim && e1.x > 3, 'движок (player.js): плывёт одинаково при 60, 144 и 30 кадрах', { e1, e2, e3 });
   }
 
+  // ═══ 4б. Подсказка постройки ═══
+  sec('подсказка постройки: рамка (по умолчанию) — та клетка, куда встанет блок; «призрак» — по желанию; «выкл»');
+  {
+    const R = { T, r: { capabilities: { isWebGL2: true }, properties: { get: () => ({}) } }, scene: new T.Scene(), camera: new T.PerspectiveCamera(70, 1, .2, 500), q: 'high', night: 0, shadowDirty(){} };
+    const VR = V.renderer(R);
+    const W = mkWorld(); lake(W, 4, -6, 10, 6, 40, 45);   // озеро справа (вода до 45, гладь 45,875)
+    const st = mkSt(W, { x: .5, y: 46, z: .5 }); st.VR = VR; st.hudHidden = false;
+    st.P.inv[0] = { id: 'planks_oak', n: 10 }; st.P.inv[1] = { id: 'door', n: 2 }; st.P.inv[2] = { id: 'torch', n: 4 };
+    const aimAt = (x, y, z) => { const ex = st.P.x, ey = st.P.y + 1.62, ez = st.P.z; look(st, x - ex, y - ey, z - ez); st.hit = V.raycast(W, ex, ey, ez, x - ex, y - ey, z - ez, 5); return st.hit; };
+    KB.opts({});
+    aimAt(.5, 45.99, -1.5); KB.ghostUpdate(st);
+    const pm = VR.previewMesh();
+    ok(KB.previewMode() === 'frame' && st.placeAt && st.placeAt.x === 0 && st.placeAt.y === 46 && st.placeAt.z === -2 && pm && pm.visible && pm.position.y === 46, 'по умолчанию — рамка: клетка над полом, куда встанет доска', st.placeAt);
+    const colors = pm.geometry.attributes.color.array; let dark = 0, light = 0; for (let i = 0; i < colors.length; i += 3) { if (colors[i] < .1) dark++; else if (colors[i] > .9) light++; }
+    ok(dark > 0 && light > 0 && pm.material.depthTest !== false && !pm.material.depthWrite && pm.material.toneMapped === false, 'рамка двойная: тёмная и светлая (видна на снегу и в пещере), не сквозь стены, без тона', { dark, light });
+    let gh = null; R.scene.traverse(o => { if (o.isMesh && o.renderOrder === 8 && o !== pm) gh = o; });
+    ok(!gh || !gh.visible, 'полупрозрачного «призрака» нет');
+    KB.opts({ preview: 'ghost' }); KB.ghostUpdate(st);
+    R.scene.traverse(o => { if (o.isMesh && o.renderOrder === 8 && o !== pm) gh = o; });
+    ok(gh && gh.visible && !pm.visible && gh.material.transparent, '«призрак» — по желанию (как было)');
+    KB.opts({ ghost: false }); KB.ghostUpdate(st);
+    ok(KB.previewMode() === 'off' && !pm.visible && !gh.visible, 'старое «призрак: выкл» — подсказки нет');
+    KB.opts({});
+    st.P.sel = 1; aimAt(.5, 45.99, -1.5); KB.ghostUpdate(st);
+    ok(st.placeAt && st.placeAt.h === 2 && pm.visible, 'дверь — рамка на 2 клетки', st.placeAt);
+    st.P.sel = 0; aimAt(.5, 45.99, .5); KB.ghostUpdate(st);
+    ok(!st.placeAt && !pm.visible, 'в себя блок не поставить — рамки нет');
+    st.WX.iceForce = true; st.WX.iceTick(); st.P.sel = 2;
+    aimAt(4.5, 45.8, .5); KB.ghostUpdate(st);
+    ok(st.hit?.ice && st.placeAt && st.placeAt.y === 46 && pm.visible, 'факел — на лёд сверху (лёд — опора)', st.placeAt);
+    st.WX.dispose(); VR.dispose();
+  }
+
   // ═══ 5. «🆘 Я застрял» и нокаут вместо смерти ═══
   sec('«🆘 Я застрял»: ближайшее место, где можно стоять; нет — начало мира; без штрафа, не чаще раза в 5 с. Нокаут — без «умер»');
   {
