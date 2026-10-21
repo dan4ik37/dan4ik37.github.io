@@ -14,6 +14,9 @@
 --   4. 📁 папки и порядок каналов, тема, архив, «пишут модераторы + роль»; 🛡 модерация с причиной (⚠️ предупреждение, ⏳ тайм-аут,
 --      👢 кик, ⛔ бан, 🧹 «удалить N последних») и 📜 журнал модерации; 🤖 автомодерация; 🔔 уведомления сервера (все / @ / ничего,
 --      заглушить сервер или канал)
+--   5. 🧒 безопасность детей (22.10.2026, docs/REALMS.md «лёгкий вариант»; выключатель site_config 'kidsafe' = 'off' — как раньше):
+--      ребёнок до 13 ↔ взрослый или «возраст не указан» — ни ЛС, ни звонков, ни заявок в друзья, ни приглашений; до 9 лет — чат и
+--      сообщества только читать и реакции, ЛС, звонков и голосовых нет. Нужен age.sql (новый, 22.10.2026) — запускать ПОСЛЕ него.
 --
 --  Проверка после запуска (гостем, publishable-ключ; PGRST202 — функции нет, файл не применён):
 --   /rpc/cm_invite_info {"p_code":"x"} → null                                  (ч. 1)
@@ -22,7 +25,16 @@
 --   /rpc/cm_modlog {"p_community":null} → {"ok":false,"reason":"rights"}       (ч. 4)
 --   /rpc/cm_automod_get {"p_community":null} → {"ok":true,"can":false,"cfg":{}}
 --   /rest/v1/chat_channels?select=id,archived,category_id&limit=1 → 200 (400 «does not exist» — ч. 4 не применилась)
+--   /rpc/call_check {"p_code":"abcdefgh","p_pass":"x","p_pub":"y"} → null; /rpc/call_pass гостем → 401 (ч. 5)
 -- ═══════════════════════════════════════════════════════════════════
+
+-- Ч. 5 (безопасность детей) опирается на age.sql 22.10.2026 (kidsafe_on, age_u9, kid_pair_ok, kid_why). Нет их — ничего не меняем:
+-- иначе чат и ЛС ломались бы на каждом сообщении («функция не найдена»)
+do $$ begin
+  if to_regprocedure('public.kid_why(uuid,uuid,boolean)') is null or to_regprocedure('public.age_u9(uuid)') is null then
+    raise exception 'Сначала запусти age.sql (новый, от 22.10.2026), потом снова community.sql';
+  end if;
+end $$;
 
 
 -- ═══════════════════════════════════════════════════════════════════
@@ -321,6 +333,7 @@ declare uid uuid := auth.uid(); v_name text := btrim(coalesce(p_name, '')); v_ab
   v_icon text := btrim(coalesce(p_icon, '')); v_id bigint; v_code text;
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if public.kidsafe_on() and public.age_u9(uid) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;   -- ч. 5: до 9 — только читать
   if char_length(v_name) < 2 or char_length(v_name) > 40 then return jsonb_build_object('ok', false, 'reason', 'name'); end if;
   if char_length(v_about) > 300 then return jsonb_build_object('ok', false, 'reason', 'about'); end if;
   if public.comm_bad(v_name) or public.comm_bad(v_about) then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
@@ -842,6 +855,7 @@ declare uid uuid := auth.uid(); ch record; s text; exp bigint; body text; p reco
 begin
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if p_pub is null or length(p_pub) < 40 or length(p_pub) > 200 then return jsonb_build_object('ok', false, 'reason', 'key'); end if;
+  if public.kidsafe_on() and public.age_u9(uid) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;   -- ч. 5: голос — с 9 лет
   select k into s from public.comm_secret where id = 1;
   if p_channel = 0 then
     -- голосовой канал сайта (сервер «Денчик37»): аккаунт старше суток (команда — сразу), без бана и мута в чате
@@ -906,12 +920,14 @@ begin
     where public.comm_online.seen_at < now() - interval '15 seconds' or public.comm_online.place is distinct from excluded.place;
 end $$;
 
+-- ч. 5: ребёнок до 13 и взрослый / «без возраста» друг друга здесь не видят (дружба остаётся, «📍 К другу» в его комнату — нет)
 create or replace function public.friends_online()
 returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object('id', o.user_id, 'seen', o.seen_at, 'place', o.place)), '[]'::jsonb)
   from public.comm_online o join public.profiles p on p.id = o.user_id
   where o.seen_at > now() - interval '3 minutes' and not coalesce(p.privacy_invisible, false) and coalesce(p.privacy_profile, 'all') <> 'nobody'
-    and public.comm_friends(auth.uid(), o.user_id) and not public.comm_blocked(auth.uid(), o.user_id);
+    and public.comm_friends(auth.uid(), o.user_id) and not public.comm_blocked(auth.uid(), o.user_id)
+    and public.kid_pair_ok(auth.uid(), o.user_id);
 $$;
 
 -- ═══ Общий чат сайта = сервер «Денчик37»: таблица messages (как раньше) + каналы chat_channels ═══
@@ -988,6 +1004,10 @@ begin
   select * into c from public.chat_channels where id = v_ch;
   if not found or c.kind <> 'text' then raise exception 'Такого канала в чате нет'; end if;
   if new.user_id is not null then v_staff := public.chat_staff_role(new.user_id) is not null; end if;
+  -- ч. 5: до 9 лет — только читать и ставить реакции (по настоящему входу, а не по полю user_id: гостем не обойти)
+  if auth.uid() is not null and not v_staff and public.kidsafe_on() and public.age_u9(auth.uid()) then
+    raise exception '👀 Писать в чат можно с 9 лет — пока можно читать и ставить реакции';
+  end if;
   if not v_staff then
     select max(until) into v_until from public.chat_mutes
       where until > now() and ((new.user_id is not null and user_id = new.user_id) or (nick <> '' and lower(nick) = lower(coalesce(new.nick, ''))));
@@ -2644,6 +2664,9 @@ begin
   select role, muted_until into v_role, v_mute from public.community_members where community_id = ch.community_id and user_id = uid;
   if v_role is null then return jsonb_build_object('ok', false, 'reason', 'member'); end if;
   if v_mute > now() then return jsonb_build_object('ok', false, 'reason', 'muted', 'until', v_mute); end if;
+  -- ч. 5: до 9 лет — только читать и ставить реакции (и в сообществах)
+  if public.kidsafe_on() and public.age_u9(uid) and not public.comm_is_staff(uid) then
+    return jsonb_build_object('ok', false, 'reason', 'u9', 'why', '👀 Писать можно с 9 лет — пока можно читать и ставить реакции'); end if;
   if ch.mods_only and v_role = 'member' and not (ch.write_role is not null
       and exists (select 1 from public.comm_member_roles where role_id = ch.write_role and user_id = uid)) then
     return jsonb_build_object('ok', false, 'reason', 'mods_only'); end if;
@@ -2893,3 +2916,106 @@ begin
     execute format('revoke all on function public.%s from public, anon, authenticated', f);
   end loop;
 end $$;
+
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ЧАСТЬ 5. 🧒 Безопасность детей (22.10.2026, docs/REALMS.md «лёгкий вариант»)
+-- ═══════════════════════════════════════════════════════════════════
+-- Выключатель — site_config 'kidsafe' (age.sql: kidsafe_on): нет строки — включено, 'off' — всё как раньше.
+-- Правила (age.sql: kid_pair_ok, age_u9, kid_why): ребёнок до 13 ↔ взрослый (18+ по году) или «возраст не указан» — ни ЛС, ни
+-- звонков, ни заявок в друзья, ни приглашений (звонок и приглашение в игру — это ЛС со ссылкой); подростки 13–17 — как раньше
+-- (ЛС только друзьям); до 9 лет — ЛС и звонков нет ни с кем, общий чат и сообщества — только читать и реакции (chat_guard,
+-- cm_send, cm_create, cv_pass выше). Старая дружба ребёнка со взрослым остаётся (данные не трогаем) — закрыты личные каналы, и
+-- в «кто из друзей онлайн» они друг друга не видят (friends_online выше).
+-- Отказ — тому, кто пишет: ребёнку — «в твоём возрасте недоступно», до 9 — «с 9 лет»; взрослому и «без возраста» — та же ошибка,
+-- что у обычного отказа прав (42501, как RLS): возраст другого по ней не узнать. Сервис (service_role, SQL Editor) — без проверок.
+
+-- ── ЛС (и вызов на звонок, и приглашение в игру) ──
+create or replace function public.dm_kidsafe()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare w text;
+begin
+  -- не браузер — как есть; чужой отправитель — откажет RLS (по нему ничего не считаем)
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') or new.sender_id is distinct from auth.uid() then return new; end if;
+  w := public.kid_why(new.sender_id, new.recipient_id, true);
+  if w is null then return new; end if;
+  if w = 'u9' then raise exception '✉️ Личные сообщения и звонки — с 9 лет'; end if;
+  if w = 'age' then
+    raise exception '🔒 В твоём возрасте это недоступно: писать, звонить и звать в игру можно только тех, кому меньше 18 и кто указал свой возраст';
+  end if;
+  raise exception using errcode = '42501', message = 'new row violates row-level security policy for table "direct_messages"';
+end $$;
+-- ── Заявка в друзья и её принятие ──
+create or replace function public.friend_kidsafe()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); other uuid; w text;
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') or me is null then return new; end if;
+  if tg_op = 'UPDATE' and (new.status is distinct from 'accepted' or old.status is not distinct from 'accepted') then return new; end if;
+  if me = new.requester_id and tg_op = 'INSERT' then other := new.addressee_id;
+  elsif me = new.addressee_id and tg_op = 'UPDATE' then other := new.requester_id;
+  else return new; end if;   -- не своя заявка — откажет RLS
+  w := public.kid_why(me, other, false);
+  if w is null then return new; end if;
+  if w = 'age' then raise exception '🔒 В твоём возрасте это недоступно: дружить на сайте можно с теми, кому меньше 18 и кто указал свой возраст'; end if;
+  raise exception using errcode = '42501', message = 'new row violates row-level security policy for table "friendships"';
+end $$;
+do $$ begin
+  if to_regclass('public.direct_messages') is not null then
+    drop trigger if exists dm_kidsafe on public.direct_messages;
+    create trigger dm_kidsafe before insert on public.direct_messages for each row execute function public.dm_kidsafe();
+  end if;
+  if to_regclass('public.friendships') is not null then
+    drop trigger if exists friend_kidsafe on public.friendships;
+    create trigger friend_kidsafe before insert or update of status on public.friendships for each row execute function public.friend_kidsafe();
+  end if;
+end $$;
+
+-- ── Звонок 1 на 1 и «компания» (комната call-<код>, calls.js): пропуск, как у голосовых каналов ──
+-- Пропуск «uid.срок.подпись» покрывает код комнаты и открытый ключ вкладки: соседи по звонку проверяют call_check и знают, кто есть
+-- кто (ник — из базы). Ребёнок до 13 и взрослый / «без возраста» друг друга не проходят, до 9 лет пропуска нет: даже по чужой
+-- ссылке на звонок ребёнок не услышит взрослого (браузер ребёнка соединяется только с теми, кого пропустил сервер).
+create or replace function public.call_pass(p_code text, p_pub text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+declare uid uuid := auth.uid(); s text; exp bigint; body text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if coalesce(p_code, '') !~ '^[a-z0-9]{8,16}$' then return jsonb_build_object('ok', false, 'reason', 'code'); end if;
+  if p_pub is null or length(p_pub) < 40 or length(p_pub) > 200 then return jsonb_build_object('ok', false, 'reason', 'key'); end if;
+  if public.kidsafe_on() and public.age_u9(uid) then return jsonb_build_object('ok', false, 'reason', 'u9'); end if;
+  select k into s from public.comm_secret where id = 1;
+  exp := extract(epoch from now())::bigint + 6 * 3600;
+  body := uid::text || '.' || exp || '.call:' || p_code || '.' || encode(extensions.digest(p_pub, 'sha256'), 'hex');
+  return jsonb_build_object('ok', true, 'pass', uid::text || '.' || exp || '.' || encode(extensions.hmac(body, s, 'sha256'), 'hex'));
+end $$;
+-- Проверка соседа: пропуск верный → { ok: true, uid, nick }; ребёнку, если сосед — взрослый / «без возраста», → { ok: false, reason:
+-- 'age' } (и 'u9' — себе до 9); взрослому про соседа-ребёнка и на подделку — null (возраст другого не раскрываем)
+create or replace function public.call_check(p_code text, p_pass text, p_pub text)
+returns jsonb language plpgsql stable security definer set search_path = public, extensions as $$
+declare me uuid := auth.uid(); parts text[]; v_uid uuid; exp bigint; s text; body text; v_nick text; w text;
+begin
+  if me is null or coalesce(p_code, '') !~ '^[a-z0-9]{8,16}$' then return null; end if;
+  parts := string_to_array(coalesce(p_pass, ''), '.');
+  if coalesce(array_length(parts, 1), 0) <> 3 or p_pub is null or length(p_pub) > 200 then return null; end if;
+  begin
+    v_uid := parts[1]::uuid;
+    exp := parts[2]::bigint;
+  exception when others then return null;
+  end;
+  if exp < extract(epoch from now())::bigint then return null; end if;
+  select k into s from public.comm_secret where id = 1;
+  body := parts[1] || '.' || parts[2] || '.call:' || p_code || '.' || encode(extensions.digest(p_pub, 'sha256'), 'hex');
+  if encode(extensions.hmac(body, s, 'sha256'), 'hex') <> parts[3] then return null; end if;
+  select nick into v_nick from public.profiles where id = v_uid;
+  if not found then return null; end if;
+  w := public.kid_why(me, v_uid, true);
+  if w in ('age', 'u9') then return jsonb_build_object('ok', false, 'reason', w); end if;
+  if w is not null then return null; end if;
+  return jsonb_build_object('ok', true, 'uid', v_uid, 'nick', v_nick);
+end $$;
+revoke all on function public.call_pass(text, text) from public, anon;
+grant execute on function public.call_pass(text, text) to authenticated;
+revoke all on function public.call_check(text, text, text) from public;
+grant execute on function public.call_check(text, text, text) to anon, authenticated;
+revoke all on function public.dm_kidsafe() from public, anon, authenticated;
+revoke all on function public.friend_kidsafe() from public, anon, authenticated;
