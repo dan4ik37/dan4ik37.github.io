@@ -1,6 +1,7 @@
-// Тесты «Района участков» (js/games/mir-base.js) в node: каталог, правила стройки (как base_act в bases.sql), добыча
-// кирпичей, подарок дня, мебель, проверка сохранённого, геометрия района на карте мира и случайная «стройка» с проверкой
-// правил после каждого хода. Запуск из корня сайта: node scripts/base-test.cjs
+// Тесты «Района участков» (мирный: дом, мебель, шахты) и ВОЕННЫХ БАЗ боевой зоны (js/games/mir-base.js) в node: каталоги,
+// правила стройки (как base_act / war_act в bases.sql), добыча, подарок дня, мебель, казарма и армия, техника, пожертвования,
+// проверка сохранённого, геометрия района и участков баз на карте (js/games/mir-war.js PLOTS), отрисовка построек, случайные ходы
+// с проверкой правил после каждого. Запуск из корня сайта: node scripts/base-test.cjs
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
 vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/games/mir-base.js'), 'utf8'), { filename: 'mir-base.js' });
@@ -35,126 +36,15 @@ const nondec = a => a.every((v, i) => i === 0 || v >= a[i - 1]);
   ok(S.n === 12 && S.in === 9 && S.per === 6 && S.plots === 600 && S.k.mine.rate.length === 5 && S.f.rug.floor === 1 && !('n' in S.k.th), 'серверная часть каталога (base_defs)');
 }
 
-// ═══ Набеги: оборона, ловушки, казарма, отряды, герой (docs/RAIDS.md) ═══
+// ═══ Район мирный (владелец 15.10, п. 31): ни обороны, ни казармы, ни армии — всё это у военных баз ═══
 {
-  const { UNITS, HERO, RAID, LEAGUES, SKINS } = MB, S = MB.SERVER;
-  const pos = a => Array.isArray(a) && a.every(v => typeof v === 'number' && v > 0);
-  for (const [k, D] of Object.entries(DEFS)) {
-    if (D.g === 'deco') { ok(!D.hp && !D.atk && !D.trap, `${k}: украшение в бою не участвует`); continue; }
-    if (D.trap) ok(!D.hp && pos(D.trap.dmg) && D.trap.dmg.length === D.lv && nondec(D.trap.dmg) && D.trap.trig > 0 && (D.trap.gnd ^ D.trap.air) === 1, `${k}: ловушка — урон по уровням, срабатывание, одна цель`);
-    else ok(pos(D.hp) && D.hp.length === D.lv && nondec(D.hp), `${k}: прочность на каждый уровень и растёт`);
-    if (D.atk) ok(pos(D.atk.dmg) && D.atk.dmg.length === D.lv && nondec(D.atk.dmg) && D.atk.cd > 0 && D.atk.rng > D.atk.min && (D.atk.gnd || D.atk.air), `${k}: оборона — урон, перезарядка, дальность`);
-  }
-  ok(DEFS.tower.atk && DEFS.tower.atk.air && DEFS.tower.lv === 5 && DEFS.tower.max[0] >= 1, 'вышка — настоящая оборона: бьёт и летающих, с ратуши 1, 5 уровней');
-  ok(DEFS.cannon.max[0] >= 1 && DEFS.bomb.max[0] >= 1, 'пушка и бомба — с первой ратуши (новичку есть чем защищаться)');
-  ok(DEFS.barracks.army.length === 5 && nondec(DEFS.barracks.army) && DEFS.barracks.max.every(m => m === 1), 'казарма: одна, место растёт с уровнем');
-  const lvs = Object.values(UNITS).map(U => U.lv);
-  ok(Object.keys(UNITS).length >= 4 && Object.keys(UNITS).length <= 6 && lvs.includes(1) && Math.max(...lvs) <= DEFS.barracks.lv, '4–6 отрядов, первый — с казармы 1');
-  for (const [u, U] of Object.entries(UNITS)) {
-    ok([U.sp, U.cost, U.time, U.hp, U.spd, U.rng].every(v => typeof v === 'number' && v > 0) && Number.isInteger(U.sp) && Number.isInteger(U.cost) && Number.isInteger(U.time), `${u}: место, цена, время, жизни, скорость`);
-    ok(['any', 'def', 'wall', 'heal'].includes(U.tgt) && (U.tgt === 'heal' ? U.heal > 0 && U.hr > 0 : U.dmg > 0) && U.n && U.e, `${u}: цель и урон/лечение`);
-    ok(U.sp <= DEFS.barracks.army[U.lv - 1], `${u}: влезает в казарму своего уровня`);
-  }
-  ok(HERO.hp.length === 5 && HERO.dmg.length === 5 && HERO.ab.length === 5 && nondec(HERO.hp) && nondec(HERO.ab), 'герой: по уровню ратуши');
-  ok(RAID.tps === 20 && RAID.max === 180 && RAID.loot.prot.length === 5 && RAID.loot.cap.length === 5 && RAID.loot.day.length === 5 && RAID.league.length === LEAGUES.length && RAID.bonus.length === LEAGUES.length && RAID.chest.length === LEAGUES.length, 'правила набегов: таблицы по ратуше и лигам');
-  ok(RAID.camp.length === RAID.campTh.length && RAID.campTh.every((t, i) => t >= 1 && t <= 5 && (!i || t >= RAID.campTh[i - 1])), 'поход: ратуши лагерей не убывают');
-  ok(Object.keys(RAID.shop.skin).every(k => SKINS[k]) && Object.values(RAID.shop.skin).every(p => (p.g > 0) !== (p.c > 0)), 'облики: есть в SKINS, одна цена (💎 или 🪙)');
-  ok(Object.values(RAID.shop.skin).some(p => p.c > 0) && RAID.shop.q2.c > 0, 'за монеты тоже можно (облик и вторая казарма) — путь без денег');
-  ok(MB.league(0) === 0 && MB.league(99) === 0 && MB.league(100) === 1 && MB.league(2600) === 6 && MB.league(99999) === 6, 'лига по кубкам');
-  ok(S.u && S.hero && S.raid && !('n' in S.u.fighter) && !('info' in S.u.fighter) && !('n' in S.hero) && S.k.cannon.atk.dmg.length === 5, 'base_defs: отряды, герой и правила — без подписей');
-  // 12×12 вмещает обязательное ядро ратуши 5 (без украшений): ратуша, дом, казарма, шахты, склады, оборона
-  const core = ['th', 'house', 'barracks', 'mine', 'store', 'shop', 'tower', 'cannon', 'mortar'].reduce((a, k) => a + DEFS[k].w * DEFS[k].d * DEFS[k].max[4], 0);
-  ok(core + DEFS.bomb.max[4] + DEFS.airmine.max[4] + 25 <= 144, `ратуша 5: ядро + ловушки + 25 заборов влезают (${core} клеток) — выбирать, что ставить, всё равно придётся`);
-}
-
-// ═══ Казарма: тренировка по времени, очередь, место, ускорение, распуск ═══
-{
-  const { UNITS, DEFS: D } = MB;
+  ok(!['barracks', 'cannon', 'mortar', 'bomb', 'airmine'].some(k => DEFS[k]) && Object.values(DEFS).every(D => !D.hp && !D.atk && !D.trap && !D.army), 'в районе нет обороны, ловушек и казармы');
+  ok(DEFS.tower.lv === 3 && !DEFS.tower.atk && DEFS.tower.max[0] === 0 && DEFS.tower.max[2] >= 1, 'вышка района — смотровая (с ратуши 3, не стреляет)');
   const s = fresh();
-  ok(act(s, 'train', { u: 'fighter', n: 1 }).reason === 'barracks', 'нет казармы — не тренировать');
-  let r = act(s, 'place', { k: 'barracks', x: 9, z: 3, r: 0 });
-  ok(r.ok && s.bricks === 600 - D.barracks.cost[0], 'казарма поставлена', r);
-  ok(act(s, 'train', { u: 'fighter', n: 1 }).reason === 'barracks', 'казарма строится — пока нельзя');
-  RU.norm(s, T0 + 60);
-  const t1 = T0 + 60, cap1 = D.barracks.army[0];
-  ok(RU.barracksLv(s) === 1 && RU.armyCap(s) === cap1 && RU.armySpace(s) === 0, 'казарма 1: место ' + cap1);
-  ok(act(s, 'train', { u: 'tank', n: 1 }, t1).reason === 'ulock', 'силач — с казармы 2');
-  ok(act(s, 'train', { u: 'dragon', n: 1 }, t1).reason === 'kind' && act(s, 'train', { u: 'fighter', n: 0 }, t1).reason === 'args' && act(s, 'train', { u: 'fighter', n: 31 }, t1).reason === 'args' && act(s, 'train', { u: 'fighter', n: 1.5 }, t1).reason === 'args' && act(s, 'train', { n: 1 }, t1).reason === 'args', 'плохие аргументы');
-  const b0 = s.bricks;
-  r = act(s, 'train', { u: 'fighter', n: 3 }, t1);
-  const Tf = UNITS.fighter.time;
-  ok(r.ok && s.bricks === b0 - 3 * UNITS.fighter.cost && s.queue.length === 3 && s.queue.map(q => q.ue).join() === [t1 + Tf, t1 + 2 * Tf, t1 + 3 * Tf].join(), 'трое бойцов: по очереди', s.queue);
-  r = act(s, 'train', { u: 'archer' }, t1 + 5);
-  ok(r.ok && s.queue.at(-1).ue === t1 + 3 * Tf + UNITS.archer.time, 'n не указано — один; встал в конец очереди');
-  RU.norm(s, t1 + Tf);
-  ok(s.army.fighter === 1 && s.queue.length === 3, 'первый готов — в армии');
-  // убрать из очереди: последний боец (середина цепочки) → лучник раньше, кирпичи назад
-  const b1 = s.bricks;
-  r = act(s, 'untrain', { u: 'fighter' }, t1 + Tf);
-  ok(r.ok && s.bricks === b1 + UNITS.fighter.cost && s.queue.length === 2 && s.queue[1].u === 'archer' && s.queue[1].ue === t1 + 2 * Tf + UNITS.archer.time, 'убрал бойца — лучник раньше на ' + Tf + ' с', s.queue);
-  ok(act(s, 'untrain', { u: 'tank' }, t1 + Tf).reason === 'noq' && act(s, 'untrain', { u: 'zzz' }, t1 + Tf).reason === 'args', 'нет такого в очереди / мусор');
-  // место: армия + очередь ≤ места
-  s.bricks = 1000;
-  const used = RU.armySpace(s);
-  ok(act(s, 'train', { u: 'fighter', n: cap1 - used + 1 }, t1 + Tf).reason === 'space' && act(s, 'train', { u: 'fighter', n: cap1 - used }, t1 + Tf).ok && RU.armySpace(s) === cap1, 'места ровно ' + cap1);
-  // ушли в набег — тоже занимают место
-  const s2 = RU.clone(s); s2.out = { fighter: 1 }; s2.queue.pop();
-  ok(act(s2, 'train', { u: 'fighter', n: 1 }, t1 + Tf).reason === 'space', 'армия в набеге занимает место');
-  // ускорение за монеты: 1 🪙 за 2 мин до конца последнего
-  const left = s.queue.at(-1).ue - (t1 + Tf), need = Math.max(1, Math.ceil(left / 120));
-  ok(act(s, 'tfinish', {}, t1 + Tf).reason === 'coins', 'без монет — нет');
-  const w = { coins: need };
-  r = act(s, 'tfinish', {}, t1 + Tf, w);
-  ok(r.ok && r.coins === need && w.coins === 0 && !s.queue.length && RU.spaceOf(s.army) === cap1, `дотренировал всех за ${need} 🪙`);
-  ok(act(s, 'tfinish', {}, t1 + Tf, { coins: 99 }).reason === 'noq', 'очередь пуста — нечего ускорять');
-  // распустить
-  ok(act(s, 'unarm', { u: 'archer', n: 2 }).reason === 'noarmy' && act(s, 'unarm', { u: 'archer', n: 1 }).ok && !('archer' in s.army), 'распустил лучника; лишних — нет');
-  // вторая казарма — вдвое быстрее (округление вверх)
-  const s3 = fresh(); act(s3, 'place', { k: 'barracks', x: 9, z: 3, r: 0 }); RU.norm(s3, T0 + 60); s3.q2 = true;
-  act(s3, 'train', { u: 'archer', n: 2 }, T0 + 60);
-  ok(s3.queue[0].t === Math.ceil(UNITS.archer.time / 2) && s3.queue[1].ue === T0 + 60 + 2 * Math.ceil(UNITS.archer.time / 2), 'вторая казарма: вдвое быстрее');
-  // очередь простаивала — новый встаёт «от сейчас»
-  RU.norm(s3, T0 + 9999); act(s3, 'train', { u: 'fighter', n: 1 }, T0 + 9999);
-  ok(s3.queue[0].ue === T0 + 9999 + Math.ceil(UNITS.fighter.time / 2) && s3.army.archer === 2, 'пустая очередь — от сейчас');
-  // сохранение: очередь и армия — туда-обратно, мусор отброшен
-  const back = RU.sanitize(JSON.parse(JSON.stringify({ ...s3, army: { ...s3.army, nuke: 5, fighter: -1 }, queue: [...s3.queue, { u: 'zzz', ue: 1, t: 1 }] })));
-  ok(JSON.stringify(back.queue) === JSON.stringify(s3.queue) && back.army.archer === 2 && !('nuke' in back.army) && !('fighter' in back.army) && back.q2 === true, 'армия и очередь — туда-обратно');
-  // казарма выше — сильные отряды и больше места
-  const s4 = fresh(); act(s4, 'place', { k: 'barracks', x: 9, z: 3, r: 0 }); RU.norm(s4, T0 + 60);
-  const bk = s4.layout.find(it => it.k === 'barracks'); bk.l = 5; s4.layout.find(it => it.k === 'th').l = 5; s4.bricks = 6000;
-  ok(Object.keys(UNITS).every(u => act(RU.clone(s4), 'train', { u, n: 1 }, T0 + 60).ok) && RU.armyCap(s4) === D.barracks.army[4], 'казарма 5: все отряды и ' + D.barracks.army[4] + ' мест');
-}
-
-// ═══ Казарма: случайные ходы — правила держатся ═══
-{
-  const { UNITS } = MB;
-  const rnd = (() => { let a = 4242; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
-  const pick = a => a[Math.floor(rnd() * a.length)];
-  let bad = 0, oks = 0, now = T0;
-  for (let run = 0; run < 20; run++) {
-    const s = fresh(now), w = { coins: 300 };
-    act(s, 'place', { k: 'barracks', x: 9, z: 3, r: 0 }, now); now += 60;
-    const bk = s.layout.find(it => it.k === 'barracks');
-    for (let step = 0; step < 250; step++) {
-      now += Math.floor(rnd() * rnd() * 300);
-      if (rnd() < .05) { RU.norm(s, now); if (bk.l < 5) { bk.l++; s.layout.find(it => it.k === 'th').l = Math.max(bk.l, RU.th(s)); } }
-      if (rnd() < .2) s.bricks = Math.min(RU.cap(s), s.bricks + Math.floor(rnd() * 800));
-      if (rnd() < .03) s.q2 = true;
-      if (rnd() < .04) { s.out = rnd() < .5 ? {} : { fighter: 1 + Math.floor(rnd() * 3) }; }
-      const a = pick(['train', 'train', 'train', 'untrain', 'tfinish', 'unarm']);
-      const g = a === 'train' ? { u: pick(Object.keys(UNITS)), n: 1 + Math.floor(rnd() * 6) } : a === 'untrain' ? (rnd() < .5 ? {} : { u: pick(Object.keys(UNITS)) }) : a === 'unarm' ? { u: pick(Object.keys(UNITS)), n: 1 + Math.floor(rnd() * 3) } : {};
-      const before = JSON.stringify(s), res = RU.act(s, a, g, now, w);
-      if (res.ok) oks++;
-      else if (JSON.stringify(RU.norm(JSON.parse(before), now)) !== JSON.stringify(s)) { bad++; console.log('отказ изменил казарму', a, g, res); }
-      // правила: место, очередь по возрастанию, время каждого — не меньше его длительности, ничего в минус
-      if (res.ok && a === 'train' && RU.armySpace(s) > RU.armyCap(s)) { bad++; console.log('места больше, чем в казарме', s.army, s.out, s.queue.length); }
-      for (let i = 1; i < s.queue.length; i++) if (s.queue[i].ue < s.queue[i - 1].ue + s.queue[i].t) { bad++; console.log('очередь не по порядку', s.queue); break; }
-      if (s.queue.length && s.queue[0].ue <= now) { bad++; console.log('готовый остался в очереди'); }
-      if (s.bricks < 0 || w.coins < 0 || Object.values(s.army).some(n => !(n > 0))) { bad++; console.log('минус или ноль в армии', s.army); }
-      if (bad > 5) break;
-    }
-  }
-  ok(bad === 0 && oks > 1000, `5000 случайных ходов казармы: правила не нарушены (успешных ${oks})`);
+  for (const a of ['train', 'untrain', 'tfinish', 'unarm', 'vbuy', 'vsell', 'give']) ok(act(s, a, { u: 'fighter', n: 1, v: 'jeep' }).reason === 'args', `в районе нет хода «${a}»`);
+  ok(!('army' in s) && !('queue' in s) && !('veh' in s) && !('q2' in s), 'у участка района нет армии, очереди и техники');
+  const S = MB.SERVER;
+  ok(!S.u && !S.raid && !S.hero && !S.k.cannon && !('hp' in S.k.th) && !('army' in S.k.tower), 'base_defs — только мирный каталог (набеги — war_defs)');
 }
 
 // ═══ Новый участок ═══
@@ -499,6 +389,277 @@ var r;
   ok([1, 2, 3, 4, 5].map(l => hOf('tower', l)).every((h, i, a) => i === 0 || h >= a[i - 1]), 'вышка выше с уровнем');
   for (const k of ['cannon', 'mortar', 'barracks']) { const bd = []; DRAW[k](() => new G(), new G(), { i: 1, k, x: 2, z: 2, r: 0, l: 1 }, bd, x0()); ok(bd.length > 0, `${k}: есть тело`); }
   for (const k of ['bomb', 'airmine']) { const bd = []; DRAW[k](() => new G(), new G(), { i: 1, k, x: 2, z: 2, r: 0, l: 1 }, bd, x0()); ok(bd.length === 0, `${k}: ловушка без тела`); }
+}
+
+globalThis.window = globalThis;
+for (const f of ['js/engine/core.js', 'js/engine/physics.js', 'js/engine/interior.js', 'js/engine/worldmap.js', 'js/games/mir-zones.js', 'js/games/mir-war.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
+
+// ═══ Военная база: каталог (оборона, ловушки, казарма, техника, отряды, герой, набеги — docs/RAIDS.md) ═══
+{
+  const { WDEFS: W, UNITS, HERO, RAID, LEAGUES, SKINS, VEH, WAR, NAMES, COLORS } = MB, S = MB.WSERVER;
+  const pos = a => Array.isArray(a) && a.every(v => typeof v === 'number' && v > 0);
+  for (const [k, D] of Object.entries(W)) {
+    ok(D.cost.length === D.lv && D.time.length === D.lv && nondec(D.cost) && nondec(D.time), `база ${k}: цена и время на каждый уровень, растут`);
+    ok(Number.isInteger(D.w) && Number.isInteger(D.d) && D.w >= 1 && D.d >= 1 && D.w <= 4 && D.d <= 4 && typeof D.n === 'string' && D.e, `база ${k}: размер, название, значок`);
+    if (D.g === 'deco') { ok(D.lv === 1 && D.time[0] === 0 && !D.hp && !D.atk && !D.trap, `база ${k}: украшение — без уровней, стройки и боя`); continue; }
+    ok(Array.isArray(D.max) && D.max.length === 5 && nondec(D.max), `база ${k}: лимит по штабу`);
+    if (D.trap) ok(!D.hp && pos(D.trap.dmg) && D.trap.dmg.length === D.lv && nondec(D.trap.dmg) && D.trap.trig > 0 && (D.trap.gnd ^ D.trap.air) === 1, `база ${k}: ловушка — урон по уровням, одна цель`);
+    else ok(pos(D.hp) && D.hp.length === D.lv && nondec(D.hp), `база ${k}: прочность на каждый уровень и растёт (в набеге — цель)`);
+    if (D.atk) ok(pos(D.atk.dmg) && D.atk.dmg.length === D.lv && nondec(D.atk.dmg) && D.atk.cd > 0 && D.atk.rng > D.atk.min && (D.atk.gnd || D.atk.air), `база ${k}: оборона — урон, перезарядка, дальность`);
+    if (D.rate) ok(D.hold.every((h, i) => h === D.rate[i] * 8) && D.rate.length === D.lv, `база ${k}: производство вмещает 8 часов`);
+    if (D.slots) ok(D.slots.length === D.lv && nondec(D.slots) && Object.values(VEH).some(V => V.b === k), `база ${k}: места техники по уровню, есть что поставить`);
+  }
+  ok(W.th.crew.length === 5 && nondec(W.th.crew) && W.th.crew[0] >= 4 && W.th.crew[4] <= 30, 'штаб: состав растёт с уровнем (4…30 человек)');
+  ok(W.th.keep.length === 5 && W.store.keep.length === 5, 'вместимость казны на 5 уровней');
+  for (let t = 2; t <= 5; t++) {
+    const prev = t - 1, best = W.th.keep[prev - 1] + W.store.max[prev - 1] * W.store.keep[Math.min(W.store.lv, prev) - 1];
+    ok(best >= W.th.cost[t - 1], `штаб ${t}: хватает места в казне (${best} ≥ ${W.th.cost[t - 1]})`);
+  }
+  ok(W.barracks.max[0] === 1 && W.barracks.max[2] === 2 && W.barracks.max.every(m => m <= 2), 'вторая казарма — постройка со штаба 3 (не покупка)');
+  ok(!('q2' in RAID.shop), 'вторую казарму за 💎 не продаём (красная линия: сила за деньги — никогда)');
+  ok(Object.keys(RAID.shop).every(k => ['sh1', 'sh2', 'shWeek', 'shMax', 'fin', 'skin', 'army'].includes(k)), 'за 💎 — только щиты, время и облики', Object.keys(RAID.shop));
+  ok(W.tower.atk.air && W.tower.max[0] >= 1 && W.cannon.max[0] >= 1 && W.bomb.max[0] >= 1, 'вышка бьёт и летающих; пушка, вышка, бомба — с первого штаба');
+  ok(W.barracks.army.length === 5 && nondec(W.barracks.army), 'казарма: место растёт с уровнем');
+  const lvs = Object.values(UNITS).map(U => U.lv);
+  ok(Object.keys(UNITS).length >= 4 && Object.keys(UNITS).length <= 6 && lvs.includes(1) && Math.max(...lvs) <= W.barracks.lv, '4–6 отрядов, первый — с казармы 1');
+  for (const [u, U] of Object.entries(UNITS)) {
+    ok([U.sp, U.cost, U.time, U.hp, U.spd, U.rng].every(v => typeof v === 'number' && v > 0) && Number.isInteger(U.sp) && Number.isInteger(U.cost) && Number.isInteger(U.time), `${u}: место, цена, время, жизни, скорость`);
+    ok(['any', 'def', 'wall', 'heal'].includes(U.tgt) && (U.tgt === 'heal' ? U.heal > 0 && U.hr > 0 : U.dmg > 0) && U.n && U.e, `${u}: цель и урон/лечение`);
+    ok(U.sp <= W.barracks.army[U.lv - 1], `${u}: влезает в казарму своего уровня`);
+  }
+  for (const [v, V] of Object.entries(VEH)) ok(W[V.b]?.slots && V.lv >= 1 && V.lv <= W[V.b].lv && V.cost > 0 && Number.isInteger(V.cost), `техника ${v}: стоит в «${W[V.b]?.n}», с ${V.lv} ур., цена в 🧱`);
+  ok(HERO.hp.length === 5 && nondec(HERO.hp) && nondec(HERO.ab), 'герой: по уровню штаба');
+  ok(RAID.tps === 20 && RAID.max === 180 && RAID.loot.prot.length === 5 && RAID.league.length === LEAGUES.length && RAID.bonus.length === LEAGUES.length && RAID.chest.length === LEAGUES.length, 'правила набегов: таблицы по штабу и лигам');
+  ok(RAID.camp.length === RAID.campTh.length && RAID.campTh.every((t, i) => t >= 1 && t <= 5 && (!i || t >= RAID.campTh[i - 1])), 'поход: штабы лагерей не убывают');
+  ok(Object.keys(RAID.shop.skin).every(k => SKINS[k]) && Object.values(RAID.shop.skin).every(p => (p.g > 0) !== (p.c > 0)) && Object.values(RAID.shop.skin).some(p => p.c > 0), 'облики: есть в SKINS, одна цена; есть и за монеты');
+  ok(MB.league(0) === 0 && MB.league(100) === 1 && MB.league(99999) === 6, 'лига по кубкам');
+  ok(WAR.n === 32 && WAR.ring.length === 5 && WAR.ring[4] === WAR.n && nondec(WAR.ring) && WAR.ring.every(s => (WAR.n - s) % 2 === 0), 'сетка 32, открытая часть 16 → 32 (ровно в середине)');
+  ok(WAR.block.every(([x, z, w, d]) => x >= 0 && z >= 0 && x + w <= WAR.n && z + d <= WAR.n), 'занятые клетки — внутри участка');
+  ok(NAMES.length === S.names && COLORS.length === S.colors && NAMES.length >= 8 && new Set(NAMES).size === NAMES.length && NAMES.every(n => /^[А-ЯЁ][а-яё]+ [а-яё]+$/.test(n)), 'имена баз — готовые, разные, без цифр и латиницы');
+  ok(MB.baseName(3, 7) === NAMES[3] + ' 7', 'имя базы: готовое + номер');
+  ok(S.k && S.u && S.hero && S.raid && S.veh && !('n' in S.k.th) && !('info' in S.u.fighter) && S.k.cannon.atk.dmg.length === 5 && S.k.th.crew, 'war_defs: каталог без подписей');
+  // ядро штаба 5 + ловушки + стены влезают в 32×32 (за вычетом занятых клеток)
+  const core = Object.entries(W).filter(([k, D]) => D.g !== 'deco' && !D.trap && k !== 'wall').reduce((a, [, D]) => a + D.w * D.d * D.max[4], 0);
+  const free = 32 * 32 - WAR.block.reduce((a, b) => a + b[2] * b[3], 0);
+  ok(core + W.bomb.max[4] + W.airmine.max[4] + W.wall.max[4] <= free * .75, `штаб 5: всё по максимуму занимает ≤ 75 % участка (${core} + ловушки + стены из ${free})`);
+}
+
+// ═══ Военная база: правила (открытая часть по штабу, занятые клетки, строители, производство, казна) ═══
+{
+  const WR = MB.WRules, W = MB.WDEFS, now = T0;
+  const s = WR.fresh(1, now), wact = (g, a, t = now, w) => WR.act(s, a, g, t, w);
+  ok(WR.boxOf(s)[0] === 8 && WR.boxOf(s)[1] === 24 && s.bricks === MB.WAR.start && WR.cap(s) === W.th.keep[0] && WR.builders(s) === 1, 'новая база: штаб 1, открыто 16×16 (клетки 8…23), казна и строитель');
+  ok(s.layout.every(it => WR.fits(s.layout, it.x, it.z, ...WR.fp(it.k, it.r), it.i)), 'новая база: ничего не пересекается, всё в открытой части');
+  ok(wact({ k: 'cannon', x: 6, z: 10, r: 0 }, 'place').reason === 'place' && wact({ k: 'cannon', x: 23, z: 10, r: 0 }, 'place').reason === 'place', 'за открытой частью — нельзя');
+  ok(wact({ k: 'cannon', x: 22, z: 10, r: 0 }, 'place').ok, 'у края открытой части — можно');
+  ok(wact({ k: 'th', x: 0, z: 0, r: 0 }, 'place').reason === 'kind' && wact({ k: 'house', x: 9, z: 9, r: 0 }, 'place').reason === 'kind', 'второго штаба и дома нет');
+  ok(wact({ k: 'factory', x: 9, z: 9, r: 0 }, 'place').reason === 'th' && wact({ k: 'hangar', x: 9, z: 9, r: 0 }, 'place').reason === 'th', 'завод и ангар — со штаба выше');
+  // штаб 5: весь участок, кроме КП зоны и проезда к воротам
+  const s5 = WR.fresh(2, now); s5.layout[0].l = 5; s5.bricks = 1e6;
+  ok(WR.boxOf(s5)[0] === 0 && WR.boxOf(s5)[1] === 32, 'штаб 5: открыт весь участок');
+  ok(WR.act(WR.clone(s5), 'place', { k: 'wall', x: 8, z: 28, r: 0 }, now).reason === 'place' && WR.act(WR.clone(s5), 'place', { k: 'wall', x: 15, z: 30, r: 0 }, now).reason === 'place', 'на КП зоны и на проезде к воротам — нельзя');
+  ok(WR.act(WR.clone(s5), 'place', { k: 'wall', x: 12, z: 29, r: 0 }, now).ok && WR.act(WR.clone(s5), 'place', { k: 'wall', x: 0, z: 0, r: 0 }, now).ok, 'рядом и в углу — можно');
+  // мастерские: каждая — плюс строитель
+  const sb = WR.fresh(3, now); sb.layout[0].l = 4; sb.bricks = 1e6;
+  for (const x of [8, 11]) { WR.act(sb, 'place', { k: 'shop', x, z: 2, r: 0 }, now); WR.norm(sb, now + 1000); }
+  ok(WR.builders(sb) === 3, 'две мастерские — три строителя (у района — максимум два)');
+  // производство: карьер и завод копят, сбор — в казну
+  const sp = WR.fresh(4, now); sp.layout[0].l = 2; sp.bricks = W.factory.cost[0];
+  ok(WR.act(sp, 'place', { k: 'factory', x: 18, z: 18, r: 0 }, now).ok && sp.bricks === 0, 'завод поставлен'); WR.norm(sp, now + 600);
+  const fac = sp.layout.find(it => it.k === 'factory');
+  ok(fac.l === 1 && fac.t0 === now + 600 && WR.prod(fac, now + 600 + 3600) === W.factory.rate[0], 'завод: копит с конца стройки, ' + W.factory.rate[0] + '/ч');
+  const r1 = WR.act(sp, 'collect', {}, now + 600 + 3600);
+  ok(r1.ok && r1.got === W.factory.rate[0] + Math.floor(W.mine.rate[0] * (4200) / 3600), 'сбор: карьер и завод — в казну', r1);
+  // подарок дня — в казну
+  ok(WR.act(sp, 'gift', {}, now + 5000).ok && WR.act(sp, 'gift', {}, now + 5001).reason === 'done', 'подарок дня базы — раз в день');
+  // мебели и доступа у базы нет
+  ok(WR.act(sp, 'fplace', { k: 'bed', x: 0, z: 0, r: 0 }, now).reason === 'args' && WR.act(sp, 'access', { a: 'all' }, now).reason === 'args', 'у базы нет мебели и доступа к дому');
+  // сохранение: туда-обратно, мусор отброшен
+  const back = WR.sanitize(JSON.parse(JSON.stringify({ ...sp, veh: { jeep: 2, ufo: 1 }, army: { fighter: 3, nuke: 2 } })));
+  ok(JSON.stringify(back.layout) === JSON.stringify(sp.layout) && back.veh.jeep === 2 && !('ufo' in back.veh) && back.army.fighter === 3 && !('nuke' in back.army), 'база: туда-обратно, мусор отброшен');
+  ok(WR.sanitize({ layout: [{ i: 1, k: 'mine', x: 0, z: 0, l: 1 }] }) === null, 'база без штаба — отброшена');
+}
+
+// ═══ Казарма базы: тренировка по времени, очередь, место, ускорение, распуск, вторая казарма ═══
+{
+  const { UNITS, WDEFS: D } = MB, WR = MB.WRules;
+  const s = WR.fresh(1, T0);
+  const act2 = (a, g, now = T0, w) => WR.act(s, a, g, now, w);
+  ok(act2('train', { u: 'fighter', n: 1 }).reason === 'barracks', 'нет казармы — не тренировать');
+  let r = act2('place', { k: 'barracks', x: 18, z: 10, r: 0 });
+  ok(r.ok && s.bricks === MB.WAR.start - D.barracks.cost[0], 'казарма поставлена', r);
+  ok(act2('train', { u: 'fighter', n: 1 }).reason === 'barracks', 'казарма строится — пока нельзя');
+  WR.norm(s, T0 + 60);
+  const t1 = T0 + 60, cap1 = D.barracks.army[0];
+  ok(WR.barracksLv(s) === 1 && WR.armyCap(s) === cap1 && WR.armySpace(s) === 0, 'казарма 1: место ' + cap1);
+  ok(act2('train', { u: 'tank', n: 1 }, t1).reason === 'ulock', 'силач — с казармы 2');
+  ok(act2('train', { u: 'dragon', n: 1 }, t1).reason === 'kind' && act2('train', { u: 'fighter', n: 0 }, t1).reason === 'args' && act2('train', { u: 'fighter', n: 31 }, t1).reason === 'args', 'плохие аргументы');
+  const b0 = s.bricks;
+  r = act2('train', { u: 'fighter', n: 3 }, t1);
+  const Tf = UNITS.fighter.time;
+  ok(r.ok && s.bricks === b0 - 3 * UNITS.fighter.cost && s.queue.map(q => q.ue).join() === [t1 + Tf, t1 + 2 * Tf, t1 + 3 * Tf].join(), 'трое бойцов: по очереди', s.queue);
+  r = act2('train', { u: 'archer' }, t1 + 5);
+  ok(r.ok && s.queue.at(-1).ue === t1 + 3 * Tf + UNITS.archer.time, 'n не указано — один; в конец очереди');
+  WR.norm(s, t1 + Tf);
+  ok(s.army.fighter === 1 && s.queue.length === 3, 'первый готов — в армии');
+  const b1 = s.bricks;
+  r = act2('untrain', { u: 'fighter' }, t1 + Tf);
+  ok(r.ok && s.bricks === b1 + UNITS.fighter.cost && s.queue.length === 2 && s.queue[1].u === 'archer' && s.queue[1].ue === t1 + 2 * Tf + UNITS.archer.time, 'убрал бойца — лучник раньше', s.queue);
+  s.bricks = 1000;
+  const used = WR.armySpace(s);
+  ok(act2('train', { u: 'fighter', n: cap1 - used + 1 }, t1 + Tf).reason === 'space' && act2('train', { u: 'fighter', n: cap1 - used }, t1 + Tf).ok && WR.armySpace(s) === cap1, 'места ровно ' + cap1);
+  const s2 = WR.clone(s); s2.out = { fighter: 1 }; s2.queue.pop();
+  ok(WR.act(s2, 'train', { u: 'fighter', n: 1 }, t1 + Tf).reason === 'space', 'армия в набеге занимает место');
+  const left = s.queue.at(-1).ue - (t1 + Tf), need = Math.max(1, Math.ceil(left / 120));
+  ok(act2('tfinish', {}, t1 + Tf).reason === 'coins', 'без монет — нет');
+  const w = { coins: need };
+  r = act2('tfinish', {}, t1 + Tf, w);
+  ok(r.ok && r.coins === need && w.coins === 0 && !s.queue.length && WR.spaceOf(s.army) === cap1, `дотренировал всех за ${need} 🪙`);
+  ok(act2('unarm', { u: 'archer', n: 2 }).reason === 'noarmy' && act2('unarm', { u: 'archer', n: 1 }).ok && !('archer' in s.army), 'распустил лучника');
+  // вторая казарма (штаб 3) — вдвое быстрее (округление вверх)
+  const s3 = WR.fresh(5, T0); s3.layout[0].l = 3; s3.bricks = 1e5;
+  WR.act(s3, 'place', { k: 'barracks', x: 8, z: 8, r: 0 }, T0); WR.norm(s3, T0 + 60);
+  WR.act(s3, 'train', { u: 'archer', n: 1 }, T0 + 60);
+  ok(s3.queue[0].t === UNITS.archer.time, 'одна казарма — обычная скорость');
+  WR.act(s3, 'place', { k: 'barracks', x: 11, z: 8, r: 0 }, T0 + 60); WR.norm(s3, T0 + 200);
+  ok(WR.barracksN(s3) === 2, 'две готовые казармы');
+  WR.act(s3, 'train', { u: 'archer', n: 2 }, T0 + 200);
+  ok(s3.queue.at(-1).t === Math.ceil(UNITS.archer.time / 2), 'вторая казарма: вдвое быстрее — без 💎');
+  ok(WR.act(WR.clone(s3), 'place', { k: 'barracks', x: 14, z: 18, r: 0 }, T0 + 200).reason === 'max', 'третьей казармы нет');
+}
+
+// ═══ Военная база: техника и пожертвования из района ═══
+{
+  const WR = MB.WRules, W = MB.WDEFS, V = MB.VEH;
+  const s = WR.fresh(1, T0); s.layout[0].l = 3; s.bricks = 30000;
+  ok(WR.act(s, 'vbuy', { v: 'jeep' }, T0).reason === 'vlock', 'без гаража — нельзя');
+  WR.act(s, 'place', { k: 'garage', x: 8, z: 8, r: 0 }, T0); WR.norm(s, T0 + 100);
+  let r = WR.act(s, 'vbuy', { v: 'jeep' }, T0 + 100);
+  ok(r.ok && s.veh.jeep === 1 && s.bricks === 30000 - W.garage.cost[0] - V.jeep.cost, 'джип в гараж');
+  ok(WR.act(s, 'vbuy', { v: 'jeep' }, T0 + 100).reason === 'vfull' && WR.act(s, 'vbuy', { v: 'tank' }, T0 + 100).reason === 'vlock', 'гараж 1: одно место, танк — с 3-го');
+  ok(WR.act(s, 'vbuy', { v: 'ufo' }, T0 + 100).reason === 'args' && WR.act(s, 'vsell', { v: 'tank' }, T0 + 100).reason === 'noveh', 'нет такой / нечего списать');
+  ok(WR.act(s, 'vsell', { v: 'jeep' }, T0 + 100).ok && !s.veh.jeep, 'списал джип');
+  const g = s.layout.find(it => it.k === 'garage'); g.l = 3;
+  ok(WR.slotsOf(s, 'garage') === 3 && WR.act(s, 'vbuy', { v: 'tank' }, T0 + 100).ok, 'гараж 3: три места, танк можно');
+  // кирпичи из района
+  const d = { bricks: 700, left: MB.WAR.give };
+  ok(WR.act(s, 'give', { n: 100 }, T0).reason === 'nodonor', 'без участка в районе — нечего дарить');
+  const b = s.bricks; s.bricks = WR.cap(s) - 600;
+  ok(WR.act(s, 'give', { n: 800 }, T0, undefined, d).reason === 'bricks', 'больше, чем есть в районе — нельзя');
+  ok(WR.act(s, 'give', { n: 650 }, T0, undefined, d).reason === 'full', 'больше, чем влезет в казну — нельзя');
+  r = WR.act(s, 'give', { n: 500 }, T0, undefined, d);
+  ok(r.ok && r.got === 500 && d.bricks === 200 && d.left === MB.WAR.give - 500 && s.bricks === WR.cap(s) - 100, 'подарил 500: из района — в казну');
+  ok(WR.act(s, 'give', { n: 600 }, T0, undefined, { bricks: 9999, left: 100 }).reason === 'givemax', 'дневной лимит');
+  void b;
+}
+
+// ═══ Военная база: случайные ходы — правила держатся ═══
+{
+  const WR = MB.WRules, W = MB.WDEFS, { UNITS } = MB;
+  let a0 = 9090; const rnd = () => { a0 = (a0 + 0x6D2B79F5) >>> 0; let t = a0; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const pick = a => a[Math.floor(rnd() * a.length)];
+  let bad = 0, oks = 0, now = T0;
+  for (let run = 0; run < 20; run++) {
+    const s = WR.fresh(run + 1, now), w = { coins: 400 };
+    for (let step = 0; step < 300; step++) {
+      now += Math.floor(rnd() * rnd() * 3000);
+      if (rnd() < .25) s.bricks = Math.min(WR.cap(s), s.bricks + Math.floor(rnd() * 6000));
+      if (rnd() < .03) { WR.norm(s, now); const th = s.layout.find(it => it.k === 'th'); if (th.l < 5 && th.ue == null) th.l++; }
+      if (rnd() < .04) s.out = rnd() < .5 ? {} : { fighter: 1 + Math.floor(rnd() * 3) };
+      const a = pick(['place', 'place', 'place', 'upgrade', 'upgrade', 'collect', 'move', 'remove', 'gift', 'finish', 'train', 'train', 'untrain', 'tfinish', 'unarm', 'vbuy', 'vsell']);
+      const L = s.layout, id = L.length ? pick(L).i : 1, [lo, hi] = WR.boxOf(s), cell = () => lo - 2 + Math.floor(rnd() * (hi - lo + 4));
+      const g = a === 'place' ? { k: pick(Object.keys(W)), x: cell(), z: cell(), r: Math.floor(rnd() * 4) } : a === 'move' ? { id, x: cell(), z: cell(), r: Math.floor(rnd() * 4) }
+        : a === 'train' ? { u: pick(Object.keys(UNITS)), n: 1 + Math.floor(rnd() * 6) } : a === 'untrain' ? (rnd() < .5 ? {} : { u: pick(Object.keys(UNITS)) })
+        : a === 'unarm' ? { u: pick(Object.keys(UNITS)), n: 1 } : a === 'vbuy' || a === 'vsell' ? { v: pick(Object.keys(MB.VEH)) } : a === 'collect' ? (rnd() < .5 ? {} : { id }) : { id };
+      const before = JSON.stringify(s), res = WR.act(s, a, g, now, w);
+      if (res.ok) oks++;
+      else if (JSON.stringify(WR.norm(JSON.parse(before), now)) !== JSON.stringify(s)) { bad++; console.log('отказ изменил базу', a, g, res); }
+      const t = WR.th(s), [b0, b1] = WR.boxOf(s);
+      for (const it of s.layout) {
+        const [w2, d2] = WR.fp(it.k, it.r);
+        if (!WR.fits(s.layout, it.x, it.z, w2, d2, it.i)) { bad++; console.log('пересечение или за краем', it, [b0, b1]); }
+        if (it.k !== 'th' && it.l > t) { bad++; console.log('уровень выше штаба', it, t); }
+      }
+      for (const k of Object.keys(W)) if (!WR.isDeco(k) && WR.count(s.layout, k) > WR.limit(k, t)) { bad++; console.log('лимит', k); }
+      if (WR.busy(s, now) > WR.builders(s)) { bad++; console.log('строителей меньше, чем строек'); }
+      if (s.bricks < 0 || w.coins < 0) { bad++; console.log('минус'); }
+      for (const b of ['garage', 'helipad', 'hangar', 'dock']) if (WR.vehIn(s, b) > WR.slotsOf(s, b)) { bad++; console.log('техники больше мест', b, s.veh); }
+      if (res.ok && a === 'train' && WR.armySpace(s) > WR.armyCap(s)) { bad++; console.log('армии больше места'); }
+      for (let i = 1; i < s.queue.length; i++) if (s.queue[i].ue < s.queue[i - 1].ue + s.queue[i].t) { bad++; console.log('очередь не по порядку'); break; }
+      if (s.queue.length && s.queue[0].ue <= now) { bad++; console.log('готовый остался в очереди'); }
+      if (Object.values(s.army).some(n => !(n > 0)) || Object.values(s.veh).some(n => !(n > 0))) { bad++; console.log('ноль в армии или технике', s.army, s.veh); }
+      if (new Set(s.layout.map(it => it.i)).size !== s.layout.length || Math.max(...s.layout.map(it => it.i)) > s.seq) { bad++; console.log('номера'); }
+      if (bad > 5) break;
+    }
+  }
+  ok(bad === 0 && oks > 1500, `6000 случайных ходов базы: правила не нарушены (успешных ${oks})`);
+}
+
+// ═══ Полная база (замеры и проверки): fillLayout — всё по правилам ═══
+{
+  const WR = MB.WRules;
+  for (let t = 1; t <= 5; t++) {
+    const L = MB.fillLayout(t, t), s = { layout: L };
+    ok(L.every(it => WR.fits(L, it.x, it.z, ...WR.fp(it.k, it.r), it.i)) && L.every(it => it.k === 'th' || it.l <= t), `полная база штаба ${t}: ${L.length} построек — без пересечений, в открытой части, уровни по штабу`);
+    ok(Object.keys(MB.WDEFS).every(k => MB.WRules.isDeco(k) || WR.count(L, k) <= WR.limit(k, t)), `полная база штаба ${t}: лимиты`);
+    void s;
+  }
+}
+
+// ═══ Участки баз на карте (js/games/mir-war.js PLOTS): рамка участка, КП зоны и проезд — в занятых клетках, подвал под серединой ═══
+{
+  const MW = globalThis.MirWar, MZ = globalThis.MirZones, G = MB.GW, YAW = { s: 0, n: Math.PI, e: Math.PI / 2, w: -Math.PI / 2 };
+  ok(MW && MW.PLOTS.length === MB.WAR.per, 'в секторе — столько участков, сколько на карте (12)');
+  const inBlock = (x, z) => MB.WAR.block.some(([bx, bz, bw, bd]) => x >= bx && x <= bx + bw && z >= bz && z <= bz + bd);
+  for (const P of MW.PLOTS) {
+    const lot = { x: P.cx, z: P.cz, yaw: YAW[P.gate.side] }, cells = (wx, wz) => { const [lx, lz] = Geo.worldToLot(lot, wx, wz); return [(lx + G.HALF) / G.CELL, (lz + G.HALF) / G.CELL]; };
+    ok(Math.abs(G.HALF * 2 - (P.x1 - P.x0)) < 1e-6 && P.cells === MB.WAR.n, `${P.id}: 32 × 32 клетки по 1,6`);
+    const g = cells(P.gate.x, P.gate.z);
+    ok(Math.abs(g[0] - 16) < 1e-6 && Math.abs(g[1] - 32) < 1e-6, `${P.id}: ворота — снизу посередине (рамка «+z — к воротам»)`, g);
+    const c = P.cp, corners = [[c.x - c.w / 2, c.z - c.d / 2], [c.x + c.w / 2, c.z - c.d / 2], [c.x - c.w / 2, c.z + c.d / 2], [c.x + c.w / 2, c.z + c.d / 2]].map(([x, z]) => cells(x, z));
+    ok(corners.every(([x, z]) => inBlock(x, z)), `${P.id}: командный пункт зоны — в занятых клетках`, corners);
+    ok(inBlock(...cells(P.spawn.x, P.spawn.z)), `${P.id}: место появления у ворот — свободно от построек (занятые клетки)`);
+    const C = P.cellar;
+    ok(C && C.x1 - C.x0 >= 10 && C.z1 - C.z0 >= 10 && C.floor < -4 && C.top <= 0 && C.x0 > P.x0 + 4 && C.x1 < P.x1 - 4 && C.z0 > P.z0 + 4 && C.z1 < P.z1 - 4, `${P.id}: подвал — под серединой участка, ниже земли`);
+    for (const [x, z] of [[0, 0], [5.5, -3.2], [-20, 17]]) { const [wx, wz] = Geo.lotToWorld(lot, x, z), [bx, bz] = Geo.worldToLot(lot, wx, wz); ok(Math.abs(bx - x) < 1e-9 && Math.abs(bz - z) < 1e-9, `${P.id}: мир ↔ участок`); }
+  }
+  ok(MZ.CELLAR && MZ.CELLAR.list.length === MW.PLOTS.length && !MZ.CELLAR.on, 'подвалы в рельефе зоны — выключены, пока не легли плиты');
+  const C0 = MW.PLOTS[0].cellar, mx = (C0.x0 + C0.x1) / 2, mz = (C0.z0 + C0.z1) / 2, g0 = MZ.terrain(mx, mz), g1 = MZ.terrain(C0.x1 + 2, mz);
+  ok(g0 > C0.floor + 3, 'пока зона не построена — над подвалом обычная земля (не провалиться)', g0);
+  MZ.CELLAR.on = true;
+  ok(MZ.terrain(mx, mz) === C0.floor && MZ.terrain(C0.x1 + 2, mz) === g1, 'плита легла — пол подвала ниже, вокруг — как было');
+  MZ.CELLAR.on = false;
+  ok(MZ.terrain(mx, mz) === g0, 'зону выгрузили — снова обычная земля');
+}
+
+// ═══ Отрисовка построек военной базы: каждая каждого уровня (свои — WDRAW, общие — DRAW), стены базы ═══
+{
+  const { DRAW, WDRAW, WALL_WST } = MB._draw;
+  const V3 = () => ({ x: 0, y: 0, z: 0, set(x, y, z){ this.x = x; this.y = y; this.z = z; return this; } });
+  class Gr { constructor(){ this.children = []; this.position = V3(); this.scale = V3(); this.rotation = V3(); this.userData = {}; } add(c){ this.children.push(c); } }
+  const x0 = () => ({ T: { Group: Gr }, R: { prefab: () => new Gr(), mat: () => ({}), water: () => new Gr() }, war: true, color: '#22c55e', glass: {}, tvMat: {}, boardMat: {} });
+  const fin = v => v === undefined || (typeof v === 'number' && Number.isFinite(v));
+  for (const [k, D] of Object.entries(MB.WDEFS)) {
+    if (k === 'wall') continue;
+    const fn = WDRAW[k] || DRAW[k];
+    ok(typeof fn === 'function', `база ${k}: есть отрисовка`);
+    if (typeof fn !== 'function') continue;
+    for (let l = 1; l <= D.lv; l++) {
+      const parts = [], bd = [], x = x0();
+      let h, err = null;
+      try { h = fn((g, o) => { parts.push(o); return new Gr(); }, new Gr(), { i: 1, k, x: 2, z: 2, r: 0, l }, bd, x); } catch (e) { err = e.message; }
+      ok(!err, `база ${k} ${l} ур.: рисуется`, err);
+      ok(parts.every(o => ['x', 'y', 'z', 'w', 'h', 'd', 'r', 'r2', 'sy', 'yaw', 'rx', 'rz'].every(f => fin(o[f]))) && parts.every(o => ['box', 'cyl', 'cone', 'ball', 'ico'].includes(o.s || 'box')), `база ${k} ${l} ур.: детали — числа и те, что умеет движок`);
+      ok(h === undefined || (Number.isFinite(h) && h > 0 && h < 20), `база ${k} ${l} ур.: высота`, h);
+      ok(bd.every(b => (b.t === 'cyl' ? b.r > 0 : b.w > 0 && b.d > 0) && b.h > 0 && fin(b.y0)), `база ${k} ${l} ур.: тела`, bd);
+      const half = Math.max(D.w, D.d) * 1.6 / 2 + .35;
+      ok(parts.every(o => Math.abs(o.x || 0) <= half + (o.w || o.r || 0) && Math.abs(o.z || 0) <= half + (o.d || o.r || 0)) || k === 'hangar', `база ${k} ${l} ур.: детали не вылезают далеко за клетки`);
+    }
+  }
+  for (let l = 1; l <= 5; l++) { const parts = [], bd = []; MB._draw.drawWall((g, o) => { parts.push(o); return new Gr(); }, new Gr(), { i: 1, k: 'wall', l }, bd, [[1, 0], [0, 1]], WALL_WST); ok(parts.length >= 3 && bd.length === 3 && parts.every(o => ['x', 'y', 'z', 'w', 'h', 'd'].every(f => fin(o[f]))), `стена базы ${l} ур.: столб и две перемычки`); }
+  const wh = [1, 2, 3, 4, 5].map(l => MB._draw.drawWall(() => new Gr(), new Gr(), { i: 1, k: 'wall', l }, [], [], WALL_WST));
+  ok(wh.every((h, i) => i === 0 || h >= wh[i - 1]), 'стена базы выше с уровнем');
+  const bd2 = []; WDRAW.th(() => new Gr(), new Gr(), { i: 1, k: 'th', l: 1 }, bd2, x0()); ok(bd2.some(b => b.cam), 'штаб держит камеру (в него не заглянуть насквозь)');
 }
 
 console.log(`${pass} ок, ${fail} ошибок`);

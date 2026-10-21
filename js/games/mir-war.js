@@ -81,9 +81,12 @@
       hangar: { ...at(38, 14), yaw: inYaw },  // ангар (вертолёты, дроны; самолёты — на свою стоянку аэродрома)
       dock: coast ? { x: r2(x0 - 14), z: cz, yaw: -PI / 2, own: true } : { ...BERTHS[berthN++], own: false },
       airSlot: AIR.slots[i],
-      under: { x0: r2(x0 + 6), x1: r2(x1 - 6), z0: r2(z0 + 6), z1: r2(z1 - 6), top: -.4, floor: -7.2 },   // подвал / бункер базы
+      under: { x0: r2(x0 + 6), x1: r2(x1 - 6), z0: r2(z0 + 6), z1: r2(z1 - 6), top: -.4, floor: -7.2 },   // место под подвалы
+      cellar: { x0: r2(cx - 7), x1: r2(cx + 7), z0: r2(cz - 7), z1: r2(cz + 7), top: -.3, floor: -6 },     // штабной зал под базой (люк — постройка «Бункер»)
     };
   });
+  // подвалы — в рельеф зоны (пол ниже земли — когда над ними лежит плита: MZ.CELLAR.on ставит постройка участков)
+  if (MZ.CELLAR) { MZ.CELLAR.list.length = 0; for (const P of PLOTS) MZ.CELLAR.list.push(P.cellar); }
   const inPlot = (x, z, m = 0) => PLOTS.some(P => x >= P.x0 - m && x <= P.x1 + m && z >= P.z0 - m && z <= P.z1 + m);
 
   const ROBOT = { hp: 40, max: 3, area: { x0: -118, x1: -88, z0: 236, z1: 280 } };
@@ -411,11 +414,14 @@
       const bx = r2(G.x + lx * 7.6 + ox * .6), bz = r2(G.z + lz * 7.6 + oz * .6); yield;
       K.board(bx, 2.15, bz, 4.2, 1.2, G.yaw, `🏯 ${P.name} · ${P.code}`, { bg: '#3f6212' }); yield;
       K.box(bx - ox * .1, 0, bz - oz * .1, .16, 1.5, .16, '#57534e', { solid: true }); yield;
-      K.item({ x: bx + ox * .9, y: 1.4, z: bz + oz * .9, r: 1.6, prompt: () => `🏯 ${P.name}: участок свободен`, act: () => K.rt.war?.plotInfo(P) }); yield;
+      K.item({ x: bx + ox * .9, y: 1.4, z: bz + oz * .9, r: 1.6, prompt: () => K.rt.S?.base?.war?.signPrompt?.(P) || `🏯 ${P.name}: участок свободен`, act: () => K.rt.S?.base?.war?.signAct?.(P) || K.rt.war?.plotInfo(P) }); yield;
+      // плита над подвалом базы: по ней ходят (под ней — штабной зал)
+      K.body({ x: (P.cellar.x0 + P.cellar.x1) / 2, z: (P.cellar.z0 + P.cellar.z1) / 2, y: -.15, hx: (P.cellar.x1 - P.cellar.x0) / 2 + .3, hy: .15, hz: (P.cellar.z1 - P.cellar.z0) / 2 + .3, tag: 'slab', data: { floor: 'concrete' } }); yield;
       // командный пункт (из деталей с номерами — как всё в зоне)
       K.mbuilding({ id: P.id + '_cp', x: P.cp.x, z: P.cp.z, w: P.cp.w, d: P.cp.d, h: 3.2, wall: '#a8a29e', trim: '#3f6212', roofC: WB(P.id + '_cp').roof, floorC: '#a8a29e', floorType: 'concrete',
         doors: [{ side: P.cp.door, at: 0, w: 1.6 }], windows: [{ side: P.cp.win, at: 0, w: 1.6, h: 1 }], sign: '🏯 КП', signBg: '#3f6212' }); yield;
     }
+    if (MZ.CELLAR) MZ.CELLAR.on = true;   // плиты легли — подвалы открыты
     yield;
     K.flush(); yield;
     K.done = true; yield;
@@ -587,7 +593,7 @@
     // цели: чужие игроки (враги), свои роботы
     function targets(){
       const L = [];
-      for (const p of S.players.values()) if (!p.leaving && p.zx?.h > 0 && MZ.inRect(WZ, p.ch.x, p.ch.z) && !(W.team && p.zx.t === W.team)) L.push({ kind: 'p', p, x: p.ch.x, y: p.ch.y, z: p.ch.z });
+      for (const p of S.players.values()) if (!p.leaving && !p.wbHide && p.zx?.h > 0 && MZ.inRect(WZ, p.ch.x, p.ch.z) && !(W.team && p.zx.t === W.team)) L.push({ kind: 'p', p, x: p.ch.x, y: p.ch.y, z: p.ch.z });
       for (const r of W.robots) if (r.hp > 0) { const a = rob.A.get(r.key); if (a) L.push({ kind: 'r', r, x: a.x, y: a.y, z: a.z }); }
       return L;
     }
@@ -908,13 +914,13 @@
       H.panel('<span class="wld-pe">⚠️</span><b>Боевая зона · 12+</b>', `<p>Здесь можно сражаться мультяшным оружием — только внутри ограды. Вышел за ворота — бой закончился, оружие убрано.</p>
         <p>🔫 1 — пенный бластер, 🎯 2 — пейнтбол, 💧 3 — водяная бомба, 🗡️ 4 — поролоновый меч, 🫧 5 — щит-пузырь. F, правый курок или 👊 — огонь.</p>
         <p>Выбили — через 5 с снова в бою (3 с защиты). Режимы: каждый сам за себя, команды, захват точек 🚩 A·B·C.</p>
-        <p>Наёмники — в палатке у КПП (30 🪙, до 2). Вокруг центра — 12 участков военных баз 🏯 (скоро — своя база и главарь). Бункер — под землёй в центре (лестница с востока), порт — на юго-западе, аэродром — на юге, вертолёты — в лагере у КПП.</p>`);
+        <p>Наёмники — в палатке у КПП (30 🪙, до 2). Вокруг центра — 12 участков военных баз 🏯: у таблички свободного участка основай свою базу и стань главарём (кнопка 🏯 — меню базы). Бункер — под землёй в центре (лестница с востока), порт — на юго-западе, аэродром — на юге, вертолёты — в лагере у КПП.</p>`);
     }
     // участок военной базы: что будет (систему баз делает агент набегов — здесь только разметка)
     function plotInfo(P){
       H.panel(`<span class="wld-pe">🏯</span><b>${esc(P.name)} · участок ${esc(P.code)}</b>`, `<p>Участок военной базы: ${P.cells} × ${P.cells} клетки по ${String(P.cell).replace('.', ',')} м${P.coast ? ', свой берег — под доки и корабли' : ', причал в порту'}, стоянка на аэродроме, место под подвал и бункер.</p>
-        <p><b>Скоро:</b> основать базу и стать главарём, звать друзей со званиями, строить ангары, гаражи, доки, вертолётные площадки, казарму, оборону, изучать своё дерево технологий. Набеги и оборона переедут сюда.</p>
-        <p><small>Сейчас участок свободен — на нём только ограда, щит и командный пункт.</small></p>`);
+        <p>Основай базу и стань главарём: зови друзей ссылкой (офицеры и бойцы), строй казарму, оборону, гараж, вертолётную площадку, ангар, причал, бункер. Набеги — на другие базы (⚔️ «Набеги»).</p>
+        <p><small>Военные базы откроются, когда сайт обновится.</small></p>`);
     }
     function armory(){ if (!W.inZone) return; W.hp = HP; rt.setZX({ h: 10 }); drawHud(); toast('🩹 Аптечка: ❤️ 100. Заряд полный!', true); rt.sfx('pickup'); }
     function click(a){

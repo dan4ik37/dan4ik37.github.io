@@ -176,7 +176,11 @@
   const worldMap = () => WM || (root.D37E?.worldMap ? (WM = root.D37E.worldMap(mapLayout())) : null);
   const addHole = r => { if (r && !HOLES.some(h => h.x0 === r.x0 && h.z0 === r.z0)) HOLES.push(r); };
   // Рельеф: гавань (дно SEA.floor, у берега отвесная набережная), бункер (пол ниже земли), канал Большого города, дальше — карта
-  const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : inRect(CANAL, x, z) ? CANAL.floor : (worldMap()?.ground(x, z) ?? 0);
+  // Подвалы военных баз (mir-war.js PLOTS[].cellar; бункер базы — mir-base.js): пол ниже земли — только когда сверху уже лежит плита
+  // участка (зона построена: CELLAR.on), иначе — обычная земля (никто не провалится, пока зона строится). Рельеф там рисуется как был
+  const CELLAR = { on: false, list: [] };
+  const cellarAt = (x, z) => { if (!CELLAR.on || !inRect(ZONES.war, x, z)) return null; for (const c of CELLAR.list) if (inRect(c, x, z)) return c.floor; return null; };
+  const terrain = (x, z) => inRect(SEA, x, z) ? SEA.floor : inRect(BUNKER, x, z) ? BUNKER.floor : inRect(CANAL, x, z) ? CANAL.floor : cellarAt(x, z) ?? (worldMap()?.ground(x, z) ?? 0);
   const water = (x, z) => inRect(SEA, x, z) ? SEA.wl : inRect(CANAL, x, z) ? CANAL.wl : (worldMap()?.water(x, z) ?? -Infinity);
   // ═══ Жители по расписанию (задел «города-симулятора»): у каждого — дом, работа, любимый магазин из таблицы зданий зоны.
   //     По часам мира (E.dayClock — у всех одинаково): ночью дома (не видно), утром — по дороге, днём — у работы, вечером — у
@@ -1335,6 +1339,7 @@
   function start(S, H){
     const E = root.D37E, R = S.R, T = R.T, ph = S.ph, X = S.X;
     const rt = { S, H, R, T, ph, X, E, zones: new Map(), area: null, zx: {}, zxSig: '', mods: [], t: 0, stopped: false, safe: null, modal: null, gateFor: null };
+    CELLAR.on = false;   // плиты над подвалами баз — с постройкой боевой зоны (mir-war.js)
     const now = () => performance.now();
     const toast = (t, ok) => S.H?.toast(t, ok);
     rt.toast = toast;
@@ -2249,6 +2254,7 @@
       drawNpcTags();
     };
     rt.dispose = () => {
+      CELLAR.on = false;
       try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
       try { rt.wmv?.dispose?.(S.ph); } catch (e) { console.error(e); } rt.wmv = null;
       try { rt.destruct?.dispose(); } catch (e) { console.error(e); } rt.destruct = null; BRK.clear();
@@ -2310,7 +2316,7 @@
     ADULT_AGE, WAR_AGE, ZONES, ZLIST, RESERVE, SEA, BUNKER, CANAL, EXPAND, AREAS, ROADS, PADS, PAD_R, PLACES0, FAMILY, PAY, DEFS, ROLES, ACTS,
     BTYPES, FLOOR_H, TILE, FACADES, PIECES, roofColor, lotsOf, buildings, building, modular, pieceGroup, facadeMat, accessRules: MZ_ACCESS,
     def, inRect, distRect, rectsOverlap, zoneAt, areaAt, roadDist, segDist, bounds, groundRect, blocked, hillOk, terrain, water, gateOf, cleanZX, residents, residentAt, BIG_GATES,
-    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES, BRK, brkHide, TOUGH,
+    MAP, mapBounds, mapLayout, worldMap, clusterRect, addHole, HOLES, BRK, brkHide, TOUGH, CELLAR, cellarOn: () => CELLAR.on,
     payState, payAdd, places, drawMap, fullView, merge, atlas, kit, build, groundHoles, start, district, esc,
     LOAD_D, SHOW_D, HIDE_D,
   };
