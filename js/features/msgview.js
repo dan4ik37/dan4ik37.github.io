@@ -13,7 +13,7 @@
 //   canPin(m), canDel(m), modActions(m) → [[k, текст]], mod(k, m), userMod(uid, nick) → [[k, текст]], onJoin()
 // Сообщение: { id, uid, nick, text, at, reply, edited, deleted, hidden, sticker, role, vip, reactions, pinned, sys, mine }
 // Ссылки на сайт превращаются в карточки: ролик /v/<id>, игра /games/<id>, комната #/games/<id>/<код> («позвать в игру»),
-// игра игрока /g/<id>, приглашение в сообщество #/c/<код>, событие #/chat/ev/<id> (community2.sql: «✅ Пойду» прямо в карточке),
+// игра игрока /g/<id>, приглашение в сообщество #/c/<код>, событие #/chat/ev/<id> (community.sql: «✅ Пойду» прямо в карточке),
 // эфир #/chat/twitch (так пишет «Денчик-бот»). Чужие ссылки — «[ссылка]», мат закрывается (как в мире).
 (() => {
   const P = window.D37Phone;
@@ -151,7 +151,7 @@
     if (c.t === 'invite') { const i = invCache.get(c.code); return `<div class="mv-card mv-inv" data-inv="${e(c.code)}"><i>${e(i?.icon || '🏰')}</i><span><b>${i ? e(i.name) : 'Приглашение в сообщество'}</b><small>${i ? `${i.members} ${P.plural(i.members, 'участник', 'участника', 'участников')}${i.about ? ' · ' + e(i.about.slice(0, 60)) : ''}` : 'Сообщество на сайте dan4ik37'}</small></span><a class="mv-cbtn" href="#/c/${e(c.code)}">Вступить</a></div>`; }
     return '';
   };
-  // ── События (community2.sql): карточка в ленте, «✅ Пойду» прямо в ней ──
+  // ── События (community.sql): карточка в ленте, «✅ Пойду» прямо в ней ──
   // evCache: id → событие (как cm_event_get) | false (нет, отменено или не видно); пусто — ещё грузим
   const evCache = new Map();
   MV.evSet = ev => { if (ev && ev.id) evCache.set(+ev.id, ev); };
@@ -165,7 +165,8 @@
     const d = new Date(s), t = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const d0 = new Date(); d0.setHours(0, 0, 0, 0);
     const days = Math.round((new Date(s).setHours(0, 0, 0, 0) - d0) / 864e5);
-    if (days === 0) return s - now < 3600e3 ? `через ${Math.max(1, Math.round((s - now) / 60e3))} мин` : `сегодня в ${t}`;
+    if (s - now < 3600e3) return `через ${Math.max(1, Math.round((s - now) / 60e3))} мин`;   // и через полночь — не «завтра в 00:10»
+    if (days === 0) return `сегодня в ${t}`;
     if (days === 1) return `завтра в ${t}`;
     return d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + t;
   };
@@ -235,9 +236,9 @@
 
   // ── Цвет и значки автора ──
   const ROLE = { admin: ['ADMIN', '255,45,85'], moderator: ['MOD', '145,71,255'], helper: ['HELPER', '34,197,94'], bot: ['🤖 БОТ', '88,101,242'], owner: ['👑', '250,204,21'], mod: ['🛡', '96,165,250'] };
-  // «Денчик-бот» (community2.sql → bot_post): роль 'bot' ставит только сервер — браузер её подделать не может (vip-balance.sql)
+  // «Денчик-бот» (community.sql → bot_post): роль 'bot' ставит только сервер — браузер её подделать не может (vip-balance.sql)
   const isBot = m => !!m && m.role === 'bot' && !m.uid;
-  // rc — цвет своей роли в сообществе (community3.sql): после ролей сайта, раньше VIP
+  // rc — цвет своей роли в сообществе (community.sql): после ролей сайта, раньше VIP
   function authorStyle(m, rc){
     const p = m.uid ? P.prof(m.uid) : null;
     const role = m.role && ROLE[m.role] ? m.role : p?.role && ROLE[p.role] ? p.role : null;
