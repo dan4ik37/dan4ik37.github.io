@@ -1435,6 +1435,7 @@
       on(cv, 'pointerdown', e => { if (e.pointerType === 'mouse' && e.button === 2) act('eject', e.timeStamp); });
       on(cv, 'contextmenu', e => e.preventDefault());
       on(window, 'keydown', onKey); on(window, 'keyup', onKey);
+      on(window, 'blur', () => { keys.u = keys.d = keys.l = keys.r = 0; });   // клавиша, отпущенная в другом окне, не «залипает»
       on(window, 'resize', resize);
       on(document, 'visibilitychange', () => S?.hidden(document.hidden));
       on(window, 'd37:fullscreen', () => setTimeout(resize, 60));
