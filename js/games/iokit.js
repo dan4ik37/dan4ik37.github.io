@@ -733,7 +733,8 @@
   }
   async function share(game, code, title, toast){
     const url = linkFor(game, code), text = `Залетай ко мне в «${title}»! Комната ${code}`;
-    if (root.navigator?.share) { try { await navigator.share({ title, text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }
+    const touch = (() => { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } })();
+    if (touch && root.navigator?.share) { try { await navigator.share({ title, text, url }); return; } catch (e) { if (e?.name === 'AbortError') return; } }   // телефон — «Поделиться», ПК — в буфер
     try { await navigator.clipboard.writeText(url); toast?.('🔗 Ссылка скопирована — отправь другу'); }
     catch (e) { try { prompt('Скопируй ссылку и отправь другу:', url); } catch (er) {} }
   }
@@ -803,13 +804,16 @@
     return `${pub ? '🌐 общая арена' : '🔗 ' + S.code} · 👥 ${S.humans()}${m === 'relay' || m === 'connecting' ? ' · 🐢' : ''}${S.role === 'guest' && S.rtt ? ` · ${Math.round(S.rtt)} мс` : ''}`;
   }
   // Итог жизни: рекорд и XP (онлайн — от 2 людей в комнате), монеты — очки/100, до 10 (coin_run_cap)
+  // Вне кадра: report() сайта сразу строит рекламу под игрой и плашку «Поддержать» — на телефоне это ~100 мс, кадр бы дёрнулся
   function reportLife(api, game, S, best, win){
     if (!api) return;
     best = Math.max(0, Math.round(best || 0));
     const online = S && S.role !== 'off' && S.humans() >= 2;
-    try { api.report?.(online ? game + '_online' : game, !!win, best, best); } catch (e) {}
-    const coins = Math.min(10, Math.floor(best / 100));
-    if (coins > 0 && root.D37Coins) { try { root.D37Coins.run(game, coins, game.slice(0, 3) + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36))?.catch?.(() => {}); } catch (e) {} }
+    setTimeout(() => {
+      try { api.report?.(online ? game + '_online' : game, !!win, best, best)?.catch?.(() => {}); } catch (e) {}
+      const coins = Math.min(10, Math.floor(best / 100));
+      if (coins > 0 && root.D37Coins) { try { root.D37Coins.run(game, coins, game.slice(0, 3) + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36))?.catch?.(() => {}); } catch (e) {} }
+    }, 30);
   }
 
   // ═══ CSS (общий для обеих игр; грузится вместе с ними) ═══

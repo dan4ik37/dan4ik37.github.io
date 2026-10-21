@@ -400,8 +400,8 @@
   }
   // Мягкий край: центр можно увести к краю, пока клетка видна наполовину, дальше — пружина назад
   function edge(X, V, B, s, lim){
-    if (X[s] > lim) { X[s] -= (X[s] - lim) * .5; if (V[s] > 0) V[s] *= .5; if (B[s] > 0) B[s] *= -.3; }
-    else if (X[s] < -lim) { X[s] -= (X[s] + lim) * .5; if (V[s] < 0) V[s] *= .5; if (B[s] < 0) B[s] *= -.3; }
+    if (X[s] > lim) { X[s] -= (X[s] - lim) * .5; if (V[s] > 0) V[s] *= .5; if (B[s] > 0) B[s] *= -.3; if (X[s] > H) X[s] = H; }   // рывок деления у края — центр всё равно не за краем
+    else if (X[s] < -lim) { X[s] -= (X[s] + lim) * .5; if (V[s] < 0) V[s] *= .5; if (B[s] < 0) B[s] *= -.3; if (X[s] < -H) X[s] = -H; }
   }
   function moveVirBlobs(W){
     const VK = Math.exp(-3 * DT), BK = Math.exp(-6 * DT);
@@ -463,6 +463,12 @@
         const ma = W.cM[a], mb = W.cM[b], nx = dx / d, ny = dy / d, ka = ov * mb / (ma + mb) * .5, kb = ov * ma / (ma + mb) * .5;
         W.cX[a] -= nx * ka; W.cY[a] -= ny * ka; W.cX[b] += nx * kb; W.cY[b] += ny * kb;
       }
+    }
+    // куски, расталкиваясь у края, не выдавливают друг друга за арену
+    for (let k = 0; k < W.cN; k++) {
+      const s = W.cL[k];
+      if (W.cX[s] > H) W.cX[s] = H; else if (W.cX[s] < -H) W.cX[s] = -H;
+      if (W.cY[s] > H) W.cY[s] = H; else if (W.cY[s] < -H) W.cY[s] = -H;
     }
   }
   function eatPellets(W){

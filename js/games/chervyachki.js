@@ -71,7 +71,8 @@
       // сетки
       gH: new Int32Array(GN * GN), gNext: new Int32Array(PCAP), gO: new Int8Array(PCAP), gX: new Float32Array(PCAP), gY: new Float32Array(PCAP), gCnt: 0,
       fgH: new Int16Array(FGN * FGN), fgN: new Int16Array(FCAP),
-      lbO: new Int8Array(10), lbS: new Float64Array(10), lbN: 0, lbMark: new Uint8Array(MAXO) };
+      lbO: new Int8Array(10), lbS: new Float64Array(10), lbN: 0, lbMark: new Uint8Array(MAXO),
+      eq: new Float32Array(256 * 4), eqN: 0 };
     for (let i = 0; i < FCAP; i++) W.fF[W.fFN++] = FCAP - 1 - i;
     W.gH.fill(-1); W.fgH.fill(-1);
     W.pSeed = (rnd(W) * 2147483647) | 0;
@@ -321,6 +322,7 @@
           if (dx * dx + dy * dy >= re * re) continue;
           W.pAl[p] = 0; W.pGen[p] = (W.pGen[p] + 1) & 7; W.pAt[p] = W.step + 75 + ((rnd(W) * 150) | 0); W.zv[(p / KS) | 0]++;
           o.L = Math.min(MAX_L, o.L + W.pV[p]);
+          eaten(W, W.pX[p], W.pY[p], (p * 5 + ((W.pGen[p] - 1) & 7)) & 15, i);
         }
       }
       let gx0 = Math.floor((x - re + R) / FGC), gx1 = Math.floor((x + re + R) / FGC), gy0 = Math.floor((y - re + R) / FGC), gy1 = Math.floor((y + re + R) / FGC);
@@ -331,9 +333,12 @@
         if (dx * dx + dy * dy >= re * re) continue;
         W.fDead[s] = 1;
         o.L = Math.min(MAX_L, o.L + W.fV[s]);
+        eaten(W, W.fX[s], W.fY[s], W.fC[s], i);
       }
     }
   }
+  // Съеденное — в кольцо для рисунка («втягивается» в голову): только картинка, на мир не влияет
+  function eaten(W, x, y, c, by){ const k = (W.eqN++ & 255) * 4; W.eq[k] = x; W.eq[k + 1] = y; W.eq[k + 2] = c; W.eq[k + 3] = by; }
   // Сетка точек тел (каждая 2-я точка, без «шеи» у головы); защищённые (только появились) — «призраки»
   function pointGrid(W){
     W.gH.fill(-1);
@@ -741,6 +746,7 @@
     if (G.onGone) G.onGone(G.fX[s], G.fY[s], G.fC[s], now);
   }
   function setPellet(G, p, alive, gen){
+    if (G.pAl[p] && !alive && G.onGone) G.onGone(G.pX[p], G.pY[p], (p * 5 + G.pGen[p]) & 15, 0, -1);
     if (G.pGen[p] !== gen) { G.pGen[p] = gen; pelletXY(G.pSeed, p, gen, G.pX, G.pY, p); }
     G.pAl[p] = alive;
   }
@@ -846,7 +852,8 @@
   const DASH = [0, 0], NODASH = [];
   let me = { x: 0, y: 0, L: L0, alive: false, a: 0 };
   // «Втянутая» еда у гостя — короткий след к ближайшей голове (пул)
-  const FX = { n: 0, x: new Float32Array(64), y: new Float32Array(64), c: new Uint8Array(64), t: new Float64Array(64) };
+  const FX = { n: 0, x: new Float32Array(96), y: new Float32Array(96), c: new Uint8Array(96), t: new Float64Array(96), o: new Int8Array(96) };
+  let eqRead = 0;
   // Спрайты огоньков (по цвету, рисуются один раз)
   let GLOW = null;
   function glowSprites(){
@@ -947,10 +954,15 @@
       names[i] = o ? K.showName(o.name) : ''; skins[i] = o ? o.skin : null; bots[i] = o && o.bot ? 1 : 0;
     }
   }
-  function gone(x, y, c, now){
-    if (FX.n >= 64) return;
+  function gone(x, y, c, now, by){
+    if (FX.n >= 96) return;
+    if (by === undefined || by < 0) {   // гость: кто съел — ближайшая голова (не дальше 90)
+      by = -1; let bd = 90 * 90;
+      for (let j = 0; j < MAXO; j++) { if (!HXok[j]) continue; const dx = HX[j] - x, dy = HY[j] - y, d = dx * dx + dy * dy; if (d < bd) { bd = d; by = j; } }
+      if (by < 0) return;
+    }
     const k = FX.n++;
-    FX.x[k] = x; FX.y[k] = y; FX.c[k] = c; FX.t[k] = now;
+    FX.x[k] = x; FX.y[k] = y; FX.c[k] = c; FX.t[k] = now || performance.now(); FX.o[k] = by;
   }
 
   // ── События ──
@@ -1069,9 +1081,10 @@
     soundL = me.L;
   }
   // Хозяин: голова — между шагами; тело — по пути
-  const HX = new Float64Array(MAXO), HY = new Float64Array(MAXO);
+  const HX = new Float64Array(MAXO), HY = new Float64Array(MAXO), HXok = new Uint8Array(MAXO);
   function prepHost(W, al){
-    for (let i = 0; i < MAXO; i++) { const o = W.owners[i]; if (o && o.alive) { HX[i] = o.hx0 + (o.x - o.hx0) * al; HY[i] = o.hy0 + (o.y - o.hy0) * al; } }
+    if (eqRead > W.eqN || W.eqN - eqRead > 512) eqRead = W.eqN;   // новый мир / долго не рисовали — старое не показываем
+    for (let i = 0; i < MAXO; i++) { const o = W.owners[i]; HXok[i] = o && o.alive ? 1 : 0; if (HXok[i]) { HX[i] = o.hx0 + (o.x - o.hx0) * al; HY[i] = o.hy0 + (o.y - o.hy0) * al; } }
     const o = W.owners[S.me];
     if (o && o.alive) { me.x = HX[S.me]; me.y = HY[S.me]; me.L = o.L; me.alive = true; me.a = o.a; }
     else { me.alive = false; if (o) { me.x = o.deadX; me.y = o.deadY; } }
@@ -1082,7 +1095,8 @@
   function prepGuest(G, t, dtf){
     const al = clamp((t - G.t1) / (G.span || 66), 0, 1);
     for (let j = 0; j < MAXO; j++) {
-      if (!G.on[j] || !G.qn[j]) continue;
+      HXok[j] = G.on[j] && G.qn[j] ? 1 : 0;
+      if (!HXok[j]) continue;
       const base = j * MQ, h = G.qh[j];
       const x = G.hfx[j] + (G.qx[base + h] - G.hfx[j]) * al, y = G.hfy[j] + (G.qy[base + h] - G.hfy[j]) * al;
       G.rx[j] = x; G.ry[j] = y; HX[j] = x; HY[j] = y;
@@ -1207,11 +1221,13 @@
       const r = (7 + Math.sqrt(V.fV[s]) * 4.5) * z * (1 + Math.sin(t * .006 + s) * .12);
       if (spr) c.drawImage(spr[V.fC[s] & 15], ox + x * z - r, oy + y * z - r, r * 2, r * 2);
     }
-    // втянутая еда (гость)
+    // съеденное «втягивается» в голову того, кто съел
+    if (!guest) { while (eqRead < V.eqN) { const q = (eqRead & 255) * 4; if (V.eqN - eqRead <= 256) gone(V.eq[q], V.eq[q + 1], V.eq[q + 2], t, V.eq[q + 3]); eqRead++; } }
     for (let k = 0; k < FX.n; k++) {
-      const a = (t - FX.t[k]) / 180;
-      if (a >= 1) { FX.n--; FX.x[k] = FX.x[FX.n]; FX.y[k] = FX.y[FX.n]; FX.c[k] = FX.c[FX.n]; FX.t[k] = FX.t[FX.n]; k--; continue; }
-      if (spr) { const r = 10 * z * (1 - a); c.globalAlpha = 1 - a; c.drawImage(spr[FX.c[k]], ox + FX.x[k] * z - r, oy + FX.y[k] * z - r, r * 2, r * 2); c.globalAlpha = 1; }
+      const a = (t - FX.t[k]) / 160, j = FX.o[k];
+      if (a >= 1 || a < 0 || !HXok[j]) { FX.n--; FX.x[k] = FX.x[FX.n]; FX.y[k] = FX.y[FX.n]; FX.c[k] = FX.c[FX.n]; FX.t[k] = FX.t[FX.n]; FX.o[k] = FX.o[FX.n]; k--; continue; }
+      const e = a * a, x = FX.x[k] + (HX[j] - FX.x[k]) * e, y = FX.y[k] + (HY[j] - FX.y[k]) * e;
+      if (spr) { const r = 9 * z * (1 - a * .7); c.globalAlpha = 1 - a * .6; c.drawImage(spr[FX.c[k]], ox + x * z - r, oy + y * z - r, r * 2, r * 2); c.globalAlpha = 1; }
     }
     // червячки: короткие снизу, длинные сверху
     const order = ORD;
