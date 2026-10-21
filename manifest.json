@@ -29,13 +29,13 @@
     { "src": "/img/app/shot-narrow-kosynka.webp", "sizes": "1080x1920", "type": "image/webp", "form_factor": "narrow", "label": "Пасьянсы, судоку, 2048 — даже без интернета" }
   ],
   "shortcuts": [
-    { "name": "Мир Денчика", "short_name": "Мир", "description": "Онлайн-мир в 3D", "url": "/#/games/world",
+    { "name": "Мир Денчика", "short_name": "Мир", "description": "Онлайн-мир в 3D", "url": "/play/world",
       "icons": [{ "src": "/img/app/sc-world.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-world-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
-    { "name": "Чат", "short_name": "Чат", "description": "Чат сайта, сообщества и Twitch", "url": "/#/chat",
+    { "name": "Чат", "short_name": "Чат", "description": "Чат сайта, сообщества и Twitch", "url": "/chat",
       "icons": [{ "src": "/img/app/sc-chat.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-chat-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
-    { "name": "Игры", "short_name": "Игры", "description": "Онлайн-игры с друзьями", "url": "/#/games",
+    { "name": "Игры", "short_name": "Игры", "description": "Онлайн-игры с друзьями", "url": "/play",
       "icons": [{ "src": "/img/app/sc-games.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-games-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
-    { "name": "Слово дня — 5 букв", "short_name": "Слово дня", "description": "Новое слово каждый день", "url": "/#/games/words",
+    { "name": "Слово дня — 5 букв", "short_name": "Слово дня", "description": "Новое слово каждый день", "url": "/play/words",
       "icons": [{ "src": "/img/app/sc-words.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-words-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] },
     { "name": "Магазин кристаллов", "short_name": "Магазин", "description": "💎 Кристаллы и VIP", "url": "/#/shop",
       "icons": [{ "src": "/img/app/sc-shop.png", "sizes": "192x192", "type": "image/png" }, { "src": "/img/app/sc-shop-m.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }] }
