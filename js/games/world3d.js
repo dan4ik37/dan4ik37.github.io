@@ -224,15 +224,20 @@
   const EAT_P = [-2.32, 0, -.48, -.01, 1];
   const hsm = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
   const HJ = [[J.ARX, J.ARY, J.ARZ, J.ER], [J.ALX, J.ALY, J.ALZ, J.EL]];
-  // плечо руки s (0 — armR, 1 — armL) — к углам A (a, b, c, e) с весом w; armL — зеркально
-  function holdArm(Pt, s, A, w){
+  // дробные числа — через типизированный массив, а не аргументами (иначе на вызове без встраивания каждое — новый объект-число):
+  // HN[0] dt, HN[1] t, HN[2] вес эмоции, HN[3] вес руки (holdArm)
+  const HN = new Float64Array(4);
+  // плечо руки s (0 — armR, 1 — armL) — к углам A (a, b, c, e) с весом HN[3]; armL — зеркально
+  function holdArm(Pt, s, A){
+    const w = HN[3];
     if (!A || w <= 0) return;
     const j = HJ[s], m = s ? -1 : 1;
     Pt[j[0]] += (A[0] - Pt[j[0]]) * w; Pt[j[1]] += (A[1] * m - Pt[j[1]]) * w; Pt[j[2]] += (A[2] * m - Pt[j[2]]) * w; Pt[j[3]] += (A[3] - Pt[j[3]]) * w;
   }
   const HA = new Float32Array(5), HB = new Float32Array(5);
   // Слой: держит (плавно при смене вещи — ch.hdS), щит, лук, еда; движение — по фазе (без сглаживания: фаза идёт от боя)
-  function holdLayer(ch, Pt, dt, t, H, snap, cat, emw){
+  function holdLayer(ch, Pt, H, snap, cat){
+    const dt = HN[0], t = HN[1], emw = HN[2];
     let S = ch.hdS;
     if (!S) S = ch.hdS = { w: new Float32Array(2), c: new Int8Array(2), on: 0 };
     const cap = (cat === 0 || cat === 6 || cat === 7 ? 1 : 0) * (1 - emw);   // земля, прыжок, сидит; эмоция — руки ей
@@ -249,7 +254,7 @@
       let A = P0;
       if (two) { A = s ? BOW_L : BOW_R; const d = H.d || 0; for (let i = 0; i < 4; i++) HA[i] = (s ? HOLD_P[12] : BOW_IDLE_R)[i] + (A[i] - (s ? HOLD_P[12] : BOW_IDLE_R)[i]) * hsm(d); if (s) HA[0] -= (H.p || 0) * hsm(d); else HA[0] -= (H.p || 0) * .6 * hsm(d); A = HA; }
       else if (S.c[s] === 11 && H.g > 0) { const g = hsm(H.g); for (let i = 0; i < 4; i++) HA[i] = P0[i] + (GUARD_P[i] - P0[i]) * g; HA[0] -= (H.p || 0) * .5 * g; A = HA; }
-      holdArm(Pt, js, A, S.w[s] * (two ? 1 : P0[4]) * k);
+      HN[3] = S.w[s] * (two ? 1 : P0[4]) * k; holdArm(Pt, js, A);
     }
     // плечи: лук — левым плечом к цели, щит — чуть к щиту (зеркально: правая — суставы armL)
     if (two) { const d = hsm(H.d || 0); Pt[J.TY] -= .25 * d * k; Pt[J.HY] += .25 * d * k; }
@@ -258,7 +263,7 @@
     const m = H.m | 0, s = H.mh ? 0 : 1, v = Math.max(0, Math.min(3, H.v || 0));
     if (m === 10) {   // еда: рука у рта (v — 0…1 насколько), жуёт
       const e = hsm(v) * k, ch2 = Math.abs(Math.sin(t * 14)) * e;
-      holdArm(Pt, s, EAT_P, e);
+      HN[3] = e; holdArm(Pt, s, EAT_P);
       const j = HJ[s]; Pt[j[0]] -= .1 * ch2; Pt[j[3]] += .15 * ch2; Pt[J.HX] += .12 * e;
       return;
     }
@@ -270,7 +275,7 @@
     HB[0] = Pt[j[0]]; HB[1] = Pt[j[1]] * mm; HB[2] = Pt[j[2]] * mm; HB[3] = Pt[j[3]];
     const A0 = seg === 0 ? HB : K[seg - 1], A1 = seg === 2 ? HB : K[seg];
     for (let i = 0; i < 4; i++) HA[i] = A0[i] + (A1[i] - A0[i]) * u;
-    holdArm(Pt, s, HA, w);
+    HN[3] = w; holdArm(Pt, s, HA);
     const ty0 = seg === 0 ? 0 : K[seg - 1][4], ty1 = seg === 2 ? 0 : K[seg][4], tx0 = seg === 0 ? 0 : K[seg - 1][5], tx1 = seg === 2 ? 0 : K[seg][5];
     Pt[J.TY] += (ty0 + (ty1 - ty0) * u) * mm * w; Pt[J.TX] += (tx0 + (tx1 - tx0) * u) * w;
   }
@@ -1843,7 +1848,7 @@
       ch.lookY += (ly - ch.lookY) * kl; ch.lookX += (lx - ch.lookX) * kl;
       Pt[J.HY] += ch.lookY * .75; Pt[J.TY] += ch.lookY * .25 * (1 - ch.wMove); Pt[J.HX] += ch.lookX;
       // руки и предметы (бой, инструменты): только если игра дала o.hold — иначе позы как были
-      if (o && o.hold) holdLayer(ch, Pt, dt, t, o.hold, snap, cat, emw);
+      if (o && o.hold) { HN[0] = dt; HN[1] = t; HN[2] = emw; holdLayer(ch, Pt, o.hold, snap, cat); }
       // телефон 📱: руки, голова, плечи — поверх позы (ноги свои: идёт и пишет, как в ГТА)
       if (ch.phS || (o && o.phone) || ch.phWant) phoneLayer(ch, Pt, t, dt, o, snap, cat, emw);
       // плавный переход между состояниями
