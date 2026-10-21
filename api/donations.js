@@ -6,6 +6,7 @@
 // пробуем обновиться по refresh_token и только если это тоже не выйдет —
 // просим войти заново.
 import { storeConfigured, sbSelect, sbRpc } from './_lib/store.js';
+import { shownName } from './_lib/da.js';
 
 // Снимок, который раз в несколько минут обновляет api/vip-sync.js. Отдаём его,
 // когда у посетителя нет своей сессии DonationAlerts — то есть ВСЕМ, кроме владельца.
@@ -61,8 +62,12 @@ async function hiddenDonors() {
   } catch (e) { return new Set(); }   // privacy.sql ещё не выполнен — колонки нет
 }
 function maskDonors(data, hidden) {
-  if (!hidden.size) return data;
-  const mask = d => hidden.has(String(d.username || '').toLowerCase()) ? { ...d, username: 'Аноним' } : d;
+  // «Аноним», «гость», «без имени»… (занятые системой имена) — тоже «Аноним» (anon: 1): за анонимного никто себя не выдаст
+  const mask = d => {
+    const name = shownName(d.username);
+    if (name === 'Аноним') return { ...d, username: 'Аноним', anon: 1, lv: undefined };
+    return hidden.has(name.toLowerCase()) ? { ...d, username: 'Аноним', anon: 1, lv: undefined } : d;
+  };
   return {
     ...data,
     donations: (data.donations || []).map(mask),
@@ -90,13 +95,26 @@ async function monthLeaderboard() {
 function aggregateTop(list) {
   const map = {};
   for (const d of list) {
-    const name = String(d.username || '').trim() || 'Аноним';
+    const name = shownName(d.username);
     const k = name.toLowerCase();
-    (map[k] ||= { username: name, total: 0, count: 0, currency: d.currency || 'RUB' });
+    (map[k] ||= { username: name, total: 0, count: 0, currency: d.currency || 'RUB', ...(name === 'Аноним' ? { anon: 1 } : {}) });
     map[k].total += d.amount;
     map[k].count++;
   }
   return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 20);
+}
+
+// 💛 Уровень «Донатер» у аккаунтов из топа (premium.sql donor_names_levels; скрывшие донаты — без значка). Нет функции — без значков
+async function withLevels(data) {
+  if (!storeConfigured()) return data;
+  const lists = [data.leaderboard, data.leaderboard_month].filter(Array.isArray);
+  const names = [...new Set(lists.flat().filter(d => d && !d.anon && d.username).map(d => String(d.username).trim()))].slice(0, 60);
+  if (!names.length) return data;
+  let lv = null;
+  try { lv = await sbRpc('donor_names_levels', { p_names: names }); } catch (e) { return data; }
+  if (!lv || typeof lv !== 'object') return data;
+  const add = arr => Array.isArray(arr) ? arr.map(d => (!d.anon && lv[String(d.username).trim().toLowerCase()] ? { ...d, lv: lv[String(d.username).trim().toLowerCase()] } : d)) : arr;
+  return { ...data, leaderboard: add(data.leaderboard), ...(data.leaderboard_month ? { leaderboard_month: add(data.leaderboard_month) } : {}) };
 }
 
 async function sendSnapshot(res, snap) {
@@ -106,8 +124,8 @@ async function sendSnapshot(res, snap) {
   // считаем прямо сейчас отдельным запросом — она "легче" (один select с
   // фильтром) и не обязана ждать следующего прогона синхронизации.
   const [goal, hidden, month] = await Promise.all([goalData(), hiddenDonors(), monthLeaderboard()]);
-  const data = { ...snap.data, leaderboard_month: month || aggregateTop((snap.data.donations || [])
-    .filter(d => Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS)) };
+  const data = await withLevels({ ...snap.data, leaderboard_month: month || aggregateTop((snap.data.donations || [])
+    .filter(d => Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS)) });
   return res.status(200).json({ ...maskDonors(data, hidden), source: 'server', updated_at: snap.at, stale: ageMin > 30, ...(goal ? { goal } : {}) });
 }
 
@@ -203,7 +221,7 @@ export default async function handler(req, res) {
     const data = await r.json();
     const donations = (data.data || []).map(d => ({
       id:       d.id,
-      username: d.username || 'Аноним',
+      username: shownName(d.username),
       amount:   parseFloat(d.amount) || 0,
       currency: d.currency || 'RUB',
       message:  d.message || '',
@@ -214,7 +232,7 @@ export default async function handler(req, res) {
     const map = {};
     donations.forEach(d => {
       const k = d.username.toLowerCase();
-      if (!map[k]) map[k] = { username: d.username, total: 0, count: 0, currency: d.currency };
+      if (!map[k]) map[k] = { username: d.username, total: 0, count: 0, currency: d.currency, ...(d.username === 'Аноним' ? { anon: 1 } : {}) };
       map[k].total += d.amount;
       map[k].count++;
     });
@@ -227,7 +245,8 @@ export default async function handler(req, res) {
     const [goal, month] = await Promise.all([goalData(), monthLeaderboard()]);
     const leaderboard_month = month || aggregateTop(donations.filter(d =>
       Date.parse(String(d.created || '').replace(' ', 'T') + 'Z') > Date.now() - MONTH_MS));
-    res.status(200).json({ donations: donations.slice(0, 20), leaderboard, leaderboard_month, ...(goal ? { goal } : {}) });
+    const top = await withLevels({ leaderboard, leaderboard_month });
+    res.status(200).json({ donations: donations.slice(0, 20), leaderboard: top.leaderboard, leaderboard_month: top.leaderboard_month, ...(goal ? { goal } : {}) });
   } catch(e) {
     // DonationAlerts недоступен — лучше показать последний снимок, чем ошибку
     const snap = await readSnapshot();

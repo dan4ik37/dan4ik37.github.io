@@ -7,8 +7,8 @@
   const N = 4, DUEL_SEC = 180;
   let root, api, keyHandler, board = null, stopDuel = null;
 
-  // «↩ Отменить» — последний ход назад (одна ступень): 2 раза за игру, VIP и персоналу — 5 (как подсказка в «5 букв»).
-  // Больше нельзя: у «2048» таблица рекордов. В соревновании отмены нет (плитки у соперников разошлись бы).
+  // «↩ Отменить» — последний ход назад (одна ступень): 2 раза за игру, VIP, донатерам и персоналу — 5 (как подсказка в «5 букв»).
+  // Честно для всех (22.10.2026): игра, где отменили больше двух раз, в рекорды и опыт не идёт. В соревновании отмены нет.
   const UNDO_FREE = 2, UNDO_VIP = 5;
   // Одна доска: el — куда рисовать, opt: { rand, timeLimit, onScore(score), onEnd(score, won2048) }
   function createBoard(el, opt){
@@ -96,8 +96,13 @@
       if (!canMove()) end();
     }
     // Отменить последний ход (новая плитка тоже уходит; 2048 уже засчитано — так и остаётся)
-    function undo(){
+    async function undo(){
       if (!prev || over || undos >= undoMax()) return;
+      // Третья отмена и дальше — бонус VIP/донатера: спросить один раз, что игра пойдёт без рекорда
+      if (undos === UNDO_FREE && !opt.timeLimit) {
+        const yes = window.GameKit ? await GameKit.ask({ icon: '↩', title: 'Ещё отмена — без рекорда', text: 'Третья отмена — бонус VIP и донатеров. С ней эта игра не пойдёт в рекорды и опыт (чтобы было честно для всех). Отменить ход?', yes: '↩ Отменить', no: 'Играть дальше' }) : confirm('Третья отмена — бонус VIP и донатеров. С ней эта игра не пойдёт в рекорды и опыт. Отменить ход?');
+        if (!yes || !prev || over) return;
+      }
       grid = prev.grid; score = prev.score; won = won || prev.won; prev = null; undos++;
       api.sfx('tick');
       draw();
@@ -136,7 +141,7 @@
       move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
     });
     reset();
-    return { move, undo, stop(){ over = true; clearInterval(timer); }, state: () => ({ grid, score, won, over, undos, prev: !!prev }) };
+    return { move, undo, stop(){ over = true; clearInterval(timer); }, unrated: () => undos > UNDO_FREE, state: () => ({ grid, score, won, over, undos, prev: !!prev }) };
   }
 
   function solo(){
@@ -144,9 +149,12 @@
     root.innerHTML = `<div class="g2-solo"></div><div class="ct-actions"><button class="ct-duel-btn" id="g2Duel">⚔️ Соревноваться с другом</button></div>`;
     root.querySelector('#g2Duel').onclick = () => { location.hash = '#/games/2048/' + GameRoom.newCode(); };
     board = createBoard(root.querySelector('.g2-solo'), {
-      on2048: score => { api.toast('🧩 2048! Можно играть дальше за рекордом'); api.report('2048', true, score, score); },
-      // Победа уже засчитана при 2048 — здесь фиксируем итоговый счёт как рекорд
-      onEnd: (score, won) => { if (!won) api.report('2048', false, score, score); },
+      on2048: score => {
+        if (board?.unrated()) { api.toast('🧩 2048! Эта игра — без рекорда (больше двух отмен)'); return; }
+        api.toast('🧩 2048! Можно играть дальше за рекордом'); api.report('2048', true, score, score);
+      },
+      // Победа уже засчитана при 2048 — здесь фиксируем итоговый счёт как рекорд. Больше двух отмен — без рекорда
+      onEnd: (score, won) => { if (board?.unrated()) { api.toast('Игра без рекорда: больше двух отмен'); return; } if (!won) api.report('2048', false, score, score); },
     });
   }
 

@@ -27,6 +27,37 @@ export const ITEMS = [
 // Лимиты по умолчанию (premium_settings в базе; админ меняет в магазине)
 export const LIMITS = { dayRub: 3000, monthRub: 10000 };
 
+// 💛 «Донатер» (22.10.2026) — те же числа и имена, что premium.sql (donor_levels, donor_rule, donor_name_reserved) и
+// js/core/premium.js (D37Donor): уровень — сумма донатов за последние days дней. ПРЕДЛОЖЕНИЕ — решает владелец
+export const DONOR_LEVELS = [
+  { lv: 1, min: 100, perk: 'bronze' },
+  { lv: 2, min: 300, perk: 'silver' },
+  { lv: 3, min: 700, perk: 'gold' },
+  { lv: 4, min: 1500, perk: 'gold' },
+];
+export const DONOR_RULES = { days: 30, auto_max: 300, claims_day: 5 };
+export const DONOR_RESERVED = {
+  exact: ['аноним', 'анонимно', 'анонимный', 'анонимная', 'анонимус', 'анон', 'anonymous', 'anonym', 'anonim', 'anonimus', 'anon',
+    'гость', 'гостья', 'guest', 'без имени', 'безымянный', 'безымянная', 'noname', 'no name', 'nameless', 'unknown',
+    'неизвестный', 'неизвестная', 'неизвестно', 'нет имени', 'ваше имя', 'your name', 'имя', 'name', 'никто', 'nobody',
+    'user', 'пользователь', 'donationalerts', 'донатер', 'донатёр', 'donater', 'donator', 'donor'],
+  prefix: ['аноним', 'anonym', 'anonim'],
+};
+const UP = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯё', LO = 'абвгдеежзийклмнопрстуфхцчшщъыьэюяе', LAT = 'aeopcxykmhbt0', CYR = 'аеорсхукмнвто';
+export function donorNameKey(t) {
+  let out = '';
+  for (let ch of String(t == null ? '' : t)) {
+    let i = UP.indexOf(ch); if (i >= 0) ch = LO[i];
+    if (ch >= 'A' && ch <= 'Z') ch = ch.toLowerCase();
+    i = LAT.indexOf(ch); if (i >= 0) ch = CYR[i];
+    if (/^[a-zа-я0-9]$/.test(ch)) out += ch;
+  }
+  return out;
+}
+const EXACT = new Set(DONOR_RESERVED.exact.map(donorNameKey)), PREF = DONOR_RESERVED.prefix.map(donorNameKey);
+// «Аноним», «гость», «без имени»… — в топе донатеров показываем «Аноним» и ни к кому не привязываем
+export function donorNameReserved(t) { const k = donorNameKey(t); return k === '' || EXACT.has(k) || PREF.some(p => k.startsWith(p)); }
+
 export function gemWord(n) {
   const a = Math.abs(n) % 100, b = a % 10;
   return GEMS.forms[a > 10 && a < 20 ? 2 : b === 1 ? 0 : b > 1 && b < 5 ? 1 : 2];
