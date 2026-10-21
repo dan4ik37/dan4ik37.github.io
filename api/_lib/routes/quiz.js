@@ -31,7 +31,7 @@ export default function handler(req, res) {
   ] };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/quiz">Тесты</a> › <span>${esc(Q.title)}</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/quiz">Тесты</a> › <span>${esc(Q.title)}</span></nav>
   ${friend ? `<p class="qz-friend">📣 Твой друг получил: <b>${friend.emoji} ${esc(friend.name)}</b> — а кто ты?</p>` : ''}
   <h1>${esc(Q.icon)} ${esc(Q.title)}</h1>
   <p class="lead">${esc(Q.lead)}</p>
@@ -84,7 +84,7 @@ function hub(res) {
   const url = `${SITE}/quiz`;
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Тесты</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Тесты</span></nav>
   <h1>Тесты: кто ты из игр?</h1>
   <p class="lead">Короткие тесты по играм с канала dan4ik37 — Майнкрафт, FNAF, Роблокс, CS2, Hollow Knight, Poppy Playtime и хорроры, «Какая ты игра?» и «Какой ты стример?» для всех и тест для зрителей. 8 вопросов, минута времени, результатом можно поделиться с друзьями.</p>
   <div class="qz-cards">${QUIZZES.map(card).join('')}</div>

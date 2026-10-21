@@ -110,7 +110,7 @@ export default function handler(req, res) {
   const p = make();
   const url = `${SITE}/${key}`;
   const body = `<main class="wrap lg">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/shop">Магазин</a> › <span>${esc(p.h1)}</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/shop">Магазин</a> › <span>${esc(p.h1)}</span></nav>
   <h1>${esc(p.h1)}</h1>
   <div class="lg-body">${p.body}</div>
   <div class="lg-nav"><a href="/terms">Соглашение</a> · <a href="/refund">Возврат</a> · <a href="/contacts">Реквизиты и контакты</a> · <a href="/privacy">Конфиденциальность</a> · <a href="/shop">${GEMS.icon} Магазин</a></div>

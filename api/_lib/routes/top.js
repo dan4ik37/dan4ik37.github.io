@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     itemListElement: longs.slice(0, 10).map((v, i) => ({ '@type': 'ListItem', position: i + 1, url: `${SITE}/v/${v.id}`, name: v.title })) };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/videos">Все видео</a> › <span>Самые популярные</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/videos">Все видео</a> › <span>Самые популярные</span></nav>
   <h1>Самые популярные видео dan4ik37</h1>
   <p class="lead">Топ по просмотрам из всех ${rows.length.toLocaleString('ru')} роликов канала — отдельно видео и шортсы. Просмотры по данным YouTube на ${esc(onDate)}.</p>
   <nav class="tp-tabs"><a href="#videos">🎬 Видео</a><a href="#shorts">⚡ Шортсы</a><a href="/history">📜 История канала</a></nav>
