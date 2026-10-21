@@ -959,7 +959,7 @@
   const GAME = 'kletochki', TITLE = 'Клеточки', COLOR = '#22c55e';
   const LS = 'd37_io_kletochki';
   let host = null, api = null, ui = null, cv = null, ctx = null, S = null, mode = 'menu', dpr = 1, cssW = 0, cssH = 0, ro = null;
-  let lastT = 0, hudAt = 0, koAt = 0, myIdx = -1, cfg = null, lifeRun = '', lbKey = '', reported = new Set(), soundMass = 0, soundAt = 0;
+  let lastT = 0, hudAt = 0, koAt = 0, myIdx = -1, cfg = null, reported = new Set(), soundMass = 0, soundAt = 0;
   const cam = { x: 0, y: 0, z: 1, ok: false };
   const INP = new Float64Array(IN);
   const mouse = { on: false, x: 0, y: 0, t: 0 }, keys = { u: 0, d: 0, l: 0, r: 0 };
@@ -995,22 +995,8 @@
     mode = 'menu';
     stopSession();
     ui.hud.hidden = true;
-    showOv(`<div class="io-card wide">
-        <div class="io-logo">🦠</div><div class="io-title">${TITLE}</div>
-        <div class="io-sub">Ты — клетка. Ешь точки и тех, кто меньше, и расти! Делись (пробел / ✂️), чтобы догнать, выбрасывай массу (W / 💧). Колючки разрывают больших — маленьким за ними можно прятаться. Раунд — 5 минут.</div>
-        <div class="io-name"><input type="text" maxlength="16" placeholder="Имя на арене" value="${K.escH(cfg.name || '')}" aria-label="Имя на арене" autocomplete="off"></div>
-        <div class="io-skins">${PRESETS.map((q, k) => `<button type="button" data-io="sk${k}" aria-label="Раскраска ${k + 1}"><canvas width="64" height="64"></canvas></button>`).join('')}</div>
-        <div class="io-cols"><label>Узор <select data-io="pat">${PATTERNS.map((p, k) => `<option value="${k}">${p}</option>`).join('')}</select></label>
-          <label>Цвет <input type="color" data-io="ca"></label><label>Второй <input type="color" data-io="cb"></label>
-          ${K.myColors() ? '<button type="button" class="io-b2" data-io="mine" style="min-height:36px;padding:.3rem .7rem">🎭 Мои цвета</button>' : ''}</div>
-        <div class="io-btns">
-          <button type="button" class="ct-start" data-io="play">▶ Играть</button>
-          <button type="button" class="io-b2" data-io="bots">🤖 С ботами (без интернета)</button>
-          <button type="button" class="io-b2" data-io="friend">🔗 Позвать друга</button>
-          <button type="button" class="io-b2" data-gk-rules="${GAME}">📖 Правила</button>
-        </div>
-        <div class="io-cd">Чата нет — только эмодзи. Боты отмечены 🤖.</div>
-      </div>`);
+    showOv(K.menuHtml({ logo: '🦠', title: TITLE, game: GAME, name: cfg.name, presets: PRESETS.length, patterns: PATTERNS,
+      sub: 'Ты — клетка. Ешь точки и тех, кто меньше, и расти! Делись (пробел / ✂️), чтобы догнать, выбрасывай массу (W / 💧). Колючки разрывают больших — маленьким за ними можно прятаться.' }));
     const inp = ui.ov.querySelector('.io-name input');
     inp.addEventListener('input', () => { cfg.name = inp.value.slice(0, 16); saveCfg(); });
     paintSkins();
@@ -1033,33 +1019,27 @@
   function stopSession(){ if (S) { S.leave(); S = null; } myIdx = -1; }
   function newSession(){
     stopSession();
-    cfg.name = cfg.name || '';
     S = K.session({ game: GAME, sim: SIM, max: 10, me: { key: K.myKey(), nick: myName(), skin: cfg.skin, aspect: (cssW || 400) / (cssH || 600) },
-      onFrame: (s, t) => frame(t), onInput: t => readInput(t), onRole: role => onRole(role), onYou: i => { myIdx = i; }, onKo: e => onKo(e), onRound: e => onRound(e),
-      onPlayers: () => syncNames(), onStatus: (k, v) => onStatus(k, v) });
+      onFrame: (s, t) => frame(t), onInput: t => readInput(t), onRole: () => onRole(), onYou: i => { myIdx = i; }, onKo: e => onKo(e), onRound: e => onRound(e),
+      onPlayers: () => { namesVer = -1; }, onStatus: (k, v) => onStatus(k, v) });
     return S;
   }
-  function startBots(){ newSession(); S.offline(); enterGame(); }
+  function startBots(){ newSession(); enterGame(); hideOv(); S.offline(); }
   function startOnline(code, pub){
     if (!K.netOk()) { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(); return; }
-    newSession(); S.online(code, { pub });
-    enterGame();
-    showOv(`<div class="io-card"><div class="io-logo">🌐</div><div class="io-sub">${pub ? 'Ищем арену…' : 'Подключаемся к комнате…'}</div></div>`);
+    newSession(); enterGame();
+    showOv(K.connHtml(pub));
+    S.online(code, { pub });
   }
   function enterGame(){
-    mode = 'play'; koAt = 0; cam.ok = false; reported.clear(); lifeRun = ''; soundMass = 0;
-    ui.hud.hidden = false; resize();
-    syncNames();
+    mode = 'play'; koAt = 0; cam.ok = false; reported.clear(); soundMass = 0; namesVer = -1;
+    ui.hud.hidden = false; ui.emos.hidden = true; resize();
   }
-  function onRole(role){
-    if (role === 'host' || role === 'off' || role === 'guest') { if (ui.ov.querySelector('.io-logo')?.textContent === '🌐') hideOv(); }
-    syncNames();
-  }
+  function onRole(){ if (ui && ui.ov.querySelector('.io-logo')?.textContent === '🌐') hideOv(); namesVer = -1; }
   function onStatus(kind, v){
-    if (kind === 'error') {
-      const txt = v === 'full' ? 'Комната заполнена (10 игроков).' : v === 'dup' ? 'Ты уже играешь в этой комнате в другой вкладке.' : 'Не удалось подключиться.';
-      showOv(`<div class="io-card"><div class="io-logo">📡</div><div class="io-title" style="font-size:1.2rem">${txt}</div><div class="io-btns"><button type="button" class="ct-start" data-io="bots">🤖 Играть с ботами</button><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`);
-    } else if (kind === 'handover') api.toast?.('Ты свернул вкладку — арену ведёт другой игрок');
+    if (!ui) return;
+    if (kind === 'error') showOv(K.errHtml(v));
+    else if (kind === 'handover') api.toast?.('Ты свернул вкладку — арену ведёт другой игрок');
   }
   function syncNames(){
     for (let i = 0; i < MAXO; i++) {
@@ -1077,33 +1057,24 @@
     const by = e.by >= 0 ? names[e.by] : '';
     setTimeout(() => {
       if (!S || mode !== 'play' || !koAt) return;
-      showOv(`<div class="io-card"><div class="io-logo">😵</div><div class="io-title">Тебя съели!</div>
-        ${by ? `<div class="io-sub">Тебя съел${bots[e.by] ? ' бот' : ''} «${K.escH(by)}»</div>` : ''}
-        <div class="io-stats"><div><b>${K.num(e.best)}</b><small>лучшая масса</small></div><div><b>${e.eaten}</b><small>${K.ru(e.eaten, 'съедена клетка', 'съедено клетки', 'съедено клеток')}</small></div><div><b>${fmtT(e.life)}</b><small>в игре</small></div></div>
-        <div class="io-btns"><button type="button" class="ct-start" data-io="again">▶ Ещё раз</button><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`, 'ko');
+      showOv(K.koHtml({ logo: '😵', title: 'Тебя съели!', sub: by ? `Тебя съел${bots[e.by] ? ' бот' : ''} «${by}»` : '',
+        stats: [[K.num(e.best), 'лучшая масса'], [String(e.eaten), K.ru(e.eaten, 'съедена клетка', 'съедено клетки', 'съедено клеток')], [fmtT(e.life), 'в игре']] }), 'ko');
     }, 650);
   }
   function onRound(e){
-    if (!S) return;
+    if (!S || !ui) return;
     if (e.k === 'start') { hideOv(); koAt = 0; reported.clear(); return; }
-    const mine = e.rank.findIndex(r => r[0] === S.me), alive = mine >= 0;
-    if (alive && !koAt) reportLife(e.rank[mine][2], mine === 0 && e.total >= 3 && e.rank[mine][3] >= 60, e.rank[mine][3]);
-    const pod = [1, 0, 2].map(k => e.rank[k] ? `<div><b>${['🥇', '🥈', '🥉'][k]}</b><span>${K.escH(K.showName(e.names[k]?.[0] || ''))}${e.names[k]?.[1] ? ' 🤖' : ''}</span><small>${K.num(e.rank[k][1])}</small><i style="height:${[54, 74, 40][k]}px"></i></div>` : '').join('');
-    showOv(`<div class="io-card"><div class="io-logo">🏁</div><div class="io-title">Раунд окончен</div><div class="io-pod">${pod}</div>
-      ${alive ? `<div class="io-me">${mine === 0 ? '🏆 Ты победил!' : `Твоё место: ${mine + 1} из ${e.rank.length}`}</div>` : ''}
-      <div class="io-cd">Новый раунд через <b class="io-left">8</b> с</div><div class="io-btns"><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`);
+    const mine = e.rank.findIndex(r => r[0] === S.me);
+    if (mine >= 0 && !koAt) reportLife(e.rank[mine][2], mine === 0 && e.total >= 3 && e.rank[mine][3] >= 60, e.rank[mine][3]);
+    showOv(K.podiumHtml(e, S.me));
     if (mine === 0) api.sfx?.('win');
     try { window.D37Ads?.interstitial?.(GAME); } catch (er) {}
   }
   function reportLife(best, win, life){
     const runKey = (S?.role || 'x') + ':' + (S?.view()?.round || 0) + ':' + Math.round(life);
-    if (reported.has(runKey) || !api) return;
+    if (reported.has(runKey)) return;
     reported.add(runKey);
-    best = Math.round(best || 0);
-    const online = S && S.role !== 'off' && S.humans() >= 2;
-    api.report?.(online ? GAME + '_online' : GAME, !!win, best, best);
-    const coins = Math.min(10, Math.floor(best / 100));
-    if (coins > 0 && root.D37Coins) root.D37Coins.run(GAME, coins, 'kl' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36)).catch?.(() => {});
+    K.reportLife(api, GAME, S, best, win);
   }
 
   // ── Управление ──
@@ -1401,8 +1372,7 @@
     const tt = V.phase ? `🏁 ${left}` : `⏱ ${fmtT(left)}`;
     if (ui.time.textContent !== tt) ui.time.textContent = tt;
     const lt = ui.ov.querySelector('.io-left'); if (lt) lt.textContent = String(left);
-    const humans = S.humans(), mode2 = S.netMode();
-    const net = S.role === 'off' ? '🤖 с ботами' : `${S.code === 'pub1' || /^pub\d$/.test(S.code) ? '🌐 общая' : '🔗 ' + S.code} · 👥 ${humans}${mode2 === 'relay' ? ' · 🐢' : ''}${S.rtt && guest ? ` · ${Math.round(S.rtt)} мс` : ''}`;
+    const net = K.netLabel(S);
     if (ui.net.textContent !== net) ui.net.textContent = net;
     // лидеры
     const n = V.lbN, list = [];
@@ -1417,8 +1387,7 @@
     if (guest) { r0 = V.rank; tot = V.total; } else { for (let i = 0; i < MAXO; i++) { const o = V.owners[i]; if (o && o.alive) { tot++; if (mass > 0 && o.mass > mass) r0++; } } if (mass > 0) r0++; else r0 = 0; }
     if (r0 > 0) rank = `Место ${r0} из ${tot}`;
     if (ui.rank.textContent !== rank) ui.rank.textContent = rank;
-    const ver = guest ? V.ver : V.ver;
-    if (ver !== namesVer) { namesVer = ver; syncNames(); }
+    if ((V.ver | 0) !== namesVer) { namesVer = V.ver | 0; syncNames(); }
   }
   let namesVer = -1;
   function sounds(t){
@@ -1463,6 +1432,19 @@
     },
     _test: { SIM, PARTS, bodyStats, radius, speedOf, viewArea, mergeSteps, pelletXY, skinOk, presetSkin, PRESETS, PATTERNS,
       C: { DT, H, ZONE, ZN, KS, NP, MAXO, MAXC, START_M, SPLIT_MIN, EJECT_MIN, EJECT_COST, BLOB_M, VIRUS_M, VIRUS_POP, VIRUS_FEEDS, VIR_MIN, PROT, ROUND, END, TOTAL, MINB, A0, MERCY },
-      cNew, vNew, bNew, compact, centers, think, leaderboard, R, frame: t => frame(t), get S(){ return S; }, get cam(){ return cam; } },
+      cNew, vNew, bNew, compact, centers, think, leaderboard, R, frame: t => frame(t), get S(){ return S; }, get cam(){ return cam; },
+      // Замер «полная комната»: 16 участников (люди — на мозгах ботов) и хозяин шлёт снимки 9 гостям каждые 2 шага (scripts/iogames-e2e.cjs)
+      stress(o = {}){
+        if (!S || !S.W) return null;
+        const W = S.W;
+        W.botWant = MAXO - 1;
+        for (let k = 0; k < MAXO; k++) if (!W.owners[k]) SIM.addOwner(W, { key: 'bot', name: botName(W), skin: null, bot: true, spawn: true });
+        const gs = [];
+        for (let i = 0; i < MAXO && gs.length < (o.guests ?? 9); i++) if (W.owners[i] && i !== S.me) gs.push({ i, g: { aspect: .45, inTs: 1, hold: 5 } });
+        const st = { bytes: 0, snaps: 0, ms: new Float32Array(4000), t: new Float64Array(4000), n: 0 };
+        S.afterStep = W2 => { if (W2.step % 2) return; for (const x of gs) { const v = SIM.encode(W2, x.i, x.g); st.bytes += v.byteLength; st.snaps++; } };
+        S.onWork = (ms, t) => { if (st.n < 4000) { st.ms[st.n] = ms; st.t[st.n] = t; st.n++; } };
+        return st;
+      } },
   };
 })();

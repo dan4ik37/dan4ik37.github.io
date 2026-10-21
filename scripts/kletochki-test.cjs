@@ -308,6 +308,7 @@ if (typeof gc === 'function') {
 const { makeClock, makeBus, makeNet } = require('./iogames-net.cjs');
 async function online(useNet){
   const tag = useNet ? ' (напрямую)' : ' (без прямой связи)';
+  if (typeof gc === 'function') gc();   // мусор прошлых тестов не должен попасть в замер кадра
   const clock = makeClock(), bus = makeBus(clock), net = useNet ? makeNet(clock) : null;
   const clients = [];
   let frameErr = 0, worstFrame = 0;

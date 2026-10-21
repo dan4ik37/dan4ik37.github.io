@@ -362,8 +362,10 @@
       S.raf = raf(f);
     }
     function loopOff(){ if (S.raf) { (c.caf || root.cancelAnimationFrame)?.(S.raf); S.raf = 0; } }
+    const clk = () => (root.performance ? performance.now() : Date.now());
     function frame(t){
       if (S.closed) return;
+      const w0 = clk();
       cb('onInput', t);   // игра кладёт управление ДО шагов этого кадра
       if (S.role === 'off' || S.role === 'host') {
         const L = S.L;
@@ -376,6 +378,8 @@
       } else if (S.role === 'guest') guestTick(t);
       S.lastFrame = t;
       cb('onFrame', S, t);
+      S.workMs = clk() - w0;   // сколько заняли шаги + рисунок этого кадра (замер «телефона»)
+      if (S.onWork) S.onWork(S.workMs, t);
     }
     S.frame = frame;
 
@@ -388,6 +392,7 @@
       const ev = W.ev.splice(0);
       for (const e of ev) hostEvent(e);
       if (S.role === 'host') hostNet(W);
+      if (S.afterStep) S.afterStep(W);
     }
     function hostEvent(e){
       if (e.k === 'ko') {
@@ -503,7 +508,7 @@
           S.P.send(from, { t: 'pl', l: sim.owners(S.W) });
         } else if (d.t === 'sp') sim.respawn(S.W, g.idx);
         else if (d.t === 'cl' && S.claimWait.has(from)) { S.claimWait.delete(from); sim.applyClaim(S.W, g.idx, d.c, S.caps); }
-        else if (d.t === 'kf') { if (Array.isArray(d.o)) for (const x of d.o.slice(0, 32)) g.ctx['kf' + (x | 0)] = -1e9; }
+        else if (d.t === 'kf') { if (Array.isArray(d.o)) for (const x of d.o.slice(0, 32)) if (x >= 0 && x < 31) g.kfReq = (g.kfReq | 0) | (1 << x); }   // гостю нужно тело целиком
         return;
       }
       if (S.role !== 'guest' || from !== S.P?.host) return;
@@ -727,6 +732,62 @@
   }
   const okColor = s => (typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s) ? s.toLowerCase() : null);
 
+  // ═══ Общие экраны io-игр (меню, «тебя съели», итоги раунда) — разметка одна, рисунок раскраски — у игры ═══
+  // menuHtml({ logo, title, sub, name, presets, patterns, game }) — кнопки data-io: play / bots / friend, раскраски sk<N>, pat, ca, cb, mine
+  function menuHtml(o){
+    return `<div class="io-card wide">
+        <div class="io-logo">${o.logo}</div><div class="io-title">${escH(o.title)}</div>
+        <div class="io-sub">${escH(o.sub)}</div>
+        <div class="io-name"><input type="text" maxlength="16" placeholder="Имя на арене" value="${escH(o.name || '')}" aria-label="Имя на арене" autocomplete="off" enterkeyhint="go"></div>
+        <div class="io-skins">${Array.from({ length: o.presets }, (_, k) => `<button type="button" data-io="sk${k}" aria-label="Раскраска ${k + 1}"><canvas width="64" height="64"></canvas></button>`).join('')}</div>
+        <div class="io-cols"><label>Узор <select data-io="pat">${o.patterns.map((p, k) => `<option value="${k}">${escH(p)}</option>`).join('')}</select></label>
+          <label>Цвет <input type="color" data-io="ca"></label><label>Второй <input type="color" data-io="cb"></label>
+          ${myColors() ? '<button type="button" class="io-b2 io-sm" data-io="mine">🎭 Мои цвета</button>' : ''}</div>
+        <div class="io-btns">
+          <button type="button" class="ct-start" data-io="play">▶ Играть</button>
+          <button type="button" class="io-b2" data-io="bots">🤖 С ботами (без интернета)</button>
+          <button type="button" class="io-b2" data-io="friend">🔗 Позвать друга</button>
+          <button type="button" class="io-b2" data-gk-rules="${o.game}">📖 Правила</button>
+        </div>
+        <div class="io-cd">Чата нет — только эмодзи. Боты отмечены 🤖. Раунд — 5 минут.</div>
+      </div>`;
+  }
+  // Карточка «нокаут»: { logo, title, sub, stats: [[число, подпись], …] }
+  function koHtml(o){
+    return `<div class="io-card"><div class="io-logo">${o.logo}</div><div class="io-title">${escH(o.title)}</div>
+      ${o.sub ? `<div class="io-sub">${escH(o.sub)}</div>` : ''}
+      <div class="io-stats">${o.stats.map(([v, l]) => `<div><b>${escH(v)}</b><small>${escH(l)}</small></div>`).join('')}</div>
+      <div class="io-btns"><button type="button" class="ct-start" data-io="again">▶ Ещё раз</button><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`;
+  }
+  // Итоги раунда (событие 'end' мира: rank — [[участник, очки, лучшее, секунд], …], names — [[имя, бот], …] тройки)
+  function podiumHtml(e, me){
+    const mine = e.rank.findIndex(r => r[0] === me);
+    const pod = [1, 0, 2].map(k => e.rank[k] ? `<div><b>${['🥇', '🥈', '🥉'][k]}</b><span>${escH(showName(e.names[k]?.[0] || ''))}${e.names[k]?.[1] ? ' 🤖' : ''}</span><small>${num(e.rank[k][1])}</small><i style="height:${[54, 74, 40][k]}px"></i></div>` : '').join('');
+    return `<div class="io-card"><div class="io-logo">🏁</div><div class="io-title">Раунд окончен</div><div class="io-pod">${pod}</div>
+      ${mine >= 0 ? `<div class="io-me">${mine === 0 ? '🏆 Ты победил!' : `Твоё место: ${mine + 1} из ${e.rank.length}`}</div>` : ''}
+      <div class="io-cd">Новый раунд через <b class="io-left">8</b> с</div><div class="io-btns"><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`;
+  }
+  const connHtml = pub => `<div class="io-card"><div class="io-logo">🌐</div><div class="io-sub">${pub ? 'Ищем арену с живыми игроками…' : 'Подключаемся к комнате…'}</div></div>`;
+  function errHtml(v){
+    const txt = v === 'full' ? 'Комната заполнена (10 игроков).' : v === 'dup' ? 'Ты уже играешь в этой комнате в другой вкладке.' : 'Не удалось подключиться.';
+    return `<div class="io-card"><div class="io-logo">📡</div><div class="io-title" style="font-size:1.2rem">${txt}</div><div class="io-btns"><button type="button" class="ct-start" data-io="bots">🤖 Играть с ботами</button><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`;
+  }
+  // Подпись сети: «🤖 с ботами» / «🌐 общая · 👥 3 · 80 мс» / «🔗 abc123 · 👥 2 · 🐢» (🐢 — без прямой связи, медленнее)
+  function netLabel(S){
+    if (!S || S.role === 'off') return '🤖 с ботами';
+    const pub = /^pub\d+$/.test(S.code || ''), m = S.netMode();
+    return `${pub ? '🌐 общая арена' : '🔗 ' + S.code} · 👥 ${S.humans()}${m === 'relay' || m === 'connecting' ? ' · 🐢' : ''}${S.role === 'guest' && S.rtt ? ` · ${Math.round(S.rtt)} мс` : ''}`;
+  }
+  // Итог жизни: рекорд и XP (онлайн — от 2 людей в комнате), монеты — очки/100, до 10 (coin_run_cap)
+  function reportLife(api, game, S, best, win){
+    if (!api) return;
+    best = Math.max(0, Math.round(best || 0));
+    const online = S && S.role !== 'off' && S.humans() >= 2;
+    try { api.report?.(online ? game + '_online' : game, !!win, best, best); } catch (e) {}
+    const coins = Math.min(10, Math.floor(best / 100));
+    if (coins > 0 && root.D37Coins) { try { root.D37Coins.run(game, coins, game.slice(0, 3) + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36))?.catch?.(() => {}); } catch (e) {} }
+  }
+
   // ═══ CSS (общий для обеих игр; грузится вместе с ними) ═══
   const CSS = `
 .io{position:relative;--io-c:#22c55e}
@@ -764,7 +825,8 @@
 .io-big b{font-size:1.45rem;line-height:1}
 .io-big.on,.io-big:active{background:color-mix(in srgb,var(--io-c) 55%,transparent);border-color:#fff}
 .io-big.big{width:80px;height:80px}
-.io-ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(4,5,12,.55);overflow:auto;z-index:2}
+.io-ov{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;padding:12px;background:rgba(4,5,12,.55);overflow:auto;overscroll-behavior:contain;z-index:2;touch-action:pan-y}
+.io-ov>.io-card{margin:auto}
 .io-ov.ko{background:rgba(2,2,8,.72)}
 body.high .io-ov.ko{animation:ioDark .7s ease-out}
 @keyframes ioDark{from{background:rgba(2,2,8,0)}to{background:rgba(2,2,8,.72)}}
@@ -786,6 +848,9 @@ body.high .io-ov.ko{animation:ioDark .7s ease-out}
 .io-cols{display:flex;gap:.6rem;align-items:center;justify-content:center;font-size:.72rem;color:var(--muted,#9a98b3);flex-wrap:wrap}
 .io-cols label{display:flex;gap:.3rem;align-items:center}
 .io-cols input[type=color]{width:38px;height:30px;border:0;background:none;padding:0;cursor:pointer}
+.io-cols select{background:rgba(255,255,255,.08);color:var(--text,#fff);border:1px solid rgba(255,255,255,.16);border-radius:8px;padding:.25rem .4rem;font:700 .72rem Montserrat,system-ui,sans-serif}
+.io-cols select option{background:#16131f;color:#fff}
+.io-sm{min-height:34px!important;padding:.3rem .7rem!important;font-size:.72rem!important}
 .io-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;width:100%}
 .io-stats div{background:rgba(255,255,255,.05);border-radius:12px;padding:.45rem .3rem;display:flex;flex-direction:column;gap:2px}
 .io-stats b{font-size:1.05rem;font-variant-numeric:tabular-nums}
@@ -801,7 +866,7 @@ body.high .io-ov.ko{animation:ioDark .7s ease-out}
 #gamesStage.gs-fs .io-note{display:none}
 .io-link{display:flex;gap:.4rem;width:100%}
 .io-link input{flex:1;min-width:0;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.14);border-radius:10px;padding:.5rem .6rem;color:var(--text,#fff);font-size:.7rem;font-family:monospace}
-@media(max-width:520px){.io-lb{min-width:118px;font-size:.62rem;padding:4px 6px}.io-sc{font-size:1.05rem}.io-title{font-size:1.4rem}.io-skins{grid-template-columns:repeat(6,1fr)}}
+@media(max-width:520px){.io-lb{min-width:112px;font-size:.62rem;padding:4px 6px}.io-lb li:nth-child(n+6){display:none}.io-lb li.me{display:flex}.io-sc{font-size:1.05rem}.io-title{font-size:1.4rem}.io-skins{grid-template-columns:repeat(6,1fr)}}
 @media(hover:hover) and (pointer:fine){.io-pad.touch-only{display:none}}
 body.low .io-ov{-webkit-backdrop-filter:none;backdrop-filter:none}
 `;
@@ -809,5 +874,5 @@ body.low .io-ov{-webkit-backdrop-filter:none;backdrop-filter:none}
 
   root.IoKit = { TAU, clamp, lerp, rnd, hash3, hashNums, writer, reader, toB64, fromB64, cleanName, hasBad, showName, EMOTES, inputLog,
     party, supaTransport, netOk, session, pubCode, myKey, myNick, touchStick, drawStick, pad, viewBox, shell, fitHeight, lbHtml, linkFor, share,
-    myColors, shade, okColor, escH, num, ru, css, RELAY_MS };
+    myColors, shade, okColor, escH, num, ru, css, RELAY_MS, menuHtml, koHtml, podiumHtml, connHtml, errHtml, netLabel, reportLife };
 })();
