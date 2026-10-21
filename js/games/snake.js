@@ -122,7 +122,14 @@
     ctx.fillStyle = '#0d0d16'; ctx.fillRect(0, 0, size, size);
     ctx.fillStyle = 'rgba(255,255,255,.025)';
     for (let r = 0; r < N; r++) for (let c = (r % 2); c < N; c += 2) ctx.fillRect(c * k, r * k, k, k);
-    if (S.food) { ctx.font = `${Math.floor(k * .9)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🍎', S.food[1] * k + k / 2, S.food[0] * k + k / 2 + 1); }
+    // 🍎: цвет — непрозрачный (Chrome на ПК умножает цветной смайлик на прозрачность fillStyle — от клеток поля осталось .025, яблоко
+    // пропадало), шрифт — цветных эмодзи; под смайликом — красный кружок на случай, если смайлика в шрифтах нет
+    if (S.food) {
+      const fx = S.food[1] * k + k / 2, fy = S.food[0] * k + k / 2;
+      ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(fx, fy + 1, k * .3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = `${Math.floor(k * .9)}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🍎', fx, fy + 1);
+    }
     S.snake.forEach(([r, c], i) => {
       const t = i / Math.max(1, S.snake.length - 1);
       ctx.fillStyle = dead ? '#7c2d12' : i === 0 ? '#22c55e' : `hsl(${145 - t * 40}, 70%, ${45 - t * 15}%)`;

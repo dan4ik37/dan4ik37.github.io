@@ -11,7 +11,7 @@
 // Что уже разослано, хранится в push_state (push.sql): последнее видео и был ли эфир.
 // Первый запуск ничего не рассылает — только запоминает текущее состояние.
 // Мёртвые подписки (404/410 от push-сервиса) удаляются.
-// «Денчик-бот» (community2.sql): тот же эфир / новый ролик — ещё и сообщением в канал «📢 новости» сервера «Денчик37»
+// «Денчик-бот» (community.sql): тот же эфир / новый ролик — ещё и сообщением в канал «📢 новости» сервера «Денчик37»
 // (bot_post — только с ключом сервера; нет функции — молча). События сообществ: напоминание 🔔 за 15 минут (bot_event_remind).
 //
 // Переменные окружения: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET,
@@ -160,12 +160,12 @@ async function checkWords(prev, deadline) {
   return { status: 'sent', day, ...sent };
 }
 
-// ── «Денчик-бот»: сообщение в канал «📢 новости» (community2.sql → bot_post). Ошибка рассылку не останавливает ──
+// ── «Денчик-бот»: сообщение в канал «📢 новости» (community.sql → bot_post). Ошибка рассылку не останавливает ──
 async function botPost(text, key) {
   try { const r = await sbRpc('bot_post', { p_channel: 'news', p_text: text.slice(0, 500), p_key: key }); return r?.dup ? 'dup' : r?.ok ? 'posted' : (r?.reason || 'no'); }
   catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? 'no_sql' : 'error'; }
 }
-// ── События сообществ: 🔔 «через 15 минут» тем, кто нажал «✅ Пойду» (community2.sql → bot_event_remind) ──
+// ── События сообществ: 🔔 «через 15 минут» тем, кто нажал «✅ Пойду» (community.sql → bot_event_remind) ──
 async function eventReminders() {
   try { const n = await sbRpc('bot_event_remind', {}); return { reminded: n || 0 }; }
   catch (e) { return /PGRST202|Could not find/i.test(String(e?.message)) ? { status: 'no_sql' } : { error: String(e?.message || e).slice(0, 120) }; }
