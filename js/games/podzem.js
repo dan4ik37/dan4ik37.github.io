@@ -265,7 +265,7 @@
     return true;
   }
   function touched(c, x, y, i, what){
-    c.mod = true; G.dirtySave.add(c);
+    c.mod = true; G.dirtySave.add(c); G.cellRev = (G.cellRev || 0) + 1;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const n = cAt(x + dx, y + dy); if (!n) continue;
       maskCell(n, (x + dx) & CM, (y + dy) & CM); n.dirty0 = true;
@@ -292,7 +292,7 @@
     chunk: (cx, cy) => G.chunks.get(kOf(cx, cy)),
     changed(x, y, fgChanged){
       const c = cAt(x, y); if (!c) return;
-      c.mod = true; G.dirtySave.add(c); c.dirty1 = true;
+      c.mod = true; G.dirtySave.add(c); c.dirty1 = true; if (fgChanged) G.cellRev = (G.cellRev || 0) + 1;   // «живой» свет пересчитать (уровень воды — не важен)
       if ((y & CM) === CM) { const b = chunk(c.cx, c.cy + 1); if (b) b.dirty1 = true; }
       const i = idx(x, y);
       if (fgChanged) { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const n = cAt(x + dx, y + dy); if (n) { maskCell(n, (x + dx) & CM, (y + dy) & CM); n.dirty0 = true; } } queueEdit(c, x, y, i); }
@@ -1758,7 +1758,10 @@
     G.q = G.fl.q;
     return G.q;
   }
-  // ═══ Ореолы у источников света (среднее и выше): факелы мерцают; на высоком — ещё руда и гладь лавы ═══
+  // ═══ Огонь (владелец 22.10: «нужен реалистичный свет и огонь везде»): живое пламя у факелов и печей (8 кадров, своя фаза и
+  // мерцание у каждого), маленький блик-ореол у огня, угольки и дымок вверх; лава — пузыри и брызги. Ореол в воздухе — в
+  // шейдере клеток (рассеянный свет по карте света: стены и толща камня его не пропускают). Частота частиц — по времени
+  // кадра (G.rdt), одинаково при 30, 60 и 144 Гц ═══
   function emissives(c){   // светящиеся клетки чанка (пересчёт — когда менялись клетки)
     const out = [];
     for (let i = 0; i < CA; i++) { const f = c.fg[i]; if (f && (P.LR[f] | P.LG[f] | P.LB[f]) && !(P.KIND[f] === 1 && (c.st[i] >> 4) !== 0)) out.push(i); }
@@ -1771,42 +1774,181 @@
     c.lava = out; c.lavaDirty = false;
     return out;
   }
-  function drawGlows(camX, camY, vw, vh){
-    const R = G.R, q = G.q;
-    if (q < 1 || !R.glow) return;
-    const t = G.t, x0 = camX - vw / 2 - 3, x1 = camX + vw / 2 + 3, y0 = camY - vh / 2 - 3, y1 = camY + vh / 2 + 3;
-    const ember = G.fl && G.fl.particles > 1 ? G.fl.particles - 1 : 0;   // «Красивые»/«Ультра»: искры над огнём и лавой
+  const WHITE = [255, 255, 255];
+  const glares = [];                 // блики огня: [x, y, радиус, r, g, b, a] — рисуются сложением после жидкостей
+  const bubbles = [];                // пузыри лавы: { x, y, t, life, r }
+  // пламя: x — середина, by — низ языка; k — размер; seed — своя фаза кадров и мерцания; low — над огнём потолок (язык короче)
+  function flame(x, by, k, seed, low, tint){
+    const fr = G.A.spr.flame; if (!fr) return 1;
+    const t = G.t, fi = Math.floor(t * 11 + seed * 2.7) % fr.length;
+    const fl = 1 + .08 * Math.sin(t * 13.7 + seed) + .05 * Math.sin(t * 23.1 + seed * 2.3);
+    const w = .5 * k * (1 + .04 * Math.sin(t * 9.1 + seed)), h = .875 * k * fl * (low ? .62 : 1), q = fr[fi], c = tint || WHITE;
+    G.R.sprite(null, x - w / 2, by - h, w, h, q[0], q[1], q[0] + q[2], q[1] + q[3], c[0], c[1], c[2], 255, (seed | 0) % 2 === 1);
+    return fl;
+  }
+  // угольки (светятся сами) и дымок (освещается сценой) над огнём: rate — сколько в секунду
+  function sparks(x, y, rate, spread){
+    const dt = G.rdt || 1 / 60;
+    if (rand() < rate * dt) part(x + (rand() - .5) * spread, y, (rand() - .5) * .7, -1.2 - rand() * .9, .7 + rand() * .8, .05 + rand() * .04, rand() < .5 ? 0xffc060 : 0xff8030, -.45, 1);
+  }
+  function smoke(x, y, rate, spread){
+    const dt = G.rdt || 1 / 60;
+    if (G.opt.parts && rand() < rate * dt) part(x + (rand() - .5) * spread, y, (rand() - .5) * .3, -.5 - rand() * .35, 1.6 + rand() * 1.1, .2 + rand() * .12, rand() < .5 ? 0x6e6a66 : 0x5c5856, -.05, 2);
+  }
+  // пламя и всё вокруг огня на экране (до спрайтов существ: факел — на стене, за героем)
+  function drawFlames(vw, vh){
+    const q = G.q, t = G.t, camX = G.cam.x, camY = G.cam.y, live = G.state === 'play', pk = G.fl?.particles || 1;
+    const x0 = camX - vw / 2 - 2, x1 = camX + vw / 2 + 2, y0 = camY - vh / 2 - 2, y1 = camY + vh / 2 + 2;
+    glares.length = 0;
     let n = 0;
-    R.glowBegin();
     for (const c of visList) {
       if (c.emiDirty || !c.emi) emissives(c);
       const ox = c.cx * CS, oy = c.cy * CS;
-      for (let k = 0; k < c.emi.length && n < 400; k++) {
+      for (let k = 0; k < c.emi.length && n < 300; k++) {
         const i = c.emi[k], x = ox + (i & CM), y = oy + (i >> CB);
         if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-        const f = c.fg[i];
-        let rad, a, gx = x + .5, gy = y + .5;
-        if (f === T.TORCH) { const fl = .8 + .2 * Math.sin(t * 9.1 + x * 1.7 + y * 2.3) * Math.sin(t * 5.3 + x); rad = 3 + .35 * fl; a = .4 * fl; gy = y + .3; R.glow(gx, gy, .85, 255, 225, 160, .5 * fl * 255 | 0); n++; }   // + яркая сердцевина
-        else if (P.KIND[f] === 1) { rad = 1.9; a = .2; gx = x + P.W[f] / 2; gy = y + P.H[f] / 2; }
-        else if (P.SOLID[f] === 1) { if (q < 2) continue; rad = .95; a = .13 + .04 * Math.sin(t * 2 + x * 3.1 + y); }   // руда
-        else { rad = 1.5; a = .22 + .04 * Math.sin(t * 1.5 + x + y); }   // светогрибы, кристаллы
-        R.glow(gx, gy, rad, P.LR[f], P.LG[f], P.LB[f], a * 255 | 0);
-        if (q >= 3 && f === T.TORCH) R.glow(gx, gy, 6.5, P.LR[f], P.LG[f], P.LB[f], 22);   // ультра: широкая дымка вокруг огня
-        if (f === T.TORCH && ember > 0 && G.state === 'play' && rand() < ember * .9 / 60) part(x + .5 + (rand() - .5) * .25, y + .2, (rand() - .5) * .7, -1.3 - rand(), .8 + rand() * .7, .06 + rand() * .05, rand() < .5 ? 0xffc060 : 0xff8030, -.5, 1);   // искры над огнём
-        n++;
-      }
-      if (q >= 2) {
-        if (c.lavaDirty || !c.lava) lavaTops(c);
-        for (let k = 0; k < c.lava.length && n < 560; k += 2) {
-          const i = c.lava[k], x = ox + (i & CM), y = oy + (i >> CB);
-          if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-          R.glow(x + .5, y + .7, 1.8, 255, 118, 36, (.1 + .04 * Math.sin(t * 1.3 + x * .7)) * 255 | 0);
-          if (ember > 0 && G.state === 'play' && rand() < ember * .08 / 60) part(x + rand(), y + .1, (rand() - .5) * 1.2, -2 - rand() * 2, .7 + rand() * .6, .07, 0xffa040, 3, 1);   // брызги лавы
+        const f = c.fg[i], seed = (x * 7.13 + y * 3.71) % 97;
+        if (P.KIND[f] === 3) {   // факел (и факелы модов — пламя в цвет их света)
+          const low = P.OPC[fgAt(x, y - 1)] === 1, tint = f === T.TORCH ? null : [Math.min(255, P.LR[f] + 90), Math.min(255, P.LG[f] + 90), Math.min(255, P.LB[f] + 90)];
+          const fl = flame(x + .5, y + .43, 1, seed, low, tint);
+          if (q >= 1) glares.push([x + .5, y + .12, .62 * fl, P.LR[f], Math.min(255, P.LG[f] + 40), Math.min(255, P.LB[f] + 40), (.3 * fl) * 255 | 0]);
+          if (live && q >= 1) { sparks(x + .5, y - .1, .9 * pk, .2); if (!low) smoke(x + .5, y - .3, .45 * pk, .12); }
+          n++;
+        } else if (f === T.FURNACE) {   // печь: огонь в окошке, дым из трубы
+          flame(x + 1.32, y + 1.86, .5, seed, false); flame(x + 1.68, y + 1.86, .55, seed + 3, false);
+          if (q >= 1) glares.push([x + 1.5, y + 1.6, .7, 255, 150, 60, 70]);
+          if (live && q >= 1) { smoke(x + 1.5, y - .05, .8 * pk, .25); sparks(x + 1.5, y + 1.3, .25 * pk, .4); }
+          n++;
+        } else if (!P.SOLID[f] && q >= 1) {   // светогрибы, кристаллы — тихий блик
+          glares.push([x + .5, y + .55, .5, P.LR[f], P.LG[f], P.LB[f], (.16 + .04 * Math.sin(t * 1.5 + x + y)) * 255 | 0]);
           n++;
         }
       }
+      // лава: пузыри поднимаются и лопаются, брызги-угольки
+      if (q >= 1 && live && c.hasLq) {
+        if (c.lavaDirty || !c.lava) lavaTops(c);
+        const dt = G.rdt || 1 / 60;
+        for (let k = 0; k < c.lava.length; k++) {
+          const i = c.lava[k], x = ox + (i & CM), y = oy + (i >> CB);
+          if (x < x0 || x > x1 || y < y0 || y > y1) continue;
+          if (bubbles.length < 48 && rand() < .16 * pk * dt) bubbles.push({ x: x + .15 + rand() * .7, y: y + .12 + (1 - c.lq[i] / 255), t: 0, life: .45 + rand() * .55, r: .07 + rand() * .09 });
+          if (q >= 2 && rand() < .05 * pk * dt) part(x + rand(), y + .1, (rand() - .5) * 1.2, -2 - rand() * 2, .7 + rand() * .6, .07, 0xffa040, 3, 1);
+        }
+      }
     }
+    // пузыри: растут у глади и лопаются (две-три искры)
+    const dt = G.rdt || 1 / 60;
+    for (let k = bubbles.length - 1; k >= 0; k--) {
+      const b = bubbles[k]; b.t += dt;
+      if (b.t >= b.life) { for (let j = 0; j < 3; j++) part(b.x, b.y, (rand() - .5) * 2, -1.5 - rand() * 1.5, .3 + rand() * .3, .05, 0xffd070, 2.2, 1); bubbles.splice(k, 1); continue; }
+      const u = b.t / b.life, r = b.r * (.4 + u * .8);
+      G.R.puff(b.x, b.y - r * .3, r * 1.6, 255, 196 + 40 * u | 0, 90, 230);
+    }
+  }
+  // блики огня — сложением, после жидкостей (огонь у воды не тонет в ней)
+  function drawGlares(){
+    const R = G.R; if (!glares.length || !R.glow) return;
+    R.glowBegin();
+    for (const g of glares) R.glow(g[0], g[1], g[2], g[3], g[4], g[5], g[6]);
     R.glowEnd();
+  }
+
+  // ═══ «Живой» свет: тусклый свет вокруг героя (видно хоть что-то рядом), факел в руке (как в Террарии), «Зелье сияния»,
+  // огненные снаряды, бесы. Своя маленькая карта вокруг камеры: заливка от каждого источника по клеткам с правилами карты
+  // мира (воздух пропускает, в камень — только грань, сквозь стену — нет), в шейдере и у спрайтов берётся максимум с
+  // картой мира. Пересчёт — только когда сдвинулись источники, окно камеры или клетки (G.cellRev) ═══
+  const DYN = { x0: 0, y0: 0, w: 0, h: 0, n: 0, cls: null, v: null, r: null, g: null, b: null, rgba: null, q: null, tl: null, key: '', ckey: '', on: false };
+  function dynSources(){
+    const out = [], p = G.pl;
+    if (!p || p.dead || G.state === 'menu') return out;
+    const px = p.x + p.w / 2, py = p.y + p.h * .45;
+    out.push(buffOn('shine') ? [px, py, 200, .87, 190, 230, 255] : [px, py, 44, .78, 255, 236, 214]);
+    const s = selItem(), it = s && itemDef(s.id);
+    if (it) {
+      const hx = G.handPos ? G.handPos[0] : px + p.dir * .5, hy = G.handPos ? G.handPos[1] - .35 : p.y + p.h * .3;
+      if (it.key === 'torch') out.push([hx, hy, 232, .885, 255, 168, 76]);
+      else if (it.kind === 'tile') { const id = it.tileId || PZ.TILE[it.tile]?.id; if (id && (P.LR[id] | P.LG[id] | P.LB[id]) && P.KIND[id] !== 1) out.push([hx, hy, 150, .85, P.LR[id], P.LG[id], P.LB[id]]); }   // светогриб, кристалл
+      else if (/_fire$/.test(it.key)) out.push([hx, hy, 96, .82, 255, 120, 40]);
+    }
+    for (const q of G.projs) if (q.spr === 'fireball') out.push([q.x, q.y, 190, .85, 255, 122, 40]); else if (q.spr === 'spark') out.push([q.x, q.y, 150, .84, 220, 120, 255]);
+    for (const m of G.mobs) if (m.type === 'imp' && m.hp > 0) out.push([m.x + m.w / 2, m.y + m.h / 2, 120, .84, 255, 110, 40]);
+    if (out.length > 16) { const cx = G.cam.x, cy = G.cam.y; out.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy)); out.length = 16; }
+    return out;
+  }
+  const NB8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  function dynLight(camX, camY, vw, vh){
+    const R = G.R; if (!R?.setDyn) return;
+    const src = dynSources();
+    if (!src.length) { if (DYN.on) { R.clearDyn(); DYN.on = false; DYN.key = ''; } return; }
+    const x0 = Math.floor(camX - vw / 2) - 3, y0 = Math.max(0, Math.floor(camY - vh / 2) - 3), w = Math.ceil(vw) + 7, h = Math.ceil(vh) + 7, n = w * h;
+    const key = src.map(q => Math.round(q[0] * 4) + ',' + Math.round(q[1] * 4) + ',' + q[2] + ',' + q[4]).join(';') + '|' + x0 + ',' + y0 + ',' + w + ',' + h + '|' + (G.cellRev || 0);
+    if (key === DYN.key && DYN.on) return;
+    DYN.key = key;
+    if (n > DYN.n) { DYN.n = n; DYN.cls = new Uint8Array(n); DYN.v = new Float32Array(n); DYN.r = new Float32Array(n); DYN.g = new Float32Array(n); DYN.b = new Float32Array(n); DYN.rgba = new Uint8Array(n * 4); DYN.q = new Int32Array(n * 4); DYN.tl = new Int32Array(n); }
+    const ckey = x0 + ',' + y0 + ',' + w + ',' + h + '|' + (G.cellRev || 0);
+    DYN.x0 = x0; DYN.y0 = y0; DYN.w = w; DYN.h = h;
+    const cls = DYN.cls;
+    if (ckey !== DYN.ckey) {   // классы клеток окна: 0 воздух, 1 непрозрачное, 2 полупрозрачное, 3 вода, 4 лава
+      DYN.ckey = ckey;
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+        const x = x0 + i, y = y0 + j, c = cAt(x, y);
+        if (!c) { cls[j * w + i] = 1; continue; }
+        const ii = idx(x, y), f = c.fg[ii], lq = c.lq[ii];
+        cls[j * w + i] = lq > 127 ? (c.lt[ii] === 2 ? 4 : 3) : P.OPC[f] === 1 ? 1 : P.OPC[f] === 2 ? 2 : 0;
+      }
+    }
+    const Rr = DYN.r, Rg = DYN.g, Rb = DYN.b;
+    Rr.fill(0, 0, n); Rg.fill(0, 0, n); Rb.fill(0, 0, n);
+    for (const s of src) dynFill(s);
+    const o = DYN.rgba;
+    for (let k = 0; k < n; k++) { o[k * 4] = Rr[k] > 255 ? 255 : Rr[k]; o[k * 4 + 1] = Rg[k] > 255 ? 255 : Rg[k]; o[k * 4 + 2] = Rb[k] > 255 ? 255 : Rb[k]; o[k * 4 + 3] = 255; }
+    R.setDyn(o.subarray(0, n * 4), w, h, x0, y0);
+    DYN.on = true;
+  }
+  // заливка от одного источника [x, y, сила 0…255, доля за клетку воздуха, r, g, b] (как карта мира: в камень — грань, дальше гаснет)
+  function dynFill(s){
+    const [sx, sy, V, m, cr, cg, cb] = s, { x0, y0, w, h, cls, v, q, tl } = DYN;
+    const M = [m, m * .7, m * .86, m * .93, m * .8], MD = M.map(a => Math.pow(a, Math.SQRT2)), mD = .22, mDD = Math.pow(.22, Math.SQRT2);
+    let qn = 0, tn = 0, qh = 0;
+    const fx = sx - .5 - x0, fy = sy - .5 - y0, ix = Math.floor(fx), iy = Math.floor(fy);
+    for (let a = 0; a < 4; a++) {   // четыре клетки вокруг точки — по расстоянию до неё (свет движется плавно, не клетками)
+      const i = ix + (a & 1), j = iy + (a >> 1); if (i < 0 || j < 0 || i >= w || j >= h) continue;
+      const k = j * w + i; if (cls[k] === 1) continue;
+      const val = V * Math.pow(m, Math.hypot(i - fx, j - fy));
+      if (val > v[k]) { if (!v[k]) tl[tn++] = k; v[k] = val; q[qn++] = k; }
+    }
+    const QL = q.length;
+    while (qh < qn) {
+      const k = q[qh++], val = v[k], i = k % w, j = (k - i) / w, solid = cls[k] === 1;
+      for (let d = 0; d < 8; d++) {
+        const ni = i + NB8[d][0], nj = j + NB8[d][1];
+        if (ni < 0 || nj < 0 || ni >= w || nj >= h) continue;
+        const nk = nj * w + ni, cn = cls[nk], diag = d >= 4;
+        if (diag && cls[j * w + ni] === 1 && cls[nj * w + i] === 1) continue;
+        let mm;
+        if (solid) { if (cn !== 1) continue; mm = diag ? mDD : mD; } else mm = diag ? MD[cn] : M[cn];
+        const nv = val * mm;
+        if (nv < 3 || nv <= v[nk]) continue;
+        if (!v[nk]) tl[tn++] = nk;
+        v[nk] = nv;
+        if (qn < QL) q[qn++] = nk;
+      }
+    }
+    const Rr = DYN.r, Rg = DYN.g, Rb = DYN.b, kr = cr / 255, kg = cg / 255, kb = cb / 255;
+    for (let t = 0; t < tn; t++) { const k = tl[t], val = v[k]; v[k] = 0; const r = val * kr, g = val * kg, b = val * kb; if (r > Rr[k]) Rr[k] = r; if (g > Rg[k]) Rg[k] = g; if (b > Rb[k]) Rb[k] = b; }
+  }
+  // «живой» свет в точке (для спрайтов) — тем же сглаживанием, что в шейдере: 0…255 по каналам в DL
+  const DL = [0, 0, 0];
+  function dynAt(x, y){
+    DL[0] = DL[1] = DL[2] = 0;
+    if (!DYN.on) return DL;
+    const fx = x - .5 - DYN.x0, fy = y - .5 - DYN.y0, ix = Math.floor(fx), iy = Math.floor(fy), ax = fx - ix, ay = fy - iy, w = DYN.w;
+    for (let k = 0; k < 4; k++) {
+      const i = ix + (k & 1), j = iy + (k >> 1); if (i < 0 || j < 0 || i >= w || j >= DYN.h) continue;
+      const wt = (k & 1 ? ax : 1 - ax) * (k >> 1 ? ay : 1 - ay), q = j * w + i;
+      DL[0] += DYN.r[q] * wt; DL[1] += DYN.g[q] * wt; DL[2] += DYN.b[q] * wt;
+    }
+    return DL;
   }
   // ═══ Поле искажений для постобработки (R — вода: рябь, G — жар над лавой: дрожь воздуха): клетка поля = клетка мира ═══
   let FLD = null;
@@ -1894,9 +2036,8 @@
     skyAt(G.W.time);
     BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth && G.fl.smooth !== false; CHS.back = G.opt.back;   // «Ретро» — свет клетками, как раньше в Террарии
     CHS.q = BG.q = G.q; CHS.amb = G.q === 0 ? .025 : .012;
-    // тусклый свет вокруг героя — чтобы в пещере без факела было видно хоть что-то рядом
-    const shine = buffOn('shine');   // «Зелье сияния» — герой сам светит
-    CHS.glowX = p.x + p.w / 2; CHS.glowY = p.y + p.h * .45; CHS.glow = p.dead ? 0 : shine ? .85 : .3; CHS.glowR = shine ? 13 : 7.5;
+    CHS.scat = [0, .26, .36, .44][G.q] || 0;   // ореол огня в воздухе (рассеянный свет; «Ретро» — без него)
+    G.rdt = dtr;                              // время кадра — частицам огня (одинаково при любой частоте экрана)
     window.D37E?._audio?.listener?.(camX, camY, 0, 0);
     // видимые чанки → на видеокарту (не больше 14 загрузок за кадр)
     visList.length = 0;
@@ -1909,13 +2050,15 @@
     }
     if (ups < 6) for (const c of G.chunks.values()) { if (ups >= 6) break; if (!c.ready || c.dirty0 || c.dirty1 || c.dirtyL) { upload(c); ups++; } }
     if ((R.frame & 15) === 0) ambience(camX, camY);   // звуки места — 4 раза в секунду
+    dynLight(camX, camY, vw, vh);                     // «живой» свет: герой, факел в руке, снаряды
     R.begin(camX, camY, G.fl);
     R.background(BG);
     R.chunks(visList, CHS, 0);
+    drawFlames(vw, vh);
     drawSprites();
     R.flush();
     R.chunks(visList, CHS, 1);
-    drawGlows(camX, camY, vw, vh);
+    drawGlares();
     if (R.post?.active) {   // постобработка набора: рябь воды и дрожь над лавой (поле по клеткам вокруг камеры), цвет края
       if (G.fl.distort) distortField(camX, camY, vw, vh);
       R.end({ time: G.t, grade: gradeAt(camX, camY) });
@@ -1937,10 +2080,11 @@
     }
     if (!any) { LT[0] = LT[1] = LT[2] = .1; return LT; }
     s /= 255;
-    const p = G.pl, d = p && !p.dead ? Math.max(0, 1 - Math.hypot(x - CHS.glowX, y - CHS.glowY) / (CHS.glowR || 7.5)) : 0, gw = CHS.glow * d * d;
+    const D = dynAt(x, y);   // «живой» свет (герой, факел в руке, снаряды) — что ярче
+    if (D[0] > r) r = D[0]; if (D[1] > g) g = D[1]; if (D[2] > b) b = D[2];
     const amb = CHS.amb + .03;
     s = Math.pow(s, .75); r = Math.pow(r / 255, .75) * 1.16; g = Math.pow(g / 255, .75) * 1.16; b = Math.pow(b / 255, .75) * 1.16;   // та же кривая, что в шейдере
-    LT[0] = Math.min(1, Math.max(r, s * skyL[0], gw) + amb); LT[1] = Math.min(1, Math.max(g, s * skyL[1], gw * .9) + amb); LT[2] = Math.min(1, Math.max(b, s * skyL[2], gw * .78) + amb);   // не больше 1: цвет спрайта — байт
+    LT[0] = Math.min(1, Math.max(r, s * skyL[0]) + amb); LT[1] = Math.min(1, Math.max(g, s * skyL[1]) + amb); LT[2] = Math.min(1, Math.max(b, s * skyL[2]) + amb);   // не больше 1: цвет спрайта — байт
     return LT;
   }
   function spr(name, f, x, y, w, h, flip, rot, tint, a, ox, oy, lit = true){
@@ -1987,6 +2131,15 @@
   // предмет в руке: инструмент/меч — поворот по взмаху, блоки — маленьким кубиком
   function heldItem(id, hx, hy, left, swingK){
     const it = itemDef(id); if (!it) return;
+    const hp = G.handPos || (G.handPos = [0, 0]); hp[0] = hx; hp[1] = hy;   // где рука — туда «живой» свет факела
+    const tid = it.kind === 'tile' ? it.tileId || PZ.TILE[it.tile]?.id : 0;
+    if (tid && P.KIND[tid] === 3 && G.A.tile?.[tid] >= 0) {   // факел в руке: ручка (освещена) и живое пламя над ней
+      const c = G.A.tile[tid], u = (c % 64) * 16, v = (c >> 6) * 16, s = .78, L = lightAt(hx, hy - .3), top = hy - s * .98;   // держит повыше, у плеча
+      G.R.sprite(null, hx - s / 2, top, s, s, u, v, u + 16, v + 16, 255 * L[0] | 0, 255 * L[1] | 0, 255 * L[2] | 0, 255);
+      flame(hx, top + s * .4, .92, 7.3, false, tid === T.TORCH ? null : [Math.min(255, P.LR[tid] + 90), Math.min(255, P.LG[tid] + 90), Math.min(255, P.LB[tid] + 90)]);
+      if (G.q >= 1 && G.state === 'play') { glares.push([hx, top + s * .1, .55, 255, 210, 140, 70]); sparks(hx, top - .05, .7, .15); }
+      return;
+    }
     const tool = it.kind === 'tool' || it.kind === 'melee' || it.kind === 'wand' || it.kind === 'bow';
     const s = tool ? 1.15 : .7;
     let rot;
@@ -2026,13 +2179,21 @@
     }
     // снаряды
     for (const q of G.projs) { const fr = A.spr[q.spr]; if (!fr) continue; const [, , w, h] = fr[0], sw = w / 16, sh = h / 16; spr(q.spr, Math.floor(q.t * 10), q.x - sw / 2, q.y - sh / 2, sw, sh, false, Math.atan2(q.vy, q.vx), null, 1, sw / 2, sh / 2, q.spr === 'arrowp'); }
-    // частицы
+    // частицы (дым — отдельно: мягкие клубы, растут и тают; освещаются сценой)
+    let smokeN = 0;
     for (let i = 0; i < PT.n; i++) {
+      if (PT.glow[i] === 2) { smokeN++; continue; }
       const c = PT.c[i], k = 1 - PT.t[i] / PT.life[i], s = PT.s[i];
       let r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255;
       if (!PT.glow[i]) { const L = lightAt(PT.x[i], PT.y[i]); r = r * L[0] | 0; g = g * L[1] | 0; b = b * L[2] | 0; }
       const q = A.spr.white[0];
       G.R.sprite(null, PT.x[i] - s / 2, PT.y[i] - s / 2, s, s, q[0], q[1], q[0] + 4, q[1] + 4, r, g, b, 255 * Math.min(1, k * 1.5) | 0);
+    }
+    if (smokeN) for (let i = 0; i < PT.n; i++) {
+      if (PT.glow[i] !== 2) continue;
+      const c = PT.c[i], u = PT.t[i] / PT.life[i], s = PT.s[i] * (1 + 2.2 * u), L = lightAt(PT.x[i], PT.y[i]);
+      const a = .3 * Math.min(1, u * 6) * (1 - u), k = Math.max(L[0], L[1], L[2]);
+      G.R.puff(PT.x[i], PT.y[i], s, (c >> 16 & 255) * L[0] | 0, (c >> 8 & 255) * L[1] | 0, (c & 255) * L[2] | 0, 255 * a * Math.min(1, .25 + k) | 0);
     }
     // крюк: верёвка звеньями от руки и сам крюк
     const hk = G.hook;

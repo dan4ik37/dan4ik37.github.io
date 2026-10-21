@@ -139,10 +139,11 @@
       p(2, 5, rgb(c[1], .9), 2, 3); p(12, 5, rgb(c[1], .9), 2, 3);
       if (R() < .5) p(7, 1, rgb(c[1]), 1, 2);
     },
-    torch(g, ox, oy, c, R){
+    torch(g, ox, oy, c, R){   // ручка и обмотка; само пламя — живое, рисует игра поверх (PZGL.SPR.flame)
       const p = P(g, ox, oy); g.clearRect(ox, oy, 16, 16);
       p(7, 7, rgb(c[0]), 2, 9); p(7, 7, rgb(c[0], 1.3), 1, 9);
-      p(6, 3, rgb(c[1]), 4, 5); p(7, 1, rgb(c[1]), 2, 3); p(7, 4, rgb(c[2]), 2, 3); p(8, 0 + (R() * 2 | 0), rgb(c[1], 1, .8), 1, 1);
+      p(6, 6, rgb([70, 46, 30]), 4, 2); p(6, 6, rgb([96, 66, 42]), 4, 1);   // обмотка
+      p(7, 5, rgb(c[1], .9), 2, 1); p(8, 4, rgb(c[2]), 1, 1);              // тлеющий кончик (если пламя не нарисовано)
     },
     trunk(g, ox, oy, c, R){   // кора: продольные борозды, светлая сторона, сучок
       const p = P(g, ox, oy); g.clearRect(ox, oy, 16, 16);
@@ -279,6 +280,11 @@
     amulet(p, c){ for (let i = 0; i < 8; i++) { p(3 + i, 1 + (i < 4 ? i : 7 - i), rgb([230, 200, 90])); } p(5, 7, rgb(c), 6, 6); p(6, 8, rgb([255, 255, 255], 1, .8), 2, 2); },
     boots(p, c){ p(3, 3, rgb(c), 5, 9); p(3, 10, rgb(c), 10, 4); p(3, 13, rgb([40, 40, 50]), 10, 2); p(4, 4, rgb(c, 1.3), 1, 7); },
     wings(p, c){ for (let i = 0; i < 7; i++) { p(1 + i, 3 + i, rgb(c), 6 - (i >> 1), 2); p(9 + (i >> 1), 3 + i, rgb(c), 6 - (i >> 1), 2); } p(7, 4, rgb([120, 80, 45]), 2, 8); },
+    torch(p){   // факел в вещах: ручка, обмотка и пламя (в мире пламя живое — SPR.flame)
+      p(7, 7, rgb([122, 75, 38]), 2, 9); p(7, 7, rgb([158, 104, 56]), 1, 9); p(6, 6, rgb([70, 46, 30]), 4, 2);
+      p(6, 2, rgb([255, 132, 40]), 4, 4); p(5, 3, rgb([226, 78, 26]), 1, 3); p(10, 3, rgb([226, 78, 26]), 1, 3); p(7, 0, rgb([255, 150, 50]), 2, 2);
+      p(7, 2, rgb([255, 222, 120]), 2, 4); p(7, 3, rgb([255, 250, 214]), 1, 2);
+    },
     hook(p, c){   // крюк-кошка: стержень, три зубца, кольцо и кусок верёвки
       for (let i = 0; i < 8; i++) p(5 + i, 11 - i, rgb(c, .85));
       p(11, 1, rgb(c), 2, 5); p(12, 1, rgb(c, 1.35), 1, 3); p(9, 3, rgb(c), 2, 2); p(8, 2, rgb(c), 1, 2); p(13, 5, rgb(c), 2, 2); p(14, 4, rgb(c), 1, 2);
@@ -383,6 +389,23 @@
       const p = P(g, x, y); p(6, 0, '#f0c8a0', 9, 9); p(6, 0, '#5a3a20', 9, 3); p(8, 4, '#222', 1, 2); p(12, 4, '#222', 1, 2);
       p(5, 9, '#4f8df7', 11, 15); p(3, 10, '#f0c8a0', 2, 10); p(16, 10, '#f0c8a0', 2, 10);
       p(6, 24, '#3a4a6a', 4, 17 + f); p(11, 24, '#3a4a6a', 4, 17 - f); p(5, 40, '#2a2a30', 5, 4); p(11, 40, '#2a2a30', 5, 4);
+    }],
+    // живое пламя (факелы, печь, факел в руке): 8 кадров «языка» — капля, жарче в середине и снизу, кончик гуляет,
+    // в части кадров сверху отрывается искра. Рисуется без света сцены (огонь светит сам), поверх — мягкий ореол
+    flame: [8, 14, 8, (g, x, y, f) => {
+      const p = P(g, x, y), R = rng(901 + f * 17);
+      const Hh = 10 + (R() * 3.99 | 0), lean = (R() - .5) * 2;
+      for (let yy = 0; yy < 14; yy++) {
+        const h = 13 - yy; if (h > Hh) continue;
+        const u = h / Hh, half = 3.2 * Math.pow(Math.sin(Math.PI * (u * .8 + .2)), .65) * (1 - u * .3);
+        const cx = 4 + lean * u * u + Math.sin(f * .785 + u * 4.5) * .6 * u;
+        for (let xx = 0; xx < 8; xx++) {
+          const d = Math.abs(xx + .5 - cx) / Math.max(.6, half); if (d > 1) continue;
+          const t = (1 - d) * (1 - u * .85);
+          p(xx, yy, t > .6 ? 'rgba(255,250,220,1)' : t > .4 ? 'rgba(255,226,120,1)' : t > .2 ? 'rgba(255,152,48,.96)' : 'rgba(230,82,26,.85)');
+        }
+      }
+      if (f % 3 === 1) { const ty = 13 - Hh - 1 - (R() * 2 | 0), tx = 3 + (R() * 2.99 | 0); if (ty >= 0) p(tx, ty, 'rgba(255,150,46,.9)'); }
     }],
     arrowp: [16, 4, 1, (g, x, y) => { const p = P(g, x, y); p(0, 1, '#eee', 3, 2); p(3, 1, '#a87848', 10, 2); p(13, 0, '#ccc', 3, 4); }],
     spark: [8, 8, 2, (g, x, y, f) => { const p = P(g, x, y); p(2, 2, f ? '#ffd0ff' : '#ff8af0', 4, 4); p(3, 0, '#fff', 2, 8); p(0, 3, '#fff', 8, 2); }],
@@ -500,12 +523,13 @@ void main(){ vT = aP * 64.0; vS = uOff + vT; vec2 p = vS * uScale; gl_Position =
   const FS_CHUNK_HQ = !S2 ? null : `#version 300 es
 precision highp float; precision highp int; precision highp usampler2D; precision highp sampler2D;
 uniform usampler2D uT0, uT1, uProps;
-uniform sampler2D uLight, uAtlas;
+uniform sampler2D uLight, uAtlas, uDyn;
 uniform ivec2 uOrg;
+uniform ivec2 uDynOrg;  // карта «живого» света (герой, факел в руке, снаряды): мировая клетка левого верха
+uniform vec2 uDynSize;  // и её размер в клетках
 uniform vec3 uSky;
 uniform float uAmb, uTime;
-uniform vec3 uGlow;     // свет вокруг героя: x, y (от угла чанка), сила
-uniform float uGlowR;   // и его радиус (клеток; «Зелье сияния» — больше)
+uniform float uScat;    // свет, рассеянный в воздухе вокруг огня (0 — нет)
 uniform vec2 uCamP;     // камера × 0,65 (по модулю 1020) — параллакс фона пещер
 uniform int uPass, uSmooth, uBack, uQ;
 in vec2 vT;
@@ -516,18 +540,23 @@ ${S2.light}
 ${S2.aoWall}
 ${S2.water}
 vec4 at(int cell, ivec2 px){ return texelFetch(uAtlas, ivec2((cell % ${AN}) * 16 + px.x, (cell / ${AN}) * 16 + px.y), 0); }
-vec4 Lraw(vec2 p){ return uSmooth == 1 ? texture(uLight, (p + 1.0) / 66.0) : texelFetch(uLight, clamp(ivec2(floor(p)) + 1, ivec2(0), ivec2(65)), 0); }
+// свет клетки: карта чанка (небо, факелы, лава) и «живой» свет — что ярче (по каналам)
+vec4 Lraw(vec2 p){
+  vec4 L = uSmooth == 1 ? texture(uLight, (p + 1.0) / 66.0) : texelFetch(uLight, clamp(ivec2(floor(p)) + 1, ivec2(0), ivec2(65)), 0);
+  vec2 dp = vec2(uOrg - uDynOrg) + p;
+  if (dp.x > 0.0 && dp.y > 0.0 && dp.x < uDynSize.x && dp.y < uDynSize.y)
+    L.rgb = max(L.rgb, (uSmooth == 1 ? texture(uDyn, dp / uDynSize) : texelFetch(uDyn, ivec2(floor(dp)), 0)).rgb);
+  return L;
+}
 // «Ультра»: свет ещё мягче — 5 выборок вокруг точки (без «ромбиков» между серединами клеток)
 vec4 Lsoft(vec2 p){
   if (uQ < 3 || uSmooth != 1) return Lraw(p);
   return Lraw(p) * 0.4 + (Lraw(p + vec2(0.35, 0.18)) + Lraw(p + vec2(-0.18, 0.35)) + Lraw(p + vec2(-0.35, -0.18)) + Lraw(p + vec2(0.18, -0.35))) * 0.15;
 }
 float Llum(vec2 p){ vec4 L = Lraw(p); return s2lum(max(L.rgb, uSky * L.a)); }
-// свет в точке: огонь (мерцает) или небо — что ярче, + тусклый свет вокруг героя
+// свет в точке: огонь (мерцает) или небо — что ярче (свет вокруг героя — в «живой» карте, его тоже держат стены)
 vec3 lightCol(vec4 L, vec2 pw, vec2 p){
-  vec3 c = s2light(L.rgb, L.a, uSky, pw, uTime, uQ);
-  float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / max(uGlowR, 1.0)); g *= g;
-  return max(c, vec3(g, g * 0.9, g * 0.78)) + uAmb;
+  return s2light(L.rgb, L.a, uSky, pw, uTime, uQ) + uAmb;
 }
 uint hsh(ivec2 p){ return s2hash(p); }
 float lum(vec3 c){ return s2lum(c); }
@@ -542,6 +571,8 @@ void main(){
   vec2 pw = vec2(uOrg & 4095) + vT;   // мировые клетки (по модулю — для шума без потери точности)
   vec4 Lr = Lsoft(vT);
   vec3 L = lightCol(Lr, pw, vT);
+  // свет, рассеянный в воздухе у огня (ореол): по той же карте света — в толщу камня и за стену не попадает
+  vec3 scat = uScat > 0.0 ? s2scatter(Lr.rgb, uQ >= 1 ? s2flick(pw, uTime) : 1.0, uScat) : vec3(0.0);
   if (uPass == 1) {
     uint lv = t1.g, lt = t1.b & 3u; bool above = (t1.b & 128u) != 0u;
     if (lv == 0u || lt == 0u) discard;
@@ -568,6 +599,7 @@ void main(){
   uint fg = t0.r, sm = t0.g, wall = t0.b, wm = t0.a & 15u, same = t0.a >> 4u, st = t1.r;
   vec4 col = vec4(0.0);
   float emis = 0.0, rel = 1.0;
+  bool open = true;   // в этой точке воздух (стена фона, растение, предмет) — тут виден рассеянный свет
   bool dirL = uQ >= 2;
   vec2 lgN = vec2(0.0);
   if (dirL) {   // куда светлее (в клетках мира, y вниз): для объёма текстур и кромок
@@ -584,7 +616,7 @@ void main(){
     if ((wm & 2u) != 0u && px.x > 13) e = 1.0;
     if ((wm & 4u) != 0u && px.y > 13) e = 1.0;
     if ((wm & 8u) != 0u && px.x < 2) e = 1.0;
-    col = vec4(w.rgb * (0.58 - e * 0.2), w.a);
+    col = vec4(w.rgb * (0.66 - e * 0.22), w.a);
     if (uQ >= 1) col.rgb *= aoWall(sm, f);
     if (dirL) {
       vec2 hg = vec2(lum(at(wc, clamp(px + ivec2(1, 0), ivec2(0), ivec2(15))).rgb) - lum(at(wc, clamp(px - ivec2(1, 0), ivec2(0), ivec2(15))).rgb),
@@ -662,24 +694,28 @@ void main(){
       }
     }
     emis = float(fx.a) / 255.0;
-    if (tc.a > 0.5) rel = frel;
+    if (tc.a > 0.5) { rel = frel; if ((fl & 4u) != 0u) open = false; }   // непрозрачный блок: ореола в нём нет
     col.rgb = tc.rgb * tc.a + col.rgb * (1.0 - tc.a);
     col.a = tc.a + col.a * (1.0 - tc.a);
   }
-  if (col.a < 0.004) discard;
+  if (col.a < 0.004) {   // пусто (небо): только ореол огня в воздухе — прибавкой
+    if (scat.r + scat.g + scat.b < 0.004) discard;
+    oC = vec4(scat, 0.0);
+    return;
+  }
   vec3 lit = col.rgb * min(L, vec3(1.35)) * rel;
   lit = max(lit, col.rgb * emis);
-  oC = vec4(lit * col.a, col.a);
+  oC = vec4(lit * col.a + (open ? scat : vec3(0.0)), col.a);
 }`;
   // ── Чанк, «простой» (как было в 1-й версии): запасной, если «красивый» не собрался или рисует чёрным ──
   const FS_CHUNK_BASIC = `#version 300 es
 precision highp float; precision highp int; precision highp usampler2D; precision highp sampler2D;
 uniform usampler2D uT0, uT1, uProps;
-uniform sampler2D uLight, uAtlas;
-uniform ivec2 uOrg;
+uniform sampler2D uLight, uAtlas, uDyn;
+uniform ivec2 uOrg, uDynOrg;
+uniform vec2 uDynSize;
 uniform vec3 uSky;
 uniform float uAmb, uTime;
-uniform vec3 uGlow;   // тусклый свет вокруг героя: x, y (от угла чанка), сила
 uniform int uPass, uSmooth, uBack;
 in vec2 vT;
 out vec4 oC;
@@ -687,8 +723,9 @@ uint hsh(ivec2 p){ uint h = uint(p.x) * 0x27d4eb2du ^ uint(p.y) * 0x165667b1u; h
 vec4 at(int cell, ivec2 px){ return texelFetch(uAtlas, ivec2((cell % ${AN}) * 16 + px.x, (cell / ${AN}) * 16 + px.y), 0); }
 vec3 lightAt(vec2 p){
   vec4 L = uSmooth == 1 ? texture(uLight, (p + 1.0) / 66.0) : texelFetch(uLight, ivec2(floor(p)) + 1, 0);
-  float g = uGlow.z * max(0.0, 1.0 - distance(p, uGlow.xy) / 6.5);
-  return max(max(L.rgb * 1.1, uSky * L.a), vec3(g, g * 0.92, g * 0.8)) + uAmb;
+  vec2 dp = vec2(uOrg - uDynOrg) + p;   // «живой» свет (герой, факел в руке…)
+  if (dp.x > 0.0 && dp.y > 0.0 && dp.x < uDynSize.x && dp.y < uDynSize.y) L.rgb = max(L.rgb, texture(uDyn, dp / uDynSize).rgb);
+  return max(L.rgb * 1.1, uSky * L.a) + uAmb;
 }
 void main(){
   ivec2 c = clamp(ivec2(floor(vT)), ivec2(0), ivec2(63));
@@ -730,7 +767,7 @@ void main(){
     if ((wm & 2u) != 0u && px.x > 13) e = 1.0;
     if ((wm & 4u) != 0u && px.y > 13) e = 1.0;
     if ((wm & 8u) != 0u && px.x < 2) e = 1.0;
-    col = vec4(w.rgb * (0.58 - e * 0.2), w.a);
+    col = vec4(w.rgb * (0.66 - e * 0.22), w.a);
   } else if ((t1.a & 1u) != 0u && uBack == 1) {
     uvec4 wi = texelFetch(uProps, ivec2(2, 2), 0);
     vec4 w = at(int(wi.r | (wi.g << 8u)) + int((hsh(wp / 3) >> 3u) & 3u), ivec2((px.x + (wp.x & 1) * 8) & 15, (px.y + (wp.y & 1) * 8) & 15));
@@ -1012,14 +1049,14 @@ void main(){
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       R.atlas = A;
     };
-    // свойства блоков: строка 0 — [ячейка lo, hi, флаги (1 трава), вид], строка 1 — [цвет травы rgb, свечение], строка 2 — стены
+    // свойства блоков: строка 0 — [ячейка lo, hi, флаги (1 трава, 2 листва, 4 непрозрачный), вид], строка 1 — [цвет травы rgb, свечение], строка 2 — стены
     R.setProps = (PZ, A) => {
       const d = new Uint8Array(256 * 3 * 4);
       for (let id = 1; id < 256; id++) {
         const c = A.tile[id];
         if (c < 0) { d[id * 4 + 3] = 3; continue; }   // неизвестный (мод удалён) — не рисуем, данные в мире целы
         const t = PZ.TILES[id] || {};
-        d[id * 4] = c & 255; d[id * 4 + 1] = c >> 8; d[id * 4 + 2] = (PZ.P.GRASSY[id] ? 1 : 0) | (PZ.P.LEAFY[id] ? 2 : 0); d[id * 4 + 3] = PZ.P.KIND[id] === 1 ? 1 : PZ.P.KIND[id] === 0 || PZ.P.LEAFY[id] ? 0 : 2;
+        d[id * 4] = c & 255; d[id * 4 + 1] = c >> 8; d[id * 4 + 2] = (PZ.P.GRASSY[id] ? 1 : 0) | (PZ.P.LEAFY[id] ? 2 : 0) | (PZ.P.OPC[id] === 1 ? 4 : 0); d[id * 4 + 3] = PZ.P.KIND[id] === 1 ? 1 : PZ.P.KIND[id] === 0 || PZ.P.LEAFY[id] ? 0 : 2;
         const gc = hex(t.grass || '#000000'), o = 1024 + id * 4;
         d[o] = gc[0]; d[o + 1] = gc[1]; d[o + 2] = gc[2]; d[o + 3] = PZ.P.EMIS[id];
       }
@@ -1035,6 +1072,23 @@ void main(){
     R.upload1 = (c, data) => { const g = R.chunkInit(c); gl.bindTexture(gl.TEXTURE_2D, g.t1); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 64, 64, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE, data); R.stats.uploads++; };
     R.uploadL = (c, data) => { const g = R.chunkInit(c); gl.bindTexture(gl.TEXTURE_2D, g.l); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 66, 66, gl.RGBA, gl.UNSIGNED_BYTE, data); R.stats.uploads++; };
     R.chunkFree = c => { if (!c.gl) return; gl.deleteTexture(c.gl.t0); gl.deleteTexture(c.gl.t1); gl.deleteTexture(c.gl.l); c.gl = null; };
+    // ── «Живой» свет (герой, факел в руке, «сияние», огненные снаряды): RGBA w×h клеток с левым верхом (x0, y0) — игра
+    // считает сама (заливка по клеткам, стены держат) и присылает, когда поменялся. Нет — пустая текстура 1×1 ──
+    const dynTex = gl.createTexture(); let dynW = 0, dynH = 0;
+    gl.bindTexture(gl.TEXTURE_2D, dynTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+    R.dyn = { x0: 0, y0: 0, w: 1, h: 1 };
+    R.setDyn = (data, w, h, x0, y0) => {
+      gl.bindTexture(gl.TEXTURE_2D, dynTex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      if (w === dynW && h === dynH) gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      else { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, data); dynW = w; dynH = h; }
+      R.dyn.x0 = x0; R.dyn.y0 = y0; R.dyn.w = w; R.dyn.h = h; R.stats.uploads++;
+    };
+    R.clearDyn = () => { R.dyn.w = R.dyn.h = 1; R.dyn.x0 = R.dyn.y0 = -1e6; };
+    R.clearDyn();
 
     R.resize = (w, h, tile) => { R.w = w; R.h = h; R.tile = tile; if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; } };
     // постобработка набора шейдеров (js/engine/shade2d.js): «Красивые»/«Ультра» — свечение, рябь, жар, цвет, виньетка;
@@ -1075,10 +1129,12 @@ void main(){
       gl.uniform3fv(u.uSky, s.sky); gl.uniform1f(u.uAmb, s.amb); gl.uniform1f(u.uTime, s.time); gl.uniform1i(u.uPass, pass);
       gl.uniform1i(u.uSmooth, s.smooth ? 1 : 0); gl.uniform1i(u.uBack, s.back === false ? 0 : 1);
       if (u.uQ) gl.uniform1i(u.uQ, s.q | 0);
-      if (u.uGlowR) gl.uniform1f(u.uGlowR, s.glowR || 7.5);
+      if (u.uScat) gl.uniform1f(u.uScat, pass === 0 ? s.scat || 0 : 0);
       if (u.uCamP) gl.uniform2f(u.uCamP, (R.camX * .65) % 1020, (R.camY * .65) % 1020);   // 1020 — кратно 6: узор фона (3 × 2) не прыгает
       gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, atlasTex); gl.uniform1i(u.uAtlas, 3);
       gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, propsTex); gl.uniform1i(u.uProps, 4);
+      gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, dynTex); if (u.uDyn) gl.uniform1i(u.uDyn, 5);
+      if (u.uDynOrg) { gl.uniform2i(u.uDynOrg, R.dyn.x0, R.dyn.y0); gl.uniform2f(u.uDynSize, R.dyn.w, R.dyn.h); }
       gl.uniform1i(u.uT0, 0); gl.uniform1i(u.uT1, 1); gl.uniform1i(u.uLight, 2);
       for (let i = 0; i < list.length; i++) {
         const c = list[i]; if (!c.gl || !c.ready) continue;
@@ -1088,7 +1144,6 @@ void main(){
         gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, c.gl.l);
         gl.uniform2f(u.uOff, c.cx * 64 - R.camX, c.cy * 64 - R.camY);
         gl.uniform2i(u.uOrg, c.cx * 64, c.cy * 64);
-        gl.uniform3f(u.uGlow, (s.glowX ?? -1e4) - c.cx * 64, (s.glowY ?? -1e4) - c.cy * 64, s.glow || 0);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         R.stats.draws++;
       }
@@ -1151,6 +1206,8 @@ void main(){
     R.glowBegin = () => { R.flush(); gl.blendFunc(gl.ONE, gl.ONE); };
     R.glow = (x, y, rad, r, g, b, a) => { const img = glowCanvas(); R.sprite(img, x - rad, y - rad, rad * 2, rad * 2, 0, 0, 64, 64, r, g, b, a); };
     R.glowEnd = () => { R.flush(); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); };
+    // мягкое пятно обычным смешиванием (дым, пузыри лавы): тот же круг, что у ореола
+    R.puff = (x, y, rad, r, g, b, a) => { const img = glowCanvas(); R.sprite(img, x - rad, y - rad, rad * 2, rad * 2, 0, 0, 64, 64, r, g, b, a); };
 
     // ── Проверка на этой видеокарте: «красивые» шейдеры рисуют не чёрным? (на части телефонов шейдер собирается, а
     // рисует чёрное — так было с травой в 3D). Рисуем кусочек стены и неба в маленькую текстуру и читаем пиксель. ──
@@ -1190,7 +1247,7 @@ void main(){
     R.dispose = () => {
       for (const t of imgTex.values()) gl.deleteTexture(t.t);
       imgTex.clear();
-      if (atlasTex) gl.deleteTexture(atlasTex); if (propsTex) gl.deleteTexture(propsTex);
+      if (atlasTex) gl.deleteTexture(atlasTex); if (propsTex) gl.deleteTexture(propsTex); gl.deleteTexture(dynTex);
       gl.deleteBuffer(quad); gl.deleteBuffer(vboS); gl.deleteBuffer(ibo);
       try { R.post?.dispose(); } catch (e) {}
       gl.getExtension('WEBGL_lose_context')?.loseContext();
