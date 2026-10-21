@@ -74,7 +74,7 @@
 
   // Экран ожидания со ссылкой
   function lobby(el, game, code, text){
-    const link = (window.D37Ref?.wrap || (u => u))(location.origin + location.pathname + `#/games/${game}/${code}`);   // 👥 с кодом приглашения (js/core/ref.js)
+    const link = (window.D37Ref?.wrap || (u => u))((window.D37Route ? D37Route.abs(`#/games/${game}/${code}`) : location.origin + location.pathname + `#/games/${game}/${code}`));   // 👥 с кодом приглашения (js/core/ref.js)
     el.innerHTML = `<div class="ct-lobby">
         <div class="gv-big">👥</div>
         <p class="rm-text">${text || 'Подключаемся к комнате…'}</p>

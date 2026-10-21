@@ -266,7 +266,7 @@ async function testUpdateFlow(){
   await tick(1000);
   ok(!U3.doc.getElementById('appUpdate'), 'идёт игра — полоски нет');
   U3.doc.body.classList.remove('game-on');
-  U3.W.dispatchEvent(new Event('hashchange'));
+  U3.W.dispatchEvent(new Event('d37:route'));   // переход раздела (js/ui/router.js)
   await tick(1000);
   ok(!!U3.doc.getElementById('appUpdate'), 'вышел из игры — полоска появилась');
   // установленное приложение: файлы игр без интернета → sw.js (один раз на GAMES_VER)
@@ -596,7 +596,7 @@ function testManifest(){
   const sc = M.shortcuts || [];
   ok(sc.length >= 5 && sc.length <= 10, 'ярлыков 5…10', sc.length);
   const urls = sc.map(s => s.url);
-  ok(['/#/games/world', '/#/chat', '/#/games', '/#/games/words', '/#/shop'].every(u => urls.includes(u)), 'ярлыки: Мир, Чат, Игры, Слово дня, Магазин', urls);
+  ok(['/play/world', '/chat', '/play', '/play/words', '/#/shop'].every(u => urls.includes(u)), 'ярлыки: Мир, Чат, Игры, Слово дня, Магазин (настоящие адреса; /shop — своя страница, ярлык — в раздел)', urls);
   for (const s of sc) {
     ok(!!s.name && s.url.startsWith('/'), `ярлык «${s.name}»: имя и адрес на сайте`);
     ok((s.icons || []).some(i => +String(i.sizes).split('x')[0] >= 96) && (s.icons || []).every(i => { const z = imgSize(i.src); return z && `${z[0]}x${z[1]}` === i.sizes; }), `ярлык «${s.name}»: значки ≥ 96 и размеры верны`);

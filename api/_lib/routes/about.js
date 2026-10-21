@@ -51,7 +51,7 @@ export default async function handler(req, res) {
   const fact = (k, v) => v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : '';
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <span>Кто такой dan4ik37</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <span>Кто такой dan4ik37</span></nav>
   <h1>Кто такой dan4ik37 (Денчик37)</h1>
   <p class="lead">${esc(lead)}</p>
   <dl class="ab-facts">
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     ${fact('Подписчики', esc(subs))}
     ${fact('Просмотры', ch ? esc(num(ch.viewCount)) : '')}
     ${fact('Стримы', '<a href="https://www.twitch.tv/dan4ik37" target="_blank" rel="noopener">Twitch — dan4ik37</a>')}
-    ${fact('Сайт', '<a href="/#/home">dan4ik37.vercel.app</a> — чат, игры с друзьями, все видео')}
+    ${fact('Сайт', '<a href="/">dan4ik37.vercel.app</a> — чат, игры с друзьями, все видео')}
   </dl>
   ${games.length ? `<section class="box"><h2>Во что играет</h2><p>Темы по названиям всех ${esc(num(vids.length))} роликов канала:</p>
     <ul class="ab-games">${games.slice(0, 12).map(x => `<li><a href="/topic/${x.t.slug}">${esc(x.t.name)}</a><span>${esc(num(x.n))} видео</span></li>`).join('')}</ul>
@@ -74,7 +74,7 @@ export default async function handler(req, res) {
   </ul><p class="muted"><a href="/top">Самые популярные видео →</a> · <a href="/videos">Все видео по годам →</a></p></section>` : ''}
   <section class="box"><h2>Где найти dan4ik37</h2><div class="ab-soc">${SOCIAL.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}</div></section>
   <section class="box"><h2>Сайт dan4ik37</h2><ul>
-    <li><a href="/#/chat">Живой чат</a> — общий чат сайта и чат Twitch, уровни и XP за активность.</li>
+    <li><a href="/chat">Живой чат</a> — общий чат сайта и чат Twitch, уровни и XP за активность.</li>
     <li><a href="/games">Онлайн-игры с друзьями</a> — «5 букв» со словом дня, морской бой, города, шашки и другие, по ссылке без регистрации.</li>
     <li><a href="/quiz">Тесты</a> — какой ты моб из Майнкрафта, кто ты из FNAF и Роблокса, какой ты зритель.</li>
     <li>Полезное для игроков — <a href="/tools/nick">генератор ников</a>, <a href="/tools/fonts">шрифты для ника</a>, <a href="/tools/cps">CPS тест</a>, <a href="/tools/wheel">колесо фортуны</a>, <a href="/tools/random">генератор случайных чисел</a>, <a href="/tools/typing">тест скорости печати</a>.</li>

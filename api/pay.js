@@ -50,11 +50,13 @@ async function handleOrder(req, res, cfg) {
   const method = String(body.method || ''), pack = String(body.pack || '');
   if (!['tiptop', 'freedom', 'kaspi'].includes(method) || !cfg[method]) return send(res, 200, { ok: false, reason: 'method' });
   if (body.consent !== true) return send(res, 200, { ok: false, reason: 'consent' });
+  if (body.pd !== true) return send(res, 200, { ok: false, reason: 'pd' });   // согласие на обработку персональных данных (22.10)
   const uid = await userFromToken(req);
   if (!uid) return send(res, 401, { ok: false, reason: 'auth' });
   let o;
   try {
-    o = await sbRpc('premium_order_create', { p_user: uid, p_pack: pack, p_provider: method, p_currency: cfg.currency, p_consent: true });
+    // возраст (до 14 — нельзя, год не указан — сначала указать) и лимиты проверяет база: premium_order_create → premium_pay_age
+    o = await sbRpc('premium_order_create', { p_user: uid, p_pack: pack, p_provider: method, p_currency: cfg.currency, p_consent: true, p_pd: true });
   } catch (e) {
     return send(res, 200, { ok: false, reason: missingSql(e) ? 'off' : 'db' });
   }

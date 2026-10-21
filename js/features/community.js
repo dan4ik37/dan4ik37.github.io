@@ -607,7 +607,7 @@
     if (P.isOpen() && (P.path() || '').startsWith('comm')) P.refresh();
   };
   // ушли со страницы чата — ленту закрыть (отписаться от «печатает…» и т.п.)
-  window.addEventListener('hashchange', () => {
+  window.addEventListener('d37:route', () => {
     if (currentRoute() !== 'chat' && page && mvHost && page.root.contains(mvHost)) dropView();
     const fr = document.getElementById('chat-twitch');
     if (fr && currentRoute() !== 'chat') { fr.style.display = 'none'; document.getElementById('chatTwitchHome')?.appendChild(fr); }

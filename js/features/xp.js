@@ -80,6 +80,7 @@ let xpBadgeTimer = 0;
 function xpQueueBadges(){
   clearTimeout(xpBadgeTimer);
   xpBadgeTimer = setTimeout(xpFillBadges, 250);
+  window.D37Donor?.queue?.();   // «💛 Донатер» рядом с ником — там же, где Lv (js/core/premium.js)
 }
 async function xpFillBadges(){
   if (!(await xpCheck())) return;

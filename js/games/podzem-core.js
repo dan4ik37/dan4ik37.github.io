@@ -174,6 +174,7 @@ function PZ_CORE(){
     defItem(k, n, { kind: 'tile', tile: k });
   defItem('wood', 'Дерево', { kind: 'tile', tile: 'planks' });
   ITEMS.door.stack = 99; ITEMS.chest.stack = 99; ITEMS.bed.stack = 99; ITEMS.workbench.stack = 99; ITEMS.furnace.stack = 99; ITEMS.anvil.stack = 99;
+  ITEMS.torch.icon = ['torch', '#ffb347'];   // значок с пламенем (в мире пламя живое, на клетке — только ручка)
   for (const w of WALLS) if (w && w.id) defItem(w.key, w.name, { kind: 'wall', wall: w.key });
   // инструменты и оружие (power — сила за удар, tier — какие блоки берёт, speed — секунд на удар)
   defItem('pick_copper', 'Медная кирка', { kind: 'tool', tool: 'pick', power: 35, tier: 1, speed: .26, dmg: 4, reach: 2.2, stack: 1, icon: ['pick', '#d9783a'] });
@@ -565,16 +566,23 @@ function PZ_CORE(){
 
   // ═══ Свет: заливка «по максимуму» (8 соседей), RGB от источников + S от неба — как режим «Цвет» у Террарии ═══
   // Клетка пропускает ДОЛЮ света (умножение), а не «минус N»: яркое ядро и долгий мягкий хвост. Доля — по той клетке,
-  // КУДА идёт свет: воздух 0,89, полупрозрачное 0,76, твёрдое 0,56 (свет заходит в камень на 2–3 клетки), вода — по
-  // цветам 0,78 / 0,84 / 0,89 (красный гаснет быстрее синего — под водой свет синеет), лава 0,7. Диагональ — в степени √2.
-  // Меньше LCUT — темно. Дальше LR клеток свет не достаёт ни через что (самая большая доля — воздух: 255 → 0 за 31 клетку) —
-  // поэтому пересчёт — коробкой ±LR вокруг правки (tiles-test это проверяет).
+  // КУДА идёт свет: воздух 0,89, полупрозрачное 0,76, вода — по цветам 0,78 / 0,84 / 0,89 (красный гаснет быстрее синего —
+  // под водой свет синеет), лава 0,7. Диагональ — в степени √2. Меньше LCUT — темно.
+  // Камень и всё непрозрачное (с 22.10.2026, владелец: «огонь выходит за пещеру» — свет факела было видно в толще камня на
+  // 5–6 клеток и сквозь тонкие стены): свет освещает только ГРАНЬ — в первую клетку камня заходит доля LFACE (0,62), дальше по
+  // камню гаснет быстро (LDEEP: 0,22 — через клетку уже почти темно; небо мягче — 0,56, как было: днём земля видна на 5–6 клеток),
+  // а ИЗ камня в воздух выходит только его собственное свечение (руды, жарит) — сквозь стену в 1 блок свет не проходит.
+  // Дальше LR клеток свет не достаёт ни через что (самая большая доля — воздух: 255 → 0 за 31 клетку) — поэтому пересчёт —
+  // коробкой ±LR вокруг правки (tiles-test это проверяет).
   const LR = 32, LCUT = 4;
-  // класс клетки для света: 0 воздух, 1 твёрдое, 2 полупрозрачное, 3 вода, 4 лава; [r, g, b, небо] × 256
-  const LMUL = [[228, 228, 228, 228], [143, 143, 143, 143], [195, 195, 195, 195], [200, 215, 228, 215], [179, 179, 179, 179]];
-  const LMULD = LMUL.map(a => a.map(m => Math.round(256 * Math.pow(m / 256, Math.SQRT2))));
+  // класс клетки для света: 0 воздух, 1 твёрдое (вход в грань — LFACE), 2 полупрозрачное, 3 вода, 4 лава; [r, g, b, небо] × 256
+  const LMUL = [[228, 228, 228, 228], [159, 159, 159, 169], [195, 195, 195, 195], [200, 215, 228, 215], [179, 179, 179, 179]];
+  const LDEEP = [56, 56, 56, 143];   // камень → камень (небо — как раньше: днём земля у поверхности видна на 5–6 клеток)
+  const pow2 = m => Math.round(256 * Math.pow(m / 256, Math.SQRT2));
+  const LMULD = LMUL.map(a => a.map(pow2)), LDEEPD = LDEEP.map(pow2);
   const LMAX = 300 * 300;
-  const L = { r: new Uint8Array(LMAX), g: new Uint8Array(LMAX), b: new Uint8Array(LMAX), s: new Uint8Array(LMAX), cls: new Uint8Array(LMAX), fix: new Uint8Array(LMAX), op: new Uint8Array(LMAX), Q: new Int32Array(LMAX * 4) };
+  const L = { r: new Uint8Array(LMAX), g: new Uint8Array(LMAX), b: new Uint8Array(LMAX), s: new Uint8Array(LMAX), cls: new Uint8Array(LMAX), fix: new Uint8Array(LMAX), op: new Uint8Array(LMAX),
+    er: new Uint8Array(LMAX), eg: new Uint8Array(LMAX), eb: new Uint8Array(LMAX), Q: new Int32Array(LMAX * 4) };
   const lightCls = (f, lq, lt) => lq > 127 ? (lt === 2 ? 4 : 3) : P.OPC[f] === 1 ? 1 : P.OPC[f] === 2 ? 2 : 0;
   // W — источник клеток: { chunk(cx, cy) → { fg, wall, st, lq, lt, light } | undefined, colTop(x) → y первой непрозрачной сверху }
   // Пересчитать [x0…x1] × [y0…y1] (включительно); вернёт множество ключей тронутых чанков
@@ -586,21 +594,25 @@ function PZ_CORE(){
     if (x1 - x0 + 3 > maxW) { const m = x0 + maxW - 4; relight(W, x0, y0, m, y1, touched); return relight(W, m + 1, y0, x1, y1, touched); }
     if (y1 - y0 + 3 > maxH) { const m = y0 + maxH - 4; relight(W, x0, y0, x1, m, touched); return relight(W, x0, m + 1, x1, y1, touched); }
     const X0 = x0 - 1, Y0 = y0 - 1, w = x1 - x0 + 3, h = y1 - y0 + 3;
-    const R = L.r, G = L.g, Bc = L.b, Sk = L.s, cls = L.cls, fix = L.fix, op = L.op, Q = L.Q;
+    const R = L.r, G = L.g, Bc = L.b, Sk = L.s, cls = L.cls, fix = L.fix, op = L.op, ER = L.er, EG = L.eg, EB = L.eb, Q = L.Q;
     let qn = 0;
     // сбор
     for (let j = 0; j < h; j++) {
       const wy = Y0 + j, ring = j === 0 || j === h - 1;
-      if (wy < 0) { for (let i = 0; i < w; i++) { const k = j * w + i; R[k] = G[k] = Bc[k] = 0; Sk[k] = 255; fix[k] = 1; cls[k] = 0; op[k] = 0; Q[qn++] = k; } continue; }
+      if (wy < 0) { for (let i = 0; i < w; i++) { const k = j * w + i; R[k] = G[k] = Bc[k] = 0; ER[k] = EG[k] = EB[k] = 0; Sk[k] = 255; fix[k] = 1; cls[k] = 0; op[k] = 0; Q[qn++] = k; } continue; }
       const cy = wy >> CB, ly = wy & CM;
       let lastCx = 1e9, ch = null;
       for (let i = 0; i < w; i++) {
         const wx = X0 + i, cx = wx >> CB, k = j * w + i;
         if (cx !== lastCx) { lastCx = cx; ch = W.chunk(cx, cy); }
         const isRing = ring || i === 0 || i === w - 1;
-        if (!ch) { R[k] = G[k] = Bc[k] = Sk[k] = 0; fix[k] = 1; cls[k] = 1; op[k] = 1; continue; }
+        if (!ch) { R[k] = G[k] = Bc[k] = Sk[k] = 0; ER[k] = EG[k] = EB[k] = 0; fix[k] = 1; cls[k] = 1; op[k] = 1; continue; }
         const ci = ly << CB | (wx & CM), f = ch.fg[ci], lq = ch.lq[ci], lt = ch.lt[ci];
         op[k] = P.OPC[f]; cls[k] = lightCls(f, lq, lt);
+        // своё свечение клетки (из камня в воздух выходит только оно)
+        let r = P.LR[f], g = P.LG[f], b = P.LB[f];
+        if (lq && lt === 2) { const a = 110 + (lq * 145 >> 8); if (a > r) r = a; const ag = a * .46 | 0; if (ag > g) g = ag; const ab = a * .13 | 0; if (ab > b) b = ab; }
+        ER[k] = r; EG[k] = g; EB[k] = b;
         if (isRing) {
           const li = ci << 2, lgt = ch.light;
           R[k] = lgt[li]; G[k] = lgt[li + 1]; Bc[k] = lgt[li + 2]; Sk[k] = lgt[li + 3]; fix[k] = 1;
@@ -608,8 +620,6 @@ function PZ_CORE(){
           continue;
         }
         fix[k] = 0;
-        let r = P.LR[f], g = P.LG[f], b = P.LB[f];
-        if (lq && lt === 2) { const a = 110 + (lq * 145 >> 8); if (a > r) r = a; const ag = a * .46 | 0; if (ag > g) g = ag; const ab = a * .13 | 0; if (ab > b) b = ab; }
         R[k] = r; G[k] = g; Bc[k] = b;
         const wl = ch.wall[ci];
         Sk[k] = wy < SKY_LIMIT && wy < W.colTop(wx) && (wl === 0 || P.WSKY[wl]) ? 255 : 0;
@@ -624,7 +634,7 @@ function PZ_CORE(){
       const k = Q[qh]; qh = qh + 1 === QL ? 0 : qh + 1;
       const r = R[k], g = G[k], b = Bc[k], s = Sk[k];
       if (!(r | g | b | s)) continue;
-      const i = k % w, j = (k - i) / w;
+      const i = k % w, j = (k - i) / w, solid = cls[k] === 1;
       for (let n = 0; n < 8; n++) {
         let di, dj;
         switch (n) { case 0: di = 1; dj = 0; break; case 1: di = -1; dj = 0; break; case 2: di = 0; dj = 1; break; case 3: di = 0; dj = -1; break;
@@ -633,13 +643,16 @@ function PZ_CORE(){
         if (ni < 0 || nj < 0 || ni >= w || nj >= h) continue;
         const nk = nj * w + ni;
         if (fix[nk]) continue;
-        let m;
-        if (n >= 4) {
-          if (op[j * w + ni] === 1 && op[nj * w + i] === 1) continue;   // по диагонали сквозь угол стен — нет
-          m = LMULD[cls[nk]];
-        } else m = LMUL[cls[nk]];
-        let up = false;
-        let nr = (r * m[0]) >> 8, ng = (g * m[1]) >> 8, nb = (b * m[2]) >> 8, ns = (s * m[3]) >> 8;
+        const diag = n >= 4;
+        if (diag && op[j * w + ni] === 1 && op[nj * w + i] === 1) continue;   // по диагонали сквозь угол стен — нет
+        const cn = cls[nk];
+        let up = false, nr, ng, nb, ns;
+        if (solid && cn === 1) { const m = diag ? LDEEPD : LDEEP; nr = (r * m[0]) >> 8; ng = (g * m[1]) >> 8; nb = (b * m[2]) >> 8; ns = (s * m[3]) >> 8; }   // в толще камня — быстро гаснет
+        else if (solid) {   // из камня наружу — только своё свечение (руда), неба нет
+          const er = ER[k], eg = EG[k], eb = EB[k];
+          if (!(er | eg | eb)) continue;
+          const m = diag ? LMULD[cn] : LMUL[cn]; nr = (er * m[0]) >> 8; ng = (eg * m[1]) >> 8; nb = (eb * m[2]) >> 8; ns = 0;
+        } else { const m = diag ? LMULD[cn] : LMUL[cn]; nr = (r * m[0]) >> 8; ng = (g * m[1]) >> 8; nb = (b * m[2]) >> 8; ns = (s * m[3]) >> 8; }
         if (nr < LCUT) nr = 0; if (ng < LCUT) ng = 0; if (nb < LCUT) nb = 0; if (ns < LCUT) ns = 0;
         if (nr > R[nk]) { R[nk] = nr; up = true; }
         if (ng > G[nk]) { G[nk] = ng; up = true; }
@@ -1080,7 +1093,7 @@ function PZ_CORE(){
   function workerSource(){ return '(' + PZ_CORE.toString() + ')().worldWorker(self);'; }
 
   return {
-    CS, CB, CM, CA, SURF, SKY_LIMIT, MOD_ID0, LR, LCUT, LMUL, LMULD, key,
+    CS, CB, CM, CA, SURF, SKY_LIMIT, MOD_ID0, LR, LCUT, LMUL, LMULD, LDEEP, LDEEPD, key,
     hash2, rnd2, rnd1, noise1, noise2, fbm1, smooth,
     P, TILES, TILE, WALLS, WALL, T, WL, B, BIOME_NAMES, ITEMS, ITEM_LIST, RECIPES, KINDS, TOOLS, SUPS,
     defTile, defWall, defItem, applyProps, setFeats, featsChunk,

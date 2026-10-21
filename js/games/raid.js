@@ -27,7 +27,7 @@
   function dev(){ const r = root.D37Ref?.device?.(); if (r) return r; let d = null; try { d = localStorage.getItem(LS_DEV); if (!d) { d = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem(LS_DEV, d); } } catch (e) {} return d; }
   // поделиться ссылкой на раздел набегов — с кодом приглашения (js/core/ref.js)
   async function share(path, text){
-    const url = (root.D37Ref?.wrap || (u => u))(location.origin + '/#/games/raid/' + path);
+    const url = (root.D37Ref?.wrap || (u => u))(window.D37Route ? D37Route.abs('#/games/raid/' + path) : location.origin + '/#/games/raid/' + path);
     if (navigator.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) { navigator.share({ title: 'Набеги', text, url }).catch(() => {}); return; }
     try { await navigator.clipboard.writeText(text + ' ' + url); toast('📣 Ссылка скопирована — отправь другу'); }
     catch (e) { prompt('Скопируй и отправь другу:', text + ' ' + url); }

@@ -39,6 +39,8 @@
   const info = id => list().find(g => g.id === id) || null;
   const can = id => { const g = info(id); return !!(g && !g.href && Array.isArray(g.scripts) && g.scripts.length && !NO.has(id)); };
   const hashOf = url => { const s = String(url || ''), i = s.indexOf('#'); return i < 0 ? '' : s.slice(i); };
+  // раздел сайта — '#/games/…' при любых адресах (js/ui/router.js: /play/chess и #/games/chess); без роутера (тесты) — решётка
+  const curHash = () => (root.D37Route ? root.D37Route.hash() : (typeof location !== 'undefined' ? location.hash : '')) || '';
   const doc = () => (typeof document !== 'undefined' ? document : null);
   const toast = t => { try { if (typeof gameToast === 'function') gameToast(t); } catch (e) {} };
   const muted = () => { try { return localStorage.getItem('d37_games_mute') === '1'; } catch (e) { return false; } };
@@ -177,7 +179,7 @@ body:not(.high) .mp-panel{animation:none}
   async function open(id, param, o = {}){
     if (cur) close('replace');
     const s = cur = { n: ++seq, g: id, param: param || null, p0: param || null, o, phase: 'loading', gen: 0, token: 'mp' + seq + '-' + Date.now().toString(36),
-      home: (typeof location !== 'undefined' && location.hash) || '#/games/world', pushed: false, depth: 0, left: 0, win: false, sig: null, mounted: null };
+      home: curHash() || '#/games/world', pushed: false, depth: 0, left: 0, win: false, sig: null, mounted: null };
     if (!can(id)) { s.err = new Error('Эта игра не открывается поверх мира: ' + id); close('fail'); return false; }
     build(s); setTitle(s); loading(s);
     doc().documentElement.classList.add('mir-playing');
@@ -320,12 +322,15 @@ body:not(.high) .mp-panel{animation:none}
   function onHash(e){
     try {
       const s = cur;
-      if (!s) { track(e?.oldURL, location.hash); shell(); return false; }
-      const d = decide(s, location.hash);
-      if (d.act === 'pass') { close('nav'); track(s.home, location.hash); shell(); return false; }
+      if (!s) { track(e?.oldURL, curHash()); shell(); return false; }
+      const d = decide(s, curHash());
+      if (d.act === 'pass') { close('nav'); track(s.home, curHash()); shell(); return false; }
       // адрес мира — обратно (замена записи, без hashchange); запись — своя: «Назад» закроет окно
       s.depth++;
-      try { history.replaceState({ mp: s.token, mpd: s.depth }, '', location.pathname + location.search + s.home); } catch (er) {}
+      try {
+        const st = { mp: s.token, mpd: s.depth };
+        if (root.D37Route) root.D37Route.setUrl(s.home, { state: st }); else history.replaceState(st, '', location.pathname + location.search + s.home);
+      } catch (er) {}
       apply(s, d);
       return true;
     } catch (er) { console.error(er); return false; }
@@ -344,7 +349,7 @@ body:not(.high) .mp-panel{animation:none}
   // «Назад» в браузере / на телефоне: вернулись на запись мира — окно закрыть. Слушаем в фазе захвата (раньше D37Full)
   function onPop(e){
     const s = cur; if (!s) return;
-    if (location.hash !== s.home) {   // игра сменила адрес (онлайн, «выйти») — решит onHash; полному экрану об этом знать не надо
+    if (curHash() !== s.home) {   // игра сменила адрес (онлайн, «выйти») — решит onHash; полному экрану об этом знать не надо
       e?.stopImmediatePropagation?.();
       return;
     }
@@ -377,7 +382,7 @@ body:not(.high) .mp-panel{animation:none}
   function shell(){
     const d = doc(); if (!d) return;
     const bar = d.querySelector('.gm-stage-bar'); if (!bar) return;
-    const r = parse(typeof location !== 'undefined' ? location.hash : ''), show = !!(r && r.g !== 'world' && flag());
+    const r = parse(curHash()), show = !!(r && r.g !== 'world' && flag());
     let b = bar.querySelector('.mp-shell');
     if (!b) {
       if (!show) return;

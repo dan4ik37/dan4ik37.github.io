@@ -628,7 +628,7 @@ function loadTwitchChat(frame){
 let chatWakeLock = null;
 async function toggleChatFull(force){
   const on = typeof force === 'boolean' ? force : !document.body.classList.contains('chat-full');
-  if (on && !/^#\/chat/.test(location.hash)) location.hash = '#/chat';
+  if (on && !/^#\/chat/.test(D37Route.hash())) location.hash = '#/chat';
   document.body.classList.toggle('chat-full', on);
   document.querySelectorAll('#chatFullBtn,.ds-full').forEach(btn => { btn.textContent = on ? '✕' : '⛶'; btn.title = on ? 'Выйти из полноэкранного чата' : 'Чат на весь экран (экран не будет гаснуть)'; btn.setAttribute('aria-label', btn.title); });
   try {
@@ -638,7 +638,7 @@ async function toggleChatFull(force){
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('chat-full') && !window.D37Phone?.isOpen?.()) toggleChatFull(false); });
 // Ушли из чата — выйти из полноэкранного режима; вернулись на вкладку — снова не гасить экран
-window.addEventListener('hashchange', () => { if (!/^#\/chat/.test(location.hash) && document.body.classList.contains('chat-full')) toggleChatFull(false); });
+window.addEventListener('d37:route', () => { if (!/^#\/chat/.test(D37Route.hash()) && document.body.classList.contains('chat-full')) toggleChatFull(false); });
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && document.body.classList.contains('chat-full') && 'wakeLock' in navigator) {
     try { chatWakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}

@@ -723,7 +723,12 @@
   function lbHtml(list, label){
     return list.map((r, k) => `<li class="${r.me ? 'me' : ''}"><i>${k + 1}</i><span>${r.bot ? '<em title="Бот">🤖</em>' : ''}${escH(showName(r.name))}</span><b>${num(r.score)}</b></li>`).join('');
   }
-  function linkFor(game, code){ return (root.D37Ref?.wrap || (u => u))((root.location ? location.origin + location.pathname : 'https://dan4ik37.vercel.app/') + `#/games/${game}/${code}`); }
+  // Ссылка на комнату: настоящий адрес (/play/<игра>/<код> — D37Route, T-007), без роутера — по-старому #/games/…; + код приглашения
+  function linkFor(game, code){
+    const h = `#/games/${game}/${code}`;
+    const abs = root.D37Route?.abs ? root.D37Route.abs(h) : (root.location ? location.origin + location.pathname : 'https://dan4ik37.vercel.app/') + h;
+    return (root.D37Ref?.wrap || (u => u))(abs);
+  }
   // Новая комната: ссылку — другу сразу (в том же нажатии), сами — в комнату по адресу #/games/<игра>/<код>
   function inviteNew(game, title, toast){
     const code = root.GameRoom?.newCode?.() || Math.random().toString(36).slice(2, 8);

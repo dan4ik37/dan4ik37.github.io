@@ -554,7 +554,7 @@ html.d37-h18 [data-age="18"]{display:none!important}
     };
     if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', boot); else setTimeout(boot, 0);
     root.addEventListener?.('d37:auth', () => setTimeout(onAuth, 0));
-    root.addEventListener?.('hashchange', () => { if (!sheet && !known() && askTries < 6) { clearTimeout(askT); askT = setTimeout(maybeAsk, 2500); } });
+    root.addEventListener?.('d37:route', () => { if (!sheet && !known() && askTries < 6) { clearTimeout(askT); askT = setTimeout(maybeAsk, 2500); } });
     // Другая вкладка поменяла год — подхватить
     root.addEventListener?.('storage', e => { if (e.key === LS) { S = read(); emit(); } });
   }

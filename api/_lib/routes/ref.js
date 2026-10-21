@@ -70,7 +70,7 @@ export default async function handler(req, res) {
 function notFound(res){
   res.status(404).setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(page({ title: 'Приглашение не найдено — сайт Денчика37', description: 'В ссылке опечатка. Попроси у друга ссылку ещё раз — или просто заходи на сайт.',
-    body: `<main class="wrap"><section class="rf-card"><span class="rf-ic">🔗</span><h1>Приглашение не найдено</h1><p class="rf-where">В ссылке опечатка — попроси у друга ссылку ещё раз. Или просто заходи на сайт: игры, мир и чат — бесплатно.</p><a class="btn btn-acc rf-go" href="/#/home">▶ На сайт</a></section></main>`,
+    body: `<main class="wrap"><section class="rf-card"><span class="rf-ic">🔗</span><h1>Приглашение не найдено</h1><p class="rf-where">В ссылке опечатка — попроси у друга ссылку ещё раз. Или просто заходи на сайт: игры, мир и чат — бесплатно.</p><a class="btn btn-acc rf-go" href="/">▶ На сайт</a></section></main>`,
     noindex: true, noAds: true, css: CSS }));
 }
 

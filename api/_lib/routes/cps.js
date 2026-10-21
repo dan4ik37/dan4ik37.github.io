@@ -33,7 +33,7 @@ export default function handler(req, res) {
   ] };
   const body = `
 <main class="wrap">
-  <nav class="crumbs"><a href="/#/home">Главная</a> › <a href="/games">Игры</a> › <span>CPS тест</span></nav>
+  <nav class="crumbs"><a href="/">Главная</a> › <a href="/games">Игры</a> › <span>CPS тест</span></nav>
   <h1>CPS тест — сколько кликов в секунду</h1>
   ${challenge ? `<p class="cp-chal">📣 ${esc(challenge)}</p>` : ''}
   <p class="lead">Кликай по полю как можно быстрее — тест покажет твой CPS (кликов в секунду), звание и рекорд. Выбери время: 1, 5 или 10 секунд. Работает с мышкой и на телефоне.</p>

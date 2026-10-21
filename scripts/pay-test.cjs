@@ -31,6 +31,7 @@ function rpc(fn, a) {
     const p = PACKS[a.p_pack];
     if (!p) return [200, { ok: false, reason: 'pack' }];
     if (a.p_consent !== true) return [200, { ok: false, reason: 'consent' }];
+    if (a.p_pd !== true) return [200, { ok: false, reason: 'pd' }];
     const id = 'D37-251015-' + String(++seq).padStart(8, '0');
     const amount = a.p_currency === 'RUB' ? p[1] : p[2];
     DB.orders[id] = { id, user_id: a.p_user, pack: a.p_pack, gems: p[0], amount, currency: a.p_currency, rub: p[1], provider: a.p_provider, status: 'new' };
@@ -160,6 +161,12 @@ const hmac = (data, key) => crypto.createHmac('sha256', key).update(data, 'utf8'
   // ═══ Включено ═══
   Object.assign(process.env, { TIPTOP_PUBLIC_ID: TT_PUB, TIPTOP_API_SECRET: TT_SECRET, FREEDOM_MERCHANT_ID: FP_ID, FREEDOM_SECRET_KEY: FP_SECRET,
     KASPI_PAY_LINK: 'https://pay.kaspi.kz/pay/test123' });
+  // 22.10: пока только Kaspi — карты выключены, даже если ключи заданы (включаются PAY_CARDS=1)
+  r = await call({ method: 'GET', query: { a: 'config' } });
+  ok(r.json().methods.map(m => m.id).join() === 'kaspi', 'по умолчанию — только Kaspi (карты выключены без PAY_CARDS=1)', r.body);
+  r = await call({ query: { a: 'order' }, headers: { 'content-type': 'application/json', authorization: 'Bearer good-token' }, body: JSON.stringify({ pack: 'p100', method: 'tiptop', consent: true, pd: true }) });
+  ok(r.json().reason === 'method', 'карта без PAY_CARDS=1 — заказ не создаётся', r.body);
+  process.env.PAY_CARDS = '1';
   r = await call({ method: 'GET', query: { a: 'config' } });
   const cfg = r.json();
   ok(cfg.methods.map(m => m.id).join() === 'tiptop,freedom,kaspi' && cfg.currency === 'KZT', 'способы: TipTop, Freedom, Kaspi; валюта KZT', cfg);
@@ -169,7 +176,7 @@ const hmac = (data, key) => crypto.createHmac('sha256', key).update(data, 'utf8'
   ok(r.json().methods.length === 0, 'нет SUPABASE_* — способов нет (некуда начислять)');
   process.env.SUPABASE_URL = SB;
 
-  const order = (body, token = 'good-token') => call({ query: { a: 'order' }, headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify(body) });
+  const order = (body, token = 'good-token') => call({ query: { a: 'order' }, headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify({ pd: true, ...body }) });
   r = await order({ pack: 'p550', method: 'tiptop', consent: true }, '');
   ok(r.statusCode === 401 && r.json().reason === 'auth', 'заказ без входа — 401');
   r = await order({ pack: 'p550', method: 'tiptop', consent: true }, 'forged');
@@ -178,6 +185,8 @@ const hmac = (data, key) => crypto.createHmac('sha256', key).update(data, 'utf8'
   ok(r.json().reason === 'consent', 'без согласия взрослого — нет заказа');
   r = await order({ pack: 'p550', method: 'stripe', consent: true });
   ok(r.json().reason === 'method', 'неизвестный способ — нет заказа');
+  r = await order({ pack: 'p550', method: 'kaspi', consent: true, pd: false });
+  ok(r.json().reason === 'pd', 'без согласия на обработку данных — нет заказа');
   r = await order({ pack: 'p550', method: 'tiptop', consent: true });
   let j = r.json();
   ok(j.ok && j.pay.type === 'widget' && j.pay.params.publicTerminalId === TT_PUB && j.pay.params.amount === 2950 && j.pay.params.currency === 'KZT'
@@ -317,6 +326,28 @@ const hmac = (data, key) => crypto.createHmac('sha256', key).update(data, 'utf8'
   ok(canon(S.ITEMS) === canon(ctx.D37Gems.CFG.items) && canon(S.ITEMS) === canon(sqlJson('premium_items')), 'товары за 💎: везде одинаковые');
   ok(S.PACKS.every(p => p.gems === p.rub + p.bonus), 'пакеты: 1 ₽ = 1 💎 + бонус');
   ok(S.PACKS.every((p, i) => i === 0 || p.kzt / p.gems < S.PACKS[i - 1].kzt / S.PACKS[i - 1].gems + 1e-9), 'пакеты: чем больше, тем дешевле кристалл (₸)');
+
+  // ═══ 💛 Донатер: уровни, правила, занятые имена — premium.sql = js/core/premium.js = api/_lib/premium.js ═══
+  const DJ = ctx.D37Donor;
+  const sqlLv = JSON.parse(sql.slice(sql.indexOf('function public.donor_levels()')).match(/select '(\[[\s\S]*?\])'::jsonb/)[1]);
+  ok(canon(S.DONOR_LEVELS) === canon(DJ.LEVELS) && canon(S.DONOR_LEVELS) === canon(sqlLv), 'уровни донатера: api/_lib/premium.js = js/core/premium.js = premium.sql', { api: S.DONOR_LEVELS, sql: sqlLv });
+  const rule = sql.slice(sql.indexOf('function public.donor_rule('), sql.indexOf('$$;', sql.indexOf('function public.donor_rule(')));
+  const sqlRules = Object.fromEntries([...rule.matchAll(/when '(\w+)' then (\d+)/g)].map(m => [m[1], +m[2]]));
+  ok(canon(S.DONOR_RULES) === canon(DJ.RULES) && canon(S.DONOR_RULES) === canon(sqlRules), 'правила донатера (дни, авто-сумма, заявки): везде одинаковые', sqlRules);
+  const res = sql.slice(sql.indexOf('function public.donor_name_reserved('), sql.indexOf('$$;', sql.indexOf('function public.donor_name_reserved(')));
+  const words = blk => [...blk.matchAll(/'([^']*)'/g)].map(m => m[1]);
+  const sqlExact = words(res.slice(res.indexOf('unnest(array['), res.indexOf(']) w))')));
+  const sqlPref = words(res.slice(res.indexOf("unnest(array['аноним', 'anonym'"), res.indexOf(']) p')));
+  ok(canon(S.DONOR_RESERVED.exact) === canon(DJ.RESERVED.exact) && canon(S.DONOR_RESERVED.exact) === canon(sqlExact)
+    && canon(S.DONOR_RESERVED.prefix) === canon(DJ.RESERVED.prefix) && canon(S.DONOR_RESERVED.prefix) === canon(sqlPref), 'занятые имена («Аноним», «гость»…): везде одинаковые', { sqlExact: sqlExact.length, sqlPref });
+  const tr = sql.match(/translate\(lower\(translate\(coalesce\(t, ''\), '([^']+)', '([^']+)'\)\),\s*'([^']+)', '([^']+)'\)/);
+  const keyRef = t => { let x = ''; for (let ch of String(t)) { let i = tr[1].indexOf(ch); if (i >= 0) ch = tr[2][i]; if (ch >= 'A' && ch <= 'Z') ch = ch.toLowerCase(); i = tr[3].indexOf(ch); if (i >= 0) ch = tr[4][i]; if (/^[a-zа-я0-9]$/.test(ch)) x += ch; } return x; };
+  ok(tr && [...tr[1]].length === [...tr[2]].length && [...tr[3]].length === [...tr[4]].length, 'ключ имени: таблицы translate в premium.sql одной длины (буква в букву)');
+  const samples = ['Аноним', 'АНОНИМ', 'Aнoним', 'An0nymous', 'Ёжик A0', 'без_имени', 'Vasya Pro', 'гостиница', 'Денчик37', ' ', '🙂', 'Анонимус_99', 'Annet'];
+  ok(samples.every(x => S.donorNameKey(x) === DJ.nameKey(x) && DJ.nameKey(x) === keyRef(x)), 'ключ имени: js = api = как в SQL (translate)', samples.map(x => [x, DJ.nameKey(x), keyRef(x)]));
+  const want = { 'Аноним': true, 'АНОНИМ': true, 'Aнoним': true, 'An0nymous': true, 'без_имени': true, ' ': true, '🙂': true, 'Анонимус_99': true, 'Vasya Pro': false, 'гостиница': false, 'Денчик37': false, 'Annet': false };
+  ok(Object.entries(want).every(([x, w]) => S.donorNameReserved(x) === w && DJ.reserved(x) === w), 'занятые имена: да/нет как задумано (js и api)');
+  ok(DJ.levelFor(99) === 0 && DJ.levelFor(100) === 1 && DJ.levelFor(350) === 2 && DJ.levelFor(700) === 3 && DJ.levelFor(5000) === 4 && DJ.label(2) === '💛 Донатер II', 'уровень по сумме и подпись «💛 Донатер II»');
   ok(ctx.D37Gems.word(1) === 'кристалл' && ctx.D37Gems.word(3) === 'кристалла' && ctx.D37Gems.word(11) === 'кристаллов' && ctx.D37Gems.word(1200) === 'кристаллов' && ctx.D37Gems.word(22) === 'кристалла',
     'склонение: кристалл / кристалла / кристаллов');
 

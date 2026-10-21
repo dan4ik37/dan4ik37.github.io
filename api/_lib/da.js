@@ -11,6 +11,7 @@
 // обновляет токен, — api/vip-sync.js (он под замком try_lock_vip_sync);
 // остальные эндпоинты токен только читают.
 import { storeConfigured, sbSelect, sbUpsert, timedFetch } from './store.js';
+import { donorNameReserved } from './premium.js';
 
 const DA = 'https://www.donationalerts.com';
 const PROVIDER = 'donationalerts';
@@ -111,6 +112,8 @@ export function normalizeDonation(d) {
     amount: raw,
     currency: cur,
     amountRub,
+    // текст доната — только для админа и только у непривязанных (credit_donation хранит до 200 знаков); в снимок не идёт
+    message: String(d.message || '').slice(0, 200),
     created: d.created_at || null,
     createdMs: parseDaTime(d.created_at),
   };
@@ -146,18 +149,22 @@ export async function fetchDonationPages(token, { maxPages = 8, deadline = Infin
   return { donations, pages, complete: !nextUrl };
 }
 
+// Имя в топе: «Аноним», «гость», «без имени», пустое… (premium.sql donor_name_reserved) — всегда «Аноним» (anon: 1),
+// чтобы никто не выдавал себя за анонимного донатера
+export const shownName = name => (donorNameReserved(name) ? 'Аноним' : String(name || '').trim());
+
 // Публичный снимок для «Топа донатеров»: никаких сообщений донатеров и почт — только
 // то, что и так показывается на странице
 export function buildSnapshot(donations) {
   const recent = donations.slice(0, 20).map(d => ({
-    id: d.id, username: d.username || 'Аноним', amount: d.amount, currency: d.currency, created: d.created,
+    id: d.id, username: shownName(d.username), amount: d.amount, currency: d.currency, created: d.created,
   }));
   const map = {};
   donations.forEach(d => {
-    const k = (d.username || 'Аноним').toLowerCase();
+    const name = shownName(d.username), k = name.toLowerCase();
     // Суммируем в рублях, где DonationAlerts дал пересчёт; иначе валюты смешивались бы как есть
     const inRub = d.amountRub != null;
-    (map[k] ||= { username: d.username || 'Аноним', total: 0, count: 0, currency: inRub ? 'RUB' : d.currency }).total += inRub ? d.amountRub : d.amount;
+    (map[k] ||= { username: name, total: 0, count: 0, currency: inRub ? 'RUB' : d.currency, ...(name === 'Аноним' ? { anon: 1 } : {}) }).total += inRub ? d.amountRub : d.amount;
     map[k].count++;
   });
   const leaderboard = Object.values(map).sort((a, b) => b.total - a.total).slice(0, 20);

@@ -190,7 +190,7 @@
     try { root.dispatchEvent(new root.CustomEvent('d37:signup', { detail: { provider, userId } })); } catch (e) {}
   }
   function go(h) {
-    if (root.location.hash !== h) { root.location.hash = h; return; }
+    if ((root.D37Route ? root.D37Route.hash() : root.location.hash) !== h) { root.location.hash = h; return; }   // раздел (js/ui/router.js): '#/…' при любых адресах
     if (/^#\/profile/.test(h) && typeof renderProfilePage === 'function') renderProfilePage(h.split('/')[2] || undefined);
   }
   // Токены сервиса (provider_token) supabase-js кладёт в сохранённую сессию — сайту они не нужны, убираем
@@ -287,7 +287,7 @@
     const t = errText(code, p);
     clearPending();
     if (mode === 'link' || mode === 'reauth' || (me() && ['taken', 'has', 'reauth', 'last', 'linkoff'].includes(code))) {
-      if (doc?.getElementById('profileLogins') && /^#\/profile/.test(root.location.hash)) methodsStatus(t, true);
+      if (doc?.getElementById('profileLogins') && /^#\/profile/.test((root.D37Route ? root.D37Route.hash() : root.location.hash))) methodsStatus(t, true);
       else { errAfter = t; go('#/profile/logins'); }
       return;
     }
