@@ -80,6 +80,18 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/games/:id/:path+",
+      "destination": "/play/:id/:path+",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/v/:id",
@@ -226,6 +238,22 @@
       "destination": "/api/game?id=:id"
     },
     {
+      "source": "/forum",
+      "destination": "/api/pages?page=forum"
+    },
+    {
+      "source": "/forum/:id",
+      "destination": "/api/pages?page=forum&id=:id"
+    },
+    {
+      "source": "/ideas",
+      "destination": "/api/pages?page=ideas"
+    },
+    {
+      "source": "/ideas/:id",
+      "destination": "/api/pages?page=ideas&id=:id"
+    },
+    {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap"
     },
@@ -240,6 +268,94 @@
     {
       "source": "/privacy",
       "destination": "/privacy.html"
+    },
+    {
+      "source": "/play",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/play/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/chat",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/chat/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/profile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/profile/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/phone",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/phone/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/shorts",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/shorts/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/invite",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/invite/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/adv",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/adv/:path+",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/donate",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/poll",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/soundboard",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/clicker",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/lfg",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/ads",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/app",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/shop/:path+",
+      "destination": "/index.html"
     }
   ]
 }
