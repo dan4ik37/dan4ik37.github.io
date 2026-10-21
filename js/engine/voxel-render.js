@@ -714,8 +714,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         for (const x of [x0, x1]) for (const z of [z0, z1]) bar([x, y0, z], [x, y1, z], t, c);
         for (const x of [x0, x1]) for (const y of [y0, y1]) bar([x, y, z0], [x, y, z1], t, c);
       };
-      edges(-.004, -.004, -.004, 1.004, h + .004, 1.004, .032, DARK);   // снаружи — тёмная
-      edges(.03, .03, .03, .97, h - .03, .97, .014, LIGHT);             // внутри — светлая
+      edges(-.004, -.004, -.004, 1.004, h + .004, 1.004, .026, DARK);   // снаружи — тёмная
+      edges(.026, .026, .026, .974, h - .026, .974, .012, LIGHT);       // внутри — светлая
       const g = new T.BufferGeometry();
       g.setAttribute('position', new T.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new T.Float32BufferAttribute(col, 3)); g.setIndex(idx);
       prevGeo.set(h, g);
