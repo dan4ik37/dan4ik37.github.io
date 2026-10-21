@@ -35,7 +35,7 @@
     { id: 'knight',   e: '🤺', name: 'Рыцарь', weapon: 'sword',     hand: '🗡️', text: 'Рубит мечом по сторонам. +1 броня и +20 здоровья.', bonus: { armor: 1, hp: 20 } },
     { id: 'vampire',  e: '🧛', name: 'Вампир', weapon: 'aura',      hand: '🧄', text: 'Аура жжёт всех вокруг. Сам лечится: +0,5 здоровья в секунду.', bonus: { regen: .5 } },
     { id: 'robot',    e: '🤖', name: 'Робот',  weapon: 'lightning', hand: '⚡', text: 'Бьёт молниями по всему экрану. +10% к размеру атак.', bonus: { area: .1 } },
-    { id: 'streamer', e: '🎙️', name: 'Денчик', weapon: 'shout',     hand: '🎤', text: 'Стример dan4ik37: «Крик в микрофон» отбрасывает всю орду. +20% монет. Для VIP — бесплатно.', bonus: { greed: .2 }, vip: true },
+    { id: 'streamer', e: '🎙️', name: 'Денчик', weapon: 'shout',     hand: '🎤', text: 'Стример dan4ik37: «Крик в микрофон» отбрасывает всю орду. +20% монет. VIP и донатерам — бесплатно.', bonus: { greed: .2 }, vip: true },
   ];
 
   // ── Пассивки (улучшения на забег) ──
@@ -1201,7 +1201,7 @@
     const h = HEROES.find(x => x.id === id), price = C().price('hero:' + id), have = C().coins(), W = WEAPONS[h.weapon];
     showOv(`<div class="hd-big">${h.e}</div><div class="hd-title">${h.name}</div><div class="hd-sub">${h.text}</div>
       <div class="hd-sub">Стартовое оружие: ${W.e} <b>${W.name}</b> — ${W.text}</div>
-      ${h.vip ? '<div class="hd-hint">👑 С VIP этот герой бесплатный. <a href="/vip" target="_blank" rel="noopener">Как получить VIP</a></div>' : ''}
+      ${h.vip ? '<div class="hd-hint">👑 VIP и донатерам этот герой бесплатный. <a href="/vip" target="_blank" rel="noopener">Что это</a></div>' : ''}
       <div class="ct-actions"><button type="button" class="ct-start" data-act="buy:hero:${id}"${have < price ? ' disabled' : ''}>Купить за 🪙 ${num(price)}</button><button type="button" data-act="menu">← Назад</button></div>
       ${have < price ? `<div class="hd-hint">У тебя ${num(have)} 🪙. Монеты — за забеги, победы в любых играх сайта, бонус дня и задание дня.</div>` : ''}`);
   }
@@ -1245,7 +1245,7 @@
     api.sfx('ok');
     showOv(`<div class="hd-title">⭐ Уровень ${G.level - G.pend + 1}!</div><div class="hd-sub">Выбери улучшение</div>
       <div class="hd-lv">${choosing.map((o, i) => { const f = optInfo(p, o); return `<button type="button" class="hd-card${f.evo ? ' evo' : ''}" data-act="pick:${i}"><span class="ic">${f.e}</span><span class="hd-card-b"><b>${f.name}${f.tag ? ` <span class="tag">${f.tag}</span>` : ''}</b><small>${f.text}</small></span><kbd>${i + 1}</kbd></button>`; }).join('')}</div>
-      ${G.k4 ? '<div class="hd-hint">👑 VIP: 4 варианта на выбор</div>' : ''}`);
+      ${G.k4 ? `<div class="hd-hint">👑 4-й вариант — бонус VIP и донатеров${G.perkUsed ? ' (уже выбран — забег без рекорда)' : ': выберешь его — забег пойдёт без рекорда'}</div>` : ''}`);
   }
   function pick(i){
     if (mode !== 'choose' || !choosing?.[i] || Date.now() < ovLock) return;
@@ -1253,6 +1253,7 @@
       if (G.viewOnly) { CO.np.send({ type: 'pick', i }); choosing = null; showOv('<div class="hd-title">⏳</div><div class="hd-sub">Ждём напарника…</div>'); return; }
       apply(G, G.players[0], choosing[i]); choosing = null; CO.pickMe = true; coopPickDone(); return;
     }
+    if (i >= 3) G.perkUsed = true;   // 4-я карта — бонус VIP/донатера: забег без рекорда (на итоги игр бонусы не влияют)
     apply(G, G.players[G.me], choosing[i]);
     choosing = null; G.pend--;
     if (G.pend > 0) { levelUp(); return; }
@@ -1313,12 +1314,12 @@
     // монеты забега (экономика 15.10.2026: вдвое меньше прежнего; потолок — coin_run_cap('horde'))
     const coins = Math.round(G.coins * p.greed) + Math.floor(G.t / 60) * 2 + (G.won ? 25 : 0);
     if (hooks) { hooks.progress(sc); hooks.done(sc); }
-    else api.report('horde', G.t >= WIN_TIME, sc, sc);
+    else if (!G.perkUsed) api.report('horde', G.t >= WIN_TIME, sc, sc);
     const best = Math.max(api.local().best || 0, sc);
     api.sfx(G.won ? 'win' : 'bad');
     showOv(`<div class="hd-title">${G.won ? '🏆 Ты выжил!' : '💀 Орда победила'}</div>
       <div class="hd-stats"><span>⏱ <b>${mmss(G.t)}</b></span><span>💀 <b>${num(G.kills)}</b></span><span>⭐ ур. <b>${G.level}</b></span></div>
-      <div class="hd-score">${num(sc)} очков${!hooks && sc >= best && sc > 0 ? ' · 🏆 рекорд!' : ''}</div>
+      <div class="hd-score">${num(sc)} очков${G.perkUsed ? ' · без рекорда (выбран 4-й вариант)' : !hooks && sc >= best && sc > 0 ? ' · 🏆 рекорд!' : ''}</div>
       <div class="hd-coins" id="hdCoins">${coins ? `🪙 +${num(coins)} монет…` : 'Монет в этот раз нет'}</div>
       <div class="hd-build">${buildHtml(p)}</div>
       ${hooks ? '' : `<div class="ct-actions"><button type="button" class="ct-start" data-act="again">↻ Ещё раз</button><button type="button" class="ct-duel-btn" data-act="duel">⚔️ С другом</button><button type="button" data-act="share">📤 Поделиться</button></div>

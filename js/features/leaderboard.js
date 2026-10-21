@@ -149,10 +149,12 @@ function renderLbHtml(data, tab) {
       const ini=esc((d.username||'?').slice(0,2).toUpperCase());
       const col=colors[i%colors.length];
       const rank=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
-      return `<div class="lb-item">
+      // 💛 — у кого аккаунт со статусом «Донатер» (api/donations.js → donor_names_levels); «Аноним» — все анонимные донаты вместе
+      const dn = d.lv && window.D37Donor ? `<span class="lb-dn" title="Донатер ${D37Donor.roman(d.lv)} — статус за поддержку стрима">💛 ${D37Donor.roman(d.lv)}</span>` : '';
+      return `<div class="lb-item${d.anon ? ' lb-anon' : ''}">
         <div class="lb-rank r${i+1}">${rank}</div>
         <div class="lb-avatar" style="background:${col}">${ini}</div>
-        <div class="lb-info"><div class="lb-name">${esc(d.username)}</div><div class="lb-sub">${d.count} ${typeof pluralRu === 'function' ? pluralRu(d.count, 'донат', 'доната', 'донатов') : 'дон.'}</div></div>
+        <div class="lb-info"><div class="lb-name">${esc(d.username)}${dn}</div><div class="lb-sub">${d.anon ? 'анонимные донаты · ' : ''}${d.count} ${typeof pluralRu === 'function' ? pluralRu(d.count, 'донат', 'доната', 'донатов') : 'дон.'}</div></div>
         <div class="lb-amount">${Math.round(d.total).toLocaleString('ru')} ${d.currency}</div>
       </div>`;
     }).join('')}</div>`;

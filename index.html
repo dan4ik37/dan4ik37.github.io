@@ -1535,9 +1535,9 @@ body.low .donation-alert-icon{animation:none}
 
   </div>
   <div class="donate-vip" id="donateVipHint">
-    <div class="dv-ic">✨</div>
-    <div class="dv-body"><b>VIP за донат — 100 ₽ = месяц</b><span id="donateVipText">Впиши свой <b>логин для доната</b> в поле «Ваше имя» на DonationAlerts — VIP включится сам. Логин задаётся в профиле.</span></div>
-    <div class="dv-act" id="donateVipAct"><a class="dv-btn ghost" href="/vip">Что даёт VIP</a></div>
+    <div class="dv-ic">💛</div>
+    <div class="dv-body"><b id="donateVipTitle">💛 Донатер — статус за поддержку стрима, с бонусами</b><span id="donateVipText">Донат — это поддержка стрима, а не покупка. Взамен — спасибо и статус «💛 Донатер» на 30 дней. Чтобы донат засчитался тебе, впиши свой <b>логин для доната</b> в поле «Ваше имя» на DonationAlerts — логин задаётся в профиле.</span></div>
+    <div class="dv-act" id="donateVipAct"><a class="dv-btn ghost" href="/vip">Что даёт статус</a></div>
   </div>
 </div>
 
@@ -1751,25 +1751,11 @@ body.low .donation-alert-icon{animation:none}
         <button onclick="saveDonateLogin()" style="padding:.5rem 1rem;border-radius:8px;border:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-weight:800;font-size:.78rem;cursor:pointer;font-family:'Montserrat',sans-serif">Сохранить</button>
       </div>
       <div id="donateLoginErr" style="font-size:.7rem;color:var(--accent);margin-top:.4rem"></div>
-      <div style="font-size:.68rem;color:var(--muted);margin-top:.5rem;line-height:1.5">Это НЕ ник — отдельный служебный логин, вводится один раз, потом просто вставляешь его в форму доната. Нужен и новым, и уже действующим VIP (чтобы продлевать).</div>
+      <div style="font-size:.68rem;color:var(--muted);margin-top:.5rem;line-height:1.5">Это НЕ ник — отдельный служебный логин, вводится один раз, потом просто вставляешь его в поле «Ваше имя» на DonationAlerts. Засчитываются донаты, сделанные после того, как логин задан.</div>
     </div>
 
-    <div id="profileVipPromo" class="pf-card pf-card-gold" style="display:none;margin-top:1rem">
-      <div style="font-size:.78rem;color:var(--muted);line-height:1.6;margin-bottom:.6rem">
-        ✨ <b style="color:var(--text)">VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится) или за 💎 кристаллы в <a href="#/shop" style="color:#ffd166">магазине</a>.
-        Всем VIP: анимированные аватар и фон, цветной ник в чате и на форуме, своя тема сайта,
-        форматирование постов, стикеры, закреп сообщения и список гостей профиля.
-        Уровень растёт с суммой поддержки (донаты и кристаллы) за всё время:
-      </div>
-      <div id="vipPromoTiers" style="margin-bottom:.9rem"></div>
-
-      <input type="hidden" id="vipBuyMonths" value="3">
-      <div id="vipMonthBtns" class="vip-month-btns" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.7rem"></div>
-      <div style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap">
-        <div id="vipCalcTotal" style="font-size:.85rem;font-weight:800;color:var(--text)"></div>
-        <button onclick="openVipBuyGuide()" class="pf-btn pf-btn-gold">✨ Хочу купить VIP</button>
-      </div>
-    </div>
+    <!-- Как получить бонусы: «💛 Донатер» (статус за поддержку) и VIP (за уровень / 💎) — содержимое рисует renderVipPromo() в profile.js -->
+    <div id="profileVipPromo" class="pf-card pf-card-gold" style="display:none;margin-top:1rem"></div>
 
     <!-- Мой VIP-уровень: что даёт и сколько до следующего -->
     <div id="profileVipPerksPanel" class="pf-card pf-card-gold" style="display:none;margin-top:1rem"></div>
@@ -1792,17 +1778,10 @@ body.low .donation-alert-icon{animation:none}
     <div id="vipBuyModal" onclick="if(event.target===this)closeVipBuyGuide()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(10px);z-index:9550;align-items:center;justify-content:center;padding:1.2rem">
       <div style="background:var(--card);border:1px solid rgba(255,215,0,.3);border-radius:18px;max-width:420px;width:100%;padding:1.6rem;position:relative">
         <button onclick="closeVipBuyGuide()" aria-label="Закрыть" style="position:absolute;top:.8rem;right:.8rem;width:30px;height:30px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:var(--text);cursor:pointer;font-size:1rem">✕</button>
-        <div style="font-size:1.1rem;font-weight:800;margin-bottom:.9rem">✨ Как получить VIP</div>
-        <ol style="padding-left:1.2rem;font-size:.82rem;line-height:1.9;color:var(--text)">
-          <li>Жми «Перейти к донату» ниже — откроется страница DonationAlerts</li>
-          <li>В поле <b>«Ваше имя»</b> введи <b>ровно</b> свой логин для доната (не ник! уже скопирован в буфер обмена — просто вставь, <kbd style="background:rgba(255,255,255,.1);padding:.1rem .3rem;border-radius:4px">Ctrl+V</kbd>): <span id="vipGuideNick" style="color:#ffd700;font-weight:700"></span></li>
-          <li>Сумма — <span id="vipGuideAmount" style="color:#ffd700;font-weight:700"></span> (любая, не обязательно кратно 100₽ — остаток копится к следующему месяцу)</li>
-          <li>После доната VIP применится автоматически в течение пары минут — обнови страницу профиля</li>
-        </ol>
-        <div style="font-size:.72rem;color:var(--muted);margin-top:.9rem;line-height:1.5">
-          ⚠ Если логин не совпадёт (опечатка, донат под ником вместо логина) — VIP не подставится
-          сам, но не потеряется: просто напиши в чат или админу, выдадут вручную по этому донату.
-        </div>
+        <div id="vipGuideTitle" style="font-size:1.1rem;font-weight:800;margin-bottom:.9rem">💛 Как стать донатером</div>
+        <!-- шаги и пояснение — openVipBuyGuide() в profile.js (что даёт донат — по выключателю premium.sql) -->
+        <ol id="vipGuideSteps" style="padding-left:1.2rem;font-size:.82rem;line-height:1.9;color:var(--text)"></ol>
+        <div id="vipGuideNote" style="font-size:.72rem;color:var(--muted);margin-top:.9rem;line-height:1.5"></div>
         <button id="vipGuideGoBtn" onclick="proceedToVipDonate()" style="width:100%;margin-top:1.1rem;padding:.8rem;border-radius:10px;border:none;background:linear-gradient(135deg,#ffd700,#ff9500);color:#000;font-weight:800;cursor:pointer;font-family:'Montserrat',sans-serif">Скопировать логин и перейти к донату →</button>
       </div>
     </div>

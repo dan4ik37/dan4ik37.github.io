@@ -254,8 +254,10 @@
   function badgeHtml(m, st, extra){
     let b = '';
     if (st.role && !['owner', 'mod'].includes(st.role)) b += `<i class="mv-role" style="--rc:${ROLE[st.role][1]}">${ROLE[st.role][0]}</i>`;
-    else if (st.vip) b += `<i class="mv-role" style="--rc:${st.vip.rgb}">${st.vip.key === 'gold' ? '✨' : st.vip.key === 'silver' ? '⭐' : '🔸'} ${st.vip.key.toUpperCase()}</i>`;
+    else if (st.vip) b += `<i class="mv-role" data-vrank="${st.vip.key === 'gold' ? 3 : st.vip.key === 'silver' ? 2 : 1}" style="--rc:${st.vip.rgb}">${st.vip.key === 'gold' ? '✨' : st.vip.key === 'silver' ? '⭐' : '🔸'} ${st.vip.key.toUpperCase()}</i>`;
     if (extra && ROLE[extra]) b += `<i class="mv-crole" title="${extra === 'owner' ? 'Владелец' : 'Модератор'}">${ROLE[extra][0]}</i>`;
+    // «💛 Донатер N» — заполняет js/core/premium.js (D37Donor.fill) пачкой; VIP-значок прячется, если статус донатера не ниже
+    if (m.uid && !(st.role && !['owner', 'mod'].includes(st.role))) b += `<span class="dn-badge" data-dn-uid="${e(m.uid)}" hidden></span>`;
     if (m.uid) b += `<span class="lv-badge" data-lv-uid="${e(m.uid)}"></span>`;
     return b;
   }
@@ -798,7 +800,7 @@
       if (uid && me && !self) acts.push(`<button type="button" class="mv-ubtn" data-u="block">${MV.blocked.has(uid) ? '✅ Разблокировать' : '🚫 Заблокировать'}</button>`);
       if (m && V.A.caps.report && me && !self) acts.push('<button type="button" class="mv-ubtn" data-u="report">🚩 Пожаловаться</button>');
       const mods = !self && V.A.userMod ? V.A.userMod(uid, nick) : [];
-      const bx = openOver('', `<div class="mv-user">${P.avatar(p, nick, 56)}<div><b>${P.nick(p, nick)}</b><span>${uid ? (p?.role === 'admin' ? 'Администратор сайта' : p?.role === 'moderator' ? 'Модератор сайта' : 'Игрок') : 'Гость (без аккаунта)'}${uid ? `<span class="lv-badge" data-lv-uid="${e(uid)}"></span>` : ''}</span>${onl ? `<span>${e(P.actText(act))}</span>` : ''}</div></div>
+      const bx = openOver('', `<div class="mv-user">${P.avatar(p, nick, 56)}<div><b>${P.nick(p, nick)}</b><span>${uid ? (p?.role === 'admin' ? 'Администратор сайта' : p?.role === 'moderator' ? 'Модератор сайта' : 'Игрок') : 'Гость (без аккаунта)'}${uid ? `<span class="dn-badge" data-dn-uid="${e(uid)}" hidden></span><span class="lv-badge" data-lv-uid="${e(uid)}"></span>` : ''}</span>${onl ? `<span>${e(P.actText(act))}</span>` : ''}</div></div>
         <div class="mv-uacts">${acts.join('')}</div>${mods.length ? `<div class="mv-msep">Модерация</div><div class="mv-uacts">${mods.map(([k, t]) => `<button type="button" class="mv-ubtn warn" data-um="${e(k)}">${t}</button>`).join('')}</div>` : ''}${!me && uid ? '<div class="mv-dim">Войди, чтобы дружить, писать и звонить</div>' : ''}`);
       over.classList.add('mv-over-user');
       if (typeof xpQueueBadges === 'function') xpQueueBadges();

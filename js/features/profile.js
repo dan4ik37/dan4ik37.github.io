@@ -37,7 +37,7 @@ function isVipActive(p){
 }
 // Стафф анимацию получает бесплатно, VIP — по донату (см. profile-system.sql)
 function canUseAnimatedAvatar(role, profile){
-  return role === 'admin' || role === 'moderator' || role === 'helper' || isVipActive(profile);
+  return role === 'admin' || role === 'moderator' || role === 'helper' || isVipActive(profile) || donorLevelOf(profile) > 0;
 }
 
 // ═══════════════════════════════════════
@@ -79,17 +79,33 @@ function getVipTier(profile){
 // { minutes, cooldownMin } — сколько держится закреп и пауза до следующего; null — закрепа нет
 function getPinPerks(role, profile){
   if (STAFF_PIN[role]) return STAFF_PIN[role];
-  const t = getVipTier(profile);
+  const t = getPerkTier(profile);
   return t ? { minutes: t.pinMin, cooldownMin: Math.round(t.pinMin * t.pinCooldownMult) } : null;
 }
-// Есть ли у человека какие-либо платные/стаффовые перки (стикеры, гости, анимация)
-function hasPerks(role, profile){ return isStaffRole(role) || isVipActive(profile); }
+// «💛 Донатер» (js/core/premium.js D37Donor, premium.sql): уровень за донаты последних 30 дней, 0 — нет. Свой — из donor_me,
+// чужие — из кэша значков (D37Donor.badges). Бонусы — как у VIP того же ранга; у кого обе ветки — по лучшей (как на сервере perk_tier_of)
+function donorLevelOf(profile){ try { return (profile?.id && window.D37Donor?.levelOf(profile.id)) || 0; } catch (e) { return 0; } }
+function getPerkTier(profile){
+  const v = getVipTier(profile), dl = donorLevelOf(profile);
+  const d = dl ? VIP_TIERS.find(t => t.key === window.D37Donor.perkOf(dl)) : null;
+  if (!d) return v;
+  return !v || VIP_TIERS.indexOf(d) < VIP_TIERS.indexOf(v) ? d : v;
+}
+// Что показать у ника: лучшая ветка с её подписью — { kind: 'donor' | 'vip', tier, label, rgb, icon, until }; при равенстве — донатер
+function statusOf(profile){
+  const v = getVipTier(profile), dl = donorLevelOf(profile), D = window.D37Donor;
+  const d = dl ? VIP_TIERS.find(t => t.key === D.perkOf(dl)) : null;
+  if (d && (!v || VIP_TIERS.indexOf(d) <= VIP_TIERS.indexOf(v))) return { kind: 'donor', lv: dl, tier: d, label: D.label(dl), rgb: D.rgb(dl), icon: '💛', until: D.untilOf(profile.id) };
+  return v ? { kind: 'vip', tier: v, label: v.label, rgb: v.rgb, icon: v.icon, until: profile?.vip_until || null } : null;
+}
+// Есть ли у человека бонусы (стикеры, гости, анимация, тема): персонал, VIP или донатер
+function hasPerks(role, profile){ return isStaffRole(role) || isVipActive(profile) || donorLevelOf(profile) > 0; }
 function allowedStickerSets(role, profile){
   if (isStaffRole(role)) return ['base', 'silver', 'gold'];
-  return getVipTier(profile)?.stickerSets || [];
+  return getPerkTier(profile)?.stickerSets || [];
 }
 function guestsLimitFor(role, profile){
-  const t = getVipTier(profile);
+  const t = getPerkTier(profile);
   if (t) return t.guestsLimit;
   return isStaffRole(role) ? 30 : 0;
 }
@@ -184,7 +200,7 @@ async function renderProfilePage(viewUserId){
   if (!isOwn && currentUser?.id) recordProfileView(targetId);
   if (isOwn) renderProfileGuests(profile);
   renderVipPerksPanel(profile, isOwn);
-  if (isOwn) { renderVipPromoTiers(); renderVipMonthButtons(); }
+  if (isOwn) renderVipPromo();
   if (isOwn) { renderDonateLoginBlock(profile.donate_login); renderProfileGems(); if (typeof renderDonationClaimBox === 'function') renderDonationClaimBox(); }
   else { const p = document.getElementById('donateLoginPanel'); if (p) p.style.display = 'none'; }
   renderStaffVipPanel(profile, isOwn);
@@ -193,22 +209,27 @@ async function renderProfilePage(viewUserId){
   // модераторам на чужом профиле — «связанные входы» (какие сервисы и сколько, без номеров и почты; social-login.js)
   if (window.D37Login) window.D37Login.staffNote(isOwn ? null : targetId).catch(() => {});
   {
-    const tier = getVipTier(profile);
+    // Статус у ника — лучшая ветка: «💛 Донатер N» (донаты за 30 дней) или VIP (за уровень / 💎)
+    if (window.D37Donor) await D37Donor.badges([targetId]).catch(() => {});
+    if (profileViewedId !== targetId) return;
+    const stat = statusOf(profile), tier = stat?.tier;
     const vipBadgeEl = document.getElementById('profileVipBadge');
-    vipBadgeEl.style.display = tier ? 'inline-block' : 'none';
-    vipBadgeEl.classList.toggle('profile-badge-pop', !!tier);
-    if (tier) {
-      vipBadgeEl.textContent = tier.key === 'gold' ? '✨ ' + tier.label : tier.key === 'silver' ? '⭐ ' + tier.label : '🔸 ' + tier.label;
-      vipBadgeEl.style.background = `linear-gradient(135deg, rgb(${tier.rgb}), rgba(${tier.rgb},.6))`;
+    vipBadgeEl.style.display = stat ? 'inline-block' : 'none';
+    vipBadgeEl.classList.toggle('profile-badge-pop', !!stat);
+    if (stat) {
+      vipBadgeEl.textContent = stat.kind === 'donor' ? `${stat.label}${stat.until ? ' · ' + D37Donor.untilText(stat.until) : ''}`
+        : tier.key === 'gold' ? '✨ ' + tier.label : tier.key === 'silver' ? '⭐ ' + tier.label : '🔸 ' + tier.label;
+      vipBadgeEl.title = stat.kind === 'donor' ? 'Статус за поддержку стрима: бонусы как у ' + tier.label : '';
+      vipBadgeEl.style.background = `linear-gradient(135deg, rgb(${stat.rgb}), rgba(${stat.rgb},.6))`;
     }
-    // Напоминание о скором окончании — только себе, чтобы не потерять
-    // уровень: без нового доната минимум 100₽ VIP не продлится.
+    // Напоминание о скором окончании VIP — только себе. Донатом VIP больше не продлевается (премиум.sql, 22.10): только за 💎
     const expireEl = document.getElementById('profileVipExpireWarn');
     if (expireEl) {
-      const daysLeft = (isOwn && tier && profile.vip_until) ? Math.ceil((new Date(profile.vip_until) - Date.now()) / 86400000) : null;
+      const vt = getVipTier(profile);
+      const daysLeft = (isOwn && vt && profile.vip_until) ? Math.ceil((new Date(profile.vip_until) - Date.now()) / 86400000) : null;
       if (daysLeft !== null && daysLeft <= 7) {
         expireEl.style.display = 'block';
-        expireEl.textContent = daysLeft <= 0 ? '⚠️ VIP истекает сегодня — задонать ещё или продли за 💎 в магазине, чтобы не потерять уровень' : `⚠️ VIP закончится через ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'} — задонать 100₽+ или продли за 💎 в магазине`;
+        expireEl.textContent = daysLeft <= 0 ? '⚠️ VIP истекает сегодня — продлить можно за 💎 в магазине' : `⚠️ VIP закончится через ${daysLeft} ${daysLeft === 1 ? 'день' : daysLeft < 5 ? 'дня' : 'дней'} — продлить можно за 💎 в магазине`;
       } else {
         expireEl.style.display = 'none';
       }
@@ -284,7 +305,7 @@ async function renderProfilePage(viewUserId){
   document.getElementById('profileVipPromo').style.display = (isOwn && !canUseAnimatedAvatar(profile.role, profile)) ? 'block' : 'none';
   const themePanel = document.getElementById('profileThemePanel');
   if (themePanel) {
-    themePanel.style.display = (isOwn && isVipActive(profile)) ? 'block' : 'none';
+    themePanel.style.display = (isOwn && (isVipActive(profile) || donorLevelOf(profile) > 0)) ? 'block' : 'none';
     if (isOwn) renderThemePresets(profile.theme_accent);
   }
   document.getElementById('profileAdminPanel').style.display = (isOwn && profile.role === 'admin') ? 'block' : 'none';
@@ -318,27 +339,72 @@ async function copyDonateLogin(btn){
   const old = btn.textContent; btn.textContent = '✅ Скопировано'; setTimeout(() => { btn.textContent = old; }, 1600);
 }
 
-// Плашка «VIP за донат» на странице #/donate: свой логин для доната с кнопкой «Скопировать», иначе — как его получить.
-// Без логина донат не находит владельца — VIP не приходит, и человек пишет заявку «задонатил, а VIP нет».
+// Что даёт донат сейчас (premium.sql, выключатель site_config 'donate_rewards'): 'off' — статус «💛 Донатер» (по умолчанию),
+// 'vip' / 'gems' — как до 22.10. premium.sql (22.10) ещё не применён на базе — сервер по-старому даёт VIP: 'vip'
+function donateMode(){
+  const D = window.D37Donor;
+  if (D && D.ready() === false) return 'vip';
+  return D?.me?.()?.mode || window.D37Gems?.state?.()?.donate_rewards || 'off';
+}
+// Уровни донатера одной строкой: «I — от 100 ₽ · II — от 300 ₽ …»
+function donorLevelsLine(){
+  const D = window.D37Donor;
+  return D ? D.LEVELS.map(l => `${D.roman(l.lv)} — от ${l.min} ₽`).join(' · ') : '';
+}
+
+// Плашка на странице #/donate: что даёт донат (честно) и свой логин для доната с кнопкой «Скопировать».
+// Без логина донат не находит владельца — статус не засчитается, и человек пишет заявку «задонатил — не засчиталось».
 function renderDonateVipHint(){
-  const txt = document.getElementById('donateVipText'), act = document.getElementById('donateVipAct');
+  const txt = document.getElementById('donateVipText'), act = document.getElementById('donateVipAct'), title = document.getElementById('donateVipTitle');
   if (!txt || !act) return;
+  const D = window.D37Donor;
+  if (D && D.ready() === null && !renderDonateVipHint._wait) {
+    renderDonateVipHint._wait = D.sync().then(() => { renderDonateVipHint._wait = null; if (document.body.dataset.route === 'donate') renderDonateVipHint(); });
+  }
   const login = currentUser && currentProfile?.donate_login;
-  const more = '<a class="dv-btn ghost" href="/vip">Что даёт VIP</a><a class="dv-btn ghost" href="#/shop">💎 Магазин</a>';
-  // Выбрал в магазине «донат → кристаллы» (premium.sql) — донат даст 💎, а не VIP
-  const gems = !!window.D37Gems?.isOn() && D37Gems.state().mode === 'gems';
+  const mode = donateMode();
+  if (mode !== 'off') {
+    if (title) title.textContent = 'VIP за донат — 100 ₽ = месяц';
+    const more = '<a class="dv-btn ghost" href="/vip">Что даёт VIP</a><a class="dv-btn ghost" href="#/shop">💎 Магазин</a>';
+    const gems = mode === 'gems' || (!!window.D37Gems?.isOn() && D37Gems.state().mode === 'gems');
+    if (login) {
+      txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — ${gems ? 'придут кристаллы 💎 (VIP за них — в магазине)' : 'VIP включится сам'}.`;
+      act.innerHTML = '<button type="button" class="dv-btn" onclick="copyDonateLogin(this)">📋 Скопировать логин</button>' + more;
+    } else if (currentUser) {
+      txt.innerHTML = 'Сначала придумай <b>логин для доната</b> в профиле (один раз), потом впиши его в поле «Ваше имя» на DonationAlerts.';
+      act.innerHTML = '<a class="dv-btn" href="#/profile/vip">🔑 Задать логин</a>' + more;
+    } else {
+      txt.innerHTML = 'Донат привязывается к аккаунту: заведи профиль, задай <b>логин для доната</b> и впиши его в поле «Ваше имя» на DonationAlerts.';
+      act.innerHTML = '<button type="button" class="dv-btn" onclick="openGlobalAuth(\'register\')">Создать профиль</button>' + more;
+    }
+    return;
+  }
+  const days = D?.RULES?.days || 30;
+  if (title) title.textContent = '💛 Донатер — статус за поддержку стрима, с бонусами';
+  const more = '<a class="dv-btn ghost" href="/vip">Что даёт статус</a>';
+  const lead = `Донат — это поддержка стрима, а не покупка. Взамен — спасибо и статус <b>«💛 Донатер»</b> на ${days} дней с бонусами как у VIP (${esc(donorLevelsLine())} за ${days} дней).`;
   if (login) {
-    txt.innerHTML = `Впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts — ${gems ? 'придут кристаллы 💎 (VIP за них — в магазине)' : 'VIP включится сам'}.`;
+    txt.innerHTML = `${lead} Чтобы донат засчитался тебе, впиши <b class="dv-login">${esc(login)}</b> в поле «Ваше имя» на DonationAlerts.`;
     act.innerHTML = '<button type="button" class="dv-btn" onclick="copyDonateLogin(this)">📋 Скопировать логин</button>' + more;
   } else if (currentUser) {
-    txt.innerHTML = 'Сначала придумай <b>логин для доната</b> в профиле (один раз), потом впиши его в поле «Ваше имя» на DonationAlerts — VIP включится сам.';
+    txt.innerHTML = `${lead} Чтобы донат засчитался тебе, сначала придумай <b>логин для доната</b> в профиле (один раз) — засчитываются донаты, сделанные после этого.`;
     act.innerHTML = '<a class="dv-btn" href="#/profile/vip">🔑 Задать логин</a>' + more;
   } else {
-    txt.innerHTML = 'VIP привязывается к аккаунту: заведи профиль, задай <b>логин для доната</b> и впиши его в поле «Ваше имя» на DonationAlerts — VIP включится сам.';
+    txt.innerHTML = `${lead} Статус привязывается к аккаунту: заведи профиль и задай <b>логин для доната</b> — засчитываются донаты, сделанные после этого.`;
     act.innerHTML = '<button type="button" class="dv-btn" onclick="openGlobalAuth(\'register\')">Создать профиль</button>' + more;
   }
 }
 window.addEventListener('d37:auth', () => { if (document.body.dataset.route === 'donate') renderDonateVipHint(); });
+// Свой статус «💛 Донатер» пришёл (js/core/premium.js, после входа или нового доната) — тема, плашка доната, свой профиль
+let donorShownLv = null;
+window.addEventListener('d37:donor', e => {
+  const lv = e?.detail?.level || 0;
+  if (currentProfile) applyThemeAccent(currentProfile);
+  const r = document.body.dataset.route;
+  if (r === 'donate') renderDonateVipHint();
+  if (r === 'profile' && currentUser && profileViewedId === currentUser.id && donorShownLv !== null && donorShownLv !== lv) renderProfilePage();
+  donorShownLv = lv;
+});
 
 // Цвет свечения вокруг аватарки: роль важнее VIP (видно, кто модерирует
 // сайт, даже если админ/модератор ещё и донатер). Цвета — те же RGB,
@@ -352,7 +418,7 @@ const GLOW_RGB = {
 function applyProfileGlow(avatarEl, profile){
   let rgb = null;
   if (profile.role && GLOW_RGB[profile.role]) rgb = GLOW_RGB[profile.role];
-  else { const tier = getVipTier(profile); if (tier) rgb = tier.rgb; }
+  else { const st = statusOf(profile); if (st) rgb = st.rgb; }
 
   if (rgb) {
     avatarEl.style.setProperty('--ring-rgb', rgb);
@@ -535,7 +601,7 @@ const THEME_PRESETS = [
   { key: 'gold',    label: 'Золотой',                 a1: '#ffd700', a2: '#ff9500' },
 ];
 function applyThemeAccent(profile){
-  if (!profile || !isVipActive(profile) || !profile.theme_accent) {
+  if (!profile || !(isVipActive(profile) || donorLevelOf(profile) > 0) || !profile.theme_accent) {
     document.documentElement.style.removeProperty('--accent');
     document.documentElement.style.removeProperty('--accent2');
     return;
@@ -571,9 +637,11 @@ async function saveThemeAccent(a1, a2){
 // Роль важнее VIP: если есть roleBadgeHtml, отдельный VIP-бейдж не
 // дублируем — тот же принцип, что и в applyProfileGlow().
 function renderNickWithVip(nick, profile, roleBadgeHtml){
-  const tier = !roleBadgeHtml ? getVipTier(profile) : null;
-  const color = tier ? `color:rgb(${tier.rgb})` : '';
-  const vipBadge = tier ? ` <span class="role-badge" style="background:rgba(${tier.rgb},.22);color:rgb(${tier.rgb})">${tier.key==='gold'?'✨':tier.key==='silver'?'⭐':'🔸'} ${tier.key.toUpperCase()}</span>` : '';
+  const st = !roleBadgeHtml ? statusOf(profile) : null, tier = st?.tier;
+  const color = st ? `color:rgb(${st.rgb})` : '';
+  const vipBadge = !st ? '' : st.kind === 'donor'
+    ? ` <span class="role-badge" style="background:rgba(${st.rgb},.22);color:rgb(${st.rgb})">💛 ${window.D37Donor.roman(st.lv)}</span>`
+    : ` <span class="role-badge" style="background:rgba(${tier.rgb},.22);color:rgb(${tier.rgb})">${tier.key==='gold'?'✨':tier.key==='silver'?'⭐':'🔸'} ${tier.key.toUpperCase()}</span>`;
   return `<span style="${color}">${esc(nick)}</span>${roleBadgeHtml||''}${vipBadge}`;
 }
 
@@ -675,21 +743,38 @@ function stickerCountFor(sets){
 function tierPerkLine(t){
   return `закреп ${t.pinMin} мин (повтор через ${Math.round(t.pinMin * t.pinCooldownMult)}) · стикеров: ${stickerCountFor(t.stickerSets)} · гостей: ${t.guestsLimit}`;
 }
-// Таблица уровней для не-VIP («что я получу») — генерируется из VIP_TIERS, чтобы
-// цифры в тексте никогда не разъезжались с реальными
-function renderVipPromoTiers(){
-  const box = document.getElementById('vipPromoTiers');
-  if (!box) return;
-  box.innerHTML = [...VIP_TIERS].reverse().map(t => `
-    <div style="display:flex;gap:.5rem;align-items:baseline;padding:.3rem 0;border-top:1px solid rgba(255,255,255,.06)">
-      <span style="flex:0 0 5.6rem;font-weight:800;color:rgb(${t.rgb})">${t.icon} ${t.key === 'bronze' ? 'VIP' : t.key === 'silver' ? 'Silver' : 'Gold'}</span>
-      <span style="flex:1;font-size:.72rem;color:var(--muted)">${t.min ? 'от ' + t.min + '₽ за всё время — ' : 'с первого месяца — '}${tierPerkLine(t)}</span>
-    </div>`).join('');
-}
-// Калькулятор стоимости VIP — чистый фронтенд поверх уже существующей
-// покупки: openVipBuyGuide() как и раньше читает #vipBuyMonths напрямую,
-// поэтому его id сохранён (теперь это скрытый input, который обновляют кнопки).
+// Блок «как получить бонусы» в своём профиле (у кого бонусов нет). Всё из чисел кода — VIP_TIERS, D37Donor.LEVELS, VIP_MONTH_OPTIONS.
+// Донаты выключены от наград ('off'): «💛 Донатер» — статус за поддержку (донат — не покупка), VIP — отдельно: за уровень или 💎.
+// 'vip' / 'gems' (как до 22.10) — VIP за донат и калькулятор месяцев
 const VIP_MONTH_OPTIONS = [1, 3, 6, 12];
+function renderVipPromo(){
+  const box = document.getElementById('profileVipPromo');
+  if (!box) return;
+  const D = window.D37Donor, mode = donateMode();
+  if (mode === 'off' && D) {
+    const rows = D.LEVELS.map(l => { const t = VIP_TIERS.find(x => x.key === l.perk); return `
+      <div class="vp-row"><span style="color:rgb(${D.rgb(l.lv)})">💛 ${D.roman(l.lv)}</span><span>от ${l.min} ₽ за ${D.RULES.days} дней — как ${esc(t.label)}: ${tierPerkLine(t)}</span></div>`; }).join('');
+    box.innerHTML = `
+      <div class="vp-lead">💛 <b>Донатер — статус за поддержку стрима, с бонусами.</b> Донат — это поддержка, а не покупка: взамен — спасибо
+        и статус на ${D.RULES.days} дней. Уровень — по сумме донатов за последние ${D.RULES.days} дней; бонусы — как у VIP (на игры и рейтинги не влияют):</div>
+      <div class="vp-rows">${rows}</div>
+      <div class="vp-note">Засчитываются донаты, сделанные после того, как задан логин для доната. Анонимные донаты ни к кому не привязываются.</div>
+      <div class="vp-act"><button type="button" onclick="openVipBuyGuide()" class="pf-btn pf-btn-gold">💛 Как стать донатером</button></div>
+      <div class="vp-lead vp-sep">✨ <b>VIP — отдельно:</b> пробный за уровень на сайте (30-й — 3 дня, 50-й — неделя, 100-й — месяц) или за 💎 в <a href="#/shop" style="color:#ffd166">магазине</a>. Бонусы почти те же; у кого есть и то, и другое — действует лучшее.</div>`;
+    return;
+  }
+  const current = parseInt(document.getElementById('vipBuyMonths')?.value, 10) || 3;
+  box.innerHTML = `
+    <div class="vp-lead">✨ <b>VIP — 100₽ в месяц</b> (донат больше — месяцев больше, остаток копится) или за 💎 кристаллы в <a href="#/shop" style="color:#ffd166">магазине</a>.
+      Всем VIP: анимированные аватар и фон, цветной ник в чате и на форуме, своя тема сайта, форматирование постов, стикеры, закреп сообщения и список гостей профиля.
+      Уровень растёт с суммой поддержки (донаты и кристаллы) за всё время:</div>
+    <div class="vp-rows">${[...VIP_TIERS].reverse().map(t => `<div class="vp-row"><span style="color:rgb(${t.rgb})">${t.icon} ${t.key === 'bronze' ? 'VIP' : t.key === 'silver' ? 'Silver' : 'Gold'}</span><span>${t.min ? 'от ' + t.min + '₽ за всё время — ' : 'с первого месяца — '}${tierPerkLine(t)}</span></div>`).join('')}</div>
+    <input type="hidden" id="vipBuyMonths" value="${current}">
+    <div id="vipMonthBtns" class="vip-month-btns" style="display:flex;gap:.4rem;flex-wrap:wrap;margin:.7rem 0"></div>
+    <div class="vp-act"><div id="vipCalcTotal" style="font-size:.85rem;font-weight:800;color:var(--text)"></div><button type="button" onclick="openVipBuyGuide()" class="pf-btn pf-btn-gold">✨ Хочу VIP</button></div>`;
+  renderVipMonthButtons();
+}
+// Калькулятор месяцев (только когда донат даёт VIP: 'vip'). openVipBuyGuide() читает #vipBuyMonths
 function renderVipMonthButtons(){
   const box = document.getElementById('vipMonthBtns');
   if (!box) return;
@@ -720,29 +805,34 @@ function updateVipCalcTotal(months){
   if (el) el.textContent = `Итого: ${(months * VIP_RUB_PER_MONTH).toLocaleString('ru')}₽ за ${months} мес.`;
 }
 
-// Панель «мой уровень» у активного VIP: что даёт сейчас и сколько до следующего
+// Панель «мой статус» (свой профиль, бонусы есть): лучшая ветка — «💛 Донатер» (донаты за 30 дней, до какого числа, сколько до
+// следующего) и/или VIP (за уровень или 💎); что даёт сейчас
 function renderVipPerksPanel(profile, isOwn){
   const panel = document.getElementById('profileVipPerksPanel');
   if (!panel) return;
-  const tier = getVipTier(profile);
-  if (!isOwn || !tier) { panel.style.display = 'none'; return; }
-  const total = Number(profile.total_donated) || 0;
-  const idx = VIP_TIERS.indexOf(tier);
-  const next = idx > 0 ? VIP_TIERS[idx - 1] : null;
-  const pct = next ? Math.max(0, Math.min(100, Math.round((total - tier.min) / (next.min - tier.min) * 100))) : 100;
+  const D = window.D37Donor, st = statusOf(profile), tier = getPerkTier(profile);
+  if (!isOwn || !st || !tier) { panel.style.display = 'none'; return; }
+  const me = D?.me?.() || {}, dl = donorLevelOf(profile), vt = getVipTier(profile);
+  const lines = [];
+  if (dl) {
+    const nx = me.next;
+    lines.push(`<div style="font-size:1.05rem;font-weight:800;color:rgb(${D.rgb(dl)});margin-bottom:.3rem">${esc(D.label(dl))} <small style="font-weight:600;color:var(--muted)">${esc(D.untilText(D.untilOf(profile.id)))}</small></div>
+      <div style="font-size:.74rem;color:var(--muted);margin-bottom:.5rem">За ${D.RULES.days} дней — ${Math.round(+me.sum || 0)} ₽ донатов. ${nx ? `До «Донатер ${D.roman(nx.level)}» ещё ${Math.round(+nx.need)} ₽.` : 'Это высший уровень — спасибо, что с нами 💛'} Статус временный: донат считается ${D.RULES.days} дней.</div>`);
+  }
+  if (vt) {
+    const until = typeof vipEffectiveUntil === 'function' ? vipEffectiveUntil(profile) : profile.vip_until;
+    lines.push(`<div style="font-size:${dl ? '.82rem' : '1.05rem'};font-weight:800;color:rgb(${vt.rgb});margin-bottom:.5rem">${vt.icon} ${esc(vt.label)}${until ? ` <small style="font-weight:600;color:var(--muted)">до ${new Date(until).toLocaleDateString('ru-RU')}</small>` : ''}</div>`);
+  }
   panel.style.display = 'block';
   panel.innerHTML = `
-    <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">${tier.icon} Твой уровень</div>
-    <div style="font-size:1.05rem;font-weight:800;color:rgb(${tier.rgb});margin-bottom:.5rem">${tier.label}</div>
+    <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">${st.icon} Твой статус</div>
+    ${lines.join('')}
     <div style="font-size:.76rem;color:var(--muted);line-height:1.7">
+      Действует лучшее: <b style="color:var(--text)">как ${esc(tier.label)}</b><br>
       📌 Закреп в чате: <b style="color:var(--text)">${tier.pinMin} мин</b>, повтор через ${Math.round(tier.pinMin * tier.pinCooldownMult)} мин<br>
       🎉 Стикеров: <b style="color:var(--text)">${stickerCountFor(tier.stickerSets)}</b> · 👀 Гостей в списке: <b style="color:var(--text)">${tier.guestsLimit}</b><br>
-      ✨ Анимированные аватар и фон, цветной ник, своя тема, форматирование на форуме
-    </div>
-    ${next ? `
-      <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.8rem 0 .4rem"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,rgb(${tier.rgb}),rgb(${next.rgb}));border-radius:6px"></div></div>
-      <div style="font-size:.72rem;color:var(--muted)">До ${next.icon} ${next.label} ещё <b style="color:var(--text)">${Math.max(0, next.min - total).toFixed(0)}₽</b> поддержки (донаты или 💎) — ${tierPerkLine(next)}</div>`
-    : '<div style="font-size:.74rem;color:var(--muted);margin-top:.7rem">Максимальный уровень — спасибо, что с нами 💛</div>'}`;
+      ✨ Анимированные аватар и фон, цветной ник, своя тема, форматирование на форуме, сайт без рекламы
+    </div>`;
 }
 
 // Личная шкала VIP-прогресса — сколько накоплено к следующему месяцу
@@ -802,6 +892,7 @@ async function saveProfileNick(){
   errEl.textContent = '';
   if (!nick) { errEl.textContent = 'Ник не может быть пустым'; return; }
   if (nick.length > 24) { errEl.textContent = 'Максимум 24 символа'; return; }
+  if (window.D37Donor?.reserved(nick)) { errEl.textContent = 'Такой ник занят системой (так подписаны анонимные донаты и гости) — выбери другой'; return; }
 
   try {
     // Ник больше не участвует в матчинге доната (см. vip-donate-login.sql)
@@ -1064,16 +1155,20 @@ async function saveDonateLogin(){
   errEl.textContent = '';
   if (!login) { errEl.textContent = 'Введи логин'; return; }
   if (login.length > 32) { errEl.textContent = 'Слишком длинный (макс. 32 символа)'; return; }
+  // «Аноним», «гость», «без имени»… так DonationAlerts подписывает анонимные донаты — к логину не привяжутся (premium.sql)
+  if (window.D37Donor?.reserved(login)) { errEl.textContent = 'Такой логин нельзя: так подписываются анонимные донаты — придумай свой'; return; }
   try {
     const { error } = await sbClient.from('profiles').update({ donate_login: login }).eq('id', currentUser.id);
     if (error) {
       errEl.textContent = error.code === '23505' || /уже занят/i.test(error.message || '')
         ? `Логин «${login}» уже занят — в том числе кем-то, кто раньше его использовал`
+        : error.code === '23514' || /нельзя: так DonationAlerts/i.test(error.message || '') ? 'Такой логин нельзя: так подписываются анонимные донаты — придумай свой'
         : 'Не удалось сохранить: ' + humanErr(error);
       return;
     }
     if (currentProfile) currentProfile.donate_login = login;
     renderDonateLoginBlock(login);
+    window.D37Donor?.sync();   // «логин стал твоим» — с этого момента донаты засчитываются
   } catch(e) {
     errEl.textContent = 'Не удалось сохранить: ' + humanErr(e);
   }
@@ -1103,7 +1198,10 @@ async function renderProfileGems(){
   if (!box) { box = document.createElement('div'); box.className = 'pg-box'; panel.appendChild(box); }
   const S = await D37Gems.sync(), C = D37Gems.CFG;
   if (!S.ok) { box.innerHTML = `<a class="dl-copy dl-go" href="#/shop">${C.icon} Магазин кристаллов</a>`; return; }
-  box.innerHTML = `<div class="pg-row"><span>${C.icon} <b class="js-gems">${D37Gems.num(S.balance)}</b> ${D37Gems.word(S.balance)}</span><a class="dl-copy dl-go" href="#/shop">Магазин →</a></div>
+  const row = `<div class="pg-row"><span>${C.icon} <b class="js-gems">${D37Gems.num(S.balance)}</b> ${D37Gems.word(S.balance)}</span><a class="dl-copy dl-go" href="#/shop">Магазин →</a></div>`;
+  // Донат не даёт ни VIP, ни 💎 (premium.sql, 'off') — выбирать нечего: статус «💛 Донатер»
+  if ((S.donate_rewards || 'off') === 'off') { box.innerHTML = row; return; }
+  box.innerHTML = row + `
     <div class="pg-mode" role="radiogroup" aria-label="Что даёт донат"><span>Донат даёт:</span>
       <button type="button" role="radio" aria-checked="${S.mode === 'vip'}" class="${S.mode === 'vip' ? 'on' : ''}" onclick="profileGemsMode('vip')">✨ VIP сразу</button>
       <button type="button" role="radio" aria-checked="${S.mode === 'gems'}" class="${S.mode === 'gems' ? 'on' : ''}" onclick="profileGemsMode('gems')">${C.icon} Кристаллы</button></div>`;
@@ -1117,28 +1215,43 @@ async function profileGemsMode(mode){
 function openVipBuyGuide(){
   if (!currentUser) { openGlobalAuth(); return; }
   if (!currentProfile?.donate_login) {
-    alert('Сначала укажи логин для доната — он выше, в блоке VIP. Без него донат не поймёт, кому начислять VIP.');
+    alert('Сначала укажи логин для доната — он выше, в блоке «Логин для доната». Без него донат не поймёт, кому засчитать.');
     document.getElementById('donateLoginInput')?.focus();
     return;
   }
-  const months = parseInt(document.getElementById('vipBuyMonths').value, 10);
-  const amount = months * VIP_RUB_PER_MONTH;
-  document.getElementById('vipGuideNick').textContent = currentProfile.donate_login;
-  document.getElementById('vipGuideAmount').textContent = amount + '₽';
+  const D = window.D37Donor, off = donateMode() === 'off';
+  const months = parseInt(document.getElementById('vipBuyMonths')?.value, 10) || 1;
+  const amount = off ? '' : months * VIP_RUB_PER_MONTH + '₽';
+  const login = esc(currentProfile.donate_login);
+  const title = document.getElementById('vipGuideTitle'), steps = document.getElementById('vipGuideSteps'), note = document.getElementById('vipGuideNote');
+  if (title) title.textContent = off ? '💛 Как стать донатером' : '✨ Как получить VIP';
+  if (steps) steps.innerHTML = off ? `
+    <li>Жми «Перейти к донату» ниже — откроется страница DonationAlerts</li>
+    <li>В поле <b>«Ваше имя»</b> впиши <b>ровно</b> свой логин для доната (не ник! он уже в буфере обмена — просто вставь): <span id="vipGuideNick" style="color:#ffd700;font-weight:700">${login}</span></li>
+    <li>Сумма — любая. За ${D?.RULES?.days || 30} дней: ${esc(donorLevelsLine())} <span id="vipGuideAmount" hidden></span></li>
+    <li>Через пару минут статус «💛 Донатер» включится сам — обнови профиль</li>`
+    : `
+    <li>Жми «Перейти к донату» ниже — откроется страница DonationAlerts</li>
+    <li>В поле <b>«Ваше имя»</b> введи <b>ровно</b> свой логин для доната (не ник! уже в буфере обмена): <span id="vipGuideNick" style="color:#ffd700;font-weight:700">${login}</span></li>
+    <li>Сумма — <span id="vipGuideAmount" style="color:#ffd700;font-weight:700">${amount}</span> (любая, не обязательно кратно 100₽ — остаток копится к следующему месяцу)</li>
+    <li>После доната VIP применится автоматически в течение пары минут — обнови страницу профиля</li>`;
+  if (note) note.textContent = off
+    ? 'Донат — это поддержка стрима, а не покупка: взамен — спасибо и статус. Засчитываются донаты после того, как задан логин. Не засчитался (опечатка в имени) — в профиле есть «Задонатил — не засчиталось?».'
+    : '⚠ Если логин не совпадёт (опечатка, донат под ником вместо логина) — не потеряется: в профиле есть «Задонатил — не засчиталось?».';
   document.getElementById('vipBuyModal').style.display = 'flex';
 }
 function closeVipBuyGuide(){
   document.getElementById('vipBuyModal').style.display = 'none';
 }
 async function proceedToVipDonate(){
-  const login = document.getElementById('vipGuideNick').textContent;
-  const amount = document.getElementById('vipGuideAmount').textContent.replace('₽','');
+  const login = document.getElementById('vipGuideNick')?.textContent || currentProfile?.donate_login || '';
+  const amount = (document.getElementById('vipGuideAmount')?.textContent || '').replace('₽','');
   try { await navigator.clipboard.writeText(login); } catch(e) {
     // Буфер обмена может быть недоступен (напр. без HTTPS или разрешения) —
     // не критично, логин всё равно есть текстом в гайде, можно ввести руками.
   }
   // best-effort — см. комментарий выше, не гарантировано
-  window.open(`${DA_DONATE_URL}?amount=${amount}`, '_blank');
+  window.open(amount ? `${DA_DONATE_URL}?amount=${amount}` : DA_DONATE_URL, '_blank');
   closeVipBuyGuide();
 }
 
@@ -1164,9 +1277,10 @@ async function openDonationLog(){
     tableEl.innerHTML = data.map(row => {
       const date = new Date(row.processed_at).toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
       // В режиме «донат → 💎» (premium.sql) донат даёт кристаллы, а не месяцы
+      const HOLD = { reserved: 'анонимный', before_reg: 'раньше регистрации — реши в «Донаты: проверка»', before_login: 'раньше, чем логин стал его — реши в «Донаты: проверка»', currency: 'не в рублях', no_profile: 'логин не найден' };
       const status = row.matched
-        ? (row.gems_granted ? `✅ +${row.gems_granted} 💎` : `✅ +${row.months_granted} мес.`) + ` → <b>${esc(row.profiles?.nick || '?')}</b>`
-        : `⚠ Не сопоставлен`;
+        ? (row.reward === 'status' ? `💛 статус${row.excluded ? ' (не в счёт)' : ''}` : row.gems_granted ? `✅ +${row.gems_granted} 💎` : `✅ +${row.months_granted} мес.`) + ` → <b>${esc(row.profiles?.nick || '?')}</b>`
+        : `⚠ Не привязан${row.hold && HOLD[row.hold] ? ': ' + HOLD[row.hold] : ''}`;
       return `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(255,255,255,.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">
           <div>
@@ -1247,12 +1361,14 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
     // Bronze/Silver/Gold уже различаются иконкой и цветом (см. profileVipBadge
     // выше), мини-профиль теперь показывает то же самое, а не «просто VIP».
     {
+      // Лучшая ветка: «💛 Донатер N — до …» или VIP
+      if (window.D37Donor) await D37Donor.badges([userId]).catch(() => {});
       const vipEl = document.getElementById('miniProfileVip');
-      const tier = getVipTier(p);
-      if (tier) {
-        vipEl.textContent = tier.key === 'gold' ? '✨' : tier.key === 'silver' ? '⭐' : '🔸';
-        vipEl.style.color = `rgb(${tier.rgb})`;
-        vipEl.title = tier.label;
+      const st = statusOf(p), tier = st?.tier;
+      if (st) {
+        vipEl.textContent = st.kind === 'donor' ? '💛 ' + D37Donor.roman(st.lv) : tier.key === 'gold' ? '✨' : tier.key === 'silver' ? '⭐' : '🔸';
+        vipEl.style.color = `rgb(${st.rgb})`;
+        vipEl.title = st.kind === 'donor' ? `Донатер ${D37Donor.roman(st.lv)}${st.until ? ' — ' + D37Donor.untilText(st.until) : ''} · статус за поддержку стрима` : tier.label;
         vipEl.style.display = 'inline';
       } else {
         vipEl.style.display = 'none';

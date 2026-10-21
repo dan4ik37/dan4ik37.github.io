@@ -98,7 +98,13 @@
     try { tier = typeof getVipTier === 'function' ? getVipTier(p) : null; } catch (e) {}
     let active = !!tier;
     if (!active) try { active = typeof isVipActive === 'function' ? isVipActive(p) : false; } catch (e) {}
-    if (!active) return false;
+    // «💛 Донатер» (js/core/premium.js) — бонусы как у VIP, и без рекламы тоже; срок — пока есть статус
+    if (!active) {
+      let dl = 0, dUntil = 0;
+      try { dl = window.D37Donor?.levelOf?.(p.id) || 0; dUntil = Date.parse(window.D37Donor?.untilAnyOf?.(p.id) || '') || 0; } catch (e) {}
+      if (!dl) return false;
+      return { until: Math.min(dUntil > now() ? dUntil : Infinity, now() + 7 * 864e5) };
+    }
     const until = p.vip_until ? Date.parse(p.vip_until) : 0;
     return { until: Math.min(until > now() ? until : Infinity, now() + 7 * 864e5) };
   }
@@ -697,6 +703,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
     if (dbg.on) document.documentElement.classList.add('d37-ads-debug');
     gate();   // VIP — пауза; остальным — снять паузу из <head>, без персональной рекламы — по возрасту
     window.addEventListener('d37:auth', () => setTimeout(syncPerk, 50));
+    window.addEventListener('d37:donor', () => setTimeout(syncPerk, 50));   // статус «💛 Донатер» пришёл позже профиля
     window.addEventListener('d37:age', () => setTimeout(() => { gate(); railTick(); }, 0));   // указал / сменил возраст
     document.addEventListener('pointerdown', onGameInput, true);
     document.addEventListener('keydown', onGameInput, true);

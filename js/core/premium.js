@@ -167,3 +167,136 @@
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },
   };
 })();
+
+// ═══════════════════════════════════════
+//  💛 ДОНАТЕР — статус за поддержку стрима (premium.sql, разделы 6 и 8; 22.10.2026)
+// ═══════════════════════════════════════
+// Донат DonationAlerts (пока выключатель site_config 'donate_rewards' = off) даёт не VIP и не 💎, а временный статус: уровень =
+// сумма привязанных донатов за последние RULES.days дней (скользящее окно), бонусы — как у VIP того же ранга (perk). Считает сервер.
+// API (window.D37Donor):
+//   LEVELS, RULES, RESERVED — числа и занятые имена (= premium.sql donor_levels / donor_rule / donor_name_reserved =
+//     api/_lib/premium.js; scripts/pay-test.cjs сверяет). ПРЕДЛОЖЕНИЕ — решает владелец
+//   reserved(name) — «Аноним», «гость», «без имени»… (нельзя ни ником, ни логином для доната)
+//   levelFor(sum), perkOf(lv) → 'bronze' | 'silver' | 'gold', label(lv) → «💛 Донатер II», rgb(lv), untilText(iso) → «до 21.11»
+//   me() — свой статус (donor_me), sync() — обновить; levelOf(uid), untilOf(uid) — из кэша (свой — из me)
+//   badges(uids) → загрузить значки пачкой (кэш 5 мин); queue() — заполнить .dn-badge[data-dn-uid] на странице
+//   событие 'd37:donor' — свой статус обновился
+(() => {
+  const LEVELS = [
+    { lv: 1, min: 100, perk: 'bronze' },
+    { lv: 2, min: 300, perk: 'silver' },
+    { lv: 3, min: 700, perk: 'gold' },
+    { lv: 4, min: 1500, perk: 'gold' },
+  ];
+  const RULES = { days: 30, auto_max: 300, claims_day: 5 };
+  const RESERVED = {
+    exact: ['аноним', 'анонимно', 'анонимный', 'анонимная', 'анонимус', 'анон', 'anonymous', 'anonym', 'anonim', 'anonimus', 'anon',
+      'гость', 'гостья', 'guest', 'без имени', 'безымянный', 'безымянная', 'noname', 'no name', 'nameless', 'unknown',
+      'неизвестный', 'неизвестная', 'неизвестно', 'нет имени', 'ваше имя', 'your name', 'имя', 'name', 'никто', 'nobody',
+      'user', 'пользователь', 'donationalerts', 'донатер', 'донатёр', 'donater', 'donator', 'donor'],
+    prefix: ['аноним', 'anonym', 'anonim'],
+  };
+  const RGB = ['', '255,205,70', '255,176,46', '255,140,40', '255,96,140'];
+  const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+  const UP = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯё', LO = 'абвгдеежзийклмнопрстуфхцчшщъыьэюяе', LAT = 'aeopcxykmhbt0', CYR = 'аеорсхукмнвто';
+  // Ключ имени — как donor_name_key в premium.sql: регистр, ё → е, латинские «двойники» → кириллица, только буквы и цифры
+  function nameKey(t){
+    let out = '';
+    for (let ch of String(t == null ? '' : t)) {
+      let i = UP.indexOf(ch); if (i >= 0) ch = LO[i];
+      if (ch >= 'A' && ch <= 'Z') ch = ch.toLowerCase();
+      i = LAT.indexOf(ch); if (i >= 0) ch = CYR[i];
+      if (/^[a-zа-я0-9]$/.test(ch)) out += ch;
+    }
+    return out;
+  }
+  const EXACT = new Set(RESERVED.exact.map(nameKey)), PREF = RESERVED.prefix.map(nameKey);
+  const reserved = t => { const k = nameKey(t); return k === '' || EXACT.has(k) || PREF.some(p => k.startsWith(p)); };
+  const levelFor = sum => LEVELS.reduce((a, l) => (Number(sum) || 0) >= l.min ? l.lv : a, 0);
+  const perkOf = lv => (LEVELS.find(l => l.lv === lv) || {}).perk || null;
+  const roman = lv => ROMAN[Math.max(1, Math.min(8, lv | 0))];
+  const label = lv => '💛 Донатер ' + roman(lv);
+  const rgb = lv => RGB[Math.max(1, Math.min(RGB.length - 1, lv | 0))];
+  const untilText = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : 'до ' + d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }); };
+
+  const client = () => (typeof sbClient !== 'undefined' && sbClient) || null;
+  const myId = () => (typeof currentUser !== 'undefined' && currentUser && currentUser.id) || null;
+  let ready = null;                     // null — не спрашивали; false — premium.sql (22.10) ещё не применён
+  let ME = { ok: false, level: 0 };
+  const cache = new Map();              // uid → { lv, until, at }
+  const TTL = 5 * 60 * 1000;
+  const fresh = c => c && Date.now() - c.at < TTL;
+
+  async function rpc(name, args){
+    const sb = client();
+    if (!sb || ready === false) return { error: { code: 'off' } };
+    try {
+      const { data, error } = await sb.rpc(name, args || {});
+      if (error && (error.code === 'PGRST202' || /Could not find the function/i.test(error.message || ''))) ready = false;
+      return error ? { error } : { data };
+    } catch (e) { return { error: e }; }
+  }
+  let syncing = null;
+  function sync(){
+    if (syncing) return syncing;
+    syncing = (async () => {
+      const { data } = await rpc('donor_me');
+      if (data) { ready = true; ME = data.ok && myId() ? data : { ok: false, level: 0, mode: data.mode }; }
+      else ME = { ok: false, level: 0 };
+      const id = myId();
+      if (id) cache.set(id, { lv: ME.level || 0, until: ME.until || null, any: ME.until_any || null, at: Date.now() });
+      try { window.dispatchEvent(new CustomEvent('d37:donor', { detail: ME })); } catch (e) {}
+      return ME;
+    })().finally(() => { syncing = null; });
+    return syncing;
+  }
+  // Значки пачкой; чужие скрывшие донаты (privacy.sql) не приходят — у них «нет статуса»
+  async function badges(uids){
+    const need = [...new Set((uids || []).filter(u => u && /^[0-9a-f-]{36}$/i.test(u) && !fresh(cache.get(u))))];
+    for (let i = 0; i < need.length; i += 200) {
+      const part = need.slice(i, i + 200);
+      const { data, error } = await rpc('donor_badges', { p_uids: part });
+      if (error) { part.forEach(u => cache.set(u, { lv: 0, at: Date.now() })); continue; }
+      const got = new Map((data || []).map(x => [x.id, x]));
+      part.forEach(u => { const x = got.get(u); cache.set(u, { lv: x ? x.lv : 0, until: x ? x.until : null, at: Date.now() }); });
+    }
+    return cache;
+  }
+  const levelOf = uid => { if (!uid) return 0; if (uid === myId() && ME.ok) return ME.level || 0; const c = cache.get(uid); return c ? c.lv || 0 : 0; };
+  const untilOf = uid => { if (uid === myId() && ME.ok) return ME.until || null; const c = cache.get(uid); return c ? c.until || null : null; };
+  const untilAnyOf = uid => { if (uid === myId() && ME.ok) return ME.until_any || ME.until || null; const c = cache.get(uid); return c ? c.any || c.until || null : null; };
+  const RANK = { bronze: 1, silver: 2, gold: 3 };
+
+  // ── Значки на странице: <span class="dn-badge" data-dn-uid="…"> рядом с ником (чат, участники, карточки) ──
+  let qt = 0;
+  function queue(){ clearTimeout(qt); qt = setTimeout(fill, 300); }
+  async function fill(){
+    if (typeof document === 'undefined' || ready === false) return;
+    const els = [...document.querySelectorAll('.dn-badge[data-dn-uid]:not([data-dn])')];
+    if (!els.length) return;
+    await badges(els.map(e => e.dataset.dnUid));
+    els.forEach(el => {
+      const uid = el.dataset.dnUid, lv = levelOf(uid);
+      el.dataset.dn = lv;
+      if (!lv) { el.hidden = true; return; }
+      el.hidden = false;
+      el.textContent = '💛 ' + roman(lv);
+      el.title = 'Донатер ' + roman(lv) + (untilOf(uid) ? ' — ' + untilText(untilOf(uid)) : '') + ' · статус за поддержку стрима';
+      el.style.setProperty('--dn', rgb(lv));
+      // VIP-значок рядом — только если VIP «выше» (бонусы — по лучшей ветке, подпись — тоже)
+      const vip = el.parentElement && el.parentElement.querySelector('[data-vrank]');
+      if (vip && RANK[perkOf(lv)] >= +vip.dataset.vrank) vip.hidden = true;
+      const nick = el.parentElement && el.parentElement.querySelector('.mv-nick');
+      if (nick && !nick.getAttribute('style')) nick.style.color = 'rgb(' + rgb(lv) + ')';
+    });
+  }
+
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('d37:auth', () => { cache.clear(); sync(); queue(); });
+  }
+  window.D37Donor = {
+    LEVELS, RULES, RESERVED, nameKey, reserved, levelFor, perkOf, label, roman, rgb, untilText,
+    sync, me: () => ME, ready: () => ready, badges, levelOf, untilOf, untilAnyOf, queue, fill,
+    rank: lv => RANK[perkOf(lv)] || 0,
+  };
+})();
