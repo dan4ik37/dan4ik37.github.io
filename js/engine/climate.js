@@ -11,8 +11,9 @@
 //   windDir, gust, humid, wet, puddle, snowCover, ice, autumn, bare, fresh, climate };
 //   C.use(W) / C.at(x, z, мс, y) — «текущий» мир; C.exposure(состояние, о) — холод/жара/мокро для персонажей (Симс — потом);
 //   C.on('holiday' | 'season' | 'weather', f) → отписка; C.tick(мс) — проверить смену праздника и сезона.
-// Календарь (правила владельца): декабрь–январь — всегда зима, ноябрь — всегда осень, февраль–октябрь — 38 быстрых сезонов
-// (≈ неделя каждый): весна, лето + 9 кругов «осень, зима, весна, лето». Фаза года φ ∈ [0, 4) непрерывна на всех стыках.
+// Календарь (правила владельца): декабрь–февраль — зима, ноябрь — всегда осень, март–ноябрь — 7 сезонов по ≈ 39 суток (владелец
+// 21.10: «не так быстро, хотя бы реальный месяц»; до этого было 38 сезонов по неделе): весна, лето, осень, зима, весна, лето,
+// осень. Наурыз (21 марта) — весной. Фаза года φ ∈ [0, 4) непрерывна на всех стыках.
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const E = root.D37E = root.D37E || {};
@@ -39,14 +40,13 @@
   C.SEASONS = ['spring', 'summer', 'autumn', 'winter'];
   C.SEASON_NAMES = { spring: 'весна', summer: 'лето', autumn: 'осень', winter: 'зима' };
   C.SEASON_ICONS = { spring: '🌱', summer: '☀️', autumn: '🍂', winter: '❄️' };
-  C.FAST = 38;   // быстрых сезонов с 1 февраля по 31 октября: весна, лето + 9 кругов (осень, зима, весна, лето)
+  C.FAST = 7;   // сезонов с 1 марта по 30 ноября: весна, лето, осень, зима, весна, лето, осень — по 275 / 7 ≈ 39,3 суток
   C.phaseCal = (ms, tz = C.ZONE) => {
     const t = ms + tz * 60000, d = new Date(t), Y = d.getUTCFullYear(), M = d.getUTCMonth();
-    if (M === 11) return 3 + (t - Date.UTC(Y, 11, 1)) / (Date.UTC(Y + 1, 1, 1) - Date.UTC(Y, 11, 1));   // зима: 1 дек … 1 фев (62 сут)
-    if (M === 0) return 3 + (t - Date.UTC(Y - 1, 11, 1)) / (Date.UTC(Y, 1, 1) - Date.UTC(Y - 1, 11, 1));
-    if (M === 10) return 2 + (t - Date.UTC(Y, 10, 1)) / (Date.UTC(Y, 11, 1) - Date.UTC(Y, 10, 1));   // ноябрь — осень
-    const L = Date.UTC(Y, 10, 1) - Date.UTC(Y, 1, 1);   // 273 или 274 суток
-    return (C.FAST * (t - Date.UTC(Y, 1, 1)) / L) % 4;
+    if (M === 11) return 3 + (t - Date.UTC(Y, 11, 1)) / (Date.UTC(Y + 1, 2, 1) - Date.UTC(Y, 11, 1));   // зима: 1 дек … 1 мар (90–91 сут)
+    if (M <= 1) return 3 + (t - Date.UTC(Y - 1, 11, 1)) / (Date.UTC(Y, 2, 1) - Date.UTC(Y - 1, 11, 1));
+    const L = Date.UTC(Y, 11, 1) - Date.UTC(Y, 2, 1);   // 1 марта … 1 декабря — всегда 275 суток; ноябрь целиком в последней осени
+    return (C.FAST * (t - Date.UTC(Y, 2, 1)) / L) % 4;
   };
   C.seasonOf = ph => C.SEASONS[Math.floor(((ph % 4) + 4) % 4) % 4];
   // Осенняя листва, зимняя «голая» (тусклая), весенняя свежая — гладко по фазе
@@ -365,7 +365,7 @@
   // Календарь общего мира + праздники игрока
   C.calendar = (ms = Date.now(), o = {}) => {
     const tz = num(o.tz, C.localTz(ms)), ph = C.phaseCal(ms, num(o.zone, C.ZONE)), season = C.seasonOf(ph), p = parts(ms, tz);
-    const fast = !(p.m === 11 || p.m === 12 || p.m === 1);
+    const fast = p.m >= 3 && p.m <= 10;   // месяцы, где сезоны сменяются; ноябрь — закреплённая осень, декабрь–февраль — зима
     return { season, phase: ph, progress: ph - Math.floor(ph), name: C.SEASON_NAMES[season], icon: C.SEASON_ICONS[season], fast,
       year: p.y, month: p.m, day: p.d, hour: p.h, tz, holidays: C.holidays(ms, { tz }), next: C.nextHoliday(ms, { tz }), advent: C.advent(ms, { tz }) };
   };
