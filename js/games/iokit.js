@@ -347,6 +347,7 @@
   // Сразу по ссылке-приглашению игра открывается раньше, чем сайт подключит Supabase (init.js → initChat): подождать до ms
   function whenNet(fn, ms = 8000){
     if (netOk()) { fn(true); return () => {}; }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) { const z = setTimeout(() => fn(false), 0); return () => clearTimeout(z); }   // без интернета ждать нечего
     const t0 = Date.now();
     let t = setInterval(() => { if (netOk() || Date.now() - t0 > ms) { clearInterval(t); t = 0; fn(netOk()); } }, 100);
     return () => { if (t) { clearInterval(t); t = 0; } };
@@ -802,9 +803,11 @@
       <div class="io-cd">Новый раунд через <b class="io-left">8</b> с</div><div class="io-btns"><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`;
   }
   const connHtml = pub => `<div class="io-card"><div class="io-logo">🌐</div><div class="io-sub">${pub ? 'Ищем арену с живыми игроками…' : 'Подключаемся к комнате…'}</div></div>`;
+  // v: 'full' | 'dup' | 'offline' (нет связи — «ещё раз», data-io="retry") | другое; игры ловят data-io="retry" / "bots" / "menu"
   function errHtml(v){
-    const txt = v === 'full' ? 'Комната заполнена (10 игроков).' : v === 'dup' ? 'Ты уже играешь в этой комнате в другой вкладке.' : 'Не удалось подключиться.';
-    return `<div class="io-card"><div class="io-logo">📡</div><div class="io-title" style="font-size:1.2rem">${txt}</div><div class="io-btns"><button type="button" class="ct-start" data-io="bots">🤖 Играть с ботами</button><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`;
+    const txt = v === 'full' ? 'Комната заполнена (10 игроков).' : v === 'dup' ? 'Ты уже играешь в этой комнате в другой вкладке.' : v === 'offline' ? 'Нет связи — не удалось подключиться к комнате. Проверь интернет и попробуй ещё раз.' : 'Не удалось подключиться.';
+    const retry = v === 'offline' ? '<button type="button" class="ct-start" data-io="retry">🔄 Ещё раз</button>' : '';
+    return `<div class="io-card"><div class="io-logo">📡</div><div class="io-title" style="font-size:1.2rem">${txt}</div><div class="io-btns">${retry}<button type="button" class="${retry ? 'io-b2' : 'ct-start'}" data-io="bots">🤖 Играть с ботами</button><button type="button" class="io-b2" data-io="menu">🏠 Меню</button></div></div>`;
   }
   // Подпись сети: «🤖 с ботами» / «🌐 общая · 👥 3 · 80 мс» / «🔗 abc123 · 👥 2 · 🐢» (🐢 — без прямой связи, медленнее)
   function netLabel(S){
