@@ -178,13 +178,13 @@
       else if (xs) for (let ly = 0; ly < CS; ly++) maskCell(n, xs[0], ly);
       else if (ys) for (let lx = 0; lx < CS; lx++) maskCell(n, lx, ys[0]);
       n.dirty0 = true; n.dirtyL = true;
-      if (dy === 1 && dx === 0) n.dirty1 = true;   // у нижнего соседа — «над клеткой жидкость»
+      if (dy === 1 && dx === 0) dirtyRows(n, 0, 0);   // у нижнего соседа — «над клеткой жидкость» (верхний ряд)
     }
   }
   function newChunk(d){
     const c = { cx: d.cx, cy: d.cy, k: kOf(d.cx, d.cy), fg: d.fg, wall: d.wall, st: d.st, lq: d.lq, lt: d.lt, light: d.light,
       m0: new Uint8Array(CA), m1: new Uint8Array(CA), ugH: new Int32Array(CS), awake: 0, hasLq: false, mod: false,
-      dirty0: true, dirty1: true, dirtyL: true, ready: false, gl: null, vis: false, emi: null, emiDirty: true, lava: null, lavaDirty: true };
+      dirty0: true, dirty1: true, d1a: 0, d1b: CM, dirtyL: true, ready: false, gl: null, vis: false, emi: null, emiDirty: true, lava: null, lavaDirty: true };
     for (let lx = 0; lx < CS; lx++) c.ugH[lx] = G.gen.colInfo(c.cx * CS + lx).h + 2;
     for (let i = 0; i < CA; i++) if (c.lq[i]) { c.hasLq = true; break; }
     c.awake = c.hasLq ? 40 : 0;
@@ -221,16 +221,18 @@
       R.upload0(c, T0); c.dirty0 = false; c.emiDirty = true;
     }
     if (c.dirty1) {
+      // только изменённые ряды (вода течёт — меняются 1–3 ряда, а не весь чанк); весь чанк — когда ряды неизвестны
       const up = chunk(c.cx, c.cy - 1), st = c.st, lq = c.lq, lt = c.lt, y0 = c.cy * CS;
+      const full = !(c.d1a <= c.d1b) || c.d1a === 0 && c.d1b === CM || !R.upload1Rows, ra = full ? 0 : c.d1a, rb = full ? CM : c.d1b;
       let any = false;
-      for (let i = 0, o = 0; i < CA; i++, o += 4) {
+      for (let i = ra << CB, o = i << 2, e = (rb + 1) << CB; i < e; i++, o += 4) {
         const ly = i >> CB, lx = i & CM;
         const above = ly ? lq[i - CS] : up ? up.lq[i + CS * CM] : 0;
         T1[o] = st[i]; T1[o + 1] = lq[i]; T1[o + 2] = lt[i] | (above ? 128 : 0); T1[o + 3] = y0 + ly > c.ugH[lx] ? 1 : 0;
         if (lq[i]) any = true;
       }
-      c.hasLq = any;
-      R.upload1(c, T1); c.dirty1 = false; c.lavaDirty = true;
+      if (full) { c.hasLq = any; R.upload1(c, T1); } else { if (any) c.hasLq = true; R.upload1Rows(c, T1, ra, rb - ra + 1); }
+      c.dirty1 = false; c.d1a = 64; c.d1b = -1; c.lavaDirty = true;
     }
     if (c.dirtyL) {
       // 66×66: середина — свет чанка, рамка — соседи (нет соседа — край своего)
@@ -253,6 +255,8 @@
 
   // ═══ Правки клеток: игра → массивы, маски, видеокарта, поток (свет), сохранение ═══
   const EF_FG = 1, EF_WALL = 2, EF_LQ = 4;
+  function dirtyRows(c, a, b){ c.dirty1 = true; if (!(c.d1a <= a)) c.d1a = a; if (!(c.d1b >= b)) c.d1b = b; }
+  function dirtyRow(c, y){ const ly = y & CM; dirtyRows(c, ly, ly < CM ? ly + 1 : ly); if (ly === CM) { const b = chunk(c.cx, c.cy + 1); if (b) dirtyRows(b, 0, 0); } }
   function setCell(x, y, fg, st, wall, lq, lt){
     const c = cAt(x, y); if (!c) return false;
     const i = idx(x, y);
@@ -270,8 +274,7 @@
       const n = cAt(x + dx, y + dy); if (!n) continue;
       maskCell(n, (x + dx) & CM, (y + dy) & CM); n.dirty0 = true;
     }
-    c.dirty1 = true;
-    if ((y & CM) === CM) { const b = chunk(c.cx, c.cy + 1); if (b) b.dirty1 = true; }
+    dirtyRow(c, y);
     if (what & (EF_FG | EF_WALL | EF_LQ)) queueEdit(c, x, y, i);
     wake(x, y);
   }
@@ -292,8 +295,7 @@
     chunk: (cx, cy) => G.chunks.get(kOf(cx, cy)),
     changed(x, y, fgChanged){
       const c = cAt(x, y); if (!c) return;
-      c.mod = true; G.dirtySave.add(c); c.dirty1 = true; if (fgChanged) G.cellRev = (G.cellRev || 0) + 1;   // «живой» свет пересчитать (уровень воды — не важен)
-      if ((y & CM) === CM) { const b = chunk(c.cx, c.cy + 1); if (b) b.dirty1 = true; }
+      c.mod = true; G.dirtySave.add(c); dirtyRow(c, y); if (fgChanged) G.cellRev = (G.cellRev || 0) + 1;   // «живой» свет пересчитать (уровень воды — не важен)
       const i = idx(x, y);
       if (fgChanged) { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const n = cAt(x + dx, y + dy); if (n) { maskCell(n, (x + dx) & CM, (y + dy) & CM); n.dirty0 = true; } } queueEdit(c, x, y, i); }
       else if (c.lt[i] === 2 || !c.lq[i]) queueEdit(c, x, y, i);
@@ -301,7 +303,8 @@
   };
 
   // ═══ Подгрузка мира вокруг камеры ═══
-  function viewTiles(){ return [G.R ? G.R.w / G.cam.tile : 60, G.R ? G.R.h / G.cam.tile : 34]; }
+  const VT = [60, 34];
+  function viewTiles(){ VT[0] = G.R ? G.R.w / G.cam.tile : 60; VT[1] = G.R ? G.R.h / G.cam.tile : 34; return VT; }
   function stream(force){
     const [vw, vh] = viewTiles();
     const m = 40;
@@ -564,7 +567,7 @@
     if (crit) G.hitStop = .045;                                                     // и на миг «замирает» (как в файтингах)
     if (!m.D.boss) { const k = kb * (1 - (m.D.kbr || 0)); m.vx = kx * k; m.vy = Math.min(m.vy, -k * .7); }   // отброс: сила оружия × (1 − стойкость моба)
     snd(m.D.ai === 'slime' || m.D.ai === 'bossSlime' ? 'squish' : 'hit', { x: m.x, y: m.y, vol: .7 });
-    const mc = m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0xb02020;   // брызги — по ходу удара
+    const mc = m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0xfff0c0;   // искры (у слизней — желе) — по ходу удара
     for (let k = 0, n = crit ? 9 : 5; k < n; k++) part(m.x + m.w / 2 - kx * m.w * .25, m.y + m.h * (.3 + rand() * .4), kx * (3 + rand() * 5) + (rand() - .5) * 2.5, -2 - rand() * 4, .35 + rand() * .3, .1 + rand() * .1, shade(mc, .35), 1);
     if (m.D.ai === 'bossSlime' && m.hp > 0) {   // великан: каждые 10 % — малыши
       const step = Math.floor((1 - m.hp / m.maxHp) * 10);
@@ -575,7 +578,7 @@
   function killMob(m){
     m.hp = 0;
     for (const [id, a, b, ch] of m.D.drop || []) if (rand() < ch) dropItem(id, a + Math.floor(rand() * (b - a + 1)), m.x + m.w / 2, m.y + m.h / 2);
-    burst(m.x + m.w / 2, m.y + m.h / 2, m.D.boss ? 60 : 14, m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0x8a2a2a, m.D.boss ? 12 : 6, .8, .2);
+    burst(m.x + m.w / 2, m.y + m.h / 2, m.D.boss ? 60 : 14, m.D.tint ? (m.D.tint[0] << 16 | m.D.tint[1] << 8 | m.D.tint[2]) : 0x9a9288, m.D.boss ? 12 : 6, .8, .2);
     // «пуф»: облачко дыма вверх и искры (у босса — крупнее)
     const big = m.D.boss ? 3 : 1;
     for (let k = 0; k < 9 * big; k++) part(m.x + m.w / 2 + (rand() - .5) * m.w * .8, m.y + m.h * (.3 + rand() * .6), (rand() - .5) * 2.4, -1.2 - rand() * 1.6, .55 + rand() * .5, (.22 + rand() * .2) * (big > 1 ? 1.6 : 1), rand() < .5 ? 0x8a8a92 : 0xb4b4bc, -.25);
@@ -808,7 +811,7 @@
     const p = G.pl;
     G.CH.hp = 0; p.dead = 4; p.vx = 0; p.vy = 0; p.mine = null;
     G.nightDied = true;
-    burst(p.x + p.w / 2, p.y + p.h / 2, 30, 0xc02020, 7, .9, .2);
+    burst(p.x + p.w / 2, p.y + p.h * .3, 18, 0xfff2a0, 4, 1, .14, -.15, 1);   // нокаут: звёздочки, без крови
     G.U?.dead(by);
     snd('hurt', { rate: .6 });
   }
@@ -1844,9 +1847,20 @@
     c.lava = out; c.lavaDirty = false;
     return out;
   }
-  const WHITE = [255, 255, 255];
-  const glares = [];                 // блики огня: [x, y, радиус, r, g, b, a] — рисуются сложением после жидкостей
-  const bubbles = [];                // пузыри лавы: { x, y, t, life, r }
+  const WHITE = [255, 255, 255], STAR = [255, 230, 120];
+  // без мусора в кадре: блики — плоским буфером, пузыри — из постоянного пула, цвет пламени факелов модов — один раз на блок
+  const GLARE_N = 400, GLR = new Float32Array(GLARE_N * 7);
+  let glareN = 0;
+  function glare(x, y, rad, r, g, b, a){ if (glareN >= GLARE_N) return; const o = glareN++ * 7; GLR[o] = x; GLR[o + 1] = y; GLR[o + 2] = rad; GLR[o + 3] = r; GLR[o + 4] = g; GLR[o + 5] = b; GLR[o + 6] = a; }
+  const BUB_N = 48, bubbles = Array.from({ length: BUB_N }, () => ({ x: 0, y: 0, t: 0, life: 0, r: 0 }));
+  let bubN = 0;
+  const tintOf = new Map();   // блок мода → цвет его пламени (по его свету)
+  function flameTint(f){
+    if (f === T.TORCH) return null;
+    let c = tintOf.get(f);
+    if (!c) { c = [Math.min(255, P.LR[f] + 90), Math.min(255, P.LG[f] + 90), Math.min(255, P.LB[f] + 90)]; tintOf.set(f, c); }
+    return c;
+  }
   // пламя: x — середина, by — низ языка; k — размер; seed — своя фаза кадров и мерцания; low — над огнём потолок (язык короче)
   function flame(x, by, k, seed, low, tint){
     const fr = G.A.spr.flame; if (!fr) return 1;
@@ -1867,95 +1881,119 @@
   }
   // пламя и всё вокруг огня на экране (до спрайтов существ: факел — на стене, за героем)
   function drawFlames(vw, vh){
-    const q = G.q, t = G.t, camX = G.cam.x, camY = G.cam.y, live = G.state === 'play', pk = G.fl?.particles || 1;
+    const q = G.q, t = G.t, camX = G.cam.x, camY = G.cam.y, live = G.state === 'play', pk = G.fl?.particles || 1, dt = G.rdt || 1 / 60;
     const x0 = camX - vw / 2 - 2, x1 = camX + vw / 2 + 2, y0 = camY - vh / 2 - 2, y1 = camY + vh / 2 + 2;
-    glares.length = 0;
+    glareN = 0;
     let n = 0;
-    for (const c of visList) {
+    for (let ci = 0; ci < visList.length; ci++) {
+      const c = visList[ci];
       if (c.emiDirty || !c.emi) emissives(c);
-      const ox = c.cx * CS, oy = c.cy * CS;
-      for (let k = 0; k < c.emi.length && n < 300; k++) {
-        const i = c.emi[k], x = ox + (i & CM), y = oy + (i >> CB);
+      const ox = c.cx * CS, oy = c.cy * CS, emi = c.emi;
+      for (let k = 0; k < emi.length && n < 300; k++) {
+        const i = emi[k], x = ox + (i & CM), y = oy + (i >> CB);
         if (x < x0 || x > x1 || y < y0 || y > y1) continue;
         const f = c.fg[i], seed = (x * 7.13 + y * 3.71) % 97;
         if (P.KIND[f] === 3) {   // факел (и факелы модов — пламя в цвет их света)
-          const low = P.OPC[fgAt(x, y - 1)] === 1, tint = f === T.TORCH ? null : [Math.min(255, P.LR[f] + 90), Math.min(255, P.LG[f] + 90), Math.min(255, P.LB[f] + 90)];
-          const fl = flame(x + .5, y + .43, 1, seed, low, tint);
-          if (q >= 1) glares.push([x + .5, y + .12, .62 * fl, P.LR[f], Math.min(255, P.LG[f] + 40), Math.min(255, P.LB[f] + 40), (.3 * fl) * 255 | 0]);
-          if (live && q >= 1) { sparks(x + .5, y - .1, .9 * pk, .2); if (!low) smoke(x + .5, y - .3, .45 * pk, .12); }
+          const low = P.OPC[fgAt(x, y - 1)] === 1;
+          const fl = flame(x + .5, y + .43, 1, seed, low, flameTint(f));
+          if (q >= 1) glare(x + .5, y + .12, .62 * fl, P.LR[f], Math.min(255, P.LG[f] + 40), Math.min(255, P.LB[f] + 40), (.3 * fl) * 255 | 0);
+          if (live && q >= 1) { sparks(x + .5, y - .1, (q >= 2 ? .9 : .5) * pk, .2); if (!low && q >= 2) smoke(x + .5, y - .3, .45 * pk, .12); }   // «Обычные» (телефоны) — меньше частиц, без дыма
           n++;
         } else if (f === T.FURNACE) {   // печь: огонь в окошке, дым из трубы
-          flame(x + 1.32, y + 1.86, .5, seed, false); flame(x + 1.68, y + 1.86, .55, seed + 3, false);
-          if (q >= 1) glares.push([x + 1.5, y + 1.6, .7, 255, 150, 60, 70]);
-          if (live && q >= 1) { smoke(x + 1.5, y - .05, .8 * pk, .25); sparks(x + 1.5, y + 1.3, .25 * pk, .4); }
+          flame(x + 1.32, y + 1.86, .5, seed, false, null); flame(x + 1.68, y + 1.86, .55, seed + 3, false, null);
+          if (q >= 1) glare(x + 1.5, y + 1.6, .7, 255, 150, 60, 70);
+          if (live && q >= 1) { if (q >= 2) smoke(x + 1.5, y - .05, .8 * pk, .25); sparks(x + 1.5, y + 1.3, .25 * pk, .4); }
           n++;
         } else if (!P.SOLID[f] && q >= 1) {   // светогрибы, кристаллы — тихий блик
-          glares.push([x + .5, y + .55, .5, P.LR[f], P.LG[f], P.LB[f], (.16 + .04 * Math.sin(t * 1.5 + x + y)) * 255 | 0]);
+          glare(x + .5, y + .55, .5, P.LR[f], P.LG[f], P.LB[f], (.16 + .04 * Math.sin(t * 1.5 + x + y)) * 255 | 0);
           n++;
         }
       }
       // лава: пузыри поднимаются и лопаются, брызги-угольки
       if (q >= 1 && live && c.hasLq) {
         if (c.lavaDirty || !c.lava) lavaTops(c);
-        const dt = G.rdt || 1 / 60;
-        for (let k = 0; k < c.lava.length; k++) {
-          const i = c.lava[k], x = ox + (i & CM), y = oy + (i >> CB);
+        const lv = c.lava;
+        for (let k = 0; k < lv.length; k++) {
+          const i = lv[k], x = ox + (i & CM), y = oy + (i >> CB);
           if (x < x0 || x > x1 || y < y0 || y > y1) continue;
-          if (bubbles.length < 48 && rand() < .16 * pk * dt) bubbles.push({ x: x + .15 + rand() * .7, y: y + .12 + (1 - c.lq[i] / 255), t: 0, life: .45 + rand() * .55, r: .07 + rand() * .09 });
+          if (bubN < BUB_N && rand() < .16 * pk * dt) { const b = bubbles[bubN++]; b.x = x + .15 + rand() * .7; b.y = y + .12 + (1 - c.lq[i] / 255); b.t = 0; b.life = .45 + rand() * .55; b.r = .07 + rand() * .09; }
           if (q >= 2 && rand() < .05 * pk * dt) part(x + rand(), y + .1, (rand() - .5) * 1.2, -2 - rand() * 2, .7 + rand() * .6, .07, 0xffa040, 3, 1);
         }
       }
     }
-    // пузыри: растут у глади и лопаются (две-три искры)
-    const dt = G.rdt || 1 / 60;
-    for (let k = bubbles.length - 1; k >= 0; k--) {
+    // пузыри: растут у глади и лопаются (две-три искры); убираем перестановкой — без splice
+    for (let k = bubN - 1; k >= 0; k--) {
       const b = bubbles[k]; b.t += dt;
-      if (b.t >= b.life) { for (let j = 0; j < 3; j++) part(b.x, b.y, (rand() - .5) * 2, -1.5 - rand() * 1.5, .3 + rand() * .3, .05, 0xffd070, 2.2, 1); bubbles.splice(k, 1); continue; }
+      if (b.t >= b.life) {
+        for (let j = 0; j < 3; j++) part(b.x, b.y, (rand() - .5) * 2, -1.5 - rand() * 1.5, .3 + rand() * .3, .05, 0xffd070, 2.2, 1);
+        const last = bubbles[--bubN]; bubbles[bubN] = b; bubbles[k] = last;
+        continue;
+      }
       const u = b.t / b.life, r = b.r * (.4 + u * .8);
       G.R.puff(b.x, b.y - r * .3, r * 1.6, 255, 196 + 40 * u | 0, 90, 230);
     }
   }
   // блики огня — сложением, после жидкостей (огонь у воды не тонет в ней)
   function drawGlares(){
-    const R = G.R; if (!glares.length || !R.glow) return;
+    const R = G.R; if (!glareN || !R.glow) return;
     R.glowBegin();
-    for (const g of glares) R.glow(g[0], g[1], g[2], g[3], g[4], g[5], g[6]);
+    for (let k = 0; k < glareN; k++) { const o = k * 7; R.glow(GLR[o], GLR[o + 1], GLR[o + 2], GLR[o + 3], GLR[o + 4], GLR[o + 5], GLR[o + 6]); }
     R.glowEnd();
   }
 
   // ═══ «Живой» свет: тусклый свет вокруг героя (видно хоть что-то рядом), факел в руке (как в Террарии), «Зелье сияния»,
   // огненные снаряды, бесы. Своя маленькая карта вокруг камеры: заливка от каждого источника по клеткам с правилами карты
   // мира (воздух пропускает, в камень — только грань, сквозь стену — нет), в шейдере и у спрайтов берётся максимум с
-  // картой мира. Пересчёт — только когда сдвинулись источники, окно камеры или клетки (G.cellRev) ═══
-  const DYN = { x0: 0, y0: 0, w: 0, h: 0, n: 0, cls: null, v: null, r: null, g: null, b: null, rgba: null, q: null, tl: null, key: '', ckey: '', on: false };
-  function dynSources(){
-    const out = [], p = G.pl;
-    if (!p || p.dead || G.state === 'menu') return out;
-    const px = p.x + p.w / 2, py = p.y + p.h * .45;
-    out.push(buffOn('shine') ? [px, py, 200, .87, 190, 230, 255] : [px, py, 44, .78, 255, 236, 214]);
-    const s = selItem(), it = s && itemDef(s.id);
-    if (it) {
-      const hx = G.handPos ? G.handPos[0] : px + p.dir * .5, hy = G.handPos ? G.handPos[1] - .35 : p.y + p.h * .3;
-      if (it.key === 'torch') out.push([hx, hy, 232, .885, 255, 168, 76]);
-      else if (it.kind === 'tile') { const id = it.tileId || PZ.TILE[it.tile]?.id; if (id && (P.LR[id] | P.LG[id] | P.LB[id]) && P.KIND[id] !== 1) out.push([hx, hy, 150, .85, P.LR[id], P.LG[id], P.LB[id]]); }   // светогриб, кристалл
-      else if (/_fire$/.test(it.key)) out.push([hx, hy, 96, .82, 255, 120, 40]);
+  // картой мира. Пересчёт — только когда сдвинулись источники (на 1/3 клетки), окно камеры или клетки (G.cellRev).
+  // Без мусора в кадре: источники — плоский буфер, ключ — число, буферы — постоянные (растут только с окном) ═══
+  const DYN_SRC = 16, DS = new Float32Array(DYN_SRC * 7);
+  let dsN = 0;
+  const DYN = { x0: 0, y0: 0, w: 0, h: 0, n: 0, cls: null, v: null, r: null, g: null, b: null, rgba: null, view: null, viewN: 0, q: null, tl: null, mark: null, cur: null, prev: null, curN: 0, prevN: 0, stamp: 0, full: true, key: NaN, ckey: NaN, on: false };
+  function dsAdd(x, y, V, m, r, g, b){
+    let o;
+    if (dsN < DYN_SRC) o = dsN++ * 7;
+    else {   // много — оставить ближние к камере
+      let far = -1, fd = Math.hypot(x - G.cam.x, y - G.cam.y);
+      for (let k = 0; k < DYN_SRC; k++) { const d = Math.hypot(DS[k * 7] - G.cam.x, DS[k * 7 + 1] - G.cam.y); if (d > fd) { fd = d; far = k; } }
+      if (far < 0) return; o = far * 7;
     }
-    for (const q of G.projs) if (q.spr === 'fireball') out.push([q.x, q.y, 190, .85, 255, 122, 40]); else if (q.spr === 'spark') out.push([q.x, q.y, 150, .84, 220, 120, 255]);
-    for (const m of G.mobs) if (m.type === 'imp' && m.hp > 0) out.push([m.x + m.w / 2, m.y + m.h / 2, 120, .84, 255, 110, 40]);
-    if (out.length > 16) { const cx = G.cam.x, cy = G.cam.y; out.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cy) - Math.hypot(b[0] - cx, b[1] - cy)); out.length = 16; }
-    return out;
+    DS[o] = x; DS[o + 1] = y; DS[o + 2] = V; DS[o + 3] = m; DS[o + 4] = r; DS[o + 5] = g; DS[o + 6] = b;
   }
-  const NB8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+  function dynSources(){
+    dsN = 0;
+    const p = G.pl;
+    if (!p || p.dead || G.state === 'menu') return 0;
+    const px = p.x + p.w / 2, py = p.y + p.h * .45, s = selItem(), it = s && itemDef(s.id), torch = it && !p.ledge && it.key === 'torch';
+    if (buffOn('shine')) dsAdd(px, py, 200, .87, 190, 230, 255); else if (!torch) dsAdd(px, py, 44, .78, 255, 236, 214);   // факел в руке ярче — тусклый свет героя не нужен
+    if (it && !p.ledge) {
+      const hx = G.handPos ? G.handPos[0] : px + p.dir * .5, hy = G.handPos ? G.handPos[1] - .35 : p.y + p.h * .3;
+      if (torch) dsAdd(hx, hy, 232, .885, 255, 168, 76);
+      else if (it.kind === 'tile') { const id = it.tileId || PZ.TILE[it.tile]?.id; if (id && (P.LR[id] | P.LG[id] | P.LB[id]) && P.KIND[id] !== 1) dsAdd(hx, hy, 150, .85, P.LR[id], P.LG[id], P.LB[id]); }   // светогриб, кристалл
+      else if (it.fire || it.key === 'sword_fire' || it.key === 'pick_fire') dsAdd(hx, hy, 96, .82, 255, 120, 40);
+    }
+    const pr = G.projs;
+    for (let k = 0; k < pr.length; k++) { const q = pr[k]; if (q.spr === 'fireball') dsAdd(q.x, q.y, 190, .85, 255, 122, 40); else if (q.spr === 'spark') dsAdd(q.x, q.y, 150, .84, 220, 120, 255); }
+    const ms = G.mobs;
+    for (let k = 0; k < ms.length; k++) { const m = ms[k]; if (m.type === 'imp' && m.hp > 0) dsAdd(m.x + m.w / 2, m.y + m.h / 2, 120, .84, 255, 110, 40); }
+    return dsN;
+  }
+  const NBX = [1, -1, 0, 0, 1, -1, 1, -1], NBY = [0, 0, 1, -1, 1, 1, -1, -1];
   function dynLight(camX, camY, vw, vh){
     const R = G.R; if (!R?.setDyn) return;
-    const src = dynSources();
-    if (!src.length) { if (DYN.on) { R.clearDyn(); DYN.on = false; DYN.key = ''; } return; }
-    const x0 = Math.floor(camX - vw / 2) - 3, y0 = Math.max(0, Math.floor(camY - vh / 2) - 3), w = Math.ceil(vw) + 7, h = Math.ceil(vh) + 7, n = w * h;
-    const key = src.map(q => Math.round(q[0] * 4) + ',' + Math.round(q[1] * 4) + ',' + q[2] + ',' + q[4]).join(';') + '|' + x0 + ',' + y0 + ',' + w + ',' + h + '|' + (G.cellRev || 0);
+    const n0 = dynSources();
+    if (!n0) { if (DYN.on) { R.clearDyn(); DYN.on = false; DYN.key = NaN; } return; }
+    // окно — с шагом 8 клеток (классы клеток перечитываются редко), чуть больше экрана
+    const x0 = (Math.floor(camX - vw / 2) - 3) & ~7, y0 = Math.max(0, (Math.floor(camY - vh / 2) - 3) & ~7), w = Math.ceil(vw) + 15, h = Math.ceil(vh) + 15, n = w * h;
+    // ключ — число: окно, клетки и источники (позиция — с точностью 1/2 клетки)
+    const ckey = (((x0 * 73856093) ^ (y0 * 19349663) ^ (w * 83492791) ^ (h * 2971215073)) + (G.cellRev || 0) * 1000003) >>> 0;
+    let key = ckey;
+    for (let k = 0; k < n0 * 7; k += 7) key = (Math.imul(key ^ (Math.round(DS[k] * 2) * 92821 + Math.round(DS[k + 1] * 2) * 68917 + DS[k + 2] * 7 + DS[k + 4]), 2654435761) + k) >>> 0;
     if (key === DYN.key && DYN.on) return;
-    DYN.key = key;
-    if (n > DYN.n) { DYN.n = n; DYN.cls = new Uint8Array(n); DYN.v = new Float32Array(n); DYN.r = new Float32Array(n); DYN.g = new Float32Array(n); DYN.b = new Float32Array(n); DYN.rgba = new Uint8Array(n * 4); DYN.q = new Int32Array(n * 4); DYN.tl = new Int32Array(n); }
-    const ckey = x0 + ',' + y0 + ',' + w + ',' + h + '|' + (G.cellRev || 0);
+    // сдвинулись только источники, а пересчитывали в прошлом кадре — подождать кадр (свет отстаёт на кадр — незаметно)
+    if (DYN.on && ckey === DYN.ckey && R.frame - DYN.lastF < 3) return;
+    DYN.key = key; DYN.lastF = R.frame;
+    if (n > DYN.n) { DYN.n = n; DYN.cls = new Uint8Array(n); DYN.v = new Float32Array(n); DYN.r = new Float32Array(n); DYN.g = new Float32Array(n); DYN.b = new Float32Array(n); DYN.rgba = new Uint8Array(n * 4); DYN.q = new Int32Array(n * 4); DYN.tl = new Int32Array(n); DYN.mark = new Uint32Array(n); DYN.cur = new Int32Array(n); DYN.prev = new Int32Array(n); DYN.prevN = 0; DYN.viewN = 0; DYN.full = true; }
+    const winMoved = x0 !== DYN.x0 || y0 !== DYN.y0 || w !== DYN.w || h !== DYN.h;
     DYN.x0 = x0; DYN.y0 = y0; DYN.w = w; DYN.h = h;
     const cls = DYN.cls;
     if (ckey !== DYN.ckey) {   // классы клеток окна: 0 воздух, 1 непрозрачное, 2 полупрозрачное, 3 вода, 4 лава
@@ -1967,18 +2005,27 @@
         cls[j * w + i] = lq > 127 ? (c.lt[ii] === 2 ? 4 : 3) : P.OPC[f] === 1 ? 1 : P.OPC[f] === 2 ? 2 : 0;
       }
     }
-    const Rr = DYN.r, Rg = DYN.g, Rb = DYN.b;
-    Rr.fill(0, 0, n); Rg.fill(0, 0, n); Rb.fill(0, 0, n);
-    for (const s of src) dynFill(s);
-    const o = DYN.rgba;
-    for (let k = 0; k < n; k++) { o[k * 4] = Rr[k] > 255 ? 255 : Rr[k]; o[k * 4 + 1] = Rg[k] > 255 ? 255 : Rg[k]; o[k * 4 + 2] = Rb[k] > 255 ? 255 : Rb[k]; o[k * 4 + 3] = 255; }
-    R.setDyn(o.subarray(0, n * 4), w, h, x0, y0);
+    const Rr = DYN.r, Rg = DYN.g, Rb = DYN.b, o = DYN.rgba, mark = DYN.mark, prev = DYN.prev;
+    if (winMoved || DYN.full) {   // окно сдвинулось — всё заново
+      Rr.fill(0, 0, n); Rg.fill(0, 0, n); Rb.fill(0, 0, n); o.fill(0, 0, n * 4); for (let k = 3; k < n * 4; k += 4) o[k] = 255;
+      DYN.prevN = 0; DYN.full = false;
+    } else for (let t = 0; t < DYN.prevN; t++) { const k = prev[t]; Rr[k] = Rg[k] = Rb[k] = 0; }   // прошлые — погасить
+    DYN.stamp = (DYN.stamp + 1) >>> 0 || 1; DYN.curN = 0;
+    for (let k = 0; k < n0 * 7; k += 7) dynFill(DS[k], DS[k + 1], DS[k + 2], DS[k + 3], DS[k + 4], DS[k + 5], DS[k + 6]);
+    const st = DYN.stamp, cur = DYN.cur;
+    for (let t = 0; t < DYN.prevN; t++) { const k = prev[t]; if (mark[k] !== st) { const j = k << 2; o[j] = o[j + 1] = o[j + 2] = 0; } }   // погасли — в текстуре ноль
+    for (let t = 0; t < DYN.curN; t++) { const k = cur[t], r = Rr[k], g = Rg[k], b = Rb[k], j = k << 2; o[j] = r > 255 ? 255 : r; o[j + 1] = g > 255 ? 255 : g; o[j + 2] = b > 255 ? 255 : b; }
+    DYN.prev = cur; DYN.cur = prev; DYN.prevN = DYN.curN;
+    if (DYN.viewN !== n) { DYN.view = o.subarray(0, n * 4); DYN.viewN = n; }
+    R.setDyn(DYN.view, w, h, x0, y0);
     DYN.on = true;
   }
-  // заливка от одного источника [x, y, сила 0…255, доля за клетку воздуха, r, g, b] (как карта мира: в камень — грань, дальше гаснет)
-  function dynFill(s){
-    const [sx, sy, V, m, cr, cg, cb] = s, { x0, y0, w, h, cls, v, q, tl } = DYN;
-    const M = [m, m * .7, m * .86, m * .93, m * .8], MD = M.map(a => Math.pow(a, Math.SQRT2)), mD = .22, mDD = Math.pow(.22, Math.SQRT2);
+  // заливка от одного источника (x, y, сила 0…255, доля за клетку воздуха, r, g, b) — как карта мира: в камень — грань, дальше гаснет
+  const DM = new Float32Array(5), DMD = new Float32Array(5), MDEEP = .22, MDEEPD = Math.pow(.22, Math.SQRT2);
+  function dynFill(sx, sy, V, m, cr, cg, cb){
+    const x0 = DYN.x0, y0 = DYN.y0, w = DYN.w, h = DYN.h, cls = DYN.cls, v = DYN.v, q = DYN.q, tl = DYN.tl;
+    DM[0] = m; DM[1] = m * .7; DM[2] = m * .86; DM[3] = m * .93; DM[4] = m * .8;
+    for (let k = 0; k < 5; k++) DMD[k] = Math.pow(DM[k], Math.SQRT2);
     let qn = 0, tn = 0, qh = 0;
     const fx = sx - .5 - x0, fy = sy - .5 - y0, ix = Math.floor(fx), iy = Math.floor(fy);
     for (let a = 0; a < 4; a++) {   // четыре клетки вокруг точки — по расстоянию до неё (свет движется плавно, не клетками)
@@ -1991,12 +2038,12 @@
     while (qh < qn) {
       const k = q[qh++], val = v[k], i = k % w, j = (k - i) / w, solid = cls[k] === 1;
       for (let d = 0; d < 8; d++) {
-        const ni = i + NB8[d][0], nj = j + NB8[d][1];
+        const ni = i + NBX[d], nj = j + NBY[d];
         if (ni < 0 || nj < 0 || ni >= w || nj >= h) continue;
         const nk = nj * w + ni, cn = cls[nk], diag = d >= 4;
         if (diag && cls[j * w + ni] === 1 && cls[nj * w + i] === 1) continue;
         let mm;
-        if (solid) { if (cn !== 1) continue; mm = diag ? mDD : mD; } else mm = diag ? MD[cn] : M[cn];
+        if (solid) { if (cn !== 1) continue; mm = diag ? MDEEPD : MDEEP; } else mm = diag ? DMD[cn] : DM[cn];
         const nv = val * mm;
         if (nv < 3 || nv <= v[nk]) continue;
         if (!v[nk]) tl[tn++] = nk;
@@ -2004,8 +2051,12 @@
         if (qn < QL) q[qn++] = nk;
       }
     }
-    const Rr = DYN.r, Rg = DYN.g, Rb = DYN.b, kr = cr / 255, kg = cg / 255, kb = cb / 255;
-    for (let t = 0; t < tn; t++) { const k = tl[t], val = v[k]; v[k] = 0; const r = val * kr, g = val * kg, b = val * kb; if (r > Rr[k]) Rr[k] = r; if (g > Rg[k]) Rg[k] = g; if (b > Rb[k]) Rb[k] = b; }
+    const Rr = DYN.r, Rg = DYN.g, Rb = DYN.b, kr = cr / 255, kg = cg / 255, kb = cb / 255, mark = DYN.mark, cur = DYN.cur, st = DYN.stamp;
+    for (let t = 0; t < tn; t++) {
+      const k = tl[t], val = v[k]; v[k] = 0;
+      if (mark[k] !== st) { mark[k] = st; cur[DYN.curN++] = k; }
+      const r = val * kr, g = val * kg, b = val * kb; if (r > Rr[k]) Rr[k] = r; if (g > Rg[k]) Rg[k] = g; if (b > Rb[k]) Rb[k] = b;
+    }
   }
   // «живой» свет в точке (для спрайтов) — тем же сглаживанием, что в шейдере: 0…255 по каналам в DL
   const DL = [0, 0, 0];
@@ -2082,6 +2133,7 @@
   }
   function ambienceOff(){ if (G?.amb) { for (const k in G.amb) G.amb[k].stop(); G.amb = null; } }
   const visList = [];
+  const SCAT = [0, .26, .36, .44];   // сила ореола огня по качеству шейдера
   function render(){
     const R = G.R; if (!R || !G.W) return;
     const t0 = now();
@@ -2099,14 +2151,14 @@
     if (Math.abs(tx - G.cam.x) > 40 || Math.abs(ty - G.cam.y) > 40) { G.cam.x = tx; G.cam.y = ty; }
     G.cam.y = Math.max(G.cam.y, vh / 2 - 30);
     let sx = 0, sy = 0;
-    if (G.cam.shake > 0) { G.cam.shake = Math.max(0, G.cam.shake - 1 / 60); sx = (rand() - .5) * G.cam.shake; sy = (rand() - .5) * G.cam.shake; }
+    if (G.cam.shake > 0) { G.cam.shake = Math.max(0, G.cam.shake - dtr); sx = (rand() - .5) * G.cam.shake; sy = (rand() - .5) * G.cam.shake; }
     // кратно пикселю — без «дрожи» клеток
     const camX = Math.round((G.cam.x + sx) * G.cam.tile) / G.cam.tile, camY = Math.round((G.cam.y + sy) * G.cam.tile) / G.cam.tile;
     bgBiome(G.gen.colInfo(Math.floor(camX)).b, 1 / 60);
     skyAt(G.W.time);
     BG.time = G.t; CHS.time = G.t; CHS.smooth = G.opt.smooth && G.fl.smooth !== false; CHS.back = G.opt.back;   // «Ретро» — свет клетками, как раньше в Террарии
     CHS.q = BG.q = G.q; CHS.amb = G.q === 0 ? .025 : .012;
-    CHS.scat = [0, .26, .36, .44][G.q] || 0;   // ореол огня в воздухе (рассеянный свет; «Ретро» — без него)
+    CHS.scat = SCAT[G.q] || 0;   // ореол огня в воздухе (рассеянный свет; «Ретро» — без него)
     G.rdt = dtr;                              // время кадра — частицам огня (одинаково при любой частоте экрана)
     window.D37E?._audio?.listener?.(camX, camY, 0, 0);
     // видимые чанки → на видеокарту (не больше 14 загрузок за кадр)
@@ -2120,11 +2172,13 @@
     }
     if (ups < 6) for (const c of G.chunks.values()) { if (ups >= 6) break; if (!c.ready || c.dirty0 || c.dirty1 || c.dirtyL) { upload(c); ups++; } }
     if ((R.frame & 15) === 0) ambience(camX, camY);   // звуки места — 4 раза в секунду
-    dynLight(camX, camY, vw, vh);                     // «живой» свет: герой, факел в руке, снаряды
+    const td = now(); dynLight(camX, camY, vw, vh);   // «живой» свет: герой, факел в руке, снаряды
+    G.perf.dynMs = (G.perf.dynMs || 0) * .97 + (now() - td) * .03;
     R.begin(camX, camY, G.fl);
     R.background(BG);
     R.chunks(visList, CHS, 0);
-    drawFlames(vw, vh);
+    const tf = now(); drawFlames(vw, vh);
+    G.perf.fireMs = (G.perf.fireMs || 0) * .97 + (now() - tf) * .03;
     drawSprites();
     R.flush();
     R.chunks(visList, CHS, 1);
@@ -2206,8 +2260,8 @@
     if (tid && P.KIND[tid] === 3 && G.A.tile?.[tid] >= 0) {   // факел в руке: ручка (освещена) и живое пламя над ней
       const c = G.A.tile[tid], u = (c % 64) * 16, v = (c >> 6) * 16, s = .78, L = lightAt(hx, hy - .3), top = hy - s * .98;   // держит повыше, у плеча
       G.R.sprite(null, hx - s / 2, top, s, s, u, v, u + 16, v + 16, 255 * L[0] | 0, 255 * L[1] | 0, 255 * L[2] | 0, 255);
-      flame(hx, top + s * .4, .92, 7.3, false, tid === T.TORCH ? null : [Math.min(255, P.LR[tid] + 90), Math.min(255, P.LG[tid] + 90), Math.min(255, P.LB[tid] + 90)]);
-      if (G.q >= 1 && G.state === 'play') { glares.push([hx, top + s * .1, .55, 255, 210, 140, 70]); sparks(hx, top - .05, .7, .15); }
+      flame(hx, top + s * .4, .92, 7.3, false, flameTint(tid));
+      if (G.q >= 1 && G.state === 'play') { glare(hx, top + s * .1, .55, 255, 210, 140, 70); sparks(hx, top - .05, .7, .15); }
       return;
     }
     const tool = it.kind === 'tool' || it.kind === 'melee' || it.kind === 'wand' || it.kind === 'bow';
@@ -2241,6 +2295,10 @@
       if (!D.boss && m.hp < m.maxHp) { const w = m.w, k = m.hp / m.maxHp; spr('white', 0, m.x, m.y - .45, w, .16, false, 0, [30, 30, 30], .8, null, null, false); spr('white', 0, m.x, m.y - .45, w * k, .16, false, 0, k > .5 ? [90, 220, 90] : [230, 80, 60], .9, null, null, false); }
     }
     // игрок
+    if (p.dead) {
+      drawChar(G.H, 'hurt', .32, p.x + p.w / 2, p.y + p.h, p.dir < 0, false, null, null);
+      for (let k = 0; k < 3; k++) { const a = t * 3 + k * 2.09, x = p.x + p.w / 2 + Math.cos(a) * .6, y = p.y + .1 + Math.sin(a) * .18; spr('spark', 0, x - .16, y - .16, .32, .32, false, 0, STAR, .9, null, null, false); }
+    }
     if (!p.dead) {
       const s = selItem(), held = s ? s.id : null, it = held ? itemDef(held) : null;
       const swingK = p.swing > 0 && it && (it.kind === 'tool' || it.kind === 'melee') ? 1 - p.swing / (it.speed || .3) : null;
@@ -2311,26 +2369,36 @@
     g.beginPath(); g.arc(64, 64, 61, 0, Math.PI * 2); g.stroke();
     return ringC;
   }
-  // надписи (2D поверх): цифры урона, имена, подсказка над курсором
+  // надписи (2D поверх): цифры урона, имена, счётчик кадров. Нечего рисовать — холст не чистим каждый кадр (на телефоне
+  // очистка большого 2D-холста — заметная работа); время цифр — по кадру (одинаково при 30/60/144 Гц)
+  let ovDirty = true;
+  const FONTS = [];
+  const fontPx = px => FONTS[px] || (FONTS[px] = `800 ${px}px Montserrat, system-ui, sans-serif`);
   function drawOverlay(camX, camY){
     const o = G.octx; if (!o) return;
-    const W = G.ov.width, H = G.ov.height, s = G.cam.tile / G.res;
+    const W = G.ov.width, H = G.ov.height, s = G.cam.tile / G.res, dpr = G.dpr2, vw = W / dpr, vh = H / dpr, dt = G.rdt || 1 / 60;
+    const sxOf = x => (x - camX) * s + vw / 2, syOf = y => (y - camY) * s + vh / 2;
+    let names = 0;
+    for (const n of G.npcs) { const x = sxOf(n.x + n.w / 2), y = syOf(n.y) - 16; if (x > -80 && x < vw + 80 && y > -20 && y < vh + 20) names++; }
+    if (!G.texts.length && !names && !G.opt.fps) { if (ovDirty) { o.clearRect(0, 0, W, H); ovDirty = false; } return; }
+    ovDirty = true;
     o.clearRect(0, 0, W, H);
-    const sxOf = x => (x - camX) * s + W / 2 / G.dpr2, syOf = y => (y - camY) * s + H / 2 / G.dpr2;
-    o.save(); o.scale(G.dpr2, G.dpr2);
+    o.save(); o.scale(dpr, dpr);
     o.textAlign = 'center'; o.lineWidth = 3; o.lineJoin = 'round'; o.strokeStyle = 'rgba(0,0,0,.75)';
     for (let n = G.texts.length - 1; n >= 0; n--) {
-      const q = G.texts[n]; q.t += 1 / 60;
+      const q = G.texts[n]; q.t += dt;
       if (q.t > 1.1) { G.texts.splice(n, 1); continue; }
       const x = sxOf(q.x), y = syOf(q.y) - q.t * 28 - q.big * 4, pop = q.t < .1 ? 1.45 - q.t * 4.5 : 1;   // «выпрыгивает» и садится
-      o.font = `800 ${Math.round((q.big ? 19 : 14) * pop)}px Montserrat, system-ui, sans-serif`;
+      o.font = fontPx(Math.round((q.big ? 19 : 14) * pop));
       o.globalAlpha = Math.min(1, (1.1 - q.t) * 3);
       o.strokeText(q.text, x, y); o.fillStyle = q.color; o.fillText(q.text, x, y);
     }
     o.globalAlpha = 1;
-    o.font = '700 12px Montserrat, system-ui, sans-serif';
-    for (const n of G.npcs) { const x = sxOf(n.x + n.w / 2), y = syOf(n.y) - 16; o.strokeText(n.name, x, y); o.fillStyle = '#ffe6a0'; o.fillText(n.name, x, y); }
-    if (G.opt.fps) { const L = G.perf.frames, avg = L.length ? L.reduce((a, b) => a + b, 0) / L.length : 0, cpu = G.perf.cpu.length ? G.perf.cpu.reduce((a, b) => a + b, 0) / G.perf.cpu.length : 0; o.textAlign = 'left'; o.font = '600 12px ui-monospace, monospace'; const txt = `${avg ? (1000 / avg).toFixed(0) : '–'} к/с · кадр ${avg.toFixed(1)} мс · ЦП ${cpu.toFixed(2)} мс · чанков ${G.chunks.size} · вызовов ${G.R.stats.draws} · спрайтов ${G.R.stats.sprites}`; o.strokeText(txt, 8, H / G.dpr2 - 10); o.fillStyle = '#9fffa0'; o.fillText(txt, 8, H / G.dpr2 - 10); }
+    if (names) {
+      o.font = '700 12px Montserrat, system-ui, sans-serif';
+      for (const n of G.npcs) { const x = sxOf(n.x + n.w / 2), y = syOf(n.y) - 16; if (x < -80 || x > vw + 80 || y < -20 || y > vh + 20) continue; o.strokeText(n.name, x, y); o.fillStyle = '#ffe6a0'; o.fillText(n.name, x, y); }
+    }
+    if (G.opt.fps) { const L = G.perf.frames, avg = L.length ? L.reduce((a, b) => a + b, 0) / L.length : 0, cpu = G.perf.cpu.length ? G.perf.cpu.reduce((a, b) => a + b, 0) / G.perf.cpu.length : 0; o.textAlign = 'left'; o.font = '600 12px ui-monospace, monospace'; const txt = `${avg ? (1000 / avg).toFixed(0) : '–'} к/с · кадр ${avg.toFixed(1)} мс · ЦП ${cpu.toFixed(2)} мс (свет ${(G.perf.dynMs || 0).toFixed(2)}) · чанков ${G.chunks.size} · вызовов ${G.R.stats.draws} · спрайтов ${G.R.stats.sprites}`; o.strokeText(txt, 8, vh - 10); o.fillStyle = '#9fffa0'; o.fillText(txt, 8, vh - 10); }
     o.restore();
   }
 
@@ -2391,7 +2459,12 @@
     let w = Math.max(280, Math.floor(box.width || G.el.clientWidth || 360));
     let h;
     if (fs) h = Math.max(240, Math.floor(window.innerHeight - box.top));
-    else { const phone = w < 640; h = phone ? Math.min(window.innerHeight - 120, Math.round(w * 1.25)) : Math.min(Math.max(420, window.innerHeight - 200), Math.round(w * .62)); h = Math.max(300, h); }
+    else {
+      // на странице: окно игры — весь экран под шапкой сайта и полосой игры (страница сама прокручивается к игре, scrollToGame)
+      const st = document.getElementById('gamesStage')?.getBoundingClientRect(), above = st ? Math.max(0, box.top - st.top) : 56, phone = w < 640;
+      h = Math.floor(window.innerHeight - navH() - above - 12);
+      h = Math.max(phone ? 360 : 400, Math.min(h, Math.round(w * (phone ? 2.1 : .75))));
+    }
     G.wrap.style.height = h + 'px';
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const base = clamp(Math.round(Math.min(w, h * 1.7) / 46), 13, 30), tileCss = base * G.opt.zoom;
@@ -2403,10 +2476,21 @@
     G.dpr2 = Math.min(2, dpr);
     G.ov.width = Math.round(w * G.dpr2); G.ov.height = Math.round(h * G.dpr2); G.ov.style.width = w + 'px'; G.ov.style.height = h + 'px';
     G.cssW = w; G.cssH = h;
+    G.U?.layout?.(w, h);   // интерфейс — под размер окна игры (панель вещей, кнопки, ячейки)
     // 2D-персонаж — под размер клетки
     const size = clamp(Math.round(tileCss * PL_SPR / 8) * 8, 32, 128);
     if (G.H && G.H.O.size !== size) G.H.set(G.look, { size });
     if (G.guideH && G.guideH.O.size !== size) G.guideH.set(G.guideLook, { size });
+  }
+
+  // шапка сайта поверх страницы (fixed) — её высота
+  function navH(){ const n = document.querySelector('body > nav') || document.querySelector('nav'); if (!n) return 0; const p = getComputedStyle(n).position; return p === 'fixed' || p === 'sticky' ? n.getBoundingClientRect().height : 0; }
+  // показать окно игры целиком (под шапкой сайта), если не видно
+  function scrollToGame(){
+    if (!G?.wrap || window.D37Full?.contains?.(G.wrap)) return;
+    const st = document.getElementById('gamesStage'); if (!st) return;
+    const r = st.getBoundingClientRect(), top = r.top - navH() - 6;
+    if (Math.abs(top) > 24 || G.wrap.getBoundingClientRect().bottom > window.innerHeight + 2) window.scrollTo({ top: Math.max(0, scrollY + top), behavior: 'smooth' });
   }
 
   // ═══ Сохранение ═══
@@ -2538,7 +2622,7 @@
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
     G.mobs.length = 0; G.items.length = 0; G.projs.length = 0; G.npcs.length = 0; G.texts.length = 0; G.boss = null; PT.n = 0;
     G.edits.length = 0; G.editIdx.clear(); G.cheats = !!W.cheats;
-    G.spawnGrace = SPAWN_GRACE; G.spawnT = 1; G.accReset = true; G.srand = mulberry((W.seed ^ Math.floor(W.playtime || 0)) >>> 0);   // мобы — не сразу после входа
+    G.spawnGrace = SPAWN_GRACE; G.spawnT = 1; G.accReset = true; DYN.full = true; DYN.key = DYN.ckey = NaN; DYN.on = false; G.R?.clearDyn?.(); G.srand = mulberry((W.seed ^ Math.floor(W.playtime || 0)) >>> 0);   // мобы — не сразу после входа
     lastC = null; inbox.length = 0;
     G.U?.loading(true, 'Мир строится…');
     // моды мира
@@ -2646,6 +2730,57 @@
     });
     on(window, 'blur', () => setShift(false));
   }
+  // кнопка «✋ Открыть» светится, когда рядом дверь, сундук, кровать или Проводник
+  function nearAct(){
+    const p = G.pl; if (!p || p.dead) return false;
+    for (const n of G.npcs) if (Math.hypot(n.x - p.x, n.y - p.y) < 4) return true;
+    const cx = Math.floor(p.x + p.w / 2), cy = Math.floor(p.y + p.h / 2);
+    for (let y = cy - 3; y <= cy + 3; y++) for (let x = cx - 3; x <= cx + 3; x++) { const f = fgAt(x, y); if (f === T.DOOR || f === T.DOOROPEN || f === T.CHEST || f === T.LOOT || f === T.BED) return true; }
+    return false;
+  }
+  // коротко для экрана игры: время и глубина
+  function clockText(){
+    const p = G.pl; if (!p || !G.W) return '';
+    const d = Math.round((p.y + p.h - PZ.SURF) * M_PER_TILE), tm = (G.W.time * 24 + 6) % 24, hh = Math.floor(tm), mm = Math.floor((tm - hh) * 60);
+    return `${isNight() ? '🌙' : '☀️'} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} · ${d >= 0 ? d + ' м вглубь' : -d + ' м вверх'}`;
+  }
+  function useSlot(i){ const s = G.CH?.inv[i], it = s && itemDef(s.id); if (!it || it.kind !== 'use') return false; useConsumable(it, s, i); G.U?.inv(); return true; }
+  // ═══ «🆘 Я застрял» (владелец 22.10): ближайшее место, где можно стоять и идти дальше — не в блоках, не в лаве, не по грудь
+  // в воде (выше — лучше, чем глубже); рядом нет — домой (кровать или старт). Без штрафа, не чаще раза в 20 с (по часам) ═══
+  const STUCK_CD = 20;
+  const stuckWait = () => Math.max(0, (G.stuckAt ?? -1e9) + STUCK_CD - now() / 1000);
+  function standOk(x, feet){   // x — столбец, feet — ряд опоры (герой встанет на её верх)
+    const p = G.pl, bx = x + .5 - p.w / 2, by = feet - p.h;
+    if (by < 1 || PZ.overlapSolid(p, bx, by, shapeAt)) return false;
+    const x0 = Math.floor(bx + .02), x1 = Math.floor(bx + p.w - .02), sup = v => v === 1 || v === 2 || v === 5;
+    if (!(sup(shapeAt(x0, feet)) || sup(shapeAt(x1, feet)))) return false;
+    for (let y = Math.floor(by); y < feet; y++) for (const cx of [x0, x1]) if (ltAt(cx, y) === 2 && lqAt(cx, y) > 20) return false;   // лава
+    if (lqAt(x, feet - 2) > 90) return false;   // по грудь в воде
+    return true;
+  }
+  function unstuck(){
+    const wait = stuckWait(); if (wait > 0) return { wait };
+    const p = G.pl; if (!p || p.dead || !G.W) return null;
+    const cx = Math.floor(p.x + p.w / 2), cy = Math.round(p.y + p.h), here = standOk(cx, cy);
+    let best = null, bd = 1e9;
+    for (let r = 1; r <= 40 && !best; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = cx + dx, y = cy + dy;
+      if (here && Math.abs(dx) < 3 && Math.abs(dy) < 3) continue;   // стоишь нормально — значит, нужно другое место
+      if (!cAt(x, y) || !standOk(x, y) || !(standOk(x - 1, y) || standOk(x + 1, y))) continue;   // рядом есть куда шагнуть
+      const d = dx * dx + (dy > 0 ? dy * dy * 3 : dy * dy * .6);
+      if (d < bd) { bd = d; best = [x, y]; }
+    }
+    G.stuckAt = now() / 1000;
+    let home = false;
+    if (!best) { const s = G.W.bed || G.W.spawn; best = [s.x, s.y]; home = true; }
+    p.x = best[0] + .5 - p.w / 2; p.y = best[1] - p.h; p.vx = p.vy = 0; p.fallY = p.y; p.ledge = null; p.climb = false; G.hook = null;
+    p.iframes = Math.max(p.iframes, 1);
+    G.cam.x = p.x; G.cam.y = p.y; stream(true);
+    burst(p.x + p.w / 2, p.y + p.h / 2, 14, 0xfff2a0, 4, .5, .14, 0, 1);
+    snd('magic', { vol: .5 });
+    return { home, x: best[0], y: best[1] };
+  }
   // ⚔ на телефоне: враг рядом, а в руке не оружие — на время нажатия взять лучшее оружие из ячеек (отпустил — вернётся)
   const isWeapon = d => d && (d.kind === 'melee' || d.kind === 'bow' || d.kind === 'wand');
   function attackStart(){
@@ -2729,6 +2864,11 @@
     G.U?.build(root);
     bindInput();
     on(window, 'resize', resize);
+    // ширина окна поменялась сама (полный экран, поворот, боковая панель) — пересчитать (раньше справа оставалась полоса)
+    if (typeof ResizeObserver !== 'undefined') { G.ro = new ResizeObserver(() => { const w = Math.floor(G.wrap.getBoundingClientRect().width); if (w && w !== G.cssW) resize(); }); G.ro.observe(G.root); }
+    // ⚙️ в полосе игры — сразу на вкладку «⛏ Подземье»
+    const sb = document.querySelector('#gamesStage [data-gs-set]'); if (sb) { G.gsSet = [sb, sb.dataset.gsSet || '']; sb.dataset.gsSet = 'podzem'; }
+    setTimeout(scrollToGame, 500);
     G.offFs = window.D37Full?.on?.(() => setTimeout(resize, 60));
     on(document, 'visibilitychange', () => { if (document.hidden) { journal(); ambienceOff(); } });   // вкладку спрятали — треск и плеск не играют в фоне
     on(window, 'pagehide', journal);
@@ -2760,7 +2900,8 @@
     g.modsStop?.();
     g.worker?.stop();
     for (const [t, ev, f, o] of g.listeners) t.removeEventListener(ev, f, o);
-    g.offFs?.(); g.offLook?.(); g.offS2?.();
+    g.offFs?.(); g.offLook?.(); g.offS2?.(); g.ro?.disconnect();
+    if (g.gsSet) g.gsSet[0].dataset.gsSet = g.gsSet[1];
     g.C?.dispose?.();
     g.U?.dispose();
     try { for (const c of g.chunks.values()) g.R?.chunkFree(c); g.R?.dispose(); } catch (e) {}
@@ -2776,6 +2917,8 @@
     aimTouch, tapTouch, interactNear, useItem: () => useItem(), runCommand, toast, snd, isNight, statusText,
     sortInv, quickStack, quickHeal, quickBuff, toggleHook, attackStart, attackEnd, buildMode, buildMove, buildSet, setSmart, escKey,
     buffs: () => G?.CH?.buffs || {}, hasHook: () => !!(G?.CH && count('hook')), goal: () => (G?.CH && G.W && G.pl ? goalNow() : undefined), GOALS,
+    foeNear: () => !!(G?.pl && G.state === 'play' && nearestFoe(9)), nearAct: () => !!(G?.pl && G.state === 'play' && nearAct()), clockText: () => (G?.W ? clockText() : ''),
+    useSlot, unstuck: () => (G?.pl ? unstuck() : null), stuckWait: () => (G ? stuckWait() : 0),
     setCell, fgAt, wallAt, lqAt, ltAt, tileKey, dropItem, burst: (x, y, n, col, sp, life, size, grav, glow) => burst(x, y, n, col, sp, life, size, grav, glow), floatText,
     spawnMob, spawnBoss, rgbInt, last: () => { try { return JSON.parse(lsGet(LS_LAST) || 'null'); } catch (e) { return null; } },
     buildAtlas,

@@ -1070,6 +1070,7 @@ void main(){
     R.chunkInit = c => { if (!c.gl) c.gl = { t0: texU(64, 64), t1: texU(64, 64), l: texL() }; return c.gl; };
     R.upload0 = (c, data) => { const g = R.chunkInit(c); gl.bindTexture(gl.TEXTURE_2D, g.t0); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 64, 64, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE, data); R.stats.uploads++; };
     R.upload1 = (c, data) => { const g = R.chunkInit(c); gl.bindTexture(gl.TEXTURE_2D, g.t1); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 64, 64, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE, data); R.stats.uploads++; };
+    R.upload1Rows = (c, data, y, rows) => { const g = R.chunkInit(c); gl.bindTexture(gl.TEXTURE_2D, g.t1); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, y, 64, rows, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE, data, y * 256); R.stats.uploads++; };   // только ряды y…y+rows−1 (вода течёт)
     R.uploadL = (c, data) => { const g = R.chunkInit(c); gl.bindTexture(gl.TEXTURE_2D, g.l); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 66, 66, gl.RGBA, gl.UNSIGNED_BYTE, data); R.stats.uploads++; };
     R.chunkFree = c => { if (!c.gl) return; gl.deleteTexture(c.gl.t0); gl.deleteTexture(c.gl.t1); gl.deleteTexture(c.gl.l); c.gl = null; };
     // ── «Живой» свет (герой, факел в руке, «сияние», огненные снаряды): RGBA w×h клеток с левым верхом (x0, y0) — игра
