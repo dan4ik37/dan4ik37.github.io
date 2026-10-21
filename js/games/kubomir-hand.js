@@ -13,6 +13,8 @@
 // когда в ней что-то есть), вещь — в кулаке (как в Bedrock), покачивание на ходу, запаздывание при повороте, смена вещи — опустить
 // и поднять; руки и вещи «из глаз» (VR.entityMaterial / VR.itemMesh с fp: не уходят в стену). От 3-го лица — слой поз world3d
 // (o.hold; номера — CB.HOLDS / CB.MOTIONS); нет слоя (старый world3d, проверки) — движения правой рукой поверх позы, как раньше.
+// У человечка world3d armL / handL — его ПРАВАЯ рука (armR — левая: названия — для того, кто смотрит на него спереди): правая
+// (главная) вещь — в handL, левая — в handR; от 1-го лица правая рука — копия armL (у заглушек проверок без armL — armR).
 // Свет всех человечков (свой и других) — как у кубиков: материалы — копии VR.entityMaterial с одной униформой на человечка
 // (KubomirEnts.Lit — плавно по 8 клеткам вокруг груди).
 (() => {
@@ -40,8 +42,8 @@
   // движения от 1-го лица (правая; левая — зеркально): [замах, конец удара] × [dx, dy, dz кулака; повороты x, y, z]
   const MOT_FP = {
     jab: [[.02, -.02, .08, .25, 0, 0], [-.07, .05, -.24, -.2, .1, 0]],
-    slash: [[.16, .17, .05, .55, -.9, -.65], [-.44, -.1, -.12, -.35, .95, .55]],
-    back: [[-.4, .1, -.04, .3, .95, .6], [.18, -.06, -.06, -.2, -.85, -.55]],
+    slash: [[.16, .17, .05, .55, -.9, -.65], [-.36, .03, -.16, -.15, .9, .4]],
+    back: [[-.36, .12, -.06, .3, .9, .55], [.18, -.03, -.08, -.15, -.8, -.5]],
     thrust: [[.03, -.02, .15, .12, 0, 0], [-.1, .05, -.34, -.1, .05, 0]],
     chop: [[0, .3, .08, 1.05, 0, -.1], [-.05, -.2, -.16, -1.15, .1, .12]],
     dig: [[.02, .2, .05, .75, .1, 0], [-.04, -.12, -.12, -.85, .2, 0]],
@@ -116,7 +118,7 @@
       }
       H.arm = H.elbow = H.hand = null; H.armL = H.elbowL = H.handL = null; H.armCh = null;
     }
-    function copyArm(ch, src0, side){
+    function copyArm(ch, src0, elb, hnd){
       const mats = new Map();
       const conv = m => {
         if (Array.isArray(m)) return m.map(conv);
@@ -124,7 +126,6 @@
         if (!c) { const src = ORIG.get(m) || m; c = VR.entityMaterial(src, H.eye.u, { fp: true, kind: 'fp' }); mats.set(m, c); }
         return c;
       };
-      const elb = side ? ch.elbowL : ch.elbowR, hnd = side ? ch.handL : ch.handR;
       let E0 = null, H0 = null;
       const copy = (src, top) => {
         const o = src.isMesh ? new T.Mesh(src.geometry, conv(src.material)) : new T.Group();
@@ -143,22 +144,36 @@
       if (E0) E0.rotation.set(-.12, 0, 0);
       return { A, E: E0, Hd: H0 };
     }
+    // правая и левая рука человечка (world3d: правая — armL); заглушка без armL — одна правая (armR)
+    const RIGHT = ch => ch.armL ? { A: ch.armL, E: ch.elbowL, Hd: ch.handL } : { A: ch.armR, E: ch.elbowR, Hd: ch.handR };
+    const LEFT = ch => ch.armL ? { A: ch.armR, E: ch.elbowR, Hd: ch.handR } : null;
     function buildArm(ch){
       dropArms();
       if (!ch?.armR) return;
-      const r = copyArm(ch, ch.armR, 0);
+      const Rr = RIGHT(ch), Ll = LEFT(ch);
+      const r = copyArm(ch, Rr.A, Rr.E, Rr.Hd);
       H.arm = r.A; H.elbow = r.E; H.hand = r.Hd;
-      H.La = (ch.armR.userData?.La || .62) * FP.scale;
+      H.La = (Rr.A.userData?.La || .62) * FP.scale;
       pose.add(H.arm);
-      if (ch.armL) { const l = copyArm(ch, ch.armL, 1); H.armL = l.A; H.elbowL = l.E; H.handL = l.Hd; H.LaL = (ch.armL.userData?.La || .62) * FP.scale; poseL.add(H.armL); }
+      if (Ll) { const l = copyArm(ch, Ll.A, Ll.E, Ll.Hd); H.armL = l.A; H.elbowL = l.E; H.handL = l.Hd; H.LaL = (Ll.A.userData?.La || .62) * FP.scale; poseL.add(H.armL); }
       H.armCh = ch;
     }
-    // вещь в кулаке: как у человечка (кость кисти); блок — повёрнут углом, инструмент — рукоятью в кулаке; левая — зеркально
+    // вещь в кулаке: как у человечка (кость кисти); блок — повёрнут углом, инструмент — рукоятью в кулаке; левая — повороты зеркально
+    // (сама картинка — нет: отрицательный размер переворачивает лицевую грань, и свет вещи выходит тёмным)
+    // плоская вещь у человечка: рукоять (точка h картинки) — в кулаке, клинок / голова (направление d картинки) — вверх и чуть вперёд
+    // от кулака (оси кисти: −y — вдоль предплечья, +z — «вверх», когда предплечье вперёд), плашмя — вбок; инструменты и оружие —
+    // по диагонали картинки (рукоять внизу слева), факел, еда и прочее — стоймя
+    const GRIP_TP = { diag: { h: [-.38, -.36], d: [1, 1], s: .62 }, up: { h: [0, -.4], d: [0, 1], s: .42 } };
+    const TU = new T.Vector3(), TV = new T.Vector3(), TW = new T.Vector3(0, 0, 1), TB = new T.Vector3(0, -.35, .94).normalize(), TN = new T.Vector3(1, 0, 0), TX = new T.Vector3().crossVectors(TN, TB), TM = new T.Matrix4(), TM2 = new T.Matrix4();
     function placeInHand(m, hand, side){
       if (m.parent !== hand) hand.add(m);
-      const flat = m.geometry.userData.flat, s = side ? -1 : 1;
-      m.position.set(0, -.08, .1); m.rotation.set(flat ? -.4 : 0, flat ? 0 : .6 * s, flat ? -1.2 * s : 0); m.scale.setScalar(flat ? .4 : .27);
-      if (side) m.scale.x = -m.scale.x;
+      if (!m.geometry.userData.flat) { m.position.set(0, -.08, .1); m.rotation.set(0, side ? -.6 : .6, 0); m.scale.setScalar(.27); return; }
+      const k = m.userData.kind, G = k === 'torch' || k === 'food' || k === 'item' || k === 'block' ? GRIP_TP.up : GRIP_TP.diag;
+      TU.set(G.d[0], G.d[1], 0).normalize(); TV.crossVectors(TW, TU);
+      TM.makeBasis(TB, TX, TN); TM2.makeBasis(TU, TV, TW).transpose(); TM.multiply(TM2);
+      m.quaternion.setFromRotationMatrix(TM); m.scale.setScalar(G.s);
+      TU.set(G.h[0] * G.s, G.h[1] * G.s, 0).applyQuaternion(m.quaternion);
+      m.position.set(-TU.x, -TU.y - .05, -TU.z);
     }
 
     // ── вещи в руках: по две сетки (из глаз и у человечка), смена — опустить и поднять ──
@@ -174,9 +189,12 @@
       }
       if (old !== null) { if (side) H.eqL = 0; else H.eq = 0; }   // первая вещь при входе в мир — без анимации
     }
+    // кисти для вещей: правая (главная) — handL человечка world3d, левая — handR (заглушка без handL — одна handR)
+    const handMain = ch => ch?.handL || ch?.handR, handOff = ch => ch?.handL ? ch.handR : null;
     function tpAttach(ch){
-      if (H.tpItem && ch?.handR) { placeInHand(H.tpItem, ch.handR, 0); H.tpItem.scale.multiplyScalar(.95); }
-      if (H.tpOff && ch?.handL) { placeInHand(H.tpOff, ch.handL, 1); H.tpOff.scale.multiplyScalar(.95); }
+      const hm = handMain(ch), ho = handOff(ch);
+      if (H.tpItem && hm) placeInHand(H.tpItem, hm, 0);
+      if (H.tpOff && ho) placeInHand(H.tpOff, ho, 1);
     }
 
     // ── действия ──
@@ -245,7 +263,7 @@
       v2.set(O.off[0] * m, O.off[1], O.off[2]).applyQuaternion(qb);
       it.position.set(F3[0] + v2.x, F3[1] + v2.y, F3[2] + v2.z);
       ie.set(O.rot[0], O.rot[1] * m, O.rot[2] * m, 'XYZ'); it.quaternion.setFromEuler(ie).premultiply(qb);
-      it.scale.setScalar(O.s * (k || 1)); if (s) it.scale.x = -it.scale.x;
+      it.scale.setScalar(O.s * (k || 1));   // без зеркала по размеру: свет вещи «из глаз» считается по лицевой грани
     }
 
     // ── кадр ──
@@ -260,7 +278,7 @@
       if (NM[0] !== H.name) setItem(0, NM[0]);
       if (NM[1] !== H.nameL) setItem(1, NM[1]);
       if (me?.ch && me.ch !== H.armCh) { buildArm(me.ch); tpAttach(me.ch); }
-      if (me?.ch && ((H.tpItem && H.tpItem.parent !== me.ch.handR) || (H.tpOff && H.tpOff.parent !== me.ch.handL))) tpAttach(me.ch);
+      if (me?.ch && ((H.tpItem && H.tpItem.parent !== handMain(me.ch)) || (H.tpOff && H.tpOff.parent !== handOff(me.ch)))) tpAttach(me.ch);
       // таймеры: взмах (повтор, пока копает), толчок, смена вещи, еда, вспышка отбива
       if (H.sw < 1) H.sw = Math.min(1, H.sw + dt / SWING);
       if (H.sw >= 1 && H.mining) H.sw = 0;
@@ -354,17 +372,17 @@
           elb.rotation.x += -.3 * hold - .55 * a1 - .25 * pa + (-1.55 + .15 * chew) * ek;
         }
         // щит и лук в левой — по телу (плоскость щита — лицом вперёд, лук — боком, по наклону взгляда), а не по кисти
-        const io = H.tpOff;
-        if (io && ch.handL && (kL === 'shield' || kL === 'bow') && ch.root) {
+        const io = H.tpOff, hL = handOff(ch);
+        if (io && hL && (kL === 'shield' || kL === 'bow') && ch.root) {
           ch.root.updateMatrixWorld(true);
           if (kL === 'shield') ef.set(-.12 + .35 * ease(guard) * (st.rig.fp || 0), .25 * (1 - ease(guard)), 0, 'YXZ');
           else ef.set(-(st.rig.fp || 0) * ease(draw) * .8, -PI / 2, .12, 'YXZ');
           qw.setFromEuler(ef); ch.root.getWorldQuaternion(qh); qw.premultiply(qh);
-          ch.handL.getWorldQuaternion(qh); qh.invert(); io.quaternion.copy(qh).multiply(qw);
-          vw.set(kL === 'shield' ? .06 : .02, kL === 'shield' ? .04 : 0, kL === 'shield' ? .12 : .05).applyQuaternion(qw);
-          ch.handL.getWorldPosition(v2); v2.add(vw);
-          mh.copy(ch.handL.matrixWorld).invert(); v2.applyMatrix4(mh); io.position.copy(v2);
-          const sc = (kL === 'shield' ? .62 : .58) / Math.max(1e-3, ch.handL.getWorldScale(vw).x); io.scale.set(sc, sc, sc);
+          hL.getWorldQuaternion(qh); qh.invert(); io.quaternion.copy(qh).multiply(qw);
+          vw.set(kL === 'shield' ? -.06 : -.02, kL === 'shield' ? .04 : 0, kL === 'shield' ? .12 : .05).applyQuaternion(qw);
+          hL.getWorldPosition(v2); v2.add(vw);
+          mh.copy(hL.matrixWorld).invert(); v2.applyMatrix4(mh); io.position.copy(v2);
+          const sc = (kL === 'shield' ? .62 : .58) / Math.max(1e-3, hL.getWorldScale(vw).x); io.scale.set(sc, sc, sc);
         }
       }
     };

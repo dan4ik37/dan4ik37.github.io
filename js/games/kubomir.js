@@ -967,8 +967,11 @@
   function hurt(st, n, why, src){
     const P = st.P;
     if (st.creative || P.dead || n <= 0) return;
-    if ((P.hurtT || 0) > now() - 450 && why !== 'drown' && why !== 'starve' && why !== 'void') return;
-    P.hurtT = now();
+    // неуязвимость после урона — 0,45 с по шагам игры (одинаково при любой частоте кадров; по часам страницы первые 0,45 с после
+    // загрузки урона не было вовсе)
+    const gt = (st.steps | 0) / 60;
+    if (P.hurtGT != null && gt - P.hurtGT < .45 && why !== 'drown' && why !== 'starve' && why !== 'void') return;
+    P.hurtT = now(); P.hurtGT = gt;
     P.hp = Math.max(0, P.hp - n);
     st.AU?.play('kb_hurt', { vol: .7 });
     st.rig.kick?.(1.2);
