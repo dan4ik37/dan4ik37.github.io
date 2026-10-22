@@ -35,6 +35,7 @@ class Conn {
     this.drops = 0; this.dropsAt = 0; this.bad = 0; this.noResume = false;
     this.inSeq = 0;   // highest numbered message (q) processed — after a resume the tab re-sends only what we didn't get
     this.zombie = false; this.zq = null; this.zqBytes = 0; this.zTimer = null;
+    this.corked = null;
   }
   out(buf){
     if (this.zombie) {
@@ -52,6 +53,9 @@ class Conn {
     if (b > C.SLOW_KILL) { stats.drop.slowKill++; this.noResume = true; try { ws.terminate(); } catch (e) {} return; }
     if (b > C.SLOW_DROP) { stats.drop.slow++; return; }
     stats.msgOut++; stats.bytesOut += buf.length;
+    // all frames for this socket in this turn of the event loop leave in ONE write (one syscall instead of one per message;
+    // the profile showed ~45 % of the time in writev without it). ws corks/uncorks per frame inside — counted, so nested.
+    if (!this.corked) { const s = ws._socket; if (s && typeof s.cork === 'function') { s.cork(); this.corked = s; this.hub.cork(this); } }
     ws.send(buf, TEXT);
   }
   send(obj){ this.out(Buffer.from(JSON.stringify(obj))); }
@@ -85,7 +89,18 @@ class Hub {
     this.shuttingDown = false;
     this.stats = stats;
     this.errLogAt = 0;
+    this.corkedList = []; this.flushing = false;
+    this.flush = () => {
+      this.flushing = false;
+      const list = this.corkedList; this.corkedList = [];
+      for (const c of list) { const s = c.corked; c.corked = null; try { s.uncork(); } catch (e) {} }
+    };
     this.sweepT = setInterval(() => this.sweep(), 60e3); this.sweepT.unref?.();
+  }
+
+  cork(conn){
+    this.corkedList.push(conn);
+    if (!this.flushing) { this.flushing = true; setImmediate(this.flush); }
   }
 
   // ═══ Connections ═══

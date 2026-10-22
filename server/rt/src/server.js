@@ -173,7 +173,8 @@ function start(){
   }
   return new Promise((resolve, rejectP) => {
     server.once('error', rejectP);
-    server.listen(C.PORT, C.LISTEN, () => {
+    // big accept queue: after a restart every tab reconnects at once (the kernel caps it at net.core.somaxconn, 4096 on Ubuntu 24.04)
+    server.listen({ port: C.PORT, host: C.LISTEN, backlog: 4096 }, () => {
       const port = server.address().port;
       log('info', 'd37-rt listening', { port, watch: !!watcher, turn: !!(C.TURN_SECRET && C.TURN_HOST), maintenance: C.MAINTENANCE });
       resolve({ server, hub, watcher, port, close, health, metrics });

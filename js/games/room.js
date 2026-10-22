@@ -46,7 +46,7 @@
   //  • on() можно звать до создания — вешается при создании; presenceState() до подписки — {}.
   function channel(name, opts){
     const ons = [];
-    let ch = null, subCb = null, started = false, joined = false, closed = false, stopWait = null, queue = [];
+    let ch = null, cl = null, subCb = null, started = false, joined = false, closed = false, stopWait = null, queue = [];
     const P = {};
     const quiet = r => { if (r && typeof r.catch === 'function') r.catch(() => {}); return r; };
     P.on = (type, filter, cb) => { ons.push([type, filter, cb]); if (ch) ch.on(type, filter, cb); return P; };
@@ -56,7 +56,8 @@
     }
     function open(){
       try {
-        ch = sbClient.channel(name, opts);
+        cl = window.D37RT?.client?.() || sbClient;   // свой сервер (js/core/rt.js, T-045); RT_URL пустой — sbClient, как было
+        ch = cl.channel(name, opts);
         for (const [t, f, c] of ons) ch.on(t, f, c);
         ch.subscribe(status => {
           if (closed) return;
@@ -89,7 +90,7 @@
       if (ch) {
         const c = ch; ch = null;
         try { quiet(c.untrack()); } catch (e) {}
-        try { quiet(sbClient.removeChannel(c)); } catch (e) {}
+        try { quiet((cl || sbClient).removeChannel(c)); } catch (e) {}
       }
     };
     return P;

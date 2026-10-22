@@ -322,7 +322,7 @@
   }
   // Транспорт — Supabase Realtime (как в room.js / krokodil.js)
   function supaTransport(name, key, opts){
-    const sb = typeof sbClient !== 'undefined' ? sbClient : root.sbClient;
+    const sb = root.D37RT?.client?.() || (typeof sbClient !== 'undefined' ? sbClient : root.sbClient);   // свой сервер (js/core/rt.js, T-045) или Supabase
     const cfg = { broadcast: { self: false } };
     if (opts?.presence) cfg.presence = { key };
     const ch = sb.channel(name, { config: cfg });
