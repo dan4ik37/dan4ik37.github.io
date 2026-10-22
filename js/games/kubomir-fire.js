@@ -214,8 +214,9 @@
 
     // ═══ Такт (20 в секунду, вместе с мобами): ветер и дождь, лава, молния, ядро ═══
     let wxT = 0, lavaT = 0;
+    X.paused = false;   // проверки (замер «с огнём / без»): такты и пламя стоят
     X.tick = () => {
-      const F = X.F; if (!F) return;
+      const F = X.F; if (!F || X.paused) return;
       if (--wxT <= 0) {   // погода — раз в 2 с (округлённо: у всех одно и то же)
         wxT = 40;
         const WX = st.WX, s = WX?.clim?.state, off = st.weatherOff;
@@ -273,6 +274,7 @@
     let snd = null, sndBig = null;
     X.frame = (dt, t) => {
       if (!FL) return;
+      if (X.paused) { FL.begin(); FL.end(); X.shadowTick(t * 1000); return; }
       const cam = st.R.camera.position, cx = cam.x + st.ox, cy = cam.y, cz = cam.z + st.oz, F = X.F, Q = FL.Q;
       FL.begin(cam);
       let near = 1e9, nx = 0, ny = 0, nz = 0, cnt = 0;
@@ -301,6 +303,7 @@
       FL.dt = dt; FL.t = t;
       FL.end();
       FX.update(dt);
+      X.shadowTick(t * 1000);
       X.stats.blocks = FS.n; X.stats.drawn = cnt;
       // треск — у ближайшего огня (до 24 блоков); большой пожар — ещё и гул
       const A = st.AU;
@@ -318,7 +321,14 @@
       for (let j = 0; j < 6; j++) { const d = DIRS[j]; s = F.find(x - d[0], y - d[1], z - d[2]); if (s >= 0 && F.AUX[s] === j + 1) return s; }
       return -1;
     }
-    X.dispose = () => { snd?.stop(); sndBig?.stop(); snd = sndBig = null; FL?.dispose(); FS.clear(); LAVA.clear(); };
+    // Тени в большом пожаре: каждая пересобранная сетка чанка (огонь меняет блоки десятки раз в секунду) просит перерисовать карту
+    // теней — в пожаре это было почти каждый кадр (+190 вызовов на телефоне). Пока горит много (30+ блоков огня), просьбы «что-то
+    // поменялось» копятся и исполняются не чаще 4 раз в секунду; «движется» (падающее дерево, мобы) — как было
+    const R0 = st.R, sd0 = R0.shadowDirty;
+    let shPend = false, shAt = 0;
+    if (typeof sd0 === 'function') R0.shadowDirty = moving => { if (!moving && FS.n >= 30) { shPend = true; return; } sd0(moving); };
+    X.shadowTick = now => { if (shPend && (now - shAt > 250 || FS.n < 30)) { shPend = false; shAt = now; sd0?.(); } };
+    X.dispose = () => { snd?.stop(); sndBig?.stop(); snd = sndBig = null; FL?.dispose(); FS.clear(); LAVA.clear(); if (sd0 && R0.shadowDirty !== sd0) R0.shadowDirty = sd0; if (shPend) sd0?.(); };
     return X;
   };
 })();

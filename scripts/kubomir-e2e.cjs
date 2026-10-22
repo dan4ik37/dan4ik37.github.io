@@ -12,6 +12,8 @@
 //   погода и время суток меняются, телепорты, бой (меч, щит, лук) — ошибок и исключений в консоли нет, игрок ходит (ввод не заперт),
 //   память JS после сборки мусора — не растёт
 // KB_MODE=reopen — мир закрыть и открыть 8 раз (KB_N — другое число): память JS после сборки мусора — не растёт
+// KB_MODE=fire — огонь (T-022d), мир «Огонь распространяется»: лес 6 × 6 и дом из досок — ЦП на кадр без огня и в пожаре (среднее, 95 %,
+//   худший, вызовы), снимки днём, ночью и после пожара; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_FIRE=1 KB_MODE=soak / reopen — с пожаром
 // KB_MODE=combat — две руки и бой (T-012): снимки поз (от 1-го лица, спереди, сзади; фаза удара «заморожена»), зомби — нокаут
 //   мечом, лук — стрела вылетела; круги боя (KB_ROUNDS) — память JS не растёт, мобы не копятся; ошибок в консоли нет
 // KB_MODE=swim — плавание (T-019): озеро, стоит / держит «прыжок» / плывёт, день и ночь — где гладь относительно плеч и глаз, поза
@@ -26,6 +28,7 @@ const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2)
 const MODE = process.env.KB_MODE || '';
 const PHONE = MODE === 'perf' || !!process.env.KB_PHONE;
 const SUPPORT = MODE === 'support' || !!process.env.KB_SUPPORT;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
+const FIRE = MODE === 'fire' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, MODE === 'water' ? 'water' : 'kubomir2', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
@@ -248,6 +251,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           await wait(3500);
           const mv = Math.hypot(S.P.x - x0, S.P.z - z0), blk = !!C.blocked;
           C.press('jump', false); C.press('run', false); C.press('forward', false);
+          // огонь (KB_FIRE=1): поджигает доски рядом и иногда льёт воду — горит, гаснет, рушится
+          if (${FIRE ? 1 : 0} && n % 5 === 2 && S.fire?.F) { const V = D37E.vox, W = S.W, x0 = Math.floor(S.P.x) + 3, z0 = Math.floor(S.P.z), y0 = Math.floor(S.P.y); for (let x = x0; x < x0 + 3; x++) for (let z = z0; z < z0 + 3; z++) W.set(x, y0 + 2, z, V.cell(V.ID.planks_oak), { urgent: 1 }); S.fire.igniteAt(x0 + 1, y0 + 2, z0 + 1, 0, 1, 0); if (n % 10 === 7) W.set(x0 + 1, y0 + 3, z0 + 1, V.cell(V.ID.water), { urgent: 1 }); }
           // ставит и ломает
           if (n % 3 === 0) { T.give?.({ id: ['planks_oak', 'stone', 'torch', 'glass'][n % 4], n: 16 }); S.P.sel = 0; for (let i = 0; i < 3; i++) { T.use?.(); await wait(150); T.dig?.(); await wait(150); } }
           // бой (T-012): меч и щит против зомби, поменять руки, лук со стрелой
@@ -270,8 +275,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       }
       const h1 = await heap(), errs = logs.slice(ex0).filter(l => !/X3595|DevTools|favicon/i.test(l));
       // мир «Обрушение» (KB_SUPPORT=1): сколько было пересчётов и обрушений — что прогон их правда задел
+      const fireSt = FIRE ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.fire; return X?.F ? { burnt: X.stats.burnt, ignited: X.F.stats.ignited, out: X.F.stats.out, peak: X.F.stats.peak, blocks: X.blocks.n } : null; })()`, 10000).catch(() => null) : undefined;
       const sup = SUPPORT ? await ev(`(() => { const X = GAME_IMPL.kubomir._test.state()?.sup, s = X?.stats; return s ? { mode: X.mode, solves: s.solves, avgMs: +(s.ms / Math.max(1, s.solves)).toFixed(2), maxMs: +s.maxMs.toFixed(1), groups: s.groups, cells: s.cells | 0, refused: s.refused } : null; })()`, 10000).catch(() => null) : undefined;
-      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup };
+      res.soak = { minutes: MIN, steps: n, walked: res.moved | 0, of: res.walk | 0, heap0: h0, heap1: h1, errors: errs.length, first: errs.slice(0, 6), sup, fire: fireSt };
       console.log('ЗАМЕР soak', JSON.stringify(res.soak));
       ok(!errs.length, MIN + ' мин игры — без ошибок и исключений в консоли', errs.slice(0, 6));
       ok((res.moved | 0) >= (res.walk | 0) * .5, 'игрок ходил (ввод не заперт окном или меню) — в половине шагов и больше', { moved: res.moved | 0, of: res.walk | 0 });
@@ -577,10 +583,96 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       ok(!bad.length, 'вода: в консоли — без ошибок шейдеров и исключений', bad.slice(0, 6));
       return;
     }
+    if (MODE === 'fire') {
+      // огонь (T-022d), мир «Огонь распространяется»: лес 6 × 6 дубов и дом из досок 10 × 10 × 5 перед камерой — ЦП на кадр без огня и в
+      // пожаре (среднее, 95 %, худший), вызовы отрисовки, сколько горит; снимки днём и ночью, после пожара; шейдеры собрались, консоль чистая
+      await idle();
+      const SETUP = `const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID;
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 });`;
+      res.fire0 = await ev(`(async () => { ${SETUP}
+        if (!S.fire?.F) return { none: true, fire: S.meta.fire };
+        const P = S.P, cx = Math.floor(P.x) + 6, cz = Math.floor(P.z) - 14, gy = Math.floor(P.y);
+        for (let x = cx - 4; x <= cx + 40; x++) for (let z = cz - 4; z <= cz + 32; z++) { for (let y = gy; y <= gy + 16; y++) if (W.raw(x, y, z) > 0) set(x, y, z, null); set(x, gy - 1, z, 'grass'); }
+        let trees = 0, leaves = 0, planks = 0;
+        for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
+          const tx = cx + 2 + i * 4, tz = cz + 2 + j * 4; trees++;
+          for (let y = gy; y < gy + 5; y++) set(tx, y, tz, 'log_oak');
+          for (let y = gy + 3; y <= gy + 6; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { if (y === gy + 6 && (Math.abs(dx) > 1 || Math.abs(dz) > 1)) continue; if (W.raw(tx + dx, y, tz + dz) === 0) { set(tx + dx, y, tz + dz, 'leaves_oak'); leaves++; } }
+        }
+        for (let x = cx + 28; x < cx + 38; x++) for (let z = cz + 4; z < cz + 14; z++) for (let y = gy; y < gy + 5; y++) { const e = x === cx + 28 || x === cx + 37 || z === cz + 4 || z === cz + 13, roof = y === gy + 4; if ((e || roof) && !(x === cx + 28 && z === cz + 8 && y < gy + 2)) { set(x, y, z, 'planks_oak'); planks++; } }
+        S._fire = { cx, cz, gy };
+        Object.assign(P, { x: cx - 6.5, y: gy, z: cz + 13.5, vx: 0, vy: 0, vz: 0, fly: false }); S.rig.yaw = -Math.PI / 2 - .25; S.rig.fp = .18;
+        S.R.lighting.time = 12; S.paused = true;
+        try { S.WX.clim.setWorld({ seed: 'kb', mode: 'fixed', season: 'summer', weather: 'clear', lapse: 0, seaY: 52 }); } catch (e) {}
+        await wait(9000);
+        return { trees, leaves, planks, spread: S.fire.spread };
+      })()`, 120000);
+      console.log('ОГОНЬ лес и дом', JSON.stringify(res.fire0));
+      ok(res.fire0 && res.fire0.spread && res.fire0.leaves > 1000, 'мир «Огонь распространяется»: лес и дом построены', res.fire0);
+      const look = `S.rig.yaw = -Math.PI / 2 - .25; S.rig.fp = .18;`;
+      const meter = sec => `const cpu = [], dts = [], calls = []; let run = true;
+        const tick = () => { if (!run) return; const st = S.R.stats; cpu.push(st.cpuFrame); dts.push(st.dt); calls.push(st.calls); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+        await wait(${sec * 1000}); run = false;
+        cpu.sort((a, b) => a - b); calls.sort((a, b) => a - b);
+        const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
+        const R = { frames: cpu.length, cpu: +avg(cpu).toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), max: +cpu[cpu.length - 1].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: calls[calls.length >> 1], callsMax: calls[calls.length - 1] };`;
+      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      res.fireBefore = await ev(`(async () => { ${SETUP} ${look} await wait(1500); ${meter(12)} return R; })()`, 60000);
+      console.log('ОГОНЬ без огня', JSON.stringify(res.fireBefore));
+      // поджечь: лес — с краю у ветра, дом — угол; ждать, пока разгорится (горит 150+)
+      res.fireStart = await ev(`(async () => { ${SETUP} const { cx, cz, gy } = S._fire;
+        S.fire.igniteAt(cx + 2, gy + 6, cz + 2, 0, 1, 0); S.fire.igniteAt(cx + 22, gy + 6, cz + 22, 0, 1, 0); S.fire.igniteAt(cx + 14, gy + 6, cz + 10, 0, 1, 0); S.fire.igniteAt(cx + 28, gy + 1, cz + 6, -1, 0, 0);
+        let t = 0; for (; t < 90 && S.fire.F.n < 150; t++) await wait(1000);
+        return { sec: t, burning: S.fire.F.n, blocks: S.fire.blocks.n };
+      })()`, 150000);
+      console.log('ОГОНЬ разгорелось', JSON.stringify(res.fireStart));
+      if (process.env.KB_PROF) { await send('Profiler.enable'); await send('Profiler.setSamplingInterval', { interval: 200 }); await send('Profiler.start'); }
+      res.fireDuring = await ev(`(async () => { ${SETUP} ${look} ${meter(12)} R.burning = S.fire.F.n; R.blocks = S.fire.blocks.n; R.fl = S.fire.FL?.stats; R.peak = S.fire.F.stats.peak; R.visits = S.fire.F.stats.visits; return R; })()`, 60000);
+      console.log('ОГОНЬ в пожаре', JSON.stringify(res.fireDuring));
+      // то же место, тот же пожар: огонь на паузе / идёт — по 5 с, 3 раза (машина под нагрузкой — сравнение рядом по времени честнее)
+      res.fireAB = await ev(`(async () => { ${SETUP} ${look} const out = { off: [], on: [] };
+        for (let r = 0; r < 3; r++) for (const p of [true, false]) { S.fire.paused = p; await wait(800); ${meter(5)} out[p ? 'off' : 'on'].push(R); }
+        S.fire.paused = false;
+        const med = (a, k) => { const v = a.map(q => q[k]).sort((x, y) => x - y); return v[v.length >> 1]; };
+        return { off: { cpu: med(out.off, 'cpu'), p95: med(out.off, 'p95'), max: med(out.off, 'max'), calls: med(out.off, 'calls') }, on: { cpu: med(out.on, 'cpu'), p95: med(out.on, 'p95'), max: med(out.on, 'max'), calls: med(out.on, 'calls') }, burning: S.fire.F.n };
+      })()`, 120000);
+      console.log('ОГОНЬ пауза / идёт (медианы трёх)', JSON.stringify(res.fireAB));
+      if (process.env.KB_PROF) {   // где время ЦП в пожаре: функции по собственному времени (KB_PROF=1)
+        const { profile: pf } = await send('Profiler.stop'), self = new Map(), byId = new Map(pf.nodes.map(n => [n.id, n]));
+        const dt = pf.timeDeltas, sm = pf.samples; for (let i = 0; i < sm.length; i++) { const n = byId.get(sm[i]); const k = (n.callFrame.functionName || '(anon)') + ' ' + n.callFrame.url.split('/').pop() + ':' + (n.callFrame.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dt[i] || 0)); }
+        const tot = [...self.values()].reduce((a, b) => a + b, 0);
+        console.log('ПРОФИЛЬ (собственное время, %):\n' + [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => '  ' + (v / tot * 100).toFixed(1).padStart(5) + '  ' + k).join('\n'));
+      }
+      ok(res.fireDuring.burning > 100 && res.fireDuring.fl?.tongues > 100, 'пожар: горит больше 100 блоков, пламя движка рисуется', res.fireDuring);
+      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); GAME_IMPL.kubomir._test.hud(false); await new Promise(r => setTimeout(r, 600)); return 1; })()`);
+      await shot('fire-day');
+      await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.R.lighting.time = 22.5; await new Promise(r => setTimeout(r, 2500)); return 1; })()`);
+      await shot('fire-night');
+      await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), { cx, cz, gy } = S._fire; S.rig.yaw = -Math.PI / 2 + .35; S.rig.fp = .1; Object.assign(S.P, { x: cx + 22.5, z: cz + 2.5 }); await new Promise(r => setTimeout(r, 2500)); return 1; })()`);
+      await shot('fire-house-night');
+      // дождаться конца пожара (до 4 мин): сколько сгорело, что почернело, сколько упало деревьев
+      res.fireEnd = await ev(`(async () => { ${SETUP} let t = 0; for (; t < 240 && S.fire.F.n > 0; t++) await wait(1000);
+        let leaves = 0, logs = 0, planks = 0, charred = 0, fire = 0; const { cx, cz, gy } = S._fire;
+        for (let x = cx - 4; x <= cx + 40; x++) for (let z = cz - 4; z <= cz + 32; z++) for (let y = gy - 1; y <= gy + 12; y++) { const v = W.raw(x, y, z) & 0xfff; if (v === ID.leaves_oak) leaves++; else if (v === ID.log_oak) logs++; else if (v === ID.planks_oak) planks++; else if (v === ID.charred_planks) charred++; else if (v === ID.fire) fire++; }
+        return { sec: t, left: { leaves, logs, planks, charred, fire }, stats: S.fire.stats, core: S.fire.F.stats };
+      })()`, 300000);
+      console.log('ОГОНЬ после пожара', JSON.stringify(res.fireEnd));
+      ok(res.fireEnd.left.leaves < res.fire0.leaves * .3 && res.fireEnd.left.fire === 0, 'пожар прошёл: лес сгорел, огня не осталось', res.fireEnd.left);
+      await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.R.lighting.time = 15; S.rig.yaw = -Math.PI / 2 - .25; S.rig.fp = .18; const { cx, cz } = S._fire; Object.assign(S.P, { x: cx - 6.5, z: cz + 13.5 }); await new Promise(r => setTimeout(r, 3500)); return 1; })()`);
+      await shot('fire-after');
+      const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
+      ok(!pr.bad.length, 'все программы шейдеров собрались (пламя, дрожь воздуха, дым)', pr.bad);
+      ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
+      return;
+    }
     if (MODE === 'reopen') {
       const hs = [];
       for (let i = 0, N = +process.env.KB_N || 8; i < N; i++) {
         await idle(); await new Promise(r => setTimeout(r, 2000));
+        if (FIRE) await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, x0 = Math.floor(P.x) + 3, z0 = Math.floor(P.z), y0 = Math.floor(P.y);
+          for (let x = x0; x < x0 + 5; x++) for (let z = z0 - 2; z < z0 + 3; z++) for (let y = y0; y < y0 + 3; y++) W.set(x, y, z, V.cell(V.ID.planks_oak), { urgent: 1 });
+          S.fire?.igniteAt(x0, y0 + 2, z0, 0, 1, 0); S.fire?.igniteAt(x0 + 4, y0 + 2, z0 + 2, 0, 1, 0); await new Promise(r => setTimeout(r, 6000)); return S.fire?.F?.n || 0; })()`, 30000);   // мир с пожаром: пламя, дым, звук — каждый раз
         hs.push(await heap());
         await ev(`(async () => { await GAME_IMPL.kubomir._test.stop(); GAME_IMPL.kubomir._test.menu(); return true; })()`, 60000);
         for (let k = 0; k < 60; k++) { await sleep(500); if (await ev(`!!document.querySelector('.kb-world [data-w="play"]')`, 3000).catch(() => false)) break; }
@@ -610,7 +702,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     for (let i = 0; i < 120; i++) { await sleep(500); const okm = await ev(`!!document.querySelector('.kb-menu')`, 3000).catch(() => false); if (okm) break; }
     await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`);
     await sleep(500);
-    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} ${SUPPORT ? `document.querySelector('[data-f="support"] [data-v="real"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
+    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} ${SUPPORT ? `document.querySelector('[data-f="support"] [data-v="real"]')?.click();` : ''} ${FIRE ? `document.querySelector('[data-f="fire"] [data-v="spread"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
     let kb = false;
     for (let i = 0; i < 240 && !kb; i++) { await sleep(500); kb = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready && GAME_IMPL.kubomir._test.state().WX)`, 3000).catch(() => false); }
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }

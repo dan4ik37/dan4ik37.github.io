@@ -21,7 +21,7 @@
     fountain: { name: 'Фонтан', icon: '⛲', rate: 90, life: [1, 1.25], size: [.12, .22], color: '#eefaff', color2: '#8fd3f5', speed: [3.6, 4.4], spread: .32, gravity: 9.8, area: .1, shape: 0, blend: 'normal', alpha: .8 },
     bubbles: { name: 'Пузыри', icon: '🫧', rate: 7, life: [2, 3.6], size: [.35, .8], color: '#c8f0ff', speed: [.6, 1.2], spread: .25, gravity: -.4, area: .5, shape: 2, blend: 'normal', alpha: .75, drift: .4 },
     // пожар (FX.flames): столб дыма — тёмный, растёт и светлеет, уносит ветром; угли — мелкие, светятся, мигают, всплывают
-    firesmoke: { name: 'Дым пожара', icon: '🌫️', rate: 8, life: [2.6, 4.2], size: [.9, 2.2], color: '#3b3836', color2: '#8d8a87', speed: [1.1, 2], spread: .18, gravity: -.25, area: .35, shape: 0, blend: 'normal', alpha: .42, grow: 1, drift: .25 },
+    firesmoke: { name: 'Дым пожара', icon: '🌫️', rate: 8, life: [2.6, 4.2], size: [.7, 1.7], color: '#3b3836', color2: '#8d8a87', speed: [1.1, 2], spread: .18, gravity: -.25, area: .35, shape: 0, blend: 'normal', alpha: .42, grow: 1, drift: .25 },
     embers: { name: 'Угли', icon: '✨', rate: 10, life: [.9, 1.8], size: [.07, .14], color: '#ffb347', color2: '#ff3a12', speed: [1.4, 3.2], spread: .45, gravity: -.6, area: .35, shape: 0, blend: 'add', twinkle: 1, drift: .6 },
   };
   const MAX = 900;   // частиц в одном эмиттере
@@ -83,9 +83,10 @@ void main(){
         em.sizeK = Math.max(.1, Math.min(10, o.size ?? 1));
         if (typeof o.at === 'function') atFn = o.at; else if (Array.isArray(o.at)) { atFn = null; at = o.at; }
       };
+      em.cap = Math.max(1, Math.min(MAX, o.cap | 0 || MAX));   // своё число частиц (дым пожара на телефоне — меньше: перерисовка экрана)
       em.set({});
       function spawn(x, y, z){
-        if (em.n >= MAX) return;
+        if (em.n >= em.cap) return;
         const i = em.n++, K = em.kind, s = em.sizeK, sp = K.spread, ar = K.area * (K.top ? 1 : s);
         const a = Math.random() * Math.PI * 2, rr = K.top ? Math.random() * ar : Math.sqrt(Math.random()) * ar;
         pos[i * 3] = x + Math.cos(a) * rr; pos[i * 3 + 1] = y + (K.top ? K.top * s * .5 + Math.random() * 2 : 0); pos[i * 3 + 2] = z + Math.sin(a) * rr;
@@ -236,10 +237,12 @@ void main(){
         smesh = new T.Mesh(S1.g, smat); smesh.frustumCulled = false; smesh.renderOrder = 7; smesh.name = 'fire:shimmer'; smesh.userData.dyn = true; R.scene.add(smesh);
       }
       // дым и угли — эмиттеры fx.js (свои пулы)
-      const smoke = o.smoke !== false ? FX.emitter({ kind: 'firesmoke', rate: 0, enabled: false }) : null;
-      const embers = o.embers !== false ? FX.emitter({ kind: 'embers', rate: 0, enabled: false }) : null;
+      // дым — мягкие большие пятна: на телефоне их меньше (каждое — перерисовка куска экрана), угли — мелкие
+      const MOB = !!E.isMobile?.();
+      const smoke = o.smoke !== false ? FX.emitter({ kind: 'firesmoke', rate: 0, enabled: false, cap: LOWQ ? 120 : HIGH && !MOB ? 520 : 260 }) : null;
+      const embers = o.embers !== false ? FX.emitter({ kind: 'embers', rate: 0, enabled: false, cap: LOWQ ? 80 : HIGH && !MOB ? 320 : 160 }) : null;
       if (smoke) smoke.wind = FL.wind; if (embers) embers.wind = FL.wind;
-      const kS = LOWQ ? .4 : HIGH ? 1 : .7, kE = LOWQ ? .3 : HIGH ? 1 : .6;
+      const kS = (LOWQ ? .3 : HIGH ? .9 : .5) * (MOB ? .7 : 1), kE = (LOWQ ? .3 : HIGH ? 1 : .6) * (MOB ? .8 : 1);
       // свет: лампы движка у ближних очагов (ореол — у всех ламп сам)
       const NL = Math.max(0, Math.min(6, o.lights | 0)), lamps = [];
       for (let i = 0; i < NL && R.lights; i++) { const src = { position: new T.Vector3(0, -1e4, 0), color: new T.Color('#ff8a3a'), intensity: 0, distance: 10, decay: 2, visible: true }; lamps.push({ src, rec: R.lights.add(src) }); }
@@ -267,8 +270,8 @@ void main(){
         const A = F1.A, B = F1.B;
         for (let k = 0; k < PER && FL.n < MAXI; k++) {   // языки — прямо в буфер экземпляров (без вызова на каждый: дробные аргументы V8 «упаковывает»)
           const a = seed * 7.13 + k * 2.39, r = k ? sz * .27 : 0, j = FL.n++ * 4;
-          A[j] = x + Math.cos(a) * r; A[j + 1] = y; A[j + 2] = z + Math.sin(a) * r; A[j + 3] = fs * (k ? .62 : .95);
-          B[j] = fs * tall * (k ? 1.05 : 1.55) * (1 + .18 * ((seed * 3.7 + k) % 1)); B[j + 1] = heat; B[j + 2] = (seed + k * .37) % 1; B[j + 3] = 0;
+          A[j] = x + Math.cos(a) * r; A[j + 1] = y; A[j + 2] = z + Math.sin(a) * r; A[j + 3] = fs * (k ? .78 : 1.2);
+          B[j] = fs * tall * (k ? 1.25 : 1.8) * (1 + .18 * ((seed * 3.7 + k) % 1)); B[j + 1] = heat; B[j + 2] = (seed + k * .37) % 1; B[j + 3] = 0;
         }
         if (SHIM && FL.ns < MAXS && heat > .5) {
           const dx = x - camX, dz = z - camZ;
