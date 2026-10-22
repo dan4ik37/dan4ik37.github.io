@@ -116,7 +116,8 @@ function Find-PgDump {
   $cmd = Get-Command pg_dump -ErrorAction SilentlyContinue
   if ($cmd) { [void]$cands.Add($cmd.Source) }
   foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, 'E:\tools', 'C:\tools')) {
-    if (-not $pf) { continue }
+    # нет такого диска (например, E: на другом компьютере) — Join-Path в Windows PowerShell 5.1 падает, поэтому сначала Test-Path
+    if (-not $pf -or -not (Test-Path -LiteralPath $pf)) { continue }
     foreach ($base in @((Join-Path $pf 'PostgreSQL'), (Join-Path $pf 'pgsql'))) {
       if (Test-Path -LiteralPath $base) {
         Get-ChildItem -LiteralPath $base -Directory -ErrorAction SilentlyContinue | Sort-Object { $_.Name } -Descending | ForEach-Object { [void]$cands.Add((Join-Path $_.FullName 'bin\pg_dump.exe')) }
