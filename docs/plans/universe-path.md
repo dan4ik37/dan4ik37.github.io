@@ -46,6 +46,27 @@ Sizes as in planet.md: **S** < 1 agent run, **M** ≈ 1, **L** ≈ 2–3, **XL**
    cities, as in kubomir-modpacks §7½). Applies to T-072 and the space steps SP-1…SP-4.
 5. «Начало времён» day — the owner sets it later.
 
+
+## Checking in a big world (owner 22.10: «а если мир станет больше? Может, чуть больше свободы, но по-другому проверять, переложить
+## ответственность или сделать проверку внутри мира чем-то другим?»)
+
+Principle: strict server checks only where cheating breaks the game for everyone; freedom everywhere else, verified differently.
+1. **Hard core on the server (stays strict, it is cheap):** money and items appearing or moving, ownership of land and buildings,
+   ratings and rewards. One RPC per action, indexed, a few ms — scales with T-045/T-071. Never moved to browsers.
+2. **Simulation in players' browsers (more freedom):** movement, physics, building, fights, creatures run at the region host
+   (a player's browser) as now. Checked by plausibility at the host (speed, reach, rate), by deterministic re-simulation of
+   samples on the server (like raids already do), and by peers: 2–3 nearby players act as witnesses; a disagreement
+   triggers a server replay of that event instead of trusting one side.
+3. **Responsibility inside the world (part of the game, era-appropriate):** settlement leaders approve building projects and set
+   local rules; elders/guards/police/courts by era handle griefing; reputation that NPC traders, guards and other settlements
+   react to; weighted reports with trust (as designed for mods in docs/MODS.md); exile from a settlement as a consequence. Kids'
+   realm: only soft tools (blocks, reports to staff), never courts.
+4. **Statistics instead of checking every step:** the server watches aggregates (the city economy log, wealth spikes, impossible
+   production, twin clusters) and flags them for the owner; suspicious accounts get stricter checks (more samples) automatically.
+5. **Everything reversible:** an action journal and per-region snapshots, so a missed cheat or griefing can be rolled back
+   (fits the rule «nothing is lost forever»).
+Owner of this design: T-045 (server), T-071 (regions on our server), T-058/T-060 (leaders and rules), T-037 (elections).
+
 ## 0. Decisions (one line each; the owner can change any of them)
 - **The path:** cell → creature → awakening → the Person: tribe (a settlement in era 0) → settlement eras → future and space. One account = one Person
   (the site avatar) + lineages («род»): 1 slot free, VIP or donor +1 (P). Extra slots are comfort, not power.
