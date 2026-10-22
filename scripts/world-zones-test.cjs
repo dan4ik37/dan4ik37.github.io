@@ -553,15 +553,24 @@ const OLD = { x0: -84, x1: 84, z0: -72, z1: 92 };   // старый мир (mir.
   for (const Z of ZLIST) ok(inRect(C, Math.max(Z.x0, SEA.x1), Z.z0) && inRect(C, Z.x1, Z.z1), `площадка мира включает зону ${Z.id}`);
   ok(inRect(C, RESERVE.x0, RESERVE.z0) && inRect(C, RESERVE.x1, RESERVE.z1), 'площадка мира включает место района участков');
   ok(C.x0 === SEA.x1, 'запад площадки — набережная гавани', [C.x0, SEA.x1]);
-  // внутри — ровно 0 (как было), кроме гавани, бункера и канала
-  const rnd = E.rng(99);
+  // внутри — ровно 0 (как было), кроме гавани, бункера, канала и подвалов военных баз (когда боевая зона построена — CELLAR.on)
+  const rnd = E.rng(99), inCellar = (x, z) => !!MZ.CELLAR?.on && MZ.CELLAR.list.some(c => inRect(c, x, z));
   let flat = true, bad = null;
   for (let k = 0; k < 3000; k++) {
     const x = C.x0 + rnd() * (C.x1 - C.x0), z = C.z0 + rnd() * (C.z1 - C.z0);
-    if (inRect(SEA, x, z) || inRect(BUNKER, x, z) || inRect(MZ.CANAL, x, z)) continue;
+    if (inRect(SEA, x, z) || inRect(BUNKER, x, z) || inRect(MZ.CANAL, x, z) || inCellar(x, z)) continue;
     const h = MZ.terrain(x, z); if (h !== 0) { flat = false; bad = [x, z, h]; break; }
   }
-  ok(flat, 'площадка мира ровная: 0 везде, кроме гавани, бункера и канала', bad);
+  ok(flat, 'площадка мира ровная: 0 везде, кроме гавани, бункера, канала и подвалов баз', bad);
+  // подвалы военных баз: 12 штук, внутри участков, пол ниже земли — только пока лежат плиты (зона построена)
+  if (MZ.CELLAR && MW?.PLOTS) {
+    ok(MZ.CELLAR.list.length === MW.PLOTS.length && MZ.CELLAR.list.every((c, i) => c === MW.PLOTS[i].cellar), 'подвалы баз — те, что у участков (mir-war.js PLOTS)');
+    const c0 = MZ.CELLAR.list[0], mx = (c0.x0 + c0.x1) / 2, mz = (c0.z0 + c0.z1) / 2, was = MZ.CELLAR.on;
+    MZ.CELLAR.on = false; const off = MZ.terrain(mx, mz);
+    MZ.CELLAR.on = true; const on = MZ.terrain(mx, mz);
+    MZ.CELLAR.on = was;
+    ok(off === 0 && on === c0.floor, 'подвал базы: без плиты — ровная земля, с плитой — пол подвала', [off, on]);
+  }
   ok(MZ.terrain((SEA.x0 + SEA.x1) / 2, (SEA.z0 + SEA.z1) / 2) === SEA.floor && MZ.water((SEA.x0 + SEA.x1) / 2, 280) === SEA.wl, 'гавань: дно и вода как были');
   ok(MZ.terrain((BUNKER.x0 + BUNKER.x1) / 2, (BUNKER.z0 + BUNKER.z1) / 2) === BUNKER.floor, 'бункер: пол как был');
   // гавань открыта в океан: от неё на запад — вода до края карты

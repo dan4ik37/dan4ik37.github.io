@@ -81,9 +81,12 @@
       hangar: { ...at(38, 14), yaw: inYaw },  // ангар (вертолёты, дроны; самолёты — на свою стоянку аэродрома)
       dock: coast ? { x: r2(x0 - 14), z: cz, yaw: -PI / 2, own: true } : { ...BERTHS[berthN++], own: false },
       airSlot: AIR.slots[i],
-      under: { x0: r2(x0 + 6), x1: r2(x1 - 6), z0: r2(z0 + 6), z1: r2(z1 - 6), top: -.4, floor: -7.2 },   // подвал / бункер базы
+      under: { x0: r2(x0 + 6), x1: r2(x1 - 6), z0: r2(z0 + 6), z1: r2(z1 - 6), top: -.4, floor: -7.2 },   // место под подвалы
+      cellar: { x0: r2(cx - 7), x1: r2(cx + 7), z0: r2(cz - 7), z1: r2(cz + 7), top: -.3, floor: -6 },     // штабной зал под базой (люк — постройка «Бункер»)
     };
   });
+  // подвалы — в рельеф зоны (пол ниже земли — когда над ними лежит плита: MZ.CELLAR.on ставит постройка участков)
+  if (MZ.CELLAR) { MZ.CELLAR.list.length = 0; for (const P of PLOTS) MZ.CELLAR.list.push(P.cellar); }
   const inPlot = (x, z, m = 0) => PLOTS.some(P => x >= P.x0 - m && x <= P.x1 + m && z >= P.z0 - m && z <= P.z1 + m);
 
   const ROBOT = { hp: 40, max: 3, area: { x0: -118, x1: -88, z0: 236, z1: 280 } };
@@ -411,11 +414,14 @@
       const bx = r2(G.x + lx * 7.6 + ox * .6), bz = r2(G.z + lz * 7.6 + oz * .6); yield;
       K.board(bx, 2.15, bz, 4.2, 1.2, G.yaw, `🏯 ${P.name} · ${P.code}`, { bg: '#3f6212' }); yield;
       K.box(bx - ox * .1, 0, bz - oz * .1, .16, 1.5, .16, '#57534e', { solid: true }); yield;
-      K.item({ x: bx + ox * .9, y: 1.4, z: bz + oz * .9, r: 1.6, prompt: () => `🏯 ${P.name}: участок свободен`, act: () => K.rt.war?.plotInfo(P) }); yield;
+      K.item({ x: bx + ox * .9, y: 1.4, z: bz + oz * .9, r: 1.6, prompt: () => K.rt.S?.base?.war?.signPrompt?.(P) || `🏯 ${P.name}: участок свободен`, act: () => K.rt.S?.base?.war?.signAct?.(P) || K.rt.war?.plotInfo(P) }); yield;
+      // плита над подвалом базы: по ней ходят (под ней — штабной зал)
+      K.body({ x: (P.cellar.x0 + P.cellar.x1) / 2, z: (P.cellar.z0 + P.cellar.z1) / 2, y: -.15, hx: (P.cellar.x1 - P.cellar.x0) / 2 + .3, hy: .15, hz: (P.cellar.z1 - P.cellar.z0) / 2 + .3, tag: 'slab', data: { floor: 'concrete' } }); yield;
       // командный пункт (из деталей с номерами — как всё в зоне)
       K.mbuilding({ id: P.id + '_cp', x: P.cp.x, z: P.cp.z, w: P.cp.w, d: P.cp.d, h: 3.2, wall: '#a8a29e', trim: '#3f6212', roofC: WB(P.id + '_cp').roof, floorC: '#a8a29e', floorType: 'concrete',
         doors: [{ side: P.cp.door, at: 0, w: 1.6 }], windows: [{ side: P.cp.win, at: 0, w: 1.6, h: 1 }], sign: '🏯 КП', signBg: '#3f6212' }); yield;
     }
+    if (MZ.CELLAR) MZ.CELLAR.on = true;   // плиты легли — подвалы открыты
     yield;
     K.flush(); yield;
     K.done = true; yield;
@@ -489,6 +495,23 @@
       if (!S.I?.touch || !S.H) return;
       S.H.buttons(on ? [{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'wnext', icon: '🔄', label: 'оружие', toggle: () => { setSlot((W.slot + 1) % SLOTS.length); return false; } }, { action: 'attack', icon: '👊', label: 'огонь', big: true }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }] : BASE_BTNS);
     }
+    // Панель оружия — не под кнопками телефона: кнопки по ширине заходят под неё (телефон стоя, планшет) — панель и жизни над
+    // кнопками (высота кнопок — меряем: размер кнопок в ⚙️, левша, их число). Раньше на телефоне её ячейки закрывали кнопки и очки
+    function layoutHud(){
+      if (hud.hidden) return;
+      const eb = S.wrap.querySelector('.e-btns'), wp = hq('.mz-wpn');
+      let up = false, mzb = 0;
+      if (eb && wp) {
+        const W0 = S.wrap.getBoundingClientRect(), half = wp.offsetWidth / 2 + 6, cx = W0.left + W0.width / 2;
+        let top = Infinity, l = Infinity, r = -Infinity;
+        for (const b of eb.children) { if (b.hidden) continue; const q = b.getBoundingClientRect(); if (!q.width) continue; top = Math.min(top, q.top); l = Math.min(l, q.left); r = Math.max(r, q.right); }
+        up = top < Infinity && l < cx + half && r > cx - half;
+        mzb = up ? Math.round(W0.bottom - top + 10) : 0;
+      }
+      if (hud.classList.contains('mz-up') !== up) hud.classList.toggle('mz-up', up);
+      if (up && hud._mzb !== mzb) { hud._mzb = mzb; hud.style.setProperty('--mzb', mzb + 'px'); }
+    }
+    const onResize = () => { if (W.inZone) requestAnimationFrame(layoutHud); };
     // ── вход и выход из зоны ──
     function enter(){
       W.inZone = true;
@@ -500,6 +523,7 @@
       rt.setZX({ h: 10, w: SLOTS[W.slot] });
       hud.hidden = false; drawHud(); drawScore();
       touchButtons(true);
+      requestAnimationFrame(layoutHud); root.addEventListener('resize', onResize);
       S.H?.crosshair?.(false);
       toast('⚔️ Ты в Боевой зоне: здесь можно сражаться. F (или 👊) — огонь, 1–5 — оружие, за воротами бой закончится', true);
     }
@@ -507,6 +531,7 @@
       W.inZone = false;
       hud.hidden = true;
       touchButtons(false);
+      root.removeEventListener('resize', onResize);
       for (const m of [...W.mercs]) dropMerc(m);
       rt.setZX({ r: W.prevRole && rt.ROLES[W.prevRole] ? W.prevRole : null, t: null, h: null, w: null, m: null, a: null });
       W.prevRole = null;
@@ -587,7 +612,7 @@
     // цели: чужие игроки (враги), свои роботы
     function targets(){
       const L = [];
-      for (const p of S.players.values()) if (!p.leaving && p.zx?.h > 0 && MZ.inRect(WZ, p.ch.x, p.ch.z) && !(W.team && p.zx.t === W.team)) L.push({ kind: 'p', p, x: p.ch.x, y: p.ch.y, z: p.ch.z });
+      for (const p of S.players.values()) if (!p.leaving && !p.wbHide && p.zx?.h > 0 && MZ.inRect(WZ, p.ch.x, p.ch.z) && !(W.team && p.zx.t === W.team)) L.push({ kind: 'p', p, x: p.ch.x, y: p.ch.y, z: p.ch.z });
       for (const r of W.robots) if (r.hp > 0) { const a = rob.A.get(r.key); if (a) L.push({ kind: 'r', r, x: a.x, y: a.y, z: a.z }); }
       return L;
     }
@@ -908,13 +933,13 @@
       H.panel('<span class="wld-pe">⚠️</span><b>Боевая зона · 12+</b>', `<p>Здесь можно сражаться мультяшным оружием — только внутри ограды. Вышел за ворота — бой закончился, оружие убрано.</p>
         <p>🔫 1 — пенный бластер, 🎯 2 — пейнтбол, 💧 3 — водяная бомба, 🗡️ 4 — поролоновый меч, 🫧 5 — щит-пузырь. F, правый курок или 👊 — огонь.</p>
         <p>Выбили — через 5 с снова в бою (3 с защиты). Режимы: каждый сам за себя, команды, захват точек 🚩 A·B·C.</p>
-        <p>Наёмники — в палатке у КПП (30 🪙, до 2). Вокруг центра — 12 участков военных баз 🏯 (скоро — своя база и главарь). Бункер — под землёй в центре (лестница с востока), порт — на юго-западе, аэродром — на юге, вертолёты — в лагере у КПП.</p>`);
+        <p>Наёмники — в палатке у КПП (30 🪙, до 2). Вокруг центра — 12 участков военных баз 🏯: у таблички свободного участка основай свою базу и стань главарём (кнопка 🏯 — меню базы). Бункер — под землёй в центре (лестница с востока), порт — на юго-западе, аэродром — на юге, вертолёты — в лагере у КПП.</p>`);
     }
     // участок военной базы: что будет (систему баз делает агент набегов — здесь только разметка)
     function plotInfo(P){
       H.panel(`<span class="wld-pe">🏯</span><b>${esc(P.name)} · участок ${esc(P.code)}</b>`, `<p>Участок военной базы: ${P.cells} × ${P.cells} клетки по ${String(P.cell).replace('.', ',')} м${P.coast ? ', свой берег — под доки и корабли' : ', причал в порту'}, стоянка на аэродроме, место под подвал и бункер.</p>
-        <p><b>Скоро:</b> основать базу и стать главарём, звать друзей со званиями, строить ангары, гаражи, доки, вертолётные площадки, казарму, оборону, изучать своё дерево технологий. Набеги и оборона переедут сюда.</p>
-        <p><small>Сейчас участок свободен — на нём только ограда, щит и командный пункт.</small></p>`);
+        <p>Основай базу и стань главарём: зови друзей ссылкой (офицеры и бойцы), строй казарму, оборону, гараж, вертолётную площадку, ангар, причал, бункер. Набеги — на другие базы (⚔️ «Набеги»).</p>
+        <p><small>Военные базы откроются, когда сайт обновится.</small></p>`);
     }
     function armory(){ if (!W.inZone) return; W.hp = HP; rt.setZX({ h: 10 }); drawHud(); toast('🩹 Аптечка: ❤️ 100. Заряд полный!', true); rt.sfx('pickup'); }
     function click(a){
@@ -955,7 +980,7 @@
       }
     }
     // ── шаг ──
-    let netT = 0, scoreT = 0;
+    let netT = 0, scoreT = 0, layT = 0, crossEl = null;
     const mod = {
       update(dt){
         const ch = S.P.ch, inside = MZ.inRect(WZ, ch.x, ch.z, -1) && MZ.gateOf(WZ).ok;
@@ -973,6 +998,7 @@
           netT -= dt;
           if (netT <= 0 && (W.out.f.length || W.out.h.length)) { netT = .25; csend({ t: 'c', f: W.out.f.splice(0, 6), h: W.out.h.splice(0, 8) }); W.out.f.length = 0; }
           scoreT -= dt; if (scoreT <= 0) { scoreT = 1; drawScore(); }
+          layT -= dt; if (layT <= 0) { layT = 2; layoutHud(); }   // кнопки телефона могли поменяться (размер в ⚙️, полный экран)
         } else if (W.robots.length) robotTick(dt);
         remoteMercs(dt);
         stepShots(dt);
@@ -980,12 +1006,13 @@
       frame(dt, t){
         const cam = R.camera.position;
         rob?.frame(dt, t, cam); mercN?.frame(dt, t, cam); remM?.frame(dt, t, cam);
-        for (const A0 of [mercN?.A, remM?.A]) if (A0) for (const a of A0.list.values()) rt.dress(a, ROLES_W.ffa);
+        if (mercN?.A) for (const a of mercN.A.list.values()) rt.dress(a, ROLES_W.ffa);
+        if (remM?.A) for (const a of remM.A.list.values()) rt.dress(a, ROLES_W.ffa);
         let n = 0;
         for (const s of shots) { const WP = WEAPONS[s.w]; mx.makeScale(WP.size, WP.size, WP.size); mx.setPosition(s.x, s.y, s.z); pMesh.setMatrixAt(n, mx); col.set(WP.color); pMesh.setColorAt(n, col); n++; }
         pMesh.count = n; pMesh.instanceMatrix.needsUpdate = true; if (pMesh.instanceColor) pMesh.instanceColor.needsUpdate = true;
         drawBars(); drawBubbles();
-        hq('.mz-cross').hidden = !W.inZone || W.down;
+        const cx0 = crossEl || (crossEl = hq('.mz-cross')), hide = !W.inZone || !!W.down; if (cx0.hidden !== hide) cx0.hidden = hide;
       },
       remote(p, z, was){ if (was?.h > 0 && z?.h === 0 && W.inZone) puff('confetti', p.ch.x, p.ch.y + 1.2, p.ch.z); },
       area(){},
@@ -999,6 +1026,7 @@
         R.scene.remove(pMesh); for (const e of Object.values(puffs)) e.dispose();
         for (const m of bubbles.values()) R.scene.remove(m);
         hud.remove(); for (const el of bars.values()) el.remove();
+        root.removeEventListener('resize', onResize);
         if (W.inZone) touchButtons(false);
       },
       _: { W, claimOk, fire, setSlot, takeDamage, hire, spawnMerc, newRound },
