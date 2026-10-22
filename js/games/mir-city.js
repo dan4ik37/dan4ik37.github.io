@@ -1326,7 +1326,7 @@
     function jobBoard(){
       const cur = rt.zx.r, D = A?.D, st = A?.st, now0 = A ? A.clock() : 0, pc = A?.pub[city];
       if (A) A.pubGet(city).then(p => { onPub(p); });
-      const hire = !pc || (pc.hire !== false && !pc.frozen), rt = A ? E.ui.rate(D, city, pc) : 100;
+      const hire = !pc || (pc.hire !== false && !pc.frozen), cRate = A ? E.ui.rate(D, city, pc) : 100;
       const rows = [], rp = [];
       for (const [id, r] of Object.entries(ROLES)) {
         const btn = cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : (r.car && !root.D37E?.vehicle) || r.soon ? '<button type="button" disabled>Скоро</button>' : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.rp ? 'Играть' : 'Работать'}</button>`;
@@ -1340,7 +1340,7 @@
       const note = A ? E.ui.trialNote() : 'Работы с зарплатой появятся, когда сайт обновится.';
       const wd = A && st.day === E.Rules.day(now0) ? st.wd : 0;
       H.panel(`<span class="wld-pe">🧰</span><b>Работа · ${esc(Z.name)}</b>`,
-        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? (rt < 100 ? `🏙️ Город нанимает · казна бедная: ставка ${rt} %` : '🏙️ Город нанимает') : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${E.fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
+        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? (cRate < 100 ? `🏙️ Город нанимает · казна бедная: ставка ${cRate} %` : '🏙️ Город нанимает') : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${E.fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
         + `<div class="mz-jobs">${rows.join('')}</div>${rp.length ? `<div class="mz-eco-sec">🎭 Роли без зарплаты</div><div class="mz-jobs">${rp.join('')}</div>` : ''}`
         + (A ? '<p><small>Зарплата — денки 💵 (один кошелёк на оба города). Навык ★ растёт с каждым заданием — платят больше. После 40 заданий одной работы — половина зарплаты, после 60 — смени работу. Еда в магазинах даёт бонус к зарплате.</small></p>' : ''));
     }

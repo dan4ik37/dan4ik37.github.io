@@ -50,7 +50,7 @@ function counts(N){
 }
 
 function run(N, opt = {}){
-  const rnd = mulberry(SEED * 7919 + N * 104729 + (opt.twins ? 1 : 0)), act = mulberry(SEED + N);   // act — номера заданий (как random() сервера)
+  const act = mulberry(SEED + N);   // номера заданий (как random() сервера); у игрока — свой поток p.rnd: двойники не меняют поведение остальных
   const pr = mulberry(SEED * 31 + N);   // состав игроков — одинаковый с двойниками и без (сравнение «главного»)
   const C = Object.fromEntries(CITY_IDS.map(c => [c, { treasury: D.cities[c].seed, minted: D.cities[c].seed, burned: 0, day: null, site: 0, frozen: false, wage_k: 100, bud: 0 }]));
   const bank = { k: D.bank.k0, day: null, m: 0, actives: 0 };
@@ -59,7 +59,7 @@ function run(N, opt = {}){
     const T = TYPES[type], c = city || (T.city === 'any' ? (pr() < .5 ? 'kids' : 'metro') : T.city);
     const pool = PROFS_OF[c].filter(id => type !== 'ref' || id === 'cook');
     const profs = shuffle(pool.slice(), pr);
-    people.push({ id: people.length, type, T, city: c, profs, st: RU.fresh(), seen: -1e12, w: {}, earned: 0, noslot: 0, tries: 0, low: 0, rate: 0, paid: 0, lvlDay: {}, dev: type === 'twin' ? 'tw' : 'd' + people.length });
+    people.push({ id: people.length, rnd: mulberry(SEED * 7919 + N * 104729 + people.length * 40503), type, T, city: c, profs, st: RU.fresh(), seen: -1e12, w: {}, earned: 0, noslot: 0, tries: 0, low: 0, rate: 0, paid: 0, lvlDay: {}, dev: type === 'twin' ? 'tw' : 'd' + people.length });
   };
   const cnt = counts(N);
   for (const [t, n] of Object.entries(cnt)) for (let i = 0; i < n; i++) add(t);
@@ -99,14 +99,14 @@ function run(N, opt = {}){
     const r = RU.act(D, p.st, a, g, now, cs, act);
     p.st = r.st; p.seen = now;
     if (r.ok && r.cs && a !== 'eat') { cs.treasury = r.cs.treasury; cs.site = r.cs.site; }
-    if (cs.treasury < 0) bad('treasury', `казна ${city} < 0 (${cs.treasury}) — день ${S.day}`);
+    if (cs.treasury < 0) bad('treasury', `treasury ${city} < 0 (${cs.treasury}) on ${S.day}`);
     if (r.ok) {
       if (r.got?.grant) { cs.minted += r.got.grant; S.grants += r.got.grant; }
       if (a === 'buy') S.food += r.got.cost;
       if (a === 'task') {
         const g2 = r.got; S.tasks++; S.wage += g2.net; S.g100 += g2.g100; S.t100 += g2.t100; p.earned += g2.net;
         const di = dayIndex(S.day), m = wageRows[city].get(di) || new Map(); wageRows[city].set(di, m); m.set(p.id, (m.get(p.id) || 0) + 1);
-        if (p.st.wd > D.caps.wageDay * 100) bad('wageDay', `дневной лимит превышен: ${p.st.wd / 100} 💵 (${p.type})`);
+        if (p.st.wd > D.caps.wageDay * 100) bad('wageDay', `daily wage cap exceeded: ${p.st.wd / 100} (${p.type})`);
         if (g2.tired) S.tired++;
         S.rate += g2.rate; p.rate += g2.rate; p.paid++;
         if (g2.rate < 100) { S.low++; p.low++; }
@@ -128,16 +128,16 @@ function run(N, opt = {}){
       const prof = P.profs[P.pi], place = D.profs[prof].cities[p.city][0];
       const r = doAct(p, 'job', { city: p.city, prof, mode: 'city', place }, t, p.city, S);
       if (!r.ok) { P.end = 'job:' + r.reason; return; }
-      P.state = P.meals > 0 && rnd() < p.T.food ? 'buy' : 'task';
-      push(P.state === 'buy' ? t + ri(rnd, 20, 60) : t + RU.minS(D, prof, RU.lvl(D, p.st.skills[prof] | 0)) + ri(rnd, 3, 15), p);
+      P.state = P.meals > 0 && p.rnd() < p.T.food ? 'buy' : 'task';
+      push(P.state === 'buy' ? t + ri(p.rnd, 20, 60) : t + RU.minS(D, prof, RU.lvl(D, p.st.skills[prof] | 0)) + ri(p.rnd, 3, 15), p);
       return;
     }
     if (P.state === 'buy') {
-      const o = P.meals > 0 && (p.type === 'grinder' || p.type === 'regular') ? MEAL[p.city] : SHOPS[p.city][Math.floor(rnd() * SHOPS[p.city].length)];
+      const o = P.meals > 0 && (p.type === 'grinder' || p.type === 'regular') ? MEAL[p.city] : SHOPS[p.city][Math.floor(p.rnd() * SHOPS[p.city].length)];
       const r = doAct(p, 'buy', { city: p.city, place: o.pl, item: o.it, qty: 1 }, t, p.city, S);
       if (r.ok) doAct(p, 'eat', { item: o.it }, t + 2, p.city, S);
       P.meals--; P.state = 'task';
-      const J = p.st.job; push(Math.max(t + 5, J.t + RU.minS(D, J.prof, RU.lvl(D, p.st.skills[J.prof] | 0)) + ri(rnd, 3, 15)), p);
+      const J = p.st.job; push(Math.max(t + 5, J.t + RU.minS(D, J.prof, RU.lvl(D, p.st.skills[J.prof] | 0)) + ri(p.rnd, 3, 15)), p);
       return;
     }
     // задание
@@ -151,11 +151,11 @@ function run(N, opt = {}){
       if (P.done >= P.tasks) { P.end = 'done'; return; }
       // гриндер: после 40 заданий в профессии — другая (дальше половина зарплаты); остальные — иногда меняют
       const nT = p.st.xpd[J.prof] | 0;
-      if ((p.type === 'grinder' && nT >= D.caps.full) || (p.T.mainShare < 1 && rnd() > p.T.mainShare && P.profs.length > 1 && P.pi === 0)) {
-        if (P.pi + 1 < P.profs.length) { P.pi++; P.state = 'job'; push(t + ri(rnd, 30, 90), p); return; }
+      if ((p.type === 'grinder' && nT >= D.caps.full) || (p.T.mainShare < 1 && p.rnd() > p.T.mainShare && P.profs.length > 1 && P.pi === 0)) {
+        if (P.pi + 1 < P.profs.length) { P.pi++; P.state = 'job'; push(t + ri(p.rnd, 30, 90), p); return; }
         if (p.type === 'grinder') { P.end = 'profs'; return; }
       }
-      push(t + RU.minS(D, J.prof, RU.lvl(D, p.st.skills[J.prof] | 0)) + ri(rnd, 3, 15), p);
+      push(t + RU.minS(D, J.prof, RU.lvl(D, p.st.skills[J.prof] | 0)) + ri(p.rnd, 3, 15), p);
       return;
     }
     switch (r.reason) {
@@ -166,7 +166,7 @@ function run(N, opt = {}){
         p.noslot++; S.noslot++; doAct(p, 'quit', {}, t + 1, J.city, S);
         if (P.retry++ < 2) { P.state = 'job'; push(t + 3600, p); } else P.end = 'noslot';
         return;
-      default: bad('reason:' + r.reason, `неожиданный отказ ${r.reason} (${p.type})`); P.end = r.reason;
+      default: bad('reason:' + r.reason, `unexpected refusal ${r.reason} (${p.type})`); P.end = r.reason;
     }
   }
   // ── дни ──
@@ -176,9 +176,9 @@ function run(N, opt = {}){
     for (const c of CITY_IDS) settle(c, today, day0 + 60, S);
     heap = [];
     for (const p of people) {
-      if (rnd() >= p.T.p) continue;
-      const T = p.T, h = T.hours[0] + rnd() * (T.hours[1] - T.hours[0]);
-      p.plan = { state: 'job', pi: 0, profs: p.type === 'ref' || T.mainShare >= 1 ? [p.profs[0]] : p.profs, tasks: ri(rnd, T.tasks[0], T.tasks[1]), done: 0, meals: T.meals, retry: 0 };
+      if (p.rnd() >= p.T.p) continue;
+      const T = p.T, h = T.hours[0] + p.rnd() * (T.hours[1] - T.hours[0]);
+      p.plan = { state: 'job', pi: 0, profs: p.type === 'ref' || T.mainShare >= 1 ? [p.profs[0]] : p.profs, tasks: ri(p.rnd, T.tasks[0], T.tasks[1]), done: 0, meals: T.meals, retry: 0 };
       S.active++;
       push(day0 + Math.floor(h * 3600), p);
     }
@@ -186,19 +186,19 @@ function run(N, opt = {}){
     // сохранение: Σ кошельков + Σ казны = выпущено − уничтожено
     let cash = 0; for (const p of people) cash += p.st.cash;
     const tre = C.kids.treasury + C.metro.treasury, net = C.kids.minted + C.metro.minted - C.kids.burned - C.metro.burned;
-    if (cash + tre !== net) bad('conservation', `дрейф денег день ${dn}: ${cash + tre - net}`);
-    if (bank.k < D.bank.kMin || bank.k > D.bank.kMax) bad('k', `k вне коридора: ${bank.k}`);
+    if (cash + tre !== net) bad('conservation', `money drift on day ${dn}: ${cash + tre - net}`);
+    if (bank.k < D.bank.kMin || bank.k > D.bank.kMax) bad('k', `k out of corridor: ${bank.k}`);
     const w = people.filter(p => p.st.granted && p.type !== 'twin').map(p => p.st.cash).sort((a, b) => a - b);
     const q = f => (w.length ? w[Math.min(w.length - 1, Math.max(0, Math.ceil(f * w.length) - 1))] : 0);
     const med = q(.5), top = q(.99);
     S.k = bank.k; S.M = bank.m; S.actives = bank.actives; S.treas = { kids: C.kids.treasury, metro: C.metro.treasury };
     S.med = med; S.top = top; S.ratio = med ? +(top / med).toFixed(1) : null; S.cash = cash;
-    if (dn >= 30 && N >= 20 && med && top > 30 * med) bad('top', `верхний 1 % = ${top} > 30 × медиана ${med} (день ${dn})`);
+    if (dn >= 30 && N >= 20 && med && top > 30 * med) bad('top', `top 1 % = ${top} > 30 × median ${med} (day ${dn})`);
     log.push(S);
   }
   const ref = people.find(p => p.type === 'ref');
-  if (!(ref.lvlDay[2] <= 6)) bad('ref2', `эталон: «Специалист» на ${ref.lvlDay[2] || '—'}-й день (нужно ≤ 6)`);
-  if (DAYS >= 50 && !(ref.lvlDay[4] <= 50)) bad('ref4', `эталон: «Мастер» на ${ref.lvlDay[4] || '—'}-й день (нужно ≤ 50)`);
+  if (!(ref.lvlDay[2] <= 6)) bad('ref2', `reference player: Specialist on day ${ref.lvlDay[2] || '—'} (need ≤ 6)`);
+  if (DAYS >= 50 && !(ref.lvlDay[4] <= 50)) bad('ref4', `reference player: Master on day ${ref.lvlDay[4] || '—'} (need ≤ 50)`);
   const byType = {};
   for (const p of people) { const b = byType[p.type] || (byType[p.type] = { n: 0, cash: 0, earned: 0, noslot: 0, tries: 0, low: 0, rate: 0, paid: 0 }); b.n++; b.cash += p.st.cash; b.earned += p.earned; b.noslot += p.noslot; b.tries += p.tries; b.low += p.low; b.rate += p.rate; b.paid += p.paid; }
   return { N, twins: opt.twins || 0, counts: cnt, log, gates, ref: { lvlDay: ref.lvlDay, cash: ref.st.cash, noslot: ref.noslot }, byType, main: mainId >= 0 ? people[mainId].st.cash : null, people };
@@ -219,51 +219,52 @@ if (base.main != null && withTw.main != null) {
   const others = (r) => { const mi = r.people.findIndex(q => q.type === 'regular' && q.city === 'metro'); const L = r.people.filter(p => p.type === 'regular' && p.city === 'metro' && p.id !== mi); return L.reduce((a, p) => a + p.st.cash, 0) / Math.max(1, L.length); };
   const gainMain = withTw.main - base.main, gainAll = others(withTw) - others(base);
   twin = { gainMain, gainAll: Math.round(gainAll), targeted: Math.round(gainMain - gainAll), transfers: 0, twinsCash: withTw.byType.twin ? withTw.byType.twin.cash : 0 };
-  if (twin.targeted > 100) withTw.gates.push(`двойники дали «главному» ${twin.targeted} 💵 сверх общего (порог 100)`);
+  if (twin.targeted > 100) withTw.gates.push(`twins gave their main ${twin.targeted} more than his peers got (gate 100)`);
 }
 const ms = Date.now() - t0;
 
-// ── таблицы ──
+// ── таблицы (английские — документы для агентов; подписи для владельца — в окне «🏙️ Экономика города») ──
+const TN = { kid: 'kids', casual: 'casual', regular: 'daily', grinder: 'grinders', ref: 'reference', twin: 'twins' };
 function table(r){
   const L = [];
-  L.push(`**${r.N} игроков** (дети ${r.counts.kid}, «иногда» ${r.counts.casual}, «каждый день» ${r.counts.regular}, «гриндеры» ${r.counts.grinder}; + эталон)${r.twins ? ` + ${r.twins} двойников` : ''}`);
+  L.push(`**${r.N} players** (kids ${r.counts.kid}, casual ${r.counts.casual}, daily ${r.counts.regular}, grinders ${r.counts.grinder}; + the reference player)${r.twins ? ` + ${r.twins} twins` : ''}`);
   L.push('');
-  L.push('| день | играли | A7 дети / город | k ‰ | M (средний кошелёк) | M / T | казна дети / город | эмиссия дети / город | зарплаты | еда | сгорело | ставка города (средняя) | «касса пуста» | медиана / верхний 1 % |');
+  L.push('| day | played | A7 kids / metro | k ‰ | M (avg wallet) | M / T | treasury kids / metro | issued kids / metro | wages | food | burned | city rate (avg) | «касса пуста» | median / top 1 % |');
   L.push('|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
   for (const d of pick) {
     const s = r.log[d - 1]; if (!s) continue;
     L.push(`| ${d} | ${s.active} | ${s.a7.kids} / ${s.a7.metro} | ${s.k} | ${fmt(s.M)} | ${(s.M / D.bank.T).toFixed(2)} | ${fmt(s.treas.kids)} / ${fmt(s.treas.metro)} | ${fmt(s.issue.kids)} / ${fmt(s.issue.metro)} | ${fmt(s.wage)} | ${fmt(s.food)} | ${fmt(s.burn.kids + s.burn.metro)} | ${s.tasks ? Math.round(s.rate / s.tasks) : 100} % | ${s.noslot} | ${fmt(s.med)} / ${fmt(s.top)} (×${s.ratio ?? '—'}) |`);
   }
   L.push('');
-  const tl = Object.entries(r.byType).map(([t, b]) => `${{ kid: 'дети', casual: '«иногда»', regular: '«каждый день»', grinder: '«гриндеры»', ref: 'эталон', twin: 'двойники' }[t] || t}: в кошельке ${fmt(Math.round(b.cash / b.n))}, заработано ${fmt(Math.round(b.earned / b.n))} (${fmt(Math.round(b.earned / b.n / DAYS))} в день), ставка в среднем ${b.paid ? Math.round(b.rate / b.paid) : 100} %, «касса пуста» ${b.tries ? (b.noslot * 100 / b.tries).toFixed(1) : 0} % попыток`);
-  L.push(`На одного игрока за ${DAYS} дн.: ` + tl.join('; ') + '.');
-  L.push(`Эталон (каждый день 38 заданий повара в Большом городе): «Работник» — ${r.ref.lvlDay[1] || '—'}-й день, «Специалист» — ${r.ref.lvlDay[2] || '—'}-й, «Эксперт» — ${r.ref.lvlDay[3] || '—'}-й, «Мастер» — ${r.ref.lvlDay[4] || '—'}-й; «касса пуста» — ${r.ref.noslot} раз.`);
+  const tl = Object.entries(r.byType).map(([t, b]) => `${TN[t] || t}: wallet ${fmt(Math.round(b.cash / b.n))}, earned ${fmt(Math.round(b.earned / b.n))} (${fmt(Math.round(b.earned / b.n / DAYS))}/day), city rate ${b.paid ? Math.round(b.rate / b.paid) : 100} %, «касса пуста» ${b.tries ? (b.noslot * 100 / b.tries).toFixed(1) : 0} % of tries`);
+  L.push(`Per player over ${DAYS} days: ` + tl.join('; ') + '.');
+  L.push(`Reference player (38 cook tasks every day, big city): Worker on day ${r.ref.lvlDay[1] || '—'}, Specialist ${r.ref.lvlDay[2] || '—'}, Expert ${r.ref.lvlDay[3] || '—'}, Master ${r.ref.lvlDay[4] || '—'}; «касса пуста» ${r.ref.noslot} times.`);
   return L.join('\n');
 }
-const gatesAll = [...results.flatMap(r => r.gates.map(g => `${r.N}: ${g}`)), ...withTw.gates.map(g => `${tw} + двойники: ${g}`)];
+const gatesAll = [...results.flatMap(r => r.gates.map(g => `${r.N}: ${g}`)), ...withTw.gates.map(g => `${tw} + twins: ${g}`)];
 const warn = [];
-for (const r of results) { const late = r.log.slice(29); if (late.length && late.some(s => s.M < .6 * D.bank.T || s.M > 1.6 * D.bank.T)) { const mx = Math.max(...late.map(s => s.M)); warn.push(`${r.N}: M после 30-го дня до ${fmt(mx)} (${(mx / D.bank.T).toFixed(2)} T) — коридор 0,6–1,6 T держат стоки P2/P4 (аренда, комиссия рынка); в P1 их нет`); } }
+for (const r of results) { const late = r.log.slice(29); if (late.length && late.some(s => s.M < .6 * D.bank.T || s.M > 1.6 * D.bank.T)) { const mx = Math.max(...late.map(s => s.M)); warn.push(`${r.N}: after day 30 M reaches ${fmt(mx)} (${(mx / D.bank.T).toFixed(2)} T)`); } }
 const summary = [
-  `Симуляция: ${DAYS} дн., зерно ${SEED}, ${ms} мс (node scripts/city-sim.cjs${NS.join(',') !== '5,20,100,300' ? ' --players ' + NS.join(',') : ''}${DAYS !== 90 ? ' --days ' + DAYS : ''}). Числа — MirEcon.SERVER (как city_defs0).`,
-  `Пороги P1: ${gatesAll.length ? '❌ ' + gatesAll.join('; ') : '✅ все (казна ≥ 0, сохранение без дрейфа, лимит 400 в день, k в коридоре, верхний 1 % ≤ 30 × медианы, «Специалист» ≤ 6 дн. и «Мастер» ≤ 50 дн. у эталона, двойники)'}.`,
-  twin ? `Двойники (${tw} игроков + 50 двойников, 2 дня из 7 по 5–6 заданий): переводов между игроками в P1 нет (0 💵); «главный» («каждый день», Большой город) получил ${fmt(twin.gainMain)} 💵 сверх прогона без двойников, такие же игроки — в среднем ${fmt(twin.gainAll)} → сверх них ${fmt(twin.targeted)} 💵 (порог 100); A7 считает браузеры — 50 двойников одного браузера = 1 житель; у самих двойников — ${fmt(twin.twinsCash)} 💵 (передать их «главному» в P1 нечем).` : '',
-  warn.length ? `⚠ ${warn.join('; ')}.` : 'M в коридоре 0,6–1,6 T после 30-го дня.',
+  `Simulation: ${DAYS} days, seed ${SEED} (node scripts/city-sim.cjs${NS.join(',') !== '5,20,100,300' ? ' --players ' + NS.join(',') : ''}${DAYS !== 90 ? ' --days ' + DAYS : ''}). Numbers: MirEcon.SERVER (= city_defs0).`,
+  `P1 gates: ${gatesAll.length ? '❌ ' + gatesAll.join('; ') : '✅ all pass (treasury ≥ 0, zero money drift, 400/day wage cap, k inside its corridor, top 1 % ≤ 30 × median, the reference player reaches Specialist by day 6 and Master by day 50, twins)'}.`,
+  twin ? `Twins (${tw} players + 50 twins on one browser, 2 days of 7 with 5–6 tasks): P1 has no player-to-player transfers (0); the main account (daily player, big city) got ${fmt(twin.gainMain)} more than in the run without twins, his peers ${fmt(twin.gainAll)} on average → ${fmt(twin.targeted)} above peers (gate 100). A7 counts browsers, so 50 twins on one browser are one resident. The twins themselves hold ${fmt(twin.twinsCash)} that P1 gives no way to pass on.` : '',
+  warn.length ? `⚠ Report only (not a P1 gate): ${warn.join('; ')}. P1 has no sinks except food, so M keeps growing and the central bank sits at kMin; the 0.6–1.6 T corridor needs the P2/P4 sinks (rent, market fee).` : 'M stays within 0.6–1.6 T after day 30.',
 ].filter(Boolean).join('\n\n');
 const out = { summary, tables: results.map(table), twins: table(withTw) };
 if (JSON_OUT) console.log(JSON.stringify({ days: DAYS, seed: SEED, results: results.map(r => ({ N: r.N, counts: r.counts, gates: r.gates, ref: r.ref, byType: r.byType, log: r.log })), twins: twin, gates: gatesAll, warn }, null, 1));
-else { console.log(summary + '\n'); for (const t of out.tables) console.log(t + '\n'); console.log(out.twins + '\n'); }
+else { console.log(summary + '\n'); for (const t of out.tables) console.log(t + '\n'); console.log(out.twins + '\n'); console.log(`(${ms} ms)`); }
 if (WRITE) {
   const f = path.join(ROOT, 'docs/CITY_ECONOMY.md');
   let s = fs.readFileSync(f, 'utf8');
   const put = (key, body) => {
     const re = new RegExp(`<!-- sim:${key} -->[\\s\\S]*?<!-- /sim:${key} -->`);
-    if (!re.test(s)) { console.log(`нет меток <!-- sim:${key} --> в docs/CITY_ECONOMY.md`); process.exitCode = 1; return; }
+    if (!re.test(s)) { console.log(`no <!-- sim:${key} --> markers in docs/CITY_ECONOMY.md`); process.exitCode = 1; return; }
     s = s.replace(re, () => `<!-- sim:${key} -->\n${body}\n<!-- /sim:${key} -->`);
   };
   put('summary', out.summary);
   put('tables', out.tables.join('\n\n'));
   put('twins', out.twins);
   fs.writeFileSync(f, s);
-  console.log('docs/CITY_ECONOMY.md: таблицы обновлены');
+  console.log('docs/CITY_ECONOMY.md: tables updated');
 }
-if (gatesAll.length) { console.log('ПОРОГИ P1 НЕ ПРОЙДЕНЫ:\n  ' + gatesAll.join('\n  ')); process.exit(1); }
+if (gatesAll.length) { console.log('P1 GATES FAILED:\n  ' + gatesAll.join('\n  ')); process.exit(1); }

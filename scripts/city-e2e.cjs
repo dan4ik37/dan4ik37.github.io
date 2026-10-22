@@ -6,6 +6,7 @@
 // ни одной ошибки в консоли. Снимки — E:\claude-tmp\city\shots. Режим perf — замер кадра в городах (профиль телефона).
 // Запуск из корня сайта: node scripts/city-e2e.cjs            (нужны Chrome и PGlite: PGLITE_PATH=<папка>, как у city-sql-test.mjs)
 //                         node scripts/city-e2e.cjs perf [замедление ЦП 4] [качество mid]   (D37_OVERRIDE=папка — старые файлы для «до»)
+//                         node scripts/city-e2e.cjs soak [минут 10]   — долгий прогон: окна ×20, работы по кругу, ошибки, память, RPC в минуту
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process'), { pathToFileURL } = require('url');
 const SITE = path.join(__dirname, '..');
 const [MODE = '', RATE = '4', Q = 'mid'] = process.argv.slice(2);
@@ -158,6 +159,44 @@ const U1 = U('1'), U2 = U('2');
       const r3 = await at('Большой город', `${Z}.padGo('metro'); await new Promise(r => setTimeout(r, 9000))`, 8000, 1000);
       console.log('итог perf:', JSON.stringify({ kids: r1, work: r2, metro: r3, rpc: rpcStat }));
       throw new Error('perf готов');
+    }
+    if (MODE === 'soak') {   // ── долгий прогон (минут — второй аргумент, 10): окна ×20 (утечки), работы по кругу, еда; ошибки, память, RPC ──
+      const MIN = +RATE || 10;
+      const p = await page(U1);
+      ok(await openWorld(p), 'мир открылся (soak)');
+      ok((await p.ev(FAKE(U1, 'admin'))) === 'server/', 'режим сервера (soak)');
+      await p.send('HeapProfiler.enable');
+      const mem = async () => { await p.send('HeapProfiler.collectGarbage'); await sleep(300); const hu = await p.send('Runtime.getHeapUsage'), dc = await p.send('Memory.getDOMCounters'); return { heap: +(hu.usedSize / 1048576).toFixed(1), nodes: dc.nodes, listeners: dc.jsEventListeners }; };
+      const win = async () => {
+        for (let i = 0; i < 20; i++) {
+          await p.ev(`${Z}.city.kids.jobBoard()`); await sleep(150); await p.ev(`(document.querySelector('.wld-panel') || {}).hidden = true`);
+          await p.ev(`D37Phone.open('bank')`); await sleep(450); await p.ev(`D37Phone.close?.()`); await sleep(150);
+          await p.ev(`openCityEconomy()`); await sleep(600); await p.ev(`D37CityAdm.close()`); await sleep(100);
+        }
+      };
+      await win();   // прогрев: первые открытия грузят файлы и кэши
+      const w0 = await mem(); await win(); const w1 = await mem();
+      console.log('окна ×20 (щит «Работа», 📱 Банк, «Экономика города»):', JSON.stringify({ before: w0, after: w1 }));
+      ok(w1.listeners - w0.listeners <= 10 && w1.nodes - w0.nodes <= 300, '20 открытий/закрытий окон — слушатели и узлы DOM не растут', { w0, w1 });
+      const roles = ['baker', 'teacher', 'doctor', 'fireman', 'mech', 'builder', 'icecream', 'vet'];
+      const t0 = Date.now(), r0 = rpcStat.n, b0 = rpcStat.bytes, m0 = await mem(), e0 = logs.length;
+      let tasks = 0, it = 0, eats = 0;
+      const skillSum = `Object.values(MirEcon.api.st.skills || {}).reduce((a, b) => a + b, 0)`;
+      while (Date.now() - t0 < MIN * 60000) {
+        const role = roles[it++ % roles.length];
+        await p.ev(`${Z}.city.kids.mod._.setJob('${role}')`); await sleep(1500);
+        const c0 = await p.ev(skillSum);
+        await p.ev(`(() => { const m = ${Z}.city.kids.mod; let k = 0; while (m._.C.task && m._.C.task[m._.C.step] && k++ < 30) m._.stepDone(); })()`);
+        for (let i = 0; i < 80; i++) { await sleep(500); if ((await p.ev(skillSum)) > c0) { tasks++; break; } }
+        if (it % 3 === 0) { await p.ev(`${Z}.city.kids.buy('k_bake', 'bun')`); await sleep(600); if (await p.ev(`${Z}.city.kids.mod.act('food:bun')`)) eats++; await sleep(400); }
+        if (it % 4 === 0) { await p.ev(`D37Phone.open('bank')`); await sleep(500); await p.ev(`D37Phone.close?.()`); }
+      }
+      const m1 = await mem(), min = (Date.now() - t0) / 60000;
+      const S = { minutes: +min.toFixed(1), tasks, jobs: it, eats, rpcPerMin: +((rpcStat.n - r0) / min).toFixed(1), bytesPerMin: Math.round((rpcStat.bytes - b0) / min), mem: { start: m0, end: m1 }, errs: logs.length - e0 };
+      console.log('soak:', JSON.stringify(S));
+      ok(tasks >= Math.floor(MIN * 1.5), `за ${MIN} мин сдано заданий: ${tasks}`, S);
+      ok(m1.heap - m0.heap < 25 && m1.listeners - m0.listeners <= 20, 'память и слушатели за прогон не растут (после сборки мусора)', S.mem);
+      throw new Error('soak готов');
     }
     // ── 1. Сервер: работа, сдача не раньше времени, зарплата ──
     const A = await page(U1);
