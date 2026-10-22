@@ -156,7 +156,7 @@
    денки 💵 в городах «Мира Денчика»: city_cfg, city_bank, cities, city_people, city_ledger, city_contrib, city_marks, city_days;
    city_defs / city_public (всем), city_state / city_act / city_admin (вошедшим). Проверка гостем (PGRST202 = не применён):
    `/rpc/city_defs` → {"v":1,…,"profs":{…},"rate":{"min":10,"days":1},…}; `/rpc/city_public` {"p_city":"kids"} → {"ok":true,"city":"kids",
-   "treasury":5315,…,"rate":100} (5000 + эмиссия первого дня); `/rpc/city_state` {} и `/rpc/city_act` {"p_act":"job"} → 401, 42501 permission
+   "treasury":5000,…,"rate":100} (в день запуска; со следующего дня + эмиссия); `/rpc/city_state` {} и `/rpc/city_act` {"p_act":"job"} → 401, 42501 permission
    denied for function; `/rest/v1/city_people?select=cash&limit=1` → 401, 42501 permission denied for table. До запуска в городах — «🧪 пробные
    денки» (в браузере) и «Банк города появится, когда сайт обновится». Числа — docs/CITY_ECONOMY.md, менять — «🏙️ Экономика города» (админ).
    PGlite: scripts/city-sql-test.mjs (134).
