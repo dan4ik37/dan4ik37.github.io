@@ -242,6 +242,7 @@
   // (подсказка — новее по игровому времени meta.gt). Облако сайта переполнено — копия ждёт, мир сохраняется в браузере. Гостю чужого
   // мира (игра вместе) облака нет — мир хозяина.
   const CLOUD = () => window.D37Cloud;
+  const cloudBusyIds = new Set();   // какие миры сейчас уходят в облако
   const cloudOn = () => !!CLOUD()?.available?.();
   let cloudCache = null;   // { at, r } — ответ cloud_list (20 с)
   async function cloudRows(force){
@@ -341,8 +342,11 @@
   async function cloudUpload(meta, o = {}){
     const C = CLOUD(), V = VX(), m = meta?.cloud;
     if (!C || !m?.on || meta.coop?.guest || !cloudOn()) return null;
-    if (meta._cloudBusy) return null;
-    meta._cloudBusy = true;
+    // занято — отметка в памяти страницы, НЕ в объекте мира: тот сохраняется в браузер (была отметка в нём — сохранялась посреди
+    // отправки, и следующие копии этого мира больше не уходили никогда)
+    if (meta._cloudBusy) delete meta._cloudBusy;   // старые сохранения с этой отметкой
+    if (cloudBusyIds.has(meta.id)) return null;
+    cloudBusyIds.add(meta.id);
     try {
       const pk = await cloudPack(meta);
       if (!pk) return null;
@@ -356,7 +360,7 @@
       await V.store.putWorld(meta).catch(() => {});
       return r;
     } catch (e) { console.warn('Кубомир: облако —', e); return { ok: false, reason: 'net' }; }
-    finally { delete meta._cloudBusy; }
+    finally { cloudBusyIds.delete(meta.id); }
   }
   // Скачать версию из облака и заменить мир в браузере (одной транзакцией: не вышло — старый как был)
   async function cloudDownload(row, id){

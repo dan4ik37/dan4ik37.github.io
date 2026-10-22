@@ -231,8 +231,10 @@ async function soak(A, B){
     ${guest ? `if (rnd() < .15) { const H = S.net.view.get(0); if (H) { const x = H.x + (rnd() - .5) * 60, z = H.z + (rnd() - .5) * 60; T.command('/tp ' + x.toFixed(1) + ' 110 ' + z.toFixed(1)); await wait(2500); } }` : `if (rnd() < .1) { const G = [...S.net.guests.values()][0]; if (G) { S.ents.spawn(rnd() < .5 ? 'zombie' : 'pig', G.tx + 4, G.ty + .5, G.tz + 4, { quiet: true }); } }`}
     return { x: Math.round(S.P.x), z: Math.round(S.P.z), mobs: S.ents.mobs.length, items: S.ents.items.length };
   })()`, 30000).catch(e => ({ err: e.message }));
+  let hMid = null;
   while (Date.now() - t0 < MIN * 60000) {
     n++;
+    if (!hMid && Date.now() - t0 > MIN * 30000) hMid = [await heap(A), await heap(B)];   // середина: растёт ли память дальше или вышла на полку
     const [ra, rb] = await Promise.all([act(A, false), act(B, true)]);
     if (n % 10 === 0 || ra?.err || rb?.err) console.log('  шаг', n, JSON.stringify(ra), JSON.stringify(rb), Math.round((Date.now() - t0) / 1000) + ' с', await B.ev(`${T}.coop()?.mode?.()`).catch(() => '?'));
     if (!(await B.ev(`!!(${ST}?.coopGuest)`).catch(() => false))) { ok(false, 'гость выпал из мира во время игры', await B.ev(`document.querySelector('.kb-screen')?.innerText?.slice(0, 200)`).catch(() => '')); break; }
@@ -241,7 +243,10 @@ async function soak(A, B){
   // сверка миров: все общие чанки (готовые у обоих) — клетка в клетку
   const dump = P => P.ev(`(() => { const S = ${ST}, out = {}; for (const c of S.W.chunks.values()) { if (!c.ready || !c.gen) continue; let h = 2166136261; for (let i = 0; i < c.ids.length; i++) { h ^= c.ids[i]; h = Math.imul(h, 16777619); } out[c.cx + '|' + c.cz] = h >>> 0; } return out; })()`, 60000);
   const [dA, dB] = await Promise.all([dump(A), dump(B)]);
-  const common = Object.keys(dB).filter(k => k in dA), bad = common.filter(k => dA[k] !== dB[k]);
+  const common = Object.keys(dB).filter(k => k in dA);
+  let bad = common.filter(k => dA[k] !== dB[k]);
+  // правка могла быть в пути (песок падает, вода течёт, дерево валится) — разные снова через 3 с — это и есть расхождение
+  for (let i = 0; i < 3 && bad.length; i++) { await sleep(3000); const [a2, b2] = await Promise.all([dump(A), dump(B)]); bad = bad.filter(k => k in a2 && k in b2 && a2[k] !== b2[k]); }
   if (bad.length) {
     const k = bad[0], [cx, cz] = k.split('|').map(Number);
     const diff = await Promise.all([A, B].map(P => P.ev(`(() => { const c = ${ST}.W.chunk(${cx}, ${cz}); return Array.from(c.ids); })()`, 30000)));
@@ -250,7 +255,7 @@ async function soak(A, B){
   }
   const hA1 = await heap(A), hB1 = await heap(B);
   const errs = [A, B].map((P, i) => P.logs.slice(e0[i]).filter(l => !/X3595|DevTools|favicon|GL Driver|GPU stall|WebGL-|Permissions policy|preload/i.test(l)));
-  res.soak = { minutes: MIN, steps: n, commonChunks: common.length, desynced: bad.length, heapA: [hA0, hA1], heapB: [hB0, hB1], errorsA: errs[0].length, errorsB: errs[1].length, host: await A.ev(`${T}.coop().stat()`), guest: await B.ev(`${T}.coop().stat()`) };
+  res.soak = { minutes: MIN, steps: n, commonChunks: common.length, desynced: bad.length, heapA: [hA0, hMid?.[0], hA1], heapB: [hB0, hMid?.[1], hB1], errorsA: errs[0].length, errorsB: errs[1].length, host: await A.ev(`${T}.coop().stat()`), guest: await B.ev(`${T}.coop().stat()`) };
   ok(common.length >= 20 && bad.length === 0, `сверка миров: ${common.length} общих чанков, расхождений ${bad.length}`);
   ok(!errs[0].length && !errs[1].length, MIN + ' мин вместе — без ошибок в консоли', errs.map(e => e.slice(0, 4)));
 }
@@ -311,9 +316,10 @@ async function cloudUi(all){
   if (!(await waitFor(A, `!!(${ST}?.ready)`, 120000, 500))) throw new Error('мир не открылся');
   const w0 = await A.ev(`(() => { const S = ${ST}; return { on: !!S.meta.cloud?.on, id: S.meta.id }; })()`);
   ok(w0.on, 'вошёл — новый мир сам «в облаке» (есть место)', w0);
-  const place = n => A.ev(`(() => { const S = ${ST}, V = D37E.vox, x = Math.floor(S.P.x) + 3, z = Math.floor(S.P.z); for (let i = 0; i < ${n}; i++) S.W.set(x + i, Math.floor(S.P.y) + 2, z, V.cell(V.ID.glass), { urgent: 2 }); return 1; })()`);
+  const place = (n, dz = 0) => A.ev(`(() => { const S = ${ST}, V = D37E.vox, x = Math.floor(S.P.x) + 3, z = Math.floor(S.P.z) + ${dz}; for (let i = 0; i < ${n}; i++) S.W.set(x + i, Math.floor(S.P.y) + 2, z, V.cell(V.ID.glass), { urgent: 2 }); return 1; })()`);
   await place(4);
-  const exitToMenu = async () => { await A.ev(`(${T}.stop(), 1)`); await sleep(2500); await A.ev(`(${T}.menu(), 1)`); await sleep(1500); };
+  // «вошёл» — подменой (сайт при проверке сессии может вернуть currentUser = null — ставим перед каждым выходом)
+  const exitToMenu = async () => { await A.ev(`(currentUser = { id: '11111111-2222-3333-4444-555555555555' }, ${T}.stop(), 1)`); await sleep(2500); await A.ev(`(${T}.menu(), 1)`); await sleep(1500); };
   await exitToMenu();
   let L = await A.ev(`({ put: __cl.put, line: document.querySelector('.kb-world .kb-cl')?.textContent || '', bar: document.querySelector('.kb-cloudbar')?.textContent || '' })`);
   ok(L.put === 1 && /В облаке/.test(L.line) && /1 из 2 мест/.test(L.bar), 'вышел — мир в облаке (отметка у мира, строка облака)', L);
@@ -326,10 +332,11 @@ async function cloudUi(all){
   ok(L.put === 1, 'зашёл и вышел, ничего не меняя — в облако не отправлялось', L);
   await A.ev(`(() => { const b = document.querySelector('.kb-world[data-id] [data-w="play"]') || document.querySelector('.kb-world[data-id]'); b?.click(); return 1; })()`);
   await waitFor(A, `!!(${ST}?.ready)`, 60000, 500);
-  await place(2);
+  await place(2, 2);   // в других клетках (игрок стоит там же — те же клетки ничего бы не поменяли)
   await sleep(21000);   // сервер облака принимает раз в 20 с
+  if (process.env.KC_DEBUG) console.log('  перед выходом:', JSON.stringify(await A.ev(`(async () => { const S = ${ST}; return { busy: !!S.meta._cloudBusy, stBusy: !!S.cloudBusy, next: S.cloudNext && Math.round(S.cloudNext - performance.now()), cloud: S.meta.cloud, unsaved: S.unsaved.size, put: __cl.put }; })()`)));
   await exitToMenu();
-  L = await A.ev(`({ put: __cl.put })`);
+  L = await A.ev(`(async () => { const V = D37E.vox, w = await V.store.world(${JSON.stringify(w0.id)}), u = await V.store.packWorld(w.id, { cloud: true }), sg = V.store.sig(w, u); return { put: __cl.put, list: __cl.list, cloud: w.cloud, sig: sg, user: typeof currentUser !== 'undefined' && !!currentUser, avail: D37Cloud.available() }; })()`);
   ok(L.put === 2, 'поменял блоки — отправилось', L);
   // «другое устройство»: мира в браузере нет — он в облаке, «⬇ Скачать» возвращает его
   await A.ev(`(async () => { await D37E.vox.store.delWorld(${JSON.stringify(w0.id)}); ${T}.menu(); return 1; })()`);
