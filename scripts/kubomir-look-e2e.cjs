@@ -117,7 +117,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       return window.__b; })()`, 120000);
   }
 
+  const ONLY = (process.env.KB_ONLY || '').split(',').filter(Boolean), only = k => !ONLY.length || ONLY.includes(k);   // KB_ONLY=hands,torch,shadow,climb,pom
   async function shots(){
+    if (only('hands')) {
     // ── 1. руки ──
     await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b;
       fill(cx - 6, gy, cz - 7, cx + 6, gy + 4, cz - 7, 'stone_bricks'); for (let x = cx - 6; x <= cx + 6; x += 3) set(x, gy + 1, cz - 6, 'ore_gold');
@@ -139,6 +141,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       Object.assign(P, { x: cx + 3.5, y: gy + 1.2, z: cz - 5.2, vx: 0, vy: 0, vz: 0 }); S.rig.yaw = 0; S.rig.fp = -.2;
       S.C.press('forward', true); await wait(500); S.C.press('forward', false); return { climb: S.P.climb }; })()`, 20000).then(r => { res.ladder = r; });
     await shot('hands-fp-ladder');
+    }
+    if (only('torch')) {
     // ── 2. факел: каменная комната ночью — на полу и на стене ──
     await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b; window.__pre = null;
       const x0 = cx - 5, x1 = cx + 5, z0 = cz - 12, z1 = cz - 2;
@@ -155,6 +159,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await view(0, .45, 0, 1200); await shot('torch-floor');
     await hands('torch', null); await view(.4, .1, 0, 1200); await shot('torch-hand');
     await ev(`(() => { window.__pre = null; GAME_IMPL.kubomir._test.state().R.lighting.time = 12; return 1; })()`);
+    }
+    if (only('shadow')) {
     // ── 3. тени травы и цветов: низкое солнце ──
     await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b; window.__pre = null;
       fill(cx - 12, gy, cz + 3, cx + 12, gy + 4, cz + 16, null);
@@ -166,6 +172,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await view(Math.PI, .55, 0, 1500); await shot('shadow-plants');
     await view(Math.PI - .7, .3, 0, 1500); await shot('shadow-plants-low');
     await ev(`(() => { GAME_IMPL.kubomir._test.state().R.lighting.time = 12; return 1; })()`);
+    }
+    if (only('climb')) {
     // ── 4. низкий потолок над головой у стены: залезть нельзя (не сквозь блок); лаз высотой в блок — ползком ──
     res.climb = await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b; window.__pre = null;
       const x0 = cx + 12; fill(x0 - 4, gy, cz - 3, x0 + 6, gy + 5, cz + 3, null);
@@ -182,7 +190,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     // лаз: туннель высотой 1 блок, длиной 6
     res.crawl = await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b;
       const x0 = cx - 14; fill(x0 - 4, gy, cz - 3, x0 + 8, gy + 4, cz + 3, null);
-      fill(x0, gy + 1, cz - 2, x0 + 6, gy + 2, cz + 2, 'stone'); fill(x0, gy + 1, cz, x0 + 6, gy + 1, cz, null);   // потолок на высоте 1 — лаз по z = cz
+      fill(x0, gy, cz - 2, x0 + 6, gy + 2, cz + 2, 'stone'); fill(x0, gy, cz, x0 + 6, gy, cz, null);   // лаз высотой в блок по z = cz
       Object.assign(P, { x: x0 - 1.5, y: gy, z: cz + .5, vx: 0, vy: 0, vz: 0 }); S.rig.yaw = -Math.PI / 2; S.rig.fp = .05; await wait(1200);
       const T2 = GAME_IMPL.kubomir._test, K = S.K;
       const x1 = P.x; K?.press?.('crawl', true); S.C.press('forward', true); await wait(2600); S.C.press('forward', false);
@@ -191,9 +199,15 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       return { moved: +(P.x - x1).toFixed(2), inside, stillCrawl: !!P.crawl, hasCrawl: !!(K && 'crawl' in (P || {})) }; })()`, 30000);
     console.log('ЛАЗ высотой в блок', JSON.stringify(res.crawl));
     await view(-Math.PI / 2, .05, 0, 800); await shot('crawl-fp');
-    await view(-Math.PI / 2 + .6, .3, 1, 1200); await shot('crawl-tp');
-    await view(Math.PI / 2, .3, 2, 1200); await shot('crawl-front');
+    // ползком на открытом месте — вид сзади и спереди (поза человечка)
+    await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b; Object.assign(P, { x: cx + 4.5, y: gy, z: cz + .5, vx: 0, vy: 0, vz: 0 }); S.rig.yaw = -Math.PI / 2; S.K?.press?.('crawl', true); await wait(400); S.C.press('forward', true); await wait(1200); return { crawl: !!P.crawl, h: P.h }; })()`).then(r => { res.crawlOpen = r; });
+    await view(-Math.PI / 2 + .6, .3, 1, 900); await shot('crawl-tp');
+    await view(-Math.PI / 2, .3, 2, 900); await shot('crawl-front');
+    await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.C.press('forward', false); await new Promise(r => setTimeout(r, 300)); await new Promise(r => setTimeout(r, 300)); return 1; })()`);
+    await view(-Math.PI / 2 + 1.2, .2, 1, 900); await shot('crawl-tp-idle');
     await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); GAME_IMPL.kubomir._test.cam(0); S.K?.press?.('crawl', false); return 1; })()`);
+    }
+    if (only('pom')) {
     // ── 5. рельеф и «живые» текстуры: стена из разных блоков вскользь, лава ──
     await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b; window.__pre = null;
       const z0 = cz + 18; fill(cx - 8, gy, z0, cx + 8, gy + 4, z0 + 6, null);
@@ -205,6 +219,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await view(-Math.PI / 2 + .35, .1, 0, 1500); await shot('pom-wall-grazing');
     await view(Math.PI - .2, .05, 0, 1500); await shot('pom-wall-front');
     await view(-Math.PI / 2 + .1, .75, 0, 1500); await shot('pom-lava');
+    }
   }
 
   async function escTest(){
