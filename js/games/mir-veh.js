@@ -53,7 +53,10 @@
     const now = () => performance.now();
     const VS = { list: new Map(), me: null, t: 0, lookAt: -9, sendT: 0, warnAt: -9, hinted: new Set(), cam0: null, loops: new Map() };
     const map = !!Z.worldMap?.();   // карта-рельеф: ездить и плавать — по всей карте, летать — выше гор
-    const env = { ph, water: (x, z) => (ph.waterLevel ? ph.waterLevel(x, z) : -Infinity), bounds: map ? Z.mapBounds() : Z.bounds(), maxY: map ? 640 : undefined, onCrash };
+    // волны (waves.js через mir.js S.waves): поле воды под лодкой; удар о волну — брызги, лодку перевернуло — люди в воду
+    const env = { ph, water: (x, z) => (ph.waterLevel ? ph.waterLevel(x, z) : -Infinity), bounds: map ? Z.mapBounds() : Z.bounds(), maxY: map ? 640 : undefined, onCrash,
+      waves: (x, z) => S.waves?.live(x, z) || null, onSlam, onCapsize };
+    const BOAT = VE.KINDS.boat;
     let glassM = null;
     const glass = () => glassM || (glassM = (() => { const m = new T.MeshStandardMaterial({ color: '#bfe8ff', transparent: true, opacity: .32, roughness: .08, metalness: 0, depthWrite: false }); R.own.push(m); return R.fresnel ? R.fresnel(m, .5) : m; })());
     const IN = { thr: 0, steer: 0, up: 0, boost: 0, brake: 0, on: true };
@@ -83,6 +86,7 @@
       if (VS.me) return null;
       const d = v.def;
       if (v.broken) return `🔧 ${d.icon} ${d.name} сломан — скоро новый`;
+      if (v.capsized) return `🌊 ${d.icon} ${d.name} перевернулся — скоро встанет`;
       const occ = seatsOf(v);
       if (v.temp && v.owner !== S.key) { const fr = d.seats.findIndex((s, i) => i > 0 && !occ[i]); return fr > 0 ? `🪑 Сесть пассажиром · ${d.name} (тест-драйв)` : null; }
       if (!occ[0] && !driverOn(v)) return `${d.icon} Сесть за руль · ${d.name}`;
@@ -90,7 +94,7 @@
       return free > 0 ? `🪑 Сесть пассажиром · ${d.name}` : null;
     }
     function tryEnter(v){
-      if (VS.me || v.broken) return;
+      if (VS.me || v.broken || v.capsized) return;
       const occ = seatsOf(v);
       const seat = !occ[0] && !driverOn(v) && !(v.temp && v.owner !== S.key) ? 0 : v.def.seats.findIndex((s, i) => i > 0 && !occ[i]);
       if (seat < 0) { toast('Мест нет'); return; }
@@ -262,6 +266,7 @@
       v.net = { s, ts, at: now(), by: p.key };
       if (d.k === 'out') {
         Object.assign(v, { x: s.x, y: s.y, z: s.z, yaw: s.yaw, pitch: s.pitch, roll: s.roll, spd: 0, vy: 0, eng: false, by: null, lastBy: p.key, idleAt: now(), broken: s.broken, grounded: s.grounded });
+        if (v.kind === 'boat') capFrom(v, s, true);
         ph.update(v.body, VE.bodyOf(v));
       } else { v.by = p.key; v.claimAt = c; v.idleAt = now(); }
       return true;
@@ -294,6 +299,7 @@
           const k2 = Math.min(1, dt * 8);
           v.pitch += (s.pitch - v.pitch) * k2; v.roll += (s.roll - v.roll) * k2;
           Object.assign(v, { spd: s.spd, steer: s.steer, rotor: s.rotor, eng: s.eng, lights: s.lights, broken: s.broken, grounded: s.grounded, boost: s.boost });
+          if (v.kind === 'boat') { capFrom(v, s, false); boatPose(v, dt); }   // качка на волне — у себя (волны у всех одни; по сети — только место и курс)
           if (s.hp != null) v.hp = Math.min(v.def.hp, s.hp);
           if (s.horn && !v._hornN) { v._hornN = true; rt.sfx('horn', { x: v.x, y: v.y + 1, z: v.z, vol: .6 }); } else if (!s.horn) v._hornN = false;
           ph.update(v.body, VE.bodyOf(v));
@@ -301,7 +307,8 @@
         } else if (!v.settled) {
           const zs = rt.zones.get(v.zone);   // зона построилась — встать на площадку/перрон (до постройки — на земле)
           if (zs?.built) { v.y = restY(v.def, v.x, v.z, v.spotY, v.body); v.home.y = v.y; v.settled = true; ph.update(v.body, VE.bodyOf(v)); }
-        }
+        } else if (v.kind === 'boat') boatPose(v, dt);   // стоит у причала — качается на волне
+        if (v.capsized && !v.by && v.capWall && t > v.capWall) { v.capsized = 0; v.capWall = 0; }   // перевёрнутая без водителя — встала сама
         if (v.temp && v.owner !== S.key && (!S.players.get(v.owner) || S.players.get(v.owner).leaving) && t - v.idleAt > 30000) { VS.despawn(v.id); continue; }
         if (v.temp) continue;   // у тест-драйва нет стоянки
         // никто не едет давно (или разбит) и рядом никого — обратно на стоянку целой
@@ -317,11 +324,46 @@
       if (VS.me && VS.me.seat > 0) seatMe();
       // пассажир: машина въехала туда, куда мне по возрасту нельзя — выйти (ворота зон вернут на безопасное место)
       if (VS.me && VS.me.seat > 0) { const Zn = Z.zoneAt(VS.me.v.x, VS.me.v.z); if (Zn && !Z.gateOf(Zn).ok) { exit({ force: true }); } }
+      if (VS.me && VS.me.seat > 0 && VS.me.v.capsized) intoWater(VS.me.v);   // пассажир: лодку перевернуло — в воду рядом
     };
+    // ── волны (waves.js): качка чужой и стоящей лодки — у себя (дальше 220 от камеры — не нужна); удар о волну; переворот ──
+    const PO = { yr: 0, dist: 0 };   // без мусора за шаг
+    function boatPose(v, dt){
+      const c = R.camera.position, d = Math.hypot(v.x - c.x, v.z - c.z);
+      if (d > 220) return;
+      if (!v.by) { v._pz = (v._pz || 0) + 1; if (v._pz & 1) { v._pdt = dt; return; } dt += v._pdt || 0; }   // стоящая — через шаг (вдвое дешевле)
+      const yr = v._pyaw === undefined ? 0 : VE.H.angDiff(v._pyaw, v.yaw) / Math.max(dt, 1e-3); v._pyaw = v.yaw;
+      PO.yr = Math.max(-1.5, Math.min(1.5, yr)); PO.dist = d;
+      if (BOAT.pose(v, dt, env, PO)) ph.update(v.body, VE.bodyOf(v));
+    }
+    function capFrom(v, s, out){   // снимок: перевёрнута ли (флаг FL.capsized); без водителя встаёт по своим часам через 8 с
+      if (s.capsized) { if (!v.capsized) { v.capsized = 1; v.capSg = s.roll >= 0 ? 1 : -1; } if (out || !v.capWall) v.capWall = now() + 8000; }
+      else if (v.capsized) { v.capsized = 0; v.capWall = 0; }
+    }
+    function onSlam(v, k){
+      const [fx, fz] = VE.fwd(v), L = v.def.size[2] * .48, x = v.x + fx * L, z = v.z + fz * L, y = v.y + v.def.water.draft;
+      fxAt('fountain', x, y + .15, z, Math.round(5 + k * 16), '#f1f8ff', .9 + k * .8);
+      if (VS.me?.v === v) { S.rig?.shake?.(Math.min(1.4, .3 + k * 1.2), .25); S.rig?.kick?.(Math.min(.5, .15 + k * .4)); }
+      rt.sfx('step_water' + (k > .5 ? 2 : 1), { x, y, z, vol: Math.min(1, .3 + k * .6), rate: .78 });
+    }
+    function intoWater(v){   // меня — в воду у борта, на который легла лодка
+      if (VS.me?.v !== v) return;
+      exit({ force: true, noPlace: true });
+      const [rx, rz] = VE.right(v), sd = (v.capSg || 1) >= 0 ? 1 : -1, w = v.def.size[0] / 2 + 1.3, x = v.x + rx * w * sd, z = v.z + rz * w * sd, wl = env.water(x, z);
+      S.P.place(x, wl > -Infinity ? wl - 1 : v.y, z, S.P.yaw);
+      toast('🌊 Лодку перевернуло волной! В шторм не поворачивай круто на полном ходу. Подожди — она встанет сама', true);
+      rt.sfx('step_water0', { vol: .9, rate: .7 });
+    }
+    function onCapsize(v){
+      v.capWall = now() + 8000;
+      fxAt('fountain', v.x, v.y + .4, v.z, 26, '#eaf6ff', 1.4);
+      if (VS.me?.v === v) intoWater(v);
+    }
     const nearPlayer = (v, r) => Math.hypot(S.P.ch.x - v.x, S.P.ch.z - v.z) < r || [...S.players.values()].some(p => !p.leaving && Math.hypot(p.ch.x - v.x, p.ch.z - v.z) < r);
     function home(v){
       Object.assign(v, { x: v.home.x, z: v.home.z, yaw: v.home.yaw, pitch: 0, roll: 0, spd: 0, vy: 0, vx: 0, vz: 0, eng: false, lastBy: null, idleAt: now(), net: null, grounded: true, thr: 0, rotor: 0 });
       v.y = restY(v.def, v.x, v.z, v.spotY, v.body); VE.repair(v); VE.refuel(v); v.drown = 0;
+      v.capsized = 0; v.capWall = 0; v.wy = undefined;   // волны: качка — заново с места
       ph.update(v.body, VE.bodyOf(v));
     }
     // ── поза седоков: сидят в машине (до A.update) ──
@@ -375,7 +417,7 @@
         }
         if (v.view?.warm && (v.local || v.by || rt.warm.poll())) { v.view.warm = false; R.scene.add(v.view.g); }
         if (v.view) {
-          if (!v.local && !v.by && v.kind === 'boat') { const tt = now() / 1000 + v.home.x; v.pitch = Math.sin(tt * 1.3) * .02; v.roll = Math.sin(tt * 1.7 + 1) * .03; }   // стоит — качается
+          if (!v.local && !v.by && v.kind === 'boat' && v.wy === undefined) { const tt = now() / 1000 + v.home.x; v.pitch = Math.sin(tt * 1.3) * .02; v.roll = Math.sin(tt * 1.7 + 1) * .03; }   // стоит — качается (на волнах — boatPose)
           v.view.update(v, dt);
           if (d < 70) { damageTick(v, dt); if (d < 60 && !v.view.still) effects(v, dt); }
         }
@@ -425,7 +467,7 @@
           }
         }
       } else if (v.kind === 'boat' && sp > 3 && v._fxAcc > .06) {   // нос режет воду — брызги; за кормой — пена
-        v._fxAcc = 0; const wl = env.water(v.x, v.z), y = wl > -Infinity ? wl : v.y;
+        v._fxAcc = 0; const wl = env.water(v.x, v.z), y = v.wy !== undefined ? v.y + v.def.water.draft : wl > -Infinity ? wl : v.y;   // на волне — гладь у лодки
         fxAt('fountain', v.x + fx * L, y + .2, v.z + fz * L, Math.min(6, sp / 4 | 0), '#eaf6ff', .8);
         fxAt('smoke', v.x - fx * L * 1.1, y + .05, v.z - fz * L * 1.1, 2, '#f8fafc', .7);
       } else if (v.kind === 'heli' && v.rotor > .7 && v._fxAcc > .1) {   // пыль (или брызги) от винта у земли

@@ -891,6 +891,21 @@
    ]
   },
   {
+   "f": "js/engine/gfx.js",
+   "fn": "onBeforeCompile",
+   "k": "markup:text",
+   "c": "const",
+   "n": "GLSL-код волн из констант E.waves.GLSL (js/engine/waves.js) в шейдере three.js — не HTML, данных игроков нет",
+   "xs": [
+    "GW ? GW.pars() : ''",
+    "GW ? GW.vNormal : ''",
+    "GW ? GW.vBegin : ''",
+    "GW ? GW.pars() + GW.fPars() : ''",
+    "GW ? GW.fMask : ''",
+    "GW ? GW.fFoam : ''"
+   ]
+  },
+  {
    "f": "js/engine/lang-cs.js",
    "fn": "boot",
    "k": "sink:new Function",
@@ -5517,6 +5532,16 @@
   },
   {
    "f": "js/games/podzem-ui.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "строка «🎮 Настроить кнопки» — D37TouchLayout.settingsRow() (js/core/touch-layout.js): название игры — esc(), остальное — константы",
+   "xs": [
+    "window.D37TouchLayout?.settingsRow?.() || ''"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
    "fn": "showHand",
    "k": "markup:text",
    "c": "num-local",
@@ -5566,16 +5591,6 @@
     "c.maxHp",
     "w.day || 1",
     "w.maxDepth || 0"
-   ]
-  },
-  {
-   "f": "js/games/podzem-ui.js",
-   "fn": "render",
-   "k": "markup:text",
-   "c": "html-helper",
-   "n": "строка «🎮 Настроить кнопки» — D37TouchLayout.settingsRow() (js/core/touch-layout.js): название игры — esc(), остальное — константы",
-   "xs": [
-    "window.D37TouchLayout?.settingsRow?.() || ''"
    ]
   },
   {

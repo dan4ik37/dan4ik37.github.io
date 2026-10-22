@@ -529,7 +529,7 @@
     P(null, { s: 'ring', x: POND.x, y: .021, z: POND.z, r: 7.4, r2: POND.r - .05, rx: -PI / 2, c: '#8fd17f', m: M.border });
     {   // вода пруда v2: знает глубину чаши (у берега светлее и пена, в середине темнее)
       const rect = [POND.x - POND.r, POND.z - POND.r, POND.r * 2, POND.r * 2];
-      const pond = R.water('#2f9fd8', { key: 'pond', fixedColor: true, depth: E.waterDepthTex ? { tex: E.waterDepthTex(R, pondH, rect, 48), rect } : null });
+      const pond = R.water('#2f9fd8', { key: 'pond', fixedColor: true, depth: E.waterDepthTex ? { tex: E.waterDepthTex(R, pondH, rect, 48), rect } : null, waves: S.waves?.F.pond, wavesMode: 'f' });
       pond.side = T.DoubleSide;
       disc(POND.x, POND.z, POND.r - .2, '#38bdf8', POND.wl, pond);
     }
@@ -713,6 +713,7 @@
     // графика v3: время суток — общее для всех игроков (сутки 40 мин, ночь — пятая часть), небо, туман, вода, цвет кадра
     R.setLighting({ time: mirTime(), brightness: 1.05, ambient: 1.05, fogEnd: window.MirZones?.worldMap?.() ? (R.q === 'low' || window.D37E?.isMobile?.() ? 430 : 640) : 260, shadows: true, gfx: MIR_GFX });   // с картой-рельефом — видно горы
     const ph = S.ph = new E.Phys({ ground: 0 });
+    try { S.waves = mirWaves(R); } catch (e) { console.error(e); S.waves = null; }   // волны (waves.js) — до постройки воды
     const C = S.C = E.controls({ onKey: () => activity() });
     const I = S.I = E.input(wrap, { controls: C, ignore: '.wld-pop, .wld-inv, .wld-status, button, a, input, .e-btn, .mir-tb, .mp' });
     const X = S.X = E.interact(ph, { who: S.key });
@@ -721,6 +722,7 @@
     const MZ = window.MirZones;   // зоны мира: море и бункер боевой зоны — свой рельеф и вода
     ph.terrain = { sample: MZ?.terrain ? (x, z) => pondH(x, z) + MZ.terrain(x, z) : pondH };   // чаша пруда (вне пруда — ровно 0)
     ph.waterLevel = (x, z) => Math.hypot(x - POND.x, z - POND.z) < POND.r ? POND.wl : MZ?.water ? MZ.water(x, z) : -Infinity;
+    ph.waveAt = S.waves ? S.waves.waveAt : null;   // пловцы качаются на волне (player.js)
     // свой персонаж
     let pos = null;
     try { pos = JSON.parse(localStorage.getItem('d37_mir_pos') || 'null'); } catch (e) {}
@@ -776,6 +778,57 @@
     S.wx = startWeather(R, ph, P, AU);   // погода, времена года, праздники (движок climate.js + precip.js; docs/SEASONS.md §10)
   }
 
+  // ═══ Волны (движок waves.js, T-022c; docs/PHYSICS_PLAN.md §5): море и гавань — одно поле (у берега волны гаснут по глубине,
+  //     в гавани боевой зоны ниже — «открытостью»: у выхода в море как в море, у набережной — три четверти), озёра и реки карты,
+  //     канал Большого города, пруд. Высота — от погоды: свой мир погоды с тем же зерном 'mir' (без «детского» флага S.wx — у
+  //     всех игроков одинаково), раз в 2 с; фазы — каждый кадр у камеры (waves.attach). Нельзя волн в картинке — нет и в физике ═══
+  function mirWaves(R){
+    const E = window.D37E, WV = E?.waves; if (!WV) return null;
+    WV.enabled = WV.can(R);
+    const MZ = window.MirZones, WM = MZ?.worldMap?.(), C = E.climate, H = MZ?.SEA;
+    const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const F = {
+      ocean: WM ? WV.field({ kind: 'ocean', seed: 'mir:ocean', level: WM.SEA }) : null,
+      lake: WV.field({ kind: 'lake', seed: 'mir:lake' }),
+      canal: WV.field({ kind: 'canal', seed: 'mir:canal' }),
+      pond: WV.field({ kind: 'pond', seed: 'mir:pond', level: POND.wl }),
+    };
+    if (F.ocean) {
+      const SG = WM.seaGrid();
+      F.ocean.grid = WV.gridFrom({ n: SG.n1, cell: SG.C, x0: SG.x0, z0: SG.z0, depth: (x, z, i, j) => WM.SEA - SG.cor[j * SG.n1 + i],
+        expo: (x, z) => H && z > H.z0 - 60 && z < H.z1 + 60 && x > H.x0 - 120 ? 1 - .25 * sm(H.x0 - 60, H.x0 + 70, x) : 1 });
+    }
+    const REF = [[F.ocean, -540, 280, WM ? WM.SEA : 0], [F.lake, 0, 0, 0], [F.canal, 215, 258, -2.4], [F.pond, POND.x, POND.z, POND.wl]];
+    let W = null;
+    try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour }) : null; } catch (e) {}
+    let tq = 0, forced = null;
+    const tick = dt => {
+      if ((tq -= dt) > 0) return;
+      tq = 2;
+      const ms = Date.now();
+      for (const [f, x, z, y] of REF) if (f) { let s = forced; if (!s) try { s = W?.at(x, z, ms, y); } catch (e) {} f.weather(s || {}); }
+    };
+    tick(0);
+    const list = Object.values(F).filter(Boolean), at = WV.attach(R, list);
+    // какая вода в точке (лодки, пловцы): пруд, гавань и море — одно поле, канал, остальное по карте (море / озёра и реки)
+    const fieldAt = (x, z) => {
+      if (Math.hypot(x - POND.x, z - POND.z) < POND.r) return F.pond;
+      if (!MZ || !WM) return null;
+      if (MZ.inRect(H, x, z)) return F.ocean;
+      if (MZ.inRect(MZ.CANAL, x, z)) return F.canal;
+      const w = WM.water(x, z);
+      return w === -Infinity ? null : Math.abs(w - WM.SEA) < 1e-6 ? F.ocean : F.lake;
+    };
+    const OUT = { y: 0, vx: 0, vz: 0 };
+    return {
+      F, fieldAt, tick,
+      force: s => { forced = s || null; tq = 0; tick(0); },   // проверки: своя погода волн ({ wind, windDir, thunder }) / null — как у всех
+      live: (x, z) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f : null; },
+      waveAt: (x, z, out = OUT) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f.sample(x, z, WV.time(), out) : null; },
+      dispose(){ at.dispose(); for (const f of list) WV.free(f); },
+    };
+  }
+
   // ═══ Погода: у всех одна (зерно 'mir' + реальное время, без сети); кадр — wxFrame до R.render() ═══
   function startWeather(R, ph, P, AU){
     const C = window.D37E?.climate; if (!C?.attach) return null;
@@ -788,6 +841,7 @@
         // где кончается небо: верх самого высокого тела в столбе (крыши, навесы, машины) или земля — без луча по рельефу (дорого)
         skyTop: (x, z) => ph.supportAt(x, z, 0, 1e4).y,
         water: (x, z) => ph.waterLevel ? ph.waterLevel(x, z) : -Infinity,
+        waveAt: (x, z) => S?.waves?.waveAt(x, z)?.y || 0,   // круги дождя — на волне (waves.js)
         sound: AU,
       });
     } catch (e) { console.error(e); return null; }
@@ -899,6 +953,7 @@
     S.zones?.frame(dt, t);   // зоны мира: постройка по кусочку, подписи жителей, эффекты
     R.update(dt); R.follow(P.ch.x, P.ch.z, P.ch.y);   // облака/вода; тени — за игроком
     if (S.wx) wxFrame(dt);   // погода: небо, осадки, лёд
+    if (S.waves) S.waves.tick(dt);   // волны: высота от погоды (раз в 2 с); фазы у камеры — в R.preRender (waves.attach)
     R.render();
     drawTags(); drawFolk();
     // на телефоне вместо «[E]» — значок кнопки ✋
@@ -1850,6 +1905,7 @@
     try { s.AU?.stopLoops?.(); s.FX?.dispose(); s.NPC?.stop(); s.NPC?.dispose(); if (s.campLight) s.R?.lights?.remove(s.campLight); } catch (e) {}   // оживление мира
     try { s.cleanup3d?.(); s.cleanupUi?.(); } catch (e) {}
     try { s.wx?.dispose(); s.wx = null; } catch (e) { console.error(e); }   // погода
+    try { s.waves?.dispose(); s.waves = null; } catch (e) { console.error(e); }   // волны
     try { s.I?.dispose(); s.C?.dispose(); s.H?.dispose(); s.A?.dispose(); s.R?.dispose(); } catch (e) {}
     if (!s.leavingTo && !seatedPlay) savePos();
     S = null;

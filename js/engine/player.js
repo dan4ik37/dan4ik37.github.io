@@ -321,10 +321,13 @@
           return;
         }
       }
-      const target = P.dive ? Math.max(bottom + .05, lvl - 3 * U) : lvl - .55 * U, maxV = 2.6 * U;
+      // волны (waves.js; ph.waveAt даёт игра): у поверхности качает вверх-вниз и чуть толкает по ходу волны
+      const wv = !P.dive && ph.waveAt ? ph.waveAt(ch.x, ch.z) : null;
+      const target = P.dive ? Math.max(bottom + .05, lvl - 3 * U) : lvl + (wv ? wv.y : 0) - .55 * U, maxV = 2.6 * U;
       ch.vy = Math.max(-maxV, Math.min(maxV, (target - ch.y) * 3.5)) + ch.g * dt;   // + тяжесть шага: её снимет fall()
       ch.grounded = false; ch.airT = 0;
       ph.move(ch, dt, wl > 1e-3 ? w : { x: 0, z: 0 }, speed, false);
+      if (wv && (wv.vx || wv.vz)) ph.slide(ch, wv.vx * .45 * dt, wv.vz * .45 * dt);
       ch.impact = 0;
       P.speed = Math.hypot(ch.vx, ch.vz); P.moving = P.speed > .3; P._sprint = P.running && P.speed > .5;
       if (P.first && cam) P.yaw = cam.yaw + Math.PI;

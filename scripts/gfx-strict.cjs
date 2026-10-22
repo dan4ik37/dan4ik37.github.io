@@ -67,7 +67,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       let sum = 0, black = 0, n = 0; for (let i = 0; i < d.length; i += 4) { const L = .2126 * d[i] + .7152 * d[i + 1] + .0722 * d[i + 2]; sum += L; if (L < 12) black++; n++; }
       const gl = R.r.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
       const progs = R.r.info.programs.map(p => ({ name: p.name, ok: !p.diagnostics || p.diagnostics.runnable !== false, log: p.diagnostics ? (p.diagnostics.fragmentShader.log || p.diagnostics.vertexShader.log || p.diagnostics.programLog || '').slice(0, 160) : '' }));
-      return { renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), mobile: D37E.isMobile(), q: R.q, pack: R.pack && R.pack.id,
+      // волны (waves.js, T-022c): у воды с волнами программы собраны и рисуются (море — «блин», пруд — нормали)
+      const wp = [...(D37E.waves?.mats || [])].map(m => R.r.properties.get(m)?.currentProgram).filter(Boolean);
+      const waves = { mats: D37E.waves?.mats.size || 0, progs: wp.length, bad: wp.filter(p => p.diagnostics && p.diagnostics.runnable === false).length, patch: [...(D37E.waves?.patches || [])].some(p => p.on && p.mesh.visible) };
+      return { renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER), mobile: D37E.isMobile(), q: R.q, pack: R.pack && R.pack.id, waves,
         post: P && { on: P.on, depthOK: P.depthOK, ao: P.ao.on, rt: P.rt.on, fol: P.fol, codes: P.codesOn() }, rep: rep && { sum: rep.sum, log: rep.log }, off: D37E.gfxGuardInfo().off,
         programs: progs.length, failed: progs.filter(p => !p.ok), withLog: progs.filter(p => p.log).slice(0, 4), frame: { mean: +(sum / n).toFixed(1), black: +(black / n).toFixed(3) }, shot: k.toDataURL('image/png') };
     })()`, 120000);
@@ -75,6 +78,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     fs.writeFileSync(out, Buffer.from(res.shot.split(',')[1], 'base64')); delete res.shot;
     console.log(`  ${res.renderer} · телефон: ${res.mobile} · качество ${res.q} · набор ${res.pack} · программ ${res.programs} · кадр ${JSON.stringify(res.frame)} · ${out}`);
     ok(res.mobile, 'профиль телефона (E.isMobile)');
+    ok(res.q === 'low' || (res.waves.progs >= 2 && !res.waves.bad && res.waves.patch), 'волны: программы воды с волнами собрались, «блин» моря рисуется', res.waves);
     ok(PACK === 'auto' || res.pack === PACK || (res.q === 'low' && res.pack === 'normal'), 'набор шейдеров включился (или страж вернул предыдущий — тогда ошибка ниже)', res.pack);
     ok(!res.failed.length, 'все программы шейдеров собрались', res.failed);
     ok(!res.withLog.length, 'без предупреждений компилятора', res.withLog);
