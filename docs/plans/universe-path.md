@@ -65,6 +65,7 @@ Principle: strict server checks only where cheating breaks the game for everyone
    production, twin clusters) and flags them for the owner; suspicious accounts get stricter checks (more samples) automatically.
 5. **Everything reversible:** an action journal and per-region snapshots, so a missed cheat or griefing can be rolled back
    (fits the rule «nothing is lost forever»).
+6. **A separate anti-cheat service** (owner 22.10: «можно ещё античит сделать, который другая система проверяет, а не сам сервер»; board T-073): its own container (later its own small server), not the game server. It reads an append-only event journal (actions from the RPC layer, auditable inputs from rooms/regions via the T-045 «anti-cheat feed», economy statistics), re-simulates deterministic parts in its own time, keeps a risk score per account (hashed ids, no personal data) and acts softly: flag for the owner, more sampling, temporary limits, rollback requests — final bans by the owner/moderators. It never slows gameplay and can be updated independently; browser-side checks stay only as a first filter (they are easy to bypass).
 Owner of this design: T-045 (server), T-071 (regions on our server), T-058/T-060 (leaders and rules), T-037 (elections).
 
 ## 0. Decisions (one line each; the owner can change any of them)
