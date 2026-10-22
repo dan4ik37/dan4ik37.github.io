@@ -849,7 +849,7 @@ function fakeWorld(sky, blk, walls = new Set()){
     for (let i = 2; i < pos.length; i += 3) { zmin = Math.min(zmin, pos[i]); zmax = Math.max(zmax, pos[i]); }
     for (let i = 0; i < cl.length; i += 3) if (cl[i] + cl[i + 1] + cl[i + 2] < 30) dark++;
     ok(g.userData.flat && n > 60 && zmax - zmin > .05 && zmax - zmin < .08 && dark === 0, 'кирка: лицо, спина и борта по краю (больше 60 граней), толщина 1/16, без чёрных граней', { n, th: +(zmax - zmin).toFixed(3), dark });
-    ok(VR.itemGeo('torch').attributes.position.count === 8, 'факел и растения (блоки) — как были: две плоскости');
+    ok(VR.itemGeo('torch').attributes.position.count === 40 && VR.itemGeo('torch').userData.flat && VR.itemGeo('flower_red').attributes.position.count === 8, 'факел — палочка с пламенем, как в мире (10 граней, T-096a); растения — как были: две плоскости');
   }
 
   // ═══ 11. Падающие деревья (V.component + X.fallGroup): валятся только настоящие, лёг — брёвна вещами ═══

@@ -173,7 +173,18 @@ if ( d37f > 0.5 && d37f < 1.5 ) {
   transformed.x += d37sw.x;
   transformed.z += d37sw.y;
 }
-#endif`;
+#endif
+if ( d37f > 2.5 ) {   // пламя факела (T-096a): верх «танцует»; в чанке 16 единиц на блок, у вещи — 1
+  float d37fp = d37wp.x * 7.13 + d37wp.z * 5.27;
+#if defined( D37_FP ) || defined( D37_ACT )
+  float d37fa = 0.0625;
+#else
+  float d37fa = 1.0;
+#endif
+  transformed.y += ( 0.55 * sin( uTime * 11.0 + d37fp ) + 0.35 * sin( uTime * 17.3 + d37fp * 1.7 ) ) * 0.55 * uFlick * d37fa;
+  transformed.x += sin( uTime * 8.3 + d37fp * 1.3 ) * 0.28 * uFlick * d37fa;
+  transformed.z += cos( uTime * 9.1 + d37fp * 0.7 ) * 0.28 * uFlick * d37fa;
+}`;
   // тень вырезного (листва, трава, стекло, факелы): по альфе текстуры — дырявая, как сам блок; листва в тени качается с тем же
   // ветром (у теней нет define набора — смотрим на силу ветра: 0 — стоит)
   const VSD_HEAD = `
@@ -778,6 +789,10 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           }
           quads.push(q);
         }
+      } else if (b && b.shape === V.SHAPE.torch && V.torchQuads && V.TORCH3D !== false) {
+        // факел (T-096a): та же палочка с пламенем, что в мире (V.torchQuads), по картинке: низ палочки — низ вещи (−0,5), как у спрайта
+        const layer = b.texf?.side ?? 0;
+        V.torchQuads((Q, UVq, nrm, glow, flame) => quads.push(Q.map((p, k) => ({ p: [p[0] - .5, p[1] - .5, p[2] - .5], uv: [UVq[k][0], UVq[k][1]], layer, nrm, col: [255, 255, 255], gl: glow ? 15 : 0, fl: flame && (k === 1 || k === 2) ? 3 : 0 }))), true);
       } else {
         const layer = it?.texL ?? b?.texf?.side ?? 0, col = b && b.tint === V.TINT.grass ? [124, 189, 90] : [255, 255, 255];
         // плоская вещь — толщиной в 1/16 (как в Майнкрафте): лицо и спина по картинке, бока — по краю непрозрачных пикселей своим
@@ -802,7 +817,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const n = quads.length, pos = new Float32Array(n * 12), vd = new Uint16Array(n * 16), cl = new Uint8Array(n * 12), lta = new Uint8Array(n * 16), idx = [];
       quads.forEach((q, qi) => q.forEach((v, k) => {
         const o = qi * 4 + k;
-        pos.set(v.p, o * 3); vd[o * 4] = Math.round(v.uv[0] * 16); vd[o * 4 + 1] = Math.round(v.uv[1] * 16); vd[o * 4 + 2] = v.layer | (v.nrm << 12); vd[o * 4 + 3] = 3 | (glow << 2);
+        pos.set(v.p, o * 3); vd[o * 4] = Math.round(v.uv[0] * 16); vd[o * 4 + 1] = Math.round(v.uv[1] * 16); vd[o * 4 + 2] = v.layer | (v.nrm << 12); vd[o * 4 + 3] = 3 | ((v.gl ?? glow) << 2) | ((v.fl || 0) << 14);
         cl.set(v.col, o * 3); lta.set(lt, o * 4);
       }));
       for (let qi = 0; qi < n; qi++) idx.push(qi * 4, qi * 4 + 1, qi * 4 + 2, qi * 4, qi * 4 + 2, qi * 4 + 3);

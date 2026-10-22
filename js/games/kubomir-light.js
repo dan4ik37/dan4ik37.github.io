@@ -11,8 +11,10 @@
   window.KubomirLight = { create };
   // вид источника: цвет, сила, дальность (блоков), мерцание. Лампа движка — добавка к «запечённому» свету кубиков: даёт
   // объём рядом с источником (грани к нему — светлее), поэтому слабее и короче самого света блоков
+  // факел (T-096a, владелец: «факел с кругом»): лампа — не в середине клетки, а над пламенем и от стены (на стене пламя в 3/16
+  // от неё: лампа вплотную давала яркий круг на стене), чуть слабее и шире; ореола движка нет (halo: 0) — светится само пламя
   const KIND = {
-    torch: { c: '#ffb36b', i: 1.35, d: 7.5, fl: 1 },
+    torch: { c: '#ffb36b', i: 1.15, d: 8, fl: 1, halo: 0 },
     lava: { c: '#ff7a2a', i: 1.8, d: 9, fl: .35 },
     lamp: { c: '#ffe4b5', i: 1.5, d: 9, fl: 0 },
     furnace: { c: '#ff9a52', i: 1.0, d: 6, fl: .7 },
@@ -44,9 +46,9 @@
     X.onDrop = c => { if (X.per.delete(c.key)) X.scanT = 0; };
     // sky — свет неба у источника (0…1): днём под открытым небом лампа почти не видна (как свет блоков в шейдере)
     const add = (key, x, y, z, k, t, own) => {
-      const K = KIND[k], src = { position: new T.Vector3(), color: colorOf(t, k), intensity: K.i, distance: K.d, decay: 2, visible: true };
+      const K = KIND[k], src = { position: new T.Vector3(), color: colorOf(t, k), intensity: K.i, distance: K.d, decay: 2, visible: true, halo: own ? 1 : K.halo ?? 1 };
       const rec = R.lights.add(src);
-      const r = { key, x, y, z, k, src, rec, base: K.i, fl: K.fl, seed: (x * 73 + y * 37 + z * 19) % 100 / 10, own, sky: own ? 0 : V().lSky(W.lightAt(x, y + .5, z)) / 15 };
+      const r = { key, x, y, z, k, src, rec, base: K.i, fl: K.fl, seed: (x * 73 + y * 37 + z * 19) % 100 / 10, own, sky: own ? 0 : V().lSky(W.lightAt(x, y + .5, z)) / 15, dx: .5, dz: .5, fx: x + .5, fy: y, fz: z + .5 };
       X.recs.set(key, r);
       return r;
     };
@@ -71,7 +73,14 @@
       for (const s of near) {
         const key = s.x + ',' + s.y + ',' + s.z; keep.add(key);
         const r0 = X.recs.get(key);
-        if (!r0) { const k = kindOf(s.t); add(key, s.x, s.y + (k === 'lava' ? .95 : k === 'torch' ? .62 : .5), s.z, k, s.t, false); }
+        if (!r0) {
+          const k = kindOf(s.t), r = add(key, s.x, s.y + (k === 'lava' ? .95 : k === 'torch' ? 1 : .5), s.z, k, s.t, false);
+          if (k === 'torch') {   // пламя (fx, fy, fz — ореол kubomir-ents.js) и лампа над ним, на стене — от стены
+            const f = (W.raw(s.x, s.y, s.z) >>> 12) & 7, dd = f >= 1 && f <= 4 ? V().FACING[f - 1] : null;
+            r.fx = s.x + .5 - (dd ? dd[0] * 5 / 16 : 0); r.fz = s.z + .5 - (dd ? dd[2] * 5 / 16 : 0); r.fy = s.y + (dd ? 3 / 16 : 0) + 11 / 16;
+            r.dx = .5 + (dd ? dd[0] * .24 : 0); r.dz = .5 + (dd ? dd[2] * .24 : 0); r.y = s.y + (dd ? 1.05 : .95);
+          }
+        }
         else r0.sky = V().lSky(W.lightAt(r0.x, r0.y + .5, r0.z)) / 15;   // крышу построили / сломали
       }
       for (const r of [...X.recs.values()]) if (!r.own && !keep.has(r.key)) drop(r);
@@ -115,7 +124,7 @@
         handLight();
         const day = 1 - Math.max(0, Math.min(1, R.night || 0));
         for (const r of X.recs.values()) {
-          r.src.position.set(r.x + (r.own ? 0 : .5) - st.ox, r.y, r.z + (r.own ? 0 : .5) - st.oz);
+          r.src.position.set(r.x + (r.own ? 0 : r.dx) - st.ox, r.y, r.z + (r.own ? 0 : r.dz) - st.oz);
           r.src.intensity = r.base * (1 - .75 * day * r.sky) * (r.fl ? 1 + r.fl * (.12 * Math.sin(t * 9.1 + r.seed) + .08 * Math.sin(t * 15.7 + r.seed * 2.3)) : 1);
         }
       }

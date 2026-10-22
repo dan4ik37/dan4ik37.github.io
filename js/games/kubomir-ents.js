@@ -437,9 +437,10 @@
         if (r.own || r.k !== 'torch') continue;
         const dx = r.x + .5 - P.x, dz = r.z + .5 - P.z; if (dx * dx + dz * dz > 400) continue;
         const fl = 1 + .14 * Math.sin(t * 9.3 + r.seed) + .09 * Math.sin(t * 15.1 + r.seed * 2.3), i3 = k * 3, i4 = k * 4;
-        p.pos[i3] = r.x + .5 - S.ox; p.pos[i3 + 1] = r.y + .08; p.pos[i3 + 2] = r.z + .5 - S.oz;
-        p.col[i4] = 1; p.col[i4 + 1] = .6; p.col[i4 + 2] = .24; p.col[i4 + 3] = .3 * fl * (1 - .55 * day * (r.sky || 0));
-        p.siz[k] = .6 * fl; k++;
+        // у самого пламени (kubomir-light.js: fx, fy, fz — на стене пламя у стены), маленький и мягкий (T-096a: «факел с кругом»)
+        p.pos[i3] = (r.fx ?? r.x + .5) - S.ox; p.pos[i3 + 1] = r.fy ?? r.y + .08; p.pos[i3 + 2] = (r.fz ?? r.z + .5) - S.oz;
+        p.col[i4] = 1; p.col[i4 + 1] = .6; p.col[i4 + 2] = .24; p.col[i4 + 3] = .22 * fl * (1 - .55 * day * (r.sky || 0));
+        p.siz[k] = .42 * fl; k++;
       }
       return k;
     }
@@ -536,7 +537,7 @@
       if (KL?.recs) for (const r of KL.recs.values()) {
         if (r.own) continue;
         const dx = r.x + .5 - P.x, dy = r.y - P.y, dz = r.z + .5 - P.z, d2 = dx * dx + dy * dy + dz * dz;
-        if (r.k === 'torch' && d2 < 196 && FR() < .2 * FXQ) { const L = lightRGB(r.x + .5, r.y + .4, r.z + .5); emit(PF, 0, r.x + .5 + (FR() - .5) * .06, r.y + .2, r.z + .5 + (FR() - .5) * .06, (FR() - .5) * .1, .5, (FR() - .5) * .1, 1.1 + FR() * .5, .07, .3, .4, SOOT[0] * L[0], SOOT[1] * L[1], SOOT[2] * L[2], 1.2, .25); if (FR() < .12) X.glow('spark', r.x + .5, r.y + .12, r.z + .5); }
+        if (r.k === 'torch' && d2 < 196 && FR() < .2 * FXQ) { const fx = r.fx ?? r.x + .5, fy = r.fy != null ? r.fy : r.y, fz = r.fz ?? r.z + .5, L = lightRGB(fx, fy + .4, fz); emit(PF, 0, fx + (FR() - .5) * .06, fy + .2, fz + (FR() - .5) * .06, (FR() - .5) * .1, .5, (FR() - .5) * .1, 1.1 + FR() * .5, .07, .3, .4, SOOT[0] * L[0], SOOT[1] * L[1], SOOT[2] * L[2], 1.2, .25); if (FR() < .12) X.glow('spark', fx, fy + .12, fz); }   // дым и искры — над пламенем (T-096a)
         else if (r.k === 'lava' && d2 < 324 && FR() < .22 * FXQ) X.glow('ember', r.x + .5, r.y + .05, r.z + .5);
       }
       const night = R.night || 0;

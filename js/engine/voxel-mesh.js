@@ -282,9 +282,10 @@
         if (sh === 2) {   // крест: две диагонали, каждая — с двух сторон
           const tk = tintT[t], c = tk ? tintOf(tint, x, z, tk, TC) : WHITE, lay = T.tex[t * 7 + 2];
           cross(streams[sT ? sT[t] || 3 : 1], x + .15, y, z + .15, .7, 1, lay, cellLt(ri, -1), c, 1, gl(lay));
-        } else if (sh === 4) {   // факел: крест; на стене — прижат к ней и чуть выше; светится сам
+        } else if (sh === 4) {   // факел (T-096a): палочка и пламя (torch ниже); на стене — прижат к ней и выше
           const f = st & 7, dd = f >= 1 && f <= 4 ? V.FACING[f - 1] : null, lay = T.tex[t * 7 + 2];
-          cross(streams[1], x + .3 - (dd ? dd[0] * .3 : 0), y + (dd ? .2 : 0), z + .3 - (dd ? dd[2] * .3 : 0), .4, 1, lay, cellLt(ri, -1), WHITE, 0, gl(lay) || emit[t]);
+          if (V.TORCH3D === false) cross(streams[1], x + .3 - (dd ? dd[0] * .3 : 0), y + (dd ? .2 : 0), z + .3 - (dd ? dd[2] * .3 : 0), .4, 1, lay, cellLt(ri, -1), WHITE, 0, gl(lay) || emit[t]);   // как было (откат одной строкой)
+          else torch(streams[1], x, y, z, dd ? -dd[0] * 5 / 16 : 0, dd ? 3 / 16 : 0, dd ? -dd[2] * 5 / 16 : 0, lay, cellLt(ri, -1), !!dd, gl(lay) || emit[t] || 15);
         } else if (sh === 5) {   // лестница: пластина у стены, с двух сторон
           const dd = V.FACING[st & 3], e = .06, lay = T.tex[t * 7 + 2], L4 = cellLt(ri, -1);
           let A, B;   // концы пластины по горизонтали (снизу)
@@ -460,6 +461,55 @@
     plate(s, A, B, y, h, layer, L4, c, sway, false, glow); plate(s, B, A, y, h, layer, L4, c, sway, false, glow);
     plate(s, C2, D2, y, h, layer, L4, c, sway, false, glow); plate(s, D2, C2, y, h, layer, L4, c, sway, false, glow);
   }
+  // Факел (T-096a, владелец 22.10: «очень странный факел с кругом» — была картинка крестом во весь блок, светилась вся): палочка
+  // 2 × 10/16 (бока — палочка картинки, верх — уголёк), над ней — пламя крестом 4 × 4/16 по картинке; светятся только пламя и
+  // уголёк (свечение кадра — у огня, а не столбом); верх пламени «танцует» в шейдере (флаг 3 в vd.w). Всё кратно 1/16 (сетка в 1/16)
+  // ox, oy, oz — сдвиг (на стене: к ней и выше), bottom — нижняя грань (на стене видна снизу). V.TORCH3D = false — крест, как было
+  const TQ = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], TUV = [[0, 0], [0, 0], [0, 0], [0, 0]], TB0 = [7 / 16, 0, 7 / 16, 9 / 16, 10 / 16, 9 / 16];
+  function tq(s, layer, nrm, L4, glow, flame){
+    grow(s, s.q + 1);
+    const q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt;
+    for (let vi = 0; vi < 4; vi++) {
+      const p = TQ[vi], o = q * 4 + vi;
+      P[o * 3] = Math.round(p[0] * 16); P[o * 3 + 1] = Math.round(p[1] * 16); P[o * 3 + 2] = Math.round(p[2] * 16);
+      VD[o * 4] = Math.round(TUV[vi][0] * 16); VD[o * 4 + 1] = Math.round(TUV[vi][1] * 16); VD[o * 4 + 2] = layer | (nrm << 12);
+      VD[o * 4 + 3] = 3 | (glow << 2) | ((flame && (vi === 1 || vi === 2) ? 3 : 0) << 14);
+      putLt(LT, o, L4);
+      C[o * 3] = 255; C[o * 3 + 1] = 255; C[o * 3 + 2] = 255;
+    }
+  }
+  V.torchQuads = (cb, bottom) => {   // общая форма факела (сетка чанка и вещь в руке — voxel-render.js): cb(TQ, TUV, nrm, glow, flame) на каждый квадрат
+    const b = TB0;
+    for (let d = 0; d < 6; d++) {
+      if (d === 3 && !bottom) continue;
+      const D = DIRS[d], nAx = d >> 1, hi = (d & 1) === 0;
+      for (let vi = 0; vi < 4; vi++) {
+        BC[nAx] = hi ? b[nAx + 3] : b[nAx];
+        BC[D.ua] = D.c[vi][0] ? b[D.ua + 3] : b[D.ua];
+        BC[D.va] = D.c[vi][1] ? b[D.va + 3] : b[D.va];
+        const X = BC[0], Y = BC[1], Z = BC[2];
+        TQ[vi][0] = X; TQ[vi][1] = Y; TQ[vi][2] = Z;
+        if (d === 2) { TUV[vi][0] = X; TUV[vi][1] = 6 / 16 + (Z - b[2]) / 2; }   // верх — уголёк (строка 6 картинки)
+        else if (d === 3) { TUV[vi][0] = X; TUV[vi][1] = Z; }
+        else if (d === 0) { TUV[vi][0] = 1 - Z; TUV[vi][1] = 1 - Y; } else if (d === 1) { TUV[vi][0] = Z; TUV[vi][1] = 1 - Y; }
+        else if (d === 4) { TUV[vi][0] = X; TUV[vi][1] = 1 - Y; } else { TUV[vi][0] = 1 - X; TUV[vi][1] = 1 - Y; }
+      }
+      cb(TQ, TUV, d, d === 2 ? 1 : 0, false);
+    }
+    // пламя: две пластины крестом через ось палочки (6/16…10/16 × 9/16…13/16), с двух сторон; картинка — строки 3…6, столбцы 6…9
+    for (let k = 0; k < 4; k++) {
+      const alongX = k < 2, rev = k & 1;
+      for (let vi = 0; vi < 4; vi++) {
+        const j = rev ? 3 - vi : vi, a = j === 2 || j === 3 ? 10 / 16 : 6 / 16, up = j === 1 || j === 2;
+        TQ[vi][0] = alongX ? a : 8 / 16; TQ[vi][1] = up ? 13 / 16 : 9 / 16; TQ[vi][2] = alongX ? 8 / 16 : a;
+        TUV[vi][0] = a; TUV[vi][1] = up ? 3 / 16 : 7 / 16;
+      }
+      cb(TQ, TUV, 6, 1, true);
+    }
+  };
+  let TS_ = null, TX_ = 0, TY_ = 0, TZ_ = 0, TL_ = 0, T4_ = null, TG_ = 0;
+  const torchCb = (Q, UVq, nrm, glow, flame) => { for (let vi = 0; vi < 4; vi++) { Q[vi][0] += TX_; Q[vi][1] += TY_; Q[vi][2] += TZ_; } tq(TS_, TL_, nrm, T4_, glow ? TG_ : 0, flame); };
+  function torch(s, x, y, z, ox, oy, oz, layer, L4, bottom, glow){ TS_ = s; TX_ = x + ox; TY_ = y + oy; TZ_ = z + oz; TL_ = layer; T4_ = L4; TG_ = glow; V.torchQuads(torchCb, bottom); }
   const UV4 = [[0, 1], [0, 0], [1, 0], [1, 1]];
   function quad(s, P4, layer, nrm, L4, c, sway, glow){
     grow(s, s.q + 1);

@@ -159,6 +159,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await view(0, .15, 0, 1200); await shot('torch-room-fp');
     await ev(`(async () => { ${PRE} const r = window.__room, { cx, gy } = window.__b; Object.assign(P, { x: cx + 2.5, y: gy, z: r.z0 + 3.8 }); await wait(1200); return 1; })()`);
     await view(0, .05, 0, 1200); await shot('torch-wall-close');
+    if (process.env.KB_TORCH_DIAG) {   // что даёт «круг»: ореол движка (точки) и лампы — по отдельности
+      await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); window.__pre = () => { S.R.scene.traverse(o => { if (o.isPoints && o.material?.uniforms?.uScale) o.visible = false; }); }; return 1; })()`);
+      await view(0, .05, 0, 900); await shot('torch-wall-nohalo');
+      await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); window.__pre = () => { S.R.scene.traverse(o => { if (o.isPoints && o.material?.uniforms?.uScale) o.visible = false; }); for (const sl of S.R.lights.slots) sl.pl.intensity = 0; }; return 1; })()`);
+      await view(0, .05, 0, 900); await shot('torch-wall-nolamp');
+      await ev(`(() => { window.__pre = null; return 1; })()`);
+    }
     await ev(`(async () => { ${PRE} const r = window.__room, { cx, gy } = window.__b; Object.assign(P, { x: cx + .5, y: gy, z: r.z0 + 5.5 }); await wait(1200); return 1; })()`);
     await view(0, .45, 0, 1200); await shot('torch-floor');
     await hands('torch', null); await view(.4, .1, 0, 1200); await shot('torch-hand');

@@ -181,7 +181,15 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   ok(q(mesh(r7), 'foliage') === 4 && !mesh(r7).cutout, 'трава — крест: 4 квадрата (с двух сторон), сетка листвы (foliage)');
   let rl2 = mk(); at(rl2, 4, 40, 4, ID.leaves_oak); at(rl2, 8, 30, 8, ID.stone); at(rl2, 8, 31, 8, ID.torch);
   const ml2 = mesh(rl2);
-  ok(q(ml2, 'foliage') === 6 && q(ml2, 'cutout') === 4 && q(ml2, 'solid') === 6, 'листва — в foliage, факел — в cutout, камень — в solid', V.LAYERS.map(k => q(ml2, k)));
+  ok(q(ml2, 'foliage') === 6 && q(ml2, 'cutout') === 9 && q(ml2, 'solid') === 6, 'листва — в foliage, факел — в cutout (палочка 5 граней + пламя 4, T-096a), камень — в solid', V.LAYERS.map(k => q(ml2, k)));
+  {   // факел (T-096a): палочка 2/16 × 10/16, светятся только пламя и уголёк, верх пламени — флаг 3 («танцует» в шейдере); на стене — с нижней гранью
+    const md = ml2.cutout, gl = [], fl3 = []; for (let i = 0; i < md.n * 4; i++) { gl.push((md.vd[i * 4 + 3] >> 2) & 15); fl3.push(md.vd[i * 4 + 3] >> 14); }
+    let ymax = 0, xs = new Set(); for (let i = 0; i < md.n * 4; i++) { ymax = Math.max(ymax, md.pos[i * 3 + 1] - 31 * 16); xs.add(md.pos[i * 3] - 8 * 16); }
+    ok(gl.filter(g => g > 0).length === 20 && fl3.filter(f => f === 3).length === 8 && ymax === 13 && [...xs].every(x => x >= 6 && x <= 10), 'факел: светятся пламя и уголёк (5 граней), верх пламени «танцует», высота 13/16, ширина в середине клетки', { glow: gl.filter(g => g > 0).length, fl3: fl3.filter(f => f === 3).length, ymax, xs: [...xs] });
+    let rw = mk(); at(rw, 8, 30, 8, ID.stone); at(rw, 9, 30, 8, ID.torch | (4 << 12));   // на стене: смотрит на +x (V.FACING[3]), стена — слева (x 8)
+    const mw = mesh(rw).cutout; let xmin = 99; for (let i = 0; i < mw.n * 4; i++) xmin = Math.min(xmin, mw.pos[i * 3] - 9 * 16);
+    ok(mw.n === 10 && xmin === 1, 'факел на стене: прижат к стене (палочка — в 2/16, пламя — в 1/16, не в стене), с нижней гранью', { n: mw.n, xmin });
+  }
   const swayOf = s => { let n = 0; for (let i = 0; i < s.n * 4; i++) if ((s.vd[i * 4 + 3] >> 14) === 1) n++; return n; };
   ok(swayOf(ml2.foliage) === 24 && swayOf(ml2.cutout) === 0, 'листва качается (флаг у всех вершин), факел — нет', [swayOf(ml2.foliage), swayOf(ml2.cutout)]);
   ok(V.LAYERS.join() === 'solid,cutout,water,foliage,glass' && V.T.stream[ID.glass] === 4 && V.T.stream[ID.leaves_birch] === 3 && V.T.stream[ID.water] === 2 && V.T.stream[ID.lava] === 0 && V.T.stream[ID.ladder] === 1, 'сетки чанка: solid, cutout, water, foliage, glass');
