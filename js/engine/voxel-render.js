@@ -904,6 +904,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       if (!prev) { prev = new T.Mesh(frameGeo(h), prevMat); prev.renderOrder = 8; prev.frustumCulled = false; prev.matrixAutoUpdate = true; prev.name = 'vox:preview'; R.scene.add(prev); }
       else if (prev.geometry !== frameGeo(h)) prev.geometry = frameGeo(h);
       prev.position.set(c.x - VR.ox, c.y, c.z - VR.oz);
+      const t = c.tint;   // обрушение (T-022a): светлые планки — цветом устойчивости (синий, зелёный, жёлтый, красный), тёмные — как были
+      if (t) prevMat.color.setRGB(t[0], t[1], t[2]); else prevMat.color.setRGB(1, 1, 1);
       prev.visible = true;
     };
     VR.previewMesh = () => prev;

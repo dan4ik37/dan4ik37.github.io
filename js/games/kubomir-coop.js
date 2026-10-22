@@ -229,7 +229,7 @@
         E.hookHurtRemote = (o, n, m) => { const G = o.G; if (G?.ready) sendJ(G, { t: 'hurt', n, m: m?.id || 0, x: m ? +m.x.toFixed(2) : o.x, z: m ? +m.z.toFixed(2) : o.z }); };
         E.hookGiveRemote = (o, s, eid) => { const G = o.G; if (!G?.ready) return s.n; sendJ(G, { t: 'give', s: { id: s.id, n: s.n, d: s.d | 0 }, e: eid || 0 }); return 0; };
         H.kill0 = E.hookKill; E.hookKill = (m, by) => { H.kill0?.(m, by); mobDied(m); };
-        H.fall0 = E.fallGroup; E.fallGroup = (cells, pivot, dir, o) => { const g = H.fall0(cells, pivot, dir, o); if (g && !o?.visual) fell(cells, pivot, dir); return g; };
+        H.fall0 = E.fallGroup; E.fallGroup = (cells, pivot, dir, o) => { const g = H.fall0(cells, pivot, dir, o); if (g && !o?.visual) fell(cells, pivot, dir, !!o?.drop); return g; };
         H.shoot0 = E.shoot; E.shoot = (x, y, z, vx, vy, vz, dmg, o) => { const a = H.shoot0(x, y, z, vx, vy, vz, dmg, o); shotOut(x, y, z, vx, vy, vz, o, H.shooter); return a; };
         E.isLocked = k => { const L = H.locks.get(k); return !!L && L !== 'host'; };
       }
@@ -277,7 +277,7 @@
         G.nonce = m.nonce;
         G.wel = { t: 'wel', v: PROTO, pid, proof, pub: meta.coop.key.pub, code: H.code,
           host: { pid: 0, nick: myNick(), look: myLook() }, players: ready().filter(o => o !== G).map(o => ({ pid: o.pid, nick: o.nick, look: o.look })),
-          world: { name: meta.name, seed: meta.seed, genVer: meta.genVer || 1, mode: meta.mode, diff: meta.diff, gen: meta.gen || null, mc: meta.mc || null, palette: meta.palette, spawn: meta.spawn, time: st.R.lighting.time, day: meta.day || 1, seasons: st.seasons, ice: meta.ice || null, snow: meta.snow || null, wf: st.WX?.force ?? null, cheats: !!meta.cheats },
+          world: { name: meta.name, seed: meta.seed, genVer: meta.genVer || 1, mode: meta.mode, diff: meta.diff, gen: meta.gen || null, mc: meta.mc || null, palette: meta.palette, spawn: meta.spawn, time: st.R.lighting.time, day: meta.day || 1, seasons: st.seasons, ice: meta.ice || null, snow: meta.snow || null, wf: st.WX?.force ?? null, cheats: !!meta.cheats, support: meta.support || null },
           items: H.items, you: saved, at: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2) }, edited: b64(new Uint8Array(keys.buffer)) };
         sendJ(G, G.wel);
         setTimeout(() => { if (G.wel) G.wel = null; }, 60000);   // дольше минуты не ждём повтора — память
@@ -556,9 +556,9 @@
       H.stats.snaps++; H.stats.snapBytes += w.o;
     }
     function mobDied(m){ for (const G of H.guests.values()) if (G.ready && Math.abs(m.x - G.x) < MOB_R && Math.abs(m.z - G.z) < MOB_R) sendJ(G, { t: 'mk', id: m.id, kx: +(m.vx || 0).toFixed(2), kz: +(m.vz || 0).toFixed(2) }); }
-    function fell(cells, pivot, dir){
+    function fell(cells, pivot, dir, drop){
       const a = new Int32Array(cells.length); for (let i = 0; i < cells.length; i += 4) { a[i] = cells[i]; a[i + 1] = cells[i + 1]; a[i + 2] = cells[i + 2]; a[i + 3] = pv(cells[i + 3]); }
-      const o = { t: 'fell', c: b64(new Uint8Array(a.buffer)), p: [pivot.x, pivot.y, pivot.z], d: [dir.x, dir.z] };
+      const o = { t: 'fell', c: b64(new Uint8Array(a.buffer)), p: [pivot.x, pivot.y, pivot.z], d: [dir.x, dir.z], k: drop ? 'd' : undefined };   // k: 'd' — обрушение (падает целым вниз)
       for (const G of H.guests.values()) if (G.ready && Math.abs(pivot.x - G.x) < MOB_R && Math.abs(pivot.z - G.z) < MOB_R) sendJ(G, o);
     }
     function shotOut(x, y, z, vx, vy, vz, o, by){
@@ -646,7 +646,7 @@
       G.meta = { id: 'coop-' + code, coop: { guest: true, code }, name: String(w.name || 'Мир друга').slice(0, 40), seed: w.seed, mode: w.mode === 'creative' ? 'creative' : 'survival', diff: ['peaceful', 'easy', 'normal', 'hard'].includes(w.diff) ? w.diff : 'easy',
         genVer: w.genVer === 2 ? 2 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,
         palette: Array.isArray(w.palette) ? w.palette.slice(0, 4096).map(String) : null, spawn: w.spawn && fin(w.spawn.x) ? { x: w.spawn.x, y: w.spawn.y, z: w.spawn.z } : null, time: fin(w.time) ? w.time : 8, day: w.day | 0 || 1,
-        ice: w.ice || undefined, snow: w.snow || undefined, mods: [], tips: false, cheats: !!w.cheats, played: Date.now() };
+        ice: w.ice || undefined, snow: w.snow || undefined, mods: [], tips: false, cheats: !!w.cheats, played: Date.now(), support: w.support === 'soft' || w.support === 'real' ? w.support : undefined };
       G.seasons = w.seasons; G.wf = w.wf;
       G.you = m.you || null; G.at = m.at || null;
       G.hostInfo = m.host; G.players0 = Array.isArray(m.players) ? m.players : [];
@@ -782,7 +782,7 @@
             const u = unb64(m.c), a = new Int32Array(u.buffer, u.byteOffset, u.byteLength >> 2); if (a.length > 4 * 400) return;
             const cells = []; for (let i = 0; i + 3 < a.length; i += 4) cells.push(a[i], a[i + 1], a[i + 2], toLocal(a[i + 3] >>> 0));
             const LOG = v => /^log_/.test(V.blocks[v & 0xfff]?.name || '');
-            if (Array.isArray(m.p) && Array.isArray(m.d)) st.ents?.fallGroup?.(cells, { x: +m.p[0], y: +m.p[1], z: +m.p[2] }, { x: +m.d[0], z: +m.d[1] }, { trunk: LOG, visual: true });
+            if (Array.isArray(m.p) && Array.isArray(m.d)) st.ents?.fallGroup?.(cells, { x: +m.p[0], y: +m.p[1], z: +m.p[2] }, { x: +m.d[0], z: +m.d[1] }, { trunk: LOG, visual: true, drop: m.k === 'd', cap: m.k === 'd' ? 8 : 3 });
           } catch (e) {}
           return;
         }

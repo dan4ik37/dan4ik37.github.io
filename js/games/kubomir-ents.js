@@ -615,6 +615,8 @@
     // плавно между тактами): угловое ускорение как у падающего столба (g · sin угла / высоту центра масс), по дуге проверяются
     // точки (стволы и крайние листья) — упёрлась в землю или блок: отскок и лёг; лёг совсем — o.onLand(группа, мир-место
     // клетки) раскладывает на вещи. Под ним моб или игрок — толчок (урон — только «обычно» и «сложно»). Не больше 3 сразу.
+    // o.drop (обрушение, T-022a, js/games/kubomir-support.js) — кусок падает целым вниз (D37E.support.drop: по тактам игры,
+    // одинаково при любой частоте кадров), лёг — o.onSettle(значение, x, y, z, номер клетки) по клеткам (блоками на место)
     const groups = X.groups = [];
     const GQ = new T.Quaternion(), GA = new T.Vector3(), GV = { x: 0, y: 0, z: 0 };
     // повернуть точку r (от оси) на угол th вокруг оси a (Родриг) → GV (общий объект: читать сразу)
@@ -624,9 +626,57 @@
       GV.x = g.px + rx * c + cx * s + ax * dot * (1 - c); GV.y = g.py + ry * c + cy * s; GV.z = g.pz + rz * c + cz * s + az * dot * (1 - c);
       return GV;
     }
+    // обрушение: сетка куска быстрее — геометрия блока одна на вид (кэш), у кубиков грани, закрытые соседним кубиком куска, не
+    // рисуются (кусок 100+ блоков: в разы меньше вершин, без сотни VR.itemGeo за кадр — раньше был рывок на телефоне)
+    const TPL = new Map();
+    function tplOf(name){
+      let t = TPL.get(name); if (t) return t;
+      const gq = VR.itemGeo(name, 15 << 12), a = gq.attributes;
+      t = { pos: a.position.array.slice(), vd: a.vd.array.slice(), cl: a.color.array.slice(), lt: a.lt.array.slice(), idx: Array.from(gq.index.array), nv: a.position.count, cube: !gq.userData.flat && a.position.count === 24 };
+      gq.dispose(); TPL.set(name, t);
+      return t;
+    }
+    const DIRS6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];   // порядок граней VR.itemGeo у кубика: +x −x +y −y +z −z
+    function dropGeo(cells, pivot){
+      const Vx = V(), n = cells.length / 4, Tt = Vx.T, key = (x, y, z) => ((x + 1048576) * 2097152 + (z + 1048576)) * 256 + y, op = new Set();
+      for (let i = 0; i < n; i++) if (Tt.opaque[cells[i * 4 + 3] & 0xfff] && Tt.shape[cells[i * 4 + 3] & 0xfff] === Vx.SHAPE.cube) op.add(key(cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2]));
+      const list = []; let nq = 0;
+      for (let i = 0; i < n; i++) {
+        const b = Vx.blocks[cells[i * 4 + 3] & 0xfff]; if (!b || !Vx.item(b.name)) continue;
+        const t = tplOf(b.name), x = cells[i * 4], y = cells[i * 4 + 1], z = cells[i * 4 + 2];
+        let mask = 0;
+        if (t.cube && op.has(key(x, y, z))) for (let d = 0; d < 6; d++) { const D = DIRS6[d]; if (op.has(key(x + D[0], y + D[1], z + D[2]))) mask |= 1 << d; }
+        const q = t.cube ? 6 - ((mask & 1) + (mask >> 1 & 1) + (mask >> 2 & 1) + (mask >> 3 & 1) + (mask >> 4 & 1) + (mask >> 5 & 1)) : t.nv / 4;
+        if (!q) continue;
+        list.push(t, x + .5 - pivot.x, y + .5 - pivot.y, z + .5 - pivot.z, mask); nq += q;
+      }
+      if (!nq) return null;
+      const nv = nq * 4, pos = new Float32Array(nv * 3), vd = new Uint16Array(nv * 4), cl = new Uint8Array(nv * 3), lt = new Uint8Array(nv * 4), idx = new Uint32Array(nq * 6);
+      let ov = 0, oi = 0;
+      for (let j = 0; j < list.length; j += 5) {
+        const t = list[j], dx = list[j + 1], dy = list[j + 2], dz = list[j + 3], mask = list[j + 4], qn = t.nv / 4;
+        for (let qi = 0; qi < qn; qi++) {
+          if (t.cube && (mask >> qi) & 1) continue;
+          for (let k = 0; k < 4; k++) {
+            const s = qi * 4 + k, o = ov + k;
+            pos[o * 3] = t.pos[s * 3] + dx; pos[o * 3 + 1] = t.pos[s * 3 + 1] + dy; pos[o * 3 + 2] = t.pos[s * 3 + 2] + dz;
+            vd[o * 4] = t.vd[s * 4]; vd[o * 4 + 1] = t.vd[s * 4 + 1]; vd[o * 4 + 2] = t.vd[s * 4 + 2]; vd[o * 4 + 3] = t.vd[s * 4 + 3];
+            cl[o * 3] = t.cl[s * 3]; cl[o * 3 + 1] = t.cl[s * 3 + 1]; cl[o * 3 + 2] = t.cl[s * 3 + 2];
+            lt[o * 4] = t.lt[s * 4]; lt[o * 4 + 1] = t.lt[s * 4 + 1]; lt[o * 4 + 2] = t.lt[s * 4 + 2]; lt[o * 4 + 3] = t.lt[s * 4 + 3];
+          }
+          idx[oi] = ov; idx[oi + 1] = ov + 1; idx[oi + 2] = ov + 2; idx[oi + 3] = ov; idx[oi + 4] = ov + 2; idx[oi + 5] = ov + 3;
+          ov += 4; oi += 6;
+        }
+      }
+      return { pos, vd, cl, lt, idx };
+    }
     X.fallGroup = (cells, pivot, dir, o = {}) => {
       if (groups.length >= (o.cap || 3) || !cells.length) return null;
       const Vx = V(), n = cells.length / 4;
+      if (o.drop) {   // обрушение — быстрая сетка
+        const A = dropGeo(cells, pivot); if (!A) return null;
+        return groupWith(cells, n, pivot, dir, o, A.pos, A.vd, A.cl, A.lt, A.idx);
+      }
       // склейка кубиков в одну сетку (координаты — от оси)
       const parts = []; let nv = 0, ni = 0;
       for (let i = 0; i < n; i++) {
@@ -644,6 +694,9 @@
         const ia = gq.index.array; for (let k = 0; k < ia.length; k++) idx[oi + k] = ia[k] + ov;
         ov += m; oi += ia.length; gq.dispose();
       }
+      return groupWith(cells, n, pivot, dir, o, pos, vd, cl, lt, idx);
+    };
+    function groupWith(cells, n, pivot, dir, o, pos, vd, cl, lt, idx){
       const geo = new T.BufferGeometry();
       geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('vd', new T.BufferAttribute(vd, 4)); geo.setAttribute('color', new T.BufferAttribute(cl, 3, true)); geo.setAttribute('lt', new T.BufferAttribute(lt, 4, false));
       geo.setIndex(new T.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
@@ -654,15 +707,27 @@
       hc = Math.max(1, hc / n);
       const isTrunk = i => o.trunk ? o.trunk(cells[i * 4 + 3]) : true, dist = i => { const rx = cells[i * 4] + .5 - pivot.x, ry = cells[i * 4 + 1] + .5 - pivot.y, rz = cells[i * 4 + 2] + .5 - pivot.z; return rx * rx + ry * ry + rz * rz; };
       const smp = far.filter(isTrunk).slice(0, 48).concat(far.filter(i => !isTrunk(i)).sort((a, b) => dist(b) - dist(a)).slice(0, 24));
-      const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0 };
+      const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0, F: null, pfy: 0 };
+      if (o.drop && window.D37E?.support) {   // обрушение: целым куском вниз; чуть кренится (по зерну куска — у всех так же)
+        const flat = []; for (let i = 0; i < n; i++) flat.push(cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2]);
+        g.F = window.D37E.support.drop(flat, { down: -1, g: 30, vmax: 40, far: 96 });
+        const h = window.D37E.support.hash(cells[0], cells[1], cells[2], n), a = (h & 1023) / 1023 * Math.PI * 2;
+        g.ax = Math.cos(a); g.az = Math.sin(a); g.hc = 0;
+      }
       groups.push(g);
       S.AU?.play('kb_creak', { x: pivot.x - S.ox, y: pivot.y + 2, z: pivot.z - S.oz, vol: .7, rate: .9 + FR() * .2 });
       return g;
-    };
+    }
     const solidHit = (x, y, z) => { const v = W.raw(x, y, z); if (v < 0) return true; if (!(v > 0)) return false; const t = v & 0xfff, Tt = V().T; return Tt.solid[t] === 1 && Tt.shape[t] !== V().SHAPE.cross; };
     function groupsTick(dt){
       for (let gi = groups.length - 1; gi >= 0; gi--) {
         const g = groups[gi];
+        if (g.F) {   // обрушение: падает целым вниз, лёг — блоками
+          g.t += dt; g.pfy = g.F.fy;
+          if (g.done) { g.done += dt; if (g.done > .06) { landDrop(g); groups.splice(gi, 1); } continue; }
+          if (window.D37E.support.dropStep(g.F, dt, solidHit)) { g.done = 1e-6; g.pfy = g.F.fy; } else dropHit(g);
+          continue;
+        }
         g.pth = g.th; g.t += dt;
         if (g.done) { g.done += dt; if (g.done > .3) { landGroup(g); groups.splice(gi, 1); } continue; }
         g.w += 9.8 * 1.5 / g.hc * Math.sin(Math.max(.12, g.th)) * dt;
@@ -705,8 +770,48 @@
       S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py + 1, z: g.pz - S.oz, vol: 1, rate: .8 });
       R.scene.remove(g.mesh); g.geo.dispose();
     }
+    // обрушение: кто под падающим куском — толчок вниз и в сторону (урон — только «обычно» / «сложно», один раз)
+    function dropHit(g){
+      if (g.o.visual) return;
+      const b = g.F.bot, fy = g.F.fy, hurtK = S.meta?.diff === 'normal' || S.meta?.diff === 'hard' ? 2 : 0;
+      for (let k = 0; k < b.length; k += 3) {
+        const x = b[k], y = b[k + 1] - fy, z = b[k + 2];
+        for (const m of X.mobs) {
+          const M = MOBS[m.type], hw = M.w / 2;
+          if (g.hitIds.has(m.id) || m.x + hw < x || m.x - hw > x + 1 || m.z + hw < z || m.z - hw > z + 1 || m.y > y + .2 || m.y + M.h < y - .4) continue;
+          g.hitIds.add(m.id); m.vx += (m.x - x - .5) * 6; m.vz += (m.z - z - .5) * 6; if (hurtK) X.damage(m, hurtK, 0, 0, 'tree'); else m.hurtT = .35;
+        }
+        const P = S.P;
+        if (P && !P.dead && !g.hitIds.has(-1) && P.x + .3 > x && P.x - .3 < x + 1 && P.z + .3 > z && P.z - .3 < z + 1 && P.y <= y + .2 && P.y + 1.8 >= y - .4) {
+          g.hitIds.add(-1); P.vx += (P.x - x - .5) * 7; P.vz += (P.z - z - .5) * 7; P.onGround = false;
+          if (hurtK && !S.creative) S.ents?.hookHurt?.(hurtK, { x: x + .5, y, z: z + .5 });
+        }
+      }
+    }
+    // лёг: каждая клетка — на своё место (o.onSettle), пыль кольцом у низа, стук; сетка убрана
+    function landDrop(g){
+      const n = g.n, off = g.F.off, c = g.cells;
+      if (!g.o.visual) { for (let i = 0; i < n; i++) { try { g.o.onSettle?.(c[i * 4 + 3], c[i * 4], c[i * 4 + 1] - off, c[i * 4 + 2], i); } catch (e) { console.error(e); } } try { g.o.onLanded?.(); } catch (e) { console.error(e); } }
+      const b = g.F.bot;
+      for (let k = 0; k < b.length; k += 3) {
+        if ((k / 3) % 2 && b.length > 12) continue;
+        const x = b[k], y = b[k + 1] - off, z = b[k + 2];
+        X.dust(x + .5, y, z + .5, V().blocks[(c[3] & 0xfff)]?.id || 1, 3, { w: .9, sp: 1.4, s: .3, s1: .7, a: .5, vy: .5 });
+      }
+      for (let i = 0; i < n; i += Math.max(1, (n / 8) | 0)) X.debris(c[i * 4], c[i * 4 + 1] - off, c[i * 4 + 2], c[i * 4 + 3] & 0xfff, 4);
+      S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py - off + 1, z: g.pz - S.oz, vol: Math.min(1, .6 + n / 120), rate: .75 + Math.min(.2, 8 / (n + 8)) });
+      { const d = S.P ? Math.hypot(S.P.x - g.px, S.P.z - g.pz) : 99; if (d < 14 && S.shakeOK?.()) S.rig?.shake?.(Math.min(1.6, (.35 + n / 90) * (1 - d / 16)), .3); }
+      R.scene.remove(g.mesh); g.geo.dispose();
+    }
     function groupsFrame(dt, a){
       for (const g of groups) {
+        if (g.F) {
+          const fy = g.done ? g.F.fy : g.pfy + (g.F.fy - g.pfy) * a, k = Math.min(.06, fy * .012);
+          GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, k);
+          g.mesh.quaternion.copy(GQ); g.mesh.position.set(g.px - S.ox, g.py - fy, g.pz - S.oz);
+          Lit.update(g.lit, S, g.px, g.py - fy + 1, g.pz, dt); VR.itemLightF(g.geo, g.lit.lv);
+          continue;
+        }
         const th = g.pth + (g.th - g.pth) * a;
         GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, th);
         g.mesh.quaternion.copy(GQ); g.mesh.position.set(g.px - S.ox, g.py, g.pz - S.oz);

@@ -1117,6 +1117,7 @@
         'GetScore(Player):double; GetTeam(Player):int; SetTeam(Player,int):void; EndRound():void; EndRound(Player):void; StartMatch():void; GetService(String):Object',
       'CameraLib | Mode:String; SetMode(String):void; SetMode(String,Player):void; Shake(double,double):void',
       'WeatherLib | State:String; Season:String; Temperature:double; FeelsLike:double; Wind:double; Rain:double; Snow:double; Today:String; Changed:Signal; Holiday:Signal; Set(String):void',
+      'SupportLib | Mode:String; Holds(Part):boolean; Get(Part):double; Break(Part):void; Collapsed:PartSignal',
       'EnumLib', 'I:AnyFn',
       // базовый класс скриптов-классов (как MonoBehaviour в Unity): start(), update(double dt), onTouched(Part, Player) …
       'Script | Parent:Part; script:Part; enabled:boolean; getParent():Part; print(Object...):void; wait():double; wait(double):double; delay(double,Runnable):void; spawn(Runnable):void; destroy():void; destroy(double):void; isEnabled():boolean; setEnabled(boolean):void; toString():String; new()',
@@ -1204,10 +1205,10 @@
       JFrame: 'окон Java (Swing) нет — рисует игра', Graphics: 'рисования Java (AWT) нет — меняй детали мира', BigInteger: 'BigInteger нет — используй long (64 бита)', BigDecimal: 'BigDecimal нет — используй double',
     };
     // тип API-глобалов по режиму: в «Студии 3D» — мир как в Roblox, в модах — API модов
-    const STUDIO_G = { script: 'Part', workspace: 'Part', game: 'GameModes', Game: 'GameModes', Camera: 'CameraLib', Weather: 'WeatherLib', task: 'TaskLib', gui: 'GuiLib', sound: 'SoundLib', Enum: 'EnumLib' };
+    const STUDIO_G = { script: 'Part', workspace: 'Part', game: 'GameModes', Game: 'GameModes', Camera: 'CameraLib', Weather: 'WeatherLib', Support: 'SupportLib', task: 'TaskLib', gui: 'GuiLib', sound: 'SoundLib', Enum: 'EnumLib' };
     const MOD_G = { mod: 'ModApi', world: 'ModWorld', fx: 'ModFx', npc: 'ModNpc', commands: 'ModCommands', player: 'ModPlayer', game: 'ModGame' };
     const STUDIO_T = new Set(['Vector3', 'Color3', 'CFrame', 'BrickColor', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'Instance', 'Part', 'Player', 'Humanoid',
-      'TouchSignal', 'PlayerSignal', 'PartSignal', 'BeatSignal', 'Signal', 'Connection', 'Prompt', 'Tween', 'Script', 'GameModes', 'CameraLib', 'WeatherLib', 'TaskLib', 'GuiLib', 'SoundLib']);
+      'TouchSignal', 'PlayerSignal', 'PartSignal', 'BeatSignal', 'Signal', 'Connection', 'Prompt', 'Tween', 'Script', 'GameModes', 'CameraLib', 'WeatherLib', 'SupportLib', 'TaskLib', 'GuiLib', 'SoundLib']);
     const ALIAS_T = { BasePart: 'Part', MeshPart: 'Part', Model: 'Part', Folder: 'Part', Workspace: 'Part', SpawnLocation: 'Part', WedgePart: 'Part', PointLight: 'Part',
       MonoBehaviour: 'Script', Behaviour: 'Script', StringBuffer: 'StringBuilder', ArrayIndexOutOfBounds: 'ArrayIndexOutOfBoundsException' };
     const STUDIO_ALIAS = new Set(['BasePart', 'MeshPart', 'Model', 'Folder', 'Workspace', 'SpawnLocation', 'WedgePart', 'PointLight', 'MonoBehaviour', 'Behaviour']);
@@ -5264,7 +5265,7 @@
         const A2 = Object.create(A);
         A2.System = { out: ps(false), err: ps(true), arraycopy(s, sp, d, dp, n){ if (s == null || d == null) throw npe('arraycopy'); if (sp < 0 || dp < 0 || n < 0 || sp + n > s.length || dp + n > d.length) throw aioobe(sp + n > s.length ? sp + n : dp + n, sp + n > s.length ? s.length : d.length); const t = Array.prototype.slice.call(s, sp, sp + n); for (let i = 0; i < n; i++) d[dp + i] = t[i]; }, identityHashCode: x => ih(x) };
         rt.A = A2;
-        rt.G = MODE === 'mod' ? Object.assign({}, env2.script, MCG ? MCG(env2, rt) : {}) : { script: env2.script, workspace: env2.workspace, game: env2.game, Game: env2.Game || env2.game, Camera: env2.Camera, Weather: env2.Weather, task: env2.task, gui: env2.gui, sound: env2.sound, Enum: env2.Enum,
+        rt.G = MODE === 'mod' ? Object.assign({}, env2.script, MCG ? MCG(env2, rt) : {}) : { script: env2.script, workspace: env2.workspace, game: env2.game, Game: env2.Game || env2.game, Camera: env2.Camera, Weather: env2.Weather, Support: env2.Support, task: env2.task, gui: env2.gui, sound: env2.sound, Enum: env2.Enum,
           Instance: env2.Instance, Color3: env2.Color3, TweenService: env2.TweenService, TweenInfo: env2.TweenInfo, RunService: env2.RunService, Players: env2.Players, Debris: env2.Debris, BrickColor: env2.BrickColor, CFrame: env2.CFrame, random: env2.random };
         if (MODE === 'mod' && MCA) Object.assign(A2, MCA(env2, rt));
         const Sc = class extends JScript {};
@@ -5467,7 +5468,7 @@ Vector3: new Vector3(x, y, z), поля X, Y, Z, Magnitude, Unit; методы a
 Игрок: player.Name, player.Position, player.Humanoid.Health / MaxHealth (100) / WalkSpeed (16) / JumpPower (50), player.Humanoid.TakeDamage(n), player.Teleport(new Vector3(x, y, z)), player.SetStat("Имя", число) / AddStat / GetStat (таблица очков), player.Message("текст", секунды).
 Плавно: TweenService.Create(деталь, new TweenInfo(секунды, Enum.EasingStyle.Sine, null, повторы (-1 — всегда), обратно (true/false)), Map.of("Position", v, "Transparency", 0.5)).Play().
 Ещё можно: System.out.println, String.format, Math, new Random(), time() (секунды с начала игры), task.delay(сек, () -> …), gui.message("текст", сек), gui.text("ключ", "текст"), sound.play("coin" | "jump" | "hit" | "click" | "pickup" | "buzz" | "door_wood_open" | "door_wood_close" | "break"); java.util (ArrayList, HashMap, HashSet, TreeMap, ArrayDeque, List.of, Map.of, Collections, Arrays, Optional), стримы, лямбды, record, enum, switch со стрелками, var. import писать не обязательно.
-Режим игры и камера: Game.Mode ("obby", "race", "ffa", "teams", "koth", "hide", "coins", "survival" или ""), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart.Connect(r -> …), Game.RoundEnd.Connect((winner, text) -> …), Game.AddScore(player, n), Game.GetScore(player), Game.GetTeam(player), Game.EndRound(player); Camera.Mode = "third" | "first" | "shoulder" | "top" | "iso" | "side" | "fixed", Camera.SetMode("top", player), Camera.Shake(сила, сек). Погода: Weather.State ("clear", "rain", "snow", "thunderstorm"…), Weather.Season ("spring", "summer", "autumn", "winter"), Weather.Temperature, Weather.FeelsLike, Weather.Today (праздник), Weather.Changed.Connect((state, season) -> …), Weather.Holiday.Connect((id, text) -> …), Weather.Set("snow").
+Режим игры и камера: Game.Mode ("obby", "race", "ffa", "teams", "koth", "hide", "coins", "survival" или ""), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart.Connect(r -> …), Game.RoundEnd.Connect((winner, text) -> …), Game.AddScore(player, n), Game.GetScore(player), Game.GetTeam(player), Game.EndRound(player); Camera.Mode = "third" | "first" | "shoulder" | "top" | "iso" | "side" | "fixed", Camera.SetMode("top", player), Camera.Shake(сила, сек). Погода: Weather.State ("clear", "rain", "snow", "thunderstorm"…), Weather.Season ("spring", "summer", "autumn", "winter"), Weather.Temperature, Weather.FeelsLike, Weather.Today (праздник), Weather.Changed.Connect((state, season) -> …), Weather.Holiday.Connect((id, text) -> …), Weather.Set("snow"). Прочность (если включено обрушение): Support.Mode, Support.Holds(part), Support.Get(part) (0…100), Support.Break(part), Support.Collapsed.Connect(part -> …).
 Нельзя: Thread (кроме Thread.sleep) и synchronized, файлы (java.io, java.nio), сеть, рефлексия, Scanner (ввода нет), Swing/AWT, классы Minecraft (они — для модов «Кубомира» и «Подземья»).
 Задача: `;
   const DEF = { label: 'Java (как в модах Minecraft)', short: 'Java', icon: '☕', kind: 'text', worker, examples: EXAMPLES, ai: AI,

@@ -6430,6 +6430,16 @@
    ]
   },
   {
+   "f": "js/games/studio3d-support.js",
+   "fn": "render",
+   "k": "markup:style",
+   "c": "const",
+   "n": "цвета уровней устойчивости D37E.support S.COLORS — числа движка",
+   "xs": [
+    "hex(col)"
+   ]
+  },
+  {
    "f": "js/games/studio3d-tools.js",
    "fn": "num",
    "k": "markup:attr",

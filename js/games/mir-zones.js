@@ -1472,18 +1472,20 @@
         for (const b of K.brk || []) DS.add({ ...b, hide: on => { if (!brkHide(b.id, on) && b.obj) b.obj.visible = !on; } });
         let nb = 0;
         for (const p of K.pieceList) {
-          // стены зданий из деталей (этап 2): стена, перемычка, подоконник, бортик крыши — выбиваются (дыра), пол, крыша и углы —
-          // нет (здание стоит, ничего не рушится); бункер и базы — прочные (в 4 раза крепче, танк не пробьёт)
-          const wallish = p.destructible && ['wall', 'lintel', 'sill', 'parapet'].includes(p.kind);
-          const kind = p.kind === 'window' ? 'glass' : wallish ? 'wall' : ['bag', 'crate', 'barrel', 'fence', 'block'].includes(p.kind) ? p.kind : null;
+          // стены зданий из деталей (этап 2): стена, перемычка, подоконник, бортик крыши — выбиваются (дыра); пол — нет; углы —
+          // взрывом (танк не протаранит); плиты крыши — только осыпаются, когда под ними нет опоры (обрушение: mir-support.js);
+          // бункер и базы — прочные (в 4 раза крепче, танк не пробьёт)
+          const wallish = p.destructible && ['wall', 'lintel', 'sill', 'parapet'].includes(p.kind), top = p.destructible && (p.kind === 'roof' || p.kind === 'pillar');
+          const kind = p.kind === 'window' ? 'glass' : wallish || top ? 'wall' : ['bag', 'crate', 'barrel', 'fence', 'block'].includes(p.kind) ? p.kind : null;
           if (!kind) continue;
           const tough = (kind === 'wall' || kind === 'block') && TOUGH.test(p.b || '');
           DS.add({ id: 'p:' + p.id, zone: zs.Z.id, kind, x: p.x, y: kind === 'glass' ? p.y : p.y - p.h / 2, z: p.z, yaw: p.yaw || 0,
             w: kind === 'wall' || kind === 'block' ? p.w : Math.max(p.w, p.d), d: kind === 'wall' || kind === 'block' ? p.d : Math.min(p.w, p.d), h: p.h, c: p.c,
-            hp: tough ? 20 : undefined, power: tough ? 3 : undefined,
-            bodies: p.body ? [p.body] : [], hide: on => { p.broken = !!on; setPieceVis(p, !on); } });
+            hp: p.kind === 'roof' ? 999 : p.kind === 'pillar' ? (tough ? 40 : 12) : tough ? 20 : undefined, power: p.kind === 'roof' ? 9 : p.kind === 'pillar' ? (tough ? 9 : 3) : tough ? 3 : undefined,
+            bodies: p.body ? [p.body] : [], hide: on => { p.broken = !!on; setPieceVis(p, !on); }, onBreak: rt.sup ? b => rt.sup.broke(b) : undefined });
           if (++nb % 300 === 0) yield;
         }
+        rt.sup?.add(K.pieceList);   // обрушение: детали зданий — в граф держания
       }
       yield;
       zs.built = true; zs.builtAt = now();
@@ -2183,6 +2185,7 @@
     rt.update = dt => {
       if (rt.stopped) return;
       rt.t += dt;
+      rt.sup?.step(dt);   // обрушение: осыпать по очереди (шаги игры)
       // камера внутри небоскрёба/дома с верхними этажами: тела выше (спрятанные) не держат камеру, пока ты внутри
       let camOff = null;
       for (const c of S.P.ch.inside) if (c.data?.camOff) { camOff = c.data.camOff; break; }
@@ -2218,9 +2221,10 @@
         // деревья карты: те, что рядом, — в список (спрятать — у вида рельефа)
         provide: (x, z, r, D) => { const M = worldMap(); if (!M) return; M.trees(x - r, z - r, x + r, z + r, (tx, ty, tz, k, pine) => { const id = treeId(tx, tz); if (!D.list.has(id)) D.add({ id, temp: true, zone: null, kind: pine ? 'pine' : 'tree', x: tx, y: ty - .1, z: tz, h: (pine ? 8.4 : 7) * k, r: .3 * k, c2: pine ? '#2f6b3a' : '#4f9a45', bodies: [], hide: on => rt.wmv?.cutTree?.(id, on) }); }); },
         lookup: id => { const m = /^wt:(-?\d+):(-?\d+)$/.exec(id); if (!m) return null; const x = +m[1] / 4, z = +m[2] / 4; DS.hit(x, z, 0, 0); return DS.list.get(id) || null; },
-        busy: b => Math.hypot(S.P.ch.x - b.x, S.P.ch.z - b.z) < 3,   // восстановится, когда рядом никто не стоит
+        busy: b => Math.hypot(S.P.ch.x - b.x, S.P.ch.z - b.z) < 3 || !!rt.sup?.hold(b),   // восстановится, когда рядом никто не стоит (и опора уже на месте)
       });
       DS.onBreak = (id, s, dx, dz) => rt.send({ k: 'brk', id, s, dx, dz });
+      rt.sup = window.MirSupport?.attach?.(rt, DS) || null;   // обрушение (T-022a): верх над дырой осыпается частями — у всех одинаково
     }
     // жители пугаются (удар, взрыв, что-то упало рядом): убегают от игрока 5 с, «😭» над головой
     rt.scare = (x, z, r) => {
@@ -2257,7 +2261,7 @@
       CELLAR.on = false;
       try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
       try { rt.wmv?.dispose?.(S.ph); } catch (e) { console.error(e); } rt.wmv = null;
-      try { rt.destruct?.dispose(); } catch (e) { console.error(e); } rt.destruct = null; BRK.clear();
+      try { rt.destruct?.dispose(); } catch (e) { console.error(e); } rt.destruct = null; BRK.clear(); rt.sup?.dispose(); rt.sup = null;
       rt.stopped = true;
       clearTimeout(rt.bannerT); clearTimeout(rt.phT); clearTimeout(rt.eatT); clearInterval(rt.mapT);
       for (const zs of rt.zones.values()) {
