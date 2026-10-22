@@ -796,7 +796,7 @@
     el.innerHTML = `<div class="hd">
         <div class="hd-wrap">
           <canvas class="hd-cv"></canvas>
-          <div class="hd-hud" hidden><button type="button" class="hd-btn" data-act="pause" aria-label="Пауза">⏸</button>${window.D37Full ? window.D37Full.btn('#gamesStage', { cls: 'hd-btn' }) : '<button type="button" class="hd-btn" data-act="full" aria-label="Во весь экран">⛶</button>'}</div>
+          <div class="hd-hud" hidden><button type="button" class="hd-btn" data-act="pause" aria-label="Пауза">⏸</button>${window.D37Full ? '' : '<button type="button" class="hd-btn" data-act="full" aria-label="Во весь экран">⛶</button>'}</div>
           <div class="hd-ov"></div>
         </div>
         <div class="ct-note hd-note">Ходи стрелками / WASD или пальцем: зажми в любом месте поля и веди. Оружие бьёт само, ты выбираешь улучшения.</div>
@@ -846,6 +846,7 @@
     if (G) setView(G, w / scale, h / scale);
     draw();
   }
+  // ⛶ — в шапке игры (одно место на действие, T-043); своя кнопка поверх поля — только без js/core/fullscreen.js
   function toggleFull(){
     const st = document.getElementById('gamesStage');
     if (window.D37Full && st) { window.D37Full.toggle(st); return; }   // общий полный экран (кнопка ⛶ обычно сама — data-gs-full)

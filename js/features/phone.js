@@ -753,13 +753,13 @@
       const draw = () => {
         const s = P.set, v = Math.round((s.vol ?? .8) * 100);
         box.innerHTML = '<div class="gs-sec">Звонки</div>'
-          + row('Кто может звонить', seg('calls', [['friends', '🤝 Друзья'], ['nobody', '🔕 Никто']]), 'Звонить могут только друзья. «Никто» — телефон молчит, вызовы попадут в пропущенные.')
+          + row('Кто может звонить', seg('calls', [['friends', '🤝 Друзья'], ['nobody', '🔕 Никто']]), 'Только друзья; «Никто» — вызовы уйдут в пропущенные.')
           + row('Мелодия', `${seg('ring', Object.entries(P.RINGS).map(([k, r]) => [k, r.t]))} <button type="button" class="gs-btn" data-pht="ring" title="Послушать" aria-label="Послушать мелодию">▶</button>`)
           + row('Громкость мелодии', `<div class="gs-range"><input type="range" min="0" max="100" step="5" value="${v}" data-phr="vol" aria-label="Громкость мелодии"><output>${v}%</output></div>`, 'И звуки телефона.')
           + row('Звуки телефона', sw('sounds'), 'Новое сообщение, нажатия.')
           + '<div class="gs-sec">Голос</div>'
           + row('Шумоподавление', sw('ns'), 'Выключи, если голос звучит «как под водой».')
-          + row('Рация', sw('ptt'), 'Говоришь, только пока держишь клавишу. На телефоне — кнопка «📻 Держи, чтобы говорить» в разговоре.')
+          + row('Рация', sw('ptt'), 'Говоришь, пока держишь клавишу (на телефоне — кнопку «📻»).')
           + row('Клавиша рации', `<button type="button" class="gs-key${capturing ? ' cap' : ''}" data-pht="key">${capturing ? 'Нажми клавишу…' : esc(P.keyName(s.pttKey || 'Backquote'))}</button>`, capturing ? 'Нажми нужную клавишу.' : '')
           + '<p class="gs-note">Громкость собеседников — во вкладке «🔊 Звук» → «Голос».</p>'
           + '<div class="gs-sec">Заблокированные</div><div data-phb><p class="gs-note">Загружаем…</p></div>'

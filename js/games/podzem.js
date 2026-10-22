@@ -21,6 +21,8 @@
   const PL_W = 1.15, PL_H = 2.62, PL_SPR = 2.95;
   const GRAV = 58, MAXFALL = 30, M_PER_TILE = .5;
   const SAVE_EVERY = 45, LS_JOURNAL = 'd37_podzem_journal', LS_OPT = 'd37_podzem_opt', LS_LAST = 'd37_podzem_last';
+  // настройки по умолчанию (⚙️ «⛏ Подземье» → «↺ Сбросить вкладку» возвращает их)
+  const OPT_DEF = Object.freeze({ zoom: 1, smooth: true, back: true, parts: true, autosave: true, fps: false, smart: false, ledge: true });
   const now = () => performance.now();
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
   const rand = () => Math.random();
@@ -70,7 +72,7 @@
       cam: { x: 0, y: 0, tile: 24, zoom: 1, shake: 0 }, mouse: { sx: -1, sy: -1, wx: 0, wy: 0, l: false, r: false, in: false, moved: 0 },
       pad: { on: false, cx: 3, cy: -1, lb: false, rb: false, y: false, lt: false }, aim: { x: 0, y: 0, src: 'mouse' },
       t: 0, tick: 0, liqTick: 0, saveT: 0, streamT: 0, spawnT: 0, modT: 0, hudT: 0, frame: 0, perf: { frames: [], cpu: [], last: 0 },
-      opt: Object.assign({ zoom: 1, smooth: true, back: true, parts: true, autosave: true, fps: false, smart: false, ledge: true }, (() => { try { return JSON.parse(lsGet(LS_OPT) || '{}'); } catch (e) { return {}; } })()),
+      opt: Object.assign({}, OPT_DEF, (() => { try { return JSON.parse(lsGet(LS_OPT) || '{}'); } catch (e) { return {}; } })()),
       chestOpen: null, talk: null, cheats: false, listeners: [], loop: null,
       hook: null,          // крюк: { state: fly | latched | back, x, y, dx, dy, … }
       target: null,        // куда сейчас подействует предмет в руке: { x, y, ok, kind } (умный курсор, превью)
@@ -2893,6 +2895,8 @@
     if (typeof ResizeObserver !== 'undefined') { G.ro = new ResizeObserver(() => { const w = Math.floor(G.wrap.getBoundingClientRect().width); if (w && w !== G.cssW) resize(); }); G.ro.observe(G.root); }
     // ⚙️ в полосе игры — сразу на вкладку «⛏ Подземье»
     const sb = document.querySelector('#gamesStage [data-gs-set]'); if (sb) { G.gsSet = [sb, sb.dataset.gsSet || '']; sb.dataset.gsSet = 'podzem'; }
+    // T-043: одно место на действие — ⚙️, ⛶ и 🔄 у «Подземья» в его меню ☰ (и на стартовом экране), в шапке игры их нет (premium.css gm-own-menu)
+    G.stage = document.getElementById('gamesStage'); G.stage?.classList.add('gm-own-menu');
     setTimeout(scrollToGame, 500);
     G.offFs = window.D37Full?.on?.(() => setTimeout(resize, 60));
     on(document, 'visibilitychange', () => { if (document.hidden) { journal(); ambienceOff(); } });   // вкладку спрятали — треск и плеск не играют в фоне
@@ -2927,6 +2931,7 @@
     for (const [t, ev, f, o] of g.listeners) t.removeEventListener(ev, f, o);
     g.offFs?.(); g.offLook?.(); g.offS2?.(); g.ro?.disconnect();
     if (g.gsSet) g.gsSet[0].dataset.gsSet = g.gsSet[1];
+    g.stage?.classList.remove('gm-own-menu');
     g.C?.dispose?.();
     g.U?.dispose();
     try { for (const c of g.chunks.values()) g.R?.chunkFree(c); g.R?.dispose(); } catch (e) {}
@@ -2935,7 +2940,7 @@
 
   // Для интерфейса и модов
   const API = {
-    get G(){ return G; }, PZ, INV_N, HOT_N, CHEST_N, ACH, MOBS, DAY_LEN, NIGHT0,
+    get G(){ return G; }, PZ, INV_N, HOT_N, CHEST_N, ACH, MOBS, DAY_LEN, NIGHT0, OPT_DEF,
     play, stopWorld, saveAll, pause, resume, respawn, selSlot, craftList, craft, give, take, count, itemDef, stackOf, zoom, saveOpt, resize,
     listWorlds, listChars, newWorldRecord, newCharRecord, deleteWorld, deleteChar, exportWorld, importWorld, exportChar, importChar,
     put: (st, v) => DB.put(st, v), dbAll: st => DB.all(st), dbDel: (st, k) => DB.del(st, k), dbGet: (st, k) => DB.get(st, k),

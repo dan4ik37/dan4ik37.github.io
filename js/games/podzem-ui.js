@@ -327,7 +327,7 @@
         <div class="pz-btns">
           <button type="button" class="pz-hbtn" data-a="inv" title="Вещи и крафт (I или Esc)"><span class="ic">🎒</span><b>Вещи</b><kbd>I</kbd></button>
           <button type="button" class="pz-hbtn" data-a="smart" aria-pressed="false" title="Умный курсор: кирка сама находит блок у курсора (Ctrl)"><span class="ic">🎯</span><b>Курсор</b><kbd>Ctrl</kbd></button>
-          <button type="button" class="pz-hbtn" data-a="pause" title="Меню и пауза (P)" aria-label="Меню"><span class="ic">⏸</span><b>Меню</b><kbd>P</kbd></button>
+          <button type="button" class="pz-hbtn" data-a="pause" title="Меню и пауза (P, Esc на паузе — назад): настройки, полный экран, цели, сохранить" aria-label="Меню"><span class="ic">☰</span><b>Меню</b><kbd>P</kbd></button>
         </div>
         <div class="pz-sel-name off"></div>
         <div class="pz-status"></div>
@@ -799,12 +799,14 @@
       if (kind === 'newchar') { menuEl.innerHTML = newCharHtml(); return; }
       if (kind === 'mods' || kind === 'wmods') { menuEl.innerHTML = '<div class="pz-card pz-mods"><div class="pz-spin"></div></div>'; window.PZMods ? window.PZMods.renderMenu(menuEl.firstChild, API, kind === 'wmods', () => U.menu(G.state === 'menu' ? 'start' : 'pause')) : menuEl.innerHTML = '<div class="pz-card">Моды не загрузились</div>'; return; }
     };
-    // пауза — общее меню игр сайта (как в «Кубомире» и «Мире Денчика»)
+    // пауза — общее меню игр сайта (как в «Кубомире» и «Мире Денчика»); ⛶ / 🔄 — общие пункты экрана (settings.js fsItems)
+    const fsEl = () => document.getElementById('gamesStage') || wrap;
     function pauseItems(){
       const ach = G.CH?.ach || {}, gl = API.goal(), wait = Math.ceil(API.stuckWait?.() || 0);
       return [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
         { id: 'opts', icon: '⚙️', text: 'Настройки' },
+        ...(window.D37Settings?.fsItems?.(fsEl()) || []),
         { id: 'help', icon: '❓', text: 'Как играть' },
         { id: 'goals', icon: '🎯', text: `Цели${gl ? ` (${gl.i} из ${gl.n})` : ' — все выполнены'}` },
         { id: 'ach', icon: '🏆', text: `Достижения (${Object.keys(ach).length} из ${Object.keys(API.ACH).length})` },
@@ -831,6 +833,7 @@
       t = setInterval(() => { if (pauseMenu !== m) { clearInterval(t); return; } if ((API.stuckWait?.() || 0) > 0) m.redraw(); }, 1000);
     }
     async function pausePick(id){
+      if (window.D37Settings?.fsPick?.(id, fsEl(), pauseMenu)) return;   // ⛶ — меню остаётся, 🔄 — закрывается (играть лёжа)
       switch (id) {
         case 'resume': API.resume(); return;
         case 'opts': openSettings(); return;
@@ -866,21 +869,23 @@
     function settingsTab(onState){
       const S = window.D37Settings; if (!S?.addTab) return;
       if (!onState) { S.addTab({ id: 'podzem', icon: '⛏', title: 'Подземье', order: 5, ctx: [], render: () => '' }); return; }
-      S.addTab({ id: 'podzem', icon: '⛏', title: 'Подземье', order: 5, ctx: ['game'], render(body){
-        const o = G.opt, sw = (k, t, hint) => `<div class="gs-row"><div class="gs-lbl"><b>${t}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl"><label class="gs-sw"><input type="checkbox" data-pzo="${k}"${o[k] ? ' checked' : ''}><i aria-hidden="true"></i></label></div></div>`;
+      // «↺ Сбросить вкладку»: свои настройки игры (API.OPT_DEF) и общие кнопки телефона, которые здесь же
+      const reset = () => { if (!API.OPT_DEF) return; Object.assign(G.opt, API.OPT_DEF); API.saveOpt(); U.smart?.(G.opt.smart); API.resize(); };
+      S.addTab({ id: 'podzem', icon: '⛏', title: 'Подземье', order: 5, ctx: ['game'], keys: ['touchSize', 'touchAlpha', 'lefty'], reset, render(body){
+        const o = G.opt, sw = (k, t, hint) => `<div class="gs-row"><div class="gs-lbl"><b>${t}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl"><label class="gs-sw"><input type="checkbox" data-pzo="${k}" aria-label="${t}"${o[k] ? ' checked' : ''}><i aria-hidden="true"></i></label></div></div>`;
         const z = Math.round((o.zoom || 1) * 100), ts = Math.round(S.get('touchSize') || 100), ta = Math.round(S.get('touchAlpha') || 100);
         body.innerHTML = `<div class="gs-sec">Управление</div>
-          ${sw('ledge', 'Цепляться за края', 'Прыгнул к стене выше себя и держишь к ней — герой хватается за край и подтягивается. Вниз или от стены — отпустить.')}
-          ${sw('smart', 'Умный курсор (Ctrl)', 'Мышью: кирка сама находит блок у курсора, блок встаёт туда, где держится. Пальцем и геймпадом — всегда включён.')}
-          <div class="gs-row"><div class="gs-lbl"><b>Масштаб мира</b><small>Ближе — крупнее, дальше — больше видно. На компьютере ещё «+ / −» и Ctrl+колесо.</small></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="60" max="190" step="5" value="${z}" data-pzz="1" aria-label="Масштаб"><output data-pzzo="1">${z}%</output></div></div></div>
-          <div class="gs-row"><div class="gs-lbl"><b>Кнопки на телефоне</b><small>Размер</small></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="70" max="150" step="5" value="${ts}" data-range="touchSize" data-mul="1" aria-label="Размер кнопок"><output data-out="touchSize">${ts}%</output></div></div></div>
-          <div class="gs-row"><div class="gs-lbl"><b>Прозрачность кнопок</b></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="30" max="100" step="5" value="${ta}" data-range="touchAlpha" data-mul="1" aria-label="Прозрачность кнопок"><output data-out="touchAlpha">${ta}%</output></div></div></div>
-          <div class="gs-row"><div class="gs-lbl"><b>Для левши</b><small>Кнопки — слева, джойстик — справа.</small></div><div class="gs-ctl"><label class="gs-sw"><input type="checkbox" data-sw="lefty"${S.get('lefty') ? ' checked' : ''}><i aria-hidden="true"></i></label></div></div>
+          ${sw('ledge', 'Цепляться за края', 'Прыгни к стене и держи к ней — герой схватится за край и подтянется.')}
+          ${sw('smart', 'Умный курсор (Ctrl)', 'Кирка сама находит блок у курсора (пальцем и геймпадом — всегда).')}
+          <div class="gs-row" data-words="зум приближение крупнее"><div class="gs-lbl"><b>Масштаб мира</b><small>Крупнее или больше видно (на компьютере ещё «+ / −»).</small></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="60" max="190" step="5" value="${z}" data-pzz="1" aria-label="Масштаб"><output data-pzzo="1">${z}%</output></div></div></div>
+          <div class="gs-row" data-words="телефон сенсор"><div class="gs-lbl"><b>Размер кнопок</b><small>Кнопки на телефоне: крупнее — легче попасть пальцем.</small></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="70" max="150" step="5" value="${ts}" data-range="touchSize" data-mul="1" aria-label="Размер кнопок"><output data-out="touchSize">${ts}%</output></div></div></div>
+          <div class="gs-row" data-words="телефон прозрачность"><div class="gs-lbl"><b>Непрозрачность кнопок</b><small>Меньше — кнопки прозрачнее, мир виднее.</small></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="30" max="100" step="5" value="${ta}" data-range="touchAlpha" data-mul="1" aria-label="Непрозрачность кнопок"><output data-out="touchAlpha">${ta}%</output></div></div></div>
+          <div class="gs-row" data-words="левая рука"><div class="gs-lbl"><b>Для левши</b><small>Кнопки — слева, джойстик — справа.</small></div><div class="gs-ctl"><label class="gs-sw"><input type="checkbox" data-sw="lefty" aria-label="Для левши"${S.get('lefty') ? ' checked' : ''}><i aria-hidden="true"></i></label></div></div>
           <div class="gs-sec">Картинка</div>
           ${sw('smooth', 'Плавный свет', 'Выключи — свет «клетками», как в старых играх.')}
-          ${sw('back', 'Подземный фон в пещерах')}
+          ${sw('back', 'Подземный фон в пещерах', 'Стены пещер позади — объёмнее; выкл — чуть быстрее.')}
           ${sw('parts', 'Частицы', 'Крошки, искры, дым.')}
-          ${sw('fps', 'Показывать кадры в секунду')}
+          ${sw('fps', 'Счётчик кадров (FPS)', 'Кадры в секунду в углу экрана.')}
           <div class="gs-sec">Игра</div>
           ${sw('autosave', 'Автосохранение', 'Каждые 45 секунд и при выходе.')}
           <p class="gs-note">Шейдеры (Обычные, Красивые, Ультра, Ретро) — вкладка «🎨 Графика». Звук — «🔊 Звук».</p>`;
@@ -919,7 +924,7 @@
             <button type="button" class="ib" data-a="expworld" data-id="${esc(w.id)}" title="Сохранить в файл" aria-label="Сохранить в файл">📤</button><button type="button" class="ib" data-a="delworld" data-id="${esc(w.id)}" title="Удалить" aria-label="Удалить">🗑</button></div>`).join('') || '<div class="pz-note">Пока нет — создай.</div>'}</div>
             <div class="pz-row"><button type="button" class="pz-b" data-a="newworld">➕ Новый мир</button><button type="button" class="pz-b ghost" data-a="impworld">📥 Из файла</button></div></section>
         </div>
-        <div class="pz-foot"><button type="button" class="pz-b" data-a="help">❓ Как играть</button><button type="button" class="pz-b" data-a="opts">⚙️ Настройки</button><button type="button" class="pz-b" data-a="mods">🧩 Моды</button></div>
+        <div class="pz-foot"><button type="button" class="pz-b" data-a="help">❓ Как играть</button><button type="button" class="pz-b" data-a="opts">⚙️ Настройки</button>${(window.D37Settings?.fsItems?.(fsEl()) || []).map(it => `<button type="button" class="pz-b" data-a="${it.id}">${it.icon}${it.text}</button>`).join('')}<button type="button" class="pz-b" data-a="mods">🧩 Моды</button></div>
         <p class="pz-note" style="margin-top:10px">Сохраняется в этом браузере (мир — только изменённые места, поэтому он бесконечный и лёгкий). Кнопкой 📤 — в файл, чтобы перенести на другое устройство.</p>
       </div>`;
     }
@@ -939,7 +944,7 @@
           <li><b>✋ Открыть</b> — дверь, сундук, Проводник рядом (кнопка светится, когда есть что открыть). <b>🎒 Вещи</b> — вещи и крафт</li>
           <li><b>Палец по миру</b>: держи — копать или ставить там, коротко — открыть дверь, сундук, поговорить</li>
           <li><b>✛ Точно</b> — крестик: двигай его пальцем, <b>✓ Сюда</b> — копать или ставить ровно в нём</li>
-          <li>Лёжа удобнее, а кнопка ⛶ — во весь экран. Размер кнопок и «для левши» — ⚙️ → «⛏ Подземье»</li></ul>`],
+          <li>Лёжа удобнее: <b>☰ Меню</b> → «Во весь экран» или «🔄 Повернуть экран». Размер кнопок и «для левши» — ☰ Меню → ⚙️ Настройки → «⛏ Подземье»</li></ul>`],
         pad: ['🎮 Геймпад', `<ul><li>Левый стик — идти (к стене — схватиться за край), <b>A</b> — прыжок, правый стик — прицел, <b>RT</b> — копать/бить/ставить, <b>X</b> — открыть, <b>B</b> — крюк, <b>Y</b> — вещи, <b>LB/RB</b> — ячейки, <b>LT</b> — лечение, крестовина ↑ — зелья, <b>Start</b> — меню</li></ul>`],
       };
       const order = [first, ...['touch', 'pc', 'pad'].filter(k => k !== first)];
@@ -1029,6 +1034,7 @@
         case 'wmods': U.menu('wmods'); return;
         case 'help': U.menu('help'); return;
         case 'opts': openSettings(); return;
+        case 'full': case 'rot': window.D37Settings?.fsPick?.(a, fsEl(), null); setTimeout(() => { if (menuKind === 'start') startMenu(); }, 120); return;   // стартовый экран: подпись «⛶» — заново
         case 'ach': U.menu('ach'); return;
         case 'back': U.menu(G.state === 'menu' ? 'start' : 'pause'); return;
         case 'resume': API.resume(); return;

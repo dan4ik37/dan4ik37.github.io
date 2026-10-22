@@ -47,7 +47,7 @@ jobs:
       - name: Поставить пакеты для проверок (вне репозитория)
         run: |
           mkdir -p "$RUNNER_TEMP/deps" "$RUNNER_TEMP/d37-tmp"
-          npm install --prefix "$RUNNER_TEMP/deps" --no-save --no-audit --no-fund --ignore-scripts three@0.149.0 @dimforge/rapier3d-compat@0.19.3 @electric-sql/pglite@0.5.8
+          npm install --prefix "$RUNNER_TEMP/deps" --no-save --no-audit --no-fund --ignore-scripts three@0.149.0 @dimforge/rapier3d-compat@0.19.3 @electric-sql/pglite@0.5.8 ws@8.21.3 @supabase/supabase-js@2.117.2
           echo "DEPS_DIR=$RUNNER_TEMP/deps" >> "$GITHUB_ENV"
           echo "D37_TMP=$RUNNER_TEMP/d37-tmp" >> "$GITHUB_ENV"
       - name: Проверки сайта
