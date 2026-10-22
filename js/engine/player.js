@@ -202,7 +202,9 @@
     const emit = (e, d) => ev?.emit(e, d);
     P.sync = () => { ch.g = P.gravity; ch.jumpV = Math.sqrt(2 * P.gravity * P.jumpH); ch.r = P.r; };
     P.sync(); ch.accG = 60; ch.accA = 30;
-    Object.defineProperty(P, 'timeMul', { get: () => Math.max(1, Math.min(1.3, 1 + (P.staminaMul - 1) * .5)) });
+    // множитель времени паркура от выносливости. Не геттером на P (T-085): свой геттер у каждого игрока V8 держит в общей «форме»
+    // объекта — после закрытия мира она держала последнего игрока, а через него весь мир (физику, сцену)
+    const timeMul = () => Math.max(1, Math.min(1.3, 1 + (P.staminaMul - 1) * .5));
 
     // ── Выносливость (PlayerStamina) ──
     P.spend = n => { if (P.stamina < n) return false; P.stamina -= n; P._regenAt = P.now + P.regenDelay; return true; };
@@ -421,7 +423,7 @@
       return true;
     }
     function pkMantle(L, top, move){
-      const s = P.scale, dur = (move === 'climb' ? PK.ClimbFromHangTime : PK.MantleTime) * P.timeMul, f = L.face;
+      const s = P.scale, dur = (move === 'climb' ? PK.ClimbFromHangTime : PK.MantleTime) * timeMul(), f = L.face;
       const st = { x: ch.x, y: ch.y, z: ch.z };
       // 1) руки на край, тело чуть вниз (вес перед рывком); 2) грудь к краю; 3) таз к краю; 4) колено на край — наверх (присев)
       // (путь — общий PK.mantleSegs: тот же у «Кубомира»)
@@ -433,7 +435,7 @@
       emit('parkour', { move, x: L.lip.x, y: L.lip.y, z: L.lip.z });
     }
     function pkVault(v){
-      const s = P.scale, dur = PK.VaultTime * P.timeMul, f = v.face, st = { x: ch.x, y: ch.y, z: ch.z };
+      const s = P.scale, dur = PK.VaultTime * timeMul(), f = v.face, st = { x: ch.x, y: ch.y, z: ch.z };
       // ладонь на ближний край, таз вверх; ноги над столом; приземление
       const up = { x: st.x - f.x * .15, y: v.lip.y + .05 * U * s, z: st.z - f.z * .15 };
       P.yaw = Math.atan2(-f.x, -f.z);

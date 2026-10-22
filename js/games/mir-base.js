@@ -2211,18 +2211,19 @@
       for (const d of dist.dyn) { d.t.dispose(); d.mat.dispose(); }
       B.war?.dispose();
     };
-    // стройка (для mir.js: Esc, камера) — района или базы
-    Object.defineProperty(B, 'activeBm', { get: () => B.bm || B.war?.bm || null });
     B._test = { rebuildAll, lotInfo, merge: M.merge, init, claim, BM };   // для проверки во встроенном браузере
     rebuildAll();   // таблички «свободен» — сразу, данные подтянутся
     init();
     return B;
   }
   // Мир без района (нет MirBase.build в мире) — только военные базы
+  // bm / cam — геттеры общего прототипа (WRAP_PROTO), не свои у объекта (T-085: свой геттер V8 держит в общей «форме» объекта —
+  // через него после закрытия жил весь прошлый мир; так держал B.activeBm — он и W.ws не использовались и убраны)
+  const WRAP_PROTO = { get bm(){ return this.war.bm; }, get cam(){ return this.war.cam; } };
   function wrapOnly(war, S){
-    return { get bm(){ return war.bm; }, get cam(){ return war.cam; }, street: 0, war, frame: (dt, t) => war.frame(dt, t),
+    return Object.assign(Object.create(WRAP_PROTO), { street: 0, war, frame: (dt, t) => war.frame(dt, t),
       update: dt => { if (S.C.down('build') && !S.editing && (war.bm || war.wantsBuild() || war.here())) war.buildKey(); war.update(dt); },
-      onMsg: (p, d) => { if (Number.isInteger(d?.w)) war.onMsg(p, d); }, dispose: () => war.dispose() };
+      onMsg: (p, d) => { if (Number.isInteger(d?.w)) war.onMsg(p, d); }, dispose: () => war.dispose() });
   }
 
   // ═══ ВОЕННЫЕ БАЗЫ боевой зоны (браузер): 12 участков сектора (MirWar.PLOTS), главарь и состав, стройка (главарь и офицеры),
@@ -3030,7 +3031,6 @@
       tags.clear(); hud.remove(); topBtn.remove();
       M.dispose();
     };
-    Object.defineProperty(W, 'ws', { get: () => W.sector });
     W._test = {
       views: () => W.views.filter(v => v?.root).length, lotInfo, BM, enterBunker, leaveBunker, cellar: () => cellar, setSector, PLS, LOTW,
       // замер: все участки сектора — базы штаба th (по максимуму), строятся сразу
