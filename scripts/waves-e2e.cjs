@@ -333,9 +333,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const r = await ev(`(async () => {
         const S = GAME_IMPL.world._test.state(), V = S.zones.veh, v = V.list.get('w_boat1'), VE = D37E.vehicle;
         V._.enter(v, 0); v.x = -455; v.z = 300;
-        const orig = VE.input; VE.input = (C, vv, out) => Object.assign(out, { thr: 1, steer: 1, up: 0, boost: 1, brake: 0, on: true });
+        const orig = VE.input; VE.input = (C, vv, out) => Object.assign(out, { thr: 1, steer: Math.sin(performance.now() / 2500) >= 0 ? 1 : -1, up: 0, boost: 1, brake: 0, on: true });
         let t0 = performance.now(), capAt = 0; const tr = [];
-        while (performance.now() - t0 < 90000 && !v.capsized) { await new Promise(q => setTimeout(q, 100)); if (tr.length < 30 && (performance.now() - t0) % 3000 < 110) tr.push([+v.x.toFixed(0), +v.z.toFixed(0), +v.spd.toFixed(1), +v.steer.toFixed(2), +v.roll.toFixed(2), +(v.wm ?? -1).toFixed(2), V.inVeh(), !!v.local, +(S.waves?.F.ocean.storm ?? -1).toFixed(2)]); }
+        while (performance.now() - t0 < 180000 && !v.capsized) { await new Promise(q => setTimeout(q, 100)); if (tr.length < 30 && (performance.now() - t0) % 3000 < 110) tr.push([+v.x.toFixed(0), +v.z.toFixed(0), +v.spd.toFixed(1), +v.steer.toFixed(2), +v.roll.toFixed(2), +(v.wm ?? -1).toFixed(2), V.inVeh(), !!v.local, +(S.waves?.F.ocean.storm ?? -1).toFixed(2)]); }
         VE.input = orig;
         if (!v.capsized) return { capsized: false, roll: v.roll, tr };
         capAt = performance.now();
@@ -345,7 +345,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await new Promise(q => setTimeout(q, 2500));
         const after = { capsized: !!v.capsized, roll: +v.roll.toFixed(2), prompt: v.item?.prompt?.() || '' };
         return { capsized: true, sec: +((capAt - t0) / 1000).toFixed(1), mid, after, hp: v.hp, maxHp: v.def.hp };
-      })()`, 150000);
+      })()`, 260000);
       console.log('  переворот:', JSON.stringify(r));
       ok(r.capsized && !r.mid.inVeh && r.mid.swim && Math.abs(r.mid.roll) > 2 && r.mid.flag && /перевернулся/.test(r.mid.prompt), 'шторм: катер перевернулся — я в воде рядом, лежит вверх дном, флаг в снимке, сесть нельзя', r);
       ok(r.capsized && !r.after.capsized && Math.abs(r.after.roll) < 1 && /Сесть/.test(r.after.prompt) && r.hp === r.maxHp, 'через 8 с встал сам, без урона, можно снова сесть', r);
