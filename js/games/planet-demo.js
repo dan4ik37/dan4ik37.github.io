@@ -66,6 +66,21 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
       st.SV = E.spaceView(R, V, st.S, { observer: P.def.id });
       st.map = E.spaceMap(wrap, st.S, { observer: P.def.id, time: () => st.t, clock: CL, onLook: id => lookAt(st, id), where: () => whereOnPlanet(st) });
     } catch (e) { console.warn('планета: небо системы не запустилось', e); st.SV = null; }
+    // погода движка (T-075, climate.js + precip.js): климат места — по широте планеты (V.climateAt), координаты погоды — общие
+    // для всей планеты (долгота и широта × R: фронт идёт с запада, переезд якоря её не сдвигает), сутки — местное солнечное время,
+    // время года — тот же момент мира, что у солнца; дождь и снег вокруг камеры, свет планеты тускнеет под тучами. Сломалась — без неё
+    try {
+      const Cl = E.climate;
+      if (Cl && Cl.world && Cl.attach && !(window.D37Opt && window.D37Opt.planetWeather === false)) {
+        const UPD = [0, 0, 0], WP = [0, 0, 0];
+        const W0 = Cl.world({ seed: 'planet-' + P.def.seed, mode: 'calendar', climateAt: V.climateAt, lapse: -6.5 / 1166, seaY: 0, front: 4000,
+          hourAt: () => { const c = V.camBF, l = Math.hypot(c[0], c[1], c[2]) || 1; UPD[0] = c[0] / l; UPD[1] = c[1] / l; UPD[2] = c[2] / l; return P.localHour(UPD, st.t); } });
+        const WA = Object.create(W0);
+        WA.at = (x, z, ms, y) => { V.weatherPos(x, y, z, WP); return W0.at(WP[0], WP[1], st.CL.msOf(st.t), WP[2]); };
+        st.wx = Cl.attach(R, { world: WA, skyTop: (x, z) => V.ground(x, z), water: (x, z) => P.patchWater(V.fr, x, z), occlusion: false });
+        st.W = W0;
+      }
+    } catch (e) { console.warn('планета: погода не запустилась', e); st.wx = null; }
     // управление
     const C = st.C = E.controls({});
     const I = st.I = E.input(wrap, { controls: C, ignore: 'button, .pl-bar, .e-btn, .sm, .pl-tele' });
@@ -238,6 +253,12 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     I.frameEnd(); C.frameEnd();
     const ms = st.CL.msOf(st.t);
     if (st.SV) { try { st.SV.update(st.t, ms); } catch (e) { console.warn('планета: небо системы', e); st.SV.dispose(); st.SV = null; } }
+    if (st.wx) {   // погода: частицы и небо движка — каждый кадр, свет планеты — 4 раза в секунду
+      try {
+        st.wx.frame(dt);
+        if ((st.wxT = (st.wxT || 0) - dt) <= 0) { st.wxT = .25; const v = st.wx.vis || st.wx.state; V.setWeather(v ? { cloud: v.cloud, rain: v.rain, fog: v.fog, storm: v.thunder } : null); }
+      } catch (e) { console.warn('планета: погода', e); try { st.wx.dispose(); } catch (e2) {} st.wx = null; V.setWeather(null); }
+    }
     V.update(dt, st.t, ms);
     R.update(dt);
     R.render();
@@ -364,6 +385,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     try { st.ro?.disconnect(); } catch (e) {}
     try { st.unfollow?.(); st.offRebase?.(); } catch (e) {}
     try { st.map?.dispose(); st.SV?.dispose(); } catch (e) { console.error(e); }
+    try { st.wx?.dispose(); } catch (e) { console.error(e); }
     try { st.offClock?.(); } catch (e) {}
     try { st.V?.dispose(); } catch (e) { console.error(e); }
     try { st.A?.dispose(); } catch (e) {}
@@ -391,6 +413,10 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     stubs: on => { if (S?.SV) S.SV.stubs = !!on; },
     events: () => S?.S && S.S.moonEvents('home', 'luna', S.t),
     clock: () => S && { state: S.CL.state, off: S.CL.off, rtt: S.CL.rtt, src: S.CL.src, err: S.CL.err },
+    // погода (T-075): что сейчас у камеры, климат места; wx('rain' | 'snow' | 'auto') — поставить погоду
+    weather: () => S?.wx && { state: S.wx.state?.state, temp: S.wx.state && +S.wx.state.temp.toFixed(1), rain: S.wx.vis?.rain, snow: S.wx.vis?.snow, cloud: S.wx.vis?.cloud,
+      climate: S.V.climateAt(...(p => [p[0], p[1]])(S.V.weatherPos(S.R.camera.position.x, S.R.camera.position.y, S.R.camera.position.z))), lit: S.V.U.uLit.value.x },
+    wx: s => { if (S?.W) S.W.set({ weather: s || 'auto' }); },
     get S(){ return S; },
   };
   window.GAME_IMPL = window.GAME_IMPL || {};

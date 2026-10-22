@@ -3,7 +3,8 @@
 // куба, выбор кусков (покрывают шар ровно один раз), 2 : 1 и сшивка (край мелкого куска совпадает с краем крупного), индексы (без
 // дыр и наложений, всё наружу), отсечение за горизонтом (не прячет видимое), плоский кусок (базис, туда-обратно, переезд якоря),
 // физика по тому же треугольнику, что нарисован, точность «плавающего начала» в 10 000 км, сутки и времена года (календарь
-// владельца), луна, области, одинаковость (поток = страница), скорость.
+// владельца), луна, области, одинаковость (поток = страница), LOD v2 (T-075: поверхность до бита, форма родителя для перетекания,
+// экранная ошибка), климат по широте, скорость.
 const path = require('path');
 const SITE = path.join(__dirname, '..');
 require(path.join(SITE, 'js/engine/planet.js'));
@@ -312,7 +313,7 @@ sec('физика: земля под ногами = нарисованная с�
     if (inner) { worst = Math.max(worst, Math.abs(best - yP)); tested++; } else maxDiffEdge = Math.max(maxDiffEdge, Math.abs(best - yP));
   }
   ok(tested > 40 && worst < .02, 'внутри куска: высота физики = нарисованный треугольник (≤ 2 см)', { worst, tested });
-  ok(maxDiffEdge < 3, 'у края куска (другая диагональ в углах) — разница мала', maxDiffEdge);
+  ok(maxDiffEdge < .02, 'у края куска — тоже нарисованный треугольник (T-075: диагональ b–c во всех клетках, кроме сшитых краёв)', maxDiffEdge);
   // море: уровень над дном; кривизна — у якоря 0, в 500 ед. ниже на ≈ 500² / 2R
   const sea0 = P.patchSea(fr, 0, 0), sea5 = P.patchSea(fr, 500, 0);
   ok(Math.abs(sea0) < 1e-9 && Math.abs(sea5 + 500 ** 2 / (2 * P.SEAR)) < .01, 'море — сфера (кривизна видна)', { sea0, sea5 });
@@ -514,6 +515,84 @@ sec('профиль v2: подъём v1, повтор без изменений,
   // статические функции = функции планеты
   const ms = Date.UTC(2026, 9, 22, 12), t = 25436970;
   ok(PL.seasonOf(A.def, ms) === A.season(ms) && PL.declinationOf(A.def, ms) === A.declination(ms) && PL.subSolarLonOf(A.def, t) === A.subSolarLon(t), 'PL.seasonOf / declinationOf / subSolarLonOf = P.season / declination / subSolarLon');
+}
+
+// ═══ 16½. LOD v2 (T-075): поверхность до бита, «перетекание» — форма родителя, климат по широте ═══
+sec('LOD v2: поверхность родной — до бита (свёртка); форма родителя в куске (перетекание без скачков); экранная ошибка');
+{
+  // свёртка pos/nrm/col 9 кусков (уровни 0–12, рёбра куба): то же число, что у кода до T-075 (поверхность не менялась)
+  const list = [[4, 8, 100, 100], [0, 5, 12, 20], [2, 10, 400, 600], [3, 3, 1, 6], [1, 0, 0, 0], [5, 12, 2047, 1], [4, 12, 1234, 2345], [2, 1, 1, 0], [0, 7, 127, 0]];
+  let h = 2166136261 >>> 0;
+  const mix = x => { h = Math.imul(h ^ (x & 255), 16777619) >>> 0; };
+  for (const [f, L, i, j] of list) { const c = P.buildChunk(f, L, i, j, 32); for (const k of ['pos', 'nrm', 'col']) { const u8 = new Uint8Array(c[k].buffer, c[k].byteOffset, c[k].byteLength); for (let q = 0; q < u8.length; q++) mix(u8[q]); } }
+  ok(h === 620557642, 'поверхность родной до бита (pos, nrm, col 9 кусков — как до T-075)', h);
+  // форма родителя: чётные вершины — вершины родителя (позиция, нормаль, цвет — до бита / в пределах float32 центров); нечётные —
+  // середина ребра или диагонали b–c родителя (сдвиг int16 — точнее 1/30000 наибольшего); err — наибольший сдвиг
+  const N = 32, n1 = 33;
+  let worstE = 0, worstO = 0, nBad = 0, cBad = 0, cOdd = 0, eBad = 0, tot = 0;
+  for (const [f, L, i, j] of [[4, 9, 300, 201], [0, 6, 63, 10], [2, 4, 0, 15], [5, 11, 1500, 777], [1, 3, 7, 0], [3, 12, 4095, 2000]]) {
+    const c = P.buildChunk(f, L, i, j, N), p = P.buildChunk(f, L - 1, i >> 1, j >> 1, N), cx = i & 1, cy = j & 1;
+    const pv = (a, b) => (b * n1 + a);   // вершина родителя
+    const BF = (ch, v) => [ch.centre[0] + ch.pos[v * 3], ch.centre[1] + ch.pos[v * 3 + 1], ch.centre[2] + ch.pos[v * 3 + 2]];
+    const s = c.mscale / 32767;
+    let em = 0;
+    for (let b = 0; b <= N; b++) for (let a = 0; a <= N; a++) {
+      const v = b * n1 + a, X = BF(c, v), M = [X[0] + c.md[v * 4] * s, X[1] + c.md[v * 4 + 1] * s, X[2] + c.md[v * 4 + 2] * s];
+      em = Math.max(em, Math.hypot(M[0] - X[0], M[1] - X[1], M[2] - X[2]));
+      const pa = cx * N / 2 + a / 2, pb = cy * N / 2 + b / 2;   // точка в решётке родителя
+      tot++;
+      if (!(a & 1) && !(b & 1)) {
+        const w = pv(pa, pb), Y = BF(p, w);
+        worstE = Math.max(worstE, Math.hypot(M[0] - Y[0], M[1] - Y[1], M[2] - Y[2]) / (p.radius * 2e-7 + 1e-6));
+        if (c.np[v * 4] !== p.nrm[w * 3] || c.np[v * 4 + 1] !== p.nrm[w * 3 + 1] || c.np[v * 4 + 2] !== p.nrm[w * 3 + 2]) nBad++;
+        if (c.colp[v * 4] !== p.col[w * 4] || c.colp[v * 4 + 1] !== p.col[w * 4 + 1] || c.colp[v * 4 + 2] !== p.col[w * 4 + 2] || c.colp[v * 4 + 3] !== p.col[w * 4 + 3]) cBad++;
+      } else {
+        const A = (a & 1) && (b & 1) ? [Math.floor(pa) + 1, Math.floor(pb)] : (a & 1) ? [Math.floor(pa), pb] : [pa, Math.floor(pb)];
+        const Bq = (a & 1) && (b & 1) ? [Math.floor(pa), Math.floor(pb) + 1] : (a & 1) ? [Math.floor(pa) + 1, pb] : [pa, Math.floor(pb) + 1];
+        const wa = pv(A[0], A[1]), wb = pv(Bq[0], Bq[1]), YA = BF(p, wa), YB = BF(p, wb), Y = [(YA[0] + YB[0]) / 2, (YA[1] + YB[1]) / 2, (YA[2] + YB[2]) / 2];
+        worstO = Math.max(worstO, Math.hypot(M[0] - Y[0], M[1] - Y[1], M[2] - Y[2]) / (c.mscale * 1e-4 + p.radius * 4e-7 + 1e-6));
+        for (let q = 0; q < 4; q++) if (Math.abs(c.colp[v * 4 + q] - (p.col[wa * 4 + q] + p.col[wb * 4 + q]) / 2) > .51) cOdd++;
+      }
+    }
+    if (Math.abs(em - c.err) > c.err * .01 + 1e-6) eBad++;
+  }
+  ok(worstE <= 1, 'чётные вершины в форме родителя — точка родителя (в пределах float32 центров)', worstE);
+  ok(worstO <= 1, 'нечётные — середина ребра или диагонали b–c родителя (сдвиг int16)', worstO);
+  ok(nBad === 0 && cBad === 0, 'нормаль и цвет родителя в чётных вершинах — до бита как у самого родителя', { nBad, cBad, tot });
+  ok(cOdd === 0, 'цвет родителя в нечётных — среднее двух его вершин', cOdd);
+  ok(eBad === 0, 'err куска — наибольший сдвиг к родителю', eBad);
+  // корень: родителя нет — сдвигов нет, err неизвестен (−1)
+  const r0 = P.buildChunk(2, 0, 0, 0, N);
+  ok(r0.err === -1 && r0.mscale === 0 && r0.md.every((x, q) => q % 4 === 3 || x === 0), 'корень: своя форма, ошибка неизвестна');
+  // экранная ошибка: у моря рядом с камерой куски крупнее суши; узел с ошибкой больше порога делится
+  const leaves = [], S = { proj: 981, tau: 3, near: 24 };
+  let sd = null; for (let k = 0; k < 3000 && !sd; k++) { const d = randDir([0, 0, 0]); if (Math.abs(d[1]) < .5 && P.height(d[0], d[1], d[2]) < -800) sd = d; }
+  const cS = [sd[0] * (P.SEAR + 5), sd[1] * (P.SEAR + 5), sd[2] * (P.SEAR + 5)];   // открытое море, 5 ед. над водой
+  P.select(cS[0], cS[1], cS[2], { maxL: 12, sse: S }, leaves); P.balance(leaves);
+  ok(leaves.length > 6 && leaves.every(n => n.leaf === P.selMark()), 'выбор по экранной ошибке: листья — выбранные (сколько у моря с настоящими ошибками — planet-lod-test)', leaves.length);
+  let gBad = 0; for (const n of leaves) if (n.L && n.par && n.par.eKs < n.eKs * 1.9) gBad++;
+  ok(gBad === 0, 'у каждого листа ошибка родителя ≥ 1,9 × своей (потолок γ: перетекание сходится)', gBad);
+}
+sec('климат по широте (погода движка на планете: js/engine/climate.js)');
+{
+  const kinds = {}, at = (lat, lon) => P.climateAt(P.dirFromLatLon(lat, lon));
+  let polar = 0, polarN = 0, warm = 0, warmN = 0;
+  for (let k = 0; k < 600; k++) {
+    const lat = -88 + rnd() * 176, lon = -180 + rnd() * 360, c = at(lat, lon);
+    kinds[c] = (kinds[c] || 0) + 1;
+    if (Math.abs(lat) > 72) { polarN++; if (c === 'snow' || c === 'sea') polar++; }
+    if (Math.abs(lat) < 30) { warmN++; if (c !== 'snow') warm++; }
+  }
+  ok(polar / polarN > .9, 'у полюсов — снега (или море)', { polar, polarN });
+  ok(warm === warmN, 'у экватора снегов нет', { warm, warmN });
+  ok(['sea', 'snow', 'desert', 'steppe', 'temperate'].every(k => kinds[k] > 0) && Object.keys(kinds).every(k => ['sea', 'snow', 'desert', 'steppe', 'temperate', 'tropic', 'mountain'].includes(k)), 'климаты планеты — из списка движка (море, снега, пустыня, степь, умеренный…)', kinds);
+  // погода движка по этому климату: у полюса холоднее, чем у экватора, в один и тот же момент
+  require(path.join(SITE, 'js/engine/climate.js'));
+  const C = globalThis.D37E.climate, Rr = P.R, D2 = 180 / Math.PI;
+  const W = C.world({ seed: 'planet', mode: 'calendar', climateAt: (x, z) => P.climateAt(P.dirFromLatLon(Math.max(-90, Math.min(90, -z / Rr * D2)), x / Rr * D2)), lapse: -6.5 / 1166, seaY: 0 });
+  const ms = Date.UTC(2027, 0, 15, 12), g = (lat, lon) => W.at(lon / D2 * Rr, -lat / D2 * Rr, ms, 10);
+  const tPol = g(80, 30), tEq = g(2, 60);
+  ok(tPol && tEq && tPol.temp < tEq.temp - 15, 'погода: у полюса холоднее экватора (январь)', { pol: tPol && tPol.temp, eq: tEq && tEq.temp });
 }
 
 // ═══ 17. Скорость ═══

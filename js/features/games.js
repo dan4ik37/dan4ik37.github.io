@@ -65,7 +65,7 @@ const GAMES = [
 const GAMES_HIDDEN = [
   { id: 'sprites', age: '0+', icon: '🎞', title: '2D-персонажи', scripts: ['js/core/char2d.js', 'js/games/sprite-view.js'] },   // проверка 2D-проекции персонажа
   // проверка круглой планеты движка (T-051, docs/plans/planet.md): полёт с орбиты до земли, ходьба, сутки от вращения
-  { id: 'planet', age: '0+', icon: '🪐', title: 'Планета (проверка)', scripts: ['js/games/world3d.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/climate.js', 'js/engine/clock.js', 'js/engine/planet.js', 'js/engine/orbit.js', 'js/engine/system.js', 'js/engine/planet-worker.js', 'js/engine/planet-view.js', 'js/engine/space-view.js', 'js/games/planet-demo.js'] },
+  { id: 'planet', age: '0+', icon: '🪐', title: 'Планета (проверка)', scripts: ['js/games/world3d.js', 'js/engine/core.js', 'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/input.js', 'js/engine/player.js', 'js/engine/camera.js', 'js/engine/gfx.js', 'js/engine/render.js', 'js/engine/post.js', 'js/engine/perf.js', 'js/engine/actors.js', 'js/engine/ui.js', 'js/engine/climate.js', 'js/engine/precip.js', 'js/engine/clock.js', 'js/engine/planet.js', 'js/engine/orbit.js', 'js/engine/system.js', 'js/engine/planet-worker.js', 'js/engine/planet-view.js', 'js/engine/space-view.js', 'js/games/planet-demo.js'] },
 ];
 // Разделы витрины: у игры может быть несколько. «С друзьями» — есть игра вдвоём/компанией онлайн или на одном экране
 const GAME_CATS = [

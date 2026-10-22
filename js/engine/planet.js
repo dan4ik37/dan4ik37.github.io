@@ -421,6 +421,20 @@
       return out;
     }
     P.tempAt = tempAt; P.moistAt = moistAt; P.landColor = landColor; P.iceAt = iceAt;
+    // Климат места для погоды движка (T-075, js/engine/climate.js C.CLIMATES) — как цвет поверхности: широта и высота (температура),
+    // влага (пояса пустынь у ±24°); море — 'sea', замёрзшее море и холод — 'snow', выше 1200 ед. над морем — 'mountain', сухо и
+    // тепло — 'desert', жарко и влажно — 'tropic', сухо — 'steppe', иначе — 'temperate'. Средний за год (сезон и сутки добавит погода)
+    P.climateAt = d => {
+      const x = d[0], y = d[1], z = d[2], h = H(x, y, z);
+      if (D.sea != null && h < D.sea) return iceAt(x, y, z) ? 'snow' : 'sea';
+      const T = tempAt(x, y, z, h), m = moistAt(x, y, z), above = h - (D.sea ?? 0);
+      if (T < -2) return 'snow';
+      if (above > 1200) return 'mountain';
+      if (m < .3 && T > 10) return 'desert';
+      if (T > 21 && m > .55) return 'tropic';
+      if (m < .42) return 'steppe';
+      return 'temperate';
+    };
     // всё о точке поверхности: { h, water (глубина ≥ 0 или 0), r, g, b }
     P.surf = (d, out = {}) => {
       const h = H(d[0], d[1], d[2]);
@@ -435,7 +449,11 @@
     function node(f, L, i, j){
       const k = key(f, L, i, j);
       let n = nodes.get(k);
-      if (n) return n;
+      if (n) {
+        // родитель вычищен и создан заново (узел — от поиска соседа, не из kidsOf: чистка его не задела) — ссылку на живого
+        if (L && nodes.get(n.par.key) !== n.par) n.par = node(f, L - 1, i >> 1, j >> 1);
+        return n;
+      }
       n = { key: k, f, L, i, j, c: [0, 0, 0], cp: [0, 0, 0], ang: 0, size: 0, hc: 0, hmin: P.renderMin, hmax: P.maxH, built: false,
         split: false, leaf: 0, used: 0, mask: 0, par: null, kids: null, nb: null,
         // LOD v2: ошибки (своя, «4 ребёнка вместо меня» — измеренная и использованная), экранная, перетекание, показ
@@ -507,6 +525,13 @@
     const SEL = { cx: 0, cy: 0, cz: 0, K: 2, hyst: 1.15, maxL: 12, cull: true, out: null, sse: null, proj: 1, tau: 3, nearE: 0, pre: null, preK: .6, px: 0, py: 0, pz: 0, pred: false };
     // экранная ошибка узла с ошибкой eK на расстоянии d (пол «рядом с игроком» — в eK: nearE · 2^(maxL − 1 − L))
     const rhoOf = (eK, d) => eK * SEL.proj / (d > 1e-3 ? d : 1e-3);
+    // ошибка «4 ребёнка вместо узла» с потолком (≤ eK родителя / γ) и полом «рядом с игроком» — одна для выбора, «куда летим» и 2 : 1
+    function ekOf(n, eKp){
+      const es = n.err >= 0 ? n.err : n.L ? eKp : LODK.EK0 / LODK.BETA;
+      let eK = min(n.eK >= 0 ? n.eK : LODK.BETA * es, eKp / LODK.GAMMA);
+      if (SEL.nearE > 0 && n.L < SEL.maxL) eK = max(eK, SEL.nearE * P2[SEL.maxL - 1 - n.L]);
+      return eK;
+    }
     function walk(n, eKp){
       n.used = selMark;
       if (SEL.cull && !P.horizonVisible(n, SEL.cx, SEL.cy, SEL.cz)) { n.split = false; return; }
@@ -515,11 +540,7 @@
       let want;
       if (SEL.sse) {
         // своя ошибка (не построен — оценка родителя), «4 ребёнка вместо меня» — измеренная или β · своя; потолок и пол
-        const es = n.err >= 0 ? n.err : n.L ? eKp : LODK.EK0 / LODK.BETA;
-        let eK = n.eK >= 0 ? n.eK : LODK.BETA * es;
-        eK = min(eK, eKp / LODK.GAMMA);
-        if (SEL.nearE > 0 && n.L < SEL.maxL) eK = max(eK, SEL.nearE * P2[SEL.maxL - 1 - n.L]);
-        n.eKs = eK;
+        const eK = n.eKs = ekOf(n, eKp);
         const rho = n.rho = rhoOf(eK, d);
         want = n.L < SEL.maxL && rho > SEL.tau * (n.split ? 1 / SEL.hyst : 1);
         n.split = want;
@@ -556,9 +577,7 @@
     // сразу своего уровня (не крупный предок рядом с мелкими соседями). out — до cap узлов, важнее — крупнее на экране
     const PK = { cx: 0, cy: 0, cz: 0, out: null, cap: 16, n: 0 };
     function peekWalk(n, eKp){
-      const es = n.err >= 0 ? n.err : n.L ? eKp : LODK.EK0 / LODK.BETA;
-      let eK = min(n.eK >= 0 ? n.eK : LODK.BETA * es, eKp / LODK.GAMMA);
-      if (SEL.nearE > 0 && n.L < SEL.maxL) eK = max(eK, SEL.nearE * P2[SEL.maxL - 1 - n.L]);
+      const eK = ekOf(n, eKp);
       if (!P.horizonVisible(n, PK.px, PK.py, PK.pz)) return;
       const dx = PK.px - n.cp[0], dy = PK.py - n.cp[1], dz = PK.pz - n.cp[2], d = max(0, sqrt(dx * dx + dy * dy + dz * dz) - n.ang * R), rho = rhoOf(eK, d);
       if (n.L < SEL.maxL && rho > SEL.tau) { const k = kidsOf(n); for (let q = 0; q < 4; q++) peekWalk(k[q], eK); return; }
@@ -750,7 +769,14 @@
             const cov = coverLeaf(neighbor(n, e));
             if (cov && cov.L < n.L - 1) {   // сосед крупнее на 2+ уровня — делим его
               cov.leaf = 0; cov.split = true;
-              for (const c of kidsOf(cov)) { c.leaf = selMark; c.split = false; c.used = selMark; leaves.push(c); }
+              for (const c of kidsOf(cov)) {
+                c.leaf = selMark; c.split = false; c.used = selMark; leaves.push(c);
+                if (SEL.sse) {   // выбор по экранной ошибке: и у этих — ошибка и ρ (как в обходе)
+                  c.eKs = ekOf(c, cov.eKs);
+                  const dx = SEL.cx - c.cp[0], dy = SEL.cy - c.cp[1], dz = SEL.cz - c.cp[2];
+                  c.rho = rhoOf(c.eKs, max(0, sqrt(dx * dx + dy * dy + dz * dz) - c.ang * R));
+                }
+              }
               changed = true;
             }
           }
