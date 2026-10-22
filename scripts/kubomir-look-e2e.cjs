@@ -182,6 +182,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       S.R.lighting.time = 8.2; await wait(6000); return 1; })()`, 60000);
     await view(Math.PI, .55, 0, 1500); await shot('shadow-plants');
     await view(Math.PI - .7, .3, 0, 1500); await shot('shadow-plants-low');
+    // вещь в руке от 3-го лица (росток, цветок — плоская картинка) и на земле: тень по форме, а не квадратом
+    await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b;
+      fill(cx - 3, gy, cz - 1, cx + 3, gy + 3, cz + 2, null);
+      Object.assign(P, { x: cx + .5, y: gy, z: cz + .5, vx: 0, vy: 0, vz: 0 }); P.inv[P.sel] = { id: 'sapling_oak', n: 1 }; P.off = { id: 'flower_red', n: 1 };
+      for (const [i, id] of [['dx', 'flower_yellow'], ['dz', 'sapling_birch']].entries()) S.ents?.addItem?.(cx + 1.6 + i, gy + .3, cz - .4, { id: id[1], n: 1 }, false, [0, 0, 0]);
+      await wait(2500); return 1; })()`, 30000);
+    await view(Math.PI + .9, .55, 1, 1500); await shot('shadow-held-tp');
     await ev(`(() => { GAME_IMPL.kubomir._test.state().R.lighting.time = 12; return 1; })()`);
     }
     if (only('climb')) {

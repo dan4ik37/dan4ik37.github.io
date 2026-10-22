@@ -617,6 +617,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     const actMat = k => actMats[k] || (actMats[k] = makeMat(k, false, true));
     // тень вырезного — по альфе текстуры (одна на слой; пересобирается с простым режимом)
     let depthMats = {};
+    VR.depthMat = k => depthMat(k);   // тень по альфе для своих сеток в формате чанка (падающее дерево — kubomir-ents.js)
     function depthMat(k){
       if (!(LAYER_OPTS[k] || {}).alphaTest) return undefined;
       if (depthMats[k]) return depthMats[k];
@@ -624,10 +625,13 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       m.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, U);
         sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\n' + VSD_HEAD).replace('#include <begin_vertex>', VSD_BEGIN);
+        // T-096a (владелец: «у цветов и травы нет нормальной тени»): альфа — с самого крупного уровня (без мип-уровней: вдали и
+        // вскользь карта теней брала усреднённую альфу — стебли и лепестки «таяли»), тонкое (стебель в 1 тексель) — чуть толще
+        // по уровню 1: тень по форме растения не пропадает в размытии теней. WebGL1 (атлас без мип-уровней) — как было
         sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vUvL;' + (gl2 ? FS_TEX2 : FS_TEX1))
-          .replace('#include <map_fragment>', 'diffuseColor.a = d37Tex( vUvL ).a;');
+          .replace('#include <map_fragment>', gl2 && V.SHADOW_DILATE !== false ? 'diffuseColor.a = max( textureLod( uTex, vUvL, 0.0 ).a, min( 1.0, textureLod( uTex, vUvL, 1.0 ).a * 1.4 ) );' : 'diffuseColor.a = d37Tex( vUvL ).a;');
       };
-      m.customProgramCacheKey = () => 'd37voxdepth-' + (gl2 ? '2' : '1');
+      m.customProgramCacheKey = () => 'd37voxdepth2-' + (gl2 ? '2' : '1') + (V.SHADOW_DILATE !== false ? 'd' : '');
       return depthMats[k] = m;
     }
     // свой материал слоя целиком (пак движка): у всех сеток этого слоя сразу; null — вернуть наш
@@ -854,6 +858,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const g = VR.itemGeo(name, L), it = V.item(name), b = it?.place ? V.block(it.place) : null, s = b ? V.T.stream?.[b.id] : 0;
       const k = g.userData.flat ? 'cutout' : s === 3 ? 'foliage' : s === 4 ? 'glass' : 'solid';   // листва и стекло в руке — по альфе
       const m = new T.Mesh(g, o?.fp ? fpMat(k) : actMat(k));
+      if (!o?.fp) m.customDepthMaterial = depthMat(k);   // тень вещи (в руке, на земле) — по альфе картинки, а не квадратом (T-096a)
       m.userData.item = name; m.userData.layer = k;
       if (o?.fp) m.userData.fp = true;
       return m;
@@ -961,7 +966,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const swap = new Map(LAYERS.map(k => [old[k], mats[k]]));
       for (const k in oldF) swap.set(oldF[k], fpMat(k));
       for (const k in oldA) swap.set(oldA[k], actMat(k));
-      R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); });
+      const dSwap = new Map(Object.entries(oldD).map(([k, m]) => [m, k]));
+      R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); if (o.isMesh && dSwap.has(o.customDepthMaterial)) o.customDepthMaterial = depthMat(dSwap.get(o.customDepthMaterial)); });
       for (const m of Object.values(old)) { R.waveMats?.delete?.(m); R.rtClear?.delete?.(m); m.dispose(); }
       regRt();
       for (const m of Object.values(oldF)) m.dispose();

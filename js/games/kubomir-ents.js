@@ -702,6 +702,7 @@
       geo.setAttribute('position', new T.BufferAttribute(pos, 3)); geo.setAttribute('vd', new T.BufferAttribute(vd, 4)); geo.setAttribute('color', new T.BufferAttribute(cl, 3, true)); geo.setAttribute('lt', new T.BufferAttribute(lt, 4, false));
       geo.setIndex(new T.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
       const mesh = new T.Mesh(geo, VR.mats?.foliage || VR.mats?.solid); mesh.castShadow = true; mesh.frustumCulled = false; R.scene.add(mesh);
+      if (VR.depthMat && VR.mats?.foliage) mesh.customDepthMaterial = VR.depthMat('foliage');   // тень падающего дерева — по альфе листвы (T-096a)
       // центр масс, точки для удара: все стволы (до 48) и самые дальние от оси листья (до 24)
       let hc = 0, far = [];
       for (let i = 0; i < n; i++) { const ry = cells[i * 4 + 1] + .5 - pivot.y; hc += ry; far.push(i); }
