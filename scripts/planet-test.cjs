@@ -30,7 +30,9 @@ sec('профиль планеты: умолчания, пределы, свои
   const a = PL.def({ atmo: null }); ok(a.atmo === null, 'без атмосферы');
   const b = PL.def({ radius: 32000, atmo: { tauM: .1 } }); ok(b.atmo && b.atmo.Hr > 0 && b.atmo.top > b.atmo.Hr && b.atmo.tauM === .1, 'атмосфера: неполная → по радиусу', b.atmo);
   ok(PL.def({ year: 'calendar' }).year === 'calendar' && PL.def({ year: 1000 }).year === 1000, 'год: календарь владельца или секунды');
-  ok(P.def.moons.length === 1 && P.def.moons[0].dist > R, 'у родной — луна');
+  ok(P.def.moons.length === 1 && P.def.moons[0] === 'luna', 'у родной — Луна-тело системы (id; орбита — js/engine/system.js)', P.def.moons);
+  const v1 = PL.def(PL.HOME_V1);
+  ok(v1.moons.length === 1 && v1.moons[0].dist > R && v1.moons[0].rails === 'visual', 'у профиля v1 — луна-«украшение» (rails visual)', v1.moons);
 }
 
 // ═══ 2. Куб-сфера ═══
@@ -387,11 +389,13 @@ sec('сутки от вращения, времена года по календ
   // ноябрь всегда осень
   let novBad = 0; for (let dd = 1; dd <= 30; dd++) { const ph = P.season(Date.UTC(2027, 10, dd, 12)); if (Math.floor(ph) !== 2) novBad++; }
   ok(novBad === 0, 'ноябрь — осень', novBad);
-  // луна: на своём расстоянии, через период — там же (с учётом вращения планеты)
-  const m1 = P.moonPos(0, 0), mm = P.def.moons[0];
+  // луна-«украшение» профиля v1: на своём расстоянии, через период — там же (с учётом вращения планеты); у v2 — тело системы
+  const PV1 = PL.create(PL.HOME_V1);
+  const m1 = PV1.moonPos(0, 0), mm = PV1.def.moons[0];
+  ok(P.moonPos(0, 0).every(x => x === 0), 'у v2 луна — не «украшение» (её место — в системе)');
   ok(Math.abs(Math.hypot(...m1) - mm.dist) < 1e-6 * mm.dist, 'луна на своём расстоянии');
-  const lcm = mm.period * P.def.day / 2400;   // кратно обоим: 7 суток — луна и планета вернулись (период луны = 7 суток)
-  const m2 = P.moonPos(0, mm.period);
+  const lcm = mm.period * PV1.def.day / 2400;   // кратно обоим: 7 суток — луна и планета вернулись (период луны = 7 суток)
+  const m2 = PV1.moonPos(0, mm.period);
   ok(Math.hypot(m1[0] - m2[0], m1[1] - m2[1], m1[2] - m2[2]) < 1e-3 * mm.dist, 'через период луны (7 суток) — там же', lcm);
 }
 
@@ -470,11 +474,49 @@ sec('замёрзшее море держит, базис = базис куск�
   const B = P.basis([.3, .5, -.8], new Array(9)), fr = P.patch([.3, .5, -.8]);
   ok(B.every((v, i) => v === fr.B[i]), 'P.basis = базис плоского куска');
   const P2 = PL.create(PL.HOME), t = 98765.4, ms = Date.UTC(2027, 3, 3);
-  const s1 = P.sunDir(t, ms), s2 = P2.sunDir(t, ms), m1 = P.moonPos(0, t), m2 = P2.moonPos(0, t);
+  const PV1 = PL.create(PL.HOME_V1), PV2 = PL.create(PL.HOME_V1);
+  const s1 = P.sunDir(t, ms), s2 = P2.sunDir(t, ms), m1 = PV1.moonPos(0, t), m2 = PV2.moonPos(0, t);
   ok(s1.every((v, i) => v === s2[i]) && m1.every((v, i) => v === m2[i]), 'солнце и луна — от времени, у всех одинаковые (без сети)');
 }
 
-// ═══ 16. Скорость ═══
+// ═══ 16. Профиль v2 (T-079): v1 поднимается сам, def(def(p)) = def(p), родная — та же поверхность до бита ═══
+sec('профиль v2: подъём v1, повтор без изменений, свои поля, воздух и атмосфера, родная — та же планета до бита');
+{
+  const deepEq = (a, b) => { if (a === b) return true; if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return a !== a && b !== b; const ka = Object.keys(a), kb = Object.keys(b); if (ka.length !== kb.length) return false; for (const k of ka) if (!deepEq(a[k], b[k])) return false; return true; };
+  const v1 = PL.def({ radius: 32000, temp: -5, air: true, o2: .1, pressure: .5, custom: { x: 1 } });
+  ok(v1.v === 2 && v1.air && v1.air.p === 50.5 && v1.air.o2 === .1 && v1.temp.mean === -5 && v1.o2 === undefined && v1.custom.x === 1, 'v1: воздух и температура — в полях v2, свои поля на месте', { air: v1.air, temp: v1.temp });
+  ok(PL.def({ air: false }).air === null && PL.def({ air: false }).atmo === null, 'v1: air: false → без воздуха и атмосферы');
+  let same = 0, tot = 0;
+  for (const p0 of [PL.HOME, PL.HOME_V1, {}, { radius: 32000, atmo: { tauM: .1 } }, { v: 2, id: 'dune', radius: 64000, air: { p: 6, dust: .4 }, atmo: { top: 16000, Hr: 2000, tint: '#d08a5a' }, orbit: { parent: 'sun', a: 6e9, e: .06, i: 1.8, M0: 189 }, moons: ['phob', { dist: 9e5, period: 5000 }, 'Плохое имя'] },
+    { v: 2, id: 'gas', type: 'gas', surface: 'none', radius: 900000, air: { p: 9000, toxic: .6 }, rings: { inner: 1.3e6, outer: 2.3e6 } }, { v: 2, id: 'rock', air: null, gen: 'moon1', terra: { on: true, vars0: { p: 0, t: -30 } } }]) {
+    const a = PL.def(p0), b = PL.def(a); tot++; if (deepEq(a, b)) same++; else console.log('   не повторяется:', p0.id || '?');
+  }
+  ok(same === tot, 'def(def(p)) = def(p) (поток получает уже проверенный профиль)', { same, tot });
+  const dn = PL.def({ v: 2, id: 'dune', radius: 64000, air: { p: 6, dust: .4 }, atmo: { top: 16000, Hr: 2000, tint: '#d08a5a' }, moons: ['phob', { dist: 9e5, period: 5000 }, 'Плохое имя'] });
+  ok(dn.atmo.top === 16000 && dn.atmo.Hr === 2000 && dn.atmo.tint === '#d08a5a' && dn.atmo.tauR[2] < .133 * .1, 'v2: недостающее в atmo — из воздуха (6 кПа: Рэлей в 17 раз слабее)', dn.atmo);
+  ok(dn.moons.length === 2 && dn.moons[0] === 'phob' && dn.moons[1].rails === 'visual', 'v2: луны — id тел и «украшения»; плохой id отброшен', dn.moons);
+  ok(PL.def({ v: 2 }).moons.length === 0 && PL.def({ v: 2 }).atmo === null && PL.def({ v: 2 }).year === 0, 'v2 без полей — без «родного»: ни Луны, ни воздуха, ни календаря');
+  const mn = PL.def({ v: 2, id: 'rock', gen: 'moon1' });
+  ok(mn.gen === 'moon1' && PL.create(mn).genOk === false && typeof PL.create(mn).height(0, 1, 0) === 'number', 'генератора ещё нет (moon1) — id сохраняется, рисует каменный');
+  // родная v2 = родная v1 (та же поверхность: высоты, цвета, вода до бита)
+  const A = PL.create(PL.HOME), B = PL.create(PL.HOME_V1);
+  let diff = 0;
+  for (const [f, L, i, j] of [[4, 8, 100, 100], [0, 5, 12, 20], [2, 10, 400, 600], [3, 3, 1, 6]]) {
+    const ca = A.buildChunk(f, L, i, j, 32), cb = B.buildChunk(f, L, i, j, 32);
+    for (let k = 0; k < ca.pos.length; k++) if (ca.pos[k] !== cb.pos[k]) diff++;
+    for (let k = 0; k < ca.col.length; k++) if (ca.col[k] !== cb.col[k]) diff++;
+  }
+  ok(diff === 0, 'родная v2 — та же поверхность, что v1 (4 куска до бита)', diff);
+  // склонение — точная формула (sin δ = sin ε · sin L): от прежней (ε·sin L) — меньше 0,3°
+  let dmax = 0;
+  for (let k = 0; k < 200; k++) { const ms = Date.UTC(2026, 0, 1) + k * 1.9e8; const ph = A.season(ms), old = 23.4 * Math.cos((ph - 1.5) * Math.PI / 2); dmax = Math.max(dmax, Math.abs(A.declination(ms) * 180 / Math.PI - old)); }
+  ok(dmax < .3, 'склонение точное — от прежнего не больше 0,3°', +dmax.toFixed(3));
+  // статические функции = функции планеты
+  const ms = Date.UTC(2026, 9, 22, 12), t = 25436970;
+  ok(PL.seasonOf(A.def, ms) === A.season(ms) && PL.declinationOf(A.def, ms) === A.declination(ms) && PL.subSolarLonOf(A.def, t) === A.subSolarLon(t), 'PL.seasonOf / declinationOf / subSolarLonOf = P.season / declination / subSolarLon');
+}
+
+// ═══ 17. Скорость ═══
 sec('скорость (node; телефон с ЦП ×4 — примерно ×4)');
 {
   const d = [0, 0, 0], N = 60000;

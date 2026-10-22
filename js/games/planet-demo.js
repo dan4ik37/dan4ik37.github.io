@@ -2,10 +2,13 @@
 //  ПЛАНЕТА — скрытая страница проверки (/play/planet, #/games/planet): полёт с орбиты до земли без экранов загрузки,
 //  посадка и ходьба своим персонажем по «плоскому куску» (обычный player.js), день и ночь от вращения планеты.
 //  Движок — js/engine/planet.js + planet-view.js (T-051, docs/plans/planet.md). Нет в каталоге, поиске и рекордах.
+//  Небесная механика (T-079, docs/plans/planet-space.md PS-1): время — часы мира (js/engine/clock.js: у всех одно, по серверу),
+//  Луна и Песчаная летят по орбитам Кеплера (orbit.js, system.js) и видны в небе с фазами (space-view.js); «🪐 Система» (M) — карта.
 // ═══════════════════════════════════════
 // Управление: полёт — W/S вперёд/назад, A/D вбок, Пробел/C вверх/вниз, Shift — быстрее, мышь (тянуть) — смотреть;
-// L — сесть / взлететь; T — время быстрее. Телефон: джойстик слева, палец — смотреть, кнопки справа.
-// Проверки: GAME_IMPL.planet._test — state(), stats(), goto(шир, долг, высота), land(), fly(), descend(сек), soak…
+// L — сесть / взлететь; T — время быстрее (своё: смещение от времени мира); M — карта системы. Телефон: джойстик слева, палец —
+// смотреть, кнопки справа.
+// Проверки: GAME_IMPL.planet._test — state(), stats(), goto(шир, долг, высота), land(), fly(), descend(сек), sky(), map(), look(id)…
 (() => {
   const CSS = `
 .pl-wrap{position:relative;height:min(78vh,760px);min-height:340px;border-radius:14px;overflow:hidden;background:#000;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -19,7 +22,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 .pl-msg{position:absolute;inset:0;display:grid;place-items:center;color:#cbd5e1;font:800 15px Montserrat,sans-serif;text-align:center;padding:20px;z-index:3}
 .pl-help{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;max-width:92%;padding:8px 12px;border-radius:12px;background:rgba(6,8,20,.72);color:#e2e8f0;font:700 12px/1.5 Montserrat,sans-serif;text-align:center}
 .pl-help[hidden]{display:none}
-@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start}.pl-bar button{padding:.3rem .55rem;font-size:.72rem}
+.pl-tele{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);z-index:6;border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:.34rem .8rem;background:rgba(10,8,24,.72);color:#fff;font:800 .76rem Montserrat,sans-serif;cursor:pointer;min-height:36px}
+.pl-tele[hidden]{display:none}
+@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start}.pl-bar button{padding:.3rem .55rem;font-size:.72rem}.pl-tele{bottom:150px}
 .pl-hud{top:58px;max-width:calc(100% - 20px);font-size:11px;padding:5px 8px}.pl-st{font-size:10px}}`;
   const css = () => { if (document.getElementById('pl-css')) return; const s = document.createElement('style'); s.id = 'pl-css'; s.textContent = CSS; document.head.appendChild(s); };
   const DEG = Math.PI / 180, U = 2.1 / 1.8, HOME_LL = [29, 81];
@@ -48,10 +53,19 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const home = P.dirFromLatLon(HOME_LL[0], HOME_LL[1]);
     const V = st.V = E.planetView(R, P, { dir: home });
     st.msg.remove();
-    // время: утро над стартом; сутки планеты — 40 мин (×30 — 80 с)
-    const lon0 = HOME_LL[1] * DEG;
-    st.t = ((P.def.phase * DEG - lon0 - Math.PI / 4) * P.def.day / (2 * Math.PI) % P.def.day + P.def.day) % P.def.day;
+    // время — часы мира (у всех одно); сутки планеты — 40 мин. Ночь над стартом — своё время: сдвиг до 9 утра (не больше суток)
+    const CL = st.CL = E.clock;
+    st.offClock = CL.start();
     st.timeK = 1;
+    const tw0 = CL.t(), hr0 = P.localHour(home, tw0);
+    st.off = hr0 >= 7 && hr0 <= 16 ? 0 : ((9 - hr0 + 24) % 24) / 24 * P.def.day;
+    st.t = tw0 + st.off;
+    // небо системы: Луна и Песчаная по орбитам Кеплера (сломалось — планета живёт без них)
+    try {
+      st.S = E.system.create(E.system.HOME);
+      st.SV = E.spaceView(R, V, st.S, { observer: P.def.id });
+      st.map = E.spaceMap(wrap, st.S, { observer: P.def.id, time: () => st.t, clock: CL, onLook: id => lookAt(st, id), where: () => whereOnPlanet(st) });
+    } catch (e) { console.warn('планета: небо системы не запустилось', e); st.SV = null; }
     // управление
     const C = st.C = E.controls({});
     const I = st.I = E.input(wrap, { controls: C, ignore: 'button, .pl-bar, .e-btn' });
@@ -76,10 +90,14 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     btn('🛰 Орбита', 'Подняться на орбиту', () => goOrbit(st));
     btn('⬇ Вниз', 'Сам спустится к земле', () => descend(st, 40));
     st.bTime = btn('⏩ ×1', 'Время быстрее (T)', () => cycleTime(st));
+    if (st.map) btn('🪐 Система', 'Карта системы: орбиты, фазы Луны, затмения (M)', () => st.map.toggle());
+    const tele = st.tele = document.createElement('button'); tele.type = 'button'; tele.className = 'pl-tele'; tele.hidden = true;
+    tele.addEventListener('click', e => { e.stopPropagation(); untele(st); });
+    wrap.appendChild(tele);
     btn('❓', 'Как управлять', () => { st.help.hidden = !st.help.hidden; });
     const help = st.help = document.createElement('div'); help.className = 'pl-help';
     help.textContent = I.touch ? 'Полёт: джойстик — лететь, палец — смотреть, ⬆ ⬇ — вверх и вниз, 🚀 — быстрее. «🛬 Сесть» — идти пешком.'
-      : 'Полёт: W/S — вперёд/назад, A/D — вбок, Пробел/C — вверх/вниз, Shift — быстрее, мышь (тянуть) — смотреть. L — сесть/взлететь, T — время быстрее.';
+      : 'Полёт: W/S — вперёд/назад, A/D — вбок, Пробел/C — вверх/вниз, Shift — быстрее, мышь (тянуть) — смотреть. L — сесть/взлететь, T — время быстрее, M — карта системы.';
     wrap.appendChild(help);
     setTimeout(() => { if (S === st) help.hidden = true; }, 9000);
     touchButtons(st);
@@ -87,7 +105,13 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.ro?.observe(wrap);
     R.resize();
     st.loop = E.loop(dt => step(st, dt), dt => frame(st, dt));
-    st.keyT = e => { if (e.code === 'KeyT' && !e.repeat && !e.target?.closest?.('input, textarea')) cycleTime(st); if (e.code === 'KeyL' && !e.repeat && !e.target?.closest?.('input, textarea')) toggleLand(st); };
+    st.keyT = e => {
+      if (e.repeat || e.target?.closest?.('input, textarea')) return;
+      if (e.code === 'KeyM' && st.map) { st.map.toggle(); return; }
+      if (st.map?.isOpen) return;
+      if (e.code === 'KeyT') cycleTime(st);
+      if (e.code === 'KeyL') toggleLand(st);
+    };
     window.addEventListener('keydown', st.keyT);
   }
   function touchButtons(st){
@@ -105,7 +129,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const { C, P, V } = st;
     C.blocked = !!window.D37Settings?.isOpen?.();
     C.step(dt);
-    st.t += dt * st.timeK;
+    st.off += dt * (st.timeK - 1);   // ускорение — своё смещение от часов мира (шагами по 1/60 с: одинаково на любом экране)
     if (st.mode === 'fly') flyStep(st, dt);
     else {
       const Pl = st.Pl;
@@ -130,7 +154,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     // взгляд (мышь/палец/стик): рысканье и тангаж от местного горизонта
     if (!F.auto) {
       const dx = I.look.dx + C.look.dx, dy = I.look.dy + C.look.dy;
+      if (st.track && (dx || dy)) st.track = null;   // смотрит сам — телескоп больше не следит
       F.yaw -= dx * .0042; F.pitch = clamp(F.pitch - dy * .0042, -1.55, 1.55);
+      if (st.track) aim(st, st.track);
     }
     const altG = Math.max(.5, altGround(st, F.pos));
     // вперёд / вправо / вверх в системе планеты
@@ -182,6 +208,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   function frame(st, dt){
     if (st.dead) return;
     const { R, V, P, I, C } = st, cam = R.camera;
+    st.t = st.CL.t() + st.off;   // секунды мира (+ своё ускорение)
+    // карта системы закрывает вид — 3D не рисуем (батарея); логика идёт
+    if (st.map?.isOpen) { I.frameEnd(); C.frameEnd(); hud(st); return; }
     if (st.mode === 'fly') {
       const F = st.fly, B = P.basis(F.pos, st.B9), fr = V.fr;
       P.toL(fr, F.pos[0], F.pos[1], F.pos[2], LA);
@@ -206,12 +235,15 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     }
     st.A?.update(dt, performance.now() / 1000, cam.position);   // в полёте человечек спрятан (hidden) — и это тоже через update
     I.frameEnd(); C.frameEnd();
-    V.update(dt, st.t);
+    const ms = st.CL.msOf(st.t);
+    if (st.SV) { try { st.SV.update(st.t, ms); } catch (e) { console.warn('планета: небо системы', e); st.SV.dispose(); st.SV = null; } }
+    V.update(dt, st.t, ms);
     R.update(dt);
     R.render();
     hud(st);
   }
   function H_stamina(st){ st.H.stamina(st.Pl.stamina / st.Pl.maxStamina, st.Pl.exhausted); }
+  const fmtMin = s => { s = Math.abs(s); return s < 5400 ? Math.round(s / 60) + ' мин' : s < 172800 ? (s / 3600).toFixed(1) + ' ч' : (s / 86400).toFixed(1) + ' сут'; };
   let hudAt = 0;
   function hud(st){
     const tn = performance.now(); if (tn - hudAt < 250) return; hudAt = tn;
@@ -222,11 +254,16 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const altS = alt > 9999 ? (alt / 1000).toFixed(alt > 99999 ? 0 : 1) + ' км' : Math.round(alt) + ' м';
     const spdS = spd > 2000 ? (spd / 1000).toFixed(1) + ' км/с' : Math.round(spd) + ' м/с';
     const lat = Math.abs(ll[0]).toFixed(1) + '° ' + (ll[0] >= 0 ? 'с' : 'ю') + '. ш.', lon = Math.abs(ll[1]).toFixed(1) + '° ' + (ll[1] >= 0 ? 'в' : 'з') + '. д.';
-    st.h1.textContent = `🪐 ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · высота ${altS} · ${spdS}\n${lat}, ${lon} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} местного`;
+    const mo = st.SV?.moon, pc = mo && mo.id ? Math.round(mo.lit * 100) : -1;
+    const moonS = pc < 0 ? '' : ` · 🌙 ${pc < 3 ? 'новолуние' : pc > 97 ? 'полнолуние' : pc + ' %' + (mo.wax ? ' ↑' : ' ↓')}`;
+    const sk = V.sunK < .98 ? ` · ☀🌑 затмение ${Math.round((1 - V.sunK) * 100)} %` : '';
+    const own = Math.abs(st.off) > 1 ? `⏩ своё время ${st.off > 0 ? '+' : '−'}${fmtMin(st.off)}` : '🌍 время мира';
+    st.h1.textContent = `🪐 ${st.mode === 'fly' ? '✈ полёт' : '🚶 пешком'} · высота ${altS} · ${spdS}\n${lat}, ${lon} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} местного${moonS}${sk}\n${own}`;
     const s = V.stats(), rs = R.stats;
     const fps = rs.frames ? 1000 / (rs.sumDt / rs.frames) : 0, cpu = rs.frames ? rs.sumCpu / rs.frames : 0;
     st.h2.textContent = `кусков ${s.shown} · кэш ${s.cached} · в очереди ${s.queued + s.building} · вызовов ${rs.calls} · FPS ${fps.toFixed(0)} · ЦП ${cpu.toFixed(1)} мс`;
     rs.frames = 0; rs.sumDt = 0; rs.sumCpu = 0; rs.maxDt = 0; rs.maxCpu = 0; rs.sumR = 0;
+    if (st.tele && !st.tele.hidden && st.teleId) st.tele.textContent = `🔭 ${st.teleName} ×${Math.round(50 / cam.fov)}${st.track ? ' · слежу' : ''} — вернуть`;
     st.bLand.textContent = st.mode === 'fly' ? '🛬 Сесть' : '✈ Взлететь';
     st.bLand.disabled = st.mode === 'fly' && st.flyAlt > 120;
   }
@@ -237,6 +274,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     if (st.mode !== 'fly') return;
     const { P, V, R } = st, F = st.fly;
     if (altGround(st, F.pos) > 120) { st.H.toast('Слишком высоко — спустись ниже 100 м', false); return; }
+    untele(st);
     // якорь — область под собой (координаты области — общие)
     const rg = P.region(F.pos); st.anchorKey = rg.key; V.setAnchor(rg.dir);
     P.toL(V.fr, F.pos[0], F.pos[1], F.pos[2], LA);
@@ -272,6 +310,45 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   function descend(st, sec){ if (st.mode !== 'fly') return; st.fly.auto = { left: sec }; }
   function cycleTime(st){ const L = [1, 30, 300]; st.timeK = L[(L.indexOf(st.timeK) + 1) % L.length]; st.bTime.textContent = '⏩ ×' + st.timeK; st.bTime.classList.toggle('on', st.timeK > 1); }
 
+  // ═══ Небо системы: «👁 Посмотреть» (телескоп), слежение, «ты здесь» на карте ═══
+  // направление на тело (BF) → рысканье и тангаж от местного горизонта в точке полёта
+  function aim(st, id){
+    const e = st.SV?.list.find(x => x.b.id === id); if (!e) return false;
+    const P = st.P, F = st.fly, B = P.basis(F.pos, st.B9), d = e.d;
+    const le = d[0] * B[0] + d[1] * B[1] + d[2] * B[2], lu = d[0] * B[3] + d[1] * B[4] + d[2] * B[5], ls = d[0] * B[6] + d[1] * B[7] + d[2] * B[8];
+    F.pitch = clamp(Math.asin(clamp(lu, -1, 1)), -1.55, 1.55); F.yaw = Math.atan2(-le, -ls);
+    return true;
+  }
+  function lookAt(st, id){
+    if (!st.SV) return;
+    if (st.mode !== 'fly') fly(st);
+    st.fly.auto = null;
+    const e = st.SV.list.find(x => x.b.id === id);
+    if (!e || !aim(st, id)) return;
+    // телескоп: тело — на треть кадра (точка — увеличение ×25); следим, пока не повернёшь камеру сам
+    const cam = st.R.camera, deg = e.rad * 360 / Math.PI;
+    if (st.fov0 == null) st.fov0 = cam.fov;
+    cam.fov = deg < .4 ? 2 : clamp(deg / .33, 1.6, 50); cam.updateProjectionMatrix();
+    st.track = id; st.teleId = id; st.teleName = e.b.title; st.tele.hidden = false;
+    // за планетой ли (луч к телу упирается в шар моря)
+    const c = st.fly.pos, d = e.d, b = c[0] * d[0] + c[1] * d[1] + c[2] * d[2], q = b * b - (c[0] * c[0] + c[1] * c[1] + c[2] * c[2] - st.P.SEAR * st.P.SEAR);
+    if (q > 0 && -b - Math.sqrt(q) > 0) st.H.toast(`${e.b.title} сейчас за планетой (под горизонтом) — поднимись выше или подожди`, false);
+  }
+  function untele(st){
+    if (st.fov0 != null) { st.R.camera.fov = st.fov0; st.R.camera.updateProjectionMatrix(); st.fov0 = null; }
+    st.track = null; st.teleId = null; if (st.tele) st.tele.hidden = true;
+  }
+  // где камера на планете — направление от центра в осях системы (для «ты здесь» на карте)
+  const WH = new Float64Array(3), WB = new Float64Array(3);
+  function whereOnPlanet(st){
+    if (!st.SV) return null;
+    const M = st.SV.F.M, c = st.V.camBF, l = Math.hypot(c[0], c[1], c[2]) || 1;
+    WB[0] = c[0] / l; WB[1] = c[1] / l; WB[2] = c[2] / l;
+    // M — «система → BF» (поворот): обратно — транспонированная
+    WH[0] = M[0] * WB[0] + M[3] * WB[1] + M[6] * WB[2]; WH[1] = M[1] * WB[0] + M[4] * WB[1] + M[7] * WB[2]; WH[2] = M[2] * WB[0] + M[5] * WB[1] + M[8] * WB[2];
+    return WH;
+  }
+
   function unmount(){
     const st = S; S = null;
     if (!st) return;
@@ -280,6 +357,8 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     window.removeEventListener('keydown', st.keyT);
     try { st.ro?.disconnect(); } catch (e) {}
     try { st.unfollow?.(); st.offRebase?.(); } catch (e) {}
+    try { st.map?.dispose(); st.SV?.dispose(); } catch (e) { console.error(e); }
+    try { st.offClock?.(); } catch (e) {}
     try { st.V?.dispose(); } catch (e) { console.error(e); }
     try { st.A?.dispose(); } catch (e) {}
     try { st.H?.dispose(); st.I?.dispose(); st.C?.dispose?.(); } catch (e) {}
@@ -297,7 +376,15 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     move: (x, z, run) => { if (S) { S.C.stick(x, z); S.C.press('run', !!run); } },
     vert: v => { if (S) { S.C.press('jump', v > 0); S.C.press('crouch', v < 0); } },
     land: () => S && land(S), fly: () => S && fly(S), orbit: () => S && goOrbit(S), descend: sec => S && descend(S, sec || 40),
-    time: (t, k) => { if (S) { if (t != null) S.t = t; if (k != null) S.timeK = k; } },
+    // t — секунды мира, которые показать (своё смещение от часов мира), k — ускорение
+    time: (t, k) => { if (S) { if (t != null) { S.off = t - S.CL.t(); S.t = t; } if (k != null) S.timeK = k; } },
+    world: () => { if (S) { S.off = 0; S.timeK = 1; } },
+    sky: () => S?.SV && { moon: { ...S.SV.moon }, sunK: S.V.sunK, cpu: S.SV.cpu, t: S.t, list: S.SV.list.map(e => { const B = S.P.basis(S.V.camBF, new Array(9)); return { id: e.b.id, kind: e.kind, lit: +e.lit.toFixed(3), rad: e.rad, light: +e.light.toFixed(3), flux: e.flux, d: [...e.d], up: +(e.d[0] * B[3] + e.d[1] * B[4] + e.d[2] * B[5]).toFixed(4) }; }) },
+    map: on => { if (S?.map) { if (on === undefined) S.map.toggle(); else if (on) S.map.open(); else S.map.close(); return S.map.isOpen; } },
+    look: id => S && lookAt(S, id), untele: () => S && untele(S),
+    stubs: on => { if (S?.SV) S.SV.stubs = !!on; },
+    events: () => S?.S && S.S.moonEvents('home', 'luna', S.t),
+    clock: () => S && { state: S.CL.state, off: S.CL.off, rtt: S.CL.rtt, src: S.CL.src, err: S.CL.err },
     get S(){ return S; },
   };
   window.GAME_IMPL = window.GAME_IMPL || {};

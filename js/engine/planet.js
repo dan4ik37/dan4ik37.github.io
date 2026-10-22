@@ -89,47 +89,156 @@
   }
 
   // ═══ Профиль планеты (данные) ═══
+  // PlanetProfile v2 (docs/plans/planet-space.md §1.1, T-079): тип тела, система, орбита по Кеплеру (элементы — градусы, период — из
+  // μ родителя, js/engine/orbit.js), воздух для игры (air: { p кПа, o2, co2, n2, toxic, dust } | null), температура
+  // { mean, dayAmp, latAmp }, луны — id своих тел (у них свои профили, D37E.system) и «украшения» v1 (rails 'visual'), кольца,
+  // пояс, ресурсы, опасности, метеориты, терраформирование. Профили v1 (без v или v: 1) поднимаются до v2 сами, тем же PL.def.
   const ATMO_EARTH = { top: 0, Hr: 0, Hm: 0, tauR: [.023, .054, .133], tauM: .012, g: .76, sun: 1 };
-  const HOME = {
+  const ID = /^[a-z][a-z0-9_-]{0,31}$/;
+  // v1 — как было до v2 (от него считаются умолчания профилей v1: та же планета до бита)
+  const HOME_V1 = {
     v: 1, id: 'home', title: 'Родная планета', seed: 37, radius: 128000, sea: 0, gen: 'rocky1',
     relief: { amp: 2600, land: .42, hills: 140, detail: 7, warp: .35 },
-    // воздух: высота однородной толщи Рэлея 4000 ед. (≈ 3,4 км), прозрачнее земного вдвое — видно на ~30 км, небо голубое
     atmo: { top: 32000, Hr: 4000, Hm: 800, tauR: [.023, .054, .133], tauM: .012, g: .76, sun: 1 },
     air: true, o2: .21, pressure: 1, g: 1, day: 2400, phase: 0, tilt: 23.4, year: 'calendar', temp: 14,
     moons: [{ id: 'luna', radius: 32000, dist: 2400000, period: 7 * 2400, phase: 1.1, incl: 5, tint: '#cfcfcf' }],
     sky: { stars: 1, sunSize: 1 }, regions: [], hazards: [], mobs: [], requires: { rocket: 0 }, games: {},
   };
+  // Родная планета (v2): та же поверхность до бита (зерно, рельеф, море, температура), Луна — своё тело системы (js/engine/system.js:
+  // орбита по Кеплеру, a = 1 398 144 u, период 16 800 с); год — календарь владельца (времена года — climate.js), орбита вокруг
+  // Солнца — ровные 365,25 суток (для неба и перелётов)
+  const HOME = {
+    v: 2, id: 'home', title: 'Родная планета', type: 'rocky', system: 'home', hero: true, seed: 37, radius: 128000, g: 1, surface: 'solid',
+    sea: 0, liquid: 'water', gen: 'rocky1', relief: { amp: 2600, land: .42, hills: 140, detail: 7, warp: .35 },
+    // воздух: высота однородной толщи Рэлея 4000 ед. (≈ 3,4 км), прозрачнее земного вдвое — видно на ~30 км, небо голубое
+    air: { p: 101, o2: .21, co2: .0004, n2: .78, toxic: 0, dust: 0 },
+    atmo: { top: 32000, Hr: 4000, Hm: 800, tauR: [.023, .054, .133], tauM: .012, g: .76, sun: 1 },
+    temp: { mean: 14, dayAmp: 8, latAmp: 44 }, climate: { kinds: ['temperate', 'steppe', 'mountain', 'desert', 'sea', 'snow', 'tropic'], storm: null },
+    day: 2400, phase: 0, tilt: 23.4, locked: false, year: 'calendar',
+    orbit: { parent: 'sun', a: 4.0e9, e: 0, i: 0, node: 0, peri: 0, M0: 0, epoch: 0, period: 'year' }, rails: 'kepler',
+    rings: null, belt: null, moons: ['luna'],
+    resources: [{ id: 'iron', where: 'mountains', k: 1 }, { id: 'coal', where: 'buried', k: 1 }, { id: 'oil', where: 'sea|desert', k: .6 }],
+    hazards: ['weather'], danger: 0, age: 0, meteors: { rate: 1, big: 1 }, terra: { on: false },
+    sky: { stars: 1, sunSize: 1 }, regions: [], mobs: [], requires: { rocket: 0 }, games: {},
+  };
+  // v2: нейтральные умолчания — у тела без поля ничего «родного» (ни Луны, ни календаря, ни земного воздуха)
+  const BASE2 = {
+    v: 2, id: 'planet', title: 'Планета', type: 'rocky', system: null, hero: false, stub: false, seed: 37, radius: 64000, g: 1, surface: 'solid',
+    sea: null, liquid: null, gen: 'rocky1', air: null, temp: { mean: 0, dayAmp: 10, latAmp: 44 }, climate: { kinds: [], storm: null },
+    day: 2400, phase: 0, tilt: 0, locked: false, year: 0, orbit: null, rails: 'kepler', rings: null, belt: null, moons: [],
+    resources: [], hazards: [], danger: 0, age: 6, meteors: { rate: 1, big: 1 }, terra: { on: false },
+    sky: { stars: 1, sunSize: 1 }, regions: [], mobs: [], requires: { rocket: 0 }, games: {},
+  };
+  const TYPES = ['rocky', 'ocean', 'ice', 'desert', 'lava', 'toxic', 'gas', 'moon', 'belt', 'aster', 'star'];
+  const AGES = [0, 6, 12, 14, 16, 18];
   const num = (v, d, a = -Infinity, b = Infinity) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? clamp(n, a, b) : d; };
-  // проверка и значения по умолчанию; неизвестные поля — как есть (переходникам игр)
+  const hex = (v, d) => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v : d;
+  const strs = (a, n, len = 32) => (Array.isArray(a) ? a : []).filter(x => typeof x === 'string').slice(0, n).map(x => x.slice(0, len));
+  // атмосфера для картинки (рассеяние) — из воздуха для игры, если её не задали (§1.5): Рэлей ∝ давлению, Ми — пыль и яд
+  function atmoOf(air, R){
+    if (!air || !(air.p > .05)) return null;
+    const k = air.p / 101, Hr = R * .03125, dust = air.dust || 0, tox = air.toxic || 0;
+    const a = { top: Hr * 8, Hr, Hm: Hr / 5, tauR: [.023 * k, .054 * k, .133 * k], tauM: .012 * k + .08 * dust * Math.sqrt(k) + .12 * tox, g: .76, sun: 1 };
+    if (tox > .1) a.tint = '#d8c060'; else if (dust > .1) a.tint = '#d08a5a';
+    return a;
+  }
+  // проверка и значения по умолчанию (всегда v2); неизвестные поля — как есть (переходникам игр); def(def(p)) = def(p)
   function def(p = {}){
     if (!p || typeof p !== 'object') p = {};
-    const o = { ...HOME, ...p };
-    o.v = 1;
-    o.id = /^[a-z][a-z0-9_-]{0,31}$/.test(o.id) ? o.id : 'planet';
+    const v2in = p.v === 2;
+    const o = v2in ? { ...BASE2, ...p } : { ...HOME_V1, ...p };   // v1 — от прежней родной (как до v2)
+    o.v = 2;
+    o.id = ID.test(o.id) ? o.id : 'planet';
     o.title = String(o.title || 'Планета').slice(0, 60);
+    o.type = TYPES.includes(o.type) ? o.type : 'rocky';
+    o.system = typeof o.system === 'string' && ID.test(o.system) ? o.system : null;
+    o.hero = !!o.hero; o.stub = !!o.stub;
     o.seed = num(o.seed, 37) | 0;
     o.radius = num(o.radius, 128000, 500, 2e7);
+    o.surface = o.surface === 'none' ? 'none' : 'solid';
     o.sea = o.sea === null ? null : num(o.sea, 0, -1e5, 1e5);
-    o.gen = typeof o.gen === 'string' && GEN[o.gen] ? o.gen : 'rocky1';
-    const rl = { ...HOME.relief, ...(p.relief || {}) };
-    o.relief = { amp: num(rl.amp, 2600, 0, o.radius * .2), land: num(rl.land, .42, 0, 1), hills: num(rl.hills, 140, 0, 1e4), detail: num(rl.detail, 7, 0, 200), warp: num(rl.warp, .35, 0, 1) };
-    if (p.atmo === null || p.air === false && p.atmo === undefined) o.atmo = null;
+    o.liquid = ['water', 'lava', 'methane'].includes(o.liquid) ? o.liquid : o.sea != null ? 'water' : null;
+    // генератор: id сохраняется (moon1, desert1… — следующие шаги), рисует rocky1, пока своего нет (create)
+    o.gen = typeof o.gen === 'string' && ID.test(o.gen) ? o.gen : 'rocky1';
+    const rl = { ...HOME_V1.relief, ...(p.relief || {}) };
+    o.relief = { ...rl, amp: num(rl.amp, 2600, 0, o.radius * .2), land: num(rl.land, .42, 0, 1), hills: num(rl.hills, 140, 0, 1e4), detail: num(rl.detail, 7, 0, 200), warp: num(rl.warp, .35, 0, 1) };
+    // воздух для игры: v1 — air: true/false + o2 + pressure (в атмосферах); v2 — объект или null
+    if (v2in) {
+      const A = p.air;
+      o.air = A && typeof A === 'object' ? { p: num(A.p, 101, 0, 1e5), o2: num(A.o2, 0, 0, 1), co2: num(A.co2, 0, 0, 1), n2: num(A.n2, 0, 0, 1), toxic: num(A.toxic, 0, 0, 1), dust: num(A.dust, 0, 0, 1) } : null;
+    } else o.air = o.air === false ? null : { p: num(o.pressure, 1, 0, 1000) * 101, o2: num(o.o2, .21, 0, 1), co2: .0004, n2: .78, toxic: 0, dust: 0 };
+    delete o.o2; delete o.pressure;
+    // атмосфера (картинка): null — без воздуха; не задана — v1: как у прежней родной (или нет, если air: false), v2: из воздуха
+    const src = p.atmo === null ? null : p.atmo && typeof p.atmo === 'object' ? p.atmo : v2in ? atmoOf(o.air, o.radius) : p.air === false ? null : HOME_V1.atmo;
+    if (!src) o.atmo = null;
     else {
-      const a = { ...ATMO_EARTH, ...(p.atmo ? {} : HOME.atmo), ...(p.atmo || {}) };
+      const a = { ...ATMO_EARTH, ...(v2in ? atmoOf(o.air, o.radius) || {} : {}), ...src };   // v2: чего нет в atmo — из воздуха
       const Hr = num(a.Hr || undefined, o.radius * .03125, 1, o.radius);
       o.atmo = { top: num(a.top || undefined, Hr * 8, Hr, o.radius), Hr, Hm: num(a.Hm || undefined, Hr / 5, .5, o.radius), tauR: (Array.isArray(a.tauR) && a.tauR.length === 3 ? a.tauR : ATMO_EARTH.tauR).map(x => num(x, .1, 0, 10)),
         tauM: num(a.tauM, .03, 0, 10), g: num(a.g, .76, -.99, .99), sun: num(a.sun, 1, 0, 10) };
+      const tn = hex(a.tint, null); if (tn) o.atmo.tint = tn;
     }
     o.g = num(o.g, 1, 0, 10);
-    o.day = num(o.day, 2400, 10, 1e7);
+    o.day = num(o.day, 2400, 10, 1e9);
     o.phase = num(o.phase, 0);
-    o.tilt = num(o.tilt, 23.4, 0, 90);
-    o.year = o.year === 'calendar' ? 'calendar' : num(o.year, 365 * 2400, 1);
-    o.temp = num(o.temp, 14, -200, 500);
-    o.moons = (Array.isArray(o.moons) ? o.moons : []).slice(0, 4).map((m, i) => ({ id: String(m.id || 'moon' + i).slice(0, 32), radius: num(m.radius, o.radius / 4, 10, o.radius * 2),
-      dist: num(m.dist, o.radius * 20, o.radius * 2, 1e9), period: num(m.period, o.day * 7, 1), phase: num(m.phase, 0), incl: num(m.incl, 5, -90, 90), tint: /^#[0-9a-f]{6}$/i.test(m.tint) ? m.tint : '#cfcfcf' }));
+    o.tilt = num(o.tilt, 23.4, -180, 180);
+    o.locked = !!o.locked;
+    o.year = o.year === 'calendar' ? 'calendar' : num(o.year, v2in ? 0 : 365 * 2400, 0);
+    // температура: v1 — число (°C на экваторе − 14), v2 — { mean, dayAmp, latAmp }
+    const T = o.temp && typeof o.temp === 'object' ? o.temp : { mean: num(o.temp, 14, -200, 500) };
+    o.temp = { mean: num(T.mean, 14, -273, 3000), dayAmp: num(T.dayAmp, 8, 0, 500), latAmp: num(T.latAmp, 44, 0, 500) };
+    const cl = o.climate && typeof o.climate === 'object' ? o.climate : {};
+    o.climate = { kinds: strs(cl.kinds, 16), storm: typeof cl.storm === 'string' ? cl.storm.slice(0, 32) : null };
+    // орбита (элементы — градусы; период — из μ родителя, кроме rails 'visual'); v1 — { parent, a, e, period: 'year', phase }
+    const ob = o.orbit;
+    if (ob && typeof ob === 'object' && num(ob.a, 0) !== 0) {
+      o.orbit = { parent: typeof ob.parent === 'string' && ID.test(ob.parent) ? ob.parent : 'sun', a: num(ob.a, 0, -1e15, 1e15), e: num(ob.e, 0, 0, .99),
+        i: num(ob.i, 0, -180, 180), node: num(ob.node, 0, -360, 720), peri: num(ob.peri, 0, -360, 720), M0: num(ob.M0 ?? ob.phase, 0, -1e6, 1e6), epoch: num(ob.epoch, 0) };
+      if (ob.period === 'year') o.orbit.period = 'year'; else if (num(ob.period, 0) > 0) o.orbit.period = num(ob.period, 0);
+    } else o.orbit = null;
+    o.rails = o.rails === 'visual' ? 'visual' : 'kepler';
+    const rg = o.rings;
+    o.rings = rg && typeof rg === 'object' ? { inner: num(rg.inner, o.radius * 1.3, 0), outer: num(rg.outer, o.radius * 2.2, 0), tint: hex(rg.tint, '#c9b48a'), alpha: num(rg.alpha, .6, 0, 1) } : null;
+    const bl = o.belt;
+    o.belt = bl && typeof bl === 'object' ? { a: num(bl.a, 0, 0), width: num(bl.width, 0, 0), density: num(bl.density, 1, 0, 100) } : null;
+    // луны: id своих тел (строки) и «украшения» v1 (объекты: круговая орбита со своим периодом — rails 'visual')
+    o.moons = (Array.isArray(o.moons) ? o.moons : []).slice(0, 8).map((m, i) => typeof m === 'string' ? (ID.test(m) ? m : null) : m && typeof m === 'object' ? {
+      id: String(m.id || 'moon' + i).slice(0, 32), radius: num(m.radius, o.radius / 4, 10, o.radius * 2), dist: num(m.dist, o.radius * 20, o.radius * 2, 1e9),
+      period: num(m.period, o.day * 7, 1), phase: num(m.phase, 0), incl: num(m.incl, 5, -90, 90), tint: hex(m.tint, '#cfcfcf'), rails: 'visual' } : null).filter(Boolean);
+    o.resources = (Array.isArray(o.resources) ? o.resources : []).filter(r => r && typeof r === 'object' && typeof r.id === 'string').slice(0, 16)
+      .map(r => ({ id: r.id.slice(0, 32), where: typeof r.where === 'string' ? r.where.slice(0, 64) : 'surface', k: num(r.k, 1, 0, 10) }));
+    o.hazards = strs(o.hazards, 16);
+    o.danger = num(o.danger, 0, 0, 3) | 0;
+    o.age = AGES.includes(o.age) ? o.age : 6;
+    const mt = o.meteors && typeof o.meteors === 'object' ? o.meteors : {};
+    o.meteors = { rate: num(mt.rate, 1, 0, 100), big: num(mt.big, 1, 0, 100) };
+    const tr = o.terra && typeof o.terra === 'object' ? o.terra : {};
+    o.terra = { on: !!tr.on };
+    if (tr.vars0 && typeof tr.vars0 === 'object') { const V0 = tr.vars0; o.terra.vars0 = { p: num(V0.p, 0, 0, 1e4), o2: num(V0.o2, 0, 0, 100), t: num(V0.t, 0, -273, 3000), w: num(V0.w, 0, 0, 1), b: num(V0.b, 0, 0, 1), x: num(V0.x, 0, 0, 1) }; }
+    o.regions = Array.isArray(o.regions) ? o.regions.slice(0, 64) : [];
+    o.games = o.games && typeof o.games === 'object' ? o.games : {};
     return o;
   }
+  // ── Сутки и времена года по профилю (без планеты — для системы, js/engine/system.js; P.season и др. зовут их же) ──
+  // фаза года φ (0 весна, 1 лето, 2 осень, 3 зима): календарь владельца (climate.js) или свой год (секунды)
+  function seasonOf(D, ms){
+    if (D.year === 'calendar') {
+      const C = E.climate;
+      if (C?.phaseCal) { try { return C.phaseCal(ms); } catch (e) {} }
+      // без climate.js (поток): та же формула, что C.phaseCal — время мира МСК (UTC+3), декабрь–февраль зима, март–ноябрь 7 сезонов
+      const t = ms + 180 * 60000, dt = new Date(t), y = dt.getUTCFullYear(), mo = dt.getUTCMonth();
+      if (mo === 11) return 3 + (t - Date.UTC(y, 11, 1)) / (Date.UTC(y + 1, 2, 1) - Date.UTC(y, 11, 1));
+      if (mo <= 1) return 3 + (t - Date.UTC(y - 1, 11, 1)) / (Date.UTC(y, 2, 1) - Date.UTC(y - 1, 11, 1));
+      return (7 * (t - Date.UTC(y, 2, 1)) / (Date.UTC(y, 11, 1) - Date.UTC(y, 2, 1))) % 4;
+    }
+    const yr = D.year > 0 ? D.year : 365 * 2400;
+    return ((ms / 1000 / yr) % 1 + 1) % 1 * 4;
+  }
+  // склонение солнца: точное для наклонённой оси (sin δ = sin ε · sin L, L = (φ − ½)·90° — долгота солнца по году):
+  // +ε в середине лета, −ε в середине зимы, 0 в середине весны и осени. Та же формула — у неба системы (system.js)
+  const declinationOf = (D, ms) => Math.asin(Math.sin(D.tilt * DEG) * Math.cos((seasonOf(D, ms) - 1.5) * PI / 2));
+  // долгота «под солнцем» в момент t (секунды мира): планета вращается на восток — точка под солнцем уходит на запад
+  const subSolarLonOf = (D, t) => D.phase * DEG - 2 * PI * t / D.day;
 
   // ═══ Куб-сфера ═══
   // грань: [нормаль n, ось u, ось v], u × v = n (наружу)
@@ -270,20 +379,20 @@
     const D = def(profile);
     const NZ = makeNoise(D.seed * 7919 + 13);
     const NZ2 = makeNoise(D.seed * 104729 + 7);   // климат и влажность — свой шум
-    const H = GEN[D.gen](NZ, D);
+    const H = (GEN[D.gen] || GEN.rocky1)(NZ, D);   // своего генератора ещё нет (moon1, desert1… — шаги PS-6, PS-8) — каменная
     const R = D.radius, SEA = D.sea ?? -Infinity, SEAR = R + (D.sea ?? 0);
     const amp = D.relief.amp;
-    const P = { def: D, R, SEA, SEAR, FACES, key, unkey, warp, unwarp, latDir, latK, dirOf, faceOf, cubeFace, noise: NZ };
+    const P = { def: D, R, SEA, SEAR, FACES, key, unkey, warp, unwarp, latDir, latK, dirOf, faceOf, cubeFace, noise: NZ, genOk: !!GEN[D.gen] };
     P.height = (x, y, z) => H(x, y, z);
     P.maxH = (D.sea ?? 0) + 760 + amp + D.relief.hills + D.relief.detail + 40;   // выше не бывает (для отсечения и дальности)
     P.minH = (D.sea ?? 0) - 2600 - 400;
     P.renderMin = D.sea != null ? D.sea : P.minH;   // нарисованная поверхность не ниже моря (вода — часть сетки)
 
     // ── Климат и цвет поверхности (в sRGB 0…255; вода — альфа: 0 суша, 1…255 — глубина) ──
-    const C3 = [0, 0, 0];
+    const C3 = [0, 0, 0], TM = D.temp.mean, TL = D.temp.latAmp;
     function tempAt(x, y, z, h){   // °C: широта, высота, шум
-      const sl = y * y;   // sin² широты: экватор +28°, 45° ≈ +17°, 60° ≈ +3°, 70° ≈ −6°, полюс ≈ −16° (при temp 14)
-      return D.temp + 14 - 44 * sl * sl - Math.max(0, h - (D.sea ?? 0)) / 1166 * 6.5 + NZ2.fbm(x * 3.1 + 5, y * 3.1 - 2, z * 3.1 + 9, 3) * 6;
+      const sl = y * y;   // sin² широты: экватор +28°, 45° ≈ +17°, 60° ≈ +3°, 70° ≈ −6°, полюс ≈ −16° (при temp.mean 14, latAmp 44)
+      return TM + 14 - TL * sl * sl - Math.max(0, h - (D.sea ?? 0)) / 1166 * 6.5 + NZ2.fbm(x * 3.1 + 5, y * 3.1 - 2, z * 3.1 + 9, 3) * 6;
     }
     // море замёрзло (холодно у полюсов): по льду ходят, рисуется белым
     const iceAt = (x, y, z) => D.sea != null && tempAt(x, y, z, D.sea) < -3;
@@ -639,23 +748,11 @@
 
     // ── Солнце, сутки, времена года ──
     // фаза года φ (0 весна, 1 лето, 2 осень, 3 зима): родная — по календарю владельца (climate.js), другие — по своему году
-    P.season = (ms) => {
-      if (D.year === 'calendar') {
-        const C = E.climate;
-        if (C?.phaseCal) { try { return C.phaseCal(ms); } catch (e) {} }
-        // без climate.js (поток): та же формула, что C.phaseCal — время мира МСК (UTC+3), декабрь–февраль зима, март–ноябрь 7 сезонов
-        const t = ms + 180 * 60000, dt = new Date(t), y = dt.getUTCFullYear(), mo = dt.getUTCMonth();
-        if (mo === 11) return 3 + (t - Date.UTC(y, 11, 1)) / (Date.UTC(y + 1, 2, 1) - Date.UTC(y, 11, 1));
-        if (mo <= 1) return 3 + (t - Date.UTC(y - 1, 11, 1)) / (Date.UTC(y, 2, 1) - Date.UTC(y - 1, 11, 1));
-        return (7 * (t - Date.UTC(y, 2, 1)) / (Date.UTC(y, 11, 1) - Date.UTC(y, 2, 1))) % 4;
-      }
-      return ((ms / 1000 / D.year) % 1 + 1) % 1 * 4;
-    };
-    // склонение солнца: +наклон в середине лета, −наклон в середине зимы, 0 в середине весны и осени (как температура в
-    // climate.js: пик — середина лета, минимум — середина зимы)
-    P.declination = ms => D.tilt * DEG * Math.cos((P.season(ms) - 1.5) * PI / 2);
-    // долгота «под солнцем» в момент t (секунды игры): планета вращается на восток — точка под солнцем уходит на запад
-    P.subSolarLon = t => D.phase * DEG - 2 * PI * t / D.day;
+    P.season = ms => seasonOf(D, ms);
+    // склонение солнца: точное для наклонённой оси (как температура в climate.js: пик — середина лета, минимум — середина зимы)
+    P.declination = ms => declinationOf(D, ms);
+    // долгота «под солнцем» в момент t (секунды мира): планета вращается на восток — точка под солнцем уходит на запад
+    P.subSolarLon = t => subSolarLonOf(D, t);
     P.sunDir = (t, ms, out = [0, 0, 0]) => {
       const dl = P.declination(ms), lon = P.subSolarLon(t), c = Math.cos(dl);
       out[0] = c * Math.cos(lon); out[1] = Math.sin(dl); out[2] = -c * Math.sin(lon);
@@ -666,9 +763,10 @@
       const lon = Math.atan2(-d[2], d[0]), dl = lon - P.subSolarLon(t);
       return (((12 + dl * 12 / PI) % 24) + 24) % 24;
     };
-    // луна i: точка в системе планеты (круговая орбита, наклон к экватору; планета под ней вращается)
+    // луна-«украшение» i (v1, rails 'visual'): точка в системе планеты (круговая орбита, наклон к экватору; планета под ней
+    // вращается). Луны-тела (id в D.moons) — на орбитах Кеплера в D37E.system, их рисует js/engine/space-view.js
     P.moonPos = (i, t, out = [0, 0, 0]) => {
-      const m = D.moons[i]; if (!m) { out[0] = out[1] = out[2] = 0; return out; }
+      const m = D.moons[i]; if (!m || typeof m !== 'object') { out[0] = out[1] = out[2] = 0; return out; }
       const a = m.phase + 2 * PI * t / m.period, inc = m.incl * DEG;
       // в «неподвижной» системе: орбита в плоскости экватора, наклонённой на inc
       const xi = Math.cos(a) * m.dist, zi = -Math.sin(a) * m.dist, yi = -zi * Math.sin(inc), zr = zi * Math.cos(inc);
@@ -692,5 +790,6 @@
     if (x0 < X) return 1e20;
     return max(2 * sqrt(PI / 2 * x0) * Math.exp(min(x - x0 - h, 80)) - Math.exp(-h) * c / ((1 - c) * mu + 1), 0);
   }
-  E.planet = { def, create, HOME, GEN, FACES, indices, makeNoise, warp, unwarp, latDir, latK, dirOf, faceOf, key, unkey, MAXL, chapman };
+  E.planet = { def, create, HOME, HOME_V1, GEN, FACES, TYPES, indices, makeNoise, warp, unwarp, latDir, latK, dirOf, faceOf, key, unkey, MAXL, chapman,
+    seasonOf, declinationOf, subSolarLonOf };
 })();
