@@ -125,7 +125,7 @@ vec3 d37Amb( float mu ){
 void main(){
   vec3 alb = vCol.rgb * vCol.rgb * 0.74;
   // мелкие пятна у камеры (камешки, трава, тень от неровностей): два слоя шума по координатам куска, вдали — гладко
-  float cd = length( cameraPosition - vW ), nk = smoothstep( 160.0, 15.0, cd );
+  float cd = length( cameraPosition - vW ), nk = 1.0 - smoothstep( 15.0, 160.0, cd );
   if ( nk > 0.0 ) alb *= 1.0 + nk * ( ( d37N( vW.xz * 0.9 ) - 0.5 ) * 0.22 + ( d37N( vW.xz * 4.3 + 17.0 ) - 0.5 ) * 0.14 );
   // альфа: 0…0,5 — суша (выше над морем — меньше), 0,5…1 — вода (глубже — больше): берег — где альфа = 0,5
   float a = vCol.a, wf = smoothstep( 0.494, 0.51, a ), water = clamp( ( a - 0.5 ) * 2.6, 0.0, 1.0 );
@@ -135,7 +135,7 @@ void main(){
   vec3 amb = d37Amb( mu ) * uLit.y;
   vec3 col = vec3( 0.0 ), colW = vec3( 0.0 );
   if ( wf > 0.0 ) {
-    float dist = length( cameraPosition - vW ), k = smoothstep( 900.0, 60.0, dist );
+    float dist = length( cameraPosition - vW ), k = 1.0 - smoothstep( 60.0, 900.0, dist );
     vec2 q = vW.xz;
     vec3 wn = vec3( sin( q.x * 0.21 + uTime * 1.3 ) + sin( q.x * 0.083 - q.y * 0.11 + uTime * 0.9 ), 0.0, sin( q.y * 0.17 + uTime * 1.1 ) + sin( q.y * 0.061 + q.x * 0.07 - uTime * 0.7 ) );
     vec3 Nw = normalize( vUp + ( wn.x * cross( vUp, vec3( 0.0, 0.0, 1.0 ) ) + wn.z * cross( vUp, vec3( 1.0, 0.0, 0.0 ) ) ) * 0.035 * k );
@@ -149,7 +149,7 @@ void main(){
   if ( wf < 1.0 ) {
     float nl = max( dot( N, L ), 0.0 );
     float shade = 1.0;
-    if ( uBlob.w > 0.0 ) { vec3 dv = vW - uBlob.xyz; float dd = length( dv.xz ); shade = mix( 0.55, 1.0, smoothstep( uBlob.w * 0.25, uBlob.w, dd ) + step( 3.0, abs( dv.y ) ) ); }
+    if ( uBlob.w > 0.0 ) { vec3 dv = vW - uBlob.xyz; float dd = length( dv.xz ); shade = mix( 0.55, 1.0, min( 1.0, smoothstep( uBlob.w * 0.25, uBlob.w, dd ) + step( 3.0, abs( dv.y ) ) ) ); }
     col = alb * ( sun * nl * shade + amb * ( 0.6 + 0.4 * max( dot( N, vUp ), 0.0 ) ) * mix( 0.8, 1.0, shade ) );
   }
   col = mix( col, colW, wf );
@@ -205,7 +205,7 @@ void main(){
   const STAR_F = `varying float vB;
 void main(){
   float r = length( gl_PointCoord - 0.5 );
-  gl_FragColor = vec4( vec3( vB ) * smoothstep( 0.5, 0.1, r ), 1.0 );
+  gl_FragColor = vec4( vec3( vB ) * ( 1.0 - smoothstep( 0.1, 0.5, r ) ), 1.0 );
   #include <tonemapping_fragment>
   #include <encodings_fragment>
 }`;
