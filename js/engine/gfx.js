@@ -854,17 +854,21 @@ void main(){
     m.userData.waterU = own;
     m.defines = { D37_WATER: 1 };
     if (dep?.tex) m.defines.D37_WDEPTH = 1;
+    // волны (js/engine/waves.js, T-022c): opts.waves — поле волн этой воды, wavesMode 'v' — смещение вершин («блин»), 'f' — нормали
+    const GW = E.waves?.GLSL || null;
+    if (opts.waves && E.waves?.can?.(R)) E.waves.use(m, opts.waves, opts.wavesMode || 'f');
     m.onBeforeCompile = sh => {
-      Object.assign(sh.uniforms, WU, own);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vD37W;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvD37W = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+      Object.assign(sh.uniforms, WU, own, m.userData.gwU || {});
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vD37W;' + (GW ? GW.pars() : ''))
+        .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>' + (GW ? GW.vNormal : ''))
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvD37W = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;' + (GW ? GW.vBegin : ''));
       sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
 varying vec3 vD37W;
 uniform float uTime; uniform float uClear; uniform float uFoam; uniform float uWQ;
 uniform vec4 uDepR;
 #ifdef D37_WDEPTH
 ${PREC_HI}uniform sampler2D tDep;
-${PREC_LO}#endif`)
+${PREC_LO}#endif${GW ? GW.pars() + GW.fPars() : ''}`)
         // нормаль: два слоя ряби в мировых координатах (только у горизонтальной поверхности)
         .replace('#include <normal_fragment_maps>', `#ifdef USE_NORMALMAP
   vec2 wq = vD37W.xz;
@@ -876,6 +880,9 @@ ${PREC_LO}#endif`)
   vec3 up = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
   float flatK = smoothstep( 0.6, 0.9, abs( dot( normal, up ) ) );
   vec3 wv = normalize( ( viewMatrix * vec4( wn, 0.0 ) ).xyz ) * ( dot( normal, up ) < 0.0 ? -1.0 : 1.0 );
+#ifdef D37_GW
+  wv = d37GwView( normal, nn, up );   // волны Герстнера (waves.js) + рябь поверх
+#endif
 #ifdef D37_CLIM
   flatK *= 1.0 - smoothstep( 0.0, 0.35, d37Cl.w );   // лёд: ряби нет
 #endif
@@ -885,7 +892,7 @@ ${PREC_LO}#endif`)
   roughnessFactor = mix( roughnessFactor, 0.32, smoothstep( 0.0, 0.35, d37Cl.w ) );
 #endif`)
         // цвет и прозрачность по глубине, пена у берега
-        .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>
+        .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>${GW ? GW.fMask : ''}
   float wDepth = 1.6;
 #ifdef D37_WDEPTH
   vec2 duv = ( vD37W.xz - uDepR.xy ) / uDepR.zw;
@@ -921,7 +928,7 @@ ${PREC_LO}#endif`)
     diffuseColor.rgb += vec3( 0.5, 0.72, 0.66 ) * ca * sh * 0.5;
     diffuseColor.rgb *= mix( vec3( 1.0 ), vec3( 0.86, 1.04, 1.08 ), sh );
   }
-#endif`)
+#endif${GW ? GW.fFoam : ''}`)
         // френель: у горизонта вода — зеркало (непрозрачнее)
         .replace('#include <output_fragment>', `#include <output_fragment>
   float fr = pow( 1.0 - clamp( abs( dot( normal, normalize( vViewPosition ) ) ), 0.0, 1.0 ), 4.0 );

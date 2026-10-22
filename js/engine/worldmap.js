@@ -278,8 +278,23 @@
       return HOLES.some(h => inRect(h, x, z, 8));
     }
 
+    // Море клетками C × C: клетка — вода, если хоть один угол (или середина у самого берега) ниже моря; высоты углов — общие.
+    // Одно и то же — рисунку воды (view) и волнам (waves.js: глубина и маска «блина»), считается один раз
+    let SG = null;
+    function seaGrid(){
+      if (SG) return SG;
+      const C = 48, n = Math.ceil(HALF * 2 / C), n1 = n + 1, cor = new Float32Array(n1 * n1), cell = new Uint8Array(n * n);
+      for (let j = 0; j < n1; j++) for (let i = 0; i < n1; i++) cor[j * n1 + i] = height(-HALF + i * C, -HALF + j * C);
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+        const x0 = -HALF + i * C, z0 = -HALF + j * C;
+        let lo = min(cor[j * n1 + i], cor[j * n1 + i + 1], cor[(j + 1) * n1 + i], cor[(j + 1) * n1 + i + 1]);
+        if (lo >= SEA + .05 && lo < SEA + 4) lo = min(lo, height(x0 + C / 2, z0 + C / 2));
+        if (lo < SEA + .05) cell[j * n + i] = 1;
+      }
+      return SG = { C, n, n1, x0: -HALF, z0: -HALF, cor, cell };
+    }
     const WM = { SEED, HALF, SEA, PADS, HOLES, OCEANS, RIVERS, LAKES, ROADS, natural, base, height, ground, water, color, forest, trees,
-      road: roadAt, river: riverAt, roadY, riverY, at, inRect, distRect };
+      road: roadAt, river: riverAt, roadY, riverY, at, inRect, distRect, seaGrid };
     WM.view = (R, vo = {}) => E.worldMapView(WM, R, vo);
     return WM;
   };
@@ -389,20 +404,21 @@
       }
     }
 
-    // ── Вода: море клетками 48 ед. (только где дно ниже моря), реки — лентами, озёра — кругами; одна сетка ──
-    const waterM = R.water ? R.water(vo.waterColor || '#2f7fc1', { key: 'wmsea', fixedColor: true }) : new T.MeshLambertMaterial({ color: '#2f7fc1', transparent: true, opacity: .85 });
+    // ── Вода: море клетками 48 ед. (только где дно ниже моря; WM.seaGrid), реки — лентами, озёра — кругами (своя сетка — свои
+    //    волны). Волны (waves.js, vo.waves = { sea, lake } — поля мира): у моря — «блин» вокруг камеры со смещением вершин (клетки
+    //    моря — маской, у берега волны гаснут по глубине), обычная сетка моря тогда спрятана; нельзя волн — как раньше ──
+    const SG = WM.seaGrid();
+    const FS = vo.waves?.sea?.grid && E.waves?.can?.(R) ? vo.waves.sea : null;
+    if (FS) { E.waves.gridTex(T, FS.grid, { n: SG.n, x0: SG.x0, z0: SG.z0, cell: SG.C, data: SG.cell }); for (const t of [FS.grid.tex, FS.grid.mask]) if (t) own.push(t); }
+    const waterM = R.water ? R.water(vo.waterColor || '#2f7fc1', { key: 'wmsea', fixedColor: true, waves: FS, wavesMode: 'v' }) : new T.MeshLambertMaterial({ color: '#2f7fc1', transparent: true, opacity: .85 });
     if (waterM.side !== undefined) waterM.side = T.DoubleSide;
+    if (FS) E.waves.bindGrid(FS);
+    const riverM = R.water ? R.water(vo.waterColor || '#2f7fc1', { key: 'wmriver', fixedColor: true, waves: vo.waves?.lake || null, wavesMode: 'f' }) : waterM;
+    if (riverM.side !== undefined) riverM.side = T.DoubleSide;
     {
-      const P = [], C = 48, n = Math.ceil(HALF * 2 / C), SEA = WM.SEA, ext = 1400;
+      const P = [], PR = [], C = SG.C, n = SG.n, SEA = WM.SEA, ext = 1400;
       const quad = (x0, z0, x1, z1, y) => P.push(x0, y, z0, x0, y, z1, x1, y, z0, x1, y, z0, x0, y, z1, x1, y, z1);
-      const n1 = n + 1, cor = new Float32Array(n1 * n1);   // углы клеток — общие (в 5 раз меньше выборок)
-      for (let j = 0; j < n1; j++) for (let i = 0; i < n1; i++) cor[j * n1 + i] = WM.height(-HALF + i * C, -HALF + j * C);
-      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
-        const x0 = -HALF + i * C, z0 = -HALF + j * C;
-        let lo = min(cor[j * n1 + i], cor[j * n1 + i + 1], cor[(j + 1) * n1 + i], cor[(j + 1) * n1 + i + 1]);
-        if (lo >= SEA + .05 && lo < SEA + 4) lo = min(lo, WM.height(x0 + C / 2, z0 + C / 2));
-        if (lo < SEA + .05) quad(x0, z0, x0 + C, z0 + C, SEA);
-      }
+      for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (SG.cell[j * n + i]) { const x0 = -HALF + i * C, z0 = -HALF + j * C; quad(x0, z0, x0 + C, z0 + C, SEA); }
       // за краем карты — океан до горизонта
       quad(-HALF - ext, -HALF - ext, HALF + ext, -HALF, SEA); quad(-HALF - ext, HALF, HALF + ext, HALF + ext, SEA);
       quad(-HALF - ext, -HALF, -HALF, HALF, SEA); quad(HALF, -HALF, HALF + ext, HALF, SEA);
@@ -414,7 +430,7 @@
           let tx = p2[0] - p0[0], tz = p2[1] - p0[1]; const tl = Math.hypot(tx, tz) || 1; tx /= tl; tz /= tl;
           const hw = lerp(Rv.w0, Rv.w1, s / Rv.L) / 2 + .9, y = WM.riverY(Rv, s) + .02;
           const cur = [p[0] - tz * hw, y, p[1] + tx * hw, p[0] + tz * hw, y, p[1] - tx * hw];
-          if (prev) P.push(...prev.slice(0, 3), ...cur.slice(0, 3), ...prev.slice(3), ...prev.slice(3), ...cur.slice(0, 3), ...cur.slice(3));
+          if (prev) PR.push(...prev.slice(0, 3), ...cur.slice(0, 3), ...prev.slice(3), ...prev.slice(3), ...cur.slice(0, 3), ...cur.slice(3));
           prev = cur;
         }
       }
@@ -422,12 +438,20 @@
         const seg = 28;
         for (let k = 0; k < seg; k++) {
           const a = k / seg * Math.PI * 2, b = (k + 1) / seg * Math.PI * 2, r = L.r + 1.5;
-          P.push(L.x, L.wl, L.z, L.x + Math.cos(b) * r, L.wl, L.z + Math.sin(b) * r, L.x + Math.cos(a) * r, L.wl, L.z + Math.sin(a) * r);
+          PR.push(L.x, L.wl, L.z, L.x + Math.cos(b) * r, L.wl, L.z + Math.sin(b) * r, L.x + Math.cos(a) * r, L.wl, L.z + Math.sin(a) * r);
         }
       }
-      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(P, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
-      const w = new T.Mesh(g, waterM); w.userData.dyn = true; w.renderOrder = 2; w.frustumCulled = false; grp.add(w); own.push(g);
-      V.water = w;
+      const mk = (arr, m) => {
+        const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(arr, 3)); g.computeVertexNormals(); g.computeBoundingSphere();
+        const w = new T.Mesh(g, m); w.userData.dyn = true; w.renderOrder = 2; w.frustumCulled = false; grp.add(w); own.push(g);
+        return w;
+      };
+      V.water = mk(P, waterM);
+      if (PR.length) V.rivers = mk(PR, riverM);
+      if (FS && waterM.userData?.gw === FS) {   // «блин» с волнами: пока виден — обычная сетка моря спрятана (страж выключил волны — вернётся)
+        V.waves = E.waves.patch(R, waterM, { level: SEA, parent: grp, onShow: on => { V.water.visible = !on; } });
+        V.water.visible = false;
+      }
     }
 
     // ── Дороги: лента асфальта по профилю + разметка; на мостах — перила и опоры ──
@@ -519,6 +543,7 @@
       cache.clear();
       for (const b of bodies.values()) ph?.remove?.(b);
       bodies.clear();
+      V.waves?.dispose(); V.waves = null;
       for (const x of own) x.dispose?.();
       R.scene.remove(grp);
     };
