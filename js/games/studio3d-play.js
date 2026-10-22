@@ -271,6 +271,8 @@
       st = { now: 0, view: null, viewAt: performance.now(), frozen: false, blind: false, coins: [], zIds: new Set(), zhp: new Map(), atk: new Map(), checks: [], sentAt: 0, camT: 0, hudT: 0, myIdWas: myId() };
       const P = pl();
       V = E.views?.create(papi.R.camera, P.rig, { T: papi.R.T }) || null;
+      // колесо/щипок до упора сменили вид (camera.js rig.autoFirst): прицел и мышь — как у клавиши V
+      if (V) V.onMode = (m, why) => { if (why !== 'zoom') return; P.H.crosshair(m === 'first' || m === 'shoulder'); if (m !== 'first') P.I.unlock(); };
       applyCam(true);
       // 👊 на телефоне — в режимах с боем
       const g = gameCfg();

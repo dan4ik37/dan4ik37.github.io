@@ -313,6 +313,46 @@ KB.opts({});
     st.WX.dispose();
   }
 
+  // ═══ 3б. Вода (22.10, владелец: «как будто он ходит по воде») ═══
+  sec('вода (22.10): «прыжок» на глубине не вынимает тело из воды; поза по глубине; человечек — гладь у плеч; мелко — ходит и прыгает');
+  {
+    const W = mkWorld(); lake(W, -8, -8, 8, 8, 40, 51);   // глубина 12, гладь 51,875
+    const surf = 51 + V.liquidHeight(V.cell(ID.water));
+    const st = mkSt(W, { x: .5, y: 47, z: .5 });
+    steps(st, 600);
+    const sub0 = st.P.water / st.P.h;
+    ok(KB.swimDeep(st.P) && near(sub0, .74, .03), 'ничего не жмёшь: плывёт (дна нет), в воде ~3/4 тела', { sub: +sub0.toFixed(3) });
+    let minSub = 1, maxSub = 0, eyeOut = true;
+    st.C.key('Space', true); steps(st, 300, i => { if (i > 120) { const s = st.P.water / st.P.h; minSub = Math.min(minSub, s); maxSub = Math.max(maxSub, s); eyeOut = eyeOut && st.P.y + 1.62 > surf; } }); st.C.key('Space', false);
+    ok(minSub > .55 && eyeOut && KB.swimDeep(st.P), 'держишь «прыжок» на глубине: голова над водой, тело в воде (было: в воде треть тела — «стоит на воде»)', { minSub: +minSub.toFixed(3), maxSub: +maxSub.toFixed(3) });
+    st.C.key('KeyC', true); steps(st, 60);
+    ok(KB.swimDeep(st.P) && st.P.sneak && st.P.eyeWater, '«красться» на глубине — нырок (поза «нырнул»)');
+    st.C.key('KeyC', false); steps(st, 400);
+    // где рисовать: гладь у плеч (корень человечка выше тела физики — человечек меньше тела)
+    const root = new T.Object3D(), arm = new T.Object3D(); arm.position.y = 1.1; root.add(arm);
+    const a = { ch: { root, armL: arm } };
+    let y = st.P.y; for (let i = 0; i < 30; i++) { root.position.y = y; root.updateMatrixWorld(true); y = KB.swimDrawY(st, a, st.P.x, st.P.y, st.P.z, true, 1 / 60); }
+    root.position.y = y; root.updateMatrixWorld(true);
+    const shY = arm.getWorldPosition(new T.Vector3()).y;
+    ok(near(shY, surf - .06, .03), 'человечек на плаву: гладь у плеч (глаза чуть над водой)', { shoulder: +shY.toFixed(3), surf, body: +st.P.y.toFixed(3) });
+    console.log(`  в воде (доля тела): стоит ${sub0.toFixed(3)}, держит «прыжок» ${minSub.toFixed(3)}…${maxSub.toFixed(3)} (было 0,345); плечи ${(shY - surf).toFixed(3)} от глади`);
+    let y2 = y; for (let i = 0; i < 30; i++) y2 = KB.swimDrawY(st, a, st.P.x, st.P.y, st.P.z, false, 1 / 60);
+    ok(near(y2, st.P.y, 1e-9), 'вылез / нырнул — рисуется там же, где тело (переход плавно, 0,25 с)', { y2, body: st.P.y });
+  }
+  {
+    // мелко (вода по пояс, дно рядом): стоит на дне — поза «идёт», а не «плывёт»; «прыжок» — подпрыгнуть
+    const W = mkWorld(); lake(W, -6, -6, 6, 6, 46, 46);   // вода в 1 блок над дном (дно — 46)
+    const st = mkSt(W, { x: .5, y: 47.5, z: .5 });
+    steps(st, 120);
+    ok(st.P.onGround && st.P.water > .3 && !KB.swimDeep(st.P), 'вода по пояс: стоит на дне — поза «идёт»', { water: +st.P.water.toFixed(2), y: st.P.y });
+    let top = st.P.y; const y0 = st.P.y;
+    st.C.key('Space', true); steps(st, 40, () => { top = Math.max(top, st.P.y); }); st.C.key('Space', false);
+    ok(top - y0 > .5, '…и подпрыгивает со дна', { jump: +(top - y0).toFixed(2) });
+    // идёт по мелкому — не плывёт
+    faceX(st); st.C.key('KeyW', true); let swamAny = false; steps(st, 90, () => { swamAny = swamAny || (st.P.onGround && KB.swimDeep(st.P)); }); st.C.key('KeyW', false);
+    ok(!swamAny && st.P.x > 2, 'идёт по мелкому — поза «идёт»', { x: +st.P.x.toFixed(2) });
+  }
+
   // ═══ 4. Одинаково при 30, 60 и 144 кадрах (на телефоне плыву, на ПК тону — так не будет) ═══
   sec('частота кадров: тот же ввод при 33,3 / 16,7 / 6,9 мс на кадр — те же места (цикл движка с шагом 1/60)');
   {

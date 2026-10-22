@@ -1309,7 +1309,7 @@ Players.PlayerAdded.Connect(player => {
     const A = E.actors(R);
     const look = window.D37Char ? window.D37Char.look() : {};
     A.add('me', look, { x: sp[0], y: sp[1], z: sp[2] });
-    const rig = E.cameraRig(R.camera, { yaw: Math.PI, pitch: .42, dist: 10, minD: 2.6, maxD: 24 });
+    const rig = E.cameraRig(R.camera, { yaw: Math.PI, pitch: .42, dist: 10, minD: 2.6, maxD: 24, autoFirst: true });
     rig.snap(sp[0], sp[1], sp[2]);
     const unf = rig.follow(P);
     const H = E.ui(R.r.domElement.parentElement, C);
@@ -1325,7 +1325,9 @@ Players.PlayerAdded.Connect(player => {
     hud.innerHTML = '<div class="s3-tags"></div><div class="s3-stats" hidden></div><div class="s3-health"><i></i></div><div class="s3-labels"></div>';
     R.r.domElement.parentElement.appendChild(hud);
     const pl = { t0: performance.now(), light0: { ...R.lighting }, P, C, I, X, A, rig, H, AU, hud, snap, sp, stats: {}, labels: {}, health: 100, maxHealth: 100, touching: new Set(), tweens: [], clicks: new Map(), prompts: new Map(), dead: 0, nick, unf,
-      role: opt.wait ? 'wait' : 'solo', meKey: 'me', running: false, hasScripts: false };
+      role: opt.wait ? 'wait' : 'solo', meKey: 'me', running: false, hasScripts: false, look: { dx: 0, dy: 0, zoom: 1 } };
+    // приблизил колесом/щипком до упора — от 1-го лица, отдалил — от 3-го (как в Роблоксе); ракурс мира (views.js) ставит своё V.onMode
+    rig.onMode = (m, why) => { if (why !== 'zoom') return; H.crosshair(m === 'first'); if (m !== 'first') I.unlock(); };
     ed.playing = pl;
     // скрипты
     pl.SH = E.scripts({
@@ -1731,7 +1733,7 @@ Players.PlayerAdded.Connect(player => {
     A.pose(pl.meKey, P.pose());
     const meA = A.get?.(pl.meKey); if (meA) { meA.hidden = rig.mode === 'first'; meA.phone = pl.phoneHand || ''; meA.fp = meA.hidden ? rig : null; }   // телефон 📱; от 1-го лица — у камеры
     if (ed.mp) mpFrame(dt);   // чужие игроки (по сети) — плавно, со своей внешностью
-    const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
+    const look = pl.look; look.dx = I.look.dx + C.look.dx; look.dy = I.look.dy + C.look.dy; look.zoom = I.zoom * (C.look.zoom || 1);   // колесо, щипок, крестовина ↑/↓
     if (!pplugAny('camera', dt, look)) rig.update(dt, P, look, ed.ph, C);   // ракурс мира (views.js): сверху, сбоку, камеры…
     A.update(dt, t, R.camera.position);
     ambTick(pl);

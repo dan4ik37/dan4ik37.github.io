@@ -39,14 +39,15 @@
     // ── «Шейдеры» — наборы для 2D и 3D (2D — js/engine/shade2d.js; 3D — js/engine/gfx.js E.PACKS, тот же ключ; render-test
     //    сверяет список и имена). «Мультяшные» (toon) — только 3D: в 2D они выглядят как «Красивые» ──
     .define('shaders', { def: 'auto', list: ['auto', 'normal', 'pretty', 'ultra', 'toon', 'retro'] })
-    .define('crt', { def: false, bool: 1 });
+    .define('crt', { def: false, bool: 1 })
+    .define('dof', { def: true, bool: 1 });   // «Глубина резкости» (набор «Ультра» на компьютере; автофокус — post.js)
   // имена 3D-наборов (как E.PACKS[id].name) и подсказки для 3D-игр
   const PACKS = [['auto', '🤖 Авто'], ['normal', '🎨 Обычные'], ['pretty', '✨ Красивые'], ['ultra', '💎 Ультра'], ['toon', '🖍 Мультяшные'], ['retro', '👾 Ретро/пиксели']];
   const PACK_HINT = {
     auto: 'Само по устройству: телефон — «Обычные» (сильный — «Красивые»), мощный компьютер — «Красивые».',
     normal: 'Как сейчас: проверено на всех устройствах, самое быстрое.',
     pretty: 'Мягкий кинотон, лучи солнца сквозь листву, облака по небу, трава и листва на ветру, блики по дну воды.',
-    ultra: 'Всё из «Красивых» в полном качестве, перистые облака и глубина резкости (фон мягко размыт) — для мощных компьютеров.',
+    ultra: 'Всё из «Красивых» в полном качестве, перистые облака и глубина резкости с автофокусом (резко там, куда смотришь; мягко размыта только даль) — для мощных компьютеров.',
     toon: 'Как мультфильм: свет полосами, чёрные контуры, сочные цвета.',
     retro: 'Крупные пиксели и цвет полосами — как в старых играх. Можно с полосками старого телевизора.',
   };
@@ -67,7 +68,7 @@
     const O = root.D37Opt || (root.D37Opt = { rev: 0 });
     O.gfx = { preset: S.get('gfxPreset'), shadowQ: S.get('shadowQ'), ao: S.get('ao'), water: S.get('water'), refl: S.get('refl'), aa: S.get('aa'),
       fog: S.get('fog'), dist: S.get('dist'), grade: S.get('grade'), fpsCap: +S.get('fpsCap') || 0, res: S.get('res'), battery: S.get('battery'),
-      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen'), shaders: S.get('shaders'), crt: S.get('crt') };
+      upscaler: S.get('upscaler'), sharp: S.get('sharp'), rt: S.get('rt'), framegen: S.get('framegen'), shaders: S.get('shaders'), crt: S.get('crt'), dof: S.get('dof') };
     O.rev++;
   }
   // ── Контекст открытой игры (её «качество — пересобрать мир»): перехватываем context(), окно его не отдаёт ──
@@ -139,7 +140,10 @@
     } else if (sh === 'auto' && SH) shNow = `Сейчас: «${SH.PACKS[SH.pack()]?.name || ''}». `;
     let h = head('Шейдеры')
       + row('Набор', seg('shaders', [['auto', 'Авто'], ['normal', 'Обычные'], ['pretty', 'Красивые'], ['ultra', 'Ультра'], ['toon', 'Мультяшные'], ['retro', 'Ретро']]), shNow + ((is3d ? PACK_HINT : SHH)[sh] || ''))
-      + (sh === 'retro' ? row('Полоски CRT', sw('crt'), 'Строки и цветная маска, как у старого телевизора.') : '');
+      + (sh === 'retro' ? row('Полоски CRT', sw('crt'), 'Строки и цветная маска, как у старого телевизора.') : '')
+      // глубина резкости — у 3D-миров («Ультра» на компьютере; «Авто» с пресетом «Ультра» — тоже); на телефоне её нет
+      + (is3d && !root.D37E?.isMobile?.() && (sh === 'ultra' || (sh === 'auto' && S.get('gfxPreset') === 'ultra') || R?.pack?.id === 'ultra')
+        ? row('Глубина резкости', sw('dof'), 'Как автофокус камеры: резко то, куда смотришь (и всё рядом), мягко размыта только даль. Выключи — весь кадр чёткий.') : '');
     // открыта 2D-игра (не на 3D-движке) — ей нужны только шейдеры
     let game2d = false; try { game2d = !gctx?.engine && typeof gamesActive !== 'undefined' && !!gamesActive; } catch (e) {}   // gamesActive — let в games.js
     if (game2d) return h + note('Остальная графика — для 3D-миров («Мир Денчика», «Студия 3D»).');
@@ -182,7 +186,7 @@
   }
   // ── 🛡 Страж графики (js/engine/post.js E.gfxGuard): что на этом устройстве выключено само и почему, «Проверить», «Вернуть» ──
   const GNAME = { clim: 'погода на поверхностях (снег, лужи, листва)', codes: 'коды в кадре (трава без затенения, блеск для отражений)', fol: 'трава и листва без затенения', ao: 'затенение в углах (AO)', rt: 'трассировка лучей',
-    fg: 'генерация кадров', nis: 'NIS', fsr: 'FSR 1', fxaa: 'FXAA', bloom: 'свечение', post: 'постобработка', test: 'самопроверка', patch: 'туман и тени v3', tier: 'графика выше низкой' };
+    fg: 'генерация кадров', nis: 'NIS', fsr: 'FSR 1', fxaa: 'FXAA', bloom: 'свечение', dof: 'глубина резкости', post: 'постобработка', test: 'самопроверка', patch: 'туман и тени v3', tier: 'графика выше низкой' };
   const GWHY = { link: 'шейдер не собрался', color: 'менял цвет картинки', ao: 'затенение считалось неверно', nan: 'в кадре были «не числа»', crush: 'кадр гас', black: 'кадр был чёрным', error: 'проверка не удалась' };
   let gLast = null;   // итог последней «🩺 Проверить»
   function guardBlock(R){

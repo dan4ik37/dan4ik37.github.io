@@ -386,6 +386,31 @@
         }
       }
     };
+    // ── другие игроки (игра вместе, js/games/kubomir-coop.js): вещи в их руках — у человечка (правая — handL, левая — handR), свет —
+    //    их (litActor, как у своего); человечка пересобрали (дальний / ближний) — вещи заново. Ушёл — H.forget(ключ) ──
+    const others = new Map();   // ключ актёра → { ch, m, o, nm, nmL }
+    function dropO(O){ for (const k of ['m', 'o']) { const m = O[k]; if (m) { m.parent?.remove(m); m.geometry.dispose(); O[k] = null; } } O.nm = O.nmL = ''; }
+    H.remote = (a, mainId, offId) => {
+      if (!a?.ch) return;
+      let O = others.get(a.key); if (!O) others.set(a.key, O = { ch: null, m: null, o: null, nm: '', nmL: '' });
+      if (O.ch !== a.ch) { dropO(O); O.ch = a.ch; }
+      for (const side of [0, 1]) {
+        const k = side ? 'o' : 'm', kn = side ? 'nmL' : 'nm', name = (side ? offId : mainId) || '';
+        if (O[kn] === name) continue;
+        if (O[k]) { O[k].parent?.remove(O[k]); O[k].geometry.dispose(); O[k] = null; }
+        O[kn] = name;
+        const hand = side ? handOff(a.ch) : handMain(a.ch);
+        if (!name || !hand || !V().item(name)) continue;
+        const m = VR.itemMesh(name, 15 << 12); m.castShadow = true; m.renderOrder = 20; m.userData.kind = kindOf(name); m.userData.item = true;
+        placeInHand(m, hand, side); O[k] = m;
+      }
+      const L = actors.get(a.key);
+      if (L) { if (O.m) VR.itemLightF(O.m.geometry, L.E.lv); if (O.o) VR.itemLightF(O.o.geometry, L.E.lv); }
+    };
+    H.forget = key => {
+      const O = others.get(key); if (O) { dropO(O); others.delete(key); }
+      const L = actors.get(key); if (L) { for (const m of L.mats.values()) m.dispose(); actors.delete(key); }
+    };
     H.state = () => ({ swing: +H.sw.toFixed(3), push: +H.push.toFixed(3), equip: +H.eq.toFixed(3), eat: +H.eatK.toFixed(3), mining: H.mining, item: H.name, off: H.nameL, fp: fp.visible, arm: !!H.arm, armL: !!H.armL, fpL: fp.visible && poseL.visible,
       eye: [...H.eye.lv].map(x => +x.toFixed(2)), body: actors.get('me') ? [...actors.get('me').E.lv].map(x => +x.toFixed(2)) : null, layer: H.layer, hold: { ...H.tp },
       fist: H.arm && fp.visible ? (() => { const p = new T.Vector3(); (H.hand || H.arm).getWorldPosition(p); R.camera.worldToLocal(p); return [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]; })() : null,
@@ -397,6 +422,8 @@
       const me = st.A?.get('me'); if (me) me.hold = null;
       for (const [key, L] of actors) { const a = st.A?.get(key); if (a?.ch === L.ch && L.ch) scanBack(L.ch, [...L.mats.values()]); for (const m of L.mats.values()) m.dispose(); }
       actors.clear();
+      for (const O of others.values()) dropO(O);
+      others.clear();
     };
     return H;
   }

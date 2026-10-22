@@ -124,6 +124,27 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(/#ifdef D37_WAVE\s*\nif \( d37f > 0\.5 && d37f < 1\.5 \)/.test(sh.vertexShader) && /#undef D37_WAVE\s*#endif\s*#include <project_vertex>/.test(sh.vertexShader), k + ': качание — под D37_WAVE набора, кусок ветра движка (для моделей без масштаба) снят');
     ok(incOk(sh.fragmentShader) && incOk(sh.vertexShader), k + ': #include — своей строкой');
   }
+  {   // вода (T-044): глубина и берег из сетки, волны картой нормалей, блик — свет three с тенью; простой режим — без этого
+    const m = VR.mats.water, sh = shaderOf('lambert'); m.onBeforeCompile(sh);
+    const fs = sh.fragmentShader, vs = sh.vertexShader;
+    ok(VR.waterLight && fs.includes('d37dl += directLight.color;\n\t\tRE_Direct( directLight, geometry, material, reflectedLight );') && fs.indexOf('vec3 d37dl') < fs.indexOf('d37dl += '), 'вода: блик — солнце/луна с тенью копятся перед RE_Direct (объявлено раньше)');
+    ok(/vec2 d37wq[\s\S]*#include <alphamap_fragment>/.test(fs) && fs.indexOf('float d37dep') < fs.indexOf('#include <emissivemap_fragment>'), 'вода: толща и глубина — до света (перед alphamap, раньше крючка льда)');
+    ok(vs.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && vs.includes('vWD = vec4(') && /varying vec4 vWD;[\s\S]*varying float vWS;/.test(vs) && /varying vec4 vWD;[\s\S]*varying float vWS;/.test(fs), 'вода: u, v — младшие 5 бит, глубины углов и берег — в varying (в обоих шейдерах)');
+    ok(fs.includes('d37uv.xy += vec2( uTime * 0.03, uTime * 0.05 );') && fs.includes('float d37IceK = 0.0;'), 'вода: строка для крючка льда на месте, d37IceK объявлен');
+    ok(sh.uniforms.uWN.value?.isDataTexture && sh.uniforms.uWN.value.image.width === 128 && sh.uniforms.uWN.value.generateMipmaps && sh.uniforms.uWN.value.wrapS === T.RepeatWrapping && sh.uniforms.uWN.value.minFilter === T.LinearMipmapLinearFilter, 'вода: карта нормалей 128² с мип-уровнями, повторяется');
+    ok(!!m.defines.D37_WQ2 && VR.U.uWP.value.z > 0 && VR.U.uWP.value.w > .3 && VR.U.uWP.value.w < 1, 'вода «высокая»: два слоя волн, пена, средняя яркость рисунка', VR.U.uWP.value);
+    // карта нормалей: шов повторения — без скачка (целые частоты), наклоны в меру
+    const wd = sh.uniforms.uWN.value.image.data, N = 128, nx = (x, y) => wd[((y % N) * N + (x % N)) * 4] / 127.5 - 1;
+    let seam = 0, mx = 0; for (let i = 0; i < N; i++) { seam = Math.max(seam, Math.abs(nx(N - 1, i) - nx(0, i)), Math.abs(nx(i, N - 1) - nx(i, 0))); mx = Math.max(mx, Math.abs(nx(i, i))); }
+    ok(seam < .25 && mx > .2 && mx < .9, 'карта нормалей: без шва на краю, наклоны в меру', { seam: +seam.toFixed(3), mx: +mx.toFixed(3) });
+    // NaN-страховки: нормализуем только ненулевое, деление — на max
+    ok(fs.includes('inversesqrt( max( dot( d37Hs, d37Hs ), 1e-8 ) )') && fs.includes('/ max( d37al, 0.004 )') && !/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/.test(fs.replace(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g, (s, a, b) => +a < +b ? '' : s)), 'вода: без NaN (половинный вектор, деление на покрытие), smoothstep — края по возрастанию');
+    // простой режим: те же u, v (младшие 5 бит), без глубин, карты нормалей и блика
+    const VRs = V.renderer(Object.assign({}, R, { scene: new T.Scene(), wave: null }), { safe: true }), shs = shaderOf('lambert');
+    VRs.mats.water.onBeforeCompile(shs);
+    ok(shs.vertexShader.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && !shs.vertexShader.includes('vWD') && !shs.fragmentShader.includes('vWD') && !shs.fragmentShader.includes('uWN') && !shs.fragmentShader.includes('d37dl +='), 'простой режим воды: u, v из младших бит, без новых кусков');
+    VRs.dispose();
+  }
   const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
   ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
   ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
@@ -492,6 +513,73 @@ function fakeWorld(sky, blk, walls = new Set()){
       ok(c.px !== c.x || c.pz !== c.z ? Math.abs(c.rx - (c.px + c.x) / 2) < 1e-9 && Math.abs(c.rz - (c.pz + c.z) / 2) < 1e-9 : true, 'моб рисуется между тактами (X.frac)', { px: c.px, x: c.x, rx: c.rx });
       X.dispose();
       void S7;
+    }
+    // мобы в воде (22.10, владелец: «зомби застряли в воде»): держатся на плаву, плывут к берегу или к цели, вылезают на край
+    // до 1,25 над гладью (как игрок), в погоне обходят глубокую воду по суше; в стенку из воды бесконечно не упираются
+    {
+      const perf0 = globalThis.performance; globalThis.performance = { now: () => 1000 };   // зерно моба — от часов: одинаковое во всех прогонах
+      const MOBS = window.KubomirEnts.MOBS;
+      // бассейн: вода в 2 блока (y 10…11, гладь 11,875) в [0..5]×[0..5]; вокруг — камень до topAt (верх берега — topAt + 1)
+      const pool = o => {
+        const r = mk({ creative: false, time: 22, night: 1, P: o.P || { x: 30.5, y: 10, z: 2.5 } });
+        for (let x = -8; x <= 13; x++) for (let z = -8; z <= 13; z++) {
+          const inPool = x >= 0 && x <= 5 && z >= 0 && z <= 5, top = o.topAt ? o.topAt(x, z) : 12;
+          for (let y = 10; y <= 13; y++) { const t = inPool ? (y <= 11 ? ID.water : 0) : (y <= top ? ID.stone : 0); if (t) r.W.set(x, y, z, t, { silent: true }); }
+        }
+        return r;
+      };
+      const runPool = (type, o = {}) => {
+        const r = o.world ? o.world() : pool(o), { X } = r, M = MOBS[type], hits = [];
+        X.hookHurt = n => hits.push(n);
+        const m = X.spawn(type, o.at?.[0] ?? 2.5, o.at?.[2] ?? 10.2, o.at?.[1] ?? 2.5, { quiet: true });
+        let landed = -1, minSub = 9, maxSub = 0, maxWall = 0, wet = 0, calm = false;
+        const N = (o.sec ?? 20) * 20, landY = o.landY ?? 13, inPool = () => m.x >= 0 && m.x < 6 && m.z >= 0 && m.z < 6;
+        for (let i = 0; i < N; i++) {
+          X.tick(1 / 20);
+          if (o.frames) { const f = o.frames(i); for (let k = 0; k < f; k++) { X.frac = (k + 1) / (f + 1); X.frame(1 / 144, i / 20); } }
+          if (!X.mobs.includes(m)) break;
+          if (inPool() && i > 60) { const s = Math.max(0, Math.min(1, (11.875 - m.y) / M.h)); minSub = Math.min(minSub, s); maxSub = Math.max(maxSub, s); }
+          maxWall = Math.max(maxWall, m.wallT || 0); if (m.wetT > 0) wet++; if (m.calm > 0) calm = true;
+          if (landed < 0 && m.ground && m.y >= landY - .02 && !inPool()) { landed = i; if (!o.keep) break; }
+        }
+        const d = Math.hypot(r.S.P.x - m.x, r.S.P.z - m.z);
+        const out = { t: landed < 0 ? -1 : +(landed / 20).toFixed(2), x: +m.x.toFixed(3), y: +m.y.toFixed(3), z: +m.z.toFixed(3), minSub: +minSub.toFixed(3), maxSub: +maxSub.toFixed(3), maxWall: +maxWall.toFixed(2), wet, calm, hits: hits.length, d: +d.toFixed(2) };
+        X.dispose(); return out;
+      };
+      // 1) вода в 2 блока, берег на блок выше воды (край +1,125 над гладью): вылез сам (без цели — к ближнему берегу)
+      const A = runPool('zombie');
+      ok(A.t > 0 && A.t <= 8, `зомби в воде (2 блока) у берега на блок выше: вылез на сушу за ${A.t} с (нужно ≤ 8)`, A);
+      const A2 = runPool('zombie', { frames: i => 1 + (i * 7) % 5 }), A3 = runPool('zombie', { frames: i => (i % 3 === 0 ? 0 : 2) });
+      ok(A2.t === A.t && A2.x === A.x && A2.z === A.z && A3.t === A.t && A3.y === A.y, 'то же при любых кадрах между тактами (30 / 60 / 144 — такт мобов 1/20 с)', [A, A2, A3]);
+      const Pg = runPool('pig'), Ck = runPool('chicken'), Sl = runPool('slime');
+      ok(Pg.t > 0 && Pg.t <= 10 && Ck.t > 0 && Ck.t <= 10 && Sl.t > 0 && Sl.t <= 10, 'свинья, курица, слизень — тоже выбираются на берег', { pig: Pg.t, chicken: Ck.t, slime: Sl.t });
+      // 2) берег высокий (+2,125) со всех сторон, кроме востока: нашёл низкий край и вылез там
+      const D = runPool('zombie', { at: [1.5, 2.5], topAt: x => x > 5 ? 12 : 13, sec: 25 });
+      ok(D.t > 0 && D.t <= 15 && D.x > 6, `высокий берег, низкий — только с одной стороны: доплыл туда и вылез за ${D.t} с`, D);
+      // 3) низкого края нет: держится на плаву (голова над водой), в стенку дольше 2 с подряд не упирается
+      const E2 = runPool('zombie', { at: [1.5, 2.5], topAt: () => 13, sec: 20 });
+      ok(E2.t < 0 && E2.minSub > .55 && E2.maxSub < .9 && E2.maxWall <= 2.06, 'вылезти негде: держится на плаву (плечи над водой, качается), в стенку не бьётся', E2);
+      // 4) гонится за игроком на берегу: плывёт к нему, вылезает и бьёт
+      const C = runPool('zombie', { at: [1.5, 2.5], P: { x: 8.5, y: 13, z: 2.5 }, keep: true, sec: 15 });
+      ok(C.t > 0 && C.t <= 8 && C.hits >= 1, `гонится за игроком на берегу: вылез за ${C.t} с и ударил (${C.hits})`, C);
+      // 5) ров (вода 2 блока, 3 ширины) между зомби и игроком, обход по суше есть: идёт в обход, в воду не лезет
+      const moat = () => {
+        const r = mk({ creative: false, time: 22, night: 1, P: { x: 10.5, y: 10, z: .5 } });
+        for (let x = 4; x <= 6; x++) for (let z = -12; z <= 6; z++) for (const y of [8, 9]) r.W.set(x, y, z, ID.water, { silent: true });
+        return r;
+      };
+      const F = runPool('zombie', { world: moat, at: [1.5, .5, 10], keep: true, sec: 15, landY: 99 });
+      ok(F.wet === 0 && F.hits >= 1, 'ров между ним и игроком, а по суше обойти можно: обошёл и ударил, в воду не лез', F);
+      // 6) обхода нет (ров во всю ширину): плывёт напрямик и вылезает на другой стороне
+      const moat2 = () => {
+        const r = mk({ creative: false, time: 22, night: 1, P: { x: 10.5, y: 10, z: .5 } });
+        for (let x = 4; x <= 6; x++) for (let z = -40; z <= 40; z++) for (const y of [8, 9]) r.W.set(x, y, z, ID.water, { silent: true });
+        return r;
+      };
+      const F2 = runPool('zombie', { world: moat2, at: [1.5, .5, 10], keep: true, sec: 15, landY: 99 });
+      ok(F2.wet > 0 && F2.hits >= 1, 'обойти нельзя — переплыл ров, вылез и ударил', F2);
+      console.log(`  мобы в воде: вылез ${A.t} с (свинья ${Pg.t}, курица ${Ck.t}, слизень ${Sl.t}); один низкий край — ${D.t} с; в воде доля тела ${E2.minSub}…${E2.maxSub}; погоня — вылез за ${C.t} с; ров — в обход (в воде 0 тактов), без обхода — вплавь`);
+      globalThis.performance = perf0;
     }
     // частицы: пулы не растут, всё конечное (без «не чисел»), ни одной живой — объект спрятан (нет вызова отрисовки)
     {

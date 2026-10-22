@@ -28,7 +28,7 @@ const opt = n => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1]
 const TESTS = [
   // сначала самое дешёвое и самое важное: «собирается ли вообще» и свежесть сгенерированного
   { f: 'syntax-test.cjs', t: 120 },
-  { f: 'make-errlog.mjs', args: ['--check'], t: 60 },
+  { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 },
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
@@ -36,7 +36,9 @@ const TESTS = [
   { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
   { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'planet-test.cjs' }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
-  { f: 'world-zones-test.cjs' }, { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' },
+  { f: 'world-zones-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
+  { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
+  { f: 'photo-test.cjs' },   // 🖼 фоторедактор: команды «d37 v1», «Мои материалы» (поддельная IndexedDB), проект .d37photo, связка раздела
   // языки скриптов ждут настоящие таймеры (по 5–60 мс): под нагрузкой других проверок опаздывают (так упала lang-cs-test) — идут по одной
   { f: 'lang-cs-test.cjs', serial: true }, { f: 'lang-java-test.cjs', serial: true }, { f: 'lang-lua-test.cjs', serial: true }, { f: 'lang-wasm-test.cjs', env: { D37_SKIP: 'cpp,rust' } },
   { f: 'voxel-test.cjs', serial: true, retry: 2 },
@@ -51,6 +53,8 @@ const TESTS = [
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
+  { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
+  { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
 ];
 
 // ═══ Откуда брать пакеты ═══

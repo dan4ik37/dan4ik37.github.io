@@ -28,7 +28,7 @@ export const GAME_AGE = {
   '2048': [0, ''], checkers: [0, ''], catch: [0, ''], sea: [0, ''], snake: [0, ''], memory: [0, ''], ttt: [0, ''], reaction: [0, ''],
   emoji: [6, 'Названия игр, в том числе хорроров и стрелялок (только эмодзи).'],
   clicker: [0, ''], quiz: [6, 'Тесты про героев игр, в том числе хорроров (FNAF).'],
-  wheel: [0, ''], random: [0, ''], typing: [0, ''], cps: [0, ''], fonts: [0, ''],
+  wheel: [0, ''], random: [0, ''], typing: [0, ''], cps: [0, ''], fonts: [0, ''], photo: [0, ''],
 };
 export const gameAge = id => (GAME_AGE[id] || [0, ''])[0];
 export const UGC_AGE = 12;   // игра / мир игрока без метки (age.sql: age_rating по умолчанию 12)

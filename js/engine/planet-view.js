@@ -568,7 +568,8 @@ void main(){
     const tame = () => {
       const b = R.optBase;
       if (!b || b === tamed) return;
-      if (b.ao || (b.rt && b.rt !== 'off') || b.framegen) { R.applyGfx({ ...b, ao: false, rt: 'off', framegen: false }); }
+      // глубина резкости («Ультра», автофокус) на видах в десятки км размыла бы горы и горизонт — тоже выкл
+      if (b.ao || (b.rt && b.rt !== 'off') || b.framegen || b.dof !== false) { R.applyGfx({ ...b, ao: false, rt: 'off', framegen: false, dof: false }); }
       tamed = R.optBase;
     };
     tame();

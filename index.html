@@ -1893,6 +1893,7 @@ body.low .donation-alert-icon{animation:none}
         <a href="/donate" class="profile-admin-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center">💝 Донаты и цель</a>
         <button onclick="openDonationLog()" class="profile-admin-btn">📋 Лог донатов/VIP</button>
         <button onclick="openSiteErrors()" class="profile-admin-btn">🩺 Ошибки сайта</button>
+        <button onclick="openCityEconomy()" class="profile-admin-btn">🏙️ Экономика города</button>
       </div>
       </details>
     </div>
@@ -2045,6 +2046,9 @@ body.low .donation-alert-icon{animation:none}
   </div>
   <div id="shopRoot"></div>
 </div>
+
+<!-- 🖼 ФОТОРЕДАКТОР /photo — редактор (fabric.js, js/apps/photo/*, css/photo.css) грузит js/apps/apps.js только при входе -->
+<div id="photo-page" style="display:none"><div id="photoRoot"></div></div>
 
 <!-- 📣 РЕКЛАМА ЗА 💎 — кабинет рекламодателя (js/features/adcab.js и css/adcab.css грузятся при входе; ads.sql) -->
 <div class="wrap reveal" id="adv-page">
@@ -2408,6 +2412,7 @@ body.low .donation-alert-icon{animation:none}
     <a href="/tools/wheel">Колесо фортуны</a>
     <a href="/tools/random">Генератор случайных чисел</a>
     <a href="/tools/typing">Тест скорости печати</a>
+    <a href="/tools/photo">Фоторедактор онлайн</a>
     <a href="/about" data-server>Кто такой dan4ik37</a>
     <a href="/top">Самые популярные видео</a>
     <a href="/vip">✨ VIP</a>
@@ -2708,6 +2713,8 @@ body.low .donation-alert-icon{animation:none}
 <script src="js/features/games.js"></script>
 <script src="js/features/shop.js"></script>
 <script src="js/features/invite.js"></script>
+<!-- 🖼 инструменты (фоторедактор /photo): маленький загрузчик, сам редактор — только при входе в раздел -->
+<script src="js/apps/apps.js"></script>
 <script src="js/init.js"></script>
 <script>routerStart()</script>
 <script src="js/features/secrets.js"></script>

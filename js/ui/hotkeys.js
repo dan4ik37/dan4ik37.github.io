@@ -29,6 +29,8 @@ document.addEventListener('keydown', e=>{
   if(isTypingContext()||isModalOpen()) return;
   // Открыта мини-игра (#/games/<id>) — стрелки и цифры её, не переключаем страницы
   if(typeof gamesActive!=='undefined' && gamesActive) return;
+  // Открыт фоторедактор (/photo) — клавиши его (V, B, стрелки двигают слой…)
+  if(window.D37Photo?.active) return;
   // «/» — поиск по сайту (как на YouTube/GitHub)
   if(e.key==='/'){ e.preventDefault(); openCmdPalette(); return; }
   const routes = Object.keys(PAGES);
@@ -81,6 +83,7 @@ const SITE_PAGES = [
   { kind:'page', label:'✒️ Шрифты для ника — красивые буквы и символы', sub:'шрифт ник символы красивые буквы стиль', href:'/tools/fonts' },
   { kind:'page', label:'🧩 Тесты: кто ты из Майнкрафта, FNAF, Роблокса', sub:'тест квиз какой ты моб персонаж кто ты зритель', href:'/quiz' },
   { kind:'page', label:'⌨️ Тест скорости печати', sub:'печать скорость знаков в минуту клавиатура тренажёр', href:'/tools/typing' },
+  { kind:'page', label:'🖼 Фоторедактор онлайн — слои, обрезка, текст, фильтры', sub:'фото редактор фотошоп обрезать картинку надпись на фото фильтр слои превью шортс', href:'/tools/photo' },
   { kind:'page', label:'🔢 Генератор случайных чисел, монетка, кубики', sub:'рандомайзер случайное число орёл решка кубик жребий', href:'/tools/random' },
   { kind:'page', label:'🛠️ Студия игр — сделай свою игру', sub:'конструктор игр создать игру своя игра без кода ии', href:'#/games/studio' },
   { kind:'page', label:'🎡 Колесо фортуны — крутить рандом', sub:'колесо рандом случайный выбор розыгрыш жребий', href:'/tools/wheel' },

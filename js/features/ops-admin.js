@@ -7,7 +7,7 @@
 (function () {
   'use strict';
   if (window.D37Ops) return;
-  const sb = () => window.sbClient;
+  const sb = () => (typeof sbClient !== 'undefined' && sbClient) || null;   // let sbClient в chat.js — не свойство window
   const st = { days: 7, hidden: false, data: null, open: new Set(), busy: false };
   let root = null, body = null;
 

@@ -12,13 +12,20 @@
 // KB_MODE=reopen — мир закрыть и открыть 8 раз: память JS после сборки мусора — не растёт
 // KB_MODE=combat — две руки и бой (T-012): снимки поз (от 1-го лица, спереди, сзади; фаза удара «заморожена»), зомби — нокаут
 //   мечом, лук — стрела вылетела; круги боя (KB_ROUNDS) — память JS не растёт, мобы не копятся; ошибок в консоли нет
+// KB_MODE=swim — плавание (T-019): озеро, стоит / держит «прыжок» / плывёт, день и ночь — где гладь относительно плеч и глаз, поза
+//   человечка; снимки сзади (видно отражение под ним) и спереди
+// KB_MODE=water — вода (T-044): бассейн от берега (1 блок) до глубины 9 с метками на дне — день, низкий взгляд, закат, ночь, под
+//   водой, лёд; океан вдаль (полосы) днём и ночью, болото, река; простой режим (VR.goSafe — шейдер «не собрался»); замер ЦП и
+//   видеокарты (таймер запросов) у бассейна и над океаном. KB_PHONE=1 — профиль телефона (412 × 915, на замере ЦП ×4 медленнее).
+//   Снимки — <TMP>\water\shots\<метка>-<пресет>-*.jpg
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
 const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2);
 const MODE = process.env.KB_MODE || '';
+const PHONE = MODE === 'perf' || !!process.env.KB_PHONE;
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
-const SHOTS = path.join(TMP, 'kubomir2', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
+const SHOTS = path.join(TMP, MODE === 'water' ? 'water' : 'kubomir2', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary' };
@@ -55,6 +62,46 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const heap = async () => ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 300)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
   const idle = () => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); for (let i = 0; i < 160; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await new Promise(r => setTimeout(r, 500)); } return true; })()`, 120000);
   async function runMode(){
+    if (MODE === 'swim') {
+      // плавание (T-019, жалоба владельца 22.10: «как будто он ходит по воде» и «он наверху, а показывает в воде»): озеро 5 блоков глубиной,
+      // игрок посередине — стоит / держит «прыжок» / плывёт; день и ночь; вид сзади сверху (видно отражение под ним) и спереди.
+      // Числа: где гладь относительно плеч и глаз человечка, поза (кат. world3d: 0 — стоит, 5 — плывёт, 11 — держится на воде, 10 — нырок)
+      await idle();
+      await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P;
+        const cx = Math.floor(P.x), cz = Math.floor(P.z), gy = Math.floor(P.y);
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(V.ID[n]) : 0, { urgent: 1 });
+        for (let x = cx - 12; x <= cx + 12; x++) for (let z = cz - 12; z <= cz + 12; z++) { for (let y = gy - 6; y <= gy + 12; y++) set(x, y, z, y < gy ? 'stone' : null); set(x, gy - 1, z, 'grass'); }
+        for (let x = cx - 8; x <= cx + 8; x++) for (let z = cz - 8; z <= cz + 8; z++) for (let y = gy - 6; y <= gy - 1; y++) set(x, y, z, 'water');
+        Object.assign(P, { x: cx + .5, y: gy - 2, z: cz + .5, vx: 0, vy: 0, vz: 0, fly: false }); S._lake = { x: cx + .5, z: cz + .5 };
+        S.paused = true; S.R.lighting.time = 12; await new Promise(r => setTimeout(r, 4000)); return 1; })()`, 60000);
+      const W8 = Object.freeze({ seed: 'kb', mode: 'fixed', season: 'summer', weather: 'clear', lapse: 0, seaY: 52 });
+      await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); try { S.WX.clim.setWorld(${JSON.stringify(W8)}); } catch (e) {} const st = document.createElement('style'); st.textContent = '.kb-lockhint,.e-toast,.kb-tip{display:none!important}'; document.head.appendChild(st); return 1; })()`);
+      const measure = () => ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, me = S.A.get('me'), T3 = S.R.T;
+        let y = Math.floor(P.y + 1), top = null; for (let k = 0; k < 8; k++) { const v = W.raw(P.x, y + k, P.z), u = W.raw(P.x, y + k + 1, P.z); if (v > 0 && V.T.liquid[v & 0xfff] === 1 && !(u > 0 && V.T.liquid[u & 0xfff] === 1)) { top = y + k + V.liquidHeight(v); break; } }
+        if (top == null) for (let k = 1; k < 8; k++) { const v = W.raw(P.x, y - k, P.z); if (v > 0 && V.T.liquid[v & 0xfff] === 1) { top = y - k + V.liquidHeight(v); break; } }
+        const wp = o => { if (!o) return null; const p = new T3.Vector3(); o.getWorldPosition(p); return +p.y.toFixed(3); };
+        const ch = me && me.ch;
+        return { surface: top, feet: +P.y.toFixed(3), water: +P.water.toFixed(3), onGround: P.onGround, eye: +(P.y + 1.62).toFixed(3), drawnY: me ? +me.y.toFixed(3) : null, cat: ch ? ch.cat : null, swim: me ? !!me.swim : null, dive: me ? !!me.dive : null,
+          shoulder: ch ? wp(ch.armL || ch.armR) : null, head: ch ? wp(ch.headP || ch.head) : null, hips: ch ? wp(ch.legL || ch.legR) : null, rt: S.R.opt?.rt }; })()`);
+      const view = async (yaw, fp, cam) => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.rig.yaw = ${yaw}; S.rig.fp = ${fp}; GAME_IMPL.kubomir._test.cam(${cam}); GAME_IMPL.kubomir._test.hud(false); await new Promise(r => setTimeout(r, 1500)); return 1; })()`, 20000);
+      const keys = async o => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), C = S.C; C.press('jump', ${!!o.jump}); C.press('forward', ${!!o.fwd}); S.rig.yaw = .3; await new Promise(r => setTimeout(r, ${o.ms || 3000})); return 1; })()`, 20000);
+      res.water = {};
+      for (const [tod, time] of [['day', 12], ['night', 22.5]]) {
+        await ev(`(() => { GAME_IMPL.kubomir._test.state().R.lighting.time = ${time}; return 1; })()`);
+        for (const [name, o] of [['idle', {}], ['jump', { jump: true }], ['swim', { fwd: true }]]) {
+          await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), P = S.P; P.x = S._lake.x; P.z = S._lake.z; P.vx = P.vz = 0; return 1; })()`);   // каждый раз — с середины озера
+          await keys(Object.assign({ ms: name === 'swim' ? 1500 : 3000 }, o));
+          const m = await measure();
+          res.water[tod + '-' + name] = m;
+          console.log('ВОДА', tod, name, JSON.stringify(m));
+          if (m.surface != null && m.shoulder != null) console.log(`  ${tod} ${name}: поза ${m.cat} (${m.swim ? m.dive ? 'нырок' : 'плывёт' : 'не плывёт'}), в воде ${(m.water / 1.8).toFixed(2)} тела, плечи ${(m.shoulder - m.surface).toFixed(2)} от глади, глаза ${(m.eye - m.surface).toFixed(2)}`);
+          await view(.3 + Math.PI, .55, 1); await shot(`water-${tod}-${name}-back`);
+          if (tod === 'day') { await view(.3, .25, 2); await shot(`water-${tod}-${name}-front`); }
+          await ev(`(() => { const C = GAME_IMPL.kubomir._test.state().C; C.press('jump', false); C.press('forward', false); return 1; })()`);
+        }
+      }
+      return;
+    }
     if (MODE === 'perf') {
       await idle(); await sleep(8000);
       await send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -260,6 +307,178 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       ok(!bad.length, 'бой: в консоли — без ошибок и исключений', bad.slice(0, 6));
       return;
     }
+    if (MODE === 'water') {
+      await idle();
+      await ev(`(async () => { const st = document.createElement('style'); st.textContent = '.kb-lockhint,.e-toast,.kb-tip{display:none!important}'; document.head.appendChild(st); window.D37Full?.toggle(document.querySelector('#gamesStage'), { esc: false }); await new Promise(r => setTimeout(r, 1500)); return true; })()`, 20000);
+      // телепорт и ожидание: мир подгрузился (потоки свободны), игрок стоит
+      const tpTo = (x, y, z, fly) => ev(`(async () => {
+        const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), P = S.P;
+        P.fly = ${!!fly}; GAME_IMPL.kubomir._test.command('/tp ${x} ${y} ${z}');
+        await wait(1500);
+        for (let i = 0; i < 160; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await wait(500); }
+        await wait(3000); if (!${!!fly}) for (let i = 0; i < 40 && !P.onGround; i++) await wait(250);
+        P.vx = P.vy = P.vz = 0;
+        return { x: Math.round(P.x), y: +P.y.toFixed(2), z: Math.round(P.z) };
+      })()`, 200000);
+      // место бассейна: обычная зона климата, равнина/лес/березняк, земля чуть выше моря (одно и то же «до» и «после»: зерно мира)
+      res.place = await ev(`(() => {
+        const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, G = S.G, P = S.P, col = {};
+        const good = (x, z) => { for (let dx = -10; dx <= 32; dx += 6) for (let dz = -18; dz <= 18; dz += 6) { if (V.climZoneAt && V.climZoneAt(G, x + dx, z + dz, col) !== 0) return false; const c = V.genColumn(G, x + dx, z + dz, col); if (c.h <= V.SEA + 1 || c.h > V.SEA + 14 || ![2, 3, 4].includes(c.b)) return false; } return true; };
+        const x0 = Math.floor(P.x), z0 = Math.floor(P.z);
+        for (let r = 0; r < 4000; r += 48) for (let a = 0; a < (r ? 32 : 1); a++) {
+          const x = Math.round(x0 + r * Math.cos(a / 32 * 6.2832)), z = Math.round(z0 + r * Math.sin(a / 32 * 6.2832));
+          if (good(x, z)) return { x, z, h: V.genColumn(G, x, z, col).h };
+        }
+        return null;
+      })()`);
+      // биомы с водой: океан (глубоко), болото, река — первое подходящее место по кругу от бассейна
+      const findBiome = (b, minDepth) => ev(`(() => {
+        const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, G = S.G, col = {}, x0 = ${res.place ? res.place.x : 0}, z0 = ${res.place ? res.place.z : 0};
+        const okAt = (x, z) => { let wet = 0; for (let dx = -12; dx <= 12; dx += 4) for (let dz = -12; dz <= 12; dz += 4) { const c = V.genColumn(G, x + dx, z + dz, col); if (c.b !== ${b}) return false; if (c.h <= V.SEA - ${minDepth}) wet++; } return wet >= 20; };
+        for (let r = 64; r < 6000; r += 64) for (let a = 0; a < 48; a++) { const x = Math.round(x0 + r * Math.cos(a / 48 * 6.2832)), z = Math.round(z0 + r * Math.sin(a / 48 * 6.2832)); if (okAt(x, z)) return { x, z }; }
+        return null;
+      })()`, 120000);
+      // KB_WATER=pool — только бассейн (быстрые пробы вида), без океана, болота, реки и замеров; KB_WATER=perf — только замеры (бассейн и
+      // океан, по 10 с, после того как мир подгрузился), без снимков — для пар «до/после»
+      const QUICK = process.env.KB_WATER === 'pool', PERF = process.env.KB_WATER === 'perf';
+      if (!QUICK) { res.ocean = await findBiome(0, 6); if (!PERF) { res.swamp = await findBiome(8, 1); res.river = await findBiome(9, 2); } }
+      console.log('  места', JSON.stringify({ pool: res.place, ocean: res.ocean, swamp: res.swamp, river: res.river }));
+      if (!res.place) throw new Error('нет места для бассейна');
+      res.tp = await tpTo(res.place.x + .5, res.place.h + 2, res.place.z + .5);
+      // бассейн: от песчаного берега (1 блок) ступенями 2, 3, 5 — до 9 блоков; на дне — песок, гравий, камень и метки (кирпичи, железо,
+      // алмаз, лампа), за водой — берёзы (отражения)
+      res.pool = await ev(`(async () => {
+        const wait = ms => new Promise(r => setTimeout(r, ms));
+        const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, ID = V.ID;
+        const cx = Math.floor(P.x), cz = Math.floor(P.z), gy = Math.floor(P.y);
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(ID[n]) : 0, { urgent: 1 });
+        for (let x = cx - 10; x <= cx + 34; x++) for (let z = cz - 18; z <= cz + 18; z++) {
+          for (let y = gy; y <= gy + 22; y++) if (W.raw(x, y, z) > 0) set(x, y, z, null);
+          set(x, gy - 1, z, 'grass'); for (let y = gy - 12; y < gy - 1; y++) set(x, y, z, 'dirt');
+        }
+        const X0 = cx + 3, X1 = cx + 28, Z0 = cz - 12, Z1 = cz + 12;
+        const prof = d => d < 2 ? 1 : d < 4 ? 2 : d < 6 ? 3 : d < 9 ? 5 : 9;
+        for (let x = X0; x <= X1; x++) for (let z = Z0; z <= Z1; z++) {
+          const dep = Math.min(prof(x - X0), prof(z - Z0), prof(Z1 - z), prof(X1 - x));
+          for (let y = gy - dep; y <= gy - 1; y++) set(x, y, z, 'water');
+          const mk = z === cz - 4 || z === cz - 3 ? 'bricks' : z === cz + 4 && (x - X0) % 3 === 0 ? 'iron_block' : z === cz + 7 && (x - X0) % 4 === 1 ? 'diamond_block' : '';
+          set(x, gy - dep - 1, z, mk || (dep <= 3 ? 'sand' : dep <= 5 ? 'gravel' : 'stone'));
+        }
+        set(X0 + 12, gy - 10, cz, 'lamp');   // свет из глубины (ночью)
+        for (let x = cx; x < X0; x++) for (let z = Z0 - 2; z <= Z1 + 2; z++) set(x, gy - 1, z, 'sand');
+        const tree = (x, z, h) => { for (let y = gy; y < gy + h; y++) set(x, y, z, 'log_birch'); const t = gy + h - 1; for (let y = t - 2; y <= t + 1; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { if (y > t - 1 && (Math.abs(dx) > 1 || Math.abs(dz) > 1)) continue; if (dx || dz || y > t) if (W.raw(x + dx, y, z + dz) === 0) set(x + dx, y, z + dz, 'leaves_birch'); } };
+        tree(X1 + 3, cz - 6, 7); tree(X1 + 4, cz + 2, 8); tree(X1 + 3, cz + 9, 6); tree(cx + 14, Z1 + 4, 7); tree(cx + 22, Z0 - 4, 6);
+        Object.assign(P, { x: cx + .5, y: gy, z: cz + .5, vx: 0, vy: 0, vz: 0, fly: false });
+        S.rig.yaw = -Math.PI / 2; S.rig.fp = .4;
+        await wait(5000);
+        return { cx, cz, gy };
+      })()`, 120000);
+      const pool = res.pool;
+      // время и погода (лето, ясно / зима с морозом), камера: yaw, наклон, вид (0 — от 1-го лица)
+      const sky = (time, w, ice) => ev(`(async () => {
+        const S = GAME_IMPL.kubomir._test.state();
+        S.R.lighting.time = ${time}; S.paused = true;
+        try { S.WX.clim.setWorld(${JSON.stringify(w)}); if ('cover' in S.WX) S.WX.cover = ${w.season === 'winter' ? 1 : 0}; } catch (e) {}
+        if ('iceForce' in S.WX) S.WX.iceForce = ${ice ? 'true' : 'false'};
+        await new Promise(r => setTimeout(r, 6000));
+        return true;
+      })()`, 60000);
+      const view = (yaw, fp, place) => ev(`(async () => {
+        const S = GAME_IMPL.kubomir._test.state(), P = S.P, o = ${JSON.stringify(place || null)};
+        if (o) { P.x = o.x; P.y = o.y; P.z = o.z; P.vx = P.vy = P.vz = 0; if ('fly' in o) P.fly = o.fly; }
+        S.rig.yaw = ${yaw}; S.rig.fp = ${fp}; GAME_IMPL.kubomir._test.cam(0); GAME_IMPL.kubomir._test.hud(false);
+        await new Promise(r => setTimeout(r, 2200)); return true;
+      })()`, 20000);
+      const SUMMER = { seed: 'kb', mode: 'fixed', season: 'summer', weather: 'clear', lapse: 0, seaY: 52 };
+      const WINTER = { seed: 'kb', mode: 'fixed', season: 'winter', weather: 'clear', lapse: 0, seaY: 52 };
+      const shore = { x: pool.cx + .5, y: pool.gy, z: pool.cz + .5, fly: false };
+      // замер: N секунд кадров — ЦП (кадр игры), видеокарта (таймер запросов вокруг R.render), FPS, вызовы
+      const measure = (name, sec, noWater) => ev(`(async () => {
+        const S = GAME_IMPL.kubomir._test.state(), R = S.R, gl = R.r.getContext(), ext = R.r.capabilities.isWebGL2 && gl.getExtension('EXT_disjoint_timer_query_webgl2');
+        const r0 = R.render, qs = [], gpu = [], cpu = [], dts = []; let run = true;
+        for (let i = 0; i < 80; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await new Promise(r => setTimeout(r, 500)); }   // мир подгрузился
+        const hideW = v => { for (const c of S.VR.chunks) { const m = c.vis && c.vis.water; if (m) m.visible = !v; } };
+        if (${noWater ? 'true' : 'false'}) hideW(true);
+        R.render = function (...a) { let q = null; if (ext && run) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); } const o = r0.apply(this, a); if (q) { gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push(q); } return o; };
+        const tick = () => { if (!run) return; cpu.push(R.stats.cpuFrame); dts.push(R.stats.dt); requestAnimationFrame(tick); };
+        await new Promise(r => setTimeout(r, 1500)); requestAnimationFrame(tick);
+        await new Promise(r => setTimeout(r, ${sec * 1000})); run = false; R.render = r0; hideW(false);
+        for (let k = 0; k < 120 && qs.length; k++) { while (qs.length && gl.getQueryParameter(qs[0], gl.QUERY_RESULT_AVAILABLE)) { const q = qs.shift(); if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) gpu.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6); gl.deleteQuery(q); } if (qs.length) await new Promise(r => setTimeout(r, 16)); }
+        for (const q of qs) gl.deleteQuery(q);
+        const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length); cpu.sort((a, b) => a - b); gpu.sort((a, b) => a - b);
+        return { name: ${JSON.stringify(name)}, frames: cpu.length, cpu: +avg(cpu).toFixed(2), cpu95: +(cpu[Math.floor(cpu.length * .95)] || 0).toFixed(2), gpu: gpu.length ? +avg(gpu).toFixed(3) : null, gpu95: gpu.length ? +gpu[Math.floor(gpu.length * .95)].toFixed(3) : null, fps: +(1000 / avg(dts)).toFixed(1), calls: R.stats.calls, q: R.q };
+      })()`, 120000);
+      res.perf = [];
+      if (PERF) {
+        await sky(10.5, SUMMER, false);
+        await view(-Math.PI / 2, .3, shore);
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        res.perf.push(await measure('бассейн днём', 10));
+        res.perf.push(await measure('бассейн днём, без воды', 10, true));
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        if (res.ocean) {
+          res.tpOcean = await tpTo(res.ocean.x + .5, 56, res.ocean.z + .5, true);
+          await view(.6, .12, { x: res.ocean.x + .5, y: 56, z: res.ocean.z + .5, fly: true });
+          if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+          res.perf.push(await measure('океан днём', 10));
+          res.perf.push(await measure('океан днём, без воды', 10, true));
+          if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        }
+        for (const p of res.perf) console.log('ЗАМЕР', JSON.stringify(p));
+        res.heapMB = await heap(); console.log('память JS, МБ', res.heapMB);
+        const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`);
+        ok(!pr.bad.length, 'вода (замер): все программы шейдеров собрались', pr.bad);
+        return;
+      }
+      // ── бассейн: день, низкий взгляд, закат, ночь ──
+      await sky(10.5, SUMMER, false);
+      await view(-Math.PI / 2, .42, shore); await shot('pool-day');
+      if (!QUICK) {
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        res.perf.push(await measure('бассейн днём', 8));
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      }
+      await view(-Math.PI / 2, .1, shore); await shot('pool-day-low');
+      await view(-Math.PI / 2 - .5, .3, { x: pool.cx + 12.5, y: pool.gy + 7, z: pool.cz - 15.5, fly: true }); await shot('pool-day-side');
+      await sky(18.3, SUMMER, false);
+      await view(-Math.PI / 2, .16, shore); await shot('pool-dusk');
+      await sky(23.5, SUMMER, false);
+      await view(-Math.PI / 2, .3, shore); await shot('pool-night');
+      // под водой (в глубине, лицом к берегу) и лёд (зима, мороз)
+      await sky(11, SUMMER, false);
+      await view(Math.PI / 2, .05, { x: pool.cx + 16.5, y: pool.gy - 6, z: pool.cz + .5, fly: true }); await shot('pool-under');
+      await sky(11, WINTER, true);
+      await view(-Math.PI / 2, .38, shore); await shot('pool-ice');
+      // ── океан вдаль (полосы и «пластик»), сверху; ночью ──
+      if (res.ocean) {
+        await sky(10.5, SUMMER, false);
+        res.tpOcean = await tpTo(res.ocean.x + .5, 56, res.ocean.z + .5, true);
+        await view(.6, .06, { x: res.ocean.x + .5, y: 56, z: res.ocean.z + .5, fly: true }); await shot('ocean-day-far');
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        res.perf.push(await measure('океан днём', 8));
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+        await view(.6, .6); await shot('ocean-day-down');
+        await sky(23.5, SUMMER, false);
+        await view(.6, .06); await shot('ocean-night-far');
+      }
+      if (res.swamp) { await sky(10.5, SUMMER, false); res.tpSwamp = await tpTo(res.swamp.x + .5, 60, res.swamp.z + .5, true); await view(.6, .35, { x: res.swamp.x + .5, y: 60, z: res.swamp.z + .5, fly: true }); await shot('swamp-day'); }
+      if (res.river) { await sky(10.5, SUMMER, false); res.tpRiver = await tpTo(res.river.x + .5, 62, res.river.z + .5, true); await view(.6, .4, { x: res.river.x + .5, y: 62, z: res.river.z + .5, fly: true }); await shot('river-day'); }
+      for (const p of res.perf) console.log('ЗАМЕР', JSON.stringify(p));
+      const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`);
+      const guard = await ev(`D37E.gfxGuardInfo ? D37E.gfxGuardInfo().off : []`);
+      ok(!pr.bad.length, 'вода: все программы шейдеров собрались', pr.bad);
+      ok(!guard || !guard.length, 'вода: страж графики ничего не выключил', guard);
+      // ── простой режим (шейдер кубиков «не собрался»): вода видна, программы собрались ──
+      res.tpBack = await tpTo(pool.cx + .5, pool.gy + 1, pool.cz + .5);
+      await sky(10.5, SUMMER, false);
+      res.safe = await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.VR.goSafe?.(); await new Promise(r => setTimeout(r, 3000)); return { safe: !!S.VR.safe }; })()`, 30000);
+      await view(-Math.PI / 2, .42, shore); await shot('pool-basic');
+      const pr2 = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`);
+      ok(res.safe && res.safe.safe && !pr2.bad.length, 'простой режим воды: включился, программы собрались', { safe: res.safe, bad: pr2.bad });
+      const bad = logs.filter(l => /WebGLProgram|Shader Error|exception|TypeError|ReferenceError/i.test(l) && !/X3595/.test(l));
+      ok(!bad.length, 'вода: в консоли — без ошибок шейдеров и исключений', bad.slice(0, 6));
+      return;
+    }
     if (MODE === 'reopen') {
       const hs = [];
       for (let i = 0; i < 8; i++) {
@@ -279,7 +498,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   }
   try {
     await send('Page.enable'); await send('Runtime.enable');
-    if (MODE === 'perf') {   // профиль телефона
+    if (PHONE) {   // профиль телефона
       await send('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 2, mobile: true });
       await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
       await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -293,7 +512,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     for (let i = 0; i < 120; i++) { await sleep(500); const okm = await ev(`!!document.querySelector('.kb-menu')`, 3000).catch(() => false); if (okm) break; }
     await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`);
     await sleep(500);
-    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' ? 'survival' : 'creative'}"]'); c && c.click(); const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
+    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'swim' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'swim' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
     let kb = false;
     for (let i = 0; i < 240 && !kb; i++) { await sleep(500); kb = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready && GAME_IMPL.kubomir._test.state().WX)`, 3000).catch(() => false); }
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }

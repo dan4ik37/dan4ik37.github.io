@@ -41,6 +41,7 @@
   async function st(name, mode = 'readonly'){ const d = await open(); if (!d) return null; return d.transaction(name, mode).objectStore(name); }
 
   const RG = 32;   // область — 32×32 чанка
+  const SIG_SKIP = ['cloud', 'gt', 'played', 'time', 'day', 'coop', 'snow', 'ice', 'ents', 'thumb', '_cloudBusy'], SIG_SKIP_P = ['x', 'y', 'z', 'yaw', 'pitch', 'hp', 'food', 'sat', 'sel', 'fly'];
   const ckey = (id, cx, cz) => `${id}|${Math.floor(cx / RG)},${Math.floor(cz / RG)}|${cx}|${cz}`;
   const S = V.store = {
     ready: () => open().then(d => !!d),
@@ -135,6 +136,107 @@
       }
       await S.putWorld(w);
       for (let i = 0; i < recs.length; i += 500) await S.putChunks(newId, recs.slice(i, i + 500));
+      return w;
+    },
+    // ── облако (js/core/cloud.js) и игра вместе: мир одним двоичным файлом (сжимает облако) ──
+    // 'KBW1' · u32 длина JSON · JSON { v, world, n } · по чанку: i32 cx, i32 cz, u32 правок, u32 байт плиток, u32 чисел «основы»;
+    // правки — номера ячеек по возрастанию разностями (u16), потом значения (u16; палитра мира); плитки — JSON [[i, плитка]]; «основа» — u16
+    async allChunks(id){
+      const d = await open();
+      if (!d) { const out = []; for (const [k, r] of mem.chunks) if (k.startsWith(id + '|')) out.push(r); return out; }
+      return reqP(d.transaction('chunks').objectStore('chunks').getAll(IDBKeyRange.bound(id + '|', id + '|￿')));
+    },
+    packRecs(world, recs){
+      const enc = new TextEncoder(), head = enc.encode(JSON.stringify({ v: 1, world, n: recs.length }));
+      const tj = recs.map(r => r.t && r.t.length ? enc.encode(JSON.stringify(r.t)) : null);
+      let size = 8 + head.length;
+      for (let i = 0; i < recs.length; i++) size += 20 + (recs[i].e ? recs[i].e.length * 4 : 0) + (tj[i] ? tj[i].length : 0) + (recs[i].b ? recs[i].b.length * 2 : 0);
+      const buf = new ArrayBuffer(size), dv = new DataView(buf), u8 = new Uint8Array(buf);
+      u8[0] = 75; u8[1] = 66; u8[2] = 87; u8[3] = 49;   // KBW1
+      dv.setUint32(4, head.length, true); u8.set(head, 8);
+      let o = 8 + head.length;
+      for (let i = 0; i < recs.length; i++) {
+        const r = recs[i], e = r.e || new Uint32Array(0), nb = r.b ? r.b.length : 0;
+        const s = Array.from(e).sort((a, b) => a - b);   // по номеру ячейки (значение — в младших битах: порядок тот же)
+        dv.setInt32(o, r.cx, true); dv.setInt32(o + 4, r.cz, true); dv.setUint32(o + 8, s.length, true); dv.setUint32(o + 12, tj[i] ? tj[i].length : 0, true); dv.setUint32(o + 16, nb, true); o += 20;
+        let prev = 0;
+        for (let k = 0; k < s.length; k++) { const c = s[k] >>> 16; dv.setUint16(o, c - prev, true); prev = c; o += 2; }
+        for (let k = 0; k < s.length; k++) { dv.setUint16(o, s[k] & 0xffff, true); o += 2; }
+        if (tj[i]) { u8.set(tj[i], o); o += tj[i].length; }
+        for (let k = 0; k < nb; k++) { dv.setUint16(o, r.b[k], true); o += 2; }
+      }
+      return u8;
+    },
+    async packWorld(id, o = {}){
+      let w = await S.world(id); if (!w) return null;
+      if (o.cloud) { w = Object.assign({}, w); delete w.thumb; delete w._cloudBusy; }   // в облако — без картинки мира (JPEG не сжимается)
+      return S.packRecs(w, await S.allChunks(id));
+    },
+    // ☁️ подпись мира — отправлять в облако, только если поменялся: b — правки и плитки (всё после заголовка), m — мир без того, что
+    // меняется само (время суток и игровое, отметки облака и игры вместе, снег и лёд погоды, мобы и вещи вокруг, где стоит и куда
+    // смотрит игрок, здоровье и еда), x — m + клетка игрока, здоровье и еда (при выходе из мира)
+    sig(world, u8){
+      const H = root.D37Cloud?.hash; if (!H || !(u8 instanceof Uint8Array) || u8.length < 8) return null;
+      const hl = new DataView(u8.buffer, u8.byteOffset, u8.byteLength).getUint32(4, true);
+      const w = Object.assign({}, world || {});
+      for (const k of SIG_SKIP) delete w[k];
+      const p = w.player || null;
+      if (p) { w.player = Object.assign({}, p); for (const k of SIG_SKIP_P) delete w.player[k]; }
+      const m = H(JSON.stringify(w));
+      return { b: H(u8, 8 + hl), m, x: H(m + '|' + (p ? [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z), p.hp | 0, p.food | 0].join(',') : '')) };
+    },
+    // разобрать (с проверкой всего: размеры, номера ячеек, «основа» — ровно V.CELLS) → { world, recs }
+    unpackWorld(u8){
+      if (!(u8 instanceof Uint8Array) || u8.length < 8 || u8[0] !== 75 || u8[1] !== 66 || u8[2] !== 87 || u8[3] !== 49) throw new Error('это не мир «Кубомира»');
+      const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), dec = new TextDecoder();
+      const hl = dv.getUint32(4, true); if (8 + hl > u8.length) throw new Error('файл обрезан');
+      const head = JSON.parse(dec.decode(u8.subarray(8, 8 + hl)));
+      const w = head && head.world;
+      if (!w || typeof w !== 'object' || typeof w.name !== 'string' || (!w.seed && w.seed !== 0)) throw new Error('в файле нет мира');
+      if (!Number.isInteger(head.n) || head.n < 0 || head.n > 200000) throw new Error('слишком большой мир');
+      const recs = [], LIM = Math.ceil((V.LIMIT || 3e7) / 16) + 2;
+      let o = 8 + hl;
+      const need = k => { if (o + k > u8.length) throw new Error('файл обрезан'); };
+      for (let i = 0; i < head.n; i++) {
+        need(20);
+        const cx = dv.getInt32(o, true), cz = dv.getInt32(o + 4, true), ne = dv.getUint32(o + 8, true), tl = dv.getUint32(o + 12, true), nb = dv.getUint32(o + 16, true); o += 20;
+        if (Math.abs(cx) > LIM || Math.abs(cz) > LIM || ne > V.CELLS || tl > 4e6 || nb > V.CELLS * 2) throw new Error('испорченный чанк');
+        need(ne * 4 + tl + nb * 2);
+        const e = new Uint32Array(ne); let c = 0;
+        for (let k = 0; k < ne; k++) { c += dv.getUint16(o + k * 2, true); if (c >= V.CELLS) throw new Error('испорченный чанк'); e[k] = c << 16; }
+        o += ne * 2;
+        for (let k = 0; k < ne; k++) e[k] = (e[k] | dv.getUint16(o + k * 2, true)) >>> 0;
+        o += ne * 2;
+        let t = [];
+        if (tl) { const a = JSON.parse(dec.decode(u8.subarray(o, o + tl))); if (Array.isArray(a)) t = a.filter(x => Array.isArray(x) && Number.isInteger(x[0]) && x[0] >= 0 && x[0] < V.CELLS && x[1] && typeof x[1] === 'object').slice(0, 4096); o += tl; }
+        const rec = { cx, cz, e, t };
+        if (nb) {
+          const b = new Uint16Array(nb); let n = 0;
+          for (let k = 0; k < nb; k++) b[k] = dv.getUint16(o + k * 2, true);
+          o += nb * 2;
+          for (let k = 0; k < nb; k += 2) n += b[k];
+          if (n === V.CELLS && nb % 2 === 0) rec.b = b;
+        }
+        recs.push(rec);
+      }
+      return { world: w, recs };
+    },
+    // заменить мир целиком (одной транзакцией: не выйдет — старый остаётся как был)
+    async replaceWorld(id, w, recs){
+      w.id = id;
+      const d = await open();
+      const empty = r => r.e && r.e.length === 0 && !(r.t && r.t.length) && !(r.b && r.b.length);
+      if (!d) {
+        for (const k of [...mem.chunks.keys()]) if (k.startsWith(id + '|')) mem.chunks.delete(k);
+        mem.worlds.set(id, w); for (const r of recs) if (!empty(r)) mem.chunks.set(ckey(id, r.cx, r.cz), r);
+      } else {
+        const tx = d.transaction(['worlds', 'chunks'], 'readwrite'), cs = tx.objectStore('chunks');
+        cs.delete(IDBKeyRange.bound(id + '|', id + '|￿'));
+        tx.objectStore('worlds').put(w);
+        for (const r of recs) if (!empty(r)) cs.put(r, ckey(id, r.cx, r.cz));
+        await txDone(tx);
+      }
+      S.clearJournal(id);
       return w;
     },
   };

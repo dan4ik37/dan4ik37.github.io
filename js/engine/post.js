@@ -10,7 +10,8 @@
 // (непрозрачные у three.js иначе пишут ровно 1, прозрачные смешиваются к 1) — светится только то, что помечено:
 // неон, лампочки, ореолы ламп, диск солнца. P.bloom = { on, strength, levels }; P.fxaa / P.msaa — что сглаживает сейчас.
 // P.setOpts({ ao: 'off'|'on'|'high', aa: 'off'|'fxaa'|'msaa' }) — настройки игрока (render.js R.applyGfx). MSAA (4×) — только
-// WebGL2, плотность ≤ 1,25 и кадр не уменьшен — иначе FXAA. P.setGrade({ gain, sat, con, vig }) — цвет кадра (gfx.js).
+// WebGL2 и плотность ≤ 1,25 (и при уменьшенном кадре — его потом растягивает FSR/NIS); плотнее — без сглаживания (FXAA поверх
+// не мылит). FXAA — только если выбран он или MSAA нельзя (WebGL1). P.setGrade({ gain, sat, con, vig }) — цвет кадра (gfx.js).
 // Глубина сцены — 24 бита (текстурой, P.depth24): буфер глубины three без текстуры — 16 бит, тонкие слои пола (плитка
 // площади в 5 мм над подложкой) вдали путаются (z-fighting).
 // SSAO (только WebGL2 + HDR): глубина сцены — текстурой (с MSAA three копирует её при сборке кадра), AO — в половинном
@@ -161,7 +162,7 @@ void main(){
   }
   vec2 h = s0 + ds * hi;
   float hd = texture2D(tDepth, h).x;
-  if (hd >= 0.99999 || hd < 0.012) { gl_FragColor = vec4(0.0); return; }   // небо — нечего отражать; рука «из глаз» (глубина у ближней плоскости) — не отражаем
+  if (hd >= 0.99999 || hd < 0.012 || abs(texture2D(tColor, h).a - 0.5) < 0.2) { gl_FragColor = vec4(0.0); return; }   // небо — нечего отражать; рука «из глаз» (глубина у ближней плоскости) и существа/вещи (код 0,5 — voxel-render.js FS_ACT) — не отражаем
   vec2 ed = min(h, 1.0 - h);
   float fade = smoothstep(0.0, 0.07, min(ed.x, ed.y)) * (1.0 - smoothstep(0.7, 1.0, hi)) * (1.0 - smoothstep(0.15, 0.65, r.z));
   vec3 rc = texture2D(tColor, h).rgb;
@@ -336,14 +337,55 @@ void main(){
   }
   gl_FragColor = vec4( min( s * uRay.w * uSun.z, 1.0 ), 0.0, 0.0, 1.0 );
 }`;
-  // Глубина резкости («Ультра» на компьютере): половина кадра; фокус — на своём персонаже (render.js R.focus), дальше и ближе
-  // глубины резкости — размытие по диску (16 выборок по спирали «золотого угла», без шума по экрану); резкое (передний план)
-  // на фон не размазывается. uDof: x — расстояние фокуса, y — глубина резкости, z — наибольший радиус (пиксели), w — сила
-  const FS_DOF = `#include <packing>
-uniform sampler2D tSrc; uniform sampler2D tDepth; uniform vec4 uDof; uniform vec2 uNF; uniform vec2 uTexel; varying vec2 vUv;
-float coc( vec2 uv ){ float z = -perspectiveDepthToViewZ( textureLod( tDepth, uv, 0.0 ).x, uNF.x, uNF.y ); return clamp( ( abs( z - uDof.x ) - uDof.y ) / ( uDof.x * 3.0 + 6.0 ), 0.0, 1.0 ) * uDof.w; }
+  // Глубина резкости («Ультра» на компьютере; 22.10.2026 — автофокус, владелец: «ты мыло перенёс в Мир Денчика — будто
+  // −6 зрение… ты почини, а не отключай»). Раньше фокус стоял на своём персонаже — от 1-го лица он в камере, и мир за пару
+  // метров расплывался. Теперь — как камера с автофокусом: фокус = глубина в СЕРЕДИНЕ кадра (куда смотришь и целишься; от
+  // 3-го лица там свой персонаж), медиана 3×3 точек, плавно (~0,2 с), в пределах [ближе всего, дальше всего]. Объектив мягкий:
+  // резко всё до max(2 × фокус, «игровая зона» 25 м), дальше — размытие нарастает до полного на ×3 от этого края; ближе фокуса
+  // размыто только совсем рядом с камерой (не ближе 0,7 ед.: рука и вещь у камеры — всегда резкие) и только если смотришь
+  // далеко. Радиус ограничен. Фокус живёт на видеокарте: проход FOCUS пишет его в буфер 1×1 (лог-шкала, 16 бит в RG8 — без
+  // float-буферов и без чтения пикселей на процессор), проход DOF читает его там же.
+  // FOCUS: uFoc — x: доля нового (0…1, 1 — сразу), y — ближе не бывает, z — дальше не бывает (небо, даль), w — шаг выборки
+  // (доля высоты кадра); uAsp — ширина/высота
+  const FOC_GLSL = `float d37FocT( float f, vec2 r ){ return clamp( log( f / r.x ) / log( r.y / r.x ), 0.0, 1.0 ); }
+float d37FocF( float t, vec2 r ){ return r.x * exp( t * log( r.y / r.x ) ); }
+vec2 d37FocPack( float t ){ float h = floor( t * 255.0 ) / 255.0; return vec2( h, ( t - h ) * 255.0 ); }
+float d37FocUnpack( vec2 p ){ return p.x + p.y / 255.0; }`;
+  const FS_FOCUS = `#include <packing>
+uniform sampler2D tDepth; uniform sampler2D tPrev; uniform vec2 uNF; uniform vec4 uFoc; uniform float uAsp; varying vec2 vUv;
+${FOC_GLSL}
+float fz( vec2 uv ){ float d = textureLod( tDepth, uv, 0.0 ).x; return d >= 0.99999 ? uFoc.z : clamp( -perspectiveDepthToViewZ( d, uNF.x, uNF.y ), uFoc.y, uFoc.z ); }
+#define D37S( a, b ) { float t_ = min( a, b ); b = max( a, b ); a = t_; }
 void main(){
-  float c0 = coc( vUv );
+  vec2 o = vec2( uFoc.w / uAsp, uFoc.w ), c = vec2( 0.5 );
+  float p0 = fz( c + vec2( -o.x, -o.y ) ), p1 = fz( c + vec2( 0.0, -o.y ) ), p2 = fz( c + vec2( o.x, -o.y ) );
+  float p3 = fz( c + vec2( -o.x, 0.0 ) ), p4 = fz( c ), p5 = fz( c + vec2( o.x, 0.0 ) );
+  float p6 = fz( c + vec2( -o.x, o.y ) ), p7 = fz( c + vec2( 0.0, o.y ) ), p8 = fz( c + vec2( o.x, o.y ) );
+  // медиана 9 (сеть сравнений opt_med9): тонкий столб или край — не сбивает фокус
+  D37S( p1, p2 ) D37S( p4, p5 ) D37S( p7, p8 ) D37S( p0, p1 ) D37S( p3, p4 ) D37S( p6, p7 ) D37S( p1, p2 ) D37S( p4, p5 ) D37S( p7, p8 )
+  D37S( p0, p3 ) D37S( p5, p8 ) D37S( p4, p7 ) D37S( p3, p6 ) D37S( p1, p4 ) D37S( p2, p5 ) D37S( p4, p7 ) D37S( p4, p2 ) D37S( p6, p4 ) D37S( p4, p2 )
+  vec2 r = uFoc.yz;
+  float tn = d37FocT( p4, r ), tp = d37FocUnpack( textureLod( tPrev, c, 0.0 ).rg );
+  float t = mix( tp, tn, uFoc.x );   // плавно и в лог-шкале (как глаз: 1 → 2 м так же заметно, как 50 → 100 м)
+  gl_FragColor = vec4( d37FocPack( t ), 0.0, 1.0 );
+}`;
+  // DOF: половина кадра, размытие по диску (16 выборок по спирали «золотого угла», без шума по экрану); резкое (передний план)
+  // на фон не размазывается. uDof: x — во сколько раз дальше фокуса ещё резко, y — «игровая зона» (резко не ближе, ед.),
+  // z — наибольший радиус (пиксели), w — сила; uDof2: x — ближняя зона (ед.), y — ближе этого не размываем (рука, вещь у
+  // камеры), z — во сколько раз дальше начала размытие полное, w — ручной фокус (> 0 — вместо автофокуса, R.dofSet.dist);
+  // uFR — пределы фокуса (как у FOCUS)
+  const FS_DOF = `#include <packing>
+uniform sampler2D tSrc; uniform sampler2D tDepth; uniform sampler2D tFoc; uniform vec4 uDof; uniform vec4 uDof2; uniform vec2 uFR; uniform vec2 uNF; uniform vec2 uTexel; varying vec2 vUv;
+${FOC_GLSL}
+float coc( vec2 uv, float F ){
+  float z = -perspectiveDepthToViewZ( textureLod( tDepth, uv, 0.0 ).x, uNF.x, uNF.y );
+  float f0 = max( F * uDof.x, uDof.y ), far = smoothstep( f0, f0 * uDof2.z, z );
+  float n0 = min( F * 0.45, uDof2.x ), near = ( 1.0 - smoothstep( n0 * 0.45, n0, z ) ) * step( uDof2.y, z ) * 0.6;
+  return max( far, near ) * uDof.w;
+}
+void main(){
+  float F = uDof2.w > 0.0 ? uDof2.w : d37FocF( d37FocUnpack( textureLod( tFoc, vec2( 0.5 ), 0.0 ).rg ), uFR );
+  float c0 = coc( vUv, F );
   vec3 acc = textureLod( tSrc, vUv, 0.0 ).rgb; float ws = 1.0;
   if ( c0 > 0.01 ) {
     float r = c0 * uDof.z;
@@ -351,14 +393,17 @@ void main(){
     vec2 dd = vec2( 1.0, 0.0 );
     for ( int i = 0; i < 16; i ++ ) {
       vec2 o = dd * sqrt( ( float( i ) + 0.5 ) / 16.0 ) * r * uTexel;
-      float cs = coc( vUv + o ), w = cs >= c0 * 0.5 ? 1.0 : cs * 2.0;
+      float cs = coc( vUv + o, F ), w = cs >= c0 * 0.5 ? 1.0 : cs * 2.0;
       acc += textureLod( tSrc, vUv + o, 0.0 ).rgb * w; ws += w;
       dd = ga * dd;
     }
   }
   gl_FragColor = vec4( acc / ws, c0 );
 }`;
-  E.PACK_FS = { comp: FS_COMP_X, rays: FS_RAYS, dof: FS_DOF };
+  E.PACK_FS = { comp: FS_COMP_X, rays: FS_RAYS, dof: FS_DOF, focus: FS_FOCUS };
+  // числа объектива по умолчанию (render-test сверяет): резко до max(FAR × фокус, ZONE ед.), полное размытие — ×RAMP от края;
+  // ближняя зона — NEAR ед., ближе MINZ — не размывать (рука), фокус — в пределах [FMIN, дальняя плоскость камеры]
+  E.DOF = { FAR: 2, ZONE: 25 * (E.UNIT || 2.1 / 1.8), RAMP: 3, NEAR: 1.6 * (E.UNIT || 2.1 / 1.8), MINZ: .7, FMIN: .6, TAU: .2, STEP: .012 };
   // FXAA (Лоттес, «лёгкий»): 5 выборок яркости, на ровном — сразу выход, на краю — размытие вдоль края (ещё 4)
   const FS_FXAA = `uniform sampler2D tSrc; uniform vec2 uTexel; varying vec2 vUv;
 void main(){
@@ -753,7 +798,9 @@ void main(){
       M.copy = mk(FS_COPY, { tSrc: { value: null } });
       M.health = mk(FS_HEALTH, { tSrc: { value: null }, tDepth: { value: null }, uMode: { value: 0 }, uDep: { value: 0 } });   // страж графики
       M.rays = mk(FS_RAYS, { tDepth: { value: null }, tSrc: { value: null }, uSun: { value: new T.Vector4() }, uRay: { value: new T.Vector4(24, .9, .955, .05) } });   // наборы: лучи
-      M.dof = mk(FS_DOF, { tSrc: { value: null }, tDepth: { value: null }, uDof: { value: new T.Vector4() }, uNF: { value: new T.Vector2(.2, 800) }, uTexel: { value: new T.Vector2() } });   // «Ультра»: глубина резкости
+      M.dof = mk(FS_DOF, { tSrc: { value: null }, tDepth: { value: null }, tFoc: { value: null }, uDof: { value: new T.Vector4() }, uDof2: { value: new T.Vector4() }, uFR: { value: new T.Vector2(.6, 800) },
+        uNF: { value: new T.Vector2(.2, 800) }, uTexel: { value: new T.Vector2() } });   // «Ультра»: глубина резкости
+      M.foc = mk(FS_FOCUS, { tDepth: { value: null }, tPrev: { value: null }, uNF: { value: new T.Vector2(.2, 800) }, uFoc: { value: new T.Vector4(1, .6, 800, .012) }, uAsp: { value: 1 } });   // её автофокус
     }
     // сборка набора (FS_COMP_X): свои uniform — общие с M.comp (тот же объект), переключение — только текст и define
     Object.assign(M.comp.uniforms, { uPackA: { value: new T.Vector4(0, 0, 1, 1) }, uPackB: { value: new T.Vector4(4, 0, 0, 4) }, uRayC: { value: new T.Vector3() },
@@ -845,11 +892,13 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       P.w = w; P.h = h; P.pr = pr;
       const scaled = P.scaled = pr < (R.pr0 || 1) - .001;   // динамическое разрешение опустило — кадр растягиваем (FSR)
       if (rtUp) { r.getDrawingBufferSize(DB); P.ow = Math.max(1, DB.x); P.oh = Math.max(1, DB.y); rtUp.setSize(P.ow, P.oh); }
-      const ms = gl2 && P.aa === 'msaa' && o.msaa !== false && pr <= 1.25 && !scaled && !P.retro ? 4 : 0, dep = P.depth24 || P.ao.mode !== 'off';
+      // MSAA и при уменьшенном кадре (FSR / NIS ждут сглаженный кадр; раньше тут включался FXAA — мыльнее, и буфер сцены
+      // пересоздавался при каждом шаге разрешения); на «ретине» (> 1,25) MSAA нет — и FXAA поверх не нужен: пиксели и так мелкие
+      const ms = gl2 && P.aa === 'msaa' && o.msaa !== false && pr <= 1.25 && !P.retro ? 4 : 0, dep = P.depth24 || P.ao.mode !== 'off';
       if (ms !== rtScene.samples || dep !== !!rtScene.depthTexture || !!P.retro !== !!rtScene.d37Nearest) { rtScene.dispose(); rtScene.depthTexture?.dispose(); rtScene = sceneRT(w, h, ms, dep); }
       else rtScene.setSize(w, h);   // текстуру глубины three пересоздаст сам (размер буфера сменился)
       P.msaa = ms;
-      P.fxaa = !ms && P.aa !== 'off' && !P.noFXAA && !P.retro && !P.pixelArt;   // нет MSAA (выбор, «ретина», уменьшенный кадр) — сглаживает FXAA, если не выключено и не пиксельная графика
+      P.fxaa = !ms && P.aa !== 'off' && !(P.aa === 'msaa' && pr > 1.25) && !P.noFXAA && !P.retro && !P.pixelArt;   // выбран FXAA или MSAA нельзя (WebGL1, рендерер без MSAA) — FXAA; «ретина» с MSAA — без FXAA
       rtLdr.setSize(w, h);
       let bw = Math.max(1, w >> (q === 'high' ? 1 : 2)), bh = Math.max(1, h >> (q === 'high' ? 1 : 2));
       for (let i = 0; i < P.bloom.levels; i++) {
@@ -875,8 +924,14 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       // лучи набора шейдеров: четверть кадра (ступень 2 — половина)
       if (P.rays.tier && M.rays) { const k = P.rays.tier > 1 ? 1 : 2, rw = Math.max(1, w >> k), rh = Math.max(1, h >> k); if (!rtRays) rtRays = new T.WebGLRenderTarget(rw, rh, { depthBuffer: false }); else rtRays.setSize(rw, rh); }
       else if (rtRays) { rtRays.dispose(); rtRays = null; }
-      if (P.dofOn && M.dof) { const dw = Math.max(1, w >> 1), dh = Math.max(1, h >> 1); if (!rtDof) rtDof = new T.WebGLRenderTarget(dw, dh, { type, depthBuffer: false }); else rtDof.setSize(dw, dh); }
-      else if (rtDof) { rtDof.dispose(); rtDof = null; }
+      if (P.dofOn && M.dof) {
+        const dw = Math.max(1, w >> 1), dh = Math.max(1, h >> 1); if (!rtDof) rtDof = new T.WebGLRenderTarget(dw, dh, { type, depthBuffer: false }); else rtDof.setSize(dw, dh);
+        // автофокус: два буфера 1×1 (прошлый → новый), обычные байты (RG — 16 бит лог-шкалы), без сглаживания выборок
+        if (!rtFoc) { const fo = { depthBuffer: false, minFilter: T.NearestFilter, magFilter: T.NearestFilter }; rtFoc = [new T.WebGLRenderTarget(1, 1, fo), new T.WebGLRenderTarget(1, 1, fo)]; P.dofFresh = true; }
+      } else {
+        if (rtDof) { rtDof.dispose(); rtDof = null; }
+        if (rtFoc) { rtFoc[0].dispose(); rtFoc[1].dispose(); rtFoc = null; }
+      }
     };
     function bloomPasses(){
       const n = Math.min(P.bloom.levels, B.length);
@@ -958,8 +1013,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     // «Обычные» (fx.id 'normal') — прежняя сборка FS_COMP. Под водой (render.js R.setUnder) — P.setUnder ──
     P.pack = { id: 'normal' }; P.packX = false; P.under = false; P.retro = null;
     P.rays = { tier: 0, drawn: false, color: new T.Vector3(), sun: new T.Vector3(), str: 0, asp: 1 };
-    let lutTex = null, lutKey = '', rtRays = null, rtDof = null;
-    P.dofOn = false; P.dofDrawn = false;
+    let lutTex = null, lutKey = '', rtRays = null, rtDof = null, rtFoc = null, focI = 0, focT = 0;
+    P.dofOn = false; P.dofDrawn = false; P.dofFresh = true; P.noDOF = false;
+    P.dofCut = () => { P.dofFresh = true; };   // смена сцены, телепорт: фокус — сразу по новому кадру, без «наезда»
     P.setUnder = (on, k) => { P.under = !!on; P.underK = on ? (k == null ? 1 : Math.max(0, Math.min(1, +k || 0))) : 0; };
     // пиксельная графика («Кубомир»: текстуры 32×32 без сглаживания внутри): FXAA размывает рисунок — не включать (MSAA можно)
     P.pixelArt = false;
@@ -973,7 +1029,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         if (fx.toon) defs.D37_TOON = '';
         if (fx.retro) defs.D37_RETRO = '';
         if (fx.retro && fx.crt) defs.D37_CRT = '';
-        if (fx.dof && gl2 && M.dof && P.depth24) defs.D37_DOF = '';
+        if (fx.dof && gl2 && M.dof && M.foc && P.depth24 && !P.noDOF) defs.D37_DOF = '';
         if (fx.under) defs.D37_UNDER = '';
       }
       P.pack = fx; P.packX = x;
@@ -994,17 +1050,25 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (P.w > 1) P.setSize(P.w, P.h, P.pr);
       return P.pack;
     };
-    // глубина резкости: фокус — на своём персонаже (R.focus — точка, за которой едет камера); нет его (редактор) — прохода нет.
-    // R.dofSet = { k, dist, depth } — игра решает сама (21.10.2026, «Кубомир»: от 1-го лица фокус «на себе» был в камере — весь
-    // мир в мыле): k — сила 0…1 (0 — без глубины резкости), dist — расстояние фокуса, depth — сколько вокруг него резко
+    // Глубина резкости: автофокус по середине кадра (проход FOCUS → буфер 1×1, на видеокарте), потом размытие (DOF). Только в
+    // игре (R.focus — свой персонаж есть; в редакторе студии — нет прохода). R.dofSet — игра может подстроить: k — сила 0…1
+    // (0 — выкл), zone — «игровая зона» в своих единицах (резко не ближе), dist — ручной фокус вместо автофокуса
     function dofPass(camera){
       P.dofDrawn = false;
-      const F = R.focus, O = R.dofSet; if (!rtDof || !F || !F.ok) return;
-      if (O && !(O.k > 0)) return;
-      const fd = O && O.dist > 0 ? O.dist : Math.hypot(camera.position.x - F.x, camera.position.y - F.y - 1.2, camera.position.z - F.z);
+      const F = R.focus, O = R.dofSet;
+      if (!rtDof || !rtFoc || !F || !F.ok || (O && !(O.k > 0))) { P.dofFresh = true; focT = 0; return; }   // пропуск — потом фокус заново, без «наезда» со старого
+      const D = E.DOF, fr = Math.max(D.FMIN * 2, camera.far * .98), now = performance.now(), dt = focT ? Math.min(.25, Math.max(0, (now - focT) / 1000)) : 1;
+      focT = now;
+      // автофокус: прошлый буфер → новый (медиана середины кадра, плавно ~TAU с)
+      const uf = M.foc.uniforms, a = rtFoc[focI], b = rtFoc[focI ^ 1];
+      uf.tDepth.value = rtScene.depthTexture; uf.tPrev.value = a.texture; uf.uNF.value.set(camera.near, camera.far); uf.uAsp.value = P.w / Math.max(1, P.h);
+      uf.uFoc.value.set(P.dofFresh ? 1 : 1 - Math.exp(-dt / D.TAU), D.FMIN, fr, D.STEP);
+      pass(M.foc, b); focI ^= 1; P.dofFresh = false;
       const u = M.dof.uniforms;
-      u.tSrc.value = rtScene.texture; u.tDepth.value = rtScene.depthTexture; u.uNF.value.set(camera.near, camera.far); u.uTexel.value.set(1 / rtDof.width, 1 / rtDof.height);
-      u.uDof.value.set(fd, O && O.depth > 0 ? O.depth : Math.max(4, fd * 1.2), Math.max(3, rtDof.height / 140), O ? Math.min(1, O.k) : 1);   // мягко: резко — свой персонаж и всё рядом, размыта даль
+      u.tSrc.value = rtScene.texture; u.tDepth.value = rtScene.depthTexture; u.tFoc.value = b.texture; u.uFR.value.set(D.FMIN, fr);
+      u.uNF.value.set(camera.near, camera.far); u.uTexel.value.set(1 / rtDof.width, 1 / rtDof.height);
+      u.uDof.value.set(D.FAR, O && O.zone > 0 ? O.zone : D.ZONE, Math.min(4, Math.max(2, rtDof.height / 180)), O ? Math.min(1, O.k) : 1);   // мягко: радиус ≤ 4 точек половины кадра
+      u.uDof2.value.set(D.NEAR, D.MINZ, D.RAMP, O && O.dist > 0 ? O.dist : 0);
       pass(M.dof, rtDof);
       P.dofDrawn = true;
     }
@@ -1133,6 +1197,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (k === 'fsr') P.noFSR = true;
       if (k === 'fxaa') P.noFXAA = true;
       if (k === 'bloom') P.bloom.on = false;
+      if (k === 'dof') { P.noDOF = true; if (P.pack) P.setPack(P.pack); }   // глубина резкости (и её автофокус) — без неё, набор остаётся
       if (k === 'post') P.on = false;
       if (P.noRT && P.rt.mode !== 'off') { P.rt.mode = 'off'; R.rtMarkAll?.(false); }
       if (!P.canAO) P.ao.mode = 'off';
@@ -1159,7 +1224,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     P._test = { M, pass, rt: () => ({ scene: rtScene, ldr: rtLdr, up: rtUp, ao: rtAO, ssr: rtSSR, out: rtOut, rays: rtRays, dof: rtDof }) };   // проверки: шейдеры и проходы
     P.dispose = () => {
       rtScene.dispose(); rtScene.depthTexture?.dispose(); rtLdr.dispose(); rtUp?.dispose(); rtAO?.dispose(); rtAO2?.dispose(); for (const b of B) b.dispose();
-      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose(); rtRays?.dispose(); lutTex?.dispose(); rtDof?.dispose();
+      coefTex?.dispose(); rtSSR?.dispose(); rtOut?.dispose(); hRT?.dispose(); rtRays?.dispose(); lutTex?.dispose(); rtDof?.dispose(); rtFoc?.forEach(t => t.dispose());
       for (const k in M) M[k].dispose();
       tri.dispose();
     };
@@ -1182,8 +1247,8 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
   //    почему, какая программа/проверка, видеокарта — семейство и модель, качество, версия); 'gfx_dark' — днём тёмная земля
   //    (только сообщить).
   const GKEY = 'd37_gfx_guard';
-  const POSTK = ['codes', 'fol', 'ao', 'rt', 'fg', 'nis', 'fsr', 'fxaa', 'bloom', 'post', 'test'];
-  const PROGK = { pre: 'bloom', down: 'bloom', up: 'bloom', comp: 'post', fxaa: 'fxaa', easu: 'fsr', rcas: 'fsr', nis: 'nis', nisS: 'nis', ao: 'ao', aob: 'ao', ssr: 'rt', fg: 'fg', copy: 'fg', health: 'test' };
+  const POSTK = ['codes', 'fol', 'ao', 'rt', 'fg', 'nis', 'fsr', 'fxaa', 'bloom', 'dof', 'post', 'test'];
+  const PROGK = { pre: 'bloom', down: 'bloom', up: 'bloom', comp: 'post', fxaa: 'fxaa', easu: 'fsr', rcas: 'fsr', nis: 'nis', nisS: 'nis', ao: 'ao', aob: 'ao', ssr: 'rt', fg: 'fg', copy: 'fg', health: 'test', dof: 'dof', foc: 'dof' };
   E.GUARD = { KEY: GKEY, POSTK, PROGK };
   const gVer = () => { try { return typeof GAMES_VER !== 'undefined' ? String(GAMES_VER) : ''; } catch (e) { return ''; } };   // eslint-disable-line no-undef
   E.gfxGuardState = () => {
@@ -1285,7 +1350,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         // программа уже никем не рисуется (материал пересобрался — например, набор шейдеров сменился раньше проверки) — она
         // ничего не портит: только отметить, ничего не выключать (иначе выключили бы невиновное)
         if (!lb.post && !lb.mat) { G.log.push('orphan:' + (p.name || '')); continue; }
-        if (lb.post === 'rays' || lb.post === 'dof' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
+        // глубина резкости и её автофокус — только они (набор остаётся: лучи, облака, тон работают)
+        if (lb.post === 'dof' || lb.post === 'foc') { off('dof', 'link', lb.post); continue; }
+        if (lb.post === 'rays' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
           if (pk) off('pack:' + pk, 'link', lb.post || lb.scene);
           continue;
         }

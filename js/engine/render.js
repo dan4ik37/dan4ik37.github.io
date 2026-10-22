@@ -507,7 +507,8 @@
       if (!E.packResolve) return { id: 'normal' };
       const fx = E.packResolve(op.pack || 'auto', { ...devInfo(), preset: op.preset, crt: !!op.crt, off: E.gfxGuardState?.().off || {}, post: !!(R.post && R.post.on) });
       if (op.packLite >= 1) { fx.rays = 0; fx.clouds = Math.min(fx.clouds, 1); }
-      if (op.packLite >= 2) { fx.clouds = 0; fx.wave = 0; }
+      if (op.packLite >= 2) { fx.clouds = 0; fx.wave = 0; fx.dof = 0; }
+      if (op.dof === false) fx.dof = 0;   // ⚙️ «Глубина резкости» выключена игроком
       return fx;
     }
     function applyPack(fx){
@@ -525,7 +526,9 @@
     R.packFx = () => R.pack;   // для игр («Кубомир»): что сейчас включено
 
     // ═══ Разрешение: плотность пикселей качества × динамический масштаб (на слабом кадре — меньше пикселей) ═══
-    const DR = R.dynRes = E.dynRes({ on: o.dynRes !== false });
+    // на компьютере кадр не опускается ниже 85 % (22.10.2026: «мыло» на мощном ПК — разрешение уезжало до 60 %, сначала пусть
+    // автокачество снимает эффекты); на телефоне — до 60 %, как раньше
+    const DR = R.dynRes = E.dynRes({ on: o.dynRes !== false, min: E.isMobile?.() ? .6 : .85 });
     let scaleNow = 1;
     function applyScale(){
       const s = scaleNow = DR.scale;
