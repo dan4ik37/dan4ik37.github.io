@@ -65,7 +65,7 @@
     let E = null, paintT = 0;
     const want = new Set();
     function later(what){ want.add(what); if (paintT) return; paintT = requestAnimationFrame(() => { paintT = 0; if (!E || E.disposed) return; const w = new Set(want); want.clear(); if (w.has('title')) paintTitle(); if (w.has('hist')) paintHist(); if (w.has('panel')) paintPanel(); }); }
-    try { E = root.D37PhotoCore.create($('.pe-stage-in'), { workerUrl: o.workerUrl, fabricUrl: o.fabricUrl, onEvent }); }
+    try { E = root.D37PhotoCore.create($('.pe-stage-in'), { workerUrl: o.workerUrl, fabricUrl: o.fabricUrl, ai: o.ai, onEvent }); }
     catch (e) { $('.pe-stage-in').innerHTML = `<div class="pe-fail">⚠️ ${esc(e.message || e)}<br><small>Обнови страницу или открой в Chrome / Яндекс Браузере.</small></div>`; return { active: false, unmount(){ root.removeEventListener('resize', onResize); document.body.classList.remove('pe-on'); host.innerHTML = ''; } }; }
     const api = { E, active: true, open: (blob, name) => openFile(blob, name) };
     root.D37Photo = api;
@@ -161,6 +161,7 @@
         const R = RT();
         if (!R) h = '<p class="pe-hint">Нет слоя-картинки — открой фото.</p>';
         else h = `<p class="pe-hint">Слой: <b>${esc(R.name)}</b></p><div class="pe-row"><button type="button" class="pe-big pe-acc" data-a="auto">✨ Авто</button><button type="button" class="pe-big" data-a="adjReset">↺ Сбросить</button></div>` +
+          `<div class="pe-row"><button type="button" class="pe-big" data-a="removeBg" title="ИИ прямо в браузере — фото никуда не отправляется">🪄 Убрать фон (ИИ)</button></div>` +
           PC.ADJ_KEYS.map(k => slider('adj:' + k, PC.ADJ[k].ru, PC.ADJ[k].min, PC.ADJ[k].max, R.adj[k] || 0)).join('') +
           '<p class="pe-hint">Коррекции не портят фото — их можно поменять в любой момент.</p>';
       } else if (p === 'filters') {
@@ -316,6 +317,14 @@
       else if (a === 'placeFile') { ui.fileMode = 'place'; fileIn.click(); }
       else if (a === 'auto') { const R = RT(); if (R) run('auto', { layer: R.id }, '✨ Готово — можно подправить ползунками'); }
       else if (a === 'adjReset') { const R = RT(); if (R) run('adjust', { layer: R.id, reset: true }); }
+      else if (a === 'removeBg') {
+        const R = RT(); if (!R) return;
+        let asked = false; try { asked = !!localStorage.getItem('d37_pe_ai'); } catch (er) {}
+        // первый раз — предупредить про загрузку (~8 МБ, дальше из кэша браузера); второе нажатие — начать
+        if (!asked && !b.dataset.sure) { b.dataset.sure = '1'; b.textContent = '🪄 Скачает ~8 МБ один раз — нажми ещё раз'; return; }
+        try { localStorage.setItem('d37_pe_ai', '1'); } catch (er) {}
+        run('removeBg', { layer: R.id }, '🪄 Фон убран — проверь края; «↶» вернёт как было');
+      }
       else if (a === 'lUp' || a === 'lDown') { if (L) run('layerOrder', { layer: L.id, to: a === 'lUp' ? 'up' : 'down' }); }
       else if (a === 'lDup') { if (L) run('layerDup', { layer: L.id }); }
       else if (a === 'lMerge') { if (L) run('layerMerge', { layer: L.id }); }

@@ -73,18 +73,20 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
     panel.addEventListener('click', () => setOpen(false));
 
+    // Классы — только toggle(…, вкл): add/remove без изменений всё равно пишут атрибут class, наблюдатель ниже это видит и
+    // снова зовёт placeIndicator — выходил вечный цикл на каждый кадр (на всех страницах; найдено 22.10 замером фоторедактора)
     function placeIndicator() {
       const desktop = window.innerWidth > 1180;
       let target = $('a.active-route', links);
       const inMore = target && panel.contains(target);
       wrap.classList.toggle('has-active', !!inMore);
       if (inMore) target = btn;
-      if (!desktop || !target || target.classList.contains('nav-donate')) { ind.classList.remove('on'); return; }
+      if (!desktop || !target || target.classList.contains('nav-donate')) { ind.classList.toggle('on', false); return; }
       const lr = links.getBoundingClientRect(), tr = target.getBoundingClientRect();
-      if (!tr.width) { ind.classList.remove('on'); return; }
+      if (!tr.width) { ind.classList.toggle('on', false); return; }
       ind.style.width = tr.width + 'px';
       ind.style.transform = 'translateX(' + (tr.left - lr.left) + 'px)';
-      ind.classList.add('on');
+      ind.classList.toggle('on', true);
     }
     const place = () => requestAnimationFrame(placeIndicator);
     new MutationObserver(place).observe(links, { attributes: true, attributeFilter: ['class'], subtree: true });

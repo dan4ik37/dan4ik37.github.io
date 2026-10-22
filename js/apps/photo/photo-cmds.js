@@ -98,9 +98,9 @@
   function budget(o = {}){
     const tex = o.maxTex > 0 ? o.maxTex : 4096;
     const mem = o.devMem > 0 ? o.devMem : (o.phone ? 3 : 8);
-    if (o.phone) {
+    if (o.phone) {   // слой 12 Мп = 48 МБ (+ копия на видеокарте): на телефоне — до 3 таких слоёв (6 на 4+ ГБ) и история 64/96 МБ
       const big = mem >= 4;
-      return { maxSide: Math.min(4096, tex), maxPixels: 12.6e6, totalPixels: big ? 64e6 : 40e6, undoBytes: big ? 160e6 : 96e6, exportMax: 4096 };
+      return { maxSide: Math.min(4096, tex), maxPixels: 12.6e6, totalPixels: big ? 36e6 : 24e6, undoBytes: big ? 96e6 : 64e6, exportMax: 4096 };
     }
     return { maxSide: Math.min(8192, tex), maxPixels: 40e6, totalPixels: mem >= 8 ? 240e6 : 140e6, undoBytes: mem >= 8 ? 600e6 : 320e6, exportMax: Math.min(8192, tex) };
   }
@@ -175,6 +175,7 @@
     adjust:     { title: 'Коррекция слоя (без потери качества, можно поменять позже); 0 — без изменения', undoable: true, args: obj(Object.assign({ layer: LAYER, reset: { type: 'boolean', description: 'сначала всё в 0' } }, ADJ_PROPS)) },
     filter:     { title: 'Готовый фильтр слоя', undoable: true, args: obj({ layer: LAYER, preset: { type: 'string', enum: Object.keys(PRESETS) } }, ['preset']) },
     auto:       { title: 'Автоулучшение: яркость, контраст и цвет по гистограмме', undoable: true, args: obj({ layer: LAYER }) },
+    removeBg:   { title: 'Убрать фон (ИИ в браузере): остаётся главный предмет или человек, фон — прозрачный', undoable: true, args: obj({ layer: LAYER }) },
     text:       { title: 'Новая надпись (слой текста)', undoable: true, args: obj(TEXT_PROPS, ['text']) },
     textEdit:   { title: 'Изменить надпись', undoable: true, args: obj(Object.assign({ layer: LAYER }, TEXT_PROPS, { text: { type: 'string', minLength: 1, maxLength: 500 } })) },
     layerNew:   { title: 'Новый пустой слой для рисования', undoable: true, args: obj({ name: { type: 'string', maxLength: 60 }, fill: COLOR }) },

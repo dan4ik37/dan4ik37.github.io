@@ -67,6 +67,34 @@ const jobs = {
     c.width = c.height = 1;
     return { out: { bitmap: out }, transfer: [out] };
   },
+  // { bitmap, ortUrl, ortBase, modelUrl } → { bitmap } — маска «где предмет» 320×320 в альфе (ИИ в браузере: U²-Netp,
+  // Apache-2.0, через ONNX Runtime Web, MIT). Подготовка — как у U²-Net при обучении: растянуть до 320×320, x / max(x), затем
+  // (x − среднее) / отклонение ImageNet; выход — растянуть от min до max. Модель и среда грузятся один раз на поток.
+  async removeBg(d){
+    if (!self.ort) importScripts(d.ortUrl);
+    const ort = self.ort;
+    ort.env.wasm.wasmPaths = d.ortBase;
+    ort.env.wasm.numThreads = 1;   // без SharedArrayBuffer (сайт не изолирован)
+    if (!self.__bgSession || self.__bgModel !== d.modelUrl) {
+      self.__bgSession = await ort.InferenceSession.create(d.modelUrl, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+      self.__bgModel = d.modelUrl;
+    }
+    const S = self.__bgSession, N = 320;
+    const c = new OffscreenCanvas(N, N), g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(d.bitmap, 0, 0, N, N); d.bitmap.close();
+    const px = g.getImageData(0, 0, N, N).data, inp = new Float32Array(3 * N * N);
+    let mx = 1; for (let i = 0; i < px.length; i += 4) { if (px[i] > mx) mx = px[i]; if (px[i + 1] > mx) mx = px[i + 1]; if (px[i + 2] > mx) mx = px[i + 2]; }
+    const M = [0.485, 0.456, 0.406], SD = [0.229, 0.224, 0.225];
+    for (let i = 0, j = 0; i < px.length; i += 4, j++) for (let k = 0; k < 3; k++) inp[k * N * N + j] = (px[i + k] / mx - M[k]) / SD[k];
+    const out = await S.run({ [S.inputNames[0]]: new ort.Tensor('float32', inp, [1, 3, N, N]) });
+    const m = out[S.outputNames[0]].data;
+    let lo = Infinity, hi = -Infinity; for (let j = 0; j < N * N; j++) { const v = m[j]; if (v < lo) lo = v; if (v > hi) hi = v; }
+    const img = new ImageData(N, N), a = img.data, k = hi > lo ? 255 / (hi - lo) : 0;
+    for (let j = 0; j < N * N; j++) a[j * 4 + 3] = (m[j] - lo) * k;
+    g.clearRect(0, 0, N, N); g.putImageData(img, 0, 0);
+    const bm = c.transferToImageBitmap();
+    return { out: { bitmap: bm, names: [S.inputNames[0], S.outputNames[0]] }, transfer: [bm] };
+  },
   // { bitmap (уже маленький, ≤ 512) } → гистограмма яркости и средние цвета середины — для автоулучшения
   async stats(d){
     const w = d.bitmap.width, h = d.bitmap.height;

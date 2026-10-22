@@ -193,7 +193,7 @@ function fakeIDB(){
   ok(Object.values(PC.autoParams({ hist: Array(256).fill(0), n: 0 })).every(x => x === 0), 'автоулучшение пустого — ничего');
   // схемы команд: те же правила, что проверяет D37Tools; на каждую — пример правильных аргументов
   const EX = { info: {}, new: { w: 100, h: 100 }, open: { asset: 'aabcdefg' }, place: { asset: 'aabcdefg' }, crop: { aspect: '1:1' }, resize: { w: 100 }, rotate: { deg: 90 },
-    flip: { axis: 'h' }, adjust: { brightness: 10 }, filter: { preset: 'bw' }, auto: {}, text: { text: 'Привет' }, textEdit: { text: 'x' }, layerNew: {}, layer: { opacity: 50 },
+    flip: { axis: 'h' }, adjust: { brightness: 10 }, filter: { preset: 'bw' }, auto: {}, removeBg: {}, text: { text: 'Привет' }, textEdit: { text: 'x' }, layerNew: {}, layer: { opacity: 50 },
     layerOrder: { to: 'up' }, layerDup: {}, layerDelete: {}, layerMerge: {}, flatten: {}, select: { layer: 1 }, fill: { color: 'red' }, draw: { points: [[1, 2]] }, export: {}, undo: {}, redo: {} };
   const reg = T.register('phototest', { title: 'фото', commands: Object.fromEntries(Object.entries(PC.SCHEMAS).map(([k, s]) => [k, Object.assign({}, s, { run: a => a })])) });
   for (const [name, args] of Object.entries(EX)) { const vv = T.validate('phototest', name, args); ok(vv.ok, `схема ${name}: правильные аргументы проходят`, vv.errors); }

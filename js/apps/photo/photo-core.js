@@ -136,8 +136,9 @@
     function mkRaster(canvas, o = {}){
       // o.id — тот же номер, что у слоя, который этот заменяет (размер, объединить): ссылки ИИ на номера не ломаются
       const L = { id: o.id || ++doc.seq, type: 'raster', name: o.name || 'Слой ' + (doc.seq), canvas, adj: {}, preset: 'none', rev: 0, pxRev: 0, proxy: null, proxyRev: -1, filt: null, fkey: '' };
+      // без кэша fabric: картинка и так рисуется видеокартой из своего холста, а кэш — до 8 МБ лишней памяти на каждый слой
       L.obj = styleObj(new F.FabricImage(canvas, { left: o.x != null ? o.x : doc.w / 2, top: o.y != null ? o.y : doc.h / 2, originX: 'center', originY: 'center',
-        scaleX: o.scale || 1, scaleY: o.scale || 1, objectCaching: true }));
+        scaleX: o.scale || 1, scaleY: o.scale || 1, objectCaching: false }));
       L.obj.d37id = L.id;
       return L;
     }
@@ -191,10 +192,13 @@
       doc.layers.splice(i, 0, L);
       cv.insertAt(i, L.obj);
       L.dead = false;
+      if (L.type === 'raster' && !L.filt && hasAdj(L)) applyFilters(L, true);   // вернулся из истории — коррекции заново
     }
+    // Слой ушёл из документа (в историю): копия для экрана и фильтры не нужны — память сразу назад
     function detach(L){
       const i = doc.layers.indexOf(L); if (i < 0) return -1;
       doc.layers.splice(i, 1); cv.remove(L.obj);
+      if (L.type === 'raster' && L.filt) { dropFilt(L); L.obj._element = L.canvas; L.obj._filterScalingX = L.obj._filterScalingY = 1; }
       if (doc.active === L.id) doc.active = (doc.layers[Math.min(i, doc.layers.length - 1)] || {}).id || null;
       return i;
     }
@@ -206,7 +210,8 @@
       try { L.obj.dispose && L.obj.dispose(); } catch (e) {}
       if (L.canvas) { L.canvas.width = L.canvas.height = 0; L.canvas = null; }
     }
-    const rasterBytes = list => list.reduce((s, L) => s + (L.type === 'raster' && L.canvas ? L.canvas.width * L.canvas.height * 4 : 1024), 0);
+    // холст стоит ~2× своих пикселей (страница + видеокарта; замер 22.10: 200 кусков по 256² — +107 МБ на 50 МБ пикселей)
+    const rasterBytes = list => list.reduce((s, L) => s + (L.type === 'raster' && L.canvas ? L.canvas.width * L.canvas.height * 8 : 1024), 0);
 
     // ── история ──
     const hist = { done: [], undone: [], bytes: 0 };
@@ -591,7 +596,7 @@
     function strokeEnd(st, label){
       if (!st || !st.any) return false;
       const L = st.L, tiles = st.tiles;
-      let bytes = 0; for (const t of tiles.values()) bytes += t.w * t.h * 4;
+      let bytes = 0; for (const t of tiles.values()) bytes += t.w * t.h * 8;   // ×2: холст куска — и страница, и видеокарта
       push({ label: label || (st.erase ? 'Ластик' : 'Кисть'), bytes, undo(){ swapTiles(L, tiles); }, redo(){ swapTiles(L, tiles); },
         free(){ for (const t of tiles.values()) { t.c.width = t.c.height = 0; } } });
       L.rev++;
@@ -941,6 +946,30 @@
       } finally { busy(false); if (phone) W.recycle(); }   // телефон: поток с картинками закрыть — память сразу назад
     }
 
+    // ── 🪄 Убрать фон: ИИ в браузере (U²-Netp, Apache-2.0; ONNX Runtime Web, MIT) — маска в потоке, к слою — «оставить по маске» ──
+    async function removeBg(L){
+      const ai = opts.ai || {};
+      if (!ai.modelUrl || !ai.ortUrl) throw userErr('ИИ для фона не настроен');
+      if (!W.threaded) throw userErr('Нужен браузер поновее (Chrome, Яндекс Браузер, Safari 16.4+)');
+      busy(true, 'ИИ ищет фон… (первый раз скачивает ~8 МБ)');
+      try {
+        const s = Math.min(1, 640 / Math.max(L.canvas.width, L.canvas.height));
+        const bmp = await createImageBitmap(L.canvas, { resizeWidth: Math.max(1, Math.round(L.canvas.width * s)), resizeHeight: Math.max(1, Math.round(L.canvas.height * s)), resizeQuality: 'high' });
+        let r;
+        try { r = await W.run('removeBg', { bitmap: bmp, ortUrl: ai.ortUrl, ortBase: ai.ortBase, modelUrl: ai.modelUrl }, [bmp]); }
+        catch (e) { console.warn('photo: removeBg', e); throw userErr('ИИ не загрузился — проверь интернет и попробуй ещё раз'); }
+        if (disposed || L.dead) { r.bitmap.close && r.bitmap.close(); return {}; }
+        const st = strokeBegin(L, { size: 1, hardness: 100, opacity: 100, color: '#000' });
+        saveTiles(st, 0, 0, L.canvas.width, L.canvas.height);
+        const g = L.canvas.getContext('2d');
+        g.save(); g.globalCompositeOperation = 'destination-in'; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+        g.drawImage(r.bitmap, 0, 0, L.canvas.width, L.canvas.height); g.restore();
+        r.bitmap.close && r.bitmap.close();
+        st.any = true; strokeEnd(st, 'Убрать фон');
+        return { layer: L.id };
+      } finally { busy(false); if (phone) W.recycle(); }
+    }
+
     // ── экспорт ──
     async function exportBlob(a = {}){
       const type = a.format === 'jpeg' ? 'image/jpeg' : a.format === 'webp' ? 'image/webp' : 'image/png';
@@ -1035,6 +1064,7 @@
       },
       filter: a => { const L = resolveLayer(a.layer, 'raster'); change('Фильтр', [L], () => { L.preset = a.preset; applyFilters(L); }); return { layer: L.id }; },
       auto: a => autoEnhance(resolveLayer(a.layer, 'raster')),
+      removeBg: a => removeBg(resolveLayer(a.layer, 'raster')),
       text: a => { const L = mkText(a); addLayer(L, 'Надпись'); return { layer: L.id }; },
       textEdit: a => {
         const L = resolveLayer(a.layer, 'text');

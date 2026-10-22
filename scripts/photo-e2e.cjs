@@ -79,7 +79,8 @@ async function chrome(tag){
     desktop: async (w = 1440, h = 900) => { await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false }); await send('Emulation.setTouchEmulationEnabled', { enabled: false }); },
     shot: async file => { const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 72 }); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, Buffer.from(r.data, 'base64')); },
     mouse: async (type, x, y, o = {}) => send('Input.dispatchMouseEvent', Object.assign({ type, x, y, button: 'left', clickCount: 1 }, o)),
-    touch: async (type, pts) => send('Input.dispatchTouchEvent', { type, touchPoints: pts }),
+    // нажатие ждёт, пока страница его обработает: страница «висит» — не ждём вечно (зависание заметит проверка ниже)
+    touch: async (type, pts) => { const r = await Promise.race([send('Input.dispatchTouchEvent', { type, touchPoints: pts }).then(() => 1), sleep(15000).then(() => 0)]); if (!r) errors.push('страница не ответила на касание 15 с'); },
     close: async () => { try { ws.close(); } catch (e) {} proc.kill(); await sleep(600); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {} },
   };
   await send('Page.enable'); await send('Runtime.enable'); await send('Network.enable'); await send('Inspector.enable').catch(() => {});
@@ -178,6 +179,31 @@ async function smoke(base){
   } finally { await C.close(); }
 }
 
+// 🪄 «Убрать фон» (ИИ в браузере): скачивает ONNX Runtime Web и модель (~8 МБ) — отдельный режим ai
+async function aiBg(base){
+  const C = await chrome('ai');
+  try {
+    await C.desktop();
+    await openEditor(C, base);
+    // предмет — яркий круг на ровном сером фоне
+    const id = await C.ev(`(async () => { const c = new OffscreenCanvas(1200, 900), g = c.getContext('2d'); g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 1200, 900);
+      const gr = g.createRadialGradient(600, 450, 40, 600, 450, 300); gr.addColorStop(0, '#ffdd33'); gr.addColorStop(1, '#ff3366'); g.fillStyle = gr; g.beginPath(); g.arc(600, 450, 300, 0, 6.28); g.fill();
+      const b = await c.convertToBlob({ type: 'image/png' }); const r = await D37Photo.E.openBlob(b, 'круг'); return r.layer; })()`);
+    const t0 = Date.now();
+    const r = JSON.parse(await C.ev(RUN('removeBg', { layer: id }), 180000));
+    const ms = Date.now() - t0;
+    const px = await C.ev(`(() => { const c = D37Photo.E.layerById(${id}).canvas, g = c.getContext('2d'); const a = (x, y) => g.getImageData(x, y, 1, 1).data[3]; return { corner: a(20, 20), corner2: a(1180, 880), center: a(600, 450), edgeIn: a(600, 200) }; })()`);
+    console.log('ai removeBg:', ms, 'мс (с загрузкой)', JSON.stringify(r), JSON.stringify(px));
+    ok(r.ok, '«Убрать фон» выполнен', r);
+    ok(px.corner < 40 && px.corner2 < 40, 'фон по углам стал прозрачным', px);
+    ok(px.center > 200, 'предмет в середине остался', px);
+    const u = JSON.parse(await C.ev(RUN('undo')));
+    const back = await C.ev(`D37Photo.E.layerById(${id}).canvas.getContext('2d').getImageData(20, 20, 1, 1).data[3]`);
+    ok(u.ok && back === 255, '«↶» вернул фон', back);
+    ok(realErrors(C.errors).length === 0, 'без ошибок', realErrors(C.errors));
+  } finally { await C.close(); }
+}
+
 async function load(base){
   const C = await chrome('load'), res = [];
   try {
@@ -207,32 +233,42 @@ async function big(base){
   try {
     await C.phone(4);
     // нулевая точка — сайт уже открыт (главная), редактор ещё нет: считаем только то, что добавил редактор
+    // память «шумит» (сборка мусора, кэши видеокарты): на каждом шаге — наименьшее из 3 замеров; страница и видеокарта отдельно
+    const step = async () => { await sleep(1500); let m = { total: Infinity }; for (let k = 0; k < 3; k++) { await C.gc(); const x = C.mem(true); if (x.total < m.total) m = x; await sleep(400); } return m; };
+    const d = (m, m0) => ({ all: MB(m.total - m0.total), page: MB(m.renderer - m0.renderer), gpu: MB(m.gpu - m0.gpu) });
     await C.load(base + '/'); await C.until('typeof D37Route !== "undefined" && document.body.dataset.route === "home"', 30000);
-    await sleep(3000); await C.gc(); await sleep(800); const m0 = C.mem();
+    await sleep(2000); const m0 = await step();
     await C.ev(`D37Route.go('/photo'); 1`);
     if (await C.until('!!(window.D37Photo && window.D37Photo.E)', 60000) < 0) throw new Error('редактор не открылся');
-    await sleep(2000); await C.gc(); const m1 = C.mem();
+    const m1 = await step();
     const t0 = Date.now();
     const o = JSON.parse(await C.ev(`(${MKIMG})(4000, 3000).then(b => D37Photo.E.openBlob(b, 'test-12mp')).then(r => JSON.stringify(r))`, 180000));
     const openMs = Date.now() - t0;
-    await sleep(2000); await C.gc(); const m2 = C.mem();
+    const m2 = await step();
     const tA = Date.now();
     const a = JSON.parse(await C.ev(RUN('adjust', { brightness: 15, contrast: 20, saturation: 20, sharpen: 30 })));
     const adjMs = Date.now() - tA;
-    await sleep(1500); await C.gc(); const m3 = C.mem();
+    const m3 = await step();
     const tD = Date.now();
     for (let i = 0; i < 5; i++) await C.ev(RUN('draw', { points: [[200, 300 + i * 400], [3800, 500 + i * 400]], size: 60, color: '#ff0000' }));
     const drawMs = Date.now() - tD;
-    await sleep(1000); await C.gc(); const m4 = C.mem();
+    const m4 = await step();
     const tE = Date.now();
     const e = JSON.parse(await C.ev(RUN('export', { to: 'assets', format: 'jpeg', quality: 90 }), 240000));
     const expMs = Date.now() - tE;
-    await sleep(1500); await C.gc(); const m5 = C.mem();
-    const res = { open: o, openMs, adjMs, drawMs, expMs, exportOk: e.ok, exported: e.result, memMB: { base: MB(m1 - m0), open12mp: MB(m2 - m0), adjust: MB(m3 - m0), draw5: MB(m4 - m0), export: MB(m5 - m0) } };
+    const m5 = await step();
+    const res = { open: o, openMs, adjMs, drawMs, expMs, exportOk: e.ok, exported: e.result,
+      memMB: { editor: d(m1, m0), open12mp: d(m2, m0), adjust: d(m3, m0), draw5: d(m4, m0), export: d(m5, m0) } };
     console.log('big (телефон, ЦП ×4):', JSON.stringify(res));
     ok(o.w * o.h >= 11.5e6, 'фото 12 Мп открыто без уменьшения', o);
     ok(a.ok && e.ok, 'коррекция и сохранение 12 Мп', { a, e });
-    ok(!Number.isFinite(m5) || (m5 - m0) / 1048576 < 700, 'память с 12 Мп меньше 700 МБ на весь Chrome', res.memMB);
+    const peak = Math.max(...[m2, m3, m4, m5].map(m => (m.total - m0.total) / 1048576));
+    ok(!Number.isFinite(peak) || peak < 800, 'память редактора с 12 Мп (весь Chrome сверх главной) меньше 800 МБ', res.memMB);
+    // 24 Мп на телефоне — уменьшается при открытии (в потоке) с предупреждением
+    const o24 = JSON.parse(await C.ev(`(${MKIMG})(6000, 4000).then(b => D37Photo.E.openBlob(b, 'test-24mp')).then(r => JSON.stringify(r))`, 240000));
+    const warn = await C.ev(`[...document.querySelectorAll('.pe-toast')].some(t => /уменьшено/.test(t.textContent))`);
+    console.log('24 Мп на телефоне:', JSON.stringify(o24), 'предупреждение:', warn);
+    ok(o24.scaled && Math.max(o24.w, o24.h) <= 4096 && o24.w * o24.h <= 12.6e6 && warn, '24 Мп → уменьшено до 4096 по стороне, с предупреждением', o24);
     ok(C.crashes.length === 0 && realErrors(C.errors).length === 0, 'без падений и ошибок', realErrors(C.errors));
   } finally { await C.close(); }
 }
@@ -242,8 +278,11 @@ async function soak(base, minutes){
   const samples = [], acts = {};
   try {
     await C.phone(4);
-    await C.load('about:blank'); await sleep(500); const m0 = C.mem();
-    await openEditor(C, base);
+    // нулевая точка — сайт открыт (главная), редактора ещё нет
+    await C.load(base + '/'); await C.until('typeof D37Route !== "undefined" && document.body.dataset.route === "home"', 30000);
+    await sleep(3000); await C.gc(); await sleep(800); const m0 = C.mem(true);
+    await C.ev(`D37Route.go('/photo'); 1`);
+    if (await C.until('!!(window.D37Photo && window.D37Photo.E)', 60000) < 0) throw new Error('редактор не открылся');
     await C.ev(`(${MKIMG})(2000, 1500).then(b => D37Photo.E.openBlob(b, 'soak')).then(() => 1)`, 120000);
     let seed = 37; const R = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 4294967296; };
     const CMDS = [
@@ -268,7 +307,7 @@ async function soak(base, minutes){
       const r = R();
       if (r < 0.55) { const [cmd, args] = CMDS[Math.floor(R() * CMDS.length)](); const res = JSON.parse(await C.ev(RUN(cmd, args), 120000).catch(e => JSON.stringify({ ok: false, error: 'TIMEOUT ' + e.message }))); acts[cmd] = (acts[cmd] || 0) + 1; if (!res.ok && /TIMEOUT/.test(res.error)) C.errors.push('команда зависла: ' + cmd); }
       else if (r < 0.75) {   // нажатия на кнопки интерфейса
-        const p = JSON.parse(await C.ev(`(() => { const b = [...document.querySelectorAll('.pe button:not([disabled])')].filter(x => { const r = x.getBoundingClientRect(); return r.width > 4 && r.height > 4 && r.top >= 0 && r.bottom <= innerHeight && !x.closest('.pe-menu') && !/full|send|menu|ai/.test(x.dataset.a || ''); }); const x = b[Math.floor(${R()} * b.length)]; if (!x) return 'null'; const r = x.getBoundingClientRect(); return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); })()`));
+        const p = JSON.parse(await C.ev(`(() => { const b = [...document.querySelectorAll('.pe button:not([disabled])')].filter(x => { const r = x.getBoundingClientRect(); return r.width > 4 && r.height > 4 && r.top >= 0 && r.bottom <= innerHeight && !x.closest('.pe-menu') && !/full|send|menu|ai/.test(x.dataset.a || ''); }); const x = b[Math.floor(${R()} * b.length)]; if (!x) return 'null'; const r = x.getBoundingClientRect(); return JSON.stringify({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); })()`, 30000).catch(e => { C.errors.push('страница не ответила 30 с: ' + e.message.slice(0, 60)); return 'null'; }));
         if (p) { await C.touch('touchStart', [{ x: p.x, y: p.y, id: 1 }]); await C.touch('touchEnd', []); }
         acts.ui = (acts.ui || 0) + 1;
       } else if (r < 0.9) {   // палец по холсту (рисует, двигает, рамка обрезки — смотря что выбрано)
@@ -284,16 +323,26 @@ async function soak(base, minutes){
       }
       n++;
       await C.ev(`document.querySelector('.pe-modal') && document.querySelector('.pe-modal').remove(); window.D37AI && D37AI.close(); document.querySelector('.pe-menu') && document.dispatchEvent(new PointerEvent('pointerdown')); 1`).catch(() => {});
-      if (Date.now() - lastS > 30000) { lastS = Date.now(); await C.gc(); const m = C.mem(); samples.push({ s: Math.round((Date.now() - t0) / 1000), memMB: MB(m - m0), err: realErrors(C.errors).length }); console.log('soak', JSON.stringify(samples[samples.length - 1])); }
+      if (Date.now() - lastS > 30000) {
+        lastS = Date.now(); await C.gc(); const m = C.mem(true);
+        const st = await C.ev(`window.D37Photo && D37Photo.E ? JSON.stringify({ layers: D37Photo.E.doc.layers.length, w: D37Photo.E.doc.w, h: D37Photo.E.doc.h, undoMB: Math.round(D37Photo.E.histState().bytes / 1048576) }) : '{}'`, 30000).then(JSON.parse).catch(() => ({}));
+        samples.push(Object.assign({ s: Math.round((Date.now() - t0) / 1000), memMB: MB(m.total - m0.total), pageMB: MB(m.renderer - m0.renderer), gpuMB: MB(m.gpu - m0.gpu), err: realErrors(C.errors).length }, st));
+        console.log('soak', JSON.stringify(samples[samples.length - 1]));
+      }
       await sleep(80 + R() * 200);
     }
-    await C.gc(); await sleep(1000); const mE = C.mem();
     const errs = [...new Set(realErrors(C.errors))];
-    console.log('soak', minutes, 'мин:', n, 'действий', JSON.stringify(acts), 'ошибок', errs.length, 'падений', C.crashes.length, 'память в конце', MB(mE - m0), 'МБ, наибольшая', Math.max(...samples.map(s => s.memMB)), errs.slice(0, 5));
+    const still = await C.ev('!!(window.D37Photo && window.D37Photo.E && !window.D37Photo.E.disposed)').catch(() => false);
+    // закрыть редактор — память должна вернуться (страница; видеокарта держит кэш)
+    await C.ev(`D37Route.go('/'); 1`); await C.until('!window.D37Photo', 20000);
+    await sleep(2000); let mc = { total: Infinity, renderer: Infinity, gpu: Infinity }; for (let k = 0; k < 3; k++) { await C.gc(); const m = C.mem(true); if (m.total < mc.total) mc = m; await sleep(500); }
+    console.log('soak', minutes, 'мин:', n, 'действий', JSON.stringify(acts), 'ошибок', errs.length, 'падений', C.crashes.length,
+      'наибольшая память', Math.max(...samples.map(s => s.memMB)), 'МБ (страница', Math.max(...samples.map(s => s.pageMB)), ', видеокарта', Math.max(...samples.map(s => s.gpuMB)),
+      '); после закрытия редактора: всего', MB(mc.total - m0.total), 'МБ, страница', MB(mc.renderer - m0.renderer), 'МБ', errs.slice(0, 5));
     ok(errs.length === 0, `за ${minutes} мин — 0 ошибок`, errs.slice(0, 8));
     ok(C.crashes.length === 0, 'страница не падала');
-    const still = await C.ev('!!(window.D37Photo && window.D37Photo.E && !window.D37Photo.E.disposed)').catch(() => false);
     ok(still, 'редактор жив после прогона');
+    ok(!Number.isFinite(mc.renderer) || (mc.renderer - m0.renderer) / 1048576 < 80, 'закрыл редактор — память страницы вернулась (< 80 МБ сверху)', MB(mc.renderer - m0.renderer));
   } finally { await C.close(); }
 }
 
@@ -362,6 +411,7 @@ async function shots(base){
     if (!await waitPort(port)) throw new Error('serve.py не запустился');
     const base = `http://localhost:${port}`;
     if (MODE === 'smoke' || MODE === 'all') await smoke(base);
+    if (MODE === 'ai' || (MODE === 'all' && !process.env.D37_NO_AI)) await aiBg(base);
     if (MODE === 'load' || MODE === 'all') await load(base);
     if (MODE === 'big' || MODE === 'all') await big(base);
     if (MODE === 'leak' || MODE === 'all') await leak(base);

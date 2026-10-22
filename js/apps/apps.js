@@ -8,8 +8,13 @@
 // /photo/<номер материала> — сразу открыть картинку из «Моих материалов» (так другой инструмент «отправляет в фоторедактор»).
 (function () {
   'use strict';
-  const VER = '1';
+  const VER = '2';   // 2 — «Убрать фон», память телефона, без кэша fabric у картинок
   const FABRIC = 'https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js';
+  // ИИ «🪄 Убрать фон» — только по кнопке: ONNX Runtime Web 1.30.0 (MIT) с jsDelivr + модель U²-Netp (Apache-2.0, ~4,6 МБ)
+  // с Hugging Face, закреплённая на коммите (лицензии проверены — docs/PHOTO.md)
+  const ORT_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/';
+  const AI = { ortUrl: ORT_BASE + 'ort.wasm.min.js', ortBase: ORT_BASE,
+    modelUrl: 'https://huggingface.co/BritishWerewolf/U-2-Netp/resolve/7112208dbac3a3642496c8d54e2f0f9bb3dc1dc8/onnx/model.onnx' };
   const CORE = { tools: 'js/core/tools.js', assets: 'js/core/assets.js', ai: 'js/core/ai-bridge.js' };
   const PHOTO = [FABRIC, CORE.tools, CORE.assets, CORE.ai, 'js/apps/photo/photo-cmds.js', 'js/apps/photo/photo-core.js', 'js/apps/photo/photo-ui.js'];
   const loaded = new Map();
@@ -56,7 +61,7 @@
     }
     ad && ad.done();
     if (my !== opening || !onRoute()) return;   // пока грузилось — ушли с раздела
-    cur = window.D37PhotoUI.mount(host, { param, fabricUrl: FABRIC, workerUrl: 'js/apps/photo/photo-worker.js?v=' + VER });
+    cur = window.D37PhotoUI.mount(host, { param, fabricUrl: FABRIC, ai: AI, workerUrl: 'js/apps/photo/photo-worker.js?v=' + VER });
   }
   function close(){
     opening++;

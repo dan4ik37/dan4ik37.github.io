@@ -144,4 +144,11 @@ body.pe-on #readProgress,body.pe-on #pwaBanner,body.pe-on #cursorTrail,body.pe-o
   .pe-pclose{display:none}
   .pe:not(.pe-sheet-on) .pe-panel{display:none}
 }
+/* пальцем — всё, что нажимают, не меньше 40 px */
+@media (pointer:coarse){
+  .pe-sw{width:40px;height:40px}
+  .pe-zoom{min-height:40px;min-width:56px}
+  .pe-sl input[type=range]{height:40px}
+  .pe-colors input[type=color]{width:46px;height:40px}
+}
 @media (prefers-reduced-motion:reduce){.pe-loading i,.pe-busy i{animation:none}}
