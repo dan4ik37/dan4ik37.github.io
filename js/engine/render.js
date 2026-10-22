@@ -14,7 +14,7 @@
 // c: цвет, m: 'basic'|'glow'|'ds'|материал }). Предметы: R.prefab(имя, opts, phys). Всё статичное — в R.static, затем
 // R.bakeStatic(): склейка по материалу + UV «по миру» (текстура ложится ровно на любой размер) + тень у земли (AO).
 // Каждый кадр: R.update(dt) (облака, вода), R.follow(x, z) (тени за игроком), R.render().
-// Лампы: R.lights.add(src) — src: THREE.PointLight (вне сцены) или { position, color, intensity, distance, decay };
+// Лампы: R.lights.add(src) — src: THREE.PointLight (вне сцены) или { position, color, intensity, distance, decay, halo (множитель ореола, 0 — без) };
 // настоящих источников всегда max (4/8, на low 0) — число света в шейдерах не меняется, шейдеры не пересобираются;
 // каждый кадр им достаются самые важные лампы (видны, близко, ярко; плавная смена), у всех — ореол-свечение.
 // Тени: карта солнца рисуется, только когда надо — R.shadowDirty() (что-то поменялось), R.shadowDirty(true) (движется —
@@ -474,7 +474,7 @@
       const g = halo.geometry, P = g.attributes.position.array, C = g.attributes.hcol.array, S = g.attributes.hsize.array;
       const day = (.3 + .7 * (R.night || 0)) * (R.pack?.halo || 1);   // днём ореол еле виден, ночью — в полную силу; набор шейдеров — ярче
       for (let i = 0; i < list.length; i++) {
-        const rec = list[i], s = rec.src, p = posOf(s), k = s.visible === false ? 0 : Math.min(1.4, (s.intensity || 0) / 2.5) * (1 - .55 * rec.w) * day;
+        const rec = list[i], s = rec.src, p = posOf(s), k = s.visible === false || s.halo === 0 ? 0 : Math.min(1.4, (s.intensity || 0) / 2.5) * (1 - .55 * rec.w) * day * (s.halo ?? 1);   // halo — множитель ореола (0 — без него; «Кубомир»: у факела — своё пламя)
         P[i * 3] = p.x; P[i * 3 + 1] = p.y; P[i * 3 + 2] = p.z;
         C[i * 3] = s.color.r * k; C[i * 3 + 1] = s.color.g * k; C[i * 3 + 2] = s.color.b * k;
         S[i] = 1.1 + Math.sqrt(Math.max(0, s.distance || 16)) * .16;

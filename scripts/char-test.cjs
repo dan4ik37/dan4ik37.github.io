@@ -34,9 +34,9 @@ const ALLOC = process.argv.includes('--alloc');
 if (ALLOC) {
   const K = W.kit(T, { q: 'high' });
   const chs = [{ hair: 'ponytail', back: 'tail', hairc: 'rainbow' }, { psal: 'robot', pst: 'knight', hat: 'propeller' }, { psh: 'cube', back: 'wings', item: 'balloon' }].map((l, i) => K.build(l, 'a' + i));
-  const o = { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: { x: 2, y: 1.6, z: 5 } };
-  const states = [() => {}, () => { o.rate = 13; }, () => { o.air = true; }, () => { o.sit = true; }, () => { o.swim = true; }, () => { o.swim = true; o.dive = true; }, () => { o.roll = .4; }, () => { o.hang = true; }, () => { o.ladder = true; o.climbPh += .1; }, () => { o.pk = 'vault'; o.pkK = .5; }, () => { o.crouch = 1; }];
-  const reset = () => { o.rate = 10.5; o.air = o.sit = o.swim = o.dive = o.hang = o.ladder = false; o.roll = -1; o.pk = ''; o.pkK = 0; o.crouch = 0; };
+  const o = { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, look: { x: 2, y: 1.6, z: 5 } };
+  const states = [() => {}, () => { o.rate = 13; }, () => { o.air = true; }, () => { o.sit = true; }, () => { o.swim = true; }, () => { o.swim = true; o.dive = true; }, () => { o.roll = .4; }, () => { o.hang = true; }, () => { o.ladder = true; o.climbPh += .1; }, () => { o.pk = 'vault'; o.pkK = .5; }, () => { o.crouch = 1; }, () => { o.crawl = true; o.rate = 6; }];
+  const reset = () => { o.rate = 10.5; o.air = o.sit = o.swim = o.dive = o.hang = o.ladder = o.crawl = false; o.roll = -1; o.pk = ''; o.pkK = 0; o.crouch = 0; };
   const tt = new Float64Array(1);
   const run = n => { for (let i = 0; i < n; i++) { tt[0] += 1 / 60; reset(); states[(i >> 6) % states.length](); for (let c = 0; c < chs.length; c++) { const ch = chs[c]; if (i % 900 === 300) { ch.emote = W.EMOTES[(i / 900 | 0) % W.EMOTES.length]; ch.emoteT = tt[0]; } K.animate(ch, (i >> 5) % 3 !== 0, 1 / 60, tt[0], o); } } };
   run(30000);   // разогрев: все состояния, все эмоции (наборы лица строятся один раз)
@@ -233,10 +233,11 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
 {
   const K = kits.high, J = 28;
   const chs = [{}, { psal: 'robot', pst: 'knight', psll: 'chunky' }, { psh: 'cube', pst: 'block', back: 'wings', hair: 'twintails' }].map((l, i) => K.build(l, 'anim' + i));
-  const o = { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: null };
+  const o = { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, crawl: false, look: null };
   const plan = [['стоит', 60, {}, 0], ['идёт', 90, {}, 1], ['бежит', 60, { rate: 13 }, 1], ['остановился', 60, {}, 0], ['присел', 40, { crouch: 1 }, 0], ['прыжок', 30, { air: true }, 1], ['приземлился', 30, {}, 0],
     ['сел', 50, { sit: true }, 0], ['встал', 30, {}, 0], ['плывёт', 80, { swim: true }, 1], ['держится на воде', 50, { swim: true }, 0], ['нырнул', 40, { swim: true, dive: true }, 1], ['вышел', 30, {}, 0],
-    ['кувырок', 30, { roll: 'k' }, 1], ['вис', 40, { hang: true }, 1], ['лестница', 50, { ladder: true }, 1], ['перелез', 40, { pk: 'vault' }, 1], ['подтянулся', 40, { pk: 'mantle' }, 1], ['смотрит', 60, { look: { x: 3, y: 1.7, z: 4 } }, 0]];
+    ['кувырок', 30, { roll: 'k' }, 1], ['вис', 40, { hang: true }, 1], ['лестница', 50, { ladder: true }, 1], ['перелез', 40, { pk: 'vault' }, 1], ['подтянулся', 40, { pk: 'mantle' }, 1], ['смотрит', 60, { look: { x: 3, y: 1.7, z: 4 } }, 0],
+    ['лёг', 40, { crawl: true }, 0], ['ползёт', 90, { crawl: true, rate: 6 }, 1], ['встал из «лёг»', 30, {}, 0]];
   let t = 0, worstJump = 0, worstName = '', nan = 0;
   const prev = new Float32Array(J);
   const wrapA = a => { a = (a + Math.PI) % (Math.PI * 2); if (a < 0) a += Math.PI * 2; return a - Math.PI; };
@@ -245,7 +246,7 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
     for (const [name, frames, set, mv] of plan) {
       for (let f = 0; f < frames; f++) {
         t += 1 / 60;
-        Object.assign(o, { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, hang: false, ladder: false, pk: '', pkK: 0, swim: false, dive: false, look: null }, set);
+        Object.assign(o, { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, hang: false, ladder: false, pk: '', pkK: 0, swim: false, dive: false, crawl: false, look: null }, set);
         if (set.roll) o.roll = f / frames;
         if (set.pk) o.pkK = f / frames;
         if (set.ladder) o.climbPh = t * 6;
@@ -265,6 +266,20 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   }
   ok(!nan, 'нет NaN в позе', nan);
   ok(worstJump < .65, 'внутри состояния — без рывков', worstJump.toFixed(3) + ' ' + worstName);
+  // ползком (T-096a, «Кубомир»: лаз высотой в блок): лёг на живот, середина тела — над местом, голова — низко и впереди
+  {
+    const ch = K.build({}, 'crawl'), V3 = T.Vector3, wp = o => { const v = new V3(); o.getWorldPosition(v); return v; };
+    ch.phase = 1;   // фаза шага у человечка случайная (толпа не в ногу) — для проверки постоянная
+    K.animate(ch, false, 1 / 60, 0, { snap: true });
+    ch.root.updateMatrixWorld(true);
+    const hs = wp(ch.head || ch.headP);
+    for (let f = 0; f < 60; f++) K.animate(ch, f > 20, 1 / 60, f / 60, { crawl: true, rate: 6 });
+    ch.root.updateMatrixWorld(true);
+    const h = wp(ch.head || ch.headP), tr = wp(ch.torso), hip = wp(ch.legL), hand = wp(ch.handL), handR = wp(ch.handR);
+    ok(h.y < hs.y * .45 && h.z > .3 && hip.y < .7 && Math.abs((h.z + hip.z) / 2) < .55 && Math.max(hand.z, handR.z) > h.z - .2, 'поза «ползком»: голова низко и впереди, таз у земли, середина тела над местом, руки тянутся вперёд',
+      { head: [+h.y.toFixed(2), +h.z.toFixed(2)], headStand: +hs.y.toFixed(2), torso: [+tr.y.toFixed(2), +tr.z.toFixed(2)], hip: [+hip.y.toFixed(2), +hip.z.toFixed(2)], hand: [+hand.z.toFixed(2), +handR.z.toFixed(2)] });
+    ok(ch.cat === 12 && W.CHAR_VERSION >= 4, 'ползком — своё состояние (12), версия персонажа 4', { cat: ch.cat, v: W.CHAR_VERSION });
+  }
   // snap: поза зависит только от (ch.phase, t, o) — для запекания спрайтов (js/core/char2d.js) и картинок
   {
     const a = K.build({ hair: 'ponytail', back: 'cape' }, 'snap'), b = K.build({ hair: 'ponytail', back: 'cape' }, 'snap');

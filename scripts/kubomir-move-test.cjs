@@ -270,6 +270,87 @@ KB.opts({});
     KB.opts({});
   }
 
+  // ═══ 2б. Не сквозь блок и ползком (T-096a, владелец 22.10: «можно взобраться через блок, нет положения лежать») ═══
+  sec('низкий потолок над головой у стены — не залезть (глаза и тело не в блоках); ползком — лаз высотой в блок; лечь под блоком — само');
+  const eyeIn = st => { const P = st.P, ey = P.y + (P.crawl ? .42 : P.sneak || P.h < PH - 1e-6 ? 1.27 : 1.62), v = st.W.raw(P.x, ey, P.z); return v > 0 && V.T.opaque[v & 0xfff] === 1; };
+  const bodyIn = st => !st.P.pk && V.boxHits(st.W, st.P.x, st.P.y + .002, st.P.z, st.P.w - .004, st.P.h - .004);
+  {
+    // стена 1–2 блока, над игроком потолок на высоте 2–3: раньше путь «залезть» поднимал тело и камеру сквозь потолок
+    for (const [h, pc] of [[2, 3], [1, 2], [2, 2], [3, 3]]) {
+      const W = mkWorld(); W.fill(2, 46, -4, 5, 45 + h, 4, 'stone'); W.fill(-3, 46 + pc, -4, 1, 46 + pc, 4, 'planks_oak');
+      const st = mkSt(W, { x: .5, y: 46, z: .5 }); faceX(st);
+      let eye = 0, body = 0;
+      const chk = () => { if (eyeIn(st)) eye++; if (bodyIn(st)) body++; };
+      st.C.key('KeyW', true); steps(st, 10, chk); st.C.key('Space', true); steps(st, 100, chk); st.C.key('Space', false); st.C.key('KeyW', false); steps(st, 30, chk);
+      ok(!eye && !body && !st.pkN && st.P.y < 46 + h - .5, `стена ${h}, потолок над головой на высоте ${pc}: не залез сквозь потолок, глаза и тело не в блоках`, { eye, body, pkN: st.pkN, y: +st.P.y.toFixed(2) });
+    }
+    // потолок над стеной, а над игроком — свободно: залезть можно (как раньше)
+    const W = mkWorld(); W.fill(2, 46, -4, 5, 47, 4, 'stone'); W.fill(2, 50, -4, 5, 50, 4, 'planks_oak');
+    const st = mkSt(W, { x: .5, y: 46, z: .5 }); faceX(st);
+    let eye = 0; st.C.key('KeyW', true); steps(st, 10); st.C.key('Space', true); steps(st, 90, () => { if (eyeIn(st)) eye++; }); st.C.key('Space', false); st.C.key('KeyW', false); steps(st, 20);
+    ok(st.pkN === 1 && near(st.P.y, 48, 1e-6) && !eye, 'над игроком свободно, над стеной место в 2 блока — залез, как раньше', { pkN: st.pkN, y: st.P.y, eye });
+  }
+  const tunnel = () => { const W = mkWorld(); W.fill(2, 46, -4, 6, 48, 4, 'stone'); W.fill(2, 46, 0, 6, 46, 0, null); return W; };   // лаз: y 46, z 0, x 2…6
+  {
+    const st = mkSt(tunnel(), { x: .5, y: 46, z: .5 }); faceX(st);
+    let eye = 0, body = 0; const chk = () => { if (eyeIn(st)) eye++; if (bodyIn(st)) body++; };
+    st.C.key('KeyW', true); steps(st, 120, chk);
+    ok(st.P.x < 1.75 && !st.P.crawl, 'стоя в лаз высотой в блок не войти', { x: +st.P.x.toFixed(2) });
+    st.touchCrawl = true; steps(st, 4, chk);
+    ok(st.P.crawl && near(st.P.h, .6, 1e-9), 'лёг: тело 0,6, глаза 0,42', { crawl: st.P.crawl, h: st.P.h });
+    const x0 = st.P.x; steps(st, 120, chk);
+    const v = (st.P.x - x0) / 2;
+    ok(st.P.x > 2.5 && v > .9 && v < 1.3, 'ползком — в лаз, медленно (~1,15 блока/с)', { x: +st.P.x.toFixed(2), v: +v.toFixed(2) });
+    st.touchCrawl = false; steps(st, 20, chk);
+    ok(st.P.crawl, 'в лазе «встать» нельзя — ползёт дальше сам (над головой блок)', { crawl: st.P.crawl, h: st.P.h });
+    steps(st, 360, chk); st.C.key('KeyW', false); steps(st, 10, chk);
+    ok(st.P.x > 7.3 && !st.P.crawl && near(st.P.h, 1.8, 1e-9) && st.P.onGround, 'вылез из лаза — встал сам', { x: +st.P.x.toFixed(2), h: st.P.h });
+    ok(!eye && !body, 'весь путь — глаза и тело не в блоках', { eye, body });
+    // прыжка ползком нет; «прыжок» снимает «лёг» (кнопка телефона) — встаёт, если есть куда
+    st.touchCrawl = true; steps(st, 4); const y0 = st.P.y; st.C.key('Space', true); steps(st, 2); st.C.key('Space', false); steps(st, 20);
+    ok(!st.touchCrawl && !st.P.crawl && near(st.P.y, y0, 1e-9), '«прыжок» ползком — встал (без прыжка)', { y: st.P.y, crawl: st.P.crawl });
+  }
+  {
+    // блок поставили над головой — тело ниже само (присел, нет места — лёг); убрали — встал
+    const W = mkWorld(); const st = mkSt(W, { x: .5, y: 46, z: .5 }); steps(st, 2);
+    W.put(0, 47, 0, 'stone'); steps(st, 2);
+    ok(st.P.crawl && !bodyIn(st) && !eyeIn(st), 'блок над головой — лёг сам (тело не в блоке)', { crawl: st.P.crawl, h: st.P.h });
+    W.put(0, 47, 0, null); W.put(0, 48, 0, 'stone'); steps(st, 2);
+    ok(!st.P.crawl && near(st.P.h, 1.8, 1e-9) && !bodyIn(st) && !eyeIn(st), 'блок убрали (потолок на высоте 2 — 1,8 влезает) — встал сам', { crawl: st.P.crawl, h: st.P.h });
+  }
+  {
+    // край в 2 блока, над ним лаз высотой в блок, над игроком свободно — залезть ползком (сразу «лёг»)
+    const W = mkWorld(); W.fill(2, 46, -4, 6, 47, 4, 'stone'); W.fill(2, 49, -4, 6, 50, 4, 'stone');
+    const st = mkSt(W, { x: .5, y: 46, z: .5 }); faceX(st);
+    let eye = 0; st.C.key('KeyW', true); steps(st, 10); st.C.key('Space', true); steps(st, 90, () => { if (eyeIn(st)) eye++; }); st.C.key('Space', false); steps(st, 60); st.C.key('KeyW', false); steps(st, 10);
+    ok(st.pkN === 1 && near(st.P.y, 48, 1e-6) && st.P.crawl && st.P.x > 2.3 && !eye && !bodyIn(st), 'над краем лаз в блок — залез ползком, глаза не в блоке', { pkN: st.pkN, y: st.P.y, x: +st.P.x.toFixed(2), crawl: st.P.crawl, eye });
+  }
+  {
+    // одинаково при 30, 60 и 144 кадрах: ползком через лаз и попытка залезть под низким потолком (ввод — по шагам игры)
+    const loopRun = (frameMs, sec2, update) => {
+      let now = 0; const q = [];
+      const raf0 = globalThis.requestAnimationFrame, perf0 = globalThis.performance, doc0 = globalThis.document;
+      globalThis.requestAnimationFrame = cb => { q.push(cb); return q.length; }; globalThis.cancelAnimationFrame = () => {};
+      globalThis.performance = { now: () => now }; globalThis.document = { hidden: false };
+      try { const L = E.loop(update, () => {}); while (now < sec2 * 1000) { now += frameMs; for (const cb of q.splice(0)) cb(now); } L.stop(); }
+      finally { globalThis.requestAnimationFrame = raf0; globalThis.performance = perf0; globalThis.document = doc0; }
+    };
+    const run = (frameMs, mk, plan) => {
+      const st = mk(); let t = 0, n = 0;
+      loopRun(frameMs, 12, dt => { plan(st, t); st.C.step(dt); st.WX.iceTick(); KB.physics(st, dt); st.steps++; t += dt; n++; });
+      st.WX.dispose(); return { x: st.P.x, y: st.P.y, h: st.P.h, crawl: st.P.crawl, pkN: st.pkN || 0, n };
+    };
+    const mkT = () => { const st = mkSt(tunnel(), { x: .5, y: 46, z: .5 }); faceX(st); return st; };
+    const mkL = () => { const W = mkWorld(); W.fill(2, 46, -4, 5, 47, 4, 'stone'); W.fill(-3, 49, -4, 1, 49, 4, 'planks_oak'); const st = mkSt(W, { x: .5, y: 46, z: .5 }); faceX(st); return st; };
+    const planT = (st, t) => { st.C.key('KeyW', t >= .2 && t < 9); st.touchCrawl = t >= 1.5 && t < 3; };
+    const planL = (st, t) => { st.C.key('KeyW', t >= .2 && t < 9); st.C.key('Space', t >= 1 && t < 3); };
+    for (const [nm, mk, plan] of [['лаз', mkT, planT], ['низкий потолок', mkL, planL]]) {
+      const A = run(1000 / 60, mk, plan), B = run(1000 / 144, mk, plan), C3 = run(1000 / 30, mk, plan);
+      ok(A.n === B.n && A.n === C3.n && near(A.x, B.x, 1e-9) && near(A.y, B.y, 1e-9) && near(A.x, C3.x, 1e-9) && near(A.y, C3.y, 1e-9) && A.h === B.h && A.h === C3.h && A.pkN === B.pkN && A.pkN === C3.pkN,
+        `${nm}: 60, 144 и 30 кадров — одинаково до 1e-9`, { A, B, C3 });
+    }
+  }
+
   // ═══ 3. Вода: плавучесть, вылезти на берег ═══
   sec('вода: держишься на плаву (голова над водой), «красться» — нырнуть, вылезти на берег, из проруби — на лёд');
   {

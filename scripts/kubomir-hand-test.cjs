@@ -145,6 +145,33 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(shs.vertexShader.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && !shs.vertexShader.includes('vWD') && !shs.fragmentShader.includes('vWD') && !shs.fragmentShader.includes('uWN') && !shs.fragmentShader.includes('d37dl +='), 'простой режим воды: u, v из младших бит, без новых кусков');
     VRs.dispose();
   }
+  {   // «живые» текстуры и рельеф (T-096a): флаги слоёв по имени, define только где нужно, выключатель, страж графики
+    sec('«живые» текстуры и рельеф (T-096a)');
+    const fx = n => V.texFx(n), F = V.TEX_FX;
+    const miss = [...F.rot, ...F.flow, ...F.glint, ...F.inv, ...Object.keys(F.pom)].filter(n => !V.texIdx.has(n));
+    ok(!miss.length, 'имена в V.TEX_FX — настоящие слои текстур', miss);
+    ok(fx('stone').rot && !fx('cobble').rot && fx('lava').flow && fx('ore_diamond').glint && fx('bricks').inv && fx('item_pick_iron').pom === 0 && fx('lava').pom === 0 && fx('glass').pom === 0 && fx('stone').pom === 1, 'флаги: камень поворачивается, лава течёт, руда блестит, кирпичи «наоборот», вещи и лава — без рельефа');
+    const lf = VR.U.uLF.value, d = lf?.image?.data, li = n => V.texIdx.get(n) * 4;
+    ok(lf?.isDataTexture && lf.image.width === V.tex.length && lf.magFilter === T.NearestFilter && !lf.generateMipmaps, 'флаги слоёв — текстура L × 1 без сглаживания', lf?.image?.width);
+    ok(d[li('stone')] & 1 && d[li('lava')] & 2 && d[li('ore_gold')] & 4 && d[li('bricks')] & 8 && d[li('item_apple') + 1] === 0 && d[li('cobble') + 1] > d[li('stone') + 1] && d[li('cobble') + 3] > d[li('cobble') + 2], 'биты и сила рельефа в текстуре флагов (низ < верх яркости)');
+    ok(VR.U.uLFP.value.x === V.tex.length && VR.U.uLFP.value.y === V.TEX, 'uLFP: число слоёв и размер рисунка', VR.U.uLFP.value);
+    const m = VR.mats, defs = k => m[k].defines;
+    ok(defs('solid').D37_TEXFX && defs('cutout').D37_TEXFX && !defs('water').D37_TEXFX, 'D37_TEXFX — у кубиков, не у воды');
+    ok(defs('solid').D37_POM && defs('solid').D37_POMN >= 8 && !defs('cutout').D37_POM && !defs('foliage').D37_POM, 'рельеф — только твёрдые блоки («высокая», компьютер)');
+    const sh = shaderOf('lambert'); m.solid.onBeforeCompile(sh);
+    const fsh = sh.fragmentShader, vsh = sh.vertexShader;
+    ok(vsh.includes('vD37C = vD37W - d37N( vD37F ) * 0.5;') && /#ifdef D37_TEXFX\s*\nuniform sampler2D uLF;[\s\S]*varying vec3 vD37C;/.test(fsh) && fsh.includes('float d37Hq(') && fsh.indexOf('uniform highp sampler2DArray uTex;') < fsh.indexOf('float d37Hq('), 'шейдер: точка клетки в вершинах, высота клетки рисунка — после объявления uTex', { v: vsh.includes('vD37C = vD37W - d37N( vD37F ) * 0.5;'), f: fsh.includes('varying vec3 vD37C;'), h: fsh.indexOf('float d37Hq('), t: fsh.indexOf('uniform highp sampler2DArray uTex;') });
+    ok(fsh.includes('d37uv.xy += uTime * vec2( 0.017, 0.029 );') && fsh.includes('#if defined( D37_POM ) && !defined( D37_FP ) && !defined( D37_ACT )') && fsh.includes('for ( int i = 0; i < D37_POMN; i ++ )') && !/\bcontinue\b|texelFetch/.test(fsh), 'шейдер: лава течёт, рельеф не у вещей, в цикле — без continue и texelFetch');
+    ok(fsh.includes('totalEmissiveRadiance += diffuseColor.rgb * d37glint * 2.2;') && /float d37glint = 0\.0;/.test(fsh), 'блёстки — свечением (d37glint объявлен и без define)');
+    ok(!/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/.test(fsh.replace(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g, (s, a, b) => +a < +b ? '' : s)) && incOk(fsh) && incOk(vsh), 'smoothstep — края по возрастанию; #include — своей строкой');
+    VR.setOrigin(300, -10); const o1 = [VR.U.uLFP.value.z, VR.U.uLFP.value.w]; VR.setOrigin(768, -768); const o2 = [VR.U.uLFP.value.z, VR.U.uLFP.value.w]; VR.setOrigin(0, 0);
+    ok(o1[0] === 44 && o1[1] === 246 && o2[0] === 0 && o2[1] === 0, 'поворот клетки не зависит от сдвига начала координат (по модулю 256)', { o1, o2 });
+    VR.setPom(false); const p0 = !!defs('solid').D37_POM; VR.setPom(null); const p1 = !!defs('solid').D37_POM;
+    VR.setTexFx(false); const off = (V.LAYERS || Object.keys(m)).filter(k => defs(k).D37_TEXFX || defs(k).D37_POM).length, offA = !VR.texFx().on;
+    VR.setTexFx(true); const on = !!defs('solid').D37_TEXFX && VR.texFx().on;
+    ok(!p0 && p1 && off === 0 && offA && on, 'выключатели: VR.setPom(false) — без рельефа; VR.setTexFx(false) — шейдер как был (страж: E.vox.texFxDisable)', { p0, p1, off, offA, on });
+    ok(/k === 'kbtex'/.test(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8')), 'страж графики знает ключ kbtex (post.js)');
+  }
   const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
   ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
   ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
@@ -309,6 +336,71 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(s2.fist[2] > fr0[2] + .15 && actor2.hold.d >= 1 && actor2.hold.r === CBc.HO.bow && actor2.hold.l === CBc.HO.bow, 'натянул — правая к лицу (ближе к камере), человечку — d = 1, лук двумя руками', { fr0, f: s2.fist, hold: actor2.hold });
     H2.dispose();
     let left2 = 0; R.camera.traverse(o => { if (o.isMesh) left2++; }); ok(left2 === 0 && actor2.hold === null, 'закрыли мир — у камеры пусто, поза человечку снята', left2);
+
+    // ═══ 3в. Вещь в кулаке и руки «по делу» (T-096a, владелец 22.10: «в руку плохо предметы держит, нет 2 руки… рука почти
+    //    бездействует»): вещь — ребёнок кисти (рукоять в кулаке и в покое, и в замахе, и у рта), левая видна всегда, обе руки —
+    //    на краю, на лестнице, в воде, ползком ═══
+    sec('вещь в кулаке (рукоять — в кулаке всегда), левая видна всегда, обе руки: вис, залезть, лестница, брасс, ползком');
+    const ch3 = mkCh2(), actor3 = { key: 'me', x: 2.5, y: 5, z: 2.5, ch: ch3, hidden: true, hold: null };
+    const A3 = { list: new Map([['me', actor3]]), get: k => A3.list.get(k) };
+    const P3 = { x: 2.5, y: 5, z: 2.5, h: 1.8, sneak: false, dead: false, onGround: true, water: 0, vx: 0, vz: 0, inv: new Array(36).fill(null), off: null, sel: 0 };
+    const st3 = { R, VR, W: cave, P: P3, A: A3, ox: 0, oz: 0, camMode: 0, hudHidden: false, eat: null, rig: { yaw: 0, fp: 0, feel: { bobPh: 0, bobW: 0 }, motion: 1 } };
+    const H3 = window.KubomirHand.create(st3);
+    const t3 = n => { for (let i = 0; i < n; i++) H3.frame(1 / 60, i / 60); };
+    t3(2);
+    let s3 = H3.state();
+    ok(s3.fp && s3.fpL && s3.fist && s3.fistL && s3.fistL[0] < -.1, 'обе руки пустые — обе видны (левая — слева внизу)', { fist: s3.fist, fistL: s3.fistL });
+    const GOOD = .07;   // точка хвата (рукоять, низ факела) — у середины кулака (сдвиг хвата o — до ~0,045)
+    for (const id of ['pick_iron', 'sword_iron', 'axe_iron', 'torch', 'apple', 'planks_oak', 'iron_ingot']) {
+      P3.inv[0] = { id, n: 1 }; t3(20); s3 = H3.state();
+      ok(s3.item === id && s3.inHand && s3.grip !== null && s3.grip < GOOD, `правая: ${id} — в кулаке (рукоятью)`, { grip: s3.grip, inHand: s3.inHand });
+    }
+    // замах (копает): вещь едет с кистью — рукоять в кулаке в каждом кадре взмаха
+    P3.inv[0] = { id: 'pick_iron', n: 1 }; t3(20);
+    let worst = 0; H3.act('swing'); for (let i = 0; i < 20; i++) { H3.frame(1 / 60, i / 60); worst = Math.max(worst, H3.state().grip); }
+    ok(worst < GOOD, 'замах киркой — рукоять в кулаке весь взмах (было: кирка «висела» рядом с кулаком)', worst);
+    st3.eat = { t: .5, need: 1.6 }; P3.inv[0] = { id: 'apple', n: 3 }; t3(30); s3 = H3.state();
+    ok(s3.grip < GOOD && s3.eat > .9, 'еда у рта — в кулаке', { grip: s3.grip, eat: s3.eat }); st3.eat = null; t3(30);
+    // левая: факел, щит, еда, кирка
+    for (const id of ['torch', 'shield', 'apple', 'pick_iron']) {
+      P3.off = { id, n: 1 }; t3(20); s3 = H3.state();
+      ok(s3.off === id && s3.inHandL && s3.gripL !== null && s3.gripL < GOOD && s3.fistL[0] < 0, `левая: ${id} — в кулаке`, { gripL: s3.gripL, fistL: s3.fistL });
+    }
+    // пересобрали человечка — вещи в новых кистях, хват заново
+    actor3.ch = mkCh2(); t3(3); s3 = H3.state();
+    ok(s3.inHand && s3.inHandL && s3.grip < GOOD && s3.gripL < GOOD, 'новый человечек — вещи в его новых кистях', s3);
+    // ходьба: руки навстречу шагу (правая вперёд — левая назад)
+    st3.rig.feel.bobW = 1; st3.rig.feel.bobPh = Math.PI / 2; t3(2); const wR = H3.state().fist, wL = H3.state().fistL;
+    st3.rig.feel.bobPh = -Math.PI / 2; t3(2); const wR2 = H3.state().fist, wL2 = H3.state().fistL;
+    ok((wR[2] - wR2[2]) * (wL[2] - wL2[2]) < 0 && Math.abs(wR[2] - wR2[2]) > .02, 'на ходу руки навстречу шагу (правая вперёд — левая назад)', { wR, wR2, wL, wL2 });
+    st3.rig.feel.bobW = 0;
+    const rest = H3.state();
+    // вис: обе руки вверху (на краю), вещей в руках не видно; по краю — перехват
+    P3.hang = { lip: { x: 0, y: 0, z: 0 } }; t3(30); s3 = H3.state();
+    ok(s3.act === 'hang' && s3.spk[0] > .95 && s3.fist[1] > rest.fist[1] + .35 && s3.fistL[1] > rest.fistL[1] + .35 && !H3.fpItem.visible, 'вис — обе руки вверху на краю, вещи — не в руках', { fist: s3.fist, fistL: s3.fistL });
+    // залезть: руки толкают вниз (к концу пути)
+    P3.hang = null; P3.pk = { move: 'mantle', k: .9 }; t3(30); s3 = H3.state();
+    ok(s3.act === 'pk' && s3.fist[1] < rest.fist[1] + .1 && s3.fistL[1] < rest.fistL[1] + .1, 'залезть — руки толкают край вниз', { fist: s3.fist, fistL: s3.fistL });
+    P3.pk = null; t3(30); ok(H3.fpItem.visible && H3.state().spk[0] < .05, 'вылез — вещь снова в руке, поза обычная');
+    // лестница: руки по очереди (правая вверху — левая внизу)
+    P3.climb = true; P3.onGround = false; P3.climbPh = Math.PI / 2; t3(30); const lR = H3.state().fist, lL = H3.state().fistL;
+    P3.climbPh = -Math.PI / 2; t3(30); const lR2 = H3.state().fist, lL2 = H3.state().fistL;
+    ok(lR[1] > lR2[1] + .15 && lL[1] < lL2[1] - .15, 'лестница — руки перехватывают по очереди', { lR, lR2, lL, lL2 });
+    P3.climb = false; P3.onGround = true; t3(30);
+    // плывёт: брасс — обе руки вперёд вместе и в стороны
+    P3.water = 1.5; P3.onGround = false; P3.vx = 2; let zMin = 9, xMax = -9;
+    for (let i = 0; i < 160; i++) { H3.frame(1 / 60, i / 60); const q = H3.state(); zMin = Math.min(zMin, q.fist[2]); xMax = Math.max(xMax, q.fist[0] - (-q.fistL[0])); }
+    s3 = H3.state();
+    ok(s3.act === 'swim' && zMin < -.75 && Math.abs(s3.fist[0] + s3.fistL[0]) < .03, 'плывёт — брасс: руки вперёд (обе вместе, зеркально)', { zMin, fist: s3.fist, fistL: s3.fistL });
+    P3.water = 0; P3.onGround = true; P3.vx = 0; t3(30);
+    // ползком: руки низко, тянутся вперёд по очереди
+    P3.crawl = true; P3.vx = 1; let cR = [], cL = [];
+    for (let i = 0; i < 90; i++) { H3.frame(1 / 60, i / 60); const q = H3.state(); cR.push(q.fist[2]); cL.push(q.fistL[2]); }
+    const corr = cR.reduce((s, v, i) => s + (v - cR.reduce((a, b) => a + b) / cR.length) * (cL[i] - cL.reduce((a, b) => a + b) / cL.length), 0);
+    ok(H3.state().act === 'crawl' && H3.state().fist[1] < rest.fist[1] - .02 && corr < 0, 'ползком — руки низко, тянутся вперёд по очереди', { y: H3.state().fist[1], corr: +corr.toFixed(4) });
+    P3.crawl = false; P3.vx = 0; t3(30);
+    H3.dispose();
+    let left3 = 0; R.camera.traverse(o => { if (o.isMesh) left3++; }); ok(left3 === 0, 'закрыли мир — у камеры пусто (и вещи из кистей)', left3);
   }
 
   // ═══ 4. Мобы — через один «вид» ═══
@@ -788,7 +880,7 @@ function fakeWorld(sky, blk, walls = new Set()){
     for (let i = 2; i < pos.length; i += 3) { zmin = Math.min(zmin, pos[i]); zmax = Math.max(zmax, pos[i]); }
     for (let i = 0; i < cl.length; i += 3) if (cl[i] + cl[i + 1] + cl[i + 2] < 30) dark++;
     ok(g.userData.flat && n > 60 && zmax - zmin > .05 && zmax - zmin < .08 && dark === 0, 'кирка: лицо, спина и борта по краю (больше 60 граней), толщина 1/16, без чёрных граней', { n, th: +(zmax - zmin).toFixed(3), dark });
-    ok(VR.itemGeo('torch').attributes.position.count === 8, 'факел и растения (блоки) — как были: две плоскости');
+    ok(VR.itemGeo('torch').attributes.position.count === 40 && VR.itemGeo('torch').userData.flat && VR.itemGeo('flower_red').attributes.position.count === 8, 'факел — палочка с пламенем, как в мире (10 граней, T-096a); растения — как были: две плоскости');
   }
 
   // ═══ 11. Падающие деревья (V.component + X.fallGroup): валятся только настоящие, лёг — брёвна вещами ═══

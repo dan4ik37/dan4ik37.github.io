@@ -291,7 +291,8 @@
       if (kind === 'furnace') U.timer = setInterval(() => { if (U.el) renderFurnace(); }, 150);
       if (kind === 'chest') hooks.sound?.('door_wood_open', { vol: .4, rate: 1.4 });
     };
-    U.close = () => {
+    // o.esc — закрыли клавишей Esc: мышь захватит игра, когда Esc отпустят (kubomir.js escClosed; T-096a)
+    U.close = o => {
       if (!U.el) return;
       const p = P();
       for (let i = 0; i < 9; i++) if (U.craft[i]) { const left = U.give(U.craft[i]); if (left > 0) hooks.drop?.({ ...U.craft[i], n: left }); U.craft[i] = null; }
@@ -301,7 +302,7 @@
       if (U.kind === 'chest') hooks.sound?.('door_wood_close', { vol: .4, rate: 1.4 });
       U.el.remove(); U.el = null; U.kind = ''; U.pos = null;
       S.C?.reset_state();
-      if (!S.I?.touch) S.I?.lock?.();   // тот же элемент, что у движка (input.js), — иначе мышь захвачена, а камера не крутится
+      if (!S.I?.touch && !o?.esc) S.I?.lock?.();   // тот же элемент, что у движка (input.js), — иначе мышь захвачена, а камера не крутится
     };
     U.dispose = () => { window.removeEventListener('keydown', hoverKey, true); if (U.el) { clearInterval(U.timer); U.el.remove(); U.el = null; } };
 

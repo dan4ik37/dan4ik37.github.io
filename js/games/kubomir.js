@@ -16,8 +16,11 @@
   const DAY_SEC = 20 * 60;                 // сутки игры — 20 минут
   const REACH = 5, REACH_C = 6.5;
   const G_ACC = 32, JUMP_V = 9, TERM = 60;
-  const SPD = { walk: 4.3, sprint: 5.7, sneak: 1.35, fly: 11, flyFast: 22, swim: 2.4 };
-  const PW = .6, PH = 1.8, PHS = 1.5;
+  const SPD = { walk: 4.3, sprint: 5.7, sneak: 1.35, crawl: 1.15, fly: 11, flyFast: 22, swim: 2.4 };
+  // тело: стоит 1,8, присел 1,5, ползком 0,6 (T-096a, как в Майнкрафте: лаз высотой в блок); глаза — 1,62 / 1,27 / 0,42
+  const PW = .6, PH = 1.8, PHS = 1.5, PHC = .6, EYE_H = 1.62, EYE_S = 1.27, EYE_C = .42;
+  // высота глаз по телу: ползком — низко; присел (сам или не встать — потолок) — как присев
+  const eyeH = P => P.crawl ? EYE_C : P.sneak || P.h < PH - 1e-6 ? EYE_S : EYE_H;
   const RD_OPTS = [4, 6, 8, 10, 12, 16];
   const KB_GEN = 3;   // версия генератора новых миров (T-022b: 3 — деревья «как в модах»; откат одной строкой — 2). Старые миры — свою
   const LS_OPT = 'd37_kb_opt', LS_ACH = 'd37_kb_ach';
@@ -70,10 +73,12 @@
     if (m) playById(m[1]); else if (cm) joinCoop(cm[1]); else showMenu();
     window.addEventListener('pagehide', onHide);
     document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('keydown', onEscKey, true); window.addEventListener('keyup', onEscKey, true); window.addEventListener('blur', onEscKey);
   }
   function unmount(){
     window.removeEventListener('pagehide', onHide);
     document.removeEventListener('visibilitychange', onVis);
+    window.removeEventListener('keydown', onEscKey, true); window.removeEventListener('keyup', onEscKey, true); window.removeEventListener('blur', onEscKey);
     if (S) { journalNow(); stopWorld({ quick: true, cloud: true }); }   // ушёл со страницы игры (вкладка жива) — копия в облако в фоне
     if (coopG) { coopG.leave(); coopG = null; }
     el = null; api = null;
@@ -641,7 +646,7 @@
   function fogNear(st){ const f = st.R.scene.fog; if (f && !(st.uwK > 0) && f.far > 20) f.near = f.far * .6; }
   // глубина глаз под гладью воды (м; над водой — меньше 0, воды нет — −9)
   function eyeDepth(st){
-    const V = VX(), W = st.W, P = st.P, ey = P.y + (P.sneak ? 1.27 : 1.62), Tl = V.T.liquid;
+    const V = VX(), W = st.W, P = st.P, ey = P.y + eyeH(P), Tl = V.T.liquid;
     let y = Math.floor(ey), v = W.raw(P.x, y, P.z);
     if (!(v > 0 && Tl[v & 0xfff] === 1)) { y--; v = W.raw(P.x, y, P.z); if (!(v > 0 && Tl[v & 0xfff] === 1)) return -9; }
     for (let n = 0; n < 24; n++) { const u = W.raw(P.x, y + 1, P.z); if (!(u > 0 && Tl[u & 0xfff] === 1)) break; y++; v = u; }
@@ -782,6 +787,10 @@
     saveAll(st).catch(() => {});
   }
   function onHide(){ journalNow(); }
+  // Esc нажат сейчас (сам по себе, мимо управления: окно при закрытии сбрасывает управление — C.reset_state) — захват мыши после
+  // закрытия окна клавишей Esc ждёт, пока её отпустят (escClosed)
+  let escHeld = false, escAt = -1e9;
+  function onEscKey(e){ if (e.type === 'blur') escHeld = false; else if (e.key === 'Escape' || e.code === 'Escape') { escHeld = e.type === 'keydown'; if (escHeld) escAt = now(); } }
   function onVis(){ if (document.visibilityState === 'hidden') journalNow(); }
 
   // ═══ Правка блока: сетки, сохранение, сущности, моды ═══
@@ -805,10 +814,27 @@
     // мир ещё строится — сеть всё равно идёт: гость спрашивает у хозяина чанки с правками (без них вокруг не достроится)
     if (!st.ready) { st.net?.step(dt); if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
     st.steps++;
-    // Esc: окно → закрыть; иначе меню
-    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (st.X?.escape()) { /* ── KX:esc ── закрыли лист помощника */ } else if (uiOpen) st.ui.close(); else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); } else if (menu) closeMenu(); else openMenu(); }
-    // E — вещи (и закрыть окно вещей той же клавишей, как в Майнкрафте)
-    if (K.downRaw('inventory') && !menu && !chatting && !window.D37Settings?.isOpen?.()) { if (uiOpen) st.ui.close(); else st.ui?.open('inv'); }
+    // Esc: окно → закрыть; иначе меню. T-096a (владелец 22.10: «выход из инвентаря тяжёлый — после Esc меню открывается, а не
+    // закрывается»): окна, которые сами ловят Esc (лист помощника, ⚙️), закрываются ещё в событии клавиши — раньше шага игры, и
+    // шаг видел «Esc без окон» → меню (или закрывал ещё и меню под ⚙️). Теперь: такое окно было открыто на прошлом шаге, а сейчас
+    // закрыто — этот Esc уже потрачен (st.selfEsc). Закрыли окно вещей Esc — мышь захватываем, когда Esc отпустят (escClosed)
+    const settingsOpen = !!window.D37Settings?.isOpen?.(), sheetOpen = !!st.X?.isOpen();
+    if (C.down('pause') && !settingsOpen) {
+      if (st.selfEsc && !sheetOpen) escClosed(st);   // лист / ⚙️ закрылись этим же Esc сами
+      else if (sheetOpen && globalThis.document?.activeElement?.closest?.('.d37sh')) { /* фокус в листе — он сам сделал «назад» (sheet.js) */ }
+      else if (chatting) chatClose();
+      else if (st.X?.escape()) escClosed(st);   // ── KX:esc ── закрыли лист помощника
+      else if (uiOpen) { st.ui.close({ esc: true }); escClosed(st); }
+      else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); escClosed(st); }
+      else if (menu) closeMenu();
+      else openMenu();
+    }
+    st.selfEsc = settingsOpen || !!st.X?.isOpen();
+    // E — вещи (и закрыть окно вещей той же клавишей, как в Майнкрафте); лист помощника — тоже закрыть
+    if (K.downRaw('inventory') && !st.menu && !st.modWin && !chatting && !settingsOpen) {
+      if (sheetOpen) { st.X.closeSheet(); if (!st.I.touch) st.I.lock?.(); }
+      else if (uiOpen) st.ui.close(); else st.ui?.open('inv');
+    }
     if (K.down('camera')) cycleCam();
     if (K.down('hud')) hideHud(!st.hudHidden);
     if (K.down('debug')) { st.dbg = !st.dbg; st.hudEl.querySelector('.kb-dbg').hidden = !st.dbg; }
@@ -885,6 +911,15 @@
     // красться — Shift (держать; в настройках — «нажал/отжал»), на телефоне — кнопка-переключатель
     if (opts.sneakToggle && K.down('sneak')) st.sneakOn = !st.sneakOn;
     const sneak = (opts.sneakToggle ? st.sneakOn : K.held('sneak')) || !!st.touchSneak || (!st.K && C.held('crouch'));
+    // ползком (T-096a): держать «ползти» (Z), два раза «красться» (Shift / Ⓑ) — лёг/встал, на телефоне — кнопка-переключатель;
+    // «красться» или «прыжок» — встать из «лёг» (если есть куда). Время двойного нажатия — по шагам игры (одинаково при любых кадрах)
+    if (K.down('sneak') && !P.fly) {
+      if (st.crawlOn) { st.crawlOn = false; st.sneakTap = -1e9; }
+      else if (st.steps - (st.sneakTap ?? -1e9) <= 18) { st.crawlOn = true; st.sneakTap = -1e9; }
+      else st.sneakTap = st.steps;
+    }
+    if ((st.crawlOn || st.touchCrawl) && C.down('jump')) { st.crawlOn = false; P.jumpCD = Math.max(P.jumpCD || 0, .35); if (st.touchCrawl) { st.touchCrawl = false; st.tbar?.on('crawl', false); } }   // «прыжок» — встать, не прыгать
+    const crawlWant = (K.held('crawl') || !!st.crawlOn || !!st.touchCrawl) && !P.fly;
     // паркур по сценарию (залезть, вылезти из воды, схватиться за край) и вис — своё движение (как у человечка движка);
     // отпустить край — «красться» (нажал; на телефоне — включил кнопку)
     P.pkCD = Math.max(0, (P.pkCD || 0) - dt);
@@ -895,29 +930,43 @@
     const touch = V.touching(W, P.x, P.y, P.z, P.w, P.h, TCH);
     P.water = touch.water; P.lava = touch.lava; P.climb = touch.climb;
     // глаза под водой: ниже глади своей клетки — или над клеткой ещё вода (верхняя 1/8 полной клетки — тоже под водой)
-    const eyeY = P.y + (P.sneak ? 1.27 : 1.62), ev = W.raw(P.x, eyeY, P.z), ea = ev > 0 && V.T.liquid[ev & 0xfff] === 1 ? W.raw(P.x, eyeY + 1, P.z) : 0;
+    const eyeY = P.y + eyeH(P), ev = W.raw(P.x, eyeY, P.z), ea = ev > 0 && V.T.liquid[ev & 0xfff] === 1 ? W.raw(P.x, eyeY + 1, P.z) : 0;
     P.eyeWater = ev > 0 && V.T.liquid[ev & 0xfff] === 1 && (eyeY < Math.floor(eyeY) + V.liquidHeight(ev) || (ea > 0 && V.T.liquid[ea & 0xfff] === 1));
     // полёт в «Творчестве»: двойной прыжок
     if (st.creative && C.doubleTap('jump')) { P.fly = !P.fly; P.vy = 0; st.H.toast(P.fly ? '🕊 Полёт (два раза «прыжок» — выключить)' : '🚶 Полёт выключен'); st.tbarSync?.(); }
     if (!st.creative) P.fly = false;
     P.sneak = sneak && !P.fly;
+    const inLiquid = P.water > .3 || P.lava > .2;
+    // рост тела (T-096a): ползком — 0,6 (в воде и на лестнице — нет); хотел встать — встаёт, только если есть куда (иначе присев,
+    // иначе — дальше ползком: «не встать под блоком»); тело не влезает в своей высоте (блок поставили над головой, залез в лаз) —
+    // ниже само
+    const wantH = crawlWant && !inLiquid && !P.climb ? PHC : P.sneak ? PHS : PH;
+    if (P.h !== wantH) {
+      if (wantH < P.h || !V.boxHits(W, P.x, P.y, P.z, P.w, wantH)) P.h = wantH;
+      else if (wantH === PH && P.h < PHS && !V.boxHits(W, P.x, P.y, P.z, P.w, PHS)) P.h = PHS;
+    }
+    if (P.h > PHC && !P.fly && V.boxHits(W, P.x, P.y, P.z, P.w, P.h)) {
+      if (P.h > PHS && !V.boxHits(W, P.x, P.y, P.z, P.w, PHS)) P.h = PHS;
+      else if (!V.boxHits(W, P.x, P.y, P.z, P.w, PHC)) P.h = PHC;
+    }
+    P.crawl = P.h <= PHC + 1e-6;
+    const low = P.sneak || P.h < PH - 1e-6;   // присел (сам или потолок не даёт встать) или ползком
     // бег как в Майнкрафте: Ctrl (или два раза «вперёд», или джойстик до упора) — и бежит, пока идёт вперёд; стоп — отпустил
     // «вперёд», присел, проголодался (еда ≤ 3 окорочков) или упёрся в стену
     const hungry = !st.creative && P.food <= 6, fwd = C.move.z > .3;
     if (opts.sprintToggle && K.down('sprint')) st.sprintOn = !st.sprintOn;
     const wantRun = (opts.sprintToggle ? st.sprintOn : K.held('sprint')) || C.doubleTap('forward') || (st.I.touch && C.held('run')) || (!st.K && C.held('run'));
     const busy = !!st.eat || !!(st.F && (st.F.drawOn || st.F.guard > .5));   // ест, натягивает лук, держит щит — не бежит
-    if (!P.sprint && wantRun && fwd && !hungry && !P.sneak && !busy) P.sprint = true;
-    else if (P.sprint && (!fwd || P.sneak || hungry || busy || (P.onGround && st.wallHit && !P.fly))) P.sprint = false;
-    const inLiquid = P.water > .3 || P.lava > .2;
-    let spd = P.fly ? (P.sprint ? SPD.flyFast : SPD.fly) : P.sneak ? SPD.sneak : P.sprint ? SPD.sprint : SPD.walk;
+    if (!P.sprint && wantRun && fwd && !hungry && !low && !busy) P.sprint = true;
+    else if (P.sprint && (!fwd || low || hungry || busy || (P.onGround && st.wallHit && !P.fly))) P.sprint = false;
+    let spd = P.fly ? (P.sprint ? SPD.flyFast : SPD.fly) : P.crawl ? SPD.crawl : low ? SPD.sneak : P.sprint ? SPD.sprint : SPD.walk;
     if (inLiquid && !P.fly) spd = P.lava > .2 ? 1.2 : SPD.swim * (P.sprint ? 1.4 : 1);
     if (st.eat && !P.fly) spd *= .35;   // ест — идёт медленно (как в Майнкрафте)
     else if (st.F && !P.fly) { if (st.F.drawOn) spd *= .4; else if (st.F.guard > .5) spd *= .55; }   // натягивает лук / держит щит
     // паркур: прыжок у стены, а прыжком край не достать — залезть (край до 2 блоков над ногами) или схватиться (до 2,6 — в прыжке);
     // в воде у берега (край до 1,25 над водой, держишь «прыжок») — вылезти. ⚙️ «🧊 Кубомир» → «Цепляться за края»
     P.pkTry = Math.max(0, (P.pkTry || 0) - dt);
-    if (!P.pkCD && !P.pkTry && !st.pkOff && opts.climb !== false && !P.fly && !P.climb && !P.sneak && !st.eat && wl > .3 && (jumpDown || jump)) {
+    if (!P.pkCD && !P.pkTry && !st.pkOff && opts.climb !== false && !P.fly && !P.climb && !low && !st.eat && wl > .3 && (jumpDown || jump)) {
       const wn = Math.hypot(wx, wz), dx = wx / wn, dz = wz / wn;
       // впереди (полшага) у тела — твёрдое? Нет — искать край незачем (держишь «прыжок» в воде или в прыжке — луч не каждый кадр)
       try {
@@ -961,7 +1010,7 @@
       P.fallTop = P.y;
     } else {
       P.vy = Math.max(-TERM, P.vy - G_ACC * dt);
-      if (jump && P.onGround && P.jumpCD <= 0) { P.vy = JUMP_V; P.onGround = false; P.jumpCD = .1; P.exh += P.sprint ? .2 : .05; st.AU?.play('jump', { vol: .25 }); }
+      if (jump && P.onGround && P.jumpCD <= 0 && !P.crawl) { P.vy = JUMP_V; P.onGround = false; P.jumpCD = .1; P.exh += P.sprint ? .2 : .05; st.AU?.play('jump', { vol: .25 }); }
     }
     P.jumpCD = (P.jumpCD || 0) - dt;
     // батут (свой блок или мода): подбросить
@@ -973,16 +1022,13 @@
       if (mx && !V.boxHits(W, P.x + mx, P.y - .6, P.z, P.w, .55, true)) mx = 0;
       if (mz && !V.boxHits(W, P.x + mx, P.y - .6, P.z + mz, P.w, .55, true)) mz = 0;
     }
-    // высота: присел — ниже (если есть куда встать)
-    const wantH = P.sneak ? PHS : PH;
-    if (P.h !== wantH) { if (wantH < P.h || !V.boxHits(W, P.x, P.y, P.z, P.w, wantH)) P.h = wantH; }
     BOX.x = P.x; BOX.y = P.y; BOX.z = P.z; BOX.w = P.w; BOX.h = P.h;
     const vy0 = P.vy, g0 = P.onGround;
     V.moveBox(W, BOX, mx, P.vy * dt, mz);
     // маленькая ступенька (край льда на озере — 1/8 блока ниже берега): шагнуть без прыжка
     if ((BOX.hitX || BOX.hitZ) && g0 && !P.fly && !inLiquid && P.vy <= 0) stepUp(W, P, BOX, mx, mz);
     // автопрыжок (телефон): упёрся в ступеньку высотой 1 — подпрыгнуть
-    if ((BOX.hitX || BOX.hitZ) && P.onGround && !P.sneak && !P.fly && st.I.touch && opts.autoJump !== false && wl > .3) {
+    if ((BOX.hitX || BOX.hitZ) && P.onGround && !low && !P.fly && st.I.touch && opts.autoJump !== false && wl > .3) {
       if (!V.boxHits(W, BOX.x + wx * .5, BOX.y + 1.05, BOX.z + wz * .5, P.w, P.h)) { P.vy = JUMP_V; }
     }
     st.climbPush = BOX.hitX || BOX.hitZ;
@@ -1060,22 +1106,31 @@
     if (!L) return false;
     const apex = P.y + (P.onGround ? JUMP_APEX : Math.max(0, P.vy) ** 2 / (2 * G_ACC));
     if (L.lip.y <= apex + .02) return false;   // прыжком и так достанет — обычный прыжок (как в Майнкрафте)
-    if (L.height <= MANTLE_MAX) { const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (!top) return false; startMantle(st, L, top, 'mantle'); return true; }
+    if (L.height <= MANTLE_MAX) { const top = topRoom(st, G, L); if (!top || !riseOk(st, G, L)) return false; startMantle(st, L, top, 'mantle'); return true; }
     if (P.onGround) return false;   // повиснуть — только в прыжке
-    startHang(st, L); return true;
+    return startHang(st, L);
   }
+  // T-096a («можно взобраться через блок, нет положения лежать»): наверху есть место хотя бы присесть — залезть; только лечь (лаз
+  // высотой в блок) — залезть ползком (top.crawl); подняться на месте до края — голова не входит в блоки над собой (PK.riseClear)
+  function topRoom(st, G, L){
+    const Eg = E().grip, P = st.P;
+    const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (top) return top;
+    const low = Eg.roomOnTop(G, L, P.w / 2, PHC + .04); if (low) low.crawl = true;
+    return low;
+  }
+  const riseOk = (st, G, L) => { const P = st.P, PK = E().parkour; return !PK.riseClear || PK.riseClear(G, P, L, P.w / 2, PH, KS); };
   function tryClimbOut(st, dx, dz){
     const P = st.P, Eg = E().grip; if (!Eg || P.water <= .3) return false;
     const surf = waterTop(st);
     if (surf - (P.y + 1.62) > .7) return false;   // глубоко — сначала всплыть
     const G = grip(st), L = Eg.findLedge(G, { x: P.x, y: P.y, z: P.z }, { x: dx, z: dz }, .2, surf + SWIM_OUT - P.y, KS);
     if (!L || L.lip.y < surf - .25) return false;
-    const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (!top) return false;
+    const top = topRoom(st, G, L); if (!top || !riseOk(st, G, L)) return false;
     startMantle(st, L, top, 'swim'); return true;
   }
   function startMantle(st, L, top, move){
     const P = st.P, PK = E().parkour, dur = move === 'climb' ? PK.ClimbFromHangTime : move === 'swim' ? .72 : PK.MantleTime;
-    P.pk = { move, segs: PK.mantleSegs({ x: P.x, y: P.y, z: P.z }, L, top, dur, KS), t: 0, k: 0, low: false, yaw: Math.atan2(-L.face.x, -L.face.z) };
+    P.pk = { move, segs: PK.mantleSegs({ x: P.x, y: P.y, z: P.z }, L, top, dur, KS), t: 0, k: 0, low: false, crawl: !!top.crawl, yaw: Math.atan2(-L.face.x, -L.face.z) };
     P.hang = null; P.vx = P.vy = P.vz = 0; P.onGround = false; P.sprint = false;
     if (!st.creative) P.exh += move === 'climb' ? .35 : move === 'swim' ? .2 : .25;
     st.AU?.play('kb_grab', { vol: .5, rate: .9 + Math.random() * .2 });
@@ -1085,11 +1140,13 @@
   }
   function startHang(st, L){
     const P = st.P, PK = E().parkour, hp = PK.hangSpot(grip(st), L, P.w / 2, HANG_DROP);
+    if (VX().boxHits(st.W, hp.x, hp.y, hp.z, P.w, PH)) return false;   // висеть негде (тело в блоках) — нет (T-096a)
     P.pk = { move: 'hang', segs: [{ a: { x: P.x, y: P.y, z: P.z }, b: hp, dur: PK.HangEnterTime, arc: { x: -L.face.x * .03, y: 0, z: -L.face.z * .03 } }], t: 0, k: 0, L, yaw: Math.atan2(-L.face.x, -L.face.z) };
     P.vx = P.vy = P.vz = 0; P.onGround = false; P.sprint = false;
     if (!st.creative) P.exh += .1;
     st.AU?.play('kb_grab', { vol: .55 });
     st.pkN = (st.pkN || 0) + 1;
+    return true;
   }
   // шаг сценария: тело — по пути; колено на край — присел (как у движка); конец — стоит (или висит)
   function pkStep(st, dt){
@@ -1098,7 +1155,7 @@
     const p = PK.pathAt(K.segs, K.t, PKP);
     P.x = p.x; P.y = p.y; P.z = p.z; K.k = p.k;
     P.vx = P.vy = P.vz = 0; P.onGround = false; P.fallTop = P.y;
-    if (K.move !== 'hang' && p.i >= 3 && !K.low) { K.low = true; P.h = PHS; }
+    if (K.move !== 'hang' && p.i >= 3 && !K.low) { K.low = true; P.h = K.crawl ? PHC : PHS; P.crawl = !!K.crawl; }   // колено на край (в лаз — лёг)
     if (!p.done) return;
     P.pk = null; P.pkCD = .35; P.jumpCD = .3;
     if (K.move === 'hang') { P.hang = K.L; P.hangYaw = K.yaw; return; }
@@ -1119,7 +1176,7 @@
     }
     const toward = wx * -L.face.x + wz * -L.face.z, side = wx * L.along.x + wz * L.along.z;
     if (dropDown || toward < -.5) { letGo(st); return false; }
-    if (jumpDown || toward > .5) { const top = Eg.roomOnTop(G, L, P.w / 2, PHS); if (top) { startMantle(st, L, top, 'climb'); return true; } }
+    if (jumpDown || toward > .5) { const top = topRoom(st, G, L); if (top && riseOk(st, G, L)) { startMantle(st, L, top, 'climb'); return true; } }
     const shimmy = Math.abs(side) > .3;
     P.shimmyNow = false;
     if (shimmy) {
@@ -1343,7 +1400,7 @@
 
   // ═══ Прицел: ломать, ставить, открывать, есть ═══
   const EYE = [0, 0, 0];
-  function eye(st){ const P = st.P; EYE[0] = P.x; EYE[1] = P.y + (P.sneak ? 1.27 : 1.62); EYE[2] = P.z; return EYE; }   // общий массив — разбирать сразу
+  function eye(st){ const P = st.P; EYE[0] = P.x; EYE[1] = P.y + eyeH(P); EYE[2] = P.z; return EYE; }   // общий массив — разбирать сразу
   const DIR = { x: 0, y: 0, z: 0 };
   // куда смотрит игрок (по повороту головы, а не по камере: в виде спереди камера смотрит на него самого)
   function lookDir(st){
@@ -1872,8 +1929,10 @@
     if (I.zoom !== 1 && !I.touch && !st.ui?.isOpen()) { P.sel = (P.sel + (I.zoom > 1 ? 1 : 8)) % 9; }
     const ch = CAMP.ch, U = E().UNIT || 1;
     // скорость — в единицах движка (1 м = UNIT): камера по ней узнаёт бег (шире обзор на 8°) и темп покачивания
-    ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx * U; ch.vz = P.vz * U; ch.h = P.sneak ? 1.5 : 1.85; ch.grounded = P.onGround;
-    CAMP.running = P.sprint; CAMP.crouchW = P.sneak ? 1 : 0; CAMP.mode = P.pk || P.hang ? 'pk' : 'move';   // залезает / висит — без покачивания
+    ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx * U; ch.vz = P.vz * U; ch.grounded = P.onGround;
+    // высота глаз камеры — плавно (присел / лёг / встал за ~0,1 с, как в Майнкрафте); прицел и лучи — по телу (eye), без сглаживания
+    const camH = eyeH(P) + .2 * U; st.camH = st.camH == null || Math.abs(st.camH - camH) > 2 ? camH : st.camH + (camH - st.camH) * (1 - Math.exp(-dt * 16)); ch.h = st.camH;
+    CAMP.running = P.sprint; CAMP.crouchW = P.crawl ? 2 : P.sneak || P.h < PH - 1e-6 ? 1 : 0; CAMP.mode = P.pk || P.hang ? 'pk' : 'move';   // залезает / висит — без покачивания
     const over = st.ui?.isOpen() || st.menu || st.modWin || st.X?.isOpen();   // открыто окно поверх мира (и лист помощника — T-049)
     rig.mode = 'first';
     rig.update(dt, CAMP, over ? null : look, PHYS, C);
@@ -1881,7 +1940,14 @@
     // ранили — крен камеры: быстро в сторону удара, плавно обратно (0,5 с)
     if (st.roll) { const r = st.roll, q = (r.t += dt); if (q > .5) st.roll = null; else R.camera.rotateZ(r.a * (q < .06 ? Math.sin(q / .06 * PI / 2) : (1 - (q - .06) / .44) ** 2) * PI / 180); }
     I.wantLock = !I.touch && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.();
-    if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.()) openMenu();
+    // Esc закрыл окно (escClosed): захват мыши — когда Esc отпустили (T-096a). Окно, которое закрылось само по своему Esc
+    // (лист помощника с фокусом в поиске — управление клавишу не видит), — тоже
+    const ovNow = !!(st.ui?.isOpen() || st.modWin || st.X?.isOpen());   // меню паузы — нет: после него Esc браузер захват не даёт
+    if (st.ovWas && !ovNow && !I.touch && !st.menu && (escHeld || now() - escAt < 300)) st.escRelock = true;
+    st.ovWas = ovNow;
+    if (st.escRelock && !escHeld) { st.escRelock = false; if (I.wantLock && !I.locked) { I.lock?.(); st.lockGrace = .4; } }
+    if (st.lockGrace > 0) st.lockGrace -= dt;
+    if (st.wasLocked && !I.locked && !over && !st.chatEl && !P.dead && !window.D37Settings?.isOpen?.() && !(st.lockGrace > 0) && !st.escRelock) openMenu();
     const padNow = !!st.K?.padLast;
     if (st.wasLocked !== I.locked || st.padWas !== padNow) { st.padWas = padNow; crossUpdate(st); }   // мышь отпущена — прицел прячем (иначе «кружок» висит посреди экрана)
     st.wasLocked = I.locked;
@@ -1902,7 +1968,8 @@
       const Q = POSE;   // общий объект: A.pose копирует поля (без мусора каждый кадр)
       Q.x = P.x - st.ox; Q.y = P.y; Q.z = P.z - st.oz; Q.yaw = want; Q.moving = P.hang ? !!P.shimmyNow : sp > .4; Q.speed = sp;
       const deep = swimDeep(P);
-      Q.air = !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang; Q.crouch = P.sneak && !P.pk && !deep ? 1 : 0; Q.swim = deep; Q.dive = deep && P.sneak;
+      Q.air = !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang; Q.crouch = (P.sneak || P.h < PH - 1e-6) && !P.crawl && !P.pk && !deep ? 1 : 0; Q.swim = deep; Q.dive = deep && P.sneak;
+      Q.crawl = P.crawl && !P.pk && !P.hang && !deep;   // ползком (T-096a): поза world3d «лёг»
       Q.y = swimDrawY(st, me, P.x, P.y, P.z, deep && !Q.dive, dt);
       Q.ladder = P.climb && !P.onGround; Q.sit = false; Q.hang = !!P.hang; Q.pk = pkm; Q.pkK = P.pk ? P.pk.k : 0; Q.climbPh = P.climbPh || 0;
       A.pose('me', Q);
@@ -2005,7 +2072,7 @@
   const PREVIEW_MODES = ['frame', 'ghost', 'off'];
   const previewMode = () => PREVIEW_MODES.includes(opts.preview) ? opts.preview : opts.ghost === false ? 'off' : 'frame';
   const PT_OUT = { x: 0, y: 0, z: 0, state: 0, h: 1 };
-  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, swim: false, dive: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };   // своя поза — общий объект
+  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, crawl: false, swim: false, dive: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };   // своя поза — общий объект
   // Плывёт (дна под ногами нет, воды больше блока): поза world3d «держится на воде» / «кролем» / «нырок» (как в «Мире Денчика»);
   // на мелком (стоит на дне) — ходит. Игра вместе: то же у других (флаги 8 и 512 — kubomir-coop.js)
   const swimDeep = P => P.water > 1 && !P.onGround && !P.pk && !P.hang && !P.fly && P.lava <= .2;
@@ -2063,17 +2130,18 @@
   // (js/core/touch-layout.js): по умолчанию — KB_SLOTS (выше панели вещей, если та под ними), игрок переставляет в ⚙️ → «Управление»
   // → «🎮 Настроить кнопки»; левша — зеркально; стили пишутся только при смене окна/настроек, не каждый кадр.
   const KB_SLOTS = {
-    tap: { jump: [0, 0, 54], sneak: [-66, 6, 44], down: [-66, 6, 44], inv: [2, -68, 44], swap: [-64, -62, 44], off: [-130, 6, 44] },
-    cross: { jump: [0, 0, 54], mine: [-68, 6, 50], place: [-66, -64, 50], inv: [2, -70, 44], sneak: [-134, 6, 44], down: [-134, 6, 44], swap: [-130, -62, 44], off: [-4, -134, 44] },
+    tap: { jump: [0, 0, 54], sneak: [-66, 6, 44], down: [-66, 6, 44], inv: [2, -68, 44], swap: [-64, -62, 44], off: [-130, 6, 44], crawl: [-130, -62, 44] },
+    cross: { jump: [0, 0, 54], mine: [-68, 6, 50], place: [-66, -64, 50], inv: [2, -70, 44], sneak: [-134, 6, 44], down: [-134, 6, 44], swap: [-130, -62, 44], off: [-4, -134, 44], crawl: [-70, -132, 44] },
   };
   function touchUI(st){
     const K = st.K; if (!K) return;
     const cross = opts.touchMode === 'cross', w = wrap();
     w?.classList.toggle('kb-touchtap', !cross); w?.classList.add('kb-touch');
-    st.touchSneak = false;
+    st.touchSneak = false; st.touchCrawl = false;
     const list = [
       { id: 'inv', icon: '🎒', label: 'вещи', onTap: () => { if (S?.ui?.isOpen()) S.ui.close(); else S?.ui?.open('inv'); } },
       { id: 'sneak', icon: '⬇', label: 'красться', toggle: () => (S.touchSneak = !S.touchSneak) },
+      { id: 'crawl', icon: '🐛', label: 'ползком', toggle: () => (S.touchCrawl = !S.touchCrawl) },   // лечь / встать (лаз в блок; T-096a)
       { id: 'down', icon: '⤓', label: 'вниз', k: 'sneak' },
     ];
     if (cross) list.push({ id: 'place', icon: '🧱', label: 'поставить', c: 'place' }, { id: 'mine', icon: '⛏', label: 'ломать', c: 'mine' });
@@ -2081,7 +2149,7 @@
     list.push({ id: 'swap', icon: '🔄', label: 'руки', onTap: () => { if (S && !S.P.dead) swapHands(S); } }, { id: 'off', icon: '🛡', label: 'щит', k: 'offuse' });
     list.push({ id: 'jump', icon: '⤒', label: 'прыжок', big: true, c: 'jump' });
     st.tbar = K.touchBar(w, list, { game: ID });
-    st.tbarSync = () => { const fly = !!S?.P?.fly; st.tbar.show('sneak', !fly); st.tbar.show('down', fly); st.tbar.btn('jump').querySelector('b').textContent = fly ? 'вверх' : 'прыжок'; if (fly && S) S.touchSneak = false; st.tbar.on('sneak', !!S?.touchSneak); };
+    st.tbarSync = () => { const fly = !!S?.P?.fly; st.tbar.show('sneak', !fly); st.tbar.show('crawl', !fly); st.tbar.show('down', fly); st.tbar.btn('jump').querySelector('b').textContent = fly ? 'вверх' : 'прыжок'; if (fly && S) { S.touchSneak = false; S.touchCrawl = false; } st.tbar.on('sneak', !!S?.touchSneak); st.tbar.on('crawl', !!S?.touchCrawl); };
     st.tbar.show('off', false); st.hud.tb = '';
     st.tbarSync();
     const slots = KB_SLOTS[cross ? 'cross' : 'tap'], TL = window.D37TouchLayout;
@@ -2488,6 +2556,10 @@
     });
   }
   function closeMenu(){ S?.menu?.close(); }
+  // Esc закрыл окно (вещи, сундук, лист помощника, моды): мышь — захватить снова, но только когда Esc отпустят (frame: escRelock).
+  // Захват сразу, пока Esc ещё нажат, браузер (Chrome) отпускает «по Esc» на отпускании клавиши — и игра видела «отпустили мышь
+  // без окон» → меню паузы. lockGrace — 0,6 с после захвата: мышь отпустилась — подсказка «нажми на мир», не меню
+  function escClosed(st){ if (!st.I?.touch) st.escRelock = true; }
   // пункты помощников в меню ☰ (у каждого помощника — свой: menu: [{ id: 'x:…', icon, text }], pick(id)) — геймпад и телефон без клавиш
   function xMenu(st){ const X = st.X; if (!X) return []; const out = [{ id: 'x:acc', icon: '💍', text: 'Помощники (аксессуары)' }]; for (const f of X.feats) if (!f.dead && f.menu) try { out.push(...f.menu()); } catch (e) {} return out; }
   async function menuPick(id){
