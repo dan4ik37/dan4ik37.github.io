@@ -6,7 +6,8 @@
 //     прототипе уровня модуля (class на уровне файла, Object.create(PROTO)) или обычное поле;
 //  2) подписка на долгоживущий объект сайта (D37Age.on) без отписки — результат on() выброшен;
 //  3) mir.js: слушатель на рамке игры (el — #gamesStageBox живёт дольше мира) снимается в cleanupUi; данные модуля (TABLES) не
-//     получают вещей мира; mir-zones.js отпускает BUILT; render.js снимает «dispose» с общей геометрии спрайтов three;
+//     получают вещей мира; mir-zones.js отпускает BUILT; render.js снимает «dispose» рендерера с общих на страницу вещей three
+//     (геометрия спрайтов, карта погоды «что над головой» GFXU.occRT);
 //  4) движок в node: E.loop, E.player, E.controls — после остановки ничто из модуля не держит мир (WeakRef + сборка мусора).
 // Проверки по дереву JS (acorn из самого Node — перезапуск с --expose-internals, ставить ничего не надо).
 // Запуск из корня сайта: node scripts/world-leak-test.cjs
@@ -80,7 +81,10 @@ ok(/el\.addEventListener\('click', onClick\)/.test(mir) && /el\.removeEventListe
 ok(!/\bt\.tag\s*=/.test(mir), 'mir.js: TABLES (данные модуля) не получают вещей мира (t.tag)');
 ok(/BUILT = null/.test(mz.slice(mz.indexOf('rt.dispose = () =>'), mz.indexOf('rt.dispose = () =>') + 600)), 'mir-zones.js: rt.dispose отпускает BUILT');
 ok(/rt\.offAge\?\.\(\)/.test(mz), 'mir-zones.js: отписка от D37Age при закрытии');
-ok(/new T\.Sprite\(\)\.geometry\)\)\.dispose\(\)/.test(rnd.slice(rnd.indexOf('R.dispose = () =>'), rnd.indexOf('R.dispose = () =>') + 2400)), 'render.js: R.dispose снимает «dispose» рендерера с общей геометрии спрайтов three');
+const rDisp = rnd.slice(rnd.indexOf('R.dispose = () =>'), rnd.indexOf('R.dispose = () =>') + 3000);
+ok(/new T\.Sprite\(\)\.geometry\)\)\.dispose\(\)/.test(rDisp), 'render.js: R.dispose снимает «dispose» рендерера с общей геометрии спрайтов three');
+ok(/E\.GFXU\?\.occRT\?\.dispose\(\)/.test(rDisp), 'render.js: R.dispose снимает «dispose» рендерера с общей карты «что над головой» (GFXU.occRT — в дождь и снег)');
+ok(/for \(const f of \[\.\.\.R\.preRender\]\) f\.dispose/.test(rDisp), 'render.js: R.dispose обходит копию R.preRender (dispose крючка убирает его из списка)');
 ok(/function openChannel\(shard\)/.test(mir) && !/async function join[\s\S]{0,2200}sbClient\.channel\(/.test(mir.slice(mir.indexOf('async function join'), mir.indexOf('function openChannel'))), 'mir.js: обработчики канала мира — в openChannel (без st закрытого мира)');
 ok(/W\.stopped = true/.test(war) && /if \(W\.stopped \|\|/.test(war) && /function relayChannel/.test(war), 'mir-war.js: остановленный бой не открывает канал заново, обработчики канала — через реле');
 

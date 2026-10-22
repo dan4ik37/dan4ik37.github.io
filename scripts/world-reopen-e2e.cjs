@@ -8,7 +8,8 @@
 // Держали: подписка D37Age.on в mir-zones.js без отписки; слушатель «click» на рамке игры (#gamesStageBox — живёт дольше мира;
 // заодно кнопки срабатывали столько раз, сколько входили); BUILT в mir-zones.js и TABLES[].tag в mir.js (данные модуля держали
 // прошлый мир); свой геттер timeMul у каждого игрока (player.js — V8 держит его в общей «форме» объекта); слушатель «dispose» на
-// общей геометрии спрайтов three r149 (каждый рендерер — свой, render.js R.dispose теперь снимает).
+// общих на страницу вещах three — геометрии спрайтов и карте погоды «что над головой» (GFXU.occRT, рисуется в дождь и снег —
+// поэтому в каждом круге включаем дождь); render.js R.dispose теперь их снимает.
 // Как искать новое: снимок кучи после 1-го закрытия и после N-го, «что держит» прошлый мир — пути от корней (DevTools → Memory →
 // Comparison / Retainers; или свой разбор, как в отчёте T-085). Полный прогон: ~4–6 мин.
 // Запуск из корня сайта: node scripts/world-reopen-e2e.cjs [N=20] [pc|phone]   (CHROME — путь к Chrome; D37_TMP — временная папка;
@@ -117,7 +118,11 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     for (let k = 1; k <= N; k++) {
       const ms = await open(); res.openMs.push(ms);
       if (ms < 0) { ok(false, `открытие ${k}: мир не открылся`); break; }
+      // дождь: погода рисует общую на страницу карту «что над головой» (gfx.js GFXU.occRT) — каждый рендерер вешает на неё своё
+      // «dispose»; без дождя этот путь утечки не проверяется (так он и прятался — зависел от погоды за окном)
+      await ev(`(() => { const S = GAME_IMPL.world._test.state(); try { S.wx?.force?.('rain'); } catch (e) {} return 1; })()`);
       await sleep(2500);
+      res.occ = (res.occ || 0) + (await ev(`GAME_IMPL.world._test.state()?.wx?.occ?.n || 0`));
       if (k === 1 || k === N || k % 5 === 0) res.openMB.push([k, await heapMB()]);   // мир открыт — то, что видит игрок
       await ev(`(() => { const S = GAME_IMPL.world._test.state(); window.__d37worlds = window.__d37worlds || []; window.__d37worlds.push([new WeakRef(S), S.R?.r ? new WeakRef(S.R.r.getContext()) : null]); return 1; })()`);
       await close(); await sleep(1500);
@@ -133,6 +138,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     console.log('  память JS, мир открыт:', res.openMB.map(([k, v]) => `#${k} ${v}`).join(' · '));
     // ── проверки ──
     ok(!alive.length, `${N} закрытий: ни одного прошлого мира и контекста WebGL в памяти (WeakRef после сборки мусора)`, alive);
+    ok(res.occ > 0, `дождь в мире: карта «что над головой» рисовалась (${res.occ} раз) — путь через общую карту проверен`);
     const grow = +(F.heapMB - B.heapMB).toFixed(1);
     // прирост на круг — по медианам начала и конца (код, который V8 дособирает горячим, растёт в первых кругах и выходит на полку;
     // одиночный выброс — то, что было в пути в момент закрытия, — медиана не замечает)
