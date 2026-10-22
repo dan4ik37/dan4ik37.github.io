@@ -1227,7 +1227,7 @@ js/features/games.js и хвост css/premium.css.
   before_login / no_profile / currency) + hold_profile + текст доната — админу. Анонимные (пустое имя) тоже пишутся — для цели.
 - «💛 Донатер» (premium.sql раздел 6–8, js/core/premium.js D37Donor): уровень = сумма донатов reward 'status' за последние 30 дней
   (скользящее окно, считается при чтении — без расписаний; индекс idx_vip_donation_log_status), уровни donor_levels() = D37Donor.LEVELS
-  = api/_lib/premium.js DONOR_LEVELS (I 100 / II 300 / III 700 / IV 1500 ₽ — ПРЕДЛОЖЕНИЕ, решает владелец; pay-test сверяет), до
+  = api/_lib/premium.js DONOR_LEVELS (I 100 / II 300 / III 700 / IV 1500 ₽ — владелец 22.10: «пока так»; pay-test сверяет), до
   какого числа — donor_status (until / until_any). Бонусы = VIP того же ранга (perk: bronze/silver/gold); лучшая ветка — perk_tier_of
   (has_perks, pin_own_message, can_be_invisible, can_send_friend_requests, friend_limit переопределены в premium.sql; клиент —
   getPerkTier / statusOf / hasPerks в profile.js, без рекламы — ad-places.js). Значки: чат (msgview .dn-badge → D37Donor.fill пачкой
