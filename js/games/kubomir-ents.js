@@ -909,8 +909,110 @@
     // вещь — к ближайшему, у кого есть для неё место (свой — X.room, другой — его room)
     function pickFor(e){ const L = players(); let best = L[0], bd = Infinity; for (let i = 0; i < L.length; i++) { const p = L[i]; if (p.dead) continue; const d = (p.x - e.x) * (p.x - e.x) + (p.z - e.z) * (p.z - e.z); if (d < bd && (p === S.P ? !X.room || X.room(e.s) : !p.room || p.room(e.s))) { bd = d; best = p; } } return best; }
     X.players = players;
+    // ── вода (22.10, владелец: «зомби застряли в воде»): мобы держатся на плаву (доля тела в воде — FLOAT, качаются по своим
+    // часам m.age — от частоты кадров не зависит), плывут к цели или к ближнему берегу, вылезают на край до 1,25 над гладью
+    // (как игрок: SWIM_OUT в kubomir.js), в погоне обходят глубокую воду, если по суше путь есть; упёрлись — пробуют другое, а
+    // через несколько секунд бросают погоню и плывут к берегу. Тонуть — как было (мобы не тонут). Считает хозяин мира (такты)
+    const FLOAT = { cow: .62, pig: .58, chicken: .42, zombie: .72, slime: .6 }, SWIM_OUT = 1.25, WT = { wy: 0, surf: 0 }, FW = { x: 0, z: 0 };
+    const liqC = (x, y, z) => { const v = W.raw(x, y, z); return v > 0 && V().T.liquid[v & 0xfff] === 1; };
+    const solidC = (x, y, z) => { const v = W.raw(x, y, z); if (v === 0) return false; if (v < 0) return true; const t = v & 0xfff, Tt = V().T; return !!Tt.solid[t] && !Tt.liquid[t]; };
+    // глубоко (2 блока воды и больше): вода у ног и над ней или под ней
+    const deepAt = (x, y, z) => liqC(x, y, z) && (liqC(x, y + 1, z) || liqC(x, y - 1, z));
+    const deepAhead = (x, y, z) => { const fx = Math.floor(x), fz = Math.floor(z), fy = Math.floor(y + .01); return deepAt(fx, fy, fz) || (!solidC(fx, fy - 1, fz) && deepAt(fx, fy - 1, fz)); };
+    function crossesDeep(x, y, z, tx, tz){
+      const dx = tx - x, dz = tz - z, n = Math.min(30, Math.ceil(Math.hypot(dx, dz) / .8));
+      for (let i = 1; i <= n; i++) if (deepAhead(x + dx * i / n, y, z + dz * i / n)) return true;
+      return false;
+    }
+    // гладь над клеткой: out.wy — клетка с гладью, out.surf — высота глади; нет воды — null
+    function waterTop(x, y, z, out){ let yy = Math.floor(y); if (!liqC(x, yy, z)) return null; for (let n = 0; n < 8 && liqC(x, yy + 1, z); n++) yy++; out.wy = yy; out.surf = yy + V().liquidHeight(W.raw(x, yy, z)); return out; }
+    // край в столбе (cx, cz), на который можно вылезти: верх твёрдого не выше глади + 1,25 и над ним место на рост; нет — −1
+    function ledgeAt(cx, cz, wy, surf, h){
+      const hh = h > 1 ? 2 : 1, top = Math.floor(surf + SWIM_OUT);
+      for (let y = wy - 1; y <= top; y++) {
+        if (!solidC(cx, y, cz)) continue;
+        let free = true; for (let k = 1; k <= hh; k++) if (solidC(cx, y + k, cz) || liqC(cx, y + k, cz)) { free = false; break; }
+        if (free) return y + 1 - surf <= SWIM_OUT + 1e-6 ? y + 1 : -1;
+      }
+      return -1;
+    }
+    // поиск пути по клеткам (до BR в стороны, до cap клеток): step(x, y, z, nx, nz) → y соседа или NaN; goal(x, y, z) → true;
+    // путь — [{ x, y, z }] (центры клеток) от следующей до цели; не нашёл — null
+    const BR = 16, BS = BR * 2 + 1, bSeen = new Int32Array(BS * BS), bQx = new Int32Array(BS * BS), bQz = new Int32Array(BS * BS), bQy = new Int32Array(BS * BS), bPar = new Int32Array(BS * BS);
+    let bGen = 0;
+    function bfs(x0, y0, z0, cap, step, goal){
+      if (++bGen > 2e9) { bGen = 1; bSeen.fill(0); }
+      let h = 0, t = 1;
+      bSeen[BR * BS + BR] = bGen; bQx[0] = x0; bQz[0] = z0; bQy[0] = y0; bPar[0] = -1;
+      while (h < t && h < cap) {
+        const x = bQx[h], z = bQz[h], y = bQy[h];
+        if (goal(x, y, z)) { const path = []; for (let k = h; k > 0; k = bPar[k]) path.push({ x: bQx[k] + .5, y: bQy[k], z: bQz[k] + .5 }); return path.reverse(); }
+        for (let d = 0; d < 4; d++) {
+          const nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0), nz = z + (d === 2 ? 1 : d === 3 ? -1 : 0);
+          if (Math.abs(nx - x0) > BR || Math.abs(nz - z0) > BR) continue;
+          const j = (nx - x0 + BR) * BS + (nz - z0 + BR); if (bSeen[j] === bGen) continue;
+          const ny = step(x, y, z, nx, nz); if (ny !== ny) continue;
+          bSeen[j] = bGen; bQx[t] = nx; bQz[t] = nz; bQy[t] = ny; bPar[t] = h; t++;
+        }
+        h++;
+      }
+      return null;
+    }
+    // шаг по суше: ступенька вверх на 1, вниз до 2; в глубокую воду — нет (вброд по мелкому — да)
+    const LDY = [0, 1, -1, -2];
+    const landStep = h => { const hh = h > 1 ? 2 : 1; return (x, y, z, nx, nz) => {
+      for (let i = 0; i < 4; i++) {
+        const ny = y + LDY[i];
+        if (!solidC(nx, ny - 1, nz) || deepAt(nx, ny, nz)) continue;
+        let free = true; for (let k = 0; k < hh; k++) if (solidC(nx, ny + k, nz)) { free = false; break; }
+        if (free) return ny;
+      }
+      return NaN;
+    }; };
+    // к ближнему берегу: по воде (у глади) до клетки, рядом с которой край, на который можно вылезти; последняя точка — сам край
+    function shorePath(m, M){
+      const wt = waterTop(m.x, m.y + .3, m.z, WT); if (!wt) return null;
+      const wy = wt.wy, surf = wt.surf, bad = m.bad;
+      let found = null;
+      const p = bfs(Math.floor(m.x), wy, Math.floor(m.z), 700, (x, y, z, nx, nz) => liqC(nx, wy, nz) && !solidC(nx, wy + 1, nz) ? wy : NaN, (x, y, z) => {
+        for (let d = 0; d < 4; d++) {
+          const nx = x + (d === 0 ? 1 : d === 1 ? -1 : 0), nz = z + (d === 2 ? 1 : d === 3 ? -1 : 0);
+          if (liqC(nx, wy, nz)) continue;
+          const ly = ledgeAt(nx, nz, wy, surf, M.h); if (ly < 0) continue;
+          if (bad && bad.includes(nx * 73856093 ^ nz * 19349663)) continue;
+          found = { x: nx + .5, y: ly, z: nz + .5 }; return true;
+        }
+        return false;
+      });
+      if (!p) return null;
+      p.push(found); return p;
+    }
+    function follow(m, p, ik){
+      if (!p) return false;
+      let i = m[ik] || 0;
+      while (i < p.length) { const w = p[i], dx = w.x - m.x, dz = w.z - m.z, d2 = dx * dx + dz * dz; if (d2 > .2) { const d = Math.sqrt(d2); FW.x = dx / d; FW.z = dz / d; m[ik] = i; return true; } i++; }
+      m[ik] = i; return false;
+    }
+    // плывёт к стенке, а край — не выше глади + 1,25 (и не там, где уже не вышло) → вылезти: вверх вдоль края и шаг на берег
+    function climbCheck(m, M, wx, wz){
+      const wt = waterTop(m.x, m.y + .3, m.z, WT); if (!wt) return;
+      const fx = Math.floor(m.x), fz = Math.floor(m.z), r = M.w / 2 + .3, mainX = Math.abs(wx) >= Math.abs(wz);
+      for (let k = 0; k < 2; k++) {
+        const useX = k === 0 ? mainX : !mainX, a = useX ? wx : wz, s = Math.sign(a);
+        if (!s || Math.abs(a) < .2) continue;
+        const cx = useX ? Math.floor(m.x + s * r) : fx, cz = useX ? fz : Math.floor(m.z + s * r);
+        if (cx === fx && cz === fz) continue;
+        if (!solidC(cx, Math.floor(m.y + .2), cz) && !solidC(cx, Math.floor(m.y + M.h * .6), cz) && !solidC(cx, wt.wy, cz)) continue;   // впереди не стенка
+        const ly = ledgeAt(cx, cz, wt.wy, wt.surf, M.h);
+        if (ly < 0 || ly <= m.y + .25) continue;
+        const key = cx * 73856093 ^ cz * 19349663;
+        if (m.bad && m.bad.includes(key)) continue;
+        m.climbT = 1.4; m.climbY = ly; m.cdx = useX ? s : 0; m.cdz = useX ? 0 : s; m.climbK = key; return;
+      }
+    }
     function mobsTick(dt){
       const Vx = V(), night = isNight(), many = X.others.length > 0;
+      let pathBudget = 2;   // поисков пути за такт — на всех
       for (let i = X.mobs.length - 1; i >= 0; i--) {
         const m = X.mobs[i], M = MOBS[m.type];
         m.px = m.x; m.py = m.y; m.pz = m.z; m.pyaw = m.yaw; m.pwalk = m.walk;   // откуда рисовать плавно до нового места
@@ -926,15 +1028,30 @@
         m.hurtT = Math.max(0, m.hurtT - dt); m.atkT -= dt; m.sndT -= dt;
         if (m.cf) CBK().step(m, dt);   // бой: неуязвимость, оглушение, стойкость — по тактам
         Vx.touching(W, m.x, m.y, m.z, M.w, M.h, TC);
-        const inWater = TC.water > .4;
+        const inWater = TC.water > Math.min(.4, M.h * .3);
+        m.wetT = inWater ? (m.wetT || 0) + dt : 0;
+        if (m.calm > 0) m.calm -= dt;
+        if (m.pathT > 0) m.pathT -= dt;
+        if (m.spathT > 0) m.spathT -= dt;
         // мозги
         let wx = 0, wz = 0, sp = M.speed;
-        const hostile = !M.passive && !S.creative && !P.dead && S.meta.diff !== 'peaceful';
+        const hostile = !M.passive && !S.creative && !P.dead && S.meta.diff !== 'peaceful' && !(m.calm > 0);
         if (m.stag > 0) {   // оглушён (отбили щитом или сбили с ног сильным ударом): не бьёт, топчется, над головой — звёздочки
           m.wind = 0; m.state = 'stag';
           if ((m.dzT = (m.dzT || 0) - dt) <= 0) { m.dzT = .2; X.glow('star', m.x, m.y + M.h + .25, m.z, 1); }
         } else if (hostile && dp < 18 && Math.abs(P.y - m.y) < 8) {
           wx = dxp / (dp || 1); wz = dzp / (dp || 1); m.state = 'chase';
+          // по суше: напрямик — глубокая вода, а обойти по суше можно — по пути (поиск раз в 1,5 с, на всех не больше двух за
+          // такт); пути по суше нет — напрямик вплавь
+          if (!inWater && m.ground) {
+            if (m.path && (!(m.pathT > 0) || Math.abs(m.pgx - P.x) + Math.abs(m.pgz - P.z) > 3)) m.path = null;
+            if (!m.path && !(m.pathT > 0) && pathBudget > 0 && crossesDeep(m.x, m.y, m.z, P.x, P.z)) {
+              pathBudget--; m.pathT = 1.5; m.pgx = P.x; m.pgz = P.z; m.pathI = 0;
+              const tx = Math.floor(P.x), tz = Math.floor(P.z);
+              m.path = bfs(Math.floor(m.x), Math.floor(m.y + .01), Math.floor(m.z), 900, landStep(M.h), (x, y, z) => Math.abs(x - tx) <= 1 && Math.abs(z - tz) <= 1);
+            }
+            if (m.path && follow(m, m.path, 'pathI')) { wx = FW.x; wz = FW.z; }
+          } else if (inWater) m.path = null;
           // удар: замах (видно, что сейчас ударит) → выпад; отошёл за время замаха — промах
           const reach = M.w / 2 + .75, near = Math.abs(P.y + .9 - (m.y + M.h / 2)) < 1.6;
           if (m.wind > 0) {
@@ -950,6 +1067,11 @@
           } else if (dp < reach && near && m.atkT <= 0) m.wind = M.wind || .35;
         } else if (m.flee > 0) {
           m.flee -= dt; wx = -dxp / (dp || 1); wz = -dzp / (dp || 1); sp *= 1.8; m.state = 'flee'; m.wind = 0;
+        } else if (inWater && !m.ground) {   // в воде без цели — к ближнему берегу, где можно вылезти (поиск раз в 3 с)
+          m.wind = 0; m.state = 'swim';
+          if ((!m.spath || !(m.spathT > 0)) && pathBudget > 0) { pathBudget--; m.spathT = 3; m.spath = shorePath(m, M); m.spathI = 0; }
+          if (m.spath && follow(m, m.spath, 'spathI')) { wx = FW.x; wz = FW.z; }
+          else { m.stT -= dt; if (m.stT <= 0) { m.stT = 2 + m.rng() * 3; m.tgtYaw = m.rng() * 6.283; } wx = Math.sin(m.tgtYaw) * .6; wz = Math.cos(m.tgtYaw) * .6; }
         } else {
           m.wind = 0; if (m.state === 'chase') m.state = 'idle';
           m.stT -= dt;
@@ -962,24 +1084,49 @@
           let drop = 0; for (let y = Math.floor(m.y) - 1; y > Math.floor(m.y) - 5; y--) { const v = W.raw(fx, y, fz); if (v !== 0) break; drop++; }
           if (drop >= 3) { wx = wz = 0; m.stT = 0; }
         }
+        // бродит — в глубокую воду не лезет (выберет другое направление)
+        if ((wx || wz) && m.ground && !inWater && m.state !== 'chase' && m.state !== 'flee' && deepAhead(m.x + wx * 1.1, m.y, m.z + wz * 1.1)) { wx = wz = 0; m.stT = 0; }
         // застрял (упёрся и стоит) — обойти: шаг вбок на 0,8 с
         if (m.side > 0) { m.side -= dt; const s2 = m.sideDir; const ox = wx; wx = -wz * s2; wz = ox * s2; }
         else if ((wx || wz) && m.blockedT > .7) { m.side = .8; m.sideDir = m.rng() < .5 ? 1 : -1; m.blockedT = 0; }
-        // слизень — прыжками
-        if (M.hop) { m.hopT -= dt; if (m.ground && m.hopT <= 0 && (wx || wz)) { m.vy = 7.5; m.vx = wx * sp; m.vz = wz * sp; m.hopT = .8 + m.rng() * .8; m.ground = false; } if (m.ground) { m.vx *= .7; m.vz *= .7; } }
-        else { const k = 1 - Math.exp(-dt * (m.ground ? 10 : 2)); m.vx += (wx * sp - m.vx) * k; m.vz += (wz * sp - m.vz) * k; }
+        const swim = inWater && !m.ground;
+        if (swim) sp *= .65;   // плывёт медленнее, чем идёт
+        // слизень — прыжками (в воде — плывёт)
+        if (M.hop && !swim) { m.hopT -= dt; if (m.ground && m.hopT <= 0 && (wx || wz)) { m.vy = 7.5; m.vx = wx * sp; m.vz = wz * sp; m.hopT = .8 + m.rng() * .8; m.ground = false; } if (m.ground) { m.vx *= .7; m.vz *= .7; } }
+        else { const k = 1 - Math.exp(-dt * (m.ground ? 10 : swim ? 4 : 2)); m.vx += (wx * sp - m.vx) * k; m.vz += (wz * sp - m.vz) * k; }
         if (wx || wz) m.yaw = angTo(m.yaw, Math.atan2(wx, wz), dt * 8);
-        // вода — всплывают
-        if (inWater) { m.vy = Math.min(m.vy + 24 * dt, 2); } else m.vy = Math.max(-40, m.vy - 30 * dt);
+        // вода: вылезти на край (вверх вдоль края, потом шаг на берег); иначе плавучесть по глубине, как у игрока (было: всплывали
+        // почти целиком и бились о берег — на берег не выбраться)
+        if (inWater && !(m.climbT > 0) && (wx || wz)) climbCheck(m, M, wx, wz);
+        if (m.climbT > 0) {
+          m.climbT -= dt;
+          if (m.y < m.climbY + .05) { m.vy = 4.5; m.vx = m.cdx * .9; m.vz = m.cdz * .9; }   // вверх вдоль края, прижавшись к нему
+          else { m.vy = Math.max(-40, Math.min(m.vy, 1) - 30 * dt); m.vx = m.cdx * 2.8; m.vz = m.cdz * 2.8; }   // над краем — шаг на берег
+          if (m.climbT <= 0 && TC.water > .05) { const b = m.bad || (m.bad = []); b.push(m.climbK); if (b.length > 6) b.shift(); m.spath = null; m.spathT = 0; }   // не вылез — край запомнить, искать другой
+        } else if (inWater) {
+          const sub = Math.min(1, TC.water / M.h), eq = (M.float ?? FLOAT[m.type] ?? .6) + .035 * Math.sin(m.age * 2.1 + m.id * 1.7);
+          m.vy += 16 * (sub - eq) * dt; m.vy *= Math.exp(-2.4 * dt); m.vy = Math.max(-3.2, Math.min(4, m.vy));
+        } else m.vy = Math.max(-40, m.vy - 30 * dt);
         MB.x = m.x; MB.y = m.y; MB.z = m.z; MB.w = M.w; MB.h = M.h;
         const vy0 = m.vy;
         Vx.moveBox(W, MB, m.vx * dt, m.vy * dt, m.vz * dt);
         // всплыл подо льдом — проломил (как игрок: подо льдом не запереть; прорубь и звук — игра, hookIce)
         if (inWater && Vx.iceTest && m.vy > 0) { const hw = M.w / 2, by = Math.floor(MB.y + M.h - .05); for (let bx = Math.floor(MB.x - hw); bx <= Math.floor(MB.x + hw); bx++) for (let bz = Math.floor(MB.z - hw); bz <= Math.floor(MB.z + hw); bz++) { const v = W.raw(bx, by, bz); if (v > 0 && Vx.T.liquid[v & 0xfff] === 1 && MB.y < by + Vx.liquidHeight(v) - .02 && Vx.isIce(W, bx, by, bz, v)) X.hookIce?.(bx, by, bz); } }
         // упёрся в ступеньку — прыжок
-        if ((MB.hitX || MB.hitZ) && m.ground && !M.hop && (wx || wz)) m.vy = 8.2;
+        if ((MB.hitX || MB.hitZ) && m.ground && !M.hop && (wx || wz) && !inWater) m.vy = 8.2;
         m.ground = MB.hitY && vy0 <= 0; if (MB.hitY) m.vy = 0;
+        if (m.climbT > 0 && m.ground && MB.y >= m.climbY - .02) m.climbT = 0;   // вылез на берег
         if ((MB.hitX || MB.hitZ) && Math.hypot(MB.x - m.x, MB.z - m.z) < sp * dt * .3) m.blockedT = (m.blockedT || 0) + dt; else m.blockedT = Math.max(0, (m.blockedT || 0) - dt);
+        // упёрся из воды в стенку (край выше 1,25): через 2 с — другой путь; второй раз в погоне — бросить погоню на 6 с, к берегу;
+        // долго плывёт за целью (14 с) — тоже
+        if (inWater && (wx || wz) && !(m.climbT > 0)) {
+          if ((MB.hitX || MB.hitZ) && Math.hypot(MB.x - m.x, MB.z - m.z) < sp * dt * .3) m.wallT = (m.wallT || 0) + dt; else m.wallT = Math.max(0, (m.wallT || 0) - dt * .5);
+          if (m.wallT > 2) {
+            m.wallT = 0; m.spath = null; m.spathT = 0; m.wallN = (m.wallN || 0) + 1;
+            if (m.state === 'chase' && m.wallN >= 2) { m.calm = 6; m.wallN = 0; } else { m.side = 1.2; m.sideDir = m.rng() < .5 ? 1 : -1; }
+          }
+        } else if (!inWater) { m.wallT = 0; m.wallN = 0; }
+        if (m.state === 'chase' && m.wetT > 14) { m.calm = 6; m.wetT = 0; }
         m.x = MB.x; m.y = MB.y; m.z = MB.z;
         if (m.y < -10) { removeMob(m); continue; }
         m.walk += Math.hypot(m.vx, m.vz) * dt * 3.2;

@@ -55,6 +55,45 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const heap = async () => ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 300)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
   const idle = () => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); for (let i = 0; i < 160; i++) { const s = S.ST?.stats; if (S.ready && s && !s.jobs && !s.pend) break; await new Promise(r => setTimeout(r, 500)); } return true; })()`, 120000);
   async function runMode(){
+    if (MODE === 'water') {
+      // вода (T-019, жалоба владельца 22.10: «как будто он ходит по воде» и «он наверху, а показывает в воде»): озеро 5 блоков глубиной,
+      // игрок посередине — стоит / держит «прыжок» / плывёт; день и ночь; вид сзади сверху (видно отражение под ним) и спереди.
+      // Числа: где гладь относительно плеч и глаз человечка, поза (кат. world3d: 0 — стоит, 5 — плывёт, 11 — держится на воде, 10 — нырок)
+      await idle();
+      await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P;
+        const cx = Math.floor(P.x), cz = Math.floor(P.z), gy = Math.floor(P.y);
+        const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(V.ID[n]) : 0, { urgent: 1 });
+        for (let x = cx - 12; x <= cx + 12; x++) for (let z = cz - 12; z <= cz + 12; z++) { for (let y = gy - 6; y <= gy + 12; y++) set(x, y, z, y < gy ? 'stone' : null); set(x, gy - 1, z, 'grass'); }
+        for (let x = cx - 8; x <= cx + 8; x++) for (let z = cz - 8; z <= cz + 8; z++) for (let y = gy - 6; y <= gy - 1; y++) set(x, y, z, 'water');
+        Object.assign(P, { x: cx + .5, y: gy - 2, z: cz + .5, vx: 0, vy: 0, vz: 0, fly: false });
+        S.paused = true; S.R.lighting.time = 12; await new Promise(r => setTimeout(r, 4000)); return 1; })()`, 60000);
+      const W8 = Object.freeze({ seed: 'kb', mode: 'fixed', season: 'summer', weather: 'clear', lapse: 0, seaY: 52 });
+      await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); try { S.WX.clim.setWorld(${JSON.stringify(W8)}); } catch (e) {} const st = document.createElement('style'); st.textContent = '.kb-lockhint,.e-toast,.kb-tip{display:none!important}'; document.head.appendChild(st); return 1; })()`);
+      const measure = () => ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, P = S.P, me = S.A.get('me'), T3 = S.R.T;
+        let y = Math.floor(P.y + 1), top = null; for (let k = 0; k < 8; k++) { const v = W.raw(P.x, y + k, P.z), u = W.raw(P.x, y + k + 1, P.z); if (v > 0 && V.T.liquid[v & 0xfff] === 1 && !(u > 0 && V.T.liquid[u & 0xfff] === 1)) { top = y + k + V.liquidHeight(v); break; } }
+        if (top == null) for (let k = 1; k < 8; k++) { const v = W.raw(P.x, y - k, P.z); if (v > 0 && V.T.liquid[v & 0xfff] === 1) { top = y - k + V.liquidHeight(v); break; } }
+        const wp = o => { if (!o) return null; const p = new T3.Vector3(); o.getWorldPosition(p); return +p.y.toFixed(3); };
+        const ch = me && me.ch;
+        return { surface: top, feet: +P.y.toFixed(3), water: +P.water.toFixed(3), onGround: P.onGround, eye: +(P.y + 1.62).toFixed(3), drawnY: me ? +me.y.toFixed(3) : null, cat: ch ? ch.cat : null, swim: me ? !!me.swim : null, dive: me ? !!me.dive : null,
+          shoulder: ch ? wp(ch.armL || ch.armR) : null, head: ch ? wp(ch.headP || ch.head) : null, hips: ch ? wp(ch.legL || ch.legR) : null, rt: S.R.opt?.rt }; })()`);
+      const view = async (yaw, fp, cam) => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.rig.yaw = ${yaw}; S.rig.fp = ${fp}; GAME_IMPL.kubomir._test.cam(${cam}); GAME_IMPL.kubomir._test.hud(false); await new Promise(r => setTimeout(r, 1500)); return 1; })()`, 20000);
+      const keys = async o => ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(), C = S.C; C.press('jump', ${!!o.jump}); C.press('forward', ${!!o.fwd}); S.rig.yaw = .3; await new Promise(r => setTimeout(r, ${o.ms || 3000})); return 1; })()`, 20000);
+      res.water = {};
+      for (const [tod, time] of [['day', 12], ['night', 22.5]]) {
+        await ev(`(() => { GAME_IMPL.kubomir._test.state().R.lighting.time = ${time}; return 1; })()`);
+        for (const [name, o] of [['idle', {}], ['jump', { jump: true }], ['swim', { fwd: true }]]) {
+          if (name !== 'swim') await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), P = S.P; P.x = Math.floor(P.x) + .5; P.z = Math.floor(P.z) + .5; return 1; })()`);
+          await keys(o);
+          const m = await measure();
+          res.water[tod + '-' + name] = m;
+          console.log('ВОДА', tod, name, JSON.stringify(m));
+          await view(.3 + Math.PI, .55, 1); await shot(`water-${tod}-${name}-back`);
+          if (tod === 'day') { await view(.3, .25, 2); await shot(`water-${tod}-${name}-front`); }
+          await ev(`(() => { const C = GAME_IMPL.kubomir._test.state().C; C.press('jump', false); C.press('forward', false); return 1; })()`);
+        }
+      }
+      return;
+    }
     if (MODE === 'perf') {
       await idle(); await sleep(8000);
       await send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -293,7 +332,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     for (let i = 0; i < 120; i++) { await sleep(500); const okm = await ev(`!!document.querySelector('.kb-menu')`, 3000).catch(() => false); if (okm) break; }
     await ev(`(() => { const b = [...document.querySelectorAll('button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`);
     await sleep(500);
-    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' ? 'survival' : 'creative'}"]'); c && c.click(); const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
+    await ev(`(() => { const s = document.querySelector('[data-f="seed"]'); if (s) s.value = 'озеро37'; const c = document.querySelector('[data-f="mode"] [data-v="${MODE === 'soak' || MODE === 'combat' || MODE === 'water' ? 'survival' : 'creative'}"]'); c && c.click(); ${MODE === 'water' ? `document.querySelector('[data-f="diff"] [data-v="peaceful"]')?.click();` : ''} const g = document.querySelector('[data-n="go"]'); g && g.click(); return !!g; })()`);
     let kb = false;
     for (let i = 0; i < 240 && !kb; i++) { await sleep(500); kb = await ev(`!!(GAME_IMPL.kubomir?._test?.state()?.ready && GAME_IMPL.kubomir._test.state().WX)`, 3000).catch(() => false); }
     if (!kb) { await shot('debug-open'); console.log('  состояние:', JSON.stringify(await ev(`(() => { const S = GAME_IMPL.kubomir?._test?.state(); return S ? { ready: S.ready, wx: !!S.WX, view: document.querySelector('.kb-screen')?.textContent?.slice(0, 200) } : { none: true, html: document.querySelector('.kb-screen')?.innerText?.slice(0, 300) }; })()`).catch(e => e.message))); }

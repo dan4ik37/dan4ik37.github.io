@@ -130,9 +130,9 @@
   const linkFor = code => (window.D37Ref?.wrap || (u => u))(window.D37Route ? window.D37Route.abs('#/games/kubomir/' + code) : location.origin + '/play/kubomir/' + code);
 
   // ═══ игроки в мире (общая часть хозяина и гостя): человечки, вещи в руках, поза рук, имена над головой, нокаут ═══
-  // флаги: 1 идёт, 2 в воздухе, 4 крадётся, 8 плывёт, 16 лестница, 32 висит, 64 нокаут, 128 бежит, 256 лезет
+  // флаги: 1 идёт, 2 в воздухе, 4 крадётся, 8 плывёт (дна нет), 16 лестница, 32 висит, 64 нокаут, 128 бежит, 256 лезет, 512 ныряет
   function peers(st){
-    const map = new Map(), A = st.A, Q = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, swim: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };
+    const map = new Map(), A = st.A, Q = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, swim: false, dive: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };
     const wrap = () => st.hudEl?.parentElement || null;
     const P = { map };
     P.add = (pid, nick, look) => {
@@ -159,7 +159,8 @@
         if (a.ch && a.ch !== p.sc) { p.sc = a.ch; a.ch.root.scale.setScalar(.8); }   // как свой (kubomir.js)
         const k = clamp((now() - p.t) / p.iv, 0, 1), x = p.px + (p.x - p.px) * k, y = p.py + (p.y - p.py) * k, z = p.pz + (p.z - p.pz) * k, f = p.flags, ko = !!(f & 64);
         Q.x = x - st.ox; Q.y = y; Q.z = z - st.oz; Q.yaw = p.pyaw + angD(p.pyaw, p.yaw) * k + Math.PI;
-        Q.moving = !!(f & 1) && !ko; Q.speed = f & 128 ? 5.7 : f & 4 ? 1.3 : 4.3; Q.air = !!(f & 2); Q.crouch = f & 4 || ko ? 1 : 0; Q.swim = !!(f & 8);
+        Q.moving = !!(f & 1) && !ko; Q.speed = f & 128 ? 5.7 : f & 4 ? 1.3 : 4.3; Q.air = !!(f & 2); Q.swim = !!(f & 8); Q.dive = !!(f & 512); Q.crouch = (f & 4 && !Q.swim) || ko ? 1 : 0;
+        Q.y = st.swimDrawY ? st.swimDrawY(a, x, y, z, Q.swim && !Q.dive, dt) : y;   // плывёт — гладь у плеч (как свой: kubomir.js)
         Q.ladder = !!(f & 16); Q.hang = !!(f & 32); Q.pk = f & 256 ? 'mantle' : ''; Q.pkK = f & 256 ? .5 : 0;
         A.pose(p.key, Q);
         if (CB && a.ch) { CB.unpack(p.pose, p.hold); if (ko) { p.hold.r = 0; p.hold.l = 0; p.hold.m = 0; } a.hold = p.hold; } else a.hold = null;
@@ -185,8 +186,8 @@
 
   // свои: поза, вещи, флаги — в пакет (хозяин — в снимок, гость — в своё состояние)
   function myFlags(st){
-    const P = st.P, sp = Math.hypot(P.vx, P.vz);
-    return (sp > .4 ? 1 : 0) | (!P.onGround && !P.climb && !(P.water > .3) ? 2 : 0) | (P.sneak ? 4 : 0) | (P.water > .9 ? 8 : 0) | (P.climb && !P.onGround ? 16 : 0) | (P.hang ? 32 : 0) | (P.dead ? 64 : 0) | (P.sprint ? 128 : 0) | (P.pk ? 256 : 0);
+    const P = st.P, sp = Math.hypot(P.vx, P.vz), deep = st.swimDeep ? st.swimDeep(P) : P.water > .9;
+    return (sp > .4 ? 1 : 0) | (!P.onGround && !P.climb && !(P.water > .3) ? 2 : 0) | (P.sneak ? 4 : 0) | (deep ? 8 : 0) | (P.climb && !P.onGround ? 16 : 0) | (P.hang ? 32 : 0) | (P.dead ? 64 : 0) | (P.sprint ? 128 : 0) | (P.pk ? 256 : 0) | (deep && P.sneak ? 512 : 0);
   }
   function handIds(st){
     const P = st.P, HS = st.F && st.hands;

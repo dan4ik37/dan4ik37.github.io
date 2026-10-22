@@ -536,7 +536,8 @@
       st.ents.hookIce = (x, y, z) => iceBreak(st, x, y, z, false); }   // моб всплыл подо льдом — прорубь
     if (guest && st.ents) st.ents.client = true;   // мобы и вещи — снимками хозяина
     else if (meta.ents && st.ents) st.ents.load(meta.ents);
-    st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;   // руки как в Майнкрафте, свет человечков
+    st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;
+    st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
     st.WX = window.KubomirWeather ? window.KubomirWeather.create(st) : null;   // дождь и снег по биому (расписание — от зерна и дня)
@@ -787,7 +788,7 @@
   // блоки (тело 1,8 м = 1,8 блока, KS = 1 / E.UNIT), высоты края — в блоках над ногами. Плавучесть: погружён на 3/4 — равновесие
   // (голова над водой, не тонешь), глубже — выталкивает, мельче — тянет вниз; «прыжок» — вверх, «красться» — нырнуть
   const KS = 1.8 / 2.1, MANTLE_MAX = 2.05, HANG_MAX = 2.6, HANG_DROP = 2, SWIM_OUT = 1.25, SHIMMY = .9, JUMP_APEX = JUMP_V * JUMP_V / (2 * G_ACC);
-  const SUB_EQ = .74, BUOY = 16;
+  const SUB_EQ = .74, BUOY = 16, SUB_JUMP = .6;   // SUB_JUMP — до какой доли в воде «прыжок» тянет вверх (голова и шея над водой, тело — в воде)
   function physics(st, dt){
     const { C, P, W, rig } = st, V = VX();
     // ввод → направление
@@ -862,7 +863,11 @@
     } else if (inLiquid) {   // вода: плавучесть по глубине (точное затухание — от шага не зависит)
       const sub = Math.min(1, P.water / P.h);
       P.vy += BUOY * (sub - SUB_EQ) * dt;
-      if (jump) P.vy += 14 * dt;
+      // «прыжок»: всплыть — пока глубоко; у поверхности тяга сходит на нет (было: 14 всегда — тело вылезало из воды, человечек
+      // «стоял на воде», жалоба владельца 22.10); стоит на дне (мелко) — оттолкнуться разом. Вылезти на берег — паркур и
+      // толчок у стенки (ниже), они не меняются
+      if (jump && P.onGround && P.jumpCD <= 0) { P.vy = Math.max(P.vy, 4.6); P.jumpCD = .25; }
+      else if (jump) P.vy += 14 * dt * clamp((sub - SUB_JUMP) / .12, 0, 1);
       if (sneak) P.vy -= 10 * dt;
       P.vy *= Math.exp(-2.4 * dt);
       if (jump) P.vy = Math.min(P.vy, P.eyeWater ? 3.2 : 4.6);
@@ -1800,7 +1805,9 @@
       const pkm = P.pk ? (P.pk.move === 'swim' ? 'mantle' : P.pk.move) : '';
       const Q = POSE;   // общий объект: A.pose копирует поля (без мусора каждый кадр)
       Q.x = P.x - st.ox; Q.y = P.y; Q.z = P.z - st.oz; Q.yaw = want; Q.moving = P.hang ? !!P.shimmyNow : sp > .4; Q.speed = sp;
-      Q.air = !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang; Q.crouch = P.sneak && !P.pk ? 1 : 0; Q.swim = P.water > .9 && !P.pk;
+      const deep = swimDeep(P);
+      Q.air = !P.onGround && !P.climb && !(P.water > .3) && !P.pk && !P.hang; Q.crouch = P.sneak && !P.pk && !deep ? 1 : 0; Q.swim = deep; Q.dive = deep && P.sneak;
+      Q.y = swimDrawY(st, me, P.x, P.y, P.z, deep && !Q.dive, dt);
       Q.ladder = P.climb && !P.onGround; Q.sit = false; Q.hang = !!P.hang; Q.pk = pkm; Q.pkK = P.pk ? P.pk.k : 0; Q.climbPh = P.climbPh || 0;
       A.pose('me', Q);
       me.hidden = !st.camMode || st.camD < .95;   // вид сзади/спереди, а камера прижата к стене — не смотреть изнутри головы
@@ -1905,7 +1912,31 @@
   const PREVIEW_MODES = ['frame', 'ghost', 'off'];
   const previewMode = () => PREVIEW_MODES.includes(opts.preview) ? opts.preview : opts.ghost === false ? 'off' : 'frame';
   const PT_OUT = { x: 0, y: 0, z: 0, state: 0, h: 1 };
-  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, swim: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };   // своя поза — общий объект
+  const POSE = { x: 0, y: 0, z: 0, yaw: 0, moving: false, speed: 0, air: false, crouch: 0, swim: false, dive: false, ladder: false, sit: false, hang: false, pk: '', pkK: 0, climbPh: 0 };   // своя поза — общий объект
+  // Плывёт (дна под ногами нет, воды больше блока): поза world3d «держится на воде» / «кролем» / «нырок» (как в «Мире Денчика»);
+  // на мелком (стоит на дне) — ходит. Игра вместе: то же у других (флаги 8 и 512 — kubomir-coop.js)
+  const swimDeep = P => P.water > 1 && !P.onGround && !P.pk && !P.hang && !P.fly && P.lava <= .2;
+  // Где рисовать человечка, который плывёт: гладь — у плеч (тело для физики — как было: глаза чуть над водой, а человечек
+  // меньше тела — без сдвига он был бы весь под водой). Плечи над корнем — по самой позе (кость плеча world3d, прошлый кадр,
+  // плавно); в воду и из воды — плавно за 0,25 с (a.swK). Возвращает высоту корня человечка
+  const SWIM_EPS = .06, SV = { x: 0, y: 0, z: 0 };
+  function swimDrawY(st, a, x, y, z, on, dt){
+    if (!a) return y;
+    a.swK = clamp((a.swK || 0) + (on ? dt : -dt) / .25, 0, 1);
+    if (a.swK <= 0) return y;
+    const V = VX(), W = st.W;
+    let yy = Math.floor(y + .3), v = W.raw(x, yy, z);
+    if (!(v > 0 && V.T.liquid[v & 0xfff] === 1)) { a.swK = Math.max(0, a.swK - dt / .25); return y; }
+    for (let n = 0; n < 8; n++) { const u = W.raw(x, yy + 1, z); if (!(u > 0 && V.T.liquid[u & 0xfff] === 1)) break; yy++; v = u; }
+    const surf = yy + V.liquidHeight(v), ch = a.ch, sh = ch && (ch.armL || ch.armR);
+    if (sh && ch.root && st.R?.T) {
+      const p = a.swP || (a.swP = new st.R.T.Vector3()); sh.getWorldPosition(p);
+      const o = p.y - ch.root.position.y;
+      a.swOff = a.swOff == null ? o : a.swOff + (o - a.swOff) * Math.min(1, dt * 8);
+    }
+    const target = surf - SWIM_EPS - (a.swOff ?? .2);
+    return target > y ? y + (target - y) * a.swK : y;
+  }
   function ghostUpdate(st){
     const VR = st.VR, V = VX(), P = st.P, s = P.inv[P.sel], it = s && V.item(s.id), b = it?.place && V.block(it.place), hit = st.hit, mode = previewMode();
     let T = null;
@@ -2448,5 +2479,7 @@
     // бой и две руки (scripts/kubomir-combat-test.cjs): шаг боя, удар, руки, поменять руки, моб бьёт, щит/лук по ПКМ
     combatStep: (st, dt) => combatStep(st, dt), attack: (st, m, dir) => attackStart(st, m, dir), hands: st => hands(st || S), swap: st => swapHands(st || S), mobHit: (st, n, m) => mobHit(st, n, m), offHands: (st, hit, rmb) => offHands(st, hit, rmb), weaponOf: id => weaponOf(id), useAt: (st, hit, tap) => use(st, hit, tap), wpnClear: () => WPN.clear(),
     // проверки в node (scripts/kubomir-move-test.cjs): шаг тела игрока на своём st, настройки, прицел, сломать — без мира в браузере
-    physics: (st, dt) => physics(st, dt), placeTarget: (st, hit, b) => placeTarget(st, hit, b), previewMode: () => previewMode(), ghostUpdate: st => ghostUpdate(st), safeSpot: (st, x, y, z) => safeSpot(st, x, y, z), unstuck: st => unstuck(st), deathText: why => DEATH[why], opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b) } };
+    physics: (st, dt) => physics(st, dt), placeTarget: (st, hit, b) => placeTarget(st, hit, b), previewMode: () => previewMode(), ghostUpdate: st => ghostUpdate(st), safeSpot: (st, x, y, z) => safeSpot(st, x, y, z), unstuck: st => unstuck(st), deathText: why => DEATH[why], opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b),
+    // вода (22.10): плывёт ли (поза «на воде»), где рисовать человечка (гладь у плеч)
+    swimDeep: P => swimDeep(P), swimDrawY: (st, a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt) } };
 })();
