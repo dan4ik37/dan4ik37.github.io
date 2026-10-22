@@ -199,7 +199,7 @@
         ow.parts = kit.parts.filter(id => id && id !== '='); ow.st = bodyStats(ow.parts, W.evo.cell); ow.brain.aggr *= W.evo.aggr;
         if (ow.giant) { ow.st.split = 0; ow.st.speed *= W.evo.k.giant.speed; }
       }
-      else if (typeof o.design === 'string') ow.next = o.design;
+      else if (typeof o.design === 'string') { ow.next = o.design; applyDesign(W, ow); }
     }
     return ow;
   }
@@ -668,11 +668,12 @@
           if (!W.pAl[p]) continue;
           const dx = W.pX[p] - x, dy = W.pY[p] - y;
           if (dx * dx + dy * dy >= (r + 2 + lure) * (r + 2 + lure)) continue;
-          if (EV) {   // путь: сахар → ДНК; минерал (Глубина) — масса больше и 🪨
-            if (isMin(W, p)) { W.cM[s] += EV.k.minM; if (o) o.dM++; }
-            else { W.cM[s] += PELLET_M; if (o) { o.pel++; o.dS += EV.k.sugar * EV.food * o.st.sugar; } }
+          let wait = 90;
+          if (EV) {   // путь: сахар → ДНК; минерал (Глубина) — масса больше и 🪨, новый — нескоро
+            if (isMin(W, p)) { W.cM[s] += EV.k.minM; if (o) o.dM++; wait = EV.k.minWait; }
+            else { W.cM[s] += PELLET_M; if (o) { o.pel++; o.dS += EV.k.sugar * EV.food * o.st.sugar; } wait = Math.round(90 / EV.food); }
           } else W.cM[s] += PELLET_M;
-          W.pAl[p] = 0; W.pGen[p] = (W.pGen[p] + 1) & 7; W.pAt[p] = W.step + (EV ? Math.round(90 / EV.food) : 90) + ((rnd(W) * 150) | 0); W.zv[(p / KS) | 0]++;
+          W.pAl[p] = 0; W.pGen[p] = (W.pGen[p] + 1) & 7; W.pAt[p] = W.step + wait + ((rnd(W) * 150) | 0); W.zv[(p / KS) | 0]++;
           r = radius(W.cM[s]);
         }
       }

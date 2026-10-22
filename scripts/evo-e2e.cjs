@@ -5,16 +5,30 @@
 //           биоме, полная комната (16 участников) и снимки 9 гостям — как scripts/iogames-e2e.cjs; BASE2 — старая копия сайта для «до»;
 //   leak  — 20 раз открыть путь (игра с ботами) и закрыть: память, узлы DOM, холсты;
 //   soak  — 10 минут игры в пути (по кругу Лужа → Риф → Глубина, управление случайное): ошибки, память по минутам.
-// Запуск: python scripts/serve.py 5591 (в другом окне), потом
-//   node scripts/evo-e2e.cjs http://localhost:5591 [smoke|perf|leak|soak|all] [сек замера]   (BASE2=http://localhost:5592 — старая копия для perf)
+// Запуск из корня сайта: node scripts/evo-e2e.cjs [smoke|perf|leak|soak|all] [сек замера]
+//   сайт раздаёт сам (из этой папки); BASE=http://localhost:5591 — чужая раздача (python scripts/serve.py 5591);
+//   BASE2=http://localhost:5592 — старая копия сайта для «до» в perf; SOAK_MIN — минут прогона soak (10).
 // Временное — D37_TMP или E:\claude-tmp\t056 (профиль Chrome, снимки).
 const { spawn } = require('child_process');
-const fs = require('fs'), path = require('path');
-const BASE = (process.argv[2] || 'http://localhost:5591').replace(/\/+$/, '');
-const MODE = process.argv[3] || 'smoke';
-const SECS = +process.argv[4] || 12;
+const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
+const SITE = path.join(__dirname, '..');
+const MODE = process.argv[2] || 'smoke';
+const SECS = +process.argv[3] || 12;
+let BASE = (process.env.BASE || '').replace(/\/+$/, '');
 const BASE2 = (process.env.BASE2 || '').replace(/\/+$/, '');
-const TMP = process.env.D37_TMP || 'E:/claude-tmp/t056', OUT = path.join(TMP, 'shots');
+const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp/t056' : path.join(os.tmpdir(), 'd37-t056')), OUT = path.join(TMP, 'shots');
+// своя раздача: файлы сайта, /play/… и / → index.html
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
+function serve(){
+  const server = http.createServer((req, res) => {
+    let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p === '/' || p.startsWith('/play/')) p = '/index.html';
+    const f = path.join(SITE, p);
+    if (!f.startsWith(SITE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('404'); return; }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    fs.createReadStream(f).pipe(res);
+  });
+  return new Promise(r => server.listen(0, '127.0.0.1', () => r(server)));
+}
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const SOAK_MIN = +process.env.SOAK_MIN || 10;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -23,6 +37,8 @@ let pass = 0, fail = 0;
 const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } else { fail++; console.log('FAIL', name, extra === undefined ? '' : JSON.stringify(extra).slice(0, 400)); } };
 
 (async () => {
+  let own = null;
+  if (!BASE) { own = await serve(); BASE = 'http://localhost:' + own.address().port; }
   const port = 9300 + Math.floor(Math.random() * 300);
   const profile = path.join(TMP, 'chrome-' + Date.now().toString(36));
   fs.mkdirSync(profile, { recursive: true });
@@ -231,5 +247,6 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
   console.log(`${pass} ок, ${fail} ошибок`);
   try { ws.close(); } catch (e) {}
   proc.kill();
+  own?.close();
   process.exit(fail ? 1 : 0);
 })();

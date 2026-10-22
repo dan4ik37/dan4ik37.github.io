@@ -59,7 +59,7 @@
   const BIOMES = {
     pool: { n: 'Лужа', e: '💧', at: 1, light: [1, .5], food: 1, min: 0, bots: ['drop', 'drop', 'green'], aggr: .35, giants: 0, d: 'Светло и спокойно: слабые клетки и много сахара. Учись тут.' },
     reef: { n: 'Риф', e: '🪸', at: 2, light: [.92, .38], food: 1.35, min: 0, bots: ['teeth', 'hedge', 'green', 'drop'], aggr: 1.1, giants: 0, d: 'Еды больше, но тут хищники с зубами.' },
-    deep: { n: 'Глубина', e: '🌑', at: 3, light: [.18, .12], food: .85, min: .04, bots: ['firefly', 'teeth', 'drop'], aggr: .9, giants: 2, d: 'Темно: нужны глазки и фотофоры. Минералы 🪨 и гиганты.' },
+    deep: { n: 'Глубина', e: '🌑', at: 3, light: [.18, .12], food: .85, min: .02, bots: ['firefly', 'teeth', 'drop'], aggr: .9, giants: 2, d: 'Темно: нужны глазки и фотофоры. Минералы 🪨 и гиганты.' },
   };
   const BIOME_IDS = Object.keys(BIOMES);
 
@@ -85,7 +85,7 @@
     { id: 'c4', n: 'Готов к суше', e: '🌊', d: 'Род готов выйти на сушу' },
     { id: 'land', n: 'На суше', e: '🌱', d: 'Род вышел на сушу — дальше «Существо»' },
   ];
-  const MILES = { 2: { parts: 1 }, 3: { earned: 250, colony: 3, min: 20 }, 4: { earned: 550, colony: 5, min: 45, biomes: ['reef', 'deep'] } };
+  const MILES = { 2: { parts: 1 }, 3: { earned: 250, colony: 3, min: 20 }, 4: { earned: 550, colony: 5, min: 55, biomes: ['reef', 'deep'] } };
 
   // ═══ Лимиты: day — ДНК в день (МСК), rest — первые столько сырой ДНК в день ×2 («отдохнувший»), actMin — ходов в минуту,
   //     life — секунд жизни в счёт, minLife — короче не идёт в минуты пути, rate — сырой ДНК в минуту жизни (+ slack на жизнь),
@@ -136,11 +136,11 @@
 
   // ═══ Числа игры пути (kletochki.js читает их из worldCfg) ═══
   // sugar — ДНК за точку (× еда биома × sugar частей); leaf — ДНК в минуту за хлоропласт при полном свете; prot — ДНК за съеденную
-  // клетку (масса × prot, не больше protMax; × prot частей и едоков); minM — масса минерала; lure — фотофор в темноте: радиус поедания
+  // клетку (масса × prot, не больше protMax; × prot частей и едоков); minM — масса минерала, minWait — шагов до нового (редкие); lure — фотофор в темноте: радиус поедания
   // точек +lure за фотофор; tox — облачко (радиус, во сколько медленнее); col — колония (k — доля массы колонии, что защищает клетку;
   // spring — пружина к месту в форме; gap — зазор; share — обмен массой к средней раз в 0,5 с); giant — гиганты глубины
-  const SIMK = { sugar: .1, leaf: 1.1, prot: .05, protMax: 5, minM: 3, lure: 30, tox: { r: 70, k: .75 }, col: { k: .35, spring: 6, gap: 10, share: .03 },
-    giant: { m: 1800, floor: 1500, speed: .45 }, dark: .25, seeR: 1 };
+  const SIMK = { sugar: .06, leaf: .7, prot: .03, protMax: 4, minM: 3, minWait: 600, lure: 30, tox: { r: 70, k: .75 }, col: { k: .25, spring: 6, gap: 10, share: .03 },
+    giant: { m: 1800, floor: 1500, speed: .45 } };
 
   // Что увидит сервер (evo_defs0): только то, что он проверяет
   const SERVER = {
