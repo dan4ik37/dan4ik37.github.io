@@ -177,11 +177,11 @@
   // reg — область 48×48×H (Uint16), light — { sky, r, g, b } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9),
   // zone — климатические зоны столбов (256, V.climZone; нет — все 0): у вершин в свет неба (lt.x, 0…60) добавляется 64 × зона —
   // шейдер погоды знает, где «всегда зима» и где «зимы нет»; грани разных зон не склеиваются.
-  // bare (T-022b) — доля опавшей лиственной листвы 0…1 (зима: сезон движка погоды; у «всегда зимы» — всегда, у «зимы нет» — никогда),
-  // cx, cz — чанк (одинаковый выбор опавших клеток у соседних чанков): такие клетки листвы для сетки — воздух (ветви видны, грани
-  // соседей рисуются). Блоки мира не меняются — только картинка; reg — свой буфер задания (его можно портить)
-  V.meshChunk = (reg, light, T, tint, zone, bare = 0, cx = 0, cz = 0) => {
-    if (T.decid && (bare > 0 || (zone && zone.includes(1)))) shedLeaves(reg, T, zone, bare, cx, cz);
+  // Зима (T-022b): до света и сетки — V.shedLeaves(reg, T, zone, bare, cx, cz): доля опавшей лиственной листвы bare 0…1 (сезон
+  // движка погоды; у «всегда зимы» — всегда, у «зимы нет» — никогда), чанк cx, cz (у соседних чанков выбор клеток одинаковый):
+  // такие клетки листвы — воздух для света (под голым деревом светлее) и для сетки (ветви видны, грани соседей рисуются). Блоки
+  // мира не меняются — только картинка и свет чанка; reg — свой буфер задания (его можно портить)
+  V.meshChunk = (reg, light, T, tint, zone) => {
     const sky = light.sky, lr = light.r, lg = light.g, lb = light.b, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
     const glowL = T.glowL || null, emit = T.emit, sT = T.stream || null;
     const gl = l => glowL && l >= 0 && l < glowL.length ? glowL[l] : 0;
@@ -389,6 +389,7 @@
     }
   }
   // ── опавшая лиственная листва (зима): клетка — по хешу мира, у соседних чанков одинаково ──
+  V.shedLeaves = (reg, T, zone, bare, cx, cz) => { if (T.decid && (bare > 0 || (zone && zone.includes(1)))) shedLeaves(reg, T, zone, bare || 0, cx | 0, cz | 0); };
   function shedLeaves(reg, T, zone, bare, cx, cz){
     const dc = T.decid, x0 = (cx - 1) * 16, z0 = (cz - 1) * 16, th = Math.round(Math.max(0, Math.min(1, bare)) * 1024), thW = 740;   // «всегда зима» — 72 %
     for (let rx = 0; rx < RW; rx++) for (let rz = 0; rz < RW; rz++) {

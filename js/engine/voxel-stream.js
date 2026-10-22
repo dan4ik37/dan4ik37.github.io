@@ -58,7 +58,7 @@
       if (!G) G = V.genInit(W.seed, { features: o.features || [], ver: o.genVer || 1 });
       const t0 = now();
       if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, zone: r.zone, ms: now() - t0 }); }
-      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone, j.bare || 0, j.c.cx, j.c.cz), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
+      else { V.shedLeaves?.(j.reg, V.T, j.zone, j.bare, j.c.cx, j.c.cz); const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
     }
     function send(j, msg, tr){
       if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; j.zone = msg.zone; j.bare = msg.bare; inlineRun(j); return; }

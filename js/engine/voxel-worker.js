@@ -28,7 +28,9 @@
         return;
       }
       if (d.t === 'mesh') {
-        const t0 = now(), L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone, d.bare || 0, d.cx | 0, d.cz | 0);
+        const t0 = now();
+        V.shedLeaves?.(d.reg, V.T, d.zone, d.bare, d.cx, d.cz);   // зима: лиственные голые (свет и сетка)
+        const L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone);
         const tr = [d.reg.buffer, m.light.buffer], out = { id: d.id, reg: d.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: 0 };
         for (const k of V.LAYERS) { out[k] = m[k]; if (m[k]) tr.push(m[k].pos.buffer, m[k].vd.buffer, m[k].col.buffer, m[k].lt.buffer); }
         if (m.lights) tr.push(m.lights.buffer);
