@@ -987,6 +987,16 @@
    ]
   },
   {
+   "f": "js/engine/planet-view.js",
+   "fn": "planetView",
+   "k": "sink:new Worker [Worker]",
+   "c": "const",
+   "n": "адрес своего файла Worker (js/engine/planet-worker.js?v=VER; o.url задаёт только код движка/игры)",
+   "xs": [
+    "url"
+   ]
+  },
+  {
    "f": "js/engine/rigid.js",
    "fn": "load",
    "k": "sink:import() [import(src || E.rigid.URL)]",
