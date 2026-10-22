@@ -170,6 +170,10 @@
       "destination": "/api/pages?page=typing"
     },
     {
+      "source": "/tools/photo",
+      "destination": "/api/pages?page=photo"
+    },
+    {
       "source": "/quiz",
       "destination": "/api/pages?page=quiz"
     },
@@ -355,6 +359,14 @@
     },
     {
       "source": "/app",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/photo",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/photo/:path+",
       "destination": "/index.html"
     },
     {

@@ -29,9 +29,10 @@ import oauth from './_lib/routes/oauth.js';          // вход через VK I
 import raid from './_lib/routes/raid.js';            // набеги: POST /api/raid — сервер пересчитывает бой и засчитывает итог
 import forum from './_lib/routes/forum.js';          // форум /forum, /forum/<id> и идеи /ideas, /ideas/<id> — для поиска и превью ссылок
 import diag from './_lib/routes/diag.js';            // мониторинг: POST /api/diag — отчёты браузеров об ошибках сайта (ops.sql, docs/OPS.md)
+import photo from './_lib/routes/photo.js';          // 🖼 «Фоторедактор онлайн» /tools/photo — для поиска; сам редактор — раздел /photo
 
 const ROUTES = { videos, topic, history, nick, ids, reklama, vip, fonts, cps, about, feed, top, quiz, wheel, random, typing, ugc,
-  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, diag };   // raid — набеги
+  shop, terms: legal, refund: legal, contacts: legal, invite, go: adgo, geo, adsterms, raid, oauth, r: ref, forum, ideas: forum, photo, diag };   // raid — набеги
 
 export default function handler(req, res) {
   const route = ROUTES[String(req.query.page || '')];

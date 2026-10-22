@@ -730,7 +730,9 @@
     P.floorAt = S.world.floorAt;
     const A = S.A = E.actors(R);
     A.add(S.key, S.me.look, { x: P.ch.x, y: P.ch.y, z: P.ch.z, yaw: P.yaw });
-    const rig = S.rig = E.cameraRig(R.camera, { yaw: (sp.yaw ?? SPAWN.yaw) - PI, pitch: .42, dist: 9.5, minD: 2.6, maxD: 22 });
+    const rig = S.rig = E.cameraRig(R.camera, { yaw: (sp.yaw ?? SPAWN.yaw) - PI, pitch: .42, dist: 9.5, minD: 2.6, maxD: 22, autoFirst: true });
+    // приблизил колесом/щипком до упора — от 1-го лица, отдалил — от 3-го (как в Роблоксе): прицел и мышь — как у клавиши V
+    rig.onMode = (m, why) => { if (why !== 'zoom' || !S?.H) return; S.H.crosshair(m === 'first'); if (m !== 'first') S.I?.unlock(); };
     rig.snap(P.ch.x, P.ch.y, P.ch.z);
     S.unfollow = rig.follow(P);
     const H = S.H = E.ui(wrap, C);
@@ -877,7 +879,8 @@
     }
     if (S.me.emo && S.me.emo.t !== S.me._emoA) { S.me._emoA = S.me.emo.t; A.emote(S.key, S.me.emo.e, t); }
     for (const k of [...A.list.keys()]) if (k !== S.key && !S.players.has(k)) A.remove(k);
-    const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
+    const look = S.lookF || (S.lookF = { dx: 0, dy: 0, zoom: 1 });   // один объект на кадр (без мусора)
+    look.dx = I.look.dx + C.look.dx; look.dy = I.look.dy + C.look.dy; look.zoom = I.zoom * (C.look.zoom || 1);   // zoom: колесо, щипок, крестовина ↑/↓
     rig.update(dt, S.zones?.camTarget?.() || S.base?.cam || S.base?.war?.cam || P, look, S.ph, C);   // в машине — за машиной; в стройке — на участок / базу
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
     I.wantLock = rig.mode === 'first' && !I.touch && !S.menu && !S.phoneOn;

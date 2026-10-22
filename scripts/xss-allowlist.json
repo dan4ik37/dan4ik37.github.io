@@ -229,6 +229,19 @@
    ]
   },
   {
+   "f": "api/_lib/routes/photo.js",
+   "fn": "handler",
+   "k": "markup:text",
+   "c": "const",
+   "n": "тексты страницы — константы файла (FEATURES, STEPS, FAQ), ещё и через esc",
+   "xs": [
+    "esc(t)",
+    "esc(d)",
+    "esc(q)",
+    "esc(a)"
+   ]
+  },
+  {
    "f": "api/_lib/routes/quiz.js",
    "fn": "handler",
    "k": "markup:url",
@@ -376,6 +389,162 @@
    "n": "id проверен VIDEO_ID_RE (11 знаков [A-Za-z0-9_-]) в начале handler",
    "xs": [
     "id"
+   ]
+  },
+  {
+   "f": "js/apps/apps.js",
+   "fn": "css",
+   "k": "sink:href [l]",
+   "c": "const",
+   "n": "адрес стилей — константа css/photo.css",
+   "xs": [
+    "url(href)"
+   ]
+  },
+  {
+   "f": "js/apps/apps.js",
+   "fn": "script",
+   "k": "sink:src [s]",
+   "c": "const",
+   "n": "адреса скриптов фоторедактора — константы apps.js (fabric.js на jsDelivr с точной версией и свои пути js/…)",
+   "xs": [
+    "url(src)"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-core.js",
+   "fn": "keepSrc",
+   "k": "sink:src [L]",
+   "c": "not-html",
+   "n": "L.src — поле своего объекта слоя (исходный файл фото для проекта), а не src элемента",
+   "xs": [
+    "{ blob, rev: L.pxRev, mime: blob.type }"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-core.js",
+   "fn": "spawnW",
+   "k": "sink:new Worker [Worker]",
+   "c": "const",
+   "n": "адрес потока — константа apps.js (js/apps/photo/photo-worker.js?v=VER)",
+   "xs": [
+    "url"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "layerQuick",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "ключ режима наложения из PC.BLENDS",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "paintPanel",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "ключ фильтра из PC.PRESETS",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "paintPanel",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "номер слоя (счётчик документа) и размеры в пикселях",
+   "xs": [
+    "L.id",
+    "Lr.id",
+    "E.B.maxSide",
+    "i.w",
+    "i.h"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "paintPanel",
+   "k": "markup:style",
+   "c": "const",
+   "n": "название шрифта из PC.FONT_NAMES",
+   "xs": [
+    "esc(f)"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "paintPanel",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "номер слоя (счётчик документа) и размеры в пикселях",
+   "xs": [
+    "r ? `${r.w} × ${r.h} пикселей` : ''",
+    "E.B.maxSide"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "slider",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "ключ коррекции из PC.ADJ_KEYS",
+   "xs": [
+    "k"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "slider",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "предел из таблицы PC.ADJ",
+   "xs": [
+    "min",
+    "max"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "slider",
+   "k": "markup:attr",
+   "c": "num-local",
+   "n": "число ползунка (кисть, коррекции слоя)",
+   "xs": [
+    "val"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-ui.js",
+   "fn": "slider",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "число ползунка (кисть, коррекции слоя)",
+   "xs": [
+    "val"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-worker.js",
+   "fn": "filter",
+   "k": "sink:importScripts [importScripts]",
+   "c": "const",
+   "n": "адреса fabric.js и ONNX Runtime — константы apps.js с точной версией; поток получает их только от своей страницы",
+   "xs": [
+    "d.fabricUrl"
+   ]
+  },
+  {
+   "f": "js/apps/photo/photo-worker.js",
+   "fn": "removeBg",
+   "k": "sink:importScripts [importScripts]",
+   "c": "const",
+   "n": "адреса fabric.js и ONNX Runtime — константы apps.js с точной версией; поток получает их только от своей страницы",
+   "xs": [
+    "d.ortUrl"
    ]
   },
   {

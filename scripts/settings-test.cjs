@@ -132,6 +132,8 @@ const S = globalThis.D37Settings;
   S.set('fov', 10); ok(S.get('fov') === 40, 'угол обзора не меньше 40');
   S.set('fov', 50);
   S.set('view', 'сверху'); ok(S.get('view') === 'third', 'вид: только 1-е / 3-е лицо');
+  ok(S.get('zoomFirst') === true && globalThis.D37Opt.zoomFirst === true, '«Приблизил до упора — от 1-го лица» — включено по умолчанию (D37Opt.zoomFirst)');
+  S.set('zoomFirst', false); ok(globalThis.D37Opt.zoomFirst === false, '…выключил — камера (camera.js) больше не переключает'); S.set('zoomFirst', true);
   S.set('invertY', 'true'); ok(S.get('invertY') === true && globalThis.D37Opt.invertY === true, 'инверсия: строка "true" — да');
   S.set('invertY', false);
   S.set('world2d', true); ok(store.d37_world_2d === '1', 'плоский мир → d37_world_2d');

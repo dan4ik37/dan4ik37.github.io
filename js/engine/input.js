@@ -6,12 +6,17 @@
 // I.taps [{x, y}] — короткие нажатия; кнопки мыши уходят в controls как Mouse0/1/2 (их можно назначить действию).
 // Джойстик: палец в левой части экрана → C.stick(x, z), до упора — бег (C.press('run')). Клавиатура и геймпад — controls.js.
 // I.wantLock = true (вид от 1-го лица на компьютере) — клик по миру захватывает мышь, Esc отпускает. Кадр — I.frameEnd().
+// «Бежит сам» (22.10.2026): палец джойстика и мышь отпускаются, где бы их ни отпустили — «отпустил» ловит и окно (не только
+// el: захват указателя мог не сработать или потеряться, el убрали из страницы), мышь без нажатых кнопок (e.buttons) на любом
+// движении — отпущена; вкладку спрятали, страницу закрыли, окно потеряло фокус — джойстик и пальцы сброшены (I.reset).
+// Без мусора на движение: число пальцев «камеры» считается, а не собирается массивом.
 (() => {
   const E = window.D37E = window.D37E || {};
+  const MBIT = [1, 4, 2, 8, 16];   // кнопка мыши → бит e.buttons
 
   E.input = function (el, opts = {}){
     const C = opts.controls;
-    const I = { look: { dx: 0, dy: 0 }, zoom: 1, taps: [], enabled: true, touch: E.isTouch(), wantLock: false, locked: false };
+    const I = { look: { dx: 0, dy: 0 }, zoom: 1, taps: [], enabled: true, touch: E.isTouch(), wantLock: false, locked: false, resets: 0 };
     const offs = [];
     const on = (t, ev, f, o) => { t.addEventListener(ev, f, o); offs.push(() => t.removeEventListener(ev, f, o)); };
     let joy = null;   // { id, ox, oy, x, y } — палец джойстика
@@ -27,7 +32,8 @@
 
     // ── Мышь и пальцы ──
     const ptrs = new Map();   // id → { x, y, sx, sy, t, moved, kind: 'look' | 'joy', btn, mouse }
-    let pinch = 0;
+    let pinch = 0, nLook = 0;   // nLook — сколько пальцев/кнопок сейчас крутят камеру
+    I.pointers = () => ptrs.size;   // для проверок
     on(el, 'contextmenu', e => e.preventDefault());
     on(el, 'pointerdown', e => {
       if (!I.enabled || (opts.ignore && e.target.closest?.(opts.ignore))) return;
@@ -38,6 +44,7 @@
       if (grab) I.lock();
       if (mouse && !(grab && !I.lockFail)) C?.mouse(e.button, true);
       if (I.locked) return;
+      if (ptrs.has(e.pointerId)) drop(e.pointerId);   // тот же указатель без «отпустил» (потерялось) — старое забыть
       try { el.setPointerCapture(e.pointerId); } catch (er) {}
       const b = el.getBoundingClientRect(), lefty = !!window.D37Opt?.lefty, lx = lefty ? b.right - e.clientX : e.clientX - b.left;   // левша (настройки) — джойстик справа
       const p = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, btn: e.button, kind: 'look', mouse };
@@ -45,18 +52,19 @@
         p.kind = 'joy'; joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY }; showJoy(); updJoy();
       }
       ptrs.set(e.pointerId, p);
-      if ([...ptrs.values()].filter(q => q.kind === 'look').length === 2) pinch = lookDist();
+      if (p.kind === 'look' && ++nLook === 2) pinch = lookDist();
       e.preventDefault();
     });
     on(el, 'pointermove', e => {
       const p = ptrs.get(e.pointerId);
       if (!p) return;
+      // мышь: кнопку уже отпустили, а «отпустил» не пришёл (за окном, над чужим) — это и есть «отпустил»
+      if (p.mouse && typeof e.buttons === 'number' && !(e.buttons & (MBIT[p.btn] || 1))) { up(e); return; }
       const dx = e.clientX - p.x, dy = e.clientY - p.y;
       p.x = e.clientX; p.y = e.clientY;
       if (Math.hypot(p.x - p.sx, p.y - p.sy) > (e.pointerType === 'touch' ? 10 : 5)) p.moved = true;
       if (p.kind === 'joy') { joy.x = e.clientX; joy.y = e.clientY; drawJoy(); updJoy(); return; }
-      const looks = [...ptrs.values()].filter(q => q.kind === 'look');
-      if (looks.length >= 2) {
+      if (nLook >= 2) {
         const d = lookDist();
         if (pinch && d) I.zoom *= pinch / d;
         pinch = d;
@@ -64,23 +72,44 @@
       }
       if (p.moved) { I.look.dx += dx; I.look.dy += dy; }
     });
+    // забыть указатель (без нажатия и без жеста)
+    function drop(id){
+      const p = ptrs.get(id); if (!p) return null;
+      ptrs.delete(id);
+      if (p.kind === 'joy') { if (joy && joy.id === id) { joy = null; hideJoy(); updJoy(); } }
+      else if (--nLook < 2) pinch = 0;
+      if (nLook < 0) nLook = 0;
+      return p;
+    }
     const up = e => {
       if (e.pointerType === 'mouse' && e.type === 'pointerup') C?.mouse(e.button, false);
-      const p = ptrs.get(e.pointerId);
-      if (!p) return;
-      ptrs.delete(e.pointerId);
-      if (p.kind === 'joy') { joy = null; hideJoy(); updJoy(); return; }
+      const p = drop(e.pointerId);
+      if (!p || p.kind === 'joy') return;
       if (!p.moved && performance.now() - p.t < 450 && e.type === 'pointerup' && (p.btn === 0 || e.pointerType === 'touch')) I.taps.push({ x: e.clientX, y: e.clientY });
-      if ([...ptrs.values()].filter(q => q.kind === 'look').length < 2) pinch = 0;
     };
     on(el, 'pointerup', up);
     on(el, 'pointercancel', up);
     on(el, 'lostpointercapture', up);   // захват потерян без «отпустил» (окно поверх, элемент спрятали) — иначе джойстик залипал и персонаж бежал сам
-    on(window, 'pointerup', e => { if (I.locked && e.pointerType === 'mouse') C?.mouse(e.button, false); });
+    // «отпустил» — где угодно: над шапкой сайта, мимо холста, за окном (окно ловит раньше el — фаза перехвата); захват
+    // потерян, когда el уже убрали со страницы, — событие приходит документу
+    const upAny = e => {
+      if (e.pointerType === 'mouse' && I.locked && e.type === 'pointerup') C?.mouse(e.button, false);
+      if (ptrs.has(e.pointerId)) up(e);
+    };
+    on(window, 'pointerup', upAny, true);
+    on(window, 'pointercancel', upAny, true);
+    on(document, 'lostpointercapture', upAny, true);
+    // мышь двигают по окну без кнопки, а камера ещё «держит» её — отпустить (отпустили там, где события не было)
+    on(window, 'pointermove', e => {
+      if (e.pointerType !== 'mouse' || typeof e.buttons !== 'number') return;
+      const p = ptrs.get(e.pointerId);
+      if (p && p.mouse && !(e.buttons & (MBIT[p.btn] || 1))) up(e);
+    }, true);
     on(el, 'wheel', e => { if (!I.enabled) return; e.preventDefault(); I.zoom *= e.deltaY > 0 ? 1.12 : 1 / 1.12; }, { passive: false });
     function lookDist(){
-      const l = [...ptrs.values()].filter(q => q.kind === 'look');
-      return l.length >= 2 ? Math.hypot(l[0].x - l[1].x, l[0].y - l[1].y) : 0;
+      let a = null, b = null;
+      for (const q of ptrs.values()) if (q.kind === 'look') { if (!a) a = q; else { b = q; break; } }
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
     }
     // Захват мыши (вид от 1-го лица): движение мыши — поворот без нажатия
     // захвачено на el ИЛИ на чём-то внутри него (холст игры): раньше игра захватывала мышь холстом, а здесь ждали el —
@@ -96,7 +125,11 @@
       try { const r = el.requestPointerLock(); r?.catch?.(() => { I.lockFail = true; }); } catch (er) { I.lockFail = true; }
     };
     I.unlock = () => { if (mine()) document.exitPointerLock?.(); };
-    on(window, 'blur', () => { joy = null; hideJoy(); updJoy(); ptrs.clear(); });
+    // окно без фокуса (Alt+Tab, клик в другую программу), вкладку спрятали, страницу закрывают — пальцы и джойстик сброшены
+    const lost = () => { if (joy || ptrs.size) I.resets++; joy = null; hideJoy(); updJoy(); ptrs.clear(); nLook = 0; pinch = 0; };
+    on(window, 'blur', lost);
+    on(window, 'pagehide', lost);
+    on(document, 'visibilitychange', () => { if (document.hidden) lost(); });
 
     // ── Джойстик на экране (появляется там, где коснулся палец) ──
     const jb = document.createElement('div'), jk = document.createElement('div');
@@ -113,7 +146,7 @@
     }
 
     I.frameEnd = () => { I.look.dx = 0; I.look.dy = 0; I.zoom = 1; I.taps.length = 0; };
-    I.reset = () => { joy = null; hideJoy(); ptrs.clear(); updJoy(); I.frameEnd(); };
+    I.reset = () => { joy = null; hideJoy(); ptrs.clear(); nLook = 0; pinch = 0; updJoy(); I.frameEnd(); };
     I.dispose = () => { I.unlock(); offs.forEach(f => f()); jb.remove(); };
     return I;
   };
