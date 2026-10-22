@@ -802,7 +802,28 @@
     let W = null;
     try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour }) : null; } catch (e) {}
     let tq = 0, forced = null;
+    // прибой (T-085): шум у ближней мели моря (узел сетки глубиной 0,1…2,4 — там и пена прибоя в шейдере, waves.js) — петля
+    // amb_water пониже (synth.js: тише издалека, сторона — по камере), громче в шторм; нет волн или мели рядом — тишина
+    const G = F.ocean?.grid;
+    let surfH = null, sq = 0;
+    const surfTick = dt => {
+      const AU = S?.AU, ch = S?.P?.ch;
+      if (!G || !AU?.loop || !ch || (sq -= dt) > 0) return;
+      sq = .5;
+      const n = G.n, c = G.cell, ci = Math.round((ch.x - G.x0) / c), cj = Math.round((ch.z - G.z0) / c);
+      let best = Infinity, bx = 0, bz = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+        const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= n || j >= n) continue;
+        const d = G.depth[j * n + i]; if (!(d > .1 && d < 2.4)) continue;
+        const x = G.x0 + i * c, z = G.z0 + j * c, r = (x - ch.x) * (x - ch.x) + (z - ch.z) * (z - ch.z);
+        if (r < best) { best = r; bx = x; bz = z; }
+      }
+      const Fo = F.ocean, vol = best < Infinity && Fo.H > 1e-4 ? Math.min(.85, .22 + .55 * Fo.storm + .12 * Fo.H) : 0;
+      if (!surfH) { if (vol > 0) surfH = AU.loop('amb_water', { x: bx, y: Fo.level, z: bz, vol, rate: .72 }); }
+      else surfH.set(vol > 0 ? { x: bx, z: bz, vol } : { vol: 0 });
+    };
     const tick = dt => {
+      surfTick(dt);
       if ((tq -= dt) > 0) return;
       tq = 2;
       const ms = Date.now();
@@ -825,7 +846,8 @@
       force: s => { forced = s || null; tq = 0; tick(0); },   // проверки: своя погода волн ({ wind, windDir, thunder }) / null — как у всех
       live: (x, z) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f : null; },
       waveAt: (x, z, out = OUT) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f.sample(x, z, WV.time(), out) : null; },
-      dispose(){ at.dispose(); for (const f of list) WV.free(f); },
+      dispose(){ at.dispose(); for (const f of list) WV.free(f); surfH?.stop(); surfH = null; },
+      surf: () => (surfH ? { ...surfH.o } : null),   // проверки: где и как громко шумит прибой
     };
   }
 

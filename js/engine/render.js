@@ -755,7 +755,7 @@
     R.dispose = () => {
       R.dead = true;
       r.domElement.removeEventListener?.('webglcontextrestored', onRestore);
-      for (const f of R.preRender) f.dispose?.();
+      for (const f of [...R.preRender]) f.dispose?.();   // копия: dispose крючка убирает его из R.preRender (иначе следующий пропускался)
       R.post?.dispose();
       if (halo) { halo.geometry.dispose(); halo.material.dispose(); }
       for (const sl of L.slots) scene.remove(sl.pl);

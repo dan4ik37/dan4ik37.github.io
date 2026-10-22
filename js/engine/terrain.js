@@ -70,9 +70,18 @@ diffuseColor.rgb *= tc;`);
     const T16 = !low && R.r.capabilities.isWebGL2 && T.DataUtils?.toHalfFloat ? T.DataUtils : null;
     const dTex = T16 ? new T.DataTexture(new Uint16Array(n * n), n, n, T.RedFormat, T.HalfFloatType) : null;
     if (dTex) { dTex.magFilter = dTex.minFilter = T.LinearFilter; dTex.wrapS = dTex.wrapT = T.ClampToEdgeWrapping; }
-    const wmesh = new T.Mesh(new T.PlaneGeometry(size, size), R.water('#3aa6dc', dTex ? { key: 'terrain', depth: { tex: dTex, rect: [-half - cell / 2, -half - cell / 2, size + cell, size + cell] } } : {}));
+    // волны (js/engine/waves.js, T-085): вода ландшафта — «озеро»: волны в нормалях шейдера ('f' — сетка воды один квадрат,
+    // смещать нечего), пловцы качаются на той же волне (TR.waveAt → ph.waveAt). Высота — от погоды мира (TR.waves.weather(…) —
+    // studio3d-weather.js), без погоды — тихо. У всех игроков одни волны (общее время). Нельзя волн (низкая, WebGL1, страж) — как было
+    const WV = E.waves, wf = !low && WV?.can?.(R) ? WV.field({ kind: 'lake', seed: o.waveSeed || 'studio' }) : null;
+    const wmesh = new T.Mesh(new T.PlaneGeometry(size, size), R.water('#3aa6dc', { ...(dTex ? { key: 'terrain', depth: { tex: dTex, rect: [-half - cell / 2, -half - cell / 2, size + cell, size + cell] } } : {}), waves: wf, wavesMode: 'f' }));
     wmesh.rotation.x = -Math.PI / 2; wmesh.visible = false; wmesh.renderOrder = 2;
     R.scene.add(wmesh);
+    TR.waves = wf;
+    const at = wf ? WV.attach(R, [wf]) : null, wavesOff = () => { if (!at) return; at.dispose(); WV.free(wf); };   // мир закрыли — поле прочь
+    if (at) R.own.push({ dispose: wavesOff });   // и при R.dispose (TR.dispose — тоже; дважды — можно)
+    const WS = { y: 0, vx: 0, vz: 0 };
+    TR.waveAt = (x, z) => (wf && wf.H > 1e-5 && TR.enabled && TR.water.on && Math.abs(x) < half && Math.abs(z) < half ? wf.sample(x, z, WV.time(), WS) : null);
 
     function refresh(x0 = 0, x1 = n - 1, z0 = 0, z1 = n - 1){
       for (let iz = z0; iz <= z1; iz++) for (let ix = x0; ix <= x1; ix++) { const i = iz * n + ix; pos.setY(i, H[i]); }
@@ -168,7 +177,7 @@ diffuseColor.rgb *= tc;`);
       TR.setWater(d.water?.on, d.water?.level);
       return true;
     };
-    TR.dispose = () => { R.scene.remove(mesh); R.scene.remove(wmesh); g.dispose(); mat.dispose(); wmesh.geometry.dispose(); dTex?.dispose(); if (ring) { R.scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); } if (ph.terrain === TR) ph.terrain = null; };
+    TR.dispose = () => { wavesOff(); R.scene.remove(mesh); R.scene.remove(wmesh); g.dispose(); mat.dispose(); wmesh.geometry.dispose(); dTex?.dispose(); if (ring) { R.scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); } if (ph.terrain === TR) ph.terrain = null; };
     ph.terrain = TR;
     return TR;
   };

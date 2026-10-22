@@ -302,6 +302,7 @@ Players.PlayerAdded.Connect(player => {
     ed.NPC = SC.npc = E.npcs(R, ph);
     // вода ландшафта: в ней плавают (player.js)
     ph.waterLevel = (x, z) => TR.enabled && TR.water.on && Math.abs(x) < TR.size / 2 && Math.abs(z) < TR.size / 2 ? TR.water.level : -Infinity;
+    ph.waveAt = TR.waveAt || null;   // волны воды ландшафта (waves.js): пловцы качаются на той же волне, что видна
     R.clouds(10, 4);
     // плоская земля, когда ландшафт выключен
     ed.ground = new R.T.Mesh(new R.T.PlaneGeometry(600, 600), R.texMat('s3ground', R.proc('grass'), { tile: 3, flatColor: '#6cbf58' }));

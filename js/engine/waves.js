@@ -307,6 +307,22 @@ vec3 d37GwView( vec3 n, vec2 nn, vec3 up ){
 		diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.9, 0.95, 1.0 ), d37Fo );
 		diffuseColor.a = max( diffuseColor.a, d37Fo * 0.9 );
 	}
+#ifdef D37_GWG
+	{   // прибой (T-085): на мели гребни ломаются — полосы пены бегут к берегу (изолинии глубины сетки), у кромки — накат;
+		// сила — от высоты волн (сумма амплитуд: тихо — редкие тонкие полосы, шторм — широкий белый прибой), гавань — слабее (открытость)
+		vec4 d37Sg = texture2D( d37GwG, ( vD37W.xz - d37GwGR.xy ) / d37GwGR.zw );
+		float d37Sd = d37Sg.r, d37SH = d37GwA[ 0 ].z + d37GwA[ 1 ].z + d37GwA[ 2 ].z + d37GwA[ 3 ].z;
+		float d37Sz = smoothstep( -0.2, 0.15, d37Sd ) * ( 1.0 - smoothstep( 0.8, 3.4, d37Sd ) ) * d37Sg.g;
+		float d37Sn = texture2D( normalMap, vD37W.xz * 0.043 + uTime * vec2( 0.005, -0.004 ) ).y;
+		float d37Sq = fract( d37Sd * 0.6 + uTime * 0.085 + d37Sn * 0.45 );   // растёт с глубиной: полосы со временем идут на мель
+		float d37Sb = smoothstep( 0.6, 0.64, d37Sq ) * ( 1.0 - smoothstep( 0.64, 0.92, d37Sq ) );   // резкий край — к берегу, хвост — в море
+		float d37Se = 1.0 - smoothstep( 0.0, 0.3 + 0.3 * d37Sn, d37Sd );   // накат у самой кромки
+		float d37Sk = smoothstep( 0.04, 0.9, d37SH );
+		float d37Sf = d37Sz * clamp( d37Sb * ( 0.25 + 0.75 * d37Sk ) + d37Se * ( 0.3 + 0.4 * d37Sk ), 0.0, 1.0 ) * smoothstep( 0.2, 0.5, d37Sn + 0.15 + 0.2 * d37Sk ) * ( 0.45 + 0.55 * uFoam );
+		diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.93, 0.96, 1.0 ), d37Sf * 0.9 );
+		diffuseColor.a = max( diffuseColor.a, d37Sf * 0.85 );
+	}
+#endif
 #endif`,
   };
   // общие uniform поля (по ссылке у всех материалов этой воды); обновляет attach() каждый кадр
