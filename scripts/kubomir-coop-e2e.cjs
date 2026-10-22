@@ -51,7 +51,10 @@ async function browser(tag, o = {}){
     const d = JSON.parse(m.data);
     if (d.id && cb.has(d.id)) { const [a, b] = cb.get(d.id); cb.delete(d.id); d.error ? b(new Error(d.error.message)) : a(d.result); }
     else if (d.method === 'Runtime.exceptionThrown') logs.push('exception: ' + (d.params.exceptionDetails?.exception?.description || d.params.exceptionDetails?.text || '').slice(0, 300));
-    else if (d.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(d.params.type)) logs.push(d.params.type + ': ' + d.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300));
+    else if (d.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(d.params.type)) {
+      const fr = (d.params.stackTrace?.callFrames || []).slice(0, 4).map(f => (f.functionName || '?') + '@' + String(f.url || '').split('/').pop().replace(/[?].*/, '') + ':' + (f.lineNumber + 1)).join(' < ');
+      logs.push(d.params.type + ': ' + d.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300) + (fr ? '  [' + fr + ']' : ''));
+    }
   };
   const send = (method, params = {}) => new Promise((a, b) => { const i = ++id; cb.set(i, [a, b]); ws.send(JSON.stringify({ id: i, method, params })); });
   const ev = async (expr, ms = 60000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: null } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
@@ -254,6 +257,10 @@ async function soak(A, B){
     console.log('  расхождение', k, cells);
   }
   const hA1 = await heap(A), hB1 = await heap(B);
+  // что лежит в localStorage (у сайта ~5 млн знаков на всё: переполнится — ломаются настройки, счётчик посещений, сохранения)
+  const lsInfo = P => P.ev(`(() => { const a = []; let tot = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i), n = (localStorage.getItem(k) || '').length + k.length; tot += n; a.push([k, n]); } a.sort((x, y) => y[1] - x[1]); return { total: tot, keys: a.length, top: a.slice(0, 6) }; })()`).catch(e => e.message);
+  res.localStorage = { host: await lsInfo(A), guest: await lsInfo(B) };
+  console.log('  localStorage:', JSON.stringify(res.localStorage));
   const errs = [A, B].map((P, i) => P.logs.slice(e0[i]).filter(l => !/X3595|DevTools|favicon|GL Driver|GPU stall|WebGL-|Permissions policy|preload/i.test(l)));
   res.soak = { minutes: MIN, steps: n, commonChunks: common.length, desynced: bad.length, heapA: [hA0, hMid?.[0], hA1], heapB: [hB0, hMid?.[1], hB1], errorsA: errs[0].length, errorsB: errs[1].length, host: await A.ev(`${T}.coop().stat()`), guest: await B.ev(`${T}.coop().stat()`) };
   ok(common.length >= 20 && bad.length === 0, `сверка миров: ${common.length} общих чанков, расхождений ${bad.length}`);
