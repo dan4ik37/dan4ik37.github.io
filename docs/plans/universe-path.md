@@ -27,6 +27,24 @@ Sizes as in planet.md: **S** < 1 agent run, **M** ≈ 1, **L** ≈ 2–3, **XL**
 14. Нужны 5 твоих решений (раздел 8): сколько длится обязательный путь новичка, «Первопоселенцы», день «Начала времён», что остаётся вне эпох, телефон до «нашего времени».
 
 ---
+
+
+## Owner decisions (22.10.2026) — they override the recommendations of §8
+
+1. **Long path to awakening: ≈ 15–20 h** (cell ≈ 1–2 h, creature the rest), not the short 3–4 h gate. Mitigate the empty
+   civilization layer with NPC tribes and settlements that grow by themselves (T-060) and with visible progress of others.
+2. **Everyone starts as a microbe — no «Первопоселенцы» shortcut**, existing players included. Coordinator decision (owner may
+   override): site-wide things stay with the account (🪙, 💎, wardrobe items, VIP, levels, achievements — red line «заработанное —
+   к аккаунту»); world-layer progress from P1 (денки, profession skills) is kept but becomes usable when the player reaches the
+   settlement stage.
+3. **Only the plaza with the games stays outside the eras.** The plots district (homes) and the battle zone with military bases
+   also follow the eras: homes from huts to houses, fights from clubs and bows through catapults and early guns to today's
+   vehicles; the current district/bases content becomes the modern-era (E5) version. Era packs T-064…T-067 must include them.
+4. **Phones and satellites must be logical**: the site phone (chat, friends, calls) always works; the phone in the character's hand
+   and in-world apps (taxi, GPS, bank) only from «наше время». Several different satellites with real coverage — navigation (GPS),
+   communication/internet, maybe TV/weather; out of coverage or underground a service does not work (relays in caves, towers in
+   cities, as in kubomir-modpacks §7½). Applies to T-072 and the space steps SP-1…SP-4.
+5. «Начало времён» day — the owner sets it later.
 
 ## 0. Decisions (one line each; the owner can change any of them)
 - **The path:** cell → creature → awakening → the Person: tribe (a settlement in era 0) → settlement eras → future and space. One account = one Person
