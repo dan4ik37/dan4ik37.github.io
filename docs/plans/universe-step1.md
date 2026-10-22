@@ -375,3 +375,10 @@ Owner must decide (5):
 - E:\site\dan4ik37.github.io\js\games\mir-city.js (job board, tasks, panels, new work sites)
 - E:\site\dan4ik37.github.io\js\games\mir-zones.js (WORKS rects, accessRules, mayor overview layer)
 - E:\site\dan4ik37.github.io\js\features\phone.js (bank, market and city apps; with phone-apps.js)
+
+## Owner decisions (22.10.2026)
+1. Kids' town switches from ⭐ to the shared 💵 денки — YES.
+2. Mayor v1 — owner asked «это как тип с выбором?» (is it an election?). Answer given: v1 = automatic «Мэр недели» by contribution (no voting), owner can appoint/remove; real elections come in step 3. Waiting for his final word — P6 only, does not block P1–P5.
+3. Numbers (start 50 💵, ~6 💵 per task, cap 400/day, rent 40/120 per week) — YES for now; owner: «потом посмотрим — сделаем лог, чтобы проверить баланс» → P1 MUST include an admin economy log: «📊 Экономика города» (per day: issued / destroyed / transferred by kind, money supply M vs target T, central-bank k, wage cap hits, top income kinds, suspicious accounts — no nicks of kids), plus CSV export; the city-sim tables in docs/CITY_ECONOMY.md.
+4. Guests play a trial without saving — YES.
+5. Keep the small 🪙 site coins for city work — YES.

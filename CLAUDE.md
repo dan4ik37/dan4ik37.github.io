@@ -69,6 +69,7 @@
   поставщик проверки 18+. Код для них — выключенным по умолчанию, места под тексты юриста.
 
 ## Ожидает запуска владельцем (обновлять этот список!)
+Проверено с сервера 22.10 утром: ПРИМЕНЕНЫ premium.sql (donor_levels, donor_me mode off, «Аноним» зарезервирован), age.sql + community.sql (kid_contact → auth, kidsafe_on → true, call_check → null, age_public_kids → 42501), games-more.sql (kletochki 4, chervyachki_online 6, quest_rule w_xp 5 / w_pts 40, weekly_quests, season_state), coins.sql (coin_run_cap kletochki/chervyachki 10). НЕ применён только ops.sql (п. 14). bases.sql / raids.sql — после слияния военных баз (T-013).
 1–3. Экономика 15.10.2026 (docs/ECONOMY.md) — СТРОГО по порядку: 1) `games-more.sql` (ещё раз) — проверка
    `/rpc/game_win_xp` {"p_game":"horde"} → 10 (20 — старая версия), {"p_game":"fillword_daily"} → 6 (новые игры), {"p_game":"podzem_boss1"} → 6 («Подземье»), {"p_game":"kubomir"} → 4 («Кубомир»); 2) `coins.sql` (ещё раз) — `/rpc/coin_rule` {"p_key":"daily"} → 20
    (PGRST202 — не применён), `/rpc/coin_level_item` {"p_item":"skin:pet:owl"} → 20, `/rpc/coin_run_cap` {"p_game":"fillword"} → 15, {"p_game":"podzem"} → 20, {"p_game":"kubomir"} → 15;
