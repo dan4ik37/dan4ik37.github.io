@@ -89,11 +89,12 @@
   }
 
   // ═══ Профиль планеты (данные) ═══
-  const ATMO_EARTH = { top: 0, Hr: 0, Hm: 0, tauR: [.046, .108, .265], tauM: .03, g: .76, sun: 1 };
+  const ATMO_EARTH = { top: 0, Hr: 0, Hm: 0, tauR: [.023, .054, .133], tauM: .012, g: .76, sun: 1 };
   const HOME = {
     v: 1, id: 'home', title: 'Родная планета', seed: 37, radius: 128000, sea: 0, gen: 'rocky1',
     relief: { amp: 2600, land: .42, hills: 140, detail: 7, warp: .35 },
-    atmo: { top: 19200, Hr: 2400, Hm: 480, tauR: [.046, .108, .265], tauM: .03, g: .76, sun: 1 },
+    // воздух: высота однородной толщи Рэлея 4000 ед. (≈ 3,4 км), прозрачнее земного вдвое — видно на ~30 км, небо голубое
+    atmo: { top: 32000, Hr: 4000, Hm: 800, tauR: [.023, .054, .133], tauM: .012, g: .76, sun: 1 },
     air: true, o2: .21, pressure: 1, g: 1, day: 2400, phase: 0, tilt: 23.4, year: 'calendar', temp: 14,
     moons: [{ id: 'luna', radius: 32000, dist: 2400000, period: 7 * 2400, phase: 1.1, incl: 5, tint: '#cfcfcf' }],
     sky: { stars: 1, sunSize: 1 }, regions: [], hazards: [], mobs: [], requires: { rocket: 0 }, games: {},
@@ -115,7 +116,7 @@
     if (p.atmo === null || p.air === false && p.atmo === undefined) o.atmo = null;
     else {
       const a = { ...ATMO_EARTH, ...(p.atmo ? {} : HOME.atmo), ...(p.atmo || {}) };
-      const Hr = num(a.Hr || undefined, o.radius * .01875, 1, o.radius);
+      const Hr = num(a.Hr || undefined, o.radius * .03125, 1, o.radius);
       o.atmo = { top: num(a.top || undefined, Hr * 8, Hr, o.radius), Hr, Hm: num(a.Hm || undefined, Hr / 5, .5, o.radius), tauR: (Array.isArray(a.tauR) && a.tauR.length === 3 ? a.tauR : ATMO_EARTH.tauR).map(x => num(x, .1, 0, 10)),
         tauM: num(a.tauM, .03, 0, 10), g: num(a.g, .76, -.99, .99), sun: num(a.sun, 1, 0, 10) };
     }
@@ -296,14 +297,14 @@
       let r, g, b;
       // по влажности: пустыня → степь → трава → лес
       const k1 = sstep(.18, .32, m), k2 = sstep(.34, .5, m), k3 = sstep(.55, .7, m);
-      r = mix(.84, .72, k1); g = mix(.74, .68, k1); b = mix(.5, .38, k1);         // песок → степь
+      r = mix(.8, .7, k1); g = mix(.68, .64, k1); b = mix(.48, .36, k1);         // песок → степь
       r = mix(r, .38, k2); g = mix(g, .6, k2); b = mix(b, .26, k2);              // → трава
       r = mix(r, .2, k3); g = mix(g, .42, k3); b = mix(b, .19, k3);              // → лес
       // холод: тайга темнее и синее, тундра серо-бурая
       const cold = sstep(10, 0, T);
       r = mix(r, mix(.42, .16, k3), cold * .8); g = mix(g, mix(.42, .3, k3), cold * .8); b = mix(b, mix(.34, .22, k3), cold * .8);
       // пляж у моря
-      if (D.sea != null) { const beach = sstep(24, 6, above) * sstep(.82, .95, up); r = mix(r, .88, beach); g = mix(g, .8, beach); b = mix(b, .6, beach); }
+      if (D.sea != null) { const beach = sstep(12, 3, above) * sstep(.82, .95, up); r = mix(r, .86, beach); g = mix(g, .78, beach); b = mix(b, .58, beach); }
       // скалы: круто или высоко
       const rock = max(sstep(.86, .7, up), sstep(1500 + nz * 300, 2200 + nz * 300, above) * .85);
       r = mix(r, .48 + nz * .08, rock); g = mix(g, .46 + nz * .07, rock); b = mix(b, .44 + nz * .06, rock);
@@ -493,13 +494,15 @@
           const dep = D.sea - h;
           landColor(dx, dy, dz, D.sea, 1, cc);   // берег под водой — по климату (лёд у полюсов)
           col[v * 4] = Math.round(cc[0] * 255); col[v * 4 + 1] = Math.round(cc[1] * 255); col[v * 4 + 2] = Math.round(cc[2] * 255);
-          col[v * 4 + 3] = max(1, Math.round(255 * (1 - Math.exp(-dep / 260))));
+          col[v * 4 + 3] = clamp(128 + Math.round(dep / 6), 129, 255);   // вода: 129…255 (глубина / 6 ед.)
         } else if (ice) {   // замёрзшее море (у полюсов): белое, по нему можно ходить
           const nzz = NZ2.n3(dx * 600, dy * 600, dz * 600) * .04;
           col[v * 4] = Math.round((.86 + nzz) * 255); col[v * 4 + 1] = Math.round((.92 + nzz) * 255); col[v * 4 + 2] = Math.round((.97 + nzz) * 255); col[v * 4 + 3] = 0;
         } else {
           landColor(dx, dy, dz, h, nx * dx + ny * dy + nz * dz, cc);
-          col[v * 4] = Math.round(cc[0] * 255); col[v * 4 + 1] = Math.round(cc[1] * 255); col[v * 4 + 2] = Math.round(cc[2] * 255); col[v * 4 + 3] = 0;
+          // суша: 0…127 — высота над морем (у берега плавно: берег — линия «0» между вершинами, без ступенек на крупных кусках)
+          col[v * 4] = Math.round(cc[0] * 255); col[v * 4 + 1] = Math.round(cc[1] * 255); col[v * 4 + 2] = Math.round(cc[2] * 255);
+          col[v * 4 + 3] = D.sea == null ? 0 : clamp(127 - Math.round((h - D.sea) / 6), 0, 127);
         }
       }
       // юбки: вершины края, опущенные к центру планеты
@@ -515,7 +518,8 @@
     };
 
     // ── Плоский кусок: якорь на уровне моря, базис [восток, вверх, юг] ──
-    P.patch = (dir, out = {}) => {
+    // базис в точке (без мусора): out — 9 чисел (восток, вверх, юг подряд)
+    P.basis = (dir, out) => {
       const l = sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]), ux = dir[0] / l, uy = dir[1] / l, uz = dir[2] / l;
       // восток = ось × вверх (у полюса — другая ось)
       let rx = 0, ry = 1, rz = 0;
@@ -523,11 +527,15 @@
       let ex = ry * uz - rz * uy, ey = rz * ux - rx * uz, ez = rx * uy - ry * ux;
       const el = sqrt(ex * ex + ey * ey + ez * ez); ex /= el; ey /= el; ez /= el;
       // юг = восток × вверх
-      const sx = ey * uz - ez * uy, sy = ez * ux - ex * uz, sz = ex * uy - ey * ux;
-      const Ra = SEAR;
-      out.dir = [ux, uy, uz]; out.Ra = Ra;
-      out.A = [ux * Ra, uy * Ra, uz * Ra];
-      out.B = [ex, ey, ez, ux, uy, uz, sx, sy, sz];   // столбцы: восток, вверх, юг (подряд по 3)
+      out[0] = ex; out[1] = ey; out[2] = ez; out[3] = ux; out[4] = uy; out[5] = uz;
+      out[6] = ey * uz - ez * uy; out[7] = ez * ux - ex * uz; out[8] = ex * uy - ey * ux;
+      return out;
+    };
+    P.patch = (dir, out = {}) => {
+      const B = P.basis(dir, new Array(9)), Ra = SEAR;
+      out.dir = [B[3], B[4], B[5]]; out.Ra = Ra;
+      out.A = [B[3] * Ra, B[4] * Ra, B[5] * Ra];
+      out.B = B;   // столбцы: восток, вверх, юг (подряд по 3)
       return out;
     };
     // L → система планеты; система планеты → L (out — массив 3)
