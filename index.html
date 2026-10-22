@@ -1711,6 +1711,12 @@ body.low .donation-alert-icon{animation:none}
       <div id="profileGameStats" class="pgs-grid"></div>
     </div>
 
+    <!-- Сезон и задания недели — только на своём профиле (renderProfileQuests в games.js, games-more.sql) -->
+    <div id="profileQuestsCard" class="pf-card pf-card-accent" style="margin-top:1rem" hidden>
+      <div class="pf-kicker" style="margin-bottom:.7rem">🏆 Сезон и задания недели</div>
+      <div id="profileQuests"></div>
+    </div>
+
     <!-- Реферальная ссылка — только на своём профиле -->
     <div id="profileReferralPanel" class="pf-card pf-card-tw" style="display:none;margin-top:1rem">
       <div class="pf-kicker" style="margin-bottom:.5rem">🔗 Пригласи друзей</div>
@@ -1929,6 +1935,9 @@ body.low .donation-alert-icon{animation:none}
     <p class="gm-lead">Мини-игры прямо на сайте. За победы — XP и монеты 🪙 (на них — свой персонаж и улучшения), рекорды попадают в таблицу.</p>
     <div class="gm-me" id="gamesMe" hidden></div>
     <div class="dq" id="gamesDaily" hidden></div>
+    <!-- Сезонный путь и задания недели (js/features/games.js → renderQuests; games-more.sql) — скрыты, пока SQL не выполнен -->
+    <div class="sq" id="gamesSeason" hidden></div>
+    <div class="sq sq-w" id="gamesWeekly" hidden></div>
     <div class="sh" id="secretHunt" hidden></div>
     <div class="gm-grid" id="gamesGrid"></div>
     <div id="gamesHubAd" hidden></div>

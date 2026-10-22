@@ -135,6 +135,14 @@
    `/rpc/call_check` {"p_code":"abcdefgh","p_pass":"x","p_pub":"y"} → null, `/rpc/call_pass` {"p_code":"abcdefgh","p_pub":"x"} → 401
    (community.sql ч. 5). До запуска: звонки — как раньше (без пропуска), ники на /forum — как раньше, до 9 — «только читать» только в
    браузере. PGlite: E:\claude-tmp\kidsafe\test-kidsafe.mjs (441), test-community-ks.mjs (1034), test-donor.mjs (94).
+13. `games-more.sql` — ЕЩЁ РАЗ (22.10.2026, T-015/T-024): задания недели, бесплатный сезонный путь, награды новогоднего задания
+   (таблицы weekly_claims, season_progress, season_owned, season_frame, advent_log; триггеры на game_log и xp_ledger). Идемпотентно;
+   нужны применённые games.sql, coins.sql, economy.sql, progression.sql, notifications.sql (всё есть). Вместе с п. 11 — один запуск
+   games-more.sql, потом coins.sql. Проверка гостем (PGRST202 = не применён): `/rpc/quest_rule` {"p_key":"w_pts"} → 40;
+   `/rpc/weekly_quests` → {"auth":false,"list":[…6 заданий…],…}; `/rpc/season_state` → {"auth":false,"no":0,"theme":"oct",…} (с 1 ноября —
+   "no":1,"theme":"nov"); `/rest/v1/season_progress?select=pts&limit=0` → 200 (400 «does not exist» — не применён); `/rpc/advent_claim`
+   {"p_day":1} → 401 (только вошедшим). До запуска карточек сезона и заданий недели нет (скрыты), новогоднее задание — без наград.
+   PGlite: E:\claude-tmp\quests\test-quests.mjs (на чистой базе дважды — 117, поверх файлов из main с данными — 119, EXPLAIN — 10).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -509,9 +517,9 @@ js/features/games.js и хвост css/premium.css.
     Новый год (14.01), Китайский (лунный; Корея, Вьетнам), Наурыз 21–23 марта («у нас в Казахстане он весной» — главный для
     нашей аудитории: «Наурыз құтты болсын!»), Сонгкран, Рош ха-Шана, исламский (только поздравление), эфиопский. «Будет висеть
     постоянно задание новогоднее» — с 1 декабря до Нового года всегда видна карточка: отсчёт и задание дня (как адвент-календарь);
-    прогресс пока в браузере, награды с сервера (SQL, как daily_quest) — следующим шагом. Праздники выключаются в ⚙️.
+    прогресс в браузере, награды с сервера — СДЕЛАНО 22.10 (T-024, games-more.sql advent_claim). Праздники выключаются в ⚙️.
     ЯДРО СДЕЛАНО 16.10 (GAMES_VER 105) — раздел «🌦 Погода, времена года и праздники (движок)» ниже; «Мир Денчика» ПОДКЛЮЧЁН 16.10
-    (GAMES_VER 106, «Мир Денчика» 3D → «Погода»); после 21.10 — персонажи «как в Симс» (C.exposure уже есть) и advent.sql (§9).
+    (GAMES_VER 106, «Мир Денчика» 3D → «Погода»); после 21.10 — персонажи «как в Симс» (C.exposure уже есть); награды задания (§9) — в games-more.sql.
 37. Физика и стихии В ДВИЖКЕ (владелец 16.10: «квадратики с физикой; деревья как в модах — реалистичные стволы; освещение,
     пламя, волны, чтобы влияли на транспорт, цунами, торнадо»; «физику обрушения, держания — для наших пресетов во всех
     движках»; «сами деревья нужно улучшить»; «и можно будет применять в разных играх»). План и порядок — docs/PHYSICS_PLAN.md:
@@ -1012,7 +1020,8 @@ js/features/games.js и хвост css/premium.css.
   ref lvN; кто уже выше — получит при следующем XP). Ник — `nick_fx()` (золото 40+, радуга 60+ или секреты) → secrets.js
   `.nick-gold`/`.nick-rainbow`. Друзья: 15 → +5 каждые 5 уровней с 15-го до 40-го (45); VIP 50/70/100; персонал без лимита (RLS на
   `friendships`). Уровень 10: титул (`user_titles`, RPC `set_title`; титул роли/VIP — только пока роль/VIP есть, `nick_extras`).
-  Время (economy-sim): обычный игрок (30–45 мин/день) — 10 ур. за ~2 мес, 30 — ~21 мес, 50 — ~5 лет.
+  Время (economy-sim; с 22.10 — с заданиями недели и сезоном): обычный игрок (30–45 мин/день) — 10 ур. за ~53 дня, 30 — ~19 мес,
+  50 — ~4,7 года.
 - VIP-уровень = max(донатный, за уровень): `vip_tier_of()` (её зовут has_perks, закреп, messages.vip_tier); `profiles_public` отдаёт
   эффективные `is_vip`/`vip_until` и `vip_tier` — клиент `getVipTier()` берёт `vip_tier`. VIP за уровень нельзя писать в profiles:
   триггер `protect_profile_columns` откатывает is_vip в клиентской сессии. Невидимка — с Silver VIP (`can_be_invisible`).
@@ -1045,6 +1054,16 @@ js/features/games.js и хвост css/premium.css.
   победы в `%_duel` и `%_online` во всех играх.
 - Задание дня: `daily_quest_code()` (12 заданий по кругу от даты по МСК), прогресс — по `game_log` (пишет game_result,
   хранится 14 дней), награда 50 XP — `claim_daily_quest()` (source `daily`, ref = дата). Тексты — `DAILY_QUESTS` в games.js.
+- Задания недели и бесплатный сезонный путь (T-015, 22.10.2026; games-more.sql — конец файла; docs/ECONOMY.md §10): 6 заданий недели
+  (пн 00:00 МСК; weekly_quest_codes — место s недели w: вариант (w + s) mod k, без случайности), прогресс — сервер (weekly_quest_stats:
+  game_log, xp_ledger 'daily'/'watch', user_visits — по индексам), claim_weekly_quest → XP и 🪙 'weekly' + ⭐. Сезон = месяц МСК
+  (quest_rule s_months; № 1 — ноябрь 2026, октябрь — пробный № 0); ⭐ — триггеры trg_season_on_game_win (первые 10 побед в день) и
+  trg_season_on_daily_quest + задания недели; season_claim — награды лестницы (🪙, вещь темы → coin_wallet.items, рамка и титулы →
+  season_owned), за прошлые сезоны тоже; титул — season_title_set (user_titles 'ss:ГГГГ-ММ:1|2'; achTitleDef в achievements.js — для
+  ников и профиля), рамка — season_frame_set / season_frames (xp.js applyLevelFrame, .lv-frame-ss[data-ss]). Витрина — quest_hub()
+  (renderQuests в «Играх», renderProfileQuests на своём профиле; подсказка после партий — questAfterGame, не чаще раза в 45 с). Платного
+  пути нет (season_paid_on → false). Числа: quest_rule ↔ QUEST_NUM, season_ladder ↔ SEASON_LADDER, season_themes ↔ SEASON_THEMES,
+  weekly_quest_pool ↔ WEEKLY_QUESTS (порядок важен) — economy-test раздел 7; проверка с датой — *_at (только сервер).
 - «Поддержать стрим / Позвать друга» — плашка `gamesSupport()` в games.js после победы или рекорда (не чаще раза
   в 10 мин, максимум 3 за визит); ссылка «позвать» ведёт на SEO-страницу `/games/<id>`.
 - «📣 Вызов» (кнопка в шапке игры, `gamesChallenge()`) — ссылка `/games/<id>?s=<рекорд>&n=<ник>`: api/game.js
@@ -1101,6 +1120,8 @@ js/features/games.js и хвост css/premium.css.
 - Вещи только за 💎 (6-е поле в PARTS): skin:hat:gemcrown 150, skin:back:gemwings 300, skin:trail:gems 100 — продаёт #/shop
   (premium_spend → coin_wallet.items); D37Char.price → цена в 💎, gemsOf(item) > 0; D37Coins.buy → 'gems', coins_buy — отказ, char_save
   надевает купленное (coin_gems_item). Новая такая вещь — PARTS + каталог магазина (premium.sql, premium.js, api/_lib/premium.js) + gen-skin-sql.
+- Вещи-награды (8-е поле PARTS): 1 — за друзей (referrals2.sql), 2 — сезонный путь (вещь темы), 3 — новогоднее задание (⛄): цены нет
+  (gen-skin-sql пропускает), сервер кладёт в coin_wallet.items, char_save надевает выданное; подписи — D37Char.grantOf (charedit, wardrobe).
 - Надетое: coin_wallet.look (char_save проверяет владение; VIP-части — coin_vip_item; части пакета — по пакету), гостю — d37_char. Цены
   частей и пакетов, списки VIP и 💎, слоты char_save в coins.sql генерирует `node scripts/gen-skin-sql.mjs` из PARTS/PACKS (504 цены; тест
   PGlite сверяет цены, свои цвета, VIP, пакеты, 💎). Пока coins.sql в базе старый: saveLook (coins.js) сохраняет то, что сервер понимает
@@ -1656,8 +1677,9 @@ js/features/games.js и хвост css/premium.css.
 - js/core/celebrate.js (D37Celebrate, на всех страницах): холст салюта (z 100250), поздравления, отсчёт, конфетти/фонарики/лепестки/
   капли по стилю праздника, свой маленький звук (или synth fw_launch / fw_boom / fw_crackle); «🎄 Новогоднее задание» — карточка
   .cel-adv (в играх свёрнута до значка, убрать нельзя) и полоса .cel-ban на главной, 31 задание ADVENT (события d37:game из
-  games.js report, переходы #/…, свой d37:chatmsg, d37:advent { kind }), прогресс d37_advent, крючок onAdventDone (SQL — потом,
-  docs/SEASONS.md §9). ⚙️ «🌦 Погода» (ключи wxFx, wxAmt, holidays): эффекты, частицы, «Салют и поздравления».
+  games.js report, переходы #/…, свой d37:chatmsg, d37:advent { kind }), прогресс d37_advent; награда за день — с сервера (T-024,
+  advent_claim в games-more.sql: проверенное — 10 🪙 + 5 XP, иначе 5 🪙; 20 дней — ⛄ «Снеговик»; на карточке «⛄ N/20»; сделанное без
+  входа забирается после входа — srvSync), крючок onAdventDone (docs/SEASONS.md §9). ⚙️ «🌦 Погода» (ключи wxFx, wxAmt, holidays): эффекты, частицы, «Салют и поздравления».
 - «Студия 3D»: js/games/studio3d-weather.js — «🌦 Погода» (SC.settings.weather: mode, days, season, weather, climate, seed — в мире,
   у гостей блоком world), Weather.* в скриптах (script.js WS/Weather; Lua, C#, Java): State, Season, Temperature, FeelsLike, Wind,
   Rain, Snow, Today, события Changed(state, season) и Holiday(id, text), Weather.Set(state) — у хозяина на время игры (гостям 'wx').
