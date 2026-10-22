@@ -163,7 +163,7 @@ let BASE = '';
         let up = false;
         for (let i = 0; i < 120 && !up; i++) { await sleep(500); up = await ev(`!!(window.GAME_IMPL?.podzem?._test)`, 3000).catch(() => false); }
         // новый мир — первая кнопка «Играть» / «Новый мир» в меню
-        await ev(`(async () => { for (let i = 0; i < 40; i++) { const b = [...document.querySelectorAll('.pz button')].find(x => /Новый мир|Создать|Играть|▶/.test(x.textContent)); if (b) { b.click(); await new Promise(r => setTimeout(r, 700)); } const g = GAME_IMPL.podzem._test.state?.(); if (g?.state === 'play') return 1; await new Promise(r => setTimeout(r, 300)); } return 0; })()`, 40000);
+        await ev(`(async () => { for (let i = 0; i < 40; i++) { const g = GAME_IMPL.podzem._test.state?.(); if (g?.state === 'play' || g?.state === 'loading') return 1; const b = document.querySelector('.pz-menu [data-a="quick"], .pz-menu [data-a="play"]:not([disabled])'); if (b) b.click(); await new Promise(r => setTimeout(r, 700)); } return 0; })()`, 40000);
         for (let i = 0; i < 60; i++) { await sleep(500); if (await ev(`GAME_IMPL.podzem._test.state?.()?.state === 'play'`, 3000).catch(() => false)) break; }
         // палец по холсту — включить кнопки телефона (они появляются после первого касания)
         await touch(send, Math.round(VW * .7), Math.round(VH * .4), 60);
@@ -173,6 +173,7 @@ let BASE = '';
         await shot(send, tag);
         results.push({ screen: VW + '×' + VH, pct: cov?.pct });
         if (land && MODE === 'full') ok(cov.pct <= 25, `«Подземье» лёжа — интерфейс не больше 25 % (${cov.pct} %)`, cov.parts);
+        if (MODE === 'full') await podzemChecks(B, VW, VH);
       } else if (GAME === 'world') {
         const lsW = { d37_perf: 'low', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_gfx: 'low', d37_settings: JSON.stringify({ gfxPreset: 'low', gfx: 'low', autoLand: true }) };
         await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(lsW).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_mir_pos');}catch(e){}` });
@@ -344,4 +345,48 @@ async function fullChecks(B, VW, VH, row){
   console.log('  узлы / слушатели: до', JSON.stringify(c0), '→ после 20+10', JSON.stringify(c1), '→ ещё 20+10', JSON.stringify(c2));
   row.leak = { c0, c1, c2 };
   ok(c2.listeners - c1.listeners <= 2 && c2.nodes - c1.nodes <= 60, 'вещи 20 раз и редактор 10 раз — слушатели и узлы не растут', { c0, c1, c2 });
+}
+
+// ═══ «Подземье»: кнопки не наезжают, под пальцем — свои, «Настроить кнопки» в ⚙️ → «⛏ Подземье» двигает их (CSS-переменные) ═══
+async function podzemChecks(B, VW, VH){
+  const { send, ev } = B;
+  const geo = () => ev(`(() => { const w = document.querySelector('.pz-wrap').getBoundingClientRect();
+    const btns = [...document.querySelectorAll('.pz-touch [data-t]')].filter(b => !b.hidden && b.getBoundingClientRect().width).map(b => { const r = b.getBoundingClientRect(); return { id: b.dataset.t, l: r.left, t: r.top, r: r.right, b: r.bottom, w: r.width, x: r.left + r.width / 2, y: r.top + r.height / 2, rx: r.left + r.width / 2 - w.left, ry: r.top + r.height / 2 - w.top }; });
+    const covered = []; for (const b of btns) for (const [x, y] of [[b.x, b.y], [b.l + b.w * .25, b.y], [b.r - b.w * .25, b.y]]) { const el = document.elementFromPoint(x, y); if (!el || el.closest('[data-t]')?.dataset.t !== b.id) covered.push({ id: b.id, top: el ? String(el.className || el.tagName).slice(0, 30) : null }); }
+    return { btns, covered }; })()`);
+  const G = await geo();
+  const bad = []; for (let i = 0; i < G.btns.length; i++) for (let j = i + 1; j < G.btns.length; j++) { const a = G.btns[i], b = G.btns[j]; if (Math.hypot(a.x - b.x, a.y - b.y) < (a.w + b.w) / 2 + 2) bad.push(a.id + '×' + b.id); }
+  ok(!bad.length && G.btns.length >= 4, '«Подземье»: кнопки не наезжают друг на друга', bad);
+  ok(!G.covered.length, '«Подземье»: каждая кнопка под пальцем — своя', G.covered.slice(0, 5));
+  ok(G.btns.every(b => b.w >= 40 && b.w <= 60), '«Подземье»: кнопки 42–58 px', G.btns.map(b => b.id + ' ' + Math.round(b.w)));
+  const j0 = G.btns.find(b => b.id === 'jump');
+  await ev(`(() => { D37Settings.open({ tab: 'podzem' }); return 1; })()`); await sleep(500);
+  const row = await ev(`!!document.querySelector('#gsSettings [data-tl-edit]:not([disabled])')`);
+  ok(row, '«⚙️ → ⛏ Подземье»: есть «Настроить кнопки»');
+  if (!row) { await ev(`D37Settings.close()`); return; }
+  await ev(`(() => { document.querySelector('#gsSettings [data-tl-edit]').click(); return 1; })()`); await sleep(500);
+  const pj = await ev(`(() => { const p = document.querySelector('.tl-ed .tl-p[data-id="jump"]'); if (!p) return null; const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width }; })()`);
+  ok(!!pj && Math.abs(pj.x - j0.x) < 2 && Math.abs(pj.y - j0.y) < 2, '«Подземье»: в редакторе «прыжок» там же, где в игре', [pj, j0]);
+  if (!pj) return;
+  const st = await ev(`GAME_IMPL.podzem._test.state().state`);
+  ok(st === 'paused', '«Подземье»: пока настраиваешь — мир на паузе', st);
+  const steps = []; for (let i = 1; i <= 6; i++) steps.push([pj.x - 110 * i / 6, pj.y - 50 * i / 6]);
+  await touch(send, pj.x, pj.y, 60, steps);
+  const done = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="done"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+  await touch(send, done[0], done[1], 50); await sleep(400);
+  const j1 = (await geo()).btns.find(b => b.id === 'jump');
+  ok(j1 && Math.abs(j1.x - (pj.x - 110)) < 4 && Math.abs(j1.y - (pj.y - 50)) < 4 && Math.abs(j1.w - j0.w) < 2, '«Подземье»: «Готово» — «прыжок» на новом месте', [j1, pj]);
+  ok(await ev(`GAME_IMPL.podzem._test.state().state`) === 'play', '«Подземье»: закрыл редактор — играем дальше');
+  await ev(`(() => { D37TouchLayout.edit(); return 1; })()`); await sleep(300);
+  for (const k of ['reset', 'done']) { const p = await ev(`(() => { const r = document.querySelector('.tl-ed [data-tl="${k}"]').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); await touch(send, p[0], p[1], 50); await sleep(300); }
+  const j2 = (await geo()).btns.find(b => b.id === 'jump');
+  ok(j2 && Math.abs(j2.rx - j0.rx) < 2 && Math.abs(j2.ry - j0.ry) < 2, '«Подземье»: «Как было» — «прыжок» на месте', [j2, j0]);
+  // левша: кнопки зеркалит CSS (.pz-tc), редактор показывает их там же, где они на экране
+  await ev(`(() => { D37Settings.set('lefty', true); return 1; })()`); await sleep(400);
+  const jl = (await geo()).btns.find(b => b.id === 'jump');
+  await ev(`(() => { D37TouchLayout.edit(); return 1; })()`); await sleep(300);
+  const pl = await ev(`(() => { const r = document.querySelector('.tl-ed .tl-p[data-id="jump"]').getBoundingClientRect(); document.querySelector('.tl-ed [data-tl="cancel"]').click(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  ok(jl && jl.rx < VW / 2 && Math.abs(pl.x - jl.x) < 2 && Math.abs(pl.y - jl.y) < 2, '«Подземье», левша: «прыжок» слева, в редакторе — там же', [jl, pl]);
+  await ev(`(() => { D37Settings.set('lefty', false); return 1; })()`); await sleep(300);
+  await shot(send, `podzem-${VW}x${VH}-after-editor`);
 }

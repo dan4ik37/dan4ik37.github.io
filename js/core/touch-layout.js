@@ -10,7 +10,7 @@
 //   btn: id => элемент кнопки (или null),
 //   defaults: (W, H, k, { lefty }) => ({ id: { x, y, d } }),   // середины (px от левого верхнего угла окна) и диаметры — для ПРАВОЙ
 //                                                   // руки; k — «Размер кнопок» из ⚙️ (1 = 100 %); левша — зеркало делает помощник
-//   apply: (id, el, { x, y, d, lefty, W, H }) — своя расстановка (по умолчанию left/top/width/height в px, зеркало для левши),
+//   apply: (id, el, { x, y, d, lefty, W, H, k }) — своя расстановка (по умолчанию left/top/width/height в px, зеркало для левши),
 //   avoid: () => [{ l, t, r, b, label }]        // что кнопкам закрывать нельзя (панель вещей…) — подсветка в редакторе
 //   onEdit: (on, overlay) => {}                 // редактор открыт/закрыт — игра не слушает пальцы (overlay.close() — «Отмена»)
 // })
@@ -127,7 +127,7 @@
     T.pos = compute(T, W, H, k);
     for (const [id, p] of T.pos) {
       const b = T.o.btn ? T.o.btn(id) : null; if (!b) continue;
-      if (T.o.apply) T.o.apply(id, b, { x: p.x, y: p.y, d: p.d, lefty: L, W, H });
+      if (T.o.apply) T.o.apply(id, b, { x: p.x, y: p.y, d: p.d, lefty: L, W, H, k });
       else place(b, L ? W - p.x : p.x, p.y, p.d);
     }
   }

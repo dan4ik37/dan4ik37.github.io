@@ -10,7 +10,8 @@
 // • «Вещи» — окно с вкладками «Вещи / Сделать / Сундук» (широкое окно — два столбца); тап по вещи — что она делает и кнопки
 //   «На панель», «В сундук», «Использовать», «Выбросить»; крафт — «Можно сделать» сверху, по станкам, кнопки «Сделать ×1/×5/всё»;
 // • пальцем — подписанные кнопки (подпись «Копать / Удар / Ставить» — по вещи в руке), джойстик с подсказкой, в открытом окне
-//   кнопок нет; левша (⚙️ → Управление) — зеркально;
+//   кнопок нет; левша (⚙️ → Управление) — зеркально; T-074: кнопки компактнее (42–58 px, подпись мелко), раскладку можно
+//   поменять — «⚙️ → ⛏ Подземье → 🎮 Настроить кнопки» (js/core/touch-layout.js);
 // • меню паузы — общее меню сайта (D37Settings.menu), «🆘 Я застрял», настройки — вкладка «⛏ Подземье» в общем ⚙️;
 // • «нокаут» вместо смерти (владелец: без жестокости) — затемнение и «Ты без сил», вещи с тобой.
 (() => {
@@ -218,8 +219,8 @@
 .gs-lefty .pz-tc{right:auto;left:0;transform:scaleX(-1)}
 .gs-lefty .pz-tc .tb>*{transform:scaleX(-1)}
 .pz-touch .tb{position:absolute;pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;border:0;border-radius:50%;background:rgba(18,18,36,.62);color:#fff;font:800 22px/1 Montserrat,system-ui,sans-serif;box-shadow:0 0 0 2px rgba(255,255,255,.2) inset;opacity:var(--gs-touch-a,1);touch-action:none;width:calc(var(--d) * var(--pz-sc));height:calc(var(--d) * var(--pz-sc));right:calc(var(--x) * var(--pz-sc));bottom:calc(var(--y) * var(--pz-sc))}
-.pz-touch .tb b{font:800 calc(10px * var(--pz-sc))/1 Montserrat,system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 1px 2px #000;white-space:nowrap}
-.pz-touch .tb .i{font-size:calc(var(--d) * var(--pz-sc) * .34);line-height:1}
+.pz-touch .tb b{font:800 calc(8px * var(--pz-sc))/1 Montserrat,system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 1px 2px #000;white-space:nowrap;opacity:.9}
+.pz-touch .tb .i{font-size:calc(var(--d) * var(--pz-sc) * .38);line-height:1}
 .pz-touch .tb.on{background:rgba(255,216,74,.45)}
 .pz-touch .tb.ok{background:rgba(40,130,70,.7)}
 .pz-touch .tb.near{box-shadow:0 0 0 3px rgba(255,216,74,.85) inset}
@@ -243,7 +244,7 @@
 .pz-hb-grid .pz-goal{flex:1 1 120px;min-height:44px}
 .pz-hb-grid .pz-clock{display:none!important}
 .pz-hb-grid .pz-buffs{flex-basis:100%}`;
-  function addCss(){ const old = document.getElementById('pz-css'); if (old && old.dataset.v === '2') return; old?.remove(); const s = document.createElement('style'); s.id = 'pz-css'; s.dataset.v = '2'; s.textContent = CSS; document.head.appendChild(s); }
+  function addCss(){ const old = document.getElementById('pz-css'); if (old && old.dataset.v === '3') return; old?.remove(); const s = document.createElement('style'); s.id = 'pz-css'; s.dataset.v = '3'; s.textContent = CSS; document.head.appendChild(s); }
   const isTouch = () => { try { return matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window; } catch (e) { return false; } };
   const fmtTime = s => { s = Math.floor(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? `${h} ч ${m} мин` : `${m} мин`; };
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -406,14 +407,14 @@
       // вторым рядом; телефон стоя — 2 ряда по 5 под строкой «⏸ здоровье цель»
       let mode = portrait ? 'grid' : 'center';
       root.classList.toggle('pz-hb-grid', mode === 'grid'); root.classList.remove('pz-hb-row2');
-      const minCell = touchUI ? 44 : 40, top = short ? 6 : 8, r1 = short ? 46 : 54;
+      const minCell = touchUI ? 44 : 40, top = short ? 6 : 8, r1 = short ? 46 : 54, maxCell = touchUI && short ? 44 : 52;   // телефон лёжа — ячейки 44 (T-074: компактнее)
       let cell, left, hotTop = top;
       if (mode === 'center') {
         const gl = 10 + (boxEl.offsetWidth || (short ? 160 : 230)) + 10, gr = w - 10 - (btnsEl.offsetWidth || 60) - 10, avail = gr - gl;
-        cell = Math.min(52, Math.floor((avail - 35) / 10));
+        cell = Math.min(maxCell, Math.floor((avail - 35) / 10));
         if (cell >= minCell) left = gl + (avail - (cell * 10 + 35)) / 2;
-        else { mode = 'row2'; cell = Math.max(32, Math.min(52, Math.floor((w - 43) / 10))); left = (w - (cell * 10 + 35)) / 2; hotTop = r1 + 6; }
-      } else { cell = Math.max(40, Math.min(50, Math.floor((w - 48) / 5))); left = (w - (cell * 5 + 20)) / 2; hotTop = r1 + 6; }
+        else { mode = 'row2'; cell = Math.max(32, Math.min(maxCell, Math.floor((w - 43) / 10))); left = (w - (cell * 10 + 35)) / 2; hotTop = r1 + 6; }
+      } else { cell = Math.max(40, Math.min(touchUI ? 44 : 50, Math.floor((w - 48) / 5))); left = (w - (cell * 5 + 20)) / 2; hotTop = r1 + 6; }
       root.classList.toggle('pz-hb-row2', mode === 'row2');
       root.style.setProperty('--pz-cell', cell + 'px');
       hotEl.style.left = Math.round(left) + 'px'; hotEl.style.top = hotTop + 'px';
@@ -423,6 +424,7 @@
       let rotSeen = false; try { rotSeen = !!sessionStorage.getItem('d37_pz_rot'); } catch (e) {}
       if (rotEl) rotEl.hidden = !(touchUI && portrait && !rotSeen && G.state === 'play');
       if (invOpen) U.inv();
+      tlT?.layout();   // кнопки телефона — по окну (пишет стили, только если окно или настройки поменялись)
     };
     U.atlas = A => {
       A.canvas.toBlob(b => {
@@ -876,6 +878,7 @@
           <div class="gs-row"><div class="gs-lbl"><b>Кнопки на телефоне</b><small>Размер</small></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="70" max="150" step="5" value="${ts}" data-range="touchSize" data-mul="1" aria-label="Размер кнопок"><output data-out="touchSize">${ts}%</output></div></div></div>
           <div class="gs-row"><div class="gs-lbl"><b>Прозрачность кнопок</b></div><div class="gs-ctl"><div class="gs-range"><input type="range" min="30" max="100" step="5" value="${ta}" data-range="touchAlpha" data-mul="1" aria-label="Прозрачность кнопок"><output data-out="touchAlpha">${ta}%</output></div></div></div>
           <div class="gs-row"><div class="gs-lbl"><b>Для левши</b><small>Кнопки — слева, джойстик — справа.</small></div><div class="gs-ctl"><label class="gs-sw"><input type="checkbox" data-sw="lefty"${S.get('lefty') ? ' checked' : ''}><i aria-hidden="true"></i></label></div></div>
+          ${window.D37TouchLayout?.settingsRow?.() || ''}
           <div class="gs-sec">Картинка</div>
           ${sw('smooth', 'Плавный свет', 'Выключи — свет «клетками», как в старых играх.')}
           ${sw('back', 'Подземный фон в пещерах')}
@@ -939,7 +942,7 @@
           <li><b>✋ Открыть</b> — дверь, сундук, Проводник рядом (кнопка светится, когда есть что открыть). <b>🎒 Вещи</b> — вещи и крафт</li>
           <li><b>Палец по миру</b>: держи — копать или ставить там, коротко — открыть дверь, сундук, поговорить</li>
           <li><b>✛ Точно</b> — крестик: двигай его пальцем, <b>✓ Сюда</b> — копать или ставить ровно в нём</li>
-          <li>Лёжа удобнее, а кнопка ⛶ — во весь экран. Размер кнопок и «для левши» — ⚙️ → «⛏ Подземье»</li></ul>`],
+          <li>Лёжа удобнее, а кнопка ⛶ — во весь экран. Размер кнопок, «для левши» и «🎮 Настроить кнопки» (переставить пальцем) — ⚙️ → «⛏ Подземье»</li></ul>`],
         pad: ['🎮 Геймпад', `<ul><li>Левый стик — идти (к стене — схватиться за край), <b>A</b> — прыжок, правый стик — прицел, <b>RT</b> — копать/бить/ставить, <b>X</b> — открыть, <b>B</b> — крюк, <b>Y</b> — вещи, <b>LB/RB</b> — ячейки, <b>LT</b> — лечение, крестовина ↑ — зелья, <b>Start</b> — меню</li></ul>`],
       };
       const order = [first, ...['touch', 'pc', 'pad'].filter(k => k !== first)];
@@ -1048,15 +1051,22 @@
     // ⤒ «Прыжок», большая — «Копать / Удар / Ставить…» (по вещи в руке; враг рядом — бьёт его), «✋ Открыть» (светится,
     // если рядом дверь, сундук, Проводник), «🎒 Вещи», «🪝 Крюк» (когда есть), «✛ Точно» — крестик и «✓ Сюда».
     // Палец по миру: держи — копать/ставить/бить там (умный курсор подправит), коротко — открыть/поговорить.
+    // Компактнее (T-074, как «Кубомир»: владелец 22.10 — «пол-экрана всё»): 42–58 px, подпись — мелко внутри. Где стоят —
+    // js/core/touch-layout.js: по умолчанию — PZ_BTNS (диаметр и отступы от правого и нижнего края при «Размере кнопок» 100 %),
+    // своя раскладка игрока («⚙️ → ⛏ Подземье → 🎮 Настроить кнопки») — те же --d/--x/--y; левша — зеркалом .pz-tc, как было
+    const PZ_BTNS = [['jump', '⤒', 'Прыжок', 58, 14, 16], ['use', '⛏', 'Копать', 54, 86, 12], ['act', '✋', 'Открыть', 46, 22, 92], ['inv', '🎒', 'Вещи', 46, 84, 80],
+      ['hook', '🪝', 'Крюк', 44, 150, 30], ['build', '✛', 'Точно', 42, 28, 158], ['put', '✓', 'Сюда', 52, 146, 84]];
+    let tlT = null;
     function buildTouch(wrap){
+      const st = id => { const b = PZ_BTNS.find(x => x[0] === id); return `--d:${b[3]}px;--x:${b[4]}px;--y:${b[5]}px`; };
       touchEl.innerHTML = `<div class="pz-tc">
-          <button type="button" class="tb" data-t="jump" style="--d:80px;--x:12px;--y:16px" aria-label="Прыжок"><span class="i">⤒</span><b>Прыжок</b></button>
-          <button type="button" class="tb" data-t="use" style="--d:70px;--x:104px;--y:10px" aria-label="Действие вещью в руке"><span class="i">⛏</span><b>Копать</b></button>
-          <button type="button" class="tb" data-t="act" style="--d:58px;--x:22px;--y:110px" aria-label="Открыть, поговорить"><span class="i">✋</span><b>Открыть</b></button>
-          <button type="button" class="tb" data-t="inv" style="--d:58px;--x:96px;--y:94px" aria-label="Вещи и крафт"><span class="i">🎒</span><b>Вещи</b></button>
-          <button type="button" class="tb" data-t="hook" style="--d:54px;--x:180px;--y:40px" aria-label="Крюк-кошка" hidden><span class="i">🪝</span><b>Крюк</b></button>
-          <button type="button" class="tb" data-t="build" style="--d:50px;--x:30px;--y:184px" aria-label="Точный крестик"><span class="i">✛</span><b>Точно</b></button>
-          <button type="button" class="tb ok" data-t="put" style="--d:62px;--x:172px;--y:100px" aria-label="Копать или ставить там, где крестик" hidden><span class="i">✓</span><b>Сюда</b></button>
+          <button type="button" class="tb" data-t="jump" style="${st('jump')}" aria-label="Прыжок"><span class="i">⤒</span><b>Прыжок</b></button>
+          <button type="button" class="tb" data-t="use" style="${st('use')}" aria-label="Действие вещью в руке"><span class="i">⛏</span><b>Копать</b></button>
+          <button type="button" class="tb" data-t="act" style="${st('act')}" aria-label="Открыть, поговорить"><span class="i">✋</span><b>Открыть</b></button>
+          <button type="button" class="tb" data-t="inv" style="${st('inv')}" aria-label="Вещи и крафт"><span class="i">🎒</span><b>Вещи</b></button>
+          <button type="button" class="tb" data-t="hook" style="${st('hook')}" aria-label="Крюк-кошка" hidden><span class="i">🪝</span><b>Крюк</b></button>
+          <button type="button" class="tb" data-t="build" style="${st('build')}" aria-label="Точный крестик"><span class="i">✛</span><b>Точно</b></button>
+          <button type="button" class="tb ok" data-t="put" style="${st('put')}" aria-label="Копать или ставить там, где крестик" hidden><span class="i">✓</span><b>Сюда</b></button>
         </div>
         <div class="pz-joyhint"${lsGet('d37_pz_joy') ? ' hidden' : ''}>◀ ▶<br>двигай<br>пальцем</div>
         <div class="pz-joy" hidden><i></i></div>`;
@@ -1142,13 +1152,26 @@
       cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
       // окно открылось — отпустить всё, что держали пальцем (кнопки скрыты)
       U.releaseTouch = () => { ptr.clear(); U.touch.mx = U.touch.my = 0; U.touch.jump = U.touch.use = U.touch.front = false; joyEl.hidden = true; for (const b of touchEl.querySelectorAll('.tb.on')) b.classList.remove('on'); API.attackEnd(); };
+      // раскладка (js/core/touch-layout.js): окно игры — wrap (у .pz-touch тот же прямоугольник), кнопки — CSS-переменными
+      const TL = window.D37TouchLayout;
+      tlT?.detach();
+      tlT = TL ? TL.attach({ id: 'podzem', title: 'Подземье', el: wrap,
+        items: () => PZ_BTNS.map(([id, icon, label]) => ({ id, icon, label, opt: id === 'hook' ? 'с крюком-кошкой' : id === 'put' ? 'в режиме «✛ Точно»' : undefined })),
+        btn: id => touchEl.querySelector(`[data-t="${id}"]`),
+        defaults: (W, H, k) => { const o = {}; for (const [id, , , d, x, y] of PZ_BTNS) o[id] = { x: W - (x + d / 2) * k, y: H - (y + d / 2) * k, d: d * k }; return o; },
+        apply: (id, b, p) => { const k = p.k || 1, s = b.style; s.setProperty('--d', (p.d / k).toFixed(1) + 'px'); s.setProperty('--x', ((p.W - p.x - p.d / 2) / k).toFixed(1) + 'px'); s.setProperty('--y', ((p.H - p.y - p.d / 2) / k).toFixed(1) + 'px'); },   // CSS сам умножит на --pz-sc
+        avoid: () => { const B = wrap.getBoundingClientRect(), out = []; for (const [e, label] of [[hotEl, 'панель вещей'], [boxEl, 'здоровье'], [btnsEl, 'меню']]) { const r = e && !e.hidden && e.getBoundingClientRect(); if (r && r.width) out.push({ l: r.left - B.left, t: r.top - B.top, r: r.right - B.left, b: r.bottom - B.top, label }); } return out; },
+        // редактор открыт — мир на паузе (без меню), пальцы отпущены; закрыли — играем дальше
+        onEdit: on => { U.releaseTouch(); if (on) { if (G.state === 'play') { G.state = 'paused'; U.tlPaused = true; } } else if (U.tlPaused) { U.tlPaused = false; if (G.state === 'paused' && !menuKind) G.state = 'play'; } } }) : null;
     }
+    U.touchLayout = () => tlT;
 
     U.dispose = () => {
       offs.forEach(f => f()); offs.length = 0;
       clearInterval(koT); clearTimeout(selNameT);
       closePause();
       settingsTab(false);
+      tlT?.detach(); tlT = null;
       modalObs.disconnect();
       if (atlasUrl) URL.revokeObjectURL(atlasUrl);
       root = null;
