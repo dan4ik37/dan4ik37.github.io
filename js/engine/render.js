@@ -626,7 +626,17 @@
       if (fl) { r.toneMappingExposure = expo0 * (1 + .9 * fl); hemi.intensity = hemi0 * (1 + 2 * fl); }   // молния
       if (GU.rt) GU.rt[0] = q !== 'low' ? R.lighting.gfx.rt?.wet || 0 : 0;   // мокрое — мира (данные общие на страницу: после кадра — 0)
       if (R.post && R.post.on) { if (R.guard?.due()) R.guard.test(scene, camera); else R.post.render(scene, camera); }   // страж графики: иногда — кадр с самопроверкой
-      else { r.render(scene, camera); ST.scene = r.info.render.calls; ST.post = 0; }
+      else {
+        // два диапазона глубины (R.depthSplit: планета, T-075) — и без постобработки: дальний, глубина заново, ближний
+        const S2 = R.depthSplit;
+        if (S2 && S2.near && S2.far) {   // фон-цвет three чистит кадр всегда — на ближний проход без фона
+          const ac = r.autoClear; r.render(scene, S2.far); r.autoClear = false; r.clearDepth();
+          if (!S2.skipNear) { const bg = scene.background; scene.background = null; r.render(scene, S2.near); scene.background = bg; }
+          r.autoClear = ac;
+        }
+        else r.render(scene, camera);
+        ST.scene = r.info.render.calls; ST.post = 0;
+      }
       if (GU.rt) GU.rt[0] = 0;
       if (R.wx) R.wx.post?.();
       if (fl) { r.toneMappingExposure = expo0; hemi.intensity = hemi0; }

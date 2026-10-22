@@ -10,12 +10,13 @@
 //          node scripts/planet-perf.cjs golden             — T-079: «золотые» значения O.m / рельсов / неба в Chrome = в node (до бита)
 // Переменные: RATE (замедление ЦП, 4), Q (качество, mid), PC=1 — компьютер 1280 × 720 без замедления, CHROME, D37_TMP (временное — на E:).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
-const SITE = path.join(__dirname, '..');
+// SITE_DIR — другая копия сайта (замер «до» на старых файлах тем же скриптом), D37_OUT — папка отчётов и снимков (в D37_TMP)
+const SITE = process.env.SITE_DIR ? path.resolve(process.env.SITE_DIR) : path.join(__dirname, '..');
 const [MODE = 'perf', ARG = ''] = process.argv.slice(2);
 const PC = !!process.env.PC, RATE = PC ? 1 : +(process.env.RATE || 4), Q = process.env.Q || (PC ? 'high' : 'mid');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
-const OUT = path.join(TMP, 't051');
+const OUT = path.join(TMP, process.env.D37_OUT || 't075');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png',
   '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.ico': 'image/x-icon' };

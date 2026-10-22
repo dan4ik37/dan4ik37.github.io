@@ -979,12 +979,24 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     // Коды в альфе: блеск — только с «Трассировкой лучей» (как было до 16.10), трава и листва — пока считается AO (он же —
     // контактные тени трассировки) и страж графики их не выключил. Включены — только на время отрисовки буфера сцены
     P.codesOn = () => !P.off.codes && !!E.GFXU?.rt && (P.rt.on || (P.fol && P.ao.on));
+    // Два диапазона глубины (T-075, R.depthSplit = { near, far, skipNear }: планета — виды на десятки км): сначала дальний проход
+    // (своя камера far: земля вдали и небо, слой 1), глубина — заново, потом ближний (near: человечки, земля рядом). В буфере
+    // глубины — только ближний: AO, отражения, контактные тени считают по near — ровно и точно. Возвращает камеру глубины кадра
     function sceneTo(scene, camera, codes){
       r.setRenderTarget(rtScene); r.autoClear = true;
       const GU = E.GFXU;
       if (codes && GU?.rt && !P.off.codes) { if (P.rt.on) GU.rt[1] = 1; if (P.fol && P.ao.on) GU.rt[2] = 1; }
-      r.render(scene, camera);
+      const S2 = R.depthSplit;
+      if (S2 && S2.near && S2.far) {
+        r.render(scene, S2.far);
+        r.autoClear = false; r.clearDepth();
+        // фон-цвет three чистит кадр ВСЕГДА (forceClear, и без autoClear) — на ближний проход фон убираем
+        if (!S2.skipNear) { const bg = scene.background; scene.background = null; r.render(scene, S2.near); scene.background = bg; }
+        r.autoClear = true;
+        camera = S2.near;
+      } else r.render(scene, camera);
       if (GU?.rt) { GU.rt[1] = 0; GU.rt[2] = 0; }
+      return camera;
     }
     function hideOver(scene){
       over.length = 0;
@@ -1098,7 +1110,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       const st = R.stats, ac = r.autoClear;
       P.passes = 0;
       hideOver(scene);
-      sceneTo(scene, camera, true);
+      camera = sceneTo(scene, camera, true);   // два диапазона глубины: дальше — по ближней камере
       st.scene = r.info.render.calls;
       finish(camera);
       r.autoClear = ac;
@@ -1110,8 +1122,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (ssrOn) ssrPass(camera);
       if (P.ao.on) aoPasses(camera);
       const k = P.bloom.on && P.bloom.strength > 0 && B.length ? bloomPasses() : 0;
-      if (P.rays.tier) raysPass(camera); else P.rays.drawn = false;
-      if (P.dofOn) dofPass(camera); else P.dofDrawn = false;
+      // два диапазона глубины: дальнее в буфере глубины — «небо» (лучи прошли бы сквозь горы, фокус ушёл бы вдаль) — без них
+      if (P.rays.tier && !R.depthSplit) raysPass(camera); else P.rays.drawn = false;
+      if (P.dofOn && !R.depthSplit) dofPass(camera); else P.dofDrawn = false;
       const U = compSet(camera, ssrOn, k);
       const out = P.fg.on && rtOut ? rtOut : null;   // генерация кадров: сначала в свой буфер, потом копией на экран
       const nisK = (m, src, w, h, ow, oh) => { const u = m.uniforms; u.tSrc.value = src; u.uIn.value.set(w, h); u.uOut.value.set(ow, oh); };
@@ -1159,9 +1172,10 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       const st = R.stats, ac = r.autoClear, rep = { codes: P.codesOn(), ao: P.ao.on, fol: P.fol && P.ao.on, rt: P.rt.on, A: null, B: null, AO: null, SSR: null, F: null };
       P.passes = 0;
       hideOver(scene);
+      const cam0 = camera;
       try {
-        if (rep.codes) { sceneTo(scene, camera, false); rep.B = health(rtScene.texture, 0, rtScene.depthTexture); }
-        sceneTo(scene, camera, true);
+        if (rep.codes) { sceneTo(scene, cam0, false); rep.B = health(rtScene.texture, 0, rtScene.depthTexture); }
+        camera = sceneTo(scene, cam0, true);   // два диапазона глубины: проверки — по ближней камере (как обычный кадр)
         st.scene = r.info.render.calls;
         rep.A = health(rtScene.texture, 0, rtScene.depthTexture);
         r.autoClear = false;
@@ -1290,26 +1304,34 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     const r = R.r, T = R.T, P = R.post, gl = typeof r.getContext === 'function' ? r.getContext() : null;
     if (!gl) return null;
     const G = { n: 0, st: E.gfxGuardState(), seen: new WeakSet(), testAt: 45, tests: 0, last: null, sig: '', black: 0, nanN: 0, wait: false,
-      gpu: E.gpuInfo(gl), log: [], cb: null };
+      gpu: E.gpuInfo(gl), log: [], cb: null, vol: {} };
     try { r.debug.checkShaderErrors = true; } catch (e) {}
     if (P) for (const k of POSTK) if (G.st.off[k]) P.disable(k);   // запомненное — сразу, до первого кадра
-    const on = k => !G.st.off[k];
+    const on = k => !G.st.off[k] && !G.vol[k];
     const base = () => ({ gpu: G.gpu.model, q: R.q, v: gVer() });
     // контекст WebGL потерян (телефон выгрузил видеопамять, сбой драйвера, вкладка долго в фоне): кадр не рисуется, чтение
     // даёт нули — это НЕ поломка шейдеров. Пока потерян — ни проверок, ни решений (иначе запомнили бы «без AO» навсегда);
     // вернётся — three.js сам всё пересоздаст
     const lost = () => { try { return !!gl.isContextLost?.(); } catch (e) { return false; } };
     G.lost = lost;
+    // R.guardVolatile(k) → true (T-075: планета — глубина кадра в десятки км): решение про k — только на этот рендерер, не в
+    // localStorage: необычные дальности одной игры не должны выключать AO, отражения и т. п. на устройстве НАВСЕГДА
     function off(k, why, prog = ''){
       if (lost()) { G.log.push('lost:' + k); return false; }
-      const s = E.gfxGuardState();
-      if (s.off[k] || G.st.off[k]) { G.st = s; G.st.off[k] = 1; return false; }
-      s.off[k] = 1; s.why.push({ k, why, prog: String(prog).slice(0, 40), t: Date.now() });
-      if (s.why.length > 20) s.why.splice(0, s.why.length - 20);
-      G.st = s; gSave(s);
-      G.log.push(k + ':' + why + (prog ? ':' + prog : ''));
-      try { console.warn(`🛡 Страж графики: выключено «${k}» (${why}${prog ? ': ' + prog : ''}) — ${G.gpu.model}`); } catch (e) {}
-      gSend('gfx_fallback', { what: k, why, prog: String(prog).slice(0, 40), ...base() });
+      const vol = typeof R.guardVolatile === 'function' && !!R.guardVolatile(k);
+      if (vol) {
+        if (G.vol[k] || G.st.off[k]) return false;
+        G.vol[k] = 1;
+      } else {
+        const s = E.gfxGuardState();
+        if (s.off[k] || G.st.off[k]) { G.st = s; G.st.off[k] = 1; return false; }
+        s.off[k] = 1; s.why.push({ k, why, prog: String(prog).slice(0, 40), t: Date.now() });
+        if (s.why.length > 20) s.why.splice(0, s.why.length - 20);
+        G.st = s; gSave(s);
+      }
+      G.log.push((vol ? 'vol:' : '') + k + ':' + why + (prog ? ':' + prog : ''));
+      try { console.warn(`🛡 Страж графики: выключено «${k}»${vol ? ' (до закрытия)' : ''} (${why}${prog ? ': ' + prog : ''}) — ${G.gpu.model}`); } catch (e) {}
+      gSend('gfx_fallback', { what: k, why: vol ? 'vol:' + why : why, prog: String(prog).slice(0, 40), ...base() });
       let rebuild = false;
       if (k.startsWith('pack:')) { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // набор шейдеров — предыдущий (render.js сам выберет)
       else if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли

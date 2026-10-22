@@ -291,6 +291,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     st.rig.yaw = F.yaw; st.rig.snap(Pl.ch.x, Pl.ch.y, Pl.ch.z);
     st.unfollow?.(); st.unfollow = st.rig.follow(Pl);   // приземления нового игрока — камере
     st.mode = 'walk'; F.vel.fill(0);
+    V.setShadows?.(true);   // тени движка на земле у игрока (T-075)
     touchButtons(st);
     st.H.toast('🚶 На земле. L или «✈ Взлететь» — снова в полёт', true);
   }
@@ -300,6 +301,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     P.toBF(V.fr, cam.position.x, cam.position.y + 3, cam.position.z, F.pos);
     F.vel.fill(0); F.yaw = st.rig ? st.rig.yaw : F.yaw; F.pitch = -.15;
     st.mode = 'fly';
+    V.setShadows?.(false);
     const me = st.A?.get('me'); if (me) me.hidden = true;
     touchButtons(st);
   }
