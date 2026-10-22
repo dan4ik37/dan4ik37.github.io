@@ -42,15 +42,16 @@ const G = S.grid({ dims: 3, down: -1, max: 24576 });
 // держание клетки (x, y, z) в мире W
 function supAt(W, mode, x, y, z){
   const code = W.read(mode)(x, y, z); if ((code & 3) < 2) return -1;
-  G.build([x, y, z, code], W.read(mode), { r: 128, rn: 12 });
+  G.build([x, y, z, code], W.read(mode), { r: 128, rn: 12, P: S.prof(mode) });
   return G.estimate(S.prof(mode));
 }
 // убрать клетки (список [x, y, z]) и узнать, что упадёт: → [{ cells: [x, y, z, …] }]
+let rnOf = 12;
 function remove(W, mode, list){
   const rd = W.read(mode), seeds = [];
   for (const [x, y, z] of list) seeds.push(x, y, z, rd(x, y, z));
   for (const [x, y, z] of list) W.set(x, y, z, 0);
-  G.build(seeds, rd, { r: 128, rn: 12 });
+  G.build(seeds, rd, { r: 128, rn: rnOf, P: S.prof(mode) });
   const ng = G.collapse(S.prof(mode)), out = [];
   for (let k = 0; k < ng; k++) out.push(G.groups(k));
   return out;
@@ -66,7 +67,7 @@ sec('материалы и режимы');
   ok(!S.on('off') && S.on('soft') && S.on('real'), 'режимы: выкл / мягкое / реализм');
   const id = S.defineMat({ key: 'test_rubber', up: 5, side: 10, down: 10 });
   ok(S.MAT.test_rubber === id && S.defineMat({ key: 'test_rubber' }) === id && S.prof('real').cap.length === S.MATS.length, 'свой материал (мод): номер, повтор — тот же, таблица режима пересобрана');
-  ok(S.level(1000, WOOD, real, true) === 0 && S.level(900, WOOD, real, false) === 1 && S.level(450, WOOD, real, false) === 2 && S.level(150, WOOD, real, false) === 3 && S.level(99, WOOD, real, false) === 4, 'цвет: синий на опоре → зелёный → жёлтый → красный → не держится');
+  ok(S.level(965, WOOD, real, 1) === 0 && S.level(900, WOOD, real, false) === 1 && S.level(450, WOOD, real, false) === 2 && S.level(150, WOOD, real, false) === 3 && S.level(99, WOOD, real, false) === 4, 'цвет: синий на опоре → зелёный → жёлтый → красный → не держится');
 }
 
 // ═══ 2. Держание: башня, балка, мост, потолок ═══
@@ -75,15 +76,15 @@ sec('держание: башня, балка, мост, висит под по�
   const W = world();
   // деревянная башня от земли: каждый шаг вверх −35, пока ≥ 100
   for (let y = 0; y < 30; y++) W.set(10, y, 10, WOOD + 1);
-  const s0 = supAt(W, 'real', 10, 0, 10), s5 = supAt(W, 'real', 10, 5, 10), s25 = supAt(W, 'real', 10, 25, 10), s26 = supAt(W, 'real', 10, 26, 10);
-  ok(s0 === 1000 && s5 === 1000 - 5 * 35 && s25 === 1000 - 25 * 35 && s26 < real.min[WOOD], 'деревянная башня: 1000 на земле, −35 за блок, выше 25 блоков не держится', [s0, s5, s25, s26]);
+  const s0 = supAt(W, 'real', 10, 0, 10), s5 = supAt(W, 'real', 10, 5, 10), s24 = supAt(W, 'real', 10, 24, 10), s25 = supAt(W, 'real', 10, 25, 10);
+  ok(s0 === 965 && s5 === 965 - 5 * 35 && s24 === 965 - 24 * 35 && s25 < real.min[WOOD], 'деревянная башня: на земле 1000 − 35, −35 за блок, держится 25 блоков', [s0, s5, s24, s25]);
   ok(supAt(W, 'soft', 10, 29, 10) >= soft.min[WOOD], '«мягкое»: та же башня держится целиком (30 блоков)');
   // балка вбок от столба на высоте 4: дерево −150 за блок
   const W2 = world();
   for (let y = 0; y < 5; y++) W2.set(20, y, 20, STONE + 1);
   for (let x = 21; x <= 30; x++) W2.set(x, 4, 20, WOOD + 1);
-  const top = 1000 - 4 * 20, b1 = supAt(W2, 'real', 21, 4, 20), b6 = supAt(W2, 'real', 26, 4, 20), b7 = supAt(W2, 'real', 27, 4, 20);
-  ok(b1 === Math.min(1000, top - 150) && b6 === top - 6 * 150 && b7 < real.min[WOOD], 'балка от каменного столба: −150 за блок, держится 6 блоков', [top, b1, b6, b7]);
+  const top = 1000 - 5 * 20, b1 = supAt(W2, 'real', 21, 4, 20), b5 = supAt(W2, 'real', 25, 4, 20), b6 = supAt(W2, 'real', 26, 4, 20);
+  ok(b1 === top - 150 && b5 === top - 5 * 150 && b6 < real.min[WOOD], 'балка от каменного столба: −150 за блок, держится 5 блоков', [top, b1, b5, b6]);
   // мост: столбы с двух сторон — середина держится от ближнего
   for (let y = 0; y < 5; y++) W2.set(31, y, 20, STONE + 1);
   const mid = supAt(W2, 'real', 26, 4, 20);
@@ -99,7 +100,7 @@ sec('держание: башня, балка, мост, висит под по�
   // стекло держится, но не держит
   const W4 = world();
   W4.set(40, 0, 40, GLASS + 1); W4.set(40, 1, 40, WOOD + 1);
-  ok(supAt(W4, 'real', 40, 0, 40) === 1000 && supAt(W4, 'real', 40, 1, 40) < real.min[WOOD], 'стекло: само на земле держится, блок на нём — нет');
+  ok(supAt(W4, 'real', 40, 0, 40) === 1000 - real.up[GLASS] && supAt(W4, 'real', 40, 1, 40) < real.min[WOOD], 'стекло: само на земле держится, блок на нём — нет');
 }
 
 // ═══ 3. Что падает после правки ═══
@@ -110,11 +111,11 @@ sec('обрушение: убрали опору — падает только �
   for (let y = 0; y < 5; y++) { W.set(10, y, 10, STONE + 1); W.set(15, y, 10, STONE + 1); }
   for (let x = 11; x < 15; x++) W.set(x, 4, 10, WOOD + 1);
   let g = remove(W, 'real', [[15, 0, 10]]);
-  ok(g.length === 1 && g[0].length / 3 === 3 && g[0].every((v, i) => i % 3 !== 0 || v === 15), 'убрали низ второго столба: падает только его верх (3 блока), балка держится от первого', g.map(a => a.length / 3));
+  ok(g.length === 1 && g[0].length / 3 === 4 && g[0].every((v, i) => i % 3 !== 0 || v === 15), 'убрали низ второго столба: падает его верх (4 блока), балка держится от первого', g.map(a => a.length / 3));
   for (const a of g) for (let i = 0; i < a.length; i += 3) W.set(a[i], a[i + 1], a[i + 2], 0);
   g = remove(W, 'real', [[10, 1, 10]]);
   const n = g.reduce((s, a) => s + a.length / 3, 0);
-  ok(g.length === 1 && n === 3 + 4 + 1, 'убрали первый столб под балкой: падает верх столба, балка и камень на её конце одним куском (8 блоков)', g.map(a => a.length / 3));
+  ok(g.length === 1 && n === 3 + 4, 'убрали первый столб под балкой: падает верх столба и балка одним куском (7 блоков)', g.map(a => a.length / 3));
   // старое «не держалось» (импорт: 12 блоков вбок) — убрали что-то рядом — его не трогаем
   const W2 = world();
   for (let y = 0; y < 3; y++) W2.set(30, y, 30, STONE + 1);
@@ -150,6 +151,26 @@ sec('своды пещер: широко выкопал — обваливает
   const ms = now() - t0, n = g.reduce((s, a) => s + a.length / 3, 0);
   ok(g.length >= 1 && n > 0 && g.every(a => { for (let i = 0; i < a.length; i += 3) if (a[i] < 15 || a[i] > 37 || a[i + 2] < 5 || a[i + 2] > 27) return false; return true; }), 'зал 23×23: падает середина свода (над залом)', { groups: g.length, n });
   console.log(`  свод: ${n} блоков в ${g.length} группах, ${ms.toFixed(1)} мс (узлов ${G.g.n})`);
+  // копаем по одной клетке в случайном порядке (как игрок), природное дальше 10 шагов — оценкой (толща или стена по прямой):
+  // зал 15×15 (до стены ≤ 7) — ни одного обвала; 25×25 — середина свода обваливается
+  const hall = (side, seed) => {
+    const Wh = world(96, 60);
+    for (let x = 0; x < 96; x++) for (let z = 0; z < 60; z++) for (let y = 0; y < 30; y++) Wh.set(x, y, z, STONE + 1, true);
+    const list = [], x0 = 48 - (side >> 1), z0 = 30 - (side >> 1);
+    for (let x = x0; x < x0 + side; x++) for (let z = z0; z < z0 + side; z++) for (let y = 5; y < 8; y++) list.push([x, y, z]);
+    const rnd = S.rng(seed); for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+    rnOf = 13; let fell = 0, roof = 0, n = 0, tms = 0;
+    for (const c of list) { if (!Wh.get(c[0], c[1], c[2])) continue; const t0 = now(); const g = remove(Wh, 'real', [c]); tms += now() - t0; n++; for (const a of g) { fell += a.length / 3; for (let i = 0; i < a.length; i += 3) { if (a[i + 1] >= 8) roof++; Wh.set(a[i], a[i + 1], a[i + 2], 0); } } }
+    rnOf = 12;
+    // итог по-честному (большой радиус): сколько клеток свода осталось без опоры
+    let bad = 0;
+    for (let x = x0; x < x0 + side; x++) for (let z = z0; z < z0 + side; z++) if (Wh.get(x, 8, z)) { G.build([x, 8, z, Wh.read('real')(x, 8, z)], Wh.read('real'), { r: 200, rn: 40, P: real }); if (G.estimate(real) < real.min[ROCK]) bad++; }
+    return { fell, roof, bad, n, avg: tms / Math.max(1, n) };
+  };
+  const h15 = hall(15, 3), h25 = hall(25, 4);
+  ok(h15.roof === 0 && h15.bad === 0, 'зал 15×15, копаем по клетке вразброс: свод не падает (стены держат; падают только подкопанные куски внутри зала)', h15);
+  ok(h25.roof > 0 && h25.bad <= 8, 'зал 25×25, копаем по клетке: середина свода обваливается (по-честному без опоры осталось ≤ 8 клеток свода)', h25);
+  console.log(`  копание по клетке: зал 15×15 — ${h15.n} клеток, ${h15.avg.toFixed(2)} мс на клетку; 25×25 — упало ${h25.fell} блоков`);
   // в «мягком» тот же зал — не трогаем (природное — опора)
   const W2 = world(96, 60);
   for (let x = 0; x < 96; x++) for (let z = 0; z < 40; z++) for (let y = 0; y < 30; y++) W2.set(x, y, z, STONE + 1, true);
@@ -188,7 +209,7 @@ sec('2D: y вниз');
   const s = G2.estimate(real);
   G2.build([15, 30, 0, read(15, 30)], read, { r: 64 });
   const s15 = G2.estimate(real);
-  ok(s === 1000 - 9 * 35 - 3 * 150 && s15 < real.min[WOOD], '2D: балка на столбе — те же числа, что в 3D (вверх — к меньшему y)', [s, s15]);
+  ok(s === 965 - 9 * 35 - 3 * 150 && s15 < real.min[WOOD], '2D: балка на столбе — те же числа, что в 3D (вверх — к меньшему y)', [s, s15]);
   const seeds = [10, 35, 0, read(10, 35)]; c[35 * N + 10] = 0;
   G2.build(seeds, read, { r: 64 });
   const ng = G2.collapse(real);
@@ -211,7 +232,7 @@ sec('детали-коробки: выбили стены — крыша без 
   let L = build(false);
   const id = k => L.findIndex(b => b[8] === k);
   B.solve(real);
-  ok(['r0', 'r1', 'r2'].every(k => B.g.sup[id(k)] === 1000 - real.up[SLAB]), 'целый дом: плиты стоят на стенах (1000 − 12)', ['r0', 'r1', 'r2'].map(k => B.g.sup[id(k)]));
+  ok(['r0', 'r1', 'r2'].every(k => B.g.sup[id(k)] === 1000 - real.up[CON] - real.up[SLAB]), 'целый дом: плиты стоят на стенах (1000 − 12 − 12)', ['r0', 'r1', 'r2'].map(k => B.g.sup[id(k)]));
   ok(B.g.off[id('r1') + 1] - B.g.off[id('r1')] === 4, 'средняя плита: 2 стены снизу и 2 плиты сбоку');
   let ng = B.collapse(real, [id('w0'), id('w1')]);
   ok(ng === 0, 'выбили стену под крайней плитой — держится за соседнюю (одна плита вбок)');
@@ -225,7 +246,7 @@ sec('детали-коробки: выбили стены — крыша без 
   ok(sig(true) === sig(false), 'детали в другом порядке — то же обрушение', [sig(true), sig(false)]);
   // крыша на стене, стена на земле, «на земле» без стены — не держит ничего лишнего
   B.reset(); const a = B.add(0, 0, 0, 1, 3, 1, CON, true), b = B.add(0, 3, 0, 1, 3.3, 1, SLAB, false), c = B.add(5, 3, 0, 6, 3.3, 1, SLAB, false); B.link(.05); B.solve(real);
-  ok(B.g.sup[a] === 1000 && B.g.sup[b] === 988 && B.g.sup[c] === 0, 'касание только сверху/сбоку: висящая в воздухе плита — 0', [B.g.sup[a], B.g.sup[b], B.g.sup[c]]);
+  ok(B.g.sup[a] === 988 && B.g.sup[b] === 976 && B.g.sup[c] === 0, 'касание только сверху/сбоку: висящая в воздухе плита — 0', [B.g.sup[a], B.g.sup[b], B.g.sup[c]]);
 }
 
 // ═══ 8. Падение куском: одинаково при 30 / 60 / 144 кадрах (настоящий цикл движка) ═══

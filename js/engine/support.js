@@ -56,9 +56,9 @@
   M({ key: 'dirt', title: 'Земля', icon: '🟤', up: 50, side: 450, down: 900 });
   M({ key: 'sand', title: 'Песок', icon: '🏖️', up: 50, side: 900, down: 900 });
   M({ key: 'snow', title: 'Снег', icon: '❄️', up: 80, side: 450, down: 900 });
-  // природное: вверх без потерь (толща держится столбом), вбок — свод пещеры, висеть не умеет (держится только снизу и сбоку)
-  M({ key: 'rock', title: 'Скала (природная)', icon: '⛰️', up: 0, side: 100, down: MAXV, nat: 1 });
-  M({ key: 'soil', title: 'Грунт (природный)', icon: '🌱', up: 0, side: 300, down: MAXV, nat: 1 });
+  // природное: вверх без потерь (толща держится столбом), вбок — свод пещеры; висит плохо (подкопанная скала под крепким сводом — 1–2 клетки)
+  M({ key: 'rock', title: 'Скала (природная)', icon: '⛰️', up: 0, side: 100, down: 450, nat: 1 });
+  M({ key: 'soil', title: 'Грунт (природный)', icon: '🌱', up: 0, side: 300, down: 900, nat: 1 });
   M({ key: 'slab', title: 'Плита перекрытия', icon: '▭', min: 300, up: 12, side: 450, down: 500 });
   M({ key: 'steel', title: 'Сталь и железобетон', icon: '🛡', up: 3, side: 25, down: 30 });
   S.VANILLA = MATS.length;
@@ -90,7 +90,7 @@
     if (!P) return 0;
     const cap = P.cap[m] || MAXV, mn = P.min[m] || 1;
     if (s < mn) return 4;
-    if (gnd === 1 || gnd === true ? s >= cap : false) return 0;
+    if ((gnd === true || (gnd & 1)) && s >= Math.min(cap, MAXV - P.up[m])) return 0;   // стоит прямо на опоре
     const t = (s - mn) / Math.max(1, cap - mn);
     return t >= .66 ? 1 : t >= .33 ? 2 : 3;
   };
@@ -103,7 +103,7 @@
   function graph(max, deg){
     const g = {
       max, n: 0, ne: 0,
-      mat: new Uint8Array(max), gnd: new Uint8Array(max), seed: new Uint8Array(max), off: new Int32Array(max + 1), adj: new Int32Array(max * deg),
+      mat: new Uint8Array(max), gnd: new Uint8Array(max), init: new Uint16Array(max), seed: new Uint8Array(max), off: new Int32Array(max + 1), adj: new Int32Array(max * deg),
       sup: new Uint16Array(max), sup0: new Uint16Array(max), dis: new Uint8Array(max), done: new Uint8Array(max), fall: new Uint8Array(max),
       nxt: new Int32Array(max), prv: new Int32Array(max), head: new Int32Array(MAXV + 1), gid: new Int32Array(max), gList: new Int32Array(max), gOff: new Int32Array(max + 1), ng: 0,
       q: new Int32Array(max),
@@ -118,12 +118,20 @@
       const n = g.n, sup = g.sup, mat = g.mat, done = g.done, dis = g.dis, off = g.off, adj = g.adj;
       const cap = P.cap, up = P.up, side = P.side, down = P.down, bear = P.bear;
       head.fill(-1);
-      // gnd: 1 — опора снизу или сбоку (держание = cap), 2 — только висит под опорой (cap − «висит»)
+      // опора — как сосед с держанием 1000: gnd — биты, где она: 1 — снизу (стоит), 2 — сбоку, 4 — сверху (висит); init — держание
+      // от природного за краем куска (оценка: толща под ним или стена пещеры по прямой)
+      const init = g.init;
       for (let i = 0; i < n; i++) {
         sup[i] = 0; done[i] = 0;
         if (useDis && dis[i]) { done[i] = 1; continue; }
-        const gd = g.gnd[i];
-        if (gd) { const m = mat[i], c = gd === 1 ? cap[m] : cap[m] - down[m]; if (c > 0) { sup[i] = c; ins(i, c); } }
+        const gd = g.gnd[i], m = mat[i];
+        let c = 0;
+        if (gd & 1) c = MAXV - up[m];
+        if (gd & 2 && MAXV - side[m] > c) c = MAXV - side[m];
+        if (gd & 4 && MAXV - down[m] > c) c = MAXV - down[m];
+        if (init[i] > c) c = init[i];
+        if (c > cap[m]) c = cap[m];
+        if (c > 0) { sup[i] = c; ins(i, c); }
       }
       for (let v = MAXV; v >= 1; v--) {
         let u = head[v];
@@ -171,7 +179,7 @@
   S.graph = (max = 4096, deg = 8) => graph(max, deg);
 
   // ═══ Сетка клеток (3D — кубики, 2D — плитки): связный кусок от места правки, хеш-таблица без мусора ═══
-  const NOT = -1, EMPTY = -2, ANCH = -3;
+  const NOT = -1, EMPTY = -2, ANCH = -3, EST = -16;   // EST − e — природная клетка за краем куска с оценкой держания e
   S.grid = (o = {}) => {
     const dims = o.dims === 2 ? 2 : 3, DOWN = o.down === 1 ? 1 : -1, max = Math.max(64, o.max | 0 || 24576), deg = dims === 2 ? 4 : 6;
     const g = graph(max, deg);
@@ -188,13 +196,36 @@
     G.at = (x, y, z = 0) => { const k = keyOf(x, y, z); if (k < 0) return -1; const v = look(k); return v >= 0 ? v : -1; };
     function add(x, y, z, code, d, isSeed){
       const i = g.n++;
-      px[i] = x; py[i] = y; pz[i] = z; dist[i] = d; g.mat[i] = code >> 2; g.gnd[i] = 0; g.seed[i] = isSeed ? 1 : 0;
+      px[i] = x; py[i] = y; pz[i] = z; dist[i] = d; g.mat[i] = code >> 2; g.gnd[i] = 0; g.init[i] = 0; g.seed[i] = isSeed ? 1 : 0;
       return i;
+    }
+    // Природная клетка за краем куска (дальше rn шагов): держание не считаем целиком, а оцениваем — под ней толща (2 твёрдые
+    // клетки) — как опора; иначе это свод или навес: держится за ближайшую стену по прямой в своём слое (стена — твёрдое с
+    // твёрдым под ним), cap − side × до стены; стены нет ближе предела — 0 (ничего не держит). Так пересчёт по одной клетке
+    // (игрок копает зал понемногу) видит и обвал середины широкого свода, и не роняет то, что держит дальняя стена.
+    const solidC = c => c === 1 || (c & 3) >= 2;
+    const HD = [1, 0, -1, 0, 0, 1, 0, -1];
+    // «толща» / «стена»: под клеткой 3 природные подряд (не подкопанный кусок под сводом, а столб до пола)
+    const natC = c => c === 1 || (c & 3) === 3;   // природное или опора (поставленное под сводом — висит, не держит толщу)
+    const col = (x, y, z, read) => natC(read(x, y + DOWN, z) | 0) && natC(read(x, y + 2 * DOWN, z) | 0) && natC(read(x, y + 3 * DOWN, z) | 0);
+    function estimate(x, y, z, m, read, P){
+      if (col(x, y, z, read)) return MAXV;
+      const cap = P.cap[m], side = P.side[m], dmax = Math.min(40, ((cap - P.min[m]) / Math.max(1, side)) | 0);
+      let best = 0;
+      for (let h = 0; h < (dims === 2 ? 2 : 4); h++) {
+        const dx = HD[h * 2], dz = HD[h * 2 + 1];
+        for (let s = 1; s <= dmax; s++) {
+          const ax = x + dx * s, az = z + dz * s, c = read(ax, y, az) | 0;
+          if (!solidC(c)) break;
+          if (col(ax, y, az, read)) { const e = cap - side * s; if (e > best) best = e; break; }
+        }
+      }
+      return best;
     }
     const NOB = {};
     // построить кусок: семена (их код — какой был), обход в ширину; b — свои пределы (лучше один объект на игру — без мусора)
     G.build = (seeds, read, b = NOB) => {
-      const r = b.r ?? 64, rn = b.rn ?? 10, lim = Math.min(max, b.max || max);
+      const r = b.r ?? 64, rn = b.rn ?? 10, lim = Math.min(max, b.max || max), P = b.P || null;
       if (++gen > 65535) { stamp.fill(0); gen = 1; }
       used = 0; g.reset(); G.full = false;
       const ns = seeds.length >> 2;
@@ -212,17 +243,23 @@
         for (let k6 = 0; k6 < deg; k6++) {
           const nx = x + DX[k6], ny = y + DY[k6], nz = z + DZ[k6];
           const k = keyOf(nx, ny, nz);
-          if (k < 0) { if (REL[k6] !== 2) g.gnd[i] = 1; continue; }   // дальше 512 клеток — опора (снизу и сбоку)
+          if (k < 0) { if (REL[k6] !== 2) g.gnd[i] |= REL[k6] === 0 ? 1 : 2; continue; }   // дальше 512 клеток — опора (снизу и сбоку)
           let v = look(k);
           if (v === NOT) {
             const c = read(nx, ny, nz) | 0, t = c & 3;
             if (t < 2) v = c === 1 ? ANCH : EMPTY;
+            else if (t === 3 && col(nx, ny, nz, read)) v = ANCH;   // природная толща (3 твёрдые под ней) — опора: обход идёт только по «коже» у пустот
+            else if (t === 3 && d + 1 > rn && P) v = EST - estimate(nx, ny, nz, c >> 2, read, P);   // природное за краем — оценка
             else if (d + 1 > r || (t === 3 && d + 1 > rn) || g.n >= lim || used >= HLIM) { v = ANCH; if (g.n >= lim || used >= HLIM) G.full = true; }
             else v = add(nx, ny, nz, c, d + 1, false);
             put(k, v);
           }
-          if (v === ANCH) g.gnd[i] = REL[k6] === 2 ? (g.gnd[i] || 2) : 1;   // опора сверху — только «висит»
+          if (v === ANCH) g.gnd[i] |= REL[k6] === 0 ? 1 : REL[k6] === 1 ? 2 : 4;   // опора снизу / сбоку / сверху (висит)
           else if (v >= 0) g.adj[g.ne++] = (v << 2) | REL[k6];
+          else if (v <= EST) {   // природное за краем: его оценка минус потеря этой клетки (стоит на нём / рядом / висит под ним)
+            const e = EST - v, m = g.mat[i], rl = REL[k6], c = e - (rl === 0 ? P.up[m] : rl === 1 ? P.side[m] : P.down[m]);
+            if (c > g.init[i]) g.init[i] = c;
+          }
         }
       }
       g.off[g.n] = g.ne;
@@ -246,7 +283,7 @@
       if (B.n >= max) { B.over = true; return -1; }
       const i = B.n++, o6 = i * 6;
       bx[o6] = Math.min(x0, x1); bx[o6 + 1] = Math.min(y0, y1); bx[o6 + 2] = Math.min(z0, z1); bx[o6 + 3] = Math.max(x0, x1); bx[o6 + 4] = Math.max(y0, y1); bx[o6 + 5] = Math.max(z0, z1);
-      g.mat[i] = mat | 0; g.gnd[i] = gnd ? 1 : 0; g.seed[i] = 0;
+      g.mat[i] = mat | 0; g.gnd[i] = gnd ? 1 : 0; g.init[i] = 0; g.seed[i] = 0;
       return i;
     };
     // касание a и b (eps — зазор): −1 — нет; 0 — a стоит на b; 2 — a под b (b стоит на a); 1 — сбоку

@@ -615,6 +615,8 @@
     // плавно между тактами): угловое ускорение как у падающего столба (g · sin угла / высоту центра масс), по дуге проверяются
     // точки (стволы и крайние листья) — упёрлась в землю или блок: отскок и лёг; лёг совсем — o.onLand(группа, мир-место
     // клетки) раскладывает на вещи. Под ним моб или игрок — толчок (урон — только «обычно» и «сложно»). Не больше 3 сразу.
+    // o.drop (обрушение, T-022a, js/games/kubomir-support.js) — кусок падает целым вниз (D37E.support.drop: по тактам игры,
+    // одинаково при любой частоте кадров), лёг — o.onSettle(значение, x, y, z, номер клетки) по клеткам (блоками на место)
     const groups = X.groups = [];
     const GQ = new T.Quaternion(), GA = new T.Vector3(), GV = { x: 0, y: 0, z: 0 };
     // повернуть точку r (от оси) на угол th вокруг оси a (Родриг) → GV (общий объект: читать сразу)
@@ -654,7 +656,13 @@
       hc = Math.max(1, hc / n);
       const isTrunk = i => o.trunk ? o.trunk(cells[i * 4 + 3]) : true, dist = i => { const rx = cells[i * 4] + .5 - pivot.x, ry = cells[i * 4 + 1] + .5 - pivot.y, rz = cells[i * 4 + 2] + .5 - pivot.z; return rx * rx + ry * ry + rz * rz; };
       const smp = far.filter(isTrunk).slice(0, 48).concat(far.filter(i => !isTrunk(i)).sort((a, b) => dist(b) - dist(a)).slice(0, 24));
-      const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0 };
+      const g = { cells: cells.slice(), n, mesh, geo, px: pivot.x, py: pivot.y, pz: pivot.z, ax: dir.z, az: -dir.x, dx: dir.x, dz: dir.z, th: 0, pth: 0, w: o.push ?? .35, hc, smp: Int32Array.from(smp), done: 0, bounced: false, hitIds: new Set(), lit: Lit.make(null), o, t: 0, F: null, pfy: 0 };
+      if (o.drop && window.D37E?.support) {   // обрушение: целым куском вниз; чуть кренится (по зерну куска — у всех так же)
+        const flat = []; for (let i = 0; i < n; i++) flat.push(cells[i * 4], cells[i * 4 + 1], cells[i * 4 + 2]);
+        g.F = window.D37E.support.drop(flat, { down: -1, g: 30, vmax: 40, far: 96 });
+        const h = window.D37E.support.hash(cells[0], cells[1], cells[2], n), a = (h & 1023) / 1023 * Math.PI * 2;
+        g.ax = Math.cos(a); g.az = Math.sin(a); g.hc = 0;
+      }
       groups.push(g);
       S.AU?.play('kb_creak', { x: pivot.x - S.ox, y: pivot.y + 2, z: pivot.z - S.oz, vol: .7, rate: .9 + FR() * .2 });
       return g;
@@ -663,6 +671,12 @@
     function groupsTick(dt){
       for (let gi = groups.length - 1; gi >= 0; gi--) {
         const g = groups[gi];
+        if (g.F) {   // обрушение: падает целым вниз, лёг — блоками
+          g.t += dt; g.pfy = g.F.fy;
+          if (g.done) { g.done += dt; if (g.done > .06) { landDrop(g); groups.splice(gi, 1); } continue; }
+          if (window.D37E.support.dropStep(g.F, dt, solidHit)) { g.done = 1e-6; g.pfy = g.F.fy; } else dropHit(g);
+          continue;
+        }
         g.pth = g.th; g.t += dt;
         if (g.done) { g.done += dt; if (g.done > .3) { landGroup(g); groups.splice(gi, 1); } continue; }
         g.w += 9.8 * 1.5 / g.hc * Math.sin(Math.max(.12, g.th)) * dt;
@@ -705,8 +719,48 @@
       S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py + 1, z: g.pz - S.oz, vol: 1, rate: .8 });
       R.scene.remove(g.mesh); g.geo.dispose();
     }
+    // обрушение: кто под падающим куском — толчок вниз и в сторону (урон — только «обычно» / «сложно», один раз)
+    function dropHit(g){
+      if (g.o.visual) return;
+      const b = g.F.bot, fy = g.F.fy, hurtK = S.meta?.diff === 'normal' || S.meta?.diff === 'hard' ? 2 : 0;
+      for (let k = 0; k < b.length; k += 3) {
+        const x = b[k], y = b[k + 1] - fy, z = b[k + 2];
+        for (const m of X.mobs) {
+          const M = MOBS[m.type], hw = M.w / 2;
+          if (g.hitIds.has(m.id) || m.x + hw < x || m.x - hw > x + 1 || m.z + hw < z || m.z - hw > z + 1 || m.y > y + .2 || m.y + M.h < y - .4) continue;
+          g.hitIds.add(m.id); m.vx += (m.x - x - .5) * 6; m.vz += (m.z - z - .5) * 6; if (hurtK) X.damage(m, hurtK, 0, 0, 'tree'); else m.hurtT = .35;
+        }
+        const P = S.P;
+        if (P && !P.dead && !g.hitIds.has(-1) && P.x + .3 > x && P.x - .3 < x + 1 && P.z + .3 > z && P.z - .3 < z + 1 && P.y <= y + .2 && P.y + 1.8 >= y - .4) {
+          g.hitIds.add(-1); P.vx += (P.x - x - .5) * 7; P.vz += (P.z - z - .5) * 7; P.onGround = false;
+          if (hurtK && !S.creative) S.ents?.hookHurt?.(hurtK, { x: x + .5, y, z: z + .5 });
+        }
+      }
+    }
+    // лёг: каждая клетка — на своё место (o.onSettle), пыль кольцом у низа, стук; сетка убрана
+    function landDrop(g){
+      const n = g.n, off = g.F.off, c = g.cells;
+      if (!g.o.visual) { for (let i = 0; i < n; i++) { try { g.o.onSettle?.(c[i * 4 + 3], c[i * 4], c[i * 4 + 1] - off, c[i * 4 + 2], i); } catch (e) { console.error(e); } } try { g.o.onLanded?.(); } catch (e) { console.error(e); } }
+      const b = g.F.bot;
+      for (let k = 0; k < b.length; k += 3) {
+        if ((k / 3) % 2 && b.length > 12) continue;
+        const x = b[k], y = b[k + 1] - off, z = b[k + 2];
+        X.dust(x + .5, y, z + .5, V().blocks[(c[3] & 0xfff)]?.id || 1, 3, { w: .9, sp: 1.4, s: .3, s1: .7, a: .5, vy: .5 });
+      }
+      for (let i = 0; i < n; i += Math.max(1, (n / 8) | 0)) X.debris(c[i * 4], c[i * 4 + 1] - off, c[i * 4 + 2], c[i * 4 + 3] & 0xfff, 4);
+      S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py - off + 1, z: g.pz - S.oz, vol: Math.min(1, .6 + n / 120), rate: .75 + Math.min(.2, 8 / (n + 8)) });
+      { const d = S.P ? Math.hypot(S.P.x - g.px, S.P.z - g.pz) : 99; if (d < 14 && S.shakeOK?.()) S.rig?.shake?.(Math.min(1.6, (.35 + n / 90) * (1 - d / 16)), .3); }
+      R.scene.remove(g.mesh); g.geo.dispose();
+    }
     function groupsFrame(dt, a){
       for (const g of groups) {
+        if (g.F) {
+          const fy = g.done ? g.F.fy : g.pfy + (g.F.fy - g.pfy) * a, k = Math.min(.06, fy * .012);
+          GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, k);
+          g.mesh.quaternion.copy(GQ); g.mesh.position.set(g.px - S.ox, g.py - fy, g.pz - S.oz);
+          Lit.update(g.lit, S, g.px, g.py - fy + 1, g.pz, dt); VR.itemLightF(g.geo, g.lit.lv);
+          continue;
+        }
         const th = g.pth + (g.th - g.pth) * a;
         GA.set(g.ax, 0, g.az); GQ.setFromAxisAngle(GA, th);
         g.mesh.quaternion.copy(GQ); g.mesh.position.set(g.px - S.ox, g.py, g.pz - S.oz);

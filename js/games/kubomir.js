@@ -103,7 +103,7 @@
     if (!list.length) box.innerHTML = '<div class="kb-empty">Миров пока нет. Нажми «➕ Новый мир» — и вперёд!</div>';
     else box.innerHTML = list.map(w => `<div class="kb-world" data-id="${esc(w.id)}">
         <div class="kb-thumb">${w.thumb ? `<img src="${esc(w.thumb)}" alt="">` : '<span>🧊</span>'}</div>
-        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}</small><small class="kb-cl" hidden></small></div>
+        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}${w.support === 'soft' || w.support === 'real' ? ' · ' + (w.support === 'real' ? '🏗' : '🏚') : ''}</small><small class="kb-cl" hidden></small></div>
         <div class="kb-wb"><button type="button" class="kb-btn primary" data-w="play">▶ Играть</button><button type="button" class="kb-btn" data-w="rename" title="Переименовать">✏️</button><button type="button" class="kb-btn" data-w="cloud" title="Облако: сохранять копию мира (открыть на другом устройстве)" hidden>☁️</button><button type="button" class="kb-btn" data-w="export" title="Выгрузить файл мира">📤</button><button type="button" class="kb-btn danger" data-w="del" title="Удалить">🗑</button></div></div>`).join('');
     box.addEventListener('click', e => { const b = e.target.closest('[data-w]'), w = e.target.closest('.kb-world'); if (!b || !w) return; worldAct(b.dataset.w, w.dataset.id, list.find(x => x.id === w.dataset.id)); });
     cloudMenu(sc, list);   // ☁️ облако: отметки у миров, миры с других устройств (без входа — подсказка)
@@ -149,10 +149,12 @@
       <div class="kb-seg" data-f="mode"><button type="button" class="on" data-v="survival">⚔️ Выживание</button><button type="button" data-v="creative">🎨 Творчество</button></div>
       <div class="kb-seg" data-f="diff"><button type="button" data-v="peaceful">🕊 Мирно</button><button type="button" class="on" data-v="easy">🙂 Легко</button><button type="button" data-v="normal">😈 Обычно</button><button type="button" data-v="hard">💀 Сложно</button></div>
       <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после нокаута вещи остаются.</p>
+      <div class="kb-seg" data-f="support" title="Обрушение и прочность построек (выбирается один раз — при создании мира)"><button type="button" class="on" data-v="off">🧱 Обрушение: выкл</button><button type="button" data-v="soft">🏚 Мягкое</button><button type="button" data-v="real">🏗 Реализм</button></div>
+      <p class="kb-note kb-supnote">${esc(window.KubomirSupport?.NOTES?.off || '')}</p>
       ${mods.length ? `<div class="kb-modpick"><b>🧩 Моды в этом мире</b>${mods.map(m => `<label class="kb-chk"><input type="checkbox" data-mod="${esc(m.id)}"> ${esc(m.manifest?.name || m.id)} <small>${esc(m.manifest?.version || '')}</small></label>`).join('')}</div>` : '<p class="kb-note">🧩 Моды можно добавить в меню миров → «Моды».</p>'}
       <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-n="go">🌍 Создать мир</button><button type="button" class="kb-btn" data-n="back">← Назад</button></div></div>`;
     const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после нокаута вещи остаются.', normal: 'Обычно: после нокаута вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может довести до нокаута, вещи после нокаута выпадают.' };
-    sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; }));
+    sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; if (g.dataset.f === 'support') sc.querySelector('.kb-supnote').textContent = window.KubomirSupport?.NOTES?.[b.dataset.v] || ''; }));
     sc.querySelector('[data-n="back"]').onclick = showMenu;
     sc.querySelector('[data-n="go"]').onclick = async () => {
       const f = k => sc.querySelector(`[data-f="${k}"]`);
@@ -162,6 +164,7 @@
       const mode = f('mode').querySelector('.on')?.dataset.v || 'survival', diff = f('diff').querySelector('.on')?.dataset.v || 'easy';
       const modIds = [...sc.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
       const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: 2 };
+      const sup = f('support')?.querySelector('.on')?.dataset.v; if (sup === 'soft' || sup === 'real') w.support = sup;   // обрушение (T-022a): старые миры — выкл
       await V.store.putWorld(w);
       playById(w.id);   // через сверку с облаком: вошёл и есть место — новый мир сразу «в облаке»
     };
@@ -569,6 +572,7 @@
     if (guest && st.ents) st.ents.client = true;   // мобы и вещи — снимками хозяина
     else if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;
+    st.sup = window.KubomirSupport?.attach?.(st) || null; st.shakeOK = () => shakeOK(st);   // обрушение и прочность (T-022a; мир без него — null)
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
@@ -1418,11 +1422,13 @@
     if (b.shape === V.SHAPE.door) { const oy = st2 & 8 ? -1 : 1, o = W.raw(x, y + oy, z); if (o > 0 && (o & 0xfff) === b.id) W.set(x, y + oy, z, 0); }
     // блок льда над водой — становится водой (как в Майнкрафте): не пустота над озером
     const toWater = b.name === 'ice' && V.T.liquid[W.get(x, y - 1, z)] === 1;
+    const sc = st.sup && !only ? st.sup.code(x, y, z) : 0;   // обрушение: чем была клетка (постройка / природное) — до правки
     W.set(x, y, z, toWater ? V.cell(V.ID.water) : 0, { urgent: 3 });
     st.AU?.play(digSound(b), { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .8 });
     if (st.ents?.breakFx) st.ents.breakFx(x, y, z, b.id); else st.ents?.debris(x, y, z, b.id);   // осколки кувыркаются и прыгают
     if (only) return;
     if (opts.fell !== false && /^log_/.test(b.name)) st.ents?.fellTree?.(x, y, z, by);   // подрубил дерево — валится (kubomir-ents.js)
+    if (sc) st.sup.removed(x, y, z, sc);   // что держалось через эту клетку — падает (kubomir-support.js)
     if (st.creative) return;
     if (canHarvestTool(b, toolId)) for (const [name, n] of dropsOf(st, b)) st.ents?.addItem(x + .5, y + .4, z + .5, { id: name, n });
     // сундук и печь — содержимое тоже
@@ -1728,6 +1734,7 @@
     if (!b) return false;
     const T = placeTarget(st, hit, b); if (!T) return false;
     const { x, y, z, state } = T;
+    if (st.sup && !st.sup.canPlace(x, y, z, b)) { if (now() - (st.supT || 0) > 2500) { st.supT = now(); st.H.toast('🧱 Тут не удержится — поставь опору ближе (колонну или стену)'); } return false; }
     if (st.coopGuest) st.net.reqPlace(x, y, z, V.cell(b.id, state), b.shape === V.SHAPE.door ? V.cell(b.id, state | 8) : null, it.name);   // 👥 хозяину
     if (b.shape === V.SHAPE.door) {
       W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
@@ -1975,6 +1982,7 @@
     }
     const ghost = T && mode === 'ghost' && b.shape === V.SHAPE.cube, frame = T && mode === 'frame';
     if (VR.ghost) VR.ghost(ghost ? b.name : null, ghost ? T.x : 0, ghost ? T.y : 0, ghost ? T.z : 0, it?.name);
+    if (frame) T.tint = st.sup ? st.sup.tint(T, b) : null;   // обрушение: рамка — цветом устойчивости
     if (VR.preview) VR.preview(frame ? T : null);
     st.placeAt = T;   // для проверок
   }
@@ -2226,6 +2234,7 @@
         if (!b || (v & 0xfff) !== b.id || y < 1 || y >= V.H - 1) return false;
         const cur = W.get(x, y, z); if (cur < 0 || !V.blocks[cur].replace) return false;
         const door = b.shape === V.SHAPE.door, h = door ? 2 : 1;
+        if (st.sup && !st.sup.canPlace(x, y, z, b)) return false;   // обрушение: не удержится — нельзя
         if (door) { const up = W.get(x, y + 1, z); if (up < 0 || !V.blocks[up].replace || v2 == null || (v2 & 0xfff) !== b.id || !((v2 >>> 12) & 8)) return false; }
         // твёрдое — не в игрока и не в моба (сам гость себя проверил: у хозяина его место — с опозданием)
         if (b.solid && (boxOverlap(st.P, x, y, z, h) || st.ents?.blocked?.(x, y, z) || (st.ents?.others || []).some(o => o.G !== G && !o.dead && boxOverlap({ x: o.x, y: o.y, z: o.z, w: PW, h: PH }, x, y, z, h)))) return false;
