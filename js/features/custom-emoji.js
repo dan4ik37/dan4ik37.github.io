@@ -104,7 +104,7 @@ function renderMessageText(escapedText){
   customEmoji.forEach(e => {
     const code = `:${e.name}:`;
     if (out.includes(code)) {
-      out = out.split(code).join(`<img src="${esc(e.image_url)}" alt="${code}" title="${code}" class="custom-emoji-img inline-emoji">`);
+      out = out.split(code).join(`<img src="${esc(e.image_url)}" alt="${esc(code)}" title="${esc(code)}" class="custom-emoji-img inline-emoji">`);
     }
   });
   // @упоминания — текст уже экранирован esc()'ом ДО вызова этой функции,

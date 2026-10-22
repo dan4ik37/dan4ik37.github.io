@@ -21,7 +21,8 @@ function buildReactionSet(){
 }
 function emojiValue(e){ return e.img ? `:${e.id}:` : e.char; }
 function renderEmoji(e){
-  return e.img ? `<img src="${esc(e.img)}" alt=":${esc(e.id)}:" title=":${esc(e.id)}:" class="custom-emoji-img">` : e.char;
+  // e.char бывает чужим: findEmojiDef отдаёт {char: значение_из_базы}, а в message_reactions.emoji любой вошедший может записать до 64 знаков (T-011)
+  return e.img ? `<img src="${esc(e.img)}" alt=":${esc(e.id)}:" title=":${esc(e.id)}:" class="custom-emoji-img">` : esc(e.char);
 }
 function findEmojiDef(value){
   return buildReactionSet().find(e => emojiValue(e) === value) || {char:value};

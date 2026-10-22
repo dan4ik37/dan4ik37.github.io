@@ -148,7 +148,7 @@ async function loadForumThread(id){
     document.getElementById('forumReplyBox').style.display = canReply ? 'block' : 'none';
     document.getElementById('forumThreadLockedHint').style.display = thread.locked ? 'block' : 'none';
   } catch(e) {
-    headerEl.innerHTML = `<p style="color:var(--muted)">Не удалось загрузить тему: ${eschumanErr(e)}</p>`;
+    headerEl.innerHTML = `<p style="color:var(--muted)">Не удалось загрузить тему: ${esc(humanErr(e))}</p>`;
   }
 }
 

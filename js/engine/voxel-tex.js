@@ -425,11 +425,15 @@
     if (s.part !== 'top') for (let x = 0; x < N; x++) for (let j = 0; j < k; j++) put(d, x, 6 * k + j, dk);
     if (s.part === 'front') { for (let y = 5 * k; y < 9 * k; y++) for (let x = 7 * k; x < 9 * k; x++) put(d, x, y, hx(y < 6 * k ? '#e8e8e8' : '#c9c9c9')); for (let j = 0; j < k; j++) put(d, 7 * k + j, 9 * k - 1, hx('#7a7a7a')); }
   };
+  // жидкость: лава — волнами с трещинами; вода (T-044) — без полос: ровная, мягкие пятна и редкие светлые точки (волны, блики,
+  // глубину рисует шейдер воды; у простого режима — только этот рисунок). Раньше у воды были косые полосы — на глади во весь
+  // экран они складывались в «муар»
   P.liquid = (d, s, nm) => {
     const c = hx(s.c), lava = s.lava;
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (!lava) { put(d, x, y, shade(c, .92 + (nm.c(x, y) - .5) * .1 + (nm.v(x, y) - .5) * .05 + (nm.v(x + 9, y + 5) > .84 ? .05 : 0)), s.alpha ?? 255); continue; }
       const w = Math.sin((x + y * .6) * .9 / K + nm.v(x, y) * 2 + nm.c(x, y) * 3) * .5 + .5;
-      const crest = w > .9 ? .14 : 0, crack = lava && nm.c(x * 2, y * 2) > .62 && w > .55;
+      const crest = w > .9 ? .14 : 0, crack = nm.c(x * 2, y * 2) > .62 && w > .55;
       put(d, x, y, crack ? hx('#ffd257') : shade(c, .84 + w * .2 + nm.v(x, y) * .08 + crest), s.alpha ?? 255);
     }
   };

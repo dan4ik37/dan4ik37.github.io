@@ -118,7 +118,7 @@ function renderPollAdminList() {
     <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);margin-bottom:.4rem">
       <div style="flex:1;min-width:0">
         <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.q)}</div>
-        <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">${p.opts.join(' · ')}</div>
+        <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">${esc(p.opts.join(' · '))}</div>
       </div>
       <button onclick="editPoll(${i})" aria-label="Редактировать опрос" style="background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.2);color:var(--tw);border-radius:6px;padding:.3rem .6rem;font-size:.68rem;cursor:pointer;font-family:'Montserrat',sans-serif;white-space:nowrap">✏️</button>
       <button onclick="deletePoll(${i})" aria-label="Удалить опрос" style="background:rgba(255,45,85,.1);border:1px solid rgba(255,45,85,.2);color:var(--accent);border-radius:6px;padding:.3rem .6rem;font-size:.68rem;cursor:pointer;font-family:'Montserrat',sans-serif">🗑</button>

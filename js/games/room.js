@@ -96,6 +96,20 @@
     return P;
   }
 
+  // Строки от других игроков (хозяин стола, соперник: карты, ходы, журнал, подписи) попадают в разметку игр. Знаки разметки в них
+  // заменяем похожими по виду (< > & " ' ` → ‹ › ＆ ” ’ ‵) ещё при получении: чужая строка не станет кодом страницы, даже если игра
+  // забыла её экранировать (T-011; проверка — scripts/xss-test.cjs). Числа и логические значения не меняются; ключи объектов — тоже.
+  const NEUTRAL = { '<': '‹', '>': '›', '&': '＆', '"': '”', "'": '’', '`': '‵' };
+  function clean(v, d = 0){
+    if (typeof v === 'string') return v.replace(/[<>&"'`]/g, c => NEUTRAL[c]);
+    if (!v || typeof v !== 'object') return v;
+    if (d > 12) return null;
+    if (Array.isArray(v)) return v.map(x => clean(x, d + 1));
+    const o = {};
+    for (const k of Object.keys(v)) if (k !== '__proto__') o[k] = clean(v[k], d + 1);
+    return o;
+  }
+
   // handlers: onPeer(opp|null, room) — соперник пришёл/ушёл; onMessage(msg, room); onFull(); onError()
   // Комната возвращается сразу (до появления sbClient тоже): нет связи — onError() чуть позже, не из самого join().
   function join(game, code, handlers){
@@ -111,7 +125,7 @@
     room.leave = () => { if (room.closed) return; room.closed = true; clearTimeout(room.peerTimer); window.removeEventListener('pagehide', room.leave); ch.close(); };
     // Закрыл/обновил страницу — сразу уходим из комнаты (иначе старое «присутствие» висит и комната кажется занятой)
     window.addEventListener('pagehide', room.leave);
-    ch.on('broadcast', { event: 'm' }, ({ payload }) => { if (!room.closed && payload?._by !== myId) handlers.onMessage?.(payload, room); });
+    ch.on('broadcast', { event: 'm' }, ({ payload }) => { if (!room.closed && payload?._by !== myId) handlers.onMessage?.(clean(payload), room); });
     ch.on('presence', { event: 'sync' }, () => {
       if (room.closed) return;
       const players = Object.entries(ch.presenceState()).map(([k, metas]) => {
@@ -171,5 +185,5 @@
   const retryBtn = '<button type="button" class="ct-start" style="margin-top:1rem" onclick="location.reload()">🔄 Попробовать ещё раз</button>';
   const errorHtml = `<div class="empty-state"><span class="empty-state-icon">📡</span><div class="empty-state-title">Нет связи</div><div class="empty-state-text">Не удалось подключиться к комнате — проверь интернет и попробуй ещё раз.</div>${retryBtn}</div>`;
 
-  window.GameRoom = { join, newCode, validCode, lobby, lobbyText, fullHtml, errorHtml, retryBtn, nick, guestId, channel, whenNet, netOk };
+  window.GameRoom = { join, newCode, validCode, lobby, lobbyText, fullHtml, errorHtml, retryBtn, nick, guestId, channel, whenNet, netOk, clean };
 })();
