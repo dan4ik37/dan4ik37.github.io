@@ -246,9 +246,9 @@ void main(){
   E.planetView = function (R, P, o = {}){
     wrapSun();
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
-    const N = 32, K = o.K ?? (mob || low ? 1.0 : 1.4), maxL = o.maxL ?? 12, BUDGET = o.budget ?? (mob || low ? 2 : 4);
+    const N = 32, K = o.K ?? (mob || low ? 1.0 : 1.25), maxL = o.maxL ?? 12, BUDGET = o.budget ?? (mob || low ? 2 : 4);
     const CAP = o.cap ?? (mob || low ? 260 : 480);
-    const V = { P, R, fr: P.patch(o.dir || P.dirFromLatLon(43.2, 76.9)), camBF: new Float64Array(3), camL: new Float64Array(3), t: 0, alt: 0, altG: 0, dead: false,
+    const V = { P, R, fr: P.patch(o.dir || P.dirFromLatLon(43.2, 76.9)), camBF: new Float64Array(3), t: 0, alt: 0, altG: 0, dead: false,
       onRebase: f => { lis.push(f); return () => { const i = lis.indexOf(f); if (i >= 0) lis.splice(i, 1); }; } };
     const lis = o.onRebase ? [o.onRebase] : [];
     const grp = new T.Group(); grp.name = 'planet'; grp.matrixAutoUpdate = false;
@@ -524,6 +524,8 @@ void main(){
         const top = A.top, kf = clamp((V.alt - top * .9) / (top * 1.6), 0, 1);
         dome.material.uniforms.uSky.value.w = 1 - kf; shell.material.uniforms.uSky.value.w = kf;
         dome.visible = kf < .999; shell.visible = kf > .001;
+        // первые кадры — оба (вес невидимого 0): шейдеры соберутся сразу, а не рывком, когда купол впервые появится на спуске
+        if (warm > 0) { warm--; dome.visible = shell.visible = true; }
         const rs = P.SEAR + top;
         shell.matrix.makeScale(rs, rs, rs).setPosition(TM[0], TM[1], TM[2]); shell.matrixWorldNeedsUpdate = true;
         // звёзды видно, когда небо тёмное у камеры: космос или ночь
@@ -557,6 +559,7 @@ void main(){
       }
     }
     const TMP_V = new T.Vector3();
+    let warm = 2;
     // AO, отражения в экране и генерация кадров читают глубину кадра — на дальностях планеты (десятки км при ближней 0,1) они
     // неточны, и страж графики решил бы, что они сломаны, и выключил бы их НАВСЕГДА для этого устройства (во всех играх).
     // Пока открыта планета — без них (настройки игрока не трогаем; разделение глубины на два прохода — шаг PL-4 плана)
