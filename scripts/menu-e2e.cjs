@@ -62,7 +62,8 @@ async function chrome(screen){
   const tapSel = async sel => { const p = await ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); if (!p) return false; await tap(p[0], p[1]); return true; };
   const VK = { Escape: 27, Enter: 13, Tab: 9, ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39 };
   const key = async (k, code) => { const vk = VK[k] || 0, base = { key: k, code: code || k, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk }; await send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, ...(k === 'Enter' ? { text: String.fromCharCode(13), unmodifiedText: String.fromCharCode(13) } : {}) }); await sleep(20); await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }); };
-  const close = async () => { try { ws.close(); } catch (e) {} proc.kill(); await sleep(400); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {} };
+  // профиль Chrome — убрать (Chrome отпускает файлы не сразу: две попытки)
+  const close = async () => { try { ws.close(); } catch (e) {} proc.kill(); for (const ms of [500, 1500]) { await sleep(ms); try { fs.rmSync(profile, { recursive: true, force: true }); break; } catch (e) {} } };
   return { kind, VW, VH, send, ev, shot, tap, tapSel, key, close, errs };
 }
 const BASE = () => 'http://localhost:' + server.address().port;
