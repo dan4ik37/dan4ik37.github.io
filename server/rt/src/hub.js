@@ -38,20 +38,25 @@ class Conn {
     this.corked = null;
   }
   out(buf){
+    const hub = this.hub;
     if (this.zombie) {
-      if (this.zq && this.zq.length < C.ZOMBIE_FRAMES && this.zqBytes + buf.length <= C.ZOMBIE_BYTES) { this.zq.push(buf); this.zqBytes += buf.length; return; }
+      if (this.zq && this.zq.length < C.ZOMBIE_FRAMES && this.zqBytes + buf.length <= C.ZOMBIE_BYTES && hub.zBytes + buf.length <= C.ZOMBIE_TOTAL && !hub.mem.soft) {
+        this.zq.push(buf); this.zqBytes += buf.length; hub.zBytes += buf.length; return;
+      }
       stats.drop.zombie++;
       if (this.zq) {   // too much missed — the session can't be resumed reliably; the tab rejoins fresh (dropped after this fan-out)
-        stats.zombieOverflow++; this.zq = null; this.noResume = true;
-        setImmediate(() => this.hub.dropConn(this));
+        stats.zombieOverflow++; hub.zBytes -= this.zqBytes; this.zq = null; this.zqBytes = 0; this.noResume = true;
+        setImmediate(() => hub.dropConn(this));
       }
       return;
     }
     const ws = this.ws;
     if (!ws || ws.readyState !== 1) return;
     const b = ws.bufferedAmount;
-    if (b > C.SLOW_KILL) { stats.drop.slowKill++; this.noResume = true; try { ws.terminate(); } catch (e) {} return; }
-    if (b > C.SLOW_DROP) { stats.drop.slow++; return; }
+    // slow reader: stop sending above SLOW_DROP (32 KB when the process is short of memory), disconnect above SLOW_KILL
+    // (or above 64 KB at the hard memory mark) — so buffered output stays bounded however many readers stall
+    if (b > C.SLOW_KILL || (hub.mem.hard && b > 65536)) { stats.drop.slowKill++; this.noResume = true; try { ws.terminate(); } catch (e) {} return; }
+    if (b > (hub.mem.soft ? 32768 : C.SLOW_DROP)) { stats.drop.slow++; return; }
     stats.msgOut++; stats.bytesOut += buf.length;
     // all frames for this socket in this turn of the event loop leave in ONE write (one syscall instead of one per message;
     // the profile showed ~45 % of the time in writev without it). ws corks/uncorks per frame inside — counted, so nested.
@@ -90,6 +95,7 @@ class Hub {
     this.stats = stats;
     this.errLogAt = 0;
     this.corkedList = []; this.flushing = false;
+    this.zBytes = 0;   // bytes buffered for all disconnected sessions together (ZOMBIE_TOTAL)
     this.flush = () => {
       this.flushing = false;
       const list = this.corkedList; this.corkedList = [];
@@ -127,7 +133,8 @@ class Hub {
   dropConn(conn){
     if (!this.conns.has(conn)) return;
     clearTimeout(conn.zTimer); clearTimeout(conn.helloT);
-    conn.zTimer = null; conn.zombie = false; conn.zq = null;
+    if (conn.zq) this.zBytes -= conn.zqBytes;
+    conn.zTimer = null; conn.zombie = false; conn.zq = null; conn.zqBytes = 0;
     if (conn.sid && this.sids.get(conn.sid) === conn) this.sids.delete(conn.sid);
     this.conns.delete(conn);
     for (const m of [...conn.byI.values()]) this.removeMember(m, true);
@@ -207,7 +214,7 @@ class Hub {
     const pb = Math.min(C.PROBE_MAX, Math.max(0, Math.floor(+m.pb || 0)));
     if (pb > 0) { stats.probes++; c.out(Buffer.from('{"t":"pr","d":"' + PROBE.slice(0, pb) + '"}')); }
     if (resumed) {
-      const q = c.zq || []; c.zq = null; c.zqBytes = 0;
+      const q = c.zq || []; c.zq = null; this.zBytes -= c.zqBytes; c.zqBytes = 0;
       for (const b of q) c.out(b);
     }
   }
@@ -420,7 +427,7 @@ class Hub {
     let members = 0, presence = 0, zombies = 0, watched = 0;
     for (const r of this.rooms.values()) { members += r.members.size; presence += r.presN; if (r.watch === 'on' || r.watch === 'peek') watched++; }
     for (const c of this.conns) if (c.zombie) zombies++;
-    return { conns: this.conns.size - zombies, zombies, rooms: this.rooms.size, members, presence, watchedRooms: watched, movedNames: this.moved.size };
+    return { conns: this.conns.size - zombies, zombies, zombieKb: Math.round(this.zBytes / 1024), rooms: this.rooms.size, members, presence, watchedRooms: watched, movedNames: this.moved.size };
   }
 }
 

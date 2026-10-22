@@ -59,8 +59,9 @@ const C = {
   MEM_HARD_MB: num('MEM_HARD_MB', 450, 32, 1e6),          // above: /health ok:false too
   GRACE_MS: num('GRACE_MS', 10000, 0, 120000),            // resume window after a dropped socket
   ZOMBIE_FRAMES: num('ZOMBIE_FRAMES', 512, 0, 1e6), ZOMBIE_BYTES: num('ZOMBIE_BYTES', 1024 * 1024, 0, 1e9),
-  SLOW_DROP: num('SLOW_DROP', 1024 * 1024, 16 * 1024, 1e9),   // outgoing buffer of a slow client: drop broadcasts …
-  SLOW_KILL: num('SLOW_KILL', 4 * 1024 * 1024, 32 * 1024, 1e9), // … and disconnect (a stalled or throttled link)
+  ZOMBIE_TOTAL: num('ZOMBIE_TOTAL', 64 * 1024 * 1024, 0, 1e10),   // all disconnected sessions together
+  SLOW_DROP: num('SLOW_DROP', 1024 * 1024, 16 * 1024, 1e9),    // outgoing buffer of a slow client: drop broadcasts (32 KB when memory is high) …
+  SLOW_KILL: num('SLOW_KILL', 4 * 1024 * 1024, 32 * 1024, 1e9), // … and disconnect (a stalled or throttled link; 64 KB at the hard memory mark)
   HELLO_MS: num('HELLO_MS', 5000, 100, 60000),
   PING_MS: num('PING_MS', 25000, 1000, 600000),           // protocol ping (browsers answer even in background tabs)
   PROBE_MAX: num('PROBE_MAX', 65536, 0, 1e6),

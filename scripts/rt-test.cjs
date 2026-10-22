@@ -306,7 +306,7 @@ async function resume(){
   await b.wait(m => m.t === 'b' && m.p?.re === 2);
   ok(!b.msgs.some(m => m.t === 'b' && m.p?.re === 1), 'повтор уже полученного номера (q) не выполняется дважды');
   let j = await S.metrics(ADMIN);
-  ok(j.stats.resumes === 1 && j.stats.dupes === 1 && j.counts.zombies === 0, 'счётчики: 1 продолжение, 1 повтор отброшен', [j.stats.resumes, j.stats.dupes, j.counts]);
+  ok(j.stats.resumes === 1 && j.stats.dupes === 1 && j.counts.zombies === 0 && j.counts.zombieKb === 0, 'счётчики: 1 продолжение, 1 повтор отброшен', [j.stats.resumes, j.stats.dupes, j.counts]);
   a2.kill();
   await sleep(1500);
   ok(!!b.msgs.find(m => m.t === 'pd' && m.l?.ka), 'не вернулся за GRACE_MS — другим «ушёл»');
@@ -325,6 +325,26 @@ async function resume(){
   c1.close();
   ok(!!(await c2.wait(m => m.t === 'pd' && m.l?.k1, 600)), 'закрыл вкладку (1000/1001) — другим «ушёл» сразу, без ожидания');
   c2.close();
+  await S.kill();
+}
+
+// ═══ 4б. Медленный читатель (телефон «застрял»): серверу не копит память — сверх SLOW_DROP ему не шлёт, остальным доставка идёт ═══
+async function slowReader(){
+  const S = await K.startServer(D, { ADMIN_TOKEN: ADMIN, BYTE_BURST: String(64 * 1024 * 1024), BYTE_PER_SEC: String(64 * 1024 * 1024), MSG_BURST: '5000', MSG_PER_SEC: '5000', ROOM_GC_MS: '0' });
+  cleanup.push(() => S.kill());
+  const a = K.rawClient(D, S.ws, { keep: false }), slow = K.rawClient(D, S.ws, { keep: false }), c = K.rawClient(D, S.ws, { keep: false });
+  for (const x of [a, slow, c]) { await x.hi(); x.send({ t: 'j', i: 1, c: 'slow-room' }); }
+  await sleep(200);
+  slow.ws._socket.pause();   // не читает (как зависшая вкладка)
+  const m0 = await S.metrics(ADMIN);
+  const big = 'x'.repeat(60000);
+  for (let k = 0; k < 150; k++) { a.send({ t: 'b', i: 1, e: 'm', p: { k, big } }); if (k % 10 === 9) await sleep(15); }   // 9 МБ за ~0,3 с
+  await until(() => c.n >= 150, 8000);
+  const m1 = await S.metrics(ADMIN);
+  ok(c.n >= 150, 'медленный читатель: остальным всё доставлено', c.n);
+  ok(m1.stats.drop.slow > 0 && m1.mem.rssMb - m0.mem.rssMb < 40, `медленный читатель: ему не шлём сверх предела (${m1.stats.drop.slow} пропущено), память сервера +${m1.mem.rssMb - m0.mem.rssMb} МБ (не 9 МБ × N)`, [m0.mem, m1.mem, m1.stats.drop]);
+  slow.ws._socket.resume();
+  for (const x of [a, slow, c]) x.kill();
   await S.kill();
 }
 
@@ -722,6 +742,7 @@ async function leaks(P, S){
   try {
     await protocol();
     await resume();
+    await slowReader();
     await jwt();
     await watcher(P);
     const P0 = await PH.start({ WS: D.WS, diffDelay: 0 });
