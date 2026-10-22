@@ -216,7 +216,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await openWorld('survival', false);
         await gear();
         const h0 = await heap(), c0 = await counts();
-        const t0 = Date.now(); let rounds = 0;
+        const t0 = Date.now(); let rounds = 0; const curve = [];
         // случайная игра с помощниками: ходит и смотрит, копает и ставит, открывает листы, ест, спит, ведро, лист карты, точки, свиток
         while (Date.now() - t0 < MIN * 60000) {
           await ev(`(async () => { const S = ${T}.state(), X = S.X, V = D37E.vox, C = S.C, P = S.P, r = Math.random, wait = ms => new Promise(q => setTimeout(q, ms));
@@ -236,12 +236,19 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
             if (P.dead) document.querySelector('.kb-dead [data-r]')?.click();
             return 1; })()`, 60000).catch(e => logs.push('soak: ' + e.message));
           rounds++;
-          if (rounds % 40 === 0) console.log('  soak: ' + Math.round((Date.now() - t0) / 60000) + ' мин, кругов ' + rounds + ', ошибок в консоли ' + logs.length);
+          if (rounds % 40 === 0) {
+            // память по ходу (после сборки мусора) — рост «на полку» (кэши мира) или без конца (утечка)
+            const hm = await heap(), wx = await ev(`(() => { const S = ${T}.state(); return { x: Math.round(S.P.x), z: Math.round(S.P.z), ch: S.W?.chunks?.size ?? null }; })()`).catch(() => null);
+            curve.push(hm);
+            console.log('  soak: ' + Math.round((Date.now() - t0) / 60000) + ' мин, кругов ' + rounds + ', ошибок в консоли ' + logs.length + ', память ' + hm + ' МБ, ' + JSON.stringify(wx));
+          }
         }
         const h1 = await heap(), c1 = await counts(), st1 = await ev(`(() => { const S = ${T}.state(); return { alive: S.X.H.stats(), wp: S.P.ext.map.wp.length, quests: S.X.quests.stats(), x: Math.round(S.P.x), ready: S.ready }; })()`);
         console.log('SOAK', MIN, 'мин: кругов', rounds, 'память', h0, '→', h1, 'МБ, DOM', JSON.stringify(c0), '→', JSON.stringify(c1), JSON.stringify(st1));
         ok(!st1.alive.dead.length, 'за ' + MIN + ' мин ни один помощник не выключился', st1.alive);
-        ok(c1.listeners - c0.listeners <= 8 && h1 - h0 < 40, 'слушатели на месте, память на полке', { c0, c1, h0, h1 });
+        ok(c1.listeners - c0.listeners <= 8 && h1 - h0 < 40, 'слушатели на месте, память в пределах', { c0, c1, h0, h1 });
+        const half = curve.slice(Math.floor(curve.length / 2)), late = half.length > 1 ? Math.max(...half) - half[0] : 0;
+        ok(late < 12, 'память на полке: во второй половине прогона рост меньше 12 МБ', { late: +late.toFixed(1), curve });
       }
     }
     const bad = logs.filter(l => !/WebGL|GPU stall|X3595|Wake Lock|wakeLock|NotAllowedError|AudioContext|favicon|404/.test(l));
