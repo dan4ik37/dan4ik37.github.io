@@ -286,7 +286,7 @@
   // ═══ ⚙️ → «Управление»: строка «Настроить кнопки» (кнопку ловит сам) ═══
   function settingsRow(){
     const T = liveT();
-    return `<div class="gs-row"><div class="gs-lbl"><b>Расположение кнопок</b><small>${T ? `«${esc(T.o.title || '')}»: перетащи кнопки пальцем, поменяй размер, «Как было» — вернуть. Лёжа и стоя — отдельно, на этом устройстве.` : 'Открой «Кубомир» или «Подземье» на телефоне — и настрой кнопки прямо в игре.'}</small></div><div class="gs-ctl"><button type="button" class="gs-btn${T ? ' primary' : ''}" data-tl-edit="1"${T ? '' : ' disabled'}>🎮 Настроить кнопки</button></div></div>`;
+    return `<div class="gs-row" data-words="кнопки расположение переставить перетащить раскладка телефон сенсор настроить"><div class="gs-lbl"><b>Расположение кнопок</b><small>${T ? `«${esc(T.o.title || '')}»: перетащи кнопки пальцем, поменяй размер, «Как было» — вернуть. Лёжа и стоя — отдельно, на этом устройстве.` : 'Открой «Кубомир» или «Подземье» на телефоне — и настрой кнопки прямо в игре.'}</small></div><div class="gs-ctl"><button type="button" class="gs-btn${T ? ' primary' : ''}" data-tl-edit="1"${T ? '' : ' disabled'}>🎮 Настроить кнопки</button></div></div>`;
   }
   doc?.addEventListener?.('click', e => { const b = e.target?.closest?.('[data-tl-edit]'); if (!b || b.disabled) return; e.preventDefault(); edit(); });
 

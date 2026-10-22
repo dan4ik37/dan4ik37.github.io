@@ -234,7 +234,7 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 html.gs-compact .gs-fs .kb-touch .kb-tip:not(.open){max-width:min(360px,calc(100% - 150px))}
 html.gs-compact .gs-fs .kb-top .kb-where{display:none}
 html.gs-compact .gs-fs .kb-top .wld-topbtns{gap:4px}
-html.gs-compact .gs-fs .kb-top .wld-topbtns button{width:32px;height:32px;border-radius:9px;font-size:.78rem;background:rgba(10,8,24,.45)}
+html.gs-compact .gs-fs .kb-top .wld-topbtns button{width:34px;height:34px;border-radius:10px;font-size:.78rem;background:rgba(10,8,24,.45)}
 html.gs-compact .gs-fs .kb-top .wld-topbtns .gs-ico{width:15px;height:15px}
 /* ── две руки и бой (docs/COMBAT.md): ячейка левой руки слева от панели, перезарядка удара под прицелом, вспышка отбива ── */
 .kb-hrow{position:relative;display:flex;justify-content:center}
