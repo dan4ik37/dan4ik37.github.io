@@ -229,11 +229,29 @@ const server = http.createServer((req, res) => {
         return { fps: +(1000 / (ST.sumDt / n)).toFixed(1), cpu: +(ST.sumCpu / n).toFixed(2), cpuMax: +ST.maxCpu.toFixed(1), long: window.__long, frames: window.__fr, calls: ST.calls, tris: R.r.info.render.triangles,
           burning: X?.F.n ?? null, ignited: X?.F.stats.ignited ?? null, tongues: X?.flames?.()?.stats?.tongues ?? null, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null }; })()`;
       const reset = `(() => { const ST = GAME_IMPL.world._test.state().R.stats; ST.frames = ST.sumDt = ST.maxDt = ST.sumCpu = ST.maxCpu = ST.sumR = 0; window.__long = 0; window.__fr = 0; return 1; })()`;
+      await sleep(15000);   // зона достроилась, шейдеры собрались (иначе «до пожара» меряет постройку)
       await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
       await ev(reset); await sleep(6000); const before = await ev(snap); console.log('до пожара'.padEnd(20), JSON.stringify(before)); rows.push({ name: 'до пожара', ...before });
-      await ev(`(() => { const S = GAME_IMPL.world._test.state(), X = S.zones.fire, h = window.__hot; for (const [dx, dz] of [[0, 0], [4, 2], [-4, -2]]) X.ignite(h.x + dx, h.y + .5, h.z + dz, 4, 77 + dx, true); return X.F.n; })()`);
-      await sleep(5000); await ev(reset); await sleep(8000);
-      const during = await ev(snap); console.log('пожар'.padEnd(20), JSON.stringify(during)); rows.push({ name: 'пожар', ...during });
+      // поджечь три самых густых места рядом (не ближе 12 м друг к другу); замер — окнами «идёт / на паузе» по 2 с, 4 раза: на паузе
+      // пожар стоит (не догорает за время замера), сравнение рядом по времени честнее (машина под нагрузкой)
+      const lit = await ev(`(() => { const S = GAME_IMPL.world._test.state(), z = S.zones, X = z.fire, h = window.__hot;
+        const L = [...z.destruct.list.values()].filter(b => ['bag', 'crate', 'barrel', 'fence', 'tree', 'pine'].includes(b.kind) && Math.hypot(b.x - h.x, b.z - h.z) < 40);
+        const dens = b => L.filter(u => Math.hypot(u.x - b.x, u.z - b.z) < 6).length, C = [];
+        for (const b of L.map(b => [dens(b), b]).sort((a, c) => c[0] - a[0]).map(q => q[1])) { if (C.every(q => Math.hypot(q.x - b.x, q.z - b.z) > 12)) C.push(b); if (C.length >= 3) break; }
+        let s = 77; for (const b of C) X.ignite(b.x, (b.y || 0) + .5, b.z, 5, s++, true);
+        return { spots: C.length, near: L.length, burning: X.F.n }; })()`);
+      console.log('подожгли', JSON.stringify(lit));
+      await sleep(1500);
+      const ab = { off: [], on: [] };
+      for (let r = 0; r < 4; r++) for (const p of [false, true]) {
+        await ev(`(() => { GAME_IMPL.world._test.state().zones.fire.paused = ${p}; return 1; })()`); await sleep(300); await ev(reset); await sleep(2000);
+        const q = await ev(snap); ab[p ? 'off' : 'on'].push(q);
+        if (!p && !r) { console.log('пожар'.padEnd(20), JSON.stringify(q)); rows.push({ name: 'пожар', ...q }); }
+      }
+      await ev(`(() => { GAME_IMPL.world._test.state().zones.fire.paused = false; return 1; })()`);
+      const med = (a, k) => { const v = a.map(q => q[k]).sort((x, y) => x - y); return v[v.length >> 1]; };
+      const abRow = k => ({ cpu: med(ab[k], 'cpu'), cpuMax: med(ab[k], 'cpuMax'), calls: med(ab[k], 'calls'), burning: med(ab[k], 'burning'), tongues: med(ab[k], 'tongues') });
+      console.log('идёт / пауза (медианы четырёх)', JSON.stringify({ on: abRow('on'), off: abRow('off') })); rows.push({ name: 'идёт', ...abRow('on') }, { name: 'пауза', ...abRow('off') });
       await send('Emulation.setCPUThrottlingRate', { rate: 1 });
       const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 84 });
       const dirS = path.join(TMP, 't022d', 'shots'); fs.mkdirSync(dirS, { recursive: true }); fs.writeFileSync(path.join(dirS, 'mir-fire.jpg'), Buffer.from(data, 'base64')); console.log('  снимок', path.join(dirS, 'mir-fire.jpg'));

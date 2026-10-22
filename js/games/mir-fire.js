@@ -82,8 +82,9 @@
     }
     // шаг игры: такты ядра; раз в секунду — что восстановилось (снова может гореть), подгрузить деревья у огня, погода
     let slowT = 0, wxT = 0;
+    X.paused = false;   // замеры (огонь на паузе / идёт): такты и пламя стоят
     X.step = dt => {
-      if (!F.n && !restoreWait) return;
+      if (X.paused || (!F.n && !restoreWait)) return;
       F.step(dt);
       if ((slowT -= dt) <= 0) { slowT = 1; slow(); }
       if ((wxT -= dt) <= 0) { wxT = 5; const s = S.wx?.state; F.setWind(s ? +s.wind || 0 : 0, s ? +s.windDir || 0 : 0); F.setRain(s ? Math.min(1, +s.rain || 0) : 0); }
@@ -96,7 +97,7 @@
     // ── картинка: пламя движка (fx.js FX.flames: языки, дым, угли, лампы), звук пожара ──
     let FL = null, snd = null, flOn = false;
     X.frame = (dt, t) => {
-      if (!F.n) { if (flOn) { FL?.clear(); flOn = false; snd?.set({ vol: 0 }); } return; }
+      if (!F.n || X.paused) { if (flOn) { FL?.clear(); flOn = false; snd?.set({ vol: 0 }); } return; }
       if (!FL) { try { FL = S.FX?.flames?.({ lights: E.isMobile?.() ? 1 : 2 }) || null; } catch (e) { console.error(e); FL = null; } if (!FL) return; }
       flOn = true;
       const cam = R.camera.position, Q = FL.Q;
