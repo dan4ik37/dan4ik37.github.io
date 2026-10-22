@@ -6,6 +6,8 @@
 //          node scripts/planet-perf.cjs soak [минут=10]    — долгий полёт: орбита ↔ земля по кругу, перелёты по планете, ходьба;
 //                                                          ошибки и рост памяти по минутам
 //          node scripts/planet-perf.cjs reopen [раз=20]    — открыть/закрыть страницу планеты N раз: холсты, потоки, память
+//          node scripts/planet-perf.cjs map [раз=20]       — T-079: карта «🪐 Система» и телескоп N раз: узлы, слушатели, память
+//          node scripts/planet-perf.cjs golden             — T-079: «золотые» значения O.m / рельсов / неба в Chrome = в node (до бита)
 // Переменные: RATE (замедление ЦП, 4), Q (качество, mid), PC=1 — компьютер 1280 × 720 без замедления, CHROME, D37_TMP (временное — на E:).
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -30,18 +32,19 @@ const SAMPLER = `(() => {
   const S = window.__plS = { on: false, f: [] };
   const tick = t => { requestAnimationFrame(tick); if (!S.on) return; const T = window.GAME_IMPL?.planet?._test?.S; if (!T?.R) return;
     const st = T.R.stats, v = T.V.stats ? T.V : null;
-    S.f.push([t, st.cpuFrame || 0, st.calls || 0, st.tris || 0, v ? v.cpu || 0 : 0]); };
+    S.f.push([t, st.cpuFrame || 0, st.calls || 0, st.tris || 0, v ? v.cpu || 0 : 0, T.SV ? T.SV.cpu || 0 : 0]); };
   requestAnimationFrame(tick);
 })()`;
 const summary = f => {
   if (f.length < 3) return { frames: f.length };
   const dts = []; for (let i = 1; i < f.length; i++) dts.push(f[i][0] - f[i - 1][0]);
-  const cpu = f.map(x => x[1]).sort((a, b) => a - b), calls = f.map(x => x[2]), tris = f.map(x => x[3]), pv = f.map(x => x[4]).sort((a, b) => a - b);
+  const cpu = f.map(x => x[1]).sort((a, b) => a - b), calls = f.map(x => x[2]), tris = f.map(x => x[3]), pv = f.map(x => x[4]).sort((a, b) => a - b), sky = f.map(x => x[5] || 0).sort((a, b) => a - b);
   const avg = a => a.reduce((s, x) => s + x, 0) / a.length, p = (a, q) => a[Math.min(a.length - 1, Math.floor(a.length * q))];
   return { frames: f.length, fps: +(1000 / avg(dts)).toFixed(1), long50: dts.filter(d => d > 50).length, worstDt: +Math.max(...dts).toFixed(0),
     cpuAvg: +avg(cpu).toFixed(2), cpuP95: +p(cpu, .95).toFixed(2), cpuMax: +cpu[cpu.length - 1].toFixed(1),
     planetAvg: +avg(pv).toFixed(3), planetP95: +p(pv, .95).toFixed(3), planetMax: +pv[pv.length - 1].toFixed(2),
-    callsAvg: Math.round(avg(calls)), callsMax: Math.max(...calls), trisAvg: Math.round(avg(tris)) };
+    callsAvg: Math.round(avg(calls)), callsMax: Math.max(...calls), trisAvg: Math.round(avg(tris)),
+    skyAvg: +avg(sky).toFixed(3), skyP95: +p(sky, .95).toFixed(3), skyMax: +sky[sky.length - 1].toFixed(2) };
 };
 (async () => {
   fs.mkdirSync(path.join(OUT, 'shots'), { recursive: true });
@@ -97,6 +100,16 @@ const summary = f => {
       await send('Emulation.setCPUThrottlingRate', { rate: RATE });
       await sleep(3000);
       out.orbit = { ...(await measure(5000)), ...(await stats()) }; await shot((PC ? 'pc' : 'phone') + '-1-orbit');
+      // T-079: Луна в телескоп (одна картинка — всё небо системы), карта системы (холст, ~30 кадров/с)
+      if (await ev(`!!${T}.sky`)) {
+        await ev(`${T}.look('luna')`); await sleep(1200);
+        out.moon = await measure(3000); await shot((PC ? 'pc' : 'phone') + '-1b-moon');
+        await ev(`${T}.untele()`);
+        await ev(`(${T}.S.map.stats = { n: 0, ms: 0, max: 0 }, ${T}.map(true))`); await sleep(4000);
+        out.map = await ev(`(() => { const m = ${T}.S.map.stats; return { frames: m.n, drawAvg: +(m.ms / Math.max(1, m.n)).toFixed(3), drawMax: +m.max.toFixed(2) }; })()`);
+        await shot((PC ? 'pc' : 'phone') + '-1c-map');
+        await ev(`${T}.map(false)`); await sleep(500);
+      }
       // спуск с орбиты до земли (сам), 40 с
       out.descent = await measure(0, async () => { await ev(`${T}.descend(40)`); for (let k = 0; k < 44; k++) { await sleep(1000); if (k === 14) await shot((PC ? 'pc' : 'phone') + '-2-descent'); const st = await ev(`${T}.state()`); if (!st.fly.auto && k > 5) break; } });
       out.descentEnd = await stats();
@@ -131,6 +144,29 @@ const summary = f => {
         console.log('  ', JSON.stringify(out.minutes[out.minutes.length - 1]));
       }
       out.workers = await workers();
+    } else if (MODE === 'golden') {
+      // одинаковость до бита: то же число в node и в Chrome
+      const node = (() => { for (const f of ['climate', 'planet', 'orbit', 'system']) require(path.join(SITE, 'js/engine', f + '.js')); return globalThis.D37E.orbitGolden(); })();
+      await open();
+      const chrome = await ev(`window.D37E.orbitGolden()`);
+      out.golden = { node, chrome, same: node.hash === chrome.hash };
+      console.log(out.golden.same ? 'ЗОЛОТЫЕ СОВПАЛИ' : 'ЗОЛОТЫЕ РАЗНЫЕ', JSON.stringify(out.golden));
+      if (!out.golden.same) failed = true;
+    } else if (MODE === 'map') {
+      const n = +ARG || 20;
+      await open(); await sleep(3000);
+      const probe = async () => ev(`(() => { const c = document.getElementsByTagName('*').length; return { nodes: c, sm: document.querySelectorAll('.sm').length, canvases: document.querySelectorAll('canvas').length, heap: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null }; })()`);
+      const lis = async () => { const r = await send('Runtime.evaluate', { expression: 'getEventListeners(window).keydown ? getEventListeners(window).keydown.length : 0', includeCommandLineAPI: true, returnByValue: true }); return r.result.value; };
+      await ev('window.gc && window.gc()');
+      out.base = { ...(await probe()), keydown: await lis() };
+      out.cycles = [];
+      for (let i = 0; i < n; i++) {
+        await ev(`${T}.map(true)`); await sleep(350);
+        await ev(`${T}.S.map._focus(['sun', 'home', 'desert'][${i} % 3], true)`); await sleep(250);
+        await ev(`${T}.map(false)`);
+        await ev(`${T}.look(['luna', 'desert'][${i} % 2])`); await sleep(250); await ev(`${T}.untele()`);
+        if (i % 5 === 4) { await ev('window.gc && window.gc()'); await sleep(300); out.cycles.push({ i: i + 1, ...(await probe()), keydown: await lis() }); console.log('  ', JSON.stringify(out.cycles[out.cycles.length - 1])); }
+      }
     } else if (MODE === 'reopen') {
       const n = +ARG || 20;
       await open(); await sleep(4000);

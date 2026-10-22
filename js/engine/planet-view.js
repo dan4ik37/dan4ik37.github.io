@@ -248,7 +248,7 @@ void main(){
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
     const N = 32, K = o.K ?? (mob || low ? 1.0 : 1.25), maxL = o.maxL ?? 12, BUDGET = o.budget ?? (mob || low ? 2 : 4);
     const CAP = o.cap ?? (mob || low ? 260 : 480);
-    const V = { P, R, fr: P.patch(o.dir || P.dirFromLatLon(43.2, 76.9)), camBF: new Float64Array(3), t: 0, alt: 0, altG: 0, dead: false,
+    const V = { P, R, fr: P.patch(o.dir || P.dirFromLatLon(43.2, 76.9)), camBF: new Float64Array(3), t: 0, alt: 0, altG: 0, dead: false, sunK: 1, skyM: null,
       onRebase: f => { lis.push(f); return () => { const i = lis.indexOf(f); if (i >= 0) lis.splice(i, 1); }; } };
     const lis = o.onRebase ? [o.onRebase] : [];
     const grp = new T.Group(); grp.name = 'planet'; grp.matrixAutoUpdate = false;
@@ -268,6 +268,7 @@ void main(){
       uLit: { value: new T.Vector4(2.3, 1, 30 * (A ? A.sun : 0), 0) }, uBlob: { value: new T.Vector4(0, 0, 0, 0) }, uTime: { value: 0 },
       uSky: { value: new T.Vector4(40 * (A ? A.sun : 0), Math.cos(.0047 * (D.sky?.sunSize || 1)), 60, 1) },
     };
+    V.U = U;   // общие числа атмосферы — и для неба системы (space-view.js: тела в небе — сквозь тот же воздух)
     const terrainMat = new T.ShaderMaterial({ name: 'planet', uniforms: U, vertexShader: TERRAIN_V, fragmentShader: TERRAIN_F, fog: false, lights: false });
     terrainMat.customProgramCacheKey = () => 'd37planet1';
     own.push(terrainMat);
@@ -287,14 +288,16 @@ void main(){
     // звёзды
     const stars = makeStars(T, D.seed, mob ? 1400 : 2400); stars.renderOrder = 900; own.push(stars.geometry, stars.material); stars.matrixAutoUpdate = false;
     R.scene.add(stars);
-    // луны
-    const moons = D.moons.map(m => {
+    // луны-«украшения» профиля v1 (rails 'visual'); луны-тела (id) и планеты рисует js/engine/space-view.js по орбитам системы
+    const moons = [];
+    D.moons.forEach((m, idx) => {
+      if (!m || typeof m !== 'object') return;
       const u = { ...U, uTint: { value: new T.Color(m.tint) } };
       const mat = new T.ShaderMaterial({ name: 'planet-moon', uniforms: u, vertexShader: MOON_V, fragmentShader: MOON_F, fog: false, lights: false });
       mat.customProgramCacheKey = () => 'd37planetmoon1';
       const mesh = new T.Mesh(new T.SphereGeometry(1, 40, 20), mat); mesh.frustumCulled = false; mesh.matrixAutoUpdate = false;
       own.push(mat, mesh.geometry); R.scene.add(mesh);
-      return { m, mesh };
+      moons.push({ m, mesh, idx });
     });
 
     // ── Небо движка: купол прячем (небо — атмосфера), фон — чёрный (космос), тени выключены (у поверхности своё освещение) ──
@@ -493,7 +496,7 @@ void main(){
 
     // ── Небо, свет, дальность — каждый кадр (перед рисованием) ──
     const SB = [0, 0, 0], ML = [0, 0, 0], MB = [0, 0, 0], UPD = [0, 0, 0];
-    let lightAt = -1e9, lastHour = -1, nearFar = [0, 0];
+    let lightAt = -1e9, lastHour = -1, nearFar = [0, 0], sunKAt = 1, lightK = 1, lightB = false;
     const m4 = new T.Matrix4(), m4b = new T.Matrix4();
     function sky(){
       const cam = R.camera, fr = V.fr, B = fr.B;
@@ -533,16 +536,21 @@ void main(){
         const tauUp = A.tauR[2] * Math.exp(-max(0, V.alt) / A.Hr);   // сколько воздуха над камерой (синий)
         stars.material.uniforms.uK.value = clamp(1 - tauUp * 40 * clamp((mu + .15) / .3, 0, 1), 0, 1);
       } else stars.material.uniforms.uK.value = 1;
-      // звёзды вертятся с небом: неподвижные → система планеты (поворот на −θ) → L
-      const th = P.spin(V.t), c = Math.cos(th), s = Math.sin(th);
-      // Rbf = поворот вокруг Y на −θ: x' = c x − s z, z' = s x + c z
-      m4b.set(c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1);
+      // звёзды вертятся с небом: неподвижные → система планеты (поворот на −θ) → L; с системой (space-view.js) — её поворот
+      // «небо системы → BF» (V.skyM, 9 чисел по строкам): звёзды стоят там же, где планеты и луна
+      const SM = V.skyM;
+      if (SM) m4b.set(SM[0], SM[1], SM[2], 0, SM[3], SM[4], SM[5], 0, SM[6], SM[7], SM[8], 0, 0, 0, 0, 1);
+      else {
+        const th = P.spin(V.t), c = Math.cos(th), s = Math.sin(th);
+        // Rbf = поворот вокруг Y на −θ: x' = c x − s z, z' = s x + c z
+        m4b.set(c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1);
+      }
       m4.set(B[0], B[1], B[2], 0, B[3], B[4], B[5], 0, B[6], B[7], B[8], 0, 0, 0, 0, 1).multiply(m4b);
       stars.matrix.copy(m4); stars.matrix.scale(TMP_V.set(10, 10, 10)); stars.matrix.setPosition(cam.position.x, cam.position.y, cam.position.z); stars.matrixWorldNeedsUpdate = true;
       // луны: место по времени, на дальности не дальше 0,9 far (тот же угловой размер)
       for (let k = 0; k < moons.length; k++) {
         const Mn = moons[k];
-        P.moonPos(k, V.t, MB);
+        P.moonPos(Mn.idx, V.t, MB);
         P.toL(fr, MB[0], MB[1], MB[2], ML);
         const dx = ML[0] - cam.position.x, dy = ML[1] - cam.position.y, dz = ML[2] - cam.position.z, dl = sqrt(dx * dx + dy * dy + dz * dz);
         const dd = min(dl, far * .9), k2 = dd / dl, rr = Mn.m.radius * k2;
@@ -550,12 +558,20 @@ void main(){
         Mn.mesh.matrixWorldNeedsUpdate = true;
       }
       U.uTime.value = V.t % 1000;
+      // солнечное затмение (space-view.js: V.sunK — какая доля диска солнца видна у камеры): свет солнца, неба и дымки тусклее
+      const sk = V.sunK >= 0 && V.sunK <= 1 ? V.sunK : 1;
+      if (sk !== sunKAt) {
+        sunKAt = sk;
+        const as = A ? A.sun : 0, ks = .03 + .97 * sk;
+        U.uLit.value.x = 2.3 * sk; U.uLit.value.y = .12 + .88 * sk; U.uLit.value.z = 30 * as * ks; U.uSky.value.x = 40 * as * ks;
+        dome.material.uniforms.uSky.value.x = shell.material.uniforms.uSky.value.x = 40 * as * ks;
+      }
       // свет движка (человечки, предметы): небо по настоящему солнцу — не чаще 4 раз в секунду или когда солнце сдвинулось
       UPD[0] = cx / Dc; UPD[1] = cy / Dc; UPD[2] = cz / Dc;
       const tn = now(), hour = P.localHour(UPD, V.t);
-      if (tn - lightAt > 250 || abs(hour - lastHour) > .25) {
-        lightAt = tn; lastHour = hour;
-        try { R.setLighting({ time: hour }); } catch (e) {}
+      if (tn - lightAt > 250 || abs(hour - lastHour) > .25 || abs(sk - lightK) > .02) {
+        lightAt = tn; lastHour = hour; lightK = sk;
+        try { R.setLighting(sk < 1 ? { time: hour, brightness: .1 + .9 * sk } : lightB ? { time: hour, brightness: 1 } : { time: hour }); lightB = sk < 1; } catch (e) {}
         cam.near = nearFar[0]; cam.far = nearFar[1]; cam.updateProjectionMatrix();   // setLighting сам ставит дальность (до 3000) — вернуть свою
       }
     }
@@ -616,6 +632,9 @@ void main(){
     V.blob = (x, y, z, r) => U.uBlob.value.set(x, y, z, r);
     return V;
   };
+
+  // куски шейдеров атмосферы — для неба системы (space-view.js): тела светят сквозь тот же воздух
+  E.planetView.GLSL = { ATMO, PHASE };
 
   // купол неба: кольца гуще у горизонта (там небо меняется сильнее всего)
   function domeGeo(T){

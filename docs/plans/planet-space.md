@@ -554,3 +554,37 @@ one satellite (el ≥ 10°): r 164000 cap 29.8° 6.6 %, pass ≤ 1.9 of 11.2 min
 walker ≥1/≥2/≥3/≥4: 3 stationary 76.4/0.1/0/0 · 6/3/1 82.7/46.8/7.0/0 · 9/3/1 98.4/82.2/21.6/0 · 12/3/1 100/100/60.6/10.8
                     18/3/1 100/100/98.5/79.0 · 24/4/1 r 320000 100/100/100/98.9 · 24/4/1 r 260000 100/100/99.0/84.7
 ```
+
+## PS-1 — built (T-079, 22.10.2026)
+**Files** (new): `js/engine/orbit.js` (`D37E.orbit`, pure), `js/engine/system.js` (`D37E.system`, pure), `js/engine/clock.js` (`D37E.clock`),
+`js/engine/space-view.js` (`D37E.spaceView` — the sky, one instanced draw call; `D37E.spaceMap` — the «🪐 Система» 2D map), `planet.sql` (part «time»:
+`world_now()`), `scripts/orbit-test.cjs`, `scripts/planet-sql-test.mjs`. Additive: `planet.js` (PlanetProfile v2 + v1 upgrade, `PL.seasonOf` /
+`declinationOf` / `subSolarLonOf`, exact declination), `planet-view.js` hooks (`V.U`, `E.planetView.GLSL`, `V.skyM` — stars in the system frame,
+`V.sunK` — solar eclipse dimming; decorative v1 moons only for objects), `planet-demo.js` (world clock + own warp offset, sky, map, telescope).
+**API as built** (vs §2.2): system-level calls are methods of the compiled system — `S.posOf / velOf / which / shadow / frame / sky / phase / moonEvents /
+orbitPath` (`S = D37E.system.create(D37E.system.HOME)`), the rails stay pure in `O` (`O.el / elRad / state / pos / fromState / uv / crossTime / hohmann /
+lambert / soi / disc / predict / golden`); `O.predict(S, { body, r, v }, t, horizon)` → ≤ 6 segments `{ body, el, t0, t1, end: soi | impact | atmo |
+horizon, next, r1, v1 }`. `O.drive` was not built (owner decision 1: honest travel time).
+**Decisions taken in the step**
+- Calendar sky: the home sky rotates the whole system about the ecliptic pole by ΔL = (calendar sun longitude) − (true one): the visible sun equals
+  `P.sunDir` (≤ 1e-9) and all angles between bodies (phases, elongations, eclipses) stay exact; stars live in the same sky frame.
+- Declination is exact (`sin δ = sin ε · sin L`, ≤ 0.25° from the old ε·sin L); the home surface is bit-identical to v1 (tested on 4 chunks).
+- Луна: a 1 398 144 (T 16 800 s), e .012, **i 15°, node 120°**. At 5° every lunation had both eclipses (the planet's shadow at the Moon spans 10°
+  of sky); at 15° there are eclipse seasons twice a year (~6 weeks each, one in late October 2026: total solar somewhere and total lunar every 4.7 h).
+- Stubs (Фоб, Дейм, Огненная, Ядовитая, Великан, Ледяная, Океания, Пояс): data and rails exist (tests), hidden in the sky and the map (owner decision 5).
+- Clock: `D37E.clock` in its own file (not only space needs it); `C.feed(serverMs, rtt)` waits for T-045 / net.js host clocks (the rt server sends no time yet).
+- Solar eclipse on the ground: one factor at the camera (`V.sunK`: sun, sky, engine light), not a moving shadow spot in the terrain shader (that is
+  the PL-2 / PL-4 lane: planet-view's terrain shader).
+**Numbers** (M). Node, PC core: `O.state` 0.25–0.34 µs, `O.m.sin` 14–15 ns, the home sky (`S.sky`: all rails, sky frame, phases, eclipse factors)
+4.8–6.3 µs, Lambert 8.5 µs, patched prediction (6 h, Луна in the way) 0.26–0.30 ms, Moon events (phases + next eclipses, map only, every 30 s)
+1.2–1.4 ms; O.m vs a 300-bit BigInt reference: sin/cos ≤ 1.6 ULP, atan2 1.6, exp 1.0, log 0.5, asin 2.5; golden hash identical in node and Chrome
+(both V8; a real-iPhone check stays in PS-2). Per frame only boxed doubles (~86 bytes), nothing retained over 100 000 frames.
+Phone profile (412×915×2, CPU ×4, «средняя»; in-page A/B with the sky system on/off in alternating 5-s windows — the machine was loaded by other
+agents and separate before/after page loads varied by ±2 ms): orbit 2.06 → 2.42 ms CPU per frame (median 2.0 → 2.4; 6 pairs, each +0.24…0.49),
+ground 3.21 → 3.35 ms (2.8 → 3.1; later ground runs were taken while the machine was overloaded — 30–60 frames per 5 s — and are not counted);
++1 draw call, and none when no body is above the horizon: a body whose disc is entirely behind the sea-level sphere is skipped (checked over a day
+on the ground and in orbit, 96 + 96 probes, no visible body hidden). All instance data is one interleaved buffer (one upload per frame). The 2D map
+draws in 2.3–4.3 ms per map frame at ~30 fps (the 3D view is paused while it is open). 20 × map open/close + telescope: DOM nodes 1878 → 1877,
+keydown listeners 7 → 7, heap 14.8 → 15.6 MB flat from cycle 5. 21 × page open/close with the map: renderers 2 → 2, geometries 54 → 54, materials
+9 → 9, heap 14.6 → 15.7 MB (13.8 after closing) — a 9-s help timer of the proof page held the whole previous world until it fired (fixed; reopen × 20
+grew 15 → 53–61 MB before). Soak 12.7 min (flights, landings, walking, time ×300, orbit): heap 24–28 MB flat, GPU 5.3–5.8 MB, 0 errors.
