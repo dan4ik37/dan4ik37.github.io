@@ -291,6 +291,7 @@
       if (it.kind === 'wand') d.push(`✨ Жезл: урон ${it.dmg}, тратит ${it.mana} маны`);
       if (it.kind === 'ammo') d.push('🏹 Стрелы для лука');
       if (it.kind === 'hook') d.push('🪝 Крюк-кошка: летит и цепляется за блок, тянет к нему (E / «🪝 Крюк»)');
+      if (it.kind === 'igniter') d.push('🔥 Огниво: поджигает дерево, листву, траву, доски у курсора (не тратится). ' + (G.W ? (G.W.fire === 'spread' ? 'В этом мире огонь перекидывается на соседнее — осторожно с домом!' : 'В этом мире огонь не перекидывается: горит только подожжённое.') : ''));
       if (it.kind === 'tile') d.push('🧱 Ставится в мир' + (TILE_INFO[it.tile] || TILE_INFO[it.key] ? ' — ' + (TILE_INFO[it.key] || TILE_INFO[it.tile]) : ''));
       if (it.kind === 'wall') d.push('🧱 Стена фона: из таких делают дом (сломать — только молотком)');
       if (it.use === 'heal') d.push(`❤ Лечит: +${it.heal} здоровья${it.key === 'potion' ? ' (зелье — раз в 30 с)' : ''}. Быстро — клавиша H`);
@@ -456,6 +457,7 @@
       if (it.kind === 'wall') return ['🧱', 'Стена'];
       if (it.kind === 'use') return it.use === 'heal' ? ['🧪', 'Выпить'] : it.use === 'buff' ? ['🧪', 'Выпить'] : ['✨', 'Применить'];
       if (it.kind === 'hook') return ['🪝', 'Крюк'];
+      if (it.kind === 'igniter') return ['🔥', 'Поджечь'];
       return ['✊', 'Действие'];
     }
     U.hud = () => {
@@ -736,6 +738,7 @@
       if (!by) return;
       returnHand(); if (invOpen) U.toggleInv(false);
       const tip = /лава/i.test(by) ? 'Лава жжёт — ставь блоки мостиком и обходи с краю.'
+        : /огон/i.test(by) ? 'Огонь жжёт — не стой в пламени и на горящих досках. Вода гасит, а прокопанная полоса без дерева и травы останавливает пожар.'
         : /падени|высот/i.test(by) ? 'С высоты лучше спускаться по верёвке или лестнице; вода смягчает падение.'
         : /филин/i.test(by) ? 'Филин кричит «!» перед броском — в этот миг отпрыгни в сторону.'
         : /великан/i.test(by) ? 'Великан сжимается перед прыжком — уходи из-под него и бей с края. Лечение — H.'
@@ -893,8 +896,10 @@
           ${sw('fps', 'Счётчик кадров (FPS)', 'Кадры в секунду в углу экрана.')}
           <div class="gs-sec">Игра</div>
           ${sw('autosave', 'Автосохранение', 'Каждые 45 секунд и при выходе.')}
+          ${G.W && G.fire ? `<div class="gs-row" data-words="огонь пожар"><div class="gs-lbl"><b>🔥 Огонь распространяется</b><small>${esc(window.PZFire?.NOTE || '')} Настройка этого мира.</small></div><div class="gs-ctl"><label class="gs-sw"><input type="checkbox" data-pzfire="1" aria-label="Огонь распространяется"${G.fire.spread ? ' checked' : ''}><i aria-hidden="true"></i></label></div></div>` : ''}
           <p class="gs-note">Шейдеры (Обычные, Красивые, Ультра, Ретро) — вкладка «🎨 Графика». Звук — «🔊 Звук».</p>`;
         body.onchange = e => {
+          if (e.target.dataset.pzfire) { if (G.fire) { G.fire.setSpread(!!e.target.checked); API.saveAll(); } return; }   // огонь — настройка мира
           const k = e.target.dataset.pzo; if (!k) return;
           G.opt[k] = !!e.target.checked; API.saveOpt();
           if (k === 'smart') U.smart(G.opt.smart);
@@ -983,13 +988,16 @@
         <div class="pz-ach">${Object.entries(API.ACH).map(([k, [ic, t, d]]) => `<div class="${got[k] ? 'got' : ''}">${ic} <b>${esc(t)}</b><small>${esc(d)}</small></div>`).join('')}</div>
         <div class="pz-row"><button type="button" class="pz-b pri" data-a="back">← Назад</button></div></div>`;
     }
+    let fireTouched = false;   // огонь: «реализм» обрушения — вкл по умолчанию, если игрок сам не выбрал
     async function newWorldHtml(){
+      fireTouched = false;
       const mods = window.PZMods ? await window.PZMods.installed(API) : [];
       const usable = mods.filter(m => m.game === 'tiles' || m.game === 'both');
       return `<div class="pz-card" style="max-width:480px"><h2>🌍 Новый мир</h2>
         <div class="pz-field"><span>Название</span><input data-f="name" maxlength="32" value="Мир ${new Date().toLocaleDateString('ru')}"></div>
         <div class="pz-field"><span>Зерно (необязательно)</span><input data-f="seed" maxlength="40" placeholder="случайное"><small>Одно и то же зерно — один и тот же мир у всех. Можно слово: «денчик».</small></div>
         ${window.PZSupport ? `<div class="pz-field"><span>Обрушение построек и пещер</span><select data-f="support"><option value="off">🧱 Выкл (как было)</option><option value="soft">🏚 Мягкое</option><option value="real">🏗 Реализм</option></select><small>${esc(window.PZSupport.NOTES.soft)} ${esc(window.PZSupport.NOTES.real)}</small></div>` : ''}
+        ${window.PZFire ? `<div class="pz-field"><span>🔥 Огонь</span><select data-f="fire"><option value="off">Горит только подожжённое (как было)</option><option value="spread">Распространяется</option></select><small>${esc(window.PZFire.NOTE)} Можно поменять потом в ⚙️ «⛏ Подземье».</small></div>` : ''}
         ${usable.length ? `<h3>🧩 Моды в этом мире</h3>${usable.map(m => `<label class="pz-chk"><input type="checkbox" data-mod="${esc(m.id)}"> <b>${esc(m.name)}</b> <span class="pz-note">${esc(m.version || '')} · ${esc(m.author || '')}</span></label>`).join('')}` : '<p class="pz-note">Модов пока нет — их можно добавить в «🧩 Моды».</p>'}
         <div class="pz-row"><button type="button" class="pz-b pri" data-a="mkworld">Создать</button><button type="button" class="pz-b ghost" data-a="back">Отмена</button></div></div>`;
     }
@@ -1022,7 +1030,7 @@
         case 'mkchar': { const c = API.newCharRecord(menuEl.querySelector('[data-f="cname"]').value.trim() || 'Герой'); await API.put('chars', c); selChar = c.id; U.menu('start'); return; }
         case 'mkworld': {
           const mods = [...menuEl.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
-          const wr = API.newWorldRecord(menuEl.querySelector('[data-f="name"]').value.trim() || 'Мой мир', menuEl.querySelector('[data-f="seed"]').value, mods, menuEl.querySelector('[data-f="support"]')?.value);
+          const wr = API.newWorldRecord(menuEl.querySelector('[data-f="name"]').value.trim() || 'Мой мир', menuEl.querySelector('[data-f="seed"]').value, mods, menuEl.querySelector('[data-f="support"]')?.value, menuEl.querySelector('[data-f="fire"]')?.value || 'off');
           await API.put('worlds', wr); selWorld = wr.id; U.menu('start'); return;
         }
         case 'delchar': if (await ask('Удалить героя?', 'Его вещи и достижения пропадут (если не сохранил в файл).')) { await API.deleteChar(id); startMenu(); } return;
@@ -1048,6 +1056,9 @@
     // запасное окно настроек: флажки и масштаб
     on(document, 'change', e => {
       if (!menuEl || !menuEl.contains(e.target)) return;
+      const nf = e.target.dataset.f;   // новый мир: огонь — как обрушение, пока игрок сам не выбрал
+      if (nf === 'fire') fireTouched = true;
+      if (nf === 'support' && !fireTouched && window.PZFire) { const fs = menuEl.querySelector('[data-f="fire"]'); if (fs) fs.value = window.PZFire.defaultFor(e.target.value) ? 'spread' : 'off'; }
       const k = e.target.dataset.opt; if (!k) return;
       if (k === 'zoom') { G.opt.zoom = +e.target.value / 100; menuEl.querySelector('[data-zv]').textContent = e.target.value + '%'; API.resize(); }
       else G.opt[k] = !!e.target.checked;

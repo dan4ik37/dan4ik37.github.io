@@ -58,7 +58,8 @@ function PZ_CORE(){
   // d: что выпадает (ключ предмета; '' — ничего; по умолчанию — свой ключ), k: вид — block (края, трава, формы) |
   // obj (несколько клеток, sz [w, h]) | plant (украшение, стоит на опоре) | torch | plat
   // g: группа «одного материала» (шов между разными), grass: цвет травы по открытым сторонам, fall: сыплется,
-  // climb: лезть, emis: само светится (0…255), sup: опора — floor | ceil | wall | any, slip: скользко
+  // climb: лезть, emis: само светится (0…255), sup: опора — floor | ceil | wall | any, slip: скользко; burn: как горит (материал огня
+  // D37E.fire: wood | planks | leaves | grass | turf | cloth | char | …, 'none' — не горит; нет поля — по остальным полям, podzem-fire.js)
   const TILE_LIST = [
     [0, 'air', 'Воздух', {}],
     [1, 'dirt', 'Земля', { s: 1, h: 40, pat: 'dirt', c: ['#8b5a34', '#6c4224', '#a3714a'], g: 1 }],
@@ -86,10 +87,10 @@ function PZ_CORE(){
     [23, 'glass', 'Стекло', { s: 1, op: 2, h: 30, pat: 'glass', c: ['#bfe6ff', '#ffffff', '#7fb8dd'], g: 13 }],
     [24, 'platform', 'Платформа', { s: 2, op: 0, h: 20, d: 'platform', pat: 'platform', c: ['#a8743e', '#86592c', '#c48e54'], k: 'plat' }],
     [25, 'torch', 'Факел', { h: 1, tool: 'any', pat: 'torch', c: ['#7a4b26', '#ffb347', '#fff2a8'], k: 'torch', l: [255, 168, 76], emis: 255, sup: 'any' }],
-    [26, 'door', 'Дверь', { s: 3, h: 40, tool: 'any', pat: 'door', c: ['#9b6a38', '#6e4824', '#d4b070'], k: 'obj', sz: [1, 3] }],
-    [27, 'dooropen', 'Дверь (открыта)', { h: 40, tool: 'any', d: 'door', pat: 'dooropen', c: ['#9b6a38', '#6e4824', '#d4b070'], k: 'obj', sz: [1, 3] }],
+    [26, 'door', 'Дверь', { s: 3, h: 40, tool: 'any', pat: 'door', c: ['#9b6a38', '#6e4824', '#d4b070'], k: 'obj', sz: [1, 3], burn: 'planks' }],
+    [27, 'dooropen', 'Дверь (открыта)', { h: 40, tool: 'any', d: 'door', pat: 'dooropen', c: ['#9b6a38', '#6e4824', '#d4b070'], k: 'obj', sz: [1, 3], burn: 'planks' }],
     [28, 'chest', 'Сундук', { h: 40, tool: 'any', pat: 'chest', c: ['#9b6a38', '#5e3c1c', '#e0b840'], k: 'obj', sz: [2, 2], sup: 'floor' }],
-    [29, 'workbench', 'Верстак', { s: 2, h: 30, tool: 'any', pat: 'workbench', c: ['#a8743e', '#6e4824', '#c48e54'], k: 'obj', sz: [2, 1], sup: 'floor' }],
+    [29, 'workbench', 'Верстак', { s: 2, h: 30, tool: 'any', pat: 'workbench', c: ['#a8743e', '#6e4824', '#c48e54'], k: 'obj', sz: [2, 1], sup: 'floor', burn: 'planks' }],
     [30, 'furnace', 'Печь', { h: 60, tool: 'any', pat: 'furnace', c: ['#7d7d86', '#4c4c55', '#ff8a2a'], k: 'obj', sz: [3, 2], sup: 'floor', l: [225, 125, 45], emis: 70 }],
     [31, 'anvil', 'Наковальня', { s: 2, h: 60, tool: 'any', pat: 'anvil', c: ['#6b6f7d', '#41444f', '#a8adbd'], k: 'obj', sz: [2, 1], sup: 'floor' }],
     [32, 'trunk', 'Ствол', { h: 70, tool: 'axe', d: 'wood', pat: 'trunk', c: ['#7a5232', '#5a3a20', '#9a6a42'], k: 'plant' }],
@@ -100,15 +101,17 @@ function PZ_CORE(){
     [37, 'tallgrass', 'Трава', { h: 0, tool: 'any', d: 'fiber?', pat: 'tallgrass', c: ['#4fae3c', '#3a8a2c', '#7ccf5c'], k: 'plant', sup: 'floor' }],
     [38, 'flower', 'Цветок', { h: 0, tool: 'any', d: '', pat: 'flower', c: ['#3a8a2c', '#ff5d8f', '#ffd84a'], k: 'plant', sup: 'floor' }],
     [39, 'vine', 'Лиана', { h: 0, tool: 'any', d: 'vine?', pat: 'vine', c: ['#2f9a3e', '#1f7a2e', '#5cd05a'], k: 'plant', sup: 'ceil', climb: 1 }],
-    [40, 'rope', 'Верёвка', { h: 1, tool: 'any', pat: 'rope', c: ['#c9a26a', '#9a7840', '#e8c890'], k: 'plant', climb: 1 }],
+    [40, 'rope', 'Верёвка', { h: 1, tool: 'any', pat: 'rope', c: ['#c9a26a', '#9a7840', '#e8c890'], k: 'plant', climb: 1, burn: 'cloth' }],
     [41, 'ladder', 'Лестница', { h: 20, tool: 'any', pat: 'ladder', c: ['#a8743e', '#7a5028', '#c48e54'], k: 'plant', climb: 1 }],
     [42, 'mushroom', 'Гриб', { h: 0, tool: 'any', pat: 'mushroom', c: ['#e8e0d0', '#d8382a', '#ffffff'], k: 'plant', sup: 'floor' }],
     [43, 'glowshroom', 'Светогриб', { h: 0, tool: 'any', pat: 'glowshroom', c: ['#9ab8e0', '#3a8cff', '#c8f0ff'], k: 'plant', sup: 'floor', l: [40, 112, 245], emis: 230 }],
     [44, 'crystal', 'Кристалл', { h: 60, tool: 'any', pat: 'crystal', c: ['#c040c8', '#ff8af0', '#ffe0ff'], k: 'plant', sup: 'any', l: [190, 70, 235], emis: 220 }],
     [45, 'lifecrystal', 'Кристалл жизни', { h: 80, tool: 'any', pat: 'lifecrystal', c: ['#d8203c', '#ff6a80', '#ffd0d8'], k: 'obj', sz: [2, 2], sup: 'floor', l: [235, 52, 92], emis: 200 }],
     [46, 'pot', 'Горшок', { h: 1, tool: 'any', d: '', pat: 'pot', c: ['#a8603a', '#7a4024', '#d8905a'], k: 'plant', sup: 'floor' }],
-    [47, 'bed', 'Кровать', { h: 30, tool: 'any', pat: 'bed', c: ['#9b6a38', '#d8383a', '#f0f0f0'], k: 'obj', sz: [3, 1], sup: 'floor' }],
+    [47, 'bed', 'Кровать', { h: 30, tool: 'any', pat: 'bed', c: ['#9b6a38', '#d8383a', '#f0f0f0'], k: 'obj', sz: [3, 1], sup: 'floor', burn: 'planks' }],
     [48, 'loot', 'Сундук с сокровищами', { h: 40, tool: 'any', d: 'chest', pat: 'chest', c: ['#7a5a30', '#3e2a14', '#f0c840'], k: 'obj', sz: [2, 2], sup: 'floor' }],
+    // огонь (T-022d): доски, почерневшие в огне (горят дальше и осыпаются; сломать — ничего не выпадает)
+    [49, 'charwood', 'Обугленные доски', { s: 1, h: 30, d: '', pat: 'planks', c: ['#3a2e28', '#241c18', '#57443a'], g: 10, burn: 'char' }],
   ];
   // Стены фона: [номер, ключ, название, свойства] (sky: пропускает солнце)
   const WALL_LIST = [
@@ -222,6 +225,8 @@ function PZ_CORE(){
   // усиления (B — выпить все, что не действуют): шахтёр — копать быстрее, сияние — свет вокруг героя
   defItem('potion_miner', 'Зелье шахтёра', { kind: 'use', use: 'buff', buff: 'mine', dur: 180, stack: 30, icon: ['potion', '#f2c230'] });
   defItem('potion_shine', 'Зелье сияния', { kind: 'use', use: 'buff', buff: 'shine', dur: 180, stack: 30, icon: ['potion', '#8fe8ff'] });
+  // огонь (T-022d): огниво — поджечь горючее у курсора (дерево, листву, траву, доски); не тратится
+  defItem('firestarter', 'Огниво', { kind: 'igniter', stack: 1, icon: ['flint', '#c8ccd4'] });
 
   // ═══ Рецепты: [что, сколько, [[из чего, сколько]…], станок] (станок — ключ блока рядом: workbench | furnace | anvil) ═══
   const RECIPES = [
@@ -277,6 +282,7 @@ function PZ_CORE(){
     ['manastar', 1, [['crystal', 3]], 'anvil'],
     ['owllure', 1, [['membrane', 6], ['bar_silver', 8]], 'anvil'],
     ['wings', 1, [['feather', 10], ['bar_gold', 5]], 'anvil'],
+    ['firestarter', 1, [['bar_iron', 1], ['stone', 1]], null],   // огонь (T-022d): кресало и кремень
   ].map(([o, n, i, st]) => ({ o, n, i, st }));
 
   // ═══ Колонка мира: высота поверхности, биом, глубина земли, «вход в пещеры» ═══

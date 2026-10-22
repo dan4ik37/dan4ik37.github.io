@@ -1973,6 +1973,7 @@
     rt.onHi = () => { if (rt.zxSig && rt.zxSig !== '{}') setTimeout(() => { if (!rt.stopped) S.forceSend = true; }, 400 + Math.random() * 1600); rt.veh?.onHi?.(); };
     rt.onMsg = (p, d) => {
       if (d.t === 'vh') { try { rt.veh?.onMsg?.(p, d); } catch (e) { console.error(e); } return; }   // транспорт (mir-veh.js)
+      if (d.k === 'fire') { try { rt.fire?.remote(d); } catch (e) { console.error(e); } return; }   // у другого взрыв поджёг боевую зону — у меня то же (зерно и такт)
       if (d.k === 'brk' && rt.destruct && typeof d.id === 'string' && d.id.length < 64) {   // у другого что-то сломалось — у меня тоже (обломки — свои)
         rt.destruct.breakId(d.id, (+d.s || 0) >>> 0, Math.max(-1, Math.min(1, +d.dx || 0)), Math.max(-1, Math.min(1, +d.dz || 0)), true);
         return;
@@ -2193,6 +2194,7 @@
       if (rt.stopped) return;
       rt.t += dt;
       rt.sup?.step(dt);   // обрушение: осыпать по очереди (шаги игры)
+      rt.fire?.step(dt);   // огонь боевой зоны: такты ядра
       // камера внутри небоскрёба/дома с верхними этажами: тела выше (спрятанные) не держат камеру, пока ты внутри
       let camOff = null;
       for (const c of S.P.ch.inside) if (c.data?.camOff) { camOff = c.data.camOff; break; }
@@ -2232,6 +2234,7 @@
       });
       DS.onBreak = (id, s, dx, dz) => rt.send({ k: 'brk', id, s, dx, dz });
       rt.sup = window.MirSupport?.attach?.(rt, DS) || null;   // обрушение (T-022a): верх над дырой осыпается частями — у всех одинаково
+      try { rt.fire = window.MirFire?.attach?.(rt, { S, R, ph, zoneAt }) || null; } catch (e) { console.error(e); rt.fire = null; }   // огонь (T-022d): только боевая зона — взрывы поджигают, деревья и ящики горят (mir-fire.js)
     }
     // жители пугаются (удар, взрыв, что-то упало рядом): убегают от игрока 5 с, «😭» над головой
     rt.scare = (x, z, r) => {
@@ -2249,6 +2252,7 @@
       rt.frameNo = (rt.frameNo || 0) + 1;
       if (rt.wmv) { const c = R.camera.position, p = S.P.ch; try { rt.wmv.update(c.x, c.z, { ph: S.ph, px: p.x, pz: p.z }); } catch (e) { console.error(e); rt.wmv = null; } }
       if (rt.destruct) { try { rt.destruct.update(dt); } catch (e) { console.error(e); } }
+      if (rt.fire) { try { rt.fire.frame(dt, t); } catch (e) { console.error(e); } }   // огонь: пламя, дым, свет, звук
       if (S.NPC?.list) { const tn = performance.now(); for (const e of S.NPC.list.values()) if (e.o._fleeT && tn > e.o._fleeT) { e.o.act = e.o._act0 || 'wander'; e.o._fleeT = 0; e.o._act0 = null; } }
       {
         const c = R.camera.position, p = S.P.ch;
@@ -2269,6 +2273,7 @@
       try { rt.offAge?.(); } catch (e) {} rt.offAge = null; BUILT = null;   // T-085: подписка на возраст и постройка держали весь прошлый мир
       try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
       try { rt.wmv?.dispose?.(S.ph); } catch (e) { console.error(e); } rt.wmv = null;
+      try { rt.fire?.dispose(); } catch (e) { console.error(e); } rt.fire = null;
       try { rt.destruct?.dispose(); } catch (e) { console.error(e); } rt.destruct = null; BRK.clear(); rt.sup?.dispose(); rt.sup = null;
       rt.stopped = true;
       clearTimeout(rt.bannerT); clearTimeout(rt.phT); clearTimeout(rt.eatT); clearInterval(rt.mapT);

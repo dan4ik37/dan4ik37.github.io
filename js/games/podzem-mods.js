@@ -76,6 +76,7 @@
       if (!mod.textures[tex]) warn(`блок «${b.id}»: нет текстуры «${tex}» — будет серым`);
       mod.blocks.push({ id: b.id, key: id + ':' + b.id, name: str(b.name, 40) || b.id, texture: tex, hardness: num(b.hardness, 0, 2000, 60) | 0, tier: num(b.tier, 0, 5, 0) | 0,
         solid: b.solid !== false, transparent: !!b.transparent, light: lightOf(b.light), drop: b.drop === '' ? '' : str(b.drop, 70), falls: !!b.falls, climbable: !!b.climbable,
+        burn: ['none', 'wood', 'planks', 'leaves', 'grass', 'turf', 'cloth', 'fuel', 'char'].includes(b.burn) ? b.burn : undefined,   // огонь (T-022d): как горит; нет — по полям (PZFire.burnOf)
         tool: ['pick', 'axe', 'any', 'hammer'].includes(b.tool) ? b.tool : b.solid === false ? 'any' : 'pick' });
     });
     items.slice(0, LIM.items).forEach((it, i) => {
@@ -367,7 +368,7 @@ up({ t: 'frame' });
           if (!id) { id = nextId(); if (!id) { API.toast('🧩 Слишком много блоков модов (больше 95)', 'bad'); break; } pal[b.key] = id; }
           const tx = await tex(b.texture);
           const s = b.solid ? 1 : 0, op = b.transparent ? (s ? 2 : 0) : s ? 1 : 0;
-          const tile = PZ.defTile(id, b.key, b.name, { s, op, h: b.hardness, t: b.tier, tool: b.tool, d: b.drop === '' ? '' : b.drop ? (b.drop.includes(':') ? b.drop : M.items.some(i => i.id === b.drop) ? M.id + ':' + b.drop : b.drop) : b.key, k: s ? 'block' : 'plant', l: b.light || undefined, emis: b.light ? 180 : 0, fall: b.falls, climb: b.climbable, g: 40 + (id % 200), c: tx?.draw ? [tx.draw.base, tx.draw.color2, tx.draw.color3] : ['#8a8a96', '#6a6a76', '#aaaab6'], pat: tx?.draw?.pattern && PATTERNS.includes(tx.draw.pattern) ? tx.draw.pattern : 'stone', mod: M.id });
+          const tile = PZ.defTile(id, b.key, b.name, { s, op, h: b.hardness, t: b.tier, tool: b.tool, d: b.drop === '' ? '' : b.drop ? (b.drop.includes(':') ? b.drop : M.items.some(i => i.id === b.drop) ? M.id + ':' + b.drop : b.drop) : b.key, k: s ? 'block' : 'plant', l: b.light || undefined, emis: b.light ? 180 : 0, fall: b.falls, climb: b.climbable, burn: b.burn, g: 40 + (id % 200), c: tx?.draw ? [tx.draw.base, tx.draw.color2, tx.draw.color3] : ['#8a8a96', '#6a6a76', '#aaaab6'], pat: tx?.draw?.pattern && PATTERNS.includes(tx.draw.pattern) ? tx.draw.pattern : 'stone', mod: M.id });
           tiles[id] = tile;
           props[id] = { s, op, l: b.light || null, h: b.hardness, t: b.tier, tool: PZ.TOOLS[b.tool] ?? 0, k: s ? 0 : 2, emis: b.light ? 180 : 0, fall: b.falls, climb: b.climbable, g: tile.g };
           atlasTiles.push({ id, key: b.key, pat: tile.pat, c: tile.c, img: tx?.img || null, k: 'block' });

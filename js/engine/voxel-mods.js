@@ -198,6 +198,7 @@
         emit: lightOf(b.light), lcol: lightCol(b.light), glow: b.glow !== false, hard: hard < 0 ? -1 : Math.round(hard * 100) / 100, tool, tier: Math.min(4, num(b.tier, 0, 0, 5) | 0),
         sound: SOUNDS.includes(b.sound) ? b.sound : 'stone', bounce: num(b.bounce, 0, 0, 30), hurt: num(b.hurt, 0, 0, 10), slip: num(b.slip, 0, 0, .98),
         climb: !!(b.climbable || b.climb) || shape === 5, replace: !!b.replaceable, fall: !!b.falls, cullSelf: b.cullSelf !== false && shape !== 7 && shape !== 8,
+        burn: ['none', 'wood', 'planks', 'leaves', 'grass', 'turf', 'cloth', 'fuel', 'char'].includes(b.burn) ? b.burn : undefined,   // огонь (T-022d): как горит; нет — по полям (V.burnOf)
         axis: !!b.axis && shape === 1, tint: TINTS[b.tint] || 0, ui: b.ui === 'craft' || b.ui === 'chest' ? b.ui : '', fuel: num(b.fuel, 0, 0, 600), stack: Math.min(64, num(b.stack, 64, 1, 999) | 0), mod: id };
       if (b.sound && !SOUNDS.includes(b.sound)) warn(`${w}: звука «${b.sound}» нет — будет stone`);
       const dr = b.drop !== undefined ? b.drop : b.drops;

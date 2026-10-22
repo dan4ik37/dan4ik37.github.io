@@ -134,6 +134,11 @@
   B({ name: 'missing', title: 'Неизвестный блок', tex: 'missing', hard: .5, drop: null, noItem: true });   // блок отключённого мода
   // «Кубомир» удобнее (T-049): лежанка — дом (появляться тут) и сон ночью (kubomir-x.js; use — что делает ПКМ). Пока простой кубик
   B({ name: 'bed', title: 'Лежанка', tex: { top: 'bed_top', side: 'bed_side', bottom: 'planks_oak' }, hard: .6, tool: 'axe', sound: 'wool', stack: 8, use: 'bed' });
+  // Огонь (T-022d; ядро — js/engine/fire.js, переходник — js/games/kubomir-fire.js): «огонь» — клетка пламени рядом с горящим блоком
+  // (светит, жжётся, поверх можно ставить блок, вода гасит; сеткой чанка не рисуется — пламя рисует движок, fx.js);
+  // «обугленные доски» — доски, которые горели и почернели (погасли — остались чёрными; ломаются — иногда уголь)
+  B({ name: 'fire', title: 'Огонь', shape: SHAPE.none, layer: LAYER.none, solid: false, opaque: false, op: 0, emit: 15, lcol: [1, .55, .2], tex: null, hard: 0, drop: null, replace: true, hurt: 2, noItem: true, sound: 'wood', burn: 'flame' });
+  B({ name: 'charred_planks', title: 'Обугленные доски', tex: 'charred_planks', hard: 1, tool: 'axe', sound: 'wood', drop: null, burn: 'char', noItem: true });
   V.VANILLA_BLOCKS = V.blocks.length;
   // доп. текстуры (ломание блока, частицы)
   for (let i = 0; i < 8; i++) V.texture('destroy_' + i);
@@ -220,6 +225,8 @@
   I({ name: 'bucket', title: 'Ведро', tex: 'item_bucket', stack: 16, use: 'bucket' });
   I({ name: 'bucket_water', title: 'Ведро воды', tex: 'item_bucket_water', stack: 1, use: 'pour', liquid: 'water' });
   I({ name: 'bucket_lava', title: 'Ведро лавы', tex: 'item_bucket_lava', stack: 1, use: 'pour', liquid: 'lava' });
+  // огниво (T-022d): ПКМ — поджечь блок (горючий — загорится сам, негорючий — огонь на нём); 64 раза
+  I({ name: 'flint_steel', title: 'Огниво', tex: 'item_flint_steel', stack: 1, use: 'ignite', dur: 64 });
   V.VANILLA_ITEMS = V.items.length;
 
   // ═══ Рецепты (верстак 3×3, в руках 2×2) и печь ═══
@@ -277,12 +284,31 @@
   R({ list: ['parchment', 'flint', 'feather'], out: 'recall', n: 1 });
   R({ pattern: ['i i', ' i '], key: { i: 'iron_ingot' }, out: 'bucket', n: 1 });
   R({ pattern: ['fff', 'ppp'], key: { f: 'fiber', p: '#planks' }, out: 'bed', n: 1 });
+  R({ list: ['iron_ingot', 'flint'], out: 'flint_steel', n: 1 });   // огниво (T-022d)
   V.VANILLA_RECIPES = V.recipes.length;
   // Что выпадает сверх обычного «drop» блока (данные — их же читает книга рецептов «Где взять»): [вещь, шанс, сколько, вместо обычного]
   // — каждая строка бросается отдельно. Кремень — из гравия (10 %, вместо гравия), волокно — из травы, ростки и яблоки — из листвы
   V.DROPS = {
     gravel: [['flint', .1, 1, true]], tall_grass: [['fiber', .15, 1]], clay: [['clay_ball', 1, 4, true]],
     leaves_oak: [['sapling_oak', .05, 1], ['apple', .02, 1]], leaves_birch: [['sapling_birch', .05, 1]], leaves_spruce: [['sapling_spruce', .05, 1]],
+    charred_planks: [['coal', .35, 1]],   // обугленные доски — иногда уголь (T-022d)
+  };
+  // Горючесть блока для огня (T-022d, D37E.fire): ключ материала огня или '' — не горит. Только по полям блока, без списков имён —
+  // новые блоки (моды, новые деревья) горят сами: b.burn (своё: 'wood' | 'planks' | 'leaves' | 'grass' | 'turf' | 'cloth' | 'fuel' |
+  // 'char' | 'flame'; '' или 'none' — не горит) главнее; иначе: жидкость, светящийся, стекло — не горит; растение-крест — трава;
+  // листва (вырезное с оттенком листвы или foliage) — листва; звук «дерево»: с осью (бревно, ствол) — дерево, без оси — доски
+  // (верстак, сундук, лестница, дверь); шерсть (куб, не прыгучий) — ткань; дёрн (куб с оттенком травы и звуком травы) — горит
+  // трава сверху. Читает поля: burn, liquid, emit, glass, shape, foliage, layer, tint, sound, axis, bounce
+  V.burnOf = b => {
+    if (!b) return '';
+    if (b.burn !== undefined) return b.burn && b.burn !== 'none' ? String(b.burn) : '';
+    if (b.liquid || b.emit > 0 || b.glass) return '';
+    if (b.shape === SHAPE.cross) return 'grass';
+    if (b.foliage || (b.layer === LAYER.cutout && (b.tint === TINT.foliage || b.tint === TINT.birch || b.tint === TINT.spruce))) return 'leaves';
+    if (b.sound === 'wood') return b.axis ? 'wood' : 'planks';
+    if (b.sound === 'wool' && b.shape === SHAPE.cube && !b.bounce) return 'cloth';
+    if (b.shape === SHAPE.cube && b.tint === TINT.grass && b.sound === 'grass') return 'turf';
+    return '';
   };
   // Что выпадает из блока b: [[имя, сколько]] (rnd — свой генератор, по умолчанию Math.random). Инструмент проверяет вызывающий
   V.dropsOf = (b, rnd = Math.random) => {

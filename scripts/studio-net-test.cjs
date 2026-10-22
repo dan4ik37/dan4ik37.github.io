@@ -51,7 +51,7 @@ const DEF = E.scene.DEF;
 {
   const propKeys = new Set(NT.PROPS.map(p => p[0]));
   const flagOf = k => NT.quant(NT.PROPS.findIndex(p => p[0] === '_flags'), { [k]: true }, { extra: [], nidOf: () => 0, sidOf: () => null }) !== undefined;
-  const ONLY_HOST = new Set(['code', 'lang', 'src', 'locked']);   // скрипт и редактор — гостям не нужны
+  const ONLY_HOST = new Set(['code', 'lang', 'src', 'locked', 'burn', 'fire']);   // скрипт и редактор — гостям не нужны; огонь (burn, fire) считает хозяин, гостям — onfire
   const miss = [];
   for (const [cls, d] of Object.entries(DEF)) {
     if (cls === 'Script') continue;

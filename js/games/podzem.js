@@ -794,7 +794,7 @@
           if (q.pierce-- <= 0) { dead = true; break; }
         }
       } else if (!dead && q.owner === 'mob' && !p.dead && p.iframes <= 0 && q.x > p.x && q.x < p.x + p.w && q.y > p.y && q.y < p.y + p.h) { hurtPlayer(q.dmg, Math.sign(q.vx) || 1, 'снаряд'); dead = true; }
-      if (dead) { burst(q.x, q.y, 4, q.spr === 'fireball' ? 0xff7a20 : q.spr === 'spark' ? 0xff8af0 : 0xcccccc, 3, .3, .1); G.projs.splice(n, 1); }
+      if (dead) { burst(q.x, q.y, 4, q.spr === 'fireball' ? 0xff7a20 : q.spr === 'spark' ? 0xff8af0 : 0xcccccc, 3, .3, .1); if (q.spr === 'fireball') G.fire?.ball(q.x, q.y); G.projs.splice(n, 1); }   // огонь: шар беса поджигает
     }
   }
 
@@ -1182,8 +1182,18 @@
       case 'wall': return placeWall(it, tx, ty);
       case 'use': return useConsumable(it, s);
       case 'hook': p.useT = .3; toggleHook(); return;
+      case 'igniter': return useIgniter(tx, ty);
       default: p.useT = .3;
     }
+  }
+  // огниво (T-022d, podzem-fire.js): поджечь горючее у курсора — дерево, листву, траву, доски
+  function useIgniter(tx, ty){
+    const p = G.pl; p.useT = .35; p.swing = .25; p.swingDur = .25;
+    if (!inReach(tx, ty)) { hint('Далеко — подойди ближе'); return; }
+    snd('flint_strike', { x: tx, y: ty, vol: .7 }); burst(tx + .5, ty + .5, 5, 0xffd070, 3, .25, .07, .5, 1);
+    const r = G.fire ? G.fire.useIgniter(tx, ty) : 0;
+    if (r > 0) snd('fire_ignite', { x: tx, y: ty, vol: .6 });
+    else hint(r < 0 ? 'Мокрое — не загорится' : 'Тут нечему гореть: дерево, листва, трава, доски');
   }
   function aimDir(){ const p = G.pl, dx = G.aim.x - (p.x + p.w / 2), dy = G.aim.y - (p.y + p.h * .35), l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; }
   function handBreak(tx, ty){
@@ -1270,6 +1280,14 @@
     afterBreak(x, y, f, 1, 1, quiet);
     if (G.sup) { G.sup.placed(x, y, false); if (sc) G.sup.removed(x, y, sc); }
     return true;
+  }
+  // огонь (podzem-fire.js): дверь, верстак, кровать догорели — исчезают целиком, ничего не выпадает; кровать — больше не точка возрождения
+  function burnObj(x, y){
+    const f = fgAt(x, y); if (!f || f === 255 || P.KIND[f] !== 1) return;
+    const [ax, ay, w, h] = objAnchor(x, y);
+    for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) if (fgAt(ax + dx, ay + dy) === f) setCell(ax + dx, ay + dy, 0, 0);
+    if (f === T.BED && G.W.bed && G.W.bed.x === ax + 1 && G.W.bed.y === ay + 1) { G.W.bed = null; toast('🛏 Кровать сгорела — встанешь у точки старта', 'bad'); }
+    afterBreak(ax, ay, f, w, h, true);
   }
   function afterBreak(x, y, f, w, h, quiet){
     if (!quiet) {
@@ -1701,6 +1719,7 @@
     const v = G.wv; if (!v) return;
     let s = v.force; if (!s) try { s = v.cw?.at(0, 0, Date.now()) || null; } catch (e) { s = null; }
     v.F.gain = G.R?.hq?.chunk !== false ? 1 : 0;   // простой шейдер («красивый» не собрался) — волн не видно, значит, и в игре их нет
+    v.wx = s || null;   // огонь (podzem-fire.js): ветер той же погоды
     v.F.weather(s || {});
   }
   function wavesStop(){ if (G.wv) { window.D37E?.waves?.free(G.wv.F); G.wv = null; } }
@@ -1823,6 +1842,7 @@
       updProjs(dt);
       updItems(dt);
       G.sup?.step(dt);   // обрушение: падающие куски (podzem-support.js)
+      if (G.fire && (G.tick & 1)) G.fire.tick();   // огонь (podzem-fire.js): такт ядра 30 в секунду
       if ((G.tick & 1) === 0) liquids();
       if (G.spawnGrace > 0) G.spawnGrace -= dt;
       G.spawnT -= dt; if (G.spawnT <= 0) { G.spawnT += 1; spawnTick(); }
@@ -2052,6 +2072,7 @@
       const u = b.t / b.life, r = b.r * (.4 + u * .8);
       G.R.puff(b.x, b.y - r * .3, r * 1.6, 255, 196 + 40 * u | 0, 90, 230);
     }
+    if (G.fire?.F.n) G.fire.draw(x0, x1, y0, y1, q, pk, live);   // огонь (podzem-fire.js): горящие клетки — пламя, блики, угли, дым
   }
   // блики огня — сложением, после жидкостей (огонь у воды не тонет в ней)
   function drawGlares(){
@@ -2068,6 +2089,10 @@
   // Без мусора в кадре: источники — плоский буфер, ключ — число, буферы — постоянные (растут только с окном) ═══
   const DYN_SRC = 16, DS = new Float32Array(DYN_SRC * 7);
   let dsN = 0;
+  // огонь (podzem-fire.js): очаги пожара — одним общим заливом (один цвет и спад): цена — как у одного источника, а не у каждого
+  const FIRE_SRC = 6, FS = new Float32Array(FIRE_SRC * 3), FIRE_LM = .87;
+  let fsN = 0;
+  const fsAdd = (x, y, V) => { if (fsN < FIRE_SRC) { const o = fsN++ * 3; FS[o] = x; FS[o + 1] = y; FS[o + 2] = V; } };
   const DYN = { x0: 0, y0: 0, w: 0, h: 0, n: 0, cls: null, v: null, r: null, g: null, b: null, rgba: null, view: null, viewN: 0, q: null, tl: null, mark: null, cur: null, prev: null, curN: 0, prevN: 0, stamp: 0, full: true, key: NaN, ckey: NaN, on: false };
   function dsAdd(x, y, V, m, r, g, b){
     let o;
@@ -2080,7 +2105,7 @@
     DS[o] = x; DS[o + 1] = y; DS[o + 2] = V; DS[o + 3] = m; DS[o + 4] = r; DS[o + 5] = g; DS[o + 6] = b;
   }
   function dynSources(){
-    dsN = 0;
+    dsN = 0; fsN = 0;
     const p = G.pl;
     if (!p || p.dead || G.state === 'menu') return 0;
     const px = p.x + p.w / 2, py = p.y + p.h * .45, s = selItem(), it = s && itemDef(s.id), torch = it && !p.ledge && it.key === 'torch';
@@ -2095,7 +2120,8 @@
     for (let k = 0; k < pr.length; k++) { const q = pr[k]; if (q.spr === 'fireball') dsAdd(q.x, q.y, 190, .85, 255, 122, 40); else if (q.spr === 'spark') dsAdd(q.x, q.y, 150, .84, 220, 120, 255); }
     const ms = G.mobs;
     for (let k = 0; k < ms.length; k++) { const m = ms[k]; if (m.type === 'imp' && m.hp > 0) dsAdd(m.x + m.w / 2, m.y + m.h / 2, 120, .84, 255, 110, 40); }
-    return dsN;
+    if (G.fire?.F.n) G.fire.lights(G.cam.x, G.cam.y, G.q >= 1 ? 4 : 2, fsAdd);   // огонь: очаги пожара у камеры
+    return dsN + fsN;
   }
   const NBX = [1, -1, 0, 0, 1, -1, 1, -1], NBY = [0, 0, 1, -1, 1, 1, -1, -1];
   function dynLight(camX, camY, vw, vh){
@@ -2107,10 +2133,11 @@
     // ключ — число: окно, клетки и источники (позиция — с точностью 1/2 клетки)
     const ckey = (((x0 * 73856093) ^ (y0 * 19349663) ^ (w * 83492791) ^ (h * 2971215073)) + (G.cellRev || 0) * 1000003) >>> 0;
     let key = ckey;
-    for (let k = 0; k < n0 * 7; k += 7) key = (Math.imul(key ^ (Math.round(DS[k] * 2) * 92821 + Math.round(DS[k + 1] * 2) * 68917 + DS[k + 2] * 7 + DS[k + 4]), 2654435761) + k) >>> 0;
+    for (let k = 0; k < dsN * 7; k += 7) key = (Math.imul(key ^ (Math.round(DS[k] * 2) * 92821 + Math.round(DS[k + 1] * 2) * 68917 + DS[k + 2] * 7 + DS[k + 4]), 2654435761) + k) >>> 0;
+    for (let k = 0; k < fsN * 3; k += 3) key = (Math.imul(key ^ (Math.round(FS[k]) * 92821 + Math.round(FS[k + 1]) * 68917 + FS[k + 2] * 7), 2654435761) + k + 7919) >>> 0;
     if (key === DYN.key && DYN.on) return;
     // сдвинулись только источники, а пересчитывали в прошлом кадре — подождать кадр (свет отстаёт на кадр — незаметно)
-    if (DYN.on && ckey === DYN.ckey && R.frame - DYN.lastF < 3) return;
+    if (DYN.on && R.frame - DYN.lastF < 3 && (ckey === DYN.ckey || G.fire?.F.n)) return;   // пожар: плитки меняются часто — и тогда не чаще раза в 3 кадра
     DYN.key = key; DYN.lastF = R.frame;
     if (n > DYN.n) { DYN.n = n; DYN.cls = new Uint8Array(n); DYN.v = new Float32Array(n); DYN.r = new Float32Array(n); DYN.g = new Float32Array(n); DYN.b = new Float32Array(n); DYN.rgba = new Uint8Array(n * 4); DYN.q = new Int32Array(n * 4); DYN.tl = new Int32Array(n); DYN.mark = new Uint32Array(n); DYN.cur = new Int32Array(n); DYN.prev = new Int32Array(n); DYN.prevN = 0; DYN.viewN = 0; DYN.full = true; }
     const winMoved = x0 !== DYN.x0 || y0 !== DYN.y0 || w !== DYN.w || h !== DYN.h;
@@ -2131,7 +2158,8 @@
       DYN.prevN = 0; DYN.full = false;
     } else for (let t = 0; t < DYN.prevN; t++) { const k = prev[t]; Rr[k] = Rg[k] = Rb[k] = 0; }   // прошлые — погасить
     DYN.stamp = (DYN.stamp + 1) >>> 0 || 1; DYN.curN = 0;
-    for (let k = 0; k < n0 * 7; k += 7) dynFill(DS[k], DS[k + 1], DS[k + 2], DS[k + 3], DS[k + 4], DS[k + 5], DS[k + 6]);
+    for (let k = 0; k < dsN * 7; k += 7) dynFill(DS[k], DS[k + 1], DS[k + 2], DS[k + 3], DS[k + 4], DS[k + 5], DS[k + 6]);
+    if (fsN) dynFillN(FS, fsN, FIRE_LM, 255, 146, 60);   // огонь — все очаги одним заливом
     const st = DYN.stamp, cur = DYN.cur;
     for (let t = 0; t < DYN.prevN; t++) { const k = prev[t]; if (mark[k] !== st) { const j = k << 2; o[j] = o[j + 1] = o[j + 2] = 0; } }   // погасли — в текстуре ноль
     for (let t = 0; t < DYN.curN; t++) { const k = cur[t], r = Rr[k], g = Rg[k], b = Rb[k], j = k << 2; o[j] = r > 255 ? 255 : r; o[j + 1] = g > 255 ? 255 : g; o[j + 2] = b > 255 ? 255 : b; }
@@ -2140,19 +2168,23 @@
     R.setDyn(DYN.view, w, h, x0, y0);
     DYN.on = true;
   }
-  // заливка от одного источника (x, y, сила 0…255, доля за клетку воздуха, r, g, b) — как карта мира: в камень — грань, дальше гаснет
-  const DM = new Float32Array(5), DMD = new Float32Array(5), MDEEP = .22, MDEEPD = Math.pow(.22, Math.SQRT2);
-  function dynFill(sx, sy, V, m, cr, cg, cb){
+  // заливка от одного источника (x, y, сила 0…255, доля за клетку воздуха, r, g, b) — как карта мира: в камень — грань, дальше гаснет.
+  // dynFillN — от нескольких сразу (S — [x, y, сила]…, одна доля и цвет): одна волна по максимуму, цена — как у одного
+  const DM = new Float32Array(5), DMD = new Float32Array(5), MDEEP = .22, MDEEPD = Math.pow(.22, Math.SQRT2), DF1 = new Float32Array(3);
+  function dynFill(sx, sy, V, m, cr, cg, cb){ DF1[0] = sx; DF1[1] = sy; DF1[2] = V; dynFillN(DF1, 1, m, cr, cg, cb); }
+  function dynFillN(S, cnt, m, cr, cg, cb){
     const x0 = DYN.x0, y0 = DYN.y0, w = DYN.w, h = DYN.h, cls = DYN.cls, v = DYN.v, q = DYN.q, tl = DYN.tl;
     DM[0] = m; DM[1] = m * .7; DM[2] = m * .86; DM[3] = m * .93; DM[4] = m * .8;
     for (let k = 0; k < 5; k++) DMD[k] = Math.pow(DM[k], Math.SQRT2);
     let qn = 0, tn = 0, qh = 0;
-    const fx = sx - .5 - x0, fy = sy - .5 - y0, ix = Math.floor(fx), iy = Math.floor(fy);
-    for (let a = 0; a < 4; a++) {   // четыре клетки вокруг точки — по расстоянию до неё (свет движется плавно, не клетками)
-      const i = ix + (a & 1), j = iy + (a >> 1); if (i < 0 || j < 0 || i >= w || j >= h) continue;
-      const k = j * w + i; if (cls[k] === 1) continue;
-      const val = V * Math.pow(m, Math.hypot(i - fx, j - fy));
-      if (val > v[k]) { if (!v[k]) tl[tn++] = k; v[k] = val; q[qn++] = k; }
+    for (let s = 0; s < cnt * 3; s += 3) {
+      const V = S[s + 2], fx = S[s] - .5 - x0, fy = S[s + 1] - .5 - y0, ix = Math.floor(fx), iy = Math.floor(fy);
+      for (let a = 0; a < 4; a++) {   // четыре клетки вокруг точки — по расстоянию до неё (свет движется плавно, не клетками)
+        const i = ix + (a & 1), j = iy + (a >> 1); if (i < 0 || j < 0 || i >= w || j >= h) continue;
+        const k = j * w + i; if (cls[k] === 1) continue;
+        const val = V * Math.pow(m, Math.hypot(i - fx, j - fy));
+        if (val > v[k]) { if (!v[k]) tl[tn++] = k; v[k] = val; q[qn++] = k; }
+      }
     }
     const QL = q.length;
     while (qh < qn) {
@@ -2211,6 +2243,7 @@
         else for (let d = 0; d <= 4 && j - d >= 0; d++) { const q = ((j - d) * w + i) * 4 + 1, v = 255 - d * 50; if (FLD[q] < v) FLD[q] = v; }   // жар — на 4 клетки вверх, слабее
       }
     }
+    if (G.fire?.F.n && G.fire.heatField(FLD, x0, y0, w, h)) any = true;   // огонь: жар над пламенем
     if (!any) return;
     const u0 = (x0 - (camX - vw / 2)) / vw, v0 = (y0 - (camY - vh / 2)) / vh;   // где поле на экране (uv, y вниз)
     G.R.post.field(FLD, w, h, [u0, v0, u0 + w / vw, v0 + h / vh]);
@@ -2233,7 +2266,8 @@
   // 4 раза в секунду; сторона и затухание — движок (A.listener — камера), своя громкость — по расстоянию в клетках
   function ambience(camX, camY){
     const A = G.audio || (window.D37E?.audio ? (G.audio = window.D37E.audio()) : null); if (!A?.loop || !G.W) return;
-    const M = G.amb || (G.amb = { fire: A.loop('amb_fire', { vol: 0 }), lava: A.loop('amb_fire', { vol: 0 }), water: A.loop('amb_water', { vol: 0 }), wind: A.loop('amb_wind', { vol: 0 }) });
+    const M = G.amb || (G.amb = { fire: A.loop('amb_fire', { vol: 0 }), lava: A.loop('amb_fire', { vol: 0 }), water: A.loop('amb_water', { vol: 0 }), wind: A.loop('amb_wind', { vol: 0 }),
+      blaze: A.loop('amb_fire', { vol: 0 }), roar: A.loop(window.D37E?.synth?.NAMES?.includes('fire_roar') ? 'fire_roar' : 'amb_fire', { vol: 0 }) });   // огонь: треск ближнего и гул большого пожара
     if (G.state !== 'play') { for (const k in M) M[k].set({ vol: 0 }); return; }
     let fx = 0, fy = 0, fd = 14, lx = 0, ly = 0, ld = 34, wx = 0, wy = 0, wd = 22;
     for (const c of visList) {
@@ -2250,6 +2284,9 @@
     M.water.set(wd < 22 ? { x: wx, y: wy, z: 0, vol: .3 * (1 - wd / 22) } : { vol: 0 });
     const d = camY - G.gen.colInfo(Math.floor(camX)).h;   // ветер — только наверху, к ночи сильнее
     M.wind.set({ vol: d < 8 ? (isNight() ? .2 : .12) * Math.min(1, (8 - d) / 10) : 0 });
+    const fn = G.fire?.F.n ? G.fire.near(camX, camY, 26) : null;
+    M.blaze.set(fn && fn.n ? { x: fn.x, y: fn.y, z: 0, vol: .35 * (1 - fn.d / 26) } : { vol: 0 });
+    M.roar.set(fn && fn.n > 40 ? { x: fn.x, y: fn.y, z: 0, vol: Math.min(.5, (fn.n - 40) / 300) * (1 - fn.d / 26) } : { vol: 0 });
   }
   function ambienceOff(){ if (G?.amb) { for (const k in G.amb) G.amb[k].stop(); G.amb = null; } }
   const visList = [];
@@ -2643,6 +2680,7 @@
     const W = G.W; W.updated = Date.now();
     W.guide = G.npcs[0] ? { x: G.npcs[0].x + G.npcs[0].w / 2, y: G.npcs[0].y + G.npcs[0].h } : W.guide;
     W.pos = { x: G.pl.x + G.pl.w / 2, y: G.pl.y + G.pl.h };
+    if (G.fire) { const fs = G.fire.save(); if (fs) W.fireState = fs; else delete W.fireState; }   // огонь: что горит — продолжится с того же места
     return JSON.parse(JSON.stringify(W));
   }
   let saving = null;
@@ -2690,10 +2728,11 @@
     let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
     return h >>> 0 || 1;
   }
-  function newWorldRecord(name, seedText, mods, support){
+  function newWorldRecord(name, seedText, mods, support, fire){
     const seed = seedOf(seedText), gen = PZ.makeGen(seed), sp = gen.spawnPoint();
     const w = { id: uid('w'), name: String(name || 'Мой мир').slice(0, 32), seed, seedText: String(seedText || seed).slice(0, 40), created: Date.now(), updated: Date.now(), playtime: 0,
       spawn: { x: sp.x, y: sp.y + 1 }, time: .08, day: 1, flags: {}, mods: (mods || []).slice(0, 16), palette: {}, maxDepth: 0, guide: null, ver: 1 };
+    if (fire === 'spread' || (fire === undefined && support === 'real')) w.fire = 'spread';   // огонь (T-022d): распространяется — только новые миры (старые — выкл), «реализм» — вкл
     if (support === 'soft' || support === 'real') w.support = support;   // обрушение (T-022a): только новые миры, старые — выкл
     return w;
   }
@@ -2742,6 +2781,12 @@
   const SUPH = { cAt: (x, y) => cAt(x, y), idx, fgAt: (x, y) => fgAt(x, y), setCell: (x, y, f, st, w, lq) => setCell(x, y, f, st, w, lq), checkSupport: (x, y) => checkSupport(x, y),
     debris: (x, y, w, h, f, n) => debris(x, y, w, h, tileColor(f, 0), n), dropTile: (f, x, y) => { const t = TILES[f] || G.modTiles?.[f]; if (t) dropOf(t, x + .5, y + .5); },
     snd: (n, o) => snd(n, o), hurtPlayer: (d, k, by) => hurtPlayer(d, k, by), P };
+  // огонь (podzem-fire.js): что переходнику нужно от игры
+  const onScreen = (x, y) => { const v = viewTiles(); return Math.abs(x + .5 - G.cam.x) < v[0] / 2 + 2 && Math.abs(y + .5 - G.cam.y) < v[1] / 2 + 2; };
+  const FIREH = { P, PZ, TILES, idx, cAt: (x, y) => cAt(x, y), fgAt: (x, y) => fgAt(x, y), setCell: (x, y, f, st) => setCell(x, y, f, st), afterBreak, lavaTops, hurtPlayer, hurtMob, onScreen,
+    fellTree: (x, y, f) => { const sh = G.cam.shake; fellTree(x, y, f); if (!onScreen(x, y)) G.cam.shake = sh; },   // дерево вдали падает без тряски камеры
+    burnObj, ash: (x, y) => debris(x, y, 1, 1, 0x4a4542, 4, 1.5), wind: () => G.wv?.wx || null,   // пепел
+    flame, glare, sparks, smoke, rect: (x, y, w, h, r, g, b, a) => { const q = G.A.spr.white[0]; G.R.sprite(null, x, y, w, h, q[0], q[1], q[0] + 4, q[1] + 4, r, g, b, a); } };
   // ═══ Запуск мира ═══
   let playTok = 0;
   async function play(worldId, charId){
@@ -2755,7 +2800,7 @@
     CH.inv = Array.from({ length: INV_N }, (_, i) => CH.inv?.[i] || null);
     if (!(CH.hp > 0)) CH.hp = CH.maxHp;   // сохранились мёртвыми (вкладку закрыли во время возрождения)
     W.flags = W.flags || {}; W.palette = W.palette || {};
-    G.W = W; G.CH = CH;
+    G.W = W; G.CH = CH; G.fire = null;
     G.sup = window.PZSupport?.attach?.(G, SUPH) || null;   // обрушение и прочность (podzem-support.js; мир без него — null)
     G.gen = PZ.makeGen(W.seed);
     wavesStart(W);   // волны мира (waves.js): зерно мира, своя погода
@@ -2774,6 +2819,7 @@
     G.saved = saved;
     // атлас (с блоками модов) и рисовальщик
     buildAtlas();
+    G.fire = null; try { G.fire = window.PZFire?.attach?.(G, FIREH) || null; } catch (e) { console.error(e); window.d37Err?.('pz:fire', e); G.fire = null; }   // огонь (podzem-fire.js): горит, перекидывается (если в мире включено), гаснет
     G.worker?.stop();
     G.worker = startWorker();
     G.worker.post({ t: 'init', seed: W.seed, props: G.modProps || null, feats: G.modFeats || null });
@@ -2800,7 +2846,7 @@
     G.modsStop?.();
     G.worker?.stop(); G.worker = null;
     for (const c of G.chunks.values()) G.R?.chunkFree(c);
-    G.chunks.clear(); G.W = null; G.CH = null; G.state = 'menu'; G.sup = null;
+    G.chunks.clear(); G.W = null; G.CH = null; G.state = 'menu'; G.sup = null; G.fire = null;
     wavesStop();
     ambienceOff();
   }
@@ -3066,7 +3112,7 @@
     useSlot, unstuck: () => (G?.pl ? unstuck() : null), stuckWait: () => (G ? stuckWait() : 0),
     setCell, fgAt, wallAt, lqAt, ltAt, tileKey, dropItem, burst: (x, y, n, col, sp, life, size, grav, glow) => burst(x, y, n, col, sp, life, size, grav, glow), floatText,
     spawnMob, spawnBoss, rgbInt, last: () => { try { return JSON.parse(lsGet(LS_LAST) || 'null'); } catch (e) { return null; } },
-    buildAtlas,
+    buildAtlas, fire: () => G?.fire || null,
   };
 
   GAME_IMPL.podzem = {
@@ -3079,7 +3125,7 @@
       surf(x, y){ const s = surfAt(x, y); return { y: s.y, k: s.k }; },
       give: (id, n) => give(id, n), time(v){ if (G?.W) G.W.time = v; }, god(v = true){ if (G) G.god = v; }, step, render, stream, shapeAt, fgAt, setCell, breakTile, placeTile: (id, x, y) => placeTile(itemDef(id), x, y),
       boss: k => spawnBoss(k), mob: (k, x, y) => spawnMob(k, x, y), save: () => saveAll(), get G(){ return G; }, perf: () => G && { frames: G.perf.frames.slice(), cpu: G.perf.cpu.slice() },
-      lootFor: (x, y) => lootFor(x, y), PT, chunk, upload,
+      lootFor: (x, y) => lootFor(x, y), PT, chunk, upload, fire: () => G?.fire || null, useIgniter: (x, y) => useIgniter(x, y), dyn: () => ({ on: DYN.on, n: dsN, fire: fsN, x: [...DS.slice(0, dsN * 7)].map(v => +v.toFixed(1)), fx: [...FS.slice(0, fsN * 3)].map(v => +v.toFixed(1)) }),
     },
   };
 })();

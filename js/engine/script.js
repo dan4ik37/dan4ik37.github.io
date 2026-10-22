@@ -627,6 +627,18 @@
       Collapsed: signal(),
       toString(){ return 'Support'; },
     };
+    // ── Огонь (Fire.*) — его считает хозяин мира (studio3d-fire.js, js/engine/fire.js): что горит; Ignite / Extinguish — команды
+    // хозяину; события — что загорелось, догорело (исчезло), погасло ──
+    const FRS = { burning: Object.create(null), n: 0 };
+    const Fire = {
+      get Count(){ return FRS.n; },
+      IsBurning(p){ const id = p && p.__id; return !!(id && FRS.burning[id]); },
+      Ignite(p){ const id = p && p.__id; if (id) send('mode', { cmd: 'fire', op: 'ignite', id }); },
+      Extinguish(p){ const id = p && p.__id; if (id) send('mode', { cmd: 'fire', op: 'out', id }); },
+      IgniteAt(pos, r){ const v = A(pos); if (v) send('mode', { cmd: 'fire', op: 'at', pos: v, r: +r || 3 }); },
+      Ignited: signal(), Burnt: signal(), Extinguished: signal(),
+      toString(){ return 'Fire'; },
+    };
     const scriptObj = s => ({ Name: s.name, Parent: s.parent ? proxyOf(s.parent) : workspace, ClassName: 'Script', Disabled: false,
       IsA(c){ return c === 'Script' || c === 'BaseScript' || c === 'LuaSourceContainer' || c === 'Instance'; },
       FindFirstChild(){ return null; }, GetChildren(){ return []; }, Destroy(){}, GetFullName(){ return (s.parent && proxyOf(s.parent) ? proxyOf(s.parent).GetFullName() : 'Workspace') + '.' + s.name; }, toString(){ return s.name; } });
@@ -644,7 +656,7 @@
         // библиотеки языков (lang-*.js) приходят текстом — регистрируются в globalThis.D37Lang
         globalThis.D37Lang = globalThis.D37Lang || {};
         for (const id of Object.keys(d.libs || {})) { try { (0, eval)(d.libs[id]); } catch (e5) { send('error', { script: '', line: 0, msg: 'Язык ' + id + ': ' + String(e5 && e5.message || e5).slice(0, 200) }); } }
-        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather, Support };
+        const API = { game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather, Support, Fire };
         for (const s of d.scripts) {
           curScript = s.name;
           if (s.lang && s.lang !== 'js') {
@@ -657,10 +669,10 @@
             continue;
           }
           try {
-            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera', 'Weather', 'Support',
+            const fn = new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'task', 'wait', 'print', 'warn', 'gui', 'sound', 'random', 'BrickColor', 'CFrame', 'Game', 'Camera', 'Weather', 'Support', 'Fire',
               'return (async () => {\n' + s.code + '\n})();');
             const scr = scriptObj(s);
-            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather, Support);
+            const r = fn(scr, game, workspace, Instance, Vector3, Color3, Enum, TweenService, TweenInfo, RunService, Players, Debris, task, wait, print, warn, gui, sound, random, BrickColor, CFrame, Game, Camera, Weather, Support, Fire);
             const nm = s.name; if (r && r.catch) r.catch(e3 => err(nm, e3));
           } catch (e4) { err(s.name, e4); }
         }
@@ -718,6 +730,12 @@
           if (typeof d.mode === 'string') SPS.mode = d.mode.slice(0, 8);
           if (d.sup && typeof d.sup === 'object') for (const k of Object.keys(d.sup).slice(0, 3000)) SPS.sup[k] = Math.max(0, Math.min(100, +d.sup[k] || 0));
           if (Array.isArray(d.fell)) for (const id of d.fell.slice(0, 500)) if (typeof id === 'string' && objs.has(id)) { SPS.sup[id] = 0; Support.Collapsed._fire(proxyOf(id)); }
+        }
+        // огонь: что горит, загорелось, догорело (исчезает), погасло
+        else if (d.ev === 'fire') {
+          if (d.burning && typeof d.burning === 'object') { FRS.burning = Object.create(null); let n = 0; for (const k of Object.keys(d.burning).slice(0, 2000)) { FRS.burning[k] = 1; n++; } FRS.n = n; }
+          const each = (L, sig, on) => { if (Array.isArray(L)) for (const id of L.slice(0, 500)) if (typeof id === 'string' && objs.has(id)) { if (on) FRS.burning[id] = 1; else delete FRS.burning[id]; sig._fire(proxyOf(id)); } };
+          each(d.ign, Fire.Ignited, true); each(d.burnt, Fire.Burnt, false); each(d.out, Fire.Extinguished, false);
         }
         return;
       }

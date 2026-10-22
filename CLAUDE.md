@@ -1972,6 +1972,26 @@ js/features/games.js и хвост css/premium.css.
   падает — кадр 1,8–2,1 → 2,0–2,8 мс; память не растёт (12 кругов; мир закрыть/открыть 20 раз — «Кубомир» полка ~112 МБ, «Подземье» 20,3 → 20,7); 10 мин игры в мире «реализм» — 0 ошибок (оба; kubomir-e2e KB_SUPPORT=1 KB_MODE=soak / reopen KB_N=20). Проверки: support-test (44), kubomir-hand-test §12, podzem-support-test (11,
   10 мин игры), studio-support-test (19), mir-support-test (11); Chrome — kubomir-e2e KB_MODE=support, podzem-support-e2e.
 
+## 🔥 Огонь — D37E.fire (js/engine/fire.js; T-022d, 22.10.2026, GAMES_VER 135; docs/PHYSICS_PLAN.md §4)
+- Владелец: «огонь — особенностью движка, во все игры». ОДНО ядро без Three.js: FI.grid (клетки 2D/3D) и FI.parts (детали); материалы
+  FI.MATS (wood, planks, leaves, grass, turf, cloth, fuel, char, flame, tree; моды — FI.defineMat); такты по шагам игры, бюджет за такт,
+  случайность — хеш места и номера такта (у деталей — ключ по координатам, не номер: у игроков с другим порядком деталей пожар тот же),
+  без мусора за такт; save/load продолжает ровно; 2D — ещё «жар через клетку» (срез мира). Ветер и дождь — от погоды игры.
+- Горючесть — ТОЛЬКО по полям блока (новые блоки модов и деревьев T-022b горят сами): «Кубомир» V.burnOf(b) — burn, liquid, emit, glass,
+  shape, foliage, layer, tint, sound, axis, bounce; «Подземье» PZFire.burnOf — поле плитки burn, P.EMIS/LR/LG/LB, LEAFY, KIND, TOOL, SUP,
+  CLIMB, HARD, GROUP (группа досок), GRASSY. Поле burn главнее ('none' — не горит). Сгоревший ствол — путём топора (ents.fellTree /
+  fellTree), сгоревшая опора — обрушение своим путём (D37E.support).
+- Картинка — fx.js FX.flames (языки шейдером, дрожь воздуха, дым, угли, лампы R.lights; смешивание «поверх с подсветкой»), одна на игру.
+- «Кубомир» (kubomir-fire.js): блоки в конце списка после 'bed' — 'fire', 'charred_planks'; вещь 'flint_steel' (Огниво, после
+  'bucket_lava'; iron_ingot + flint); meta.fire 'spread' (при создании; «реализм» — вкл; старые миры — выкл; ⚙️ «🧊 Кубомир»),
+  meta.fireState; вместе — считает хозяин. «Подземье» (podzem-fire.js): плитка 49 'charwood', вещь 'firestarter' (bar_iron + stone),
+  W.fire / W.fireState; свет очагов — одним заливом (dynFillN), пока горит — пересчёт не чаще раза в 3 кадра. «Мир» (mir-fire.js):
+  только боевая зона, событие {k:'fire', x, y, z, r, s, t}, догорело — DS.breakId без рассылки. «Студия 3D» (studio3d-fire.js):
+  свойства burn / fire (SAVE), onfire (NET_EXTRA; 9 — вечный), Fire.* в JS / Lua / C# / Java.
+- Откат одной строкой: KubomirFire.ON, PZFire.ON, MirFire.ON, ON в studio3d-fire.js. Проверки: fire-test, podzem-fire-test,
+  mir-fire-test, studio-fire-test, kubomir-hand-test §13; Chrome — kubomir-e2e KB_MODE=fire / firecycle (KB_FIRE=1 — soak / reopen),
+  podzem-fire-e2e [perf|look|reopen|soak], studio-fire-e2e, world-perf … fire.
+
 ## Полный экран, «⚙️ Настройки», поворот телефона (js/core/fullscreen.js, js/core/settings.js; агент 15.10.2026)
 - D37Full — один полный экран на всё: шапка игры (#gamesStage), «Мир», «Студия 3D» (.s3), окно Unity (.un-box). CSS закрепляет
   элемент во всё окно (el.gs-fs; html.gs-full прячет шапку, нижнее меню, плашки и кнопки сайта; у предков снимаются

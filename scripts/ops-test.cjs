@@ -64,6 +64,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       'kubomir-e2e.cjs': 'Chrome, 10+ минут прогона', 'raid-e2e.cjs': 'Chrome, подменный сервер', 'room-net-e2e.cjs': 'Chrome + настоящий Supabase',
       'kubomir-coop-e2e.cjs': 'два Chrome + настоящий Supabase и WebRTC, до 10 минут', 'podzem-support-e2e.cjs': 'Chrome, профиль телефона (ЦП ×4), замеры обрушения',
       'kubomir-qol-e2e.cjs': 'Chrome, помощники «Кубомира»: снимки, замеры на профиле телефона (ЦП ×4), 20 открытий, 10 минут игры',
+      'podzem-fire-e2e.cjs': 'Chrome, огонь «Подземья»: замеры на профиле телефона (ЦП ×4), снимки, 20 открытий, 10 минут игры',
+      'studio-fire-e2e.cjs': 'Chrome, огонь «Студии 3D»: ▶ Играть, пожар ~1 мин, снимок',
     };
     const files = fs.readdirSync(path.join(SITE, 'scripts')).filter(f => /-(test|e2e)\.(cjs|mjs)$/.test(f));
     const forgotten = files.filter(f => !inManifest.has(f) && !NOT_IN_CI[f]);

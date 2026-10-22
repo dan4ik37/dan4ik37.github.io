@@ -129,7 +129,7 @@
     if (!list.length) box.innerHTML = '<div class="kb-empty">Миров пока нет. Нажми «➕ Новый мир» — и вперёд!</div>';
     else box.innerHTML = list.map(w => `<div class="kb-world" data-id="${esc(w.id)}">
         <div class="kb-thumb">${w.thumb ? `<img src="${esc(w.thumb)}" alt="">` : '<span>🧊</span>'}</div>
-        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}${w.support === 'soft' || w.support === 'real' ? ' · ' + (w.support === 'real' ? '🏗' : '🏚') : ''}</small><small class="kb-cl" hidden></small></div>
+        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}${w.support === 'soft' || w.support === 'real' ? ' · ' + (w.support === 'real' ? '🏗' : '🏚') : ''}${w.fire === 'spread' ? ' · 🔥' : ''}</small><small class="kb-cl" hidden></small></div>
         <div class="kb-wb"><button type="button" class="kb-btn primary" data-w="play">▶ Играть</button><button type="button" class="kb-btn" data-w="rename" title="Переименовать">✏️</button><button type="button" class="kb-btn" data-w="cloud" title="Облако: сохранять копию мира (открыть на другом устройстве)" hidden>☁️</button><button type="button" class="kb-btn" data-w="export" title="Выгрузить файл мира">📤</button><button type="button" class="kb-btn danger" data-w="del" title="Удалить">🗑</button></div></div>`).join('');
     box.addEventListener('click', e => { const b = e.target.closest('[data-w]'), w = e.target.closest('.kb-world'); if (!b || !w) return; worldAct(b.dataset.w, w.dataset.id, list.find(x => x.id === w.dataset.id)); });
     cloudMenu(sc, list);   // ☁️ облако: отметки у миров, миры с других устройств (без входа — подсказка)
@@ -177,10 +177,14 @@
       <p class="kb-note kb-diffnote">Легко: ночью приходят мобы, но после нокаута вещи остаются.</p>
       <div class="kb-seg" data-f="support" title="Обрушение и прочность построек (выбирается один раз — при создании мира)"><button type="button" class="on" data-v="off">🧱 Обрушение: выкл</button><button type="button" data-v="soft">🏚 Мягкое</button><button type="button" data-v="real">🏗 Реализм</button></div>
       <p class="kb-note kb-supnote">${esc(window.KubomirSupport?.NOTES?.off || '')}</p>
+      ${window.KubomirFire ? `<div class="kb-seg" data-f="fire" title="Огонь распространяется (можно поменять потом в ⚙️ «Кубомир»)"><button type="button" class="on" data-v="off">🔥 Огонь распространяется: выкл</button><button type="button" data-v="spread">🔥 Вкл</button></div>
+      <p class="kb-note kb-firenote">${esc(window.KubomirFire.NOTE)}</p>` : ''}
       ${mods.length ? `<div class="kb-modpick"><b>🧩 Моды в этом мире</b>${mods.map(m => `<label class="kb-chk"><input type="checkbox" data-mod="${esc(m.id)}"> ${esc(m.manifest?.name || m.id)} <small>${esc(m.manifest?.version || '')}</small></label>`).join('')}</div>` : '<p class="kb-note">🧩 Моды можно добавить в меню миров → «Моды».</p>'}
       <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-n="go">🌍 Создать мир</button><button type="button" class="kb-btn" data-n="back">← Назад</button></div></div>`;
     const DN = { peaceful: 'Мирно: мобов-врагов нет, голод не отнимает здоровье.', easy: 'Легко: ночью приходят мобы, но после нокаута вещи остаются.', normal: 'Обычно: после нокаута вещи выпадают — успей их подобрать.', hard: 'Сложно: мобов больше и бьют в полтора раза сильнее, голод может довести до нокаута, вещи после нокаута выпадают.' };
-    sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; if (g.dataset.f === 'support') sc.querySelector('.kb-supnote').textContent = window.KubomirSupport?.NOTES?.[b.dataset.v] || ''; }));
+    let fireTouched = false;   // огонь: «реализм» обрушения — вкл по умолчанию (если игрок сам не выбрал)
+    const fireSet = v => sc.querySelectorAll('[data-f="fire"] button').forEach(x => x.classList.toggle('on', x.dataset.v === v));
+    sc.querySelectorAll('.kb-seg').forEach(g => g.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; g.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); if (g.dataset.f === 'diff') sc.querySelector('.kb-diffnote').textContent = DN[b.dataset.v]; if (g.dataset.f === 'support') { sc.querySelector('.kb-supnote').textContent = window.KubomirSupport?.NOTES?.[b.dataset.v] || ''; if (!fireTouched && window.KubomirFire) fireSet(window.KubomirFire.defaultFor(b.dataset.v) ? 'spread' : 'off'); } if (g.dataset.f === 'fire') fireTouched = true; }));
     sc.querySelector('[data-n="back"]').onclick = showMenu;
     sc.querySelector('[data-n="go"]').onclick = async () => {
       const f = k => sc.querySelector(`[data-f="${k}"]`);
@@ -191,6 +195,7 @@
       const modIds = [...sc.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
       const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: 2 };
       const sup = f('support')?.querySelector('.on')?.dataset.v; if (sup === 'soft' || sup === 'real') w.support = sup;   // обрушение (T-022a): старые миры — выкл
+      w.fire = f('fire')?.querySelector('.on')?.dataset.v === 'spread' ? 'spread' : 'off';   // огонь (T-022d): старые миры — выкл (поля нет)
       await V.store.putWorld(w);
       playById(w.id);   // через сверку с облаком: вошёл и есть место — новый мир сразу «в облаке»
     };
@@ -556,9 +561,9 @@
     st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features, genVer: meta.genVer || 1,
       load: c => guest ? guest.loadChunk(c) : st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
       applySaved: (c, rec) => applySaved(c, rec),
-      onGen: c => { st.ents?.onChunkTiles?.(c); },
-      onMesh: (c, m) => { VR.setChunk(c, m); st.KL?.onChunk(c, m); },
-      onDrop: c => { VR.dropChunk(c); st.KL?.onDrop(c); if (st.unsaved.has(c.key)) saveChunks([c]); window.KubomirEnts?.onDrop?.(st, c); },
+      onGen: c => { st.ents?.onChunkTiles?.(c); st.fire?.onChunk(c); },   // огонь: блоки «огонь» из правок (сохранённый пожар)
+      onMesh: (c, m) => { VR.setChunk(c, m); st.KL?.onChunk(c, m); st.fire?.onMesh(c, m); },
+      onDrop: c => { VR.dropChunk(c); st.KL?.onDrop(c); st.fire?.onDrop(c); if (st.unsaved.has(c.key)) saveChunks([c]); window.KubomirEnts?.onDrop?.(st, c); },
       log: t => console.warn('Кубомир:', t) });
     W.listeners.push((x, y, z, was, v, o) => onEdit(x, y, z, was, v, o));
     // управление, камера, звук, интерфейс
@@ -602,6 +607,8 @@
     else if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;
     st.sup = window.KubomirSupport?.attach?.(st) || null; st.shakeOK = () => shakeOK(st);   // обрушение и прочность (T-022a; мир без него — null)
+    st.fellOn = () => opts.fell !== false;
+    try { st.fire = window.KubomirFire?.attach?.(st) || null; } catch (e) { console.error(e); window.d37Err?.('kb:fire', e); st.fire = null; }   // огонь (T-022d): горит, перекидывается (если в мире включено), гаснет
     st.swimDeep = swimDeep; st.swimDrawY = (a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt);   // 👥 у других игроков — так же (kubomir-coop.js)   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
@@ -695,6 +702,7 @@
     try { st.X?.dispose(); } catch (e) {}   // ── KX:dispose ──
     try { st.KL?.dispose(); } catch (e) {}
     try { st.WX?.dispose(); } catch (e) {}
+    try { st.fire?.dispose(); st.FX?.dispose(); } catch (e) {}   // огонь: пламя, дым, звук
     try { st.AU?.muffle?.(0); st.uwLoop?.stop(); st.uwLoop = null; } catch (e) {}   // звук — снова чистый (движок общий для игр)
     st.ST?.close(); st.VR?.dispose(); st.A?.dispose();
     st.C?.dispose(); st.I?.dispose(); st.H?.dispose(); st.K?.dispose();
@@ -745,6 +753,7 @@
       acc: (P.acc || []).map(s => s ? { id: s.id, n: 1, d: s.d | 0 } : null), ext: P.ext || {} };   // ── KX:player ── аксессуары и данные помощников (T-049)
     m.time = st.R?.lighting?.time ?? m.time;
     m.ents = st.ents?.save?.() || [];
+    if (st.fire?.F) m.fireState = st.fire.save();   // огонь: что горит (чтобы продолжить с того же места)
     if (st.modRun) m.modData = st.modRun.data();
     return m;
   }
@@ -766,7 +775,7 @@
     const st = S; if (!st || !st.ready || st.coopGuest) return;
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
-    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow };
+    const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow, fireState: m.fireState };
     V.store.journal(st.meta.id, { recs, meta });
     saveAll(st).catch(() => {});
   }
@@ -779,6 +788,7 @@
     const c = S.W.chunkAt(x, z); if (c) S.unsaved.add(c.key);
     S.ST.touch(x, z, o.urgent ?? 2);
     S.ents?.onBlockChanged(x, y, z, was, v);
+    S.fire?.onEdit(x, y, z, was, v, o);   // огонь: где блоки «огонь» (пламя); вода и блок поверх — гасят
   }
 
   // ═══ Шаг логики (1/60 с) ═══
@@ -821,6 +831,7 @@
     if (st.steps % 3 === 0) {
       st.ents?.tick(1 / 20);
       st.sup?.step();   // обрушение: очередь падающих кусков (по бюджету шага; kubomir-support.js)
+      st.fire?.tick();   // огонь: такт ядра (D37E.fire), ветер и дождь погоды, лава и молния поджигают (kubomir-fire.js)
       if (!st.creative) survivalTick(st, 1 / 20);
       st.modRun?.tick(1 / 20);
     }
@@ -1024,7 +1035,7 @@
     if (P.eyeWater && ((st.bubT = (st.bubT || 0) - dt) < 0)) { st.bubT = .5 + Math.random() * .6; const [ex, ey, ez] = eye(st), d = lookDir(st); st.ents?.bubbles?.(ex + d.x * .45, ey - .15, ez + d.z * .45, 1 + (Math.random() * 2 | 0)); }
     // лава и кактус: урон
     if (!st.creative) {
-      if (touch.hurt) { P.hurtSrc = (P.hurtSrc || 0) + dt * touch.hurt; if (P.hurtSrc >= 1) { const n = Math.floor(P.hurtSrc); P.hurtSrc -= n; hurt(st, n, P.lava > .2 ? 'lava' : 'cactus'); } }
+      if (touch.hurt) { P.hurtSrc = (P.hurtSrc || 0) + dt * touch.hurt; if (P.hurtSrc >= 1) { const n = Math.floor(P.hurtSrc); P.hurtSrc -= n; hurt(st, n, P.lava > .2 ? 'lava' : st.fire?.touching(P) ? 'fire' : 'cactus'); } }
       if (P.y < -20) hurt(st, 4, 'void');
     } else if (P.y < -30) { P.y = 130; P.vy = 0; }
     if (P.y > 100) unlock('high');
@@ -1301,7 +1312,7 @@
   }
   // «Нокаут» вместо смерти (21.10.2026, правило сайта: без насилия на экране): экран темнеет и мутнеет, «Ты без сил», дальше —
   // как раньше (вещи по сложности, появляешься у кровати или в начале мира). Внутри кода — по-старому (die, P.dead)
-  const DEATH = { fall: 'упал с высоты', lava: 'обжёгся о лаву', cactus: 'укололся о кактус', starve: 'совсем ослаб от голода', drown: 'наглотался воды', void: 'выпал за край мира', mob: 'не справился с монстром' };
+  const DEATH = { fall: 'упал с высоты', lava: 'обжёгся о лаву', fire: 'обжёгся в огне', cactus: 'укололся о кактус', starve: 'совсем ослаб от голода', drown: 'наглотался воды', void: 'выпал за край мира', mob: 'не справился с монстром' };
   function die(st, why){
     const P = st.P; P.dead = true; P.pk = null; P.hang = null;
     st.I.unlock();
@@ -1695,6 +1706,8 @@
   function useHand(st, hit, tap, s, which){
     const V = VX(), P = st.P, it = s ? V.item(s.id) : null;
     if (!it) return false;
+    // огниво (T-022d): поджечь блок под прицелом (kubomir-fire.js)
+    if (it.use === 'ignite' && st.fire?.useIgniter(s, it, which, hit)) { st.hand?.act('push', which); return true; }
     // ── KX:useItem ── вещи помощников: аксессуар — надеть, лист карты, книга мастера, свиток возврата, ведро
     if ((it.use || it.acc) && st.X?.useItem(s, it, which, hit)) { st.hand?.act('push', which); return true; }
     // вещь мода «в воздух» (палочка, свиток) — тоже событие use
@@ -1904,6 +1917,7 @@
     st.hand?.frame(dt, t);   // руки и вещь в руке (поверх позы человечка), свет человечков — как у кубиков
     st.ents?.frame(dt, t);
     st.WX?.frame(dt, t);   // дождь / снег вокруг камеры, шум, гром
+    st.fire?.frame(dt, t);   // пламя движка на блоках «огонь» (fx.js), дым, угли, треск
     VR.select(st.hit && !C.blocked ? st.hit : null);
     if (st.mine.st >= 0 && st.hit) VR.crack(st.hit.x, st.hit.y, st.hit.z, st.mine.st, st.hit.box); else VR.crack(0, 0, 0, -1);
     if (!st.previewOff) try { ghostUpdate(st); } catch (e) { st.previewOff = true; try { st.VR.preview?.(null); st.VR.ghost?.(null); } catch (e2) {} console.warn('Кубомир: подсказка постройки —', e); }
@@ -2367,6 +2381,7 @@
         st.AU?.play(s & 4 ? 'door_wood_close' : 'door_wood_open', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .7 });
         return true;
       },
+      fireAs(G, x, y, z, nx, ny, nz){ return !!st.fire?.igniteAt(x, y, z, nx, ny, nz); },   // огниво гостя (T-022d): поджигает хозяин
       iceAs(G, x, y, z){ if (!st.WX?.hole?.(x, y, z)) return false; st.AU?.play('kb_ice', { x: x - st.ox + .5, y: y + .8, z: z - st.oz + .5, vol: .6 }); st.ents?.breakFx?.(x, y, z, V.ID.ice); return true; },
       toast: t => st.H?.toast(t), log: t => log(t), changed: () => coopBar(st),
       sleepVote: () => st.X?.sleepVote?.(),   // ── KX:sleep ── гость лёг на лежанку / встал (kubomir-world.js решает, прошла ли ночь)
@@ -2555,6 +2570,7 @@
         <div class="gs-row"><div class="gs-lbl">Времена года<small>«Как в общем мире» — как у всех на сайте: быстрые сезоны (около недели), декабрь–январь — зима, ноябрь — осень. «По игровым дням» — 3 суток игры на сезон. Зимой снег на блоках и лёд на озёрах (по нему можно ходить), осенью желтеет листва. «Выкл» — всегда лето.</small></div><div class="gs-ctl">${seg('seasons', [['calendar', 'Как в общем мире'], ['cycle', 'По игровым дням'], ['off', 'Выкл']], opts.seasons || 'calendar')}</div></div>
         <div class="gs-row"><div class="gs-lbl">Цепляться за края<small>Как в «Мире Денчика»: прыгни у стены в 2 блока, держа «вперёд», — залезешь; выше — схватишься за край (в стороны — по краю, «вперёд» или «прыжок» — наверх, «красться» — отпустить). В воде у берега — «прыжок», и вылезешь.</small></div><div class="gs-ctl">${seg('climb', [[1, 'Вкл'], [0, 'Выкл']], opts.climb === false ? 0 : 1)}</div></div>
         <div class="gs-row"><div class="gs-lbl">Деревья падают<small>Подрубил ствол — дерево валится от тебя и рассыпается на брёвна (только настоящие деревья, не постройки).</small></div><div class="gs-ctl">${seg('fell', [[1, 'Вкл'], [0, 'Выкл']], opts.fell === false ? 0 : 1)}</div></div>
+        ${st?.fire ? `<div class="gs-row"><div class="gs-lbl">Огонь распространяется<small>${esc(window.KubomirFire?.NOTE || '')} Настройка этого мира${st.coopGuest ? ' — её выбирает хозяин' : ''}.</small></div><div class="gs-ctl">${st.coopGuest ? `<span class="gs-note">${st.fire.spread ? 'Вкл' : 'Выкл'}</span>` : seg('fire', [[1, 'Вкл'], [0, 'Выкл']], st.fire.spread ? 1 : 0)}</div></div>` : ''}
         <div class="gs-row"><div class="gs-lbl">Погода<small>Дождь и снег по месту (в пустыне — сухо): небо темнее, капли и хлопья вокруг, шум дождя. На «низкой» графике — без капель.</small></div><div class="gs-ctl">${seg('weather', [[1, 'Вкл'], [0, 'Выкл']], opts.weather === false ? 0 : 1)}</div></div>
         ${st && !st.creative ? `<div class="gs-row"><div class="gs-lbl">Подсказки новичку<small>Вверху слева — что делать дальше: брёвна, верстак, кирка, факелы… и где лежат вещи после нокаута.</small></div><div class="gs-ctl">${seg('tips', [[1, 'Показывать'], [0, 'Скрыть']], st.meta.tips === false ? 0 : 1)}</div></div>` : ''}
         ${st ? `<div class="gs-row"><div class="gs-lbl">Застрял?<small>Перенесёт на ближайшее место, где можно стоять (не в воде и не в лаве), — без штрафа. Нет такого рядом — к кровати или в начало мира.</small></div><div class="gs-ctl"><button type="button" class="gs-btn" data-kbo="unstuck:1">🆘 Я застрял</button></div></div>` : ''}
@@ -2572,6 +2588,7 @@
         if (k === 'preview') { opts.preview = ['frame', 'ghost', 'off'].includes(v) ? v : 'frame'; delete opts.ghost; }
         if (k === 'fell') opts.fell = v === '1';
         if (k === 'climb') opts.climb = v === '1';
+        if (k === 'fire' && S?.fire && !S.coopGuest) { S.fire.setSpread(v === '1'); V_putWorld(S); }   // огонь — настройка мира
         if (k === 'unstuck') { if (S) { unstuck(S); D.close?.(); } return; }
         if (k === 'weather') { opts.weather = v === '1'; if (S) S.weatherOff = !opts.weather; }
         if (k === 'seasons') { opts.seasons = ['calendar', 'cycle', 'off'].includes(v) ? v : 'calendar'; if (S) S.WX?.setSeasons?.(opts.seasons); }

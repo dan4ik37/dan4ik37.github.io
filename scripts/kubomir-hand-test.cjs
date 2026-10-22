@@ -920,6 +920,161 @@ function fakeWorld(sky, blk, walls = new Set()){
       X.dispose(); }
   }
 
+  // ═══ 13. Огонь (T-022d: D37E.fire + kubomir-fire.js + пламя движка fx.js) ═══
+  sec('огонь: огниво поджигает, дом сгорает (доски чернеют), дерево валится, дёрн — в землю, вода и дождь гасят, лава поджигает, «выкл» — не перекидывается');
+  {
+    run('js/engine/fire.js'); run('js/engine/fx.js'); run('js/games/kubomir-fire.js');
+    if (!E.support) run('js/engine/support.js');
+    if (!window.KubomirSupport) run('js/games/kubomir-support.js');
+    const KF = window.KubomirFire, key = (x, y, z) => x + ',' + y + ',' + z;
+    // горючесть — по полям блока (без списков имён): новые деревья и моды горят сами
+    const bo = n => V.burnOf(V.block(n));
+    ok(bo('log_oak') === 'wood' && bo('leaves_spruce') === 'leaves' && bo('planks_birch') === 'planks' && bo('grass') === 'turf' && bo('tall_grass') === 'grass' && bo('bed') === 'cloth' && bo('chest') === 'planks',
+      'горит: брёвна, листва, доски, дёрн, трава, лежанка, сундук', ['log_oak', 'leaves_spruce', 'planks_birch', 'grass', 'tall_grass', 'bed', 'chest'].map(bo));
+    ok(['stone', 'dirt', 'sand', 'water', 'lava', 'torch', 'glass', 'cactus', 'bouncer', 'snow_grass', 'iron_block', 'lamp', 'furnace'].every(n => bo(n) === ''), 'не горит: камень, земля, песок, вода, лава, факел, стекло, кактус, батут, снег, железо, лампа, печь');
+    ok(V.burnOf({ name: 'log_new_tree', shape: V.SHAPE.cube, sound: 'wood', axis: true, tool: 'axe' }) === 'wood' && V.burnOf({ name: 'x_leaves', layer: V.LAYER.cutout, tint: V.TINT.foliage, shape: V.SHAPE.cube }) === 'leaves' && V.burnOf({ name: 'branch', foliage: true }) === 'leaves'
+      && V.burnOf({ name: 'stone_wood_look', sound: 'wood', burn: '' }) === '' && V.burnOf({ name: 'oil', burn: 'fuel' }) === 'fuel', 'новый блок (другое дерево, ветка, мод) — по полям; своё поле burn главнее');
+    ok(bo('fire') === 'flame' && bo('charred_planks') === 'char' && V.item('flint_steel')?.use === 'ignite' && V.craft(['iron_ingot', 'flint', null, null], 2, 2)?.out === 'flint_steel', 'блоки «огонь» и «обугленные доски», огниво (железо + кремень)');
+    // мир: ниже y 9 — камень, y 9 — дёрн; правки — в чанке (как у V.World), слушатели правок — как у V.World
+    const mkFW = () => { const cells = new Map(), chunks = new Map(); const W = { seed: 21, rev: 0, listeners: [], cells, chunks,
+      raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < 9 ? ID.stone : y === 9 ? ID.grass : 0) : v; },
+      get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; },
+      chunk(cx, cz){ const k = cx + '|' + cz; let c = chunks.get(k); if (!c) chunks.set(k, c = { cx, cz, key: k, edits: null, gen: true }); return c; },
+      set(x, y, z, v, o = {}){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); const was = this.raw(x, y, z); if (was === v) return false; cells.set(key(x, y, z), v); this.rev++; const c = this.chunk(x >> 4, z >> 4); (c.edits || (c.edits = new Map())).set(((x & 15) << 11) | ((z & 15) << 7) | y, v); for (const f of this.listeners) f(x, y, z, was, v, o); return true; },
+      lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => 10, chunkAt(x, z){ return this.chunk(Math.floor(x) >> 4, Math.floor(z) >> 4); } }; return W; };
+    const R13 = Object.assign({}, R, { lighting: { time: 12 }, night: 0 });
+    const mkF = (W, o = {}) => {
+      const S13 = { R: R13, VR, W, P: { x: 30.5, y: 10, z: 30.5, vx: 0, vy: 0, vz: 0, dead: false, inv: [] }, ox: 0, oz: 0, meta: Object.assign({ diff: 'easy', seed: 'fire' }, o.meta || {}), ST: { rd: 6 }, creative: false, coopGuest: !!o.guest, net: o.net || null, WX: o.WX || null, fellOn: () => true };
+      const X = window.KubomirEnts.create(S13); S13.ents = X; X.spawnT = 1e9;
+      S13.sup = window.KubomirSupport.attach(S13);
+      S13.fire = KF.attach(S13);
+      W.listeners.push((x, y, z, was, v, ev) => { S13.ents.onBlockChanged(x, y, z, was, v); S13.fire?.onEdit(x, y, z, was, v, ev); });
+      return { X, S13, F: S13.fire };
+    };
+    const ticks = (S, n) => { for (let i = 0; i < n; i++) { S.fire.tick(); S.ents.tick(1 / 20); S.sup?.step(); } };
+    const PL = V.cell(ID.planks_oak);
+    const house = W => { for (let x = 20; x < 26; x++) for (let z = 20; z < 26; z++) for (let y = 10; y <= 13; y++) if (x === 20 || x === 25 || z === 20 || z === 25 || y === 13) W.set(x, y, z, PL); };
+    const count = (W, id) => { let n = 0; for (const v of W.cells.values()) if ((v & 0xfff) === id) n++; return n; };
+    { const F0 = KF.attach({ meta: {}, W: mkFW(), R: R13, coopGuest: false }); ok(F0.spread === false, 'старый мир (нет meta.fire) — огонь не распространяется'); F0.dispose(); }
+    // огниво по дому: загорелась доска, рядом — блок «огонь»
+    const burnHouse = (spread, extra) => {
+      const W = mkFW(); house(W); const { X, S13, F } = mkF(W, { meta: { fire: spread ? 'spread' : 'off', support: 'soft' } });
+      const s = { id: 'flint_steel', n: 1, d: 0 }; S13.P.inv = [s];
+      const used = F.useIgniter(s, V.item('flint_steel'), 'main', { x: 20, y: 10, z: 22, nx: -1, ny: 0, nz: 0, v: PL });
+      const r = { used, fire0: count(W, ID.fire), burning0: F.F.n, wear: s.d, charMax: 0, fireMax: 0 };
+      extra?.(W, S13, F);
+      for (let t = 0; t < 20 * 240 && F.F.n; t++) { ticks(S13, 1); if (t % 40 === 0) { r.charMax = Math.max(r.charMax, count(W, ID.charred_planks)); r.fireMax = Math.max(r.fireMax, count(W, ID.fire)); } }
+      r.planks = count(W, ID.planks_oak) + count(W, ID.charred_planks); r.fire = count(W, ID.fire); r.burnt = F.stats.burnt; r.n = F.F.n; r.sec = F.F.T / 20; r.coal = F.stats.coal;
+      r.hash = [...W.cells.entries()].filter(([, v]) => v).map(([k, v]) => k + '=' + v).sort().join(';').length + ':' + F.F.stats.ignited + ':' + F.F.T;
+      X.dispose(); F.dispose();
+      return r;
+    };
+    const H1 = burnHouse(true), H2 = burnHouse(true);
+    ok(H1.used && H1.burning0 === 1 && H1.fire0 === 1 && H1.wear === 1, 'огниво: доска горит, рядом блок «огонь», огниво износилось', H1);
+    ok(H1.planks <= 15 && H1.burnt > 60, 'дом из досок сгорел (огонь перекинулся: из 96 досок — 81 и больше)', H1);
+    ok(H1.charMax > 0, 'доски чернеют, прежде чем осыпаться (обугленные доски)', H1.charMax);
+    ok(H1.fire === 0 && H1.fireMax > 3, 'догорело — блоков «огонь» не осталось (во время пожара — были)', { fire: H1.fire, max: H1.fireMax });
+    ok(H1.hash === H2.hash, 'одинаково при повторе (одно зерно мира)', [H1.hash, H2.hash]);
+    const H0 = burnHouse(false);
+    ok(H0.burnt === 1 && H0.planks >= 6 * 6 + 4 * 3 * 4 - 2, '«Огонь распространяется: выкл» — сгорела только подожжённая доска', H0);
+    // вода гасит: вода в клетке «огня» рядом с доской — погасло
+    const HW = burnHouse(true, (W, S13) => { ticks(S13, 4); W.set(19, 10, 22, V.cell(ID.water)); });
+    ok(HW.burnt === 0 && HW.fire === 0, 'вода рядом — погасло', HW);
+    // поставил блок на «огонь» — погасло
+    const HB = burnHouse(true, (W, S13) => { ticks(S13, 2); W.set(19, 10, 22, V.cell(ID.cobble)); });
+    ok(HB.burnt === 0, 'закрыл огонь блоком — погасло', HB);
+    // дерево: загорелась верхушка — листва сгорела, бревно догорело — дерево валится (путь топора) или сгорает целиком
+    {
+      const W = mkFW(); for (let y = 10; y < 15; y++) W.set(40, y, 40, V.cell(ID.log_oak));
+      for (let y = 13; y <= 15; y++) for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) if (W.raw(40 + dx, y, 40 + dz) === 0) W.set(40 + dx, y, 40 + dz, V.cell(ID.leaves_oak));
+      const { X, S13, F } = mkF(W, { meta: { fire: 'spread' } });
+      F.igniteAt(40, 15, 40, 0, 1, 0);
+      let fellSeen = false;
+      for (let t = 0; t < 20 * 200 && F.F.n; t++) { ticks(S13, 1); if (X.groups.length) fellSeen = true; }
+      ok(count(W, ID.leaves_oak) <= 7, 'листва сгорела (почти вся: 66 из 73 и больше)', count(W, ID.leaves_oak));
+      ok(count(W, ID.log_oak) < 5 && (F.stats.fell > 0 || count(W, ID.log_oak) === 0), 'ствол догорел: дерево свалилось (путь топора) или сгорело', { logs: count(W, ID.log_oak), fell: F.stats.fell, fellSeen });
+      X.dispose(); F.dispose();
+    }
+    // дёрн: загорелся — стал землёй
+    {
+      const W = mkFW(); const { X, S13, F } = mkF(W, { meta: { fire: 'off' } });
+      F.igniteAt(30, 9, 30, 0, 1, 0); ok(F.F.n === 1 && W.get(30, 10, 30) === ID.fire, 'дёрн горит, огонь — над ним');
+      ticks(S13, 20 * 4);
+      ok(W.get(30, 9, 30) === ID.dirt && W.get(30, 10, 30) === 0, 'дёрн догорел — земля, огня нет', [W.get(30, 9, 30), W.get(30, 10, 30)]);
+      X.dispose(); F.dispose();
+    }
+    {
+      const W = mkFW(); W.set(50, 10, 50, V.cell(ID.cobble)); const { X, S13, F } = mkF(W, { meta: { fire: 'off' } });
+      ok(F.igniteAt(50, 10, 50, 0, 1, 0) && W.get(50, 11, 50) === ID.fire, 'огниво по камню — пламя без топлива на нём');
+      ticks(S13, 20 * 8);
+      ok(W.get(50, 11, 50) === 0 && F.F.n === 0, '…несколько секунд — и гаснет само');
+      X.dispose(); F.dispose();
+    }
+    // дождь гасит то, что под открытым небом
+    {
+      const rainHouse = rain => { const W = mkFW(); house(W); const WX = { rain, clim: { state: { wind: 0, windDir: 0, temp: 15 } }, tz: { wet: 0 } };
+        const { X, S13, F } = mkF(W, { meta: { fire: 'spread' }, WX }); F.igniteAt(22, 13, 22, 0, 1, 0);
+        for (let t = 0; t < 20 * 120 && F.F.n; t++) ticks(S13, 1);
+        const r = { burnt: F.stats.burnt, out: F.F.stats.out }; X.dispose(); F.dispose(); return r; };
+      const dry = rainHouse(0), wet = rainHouse(1);
+      ok(wet.burnt < dry.burnt * .5 && wet.out > 0, 'ливень — крыша горит хуже и гаснет', { dry, wet });
+    }
+    // лава поджигает горючее рядом (поток сообщил, где лава)
+    {
+      const W = mkFW(); W.set(30, 10, 30, V.cell(ID.lava)); W.set(30, 11, 31, PL); W.set(31, 11, 30, PL); W.set(30, 11, 30, 0);
+      const { X, S13, F } = mkF(W, { meta: { fire: 'spread' } });
+      const c = W.chunk(1, 1); F.onMesh(c, { lights: Int32Array.from([((30 & 15) << 11) | ((30 & 15) << 7) | 10 | (ID.lava << 15)]) });
+      ticks(S13, 20 * 20);
+      ok(F.stats.lava > 0, 'лава подожгла доски рядом', F.stats);
+      X.dispose(); F.dispose();
+    }
+    // чанк с лавой выгрузили (без правок) — его лава забыта: не поджигает и не копится
+    {
+      const W = mkFW(); W.set(30, 10, 30, V.cell(ID.lava)); W.set(30, 11, 31, PL); W.set(31, 11, 30, PL); W.set(30, 11, 30, 0);
+      const { X, S13, F } = mkF(W, { meta: { fire: 'spread' } });
+      const c = W.chunk(1, 1); F.onMesh(c, { lights: Int32Array.from([((30 & 15) << 11) | ((30 & 15) << 7) | 10 | (ID.lava << 15)]) });
+      F.onDrop({ key: c.key, cx: c.cx, cz: c.cz });
+      ticks(S13, 20 * 20);
+      ok(F.stats.lava === 0, 'выгруженный чанк без правок — его лава забыта', F.stats);
+      X.dispose(); F.dispose();
+    }
+    // гость: ядра нет — огниво просит хозяина; пламя — по блокам «огонь» из правок
+    {
+      const W = mkFW(); const asks = [];
+      const { X, F } = mkF(W, { guest: true, net: { reqFire: (...a) => asks.push(a) } });
+      ok(F.F === null, 'у гостя ядра нет (считает хозяин)');
+      const s = { id: 'flint_steel', n: 1, d: 0 };
+      ok(F.useIgniter(s, V.item('flint_steel'), 'main', { x: 5, y: 10, z: 5, nx: 0, ny: 1, nz: 0 }) && asks.length === 1, 'огниво гостя — просьба хозяину', asks);
+      W.set(6, 11, 6, V.cell(ID.fire));
+      ok(F.blocks.n === 1, 'блок «огонь» из правок хозяина — у гостя пламя');
+      R13.camera.position.set(6, 12, 3);
+      F.frame(1 / 60, 1); ok(F.FL.stats.cells === 1 && F.FL.stats.tongues >= 1, 'пламя движка нарисовано (языки)', F.FL.stats);
+      X.dispose(); F.dispose();
+    }
+    // сохранить посреди пожара и продолжить
+    {
+      const W = mkFW(); house(W); const { X, S13, F } = mkF(W, { meta: { fire: 'spread' } });
+      F.igniteAt(22, 13, 22, 0, 1, 0); ticks(S13, 20 * 10);
+      const n0 = F.F.n, save = JSON.parse(JSON.stringify(F.save()));
+      X.dispose(); F.dispose(); W.listeners.length = 0;
+      const { X: X2, F: F2 } = mkF(W, { meta: { fire: 'spread', fireState: save } });
+      ok(F2.F.n === n0 && n0 > 0, 'загрузился пожар (горит столько же)', [n0, F2.F.n]);
+      // сирота: блок «огонь» без горящего рядом (сохранение потерялось) — горит пламенем и гаснет
+      const c = W.chunk(3, 3); c.edits = c.edits || new Map(); W.cells.set(key(50, 20, 50), V.cell(ID.fire)); c.edits.set(((50 & 15) << 11) | ((50 & 15) << 7) | 20, V.cell(ID.fire));
+      F2.onChunk(c); ok(F2.F.find(50, 20, 50) >= 0, 'огонь-сирота при загрузке чанка — догорит сам');
+      X2.dispose(); F2.dispose();
+    }
+    // кадр: пламя рядом с камерой, без ошибок; без мусора (кадр пламени на 300 блоках огня)
+    {
+      const W = mkFW(); const { X, F } = mkF(W, { guest: true, net: { reqFire(){} } });
+      for (let i = 0; i < 300; i++) W.set(10 + (i % 20), 11, 10 + ((i / 20) | 0), V.cell(ID.fire));
+      R13.camera.position.set(20, 12, 18);
+      for (let k = 0; k < 30; k++) F.frame(1 / 60, k / 60);
+      ok(F.FL.stats.cells === 300 && F.FL.stats.tongues > 300, 'кадр: 300 очагов — языки (на «высокой» — до 3 на очаг)', F.FL.stats);   // мусор кадра — fire-test (отдельный процесс)
+      X.dispose(); F.dispose();
+    }
+  }
+
   console.log(`\nkubomir-hand-test: ${pass} ok, ${fail} fail`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

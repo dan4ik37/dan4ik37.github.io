@@ -206,6 +206,60 @@ const server = http.createServer((req, res) => {
       }
       throw new Error('замер баз готов');
     }
+    if (MODE === 'fire') {   // огонь боевой зоны (mir-fire.js, T-022d): у мешков укрытий — до пожара, в пожаре, после; снимок
+      await send('Page.navigate', { url: BASE + '/#/games/world' });
+      let okF = false; for (let i = 0; i < 240 && !okF; i++) { await sleep(500); try { okF = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      if (!okF) throw new Error('мир не открылся');
+      const prep = await ev(`(async () => {
+        const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
+        const S = GAME_IMPL.world._test.state(), z = S.zones, P = S.P;
+        S.fixedTime = 13; P.place(-200, MirZones.terrain(-200, 190) + .3, 196, 0);
+        const zs = z.zoneState('war'); if (!zs.ready) await z.buildNow(zs);
+        const X = z.fire, L = [...z.destruct.list.values()].filter(b => ['bag', 'crate', 'barrel', 'fence', 'tree', 'pine'].includes(b.kind));
+        let hot = L[0], best = 0; for (const b of L) { const n = L.filter(u => Math.hypot(u.x - b.x, u.z - b.z) < 6).length; if (n > best) { best = n; hot = b; } }
+        window.__hot = { x: hot.x, y: hot.y || 0, z: hot.z, n: best };
+        P.place(hot.x, MirZones.terrain(hot.x, hot.z + 9) + .3, hot.z + 9, 0); S.rig.yaw = 0;
+        await new Promise(r => setTimeout(r, 4000));
+        window.__long = 0; window.__fr = 0; let last = performance.now();
+        const tick = t => { const d = t - last; last = t; window.__fr++; if (d > 50) window.__long++; requestAnimationFrame(tick); }; requestAnimationFrame(tick);
+        return { fire: !!X, parts: X?.stats.parts, hot: window.__hot };
+      })()`, 240000);
+      console.log('подготовка', JSON.stringify(prep));
+      const snap = `(() => { const S = GAME_IMPL.world._test.state(), R = S.R, ST = R.stats, n = Math.max(1, ST.frames), X = S.zones.fire;
+        return { fps: +(1000 / (ST.sumDt / n)).toFixed(1), cpu: +(ST.sumCpu / n).toFixed(2), cpuMax: +ST.maxCpu.toFixed(1), long: window.__long, frames: window.__fr, calls: ST.calls, tris: R.r.info.render.triangles,
+          burning: X?.F.n ?? null, ignited: X?.F.stats.ignited ?? null, tongues: X?.flames?.()?.stats?.tongues ?? null, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null }; })()`;
+      const reset = `(() => { const ST = GAME_IMPL.world._test.state().R.stats; ST.frames = ST.sumDt = ST.maxDt = ST.sumCpu = ST.maxCpu = ST.sumR = 0; window.__long = 0; window.__fr = 0; return 1; })()`;
+      await sleep(15000);   // зона достроилась, шейдеры собрались (иначе «до пожара» меряет постройку)
+      await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      await ev(reset); await sleep(6000); const before = await ev(snap); console.log('до пожара'.padEnd(20), JSON.stringify(before)); rows.push({ name: 'до пожара', ...before });
+      // поджечь три самых густых места рядом (не ближе 12 м друг к другу); замер — окнами «идёт / на паузе» по 2 с, 4 раза: на паузе
+      // пожар стоит (не догорает за время замера), сравнение рядом по времени честнее (машина под нагрузкой)
+      const lit = await ev(`(() => { const S = GAME_IMPL.world._test.state(), z = S.zones, X = z.fire, h = window.__hot;
+        const L = [...z.destruct.list.values()].filter(b => ['bag', 'crate', 'barrel', 'fence', 'tree', 'pine'].includes(b.kind) && Math.hypot(b.x - h.x, b.z - h.z) < 40);
+        const dens = b => L.filter(u => Math.hypot(u.x - b.x, u.z - b.z) < 6).length, C = [];
+        for (const b of L.map(b => [dens(b), b]).sort((a, c) => c[0] - a[0]).map(q => q[1])) { if (C.every(q => Math.hypot(q.x - b.x, q.z - b.z) > 12)) C.push(b); if (C.length >= 3) break; }
+        let s = 77; for (const b of C) X.ignite(b.x, (b.y || 0) + .5, b.z, 5, s++, true);
+        return { spots: C.length, near: L.length, burning: X.F.n }; })()`);
+      console.log('подожгли', JSON.stringify(lit));
+      await sleep(1500);
+      const ab = { off: [], on: [] };
+      for (let r = 0; r < 4; r++) for (const p of [false, true]) {
+        await ev(`(() => { GAME_IMPL.world._test.state().zones.fire.paused = ${p}; return 1; })()`); await sleep(300); await ev(reset); await sleep(2000);
+        const q = await ev(snap); ab[p ? 'off' : 'on'].push(q);
+        if (!p && !r) { console.log('пожар'.padEnd(20), JSON.stringify(q)); rows.push({ name: 'пожар', ...q }); }
+      }
+      await ev(`(() => { GAME_IMPL.world._test.state().zones.fire.paused = false; return 1; })()`);
+      const med = (a, k) => { const v = a.map(q => q[k]).sort((x, y) => x - y); return v[v.length >> 1]; };
+      const abRow = k => ({ cpu: med(ab[k], 'cpu'), cpuMax: med(ab[k], 'cpuMax'), calls: med(ab[k], 'calls'), burning: med(ab[k], 'burning'), tongues: med(ab[k], 'tongues') });
+      console.log('идёт / пауза (медианы четырёх)', JSON.stringify({ on: abRow('on'), off: abRow('off') })); rows.push({ name: 'идёт', ...abRow('on') }, { name: 'пауза', ...abRow('off') });
+      await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 84 });
+      const dirS = path.join(TMP, 't022d', 'shots'); fs.mkdirSync(dirS, { recursive: true }); fs.writeFileSync(path.join(dirS, 'mir-fire.jpg'), Buffer.from(data, 'base64')); console.log('  снимок', path.join(dirS, 'mir-fire.jpg'));
+      await send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      await ev(`(() => { GAME_IMPL.world._test.state().zones.fire.F.clear(); return 1; })()`); await sleep(1500); await ev(reset); await sleep(6000);
+      const after = await ev(snap); console.log('после'.padEnd(20), JSON.stringify(after)); rows.push({ name: 'после', ...after });
+      throw new Error('замер огня готов');
+    }
     if (MODE === 'approach') {   // въезд в каждую зону — на свежей странице (зона строится один раз)
       for (const [zid, from] of [['metro', [650, 225]], ['war', [-288, 720]], ['kids', [230, -330]]].filter(([k]) => !process.env.ZONES || process.env.ZONES.split(',').includes(k))) {
         await send('Page.navigate', { url: 'about:blank' }); await sleep(300);
