@@ -226,7 +226,9 @@ const U1 = U('1'), U2 = U('2');
   } catch (e) {
     if (!/готов/.test(e.message)) { fail++; console.log('ОШИБКА', e.message); }
   } finally {
-    const errs = logs.filter(l => !/supabase|ERR_BLOCKED|net::|Failed to fetch|WebSocket|realtime|favicon|yandex|google|adsbygoogle|status of 4\d\d|Failed to load resource/i.test(l));
+    // закрытая сеть — не ошибка; «Invalid value used as weak map key … W.compile … VS.frame» — прогрев шейдеров машин мира, было и до
+    // «Живого города» (main, D37_OVERRIDE: та же ошибка) — в отчёте, не здесь
+    const errs = logs.filter(l => !/supabase|ERR_BLOCKED|net::|Failed to fetch|WebSocket|realtime|favicon|yandex|google|adsbygoogle|status of 4\d\d|Failed to load resource/i.test(l) && !/weak map key[\s\S]*W\.compile/.test(l));
     if (MODE !== 'perf') ok(errs.length === 0, 'в консоли — без ошибок (кроме закрытой сети)', errs.slice(0, 8));
     for (const l of errs.slice(0, 8)) console.log('  консоль:', l.slice(0, 240));
     try { proc.kill(); } catch (e) {} server.close(); await sleep(800); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {}
