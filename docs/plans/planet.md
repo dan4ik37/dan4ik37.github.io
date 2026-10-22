@@ -11,7 +11,7 @@ Units: engine units **u** (1 m = `E.UNIT` = 1.1667 u). **(M)** = measured by the
 3. Под игроком держится «плоский кусок» (ровно как сейчас в «Мире»), он сам переезжает за игроком — ходьба, прыжки, машины, стройка и погода работают без переделки.
 4. День и ночь — от вращения планеты (у каждого места своё время), времена года — по твоему календарю (зима — декабрь–февраль, ноябрь — осень).
 5. Небо считается «как в жизни» (рассеяние света в воздухе), но дёшево — видно и с орбиты (голубой ореол, луна, звёзды), и с земли, без экранов загрузки.
-6. Образец — скрытая страница /play/planet: с орбиты летишь вниз, садишься и бежишь своим персонажем. На слабом телефоне: 2–4 мс на кадр, до 73 вызовов, без рывков; 10 минут полёта — без ошибок.
+6. Образец — скрытая страница /play/planet: с орбиты летишь вниз, садишься и бежишь своим персонажем. На слабом телефоне: 2–4 мс на кадр, до 73 вызовов, без рывков; 20 минут полёта — без ошибок, память не растёт.
 7. Предлагаю родную планету радиусом ≈ 110 км (облёт на реактивном самолёте ≈ 20 мин, круг по орбите ≈ 8 мин); нынешняя карта «Мира» станет одним краем этой планеты, города останутся.
 8. «Кубомир» — планеты из кубиков как новый тип мира (6 граней-сеток; обычный бесконечный мир остаётся); «Подземье» — мир по кругу + другие планеты на ракете.
 9. Космос — потом: ракета, спутник (после него заработает GPS в телефоне, в пещерах — ретрансляторы), Луна.
@@ -63,7 +63,7 @@ cost almost nothing more to render; they cost travel time.
 | New chunks integrated per frame | ≤ 2 | 2 (0.14–0.17 ms avg each) | ≤ 4 / 4 (0.02 ms) |
 | Chunk build in a Worker | ≤ 15 ms | 2.9–3.1 ms avg, 9 ms max on a PC core (Chrome does not slow Workers) → ≈ 12 ms on a phone | ≤ 4 ms / 3.1–3.4 avg |
 | Chunk cache (GPU + JS copy) | ≤ 260 chunks ≈ 7 MB | 238–254 chunks ≈ 5.4–5.8 MB | ≤ 480 / 436–476 ≈ 9.9–10.8 MB |
-| Memory over a 10-min flight | flat | 0 errors; JS heap 22.1 → 25.6 MB after GC (node objects, pruned); 20-min run in §12 | flat |
+| Memory over a long flight | flat | 20 min: 0 errors; JS heap after GC 22.5 → 25.1 MB, flat at 24–25 MB from minute 3 (LOD nodes pruned) | flat |
 
 ## 2. Module map and API
 
@@ -319,8 +319,9 @@ time, chunks, draw calls, FPS, CPU), `scripts/planet-test.cjs` (83 checks, in `c
 Chunks: 189–226 shown, 238–254 cached (5.4–5.8 MB); Worker build 2.9–3.1 ms avg / 9 ms max (unthrottled, ≈ ×4 on a phone); integration
 0.14–0.17 ms avg; selection 1.2–1.3 ms avg / 6.4 ms max; whole-page JS heap 22–30 MB. Runs made while other agents loaded the machine showed
 3–42 frames > 50 ms in the running stage; quiet runs show none. **PC** (1280 × 720, high, `PC=1`): 0.3–1.3 ms CPU, 21 → 66 → 122–140 draw calls.
-**Soak** (`soak 10`: orbit → descent → landing → running → time ×300 → orbit at 8 places, ×4 CPU, run twice): 0 errors, 0 console warnings,
-≈ 6 250 chunks built, 25 rebases, JS heap after GC 22.1 → 25.6 MB (LOD node objects; the node count is pruned and oscillates 2 600–4 000).
+**Soak** (`soak 20`: orbit → descent → landing → running → time ×300 → orbit at 8 places around the planet, ×4 CPU; final code): 20 minutes,
+0 errors, 0 console warnings, 12 470 chunks built, 51 region rebases, chunk cache 238–256, JS heap after GC 22.5 → 25.1 MB and flat at 24–25 MB
+from minute 3 (LOD node objects are pruned; their count oscillates 2 700–4 000). Two earlier 10-minute runs: the same picture.
 **Reopen** ×20: the Worker is gone after each close, no errors, heap after GC plateaus at 40–50 MB (site caches).
 Screenshots: `E:\claude-tmp\t051\shots` (`1-orbit` … `7-time`, `phone-*`), SwiftShader — `shots-ss`.
 
