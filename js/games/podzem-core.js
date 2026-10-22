@@ -283,8 +283,11 @@ function PZ_CORE(){
   // Биомы: 0 лес, 1 пустыня, 2 снег, 3 джунгли. Рядом со стартом (|x| < 220) — всегда лес.
   const B = { FOREST: 0, DESERT: 1, SNOW: 2, JUNGLE: 3 };
   const BIOME_NAMES = ['Лес', 'Пустыня', 'Снега', 'Джунгли'];
-  function makeGen(seed){
+  // o.trees (T-022b, новые миры) — деревья пород движка деревьев (js/engine/trees.js: ствол 2×2 у корня, сучья, крона облаками,
+  // ели — ярусами), сбоку (TR.cells2d); нет — как раньше. В поток модуль деревьев приходит текстом перед ядром (workerSource)
+  function makeGen(seed, o = {}){
     const S = (seed >>> 0) || 1;
+    const TRS = (typeof self !== 'undefined' ? self : globalThis).D37E?.trees, T3 = !!o.trees && !!TRS?.cells2d;
     const cols = new Map();
     function colInfo(x){
       let c = cols.get(x);
@@ -425,7 +428,8 @@ function PZ_CORE(){
     const solidBase = (x, y) => { const f = base(x, y) & 255; return f !== 0 && P.SOLID[f] === 1; };
 
     // ── Деревья: в ячейке из 7 колонок не больше одного; лес, джунгли, ели, кактусы ──
-    function treeOf(k){
+    function treeOf(k){ return T3 ? treeOf3(k) : treeOf0(k); }
+    function treeOf0(k){
       const r = hash2(k, 11, S + 60), xc = k * 7 + 1 + (r & 3);
       if (xc > -5 && xc < 5) return null;
       const C = colInfo(xc), b = C.b;
@@ -438,8 +442,37 @@ function PZ_CORE(){
       const H = kind === 'cactus' ? 3 + (r >>> 18 & 3) : kind === 'jungle' ? 11 + (r >>> 18 & 7) : kind === 'pine' ? 8 + (r >>> 18 & 5) : 6 + (r >>> 18 & 5);
       return { xc, y0: C.h - 1, H, kind, r };
     }
+    // деревья пород (T-022b): то же место и та же «жеребьёвка», что у прежних (treeOf0), порода — по биому, форма — по зерну места;
+    // клетки сбоку — один раз на дерево (кэш до 2000)
+    const tcache = new Map();
+    function treeOf3(k){
+      if (tcache.has(k)) return tcache.get(k);
+      const tr = treeOf0(k);
+      let out = tr;
+      if (tr && tr.kind !== 'cactus') {
+        const b = colInfo(tr.xc).b, u = (tr.r >>> 12) & 63;
+        const sp = b === B.JUNGLE ? (u < 6 ? 'oak' : 'tropical') : b === B.SNOW ? (u < 2 ? 'giant_spruce' : u < 5 ? 'dead' : u < 26 ? 'pine' : 'spruce') : (u < 2 ? 'giant_oak' : u < 5 ? 'dead' : u < 22 ? 'birch' : 'oak');
+        const c = TRS.cells2d(TRS.grow(sp, hash2(tr.xc, 61, S + 62), {}), { style: 'side' });
+        let top = 0; for (let i = 0; i < c.n; i++) if (c.y[i] > top) top = c.y[i];
+        out = { xc: tr.xc, y0: tr.y0, H: top + 2, kind: sp, r: tr.r, cells: c, leaf: /spruce|pine/.test(sp) ? T.PLEAVES : sp === 'tropical' ? T.JLEAVES : T.LEAVES };
+      }
+      if (tcache.size >= 2000) tcache.delete(tcache.keys().next().value);
+      tcache.set(k, out);
+      return out;
+    }
+    // дерево, которому принадлежит клетка (x, y) ствола или ветки (рубка: падает всё выше среза), или null
+    function treeAt(x, y){
+      if (!T3) return null;
+      for (let k = Math.floor((x - 16) / 7); k <= Math.floor((x + 16) / 7); k++) {
+        const tr = treeOf(k); if (!tr || !tr.cells) continue;
+        const c = tr.cells;
+        for (let i = 0; i < c.n; i++) if (c.t[i] !== 0 && tr.xc + c.x[i] === x && tr.y0 - c.y[i] === y) return tr;
+      }
+      return null;
+    }
     // клетки дерева: cb(x, y, fg)
     function treeCells(tr, cb){
+      if (tr.cells) { const c = tr.cells; for (let i = 0; i < c.n; i++) cb(tr.xc + c.x[i], tr.y0 - c.y[i], c.t[i] === 0 ? tr.leaf : T.TRUNK); return; }   // деревья пород
       const { xc, y0, H, kind, r } = tr, top = y0 - H + 1;
       if (kind === 'cactus') {
         for (let y = y0; y >= top; y--) cb(xc, y, T.CACTUS);
@@ -493,12 +526,12 @@ function PZ_CORE(){
       const fgAt = (x, y) => { const lx = x - x0, ly = y - y0; return lx >= 0 && lx < CS && ly >= 0 && ly < CS ? fg[ly << CB | lx] : base(x, y) & 255; };
       const put = (x, y, f, s) => { const lx = x - x0, ly = y - y0; if (lx < 0 || lx >= CS || ly < 0 || ly >= CS) return; const i = ly << CB | lx; if (fg[i] || lq[i]) return; fg[i] = f; st[i] = s || 0; };
       // 2. деревья (из соседних колонок — тоже: крона заходит в чанк)
-      const k0 = Math.floor((x0 - 6) / 7), k1 = Math.floor((x0 + CS + 6) / 7);
+      const TW = T3 ? 16 : 6, k0 = Math.floor((x0 - TW) / 7), k1 = Math.floor((x0 + CS + TW) / 7);   // деревья пород шире (до 15 клеток от ствола)
       const treeCol = new Set();
       for (let k = k0; k <= k1; k++) {
         const tr = treeOf(k); if (!tr) continue;
         if (tr.y0 + 4 < y0 || tr.y0 - tr.H - 8 > y0 + CM) continue;
-        treeCol.add(tr.xc);
+        treeCol.add(tr.xc); if (tr.cells) treeCol.add(tr.xc - 1);
         treeCells(tr, (x, y, f) => put(x, y, f));
       }
       // 3. украшения: трава и цветы на поверхности, грибы, светогрибы, кристаллы, горшки
@@ -561,7 +594,7 @@ function PZ_CORE(){
       }
       return { x: 0, y: colInfo(0).h - 1 };
     }
-    return { seed: S, colInfo, base, caveAt, treeOf, treeCells, genChunk, spawnPoint, basin, biomeName: x => BIOME_NAMES[colInfo(x).b] };
+    return { seed: S, trees: T3, colInfo, base, caveAt, treeOf, treeCells, treeAt, genChunk, spawnPoint, basin, biomeName: x => BIOME_NAMES[colInfo(x).b] };
   }
 
   // ═══ Свет: заливка «по максимуму» (8 соседей), RGB от источников + S от неба — как режим «Цвет» у Террарии ═══
@@ -759,7 +792,7 @@ function PZ_CORE(){
     self.onmessage = e => {
       const d = e.data || {};
       try {
-        if (d.t === 'init') { G = makeGen(d.seed); chunks.clear(); tops.clear(); if (d.props) applyProps(d.props); if (d.feats) setFeats(d.feats); post({ t: 'ready' }); }
+        if (d.t === 'init') { G = makeGen(d.seed, { trees: d.trees }); chunks.clear(); tops.clear(); if (d.props) applyProps(d.props); if (d.feats) setFeats(d.feats); post({ t: 'ready' }); }
         else if (d.t === 'props') { applyProps(d.props); if (d.feats) setFeats(d.feats); }
         else if (d.t === 'load') load(d);
         else if (d.t === 'drop') { chunks.delete(key(d.cx, d.cy)); for (let i = 0; i < CS; i++) tops.delete(d.cx * CS + i); }
@@ -1090,7 +1123,8 @@ function PZ_CORE(){
   }
 
   // Исходник для потока: эта функция целиком + запуск worldWorker
-  function workerSource(){ return '(' + PZ_CORE.toString() + ')().worldWorker(self);'; }
+  // + движок деревьев (T-022b) текстом впереди — деревья пород считаются в потоке так же, как в окне
+  function workerSource(){ const tr = typeof window !== 'undefined' && window.D37E && window.D37E.trees && window.D37E.trees.src || ''; return tr + '\n(' + PZ_CORE.toString() + ')().worldWorker(self);'; }
 
   return {
     CS, CB, CM, CA, SURF, SKY_LIMIT, MOD_ID0, LR, LCUT, LMUL, LMULD, LDEEP, LDEEPD, key,

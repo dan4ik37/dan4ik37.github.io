@@ -19,7 +19,8 @@
 // TR.cells2d(S) → { n, x, y, t } — дерево сбоку (2D-миры: «Подземье»): проекция скелета на плоскость x-y.
 // TR.cut(part, y) — часть сетки выше среза (падающий верх дерева, destruct.js); TR.source(префикс, f) / TR.lookup(id) — кто
 // рисует дерево с этим id (3D-мир отдаёт разрушениям сетку и место своего дерева).
-(() => {
+// TR.src — текст этого модуля: поток, собранный из строки (поток «Подземья»), выполняет его перед своим кодом.
+(function d37Trees(){
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
   const TR = E.trees = E.trees || {};
@@ -355,13 +356,21 @@
   TR.dda = dda;
 
   // ═══ Сбоку (2D): клетки дерева на плоскости x-y (y вверх) — ствол, ветви, крона; z скелета не смотрим ═══
+  // o.style 'side' — как в играх сбоку (Террария): ствол — один прямой столбец (плитка коры узкая: ступенька выглядела бы
+  // разрывом), сучья — листвой (у сухого — без сучьев: голые ветки плиткой коры — «висящие обрубки»), без корней, крона крупнее
+  // (o.blobK, по умолчанию 1,25): картинка «плитками» без своих плиток для толстых стволов и веток
   TR.cells2d = (S, o = {}) => {
-    const out = new Map(), key = (x, y) => x * 4096 + y;
+    const out = new Map(), key = (x, y) => x * 4096 + y, side = o.style === 'side', bk = side ? o.blobK ?? 1.25 : 1, bare = S.form === 'dead';
     const put = (x, y, t) => { if (x < -LIM || x > LIM) return; const k = key(x, y), c = out.get(k); if (c === undefined || PRI[c] < PRI[t]) out.set(k, t); };
-    const segs = S.segs, off = S.R0 >= .7 && S.R0 < 1.05 ? 0 : .5;
+    const segs = S.segs, off = side || !(S.R0 >= .7 && S.R0 < 1.05) ? .5 : 0, tcol = floor((segs[0] || 0) + off);
     for (let s = 0; s < segs.length; s += 11) {
       const ax = segs[s] + off, ay = segs[s + 1], bx = segs[s + 3] + off, by = segs[s + 4], ra = segs[s + 6], rb = segs[s + 7], kind = segs[s + 9], depth = segs[s + 8];
-      if (kind === 2 && o.roots === false) continue;
+      if (kind === 2 && (o.roots === false || side)) continue;
+      if (side && kind === 1) {   // сук — листвой вдоль (крона связна со стволом); у сухого и ели — нет
+        if (!bare && S.form !== 'cone') { const n = depth >= 2 ? 1 : 0; dda(ax, ay, .5, bx, by, .5, (x, y) => { put(x, y, 0); if (n) put(x, y + 1, 0); }); }
+        continue;
+      }
+      if (side) { dda(ax, ay, .5, bx, by, .5, (x, y) => put(tcol, y, 2)); continue; }   // ствол — один столбец (без «лесенки»)
       const t = kind === 2 ? 3 : depth >= 2 && (ra + rb) * .5 < .2 ? 1 : 2, rmax = ra > rb ? ra : rb;
       if (rmax >= .62) {
         const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
@@ -375,7 +384,7 @@
     }
     const bl = S.blobs, sd = S.seed;
     for (let b = 0; b < bl.length; b += 8) {
-      const cx = bl[b] + off, cy = bl[b + 1], rx = bl[b + 3], ry = bl[b + 4], kind = bl[b + 6];
+      const cx = bl[b] + off, cy = bl[b + 1], rx = bl[b + 3] * bk, ry = bl[b + 4] * bk, kind = bl[b + 6];
       if (kind === 2) { for (let y = floor(cy); y <= floor(cy + ry); y++) { const f = (y + .5 - cy) / ry; if (f < 0 || f > 1) continue; const R = rx * (1 - f) + .35; for (let x = floor(cx - R); x <= floor(cx + R); x++) put(x, y, 0); } continue; }
       for (let x = floor(cx - rx - .5); x <= floor(cx + rx + .5); x++) for (let y = floor(cy - ry - .5); y <= floor(cy + ry + .5); y++) {
         const px = (x + .5 - cx) / rx, py = (y + .5 - cy) / ry, n = (hash(x, y, 7, sd ^ 0x51) & 1023) / 1023 - .5;
@@ -545,4 +554,5 @@
   const SRC = new Map();
   TR.source = (prefix, f) => { if (f) SRC.set(prefix, f); else SRC.delete(prefix); return () => { if (SRC.get(prefix) === f) SRC.delete(prefix); }; };
   TR.lookup = id => { if (typeof id !== 'string') return null; const k = id.indexOf(':'); const f = k > 0 ? SRC.get(id.slice(0, k)) : null; try { return f ? f(id) : null; } catch (e) { return null; } };
+  TR.src = '(' + d37Trees + ')();';
 })();

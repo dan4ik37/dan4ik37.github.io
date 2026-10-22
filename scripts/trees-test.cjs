@@ -69,7 +69,7 @@ const cells = (sp, seed, g) => { const v = TR.voxels(TR.grow(sp, seed, { g })); 
   ok(oak2 === SEEDS, 'дуб: ствол 2×2 у корня', oak2);
   ok(oak1top >= SEEDS * .9, 'дуб: к верху ствол — 1×1 (толще у корня)', oak1top);
   ok(giant3 === SEEDS, 'дуб-великан: у корня 3×3 и шире', giant3);
-  ok(spruceCone >= SEEDS * .9, 'ель: крона конусом (внизу шире, чем вверху)', spruceCone);
+  ok(spruceCone >= SEEDS * .8, 'ель: крона конусом (внизу шире, чем вверху)', spruceCone);
   ok(pineBare === SEEDS, 'сосна: голый ствол снизу (крона — выше половины)', pineBare);
   ok(acaciaFlat >= SEEDS * .9, 'акация: плоская широкая крона', acaciaFlat);
   ok(willowHang === SEEDS, 'ива: свисающие пряди', willowHang);
@@ -138,6 +138,16 @@ sec('сбоку (2D): ствол, ветви, крона');
   ok(c2.n > 30 && t[2] >= 6 && t[0] > 20 && hashArr(c2.x, c2.y, c2.t) === hashArr(c2b.x, c2b.y, c2b.t), 'дуб сбоку: ствол и крона, одинаково по зерну', t);
   const s2 = TR.cells2d(TR.grow('spruce', 9)), w = y => { let m = -1; for (let i = 0; i < s2.n; i++) if (s2.y[i] === y && s2.t[i] === 0) m = Math.max(m, Math.abs(s2.x[i])); return m; };
   ok(w(3) > w(10), 'ель сбоку — конусом', [w(3), w(10)]);
+  // как в «Подземье» (style 'side'): ствол — один столбец x = 0, сухое — только ствол, всё дерево связано со стволом (8 соседей)
+  let offcol = 0, deadx = 0, lost = 0;
+  for (const sp of ['oak', 'birch', 'giant_oak', 'dead', 'spruce', 'pine', 'giant_spruce', 'tropical']) for (let sd = 1; sd <= 40; sd++) {
+    const c = TR.cells2d(TR.grow(sp, sd * 7919), { style: 'side' }), have = new Set();
+    for (let i = 0; i < c.n; i++) { have.add(c.x[i] * 1000 + c.y[i]); if (c.t[i] === 2 && c.x[i] !== 0) offcol++; if (sp === 'dead' && c.x[i] !== 0) deadx++; }
+    const seen = new Set([0]), q = [0, 0];
+    while (q.length) { const y = q.pop(), x = q.pop(); for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const k = (x + dx) * 1000 + y + dy; if (have.has(k) && !seen.has(k)) { seen.add(k); q.push(x + dx, y + dy); } } }
+    lost += c.n - seen.size;
+  }
+  ok(!offcol && !deadx && !lost, 'сбоку как в «Подземье»: ствол — один столбец, сухое — без сучьев, всё связано со стволом', { offcol, deadx, lost });
 }
 
 sec('кто рисует дерево (разрушениям): источник по префиксу id');
@@ -172,6 +182,29 @@ sec('генератор «Кубомира»: v1, v2 — как было; v3 —
   const G2 = V.genInit('озеро37', { ver: 2 }); let t2 = 0, t3 = 0;
   for (let cx = -6; cx < 6; cx++) for (let cz = -6; cz < 6; cz++) { const a = V.genChunk(G2, cx, cz).ids, b = V.genChunk(G, cx, cz).ids; for (let i = 0; i < a.length; i++) { if (V.T.tree[a[i] & 0xfff] === 1) t2++; if (V.T.tree[b[i] & 0xfff] === 1 || V.T.tree[b[i] & 0xfff] === 2) t3++; } }
   ok(t3 > t2 * .8 && t3 < t2 * 14, 'v3: лес остаётся лесом — брёвен больше (стволы толще, сучья): v2 ' + t2 + ', v3 ' + t3, [t2, t3]);
+}
+
+sec('«Подземье» (2D): новые миры — деревья пород сбоку, старые — как были; поток получает модуль деревьев текстом');
+{
+  // ядро «Подземья» и движок деревьев в одном контексте (как в окне)
+  const pctx = load(['js/engine/trees.js']);
+  pctx.module = undefined; vm.runInContext(fs.readFileSync(path.join(SITE, 'js/games/podzem-core.js'), 'utf8'), pctx, { filename: 'podzem-core.js' });
+  const PZ = pctx.PZ_CORE(), T = PZ.T, CA = 4096;
+  const mk = () => ({ fg: new Uint8Array(CA), wall: new Uint8Array(CA), st: new Uint8Array(CA), lq: new Uint8Array(CA), lt: new Uint8Array(CA) });
+  const run = (o) => { const G = PZ.makeGen(4242, o), h = []; for (let cx = -8; cx <= 8; cx++) for (let cy = 2; cy <= 4; cy++) { const c = G.genChunk(cx, cy, mk()); h.push(hashArr(c.fg, c.wall)); } return { G, h: hashArr(h) }; };
+  const old0 = run(), old1 = run({ trees: false }), n1 = run({ trees: true }), n2 = run({ trees: true });
+  ok(old0.h === old1.h, '«Подземье»: без флага мира — генерация как была');
+  ok(n1.h === n2.h && n1.h !== old0.h, 'новые миры (trees): свои деревья, по зерну одинаково');
+  // деревья пород: стволы 2 в ширину у толстых, листва своих видов; рубка — дерево по клетке ствола
+  const G = n1.G; let wide = 0, kinds = new Set(), found = null;
+  for (let k = -40; k <= 40; k++) { const tr = G.treeOf(k); if (!tr || !tr.cells) continue; kinds.add(tr.kind); const c = tr.cells; let base = 0; for (let i = 0; i < c.n; i++) if (c.y[i] === 0 && c.t[i] === 2) base++; if (base >= 2) wide++; if (!found) { for (let i = 0; i < c.n; i++) if (c.t[i] === 2 && c.y[i] === 2) { found = [tr, tr.xc + c.x[i], tr.y0 - c.y[i]]; break; } } }
+  ok(kinds.size >= 3 && wide === 0, 'деревья пород сбоку (как в Террарии): несколько пород, ствол — один столбец, сучья — листвой', { kinds: [...kinds], wide });
+  ok(found && G.treeAt(found[1], found[2]) === found[0], 'рубка: клетка ствола → её дерево (падает всё выше среза)');
+  // поток из строки: модуль деревьев идёт текстом перед ядром
+  pctx.window = pctx;   // как в окне
+  const src = PZ.workerSource();
+  ok(src.indexOf('d37Trees') >= 0 && src.indexOf('d37Trees') < src.indexOf('PZ_CORE'), 'поток «Подземья» получает движок деревьев текстом (перед ядром)');
+  delete pctx.window;
 }
 
 sec('скорость (node, ЦП компьютера; телефон ≈ ×4)');

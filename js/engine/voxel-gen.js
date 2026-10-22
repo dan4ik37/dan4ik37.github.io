@@ -242,7 +242,7 @@
   }
   // ── v3: порода по биому и климату (и по своему хешу места — числа r() те же, что у v1/v2: озёра и фичи модов не съезжают);
   //    в лесу реже, чем у v2 (кроны шире), большие — не впритык к соседям в этом чанке; каждое седьмое — молодое (g < 1) ──
-  const TREE_P3 = [0, 0, .07, .56, .5, 0, .24, .12, .3, 0];
+  const TREE_P3 = [0, 0, .07, .56, .5, 0, .17, .1, .3, 0];   // ели и сосны v3 крупнее — их реже
   const SPACE = { giant_oak: 5.5, giant_spruce: 3.5, tropical: 3, acacia: 2.6, oak: 2.2, willow: 2.2 };
   function pick3(G, c, kind, x, z, out){
     const b = c.b, T = c.T, u = V.hash(G.seed, x, z, 919) / 4294967296, w = V.hash(G.seed, x, z, 920) / 4294967296;
@@ -250,7 +250,7 @@
     const warm = T > .18, cold = 1 - kind < ss(-.27, -.4, T), r = (u * 7919) % 1;
     let sp;
     if (b === BI.mountains) sp = r < .45 ? 'pine' : 'spruce';
-    else if (b === BI.snow || cold) sp = r < .045 ? 'giant_spruce' : r < .09 ? 'dead' : r < .38 ? 'pine' : 'spruce';
+    else if (b === BI.snow || cold) sp = r < .03 ? 'giant_spruce' : r < .075 ? 'dead' : r < .4 ? 'pine' : 'spruce';
     else if (b === BI.swamp) sp = r < .55 ? 'willow' : r < .82 ? 'oak' : 'dead';
     else if (b === BI.birch) sp = r < .04 ? 'dead' : r < .14 ? 'oak' : 'birch';
     else if (b === BI.forest) sp = warm ? (r < .62 ? 'tropical' : r < .84 ? 'oak' : 'acacia') : r < .035 ? 'giant_oak' : r < .07 ? 'dead' : r < .3 ? 'birch' : 'oak';

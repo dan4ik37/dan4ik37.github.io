@@ -9,7 +9,9 @@
 //   mir-shots  — «Мир Денчика»: лес у озера, боевая зона (танк валит дерево — снимок), снимки
 //   mir-perf   — «Мир Денчика» в профиле телефона: лес — ЦП, FPS, вызовы отрисовки, треугольники, память; пролёт над лесом
 //   mir-tank   — «Мир Денчика»: удар по дереву в боевой зоне — ствол ломается по месту удара (пень, падает верх), обломки, назад
-//   studio     — «Студия 3D»: «🌳 Деревья» в ➕ Деталь, все породы — вставить, снимок; 20 раз новый мир — память
+//   studio     — «Студия 3D»: «🌳 Деревья» в ➕ Деталь, все породы — вставить, снимок
+//   pz-shots   — «Подземье», новый мир: деревья пород сбоку (лес, снега, джунгли) — снимки; срубил низ — падает всё дерево
+//   pz-perf    — «Подземье» в профиле телефона (ЦП ×4): лес — ЦП кадра, FPS
 //   SITE_DIR=папка — снимать другую копию сайта («до»: выгрузка прошлого коммита). TR_PHONE=1 — профиль телефона и для снимков.
 // Снимки — <D37_TMP или E:\claude-tmp>\t022b\shots\<метка>-<режим>-*.jpg; числа — в конце вывода (JSON)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
@@ -68,9 +70,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     if (MODE.startsWith('kb')) await kubomir();
     else if (MODE.startsWith('mir')) await mir();
     else if (MODE === 'studio') await studio();
+    else if (MODE.startsWith('pz')) await podzem();
   } catch (e) { if (e.message !== '__готово') { console.log('ОШИБКА', e.message); fail++; } }
   finally {
-    const bad = logs.filter(l => /exception|TypeError|ReferenceError|RangeError|Shader Error|WebGLProgram/i.test(l) && !/X3595|favicon|ERR_|net::/.test(l));
+    const bad = logs.filter(l => /exception|TypeError|ReferenceError|RangeError|Shader Error|WebGLProgram/i.test(l) && !/X3595|favicon|ERR_|net::|adsbygoogle|googlesyndication|doubleclick/.test(l));
     res.errors = bad.slice(0, 12); res.logs = logs.length;
     if (bad.length) { console.log('ОШИБКИ В КОНСОЛИ:'); for (const l of bad.slice(0, 12)) console.log('  ', l); }
     console.log('ИТОГ', JSON.stringify(res));
@@ -99,7 +102,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     const ax = ${x} + .5 - Math.cos(${a}) * ${d}, az = ${z} + .5 - Math.sin(${a}) * ${d};
     GAME_IMPL.kubomir._test.command('/tp ' + ax.toFixed(1) + ' ' + (${y} + ${h}) + ' ' + az.toFixed(1));
     for (let i = 0; i < 80 && !S.ready; i++) await new Promise(r => setTimeout(r, 300));
-    P.fly = true; P.vx = P.vy = P.vz = 0;
+    P.fly = true; Object.assign(P, { x: ax, y: ${y} + ${h}, z: az, vx: 0, vy: 0, vz: 0 });   // ровно туда же (замеры «до/после» — один вид)
     const dx = ${x} + .5 - P.x, dz = ${z} + .5 - P.z; S.rig.yaw = Math.atan2(-dx, -dz); S.rig.fp = Math.atan2(P.y + 1.62 - (${y} + ${c}), Math.sqrt(dx * dx + dz * dz)); S.rig.pitch = S.rig.fp;
     S.R.lighting.time = 10.5; S.paused = true; GAME_IMPL.kubomir._test.hud(false);
     return { x: P.x, y: P.y, z: P.z }; })()`, 120000); }
@@ -110,9 +113,12 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       await ev(`(async () => { for (const f of ['js/engine/voxel.js', 'js/engine/trees.js', 'js/engine/voxel-gen.js']) { const r = await fetch(f, { cache: 'reload' }); if (!r.ok) continue; (0, eval)(await r.text()); } return !!D37E.vox.genChunk; })()`);
       await send('Emulation.setCPUThrottlingRate', { rate: 4 });
       res.genPhone = await ev(`(() => { const V = D37E.vox, out = {};
-        for (const ver of [2, 3]) { if (ver === 3 && !D37E.trees) continue; const G = V.genInit('озеро37', { ver }); V.genChunk(G, 40, 40); const t = performance.now(); let n = 0;
-          for (let cx = -9; cx < -1; cx++) for (let cz = -5; cz < 3; cz++) { V.genChunk(G, cx, cz); n++; } out['v' + ver] = +((performance.now() - t) / n).toFixed(2); }
-        return out; })()`, 600000);
+        const one = ver => { const G = V.genInit('озеро37', { ver }); V.genChunk(G, 40, 40); const t = performance.now(); let n = 0;
+          for (let cx = -12; cx < 0; cx++) for (let cz = -6; cz < 4; cz++) { V.genChunk(G, cx, cz); n++; } return (performance.now() - t) / n; };
+        const R = { v2: [], v3: [] };
+        for (let k = 0; k < 3; k++) for (const ver of [2, 3]) { if (ver === 3 && !D37E.trees) continue; R['v' + ver].push(one(ver)); }
+        for (const k in R) if (R[k].length) { R[k].sort((a, b) => a - b); out[k] = +R[k][1].toFixed(2); }
+        return out; })()`, 900000);
       console.log('ГЕНЕРАЦИЯ ЧАНКА (ЦП ×4), мс:', JSON.stringify(res.genPhone));
       await send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
@@ -166,21 +172,21 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     }
     if (MODE === 'kb-perf') {
       await send('Emulation.setCPUThrottlingRate', { rate: 4 });
-      const spots = [['лес (великан, дубы)', -143, 53, -59, 16, 3], ['ели', -128, 56, 115, 14, 3], ['равнина (дуб, акация)', 27, 60, 0, 12, 3]];
+      const spots = [['лес (сверху)', -143, 53, -59, 34, 26, 4], ['лес (в лесу)', -150, 53, -50, 6, 2, 3], ['ели (сверху)', -128, 56, 115, 34, 24, 4], ['равнина (дуб, акация)', 27, 60, 0, 20, 7, 4]];
       res.perf = {};
-      for (const [name, x, y, z, d, h] of spots) {
-        await lookAt(x, y, z, d, h);
+      for (const [name, x, y, z, d, h, c] of spots) {
+        await lookAt(x, y, z, d, h, .6, c);
         await send('Emulation.setCPUThrottlingRate', { rate: 1 }); await idle(); await send('Emulation.setCPUThrottlingRate', { rate: 4 });
         await sleep(4000);
         const r = await ev(`(async () => {
           const S = GAME_IMPL.kubomir._test.state(); S.paused = false;
-          const cpu = [], dts = []; let run = true;
+          const cpu = [], dts = []; let run = true; const st0 = { ...S.ST.stats }, bare0 = S.ST.bare;
           const tick = () => { if (!run) return; const st = S.R.stats; cpu.push(st.cpuFrame); dts.push(st.dt); requestAnimationFrame(tick); };
           requestAnimationFrame(tick);
           await new Promise(r => setTimeout(r, 12000)); run = false;
           cpu.sort((a, b) => a - b);
           const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length), info = S.R.r.info;
-          return { frames: cpu.length, cpu: +avg(cpu).toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: S.R.stats.calls, tris: info.render.triangles, q: S.R.q, chunks: S.W.chunks.size };
+          const s1 = S.ST.stats; return { frames: cpu.length, cpu: +avg(cpu).toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: S.R.stats.calls, tris: info.render.triangles, q: S.R.q, chunks: S.W.chunks.size, meshesDuring: s1.mesh - st0.mesh, genDuring: s1.gen - st0.gen, bare: [bare0, S.ST.bare], season: S.WX?.clim?.state?.season };
         })()`, 90000);
         res.perf[name] = r; console.log('ЗАМЕР', name, JSON.stringify(r));
       }
@@ -302,6 +308,52 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       await sleep(2200); await shot('mir-tree-hit-2');
       res.tank2 = await ev(`GAME_IMPL.world._test.state().zones.destruct.stats()`);
       ok(r.n >= 1, 'удар валит дерево', r);
+      return;
+    }
+  }
+
+  // ═══ «Подземье» ═══
+  async function podzem(){
+    await send('Page.navigate', { url: BASE + '/#/games/podzem' });
+    let up = false; for (let i = 0; i < 160 && !up; i++) { await sleep(250); up = await ev(`!!(window.GAME_IMPL?.podzem?._test?.G)`, 3000).catch(() => false); }
+    ok(up, '«Подземье» загрузилось');
+    if (!up) throw new Error('не загрузилось');
+    res.open = await ev(`(async () => { const A = GAME_IMPL.podzem.api, T = GAME_IMPL.podzem._test;
+      const w = A.newWorldRecord('Лес', 'лес37', [], ''), c = A.newCharRecord('Герой'); await A.put('worlds', w); await A.put('chars', c);
+      await A.play(w.id, c.id);
+      for (let i = 0; i < 200 && T.G.state !== 'play'; i++) await new Promise(r => setTimeout(r, 100));
+      T.god(true); T.G.U?.menu?.(null); T.time(.3);
+      return { state: T.G.state, trees: w.trees || 0, gen: !!T.G.gen?.trees }; })()`, 120000);
+    ok(res.open?.state === 'play' && res.open.gen, 'новый мир «Подземья» — деревья пород', res.open);
+    // деревья у старта и дальше (снега — x < 0 далеко, джунгли — далеко вправо): по одному каждой породы
+    const spots = await ev(`(() => { const G = GAME_IMPL.podzem._test.G, out = {}; for (let q = 0; q <= 1000; q++) { const k = q & 1 ? -((q + 1) >> 1) : q >> 1, tr = G.gen.treeOf(k); if (tr && tr.cells && !out[tr.kind]) out[tr.kind] = [tr.xc, tr.y0]; } return out; })()`);
+    res.spots = spots; console.log('породы', JSON.stringify(spots));
+    if (MODE === 'pz-shots') {
+      for (const [sp, [x, y]] of Object.entries(spots).slice(0, 8)) {
+        await ev(`(async () => { const T = GAME_IMPL.podzem._test; T.tp(${x} - 8, ${y} - 2); await new Promise(r => setTimeout(r, 2500)); return 1; })()`, 30000);
+        await shot('pz-' + sp);
+      }
+      // рубка: низ ствола — всё дерево выше среза падает (клетки ствола, сучья, листва)
+      const fell = await ev(`(async () => { const T = GAME_IMPL.podzem._test, G = T.G, PZ = window.PZ, [x, y] = ${JSON.stringify(spots.oak || Object.values(spots)[0])};
+        T.tp(x - 6, y - 1); await new Promise(r => setTimeout(r, 2000));
+        const tr = G.gen.treeOf(Math.floor((x - 1) / 7)) && G.gen.treeAt(x, y) || G.gen.treeAt(x, y), c = tr.cells; let before = 0, after = 0;
+        const own = () => { let n = 0; for (let i = 0; i < c.n; i++) { const f = T.fgAt(tr.xc + c.x[i], tr.y0 - c.y[i]); if (f === (c.t[i] === 0 ? tr.leaf : PZ.T.TRUNK)) n++; } return n; };
+        before = own(); T.breakTile(x, y); await new Promise(r => setTimeout(r, 600)); after = own();
+        return { before, after }; })()`, 60000);
+      res.fell = fell; console.log('рубка', JSON.stringify(fell));
+      ok(fell.before > 20 && fell.after < fell.before * .2, 'срубил низ — дерево упало целиком', fell);
+      await shot('pz-felled');
+      return;
+    }
+    if (MODE === 'pz-perf') {
+      const [x, y] = spots.oak || Object.values(spots)[0];
+      await ev(`(async () => { const T = GAME_IMPL.podzem._test; T.tp(${x}, ${y} - 2); await new Promise(r => setTimeout(r, 3000)); return 1; })()`, 30000);
+      await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      await sleep(3000);
+      const r = await ev(`(async () => { const T = GAME_IMPL.podzem._test, G = T.G; G.perf.frames.length = 0; G.perf.cpu.length = 0; await new Promise(r => setTimeout(r, 10000)); const p = T.perf(), avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
+        return { frames: p.frames.length, cpu: +avg(p.cpu).toFixed(3), fps: +(1000 / avg(p.frames)).toFixed(1) }; })()`, 60000);
+      await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      res.perf = { лес: r }; console.log('ЗАМЕР', JSON.stringify(r));
       return;
     }
   }
