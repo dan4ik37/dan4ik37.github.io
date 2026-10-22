@@ -472,10 +472,10 @@ drop trigger if exists trg_season_on_daily_quest on public.xp_ledger;
 create trigger trg_season_on_daily_quest after insert on public.xp_ledger
   for each row when (new.source = 'daily') execute function public.season_on_daily_quest();
 
--- Витрина сезона: номер, даты, тема, ⭐, до какого уровня забрано, незабранное в прошлых сезонах, мои титулы и рамки
-create or replace function public.season_state() returns jsonb
+-- Витрина сезона: номер, даты, тема, ⭐, до какого уровня забрано, незабранное в прошлых сезонах, мои титулы и рамки (p_day — день МСК)
+create or replace function public.season_state_at(p_uid uuid, p_day date) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare uid uuid := auth.uid(); d date := (now() at time zone 'Europe/Moscow')::date; n int := public.season_no(d);
+declare uid uuid := p_uid; d date := p_day; n int := public.season_no(d);
   r public.season_progress%rowtype; per int := public.quest_rule('s_lv'); v_top int := public.quest_rule('s_levels');
   prev jsonb := '[]'::jsonb; owned jsonb := '[]'::jsonb; fr text; tt text;
 begin
@@ -497,13 +497,20 @@ begin
     'wins_today', case when r.day = d then r.day_wins else 0 end, 'per', per, 'levels', v_top,
     'prev', prev, 'owned', owned, 'frame', fr, 'title', tt, 'paid', public.season_paid_on());
 end $$;
+revoke execute on function public.season_state_at(uuid, date) from public, anon, authenticated;
+
+create or replace function public.season_state() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return public.season_state_at(auth.uid(), (now() at time zone 'Europe/Moscow')::date);
+end $$;
 grant execute on function public.season_state() to anon, authenticated;
 
 -- Забрать награды всех пройденных уровней сезона (по умолчанию — текущего; прошлые — до 12 сезонов назад). Каждая — один раз
--- (claimed под блокировкой строки); вещь или рамка уже есть — вместо неё s_dup 🪙
-create or replace function public.season_claim(p_no int default null) returns jsonb
+-- (claimed под блокировкой строки); вещь или рамка уже есть — вместо неё s_dup 🪙. p_day — день МСК (клиенту — season_claim ниже)
+create or replace function public.season_claim_at(p_uid uuid, p_no int, p_day date) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); cur int := public.season_no(); n int := coalesce(p_no, cur); r public.season_progress%rowtype;
+declare uid uuid := p_uid; cur int := public.season_no(p_day); n int := coalesce(p_no, cur); r public.season_progress%rowtype;
   per int := public.quest_rule('s_lv'); v_top int := public.quest_rule('s_levels'); dup int := public.quest_rule('s_dup');
   lv int; e jsonb; th jsonb; ym text; k int; c int; m int; total int := 0; got jsonb := '[]'::jsonb; one jsonb; it text; bal int;
 begin
@@ -549,6 +556,13 @@ begin
   end loop;
   update public.season_progress set claimed = lv, updated_at = now() where user_id = uid and season = n;
   return jsonb_build_object('ok', true, 'got', got, 'coins', total, 'claimed', lv, 'balance', bal);
+end $$;
+revoke execute on function public.season_claim_at(uuid, int, date) from public, anon, authenticated;
+
+create or replace function public.season_claim(p_no int default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  return public.season_claim_at(auth.uid(), p_no, (now() at time zone 'Europe/Moscow')::date);
 end $$;
 revoke execute on function public.season_claim(int) from public, anon;
 grant execute on function public.season_claim(int) to authenticated;
@@ -726,17 +740,24 @@ end $$;
 revoke execute on function public.advent_claim(int) from public, anon;
 grant execute on function public.advent_claim(int) to authenticated;
 
--- Для карточки: какие дни этого декабря уже забраны (и полной ли наградой), есть ли большая награда
-create or replace function public.advent_state() returns jsonb
+-- Для карточки: какие дни этого декабря уже забраны (и полной ли наградой), есть ли большая награда (p_today — день МСК)
+create or replace function public.advent_state_at(p_uid uuid, p_today date) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
-declare uid uuid := auth.uid(); y int := public.advent_year((now() at time zone 'Europe/Moscow')::date); days jsonb;
+declare y int := public.advent_year(p_today); days jsonb;
 begin
   if y is null then return jsonb_build_object('on', false); end if;
-  if uid is null then return jsonb_build_object('on', true, 'year', y, 'auth', false, 'need', public.quest_rule('a_big')); end if;
+  if p_uid is null then return jsonb_build_object('on', true, 'year', y, 'auth', false, 'need', public.quest_rule('a_big')); end if;
   select coalesce(jsonb_agg(jsonb_build_object('d', a.day, 'full', a.full_reward) order by a.day), '[]'::jsonb) into days
-    from public.advent_log a where a.user_id = uid and a.year = y and a.day > 0;
+    from public.advent_log a where a.user_id = p_uid and a.year = y and a.day > 0;
   return jsonb_build_object('on', true, 'year', y, 'auth', true, 'days', days, 'total', jsonb_array_length(days),
-    'big', exists (select 1 from public.advent_log a where a.user_id = uid and a.year = y and a.day = 0),
+    'big', exists (select 1 from public.advent_log a where a.user_id = p_uid and a.year = y and a.day = 0),
     'need', public.quest_rule('a_big'));
+end $$;
+revoke execute on function public.advent_state_at(uuid, date) from public, anon, authenticated;
+
+create or replace function public.advent_state() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return public.advent_state_at(auth.uid(), (now() at time zone 'Europe/Moscow')::date);
 end $$;
 grant execute on function public.advent_state() to anon, authenticated;
