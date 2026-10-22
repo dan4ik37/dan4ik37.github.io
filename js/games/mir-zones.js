@@ -1383,7 +1383,10 @@
     const BUD = R.q === 'low' || E?.isMobile?.() ? 3 : 3.5;
     rt.warm = warmer(R);
     function beginBuild(zs){
-      if (zs.it || zs.built || !zs.D?.build) return;
+      // одна постройка на зону: zs.grp есть — уже строится (любой этап: постройка, клетки, склейка, доделка) или построена.
+      // Раньше смотрели только zs.it: пока шли клетки/склейка/доделка, подгрузка (4 раза в секунду) начинала зону заново — на
+      // медленном кадре без конца, и каждая копия (сетки, тела, предметы, BRK) оставалась в памяти: +10 МБ/с (T-090)
+      if (zs.grp || zs.it || zs.built || !zs.D?.build) return;
       const grp = new T.Group(); grp.name = 'mz-' + zs.Z.id; grp.visible = false;   // в сцену — только при показе (setShown)
       zs.grp = grp; zs.K = kit(rt, zs, grp);
       zs.it = zs.D.build(zs.K);
