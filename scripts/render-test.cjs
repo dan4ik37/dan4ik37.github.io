@@ -533,6 +533,8 @@ function boundsOk(R){
   r = E.gfxResolve({ ...O().gfx, shadows: O().shadows }, { q: 'mid' });
   ok(r.fpsCap === 30 && r.res === 70 && r.prCap === 1, 'экономия батареи сильнее лимита 60', r);
   S.set('fpsCap', 'x'); ok(S.get('fpsCap') === '0', 'лимит FPS: неверное — без лимита');
+  ok(S.get('dof') === true && O().gfx.dof === true && E.gfxResolve({ ...O().gfx }, { q: 'high' }).dof === true, '«Глубина резкости» — включена по умолчанию (в «Ультра»)');
+  S.set('dof', false); ok(O().gfx.dof === false && E.gfxResolve({ ...O().gfx }, { q: 'high' }).dof === false && S.get('gfxPreset') === 'auto', '…выключил — движок без неё; пресет «Своим» не становится');
   S.reset();
   ok(O().gfx.preset === 'auto' && O().gfx.battery === false && S.get('gfx') === 'auto', '«Сбросить всё» — графика по умолчанию');
 }
@@ -997,7 +999,7 @@ function boundsOk(R){
   const bad = ms.filter(([, m]) => !m.fragmentShader.startsWith(PREC)).map(([k]) => k);
   ok(ms.length >= 12 && !bad.length, 'постобработка: КАЖДЫЙ шейдер (AO, отражения, генерация кадров, сборка, FSR, NIS…) начинается со строки точности', { n: ms.length, bad });
   const depthReaders = ms.filter(([, m]) => /tDepth/.test(m.fragmentShader)).map(([k]) => k).sort().join();
-  ok(depthReaders === 'ao,comp,dof,fg,health,rays,ssr', 'глубину читают ao, ssr, fg, comp, лучи и глубина резкости наборов, самопроверка — все с highp', depthReaders);
+  ok(depthReaders === 'ao,comp,dof,fg,foc,health,rays,ssr', 'глубину читают ao, ssr, fg, comp, лучи, глубина резкости наборов и её автофокус, самопроверка — все с highp', depthReaders);
   ok(P0.depthOK === true && P0.canAO, 'подставной рендерер без чтения пикселей — проверка глубины не мешает (как раньше)');
   P0.dispose();
   // проверка глубины при запуске: видеокарта без highp (precision < 23) или неточная глубина — AO, трассировка, генерация кадров выключены
@@ -1399,23 +1401,56 @@ function boundsOk(R){
     ok(rc.x > 0 && M.comp.uniforms.tLut.value && M.comp.uniforms.tLut.value.image.width === 1024, 'лучи: цвет света в сборку; LUT 1024×32 — в сборку');
     Rs.sky.lightDir = [0, .3, 1]; log.length = 0; P.render(new T.Scene(), cam);
     ok(!log.some(x => kind(x) === 'лучи') && M.comp.uniforms.uRayC.value.x === 0, 'солнце за спиной — прохода лучей нет, цвет лучей 0');
-    // «Ультра» на компьютере: глубина резкости — фокус на своём персонаже; на телефоне её нет
+    // «Ультра» на компьютере: глубина резкости с автофокусом (22.10.2026: фокус «на себе» от 1-го лица мылил весь мир) —
+    // проход FOCUS (медиана середины кадра → буфер 1×1, плавно), потом DOF; на телефоне её нет
     Rs.focus = { x: 0, y: 0, z: -12, ok: true }; Rs.sky.lightDir = [0, .3, -1];
     P.setPack(E.packResolve('ultra', { q: 'high' }));
     log.length = 0; P.render(new T.Scene(), cam);
-    ok(M.comp.defines.D37_DOF !== undefined && P._test.rt().dof && log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 1 && Math.abs(M.dof.uniforms.uDof.value.x - Math.hypot(0, 3 - 1.2, 8 + 12)) < 1e-3,
-      '«Ультра»: глубина резкости (половина кадра), фокус — расстояние до своего персонажа');
+    const D = E.DOF, ud0 = M.dof.uniforms.uDof.value, ud2 = M.dof.uniforms.uDof2.value, uf = M.foc.uniforms.uFoc.value;
+    const iF = log.findIndex(x => x.m === M.foc), iD = log.findIndex(x => x.m === M.dof), fT1 = log[iF]?.t;
+    ok(M.comp.defines.D37_DOF !== undefined && P._test.rt().dof && iF >= 0 && iD > iF && M.comp.uniforms.uDofOn.value === 1 && M.dof.uniforms.tFoc.value === fT1?.texture,
+      '«Ультра»: автофокус (FOCUS → буфер 1×1), потом глубина резкости (половина кадра) — читает фокус оттуда', { iF, iD });
+    ok(ud0.x === D.FAR && ud0.y === D.ZONE && ud2.w === 0 && ud2.x === D.NEAR && ud2.y === D.MINZ && ud2.z === D.RAMP && ud0.z >= 2 && ud0.z <= 4 && ud0.w === 1,
+      'объектив: резко до max(2 × фокус, 25 м), ближняя зона, рука у камеры не размывается, радиус ≤ 4 точек', [ud0.x, ud0.y, ud0.z, ud2.x, ud2.y, ud2.z]);
+    ok(fT1 && fT1.width === 1 && fT1.height === 1 && uf.x === 1 && uf.y === D.FMIN && Math.abs(uf.z - cam.far * .98) < 1e-6, 'первый кадр — фокус сразу (без «наезда»), в пределах [ближе всего, дальняя плоскость]', [uf.x, uf.y, uf.z]);
+    log.length = 0; P.render(new T.Scene(), cam);
+    const fT2 = log.find(x => x.m === M.foc)?.t;
+    ok(fT2 && fT2 !== fT1 && M.foc.uniforms.tPrev.value === fT1.texture && uf.x > 0 && uf.x < 1, 'дальше — плавно (смесь с прошлым кадром), буферы по очереди', uf.x);
     ok(!E.packResolve('ultra', { q: 'high', mobile: true }).dof, '…на телефоне — без глубины резкости');
-    // игра решает сама (R.dofSet): «Кубомир» от 1-го лица — без глубины резкости (фокус «на себе» был в камере — весь мир в мыле)
+    // шейдеры автофокуса и размытия: медиана 9 (19 сравнений), выборки — textureLod, без continue/texelFetch/isnan, лог-шкала
+    const FSF = E.PACK_FS.focus, FSD = E.PACK_FS.dof;
+    ok((FSF.match(/D37S\( p/g) || []).length === 19 && (FSF.match(/fz\( c/g) || []).length === 9 && /textureLod\( tDepth/.test(FSF) && /textureLod\( tPrev/.test(FSF) && /textureLod\( tFoc/.test(FSD)
+      && !/\bcontinue\b|texelFetch|isnan/.test(FSF + FSD) && FSD.includes('step( uDof2.y, z )'), 'шейдеры: медиана 9 точек, плавно в лог-шкале, рука у камеры — резкая; без continue/texelFetch/isnan');
+    // объектив в числах (тот же расчёт, что в FS_DOF): «игровая зона» — резкая при любом фокусе; даль — мягко; рядом с камерой — только если смотришь вдаль
+    const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const coc = (z, F) => { const f0 = Math.max(F * D.FAR, D.ZONE), far = sm(f0, f0 * D.RAMP, z), n0 = Math.min(F * .45, D.NEAR), near = (1 - sm(n0 * .45, n0, z)) * (z >= D.MINZ ? 1 : 0) * .6; return Math.max(far, near); };
+    let zoneBad = 0; for (const F of [.6, 1.5, 3, 9.5, 22, 60, 250, 780]) for (let z = D.NEAR; z <= D.ZONE; z += .25) if (coc(z, F) > 1e-6) zoneBad++;
+    ok(zoneBad === 0, 'от ближней зоны до 25 м — всегда резко (куда бы ни смотрел: в стену у лица, на себя сзади, вдаль)', zoneBad);
+    ok(coc(.5, 200) === 0 && coc(1.2, 200) > .3 && coc(1.2, 2) < .3 && coc(D.ZONE * 3.2, 9.5) > .99 && coc(D.ZONE * 1.5, 9.5) > .05 && coc(D.ZONE * 1.5, 9.5) < .5,
+      'рука у камеры — резкая; совсем близко — мягко, только если смотришь вдаль; даль — нарастает до полного', [coc(1.2, 200), coc(D.ZONE * 1.5, 9.5)]);
+    // игра решает сама (R.dofSet): k — сила (0 — выкл), zone — своя «игровая зона», dist — ручной фокус
     Rs.dofSet = { k: 0 }; log.length = 0; P.render(new T.Scene(), cam);
-    ok(!log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 0, 'игра выключила глубину резкости (R.dofSet.k = 0) — прохода нет');
-    Rs.dofSet = { k: .5, dist: 6, depth: 20 }; log.length = 0; P.render(new T.Scene(), cam);
-    { const ud = M.dof.uniforms.uDof.value; ok(log.some(x => x.m === M.dof) && ud.x === 6 && ud.y === 20 && ud.w === .5, 'игра задала фокус, глубину и силу (R.dofSet) — так и рисует', [ud.x, ud.y, ud.w]); }
+    ok(!log.some(x => x.m === M.dof || x.m === M.foc) && M.comp.uniforms.uDofOn.value === 0, 'игра выключила глубину резкости (R.dofSet.k = 0) — проходов нет');
+    Rs.dofSet = { k: .5, dist: 6, zone: 40 }; log.length = 0; P.render(new T.Scene(), cam);
+    ok(log.some(x => x.m === M.dof) && ud2.w === 6 && ud0.y === 40 && ud0.w === .5 && uf.x === 1, 'игра задала ручной фокус, зону и силу (R.dofSet) — так и рисует; после пропуска фокус — сразу', [ud2.w, ud0.y, ud0.w, uf.x]);
     Rs.dofSet = null;
+    // страж: не собралась глубина резкости / автофокус — выключается только она (набор «Ультра» остаётся)
+    P.disable('dof');
+    ok(P.noDOF && M.comp.defines.D37_DOF === undefined && P.pack.id === 'ultra' && !P._test.rt().dof, 'страж: «без глубины резкости» — набор тот же, проходов и буферов нет');
+    P.noDOF = false; P.off.dof = false; P.setPack(E.packResolve('ultra', { q: 'high' }));
+    ok(E.gfxResolve({}, { q: 'high' }).dof === true && E.gfxResolve({ dof: false }, { q: 'high' }).dof === false, '⚙️ «Глубина резкости»: включена, пока игрок не выключит');
     // пиксельная графика (P.setPixelArt): без FXAA — рисунок текстур не размывается; выключили — снова как было
     P.setOpts({ ao: 'off', aa: 'fxaa' }); P.setPixelArt(true); P.setSize(800, 450, 1);
     const fxPix = P.fxaa; P.setPixelArt(false);
     ok(!fxPix && P.fxaa, 'пиксельная графика — без FXAA; выключили — FXAA снова', [fxPix, P.fxaa]);
+    // «мыло» (22.10.2026): MSAA держится и в уменьшенном кадре (его растянет FSR/NIS) — без FXAA вместо него; на «ретине» MSAA нет — и FXAA поверх нет
+    Rs.pr0 = 1; P.setOpts({ ao: 'off', aa: 'msaa' });
+    P.setSize(800, 450, 1); const ms1 = [P.msaa, P.fxaa];
+    P.setSize(680, 383, .85); const ms2 = [P.msaa, P.fxaa, P.scaled];
+    Rs.pr0 = 2; P.setSize(1600, 900, 1.7); const ms3 = [P.msaa, P.fxaa];
+    Rs.pr0 = 1; P.setOpts({ ao: 'off', aa: 'fxaa' }); P.setSize(800, 450, 1); const ms4 = [P.msaa, P.fxaa];
+    ok(ms1[0] === 4 && !ms1[1] && ms2[0] === 4 && !ms2[1] && ms2[2] && ms3[0] === 0 && !ms3[1] && ms4[0] === 0 && ms4[1],
+      'MSAA и при 85 % кадра (без FXAA); «ретина» с MSAA — без FXAA поверх; выбран FXAA — FXAA', { ms1, ms2, ms3, ms4 });
     Rs.focus = { ok: false }; log.length = 0; P.render(new T.Scene(), cam);
     ok(!log.some(x => x.m === M.dof) && M.comp.uniforms.uDofOn.value === 0, 'нет своего персонажа (редактор) — прохода нет');
     P.setPack(E.packResolve('toon', { q: 'high' }));
