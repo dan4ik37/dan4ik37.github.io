@@ -31,8 +31,15 @@
     if (X && XR === R) return X;
     dispose();
     XR = R;
-    X = C.attach(R, { world: worldOf(cfg(), R), where, skyTop: E.precip.physTop(ed.ph, 400), water: (x, z) => { const w = ed.ph?.waterLevel?.(x, z); return Number.isFinite(w) ? w : -Infinity; }, sound: E.audio?.() });
-    hook = (r, t0) => { const dt = lastT ? Math.min(.1, (t0 - lastT) / 1000) : 1 / 60; lastT = t0; try { X?.frame(dt); } catch (e) { console.warn('погода студии:', e); } };
+    X = C.attach(R, { world: worldOf(cfg(), R), where, skyTop: E.precip.physTop(ed.ph, 400), water: (x, z) => { const w = ed.ph?.waterLevel?.(x, z); return Number.isFinite(w) ? w : -Infinity; },
+      waveAt: (x, z) => ED()?.TR?.waveAt?.(x, z)?.y || 0, sound: E.audio?.() });   // круги дождя — на волне
+    // волны воды ландшафта (terrain.js TR.waves, waves.js): высота — от погоды здесь (ветер, гроза, лёд), раз в 2 с
+    let wq = 0;
+    hook = (r, t0) => {
+      const dt = lastT ? Math.min(.1, (t0 - lastT) / 1000) : 1 / 60; lastT = t0;
+      try { X?.frame(dt); } catch (e) { console.warn('погода студии:', e); }
+      if ((wq -= dt) <= 0) { wq = 2; try { const F = ED()?.TR?.waves; if (F && X?.state) F.weather(X.state); } catch (e) {} }
+    };
     R.preRender.push(hook);
     offH = C.on('holiday', h => { if (h.phase === 'burst' || h.phase === 'day') toScripts('holiday', { id: h.id, greet: h.greet }); });
     return X;

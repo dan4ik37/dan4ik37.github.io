@@ -546,10 +546,16 @@
     it.mesh.instanceMatrix.needsUpdate = true;
   }
   // «Группа» деталей для триггера комнаты (mir.js прячет крышу: roof.visible = false) — те же правила, что у Object3D.visible
-  function pieceGroup(list){
-    let vis = true;
-    return { isPieceGroup: true, list, get visible(){ return vis; }, set visible(v){ v = !!v; if (v === vis) return; vis = v; for (const p of list) setPieceVis(p, v && !p.broken); } };
+  // visible — геттер/сеттер класса (общий прототип), не свой у каждой группы (T-085: свой геттер V8 держит в общей «форме» объекта,
+  // и через него после закрытия жил бы прошлый мир)
+  class PieceGroup {
+    constructor(list){ this.isPieceGroup = true; this.list = list; this._vis = true; }
+    get visible(){ return this._vis; }
+    set visible(v){ v = !!v; if (v === this._vis) return; this._vis = v; for (const p of this.list) setPieceVis(p, v && !p.broken); }
   }
+  function pieceGroup(list){ return new PieceGroup(list); }
+  // ctx интерьеров (js/engine/interior.js читает ctx.glass): материал стекла — геттером общего прототипа (T-085, как PieceGroup)
+  const ICTX_PROTO = { get glass(){ return this.glassOf(); } };
   function flushPieces(R, K, grp){ const it = flushPiecesIt(R, K, grp); let r; do r = it.next(); while (!r.done); return r.value; }
   function* flushPiecesIt(R, K, grp){
     const T = R.T, L = K.pieceList; if (!L.length) return [];
@@ -1362,6 +1368,7 @@
     rt.mapBtn = btn('mz-mapbtn', '🗺️<span> Карта</span>', 'Карта мира и телепорты (M)', () => openMap());
     // ── зоны: силуэт, содержимое (строится кусочками), жители ──
     for (const Z of ZLIST) rt.zones.set(Z.id, { Z, D: DEFS[Z.id] || null, proxy: BUILT?.proxies?.[Z.id] || null, grp: null, K: null, it: null, built: false, shown: false, npcOn: false, mod: null });
+    BUILT = null;   // постройка своё отдала зонам: модуль не держит прошлый мир после закрытия (T-085)
     // жители зон говорят своё (облачко над головой) — mir.js слушает только своих (FOLK)
     if (S.NPC?.cb) {
       const cb = S.NPC.cb, prev = cb.onSay;
@@ -1609,10 +1616,10 @@
     rt.mountedCount = () => mounted.size;   // сколько этажей интерьеров построено (замер: только у входа)
     const INT_CAP = R.q === 'low' || E?.isMobile?.() ? 3 : 6;
     let glassM = null;
-    const ictx = {
+    const ictx = Object.assign(Object.create(ICTX_PROTO), {   // glass — геттер общего прототипа (ICTX_PROTO, T-085)
       R, ph, toast,
       merge: (R2, g) => merge(R2, g, { chunk: 0 }),
-      get glass(){ if (!glassM) { for (const zs of rt.zones.values()) if (zs.K?.M?.glass) { glassM = zs.K.M.glass; break; } } return glassM; },
+      glassOf: () => { if (!glassM) { for (const zs of rt.zones.values()) if (zs.K?.M?.glass) { glassM = zs.K.M.glass; break; } } return glassM; },
       item: it => X.add(it),
       unitem: h => { if (!h) return; if (h.npc) { if (S.NPC) S.NPC.remove(h.npc); h.tag?.remove(); return; } X.remove(h); },
       seat: sp => { const s2 = { ...sp, name: sp.name || (sp.bed ? 'Лечь' : 'Сесть') }; intSeats.push(s2); const it = X.add({ x: s2.x, y: s2.y + .5, z: s2.z, r: s2.bed ? 1.1 : .55, prompt: () => rt.seatPrompt(s2), act: () => rt.sitDown(s2) }); return { s: s2, it }; },
@@ -1627,7 +1634,7 @@
         S.NPC.add(n);
         return { npc: n };
       },
-    };
+    });
     rt.intSeats = intSeats;
     // правила дверей: запертое открывает тот, кому положено (РП). Будущие правила (владельцы, «градостроитель») — MirZones.accessRules
     rt.doorAccess = door => {
@@ -1766,7 +1773,7 @@
       return false;
     }
     rt.showGate = showGate;
-    root.D37Age?.on?.(() => {   // указал год / «взрослый разрешил» — пробуем снова
+    rt.offAge = root.D37Age?.on?.(() => {   // указал год / «взрослый разрешил» — пробуем снова (отписка — в rt.dispose: T-085)
       const g = rt.gateFor; if (!g || rt.stopped) return;
       if (gateOf(g.Z).ok && now() - g.at < 120e3) { rt.gateFor = null; H.closePops(); toast(`✅ Проходи: ${g.Z.icon} ${g.Z.name}`, true); g.retry?.(); }
       else if (now() - g.at < 120e3) showGate(g.Z, g.retry);
@@ -2259,6 +2266,7 @@
     };
     rt.dispose = () => {
       CELLAR.on = false;
+      try { rt.offAge?.(); } catch (e) {} rt.offAge = null; BUILT = null;   // T-085: подписка на возраст и постройка держали весь прошлый мир
       try { rt.veh?.dispose?.(); } catch (e) { console.error(e); }
       try { rt.wmv?.dispose?.(S.ph); } catch (e) { console.error(e); } rt.wmv = null;
       try { rt.destruct?.dispose(); } catch (e) { console.error(e); } rt.destruct = null; BRK.clear(); rt.sup?.dispose(); rt.sup = null;

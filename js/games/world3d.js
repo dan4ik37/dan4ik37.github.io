@@ -2141,14 +2141,16 @@
       v3.set(x / U, hh, y / U).project(camera);
       return [(v3.x + 1) / 2 * w, (1 - v3.y) / 2 * h, v3.z < 1 && Math.abs(v3.x) < 1.3 && Math.abs(v3.y) < 1.3];
     }
-    function setZoom(z){ zoom = Math.max(.55, Math.min(1.8, z)); }
+    let G3 = null;   // zoom — обычное поле (не геттер, T-085: свой геттер V8 держит в общей «форме» объекта — жил бы прошлый вид)
+    function setZoom(z){ zoom = Math.max(.55, Math.min(1.8, z)); if (G3) G3.zoom = zoom; }
     function dispose(){
       chars.forEach(c => K.dispose(c.ch)); chars.clear();
       renderer.dispose(); renderer.forceContextLoss?.();
       renderer.domElement.remove();
     }
     resize();
-    return { setPlayer, removePlayer, updatePlayer, emote, render, pickGround, project, resize, dispose, tagY, setLive: drawScreen, get zoom(){ return zoom; }, setZoom, setPaused(v){ paused = !!v; }, has: k => chars.has(k), keys: () => [...chars.keys()] };
+    G3 = { setPlayer, removePlayer, updatePlayer, emote, render, pickGround, project, resize, dispose, tagY, setLive: drawScreen, zoom, setZoom, setPaused(v){ paused = !!v; }, has: k => chars.has(k), keys: () => [...chars.keys()] };
+    return G3;
   }
 
   // ═══ Витрина гардероба: человечек на подставке, крутится пальцем; картинки вариантов (thumb) ═══
@@ -2188,12 +2190,14 @@
     const trail = K.trails(scene);
     let ch = null, yaw = .45, auto = true, drag = null, lastDrag = -9, walk = false, view = 'full', w = 1, h = 1, raf = 0, last = performance.now(), dead = false, lastTrail = 0, hl = null, onPick = null;
     const cam = { up: .3, d: 6, ty: 1.15 }, look = { x: 0, y: 0, z: 0 }, ao = { rate: 10.5, look };
+    let PV = null;   // ch / walking — обычные поля (не геттеры, T-085: свой геттер V8 держит в общей «форме» объекта — жила бы прошлая витрина)
     function set(look2, key){
       const nch = K.build(look2, key || opts.key || 'me');
       scene.add(nch.root);
       if (nch.pet) scene.add(nch.pet);
       if (ch) { nch.phase = ch.phase; K.dispose(ch); }
       ch = nch;
+      if (PV) PV.ch = ch;
       if (hl) K.highlight(ch, hl);
     }
     function focus(v){ view = VIEWS[v] ? v : 'full'; if (view === 'back') yaw = PI; else if (view === 'armL' || view === 'legL') { yaw = -.8; lastDrag = performance.now() / 1000; } else if (view === 'armR' || view === 'legR') { yaw = .8; lastDrag = performance.now() / 1000; } }
@@ -2289,12 +2293,13 @@
       renderer.dispose(); renderer.forceContextLoss?.(); el.remove();
       if (tr) { tr.dispose(); tr.forceContextLoss?.(); }
     }
-    return {
-      set, focus, resize, dispose, thumb, recolor: look2 => !!ch && K.recolor(ch, look2), walk(v){ walk = !!v; if (!walk) trail.clear(); }, get walking(){ return walk; },
+    PV = {
+      set, focus, resize, dispose, thumb, recolor: look2 => !!ch && K.recolor(ch, look2), walk(v){ walk = !!v; PV.walking = walk; if (!walk) trail.clear(); }, walking: walk,
       emote(e){ if (ch) { ch.emote = e; ch.emoteT = performance.now() / 1000; } }, spin(d){ yaw += d; lastDrag = performance.now() / 1000; }, setYaw(v){ yaw = v; }, auto(v){ auto = !!v; },
       onPick(fn){ onPick = fn; }, highlight(part){ hl = part || null; if (ch) K.highlight(ch, hl); }, partAt,
-      get ch(){ return ch; }, get renderer(){ return renderer; }, get scene(){ return scene; }, get camera(){ return camera; },
+      ch, renderer, scene, camera,
     };
+    return PV;
   }
 
   // Версия внешности человечка: менять при любой правке геометрии, цветов или поз (кэш спрайтов и картинок по ней сбрасывается).

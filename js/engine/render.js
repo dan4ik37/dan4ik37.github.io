@@ -755,7 +755,7 @@
     R.dispose = () => {
       R.dead = true;
       r.domElement.removeEventListener?.('webglcontextrestored', onRestore);
-      for (const f of R.preRender) f.dispose?.();
+      for (const f of [...R.preRender]) f.dispose?.();   // копия: dispose крючка убирает его из R.preRender (иначе следующий пропускался)
       R.post?.dispose();
       if (halo) { halo.geometry.dispose(); halo.material.dispose(); }
       for (const sl of L.slots) scene.remove(sl.pl);
@@ -767,6 +767,14 @@
       sky.geometry.dispose(); skyMat.dispose();
       GU.fogA.fill(0); GU.fogB.fill(0); GU.fogC.fill(0); GU.sh.fill(0); E.fpsCap = 0;   // общие данные шейдеров — как без движка
       r.dispose(); r.forceContextLoss?.(); r.domElement.remove();
+      // T-085: у всех спрайтов three r149 одна общая геометрия модуля — каждый рендерер вешает на неё свой «dispose»
+      // (буферы, программы, VAO и контекст WebGL этого рендерера). r.dispose() его не снимает — прошлый рендерер жил, пока жива
+      // страница (+1 контекст WebGL и ~1 МБ на каждый вход в мир). dispose() общей геометрии снимает слушатели всех
+      // рендереров: живой (если есть) просто загрузит её заново в следующем кадре
+      try { (E._spriteGeo || (E._spriteGeo = new T.Sprite().geometry)).dispose(); } catch (e) {}
+      // то же у общей на страницу карты «что над головой» (gfx.js GFXU.occRT — в неё рисует погода, precip.js): держала
+      // рендерер, контекст и холст закрытого мира или студии (а через слушатели холста — всё остальное)
+      try { E.GFXU?.occRT?.dispose(); } catch (e) {}
     };
 
     // ═══ Материалы ═══

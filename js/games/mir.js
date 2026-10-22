@@ -402,7 +402,7 @@
       top.rotation.x = -PI / 2; top.position.set(t.x, .835, t.z); st.add(top);
       // флажок над столом: что за игра (видно издалека)
       const tag = new T.Sprite(new T.SpriteMaterial({ map: emojiTex(gi.icon), transparent: true, depthWrite: false }));
-      tag.position.set(t.x, 2.5, t.z); tag.scale.setScalar(.7); R.scene.add(tag); t.tag = tag;
+      tag.position.set(t.x, 2.5, t.z); tag.scale.setScalar(.7); R.scene.add(tag);   // не в t: TABLES — общие данные модуля, держали бы прошлый мир (T-085)
       const ang = t.n === 2 ? [PI / 2, -PI / 2] : [PI / 2, 0, -PI / 2, PI];
       ang.forEach((a, i) => {
         const d = round ? 1.35 : 1.25, sx = t.x - Math.sin(a) * d, sz = t.z - Math.cos(a) * d;
@@ -802,7 +802,28 @@
     let W = null;
     try { W = C?.world ? C.world({ seed: 'mir', mode: 'calendar', climateAt: mirClimate, seaY: 0, lapse: -.12, hourAt: mirHour }) : null; } catch (e) {}
     let tq = 0, forced = null;
+    // прибой (T-085): шум у ближней мели моря (узел сетки глубиной 0,1…2,4 — там и пена прибоя в шейдере, waves.js) — петля
+    // amb_water пониже (synth.js: тише издалека, сторона — по камере), громче в шторм; нет волн или мели рядом — тишина
+    const G = F.ocean?.grid;
+    let surfH = null, sq = 0;
+    const surfTick = dt => {
+      const AU = S?.AU, ch = S?.P?.ch;
+      if (!G || !AU?.loop || !ch || (sq -= dt) > 0) return;
+      sq = .5;
+      const n = G.n, c = G.cell, ci = Math.round((ch.x - G.x0) / c), cj = Math.round((ch.z - G.z0) / c);
+      let best = Infinity, bx = 0, bz = 0;
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+        const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= n || j >= n) continue;
+        const d = G.depth[j * n + i]; if (!(d > .1 && d < 2.4)) continue;
+        const x = G.x0 + i * c, z = G.z0 + j * c, r = (x - ch.x) * (x - ch.x) + (z - ch.z) * (z - ch.z);
+        if (r < best) { best = r; bx = x; bz = z; }
+      }
+      const Fo = F.ocean, vol = best < Infinity && Fo.H > 1e-4 ? Math.min(.85, .22 + .55 * Fo.storm + .12 * Fo.H) : 0;
+      if (!surfH) { if (vol > 0) surfH = AU.loop('amb_water', { x: bx, y: Fo.level, z: bz, vol, rate: .72 }); }
+      else surfH.set(vol > 0 ? { x: bx, z: bz, vol } : { vol: 0 });
+    };
     const tick = dt => {
+      surfTick(dt);
       if ((tq -= dt) > 0) return;
       tq = 2;
       const ms = Date.now();
@@ -825,7 +846,8 @@
       force: s => { forced = s || null; tq = 0; tick(0); },   // проверки: своя погода волн ({ wind, windDir, thunder }) / null — как у всех
       live: (x, z) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f : null; },
       waveAt: (x, z, out = OUT) => { const f = fieldAt(x, z); return f && f.H > 1e-5 ? f.sample(x, z, WV.time(), out) : null; },
-      dispose(){ at.dispose(); for (const f of list) WV.free(f); },
+      dispose(){ at.dispose(); for (const f of list) WV.free(f); surfH?.stop(); surfH = null; },
+      surf: () => (surfH ? { ...surfH.o } : null),   // проверки: где и как громко шумит прибой
     };
   }
 
@@ -1077,6 +1099,11 @@
     if (old) { try { await sbClient.removeChannel(old); } catch (e) {} if (S !== st || st.stopped) return; }
     S.shard = shard;
     S.q('.wldShard').textContent = `сервер ${shard}`;
+    openChannel(shard);
+  }
+  // Канал мира — своей функцией, без st в замыканиях (T-085): Supabase держит канал и его обработчики ещё до ~10 с после
+  // removeChannel (ожидающие отправки), и обработчики из join() держали бы весь закрытый мир (через своё st). Здесь — только ch и S
+  function openChannel(shard){
     const ch = sbClient.channel(CHAN + shard, { config: { broadcast: { self: false }, presence: { key: S.key } } });
     S.ch = ch; S.firstSync = false; S.chWhy = '';
     ch.on('presence', { event: 'sync' }, () => { if (S?.ch === ch) onSync(); });
@@ -1459,10 +1486,13 @@
     });
     q('.wld-say input').addEventListener('focus', () => { if (q('.wld-say input').readOnly) roHint(); });
     q('.wld-say input').addEventListener('keydown', e => { if (e.key === 'Escape') e.target.blur(); });
-    el.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b) && !b.closest('.mp')) onAct(b.dataset.act, b); });   // .mp — игра поверх мира: её data-act не наши
+    // el — рамка игры (#gamesStageBox): она живёт дольше мира — слушатель снять при закрытии (T-085: иначе каждый вход добавлял
+    // ещё один, старый держал весь прошлый мир в памяти, а нажатие на кнопку срабатывало столько раз, сколько входили)
+    const onClick = e => { const b = e.target.closest('[data-act]'); if (b && el.contains(b) && !b.closest('.mp')) onAct(b.dataset.act, b); };   // .mp — игра поверх мира: её data-act не наши
+    el.addEventListener('click', onClick);
     const onVis = () => { if (document.hidden) { S.hiddenAt = Date.now(); sendStop(); } else S.hiddenAt = 0; };
     document.addEventListener('visibilitychange', onVis);
-    S.cleanupUi = () => document.removeEventListener('visibilitychange', onVis);
+    S.cleanupUi = () => { document.removeEventListener('visibilitychange', onVis); el.removeEventListener('click', onClick); };
   }
   const toast = t => { if (S?.H) S.H.toast(t); else api?.toast?.(t); };
   // чат только для чтения: до 9 лет — почему (безопасность детей), гость — войти
@@ -1914,13 +1944,15 @@
   // ═══ Телефон 📱 (js/features/phone.js) и чат «🌍 Весь мир» (js/features/worldchat.js) — подключение мира ═══
   // Телефон: кнопка в панели мира и клавиша P; пока открыт — клавиши мира молчат. Камера (снимок кадра), карта с телепортом,
   // «📍 К другу» (сменить сервер и встать рядом). Чем занят («в Мире, сервер N») — друзьям. «🌍 Весь мир» — кнопка 🏠/🌍 у чата.
+  // Геттер «клавиша P — телефону?» — один на модуль, на прототипе (T-085): свой геттер в объекте каждого мира V8 держит в общей
+  // «форме» объекта, и после закрытия через него жил весь прошлый мир. Игра поверх мира (mir-play.js): P — игре («5 букв»)
+  const PHONE_HOOKS = { get hotkey(){ return !S?.playing; } };
   function mirPhone(){
     const Ph = window.D37Phone; if (!Ph?.attach || !S) return;
     const st = S;
     const tp = (x, z, yaw) => { if (!S?.P) return; if (S.mySeat) S.P.standUp(); S.P.place(x, null, z, yaw); S.rig?.snap(S.P.ch.x, S.P.ch.y, S.P.ch.z); if (S.rig) S.rig.yaw = yaw - PI; S.forceSend = true; savePos(); };
-    S.phoneOff = Ph.attach('world', {
+    S.phoneOff = Ph.attach('world', Object.assign(Object.create(PHONE_HOOKS), {   // hotkey — геттер общего прототипа (PHONE_HOOKS, T-085)
       title: '🌍 Мир Денчика',
-      get hotkey(){ return !S?.playing; },   // игра поверх мира (mir-play.js): клавиша P — игре («5 букв»), телефон — кнопкой 📱 окна
       pause(on){ const s = S; if (!s?.C) return; s.phoneOn = on; s.C.blocked = on || !!s.menu; s.C.reset_state(); if (s.I) { if (on) { s.I.unlock(); s.I.reset?.(); } s.I.enabled = !on; } },
       // телефон в руке персонажа (как в ГТА): достаёт, у уха, играет, снимает — видят все (в 'st'); true — показываем человечком
       hand(st){
@@ -1936,7 +1968,7 @@
       placeName: () => S?.zones?.placeName() || '',
       toFriend: uid => { const p = S && [...S.players.values()].find(q => q.uid === uid && !q.leaving); if (!p) return false; const x = p.ch.x + Math.cos(p.yaw) * 1.6, z = p.ch.z - Math.sin(p.yaw) * 1.6; if (S.zones) S.zones.tp(x, z, p.yaw + PI); else tp(x, z, p.yaw + PI); return true; },
       shard: n => { if (n != null && S && n !== S.shard && n >= 1 && n <= SHARDS) { leaveChannel(); for (const k of S.players.keys()) S.A?.remove(k); S.players.clear(); join(n); } return S?.shard || 1; },
-    });
+    }));
     // кнопка 📱 в панели мира — перед 💬 и ☰ (☰ Меню — всегда последняя)
     const bar = S.q('.wld-topbtns');
     if (bar && !bar.querySelector('.mir-phone')) {

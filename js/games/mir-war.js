@@ -461,6 +461,14 @@
   }
 
   // ═══ ИГРА В ЗОНЕ ═══
+  // Обработчики канала боя — через «реле» уровня модуля (T-085): Supabase держит канал ещё до ~10 с после removeChannel
+  // (ожидающие отправки), и замыкания из warMod держали бы весь закрытый мир. off() — реле пустеет, канал больше никого не держит
+  function relayChannel(ch, onMsg, onSub){
+    const r = { m: onMsg, s: onSub };
+    ch.on('broadcast', { event: 'c' }, e => r.m?.(e));
+    ch.subscribe(st => r.s?.(st));
+    return () => { r.m = r.s = null; };
+  }
   function warMod(rt, K){
     const S = rt.S, R = rt.R, T = rt.T, ph = rt.ph, X = rt.X, H = rt.H, toast = rt.toast, E = rt.E;
     rt.WEAPON_E = { foam: '🔫', paint: '🎯', water: '💧', sword: '🗡️', shield: '🫧' };
@@ -518,7 +526,7 @@
       W.prevRole = rt.zx.r && !ROLES_W[rt.zx.r] ? rt.zx.r : W.prevRole;
       if (rt.zx.r && rt.ROLES[rt.zx.r] && !ROLES_W[rt.zx.r]) rt.setZX({ r: null });
       joinChannel();
-      setTimeout(() => { if (W.inZone) applyTeam(); }, 700);
+      setTimeout(() => { if (W.inZone && !W.stopped) applyTeam(); }, 700);
       W.hp = HP; W.prot = nowMs() + PROTECT * 1000;
       rt.setZX({ h: 10, w: SLOTS[W.slot] });
       hud.hidden = false; drawHud(); drawScore();
@@ -547,19 +555,18 @@
     }
     // ── канал боя: только broadcast, подписи ключом мира ──
     function joinChannel(){
-      clearTimeout(W.leaveT);
-      if (W.ch || typeof sbClient === 'undefined' || !sbClient || !S.keys) return;
-      if (nowMs() - W.chAt < 8000) { setTimeout(() => { if (W.inZone && !W.ch) joinChannel(); }, 8000); return; }
+      clearTimeout(W.leaveT); clearTimeout(W.joinT);
+      if (W.stopped || W.ch || typeof sbClient === 'undefined' || !sbClient || !S.keys) return;   // мир закрыт — канала нет (T-085)
+      if (nowMs() - W.chAt < 8000) { W.joinT = setTimeout(() => { if (W.inZone && !W.ch) joinChannel(); }, 8000); return; }
       W.chAt = nowMs();
       const name = 'mirz-' + (S.shard || 1);
       const old = sbClient.getChannels?.().find(c => c.topic === 'realtime:' + name);
       if (old) { try { sbClient.removeChannel(old); } catch (e) {} }
       const ch = sbClient.channel(name, { config: { broadcast: { self: false } } });
-      ch.on('broadcast', { event: 'c' }, ({ payload }) => { if (W.ch === ch) onCombat(payload); });
-      ch.subscribe(s => { if (W.ch === ch && s === 'SUBSCRIBED') W.chOn = true; });
+      W.chOff = relayChannel(ch, ({ payload }) => { if (W.ch === ch) onCombat(payload); }, s => { if (W.ch === ch && s === 'SUBSCRIBED') W.chOn = true; });
       W.ch = ch;
     }
-    function leaveChannel(){ const ch = W.ch; W.ch = null; W.chOn = false; if (ch) { try { sbClient.removeChannel(ch); } catch (e) {} } }
+    function leaveChannel(){ const ch = W.ch; W.ch = null; W.chOn = false; W.chOff?.(); W.chOff = null; if (ch) { try { sbClient.removeChannel(ch); } catch (e) {} } }
     let lastTs = 0;
     async function csend(d){
       if (!W.ch || !W.chOn || !S.keys) return;
@@ -1021,6 +1028,7 @@
       esc(){ return false; },
       shown(){},
       stop(){
+        W.stopped = true; clearTimeout(W.joinT);   // T-085: повтор входа в канал через 8 с открыл бы канал уже закрытого мира
         leaveChannel(); clearTimeout(W.leaveT);
         rob?.stop(); rob?.dispose(); mercN?.stop(); mercN?.dispose(); remM?.stop(); remM?.dispose();
         R.scene.remove(pMesh); for (const e of Object.values(puffs)) e.dispose();

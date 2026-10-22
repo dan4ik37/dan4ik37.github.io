@@ -95,6 +95,9 @@
       frame(dt, acc / step);
     };
     raf = requestAnimationFrame(f);
-    return { stop(){ on = false; cancelAnimationFrame(raf); }, pause(v){ paused = !!v; last = performance.now(); }, get paused(){ return paused; } };
+    // paused — обычное поле, не геттер (T-085): свой геттер у каждого объекта V8 держит в общей «форме» объекта — после закрытия
+    // мира через него жил бы последний цикл, а с ним весь мир (update/frame)
+    const L = { stop(){ on = false; cancelAnimationFrame(raf); }, pause(v){ paused = !!v; L.paused = paused; last = performance.now(); }, paused: false };
+    return L;
   };
 })();

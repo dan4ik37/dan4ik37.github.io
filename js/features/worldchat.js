@@ -34,7 +34,7 @@
       if (!o.input.readOnly) o.input.placeholder = st.on ? 'Написать во весь мир (все серверы)…' : 'Написать всем на сервере…';
       btn.classList.toggle('on', st.on);
     };
-    btn.addEventListener('click', ev => { ev.preventDefault(); st.on = !st.on; upd(); if (!o.input.readOnly) o.input.focus(); });
+    btn.addEventListener('click', ev => { ev.preventDefault(); if (!o) return; st.on = !st.on; api.on = st.on; upd(); if (!o.input.readOnly) o.input.focus(); });
     o.form.prepend(btn); upd();
     const ch = sbClient.channel('mir-all', { config: { broadcast: { self: false } } })
       .on('broadcast', { event: 'm' }, ({ payload }) => recv(payload))
@@ -48,6 +48,7 @@
       return v;
     }
     async function recv(pl){
+      if (!o) return;   // остановлен (мир закрыт)
       const d = W.valid(pl); if (!d) return;
       const sigKey = pl.s.slice(0, 40); if (st.seen.has(sigKey)) return; st.seen.add(sigKey); if (st.seen.size > 500) st.seen.clear();
       const t = Date.now(), last = st.rate.get(pl.p) || 0;
@@ -60,23 +61,28 @@
       if (who?.banned) return;
       const nick = who && (!d.u || who.uid === d.u) ? who.nick : d.n + ' ?';
       if (typeof bannedNicks !== 'undefined' && bannedNicks.has(String(who?.nick || d.n).toLowerCase())) return;
-      if (o.muted?.(pl.p, who?.uid || d.u)) return;
+      if (!o || o.muted?.(pl.p, who?.uid || d.u)) return;
       o.addLog(nick, o.clean(d.x), d.sh, false);
     }
-    return {
-      get on(){ return st.on; },
+    // on — обычное поле (не геттер, T-085: свой геттер у каждого объекта V8 держит в общей «форме» объекта — через o жил бы
+    // весь закрытый мир); stop() отпускает o: Supabase держит канал (и recv) ещё до ~10 с после removeChannel
+    const api = {
+      on: false,
       async send(text){
+        if (!o) return false;
         if (!st.ready) { o.toast('🌍 Чат всего мира подключается — секунду…'); return false; }
         if (Date.now() - st.lastSend < 2000) { o.toast('Не так быстро 🙂'); return false; }
         const keys = o.keys(); if (!keys) return false;
         st.lastSend = Date.now();
         const m = JSON.stringify({ n: String(o.me().nick || 'игрок').slice(0, 24), u: o.me().uid || null, sh: o.shard(), x: text.slice(0, 160), ts: Date.now() });
         const s = await sign(keys.kp.privateKey, m);
+        if (!o) return false;
         ch.send({ type: 'broadcast', event: 'm', payload: { m, s, p: keys.pub, ps: o.pass() || null } }).catch(() => {});
         o.addLog(o.me().nick, o.clean(text), o.shard(), true);
         return true;
       },
-      stop(){ try { sbClient.removeChannel(ch); } catch (e) {} btn.remove(); },
+      stop(){ try { sbClient.removeChannel(ch); } catch (e) {} btn.remove(); o = null; },
     };
+    return api;
   };
 })();
