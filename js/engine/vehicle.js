@@ -236,16 +236,16 @@
   }
 
   // ═══ Сеть: снимок и проверка ═══
-  const FL = { eng: 1, lights: 2, horn: 4, boost: 8, broken: 16, parked: 32, ground: 64 };
+  const FL = { eng: 1, lights: 2, horn: 4, boost: 8, broken: 16, parked: 32, ground: 64, capsized: 128 };   // capsized — лодку перевернуло волной (vehicle-water.js)
   function pack(v, parked = false){
-    const f = (v.eng ? FL.eng : 0) | (v.lights ? FL.lights : 0) | (v.horn > 0 ? FL.horn : 0) | (v.boost ? FL.boost : 0) | (v.broken ? FL.broken : 0) | (parked ? FL.parked : 0) | (v.grounded ? FL.ground : 0);
+    const f = (v.eng ? FL.eng : 0) | (v.lights ? FL.lights : 0) | (v.horn > 0 ? FL.horn : 0) | (v.boost ? FL.boost : 0) | (v.broken ? FL.broken : 0) | (parked ? FL.parked : 0) | (v.grounded ? FL.ground : 0) | (v.capsized ? FL.capsized : 0);
     return [r2(v.x), r2(v.y), r2(v.z), r3(v.yaw), r3(v.pitch), r3(v.roll), r2(v.spd), r2(v.vy), f, r2(v.steer), r2(v.rotor), Math.round(v.hp)];
   }
   function unpack(a){
     if (!Array.isArray(a) || a.length < 9 || !a.slice(0, 9).every(Number.isFinite)) return null;
     const f = a[8] | 0;
     return { x: a[0], y: a[1], z: a[2], yaw: a[3], pitch: clamp(a[4], -1.4, 1.4), roll: clamp(a[5], -1.4, 1.4), spd: a[6], vy: a[7], fl: f, steer: clamp(+a[9] || 0, -1, 1), rotor: clamp(+a[10] || 0, 0, 1),
-      eng: !!(f & FL.eng), lights: !!(f & FL.lights), horn: !!(f & FL.horn), boost: !!(f & FL.boost), broken: !!(f & FL.broken), parked: !!(f & FL.parked), grounded: !!(f & FL.ground),
+      eng: !!(f & FL.eng), lights: !!(f & FL.lights), horn: !!(f & FL.horn), boost: !!(f & FL.boost), broken: !!(f & FL.broken), parked: !!(f & FL.parked), grounded: !!(f & FL.ground), capsized: !!(f & FL.capsized),
       hp: Number.isFinite(a[11]) ? Math.max(0, a[11]) : null };
   }
   // b после a через dt секунд — так может эта машина? null — да, иначе причина ('speed' — быстрее потолка, 'climb' — взлёт без крыльев)
@@ -333,9 +333,9 @@
         if (v.grounded && Math.abs(dy) > .03 && Math.abs(dy) < 1.5) sus.vy -= dy / dt * .3;   // кочка
         if (W.gone.size) for (const n of W.gone) if (n.startsWith('wheel')) { const i = +n.slice(5); tp += (i < 2 ? .06 : -.06); tr += (i % 2 ? -.07 : .07); }   // без колеса — на один угол
       } else if (kind === 'boat') {
-        const s = clamp(Math.abs(v.spd) / mx, 0, 1);
-        tp = -.08 * s + Math.sin(sus.t * (1.6 + s * 2.5)) * (.012 + .03 * s);   // нос над водой на ходу, качка на волне
-        tr = clamp(yr * v.spd * .006, -.14, .14) + Math.sin(sus.t * 1.3 + 1) * .02;
+        const s = clamp(Math.abs(v.spd) / mx, 0, 1), wv = v.wy !== undefined ? 0 : 1;   // на волнах (waves.js) качка — в самой лодке
+        tp = (-.08 * s + Math.sin(sus.t * (1.6 + s * 2.5)) * (.012 + .03 * s)) * wv;   // нос над водой на ходу, качка на волне
+        tr = clamp(yr * v.spd * .006, -.14, .14) + Math.sin(sus.t * 1.3 + 1) * .02 * wv;
       } else if (kind === 'heli') { tp = clamp(acc * .008, -.07, .07); tr = clamp(-yr * .05, -.06, .06); }
       if (v.crashAt !== sus.crashAt) {   // удар: толчок корпусу (сильнее — больше)
         sus.crashAt = v.crashAt; const k = clamp((v.crash || 0) * .02, .03, .28);

@@ -228,10 +228,11 @@
       const up = chunk(c.cx, c.cy - 1), st = c.st, lq = c.lq, lt = c.lt, y0 = c.cy * CS;
       const full = !(c.d1a <= c.d1b) || c.d1a === 0 && c.d1b === CM || !R.upload1Rows, ra = full ? 0 : c.d1a, rb = full ? CM : c.d1b;
       let any = false;
+      const wb = wvRows(c, ra, rb);   // волны: «большое озеро» по клеткам глади (биты 1–7 канала a; бит 0 — «под землёй»)
       for (let i = ra << CB, o = i << 2, e = (rb + 1) << CB; i < e; i++, o += 4) {
         const ly = i >> CB, lx = i & CM;
         const above = ly ? lq[i - CS] : up ? up.lq[i + CS * CM] : 0;
-        T1[o] = st[i]; T1[o + 1] = lq[i]; T1[o + 2] = lt[i] | (above ? 128 : 0); T1[o + 3] = y0 + ly > c.ugH[lx] ? 1 : 0;
+        T1[o] = st[i]; T1[o + 1] = lq[i]; T1[o + 2] = lt[i] | (above ? 128 : 0); T1[o + 3] = (y0 + ly > c.ugH[lx] ? 1 : 0) | wb[i] << 1;
         if (lq[i]) any = true;
       }
       if (full) { c.hasLq = any; R.upload1(c, T1); } else { if (any) c.hasLq = true; R.upload1Rows(c, T1, ra, rb - ra + 1); }
@@ -502,6 +503,7 @@
           if (left) it.n = left; else { G.items.splice(n, 1); continue; }
         } else { const k = 22 / Math.max(.5, d); it.vx += dx * k * dt; it.vy += dy * k * dt; it.vx *= .9; it.vy *= .9; it.x += it.vx * dt; it.y += it.vy * dt; continue; }
       }
+      if (G.wv && G.wv.F.H > .02 && lqAt(Math.floor(it.x + .3), Math.floor(it.y + .3)) > 40) { const k = waveBob(it, dt, true, .45, 5); if (k) { it.vy -= GRAV * .6 * dt * k; it.vx *= .985; } }   // волны: вещь всплывает и качается у глади
       it.vy = Math.min(it.vy + GRAV * .6 * dt, 18); it.vx *= it.ground ? .8 : .99;
       PZ.moveBody(it, dt, shapeAt);
     }
@@ -715,7 +717,7 @@
     if (D.ai === 'slime' || D.ai === 'walker') m.dir = m.vx > .1 ? 1 : m.vx < -.1 ? -1 : m.dir;
     // жидкость и лава
     const ml = lqAt(Math.floor(mcx), Math.floor(mcy));
-    if (ml > 60 && !m.fly) { m.vy *= .9; if (ltAt(Math.floor(mcx), Math.floor(mcy)) === 2 && m.type !== 'imp') hurtMob(m, 30 * dt, 0); }
+    if (ml > 60 && !m.fly) { m.vy *= .9; if (ltAt(Math.floor(mcx), Math.floor(mcy)) === 2 && m.type !== 'imp') hurtMob(m, 30 * dt, 0); else if (G.wv && G.wv.F.H > .02 && !m.D.boss) { const k = waveBob(m, dt, true, .4); if (k) m.vy -= GRAV * dt * k * .8; } }   // волны: моб у глади качается
     // контакт с игроком
     if (!p.dead && p.iframes <= 0 && m.alpha > .5 && m.x < p.x + p.w && m.x + m.w > p.x && m.y < p.y + p.h && m.y + m.h > p.y) hurtPlayer(D.dmg, Math.sign(pcx - mcx) || 1, D.name);
   }
@@ -1094,6 +1096,7 @@
           if (I.jump) p.vy = Math.max(p.vy - 46 * dt, -8);
           p.vy = Math.min(p.vy + GRAV * .28 * dt, 6);
           if (p.jumpBuf > 0 && inLq === 1 && p.coyote > 0) { p.vy = -jv * .8; p.jumpBuf = 0; }
+          if (G.wv && G.wv.F.H > .02) { const k = waveBob(p, dt, !I.down && !I.jump && p.vy > -5, .3); if (k) p.vy -= GRAV * .28 * dt * k; }   // волны: у глади качает
         } else {
           if (p.jumpBuf > 0 && (p.coyote > 0)) { p.vy = -jv; p.jumpBuf = 0; p.coyote = 0; p.jumpHold = .18; snd('jump', { vol: .4 }); }
           else if (p.jumpBuf > 0 && wings && p.jumps < 1 && !p.ground) { p.vy = -jv * .9; p.jumps++; p.jumpBuf = 0; p.jumpHold = .12; burst(p.x + p.w / 2, p.y + p.h, 10, 0xd8c8a8, 4, .4, .16); snd('swing', { vol: .5 }); }
@@ -1681,6 +1684,114 @@
   const tileKey = f => TILES[f]?.key || G.modTiles?.[f]?.key || 'air';
 
   // ═══ Шаг мира (60 раз в секунду) ═══
+  // ═══ Волны (движок js/engine/waves.js, T-022c; владелец 22.10: «физику — как для 2D-мира, так и 3D»): гладь воды под открытым
+  //     небом и в больших озёрах качается волнами — от ветра и грозы (свой мир погоды по зерну мира: у всех одинаково, без сети),
+  //     подземные лужи — тихие. Та же сумма волн — в шейдере клеток (podzem-gl.js d37w1) и здесь (F.at1): герой, вещи и мобы у
+  //     глади качаются и их чуть сносит по ходу волн, на гребнях — брызги. Время волн — часы шага (одинаково при 30/60/144 Гц) ═══
+  const WV1 = { K: new Float32Array(4), A: new Float32Array(4), P: new Float32Array(4), O: 0, H: 0 };
+  function wavesStart(W){
+    wavesStop();
+    const WV = window.D37E?.waves; if (!WV) return;
+    const F = WV.field({ kind: 'side', seed: 'podzem:' + W.seed, solo: true });
+    let cw = null; try { const C = window.D37E.climate; cw = C?.world ? C.world({ seed: 'podzem:' + W.seed, mode: 'calendar', climateAt: () => 'temperate' }) : null; } catch (e) {}
+    G.wv = { F, cw, wt: undefined, wxT: 0, force: null, surf: [], surfT: 0, sprT: 0 };
+    wavesWeather();
+  }
+  function wavesWeather(){
+    const v = G.wv; if (!v) return;
+    let s = v.force; if (!s) try { s = v.cw?.at(0, 0, Date.now()) || null; } catch (e) { s = null; }
+    v.F.gain = G.R?.hq?.chunk !== false ? 1 : 0;   // простой шейдер («красивый» не собрался) — волн не видно, значит, и в игре их нет
+    v.F.weather(s || {});
+  }
+  function wavesStop(){ if (G.wv) { window.D37E?.waves?.free(G.wv.F); G.wv = null; } }
+  const smoothK = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  // сила волн на глади — как pzWaveK в шейдере: под небом (свет неба клетки) или «большое озеро» (своя доля клетки, c.wvb — она же
+  // уходит в шейдер в канале a), между серединами клеток плавно; соседняя клетка за краем чанка — «большое озеро» края (как в шейдере)
+  function skyK(x, y){ const c = cAt(x, y); return c ? smoothK(.3, .8, c.light[idx(x, y) * 4 + 3] / 255) : 0; }
+  function waveK(x, y){
+    const fx = x - .5, i0 = Math.floor(fx), u = fx - i0, c = cAt(Math.floor(x), y);
+    if (!c) return 0;
+    const B = c.wvb, cx0 = c.cx * CS, row = (y & CM) << CB;
+    const b0 = B ? B[row | clamp(i0 - cx0, 0, CM)] / 127 : 0, b1 = B ? B[row | clamp(i0 + 1 - cx0, 0, CM)] / 127 : 0;
+    return Math.max(skyK(i0, y), b0) * (1 - u) + Math.max(skyK(i0 + 1, y), b1) * u;
+  }
+  // гладь воды у точки (x, y): клетка глади (вода, над ней — нет) не выше 4 клеток; уровень с волной (клетки, вниз +), k — сила волн
+  const SURF = { y: NaN, k: 0 };
+  function surfAt(x, y){
+    SURF.y = NaN; SURF.k = 0;
+    const cx = Math.floor(x); let cy = Math.floor(y);
+    if (!(lqAt(cx, cy) > 0 && ltAt(cx, cy) === 1)) { if (lqAt(cx, cy + 1) > 0 && ltAt(cx, cy + 1) === 1) cy++; else return SURF; }
+    for (let k = 0; k < 4 && lqAt(cx, cy - 1) > 0; k++) cy--;
+    if (lqAt(cx, cy - 1) > 0) return SURF;
+    let top = 1 - lqAt(cx, cy) / 255;
+    const v = G.wv;
+    if (v && v.F.H > 0 && v.wt >= 0) { const k = waveK(x, cy); if (k > 0) { top = Math.min(.98, top + k * (v.F.H - v.F.at1(x, v.wt))); SURF.k = k; } }
+    SURF.y = cy + top;
+    return SURF;
+  }
+  // у глади с волнами — тянет к ней (качает с волной) и чуть сносит по ходу волн; float — доля роста над водой; keep — держать у глади;
+  // deep — с какой глубины ещё всплывает (герой — 1,2: нырять можно; вещи — со дна неглубокой воды)
+  function waveBob(b, dt, keep, float, deep = 1.2){
+    const s = surfAt(b.x + b.w / 2, b.y + b.h * float);
+    if (!(s.y === s.y) || s.k < .05) return 0;
+    const F = G.wv.F, target = s.y - b.h * float;
+    if (b.y < target - 1.5 || b.y > target + deep) return 0;
+    if (keep) b.vy += ((target - b.y) * 16 - b.vy * 3.2) * dt * s.k;
+    b.vx += F.ddx * F.drift * s.k * dt * 1.5;
+    return s.k;
+  }
+  // «большое озеро» по клеткам глади (ряды ra…rb чанка, при загрузке на видеокарту): гладь подряд (вода под воздухом, и в соседних
+  // чанках) шириной 16…40 клеток и глубиной от 3 → 0…127; всё остальное — 0. Подземные лужи — тихие
+  const surfCell = (x, y) => lqAt(x, y) && ltAt(x, y) === 1 && !lqAt(x, y - 1);
+  function wvRows(c, ra, rb){
+    const B = c.wvb || (c.wvb = new Uint8Array(CA)), x0 = c.cx * CS, y0 = c.cy * CS;
+    for (let ly = ra; ly <= rb; ly++) {
+      const y = y0 + ly, row = ly << CB;
+      for (let lx = 0; lx < CS;) {
+        const i = row | lx;
+        if (!(c.lq[i] && c.lt[i] === 1 && !lqAt(x0 + lx, y - 1))) { B[i] = 0; lx++; continue; }
+        let a = x0 + lx, b = a;
+        while (b - a < 160 && surfCell(b + 1, y)) b++;
+        while (b - a < 160 && surfCell(a - 1, y)) a--;
+        const w = b - a + 1, mid = (a + b) >> 1;
+        const v = w > 12 && lqAt(mid, y + 1) && lqAt(mid, y + 2) ? Math.round(smoothK(16, 40, w) * 127) : 0;
+        const end = Math.min(CM, b - x0);
+        for (let k = lx; k <= end; k++) B[row | k] = v;
+        lx = end + 1;
+      }
+    }
+    return B;
+  }
+  // брызги на гребнях: точки глади у камеры (раз в 0,5 с — по видимым чанкам), на гребне сильной волны — капли
+  function waveSpray(dt){
+    const v = G.wv, F = v.F;
+    if ((v.surfT -= dt) <= 0) {
+      v.surfT = .5; v.surf.length = 0;
+      for (const c of visList) {
+        if (!c.hasLq) continue;
+        const x0 = c.cx * CS, y0 = c.cy * CS;
+        for (let i = CS; i < CA && v.surf.length < 128; i += 3) if (c.lt[i] === 1 && c.lq[i] > 120 && !c.lq[i - CS] && !c.fg[i - CS]) { const x = x0 + (i & CM) + .5, y = y0 + (i >> CB); if (waveK(x, y) > .4) v.surf.push(x, y); }
+      }
+    }
+    if (F.H < .12 || !v.surf.length || (v.sprT -= dt) > 0) return;
+    v.sprT = .06;
+    const j = (rand() * v.surf.length / 2) | 0, x = v.surf[j * 2] + rand() - .5, y = v.surf[j * 2 + 1];
+    if (F.at1(x, v.wt) > F.H * .55 && F.vel1(x, v.wt) > 0) { const s = surfAt(x, y + .5); if (s.y === s.y) burst(x, s.y - .05, F.H > .3 ? 4 : 2, 0xd6ecff, 2.5 + F.H * 4, .45, .1); }
+  }
+  function wavesStep(dt){
+    const v = G.wv, WV = window.D37E?.waves; if (!WV) return;
+    WV.clock(v, dt);
+    if ((v.wxT -= dt) <= 0) { v.wxT = 2; wavesWeather(); }
+    if (v.F.H > .02 && G.opt.parts !== false) waveSpray(dt);
+  }
+  // для шейдера: фазы от начала отсчёта у камеры (числа поменьше — точнее), сумма амплитуд
+  function wavesSync(camX){
+    const v = G.wv; if (!v || !(v.F.H > 0) || !(v.wt >= 0)) return null;
+    const ox = Math.round(camX / 1024) * 1024;
+    window.D37E.waves.sync1(v.F, v.wt, ox, WV1.K, WV1.A, WV1.P); WV1.O = ox; WV1.H = v.F.H;
+    return WV1;
+  }
+
   function step(dt){
     G.t += dt; G.tick++;
     G.C.step(dt);
@@ -1695,6 +1806,7 @@
       G.W.playtime = (G.W.playtime || 0) + dt; G.CH.playtime = (G.CH.playtime || 0) + dt;
       keysOnce();
       if (G.shift && !G.U?.modal()) autoSelect();
+      if (G.wv) wavesStep(dt);   // волны: часы шага, погода, «большие озёра», брызги
       updHook(dt);
       updPlayer(dt);
       updTarget();
@@ -2189,6 +2301,7 @@
     G.perf.fireMs = (G.perf.fireMs || 0) * .97 + (now() - tf) * .03;
     drawSprites();
     R.flush();
+    CHS.wv = wavesSync(camX);   // волны на глади (waves.js): та же волна, что у героя и вещей
     R.chunks(visList, CHS, 1);
     drawGlares();
     if (R.post?.active) {   // постобработка набора: рябь воды и дрожь над лавой (поле по клеткам вокруг камеры), цвет края
@@ -2645,6 +2758,7 @@
     G.W = W; G.CH = CH;
     G.sup = window.PZSupport?.attach?.(G, SUPH) || null;   // обрушение и прочность (podzem-support.js; мир без него — null)
     G.gen = PZ.makeGen(W.seed);
+    wavesStart(W);   // волны мира (waves.js): зерно мира, своя погода
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
     G.mobs.length = 0; G.items.length = 0; G.projs.length = 0; G.npcs.length = 0; G.texts.length = 0; G.boss = null; PT.n = 0;
     G.edits.length = 0; G.editIdx.clear(); G.cheats = !!W.cheats;
@@ -2687,6 +2801,7 @@
     G.worker?.stop(); G.worker = null;
     for (const c of G.chunks.values()) G.R?.chunkFree(c);
     G.chunks.clear(); G.W = null; G.CH = null; G.state = 'menu'; G.sup = null;
+    wavesStop();
     ambienceOff();
   }
   // рекорд глубины — в таблицу рекордов сайта (без XP), не чаще раза в минуту
@@ -2959,6 +3074,9 @@
     _test: {
       state: () => G && { state: G.state, world: G.W && { id: G.W.id, seed: G.W.seed, time: +G.W.time.toFixed(3), maxDepth: G.W.maxDepth, mods: G.W.mods }, pl: G.pl && { x: +G.pl.x.toFixed(2), y: +G.pl.y.toFixed(2), ground: G.pl.ground, hp: G.CH?.hp, dead: G.pl.dead }, chunks: G.chunks.size, pending: G.pending.size, mobs: G.mobs.length, items: G.items.length, boss: G.boss && G.boss.type, worker: G.worker?.kind, fps: G.perf.frames.length ? +(1000 / (G.perf.frames.reduce((a, b) => a + b, 0) / G.perf.frames.length)).toFixed(1) : 0, cpu: G.perf.cpu.length ? +(G.perf.cpu.reduce((a, b) => a + b, 0) / G.perf.cpu.length).toFixed(2) : 0, draws: G.R?.stats.draws, sprites: G.R?.stats.sprites },
       tp(x, y){ if (!G?.pl) return; G.pl.x = x; G.pl.y = y; G.pl.vx = G.pl.vy = 0; G.pl.fallY = y; G.pl.ledge = null; G.cam.x = x; G.cam.y = y; stream(true); },
+      // волны (waves.js): своя погода волн ({ wind, windDir, thunder } / null — как у всех), гладь у точки, «большое озеро» чанков
+      waves(o){ if (!G?.wv) return null; if (o !== undefined) { G.wv.force = o; wavesWeather(); } return { H: G.wv.F.H, storm: G.wv.F.storm, wt: G.wv.wt, ddx: G.wv.F.ddx, drift: G.wv.F.drift }; },
+      surf(x, y){ const s = surfAt(x, y); return { y: s.y, k: s.k }; },
       give: (id, n) => give(id, n), time(v){ if (G?.W) G.W.time = v; }, god(v = true){ if (G) G.god = v; }, step, render, stream, shapeAt, fgAt, setCell, breakTile, placeTile: (id, x, y) => placeTile(itemDef(id), x, y),
       boss: k => spawnBoss(k), mob: (k, x, y) => spawnMob(k, x, y), save: () => saveAll(), get G(){ return G; }, perf: () => G && { frames: G.perf.frames.slice(), cpu: G.perf.cpu.slice() },
       lootFor: (x, y) => lootFor(x, y), PT, chunk, upload,

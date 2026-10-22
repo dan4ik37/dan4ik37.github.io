@@ -1152,7 +1152,7 @@
     for (const [r, c, key] of [[SEA, '#2f7fc1', 'mzsea'], [CANAL, '#3a8fd0', 'mzcanal']]) {
       const sea = r === SEA;
       if (!(open && sea)) {
-        const wm = R.water(c, { key, fixedColor: true }); wm.side = T.DoubleSide;   // из-под воды видно поверхность
+        const wm = R.water(c, { key, fixedColor: true, waves: r === CANAL ? S?.waves?.F.canal : null, wavesMode: 'f' }); wm.side = T.DoubleSide;   // из-под воды видно поверхность; канал — с рябью волн (waves.js)
         const m = new T.Mesh(new T.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0), wm); m.rotation.x = -PI / 2; m.position.set((r.x0 + r.x1) / 2, r.wl, (r.z0 + r.z1) / 2);
         m.userData.dyn = true; R.scene.add(m); R.own.push(m.geometry);
         P(null, { s: 'box', x: (r.x0 + r.x1) / 2, y: r.floor - .1, z: (r.z0 + r.z1) / 2, w: r.x1 - r.x0, h: .2, d: r.z1 - r.z0, c: '#b8a77a' });
@@ -1297,7 +1297,7 @@
       finally { sc.children = ch; on = false; delete progs.push; r.debug.checkShaderErrors = chk; r.setRenderTarget(rt0); }
       if (fresh.length) {   // у материалов с новой программой список uniform — заново при первом настоящем кадре
         const F = new Set(fresh);
-        for (const o of list) for (const m of Array.isArray(o.material) ? o.material : [o.material]) { const mp = r.properties.get(m); if (F.has(mp.currentProgram)) { mp.lightsStateVersion = -1; m.needsUpdate = true; } }
+        for (const o0 of list) o0.traverse(o => { if (!o.material) return; for (const m of Array.isArray(o.material) ? o.material : [o.material]) { const mp = r.properties.get(m); if (F.has(mp.currentProgram)) { mp.lightsStateVersion = -1; m.needsUpdate = true; } } });   // группы (вид машины) — по всем сеткам внутри
         const t = performance.now(); for (const pg of fresh) W.wait.push({ pg, t });
         W.n += fresh.length;
         for (const pg of fresh) { W.log.push(pg.name + ' ' + pg.cacheKey.slice(0, 90)); if (W.log.length > 40) W.log.shift(); }
@@ -2236,7 +2236,7 @@
       }
     };
     // рельеф карты: чанки рядом с камерой (дальность — по туману), деревья, тела деревьев рядом с игроком
-    try { const wm = worldMap(); if (wm) rt.wmv = wm.view(R, { far: () => R.camera.far * .98 }); } catch (e) { console.error(e); }
+    try { const wm = worldMap(); if (wm) rt.wmv = wm.view(R, { far: () => R.camera.far * .98, waves: S.waves ? { sea: S.waves.F.ocean, lake: S.waves.F.lake } : null }); } catch (e) { console.error(e); }   // волны моря — «блин» вокруг камеры (waves.js)
     rt.frame = (dt, t) => {
       if (rt.stopped) return;
       rt.frameNo = (rt.frameNo || 0) + 1;

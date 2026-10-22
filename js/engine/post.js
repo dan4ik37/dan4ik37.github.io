@@ -1314,6 +1314,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       if (k.startsWith('pack:')) { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // набор шейдеров — предыдущий (render.js сам выберет)
       else if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
       else if (k === 'clim' && why !== 'link') { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // погода на поверхностях: данные шейдеров больше не ставятся (precip.js) — сразу
+      else if (k === 'waves') { E.waves?.disable?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // волны (waves.js): вода без кусков волн, «блины» прочь, физика без волн
       else { if (k === 'patch') E.gfxUnpatch?.(T); if (k === 'clim') E.climUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
       try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k, why, prog, rebuild } })); } catch (e) {}
       return true;
@@ -1321,7 +1322,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     // сцена: по ступеньке — коды в альфе → свои куски шейдеров → «низкая» (не собралось — коды не помогут: это не текст шейдера)
     function ladder(why, prog = ''){
       if (G.wait) return;
-      // погода на поверхностях (gfx.js D37_CLIM) — новее всего: кадр с ней чернеет / «не числа» — сначала без неё
+      // волны (waves.js, D37_GW) — новее всего: кадр с ними «не числа» / чернеет — сначала без них
+      if (why !== 'link' && E.waves?.active?.() && on('waves')) { off('waves', why, prog); return; }
+      // погода на поверхностях (gfx.js D37_CLIM): кадр с ней чернеет / «не числа» — потом без неё
       if (why !== 'link' && R.wxOn && E.climShaders && on('clim')) { off('clim', why, prog); return; }
       if (why !== 'link' && P?.codesOn?.() && on('codes')) { off('codes', why, prog); return; }
       if (on('patch') && T.ShaderChunk?.__d37) { off('patch', why, prog); return; }
@@ -1352,6 +1355,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         if (!lb.post && !lb.mat) { G.log.push('orphan:' + (p.name || '')); continue; }
         // глубина резкости и её автофокус — только они (набор остаётся: лучи, облака, тон работают)
         if (lb.post === 'dof' || lb.post === 'foc') { off('dof', 'link', lb.post); continue; }
+        if (!lb.post && lb.mat?.defines?.D37_GW !== undefined && on('waves')) { off('waves', 'link', lb.scene); continue; }   // вода с волнами (waves.js) — только волны
         if (lb.post === 'rays' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
           if (pk) off('pack:' + pk, 'link', lb.post || lb.scene);
           continue;
