@@ -54,9 +54,11 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
   const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; cb.set(i, [res, rej]); ws.send(JSON.stringify({ id: i, method, params })); });
   const ev = async expr => { const r = await send('Runtime.evaluate', { expression: expr, returnByValue: true, awaitPromise: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + ' ' + (r.exceptionDetails.exception?.description || '')); return r.result.value; };
   const errors = [];
+  // где: файл:строка (ошибка в своём коде или в чужом скрипте — реклама, Метрика)
+  const where = (u, l) => (u ? ' @ ' + String(u).replace(/^https?:\/\/[^/]+/, '') + ':' + ((l | 0) + 1) : '');
   subs.add(d => {
-    if (d.method === 'Runtime.exceptionThrown') errors.push((d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text || '').slice(0, 300));
-    if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push(d.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300));
+    if (d.method === 'Runtime.exceptionThrown') { const x = d.params.exceptionDetails; errors.push(((x.exception?.description || x.text || '') + where(x.url || x.stackTrace?.callFrames?.[0]?.url, x.lineNumber)).slice(0, 360)); }
+    if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') { const f = d.params.stackTrace?.callFrames?.[0]; errors.push((d.params.args.map(a => a.value ?? a.description ?? '').join(' ') + where(f?.url, f?.lineNumber)).slice(0, 360)); }
   });
   await send('Page.enable'); await send('Runtime.enable');
   // без окошек возраста и «установить приложение», без звука; perf — «средняя» (не .high)
@@ -64,6 +66,9 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('d37_age_ask',String(Date.now()+864e6));localStorage.setItem('d37_perf',${JSON.stringify(perfMode)});localStorage.setItem('d37_app',JSON.stringify({x:1,v:1}));localStorage.setItem('d37_games_mute','1')}catch(e){}` });
   const shot = async name => { const r = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(OUT, name), Buffer.from(r.data, 'base64')); return name; };
   const go = async url => { await send('Page.navigate', { url }); await sleep(700); };
+  // переход внутри страницы (как человек по ссылкам сайта): адреса настоящие (/play/…), поэтому Page.navigate на «/#/…» — это загрузка
+  // новой страницы (а старые страницы Chrome под DevTools держит в памяти — растёт и у старого кода). Здесь — тот же документ
+  const hop = async h => { await ev(`(window.D37Route?.go ? D37Route.go(${JSON.stringify(h)}) : (location.hash = ${JSON.stringify(h)}), 1)`); await sleep(500); };
   const waitFor = async (expr, ms = 15000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { try { if (await ev(expr)) return true; } catch (e) {} await sleep(200); } return false; };
   const click = sel => ev(`(() => { const b = document.querySelector(${JSON.stringify(sel)}); if (!b) return false; b.click(); return true; })()`);
   const pc = () => send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 760, deviceScaleFactor: 1, mobile: false });
@@ -217,13 +222,14 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
       await go(`${BASE}/#/home`); await seedTrial({ stage: 3, dna: 100, earned: 400, play: 1500, col: 3, owned: { adhesion: 1, photo: 1 }, design: { s: ['adhesion', 'photo', '', '', '', ''], f: 'chain', k: { p: 5, a: '#4ade80', b: '#166534' } } });
       const probe = async () => { await send('HeapProfiler.collectGarbage'); await sleep(150); await send('HeapProfiler.collectGarbage'); return ev(`({ heap: performance.memory.usedJSHeapSize, nodes: document.getElementsByTagName('*').length, canv: document.getElementsByTagName('canvas').length, styles: document.querySelectorAll('style#kpCss, style#ioCss').length })`); };
       const marks = [];
+      await go(`${BASE}/#/games`); await sleep(1500);
       for (let i = 0; i < 20; i++) {
-        await go(`${BASE}/#/games/kletochki/evo`);
+        await hop('#/games/kletochki/evo');
         await waitFor(`!!document.querySelector('[data-io="evplay"][data-b="deep"]')`, 8000);
         await click(`[data-io="evplay"][data-b="${['pool', 'reef', 'deep'][i % 3]}"][data-m="bots"]`);
         await waitFor(`!!(${T}.S?.W)`, 8000);
         await sleep(1200);
-        await go(`${BASE}/#/games`); await sleep(300);
+        await hop('#/games'); await sleep(300);
         if (i === 4 || i === 11 || i === 19) marks.push(await probe());   // первые 5 — разогрев сайта (кэши; так же и у обычной арены и в старом коде)
       }
       const [a, m, b] = marks;
@@ -241,18 +247,19 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
       await phone();
       await go(`${BASE}/#/home`); await seedTrial({ stage: 3, dna: 50, earned: 400, play: 1500, col: 3, owned: { adhesion: 2, photo: 1, eye: 1, jaw: 1, flagellum: 1 }, design: { s: ['jaw', 'eye', 'adhesion', 'flagellum', 'adhesion', 'photo'], f: 'wedge', k: { p: 9, a: '#f472b6', b: '#fde68a' } } });
       const e0 = errors.length, heaps = [];
+      await go(`${BASE}/#/games`); await sleep(1500);
       const t0 = Date.now();
       let lap = 0;
       while (Date.now() - t0 < SOAK_MIN * 60000) {
         const b = ['pool', 'reef', 'deep'][lap++ % 3];
-        // как человек: к списку игр и снова в «Путь клетки» (переход внутри страницы; тот же адрес ещё раз — это перезагрузка, не то)
-        await go(`${BASE}/#/games`); await sleep(300);
-        await go(`${BASE}/#/games/kletochki/evo`);
+        // как человек: к списку игр и снова в «Путь клетки» — переходом внутри страницы (один документ все 10 минут)
+        await hop('#/games'); await sleep(300);
+        await hop('#/games/kletochki/evo');
         ok(await waitFor(`!!document.querySelector('[data-io="evplay"][data-b="${b}"]')`, 8000), `круг ${lap}: «Мой род» открылся`);
         await click(`[data-io="evplay"][data-b="${b}"][data-m="bots"]`);
         ok(await waitFor(`${T}.S?.W?.evo?.b === '${b}'`, 8000), `круг ${lap}: игра в биоме ${b}`);
         // управление: новое направление раз в 0,7 с, деление и выброс иногда; съели — «Ещё раз»
-        await ev(`window.__soak && clearInterval(window.__soak); window.__soak = setInterval(() => { const S = ${T}.S; if (!S) return; const I = window.__I || (window.__I = new Float64Array(6)); const a = Math.random() * 6.283; I[0] = Math.cos(a); I[1] = Math.sin(a); if (Math.random() < .25) I[2]++; if (Math.random() < .15) I[3]++; S.setInput(I, performance.now()); const ag = document.querySelector('[data-io="again"]'); if (ag && Math.random() < .5) ag.click(); }, 700), 1`);
+        await ev(`window.__soak && clearInterval(window.__soak); window.__soak = setInterval(() => { const S = window.GAME_IMPL?.kletochki?._test?.S; if (!S) return; const I = window.__I || (window.__I = new Float64Array(6)); const a = Math.random() * 6.283; I[0] = Math.cos(a); I[1] = Math.sin(a); if (Math.random() < .25) I[2]++; if (Math.random() < .15) I[3]++; S.setInput(I, performance.now()); const ag = document.querySelector('[data-io="again"]'); if (ag && Math.random() < .5) ag.click(); }, 700), 1`);
         const until = Math.min(t0 + SOAK_MIN * 60000, Date.now() + 100000);
         while (Date.now() < until) { await sleep(20000); await send('HeapProfiler.collectGarbage'); heaps.push(+(await ev('performance.memory.usedJSHeapSize / 1048576')).toFixed(1)); }
         await ev('clearInterval(window.__soak), 1');
