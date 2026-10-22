@@ -4,6 +4,8 @@ Plan v1, 2026-10-22. Sources: `docs/superpowers/specs/2026-10-16-universe-design
 (§6.4 PlanetProfile, §7½ GPS-телефон после спутника и ретрансляторы), `docs/WORLD_MAP.md`, `docs/PHYSICS_PLAN.md`, `docs/SEASONS.md`,
 CLAUDE.md («Движок D37E», «Мир Денчика» 3D, «Кубомир», «Подземье», «Студия 3D», мастер-инструкция).
 Units: engine units **u** (1 m = `E.UNIT` = 1.1667 u). **(M)** = measured by the proof (§12); everything else is an estimate.
+
+> Space, other planets, orbits with physics, satellites, meteors and terraforming are planned in docs/plans/planet-space.md (T-078). Mapping: PL-9 → PS-1; SP-1 → PS-1 + PS-2 + PS-4; SP-2 → PS-4 + PS-5; SP-3 → PS-6; SP-4 → PS-16.
 
 ## Для владельца (кратко, по-русски)
 1. Сделали основу круглой планеты как ОБЩИЙ модуль движка (`D37E.planet`), а не код одной игры: его подключат «Мир Денчика», «Кубомир», «Подземье», «Студия 3D» и космос.
