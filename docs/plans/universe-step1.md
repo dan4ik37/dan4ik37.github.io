@@ -388,3 +388,14 @@ Owner must decide (5):
    - anti-fraud WITHOUT bans («чтобы не банило» — families and schools share an IP): at most 3 counted votes per device hash and per IP hash per election (extra votes are silently not counted, not punished); device hash (D37Ref.device / d37_dev + stable browser signals) links accounts across IP changes / VPN, so switching IP does not add votes; accounts with no real gameplay (bot-like: no city tasks, no visits pattern) do not count; Turnstile captcha on the vote button when TURNSTILE_SITE_KEY is set (owner); suspicious clusters (many accounts on one device/IP, new accounts voting together) listed for the admin with «не считать» — never auto-ban;
    - the owner/admin can still appoint or remove a mayor and void an election;
    - results public, counts per candidate; ties → older account.
+
+7. **Cities grow from ZERO through eras** (owner 22.10: «нужно постепенное развитие города, не сразу: сначала с нуля, потом с древнего
+   мира до нынешнего»; chose «все города с нуля» and «у каждого поселения своя эпоха»). ALL cities — the capital's city part, the kids'
+   town (0+, peaceful rules stay) and the big city (16+) — start as an empty site (campfire, tents) and are rebuilt by players through
+   eras: stone age → ancient world → middle ages → industrial → modern (→ future / space with the planet plan T-051). Each settlement has
+   its own era (they race and trade, like Civilization); an era is unlocked by deeds (population, resources, buildings, research), not
+   by XP. Buildings, professions, tools, transport, services and looks depend on the era (no taxi/police/phones before the modern era).
+   Coordinator decisions (one line each, owner may override): the spawn hub (plaza with the fountain, café and club with game tables,
+   stage, portals to games) stays a neutral «timeless» area so the site's mini-games stay reachable on day 1; the battle zone and
+   military bases stay a separate mode with their own progression (era-themed weapons later); players keep денки and skills from P1;
+   the current city layouts become the modern-era blueprints. This reshapes P2–P7: a new plan (board T-053) comes BEFORE P2.
