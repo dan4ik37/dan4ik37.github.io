@@ -204,9 +204,9 @@
       return false;
     }
     X.onDrop = c => {
-      if (!c?.edits) return;
-      for (const [i, v] of c.edits) if ((v & 0xfff) === FIRE) FS.del(c.cx * 16 + (i >> 11), i & 127, c.cz * 16 + ((i >> 7) & 15));
-      LAVA.delete(c.key);
+      if (!c) return;
+      LAVA.delete(c.key);   // и у чанка без правок (иначе лава выгруженных чанков копилась бы)
+      if (c.edits) for (const [i, v] of c.edits) if ((v & 0xfff) === FIRE) FS.del(c.cx * 16 + (i >> 11), i & 127, c.cz * 16 + ((i >> 7) & 15));
     };
     // лава в чанке (светящиеся клетки потока: одна на поверхность 4×4) — для «лава поджигает»
     const LAVA = new Map();

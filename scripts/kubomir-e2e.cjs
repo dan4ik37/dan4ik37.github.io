@@ -14,6 +14,8 @@
 // KB_MODE=reopen — мир закрыть и открыть 8 раз (KB_N — другое число): память JS после сборки мусора — не растёт
 // KB_MODE=fire — огонь (T-022d), мир «Огонь распространяется»: лес 6 × 6 и дом из досок — ЦП на кадр без огня и в пожаре (среднее, 95 %,
 //   худший, вызовы), снимки днём, ночью и после пожара; KB_PHONE=1 — профиль телефона (ЦП ×4); KB_FIRE=1 KB_MODE=soak / reopen — с пожаром
+// KB_MODE=firecycle — дом из досок сгорает на одном месте KB_N раз (по умолчанию 12): память JS после сборки мусора не растёт (без
+//   телепортов и новых чанков, как в soak, — растёт только то, что держит огонь)
 // KB_MODE=combat — две руки и бой (T-012): снимки поз (от 1-го лица, спереди, сзади; фаза удара «заморожена»), зомби — нокаут
 //   мечом, лук — стрела вылетела; круги боя (KB_ROUNDS) — память JS не растёт, мобы не копятся; ошибок в консоли нет
 // KB_MODE=swim — плавание (T-019): озеро, стоит / держит «прыжок» / плывёт, день и ночь — где гладь относительно плеч и глаз, поза
@@ -28,7 +30,7 @@ const [label = 'now', preset = 'ultra', angle = 'd3d11'] = process.argv.slice(2)
 const MODE = process.env.KB_MODE || '';
 const PHONE = MODE === 'perf' || !!process.env.KB_PHONE;
 const SUPPORT = MODE === 'support' || !!process.env.KB_SUPPORT;   // мир «Обрушение: реализм» (T-022a; KB_SUPPORT=1 — и для soak)
-const FIRE = MODE === 'fire' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
+const FIRE = MODE === 'fire' || MODE === 'firecycle' || !!process.env.KB_FIRE;   // мир «Огонь распространяется» (T-022d; KB_FIRE=1 — и для soak / reopen)
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
 const SHOTS = path.join(TMP, MODE === 'water' ? 'water' : 'kubomir2', 'shots'); fs.mkdirSync(SHOTS, { recursive: true });
@@ -670,6 +672,29 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       await shot('fire-after');
       const pr = await ev(`(${progsOk})(GAME_IMPL.kubomir._test.state().R)`), errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
       ok(!pr.bad.length, 'все программы шейдеров собрались (пламя, дрожь воздуха, дым)', pr.bad);
+      ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
+      return;
+    }
+    if (MODE === 'firecycle') {
+      await idle();
+      const hs = [], N = +process.env.KB_N || 12;
+      for (let i = 0; i < N; i++) {
+        const r = await ev(`(async () => { const wait = ms => new Promise(r => setTimeout(r, ms)), S = GAME_IMPL.kubomir._test.state(), V = D37E.vox, W = S.W, ID = V.ID;
+          if (!S.fire?.F) return { none: true };
+          if (!S._fc) { const P = S.P; S._fc = { x: Math.floor(P.x) + 4, z: Math.floor(P.z) - 2, y: Math.floor(P.y) }; }
+          const { x: cx, z: cz, y: gy } = S._fc;
+          for (let x = cx; x < cx + 5; x++) for (let z = cz; z < cz + 5; z++) for (let y = gy; y < gy + 3; y++) { const e = x === cx || x === cx + 4 || z === cz || z === cz + 4 || y === gy + 2; W.set(x, y, z, e ? V.cell(ID.planks_oak) : 0, { urgent: 1 }); }
+          await wait(1200);
+          S.fire.igniteAt(cx, gy + 1, cz + 2, -1, 0, 0); S.fire.igniteAt(cx + 4, gy + 2, cz + 4, 0, 1, 0);
+          let t = 0, peak = 0; for (; t < 75 && (t < 2 || S.fire.F.n > 0); t++) { await wait(1000); peak = Math.max(peak, S.fire.F.n); }
+          return { sec: t, peak, left: S.fire.F.n, blocks: S.fire.blocks.n, burnt: S.fire.stats.burnt };
+        })()`, 150000);
+        if (r?.none) { ok(false, 'мир «Огонь распространяется» не открылся'); return; }
+        if (i === 0 || i % 3 === 2 || i === N - 1) { const h = i ? await heap() : null; if (h != null) hs.push(h); console.log('  круг', i + 1, JSON.stringify(r), h != null ? 'память ' + h : ''); }
+      }
+      res.firecycle = hs; console.log('ЗАМЕР firecycle, память JS после сборки мусора (МБ):', hs.join(' → '));
+      ok(hs.length >= 3 && hs[hs.length - 1] - hs[0] < 8, 'дом сгорел ' + N + ' раз на одном месте — память не растёт', hs);
+      const errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
       ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
       return;
     }

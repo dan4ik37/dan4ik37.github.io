@@ -1028,6 +1028,16 @@ function fakeWorld(sky, blk, walls = new Set()){
       ok(F.stats.lava > 0, 'лава подожгла доски рядом', F.stats);
       X.dispose(); F.dispose();
     }
+    // чанк с лавой выгрузили (без правок) — его лава забыта: не поджигает и не копится
+    {
+      const W = mkFW(); W.set(30, 10, 30, V.cell(ID.lava)); W.set(30, 11, 31, PL); W.set(31, 11, 30, PL); W.set(30, 11, 30, 0);
+      const { X, S13, F } = mkF(W, { meta: { fire: 'spread' } });
+      const c = W.chunk(1, 1); F.onMesh(c, { lights: Int32Array.from([((30 & 15) << 11) | ((30 & 15) << 7) | 10 | (ID.lava << 15)]) });
+      F.onDrop({ key: c.key, cx: c.cx, cz: c.cz });
+      ticks(S13, 20 * 20);
+      ok(F.stats.lava === 0, 'выгруженный чанк без правок — его лава забыта', F.stats);
+      X.dispose(); F.dispose();
+    }
     // гость: ядра нет — огниво просит хозяина; пламя — по блокам «огонь» из правок
     {
       const W = mkFW(); const asks = [];
