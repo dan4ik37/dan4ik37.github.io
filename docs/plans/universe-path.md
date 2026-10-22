@@ -27,6 +27,46 @@ Sizes as in planet.md: **S** < 1 agent run, **M** ≈ 1, **L** ≈ 2–3, **XL**
 14. Нужны 5 твоих решений (раздел 8): сколько длится обязательный путь новичка, «Первопоселенцы», день «Начала времён», что остаётся вне эпох, телефон до «нашего времени».
 
 ---
+
+
+## Owner decisions (22.10.2026) — they override the recommendations of §8
+
+1. **Long path to awakening: ≈ 15–20 h** (cell ≈ 1–2 h, creature the rest), not the short 3–4 h gate. Mitigate the empty
+   civilization layer with NPC tribes and settlements that grow by themselves (T-060) and with visible progress of others.
+2. **Everyone starts as a microbe — no «Первопоселенцы» shortcut**, existing players included. Coordinator decision (owner may
+   override): site-wide things stay with the account (🪙, 💎, wardrobe items, VIP, levels, achievements — red line «заработанное —
+   к аккаунту»); world-layer progress from P1 (денки, profession skills) is kept but becomes usable when the player reaches the
+   settlement stage.
+3. **Only the plaza with the games stays outside the eras.** The plots district (homes) and the battle zone with military bases
+   also follow the eras: homes from huts to houses, fights from clubs and bows through catapults and early guns to today's
+   vehicles; the current district/bases content becomes the modern-era (E5) version. Era packs T-064…T-067 must include them.
+4. **Phones and satellites must be logical**: the site phone (chat, friends, calls) always works; the phone in the character's hand
+   and in-world apps (taxi, GPS, bank) only from «наше время». Several different satellites with real coverage — navigation (GPS),
+   communication/internet, maybe TV/weather; out of coverage or underground a service does not work (relays in caves, towers in
+   cities, as in kubomir-modpacks §7½). Applies to T-072 and the space steps SP-1…SP-4.
+5. «Начало времён» day — the owner sets it later.
+
+
+## Checking in a big world (owner 22.10: «а если мир станет больше? Может, чуть больше свободы, но по-другому проверять, переложить
+## ответственность или сделать проверку внутри мира чем-то другим?»)
+
+Principle: strict server checks only where cheating breaks the game for everyone; freedom everywhere else, verified differently.
+1. **Hard core on the server (stays strict, it is cheap):** money and items appearing or moving, ownership of land and buildings,
+   ratings and rewards. One RPC per action, indexed, a few ms — scales with T-045/T-071. Never moved to browsers.
+2. **Simulation in players' browsers (more freedom):** movement, physics, building, fights, creatures run at the region host
+   (a player's browser) as now. Checked by plausibility at the host (speed, reach, rate), by deterministic re-simulation of
+   samples on the server (like raids already do), and by peers: 2–3 nearby players act as witnesses; a disagreement
+   triggers a server replay of that event instead of trusting one side.
+3. **Responsibility inside the world (part of the game, era-appropriate):** settlement leaders approve building projects and set
+   local rules; elders/guards/police/courts by era handle griefing; reputation that NPC traders, guards and other settlements
+   react to; weighted reports with trust (as designed for mods in docs/MODS.md); exile from a settlement as a consequence. Kids'
+   realm: only soft tools (blocks, reports to staff), never courts.
+4. **Statistics instead of checking every step:** the server watches aggregates (the city economy log, wealth spikes, impossible
+   production, twin clusters) and flags them for the owner; suspicious accounts get stricter checks (more samples) automatically.
+5. **Everything reversible:** an action journal and per-region snapshots, so a missed cheat or griefing can be rolled back
+   (fits the rule «nothing is lost forever»).
+6. **A separate anti-cheat service** (owner 22.10: «можно ещё античит сделать, который другая система проверяет, а не сам сервер»; board T-073): its own container (later its own small server), not the game server. It reads an append-only event journal (actions from the RPC layer, auditable inputs from rooms/regions via the T-045 «anti-cheat feed», economy statistics), re-simulates deterministic parts in its own time, keeps a risk score per account (hashed ids, no personal data) and acts softly: flag for the owner, more sampling, temporary limits, rollback requests — final bans by the owner/moderators. It never slows gameplay and can be updated independently; browser-side checks stay only as a first filter (they are easy to bypass).
+Owner of this design: T-045 (server), T-071 (regions on our server), T-058/T-060 (leaders and rules), T-037 (elections).
 
 ## 0. Decisions (one line each; the owner can change any of them)
 - **The path:** cell → creature → awakening → the Person: tribe (a settlement in era 0) → settlement eras → future and space. One account = one Person
