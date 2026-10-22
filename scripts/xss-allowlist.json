@@ -5569,6 +5569,16 @@
    ]
   },
   {
+   "f": "js/games/podzem-ui.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "html-helper",
+   "n": "строка «🎮 Настроить кнопки» — D37TouchLayout.settingsRow() (js/core/touch-layout.js): название игры — esc(), остальное — константы",
+   "xs": [
+    "window.D37TouchLayout?.settingsRow?.() || ''"
+   ]
+  },
+  {
    "f": "js/games/pool.js",
    "fn": "hud",
    "k": "markup:text",
