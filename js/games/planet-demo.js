@@ -97,7 +97,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
   }
 
   // ═══ Шаг логики (1/60 с): полёт или ходьба; переезд якоря — только здесь (одинаково на телефоне и ПК) ═══
-  const TMP = [0, 0, 0], TMP2 = [0, 0, 0];
+  const TMP = [0, 0, 0], TMP2 = [0, 0, 0], FL = [0, 0, 0], RL = [0, 0, 0];
+  // местные оси (восток, вверх, юг; базис B) → система планеты, без мусора
+  const locToBF = (B, v, o) => { o[0] = B[0] * v[0] + B[3] * v[1] + B[6] * v[2]; o[1] = B[1] * v[0] + B[4] * v[1] + B[7] * v[2]; o[2] = B[2] * v[0] + B[5] * v[1] + B[8] * v[2]; return o; };
   function step(st, dt){
     if (st.dead) return;
     const { C, P, V } = st;
@@ -133,9 +135,8 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const altG = Math.max(.5, altGround(st, F.pos));
     // вперёд / вправо / вверх в системе планеты
     const cy = Math.cos(F.yaw), sy = Math.sin(F.yaw), cp = Math.cos(F.pitch), sp = Math.sin(F.pitch);
-    const fl = [-sy * cp, sp, -cy * cp], rl = [cy, 0, -sy];
-    const toBF = (v, o) => { o[0] = B[0] * v[0] + B[3] * v[1] + B[6] * v[2]; o[1] = B[1] * v[0] + B[4] * v[1] + B[7] * v[2]; o[2] = B[2] * v[0] + B[5] * v[1] + B[8] * v[2]; return o; };
-    toBF(fl, TMP); toBF(rl, TMP2);
+    FL[0] = -sy * cp; FL[1] = sp; FL[2] = -cy * cp; RL[0] = cy; RL[1] = 0; RL[2] = -sy;
+    locToBF(B, FL, TMP); locToBF(B, RL, TMP2);
     let mz = C.move.z, mx = C.move.x, my = (C.held('jump') ? 1 : 0) - (C.held('crouch') ? 1 : 0);
     let speed = clamp(altG * .9, 14, 90000) * (C.held('run') ? 6 : 1);
     if (F.auto) {   // сам спускается к земле: к точке под собой, высота падает в e раз за ~6 с

@@ -492,7 +492,7 @@ void main(){
     V.ground = (x, z) => P.patchHeight(V.fr, x, z, true);
 
     // ── Небо, свет, дальность — каждый кадр (перед рисованием) ──
-    const SB = [0, 0, 0], ML = [0, 0, 0], MB = [0, 0, 0];
+    const SB = [0, 0, 0], ML = [0, 0, 0], MB = [0, 0, 0], UPD = [0, 0, 0];
     let lightAt = -1e9, lastHour = -1, nearFar = [0, 0];
     const m4 = new T.Matrix4(), m4b = new T.Matrix4();
     function sky(){
@@ -529,7 +529,7 @@ void main(){
         const rs = P.SEAR + top;
         shell.matrix.makeScale(rs, rs, rs).setPosition(TM[0], TM[1], TM[2]); shell.matrixWorldNeedsUpdate = true;
         // звёзды видно, когда небо тёмное у камеры: космос или ночь
-        const up = [cx / Dc, cy / Dc, cz / Dc], mu = up[0] * SB[0] + up[1] * SB[1] + up[2] * SB[2];
+        const mu = (cx * SB[0] + cy * SB[1] + cz * SB[2]) / Dc;
         const tauUp = A.tauR[2] * Math.exp(-max(0, V.alt) / A.Hr);   // сколько воздуха над камерой (синий)
         stars.material.uniforms.uK.value = clamp(1 - tauUp * 40 * clamp((mu + .15) / .3, 0, 1), 0, 1);
       } else stars.material.uniforms.uK.value = 1;
@@ -551,7 +551,8 @@ void main(){
       }
       U.uTime.value = V.t % 1000;
       // свет движка (человечки, предметы): небо по настоящему солнцу — не чаще 4 раз в секунду или когда солнце сдвинулось
-      const tn = now(), hour = P.localHour([cx / Dc, cy / Dc, cz / Dc], V.t);
+      UPD[0] = cx / Dc; UPD[1] = cy / Dc; UPD[2] = cz / Dc;
+      const tn = now(), hour = P.localHour(UPD, V.t);
       if (tn - lightAt > 250 || abs(hour - lastHour) > .25) {
         lightAt = tn; lastHour = hour;
         try { R.setLighting({ time: hour }); } catch (e) {}
