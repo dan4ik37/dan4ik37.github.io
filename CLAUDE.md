@@ -160,6 +160,8 @@
    denied for function; `/rest/v1/city_people?select=cash&limit=1` → 401, 42501 permission denied for table. До запуска в городах — «🧪 пробные
    денки» (в браузере) и «Банк города появится, когда сайт обновится». Числа — docs/CITY_ECONOMY.md, менять — «🏙️ Экономика города» (админ).
    PGlite: scripts/city-sql-test.mjs (134).
+16. `ugc.sql` — ЕЩЁ РАЗ (22.10.2026, T-019: облачные сохранения «Кубомира» — раздел «☁️» в конце файла; весь файл идемпотентен). Проверка гостем (PGRST202/PGRST205 = не применён): `/rpc/cloud_rule` {"p_key":"slots"} → 2; `/rpc/cloud_list` {"p_game":"kubomir"} → {"ok":false,"reason":"auth"}; `/rpc/cloud_usage` {} → 401 permission denied; `/rest/v1/cloud_saves?select=world&limit=0` → 200. До запуска: «Облако сейчас недоступно — миры сохраняются в браузере». Числа (2 мира × 2 МБ, VIP/Донатер 4 × 4 МБ) — предложение, решает владелец. PGlite: E:\claude-tmp\coop\test-cloud.mjs (64).
+Проверено с сервера 22.10 днём: ops.sql ПРИМЕНЁН (ops_err_admin → 42501); city.sql и ugc.sql (облако) — ещё нет.
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
