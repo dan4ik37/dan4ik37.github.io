@@ -1532,7 +1532,9 @@ js/features/games.js и хвост css/premium.css.
   CB.init в X.spawn (MOBS[].cb); X.damage(…, res) — отброс и сбитый замах только по итогу боя; удар моба → mobHit (блок / отбив →
   m.stag). Поза человечка — H.pose ДО A.update → a.hold → слой world3d; от 1-го лица правая рука — копия armL. hurt — неуязвимость
   по шагам игры (P.hurtGT). player.js — в списке скриптов «Кубомира» (без него паркур не работал, если «Кубомир» открыт первым).
-  Тесты: kubomir-combat-test (33), hand-test 271, input-test 89, char-test 5309; KB_MODE=combat — снимки поз, бой, лук.
+  Тесты: kubomir-combat-test (33), hand-test 271, input-test 89, char-test 5309; KB_MODE=combat — снимки поз, бой, лук, круги боя
+  (память). В проверках «захват мыши» S.I.locked = true снимать вместе с S.wasLocked — иначе игра открывает меню паузы и ввод
+  заперт до конца прогона (soak теперь проверяет, что игрок ходил).
 
 ## «Клеточки» и «Червячки» — io-игры (js/games/iokit.js, kletochki.js, chervyachki.js; агент 22.10.2026, T-009)
 - Владелец 21.10: «на многих основах потом можно делать похожие игры — агарио, снейкио». «Клеточки» (как agar.io: ешь, расти,
