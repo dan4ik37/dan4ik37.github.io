@@ -6,7 +6,7 @@
 //  (Date.now) и зерна: у всех игроков одни и те же волны без сети.
 // ═══════════════════════════════════════
 // Без three.js (проверяется в node: scripts/waves-test.cjs). Единицы — движка (1 м = E.UNIT); у 2D-игр — свои (g в клетках).
-//   F = D37E.waves.field({ kind, seed, level, dir, gain, grid, g, fade })   — волны одной воды
+//   F = D37E.waves.field({ kind, seed, level, dir, gain, grid, g, fade, solo })   — волны одной воды (solo — своя вода 2D-игры)
 //       kind: ocean | lake | pond | canal | river | side (вид сбоку, 2D); grid — сетка глубины и «открытости» (gridFrom)
 //   F.weather({ wind (м/с), windDir (рад, куда дует), thunder 0…1, ice 0…1 }) — от погоды (W.at climate.js): высота F.H, шторм F.storm
 //   F.sample(x, z, t, out, fadeDist) → { y, vx, vz, vy, sx, sz, m } — высота над спокойной гладью в точке мира (обратное
@@ -94,7 +94,7 @@
     const side = kind === 'side';
     const th0 = side ? 0 : num(o.dir, r() * TAU);   // главное направление зыби — от зерна (постоянное: иначе фазы вдали «прыгают»)
     const F = {
-      kind, K, seed, side, g, th0, level: num(o.level, 0), gain: num(o.gain, 1), grid: o.grid || null, fadeK: num(o.fade, 40),
+      kind, K, seed, side, g, th0, level: num(o.level, 0), gain: num(o.gain, 1), grid: o.grid || null, fadeK: num(o.fade, 40), solo: !!o.solo,
       k: new Float64Array(N), w: new Float64Array(N), dx: new Float64Array(N), dz: new Float64Array(N), ph: new Float64Array(N), th: new Float64Array(N), lam: new Float64Array(N),
       A: new Float64Array(N), QA: new Float64Array(N), H: 0, Q: 0, storm: 0, wind: 0, windDir: th0, thunder: 0, ice: 0, ddx: Math.cos(th0), ddz: Math.sin(th0), drift: 0, rev: 0, U: null,
     };
@@ -107,7 +107,7 @@
     const WT = new Float64Array(N);
     F.weather = (s = {}) => {
       const wind = Math.max(0, num(s.wind, K.calm)), wd = num(s.windDir, th0), th = cl(num(s.thunder, 0), 0, 1), ice = cl(num(s.ice, 0), 0, 1);
-      const on = W.enabled && F.gain > 0 ? 1 : 0;
+      const on = (F.solo || W.enabled) && F.gain > 0 ? 1 : 0;   // solo — своя вода игры (2D): общий выключатель 3D-воды её не трогает
       const H0 = Math.min(K.max, K.base + K.perW * wind * wind + K.storm * th);
       const H = H0 * F.gain * (1 - sm(.5, .8, ice)) * on;
       let ws = 0;

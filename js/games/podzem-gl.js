@@ -520,6 +520,8 @@ void main(){ vT = aP * 64.0; vS = uOff + vT; vec2 p = vS * uScale; gl_Position =
   // smoothstep — только с edge0 < edge1 (иначе на части видеокарт неопределённо). Общие куски (шум, кривая света и мерцание,
   // тень у стен, гладь, лучи, лава) — из js/engine/shade2d.js (D37E.shade2d.GLSL): их же возьмут другие 2D-игры.
   const S2 = (typeof window !== 'undefined' && window.D37E && window.D37E.shade2d && window.D37E.shade2d.GLSL) || null;
+  // волны «вида сбоку» (js/engine/waves.js GLSL1 — та же сумма волн, что F.at1 в JS); нет модуля — та же формула здесь (uW1H = 0 — волн нет)
+  const W1 = (typeof window !== 'undefined' && window.D37E && window.D37E.waves && window.D37E.waves.GLSL1) || 'float d37w1( float x ){ vec4 th = uW1K * x + uW1P; return dot( uW1A, sin( th ) ); }';
   const FS_CHUNK_HQ = !S2 ? null : `#version 300 es
 precision highp float; precision highp int; precision highp usampler2D; precision highp sampler2D;
 uniform usampler2D uT0, uT1, uProps;
@@ -532,6 +534,9 @@ uniform float uAmb, uTime;
 uniform float uScat;    // свет, рассеянный в воздухе вокруг огня (0 — нет)
 uniform vec2 uCamP;     // камера × 0,65 (по модулю 1020) — параллакс фона пещер
 uniform int uPass, uSmooth, uBack, uQ;
+uniform vec4 uW1K, uW1A, uW1P;   // волны (js/engine/waves.js, «вид сбоку»): k·направление, амплитуды, фазы от начала отсчёта uW1O
+uniform int uW1O;
+uniform float uW1H;              // сумма амплитуд (0 — волн нет)
 in vec2 vT;
 in vec2 vS;
 out vec4 oC;
@@ -539,6 +544,15 @@ ${S2.noise}
 ${S2.light}
 ${S2.aoWall}
 ${S2.water}
+${W1}
+// волны на глади: под открытым небом (свет неба в клетке) или в большом озере (доля клетки — биты 1–7 канала a, podzem.js wvRows);
+// между серединами клеток — плавно (как waveK в podzem.js); соседняя клетка за краем чанка — «озеро» края
+float pzSkyK( ivec2 cc ){ return smoothstep( 0.3, 0.8, texelFetch( uLight, clamp( cc + 1, ivec2( 0 ), ivec2( 65 ) ), 0 ).a ); }
+float pzBigK( ivec2 cc ){ return float( ( texelFetch( uT1, clamp( cc, ivec2( 0 ), ivec2( 63 ) ), 0 ).a >> 1u ) & 127u ) / 127.0; }
+float pzWaveK( int cy, float x ){
+  float fx = x - 0.5, i0 = floor( fx ), u = fx - i0; int ix = int( i0 );
+  return mix( max( pzSkyK( ivec2( ix, cy ) ), pzBigK( ivec2( ix, cy ) ) ), max( pzSkyK( ivec2( ix + 1, cy ) ), pzBigK( ivec2( ix + 1, cy ) ) ), u );
+}
 vec4 at(int cell, ivec2 px){ return texelFetch(uAtlas, ivec2((cell % ${AN}) * 16 + px.x, (cell / ${AN}) * 16 + px.y), 0); }
 // свет клетки: карта чанка (небо, факелы, лава) и «живой» свет — что ярче (по каналам)
 vec4 Lraw(vec2 p){
@@ -577,7 +591,9 @@ void main(){
     uint lv = t1.g, lt = t1.b & 3u; bool above = (t1.b & 128u) != 0u;
     if (lv == 0u || lt == 0u) discard;
     float top = above ? 0.0 : 1.0 - float(lv) / 255.0;
-    if (!above && uQ >= 1) top = min(0.98, top + s2wave(pw, uTime, lt != 1u) * (lt == 1u ? 0.07 : 0.05));   // волны на глади (только вниз от верха клетки)
+    float wk = !above && lt == 1u && uW1H > 0.0 ? pzWaveK(c.y, vT.x) : 0.0;   // волны движка (ветер, гроза) — вместо мелкой ряби
+    if (!above && uQ >= 1) top = min(0.98, top + s2wave(pw, uTime, lt != 1u) * (lt == 1u ? 0.07 : 0.05) * (1.0 - wk));   // рябь на глади (только вниз от верха клетки)
+    if (wk > 0.0) top = min(0.98, top + wk * (uW1H - d37w1(float(uOrg.x - uW1O) + vT.x)));
     if (f.y < top) discard;
     float dep = f.y - top;
     vec4 col;
@@ -1137,6 +1153,9 @@ void main(){
       gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, dynTex); if (u.uDyn) gl.uniform1i(u.uDyn, 5);
       if (u.uDynOrg) { gl.uniform2i(u.uDynOrg, R.dyn.x0, R.dyn.y0); gl.uniform2f(u.uDynSize, R.dyn.w, R.dyn.h); }
       gl.uniform1i(u.uT0, 0); gl.uniform1i(u.uT1, 1); gl.uniform1i(u.uLight, 2);
+      const wv = pass === 1 && u.uW1H ? s.wv : null;   // волны (waves.js): только жидкости, только «красивый» шейдер
+      if (u.uW1H) gl.uniform1f(u.uW1H, wv ? wv.H : 0);
+      if (wv && u.uW1K) { gl.uniform4fv(u.uW1K, wv.K); gl.uniform4fv(u.uW1A, wv.A); gl.uniform4fv(u.uW1P, wv.P); gl.uniform1i(u.uW1O, wv.O); }
       for (let i = 0; i < list.length; i++) {
         const c = list[i]; if (!c.gl || !c.ready) continue;
         if (pass === 1 && !c.hasLq) continue;
