@@ -70,6 +70,7 @@ export default async function handler(req, res) {
       ...ugc.map(g => url(`${SITE}/g/${esc(g.id)}`, 'weekly', '0.5', esc(String(g.updated_at).slice(0, 10)))),
       url(`${SITE}/tools/random`, 'monthly', '0.8'),
       url(`${SITE}/tools/typing`, 'monthly', '0.8'),
+      url(`${SITE}/tools/photo`, 'monthly', '0.9'),
       url(`${SITE}/quiz`, 'monthly', '0.8'),
       ...QUIZZES.map(q => url(`${SITE}/quiz/${q.slug}`, 'monthly', '0.8')),
       url(`${SITE}/videos`, 'daily', '0.8'),

@@ -20,7 +20,7 @@
 // Обновление: новая версия ставится и ЖДЁТ — app.js показывает «Доступна новая версия — Обновить» и шлёт SKIP_WAITING.
 // Самая первая установка и переход со старого sw.js (кэши dan4ik37-shell-v1/v2) — сразу, без кнопки.
 // Поменял этот файл — подними VERSION (у всех откроется «Доступна новая версия»). Тест: node scripts/pwa-test.cjs.
-const VERSION = 'v6';   // v6 — офлайн-страница: «Клеточки» и «Червячки» (с ботами без сети); v5 — настоящие адреса разделов (/chat, /play/…) открываются оболочкой и без сети
+const VERSION = 'v7';   // v7 — фоторедактор /photo открывается и без сети (fabric.js с точной версией — в кэше после первого раза); v6 — офлайн-страница: «Клеточки» и «Червячки» (с ботами без сети); v5 — настоящие адреса разделов (/chat, /play/…) открываются оболочкой и без сети
 const SHELL = 'd37-shell-' + VERSION;
 const RT = 'd37-rt-v1';
 const MINE = /^(d37-shell-|d37-rt-|dan4ik37-shell-)/;
@@ -28,7 +28,7 @@ const LEGACY = ['dan4ik37-shell-v1', 'dan4ik37-shell-v2'];
 const OFFLINE = '/offline.html';
 // Разделы сайта по настоящим адресам (js/ui/router.js) — та же index.html (vercel.json → rewrites). /about, /shop, /forum, /ideas —
 // у них своя серверная страница (поиск), её не подменяем; /shop/<заказ> — уже приложение
-const SPA_PATH = /^\/(?:play|chat|profile|phone|shorts|invite|adv|donate|poll|soundboard|clicker|lfg|ads|app)(?:\/|$)|^\/shop\/./;
+const SPA_PATH = /^\/(?:play|chat|profile|phone|shorts|invite|adv|donate|poll|soundboard|clicker|lfg|ads|app|photo)(?:\/|$)|^\/shop\/./;
 const SHELL_FILES = ['/', OFFLINE, '/manifest.json', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/favicon.ico',
   '/img/app/maskable-192.png', '/img/app/maskable-512.png', '/img/app/badge-96.png'];
 const RT_MAX = 400;          // записей в d37-rt — лишние, самые старые, удаляются
@@ -56,6 +56,7 @@ function route(req){
     return 'net';
   }
   if (u.hostname === 'cdn.jsdelivr.net' && /^\/npm\/@supabase\/supabase-js@\d+\.\d+\.\d+\//.test(u.pathname)) return 'cdn';
+  if (u.hostname === 'cdn.jsdelivr.net' && /^\/npm\/fabric@\d+\.\d+\.\d+\/dist\/index\.min\.js$/.test(u.pathname)) return 'cdn';   // фоторедактор: основа fabric.js (точная версия — не меняется)
   if (u.hostname === 'fonts.gstatic.com') return 'cdn';
   if (u.hostname === 'fonts.googleapis.com') return 'swr';
   return 'pass';
