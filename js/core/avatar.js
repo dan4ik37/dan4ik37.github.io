@@ -25,6 +25,8 @@
   // (в руке, питомец, след): их рисуют и 2D, и 3D без новых моделей.
   // Друзья (8-е поле) — «👥 Пригласи друзей» (js/core/ref.js LADDER, ref_ladder в referrals2.sql): подарок новичку по ссылке и ступени
   // пригласившего. Тоже только эмодзи-вещи; не продаются, носить — если выдали (owns → D37Coins.owns).
+  // 8-е поле — вообще «награда, выданная сервером» (GRANTS ниже): 1 — друзья, 2 — сезонный путь (вещь темы сезона, season_themes в
+  // games-more.sql), 3 — новогоднее задание (20 дней из 31, advent_claim в games-more.sql).
   const CUSTOM = /^x[0-9a-f]{6}$/;
   const BASE = [
     ['white', 'Белый', '#f4f5f7'], ['silver', 'Светло-серый', '#c9ced8'], ['gray', 'Серый', '#7d8696'], ['black', 'Чёрный', '#25252d'],
@@ -78,6 +80,8 @@
       ['sword', 'Меч', 150, '🗡️'], ['trophy', 'Кубок', 300, '🏆'],
       ['medal', 'Медаль', 0, '🏅', 0, 0, 35], ['orb', 'Хрустальный шар', 0, '🔮', 0, 0, 65],
       ['megaphone', 'Мегафон', 0, '📣', 0, 0, 0, 1],
+      ['tulip', 'Тюльпан', 0, '🌷', 0, 0, 0, 2], ['melon', 'Арбуз', 0, '🍉', 0, 0, 0, 2], ['books', 'Книги', 0, '📚', 0, 0, 0, 2],
+      ['umbrella', 'Зонтик', 0, '☂️', 0, 0, 0, 2], ['gift', 'Подарок', 0, '🎁', 0, 0, 0, 2],
     ] },
     pet: { name: 'Питомец', icon: '🐾', list: [
       ['none', 'Без питомца', 0], ['dog', 'Пёсик', 300, '🐶'], ['cat', 'Котик', 300, '🐱'], ['frog', 'Лягушка', 300, '🐸'],
@@ -85,6 +89,8 @@
       ['dragon', 'Дракончик', 900, '🐲'],
       ['owl', 'Совёнок', 0, '🦉', 0, 0, 20], ['wolf', 'Волчонок', 0, '🐺', 0, 0, 55], ['eagle', 'Орёл', 0, '🦅', 0, 0, 80],
       ['parrot', 'Попугай', 0, '🦜', 0, 0, 0, 1],
+      ['penguin', 'Пингвин', 0, '🐧', 0, 0, 0, 2], ['bee', 'Пчёлка', 0, '🐝', 0, 0, 0, 2], ['turtle', 'Черепашка', 0, '🐢', 0, 0, 0, 2],
+      ['pumpkin', 'Тыковка', 0, '🎃', 0, 0, 0, 2], ['snowman', 'Снеговик', 0, '⛄', 0, 0, 0, 3],
     ] },
     trail: { name: 'След', icon: '✨', list: [
       ['none', 'Без следа', 0], ['dust', 'Пыль', 100, '💨'], ['sparks', 'Искры', 250, '✨'], ['hearts', 'Сердечки', 250, '💕'],
@@ -93,6 +99,7 @@
       ['leaves', 'Листопад', 0, '🍂', 0, 0, 10], ['snow', 'Снежинки', 0, '❄️', 0, 0, 45], ['comet', 'Кометы', 0, '☄️', 0, 0, 70],
       ['galaxy', 'Галактика', 0, '🌌', 0, 0, 90],
       ['confetti', 'Конфетти', 0, '🎊', 0, 0, 0, 1], ['fireworks', 'Салют', 0, '🎆', 0, 0, 0, 1],
+      ['ice', 'Льдинки', 0, '🧊', 0, 0, 0, 2], ['drops', 'Капли', 0, '💧', 0, 0, 0, 2], ['starfall', 'Звездопад', 0, '🌠', 0, 0, 0, 2],
     ] },
     // ── 3D-человечек («Мир Денчика», гардероб): тело, лицо, волосы, одежда, аксессуары и их цвета. В 2D-играх не рисуются
     //    (body: 1). Не выбрано (нет в look) — мир берёт по «отпечатку» игрока, чтобы толпа была разной (world3d.js → resolve)
@@ -231,12 +238,20 @@
     const p = PARTS[m[1]]?.list.find(x => x[0] === m[2]);
     return p ? p[5] || 0 : 0;
   }
-  // Награда за приглашения друзей (8-е поле, referrals2.sql): 1 — да, 0 — обычная
+  // Награда, которую выдаёт сервер (8-е поле): 1 — за приглашения друзей (referrals2.sql), 2 — сезонный путь, 3 — новогоднее
+  // задание (games-more.sql); 0 — обычная вещь
   function refOf(item){
     const m = /^skin:(\w+):(\w+)$/.exec(item || '');
     const p = m && PARTS[m[1]]?.list.find(x => x[0] === m[2]);
     return p ? p[7] || 0 : 0;
   }
+  // Подписи наград (8-е поле) для гардеробов: значок, коротко, подсказка, где получить
+  const GRANTS = {
+    1: { icon: '🤝', short: 'друзья', title: 'Награда за приглашения друзей — не продаётся', href: '#/invite', how: '👥 Как получить' },
+    2: { icon: '🏆', short: 'сезон', title: 'Награда сезонного пути (задания недели и победы) — не продаётся', href: '#/games', how: '🏆 Сезонный путь' },
+    3: { icon: '🎄', short: 'Новый год', title: 'Награда новогоднего задания (20 дней из 31 в декабре) — не продаётся', href: '#/games', how: '🎄 Новогоднее задание' },
+  };
+  const grantOf = kind => GRANTS[kind] || null;
   // С какого уровня вещь (0 — обычная): награда лестницы уровней, не продаётся
   function levelOf(item){
     const m = /^skin:(\w+):(\w+)$/.exec(item || '');
@@ -275,7 +290,7 @@
     const p = part(slot, id);
     if (!p || p.id !== id) return false;
     if (p.lvl) return myLevel() >= p.lvl;
-    if (p.ref) return !!window.D37Coins?.owns?.(`skin:${slot}:${id}`);   // за приглашения — только выданное
+    if (p.ref) return !!window.D37Coins?.owns?.(`skin:${slot}:${id}`);   // награда (друзья, сезон, Новый год) — только выданное
     if (!p.price) return true;
     const C = window.D37Coins, b = buyItem(slot, id);
     return !!C && (C.owns(b.item) || (b.vip && C.perks()));
@@ -723,7 +738,7 @@
   }
 
   window.D37Char = {
-    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, gemsOf, levelOf, refOf, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
+    PARTS, SLOTS, BODY_SLOTS, SLOTS2D, DEFAULT, CUSTOM, PACKS, PART_DEFAULT, BODY_PARTS, part, price, gemsOf, levelOf, refOf, GRANTS, grantOf, norm, upgrade, owns, wearable, custom, nearest, packOf, buyItem,
     look: () => wearable(current()), set, fromServer,
     draw, sprite, img, trail, petEmoji, looksOf, drawWalker, walker,
     on(fn){ listeners.add(fn); return () => listeners.delete(fn); },

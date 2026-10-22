@@ -258,6 +258,7 @@ async function renderProfilePage(viewUserId){
   renderReferralPanel(profile, isOwn);
   if (!hidden && typeof renderAchievements === 'function') renderAchievements(targetId, isOwn);
   if (typeof renderProfileGameStats === 'function') renderProfileGameStats(hidden ? null : targetId, isOwn);
+  if (typeof renderProfileQuests === 'function') renderProfileQuests(targetId, isOwn);   // сезон и задания недели (свой профиль)
   if (hidden) document.getElementById('profileXpCard').hidden = true;
   else if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
   if (isOwn) renderPrivacySettings(profile);
@@ -1388,7 +1389,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
       const tEl = document.getElementById('miniProfileTitle');
       tEl.hidden = true;
       if (typeof xpGetExtras === 'function') xpGetExtras(userId).then(ex => {
-        const d = ex?.title && typeof ACH_BY_CODE !== 'undefined' && ACH_BY_CODE[ex.title];
+        const d = ex?.title && typeof achTitleDef === 'function' && achTitleDef(ex.title);   // ачивка или титул сезона
         if (d) { tEl.textContent = `${d.icon} ${d.title}`; tEl.hidden = false; }
       });
     }

@@ -438,8 +438,8 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   const gemItems = [];
   for (const s of C.SLOTS) for (const p of C.PARTS[s].list) {
     if (p[5]) { gemItems.push(`'skin:${s}:${p[0]}'`); ok(!new RegExp(`\\('skin:${s}:${p[0]}', \\d+\\)`).test(sql), 'вещь за 💎 не продаётся за монеты', p[0]); continue; }
-    // за приглашения друзей (8-е поле, referrals2.sql): цены нет нигде — char_save надевает выданное
-    if (p[7]) { ok(!sql.includes(`'skin:${s}:${p[0]}'`) && C.price(`skin:${s}:${p[0]}`) === null && C.refOf(`skin:${s}:${p[0]}`) === 1, 'вещь за приглашения не продаётся (цены нет)', p[0]); continue; }
+    // награда сервера (8-е поле: 1 — друзья, referrals2.sql; 2 — сезон, 3 — Новый год, games-more.sql): цены нет нигде — char_save надевает выданное
+    if (p[7]) { ok(!sql.includes(`'skin:${s}:${p[0]}'`) && C.price(`skin:${s}:${p[0]}`) === null && C.refOf(`skin:${s}:${p[0]}`) === p[7] && !!C.grantOf(p[7]), 'вещь-награда (друзья, сезон, Новый год) не продаётся (цены нет)', p[0]); continue; }
     if (!sql.includes(`('skin:${s}:${p[0]}', ${p[2]})`)) { miss++; if (miss < 5) ok(false, 'цена в coins.sql', `skin:${s}:${p[0]}`); }
   }
   ok(gemItems.length === 3 && sql.includes(`select p_item in (${gemItems.join(', ')})`), 'coin_gems_item — все вещи только за 💎', gemItems.join(', '));

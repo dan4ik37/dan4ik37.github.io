@@ -118,19 +118,44 @@ function rules(ref){
   R.sudoku = [...sd.matchAll(/base: \d+, ref: \d+, coins: (\d+)/g)].map(m => +m[1]);
   R.sudokuDaily = num(sd, /coins = daily \? (\d+) :/, 'sudoku daily');
   need(R.sudoku.length === 4 || null, 'sudoku coins');
+  // Задания недели, сезонный путь, новогоднее задание (games-more.sql quest_rule / season_ladder; 22.10.2026). Нет — «до» (0)
+  const qr = casePairs(fnBody(moreSql, 'quest_rule'));
+  if (qr.w_xp != null) {
+    for (const k of ['w_xp', 'w_coins', 'w_pts', 's_win', 's_win_day', 's_daily', 's_lv', 's_levels', 's_months', 'a_coins', 'a_xp', 'a_small', 'a_big', 'a_big_coins']) need(qr[k], 'quest_rule ' + k);
+    const sl = /function public\.season_ladder\(\)[\s\S]*?select '(\[[\s\S]*?\])'::jsonb/.exec(moreSql);
+    R.quest = { ...qr, ladder: JSON.parse(need(sl && sl[1], 'season_ladder')) };
+  } else R.quest = null;
   return R;
+}
+// Сезонный путь, задания недели, новогоднее задание за день (в среднем): XP, монеты, ⭐ и уровень сезона за его длину
+function questDay(R, P){
+  const Q = R.quest;
+  if (!Q || P.noQuests) return { xp: 0, coins: 0, pts: 0, lv: 0, weekly: 0 };
+  const weekly = P.max ? 6 : (P.weekly || 0);
+  const wins = P.max ? Q.s_win_day : Object.values(P.wins).reduce((a, b) => a + b, 0);
+  const pts = Q.s_win * Math.min(wins, Q.s_win_day) + Q.s_daily * (P.quest || 0) + Q.w_pts * weekly / 7;
+  const len = 30.4 * Q.s_months, lv = Math.min(Math.floor(pts * len / Q.s_lv), Q.s_levels);
+  const seasonCoins = Q.ladder.filter(e => e.lv <= lv).reduce((a, e) => a + (e.coins || 0), 0);
+  const A = P.max ? { days: 31, full: 1 } : (P.advent || { days: 0, full: 0 });
+  const advCoins = A.days * (A.full * Q.a_coins + (1 - A.full) * Q.a_small) + (A.days >= Q.a_big ? Q.a_big_coins : 0);
+  return {
+    xp: Q.w_xp * weekly / 7 + Q.a_xp * A.days * A.full / 365,
+    coins: Q.w_coins * weekly / 7 + seasonCoins / len + advCoins / 365,
+    pts, lv, weekly,
+  };
 }
 
 // ── Профили игроков (ПРЕДПОЛОЖЕНИЯ) ──
 // wins — победы в день по ключам сервера (дробь = «в среднем»), runs — забеги с монетами, quest — доля дней с заданием дня,
 // watch / chat / posts / threads / ideas — в день; ach — ачивки: код → день, когда получена. Каждый день заходит (серия идёт).
+// weekly — сколько заданий недели из 6 делает за неделю; advent — новогоднее задание: дней с наградой и доля, которую сервер проверил.
 const PROFILES = [
-  { id: 'casual', name: 'Обычный (30–45 мин в день)', quest: .8, watch: 1, chat: 3, posts: 0, threads: 0, ideas: 0, ads: 0,
+  { id: 'casual', name: 'Обычный (30–45 мин в день)', quest: .8, watch: 1, chat: 3, posts: 0, threads: 0, ideas: 0, ads: 0, weekly: 3, advent: { days: 18, full: .7 },
     wins: { words: .8, kosynka: 1, ttt_normal: 1, checkers_normal: 1, memory: 1, blocks: 1, sudoku2: .5 },
     runs: [['horde', 2, { min: 5.5, drops: 10, elites: 1, boss: .2, won: 0 }], ['blocks', 1, { score: 2200 }], ['kosynka', 1], ['sudoku', .5, { lv: 2 }]],
     ach: { member: 0, early_bird: 0, gamer: 2, streak_3: 3, chatty_10: 4, week_here: 7, streak_7: 7, watcher_10: 10, friends_1: 10, sharp_memory: 15, styled: 20,
       month_here: 30, streak_30: 30, chatty_100: 34, friends_5: 60, streak_100: 100, watcher_100: 100, half_year: 180, year_here: 365 } },
-  { id: 'active', name: 'Активный (1–1,5 ч в день)', quest: 1, watch: 3, chat: 10, posts: 1, threads: 0, ideas: 0, ads: 0,
+  { id: 'active', name: 'Активный (1–1,5 ч в день)', quest: 1, watch: 3, chat: 10, posts: 1, threads: 0, ideas: 0, ads: 0, weekly: 5, advent: { days: 27, full: .85 },
     wins: { words: .9, sudoku_daily: .8, chess_normal: 2, sea_normal: 2, checkers_hard: .5, kosynka: 2, pauk2: 1, miner2: 2, mahjong: 3, blocks: 1,
       td: .15, horde: .1, uno: 1, durak: 1, ttt_normal: 2 },
     runs: [['horde', 3, { min: 6, drops: 15, elites: 1.5, boss: .35, won: .1 }], ['td', 1, { waves: 14, won: .15 }], ['blocks', 1, { score: 3000 }],
@@ -198,24 +223,24 @@ function gameXpMax(R){
 }
 
 function dayXp(R, P){
-  const X = R.xp;
+  const X = R.xp, Q = questDay(R, P).xp;
   if (P.max) {
     return X.visit + X.daily + gameXpMax(R) + X.watch * X.watch_day + X.chat * X.chat_day + X.forum_thread * X.forum_thread_day
-      + X.forum_post * X.forum_post_day + X.idea * Math.min(X.idea_day, 3);
+      + X.forum_post * X.forum_post_day + X.idea * Math.min(X.idea_day, 3) + Q;
   }
   return X.visit + X.daily * P.quest + gameXpDay(R, P.wins) + X.watch * Math.min(P.watch, X.watch_day) + X.chat * Math.min(P.chat, X.chat_day)
-    + X.forum_post * Math.min(P.posts, X.forum_post_day) + X.forum_thread * Math.min(P.threads, X.forum_thread_day) + X.idea * Math.min(P.ideas, X.idea_day);
+    + X.forum_post * Math.min(P.posts, X.forum_post_day) + X.forum_thread * Math.min(P.threads, X.forum_thread_day) + X.idea * Math.min(P.ideas, X.idea_day) + Q;
 }
 function dayCoins(R, P){
-  const C = R.coin;
+  const C = R.coin, Q = questDay(R, P).coins;
   if (P.max) {
     const best = Object.values(R.runCap).sort((a, b) => b - a);
-    return C.daily + C.quest + C.win * C.win_day + C.run_day + C.ad * C.ad_day + best[0] * C.double_day;
+    return C.daily + C.quest + C.win * C.win_day + C.run_day + C.ad * C.ad_day + best[0] * C.double_day + Q;
   }
   const wins = Object.values(P.wins).reduce((a, b) => a + b, 0);
   let runs = 0;
   for (const [game, n, o] of P.runs) runs += n * runCoins(R, game, o);
-  return C.daily + C.quest * P.quest + C.win * Math.min(wins, C.win_day) + Math.min(runs, C.run_day) + C.ad * Math.min(P.ads || 0, C.ad_day);
+  return C.daily + C.quest * P.quest + C.win * Math.min(wins, C.win_day) + Math.min(runs, C.run_day) + C.ad * Math.min(P.ads || 0, C.ad_day) + Q;
 }
 
 const xpFor = (R, L) => R.div * (L - 1) * (L - 1);
@@ -268,11 +293,24 @@ function report(){
     const d = (r, k) => Math.ceil(price / Math.max(1, r[k].coins));
     lines.push(`- ${what}: ${d(typ, 'a')} → **${d(typ, 'b')}** / ${d(act, 'a')} → **${d(act, 'b')}** дн.`);
   }
+  // Задания недели, сезонный путь, новогоднее задание (22.10.2026): «стало» выше — уже с ними; здесь — сколько они добавили
+  if (B.quest) {
+    for (const r of res) r.n = simulate(B, { ...r.P, noQuests: true });
+    lines.push('', '**Задания недели, сезонный путь и новогоднее задание** (22.10.2026; без них → с ними):', '');
+    lines.push('| Профиль | Заданий недели | ⭐ в день → уровень сезона за месяц | XP в день | Монет 🪙 в день | До 10 ур. | До 30 ур. | До 50 ур. |', '|---|---|---|---|---|---|---|---|');
+    for (const r of res) {
+      const q = questDay(B, r.P);
+      lines.push(`| ${r.P.name.split(' (')[0]} | ${q.weekly} из 6 | ${Math.round(q.pts)} → ${q.lv} из ${B.quest.s_levels} | ${r.n.perDay} → **${r.b.perDay}** | ${r.n.coins} → **${r.b.coins}** | ${fmtDays(r.n.at[10])} → **${fmtDays(r.b.at[10])}** | ${fmtDays(r.n.at[30])} → **${fmtDays(r.b.at[30])}** | ${fmtDays(r.n.at[50])} → **${fmtDays(r.b.at[50])}** |`);
+    }
+  }
   return { text: lines.join('\n'), A, B, res };
 }
 
 const out = report();
-if (args.includes('--json')) { console.log(JSON.stringify({ before: out.res.map(r => ({ id: r.P.id, ...r.a })), now: out.res.map(r => ({ id: r.P.id, ...r.b })) }, null, 1)); }
+if (args.includes('--json')) {
+  console.log(JSON.stringify({ before: out.res.map(r => ({ id: r.P.id, ...r.a })), now: out.res.map(r => ({ id: r.P.id, ...r.b })),
+    noquests: out.res.filter(r => r.n).map(r => ({ id: r.P.id, ...r.n })), quests: out.res.map(r => ({ id: r.P.id, ...questDay(out.B, r.P) })) }, null, 1));
+}
 else console.log(out.text);
 if (args.includes('--write')) {
   const doc = path.join(ROOT, 'docs/ECONOMY.md');
