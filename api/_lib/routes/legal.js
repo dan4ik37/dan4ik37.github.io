@@ -128,7 +128,7 @@ export const CSS = `
 .crumbs a{text-decoration:none}
 .lg{max-width:820px}
 .lg h1{margin-top:0}
-.lg-body{margin-top:1rem;padding:1.3rem 1.5rem;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:.92rem;color:rgba(240,240,248,.86)}
+.lg-body{margin-top:1rem;padding:1.3rem 1.5rem;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:.92rem;color:rgba(var(--text-rgb),.86)}
 .lg-body h2{font-size:1.05rem;margin:1.4rem 0 .5rem;text-transform:none;letter-spacing:.02em}
 .lg-body h2:first-child{margin-top:0}
 .lg-body p{margin:.6rem 0}

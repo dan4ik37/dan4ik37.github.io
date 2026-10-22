@@ -1,0 +1,53 @@
+/* ═══════════════════════════════════════════════════════════════════
+   UI 2 (T-086, 22.10.2026): светлая тема (то, что токенами не выразить без перемен в тёмной), общая мини-карточка игрока
+   (js/features/minicard.js — D37Mini) и профиль 2.0 (html.ui2, js/core/config.js UI_V2). Только токены из <style> index.html.
+   Порядок: подключается ПОСЛЕДНИМ из стилей — при равной специфичности главнее premium.css / ds.css.
+   Светлые правила для того, что бывает и в «тёмных островах» (игры, телефон, студии, Shorts), — с :not(:is(<острова>) *).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ───────────── 1. СВЕТЛАЯ ТЕМА: шапка, герой, главная ───────────── */
+:root[data-theme="light"] .sec-title{text-shadow:none}
+:root[data-theme="light"] .nav-links a.nav-vip:hover{color:#6b4500}
+:root[data-theme="light"] :is(.nav-links a.nav-shop,.nav-gems){color:#8a5a00}
+:root[data-theme="light"] .hero-btn.is-tw{color:#4c1d95;background:linear-gradient(180deg,rgba(145,71,255,.16),rgba(145,71,255,.06))}
+:root[data-theme="light"] .hero-btn.is-tw .hb-ic{background:rgba(145,71,255,.22)}
+:root[data-theme="light"] .wordmark{--wm-hi:rgba(255,255,255,.55);--wm-mid:rgba(255,255,255,.12)}
+:root[data-theme="light"] .hf-card{--hf-bg:linear-gradient(180deg,#fff,#f6f7fb);box-shadow:var(--sh-2)}
+:root[data-theme="light"] .tw-block{--tw-status:#4c1d95;--tw-ghost:#6d28d9}
+:root[data-theme="light"] :is(.stat-lbl,.about-text,.hub-handle,.dc-desc){color:var(--muted)}
+:root[data-theme="light"] .day-live{color:#6d28d9}
+:root[data-theme="light"] .hub-grid>.hub-card:last-child{--card:color-mix(in srgb,var(--accent) 6%,#fff)}
+:root[data-theme="light"] .vthumb-ph{background:linear-gradient(135deg,#e6e8f0,#d9dce8)}
+:root[data-theme="light"] .vthumb{background:var(--bg2)}
+:root[data-theme="light"] .today-online b{color:var(--ok-t)}
+:root[data-theme="light"] :is(.xp-today,.xp-chip b,.xp-top-xp){color:#15803d}
+:root[data-theme="light"] .xp-lvl b.lv-t10{color:#6d28d9}
+:root[data-theme="light"] .xp-lvl b.lv-t20{color:#946200}
+:root[data-theme="light"] .dc-box summary{color:#8a6d00}
+:root[data-theme="light"] .dc-warn{color:#b45309!important}
+:root[data-theme="light"] .lb-dn{color:#8a6d00}
+:root[data-theme="light"] .id-form{--in-bg:#fff}
+:root[data-theme="light"] .shorts-page{background:var(--bg)}
+/* значок «Lv N» и титул — бывают и в чате телефона (тёмный остров): там как в тёмной */
+:where(:root[data-theme="light"]) .lv-badge:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#4b4d60;background:rgba(23,25,50,.06);border-color:rgba(23,25,50,.14)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t5:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#0369a1;background:rgba(3,105,161,.08);border-color:rgba(3,105,161,.35)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t10:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#6d28d9;background:rgba(109,40,217,.08);border-color:rgba(109,40,217,.35)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t20:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#946200;background:rgba(180,120,0,.1);border-color:rgba(180,120,0,.4)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t30:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+
+/* витрина игр (вне игры — сама игра остаётся тёмной) */
+:root[data-theme="light"] #gamesHub :is(.gm-rec,.gm-top-score){color:#946200}
+:root[data-theme="light"] #gamesHub .gm-tab.active{color:var(--accent-t)}
+
+/* магазин 💎 */
+:root[data-theme="light"] :is(.shp-note,.shp-wait,.pg-mode button.on){color:#8a5a00}
+:root[data-theme="light"] .shp-wallet .shp-warn{color:#b45309}
+:root[data-theme="light"] :is(.shp-bal,.shp-pack-gems,.shp-don-table b,.shp-price,.pg-row b,.gm-gems){color:#0369a1}
+:root[data-theme="light"] .shp-row .plus{color:#15803d}
+:root[data-theme="light"] :is(.shp-row .minus,.shp-modal-err){color:#b91c1c}
+
+/* окно «⚙️ Настройки»: своя палитра окна — переменные (тёмные значения — в premium.css как запасные) */
+:root[data-theme="light"] .gs-set{--gs-scrim:rgba(14,15,30,.4);--gs-tx:#14141e;--gs-bg:#ffffff;--gs-mut:#5b5e73;--gs-sub:#3b3d50;--gs-acc:#6d28d9;--gs-acc2:#5b21b6;--gs-main:#92400e;--gs-inv:none;--gs-ok:#15803d;--gs-bad:#b91c1c}
+:root[data-theme="light"] .gs-set .gs-key.cap{color:#92400e}
+:root[data-theme="light"] .gs-set .gs-key.bad{color:#b91c1c}
+:root[data-theme="light"] .gs-set .gs-sw i::after{box-shadow:0 1px 4px rgba(23,25,50,.35)}

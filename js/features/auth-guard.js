@@ -133,18 +133,18 @@
     s.textContent = `
 .ulg-ov{position:fixed;inset:0;z-index:100700;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:1rem;
   background:rgba(5,4,10,.86);backdrop-filter:blur(10px);font-family:Montserrat,system-ui,sans-serif;color:#f0f0f8}
-.ulg-box{margin:auto 0;width:min(400px,100%);padding:1.25rem 1.2rem 1.1rem;border-radius:18px;background:#15131f;border:1px solid rgba(255,255,255,.14);box-shadow:0 24px 70px rgba(0,0,0,.65)}
+.ulg-box{margin:auto 0;width:min(400px,100%);padding:1.25rem 1.2rem 1.1rem;border-radius:18px;background:#15131f;border:1px solid rgba(var(--fg-rgb),.14);box-shadow:0 24px 70px rgba(0,0,0,.65)}
 .ulg-h{font:800 1.08rem/1.3 Montserrat,system-ui,sans-serif;margin:0 0 .7rem}
-.ulg-who{display:flex;align-items:center;gap:.7rem;padding:.7rem .8rem;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);margin-bottom:.7rem}
+.ulg-who{display:flex;align-items:center;gap:.7rem;padding:.7rem .8rem;border-radius:14px;background:rgba(var(--fg-rgb),.05);border:1px solid rgba(var(--fg-rgb),.1);margin-bottom:.7rem}
 .ulg-av{width:42px;height:42px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;background:linear-gradient(135deg,#9147ff,#ff2d55);color:#fff}
 .ulg-who b{display:block;font-size:.95rem;word-break:break-word}.ulg-who small{display:block;font-size:.72rem;color:#9a9ab5;margin-top:.1rem}
-.ulg-box p{margin:.35rem 0 .55rem;font-size:.8rem;line-height:1.5;color:rgba(240,240,248,.86)}
+.ulg-box p{margin:.35rem 0 .55rem;font-size:.8rem;line-height:1.5;color:rgba(var(--text-rgb),.86)}
 .ulg-cur{color:#ffd166!important}
 .ulg-warn{padding:.6rem .7rem;border-radius:12px;background:rgba(255,45,85,.08);border:1px solid rgba(255,45,85,.3);font-size:.74rem!important}
 .ulg-act{display:flex;gap:.5rem;margin-top:.85rem;flex-wrap:wrap}
 .ulg-act button{flex:1 1 140px;min-height:44px;border-radius:12px;font:800 .82rem Montserrat,system-ui,sans-serif;cursor:pointer}
 .ulg-yes{border:0;background:linear-gradient(135deg,#9147ff,#6d28d9);color:#fff}
-.ulg-no{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#f0f0f8}
+.ulg-no{border:1px solid rgba(var(--fg-rgb),.18);background:rgba(var(--fg-rgb),.06);color:#f0f0f8}
 .ulg-act button:focus-visible{outline:2px solid #fff;outline-offset:2px}`;
     doc.head.appendChild(s);
   }

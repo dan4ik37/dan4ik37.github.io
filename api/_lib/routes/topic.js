@@ -117,7 +117,7 @@ function topicPage(t, all, counts, req){
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:760px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:760px}
 .chips{display:flex;flex-wrap:wrap;gap:.45rem}
 .chips a{padding:.4rem .85rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:700;font-size:.8rem}
 .chips a:hover,.chips a.on{border-color:var(--accent)}
@@ -131,7 +131,7 @@ const CSS = `
 .tcard span{font-size:.78rem;color:var(--muted);line-height:1.45}
 .card small{padding:0 .8rem .8rem;margin-top:-.4rem;font-size:.7rem;color:var(--muted)}
 .all-h{margin-top:2.2rem}
-.intro{margin-top:.7rem;max-width:820px;color:rgba(240,240,248,.75);font-size:.92rem;line-height:1.65}
+.intro{margin-top:.7rem;max-width:820px;color:rgba(var(--text-rgb),.75);font-size:.92rem;line-height:1.65}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:1rem;margin-top:2rem;font-size:.85rem}
 .pager a{padding:.6rem 1.1rem;border-radius:12px;border:1px solid var(--line);text-decoration:none;font-weight:800}
 .pager a:hover{border-color:var(--accent)}

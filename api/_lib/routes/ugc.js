@@ -149,19 +149,19 @@ const CSS = `
 .ug-author small{color:var(--muted);font-size:.8rem}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .ug-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.7rem;margin-top:.7rem}
-.ug-card{display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:1rem .6rem;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);text-decoration:none;text-align:center}
+.ug-card{display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:1rem .6rem;border-radius:14px;background:rgba(var(--fg-rgb),.04);border:1px solid var(--line);text-decoration:none;text-align:center}
 .ug-card:hover{border-color:var(--accent)}
 .ug-ic{font-size:2.3rem;line-height:1.1}
 .ug-card b{font-size:.88rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ug-card small{color:var(--muted);font-size:.72rem}
 .ug-steps{margin:.6rem 0 0;padding-left:1.3rem;display:flex;flex-direction:column;gap:.4rem;font-size:.92rem}
 .ug-tpls{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.7rem;margin-top:.7rem}
-.ug-tpl{display:flex;flex-direction:column;gap:.2rem;padding:.9rem;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid var(--line);text-decoration:none}
+.ug-tpl{display:flex;flex-direction:column;gap:.2rem;padding:.9rem;border-radius:14px;background:rgba(var(--fg-rgb),.04);border:1px solid var(--line);text-decoration:none}
 .ug-tpl span{font-size:1.8rem}
 .ug-tpl small{color:var(--muted);font-size:.78rem;line-height:1.4}
 .ug-warn{color:var(--muted);font-size:.75rem;text-align:center;margin-top:1.2rem}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
-.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
+.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(var(--text-rgb),.8)}
 `;

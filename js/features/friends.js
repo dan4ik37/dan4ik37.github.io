@@ -183,7 +183,7 @@ function renderDmMessages(messages){
   listEl.innerHTML = messages.map(m => {
     const isOwn = m.sender_id === currentUser.id;
     return `<div style="display:flex;justify-content:${isOwn?'flex-end':'flex-start'};margin-bottom:.5rem">
-      <div style="max-width:75%;background:${isOwn?'linear-gradient(135deg,var(--accent),var(--accent2))':'rgba(255,255,255,.06)'};color:${isOwn?'#fff':'var(--text)'};padding:.5rem .8rem;border-radius:12px;font-size:.82rem;word-break:break-word">
+      <div style="max-width:75%;background:${isOwn?'linear-gradient(135deg,var(--accent),var(--accent2))':'rgba(var(--fg-rgb),.06)'};color:${isOwn?'#fff':'var(--text)'};padding:.5rem .8rem;border-radius:12px;font-size:.82rem;word-break:break-word">
         ${esc(m.text)}
         <div style="font-size:.6rem;opacity:.7;margin-top:.2rem">${new Date(m.created_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>

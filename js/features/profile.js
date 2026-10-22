@@ -290,7 +290,7 @@ async function renderProfilePage(viewUserId){
       none: `<button onclick="sendFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">➕ Добавить в друзья</button>`,
       pending_sent: `<span style="color:var(--muted);font-size:.8rem">⏳ Заявка отправлена</span>`,
       pending_received: `<button onclick="acceptFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✅ Принять заявку в друзья</button>`,
-      friends: `<button onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
+      friends: `<button onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(var(--fg-rgb),.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
     };
     if (status === 'none' && profile.accepts_friend_requests === false) {
       buttons.none = `<span style="color:var(--muted);font-size:.8rem">🚫 Не принимает заявки в друзья</span>`;
@@ -624,7 +624,7 @@ function renderThemePresets(currentValue){
   wrap.innerHTML = THEME_PRESETS.map(p => {
     const active = currentValue === `${p.a1},${p.a2}` || (!currentValue && p.key === 'default');
     return `<button onclick="saveThemeAccent('${p.key === 'default' ? '' : p.a1}','${p.key === 'default' ? '' : p.a2}')" title="${p.label}"
-      style="width:34px;height:34px;border-radius:50%;cursor:pointer;background:linear-gradient(135deg,${p.a1},${p.a2});border:2px solid ${active ? '#fff' : 'transparent'};box-shadow:${active ? '0 0 0 2px rgba(255,255,255,.3)' : 'none'}"></button>`;
+      style="width:34px;height:34px;border-radius:50%;cursor:pointer;background:linear-gradient(135deg,${p.a1},${p.a2});border:2px solid ${active ? '#fff' : 'transparent'};box-shadow:${active ? '0 0 0 2px rgba(var(--fg-rgb),.3)' : 'none'}"></button>`;
   }).join('');
 }
 async function saveThemeAccent(a1, a2){
@@ -789,7 +789,7 @@ function renderVipMonthButtons(){
   const current = parseInt(document.getElementById('vipBuyMonths')?.value, 10) || 3;
   box.innerHTML = VIP_MONTH_OPTIONS.map(m => `
     <button type="button" class="vip-month-btn${m === current ? ' active' : ''}" data-months="${m}"
-      style="padding:.5rem .9rem;border-radius:8px;border:1.5px solid ${m === current ? 'var(--vip-gold,#ffd93d)' : 'var(--border)'};background:${m === current ? 'rgba(255,217,61,.14)' : 'rgba(255,255,255,.04)'};color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s">
+      style="padding:.5rem .9rem;border-radius:8px;border:1.5px solid ${m === current ? 'var(--vip-gold,#ffd93d)' : 'var(--border)'};background:${m === current ? 'rgba(255,217,61,.14)' : 'rgba(var(--fg-rgb),.04)'};color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s">
       ${m} мес${m===1?'':m<5?'яца':'яцев'}<br><span style="font-size:.66rem;font-weight:600;color:var(--muted)">${(m*VIP_RUB_PER_MONTH).toLocaleString('ru')}₽</span>
     </button>`).join('');
   box.querySelectorAll('.vip-month-btn').forEach(btn=>{
@@ -804,7 +804,7 @@ function selectVipMonths(months){
     const active = parseInt(b.dataset.months,10) === months;
     b.classList.toggle('active', active);
     b.style.borderColor = active ? 'var(--vip-gold,#ffd93d)' : 'var(--border)';
-    b.style.background = active ? 'rgba(255,217,61,.14)' : 'rgba(255,255,255,.04)';
+    b.style.background = active ? 'rgba(255,217,61,.14)' : 'rgba(var(--fg-rgb),.04)';
   });
   updateVipCalcTotal(months);
 }
@@ -864,7 +864,7 @@ function renderStaffVipPanel(profile, isOwn){
     <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">🔒 Только для модерации: шкала VIP</div>
     <div style="font-size:.78rem;margin-bottom:.4rem">Уровень: <b>${tier ? tier.label : 'не активен'}</b> · всего задонатил: <b>${profile.donations_hidden ? '🔒 скрыто' : (Number(profile.total_donated)||0).toFixed(0) + '₽'}</b></div>
     <div style="font-size:.78rem;margin-bottom:.4rem">До следующего месяца: <b>${pending.toFixed(0)}/${VIP_RUB_PER_MONTH}₽</b>${missing > 0 ? ` (не хватает ${missing.toFixed(0)}₽)` : ' — набрано!'}</div>
-    <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.5rem 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px"></div></div>
+    <div style="background:rgba(var(--fg-rgb),.08);border-radius:6px;height:8px;overflow:hidden;margin:.5rem 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px"></div></div>
     <div style="font-size:.72rem;color:var(--muted)">VIP активен до: ${untilStr}</div>`;
 }
 
@@ -1290,7 +1290,7 @@ async function openDonationLog(){
         ? (row.reward === 'status' ? `💛 статус${row.excluded ? ' (не в счёт)' : ''}` : row.gems_granted ? `✅ +${row.gems_granted} 💎` : `✅ +${row.months_granted} мес.`) + ` → <b>${esc(row.profiles?.nick || '?')}</b>`
         : `⚠ Не привязан${row.hold && HOLD[row.hold] ? ': ' + HOLD[row.hold] : ''}`;
       return `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(255,255,255,.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(var(--fg-rgb),.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">
           <div>
             <div style="font-weight:700">${esc(row.donor_username || '(без имени)')} — ${row.amount ?? '?'} ${esc(row.currency || 'RUB')}</div>
             <div style="color:var(--muted);font-size:.7rem">${date} · №${esc(String(row.donation_id))}</div>
@@ -1403,7 +1403,7 @@ async function openMiniProfile(userId, fallbackNick, anchorEl){
         none: `<button onclick="sendFriendRequest('${userId}')" style="${small};background:var(--tw);color:#fff">➕ В друзья</button>`,
         pending_sent: `<span style="font-size:.72rem;color:var(--muted)">⏳ Заявка отправлена</span>`,
         pending_received: `<button onclick="acceptFriendRequest('${userId}')" style="${small};background:var(--accent);color:#fff">✅ Принять заявку</button>`,
-        friends: `<button onclick="openDmWith('${userId}',${jsAttr(p.nick||fallbackNick)})" style="${small};background:rgba(255,255,255,.1);color:var(--text)">✉ Написать</button>`,
+        friends: `<button onclick="openDmWith('${userId}',${jsAttr(p.nick||fallbackNick)})" style="${small};background:rgba(var(--fg-rgb),.1);color:var(--text)">✉ Написать</button>`,
       };
       if (status === 'none' && p.accepts_friend_requests === false) {
         buttons.none = `<span style="font-size:.72rem;color:var(--muted)">🚫 Не принимает заявки</span>`;

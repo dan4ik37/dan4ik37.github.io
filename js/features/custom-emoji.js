@@ -75,7 +75,7 @@ function renderCustomEmojiList(){
   if (!el) return;
   if (!customEmoji.length) { el.innerHTML = `<div style="font-size:.7rem;color:var(--muted)">Пока не загружено ни одного</div>`; return; }
   el.innerHTML = customEmoji.map(e => `
-    <div style="display:flex;flex-direction:column;align-items:center;gap:.3rem;background:rgba(255,255,255,.04);border-radius:10px;padding:.5rem;width:64px">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:.3rem;background:rgba(var(--fg-rgb),.04);border-radius:10px;padding:.5rem;width:64px">
       <img src="${esc(e.image_url)}" alt=":${esc(e.name)}:" style="width:32px;height:32px;object-fit:contain">
       <div style="font-size:.6rem;color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title=":${esc(e.name)}:">:${esc(e.name)}:</div>
       <button data-emoji-id="${e.id}" onclick="deleteCustomEmoji(this.dataset.emojiId)" aria-label="Удалить эмодзи ${esc(e.name)}" style="background:rgba(255,45,85,.15);border:1px solid rgba(255,45,85,.3);color:var(--accent);border-radius:6px;width:20px;height:20px;font-size:.6rem;cursor:pointer">✕</button>
@@ -131,7 +131,7 @@ function appendCustomEmojiToComposerPicker(){
     btn.setAttribute('aria-label', 'Вставить эмодзи ' + e.name);
     btn.onclick = () => insertEmoji(`:${e.name}:`);
     btn.style.cssText = 'background:none;border:none;cursor:pointer;padding:.2rem .25rem;border-radius:6px;transition:background .15s;display:inline-flex;align-items:center';
-    btn.onmouseover = () => btn.style.background = 'rgba(255,255,255,.1)';
+    btn.onmouseover = () => btn.style.background = 'rgba(var(--fg-rgb),.1)';
     btn.onmouseout = () => btn.style.background = 'none';
     picker.appendChild(btn);
   });

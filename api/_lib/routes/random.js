@@ -78,15 +78,15 @@ export default function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:780px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
 .rn{margin-top:1.4rem;padding:1.2rem;border-radius:20px;background:var(--card);border:1px solid var(--line)}
 .rn-tabs{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:1rem}
-.rn-tabs button{border:1.5px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);border-radius:10px;padding:.5rem .9rem;font:800 .85rem Montserrat,sans-serif;cursor:pointer;min-height:42px}
+.rn-tabs button{border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.03);color:var(--muted);border-radius:10px;padding:.5rem .9rem;font:800 .85rem Montserrat,sans-serif;cursor:pointer;min-height:42px}
 .rn-tabs button.on{color:#fff;border-color:var(--accent);background:rgba(255,45,85,.14)}
 .rn-pane[hidden]{display:none}
 .rn-row{display:flex;gap:.6rem;flex-wrap:wrap}
 .rn-row label{display:flex;flex-direction:column;gap:.25rem;font-size:.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;flex:1;min-width:90px}
-.rn-row input{padding:.7rem .8rem;border-radius:12px;border:1.5px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:700 1.05rem Montserrat,sans-serif;width:100%}
+.rn-row input{padding:.7rem .8rem;border-radius:12px;border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.05);color:var(--text);font:700 1.05rem Montserrat,sans-serif;width:100%}
 .rn-row input:focus{outline:none;border-color:var(--accent)}
 .rn-chk{display:flex;gap:.5rem;align-items:center;margin:.8rem 0;font-size:.88rem;cursor:pointer}
 .rn-chk input{width:18px;height:18px;accent-color:var(--accent)}
@@ -104,6 +104,6 @@ const CSS = `
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
-.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
+.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(var(--text-rgb),.8)}
 @media(prefers-reduced-motion:reduce){.rn-coin.spin{animation:none}}
 `;

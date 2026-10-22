@@ -659,17 +659,17 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-adload .d37-ad,.d37-adcard .d37-ad{margin:0 auto;width:100%;max-width:none;min-height:90px}
 .d37-adload-ad{width:100%}
 .d37-adload-tip{font-size:12.5px;line-height:1.45;opacity:.85;max-width:560px;text-align:center}
-.d37-adcard{position:absolute;right:12px;bottom:12px;z-index:6;width:min(340px,calc(100% - 24px));padding:10px 12px 12px;border-radius:12px;background:rgba(12,10,24,.94);border:1px solid rgba(255,255,255,.14);color:#fff;font:600 12.5px/1.4 Montserrat,system-ui,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.d37-adcard{position:absolute;right:12px;bottom:12px;z-index:6;width:min(340px,calc(100% - 24px));padding:10px 12px 12px;border-radius:12px;background:rgba(12,10,24,.94);border:1px solid rgba(var(--fg-rgb),.14);color:#fff;font:600 12.5px/1.4 Montserrat,system-ui,sans-serif;box-shadow:0 12px 30px rgba(0,0,0,.45)}
 .d37-adcard-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
 .d37-adcard-h b{white-space:nowrap}
 .d37-adcard-st{flex:1;min-width:0;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.d37-adcard-x{flex:none;width:24px;height:24px;border-radius:50%;border:0;background:rgba(255,255,255,.1);color:#fff;cursor:pointer;font-size:11px}
+.d37-adcard-x{flex:none;width:24px;height:24px;border-radius:50%;border:0;background:rgba(var(--fg-rgb),.1);color:#fff;cursor:pointer;font-size:11px}
 .d37-adcard .d37-adload-tip{text-align:left;margin-bottom:8px}
-.d37-break{margin:1.6rem auto 0;max-width:780px;padding:.8rem 1rem 1rem;border-radius:16px;background:rgba(255,255,255,.03);border:1px dashed var(--border,rgba(255,255,255,.14));text-align:center}
+.d37-break{margin:1.6rem auto 0;max-width:780px;padding:.8rem 1rem 1rem;border-radius:16px;background:rgba(var(--fg-rgb),.03);border:1px dashed var(--border,rgba(var(--fg-rgb),.14));text-align:center}
 .d37-break-t{font-size:.8rem;color:var(--muted,#8d8daa);margin-bottom:.5rem}
 .d37-break-t b{color:var(--text,#f0f0f8)}
 .d37-break .d37-ad{margin:0 auto}
-.d37-feed{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:250px;padding:.55rem .6rem .7rem;border-radius:18px;border:1px dashed var(--border,var(--line,rgba(255,255,255,.14)));background:rgba(255,255,255,.025);overflow:hidden;text-align:center}
+.d37-feed{position:relative;display:flex;flex-direction:column;justify-content:center;min-height:250px;padding:.55rem .6rem .7rem;border-radius:18px;border:1px dashed var(--border,var(--line,rgba(var(--fg-rgb),.14)));background:rgba(var(--fg-rgb),.025);overflow:hidden;text-align:center}
 .d37-feed[hidden]{display:none!important}
 .d37-feed.d37-ad{margin:0;max-width:none}
 .d37-feed.row{grid-column:1/-1;min-height:110px}
@@ -690,7 +690,7 @@ html.d37-ads-debug .d37-ad{outline:2px dashed #22d3ee;outline-offset:3px}
 .d37-spadm{background:rgba(255,209,102,.05);border:1px solid rgba(255,209,102,.18);border-radius:14px;padding:1.2rem;margin-top:1.2rem;display:flex;flex-direction:column;gap:.5rem}
 .d37-spadm-h{font-size:.72rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#ffd166}
 .d37-spadm p{font-size:.72rem;color:var(--muted);margin:0}
-.d37-spadm input:not([type=checkbox]):not([type=color]){width:100%;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:10px;padding:.55rem .8rem;color:var(--text);font:600 .78rem Montserrat,sans-serif;outline:none}
+.d37-spadm input:not([type=checkbox]):not([type=color]){width:100%;background:rgba(var(--fg-rgb),.05);border:1.5px solid var(--border);border-radius:10px;padding:.55rem .8rem;color:var(--text);font:600 .78rem Montserrat,sans-serif;outline:none}
 .d37-spadm-row{display:flex;gap:.8rem;flex-wrap:wrap;font-size:.72rem;color:var(--muted);align-items:center}
 .d37-spadm-on{font-size:.78rem;font-weight:700;display:flex;gap:.4rem;align-items:center}
 .d37-spadm-save{padding:.6rem;border-radius:10px;border:0;background:linear-gradient(135deg,#f59e0b,#ffd166);color:#1a1205;font:800 .8rem Montserrat,sans-serif;cursor:pointer}

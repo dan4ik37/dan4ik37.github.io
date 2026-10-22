@@ -104,31 +104,31 @@ function hub(res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:780px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
 .qz-friend{margin-bottom:.4rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-weight:700}
 .qz{margin-top:1.4rem;padding:1.4rem;border-radius:20px;background:var(--card);border:1px solid var(--line);min-height:260px;scroll-margin-top:80px}
 .qz-start{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;min-height:220px;text-align:center;color:var(--muted)}
 .qz-go{font-size:1rem;padding:.9rem 1.8rem}
-.qz-prog{height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}
+.qz-prog{height:6px;border-radius:99px;background:rgba(var(--fg-rgb),.08);overflow:hidden}
 .qz-prog i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .3s}
 .qz-n{margin-top:.8rem;font-size:.75rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
 .qz-q{margin:.4rem 0 1rem;text-transform:none;letter-spacing:0;font-size:1.35rem}
 .qz-a{display:grid;gap:.55rem}
-.qz-a button{min-height:52px;padding:.75rem 1rem;border-radius:14px;border:1.5px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);
+.qz-a button{min-height:52px;padding:.75rem 1rem;border-radius:14px;border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.04);color:var(--text);
   font:700 .95rem Montserrat,sans-serif;text-align:left;cursor:pointer;transition:border-color .15s,background .15s}
 .qz-a button:hover{border-color:var(--accent);background:rgba(255,45,85,.08)}
 .qz-res{text-align:center;display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:.6rem 0}
 .qz-emoji{font-size:4rem;line-height:1.1}
 .qz-res small{color:var(--muted);font-weight:700}
 .qz-res h2{font-size:2rem;text-transform:none;letter-spacing:0;margin:0}
-.qz-res p{max-width:560px;color:rgba(240,240,248,.88)}
+.qz-res p{max-width:560px;color:rgba(var(--text-rgb),.88)}
 .qz-act{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;margin-top:.8rem}
 .qz-copied{color:#4ade80;font-size:.85rem;min-height:1.2rem}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .box a{color:#7cc4ff}
 .qz-all{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.7rem;margin-top:.5rem}
-.qz-all div{padding:.8rem 1rem;border-radius:12px;background:rgba(255,255,255,.04)}
-.qz-all p{font-size:.86rem;color:rgba(240,240,248,.8);margin-top:.3rem}
+.qz-all div{padding:.8rem 1rem;border-radius:12px;background:rgba(var(--fg-rgb),.04)}
+.qz-all p{font-size:.86rem;color:rgba(var(--text-rgb),.8);margin-top:.3rem}
 .qz-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.8rem;margin-top:1.2rem}
 .qz-card{display:flex;flex-direction:column;gap:.35rem;padding:1.1rem 1.2rem;border-radius:16px;background:var(--card);border:1px solid var(--line);text-decoration:none;color:var(--text)!important;transition:border-color .2s,transform .2s}
 .qz-card:hover{border-color:var(--accent);transform:translateY(-2px)}

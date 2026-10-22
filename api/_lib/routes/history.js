@@ -67,7 +67,7 @@ export default async function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:760px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:760px}
 .hy-origin{display:flex;gap:1rem;align-items:center;margin-top:1.4rem;padding:.8rem;border-radius:16px;background:linear-gradient(135deg,rgba(255,209,102,.1),var(--card) 60%);border:1px solid rgba(255,209,102,.35);text-decoration:none;max-width:720px}
 .hy-origin img{width:200px;height:auto;border-radius:10px;flex:none}
 .hy-origin span{display:flex;flex-direction:column;gap:.3rem}
@@ -78,9 +78,9 @@ const CSS = `
 .hy-year b{display:block;font-family:Oswald,sans-serif;font-size:1.8rem;line-height:1}
 .hy-year small{color:var(--muted);font-size:.75rem}
 .hy-body{display:flex;flex-direction:column;gap:.55rem;min-width:0}
-.hy-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin-top:.5rem}
+.hy-bar{height:8px;border-radius:99px;background:rgba(var(--fg-rgb),.06);overflow:hidden;margin-top:.5rem}
 .hy-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
-.hy-games{font-size:.82rem;color:rgba(240,240,248,.8)}
+.hy-games{font-size:.82rem;color:rgba(var(--text-rgb),.8)}
 .hy-games a{font-weight:700}
 .hy-games small{color:var(--muted)}
 .hy-first{display:flex;gap:.7rem;align-items:center;text-decoration:none;padding:.5rem;border-radius:12px;background:var(--card);border:1px solid var(--line);max-width:560px}

@@ -211,7 +211,7 @@ const ST = globalThis.D37Settings;
   // «Главное»: самое нужное по месту (качество и шейдеры добавляет gfx-settings.js — здесь его нет)
   ok(T.mainFor('engine').join() === 'sens,vol,view', '«Главное» в 3D-мире: чувствительность, громкость, вид', T.mainFor('engine'));
   ok(T.mainFor('game').join() === 'vol,ui', '«Главное» в обычной игре: громкость, размер кнопок (3D-настроек нет)', T.mainFor('game'));
-  ok(T.mainFor('site').join() === 'sens,vol,view,perf', '«Главное» из меню сайта: + режим сайта', T.mainFor('site'));
+  ok(T.mainFor('site').join() === 'sens,vol,view,theme,perf', '«Главное» из меню сайта: + тема сайта (T-086) и режим сайта', T.mainFor('site'));
   ST.addMain({ id: 'x1', order: 5, ctx: ['engine'], html: () => '<div class="gs-row">x</div>' });
   ok(T.mainFor('engine')[0] === 'x1' && !T.mainFor('game').includes('x1'), 'addMain — своя строка по порядку и по месту');
   ST.addMain({ id: 'x2', order: 99, when: c => c === 'site', html: () => '' });

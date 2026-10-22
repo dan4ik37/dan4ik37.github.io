@@ -115,7 +115,7 @@ function closePollAdmin() {
 function renderPollAdminList() {
   const list = document.getElementById('pollAdminList');
   list.innerHTML = POLLS.map((p, i) => `
-    <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);margin-bottom:.4rem">
+    <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border-radius:8px;background:rgba(var(--fg-rgb),.03);border:1px solid var(--border);margin-bottom:.4rem">
       <div style="flex:1;min-width:0">
         <div style="font-size:.78rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.q)}</div>
         <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">${esc(p.opts.join(' · '))}</div>
@@ -138,7 +138,7 @@ function addPollOptInput(val = '') {
   div.style.cssText = 'display:flex;gap:.4rem;margin-bottom:.4rem';
   div.innerHTML = `
     <input placeholder="Вариант ${container.children.length}..." value="${esc(val)}"
-      style="flex:1;background:rgba(255,255,255,.05);border:1.5px solid var(--border);border-radius:8px;padding:.5rem .8rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.78rem;outline:none"
+      style="flex:1;background:rgba(var(--fg-rgb),.05);border:1.5px solid var(--border);border-radius:8px;padding:.5rem .8rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.78rem;outline:none"
       onfocus="this.style.borderColor='var(--tw)'" onblur="this.style.borderColor='var(--border)'">
     <button onclick="this.parentNode.remove()" aria-label="Удалить вариант ответа" style="background:rgba(255,45,85,.1);border:1px solid rgba(255,45,85,.2);color:var(--accent);border-radius:8px;padding:.4rem .6rem;cursor:pointer;font-size:.8rem">✕</button>`;
   container.appendChild(div);

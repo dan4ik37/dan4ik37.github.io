@@ -13,30 +13,30 @@
 
   const CSS = `
 .ops-modal{position:fixed;inset:0;z-index:9550;background:rgba(0,0,0,.88);backdrop-filter:blur(14px);display:flex;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto}
-.ops-box{background:var(--card,#111119);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:18px;width:100%;max-width:980px;padding:1.1rem 1.2rem 1.4rem;position:relative;margin:auto 0}
+.ops-box{background:var(--card,#111119);border:1px solid var(--border,rgba(var(--fg-rgb),.08));border-radius:18px;width:100%;max-width:980px;padding:1.1rem 1.2rem 1.4rem;position:relative;margin:auto 0}
 .ops-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem}
 .ops-head h3{font-size:1.1rem;font-weight:800;flex:1;min-width:10rem}
-.ops-btn{min-height:36px;padding:.35rem .8rem;border-radius:10px;border:1px solid var(--border,rgba(255,255,255,.1));background:rgba(255,255,255,.05);color:var(--text,#f0f0f8);font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}
+.ops-btn{min-height:36px;padding:.35rem .8rem;border-radius:10px;border:1px solid var(--border,rgba(var(--fg-rgb),.1));background:rgba(var(--fg-rgb),.05);color:var(--text,#f0f0f8);font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}
 .ops-btn:hover{border-color:var(--accent,#ff2d55)}.ops-btn.on{background:var(--accent,#ff2d55);border-color:transparent;color:#fff}.ops-btn.danger{color:#ff8a8a}
 .ops-btn[disabled]{opacity:.5;cursor:default}
 .ops-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;margin-bottom:.8rem}
-.ops-card{background:rgba(255,255,255,.04);border:1px solid var(--border,rgba(255,255,255,.07));border-radius:12px;padding:.55rem .75rem}
+.ops-card{background:rgba(var(--fg-rgb),.04);border:1px solid var(--border,rgba(var(--fg-rgb),.07));border-radius:12px;padding:.55rem .75rem}
 .ops-card b{display:block;font-size:1.25rem}.ops-card span{font-size:.68rem;color:var(--muted,#8d8daa)}
 .ops-bar{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.8rem}
 .ops-chart{display:flex;align-items:flex-end;gap:3px;height:54px;margin-bottom:.9rem}
 .ops-chart i{flex:1;min-width:6px;background:linear-gradient(var(--accent,#ff2d55),var(--accent2,#ff6b35));border-radius:3px 3px 0 0;opacity:.85}
-.ops-chart i.z{background:rgba(255,255,255,.1);height:2px!important}
-.ops-row{background:rgba(255,255,255,.035);border:1px solid var(--border,rgba(255,255,255,.07));border-radius:12px;padding:.6rem .75rem;margin-bottom:.5rem;display:grid;grid-template-columns:auto 1fr;gap:.2rem .75rem}
+.ops-chart i.z{background:rgba(var(--fg-rgb),.1);height:2px!important}
+.ops-row{background:rgba(var(--fg-rgb),.035);border:1px solid var(--border,rgba(var(--fg-rgb),.07));border-radius:12px;padding:.6rem .75rem;margin-bottom:.5rem;display:grid;grid-template-columns:auto 1fr;gap:.2rem .75rem}
 .ops-row.ign{opacity:.55}.ops-row.new{border-color:rgba(255,107,53,.6)}
 .ops-n{grid-row:span 4;min-width:3.2rem;text-align:center;font-weight:800;font-size:1.05rem;align-self:start;padding-top:.1rem}.ops-n small{display:block;font-weight:600;font-size:.6rem;color:var(--muted,#8d8daa)}
 .ops-m{font-weight:700;font-size:.82rem;word-break:break-word}
 .ops-t{font-size:.7rem;color:var(--muted,#8d8daa);word-break:break-word}
 .ops-chips{display:flex;gap:.3rem;flex-wrap:wrap;font-size:.66rem}
-.ops-chips span{background:rgba(255,255,255,.07);border-radius:6px;padding:.1rem .4rem}
+.ops-chips span{background:rgba(var(--fg-rgb),.07);border-radius:6px;padding:.1rem .4rem}
 .ops-act{display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.15rem}
 .ops-det{grid-column:2;font-size:.7rem;color:var(--muted,#8d8daa);white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);border-radius:8px;padding:.45rem .6rem;font-family:ui-monospace,Consolas,monospace}
-.ops-note{font-size:.78rem;color:var(--muted,#8d8daa);line-height:1.55;padding:.8rem;background:rgba(255,255,255,.04);border-radius:12px}
-.ops-note b{color:var(--text,#f0f0f8)}.ops-note code{background:rgba(255,255,255,.08);padding:0 .3rem;border-radius:4px}
+.ops-note{font-size:.78rem;color:var(--muted,#8d8daa);line-height:1.55;padding:.8rem;background:rgba(var(--fg-rgb),.04);border-radius:12px}
+.ops-note b{color:var(--text,#f0f0f8)}.ops-note code{background:rgba(var(--fg-rgb),.08);padding:0 .3rem;border-radius:4px}
 @media(max-width:560px){.ops-box{padding:.9rem .75rem 1.1rem}.ops-n{min-width:2.6rem}}`;
 
   // маленький помощник: элемент с текстом (разметка из строк не собирается — только textContent)
