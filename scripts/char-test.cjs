@@ -269,14 +269,15 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   // ползком (T-096a, «Кубомир»: лаз высотой в блок): лёг на живот, середина тела — над местом, голова — низко и впереди
   {
     const ch = K.build({}, 'crawl'), V3 = T.Vector3, wp = o => { const v = new V3(); o.getWorldPosition(v); return v; };
+    ch.phase = 1;   // фаза шага у человечка случайная (толпа не в ногу) — для проверки постоянная
     K.animate(ch, false, 1 / 60, 0, { snap: true });
     ch.root.updateMatrixWorld(true);
     const hs = wp(ch.head || ch.headP);
     for (let f = 0; f < 60; f++) K.animate(ch, f > 20, 1 / 60, f / 60, { crawl: true, rate: 6 });
     ch.root.updateMatrixWorld(true);
-    const h = wp(ch.head || ch.headP), tr = wp(ch.torso), hip = wp(ch.legL), hand = wp(ch.handL);
-    ok(h.y < hs.y * .45 && h.z > .3 && hip.y < .7 && Math.abs((h.z + hip.z) / 2) < .55 && hand.z > h.z - .2, 'поза «ползком»: голова низко и впереди, таз у земли, середина тела над местом, руки тянутся вперёд',
-      { head: [+h.y.toFixed(2), +h.z.toFixed(2)], headStand: +hs.y.toFixed(2), torso: [+tr.y.toFixed(2), +tr.z.toFixed(2)], hip: [+hip.y.toFixed(2), +hip.z.toFixed(2)], hand: +hand.z.toFixed(2) });
+    const h = wp(ch.head || ch.headP), tr = wp(ch.torso), hip = wp(ch.legL), hand = wp(ch.handL), handR = wp(ch.handR);
+    ok(h.y < hs.y * .45 && h.z > .3 && hip.y < .7 && Math.abs((h.z + hip.z) / 2) < .55 && Math.max(hand.z, handR.z) > h.z - .2, 'поза «ползком»: голова низко и впереди, таз у земли, середина тела над местом, руки тянутся вперёд',
+      { head: [+h.y.toFixed(2), +h.z.toFixed(2)], headStand: +hs.y.toFixed(2), torso: [+tr.y.toFixed(2), +tr.z.toFixed(2)], hip: [+hip.y.toFixed(2), +hip.z.toFixed(2)], hand: [+hand.z.toFixed(2), +handR.z.toFixed(2)] });
     ok(ch.cat === 12 && W.CHAR_VERSION >= 4, 'ползком — своё состояние (12), версия персонажа 4', { cat: ch.cat, v: W.CHAR_VERSION });
   }
   // snap: поза зависит только от (ch.phase, t, o) — для запекания спрайтов (js/core/char2d.js) и картинок

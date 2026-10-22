@@ -1663,6 +1663,15 @@ js/features/games.js и хвост css/premium.css.
   (9,1); стоя 390×844 — 29 → 19 (15), 360×780 — 33,1 → 21,5 (17). Пересчётов стилей в покое — 13 → 3 в секунду.
   Грабли: при «уменьшить движение» (index.html, body:not(.high) *) у сайта ВСЁ с переходом 0,01 мс — getBoundingClientRect сразу
   после смены стиля отдаёт старое место (переход стартует на следующем кадре). У измеряемых частей HUD и у кнопок — transition: none.
+- T-096a (22.10, GAMES_VER 135; включено): Esc/E — сначала окно (kubomir.js escClosed/escRelock: мышь захватывается, только когда Esc
+  отпущен); PK.riseClear (player.js, только «Кубомир») — не залезть сквозь потолок; ползком (PHC 0,6, глаза 0,42; K 'crawl' — Z, два раза
+  «красться», 🐛, два раза Ⓑ; world3d o.crawl, CHAR_VERSION 4; кооп — флаг 1024); обе руки «из глаз» — GRIP_FP / ACT_FP в kubomir-hand.js
+  (state(): grip, act); факел — V.torchQuads (V.TORCH3D = false — старый), лампа у стены без ореола (halo 0); тени вырезного — depthMat с
+  альфой без мипов (V.SHADOW_DILATE = false — как было). «Живые» текстуры (D37_TEXFX, WebGL2): поворот картинки по хешу клетки (uLFP.zw —
+  начало координат mod 256), лава течёт, руды блестят; рельеф D37_POM — луч по клеткам рисунка (d37Hq: яркость → 5 ступенек, у кирпичей
+  наоборот), только solid, ПК «высокая», ближе 16; флаги — V.TEX_FX / V.texFx (voxel-tex.js, по имени слоя; мод — spec.fx); откат —
+  D37E.vox.TEXFX = false / VR.setPom(false); страж — ключ 'kbtex'. Стенд — scripts/kubomir-look-e2e.cjs (shots, esc, perf, gpu, leak).
+  Не сделано: 10-мин прогон и долгие круги утечек (владелец: «проверит сам»), riseClear в «Мире»/студии.
 - Помощники «удобнее» (T-049, 22.10, GAMES_VER 131; docs/plans/kubomir-modpacks.md — статус этапа 1 в начале). Общие модули движка
   (Подземье — следующее): D37E.host (шов: события break place craft smelt pickup kill eat use sleep wake knockout respawn biome day ach
   quest inv equip, данные игрока P.ext — сохраняется и уходит хозяину «вместе»), D37E.accessories (ячейки 💍), D37E.sheet (листы: справа ≥ 720
