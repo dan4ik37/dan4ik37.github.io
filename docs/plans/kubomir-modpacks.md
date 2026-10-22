@@ -656,7 +656,7 @@ Skills (Mining, Fighting, Building, Exploring, Farming): XP from events (not fro
    the player builds **relay stations** (ретрансляторы) that pass the signal like real ones: line of sight / attenuation through blocks,
    range, power; a dead zone shows «нет сигнала». Same signal model can serve «Мир Денчика» phones later.
 4. **Public recipe pages: YES** (K1.14) — generated from game data, normal ads, Vercel functions stay ≤ 12.
-5. Horror mode — decide later (not needed for Phase 1).
+5. **Horror / special monsters: YES** (owner 22.10: «некоторых SCP можно и в наш мир добавить или с Backrooms — как особые монстры мира»). Rules: SCP-like creatures are OUR OWN «по мотивам» — own names, looks and text, generic mechanics only (owner chose this; no SCP names/numbers/texts); monsters from the owner's own Backrooms game (D:\UnityProjects\Backrooms, read-only, another session works there) may be reused as ideas and behaviour; models/sounds only if they are his own or their licence allows it — check each. Age 12+/16+, opt-in zones/world rule, never gore (knockout and fade), never in the kids' town. Board task T-052.
 
 Consequences for Phase 1: K1.0 gains `D37E.accessories` (slots + unlock rules + effect hooks + save/sync + UI on phone/PC/pad);
 K1.1 «info pack» becomes info accessories; K1.6–K1.7 map becomes the atlas accessory; K1.8 camps use the consumable teleport item;
