@@ -58,7 +58,7 @@
       const own = C().owns(slot, id), on = wear[slot] === id, tr = trying[slot] === id && !on;
       const tag = on ? '<span class="wr-tag on">надето</span>' : own ? '<span class="wr-tag">есть</span>'
         : gems ? `<span class="wr-tag price">💎 ${num(gems)}</span>` : lvl ? `<span class="wr-tag price">🔒 ур. ${lvl}</span>`
-        : ref ? '<span class="wr-tag price" title="Награда за приглашения друзей">🤝 друзья</span>'
+        : ref ? (g => `<span class="wr-tag price" title="${g.title}">${g.icon} ${g.short}</span>`)(C().grantOf?.(ref) || { icon: '🤝', short: 'друзья', title: 'Награда за приглашения друзей' })
         : `<span class="wr-tag price">${vip ? 'VIP · ' : ''}🪙 ${num(price)}</span>`;
       return `<button type="button" class="wr-card${on ? ' on' : ''}${tr ? ' trying' : ''}${own ? '' : ' locked'}" data-part="${id}" title="${name}">
         <canvas width="88" height="88" data-mini="${id}"></canvas><b>${name}</b>${tag}</button>`;
@@ -89,9 +89,10 @@
         <div class="wr-try-row"><a class="wr-btn gold" href="#/shop">💎 ${num(p.gems)} — в магазин</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
       return;
     }
-    if (p.ref) {   // награда за приглашения друзей — не продаётся (js/core/ref.js)
-      bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — награда за приглашения друзей</div>
-        <div class="wr-try-row"><a class="wr-btn gold" href="#/invite">👥 Как получить</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
+    if (p.ref) {   // награда (друзья — js/core/ref.js, сезон и Новый год — games-more.sql) — не продаётся
+      const g = C().grantOf?.(p.ref) || { title: 'Награда за приглашения друзей', href: '#/invite', how: '👥 Как получить' };
+      bar.innerHTML = `<div class="wr-try-t">Примерка: <b>${p.name}</b> — ${g.title.split(' — ')[0].toLowerCase()}</div>
+        <div class="wr-try-row"><a class="wr-btn gold" href="${g.href}">${g.how}</a><button type="button" class="wr-btn" data-act="untry">Снять примерку</button></div>`;
       return;
     }
     if (p.lvl) {   // награда за уровень — не продаётся

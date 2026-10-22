@@ -70,6 +70,21 @@ if (process.argv.includes('--alloc-phone')) {
   return;
 }
 
+// ═══ Кадр с руками и предметами (слой o.hold) без мусора: вещи, удары по фазам, щит, лук, на ходу (тот же замер) ═══
+if (process.argv.includes('--alloc-hold')) {
+  const K = W.kit(T, { q: 'high' });
+  const chs = [{ item: 'sword' }, { psal: 'robot', psar: 'robot' }, { hair: 'long', glove: 'boxing' }].map((l, i) => K.build(l, 'h' + i));
+  const hold = { r: 3, l: 11, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 };
+  const o = { rate: 10.5, air: false, sit: false, crouch: 0, roll: -1, rollBack: false, hang: false, ladder: false, climbPh: 0, pk: '', pkK: 0, swim: false, dive: false, look: { x: 2, y: 1.6, z: 5 }, phone: '', hold };
+  const tt = new Float64Array(1);
+  const run = n => { for (let i = 0; i < n; i++) { tt[0] += 1 / 60; hold.r = (i >> 8) % 13; hold.l = (i >> 9) & 1 ? 11 : 12; hold.m = (i >> 5) % 13; hold.mh = hold.m === 12 ? 1 : 0; hold.v = (i % 32) / 32 * 3; hold.g = (i >> 6) & 1; hold.d = ((i >> 4) & 3) / 3; hold.p = ((i % 50) / 50 - .5); o.air = (i >> 7) % 9 === 3; for (let c = 0; c < chs.length; c++) K.animate(chs[c], (i >> 5) % 3 !== 0, 1 / 60, tt[0], o); } };
+  run(30000);
+  let best = Infinity;
+  for (let k = 0; k < 3; k++) { global.gc(); global.gc(); const h0 = process.memoryUsage().heapUsed; run(40000); best = Math.min(best, (process.memoryUsage().heapUsed - h0) / (40000 * chs.length)); }
+  console.log(JSON.stringify({ perCall: best }));
+  return;
+}
+
 // ═══ 1. Образы: нормализация и миграция ═══
 const ref = JSON.parse(fs.readFileSync(path.join(__dirname, 'char-ref.json'), 'utf8'));
 {
@@ -416,6 +431,57 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   }
 }
 
+// ═══ 6в. Руки и предметы (бой, D37E.combat): слой o.hold — без него позы как были; хват, удары, щит, лук; правая — armL ═══
+{
+  const K = kits.high, J = 28;
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/combat.js'), 'utf8'), { filename: 'js/engine/combat.js' });
+  const CB = globalThis.D37E.combat;
+  ok(W.HOLDS && W.HOLDS.join() === CB.HOLDS.join() && W.MOTIONS.join() === CB.MOTIONS.join(), 'руки: номера поз и движений — одни и те же в world3d.js и combat.js (сеть)', [W.HOLDS, CB.HOLDS]);
+  const H = n => W.HOLDS.indexOf(n), M = n => W.MOTIONS.indexOf(n);
+  // фаза шага и моргание — случайные у каждого человечка: для сравнения — одни и те же
+  const pose = (look, hold, n = 40, o0) => { const ch = K.build(look || {}, 'hl'); ch.phase = 1; ch.blinkAt = 1; let t = 0; for (let f = 0; f < n; f++) { t += 1 / 60; K.animate(ch, false, 1 / 60, t, Object.assign({ hold }, o0 || {})); } return ch; };
+  const base = pose({}, null), empty = pose({}, { r: 0, l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 });
+  let same = true; for (let j = 0; j < J; j++) if (Math.abs(base.P[j] - empty.P[j]) > 1e-9) same = false;
+  ok(same, 'пустые руки (o.hold без вещей и движения) — поза ровно как без слоя');
+  // где кисть (в осях человечка: +z — вперёд, armL — сторона −x — его правая рука)
+  const loc = (ch, o) => { ch.root.updateMatrixWorld(true); const v = new T.Vector3(); o.getWorldPosition(v); return v.applyMatrix4(new T.Matrix4().copy(ch.root.matrixWorld).invert()); };
+  const sw = pose({}, { r: H('sword'), l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 });
+  const hR0 = loc(base, base.handL), hR = loc(sw, sw.handL), hL = loc(sw, sw.handR);
+  ok(hR.z > hR0.z + .12 && hR.y > hR0.y + .05 && Math.abs(hL.z - loc(base, base.handR).z) < 1e-6, 'меч — в правой (armL): кисть вперёд и выше; левая — как была', { hR, hR0 });
+  // все вещи и движения: без «не чисел», поза меняется
+  let nan = 0, flat = [];
+  for (let r = 0; r < W.HOLDS.length; r++) for (const l of [0, H('shield'), H('torch')]) for (let m = 0; m < W.MOTIONS.length; m++) for (const v of [.4, 1.5, 2.6]) {
+    const ch = pose({}, { r, l, m, mh: m === M('bash') ? 1 : 0, v, g: l === H('shield') ? .7 : 0, d: r === H('bow') ? .6 : 0, p: .3 }, 12);
+    for (let j = 0; j < J; j++) if (!Number.isFinite(ch.P[j])) nan++;
+    if (m && v === 1.5) { let d = 0; for (let j = 0; j < J; j++) d = Math.max(d, Math.abs(ch.P[j] - base.P[j])); if (d < .05) flat.push(W.MOTIONS[m]); }
+  }
+  ok(!nan, 'все вещи × все движения × фазы — без «не чисел»', nan);
+  ok(!flat.length, 'каждое движение заметно меняет позу', flat);
+  // рубка: замах — правая рука справа и наверху, конец удара — впереди левее
+  const sl1 = pose({}, { r: H('sword'), l: 0, m: M('slash'), mh: 0, v: 1, g: 0, d: 0, p: 0 }), w1 = loc(sl1, sl1.handL);
+  const sl2 = pose({}, { r: H('sword'), l: 0, m: M('slash'), mh: 0, v: 2, g: 0, d: 0, p: 0 }), w2 = loc(sl2, sl2.handL);
+  ok(w1.x < -.45 && w1.y > .95 && w2.x > w1.x + .35 && w2.z > .3, 'рубка: замах — справа (−x) и высоко, удар — вперёд к середине', { w1, w2 });
+  const ch1 = pose({}, { r: H('axe'), l: 0, m: M('chop'), mh: 0, v: 1, g: 0, d: 0, p: 0 }), ch2 = pose({}, { r: H('axe'), l: 0, m: M('chop'), mh: 0, v: 2, g: 0, d: 0, p: 0 });
+  ok(loc(ch1, ch1.handL).y > 1.3 && loc(ch2, ch2.handL).y < .95 && loc(ch2, ch2.handL).z > .3, 'топор: замах над плечом, удар — вниз и вперёд');
+  // щит поднят — левая (armR) перед грудью; лук натянут — левая вытянута вперёд
+  const gd = pose({}, { r: H('sword'), l: H('shield'), m: 0, mh: 0, v: 0, g: 1, d: 0, p: 0 }), gl = loc(gd, gd.handR);
+  ok(gl.z > .25 && gl.y > .9 && gl.x > 0, 'щит поднят — левая рука (armR) перед грудью', gl);
+  const bw = pose({}, { r: H('bow'), l: H('bow'), m: 0, mh: 0, v: 0, g: 0, d: 1, p: 0 }), bl = loc(bw, bw.handR);
+  ok(bl.z > .4 && bl.y > .95, 'лук натянут — левая вытянута вперёд', bl);
+  const bwUp = pose({}, { r: H('bow'), l: H('bow'), m: 0, mh: 0, v: 0, g: 0, d: 1, p: .6 });
+  ok(loc(bwUp, bwUp.handR).y > bl.y + .1, 'целится вверх — рука с луком выше');
+  // вода, лестница, паркур — руки не держат позу (слой уходит), эмоция — главнее
+  const sw2 = pose({}, { r: H('sword'), l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 }, 40, { swim: true });
+  const nh2 = pose({}, null, 40, { swim: true });
+  let d2 = 0, dj = -1; for (let j = 0; j < J; j++) { const dd = Math.abs(sw2.P[j] - nh2.P[j]); if (dd > d2) { d2 = dd; dj = j; } }
+  ok(d2 < 1e-6, 'плывёт — слой рук не мешает плаванию', { d2, dj });
+  // не мусорит (отдельный процесс)
+  const ra = cp.spawnSync(process.execPath, ['--expose-gc', '--max-semi-space-size=128', __filename, threePath, '--alloc-hold'], { encoding: 'utf8', timeout: 180000 });
+  let resA = null; try { resA = JSON.parse((ra.stdout || '').trim().split('\n').pop()); } catch (e) {}
+  ok(resA && resA.perCall < 32, 'руки и предметы: анимация не мусорит (байт на кадр человечка)', resA ? resA.perCall.toFixed(1) : (ra.stderr || ra.stdout || '').slice(0, 300));
+  if (resA) console.log(`  руки и предметы: ${resA.perCall.toFixed(1)} байт на кадр человечка (вещи, удары, щит, лук)`);
+}
+
 // ═══ 7. Кадр без мусора (отдельный процесс) ═══
 {
   const r = cp.spawnSync(process.execPath, ['--expose-gc', '--max-semi-space-size=128', __filename, threePath, '--alloc'], { encoding: 'utf8', timeout: 180000 });
@@ -438,8 +504,8 @@ const kits = { low: W.kit(T, { q: 'low' }), mid: W.kit(T, { q: 'mid' }), high: W
   const gemItems = [];
   for (const s of C.SLOTS) for (const p of C.PARTS[s].list) {
     if (p[5]) { gemItems.push(`'skin:${s}:${p[0]}'`); ok(!new RegExp(`\\('skin:${s}:${p[0]}', \\d+\\)`).test(sql), 'вещь за 💎 не продаётся за монеты', p[0]); continue; }
-    // за приглашения друзей (8-е поле, referrals2.sql): цены нет нигде — char_save надевает выданное
-    if (p[7]) { ok(!sql.includes(`'skin:${s}:${p[0]}'`) && C.price(`skin:${s}:${p[0]}`) === null && C.refOf(`skin:${s}:${p[0]}`) === 1, 'вещь за приглашения не продаётся (цены нет)', p[0]); continue; }
+    // награда сервера (8-е поле: 1 — друзья, referrals2.sql; 2 — сезон, 3 — Новый год, games-more.sql): цены нет нигде — char_save надевает выданное
+    if (p[7]) { ok(!sql.includes(`'skin:${s}:${p[0]}'`) && C.price(`skin:${s}:${p[0]}`) === null && C.refOf(`skin:${s}:${p[0]}`) === p[7] && !!C.grantOf(p[7]), 'вещь-награда (друзья, сезон, Новый год) не продаётся (цены нет)', p[0]); continue; }
     if (!sql.includes(`('skin:${s}:${p[0]}', ${p[2]})`)) { miss++; if (miss < 5) ok(false, 'цена в coins.sql', `skin:${s}:${p[0]}`); }
   }
   ok(gemItems.length === 3 && sql.includes(`select p_item in (${gemItems.join(', ')})`), 'coin_gems_item — все вещи только за 💎', gemItems.join(', '));

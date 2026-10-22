@@ -375,3 +375,16 @@ Owner must decide (5):
 - E:\site\dan4ik37.github.io\js\games\mir-city.js (job board, tasks, panels, new work sites)
 - E:\site\dan4ik37.github.io\js\games\mir-zones.js (WORKS rects, accessRules, mayor overview layer)
 - E:\site\dan4ik37.github.io\js\features\phone.js (bank, market and city apps; with phone-apps.js)
+
+## Owner decisions (22.10.2026)
+1. Kids' town switches from ⭐ to the shared 💵 денки — YES.
+2. Mayor v1 — owner asked «это как тип с выбором?» (is it an election?). Answer given: v1 = automatic «Мэр недели» by contribution (no voting), owner can appoint/remove; real elections come in step 3. Waiting for his final word — P6 only, does not block P1–P5.
+3. Numbers (start 50 💵, ~6 💵 per task, cap 400/day, rent 40/120 per week) — YES for now; owner: «потом посмотрим — сделаем лог, чтобы проверить баланс» → P1 MUST include an admin economy log: «📊 Экономика города» (per day: issued / destroyed / transferred by kind, money supply M vs target T, central-bank k, wage cap hits, top income kinds, suspicious accounts — no nicks of kids), plus CSV export; the city-sim tables in docs/CITY_ECONOMY.md.
+4. Guests play a trial without saving — YES.
+5. Keep the small 🪙 site coins for city work — YES.
+6. Mayor — UPDATED by the owner (22.10): «голосование оставим, но чтобы не могли заходить с одного IP и устройства сразу несколько раз — не больше 3 аккаунтов, и защита от смены IP и другого, как ботов используют, чтобы не банило». So P6 = real ELECTIONS (weekly) instead of the automatic «Мэр недели»:
+   - candidates: eligible residents (account ≥ 14 days, level ≥ 5 kids / 10 metro, age gate, not banned, real city activity in the last 14 days);
+   - voters: the same activity/age/level gates; one vote per account;
+   - anti-fraud WITHOUT bans («чтобы не банило» — families and schools share an IP): at most 3 counted votes per device hash and per IP hash per election (extra votes are silently not counted, not punished); device hash (D37Ref.device / d37_dev + stable browser signals) links accounts across IP changes / VPN, so switching IP does not add votes; accounts with no real gameplay (bot-like: no city tasks, no visits pattern) do not count; Turnstile captcha on the vote button when TURNSTILE_SITE_KEY is set (owner); suspicious clusters (many accounts on one device/IP, new accounts voting together) listed for the admin with «не считать» — never auto-ban;
+   - the owner/admin can still appoint or remove a mayor and void an election;
+   - results public, counts per candidate; ties → older account.

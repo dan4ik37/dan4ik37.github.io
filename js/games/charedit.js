@@ -15,6 +15,8 @@
   const C = () => window.D37Char, W = () => window.D37Coins;
   const num = n => Number(n || 0).toLocaleString('ru');
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Награда сервера (8-е поле PARTS): 1 — друзья, 2 — сезон, 3 — Новый год (avatar.js GRANTS)
+  const grant = k => C().grantOf?.(k) || { icon: '🤝', short: 'друзья', title: 'Награда за приглашения друзей — не продаётся', href: '#/invite', how: 'Как получить' };
   const TS = 144;   // размер картинки варианта (в CSS — 72 px)
   // Разделы и вкладки: slot — что выбираем, view — куда смотрит камера, colors — палитры под карточками; parts — части тела
   const CATS = [
@@ -223,7 +225,7 @@
     if (own) return b.price ? '<i class="ce-tag">есть</i>' : b.lvl ? `<i class="ce-tag">ур. ${b.lvl}</i>` : '';
     if (b.gems) return `<i class="ce-tag price gem" title="Только за кристаллы — в магазине">💎 ${num(b.gems)}</i>`;
     if (b.lvl) return `<i class="ce-tag price" title="Награда за ${b.lvl} уровень — бесплатно, не продаётся">🔒 ур. ${b.lvl}</i>`;
-    if (b.ref) return '<i class="ce-tag price" title="Награда за приглашения друзей — не продаётся">🤝 друзья</i>';   // 👥 js/core/ref.js
+    if (b.ref) { const g = grant(b.ref); return `<i class="ce-tag price" title="${g.title}">${g.icon} ${g.short}</i>`; }   // друзья, сезон, Новый год
     return `<i class="ce-tag price">${b.vip ? 'VIP · ' : ''}🪙 ${num(b.price)}${b.pack ? ' · пакет' : ''}</i>`;
   }
   function cards(slot){
@@ -399,11 +401,11 @@
       refItems = items.filter(x => x.ref);
     const total = coinItems.reduce((a, x) => a + x.price, 0), have = W().coins();
     bar.hidden = false;
-    bar.innerHTML = `<div class="ce-try-t">👀 Примерка: ${items.map(x => `<span class="ce-chip${x.gems ? ' gem' : ''}">${esc(x.name)} · ${x.gems ? '💎 ' + num(x.gems) : x.lvl ? '🔒 ур. ' + x.lvl : x.ref ? '🤝 друзья' : '🪙 ' + num(x.price)}<button type="button" data-act="untry" data-slots="${x.slots.join(',')}" title="Снять" aria-label="Снять">✕</button></span>`).join('')}</div>
+    bar.innerHTML = `<div class="ce-try-t">👀 Примерка: ${items.map(x => `<span class="ce-chip${x.gems ? ' gem' : ''}">${esc(x.name)} · ${x.gems ? '💎 ' + num(x.gems) : x.lvl ? '🔒 ур. ' + x.lvl : x.ref ? grant(x.ref).icon + ' ' + grant(x.ref).short : '🪙 ' + num(x.price)}<button type="button" data-act="untry" data-slots="${x.slots.join(',')}" title="Снять" aria-label="Снять">✕</button></span>`).join('')}</div>
       ${coinItems.some(x => x.vip) ? '<div class="ce-try-vip">👑 VIP-вещи для VIP — бесплатно. <a href="/vip" target="_blank" rel="noopener">Как получить VIP</a></div>' : ''}
       ${gemItems.length ? `<div class="ce-try-gem">💎 ${gemItems.map(x => esc(x.name)).join(', ')} — только за кристаллы. <a href="#/shop">В магазин 💎</a></div>` : ''}
       ${lvlItems.length ? `<div class="ce-try-vip">🔒 ${lvlItems.map(x => `${esc(x.name)} — с ${x.lvl} уровня`).join(', ')}: награда за уровень, не продаётся${W()?.level?.() ? ` (у тебя ${W().level()})` : ' — войди в аккаунт'}. <a href="#/profile">Что даёт уровень</a></div>` : ''}
-      ${refItems.length ? `<div class="ce-try-vip">🤝 ${refItems.map(x => esc(x.name)).join(', ')} — награда за приглашения друзей, не продаётся. <a href="#/invite">Как получить</a></div>` : ''}
+      ${refItems.map(x => { const g = grant(x.ref); return `<div class="ce-try-vip">${g.icon} ${esc(x.name)} — ${esc(g.title.toLowerCase())}. <a href="${g.href}">${g.how}</a></div>`; }).join('')}
       ${coinItems.length ? `<div class="ce-try-row"><button type="button" class="ce-btn gold" data-act="buyall"${have < total ? ' disabled' : ''}>Купить и надеть · 🪙 ${num(total)}</button>
       ${have < total ? `<span class="ce-need">Не хватает 🪙 ${num(total - have)} — играй в игры, забери бонус дня</span>` : ''}</div>` : ''}`;
   }
