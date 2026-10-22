@@ -841,6 +841,7 @@
         // где кончается небо: верх самого высокого тела в столбе (крыши, навесы, машины) или земля — без луча по рельефу (дорого)
         skyTop: (x, z) => ph.supportAt(x, z, 0, 1e4).y,
         water: (x, z) => ph.waterLevel ? ph.waterLevel(x, z) : -Infinity,
+        waveAt: (x, z) => S?.waves?.waveAt(x, z)?.y || 0,   // круги дождя — на волне (waves.js)
         sound: AU,
       });
     } catch (e) { console.error(e); return null; }

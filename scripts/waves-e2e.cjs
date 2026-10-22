@@ -119,6 +119,33 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} podzem ${TAG}-off ${PROF} ${JSON.stringify(b)}\n`);
     }
     if (phone) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    if (process.env.PZSOAK) {   // N минут «играть» у бассейна: плавать, прыгать, бросать вещи, мобы в воде; погода волн меняется
+      const min = +process.env.PZSOAK || 10;
+      const r = await ev(`(async () => {
+        const A = GAME_IMPL.podzem.api, T = GAME_IMPL.podzem._test, g = T.G, U = g.U, err = [];
+        const onErr = e => err.push(String(e.message || e).slice(0, 200)); window.addEventListener('error', onErr);
+        const t0 = performance.now(), WX = [{ wind: 17, windDir: 0, thunder: 1 }, { wind: 6, windDir: 3, thunder: 0 }, null, { wind: 12, windDir: 1, thunder: .4 }];
+        let acts = 0, k = 0, wx = 0, last = 0, swim = 0;
+        while (performance.now() - t0 < ${min} * 60000) {
+          const el = performance.now() - t0, r = Math.random();
+          if (el - last > 20000) { last = el; T.waves(WX[wx++ % WX.length]); }
+          if (g.state === 'paused') A.resume();
+          if (r < .35) U.touch.mx = Math.random() < .5 ? -1 : 1; else if (r < .45) U.touch.mx = 0;
+          else if (r < .6) { U.touch.jump = true; U.touch.jumpDown = true; setTimeout(() => { U.touch.jump = false; }, 300); }
+          else if (r < .65) A.dropItem(['dirt', 'wood', 'gel'][acts % 3], 1, g.pl.x + (Math.random() - .5) * 6, g.pl.y - 1, 0, 0);
+          else if (r < .68 && g.mobs.length < 5) T.mob(['slime', 'zombie'][acts % 2], g.pl.x + (Math.random() < .5 ? -6 : 6), g.pl.y + g.pl.h);
+          else if (r < .7) T.tp(${st.sx} + (Math.random() - .5) * 40, ${st.gy} - 2);
+          if (g.pl.inLq) swim++;
+          if (g.pl.dead) g.pl.dead = .01;
+          acts++; await new Promise(q => setTimeout(q, 250));
+        }
+        U.touch.mx = 0; window.removeEventListener('error', onErr);
+        return { minutes: ${min}, acts, swim, err, items: g.items.length, mobs: g.mobs.length, H: g.wv && +g.wv.F.H.toFixed(2) };
+      })()`, (min + 3) * 60000);
+      console.log('  ПРОГОН Подземье:', JSON.stringify(r));
+      ok(r.err.length === 0 && r.swim > 50, `Подземье: ${r.minutes} мин у воды с волнами — без ошибок`, r);
+      fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} podzem-soak ${PROF} ${JSON.stringify(r)}\n`);
+    }
     const bad = logs.filter(l => /Шейдер|shader|exception|TypeError|ReferenceError/i.test(l) && !/X3595/.test(l));
     ok(!bad.length, 'Подземье: в консоли — без ошибок', bad.slice(0, 6));
   }
@@ -307,10 +334,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         const S = GAME_IMPL.world._test.state(), V = S.zones.veh, v = V.list.get('w_boat1'), VE = D37E.vehicle;
         V._.enter(v, 0); v.x = -455; v.z = 300;
         const orig = VE.input; VE.input = (C, vv, out) => Object.assign(out, { thr: 1, steer: 1, up: 0, boost: 1, brake: 0, on: true });
-        let t0 = performance.now(), capAt = 0;
-        while (performance.now() - t0 < 90000 && !v.capsized) await new Promise(q => setTimeout(q, 100));
+        let t0 = performance.now(), capAt = 0; const tr = [];
+        while (performance.now() - t0 < 90000 && !v.capsized) { await new Promise(q => setTimeout(q, 100)); if (tr.length < 30 && (performance.now() - t0) % 3000 < 110) tr.push([+v.x.toFixed(0), +v.z.toFixed(0), +v.spd.toFixed(1), +v.steer.toFixed(2), +v.roll.toFixed(2), +(v.wm ?? -1).toFixed(2), V.inVeh(), !!v.local, +(S.waves?.F.ocean.storm ?? -1).toFixed(2)]); }
         VE.input = orig;
-        if (!v.capsized) return { capsized: false, roll: v.roll };
+        if (!v.capsized) return { capsized: false, roll: v.roll, tr };
         capAt = performance.now();
         await new Promise(q => setTimeout(q, 1500));
         const mid = { inVeh: V.inVeh(), swim: S.P.swim, roll: +v.roll.toFixed(2), hp: v.hp, prompt: v.item?.prompt?.() || '', flag: VE.unpack(VE.pack(v)).capsized };
