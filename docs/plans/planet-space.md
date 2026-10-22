@@ -47,6 +47,23 @@ Units: engine units **u** (1 m = `E.UNIT` ≈ 1.1667 u); game gravity `g0 = 20·
 - Eras (universe-path): satellites and uncrewed rockets — late E5; crewed orbit and the orbital station — E6; the transfer drive, Луна, planets, terraforming —
   E7. The proof page, Кубомир, Подземье and Студия 3D use their own progression (no era gate).
 - Age: space flight, satellites, meteors and terraforming are 6+ (cartoon, knockout instead of death); space combat stays out of this plan (12+, later).
+
+
+## Owner decisions (22.10.2026) — they override the recommendations of §7
+
+1. **Honest travel time first, faster ships later** (owner: «настоящие сначала, потом можно улучшать корабль — это будет ближе к
+   будущему»): no transfer drive at the start — real coast times (Луна ≈ 1 h, planets long); engine tech upgrades by era/research
+   shorten trips (better chemical → nuclear → ion/fusion → «future» drives), so speed is progression, never paid. Flight plans keep
+   running while the player is away; design the waiting (station life, radio, cargo planning) so long trips are fun, not dead time.
+2. **Satellites serve their owner's settlement; later cities can RENT coverage to others for денки** (owner: «для своего поселения,
+   потом города можно давать в аренду пользоваться и получать за это деньги — система экономики»): satellite services become a
+   business in the city economy (contracts, prices in a corridor, coverage SLA computed from real geometry, revenue to the owner
+   settlement's treasury).
+3. **Meteors fall everywhere except the kids' realm and the game hub** (owner: «везде, кроме детей и площади»): settlements, homes and
+   bases can be hit; all damage is repairable or rolled back (nothing lost forever), warnings come first, danger is real but fair.
+4. **Terraforming is slow: half a year and more** (owner: «медленнее — полгода и больше») — a long shared server goal; tune with the
+   terra-sim script to that pace.
+5. Home system names: start with Луна and Песчаная; the rest later.
 
 ## 1. Other planets and moons as data
 
