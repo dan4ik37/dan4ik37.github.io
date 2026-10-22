@@ -654,12 +654,13 @@
   function mount(el, gapi){
     api = gapi; root = el;
     const E = window.D37E;
-    // панель: 🎭 ⚙️ (💬 — только телефон лёжа) 🔄 ⛶ ❓; mir-base ставит 🏘️ в начало, другие могут дописать свои кнопки в .wld-topbtns.
+    // панель (T-043, владелец 22.10: «Зачем тут 2 меню?»): 🗺️ Карта (mir-zones) · 🏘️ Участок (mir-base) · 📱 Телефон · ☰ Меню; 💬 — только
+    // телефон лёжа, 🎬 Действия — в городах, 🏯 База — в боевой зоне. Персонаж, ⚙️ Настройки, ⛶ / 🔄, ❓ — только в меню ☰ (оно же — Esc и
+    // Start геймпада; на телефоне Esc нет). Свои кнопки модули ставят в .wld-topbtns ПЕРЕД 💬/☰.
     // Вид, графика, FSR и 2D — в окне ⚙️ Настройки (js/core/settings.js); gs-noesc — Esc у «Мира» открывает меню, а не выходит
-    const FS = window.D37Full;
     el.innerHTML = `<div class="wld mir gs-noesc">
         <div class="wld-top"><b>🌍 Мир Денчика</b><span class="wldShard"></span><span class="wldOnline">подключаемся…</span>
-          <span class="wld-topbtns"><button type="button" data-act="look" title="Мой персонаж">🎭<span> Персонаж</span></button><button type="button" data-act="settings" title="Настройки: графика, звук, управление, камера (Esc — меню)">⚙️<span> Настройки</span></button><button type="button" class="gs-chatbtn" data-act="chat" title="Чат и эмоции">💬</button>${FS ? FS.rotBtn('#gamesStage') + FS.btn('#gamesStage', { esc: false, cls: 'gs-fullbtn' }) : ''}<button type="button" data-act="help" title="Как играть">❓</button></span></div>
+          <span class="wld-topbtns"><button type="button" class="gs-chatbtn" data-act="chat" title="Чат и эмоции">💬</button><button type="button" class="wld-menubtn" data-act="menu" title="Меню (Esc): настройки, персонаж, полный экран, как играть, выход" aria-label="Меню" aria-haspopup="dialog">☰<span> Меню</span></button></span></div>
         <div class="wld-wrap is3d">
           <div class="wld-tags"></div>
           <div class="wld-log" aria-live="polite"></div>
@@ -924,22 +925,23 @@
   }
   function toggleView(){ const m = S.rig.toggle(); S.H.crosshair(m === 'first'); if (m !== 'first') S.I.unlock(); toast(m === 'first' ? '👁 Вид от 1-го лица (V — обратно)' : '🎥 Вид от 3-го лица'); }
 
-  // ═══ Меню (Esc на компьютере): продолжить, настройки, персонаж, полный экран, выйти — js/core/settings.js D37Settings.menu ═══
+  // ═══ Меню — одно: ☰ в панели, Esc, Start геймпада. Продолжить, настройки, персонаж, полный экран (+ 🔄 на телефоне стоя), как играть,
+  //     выйти — js/core/settings.js D37Settings.menu (пункты экрана — fsItems / fsPick, одинаковые во всех играх) ═══
   function openMenu(){
     if (!S || S.menu || !window.D37Settings || S.stopped) return;
     S.I?.unlock();
-    const fsOn = () => !!window.D37Full?.contains?.(S.wrap);
-    S.menu = window.D37Settings.menu(S.wrap, {
-      title: '🌍 Мир Денчика', sub: 'Мир онлайн — он идёт и в меню. Esc — вернуться',
+    const SS = window.D37Settings, fsEl = () => S?.stage || S?.el;
+    S.menu = SS.menu(S.wrap, {
+      title: '🌍 Мир Денчика', sub: `Мир онлайн — он идёт и в меню. ${window.D37Full?.isTouch?.() ? '☰' : 'Esc'} — вернуться`,
       items: () => [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         { id: 'look', icon: '🎭', text: 'Персонаж' },
-        { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
+        ...(SS.fsItems?.(fsEl()) || []),
         { id: 'help', icon: '❓', text: 'Как играть' },
         { id: 'exit', icon: '🚪', text: 'Выйти из мира', warn: true },
       ],
-      onPick: id => menuAct(id),
+      onPick: id => { if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuAct(id); },
       onClose: () => { if (S) { S.menu = null; S.C?.reset_state(); } },   // Enter/Esc, закрывшие меню, — не в игру (чат, меню снова)
     });
   }
@@ -1669,9 +1671,10 @@
     else if (a === 'look') openEditor();
     else if (a === 'view') { if (S.rig) toggleView(); }
     else if (a === 'login') { if (typeof openGlobalAuth === 'function') openGlobalAuth(); }
+    else if (a === 'menu') { if (S.menu) closeMenu(); else openMenu(); }   // ☰ — то же меню, что Esc (на телефоне Esc нет)
     else if (a === 'help') showInfo('❓ Как играть', S.I?.touch
-      ? 'Левый палец — джойстик (до упора — бег). Правым пальцем крути камеру, двумя — приближай. ⤒ — прыжок (у стены — залезть на уступ), ⬇ — присесть, ✋ — сесть или играть. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Положи телефон горизонтально (или 🔄) — мир на весь экран; ⚙️ — настройки: кнопки, графика, звук. 🗺️ — карта и телепорты, 🎬 — действия в городе (сесть, спать, есть, позвонить).'
-      : 'WASD — идти, Shift — бег, Пробел — прыжок (у стены — залезть на уступ, перелезть стол), C — присесть, Q — кувырок, E — сесть или играть, V — вид от 1-го лица, мышь — камера, колесо — приближение, Enter — чат, Esc — меню, M — карта мира и телепорты, T — действия в городе, F — удар в Боевой зоне. «/me танцует» в чате — что делает персонаж. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Клавиши, графика, звук и камера — в ⚙️ Настройках.');
+      ? 'Левый палец — джойстик (до упора — бег). Правым пальцем крути камеру, двумя — приближай. ⤒ — прыжок (у стены — залезть на уступ), ⬇ — присесть, ✋ — сесть или играть. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся. Положи телефон горизонтально — мир на весь экран. ☰ Меню — настройки (кнопки, графика, звук), персонаж, полный экран и поворот. 🗺️ — карта и телепорты, 🏘️ — твой участок, 📱 — телефон, 🎬 — действия в городе (сесть, спать, есть, позвонить).'
+      : 'WASD — идти, Shift — бег, Пробел — прыжок (у стены — залезть на уступ, перелезть стол), C — присесть, Q — кувырок, E — сесть или играть, V — вид от 1-го лица, мышь — камера, колесо — приближение, Enter — чат, Esc или ☰ — меню (настройки, персонаж, полный экран), M — карта мира и телепорты, T — действия в городе, F — удар в Боевой зоне, P — телефон. «/me танцует» в чате — что делает персонаж. Сядь за столик в кафе: когда сядет второй игрок — партия начнётся.');
     else if (a.startsWith('profile:')) go('#/profile/' + a.slice(8));
     else if (a.startsWith('go:')) go(a.slice(3));
     else if (a.startsWith('room:')) go(roomUrl(a.slice(5), newCode(), false));
@@ -1878,13 +1881,13 @@
       toFriend: uid => { const p = S && [...S.players.values()].find(q => q.uid === uid && !q.leaving); if (!p) return false; const x = p.ch.x + Math.cos(p.yaw) * 1.6, z = p.ch.z - Math.sin(p.yaw) * 1.6; if (S.zones) S.zones.tp(x, z, p.yaw + PI); else tp(x, z, p.yaw + PI); return true; },
       shard: n => { if (n != null && S && n !== S.shard && n >= 1 && n <= SHARDS) { leaveChannel(); for (const k of S.players.keys()) S.A?.remove(k); S.players.clear(); join(n); } return S?.shard || 1; },
     });
-    // кнопка 📱 в панели мира (панель могут перегруппировать — просто добавляемся в конец)
+    // кнопка 📱 в панели мира — перед 💬 и ☰ (☰ Меню — всегда последняя)
     const bar = S.q('.wld-topbtns');
     if (bar && !bar.querySelector('.mir-phone')) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'mir-phone'; b.title = 'Телефон (P): друзья, звонки, карта, камера';
       b.innerHTML = '📱<span> Телефон</span><em class="ph-bdg" data-ph-badge="total" hidden></em>';
       b.addEventListener('click', ev => { ev.stopPropagation(); Ph.toggle(); });
-      bar.appendChild(b); Ph.renderBadges?.();
+      bar.insertBefore(b, bar.querySelector('.gs-chatbtn') || bar.querySelector('.wld-menubtn')); Ph.renderBadges?.();
     }
     Ph.need('wchat').then(() => {
       if (S !== st || !window.D37WorldChat) return;

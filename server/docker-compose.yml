@@ -1,0 +1,100 @@
+# d37 — own server for the site's games (docs/SERVER.md). From this folder: docker compose up -d --build
+# Everything uses the host network (like the Minecraft container): no Docker NAT, real client addresses reach Caddy only,
+# rt listens on 127.0.0.1 only. Ports: 80 + 443 tcp — Caddy (HTTPS), 3478 udp + tcp and 49160–49200 udp — coturn.
+# Minecraft (25565, 8 GB) and the Discord bot are not touched; every container here has a memory and CPU cap
+# (together ≤ 1 GB and 2 CPU at the very peak — usually ~150 MB and a few % of one core).
+name: d37
+
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  rt:
+    build: ./rt
+    image: d37-rt:local
+    restart: unless-stopped
+    network_mode: host
+    env_file: .env
+    environment:
+      RT_LISTEN: "127.0.0.1"
+      RT_PORT: "8787"
+      TRUST_PROXY: "1"
+    mem_limit: 512m
+    memswap_limit: 512m
+    cpus: "1.0"
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      # anti-cheat journal (only with AUDIT=file in .env; docs/SERVER.md «Anti-cheat feed»)
+      - rt_audit:/audit
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    logging: *logs
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      RT_HOST: "${RT_HOST:?RT_HOST is empty: run bash make-env.sh <IP>}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: "0.5"
+    pids_limit: 128
+    security_opt:
+      - "no-new-privileges:true"
+    logging: *logs
+    depends_on:
+      - rt
+
+  turn:
+    image: coturn/coturn:4.18.0-alpine
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TURN_SECRET: "${TURN_SECRET:?TURN_SECRET is empty: run bash make-env.sh <IP>}"
+      TURN_PUBLIC_IP: "${TURN_PUBLIC_IP:?TURN_PUBLIC_IP is empty: run bash make-env.sh <IP>}"
+      TURN_PRIVATE_IP: "${TURN_PRIVATE_IP:?TURN_PRIVATE_IP is empty: run bash make-env.sh <IP>}"
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/d37.conf:ro
+    tmpfs:
+      - /tmp
+      - /var/lib/coturn
+      - /var/tmp
+    # the secret goes into a config file inside the container (not into the command line, which `ps` shows to everyone)
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        cp /etc/coturn/d37.conf /tmp/turn.conf &&
+        printf 'static-auth-secret=%s\nexternal-ip=%s/%s\nlistening-ip=%s\nrelay-ip=%s\n'
+        "$$TURN_SECRET" "$$TURN_PUBLIC_IP" "$$TURN_PRIVATE_IP" "$$TURN_PRIVATE_IP" "$$TURN_PRIVATE_IP" >> /tmp/turn.conf &&
+        exec turnserver -c /tmp/turn.conf
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: "0.5"
+    pids_limit: 256
+    security_opt:
+      - "no-new-privileges:true"
+    logging: *logs
+
+volumes:
+  caddy_data: {}
+  caddy_config: {}
+  rt_audit: {}

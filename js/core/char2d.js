@@ -177,9 +177,9 @@
     if (!S?.define || !S.addTab) return;
     try {
       S.define('spr2d', { def: 'auto', list: ['auto', ...STYLE_LIST] });
-      S.addTab({ id: 'spr2d', icon: '🎞', title: '2D-персонаж', order: 55, ctx: ['game', 'site'], render(){
+      S.addTab({ id: 'spr2d', icon: '🎞', title: '2D-персонаж', order: 55, ctx: ['game', 'site'], keys: ['spr2d'], reset(){ try { localStorage.removeItem(LS_STYLE); } catch (e) {} }, render(){
         const cur = myStyle(), b = (v, t) => `<button type="button" role="radio" aria-checked="${cur === v}" class="${cur === v ? 'on' : ''}" data-set="spr2d" data-v="${v}">${t}</button>`;
-        return `<div class="gs-row"><div class="gs-lbl"><b>Стиль персонажа в 2D-играх</b><small>Твой 3D-персонаж в «Орде», «Арене», плоском мире и играх игроков. «Как задумано» — стиль выбирает сама игра. Посмотреть все — гардероб → «🎞 2D».</small></div>
+        return `<div class="gs-row"><div class="gs-lbl"><b>Стиль персонажа в 2D-играх</b><small>Как рисуется твой персонаж в 2D-играх; «Как задумано» — стиль выбирает игра. Все стили — гардероб → «🎞 2D».</small></div>
           <div class="gs-ctl"><div class="gs-seg" role="radiogroup" style="flex-wrap:wrap">${b('auto', 'Как задумано')}${STYLE_LIST.map(v => b(v, STYLES[v].icon + ' ' + STYLES[v].name)).join('')}</div></div></div>`;
       } });
     } catch (e) {}
