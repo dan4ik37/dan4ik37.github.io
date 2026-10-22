@@ -1761,7 +1761,7 @@ Players.PlayerAdded.Connect(player => {
   // Скрипты про игроков: свой — 'me', гости — их номера в комнате. Объекты — сами (сеть обёрнута вокруг SC.set/add/remove);
   // подсказки и клики скриптов — свойствами объекта prompt / click. Ландшафт, свет, скрипты, авторы моделей — «большими
   // данными» world (новичку и новому хозяину). Ушёл хозяин — новый перезапускает скрипты из world (очки игроков — из их данных).
-  const NET_EXTRA = ['touch', 'model', 'fit', 'rate', 'color2', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order', 'smat'];   // smat — материал прочности (новый хозяин считает обрушение)   // свойства сверх PROPS net.js (fov — камера, team / order — режимы игры)
+  const NET_EXTRA = ['touch', 'model', 'fit', 'rate', 'color2', 'look', 'seed', 'act', 'speed', 'radius', 'damage', 'fov', 'team', 'order', 'smat', 'onfire'];   // smat — материал прочности (новый хозяин считает обрушение); onfire — огонь (studio3d-fire.js: гости рисуют пламя; 9 — вечный); предел net.js — 16   // свойства сверх PROPS net.js (fov — камера, team / order — режимы игры)
   const MP_MAX = 8;
   // #/games/studio3d/… : play/<мир>[/<комната>] — выложенный мир (с друзьями), join/<комната> — «Тест вдвоём»
   function mpParam(param){

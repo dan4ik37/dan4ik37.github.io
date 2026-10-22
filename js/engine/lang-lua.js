@@ -2031,7 +2031,7 @@
       G('utf8', utf8Lib()); G('bit32', bitLib()); G('debug', dbgLib()); G('Random', randomLib());
       G('_G', new LT()); G('shared', new LT()); G('_VERSION', 'Luau');
       for (const k of ['game', 'workspace', 'Instance', 'Color3', 'Enum', 'TweenService', 'TweenInfo', 'RunService', 'Players', 'Debris', 'gui', 'sound', 'random']) G(k, fromJS(env[k]));
-      G('Game', fromJS(env.Game || env.game)); G('Camera', env.Camera ? fromJS(env.Camera) : null); G('Workspace', env.workspace); G('Weather', env.Weather ? fromJS(env.Weather) : null); G('Support', env.Support ? fromJS(env.Support) : null);   // погода (Weather.State, Weather.Changed:Connect)   // Game — и режим игры (Game.Mode), и прежний game
+      G('Game', fromJS(env.Game || env.game)); G('Camera', env.Camera ? fromJS(env.Camera) : null); G('Workspace', env.workspace); G('Weather', env.Weather ? fromJS(env.Weather) : null); G('Support', env.Support ? fromJS(env.Support) : null); G('Fire', env.Fire ? fromJS(env.Fire) : null);   // погода (Weather.State, Weather.Changed:Connect)   // Game — и режим игры (Game.Mode), и прежний game
       for (const k of ['Vector3', 'CFrame', 'BrickColor']) if (typeof env[k] === 'function') G(k, classTable(env[k]));
       ENVMT = tab({ __index: BASE });
     }
@@ -2191,6 +2191,7 @@ end)`],
 - режим игры и камера: Game.Mode ("obby" | "race" | "ffa" | "teams" | "koth" | "hide" | "coins" | "survival" | ""), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart:Connect(function(r) … end), Game.RoundEnd:Connect(function(winner, text) … end), Game:AddScore(player, n), Game:GetTeam(player), Game:EndRound(player); Camera.Mode = "third" | "first" | "shoulder" | "top" | "iso" | "side" | "fixed", Camera:SetMode("top", player), Camera:Shake(сила, сек)
 - погода: Weather.State ("clear" | "cloudy" | "overcast" | "rain" | "thunderstorm" | "snow" | "blizzard" | "fog" | "heat"), Weather.Season ("spring" | "summer" | "autumn" | "winter"), Weather.Temperature, Weather.FeelsLike, Weather.Wind, Weather.Today (праздник или ""), Weather.Changed:Connect(function(state, season) … end), Weather.Holiday:Connect(function(id, greeting) … end), Weather:Set("snow")
 - прочность построек (если в мире включено обрушение): Support.Mode ("off" | "soft" | "real"), Support:Holds(part), Support:Get(part) (0…100, 100 — на земле), Support:Break(part) — сломать деталь (что держалось через неё, упадёт), Support.Collapsed:Connect(function(part) … end)
+- огонь: Fire:Ignite(part), Fire:Extinguish(part), Fire:IsBurning(part), Fire.Count, Fire:IgniteAt(Vector3.new(x, y, z), радиус), Fire.Ignited / Fire.Burnt / Fire.Extinguished:Connect(function(part) … end) (у детали свойства «Горючее» и «Горит»; сгоревшее исчезает)
 Нельзя: сеть, HttpService, RemoteEvent, require, LocalScript, ScreenGui и другие GUI-объекты, DataStore. Скрипт работает «на сервере».
 Задача: `;
   const DEF = { label: 'Lua (как в Roblox)', short: 'Lua', icon: '🌙', kind: 'text', worker, examples: EXAMPLES, ai: AI,
