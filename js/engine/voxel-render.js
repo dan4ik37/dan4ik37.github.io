@@ -268,6 +268,14 @@ totalEmissiveRadiance += diffuseColor.rgb * vEm * uEmK;`;
 #ifdef OPAQUE
 gl_FragColor = vec4( gl_FragColor.rgb, ( uBloomK > 0.0 && vEm > 0.01 ) ? 1.0 + vEm * uBloomK : gl_FragColor.a );
 #endif`;
+  // существа и вещи (человечки, мобы, вещи в мире и в руках) — код 0,5 в альфе буфера сцены, пока рисуется кадр с отражениями
+  // (E.GFXU.rt[1] = 1, post.js): отражения в экране (вода, лёд) их не показывают — «призрак» человечка под гладью читался как
+  // «он под водой» (жалоба владельца 22.10, T-019). Светящееся (альфа > 1 — свечение) не трогаем. Небо и блоки отражаются как были
+  const FS_ACT = `
+#ifdef OPAQUE
+gl_FragColor = vec4( gl_FragColor.rgb, ( uD37Act.y > 0.5 && gl_FragColor.a <= 1.0001 ) ? 0.5 : gl_FragColor.a );
+#endif`;
+  const ACT0 = new Float32Array(4);
   // вырезное по альфе (листва, трава, цветы, факелы, стекло) — код травы движка (E.FOLIAGE_GLSL после output_fragment, uniform
   // d37Rt = E.GFXU.rt): AO и контактные тени его не учитывают — без тёмных пятен вокруг травинок; флаг ставит движок (post.js)
   const foliageGLSL = () => typeof E.FOLIAGE_GLSL === 'string' && E.GFXU?.rt ? E.FOLIAGE_GLSL : '';
@@ -373,6 +381,7 @@ diffuseColor = vec4( max( mix( vec3( d37wl ), d37wt, mix( 0.7, 0.85, d37mk ) ) *
   // свет блоков — своим цветом; у «плоских» (MeshBasic: глаза, блики) — просто яркость
   const ENT_FS_HEAD = `
 uniform vec4 uD37L;
+uniform vec4 uD37Act;
 uniform float uMinAmb;
 uniform float uBlockK;
 uniform float uDay;
@@ -512,8 +521,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const h = { id: String(id || 'h' + (++hookSeq)), fn };
       if (!shaderHooks.has(layer)) shaderHooks.set(layer, []);
       shaderHooks.get(layer).push(h);
-      for (const m of Object.values(mats)) m.needsUpdate = true;
-      return () => { const a = shaderHooks.get(layer) || []; const i = a.indexOf(h); if (i >= 0) a.splice(i, 1); for (const m of Object.values(mats)) m.needsUpdate = true; };
+      const all = () => [...Object.values(mats), ...Object.values(fpMats), ...Object.values(actMats)];
+      for (const m of all()) m.needsUpdate = true;
+      return () => { const a = shaderHooks.get(layer) || []; const i = a.indexOf(h); if (i >= 0) a.splice(i, 1); for (const m of all()) m.needsUpdate = true; };
     };
     let hookSeq = 0;
     function patch(m, kind){
@@ -521,6 +531,8 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       m.onBeforeCompile = sh => {
         Object.assign(sh.uniforms, U);
         if (FOL) sh.uniforms.d37Rt = { value: E.GFXU.rt };
+        const ACT = !simple && !!m.defines?.D37_ACT;
+        if (ACT) sh.uniforms.uD37Act = { value: E.GFXU?.rt || ACT0 };
         // #include — только с новой строки (иначе шейдер не собирается)
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', '#include <common>\n' + VS_HEAD + (simple ? '' : VS_WHEAD))
@@ -528,7 +540,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           .replace('#include <begin_vertex>', VS_BEGIN(simple))
           .replace('#include <project_vertex>', VS_FP);
         let fs = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (simple ? '' : FS_WHEAD) + (FOL ? '\nuniform vec4 d37Rt;' : '') + (gl2 ? FS_TEX2 : FS_TEX1))
+          .replace('#include <common>', '#include <common>\n' + FS_COMMON + (simple ? '' : FS_WHEAD) + (FOL ? '\nuniform vec4 d37Rt;' : '') + (ACT ? '\nuniform vec4 uD37Act;' : '') + (gl2 ? FS_TEX2 : FS_TEX1))
           .replace('#include <map_fragment>', FS_MAP)
           .replace('#include <color_fragment>', FS_COLOR)
           .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + FS_LIGHT + (simple ? '' : FS_WATER));
@@ -536,7 +548,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
         if (LFB2 && !simple) fs = fs.replace('#include <lights_fragment_begin>', kind === 'water' && LFBW ? LFBW : LFB2);
         if (!simple) fs = fs.replace('#include <normal_fragment_maps>', FS_NMAP);
         if (FOL) fs = fs.replace('#include <output_fragment>', '#include <output_fragment>\n' + FOL);
-        if (!simple) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_BLOOM);
+        if (!simple) fs = fs.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_BLOOM + (ACT ? FS_ACT : ''));
         sh.fragmentShader = fs;
         // куски движка (паки шейдеров): после наших; ошибка в куске — без него (кубики важнее)
         if (!simple) for (const h of [...(shaderHooks.get(kind) || []), ...(shaderHooks.get('*') || [])]) {
@@ -544,7 +556,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           try { h.fn(sh, { layer: kind, gl2, material: m, fp: !!m.defines?.D37_FP }); } catch (e) { sh.vertexShader = v0; sh.fragmentShader = f0; console.warn('Кубомир: кусок шейдера «' + h.id + '» —', e); }
         }
       };
-      m.customProgramCacheKey = () => 'd37vox6-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (FOL ? 'F' : '') + (simple ? '' : hookKey(kind));
+      m.customProgramCacheKey = () => 'd37vox6-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (m.defines?.D37_ACT ? 'a' : '') + (FOL ? 'F' : '') + (simple ? '' : hookKey(kind));
       return m;
     }
     const LAYER_OPTS = {
@@ -556,11 +568,12 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       foliage: { alphaTest: .5 },
       glass: { alphaTest: .5 },
     };
-    const makeMat = (k, fp) => {
+    const makeMat = (k, fp, act) => {
       const opt = LAYER_OPTS[k] || { alphaTest: .5 };
       const m = patch(new T.MeshLambertMaterial({ vertexColors: true, ...opt }), k);
       m.defines = { D37_VOX: 1, D37_VOXZ: 1, ['D37_' + k.toUpperCase()]: 1 };
       if (fp) m.defines.D37_FP = 1;
+      if (act) m.defines.D37_ACT = 1;
       if (nmapOn() && k !== 'water') m.defines.D37_NMAP = 1;   // рельеф текстур — на «высокой» (WebGL2)
       if (k === 'water' && WQ) m.defines.D37_WQ2 = 1;   // вода: второй слой волн и пена (кроме «низкой»)
       m.userData.d37vox = { layer: k, cutout: !!opt.alphaTest, foliage: k === 'foliage', water: k === 'water', glass: k === 'glass', emissive: 'vertex', fp: !!fp };
@@ -570,6 +583,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     // вещь «из глаз» (в руке от 1-го лица): те же слои с D37_FP — по одной на слой, по первому запросу
     let fpMats = {};
     const fpMat = k => fpMats[k] || (fpMats[k] = makeMat(k, true));
+    // вещь в мире и у человечка: те же слои с D37_ACT (в отражениях её нет — FS_ACT)
+    let actMats = {};
+    const actMat = k => actMats[k] || (actMats[k] = makeMat(k, false, true));
     // тень вырезного — по альфе текстуры (одна на слой; пересобирается с простым режимом)
     let depthMats = {};
     function depthMat(k){
@@ -804,7 +820,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     VR.itemMesh = (name, L, o) => {
       const g = VR.itemGeo(name, L), it = V.item(name), b = it?.place ? V.block(it.place) : null, s = b ? V.T.stream?.[b.id] : 0;
       const k = g.userData.flat ? 'cutout' : s === 3 ? 'foliage' : s === 4 ? 'glass' : 'solid';   // листва и стекло в руке — по альфе
-      const m = new T.Mesh(g, o?.fp ? fpMat(k) : mats[k]);
+      const m = new T.Mesh(g, o?.fp ? fpMat(k) : actMat(k));
       m.userData.item = name; m.userData.layer = k;
       if (o?.fp) m.userData.fp = true;
       return m;
@@ -821,15 +837,16 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       if (fp) m.defines.D37_FP = 1;
       m.onBeforeCompile = (sh, r) => {
         if (typeof prev === 'function') try { prev.call(m, sh, r); } catch (e) {}
-        sh.uniforms.uD37L = u; sh.uniforms.uMinAmb = U.uMinAmb; sh.uniforms.uBlockK = U.uBlockK; sh.uniforms.uDay = U.uDay;
+        sh.uniforms.uD37L = u; sh.uniforms.uMinAmb = U.uMinAmb; sh.uniforms.uBlockK = U.uBlockK; sh.uniforms.uDay = U.uDay; sh.uniforms.uD37Act = { value: E.GFXU?.rt || ACT0 };
         sh.fragmentShader = sh.fragmentShader
           .replace('#include <common>', '#include <common>\n' + ENT_FS_HEAD)
           .replace('#include <lights_fragment_begin>', lfbEnt())
-          .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + ENT_FS_LIGHT);
+          .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + ENT_FS_LIGHT)
+          .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_ACT);   // в отражениях существ нет
         if (fp) sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', VS_FP);
       };
       const key0 = typeof src.customProgramCacheKey === 'function' ? String(src.customProgramCacheKey()) : '';
-      m.customProgramCacheKey = () => 'd37ent1' + (lit ? 'L' : 'B') + (fp ? 'f' : '') + key0;
+      m.customProgramCacheKey = () => 'd37ent2' + (lit ? 'L' : 'B') + (fp ? 'f' : '') + key0;
       m.userData.d37ent = { fp, kind: o.kind || '' };
       return m;
     };
@@ -900,7 +917,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     function goSafe(){
       if (VR.safe) return;
       VR.safe = true; gl2 = false;
-      const old = mats, oldD = depthMats, oldF = fpMats;
+      const old = mats, oldD = depthMats, oldF = fpMats, oldA = actMats;
       mats = VR.mats = makeMats(); depthMats = {}; fpMats = {};
       buildTextures();
       crackMat.fragmentShader = crackFS1; crackMat.needsUpdate = true;
@@ -908,10 +925,12 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       for (const m of meshPool) m.material = mats.solid;
       const swap = new Map(LAYERS.map(k => [old[k], mats[k]]));
       for (const k in oldF) swap.set(oldF[k], fpMat(k));
+      for (const k in oldA) swap.set(oldA[k], actMat(k));
       R.scene.traverse(o => { if (o.isMesh && swap.has(o.material)) o.material = swap.get(o.material); });
       for (const m of Object.values(old)) { R.waveMats?.delete?.(m); R.rtClear?.delete?.(m); m.dispose(); }
       regRt();
       for (const m of Object.values(oldF)) m.dispose();
+      for (const m of Object.values(oldA)) m.dispose();
       regWave();
       for (const m of Object.values(oldD)) m.dispose();
       if (ghostMat) { ghostMat.dispose(); ghostMat = null; ghostName = ''; if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); ghost = null; } }
@@ -948,6 +967,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       for (const m of Object.values(mats)) { R.rtClear?.delete?.(m); m.dispose(); }
       for (const m of Object.values(depthMats)) m.dispose();
       for (const m of Object.values(fpMats)) m.dispose();
+      for (const m of Object.values(actMats)) m.dispose();
       tex?.dispose(); ntex?.dispose(); U.uWN.value?.dispose(); selGeo.dispose(); sel.material.dispose(); crack.geometry.dispose(); crackMat.dispose();
       R.scene.remove(sel); R.scene.remove(crack);
       if (ghost) { R.scene.remove(ghost); ghost.geometry?.dispose(); } ghostMat?.dispose();

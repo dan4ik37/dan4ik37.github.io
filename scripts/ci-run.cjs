@@ -37,7 +37,7 @@ const TESTS = [
   { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
-  { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' },
+  { f: 'vehicle-test.cjs' }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
   { f: 'photo-test.cjs' },   // 🖼 фоторедактор: команды «d37 v1», «Мои материалы» (поддельная IndexedDB), проект .d37photo, связка раздела
   // языки скриптов ждут настоящие таймеры (по 5–60 мс): под нагрузкой других проверок опаздывают (так упала lang-cs-test) — идут по одной
   { f: 'lang-cs-test.cjs', serial: true }, { f: 'lang-java-test.cjs', serial: true }, { f: 'lang-lua-test.cjs', serial: true }, { f: 'lang-wasm-test.cjs', env: { D37_SKIP: 'cpp,rust' } },
