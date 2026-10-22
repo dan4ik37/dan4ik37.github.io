@@ -62,6 +62,7 @@
     const origin = typeof o.origin === 'function' ? o.origin : () => ZERO2;
     const skyTop = typeof o.skyTop === 'function' ? o.skyTop : null;
     const waterAt = typeof o.water === 'function' ? o.water : null;
+    const waveAt = typeof o.waveAt === 'function' ? o.waveAt : null;   // волны (waves.js): высота над спокойной гладью — круги дождя на волне
     const A = o.sound || null;
     // particles: false — свои частицы у игры («Кубомир»); sky: false — небо и туман игра темнит сама; occlusion: false — без карты сверху
     const qBase = o.particles === false || R.q === 'low' ? 0 : (E.isMobile?.() || R.q === 'mid') ? .45 : 1, useSky = o.sky !== false;
@@ -300,7 +301,7 @@ void main(){
               if (rlive[i] && ry[i] <= rt[i]) {   // долетела: круг на воде / в луже, брызги
                 const dx = rx[i] - cx, dz = rz[i] - cz;
                 if (dx * dx + dz * dz < 100 && FR() < .35 && rt[i] > cy - 39) {
-                  if (rw[i] && V.ice < .5) { if (ripO) ripple(rx[i], rt[i], rz[i]); }
+                  if (rw[i] && V.ice < .5) { if (ripO) ripple(rx[i], rt[i] + (waveAt ? waveAt(rx[i] + ox, rz[i] + oz) || 0 : 0), rz[i]); }   // на волне — круг на гребне (waves.js)
                   else if (V.puddle > .3 && FR() < V.puddle * .6) { if (ripO) ripple(rx[i], rt[i], rz[i]); }
                   else if (splO) splash(rx[i], rt[i], rz[i], rh[i] ? .95 : .75 * lum);
                 }
