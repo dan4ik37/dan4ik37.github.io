@@ -336,7 +336,7 @@ vehicle; the start is a natural coast because the `mir` spot is sea on seed 37 (
 Branch `worktree-agent-a22547bb6ee7652aa`. **Everything new is behind flags that are OFF by default** — `/play/planet` behaves as before
 T-075 (checked: `gfx-strict PAGE=planet PLANET_V2=0` on SwiftShader green — 1 depth range, no AO/shadows/haze, guard writes nothing; Chrome
 smoke — 214 chunks on the ground, 5.7 MB chunk memory, 1 worker on the phone profile, 0 errors). Turn on: `localStorage d37_planet_v2 = '1'`
-+ reload (gfx.js reads it at load for the haze chunk), or `o.flags` in `D37E.planetView(R, P, { flags })`; defaults — `D37E.planetView.FLAGS`
++ reopen the planet (read when the view opens), or `o.flags` in `D37E.planetView(R, P, { flags })`; defaults — `D37E.planetView.FLAGS`
 (`lod2, morph, prefetch, split, shadows, aerial, weather`). Flag off = old code paths: `P.select` with `K`, old show/stitch logic, old worker
 count, `buildChunk(…, { lite: true })` (ring 1, no parent data; pos/nrm/col bit-identical — planet-test), shader without `D37_MORPH`/`D37_PSH`,
 sky on layer 0, fog chunks byte-identical to pre-T-075 (all 10 patched chunks compared).
@@ -362,15 +362,38 @@ build 3.2–4.6 → ~5.3 ms avg (ring 2 + parent data; loaded machine). `gfx-str
 **Half-done / not done:** phone-profile A/B (CPU ×4) before → after — started, stopped at the pause; 10-min soak and reopen ×21 with the flag
 (`planet-perf.cjs` now reports three.js object counts and guard state); real phone; GPU memory of parent data (+84 %: pack colp/np only for odd
 vertices or int8 offsets on coarse levels, or lower CAP on phones); worker cost on phones (Chrome's CPU throttle does not slow workers — ×4 by hand);
-haze is a load-time switch (gfx.js `AERIAL`) without a guard key; weather: no rain occlusion under overhangs, no snow cover on the terrain shader;
+haze and weather on the terrain — done later the same day (see «Resumed» below);
 CLAUDE.md «🪐 Планета» and docs/progress.md not updated yet.
 **Resume:** (1) `localStorage.setItem('d37_planet_v2','1')`; (2) `node scripts/planet-test.cjs`, `node scripts/planet-lod-test.cjs` (full),
 `node scripts/render-test.cjs <three r149>`, `PAGE=planet node scripts/gfx-strict.cjs swiftshader|gl|vulkan high`, `V2=1 node scripts/planet-perf.cjs
-perf` (and `SITE_DIR=<copy before T-075>` for «before»), `V2=1 … soak 10`, `V2=1 … reopen 21`; (3) numbers OK → `FLAGS` defaults and gfx.js `AERIAL`
+perf` (and `SITE_DIR=<copy before T-075>` for «before»), `V2=1 … soak 10`, `V2=1 … reopen 21`; (3) numbers OK → `FLAGS` defaults
 → true, GAMES_VER, CLAUDE.md, docs/progress.md. Files: `js/engine/planet.js` (sse walk, `lodShow`, `lodMorph`, `peek`, `buildChunk` md/np/colp/err,
 `indices`), `planet-view.js` (FLAGS, pool, budget, morph uniforms, split cameras, shadows, haze, weather API), `planet-worker.js`, `gfx.js`
 (sun provider, haze), `post.js` / `render.js` (two passes, guard `G.vol`), `js/games/planet-demo.js` (weather), `scripts/planet-lod-test.cjs`,
 `planet-test.cjs`, `gfx-strict.cjs` (PAGE=planet, PLANET_V2), `planet-perf.cjs` (V2). Temp files: `E:\claude-tmp\t075`.
+
+**Resumed 22.10 evening, paused again (weekly limit) — still OFF by default.** Added since the pause (all behind the flags):
+- Haze: gfx.js no longer has a load-time switch — the fog chunk with haze is set by the planet itself while it is open
+  (`E.aerialPatch(T, true/false)`, before scene materials compile); the rest of the site keeps the old fog chunk byte-for-byte. Guard key
+  `'aerial'` (post.js): a frame with haze has «not numbers» / is black by day → haze off at once (`d37ApA.w = 0`); a fog program fails to
+  compile while haze is on → old chunk + rebuild; remembered per device (render-test 391 covers it; ⚙️ label «дымка атмосферы на планете»).
+- GPU memory: a chunk hidden longer than 3 s releases its GPU buffers (JS data stays; three re-uploads when shown) — `V.stats().gpuKB` =
+  resident, `cacheKB` = all data. Phone profile, on the ground: 10.6 MB data, 7.7–7.8 MB on the GPU (was 10.5 on both); flag off — 5.5 MB.
+- Weather on the terrain (`D37_PWX`, flag `weather`): snow cover on up-facing ground and darker wet ground within 3000 u of the camera (the
+  weather is local; farther — other climates), not on water. Rain shelter is not needed yet — the planet is a heightfield (no roofs, caves).
+- `select` no longer spins every 60 ms while standing with waits that cannot resolve by themselves (2:1 neighbour, chunk still building):
+  only 0.4 s after the last change. Planet update on the ground (×4): 0.375 → 0.27 ms.
+- Switches per device: `localStorage d37_planet_v2` = `'1'` / `'0'`, single flags — `d37_planet_flags` = `'{"weather":false}'` (known keys
+  only). planet-perf: `V2=0|1`, `PF='{"split":false}'`; soak reports three.js object counts.
+**Numbers** (phone profile 412×915×2, CPU ×4, «средняя», machine loaded by other agents, one pair after the fixes; CPU ms per frame avg / p95,
+flag off → on): orbit 1.51 / 2.9 → 2.14 / 3.7; descent 2.25 / 4.1 → 2.86 / 5.2; ground 3.27 / 4.8 → 5.24 / 7.5; running 5.0 / 9.2 → 5.6 / 8.8;
+fresh descent elsewhere 2.48 / 4.6 (19 frames > 50 ms) → 3.21 / 5.7 (0). Shown chunks on the ground 214 → 165, JS heap 27.9 → 35.7 MB, worker
+build 3.2 → 3.5 ms, 0 errors, guard clean in both. Before the two fixes the same pair gave ground 4.7 → 7.46 and running 4.3 → 8.2.
+**Decision: keep OFF** — +2 ms CPU on the ground (+60 %) on the phone profile is a regression. Suspects, in order: per-chunk material
+re-upload (most shown chunks are mid-morph: ~115 k uploads per minute; fix — k per chunk without `uniformsNeedUpdate`, e.g. a tiny per-chunk
+attribute buffer or one draw per level), the second render pass (near + far scene traversal), engine shadows, weather particles.
+**Not done:** breakdown runs (`V2=1 PF='{"weather":false}'`, `{"split":false}`, `{"shadows":false}`, LOD only — runner
+`E:\claude-tmp\t075\meas2.cjs parts`), 10-min soak and reopen ×21 with the flag, real phone, CLAUDE.md / progress.md text for «on».
 
 ## 13. Step list → board tasks
 | Step | What | Size | After |

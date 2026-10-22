@@ -44,7 +44,14 @@
   // перезагрузка — gfx.js E.aerialFog) или o.flags в D37E.planetView(R, P, { flags }); навсегда — true здесь
   const FLAGS = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
   const FLAGS_ON = { lod2: true, morph: true, prefetch: true, split: true, shadows: true, aerial: true, weather: true };
-  const v2on = () => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_v2') === '1'; } catch (e) { return false; } };
+  const FLAGS_OFF = { lod2: false, morph: false, prefetch: false, split: false, shadows: false, aerial: false, weather: false };
+  const v2ls = () => { try { return typeof localStorage !== 'undefined' ? localStorage.getItem('d37_planet_v2') : null; } catch (e) { return null; } };
+  // замеры по частям и отладка: localStorage d37_planet_flags = '{"weather":false}' — отдельные флаги поверх (только известные)
+  const v2flags = () => {
+    const o2 = {};
+    try { const s = typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_flags'), j = s ? JSON.parse(s) : null; if (j && typeof j === 'object') for (const k in FLAGS_ON) if (k in j) o2[k] = !!j[k]; } catch (e) {}
+    return o2;
+  };
 
   // ═══ GLSL: атмосфера (Рэлей + Ми, оптическая глубина к солнцу — приближение функции Чепмена, Шулер, GPU Pro 3;
   //     та же формула на JS — D37E.planet.chapman, сверка с численным интегралом — scripts/planet-test.cjs) ═══
@@ -356,7 +363,7 @@ void main(){
   // ═══ Вид ═══
   E.planetView = function (R, P, o = {}){
     const T = R.T, PL = E.planet, D = P.def, q = R.q || 'mid', mob = !!E.isMobile?.(), low = q === 'low';
-    const F = { ...FLAGS, ...(v2on() ? FLAGS_ON : {}), ...(o.flags || {}) };
+    const v2 = v2ls(), F = { ...FLAGS, ...(v2 === '1' ? FLAGS_ON : v2 === '0' ? FLAGS_OFF : {}), ...v2flags(), ...(o.flags || {}) };
     if (!F.lod2) F.morph = F.prefetch = false;
     const BO = { lite: !F.lod2 };   // без LOD v2 — кусок собирается как раньше (без формы родителя и его точности — дешевле)
     // дымка до вещей движка: кусок тумана с дымкой — только пока открыта планета (gfx.js E.aerialPatch; страж снимает — ключ 'aerial')
@@ -498,8 +505,10 @@ void main(){
     const MK = TU.uMk.value, ME = TU.uMe.value, LAST = [NaN, NaN, NaN, NaN, NaN, NaN];
     function morphUp(){
       const c = this.userData.c, n = c.n, on = F.morph && n && n.ke;
-      const k = on ? n.k : 0, ke = on ? n.ke : null, ms = c.data ? c.data.mscale : 0;
+      const k = on ? n.k : 0, ke = on ? n.ke : null;
       const e0 = ke ? ke[0] : 0, e1 = ke ? ke[1] : 0, e2 = ke ? ke[2] : 0, e3 = ke ? ke[3] : 0;
+      // не перетекает (k и края 0) — масштаб не важен: у всех таких одно и то же (иначе каждый кусок перезаливал бы числа материала)
+      const ms = !(k > 0) && !(e0 > 0) && !(e1 > 0) && !(e2 > 0) && !(e3 > 0) ? 0 : c.data ? c.data.mscale : 0;
       if (k === LAST[0] && ms === LAST[1] && e0 === LAST[2] && e1 === LAST[3] && e2 === LAST[4] && e3 === LAST[5]) return;
       LAST[0] = k; LAST[1] = ms; LAST[2] = e0; LAST[3] = e1; LAST[4] = e2; LAST[5] = e3;
       MK.x = k; MK.y = ms; ME.set(e0, e1, e2, e3);
@@ -598,10 +607,10 @@ void main(){
     // бюджет кусков: выбрано больше — допустимая ошибка на экране растёт (плавно: куски перетекают), меньше 80 % — назад
     const LEAF_MAX = o.leafMax ?? (mob || low ? 220 : 450), PRE_MAX = mob || low ? 6 : 12;
     let bias = 1;
-    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false;
+    let showMark = 1, lastSel = -1e9, selX = Infinity, selY = Infinity, selZ = Infinity, waitMore = false, chgAt = 0;
     const LS = { split: 0, merge: 0 };
     function select(){
-      const t0 = now();
+      const t0 = now(), wasDirty = dirty;
       const cx = V.camBF[0], cy = V.camBF[1], cz = V.camBF[2];
       if (F.lod2) {
         SSE.proj = MORPH.proj = projNow();
@@ -624,7 +633,10 @@ void main(){
         if (st.merges) for (const p of st.merges) { let kmin = 1, e = 0; for (const c of p.kids || []) { kmin = min(kmin, F.morph ? c.k : 0); e = max(e, c.err); } popAdd(1 - kmin, e, p, MORPH.proj); }
         ST.splits += st.split; ST.merges += st.merge;
         LS.split = st.split; LS.merge = st.merge;
-        waitMore = st.wait > 0 || st.split > 0 || st.merge > 0 || st.need.length > 0;
+        // шаг показа идёт — выбирать чаще (60 мс). Ждём то, что само не изменится (сосед крупнее, кусок ещё строится) — не крутить
+        // выбор вхолостую: через 0,4 с после последней перемены — как обычно (сдвинулась камера, готов новый кусок)
+        if (st.split || st.merge || st.stand || wasDirty) chgAt = t0;
+        waitMore = st.split > 0 || st.merge > 0 || ((st.wait > 0 || st.need.length > 0) && t0 - chgAt < 400);
         if (leaves.length > LEAF_MAX) bias = min(4, bias * 1.06); else if (leaves.length < LEAF_MAX * .8) bias = max(1, bias / 1.03);
         // в очередь по ступеням: шаг показа (дети делимых, родители сливаемых, поднявшееся из-за горизонта), на уровень вперёд,
         // «куда летим» (из-за горизонта), листья не глубже 2 уровней под показанным; глубже — потом (их черёд придёт шагами)
