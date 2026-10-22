@@ -410,7 +410,71 @@ sec('области: якорь — центр узла уровня LR (≈ 768
   ok(r1.key === r2.key && r1.dir[0] === r2.dir[0], 'область и якорь у всех одинаковые (без сети)');
 }
 
-// ═══ 13. Скорость ═══
+// ═══ 13. Атмосфера: функция Чепмена (как в шейдере) против численного интеграла ═══
+sec('атмосфера: приближение Чепмена — в пределах 15 % от численного интеграла; луч в планету — тень');
+{
+  const R0 = 128000, Hs = [4000, 800];
+  let worst = 0, n = 0, blocked = 0;
+  const numInt = (H, alt0, mu) => {
+    const o = [0, R0 + alt0], d = [Math.sqrt(1 - mu * mu), mu], ds = H / 200;
+    let tau = 0;
+    for (let s = 0; s < 4e6; s += ds) {
+      const x = o[0] + d[0] * (s + ds / 2), y = o[1] + d[1] * (s + ds / 2), r = Math.hypot(x, y);
+      if (r < R0) return Infinity;
+      const a = r - R0; if (a > 30 * H) break;
+      tau += Math.exp(-a / H) * ds;
+    }
+    return tau;
+  };
+  for (const H of Hs) for (const alt of [0, 600, 3000, 9000]) for (const mu of [1, .6, .3, .1, 0, -.05, -.12]) {
+    const ex = numInt(H, alt, mu), ap = PL.chapman(R0 / H, alt / H, mu) * H;
+    if (ex === Infinity) { if (ap >= 1e19) blocked++; else worst = Math.max(worst, 9); continue; }
+    n++; worst = Math.max(worst, Math.abs(ap / ex - 1));
+  }
+  ok(n > 40 && worst < .15, 'оптическая толща к солнцу: ошибка ≤ 15 % (у Ми — высота 800, у Рэлея — 4000)', { worst: +worst.toFixed(3), n });
+  console.log(`  функция Чепмена: наибольшая ошибка ${(worst * 100).toFixed(1)} %`);
+  ok(blocked > 0, 'солнце за горизонтом (луч в планету) — тень', blocked);
+}
+
+// ═══ 14. Отсечение у земли (ошибка «камера у воды — горизонта нет» не вернётся) и чистка узлов ═══
+sec('у земли выбраны только куски до горизонта; старые узлы чистятся');
+{
+  const cam = camAt(-20, 33, 3), D = Math.hypot(...cam), rocc = R + P.renderMin;
+  const leaves = P.select(cam[0], cam[1], cam[2], { K: 1.4, maxL: 12 }, []);
+  let beyond = 0;
+  for (const n of leaves) {
+    const a = Math.acos(Math.min(1, (cam[0] * n.c[0] + cam[1] * n.c[1] + cam[2] * n.c[2]) / D));
+    if (a - n.ang > Math.acos(rocc / D) + Math.acos(rocc / (R + n.hmax)) + 1e-9) beyond++;
+  }
+  ok(beyond === 0 && leaves.length < 700, 'у земли (3 ед.): все куски — до горизонта, их немного', { leaves: leaves.length, beyond });
+  const before = P.nodes.size;
+  for (let k = 0; k < 640; k++) { const c = camAt(rnd() * 140 - 70, rnd() * 360 - 180, [3, 300, 30000][k % 3]); P.select(c[0], c[1], c[2], { K: 1.4, maxL: 12, keep: 60 }, []); }
+  const after = P.nodes.size;
+  ok(after < 60000, 'узлы не копятся без конца (чистка старых)', { before, after });
+  const c2 = camAt(10, 20, 3), L2 = P.balance(P.select(c2[0], c2[1], c2[2], { K: 2, maxL: 12, cull: false }, []));
+  let bad = 0; const dd = [0, 0, 0];
+  for (let k = 0; k < 1500; k++) { randDir(dd); if (leafOf(L2, dd)[0] !== 1) bad++; }
+  ok(bad === 0, 'после чистки выбор снова покрывает шар ровно один раз', bad);
+}
+
+// ═══ 15. Лёд, базис, одинаковость солнца и луны ═══
+sec('замёрзшее море держит, базис = базис куска, солнце и луна у всех одинаковые');
+{
+  // точка замёрзшего моря у полюса
+  let iceDir = null; const d = [0, 0, 0];
+  for (let k = 0; k < 4000 && !iceDir; k++) { randDir(d); if (Math.abs(d[1]) > .9 && P.height(d[0], d[1], d[2]) < -40 && P.iceAt(d[0], d[1], d[2])) iceDir = d.slice(); }
+  if (iceDir) {
+    const fr = P.patch(iceDir), g = P.patchGround(fr, 0, 0), s = P.patchSea(fr, 0, 0);
+    ok(Math.abs(g - s) < 1e-9 && P.patchWater(fr, 0, 0) === -Infinity, 'на льду — опора на уровне моря, не вода', { g, s });
+  } else ok(false, 'нашлась точка замёрзшего моря');
+  const B = P.basis([.3, .5, -.8], new Array(9)), fr = P.patch([.3, .5, -.8]);
+  ok(B.every((v, i) => v === fr.B[i]), 'P.basis = базис плоского куска');
+  const P2 = PL.create(PL.HOME), t = 98765.4, ms = Date.UTC(2027, 3, 3);
+  const s1 = P.sunDir(t, ms), s2 = P2.sunDir(t, ms), m1 = P.moonPos(0, t), m2 = P2.moonPos(0, t);
+  ok(s1.every((v, i) => v === s2[i]) && m1.every((v, i) => v === m2[i]), 'солнце и луна — от времени, у всех одинаковые (без сети)');
+}
+
+// ═══ 16. Скорость ═══
 sec('скорость (node; телефон с ЦП ×4 — примерно ×4)');
 {
   const d = [0, 0, 0], N = 60000;

@@ -27,7 +27,8 @@
     E.__sunWrapped = true;
   }
 
-  // ═══ GLSL: атмосфера (Рэлей + Ми, оптическая глубина к солнцу — приближение функции Чепмена, Шулер, GPU Pro 3) ═══
+  // ═══ GLSL: атмосфера (Рэлей + Ми, оптическая глубина к солнцу — приближение функции Чепмена, Шулер, GPU Pro 3;
+  //     та же формула на JS — D37E.planet.chapman, сверка с численным интегралом — scripts/planet-test.cjs) ═══
   const ATMO = `
 uniform vec3 uCamP;
 uniform vec3 uSunL;
@@ -42,10 +43,12 @@ vec2 d37RaySph( vec3 o, vec3 d, float r ){
   q = sqrt( q ); return vec2( -b - q, -b + q );
 }
 float d37Chap( float X, float h, float mu ){
-  float c = sqrt( X + h ), r;
-  if ( mu >= 0.0 ) r = c / ( c * mu + 1.0 ) * exp2( -h );
-  else { float x0 = sqrt( max( 1.0 - mu * mu, 0.0 ) ) * ( X + h ); float c0 = sqrt( x0 ); r = 2.0 * c0 * exp2( min( X - x0, 100.0 ) ) - c / ( 1.0 - c * mu ) * exp2( -h ); }
-  return clamp( r, 0.0, 1e20 );
+  float x = X + h, c = sqrt( 1.5707963 * x );
+  if ( mu >= 0.0 ) return exp( -h ) * c / ( ( c - 1.0 ) * mu + 1.0 );
+  float x0 = x * sqrt( max( 1.0 - mu * mu, 0.0 ) );
+  if ( x0 < X ) return 1e20;
+  float c0 = sqrt( 1.5707963 * x0 );
+  return max( 2.0 * c0 * exp( min( x - x0 - h, 80.0 ) ) - exp( -h ) * c / ( ( 1.0 - c ) * mu + 1.0 ), 0.0 );
 }
 vec3 d37SunT( vec3 p ){
   float r = length( p ), h = max( r - uAtm.x, 0.0 ), mu = dot( p, uSunL ) / r;
@@ -59,9 +62,15 @@ void d37Atmo( vec3 o, vec3 d, float tMax, out vec3 inR, out vec3 inM, out vec3 T
   vec2 tg = d37RaySph( o, d, uAtm.x );
   if ( tg.x > 0.0 ) t1 = min( t1, tg.x );
   if ( t1 <= t0 ) return;
-  float ds = ( t1 - t0 ) / float( NSAMP ), odR = 0.0, odM = 0.0;
+  // выборки гуще там, где воздух плотнее: у ближайшей к планете точки луча (у края планеты с орбиты — тонкий слой),
+  // у начала (смотрим вверх с земли) или у конца (с орбиты на землю); вес ds — по шагу этой раскладки
+  float Ls = t1 - t0, tc = clamp( -dot( o, d ), t0, t1 ), sa = tc - t0, sb = t1 - tc, odR = 0.0, odM = 0.0;
   for ( int i = 0; i < NSAMP; i ++ ) {
-    vec3 p = o + d * ( t0 + ( float( i ) + 0.5 ) * ds );
+    float u = ( float( i ) + 0.5 ) / float( NSAMP ), t, ds;
+    if ( sa < 0.05 * Ls ) { t = t0 + u * u * Ls; ds = 2.0 * u * Ls / float( NSAMP ); }
+    else if ( sb < 0.05 * Ls ) { float v = 1.0 - u; t = t1 - v * v * Ls; ds = 2.0 * v * Ls / float( NSAMP ); }
+    else { float w = u * 2.0 - 1.0, sd = w < 0.0 ? sa : sb; t = tc + w * abs( w ) * sd; ds = 4.0 * abs( w ) * sd / float( NSAMP ); }
+    vec3 p = o + d * t;
     float r = length( p ), h = max( r - uAtm.x, 0.0 );
     float dR = exp( -h * uAtm.z ) * ds, dM = exp( -h * uAtm.w ) * ds;
     float mu = dot( p, uSunL ) / r;
@@ -119,7 +128,7 @@ void main(){
   float cd = length( cameraPosition - vW ), nk = smoothstep( 160.0, 15.0, cd );
   if ( nk > 0.0 ) alb *= 1.0 + nk * ( ( d37N( vW.xz * 0.9 ) - 0.5 ) * 0.22 + ( d37N( vW.xz * 4.3 + 17.0 ) - 0.5 ) * 0.14 );
   // альфа: 0…0,5 — суша (выше над морем — меньше), 0,5…1 — вода (глубже — больше): берег — где альфа = 0,5
-  float a = vCol.a, wf = smoothstep( 0.497, 0.503, a ), water = clamp( ( a - 0.5 ) * 2.6, 0.0, 1.0 );
+  float a = vCol.a, wf = smoothstep( 0.494, 0.51, a ), water = clamp( ( a - 0.5 ) * 2.6, 0.0, 1.0 );
   vec3 N = normalize( vN ), L = uSunL, V = normalize( cameraPosition - vW );
   float mu = dot( vUp, L );
   vec3 sun = uLit.x * vSunT;
@@ -248,14 +257,15 @@ void main(){
 
     // ── Атмосфера: числа для шейдеров ──
     const A = D.atmo, Rg = P.SEAR;
-    const LN2 = Math.LN2;
     const U = {
       uCamP: { value: new T.Vector3() }, uSunL: { value: new T.Vector3(0, 1, 0) }, uPlanetC: { value: new T.Vector3() },
       uAtm: { value: new T.Vector4(Rg, A ? Rg + A.top : Rg + 1, A ? 1 / A.Hr : 1, A ? 1 / A.Hm : 1) },
-      uAtm2: { value: new T.Vector4(A ? Rg / (A.Hr * LN2) : 1, A ? Rg / (A.Hm * LN2) : 1, A ? 1 / (A.Hr * LN2) : 1, A ? 1 / (A.Hm * LN2) : 1) },
+      // функция Чепмена (Шулер, GPU Pro 3: Ch ≈ c / ((c − 1) μ + 1), c = √(πX/2)): X = R / H, высота — в долях H
+      uAtm2: { value: new T.Vector4(A ? Rg / A.Hr : 1, A ? Rg / A.Hm : 1, A ? 1 / A.Hr : 1, A ? 1 / A.Hm : 1) },
       uAtm3: { value: new T.Vector4(A ? A.Hr : 1, A ? A.Hm : 1, A ? A.g : .76, 0) },
       uBetaR: { value: new T.Vector3(...(A ? A.tauR.map(x => x / A.Hr) : [0, 0, 0])) }, uBetaM: { value: A ? A.tauM / A.Hm : 0 },
-      uLit: { value: new T.Vector4(2.3, 1, 40 * (A ? A.sun : 0), 0) }, uBlob: { value: new T.Vector4(0, 0, 0, 0) }, uTime: { value: 0 },
+      // x — сила солнца у поверхности, y — свет неба, z — дымка до камеры (чуть слабее неба: дали темнее неба за ними)
+      uLit: { value: new T.Vector4(2.3, 1, 30 * (A ? A.sun : 0), 0) }, uBlob: { value: new T.Vector4(0, 0, 0, 0) }, uTime: { value: 0 },
       uSky: { value: new T.Vector4(40 * (A ? A.sun : 0), Math.cos(.0047 * (D.sky?.sunSize || 1)), 60, 1) },
     };
     const terrainMat = new T.ShaderMaterial({ name: 'planet', uniforms: U, vertexShader: TERRAIN_V, fragmentShader: TERRAIN_F, fog: false, lights: false });
@@ -312,9 +322,10 @@ void main(){
       if (typeof Worker === 'function' && o.workers !== 0) {
         const url = o.url || 'js/engine/planet-worker.js?v=' + (typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1');
         for (let k = 0; k < wanted; k++) {
-          const w = new Worker(url), W = { w, busy: 0, ok: false };
+          const w = new Worker(url), W = { w, busy: 0, ok: false, ids: new Set() };
           w.onmessage = e => onResult(W, e.data);
-          w.onerror = () => { W.dead = true; ST.errors++; };
+          // поток упал — его куски снова в очередь (построит другой поток или страница)
+          w.onerror = () => { W.dead = true; ST.errors++; for (const i of W.ids) { const c = inflight.get(i); inflight.delete(i); if (c && c.state === 2) c.state = 0; } W.ids.clear(); dirty = true; };
           w.postMessage({ t: 'init', def: D });
           workers.push(W);
         }
@@ -322,7 +333,7 @@ void main(){
     } catch (e) { console.warn('планета: потоков нет — строим на странице', e); }
     function onResult(W, d){
       if (d.t === 'ready') { W.ok = true; ST.workerOk = true; return; }
-      W.busy--;
+      W.busy--; W.ids.delete(d.id);
       const c = inflight.get(d.id); inflight.delete(d.id);
       if (!c) return;
       if (d.err) { ST.errors++; c.state = 0; console.warn('планета: кусок не собрался', d.err); return; }
@@ -377,7 +388,7 @@ void main(){
         for (const W of workers) while (W.ok && !W.dead && W.busy < 2 && queue.length) {
           const n = queue.shift(), c = chunkOf(n);
           if (c.state !== 1) continue;
-          c.state = 2; const id = ++reqId; inflight.set(id, c); W.busy++;
+          c.state = 2; const id = ++reqId; inflight.set(id, c); W.busy++; W.ids.add(id);
           W.w.postMessage({ t: 'build', id, f: n.f, L: n.L, i: n.i, j: n.j, N });
         }
       } else if (queue.length && (!workers.length || workers.every(W => W.dead) || now() - started > 4000)) {

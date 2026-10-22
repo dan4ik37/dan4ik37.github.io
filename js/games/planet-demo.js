@@ -18,7 +18,9 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
 .pl-bar button.on{background:var(--accent,#9b6dff);border-color:transparent}
 .pl-msg{position:absolute;inset:0;display:grid;place-items:center;color:#cbd5e1;font:800 15px Montserrat,sans-serif;text-align:center;padding:20px;z-index:3}
 .pl-help{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;max-width:92%;padding:8px 12px;border-radius:12px;background:rgba(6,8,20,.72);color:#e2e8f0;font:700 12px/1.5 Montserrat,sans-serif;text-align:center}
-.pl-help[hidden]{display:none}`;
+.pl-help[hidden]{display:none}
+@media (max-width:640px){.pl-bar{left:10px;right:10px;max-width:none;justify-content:flex-start}.pl-bar button{padding:.3rem .55rem;font-size:.72rem}
+.pl-hud{top:58px;max-width:calc(100% - 20px);font-size:11px;padding:5px 8px}.pl-st{font-size:10px}}`;
   const css = () => { if (document.getElementById('pl-css')) return; const s = document.createElement('style'); s.id = 'pl-css'; s.textContent = CSS; document.head.appendChild(s); };
   const DEG = Math.PI / 180, U = 2.1 / 1.8, HOME_LL = [29, 81];
   const clamp = (v, a, b) => v < a ? a : v > b ? b : v;

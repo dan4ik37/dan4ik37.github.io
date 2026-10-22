@@ -682,5 +682,15 @@
     return P;
   }
 
-  E.planet = { def, create, HOME, GEN, FACES, indices, makeNoise, warp, unwarp, latDir, latK, dirOf, faceOf, key, unkey, MAXL };
+  // Функция Чепмена (Шулер, GPU Pro 3): во сколько раз толща воздуха по лучу больше вертикальной; X = R / H, h = высота / H,
+  // mu — косинус угла луча к вертикали. Вернёт τ / H (с плотностью у начала луча); луч в планету — 1e20. Та же формула в шейдере
+  // атмосферы (js/engine/planet-view.js)
+  function chapman(X, h, mu){
+    const x = X + h, c = sqrt(PI / 2 * x);
+    if (mu >= 0) return Math.exp(-h) * c / ((c - 1) * mu + 1);
+    const x0 = x * sqrt(max(1 - mu * mu, 0));
+    if (x0 < X) return 1e20;
+    return max(2 * sqrt(PI / 2 * x0) * Math.exp(min(x - x0 - h, 80)) - Math.exp(-h) * c / ((1 - c) * mu + 1), 0);
+  }
+  E.planet = { def, create, HOME, GEN, FACES, indices, makeNoise, warp, unwarp, latDir, latK, dirOf, faceOf, key, unkey, MAXL, chapman };
 })();
