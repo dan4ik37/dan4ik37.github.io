@@ -3922,10 +3922,19 @@ html.gs-set-open,html.gs-set-open body{overflow:hidden}
 .gs-menu-it.primary{background:var(--accent,#7c3aed);border-color:transparent}
 .gs-menu-it.warn{color:#fca5a5}
 .gs-mi-ic{width:1.5em;text-align:center;flex:none}
+/* группы пунктов (it.group) и плитки: столбцом не влезает — settings.js fit() ставит gs-mg (2 столбца) / gs-mg3 (3 столбца) */
+.gs-menu-sec{grid-column:1/-1;margin:.4rem .3rem -.1rem;color:#9ca3af;font:800 .64rem 'Montserrat',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.gs-menu-box.gs-mg{width:min(560px,calc(100% - 24px));display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:.8rem}
+.gs-menu-box.gs-mg3{width:min(760px,calc(100% - 24px));grid-template-columns:1fr 1fr 1fr}
+.gs-menu-box.gs-mg .gs-menu-head,.gs-menu-box.gs-mg .gs-menu-it.primary,.gs-menu-box.gs-mg .gs-menu-it.warn{grid-column:1/-1}
+.gs-menu-box.gs-mg .gs-menu-head{margin-bottom:.1rem}
+.gs-menu-box.gs-mg .gs-menu-it{min-height:42px;padding:.5rem .75rem;font-size:.86rem}
+.gs-menu-box.gs-mg .gs-menu-sec{margin:.25rem .3rem 0}
 /* палец: пункты крупнее; без размытия (3D под меню рисуется каждый кадр) */
 @media (pointer:coarse){
   .gs-menu{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(6,5,14,.72)}
   .gs-menu-it{min-height:50px}
+  .gs-menu-box.gs-mg .gs-menu-it{min-height:44px}
 }
 /* низкий экран (телефон лёжа): пункты в два столбца — меню без прокрутки */
 @media (max-height:460px) and (min-width:560px){

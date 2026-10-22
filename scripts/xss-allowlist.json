@@ -783,6 +783,17 @@
   },
   {
    "f": "js/core/settings.js",
+   "fn": "itemsHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "D37Settings.menu зовут kubomir/mir/podzem-ui: пункты — константы, числа и esc() игры; группа — через esc() здесь",
+   "xs": [
+    "it.icon || ''",
+    "it.text"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
    "fn": "k",
    "k": "markup:attr",
    "c": "const",

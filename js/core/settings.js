@@ -689,35 +689,71 @@
   function menu(parent, o = {}){
     const el = doc.createElement('div'); el.className = 'gs-menu'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', o.title || 'Меню');
     const items = () => typeof o.items === 'function' ? o.items() : o.items || [];
+    // пункты с group: «Игра», «Мир»… — подзаголовок группы перед первым её пунктом (владелец 22.10: «не вмещается — поделил бы категории»)
+    const itemsHtml = list => { let g = null; return list.map(it => {
+      const sec = it.group && it.group !== g && !it.primary && !it.warn ? `<div class="gs-menu-sec" role="presentation">${esc(it.group)}</div>` : '';
+      if (it.group) g = it.group;
+      return sec + `<button type="button" class="gs-menu-it${it.primary ? ' primary' : ''}${it.warn ? ' warn' : ''}" data-mi="${esc(it.id)}"><span class="gs-mi-ic" aria-hidden="true">${it.icon || ''}</span>${it.text}</button>`;
+    }).join(''); };
+    // не влезает столбцом — плитки в 2 столбца, не влезает и так (а места хватает) — в 3; ⬆⬇⬅➡ ходят по плиткам (keydown ниже)
+    const fit = () => {
+      const box = el.isConnected && el.querySelector('.gs-menu-box'); if (!box) return;
+      box.classList.remove('gs-mg', 'gs-mg3');
+      if (box.querySelectorAll('.gs-menu-it').length < 6 || box.scrollHeight <= box.clientHeight + 1) return;
+      box.classList.add('gs-mg');
+      if (box.scrollHeight > box.clientHeight + 1 && el.clientWidth >= 640) box.classList.add('gs-mg3');
+    };
     const draw = () => {
       const f = doc.activeElement && el.contains(doc.activeElement) ? doc.activeElement.getAttribute('data-mi') : null;   // фокус — на тот же пункт
-      el.innerHTML = `<div class="gs-menu-box"><div class="gs-menu-head"><b>${o.title || 'Меню'}</b>${o.sub ? `<small>${o.sub}</small>` : ''}</div>${items().map(it =>
-        `<button type="button" class="gs-menu-it${it.primary ? ' primary' : ''}${it.warn ? ' warn' : ''}" data-mi="${esc(it.id)}"><span class="gs-mi-ic" aria-hidden="true">${it.icon || ''}</span>${it.text}</button>`).join('')}</div>`;
+      el.innerHTML = `<div class="gs-menu-box"><div class="gs-menu-head"><b>${o.title || 'Меню'}</b>${o.sub ? `<small>${o.sub}</small>` : ''}</div>${itemsHtml(items())}</div>`;
+      fit();
       if (f) el.querySelector(`[data-mi="${qa(f)}"]`)?.focus({ preventScroll: true });
     };
     draw();
     // мир под меню не крутится и не захватывает мышь
     for (const ev of ['pointerdown', 'pointerup', 'pointermove', 'contextmenu']) el.addEventListener(ev, e => e.stopPropagation());
     el.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
-    // ↑↓ / Home / End — по пунктам; Enter и Пробел — нажать (и когда игра под меню их «съела»)
+    // ↑↓ / Home / End — по пунктам; плитками (gs-mg) — ещё ←→ и ↑↓ по столбцам; Enter и Пробел — нажать (и когда игра под меню их «съела»)
+    const DIRS = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r' };
     el.addEventListener('keydown', e => {
       if (keyActivate(e)) return;
-      const k = e.key; if (k !== 'ArrowUp' && k !== 'ArrowDown' && k !== 'Home' && k !== 'End') return;
+      const k = e.key, d = DIRS[k]; if (!d && k !== 'Home' && k !== 'End') return;
       const all = [...el.querySelectorAll('.gs-menu-it')]; if (!all.length) return;
       const i = all.indexOf(doc.activeElement);
-      const j = k === 'Home' ? 0 : k === 'End' ? all.length - 1 : i < 0 ? 0 : (i + (k === 'ArrowDown' ? 1 : -1) + all.length) % all.length;
+      const grid = !!el.querySelector('.gs-menu-box.gs-mg');
+      if (!grid && (d === 'l' || d === 'r')) return;
+      let j;
+      if (k === 'Home' || k === 'End') j = k === 'Home' ? 0 : all.length - 1;
+      else if (i < 0) j = 0;
+      else if (!grid) j = (i + (d === 'd' ? 1 : -1) + all.length) % all.length;
+      else {   // ближайшая плитка в ту сторону (столбцы разной ширины: «Продолжить» и «Выйти» — во всю строку)
+        const a = all[i].getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+        let bs = Infinity; j = -1;
+        all.forEach((b, n) => {
+          if (n === i) return;
+          const r = b.getBoundingClientRect(), dx = r.left + r.width / 2 - ax, dy = r.top + r.height / 2 - ay;
+          if (d === 'd' ? dy <= 4 : d === 'u' ? dy >= -4 : Math.abs(dy) > a.height / 2 || (d === 'r' ? dx <= 4 : dx >= -4)) return;
+          const s = d === 'u' || d === 'd' ? Math.abs(dy) + Math.abs(dx) * 2 : Math.abs(dx);
+          if (s < bs) { bs = s; j = n; }
+        });
+        if (j < 0) { if (d === 'l' || d === 'r') return; j = d === 'd' ? 0 : all.length - 1; }   // по кругу, как в столбце
+      }
       e.preventDefault(); all[j].focus({ preventScroll: true });
     });
     let offFs = null;
     const rec = { el, h: null };
     const h = {
       el,
-      close(){ if (!el.isConnected) return; el.remove(); offFs?.(); offFs = null; const i = MENUS.indexOf(rec); if (i >= 0) MENUS.splice(i, 1); try { o.onClose?.(); } catch (e) { console.error(e); } },
+      close(){ if (!el.isConnected) return; el.remove(); offFs?.(); offFs = null; ro?.disconnect(); ro = null; const i = MENUS.indexOf(rec); if (i >= 0) MENUS.splice(i, 1); try { o.onClose?.(); } catch (e) { console.error(e); } },
       redraw: draw,
     };
     rec.h = h;
     el.addEventListener('click', e => { el.querySelector('.gs-menu-box')?.classList.remove('gs-pad'); const b = e.target.closest('[data-mi]'); if (b) o.onPick?.(b.dataset.mi, b); else if (e.target === el) h.close(); });
     parent.appendChild(el);
+    fit();   // мерить можно только в странице
+    // окно игры поменяло размер (поворот телефона, полный экран, ресайз) — заново: столбцом или плитками
+    let ro = root.ResizeObserver ? new root.ResizeObserver(() => fit()) : null;
+    ro?.observe(el);
     el.querySelector('.gs-menu-it')?.focus({ preventScroll: true });
     // полный экран включили/выключили (Esc браузера, кнопка, поворот) — пункт «⛶» показывает правду
     offFs = root.D37Full?.on?.(() => { if (el.isConnected) draw(); else { offFs?.(); offFs = null; } }) || null;

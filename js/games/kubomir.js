@@ -2442,26 +2442,28 @@
     const SS = window.D37Settings, fsEl = () => el?.closest('#gamesStage') || wrap();
     st.menu = SS.menu(wrap(), {
       title: (st.coopGuest ? '👥 ' : '🧊 ') + esc(st.meta.name), sub: st.coopGuest ? 'Мир друга · хозяин сохраняет мир и твои вещи' : st.creative ? '🎨 Творчество' : '⚔️ Выживание · мир сохраняется сам',
+      // группы (settings.js: подзаголовки; не влезает столбцом — плитки): «Игра» — помощники и игра вместе, «Мир» — моды и файлы,
+      // «Экран и помощь» — настройки, экран, помощь (владелец 22.10: «не вмещается — поделил бы категории удобнее»)
       items: () => st.coopGuest ? [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
-        ...xMenu(st),   // ── KX:menu ── помощники (💍, 📖, 📜, 🗺)
-        { id: 'coop', icon: '👥', text: 'Игроки' },
-        { id: 'settings', icon: '⚙️', text: 'Настройки' },
-        ...(SS.fsItems?.(fsEl()) || []),   // ⛶ Во весь экран / 🔄 Повернуть — как во всех играх (settings.js)
-        { id: 'help', icon: '❓', text: 'Как играть' },
-        { id: 'unstuck', icon: '🆘', text: 'Я застрял' },
+        ...xMenu(st).map(it => ({ group: 'Игра', ...it })),   // ── KX:menu ── помощники (💍, 📖, 📜, 🗺)
+        { id: 'coop', icon: '👥', text: 'Игроки', group: 'Игра' },
+        { id: 'settings', icon: '⚙️', text: 'Настройки', group: 'Экран и помощь' },
+        ...(SS.fsItems?.(fsEl()) || []).map(it => ({ group: 'Экран и помощь', ...it })),   // ⛶ / 🔄 — как во всех играх (settings.js)
+        { id: 'help', icon: '❓', text: 'Как играть', group: 'Экран и помощь' },
+        { id: 'unstuck', icon: '🆘', text: 'Я застрял', group: 'Экран и помощь' },
         { id: 'exit', icon: '🚪', text: 'Выйти из мира друга', warn: true },
       ] : [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
-        ...xMenu(st),   // ── KX:menu ──
-        { id: 'coop', icon: '👥', text: st.net ? `Играть вместе (${st.net.players().length})` : 'Играть вместе' },
-        { id: 'settings', icon: '⚙️', text: 'Настройки' },
-        { id: 'mods', icon: '🧩', text: 'Моды мира' + (st.mods.loaded.length ? ` (${st.mods.loaded.length})` : '') },
-        { id: 'mc', icon: '📥', text: 'Импорт из Minecraft' },
-        { id: 'export', icon: '📤', text: 'Сохранить файл мира' },
-        ...(SS.fsItems?.(fsEl()) || []),   // ⛶ Во весь экран / 🔄 Повернуть — как во всех играх (settings.js)
-        { id: 'help', icon: '❓', text: 'Как играть' },
-        { id: 'unstuck', icon: '🆘', text: 'Я застрял' },
+        ...xMenu(st).map(it => ({ group: 'Игра', ...it })),   // ── KX:menu ──
+        { id: 'coop', icon: '👥', text: st.net ? `Играть вместе (${st.net.players().length})` : 'Играть вместе', group: 'Игра' },
+        { id: 'mods', icon: '🧩', text: 'Моды мира' + (st.mods.loaded.length ? ` (${st.mods.loaded.length})` : ''), group: 'Мир' },
+        { id: 'mc', icon: '📥', text: 'Импорт из Minecraft', group: 'Мир' },
+        { id: 'export', icon: '📤', text: 'Сохранить файл мира', group: 'Мир' },
+        { id: 'settings', icon: '⚙️', text: 'Настройки', group: 'Экран и помощь' },
+        ...(SS.fsItems?.(fsEl()) || []).map(it => ({ group: 'Экран и помощь', ...it })),   // ⛶ / 🔄 — как во всех играх (settings.js)
+        { id: 'help', icon: '❓', text: 'Как играть', group: 'Экран и помощь' },
+        { id: 'unstuck', icon: '🆘', text: 'Я застрял', group: 'Экран и помощь' },
         { id: 'exit', icon: '🏠', text: 'Сохранить и выйти в меню', warn: true },
       ],
       onPick: id => { if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuPick(id); },

@@ -805,17 +805,19 @@
     const fsEl = () => document.getElementById('gamesStage') || wrap;
     function pauseItems(){
       const ach = G.CH?.ach || {}, gl = API.goal(), wait = Math.ceil(API.stuckWait?.() || 0);
+      // группы — подзаголовки и плитки, если столбцом не влезает (settings.js; владелец 22.10: «поделил бы категории удобнее»)
+      const SYS = 'Экран и помощь';
       return [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
-        { id: 'opts', icon: '⚙️', text: 'Настройки' },
-        ...(window.D37Settings?.fsItems?.(fsEl()) || []),
-        { id: 'help', icon: '❓', text: 'Как играть' },
-        { id: 'goals', icon: '🎯', text: `Цели${gl ? ` (${gl.i} из ${gl.n})` : ' — все выполнены'}` },
-        { id: 'ach', icon: '🏆', text: `Достижения (${Object.keys(ach).length} из ${Object.keys(API.ACH).length})` },
-        { id: 'stuck', icon: '🆘', text: wait > 0 ? `Я застрял (можно через ${wait} с)` : 'Я застрял — вытащить' },
-        { id: 'save', icon: '💾', text: 'Сохранить' },
-        { id: 'wmods', icon: '🧩', text: 'Моды мира' },
-        { id: 'share', icon: '📣', text: 'Позвать друга' },
+        { id: 'goals', icon: '🎯', text: `Цели${gl ? ` (${gl.i} из ${gl.n})` : ' — все выполнены'}`, group: 'Игра' },
+        { id: 'ach', icon: '🏆', text: `Достижения (${Object.keys(ach).length} из ${Object.keys(API.ACH).length})`, group: 'Игра' },
+        { id: 'share', icon: '📣', text: 'Позвать друга', group: 'Игра' },
+        { id: 'save', icon: '💾', text: 'Сохранить', group: 'Мир' },
+        { id: 'wmods', icon: '🧩', text: 'Моды мира', group: 'Мир' },
+        { id: 'opts', icon: '⚙️', text: 'Настройки', group: SYS },
+        ...(window.D37Settings?.fsItems?.(fsEl()) || []).map(it => ({ group: SYS, ...it })),
+        { id: 'help', icon: '❓', text: 'Как играть', group: SYS },
+        { id: 'stuck', icon: '🆘', text: wait > 0 ? `Я застрял (можно через ${wait} с)` : 'Я застрял — вытащить', group: SYS },
         { id: 'exit', icon: '🚪', text: 'Сохранить и выйти', warn: true },
       ];
     }
