@@ -13,7 +13,8 @@
 // Как искать новое: снимок кучи после 1-го закрытия и после N-го, «что держит» прошлый мир — пути от корней (DevTools → Memory →
 // Comparison / Retainers; или свой разбор, как в отчёте T-085). Полный прогон: ~4–6 мин.
 // Запуск из корня сайта: node scripts/world-reopen-e2e.cjs [N=20] [pc|phone]   (CHROME — путь к Chrome; D37_TMP — временная папка;
-// D37_OVERRIDE=<папка> — файлы оттуда вместо сайта: замер «до»; WAIT_MS — сколько ждать после закрытия перед итогом, 12000)
+// D37_OVERRIDE=<папка> — файлы оттуда вместо сайта: замер «до»; WAIT_MS — сколько ждать после закрытия перед итогом, 12000;
+// phone — 412×915, «средняя», ЦП ×RATE (по умолчанию 4) — прогон дольше, ~10 мин на 20 кругов)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const [N_ = '20', PROF = 'pc'] = process.argv.slice(2);
@@ -49,7 +50,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
   T.count = () => { const by = m => { const o = {}; for (const v of m.values()) o[v] = (o[v] || 0) + 1; return o; };
     T.gl = T.gl.filter(w => w.deref());
     return { iv: T.iv.size, ivBy: by(T.iv), raf: T.raf.size, rafBy: by(T.raf), wk: [...T.wk], gl: T.gl.filter(w => !w.deref().isContextLost?.()).length, glObj: T.gl.length,
-      ch: (window.sbClient?.getChannels?.() || []).map(c => c.topic).sort(), nodes: document.getElementsByTagName('*').length }; };
+      ch: (typeof sbClient !== 'undefined' && sbClient?.getChannels ? sbClient.getChannels() : []).map(c => c.topic).sort(), nodes: document.getElementsByTagName('*').length }; };
 })();`;
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
@@ -93,12 +94,16 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
       await send('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (Linux; Android 14; 23078PND5G) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36', platform: 'Linux armv8l' });
       await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
     }
+    // телефон — ЦП в RATE раз медленнее (по умолчанию ×4, как слабый телефон; RATE=1 — без замедления)
+    const RATE = +(process.env.RATE || (phone ? 4 : 1));
+    if (RATE > 1) await send('Emulation.setCPUThrottlingRate', { rate: RATE });
+    res.rate = RATE;
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_mir_pos');}catch(e){}` + INSTR });
     await send('Page.navigate', { url: BASE + '/' });
     for (let i = 0; i < 80 && !(await ev(`!!(window.D37Route && window.GAME_IMPL !== undefined && document.readyState === 'complete')`).catch(() => false)); i++) await sleep(250);
     await sleep(2500);
-    const open = async (sec = 40) => {
+    const open = async (sec = 40 * Math.max(1, RATE / 2)) => {
       const t0 = Date.now();
       await ev(`location.hash = '#/games/world'`);
       let up = false; for (let i = 0; i < sec * 4 && !up; i++) { await sleep(250); try { up = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
@@ -108,7 +113,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     // разогрев — 2 круга: первое открытие грузит скрипты движка и мира, three.js с jsDelivr (остаются — это не утечка), второе — V8
     // дособирает горячий код; дальше память «до» — честная
     for (let w = 1; w <= 2; w++) {
-      const ms0 = await open(w === 1 ? 120 : 40);
+      const ms0 = await open((w === 1 ? 120 : 40) * Math.max(1, RATE / 2));
       if (ms0 < 0) { ok(false, `мир не открылся (разогрев ${w})`); throw new Error('мир не открылся'); }
       console.log(`  разогрев ${w}: мир открылся за ${ms0} мс`);
       await sleep(2500); await close(); await sleep(w === 1 ? 2000 : WAIT);
@@ -123,6 +128,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
       await ev(`(() => { const S = GAME_IMPL.world._test.state(); try { S.wx?.force?.('rain'); } catch (e) {} return 1; })()`);
       await sleep(2500);
       res.occ = (res.occ || 0) + (await ev(`GAME_IMPL.world._test.state()?.wx?.occ?.n || 0`));
+      if (k === 1) res.chOpen = await ev('__d37leak.count().ch');   // канал мира есть, пока мир открыт (после закрытия — нет)
       if (k === 1 || k === N || k % 5 === 0) res.openMB.push([k, await heapMB()]);   // мир открыт — то, что видит игрок
       await ev(`(() => { const S = GAME_IMPL.world._test.state(); window.__d37worlds = window.__d37worlds || []; window.__d37worlds.push([new WeakRef(S), S.R?.r ? new WeakRef(S.R.r.getContext()) : null]); return 1; })()`);
       await close(); await sleep(1500);
@@ -152,7 +158,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     ok(F.iv <= B.iv, `setInterval: ${B.iv} → ${F.iv}`, F.iv > B.iv ? F.ivBy : undefined);
     ok(F.raf <= B.raf + 1, `ожидающие requestAnimationFrame: ${B.raf} → ${F.raf}`, F.raf > B.raf + 1 ? F.rafBy : undefined);
     ok(F.wk.length <= B.wk.length, `потоки (Worker): ${B.wk.length} → ${F.wk.length}`, F.wk);
-    ok(F.ch.length <= B.ch.length, `каналы Supabase: ${B.ch.length} → ${F.ch.length}`, F.ch);
+    ok(F.ch.length <= B.ch.length && !F.ch.some(t => /realtime:mirz?-/.test(t)), `каналы Supabase: ${B.ch.length} → ${F.ch.length} (пока мир открыт: ${(res.chOpen || []).filter(t => /mir/.test(t)).join(', ') || 'канала мира нет — без сети?'})`, F.ch);
     ok(F.gl <= B.gl, `живые контексты WebGL: ${B.gl} → ${F.gl} (объектов контекста ${B.glObj} → ${F.glObj})`);
     ok(F.glObj <= B.glObj, `объекты контекстов WebGL в памяти: ${B.glObj} → ${F.glObj}`);
     ok(F.nodes <= B.nodes + 5, `узлы DOM: ${B.nodes} → ${F.nodes}`);
