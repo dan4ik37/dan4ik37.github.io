@@ -108,7 +108,7 @@ async function loadForumThread(id){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap">
         <div>
           <div style="font-size:1.15rem;font-weight:800">${thread.pinned?'📌 ':''}${thread.locked?'🔒 ':''}${esc(thread.title)}</div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem">${renderNickWithVip(thread.profiles?.nick||'?', thread.profiles, ROLE_BADGE_HTML[thread.profiles?.role]||'')}<span class="lv-badge" data-lv-uid="${esc(thread.author_id)}"></span> · ${new Date(thread.created_at).toLocaleString('ru-RU')}</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:.3rem"><span data-mini-uid="${esc(thread.author_id)}" data-mini-nick="${esc(thread.profiles?.nick || '')}" style="cursor:pointer">${renderNickWithVip(thread.profiles?.nick||'?', thread.profiles, ROLE_BADGE_HTML[thread.profiles?.role]||'')}</span><span class="lv-badge" data-lv-uid="${esc(thread.author_id)}"></span> · ${new Date(thread.created_at).toLocaleString('ru-RU')}</div>
         </div>
         <div style="display:flex;gap:.4rem;flex-wrap:wrap">
           ${isAdmin ? `<button onclick="toggleForumPin(${thread.id}, ${!thread.pinned})" class="profile-admin-btn" style="padding:.4rem .7rem;font-size:.7rem">${thread.pinned?'Открепить':'📌 Закрепить'}</button>` : ''}
@@ -130,7 +130,7 @@ async function loadForumThread(id){
       return `
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem 1.2rem" data-post-id="${p.id}">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem">
-            <div style="font-weight:700;font-size:.82rem">${nickHtml}<span class="lv-badge" data-lv-uid="${esc(p.author_id)}"></span></div>
+            <div style="font-weight:700;font-size:.82rem"><span data-mini-uid="${esc(p.author_id)}" data-mini-nick="${esc(p.profiles?.nick || '')}" style="cursor:pointer">${nickHtml}</span><span class="lv-badge" data-lv-uid="${esc(p.author_id)}"></span></div>
             <div style="display:flex;align-items:center;gap:.6rem">
               <span style="font-size:.7rem;color:var(--muted)">${new Date(p.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
               ${canDelete ? `<button onclick="deleteForumPost(${p.id})" aria-label="Удалить ответ" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:.75rem">🗑</button>` : ''}

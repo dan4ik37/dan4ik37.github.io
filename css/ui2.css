@@ -82,7 +82,7 @@
   background:var(--panel);color:var(--text);border:1px solid var(--line-hi);border-radius:18px;box-shadow:var(--sh-2);outline:none;font-family:'Montserrat',sans-serif;text-align:left}
 .d37m.pop.in .d37m-card{animation:d37mIn .16s var(--ease-out,ease) both}
 @keyframes d37mIn{from{opacity:0;transform:translateY(-6px) scale(.97)}}
-.d37m.sheet .d37m-card{left:0;right:0;bottom:0;top:auto;width:auto;max-width:none;max-height:86vh;max-height:86dvh;border-radius:20px 20px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom)}
+.d37m.sheet .d37m-card{left:0;right:0;bottom:0;top:auto;width:auto;max-width:none;max-height:86vh;max-height:86dvh;border-radius:20px 20px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom);box-shadow:none}
 .d37m.sheet.in .d37m-card{animation:d37mUp .22s var(--ease-out,ease) both}
 @keyframes d37mUp{from{transform:translateY(35%);opacity:.6}}
 .d37m.sheet .d37m-card::before{content:'';position:absolute;left:50%;top:7px;width:42px;height:4px;margin-left:-21px;border-radius:2px;background:rgba(255,255,255,.55);z-index:3}
@@ -151,6 +151,7 @@ html.ui2 .pf-ava-edit,html.ui2 .pf-ava-del{border-color:var(--card)}
 html.ui2 .pf-info{padding:.55rem 0 0}
 html.ui2 .pf-nick{font-size:clamp(1.3rem,2.6vw,1.75rem);color:var(--text-hi);word-break:break-word}
 html.ui2 .pf-char{width:64px;right:-58px;bottom:-4px}
+@media (min-width:641px){html.ui2 .pf-hrow:has(>* > .pf-char:not([hidden])){gap:4.4rem}}   /* персонаж справа от аватарки не наезжает на ник и уровень */
 body.high .pf-char img{animation:pf2Breath 3.2s ease-in-out infinite;transform-origin:50% 100%}
 @keyframes pf2Breath{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.025)}}
 .pf2-lv{display:flex;align-items:center;gap:.6rem;margin-top:.6rem;max-width:560px}

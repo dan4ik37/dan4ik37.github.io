@@ -56,8 +56,13 @@
   }
   M._test = { decide, PROFILE_HREF };
 
-  // ═══ Данные (кэш на визит: профиль — 60 с, дружба — 15 с, персонаж — до перезагрузки) ═══
-  const PC = new Map(), FC = new Map(), LOOK = new Map();
+  // ═══ Данные (кэш на визит: профиль — 60 с, дружба — 15 с, персонаж и его картинка — до перезагрузки) ═══
+  const PC = new Map(), FC = new Map(), LOOK = new Map(), IMG = new Map();
+  // Фокус в карточку (и обратно) — только при работе с клавиатуры: focus() заставляет пересчитать стили и раскладку всей страницы
+  // до первого кадра (телефон, ЦП ×4: ≈ 12 мс на открытие и столько же на закрытие); пальцем и мышью он не нужен
+  let kbd = false;
+  addEventListener('keydown', () => { kbd = true; }, true);
+  addEventListener('pointerdown', () => { kbd = false; }, true);
   async function profileOf(uid, fresh){
     const c = PC.get(uid);
     if (c && !fresh && Date.now() - c.t < 60e3) return c.p;
@@ -113,6 +118,22 @@
     root.addEventListener('click', onClick);
     document.body.appendChild(root);
   }
+  // Разметку — заранее, когда браузер свободен (скрытая: ни стилей, ни раскладки) — первое открытие не дольше повторного
+  const idle = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 5000 }) : setTimeout(f, 2000));
+  const prebuild = () => idle(() => {
+    try {
+      if (!document.body || root) return;
+      build();
+      // прогрев: один раз разложить невидимой с типичными кнопками (стили, шрифты, значки) — первый кадр открытия короче
+      q('.d37m-acts').innerHTML = '<span class="d37m-btn pri">👤 Профиль</span><span class="d37m-btn ok">➕ В друзья</span><span class="d37m-btn warn">🚫 Заблокировать</span><span class="d37m-btn">✉ Написать</span><span class="d37m-btn">📞 Позвонить</span>';
+      q('.d37m-nick').textContent = 'Игрок';
+      root.style.visibility = 'hidden'; root.classList.add(sheetMode() ? 'sheet' : 'pop'); root.hidden = false;
+      void card.offsetHeight;
+      root.hidden = true; root.style.visibility = ''; root.classList.remove('sheet', 'pop');
+      q('.d37m-acts').textContent = ''; q('.d37m-nick').textContent = '';
+    } catch (er) {}
+  });
+  if (document.readyState === 'complete') prebuild(); else addEventListener('load', prebuild, { once: true });
   const q = s => card.querySelector(s);
   const sheetMode = () => { try { return matchMedia('(max-width: 640px)').matches || (matchMedia('(pointer: coarse)').matches && innerHeight < 480); } catch (er) { return false; } };
 
@@ -162,7 +183,7 @@
       if (sheet) pushHist();
     }
     place();
-    try { card.focus({ preventScroll: true }); } catch (er) {}
+    if (kbd) requestAnimationFrame(() => { if (open?.id === id) { try { card.focus({ preventScroll: true }); } catch (er) {} } });
     return load(id, uid, o);
   }
 
@@ -285,7 +306,9 @@
     const box = q('.d37m-char');
     if (!look || !window.D37Char) { box.hidden = true; return; }
     try {
-      const src = D37Char.img(look, 120); if (!src) return;
+      const key = JSON.stringify(look);   // картинка персонажа — одна на образ (D37Char.img рисует и кодирует PNG ≈ 3 мс на телефоне)
+      let src = IMG.get(key);
+      if (!src) { src = D37Char.img(look, 120); if (!src) return; IMG.set(key, src); if (IMG.size > 60) IMG.delete(IMG.keys().next().value); }
       box.innerHTML = '';
       const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = src;
       box.appendChild(img); box.hidden = false;
@@ -395,7 +418,7 @@
       hist = 0;
     } else hist = 0;
     const r = was?.ret;
-    if (r && r.isConnected && typeof r.focus === 'function' && !o.nav && !o.fromPop) { try { r.focus({ preventScroll: true }); } catch (er) {} }
+    if (kbd && r && r.isConnected && typeof r.focus === 'function' && !o.nav && !o.fromPop) { try { r.focus({ preventScroll: true }); } catch (er) {} }
   }
   M.close = () => close();
   M.isOpen = () => !!root && !root.hidden;

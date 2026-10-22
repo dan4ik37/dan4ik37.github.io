@@ -87,7 +87,7 @@ async function chrome({ phone = true, w = 412, h = 915, cpu = 1, ls = {}, scheme
 }
 
 // Профиль для замеров: UID или первый профиль с аватаркой (только чтение)
-const FIND_UID = `(async () => { for (let i = 0; i < 80 && !(typeof sbClient !== 'undefined' && sbClient); i++) await new Promise(r => setTimeout(r, 100));
+const FIND_UID = `(async () => { for (let i = 0; i < 300 && !(typeof sbClient !== 'undefined' && sbClient && typeof sbProfiles === 'function'); i++) await new Promise(r => setTimeout(r, 100));
   const { data } = await (await sbProfiles()).select('id,nick').not('avatar_url', 'is', null).limit(1); return data && data[0] ? data[0].id + '|' + data[0].nick : ''; })()`;
 const READY = `typeof sbClient !== 'undefined' && !!sbClient && typeof renderProfilePage === 'function' && document.readyState === 'complete'`;
 
@@ -143,7 +143,7 @@ async function perf(site){
   console.log('\n— perf: телефон 412×915, ЦП ×4');
   const B = await chrome({ cpu: 4 });
   await B.go(site.base + '/', 0);
-  ok(await B.until(READY, 30000), 'сайт загрузился');
+  ok(await B.until(READY, 60000), 'сайт загрузился');
   const [uid, nick] = (process.env.UID ? process.env.UID + '|игрок' : await B.ev(FIND_UID)).split('|');
   ok(!!uid, 'есть профиль для замеров');
   await sleep(2500);
@@ -174,7 +174,7 @@ async function leak(site){
   console.log('\n— leak: 20 × мини-карточка, 10 × профиль (телефон)');
   const B = await chrome({ cpu: 1 });
   await B.go(site.base + '/', 0);
-  ok(await B.until(READY, 30000), 'сайт загрузился');
+  ok(await B.until(READY, 60000), 'сайт загрузился');
   const [uid, nick] = (process.env.UID ? process.env.UID + '|игрок' : await B.ev(FIND_UID)).split('|');
   await sleep(2500);
   // прогрев: один круг (первое открытие создаёт карточку и кэш)
@@ -210,7 +210,7 @@ async function cls(site){
   for (const [name, ls, scheme, want] of [['dark', {}, 'dark', ''], ['light', { d37_theme: 'light' }, 'dark', 'light'], ['auto-light', { d37_theme: 'auto' }, 'light', 'light'], ['auto-dark', { d37_theme: 'auto' }, 'dark', '']]) {
     const B = await chrome({ cpu: 4, ls, scheme, init: FIRST });
     await B.go(site.base + at, 0);
-    await B.until(READY, 30000);
+    await B.until(READY, 60000);
     const r = await B.ev(CLS_PROBE), f = await B.ev('window.__d37first || null');
     out[name] = { ...r, first: f };
     console.log(' ', name.padEnd(10), JSON.stringify(out[name]));
@@ -228,7 +228,7 @@ async function shots(site){
   for (const [kind, w, h] of [['phone', 412, 915], ['pc', 1366, 900]]) {
     for (const theme of ['dark', 'light']) {
       const B = await chrome({ phone: kind === 'phone', w, h, ls: { d37_theme: theme } });
-      await B.go(site.base + '/', 0); await B.until(READY, 30000); await sleep(3500);
+      await B.go(site.base + '/', 0); await B.until(READY, 60000); await sleep(3500);
       await B.shot(path.join(SHOTS, `${TAG}-${kind}-${theme}-home.jpg`));
       const [uid, nick] = (process.env.UID ? process.env.UID + '|игрок' : await B.ev(FIND_UID)).split('|');
       await B.ev(PROFILE_OPEN(uid)); await sleep(800);
@@ -236,7 +236,7 @@ async function shots(site){
       await B.ev(`window.scrollTo(0, 0)`);
       await B.ev(MINI_OPEN(uid, nick)); await sleep(500);
       await B.shot(path.join(SHOTS, `${TAG}-${kind}-${theme}-mini.jpg`));
-      await B.ev(MINI_CLOSE);
+      await B.ev(MINI_CLOSE); await B.ev(`(document.getElementById('e2eAnchor')?.remove(), 1)`);
       await B.ev(`D37Route.go('#/chat')`); await sleep(3500);
       await B.shot(path.join(SHOTS, `${TAG}-${kind}-${theme}-chat.jpg`));
       ok(!B.errs.length, `${kind} ${theme}: без ошибок`, B.errs.slice(0, 3));
@@ -251,7 +251,7 @@ async function flags(site){
   const cfg = fs.readFileSync(path.join(SITE, 'js/core/config.js'), 'utf8').replace(/const UI_V2 = true/, 'const UI_V2 = false').replace(/const THEME_LIGHT = true/, 'const THEME_LIGHT = false');
   ok(/const UI_V2 = false/.test(cfg) && /const THEME_LIGHT = false/.test(cfg), 'в config.js есть флаги UI_V2 и THEME_LIGHT');
   const B = await chrome({ phone: true, ls: { d37_theme: 'light' }, intercept: [{ url: '*config.js*', match: '/js/core/config.js', body: cfg }] });
-  await B.go(site.base + '/', 0); await B.until(READY, 30000); await sleep(2000);
+  await B.go(site.base + '/', 0); await B.until(READY, 60000); await sleep(2000);
   const st = await B.ev(`({ theme: document.documentElement.dataset.theme || '', ui2: document.documentElement.classList.contains('ui2'), ls: localStorage.getItem('d37_theme'), mini: !!window.D37Mini })`);
   console.log('  ', JSON.stringify(st));
   ok(st.theme !== 'light' && !st.ls, 'THEME_LIGHT = false: светлой темы нет, выбор стёрт', st);

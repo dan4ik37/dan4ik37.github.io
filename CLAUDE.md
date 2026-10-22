@@ -2544,6 +2544,29 @@ js/features/games.js и хвост css/premium.css.
 - Тесты: rt-test (144; ws@8.21.3 + @supabase/supabase-js@2.117.2 в DEPS_DIR — в CI ставятся), rt-load-test (`--quick` в ci-run;
   без него — 1000 соединений, `--prio` на занятом компьютере), rt-e2e (--e2e: два Chrome, настоящий Supabase, сервер убит).
 
+## Mini-card, Profile 2.0, light theme (T-086, 22.10.2026)
+- Flags in js/core/config.js, one-line rollback each: `UI_V2` (html.ui2 — Profile 2.0 layout; any `#/profile/<uuid>` link opens the
+  mini-card) and `THEME_LIGHT` (false — dark only, d37_theme cleared). ui-e2e `flags` checks both off.
+- Theme: dark tokens on `:root`, light on `:root[data-theme="light"]` (index.html; server pages — CSS in api/_lib/page.js). The head
+  script (index.html == `THEME_HEAD` in page.js, ui-test compares) sets data-theme before first paint from localStorage `d37_theme`
+  (auto | dark | light; default `D='dark'` — owner's choice, «Авто» = change D in both). ⚙️ «Сайт» → «Тема» = D37Settings `theme`
+  (mirrors d37_theme; «↺ Сбросить всё» keeps it). Site shell colors — tokens only: `--text --muted --text-hi --card --panel --line`,
+  veils `rgba(var(--fg-rgb),a)` (not rgba(255,255,255,a)), text colors `--accent-t --ok-t --gold-t --bad-t --tw-t` (light: AA ≥ 4.5 on
+  every light surface incl. --bg2 — ui-test computes it). Light-only fixes — css/ui2.css. White stays white only on colored buttons/media.
+- Dark islands (always dark tokens; their UI sits on dark canvases): `#gamesStage,.s3,.wld-edit,.ph,.pe,.pe-loading,.shorts-page` —
+  one list (index.html twice + ui2.css `:not(:is(…) *)`, ui-test checks). New overlay drawn over a game → add it there.
+  VIP accent as text in light → `--accent-ink` (profile.js accentInk, darkened until 4.5:1).
+- Mini-card — ONE for the site: js/features/minicard.js `D37Mini.open(uid, { nick, anchor, actions, guest })` / `close()` / `isOpen()`
+  (old name `openMiniProfile(id, nick, el)`). Opens from `data-mini-uid` (+ `data-mini-nick`) or `<a href="#/profile/<uuid>">`
+  (UI_V2); `data-nomini` opts out. Buttons — pure `decide()` (privacy; D37Age: `kb` closes DM/calls, `kp` closes friendship and
+  «📍 К нему»; ui-test). msgview `V.userCard` delegates (actions: report / mods / modDo / block). Phone — bottom sheet with its own
+  history entry (Back closes); PC — popover kept on screen; Esc / outside click close. User text — textContent only. Speed: built
+  hidden in idle time (warm-up layout), focus moves into it only for keyboard users (focus() forces a full style+layout — ≈12 ms on
+  a phone ×4), character image cached per look. Not yet: the 3D/2D world cards (js/games/mir.js, world.js — API is ready).
+- Profile 2.0: pf2Layout() moves the existing cards into two columns once (ids unchanged); header numbers come from return values of
+  renderProfileXp / renderAchievements. Others' friend count is not shown (RLS returns only own friendships).
+- Tests: ui-test (64), settings-test (theme part), `node scripts/ui-e2e.cjs perf|leak|cls|shots|flags|ci` (Chrome, phone CPU ×4).
+
 ## Известные хвосты
 - AdSense: сайт в кабинете зарегистрирован как dan4ik37.github.io и отклонён («бесполезный контент»); главный адрес —
   dan4ik37.vercel.app (github.io перенаправляет туда). Номера блоков вписаны; Google в РФ рекламу не показывает —
