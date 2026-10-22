@@ -8,6 +8,7 @@
 //                ошибок в консоли, память не растёт
 //   mir-shots  — «Мир Денчика»: лес у озера, боевая зона (танк валит дерево — снимок), снимки
 //   mir-perf   — «Мир Денчика» в профиле телефона: лес — ЦП, FPS, вызовы отрисовки, треугольники, память; пролёт над лесом
+//   mir-replant — «Мир Денчика», профиль телефона (ЦП ×4): цена пересадки деревьев у камеры (каждые ~20 ед. пути) — мс, 40 раз
 //   mir-tank   — «Мир Денчика»: удар по дереву в боевой зоне — ствол ломается по месту удара (пень, падает верх), обломки, назад
 //   mir-soak   — «Мир Денчика»: TR_MIN минут (10) — по лесам в разных краях карты, удар по ближнему дереву, зима ↔ лето, дождь —
 //                без ошибок в консоли, память не растёт
@@ -46,16 +47,19 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   if (!page) { console.log('Chrome не запустился'); proc.kill(); server.close(); process.exit(1); }
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
-  let id = 0; const cb = new Map(), logs = [];
+  let id = 0, paused = null; const cb = new Map(), logs = [];
   ws.onmessage = m => {
     const d = JSON.parse(m.data);
     if (d.id && cb.has(d.id)) { const [a, b] = cb.get(d.id); cb.delete(d.id); d.error ? b(new Error(d.error.message)) : a(d.result); return; }
     if (d.method === 'Runtime.consoleAPICalled' && ['error', 'warning'].includes(d.params.type)) logs.push(d.params.type + ': ' + d.params.args.map(a => a.value ?? a.description ?? '').join(' ').slice(0, 300));
     if (d.method === 'Runtime.exceptionThrown') logs.push('exception: ' + (d.params.exceptionDetails?.exception?.description || d.params.exceptionDetails?.text || '').slice(0, 300));
+    if (d.method === 'Debugger.paused') { paused = (d.params.callFrames || []).slice(0, 14).map(f => (f.functionName || '(anon)') + ' ' + (f.url || '').replace(/^.*\/(js\/)/, '$1') + ':' + (f.location.lineNumber + 1)); }
   };
   const send = (method, params = {}) => new Promise((a, b) => { const i = ++id; cb.set(i, [a, b]); ws.send(JSON.stringify({ id: i, method, params })); });
   const ev = async (expr, ms = 60000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: '__timeout' } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   const shot = async name => { const r = await send('Page.captureScreenshot', { format: 'jpeg', quality: 88 }); const f = path.join(SHOTS, `${label}-${name}.jpg`); fs.writeFileSync(f, Buffer.from(r.data, 'base64')); console.log('  снимок', f); return f; };
+  // страница не отвечает (ev вернул '__timeout') — где стоит главный поток: пауза отладчика и стек (потом дальше)
+  const whereHung = async () => { try { paused = null; await Promise.race([send('Debugger.enable'), sleep(5000)]); await Promise.race([send('Debugger.pause'), sleep(5000)]); for (let i = 0; i < 40 && !paused; i++) await sleep(250); const st = paused; await Promise.race([send('Debugger.resume'), sleep(3000)]); await Promise.race([send('Debugger.disable'), sleep(3000)]); return st || ['нет паузы']; } catch (e) { return ['ошибка: ' + e.message]; } };
   const heap = async () => ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 300)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
   const res = { mode: MODE, label, site: SITE };
   try {
@@ -78,6 +82,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     const bad = logs.filter(l => /exception|TypeError|ReferenceError|RangeError|Shader Error|WebGLProgram/i.test(l) && !/X3595|favicon|ERR_|net::|adsbygoogle|googlesyndication|doubleclick/.test(l));
     res.errors = bad.slice(0, 12); res.logs = logs.length;
     if (bad.length) { console.log('ОШИБКИ В КОНСОЛИ:'); for (const l of bad.slice(0, 12)) console.log('  ', l); }
+    else if (logs.length && logs.length <= 6) { console.log('консоль (предупреждения):'); for (const l of logs) console.log('  ', l.slice(0, 240)); }
     console.log('ИТОГ', JSON.stringify(res));
     fs.writeFileSync(path.join(OUT, `res-${label}-${MODE}.json`), JSON.stringify(res, null, 1));
     try { ws.close(); } catch (e) {} proc.kill(); server.close(); await sleep(800); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {}
@@ -224,8 +229,22 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         await idle(); await sleep(1200);
         const r = await ev(`(async () => {
           const S = GAME_IMPL.kubomir._test.state(), W = S.W, V = D37E.vox, out = { fell: 0, plant: 0, grown: 0 };
-          // срубить низ ствола (все клетки ствола у корня) — дерево валится
-          let cut = 0; for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const v = W.raw(${x} + dx, ${y}, ${z} + dz); if (v > 0 && V.T.tree[v & 0xfff] === 1) { W.set(${x} + dx, ${y}, ${z} + dz, 0, { urgent: 3 }); if (S.ents.fellTree(${x} + dx, ${y}, ${z} + dz, S.P)) out.fell++; cut++; } }
+          // ближнее дерево (столбик брёвен на земле, ещё не срубленное): всё сечение ствола на 3-м блоке над землёй (выше корней) —
+          // срубить, потом валить (как топор игрока или огонь: клетки уже пустые — X.fellAt)
+          const Tt = V.T, isLog = v => v > 0 && (Tt.tree[v & 0xfff] === 1 || Tt.tree[v & 0xfff] === 2);
+          let col = null;
+          for (let r = 0; r <= 16 && !col; r++) for (let dx = -r; dx <= r && !col; dx++) for (let dz = -r; dz <= r && !col; dz++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+            const x = ${x} + dx, z = ${z} + dz; let y = W.heightAt(x, z); if (!(y > 0)) continue;
+            while (y > 1 && (W.raw(x, y, z) === 0 || isLog(W.raw(x, y, z)) || (W.raw(x, y, z) > 0 && Tt.tree[W.raw(x, y, z) & 0xfff] === 3))) y--;   // вниз сквозь крону и ствол — до земли
+            if (isLog(W.raw(x, y + 1, z)) && isLog(W.raw(x, y + 2, z)) && isLog(W.raw(x, y + 3, z)) && isLog(W.raw(x, y + 4, z))) col = [x, y + 3, z];
+          }
+          if (col) {
+            const [cx, cy, cz] = col, cutAt = [];
+            for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { const v = W.raw(cx + dx, cy, cz + dz); if (isLog(v)) { W.set(cx + dx, cy, cz + dz, 0, { urgent: 3 }); cutAt.push([cx + dx, cz + dz]); } }
+            for (const [a, b] of cutAt) if (S.ents.fellAt(a, cy, b, S.P)) { out.fell++; break; }
+            out.cut = cutAt.length;
+          }
           // посадить ростки рядом и промотать время игры
           const kinds = ['oak', 'birch', 'spruce', 'acacia', 'jungle', 'willow'];
           for (let i = 0; i < 3; i++) { const px = ${x} + 4 + i * 3, pz = ${z} + 4, py = W.heightAt(px, pz); if (py > 0 && W.get(px, py, pz) === 0) { W.set(px, py, pz, V.cell(V.ID['sapling_' + kinds[(i + ${k}) % kinds.length]]), { urgent: 1 }); out.plant++; } }
@@ -234,6 +253,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           // времена года: зима ↔ лето
           try { S.WX.clim.setWorld({ seed: 'kb', mode: 'fixed', season: ${k} % 2 ? 'winter' : 'summer', weather: ${k} % 3 ? 'clear' : 'rain', lapse: 0, seaY: 52 }); } catch (e) {}
           return out; })()`, 60000);
+        if (r === '__timeout' || !r || typeof r !== 'object') { const st = await whereHung(); console.log('ЗАВИС: страница не ответила за 60 с; стек:\n   ' + st.join('\n   ')); res.hang = st; ok(false, 'страница отвечает (шаг ' + k + ')'); break; }
         felled += r.fell; planted += r.plant; grown += r.grown;
         if (k % 6 === 0) { hs.push(await heap()); console.log('  прогон', Math.round((Date.now() - t0) / 1000), 'с: срублено', felled, 'посажено', planted, 'выросло', grown, 'память', hs[hs.length - 1], 'МБ'); }
       }
@@ -292,6 +312,18 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       res.perf.flight = r2; console.log('ПРОЛЁТ', JSON.stringify(r2));
       await send('Emulation.setCPUThrottlingRate', { rate: 1 });
       res.heapMB = await heap();
+      return;
+    }
+    if (MODE === 'mir-replant') {
+      res.place = await mirPlace(-760, -560, 0, 9);
+      await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+      await sleep(4000);
+      // пересадка по требованию: cutTree(…, false) сбрасывает «где сажали» — следующий update сажает заново (рельеф не трогает: стоим)
+      const r = await ev(`(async () => { const S = GAME_IMPL.world._test.state(), V = S.zones.wmv, P = S.P, t = [];
+        for (let i = 0; i < 40; i++) { await new Promise(r => requestAnimationFrame(r)); const a = performance.now(); V.cutTree('wt:none', false); V.update(P.ch.x, P.ch.z); t.push(performance.now() - a); }
+        t.sort((a, b) => a - b); return { n: t.length, p50: +t[t.length >> 1].toFixed(2), p90: +t[Math.floor(t.length * .9)].toFixed(2), max: +t[t.length - 1].toFixed(2), trees: V.treeStats?.() || null }; })()`, 120000);
+      await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      res.perf = { replant: r }; console.log('ПЕРЕСАДКА (ЦП ×4), мс', JSON.stringify(r));
       return;
     }
     if (MODE === 'mir-soak') {

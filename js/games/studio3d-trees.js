@@ -34,7 +34,7 @@
       const sel = `<label class="s3-lbl">Порода<select data-p="kind">${list().map(([k, n, i]) => `<option value="tree_${esc(k)}"${o.kind === 'tree_' + k ? ' selected' : ''}>${esc(i)} ${esc(n)}</option>`).join('')}</select></label>`
         + `<label class="s3-lbl">Размер <b>${esc(o.scale ?? 1)}</b><input type="range" min="0.4" max="2.5" step="0.1" value="${esc(o.scale ?? 1)}" data-p="scale"></label>`
         + `<button type="button" class="s3-btn" data-a="tree:reseed" title="Та же порода, другая форма">🎲 Другое дерево</button>`;
-      return h.replace(/<label class="s3-lbl">Вид<select data-p="kind">[\s\S]*?<\/select><\/label>/, sel);
+      return h.replace(/<label class="s3-lbl">Вид<select data-p="kind">[\s\S]*?<\/select><\/label>/, () => sel);
     },
     act(a){
       if (a !== 'tree:reseed') return false;
