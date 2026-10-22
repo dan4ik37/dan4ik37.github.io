@@ -12,9 +12,18 @@
 // Окно: D37Settings.open({ tab, ctx: 'engine' | 'game' | 'site', onClose }) / close() / isOpen(). Игра со своими действиями
 // регистрирует контекст: off = D37Settings.context({ engine: true, gfx(), world2d(v), view(v), onClose() }) — «качество»
 // пересобирает мир, «вид» переключает камеру, onClose — сбросить нажатия (Esc закрыл окно — меню игры не открывать).
-// Свои вкладки (телефон и т. п.): D37Settings.addTab({ id, icon, title, order, ctx: ['engine','game','site'], when(cx) — показывать ли сейчас, render(el, S) })
-// и свои значения: D37Settings.define(key, { def, list | bool | min/max | obj }).
-// Меню паузы для игр: D37Settings.menu(parent, { title, sub, items: [{ id, icon, text, primary, warn }], onPick(id), onClose }).
+// Свои вкладки (телефон и т. п.): D37Settings.addTab({ id, icon, title, order, ctx: ['engine','game','site'], when(cx) — показывать ли сейчас,
+// render(el, S), keys: [значения для «↺ Сбросить» этой вкладки], reset() — своё «как было» }) и свои значения: D37Settings.define(key, { def, list | bool | min/max | obj }).
+// T-043 (владелец 22.10: «Сделай понятнее и лучше настройки»): первая вкладка «⭐ Главное» — самое нужное из других вкладок (строки —
+// D37Settings.addMain({ id, order, ctx, when(cx), html(cx) }), те же data-set / data-sw / data-range, что во вкладках); у каждой строки —
+// простое название и подсказка в одну строку; «🔍 Найти настройку» в шапке — рисует все вкладки места сразу и оставляет строки, где есть
+// все слова (название, подсказка, варианты, data-words; окончания слов не важны); «↺ Сбросить» внизу — текущую вкладку (её keys / reset),
+// на «Главном» — всё. Стрелки и геймпад: ↑↓ (крестовина, стик) — по строкам, ←→ — ползунок / соседняя кнопка, Ⓐ — нажать (при
+// отпускании — игра под окном не «прыгнет»), Ⓑ — назад, LB/RB — вкладки; на телефоне — крупные кнопки и прокрутка без размытия под окном.
+// Меню паузы для игр: D37Settings.menu(parent, { title, sub, items: [{ id, icon, text, primary, warn }], onPick(id), onClose }) — одно меню
+// на игру («Мир Денчика», «Кубомир», «Подземье»: ☰ на экране и Esc / Start открывают его же); пункты про экран одинаковые везде:
+// ...D37Settings.fsItems(el) («⛶ Во весь экран» / «Обычный экран» и на телефоне стоя «🔄 Повернуть экран») + в onPick
+// D37Settings.fsPick(id, el, меню) → true, если это был он (уже сделано).
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const doc = root.document;
@@ -129,6 +138,17 @@
     const P = root.D37E?.perf; if (P?.on) P.toggle(false);
     emit({ key: '*' });
   }
+  // «↺ Сбросить» одной вкладки: только её значения — как reset(), но выборочно (событие тоже «*», в keys — что сбросили)
+  function resetKeys(keys, o = {}){
+    const list = (keys || []).filter(k => SCHEMA[k]);
+    if (!list.length) return [];
+    for (const k of list) { delete data[k]; if (LEG[k]) lsSet(LEG[k].k, null); }
+    if (list.includes('keys')) keysRev++;
+    save(); apply();
+    if (list.includes('fps')) { const P = root.D37E?.perf; if (P?.on) P.toggle(false); }
+    emit({ key: '*', keys: list.slice(), ui: !!o.ui });
+    return list;
+  }
   // Ключи сменил controls.js (C.set пишет d37_keys) — переложить в хранилище и сказать живым управлениям
   function keysChanged(){ data.keys = clean('keys', LEG.keys.read(lsGet(LEG.keys.k) || '{}') || {}); save(); keysRev++; apply(); emit({ key: 'keys', value: data.keys }); }
 
@@ -168,148 +188,277 @@
 
   // ═══ Окно ═══
   const TABS = [
-    { id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site'], render: tabGfx },
-    { id: 'sound', icon: '🔊', title: 'Звук', order: 20, ctx: ['engine', 'game', 'site'], render: tabSound },
-    { id: 'controls', icon: '🎮', title: 'Управление', order: 30, ctx: ['engine', 'site'], render: tabControls },
-    { id: 'camera', icon: '🎥', title: 'Камера', order: 40, ctx: ['engine', 'site'], render: tabCamera },
-    { id: 'ui', icon: '🧩', title: 'Интерфейс', order: 50, ctx: ['engine', 'game', 'site'], render: tabUi },
+    { id: 'main', icon: '⭐', title: 'Главное', order: 0, ctx: ['engine', 'game', 'site'], render: tabMain },
+    { id: 'gfx', icon: '🎨', title: 'Графика', order: 10, ctx: ['engine', 'site'], render: tabGfx, keys: ['gfx', 'fsr', 'shadows', 'fps', 'world2d'] },
+    { id: 'sound', icon: '🔊', title: 'Звук', order: 20, ctx: ['engine', 'game', 'site'], render: tabSound, keys: ['mute', 'vol', 'volFx', 'volAmb', 'volVoice'] },
+    { id: 'controls', icon: '🎮', title: 'Управление', order: 30, ctx: ['engine', 'site'], render: tabControls, keys: ['sens', 'invertY', 'touchSize', 'touchAlpha', 'lefty', 'keys'] },
+    { id: 'camera', icon: '🎥', title: 'Камера', order: 40, ctx: ['engine', 'site'], render: tabCamera, keys: ['view', 'zoomFirst', 'fov', 'motion', 'shake'] },
+    { id: 'ui', icon: '🧩', title: 'Интерфейс', order: 50, ctx: ['engine', 'game', 'site'], render: tabUi, keys: ['uiScale', 'tags', 'bubbles', 'autoFull', 'autoLand'] },
     { id: 'site', icon: '🌐', title: 'Сайт', order: 90, ctx: ['engine', 'game', 'site'], render: tabSite },
   ];
-  let win = null, cur = 'gfx', cx = 'site', opened = {}, capture = null, keyNote = '', padT = 0, sfxAt = 0;
+  let win = null, cur = 'main', cx = 'site', opened = {}, capture = null, keyNote = '', padT = 0, sfxAt = 0, query = '', qWords = [];
   const tabsFor = () => TABS.filter(t => (!t.ctx || t.ctx.includes(cx)) && (!t.when || t.when(cx))).sort((a, b) => a.order - b.order);   // when(cx) — своё условие вкладки
+  const tabKeys = t => (t?.keys || []).filter(k => SCHEMA[k]);
   const gameOpen = () => { try { return typeof gamesActive !== 'undefined' && !!gamesActive; } catch (e) { return false; } };   // gamesActive — games.js
+  const mm = q => { try { return !!root.matchMedia?.(q)?.matches; } catch (e) { return false; } };
 
   function open(o = {}){
     if (!doc?.body) return;
     opened = o;
     cx = o.ctx || (ctx?.engine ? 'engine' : gameOpen() ? 'game' : 'site');
     const list = tabsFor();
-    cur = list.some(t => t.id === o.tab) ? o.tab : cx === 'site' ? 'site' : cx === 'game' ? 'sound' : 'gfx';
+    cur = list.some(t => t.id === o.tab) ? o.tab : 'main';   // по умолчанию — «⭐ Главное»
     if (!list.some(t => t.id === cur)) cur = list[0]?.id;
-    keyNote = ''; ctlFail = false;   // клавиши не загрузились — при новом открытии попробовать снова
+    keyNote = ''; ctlFail = false; query = ''; qWords = [];   // клавиши не загрузились — при новом открытии попробовать снова
     if (!win) {
       win = doc.createElement('div'); win.className = 'gs-set'; win.id = 'gsSettings';
       win.setAttribute('role', 'dialog'); win.setAttribute('aria-modal', 'true'); win.setAttribute('aria-label', 'Настройки');
       win.innerHTML = `<div class="gs-set-box">
-          <div class="gs-set-head"><b>⚙️ Настройки</b><small>сохраняются сами</small><button type="button" class="gs-set-x" data-gs="close" aria-label="Закрыть">✕</button></div>
-          <div class="gs-set-main"><div class="gs-set-tabs" role="tablist"></div><div class="gs-set-body" role="tabpanel"></div></div>
+          <div class="gs-set-head"><b class="gs-set-title">⚙️ Настройки</b><small>сохраняются сами</small>
+            <label class="gs-set-search"><span aria-hidden="true">🔍</span><input type="search" class="gs-set-find" placeholder="Найти настройку…" aria-label="Найти настройку" autocomplete="off" spellcheck="false" enterkeyhint="search"></label>
+            <button type="button" class="gs-set-x" data-gs="close" aria-label="Закрыть">✕</button></div>
+          <div class="gs-set-main"><div class="gs-set-tabs" role="tablist" aria-orientation="vertical"></div><div class="gs-set-body" role="tabpanel"></div></div>
           <div class="gs-set-foot"><button type="button" class="gs-btn ghost" data-gs="reset">↺ Сбросить всё</button><span class="gs-grow"></span><button type="button" class="gs-btn primary" data-gs="close">Готово</button></div>
         </div>`;
       win.addEventListener('click', onClick);
       win.addEventListener('input', onInput);
       win.addEventListener('change', onChange);
-      win.addEventListener('pointerdown', e => { if (e.target === win) close(); });
+      win.addEventListener('keydown', onWinKey);
+      win.addEventListener('pointerdown', e => { win?.querySelector('.gs-set-box')?.classList.remove('gs-pad'); if (e.target === win) close(); });
       doc.body.appendChild(win);
       root.addEventListener('keydown', onKey, true);
       doc.documentElement.classList.add('gs-set-open');
-    }
+    } else { const f = win.querySelector('.gs-set-find'); if (f) f.value = ''; }
     renderAll();
-    win.querySelector('.gs-set-x')?.focus({ preventScroll: true });
+    // компьютер — сразу в поиск (печатай и найдёшь); телефон — без клавиатуры на пол-экрана
+    const fine = mm('(pointer: fine)') && !mm('(pointer: coarse)');
+    (fine ? win.querySelector('.gs-set-find') : win.querySelector('.gs-set-x'))?.focus({ preventScroll: true });
+    padWake();
   }
   function close(){
     if (!win) return;
     stopCapture();
     root.removeEventListener('keydown', onKey, true);
-    win.remove(); win = null;
+    win.remove(); win = null; query = ''; qWords = [];
     doc.documentElement.classList.remove('gs-set-open');
     const f1 = opened.onClose, f2 = ctx?.onClose; opened = {};
     try { f1?.(); } catch (e) { console.error(e); }
     try { if (f2 !== f1) f2?.(); } catch (e) { console.error(e); }
+    // под окном — меню игры: фокус в него (клавиатура и геймпад продолжают там)
+    const m = topMenu(); if (m) m.el.querySelector('[data-mi="settings"], .gs-menu-it')?.focus({ preventScroll: true });
   }
   function renderAll(){
     if (!win) return;
     const list = tabsFor();
     if (!list.some(t => t.id === cur)) cur = list[0]?.id;
-    win.querySelector('.gs-set-tabs').innerHTML = list.map(t => `<button type="button" role="tab" aria-selected="${t.id === cur}" class="${t.id === cur ? 'on' : ''}" data-tab="${t.id}"><span>${t.icon}</span>${esc(t.title)}</button>`).join('');
+    const tabs = win.querySelector('.gs-set-tabs'), on = t => !query && t.id === cur;
+    tabs.innerHTML = list.map(t => `<button type="button" role="tab" aria-selected="${on(t)}" class="${on(t) ? 'on' : ''}" data-tab="${t.id}"><span aria-hidden="true">${t.icon}</span>${esc(t.title)}</button>`).join('');
+    // вкладки строкой (телефон) — выбранную в середину полосы
+    const b = tabs.querySelector('.on');
+    if (b && tabs.scrollWidth > tabs.clientWidth + 2) tabs.scrollLeft = Math.max(0, b.offsetLeft - (tabs.clientWidth - b.offsetWidth) / 2);
     renderBody();
   }
   function renderBody(){
     if (!win) return;
-    const body = win.querySelector('.gs-set-body'), t = TABS.find(x => x.id === cur);
+    const body = win.querySelector('.gs-set-body'), keep = focusSig(body);
     const top = body.scrollTop;
     body.innerHTML = '';
-    if (!t) return;
-    try {
-      const html = t.render(body, API);
-      if (typeof html === 'string') body.innerHTML = html;
-    } catch (e) { console.error(e); body.innerHTML = '<p class="gs-note">Не получилось показать эту вкладку.</p>'; }
+    body.onclick = body.onchange = body.oninput = null;   // свои обработчики вкладки (Кубомир, Подземье) — только её
+    if (query) renderSearch(body);
+    else {
+      const t = TABS.find(x => x.id === cur);
+      if (t) {
+        try {
+          const html = t.render(body, API);
+          if (typeof html === 'string') body.innerHTML = html;
+        } catch (e) { console.error(e); body.innerHTML = '<p class="gs-note">Не получилось показать эту вкладку.</p>'; }
+      }
+    }
     body.scrollTop = top;
+    syncFoot();
+    focusBack(body, keep);
+  }
+  // «↺ Сбросить» внизу: на «Главном» — всё; во вкладке с keys / reset — только её; поиск и вкладки без своих значений — без кнопки
+  function syncFoot(){
+    const b = win?.querySelector('[data-gs="reset"]'); if (!b) return;
+    const t = TABS.find(x => x.id === cur);
+    if (query) { b.hidden = true; return; }
+    b.hidden = false;
+    if (cur === 'main') { b.textContent = '↺ Сбросить всё'; b.dataset.scope = 'all'; b.title = 'Все настройки — как было'; }
+    else if (t && (tabKeys(t).length || t.reset)) { b.textContent = '↺ Сбросить вкладку'; b.dataset.scope = 'tab'; b.title = `Настройки вкладки «${t.title}» — как было`; }
+    else b.hidden = true;
+  }
+  // фокус после перерисовки — на том же (клавиатура, геймпад и экранные читалки не теряют место)
+  const SIG = ['data-set', 'data-sw', 'data-range', 'data-key', 'data-keyreset', 'data-keysall', 'data-site', 'data-tab'];
+  const qa = v => String(v).replace(/["\\]/g, '\\$&');
+  function focusSig(box){
+    const a = doc.activeElement; if (!a || !box.contains(a)) return null;
+    for (const k of SIG) if (a.hasAttribute?.(k)) return `[${k}="${qa(a.getAttribute(k))}"]` + (a.dataset?.v != null ? `[data-v="${qa(a.dataset.v)}"]` : '');
+    return null;
+  }
+  function focusBack(box, sel){ if (!sel) return; let e = null; try { e = box.querySelector(sel); } catch (er) {} if (e && doc.activeElement !== e) try { e.focus({ preventScroll: true }); } catch (er) {} }
+
+  // ── Поиск: все вкладки места сразу (по секциям), видны строки, где есть все слова ──
+  const norm = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/[«»"'.,:;!?()…—–\-/]+/g, ' ');
+  // Слово запроса найдено: само (от 4 букв — в любом месте, короче — с начала слова) или его основа без окончания — с начала
+  // слова («теней» → «тен…» → «Тени», «звука» → «Звук», «кнопок» → «Кнопки»); основа не короче 3 букв (иначе «гро» нашло бы «игроков»)
+  const ENDS = ['ами', 'ями', 'ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ой', 'ей', 'ий', 'ый', 'ая', 'яя', 'ое', 'ее', 'ые', 'ие', 'ов', 'ев', 'ок', 'ек', 'ах', 'ях', 'ам', 'ям', 'ом', 'ем', 'ть', 'ь', 'а', 'я', 'о', 'е', 'ы', 'и', 'у', 'ю'];
+  function hasWord(text, w){
+    const t = ' ' + text;
+    if (w.length >= 4 ? t.includes(w) : t.includes(' ' + w)) return true;
+    for (const e of ENDS) if (w.length - e.length >= 3 && w.endsWith(e)) return t.includes(' ' + w.slice(0, -e.length));
+    return false;
+  }
+  const matchText = (text, words) => words.every(w => hasWord(text, w));
+  function setQuery(v){
+    const q = norm(v).trim().replace(/\s+/g, ' ');
+    if (q === query) return;
+    const was = !!query;
+    query = q; qWords = q ? q.split(' ') : [];
+    stopCapture(); keyNote = '';
+    if (!q) { renderAll(); return; }
+    if (!was) { renderAll(); return; }   // начали искать — нарисовать все вкладки
+    filterSearch(win.querySelector('.gs-set-body'));
+  }
+  function renderSearch(body){
+    for (const t of tabsFor()) {
+      if (t.id === 'main') continue;   // «Главное» — то же, что во вкладках
+      const sec = doc.createElement('section'); sec.className = 'gs-sres'; sec.dataset.tab = t.id;
+      sec.innerHTML = `<button type="button" class="gs-sres-h" data-tab="${t.id}" title="Открыть вкладку «${esc(t.title)}»"><span aria-hidden="true">${t.icon}</span>${esc(t.title)}<i aria-hidden="true">→</i></button>`;
+      const box = doc.createElement('div'); box.className = 'gs-sres-b'; sec.appendChild(box);
+      body.appendChild(sec);   // уже в документе: вкладки, которые догружают своё (телефон), дорисуют сами
+      try { const html = t.render(box, API); if (typeof html === 'string') box.innerHTML = html; } catch (e) { console.error(e); sec.remove(); }
+    }
+    filterSearch(body);
+  }
+  const rowText = new WeakMap();
+  function filterSearch(body){
+    if (!body) return;
+    let total = 0;
+    for (const sec of body.querySelectorAll('.gs-sres')) {
+      const title = norm(sec.firstElementChild?.textContent || '');
+      let n = 0;
+      for (const r of sec.querySelectorAll('.gs-row, .gs-krow')) {
+        let tx = rowText.get(r);
+        if (tx === undefined) { tx = norm(r.textContent + ' ' + (r.dataset.words || '') + ' ' + title); rowText.set(r, tx); }
+        const hit = matchText(tx, qWords);
+        r.hidden = !hit; if (hit) n++;
+      }
+      for (const g of sec.querySelectorAll('.gs-keyg')) g.hidden = !g.querySelector('.gs-krow:not([hidden])');
+      sec.hidden = !n; total += n;
+    }
+    let empty = body.querySelector('.gs-sempty');
+    if (!total) {
+      if (!empty) { empty = doc.createElement('p'); empty.className = 'gs-note gs-sempty'; body.appendChild(empty); }
+      empty.textContent = `Ничего не нашлось по «${query}». Попробуй другое слово: «громкость», «тени», «кнопки», «клавиши».`;
+    } else empty?.remove();
   }
 
   // ── Строки ──
   const FMT = { vol: v => v + '%', volFx: v => v + '%', volAmb: v => v + '%', volVoice: v => v + '%', sens: v => Math.round(v * 100) + '%', motion: v => Math.round(v * 100) + '%',
     fov: v => `${v}° <small>(от 1-го лица ${v + 22}°)</small>`, uiScale: v => v + '%', touchSize: v => v + '%', touchAlpha: v => v + '%' };
-  const row = (label, ctl, hint, o = {}) => `<div class="gs-row${o.cls ? ' ' + o.cls : ''}${o.dis ? ' dis' : ''}"><div class="gs-lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
-  const seg = (k, opts, o = {}) => `<div class="gs-seg" role="radiogroup">${opts.map(([v, t]) => { const on = (o.cur ?? get(k)) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-set="${k}" data-v="${esc(v)}"${o.dis ? ' disabled' : ''}>${t}</button>`; }).join('')}</div>`;
-  const sw = (k, o = {}) => { const on = o.inv ? !get(k) : !!get(k); return `<label class="gs-sw"><input type="checkbox" data-sw="${k}"${o.inv ? ' data-inv="1"' : ''}${on ? ' checked' : ''}${o.dis ? ' disabled' : ''}><i aria-hidden="true"></i></label>`; };
-  const range = (k, min, max, step, mul = 1) => `<div class="gs-range"><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.round(get(k) * mul)}" data-range="${k}" data-mul="${mul}" aria-label="${k}"><output data-out="${k}">${FMT[k] ? FMT[k](get(k)) : get(k)}</output></div>`;
+  // row(название, управление, подсказка, { dis, cls, words — ещё слова для поиска })
+  const row = (label, ctl, hint, o = {}) => `<div class="gs-row${o.cls ? ' ' + o.cls : ''}${o.dis ? ' dis' : ''}"${o.words ? ` data-words="${esc(o.words)}"` : ''}><div class="gs-lbl">${label ? `<b>${label}</b>` : ''}${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
+  const seg = (k, opts, o = {}) => `<div class="gs-seg" role="radiogroup"${o.label ? ` aria-label="${esc(o.label)}"` : ''}>${opts.map(([v, t]) => { const on = (o.cur ?? get(k)) === v; return `<button type="button" role="radio" aria-checked="${on}" class="${on ? 'on' : ''}" data-set="${k}" data-v="${esc(v)}"${o.dis ? ' disabled' : ''}>${t}</button>`; }).join('')}</div>`;
+  const sw = (k, o = {}) => { const on = o.inv ? !get(k) : !!get(k); return `<label class="gs-sw"><input type="checkbox" data-sw="${k}"${o.inv ? ' data-inv="1"' : ''}${on ? ' checked' : ''}${o.dis ? ' disabled' : ''}${o.label ? ` aria-label="${esc(o.label)}"` : ''}><i aria-hidden="true"></i></label>`; };
+  const range = (k, min, max, step, mul = 1, o = {}) => `<div class="gs-range${o.dis ? ' dis' : ''}"><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.round(get(k) * mul)}" data-range="${k}" data-mul="${mul}" aria-label="${esc(o.label || k)}"><output data-out="${k}">${FMT[k] ? FMT[k](get(k)) : get(k)}</output></div>`;
   const head = t => `<div class="gs-sec">${t}</div>`;
   const note = t => `<p class="gs-note">${t}</p>`;
+  const VIEWS = [['third', 'От 3-го лица'], ['first', 'От 1-го лица']];
+
+  // ── «⭐ Главное»: самое нужное из других вкладок (строки — addMain) ──
+  const MAIN = [];
+  function addMain(m){
+    if (!m?.id || typeof m.html !== 'function') return root.D37Settings;
+    const it = { order: 50, ...m }, i = MAIN.findIndex(x => x.id === m.id);
+    if (i >= 0) MAIN[i] = it; else MAIN.push(it);
+    if (win && cur === 'main' && !query) renderBody();
+    return root.D37Settings;   // при загрузке файла API ещё нет — вызовы цепочкой только снаружи
+  }
+  function tabMain(){
+    const list = MAIN.filter(m => (!m.ctx || m.ctx.includes(cx)) && (!m.when || m.when(cx))).sort((a, b) => a.order - b.order);
+    let h = '';
+    for (const m of list) { try { h += m.html(cx, API) || ''; } catch (e) { console.error(e); } }
+    return (h || note('Здесь пока нечего настраивать.')) + note('Остальное — в других вкладках. Не можешь найти — 🔍 поиск вверху окна.');
+  }
+  const volRow = () => {
+    const m = get('mute');
+    return row('Громкость', `<div class="gs-vol">${sw('mute', { inv: true, label: 'Звук в играх' })}${range('vol', 0, 100, 5, 1, { dis: m, label: 'Громкость' })}</div>`,
+      m ? 'Звук игр выключен — включи переключателем.' : 'Всех звуков в играх. Отдельно эффекты и голос — во вкладке «🔊 Звук».', { words: 'звук громко тихо выключить тишина' });
+  };
+  function perfRow(){
+    const perf = typeof currentPerf !== 'undefined' ? currentPerf : null;   // performance-mode.js
+    return row('Режим сайта', `<div class="gs-seg" role="radiogroup" aria-label="Режим сайта">${[['low', '🐢 Слабое'], ['high', '🚀 Мощное']].map(([v, t]) => `<button type="button" role="radio" class="${perf === v ? 'on' : ''}" aria-checked="${perf === v}" data-site="perf:${v}">${t}</button>`).join('')}</div>`,
+      'Анимации сайта: «Слабое» — быстрее на старых телефонах.', { words: 'анимации эффекты медленно тормозит производительность' });
+  }
+  addMain({ id: 'sens', order: 30, ctx: ['engine', 'site'], html: () => row('Чувствительность мыши и пальца', range('sens', 20, 300, 5, 100, { label: 'Чувствительность' }), 'Как быстро поворачивается камера.', { words: 'мышь мышка палец сенсор поворот обзор' }) });
+  addMain({ id: 'vol', order: 40, html: volRow });
+  addMain({ id: 'ui', order: 45, ctx: ['game'], html: () => row('Размер кнопок и надписей', range('uiScale', 80, 130, 5, 1, { label: 'Размер кнопок и надписей' }), 'Панели и подсказки игр крупнее или мельче.', { words: 'масштаб крупнее мельче шрифт' }) });
+  addMain({ id: 'view', order: 50, ctx: ['engine', 'site'], html: () => row('Вид камеры', seg('view', VIEWS, { label: 'Вид камеры' }), 'Каким начинать в 3D. В игре — клавиша V.', { words: 'первое третье лицо от первого глазами' }) });
+  addMain({ id: 'perf', order: 60, ctx: ['site'], html: perfRow });
 
   // ── Вкладки ──
   function liveR(){ try { return ctx?.R?.() || null; } catch (e) { return null; } }
+  // запасная «Графика» (если js/core/gfx-settings.js не загрузился — обычно её заменяет он)
   function tabGfx(){
     const R = liveR(), E = root.D37E, autoQ = E?.quality ? E.quality() : null, qn = { low: 'низкое', mid: 'среднее', high: 'высокое' };
     const q = R ? R.q : get('gfx') === 'auto' ? autoQ : get('gfx'), low = q === 'low';
     const now = R ? `Сейчас: ${qn[R.q] || R.q}. ` : autoQ && get('gfx') === 'auto' ? `Для этого устройства: ${qn[autoQ]}. ` : '';
     return head('3D-миры: «Мир Денчика», «Студия 3D»')
-      + row('Качество', seg('gfx', [['auto', 'Авто'], ['low', 'Низкое'], ['mid', 'Среднее'], ['high', 'Высокое']]),
-        now + 'Низкое — без теней и текстур, для слабых телефонов. Высокое — мягкие тени и рельеф текстур.' + (ctx?.gfx ? ' Мир перезагрузится.' : R ? ' Сработает при следующем запуске.' : ''))
-      + row('Разрешение (FSR)', seg('fsr', [['auto', 'Авто'], ['native', '100%'], ['quality', 'Качество'], ['balanced', 'Баланс'], ['performance', 'Скорость']], { dis: low }),
-        low ? 'FSR работает на среднем и высоком качестве.' : 'AMD FSR 1, как DLSS: кадр рисуется меньше (77 / 67 / 59%) и чётко растягивается — игра быстрее. «Авто» снижает разрешение само, только когда тормозит.', { dis: low })
-      + row('Тени', sw('shadows', { dis: low }), low ? 'На низком качестве теней нет.' : 'Выключи, если 3D тормозит.', { dis: low })
-      + row('Счётчик FPS', sw('fps'), 'Кадры в секунду и нагрузка — поверх 3D (клавиша F3).')
-      + row('Плоский «Мир Денчика»', sw('world2d'), 'Мир без 3D — для очень слабых телефонов.')
-      + note('Анимации и эффекты самого сайта — во вкладке «🌐 Сайт».');
+      + row('Качество графики', seg('gfx', [['auto', 'Авто'], ['low', 'Низкое'], ['mid', 'Среднее'], ['high', 'Высокое']]),
+        now + 'Низкое — для слабых телефонов, высокое — мягкие тени.' + (ctx?.gfx ? ' Мир перезагрузится.' : ''), { words: 'качество графика лагает тормозит производительность' })
+      + row('Размер кадра', seg('fsr', [['auto', 'Авто'], ['native', '100%'], ['quality', 'Качество'], ['balanced', 'Баланс'], ['performance', 'Скорость']], { dis: low }),
+        low ? 'На низком качестве — всегда 100%.' : 'Кадр меньше экрана — игра быстрее (FSR 1).', { dis: low, words: 'разрешение fsr апскейл' })
+      + row('Тени', sw('shadows', { dis: low, label: 'Тени' }), low ? 'На низком качестве теней нет.' : 'Выключи, если 3D тормозит.', { dis: low })
+      + row('Счётчик кадров (FPS)', sw('fps', { label: 'Счётчик кадров' }), 'Кадры в секунду поверх 3D (клавиша F3).', { words: 'fps лаги' })
+      + row('Плоский «Мир Денчика»', sw('world2d', { label: 'Плоский мир' }), 'Мир без 3D — для очень слабых телефонов.', { words: '2d плоский' });
   }
   function tabSound(){
-    const m = get('mute');
-    return row('Звук в играх', sw('mute', { inv: true }), m ? 'Сейчас выключен.' : 'Кнопка 🔊 в игре — тоже.')
-      + row('Общая громкость', range('vol', 0, 100, 5), '', { dis: m })
-      + row('Эффекты', range('volFx', 0, 100, 5), 'Шаги, прыжки, кнопки, звуки мини-игр.', { dis: m })
-      + row('Окружение', range('volAmb', 0, 100, 5), 'Вода, огонь, ветер в 3D-мирах.', { dis: m })
-      + row('Голос', range('volVoice', 0, 100, 5), 'Звонки и голосовой чат — их слышно, даже когда звук игр выключен.');
+    const m = get('mute'), dis = { dis: m };
+    return row('Звук в играх', sw('mute', { inv: true, label: 'Звук в играх' }), m ? 'Сейчас выключен.' : 'Выключить все звуки игр сразу (кнопка 🔊 — тоже).', { words: 'выключить тишина mute' })
+      + row('Общая громкость', range('vol', 0, 100, 5, 1, { label: 'Общая громкость' }), 'Громкость всех звуков игр.', dis)
+      + row('Эффекты', range('volFx', 0, 100, 5, 1, { label: 'Громкость эффектов' }), 'Шаги, прыжки, кнопки, звуки мини-игр.', { dis: m, words: 'громкость' })
+      + row('Окружение', range('volAmb', 0, 100, 5, 1, { label: 'Громкость окружения' }), 'Вода, огонь, ветер в 3D-мирах.', { dis: m, words: 'громкость фон' })
+      + row('Голос', range('volVoice', 0, 100, 5, 1, { label: 'Громкость голоса' }), 'Звонки и голосовой чат (слышно и без звука игр).', { words: 'громкость звонок микрофон собеседник' });
   }
   function tabControls(body){
     const touchDev = !!root.D37Full?.isTouch?.();
-    let html = row('Чувствительность мыши', range('sens', 20, 300, 5, 100), 'И поворот камеры пальцем.')
-      + row('Инверсия по вертикали', sw('invertY'), 'Мышь вверх — камера вниз.')
-      + head('Телефон: кнопки на экране')
-      + row('Размер кнопок', range('touchSize', 70, 150, 5))
-      + row('Непрозрачность кнопок', range('touchAlpha', 30, 100, 5))
-      + row('Для левши', sw('lefty'), 'Джойстик — справа, кнопки — слева.')
+    let html = row('Чувствительность мыши и пальца', range('sens', 20, 300, 5, 100, { label: 'Чувствительность' }), 'Как быстро поворачивается камера.', { words: 'мышь мышка палец сенсор поворот обзор' })
+      + row('Инверсия по вертикали', sw('invertY', { label: 'Инверсия по вертикали' }), 'Мышь вверх — камера вниз.', { words: 'инвертировать перевернуть' })
+      + head('Кнопки на экране телефона')
+      + row('Размер кнопок', range('touchSize', 70, 150, 5, 1, { label: 'Размер кнопок' }), 'Крупнее — легче попасть пальцем.', { words: 'телефон сенсор' })
+      + row('Непрозрачность кнопок', range('touchAlpha', 30, 100, 5, 1, { label: 'Непрозрачность кнопок' }), 'Меньше — кнопки прозрачнее, мир виднее.', { words: 'прозрачность телефон' })
+      + row('Для левши', sw('lefty', { label: 'Для левши' }), 'Джойстик — справа, кнопки — слева.', { words: 'левая рука левша' })
       + head('Клавиши' + (touchDev ? ' <small>(клавиатура и геймпад)</small>' : ''));
     const C = ctl();
     if (!C && ctlFail) return html + note('Список клавиш не загрузился — проверь интернет и открой окно ещё раз.');
-    if (!C) { html += note('⏳ Загружаем список клавиш…'); loadControls().then(ok => { if (!ok) ctlFail = true; if (win && cur === 'controls') renderBody(); }); return html; }
+    if (!C) { html += note('⏳ Загружаем список клавиш…'); loadControls().then(ok => { if (!ok) ctlFail = true; if (win && (cur === 'controls' || query)) renderBody(); }); return html; }
     html += keysHtml(C);
     return html;
   }
   function tabCamera(){
-    return row('Вид', seg('view', [['third', 'От 3-го лица'], ['first', 'От 1-го лица']]), 'Каким начинать в 3D-мире. В игре — клавиша V.')
-      + row('Приблизил до упора — от 1-го лица', sw('zoomFirst'), 'Как в Роблоксе: колесо мыши, щипок или крестовина ↑ до конца — вид глазами персонажа, обратно — отдали.')
-      + row('Угол обзора', range('fov', 40, 80, 1), 'Шире — видно больше, но всё мельче.')
-      + row('Покачивание при ходьбе', range('motion', 0, 100, 5, 100), 'Камера качается в такт шагам, на бегу шире обзор.')
-      + row('Тряска камеры', sw('shake'), 'Удары, взрывы, жёсткое приземление.');
+    return row('Вид камеры', seg('view', VIEWS, { label: 'Вид камеры' }), 'Каким начинать в 3D. В игре — клавиша V.', { words: 'первое третье лицо от первого глазами' })
+      + row('Приблизил до упора — от 1-го лица', sw('zoomFirst', { label: 'Приблизил до упора — от 1-го лица' }), 'Колесо, щипок или ↑ до конца — вид глазами персонажа.', { words: 'зум приближение колесо' })
+      + row('Угол обзора', range('fov', 40, 80, 1, 1, { label: 'Угол обзора' }), 'Шире — видно больше, но всё мельче.', { words: 'fov обзор' })
+      + row('Покачивание при ходьбе', range('motion', 0, 100, 5, 100, { label: 'Покачивание при ходьбе' }), 'Камера качается в такт шагам, на бегу шире обзор.', { words: 'тошнит укачивает' })
+      + row('Тряска камеры', sw('shake', { label: 'Тряска камеры' }), 'От ударов, взрывов и жёсткого приземления.', { words: 'тошнит укачивает' });
   }
   function tabUi(){
-    return row('Размер кнопок и надписей в играх', range('uiScale', 80, 130, 5))
-      + row('Ники над головами', sw('tags'))
-      + row('Облачка сообщений', sw('bubbles'), 'Сообщения чата и жителей над головами.')
+    return row('Размер кнопок и надписей', range('uiScale', 80, 130, 5, 1, { label: 'Размер кнопок и надписей' }), 'Панели и подсказки игр крупнее или мельче.', { words: 'масштаб крупнее мельче шрифт' })
+      + row('Ники над головами', sw('tags', { label: 'Ники над головами' }), 'Имена игроков над персонажами.', { words: 'имена подписи' })
+      + row('Облачка сообщений', sw('bubbles', { label: 'Облачка сообщений' }), 'Сообщения чата и жителей над головами.', { words: 'чат пузыри' })
       + head('Полный экран')
-      + row('Открывать игры во весь экран', sw('autoFull'), 'Сразу при запуске игры. Выйти — кнопка ⛶ или Esc.')
-      + row('Повернул телефон — игра на весь экран', sw('autoLand'), 'Положи телефон горизонтально — игра займёт весь экран, верни — снова сайт.')
-      + (cx === 'game' ? note('Графика, управление и камера 3D — в «Мире Денчика» (кнопка ⚙️) или в меню сайта «Ещё → ⚙️ Настройки».') : '');
+      + row('Сразу во весь экран', sw('autoFull', { label: 'Сразу во весь экран' }), 'Игры открываются во весь экран. Выйти — ☰ Меню или Esc.', { words: 'полный экран fullscreen' })
+      + row('Повернул телефон — во весь экран', sw('autoLand', { label: 'Повернул телефон — во весь экран' }), 'Телефон горизонтально — игра на весь экран, обратно — сайт.', { words: 'поворот горизонтально альбомная' })
+      + (cx === 'game' ? note('Графика, управление и камера 3D — в «Мире Денчика» (☰ Меню → ⚙️ Настройки) или в меню сайта «Ещё → ⚙️ Настройки».') : '');
   }
   function tabSite(){
-    const perf = typeof currentPerf !== 'undefined' ? currentPerf : null;   // performance-mode.js
     const hasPush = typeof togglePush === 'function', pushOn = typeof pushSubscribed !== 'undefined' && !!pushSubscribed;
     const authed = typeof currentUser !== 'undefined' && !!currentUser;
-    return row('Режим сайта', `<div class="gs-seg">${[['low', '🐢 Слабое'], ['high', '🚀 Мощное']].map(([v, t]) => `<button type="button" class="${perf === v ? 'on' : ''}" aria-pressed="${perf === v}" data-site="perf:${v}">${t}</button>`).join('')}</div>`,
-        'Анимации, частицы и эффекты сайта. «Слабое» — быстрее на старых телефонах. Графика 3D — во вкладке «🎨 Графика».')
-      + (hasPush ? row('Уведомления', `<button type="button" class="gs-btn${pushOn ? '' : ' primary'}" data-site="push">${pushOn ? '✅ Включены — выключить' : '🔔 Включить'}</button>`, 'О новом видео и начале стрима — даже когда сайт закрыт.') : '')
+    return perfRow()
+      + (hasPush ? row('Уведомления', `<button type="button" class="gs-btn${pushOn ? '' : ' primary'}" data-site="push">${pushOn ? '✅ Включены — выключить' : '🔔 Включить'}</button>`, 'О новом видео и начале стрима — даже когда сайт закрыт.', { words: 'push пуш оповещения' }) : '')
       + row('Профиль и приватность', authed ? '<button type="button" class="gs-btn" data-site="profile">👤 Открыть</button>' : '<button type="button" class="gs-btn primary" data-site="login">🔑 Войти</button>',
-        authed ? 'Кто видит профиль, заявки в друзья, невидимка, логин для доната.' : 'Войди — и появятся настройки профиля.')
+        authed ? 'Кто видит профиль, заявки в друзья, невидимка.' : 'Войди — и появятся настройки профиля.', { words: 'аккаунт друзья невидимка донат' })
       // «🎂 Возраст»: год рождения (видит только сам) — Изменить / Удалить (js/core/age.js; кнопки ловит он же)
       + (root.D37Age?.settingsRow ? root.D37Age.settingsRow() : '')
       // «📲 Приложение»: установить / счётчик на значке (js/features/app.js; кнопки ловит он же)
@@ -338,13 +487,13 @@
       html += `<div class="gs-keyg"><div class="gs-keyh">${esc(g)}</div>`;
       for (const a of acts) {
         const cap = s => capture && capture.id === a.id && capture.slot === s;
-        const k = s => { const code = a.keys[s]; return `<button type="button" class="gs-key${cap(s) ? ' cap' : ''}${code && bad.has(a.id + '|' + code) ? ' bad' : ''}" data-key="${a.id}:${s}"${a.locked ? ' disabled' : ''} title="${a.locked ? 'Эту клавишу поменять нельзя' : 'Нажми и затем нужную клавишу'}">${cap(s) ? 'Нажми клавишу…' : esc(C.keyName(code))}</button>`; };
+        const k = s => { const code = a.keys[s]; return `<button type="button" class="gs-key${cap(s) ? ' cap' : ''}${code && bad.has(a.id + '|' + code) ? ' bad' : ''}" data-key="${a.id}:${s}"${a.locked ? ' disabled' : ''} title="${a.locked ? 'Эту клавишу поменять нельзя' : 'Нажми и затем нужную клавишу'}" aria-label="${esc(a.title)}: ${s ? 'вторая' : 'первая'} клавиша">${cap(s) ? 'Нажми клавишу…' : esc(C.keyName(code))}</button>`; };
         const def = a.keys[0] === (a.def[0] || '') && a.keys[1] === (a.def[1] || '');
-        html += `<div class="gs-krow"><span>${esc(a.title)}</span>${k(0)}${k(1)}<button type="button" class="gs-kreset" data-keyreset="${a.id}" title="Как было" aria-label="Как было"${a.locked || def ? ' disabled' : ''}>↺</button></div>`;
+        html += `<div class="gs-krow" data-words="клавиша кнопка ${esc(g)}"><span>${esc(a.title)}</span>${k(0)}${k(1)}<button type="button" class="gs-kreset" data-keyreset="${a.id}" title="Как было" aria-label="${esc(a.title)}: как было"${a.locked || def ? ' disabled' : ''}>↺</button></div>`;
       }
       html += '</div>';
     }
-    return html + `<div class="gs-row"><div class="gs-lbl"><small>Нажми на клавишу и потом новую. Esc — отмена, Backspace — убрать. Работает в «Мире Денчика» и «Студии 3D».</small></div><div class="gs-ctl"><button type="button" class="gs-btn" data-keysall="1">↺ Все клавиши как были</button></div></div>`;
+    return html + row('', '<button type="button" class="gs-btn" data-keysall="1">↺ Все клавиши как были</button>', 'Нажми на клавишу и потом новую. Esc — отмена, Backspace — убрать. Работает в 3D-мирах.', { words: 'клавиши сбросить по умолчанию' });
   }
   function startCapture(id, slot){
     stopCapture();
@@ -383,8 +532,38 @@
       finishCapture(e.code === 'Escape' ? null : e.code === 'Backspace' || e.code === 'Delete' ? '' : e.code);
       return;
     }
-    // Esc закрывает окно — и только его (дальше по окну клавишу не пускаем: ни меню игры, ни выход из полного экрана)
-    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation?.(); close(); }
+    // Esc закрывает окно — и только его (дальше по окну клавишу не пускаем: ни меню игры, ни выход из полного экрана);
+    // идёт поиск — сначала очищает поиск
+    if (e.key === 'Escape') {
+      e.preventDefault(); e.stopImmediatePropagation?.();
+      const f = win.querySelector('.gs-set-find');
+      if (f && (f.value || query)) { f.value = ''; setQuery(''); f.focus({ preventScroll: true }); return; }
+      close();
+    }
+  }
+  // стрелки по вкладкам (как у обычных вкладок): ↑↓ — столбиком (компьютер), ←→ — строкой (телефон); Enter в поиске — к первой найденной
+  function onWinKey(e){
+    const t = e.target;
+    if (t?.classList?.contains('gs-set-find')) {
+      if (e.key === 'Enter' || e.key === 'ArrowDown') { const f = focusables(win.querySelector('.gs-set-body'))[0]; if (f) { e.preventDefault(); f.focus({ preventScroll: true }); f.scrollIntoView?.({ block: 'nearest' }); } }
+      return;
+    }
+    if (!t?.closest?.('.gs-set-tabs') || !t.dataset?.tab) return;
+    const horiz = getComputedStyle(t.parentElement).flexDirection.startsWith('row');
+    const d = { ArrowDown: horiz ? 0 : 1, ArrowUp: horiz ? 0 : -1, ArrowRight: horiz ? 1 : 0, ArrowLeft: horiz ? -1 : 0 }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    stepTab(d, true);
+  }
+  function stepTab(d, focus){
+    if (!win) return;
+    const list = tabsFor(); if (!list.length) return;
+    if (query) { const f = win.querySelector('.gs-set-find'); if (f) f.value = ''; query = ''; qWords = []; }
+    const i = Math.max(0, list.findIndex(t => t.id === cur)), j = (i + d + list.length) % list.length;
+    stopCapture(); keyNote = ''; cur = list[j].id;
+    win.querySelector('.gs-set-body').scrollTop = 0;
+    renderAll();
+    if (focus) win.querySelector(`.gs-set-tabs [data-tab="${cur}"]`)?.focus({ preventScroll: true });
   }
   function hook(k, v){
     try {
@@ -398,6 +577,19 @@
     const d = t.dataset;
     if (d.gs === 'close') { close(); return; }
     if (d.gs === 'reset') {
+      const tab = TABS.find(x => x.id === cur);
+      // «↺ Сбросить «Вкладку»» — только её значения (и её reset)
+      if (d.scope === 'tab' && tab) {
+        if (root.confirm && !root.confirm(`Вернуть настройки вкладки «${tab.title}» как было?`)) return;
+        const was = { gfx: get('gfx'), world2d: get('world2d'), view: get('view') }, keys = tabKeys(tab);
+        stopCapture();
+        if (keys.length) resetKeys(keys, { ui: true });
+        try { tab.reset?.(API); } catch (er) { console.error(er); }
+        keyNote = keys.includes('keys') ? '✅ Клавиши как было' : '';
+        for (const k of Object.keys(was)) if (was[k] !== get(k)) hook(k, get(k));
+        renderBody();
+        return;
+      }
       if (!root.confirm || root.confirm('Вернуть все настройки как было? (графика, звук, клавиши, камера, интерфейс)')) {
         const was = { gfx: get('gfx'), world2d: get('world2d'), view: get('view') };
         reset(); keyNote = '';
@@ -406,7 +598,17 @@
       }
       return;
     }
-    if (d.tab) { if (d.tab !== cur) { stopCapture(); keyNote = ''; cur = d.tab; renderAll(); } return; }
+    if (d.tab) {
+      if (query || d.tab !== cur) {
+        const fromSearch = !!query;
+        if (query) { const f = win.querySelector('.gs-set-find'); if (f) f.value = ''; query = ''; qWords = []; }
+        stopCapture(); keyNote = ''; cur = d.tab;
+        if (fromSearch) win.querySelector('.gs-set-body').scrollTop = 0;
+        renderAll();
+        if (fromSearch) win.querySelector(`.gs-set-tabs [data-tab="${cur}"]`)?.focus({ preventScroll: true });
+      }
+      return;
+    }
     if (d.set) { const k = d.set, v = d.v; if (get(k) === v) { if (k === 'view') hook(k, v); return; } set(k, v, { ui: true }); hook(k, v); renderBody(); return; }   // вид — и при том же значении (в игре могли нажать V)
     if (d.key) { const [id, s] = d.key.split(':'); if (capture && capture.id === id && capture.slot === +s) { stopCapture(); renderBody(); } else startCapture(id, s); return; }
     if (d.keyreset) { const C = ctl(); if (C) { C.reset(d.keyreset); keyNote = ''; keysChanged(); } return; }
@@ -420,10 +622,12 @@
     }
   }
   function onInput(e){
-    const t = e.target; if (!t.dataset?.range) return;
+    const t = e.target;
+    if (t?.classList?.contains('gs-set-find')) { setQuery(t.value); return; }
+    if (!t.dataset?.range) return;
     const k = t.dataset.range, v = +t.value / (+t.dataset.mul || 1);
     set(k, v, { ui: true });
-    const out = win.querySelector(`[data-out="${k}"]`); if (out) out.innerHTML = FMT[k] ? FMT[k](get(k)) : String(get(k));
+    for (const out of win.querySelectorAll(`[data-out="${k}"]`)) out.innerHTML = FMT[k] ? FMT[k](get(k)) : String(get(k));
     // громкость — сразу слышно
     if (/^vol/.test(k) && k !== 'volVoice' && Date.now() - sfxAt > 160) { sfxAt = Date.now(); if (typeof gameSfx === 'function') gameSfx('tick'); }
   }
@@ -434,27 +638,149 @@
     renderBody();
   }
 
-  // ═══ Меню паузы для игр (у «Мира Денчика» — Esc) ═══
+  // ═══ Меню паузы для игр (одно на игру: ☰ на экране, Esc, Start геймпада) ═══
+  const MENUS = [];   // открытые меню (последнее — сверху)
+  const topMenu = () => { for (let i = MENUS.length - 1; i >= 0; i--) { if (MENUS[i].el.isConnected) return MENUS[i]; MENUS.splice(i, 1); } return null; };
   function menu(parent, o = {}){
     const el = doc.createElement('div'); el.className = 'gs-menu'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', o.title || 'Меню');
     const items = () => typeof o.items === 'function' ? o.items() : o.items || [];
     const draw = () => {
+      const f = doc.activeElement && el.contains(doc.activeElement) ? doc.activeElement.getAttribute('data-mi') : null;   // фокус — на тот же пункт
       el.innerHTML = `<div class="gs-menu-box"><div class="gs-menu-head"><b>${o.title || 'Меню'}</b>${o.sub ? `<small>${o.sub}</small>` : ''}</div>${items().map(it =>
         `<button type="button" class="gs-menu-it${it.primary ? ' primary' : ''}${it.warn ? ' warn' : ''}" data-mi="${esc(it.id)}"><span class="gs-mi-ic" aria-hidden="true">${it.icon || ''}</span>${it.text}</button>`).join('')}</div>`;
+      if (f) el.querySelector(`[data-mi="${qa(f)}"]`)?.focus({ preventScroll: true });
     };
     draw();
     // мир под меню не крутится и не захватывает мышь
     for (const ev of ['pointerdown', 'pointerup', 'pointermove', 'contextmenu']) el.addEventListener(ev, e => e.stopPropagation());
     el.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
+    // ↑↓ / Home / End — по пунктам (Tab и Enter работают и так)
+    el.addEventListener('keydown', e => {
+      const k = e.key; if (k !== 'ArrowUp' && k !== 'ArrowDown' && k !== 'Home' && k !== 'End') return;
+      const all = [...el.querySelectorAll('.gs-menu-it')]; if (!all.length) return;
+      const i = all.indexOf(doc.activeElement);
+      const j = k === 'Home' ? 0 : k === 'End' ? all.length - 1 : i < 0 ? 0 : (i + (k === 'ArrowDown' ? 1 : -1) + all.length) % all.length;
+      e.preventDefault(); all[j].focus({ preventScroll: true });
+    });
+    let offFs = null;
+    const rec = { el, h: null };
     const h = {
       el,
-      close(){ if (!el.isConnected) return; el.remove(); try { o.onClose?.(); } catch (e) { console.error(e); } },
+      close(){ if (!el.isConnected) return; el.remove(); offFs?.(); offFs = null; const i = MENUS.indexOf(rec); if (i >= 0) MENUS.splice(i, 1); try { o.onClose?.(); } catch (e) { console.error(e); } },
       redraw: draw,
     };
-    el.addEventListener('click', e => { const b = e.target.closest('[data-mi]'); if (b) o.onPick?.(b.dataset.mi, b); else if (e.target === el) h.close(); });
+    rec.h = h;
+    el.addEventListener('click', e => { el.querySelector('.gs-menu-box')?.classList.remove('gs-pad'); const b = e.target.closest('[data-mi]'); if (b) o.onPick?.(b.dataset.mi, b); else if (e.target === el) h.close(); });
     parent.appendChild(el);
     el.querySelector('.gs-menu-it')?.focus({ preventScroll: true });
+    // полный экран включили/выключили (Esc браузера, кнопка, поворот) — пункт «⛶» показывает правду
+    offFs = root.D37Full?.on?.(() => { if (el.isConnected) draw(); else { offFs?.(); offFs = null; } }) || null;
+    MENUS.push(rec);
+    padWake();
     return h;
+  }
+  // Пункты про экран — одинаковые во всех играх: «⛶ Во весь экран» / «Обычный экран» и на телефоне стоя «🔄 Повернуть экран»
+  function fsItems(el){
+    const F = root.D37Full; if (!F || !el) return [];
+    const on = !!F.contains?.(el);
+    const out = [{ id: 'full', icon: F.icon?.(on) || '⛶', text: on ? 'Обычный экран' : 'Во весь экран' }];
+    if (F.isTouch?.() && !F.isLandscape?.()) out.push({ id: 'rot', icon: '🔄', text: 'Повернуть экран' });
+    return out;
+  }
+  // → true, если это был пункт экрана (сделано): ⛶ — меню остаётся (подпись меняется сама), 🔄 — меню закрывается (играть лёжа)
+  function fsPick(id, el, m, o = {}){
+    const F = root.D37Full; if (!F || !el || (id !== 'full' && id !== 'rot')) return false;
+    const opt = Object.assign({ esc: false }, o);
+    if (id === 'full') { F.toggle(el, opt); setTimeout(() => { if (m?.el?.isConnected) m.redraw(); }, 80); }
+    else { F.rotate(el, opt); m?.close?.(); }
+    return true;
+  }
+
+  // ═══ Геймпад в меню и окне: ↑↓ (крестовина, левый стик) — по строкам, ←→ — ползунок / соседняя кнопка, Ⓐ — нажать
+  //     (при отпускании), Ⓑ — назад (как Esc), LB/RB — вкладки окна. Опрос — только пока открыто меню или окно и есть геймпад ═══
+  const NAV = { raf: 0, prev: null, dir: '', next: 0 };
+  const FOC = 'button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+  const shown = e => !!(e.offsetWidth || e.offsetHeight || e.getClientRects?.().length) && !e.closest('[hidden]');
+  const focusables = box => box ? [...box.querySelectorAll(FOC)].filter(shown) : [];
+  function layer(){
+    if (win) return { box: win.querySelector('.gs-set-box'), back: () => { const f = win.querySelector('.gs-set-find'); if (f && (f.value || query)) { f.value = ''; setQuery(''); } else close(); }, tabs: true };
+    const m = topMenu();
+    return m ? { box: m.el.querySelector('.gs-menu-box'), back: () => m.h.close() } : null;
+  }
+  function padRead(){ try { const ps = root.navigator?.getGamepads?.(); if (ps) for (const p of ps) if (p && p.connected) return p; } catch (e) {} return null; }
+  function padWake(){
+    if (NAV.raf || !root.requestAnimationFrame || !layer() || !padRead()) return;
+    NAV.prev = null;   // первый опрос — только запомнить (Start, которым открыли меню, — не нажатие)
+    NAV.raf = root.requestAnimationFrame(padTick);
+  }
+  root.addEventListener?.('gamepadconnected', () => padWake());
+  function focusEl(el){
+    if (!el) return;
+    // в группе вариантов — сразу на выбранный (а не на крайний)
+    const g = el.closest('.gs-seg'), on = g && g.querySelector('button.on:not([disabled])');
+    const t = on && shown(on) ? on : el;
+    try { t.focus({ preventScroll: true }); } catch (e) {}
+    t.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }
+  // d = ±1; skip — группа, которую перескакиваем целиком (варианты, клавиши); within — двигаться только внутри
+  function moveFocus(box, d, o = {}){
+    const all = focusables(o.within || box); if (!all.length) return;
+    const a = doc.activeElement; const i = all.indexOf(a);
+    if (i < 0) { focusEl(all[d > 0 ? 0 : all.length - 1]); return; }
+    const grp = o.skip ? a.closest(o.skip) : null;
+    let j = i;
+    do j += d; while (grp && j >= 0 && j < all.length && grp.contains(all[j]));
+    if (j < 0 || j >= all.length) { if (o.within) return; j = d > 0 ? 0 : all.length - 1; }
+    if (o.within) { try { all[j].focus({ preventScroll: true }); } catch (e) {} all[j].scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); }
+    else focusEl(all[j]);
+  }
+  function stepRange(el, d){
+    const st = +el.step || 1, v = Math.min(+el.max, Math.max(+el.min, +el.value + d * st));
+    if (v === +el.value) return;
+    el.value = String(v);
+    el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function padDir(L, dir){
+    L.box.classList.add('gs-pad');
+    const a = doc.activeElement, inBox = !!(a && L.box.contains(a));
+    const rowTabs = a?.closest?.('.gs-set-tabs') && getComputedStyle(a.parentElement).flexDirection.startsWith('row');
+    if (dir === 'left' || dir === 'right') {
+      if (!inBox) return;
+      const d = dir === 'right' ? 1 : -1;
+      if (a.matches('input[type="range"]')) { stepRange(a, d); return; }
+      const grp = a.closest('.gs-seg, .gs-krow, .gs-vol') || (rowTabs ? a.closest('.gs-set-tabs') : null);
+      if (grp) { moveFocus(L.box, d, { within: grp }); return; }
+      if (a.closest('.gs-set-tabs') && d > 0) { const f = focusables(L.box.querySelector('.gs-set-body'))[0]; if (f) focusEl(f); }
+      return;
+    }
+    moveFocus(L.box, dir === 'down' ? 1 : -1, { skip: rowTabs ? '.gs-set-tabs' : '.gs-seg, .gs-krow' });
+  }
+  function padPress(L){
+    const a = doc.activeElement;
+    L.box.classList.add('gs-pad');
+    if (!a || !L.box.contains(a)) { moveFocus(L.box, 1); return; }
+    if (a.matches('input[type="range"], input[type="search"]')) return;
+    a.click();
+  }
+  function padTick(t){
+    NAV.raf = 0;
+    const L = layer(), gp = L && padRead();
+    if (!L || !gp) { NAV.prev = null; NAV.dir = ''; return; }
+    const B = i => { const x = gp.buttons[i]; return !!x && (x.pressed || x.value > .5); };
+    const ay = gp.axes[1] || 0, ax = gp.axes[0] || 0;
+    const c = { up: B(12) || ay < -.6, down: B(13) || ay > .6, left: B(14) || ax < -.6, right: B(15) || ax > .6, a: B(0), b: B(1), lb: B(4), rb: B(5) };
+    const P = NAV.prev; NAV.prev = c;
+    if (P) {
+      // направление — сразу; держишь — через 0,4 с повтор каждые 0,11 с
+      const dir = c.up ? 'up' : c.down ? 'down' : c.left ? 'left' : c.right ? 'right' : '';
+      if (dir && (dir !== NAV.dir || t >= NAV.next)) { NAV.next = t + (dir !== NAV.dir ? 400 : 110); padDir(L, dir); }
+      NAV.dir = dir;
+      // Ⓐ и Ⓑ — при отпускании: «Продолжить» закрыл меню, а игра под ним кнопку уже не видит нажатой (без прыжка)
+      if (P.a && !c.a) padPress(L);
+      else if (P.b && !c.b) L.back();
+      else if (L.tabs && ((c.lb && !P.lb) || (c.rb && !P.rb))) { stepTab(c.rb && !P.rb ? 1 : -1, true); win?.querySelector('.gs-set-box')?.classList.add('gs-pad'); }
+    }
+    if (layer()) NAV.raf = root.requestAnimationFrame(padTick); else { NAV.prev = null; NAV.dir = ''; }
   }
 
   // ═══ «⚙️ Настройки» в меню сайта (Ещё ▾ / ☰) ═══
@@ -482,7 +808,7 @@
   }
 
   const API = root.D37Settings = {
-    get, set, reset, open, close, isOpen: () => !!win, context, menu,
+    get, set, reset, resetKeys, open, close, isOpen: () => !!win, context, menu, fsItems, fsPick, addMain,
     on(f){ subs.add(f); return () => subs.delete(f); },
     define(k, spec){ if (!SCHEMA[k] && spec && 'def' in spec) SCHEMA[k] = spec; return API; },
     addTab(t){
@@ -497,6 +823,8 @@
     sfxGain(){ const O = root.D37Opt; return !O ? 1 : O.mute ? 0 : O.vol * O.volFx; },
     keysChanged,
     get schema(){ return SCHEMA; },
-    _test: { LEG, clean, migrate, data: () => data, apply, tabsFor: c => { const o = cx; cx = c; const r = tabsFor().map(t => t.id); cx = o; return r; } },
+    _test: { LEG, clean, migrate, data: () => data, apply, tabsFor: c => { const o = cx; cx = c; const r = tabsFor().map(t => t.id); cx = o; return r; },
+      tabKeys: id => tabKeys(TABS.find(t => t.id === id)), norm, matchText, mainFor: c => { const o = cx; cx = c; const r = MAIN.filter(m => (!m.ctx || m.ctx.includes(c)) && (!m.when || m.when(c))).sort((a, b) => a.order - b.order).map(m => m.id); cx = o; return r; },
+      menus: () => MENUS.length, nav: () => ({ raf: !!NAV.raf }) },
   };
 })();

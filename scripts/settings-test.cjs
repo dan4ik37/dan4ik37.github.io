@@ -3,7 +3,8 @@
 // d37_games_mute, d37_cam_*, d37_world_2d) и зеркало для движка, «на живую» (window.D37Opt, события, CSS-переменные),
 // вкладки по месту (мир / игра / сайт), свои вкладки и значения; js/engine/controls.js — клавиши и конфликты, живые
 // управления перечитывают клавиши; js/core/fullscreen.js — вход/выход, «как полный экран» (API нет или отказал), Esc,
-// «Назад», браузер вышел сам, телефон лёжа (сам во весь экран и обратно), 🔄 поворот, смена элемента, gs-noesc.
+// «Назад», браузер вышел сам, телефон лёжа (сам во весь экран и обратно), 🔄 поворот, смена элемента, gs-noesc;
+// T-043: «⭐ Главное» по месту, поиск (слова, ё, окончания), «↺ Сбросить» вкладки, пункты меню «⛶ / 🔄» (fsItems / fsPick), меню без хвостов.
 // Запуск из корня сайта: node scripts/settings-test.cjs
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const SITE = process.argv[2] || path.join(__dirname, '..');
@@ -192,16 +193,53 @@ const ST = globalThis.D37Settings;
 // ═══ Вкладки по месту, свои вкладки и значения ═══
 {
   const t = ST._test.tabsFor;
-  ok(t('engine').join() === 'gfx,sound,controls,camera,ui,site', 'в 3D-мире — все вкладки', t('engine'));
-  ok(t('game').join() === 'sound,ui,site', 'в обычной игре — звук, интерфейс, сайт', t('game'));
-  ok(t('site').length === 6, 'из меню сайта — все вкладки');
+  ok(t('engine').join() === 'main,gfx,sound,controls,camera,ui,site', 'в 3D-мире — «⭐ Главное» первой, потом все вкладки', t('engine'));
+  ok(t('game').join() === 'main,sound,ui,site', 'в обычной игре — главное, звук, интерфейс, сайт', t('game'));
+  ok(t('site').length === 7 && t('site')[0] === 'main', 'из меню сайта — все вкладки, первая — «Главное»');
   ST.addTab({ id: 'phone', icon: '📱', title: 'Телефон', order: 60, ctx: ['game', 'site'], render: () => '' });
-  ok(t('game').join() === 'sound,ui,phone,site' && !t('engine').includes('phone'), 'своя вкладка — по порядку и по месту', t('game'));
+  ok(t('game').join() === 'main,sound,ui,phone,site' && !t('engine').includes('phone'), 'своя вкладка — по порядку и по месту', t('game'));
   ST.addTab({ id: 'bad' }); ok(!t('site').includes('bad'), 'вкладка без render не добавляется');
   ST.define('ringVol', { def: 80, min: 0, max: 100 });
   ok(ST.get('ringVol') === 80, 'своё значение — по умолчанию');
   ST.set('ringVol', 150); ok(ST.get('ringVol') === 100, 'своё значение — проверяется по описанию');
   ST.define('gfx', { def: 'x', list: ['x'] }); ok(ST.get('gfx') === 'auto', 'define не перезаписывает встроенное');
+}
+
+// ═══ T-043: «⭐ Главное», поиск, «↺ Сбросить» вкладки ═══
+{
+  const T = ST._test;
+  // «Главное»: самое нужное по месту (качество и шейдеры добавляет gfx-settings.js — здесь его нет)
+  ok(T.mainFor('engine').join() === 'sens,vol,view', '«Главное» в 3D-мире: чувствительность, громкость, вид', T.mainFor('engine'));
+  ok(T.mainFor('game').join() === 'vol,ui', '«Главное» в обычной игре: громкость, размер кнопок (3D-настроек нет)', T.mainFor('game'));
+  ok(T.mainFor('site').join() === 'sens,vol,view,perf', '«Главное» из меню сайта: + режим сайта', T.mainFor('site'));
+  ST.addMain({ id: 'x1', order: 5, ctx: ['engine'], html: () => '<div class="gs-row">x</div>' });
+  ok(T.mainFor('engine')[0] === 'x1' && !T.mainFor('game').includes('x1'), 'addMain — своя строка по порядку и по месту');
+  ST.addMain({ id: 'x2', order: 99, when: c => c === 'site', html: () => '' });
+  ok(T.mainFor('site').includes('x2') && !T.mainFor('engine').includes('x2'), 'addMain: when(cx) — показывать ли сейчас');
+  ok(ST.addMain({ id: 'bad' }) === ST && !T.mainFor('site').includes('bad'), 'addMain без html — не добавляется');
+  // поиск: все слова, «ё» = «е», окончания не важны (до 2 букв, слово не короче 3)
+  const tx = T.norm('Тени — выключи, если 3D тормозит. Громкость звуков, ёлка «Шейдеры»');
+  ok(T.matchText(tx, ['тени']) && T.matchText(tx, ['теней']) && T.matchText(tx, ['громк']) && T.matchText(tx, ['звука']), 'поиск: «теней» → тени, «звука» → звуков, «громк» → громкость');
+  ok(T.matchText(tx, ['елка']) && T.matchText(tx, ['шейдеры', 'тормозит']), 'поиск: ё = е, несколько слов — все');
+  ok(!T.matchText(tx, ['тени', 'клавиши']) && !T.matchText(tx, ['zzz']) && !T.matchText(tx, ['тк']), 'поиск: нет слова — не найдено (короткое не обрезаем)');
+  ok(!T.matchText(T.norm('Имена игроков. Гроза и град'), ['громк']) && T.matchText(T.norm('Кнопки на экране'), ['кнопок']) && T.matchText(T.norm('Тени'), ['тень']), 'поиск: «громк» не находит «игроков» и «гроза»; «кнопок» → Кнопки, «тень» → Тени');
+  ok(T.matchText(T.norm('Счётчик кадров (FPS)'), ['fps']) && !T.matchText(T.norm('техник'), ['ник']), 'поиск: короткое слово — с начала слова (fps да, «ник» в «техник» — нет)');
+  ok(T.norm('«Сбросить»: всё!') === ' сбросить  все ', 'поиск: кавычки и знаки — пробелы', T.norm('«Сбросить»: всё!'));
+  // сброс вкладки: только её значения, старые ключи-зеркала — тоже, событие «*» со списком
+  ok(T.tabKeys('sound').join() === 'mute,vol,volFx,volAmb,volVoice' && T.tabKeys('camera').includes('fov') && T.tabKeys('controls').includes('keys') && T.tabKeys('site').length === 0, 'у вкладок — свои значения для «↺ Сбросить»');
+  ST.set('mute', true); ST.set('vol', 30); ST.set('volVoice', 40); ST.set('fov', 70); ST.set('sens', 2);
+  const evs = []; const off = ST.on(d => evs.push(d));
+  const done = ST.resetKeys(T.tabKeys('sound'));
+  ok(done.length === 5 && ST.get('mute') === false && ST.get('vol') === 100 && ST.get('volVoice') === 100 && !('d37_games_mute' in store), '«↺ Сбросить «Звук»» — звук как было (и d37_games_mute убран)');
+  ok(ST.get('fov') === 70 && ST.get('sens') === 2 && store.d37_cam_sens === '2', '…а камера и управление — не тронуты');
+  ok(evs.length === 1 && evs[0].key === '*' && evs[0].keys.join() === 'mute,vol,volFx,volAmb,volVoice', 'событие «*» со списком сброшенного (games.js 🔊 ловит «*»)', evs[0]);
+  ok(globalThis.D37Opt.vol === 1 && globalThis.D37Opt.mute === false, 'D37Opt — сразу (движок видит)');
+  ST.set('keys', { jump: ['KeyK', 'Pad0'] }); const kr = globalThis.D37Opt.keysRev;
+  ST.resetKeys(T.tabKeys('controls'));
+  ok(ST.get('sens') === 1 && !('d37_cam_sens' in store) && !('d37_keys' in store) && globalThis.D37Opt.keysRev > kr, '«↺ Сбросить «Управление»» — чувствительность и клавиши (живые управления перечитают)');
+  ST.resetKeys(['fov', 'нет такого']); ok(ST.get('fov') === 50, 'resetKeys: неизвестное — пропускает');
+  const ne = evs.length; ok(ST.resetKeys([]).length === 0 && evs.length === ne, 'пустой список — без события');
+  off();
 }
 
 // ═══ Клавиши: controls.js + окно (конфликты, живые управления перечитывают) ═══
@@ -389,6 +427,50 @@ const ST = globalThis.D37Settings;
   globalThis.history.back(); await tick(10);
   ok(!F.state().el, '«Назад» на старую запись полного экрана — ничего не включает');
   ok(F.contains(stage) === false, 'contains — после выхода нет');
+
+  // 9а. T-043: меню игр — пункты экрана одинаковые (fsItems / fsPick), меню закрывается без хвостов (подписка на полный экран)
+  {
+    coarse = false; setSize(1280, 800);
+    let it = ST.fsItems(stage);
+    ok(it.length === 1 && it[0].id === 'full' && it[0].text === 'Во весь экран' && /<svg/.test(it[0].icon), 'компьютер: «⛶ Во весь экран» (без «Повернуть»)', it.map(x => x.id));
+    coarse = true; setSize(412, 915);
+    it = ST.fsItems(stage);
+    ok(it.map(x => x.id).join() === 'full,rot' && it[1].text === 'Повернуть экран', 'телефон стоя: + «🔄 Повернуть экран»', it.map(x => x.id));
+    setSize(915, 412); F.exit(); await tick(10);
+    ok(ST.fsItems(stage).length === 1, 'телефон лёжа — «Повернуть» не нужен');
+    setSize(412, 915); coarse = false; setSize(1280, 800);
+    ok(ST.fsPick('settings', stage, null) === false && ST.fsPick('full', null, null) === false, 'fsPick: чужой пункт — не его (false)');
+    FS.mode = 'ok';
+    const m = { el: { isConnected: true }, redraws: 0, closes: 0, redraw(){ this.redraws++; }, close(){ this.closes++; } };
+    ok(ST.fsPick('full', stage, m) === true, 'fsPick(«⛶») — сделано');
+    await tick(150);
+    ok(F.state().el === stage && m.redraws === 1 && m.closes === 0, '«⛶»: во весь экран, меню остаётся и перерисовано («Обычный экран»)');
+    ok(ST.fsItems(stage)[0].text === 'Обычный экран', 'пункт — «Обычный экран»');
+    ST.fsPick('full', stage, m); await tick(150);
+    ok(!F.state().el, '«⛶» ещё раз — обычный экран');
+    ORI.can = true;
+    ok(ST.fsPick('rot', stage, m) === true, 'fsPick(«🔄») — сделано');
+    await tick(50);
+    ok(m.closes === 1 && F.state().el === stage, '«🔄»: полный экран и поворот, меню закрыто (играть лёжа)');
+    F.exit(); await tick(10);
+    // меню: открыть / закрыть — в списке открытых и в подписках полного экрана не остаётся
+    const host = new El('div', doc); doc.body.appendChild(host);
+    const n0 = ST._test.menus();
+    let closes = 0;
+    for (let i = 0; i < 20; i++) {
+      const mm = ST.menu(host, { title: 'Т', items: () => [{ id: 'resume', text: 'Продолжить' }, ...ST.fsItems(stage)], onPick: () => {}, onClose: () => closes++ });
+      ok(i || (ST._test.menus() === n0 + 1 && host.children.length === 1), 'меню открыто — одно в списке открытых');
+      mm.close(); mm.close();
+    }
+    ok(ST._test.menus() === n0 && host.children.length === 0 && closes === 20, '20 открытий/закрытий: меню не копятся, onClose — по разу', { menus: ST._test.menus(), kids: host.children.length, closes });
+    // полный экран поменялся — подписок от закрытых меню нет (иначе каждая звала бы draw() у удалённого меню)
+    let draws = 0; const mm2 = ST.menu(host, { title: 'Т', items: () => { draws++; return []; } });
+    const d0 = draws; await F.enter(stage); await tick(5);
+    ok(draws > d0, 'открытое меню перерисовывается при смене полного экрана', { d0, draws });
+    mm2.close(); const d1 = draws; F.exit(); await tick(10);
+    ok(draws === d1, 'закрытое меню — больше не перерисовывается (подписка снята)');
+    host.remove();
+  }
 
   // 9. html кнопки ⛶
   const b1 = F.btn('#gamesStage', { cls: 'x', esc: false, label: 'Во весь экран' });

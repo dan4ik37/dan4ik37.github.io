@@ -451,16 +451,16 @@ body.cel-ban-on .cel-adv{display:none}
     SS.define('wxFx', { def: true, bool: 1 }).define('wxAmt', { def: 100, min: 0, max: 100 }).define('holidays', { def: true, bool: 1 });
     const row = (label, ctl, hint) => `<div class="gs-row"><div class="gs-lbl"><b>${label}</b>${hint ? `<small>${hint}</small>` : ''}</div><div class="gs-ctl">${ctl}</div></div>`;
     const sw = k => `<label class="gs-sw"><input type="checkbox" data-sw="${k}"${SS.get(k) !== false ? ' checked' : ''}><i aria-hidden="true"></i></label>`;
-    SS.addTab({ id: 'weather', icon: '🌦', title: 'Погода', order: 12, ctx: ['engine', 'game', 'site'], render(){
+    SS.addTab({ id: 'weather', icon: '🌦', title: 'Погода', order: 12, ctx: ['engine', 'game', 'site'], keys: ['wxFx', 'wxAmt', 'holidays'], render(){
       const c = C(), cal = c ? c.calendar(Date.now()) : null, X = root.D37E?.climate?.current?.(), st = X ? X.at(0, 0) : null;
       const nx = cal?.next, nxD = nx ? Math.ceil((nx.start - Date.now()) / 86400000) : 0;
       const amt = SS.get('wxAmt');
       return '<div class="gs-sec">Погода в 3D-мирах</div>'
-        + row('Эффекты погоды', sw('wxFx'), 'Дождь, снег, тучи, лужи, снег на крышах, осенняя листва, лёд, гроза. Выкл — всегда ясно, как раньше.')
-        + row('Сколько частиц', `<div class="gs-range"><input type="range" min="0" max="100" step="10" value="${amt}" data-range="wxAmt" data-mul="1" aria-label="Сколько частиц"><output data-out="wxAmt">${amt}%</output></div>`, 'Капли и снежинки вокруг. Меньше — быстрее на слабом телефоне. На «Низкой» графике частиц нет.')
+        + row('Эффекты погоды', sw('wxFx'), 'Дождь, снег, лужи, осенняя листва и гроза в 3D. Выкл — всегда ясно.')
+        + row('Сколько частиц', `<div class="gs-range"><input type="range" min="0" max="100" step="10" value="${amt}" data-range="wxAmt" data-mul="1" aria-label="Сколько частиц"><output data-out="wxAmt">${amt}%</output></div>`, 'Капли и снежинки вокруг; меньше — быстрее на слабом телефоне.')
         + '<div class="gs-sec">Праздники</div>'
-        + row('Салют и поздравления', sw('holidays'), 'Новый год в твою полночь (с отсчётом), Наурыз, Лунный Новый год и другие. Новогоднее задание в декабре остаётся.')
-        + (cal ? `<p class="gs-note">Сейчас в общем мире: ${cal.icon} ${esc(cal.name)}${st ? ` · ${c.STATE_ICONS[st.state] || ''} ${esc(c.STATE_NAMES[st.state] || '')}, ${Math.round(st.temp)}°` : ''}. Времена года быстрые, как в Симс: около недели каждое; декабрь и январь — зима, ноябрь — осень.${nx ? ` Ближайший праздник: ${nx.h.icon} ${esc(nx.h.name)}${nxD > 0 ? ` — через ${nxD} дн.` : ''}` : ''}</p>` : '')
+        + row('Салют и поздравления', sw('holidays'), 'Салют в Новый год (в твою полночь), Наурыз и другие праздники.')
+        + (cal ? `<p class="gs-note">Сейчас в общем мире: ${cal.icon} ${esc(cal.name)}${st ? ` · ${c.STATE_ICONS[st.state] || ''} ${esc(c.STATE_NAMES[st.state] || '')}, ${Math.round(st.temp)}°` : ''}. Времена года — примерно по 39 дней; декабрь–февраль — зима.${nx ? ` Ближайший праздник: ${nx.h.icon} ${esc(nx.h.name)}${nxD > 0 ? ` — через ${nxD} дн.` : ''}` : ''}</p>` : '')
         + '<p class="gs-note"><button type="button" class="gs-btn" data-celtest="1">🎆 Показать салют</button></p>';
     } });
     doc?.addEventListener?.('click', e => { const b = e.target?.closest?.('[data-celtest]'); if (!b) return; e.preventDefault(); style(); fireworks(8, 'fireworks', true); confetti(80); });

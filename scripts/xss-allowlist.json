@@ -852,6 +852,36 @@
   },
   {
    "f": "js/core/settings.js",
+   "fn": "renderSearch",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "поиск: вкладки регистрирует код сайта (id, значок — константы)",
+   "xs": [
+    "t.id"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "renderSearch",
+   "k": "markup:text",
+   "c": "const",
+   "n": "поиск: вкладки регистрирует код сайта (id, значок — константы)",
+   "xs": [
+    "t.icon"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
+   "fn": "renderSearch",
+   "k": "sink:innerHTML",
+   "c": "html-helper",
+   "n": "поиск рисует те же t.render() вкладок, что renderBody: html из констант, чисел и esc()",
+   "xs": [
+    "html"
+   ]
+  },
+  {
+   "f": "js/core/settings.js",
    "fn": "row",
    "k": "markup:text",
    "c": "const",
@@ -5446,6 +5476,26 @@
   {
    "f": "js/games/podzem-ui.js",
    "fn": "pauseOpen",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "пункты паузы: константы игры + D37Settings.fsItems (full / rot)",
+   "xs": [
+    "it.id"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "pauseOpen",
+   "k": "markup:text",
+   "c": "const",
+   "n": "пункты паузы: константы игры + D37Settings.fsItems (значок SVG полного экрана, 🔄)",
+   "xs": [
+    "it.icon"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "pauseOpen",
    "k": "markup:text",
    "c": "esc-up",
    "n": "aria-label — esc(nameOf()); sub — esc(имя мира) внутри; newWorldHtml — esc() на именах модов",
@@ -5483,6 +5533,27 @@
    "n": "числа стопок, рецептов, здоровья",
    "xs": [
     "s.n > 1 ? ' ×' + s.n : ''"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "startMenu",
+   "k": "markup:attr",
+   "c": "const",
+   "n": "стартовый экран: пункты экрана D37Settings.fsItems (full / rot) — константы",
+   "xs": [
+    "it.id"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "startMenu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "стартовый экран: пункты экрана D37Settings.fsItems — константы",
+   "xs": [
+    "it.id === 'rot' ? it.icon + ' ' : ''",
+    "it.text"
    ]
   },
   {
