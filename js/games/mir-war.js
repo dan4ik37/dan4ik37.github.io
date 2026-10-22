@@ -495,6 +495,23 @@
       if (!S.I?.touch || !S.H) return;
       S.H.buttons(on ? [{ action: 'crouch', icon: '⬇', label: 'присесть' }, { action: 'interact', icon: '✋', label: 'действие' }, { id: 'wnext', icon: '🔄', label: 'оружие', toggle: () => { setSlot((W.slot + 1) % SLOTS.length); return false; } }, { action: 'attack', icon: '👊', label: 'огонь', big: true }, { action: 'jump', icon: '⤒', label: 'прыжок', big: true }] : BASE_BTNS);
     }
+    // Панель оружия — не под кнопками телефона: кнопки по ширине заходят под неё (телефон стоя, планшет) — панель и жизни над
+    // кнопками (высота кнопок — меряем: размер кнопок в ⚙️, левша, их число). Раньше на телефоне её ячейки закрывали кнопки и очки
+    function layoutHud(){
+      if (hud.hidden) return;
+      const eb = S.wrap.querySelector('.e-btns'), wp = hq('.mz-wpn');
+      let up = false, mzb = 0;
+      if (eb && wp) {
+        const W0 = S.wrap.getBoundingClientRect(), half = wp.offsetWidth / 2 + 6, cx = W0.left + W0.width / 2;
+        let top = Infinity, l = Infinity, r = -Infinity;
+        for (const b of eb.children) { if (b.hidden) continue; const q = b.getBoundingClientRect(); if (!q.width) continue; top = Math.min(top, q.top); l = Math.min(l, q.left); r = Math.max(r, q.right); }
+        up = top < Infinity && l < cx + half && r > cx - half;
+        mzb = up ? Math.round(W0.bottom - top + 10) : 0;
+      }
+      if (hud.classList.contains('mz-up') !== up) hud.classList.toggle('mz-up', up);
+      if (up && hud._mzb !== mzb) { hud._mzb = mzb; hud.style.setProperty('--mzb', mzb + 'px'); }
+    }
+    const onResize = () => { if (W.inZone) requestAnimationFrame(layoutHud); };
     // ── вход и выход из зоны ──
     function enter(){
       W.inZone = true;
@@ -506,6 +523,7 @@
       rt.setZX({ h: 10, w: SLOTS[W.slot] });
       hud.hidden = false; drawHud(); drawScore();
       touchButtons(true);
+      requestAnimationFrame(layoutHud); root.addEventListener('resize', onResize);
       S.H?.crosshair?.(false);
       toast('⚔️ Ты в Боевой зоне: здесь можно сражаться. F (или 👊) — огонь, 1–5 — оружие, за воротами бой закончится', true);
     }
@@ -513,6 +531,7 @@
       W.inZone = false;
       hud.hidden = true;
       touchButtons(false);
+      root.removeEventListener('resize', onResize);
       for (const m of [...W.mercs]) dropMerc(m);
       rt.setZX({ r: W.prevRole && rt.ROLES[W.prevRole] ? W.prevRole : null, t: null, h: null, w: null, m: null, a: null });
       W.prevRole = null;
@@ -961,7 +980,7 @@
       }
     }
     // ── шаг ──
-    let netT = 0, scoreT = 0;
+    let netT = 0, scoreT = 0, layT = 0, crossEl = null;
     const mod = {
       update(dt){
         const ch = S.P.ch, inside = MZ.inRect(WZ, ch.x, ch.z, -1) && MZ.gateOf(WZ).ok;
@@ -979,6 +998,7 @@
           netT -= dt;
           if (netT <= 0 && (W.out.f.length || W.out.h.length)) { netT = .25; csend({ t: 'c', f: W.out.f.splice(0, 6), h: W.out.h.splice(0, 8) }); W.out.f.length = 0; }
           scoreT -= dt; if (scoreT <= 0) { scoreT = 1; drawScore(); }
+          layT -= dt; if (layT <= 0) { layT = 2; layoutHud(); }   // кнопки телефона могли поменяться (размер в ⚙️, полный экран)
         } else if (W.robots.length) robotTick(dt);
         remoteMercs(dt);
         stepShots(dt);
@@ -986,12 +1006,13 @@
       frame(dt, t){
         const cam = R.camera.position;
         rob?.frame(dt, t, cam); mercN?.frame(dt, t, cam); remM?.frame(dt, t, cam);
-        for (const A0 of [mercN?.A, remM?.A]) if (A0) for (const a of A0.list.values()) rt.dress(a, ROLES_W.ffa);
+        if (mercN?.A) for (const a of mercN.A.list.values()) rt.dress(a, ROLES_W.ffa);
+        if (remM?.A) for (const a of remM.A.list.values()) rt.dress(a, ROLES_W.ffa);
         let n = 0;
         for (const s of shots) { const WP = WEAPONS[s.w]; mx.makeScale(WP.size, WP.size, WP.size); mx.setPosition(s.x, s.y, s.z); pMesh.setMatrixAt(n, mx); col.set(WP.color); pMesh.setColorAt(n, col); n++; }
         pMesh.count = n; pMesh.instanceMatrix.needsUpdate = true; if (pMesh.instanceColor) pMesh.instanceColor.needsUpdate = true;
         drawBars(); drawBubbles();
-        hq('.mz-cross').hidden = !W.inZone || W.down;
+        const cx0 = crossEl || (crossEl = hq('.mz-cross')), hide = !W.inZone || !!W.down; if (cx0.hidden !== hide) cx0.hidden = hide;
       },
       remote(p, z, was){ if (was?.h > 0 && z?.h === 0 && W.inZone) puff('confetti', p.ch.x, p.ch.y + 1.2, p.ch.z); },
       area(){},
@@ -1005,6 +1026,7 @@
         R.scene.remove(pMesh); for (const e of Object.values(puffs)) e.dispose();
         for (const m of bubbles.values()) R.scene.remove(m);
         hud.remove(); for (const el of bars.values()) el.remove();
+        root.removeEventListener('resize', onResize);
         if (W.inZone) touchButtons(false);
       },
       _: { W, claimOk, fire, setSlot, takeDamage, hire, spawnMerc, newRound },
