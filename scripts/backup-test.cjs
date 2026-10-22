@@ -146,7 +146,12 @@ for (const [label, shell] of shells) {
     ok(!leaks(r.text, logText(c)), L(`отказ — ${what}: пароль не светится`));
   }
   c = mk(baseEnv.replace('PG_DUMP=' + stub, 'PG_DUMP=' + path.join(root, 'нет-такого-pg_dump')));
-  const hasRealPgDump = spawnSync(shell, ['-NoProfile', '-Command', 'if (Get-Command pg_dump -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }']).status === 0;
+  // настоящий pg_dump есть там, где его ищет сам скрипт (Find-PgDump: PATH, Program Files\PostgreSQL|pgsql, E:\tools, C:\tools) —
+  // тогда «не найден» не проверить (на машинах GitHub PostgreSQL стоит в Program Files, но не в PATH: скрипт находил его, код 4)
+  const hasRealPgDump = spawnSync(shell, ['-NoProfile', '-Command',
+    "if (Get-Command pg_dump -ErrorAction SilentlyContinue) { exit 0 }; foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, 'E:\\tools', 'C:\\tools')) { " +
+    "if (-not $pf -or -not (Test-Path -LiteralPath $pf)) { continue }; foreach ($b in @((Join-Path $pf 'PostgreSQL'), (Join-Path $pf 'pgsql'))) { " +
+    "if ((Test-Path -LiteralPath $b) -and (Get-ChildItem -LiteralPath $b -Filter pg_dump.exe -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1)) { exit 0 } } }; exit 1"]).status === 0;
   if (!hasRealPgDump) { r = run(shell, c); ok(r.code === 3, L('нет pg_dump: код 3 и подсказка'), r.code); }
 
   // разбор файла настроек: кавычки, BOM, комментарии, свои папка/схемы/хранение
