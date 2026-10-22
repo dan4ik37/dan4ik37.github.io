@@ -199,11 +199,11 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
       const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
       cam.up.set(0, 1, 0);
       rig.update(dt, Pl, look, st.ph, C);
-      A.update(dt, performance.now() / 1000, cam.position);
       R.follow(Pl.ch.x, Pl.ch.z, Pl.ch.y);
       V.blob(Pl.ch.x, Pl.ch.y, Pl.ch.z, 1.1);
       H_stamina(st);
     }
+    st.A?.update(dt, performance.now() / 1000, cam.position);   // в полёте человечек спрятан (hidden) — и это тоже через update
     I.frameEnd(); C.frameEnd();
     V.update(dt, st.t);
     R.update(dt);
@@ -245,10 +245,11 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     Pl.place(LA[0], Math.max(gy, wy > -Infinity ? wy - .6 : gy), LA[2], F.yaw + Math.PI);
     if (!st.A) { st.A = E.actors(R); }
     const look = Object.assign({}, window.D37Char?.look?.() || {});
-    if (!st.A.get('me')) st.A.add('me', look, { x: Pl.ch.x, y: Pl.ch.y, z: Pl.ch.z, yaw: Pl.yaw });
+    const me = st.A.get('me');   // человечек один на всю игру: в полёте спрятан (не собирать заново при каждой посадке)
+    if (me) me.hidden = false; else st.A.add('me', look, { x: Pl.ch.x, y: Pl.ch.y, z: Pl.ch.z, yaw: Pl.yaw });
     if (!st.rig) st.rig = E.cameraRig(R.camera, { yaw: F.yaw, pitch: .35, dist: 8, minD: 2.6, maxD: 22 });
     st.rig.yaw = F.yaw; st.rig.snap(Pl.ch.x, Pl.ch.y, Pl.ch.z);
-    if (!st.unfollow) st.unfollow = st.rig.follow(Pl);
+    st.unfollow?.(); st.unfollow = st.rig.follow(Pl);   // приземления нового игрока — камере
     st.mode = 'walk'; F.vel.fill(0);
     touchButtons(st);
     st.H.toast('🚶 На земле. L или «✈ Взлететь» — снова в полёт', true);
@@ -259,7 +260,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     P.toBF(V.fr, cam.position.x, cam.position.y + 3, cam.position.z, F.pos);
     F.vel.fill(0); F.yaw = st.rig ? st.rig.yaw : F.yaw; F.pitch = -.15;
     st.mode = 'fly';
-    const me = st.A?.get('me'); if (me) { st.A.remove('me'); }
+    const me = st.A?.get('me'); if (me) me.hidden = true;
     touchButtons(st);
   }
   function goOrbit(st){
