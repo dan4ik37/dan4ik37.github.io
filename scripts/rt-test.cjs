@@ -38,7 +38,8 @@ process.on('exit', () => { if (!finished) { console.log('FAIL тест не до
 const SRC = { rt: read('js/core/rt.js'), room: read('js/games/room.js'), table: read('js/games/table.js'), netplay: read('js/games/netplay.js'), iokit: read('js/games/iokit.js'), coop: fs.existsSync(path.join(SITE, 'js/games/coop.js')) ? read('js/games/coop.js') : '' };
 const FAST = { PROBE_MS: 2500, HEALTH_MS: 2000, JOIN_MS: 3000, PING_MS: 400, DEAD_MS: 1500, FAIL_MS: 1500, FAIL_RESTART_MS: 2500, SETTLE_MS: 2500, IDLE_MS: 600, DOWN_MS: 1500, ACK_MS: 3000 };
 function storage(){ const m = new Map(); return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: k => m.delete(k), clear: () => m.clear(), get length(){ return m.size; } }; }
-class TabWS extends D.WS { constructor(url, protocols){ super(url, protocols || undefined, { origin: 'http://localhost:5500', perMessageDeflate: false }); } }
+// как в браузере: «ошибка» сокета без обработчика не роняет страницу (у пакета ws — уронила бы процесс)
+class TabWS extends D.WS { constructor(url, protocols){ super(url, protocols || undefined, { origin: 'http://localhost:5500', perMessageDeflate: false }); this.on('error', () => {}); } }
 function makeTab(o = {}){
   const timers = new Set(), errs = [], net = { rtFetch: 0, rtWs: 0, other: 0 };
   const ls = storage(), ss = storage();
