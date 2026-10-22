@@ -162,7 +162,7 @@
     if (!(F.FL[s] & 1) && P.charK[m] < 1000 && a * 1000 >= F.LIFE[s] * P.charK[m]) { F.FL[s] |= 1; return 3; }   // почернел
     if (F.rainQ && open) {
       const p = P.rainK[m] * F.rain * el;
-      if (p > 0 && hash(F.seed, F.X[s], F.Y[s], F.Z[s], F.T ^ 0x7a1) < p * U32) { F.stats.out++; return 1; }   // погас
+      if (p > 0 && hash(F.seed, F.kind === 'parts' ? 0 : F.X[s], F.Y[s], F.Z[s], F.T ^ 0x7a1) < p * U32) { F.stats.out++; return 1; }   // погас (деталь — по ключу места)
     }
     return 0;
   }
@@ -313,14 +313,17 @@
   };
 
   // ═══ Детали: точки с радиусом (дерево, ящик, деталь студии); соседи — в радиусе reach (по сетке столбцов cell × cell) ═══
+  // Случайность — от места детали (ключ по координатам с шагом 1/8), не от её номера: у игроков, добавивших те же детали в
+  // другом порядке, пожар идёт одинаково (номер такта — общий, если обход успевает всех: budget ≥ горящих)
   FI.parts = (o = {}) => {
     const F = core(o, 'parts');
     const NP = Math.max(16, Math.min(1 << 16, o.parts | 0 || 4096)), CELL = Math.max(1, +o.cell || 6), REACH = Math.max(.5, +o.reach || 5);
     F.reach = REACH; F.cellSize = CELL;
     const PX = new Float32Array(NP), PY = new Float32Array(NP), PZ = new Float32Array(NP), PR = new Float32Array(NP), PM = new Uint8Array(NP), PB = new Uint8Array(NP), LIVE = new Uint8Array(NP);
-    const NEXT = new Int32Array(NP).fill(-1), CK = new Int32Array(NP), SLOT = new Int32Array(NP).fill(-1), PFREE = new Int32Array(NP);
+    const NEXT = new Int32Array(NP).fill(-1), CK = new Int32Array(NP), SLOT = new Int32Array(NP).fill(-1), PFREE = new Int32Array(NP), PK = new Int32Array(NP);
+    const keyOf = p => hash(Math.round(PX[p] * 8), Math.round(PY[p] * 8), Math.round(PZ[p] * 8), 0x5bd1e995, 0x2f);
     let npf = NP; for (let i = 0; i < NP; i++) PFREE[i] = NP - 1 - i;
-    F.PX = PX; F.PY = PY; F.PZ = PZ; F.PR = PR; F.PM = PM; F.PB = PB; F.LIVE = LIVE; F.SLOT = SLOT; F.np = 0;
+    F.PX = PX; F.PY = PY; F.PZ = PZ; F.PR = PR; F.PM = PM; F.PB = PB; F.LIVE = LIVE; F.SLOT = SLOT; F.PK = PK; F.np = 0;
     // столбцы сетки: ключ (ix, iz) → первая деталь
     let HS = 1; while (HS < NP * 2) HS <<= 1;
     const HM = HS - 1, HKEY = new Int32Array(HS), HHEAD = new Int32Array(HS).fill(-1), HUSE = new Uint8Array(HS);
@@ -335,12 +338,12 @@
     F.add = (x, y, z, r, m) => {
       if (!npf) return -1;
       const p = PFREE[--npf];
-      PX[p] = +x || 0; PY[p] = +y || 0; PZ[p] = +z || 0; PR[p] = Math.max(0, +r || 0); PM[p] = m > 0 && m < MATS.length ? m : 0; PB[p] = 0; LIVE[p] = 1; SLOT[p] = -1;
+      PX[p] = +x || 0; PY[p] = +y || 0; PZ[p] = +z || 0; PR[p] = Math.max(0, +r || 0); PM[p] = m > 0 && m < MATS.length ? m : 0; PB[p] = 0; LIVE[p] = 1; SLOT[p] = -1; PK[p] = keyOf(p);
       link(p); if (p + 1 > F.np) F.np = p + 1;
       return p;
     };
     F.remove = p => { if (!(p >= 0 && p < NP) || !LIVE[p]) return; if (SLOT[p] >= 0) { const s = SLOT[p]; SLOT[p] = -1; release(F, s); } unlink(p); LIVE[p] = 0; PFREE[npf++] = p; };
-    F.move = (p, x, y, z) => { if (!(p >= 0 && p < NP) || !LIVE[p]) return; unlink(p); PX[p] = x; PY[p] = y; PZ[p] = z; link(p); };
+    F.move = (p, x, y, z) => { if (!(p >= 0 && p < NP) || !LIVE[p]) return; unlink(p); PX[p] = x; PY[p] = y; PZ[p] = z; PK[p] = keyOf(p); link(p); };
     F.setMat = (p, m) => { if (p >= 0 && p < NP && LIVE[p]) PM[p] = m > 0 && m < MATS.length ? m : 0; };
     F.restore = p => { if (p >= 0 && p < NP) PB[p] = 0; };
     F.burning = p => p >= 0 && p < NP && SLOT[p] >= 0;
@@ -356,7 +359,7 @@
       if (!(p >= 0 && p < NP) || !LIVE[p] || SLOT[p] >= 0 || (PB[p] && !(io && io.force))) return -1;
       m = m || PM[p]; if (!(m > 0 && m < MATS.length)) return -1;
       const s = alloc(F); if (s < 0) { F.stats.refused++; return -1; }
-      F.X[s] = p; F.Y[s] = 0; F.Z[s] = 0; F.M[s] = m; F.AGE[s] = 0; F.LIFE[s] = Math.max(1, lifeOf(F, m, p, 0x51, 0)); F.LAST[s] = F.T; F.AUX[s] = io && io.aux | 0 || 0; F.FL[s] = 0;
+      F.X[s] = p; F.Y[s] = PK[p]; F.Z[s] = 0; F.M[s] = m; F.AGE[s] = 0; F.LIFE[s] = Math.max(1, lifeOf(F, m, PK[p], 0x51, 0)); F.LAST[s] = F.T; F.AUX[s] = io && io.aux | 0 || 0; F.FL[s] = 0;
       SLOT[p] = s; PB[p] = 0;
       F.stats.ignited++;
       if (F.onIgnite) F.onIgnite(p, m, s);
@@ -370,7 +373,7 @@
       for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
         const h = cslot(ckey(i, j), false); if (h < 0) continue;
         for (let q = HHEAD[h]; q >= 0; q = NEXT[q]) {
-          if (!PM[q] || !LIVE[q]) continue;
+          if (!PM[q] || !LIVE[q] || PB[q]) continue;   // сгоревшее (ждёт возврата) — не горит
           const d = Math.hypot(PX[q] - x, PY[q] - y, PZ[q] - z) - PR[q];
           if (d <= r && d < bd) { bd = d; best = q; }
         }
@@ -388,7 +391,7 @@
           const d = Math.max(0, Math.hypot(PX[q] - x, PY[q] - y, PZ[q] - z) - PR[q]);
           if (d > r) continue;
           const p = (1 - d / r) * (.4 + .6 * F.P.catchK[PM[q]] * F.hz);   // ближе и горючее — вернее
-          if (hash(F.seed, q, seed | 0, 0x1a, 0) < p * U32 && F.ignite(q) >= 0) n++;
+          if (hash(F.seed, PK[q], seed | 0, 0x1a, 0) < p * U32 && F.ignite(q) >= 0) n++;
         }
       }
       return n;
@@ -429,7 +432,7 @@
           if (gap > lim) continue;
           const g = gap <= 0 ? 1 : 1 - gap / lim, up = dy > rr * .5 ? 1.6 : dy < -rr ? .6 : 1;
           const pr = ck * base * g * g * up * w * el;
-          if (pr > 0 && hash(F.seed, p, q, F.T, 0x6a09) < pr * U32) F.ignite(q);
+          if (pr > 0 && hash(F.seed, PK[p], PK[q], F.T, 0x6a09) < pr * U32) F.ignite(q);
         }
       }
       return false;
@@ -437,7 +440,7 @@
     F.tick = () => { F.T++; F.stats.ticks++; run(F, visit); };
     stepper(F);
     F.clear = () => { for (let i = F.n - 1; i >= 0; i--) { const s = F.ACT[i]; SLOT[F.X[s]] = -1; } F.n = 0; F.nfree = F.cap; for (let i = 0; i < F.cap; i++) F.FREE[i] = F.cap - 1 - i; F.cur = 0; };
-    F.reset = () => { F.clear(); HUSE.fill(0); HHEAD.fill(-1); NEXT.fill(-1); LIVE.fill(0); PB.fill(0); PM.fill(0); SLOT.fill(-1); npf = NP; for (let i = 0; i < NP; i++) PFREE[i] = NP - 1 - i; F.np = 0; };
+    F.reset = () => { F.clear(); HUSE.fill(0); HHEAD.fill(-1); NEXT.fill(-1); LIVE.fill(0); PB.fill(0); PM.fill(0); SLOT.fill(-1); PK.fill(0); npf = NP; for (let i = 0; i < NP; i++) PFREE[i] = NP - 1 - i; F.np = 0; };
     return F;
   };
 

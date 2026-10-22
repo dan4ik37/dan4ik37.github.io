@@ -289,6 +289,19 @@ sec('детали: деревья-точки, ветер, сгоревшее н�
   P.remove(p0); ok(!P.LIVE[p0], 'убрали деталь');
   const P2 = FI.parts({ hz: 20, parts: 256, seed: 4 }); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) P2.add(i * 3, 1, j * 3, .5, FI.MAT.planks);
   const k = P2.igniteNear(10, 1, 10, 6, 77); ok(k >= 1 && P2.n === k, 'взрыв поджигает рядом', k);
+  // те же детали в другом порядке (у другого игрока зона строилась иначе) — тот же пожар: случайность — от места, не от номера
+  const grove = (order) => {
+    const P = FI.parts({ hz: 10, parts: 1024, cell: 8, reach: 4.5, seed: 31, budget: 1024 }), pts = [];
+    for (let i = 0; i < 14; i++) for (let j = 0; j < 14; j++) pts.push([i * 4.2 + ((i * 5 + j) % 3) * .7, 2.5, j * 4.6 + ((j * 3 + i) % 4) * .5]);
+    if (order) pts.reverse();
+    for (const [x, y, z] of pts) P.add(x, y, z, 1.4, FI.MAT.tree);
+    const out = []; P.onBurnt = p => out.push(Math.round(P.PX[p] * 10) + ':' + Math.round(P.PZ[p] * 10) + '@' + P.T);
+    P.T = 5000; P.igniteNear(28, 2.5, 30, 5, 99);
+    for (let t = 0; t < 10 * 120 && P.n; t++) P.tick();
+    return out.sort().join(',');
+  };
+  const g1 = grove(false), g2 = grove(true);
+  ok(g1.length > 200 && g1 === g2, 'детали в другом порядке — тот же пожар (место, а не номер)', { a: g1.length, same: g1 === g2 });
 }
 
 // ═══ 12. Набор клеток без мусора ═══
