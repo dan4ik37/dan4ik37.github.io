@@ -116,7 +116,8 @@ function mkSt(o = {}){
     const NEW = ['watch', 'compass', 'depth_meter', 'lens', 'ore_finder', 'navigator', 'atlas', 'parchment', 'map_blank', 'map_filled', 'master_book', 'recall', 'bucket', 'bucket_water', 'bucket_lava', 'bed'];
     ok(NEW.every(n => V.item(n)), 'все новые вещи есть', NEW.filter(n => !V.item(n)));
     ok(V.items.indexOf(V.item('bucket_lava')) < V.VANILLA_ITEMS && V.blocks.indexOf(V.block('bed')) < V.VANILLA_BLOCKS, 'новое — в «ванили» (моды не стирают при смене мира)');
-    ok(V.block('bed').id === V.VANILLA_BLOCKS - 1 && V.block('missing').id === V.VANILLA_BLOCKS - 2, 'номера блоков не сдвинулись: лежанка — в конце');
+    // лежанка — сразу за прежними блоками («missing» — последний до неё); новые блоки других задач (деревья пород T-022b…) — только после неё
+    ok(V.block('bed').id === V.block('missing').id + 1 && V.block('bed').id < V.VANILLA_BLOCKS && V.blocks.slice(V.block('bed').id + 1).every(b => b.id > V.block('bed').id), 'номера блоков не сдвинулись: лежанка — сразу за прежними, новые — после неё');
     const accs = V.items.filter(i => i.acc); ok(accs.length === 7 && accs.every(i => i.stack === 1 && i.acc.every(f => E.accessories.FX[f])), 'аксессуары — по одному, действия известны', accs.map(i => i.name));
     // каждый новый рецепт собирается своей сеткой
     const grid = r => { const w = r.list ? (r.list.length > 4 || r.table ? 3 : 2) : 3, g = new Array(w * w).fill(null); if (r.list) r.list.forEach((k, i) => { g[i] = k[0] === '#' ? V.TAGS[k.slice(1)][0] : k; }); else r.pattern.forEach((row, y) => [...row].forEach((ch, x) => { if (ch !== ' ') { const k = r.key[ch]; g[y * w + x] = k[0] === '#' ? V.TAGS[k.slice(1)][0] : k; } })); return { g, w }; };

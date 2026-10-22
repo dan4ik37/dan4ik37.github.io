@@ -1973,7 +1973,7 @@ js/features/games.js и хвост css/premium.css.
 
 ## 🌳 Деревья пород — D37E.trees (js/engine/trees.js + trees3d.js; T-022b, 22.10.2026; docs/PHYSICS_PLAN.md §2)
 - Владелец: «деревья как в модах — реалистичные стволы», «можно будет применять в разных играх». ОДНО ядро без three.js (окно, поток,
-  node; TR.src — текст модуля для потоков из строки): породы TR.SPECIES — данные (oak, birch, spruce, pine, acacia, willow, tropical, dead,
+  node; TR.code — текст модуля для потоков из строки): породы TR.SPECIES — данные (oak, birch, spruce, pine, acacia, willow, tropical, dead,
   giant_oak, giant_spruce) → TR.grow(порода, зерно, { g — рост .12…1 }) → скелет (segs по 11 чисел, blobs по 8, hang по 5; только + − × ÷
   floor sqrt, свои sin/cos/pw — до бита везде). Переходники: TR.voxels (0 листва / 1 тонкая ветка / 2 бревно / 3 корень + ось; толщина
   .7…1,05 — ось на углу клетки = ствол 2×2), TR.cells2d ({ style: 'side' } — как в Террарии), TR.mesh (кора трубами, листва облаками, lod 0…2), TR.cut.

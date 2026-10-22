@@ -19,7 +19,7 @@
 // TR.cells2d(S) → { n, x, y, t } — дерево сбоку (2D-миры: «Подземье»): проекция скелета на плоскость x-y.
 // TR.cut(part, y) — часть сетки выше среза (падающий верх дерева, destruct.js); TR.source(префикс, f) / TR.lookup(id) — кто
 // рисует дерево с этим id (3D-мир отдаёт разрушениям сетку и место своего дерева).
-// TR.src — текст этого модуля: поток, собранный из строки (поток «Подземья»), выполняет его перед своим кодом.
+// TR.code — текст этого модуля: поток, собранный из строки (поток «Подземья»), выполняет его перед своим кодом.
 (function d37Trees(){
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
@@ -557,5 +557,5 @@
   const SRC = new Map();
   TR.source = (prefix, f) => { if (f) SRC.set(prefix, f); else SRC.delete(prefix); return () => { if (SRC.get(prefix) === f) SRC.delete(prefix); }; };
   TR.lookup = id => { if (typeof id !== 'string') return null; const k = id.indexOf(':'); const f = k > 0 ? SRC.get(id.slice(0, k)) : null; try { return f ? f(id) : null; } catch (e) { return null; } };
-  TR.src = '(' + d37Trees + ')();';
+  TR.code = '(' + d37Trees + ')();';
 })();

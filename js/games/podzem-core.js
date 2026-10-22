@@ -1124,7 +1124,7 @@ function PZ_CORE(){
 
   // Исходник для потока: эта функция целиком + запуск worldWorker
   // + движок деревьев (T-022b) текстом впереди — деревья пород считаются в потоке так же, как в окне
-  function workerSource(){ const tr = typeof window !== 'undefined' && window.D37E && window.D37E.trees && window.D37E.trees.src || ''; return tr + '\n(' + PZ_CORE.toString() + ')().worldWorker(self);'; }
+  function workerSource(){ const tr = typeof window !== 'undefined' && window.D37E && window.D37E.trees && window.D37E.trees.code || ''; return tr + '\n(' + PZ_CORE.toString() + ')().worldWorker(self);'; }
 
   return {
     CS, CB, CM, CA, SURF, SKY_LIMIT, MOD_ID0, LR, LCUT, LMUL, LMULD, LDEEP, LDEEPD, key,

@@ -209,7 +209,8 @@ sec('«Подземье» (2D): новые миры — деревья поро�
   ok(src.indexOf('d37Trees') >= 0 && src.indexOf('d37Trees') < src.indexOf('PZ_CORE'), 'поток «Подземья» получает движок деревьев текстом (перед ядром)');
   delete pctx.window;
   // скорость: чанки у поверхности (деревья) — старые миры и новые (новый генератор на каждый замер: и сборка клеток деревьев)
-  const pzT = o => { let best = 1e9; for (let k = 0; k < 3; k++) { const G = PZ.makeGen(777 + k, o); G.genChunk(50, 3, mk()); const t = performance.now(); let n = 0; for (let cx = -12; cx < 12; cx++) for (let cy = 2; cy <= 3; cy++) { G.genChunk(cx, cy, mk()); n++; } best = Math.min(best, (performance.now() - t) / n); } return best; };
+  const PK = FAST ? 2 : 3, PC = FAST ? 6 : 12;
+  const pzT = o => { let best = 1e9; for (let k = 0; k < PK; k++) { const G = PZ.makeGen(777 + k, o); G.genChunk(50, 3, mk()); const t = performance.now(); let n = 0; for (let cx = -PC; cx < PC; cx++) for (let cy = 2; cy <= 3; cy++) { G.genChunk(cx, cy, mk()); n++; } best = Math.min(best, (performance.now() - t) / n); } return best; };
   pzT({ trees: true }); const p0 = pzT(), p1 = pzT({ trees: true });
   console.log('  «Подземье», чанк у поверхности, мс: старые миры', p0.toFixed(2), '· новые', p1.toFixed(2));
   ok(p1 < p0 * 1.8 + 1, '«Подземье»: чанк с деревьями пород не дороже старого больше чем в 1,8 раза (+1 мс)', [p0, p1]);
