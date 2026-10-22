@@ -2467,6 +2467,16 @@
    ]
   },
   {
+   "f": "js/features/minicard.js",
+   "fn": "paintChar",
+   "k": "sink:src [img]",
+   "c": "self-made",
+   "n": "картинка персонажа: D37Char.img → canvas.toDataURL; кэш IMG хранит только его результаты",
+   "xs": [
+    "src"
+   ]
+  },
+  {
    "f": "js/features/msgview.js",
    "fn": "ask",
    "k": "markup:attr",
