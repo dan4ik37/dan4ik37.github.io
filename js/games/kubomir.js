@@ -73,7 +73,7 @@
   function unmount(){
     window.removeEventListener('pagehide', onHide);
     document.removeEventListener('visibilitychange', onVis);
-    if (S) { journalNow(); stopWorld({ quick: true }); }
+    if (S) { journalNow(); stopWorld({ quick: true, cloud: true }); }   // ушёл со страницы игры (вкладка жива) — копия в облако в фоне
     el = null; api = null;
   }
   function onTop(a){
@@ -99,12 +99,13 @@
     const box = sc.querySelector('.kb-worlds');
     if (!box) return;   // пока грузился список, меню сменилось (нажали «Новый мир» и т. п.)
     if (!V.store.persistent()) box.insertAdjacentHTML('beforebegin', '<div class="kb-warn">⚠️ Браузер не даёт сохранять в базу (приватный режим?) — мир сохранится, только пока открыта вкладка. Выгружай мир в файл.</div>');
-    if (!list.length) { box.innerHTML = '<div class="kb-empty">Миров пока нет. Нажми «➕ Новый мир» — и вперёд!</div>'; return; }
-    box.innerHTML = list.map(w => `<div class="kb-world" data-id="${esc(w.id)}">
+    if (!list.length) box.innerHTML = '<div class="kb-empty">Миров пока нет. Нажми «➕ Новый мир» — и вперёд!</div>';
+    else box.innerHTML = list.map(w => `<div class="kb-world" data-id="${esc(w.id)}">
         <div class="kb-thumb">${w.thumb ? `<img src="${esc(w.thumb)}" alt="">` : '<span>🧊</span>'}</div>
-        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}</small></div>
-        <div class="kb-wb"><button type="button" class="kb-btn primary" data-w="play">▶ Играть</button><button type="button" class="kb-btn" data-w="rename" title="Переименовать">✏️</button><button type="button" class="kb-btn" data-w="export" title="Выгрузить файл мира">📤</button><button type="button" class="kb-btn danger" data-w="del" title="Удалить">🗑</button></div></div>`).join('');
+        <div class="kb-wi"><b>${esc(w.name)}</b><small>${w.mode === 'creative' ? '🎨 Творчество' : '⚔️ Выживание'} · зерно ${esc(w.seed)} · ${new Date(w.played || w.created || Date.now()).toLocaleDateString('ru')}${w.mods?.length ? ' · 🧩 ' + w.mods.length : ''}</small><small class="kb-cl" hidden></small></div>
+        <div class="kb-wb"><button type="button" class="kb-btn primary" data-w="play">▶ Играть</button><button type="button" class="kb-btn" data-w="rename" title="Переименовать">✏️</button><button type="button" class="kb-btn" data-w="cloud" title="Облако: сохранять копию мира (открыть на другом устройстве)" hidden>☁️</button><button type="button" class="kb-btn" data-w="export" title="Выгрузить файл мира">📤</button><button type="button" class="kb-btn danger" data-w="del" title="Удалить">🗑</button></div></div>`).join('');
     box.addEventListener('click', e => { const b = e.target.closest('[data-w]'), w = e.target.closest('.kb-world'); if (!b || !w) return; worldAct(b.dataset.w, w.dataset.id, list.find(x => x.id === w.dataset.id)); });
+    cloudMenu(sc, list);   // ☁️ облако: отметки у миров, миры с других устройств (без входа — подсказка)
   }
   function menuAct(a){
     if (a === 'new') newWorldDialog();
@@ -118,9 +119,16 @@
     if (a === 'play') return playById(id);
     if (a === 'rename') { const n = prompt('Новое название мира', w?.name || ''); if (n && w) { w.name = n.trim().slice(0, 40) || w.name; await V.store.putWorld(w); showMenu(); } return; }
     if (a === 'export') return exportWorld(id);
+    if (a === 'cloud') return cloudToggle(w);
     if (a === 'del') {
-      const ok = window.GameKit?.ask ? await window.GameKit.ask(`Удалить мир «${w?.name}»? Это нельзя отменить.`, { yes: '🗑 Удалить', no: 'Нет' }) : confirm(`Удалить мир «${w?.name}»?`);
-      if (ok) { await V.store.delWorld(id); showMenu(); }
+      const ok = window.GameKit?.ask ? await window.GameKit.ask({ icon: '🗑', title: `Удалить мир «${w?.name}»?`, text: 'Из этого браузера. Это нельзя отменить.', yes: '🗑 Удалить', no: 'Нет', danger: true }) : confirm(`Удалить мир «${w?.name}»?`);
+      if (!ok) return;
+      await V.store.delWorld(id);
+      if (w?.cloud?.on && cloudOn()) {
+        const also = window.GameKit?.ask ? await window.GameKit.ask({ icon: '☁️', title: 'Удалить и из облака?', text: 'Копия этого мира есть в облаке — на других устройствах он тоже откроется. Удалить и её?', yes: '🗑 Да, из облака тоже', no: 'Нет, пусть останется' }) : false;
+        if (also) { await CLOUD().del(ID, id); cloudCache = null; }
+      }
+      showMenu();
     }
   }
   function newWorldDialog(){
@@ -150,8 +158,10 @@
     };
   }
   async function playById(id){
-    const w = await VX().store.world(id).catch(() => null);
+    let w = await VX().store.world(id).catch(() => null);
     if (!w) { toastMsg('Мир не найден'); showMenu(); return; }
+    w = await cloudBeforePlay(w);   // ☁️ в облаке новее — скачать; менялись оба — спросить
+    if (!w || !el) return;
     playWorld(w);
   }
   async function exportWorld(id){
@@ -173,6 +183,165 @@
       const got = Array.isArray(obj.mods) ? await window.KubomirMods?.unpack?.(obj.mods).catch(() => null) : null;
       toastMsg('📥 Мир «' + w.name + '» загружен' + (got?.added?.length ? ' + моды: ' + got.added.join(', ') : '')); showMenu();
     } catch (e) { toastMsg('Не получилось: ' + (e.message || e)); }
+  }
+
+  // ═══ ☁️ Облако (js/core/cloud.js + ugc.sql): копия миров — открыть на другом устройстве ═══
+  // Мир живёт в браузере, облако — копия (meta.cloud { on, ver, dirty, conflict }). Вошёл — мир, который играешь, сам попадает в
+  // облако, пока есть места (3, VIP — 5); копия — каждые 3 минуты игры и при выходе в меню. Перед игрой: в облаке новее, а здесь не
+  // менялся — скачать; менялись оба — «Какую версию оставить?» (подсказка — новее по игровому времени meta.gt). Гостю чужого мира
+  // (игра вместе) облака нет — мир хозяина.
+  const CLOUD = () => window.D37Cloud;
+  const cloudOn = () => !!CLOUD()?.available?.();
+  let cloudCache = null;   // { at, r } — ответ cloud_list (20 с)
+  async function cloudRows(force){
+    if (!cloudOn()) return null;
+    if (!force && cloudCache && now() - cloudCache.at < 20000) return cloudCache.r;
+    const r = await Promise.race([CLOUD().list(ID), new Promise(res => setTimeout(() => res({ ok: false, reason: 'net' }), 6000))]);
+    if (r?.ok) cloudCache = { at: now(), r };
+    return r?.ok ? r : null;
+  }
+  const cloudRowOf = (r, id) => r?.list?.find(x => x.world === id) || null;
+  // отметка у мира в меню
+  function cloudLine(w, row){
+    const C = CLOUD(), a = C.resolve(w.cloud, row), m = w.cloud || {};
+    if (a === 'same') return { t: `☁️ В облаке · ${new Date(row.at).toLocaleDateString('ru')} · ${C.fmtSize(row.bytes)}`, cls: 'ok' };
+    if (a === 'up') return { t: m.on ? '☁️ Сохранится в облако при следующей игре' : '', cls: 'wait' };
+    if (a === 'down') return { t: `☁️ В облаке новее (${C.deviceName(row.device)}, ${new Date(row.at).toLocaleString('ru', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}) — скачается перед игрой`, cls: 'new' };
+    if (a === 'conflict') return { t: '⚠️ Две разные версии (здесь и в облаке) — спросим перед игрой, какую оставить', cls: 'warn' };
+    if (a === 'gone') return { t: '☁️ Мир убрали из облака (на другом устройстве) — здесь он остался', cls: 'wait' };
+    return { t: m.full ? '☁️ Не в облаке: мест нет — освободи место или включи у другого мира' : '', cls: '' };
+  }
+  async function cloudMenu(sc, list){
+    const C = CLOUD(); if (!C || view !== 'menu') return;
+    const host = sc.querySelector('.kb-worlds'); if (!host) return;
+    let bar = sc.querySelector('.kb-cloudbar');
+    if (!bar) { bar = document.createElement('div'); bar.className = 'kb-cloudbar'; host.insertAdjacentElement('beforebegin', bar); }
+    const authed = (() => { try { return typeof currentUser !== 'undefined' && !!currentUser; } catch (e) { return false; } })();
+    if (!authed) { bar.innerHTML = `<span>☁️ Войди — и миры будут сохраняться в облаке: откроешь их на телефоне и на компьютере.</span>${typeof openGlobalAuth === 'function' ? '<button type="button" class="kb-btn" data-cl="login">Войти</button>' : ''}`; bar.onclick = e => { if (e.target.closest('[data-cl="login"]')) try { openGlobalAuth('login'); } catch (er) {} }; return; }
+    if (!C.canZip()) { bar.textContent = '☁️ Облако: браузер не умеет сжимать файлы — обнови браузер.'; return; }
+    bar.textContent = '☁️ Облако: загружаем…';
+    const r = await cloudRows(true);
+    if (view !== 'menu' || !sc.isConnected) return;
+    if (!r) { bar.textContent = '☁️ Облако сейчас недоступно — миры сохраняются в браузере.'; return; }
+    bar.innerHTML = `<span>☁️ Облако: ${r.used} из ${r.slots} мест · файл до ${C.fmtSize(r.max_bytes || C.RULES.maxBytes)}</span>`;
+    const local = new Set(list.map(w => w.id));
+    for (const w of list) {
+      const card = sc.querySelector(`.kb-world[data-id="${CSS.escape(w.id)}"]`); if (!card) continue;
+      const row = cloudRowOf(r, w.id), L = cloudLine(w, row), cl = card.querySelector('.kb-cl'), btn = card.querySelector('[data-w="cloud"]');
+      cl.hidden = !L.t; cl.textContent = L.t; cl.className = 'kb-cl ' + L.cls;
+      btn.hidden = false; btn.classList.toggle('on', !!w.cloud?.on); btn.title = w.cloud?.on ? 'Убрать мир из облака (в браузере останется)' : 'Сохранять копию мира в облаке';
+    }
+    const extra = r.list.filter(x => !local.has(x.world));
+    let box = sc.querySelector('.kb-cloudonly');
+    if (!extra.length) { box?.remove(); return; }
+    if (!box) { box = document.createElement('div'); box.className = 'kb-cloudonly'; host.insertAdjacentElement('afterend', box); }
+    box.innerHTML = `<h4>☁️ В облаке — с других устройств</h4>` + extra.map(x => `<div class="kb-world" data-cw="${esc(x.world)}"><div class="kb-thumb"><span>☁️</span></div>
+        <div class="kb-wi"><b>${esc(x.name || 'Мир')}</b><small>${C.deviceName(x.device)} · ${new Date(x.at).toLocaleString('ru', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })} · ${C.fmtSize(x.bytes)} · в игре ${C.fmtTime(x.gt)}</small></div>
+        <div class="kb-wb"><button type="button" class="kb-btn primary" data-c="get">⬇ Скачать</button><button type="button" class="kb-btn danger" data-c="del" title="Удалить из облака">🗑</button></div></div>`).join('');
+    box.onclick = async e => {
+      const b = e.target.closest('[data-c]'), cw = e.target.closest('[data-cw]'); if (!b || !cw) return;
+      const row = extra.find(x => x.world === cw.dataset.cw); if (!row) return;
+      if (b.dataset.c === 'get') { b.disabled = true; b.textContent = '⏳'; try { const w = await cloudDownload(row, row.world); toastMsg('☁️ Мир «' + w.name + '» скачан'); } catch (er) { toastMsg('Не скачалось: ' + (er.message || er)); } cloudCache = null; showMenu(); }
+      else if (b.dataset.c === 'del') { const ok = window.GameKit?.ask ? await window.GameKit.ask({ icon: '🗑', title: `Удалить «${row.name || 'мир'}» из облака?`, text: 'На этом устройстве его нет — удалится совсем.', yes: '🗑 Удалить', no: 'Нет', danger: true }) : confirm('Удалить из облака?'); if (ok) { await CLOUD().del(ID, row.world); cloudCache = null; showMenu(); } }
+    };
+  }
+  // ☁️ у мира: включить (есть место — сразу отправить) / убрать из облака
+  async function cloudToggle(w){
+    if (!w || !cloudOn()) return;
+    const C = CLOUD(), V = VX();
+    if (w.cloud?.on) {
+      const ok = window.GameKit?.ask ? await window.GameKit.ask({ icon: '☁️', title: 'Убрать мир из облака?', text: 'В этом браузере он останется. На других устройствах его больше не будет.', yes: 'Убрать', no: 'Нет' }) : confirm('Убрать из облака?');
+      if (!ok) return;
+      await C.del(ID, w.id); w.cloud = { on: false, off: true }; await V.store.putWorld(w); cloudCache = null; showMenu(); return;   // сам убрал — сам и вернёт (кнопкой)
+    }
+    const r = await cloudRows(true);
+    if (!r) { toastMsg('☁️ Облако сейчас недоступно'); return; }
+    const row = cloudRowOf(r, w.id);
+    w.cloud = { on: true, ver: null, dirty: true };
+    if (row) { await V.store.putWorld(w); toastMsg('☁️ В облаке уже есть версия этого мира — при входе спросим, какую оставить'); cloudCache = null; showMenu(); return; }
+    if (r.used >= r.slots) { toastMsg(`☁️ В облаке уже ${r.used} из ${r.slots} миров — убери другой мир из облака`); return; }
+    await V.store.putWorld(w);
+    toastMsg('☁️ Отправляем в облако…');
+    const res = await cloudUpload(w);
+    toastMsg(res?.ok ? '☁️ Мир в облаке' : '☁️ ' + cloudWhy(res));
+    cloudCache = null; showMenu();
+  }
+  const cloudWhy = r => ({ conflict: 'В облаке другая версия — выбери при входе в мир, какую оставить', slots: 'Мест в облаке нет', full: 'Облако сайта заполнено — пока сохраняем только в браузере', size: 'Мир больше 5 МБ — в облако не помещается', too_fast: 'Слишком часто — сохраним позже', auth: 'Войди в аккаунт', off: 'Облако появится, когда сайт обновится', zip: 'Браузер не смог сжать мир', net: 'Нет связи — сохраним позже' })[r?.reason] || 'Не получилось — сохраним позже';
+  // Отправить копию мира (meta — объект мира; идёт игра — тот же, что S.meta). Поверх — только если копия совпадала с облаком
+  // (meta.cloud.ver) или выбрали «оставить эту»
+  async function cloudUpload(meta, o = {}){
+    const C = CLOUD(), V = VX(), m = meta?.cloud;
+    if (!C || !m?.on || meta.coop?.guest || !cloudOn()) return null;
+    if (meta._cloudBusy) return null;
+    meta._cloudBusy = true;
+    try {
+      const data = await V.store.packWorld(meta.id);
+      if (!data) return null;
+      const r = await C.put(ID, meta.id, { name: meta.name, data, gt: meta.gt || 0, base: Number.isInteger(m.ver) ? m.ver : null, force: !!(o.force || m.force) });
+      if (r.ok) { m.ver = r.ver; m.dirty = false; m.at = Date.now(); m.conflict = null; m.force = false; m.full = false; m.bytes = r.bytes; }
+      else if (r.reason === 'conflict') m.conflict = { ver: r.ver, gt: r.gt, at: r.at, device: r.device };
+      else if (r.reason === 'slots') { m.on = false; m.full = true; }
+      await V.store.putWorld(meta).catch(() => {});
+      return r;
+    } catch (e) { console.warn('Кубомир: облако —', e); return { ok: false, reason: 'net' }; }
+    finally { delete meta._cloudBusy; }
+  }
+  // Скачать версию из облака и заменить мир в браузере (одной транзакцией: не вышло — старый как был)
+  async function cloudDownload(row, id){
+    const C = CLOUD(), V = VX();
+    const raw = await C.get(ID, row);
+    const { world, recs } = V.store.unpackWorld(raw);
+    world.cloud = { on: true, ver: row.ver, dirty: false, at: Date.now() };
+    world.played = Date.now();
+    delete world._cloudBusy;
+    await V.store.replaceWorld(id, world, recs);
+    const need = (world.mods || []).filter(mid => !(window.KubomirMods?.list?.() || []).some(m => m.id === mid));
+    if (need.length) toastMsg('🧩 Для этого мира нужны моды: ' + need.join(', ') + ' — поставь их в «🧩 Моды»');
+    return world;
+  }
+  // Перед входом в мир: сверка с облаком (не дольше 6 с — дальше играем как есть)
+  async function cloudBeforePlay(w){
+    if (!cloudOn() || w.coop?.guest) return w;
+    const C = CLOUD(), V = VX(), sc = screen();
+    const r = await cloudRows(true);
+    if (!r || !el) return w;
+    const row = cloudRowOf(r, w.id);
+    // первый раз в этом мире после входа (или не было мест, а теперь есть): есть место — мир в облако (сам)
+    if (!row && (!w.cloud || (w.cloud.full && !w.cloud.off))) {
+      if (r.used < r.slots) { w.cloud = { on: true, ver: null, dirty: true }; await V.store.putWorld(w); }
+      else if (!w.cloud) { w.cloud = { on: false, full: true }; await V.store.putWorld(w); toastMsg(`☁️ В облаке уже ${r.used} из ${r.slots} миров — этот сохраняется только в браузере`); }
+      return w;
+    }
+    const a = C.resolve(w.cloud, row);
+    if (a === 'gone') { w.cloud = { on: false, off: true }; await V.store.putWorld(w); toastMsg('☁️ Этот мир убрали из облака на другом устройстве — здесь он остался'); return w; }
+    if (a === 'down') {
+      if (sc) sc.innerHTML = '<div class="kb-load"><div class="spinner"></div><b>☁️ Скачиваем новую версию из облака…</b></div>';
+      try { const nw = await cloudDownload(row, w.id); toastMsg('☁️ Загружена версия из облака'); return nw; }
+      catch (e) { toastMsg('☁️ Не скачалось (' + (e.message || e) + ') — играем версию из браузера'); return w; }
+    }
+    if (a !== 'conflict') return w;
+    const pick = await cloudChoice(w, row);
+    if (pick === 'cloud') {
+      if (sc) sc.innerHTML = '<div class="kb-load"><div class="spinner"></div><b>☁️ Скачиваем версию из облака…</b></div>';
+      try { return await cloudDownload(row, w.id); } catch (e) { toastMsg('☁️ Не скачалось: ' + (e.message || e)); showMenu(); return null; }
+    }
+    if (pick === 'local') { w.cloud = Object.assign(w.cloud || {}, { on: true, ver: row.ver, dirty: true, conflict: null }); await V.store.putWorld(w); return w; }
+    showMenu(); return null;
+  }
+  // «Какую версию оставить?» — две карточки: здесь и в облаке; подсказка — новее по игровому времени
+  function cloudChoice(w, row){
+    return new Promise(res => {
+      const sc = screen(); if (!sc) { res(null); return; }
+      const C = CLOUD(), lt = +w.gt || 0, ct = +row.gt || 0, newer = lt >= ct ? 'local' : 'cloud';
+      const dt = t => new Date(t).toLocaleString('ru', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      sc.innerHTML = `<div class="kb-menu kb-choice"><h3>☁️ Какую версию оставить?</h3>
+        <p class="kb-note">Мир «${esc(w.name)}» меняли и здесь, и на другом устройстве. Оставь одну — другая заменится ею.</p>
+        <div class="kb-chs"><button type="button" class="kb-ch${newer === 'local' ? ' best' : ''}" data-p="local"><b>💻 Эту — из этого браузера</b><small>в игре ${C.fmtTime(lt)} · ${dt(w.played || Date.now())}</small>${newer === 'local' ? '<i>новее по игровому времени</i>' : ''}</button>
+          <button type="button" class="kb-ch${newer === 'cloud' ? ' best' : ''}" data-p="cloud"><b>☁️ Из облака — ${esc(C.deviceName(row.device))}</b><small>в игре ${C.fmtTime(ct)} · ${dt(row.at)}</small>${newer === 'cloud' ? '<i>новее по игровому времени</i>' : ''}</button></div>
+        <p class="kb-note">Не уверен? Сначала нажми «📤» у мира в меню — сохрани файл этой версии.</p>
+        <div class="kb-mbtns"><button type="button" class="kb-btn" data-p="">← Назад</button></div></div>`;
+      sc.querySelector('.kb-choice').addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (!b) return; res(b.dataset.p || null); });
+    });
   }
   function achScreen(){
     const sc = screen(); if (!sc) return;
@@ -383,7 +552,13 @@
   async function stopWorld(o = {}){
     const st = S; if (!st) return;
     S = null;
-    try { if (!o.quick) await saveAll(st, true); else saveAll(st, true); } catch (e) { console.error(e); }
+    let saved = null;
+    try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
+    // ☁️ копия в облако: вышел в меню или ушёл со страницы (вкладку не закрыли); закрыли вкладку — отправится в следующий раз
+    if ((!o.quick || o.cloud) && st.meta.cloud?.on && !st.coopGuest && cloudOn()) Promise.resolve(saved).catch(() => {}).then(() => cloudUpload(st.meta)).then(r => {
+      if (r?.ok) toastMsg('☁️ Мир сохранён в облаке', true); else if (r && r.reason !== 'too_fast') toastMsg('☁️ ' + cloudWhy(r));
+      if (view === 'menu' && el && !S) showMenu();
+    });
     try { st.loop?.stop(); } catch (e) {}
     clearInterval(st.tick);
     st.ro?.disconnect();
@@ -529,6 +704,7 @@
       L.time = L._t;
     }
     st.WX?.step(dt);
+    if (!st.coopGuest) { st.meta.gt = (st.meta.gt || 0) + dt; const cm = st.meta.cloud; if (cm?.on && !cm.dirty) cm.dirty = true; }   // ☁️ игровое время (с) и «менялся после отправки»
     if (now() - st.lastSave > 12000) saveAll(st).catch(() => {});
   }
   function spawnReady(st){
@@ -1801,6 +1977,23 @@
     // награды: очередь достижений (сервер — не чаще раза в 20 с)
     if (st.achQ.length && (!st.achAt || now() - st.achAt > 21000)) { const a = st.achQ.shift(); st.achAt = now(); rewardAch(a); }
     st.modRun?.second?.();
+    cloudTick(st);
+  }
+
+  // ☁️ копия в облако каждые 3 минуты игры (прошлый раз не успели — через 20 с после входа); идёт — не мешает игре (сжатие кусками)
+  function cloudTick(st){
+    const m = st.meta.cloud;
+    if (!m?.on || m.conflict || st.coopGuest || !st.ready || st.cloudBusy || !cloudOn()) return;
+    if (st.cloudNext == null) st.cloudNext = now() + (m.dirty ? 20000 : CLOUD().RULES.autosaveMs);
+    if (now() < st.cloudNext) return;
+    st.cloudBusy = true; st.cloudNext = now() + CLOUD().RULES.autosaveMs;
+    saveAll(st).then(() => cloudUpload(st.meta)).then(r => {
+      st.cloudBusy = false;
+      if (!r || r.ok || S !== st) return;
+      if (r.reason === 'conflict') st.H?.toast('☁️ В облаке другая версия этого мира — выйди в меню миров: спросим, какую оставить');
+      else if (r.reason === 'slots') st.H?.toast('☁️ ' + cloudWhy(r));
+      else st.cloudNext = now() + (r.reason === 'too_fast' ? 25000 : 60000);
+    }, () => { st.cloudBusy = false; });
   }
 
   // ═══ Подсказки новичку (выживание): следующий шаг — по достижениям этого мира и вещам; после смерти — где лежат вещи ═══

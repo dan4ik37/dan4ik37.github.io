@@ -223,3 +223,19 @@ body.high .kb-lockhint{animation:kbHint 1.8s ease-in-out infinite}
 .kb-offwrap{display:flex;flex-direction:column;align-items:center;gap:2px}
 .kb-offwrap small{font-size:.65rem;color:#aab3d6}
 .kb-slot.offs{border-color:rgba(255,210,63,.35)}
+/* ☁️ облако (T-019): отметки у миров, миры с других устройств, «какую версию оставить» */
+.kb-cloudbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:space-between;margin:10px 0 2px;padding:8px 10px;border-radius:10px;background:rgba(79,140,255,.1);color:#cfe0ff;font-size:.86rem}
+.kb-cloudbar .kb-btn{min-height:34px;padding:4px 12px}
+.kb-cl{display:block;margin-top:2px;font-size:.78rem}
+.kb-cl[hidden]{display:none}
+.kb-cl.ok{color:#86efac}.kb-cl.wait{color:#aab3d6}.kb-cl.new{color:#93c5fd}.kb-cl.warn{color:#fde68a}
+.kb-wb [data-w="cloud"][hidden]{display:none}
+.kb-wb [data-w="cloud"].on{border-color:#7aa6ff;background:rgba(79,140,255,.22)}
+.kb-cloudonly{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.kb-cloudonly h4{margin:4px 0;font-size:.95rem;color:#cfe0ff}
+.kb-chs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.kb-ch{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:12px;border-radius:12px;border:1px solid var(--kb-line);background:rgba(255,255,255,.05);color:#eef1ff;cursor:pointer;font-family:inherit;min-height:84px}
+.kb-ch:hover{background:rgba(255,255,255,.1)}
+.kb-ch.best{border-color:#86efac;box-shadow:0 0 0 1px rgba(134,239,172,.35)}
+.kb-ch small{color:#aab3d6}.kb-ch i{font-style:normal;font-size:.75rem;color:#86efac}
+@media (max-width:640px){.kb-chs{grid-template-columns:1fr}}

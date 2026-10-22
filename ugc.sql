@@ -10,6 +10,7 @@
 --  Изменил игру из каталога — она снова уходит на проверку. 3 жалобы — игра уходит из каталога до проверки.
 --  Монеты автору: каждые 10 засчитанных запусков (чужих, не чаще раза в 30 мин с одного человека) — 1 🪙, до 100 в день.
 --  3D-миры «Студии 3D» — тоже здесь (kind = 'place', data — мир). Свои 3D-модели — ugc_models + хранилище ugc3d (в конце файла).
+--  Облачные сохранения игр (☁️ «Кубомир») — cloud_saves + закрытое хранилище saves (самый конец файла; от остального не зависит).
 --  Проверка после запуска: /rpc/ugc_play гостем с {"p_id":"x"} → {"ok":false,"reason":"not_found"}
 -- ═══════════════════════════════════════════════════════════════════
 
@@ -344,3 +345,167 @@ create policy "ugc3d: читать свои, проверенные, модер�
     (storage.foldername(name))[2] = auth.uid()::text
     or public.ugc_is_staff()
     or exists (select 1 from public.ugc_models m where m.status = 'public' and storage.objects.name = 'models/' || m.author::text || '/' || m.id || '.json')));
+
+-- ═══════════════════════════════════════════════════════════════════
+--  ☁️ ОБЛАЧНЫЕ СОХРАНЕНИЯ ИГР (js/core/cloud.js; сейчас «Кубомир», потом «Подземье»; T-019, 22.10.2026)
+--  Мир живёт в браузере (IndexedDB), облако — копия: войти с другого устройства — мир там же. Файл мира — в закрытом хранилище
+--  saves: <uid>/<игра>/<мир>/<версия>-<случ>.kbw (сжатый gzip). Читает и пишет только хозяин аккаунта. Загрузить можно только тот
+--  путь, что выдал cloud_begin (место проверено), новая версия — новый файл, старый удаляется после cloud_commit.
+--  Строка мира — cloud_saves: имя, размер, версия (растёт на каждой записи — по ней видно, что мир меняли с другого устройства),
+--  игровое время (gt, с), устройство. Писать в таблицу напрямую нельзя — только функциями ниже.
+--  Числа — cloud_rule(): мест 3 (VIP — 5, только удобство), файл до 5 МБ, всего на сайт — 700 МБ (бесплатный тариф Supabase —
+--  1 ГБ на всё хранилище), записывать мир не чаще раза в 20 с. Предложения — меняет владелец здесь (копия в js/core/cloud.js RULES).
+--  Нужны: только auth.users и storage (есть всегда); vip_tier_of — если есть (progression.sql), иначе VIP-мест нет.
+--  Проверка после запуска (гостем): /rpc/cloud_rule {"p_key":"slots"} → 3; /rpc/cloud_list {"p_game":"kubomir"} → {"ok":false,"reason":"auth"};
+--  /rest/v1/cloud_saves?select=world&limit=0 → 200 (404/PGRST205 — не применён).
+-- ═══════════════════════════════════════════════════════════════════
+create table if not exists public.cloud_saves (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  game text not null,
+  world text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, game, world)
+);
+alter table public.cloud_saves add column if not exists name text not null default '';
+alter table public.cloud_saves add column if not exists bytes bigint not null default 0;
+alter table public.cloud_saves add column if not exists ver int not null default 0;
+alter table public.cloud_saves add column if not exists gt double precision not null default 0;
+alter table public.cloud_saves add column if not exists device text not null default '';
+alter table public.cloud_saves add column if not exists path text;
+alter table public.cloud_saves add column if not exists pending text;
+alter table public.cloud_saves add column if not exists pend_at timestamptz;
+alter table public.cloud_saves add column if not exists updated_at timestamptz not null default now();
+alter table public.cloud_saves drop constraint if exists cloud_saves_check;
+alter table public.cloud_saves add constraint cloud_saves_check check (game ~ '^[a-z]{2,16}$' and world ~ '^[A-Za-z0-9_-]{2,40}$'
+  and char_length(name) <= 40 and bytes between 0 and 52428800 and char_length(device) <= 24 and ver >= 0 and gt >= 0);
+alter table public.cloud_saves enable row level security;
+drop policy if exists cloud_saves_read on public.cloud_saves;
+create policy cloud_saves_read on public.cloud_saves for select using (user_id = auth.uid());
+grant select on public.cloud_saves to authenticated;
+revoke insert, update, delete on public.cloud_saves from anon, authenticated;
+revoke all on public.cloud_saves from anon;
+
+-- ── Числа облака (одно место) ──
+create or replace function public.cloud_rule(p_key text) returns bigint language sql immutable as $$
+  select case p_key when 'slots' then 3 when 'slots_vip' then 5 when 'max_bytes' then 5242880 when 'total_mb' then 700
+    when 'min_gap_s' then 20 when 'pending_min' then 15 else null end::bigint
+$$;
+grant execute on function public.cloud_rule(text) to anon, authenticated;
+
+-- мест у человека: VIP (любого уровня, в т. ч. за уровень) — больше; нет vip_tier_of — как у всех
+create or replace function public.cloud_slots(uid uuid) returns int
+language plpgsql stable security definer set search_path = public as $$
+declare t text;
+begin
+  if to_regprocedure('public.vip_tier_of(uuid)') is not null then
+    begin execute 'select public.vip_tier_of($1)' into t using uid; exception when others then t := null; end;
+  end if;
+  return (case when t is not null then public.cloud_rule('slots_vip') else public.cloud_rule('slots') end)::int;
+end $$;
+revoke execute on function public.cloud_slots(uuid) from public, anon, authenticated;
+
+-- ── Свои миры в облаке ──
+create or replace function public.cloud_list(p_game text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare uid uuid := auth.uid();
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  return jsonb_build_object('ok', true, 'slots', public.cloud_slots(uid), 'max_bytes', public.cloud_rule('max_bytes'),
+    'used', (select count(*) from public.cloud_saves s where s.user_id = uid and s.game = p_game and s.path is not null),
+    'list', coalesce((select jsonb_agg(jsonb_build_object('world', s.world, 'name', s.name, 'bytes', s.bytes, 'ver', s.ver, 'gt', s.gt,
+        'device', s.device, 'path', s.path, 'at', s.updated_at) order by s.updated_at desc)
+      from public.cloud_saves s where s.user_id = uid and s.game = p_game and s.path is not null), '[]'::jsonb));
+end $$;
+grant execute on function public.cloud_list(text) to anon, authenticated;
+
+-- ── Записать версию, шаг 1: место и путь для файла. p_base — с какой версией облака совпадала копия (null — ни с какой);
+--    другая — 'conflict' (мир меняли с другого устройства: игра спросит, какую версию оставить; p_force — «оставить эту») ──
+create or replace function public.cloud_begin(p_game text, p_world text, p_name text, p_bytes bigint, p_base int, p_gt double precision, p_device text, p_force boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); s public.cloud_saves%rowtype; n int; sl int; tot bigint; p text; gap int := public.cloud_rule('min_gap_s')::int;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  if coalesce(p_game, '') !~ '^[a-z]{2,16}$' or coalesce(p_world, '') !~ '^[A-Za-z0-9_-]{2,40}$' then return jsonb_build_object('ok', false, 'reason', 'bad'); end if;
+  if p_bytes is null or p_bytes < 1 or p_bytes > public.cloud_rule('max_bytes') then
+    return jsonb_build_object('ok', false, 'reason', 'size', 'max', public.cloud_rule('max_bytes'));
+  end if;
+  -- брошенные места (файл так и не дошёл) — освободить
+  delete from public.cloud_saves where user_id = uid and path is null and coalesce(pend_at, created_at) < now() - make_interval(mins => public.cloud_rule('pending_min')::int);
+  select * into s from public.cloud_saves where user_id = uid and game = p_game and world = p_world for update;
+  if found then
+    if s.path is not null and s.updated_at > now() - make_interval(secs => gap) then
+      return jsonb_build_object('ok', false, 'reason', 'too_fast', 'wait', ceil(extract(epoch from (s.updated_at + make_interval(secs => gap) - now()))));
+    end if;
+    if s.path is not null and not coalesce(p_force, false) and p_base is distinct from s.ver then
+      return jsonb_build_object('ok', false, 'reason', 'conflict', 'ver', s.ver, 'gt', s.gt, 'at', s.updated_at, 'device', s.device, 'bytes', s.bytes, 'name', s.name);
+    end if;
+  else
+    sl := public.cloud_slots(uid);
+    select count(*) into n from public.cloud_saves where user_id = uid and game = p_game;
+    if n >= sl then return jsonb_build_object('ok', false, 'reason', 'slots', 'slots', sl, 'used', n); end if;
+    insert into public.cloud_saves (user_id, game, world, name, pend_at) values (uid, p_game, p_world, left(btrim(coalesce(p_name, '')), 40), now())
+      returning * into s;
+  end if;
+  -- всё облако сайта (бесплатный тариф): не больше total_mb
+  select coalesce(sum(bytes), 0) into tot from public.cloud_saves;
+  if tot - s.bytes + p_bytes > public.cloud_rule('total_mb') * 1048576 then return jsonb_build_object('ok', false, 'reason', 'full'); end if;
+  p := uid::text || '/' || p_game || '/' || p_world || '/' || (s.ver + 1)::text || '-' || substr(md5(random()::text || clock_timestamp()::text), 1, 10) || '.kbw';
+  update public.cloud_saves set pending = p, pend_at = now() where user_id = uid and game = p_game and world = p_world;
+  return jsonb_build_object('ok', true, 'path', p, 'ver', s.ver);
+end $$;
+revoke execute on function public.cloud_begin(text, text, text, bigint, int, double precision, text, boolean) from public, anon;
+grant execute on function public.cloud_begin(text, text, text, bigint, int, double precision, text, boolean) to authenticated;
+
+-- ── Шаг 2 (файл уже в хранилище): новая версия. Размер — настоящий (из хранилища), путь — только выданный в cloud_begin ──
+create or replace function public.cloud_commit(p_game text, p_world text, p_path text, p_bytes bigint, p_gt double precision, p_device text, p_name text, p_base int, p_force boolean)
+returns jsonb language plpgsql security definer set search_path = public, storage as $$
+declare uid uuid := auth.uid(); s public.cloud_saves%rowtype; sz bigint; nm text := left(btrim(coalesce(p_name, '')), 40);
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  select * into s from public.cloud_saves where user_id = uid and game = p_game and world = p_world for update;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  if s.pending is distinct from p_path then return jsonb_build_object('ok', false, 'reason', 'stale'); end if;
+  if s.path is not null and not coalesce(p_force, false) and p_base is distinct from s.ver then
+    return jsonb_build_object('ok', false, 'reason', 'conflict', 'ver', s.ver, 'gt', s.gt, 'at', s.updated_at, 'device', s.device, 'bytes', s.bytes, 'name', s.name);
+  end if;
+  begin
+    select coalesce(nullif(o.metadata ->> 'size', '')::bigint, p_bytes) into sz from storage.objects o where o.bucket_id = 'saves' and o.name = p_path;
+    if not found then return jsonb_build_object('ok', false, 'reason', 'nofile'); end if;
+  exception when insufficient_privilege or undefined_table or undefined_column then sz := p_bytes;   -- нет доступа к хранилищу — размер со слов браузера
+  end;
+  update public.cloud_saves set ver = s.ver + 1, path = p_path, pending = null, pend_at = null, bytes = greatest(0, least(sz, 52428800)),
+    gt = greatest(0, coalesce(p_gt, 0)), device = left(coalesce(p_device, ''), 24), name = case when nm <> '' then nm else s.name end, updated_at = now()
+    where user_id = uid and game = p_game and world = p_world;
+  return jsonb_build_object('ok', true, 'ver', s.ver + 1, 'old', s.path);
+end $$;
+revoke execute on function public.cloud_commit(text, text, text, bigint, double precision, text, text, int, boolean) from public, anon;
+grant execute on function public.cloud_commit(text, text, text, bigint, double precision, text, text, int, boolean) to authenticated;
+
+-- ── Убрать мир из облака (файлы удаляет браузер — пути в ответе) ──
+create or replace function public.cloud_delete(p_game text, p_world text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare uid uuid := auth.uid(); p text; pe text;
+begin
+  if uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
+  delete from public.cloud_saves where user_id = uid and game = p_game and world = p_world returning path, pending into p, pe;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'not_found'); end if;
+  return jsonb_build_object('ok', true, 'path', p, 'pending', pe);
+end $$;
+revoke execute on function public.cloud_delete(text, text) from public, anon;
+grant execute on function public.cloud_delete(text, text) to authenticated;
+
+-- ── Хранилище saves: закрытое, файл до 5 МБ; загрузить — только выданный путь (место проверено), читать и удалять — свою папку ──
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('saves', 'saves', false, 5242880, array['application/octet-stream'])
+on conflict (id) do update set public = false, file_size_limit = 5242880, allowed_mime_types = array['application/octet-stream'];
+
+drop policy if exists "saves: загрузить выданный путь" on storage.objects;
+create policy "saves: загрузить выданный путь" on storage.objects for insert to authenticated
+  with check (bucket_id = 'saves' and (storage.foldername(name))[1] = auth.uid()::text and exists (select 1 from public.cloud_saves s
+    where s.user_id = auth.uid() and s.pending = storage.objects.name and s.pend_at > now() - interval '15 minutes'));
+drop policy if exists "saves: читать свою папку" on storage.objects;
+create policy "saves: читать свою папку" on storage.objects for select to authenticated
+  using (bucket_id = 'saves' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "saves: удалить из своей папки" on storage.objects;
+create policy "saves: удалить из своей папки" on storage.objects for delete to authenticated
+  using (bucket_id = 'saves' and (storage.foldername(name))[1] = auth.uid()::text);
