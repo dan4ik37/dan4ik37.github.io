@@ -431,6 +431,50 @@ async function watcher(P){
   return joinsBefore;
 }
 
+// ═══ 7а. Алгоритм presence D37RT = Presence из @supabase/phoenix (то, что внутри supabase-js) на случайных последовательностях ═══
+function presenceAlgo(){
+  let Phx = null;
+  try { Phx = require(path.join(D.nm, '@supabase', 'phoenix')).Presence; } catch (e) {}
+  if (!Phx) { console.log('  (нет @supabase/phoenix — сравнение алгоритма presence пропущено)'); return; }
+  const T = makeTab({ rtUrl: '', sbUrl: 'http://127.0.0.1:9' });
+  const { syncState, syncDiff } = T.RT._test;
+  let seed = 7;
+  const rnd = n => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  let refN = 0, bad = 0, ops = 0;
+  for (let run = 0; run < 40; run++) {
+    let A = {}, B = {};
+    const live = [];   // [key, ref]
+    for (let step = 0; step < 60; step++) {
+      const evA = [], evB = [];
+      const recA = (t, l) => (k, c, p) => l.push([t, k, c ? JSON.parse(JSON.stringify(c)) : null, JSON.parse(JSON.stringify(p))]);
+      if (rnd(10) === 0) {   // полное состояние (presence_state): часть живых + новые
+        const st = {};
+        for (const [k, r] of live) if (rnd(3)) (st[k] || (st[k] = { metas: [] })).metas.push({ phx_ref: r, v: rnd(5) });
+        for (let i = rnd(3); i > 0; i--) { const k = 'k' + rnd(5), r = 'R' + (++refN); (st[k] || (st[k] = { metas: [] })).metas.push({ phx_ref: r, v: rnd(5) }); }
+        live.length = 0; for (const k of Object.keys(st)) for (const m of st[k].metas) live.push([k, m.phx_ref]);
+        A = Phx.syncState(A, JSON.parse(JSON.stringify(st)), recA('j', evA), recA('l', evA));
+        B = syncState(B, JSON.parse(JSON.stringify(st)), recA('j', evB), recA('l', evB));
+      } else {
+        const joins = {}, leaves = {};
+        for (let i = rnd(3); i > 0; i--) {
+          const k = 'k' + rnd(5), r = 'R' + (++refN);
+          const upd = live.find(x => x[0] === k && rnd(2));
+          (joins[k] || (joins[k] = { metas: [] })).metas.push(upd ? { phx_ref: r, phx_ref_prev: upd[1], v: rnd(5) } : { phx_ref: r, v: rnd(5) });
+          if (upd) { (leaves[k] || (leaves[k] = { metas: [] })).metas.push({ phx_ref: upd[1], v: 0 }); live.splice(live.indexOf(upd), 1); }
+          live.push([k, r]);
+        }
+        for (let i = rnd(2); i > 0 && live.length; i--) { const x = live.splice(rnd(live.length), 1)[0]; (leaves[x[0]] || (leaves[x[0]] = { metas: [] })).metas.push({ phx_ref: x[1], v: 0 }); }
+        if (rnd(8) === 0) (leaves['k' + rnd(5)] || (leaves['k' + rnd(5)] = { metas: [] })).metas.push({ phx_ref: 'nope' + refN });   // уход несуществующего
+        A = Phx.syncDiff(A, JSON.parse(JSON.stringify({ joins, leaves })), recA('j', evA), recA('l', evA));
+        B = syncDiff(B, JSON.parse(JSON.stringify({ joins, leaves })), recA('j', evB), recA('l', evB));
+      }
+      ops++;
+      if (JSON.stringify(A) !== JSON.stringify(B) || JSON.stringify(evA) !== JSON.stringify(evB)) { if (bad++ < 2) console.log('  presence расходится', JSON.stringify({ A, B, evA, evB }).slice(0, 600)); }
+    }
+  }
+  ok(!bad && ops === 2400, `алгоритм presence D37RT = Phoenix Presence (supabase-js): ${ops} случайных шагов (состояния, приходы, обновления, уходы), расхождений ${bad}`);
+}
+
 // ═══ 7. Формы presence: D37RT (свой сервер) = supabase-js (Supabase) ═══
 async function shapes(P){
   const S = await K.startServer(D, { ROOM_GC_MS: '0' });
@@ -656,6 +700,7 @@ async function leaks(P, S){
     await watcher(P);
     const P0 = await PH.start({ WS: D.WS, diffDelay: 0 });
     cleanup.push(() => P0.close());
+    presenceAlgo();
     await shapes(P0);
     const S = await rooms(P);
     await tableIo(P, S);

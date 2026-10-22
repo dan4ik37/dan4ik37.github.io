@@ -257,27 +257,31 @@
   const clone = o => JSON.parse(JSON.stringify(o));
   const metasOut = p => (p && Array.isArray(p.metas) ? p.metas.map(m => { const o = Object.assign({}, m); o.presence_ref = o.phx_ref; delete o.phx_ref; delete o.phx_ref_prev; return o; }) : []);
   const transform = st => { const o = {}; for (const k of Object.keys(st)) o[k] = metasOut(st[k]); return o; };
+  // diff — свежий объект (из JSON.parse), его не копируем; состояние ключа — новый объект (старый уходит в событие join как «было»)
   function syncDiff(state, diff, onJoin, onLeave){
-    const joins = clone(diff.joins || {}), leaves = clone(diff.leaves || {});
+    const joins = diff.joins || {}, leaves = diff.leaves || {};
     for (const key of Object.keys(joins)) {
+      const np = joins[key];
+      if (!np || !Array.isArray(np.metas)) continue;
       const cur = state[key];
-      state[key] = clone(joins[key]);
-      if (cur) { const jr = state[key].metas.map(m => m.phx_ref); state[key].metas.unshift(...cur.metas.filter(m => jr.indexOf(m.phx_ref) < 0)); }
-      onJoin(key, cur, joins[key]);
+      let metas = np.metas.slice();
+      if (cur) { const jr = new Set(metas.map(m => m.phx_ref)); metas = cur.metas.filter(m => !jr.has(m.phx_ref)).concat(metas); }
+      state[key] = { metas };
+      onJoin(key, cur, np);
     }
     for (const key of Object.keys(leaves)) {
-      const cur = state[key];
-      if (!cur) continue;
-      const rm = leaves[key].metas.map(m => m.phx_ref);
-      cur.metas = cur.metas.filter(p => rm.indexOf(p.phx_ref) < 0);
-      onLeave(key, cur, leaves[key]);
+      const cur = state[key], lp = leaves[key];
+      if (!cur || !lp || !Array.isArray(lp.metas)) continue;
+      const rm = new Set(lp.metas.map(m => m.phx_ref));
+      cur.metas = cur.metas.filter(p => !rm.has(p.phx_ref));
+      onLeave(key, cur, lp);
       if (!cur.metas.length) delete state[key];
     }
     return state;
   }
   function syncState(cur, next, onJoin, onLeave){
     const state = clone(cur), joins = {}, leaves = {};
-    for (const key of Object.keys(state)) if (!next[key]) leaves[key] = state[key];
+    for (const key of Object.keys(state)) if (!next[key]) leaves[key] = clone(state[key]);
     for (const key of Object.keys(next)) {
       const np = next[key], cp = state[key];
       if (!np || !Array.isArray(np.metas)) continue;
@@ -325,7 +329,9 @@
       if (this.started || this.dead) return this;
       this.started = true; this.subCb = typeof cb === 'function' ? cb : null; this.state = 'joining';
       if (enabled()) prefetchTurn();
-      if (!enabled() || isSticky(this.name) || !inShare(this.name)) { this._openSb(); return this; }
+      // postgres_changes наш сервер пока не раздаёт (этап 2, docs/SERVER.md) — такие каналы всегда через Supabase
+      const pg = this.binds.some(b => b[0] === 'postgres_changes');
+      if (!enabled() || pg || isSticky(this.name) || !inShare(this.name)) { this._openSb(); return this; }
       ensure(ok => { if (this.dead || this.via) return; if (ok) this._rtJoin(); else this._openSb(); });
       return this;
     }
@@ -568,7 +574,7 @@
       return { enabled: enabled(), url: baseUrl(), st: N.st, sid: !!N.sid, badWhy: badUntil()?.why || '', probeMs: N.stats.probeMs, turn: !!turn.list,
         chans: [...reg.values()].map(c => ({ name: c.name, via: c.via, state: c.state, held: !!c.hold })), ...N.stats, sticky: sticky.size };
     },
-    _test: { N, reg, sticky, syncState, syncDiff, transform, family, inShare, hash32, markBad, badUntil, fallbackAll, onLost, turn,
+    _test: { N, reg, sticky, syncState, syncDiff, transform, family, inShare, hash32, markBad, badUntil, fallbackAll, onLost, turn, feed: onMsg,
       reset(){ for (const c of [...reg.values()]) c.unsubscribe(); reg.clear(); sticky.clear(); closeWs(1000); clearTimeout(N.failT); clearTimeout(N.retryT); clearTimeout(N.idleT); clearTimeout(N.authT); clearTimeout(N.probeT); clearInterval(N.pingT);
         Object.assign(N, { st: 'idle', ws: null, sid: '', byI: new Map(), byR: new Map(), refs: new Map(), outbox: [], outBytes: 0, waiters: [], downUntil: 0, restart: false, pingT: 0, pingAt: 0 }); ss.del(SS_KEY); turn.list = null; turn.exp = 0; turn.badUntil = 0; turn.busy = false; } },
   };

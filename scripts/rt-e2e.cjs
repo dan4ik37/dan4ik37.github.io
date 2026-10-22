@@ -125,6 +125,56 @@ const waitFor = async (P, expr, ms = 20000) => { const t0 = Date.now(); while (D
     ok(seatsMin === 2 && !hist.some(s => s.a?.[3] || s.b?.[3]), 'стол: места не пропадали ни на миг (presence «замер» на время переезда), ошибок нет', hist.map(s => [s.a?.[2], s.b?.[2]]));
     await A.ev(`(async () => { const g = __tr.seats.find(s => !s.me); await __tr.sendTo(g.id, { k: 'после' }); return 1; })()`);
     ok(!!(await waitFor(B, `__T.priv.some(p => p.k === 'после')`, 8000)), 'стол: личное сообщение после переезда (через Supabase) дошло');
+    // 6) замер на профиле телефона (ЦП ×4): разбор и запуск rt.js; одно сообщение комнаты и presence-diff на 10 человек —
+    //    у D37RT и у supabase-js (тот же разбор кадра и вызов обработчиков: «до» — Supabase, «после» — свой сервер)
+    await A.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    report.phone = await A.ev(`(async () => {
+      const R = {}, N = 2000, PAY = JSON.stringify({ ts: 1, k: 'in', x: 12.5, y: 7.25, a: [1, 0, 1], s: 'x'.repeat(48) });
+      const med = f => { const v = [f(), f(), f()].sort((x, y) => x - y); return +v[1].toFixed(2); };
+      const src = await (await fetch('js/core/rt.js', { cache: 'no-store' })).text();
+      R.rtJsEvalMs = med(() => { const t = performance.now(); for (let k = 0; k < 10; k++) new Function('window', src)({ location: { hostname: 'x', search: '' } }); return (performance.now() - t) / 10; });
+      // основа: сам разбор кадра (JSON.parse) — сколько добавляет клиент поверх
+      const fb = '{"t":"b","r":999999,"e":"m","p":' + PAY + '}';
+      R.jsonParseUs = med(() => { const t = performance.now(); for (let k = 0; k < N; k++) JSON.parse(fb); return (performance.now() - t) * 1000 / N; });
+      // свой сервер: кадры прямо в разбор D37RT
+      const ch = D37RT.channel('bench-rt', { config: { presence: { key: 'me' } } });
+      let n = 0; ch.on('broadcast', { event: 'm' }, () => { n++; }); ch.on('presence', { event: 'sync' }, () => { n++; });
+      ch.via = 'rt'; ch.state = 'joined'; ch.r = 999999; D37RT._test.N.byR.set(999999, ch);
+      const rtBatch = () => { const t = performance.now(); for (let k = 0; k < N; k++) D37RT._test.feed(fb); return (performance.now() - t) * 1000 / N; };
+      R.rtMsgUs = med(rtBatch);
+      const metas = i => ({ metas: [{ phx_ref: 'r' + i, nick: 'игрок ' + i, t: i, look: { c: 'x1a2b3c', h: 3 } }] });
+      const jn = {}; for (let i = 0; i < 9; i++) jn['k' + i] = metas(i);
+      D37RT._test.feed(JSON.stringify({ t: 'ps', r: 999999, s: jn }));
+      const frames = [];
+      for (let k = 0; k < 900; k++) { const j = {}, l = {}; j.k3 = { metas: [{ phx_ref: 'n' + k, nick: 'игрок 3', t: 3, look: { c: 'x1a2b3c', h: k } }] }; l.k3 = { metas: [{ phx_ref: k ? 'n' + (k - 1) : 'r3' }] }; frames.push(JSON.stringify({ t: 'pd', r: 999999, j, l })); }
+      let q = 0;
+      R.rtPresenceDiffUs = med(() => { const t = performance.now(); for (let k = 0; k < 300; k++) D37RT._test.feed(frames[q++]); return (performance.now() - t) * 1000 / 300; });
+      R.rtPresenceKeys = Object.keys(ch.presenceState()).length;
+      D37RT._test.N.byR.delete(999999); ch.r = 0;
+      // Supabase (supabase-js 2.117, сериализатор 2.0.0): те же broadcast-кадры в разбор сокета realtime-js
+      try {
+        const sock = sbClient.realtime.socketAdapter.socket;
+        const sc = sbClient.channel('bench-sb', { config: { presence: { key: 'me' } } });
+        let m = 0; sc.on('broadcast', { event: 'm' }, () => { m++; });
+        const fr = JSON.stringify([null, null, 'realtime:bench-sb', 'broadcast', { type: 'broadcast', event: 'm', payload: JSON.parse(PAY) }]);
+        const sbBatch = () => { const t = performance.now(); for (let k = 0; k < N; k++) sock.onConnMessage({ data: fr }); return (performance.now() - t) * 1000 / N; };
+        R.sbMsgUs = med(sbBatch);
+        // по очереди, 7 раз: отношение D37RT / supabase-js на одном и том же «состоянии» машины (общий компьютер занят другим)
+        D37RT._test.N.byR.set(999999, ch); ch.r = 999999;
+        const ratios = []; for (let k = 0; k < 7; k++) { const a = rtBatch(), b = sbBatch(); ratios.push(a / b); }
+        ratios.sort((x, y) => x - y); R.rtToSbRatio = +ratios[3].toFixed(2);
+        D37RT._test.N.byR.delete(999999); ch.r = 0;
+        R.sbDelivered = m;
+        sbClient.removeChannel(sc);
+      } catch (e) { R.sbErr = String(e).slice(0, 120); }
+      R.rtDelivered = n;
+      D37RT.removeChannel(ch);
+      return R;
+    })()`);
+    await A.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    const ph = report.phone || {};
+    ok(ph.rtDelivered >= 6900 + 7 * 2000 && ph.rtPresenceKeys === 9 && ph.rtMsgUs > 0 && ph.rtJsEvalMs < 20, 'телефон (ЦП ×4): D37RT разобрал все кадры; rt.js запускается быстрее 20 мс', ph);
+    ok(!ph.sbMsgUs || ph.rtToSbRatio <= 1.5, 'телефон (ЦП ×4): сообщение комнаты у D37RT не дороже, чем у supabase-js (медиана отношения по очереди)', ph);
     // 5) ?rt=0
     await B.send('Page.navigate', { url: `${BASE}/?rt=0#/home` });
     ok(!!(await waitFor(B, `window.D37RT && D37RT.enabled() === false && D37RT.client() === null`, 15000)), '?rt=0: D37RT выключен');
