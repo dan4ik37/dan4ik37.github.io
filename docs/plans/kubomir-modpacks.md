@@ -632,6 +632,37 @@ Skills (Mining, Fighting, Building, Exploring, Farming): XP from events (not fro
 - Audience: combat and horror labels follow `D37Age`; text filters on every player-visible name.
 - Scope: Phase 1 is deliberately helpers only; content waits for T-020 and T-021 so mob and art work is not duplicated.
 
+
+## 7½. Owner decisions (22.10.2026) — they override the recommendations in §7 and change Phase 1
+
+1. **Helpers are EARNED and WORN as accessories** (owner: «с развитием и добавлением в аксессуары, чтобы место не занимало и надо было
+   потрудиться; как доп. слоты помимо аксессуаров — в модах Майна есть мод на кольца, в Террарии тоже есть такое»).
+   - New shared module `D37E.accessories`: accessory slots separate from the hotbar, the inventory and armour (they never take bag space);
+     a few slots at the start, more unlocked by progression (first boss, deeper layers, quests) — like Terraria's extra accessory slot
+     and the ring/amulet slots of Curios/Baubles. Saved with the player, synced in co-op (T-019), shown on the character where it makes sense.
+   - Info helpers are crafted accessory items with a real progression cost (Terraria info accessories): e.g. watch (time), compass
+     (direction + X/Z), depth meter (Y/layer), monocle (target card «что под прицелом»), ore detector, lifeform analyzer; they COMBINE
+     into upgrades (e.g. compass + depth meter + watch → navigator) and finally into a phone (see 3). Effects work while worn.
+   - Keep what already exists (the beginner «📖 Можно сделать» and tips stay); the full recipe browser (K1.2–K1.3) is unlocked by a crafted
+     item («книга мастера» or similar) instead of being free.
+   - Accessories also give small stat effects later (rings/amulets), never paid: no 💎 for strength (red line).
+2. **Teleports cost a consumable item that must be crafted every time** (owner: «предмет, который нужно постоянно крафтить»). Plus a
+   transport layer later: wagons/carts on player-built roads between towns carrying players and villagers, ships and other vehicles
+   (owner: «повозку, чтобы строили дороги между городами и возили людей и игроков, так же корабли») — shared with D37E.vehicle / D37E.infra
+   (docs/ENGINE_ECONOMY.md), Phase 3.
+3. **Map = one accessory built from many maps** (owner: «1 предмет, и для него нужно много карт сделать»): explore and fill map sheets,
+   combine many into an atlas accessory = minimap + waypoints + death point. Future upgrade (owner): **a phone with GPS** — works only after
+   the player launches a **satellite** into space (ties Phase 4 / the Universe space stage to Phase 1 helpers); **in caves GPS barely works** —
+   the player builds **relay stations** (ретрансляторы) that pass the signal like real ones: line of sight / attenuation through blocks,
+   range, power; a dead zone shows «нет сигнала». Same signal model can serve «Мир Денчика» phones later.
+4. **Public recipe pages: YES** (K1.14) — generated from game data, normal ads, Vercel functions stay ≤ 12.
+5. Horror mode — decide later (not needed for Phase 1).
+
+Consequences for Phase 1: K1.0 gains `D37E.accessories` (slots + unlock rules + effect hooks + save/sync + UI on phone/PC/pad);
+K1.1 «info pack» becomes info accessories; K1.6–K1.7 map becomes the atlas accessory; K1.8 camps use the consumable teleport item;
+the GPS phone, satellite and relays are a Phase 4 hook (design the signal API now, build later). Apply the same accessory module to
+«Подземье» first as the second adapter (it is Terraria-like).
+
 ---
 
 ## Appendix. Evidence and sources
