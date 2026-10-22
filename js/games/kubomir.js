@@ -2369,6 +2369,7 @@
       },
       iceAs(G, x, y, z){ if (!st.WX?.hole?.(x, y, z)) return false; st.AU?.play('kb_ice', { x: x - st.ox + .5, y: y + .8, z: z - st.oz + .5, vol: .6 }); st.ents?.breakFx?.(x, y, z, V.ID.ice); return true; },
       toast: t => st.H?.toast(t), log: t => log(t), changed: () => coopBar(st),
+      sleepVote: () => st.X?.sleepVote?.(),   // ── KX:sleep ── гость лёг на лежанку / встал (kubomir-world.js решает, прошла ли ночь)
       ended: t => { st.H?.toast('👥 ' + t); st.net = null; coopBar(st); },
     };
   }
@@ -2637,6 +2638,11 @@
       breakTime: b => breakTime(st, b), canHarvestTool: (b, tool) => canHarvestTool(b, tool), spawnItem: (x, y, z, s) => spawnItem(st, x, y, z, s),
       placeSafe: () => placeSafe(st), rebase: () => rebase(st, true), homeOf: () => homeOf(st), openInv: kind => { if (!st.ui?.isOpen()) st.ui?.open(kind || 'inv'); },
       label: id => (st.K || NOK).label(id), touch: () => !!st.I?.touch,
+      // перенести игрока (свиток возврата): мир вокруг достроится, потом — на безопасное место (как после /tp)
+      teleport: (x, y, z) => { const P = st.P; Object.assign(P, { x, y, z, vx: 0, vy: 0, vz: 0, fallTop: y, pk: null, hang: null }); rebase(st, true); st.ready = false; st.C?.reset_state?.(); },
+      night: () => st.ents?.isNight ? st.ents.isNight() : (t => t < 5.6 || t > 18.8)(st.R?.lighting?.time ?? 12),
+      hurtAgo: () => st.P.hurtGT == null ? 1e9 : (st.steps | 0) / 60 - st.P.hurtGT,   // секунд игры с последнего удара
+      unlockNight: () => { if (st.nightSeen && !st.creative) unlock('night'); },   // проспал ночь, которая началась при тебе, — «Пережил ночь»
     };
   }
   function modHooks(){

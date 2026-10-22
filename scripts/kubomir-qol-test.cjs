@@ -20,8 +20,8 @@ const store = {};
 globalThis.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
 const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js',
-  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js',
-  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir.js']) run(f);
+  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js', 'js/engine/sleep.js',
+  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir-world.js', 'js/games/kubomir.js']) run(f);
 const E = window.D37E, V = E.vox, ID = V.ID, KB = window.GAME_IMPL.kubomir._test, KX = window.KubomirX;
 
 // игрок и мир-заглушка для переходника помощников
@@ -372,6 +372,121 @@ function mkSt(o = {}){
     // сохранение: прочитанная книга — в данных игрока
     const P3 = mkPlayer(); P3.ext = E.host.cleanExt(JSON.parse(JSON.stringify(st.P.ext))); const { st: st3, g: g3 } = mkSt({ P: P3 }); const X3 = KX.attach(st3, g3);
     ok(X3.recipesKnown(), 'после загрузки книга по-прежнему открыта');
+  }
+
+  // ═══ 7. Лежанка и сон, вёдра, свиток возврата ═══
+  sec('лежанка: дом и сон (день/ночь × монстры × сложность × творчество × вместе), погода после сна, вёдра (сохранение воды), свиток');
+  {
+    // мир: чанки 0…1, пол из камня на y 40, бассейн воды 4×4 (источники) у x 20…23
+    const W = new V.World({ seed: 5 });
+    for (const [cx, cz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const c = new V.Chunk(cx, cz); for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) for (let y = 0; y <= 40; y++) c.ids[(x << 11) | (z << 7) | y] = V.cell(ID.stone); W.add(c); }
+    const set = (x, y, z, n, s = 0) => W.set(x, y, z, n ? V.cell(ID[n], s) : 0, { silent: true });
+    for (let x = 20; x < 24; x++) for (let z = 4; z < 8; z++) set(x, 40, z, 'water');
+    set(5, 41, 5, 'bed');
+    const mkWorldSt = o => {
+      const { st, g } = mkSt(o); const calls = { tp: [], night: [] };
+      Object.assign(st, { W, ox: 0, oz: 0, steps: 6000, ready: true, R: { lighting: { time: 22 } } });
+      Object.assign(st.P, { x: 5.5, y: 42, z: 5.5, hp: 9 });
+      st.ents = { mobs: [], isNight: () => { const t = st.R.lighting.time; return t < 5.6 || t > 18.8; }, splash(){}, glow(){}, particles(){}, save: () => [] };
+      st.meta.day = 4;
+      Object.assign(g, { night: () => st.ents.isNight(), hurtAgo: () => 60, unlockNight: () => calls.night.push(1), teleport: (x, y, z) => { calls.tp.push([x, y, z]); Object.assign(st.P, { x, y, z }); }, eye: () => [st.P.x, st.P.y + 1.62, st.P.z], lookDir: () => ({ x: 0, y: -1, z: 0 }), spawnItem(){} });
+      const X = st.X = KX.attach(st, g); return { st, g, X, calls, FW: X.feats.find(f => f.id === 'world') };
+    };
+    const bedHit = { x: 5, y: 41, z: 5, v: V.cell(ID.bed), nx: 0, ny: 1, nz: 0 };
+    const steps = (X, n = 90) => { for (let i = 0; i < n; i++) X.update(1 / 60); };
+    // день: дом, без сна
+    let T = mkWorldSt(); T.st.R.lighting.time = 12;
+    ok(T.X.useBlock(bedHit, V.block('bed')) && T.FW.state().home?.y === 42 && !T.FW.state().sleep && T.st.toasts.some(t => /Дом здесь/.test(t)), 'днём лежанка — дом (появишься тут), спать нельзя');
+    ok(KB.homeOf(T.st).x === 5.5 && KB.homeOf(T.st).y === 42, 'дом после нокаута — у лежанки (homeOf)');
+    // ночь, монстров нет: уснул, через 1,2 с — утро следующего дня, здоровье ≥ 14, «Пережил ночь» (ночь при тебе), события
+    T = mkWorldSt(); const ev = []; T.X.H.register({ id: 't', on: { sleep: d => ev.push('sleep' + d), wake: () => ev.push('wake') } });
+    T.X.useBlock(bedHit, V.block('bed'));
+    ok(T.FW.state().sleep, 'ночью без монстров — уснул');
+    steps(T.X, 60); ok(T.st.R.lighting.time === 22, 'первую секунду — темнеет, время не тронуто');
+    steps(T.X, 40);
+    ok(T.st.R.lighting.time === 5.6 && T.st.meta.day === 5 && T.st.P.hp === 14 && !T.FW.state().sleep, 'утро следующего дня (5,6 ч, день 5), здоровье 9 → 14', { t: T.st.R.lighting.time, d: T.st.meta.day, hp: T.st.P.hp });
+    ok(ev.join() === 'sleep5,wake' && T.calls.night.length === 1, 'события sleep / wake и «Пережил ночь» (если ночь началась при тебе)', ev);
+    // уснул после полуночи — утро того же дня
+    T = mkWorldSt(); T.st.R.lighting.time = 2; T.X.useBlock(bedHit, V.block('bed')); steps(T.X, 100);
+    ok(T.st.meta.day === 4 && T.st.R.lighting.time === 5.6, 'после полуночи — утро того же дня');
+    // погода после сна — та же функция дня и часа (одинаково у всех, без сети)
+    if (window.KubomirWeather?.at) { const a = JSON.stringify(window.KubomirWeather.at(77, 5, 5.6)), b = JSON.stringify(window.KubomirWeather.at(77, 5, 5.6)); ok(a === b, 'погода утром — по дню и часу (KubomirWeather.at), повторяемо'); }
+    // монстры: зомби в 7 блоках — нельзя; в 9 — можно; на 5 ниже — можно; «мирно» — можно; творчество — можно; курица рядом — можно
+    for (const [mob, dx, dy, diff, creative, can, msg] of [['zombie', 7, 0, 'normal', false, false, 'зомби в 7 блоках — не уснуть'], ['zombie', 9, 0, 'normal', false, true, 'зомби в 9 — можно'], ['zombie', 2, 5, 'normal', false, true, 'зомби на 5 ниже (в пещере) — можно'],
+      ['zombie', 2, 0, 'peaceful', false, true, '«Мирно» — монстры не мешают'], ['zombie', 2, 0, 'normal', true, true, '«Творчество» — не мешают'], ['chicken', 1, 0, 'hard', false, true, 'курица рядом — можно'], ['slime', 3, -2, 'hard', false, false, 'слизень рядом — нельзя']]) {
+      T = mkWorldSt({ creative, meta: { diff } }); T.st.ents.mobs.push({ type: mob, x: 5.5 + dx, y: 42 + dy, z: 5.5, hp: 10 });
+      T.X.useBlock(bedHit, V.block('bed'));
+      ok(!!T.FW.state().sleep === can, msg, { toasts: T.st.toasts });
+    }
+    // сдвинулся — проснулся, ночь не прошла; ударили — проснулся
+    T = mkWorldSt(); T.X.useBlock(bedHit, V.block('bed')); steps(T.X, 30); T.st.P.x += 1; steps(T.X, 5);
+    ok(!T.FW.state().sleep && T.st.R.lighting.time === 22 && T.st.toasts.some(t => /Встал/.test(t)), 'сдвинулся — встал, ночь не прошла');
+    T = mkWorldSt(); T.X.useBlock(bedHit, V.block('bed')); steps(T.X, 30); T.st.P.hp -= 2; steps(T.X, 5);
+    ok(!T.FW.state().sleep && T.st.R.lighting.time === 22, 'ударили — разбудили');
+    // лежанку сломали — дом пропал (одна подсказка), появишься в начале мира
+    T = mkWorldSt(); T.st.R.lighting.time = 12; T.X.useBlock(bedHit, V.block('bed')); set(5, 41, 5, null);
+    const h1 = KB.homeOf(T.st);
+    ok(h1 === T.st.meta.spawn && !T.FW.state().home && T.st.toasts.some(t => /пропала/.test(t)), 'лежанку сломали — «пропала», дом — начало мира'); set(5, 41, 5, 'bed');
+    // над лежанкой камень — нельзя
+    set(5, 42, 5, 'stone'); T = mkWorldSt(); T.X.useBlock(bedHit, V.block('bed')); ok(!T.FW.state().home && T.st.toasts.some(t => /2 свободные/.test(t)), 'над лежанкой нет места — нельзя'); set(5, 42, 5, null);
+    // вместе: хозяин спит, гостей 2, спит ни одного → 1 из 3 (нужно 2) — ждём; лёг один гость — утро
+    T = mkWorldSt(); let gs = 0; T.st.net = { players: () => [{}, {}, {}], sleepers: () => gs };
+    T.X.useBlock(bedHit, V.block('bed')); steps(T.X, 120);
+    ok(T.FW.state().sleep && T.st.R.lighting.time === 22, 'вместе: спит 1 из 3 — ночь не проходит (нужна половина — 2)');
+    gs = 1; T.X.sleepVote(); steps(T.X, 2);
+    ok(!T.FW.state().sleep && T.st.R.lighting.time === 5.6, 'лёг гость — 2 из 3: утро');
+    // хозяин не спит, а спят 2 гостя из 3 — утро и так
+    T = mkWorldSt(); T.st.net = { players: () => [{}, {}, {}], sleepers: () => 2 }; T.X.hud(1.1);
+    ok(T.st.R.lighting.time === 5.6, 'хозяин не спит, спят 2 гостя из 3 — ночь прошла');
+    // гость: лёг — хозяину «zz», утро от хозяина — проснулся и сказал «встал»
+    T = mkWorldSt({ guest: true }); const zz = []; T.st.net = { sleep: on => zz.push(on) };
+    T.X.useBlock(bedHit, V.block('bed')); steps(T.X, 120);
+    ok(zz.join() === 'true' && T.FW.state().sleep?.wait && T.st.R.lighting.time === 22, 'гость лёг — хозяину «сплю», ждёт других (время не трогает)');
+    T.st.R.lighting.time = 5.61; steps(T.X, 2);
+    ok(!T.FW.state().sleep && zz.join() === 'true,false', 'у хозяина утро — гость проснулся, «встал» хозяину');
+    // вёдра: черпнуть источник, вылить на камень; 300 случайных действий — вода не появляется и не пропадает
+    T = mkWorldSt(); Object.assign(T.st.P, { x: 21.5, y: 41, z: 5.5 });
+    const water = () => { let n = 0; for (let x = 16; x < 32; x++) for (let z = 0; z < 16; z++) for (let y = 39; y < 46; y++) { const v = W.raw(x, y, z); if (v > 0 && (v & 0xfff) === ID.water && (v >>> 12) === 0) n++; } return n; };
+    const buckets = () => T.st.P.inv.reduce((a, s) => a + (s && s.id === 'bucket_water' ? s.n : 0), 0);
+    T.st.P.inv[0] = { id: 'bucket', n: 3 }; T.st.P.sel = 0;
+    const w0 = water();
+    T.st.steps += 60; T.X.useItem(T.st.P.inv[0], V.item('bucket'), 'main', null);
+    ok(water() === w0 - 1 && buckets() === 1 && T.st.P.inv[0].n === 2, 'ведро: черпнул источник — воды в мире −1, полное ведро в сумке, пустых 2');
+    // вылить: смотрим на камень сбоку бассейна (верх камня — клетка над ним)
+    const stoneHit = { x: 18, y: 40, z: 5, v: V.cell(ID.stone), nx: 0, ny: 1, nz: 0 };
+    const jw = T.st.P.inv.findIndex(s => s && s.id === 'bucket_water'); T.st.P.sel = jw;
+    T.st.steps += 60; T.X.useItem(T.st.P.inv[jw], V.item('bucket_water'), 'main', stoneHit);
+    ok((W.raw(18, 41, 18 - 13) & 0xfff) === ID.water && water() === w0 && buckets() === 0, 'вылил на камень — источник над ним, воды столько же, ведро пустое');
+    let s2 = 3; const r2 = () => { s2 = (s2 * 16807) % 2147483647; return s2 / 2147483647; };
+    let bad2 = 0;
+    for (let i = 0; i < 300; i++) {
+      T.st.steps += 60;
+      const full = T.st.P.inv.findIndex(s => s && s.id === 'bucket_water'), empty = T.st.P.inv.findIndex(s => s && s.id === 'bucket');
+      if (r2() < .5 && empty >= 0) { T.st.P.sel = empty; Object.assign(T.st.P, { x: 20.5 + Math.floor(r2() * 4), z: 4.5 + Math.floor(r2() * 4), y: 41 }); T.X.useItem(T.st.P.inv[empty], V.item('bucket'), 'main', null); }
+      else if (full >= 0) { T.st.P.sel = full; const x = 16 + Math.floor(r2() * 3), z = Math.floor(r2() * 12); T.X.useItem(T.st.P.inv[full], V.item('bucket_water'), 'main', { x, y: 40, z, v: W.raw(x, 40, z), nx: 0, ny: 1, nz: 0 }); }
+      if (water() + buckets() !== w0) bad2++;
+    }
+    ok(bad2 === 0, 'вёдра: 300 случайных «черпнуть / вылить» — воды в мире + полных вёдер всегда столько же', bad2);
+    ok(T.st.P.inv.reduce((a, s) => a + (s && /bucket/.test(s.id) ? s.n : 0), 0) === 3, 'вёдер всего — 3 (не размножились и не пропали)');
+    // течение не черпается
+    set(26, 41, 2, 'water', 3); Object.assign(T.st.P, { x: 26.5, y: 42.5, z: 2.5 }); const je = T.st.P.inv.findIndex(s => s && s.id === 'bucket'); T.st.P.sel = je; T.st.steps += 60;
+    const n0 = T.st.P.inv[je].n; T.X.useItem(T.st.P.inv[je], V.item('bucket'), 'main', null);
+    ok(T.st.P.inv[je]?.n === n0 && W.raw(26, 41, 2) > 0, 'течение (не источник) ведром не черпается');
+    // гость — вёдра пока нет (честно сказано)
+    const G = mkWorldSt({ guest: true }); G.st.P.inv[0] = { id: 'bucket', n: 1 }; G.st.steps += 60; G.X.useItem(G.st.P.inv[0], V.item('bucket'), 'main', null);
+    ok(G.st.toasts.some(t => /мире друга/.test(t)) && G.st.P.inv[0].id === 'bucket', 'в мире друга ведро: «пока не работает», вещь цела');
+    // свиток возврата: после удара — нельзя (не тратится); потом — домой, свиток ушёл; без лежанки — в начало мира
+    T = mkWorldSt(); T.st.R.lighting.time = 12; T.X.useBlock(bedHit, V.block('bed')); Object.assign(T.st.P, { x: 100, y: 60, z: 100 });
+    T.st.P.inv[0] = { id: 'recall', n: 2 }; T.st.P.sel = 0; T.g.hurtAgo = () => 2;
+    T.st.steps += 60; T.X.useItem(T.st.P.inv[0], V.item('recall'), 'main', null);
+    ok(T.st.P.inv[0].n === 2 && !T.calls.tp.length, 'свиток: только что ударили — нельзя, не тратится');
+    T.g.hurtAgo = () => 30; T.st.steps += 60; T.X.useItem(T.st.P.inv[0], V.item('recall'), 'main', null);
+    ok(T.st.P.inv[0].n === 1 && JSON.stringify(T.calls.tp[0]) === '[5.5,42,5.5]', 'свиток: домой к лежанке, один ушёл', T.calls.tp);
+    T.X.useItem(T.st.P.inv[0], V.item('recall'), 'main', null);
+    ok(T.st.P.inv[0].n === 1, 'держишь ПКМ — второй свиток сразу не тратится (0,45 с)');
+    const T2 = mkWorldSt(); T2.st.P.inv[0] = { id: 'recall', n: 1 }; T2.st.steps += 60; T2.X.useItem(T2.st.P.inv[0], V.item('recall'), 'main', null);
+    ok(!T2.st.P.inv[0] && JSON.stringify(T2.calls.tp[0]) === JSON.stringify([T2.st.meta.spawn.x, T2.st.meta.spawn.y, T2.st.meta.spawn.z]), 'без лежанки — в начало мира');
+    ok(E.sleep.need(1, 'half') === 1 && E.sleep.need(3, 'half') === 2 && E.sleep.need(4, 'all') === 4 && E.sleep.need(8, 'one') === 1, 'правило «сколько спит»: один / половина / все');
   }
 
   console.log(`\nkubomir-qol-test: ${pass} ok, ${fail} fail`);
