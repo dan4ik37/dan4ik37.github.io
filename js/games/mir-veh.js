@@ -521,17 +521,18 @@
       return v;
     };
     const TEMP_RE = /^t_[a-z0-9]{2,12}$/;
-    VS.testDrive = (defId, at) => {
+    // тест-драйв (город) и техника военной базы (mir-base.js): o — { ttl (мс), area (только в своей зоне), msg, end }
+    VS.testDrive = (defId, at, o = {}) => {
       if (!VE.get(defId) || VS.me) return null;
       const old = [...VS.list.values()].find(v => v.temp && v.owner === S.key);
       if (old) { rt.vehSend?.({ k: 'gone', id: old.id }); VS.despawn(old.id); }
       const tag = (S.key || 'me').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(-6) || 'me';
-      const v = VS.spawn(defId, { id: 't_' + tag + (Date.now() % 1296).toString(36), x: at.x, z: at.z, yaw: at.yaw || 0, temp: true, zone: at.zone || null });
+      const v = VS.spawn(defId, { id: 't_' + tag + (Date.now() % 1296).toString(36), x: at.x, z: at.z, yaw: at.yaw || 0, temp: true, zone: at.zone || null, area: o.area || null });
       if (!v) return null;
       v.owner = S.key;
       enter(v, 0);
-      toast(`🚗 Тест-драйв: ${v.def.name} — 5 минут`, true);
-      clearTimeout(v.endT); v.endT = setTimeout(() => { if (VS.list.get(v.id) !== v) return; if (VS.me?.v === v) { exit({ force: true }); toast('🚗 Тест-драйв окончен — понравилось? Скоро можно будет купить'); } rt.vehSend?.({ k: 'gone', id: v.id }); VS.despawn(v.id); }, 300000);
+      toast(o.msg || `🚗 Тест-драйв: ${v.def.name} — 5 минут`, true);
+      clearTimeout(v.endT); v.endT = setTimeout(() => { if (VS.list.get(v.id) !== v) return; if (VS.me?.v === v) { exit({ force: true }); toast(o.end || '🚗 Тест-драйв окончен — понравилось? Скоро можно будет купить'); } rt.vehSend?.({ k: 'gone', id: v.id }); VS.despawn(v.id); }, o.ttl || 300000);
       return v;
     };
     VS.despawn = id => {

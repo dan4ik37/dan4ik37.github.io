@@ -49,6 +49,7 @@ const TESTS = [
   { f: 'studio-modes-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'worldmap-test.cjs', args: ['{THREE}'], needs: 'three' },
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
+  { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
 ];
 
 // ═══ Откуда брать пакеты ═══

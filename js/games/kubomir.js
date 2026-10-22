@@ -1756,7 +1756,8 @@
     const nm = P.inv[P.sel] ? V.item(P.inv[P.sel].id)?.title || '' : '';
     if (C.nm !== nm) { C.nm = nm; const e = h.querySelector('.kb-iname'); e.textContent = nm; e.classList.remove('show'); void e.offsetWidth; if (nm) e.classList.add('show'); }
     // здоровье, еда, воздух (в творчестве — нет)
-    const surv = !st.creative, bars = surv ? P.hp + '|' + P.food + '|' + Math.ceil(P.air) + '|' + (P.eyeWater ? 1 : 0) : 'c';
+    // воздух полный — отдельный ключ: иначе с 14,x до 15 Math.ceil не менялся, панель не перерисовывалась и пузырьки оставались на суше
+    const surv = !st.creative, bars = surv ? P.hp + '|' + P.food + '|' + (P.air < 15 ? Math.ceil(P.air) : 'F') + '|' + (P.eyeWater ? 1 : 0) : 'c';
     if (C.bars !== bars) {
       C.bars = bars;
       const icons = (n, full, half, empty) => { let s = ''; for (let i = 0; i < 10; i++) s += n >= (i + 1) * 2 ? full : n === i * 2 + 1 ? half : empty; return s; };

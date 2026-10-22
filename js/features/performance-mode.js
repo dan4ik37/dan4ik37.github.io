@@ -122,10 +122,19 @@ function initCursorTrail() {
     if (!running && currentPerf === 'high') { running = true; requestAnimationFrame(animCursor); }
   });
 
+  // В игре кольца нет: над холстом игры, в полном экране и пока игра держит мышь (pointer lock) — иначе оно висело
+  // кружком посреди «Кубомира», «Мира Денчика», «Подземья» (владелец 22.10: «круг видно в игре»)
+  const GAME = '#gamesStage canvas,#gamesStage .wld-wrap,.s3,.mp,.un-box';
+  let overGame = false;
+  const hideIn = () => { trail.style.opacity = (overGame || document.pointerLockElement || document.documentElement.classList.contains('gs-full')) ? '0' : ''; };
+  document.addEventListener('pointerlockchange', hideIn);
+  window.addEventListener('d37:fullscreen', hideIn);
   // На кликабельном кольцо больше и оранжевое — делегированием, чтобы работало и на кнопках, появившихся позже
   const HOT = 'a,button,.vcard,.hub-card,.dc,.stat-card';
   let hot = false;
   document.addEventListener('mouseover', e => {
+    const g = !!(e.target.closest && e.target.closest(GAME));
+    if (g !== overGame) { overGame = g; hideIn(); }
     const on = !!(e.target.closest && e.target.closest(HOT));
     if (on === hot) return;
     hot = on;
