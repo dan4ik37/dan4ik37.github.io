@@ -69,6 +69,9 @@ function fakeIDB(){
       name: { title: 'Имя', args: { type: 'object', properties: { s: { type: 'string', pattern: '^[a-z]+$' }, k: { type: 'string', enum: ['a', 'b'] }, ref: { type: 'string' } }, required: ['s'], additionalProperties: false }, run: a => a },
       boom: { title: 'Ошибка', args: { type: 'object', properties: {}, additionalProperties: false }, run: () => { const e = new Error('сломалось'); e.user = true; throw e; } },
       pair: { title: 'Пара', check: a => (a.x != null && a.y == null ? 'нужно и y' : ''), args: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, list: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'array', items: { type: 'number' } } } }, additionalProperties: false }, run: a => a },
+      // инструмент сам говорит, сколько шагов «Отменить» записано: «ничего не поменялось» — 0, двойная правка — 2
+      same: { title: 'Без изменений', undoable: true, args: { type: 'object', properties: {}, additionalProperties: false }, run: (a, ctx) => { ctx.steps = 0; return { v: state.v }; } },
+      two: { title: 'Две правки', undoable: true, args: { type: 'object', properties: {}, additionalProperties: false }, run: (a, ctx) => { state.v += 3; stack.push(1, 2); ctx.steps = 2; return { v: state.v }; } },
     },
   });
   ok(T.list().some(t => t.id === 'demo' && t.commands.includes('add')), 'list: инструмент и команды');
@@ -111,6 +114,11 @@ function fakeIDB(){
   r = await T.runPlan({ steps: [{ tool: 'demo', cmd: 'add' }, { tool: 'demo', cmd: 'name', args: { s: 'ab', ref: '$1.nope' } }] }); ok(!r.ok && /нет значения/.test(r.error), 'ссылка на несуществующее поле — понятная ошибка', r);
   const steps = []; await T.runPlan({ steps: [{ tool: 'demo', cmd: 'add', why: 'для проверки' }] }, { onStep: (i, s, st) => steps.push(st) });
   ok(steps.join(',') === 'run,ok', 'onStep: run → ok', steps);
+  r = await T.run('demo', 'same'); ok(r.ok && !r.undoable && r.steps === 0, 'ctx.steps = 0 — команда ничего не записала, не отменяемо', r);
+  { const v1 = state.v, s1 = stack.length;
+    r = await T.runPlan({ steps: [{ tool: 'demo', cmd: 'add', args: { n: 4 } }, { tool: 'demo', cmd: 'same' }, { tool: 'demo', cmd: 'two' }] });
+    const n2 = await T.undoSteps(r.steps);
+    ok(r.ok && r.steps.map(s => s.steps).join(',') === '1,0,2' && n2 === 3 && state.v === v1 && stack.length === s1, 'undoSteps: по ctx.steps (1 + 0 + 2) — ровно план, чужие шаги целы', { steps: r.steps, n2, v: state.v, v1 }); }
   const d = T.describe(['demo']); ok(/Инструмент "demo"/.test(d) && /add — Прибавить/.test(d) && /"maximum":10/.test(d) && /Состояние сейчас/.test(d), 'describe: команды, схемы, состояние');
   const sc = T.schema('demo'); ok(sc.commands.add.args.properties.n.default === 1, 'schema()');
   const evs = []; const off = T.on((t, x) => evs.push(t)); await T.run('demo', 'add'); await T.run('demo', 'add', { n: 0 }); off();

@@ -4,8 +4,9 @@
 // Каждый инструмент сайта (фоторедактор, потом видео, «Студия 3D», персонаж…) регистрирует свои команды с JSON-схемой
 // аргументов: D37Tools.register('photo', { title, describe(), state(), undo(), commands: { crop: { title, args, run } } }).
 // Кнопка инструмента и ИИ идут ОДНИМ путём — D37Tools.run(tool, cmd, args): проверка аргументов по схеме (лишнее и неверное —
-// отказ с понятной ошибкой, умолчания подставляются), потом run(args). Каждая команда, которая меняет работу, — один шаг
-// «Отменить» в истории инструмента (undo() — отменить последний шаг).
+// отказ с понятной ошибкой, умолчания подставляются), потом run(args, ctx). Каждая команда, которая меняет работу, — один шаг
+// «Отменить» в истории инструмента (undo() — отменить последний шаг); сколько шагов записано на самом деле, инструмент
+// сообщает в ctx.steps (0 — ничего не поменялось).
 // План для ИИ — «d37 v1»: { "d37": 1, "steps": [ { "tool": "photo", "cmd": "adjust", "args": { … } }, … ] }. Сначала проверяются
 // ВСЕ шаги (неизвестный инструмент/команда, неверные аргументы — план не начинается), потом выполняются по одному. Результат
 // раньше идущего шага можно подставить строкой "$N.поле" (N — номер шага с 1): { "asset": "$2.asset" }.
@@ -111,15 +112,20 @@
     if (!v.ok) { emit('reject', { tool, cmd, errors: v.errors }); return { ok: false, error: v.errors[0], errors: v.errors }; }
     const t = get(tool), c = t.commands[cmd];
     const t0 = Date.now();
+    // ctx.steps — сколько шагов «Отменить» команда на самом деле записала (ставит инструмент; нет — по флагу undoable):
+    // «ничего не поменялось» — 0 шагов, и «Отменить всё» у плана не отменит чужой шаг
+    const ctx = Object.assign({ tool: t, via: opts.via || 'ui', signal: opts.signal }, opts.ctx || {});
+    const stepsOf = ok => typeof ctx.steps === 'number' ? Math.max(0, ctx.steps | 0) : (ok && c.undoable ? 1 : 0);
     busy++;
     try {
-      const result = await c.run(v.args, Object.assign({ tool: t, via: opts.via || 'ui', signal: opts.signal }, opts.ctx || {}));
+      const result = await c.run(v.args, ctx);
       emit('run', { tool, cmd, ms: Date.now() - t0, via: opts.via || 'ui' });
-      return { ok: true, result: result === undefined ? null : result, undoable: !!c.undoable };
+      const steps = stepsOf(true);
+      return { ok: true, result: result === undefined ? null : result, undoable: steps > 0, steps };
     } catch (e) {
       const msg = e && e.user ? e.message : (e && e.message ? e.message : String(e));
       emit('error', { tool, cmd, error: msg });
-      return { ok: false, error: msg, errors: [msg] };
+      return { ok: false, error: msg, errors: [msg], steps: stepsOf(false) };
     } finally { busy--; }
   }
 
@@ -185,20 +191,22 @@
       try { args = resolveRefs(s.args, results); } catch (e) { log.push({ tool: s.tool, cmd: s.cmd, ok: false, error: e.message }); opts.onStep && opts.onStep(i, s, 'error', e.message); return { ok: false, done: i, results, steps: log, error: `шаг ${i + 1}: ${e.message}` }; }
       opts.onStep && opts.onStep(i, s, 'run');
       const r = await run(s.tool, s.cmd, args, { via: opts.via || 'plan', signal: opts.signal });
-      log.push({ tool: s.tool, cmd: s.cmd, ok: r.ok, undoable: !!r.undoable && r.ok, error: r.error || '' });
+      log.push({ tool: s.tool, cmd: s.cmd, ok: r.ok, undoable: !!r.undoable && r.ok, steps: r.steps || 0, error: r.error || '' });
       results.push(r.ok ? r.result : null);
       opts.onStep && opts.onStep(i, s, r.ok ? 'ok' : 'error', r.ok ? r.result : r.error);
       if (!r.ok) return { ok: false, done: i, results, steps: log, error: `шаг ${i + 1} (${s.tool}.${s.cmd}): ${r.error}` };
     }
     return { ok: true, done: steps.length, results, steps: log };
   }
-  // Отменить сделанные шаги плана (с конца): у каждого инструмента — его undo() (один шаг истории на команду)
+  // Отменить сделанные шаги плана (с конца): у каждого инструмента — его undo() столько раз, сколько шагов записала команда
+  // (steps; старый журнал без steps — один шаг на удачную команду с undoable). → сколько шагов отменено
   async function undoSteps(log){
     let n = 0;
     for (let i = (log || []).length - 1; i >= 0; i--) {
       const s = log[i], t = get(s.tool);
-      if (!s.ok || !s.undoable || !t || typeof t.undo !== 'function') continue;
-      try { if (await t.undo() !== false) n++; } catch (e) {}
+      const k = typeof s.steps === 'number' ? s.steps : (s.ok && s.undoable ? 1 : 0);
+      if (!k || !t || typeof t.undo !== 'function') continue;
+      for (let j = 0; j < k; j++) { try { if (await t.undo() === false) break; n++; } catch (e) { break; } }
     }
     return n;
   }

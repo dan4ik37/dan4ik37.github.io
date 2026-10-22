@@ -157,7 +157,7 @@
         if (box) {
           b.disabled = false;
           lastLog = r.steps || [];
-          $('[data-a="undo"]').hidden = !lastLog.some(x => x.ok && x.undoable);
+          $('[data-a="undo"]').hidden = !lastLog.some(x => x.steps > 0 || (x.ok && x.undoable));
           if (r.say) { say.hidden = false; say.textContent = '🤖 ' + r.say; }
           else if (!r.ok) { say.hidden = false; say.textContent = '⚠ ' + (r.error || 'Не получилось') + (r.errors && r.errors.length > 1 ? ' (и ещё ' + (r.errors.length - 1) + ')' : ''); }
           else { say.hidden = false; say.textContent = `✓ Готово: ${r.done} ${r.done === 1 ? 'шаг' : 'шагов'}.`; }

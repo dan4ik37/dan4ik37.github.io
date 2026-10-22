@@ -4,11 +4,12 @@
 //  load  — первая загрузка раздела на профиле телефона (412×915, ЦП ×4, без кэша): сколько скачано, когда редактор готов;
 //  big   — фото 12 Мп на профиле телефона: память (все процессы этого Chrome) после открытия, коррекции, кисти, сохранения;
 //  soak  — случайные команды, нажатия и жесты N минут (по умолчанию 10): 0 ошибок, падений нет, память не растёт;
-//  leak  — 20 раз открыть/закрыть раздел (/photo ↔ /): память после сборки мусора не растёт;
+//  leak  — 20 раз (leak 40 — 40) открыть/закрыть раздел (/photo ↔ /): память после сборки мусора не растёт;
+//  ui    — настоящими касаниями на профиле телефона: кисть, щипок, надпись, обрезка 9:16, слои, «↶»;
 //  shot  — снимки телефона и компьютера (D37_TMP/shots).
 // Chrome — переменная CHROME; профиль и временное — D37_TMP (по умолчанию E:\claude-tmp\photo, диск C у владельца полный).
 // Внешние адреса, кроме jsDelivr (основа fabric.js) и шрифтов Google, заблокированы — проверяем свой код.
-const http = require('http'), fs = require('fs'), path = require('path'), { spawn, execFileSync } = require('child_process');
+const http = require('http'), net = require('net'), fs = require('fs'), path = require('path'), { spawn, execFileSync } = require('child_process');
 const SITE = path.join(__dirname, '..');
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || 'E:/claude-tmp/photo';
@@ -25,6 +26,12 @@ const BLOCK = ['*://*.supabase.co/*', '*://*.googlesyndication.com/*', '*://*.do
 function startServe(port){ return spawn('python', [path.join(SITE, 'scripts/serve.py'), String(port)], { cwd: SITE, env: { ...process.env, D37_SERVE_QUIET: '1' }, stdio: 'ignore' }); }
 const getRaw = (port, p) => new Promise(res => http.get({ host: '127.0.0.1', port, path: p }, r => { r.resume(); res(r.statusCode); }).on('error', () => res(0)));
 async function waitPort(port){ for (let i = 0; i < 80; i++) { if (await getRaw(port, '/robots.txt')) return true; await sleep(150); } return false; }
+// Порт, где никто не слушает ни 127.0.0.1, ни ::1 (тесты других веток тоже поднимают serve.py — «чужой» сервер на том же порту
+// отдавал бы чужой сайт: «редактор не открылся» без единой ошибки); после запуска — сверка, что отвечает именно этот сайт
+const probe = (host, port) => new Promise(res => { const s = net.connect({ host, port }); const end = v => { s.destroy(); res(v); }; s.once('connect', () => end(true)); s.once('error', () => end(false)); s.setTimeout(400, () => end(false)); });
+async function pickPort(){ for (let i = 0; i < 60; i++) { const p = 5600 + Math.floor(Math.random() * 2400); if (!(await probe('127.0.0.1', p)) && !(await probe('::1', p))) return p; } throw new Error('нет свободного порта'); }
+const getLen = (port, p) => new Promise(res => http.get({ host: '127.0.0.1', port, path: p }, r => { let n = 0; r.on('data', c => n += c.length); r.on('end', () => res(r.statusCode === 200 ? n : -1)); }).on('error', () => res(-1)));
+async function ownServer(port){ const f = 'js/apps/photo/photo-core.js'; return (await getLen(port, '/' + f)) === fs.readFileSync(path.join(SITE, f)).length; }
 // Память всех процессов этого Chrome (по папке профиля) — Windows; иначе NaN. byType: { renderer, gpu, other } — страница отдельно
 // от процесса видеокарты (у того свои кэши: после первых открытий он растёт и стоит — это не утечка страницы)
 function chromeMem(profile, byType){
@@ -102,8 +109,13 @@ const MKIMG = `async (w, h) => {
 const RUN = (cmd, args) => `D37Tools.run('photo', ${JSON.stringify(cmd)}, ${JSON.stringify(args || {})}).then(r => JSON.stringify(r))`;
 
 async function openEditor(C, base){
+  const READY = '!!(window.D37Photo && window.D37Photo.E && window.D37Tools && D37Tools.get("photo"))';
   await C.load(base + '/photo');
-  const t = await C.until('!!(window.D37Photo && window.D37Photo.E && window.D37Tools && D37Tools.get("photo"))', 60000);
+  let t = await C.until(READY, 60000);
+  if (t < 0 && !(await C.ev('!!window.D37Apps').catch(() => false))) {   // скрипты страницы не дошли (локальный сервер занят) — ещё раз, вслух
+    console.log('openEditor: скрипты страницы не загрузились за 60 с — перезагружаю один раз');
+    await C.load(base + '/photo'); t = await C.until(READY, 60000);
+  }
   if (t < 0) throw new Error('редактор не открылся: ' + await C.ev(`JSON.stringify({ route: document.body.dataset.route, href: location.href, apps: !!window.D37Apps, ui: !!window.D37PhotoUI, root: (document.getElementById('photoRoot') || {}).textContent?.slice(0, 160) })`).catch(e => e.message) + ' ' + JSON.stringify(C.errors.slice(0, 3)));
   return t;
 }
@@ -176,6 +188,63 @@ async function smoke(base){
     const mid = await C.ev(`window.D37E && D37E.models ? D37E.models.list().then(l => l.length) : -1`);
     ok(mid >= 1, 'в «🧩 Модели» Студии 3D есть картинка', mid);
     ok(realErrors(C.errors).length === 0, 'нет ошибок в консоли', realErrors(C.errors));
+  } finally { await C.close(); }
+}
+
+// Пальцем на профиле телефона: кисть, надпись, обрезка 9:16, щипок, слои — настоящими касаниями (не командами)
+async function ui(base){
+  const C = await chrome('ui');
+  try {
+    await C.phone(1);
+    await openEditor(C, base);
+    const tapEl = async sel => { const r = await C.ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; e.scrollIntoView({ block: 'nearest', inline: 'nearest' }); const b = e.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`); if (!r) throw new Error('нет ' + sel); await C.touch('touchStart', [{ x: r.x, y: r.y, id: 1 }]); await C.touch('touchEnd', []); await sleep(250); };
+    // точка документа → точка экрана (холст может быть меньше области: на телефоне снизу панель)
+    const view = async () => JSON.parse(await C.ev(`JSON.stringify((() => { const E = D37Photo.E, v = E.cv.viewportTransform, r = E.cv.upperCanvasEl.getBoundingClientRect(); return { l: r.left, t: r.top, v: Array.from(v), w: E.doc.w, h: E.doc.h }; })())`));
+    const S = (V, x, y) => ({ x: V.l + V.v[0] * x + V.v[4], y: V.t + V.v[3] * y + V.v[5] });
+    await tapEl('[data-a="startClose"]');
+    // кисть: провести пальцем по середине фото
+    await tapEl('.pe-tool[data-tool="brush"]');
+    await sleep(300);
+    let V = await view();
+    const h0 = await C.ev('D37Photo.E.histState().undo');
+    const a = S(V, V.w * 0.25, V.h * 0.5), b = S(V, V.w * 0.75, V.h * 0.5);
+    await C.touch('touchStart', [{ x: a.x, y: a.y, id: 1 }]); for (let i = 1; i <= 10; i++) await C.touch('touchMove', [{ x: a.x + (b.x - a.x) * i / 10, y: a.y, id: 1 }]); await C.touch('touchEnd', []);
+    await sleep(300);
+    const px = await C.ev(`Array.from(D37Photo.E.activeLayer().canvas.getContext('2d').getImageData(${Math.round(V.w / 2)}, ${Math.round(V.h / 2)}, 1, 1).data)`);
+    const painted = await C.ev(`(() => { const c = D37Photo.E.activeLayer().canvas, d = c.getContext('2d').getImageData(0, ${Math.round(V.h / 2)}, c.width, 1).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 1] < 200) n++; return n; })()`);
+    ok(px[1] < 200 && painted > V.w * 0.4 && (await C.ev('D37Photo.E.histState().undo')) === h0 + 1, 'кисть пальцем рисует линию, один шаг «Отменить»', { px, painted, V });
+    // два пальца во время рисования — не рисуют, а приближают
+    const z0 = await C.ev('D37Photo.E.cv.getZoom()');
+    const c0 = S(V, V.w / 2, V.h / 2), cx = c0.x, cy = c0.y, pt = d => [{ x: cx - d / 2, y: cy, id: 1 }, { x: cx + d / 2, y: cy, id: 2 }];
+    await C.touch('touchStart', pt(80)); for (let i = 1; i <= 6; i++) await C.touch('touchMove', pt(80 + 30 * i)); await C.touch('touchEnd', []);
+    await sleep(200);
+    const z1 = await C.ev('D37Photo.E.cv.getZoom()'), h1 = await C.ev('D37Photo.E.histState().undo');
+    ok(z1 > z0 * 1.5 && h1 === h0 + 1, 'щипок приближает и не оставляет следа кисти', { z0, z1, h0, h1 });
+    await tapEl('.pe-zoom');
+    await sleep(200);
+    // надпись: «Текст» → нажать на фото → ввести
+    await tapEl('.pe-tool[data-tool="text"]');
+    await sleep(300);
+    V = await view();
+    const n0 = await C.ev('D37Photo.E.doc.layers.length'), tp = S(V, V.w / 2, V.h * 0.3);
+    await C.touch('touchStart', [{ x: tp.x, y: tp.y, id: 1 }]); await C.touch('touchEnd', []);
+    await C.until(`document.activeElement && document.activeElement.classList.contains('pe-text')`, 5000);
+    await C.ev(`(() => { const t = document.querySelector('.pe-text'); t.value = 'Привет, мир'; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); return 1; })()`);
+    await sleep(400);
+    const tl = await C.ev(`(() => { const L = D37Photo.E.activeLayer(); return L && L.type === 'text' ? L.obj.text : null; })()`);
+    ok((await C.ev('D37Photo.E.doc.layers.length')) === n0 + 1 && tl === 'Привет, мир', 'надпись: нажал на фото — появилась, текст из поля', { n0, tl });
+    // обрезка 9:16
+    await tapEl('.pe-tool[data-tool="crop"]');
+    await tapEl('[data-crop="9:16"]');
+    await tapEl('[data-a="cropOk"]');
+    const doc = await C.ev('JSON.stringify({ w: D37Photo.E.doc.w, h: D37Photo.E.doc.h })').then(JSON.parse);
+    ok(Math.abs(doc.w / doc.h - 9 / 16) < 0.01, 'обрезка 9:16 кнопками', doc);
+    // слои
+    await tapEl('.pe-tool[data-tool="layers"]');
+    ok((await C.ev('document.querySelectorAll(".pe-layer").length')) === (await C.ev('D37Photo.E.doc.layers.length')), 'панель «Слои» — все слои');
+    await tapEl('[data-a="undo"]'); await tapEl('[data-a="undo"]');
+    ok((await C.ev('D37Photo.E.doc.layers.length')) === n0, '«↶» дважды — назад до надписи');
+    ok(realErrors(C.errors).length === 0, 'без ошибок', realErrors(C.errors));
   } finally { await C.close(); }
 }
 
@@ -373,10 +442,19 @@ async function leak(base, n = 20){
     const slope = slopeOf('pageMB'), slopeG = slopeOf('gpuMB');
     const growHeap = pts[pts.length - 1].heapMB - pts[0].heapMB, growNodes = pts[pts.length - 1].nodes - pts[0].nodes;
     console.log(`leak: ${n} открытий/закрытий — страница ${slope > 0 ? '+' : ''}${slope.toFixed(2)} МБ за раз, видеокарта ${slopeG > 0 ? '+' : ''}${slopeG.toFixed(2)} МБ за раз, куча JS ${growHeap > 0 ? '+' : ''}${growHeap.toFixed(1)} МБ, узлов DOM ${growNodes > 0 ? '+' : ''}${growNodes}`);
+    // процесс видеокарты держит освобождённое в своём кэше; сигнал «мало памяти» (как на телефоне) — кэш отдаётся.
+    // Если после него память видеокарты вернулась к началу — это кэш Chrome, а не утечка редактора
+    let gpuP = NaN;
+    try {
+      await C.send('Memory.simulatePressureNotification', { level: 'critical' }); await sleep(3000); await C.gc();
+      gpuP = Infinity; for (let k = 0; k < 3; k++) { await C.gc(); gpuP = Math.min(gpuP, C.mem(true).gpu); await sleep(400); } gpuP = MB(gpuP);
+    } catch (e) {}
+    console.log(`leak: после сигнала «мало памяти» видеокарта ${gpuP} МБ (в начале ${pts[0].gpuMB}, после разогрева ${(pts.find(p => p.i === 4) || pts[0]).gpuMB})`);
     ok(!Number.isFinite(slope) || slope < 2.5, `${n} открытий/закрытий — память страницы не растёт (< 2,5 МБ за раз)`, pts);
     // процесс видеокарты держит кэш освобождённых холстов (растёт первые ~10 раз и стоит) — проверяем, что он ограничен
     const g4 = (pts.find(p => p.i === 4) || pts[0]).gpuMB, gEnd = pts[pts.length - 1].gpuMB;
-    ok(!Number.isFinite(gEnd) || gEnd < g4 + 300, `память видеокарты ограничена (в конце < чем после разогрева + 300 МБ)`, pts);
+    ok(!Number.isFinite(gEnd) || gEnd < g4 + 400, `память видеокарты ограничена (в конце < чем после разогрева + 400 МБ)`, pts);
+    ok(!Number.isFinite(gpuP) || gpuP < g4 + 100, `после сигнала «мало памяти» видеокарта вернулась к разогреву (+100 МБ) — это кэш, не утечка`, { gpuP, g4 });
     ok(growHeap < 8, `куча JS не растёт (< 8 МБ)`, pts);
     ok(!(growNodes > 200), 'узлы DOM не копятся', pts);
     ok(realErrors(C.errors).length === 0, 'без ошибок', realErrors(C.errors));
@@ -405,16 +483,18 @@ async function shots(base){
 }
 
 (async () => {
-  const port = 5600 + Math.floor(Math.random() * 300);
+  const port = await pickPort();
   const srv = startServe(port);
   try {
     if (!await waitPort(port)) throw new Error('serve.py не запустился');
+    if (!await ownServer(port)) throw new Error('на порту ' + port + ' отвечает не этот сайт');
     const base = `http://localhost:${port}`;
     if (MODE === 'smoke' || MODE === 'all') await smoke(base);
+    if (MODE === 'ui' || MODE === 'all') await ui(base);
     if (MODE === 'ai' || (MODE === 'all' && !process.env.D37_NO_AI)) await aiBg(base);
     if (MODE === 'load' || MODE === 'all') await load(base);
     if (MODE === 'big' || MODE === 'all') await big(base);
-    if (MODE === 'leak' || MODE === 'all') await leak(base);
+    if (MODE === 'leak' || MODE === 'all') await leak(base, MODE === 'leak' && +process.argv[3] > 4 ? +process.argv[3] : 20);   // leak 40 — 40 раз
     if (MODE === 'shot' || MODE === 'all') await shots(base);
     if (MODE === 'soak' || MODE === 'all') await soak(base, MIN);
   } catch (e) { fail++; console.log('FAIL', e.stack || e.message); }

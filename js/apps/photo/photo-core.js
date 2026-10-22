@@ -214,16 +214,19 @@
     const rasterBytes = list => list.reduce((s, L) => s + (L.type === 'raster' && L.canvas ? L.canvas.width * L.canvas.height * 8 : 1024), 0);
 
     // ── история ──
-    const hist = { done: [], undone: [], bytes: 0 };
-    function push(entry){
+    const hist = { done: [], undone: [], bytes: 0, seq: 0 };   // seq — сколько шагов записано всего (для ctx.steps у D37Tools)
+    function dropRedo(){
       for (const e of hist.undone) { hist.bytes -= e.bytes || 0; try { e.free && e.free('redo'); } catch (er) {} }
       hist.undone = [];
+    }
+    function push(entry){
+      dropRedo();
       entry.bytes = entry.bytes || 256;
       if (entry.bytes > B.undoBytes) {   // один шаг больше всего бюджета: не храним (и честно говорим)
         try { entry.free && entry.free('drop'); } catch (er) {}
         toast('Этот шаг нельзя будет отменить: мало памяти устройства', 'warn');
       } else {
-        hist.done.push(entry); hist.bytes += entry.bytes;
+        hist.done.push(entry); hist.bytes += entry.bytes; hist.seq++;
         while ((hist.bytes > B.undoBytes || hist.done.length > 80) && hist.done.length > 1) {
           const old = hist.done.shift(); hist.bytes -= old.bytes || 0; try { old.free && old.free('drop'); } catch (er) {}
         }
@@ -733,7 +736,7 @@
     function addLayer(L, label, index){
       const i = index == null ? doc.layers.length : index;
       attach(L, i); doc.active = L.id;
-      push({ label, bytes: 1024, undo(){ detach(L); }, redo(){ attach(L, i); doc.active = L.id; }, free(kind){ if (kind === 'redo') release(L); } });
+      push({ label, bytes: 1024, adds: L, undo(){ detach(L); }, redo(){ attach(L, i); doc.active = L.id; }, free(kind){ if (kind === 'redo') release(L); } });
       afterChange(); emit('active', L.id);
       return L;
     }
@@ -1069,7 +1072,14 @@
       textEdit: a => {
         const L = resolveLayer(a.layer, 'text');
         const p = textProps(a, L.obj); if (a.x != null) p.left = a.x; if (a.y != null) p.top = a.y;
-        change('Текст', [L], () => { L.obj.set(p); L.obj.initDimensions && L.obj.initDimensions(); L.obj.setCoords(); if (a.name) L.name = a.name; else if (a.text) L.name = 'Т: ' + String(a.text).slice(0, 18); fontReady(L); });
+        const set = () => { L.obj.set(p); L.obj.initDimensions && L.obj.initDimensions(); L.obj.setCoords(); if (a.name) L.name = a.name; else if (a.text) L.name = 'Т: ' + String(a.text).slice(0, 18); fontReady(L); };
+        // только что созданная надпись: набранный текст — тем же шагом «Надпись» (одно «Отменить» убирает её целиком, как в Фотошопе)
+        const top = hist.done[hist.done.length - 1];
+        if (top && top.adds === L && Object.keys(a).every(k => k === 'layer' || k === 'text')) {
+          dropRedo(); set(); L.rev++; afterChange(); emit('history', histState());
+          return { layer: L.id };
+        }
+        change('Текст', [L], set);
         return { layer: L.id };
       },
       layerNew: a => {
@@ -1125,7 +1135,11 @@
     // Команды по очереди: пока одна идёт (открыть фото, экспорт), следующая ждёт
     const serial = fn => (...args) => { const p = queue.then(() => fn(...args)); queue = p.catch(() => {}); return p; };
     const commands = {};
-    for (const [name, sch] of Object.entries(PC.SCHEMAS)) commands[name] = Object.assign({}, sch, { run: serial(async a => { if (disposed) throw userErr('Редактор закрыт'); return RUN[name](a); }) });
+    for (const [name, sch] of Object.entries(PC.SCHEMAS)) commands[name] = Object.assign({}, sch, { run: serial(async (a, ctx) => {
+      if (disposed) throw userErr('Редактор закрыт');
+      const n0 = hist.seq;
+      try { return await RUN[name](a); } finally { if (ctx) ctx.steps = hist.seq - n0; }   // ничего не поменялось — 0 шагов
+    }) });
     let unreg = null;
     if (root.D37Tools) unreg = root.D37Tools.register('photo', { title: 'Фоторедактор', version: 1, describe: () => PC.DESCRIBE, state: info, undo: () => undo(), commands });
     function exec(cmd, args){ return root.D37Tools ? root.D37Tools.run('photo', cmd, args || {}, { via: 'ui' }) : Promise.resolve({ ok: false, error: 'D37Tools не загружен' }); }
@@ -1209,7 +1223,8 @@
     return {
       cv, doc, brush, B, info, exec, undo, redo, fit, zoomAt, panBy, setTool, get tool(){ return tool; }, select, layerById, activeLayer,
       layerInfo, layerThumb, thumbDataURL, previewFilters, applyFilters, cropRect, setCropAspect, get cropAspect(){ return cropAspect; },
-      openBlob, placeBlob, exportBlob, toStudio3d, download, histState, get dirty(){ return dirty; }, set dirty(v){ dirty = !!v; },
+      // файл с устройства (кнопки, перетащить, вставить) — в той же очереди, что и команды: не пересекаются с ними
+      openBlob: serial(openBlob), placeBlob: serial(placeBlob), exportBlob: serial(exportBlob), toStudio3d, download, histState, get dirty(){ return dirty; }, set dirty(v){ dirty = !!v; },
       get threaded(){ return W.threaded; }, on(f){ subs.add(f); return () => subs.delete(f); }, emit, toast, dispose, get disposed(){ return disposed; },
       _test: { hist, rasterPixels, renderLayers, strokeBegin, strokeTo, strokeEnd },
     };

@@ -354,13 +354,10 @@
       if (mode === 'place') return placeBlob(blob, name);
       try { await E.openBlob(blob, name); } catch (er) { toast('⚠ ' + (er.message || er), 'err'); }
     }
+    // Файл с устройства — сразу в работу (в «Мои материалы» без спроса не кладём: место в браузере не резиновое).
+    // Команды open/place (ИИ) берут картинки из «Моих материалов» — внутри тот же E.openBlob / E.placeBlob.
     async function placeBlob(blob, name){
-      try {
-        if (!root.D37Assets) return E.placeBlob(blob, { fileName: name });
-        // через «Мои материалы» — тем же путём, что и команда place (ИИ сможет повторить)
-        const meta = await root.D37Assets.put(blob, { type: 'image', name: name || 'Картинка', tool: 'photo' });
-        return run('place', { asset: meta.id });
-      } catch (er) { toast('⚠ ' + (er.message || er), 'err'); }
+      try { await E.placeBlob(blob, { fileName: name }); } catch (er) { toast('⚠ ' + (er.message || er), 'err'); }
     }
     fileIn.addEventListener('change', () => { const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (f) openFile(f, f.name); });
     const stage = $('.pe-stage');

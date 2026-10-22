@@ -8,7 +8,7 @@
 // /photo/<номер материала> — сразу открыть картинку из «Моих материалов» (так другой инструмент «отправляет в фоторедактор»).
 (function () {
   'use strict';
-  const VER = '2';   // 2 — «Убрать фон», память телефона, без кэша fabric у картинок
+  const VER = '3';   // 3 — ctx.steps (шаги «Отменить» по факту), текст новой надписи — тем же шагом
   const FABRIC = 'https://cdn.jsdelivr.net/npm/fabric@7.4.0/dist/index.min.js';
   // ИИ «🪄 Убрать фон» — только по кнопке: ONNX Runtime Web 1.30.0 (MIT) с jsDelivr + модель U²-Netp (Apache-2.0, ~4,6 МБ)
   // с Hugging Face, закреплённая на коммите (лицензии проверены — docs/PHOTO.md)
