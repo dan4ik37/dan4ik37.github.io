@@ -121,13 +121,14 @@
     // каждый значок заново (V.icon + перевод в картинку — на телефоне ×4 до 2 мс на значок, 100+ вещей)
     let warmI = 0, warmId = 0, warmOff = false;
     const hasDoc = typeof document !== 'undefined' && typeof window !== 'undefined';
-    const ric = hasDoc && window.requestIdleCallback ? f => window.requestIdleCallback(f, { timeout: 4000 }) : f => setTimeout(() => f({ timeRemaining: () => 4, didTimeout: false }), 250);
+    const ric = hasDoc && window.requestIdleCallback ? f => window.requestIdleCallback(f, { timeout: 2500 }) : f => setTimeout(() => f({ timeRemaining: () => 4, didTimeout: false }), 250);
     const cic = id => { try { (hasDoc && window.cancelIdleCallback && window.requestIdleCallback ? window.cancelIdleCallback : clearTimeout)(id); } catch (e) {} };
     function warm(dl){
       warmId = 0; if (warmOff) return;
       const V = VX(), L = V.items || [];
-      for (let n = 0; warmI < L.length && n < 6; n++) {
-        if (n && !(dl.timeRemaining() > 3)) break;
+      // простоя нет (слабый телефон: кадр занят целиком) — по 2 значка раз в 2,5 с (~1 мс), иначе — пока есть простой, до 6
+      for (let n = 0; warmI < L.length && n < (dl.didTimeout ? 2 : 6); n++) {
+        if (n && !dl.didTimeout && !(dl.timeRemaining() > 3)) break;
         const it = L[warmI++]; if (it && it.name) { try { V.iconURL(it.name, 40); } catch (e) { warmOff = true; return; } }
       }
       if (warmI < L.length) warmId = ric(warm);

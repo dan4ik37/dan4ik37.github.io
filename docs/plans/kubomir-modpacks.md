@@ -19,6 +19,19 @@
 13. Добавлено 22.10: идеи переносим и в другие игры. В таблицах §2 есть колонка «Где ещё» (Подземье, Мир Денчика, Студия 3D, Орда/Башни/Арена/io). Логика пишется один раз в общих модулях движка (книга заданий, книга рецептов, карта и точки, бестиарий, добыча и постройки, привалы), в каждой игре остаётся тонкий «переходник». Список модулей и порядок — раздел 3.3.
 14. Где что: этот файл `docs/plans/kubomir-modpacks.md`; 244 мода по группам с идеями `E:\claude-tmp\t047\mods-categorized.json` (рядом, не в репозитории).
 
+## Phase 1 status (T-049, 22.10.2026; for agents)
+- Done: K1.0 seam (`D37E.host`, `D37E.accessories` — 8 slots opened by progress, `D37E.sheet`); K1.1 info pack (`D37E.info`: watch, compass strip,
+  depth meter, lens target card = the digging rules, ore finder, food preview); K1.2 recipe browser (`D37E.recipes` + `D37E.search`, unlocked
+  by «Книга мастера»; H1 index by shape + first item); K1.3 only «Положить в сетку»; K1.5 bed + sleep (`D37E.sleep`, co-op vote) and buckets
+  (sources only, guests not yet); consumable «Свиток возврата» instead of K1.8 camps (owner §7½); K1.6 atlas (`D37E.mapkit`: compass + 8 map
+  sheets from different 128-block regions; minimap, 64 waypoints, knockout point); K1.10 quest book (`D37E.quests`, items-only rewards,
+  chapter «Помощники» opens slot 7).
+- Not done: K1.3 tree / pinned recipe goals / chooser, K1.4, K1.7 (fullscreen map, grave, tile store in IndexedDB), K1.8 camps (`D37E.travel`),
+  K1.9 finder, K1.11 backpack, K1.12, K1.13, K1.14 SEO recipe pages, K1.15; lift and ward lamp (A19/A20); mod-format additions (§5.4);
+  Podzem adapters; accessory visuals on the character; guest kill events.
+- Files: `js/engine/{host,accessories,sheet,info,recipes,sleep,mapkit,quests}.js`, `js/games/kubomir-{x,info,recipes,world,map,quests}.js`;
+  tests `scripts/kubomir-qol-test.cjs` (node), `scripts/kubomir-qol-e2e.cjs` (Chrome: shots | perf | leak | soak).
+
 ---
 
 ## 0. Scope, rules, method
