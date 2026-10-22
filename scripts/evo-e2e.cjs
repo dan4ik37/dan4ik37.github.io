@@ -127,6 +127,17 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
       ok(await waitFor(`!!document.querySelector('.kp-evo')`), 'из карточки «съели» — в «Эволюцию»');
       await click('[data-io="evback"]');
       ok(await waitFor(`!!document.querySelector('.kp-gain')`), '«← Назад» — снова карточка «съели»');
+      // «Ещё раз» → новая жизнь (новый билет) → конец раунда: итоги с ДНК, новый раунд — карточка уходит сама
+      const lives0 = await ev('D37Evo.api.st.rec.lives');
+      await click('[data-io="again"]');
+      ok(await waitFor(`(() => { const S = ${T}.S; return S.W.owners[S.me].alive; })()`, 5000), '«Ещё раз» — снова в игре');
+      await sleep(1500);
+      ok(await ev(`!!D37Evo.api.st.tk`), 'новая жизнь — новый билет');
+      await ev(`${T}.S.W.left = 15, 1`);
+      ok(await waitFor(`!!document.querySelector('.io-pod') && /ДНК/.test(document.querySelector('.kp-gain')?.textContent || '') && !/считаем/.test(document.querySelector('.kp-gain')?.textContent || '')`, 6000), 'конец раунда: пьедестал и ДНК жизни', await ev(`document.querySelector('.kp-gain')?.textContent`));
+      ok(await ev(`D37Evo.api.st.rec.lives === ${lives0} + 1`), 'жизнь до конца раунда записана в род');
+      await shot('evo-podium-pc.png');
+      ok(await waitFor(`document.querySelector('.io-ov').hidden && ${T}.S.W.phase === 0`, 12000), 'новый раунд — карточка ушла сама');
       // телефон: Глубина (род на стадии «Колония»: продвинутый пробный род)
       await phone();
       await go(`${BASE}/#/home`);

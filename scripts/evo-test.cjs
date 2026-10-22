@@ -315,7 +315,8 @@ async function rooms(){
   Bc.setInput(Float64Array.from([1, 0, 2, 0, 0, 0]), clock.t); await tick(1500);
   ok(A.W.owners[Bc.me].colN === 3 && Bc.G.colN === 3, 'гость делится — колония 3 у хозяина и у гостя в снимке', [A.W.owners[Bc.me].colN, Bc.G.colN]);
   await tick(5000);
-  ok(Bc.G.pel > 0 || Bc.G.dS > 0 || A.W.owners[Bc.me].pel === 0, 'ДНК жизни гостя считает хозяин и шлёт гостю', [Bc.G.pel, Bc.G.dS]);
+  const hp = A.W.owners[Bc.me].pel;
+  ok(hp > 0 && Math.abs(hp - Bc.G.pel) <= 5 && Math.abs(A.W.owners[Bc.me].dS - Bc.G.dS) < 1, 'ДНК жизни гостя считает хозяин и шлёт гостю в снимке', [hp, Bc.G.pel, A.W.owners[Bc.me].dS, Bc.G.dS]);
   // смена хозяина: колония гостя не рассыпается
   const before = Bc.G.colN;
   A.leave(); await tick(4500);

@@ -286,7 +286,7 @@
     function makePV(b){
       const st = A.st || E.Rules.fresh(), cfg = E.worldCfg(b);
       const HA = new Float64Array(H.MAXO), PX = new Float64Array(H.MAXO), PY = new Float64Array(H.MAXO), CX = new Float64Array(H.MAXO), CY = new Float64Array(H.MAXO), CM = new Float64Array(H.MAXO);
-      const HEART = new Int16Array(H.MAXO), LAY = new Array(H.MAXO).fill(null), GLO = new Uint8Array(H.MAXO);
+      const HEART = new Int16Array(H.MAXO), BIG = new Int16Array(H.MAXO), LAY = new Array(H.MAXO).fill(null), GLO = new Uint8Array(H.MAXO);
       const lays = new Map();
       let hl = null, hlTxt = '', known = 0, life = null, last = null, kOv = '';
       for (let i = 0; i < E.MICRO_IDS.length; i++) if (st.finds.includes(E.MICRO_IDS[i])) known |= 1 << i;
@@ -437,8 +437,13 @@
       }
       function bridges(c, ox, oy, z, n){
         const R = H.R, S = H.S;
-        HEART.fill(-1); CX.fill(0); CY.fill(0); CM.fill(0);
-        for (let j = 0; j < n; j++) { const i = R.o[j], m = R.r[j] * R.r[j]; CX[i] += R.x[j] * m; CY[i] += R.y[j] * m; CM[i] += m; if (R.f[j] & 8) HEART[i] = j; }
+        HEART.fill(-1); BIG.fill(-1); CX.fill(0); CY.fill(0); CM.fill(0);
+        for (let j = 0; j < n; j++) {
+          const i = R.o[j], m = R.r[j] * R.r[j]; CX[i] += R.x[j] * m; CY[i] += R.y[j] * m; CM[i] += m;
+          if (R.f[j] & 8) HEART[i] = j;
+          if (R.f[j] & 4 && (BIG[i] < 0 || R.r[j] > R.r[BIG[i]])) BIG[i] = j;
+        }
+        for (let i = 0; i < H.MAXO; i++) if (HEART[i] < 0) HEART[i] = BIG[i];   // у гостя сердце не приходит — самая большая клетка колонии
         // курс участника — по движению (свой — по управлению), плавно
         for (let i = 0; i < H.MAXO; i++) {
           if (!CM[i]) continue;
@@ -453,12 +458,12 @@
         }
         // мостики колонии: от сердца к клеткам
         let any = false;
-        for (let j = 0; j < n; j++) if ((R.f[j] & 12) === 4 && HEART[R.o[j]] >= 0) { any = true; break; }
+        for (let j = 0; j < n; j++) if ((R.f[j] & 12) === 4 && HEART[R.o[j]] >= 0 && HEART[R.o[j]] !== j) { any = true; break; }
         if (!any) return;
         c.globalAlpha = .55; c.lineCap = 'round';
         for (let j = 0; j < n; j++) {
           if ((R.f[j] & 12) !== 4) continue;
-          const h = HEART[R.o[j]]; if (h < 0) continue;
+          const h = HEART[R.o[j]]; if (h < 0 || h === j) continue;
           const sk = H.skins[R.o[j]];
           c.strokeStyle = sk ? sk.b : '#fff'; c.lineWidth = Math.max(2, Math.min(R.r[j], R.r[h]) * z * .55);
           c.beginPath(); c.moveTo(ox + R.x[h] * z, oy + R.y[h] * z); c.lineTo(ox + R.x[j] * z, oy + R.y[j] * z); c.stroke();
@@ -471,8 +476,27 @@
         const a0 = HA[i], night = pv.light < .5;
         for (let k = 0; k < 6; k++) { const id = l[k]; if (id && id !== '=') part(c, id, x, y, r, a0 + k * TAU / 6, t, sk, night, j); }
       }
+      // «Тени великанов» (план §2.3): над лужей и рифом раз в ~1,5 мин проплывает тень огромного существа — по времени, у всех одна
+      const SHP = 95, SHT = 9;
+      function shadow(c, ox, oy, z){
+        const now = Date.now() / 1000, k = Math.floor(now / SHP), ph = now - k * SHP;
+        if (ph > SHT) return;
+        const a = K.hash3(k, 37, 1) * TAU, ca = Math.cos(a), sa = Math.sin(a), off = (K.hash3(k, 37, 2) - .5) * 2400;
+        const d = (ph / SHT * 2 - 1) * 3200, x = ox + (ca * d - sa * off) * z, y = oy + (sa * d + ca * off) * z, rx = 560 * z, ry = 220 * z;
+        c.save();
+        c.globalAlpha = .16 * Math.min(1, ph / 1.2, (SHT - ph) / 1.2);
+        c.fillStyle = '#00060f';
+        c.translate(x, y); c.rotate(a);
+        c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, TAU);
+        c.moveTo(-rx * .85, 0); c.lineTo(-rx * 1.45, -ry * .9); c.lineTo(-rx * 1.3, 0); c.lineTo(-rx * 1.45, ry * .9); c.closePath();   // хвост
+        c.moveTo(rx * .1, ry * .8); c.lineTo(-rx * .25, ry * 1.6); c.lineTo(-rx * .35, ry * .7); c.closePath();   // плавники
+        c.moveTo(rx * .1, -ry * .8); c.lineTo(-rx * .25, -ry * 1.6); c.lineTo(-rx * .35, -ry * .7); c.closePath();
+        c.fill();
+        c.restore();
+      }
       function overlay(c, ox, oy, z, W2, H2, t, n){
         const L = pv.light;
+        if (b !== 'deep') shadow(c, ox, oy, z);
         if (L > .9 || typeof document === 'undefined') return;
         if (!pv.lm) { pv.lm = document.createElement('canvas'); pv.lx = pv.lm.getContext('2d'); }
         const w = Math.max(16, Math.round(W2 / 4)), h = Math.max(16, Math.round(H2 / 4)), x = pv.lx, k = w / W2, g = glowSprite();
