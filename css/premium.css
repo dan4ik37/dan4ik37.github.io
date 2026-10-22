@@ -1926,16 +1926,17 @@ body.low .wd-tile.rev,body.low .wd-row.shake{animation:none}
 .sq-lv b{font-size:1.05rem;color:var(--text)}
 .sq-bar,.sq-pb{display:block;height:8px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:.6rem}
 .sq-bar i,.sq-pb i{display:block;height:100%;border-radius:inherit;background:var(--sc);min-width:2px}
-.sq-path{display:flex;gap:.35rem;overflow-x:auto;overscroll-behavior-x:contain;padding:.6rem 0 .35rem;margin-top:.2rem;scrollbar-width:thin}
+.sq-path{display:flex;gap:.35rem;overflow-x:auto;overscroll-behavior-x:contain;padding:.6rem 0 .35rem;margin-top:.2rem;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent}
+.sq-path::-webkit-scrollbar{height:5px}.sq-path::-webkit-scrollbar-track{background:transparent}.sq-path::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:9px}
+@media(pointer:coarse){.sq-path{scrollbar-width:none}.sq-path::-webkit-scrollbar{display:none}}
 .sq-c{flex:0 0 auto;width:46px;display:flex;flex-direction:column;align-items:center;gap:.05rem;padding:.3rem 0;border-radius:10px;
-  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);opacity:.6}
-.sq-c i{font-style:normal;font-size:.56rem;color:var(--muted)}
-.sq-c b{font-size:1.05rem;line-height:1.2}
+  background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);opacity:.6;font-size:1.05rem;line-height:1.2}
+.sq-c::before{content:attr(data-lv);font-size:.56rem;line-height:1.4;color:var(--muted)}
 .sq-c small{font-size:.58rem;color:#ffd166;font-weight:700}
 .sq-c.big{border-color:rgba(255,255,255,.2)}
 .sq-c.ready{opacity:1;border-color:var(--sc);box-shadow:0 0 0 1px var(--sc) inset}
 .sq-c.got{opacity:1;background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.45)}
-.sq-c.got i::after{content:' ✓';color:#22c55e}
+.sq-c.got::before{content:attr(data-lv) ' ✓';color:#22c55e}
 .sq-f{display:flex;flex-wrap:wrap;align-items:flex-start;gap:.5rem;margin-top:.55rem}
 .sq-how{flex:1 1 100%;font-size:.7rem;color:var(--muted)}
 .sq-how summary{cursor:pointer;color:var(--text);font-weight:700;padding:.2rem 0}

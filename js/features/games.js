@@ -346,7 +346,7 @@ function seasonHtml(s, compact){
   if (compact) return head + (claim || prev ? `<div class="sq-f">${claim}${prev}</div>` : '');
   const path = SEASON_LADDER.map(e => {
     const st = e.lv <= (s.claimed || 0) ? ' got' : e.lv <= lv ? ' ready' : '';
-    return `<span class="sq-c${st}${e.coins && !e.item && !e.frame && !e.title ? '' : ' big'}" title="${esc(`Уровень ${e.lv}: ${seasonRewardText(e, t)}`)}"><i>${e.lv}</i><b>${seasonRewardIcon(e, t)}</b>${e.coins && !e.title ? `<small>${e.coins}</small>` : ''}</span>`;
+    return `<span class="sq-c${st}${e.coins && !e.item && !e.frame && !e.title ? '' : ' big'}" data-lv="${e.lv}" title="${esc(`Уровень ${e.lv}: ${seasonRewardText(e, t)}`)}">${seasonRewardIcon(e, t)}${e.coins && !e.title ? `<small>${e.coins}</small>` : ''}</span>`;
   }).join('');
   const how = `<details class="sq-how"><summary>Как получать ⭐</summary><ul>
       <li>🏆 Победа в любой игре — +${QUEST_NUM.s_win} ⭐ (первые ${QUEST_NUM.s_win_day} побед в день${s.auth ? `, сегодня: ${Math.min(s.wins_today || 0, QUEST_NUM.s_win_day)}` : ''})</li>
@@ -388,12 +388,17 @@ async function renderQuests(){
   if (!sb || !wb) return;
   const h = await questLoad(false);
   if (!h?.season || !h?.weekly) { sb.hidden = wb.hidden = true; return; }
+  if (!sb.hidden && sb.dataset.at === String(questAt)) return;   // те же данные — DOM не трогаем
+  sb.dataset.at = String(questAt);
   const t = seasonThemeById(h.season.theme);
   sb.style.setProperty('--sc', t ? t.color : '#ffd166');
   sb.innerHTML = seasonHtml(h.season, false); sb.hidden = false;
   wb.innerHTML = weeklyHtml(h.weekly, false); wb.hidden = false;
-  const path = sb.querySelector('.sq-path'), cur = path?.querySelector('.sq-c:not(.got)');
-  if (path && cur) path.scrollLeft = Math.max(0, cur.offsetLeft - path.offsetLeft - path.clientWidth / 3);   // к ближайшей награде
+  // к ближайшей награде — в кадре (без лишней синхронной раскладки страницы)
+  requestAnimationFrame(() => {
+    const path = sb.querySelector('.sq-path'), cur = path?.querySelector('.sq-c:not(.got)');
+    if (path && cur) path.scrollLeft = Math.max(0, cur.offsetLeft - path.offsetLeft - path.clientWidth / 3);
+  });
 }
 // Профиль (свой): сезон и задания недели коротко
 async function renderProfileQuests(uid, isOwn){
@@ -407,9 +412,11 @@ async function renderProfileQuests(uid, isOwn){
     <div class="sq-more"><a class="dq-btn ghost" href="/play">Все задания и награды сезона →</a></div>`;
   card.hidden = false;
 }
+// перерисовать то, что сейчас на экране (витрина «Игр» или свой профиль) — без лишних запросов на других страницах
 function questsRerender(){
-  if (!document.getElementById('gamesHub')?.hidden) renderQuests();
-  if (document.getElementById('profileQuestsCard') && !document.getElementById('profileQuestsCard').hidden && currentUser) renderProfileQuests(currentUser.id, true);
+  const route = document.body.dataset.route;
+  if (route === 'games' && !document.getElementById('gamesHub')?.hidden) renderQuests();
+  if (route === 'profile' && !document.getElementById('profileQuestsCard')?.hidden && currentUser) renderProfileQuests(currentUser.id, true);
 }
 async function weeklyClaim(btn, code){
   if (!WEEKLY_QUESTS[code] || !currentUser) return;

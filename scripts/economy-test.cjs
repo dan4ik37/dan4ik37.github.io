@@ -216,7 +216,7 @@ if (sim) {
     ok(css.includes(`.lv-frame-ss[data-ss="${t.id}"]{--ssc:${t.color};--sse:'${t.icon}'}`), `рамка темы ${t.id} — в css/premium.css (цвет и значок как в season_themes)`);
   }
   ok(G.seasonTitleDef('ss:2026-11:1')?.title === 'Осенний дождь 2026' && /Легенда/.test(G.seasonTitleDef('ss:2027-01:2')?.title) && G.seasonTitleDef('ss:x') === null, 'титулы сезона: «тема год» и «Легенда: …»');
-  ok(/'ss:' \|\| ym \|\| ':' \|\| \(e->>'title'\)/.test(fnBody(more, 'season_claim')), 'season_claim выдаёт титулы ss:ГГГГ-ММ:N (как seasonTitleDef)');
+  ok(/'ss:' \|\| ym \|\| ':' \|\| \(e->>'title'\)/.test(fnBody(more, 'season_claim_at')), 'season_claim_at выдаёт титулы ss:ГГГГ-ММ:N (как seasonTitleDef)');
   // платного пути нет — только выключатель; случайности нет
   ok(/function public\.season_paid_on\(\) returns boolean language sql immutable as \$\$ select false \$\$/.test(more), 'платного пути нет: season_paid_on() → false');
   const qsql = more.slice(more.indexOf('ЗАДАНИЯ НЕДЕЛИ, СЕЗОННЫЙ ПУТЬ И НОВОГОДНЕЕ ЗАДАНИЕ'));
