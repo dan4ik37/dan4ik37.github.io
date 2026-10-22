@@ -1,0 +1,147 @@
+/* ═══ 🖼 Фоторедактор (js/apps/photo/photo-ui.js) — классы pe-*. Грузится только на разделе /photo (js/apps/apps.js) ═══ */
+#photo-page{padding:0;margin:0;max-width:none}
+body.pe-on{overflow:hidden!important;overscroll-behavior:none}
+body.pe-on #bottomTabbar,body.pe-on #perfToggle,body.pe-on #scrollTop,body.pe-on #donateFab,body.pe-on footer,body.pe-on .d37-live,
+body.pe-on #readProgress,body.pe-on #pwaBanner,body.pe-on #cursorTrail,body.pe-on #cursorDot,body.pe-on .chat-toast{display:none!important}
+.pe-loading{position:fixed;left:0;right:0;bottom:0;top:64px;z-index:440;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  background:#101016;color:var(--muted,#a0a0b8);font-size:.95rem;text-align:center;padding:16px}
+.pe-loading b{color:var(--text,#f0f0f8);font:800 1.1rem Montserrat,sans-serif}
+.pe-loading i{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:var(--accent,#7c5cff);animation:pe-spin .8s linear infinite}
+@keyframes pe-spin{to{transform:rotate(360deg)}}
+
+.pe{position:fixed;left:0;right:0;bottom:0;top:var(--pe-top,64px);z-index:440;display:flex;flex-direction:column;background:#101016;color:var(--text,#f0f0f8);
+  font-family:inherit;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.pe.gs-fs{z-index:9100;--pe-top:0px}
+.pe button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.pe button:disabled{opacity:.38;cursor:default}
+.pe input,.pe select,.pe textarea{font:inherit;color:inherit}
+.pe-top{display:flex;align-items:center;gap:4px;padding:4px 6px;min-height:52px;border-bottom:1px solid rgba(255,255,255,.08);background:#14141c;flex:none}
+.pe-btn{min-width:44px;min-height:44px;padding:0 10px;border:1px solid rgba(255,255,255,.1);border-radius:12px;background:rgba(255,255,255,.05);font-size:1.15rem;line-height:1;display:inline-flex;align-items:center;justify-content:center;gap:4px}
+.pe-btn:hover:not(:disabled){background:rgba(255,255,255,.1)}
+.pe-acc{background:var(--accent,#7c5cff)!important;border-color:transparent!important;color:#fff!important}
+.pe-lbl{font-size:.88rem;font-weight:700}
+.pe-title{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 6px;line-height:1.15}
+.pe-title b{font:800 .95rem Montserrat,sans-serif}
+.pe-title span{font-size:.72rem;color:var(--muted,#a0a0b8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pe-main{flex:1;min-height:0;display:flex;position:relative}
+.pe-stage{position:relative;flex:1;min-width:0;min-height:0;overflow:hidden;background:#15151c;touch-action:none}
+.pe-stage-in{position:absolute;inset:0}
+.pe-stage.pe-drop::after{content:'Отпусти — откроется';position:absolute;inset:10px;border:2px dashed var(--accent,#7c5cff);border-radius:16px;display:flex;align-items:center;justify-content:center;
+  background:rgba(124,92,255,.12);color:#fff;font-weight:800;pointer-events:none}
+.pe-zoom{position:absolute;left:8px;bottom:8px;min-height:32px;padding:0 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(10,10,16,.75);font-size:.78rem;font-weight:700}
+.pe-busy{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(10,10,16,.55);z-index:5;font-weight:700}
+.pe-busy[hidden],.pe-start[hidden]{display:none}
+.pe-busy i{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;animation:pe-spin .8s linear infinite}
+.pe-toasts{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:6;pointer-events:none;width:min(94%,520px)}
+.pe-toast{padding:9px 14px;border-radius:12px;background:rgba(16,16,24,.94);border:1px solid rgba(255,255,255,.12);font-size:.86rem;box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .4s;text-align:center;-webkit-user-select:text;user-select:text}
+.pe-toast.ok{border-color:rgba(74,222,128,.5)}.pe-toast.warn{border-color:rgba(255,209,102,.6);color:#ffe7a8}.pe-toast.err{border-color:rgba(255,107,129,.6);color:#ffc2cc}
+.pe-toast.out{opacity:0}
+.pe-fail{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:8px}
+
+/* стартовая карточка */
+.pe-start{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:14px;background:rgba(10,10,16,.6);z-index:4}
+.pe-card{width:min(460px,100%);max-height:100%;overflow:auto;padding:18px;border-radius:18px;background:#1a1a24;border:1px solid rgba(255,255,255,.1);box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.pe-card>b{display:block;font:800 1.2rem Montserrat,sans-serif;margin-bottom:6px}
+.pe-card p{margin:0 0 12px;font-size:.88rem;color:var(--muted,#a0a0b8);line-height:1.45}
+.pe-link{margin-top:10px;background:none;border:0;color:var(--accent2,#a99bff);font-weight:700;padding:8px 0;min-height:40px}
+
+/* инструменты */
+.pe-tools{display:flex;flex:none;background:#14141c;gap:2px;padding:4px}
+.pe-tool{min-width:52px;min-height:52px;padding:4px 2px;border:1px solid transparent;border-radius:12px;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.pe-tool i{font-style:normal;font-size:1.3rem;line-height:1}
+.pe-tool span{font-size:.62rem;color:var(--muted,#a0a0b8);white-space:nowrap}
+.pe-tool:hover{background:rgba(255,255,255,.06)}
+.pe-tool.on{background:rgba(124,92,255,.22);border-color:rgba(124,92,255,.65)}
+.pe-tool.on span{color:#fff}
+
+/* панель */
+.pe-panel{flex:none;background:#14141c;display:flex;flex-direction:column;min-height:0}
+.pe-ph{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid rgba(255,255,255,.06);min-height:44px}
+.pe-ph b{flex:1;font:800 .92rem Montserrat,sans-serif}
+.pe-pb{overflow:auto;padding:8px 12px 12px;min-height:0;overscroll-behavior:contain;-webkit-user-select:none;user-select:none}
+.pe-hint{font-size:.8rem;color:var(--muted,#a0a0b8);margin:6px 0;line-height:1.4}
+.pe-warn{font-size:.82rem;color:#ffd166;margin:6px 0;line-height:1.5}
+.pe-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.pe-big{flex:1 1 auto;min-height:44px;padding:0 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);font-weight:700;font-size:.9rem}
+.pe-mini{min-height:40px;min-width:40px;padding:0 10px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);font-size:.85rem;font-weight:600}
+.pe-mini.on,.pe-chip.on,.pe-flt.on{background:rgba(124,92,255,.25);border-color:rgba(124,92,255,.7)}
+.pe-danger{color:#ff8fa3}
+.pe-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.pe-chip{min-height:40px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);font-size:.82rem;font-weight:600}
+.pe-chip small{color:var(--muted,#a0a0b8);margin-left:4px}
+.pe-sl{display:block;margin:6px 0 10px}
+.pe-sl>span{display:flex;justify-content:space-between;font-size:.8rem;color:var(--muted,#a0a0b8);margin-bottom:2px}
+.pe-sl b{color:var(--text,#f0f0f8);font-weight:700}
+.pe-sl input[type=range]{width:100%;height:32px;accent-color:var(--accent,#7c5cff);touch-action:pan-y}
+.pe-sel{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0;font-size:.82rem;color:var(--muted,#a0a0b8)}
+.pe-sel select,.pe-size input{min-height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#1d1d28;padding:0 8px;max-width:60%}
+.pe-sel input[type=color]{width:56px;height:40px;border:0;background:none;padding:0}
+.pe-text{width:100%;box-sizing:border-box;min-height:64px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:#1d1d28;padding:10px;font-size:1rem;resize:vertical;-webkit-user-select:text;user-select:text}
+.pe-colors{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 10px}
+.pe-sw{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.25);padding:0}
+.pe-sw.on{outline:3px solid var(--accent,#7c5cff);outline-offset:2px}
+.pe-colors input[type=color]{width:40px;height:36px;border:0;background:none;padding:0}
+.pe-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px}
+.pe-flt{min-height:64px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.78rem}
+.pe-flt i{font-style:normal;font-size:1.3rem}
+.pe-lrow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.pe-layers{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.pe-layer{display:flex;align-items:center;gap:8px;min-height:52px;padding:4px 6px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);cursor:pointer}
+.pe-layer.on{border-color:rgba(124,92,255,.7);background:rgba(124,92,255,.14)}
+.pe-lthumb{width:40px;height:40px;flex:none;border-radius:8px;overflow:hidden;background:repeating-conic-gradient(#3a3a46 0 25%,#2c2c36 0 50%) 0 0/12px 12px;display:flex}
+.pe-lthumb canvas{width:40px;height:40px}
+.pe-lname{flex:1;min-width:0;font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pe-eye{min-width:40px;min-height:40px;border:0;border-radius:10px;background:none;font-size:1.05rem}
+.pe-eye.off{opacity:.5}
+.pe-quick{margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06)}
+.pe-size{display:flex;align-items:flex-end;gap:6px;margin:6px 0}
+.pe-size label{flex:1;display:flex;flex-direction:column;gap:3px;font-size:.78rem;color:var(--muted,#a0a0b8)}
+.pe-size input{max-width:none;width:100%;box-sizing:border-box}
+
+/* меню и окна */
+.pe-menu{position:absolute;z-index:20;min-width:240px;max-width:min(340px,calc(100% - 12px));max-height:70%;overflow:auto;padding:6px;border-radius:14px;background:#1d1d29;border:1px solid rgba(255,255,255,.12);box-shadow:0 18px 44px rgba(0,0,0,.55)}
+.pe-menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:46px;padding:6px 10px;border:0;border-radius:10px;background:none;text-align:left}
+.pe-menu button:hover:not(:disabled){background:rgba(255,255,255,.07)}
+.pe-menu i{font-style:normal;font-size:1.1rem;width:24px;text-align:center}
+.pe-menu span{display:flex;flex-direction:column;font-size:.9rem;font-weight:600}
+.pe-menu small{font-size:.72rem;color:var(--muted,#a0a0b8);font-weight:500}
+.pe-menu hr{border:0;border-top:1px solid rgba(255,255,255,.08);margin:4px 0}
+.pe-modal{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(5,5,10,.6);padding:10px}
+.pe-modal-in{width:min(560px,100%);max-height:100%;display:flex;flex-direction:column;border-radius:16px;background:#1a1a24;border:1px solid rgba(255,255,255,.1);overflow:hidden}
+.pe-assets{overflow:auto;padding:8px 12px;flex:1;min-height:0}
+.pe-assets ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pe-assets li{display:flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(255,255,255,.04)}
+.pe-ath{width:52px;height:52px;flex:none;border-radius:10px;overflow:hidden;background:#2a2a36;display:flex;align-items:center;justify-content:center;font-size:1.3rem}
+.pe-ath img{width:100%;height:100%;object-fit:cover}
+.pe-an{flex:1;min-width:0;display:flex;flex-direction:column}
+.pe-an b{font-size:.86rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pe-an small{font-size:.72rem;color:var(--muted,#a0a0b8)}
+.pe-usage{padding:0 12px 10px}
+
+/* реклама — столбик сбоку (только широкий компьютер; не поверх холста) */
+.pe-ad{display:none}
+.pe.has-ad .pe-ad{display:block;flex:none;width:320px;padding:10px;background:#101016;border-left:1px solid rgba(255,255,255,.06);overflow:hidden}
+.pe-ad-in{position:sticky;top:0}
+.pe.gs-fs .pe-ad{display:none!important}
+
+/* ═══ Телефон и узкие окна: холст, под ним панель (лист) и полоса инструментов ═══ */
+@media (max-width:899px){
+  .pe-main{flex-direction:column}
+  .pe-tools{order:3;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:4px 4px calc(4px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,.08)}
+  .pe-tools::-webkit-scrollbar{display:none}
+  .pe-tool{flex:1 0 auto;min-width:58px}
+  .pe-stage{order:1}
+  .pe-panel{order:2;max-height:min(42dvh,360px);border-top:1px solid rgba(255,255,255,.08);display:none}
+  .pe.pe-sheet-on .pe-panel{display:flex}
+  .pe-lbl{display:none}
+  .pe-title b{font-size:.85rem}
+}
+/* ═══ Компьютер: инструменты слева, панель справа ═══ */
+@media (min-width:900px){
+  .pe-tools{flex-direction:column;width:72px;overflow-y:auto;border-right:1px solid rgba(255,255,255,.06)}
+  .pe-tool{min-width:0;width:100%;min-height:58px}
+  .pe-panel{width:300px;border-left:1px solid rgba(255,255,255,.06)}
+  .pe-pclose{display:none}
+  .pe:not(.pe-sheet-on) .pe-panel{display:none}
+}
+@media (prefers-reduced-motion:reduce){.pe-loading i,.pe-busy i{animation:none}}
