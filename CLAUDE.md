@@ -2200,7 +2200,7 @@ js/features/games.js и хвост css/premium.css.
   ИИ — js/core/ai-bridge.js (D37AI: задание для ИИ без ключей,
   ответ JSON выполняется по шагам) и «🪄 Убрать фон» (U²-Netp Apache-2.0 + ONNX Runtime Web MIT, ~8 МБ при первом нажатии).
 - Реклама: только loading при загрузке редактора и столбик rail справа на ПК ≥ 1400 px, не поверх холста. 0+.
-- Тесты: node scripts/photo-test.cjs (166), node scripts/photo-e2e.cjs smoke|ui|proj|ai|load|big|leak|soak|shot (Chrome, профиль
+- Тесты: node scripts/photo-test.cjs (166), node scripts/photo-e2e.cjs smoke|ui|proj|ai|load|big|idle|leak|soak|shot (Chrome, профиль
   телефона; ui — настоящими касаниями: кисть, щипок, надпись, обрезка 9:16, слои, «↶»; proj — проект и черновик).
 - Исправлено попутно: js/features/fx.js placeIndicator вызывал сам себя каждый кадр на всех страницах (classList.add/remove без изменений
   пишет атрибут → MutationObserver) — теперь toggle(…, вкл).

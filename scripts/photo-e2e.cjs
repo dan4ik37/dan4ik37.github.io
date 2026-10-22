@@ -355,6 +355,30 @@ async function load(base){
   ok(med('kb') < 600, 'скачано меньше 600 КБ', res);
 }
 
+// Сколько ЦП ест открытый редактор, когда ничего не делаешь (профиль телефона, ЦП ×4): доля времени главного потока за 10 с
+async function idle(base){
+  const C = await chrome('idle');
+  try {
+    await C.phone(4);
+    await C.send('Performance.enable', { timeDomain: 'timeTicks' });
+    const busy = async label => {
+      await sleep(4000);
+      const m = async () => Object.fromEntries((await C.send('Performance.getMetrics')).metrics.map(x => [x.name, x.value]));
+      const a = await m(); const t0 = Date.now(); await sleep(10000); const b = await m(); const dt = (Date.now() - t0) / 1000;
+      const r = { task: Math.round((b.TaskDuration - a.TaskDuration) / dt * 1000) / 10, script: Math.round((b.ScriptDuration - a.ScriptDuration) / dt * 1000) / 10, layout: b.LayoutCount - a.LayoutCount, style: b.RecalcStyleCount - a.RecalcStyleCount };
+      console.log('idle', label, JSON.stringify(r), '(task/script — % главного потока)');
+      return r;
+    };
+    await C.load(base + '/'); await C.until('typeof D37Route !== "undefined" && document.body.dataset.route === "home"', 60000);
+    const h = await busy('главная');
+    await C.ev(`D37Route.go('/photo'); 1`); await C.until('!!(window.D37Photo && window.D37Photo.E)', 60000);
+    const p = await busy('фоторедактор');
+    await C.ev(`document.querySelector('[data-a="startClose"]')?.click(); (${MKIMG})(1600, 1200).then(b => D37Photo.E.openBlob(b, 'x')).then(() => 1)`, 60000);
+    const q = await busy('фоторедактор с фото');
+    ok(p.task < 15 && q.task < 15, 'открытый редактор без действий занимает меньше 15 % главного потока (телефон, ЦП ×4)', { h, p, q });
+  } finally { await C.close(); }
+}
+
 async function big(base){
   const C = await chrome('big');
   try {
@@ -558,6 +582,7 @@ async function shots(base){
     if (MODE === 'ai' || (MODE === 'all' && !process.env.D37_NO_AI)) await aiBg(base);
     if (MODE === 'load' || MODE === 'all') await load(base);
     if (MODE === 'big' || MODE === 'all') await big(base);
+    if (MODE === 'idle' || MODE === 'all') await idle(base);
     if (MODE === 'leak' || MODE === 'all') await leak(base, MODE === 'leak' && +process.argv[3] > 4 ? +process.argv[3] : 20);   // leak 40 — 40 раз
     if (MODE === 'shot' || MODE === 'all') await shots(base);
     if (MODE === 'soak' || MODE === 'all') await soak(base, MIN);
