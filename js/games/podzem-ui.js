@@ -924,7 +924,7 @@
             <button type="button" class="ib" data-a="expworld" data-id="${esc(w.id)}" title="Сохранить в файл" aria-label="Сохранить в файл">📤</button><button type="button" class="ib" data-a="delworld" data-id="${esc(w.id)}" title="Удалить" aria-label="Удалить">🗑</button></div>`).join('') || '<div class="pz-note">Пока нет — создай.</div>'}</div>
             <div class="pz-row"><button type="button" class="pz-b" data-a="newworld">➕ Новый мир</button><button type="button" class="pz-b ghost" data-a="impworld">📥 Из файла</button></div></section>
         </div>
-        <div class="pz-foot"><button type="button" class="pz-b" data-a="help">❓ Как играть</button><button type="button" class="pz-b" data-a="opts">⚙️ Настройки</button>${(window.D37Settings?.fsItems?.(fsEl()) || []).map(it => `<button type="button" class="pz-b" data-a="${it.id}">${it.id === 'rot' ? it.icon + ' ' : ''}${it.text}</button>`).join('')}<button type="button" class="pz-b" data-a="mods">🧩 Моды</button></div>
+        <div class="pz-foot"><button type="button" class="pz-b" data-a="help">❓ Как играть</button><button type="button" class="pz-b" data-a="opts">⚙️ Настройки</button>${(window.D37Settings?.fsItems?.(fsEl()) || []).map(it => `<button type="button" class="pz-b" data-a="${it.id}">${it.icon}${it.text}</button>`).join('')}<button type="button" class="pz-b" data-a="mods">🧩 Моды</button></div>
         <p class="pz-note" style="margin-top:10px">Сохраняется в этом браузере (мир — только изменённые места, поэтому он бесконечный и лёгкий). Кнопкой 📤 — в файл, чтобы перенести на другое устройство.</p>
       </div>`;
     }

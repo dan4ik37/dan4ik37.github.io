@@ -90,7 +90,7 @@
     lmenu = SS.menu(w, {
       title: '🧊 Кубомир', sub: 'Миры хранятся в этом браузере',
       items: () => [
-        { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        { id: 'resume', icon: '▶', text: 'К списку миров', primary: true },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         ...(SS.fsItems?.(fsEl()) || []),
         { id: 'help', icon: '❓', text: 'Как играть' },

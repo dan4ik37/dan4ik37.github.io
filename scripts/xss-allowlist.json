@@ -5552,7 +5552,7 @@
    "c": "const",
    "n": "стартовый экран: пункты экрана D37Settings.fsItems — константы",
    "xs": [
-    "it.id === 'rot' ? it.icon + ' ' : ''",
+    "it.icon",
     "it.text"
    ]
   },

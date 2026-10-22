@@ -230,9 +230,9 @@
       doc.documentElement.classList.add('gs-set-open');
     } else { const f = win.querySelector('.gs-set-find'); if (f) f.value = ''; }
     renderAll();
-    // компьютер — сразу в поиск (печатай и найдёшь); телефон — без клавиатуры на пол-экрана
-    const fine = mm('(pointer: fine)') && !mm('(pointer: coarse)');
-    (fine ? win.querySelector('.gs-set-find') : win.querySelector('.gs-set-x'))?.focus({ preventScroll: true });
+    // компьютер — сразу в поиск (печатай и найдёшь); палец — без клавиатуры на пол-экрана
+    const touch = mm('(pointer: coarse)') || 'ontouchstart' in root;
+    (touch ? win.querySelector('.gs-set-x') : win.querySelector('.gs-set-find'))?.focus({ preventScroll: true });
     padWake();
   }
   function close(){
@@ -245,7 +245,7 @@
     try { f1?.(); } catch (e) { console.error(e); }
     try { if (f2 !== f1) f2?.(); } catch (e) { console.error(e); }
     // под окном — меню игры: фокус в него (клавиатура и геймпад продолжают там)
-    const m = topMenu(); if (m) m.el.querySelector('[data-mi="settings"], .gs-menu-it')?.focus({ preventScroll: true });
+    const m = topMenu(); if (m) (m.el.querySelector('[data-mi="settings"]') || m.el.querySelector('.gs-menu-it'))?.focus({ preventScroll: true });
   }
   function renderAll(){
     if (!win) return;
@@ -541,8 +541,18 @@
       close();
     }
   }
+  // Enter / Пробел на кнопке меню или окна: игра под ними (controls.js, kubomir-input.js) отменяет у своих клавиш действие «по умолчанию»
+  // (Enter — чат, Пробел — прыжок), и кнопка не нажималась бы — тогда нажимаем сами (поле и флажок игра не трогает)
+  function keyActivate(e){
+    if (!e.defaultPrevented || e.repeat || e.altKey || e.ctrlKey || e.metaKey || (e.key !== 'Enter' && e.key !== ' ' && e.code !== 'Space')) return false;
+    const b = e.target?.closest?.('button');
+    if (!b || b.disabled || !(win?.contains(b) || b.closest('.gs-menu'))) return false;
+    b.click();
+    return true;
+  }
   // стрелки по вкладкам (как у обычных вкладок): ↑↓ — столбиком (компьютер), ←→ — строкой (телефон); Enter в поиске — к первой найденной
   function onWinKey(e){
+    if (keyActivate(e)) return;
     const t = e.target;
     if (t?.classList?.contains('gs-set-find')) {
       if (e.key === 'Enter' || e.key === 'ArrowDown') { const f = focusables(win.querySelector('.gs-set-body'))[0]; if (f) { e.preventDefault(); f.focus({ preventScroll: true }); f.scrollIntoView?.({ block: 'nearest' }); } }
@@ -654,8 +664,9 @@
     // мир под меню не крутится и не захватывает мышь
     for (const ev of ['pointerdown', 'pointerup', 'pointermove', 'contextmenu']) el.addEventListener(ev, e => e.stopPropagation());
     el.addEventListener('wheel', e => e.stopPropagation(), { passive: true });
-    // ↑↓ / Home / End — по пунктам (Tab и Enter работают и так)
+    // ↑↓ / Home / End — по пунктам; Enter и Пробел — нажать (и когда игра под меню их «съела»)
     el.addEventListener('keydown', e => {
+      if (keyActivate(e)) return;
       const k = e.key; if (k !== 'ArrowUp' && k !== 'ArrowDown' && k !== 'Home' && k !== 'End') return;
       const all = [...el.querySelectorAll('.gs-menu-it')]; if (!all.length) return;
       const i = all.indexOf(doc.activeElement);
