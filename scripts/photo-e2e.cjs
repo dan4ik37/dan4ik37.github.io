@@ -332,10 +332,15 @@ async function load(base){
     await C.phone(4);
     await C.send('Network.setCacheDisabled', { cacheDisabled: true });
     await C.send('Network.setBypassServiceWorker', { bypass: true });   // без кэша sw.js — как в первый раз
+    let slow = 0;
     for (let i = 0; i < 5; i++) {
       await C.load('about:blank'); await sleep(500);
       await C.load(base + '/');   // сайт открыт, человек нажал «Фоторедактор» (раздел без перезагрузки)
-      await C.until('typeof D37Route !== "undefined" && document.body.dataset.route === "home"', 30000);
+      // главная без кэша на ЦП ×4 (сотни файлов без сжатия с локального сервера) иногда не успевает — это не замер редактора: ещё раз
+      if (await C.until('typeof D37Route !== "undefined" && document.body.dataset.route === "home"', 30000) < 0) {
+        if (++slow > 3) throw new Error('главная не загрузилась 4 раза');
+        console.log('load: главная не загрузилась за 30 с — ещё раз'); i--; continue;
+      }
       await sleep(1500);
       C.resetBytes();
       const t0 = Date.now();
