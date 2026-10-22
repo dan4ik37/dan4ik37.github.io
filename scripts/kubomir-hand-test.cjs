@@ -19,7 +19,7 @@ const near = (a, b, e = 1e-3) => Math.abs(a - b) <= e;
 
 globalThis.window = globalThis; globalThis.self = globalThis; globalThis.THREE = THREE;
 const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
-for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js', 'js/games/kubomir-ents.js', 'js/games/kubomir-hand.js']) run(f);
+for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/trees.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js', 'js/games/kubomir-ents.js', 'js/games/kubomir-hand.js']) run(f);
 const T = THREE, E = window.D37E, V = E.vox, Lit = window.KubomirEnts.Lit, ID = V.ID;
 
 // ── сцена движка без WebGL: столько, сколько нужно voxel-render (R.wave — как у движка: метка на материале) ──
@@ -755,7 +755,11 @@ function fakeWorld(sky, blk, walls = new Set()){
     const sumIds = ver => { let h = 0; for (const seed of ['test-v1', 12345]) { const G = V.genInit(seed, { ver }); for (let cx = -3; cx <= 3; cx++) for (let cz = -3; cz <= 3; cz++) { const r = V.genChunk(G, cx * 7, cz * 5); for (let i = 0; i < r.ids.length; i++) h = (Math.imul(h, 31) + r.ids[i]) | 0; } } return h; };
     const s1 = sumIds(1);
     ok(s1 === 1214627954, 'v1 (миры до 16.10): блоки ровно как раньше — несохранённые чанки не вырастут другими', s1);
-    ok(sumIds(2) !== s1, 'v2 (новые миры) — свой рельеф у границ');
+    const s2 = sumIds(2);
+    ok(s2 !== s1, 'v2 (миры 16.10–22.10) — свой рельеф у границ');
+    ok(s2 === -1645966598, 'v2: блоки ровно как до деревьев v3 (T-022b) — миры 16.10–22.10 не меняются', s2);
+    const s3 = sumIds(3);
+    ok(s3 !== s2 && s3 === sumIds(3), 'v3 (деревья «как в модах», новые миры) — свои деревья, по зерну одинаково', [s3]);
     const strip = ver => {
       const G = V.genInit('kubik', { ver }); let mixed = 0, cells = 0;
       for (let cx = -1; cx <= 3; cx++) for (let cz = 9; cz <= 12; cz++) {
@@ -820,7 +824,8 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(none(W => { for (let y = 10; y < 15; y++) W.cells.set(key(50, y, 50), ID.log_oak); }, [50, 10, 50]), 'голый столб из брёвен (без листвы) — стоит');
     ok(none(W => { for (let y = 10; y < 13; y++) for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) if (x === 48 || x === 52 || z === 48 || z === 52) W.cells.set(key(x, y, z), ID.log_oak); for (let x = 48; x <= 52; x++) for (let z = 48; z <= 52; z++) W.cells.set(key(x, 13, z), ID.leaves_oak); }, [50, 10, 48]), 'дом из брёвен (даже с крышей из листвы) — стоит: стены держатся за землю');
     ok(none(W => { tree(W, 50, 50); W.cells.set(key(51, 12, 50), ID.planks_oak); }, [50, 10, 50]), 'дерево касается досок (постройка) — не валится');
-    ok(none(W => tree(W, 50, 50, 10, 4, 8), [50, 10, 50]), 'слишком большое (больше 220 блоков) — как в Майнкрафте, ничего не падает');
+    ok(none(W => { for (let y = 10; y < 70; y++) for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) W.cells.set(key(50 + dx, y, 50 + dz), ID.log_oak); for (let dx = -3; dx <= 3; dx++) for (let dz = -3; dz <= 3; dz++) W.cells.set(key(50 + dx, 70, 50 + dz), ID.leaves_oak); }, [50, 10, 50]),
+      'слишком большое (больше 480 брёвен; T-022b — было 48 / 220 блоков, у деревьев v3 великаны) — как в Майнкрафте, ничего не падает');
     // не больше 3 сразу
     { const W = mkW(); for (let k = 0; k < 4; k++) tree(W, 50 + k * 8, 50); const { X, S11 } = mk(W); let n = 0; for (let k = 0; k < 4; k++) { W.set(50 + k * 8, 10, 50, 0); if (X.fellTree(50 + k * 8, 10, 50, S11.P)) n++; } ok(n === 3 && X.groups.length === 3, 'падает не больше 3 деревьев сразу', n); X.dispose(); }
     // V.component: опора и «чужое»
@@ -828,6 +833,64 @@ function fakeWorld(sky, blk, walls = new Set()){
       const c = V.component(W, [[5, 11, 5]], { take: v => (v & 0xfff) === ID.log_oak, edge: (v, x, y, z, dy) => v === ID.stone && dy < 0 ? 1 : 0, max: 10 });
       ok(c && c.n === 3 && c.grounded && c.box[1] === 10 && c.box[4] === 12, 'V.component: кусок, опора снизу, рамка', c && { n: c.n, g: c.grounded, box: c.box });
       ok(V.component(W, [[5, 11, 5]], { take: v => (v & 0xfff) === ID.log_oak, max: 2 }) === null && V.stabilityOf(V.blocks[ID.log_oak]).base > 0, 'V.component: больше предела — null; запас прочности (на будущее) — данные есть'); }
+  }
+
+  // ═══ 11б. Деревья v3 (T-022b): толстый ствол стоит, пока цел хоть один столбик; сук — падает сам; сухое дерево (без листвы —
+  //     по тонким веткам) падает; великан падает (не «слишком большой»); вещей — пачками; ростки растут по времени игры ═══
+  sec('деревья v3: ствол 2×2, сук, сухое дерево, великан; ростки → молодое → взрослое по времени игры');
+  {
+    const TR = E.trees, key = (x, y, z) => x + ',' + y + ',' + z;
+    const mkW = () => { const cells = new Map(); return { seed: 5, listeners: [], cells,
+      raw(x, y, z){ x = Math.floor(x); y = Math.floor(y); z = Math.floor(z); if (y < 0) return 7; if (y >= 128) return 0; const v = cells.get(key(x, y, z)); return v === undefined ? (y < 10 ? ID.dirt : 0) : v; },
+      get(x, y, z){ const v = this.raw(x, y, z); return v < 0 ? -1 : v & 0xfff; }, set(x, y, z, v){ const k = key(Math.floor(x), Math.floor(y), Math.floor(z)), was = this.raw(x, y, z); cells.set(k, v); for (const f of this.listeners) f(Math.floor(x), Math.floor(y), Math.floor(z), was, v, {}); return true; },
+      lightAt(){ return 15 << 12; }, loaded: () => true, heightAt: () => 10, chunkAt: () => null, chunk: () => null }; };
+    const mk = (W, meta = {}) => { const S11 = { R: Object.assign({}, R, { lighting: { time: 12 }, night: 0 }), VR, W, P: { x: 30.5, y: 10, z: 50.5, vx: 0, vy: 0, vz: 0, dead: false }, ox: 0, oz: 0, meta: Object.assign(meta, { diff: meta.diff || 'easy' }), ST: { rd: 6 }, creative: false }; const X = window.KubomirEnts.create(S11); S11.ents = X; X.spawnT = 1e9; return { X, S11 }; };
+    // поставить дерево v3 из движка деревьев (как генератор: ствол — бревно породы, листва, тонкие ветки)
+    const plant = (W, sp, x, z, seed, g = 1) => { const vx = TR.voxels(TR.grow(sp, seed, { g })), w = sp === 'acacia' ? 'acacia' : sp === 'tropical' ? 'jungle' : /spruce|pine/.test(sp) ? 'spruce' : sp === 'birch' ? 'birch' : 'oak', log = ID['log_' + w], thin = ID['log_' + w + '_thin'], leaf = ID['leaves_' + (sp === 'tropical' ? 'jungle' : w)];
+      for (let i = 0; i < vx.n; i++) { const a = x + vx.x[i], b = 10 + vx.y[i], c = z + vx.z[i], t = vx.t[i]; if (t === 0) { if (W.raw(a, b, c) === 0) W.cells.set(key(a, b, c), leaf); } else W.cells.set(key(a, b, c), V.cell(t === 1 ? thin : log, vx.a[i])); }
+      return vx; };
+    const run20 = (X, n = 400) => { for (let i = 0; i < n && X.groups.length; i++) X.tick(1 / 20); };
+    // дуб: ствол 2×2 у корня — срубил 3 клетки — стоит, 4-ю — падает
+    { const W = mkW(), vx = plant(W, 'oak', 50, 50, 7); const base = []; for (let i = 0; i < vx.n; i++) if (vx.y[i] === 0 && vx.t[i] === 2) base.push([50 + vx.x[i], 10, 50 + vx.z[i]]);
+      const { X, S11 } = mk(W); let fell = null;
+      for (let k = 0; k < base.length; k++) { const [a, b, c] = base[k]; W.set(a, b, c, 0); const g = X.fellTree(a, b, c, S11.P); if (g) { fell = k; break; } }
+      ok(base.length === 4 && fell === 3, 'дуб v3: ствол 2×2 у корня; срубил 3 из 4 — стоит, 4-ю — валится', { base: base.length, fell });
+      run20(X); const logs = X.items.filter(e => /^log_oak/.test(e.s.id)).reduce((a, e) => a + e.s.n, 0); let n0 = 0; for (let i = 0; i < vx.n; i++) if (vx.t[i] >= 1 && vx.y[i] > 0) n0++;
+      ok(logs >= n0 - 1 && logs <= n0 + 2, 'лёг — брёвна и ветки вещами (столько, сколько было над срезом)', [logs, n0]); X.dispose(); }
+    // сук: срубил бревно сука у ствола — падает внешняя часть (ствол стоит)
+    { const W = mkW(); plant(W, 'giant_oak', 50, 50, 11); const { X, S11 } = mk(W);
+      let cut = null; for (let y = 16; y < 30 && !cut; y++) for (let x = 46; x <= 54 && !cut; x++) for (let z = 46; z <= 54 && !cut; z++) { const v = W.raw(x, y, z); if (v > 0 && (v & 0xfff) === ID.log_oak && ((v >>> 12) & 3) !== 0 && (Math.abs(x - 50) + Math.abs(z - 50)) >= 3) cut = [x, y, z]; }
+      let g = null; if (cut) { W.set(cut[0], cut[1], cut[2], 0); g = X.fellTree(cut[0], cut[1], cut[2], S11.P); }
+      ok(cut && g && g.n > 3, 'великан: срубил сук — внешняя часть сука с листвой падает', { cut, n: g && g.n });
+      ok(W.get(50, 12, 50) === ID.log_oak, 'ствол великана стоит'); X.dispose(); }
+    // великан: срубил весь низ — падает целиком (не «слишком большой»), вещей — пачками
+    { const W = mkW(), vx = plant(W, 'giant_oak', 50, 50, 3); const { X, S11 } = mk(W); let g = null, cells = 0;
+      for (let i = 0; i < vx.n; i++) if (vx.y[i] === 1 && vx.t[i] >= 2) { W.set(50 + vx.x[i], 11, 50 + vx.z[i], 0); g = X.fellTree(50 + vx.x[i], 11, 50 + vx.z[i], S11.P) || g; }
+      if (g) cells = g.n;
+      run20(X, 600);
+      ok(g && cells > 400, 'дуб-великан (сотни блоков) — падает целиком', cells);
+      ok(X.items.length < 120, 'вещей — пачками (у великана не сотни вещей)', X.items.length); X.dispose(); }
+    // сухое дерево: листвы нет — узнаётся по тонким веткам
+    { const W = mkW(), vx = plant(W, 'dead', 50, 50, 21); let thin = 0; for (let i = 0; i < vx.n; i++) if (vx.t[i] === 1) thin++;
+      const { X, S11 } = mk(W); W.set(50, 10, 50, 0); const g = X.fellTree(50, 10, 50, S11.P);
+      ok(thin >= 2 ? !!g : !g, 'сухое дерево (без листвы, с тонкими ветками) — падает', { thin, fell: !!g }); X.dispose(); }
+    // ростки: посадил — через 4–8 мин игры молодое, ещё через 8–16 — взрослое (то же место и зерно — то же дерево)
+    { const W = mkW(), meta = { gt: 0 }; const { X } = mk(W, meta);
+      W.set(50, 10, 50, ID.sapling_oak);
+      ok(X.grow.size === 1, 'посадил росток — он в реестре роста (meta.grow)', X.grow.size);
+      const at = s => { meta.gt = s; X.growTick(); };
+      at(200); ok(W.get(50, 10, 50) === ID.sapling_oak, 'через 200 с игры — ещё росток');
+      at(500); const young = W.get(50, 10, 50) === ID.log_oak; let h1 = 0; for (let y = 10; y < 40; y++) if (W.get(50, y, 50) === ID.log_oak) h1 = y - 9;
+      ok(young && h1 >= 2 && h1 <= 7 && X.grow.size === 1, 'через 500 с — молодое дерево (невысокое)', { young, h1 });
+      at(1500); let h2 = 0; for (let y = 10; y < 40; y++) if (W.get(50, y, 50) === ID.log_oak) h2 = y - 9;
+      ok(h2 > h1 && X.grow.size === 0, 'через 1500 с — взрослое (выше молодого), запись убрана', { h1, h2 });
+      ok(Array.isArray(meta.grow) ? meta.grow.length === 0 : meta.grow === undefined, 'реестр роста сохраняется в мире (meta.grow)');
+      // то же место в другом мире с тем же зерном — то же дерево
+      const W2 = mkW(), m2 = { gt: 0 }; const B = mk(W2, m2); W2.set(50, 10, 50, ID.sapling_oak); m2.gt = 5000; B.X.growTick();
+      let same = true; for (const k of new Set([...W.cells.keys(), ...W2.cells.keys()])) { const [a, b, c] = k.split(',').map(Number); if (W.raw(a, b, c) !== W2.raw(a, b, c)) same = false; }
+      ok(same, 'взрослое дерево из ростка — по зерну мира и месту (одинаковое; сразу взрослое, если долго не заходил)'); X.dispose(); B.X.dispose(); }
+    // зима: опавшая листва — ступенями, «Погода» выкл — листва на месте
+    { const KE = window.KubomirEnts; ok(KE.bareOf({ WX: { clim: { state: { bare: .9 } } } }) === .72 && KE.bareOf({ WX: { clim: { state: { bare: .05 } } } }) === 0 && KE.bareOf({ weatherOff: true, WX: { clim: { state: { bare: .9 } } } }) === 0, 'зима: лиственные голые (ступени 0 / 0,3 / 0,55 / 0,72), без погоды — нет'); }
   }
 
   // ═══ 12. Обрушение и прочность (T-022a: D37E.support + kubomir-support.js + fallGroup drop) ═══

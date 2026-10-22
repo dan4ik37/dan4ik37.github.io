@@ -14,6 +14,7 @@
 // Comparison / Retainers; или свой разбор, как в отчёте T-085). Полный прогон: ~4–6 мин.
 // Запуск из корня сайта: node scripts/world-reopen-e2e.cjs [N=20] [pc|phone] [world|studio3d]   (CHROME — путь к Chrome; D37_TMP — временная папка;
 // D37_OVERRIDE=<папка> — файлы оттуда вместо сайта: замер «до»; WAIT_MS — сколько ждать после закрытия перед итогом, 12000;
+// REOPEN_FOREST=1 — в каждом круге ещё и в лес (деревья пород, T-022b);
 // phone — 412×915, «средняя», ЦП ×RATE (по умолчанию 4) — прогон дольше, ~10 мин на 20 кругов)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
@@ -132,6 +133,15 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
       // дождь: погода рисует общую на страницу карту «что над головой» (gfx.js GFXU.occRT) — каждый рендерер вешает на неё своё
       // «dispose»; без дождя этот путь утечки не проверяется (так он и прятался — зависел от погоды за окном)
       await ev(`(() => { const S = ${G.state}; try { ${G.wx}?.force?.('rain'); } catch (e) {} return 1; })()`);
+      // REOPEN_FOREST=1 — в каждом круге ещё и в лес (деревья пород T-022b: геометрии у рендерера мира — должны уйти вместе с ним)
+      if (process.env.REOPEN_FOREST && GAME === 'world') {
+        const t = await ev(`(async () => { const S = ${G.state}, W = MirZones.worldMap(); let best = null;
+          for (let r = 0; r < 600 && !best; r += 20) for (let a = 0; a < 16; a++) { const px = -760 + Math.cos(a / 16 * 6.283) * r, pz = -560 + Math.sin(a / 16 * 6.283) * r; if (W.forest(px, pz) > .9 && W.height(px, pz) > W.SEA + 4 && W.height(px, pz) < 110) { best = [px, pz]; break; } }
+          if (best) S.P.place(best[0], W.height(best[0], best[1]) + .3, best[1], ${k} * .7);
+          await new Promise(r => setTimeout(r, 3500)); return S.zones.wmv?.treeStats?.() || null; })()`, 60000);
+        if (k === 1 || k === N) console.log('  в лесу:', JSON.stringify(t));
+        res.forest = (res.forest || 0) + (t && Array.isArray(t.near) && t.near.reduce((a, b) => a + b, 0) > 0 ? 1 : 0);   // кругов, где деревья пород были рядом
+      }
       await sleep(2500);
       res.occ = (res.occ || 0) + (await ev(`(() => { const S = ${G.state}; return ${G.wx}?.occ?.n || 0; })()`));
       if (k === 1) res.chOpen = await ev('__d37leak.count().ch');   // канал мира есть, пока мир открыт (после закрытия — нет)

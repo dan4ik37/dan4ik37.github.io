@@ -1,15 +1,15 @@
 // ═══════════════════════════════════════
 //  ДВИЖОК ДЕНЧИКА — поток «Кубомира»: генерация чанков, свет и сетки (чтобы кадр не ждал)
 // ═══════════════════════════════════════
-// new Worker('js/engine/voxel-worker.js?v=…') — сам подгружает voxel.js, voxel-gen.js, voxel-mesh.js с тем же ?v=.
+// new Worker('js/engine/voxel-worker.js?v=…') — сам подгружает voxel.js, trees.js (деревья генератора v3), voxel-gen.js, voxel-mesh.js с тем же ?v=.
 // Сообщения: { t: 'init', T, seed, features } · { t: 'gen', id, cx, cz } → { id, ids, biome, tint, zone, ms }
-// · { t: 'mesh', id, reg, tint, zone } → { id, reg (вернули — переиспользовать), light, lights, сетки V.LAYERS (solid, cutout,
+// · { t: 'mesh', id, reg, tint, zone, bare, cx, cz } → { id, reg (вернули — переиспользовать), light, lights, сетки V.LAYERS (solid, cutout,
 // water, foliage, glass), yMax, ms }.
 // Ошибка → { id, err }. Подключён обычным <script> в окне (список файлов игры — для кэша приложения) — ничего не делает.
 (() => {
   if (typeof window !== 'undefined' || typeof importScripts !== 'function') return;
   const q = (self.location && self.location.search) || '';
-  importScripts('voxel.js' + q, 'voxel-gen.js' + q, 'voxel-mesh.js' + q);
+  importScripts('voxel.js' + q, 'trees.js' + q, 'voxel-gen.js' + q, 'voxel-mesh.js' + q);
   const V = self.D37E.vox;
   let G = null;
   const now = () => (self.performance ? performance.now() : Date.now());
@@ -28,7 +28,9 @@
         return;
       }
       if (d.t === 'mesh') {
-        const t0 = now(), L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone);
+        const t0 = now();
+        V.shedLeaves?.(d.reg, V.T, d.zone, d.bare, d.cx, d.cz);   // зима: лиственные голые (свет и сетка)
+        const L = V.lightRegion(d.reg, V.T), m = V.meshChunk(d.reg, L, V.T, d.tint, d.zone);
         const tr = [d.reg.buffer, m.light.buffer], out = { id: d.id, reg: d.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: 0 };
         for (const k of V.LAYERS) { out[k] = m[k]; if (m[k]) tr.push(m[k].pos.buffer, m[k].vd.buffer, m[k].col.buffer, m[k].lt.buffer); }
         if (m.lights) tr.push(m.lights.buffer);

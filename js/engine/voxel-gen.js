@@ -8,6 +8,9 @@
 // zone — климат столба для погоды игры (V.climZone): 0 — времена года, 1 — всегда зима, 2 — зимы не бывает.
 // Деревья, валуны, озёра пересекают границы чанков: чанк смотрит «происхождения» соседей 3×3 и пишет свою часть.
 // Биомы: 0 океан, 1 пляж, 2 равнина, 3 лес, 4 березняк, 5 пустыня, 6 снега, 7 горы, 8 болото, 9 река.
+// Версии (meta.genVer мира): 1 — до 16.10, 2 — извилистые границы биомов, 3 (T-022b, 22.10) — деревья «как в модах» (js/engine/trees.js:
+// породы по биому и климату, ствол 2×2 / 3×3 у корня, сучья, корни, тонкие ветки, молодые деревья). Старые миры — свои версии: блоки
+// несохранённых чанков ровно как раньше (проверка — kubomir-hand-test, «генератор»).
 (() => {
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
@@ -82,7 +85,8 @@
       features: Array.isArray(o.features) ? o.features : [], ores: null, id: V.ID || {}, oc: new Map(),
       // версия генератора (meta.genVer мира; нет — 1): 2 — границы биомов извилистые (сдвиг шума), у снегов — переходная полоса
       // (снег пятнами, смешанные деревья). Старые миры остаются на 1 — несохранённые чанки иначе выросли бы другими
-      ver: o.ver >= 2 ? 2 : 1, nW1: mk(16), nW2: mk(17), nPt: mk(18) };
+      ver: o.ver >= 3 ? 3 : o.ver >= 2 ? 2 : 1, nW1: mk(16), nW2: mk(17), nPt: mk(18), tc: new Map() };
+    if (G.ver >= 3 && !root.D37E.trees) throw new Error('генератор v3: нет js/engine/trees.js');
     const ID = G.id;
     // руды: блок, замена, высота, размер жилы, попыток на чанк
     G.ores = [
@@ -206,6 +210,7 @@
       if (c.h <= SEA || V.caveAt(G, x, c.h - 1, z, c.h) || ravineCut(G, x, z, c.h - 1, c.h)) continue;
       if (c.mk > .3 && b === BI.mountains && c.h > SEA + 40) continue;
       if (b === BI.desert) { out.push({ t: 'cactus', x, z, y: c.h, n: 1 + Math.floor(hgt * 3) }); continue; }
+      if (G.ver >= 3) { const q = pick3(G, c, kind, x, z, out); if (q) out.push(q); continue; }   // v3 — деревья «как в модах» (те же попытки и числа r)
       const sp = b === BI.mountains || (G.ver >= 2 ? 1 - kind < ss(-.27, -.4, c.T) : b === BI.snow), bi = !sp && (b === BI.birch || (b === BI.forest && kind < .2));   // v2: у снегов ели и лиственные вперемешку
       out.push({ t: sp ? 'spruce' : bi ? 'birch' : 'oak', x, z, y: c.h, n: sp ? 6 + Math.floor(hgt * 4) : bi ? 5 + Math.floor(hgt * 3) : 4 + Math.floor(hgt * 3), apple: kind > .985 });
     }
@@ -235,6 +240,74 @@
     }
     return out;
   }
+  // ── v3: порода по биому и климату (и по своему хешу места — числа r() те же, что у v1/v2: озёра и фичи модов не съезжают);
+  //    в лесу реже, чем у v2 (кроны шире), большие — не впритык к соседям в этом чанке; каждое седьмое — молодое (g < 1) ──
+  const TREE_P3 = [0, 0, .07, .56, .5, 0, .17, .1, .3, 0];   // ели и сосны v3 крупнее — их реже
+  const SPACE = { giant_oak: 5.5, giant_spruce: 3.5, tropical: 3, acacia: 2.6, oak: 2.2, willow: 2.2 };
+  function pick3(G, c, kind, x, z, out){
+    const b = c.b, T = c.T, u = V.hash(G.seed, x, z, 919) / 4294967296, w = V.hash(G.seed, x, z, 920) / 4294967296;
+    if (u * .999 >= TREE_P3[b] / (TREE_P[b] || 1)) return null;   // реже, чем у v2 (доля попыток, прошедших прежний бросок)
+    const warm = T > .18, cold = 1 - kind < ss(-.27, -.4, T), r = (u * 7919) % 1;
+    let sp;
+    if (b === BI.mountains) sp = r < .45 ? 'pine' : 'spruce';
+    else if (b === BI.snow || cold) sp = r < .03 ? 'giant_spruce' : r < .075 ? 'dead' : r < .4 ? 'pine' : 'spruce';
+    else if (b === BI.swamp) sp = r < .55 ? 'willow' : r < .82 ? 'oak' : 'dead';
+    else if (b === BI.birch) sp = r < .04 ? 'dead' : r < .14 ? 'oak' : 'birch';
+    else if (b === BI.forest) sp = warm ? (r < .62 ? 'tropical' : r < .84 ? 'oak' : 'acacia') : r < .035 ? 'giant_oak' : r < .07 ? 'dead' : r < .3 ? 'birch' : 'oak';
+    else if (b === BI.plains) sp = warm ? (r < .78 ? 'acacia' : 'oak') : (c.river > .05 && r < .5) || r < .07 ? 'willow' : r < .15 ? 'birch' : 'oak';
+    else sp = 'oak';
+    const TS = root.D37E.trees.SPECIES[sp];
+    if (c.h + TS.h[1] + 6 >= H - 2) return null;   // макушка не выше мира
+    const sz = SPACE[sp] || 1.4;
+    for (const q of out) if (q.t === 'tree3') { const dx = q.x - x, dz = q.z - z, need = sz + (SPACE[q.sp] || 1.4); if (dx * dx + dz * dz < need * need) return null; }
+    return { t: 'tree3', sp, x, z, y: c.h, g: w < .14 ? .5 + w * 2.8 : 1, seed: V.hash(G.seed, x, z, 4243) };
+  }
+  // блоки породы (v3): ствол, листва, тонкая ветка
+  const WOOD = { oak: 'oak', birch: 'birch', spruce: 'spruce', pine: 'spruce', giant_spruce: 'spruce', acacia: 'acacia', tropical: 'jungle', willow: 'oak', dead: 'oak', giant_oak: 'oak' };
+  const LEAF = { willow: 'willow', tropical: 'jungle', pine: 'spruce', giant_spruce: 'spruce', giant_oak: 'oak', dead: 'oak' };
+  function blocksOf(G, sp){
+    const k = G.tb || (G.tb = {});
+    if (k[sp]) return k[sp];
+    const ID = G.id, w = WOOD[sp] || 'oak', l = LEAF[sp] || w;
+    return (k[sp] = { log: ID['log_' + w] || ID.log_oak, leaf: ID['leaves_' + l] || ID.leaves_oak, thin: ID['log_' + w + '_thin'] || ID['log_' + w] || ID.log_oak });
+  }
+  // кубики дерева — один раз на дерево (соседние чанки берут из кэша), не больше 1500 в памяти потока
+  function treeVox(G, f){
+    const key = (f.x + 1048576) * 2097152 + (f.z + 1048576);
+    let v = G.tc.get(key);
+    if (v) return v;
+    const TR = root.D37E.trees;
+    v = TR.voxels(TR.grow(f.sp, f.seed, { g: f.g }), { thin: !!G.id.log_oak_thin });
+    if (G.tc.size >= 1500) G.tc.delete(G.tc.keys().next().value);
+    G.tc.set(key, v);
+    return v;
+  }
+  V.treeVox = treeVox;
+  function placeTree3(G, ids, x0, z0, f, inC, I, soft){
+    const v = treeVox(G, f), bx = v.box;
+    if (f.x + bx[3] < x0 || f.x + bx[0] > x0 + 15 || f.z + bx[5] < z0 || f.z + bx[2] > z0 + 15) return;
+    const B3 = blocksOf(G, f.sp), ID = G.id, Tt = V.T, tree = Tt.tree;
+    const soil = c => c === ID.dirt || c === ID.grass || c === ID.snow_grass || c === ID.sand || c === ID.gravel || c === ID.clay;
+    const free = c => c === 0 || soft(c) || (tree && tree[c & 0xfff] === 3);
+    for (let i = 0; i < v.n; i++) {
+      const x = f.x + v.x[i], z = f.z + v.z[i];
+      if (!inC(x, z)) continue;
+      const y = f.y + v.y[i];
+      if (y <= 0 || y >= H - 1) continue;
+      const t = v.t[i], k = I(x, y, z), cur = ids[k];
+      if (t === 0) { if (cur === 0 || soft(cur)) ids[k] = B3.leaf; }
+      else if (t === 1) { if (free(cur)) ids[k] = V.cell(B3.thin, v.a[i]); }
+      else if (free(cur) || (t === 3 && soil(cur))) {
+        ids[k] = V.cell(B3.log, v.a[i]);
+        if (t === 2 && v.y[i] === 0) {   // у ствола: под ним — земля (не дёрн); на склоне — ствол до земли (не висит)
+          let yy = y - 1;
+          for (; yy > 0 && yy >= y - 4; yy--) { const c = ids[k - (y - yy)]; if (!(c === 0 || soft(c))) break; ids[k - (y - yy)] = V.cell(B3.log, 0); }
+          if (yy > 0) { const g = k - (y - yy); if (ids[g] === ID.grass || ids[g] === ID.snow_grass) ids[g] = ID.dirt; }
+        }
+      }
+    }
+  }
+
   // синус/косинус без Math.sin (одинаково везде): ряд Тейлора, угол в [0, 2π)
   function sinT(a){ while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; const a2 = a * a; return a * (1 - a2 / 6 * (1 - a2 / 20 * (1 - a2 / 42 * (1 - a2 / 72 * (1 - a2 / 110))))); }
   function cosT(a){ return sinT(a + Math.PI / 2); }
@@ -400,6 +473,7 @@
       return;
     }
     if (f.t === 'mod') { modFeature(G, ids, x0, z0, f, setIf, soft, leafOk); return; }
+    if (f.t === 'tree3') { placeTree3(G, ids, x0, z0, f, inC, I, soft); return; }
     const log = f.t === 'spruce' ? ID.log_spruce : f.t === 'birch' ? ID.log_birch : ID.log_oak;
     const leaf = f.t === 'spruce' ? ID.leaves_spruce : f.t === 'birch' ? ID.leaves_birch : ID.leaves_oak;
     const top = f.y + f.n;

@@ -380,7 +380,7 @@
       w.onerror = e => {   // поток упал — дальше здесь же: заново init и все загрузки
         console.warn('Подземье: поток упал, считаю здесь', e.message);
         w?.terminate(); w = null; local = makeLocal();
-        if (G?.W) { local({ t: 'init', seed: G.W.seed, props: G.modProps || null, feats: G.modFeats || null }); G.pending.clear(); }
+        if (G?.W) { local({ t: 'init', seed: G.W.seed, trees: !!G.W.trees, props: G.modProps || null, feats: G.modFeats || null }); G.pending.clear(); }
       };
     } catch (e) { w = null; local = makeLocal(); }
     S.post = m => { if (w) w.postMessage(m); else if (local) local(m); };
@@ -1337,8 +1337,26 @@
     if (r() < .12) add('hook', 1);
     return out;
   }
+  // дерево пород (T-022b, новые миры): всё, что выше среза (ствол 2×2, сучья, крона, лианы), — по клеткам этого дерева (генератор
+  // знает форму по зерну): чужие деревья и постройки не трогает, сломанное игроком уже не вернётся
+  function fellTree3(tr, x, y){
+    const c = tr.cells; let wood = 0;
+    for (let i = 0; i < c.n; i++) {
+      const px = tr.xc + c.x[i], py = tr.y0 - c.y[i]; if (py > y) continue;   // ниже среза — пень стоит
+      const want = c.t[i] === 0 ? tr.leaf : T.TRUNK, ff = fgAt(px, py);
+      if (ff !== want && !(c.t[i] === 0 && ff === T.VINE)) continue;
+      setCell(px, py, 0, 0);
+      if (want === T.TRUNK) wood++; else if (rand() < .18) burst(px + .5, py + .5, 2, tileColor(ff, 0), 2, .6, .12, .3);
+    }
+    dropItem('wood', Math.max(1, Math.round(wood * 1.5)), x + .5, y);
+    snd('break', { x, y, vol: .8 });
+    G.cam.shake = Math.max(G.cam.shake, Math.min(.3, .1 + wood / 200));
+    G.modsEmit?.('tileBreak', { x, y, tile: tileKey(T.TRUNK) });
+    checkSupport(x, y + 1);
+  }
   // дерево: ствол и всё над ним (листва, лианы), не дальше 4 клеток в стороны
   function fellTree(x, y, f){
+    if (f === T.TRUNK && G.gen?.trees) { const tr = G.gen.treeAt(x, y); if (tr) { fellTree3(tr, x, y); return; } }
     const q = [[x, y]], seen = new Set([x + ',' + y]), parts = [];
     let wood = 0;
     while (q.length && parts.length < 500) {
@@ -2728,12 +2746,14 @@
     let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
     return h >>> 0 || 1;
   }
+  const PZ_TREES = true;   // T-022b: новые миры — деревья пород (движок деревьев; откат одной строкой — false). Старые миры — как были
   function newWorldRecord(name, seedText, mods, support, fire){
     const seed = seedOf(seedText), gen = PZ.makeGen(seed), sp = gen.spawnPoint();
     const w = { id: uid('w'), name: String(name || 'Мой мир').slice(0, 32), seed, seedText: String(seedText || seed).slice(0, 40), created: Date.now(), updated: Date.now(), playtime: 0,
       spawn: { x: sp.x, y: sp.y + 1 }, time: .08, day: 1, flags: {}, mods: (mods || []).slice(0, 16), palette: {}, maxDepth: 0, guide: null, ver: 1 };
     if (fire === 'spread' || (fire === undefined && support === 'real')) w.fire = 'spread';   // огонь (T-022d): распространяется — только новые миры (старые — выкл), «реализм» — вкл
     if (support === 'soft' || support === 'real') w.support = support;   // обрушение (T-022a): только новые миры, старые — выкл
+    if (PZ_TREES && window.D37E?.trees) w.trees = 3;   // деревья пород (T-022b): только новые миры
     return w;
   }
   function newCharRecord(name){
@@ -2802,7 +2822,7 @@
     W.flags = W.flags || {}; W.palette = W.palette || {};
     G.W = W; G.CH = CH; G.fire = null;
     G.sup = window.PZSupport?.attach?.(G, SUPH) || null;   // обрушение и прочность (podzem-support.js; мир без него — null)
-    G.gen = PZ.makeGen(W.seed);
+    G.gen = PZ.makeGen(W.seed, { trees: !!W.trees });
     wavesStart(W);   // волны мира (waves.js): зерно мира, своя погода
     G.chunks.clear(); G.pending.clear(); G.want.clear(); G.metaOf.clear(); G.dirtySave.clear(); G.chests = new Map();
     G.mobs.length = 0; G.items.length = 0; G.projs.length = 0; G.npcs.length = 0; G.texts.length = 0; G.boss = null; PT.n = 0;
@@ -2822,7 +2842,7 @@
     G.fire = null; try { G.fire = window.PZFire?.attach?.(G, FIREH) || null; } catch (e) { console.error(e); window.d37Err?.('pz:fire', e); G.fire = null; }   // огонь (podzem-fire.js): горит, перекидывается (если в мире включено), гаснет
     G.worker?.stop();
     G.worker = startWorker();
-    G.worker.post({ t: 'init', seed: W.seed, props: G.modProps || null, feats: G.modFeats || null });
+    G.worker.post({ t: 'init', seed: W.seed, trees: !!W.trees, props: G.modProps || null, feats: G.modFeats || null });
     const pos = W.pos || { x: W.spawn.x + .5, y: W.spawn.y };
     G.pl = newPlayer(pos.x, pos.y);
     G.fresh = !W.pos;

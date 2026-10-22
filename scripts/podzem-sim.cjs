@@ -2,6 +2,7 @@
 // (в памяти), свой requestAnimationFrame с любой частотой кадров (60, 144, 240 Гц…), поток мира — «в этом же потоке».
 // Для проверок управления, урона и появления мобов: scripts/tiles-test.cjs (раздел game).
 //   const sim = await require('./podzem-sim.cjs')(SITE);  →  { A (api игры), T (_test), G (состояние), frames(сек, гц), aimAt(x, y), … }
+//   opts.pre — модули движка до игры (['js/engine/trees.js'] — новые миры с деревьями пород, T-022b)
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
 module.exports = async function podzemSim(SITE, opts = {}){
@@ -57,6 +58,7 @@ module.exports = async function podzemSim(SITE, opts = {}){
   // управление движка: что «зажато» и что «нажали» (на один шаг)
   const C = { held: new Set(), downs: new Set(), move: { x: 0, y: 0 } };
   g.D37E = { controls: () => ({ move: C.move, step: noop, held: k => C.held.has(k), down: k => C.downs.has(k), frameEnd: () => C.downs.clear(), reset_state: noop, dispose: noop }) };
+  for (const f of opts.pre || []) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });   // модули движка (['js/engine/trees.js'] — деревья пород в новых мирах)
   const touch = { mx: 0, my: 0, jump: false, jumpDown: false, use: false, front: false, build: false };
   const toasts = [];
   g.PZUI = { create: () => new Proxy({ touch, modal: () => false, toast: t => toasts.push(t) }, { get: (t, k) => (k in t ? t[k] : noop) }) };

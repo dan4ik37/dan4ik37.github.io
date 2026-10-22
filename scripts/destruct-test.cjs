@@ -92,6 +92,30 @@ const run = (DS, sec, dt = 1 / 30) => { for (let t = 0; t < sec; t += dt) DS.upd
   run(DS, 13);
   ok(!DS.broken.has('p:w1') && hidden.get('w1') === false && ph.cols.has(wb) && ph.cols.has(tb), 'восстановились: куски и тела на месте');
 }
+{
+  // деревья пород (T-022b): есть сетка дерева (E.trees.lookup) — ствол ломается по месту удара: пень стоит, падает настоящий верх
+  // (срез сетки); высота среза — в зерне (у всех одинаково); лёг — брёвна; восстановилось — пня нет
+  for (const f of ['js/engine/trees.js', 'js/engine/trees3d.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
+  const { R, ph, DS } = mk({ restore: 1 }), T3 = E.trees3d, mat = new THREE.MeshStandardMaterial({ vertexColors: true });
+  const geo = T3.geometry(R, 'oak', 5, { lod: 1 }), s = 7 / geo.userData.H;
+  const off = E.trees.source('dt', id => ({ geo, mat, x: 0, y: 0, z: 0, yaw: 1, s, h: 7, trunkR: geo.userData.trunkR * s, pine: false, sp: 'oak' }));
+  const hidden = new Map(), tb = ph.addCyl({ x: 0, z: 0, y: 1.2, r: .38, hy: 1.2, tag: 'tree' });
+  DS.add({ id: 'dt:1', zone: 'war', kind: 'tree', x: 0, y: 0, z: 0, h: 7, r: .3, bodies: [tb], hide: on => hidden.set('dt:1', on) });
+  const sent = []; DS.onBreak = (id, sd) => sent.push(sd);
+  ok(DS.hit(0, 0, .6, 9, { y: 1.8, dx: 1, dz: 0 }) === 1 && hidden.get('dt:1') === true, 'удар на высоте 1,8 — дерево сломано (целое спрятано)');
+  ok(sent.length === 1 && Math.abs(DS.cutOf(sent[0], 7) - 1.8) < .08, 'высота среза — в зерне события (у всех одинаково)', DS.cutOf(sent[0], 7));
+  const g0 = R.scene.children.find(c => c.name === 'destruct')?.children.filter(c => c.isGroup).length;
+  ok(g0 === 1 && DS.stats().fallers === 1 && DS.stats().cyl >= 1, 'падает сетка верха дерева, пень стоит', { g0, st: DS.stats() });
+  run(DS, 4);
+  const st = DS.stats(), g1 = R.scene.children.find(c => c.name === 'destruct')?.children.filter(c => c.isGroup).length;
+  ok(st.fallers === 0 && g1 === 0 && st.cyl >= 3, 'упал — сетка убрана, брёвна и пень', { st, g1 });
+  ok(DS.cutOf(64 * 77, 7) >= .7 && DS.cutOf(64 * 77, 7) <= 1.3 && DS.cutOf(64 * 77, 7) === DS.cutOf(64 * 77, 7), 'машина / танк (зерно без высоты) — срез у бампера 0,7…1,3, по зерну');
+  DS.restore('dt:1');
+  ok(hidden.get('dt:1') === false && ph.cols.has(tb), 'восстановилось — дерево снова целое');
+  run(DS, 30);
+  ok(DS.stats().cyl === 0, 'пня после восстановления нет, брёвна растаяли', DS.stats());
+  off(); DS.dispose();
+}
 ok(E.destruct.POWER.wall === 2 && E.destruct.POWER.block === 3, 'стены: сила танка, блоки — только взрывы');
 ok(E.destruct.POWER.tree === 2 && E.destruct.POWER.lamp === 1 && E.destruct.SMALL.has('bench') && !E.destruct.SMALL.has('glass'), 'таблица силы и «мелочи»');
 console.log(`destruct-test: ${pass} ок, ${fail} ошибок`);

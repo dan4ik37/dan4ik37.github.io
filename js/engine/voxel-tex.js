@@ -591,6 +591,14 @@
     charred_planks: { k: 'planks', c: '#2b231e' }, item_flint_steel: { k: 'ingot', c: '#8e959e' },
   };
   for (let i = 0; i < 8; i++) S['destroy_' + i] = { k: 'destroy', st: i };
+  // деревья «как в модах» (T-022b): акация — серо-бурая кора и оранжевая древесина, тропическое — тёмная кора с прожилками,
+  // ива — листва реже (длинные пряди); ростки — свои оттенки (листва серая — цвет даёт биом, как у дуба)
+  Object.assign(S, {
+    log_acacia: { k: 'log', c: '#6e655c' }, log_acacia_top: { k: 'log_top', c: '#c46d3a', bark: '#6e655c' }, leaves_acacia: { k: 'leaves', c: '#c4c4c4', holes: .26 }, planks_acacia: { k: 'planks', c: '#b8673a' },
+    log_jungle: { k: 'log', c: '#5c4a2e' }, log_jungle_top: { k: 'log_top', c: '#a8823e', bark: '#5c4a2e' }, leaves_jungle: { k: 'leaves', c: '#b8b8b8', holes: .12 }, planks_jungle: { k: 'planks', c: '#a77b4d' },
+    leaves_willow: { k: 'leaves', c: '#cacaca', holes: .3 },
+    sapling_acacia: { k: 'plant', sapling: true, c: '#8aa83a' }, sapling_jungle: { k: 'plant', sapling: true, c: '#2f8a3a' }, sapling_willow: { k: 'plant', sapling: true, c: '#8cc060' },
+  });
   for (const [m, M] of Object.entries(V.TOOL_MATS || {})) for (const k of ['pick', 'axe', 'shovel', 'sword']) S[`item_${k}_${m}`] = { k: 'tool32', tool: k, m, c: M.color };
 
   // готовые пиксели (PNG мода, пакет текстур): 16×16 или 32×32 → размер текущего рисунка

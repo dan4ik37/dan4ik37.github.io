@@ -249,7 +249,7 @@
         const holder = new T.Group(), cols = [];
         const rec = { addBox: b => { const c = ph.addBox({ ...b, y: (b.y || 0) + obj.pos[1], data: { part: obj.id, floor: 'wood' } }); cols.push(c); return c; },
           addCyl: b => { const c = ph.addCyl({ ...b, y: (b.y || 0) + obj.pos[1], data: { part: obj.id, floor: 'wood' } }); cols.push(c); return c; } };
-        R.prefab(obj.kind, { x: obj.pos[0], z: obj.pos[2], yaw: (obj.rot?.[1] || 0) * DEG, k: obj.scale || 1, parent: holder, text: obj.text, c: obj.kind === 'sign' ? obj.color : undefined, seed: obj.id.length * 7,
+        R.prefab(obj.kind, { x: obj.pos[0], z: obj.pos[2], yaw: (obj.rot?.[1] || 0) * DEG, k: obj.scale || 1, parent: holder, text: obj.text, c: obj.kind === 'sign' ? obj.color : undefined, seed: obj.id.length * 7, id: obj.id, tseed: obj.seed,   // id, tseed — деревья пород (T-022b): форма — по объекту
           x1: obj.pos[0] - 3 * (obj.scale || 1), z1: obj.pos[2], x2: obj.pos[0] + 3 * (obj.scale || 1), z2: obj.pos[2] }, rec);
         if (obj.kind === 'fence') { holder.children[0].rotation.y = (obj.rot?.[1] || 0) * DEG - Math.PI / 2 + Math.PI / 2; }
         holder.position.y = obj.pos[1];

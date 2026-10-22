@@ -11,10 +11,12 @@
 //   oceans: [rect] — тут обязано быть море (гавань боевой зоны и выход из неё)
 // WM.height(x, z) — земля (рисунок); WM.ground(x, z) — физика (+ мосты); WM.water(x, z) — уровень воды или −∞;
 // WM.road(x, z) — { id, d, y } ближайшей дороги (или null); WM.color(h, ny, x, z, out) — цвет земли;
-// WM.trees(x0, z0, x1, z1, cb) — деревья (по зерну); WM.view(R, o) — рисование (чанки с LOD, вода, дороги, деревья).
+// WM.trees(x0, z0, x1, z1, cb) — деревья (по зерну); WM.view(R, o) — рисование (чанки с LOD, вода, дороги, деревья; деревья пород —
+// js/engine/trees.js + trees3d.js, T-022b; o.trees === false — прежние ствол + шар / конус).
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const E = root.D37E = root.D37E || {};
+  const TREES_3D = true;   // T-022b: деревья пород рядом с камерой (откат одной строкой — false: прежние ствол + шар / конус)
   const imul = Math.imul, floor = Math.floor, abs = Math.abs, min = Math.min, max = Math.max, sqrt = Math.sqrt, hypot = Math.hypot;
   const lerp = (a, b, t) => a + (b - a) * t;
   const sstep = (a, b, x) => { const t = max(0, min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };   // a < b
@@ -491,31 +493,103 @@
       }
     }
 
-    // ── Деревья рядом с камерой: экземпляры (ствол, крона-конус у ели, крона-шар у лиственного) ──
+    // ── Деревья рядом с камерой (T-022b): породы движка деревьев (js/engine/trees.js + trees3d.js) — ствол толще у корня, сучья,
+    //    крона облаками, хвоя юбками; ближние (до NEAR) — подробные: 5 видов (дуб ×2, берёза, ель, сосна) экземплярами, кора и
+    //    листва одной сеткой — 5 вызовов; дальние — простые (лиственное / хвойное) — 2 вызова; ветер и времена года — материалом
+    //    (зимой лиственные голые). Места, зерно, размеры — те же (WM.trees): высота ≈ 7 · k (ель — 8,4 · k), поворот — r. Список
+    //    деревьев — по клеткам 64 ед. (кэш): пересадка вблизи каждые ~20 ед. стоит доли мс. Нет движка деревьев или vo.trees ===
+    //    false — прежние ствол + шар / конус ──
     const TR = low ? 160 : mob ? 200 : 320, TMAX = low ? 400 : mob ? 700 : 1600;
-    const trunkG = new T.CylinderGeometry(.22, .32, 1, 6); trunkG.translate(0, .5, 0);
-    const pineG = new T.ConeGeometry(1.7, 4.6, 7); pineG.translate(0, 4.4, 0);
-    const leafG = new T.IcosahedronGeometry(2.1, 0); leafG.translate(0, 4.2, 0);
-    own.push(trunkG, pineG, leafG);
-    const trunkM = R.mat('#6b4423', { rough: .9 }), pineM = R.mat('#2f6b3a', { rough: .9 }), leafM = R.mat('#4f9a45', { rough: .9 });
-    E.leafMaterial?.(leafM, 'leaves'); E.leafMaterial?.(pineM, 'needles');   // погода: листва по сезону, хвоя осенью не желтеет
-    const mkI = (g, m) => { const im = new T.InstancedMesh(g, m, TMAX); im.count = 0; im.castShadow = !low; im.receiveShadow = !low; im.frustumCulled = false; im.userData.dyn = true; grp.add(im); return im; };
-    const iTrunk = mkI(trunkG, trunkM), iPine = mkI(pineG, pineM), iLeaf = mkI(leafG, leafM);
     const tm = new T.Matrix4(), tq = new T.Quaternion(), ts = new T.Vector3(), tp = new T.Vector3(), te = new T.Euler(), tc = new T.Color();
     let tX = Infinity, tZ = Infinity;
     const cut = new Set(), tid = (x, z) => 'wt:' + Math.round(x * 4) + ':' + Math.round(z * 4);
     V.cutTree = (id, on) => { if (on) cut.add(id); else cut.delete(id); tX = Infinity; bX = Infinity; const b = bodies.get(id); if (b && on) { V.ph?.remove?.(b); bodies.delete(id); } };
-    function plantTrees(cx, cz){
-      let nT = 0, nP = 0, nL = 0;
-      WM.trees(cx - TR, cz - TR, cx + TR, cz + TR, (x, y, z, k, pine, r) => {
-        if (nT >= TMAX || (x - cx) ** 2 + (z - cz) ** 2 > TR * TR || (cut.size && cut.has(tid(x, z)))) return;
-        te.set(0, r * 6.28, 0); tq.setFromEuler(te);
-        ts.set(k, k * (pine ? 1.25 : 1), k); tp.set(x, y - .1, z); tm.compose(tp, tq, ts); iTrunk.setMatrixAt(nT++, tm);
-        ts.set(k * (.85 + r * .3), k * (pine ? 1.1 + r * .3 : .9 + r * .3), k * (.85 + r * .3)); tm.compose(tp, tq, ts);
-        if (pine) iPine.setMatrixAt(nP++, tm); else { iLeaf.setMatrixAt(nL, tm); tc.setHSL(.27 + r * .07, .45, .36 + r * .12); iLeaf.setColorAt(nL++, tc); }
+    // деревья карты по клеткам TT (кэш: рельеф и дороги считаются один раз на клетку), прямоугольник — в своих клетках
+    const TT = 64, tiles = new Map();
+    let tileUse = 0;
+    function tile(i, j){
+      const key = i * 1000003 + j, t = tiles.get(key);
+      if (t) { t.u = tileUse; return t.a; }
+      const a = []; WM.trees(i * TT, j * TT, i * TT + TT - 1e-6, j * TT + TT - 1e-6, (x, y, z, k, pine, r) => { a.push(x, y, z, k, pine, r); });
+      const fa = Float64Array.from(a); tiles.set(key, { a: fa, u: tileUse });
+      if (tiles.size > 700) { const old = [...tiles.entries()].sort((p, q) => p[1].u - q[1].u).slice(0, 200); for (const [k] of old) tiles.delete(k); }
+      return fa;
+    }
+    function eachTree(x0, z0, x1, z1, cb){
+      tileUse++;
+      for (let i = Math.floor(x0 / TT); i <= Math.floor(x1 / TT); i++) for (let j = Math.floor(z0 / TT); j <= Math.floor(z1 / TT); j++) {
+        const a = tile(i, j);
+        for (let q = 0; q < a.length; q += 6) { const x = a[q], z = a[q + 2]; if (x >= x0 && x <= x1 && z >= z0 && z <= z1) cb(x, a[q + 1], z, a[q + 3], a[q + 4], a[q + 5]); }
+      }
+    }
+    V.eachTree = eachTree;
+    const T3 = TREES_3D && vo.trees !== false && E.trees3d && E.trees ? E.trees3d : null;
+    let plantTrees = null, offSrc = null, TM = null;
+    if (T3) {
+      const NEAR = low ? 46 : mob ? 80 : 130, NMAX = low ? 90 : mob ? 220 : 520, lodN = low || mob ? 1 : 0;
+      TM = T3.materials(R, { h: 10 });
+      // виды: порода, зерно, высота в мире при k = 1 (как прежние деревья)
+      const protos = [['oak', 101, 7], ['oak', 233, 7], ['birch', 307, 7.6], ['spruce', 401, 8.4], ['pine', 503, 8.8]].map(([sp, seed, h]) => {
+        const geo = T3.geometry(R, sp, seed, { lod: lodN }), pine = sp === 'spruce' || sp === 'pine';
+        return { sp, seed, geo, pine, s: h / geo.userData.H, im: null, n: 0 };
       });
-      iTrunk.count = nT; iPine.count = nP; iLeaf.count = nL;
-      for (const im of [iTrunk, iPine, iLeaf]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+      const farB = T3.geometry(R, 'oak', 101, { lod: 2 }), farC = T3.geometry(R, 'spruce', 401, { lod: 2 }), sFarB = 7 / farB.userData.H, sFarC = 8.4 / farC.userData.H;
+      const mkI = (g, m, n, shadow, depth) => { const im = new T.InstancedMesh(g, m, n); im.count = 0; im.castShadow = shadow && !low; im.receiveShadow = !low; im.frustumCulled = false; im.userData.dyn = true; if (depth && im.castShadow) im.customDepthMaterial = depth; grp.add(im); return im; };
+      for (const p of protos) p.im = mkI(p.geo, p.pine ? TM.needles : TM.leaves, NMAX, true, p.pine ? null : TM.depth);
+      const iFarB = mkI(farB, TM.leaves, TMAX, false), iFarC = mkI(farC, TM.needles, TMAX, false);
+      const protoOf = (pine, r, y) => pine ? (y > 120 || r < .35 ? 4 : 3) : r < .2 ? 2 : r < .6 ? 0 : 1;
+      const frac = v => v - Math.floor(v);
+      plantTrees = (cx, cz) => {
+        for (const p of protos) p.n = 0;
+        let nB = 0, nC = 0;
+        eachTree(cx - TR, cz - TR, cx + TR, cz + TR, (x, y, z, k, pine, r) => {
+          const d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz); if (d2 > TR * TR || (cut.size && cut.has(tid(x, z)))) return;
+          const pi = protoOf(pine, r, y), P = protos[pi], v = .9 + frac(r * 977) * .18;
+          te.set(0, r * 6.28, 0); tq.setFromEuler(te); tp.set(x, y - .1, z);
+          if (d2 < NEAR * NEAR && P.n < NMAX) {
+            const s = k * P.s; ts.set(s, s * (.94 + frac(r * 7919) * .12), s); tm.compose(tp, tq, ts);
+            P.im.setMatrixAt(P.n, tm); tc.setRGB(v, v, v); P.im.setColorAt(P.n++, tc); return;
+          }
+          if (pine) { if (nC >= TMAX) return; const s = k * sFarC; ts.set(s, s, s); tm.compose(tp, tq, ts); iFarC.setMatrixAt(nC, tm); tc.setRGB(v, v, v); iFarC.setColorAt(nC++, tc); }
+          else { if (nB >= TMAX) return; const s = k * sFarB, w = pi === 2 ? .62 : 1; ts.set(s * w, s, s * w); tm.compose(tp, tq, ts); iFarB.setMatrixAt(nB, tm); tc.setRGB(v * (pi === 2 ? 1.1 : 1), v, v * (pi === 2 ? .92 : 1)); iFarB.setColorAt(nB++, tc); }
+        });
+        for (const p of protos) { p.im.count = p.n; p.im.instanceMatrix.needsUpdate = true; if (p.im.instanceColor) p.im.instanceColor.needsUpdate = true; }
+        iFarB.count = nB; iFarC.count = nC;
+        for (const im of [iFarB, iFarC]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+      };
+      // разрушения (destruct.js): дерево карты по id — сетка вида и место (ствол ломается по месту удара, падает настоящий верх)
+      offSrc = E.trees.source('wt', id => {
+        const m = /^wt:(-?\d+):(-?\d+)$/.exec(id); if (!m) return null;
+        const tx = +m[1] / 4, tz = +m[2] / 4; let out = null;
+        eachTree(tx - 1, tz - 1, tx + 1, tz + 1, (x, y, z, k, pine, r) => {
+          if (out || tid(x, z) !== id) return;
+          const pi = protoOf(pine, r, y), P = protos[pi], s = k * P.s;
+          out = { geo: P.geo, mat: P.pine ? TM.needles : TM.leaves, depth: P.pine ? null : TM.depth, x, y: y - .1, z, yaw: r * 6.28, s, h: P.geo.userData.H * s, trunkR: P.geo.userData.trunkR * s, pine: !!pine, sp: P.sp };
+        });
+        return out;
+      });
+      V.treeStats = () => ({ near: protos.map(p => p.n), farB: iFarB.count, farC: iFarC.count, verts: protos.map(p => p.geo.attributes.position.count), far: [farB.attributes.position.count, farC.attributes.position.count], tiles: tiles.size, NEAR });
+    } else {   // прежние: ствол + шар / конус (без движка деревьев)
+      const trunkG = new T.CylinderGeometry(.22, .32, 1, 6); trunkG.translate(0, .5, 0);
+      const pineG = new T.ConeGeometry(1.7, 4.6, 7); pineG.translate(0, 4.4, 0);
+      const leafG = new T.IcosahedronGeometry(2.1, 0); leafG.translate(0, 4.2, 0);
+      own.push(trunkG, pineG, leafG);
+      const trunkM = R.mat('#6b4423', { rough: .9 }), pineM = R.mat('#2f6b3a', { rough: .9 }), leafM = R.mat('#4f9a45', { rough: .9 });
+      E.leafMaterial?.(leafM, 'leaves'); E.leafMaterial?.(pineM, 'needles');   // погода: листва по сезону, хвоя осенью не желтеет
+      const mkI = (g, m) => { const im = new T.InstancedMesh(g, m, TMAX); im.count = 0; im.castShadow = !low; im.receiveShadow = !low; im.frustumCulled = false; im.userData.dyn = true; grp.add(im); return im; };
+      const iTrunk = mkI(trunkG, trunkM), iPine = mkI(pineG, pineM), iLeaf = mkI(leafG, leafM);
+      plantTrees = (cx, cz) => {
+        let nT = 0, nP = 0, nL = 0;
+        eachTree(cx - TR, cz - TR, cx + TR, cz + TR, (x, y, z, k, pine, r) => {
+          if (nT >= TMAX || (x - cx) ** 2 + (z - cz) ** 2 > TR * TR || (cut.size && cut.has(tid(x, z)))) return;
+          te.set(0, r * 6.28, 0); tq.setFromEuler(te);
+          ts.set(k, k * (pine ? 1.25 : 1), k); tp.set(x, y - .1, z); tm.compose(tp, tq, ts); iTrunk.setMatrixAt(nT++, tm);
+          ts.set(k * (.85 + r * .3), k * (pine ? 1.1 + r * .3 : .9 + r * .3), k * (.85 + r * .3)); tm.compose(tp, tq, ts);
+          if (pine) iPine.setMatrixAt(nP++, tm); else { iLeaf.setMatrixAt(nL, tm); tc.setHSL(.27 + r * .07, .45, .36 + r * .12); iLeaf.setColorAt(nL++, tc); }
+        });
+        iTrunk.count = nT; iPine.count = nP; iLeaf.count = nL;
+        for (const im of [iTrunk, iPine, iLeaf]) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+      };
     }
     // тела деревьев рядом с игроком (дорого держать все — только в радиусе 45)
     const bodies = new Map();
@@ -524,7 +598,7 @@
       if (!ph?.addCyl) return;
       const keep = new Set();
       V.ph = ph;
-      WM.trees(px - 45, pz - 45, px + 45, pz + 45, (x, y, z, k) => {
+      eachTree(px - 45, pz - 45, px + 45, pz + 45, (x, y, z, k) => {
         const key = tid(x, z); if (cut.has(key)) return; keep.add(key);
         if (!bodies.has(key)) bodies.set(key, ph.addCyl({ x, z, y: y + 2, r: .32 * k + .05, hy: 2, tag: 'tree' }));
       });
@@ -534,7 +608,7 @@
     V.update = (cx, cz, o = {}) => {
       tick++;
       if (pending || Math.hypot(cx - lastX, cz - lastZ) > 24 || o.force) { const first = lastX === Infinity; lastX = cx; lastZ = cz; refresh(cx, cz, first || o.force); }
-      if (Math.hypot(cx - tX, cz - tZ) > (mob ? 52 : 40)) { tX = cx; tZ = cz; plantTrees(cx, cz); }
+      if (Math.hypot(cx - tX, cz - tZ) > (T3 ? (mob ? 24 : 20) : mob ? 52 : 40)) { tX = cx; tZ = cz; plantTrees(cx, cz); }
       const px = o.px ?? cx, pz = o.pz ?? cz;
       if (o.ph && Math.hypot(px - bX, pz - bZ) > 8) { bX = px; bZ = pz; treeBodies(o.ph, px, pz); }
     };
@@ -542,9 +616,10 @@
       for (const e of cache.values()) e.mesh.geometry.dispose();
       cache.clear();
       for (const b of bodies.values()) ph?.remove?.(b);
-      bodies.clear();
+      bodies.clear(); tiles.clear();
       V.waves?.dispose(); V.waves = null;
       for (const x of own) x.dispose?.();
+      offSrc?.(); TM?.dispose(); T3?.release(R);   // деревья пород: материалы и сетки этого рендерера (числа сеток — в кэше страницы)
       R.scene.remove(grp);
     };
     return V;

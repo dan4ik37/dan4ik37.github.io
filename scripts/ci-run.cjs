@@ -45,6 +45,7 @@ const TESTS = [
   { f: 'lang-cs-test.cjs', serial: true }, { f: 'lang-java-test.cjs', serial: true }, { f: 'lang-lua-test.cjs', serial: true }, { f: 'lang-wasm-test.cjs', env: { D37_SKIP: 'cpp,rust' } },
   { f: 'studio-support-test.cjs', serial: true },   // T-022a: прочность в «Студии 3D»; Support.* в JS / Lua / C# / Java — ждёт настоящие таймеры
   { f: 'voxel-test.cjs', serial: true, retry: 2 },
+  { f: 'trees-test.cjs', args: ['--fast'], retry: 1 },   // T-022b: движок деревьев — по зерну одинаково, породы, связность, сетка, генератор «Кубомира» v1/v2 как было, v3
   // игры: бот против бота (число партий уменьшено — в CI достаточно)
   { f: 'domino-test.cjs' }, { f: 'fillword-test.cjs' }, { f: 'balda-test.cjs', args: ['300'] }, { f: 'krokodil-test.cjs' },
   { f: 'kletochki-test.cjs' }, { f: 'chervyachki-test.cjs' },
@@ -61,6 +62,7 @@ const TESTS = [
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
+  { f: 'trees-e2e.cjs', args: ['studio', 'ci'], e2e: true, t: 600 },   // T-022b: деревья пород в «Студии 3D» — все породы ставятся (замеры, снимки, 10 мин игры — режимы вручную)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается
   { f: 'world-reopen-e2e.cjs', args: ['20'], e2e: true, t: 900 },   // T-085: 20 раз закрыть и открыть «Мир Денчика» — прошлые миры уходят из памяти, счётчики — как до
   { f: 'evo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // «Путь клетки»: род, эволюция, Лужа и Глубина, колония, ДНК (ПК и телефон)

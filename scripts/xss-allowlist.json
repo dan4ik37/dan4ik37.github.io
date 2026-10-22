@@ -6559,6 +6559,16 @@
    ]
   },
   {
+   "f": "js/games/studio3d-trees.js",
+   "fn": "menuHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu); породы — константы trees.js, esc()",
+   "xs": [
+    "html"
+   ]
+  },
+  {
    "f": "js/games/studio3d-ui.js",
    "fn": "drawHints",
    "k": "sink:innerHTML",

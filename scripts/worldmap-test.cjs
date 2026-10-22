@@ -49,5 +49,27 @@ ok(trees.length > 0 && trees.every(c => Math.hypot(c.x - 0, c.z + 200) < 70), '�
 ok(!!V.water && V.water.geometry.attributes.position.count > 1000, 'вода — одной сеткой (море, реки, озёра)');
 V.dispose(ph);
 ok(V.grp.parent === null && [...ph.query(-2000, -2000, 2000, 2000, [])].filter(c => c.tag === 'tree').length === 0, 'после выхода — ни сетки, ни тел деревьев');
+// деревья пород (T-022b, js/engine/trees.js + trees3d.js): вблизи — 5 видов экземплярами, вдали — 2 простых; те же места;
+// разрушениям — сетка дерева по id; после выхода источник снят
+for (const f of ['js/engine/trees.js', 'js/engine/trees3d.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
+{
+  const V2 = WM.view(R, { far: 900 });
+  V2.update(-760, -560, { force: true, ph, px: -760, pz: -560 });
+  const im = V2.grp.children.filter(m => m.isInstancedMesh), S = V2.treeStats();
+  ok(im.length === 7, 'деревья пород: 7 экземпляров (5 видов вблизи + 2 вдали)', im.length);
+  ok(S.near.reduce((a, b) => a + b, 0) > 20 && S.farB + S.farC > 100, 'в лесу: подробные вблизи и простые вдали', S);
+  ok(S.verts.every(v => v > 100 && v < 6000) && S.far.every(v => v < 260), 'вершин: вид вблизи < 6000, вдали < 260', { v: S.verts, f: S.far });
+  // те же места, что у прежних деревьев: число деревьев в круге — как у WM.trees
+  let n0 = 0; WM.trees(-760 - 320, -560 - 320, -760 + 320, -560 + 320, (x, y, z) => { if ((x + 760) ** 2 + (z + 560) ** 2 <= 320 * 320) n0++; });
+  const n1 = S.near.reduce((a, b) => a + b, 0) + S.farB + S.farC;
+  ok(n1 === Math.min(n0, n1) && n1 >= n0 * .97, 'деревьев столько же, что и мест у карты (кэш клеток не теряет)', [n0, n1]);
+  let id = null; WM.trees(-770, -570, -750, -550, (x, y, z) => { id = id || 'wt:' + Math.round(x * 4) + ':' + Math.round(z * 4); });
+  const info = E.trees.lookup(id);
+  ok(!!info && info.geo?.isBufferGeometry && info.h > 3 && info.s > 0, 'разрушениям: дерево карты по id — сетка и место', info && { h: info.h, s: info.s, sp: info.sp });
+  V2.cutTree(id, true); V2.update(-760, -560, { ph, px: -760, pz: -560 });
+  ok(V2.treeStats().near.reduce((a, b) => a + b, 0) + V2.treeStats().farB + V2.treeStats().farC === n1 - 1, 'сломанное дерево спрятано (−1)');
+  V2.dispose(ph);
+  ok(V2.grp.parent === null && E.trees.lookup(id) === null, 'после выхода — сетки прочь, источник для разрушений снят');
+}
 console.log(`worldmap-test: ${pass} ок, ${fail} ошибок`);
 process.exit(fail ? 1 : 0);

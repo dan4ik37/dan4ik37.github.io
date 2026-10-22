@@ -39,7 +39,7 @@
   V.seedOf = s => { if (typeof s === 'number' && Number.isFinite(s)) return s >>> 0; const t = String(s ?? ''); if (/^-?\d{1,10}$/.test(t)) return (+t) >>> 0; let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = imul(h, 16777619); } return h >>> 0; };
 
   // ═══ Формы (как рисовать) и слои (каким материалом) ═══
-  const SHAPE = V.SHAPE = { none: 0, cube: 1, cross: 2, liquid: 3, torch: 4, ladder: 5, door: 6, cactus: 7, chest: 8 };
+  const SHAPE = V.SHAPE = { none: 0, cube: 1, cross: 2, liquid: 3, torch: 4, ladder: 5, door: 6, cactus: 7, chest: 8, branch: 9 };   // branch — тонкая ветка (T-022b)
   const LAYER = V.LAYER = { none: 0, solid: 1, cutout: 2, water: 3 };
   const TINT = V.TINT = { none: 0, grass: 1, foliage: 2, water: 3, birch: 4, spruce: 5 };
 
@@ -54,7 +54,9 @@
   // tool ('pick' | 'axe' | 'shovel'), tier (какая кирка нужна, чтобы выпал: 1 дерево … 4 алмаз), drop (имя вещи,
   // null — ничего), sound, replace (можно поставить поверх), fall (падает), liquid, climb, ui ('craft'|'chest'|'furnace'),
   // bounce (подбрасывает: скорость), hurt (урон в секунду при касании), mod (чей); свет: emit — яркость 0…15, lcol [r, g, b] — цвет
-  // 0…1 (нет — тёплый белый), glowTex — какие текстуры светятся сами (нет — все грани светящегося блока), glow: false — сам не светится
+  // 0…1 (нет — тёплый белый), glowTex — какие текстуры светятся сами (нет — все грани светящегося блока), glow: false — сам не светится;
+  // деревья (T-022b): tree — чем блок служит дереву: 'log' (ствол, сук, корень), 'thin' (тонкая ветка), 'leaves', 'sapling' — по нему
+  // узнают дерево падение (kubomir-ents.js fellTree), рост ростков и сетка тонких веток; decid — листва опадает зимой (лиственная)
   V.blocks = []; V.byName = new Map();
   const DEF = { shape: SHAPE.cube, layer: LAYER.solid, solid: true, opaque: true, op: 15, emit: 0, tint: TINT.none, hard: 1, tool: '', tier: 0, drop: undefined, sound: 'stone', replace: false, fall: false, liquid: '', climb: false, ui: '', bounce: 0, hurt: 0, slip: 0, cullSelf: true, axis: false, mod: '', title: '' };
   V.defineBlock = d => {
@@ -88,13 +90,13 @@
   B({ name: 'bedrock', title: 'Коренная порода', tex: 'bedrock', hard: -1, drop: null });
   B({ name: 'water', title: 'Вода', shape: SHAPE.liquid, layer: LAYER.water, solid: false, opaque: false, op: 2, tex: 'water', tint: TINT.water, hard: -1, drop: null, replace: true, liquid: 'water', sound: 'water' });
   B({ name: 'lava', title: 'Лава', shape: SHAPE.liquid, layer: LAYER.solid, solid: false, opaque: false, op: 15, emit: 15, lcol: [1, .55, .2], tex: 'lava', hard: -1, drop: null, replace: true, liquid: 'lava', hurt: 4, sound: 'lava' });
-  B({ name: 'log_oak', axis: true, title: 'Дубовое бревно', tex: { top: 'log_oak_top', side: 'log_oak' }, hard: 2, tool: 'axe', sound: 'wood' });
-  B({ name: 'leaves_oak', title: 'Дубовая листва', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_oak', tint: TINT.foliage, hard: .2, drop: null, sound: 'grass' });
+  B({ name: 'log_oak', axis: true, title: 'Дубовое бревно', tex: { top: 'log_oak_top', side: 'log_oak' }, hard: 2, tool: 'axe', sound: 'wood', tree: 'log' });
+  B({ name: 'leaves_oak', title: 'Дубовая листва', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_oak', tint: TINT.foliage, hard: .2, drop: null, sound: 'grass', tree: 'leaves', decid: true });
   B({ name: 'planks_oak', title: 'Дубовые доски', tex: 'planks_oak', hard: 2, tool: 'axe', sound: 'wood' });
-  B({ name: 'log_birch', axis: true, title: 'Берёзовое бревно', tex: { top: 'log_birch_top', side: 'log_birch' }, hard: 2, tool: 'axe', sound: 'wood' });
-  B({ name: 'leaves_birch', title: 'Берёзовая листва', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_birch', tint: TINT.birch, hard: .2, drop: null, sound: 'grass' });
-  B({ name: 'log_spruce', axis: true, title: 'Еловое бревно', tex: { top: 'log_spruce_top', side: 'log_spruce' }, hard: 2, tool: 'axe', sound: 'wood' });
-  B({ name: 'leaves_spruce', title: 'Еловая хвоя', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_spruce', tint: TINT.spruce, hard: .2, drop: null, sound: 'grass' });
+  B({ name: 'log_birch', axis: true, title: 'Берёзовое бревно', tex: { top: 'log_birch_top', side: 'log_birch' }, hard: 2, tool: 'axe', sound: 'wood', tree: 'log' });
+  B({ name: 'leaves_birch', title: 'Берёзовая листва', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_birch', tint: TINT.birch, hard: .2, drop: null, sound: 'grass', tree: 'leaves', decid: true });
+  B({ name: 'log_spruce', axis: true, title: 'Еловое бревно', tex: { top: 'log_spruce_top', side: 'log_spruce' }, hard: 2, tool: 'axe', sound: 'wood', tree: 'log' });
+  B({ name: 'leaves_spruce', title: 'Еловая хвоя', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_spruce', tint: TINT.spruce, hard: .2, drop: null, sound: 'grass', tree: 'leaves' });
   B({ name: 'sandstone', title: 'Песчаник', tex: { top: 'sandstone_top', side: 'sandstone', bottom: 'sandstone_top' }, hard: .8, tool: 'pick', tier: 1 });
   B({ name: 'snow', title: 'Снег', tex: 'snow', hard: .3, tool: 'shovel', sound: 'snow' });
   B({ name: 'ice', title: 'Лёд', tex: 'ice', hard: .5, tool: 'pick', slip: .9, op: 2, opaque: true, sound: 'glass', drop: null });
@@ -125,9 +127,9 @@
   B({ name: 'snow_grass', title: 'Снежный дёрн', tex: { top: 'snow', side: 'snow_grass_side', bottom: 'dirt' }, hard: .6, tool: 'shovel', drop: 'dirt', sound: 'snow' });
   B({ name: 'planks_birch', title: 'Берёзовые доски', tex: 'planks_birch', hard: 2, tool: 'axe', sound: 'wood' });
   B({ name: 'planks_spruce', title: 'Еловые доски', tex: 'planks_spruce', hard: 2, tool: 'axe', sound: 'wood' });
-  B({ name: 'sapling_oak', title: 'Росток дуба', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_oak', hard: 0, sound: 'grass' });
-  B({ name: 'sapling_birch', title: 'Росток берёзы', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_birch', hard: 0, sound: 'grass' });
-  B({ name: 'sapling_spruce', title: 'Росток ели', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_spruce', hard: 0, sound: 'grass' });
+  B({ name: 'sapling_oak', title: 'Росток дуба', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_oak', hard: 0, sound: 'grass', tree: 'sapling' });
+  B({ name: 'sapling_birch', title: 'Росток берёзы', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_birch', hard: 0, sound: 'grass', tree: 'sapling' });
+  B({ name: 'sapling_spruce', title: 'Росток ели', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_spruce', hard: 0, sound: 'grass', tree: 'sapling' });
   B({ name: 'mossy_cobble', title: 'Замшелый булыжник', tex: 'mossy_cobble', hard: 2, tool: 'pick', tier: 1 });
   B({ name: 'furnace_lit', title: 'Печь', tex: { top: 'furnace_top', side: 'furnace_side', front: 'furnace_front_lit', bottom: 'furnace_top' }, emit: 13, lcol: [1, .72, .45], glowTex: ['furnace_front_lit'], hard: 3.5, tool: 'pick', tier: 1, ui: 'furnace', drop: 'furnace', noItem: true });
   B({ name: 'bouncer', title: 'Батут', tex: 'bouncer', bounce: 15, hard: .3, sound: 'wool' });
@@ -139,6 +141,21 @@
   // «обугленные доски» — доски, которые горели и почернели (погасли — остались чёрными; ломаются — иногда уголь)
   B({ name: 'fire', title: 'Огонь', shape: SHAPE.none, layer: LAYER.none, solid: false, opaque: false, op: 0, emit: 15, lcol: [1, .55, .2], tex: null, hard: 0, drop: null, replace: true, hurt: 2, noItem: true, sound: 'wood', burn: 'flame' });
   B({ name: 'charred_planks', title: 'Обугленные доски', tex: 'charred_planks', hard: 1, tool: 'axe', sound: 'wood', drop: null, burn: 'char', noItem: true });
+  // Деревья «как в модах» (T-022b, генератор v3 — js/engine/trees.js): акация и тропическое дерево (свои брёвна, листва, доски,
+  // ростки), ива (листва и росток; ствол — дубовый), тонкие ветки (форма branch: середина и «руки» к соседним брёвнам; поля — как у
+  // брёвен: топор, звук дерева, горит как дерево). Только в конец списка — номера блоков постоянны
+  B({ name: 'log_acacia', axis: true, title: 'Бревно акации', tex: { top: 'log_acacia_top', side: 'log_acacia' }, hard: 2, tool: 'axe', sound: 'wood', tree: 'log' });
+  B({ name: 'leaves_acacia', title: 'Листва акации', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_acacia', tint: TINT.foliage, hard: .2, drop: null, sound: 'grass', tree: 'leaves', decid: true });
+  B({ name: 'planks_acacia', title: 'Доски акации', tex: 'planks_acacia', hard: 2, tool: 'axe', sound: 'wood' });
+  B({ name: 'sapling_acacia', title: 'Росток акации', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_acacia', hard: 0, sound: 'grass', tree: 'sapling' });
+  B({ name: 'log_jungle', axis: true, title: 'Тропическое бревно', tex: { top: 'log_jungle_top', side: 'log_jungle' }, hard: 2, tool: 'axe', sound: 'wood', tree: 'log' });
+  B({ name: 'leaves_jungle', title: 'Тропическая листва', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_jungle', tint: TINT.foliage, hard: .2, drop: null, sound: 'grass', tree: 'leaves' });
+  B({ name: 'planks_jungle', title: 'Тропические доски', tex: 'planks_jungle', hard: 2, tool: 'axe', sound: 'wood' });
+  B({ name: 'sapling_jungle', title: 'Тропический росток', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_jungle', hard: 0, sound: 'grass', tree: 'sapling' });
+  B({ name: 'leaves_willow', title: 'Листва ивы', layer: LAYER.cutout, opaque: false, op: 1, tex: 'leaves_willow', tint: TINT.foliage, hard: .2, drop: null, sound: 'grass', tree: 'leaves', decid: true });
+  B({ name: 'sapling_willow', title: 'Росток ивы', shape: SHAPE.cross, layer: LAYER.cutout, solid: false, opaque: false, op: 0, tex: 'sapling_willow', hard: 0, sound: 'grass', tree: 'sapling' });
+  for (const [w, t] of [['oak', 'Тонкая дубовая ветка'], ['birch', 'Тонкая берёзовая ветка'], ['spruce', 'Тонкая еловая ветка'], ['acacia', 'Тонкая ветка акации'], ['jungle', 'Тонкая тропическая ветка']])
+    B({ name: 'log_' + w + '_thin', axis: true, title: t, shape: SHAPE.branch, opaque: false, op: 0, cullSelf: false, tex: { top: 'log_' + w + '_top', side: 'log_' + w }, hard: 1, tool: 'axe', sound: 'wood', tree: 'thin' });
   V.VANILLA_BLOCKS = V.blocks.length;
   // доп. текстуры (ломание блока, частицы)
   for (let i = 0; i < 8; i++) V.texture('destroy_' + i);
@@ -232,12 +249,14 @@
   // ═══ Рецепты (верстак 3×3, в руках 2×2) и печь ═══
   // shaped: { pattern: ['##', '##'], key: { '#': 'planks' }, out: 'crafting_table', n: 1 }; shapeless: { list: [...], out, n }.
   // Группы вещей: 'planks' — любые доски, 'log' — любое бревно (#tag)
-  V.TAGS = { planks: ['planks_oak', 'planks_birch', 'planks_spruce'], log: ['log_oak', 'log_birch', 'log_spruce'], coal: ['coal'] };
+  V.TAGS = { planks: ['planks_oak', 'planks_birch', 'planks_spruce', 'planks_acacia', 'planks_jungle'], log: ['log_oak', 'log_birch', 'log_spruce', 'log_acacia', 'log_jungle', 'log_oak_thin', 'log_birch_thin', 'log_spruce_thin', 'log_acacia_thin', 'log_jungle_thin'], coal: ['coal'] };
   V.recipes = []; V.smelting = new Map();
   V.addRecipe = r => { V.recipes.push(r); return r; };
   V.addSmelt = (input, out, time = 6, n = 1) => { V.smelting.set(input, { out, time, n: Math.max(1, n | 0) }); };   // n — сколько выходит (рецепт мода)
   const R = r => V.addRecipe(r);
   R({ list: ['log_oak'], out: 'planks_oak', n: 4 }); R({ list: ['log_birch'], out: 'planks_birch', n: 4 }); R({ list: ['log_spruce'], out: 'planks_spruce', n: 4 });
+  R({ list: ['log_acacia'], out: 'planks_acacia', n: 4 }); R({ list: ['log_jungle'], out: 'planks_jungle', n: 4 });   // T-022b: новые породы; тонкая ветка — 2 доски своей породы
+  for (const w of ['oak', 'birch', 'spruce', 'acacia', 'jungle']) R({ list: ['log_' + w + '_thin'], out: 'planks_' + w, n: 2 });
   R({ pattern: ['#', '#'], key: { '#': '#planks' }, out: 'stick', n: 4 });
   R({ pattern: ['##', '##'], key: { '#': '#planks' }, out: 'crafting_table', n: 1 });
   R({ pattern: ['###', '# #', '###'], key: { '#': 'cobble' }, out: 'furnace', n: 1 });
@@ -269,7 +288,7 @@
   R({ pattern: ['k', '|', 'p'], key: { k: 'cobble', '|': 'stick', p: 'feather' }, out: 'arrow', n: 2 });   // без кремня — из булыжника, меньше
   V.addSmelt('ore_iron', 'iron_ingot'); V.addSmelt('ore_gold', 'gold_ingot'); V.addSmelt('sand', 'glass'); V.addSmelt('cobble', 'stone');
   V.addSmelt('clay_ball', 'brick'); V.addSmelt('meat_raw', 'meat_cooked'); V.addSmelt('chicken_raw', 'chicken_cooked');
-  V.addSmelt('log_oak', 'coal'); V.addSmelt('log_birch', 'coal'); V.addSmelt('log_spruce', 'coal');
+  V.addSmelt('log_oak', 'coal'); V.addSmelt('log_birch', 'coal'); V.addSmelt('log_spruce', 'coal'); V.addSmelt('log_acacia', 'coal'); V.addSmelt('log_jungle', 'coal');
   // помощники и удобства (T-049; рецепты свои): пергамент — из волокна (трава), карты, аксессуары, книга мастера, свиток, ведро, лежанка
   R({ list: ['fiber', 'fiber', 'fiber'], out: 'parchment', n: 1 });
   R({ list: ['parchment', 'coal'], out: 'map_blank', n: 1 });
@@ -292,6 +311,7 @@
     gravel: [['flint', .1, 1, true]], tall_grass: [['fiber', .15, 1]], clay: [['clay_ball', 1, 4, true]],
     leaves_oak: [['sapling_oak', .05, 1], ['apple', .02, 1]], leaves_birch: [['sapling_birch', .05, 1]], leaves_spruce: [['sapling_spruce', .05, 1]],
     charred_planks: [['coal', .35, 1]],   // обугленные доски — иногда уголь (T-022d)
+    leaves_acacia: [['sapling_acacia', .05, 1]], leaves_jungle: [['sapling_jungle', .03, 1]], leaves_willow: [['sapling_willow', .05, 1]],
   };
   // Горючесть блока для огня (T-022d, D37E.fire): ключ материала огня или '' — не горит. Только по полям блока, без списков имён —
   // новые блоки (моды, новые деревья) горят сами: b.burn (своё: 'wood' | 'planks' | 'leaves' | 'grass' | 'turf' | 'cloth' | 'fuel' |
@@ -401,12 +421,15 @@
       tex: new Int16Array(n * 7),   // top, bottom, side, front, back, extra, (запас)
       ecol: new Uint8Array(n * 3),  // цветной свет блока: R, G, B (0…255 = уровень × 17; самый яркий канал = emit × 17)
       stream: new Uint8Array(n),    // сетка (V.LAYERS): 0 solid, 1 cutout, 2 water, 3 foliage (листва, трава, цветы), 4 glass
+      tree: new Uint8Array(n),      // деревья (T-022b): 1 бревно, 2 тонкая ветка, 3 листва, 4 росток
+      decid: new Uint8Array(n),     // листва опадает зимой (сетка чанка: «голые» лиственные — V.meshChunk, bare)
       glowL: new Uint8Array(V.tex.length + 1),   // текстура светится сама (0…15): факел, лава, лампа, «перед» горящей печи
     };
     for (const b of V.blocks) {
       const i = b.id;
       T.shape[i] = b.shape; T.layer[i] = b.layer; T.solid[i] = b.solid ? 1 : 0; T.opaque[i] = b.opaque ? 1 : 0;
       T.op[i] = Math.max(0, Math.min(15, b.opaque ? 15 : b.op | 0)); T.emit[i] = Math.max(0, Math.min(15, b.emit | 0));
+      T.tree[i] = b.tree === 'log' ? 1 : b.tree === 'thin' ? 2 : b.tree === 'leaves' ? 3 : b.tree === 'sapling' ? 4 : 0; T.decid[i] = b.decid ? 1 : 0;
       T.tint[i] = b.tint; T.cullSelf[i] = b.cullSelf ? 1 : 0; T.liquid[i] = b.liquid === 'water' ? 1 : b.liquid === 'lava' ? 2 : 0; T.climb[i] = b.climb ? 1 : 0; T.axis[i] = b.axis ? 1 : 0;
       const f = b.texf;
       if (f) { T.tex[i * 7] = f.top; T.tex[i * 7 + 1] = f.bottom; T.tex[i * 7 + 2] = f.side; T.tex[i * 7 + 3] = f.front; T.tex[i * 7 + 4] = f.back; T.tex[i * 7 + 5] = f.extra; }
@@ -530,6 +553,8 @@
 
   // ═══ Рамки блоков (выделение, столкновения): в долях блока [x0, y0, z0, x1, y1, z1] ═══
   const FULL = [0, 0, 0, 1, 1, 1];
+  const BRANCH_BOX = [[.3125, 0, .3125, .6875, 1, .6875], [0, .3125, .3125, 1, .6875, .6875], [.3125, .3125, 0, .6875, .6875, 1]];
+  V.BRANCH_W = [.3125, .6875];   // толщина тонкой ветки (доли блока): сетка и вещь
   // сторона по состоянию: 0 — к +z (юг), 1 — к −x (запад), 2 — к −z (север), 3 — к +x (восток)
   V.FACING = [[0, 0, 1], [-1, 0, 0], [0, 0, -1], [1, 0, 0]];
   V.boxOf = (v, forCollide) => {
@@ -545,6 +570,7 @@
         return d[0] > 0 ? [0, 0, 0, t0, 1, 1] : d[0] < 0 ? [1 - t0, 0, 0, 1, 1, 1] : d[2] > 0 ? [0, 0, 0, 1, 1, t0] : [0, 0, 1 - t0, 1, 1, 1]; }
       case SHAPE.cactus: return [.0625, 0, .0625, .9375, 1, .9375];
       case SHAPE.chest: return [.0625, 0, .0625, .9375, .875, .9375];
+      case SHAPE.branch: return BRANCH_BOX[s & 3] || BRANCH_BOX[0];   // тонкая ветка: брусок 6/16 вдоль оси (по нему можно пройти)
       default: return FULL;
     }
   };
