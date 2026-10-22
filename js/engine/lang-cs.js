@@ -925,7 +925,7 @@
     const API = {
       script: { t: 'Script' }, Parent: { t: 'Part' }, game: { t: 'Game' }, workspace: { t: 'Workspace' }, Enum: { t: null },
       Instance: { type: 1, s: { new: 'Part()' } },
-      TweenService: { t: 'TweenService' }, RunService: { t: 'RunService' }, Players: { t: 'Players' }, Debris: { t: 'Debris' }, gui: { t: null }, sound: { t: null }, Game: { t: null }, Camera: { t: null }, Weather: { t: null },
+      TweenService: { t: 'TweenService' }, RunService: { t: 'RunService' }, Players: { t: 'Players' }, Debris: { t: 'Debris' }, gui: { t: null }, sound: { t: null }, Game: { t: null }, Camera: { t: null }, Weather: { t: null }, Support: { t: null },
       TweenInfo: { type: 1, s: { new: 'TweenInfo()' } },
       task: { type: 1, s: { wait: 'Task<float>()', spawn: 'void()', delay: 'void()' } },
       wait: { f: 'Task<float>' }, print: { f: 'void', pr: 1 }, warn: { f: 'void', pr: 1 }, random: { f: 'rnd' },
@@ -3556,7 +3556,7 @@
       // ── всё, что видит код C# по имени ──
       const A = {
         game: env.game, workspace: env.workspace, Enum: env.Enum, Instance: env.Instance, TweenService: env.TweenService, TweenInfo: env.TweenInfo, RunService: env.RunService,
-        Players: env.Players, Debris: env.Debris, gui: env.gui, sound: env.sound, wait: env.wait, random: env.random, Color3: env.Color3, Game: env.Game || env.game, Camera: env.Camera, Weather: env.Weather,   // Game.Mode, Camera.Mode — режим игры и ракурс; Weather — погода
+        Players: env.Players, Debris: env.Debris, gui: env.gui, sound: env.sound, wait: env.wait, random: env.random, Color3: env.Color3, Game: env.Game || env.game, Camera: env.Camera, Weather: env.Weather, Support: env.Support,   // Game.Mode, Camera.Mode — режим игры и ракурс; Weather — погода
         print: (...a) => env.print(...a.map(S)), warn: (...a) => env.warn(...a.map(S)),
         Vector3: V3, Color, Color32, Mathf, Math: MathCs, MathF: MathCs, Debug, Console, Random, Time, Quaternion, Space: { World: 1, Self: 0 }, PlayerPrefs,
         GameObject: { Find: n => env.workspace.FindFirstChild(S(n), true) },
@@ -3775,7 +3775,7 @@ script.Parent.Touched += (hit, player) =>
 Игрок: player.Name, player.Position, player.Humanoid.Health / MaxHealth (100) / WalkSpeed (16) / JumpPower (50), player.Humanoid.TakeDamage(n), player.Teleport(new Vector3(x, y, z)), player.SetStat("Имя", число) / AddStat / GetStat (таблица очков), player.Message("текст", секунды).
 Плавно: TweenService.Create(деталь, new TweenInfo(секунды, Enum.EasingStyle.Sine, null, повторы (-1 — всегда), обратно (true/false)), new { Position = v, Transparency = 0.5f }).Play().
 Ещё можно: Vector3 (+ - * /, Vector3.up, Vector3.Distance, Vector3.Lerp, v.magnitude, v.normalized), Mathf (Sin, Abs, Clamp, Lerp, PingPong, Round…), Math, Random.Range(a, b), Time.time, Time.deltaTime, Debug.Log, строки $"…{x:F1}…", List<T>, Dictionary<K, V>, LINQ (Where, Select, Sum, OrderBy…), async/await с await Task.Delay(миллисекунды), gui.message("текст", сек), gui.text("ключ", "текст"), sound.play("coin" | "jump" | "hit" | "click" | "pickup" | "buzz" | "door_wood_open" | "door_wood_close" | "break").
-Режим игры и камера: Game.Mode ("obby", "race", "ffa", "teams", "koth", "hide", "coins", "survival" или ""), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart.Connect(r => …), Game.RoundEnd.Connect((winner, text) => …), Game.AddScore(player, n), Game.GetScore(player), Game.GetTeam(player), Game.EndRound(player); Camera.Mode = "third" | "first" | "shoulder" | "top" | "iso" | "side" | "fixed", Camera.SetMode("top", player), Camera.Shake(сила, сек). Погода: Weather.State ("clear", "rain", "snow", "thunderstorm"…), Weather.Season ("spring", "summer", "autumn", "winter"), Weather.Temperature, Weather.FeelsLike, Weather.Today (праздник), Weather.Changed.Connect((state, season) => …), Weather.Holiday.Connect((id, text) => …), Weather.Set("snow").
+Режим игры и камера: Game.Mode ("obby", "race", "ffa", "teams", "koth", "hide", "coins", "survival" или ""), Game.State, Game.Round, Game.TimeLeft, Game.RoundStart.Connect(r => …), Game.RoundEnd.Connect((winner, text) => …), Game.AddScore(player, n), Game.GetScore(player), Game.GetTeam(player), Game.EndRound(player); Camera.Mode = "third" | "first" | "shoulder" | "top" | "iso" | "side" | "fixed", Camera.SetMode("top", player), Camera.Shake(сила, сек). Погода: Weather.State ("clear", "rain", "snow", "thunderstorm"…), Weather.Season ("spring", "summer", "autumn", "winter"), Weather.Temperature, Weather.FeelsLike, Weather.Today (праздник), Weather.Changed.Connect((state, season) => …), Weather.Holiday.Connect((id, text) => …), Weather.Set("snow"). Прочность (если включено обрушение): Support.Mode, Support.Holds(part), Support.Get(part) (0…100), Support.Break(part), Support.Collapsed.Connect(part => …).
 Нельзя: Input, Rigidbody, Physics, GetComponent<Rigidbody>, UI-классы Unity, Vector2, Quaternion-математика, сеть, файлы, потоки (Thread), LINQ-запросы from…select, goto, unsafe, record. using и namespace не нужны.
 Задача: `;
   const def = { label: 'C# (как в Unity)', short: 'C#', icon: '♯', kind: 'text', worker, examples: EXAMPLES, ai: AI,
