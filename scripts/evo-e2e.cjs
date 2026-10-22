@@ -245,10 +245,12 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
       let lap = 0;
       while (Date.now() - t0 < SOAK_MIN * 60000) {
         const b = ['pool', 'reef', 'deep'][lap++ % 3];
+        // как человек: к списку игр и снова в «Путь клетки» (переход внутри страницы; тот же адрес ещё раз — это перезагрузка, не то)
+        await go(`${BASE}/#/games`); await sleep(300);
         await go(`${BASE}/#/games/kletochki/evo`);
-        await waitFor(`!!document.querySelector('[data-io="evplay"][data-b="${b}"]')`, 8000);
+        ok(await waitFor(`!!document.querySelector('[data-io="evplay"][data-b="${b}"]')`, 8000), `круг ${lap}: «Мой род» открылся`);
         await click(`[data-io="evplay"][data-b="${b}"][data-m="bots"]`);
-        await waitFor(`!!(${T}.S?.W)`, 8000);
+        ok(await waitFor(`${T}.S?.W?.evo?.b === '${b}'`, 8000), `круг ${lap}: игра в биоме ${b}`);
         // управление: новое направление раз в 0,7 с, деление и выброс иногда; съели — «Ещё раз»
         await ev(`window.__soak && clearInterval(window.__soak); window.__soak = setInterval(() => { const S = ${T}.S; if (!S) return; const I = window.__I || (window.__I = new Float64Array(6)); const a = Math.random() * 6.283; I[0] = Math.cos(a); I[1] = Math.sin(a); if (Math.random() < .25) I[2]++; if (Math.random() < .15) I[3]++; S.setInput(I, performance.now()); const ag = document.querySelector('[data-io="again"]'); if (ag && Math.random() < .5) ag.click(); }, 700), 1`);
         const until = Math.min(t0 + SOAK_MIN * 60000, Date.now() + 100000);

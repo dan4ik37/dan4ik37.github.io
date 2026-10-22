@@ -646,7 +646,8 @@ function miniEl(){
     await clock.advance(5);
     ok(got.length === 1 && got[0] === false && clock.pending() === 0, `${id}: whenNet без интернета — сразу false, опроса нет`, [got, clock.pending()]);
     const src = read('js/games/' + file);
-    ok(/else if \(pub\) \{ api\.toast\?\.\('📡 Онлайн сейчас недоступен — играем с ботами'\); startBots\(\); \}\s*\n\s*else showOv\(K\.errHtml\('offline'\)\);/.test(src), `${id}: по ссылке друга без связи — «Нет связи» с «Ещё раз», а не тихие боты`);
+    // «Клеточки»: startBots(PV && PV.again()) — в «Пути клетки» боты в том же биоме (T-056)
+    ok(/else if \(pub\) \{ api\.toast\?\.\('📡 Онлайн сейчас недоступен — играем с ботами'\); startBots\((?:PV && PV\.again\(\))?\); \}\s*\n\s*else showOv\(K\.errHtml\('offline'\)\);/.test(src), `${id}: по ссылке друга без связи — «Нет связи» с «Ещё раз», а не тихие боты`);
     ok(/a === 'retry'/.test(src) && /lastOnline/.test(src), `${id}: кнопка «Ещё раз» обработана`);
     const html = P.ctx.IoKit.errHtml('offline');
     ok(/Нет связи/.test(html) && /data-io="retry"/.test(html) && /data-io="bots"/.test(html) && /data-io="menu"/.test(html), `${id}: errHtml('offline') — «Нет связи», «Ещё раз», боты, меню`, html);
