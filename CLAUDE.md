@@ -168,7 +168,7 @@
    рода на сервере появится, когда сайт обновится»; «🌱 На сушу» — только после запуска (пробный род переносится один раз, до «Колонии»).
    PGlite: scripts/evo-sql-test.mjs (88: JS = SQL на 900 случайных ходах).
 18. `planet.sql` (НОВЫЙ, 22.10.2026, T-079 — часы мира; от других файлов не зависит; дальше в него допишут части планет и космоса). Проверка гостем: POST `/rpc/world_now` {} → число около «сейчас» в мс (в октябре 2026 ≈ 1,79·10¹²); PGRST202 / 404 = не применён. До запуска небо и орбиты на /play/planet идут по часам устройства (окно «🪐 Система» пишет «planet.sql ещё не запущен»). PGlite: scripts/planet-sql-test.mjs (8).
-Проверено с сервера 22.10 днём: ops.sql ПРИМЕНЁН (ops_err_admin → 42501); city.sql и ugc.sql (облако) — ещё нет.
+Проверено с сервера 22.10 днём: ops.sql ПРИМЕНЁН (ops_err_admin → 42501); city.sql и ugc.sql (облако) — ещё нет. Вечером 22.10 (с сервера): НЕ применены bases.sql (новая, war_state — PGRST202), raids.sql (raid_state — PGRST202), city.sql, ugc.sql (cloud_rule), evo.sql, planet.sql (world_now) — владельцу дан список по порядку: bases → raids → city → ugc → evo → planet.
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
