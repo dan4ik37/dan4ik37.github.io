@@ -55,6 +55,7 @@ const TESTS = [
   // в настоящем Chrome (--e2e)
   { f: 'errlog-e2e.cjs', e2e: true, t: 400 }, { f: 'routes-e2e.cjs', e2e: true, t: 600 }, { f: 'pwa-e2e.cjs', e2e: true, t: 400 },
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
+  { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 900 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки
   { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)
   { f: 'city-e2e.cjs', e2e: true, needs: 'pglite', t: 900 },   // «Живой город»: работа с сервера (city.sql в PGlite), банк, окно экономики, два игрока
   { f: 'rt-e2e.cjs', e2e: true, needs: 'rt', t: 600 },   // свой сервер: два Chrome, io-игра и стол, сервер убит посреди партии → Supabase

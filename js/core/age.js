@@ -424,7 +424,7 @@
     const ctl = y
       ? `<span class="age-set-y">${y} · ${esc(ageText())}</span><button type="button" class="gs-btn" data-age-act="change">Изменить</button><button type="button" class="gs-btn ghost" data-age-act="clear">Удалить</button>`
       : `${k ? `<span class="age-set-y">${esc(GROUP_NAME[group()])}</span>` : ''}<button type="button" class="gs-btn primary" data-age-act="change">🎂 Указать год</button>`;
-    return `<div class="gs-row age-srow ym-hide-content"><div class="gs-lbl"><b>🎂 Возраст</b><small>Видишь только ты. Нужен, чтобы показывать подходящие игры, ролики и рекламу. Менять — до 2 раз в месяц.${cool}</small></div><div class="gs-ctl age-sctl">${ctl}</div></div>`;
+    return `<div class="gs-row age-srow ym-hide-content"><div class="gs-lbl"><b>🎂 Возраст</b><small>Видишь только ты; для игр и рекламы по возрасту. Менять — до 2 раз в месяц.${cool}</small></div><div class="gs-ctl age-sctl">${ctl}</div></div>`;
   }
 
   // ═══ «Обложка» вместо того, что не по возрасту ═══

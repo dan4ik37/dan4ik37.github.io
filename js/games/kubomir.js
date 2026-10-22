@@ -56,10 +56,10 @@
   // ═══ Вход в игру ═══
   function mount(root, gapi){
     el = root; api = gapi; css(); opts = optsLoad();
-    const FS = window.D37Full;
+    // T-043: одно меню — ☰ (в мире — то же, что Esc / Start; в списке миров — настройки, полный экран, как играть, все игры)
     el.innerHTML = `<div class="wld kb gs-noesc">
         <div class="wld-top kb-top"><b>🧊 Кубомир</b><span class="kb-where"></span>
-          <span class="wld-topbtns"><button type="button" data-kb="settings" title="Настройки: графика, звук, управление (Esc — меню)">⚙️</button>${FS ? FS.rotBtn('#gamesStage') + FS.btn('#gamesStage', { esc: false, cls: 'gs-fullbtn' }) : ''}<button type="button" data-kb="help" title="Как играть">❓</button></span></div>
+          <span class="wld-topbtns"><button type="button" class="wld-menubtn" data-kb="menu" title="Меню (Esc): настройки, моды, полный экран, как играть, выход" aria-label="Меню" aria-haspopup="dialog">☰<span> Меню</span></button></span></div>
         <div class="wld-wrap kb-wrap is3d"><div class="kb-screen"></div></div>
       </div>`;
     el.querySelector('.kb-top').addEventListener('click', e => { const b = e.target.closest('[data-kb]'); if (!b) return; onTop(b.dataset.kb); });
@@ -78,8 +78,34 @@
     el = null; api = null;
   }
   function onTop(a){
-    if (a === 'settings') { if (window.D37Settings) window.D37Settings.open({ ctx: S ? 'engine' : 'game', tab: S ? 'kubomir' : undefined }); }
+    if (a === 'menu') { if (S) { if (S.menu) closeMenu(); else openMenu(); } else listMenu(); }
+    else if (a === 'settings') { if (window.D37Settings) window.D37Settings.open({ ctx: S ? 'engine' : 'game', tab: S ? 'kubomir' : undefined }); }
     else if (a === 'help') help();
+  }
+  // ☰ в списке миров (мира ещё нет): то же меню сайта — настройки, полный экран (и поворот на телефоне), как играть, все игры
+  let lmenu = null;
+  function listMenu(){
+    const SS = window.D37Settings, w = wrap(); if (!SS?.menu || !w) return;
+    if (lmenu?.el?.isConnected) { lmenu.close(); return; }
+    const fsEl = () => el?.closest('#gamesStage') || wrap();
+    lmenu = SS.menu(w, {
+      title: '🧊 Кубомир', sub: 'Миры хранятся в этом браузере',
+      items: () => [
+        { id: 'resume', icon: '▶', text: 'К списку миров', primary: true },
+        { id: 'settings', icon: '⚙️', text: 'Настройки' },
+        ...(SS.fsItems?.(fsEl()) || []),
+        { id: 'help', icon: '❓', text: 'Как играть' },
+        { id: 'exit', icon: '🚪', text: 'Все игры', warn: true },
+      ],
+      onPick: id => {
+        if (SS.fsPick?.(id, fsEl(), lmenu)) return;
+        if (id === 'settings') { SS.open({ ctx: 'game' }); return; }
+        lmenu?.close();
+        if (id === 'help') help();
+        else if (id === 'exit') { if (typeof closeGame === 'function') closeGame(); else location.hash = '#/games'; }
+      },
+      onClose: () => { lmenu = null; },
+    });
   }
   const screen = () => el?.querySelector('.kb-screen');
   const wrap = () => el?.querySelector('.kb-wrap');
@@ -2302,14 +2328,14 @@
   function openMenu(){
     const st = S; if (!st || st.menu || !window.D37Settings) return;
     st.I.unlock();
-    const fsOn = () => !!window.D37Full?.contains?.(wrap());
-    st.menu = window.D37Settings.menu(wrap(), {
+    const SS = window.D37Settings, fsEl = () => el?.closest('#gamesStage') || wrap();
+    st.menu = SS.menu(wrap(), {
       title: (st.coopGuest ? '👥 ' : '🧊 ') + esc(st.meta.name), sub: st.coopGuest ? 'Мир друга · хозяин сохраняет мир и твои вещи' : st.creative ? '🎨 Творчество' : '⚔️ Выживание · мир сохраняется сам',
       items: () => st.coopGuest ? [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
         { id: 'coop', icon: '👥', text: 'Игроки' },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
-        { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
+        ...(SS.fsItems?.(fsEl()) || []),   // ⛶ Во весь экран / 🔄 Повернуть — как во всех играх (settings.js)
         { id: 'help', icon: '❓', text: 'Как играть' },
         { id: 'unstuck', icon: '🆘', text: 'Я застрял' },
         { id: 'exit', icon: '🚪', text: 'Выйти из мира друга', warn: true },
@@ -2320,12 +2346,12 @@
         { id: 'mods', icon: '🧩', text: 'Моды мира' + (st.mods.loaded.length ? ` (${st.mods.loaded.length})` : '') },
         { id: 'mc', icon: '📥', text: 'Импорт из Minecraft' },
         { id: 'export', icon: '📤', text: 'Сохранить файл мира' },
-        { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
+        ...(SS.fsItems?.(fsEl()) || []),   // ⛶ Во весь экран / 🔄 Повернуть — как во всех играх (settings.js)
         { id: 'help', icon: '❓', text: 'Как играть' },
         { id: 'unstuck', icon: '🆘', text: 'Я застрял' },
         { id: 'exit', icon: '🏠', text: 'Сохранить и выйти в меню', warn: true },
       ],
-      onPick: id => menuPick(id),
+      onPick: id => { if (!SS.fsPick?.(id, fsEl(), S?.menu)) menuPick(id); },
       onClose: () => { if (S) { S.menu = null; S.C?.reset_state(); } },
     });
   }
