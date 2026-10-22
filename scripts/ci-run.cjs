@@ -52,6 +52,7 @@ const TESTS = [
   // нужен three@0.149.0
   { f: 'char-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'destruct-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'kubomir-hand-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'kubomir-move-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'kubomir-combat-test.cjs', args: ['{THREE}'], needs: 'three' },
+  { f: 'kubomir-qol-test.cjs', args: ['{THREE}'], needs: 'three' },   // T-049: помощники «Кубомира» — шов, аксессуары, рецепты, подсказки, лежанка, вёдра, карта, задания
   { f: 'render-test.cjs', args: ['{THREE}'], needs: 'three', t: 240 }, { f: 'sprite-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'studio-modes-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'worldmap-test.cjs', args: ['{THREE}'], needs: 'three' },
   // в настоящем Chrome (--e2e)

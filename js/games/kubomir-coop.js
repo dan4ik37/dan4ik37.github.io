@@ -440,7 +440,10 @@
           const d = m.d; if (!d || typeof d !== 'object' || !G.pkey) return;
           const stack = s => s && V.item(s.id) && Number.isInteger(s.n) && s.n > 0 ? { id: s.id, n: Math.min(s.n, V.item(s.id).stack), d: clamp(s.d | 0, 0, 100000) } : null;
           const rec = { x: fin(d.x) ? d.x : null, y: fin(d.y) ? d.y : null, z: fin(d.z) ? d.z : null, yaw: fin(d.yaw) ? d.yaw : 0, pitch: fin(d.pitch) ? d.pitch : 0, hp: clamp(+d.hp || 20, 0, 20), food: clamp(+d.food || 20, 0, 20), sat: clamp(+d.sat || 5, 0, 20),
-            sel: clamp(d.sel | 0, 0, 8), inv: Array.isArray(d.inv) ? d.inv.slice(0, 36).map(stack) : [], off: stack(d.off), fly: !!d.fly, at: Date.now() };
+            sel: clamp(d.sel | 0, 0, 8), inv: Array.isArray(d.inv) ? d.inv.slice(0, 36).map(stack) : [], off: stack(d.off), fly: !!d.fly, at: Date.now(),
+            // T-049: аксессуары (только вещи-аксессуары, по одной) и данные помощников гостя (простые данные, ≤ 32 КБ) — его, хозяин только хранит
+            acc: Array.isArray(d.acc) ? d.acc.slice(0, 12).map(s => { const q = stack(s); return q && V.item(q.id)?.acc ? { id: q.id, n: 1, d: q.d } : null; }) : [],
+            ext: window.D37E?.host?.cleanExt ? window.D37E.host.cleanExt(d.ext, 32768) : {} };
           const all = meta.coopPlayers = meta.coopPlayers || {};
           all[G.pkey] = rec;
           const ks = Object.keys(all); if (ks.length > 32) { ks.sort((a, b) => (all[a].at || 0) - (all[b].at || 0)); for (const q of ks.slice(0, ks.length - 32)) delete all[q]; }

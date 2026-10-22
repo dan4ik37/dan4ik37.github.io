@@ -33,8 +33,10 @@
       return n;
     };
     // ── контейнеры: что лежит в ячейке и как туда положить ──
+    const X = () => hooks.x?.() || null;   // помощники (kubomir-x.js): ячейки аксессуаров
     function cont(k){
       if (k === 'inv') return P().inv;
+      if (k === 'acc') return X() ? P().acc : null;
       if (k === 'off') return [P().off || null];
       if (k === 'craft') return U.craft;
       if (k === 'chest') return chestTile()?.items || null;
@@ -43,6 +45,7 @@
     }
     function setSlot(k, i, v){
       if (k === 'inv') P().inv[i] = v;
+      else if (k === 'acc') { P().acc[i] = v || null; X()?.accChanged(); }
       else if (k === 'off') P().off = v || null;
       else if (k === 'craft') U.craft[i] = v;
       else if (k === 'chest') { const t = chestTile(); if (t) { t.items[i] = v; S.W.markTile(U.pos.x, U.pos.z); } }
@@ -51,7 +54,12 @@
     const chestTile = () => U.pos ? S.W.tile(U.pos.x, U.pos.y, U.pos.z, () => ({ items: new Array(27).fill(null) })) : null;
     const furnaceTile = () => U.pos ? S.W.tile(U.pos.x, U.pos.y, U.pos.z, () => ({ in: null, fuel: null, out: null, burn: 0, burnMax: 0, cook: 0 })) : null;
     // можно ли положить в ячейку печи
-    const fits = (k, i, s) => { if (k !== 'furnace' || !s) return true; if (i === 2) return false; if (i === 1) return !!it(s.id)?.fuel; return true; };
+    const fits = (k, i, s) => {
+      if (k === 'acc') return !!X() && X().acc.canPut(i, s) === '';   // аксессуар: открытая ячейка, такого ещё не надето (у вещей-аксессуаров стопка — 1)
+      if (k !== 'furnace' || !s) return true; if (i === 2) return false; if (i === 1) return !!it(s.id)?.fuel; return true;
+    };
+    // почему не кладётся в ячейку аксессуара (подсказка)
+    const accWhy = (i, s) => { const A = X()?.acc; if (!A) return ''; const r = A.canPut(i, s); return r === 'lock' ? '🔒 ' + (A.why(i) || 'Ячейка откроется позже') : r === 'not' ? '💍 Сюда — только помощники: часы, компас, лупа, атлас…' : r === 'dup' ? '💍 Такой уже надет' : ''; };
 
     // ── крафт ──
     function craftSize(){ return U.kind === 'craft' ? 3 : 2; }
@@ -73,6 +81,7 @@
         const w = craftSize();
         for (let y = 0; y < w; y++) for (let x = 0; x < w; x++) { const i = y * 3 + x, s = U.craft[i]; if (s) { s.n--; if (s.n <= 0) U.craft[i] = null; } }
         made++;
+        hooks.craft?.(r.out, r.n);   // помощникам (задания, книга рецептов)
         if (r.out === 'crafting_table') hooks.unlock?.('table');
         if (/^pick_/.test(r.out)) hooks.unlock?.('pick');
         if (r.out === 'pick_stone') hooks.unlock?.('stone_pick');
@@ -156,8 +165,11 @@
       if (k === 'trash') { p.cursor = null; render(); return; }
       const C = cont(k); if (!C) return;
       const s = C[i];
+      if (k === 'furnace' && i === 2 && s && (shift || !p.cursor)) hooks.smelt?.(s.id, right && !shift ? Math.ceil(s.n / 2) : s.n);   // забрал выплавленное — помощникам (задания)
       if (shift && s) { quickMove(k, i, s); render(); return; }
       const cur = p.cursor;
+      // ячейка аксессуара: закрыта или вещь не подходит — сказать почему (а не молча)
+      if (k === 'acc' && (cur ? !fits(k, i, cur) : !s)) { const w = accWhy(i, cur); if (w) hooks.toast?.(w); if (cur || w) { render(); return; } }
       if (!right) {
         if (!cur) { if (s) { p.cursor = s; setSlot(k, i, null); lastPick = { k, i, t: performance.now() }; } }
         else if (!fits(k, i, cur)) { if (!s && k === 'furnace' && i === 2) {} }
@@ -224,12 +236,17 @@
     function quickMove(k, i, s){
       const inv = P().inv;
       const put = (C, from, to, kk) => { for (let pass = 0; pass < 2 && s.n > 0; pass++) for (let j = from; j < to && s.n > 0; j++) { const d = C[j]; if (pass === 0 && d && same(d, s) && d.n < max(d)) { const q = Math.min(s.n, max(d) - d.n); d.n += q; s.n -= q; setSlot(kk, j, d); } else if (pass === 1 && !d && fits(kk, j, s)) { setSlot(kk, j, { ...s }); s.n = 0; } } };
-      if (k === 'off') { put(inv, 9, 36, 'inv'); put(inv, 0, 9, 'inv'); }
+      // Shift + аксессуар в окне вещей — надеть (в первую свободную ячейку); Shift по надетому — снять в сумку
+      if (k === 'inv' && (U.kind === 'inv' || U.kind === 'craft') && X()?.acc.isAcc(s.id)) {
+        const j = X().acc.firstFree(s);
+        if (j >= 0) { setSlot('acc', j, { id: s.id, n: 1, d: s.d | 0 }); s.n -= 1; setSlot(k, i, s.n > 0 ? s : null); hooks.sound?.('click', { vol: .4, rate: 1.3 }); return; }
+      }
+      if (k === 'off' || k === 'acc') { put(inv, 9, 36, 'inv'); put(inv, 0, 9, 'inv'); }
       else if (k === 'inv') {
         if (U.kind === 'chest') put(cont('chest'), 0, 27, 'chest');
         else if (U.kind === 'furnace') { if (V().smelting.has(s.id)) put(cont('furnace'), 0, 1, 'furnace'); else if (it(s.id)?.fuel) put(cont('furnace'), 1, 2, 'furnace'); }
         else if (i < 9) put(inv, 9, 36, 'inv'); else put(inv, 0, 9, 'inv');
-      } else if (k !== 'off') put(inv, 0, 36, 'inv');
+      } else if (k !== 'off' && k !== 'acc') put(inv, 0, 36, 'inv');
       if (s.n <= 0) setSlot(k, i, null); else setSlot(k, i, s);
     }
 
@@ -286,9 +303,10 @@
     };
     U.dispose = () => { window.removeEventListener('keydown', hoverKey, true); if (U.el) { clearInterval(U.timer); U.el.remove(); U.el = null; } };
 
+    const accText = item => item?.acc && window.D37E?.accessories ? ' — 💍 ' + window.D37E.accessories.describe(item.acc) : '';
     const slot = (k, i, s, cls = '') => {
       const item = s && it(s.id), dur = item?.tool && s.d ? 1 - s.d / item.tool.dur : -1;
-      return `<div class="kb-slot ${cls}" data-k="${k}" data-i="${i}" title="${item ? esc(item.title) : ''}">${s ? `<i style="background-image:url(${V().iconURL(s.id, 40)})"></i>${s.n > 1 ? `<b>${s.n}</b>` : ''}${dur >= 0 ? `<u style="width:${Math.round(dur * 80)}%;background:${dur > .5 ? '#4ade80' : dur > .2 ? '#facc15' : '#ef4444'}"></u>` : ''}` : ''}</div>`;
+      return `<div class="kb-slot ${cls}" data-k="${k}" data-i="${i}" title="${item ? esc(item.title + accText(item)) : ''}">${s ? `<i style="background-image:url(${V().iconURL(s.id, 40)})"></i>${s.n > 1 ? `<b>${s.n}</b>` : ''}${dur >= 0 ? `<u style="width:${Math.round(dur * 80)}%;background:${dur > .5 ? '#4ade80' : dur > .2 ? '#facc15' : '#ef4444'}"></u>` : ''}` : ''}</div>`;
     };
     function render(){
       if (!U.el) return;
@@ -312,6 +330,17 @@
       } else if (U.kind === 'chest') {
         const t = chestTile(); let g = ''; for (let i = 0; i < 27; i++) g += slot('chest', i, t?.items[i]);
         top += `<div class="kb-grid">${g}</div>`;
+      }
+      // 💍 аксессуары (T-049): открытые ячейки + следующая закрытая (видно, что их можно открыть, и как)
+      const XX = X();
+      if (XX && (U.kind === 'inv' || U.kind === 'craft')) {
+        const A = XX.acc, n = Math.min(A.max, A.open + 1);
+        let g = '';
+        for (let i = 0; i < A.max; i++) {
+          if (i < A.open || p.acc[i]) g += slot('acc', i, p.acc[i], i < A.open ? 'acc' : 'acc off');
+          else if (i < n) g += `<div class="kb-slot acc lock" data-k="acc" data-i="${i}" title="${esc('🔒 ' + (A.why(i) || 'Откроется позже'))}">🔒</div>`;
+        }
+        top += `<div class="kb-accrow"><span class="kb-acct" title="Помощники: действуют, пока надеты. Ячейки открываются развитием (☰ → 💍 Помощники)">💍<small>${A.open | 0}/${A.max | 0}</small></span><div class="kb-accs">${g}</div></div>`;
       }
       let main = '', hot = '';
       for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
@@ -344,7 +373,7 @@
     }
     // ── ввод: мышь и палец (долгое нажатие = правая кнопка) ──
     let press = null, drag = null;
-    const SLOT_K = { inv: 1, off: 1, craft: 1, chest: 1, furnace: 1 };   // ячейки, куда можно «протянуть»
+    const SLOT_K = { inv: 1, off: 1, acc: 1, craft: 1, chest: 1, furnace: 1 };   // ячейки, куда можно «протянуть»
     function onDown(e){
       const t = e.target;
       if (t.closest('[data-close]')) { U.close(); return; }

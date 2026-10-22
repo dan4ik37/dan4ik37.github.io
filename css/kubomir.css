@@ -292,3 +292,23 @@ html.gs-compact .gs-fs .kb-top .wld-topbtns .gs-ico{width:15px;height:15px}
 .kb-pl small{color:#aab3d6}
 .kb-pl .kb-btn{min-height:32px;padding:4px 9px}
 .kb-coopjoin .kb-logo small{display:block;color:#aab3d6;margin-top:2px}
+
+/* T-049 помощники (kubomir-x.js): ячейки аксессуаров в окне вещей; лист «💍 Помощники»; окно вещей сдвигается, когда справа лист */
+.kb-accrow{display:flex;align-items:center;gap:8px}
+.kb-acct{display:flex;flex-direction:column;align-items:center;font-size:20px;line-height:1;min-width:30px;cursor:help}
+.kb-acct small{font-size:11px;font-weight:800;color:#c9b8ff;margin-top:2px}
+.kb-accs{display:flex;flex-wrap:wrap;gap:3px}
+.kb-slot.acc{border-color:rgba(170,130,255,.5);background:linear-gradient(180deg,rgba(170,130,255,.16),rgba(170,130,255,.05))}
+.kb-slot.acc.lock{display:grid;place-items:center;font-size:15px;opacity:.6;cursor:help}
+.kb-slot.acc.off{opacity:.45;filter:grayscale(.7)}
+.kb-wrap.d37sh-docked .kb-inv{padding-right:calc(var(--d37sh-w,0px) + 16px)}
+.kx-acc{display:flex;flex-direction:column;gap:6px}
+.kx-arow{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.kx-arow.lock{opacity:.62}
+.kx-arow.empty{border-style:dashed}
+.kx-arow>div{flex:1;min-width:0}
+.kx-arow b{display:block;font-size:.92rem}
+.kx-arow small{display:block;color:#aab3d6;font-size:.78rem;line-height:1.35}
+.kx-ai{flex:none;width:40px;height:40px;border-radius:10px;background:rgba(0,0,0,.25) center/32px no-repeat;image-rendering:pixelated;display:grid;place-items:center;font-size:20px}
+.kx-btn{flex:none;min-height:40px;padding:6px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:#fff;font-weight:800;cursor:pointer}
+.kx-btn.pri{background:linear-gradient(180deg,#4f8cff,#3566d8);border-color:#7aa6ff}

@@ -249,7 +249,8 @@
     });
     try { await G.start(); } catch (e) { line('Не получилось: ' + (e.message || e)); }
   }
-  function guestData(st){ const P = st.P; return { x: P.x, y: P.y, z: P.z, yaw: st.rig.yaw, pitch: st.rig.fp, hp: P.hp, food: P.food, sat: P.sat, sel: P.sel, fly: P.fly, inv: P.inv.map(s => s ? { id: s.id, n: s.n, d: s.d | 0 } : null), off: P.off ? { id: P.off.id, n: P.off.n, d: P.off.d | 0 } : null }; }
+  function guestData(st){ const P = st.P; return { x: P.x, y: P.y, z: P.z, yaw: st.rig.yaw, pitch: st.rig.fp, hp: P.hp, food: P.food, sat: P.sat, sel: P.sel, fly: P.fly, inv: P.inv.map(s => s ? { id: s.id, n: s.n, d: s.d | 0 } : null), off: P.off ? { id: P.off.id, n: P.off.n, d: P.off.d | 0 } : null,
+    acc: (P.acc || []).map(s => s ? { id: s.id, n: 1, d: s.d | 0 } : null), ext: P.ext || {} }; }   // ── KX:player ── аксессуары и данные помощников (T-049)
   async function coopEnded(G, text, why){
     if (coopG !== G) return;
     coopG = null;
@@ -576,12 +577,14 @@
     st.K = window.KubomirInput ? window.KubomirInput.create({ el: wr, C, isOpen: () => !!(S && (S.ui?.isOpen() || S.menu || S.modWin || S.chatEl)) }) : null;
     // игрок
     const P = st.P = { x: 0, y: 80, z: 0, vx: 0, vy: 0, vz: 0, w: PW, h: PH, onGround: false, fly: st.creative, sneak: false, sprint: false, water: 0, lava: 0, climb: false, eyeWater: false,
-      fallTop: 80, hp: 20, food: 20, sat: 5, exh: 0, air: 15, regT: 0, starveT: 0, hurtT: 0, inv: new Array(36).fill(null), off: null, sel: 0, cursor: null, dead: false, stepT: 0, lastStepX: 0, lastStepZ: 0, bodyYaw: 0, swimT: 0 };
+      fallTop: 80, hp: 20, food: 20, sat: 5, exh: 0, air: 15, regT: 0, starveT: 0, hurtT: 0, inv: new Array(36).fill(null), off: null, sel: 0, cursor: null, dead: false, stepT: 0, lastStepX: 0, lastStepZ: 0, bodyYaw: 0, swimT: 0,
+      acc: new Array(window.KubomirX?.ACC_MAX || 7).fill(null), ext: {} };   // ── KX:player ── аксессуары (ячейки) и данные помощников (T-049)
     const sp = meta.spawn || (meta.spawn = V.findSpawn(G, 0, 0));
     // гость: свои вещи и место — что хозяин хранит в мире; первый раз — рядом с хозяином
     if (guest) meta.player = guest.you && Number.isFinite(guest.you.x) ? guest.you : guest.at && Number.isFinite(guest.at.x) ? { x: guest.at.x + 1.5, y: guest.at.y + .1, z: guest.at.z + .5, hp: 20, food: 20 } : null;
     const pl = meta.player;
-    if (pl && Number.isFinite(pl.x)) { Object.assign(P, { x: pl.x, y: pl.y, z: pl.z, hp: pl.hp ?? 20, food: pl.food ?? 20, sat: pl.sat ?? 5, sel: pl.sel | 0, fly: st.creative && !!pl.fly }); invLoad(P.inv, pl.inv); P.off = stackLoad(pl.off); st.rig.yaw = pl.yaw || 0; st.rig.fp = pl.pitch || 0; }
+    if (pl && Number.isFinite(pl.x)) { Object.assign(P, { x: pl.x, y: pl.y, z: pl.z, hp: pl.hp ?? 20, food: pl.food ?? 20, sat: pl.sat ?? 5, sel: pl.sel | 0, fly: st.creative && !!pl.fly }); invLoad(P.inv, pl.inv); P.off = stackLoad(pl.off); st.rig.yaw = pl.yaw || 0; st.rig.fp = pl.pitch || 0;
+      invLoad(P.acc, pl.acc); P.ext = Ex.host?.cleanExt ? Ex.host.cleanExt(pl.ext) : {}; }   // ── KX:player ──
     else { P.x = sp.x; P.y = sp.y; P.z = sp.z; if (!st.creative) giveStart(P); else { P.inv[0] = { id: 'grass', n: 64 }; P.inv[1] = { id: 'planks_oak', n: 64 }; P.inv[2] = { id: 'torch', n: 64 }; P.inv[3] = { id: 'glass', n: 64 }; } }
     P.fallTop = P.y;
     rebase(st, true);
@@ -592,8 +595,8 @@
     // сущности и окна
     st.ents = window.KubomirEnts ? window.KubomirEnts.create(st) : null;
     if (st.ents) { st.ents.hookHurt = (n, m) => mobHit(st, n, m); st.ents.hookUnlock = id => unlock(id); st.ents.give = s => give(st, s); st.ents.room = s => room(st, s);
-      st.ents.hookPickup = (id, n) => { popSlot(st, id); st.modRun?.event('pickup', { item: id, n }); };   // моды: подобрал вещь, победил моба
-      st.ents.hookKill = (m, by) => { if (by === 'player') st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); };
+      st.ents.hookPickup = (id, n) => { popSlot(st, id); st.modRun?.event('pickup', { item: id, n }); st.X?.emit('pickup', id, n); };   // моды: подобрал вещь, победил моба; ── KX:pickup ──
+      st.ents.hookKill = (m, by) => { if (by === 'player') { st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); st.X?.emit('kill', m.type, m.x, m.y, m.z); } };   // ── KX:kill ──
       st.ents.hookIce = (x, y, z) => iceBreak(st, x, y, z, false); }   // моб всплыл подо льдом — прорубь
     if (guest && st.ents) st.ents.client = true;   // мобы и вещи — снимками хозяина
     else if (meta.ents && st.ents) st.ents.load(meta.ents);
@@ -604,6 +607,8 @@
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
     st.WX = window.KubomirWeather ? window.KubomirWeather.create(st) : null;   // дождь и снег по биому (расписание — от зерна и дня)
     st.ui = window.KubomirUI ? window.KubomirUI.create(st, uiHooks()) : null;
+    // ── KX:init ── помощники (T-049, kubomir-x.js): аксессуары, подсказки, книга рецептов, карта, лежанка, задания; не подключились — игра без них
+    try { st.X = window.KubomirX ? window.KubomirX.attach(st, xHooks(st)) : null; } catch (e) { console.error(e); window.d37Err?.('kx:attach', e); st.X = null; }
     if (I.touch) { hudFit(st); hudUpdate(st); touchUI(st); }   // ячейки панели — по окну, полоски заполнены (кнопки встают выше них), кнопки телефона — когда уже есть игрок
     crossUpdate(st);
     // моды: события в песочнице
@@ -687,6 +692,7 @@
     try { st.ents?.dispose(); } catch (e) {}
     try { st.hand?.dispose(); } catch (e) {}
     try { st.ui?.dispose(); } catch (e) {}
+    try { st.X?.dispose(); } catch (e) {}   // ── KX:dispose ──
     try { st.KL?.dispose(); } catch (e) {}
     try { st.WX?.dispose(); } catch (e) {}
     try { st.AU?.muffle?.(0); st.uwLoop?.stop(); st.uwLoop = null; } catch (e) {}   // звук — снова чистый (движок общий для игр)
@@ -735,7 +741,8 @@
   }
   function metaSnap(st = S){
     const P = st.P, m = st.meta;
-    m.player = { x: P.x, y: P.y, z: P.z, yaw: st.rig.yaw, pitch: st.rig.fp, hp: P.hp, food: P.food, sat: P.sat, sel: P.sel, fly: P.fly, inv: P.inv.map(s => s ? { id: s.id, n: s.n, d: s.d | 0 } : null), off: P.off ? { id: P.off.id, n: P.off.n, d: P.off.d | 0 } : null };
+    m.player = { x: P.x, y: P.y, z: P.z, yaw: st.rig.yaw, pitch: st.rig.fp, hp: P.hp, food: P.food, sat: P.sat, sel: P.sel, fly: P.fly, inv: P.inv.map(s => s ? { id: s.id, n: s.n, d: s.d | 0 } : null), off: P.off ? { id: P.off.id, n: P.off.n, d: P.off.d | 0 } : null,
+      acc: (P.acc || []).map(s => s ? { id: s.id, n: 1, d: s.d | 0 } : null), ext: P.ext || {} };   // ── KX:player ── аксессуары и данные помощников (T-049)
     m.time = st.R?.lighting?.time ?? m.time;
     m.ents = st.ents?.save?.() || [];
     if (st.modRun) m.modData = st.modRun.data();
@@ -778,7 +785,7 @@
   function update(dt){
     const st = S; if (!st || st.dead) return;
     const { C, P, W } = st, V = VX();
-    const uiOpen = !!st.ui?.isOpen(), menu = !!st.menu || !!st.modWin, chatting = !!st.chatEl;   // modWin — окно «Моды мира»
+    const uiOpen = !!st.ui?.isOpen(), menu = !!st.menu || !!st.modWin || !!st.X?.isOpen(), chatting = !!st.chatEl;   // modWin — окно «Моды мира»; X — лист помощника (T-049)
     C.blocked = uiOpen || menu || chatting || !!window.D37Settings?.isOpen?.();
     C.step(dt);
     const K = st.K || NOK;
@@ -787,7 +794,7 @@
     if (!st.ready) { st.net?.step(dt); if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
     st.steps++;
     // Esc: окно → закрыть; иначе меню
-    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (uiOpen) st.ui.close(); else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); } else if (menu) closeMenu(); else openMenu(); }
+    if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (st.X?.escape()) { /* ── KX:esc ── закрыли лист помощника */ } else if (uiOpen) st.ui.close(); else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); } else if (menu) closeMenu(); else openMenu(); }
     // E — вещи (и закрыть окно вещей той же клавишей, как в Майнкрафте)
     if (K.downRaw('inventory') && !menu && !chatting && !window.D37Settings?.isOpen?.()) { if (uiOpen) st.ui.close(); else st.ui?.open('inv'); }
     if (K.down('camera')) cycleCam();
@@ -809,6 +816,7 @@
     physics(st, dt);
     interact(st, dt);
     combatStep(st, dt);   // бой: перезарядка, удар по дуге, щит, лук — каждый шаг (1/60 с)
+    st.X?.update(dt);   // ── KX:update ── помощники: сон, ведро, свиток, задания (по шагам игры — одинаково при любой частоте кадров)
     // 20 раз в секунду: мобы, вода, печи, голод
     if (st.steps % 3 === 0) {
       st.ents?.tick(1 / 20);
@@ -1207,13 +1215,14 @@
     st.unstuckAt = t;
     let p = null, far = false;
     try { p = safeSpot(st, P.x, P.y, P.z); } catch (e) { console.warn('Кубомир: «Я застрял» —', e); }
-    if (!p) { const sp = st.meta.bed || st.meta.spawn; p = sp ? { x: sp.x, y: sp.y, z: sp.z } : null; far = true; }
+    let bed = false;
+    if (!p) { const sp = homeOf(st); bed = sp !== st.meta.spawn; p = sp ? { x: sp.x, y: sp.y, z: sp.z } : null; far = true; }
     if (!p) return false;
     Object.assign(P, { x: p.x, y: p.y, z: p.z, vx: 0, vy: 0, vz: 0, fallTop: p.y, pk: null, hang: null, onGround: true });
     P.h = PH;
     if (far) placeSafe(st);
     rebase(st, true); st.C?.reset_state?.();
-    st.H?.toast(far ? '🆘 Рядом негде стоять — перенесли ' + (st.meta.bed ? 'к кровати' : 'в начало мира') : '🆘 Перенесли на безопасное место рядом');
+    st.H?.toast(far ? '🆘 Рядом негде стоять — перенесли ' + (bed ? 'к лежанке' : 'в начало мира') : '🆘 Перенесли на безопасное место рядом');
     return true;
   }
   const SND_FLOOR = { stone: 'concrete', metal: 'metal', wood: 'wood', grass: 'grass', dirt: 'grass', sand: 'carpet', gravel: 'concrete', snow: 'carpet', glass: 'tile', water: 'water', wool: 'carpet' };
@@ -1301,17 +1310,23 @@
     if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { spawnItem(st, P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } if (P.off) { spawnItem(st, P.x, P.y + 1, P.z, P.off, true); P.off = null; } }
     st.lastDeath = { x: P.x, y: P.y, z: P.z, t: now(), drop: !keep && !!st.ents };
     st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра без нокаута
+    st.X?.emit('knockout', P.x, P.y, P.z, keep ? 0 : 1);   // ── KX:knockout ── (точка на карте, задания)
     const xyz = `X ${Math.floor(P.x)}, Y ${Math.floor(P.y)}, Z ${Math.floor(P.z)}`;
+    const home = homeOf(st), atBed = home !== st.meta.spawn;
     const box = document.createElement('div'); box.className = 'kb-dead kb-ui';
-    box.innerHTML = `<div><b>😵 Нокаут!</b><small class="kb-ko">Ты без сил: ${esc(DEATH[why] || 'устал')}.</small><small>${keep ? 'Вещи остались с тобой (сложность «мирно» или «легко»).' : `Вещи выпали там, где ты упал без сил (${xyz}), и лежат 5 минут — подсказка вверху покажет, куда идти.`}</small><small class="kb-where">Придёшь в себя ${st.meta.bed ? 'у своей кровати' : 'в начале мира'} — с полным здоровьем и сытостью.</small><div class="kb-btns"><button type="button" class="kb-btn primary" data-r="1">↺ Прийти в себя</button><button type="button" class="kb-btn" data-m="1">🏠 В меню</button></div></div>`;
+    box.innerHTML = `<div><b>😵 Нокаут!</b><small class="kb-ko">Ты без сил: ${esc(DEATH[why] || 'устал')}.</small><small>${keep ? 'Вещи остались с тобой (сложность «мирно» или «легко»).' : `Вещи выпали там, где ты упал без сил (${xyz}), и лежат 5 минут — подсказка вверху покажет, куда идти.`}${P.acc?.some(Boolean) ? ' Помощники (💍) — с тобой.' : ''}</small><small class="kb-where">Придёшь в себя ${atBed ? 'у своей лежанки' : 'в начале мира'} — с полным здоровьем и сытостью.</small><div class="kb-btns"><button type="button" class="kb-btn primary" data-r="1">↺ Прийти в себя</button><button type="button" class="kb-btn" data-m="1">🏠 В меню</button></div></div>`;
     wrap().appendChild(box);
-    box.querySelector('[data-m]').onclick = () => { box.remove(); P.dead = false; P.hp = 20; P.food = Math.max(P.food, 6); const sp = st.meta.bed || st.meta.spawn; Object.assign(P, { x: sp.x, y: sp.y, z: sp.z, vx: 0, vy: 0, vz: 0, fallTop: sp.y }); stopWorld().then(() => showMenu()); };
+    box.querySelector('[data-m]').onclick = () => { box.remove(); P.dead = false; P.hp = 20; P.food = Math.max(P.food, 6); const sp = homeOf(st); Object.assign(P, { x: sp.x, y: sp.y, z: sp.z, vx: 0, vy: 0, vz: 0, fallTop: sp.y }); stopWorld().then(() => showMenu()); };
     box.querySelector('[data-r]').onclick = () => {
-      box.remove(); const sp = st.meta.bed || st.meta.spawn;
+      box.remove(); const sp = homeOf(st);
       Object.assign(P, { x: sp.x, y: sp.y, z: sp.z, vx: 0, vy: 0, vz: 0, hp: 20, food: 20, sat: 5, air: 15, dead: false, fallTop: sp.y });
       placeSafe(st); rebase(st, true); st.C.reset_state();
+      st.X?.emit('respawn', sp.x, sp.y, sp.z);   // ── KX:respawn ──
     };
   }
+  // куда возвращаться (нокаут, «🆘», свиток): лежанка этого игрока (помощник «дом», проверяет, что лежанка цела) → старая
+  // meta.bed → начало мира
+  function homeOf(st){ let h = null; try { h = st.X?.home?.(); } catch (e) {} return h || st.meta.bed || st.meta.spawn; }
 
   // ═══ Прицел: ломать, ставить, открывать, есть ═══
   const EYE = [0, 0, 0];
@@ -1433,6 +1448,7 @@
     breakCell(st, hit.x, hit.y, hit.z, hit.v, it ? it.id : '', P, !!st.coopGuest);
     if (st.coopGuest) st.net.reqBreak(hit.x, hit.y, hit.z, it ? it.id : '');   // 👥 у гостя — показали сразу, хозяин проверит и разошлёт
     st.modRun?.event('blockBreak', { x: hit.x, y: hit.y, z: hit.z, block: b.name });
+    st.X?.emit('break', hit.x, hit.y, hit.z, b.id);   // ── KX:break ── (только свой игрок: правки гостей у хозяина сюда не идут)
     if (st.creative) return;
     // износ инструмента, голод
     if (tool && b.hard > 0) wear(st, P.sel, 1);
@@ -1463,18 +1479,9 @@
     const tile = W.dropTile(x, y, z);
     if (tile) for (const s of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (s && s.n > 0) st.ents?.addItem(x + .5, y + .5, z + .5, s);
   }
-  // что выпадает: [[имя, сколько]]
-  function dropsOf(st, b){
-    const V = VX(), r = Math.random();
-    if (/^leaves_/.test(b.name)) { const out = []; if (r < .05) out.push(['sapling_' + b.name.slice(7), 1]); if (b.name === 'leaves_oak' && Math.random() < .02) out.push(['apple', 1]); return out; }
-    if (b.name === 'clay') return [['clay_ball', 4]];
-    if (b.name === 'door_oak') return [['door', 1]];
-    if (b.name === 'furnace_lit') return [['furnace', 1]];
-    if (b.name === 'gravel' && r < .1) return [['gravel', 1]];
-    const d = b.drop;
-    if (!d || !V.item(d)) return [];
-    return [[d, 1]];
-  }
+  // что выпадает: [[имя, сколько]] — одна таблица на игру и книгу рецептов (V.DROPS в voxel.js: кремень из гравия 10 % — раньше
+  // гравий отдавал гравий, и кремня с волокном в выживании не было вовсе, T-049)
+  function dropsOf(st, b){ return VX().dropsOf(b); }
   function wear(st, slot, n){
     const s = st.P.inv[slot], it = s && VX().item(s.id);
     if (!it?.tool) return;
@@ -1661,6 +1668,7 @@
     if (st.eat) return true;
     if (hit && !P.sneak) {
       const b = V.blocks[hit.v & 0xfff];
+      if (b.use && st.X?.useBlock(hit, b)) { st.hand?.act('push'); return true; }   // ── KX:useBlock ── лежанка и другие блоки помощников
       if (b.ui) {
         st.hand?.act('push');
         if (st.net && (b.ui === 'chest' || b.ui === 'furnace')) {   // 👥 сундук и печь — по одному игроку
@@ -1687,6 +1695,8 @@
   function useHand(st, hit, tap, s, which){
     const V = VX(), P = st.P, it = s ? V.item(s.id) : null;
     if (!it) return false;
+    // ── KX:useItem ── вещи помощников: аксессуар — надеть, лист карты, книга мастера, свиток возврата, ведро
+    if ((it.use || it.acc) && st.X?.useItem(s, it, which, hit)) { st.hand?.act('push', which); return true; }
     // вещь мода «в воздух» (палочка, свиток) — тоже событие use
     if (!hit && st.modRun?.hasUse(s.id)) { st.modRun.event('use', { x: Math.floor(P.x), y: Math.floor(P.y + 1), z: Math.floor(P.z), block: '', item: s.id }); st.hand?.act('push', which); return true; }
     // еда — как в Майнкрафте: держать ~1,6 с (рука ко рту); съел — eat()
@@ -1702,6 +1712,7 @@
     P.food = Math.min(20, P.food + it.food.h); P.sat = Math.min(P.food, P.sat + it.food.sat);
     st.AU?.play('kb_eat', { vol: .6 });
     handTake(st, which);
+    st.X?.emit('eat', it.name);   // ── KX:eat ──
   }
   // идёт еда: держишь ПКМ / LT (палец — нажал, дальше само) — хруст и крошки у рта; отпустил, сменил ячейку, наелся — не съел
   function eatTick(st, dt, live){
@@ -1770,6 +1781,7 @@
       st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5 });
       st.ents?.placeFx?.(x, y, z, b.id);
       unlock('door'); countPlaced(st);
+      st.X?.emit('place', x, y, z, b.id);   // ── KX:place ──
       return true;
     }
     W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
@@ -1778,6 +1790,7 @@
     st.modRun?.event('blockPlace', { x, y, z, block: b.name });
     if (b.name === 'torch') unlock('torch');
     countPlaced(st);
+    st.X?.emit('place', x, y, z, b.id);   // ── KX:place ──
     return true;
   }
   function countPlaced(st){ if (st.creative) return; const n = (st.meta.placed = (st.meta.placed | 0) + 1); if (n >= 200) unlock('builder'); }
@@ -1846,7 +1859,7 @@
     // скорость — в единицах движка (1 м = UNIT): камера по ней узнаёт бег (шире обзор на 8°) и темп покачивания
     ch.x = P.x - st.ox; ch.y = P.y; ch.z = P.z - st.oz; ch.vx = P.vx * U; ch.vz = P.vz * U; ch.h = P.sneak ? 1.5 : 1.85; ch.grounded = P.onGround;
     CAMP.running = P.sprint; CAMP.crouchW = P.sneak ? 1 : 0; CAMP.mode = P.pk || P.hang ? 'pk' : 'move';   // залезает / висит — без покачивания
-    const over = st.ui?.isOpen() || st.menu || st.modWin;   // открыто окно поверх мира
+    const over = st.ui?.isOpen() || st.menu || st.modWin || st.X?.isOpen();   // открыто окно поверх мира (и лист помощника — T-049)
     rig.mode = 'first';
     rig.update(dt, CAMP, over ? null : look, PHYS, C);
     camApply(st, dt);
@@ -1923,6 +1936,7 @@
     R.update(dt); R.follow(P.x - st.ox, P.z - st.oz, P.y);
     R.render();
     hudUpdate(st);
+    st.X?.hud(dt);   // ── KX:hud ── помощники на экране (часы, компас, лупа, карта): DOM — только когда поменялось
     I.frameEnd(); C.frameEnd();
   }
   // Глубина резкости («Ультра», post.js): у движка — автофокус по середине кадра (22.10.2026; от 1-го лица — куда смотришь,
@@ -2401,6 +2415,7 @@
     st.meta.ach = st.meta.ach || {};
     if (st.meta.ach[id]) return;
     st.meta.ach[id] = Date.now();
+    st.X?.emit('ach', id);   // ── KX:ach ── развитие игрока: ячейки аксессуаров, задания
     if (all[id]) return;   // это достижение уже было (в другом мире) — без новой награды
     all[id] = Date.now(); lsSet(LS_ACH, all);
     st.H?.toast(`${a[1]} Достижение: ${a[2]}!`, true);
@@ -2422,6 +2437,7 @@
       title: (st.coopGuest ? '👥 ' : '🧊 ') + esc(st.meta.name), sub: st.coopGuest ? 'Мир друга · хозяин сохраняет мир и твои вещи' : st.creative ? '🎨 Творчество' : '⚔️ Выживание · мир сохраняется сам',
       items: () => st.coopGuest ? [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        ...xMenu(st),   // ── KX:menu ── помощники (💍, 📖, 📜, 🗺)
         { id: 'coop', icon: '👥', text: 'Игроки' },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         ...(SS.fsItems?.(fsEl()) || []),   // ⛶ Во весь экран / 🔄 Повернуть — как во всех играх (settings.js)
@@ -2430,6 +2446,7 @@
         { id: 'exit', icon: '🚪', text: 'Выйти из мира друга', warn: true },
       ] : [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        ...xMenu(st),   // ── KX:menu ──
         { id: 'coop', icon: '👥', text: st.net ? `Играть вместе (${st.net.players().length})` : 'Играть вместе' },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         { id: 'mods', icon: '🧩', text: 'Моды мира' + (st.mods.loaded.length ? ` (${st.mods.loaded.length})` : '') },
@@ -2445,8 +2462,11 @@
     });
   }
   function closeMenu(){ S?.menu?.close(); }
+  // пункты помощников в меню ☰ (у каждого помощника — свой: menu: [{ id: 'x:…', icon, text }], pick(id)) — геймпад и телефон без клавиш
+  function xMenu(st){ const X = st.X; if (!X) return []; const out = [{ id: 'x:acc', icon: '💍', text: 'Помощники (аксессуары)' }]; for (const f of X.feats) if (!f.dead && f.menu) try { out.push(...f.menu()); } catch (e) {} return out; }
   async function menuPick(id){
     const st = S; if (!st) return;
+    if (id.startsWith('x:') && st.X) { closeMenu(); if (id === 'x:acc') st.X.openAcc(); else for (const f of st.X.feats) if (!f.dead && f.pick?.(id)) break; return; }   // ── KX:menu ──
     if (id === 'resume') { closeMenu(); if (!st.I.touch) st.I.lock?.(); }   // не вышло (браузер не дал сразу после Esc) — «🖱 Нажми на мир»
     else if (id === 'settings') window.D37Settings?.open({ ctx: 'engine', tab: 'kubomir' });
     else if (id === 'mods') { closeMenu(); window.KubomirMods?.worldPanel?.(st, wrap(), { restart: ids => { if (S !== st) return; st.meta.mods = ids; restartWorld(); } }); }
@@ -2600,7 +2620,19 @@
   }
 
   // ── связь с окнами и сущностями ──
-  function uiHooks(){ return { give: s => give(S, s), drop: s => S && spawnItem(S, S.P.x, S.P.y + 1.4, S.P.z, s, false, (() => { const d = lookDir(S); return [d.x * 4, 2, d.z * 4]; })()), unlock, toast: (t, ok) => S?.H.toast(t, ok), sound: (n, o) => S?.AU?.play(n, o || {}) }; }
+  function uiHooks(){ return { give: s => give(S, s), drop: s => S && spawnItem(S, S.P.x, S.P.y + 1.4, S.P.z, s, false, (() => { const d = lookDir(S); return [d.x * 4, 2, d.z * 4]; })()), unlock, toast: (t, ok) => S?.H.toast(t, ok), sound: (n, o) => S?.AU?.play(n, o || {}),
+    // ── KX:ui ── окно вещей → помощники: сделал на верстаке, забрал из печи, поменял аксессуары, открыть книгу рецептов / помощников
+    craft: (id, n) => S?.X?.emit('craft', id, n), smelt: (id, n) => S?.X?.emit('smelt', id, n), x: () => S?.X || null }; }
+  // ── KX:hooks ── что игра даёт помощникам (kubomir-x.js и его файлы): только нужное, без доступа к внутренностям
+  function xHooks(st){
+    return {
+      give: s => give(st, s), take: which => handTake(st, which), toast: (t, ok) => st.H?.toast(t, ok), log: t => log(t), sound: (n, o) => st.AU?.play(n, o || {}),
+      unlock: id => unlock(id), wrap: () => wrap(), hudEl: () => st.hudEl, eye: () => eye(st), lookDir: () => lookDir(st),
+      breakTime: b => breakTime(st, b), canHarvestTool: (b, tool) => canHarvestTool(b, tool), spawnItem: (x, y, z, s) => spawnItem(st, x, y, z, s),
+      placeSafe: () => placeSafe(st), rebase: () => rebase(st, true), homeOf: () => homeOf(st), openInv: kind => { if (!st.ui?.isOpen()) st.ui?.open(kind || 'inv'); },
+      label: id => (st.K || NOK).label(id), touch: () => !!st.I?.touch,
+    };
+  }
   function modHooks(){
     return {
       log, toast: (t, ok) => S?.H.toast(t, ok),
@@ -2626,5 +2658,8 @@
     // проверки в node (scripts/kubomir-move-test.cjs): шаг тела игрока на своём st, настройки, прицел, сломать — без мира в браузере
     physics: (st, dt) => physics(st, dt), placeTarget: (st, hit, b) => placeTarget(st, hit, b), previewMode: () => previewMode(), ghostUpdate: st => ghostUpdate(st), safeSpot: (st, x, y, z) => safeSpot(st, x, y, z), unstuck: st => unstuck(st), deathText: why => DEATH[why], opts: o => { opts = Object.assign(optsLoad(), o || {}); return opts; }, interact: (st, dt) => interact(st, dt), breakBlock: (st, hit) => breakBlock(st, hit), breakTime: (st, b) => breakTime(st, b),
     // вода (22.10): плывёт ли (поза «на воде»), где рисовать человечка (гладь у плеч)
-    swimDeep: P => swimDeep(P), swimDrawY: (st, a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt) } };
+    swimDeep: P => swimDeep(P), swimDrawY: (st, a, x, y, z, on, dt) => swimDrawY(st, a, x, y, z, on, dt),
+    // помощники (T-049, scripts/kubomir-qol-test.cjs): что пишется в сохранение и гостю, дом, пункты меню, «съесть» и ПКМ вещью
+    metaSnap: st => metaSnap(st), guestData: st => guestData(st), homeOf: st => homeOf(st), xMenu: st => xMenu(st), xHooks: st => xHooks(st), eatNow: (st, it, which) => eat(st, it, which),
+    useHand: (st, hit, tap, s, which) => useHand(st, hit, tap, s, which), dropsOf: (st, b) => dropsOf(st, b), die: (st, why) => die(st, why) } };
 })();
