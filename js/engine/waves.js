@@ -189,7 +189,13 @@
     W.fields.add(F);
     return F;
   };
-  W.free = F => { W.fields.delete(F); };
+  // мир закрыли: поле прочь вместе с его материалами (материал держит рендерер старого мира — иначе утечка) и «блинами»
+  W.free = F => {
+    W.fields.delete(F);
+    for (const m of W.mats) if (m.userData?.gw === F) W.mats.delete(m);
+    for (const Pt of W.patches) if (Pt.mesh?.material?.userData?.gw === F) W.patches.delete(Pt);
+    if (F.U) { F.U.d37GwG.value = null; F.U.d37GwM.value = null; }
+  };
 
   // ═══ Лодка на волне: высоты под носом, кормой и бортами → цели качки (подъём, тангаж, крен); длина L, ширина B ═══
   // (вид: x — влево, z — вперёд; тангаж > 0 — нос вниз, крен > 0 — левый борт выше — как E.vehicle.local)

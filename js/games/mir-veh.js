@@ -331,6 +331,7 @@
     function boatPose(v, dt){
       const c = R.camera.position, d = Math.hypot(v.x - c.x, v.z - c.z);
       if (d > 220) return;
+      if (!v.by) { v._pz = (v._pz || 0) + 1; if (v._pz & 1) { v._pdt = dt; return; } dt += v._pdt || 0; }   // стоящая — через шаг (вдвое дешевле)
       const yr = v._pyaw === undefined ? 0 : VE.H.angDiff(v._pyaw, v.yaw) / Math.max(dt, 1e-3); v._pyaw = v.yaw;
       PO.yr = Math.max(-1.5, Math.min(1.5, yr)); PO.dist = d;
       if (BOAT.pose(v, dt, env, PO)) ph.update(v.body, VE.bodyOf(v));

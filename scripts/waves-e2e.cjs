@@ -50,6 +50,78 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
   const ev = async (expr, ms = 120000) => { const r = await Promise.race([send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }), sleep(ms).then(() => ({ result: { value: '__timeout' } }))]); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   const shot = async name => { const { data } = await send('Page.captureScreenshot', { format: 'jpeg', quality: 80 }); const f = path.join(SHOTS, `${TAG}-${PROF}-${name}.jpg`); fs.writeFileSync(f, Buffer.from(data, 'base64')); return f; };
   const phone = PROF === 'phone', Q = phone ? 'mid' : 'high';
+  // ═══ «Подземье» (2D): открытый бассейн у точки появления, шторм; снимки; время прохода жидкостей на видеокарте (волны / без волн) ═══
+  async function podzem(){
+    if (phone) { await send('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 2, mobile: true }); await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 }); }
+    await send('Page.navigate', { url: BASE + '/#/games/podzem' });
+    let up = false;
+    for (let i = 0; i < 160 && !up; i++) { await sleep(250); try { up = await ev(`!!(window.GAME_IMPL?.podzem?._test?.G?.U)`, 3000); } catch (e) {} }
+    ok(up, 'Подземье открылось');
+    const st = await ev(`(async () => {
+      const sleep = ms => new Promise(r => setTimeout(r, ms)), A = GAME_IMPL.podzem.api, T = GAME_IMPL.podzem._test, G = () => T.G;
+      const wait = async (fn, ms) => { const t = performance.now(); while (performance.now() - t < ms) { try { if (fn()) return true; } catch (e) {} await sleep(80); } return false; };
+      await wait(() => document.querySelector('.pz-menu') && !document.querySelector('.pz-menu').hidden, 25000);
+      const w = A.newWorldRecord('Волны', 'podzem-waves'); await A.put('worlds', w); const c = A.newCharRecord('Денчик'); await A.put('chars', c);
+      G().U.menu(null); await A.play(w.id, c.id);
+      await wait(() => G().state === 'play', 40000);
+      T.god(true); G().spawnGrace = 1e9; G().mobs.length = 0; G().noCursor = true;
+      try { window.D37Full?.enter(document.getElementById('gamesStage'), { api: false, history: false }); await sleep(400); A.resize(); } catch (e) {}
+      const g = G(), TL = A.PZ.TILE, sx = g.W.spawn.x + 40, gy = g.gen.colInfo(sx).h;
+      for (let x = sx - 30; x <= sx + 30; x++) { for (let y = gy - 20; y < gy; y++) T.setCell(x, y, 0, 0, 0, 0, 0); for (let y = gy; y < gy + 9; y++) T.setCell(x, y, TL.stone.id, 0, 0); }
+      for (let x = sx - 26; x <= sx + 26; x++) for (let y = gy; y < gy + 6; y++) T.setCell(x, y, 0, 0, 0, 255, 1);
+      for (let x = sx - 30; x <= sx - 27; x++) for (let y = gy - 1; y < gy; y++) T.setCell(x, y, TL.stone.id, 0, 0);
+      const p = g.pl; T.tp(sx - 28 - p.w / 2, gy - 1 - p.h); p.dir = 1; g.W.time = .3;
+      await wait(() => g.pending.size === 0, 15000); await sleep(2500);
+      return { sx, gy, hq: g.R.hq, wv: !!g.wv };
+    })()`, 120000);
+    console.log('  Подземье:', JSON.stringify(st));
+    if (!process.env.D37_OVERRIDE) ok(st.hq && st.hq.chunk && st.wv, '«красивый» шейдер клеток собрался, волны включены', st);
+    for (const [lbl, wx] of [['calm', { wind: 2, windDir: 0, thunder: 0 }], ['storm', { wind: 17, windDir: 0, thunder: 1 }]]) {
+      await ev(`(async () => { GAME_IMPL.podzem._test.waves?.(${JSON.stringify(wx)}); await new Promise(r => setTimeout(r, 1500)); return 1; })()`);
+      console.log('  снимок', await shot('podzem-' + lbl));
+    }
+    // герой в воде у гребней: снимок
+    await ev(`(async () => { const T = GAME_IMPL.podzem._test, g = T.G, p = g.pl; T.tp(${st.sx} - 8, ${st.gy} - 1.2); await new Promise(r => setTimeout(r, 2500)); return 1; })()`);
+    console.log('  снимок', await shot('podzem-swim'));
+    // видеокарта: проход жидкостей (R.chunks pass 1) — шторм / без волн; ЦП кадра
+    if (phone) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const meas = async label => ev(`(async () => {
+      const g = GAME_IMPL.podzem._test.G, R = g.R, gl = R.gl || document.querySelector('.pz-gl').getContext('webgl2'), ext = gl && gl.getExtension('EXT_disjoint_timer_query_webgl2');
+      const c0 = R.chunks, qs = [], out = []; let run = true;
+      R.chunks = function (list, s, pass) { let q = null; if (ext && run && pass === 1) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); } const o = c0.call(this, list, s, pass); if (q) { gl.endQuery(ext.TIME_ELAPSED_EXT); qs.push(q); } return o; };
+      g.perf.cpu.length = 0;
+      await new Promise(r => setTimeout(r, 5000)); run = false;
+      for (let k = 0; k < 100 && qs.length; k++) { while (qs.length && gl.getQueryParameter(qs[0], gl.QUERY_RESULT_AVAILABLE)) { const q = qs.shift(); if (!gl.getParameter(ext.GPU_DISJOINT_EXT)) out.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6); gl.deleteQuery(q); } if (qs.length) await new Promise(r => setTimeout(r, 16)); }
+      R.chunks = c0;
+      out.sort((a, b) => a - b); const cpu = g.perf.cpu.slice().sort((a, b) => a - b);
+      const med = a => a.length ? +a[Math.floor(a.length / 2)].toFixed(4) : null;
+      return { label: ${JSON.stringify(label)}, ext: !!ext, liquidsGpuMs: med(out), n: out.length, cpuMs: med(cpu), dynMs: g.perf.dynMs && +g.perf.dynMs.toFixed(3), renderMs: g.perf.renderMs && +g.perf.renderMs.toFixed(3), H: g.wv ? +g.wv.F.H.toFixed(3) : null, swim: !!g.pl.inLq };
+    })()`, 60000);
+    if (process.env.PROF) {   // профиль ЦП 5 с: самые дорогие функции (собственное время)
+      await send('Profiler.enable'); await send('Profiler.setSamplingInterval', { interval: 200 }); await send('Profiler.start');
+      await sleep(5000);
+      const { profile: pr } = await send('Profiler.stop');
+      const self = new Map(), dt = pr.timeDeltas || [], byId = new Map(pr.nodes.map(n => [n.id, n]));
+      for (let i = 0; i < pr.samples.length; i++) { const n = byId.get(pr.samples[i]), cf = n.callFrame, k = `${cf.functionName || '(anon)'} ${cf.url.split('/').pop().split('?')[0]}:${cf.lineNumber + 1}`; self.set(k, (self.get(k) || 0) + (dt[i] || 0) / 1000); }
+      const tot = [...self.values()].reduce((s, v) => s + v, 0);
+      const WF = /^(waveK|skyK|surfAt|waveBob|wvRows|surfCell|waveSpray|wavesStep|wavesSync|wavesWeather|F\.at1|F\.vel1|W\.sync1|W\.clock|at1|vel1|sync1|clock|smoothK) /;
+      const wsum = [...self.entries()].filter(([k]) => WF.test(k)).reduce((s, [, v]) => s + v, 0), js = [...self.entries()].filter(([k]) => !/^\((program|idle|garbage)/.test(k)).reduce((s, [, v]) => s + v, 0);
+      console.log('  профиль ЦП (мс за 5 с):', [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(' | '), '· всего', tot.toFixed(0), '· JS', js.toFixed(0), '· волны (JS)', wsum.toFixed(1));
+      fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} podzem-prof ${TAG} ${PROF} waves ${wsum.toFixed(1)} ms / js ${js.toFixed(0)} ms / 5 s\n`);
+    }
+    const a = await meas(process.env.D37_OVERRIDE ? 'before' : 'storm');
+    console.log(`  ЗАМЕР Подземье ${TAG} ${PROF}:`, JSON.stringify(a));
+    fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} podzem ${TAG} ${PROF} ${JSON.stringify(a)}\n`);
+    if (!process.env.D37_OVERRIDE) {
+      await ev(`(async () => { const T = GAME_IMPL.podzem._test, g = T.G; g.wv.F.gain = 0; g.wv.F.weather({}); g.wv.force = { wind: 0 }; await new Promise(r => setTimeout(r, 600)); return 1; })()`);
+      const b = await meas('off');
+      console.log(`  ЗАМЕР Подземье ${TAG}-off ${PROF}:`, JSON.stringify(b));
+      fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} podzem ${TAG}-off ${PROF} ${JSON.stringify(b)}\n`);
+    }
+    if (phone) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    const bad = logs.filter(l => /Шейдер|shader|exception|TypeError|ReferenceError/i.test(l) && !/X3595/.test(l));
+    ok(!bad.length, 'Подземье: в консоли — без ошибок', bad.slice(0, 6));
+  }
   try {
     await send('Page.enable'); await send('Runtime.enable');
     if (phone) {
@@ -59,6 +131,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     } else await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
     const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q, view: 'third' }), d37_gfx: Q, d37_world_2d: '0' };
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_mir_pos');localStorage.removeItem('d37_gfx_guard');}catch(e){}` });
+    if (MODE === 'podzem') { await podzem(); return; }
     await send('Page.navigate', { url: BASE + '/#/games/world' });
     let up = false;
     for (let i = 0; i < 240 && !up; i++) { await sleep(500); try { up = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
@@ -165,8 +238,10 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
 
     if (MODE === 'perf') {
       await setView({ wind: 11, windDir: 1.2, thunder: 0 }, 'perf');
-      // с катера, носом в море: как видит игрок, который плывёт
-      await ev(`(async () => { const S = GAME_IMPL.world._test.state(), V = S.zones.veh, v = V.list.get('w_boat1'); if (v) { V._.enter(v, 0); v.x = -450; v.z = 330; v.yaw = -Math.PI / 2; } S.rig.yaw = Math.PI / 2; S.rig.pitch = .2; await new Promise(r => setTimeout(r, 1500)); return 1; })()`);
+      // сцена A — стоим на набережной, камера неподвижно смотрит на гавань (цена картинки); B — с катера носом в море (всё вместе)
+      const sceneA = () => ev(`(async () => { const S = GAME_IMPL.world._test.state(), V = S.zones.veh; if (V.inVeh()) V._.exit({ force: true }); S.P.place(-361, MirZones.terrain(-361, 330) + .3, 330, -Math.PI / 2); S.rig.yaw = Math.PI / 2; S.rig.pitch = .2; S.rig.dist = 12; await new Promise(r => setTimeout(r, 1500)); return 1; })()`);
+      const sceneB = () => ev(`(async () => { const S = GAME_IMPL.world._test.state(), V = S.zones.veh, v = V.list.get('w_boat1'); if (v && !V.inVeh()) { V._.enter(v, 0); v.x = -450; v.z = 330; v.yaw = -Math.PI / 2; } S.rig.yaw = Math.PI / 2; S.rig.pitch = .2; await new Promise(r => setTimeout(r, 1500)); return 1; })()`);
+      await sceneA();
       if (phone) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
       const measure = () => ev(`(async () => {
         const S = GAME_IMPL.world._test.state(), R = S.R, gl = R.r.getContext(), ext = R.r.capabilities.isWebGL2 && gl.getExtension('EXT_disjoint_timer_query_webgl2');
@@ -177,7 +252,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         for (const o of waters) { o.onBeforeRender = () => { if (ext && run && measureWater && !cur) { cur = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, cur); } }; o.onAfterRender = () => { if (cur) { gl.endQuery(ext.TIME_ELAPSED_EXT); qw.push([curW, cur]); cur = null; } }; }
         const ST = R.stats, st0 = { f: ST.frames, c: ST.sumCpu, r: ST.sumR };   // ЦП кадра целиком (логика + отрисовка), как R.stats
         // волны в ЦП: шаг лодок (свой — физика, чужие/стоящие — качка) и фазы у камеры — отдельным счётом
-        const VE = D37E.vehicle, B = VE.KINDS.boat, W = D37E.waves, wcpu = { step: 0, pose: 0, sync: 0, n: 0 };
+        const VE = D37E.vehicle, B = VE.KINDS.boat, W = D37E.waves || {}, wcpu = { step: 0, pose: 0, sync: 0, n: 0 };
         const st1 = B.step, po1 = B.pose, sy1 = W.sync;
         B.step = function (...a) { const t = performance.now(); const o = st1.apply(this, a); wcpu.step += performance.now() - t; return o; };
         if (po1) B.pose = function (...a) { const t = performance.now(); const o = po1.apply(this, a); wcpu.pose += performance.now() - t; return o; };
@@ -198,18 +273,50 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           frameCpu, boatsCpuPerFrame: waveCpu, boatStepMs: +(wcpu.step / nf).toFixed(4), poseMs: +(wcpu.pose / nf).toFixed(4), syncMs: +(wcpu.sync / nf).toFixed(4),
           water: waters.filter(o => o.visible).map(o => (o.name || o.material.name) + ':' + o.geometry.attributes.position.count), q: R.q, calls: R.stats?.calls, tris: R.stats?.tris };
       })()`, 120000);
-      const r = await measure();
-      console.log(`  ЗАМЕР ${TAG} ${PROF}:`, JSON.stringify(r));
-      fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} ${TAG} ${PROF} ${JSON.stringify(r)}\n`);
-      if (isAfter) {   // тот же кадр без волн (как выключает страж): обычная сетка моря, вода без кусков волн
+      const run = async tag => {
+        for (const [sc, go] of [['A-набережная', sceneA], ['B-катер', sceneB]]) {
+          await go();
+          const r = await measure();
+          console.log(`  ЗАМЕР ${tag} ${PROF} ${sc}:`, JSON.stringify(r));
+          fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} ${tag} ${PROF} ${sc} ${JSON.stringify(r)}\n`);
+        }
+      };
+      if (isAfter && process.env.AB) {   // A/B в одной вкладке без пересборки: «блин» ↔ обычная сетка моря и волны в физике ↔ нет (4 раза)
+        const tog = on => ev(`(async () => { const W = D37E.waves; for (const P of W.patches) P.show(${on}); for (const F of W.fields) { F.gain = ${on ? 1 : 0}; F.weather({ wind: 11, windDir: 1.2 }); } await new Promise(r => setTimeout(r, 1200)); return 1; })()`);
+        for (const [sc, go] of [['A-набережная', sceneA], ['B-катер', sceneB]]) {
+          await go();
+          const acc = { on: [], off: [] };
+          for (let k = 0; k < 4; k++) for (const on of [true, false]) { await tog(on); const r = await measure(); acc[on ? 'on' : 'off'].push(r); }
+          const mean = (L, f) => +(L.reduce((s, r) => s + f(r), 0) / L.length).toFixed(3);
+          const sum = L => ({ waterGpu: mean(L, r => r.waterMs.med), frameGpu: mean(L, r => r.frameGpuMs.med), frameCpu: mean(L, r => r.frameCpu), renderCpu: mean(L, r => r.cpuMs.med), boats: mean(L, r => r.boatsCpuPerFrame) });
+          const line = `A/B ${PROF} ${sc}: волны ${JSON.stringify(sum(acc.on))} · без волн ${JSON.stringify(sum(acc.off))}`;
+          console.log('  ЗАМЕР', line); fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} ${line}\n`);
+        }
+        await tog(true);
+      } else await run(TAG);
+      if (isAfter && !process.env.AB) {   // тот же мир без волн (как выключает страж): обычная сетка моря, вода без кусков волн
         await ev(`(async () => { D37E.waves.disable(); await new Promise(r => setTimeout(r, 2500)); return 1; })()`);
-        const r2 = await measure();
-        console.log(`  ЗАМЕР ${TAG}-off ${PROF}:`, JSON.stringify(r2));
-        fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} ${TAG}-off ${PROF} ${JSON.stringify(r2)}\n`);
+        await run(TAG + '-off');
       }
       if (phone) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
     }
 
+    if (MODE === 'reopen') {   // мир закрыть и открыть N раз (по умолчанию 20): поля, «блины», материалы волн и память не растут
+      const n = Math.max(2, +MIN || 20), cnt = () => ev(`(() => { if (window.gc) gc(); const W = D37E.waves || { fields: new Set(), patches: new Set(), mats: new Set() }; return { fields: W.fields.size, patches: W.patches.size, mats: W.mats.size, heapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : 0, pre: GAME_IMPL.world._test.state()?.R?.preRender?.length || 0 }; })()`);
+      const first = await cnt(), hist = [first];
+      for (let k = 0; k < n; k++) {
+        await ev(`location.hash = '#/home'`); await sleep(900);
+        await ev(`location.hash = '#/games/world'`);
+        let ok2 = false; for (let i = 0; i < 120 && !ok2; i++) { await sleep(500); try { ok2 = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+        await sleep(1500);
+        if (k === 1 || k === n - 1 || k % 5 === 4) hist.push(await cnt());
+      }
+      const last = hist[hist.length - 1];
+      console.log('  закрыть/открыть:', JSON.stringify(hist));
+      ok(last.fields === first.fields && last.patches === first.patches && last.mats <= first.mats && last.pre === first.pre, `${n} раз закрыть и открыть мир: поля, «блины», материалы волн и кадровые крючки не копятся`, { first, last });
+      ok(last.heapMB - hist[2].heapMB < 25, `${n} раз: память JS не растёт (после 2-го открытия)`, hist.map(h => h.heapMB));
+      fs.appendFileSync(path.join(TMP, 't022c', 'perf.txt'), `${new Date().toISOString()} reopen ${PROF} ${n} ${JSON.stringify(hist)}\n`);
+    }
     if (MODE === 'soak') {
       const minutes = Math.max(1, +MIN || 10);
       const r = await ev(`(async () => {
