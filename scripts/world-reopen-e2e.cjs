@@ -12,12 +12,18 @@
 // поэтому в каждом круге включаем дождь); render.js R.dispose теперь их снимает.
 // Как искать новое: снимок кучи после 1-го закрытия и после N-го, «что держит» прошлый мир — пути от корней (DevTools → Memory →
 // Comparison / Retainers; или свой разбор, как в отчёте T-085). Полный прогон: ~4–6 мин.
-// Запуск из корня сайта: node scripts/world-reopen-e2e.cjs [N=20] [pc|phone]   (CHROME — путь к Chrome; D37_TMP — временная папка;
+// Запуск из корня сайта: node scripts/world-reopen-e2e.cjs [N=20] [pc|phone] [world|studio3d]   (CHROME — путь к Chrome; D37_TMP — временная папка;
 // D37_OVERRIDE=<папка> — файлы оттуда вместо сайта: замер «до»; WAIT_MS — сколько ждать после закрытия перед итогом, 12000;
 // phone — 412×915, «средняя», ЦП ×RATE (по умолчанию 4) — прогон дольше, ~10 мин на 20 кругов)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.join(__dirname, '..');
-const [N_ = '20', PROF = 'pc'] = process.argv.slice(2);
+const [N_ = '20', PROF = 'pc', GAME = 'world'] = process.argv.slice(2);
+// что открываем: мир (по умолчанию) или «Студию 3D» (тот же движок; студия держала прошлый редактор через холст и карту погоды)
+const G = {
+  world: { route: '#/games/world', ready: 'GAME_IMPL?.world?._test?.state()?.zones?.wmv', state: 'GAME_IMPL.world._test.state()', wx: 'S.wx', name: 'мир' },
+  studio3d: { route: '#/games/studio3d', ready: 'GAME_IMPL?.studio3d?._test?.state()?.TR', state: 'GAME_IMPL.studio3d._test.state()', wx: 'D37E.studioWeather?.X?.()', name: 'студия' },
+}[GAME];
+if (!G) { console.log('Нет такого: ' + GAME + ' (world | studio3d)'); process.exit(2); }
 const N = Math.max(2, +N_ || 20);
 const CHROME = process.env.CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const TMP = process.env.D37_TMP || (fs.existsSync('E:/claude-tmp') ? 'E:/claude-tmp' : os.tmpdir());
@@ -98,15 +104,15 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     const RATE = +(process.env.RATE || (phone ? 4 : 1));
     if (RATE > 1) await send('Emulation.setCPUThrottlingRate', { rate: RATE });
     res.rate = RATE;
-    const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q };
+    const ls = { d37_perf: 'high', d37_age_ask: String(Date.now() + 864e6), d37_app: JSON.stringify({ x: 1, v: 1 }), d37_settings: JSON.stringify({ gfxPreset: Q, gfx: Q }), d37_gfx: Q, d37_s3_learn: 'done' };
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{${Object.entries(ls).map(([k, v]) => `localStorage.setItem(${JSON.stringify(k)},${JSON.stringify(v)});`).join('')}localStorage.removeItem('d37_mir_pos');}catch(e){}` + INSTR });
     await send('Page.navigate', { url: BASE + '/' });
     for (let i = 0; i < 80 && !(await ev(`!!(window.D37Route && window.GAME_IMPL !== undefined && document.readyState === 'complete')`).catch(() => false)); i++) await sleep(250);
     await sleep(2500);
     const open = async (sec = 40 * Math.max(1, RATE / 2)) => {
       const t0 = Date.now();
-      await ev(`location.hash = '#/games/world'`);
-      let up = false; for (let i = 0; i < sec * 4 && !up; i++) { await sleep(250); try { up = await ev(`!!(window.GAME_IMPL?.world?._test?.state()?.zones?.wmv)`, 5000); } catch (e) {} }
+      await ev(`location.hash = '${G.route}'`);
+      let up = false; for (let i = 0; i < sec * 4 && !up; i++) { await sleep(250); try { up = await ev(`!!(window.${G.ready})`, 5000); } catch (e) {} }
       return up ? Date.now() - t0 : -1;
     };
     const close = async () => { await ev(`location.hash = '#/home'`); };
@@ -125,12 +131,12 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
       if (ms < 0) { ok(false, `открытие ${k}: мир не открылся`); break; }
       // дождь: погода рисует общую на страницу карту «что над головой» (gfx.js GFXU.occRT) — каждый рендерер вешает на неё своё
       // «dispose»; без дождя этот путь утечки не проверяется (так он и прятался — зависел от погоды за окном)
-      await ev(`(() => { const S = GAME_IMPL.world._test.state(); try { S.wx?.force?.('rain'); } catch (e) {} return 1; })()`);
+      await ev(`(() => { const S = ${G.state}; try { ${G.wx}?.force?.('rain'); } catch (e) {} return 1; })()`);
       await sleep(2500);
-      res.occ = (res.occ || 0) + (await ev(`GAME_IMPL.world._test.state()?.wx?.occ?.n || 0`));
+      res.occ = (res.occ || 0) + (await ev(`(() => { const S = ${G.state}; return ${G.wx}?.occ?.n || 0; })()`));
       if (k === 1) res.chOpen = await ev('__d37leak.count().ch');   // канал мира есть, пока мир открыт (после закрытия — нет)
       if (k === 1 || k === N || k % 5 === 0) res.openMB.push([k, await heapMB()]);   // мир открыт — то, что видит игрок
-      await ev(`(() => { const S = GAME_IMPL.world._test.state(); window.__d37worlds = window.__d37worlds || []; window.__d37worlds.push([new WeakRef(S), S.R?.r ? new WeakRef(S.R.r.getContext()) : null]); return 1; })()`);
+      await ev(`(() => { const S = ${G.state}; window.__d37worlds = window.__d37worlds || []; window.__d37worlds.push([new WeakRef(S), S.R?.r ? new WeakRef(S.R.r.getContext()) : null]); return 1; })()`);
       await close(); await sleep(1500);
       res.closedMB.push(await heapMB());
       if (k % 5 === 0) console.log(`  ${k}/${N}: мир закрыт — память JS ${res.closedMB.slice(-5).join(' · ')} МБ, открытие ${res.openMs.slice(-5).join(' · ')} мс`);
@@ -143,8 +149,8 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     console.log('  память JS, мир закрыт (после каждого круга):', res.closedMB.join(' → '));
     console.log('  память JS, мир открыт:', res.openMB.map(([k, v]) => `#${k} ${v}`).join(' · '));
     // ── проверки ──
-    ok(!alive.length, `${N} закрытий: ни одного прошлого мира и контекста WebGL в памяти (WeakRef после сборки мусора)`, alive);
-    ok(res.occ > 0, `дождь в мире: карта «что над головой» рисовалась (${res.occ} раз) — путь через общую карту проверен`);
+    ok(!alive.length, `${N} закрытий (${G.name}): ни одного прошлого состояния и контекста WebGL в памяти (WeakRef после сборки мусора)`, alive);
+    ok(res.occ > 0, `дождь (${G.name}): карта «что над головой» рисовалась (${res.occ} раз) — путь через общую карту проверен`);
     const grow = +(F.heapMB - B.heapMB).toFixed(1);
     // прирост на круг — по медианам начала и конца (код, который V8 дособирает горячим, растёт в первых кругах и выходит на полку;
     // одиночный выброс — то, что было в пути в момент закрытия, — медиана не замечает)
@@ -158,7 +164,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     ok(F.iv <= B.iv, `setInterval: ${B.iv} → ${F.iv}`, F.iv > B.iv ? F.ivBy : undefined);
     ok(F.raf <= B.raf + 1, `ожидающие requestAnimationFrame: ${B.raf} → ${F.raf}`, F.raf > B.raf + 1 ? F.rafBy : undefined);
     ok(F.wk.length <= B.wk.length, `потоки (Worker): ${B.wk.length} → ${F.wk.length}`, F.wk);
-    ok(F.ch.length <= B.ch.length && !F.ch.some(t => /realtime:mirz?-/.test(t)), `каналы Supabase: ${B.ch.length} → ${F.ch.length} (пока мир открыт: ${(res.chOpen || []).filter(t => /mir/.test(t)).join(', ') || 'канала мира нет — без сети?'})`, F.ch);
+    ok(F.ch.length <= B.ch.length && !F.ch.some(t => /realtime:(mirz?|s3)-/.test(t)), `каналы Supabase: ${B.ch.length} → ${F.ch.length}${GAME === 'world' ? ` (пока мир открыт: ${(res.chOpen || []).filter(t => /mir/.test(t)).join(', ') || 'канала мира нет — без сети?'})` : ''}`, F.ch);
     ok(F.gl <= B.gl, `живые контексты WebGL: ${B.gl} → ${F.gl} (объектов контекста ${B.glObj} → ${F.glObj})`);
     ok(F.glObj <= B.glObj, `объекты контекстов WebGL в памяти: ${B.glObj} → ${F.glObj}`);
     ok(F.nodes <= B.nodes + 5, `узлы DOM: ${B.nodes} → ${F.nodes}`);
@@ -169,7 +175,7 @@ const INSTR = `(() => { if (window.__d37leak) return; const T = window.__d37leak
     ok(!bad.length, 'без исключений и без «Too many active WebGL contexts»', bad.slice(0, 4));
   } catch (e) { ok(false, 'исключение: ' + (e.stack || e.message)); }
   res.fail = fail;
-  try { fs.writeFileSync(path.join(OUT, `reopen-${PROF}${process.env.D37_OVERRIDE ? '-before' : ''}.json`), JSON.stringify(res, null, 1)); } catch (e) {}
+  try { fs.writeFileSync(path.join(OUT, `reopen-${GAME === 'world' ? '' : GAME + '-'}${PROF}${process.env.D37_OVERRIDE ? '-before' : ''}.json`), JSON.stringify(res, null, 1)); } catch (e) {}
   console.log(fail ? `world-reopen-e2e: ${fail} FAIL` : 'world-reopen-e2e: всё ok');
   try { ws.close(); } catch (e) {} proc.kill(); server.closeAllConnections?.(); server.close();
   await sleep(500); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {}
