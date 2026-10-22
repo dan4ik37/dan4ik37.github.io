@@ -1403,7 +1403,7 @@
     else if (a === 'bots') startBots(PV && PV.again());
     else if (a === 'retry') { if (lastOnline) startOnline(lastOnline.code, lastOnline.pub, lastOnline.pv && lastOnline.pv.again()); else menu(); }
     else if (a === 'friend') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); K.inviteNew(GAME, TITLE, api.toast); }
-    else if (a === 'menu') menu();
+    else if (a === 'menu') { const path = !!PV; menu(); if (path) PATH?.hub(); }   // из игры пути ☰ — в «Мой род»
     else if (a.startsWith('ev') && PATH) PATH.click(a, b, e);
     else if (a === 'again') { hideOv(); koAt = 0; S?.respawn(); }
     else if (a === 'emo') ui.emos.hidden = !ui.emos.hidden;

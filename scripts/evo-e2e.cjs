@@ -155,16 +155,21 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
     if (MODE === 'perf' || MODE === 'all') {
       console.log('— perf (телефон, CPU ×4, «средняя»)');
       await phone();
-      const measure = async (base, label, url, setup) => {
+      const measure = async (base, label, url, setup, biome, big) => {
         await go(`${base}/#/home`); await sleep(300);
         if (setup) await ev(setup);
         await go(url);
+        if (biome) { await waitFor(`!!document.querySelector('[data-io="evplay"][data-b="${biome}"]')`, 10000); await click(`[data-io="evplay"][data-b="${biome}"][data-m="bots"]`); }
         if (!(await waitFor(`!!(${T}.S?.W)`, 20000))) { ok(false, label + ': игра не открылась'); return null; }
         await sleep(3000);
         await send('HeapProfiler.enable'); await send('HeapProfiler.collectGarbage');
         const heap0 = await ev('performance.memory ? performance.memory.usedJSHeapSize : 0');
         await send('Emulation.setCPUThrottlingRate', { rate: 4 });
         await ev(`(window.__st = ${T}.stress({ guests: 9 })) ? 1 : 0`);
+        if (big) {   // тяжёлый кадр: своя колония из 7 больших клеток (камера дальше — на экране все 16 участников с частями)
+          await ev(`(() => { const S = ${T}.S, W = S.W; for (const s of W.cL.subarray(0, W.cN)) if (W.cO[s] === S.me) W.cM[s] = 4000; S.setInput(Float64Array.from([.2, .1, 0, 0, 0, 0]), performance.now()); return 1; })()`);
+          for (let k = 1; k <= 7; k++) { await sleep(450); await ev(`${T}.S.setInput(Float64Array.from([.2, .1, ${k}, 0, 0, 0]), performance.now()), 1`); }
+        }
         await sleep(2000);
         await ev('window.__st.n = 0, window.__st.bytes = 0, window.__st.snaps = 0, 1');
         await sleep(SECS * 1000);
@@ -186,8 +191,12 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
       report.perf.classic = await measure(BASE, 'после: обычная арена', `${BASE}/#/games/kletochki/bots`);
       const rich = `localStorage.setItem('d37_evo_trial', JSON.stringify({ stage: 3, dna: 100, earned: 400, play: 1500, col: 5, owned: { flagellum: 1, adhesion: 3, eye: 1, photo: 1, jaw: 1, spikes: 1 }, design: { s: ['jaw', 'eye', 'adhesion', 'adhesion', 'adhesion', 'photo'], f: 'wedge', k: { p: 5, a: '#60a5fa', b: '#1e3a8a' } } })), 1`;
       for (const b of ['pool', 'reef', 'deep']) {
-        report.perf[b] = await measure(BASE, `после: путь ${b}`, `${BASE}/#/games/kletochki/evo`, rich);
+        report.perf[b] = await measure(BASE, `после: путь ${b}`, `${BASE}/#/games/kletochki/evo`, rich, b);
       }
+      if (BASE2) report.perf.beforeBig = await measure(BASE2, 'до: обычная, масса 4000', `${BASE2}/#/games/kletochki/bots`, null, null, true);
+      report.perf.classicBig = await measure(BASE, 'после: обычная, масса 4000', `${BASE}/#/games/kletochki/bots`, null, null, true);
+      report.perf.deepBig = await measure(BASE, 'путь deep: колония 7 ×4000', `${BASE}/#/games/kletochki/evo`, rich, 'deep', true);
+      report.perf.reefBig = await measure(BASE, 'путь reef: колония 7 ×4000', `${BASE}/#/games/kletochki/evo`, rich, 'reef', true);
     }
 
     // ═══ leak: 20 открытий и закрытий ═══
@@ -204,12 +213,12 @@ const ok = (c, name, extra) => { if (c) { pass++; console.log('  ✓', name); } 
         await waitFor(`!!(${T}.S?.W)`, 8000);
         await sleep(1200);
         await go(`${BASE}/#/games`); await sleep(300);
-        if (i === 1 || i === 19) marks.push(await probe());
+        if (i === 4 || i === 11 || i === 19) marks.push(await probe());   // первые 5 — разогрев сайта (кэши; так же и у обычной арены и в старом коде)
       }
-      const [a, b] = marks;
+      const [a, m, b] = marks;
       const grow = (b.heap - a.heap) / 1048576;
-      console.log(`  после 2-го: ${(a.heap / 1048576).toFixed(1)} МБ, узлов ${a.nodes}, холстов ${a.canv}; после 20-го: ${(b.heap / 1048576).toFixed(1)} МБ, узлов ${b.nodes}, холстов ${b.canv}`);
-      ok(grow < 3, `память за 18 открытий не растёт (${grow.toFixed(2)} МБ)`, grow);
+      console.log(`  после 5-го: ${(a.heap / 1048576).toFixed(1)} МБ, узлов ${a.nodes}, холстов ${a.canv}; после 12-го: ${(m.heap / 1048576).toFixed(1)} МБ; после 20-го: ${(b.heap / 1048576).toFixed(1)} МБ, узлов ${b.nodes}, холстов ${b.canv}`);
+      ok(grow < 2, `память за 15 открытий после разогрева не растёт (${grow.toFixed(2)} МБ)`, grow);
       ok(b.nodes - a.nodes < 40 && b.canv <= a.canv + 1 && b.styles <= 2, 'узлы DOM, холсты и стили не копятся', { a, b });
       ok(errors.length === 0, 'без ошибок', errors.slice(0, 5));
       report.leak = { grow: +grow.toFixed(2), a, b };

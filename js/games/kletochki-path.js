@@ -37,7 +37,10 @@
   root.KletochkiPath = function(H){
     const E = root.D37Evo, K = H.K;
     if (!E || !K) return null;
-    const A = E.api, esc = K.escH, num = K.num;
+    const A = E.api;
+    // свои экранировщик и числа (xss-scan видит, что они безопасны): чужой текст и подписи — только через esc
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    const num = n => Math.round(+n || 0).toLocaleString('ru');
     css();
     let screen = '', backTo = '', draft = null, sel = -1, land = { plan: '', diet: '' }, nameEdit = null, adL = null, transT = 0, koCard = '';
     const toast = t => { try { H.api?.toast?.(t); } catch (e) {} };
@@ -66,9 +69,9 @@
       paintCell(H.ui.ov.querySelector('.kp-cell'), A.st.design, -Math.PI / 2);
     }
     const stageName = i => E.STAGES[i] ? `${E.STAGES[i].e} ${E.STAGES[i].n}` : '';
-    function homeLine(st){
+    function homeLine(st){   // текст (экранируется там, где вставляется)
       const h = E.HOMES.find(x => x.id === st.home?.id) || E.HOMES[0], ms = Date.now(), L = E.light, s = L.season(ms);
-      return `🏝 Родина: ${esc(h.n)} · ${L.isNight(ms) ? '🌙 ночь' : '☀️ день'} · ${L.SEASON_E[s]} ${esc(L.SEASON_N[s])}`;
+      return `🏝 Родина: ${h.n} · ${L.isNight(ms) ? '🌙 ночь' : '☀️ день'} · ${L.SEASON_E[s]} ${L.SEASON_N[s]}`;
     }
     function hubHtml(){
       const st = A.st, D = A.D, now = A.clock();
@@ -76,26 +79,26 @@
       const T = E.TASKS[E.Rules.taskOf(now)], tdone = st.tday === E.Rules.dayOf(now);
       const note = A.mode === 'server' ? '' : A.why === 'nosql' ? '🧪 Сохранение рода на сервере появится, когда сайт обновится. Пока — пробный род, только в этом браузере.'
         : A.why === 'net' ? '📡 Нет связи с сервером — пока пробный род в этом браузере.' : '🧪 Пробный род — только в этом браузере. Войди, чтобы род сохранился (перенесётся до стадии «Колония»).';
-      const track = [1, 2, 3, 4, 5].map(i => `<span class="${st.stage > i ? 'done' : st.stage === i ? 'on' : ''}"><b>${E.STAGES[i].e}</b><small>${esc(E.STAGES[i].n)}</small></span>`).join('<i></i>');
+      const track = [1, 2, 3, 4, 5].map(i => `<span class="${st.stage > i ? 'done' : st.stage === i ? 'on' : ''}"><b>${esc(E.STAGES[i].e)}</b><small>${esc(E.STAGES[i].n)}</small></span>`).join('<i></i>');
       const needs = E.nextNeeds(D, st);
       const needH = needs.length ? `<div class="kp-sec"><div class="kp-h">До стадии «${esc(E.STAGES[st.stage + 1].n)}»</div><ul class="kp-needs">${needs.map(n => `<li class="${n.ok ? 'ok' : ''}">${n.ok ? '✅' : '⬜'} ${esc(n.t)}${!n.ok && n.need > 1 ? ` <b>${num(Math.min(n.v, n.need))}/${num(n.need)}</b>` : ''}</li>`).join('')}</ul></div>` : '';
       const landH = st.stage === 4 ? `<div class="kp-land"><b>🌊 Род готов выйти на сушу!</b><span>Выбери план тела и питание — с них начнётся существо.</span><button type="button" class="ct-start" data-io="evland">🌱 На сушу</button></div>`
         : st.stage === 5 ? `<div class="kp-land done"><b>🌱 Род на суше: ${esc(E.PLANS[st.plan]?.e || '')} ${esc(E.PLANS[st.plan]?.n || '')}, ${esc(E.DIETS[st.diet]?.n || '')}</b><span>Стадия «Существо» — скоро. А клетку можно развивать дальше: рекорды и Микромир ждут.</span></div>` : '';
-      const offer = A.offer ? `<div class="kp-imp"><b>🧪 Перенести пробный род в аккаунт?</b><span>ДНК ${num(A.offer.dna)}, частей ${E.Rules.partsOwned(A.offer)}. Переносится до стадии «Колония».</span><div class="kp-row"><button type="button" class="ct-start" data-io="evimp">Перенести</button><button type="button" class="io-b2" data-io="evimpno">Не надо</button></div></div>` : '';
+      const offer = A.offer ? `<div class="kp-imp"><b>🧪 Перенести пробный род в аккаунт?</b><span>ДНК ${num(A.offer.dna)}, частей ${num(E.Rules.partsOwned(A.offer))}. Переносится до стадии «Колония».</span><div class="kp-row"><button type="button" class="ct-start" data-io="evimp">Перенести</button><button type="button" class="io-b2" data-io="evimpno">Не надо</button></div></div>` : '';
       const name = nameEdit ? `<div class="kp-nm"><select data-io="evna">${E.NAME_A.map((w, i) => `<option value="${i}"${i === nameEdit.a ? ' selected' : ''}>${esc(w)}</option>`).join('')}</select>
           <select data-io="evnb">${E.NAME_B.map((w, i) => `<option value="${i}"${i === nameEdit.b ? ' selected' : ''}>${esc(w)}</option>`).join('')}</select>
           <button type="button" class="io-b2 io-sm" data-io="evnrnd" title="Случайно">🎲</button><button type="button" class="ct-start io-sm" data-io="evnsave">✓</button></div>`
         : `<div class="kp-name">Род «${esc(E.lineageName(st))}» <button type="button" class="kp-ib" data-io="evname" title="Имя рода" aria-label="Имя рода">✏️</button></div>`;
       const bio = E.BIOME_IDS.map(b => {
         const B = E.BIOMES[b], open = st.stage >= B.at, been = st.biomes.includes(b);
-        return `<div class="kp-bio${open ? '' : ' off'}" style="--kb:${BCOL[b]}"><div class="kp-bt"><b>${B.e} ${esc(B.n)}</b>${been ? ' <i title="Род тут был">✓</i>' : ''}</div>
+        return `<div class="kp-bio${open ? '' : ' off'}" style="--kb:${BCOL[b]}"><div class="kp-bt"><b>${esc(B.e)} ${esc(B.n)}</b>${been ? ' <i title="Род тут был">✓</i>' : ''}</div>
           <div class="kp-bd">${esc(open ? B.d : `🔒 Откроется на стадии «${E.STAGES[B.at].n}»`)}</div>
-          ${open ? `<div class="kp-bb"><button type="button" class="ct-start" data-io="evplay" data-b="${b}" data-m="pub">▶ Плыть</button><button type="button" class="io-b2 io-sm" data-io="evplay" data-b="${b}" data-m="bots" title="С ботами, без интернета" aria-label="С ботами">🤖</button><button type="button" class="io-b2 io-sm" data-io="evplay" data-b="${b}" data-m="friend" title="С другом по ссылке" aria-label="С другом">🔗</button></div>` : ''}</div>`;
+          ${open ? `<div class="kp-bb"><button type="button" class="ct-start" data-io="evplay" data-b="${esc(b)}" data-m="pub">▶ Плыть</button><button type="button" class="io-b2 io-sm" data-io="evplay" data-b="${esc(b)}" data-m="bots" title="С ботами, без интернета" aria-label="С ботами">🤖</button><button type="button" class="io-b2 io-sm" data-io="evplay" data-b="${esc(b)}" data-m="friend" title="С другом по ссылке" aria-label="С другом">🔗</button></div>` : ''}</div>`;
       }).join('');
       const r = st.rec;
       return `<div class="io-card wide kp-hub">
         <div class="kp-head"><canvas class="kp-cell" width="120" height="120"></canvas><div class="kp-hi">${name}
-          <div class="kp-stg">${stageName(st.stage)} <small>· стадия ${Math.min(st.stage, 4)} из 4</small></div><div class="kp-home">${homeLine(st)}</div></div></div>
+          <div class="kp-stg">${esc(stageName(st.stage))} <small>· стадия ${Math.min(st.stage, 4)} из 4</small></div><div class="kp-home">${esc(homeLine(st))}</div></div></div>
         ${offer}${note ? `<div class="kp-note">${esc(note)}</div>` : ''}
         <div class="kp-track">${track}</div>
         ${landH}${needH}
@@ -134,7 +137,7 @@
       const ring = d.s.map((id, k) => {
         const a = -Math.PI / 2 + k * TAU / 6, x = 50 + Math.cos(a) * 43, y = 50 + Math.sin(a) * 43;
         const P = id && id !== '=' ? E.CELL[id] : null;
-        return `<button type="button" class="kp-slot${sel === k ? ' sel' : ''}${id === '=' ? ' cont' : ''}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%" data-io="evslot" data-k="${k}" aria-label="Место ${k + 1}${P ? ': ' + esc(P.n) : ''}">${P ? P.e : id === '=' ? '·' : '+'}</button>`;
+        return `<button type="button" class="kp-slot${sel === k ? ' sel' : ''}${id === '=' ? ' cont' : ''}" style="left:${x.toFixed(1)}%;top:${y.toFixed(1)}%" data-io="evslot" data-k="${k}" aria-label="Место ${k + 1}${P ? ': ' + esc(P.n) : ''}">${esc(P ? P.e : id === '=' ? '·' : '+')}</button>`;
       }).join('');
       const bar = (v, lo, hi) => `<i style="width:${Math.round(Math.max(.06, Math.min(1, (v - lo) / (hi - lo))) * 100)}%"></i>`;
       const special = [sc.spikes && '📌 колючки не рвут', sc.def && '🛡 панцирь', sc.toxin && '☁️ облачко', sc.leaf && `🌿 сахар от света ×${sc.leaf}`, sc.glow && `✨ свет ×${sc.glow}`, sc.prot > 1 && '🦷 белка больше'].filter(Boolean);
@@ -143,16 +146,16 @@
         const cur = d.s[sel];
         const opts = E.PART_IDS.filter(id => E.CELL[id].slots > 0 && (own[id] | 0) > usedOf(d, id) - (cur === id ? 1 : 0)).map(id => {
           const P = E.CELL[id];
-          return `<button type="button" class="kp-opt" data-io="evput" data-id="${id}"><b>${P.e}</b>${esc(P.n)}${P.slots > 1 ? ' <small>(2 места)</small>' : ''}</button>`;
+          return `<button type="button" class="kp-opt" data-io="evput" data-id="${esc(id)}"><b>${esc(P.e)}</b>${esc(P.n)}${P.slots > 1 ? ' <small>(2 места)</small>' : ''}</button>`;
         }).join('');
         pick = `<div class="kp-pick"><div class="kp-h">Место ${sel + 1}: что поставить</div>${opts || '<div class="kp-mut">Свободных купленных частей нет — купи ниже ⬇</div>'}
           ${cur ? '<button type="button" class="kp-opt del" data-io="evdel">✖ Убрать</button>' : ''}</div>`;
       }
-      const forms = own.adhesion ? `<div class="kp-sec"><div class="kp-h">Форма колонии</div><div class="kp-forms">${E.FORM_IDS.map(f => { const F = E.FORMS[f]; return `<button type="button" class="kp-chip${d.f === f ? ' sel' : ''}" data-io="evform" data-v="${f}"><b>${F.e} ${esc(F.n)}</b><small>${esc(F.d)}</small></button>`; }).join('')}</div></div>` : '';
+      const forms = own.adhesion ? `<div class="kp-sec"><div class="kp-h">Форма колонии</div><div class="kp-forms">${E.FORM_IDS.map(f => { const F = E.FORMS[f]; return `<button type="button" class="kp-chip${d.f === f ? ' sel' : ''}" data-io="evform" data-v="${esc(f)}"><b>${esc(F.e)} ${esc(F.n)}</b><small>${esc(F.d)}</small></button>`; }).join('')}</div></div>` : '';
       const shop = E.PART_IDS.map(id => {
         const P = E.CELL[id], n = own[id] | 0, can = st.stage >= P.at, full = n >= P.max, cheap = st.dna >= P.cost;
-        const btn = full ? '<span class="kp-own">✓ есть</span>' : !can ? `<span class="kp-lock">🔒 ${esc(E.STAGES[P.at].n)}</span>` : `<button type="button" class="${cheap ? 'ct-start' : 'io-b2'} io-sm" data-io="evbuy" data-id="${id}"${cheap ? '' : ' disabled'}>${num(P.cost)} 🧬</button>`;
-        return `<div class="kp-part${full ? ' full' : ''}"><b class="kp-pe">${P.e}</b><div><div class="kp-pn">${esc(P.n)}${P.max > 1 ? ` <small>${n}/${P.max}</small>` : ''}${P.slots > 1 ? ' <small>· 2 места</small>' : P.slots === 0 ? ' <small>· без места</small>' : ''}</div><div class="kp-pd">${esc(P.d)}</div></div>${btn}</div>`;
+        const btn = full ? '<span class="kp-own">✓ есть</span>' : !can ? `<span class="kp-lock">🔒 ${esc(E.STAGES[P.at].n)}</span>` : `<button type="button" class="${cheap ? 'ct-start' : 'io-b2'} io-sm" data-io="evbuy" data-id="${esc(id)}"${cheap ? '' : ' disabled'}>${num(P.cost)} 🧬</button>`;
+        return `<div class="kp-part${full ? ' full' : ''}"><b class="kp-pe">${esc(P.e)}</b><div><div class="kp-pn">${esc(P.n)}${P.max > 1 ? ` <small>${num(n)}/${num(P.max)}</small>` : ''}${P.slots > 1 ? ' <small>· 2 места</small>' : P.slots === 0 ? ' <small>· без места</small>' : ''}</div><div class="kp-pd">${esc(P.d)}</div></div>${btn}</div>`;
       }).join('');
       const pig = (own.pigment | 0) > 0, pats = pig ? H.PATTERNS_X : H.PATTERNS;
       const changed = JSON.stringify(d) !== JSON.stringify(st.design), bad = E.designWhy(d, own);
@@ -161,7 +164,7 @@
         <div class="kp-ringw"><div class="kp-ring"><canvas class="kp-ecell" width="220" height="220"></canvas>${ring}</div>
           <div class="kp-st"><div>Скорость <span class="kp-sb">${bar(sc.speed, .7, 1.3)}</span></div><div>Обзор <span class="kp-sb">${bar(sc.view, .9, 1.4)}</span></div>
             <div>Ест клетки <span class="kp-sb">${bar(1.3 - sc.eat, 0, .25)}</span></div><div>Поворот <span class="kp-sb">${bar(sc.turn, 1, 1.7)}</span></div>
-            <div>В темноте <span class="kp-sb">${bar(sc.dark, 0, .9)}</span></div><div>Колония: <b>${col}</b> ${col > 1 ? 'клеток' : '(нужна 🧲)'}</div>
+            <div>В темноте <span class="kp-sb">${bar(sc.dark, 0, .9)}</span></div><div><span>Колония</span><span><b>${num(col)}</b> ${col > 1 ? 'клеток' : '(нужна 🧲)'}</span></div>
             ${special.length ? `<div class="kp-mut">${esc(special.join(' · '))}</div>` : ''}</div></div>
         <div class="kp-mut">Нажми на место у мембраны и поставь купленную часть. Облик — со следующей жизни.</div>
         ${pick}${forms}
@@ -219,7 +222,7 @@
       const st = A.st;
       const cards = E.MICRO_IDS.map(id => {
         const M = E.MICRO[id], f = st.finds.includes(id), B = E.BIOMES[M.b];
-        return `<div class="kp-mc${f ? '' : ' off'}"><b>${f ? M.e : '❓'}</b><div><div class="kp-pn">${esc(f ? M.n : '???')}</div><div class="kp-pd">${esc(f ? M.d : `Живёт: ${B ? B.e + ' ' + B.n : 'везде'}`)}</div></div></div>`;
+        return `<div class="kp-mc${f ? '' : ' off'}"><b>${esc(f ? M.e : '❓')}</b><div><div class="kp-pn">${esc(f ? M.n : '???')}</div><div class="kp-pd">${esc(f ? M.d : `Живёт: ${B ? B.e + ' ' + B.n : 'везде'}`)}</div></div></div>`;
       }).join('');
       H.showOv(`<div class="io-card wide kp-book"><div class="io-title" style="font-size:1.3rem">📖 Микромир</div>
         <div class="io-sub">Кого встретил твой род: ${st.finds.length} из ${E.MICRO_IDS.length}. Плавай в разных биомах, днём и ночью.</div>
@@ -231,8 +234,8 @@
       screen = 'land';
       const st = A.st, own = st.owned;
       if (!land.diet) land.diet = own.jaw && !own.leaf ? 'meat' : own.leaf && !own.jaw ? 'plant' : 'both';
-      const plans = Object.keys(E.PLANS).map(p => { const P = E.PLANS[p]; return `<button type="button" class="kp-chip big${land.plan === p ? ' sel' : ''}" data-io="evplan" data-v="${p}"><b>${P.e} ${esc(P.n)}</b><small>${esc(P.d)}</small></button>`; }).join('');
-      const diets = Object.keys(E.DIETS).map(p => { const P = E.DIETS[p]; return `<button type="button" class="kp-chip${land.diet === p ? ' sel' : ''}" data-io="evdiet" data-v="${p}"><b>${P.e} ${esc(P.n)}</b></button>`; }).join('');
+      const plans = Object.keys(E.PLANS).map(p => { const P = E.PLANS[p]; return `<button type="button" class="kp-chip big${land.plan === p ? ' sel' : ''}" data-io="evplan" data-v="${esc(p)}"><b>${esc(P.e)} ${esc(P.n)}</b><small>${esc(P.d)}</small></button>`; }).join('');
+      const diets = Object.keys(E.DIETS).map(p => { const P = E.DIETS[p]; return `<button type="button" class="kp-chip${land.diet === p ? ' sel' : ''}" data-io="evdiet" data-v="${esc(p)}"><b>${esc(P.e)} ${esc(P.n)}</b></button>`; }).join('');
       H.showOv(`<div class="io-card wide kp-landc"><div class="io-logo">🌊</div><div class="io-title" style="font-size:1.35rem">Выйти на сушу</div>
         <div class="io-sub">Колония твоего рода стала одним телом. С чего начнёт существо на берегу? Части клетки тоже пригодятся: глазки, зубы, шипы, свет.</div>
         <div class="kp-h">План тела</div><div class="kp-forms">${plans}</div><div class="kp-h">Питание</div><div class="kp-forms row">${diets}</div>
@@ -258,8 +261,8 @@
       screen = 'trans';
       const st = A.st, t = E.landTemplate(st), P = E.PLANS[st.plan];
       H.showOv(`<div class="kp-tr"><div class="kp-tr-t">Прошли миллионы лет…</div><div class="kp-tr-ad"></div>
-        <div class="io-card kp-tr-c" hidden><div class="io-logo">${P?.e || '🌱'}</div><div class="io-title" style="font-size:1.3rem">Род «${esc(E.lineageName(st))}» вышел на сушу!</div>
-          <div class="io-sub">${esc(P?.n || '')} · ${esc(E.DIETS[st.diet]?.n || '')} · глаз: ${t ? t.body.eyes : 2}${t?.body.horns ? ' · рожки' : ''}${t?.body.glow ? ' · светится' : ''}${t?.body.armour ? ' · чешуя' : ''}</div>
+        <div class="io-card kp-tr-c" hidden><div class="io-logo">${esc(P?.e || '🌱')}</div><div class="io-title" style="font-size:1.3rem">Род «${esc(E.lineageName(st))}» вышел на сушу!</div>
+          <div class="io-sub">${esc(P?.n || '')} · ${esc(E.DIETS[st.diet]?.n || '')} · глаз: ${num(t ? t.body.eyes : 2)}${t?.body.horns ? ' · рожки' : ''}${t?.body.glow ? ' · светится' : ''}${t?.body.armour ? ' · чешуя' : ''}</div>
           <div class="kp-note">Дальше — стадия «Существо»: тело как в редакторе, еда, гнездо, стая, поколения. Она появится на сайте — род её дождётся.${r?.got?.awake ? ' «Пробуждение» уже открыто.' : ''}</div>
           <div class="kp-row kp-main"><button type="button" class="ct-start" data-io="evhub">🧬 Мой род</button></div></div></div>`, 'kp kp-trans');
       try { root.GAME_IMPL?.kletochki && H.api?.sfx?.('win'); } catch (e) {}
@@ -403,9 +406,13 @@
         if (txt !== hlTxt) { hlTxt = txt; hl.textContent = txt; hl.title = g ? `Цель жизни: ${g.n} (+${E.CAPS.goal} ДНК)` : ''; }
       }
       // ── Рисунок: части на мембране, мостики колонии, темнота, минералы ──
+      // части участника на мембране (6 мест): по виду бота или коду облика; в кадре — без новых строк (ключ — только когда поменялся)
+      const SRCK = new Int16Array(H.MAXO).fill(-2), SRCD = new Array(H.MAXO).fill(null);
       function layoutOf(i){
         const S = H.S, V = S?.view?.(), o = V?.owners?.[i];
-        if (!o) return null;
+        if (!o) { SRCK[i] = -2; return null; }
+        if (o.kind === SRCK[i] && (o.kind >= 0 || o.design === SRCD[i])) return LAY[i];
+        SRCK[i] = o.kind; SRCD[i] = o.design;
         const key = o.kind >= 0 ? 'k' + o.kind : o.design || '';
         if (!key) return null;
         let l = lays.get(key);
@@ -413,7 +420,16 @@
           l = null;
           if (o.kind >= 0) {
             const id = E.MICRO_IDS[o.kind], M = E.MICRO[id];
-            if (M && M.parts?.length) { l = ['', '', '', '', '', '']; for (const p of M.parts) { if (!E.CELL[p]) continue; let k = PREF[p] ?? 0; while (l[k] && k < 11) k = (k + 1) % 6; l[k] = p; if (E.CELL[p].slots > 1) l[(k + 1) % 6] = '='; } }
+            if (M && M.parts?.length) {
+              l = ['', '', '', '', '', ''];
+              for (const p of M.parts) {
+                if (!E.CELL[p]) continue;
+                let k = PREF[p] ?? 0, n = 0;
+                while (l[k] && n++ < 6) k = (k + 1) % 6;
+                if (l[k]) break;
+                l[k] = p; if (E.CELL[p].slots > 1) l[(k + 1) % 6] = '=';
+              }
+            }
           } else { const d = E.parseCode(o.design); if (d && d.s.some(x => x)) l = d.s; }
           lays.set(key, l);
         }
