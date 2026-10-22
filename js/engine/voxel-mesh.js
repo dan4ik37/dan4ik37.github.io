@@ -176,8 +176,12 @@
 
   // reg — область 48×48×H (Uint16), light — { sky, r, g, b } из V.lightRegion, T — V.T, tint — цвета биомов центра (256 × 9),
   // zone — климатические зоны столбов (256, V.climZone; нет — все 0): у вершин в свет неба (lt.x, 0…60) добавляется 64 × зона —
-  // шейдер погоды знает, где «всегда зима» и где «зимы нет»; грани разных зон не склеиваются
-  V.meshChunk = (reg, light, T, tint, zone) => {
+  // шейдер погоды знает, где «всегда зима» и где «зимы нет»; грани разных зон не склеиваются.
+  // bare (T-022b) — доля опавшей лиственной листвы 0…1 (зима: сезон движка погоды; у «всегда зимы» — всегда, у «зимы нет» — никогда),
+  // cx, cz — чанк (одинаковый выбор опавших клеток у соседних чанков): такие клетки листвы для сетки — воздух (ветви видны, грани
+  // соседей рисуются). Блоки мира не меняются — только картинка; reg — свой буфер задания (его можно портить)
+  V.meshChunk = (reg, light, T, tint, zone, bare = 0, cx = 0, cz = 0) => {
+    if (T.decid && (bare > 0 || (zone && zone.includes(1)))) shedLeaves(reg, T, zone, bare, cx, cz);
     const sky = light.sky, lr = light.r, lg = light.g, lb = light.b, opaque = T.opaque, shape = T.shape, layerT = T.layer, cull = T.cullSelf, tintT = T.tint, liquid = T.liquid;
     const glowL = T.glowL || null, emit = T.emit, sT = T.stream || null;
     const gl = l => glowL && l >= 0 && l < glowL.length ? glowL[l] : 0;
@@ -292,6 +296,8 @@
           else if (dd[2] > 0) { A = [x, z + e]; B = [x + 1, z + e]; } else { A = [x + 1, z + 1 - e]; B = [x, z + 1 - e]; }
           plate(streams[1], A, B, y, 1, lay, L4, WHITE, 0, false, gl(lay));
           plate(streams[1], B, A, y, 1, lay, L4, WHITE, 0, false, gl(lay));
+        } else if (sh === 9) {   // тонкая ветка: середина и «руки» к соседним брёвнам и веткам (как в модах Dynamic Trees)
+          branch(reg, ri, x, y, z, t, st, T, cellLt, gl, sT ? streams[sT[t]] : streams[0]);
         } else if (sh === 6 || sh === 7 || sh === 8) {   // дверь / кактус / сундук: коробка
           const bx = V.boxOf(cv, false); if (!bx) continue;
           for (let d = 0; d < 6; d++) {
@@ -356,6 +362,46 @@
     return out;
   };
   const BC = [0, 0, 0], HC = [1, 1, 1, 1];
+  // ── тонкая ветка (T-022b): середина 6/16 и «руки» до края клетки к соседним брёвнам/веткам (T.tree 1 / 2); соседей нет — брусок
+  //    вдоль своей оси. Торец руки к бревну (оно непрозрачное) и к соседней ветке (её рука встречает эту) не рисуется ──
+  const BW0 = .3125, BW1 = .6875, BXC = [BW0, BW0, BW0, BW1, BW1, BW1], ARM = [];
+  for (let d = 0; d < 6; d++) { const b = BXC.slice(), ax = d >> 1; if (d & 1) { b[ax] = 0; b[ax + 3] = BW0; } else { b[ax] = BW1; b[ax + 3] = 1; } ARM.push(b); }
+  const AXM = [(1 << 2) | (1 << 3), 1 | 2, (1 << 4) | (1 << 5)];
+  function branch(reg, ri, x, y, z, t, st, T, cellLt, gl, s){
+    const tr = T.tree, opaque = T.opaque;
+    let m = 0;
+    for (let d = 0; d < 6; d++) {
+      const ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0); if (ny < 0 || ny >= H) continue;
+      const q = tr ? tr[reg[ri + DIRS[d].n] & TYPE] : 0; if (q === 1 || q === 2) m |= 1 << d;
+    }
+    if (!m) m = AXM[st & 3] || AXM[0];
+    const W3 = WHITE;
+    for (let d = 0; d < 6; d++) if (!((m >> d) & 1)) { const lay = texFor(T, t, st & 3, d); if (lay >= 0) boxFace(s, d, x, y, z, BXC, lay, cellLt(ri, -1), W3, 0, gl(lay)); }
+    for (let a = 0; a < 6; a++) {
+      if (!((m >> a) & 1)) continue;
+      const bx = ARM[a], ax = a >> 1, axs = ax === 1 ? 0 : ax === 0 ? 1 : 2, nri = ri + DIRS[a].n, nt = reg[nri] & TYPE;
+      for (let d = 0; d < 6; d++) {
+        if (d === (a ^ 1)) continue;   // к середине — внутри
+        if (d === a && (opaque[nt] || (tr && tr[nt] === 2))) continue;   // торец к бревну или к соседней ветке
+        const lay = texFor(T, t, axs, d); if (lay < 0) continue;
+        boxFace(s, d, x, y, z, bx, lay, cellLt(ri, d === a ? nri : -1), W3, 0, gl(lay));
+      }
+    }
+  }
+  // ── опавшая лиственная листва (зима): клетка — по хешу мира, у соседних чанков одинаково ──
+  function shedLeaves(reg, T, zone, bare, cx, cz){
+    const dc = T.decid, x0 = (cx - 1) * 16, z0 = (cz - 1) * 16, th = Math.round(Math.max(0, Math.min(1, bare)) * 1024), thW = 740;   // «всегда зима» — 72 %
+    for (let rx = 0; rx < RW; rx++) for (let rz = 0; rz < RW; rz++) {
+      const zi = (rx < 16 ? 0 : rx >= 32 ? 15 : rx - 16) * 16 + (rz < 16 ? 0 : rz >= 32 ? 15 : rz - 16), zn = zone ? zone[zi] & 3 : 0;
+      const lim = zn === 2 ? 0 : zn === 1 ? thW : th;
+      if (!lim) continue;
+      const b = (rx * RW + rz) * H, wx = x0 + rx, wz = z0 + rz;
+      for (let y = 0; y < H; y++) {
+        const t = reg[b + y] & TYPE;
+        if (dc[t] && (V.hash(wx, y, wz, 0x7ea5) & 1023) < lim) reg[b + y] = 0;
+      }
+    }
+  }
   // Высота жидкости в углу (cx, cz ∈ {0, 1} — угол клетки): клетки вокруг угла — эта и три соседние
   function cornerH(reg, ri, t, y, cx, cz, cv, opaque){
     let h = 0, w = 0;

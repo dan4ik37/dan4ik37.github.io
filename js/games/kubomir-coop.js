@@ -649,7 +649,7 @@
       G.pid = m.pid | 0; G.items = Array.isArray(m.items) ? m.items.map(String) : [];
       try { const u = unb64(m.edited || ''), a = new Int16Array(u.buffer, u.byteOffset, u.byteLength >> 1); for (let i = 0; i + 1 < a.length; i += 2) G.edited.add(a[i] + '|' + a[i + 1]); } catch (e) {}
       G.meta = { id: 'coop-' + code, coop: { guest: true, code }, name: String(w.name || 'Мир друга').slice(0, 40), seed: w.seed, mode: w.mode === 'creative' ? 'creative' : 'survival', diff: ['peaceful', 'easy', 'normal', 'hard'].includes(w.diff) ? w.diff : 'easy',
-        genVer: w.genVer === 2 ? 2 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,
+        genVer: w.genVer === 3 ? 3 : w.genVer === 2 ? 2 : 1, gen: w.gen === 'void' ? 'void' : undefined, mc: w.mc && Array.isArray(w.mc.blocks) ? { blocks: w.mc.blocks.slice(0, 2000).map(String) } : undefined,
         palette: Array.isArray(w.palette) ? w.palette.slice(0, 4096).map(String) : null, spawn: w.spawn && fin(w.spawn.x) ? { x: w.spawn.x, y: w.spawn.y, z: w.spawn.z } : null, time: fin(w.time) ? w.time : 8, day: w.day | 0 || 1,
         ice: w.ice || undefined, snow: w.snow || undefined, mods: [], tips: false, cheats: !!w.cheats, played: Date.now(), support: w.support === 'soft' || w.support === 'real' ? w.support : undefined };
       G.seasons = w.seasons; G.wf = w.wf;
@@ -784,10 +784,10 @@
         case 'ice': if (Number.isInteger(m.x) && Number.isInteger(m.y) && Number.isInteger(m.z)) st.WX?.hole?.(m.x, m.y, m.z, fin(m.at) ? m.at : Date.now()); return;
         case 'fell': {
           try {
-            const u = unb64(m.c), a = new Int32Array(u.buffer, u.byteOffset, u.byteLength >> 2); if (a.length > 4 * 400) return;
+            const u = unb64(m.c), a = new Int32Array(u.buffer, u.byteOffset, u.byteLength >> 2); if (a.length > 4 * 2400) return;   // деревья v3 (T-022b): великан — до ~2000 блоков
             const cells = []; for (let i = 0; i + 3 < a.length; i += 4) cells.push(a[i], a[i + 1], a[i + 2], toLocal(a[i + 3] >>> 0));
             const LOG = v => /^log_/.test(V.blocks[v & 0xfff]?.name || '');
-            if (Array.isArray(m.p) && Array.isArray(m.d)) st.ents?.fallGroup?.(cells, { x: +m.p[0], y: +m.p[1], z: +m.p[2] }, { x: +m.d[0], z: +m.d[1] }, { trunk: LOG, visual: true, drop: m.k === 'd', cap: m.k === 'd' ? 8 : 3 });
+            if (Array.isArray(m.p) && Array.isArray(m.d)) st.ents?.fallGroup?.(cells, { x: +m.p[0], y: +m.p[1], z: +m.p[2] }, { x: +m.d[0], z: +m.d[1] }, { trunk: LOG, visual: true, drop: m.k === 'd', fast: true, cap: m.k === 'd' ? 8 : 3 });
           } catch (e) {}
           return;
         }

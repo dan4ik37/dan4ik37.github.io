@@ -56,7 +56,7 @@
     const c = document.createElement('canvas'); c.width = c.height = size;
     const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
     try {
-      if (b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus) && !it.tex) {
+      if (b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus || b.shape === V.SHAPE.branch) && !it.tex) {
         const f = b.texf, tint = b.tint ? (b.tint === V.TINT.birch ? [128, 167, 85] : b.tint === V.TINT.spruce ? [97, 153, 97] : [124, 189, 90]) : [255, 255, 255];
         const mul = (c, k) => [Math.round(c[0] * k), Math.round(c[1] * k), Math.round(c[2] * k)], W3 = [255, 255, 255];
         const sideT = b.tint && b.tint !== V.TINT.grass ? tint : W3;
@@ -756,8 +756,9 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       const it = V.item(name), b = it?.place ? V.block(it.place) : null;
       const quads = [], lt = ltOf(L, [0, 0, 0, 0]);
       const glow = b ? V.T.emit[b.id] : 0;
-      if (b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus) && !it.tex) {
+      if (b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus || b.shape === V.SHAPE.branch) && !it.tex) {
         const tint = b.tint ? (b.tint === V.TINT.birch ? [128, 167, 85] : b.tint === V.TINT.spruce ? [97, 153, 97] : [124, 189, 90]) : [255, 255, 255];
+        const bw = b.shape === V.SHAPE.branch ? (V.BRANCH_W || [.3125, .6875]) : null;   // тонкая ветка — брусок вдоль y
         for (let d = 0; d < 6; d++) {
           const D = V.MESH_DIRS[d], layer = V.texFor(V.T, b.id, 0, d), col = b.tint && !(b.tint === V.TINT.grass && d !== 2) ? tint : [255, 255, 255];
           const q = [];
@@ -765,6 +766,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
             const du = D.c[k][0], dv = D.c[k][1], p = [0, 0, 0];
             p[d >> 1] = (d & 1) ? 0 : 1; p[D.ua] = du; p[D.va] = dv;
             const U2 = d === 2 || d === 3 ? [p[0], p[2]] : d === 0 ? [1 - p[2], 1 - p[1]] : d === 1 ? [p[2], 1 - p[1]] : d === 4 ? [p[0], 1 - p[1]] : [1 - p[0], 1 - p[1]];
+            if (bw) { p[0] = bw[0] + p[0] * (bw[1] - bw[0]); p[2] = bw[0] + p[2] * (bw[1] - bw[0]); }
             q.push({ p: [p[0] - .5, p[1] - .5, p[2] - .5], uv: U2, layer, nrm: d, col });
           }
           quads.push(q);
@@ -801,7 +803,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
       g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setAttribute('vd', new T.BufferAttribute(vd, 4)); g.setAttribute('color', new T.BufferAttribute(cl, 3, true));
       g.setAttribute('lt', new T.BufferAttribute(lta, 4, false));
       g.setIndex(idx);
-      g.userData.flat = !(b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus) && !it.tex);
+      g.userData.flat = !(b && (b.shape === V.SHAPE.cube || b.shape === V.SHAPE.chest || b.shape === V.SHAPE.cactus || b.shape === V.SHAPE.branch) && !it.tex);
       g.userData.L = L;
       return g;
     };

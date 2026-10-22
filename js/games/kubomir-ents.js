@@ -86,7 +86,10 @@
   // Удар врага — с замахом (MOBS.wind с: зомби поднимает руки, слизень сжимается) и выпадом; отошёл за время замаха — промах,
   // ударили его — замах сбит. После удара — пауза 0,6 с: замах + пауза = 1 с, как раньше (урон в минуту тот же).
   const DIFF = { peaceful: { cap: 0, every: 2, dmg: 0 }, easy: { cap: 4, every: 4, dmg: .67 }, normal: { cap: 6, every: 3, dmg: 1 }, hard: { cap: 9, every: 2, dmg: 1.5 } };
-  window.KubomirEnts = { MOBS, DIFF, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice(), Lit, mobView: null, boxMobView: c => boxMobView(c) };
+  window.KubomirEnts = { MOBS, DIFF, create, onChunk(){}, onDrop(){}, lightTint: (L, min) => lightTint(L, min).slice(), Lit, mobView: null, boxMobView: c => boxMobView(c),
+    // зима (T-022b): какая доля лиственной листвы опала — ступенями (поменялась ступень — сетки чанков понемногу заново): сезон движка
+    // погоды (kubomir-weather.js, climate.js state.bare); «Погода» выкл или времена года выкл — листва всегда
+    bareOf: st => { if (!st || st.weatherOff) return 0; const b = +(st.WX?.clim?.state?.bare || 0); return b < .15 ? 0 : b < .45 ? .3 : b < .8 ? .55 : .72; } };
   // цвет освещения существа по свету клетки: небо — белым, факелы и лава — своим цветом (как у кубиков) → [r, g, b, яркость]
   // (запасной путь, если свой кусок шейдера не собрался)
   const LTC = [1, 1, 1, 1];
@@ -673,7 +676,7 @@
     X.fallGroup = (cells, pivot, dir, o = {}) => {
       if (groups.length >= (o.cap || 3) || !cells.length) return null;
       const Vx = V(), n = cells.length / 4;
-      if (o.drop) {   // обрушение — быстрая сетка
+      if (o.drop || o.fast) {   // обрушение и деревья (T-022b) — быстрая сетка
         const A = dropGeo(cells, pivot); if (!A) return null;
         return groupWith(cells, n, pivot, dir, o, A.pos, A.vd, A.cl, A.lt, A.idx);
       }
@@ -768,6 +771,7 @@
         if ((i & 1) === 0) { const b = Vx.blocks[v & 0xfff]; if (g.o.trunk?.(v)) X.dust(x, Math.floor(y - .3) + 1, z, v & 0xfff, 2, { w: .8, sp: 1, s: .25, s1: .6, a: .45, vy: .4 }); else if (b) X.debris(Math.floor(x), Math.floor(y), Math.floor(z), b.id, 3); }
       }
       S.AU?.play('kb_thud', { x: g.px - S.ox, y: g.py + 1, z: g.pz - S.oz, vol: 1, rate: .8 });
+      try { g.o.onLanded?.(g); } catch (e) { console.error(e); }
       R.scene.remove(g.mesh); g.geo.dispose();
     }
     // обрушение: кто под падающим куском — толчок вниз и в сторону (урон — только «обычно» / «сложно», один раз)
@@ -818,44 +822,66 @@
         const c = rot(g, 0, g.hc, 0, th); Lit.update(g.lit, S, c.x, c.y, c.z, dt); VR.itemLightF(g.geo, g.lit.lv);
       }
     }
-    // Дерево: сломал бревно — стволы над ним (только брёвна, связь по 6 соседям, до 48) не касаются ничего твёрдого, кроме
-    // листвы (земля, доски, камень рядом — «держится» или постройка: как в Майнкрафте, ничего не падает), листва вокруг (до 4 шагов
-    // от стволов, не меньше 3 листьев) — и всего не больше 220 блоков. Тогда всё это убирается из мира (обычные правки — сохранятся)
-    // и валится от игрока одной сеткой; легло — брёвна вещами (каждое), из листвы — ростки, палки, яблоки по случаю
-    let LOGF = null, LEAFF = null, flagsN = 0;
-    function treeFlags(){ const Vx = V(); if (LOGF && flagsN === Vx.blocks.length) return; flagsN = Vx.blocks.length; LOGF = new Uint8Array(flagsN); LEAFF = new Uint8Array(flagsN); for (const b of Vx.blocks) { if (/^log_/.test(b.name)) LOGF[b.id] = 1; else if (/^leaves_/.test(b.name)) LEAFF[b.id] = 1; } }
+    // Дерево: сломал бревно — кусок брёвен рядом (над срезом, а у деревьев v3 и сбоку: срубил сук — падает сук; связь по 6
+    // соседям, брёвна и тонкие ветки, до 480) не касается ничего твёрдого, кроме листвы (земля, доски, камень рядом — «держится» или
+    // постройка: как в Майнкрафте, ничего не падает), листва вокруг (до 5 шагов от брёвен, всего до 2400 блоков — дуб-великан
+    // T-022b), не меньше 3 листьев или 2 тонких веток (сухое дерево). Тогда всё это убирается из мира (обычные правки — сохранятся)
+    // и валится одной сеткой (быстрая: кубики по шаблону, без граней между брёвнами); легло — брёвна вещами (пачками по 6 у больших),
+    // из листвы — ростки, палки, яблоки по случаю (у больших — не больше, чем у обычного дерева). Срез у ствола — от игрока; сук —
+    // наружу, качается вниз. Кто угодно может позвать X.fellAt (сгорело бревно — огонь, T-022d): то же самое, кто ломал — неважно
+    let LOGF = null, LEAFF = null, THINF = null, flagsN = 0;
+    function treeFlags(){
+      const Vx = V(); if (LOGF && flagsN === Vx.blocks.length) return;
+      flagsN = Vx.blocks.length; LOGF = new Uint8Array(flagsN); LEAFF = new Uint8Array(flagsN); THINF = new Uint8Array(flagsN);
+      const tt = Vx.T.tree;   // поле блока tree (voxel.js); у модов — по имени, как раньше
+      for (const b of Vx.blocks) { const k = tt ? tt[b.id] : 0; if (k === 1 || k === 2 || (!k && /^log_/.test(b.name))) LOGF[b.id] = 1; else if (k === 3 || (!k && /^leaves_/.test(b.name))) LEAFF[b.id] = 1; if (k === 2) THINF[b.id] = 1; }
+    }
+    const FELL_N = [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
     X.fellTree = (x, y, z, P) => {
       if (groups.length >= 3) return null;
       treeFlags();
-      const Vx = V(), Tt = Vx.T, up = W.raw(x, y + 1, z);
+      for (let k = 0; k < FELL_N.length && groups.length < 3; k++) { const d = FELL_N[k], g = fellFrom(x, y, z, x + d[0], y + d[1], z + d[2], P, k); if (g) return g; }
+      return null;
+    };
+    X.fellAt = X.fellTree;
+    const SAPLING_OF = n => n === 'leaves_jungle' ? 'sapling_jungle' : 'sapling_' + n.slice(7);
+    function fellFrom(x, y, z, sx, sy, sz, P, side){
+      const Vx = V(), Tt = Vx.T, up = W.raw(sx, sy, sz);
       if (!(up > 0) || !LOGF[up & 0xfff]) return null;
       const soft = t => !Tt.solid[t] || LEAFF[t] || Tt.liquid[t] || Tt.shape[t] === Vx.SHAPE.cross || Tt.shape[t] === Vx.SHAPE.torch;
-      const C = Vx.component(W, [[x, y + 1, z]], { take: v => LOGF[v & 0xfff] === 1, edge: v => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) ? 0 : 2), max: 48 });
+      const C = Vx.component(W, [[sx, sy, sz]], { take: v => LOGF[v & 0xfff] === 1, edge: v => (v < 0 ? 2 : v === 0 || soft(v & 0xfff) ? 0 : 2), max: 480 });
       if (!C || C.touch || C.grounded) return null;
-      const inC = new Set(); for (let i = 0; i < C.cells.length; i += 4) inC.add(Vx.supportKey(C.cells[i], C.cells[i + 1], C.cells[i + 2]));
-      const seeds = []; for (let i = 0; i < C.cells.length; i += 4) seeds.push([C.cells[i], C.cells[i + 1], C.cells[i + 2]]);
-      const Lf = Vx.component(W, seeds, { take: (v, a, b, c) => LEAFF[v & 0xfff] === 1 || (LOGF[v & 0xfff] === 1 && inC.has(Vx.supportKey(a, b, c))), depth: 4, max: 220 });
+      let thin = 0; const inC = new Set(), seeds = [];
+      for (let i = 0; i < C.cells.length; i += 4) { inC.add(Vx.supportKey(C.cells[i], C.cells[i + 1], C.cells[i + 2])); seeds.push([C.cells[i], C.cells[i + 1], C.cells[i + 2]]); if (THINF[C.cells[i + 3] & 0xfff]) thin++; }
+      const Lf = Vx.component(W, seeds, { take: (v, a, b, c) => LEAFF[v & 0xfff] === 1 || (LOGF[v & 0xfff] === 1 && inC.has(Vx.supportKey(a, b, c))), depth: 5, max: 2400 });
       if (!Lf) return null;
       const leaves = Lf.n - C.n;
-      if (leaves < 3) return null;   // голый столб из брёвен — не дерево
+      if (leaves < 3 && thin < 2) return null;   // голый столб из брёвен — не дерево (сухое дерево узнаётся по тонким веткам)
       const cells = Lf.cells;
       for (let i = 0; i < cells.length; i += 4) W.set(cells[i], cells[i + 1], cells[i + 2], 0, { urgent: 2 });
-      // куда валится: от игрока (по горизонтали); игрок прямо у ствола — по взгляду
-      let dx = x + .5 - (P ? P.x : x), dz = z + .5 - (P ? P.z : z), dl = Math.hypot(dx, dz);
-      if (dl < .2) { dx = 1; dz = 0; dl = 1; }
-      dx /= dl; dz /= dl;
-      const sap = n => 'sapling_' + n.slice(7);
-      return X.fallGroup(cells, { x: x + .5 + dx * .5, y: y + 1, z: z + .5 + dz * .5 }, { x: dx, z: dz }, {
+      // куда валится: ствол — от игрока (по горизонтали; игрок прямо у ствола — по взгляду), сук — наружу от среза
+      let dx, dz, pv;
+      if (side) { dx = sx - x; dz = sz - z; pv = { x: (x + sx) / 2 + .5, y: sy + .5, z: (z + sz) / 2 + .5 }; }
+      else {
+        dx = x + .5 - (P ? P.x : x); dz = z + .5 - (P ? P.z : z); let dl = Math.sqrt(dx * dx + dz * dz);
+        if (dl < .2) { dx = 1; dz = 0; dl = 1; }
+        dx /= dl; dz /= dl; pv = { x: x + .5 + dx * .5, y: y + 1, z: z + .5 + dz * .5 };
+      }
+      // вещи: брёвна — пачками (у большого дерева не сотни вещей), из листвы — как у обычного дерева (доля — по числу листьев)
+      const nLog = C.n, pack = nLog > 24 ? 6 : 1, lk = Math.min(1, 150 / Math.max(1, leaves)), acc = new Map();
+      return X.fallGroup(cells, pv, { x: dx, z: dz }, {
+        fast: true,
         trunk: v => LOGF[v & 0xfff] === 1,
         onLand: (v, wx, wy, wz) => {
           const b = Vx.blocks[v & 0xfff], r = X.rng();
-          if (LOGF[b.id]) { X.addItem(wx, wy, wz, { id: b.drop || b.name, n: 1 }); return; }
-          if (r < .05 && Vx.item(sap(b.name))) X.addItem(wx, wy, wz, { id: sap(b.name), n: 1 });
-          else if (r < .07) X.addItem(wx, wy, wz, { id: 'stick', n: 1 });
-          else if (r < .08 && b.name === 'leaves_oak') X.addItem(wx, wy, wz, { id: 'apple', n: 1 });
+          if (LOGF[b.id]) { const id = b.drop || b.name, n = (acc.get(id) || 0) + 1; if (n >= pack) { acc.set(id, 0); X.addItem(wx, wy, wz, { id, n }); } else acc.set(id, n); return; }
+          if (r < .05 * lk && Vx.item(SAPLING_OF(b.name))) X.addItem(wx, wy, wz, { id: SAPLING_OF(b.name), n: 1 });
+          else if (r < .07 * lk) X.addItem(wx, wy, wz, { id: 'stick', n: 1 });
+          else if (r < .08 * lk && b.name === 'leaves_oak') X.addItem(wx, wy, wz, { id: 'apple', n: 1 });
         },
+        onLanded: (g) => { for (const [id, n] of acc) if (n > 0) X.addItem(g.px, g.py + .5, g.pz, { id, n }); acc.clear(); },
       });
-    };
+    }
 
     // ═══ Мобы ═══
     // как моб рисуется — одно место: view (по умолчанию коробки — boxMobView ниже; KubomirEnts.mobView — свой вид);
@@ -1416,19 +1442,81 @@
             const up = W.get(x, y + 1, z); if (up !== 0 || (V().lSky(W.lightAt(x, y + 1, z)) < 9)) continue;
             for (let q = 0; q < 4; q++) { const nx = x + Math.floor(r() * 3) - 1, ny = y + Math.floor(r() * 3) - 1, nz = z + Math.floor(r() * 3) - 1; if (W.get(nx, ny, nz) === ID.grass) { W.set(x, y, z, ID.grass, { urgent: 0 }); break; } }
           } else if (t === ID.grass) { const up = W.get(x, y + 1, z); if (up > 0 && T.opaque[up]) W.set(x, y, z, ID.dirt, { urgent: 0 }); }
-          else if (Vx.blocks[t]?.name.startsWith('sapling_') && r() < .35) growTree(x, y, z, Vx.blocks[t].name.slice(8));
+          else if (Vx.blocks[t]?.name.startsWith('sapling_')) X.plantAt(x, y, z);   // росток без записи (старый мир) — растёт по времени
         }
       }
     }
-    function growTree(x, y, z, kind){
-      const Vx = V(), ID = Vx.ID, n = kind === 'spruce' ? 6 + Math.floor(X.rng() * 3) : 4 + Math.floor(X.rng() * 3);
-      for (let k = 1; k < n + 2; k++) { const v = W.get(x, y + k, z); if (v !== 0 && !/^leaves_/.test(Vx.blocks[v]?.name || '')) return; }
-      const log = ID['log_' + kind], leaf = ID['leaves_' + kind], top = y + n;
-      const set = (a, b, c, v, only) => { const cur = W.get(a, b, c); if (cur === 0 || (only && cur !== v && Vx.blocks[cur]?.replace)) W.set(a, b, c, v, { urgent: 1 }); };
-      for (let yy = top - 3; yy <= top; yy++) { const rr = yy >= top - 1 ? 1 : 2; for (let dx = -rr; dx <= rr; dx++) for (let dz = -rr; dz <= rr; dz++) { if (Math.abs(dx) === rr && Math.abs(dz) === rr && X.rng() < .5) continue; set(x + dx, yy, z + dz, leaf, true); } }
-      set(x, top + 1, z, leaf, true);
-      for (let k = 0; k < n; k++) W.set(x, y + k, z, log, { urgent: 1 });
+    // ═══ Ростки (T-022b): росток → молодое дерево → взрослое — по времени игры (meta.gt, с): сроки (молодое — через 4–8 мин игры,
+    // взрослое — ещё через 8–16) и форма (D37E.trees: порода ростка, зерно — мир и место) — у всех одинаковые. Реестр — meta.grow:
+    // [[x, y, z, посажен (gt), этап, порода], …] (≤ 400; сохраняется с миром): посадил (правка «стал ростком») — запись; старые
+    // ростки находят случайные такты. Чанк не загружен — ждёт (время идёт; загрузился и пора — сразу взрослое). Не влезает
+    // (ствол упирается) — ждёт. Молодое срубили — запись прочь. Взрослое — на месте молодого (его клетки сначала убираются) ===
+    const SAP_SP = { oak: 'oak', birch: 'birch', spruce: 'spruce', acacia: 'acacia', jungle: 'tropical', willow: 'willow' };
+    const YOUNG = .42, GROW_MAX = 400;
+    const grow = X.grow = new Map();
+    for (const a of (Array.isArray(S.meta?.grow) ? S.meta.grow : [])) if (Array.isArray(a) && a.length >= 6 && [0, 1, 2, 3].every(i => Number.isFinite(a[i])) && SAP_SP[a[5]] !== undefined) grow.set(a[0] + ',' + a[1] + ',' + a[2], [a[0] | 0, a[1] | 0, a[2] | 0, +a[3], a[4] | 0, a[5]]);
+    const growSave = () => { if (S.meta) S.meta.grow = grow.size ? [...grow.values()] : undefined; };
+    const gtNow = () => +(S.meta?.gt || 0);
+    X.plantAt = (x, y, z, t0) => {
+      if (X.client || grow.size >= GROW_MAX) return false;
+      const k = x + ',' + y + ',' + z; if (grow.has(k)) return false;
+      const b = V().blocks[W.get(x, y, z)], kind = b && b.name.startsWith('sapling_') ? b.name.slice(8) : '';
+      if (SAP_SP[kind] === undefined) return false;
+      grow.set(k, [x, y, z, t0 ?? gtNow(), 0, kind]); growSave(); return true;
+    };
+    // посадил игрок (или гость — у хозяина правка): росток в клетке — в реестр
+    if (W.listeners) W.listeners.push((x, y, z, was, v) => { if (X.client || !(v > 0) || V().T.tree?.[v & 0xfff] !== 4) return; X.plantAt(x, y, z); });
+    const treeSeed = (x, y, z) => V().hash(W.seed, x, z, 4243 ^ y);
+    // клетки дерева породы sp (рост g) в точке: { cells: [x, y, z, значение, тип], trunk: стволовые клетки }
+    function treeCells(x, y, z, kind, g){
+      const TR = window.D37E?.trees, Vx = V(), ID = Vx.ID; if (!TR) return null;
+      const sp = kind === 'spruce' && (treeSeed(x, y, z) & 7) < 3 ? 'pine' : SAP_SP[kind];
+      const w = kind === 'jungle' ? 'jungle' : kind === 'willow' ? 'oak' : kind;
+      const log = ID['log_' + w], leaf = ID['leaves_' + kind] || ID.leaves_oak, thin = ID['log_' + w + '_thin'] || log;
+      if (!log) return null;
+      const vx = TR.voxels(TR.grow(sp, treeSeed(x, y, z), { g }), { thin: !!ID.log_oak_thin });
+      return { vx, log, leaf, thin };
     }
+    function placeTree(x, y, z, kind, g, clear){
+      const Vx = V(), Tt = Vx.T, D = treeCells(x, y, z, kind, g); if (!D) return false;
+      const { vx, log, leaf, thin } = D;
+      const free = c => c === 0 || (c > 0 && (Tt.tree[c & 0xfff] === 3 || Tt.tree[c & 0xfff] === 4 || (!Tt.solid[c & 0xfff] && Vx.blocks[c & 0xfff]?.replace)));
+      const mine = new Set();   // клетки прошлого этапа (молодое дерево) — тоже свободны
+      if (clear) for (let i = 0; i < clear.vx.n; i++) mine.add((clear.vx.x[i] + 64) * 16384 + (clear.vx.y[i] + 64) * 128 + clear.vx.z[i] + 64);
+      const own = (dx, dy, dz, c) => mine.has((dx + 64) * 16384 + (dy + 64) * 128 + dz + 64) && c > 0 && ((c & 0xfff) === clear.log || (c & 0xfff) === clear.leaf || (c & 0xfff) === clear.thin);
+      // ствол обязан влезть (кроме самой клетки ростка)
+      for (let i = 0; i < vx.n; i++) if (vx.t[i] === 2 && vx.x[i] === 0 && vx.z[i] === 0 && vx.y[i] > 0) { const c = W.raw(x, y + vx.y[i], z); if (c < 0 || !(free(c) || own(0, vx.y[i], 0, c))) return false; }
+      if (clear) for (let i = 0; i < clear.vx.n; i++) { const a = x + clear.vx.x[i], b = y + clear.vx.y[i], c = z + clear.vx.z[i], v = W.raw(a, b, c); if (own(clear.vx.x[i], clear.vx.y[i], clear.vx.z[i], v)) W.set(a, b, c, 0, { urgent: 1 }); }
+      for (let i = 0; i < vx.n; i++) {
+        const a = x + vx.x[i], b = y + vx.y[i], c = z + vx.z[i]; if (b <= 0 || b >= Vx.H - 1) continue;
+        const cur = W.raw(a, b, c), t = vx.t[i];
+        if (cur < 0) continue;
+        if (t === 0) { if (cur === 0 || (cur > 0 && !Tt.solid[cur & 0xfff] && Vx.blocks[cur & 0xfff]?.replace)) W.set(a, b, c, leaf, { urgent: 1 }); }
+        else if ((vx.x[i] === 0 && vx.y[i] === 0 && vx.z[i] === 0) || free(cur)) W.set(a, b, c, Vx.cell(t === 1 ? thin : log, vx.a[i]), { urgent: 1 });
+      }
+      return true;
+    }
+    function growTick(){
+      if (X.client || !grow.size) return;
+      const gt = gtNow(), Vx = V(), Tt = Vx.T;
+      let ch = false;
+      for (const [k, e] of grow) {
+        const [x, y, z, t0, stg, kind] = e, v = W.raw(x, y, z);
+        if (v < 0) continue;   // чанк не загружен — подождёт
+        const h = Vx.hash(W.seed, x, z, y + 77), T1 = 240 + (h & 255) / 255 * 240, T2 = T1 + 480 + ((h >>> 8) & 255) / 255 * 480, el = gt - t0;
+        if (stg === 0) {
+          if (!(v > 0) || Tt.tree[v & 0xfff] !== 4) { grow.delete(k); ch = true; continue; }   // росток сломали
+          if (el < T1) continue;
+          if (placeTree(x, y, z, kind, el >= T2 ? 1 : YOUNG, null)) { if (el >= T2) grow.delete(k); else e[4] = 1; ch = true; }
+        } else {
+          if (!(v > 0) || Tt.tree[v & 0xfff] !== 1) { grow.delete(k); ch = true; continue; }   // молодое срубили
+          if (el < T2) continue;
+          if (placeTree(x, y, z, kind, 1, treeCells(x, y, z, kind, YOUNG))) { grow.delete(k); ch = true; }
+        }
+      }
+      if (ch) growSave();
+    }
+    X.growTick = growTick;
 
     // ═══ Печи: топливо, плавка ═══
     function furnaceTick(dt){
@@ -1463,6 +1551,7 @@
       updatesTick();
       furnaceTick(dt);
       if (X.tickN % 4 === 0) randomTicks();
+      if (X.tickN % 20 === 7) growTick();   // ростки растут (раз в секунду)
       if ((X.spawnT -= dt) <= 0) { X.spawnT = 2; spawnTick(); }
     };
     X.frame = (dt, t) => {

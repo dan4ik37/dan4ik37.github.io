@@ -19,6 +19,7 @@
   const SPD = { walk: 4.3, sprint: 5.7, sneak: 1.35, fly: 11, flyFast: 22, swim: 2.4 };
   const PW = .6, PH = 1.8, PHS = 1.5;
   const RD_OPTS = [4, 6, 8, 10, 12, 16];
+  const KB_GEN = 3;   // версия генератора новых миров (T-022b: 3 — деревья «как в модах»; откат одной строкой — 2). Старые миры — свою
   const LS_OPT = 'd37_kb_opt', LS_ACH = 'd37_kb_ach';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const now = () => performance.now();
@@ -189,7 +190,7 @@
       if (!seed) seed = String(Math.floor(Math.random() * 2e9));
       const mode = f('mode').querySelector('.on')?.dataset.v || 'survival', diff = f('diff').querySelector('.on')?.dataset.v || 'easy';
       const modIds = [...sc.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
-      const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: 2 };
+      const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: KB_GEN };
       const sup = f('support')?.querySelector('.on')?.dataset.v; if (sup === 'soft' || sup === 'real') w.support = sup;   // обрушение (T-022a): старые миры — выкл
       await V.store.putWorld(w);
       playById(w.id);   // через сверку с облаком: вошёл и есть место — новый мир сразу «в облаке»
@@ -524,7 +525,7 @@
     R.post?.setPixelArt?.(true);
     if (!Ex.isMobile?.() && R.dynRes) R.dynRes.min = Math.max(R.dynRes.min, .85);
     const W = new V.World({ seed: meta.seed });
-    const G = V.genInit(W.seed, { features: modState.features, ver: meta.genVer || 1 });   // genVer: старые миры — 1 (как были), новые — 2
+    const G = V.genInit(W.seed, { features: modState.features, ver: meta.genVer || 1 });   // genVer: старые миры — 1 (как были), 2 — с 16.10, новые — KB_GEN
     const st = {
       meta, W, G, R, mods: modState, remapIn, remapOut, ox: 0, oz: 0, t: 0, steps: 0, ready: false, dead: false, paused: false, saving: false,
       unsaved: new Set(), savedKeys: guest ? new Set() : await V.store.chunkKeys(meta.id).catch(() => new Set()), lastSave: now(), creative: meta.mode === 'creative', coopGuest: !!guest, net: guest,
@@ -554,6 +555,7 @@
     // подгрузка мира
     const url = 'js/engine/voxel-worker.js?v=' + ver();
     st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features, genVer: meta.genVer || 1,
+      bare: () => window.KubomirEnts?.bareOf?.(st) || 0,   // зима: лиственные — с голыми ветвями (сетка чанка, T-022b)
       load: c => guest ? guest.loadChunk(c) : st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
       applySaved: (c, rec) => applySaved(c, rec),
       onGen: c => { st.ents?.onChunkTiles?.(c); },

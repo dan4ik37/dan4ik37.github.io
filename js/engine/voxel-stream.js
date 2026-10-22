@@ -8,6 +8,8 @@
 // Правка блока → сетка этого чанка срочно; соседи — если правка у края (AO, грани) или у края поменялся свет (новая
 // волна света ушла к соседу) — тогда и соседа заново. Далеко (rd + 3) — чанк выгружается (onDrop: сохранить правки).
 // Нет потоков (старый браузер, ошибка) — то же самое прямо в кадре, по чуть-чуть (бюджет по времени).
+// o.bare() — сколько лиственной листвы опало (0…1, зима; T-022b): сетка рисует ветви без части листвы; поменялось — все сетки
+// понемногу заново (S.bare — с каким числом собраны новые сетки).
 // S.extra — другие точки (игра вместе: где гости, [[x, z], …] в блоках): вокруг них чанки только генерируются (без сеток — их не
 // видно) в радиусе S.extraR (3) и не выгружаются, пока гость рядом — хозяину есть где считать мобов, вещи и проверять правки.
 (() => {
@@ -21,7 +23,7 @@
 
   V.streamer = (o = {}) => {
     const W = o.world, RCN = V.REGION * V.REGION * V.H;
-    const S = { rd: Math.max(2, Math.min(32, o.rd | 0 || 8)), dead: false, workers: [], inline: false, stats: { gen: 0, mesh: 0, genMs: 0, meshMs: 0, uploads: 0, dropped: 0, errors: 0, pend: 0 },
+    const S = { bare: 0, rd: Math.max(2, Math.min(32, o.rd | 0 || 8)), dead: false, workers: [], inline: false, stats: { gen: 0, mesh: 0, genMs: 0, meshMs: 0, uploads: 0, dropped: 0, errors: 0, pend: 0 },
       pcx: 1e9, pcz: 1e9, budgetQuads: o.budgetQuads || 14000, budgetMs: o.budgetMs || 4, maxJobs: 0, extra: [], extraR: 3 };
     const jobs = new Map();      // id → задание
     const results = [];          // готовые ответы (применяются по бюджету)
@@ -56,10 +58,10 @@
       if (!G) G = V.genInit(W.seed, { features: o.features || [], ver: o.genVer || 1 });
       const t0 = now();
       if (j.t === 'gen') { const r = V.genChunk(G, j.c.cx, j.c.cz); onResult({ id: j.id, ids: r.ids, biome: r.biome, tint: r.tint, zone: r.zone, ms: now() - t0 }); }
-      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
+      else { const L = V.lightRegion(j.reg, V.T), m = V.meshChunk(j.reg, L, V.T, j.tint, j.zone, j.bare || 0, j.c.cx, j.c.cz), r = { id: j.id, reg: j.reg, light: m.light, lights: m.lights, yMax: m.yMax, ms: now() - t0 }; for (const k of V.LAYERS) r[k] = m[k]; onResult(r); }
     }
     function send(j, msg, tr){
-      if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; j.zone = msg.zone; inlineRun(j); return; }
+      if (S.inline) { j.reg = msg.reg; j.tint = msg.tint; j.zone = msg.zone; j.bare = msg.bare; inlineRun(j); return; }
       let w = S.workers[0];
       for (const x of S.workers) if (x.n < w.n) w = x;
       w.n++; j.w = w;
@@ -93,7 +95,8 @@
       const id = ++seq, j = { id, t: 'mesh', c, rev: c.rev };
       c.meshJob = id; c.urgent = 0; jobs.set(id, j);
       const reg = V.buildRegion((x, z) => { const n = W.chunk(x, z); return n && n.ready ? n.ids : null; }, c.cx, c.cz, regions.pop());
-      send(j, { t: 'mesh', id, reg, tint: c.tint, zone: c.zone }, S.inline ? null : [reg.buffer]);
+      c.bare = S.bare;
+      send(j, { t: 'mesh', id, reg, tint: c.tint, zone: c.zone, bare: S.bare, cx: c.cx, cz: c.cz }, S.inline ? null : [reg.buffer]);
     }
 
     // ── применить готовое (по бюджету) ──
@@ -147,10 +150,12 @@
     };
 
     // ── кадр ──
-    let dropT = 0;
+    let dropT = 0, bareT = 0;
     S.update = (px, pz, fx = 0, fz = 0) => {
       if (S.dead) return;
       const t0 = now();
+      // зима: опала листва (раз в секунду) — сетки всех чанков понемногу заново (не срочно: ближние раньше, по спирали)
+      if (o.bare && t0 - bareT > 1000) { bareT = t0; let b = 0; try { b = +o.bare() || 0; } catch (e) {} if (b !== S.bare) { S.bare = b; for (const c of W.chunks.values()) if (c.ready && c.meshRev >= 0) { c.dirty = c.rev = ++W.rev; } } }
       const pcx = Math.floor(px) >> 4, pcz = Math.floor(pz) >> 4;
       S.pcx = pcx; S.pcz = pcz;
       // 1) готовое — по бюджету (сначала генерация: она дешёвая и открывает сетки соседям)
