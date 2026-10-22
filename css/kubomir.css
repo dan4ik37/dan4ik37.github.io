@@ -367,3 +367,18 @@ body.high .kb-food .g{animation:kbGhost .9s ease-in-out infinite alternate}
 .kx-sleep.on{opacity:.9}
 .kx-sleep b{font:800 18px Montserrat,system-ui,sans-serif;color:#dfe5ff;text-align:center;padding:0 20px;text-shadow:0 2px 6px #000}
 @media (prefers-reduced-motion:reduce){body:not(.high) .kx-sleep{transition:none}}
+/* T-049 🗺 атлас (kubomir-map.js → D37E.mapkit): мини-карта справа сверху; строки и полоса компаса — под ней */
+.kb-touch .kx-mm{top:54px;right:8px}
+.kb-hud.kx-mmon .kx-info .d37in-chips{top:148px}
+.kb-touch .kb-hud.kx-mmon .kx-info .d37in-cbar{top:142px}
+.kb-touch .kb-hud.kx-mmon .kx-info .d37in-chips{top:142px}
+.kb-touch .kb-hud.kx-mmon .kx-info .d37in-cbar:not([hidden]) ~ .d37in-chips{top:170px}
+.kb-nohud .kx-mm{display:none}
+.kx-wptop{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.kx-wptop small{color:#aab3d6;font-size:.78rem}
+.kx-wpic{display:flex;flex-wrap:wrap;gap:5px}
+.kx-wpic .kx-ri{font-size:20px;display:grid;place-items:center;background-image:none}
+.kx-wpic .kx-ri.on,.kx-wc.on{outline:3px solid #ffd23f;outline-offset:1px}
+.kx-wpcol{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.kx-wc{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.4);cursor:pointer}
+.kx-wpname{width:calc(100% - 4px);margin:4px 0 6px}

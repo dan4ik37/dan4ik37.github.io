@@ -99,6 +99,23 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           ok(/iron_ingot/.test(filled || '') && /flint/.test(filled || ''), P + ': «Положить в сетку» — компас разложен на верстаке', filled);
           await sleep(500); await shot(P + '-recipes-filled');
           await ev(`(() => { const S = ${T}.state(); S.X.closeSheet(); S.ui.close(); return 1; })()`);
+          // 🗺 атлас: пятая ячейка (глубина), надеть атлас, две точки — мини-карта, лист «Атлас»
+          const atlas = await ev(`(() => { const S = ${T}.state(), V = D37E.vox; S.X.emit('ach', 'deep'); const j = S.P.inv.findIndex(s => s && s.id === 'atlas'); if (j < 0) return 'нет атласа'; S.X.equip(S.P.inv[j], () => { S.P.inv[j] = null; }); const M = S.X.feats.find(f => f.id === 'map'); S.P.x += 6; M._add(); S.P.x -= 6; S.P.z += 9; M._add(); S.P.z -= 9; return S.X.on('map') && S.P.ext.map.wp.length; })()`);
+          ok(atlas === 2, P + ': атлас надет, две точки', atlas);
+          await ev(`(async () => { const S = ${T}.state(); S.rig.fp = .15; await new Promise(r => setTimeout(r, 1500)); return 1; })()`); await shot(P + '-atlas-hud');
+          await ev(`(() => { const S = ${T}.state(); S.X.feats.find(f => f.id === 'map').pick('x:atlas'); return 1; })()`); await sleep(700); await shot(P + '-atlas-sheet');
+          await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`);
+          // 🛏 лежанка: ночь, «Мирно» (монстров нет), лечь — экран темнеет, через 1,2 с — утро
+          const bed = await ev(`(async () => { const S = ${T}.state(), V = D37E.vox, W = S.W, P = S.P; S.meta.diff = 'peaceful'; S.ents.mobs.length = 0;
+            const x = Math.floor(P.x) + 2, z = Math.floor(P.z), y = W.heightAt(x, z); W.set(x, y, z, V.cell(V.ID.bed), { urgent: 3 }); W.set(x, y + 1, z, 0); W.set(x, y + 2, z, 0);
+            S.paused = false; S.R.lighting.time = 22.5; const d0 = S.meta.day || 1;   // новый мир: дня в meta ещё нет — это день 1
+            const ok1 = S.X.useBlock({ x, y, z, v: V.cell(V.ID.bed), nx: 0, ny: 1, nz: 0 }, V.block('bed'));
+            await new Promise(r => setTimeout(r, 700)); return { ok1, d0, sleeping: !!S.X.feats.find(f => f.id === 'world').state().sleep }; })()`);
+          ok(bed && bed.ok1 && bed.sleeping, P + ': ночью на лежанке — уснул', bed);
+          await shot(P + '-sleep');
+          const woke = await ev(`(async () => { const S = ${T}.state(); await new Promise(r => setTimeout(r, 1500)); return { t: +S.R.lighting.time.toFixed(2), day: S.meta.day | 0, sleeping: !!S.X.feats.find(f => f.id === 'world').state().sleep, home: S.X.home() }; })()`);
+          ok(woke && !woke.sleeping && woke.t >= 5.6 && woke.t < 6.5 && woke.day === bed.d0 + 1 && woke.home, P + ': утро следующего дня, дом — у лежанки', woke);
+          await ev(`(() => { const S = ${T}.state(); S.R.lighting.time = 10; S.paused = true; return 1; })()`);
           if (phone) {
             await screen(390, 844, true); await shot('phone-portrait-hud');
             await ev(`(() => { ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('phone-portrait-acc-sheet');

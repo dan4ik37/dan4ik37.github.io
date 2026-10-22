@@ -20,8 +20,8 @@ const store = {};
 globalThis.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
 const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js',
-  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js', 'js/engine/sleep.js',
-  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir-world.js', 'js/games/kubomir.js']) run(f);
+  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js', 'js/engine/sleep.js', 'js/engine/mapkit.js',
+  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir-world.js', 'js/games/kubomir-map.js', 'js/games/kubomir.js']) run(f);
 const E = window.D37E, V = E.vox, ID = V.ID, KB = window.GAME_IMPL.kubomir._test, KX = window.KubomirX;
 
 // игрок и мир-заглушка для переходника помощников
@@ -487,6 +487,66 @@ function mkSt(o = {}){
     const T2 = mkWorldSt(); T2.st.P.inv[0] = { id: 'recall', n: 1 }; T2.st.steps += 60; T2.X.useItem(T2.st.P.inv[0], V.item('recall'), 'main', null);
     ok(!T2.st.P.inv[0] && JSON.stringify(T2.calls.tp[0]) === JSON.stringify([T2.st.meta.spawn.x, T2.st.meta.spawn.y, T2.st.meta.spawn.z]), 'без лежанки — в начало мира');
     ok(E.sleep.need(1, 'half') === 1 && E.sleep.need(3, 'half') === 2 && E.sleep.need(4, 'all') === 4 && E.sleep.need(8, 'one') === 1, 'правило «сколько спит»: один / половина / все');
+  }
+
+  // ═══ 8. Атлас: листы карты, мини-карта (участки), точки, место нокаута, имена ═══
+  sec('атлас: лист карты — только новое место, участок карты = перебор столбцов, точки (до 64, имена без мусора), место нокаута');
+  {
+    const W = new V.World({ seed: 9 });
+    const c0 = new V.Chunk(0, 0); W.add(c0);
+    // рельеф: столбцы разной высоты, озеро, трава и цветы сверху (насквозь)
+    for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) { const h = 50 + ((x * 7 + z * 3) % 9); for (let y = 0; y <= h; y++) c0.ids[(x << 11) | (z << 7) | y] = V.cell(y === h ? ID.grass : ID.stone); if ((x + z) % 5 === 0) c0.ids[(x << 11) | (z << 7) | (h + 1)] = V.cell(ID.tall_grass); }
+    for (let x = 10; x < 14; x++) for (let z = 10; z < 14; z++) for (let y = 55; y <= 58; y++) c0.ids[(x << 11) | (z << 7) | y] = V.cell(ID.water);
+    c0.maxY = 70;
+    const { st, g } = mkSt(); Object.assign(st, { W, ready: true, hudHidden: false, steps: 100 }); st.rig = { yaw: 0 };
+    Object.assign(st.P, { x: 3.5, y: 60, z: 3.5 });
+    const X = st.X = KX.attach(st, g), FM = X.feats.find(f => f.id === 'map');
+    // участок карты: верхний блок — как полный перебор столбца (трава насквозь, вода — синим)
+    const out = new Uint32Array(256);
+    ok(FM._tiles.rev(0, 0) >= 0 && FM._tiles.rev(5, 5) === -1 && FM._tiles.fill(0, 0, out), 'участок: есть — номер правки, нет — −1; цвета посчитаны');
+    let badTop = 0;
+    for (let x = 0; x < 16; x++) for (let z = 0; z < 16; z++) {
+      let y = 70, t = 0; for (; y > 0; y--) { t = c0.ids[(x << 11) | (z << 7) | y] & 0xfff; if (t && t !== ID.tall_grass) break; }
+      const water = (out[z * 16 + x] >>> 16 & 255) > (out[z * 16 + x] & 255) + 40;
+      if ((t === ID.water) !== water) badTop++;
+    }
+    ok(badTop === 0, 'вода на карте — синяя ровно там, где сверху вода (перебор 256 столбцов)', badTop);
+    const g1 = out[3 * 16 + 3], g2 = out[3 * 16 + 4];
+    ok((g1 >>> 8 & 255) > (g1 & 255) && g1 !== g2, 'трава — зелёная, рельеф виден (соседние столбцы разной высоты — разный оттенок)', [g1.toString(16), g2.toString(16)]);
+    let t0 = process.hrtime.bigint(); for (let i = 0; i < 200; i++) FM._tiles.fill(0, 0, out); const tms = Number(process.hrtime.bigint() - t0) / 1e6 / 200;
+    console.log(`  участок карты: ${(tms * 1000).toFixed(0)} мкс на участок 16×16 (node)`);
+    ok(tms < .5, 'участок карты считается быстро (< 0,5 мс)', tms);
+    // листы карты: новое место — да, то же — нет
+    st.P.inv[0] = { id: 'map_blank', n: 3 }; st.P.sel = 0;
+    X.useItem(st.P.inv[0], V.item('map_blank'), 'main', null);
+    ok(st.P.inv[0].n === 2 && st.P.inv.some(s => s && s.id === 'map_filled'), 'лист зарисован: чистых −1, «Лист карты» в сумке');
+    X.useItem(st.P.inv[0], V.item('map_blank'), 'main', null);
+    ok(st.P.inv[0].n === 2 && st.toasts.some(t => /уже зарисовано/.test(t)), 'то же место второй раз — «отойди дальше», лист не тратится');
+    st.P.x += 130; X.useItem(st.P.inv[0], V.item('map_blank'), 'main', null);
+    ok(st.P.inv[0].n === 1 && st.P.ext.map.regions.length === 2, 'в 130 блоках — новое место, второй лист', st.P.ext.map.regions);
+    st.P.x -= 130;
+    // атлас не надет — карты нет, точку не поставить
+    ok(!X.on('map') && FM._add() === null && st.toasts.some(t => /надень/.test(t)), 'без атласа точку не поставить (подсказка «надень»)');
+    st.P.inv[1] = { id: 'atlas', n: 1 }; st.P.sel = 1; X.useItem(st.P.inv[1], V.item('atlas'), 'main', null);
+    ok(X.on('map') && X.on('dir'), 'атлас надет — карта и стороны света');
+    // точки: до 64, имена — через cleanName
+    for (let i = 0; i < 70; i++) FM._add();
+    ok(st.P.ext.map.wp.length === 64 && st.toasts.some(t => /уже 64/.test(t)), 'точек — не больше 64');
+    const CN = E.mapkit.cleanName;
+    ok(CN('  Моя   шахта  ') === 'Моя шахта' && CN('a'.repeat(40)).length === 24 && CN('зайди на site.ru') === 'зайди на' && CN('звони +7 777 123 45 67') === 'звони' && CN('@hacker база') === 'база', 'имя точки: пробелы, до 24 знаков, без ссылок, телефонов, @ников');
+    ok(CN('ху' + 'йня') === '' && CN('s' + 'hit') === '', 'имя точки: мат — пусто (останется старое имя)');
+    ok(CN('Тай' + String.fromCharCode(0x202e) + 'ник') === 'Тайник', 'невидимые знаки направления текста — убраны');
+    ok(X.markers().length === 64 && X.markers()[0].ic === '📍', 'точки видны на полосе компаса (X.markers)');
+    // место нокаута: появилось, ушло, когда подошёл на 3 блока
+    X.emit('knockout', 40.2, 61, 40.7, 1);
+    ok(st.P.ext.map.death && st.P.ext.map.death.x === 40.2, 'нокаут — место на карте 💀');
+    X.update(1.1); ok(st.P.ext.map.death, 'далеко — место держится');
+    Object.assign(st.P, { x: 41, z: 41 }); X.update(1.1);
+    ok(!st.P.ext.map.death, 'подошёл (меньше 3 блоков) — место убрано');
+    // сохранение: точки и листы — в данных игрока (round-trip через cleanExt)
+    const P2 = mkPlayer(); P2.ext = E.host.cleanExt(JSON.parse(JSON.stringify(st.P.ext))); const S2 = mkSt({ P: P2 }); const X2 = KX.attach(S2.st, S2.g);
+    ok(S2.st.P.ext.map.wp.length === 64 && S2.st.P.ext.map.regions.length === 2, 'после загрузки — 64 точки и 2 места', S2.st.P.ext.map.regions);
+    ok(JSON.stringify(S2.st.P.ext).length < 32768, 'данные помощников ≤ 32 КБ (64 точки)', JSON.stringify(S2.st.P.ext).length); void X2;
   }
 
   console.log(`\nkubomir-qol-test: ${pass} ok, ${fail} fail`);
