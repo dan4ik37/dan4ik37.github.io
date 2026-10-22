@@ -186,22 +186,23 @@
   // ═══ Облик рода: 6 мест мембраны (id части, '' — пусто, '=' — продолжение части на 2 места), форма колонии, раскраска ═══
   const emptyDesign = () => ({ s: ['', '', '', '', '', ''], f: 'chain', k: { p: 5, a: '#4ade80', b: '#166534' } });
   const okColor = s => (typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s) ? s.toLowerCase() : null);
+  const hasOwn = (o, k) => typeof k === 'string' && !!o && Object.prototype.hasOwnProperty.call(o, k);   // только свои ключи каталога (не «constructor»)
   function skinOk(k, pig){
-    if (!k || typeof k !== 'object') return null;
+    if (!k || typeof k !== 'object' || typeof k.p !== 'number') return null;
     const p = k.p | 0, a = okColor(k.a), b = okColor(k.b);
-    if (!a || !b || p < 0 || p > (pig ? 9 : 7) || p !== +k.p) return null;
+    if (!a || !b || p < 0 || p > (pig ? 9 : 7) || p !== k.p) return null;
     return { p, a, b };
   }
   // Проверка облика: '' — ок, иначе причина. owned — купленные части {id: штук}
   function designWhy(d, owned){
     if (!d || typeof d !== 'object' || !Array.isArray(d.s) || d.s.length !== SLOTS) return 'args';
-    if (!FORMS[d.f]) return 'args';
+    if (!hasOwn(FORMS, d.f)) return 'args';
     const cov = [0, 0, 0, 0, 0, 0], cnt = {};
     for (let i = 0; i < SLOTS; i++) {
       const id = d.s[i];
       if (id === '' || id === '=') continue;
-      const P = CELL[id];
-      if (typeof id !== 'string' || !P || P.slots < 1) return 'args';
+      const P = hasOwn(CELL, id) ? CELL[id] : null;
+      if (!P || P.slots < 1) return 'args';
       for (let j = 1; j < P.slots; j++) { const q = (i + j) % SLOTS; if (d.s[q] !== '=' || cov[q]) return 'args'; cov[q] = 1; }
       cnt[id] = (cnt[id] | 0) + 1;
     }
@@ -337,7 +338,7 @@
     if (st.day !== today) { st.day = today; st.today = 0; st.raw = 0; }
     if (a === 'start') {
       const b = g.b;
-      if (typeof b !== 'string' || !D.biomes[b]) return fail(st, 'args');
+      if (!hasOwn(D.biomes, b)) return fail(st, 'args');
       if (!unlocked(D, st, b)) return fail(st, 'locked');
       st.tk = nonce ? nonce() : Math.random().toString(36).slice(2, 10).padEnd(8, '0'); st.tt = now; st.tb = b; st.tc = capacity(st.design);
       st.rev++;
@@ -370,8 +371,8 @@
       return { ok: true, st, got: { raw: c.raw, bonus: c.bonus, gain: c.gain, cut: c.cut, task, dur, up: st.stage > s0 ? st.stage : 0 } };
     }
     if (a === 'buy') {
-      const id = g.part, P = D.cell[id];
-      if (typeof id !== 'string' || !P) return fail(st, 'args');
+      const id = g.part, P = hasOwn(D.cell, id) ? D.cell[id] : null;
+      if (!P) return fail(st, 'args');
       if (st.stage < P.at) return fail(st, 'stage');
       if ((st.owned[id] | 0) >= P.max) return fail(st, 'max');
       if (st.dna < P.cost) return fail(st, 'dna', { need: P.cost });
@@ -418,7 +419,7 @@
       st.play = Math.min(t.play, I.play); st.col = Math.max(1, Math.min(t.col, I.col));
       st.finds = t.finds.slice(); st.rec = { ...t.rec };
       st.name = { ...t.name };
-      st.design = designWhy(t.design, own) === '' ? clone(t.design) : { ...emptyDesign(), f: t.design.f, k: t.design.k };
+      st.design = designWhy(t.design, own) === '' ? clone(t.design) : { ...emptyDesign(), f: t.design.f, k: skinOk(t.design.k, (own.pigment | 0) > 0) || emptyDesign().k };
       st.biomes = [];
       st.stage = Math.min(3, stageOf(D, { ...st, stage: 1 }));
       st.biomes = D.biomeIds.filter(b => t.biomes.includes(b) && D.biomes[b].at <= st.stage);   // побывал — только где уже можно
