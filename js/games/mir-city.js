@@ -1213,7 +1213,7 @@
         endTask();
         burst(S.P.ch, 'confetti');
         const g = r.got || {}, sk = E.ui.skill(A.D, A.st, R0.prof);
-        toast(`${fin?.done ? fin.done + ' ' : ''}+${g.net} 💵 · ${R0.name} ${'★'.repeat(sk.L + 1)}${sk.next ? ` ${sk.xp}/${sk.next}` : ''}`, true);
+        toast(`${fin?.done ? fin.done + ' ' : ''}+${g.net} 💵${g.rate < 100 ? ` (ставка города ${g.rate} %)` : ''} · ${R0.name} ${'★'.repeat(sk.L + 1)}${sk.next ? ` ${sk.xp}/${sk.next}` : ''}`, true);
         if (g.up) setTimeout(() => toast(`🎉 Новый уровень: ${E.ui.lvlName(g.lvl)} — зарплата выше!`, true), 1200);
         if (g.tired && !C.tiredHint) { C.tiredHint = true; setTimeout(() => toast('😮‍💨 Устал от этой работы: дальше — половина зарплаты. Смени профессию!'), 2400); }
         rt.sfx('coin');
@@ -1247,7 +1247,7 @@
       el.dataset.city = city; el.hidden = false;
       const txt = st ? esc(st.text) : C.run?.st === 'sent' ? 'сдаём работу…' : '⏳ работа готова — сдаём через <b class="mz-left"></b>';
       el.innerHTML = `<span>${R0.icon} <b>${esc(R0.name)}:</b> ${txt}</span><span class="mz-dist"></span><button type="button" data-mz="c:${city}:quit">Уйти с работы</button>`;
-      C.leftT = 0;
+      C.leftT = 0; C.distEl = null; C.distK = NaN;
     }
     // ── пожар (пожарный): огонь + дым + треск; тушишь — водяные пузыри ──
     const FX = S.FX;
@@ -1311,6 +1311,7 @@
     }
     // ── пожарный: распылитель, пока держишь E у огня ──
     let sprayE = null;
+    const WORK_POSE = ['cook', 'heal', 'fix'];
     function sprayTick(){
       const st = C.task?.[C.step], holding = !!(st?.fire && X.cur === jobItem && X.progress > 0);
       if (holding && !sprayE && FX) { const p = st.at; sprayE = FX.emitter({ kind: 'fountain', at: [p.x, .3, p.z], rate: 1.4, size: 1.2, color: '#e0f2fe', color2: '#7dd3fc' }); rt.setZX({ a: 'hose' }); }
@@ -1318,14 +1319,14 @@
       // во время удержания у плиты/кровати — поза работы
       const act = st && X.cur === jobItem && X.progress > 0 ? st.act : null;
       if (act && act !== 'hose' && rt.zx.a !== act) rt.setZX({ a: act });
-      else if (!act && st && rt.zx.a && ['cook', 'heal', 'fix'].includes(rt.zx.a)) rt.setZX({ a: st.carry && C.step > 0 ? 'carry' : null, w: st.carry && C.step > 0 ? st.carry : null });
+      else if (!act && st && rt.zx.a && WORK_POSE.includes(rt.zx.a)) rt.setZX({ a: st.carry && C.step > 0 ? 'carry' : null, w: st.carry && C.step > 0 ? st.carry : null });
     }
     // ═══ Окна: работа, семья, питомцы, магазины, банк, дома ═══
     const w1 = v => (Math.round(v * 10) / 10).toLocaleString('ru-RU');
     function jobBoard(){
       const cur = rt.zx.r, D = A?.D, st = A?.st, now0 = A ? A.clock() : 0, pc = A?.pub[city];
       if (A) A.pubGet(city).then(p => { onPub(p); });
-      const hire = !pc || (pc.hire !== false && !pc.frozen);
+      const hire = !pc || (pc.hire !== false && !pc.frozen), rt = A ? E.ui.rate(D, city, pc) : 100;
       const rows = [], rp = [];
       for (const [id, r] of Object.entries(ROLES)) {
         const btn = cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : (r.car && !root.D37E?.vehicle) || r.soon ? '<button type="button" disabled>Скоро</button>' : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.rp ? 'Играть' : 'Работать'}</button>`;
@@ -1333,13 +1334,13 @@
         const P = D.profs[r.prof]; if (!P || !(P.cities[city] || []).includes(r.place)) continue;
         const sk = E.ui.skill(D, st, r.prof), min = E.Rules.minS(D, r.prof, sk.L), tired = sk.today >= D.caps.full, out = sk.today >= D.caps.half;
         rows.push(`<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)} <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em></b><small>${esc(r.desc)}</small>`
-          + `<small class="mz-jobm">≈ ${w1(E.ui.wageNow(D, st, r.prof, city, now0))} 💵 за задание · от ${min} с · ${esc(sk.name)}${sk.next ? ` ${sk.xp}/${sk.next}` : ''}${sk.today ? ` · сегодня ${sk.today}` : ''}${out ? ' · 😴 на сегодня всё' : tired ? ' · 😮‍💨 половина зарплаты' : ''}</small>`
+          + `<small class="mz-jobm">≈ ${w1(E.ui.wageNow(D, st, r.prof, city, now0, pc))} 💵 за задание · от ${min} с · ${esc(sk.name)}${sk.next ? ` ${sk.xp}/${sk.next}` : ''}${sk.today ? ` · сегодня ${sk.today}` : ''}${out ? ' · 😴 на сегодня всё' : tired ? ' · 😮‍💨 половина зарплаты' : ''}</small>`
           + `<i class="mz-xpbar" style="--p:${sk.pct}%"></i></div>${btn}</div>`);
       }
       const note = A ? E.ui.trialNote() : 'Работы с зарплатой появятся, когда сайт обновится.';
       const wd = A && st.day === E.Rules.day(now0) ? st.wd : 0;
       H.panel(`<span class="wld-pe">🧰</span><b>Работа · ${esc(Z.name)}</b>`,
-        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? '🏙️ Город нанимает' : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${E.fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
+        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? (rt < 100 ? `🏙️ Город нанимает · казна бедная: ставка ${rt} %` : '🏙️ Город нанимает') : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${E.fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
         + `<div class="mz-jobs">${rows.join('')}</div>${rp.length ? `<div class="mz-eco-sec">🎭 Роли без зарплаты</div><div class="mz-jobs">${rp.join('')}</div>` : ''}`
         + (A ? '<p><small>Зарплата — денки 💵 (один кошелёк на оба города). Навык ★ растёт с каждым заданием — платят больше. После 40 заданий одной работы — половина зарплаты, после 60 — смени работу. Еда в магазинах даёт бонус к зарплате.</small></p>' : ''));
     }
@@ -1478,24 +1479,28 @@
       endTask();
       H.panel('<span class="wld-pe">⚖️</span><b>Дело №' + (100 + Math.floor(Math.random() * 900)) + '</b>', `<p>Подсудимый: ${pick(['перешёл дорогу на красный', 'шумел ночью', 'не вернул книгу в библиотеку', 'ограбил киоск с мороженым', 'парковался на газоне'])}. Ваше решение?</p><div class="wld-acts"><button type="button" data-mz="c:metro:verdict:free">Оправдать</button><button type="button" data-mz="c:metro:verdict:fine">Штраф</button><button type="button" data-mz="c:metro:verdict:jail">30 суток метлой подметать улицы</button></div>`);
     }
-    // ── питомец рядом с хозяином (свой и чужие — по zx.pt) ──
-    const petS = new Map();
-    function petsFrame(dt, t){
-      const all = [[S.key, rt.zx.pt, S.A.get(S.key)], ...[...S.players.values()].map(p => [p.key, p.zx?.pt, S.A.get(p.key)])];
-      const seen = new Set();
-      for (const [key, pt, a] of all) {
-        if (!pt || !PETS[pt] || !a || !a.ch?.root.visible) continue;
-        seen.add(key);
-        let s = petS.get(key);
-        if (!s) { s = { sp: new T.Sprite(rt.spriteMat(PETS[pt][0])), x: a.x, z: a.z }; s.sp.scale.setScalar(.8); R.scene.add(s.sp); petS.set(key, s); }
-        s.sp.material = rt.spriteMat(PETS[pt][0]);
-        const yaw = a.ch.yaw, tx = a.x - Math.sin(yaw) * 1.1 - Math.cos(yaw) * .8, tz = a.z - Math.cos(yaw) * 1.1 + Math.sin(yaw) * .8;
-        s.x += (tx - s.x) * Math.min(1, dt * 4); s.z += (tz - s.z) * Math.min(1, dt * 4);
-        const hop = Math.abs(Math.sin(t * 8 + key.length)) * (Math.hypot(tx - s.x, tz - s.z) > .3 ? .25 : .04);
-        s.sp.position.set(s.x, a.y + .45 + hop, s.z);
-      }
-      for (const [k, s] of petS) if (!seen.has(k)) { R.scene.remove(s.sp); petS.delete(k); }
+    // ── питомец рядом с хозяином (свой и чужие — по zx.pt). Рисует ОДИН город (первый построенный; был двойной — по спрайту в каждом
+    // городе на одном месте), без мусора за кадр: отметка кадра вместо нового Set и массивов ──
+    const petS = new Map(); let petStamp = 0;
+    function petOne(key, pt, a, dt, t){
+      if (!pt || !PETS[pt] || !a || !a.ch?.root.visible) return;
+      let s = petS.get(key);
+      if (!s) { s = { sp: new T.Sprite(rt.spriteMat(PETS[pt][0])), x: a.x, z: a.z, pt: '', seen: 0 }; s.sp.scale.setScalar(.8); R.scene.add(s.sp); petS.set(key, s); }
+      if (s.pt !== pt) { s.pt = pt; s.sp.material = rt.spriteMat(PETS[pt][0]); }
+      s.seen = petStamp;
+      const yaw = a.ch.yaw, tx = a.x - Math.sin(yaw) * 1.1 - Math.cos(yaw) * .8, tz = a.z - Math.cos(yaw) * 1.1 + Math.sin(yaw) * .8;
+      s.x += (tx - s.x) * Math.min(1, dt * 4); s.z += (tz - s.z) * Math.min(1, dt * 4);
+      const hop = Math.abs(Math.sin(t * 8 + key.length)) * (Math.hypot(tx - s.x, tz - s.z) > .3 ? .25 : .04);
+      s.sp.position.set(s.x, a.y + .45 + hop, s.z);
     }
+    function petsFrame(dt, t){
+      if (rt.petsBy && rt.petsBy !== city) return;
+      rt.petsBy = city; petStamp++;
+      petOne(S.key, rt.zx.pt, S.A.get(S.key), dt, t);
+      for (const p of S.players.values()) petOne(p.key, p.zx?.pt, S.A.get(p.key), dt, t);
+      if (petS.size) petS.forEach(petGone);
+    }
+    function petGone(s, k){ if (s.seen !== petStamp) { R.scene.remove(s.sp); petS.delete(k); } }
     // ── щелчки по кнопкам окон ──
     function click(a){
       if (!a.startsWith('c:' + city + ':')) return false;
@@ -1558,12 +1563,14 @@
         if (C.task) {
           C.run?.update(dt);
           sprayTick();
-          // метка — расстояние; работа готова — сколько ждать сдачи
-          const st = C.task[C.step], el = rt.q('.mz-task .mz-dist');
+          // метка — расстояние; работа готова — сколько ждать сдачи (подпись пишется, только когда поменялась: шаг логики — 60 раз в секунду)
+          let el = C.distEl; if (!el || !el.isConnected) { el = C.distEl = rt.q('.mz-task .mz-dist'); C.distK = NaN; }
+          const st = C.task[C.step];
           if (st?.at && el) {
             const d = Math.hypot(st.at.x - S.P.ch.x, st.at.z - S.P.ch.z), me = rt.veh?.me, inCar = !!st.drive && me?.seat === 0 && me.v.def.id === st.drive;
             const slow = inCar && Math.abs(me.v.spd || 0) < 3;   // такси: пассажир садится и выходит, только когда машина стоит
-            el.textContent = st.any ? (inCar ? '✅' : '') : d > 3 ? Math.round(d / 1.17) + ' м' : inCar && !slow ? '🛑 остановись' : '✋ здесь';
+            const k = st.any ? (inCar ? -1 : -2) : d > 3 ? Math.round(d / 1.17) : inCar && !slow ? -3 : -4;
+            if (k !== C.distK) { C.distK = k; el.textContent = k === -1 ? '✅' : k === -2 ? '' : k === -3 ? '🛑 остановись' : k === -4 ? '✋ здесь' : k + ' м'; }
             if ((st.walk && d < 2.5) || (inCar && (st.any || (d < 7 && slow)))) stepDone();   // такси: доехал и остановился (за рулём такси) — засчитано
           } else if (!st && C.srv && (C.leftT -= dt) <= 0) {
             C.leftT = .25;
@@ -1596,6 +1603,7 @@
       shown(on){ if (!on && C.fireOn) stopFire(false); },
       stop(){
         C.stopped = true; offState?.(); offPub?.();
+        if (rt.petsBy === city) rt.petsBy = null;
         endTask(true); mk.parent?.remove(mk); for (const s of petS.values()) R.scene.remove(s.sp); for (const sp of Object.values(marks)) R.scene.remove(sp);
         if (site) { for (const m of site.children) if (m.userData.mzOwn) m.geometry.dispose(); R.scene.remove(site); }
         for (const it of arrestItems.values()) X.remove(it); wEl.remove();

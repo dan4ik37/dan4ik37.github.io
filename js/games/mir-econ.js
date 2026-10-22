@@ -36,6 +36,10 @@
   const BUFF = { max: 20 };   // бонусы к зарплате складываются не больше чем до +20 %
   // Центробанк (раз в день, глобально): M — средний кошелёк игроков за 14 дней, цель T; k (‰) множит эмиссию
   const BANK = { T: 1500, k0: 1000, kMin: 500, kMax: 1500, hi2: 130, hi1: 110, lo1: 90, lo2: 70, d2: 50, d1: 20, drift: 10, mDays: 14, a7: [5, 2] };
+  // Ставка города: пока казна выше запаса хотя бы на days дневных бюджетов (бюджет — base + per × A7, без k) — зарплата полная; меньше —
+  // ниже, до min % (у запаса). Бедный город платит всем понемногу (и опыт идёт), а не первым — всё, остальным — «касса пуста»
+  // (city-sim: без ставки при 300 игроках у детей и «иногда» отказ в 33–39 % заданий, и A7 падал по спирали)
+  const RATE = { min: 10, days: 1 };
   const SITE = { units: 10, stages: 5 };   // общая стройка: units заданий строителей — этап, stages этапов — дом
   const KEEP = { ledger: 30, marks: 30, contrib: 56, batch: 5000 };   // хранение (дней) и сколько строк убирать за раз
   // Профессии P1 (ph — фаза). cities — где работают (здания K_BLD / M_BLD), age — с какого возраста (метро и так 16+), min — секунд на
@@ -65,7 +69,7 @@
     ['caps.wageDay', 0, 5000], ['caps.full', 1, 300], ['caps.half', 1, 300], ['caps.foodDay', 0, 100], ['caps.foodHold', 1, 50],
     ['cities.kids.tax.income', 0, 10], ['cities.kids.tax.sales', 0, 8], ['cities.metro.tax.income', 0, 15], ['cities.metro.tax.sales', 0, 12],
     ['cities.*.issue.base', 0, 100000], ['cities.*.issue.per', 0, 10000], ['cities.*.issue.cap', 0, 1000000], ['cities.*.reserve', 0, 1000000], ['cities.*.capDays', 1, 365],
-    ['bank.T', 100, 1000000], ['goods.*.ref', 1, 10000], ['site.units', 1, 1000],
+    ['bank.T', 100, 1000000], ['goods.*.ref', 1, 10000], ['site.units', 1, 1000], ['rate.min', 0, 100], ['rate.days', 1, 30],
   ];
   const pickKeys = (o, keys) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Object.fromEntries(keys.filter(f => v[f] != null).map(f => [f, v[f]]))]));
   // то, что знает сервер (city_defs0 в city.sql — генерируется из этого объекта)
@@ -74,7 +78,7 @@
     cities: pickKeys(CITIES, ['age', 'seed', 'reserve', 'capDays', 'tax', 'issue', 'shops']),
     profs: pickKeys(PROFS, ['ph', 'cities', 'age', 'kind', 'modes', 'min', 'wage', 'site']),
     goods: pickKeys(GOODS, ['cat', 'ref', 'buff']),
-    skill: { at: SKILL.at, mult: SKILL.mult, fast: SKILL.fast }, caps: CAPS, buff: BUFF, bank: BANK, site: SITE, keep: KEEP, cfgk: CFGK,
+    skill: { at: SKILL.at, mult: SKILL.mult, fast: SKILL.fast }, caps: CAPS, buff: BUFF, bank: BANK, rate: RATE, site: SITE, keep: KEEP, cfgk: CFGK,
   };
 
   const clone = o => (o == null ? o : JSON.parse(JSON.stringify(o)));
@@ -114,6 +118,13 @@
     // валовая зарплата в сотых: wage × навык% × (100 + бонус)% × ставка города%
     const g100 = (D, prof, L, buff, wk) => Math.floor(D.profs[prof].wage * D.skill.mult[L] * (100 + buff) * wk / 10000);
     const stage = (D, site) => Math.floor((site | 0) / D.site.units) % D.site.stages;
+    // ставка города, % (то же — city_rate_ в city.sql): (казна − запас) × 100 / (дней × бюджет дня), в коридоре min…100; без казны — 100
+    const rate = (D, city, cs) => {
+      const C = D.cities[city], R0 = D.rate || RATE;
+      if (!C || !cs || cs.treasury == null) return 100;
+      const b = Math.max(cs.bud | 0, C.issue.base | 0, 1) * R0.days;
+      return Math.max(R0.min, Math.min(100, Math.floor((cs.treasury - C.reserve) * 100 / b)));
+    };
     const fresh = () => ({ cash: 0, frac: 0, granted: false, skills: {}, xpd: {}, day: null, wd: 0, fd: 0, food: {}, buffs: {}, job: null, act_t: 0, act_n: 0, rev: 0 });
     const hex8 = rnd => { let s = ''; for (let i = 0; i < 8; i++) s += '0123456789abcdef'[Math.floor(rnd() * 16) & 15]; return s; };
     // Состояние из сервера / браузера → проверенное (мусор отбрасывается)
@@ -172,6 +183,8 @@
         if (room <= 0) return fail('day_cap', { cap: 'wage' });
         if (cs.frozen) return fail('frozen');
         let gr = g100(D, J.prof, L, buffP(D, st, now), cs.wage_k == null ? 100 : cs.wage_k);
+        const rt = rate(D, J.city, cs);
+        gr = Math.floor(gr * rt / 100);
         if (nT >= D.caps.full) gr = Math.floor(gr / 2);
         gr = Math.min(gr, room);
         const tx = Math.floor(gr * C.tax.income / 100), f = st.frac + gr - tx, net = Math.floor(f / 100);
@@ -182,7 +195,7 @@
         if (P.site) cs.site = (cs.site | 0) + 1;
         const L2 = lvl(D, xp + 1);
         newTask(); st.rev++;
-        return { ok: true, st, cs, got: { net, g100: gr, t100: tx, xp: 1, lvl: L2, up: L2 > L, tired: nT + 1 >= D.caps.full } };
+        return { ok: true, st, cs, got: { net, g100: gr, t100: tx, xp: 1, lvl: L2, up: L2 > L, tired: nT + 1 >= D.caps.full, rate: rt } };
       }
       if (a === 'buy') {
         const C = D.cities[g.city]; if (!C) return fail('city');
@@ -222,7 +235,7 @@
     const budget = (D, city, a7) => { const I = D.cities[city].issue; return Math.min(I.cap, I.base + I.per * a7); };
     const issue = (D, city, a7, k) => Math.floor(budget(D, city, a7) * k / 1000);
     const capT = (D, city, a7) => D.cities[city].capDays * budget(D, city, a7);
-    return { day, lvl, minS, price, buffP, g100, stage, fresh, sanitize, act, kNext, budget, issue, capT };
+    return { day, lvl, minS, price, buffP, g100, stage, rate, fresh, sanitize, act, kNext, budget, issue, capT };
   })();
 
   // ═══ Случайность от номера задания: у одного номера — одни и те же цели (после перезагрузки — то же задание) ═══
@@ -374,9 +387,12 @@
       const xp = st.skills?.[prof] | 0, L = Rules.lvl(D, xp), next = D.skill.at[L + 1];
       return { xp, L, name: SKILL.names[L], next: next ?? null, pct: next ? Math.round((xp - D.skill.at[L]) / (next - D.skill.at[L]) * 100) : 100, today: st.day === Rules.day(api.clock()) ? st.xpd?.[prof] | 0 : 0 };
     },
-    wageNow(D, st, prof, city, now){
+    // ставка города по последним данным города (pc — city_public; пробный режим и нет данных — 100)
+    rate: (D, city, pc) => (pc && pc.treasury != null ? Rules.rate(D, city, pc) : 100),
+    wageNow(D, st, prof, city, now, pc){
       const P = D.profs[prof]; if (!P) return 0;
-      const L = Rules.lvl(D, st.skills?.[prof] | 0), g = Rules.g100(D, prof, L, Rules.buffP(D, st, now), 100), C = D.cities[city];
+      const L = Rules.lvl(D, st.skills?.[prof] | 0), C = D.cities[city];
+      const g0 = Rules.g100(D, prof, L, Rules.buffP(D, st, now), pc?.wage_k ?? 100), g = Math.floor(g0 * ui.rate(D, city, pc) / 100);
       return (g - Math.floor(g * (C?.tax?.income || 0) / 100)) / 100;
     },
     trialNote(){
@@ -434,7 +450,7 @@
   }
 
   root.MirEcon = {
-    V, START, CITIES, PROFS, GOODS, SKILL, CAPS, BUFF, BANK, SITE, KEEP, CFGK, SERVER,
+    V, START, CITIES, PROFS, GOODS, SKILL, CAPS, BUFF, BANK, RATE, SITE, KEEP, CFGK, SERVER,
     Rules, TaskRunner, rng, merge, cfgOk, api, ui, WHY, why, fmt, fmt100, bankApp,
     get sv(){ return api.mode === 'server' ? api.sv : 0; },
     get D(){ return api.D; },

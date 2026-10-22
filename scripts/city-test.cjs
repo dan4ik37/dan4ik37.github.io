@@ -119,9 +119,17 @@ const est = {};
   for (let i = 0; i < 8; i++) { const x = RU.act(D2, s2, 'task', { n: s2.job.n }, now + 30 * (i + 1), { treasury: 1e6, frozen: false, wage_k: 100 }); if (x.ok) { s2 = x.st; n++; } else { r = x; break; } }
   ok(n === 4 && s2.wd === 40000 && r.reason === 'day_cap' && r.cap === 'wage', 'зарплата в день — 400 💵 валовых, дальше — отказ', { n, wd: s2.wd, r: r.reason });
   ok(RU.act(D2, s2, 'task', { n: s2.job.n }, now + 86400, { treasury: 1e6, frozen: false, wage_k: 100 }).ok, 'на следующий день — снова можно');
-  // касса пуста, пауза
+  // ставка города, «касса пуста», пауза
   const s3 = RU.act(D, RU.fresh(), 'job', { city: 'kids', prof: 'fire', place: 'k_fire' }, now, cs()).st;
-  ok(RU.act(D, s3, 'task', { n: s3.job.n }, now + 30, { treasury: 304, frozen: false, wage_k: 100 }).reason === 'no_slots', 'казна у запаса — «касса пуста»');
+  ok(RU.rate(D, 'kids', null) === 100 && RU.rate(D, 'kids', { treasury: null }) === 100 && RU.rate(D, 'kids', { treasury: 600, bud: 300 }) === 100 && RU.rate(D, 'kids', { treasury: 450, bud: 300 }) === 50
+    && RU.rate(D, 'kids', { treasury: 300, bud: 900 }) === 10 && RU.rate(D, 'kids', { treasury: 0, bud: 0 }) === 10 && RU.rate(D, 'kids', { treasury: 1200, bud: 1800 }) === 50 && RU.rate(D, 'kids', { treasury: 450, bud: 0 }) === 50,
+    'ставка города: полная, если казна выше запаса на бюджет дня; дальше линейно до 10 % у запаса; бюджет — не меньше базы');
+  let x3 = RU.act(D, s3, 'task', { n: s3.job.n }, now + 30, { treasury: 450, bud: 300, frozen: false, wage_k: 100 });
+  ok(x3.ok && x3.got.rate === 50 && x3.got.g100 === 300 && x3.st.skills.fire === 1, 'казна на полбюджета выше запаса: ставка 50 % — 3,00 за задание, опыт идёт', x3.got);
+  ok(RU.act(D, s3, 'task', { n: s3.job.n }, now + 30, { treasury: 300, bud: 300, frozen: false, wage_k: 100 }).ok, 'у самого запаса — 10 %: 0,57 копится в «копейках»');
+  ok(RU.act(D, { ...s3, frac: 99 }, 'task', { n: s3.job.n }, now + 30, { treasury: 300, bud: 300, frozen: false, wage_k: 100 }).reason === 'no_slots', 'казна = запас и «копейки» дали денку — «касса пуста»');
+  ok(M.ui.wageNow(D, RU.fresh(), 'cook', 'kids', now) === 5.7 && M.ui.wageNow(D, RU.fresh(), 'cook', 'kids', now, { treasury: 450, bud: 300 }) === 2.85, 'щит «Работа»: зарплата — по ставке города (5,70 → 2,85 при 50 %)');
+  ok(M.cfgOk(D, 'rate.min', 0) && M.cfgOk(D, 'rate.days', 3) && !M.cfgOk(D, 'rate.days', 0) && !M.cfgOk(D, 'rate.min', 101), 'ставка — в белом списке настроек');
   ok(RU.act(D, s3, 'task', { n: s3.job.n }, now + 30, { treasury: 5000, frozen: true, wage_k: 100 }).reason === 'frozen', 'пауза города');
   // еда: больший бонус не перебивается меньшим, кончается
   let s4 = RU.act(D, RU.fresh(), 'buy', { city: 'kids', place: 'k_bake', item: 'pie', qty: 2 }, now, cs()).st;

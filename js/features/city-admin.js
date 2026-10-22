@@ -68,11 +68,11 @@
   const row = (c, d, s) => ({
     d, c, grant: s.mint?.grant | 0, issue: s.mint?.issue | 0, adm: s.mint?.adm | 0, cap: s.burn?.cap | 0, admB: s.burn?.adm | 0, gone: s.burn?.gone | 0,
     wage: s.tr?.wage | 0, tax: Math.round((s.tr?.t100 | 0) / 100), food: s.tr?.food | 0, tasks: s.n?.tasks | 0, people: s.people ?? '', caphit: s.n?.caphit | 0, tired: s.n?.tired | 0,
-    noslot: s.n?.noslot | 0, soon: s.n?.soon | 0, nonce: s.n?.nonce | 0, treasury: s.treasury ?? '', M: s.M ?? '', T: s.T ?? '', k: s.k ?? '', a7: s.a7 ?? '',
+    noslot: s.n?.noslot | 0, low: s.n?.low | 0, soon: s.n?.soon | 0, nonce: s.n?.nonce | 0, treasury: s.treasury ?? '', M: s.M ?? '', T: s.T ?? '', k: s.k ?? '', a7: s.a7 ?? '',
     top: Object.entries(s.pn || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([p, v]) => `${p} ${v}`).join(', '),
   });
   const COLS = [['d', 'Дата'], ['c', 'Город'], ['grant', '🎁 подарки'], ['issue', '🏦 эмиссия'], ['adm', '🛠 +админ'], ['cap', '🔥 сверх казны'], ['admB', '🛠 −админ'], ['gone', '🗑 удалённые'],
-    ['wage', '🧰 зарплаты'], ['tax', 'налог'], ['food', '🍽 еда'], ['tasks', 'заданий'], ['people', 'работали'], ['caphit', 'упёрлись в 400'], ['tired', 'устали (60)'], ['noslot', 'касса пуста'],
+    ['wage', '🧰 зарплаты'], ['tax', 'налог'], ['food', '🍽 еда'], ['tasks', 'заданий'], ['people', 'работали'], ['caphit', 'упёрлись в 400'], ['tired', 'устали (60)'], ['noslot', 'касса пуста'], ['low', 'по сниженной ставке'],
     ['soon', 'рано (too_soon)'], ['nonce', 'чужой номер'], ['treasury', 'казна'], ['M', 'M'], ['T', 'T'], ['k', 'k ‰'], ['a7', 'A7'], ['top', 'топ профессий']];
   function rowsOf(L) {
     const out = [];
@@ -96,7 +96,7 @@
     const cards = h('div', 'cea-sum');
     const B = L.bank || {}, pct = B.T ? Math.round((B.M || 0) * 100 / B.T) : 0;
     for (const [c, x] of Object.entries(L.cities || {})) {
-      cards.appendChild(h('div', 'cea-card', null, [h('b', null, fmt(x.treasury) + ' 💵'), h('span', null, `${C_N[c] || c}: казна${x.frozen ? ' · ⏸ пауза' : ''} (запас ${fmt(x.reserve)})`)]));
+      cards.appendChild(h('div', 'cea-card', null, [h('b', null, fmt(x.treasury) + ' 💵'), h('span', null, `${C_N[c] || c}: казна${x.frozen ? ' · ⏸ пауза' : ''} (запас ${fmt(x.reserve)}) · ставка ${x.rate ?? 100} %`)]));
       cards.appendChild(h('div', 'cea-card', null, [h('b', null, '+' + fmt(x.minted) + ' / −' + fmt(x.burned)), h('span', null, `${C_N[c] || c}: всего выпущено / уничтожено`)]));
     }
     cards.appendChild(h('div', 'cea-card' + (pct > 130 || pct < 70 ? ' bad' : ' ok'), null, [h('b', null, `${fmt(B.M)} / ${fmt(B.T)}`), h('span', null, `M (средний кошелёк за 14 дней) / цель T — ${pct} % · игроков ${fmt(B.actives)}`)]));
@@ -112,7 +112,7 @@
       const t = x.today || {}, pn = Object.entries(t.pn || {}).sort((a, b) => b[1] - a[1]), fs = Object.entries(t.fs || {}).sort((a, b) => b[1] - a[1]);
       wrap.appendChild(h('div', 'cea-note', null, [h('b', null, `${C_N[c] || c}, сегодня: `),
         document.createTextNode(`заданий ${fmt(t.n?.tasks)}, зарплаты ${fmt(t.tr?.wage)} 💵 (налог ${fmt(Math.round((t.tr?.t100 | 0) / 100))}), еда ${fmt(t.tr?.food)}, подарки ${fmt(t.mint?.grant)}, эмиссия ${fmt(t.mint?.issue)}; ` +
-          `упёрлись в дневной лимит — ${fmt(t.n?.caphit)}, «касса пуста» — ${fmt(t.n?.noslot)}, «рано» — ${fmt(t.n?.soon)}. ` +
+          `упёрлись в дневной лимит — ${fmt(t.n?.caphit)}, «касса пуста» — ${fmt(t.n?.noslot)}, по сниженной ставке (бедная казна) — ${fmt(t.n?.low)}, «рано» — ${fmt(t.n?.soon)}. ` +
           (pn.length ? 'Больше всего платят: ' + pn.slice(0, 5).map(([p, v]) => `${PN(p)} ${fmt(v)} 💵 (${fmt(t.pt?.[p])} зад.)`).join(', ') + '. ' : '') +
           (fs.length ? 'Еда: ' + fs.slice(0, 5).map(([g, v]) => `${GN(g)} ×${v}`).join(', ') + '.' : ''))]));
     }
@@ -160,6 +160,8 @@
     if (k === 'bank.T') return '🏦 Цель центробанка T (средний кошелёк), 💵';
     if (p[0] === 'goods') return `${GN(p[1])}: опорная цена (в магазине ×1,25)`;
     if (k === 'site.units') return '🏗️ Заданий строителей на этап стройки';
+    if (k === 'rate.min') return '📉 Ставка бедного города — не ниже, % (у запаса казны)';
+    if (k === 'rate.days') return '📉 Полная зарплата, пока казна выше запаса на N дней бюджета';
     return k;
   };
   function drawCfg() {

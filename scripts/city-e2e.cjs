@@ -140,12 +140,18 @@ const U1 = U('1'), U2 = U('2');
       const p = await page(U1, 412, 915, true);
       ok(await openWorld(p), 'мир открылся (perf)');
       await p.send('Emulation.setCPUThrottlingRate', { rate: +RATE || 4 });
+      // своё время модуля города (update + frame обоих городов) — точнее кадра целиком, когда машина занята другими процессами
       await p.ev(`(() => { const A = window.D37Age; if (A) { A.known = () => true; A.canOpen = () => true; A.allows = () => true; A.group = () => 'adult'; }
         const S = ${W}, R = S.R; S.fixedTime = 13;
-        window.__reset = () => { const T = R.stats; T.frames = T.sumDt = T.maxDt = T.sumCpu = T.maxCpu = T.sumR = 0; };
-        window.__snap = () => { const T = R.stats, n = Math.max(1, T.frames); return { fps: +(1000 / (T.sumDt / n)).toFixed(1), cpu: +(T.sumCpu / n).toFixed(2), cpuMax: +T.maxCpu.toFixed(1), calls: T.calls, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null }; };
+        window.__cm = { t: 0, n: 0, max: 0 };
+        window.__wrapCity = () => { for (const c of ['kids', 'metro']) { const m = ${W}.zones?.city?.[c]?.mod; if (!m || m.__w) continue; m.__w = 1;
+          for (const k of ['update', 'frame']) { const f = m[k]; m[k] = function(){ const t0 = performance.now(); try { return f.apply(this, arguments); } finally { const d = performance.now() - t0; __cm.t += d; if (k === 'update') __cm.n++; if (d > __cm.max) __cm.max = d; } }; } } };
+        __wrapCity();
+        window.__reset = () => { const T = R.stats; T.frames = T.sumDt = T.maxDt = T.sumCpu = T.maxCpu = T.sumR = 0; __cm.t = __cm.n = __cm.max = 0; };
+        window.__snap = () => { const T = R.stats, n = Math.max(1, T.frames); return { fps: +(1000 / (T.sumDt / n)).toFixed(1), cpu: +(T.sumCpu / n).toFixed(2), cpuMax: +T.maxCpu.toFixed(1), calls: T.calls, city: +(__cm.t / n).toFixed(3), steps: __cm.n, cityMax: +__cm.max.toFixed(2), q: window.D37E?.gfxQuality?.(), guard: (() => { try { return localStorage.getItem('d37_gfx_guard') || ''; } catch (e) { return '?'; } })().slice(0, 80), heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null }; };
         return true; })()`);
-      const at = async (name, js, ms = 8000, settle = 2500) => { await p.ev(`(async () => { ${js}; await new Promise(r => setTimeout(r, ${settle})); __reset(); })()`); await sleep(ms); const s = await p.ev('__snap()'); console.log(name.padEnd(34), JSON.stringify(s)); return s; };
+      const waitCity = `for (let i = 0; i < 120 && !${W}.zones?.city?.kids?.mod; i++) await new Promise(r => setTimeout(r, 250)); __wrapCity()`;
+      const at = async (name, js, ms = 8000, settle = 2500) => { await p.ev(`(async () => { ${waitCity}; ${js}; await new Promise(r => setTimeout(r, ${settle})); __wrapCity(); __reset(); })()`); await sleep(ms); const s = await p.ev('__snap()'); console.log(name.padEnd(34), JSON.stringify(s)); return s; };
       const r1 = await at('Солнечный городок', ``, 8000, 6000);
       const working = await p.ev(`!!window.MirEcon`);
       const r2 = await at('Солнечный городок: работа (пекарь)', working ? `${Z}.city.kids.mod._.setJob('baker'); await new Promise(r => setTimeout(r, 1500))` : `${Z}.city.kids.mod._.setJob('baker')`, 8000, 2500);

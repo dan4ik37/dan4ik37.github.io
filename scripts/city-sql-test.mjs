@@ -210,7 +210,14 @@ ok((await q1(`public.city_admin('grant', ${J({ city: 'kids', n: -99999 })})`)).r
 await as(A); st = await q1('public.city_state()'); n = st.st.job.n;
 await setNow(NOW + 30);
 r = await act('task', { n });
-ok(r.reason === 'no_slots', 'казна у запаса (300) — «касса пуста»', r);
+ok(r.ok && r.got.rate === 10 && r.got.g100 === 60 && r.c?.rate === 10, 'бедная казна (302 при запасе 300): ставка города 10 % — 0,60 💵, опыт идёт', r.got);
+// у самого запаса и «копейки» вот-вот станут денкой — отказ
+await as(ADM); pk = await q1(`public.city_public('kids')`);
+await q1(`public.city_admin('grant', ${J({ city: 'kids', n: -(pk.treasury - 300), why: 'тест' })})`);
+await su(); await db.exec(`update public.city_people set frac = 99 where user_id = '${A}'`);
+await as(A); n = r.st.job.n; await setNow(NOW + 60);
+r = await act('task', { n });
+ok(r.reason === 'no_slots', 'казна = запас (300) — «касса пуста»', r);
 await as(ADM); await q1(`public.city_admin('grant', ${J({ city: 'kids', n: 2000, why: 'тест' })})`);
 await q1(`public.city_admin('freeze', ${J({ city: 'kids', on: true })})`);
 await as(A); ok((await act('task', { n })).reason === 'frozen' && (await act('buy', { city: 'kids', place: 'k_bake', item: 'bun' })).reason === 'frozen', 'город на паузе — работа и магазины закрыты');
@@ -289,7 +296,7 @@ s = await sum(); ok(s.drift === 0, 'удалили аккаунт — денки
   const rnd = (x => () => (x = (x * 16807) % 2147483647) / 2147483647)(37);
   const P = { kids: Object.keys(D.profs).filter(p => D.profs[p].cities.kids), metro: Object.keys(D.profs).filter(p => D.profs[p].cities.metro) };
   const shops = c => Object.entries(D.cities[c].shops).flatMap(([pl, it]) => it.map(i => [pl, i]));
-  let mism = 0, steps = 0, oks = 0, reasons = {};
+  let mism = 0, steps = 0, oks = 0, low = 0, reasons = {};
   for (const u of [A, B]) {
     await as(u); let js = RU.sanitize((await q1('public.city_state()')).st);
     let t = NOW + 30 * 86400 + (u === B ? 7 : 0);
@@ -306,21 +313,27 @@ s = await sum(); ok(s.drift === 0, 'удалили аккаунт — денки
       // город для JS — как в базе в этот момент (после нового дня)
       const cityOf = a === 'task' ? js.job?.city : g.city;
       await su(); if (cityOf) await q1(`(select 1 from public.city_lock_('${cityOf}'))`).catch(() => 0);
-      const crow = cityOf ? (await rows(`select treasury, frozen, wage_k, site from public.cities where id = '${cityOf}'`))[0] : null;
+      // иногда казна у самого запаса — проверяется ставка города (сдвиг — через выпущено / уничтожено: дрейф остаётся 0)
+      if (cityOf && rnd() < .25) {
+        const want = D.cities[cityOf].reserve + Math.floor(rnd() * 1.3 * (D.cities[cityOf].issue.base + 200));
+        await db.exec(`update public.cities set minted = minted + greatest(0, ${want} - treasury), burned = burned + greatest(0, treasury - ${want}), treasury = ${want} where id = '${cityOf}'`);
+      }
+      const crow = cityOf ? (await rows(`select treasury, frozen, wage_k, site, bud from public.cities where id = '${cityOf}'`))[0] : null;
       await as(u);
-      const R1 = RU.act(D, js, a, g, t, crow ? { treasury: +crow.treasury, frozen: crow.frozen, wage_k: crow.wage_k, site: crow.site } : null, rnd);
+      const R1 = RU.act(D, js, a, g, t, crow ? { treasury: +crow.treasury, frozen: crow.frozen, wage_k: crow.wage_k, site: crow.site, bud: +crow.bud } : null, rnd);
       const R2 = await act(a, g);
       steps++;
       const s2 = R2.st || (await q1('public.city_state()')).st;
       const a1 = { ...R1.st, job: R1.st.job && { ...R1.st.job, n: 0, k: 0 } }, a2 = { ...s2, job: s2.job && { ...s2.job, n: 0, k: 0 } };
-      if (R1.ok !== R2.ok || (R1.reason || null) !== (R2.reason || null) || !deepEq(a1, a2) || (R1.ok && a === 'task' && R1.got.net !== R2.got.net)) {
+      if (R1.ok !== R2.ok || (R1.reason || null) !== (R2.reason || null) || !deepEq(a1, a2) || (R1.ok && a === 'task' && (R1.got.net !== R2.got.net || R1.got.rate !== R2.got.rate || R1.got.g100 !== R2.got.g100))) {
         if (mism++ < 4) console.log('  расхождение', u.slice(0, 2), a, JSON.stringify(g), { js: [R1.ok, R1.reason, R1.got], sql: [R2.ok, R2.reason, R2.got], a1, a2 });
       }
-      if (R2.ok) oks++; else reasons[R2.reason] = (reasons[R2.reason] || 0) + 1;
+      if (R2.ok) { oks++; if (a === 'task' && R2.got.rate < 100) low++; } else reasons[R2.reason] = (reasons[R2.reason] || 0) + 1;
       js = RU.sanitize(s2);   // номер и цель задания — случайные у сервера: дальше идём от его состояния
     }
   }
-  console.log(`  JS = SQL: ${steps} случайных ходов, успешных ${oks}, расхождений ${mism}; отказы ${JSON.stringify(reasons)}`);
+  console.log(`  JS = SQL: ${steps} случайных ходов, успешных ${oks} (по сниженной ставке ${low}), расхождений ${mism}; отказы ${JSON.stringify(reasons)}`);
+  ok(low > 10, 'ставка города в случайных ходах проверена (зарплаты по сниженной ставке)', low);
   ok(mism === 0, `JS = SQL на ${steps} случайных ходах (успешных ${oks}; отказы ${JSON.stringify(reasons)})`, mism);
   s = await sum(); ok(s.drift === 0, 'после случайных ходов — дрейф 0', s);
 }
@@ -334,6 +347,36 @@ s = await sum(); ok(s.drift === 0, 'удалили аккаунт — денки
   const after = await rows(`select id, treasury, minted, burned, site from public.cities order by id`), cashA = await q1(`(select sum(cash) from public.city_people)`);
   ok(deepEq(before, after) && cashA === cashB, 'повторный запуск city.sql поверх данных — казна и кошельки на месте');
   s = await sum(); ok(s.drift === 0, 'и дрейф 0');
+}
+
+// ═══ 12б. A7 — жители по браузерам (двойники одного браузера считаются за одного), бюджет дня и ставка — в строке города ═══
+{
+  await su();
+  const X = U('1', 1), Y = U('1', 2), Z = U('1', 3);
+  for (const [id, nk] of [[X, 'Икс'], [Y, 'Игрек'], [Z, 'Зет']]) await db.exec(`insert into auth.users values ('${id}'); insert into public.profiles values ('${id}', '${nk}', 'user'); insert into public.test_age values ('${id}', 'adult');`);
+  await db.exec(`insert into public.city_marks (user_id, kind, hash) values ('${X}', 'dev', 'h-shared'), ('${Y}', 'dev', 'h-shared'), ('${Z}', 'dev', 'h-zed')`);
+  const cday = await q1(`(select day::text from public.cities where id = 'kids')`);
+  // по 5 заданий в 2 дня из последних 7 — у всех троих (строки журнала как у зарплат)
+  for (const u of [X, Y, Z]) for (const back of [1, 2]) for (let i = 0; i < 5; i++)
+    await db.exec(`insert into public.city_ledger (user_id, city, amount, bal, kind, ref, at, day) values ('${u}', 'kids', 0, 0, 'wage', 'cook', 0, '${cday}'::date - ${back - 1})`);
+  await setNow(NOW + 86400); await as(null); pk = await q1(`public.city_public('kids')`);
+  await su();
+  const nd = await q1(`(select day::text from public.cities where id = 'kids')`);
+  const W = await rows(`select user_id::text u, day::text d, count(*)::int n from public.city_ledger where city = 'kids' and kind = 'wage' and day >= '${nd}'::date - 7 and day < '${nd}'::date group by 1, 2`);
+  const mk = new Map((await rows(`select user_id::text u, min(hash) h from public.city_marks where kind = 'dev' group by 1`)).map(x => [x.u, x.h]));
+  const days = new Map(); for (const w of W) if (w.n >= D.bank.a7[0]) days.set(w.u, (days.get(w.u) || 0) + 1);
+  const q = [...days].filter(([, v]) => v >= D.bank.a7[1]).map(([u]) => u), a7 = new Set(q.map(u => mk.get(u) || u)).size;
+  const bud = await q1(`(select bud from public.cities where id = 'kids')`);
+  ok(q.includes(X) && q.includes(Y) && q.includes(Z) && a7 === q.length - 1, 'A7: X и Y — один браузер → один житель', { q: q.length, a7 });
+  ok(+bud === RU.budget(D, 'kids', a7) && pk.bud === +bud, `бюджет дня в строке города: ${bud} = base + per × A7 (${a7})`, { bud, a7 });
+  ok(pk.rate === RU.rate(D, 'kids', { treasury: pk.treasury, bud: +bud }), 'ставка в city_public = Rules.rate', { rate: pk.rate, tr: pk.treasury });
+  // ставка на сетке: SQL city_rate_ = Rules.rate
+  let bad = 0;
+  for (const tr of [0, 299, 300, 301, 330, 450, 600, 900, 1200, 5000]) for (const bd of [0, 300, 420, 900, 6000]) {
+    const sq = await q1(`public.city_rate_(public.city_defs(), 'kids', ${tr}, ${bd})`), js = RU.rate(D, 'kids', { treasury: tr, bud: bd });
+    if (sq !== js) { bad++; if (bad < 4) console.log('  ставка: расхождение', { tr, bd, sq, js }); }
+  }
+  ok(bad === 0, 'ставка города: SQL = JS на сетке казна × бюджет', bad);
 }
 
 // ═══ 13. Время и размер на «живом» объёме: 3000 жителей, 120 000 строк журнала ═══

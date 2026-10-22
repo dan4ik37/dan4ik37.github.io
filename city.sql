@@ -36,6 +36,7 @@ create table if not exists public.cities (
   treasury bigint not null default 0 check (treasury >= 0),
   wage_k int not null default 100,                  -- ставка зарплат города, % (мэр — P6)
   site int not null default 0,                      -- общая стройка: сколько заданий строителей сделано
+  bud bigint not null default 0,                    -- бюджет дня (base + per × A7, без k) — для ставки города и потолка казны
   frozen boolean not null default false,            -- пауза (админ): работы и магазины закрыты
   minted bigint not null default 0,                 -- всего выпущено в этот город (стартовая казна, подарки новичкам, эмиссия, админ)
   burned bigint not null default 0,                 -- всего уничтожено (сверх потолка казны, админ, удалённые аккаунты)
@@ -97,6 +98,7 @@ create table if not exists public.city_days (
   city text not null, day date not null, stats jsonb not null default '{}'::jsonb,
   primary key (city, day)
 );
+alter table public.cities add column if not exists bud bigint not null default 0;
 -- снаружи не читается и не пишется ничего: только функции ниже
 alter table public.city_cfg enable row level security;
 alter table public.city_bank enable row level security;
@@ -119,7 +121,7 @@ $$;
 -- Каталог — КАК MirEcon.SERVER в js/games/mir-econ.js. Собирает node scripts/gen-city-defs.cjs (--check — сверка)
 -- gen:city-defs:begin
 create or replace function public.city_defs0() returns jsonb language sql immutable as $$
-  select '{"v":1,"start":50,"cities":{"kids":{"age":0,"seed":5000,"reserve":300,"capDays":30,"tax":{"income":5,"sales":3},"issue":{"base":300,"per":120,"cap":6000},"shops":{"k_bake":["bun","pie"],"k_ice":["icecream"]}},"metro":{"age":16,"seed":10000,"reserve":500,"capDays":30,"tax":{"income":10,"sales":5},"issue":{"base":500,"per":160,"cap":12000},"shops":{"m_shop":["apple","juice","burger"],"m_rest":["pizza","soup","coffee"],"m_mall":["burger","pizza","juice","coffee","icecream"]}}},"profs":{"cook":{"ph":1,"cities":{"kids":["k_bake"],"metro":["m_rest"]},"age":0,"kind":"svc","modes":["city"],"min":20,"wage":6},"seller":{"ph":1,"cities":{"kids":["k_ice"],"metro":["m_shop","m_bank"]},"age":0,"kind":"svc","modes":["city"],"min":15,"wage":5},"doctor":{"ph":1,"cities":{"kids":["k_hosp"],"metro":["m_hosp"]},"age":0,"kind":"svc","modes":["city"],"min":20,"wage":6},"fire":{"ph":1,"cities":{"kids":["k_fire"],"metro":["m_fire"]},"age":0,"kind":"svc","modes":["city"],"min":25,"wage":6},"builder":{"ph":1,"cities":{"kids":["k_site"],"metro":["m_lot1"]},"age":0,"kind":"build","modes":["city"],"min":20,"wage":7,"site":1},"teacher":{"ph":1,"cities":{"kids":["k_school"],"metro":["m_city3"]},"age":0,"kind":"svc","modes":["city"],"min":20,"wage":6},"police":{"ph":1,"cities":{"metro":["m_police"]},"age":16,"kind":"svc","modes":["city"],"min":25,"wage":7},"driver":{"ph":1,"cities":{"metro":["m_taxi"]},"age":16,"kind":"svc","modes":["city"],"min":40,"wage":10},"mech":{"ph":1,"cities":{"kids":["k_play"],"metro":["m_gas"]},"age":0,"kind":"svc","modes":["city"],"min":15,"wage":6}},"goods":{"bun":{"cat":"food","ref":4,"buff":[5,30]},"pie":{"cat":"food","ref":12,"buff":[10,60]},"icecream":{"cat":"food","ref":4,"buff":[5,30]},"apple":{"cat":"food","ref":3,"buff":[3,20]},"juice":{"cat":"food","ref":4,"buff":[5,30]},"coffee":{"cat":"food","ref":6,"buff":[5,30]},"burger":{"cat":"food","ref":10,"buff":[10,60]},"pizza":{"cat":"food","ref":12,"buff":[10,60]},"soup":{"cat":"food","ref":10,"buff":[10,60]}},"skill":{"at":[0,30,150,500,1500],"mult":[100,110,125,140,160],"fast":[100,95,90,85,80]},"caps":{"full":40,"half":60,"wageDay":400,"foodDay":20,"foodHold":10,"actMin":60,"qtyMax":5},"buff":{"max":20},"bank":{"T":1500,"k0":1000,"kMin":500,"kMax":1500,"hi2":130,"hi1":110,"lo1":90,"lo2":70,"d2":50,"d1":20,"drift":10,"mDays":14,"a7":[5,2]},"site":{"units":10,"stages":5},"keep":{"ledger":30,"marks":30,"contrib":56,"batch":5000},"cfgk":[["start",0,1000],["profs.*.wage",1,100],["profs.*.min",5,600],["caps.wageDay",0,5000],["caps.full",1,300],["caps.half",1,300],["caps.foodDay",0,100],["caps.foodHold",1,50],["cities.kids.tax.income",0,10],["cities.kids.tax.sales",0,8],["cities.metro.tax.income",0,15],["cities.metro.tax.sales",0,12],["cities.*.issue.base",0,100000],["cities.*.issue.per",0,10000],["cities.*.issue.cap",0,1000000],["cities.*.reserve",0,1000000],["cities.*.capDays",1,365],["bank.T",100,1000000],["goods.*.ref",1,10000],["site.units",1,1000]]}'::jsonb
+  select '{"v":1,"start":50,"cities":{"kids":{"age":0,"seed":5000,"reserve":300,"capDays":30,"tax":{"income":5,"sales":3},"issue":{"base":300,"per":120,"cap":6000},"shops":{"k_bake":["bun","pie"],"k_ice":["icecream"]}},"metro":{"age":16,"seed":10000,"reserve":500,"capDays":30,"tax":{"income":10,"sales":5},"issue":{"base":500,"per":160,"cap":12000},"shops":{"m_shop":["apple","juice","burger"],"m_rest":["pizza","soup","coffee"],"m_mall":["burger","pizza","juice","coffee","icecream"]}}},"profs":{"cook":{"ph":1,"cities":{"kids":["k_bake"],"metro":["m_rest"]},"age":0,"kind":"svc","modes":["city"],"min":20,"wage":6},"seller":{"ph":1,"cities":{"kids":["k_ice"],"metro":["m_shop","m_bank"]},"age":0,"kind":"svc","modes":["city"],"min":15,"wage":5},"doctor":{"ph":1,"cities":{"kids":["k_hosp"],"metro":["m_hosp"]},"age":0,"kind":"svc","modes":["city"],"min":20,"wage":6},"fire":{"ph":1,"cities":{"kids":["k_fire"],"metro":["m_fire"]},"age":0,"kind":"svc","modes":["city"],"min":25,"wage":6},"builder":{"ph":1,"cities":{"kids":["k_site"],"metro":["m_lot1"]},"age":0,"kind":"build","modes":["city"],"min":20,"wage":7,"site":1},"teacher":{"ph":1,"cities":{"kids":["k_school"],"metro":["m_city3"]},"age":0,"kind":"svc","modes":["city"],"min":20,"wage":6},"police":{"ph":1,"cities":{"metro":["m_police"]},"age":16,"kind":"svc","modes":["city"],"min":25,"wage":7},"driver":{"ph":1,"cities":{"metro":["m_taxi"]},"age":16,"kind":"svc","modes":["city"],"min":40,"wage":10},"mech":{"ph":1,"cities":{"kids":["k_play"],"metro":["m_gas"]},"age":0,"kind":"svc","modes":["city"],"min":15,"wage":6}},"goods":{"bun":{"cat":"food","ref":4,"buff":[5,30]},"pie":{"cat":"food","ref":12,"buff":[10,60]},"icecream":{"cat":"food","ref":4,"buff":[5,30]},"apple":{"cat":"food","ref":3,"buff":[3,20]},"juice":{"cat":"food","ref":4,"buff":[5,30]},"coffee":{"cat":"food","ref":6,"buff":[5,30]},"burger":{"cat":"food","ref":10,"buff":[10,60]},"pizza":{"cat":"food","ref":12,"buff":[10,60]},"soup":{"cat":"food","ref":10,"buff":[10,60]}},"skill":{"at":[0,30,150,500,1500],"mult":[100,110,125,140,160],"fast":[100,95,90,85,80]},"caps":{"full":40,"half":60,"wageDay":400,"foodDay":20,"foodHold":10,"actMin":60,"qtyMax":5},"buff":{"max":20},"bank":{"T":1500,"k0":1000,"kMin":500,"kMax":1500,"hi2":130,"hi1":110,"lo1":90,"lo2":70,"d2":50,"d1":20,"drift":10,"mDays":14,"a7":[5,2]},"rate":{"min":10,"days":1},"site":{"units":10,"stages":5},"keep":{"ledger":30,"marks":30,"contrib":56,"batch":5000},"cfgk":[["start",0,1000],["profs.*.wage",1,100],["profs.*.min",5,600],["caps.wageDay",0,5000],["caps.full",1,300],["caps.half",1,300],["caps.foodDay",0,100],["caps.foodHold",1,50],["cities.kids.tax.income",0,10],["cities.kids.tax.sales",0,8],["cities.metro.tax.income",0,15],["cities.metro.tax.sales",0,12],["cities.*.issue.base",0,100000],["cities.*.issue.per",0,10000],["cities.*.issue.cap",0,1000000],["cities.*.reserve",0,1000000],["cities.*.capDays",1,365],["bank.T",100,1000000],["goods.*.ref",1,10000],["site.units",1,1000],["rate.min",0,100],["rate.days",1,30]]}'::jsonb
 $$;
 -- gen:city-defs:end
 -- Ключ настройки из белого списка (cfgk) и число в его пределах (то же — MirEcon.cfgOk)
@@ -179,7 +181,7 @@ create or replace function public.city_stats0_(p_day date) returns jsonb languag
   select jsonb_build_object('d', to_char(p_day, 'YYYY-MM-DD'),
     'mint', jsonb_build_object('grant', 0, 'issue', 0, 'adm', 0), 'burn', jsonb_build_object('cap', 0, 'adm', 0, 'gone', 0),
     'tr', jsonb_build_object('wage', 0, 'g100', 0, 't100', 0, 'food', 0),
-    'n', jsonb_build_object('tasks', 0, 'jobs', 0, 'buys', 0, 'caphit', 0, 'tired', 0, 'noslot', 0, 'soon', 0, 'nonce', 0),
+    'n', jsonb_build_object('tasks', 0, 'jobs', 0, 'buys', 0, 'caphit', 0, 'tired', 0, 'noslot', 0, 'low', 0, 'soon', 0, 'nonce', 0),
     'pt', '{}'::jsonb, 'pn', '{}'::jsonb, 'fs', '{}'::jsonb)
 $$;
 create or replace function public.city_int_(p jsonb, p_key text) returns int language sql immutable as $$
@@ -200,6 +202,12 @@ begin
   end if;
   return greatest((b->>'kMin')::int, least((b->>'kMax')::int, n));
 end $$;
+-- Ставка города, % (то же — Rules.rate): (казна − запас) × 100 / (дней × бюджет дня), в коридоре rate.min…100
+create or replace function public.city_rate_(d jsonb, p_city text, p_treasury bigint, p_bud bigint) returns int language sql immutable as $$
+  select greatest(coalesce((d->'rate'->>'min')::int, 10)::bigint, least(100::bigint,
+    (p_treasury - (d->'cities'->p_city->>'reserve')::bigint) * 100
+      / (greatest(coalesce(p_bud, 0), (d->'cities'->p_city->'issue'->>'base')::bigint, 1) * greatest(1, coalesce((d->'rate'->>'days')::int, 1)))))::int
+$$;
 -- Возраст для города/профессии: 0 — всем; 16 — с 16 лет (teen16, adult); возраст не указан — нельзя. Без age.sql — нельзя
 create or replace function public.city_age_ok_(p_uid uuid, p_age int) returns boolean language plpgsql stable security definer set search_path = public as $$
 declare g text;
@@ -245,6 +253,7 @@ create or replace function public.city_pub_(c public.cities, d jsonb) returns js
   select jsonb_build_object('city', c.id, 'rev', c.rev, 'treasury', c.treasury, 'reserve', (d->'cities'->c.id->>'reserve')::int,
     'hire', c.treasury > (d->'cities'->c.id->>'reserve')::int, 'site', c.site, 'stage', public.city_stage_(d, c.site), 'units', (d->'site'->>'units')::int,
     'frozen', c.frozen, 'day', to_char(c.day, 'YYYY-MM-DD'), 'wage_k', c.wage_k, 'tax', d->'cities'->c.id->'tax',
+    'bud', c.bud, 'rate', public.city_rate_(d, c.id, c.treasury, c.bud),
     'k', (select b.k from public.city_bank b where b.id = 1), 'v', d->'v', 'cv', d->'cv')
 $$;
 create or replace function public.city_fail_(p_uid uuid, p_t bigint, p_n int, p_reason text, p_x jsonb default null) returns jsonb
@@ -266,7 +275,7 @@ begin
   if not found or c.day >= v_today then return; end if;
   v_n := least(7, v_today - coalesce(c.day, v_today - 1));
   -- A7: жители, у кого ≥ a7[0] заданий в день хотя бы a7[1] дня из последних 7 (по журналу)
-  select count(*) into v_a7 from (
+  select count(distinct coalesce((select min(m.hash) from public.city_marks m where m.user_id = a.user_id and m.kind = 'dev'), a.user_id::text)) into v_a7 from (
     select q.user_id from (
       select l.user_id, l.day from public.city_ledger l
       where l.city = p_city and l.kind = 'wage' and l.day >= v_today - 7 and l.day < v_today
@@ -310,7 +319,7 @@ begin
     delete from public.city_marks where ctid in (select m.ctid from public.city_marks m where m.seen_at < now() - make_interval(days => (v_keep->>'marks')::int) limit (v_keep->>'batch')::int);
     delete from public.city_contrib where ctid in (select x.ctid from public.city_contrib x where x.last_day < v_today - (v_keep->>'contrib')::int limit (v_keep->>'batch')::int);
   end if;
-  update public.cities set treasury = c.treasury, minted = c.minted, burned = c.burned, stats = c.stats, day = v_today, t_tick = v_now, rev = rev + 1
+  update public.cities set treasury = c.treasury, minted = c.minted, burned = c.burned, stats = c.stats, day = v_today, t_tick = v_now, bud = v_bud, rev = rev + 1
   where id = p_city;
 end $$;
 -- Замок строки города (по порядку: сначала человек, потом город) + новый день, если наступил
@@ -378,7 +387,7 @@ declare
   v_at bigint; v_an int;
   v_city text; v_prof text; v_pr jsonb; v_cc jsonb; v_place text; v_mode text; v_item text; v_g jsonb;
   v_xp int; v_l int; v_l2 int; v_need int; v_nt int; v_room int; v_gr int; v_tx int; v_f int; v_net int; v_q int; v_cost int; v_gift int := 0;
-  v_s0 int; v_hire boolean; v_cur jsonb; v_res jsonb; v_week text;
+  v_s0 int; v_hire boolean; v_cur jsonb; v_res jsonb; v_week text; v_rate int;
 begin
   if v_uid is null then return jsonb_build_object('ok', false, 'reason', 'auth'); end if;
   if p_act is null or p_act not in ('job', 'quit', 'task', 'buy', 'eat') then return jsonb_build_object('ok', false, 'reason', 'args'); end if;
@@ -457,6 +466,8 @@ begin
     if c.frozen then return public.city_fail_(v_uid, v_at, v_an, 'frozen'); end if;
     -- зарплата в сотых: wage × навык% × (100 + бонус)% × ставка% ; 41–60-е задание — половина; не больше остатка дневного лимита
     v_gr := ((v_pr->>'wage')::bigint * (d->'skill'->'mult'->>v_l)::int * (100 + public.city_buff_(d, p.buffs, v_now)) * c.wage_k / 10000)::int;
+    v_rate := public.city_rate_(d, v_city, c.treasury, c.bud);   -- бедная казна — всем ниже (не «первым всё»)
+    v_gr := v_gr * v_rate / 100;
     if v_nt >= (d->'caps'->>'full')::int then v_gr := v_gr / 2; end if;
     v_gr := least(v_gr, v_room);
     v_tx := v_gr * (v_cc->'tax'->>'income')::int / 100;
@@ -470,7 +481,8 @@ begin
     p.xpd := jsonb_set(p.xpd, array[v_prof], to_jsonb(v_nt + 1), true);
     p.skills := jsonb_set(p.skills, array[v_prof], to_jsonb(v_xp + 1), true);
     c.treasury := c.treasury - v_net;
-    if (c.treasury > (v_cc->>'reserve')::int) <> v_hire then c.rev := c.rev + 1; end if;
+    if (c.treasury > (v_cc->>'reserve')::int) <> v_hire or public.city_rate_(d, v_city, c.treasury, c.bud) / 10 <> v_rate / 10 then c.rev := c.rev + 1; end if;
+    if v_rate < 100 then c.stats := public.city_inc_(c.stats, '{n,low}', 1); end if;
     if coalesce((v_pr->>'site')::int, 0) = 1 then
       v_s0 := public.city_stage_(d, c.site); c.site := c.site + 1;
       if public.city_stage_(d, c.site) <> v_s0 then c.rev := c.rev + 1; end if;
@@ -489,7 +501,7 @@ begin
       task_n = p.task_n, task_t = p.task_t, task_k = p.task_k, act_t = p.act_t, act_n = p.act_n, seen_at = p.seen_at, rev = p.rev, updated_at = now()
     where user_id = v_uid;
     return jsonb_build_object('ok', true, 'now', v_now, 'st', public.city_st_(p),
-      'got', jsonb_build_object('net', v_net, 'g100', v_gr, 't100', v_tx, 'xp', 1, 'lvl', v_l2, 'up', v_l2 > v_l, 'tired', v_nt + 1 >= (d->'caps'->>'full')::int),
+      'got', jsonb_build_object('net', v_net, 'g100', v_gr, 't100', v_tx, 'xp', 1, 'lvl', v_l2, 'up', v_l2 > v_l, 'tired', v_nt + 1 >= (d->'caps'->>'full')::int, 'rate', v_rate),
       'c', public.city_pub_(c, d));
 
   elsif p_act = 'buy' then
@@ -516,9 +528,9 @@ begin
     end if;
     p.cash := p.cash - v_cost; p.fd := p.fd + v_q;
     p.food := jsonb_set(p.food, array[v_item], to_jsonb(coalesce((p.food->>v_item)::int, 0) + v_q), true);
-    v_hire := c.treasury > (v_cc->>'reserve')::int;
+    v_hire := c.treasury > (v_cc->>'reserve')::int; v_rate := public.city_rate_(d, v_city, c.treasury, c.bud);
     c.treasury := c.treasury + v_cost;
-    if (c.treasury > (v_cc->>'reserve')::int) <> v_hire then c.rev := c.rev + 1; end if;
+    if (c.treasury > (v_cc->>'reserve')::int) <> v_hire or public.city_rate_(d, v_city, c.treasury, c.bud) / 10 <> v_rate / 10 then c.rev := c.rev + 1; end if;
     c.stats := public.city_inc_(public.city_inc_(public.city_inc_(c.stats, '{tr,food}', v_cost), '{n,buys}', 1), array['fs', v_item], v_q);
     insert into public.city_ledger (user_id, city, amount, bal, kind, ref, at, day) values (v_uid, v_city, -v_cost, p.cash, 'food', v_item, v_now, v_today);
     p.rev := p.rev + 1; p.seen_at := v_now;
@@ -566,7 +578,8 @@ begin
     return jsonb_build_object('ok', true, 'now', v_now, 'today', to_char(v_today, 'YYYY-MM-DD'),
       'bank', (select jsonb_build_object('k', b.k, 'M', b.m_avg, 'actives', b.actives, 'day', to_char(b.day, 'YYYY-MM-DD'), 'T', (d->'bank'->>'T')::int) from public.city_bank b where b.id = 1),
       'cities', (select jsonb_object_agg(x.id, jsonb_build_object('treasury', x.treasury, 'minted', x.minted, 'burned', x.burned, 'frozen', x.frozen, 'site', x.site,
-          'reserve', (d->'cities'->x.id->>'reserve')::int, 'day', to_char(x.day, 'YYYY-MM-DD'), 'today', x.stats)) from public.cities x),
+          'reserve', (d->'cities'->x.id->>'reserve')::int, 'bud', x.bud, 'rate', public.city_rate_(d, x.id, x.treasury, x.bud),
+          'day', to_char(x.day, 'YYYY-MM-DD'), 'today', x.stats)) from public.cities x),
       'days', coalesce((select jsonb_agg(jsonb_build_object('c', y.city, 'd', to_char(y.day, 'YYYY-MM-DD'), 's', y.stats) order by y.day desc, y.city)
           from public.city_days y where y.day >= v_today - v_days), '[]'::jsonb));
   elsif p_act = 'twins' then
@@ -666,6 +679,7 @@ revoke execute on function public.city_inc_(jsonb, text[], bigint) from public, 
 revoke execute on function public.city_stats0_(date) from public, anon, authenticated;
 revoke execute on function public.city_int_(jsonb, text) from public, anon, authenticated;
 revoke execute on function public.city_knext_(jsonb, int, int) from public, anon, authenticated;
+revoke execute on function public.city_rate_(jsonb, text, bigint, bigint) from public, anon, authenticated;
 revoke execute on function public.city_age_ok_(uuid, int) from public, anon, authenticated;
 revoke execute on function public.city_banned_(uuid) from public, anon, authenticated;
 revoke execute on function public.city_mark_(uuid, text) from public, anon, authenticated;
