@@ -249,10 +249,7 @@
       }
       case 'cannon': {
         cyl(V, cx, cz, .85, 0, .3, PALS.caB[i], t); cyl(V, cx, cz, .62, .3, .1, '#6b4426', t);
-        const a = o.aim != null ? o.aim : PI / 4, len = .95, [bx, by] = V.p(cx, cz, .62), [ex, ey] = V.p(cx + Math.cos(a) * len, cz + Math.sin(a) * len, .7), g = V.ctx;
-        g.strokeStyle = L >= 5 ? '#ca8a04' : L >= 3 ? '#1f2937' : '#374151'; g.lineCap = 'round'; g.lineWidth = V.tw * .22; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke();
-        g.fillStyle = '#111827'; g.beginPath(); g.arc(ex, ey, V.tw * .08, 0, 2 * PI); g.fill(); g.lineCap = 'butt';
-        if (o.fire) { g.fillStyle = 'rgba(253,224,71,.9)'; g.beginPath(); g.arc(ex, ey, V.tw * .2, 0, 2 * PI); g.fill(); }
+        if (!o.noDyn) barrel(V, b, o.aim, o.fire);   // в картинке постройки ствола нет — он поворачивается каждый кадр
         break;
       }
       case 'mortar': cyl(V, cx, cz, .9, 0, .38, PALS.moR[Math.min(3, i)], t); cyl(V, cx, cz, .66, .38, .02, '#44403c'); cyl(V, cx, cz, .32, .38, .45, L >= 4 ? '#ca8a04' : '#1f2937', t); { const [sx, sy] = V.p(cx, cz, .83), g = V.ctx; g.fillStyle = '#0b0f19'; g.beginPath(); g.ellipse(sx, sy, .3 * Math.SQRT2 * V.hw, .3 * Math.SQRT2 * V.hh, 0, 0, 2 * PI); g.fill(); } break;
@@ -274,6 +271,44 @@
       default: box(V, x + .2, z + .2, w - .4, d - .4, 0, .5, '#9ca3af', t);
     }
     if (o.busy) emo(V, cx, cz, 2, V.tw * .4, '🔨');
+  }
+  // ствол пушки (смотрит на цель) и вспышка выстрела
+  function barrel(V, b, aim, fire){
+    const L = Math.max(1, Math.min(5, b.l || 1)), cx = b.x0 + b.w / 2, cz = b.z0 + b.d / 2, a = aim != null ? aim : PI / 4, len = .95, g = V.ctx;
+    const bx = V.ox + (cx - cz) * V.hw, by = V.oy + (cx + cz) * V.hh - .62 * V.vh, ax = cx + Math.cos(a) * len, az = cz + Math.sin(a) * len, ex = V.ox + (ax - az) * V.hw, ey = V.oy + (ax + az) * V.hh - .7 * V.vh;
+    g.strokeStyle = L >= 5 ? '#ca8a04' : L >= 3 ? '#1f2937' : '#374151'; g.lineCap = 'round'; g.lineWidth = V.tw * .22; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke();
+    g.fillStyle = '#111827'; g.beginPath(); g.arc(ex, ey, V.tw * .08, 0, 2 * PI); g.fill(); g.lineCap = 'butt';
+    if (fire) { g.fillStyle = 'rgba(253,224,71,.9)'; g.beginPath(); g.arc(ex, ey, V.tw * .2, 0, 2 * PI); g.fill(); }
+  }
+  // Картинки построек: постройка одного вида, уровня, размера и состояния выглядит одинаково в любом месте карты (изометрия —
+  // только сдвиг) — рисуется один раз в свой холст и дальше ставится картинкой (полная база: ~1500 многоугольников за кадр → ~214
+  // картинок). Ключ — число; при смене масштаба, плотности пикселей или облика базы картинки рисуются заново
+  const KIDX = new Map(), SB = { n: 0, k: '', l: 1, w: 1, d: 1, x0: 0, z0: 0, x1: 1, z1: 1, alive: true, trap: false, arm: -1 };
+  function sprKey(b, po){
+    let ki = KIDX.get(b.k); if (ki === undefined) { ki = KIDX.size + 1; KIDX.set(b.k, ki); }
+    const dead = !b.alive && !b.trap, tv = b.k === 'bomb' ? (po.showTraps || b.arm >= 0 ? 1 : 0) : b.k === 'airmine' ? (po.showTraps ? 1 : 0) : 0;
+    return (((((((ki * 8 + Math.min(7, b.l | 0)) * 8 + Math.min(7, b.w)) * 8 + Math.min(7, b.d)) * 2 + (dead ? 1 : 0)) * 4 + (po.nx ? 1 : 0) + (po.nz ? 2 : 0)) * 4 + (po.scaffold ? 1 : 0) + (po.busy ? 2 : 0)) * 2 + tv) * 16 + (dead ? b.n % 10 : 0);
+  }
+  function makeSpr(V, b, po){
+    const w = b.w, d = b.d, hw = V.hw, hh = V.hh, vh = V.vh, pad = Math.ceil(V.tw * .7) + 2, Hm = 5;   // выше вышки с крышей и значком
+    const minX = -d * hw - pad, minY = -Hm * vh - pad, cw = Math.ceil((w + d) * hw + 2 * pad), ch = Math.ceil(Hm * vh + (w + d) * hh + 2 * pad), dpr = V.dpr;
+    const cv = V.cv.ownerDocument.createElement('canvas');
+    cv.width = Math.max(1, Math.ceil(cw * dpr)); cv.height = Math.max(1, Math.ceil(ch * dpr));
+    const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const VS = { ctx, tw: V.tw, hw, hh, vh, dpr, W: cw, H: ch, ox: -minX, oy: -minY };
+    VS.p = (cx, cz, h = 0) => [VS.ox + (cx - cz) * hw, VS.oy + (cx + cz) * hh - h * vh];
+    SB.n = b.n; SB.k = b.k; SB.l = b.l; SB.w = w; SB.d = d; SB.x1 = w; SB.z1 = d; SB.alive = b.alive; SB.trap = b.trap; SB.arm = b.arm;
+    paintB(VS, SB, { tint: po.tint, nx: po.nx, nz: po.nz, showTraps: po.showTraps, busy: po.busy, scaffold: po.scaffold, noDyn: true });
+    return { cv, dx: minX, dy: minY, w: cw, h: ch };
+  }
+  function drawB(V, b, po){
+    const key = sprKey(b, po);
+    let sp = V.spr.get(key);
+    if (!sp) { sp = makeSpr(V, b, po); V.spr.set(key, sp); }
+    const x = Math.round((V.ox + (b.x0 - b.z0) * V.hw + sp.dx) * V.dpr) / V.dpr, y = Math.round((V.oy + (b.x0 + b.z0) * V.hh + sp.dy) * V.dpr) / V.dpr;
+    if (x > V.W || y > V.H || x + sp.w < 0 || y + sp.h < 0) return;   // за краем экрана (приближение)
+    V.ctx.drawImage(sp.cv, x, y, sp.w, sp.h);
+    if (b.k === 'cannon' && b.alive && !po.scaffold) barrel(V, b, po.aim, po.fire);
   }
   function hpBar(V, cx, cz, h, k, w, c){
     const [sx, sy] = V.p(cx, cz, h), g = V.ctx, W2 = Math.max(14, w), H2 = Math.max(3, V.tw * .09);
@@ -312,8 +347,12 @@
     }
     return out;
   }
+  const PO = { tint: null, nx: false, nz: false, showTraps: false, aim: null, fire: false, busy: false, scaffold: false };   // общие настройки постройки (без мусора за кадр)
   function drawScene(V, bs, us, o = {}){
-    const walls = new Set(bs.filter(b => b.wall && b.alive).map(b => b.x0 + ',' + b.z0));
+    // целые стены: набор клеток — только когда их число поменялось (раньше — 160 строк и Set каждый кадр)
+    let nW = 0; for (let i = 0; i < bs.length; i++) if (bs[i].wall && bs[i].alive) nW++;
+    if (!V.walls || V.wallN !== nW || V.wallBs !== bs) { V.walls = new Set(); for (const b of bs) if (b.wall && b.alive) V.walls.add(b.x0 * 1000 + b.z0); V.wallN = nW; V.wallBs = bs; }
+    const walls = V.walls;
     // фон — земля и целые стены — одной картинкой: у большой базы стен до 160, это ~1500 многоугольников в кадр.
     // Перерисовка — когда вид сдвинули / приблизили или упала стена (стены низкие: отряды за ними — поверх, это не мешает)
     const doc = V.cv?.ownerDocument, bgOn = !!doc && V.cv.width > 0;
@@ -327,27 +366,36 @@
         try {
           ground(V, o);
           const wl = bs.filter(b => b.wall && b.alive).sort((a, c) => (a.x0 + a.z0) - (c.x0 + c.z0));
-          for (const b of wl) paintB(V, b, { tint: o.tint, nx: walls.has((b.x0 + 1) + ',' + b.z0), nz: walls.has(b.x0 + ',' + (b.z0 + 1)) });
+          for (const b of wl) paintB(V, b, { tint: o.tint, nx: walls.has((b.x0 + 1) * 1000 + b.z0), nz: walls.has(b.x0 * 1000 + b.z0 + 1) });
         } finally { V.ctx = main; }
         V.bgKey = key;
       }
       V.ctx.drawImage(V.bg, 0, 0, V.W, V.H);
+      // картинки построек — заново, если поменялись масштаб, плотность пикселей или облик
+      if (!V.spr || V.sprTw !== V.tw || V.sprDpr !== V.dpr || V.sprTint !== (o.tint || null)) { V.spr = new Map(); V.sprTw = V.tw; V.sprDpr = V.dpr; V.sprTint = o.tint || null; }
     } else ground(V, o);
-    const list = [];
-    for (const b of bs) if (!(bgOn && b.wall && b.alive)) list.push({ key: b.x0 + b.w / 2 + b.z0 + b.d / 2 + (b.alive || b.trap ? 0 : -50), b });
-    for (const u of us || []) list.push({ key: u.cx + u.cz + .05 + (u.air ? 30 : 0), u });
-    list.sort((a, c) => a.key - c.key);
-    const g = V.ctx;
+    // порядок рисования (дальнее — раньше): записи списка переиспользуются
+    const list = V.list || (V.list = []);
+    let n = 0;
+    const put = (key, b, u) => { let e = list[n]; if (!e) e = list[n] = { key: 0, b: null, u: null }; e.key = key; e.b = b; e.u = u; n++; };
+    for (const b of bs) if (!(bgOn && b.wall && b.alive)) put(b.x0 + b.w / 2 + b.z0 + b.d / 2 + (b.alive || b.trap ? 0 : -50), b, null);
+    if (us) for (const u of us) put(u.cx + u.cz + .05 + (u.air ? 30 : 0), null, u);
+    list.length = n;
+    list.sort(byKey);
     if (bgOn && o.bars) for (const b of bs) if (b.wall && b.alive && b.mhp && b.hp < b.mhp) hpBar(V, b.x0 + b.w / 2, b.z0 + b.d / 2, .9, b.hp / b.mhp, V.tw * Math.min(1.4, b.w * .6));
-    for (const e of list) {
+    for (let i = 0; i < n; i++) {
+      const e = list[i];
       if (e.b) {
         const b = e.b;
         if (b.trap && !b.alive && !o.showTraps) continue;
-        paintB(V, b, { tint: o.tint, nx: b.wall && walls.has((b.x0 + 1) + ',' + b.z0), nz: b.wall && walls.has(b.x0 + ',' + (b.z0 + 1)), showTraps: o.showTraps, aim: o.aims?.get(b.n), fire: o.fires?.get(b.n), busy: b.upg && o.hub, scaffold: b.building });
+        PO.tint = o.tint || null; PO.nx = b.wall && walls.has((b.x0 + 1) * 1000 + b.z0); PO.nz = b.wall && walls.has(b.x0 * 1000 + b.z0 + 1); PO.showTraps = !!o.showTraps;
+        PO.aim = o.aims ? o.aims.get(b.n) : null; PO.fire = !!(o.fires && o.fires.get(b.n)); PO.busy = !!(b.upg && o.hub); PO.scaffold = !!b.building;
+        if (bgOn) drawB(V, b, PO); else paintB(V, b, PO);
         if (o.bars && b.alive && b.mhp && b.hp < b.mhp && !b.trap) hpBar(V, b.x0 + b.w / 2, b.z0 + b.d / 2, b.wall ? .9 : 1.6, b.hp / b.mhp, V.tw * Math.min(1.4, b.w * .6));
-      } else o.drawUnit?.(e.u);
+      } else if (o.drawUnit) o.drawUnit(e.u);
     }
   }
+  const byKey = (a, c) => a.key - c.key;
 
   // ═══ Бой: живой (с вводом игрока), повтор, тренировка ═══
   function newBattle(kind, data){
@@ -973,14 +1021,16 @@
     const B = bt.B, V = bt.V, g = V.ctx, now = performance.now();
     g.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
     if (bt.shake && now - bt.shake < 300) { const k = (1 - (now - bt.shake) / 300) * 5; g.translate((Math.random() - .5) * k, (Math.random() - .5) * k); }
-    const us = [];
-    for (const o of B.us) if (o.alive) us.push({ o, cx: (o.px + (o.x - o.px) * a) / 256, cz: (o.pz + (o.z - o.pz) * a) / 256, air: o.air });
+    const us = bt.usPool || (bt.usPool = []);   // записи отрядов переиспользуются (без мусора за кадр)
+    let un = 0;
+    for (const o of B.us) if (o.alive) { let u = us[un]; if (!u) u = us[un] = { o: null, cx: 0, cz: 0, air: false }; u.o = o; u.cx = (o.px + (o.x - o.px) * a) / 256; u.cz = (o.pz + (o.z - o.pz) * a) / 256; u.air = o.air; un++; }
+    us.length = un;
     drawScene(V, B.bs, us, { tint: bt.skinB, ring: bt.kind !== 'replay' && !B.over && (bt.phase === 'scout' || Object.values(B.left).some(n => n > 0) || (B.hero && !B.heroUsed)), bars: true, aims: bt.aims, fires: bt.fires, showTraps: bt.kind === 'replay' && false,
       drawUnit: u => drawUnit(bt, u, now) });
     // ловушки, что сработали, — воронки
     for (const b of B.bs) if (b.trap && !b.alive) { const [sx, sy] = V.p(b.x0 + .5, b.z0 + .5); g.fillStyle = 'rgba(30,20,10,.55)'; g.beginPath(); g.ellipse(sx, sy, V.hw * .5, V.hh * .5, 0, 0, 2 * PI); g.fill(); }
     // эффекты
-    bt.fx = bt.fx.filter(f => now - f.t < f.d);
+    { const F = bt.fx; let w = 0; for (let i = 0; i < F.length; i++) if (now - F[i].t < F[i].d) F[w++] = F[i]; F.length = w; }   // отжившие — прочь, на месте
     for (const f of bt.fx) {
       const k = (now - f.t) / f.d;
       if (f.k === 'arrow' || f.k === 'ball' || f.k === 'shell') {
@@ -1011,7 +1061,7 @@
     const HH = V.tw * (o.k === 'tank' ? .95 : o.k === 'hero' ? .9 : .78), moving = o.x !== o.px || o.z !== o.pz;
     const dir = root.D37Sprite ? root.D37Sprite.dir8(o.fx - o.fz, (o.fx + o.fz) / 2, 0) : 0;
     const anim = bt.B.tick - o.act < 6 ? 'use' : moving ? 'run' : 'idle';
-    const H = spriteFor(o.k, o.k === 'hero' ? '' : bt.skinA, bt.heroLook);
+    const SH = bt.sprH || (bt.sprH = {}), H = SH[o.k] || (SH[o.k] = spriteFor(o.k, o.k === 'hero' ? '' : bt.skinA, bt.heroLook));
     const drew = H && H.draw(g, anim, now / 1000 + o.n * .37, sx, sy, { dir, h: HH, item: ITEM[o.k] || (o.k === 'hero' ? '⚔️' : '') });
     if (!drew) { g.fillStyle = TEAM[o.k] || '#fff'; g.beginPath(); g.arc(sx, sy - HH * .45, HH * .3, 0, 2 * PI); g.fill(); g.font = `${Math.round(HH * .45)}px "Segoe UI Emoji",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(MB().UNITS[o.k]?.e || '🦸', sx, sy - HH * .45); }
     if (o.hp < o.mhp) hpBar(V, u.cx, u.cz, h + 1.05, o.hp / o.mhp, V.tw * .5, o.k === 'hero' ? '#c084fc' : null);
