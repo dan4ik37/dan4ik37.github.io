@@ -5,8 +5,9 @@
 // IoKit) могут идти через свой сервер владельца (Oracle, server/), а не через Supabase Realtime (у бесплатного Supabase —
 // 200 соединений, 100 сообщений в секунду и 5 presence за 30 с на человека). Supabase остаётся для базы и входа и — запасной путь.
 //  • RT_URL в js/core/config.js пустой (по умолчанию) → D37RT.client() = null: всё ровно как раньше (sbClient напрямую).
-//  • RT_URL задан → один раз за сеанс вкладки: /health + сокет + «проба» 40 КБ (провайдеры в России режут соединения к
-//    зарубежным хостингам после ~16 КБ — такая связь не годится, тогда весь сеанс через Supabase; итог помнит sessionStorage).
+//  • RT_URL задан → /health один раз за сеанс вкладки (помнит sessionStorage 30 мин) и «проба» 40 КБ на каждом новом сокете
+//    (провайдеры в России режут соединения к зарубежным хостингам после ~16 КБ: такая связь не годится — тогда весь сеанс через
+//    Supabase, итог помнит sessionStorage); связь «умирает» по сердцебиению дважды за 3 мин — то же самое (порезали посреди игры).
 //  • D37RT.channel(name, opts) — тот же набор, что у канала supabase-js: on / subscribe(статусы) / send / track / untrack /
 //    presenceState / unsubscribe, плюс D37RT.removeChannel(ch). Presence — тем же алгоритмом, что в supabase-js (формы
 //    presenceState(), join / leave / sync — те же). Игры не знают, через что идёт их комната.
@@ -25,11 +26,11 @@
   const root = typeof window !== 'undefined' ? window : globalThis;
   // сроки (мс); __D37RT_T — только для проверок в node (scripts/rt-test.cjs), на сайте его нет
   const TM = Object.assign({ PROBE_BYTES: 40000, PROBE_MS: 8000, HEALTH_MS: 4000, JOIN_MS: 8000, PING_MS: 4000, DEAD_MS: 9000,
-    FAIL_MS: 5000, FAIL_RESTART_MS: 9000, SETTLE_MS: 5000, IDLE_MS: 30000, DOWN_MS: 60000, ACK_MS: 10000 }, root.__D37RT_T || {});
-  const { PROBE_BYTES, PROBE_MS, HEALTH_MS, JOIN_MS, PING_MS, DEAD_MS, FAIL_MS, FAIL_RESTART_MS, SETTLE_MS, IDLE_MS, DOWN_MS, ACK_MS } = TM;
+    FAIL_MS: 5000, FAIL_RESTART_MS: 9000, SETTLE_MS: 5000, IDLE_MS: 120000, DOWN_MS: 60000, ACK_MS: 10000, WAIT_MS: 2500 }, root.__D37RT_T || {});
+  const { PROBE_BYTES, PROBE_MS, HEALTH_MS, JOIN_MS, PING_MS, DEAD_MS, FAIL_MS, FAIL_RESTART_MS, SETTLE_MS, IDLE_MS, DOWN_MS, ACK_MS, WAIT_MS } = TM;
   const QUEUE_MAX = 100, OUTBOX_MAX = 400, OUTBOX_BYTES = 512 * 1024;
   const BAD = { stall: 15 * 60e3, conn: 3 * 60e3, health: 60e3, kicked: 30 * 60e3 };
-  const SS_KEY = 'd37_rt', OFF_KEY = 'd37_rt_off';
+  const SS_KEY = 'd37_rt', OFF_KEY = 'd37_rt_off', OK_KEY = 'd37_rt_ok';
   const now = () => Date.now();
   const ss = { get(k){ try { return root.sessionStorage?.getItem(k) ?? null; } catch (e) { return null; } }, set(k, v){ try { root.sessionStorage?.setItem(k, v); } catch (e) {} }, del(k){ try { root.sessionStorage?.removeItem(k); } catch (e) {} } };
 
@@ -60,7 +61,9 @@
 
   // ── Плохая связь с нашим сервером: помним до конца срока (весь сеанс вкладки, sessionStorage) ──
   function badUntil(){ try { const o = JSON.parse(ss.get(SS_KEY) || 'null'); return o && o.u === baseUrl() && o.until > now() ? o : null; } catch (e) { return null; } }
-  function markBad(why){ const ms = BAD[why] || BAD.conn; ss.set(SS_KEY, JSON.stringify({ u: baseUrl(), until: now() + ms, why })); N.stats.bad++; N.badWhy = why; }
+  function markBad(why){ const ms = BAD[why] || BAD.conn; ss.set(SS_KEY, JSON.stringify({ u: baseUrl(), until: now() + ms, why })); ss.del(OK_KEY); N.stats.bad++; N.badWhy = why; }
+  // /health уже отвечал «можно» в этом сеансе (30 мин) — не спрашиваем снова
+  const healthOk = () => { try { const o = JSON.parse(ss.get(OK_KEY) || 'null'); return !!(o && o.u === baseUrl() && o.until > now()); } catch (e) { return false; } };
 
   // Комнаты, ушедшие в Supabase: пока у вкладки открыт хоть один канал этой комнаты (и её «-…» соседей) + 30 с — только Supabase.
   // Потом снова можно через свой сервер: если в Supabase ещё кто-то есть, сервер сам ответит «sb» (он смотрит канал комнаты)
@@ -83,29 +86,38 @@
   const N = {
     st: 'idle', ws: null, sid: '', url: '', byI: new Map(), byR: new Map(), nextI: 0, refs: new Map(), nextRef: 0,
     outSeq: 0, outbox: [], outBytes: 0, pingT: 0, pingAt: 0, lastIn: 0, idleT: 0, failT: 0, retryT: 0, probeT: 0, tries: 0,
-    downUntil: 0, restart: false, waiters: [], authT: 0, badWhy: '', helloAt: 0,
-    stats: { connects: 0, probeMs: 0, resumes: 0, rejoins: 0, fallbacks: 0, moves: 0, stalls: 0, bad: 0, sbChannels: 0, rtChannels: 0 },
+    downUntil: 0, restart: false, waiters: [], authT: 0, badWhy: '', helloAt: 0, deaths: [],
+    stats: { connects: 0, probeMs: 0, resumes: 0, rejoins: 0, fallbacks: 0, moves: 0, stalls: 0, bad: 0, sbChannels: 0, rtChannels: 0, slowProbe: 0 },
   };
   function wsUrl(){ return N.url.replace(/^http/i, 'ws') + '/rt'; }
   function settle(ok){ const w = N.waiters; N.waiters = []; for (const f of w) { try { f(ok); } catch (e) { console.error(e); } } }
-  // ok(true) — сокет готов (сразу, если уже); ok(false) — нельзя (не задан, плохая связь, сервер лежит недавно)
-  function ensure(cb){
+  // ok(true) — сокет готов (сразу, если уже); ok(false) — нельзя (не задан, плохая связь, сервер лежит недавно) или не дождались
+  // waitMs: проба идёт дольше — эта комната идёт через Supabase сразу (проба продолжается; раздела нет — сервер сам переведёт
+  // остальных, если они у нас), игра по ссылке не ждёт 8 с
+  function ensure(cb, waitMs){
     if (!enabled()) { cb(false); return; }
     if (N.st === 'up') { cb(true); return; }
     if (N.st === 'down') { if (now() < N.downUntil) { cb(false); return; } N.st = 'idle'; }
     if (N.st === 'idle' && badUntil()) { cb(false); return; }
-    N.waiters.push(cb);
+    let done = false, t = 0;
+    const f = ok => { if (done) return; done = true; clearTimeout(t); cb(ok); };
+    if (waitMs > 0) t = setTimeout(() => { N.waiters = N.waiters.filter(x => x !== f); N.stats.slowProbe++; f(false); }, waitMs);
+    N.waiters.push(f);
     if (N.st === 'idle') start();
   }
+  // Разогрев: открыли раздел игр — проверить связь заранее (раз за сеанс; к моменту входа в комнату уже ясно, куда)
+  function warm(){ if (enabled() && N.st === 'idle' && !badUntil()) ensure(() => {}); }
   function start(){
     N.url = baseUrl(); N.st = 'probing'; N.sid = ''; N.tries = 0;
     const t0 = now();
+    if (healthOk()) { N.helloAt = t0; open(); return; }
     let done = false;
     const ac = typeof AbortController === 'function' ? new AbortController() : null;
     const tm = setTimeout(() => { if (!done) { done = true; try { ac?.abort(); } catch (e) {} first(false, 'health'); } }, HEALTH_MS);
     root.fetch(N.url + '/health', { cache: 'no-store', signal: ac?.signal }).then(r => r.ok ? r.json() : null).then(j => {
       if (done) return; done = true; clearTimeout(tm);
       if (!j || j.ok !== true || j.rooms === false || j.proto !== 1) { first(false, 'health'); return; }
+      ss.set(OK_KEY, JSON.stringify({ u: N.url, until: now() + 30 * 60e3 }));
       N.helloAt = t0;
       open();
     }, () => { if (!done) { done = true; clearTimeout(tm); first(false, 'conn'); } });
@@ -195,7 +207,12 @@
   function ping(){
     if (N.st !== 'up' || !N.ws) return;
     const t = now();
-    if (N.pingAt && t - N.pingAt > DEAD_MS && N.lastIn < N.pingAt) { N.stats.stalls++; onLost('dead'); return; }
+    if (N.pingAt && t - N.pingAt > DEAD_MS && N.lastIn < N.pingAt) {
+      // сокет «висит» (не закрылся, но молчит): второй раз за 3 мин — связь режут (как «16 КБ»), весь сеанс через Supabase
+      N.stats.stalls++; N.deaths = N.deaths.filter(x => t - x < 180e3); N.deaths.push(t);
+      if (N.deaths.length >= 2) markBad('stall');
+      onLost('stall'); return;
+    }
     if (!N.pingAt || N.lastIn >= N.pingAt) { N.pingAt = t; raw({ t: 'ping', n: t % 1e9 }); }
   }
   function onClose(code){
@@ -298,6 +315,7 @@
 
   // ═══ Канал ═══
   const reg = new Map();   // имя → канал (как supabase-js: то же имя — тот же объект, пока не закрыт)
+  const ours = new WeakSet();   // каналы supabase-js, которые завёл сам D37RT (чужие с тем же именем не трогаем)
   class Chan {
     constructor(name, opts){
       this.name = String(name); this.topic = 'realtime:' + this.name; this.params = opts || { config: {} };
@@ -332,7 +350,7 @@
       // postgres_changes наш сервер пока не раздаёт (этап 2, docs/SERVER.md) — такие каналы всегда через Supabase
       const pg = this.binds.some(b => b[0] === 'postgres_changes');
       if (!enabled() || pg || isSticky(this.name) || !inShare(this.name)) { this._openSb(); return this; }
-      ensure(ok => { if (this.dead || this.via) return; if (ok) this._rtJoin(); else this._openSb(); });
+      ensure(ok => { if (this.dead || this.via) return; if (ok) this._rtJoin(); else this._openSb(); }, WAIT_MS);
       return this;
     }
     // ── свой сервер ──
@@ -403,8 +421,8 @@
       this.via = 'sb'; N.stats.sbChannels++;
       const c = sb();
       if (!c?.channel) { this.state = 'errored'; this._endHold(); this._status('CHANNEL_ERROR', new Error('no supabase')); return; }
-      const old = c.getChannels?.().find(x => x.topic === this.topic && x !== this.sb);
-      if (old) {   // старый канал с тем же именем ещё закрывается — supabase-js отдал бы его же
+      const old = c.getChannels?.().find(x => x.topic === this.topic && x !== this.sb && ours.has(x));
+      if (old) {   // наш старый канал с тем же именем ещё закрывается — supabase-js отдал бы его же
         let gone = false;
         const go = () => { if (gone) return; gone = true; if (!this.dead && this.via === 'sb' && !this.sb) this._makeSb(c); };
         Promise.resolve(c.removeChannel(old)).then(go, go);
@@ -416,7 +434,7 @@
     _makeSb(c){
       let ch;
       try { ch = c.channel(this.name, this.params); } catch (e) { this.state = 'errored'; this._endHold(); this._status('CHANNEL_ERROR', e); return; }
-      this.sb = ch;
+      this.sb = ch; ours.add(ch);
       ch.on('broadcast', { event: '*' }, m => { if (this.sb === ch && !this.dead) this._emit('broadcast', m); });
       if (this._hasPres()) ch.on('presence', { event: '*' }, p => { if (this.sb !== ch || this.dead) return; if (p?.event === 'sync') this._presChanged(); else if (!this.hold) this._emit('presence', p); });
       for (const [t, f, cb] of this.binds) if (t !== 'broadcast' && t !== 'presence') { try { ch.on(t, f, cb); } catch (e) {} }
@@ -569,7 +587,7 @@
     removeChannel(ch){ return ch && typeof ch.unsubscribe === 'function' ? ch.unsubscribe() : Promise.resolve('ok'); },
     remove(ch){ return D.removeChannel(ch); },
     getChannels: () => [...reg.values()],
-    ice, prefetchTurn,
+    ice, prefetchTurn, warm,
     stats(){
       return { enabled: enabled(), url: baseUrl(), st: N.st, sid: !!N.sid, badWhy: badUntil()?.why || '', probeMs: N.stats.probeMs, turn: !!turn.list,
         chans: [...reg.values()].map(c => ({ name: c.name, via: c.via, state: c.state, held: !!c.hold })), ...N.stats, sticky: sticky.size };
@@ -582,6 +600,9 @@
   try {
     root.addEventListener?.('d37:auth', () => { if (N.st === 'up') { const c = sb(); if (c?.auth?.getSession) c.auth.getSession().then(({ data }) => raw({ t: 'auth', jwt: data?.session?.access_token || '' })).catch(() => {}); } });
     root.addEventListener?.('d37:callstate', () => prefetchTurn());   // звонок начинается — TURN понадобится через секунды
+    const gameRoute = h => /^#\/(games|play)(\/|$)/.test(String(h || ''));
+    root.addEventListener?.('d37:route', e => { if (gameRoute(e?.detail?.to)) warm(); });
+    setTimeout(() => { try { if (gameRoute(root.D37Route?.hash?.())) warm(); } catch (e) {} }, 0);
     root.addEventListener?.('pagehide', e => { if (!e?.persisted && N.ws) { closeWs(1000); } });
   } catch (e) {}
 })();

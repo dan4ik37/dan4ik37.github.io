@@ -86,6 +86,7 @@ function proxy(targetPort, o = {}){
     const end = () => { pairs.delete(pair); try { c.destroy(); } catch (e) {} try { u.destroy(); } catch (e) {} };
     c.on('data', d => { try { u.write(d); } catch (e) {} });
     u.on('data', d => {
+      if (P.delay) { const x = d; setTimeout(() => { try { c.write(x); } catch (e) {} }, P.delay); return; }
       if (P.cutAfter) {   // как у провайдеров в России к зарубежным хостингам: первые ~16 КБ проходят, дальше соединение «висит»
         const keep = P.cutAfter - pair.down;
         if (keep <= 0) return;
@@ -96,7 +97,7 @@ function proxy(targetPort, o = {}){
     });
     c.on('error', end); u.on('error', end); c.on('close', end); u.on('close', end);
   });
-  const P = { cutAfter: o.cutAfter || 0, pairs };
+  const P = { cutAfter: o.cutAfter || 0, delay: o.delay || 0, pairs };
   P.ready = new Promise(r => srv.listen(0, '127.0.0.1', () => { P.port = srv.address().port; P.url = 'http://127.0.0.1:' + P.port; r(); }));
   P.cut = () => { for (const p of [...pairs]) { pairs.delete(p); try { p.c.destroy(); } catch (e) {} try { p.u.destroy(); } catch (e) {} } };
   P.close = () => new Promise(r => { P.cut(); srv.close(() => r()); });
@@ -577,6 +578,31 @@ async function rooms(P){
   df.room.send({ x: 'f' }); de.room.send({ x: 'e' });
   ok(!!(await until(() => de.msgs().includes('f') && df.msgs().includes('e'), 4000)), '«16 КБ»: играют через Supabase');
   ok(E.ctx.sessionStorage.getItem('d37_rt')?.includes('stall'), '«16 КБ»: вкладка помнит до конца срока (sessionStorage), пробу не повторяет');
+  // 8c'. связь режут ПОСЛЕ пробы (поздние ~45 КБ на соединение): сокет «висит» → переподключение → снова висит → весь сеанс
+  //      через Supabase (две «смерти» по сердцебиению за 3 мин), комната переезжает целиком
+  const TL = proxy(port, { cutAfter: 45000 }); await TL.ready;
+  const L1 = makeTab({ rtUrl: TL.url, sbUrl: P.url }), L2 = makeTab({ rtUrl: S.url, sbUrl: P.url });
+  const dl1 = duel(L1, 'rt7abc', 'L1');
+  await until(() => dl1.ev.length > 0 && viaAll(L1, 'rt'), 5000);
+  const dl2 = duel(L2, 'rt7abc', 'L2');
+  await until(() => dl1.room.opp && dl2.room.opp, 6000);
+  const chat = setInterval(() => { dl2.room.send({ x: 'болтовня ' + 'x'.repeat(300) }); }, 40);
+  ok(!!(await until(() => L1.RT.stats().badWhy === 'stall' && viaAll(L1, 'sb') && viaAll(L2, 'sb'), 15000)), 'поздний обрыв «по объёму»: два зависания подряд — плохая связь (stall), комната целиком в Supabase', [L1.RT.stats(), L2.RT.stats().chans]);
+  clearInterval(chat);
+  const before = dl1.msgs().length;
+  dl2.room.send({ x: 'дошло?' });
+  ok(!!(await until(() => dl1.msgs().includes('дошло?'), 4000)) && dl1.msgs().length > before, 'поздний обрыв: после переезда сообщения доходят');
+  dl1.room.leave(); dl2.room.leave();
+  // 8c''. медленная связь: проба дольше WAIT_MS — эта комната сразу через Supabase (игра по ссылке не ждёт), проба идёт дальше;
+  //       следующая комната — уже через свой сервер
+  const SL = proxy(port, { delay: 3500 }); await SL.ready;
+  const W1 = makeTab({ rtUrl: SL.url, sbUrl: P.url, timing: { WAIT_MS: 1500, PROBE_MS: 12000, HEALTH_MS: 9000 } });
+  const dw = duel(W1, 'rt8abc', 'W1');
+  ok(!!(await until(() => viaAll(W1, 'sb') && W1.RT.stats().slowProbe === 1, 4000)), 'медленная проба: комната не ждёт — через 1,5 с уже в Supabase', W1.RT.stats());
+  ok(!!(await until(() => W1.RT.stats().st === 'up', 14000)) && !W1.RT.stats().badWhy, 'медленная проба: проба всё же прошла (связь годная, просто медленная)', W1.RT.stats());
+  const dw2 = duel(W1, 'rt9abc', 'W1b');
+  ok(!!(await until(() => W1.RT.stats().chans.find(c => c.name === 'chess-duel-rt9abc')?.via === 'rt', 15000)), 'медленная проба: следующая комната — через свой сервер', W1.RT.stats().chans);
+  dw.room.leave(); dw2.room.leave();
   // 8d. кто-то с ?rt=0 (или старая вкладка) — вся комната переезжает, «соперник ушёл» не было
   const G = makeTab({ rtUrl: S.url, sbUrl: P.url });
   const dg = duel(G, 'rt4abc', 'G');
