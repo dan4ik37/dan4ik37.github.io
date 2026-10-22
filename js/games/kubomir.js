@@ -65,8 +65,8 @@
     el.querySelector('.kb-top').addEventListener('click', e => { const b = e.target.closest('[data-kb]'); if (!b) return; onTop(b.dataset.kb); });
     el.closest('#gamesStage')?.classList.add('gm-own-bar');
     const p = String(gapi?.param || '');
-    const m = /^play\/([\w-]+)$/.exec(p);
-    if (m) playById(m[1]); else showMenu();
+    const m = /^play\/([\w-]+)$/.exec(p), cm = /^(?:coop\/)?([a-z2-7]{8})$/.exec(p);
+    if (m) playById(m[1]); else if (cm) joinCoop(cm[1]); else showMenu();
     window.addEventListener('pagehide', onHide);
     document.addEventListener('visibilitychange', onVis);
   }
@@ -74,6 +74,7 @@
     window.removeEventListener('pagehide', onHide);
     document.removeEventListener('visibilitychange', onVis);
     if (S) { journalNow(); stopWorld({ quick: true, cloud: true }); }   // ушёл со страницы игры (вкладка жива) — копия в облако в фоне
+    if (coopG) { coopG.leave(); coopG = null; }
     el = null; api = null;
   }
   function onTop(a){
@@ -89,7 +90,7 @@
     const sc = screen(); if (!sc) return;
     setWhere('');
     sc.innerHTML = `<div class="kb-menu"><div class="kb-logo"><span>🧊</span><div><b>Кубомир</b><small>Бесконечный мир из кубиков: строй, копай, выживай</small></div></div>
-      <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-m="new">➕ Новый мир</button><button type="button" class="kb-btn" data-m="import">📂 Загрузить файл мира</button><button type="button" class="kb-btn" data-m="mc">📥 Из Minecraft</button><button type="button" class="kb-btn" data-m="mods">🧩 Моды</button><button type="button" class="kb-btn" data-m="ach">🏆 Достижения</button></div>
+      <div class="kb-mbtns"><button type="button" class="kb-btn primary" data-m="new">➕ Новый мир</button><button type="button" class="kb-btn" data-m="import">📂 Загрузить файл мира</button><button type="button" class="kb-btn" data-m="mc">📥 Из Minecraft</button><button type="button" class="kb-btn" data-m="mods">🧩 Моды</button><button type="button" class="kb-btn" data-m="ach">🏆 Достижения</button><button type="button" class="kb-btn" data-m="coop" title="Зайти в мир друга по ссылке или коду">👥 В мир друга</button></div>
       <div class="kb-worlds"><div class="kb-note">⏳ Загружаем миры…</div></div>
       <input type="file" class="kb-file" accept=".kubomir,.json,application/json" hidden></div>`;
     sc.querySelector('.kb-mbtns').addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; menuAct(b.dataset.m); });
@@ -113,6 +114,14 @@
     else if (a === 'mods') window.KubomirMods?.library(screen(), { back: showMenu, mc: file => window.KubomirMC?.open(screen(), { back: () => menuAct('mods'), play: id => playById(id), file }) });
     else if (a === 'mc') window.KubomirMC?.open(screen(), { back: showMenu, play: id => playById(id) });
     else if (a === 'ach') achScreen();
+    else if (a === 'coop') {
+      const s = prompt('Ссылка или код мира друга (8 знаков)', '');
+      const c = /([a-z2-7]{8})\s*$/i.exec(String(s || '').trim());
+      if (!c) { if (s) toastMsg('Нужен код из 8 знаков — он в конце ссылки друга'); return; }
+      const code = c[1].toLowerCase();
+      window.D37Route?.setUrl?.('#/games/kubomir/' + code);
+      joinCoop(code);
+    }
   }
   async function worldAct(a, id, w){
     const V = VX();
@@ -167,6 +176,7 @@
   async function exportWorld(id){
     const V = VX(), obj = await V.store.exportWorld(id);
     if (!obj) return;
+    if (obj.world) { obj.world = Object.assign({}, obj.world); delete obj.world.coop; delete obj.world.coopPlayers; delete obj.world.cloud; }
     // моды мира — в тот же файл (на другом компьютере мир откроется с ними)
     try { const mods = await window.KubomirMods?.pack?.(obj.world.mods || []); if (mods?.length) obj.mods = mods; } catch (e) {}
     const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
@@ -183,6 +193,45 @@
       const got = Array.isArray(obj.mods) ? await window.KubomirMods?.unpack?.(obj.mods).catch(() => null) : null;
       toastMsg('📥 Мир «' + w.name + '» загружен' + (got?.added?.length ? ' + моды: ' + got.added.join(', ') : '')); showMenu();
     } catch (e) { toastMsg('Не получилось: ' + (e.message || e)); }
+  }
+
+  // ═══ 👥 Мир друга (гость): js/games/kubomir-coop.js — хозяин считает мир, мы показываем сразу и спрашиваем его ═══
+  let coopG = null;
+  async function joinCoop(code){
+    const sc = screen(); if (!sc) return;
+    if (S) await stopWorld();
+    if (coopG) { coopG.leave(); coopG = null; }
+    view = 'coop';
+    setWhere('👥 мир друга');
+    sc.innerHTML = `<div class="kb-menu kb-coopjoin"><div class="kb-logo"><span>👥</span><div><b>Мир друга</b><small class="kb-cj">Подключаемся…</small></div></div>
+      <p class="kb-note">Мир у хозяина: ты строишь, копаешь и сражаешься вместе с ним. Твои вещи — твои, хозяин хранит их в своём мире.</p>
+      <div class="kb-mbtns"><button type="button" class="kb-btn" data-n="back">← К моим мирам</button></div></div>`;
+    const line = t => { const s = sc.querySelector('.kb-cj'); if (s) s.textContent = t; };
+    sc.querySelector('[data-n="back"]').onclick = () => { coopG?.leave(); coopG = null; window.D37Route?.setUrl?.('#/games/kubomir'); showMenu(); };
+    if (!window.KubomirCoop || !window.D37Coop || !window.GameRoom) { line('Не загрузилась игра вместе — обнови страницу'); return; }
+    if (!window.crypto?.subtle) { line('Браузер без защищённого соединения (нужен https) — игра вместе недоступна'); return; }
+    const okE = E().load();   // движок грузим, пока ищем хозяина
+    const G = coopG = window.KubomirCoop.join(code, {
+      start: async (meta, g) => { if (coopG !== g || !el) return; line('Загружаем мир…'); if (!(await okE)) { line('Не загрузилась 3D-графика — нужен браузер с WebGL'); g.leave(); return; } if (coopG === g && el) playWorld(meta, { guest: g }); },
+      status: s => line(s === 'wait' ? '⏳ Хозяин мира сейчас не в нём — ждём (ссылка работает, когда он в мире)…' : 'Подключаемся к хозяину мира…'),
+      ended: (text, why) => coopEnded(G, text, why),
+      rd: () => opts.rd, applySaved: (c, rec) => applySaved(c, rec), give: s => S ? give(S, s) : s.n, hurt: (n, m) => { if (S && !S.creative) mobHit(S, n, m); },
+      playerData: () => S && S.coopGuest ? guestData(S) : null, toast: t => toastMsg(t), log: t => log(t), changed: () => { if (S) coopBar(S); },
+    });
+    try { await G.start(); } catch (e) { line('Не получилось: ' + (e.message || e)); }
+  }
+  function guestData(st){ const P = st.P; return { x: P.x, y: P.y, z: P.z, yaw: st.rig.yaw, pitch: st.rig.fp, hp: P.hp, food: P.food, sat: P.sat, sel: P.sel, fly: P.fly, inv: P.inv.map(s => s ? { id: s.id, n: s.n, d: s.d | 0 } : null), off: P.off ? { id: P.off.id, n: P.off.n, d: P.off.d | 0 } : null }; }
+  async function coopEnded(G, text, why){
+    if (coopG !== G) return;
+    coopG = null;
+    const wasWorld = !!S?.coopGuest;
+    if (wasWorld) await stopWorld({ quick: true });
+    const sc = screen(); if (!sc || !el) return;
+    view = 'coop';
+    sc.innerHTML = `<div class="kb-menu kb-coopjoin"><div class="kb-logo"><span>👥</span><div><b>Мир друга</b><small>${esc(text)}</small></div></div>
+      <div class="kb-mbtns">${['host', 'silent', 'offline', 'wait'].includes(why) ? '<button type="button" class="kb-btn primary" data-n="again">↻ Попробовать ещё раз</button>' : ''}<button type="button" class="kb-btn" data-n="back">← К моим мирам</button></div></div>`;
+    sc.querySelector('[data-n="back"]').onclick = () => { window.D37Route?.setUrl?.('#/games/kubomir'); showMenu(); };
+    sc.querySelector('[data-n="again"]')?.addEventListener('click', () => joinCoop(G.code));
   }
 
   // ═══ ☁️ Облако (js/core/cloud.js + ugc.sql): копия миров — открыть на другом устройстве ═══
@@ -363,7 +412,7 @@
   function toastMsg(t, ok){ if (S?.H) S.H.toast(t, ok); else if (typeof gameToast === 'function') gameToast(t); }
 
   // ═══ Мир: запуск ═══
-  async function playWorld(meta){
+  async function playWorld(meta, o = {}){
     const sc = screen(); if (!sc) return;
     view = 'loading';
     sc.innerHTML = '<div class="kb-load"><div class="spinner"></div><b>Загружаем мир…</b><small class="kb-lp"></small></div>';
@@ -373,14 +422,15 @@
     adL?.done?.();
     if (!el || view !== 'loading') return;
     if (!ok) { sc.innerHTML = '<div class="kb-menu"><b>Не загрузилась 3D-графика</b><p class="kb-note">Проверь интернет и обнови страницу. Нужен браузер с WebGL.</p></div>'; return; }
-    try { await startWorld(meta); }
+    try { await startWorld(meta, o); }
     catch (e) { console.error(e); stopWorld({ quick: true }); sc.innerHTML = `<div class="kb-menu"><b>Мир не открылся</b><p class="kb-note">${esc(e.message || e)}</p><button type="button" class="kb-btn" data-n="back">← К мирам</button></div>`; sc.querySelector('[data-n="back"]').onclick = showMenu; }
   }
 
-  async function startWorld(meta){
+  async function startWorld(meta, o = {}){
     const Ex = E(), V = VX(), sc = screen(), wr = wrap();
+    const guest = o.guest || null;   // 👥 мир друга: мир — у хозяина (js/games/kubomir-coop.js), здесь ничего не сохраняем
     // журнал (вкладку закрыли до сохранения) — сначала дописать в базу
-    const J = V.store.takeJournal(meta.id);
+    const J = guest ? null : V.store.takeJournal(meta.id);
     if (J) {
       try {
         if (J.recs?.length) {
@@ -392,7 +442,7 @@
       } catch (e) { console.error(e); }
     }
     // моды мира: блоки, вещи, рецепты, текстуры, фичи генерации, скрипты
-    const modState = window.KubomirMods ? await window.KubomirMods.forWorld(meta) : { features: [], loaded: [] };
+    const modState = window.KubomirMods && !guest ? await window.KubomirMods.forWorld(meta) : { features: [], loaded: [] };
     // перенос из Minecraft: цветные блоки «mc:…» мира, пакет текстур; мир «без земли» — весь из сохранения
     try { await window.KubomirMC?.beforeWorld(meta); } catch (e) { console.error(e); }
     if (meta.gen === 'void') modState.features = [...modState.features, { type: 'void' }];
@@ -415,7 +465,7 @@
     const G = V.genInit(W.seed, { features: modState.features, ver: meta.genVer || 1 });   // genVer: старые миры — 1 (как были), новые — 2
     const st = {
       meta, W, G, R, mods: modState, remapIn, remapOut, ox: 0, oz: 0, t: 0, steps: 0, ready: false, dead: false, paused: false, saving: false,
-      unsaved: new Set(), savedKeys: await V.store.chunkKeys(meta.id).catch(() => new Set()), lastSave: now(), creative: meta.mode === 'creative',
+      unsaved: new Set(), savedKeys: guest ? new Set() : await V.store.chunkKeys(meta.id).catch(() => new Set()), lastSave: now(), creative: meta.mode === 'creative', coopGuest: !!guest, net: guest,
       hit: null, mine: { key: '', t: 0, need: 0, st: -1, cool: 0 }, placeCool: 0, eat: null, hud: {}, keys: { q: false }, raw: new Set(),
       stats: { placed: 0, fps: 0 }, chat: [], achQ: [], dayPrev: null,
       // бой (docs/COMBAT.md): боец ядра (перезарядка, серия, щит, лук), что в руках (hands), держит щит, куда бьёт (палец)
@@ -442,7 +492,7 @@
     // подгрузка мира
     const url = 'js/engine/voxel-worker.js?v=' + ver();
     st.ST = V.streamer({ world: W, rd: opts.rd, url, features: modState.features, genVer: meta.genVer || 1,
-      load: c => st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
+      load: c => guest ? guest.loadChunk(c) : st.savedKeys.has(c.cx + '|' + c.cz) ? V.store.chunk(meta.id, c.cx, c.cz) : null,
       applySaved: (c, rec) => applySaved(c, rec),
       onGen: c => { st.ents?.onChunkTiles?.(c); },
       onMesh: (c, m) => { VR.setChunk(c, m); st.KL?.onChunk(c, m); },
@@ -467,6 +517,8 @@
     const P = st.P = { x: 0, y: 80, z: 0, vx: 0, vy: 0, vz: 0, w: PW, h: PH, onGround: false, fly: st.creative, sneak: false, sprint: false, water: 0, lava: 0, climb: false, eyeWater: false,
       fallTop: 80, hp: 20, food: 20, sat: 5, exh: 0, air: 15, regT: 0, starveT: 0, hurtT: 0, inv: new Array(36).fill(null), off: null, sel: 0, cursor: null, dead: false, stepT: 0, lastStepX: 0, lastStepZ: 0, bodyYaw: 0, swimT: 0 };
     const sp = meta.spawn || (meta.spawn = V.findSpawn(G, 0, 0));
+    // гость: свои вещи и место — что хозяин хранит в мире; первый раз — рядом с хозяином
+    if (guest) meta.player = guest.you && Number.isFinite(guest.you.x) ? guest.you : guest.at && Number.isFinite(guest.at.x) ? { x: guest.at.x + 1.5, y: guest.at.y + .1, z: guest.at.z + .5, hp: 20, food: 20 } : null;
     const pl = meta.player;
     if (pl && Number.isFinite(pl.x)) { Object.assign(P, { x: pl.x, y: pl.y, z: pl.z, hp: pl.hp ?? 20, food: pl.food ?? 20, sat: pl.sat ?? 5, sel: pl.sel | 0, fly: st.creative && !!pl.fly }); invLoad(P.inv, pl.inv); P.off = stackLoad(pl.off); st.rig.yaw = pl.yaw || 0; st.rig.fp = pl.pitch || 0; }
     else { P.x = sp.x; P.y = sp.y; P.z = sp.z; if (!st.creative) giveStart(P); else { P.inv[0] = { id: 'grass', n: 64 }; P.inv[1] = { id: 'planks_oak', n: 64 }; P.inv[2] = { id: 'torch', n: 64 }; P.inv[3] = { id: 'glass', n: 64 }; } }
@@ -482,7 +534,8 @@
       st.ents.hookPickup = (id, n) => { popSlot(st, id); st.modRun?.event('pickup', { item: id, n }); };   // моды: подобрал вещь, победил моба
       st.ents.hookKill = (m, by) => { if (by === 'player') st.modRun?.event('mobKill', { mob: m.type, x: m.x, y: m.y, z: m.z }); };
       st.ents.hookIce = (x, y, z) => iceBreak(st, x, y, z, false); }   // моб всплыл подо льдом — прорубь
-    if (meta.ents && st.ents) st.ents.load(meta.ents);
+    if (guest && st.ents) st.ents.client = true;   // мобы и вещи — снимками хозяина
+    else if (meta.ents && st.ents) st.ents.load(meta.ents);
     st.hand = window.KubomirHand && window.KubomirEnts?.Lit ? window.KubomirHand.create(st) : null;   // руки как в Майнкрафте, свет человечков
     st.weatherOff = opts.weather === false;
     st.seasons = ['calendar', 'cycle', 'off'].includes(opts.seasons) ? opts.seasons : 'calendar';   // времена года (движок погоды)
@@ -491,7 +544,7 @@
     if (I.touch) touchUI(st);   // кнопки телефона — когда уже есть игрок
     crossUpdate(st);
     // моды: события в песочнице
-    st.modRun = window.KubomirMods ? window.KubomirMods.run(st, modState, modHooks()) : null;
+    st.modRun = window.KubomirMods && !guest ? window.KubomirMods.run(st, modState, modHooks()) : null;
     // настройки, полный экран, телефон
     st.stage = el.closest('#gamesStage');
     st.offCtx = window.D37Settings?.context({ engine: true, R: () => S?.R, gfx: () => setTimeout(() => restartWorld(), 60), view: v => { if (S && S.rig.mode !== v) toggleView(); }, onClose: () => S?.C?.reset_state() });
@@ -500,10 +553,12 @@
     st.ro?.observe(wr); R.resize();
     st.loop = Ex.loop(update, frame);
     st.tick = setInterval(housekeeping, 1000);
-    setWhere(meta.name + (st.creative ? ' · 🎨' : ''));
+    setWhere((guest ? '👥 ' : '') + meta.name + (st.creative ? ' · 🎨' : ''));
+    if (guest) { guest.attach(st); coopBar(st); return; }
     meta.played = Date.now();
     V.store.putWorld(meta).catch(() => {});
     if (modState.loaded.length) unlock('mod');
+    if (meta.coop?.on && !(meta.mods || []).length) coopHost(st, true);   // мир был открыт для друзей — снова открыт (та же ссылка)
   }
   // туман движка начинается с 30 % дальности — у кубиков видно дальше: начало тумана — 60 % (конец прячет край мира)
   function fogNear(st){ const f = st.R.scene.fog; if (f && !(st.uwK > 0) && f.far > 20) f.near = f.far * .6; }
@@ -552,6 +607,8 @@
   async function stopWorld(o = {}){
     const st = S; if (!st) return;
     S = null;
+    if (st.net) { try { if (st.coopGuest) { if (coopG === st.net) coopG = null; st.net.leave(); } else st.net.close('exit'); } catch (e) { console.error(e); } }
+    st.coopEl?.remove();
     let saved = null;
     try { if (!o.quick) await (saved = saveAll(st, true)); else saved = saveAll(st, true); } catch (e) { console.error(e); }
     // ☁️ копия в облако: вышел в меню или ушёл со страницы (вкладку не закрыли); закрыли вкладку — отправится в следующий раз
@@ -607,7 +664,7 @@
     return r;
   }
   function saveChunks(list, st = S){
-    if (!st || !list.length) return Promise.resolve();
+    if (!st || !list.length || st.coopGuest) return Promise.resolve();
     const recs = list.map(c => chunkRec(c, st));
     for (const c of list) { st.unsaved.delete(c.key); st.savedKeys.add(c.cx + '|' + c.cz); }
     return VX().store.putChunks(st.meta.id, recs).catch(e => console.error(e));
@@ -621,7 +678,7 @@
     return m;
   }
   async function saveAll(st = S, thumb){
-    if (!st || st.saving) return;
+    if (!st || st.saving || st.coopGuest) return;
     st.saving = true;
     try {
       const list = []; for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) list.push(c); }
@@ -635,7 +692,7 @@
   }
   // вкладку закрывают: синхронно в localStorage (журнал), база — как успеет
   function journalNow(){
-    const st = S; if (!st || !st.ready) return;
+    const st = S; if (!st || !st.ready || st.coopGuest) return;
     const V = VX(), recs = [];
     for (const k of st.unsaved) { const c = st.W.chunks.get(k); if (c && c.gen) { const r = chunkRec(c, st); recs.push({ cx: r.cx, cz: r.cz, e: V.store.b64(new Uint8Array(r.e.buffer)), t: r.t }); } }
     const m = metaSnap(st), meta = { player: m.player, time: m.time, day: m.day, ents: m.ents, palette: m.palette, spawn: m.spawn, modData: m.modData, ice: m.ice, snow: m.snow };
@@ -704,6 +761,7 @@
       L.time = L._t;
     }
     st.WX?.step(dt);
+    st.net?.step(dt);   // 👥 игра вместе: снимки, правки, чанки, своё состояние
     if (!st.coopGuest) { st.meta.gt = (st.meta.gt || 0) + dt; const cm = st.meta.cloud; if (cm?.on && !cm.dirty) cm.dirty = true; }   // ☁️ игровое время (с) и «менялся после отправки»
     if (now() - st.lastSave > 12000) saveAll(st).catch(() => {});
   }
@@ -1032,6 +1090,7 @@
   // прорубь (разбил или проломил снизу): треск, осколки льда; вещей нет. Лёд — у погоды (kubomir-weather.js: X.hole)
   function iceBreak(st, x, y, z, hit){
     if (!st.WX?.hole?.(x, y, z)) return false;
+    if (st.coopGuest) st.net.reqIce(x, y, z);   // 👥 прорубь — и у хозяина (он разошлёт остальным)
     const V = VX();
     st.AU?.play('kb_ice', { x: x - st.ox + .5, y: y + .8, z: z - st.oz + .5, vol: hit ? .8 : .65, rate: .9 + Math.random() * .2 });
     if (st.ents?.breakFx) st.ents.breakFx(x, y, z, V.ID.ice); else st.ents?.debris?.(x, y, z, V.ID.ice);
@@ -1169,7 +1228,7 @@
     st.I.unlock();
     const keep = !['normal', 'hard'].includes(st.meta.diff || 'easy');
     if (st.F) { st.F.guardOn = false; st.F.drawOn = false; st.F.draw = 0; st.F.mv = null; st.guardIn = false; }
-    if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { st.ents?.addItem(P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } if (P.off) { st.ents?.addItem(P.x, P.y + 1, P.z, P.off, true); P.off = null; } }
+    if (!keep) { for (let i = 0; i < P.inv.length; i++) if (P.inv[i]) { spawnItem(st, P.x, P.y + 1, P.z, P.inv[i], true); P.inv[i] = null; } if (P.off) { spawnItem(st, P.x, P.y + 1, P.z, P.off, true); P.off = null; } }
     st.lastDeath = { x: P.x, y: P.y, z: P.z, t: now(), drop: !keep && !!st.ents };
     st.nightSeen = false;   // «Пережил ночь» — только если дожил до утра без нокаута
     const xyz = `X ${Math.floor(P.x)}, Y ${Math.floor(P.y)}, Z ${Math.floor(P.z)}`;
@@ -1270,10 +1329,17 @@
     if (st.P.eyeWater) t *= 3;
     return Math.max(.05, t);
   }
-  function canHarvest(st, b){
+  function canHarvest(st, b){ const it = st.P.inv[st.P.sel]; return canHarvestTool(b, it ? it.id : ''); }
+  function canHarvestTool(b, toolId){
     if (!b.tier) return true;
-    const it = st.P.inv[st.P.sel], tool = it ? VX().item(it.id)?.tool : null;
+    const tool = toolId ? VX().item(toolId)?.tool : null;
     return !!(tool && tool.kind === b.tool && tool.tier >= b.tier);
+  }
+  // сколько копать блок этим инструментом (без «в воздухе» и «под водой» — хозяин проверяет гостя с запасом)
+  function breakTimeTool(b, toolId){
+    if (!b || b.hard < 0) return Infinity;
+    const tool = toolId ? VX().item(toolId)?.tool : null, right = !!(tool && b.tool && tool.kind === b.tool), can = !b.tier || (right && tool.tier >= b.tier);
+    return Math.max(.05, b.hard * (can ? 1.5 : 5) / (right ? tool.speed : 1));
   }
   const DIG = { stone: 'kb_dig_stone', metal: 'kb_dig_stone', glass: 'kb_dig_stone', wood: 'kb_dig_wood', grass: 'kb_dig_grass', dirt: 'kb_dig_dirt', sand: 'kb_dig_dirt', gravel: 'kb_dig_dirt', snow: 'kb_dig_dirt', wool: 'kb_dig_grass' };
   function digSound(b){ return DIG[b.sound] || 'kb_dig_stone'; }
@@ -1291,31 +1357,39 @@
     const b = V.blocks[hit.v & 0xfff];
     if (!b || b.hard < 0 && !st.creative) return;
     if (b.hard < 0 && st.creative && b.name === 'bedrock' && hit.y === 0) return;
-    // дверь — обе половины
-    const st2 = hit.v >>> 12;
-    if (b.shape === V.SHAPE.door) { const oy = st2 & 8 ? -1 : 1, o = W.raw(hit.x, hit.y + oy, hit.z); if (o > 0 && (o & 0xfff) === b.id) W.set(hit.x, hit.y + oy, hit.z, 0); }
-    // блок льда над водой — становится водой (как в Майнкрафте): не пустота над озером
-    const toWater = b.name === 'ice' && V.T.liquid[W.get(hit.x, hit.y - 1, hit.z)] === 1;
-    W.set(hit.x, hit.y, hit.z, toWater ? V.cell(V.ID.water) : 0, { urgent: 3 });
-    st.AU?.play(digSound(b), { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .8 });
-    if (st.ents?.breakFx) st.ents.breakFx(hit.x, hit.y, hit.z, b.id); else st.ents?.debris(hit.x, hit.y, hit.z, b.id);   // осколки кувыркаются и прыгают
-    if (opts.fell !== false && /^log_/.test(b.name)) st.ents?.fellTree?.(hit.x, hit.y, hit.z, st.P);   // подрубил дерево — валится (kubomir-ents.js)
+    const P = st.P, it = P.inv[P.sel], tool = it ? V.item(it.id)?.tool : null;
+    // 👥 сундук или печь открыты у другого игрока — не ломается
+    if (b.ui && st.net?.tileBusy?.(hit.x, hit.y, hit.z)) { st.H.toast('📦 Сейчас открыто у: ' + st.net.tileBusy(hit.x, hit.y, hit.z)); return; }
+    breakCell(st, hit.x, hit.y, hit.z, hit.v, it ? it.id : '', P, !!st.coopGuest);
+    if (st.coopGuest) st.net.reqBreak(hit.x, hit.y, hit.z, it ? it.id : '');   // 👥 у гостя — показали сразу, хозяин проверит и разошлёт
     st.modRun?.event('blockBreak', { x: hit.x, y: hit.y, z: hit.z, block: b.name });
     if (st.creative) return;
-    // вещь выпала
-    const P = st.P, it = P.inv[P.sel], tool = it ? V.item(it.id)?.tool : null;
-    if (canHarvest(st, b)) {
-      for (const [name, n] of dropsOf(st, b)) st.ents?.addItem(hit.x + .5, hit.y + .4, hit.z + .5, { id: name, n });
-    }
-    // сундук и печь — содержимое тоже
-    const tile = W.dropTile(hit.x, hit.y, hit.z);
-    if (tile) for (const s of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (s && s.n > 0) st.ents?.addItem(hit.x + .5, hit.y + .5, hit.z + .5, s);
     // износ инструмента, голод
     if (tool && b.hard > 0) wear(st, P.sel, 1);
     P.exh += .005;
     if (b.name.startsWith('log_')) unlock('log');
     if (b.name === 'ore_diamond' && canHarvest(st, b)) unlock('diamond');
     if (b.name === 'ore_coal') unlock('coal');
+  }
+  // Сломать клетку (x, y, z) со значением v инструментом toolId; by — кто ломал ({ x, z }: дерево валится от него); only — только
+  // картинка (у гостя: мир, вещи и упавшее дерево — у хозяина). Дверь — обе половины, лёд над водой — вода, вещи и содержимое
+  // сундука или печи — выпадают (в «Творчестве» — нет)
+  function breakCell(st, x, y, z, v, toolId, by, only){
+    const V = VX(), W = st.W, b = V.blocks[v & 0xfff];
+    const st2 = v >>> 12;
+    if (b.shape === V.SHAPE.door) { const oy = st2 & 8 ? -1 : 1, o = W.raw(x, y + oy, z); if (o > 0 && (o & 0xfff) === b.id) W.set(x, y + oy, z, 0); }
+    // блок льда над водой — становится водой (как в Майнкрафте): не пустота над озером
+    const toWater = b.name === 'ice' && V.T.liquid[W.get(x, y - 1, z)] === 1;
+    W.set(x, y, z, toWater ? V.cell(V.ID.water) : 0, { urgent: 3 });
+    st.AU?.play(digSound(b), { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .8 });
+    if (st.ents?.breakFx) st.ents.breakFx(x, y, z, b.id); else st.ents?.debris(x, y, z, b.id);   // осколки кувыркаются и прыгают
+    if (only) return;
+    if (opts.fell !== false && /^log_/.test(b.name)) st.ents?.fellTree?.(x, y, z, by);   // подрубил дерево — валится (kubomir-ents.js)
+    if (st.creative) return;
+    if (canHarvestTool(b, toolId)) for (const [name, n] of dropsOf(st, b)) st.ents?.addItem(x + .5, y + .4, z + .5, { id: name, n });
+    // сундук и печь — содержимое тоже
+    const tile = W.dropTile(x, y, z);
+    if (tile) for (const s of [...(tile.items || []), tile.in, tile.fuel, tile.out]) if (s && s.n > 0) st.ents?.addItem(x + .5, y + .5, z + .5, s);
   }
   // что выпадает: [[имя, сколько]]
   function dropsOf(st, b){
@@ -1482,6 +1556,7 @@
     C.receive(F, CBOUT, m.x, m.z, P.x, P.z, m);
     if (CBOUT.parried) {
       m.vx += CBOUT.akx; m.vz += CBOUT.akz; m.vy = Math.max(m.vy, 3); m.wind = 0;
+      if (st.coopGuest && m.id) st.net.parry(m.id, CBOUT.akx, CBOUT.akz, m.stag || 0);   // 👥 моб — у хозяина
       st.AU?.play('kb_parry', { vol: .8 });
       const [ex, ey, ez] = eye(st), d = lookDir(st); st.ents?.glow?.('spark', ex + d.x * .9, ey - .2, ez + d.z * .9, 10);
       st.hand?.flash?.(); if (shakeOK(st)) st.rig.kick?.(.6);
@@ -1514,7 +1589,15 @@
     if (st.eat) return true;
     if (hit && !P.sneak) {
       const b = V.blocks[hit.v & 0xfff];
-      if (b.ui) { st.ui?.open(b.ui, { x: hit.x, y: hit.y, z: hit.z }); st.hand?.act('push'); return true; }
+      if (b.ui) {
+        st.hand?.act('push');
+        if (st.net && (b.ui === 'chest' || b.ui === 'furnace')) {   // 👥 сундук и печь — по одному игроку
+          if (st.coopGuest) { if (!st.tileWait) { st.tileWait = true; st.net.openTile(b.ui, hit.x, hit.y, hit.z).then(ok => { st.tileWait = false; if (ok && S === st) st.ui?.open(b.ui, { x: hit.x, y: hit.y, z: hit.z }); }); } return true; }
+          const who = st.net.tileBusy?.(hit.x, hit.y, hit.z); if (who) { st.H.toast('📦 Сейчас открыто у: ' + who); return true; }
+          st.net.lockHost?.(hit.x, hit.y, hit.z);
+        }
+        st.ui?.open(b.ui, { x: hit.x, y: hit.y, z: hit.z }); return true;
+      }
       if (b.shape === V.SHAPE.door) { toggleDoor(st, hit); st.hand?.act('push'); return true; }
       if (st.modRun?.hasUse(b.name) || st.modRun?.hasUse(s?.id)) { st.modRun.event('use', { x: hit.x, y: hit.y, z: hit.z, block: b.name, item: s?.id || '' }); st.hand?.act('push'); return true; }
     }
@@ -1607,6 +1690,7 @@
     if (!b) return false;
     const T = placeTarget(st, hit, b); if (!T) return false;
     const { x, y, z, state } = T;
+    if (st.coopGuest) st.net.reqPlace(x, y, z, V.cell(b.id, state), b.shape === V.SHAPE.door ? V.cell(b.id, state | 8) : null, it.name);   // 👥 хозяину
     if (b.shape === V.SHAPE.door) {
       W.set(x, y, z, V.cell(b.id, state), { urgent: 3 });
       W.set(x, y + 1, z, V.cell(b.id, state | 8), { urgent: 3 });
@@ -1627,6 +1711,7 @@
   function boxOverlap(P, x, y, z, h){ const hw = P.w / 2; return P.x + hw > x && P.x - hw < x + 1 && P.z + hw > z && P.z - hw < z + 1 && P.y + P.h > y && P.y < y + h; }
   function toggleDoor(st, hit){
     const V = VX(), W = st.W, v = hit.v, s = v >>> 12, t = v & 0xfff, oy = s & 8 ? -1 : 1;
+    if (st.coopGuest) st.net.reqDoor(hit.x, hit.y, hit.z);   // 👥 хозяину (у себя — сразу)
     W.set(hit.x, hit.y, hit.z, V.cell(t, s ^ 4), { urgent: 3 });
     const o = W.raw(hit.x, hit.y + oy, hit.z); if (o > 0 && (o & 0xfff) === t) W.set(hit.x, hit.y + oy, hit.z, V.cell(t, (o >>> 12) ^ 4), { urgent: 3 });
     st.AU?.play(s & 4 ? 'door_wood_close' : 'door_wood_open', { x: hit.x - st.ox + .5, y: hit.y + .5, z: hit.z - st.oz + .5, vol: .7 });
@@ -1648,10 +1733,15 @@
     }
     if (st.creative) { const k = free >= 0 ? free : P.sel; P.inv[k] = { id: name, n: V.item(name).stack }; P.sel = k; }
   }
+  // вещь в мир (выбросил, выпала при нокауте): у гостя — в мир хозяина (он и покажет её всем)
+  function spawnItem(st, x, y, z, stack, scatter, vel){
+    if (st.coopGuest) { st.net.reqDrop(stack, [x, y, z], vel || null); return; }
+    st.ents?.addItem(x, y, z, stack, scatter, vel);
+  }
   function dropSel(st, all){
     const P = st.P, s = P.inv[P.sel]; if (!s) return;
     const n = all ? s.n : 1, d = lookDir(st), [ex, ey, ez] = eye(st);
-    st.ents?.addItem(ex + d.x * .4, ey - .3, ez + d.z * .4, { id: s.id, n, d: s.d }, false, [d.x * 5, 2.5, d.z * 5]);
+    spawnItem(st, ex + d.x * .4, ey - .3, ez + d.z * .4, { id: s.id, n, d: s.d }, false, [d.x * 5, 2.5, d.z * 5]);
     s.n -= n; if (s.n <= 0) P.inv[P.sel] = null;
   }
   // добавить в инвентарь (сначала к таким же, потом в пустые) → сколько не влезло
@@ -1719,6 +1809,7 @@
       me.lookAt.x = ex - st.ox + d.x * 8; me.lookAt.y = ey + d.y * 8; me.lookAt.z = ez - st.oz + d.z * 8;
       if (me.ch && me.ch !== st.meCh) { st.meCh = me.ch; me.ch.root.scale.setScalar(.8); }
     }
+    st.net?.frame(dt, t);   // 👥 другие игроки: место, поза, вещи в руках, имена — до A.update
     st.hand?.pose?.(dt, alpha);   // руки и вещи человечка (слой поз world3d: что в руках, удар, щит, лук) — до A.update
     A.update(dt, t, R.camera.position);
     dofFor(st);   // глубина резкости набора «Ультра»: от 1-го лица — нет, сзади — мягко только даль
@@ -1978,6 +2069,7 @@
     if (st.achQ.length && (!st.achAt || now() - st.achAt > 21000)) { const a = st.achQ.shift(); st.achAt = now(); rewardAch(a); }
     st.modRun?.second?.();
     cloudTick(st);
+    if (st.net) coopBar(st);
   }
 
   // ☁️ копия в облако каждые 3 минуты игры (прошлый раз не успели — через 20 с после входа); идёт — не мешает игре (сжатие кусками)
@@ -1994,6 +2086,105 @@
       else if (r.reason === 'slots') st.H?.toast('☁️ ' + cloudWhy(r));
       else st.cloudNext = now() + (r.reason === 'too_fast' ? 25000 : 60000);
     }, () => { st.cloudBusy = false; });
+  }
+
+  // ═══ 👥 Играть вместе (хозяин): ссылка, кто в мире, «выгнать», закрыть мир для друзей ═══
+  async function coopHost(st, silent){
+    if (st.net || st.coopGuest) { coopPanel(st); return; }
+    if ((st.meta.mods || []).length || st.mods.loaded.length) { st.H.toast('👥 Играть вместе можно в мирах без модов (моды хозяина друзьям пришлось бы ставить — позже)'); return; }
+    if (!window.KubomirCoop || !window.D37Coop || !window.GameRoom || !window.crypto?.subtle) { st.H.toast('👥 Игра вместе не загрузилась — обнови страницу'); return; }
+    const H = window.KubomirCoop.host(st, hostHooks(st));
+    try { await H.start(); } catch (e) { st.H.toast('👥 ' + (e.message || e)); return; }
+    if (S !== st) { H.close('exit', true); return; }
+    st.net = H; st.meta.coop.on = true;
+    V_putWorld(st);
+    coopBar(st);
+    if (!silent) coopPanel(st);
+  }
+  const V_putWorld = st => { VX().store.putWorld(st.meta).catch(() => {}); };
+  function coopStop(st){ if (!st.net || st.coopGuest) return; st.net.close('closed'); st.net = null; if (st.meta.coop) st.meta.coop.on = false; V_putWorld(st); coopBar(st); }
+  function coopPanel(st){
+    if (st.modWin) return;
+    st.I.unlock();
+    const box = document.createElement('div'); box.className = 'kb-inv kb-modwin kb-ui kb-coopwin';
+    const close = () => { box.remove(); clearInterval(tm); st.C?.reset_state?.(); if (st.modWin === box) st.modWin = null; };
+    box.close = close;
+    box.addEventListener('click', e => { if (e.target === box) close(); });
+    const draw = () => {
+      const N = st.net, guest = !!st.coopGuest, list = N ? N.players() : [];
+      const link = N ? N.link() : '';
+      const modeTxt = m => m === 'p2p' ? '📶 напрямую' : m === 'connecting' ? '⏳ соединяемся' : '📡 через сервер';
+      box.innerHTML = `<div class="kb-panel kb-coop"><div class="kb-ph"><b>👥 ${guest ? 'Мир друга' : 'Играть вместе'}</b><button type="button" class="kb-x" data-c="x" aria-label="Закрыть">✕</button></div>
+        ${N ? `${guest ? `<p class="kb-note">Мир у хозяина: он сохраняет мир и твои вещи. Связь: ${modeTxt(N.mode())}.</p>` : `<p class="kb-note">Отправь ссылку друзьям — зайдут в этот мир (до ${window.KubomirCoop.MAX - 1} человек). Ссылка работает, пока ты в мире; их вещи — их, мир сохраняешь ты.</p>
+          <div class="ct-link kb-clink"><input readonly value="${esc(link)}"><button type="button" class="kb-btn" data-c="copy">📋 Копировать</button>${navigator.share ? '<button type="button" class="kb-btn" data-c="share">📤</button>' : ''}</div>`}
+          <div class="kb-plist">${list.map(p => `<div class="kb-pl"><span>${p.host ? '👑' : p.me ? '🙂' : '👤'} ${esc(p.nick)}${p.me ? ' (ты)' : ''}${p.ko ? ' · 💫' : ''}</span><small>${p.mode ? modeTxt(p.mode) : ''}</small>${!guest && !p.me ? `<button type="button" class="kb-btn danger" data-k="${p.pid}" title="Выгнать из мира (до новой ссылки не вернётся)">👢</button>` : ''}</div>`).join('')}</div>
+          <div class="kb-mbtns">${guest ? '<button type="button" class="kb-btn danger" data-c="leave">🚪 Выйти из мира друга</button>' : '<button type="button" class="kb-btn" data-c="new" title="Старая ссылка перестанет работать, все выйдут">🔄 Новая ссылка</button><button type="button" class="kb-btn danger" data-c="stop">⛔ Закрыть мир для друзей</button>'}</div>`
+        : '<p class="kb-note">Мир закрыт для друзей.</p>'}</div>`;
+    };
+    box.addEventListener('click', async e => {
+      const b = e.target.closest('[data-c],[data-k]'); if (!b) return;
+      const c = b.dataset.c, N = st.net;
+      if (c === 'x') close();
+      else if (c === 'copy') { const inp = box.querySelector('.kb-clink input'); try { await navigator.clipboard.writeText(inp.value); b.textContent = '✅ Скопировано'; } catch (er) { inp.select(); } }
+      else if (c === 'share') { try { await navigator.share({ title: 'Кубомир — заходи в мой мир', url: N.link() }); } catch (er) {} }
+      else if (c === 'leave') { close(); const sc = screen(); await stopWorld(); window.D37Route?.setUrl?.('#/games/kubomir'); if (sc) showMenu(); }
+      else if (c === 'stop') { coopStop(st); close(); st.H.toast('⛔ Мир закрыт для друзей'); }
+      else if (c === 'new') { const ok = window.GameKit?.ask ? await window.GameKit.ask({ icon: '🔄', title: 'Новая ссылка?', text: 'Старая перестанет работать, все друзья выйдут из мира.', yes: '🔄 Новая', no: 'Нет' }) : confirm('Новая ссылка?'); if (!ok) return; coopStop(st); st.meta.coop = null; await coopHost(st, true); draw(); }
+      else if (b.dataset.k && N?.kick) { N.kick(+b.dataset.k); setTimeout(draw, 500); }
+    });
+    wrap().appendChild(box); st.modWin = box;
+    draw();
+    const tm = setInterval(() => { if (!box.isConnected) { clearInterval(tm); return; } if (!box.contains(document.activeElement)) draw(); }, 1500);
+  }
+  // полоска вверху: «👥 3 · 📶» (нажать — панель)
+  function coopBar(st){
+    if (!st?.hudEl) return;
+    const N = st.net;
+    if (!N) { st.coopEl?.remove(); st.coopEl = null; return; }
+    if (!st.coopEl) { const b = document.createElement('button'); b.type = 'button'; b.className = 'kb-coopbar'; b.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); if (S) coopPanel(S); }); st.hudEl.appendChild(b); st.coopEl = b; }
+    const n = N.players().length, m = st.coopGuest ? N.mode() : '';
+    const txt = '👥 ' + n + (st.coopGuest ? (m === 'p2p' ? ' · 📶' : m === 'connecting' ? ' · ⏳' : ' · 📡') + (N.paused ? ' · ⏸ хозяин свернул игру' : '') : '');
+    if (st.coopEl.textContent !== txt) st.coopEl.textContent = txt;
+  }
+  // хозяину — проверки и правки от гостей (kubomir-coop.js зовёт их, проверив дальность и частоту)
+  function hostHooks(st){
+    const V = VX();
+    return {
+      breakTime: (b, tool) => breakTimeTool(b, tool),
+      chunkRec: c => chunkRec(c, st),
+      breakAs(G, x, y, z, tool){
+        const v = st.W.raw(x, y, z); if (v <= 0) return false;
+        const b = V.blocks[v & 0xfff];
+        if (!b || (b.hard < 0 && !st.creative) || (b.name === 'bedrock' && y === 0)) return false;
+        if (b.ui && st.net?.tileBusy?.(x, y, z)) return false;
+        breakCell(st, x, y, z, v, tool && V.item(tool) ? tool : '', { x: G.tx, z: G.tz }, false);
+        return true;
+      },
+      placeAs(G, x, y, z, v, itemId, v2){
+        const W = st.W, it = itemId ? V.item(itemId) : null, b = it?.place ? V.block(it.place) : null;
+        if (!b || (v & 0xfff) !== b.id || y < 1 || y >= V.H - 1) return false;
+        const cur = W.get(x, y, z); if (cur < 0 || !V.blocks[cur].replace) return false;
+        const door = b.shape === V.SHAPE.door, h = door ? 2 : 1;
+        if (door) { const up = W.get(x, y + 1, z); if (up < 0 || !V.blocks[up].replace || v2 == null || (v2 & 0xfff) !== b.id || !((v2 >>> 12) & 8)) return false; }
+        // твёрдое — не в игрока и не в моба (сам гость себя проверил: у хозяина его место — с опозданием)
+        if (b.solid && (boxOverlap(st.P, x, y, z, h) || st.ents?.blocked?.(x, y, z) || (st.ents?.others || []).some(o => o.G !== G && !o.dead && boxOverlap({ x: o.x, y: o.y, z: o.z, w: PW, h: PH }, x, y, z, h)))) return false;
+        W.set(x, y, z, v, { urgent: 3 }); if (door) W.set(x, y + 1, z, v2, { urgent: 3 });
+        st.AU?.play('kb_place', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .6 });
+        st.ents?.placeFx?.(x, y, z, b.id);
+        return true;
+      },
+      doorAs(G, x, y, z){
+        const v = st.W.raw(x, y, z); if (v <= 0 || V.blocks[v & 0xfff].shape !== V.SHAPE.door) return false;
+        const W = st.W, s = v >>> 12, t = v & 0xfff, oy = s & 8 ? -1 : 1;
+        W.set(x, y, z, V.cell(t, s ^ 4), { urgent: 3 });
+        const o = W.raw(x, y + oy, z); if (o > 0 && (o & 0xfff) === t) W.set(x, y + oy, z, V.cell(t, (o >>> 12) ^ 4), { urgent: 3 });
+        st.AU?.play(s & 4 ? 'door_wood_close' : 'door_wood_open', { x: x - st.ox + .5, y: y + .5, z: z - st.oz + .5, vol: .7 });
+        return true;
+      },
+      iceAs(G, x, y, z){ if (!st.WX?.hole?.(x, y, z)) return false; st.AU?.play('kb_ice', { x: x - st.ox + .5, y: y + .8, z: z - st.oz + .5, vol: .6 }); st.ents?.breakFx?.(x, y, z, V.ID.ice); return true; },
+      toast: t => st.H?.toast(t), log: t => log(t), changed: () => coopBar(st),
+      ended: t => { st.H?.toast('👥 ' + t); st.net = null; coopBar(st); },
+    };
   }
 
   // ═══ Подсказки новичку (выживание): следующий шаг — по достижениям этого мира и вещам; после смерти — где лежат вещи ═══
@@ -2052,9 +2243,18 @@
     st.I.unlock();
     const fsOn = () => !!window.D37Full?.contains?.(wrap());
     st.menu = window.D37Settings.menu(wrap(), {
-      title: '🧊 ' + esc(st.meta.name), sub: st.creative ? '🎨 Творчество' : '⚔️ Выживание · мир сохраняется сам',
-      items: () => [
+      title: (st.coopGuest ? '👥 ' : '🧊 ') + esc(st.meta.name), sub: st.coopGuest ? 'Мир друга · хозяин сохраняет мир и твои вещи' : st.creative ? '🎨 Творчество' : '⚔️ Выживание · мир сохраняется сам',
+      items: () => st.coopGuest ? [
         { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        { id: 'coop', icon: '👥', text: 'Игроки' },
+        { id: 'settings', icon: '⚙️', text: 'Настройки' },
+        { id: 'full', icon: window.D37Full?.icon?.(fsOn()) || '⛶', text: fsOn() ? 'Обычный экран' : 'Во весь экран' },
+        { id: 'help', icon: '❓', text: 'Как играть' },
+        { id: 'unstuck', icon: '🆘', text: 'Я застрял' },
+        { id: 'exit', icon: '🚪', text: 'Выйти из мира друга', warn: true },
+      ] : [
+        { id: 'resume', icon: '▶', text: 'Продолжить', primary: true },
+        { id: 'coop', icon: '👥', text: st.net ? `Играть вместе (${st.net.players().length})` : 'Играть вместе' },
         { id: 'settings', icon: '⚙️', text: 'Настройки' },
         { id: 'mods', icon: '🧩', text: 'Моды мира' + (st.mods.loaded.length ? ` (${st.mods.loaded.length})` : '') },
         { id: 'mc', icon: '📥', text: 'Импорт из Minecraft' },
@@ -2079,7 +2279,8 @@
     else if (id === 'full') { window.D37Full?.toggle(el.closest('#gamesStage') || wrap(), { esc: false }); setTimeout(() => S?.menu?.redraw(), 80); }
     else if (id === 'help') help();
     else if (id === 'unstuck') { closeMenu(); unstuck(st); if (!st.I.touch) st.I.lock?.(); }
-    else if (id === 'exit') { closeMenu(); const sc = screen(); await stopWorld(); if (sc) showMenu(); }
+    else if (id === 'coop') { closeMenu(); if (st.coopGuest || st.net) coopPanel(st); else coopHost(st); }
+    else if (id === 'exit') { closeMenu(); const sc = screen(); await stopWorld(); if (st.coopGuest) window.D37Route?.setUrl?.('#/games/kubomir'); if (sc) showMenu(); }
   }
   // «📥 Импорт из Minecraft» в игре: окно поверх мира (постройку — перед собой, мир — новым миром)
   function mcWindow(st){
@@ -2113,16 +2314,17 @@
   }
   function command(line){
     const st = S; if (!st) return;
-    if (line[0] !== '/') { log('💬 ' + line); st.modRun?.event('chat', { text: line }); return; }
+    if (line[0] !== '/') { if (st.net?.chat) st.net.chat(line); else log('💬 ' + line); st.modRun?.event('chat', { text: line }); return; }
     const [cmd, ...a] = line.slice(1).split(/\s+/), P = st.P, V = VX();
     const cheat = st.creative || st.meta.cheats;
+    if (st.coopGuest && ['time', 'weather', 'gamemode'].includes(cmd)) { log('🔒 Это меняет только хозяин мира'); return; }
     switch (cmd) {
       case 'help': log('Команды: /time day|night|<часы>, /weather clear|rain|auto, /gamemode survival|creative, /tp x y z, /seed, /give <вещь> [сколько], /spawn, /where'); for (const c of st.modRun?.commandInfo?.() || []) log(`🧩 /${c.name}${c.desc ? ' — ' + c.desc : ''} (${c.mod})`); return;
       case 'seed': log('🌱 Зерно мира: ' + st.meta.seed); return;
-      case 'weather': { if (!cheat || !st.WX) break; const f = a[0] === 'rain' || a[0] === 'snow' ? 1 : a[0] === 'clear' ? 0 : null; st.WX.force = f; log(f == null ? '🌦 Погода — по расписанию мира' : f ? '🌧 Непогода (дождь, в снегах — снег)' : '☀️ Ясно'); return; }
+      case 'weather': { if (!cheat || !st.WX) break; const f = a[0] === 'rain' || a[0] === 'snow' ? 1 : a[0] === 'clear' ? 0 : null; st.WX.force = f; st.net?.weather?.(f); log(f == null ? '🌦 Погода — по расписанию мира' : f ? '🌧 Непогода (дождь, в снегах — снег)' : '☀️ Ясно'); return; }
       case 'where': log(`📍 ${Math.floor(P.x)} ${Math.floor(P.y)} ${Math.floor(P.z)}`); return;
       case 'time': { if (!cheat) break; const h = a[0] === 'day' ? 8 : a[0] === 'night' ? 21 : a[0] === 'noon' ? 12 : +a[0]; if (Number.isFinite(h)) { st.R.lighting.time = ((h % 24) + 24) % 24; log('🕐 Время: ' + st.R.lighting.time + ' ч'); } return; }
-      case 'gamemode': { if (!cheat && a[0] !== 'survival') break; const c = a[0] === 'creative' || a[0] === 'c' || a[0] === '1'; st.creative = c; st.meta.mode = c ? 'creative' : 'survival'; if (c) st.meta.cheats = true; P.fly = false; log(c ? '🎨 Творчество (достижения в этом мире больше не засчитываются)' : '⚔️ Выживание'); setWhere(st.meta.name + (c ? ' · 🎨' : '')); return; }
+      case 'gamemode': { if (!cheat && a[0] !== 'survival') break; const c = a[0] === 'creative' || a[0] === 'c' || a[0] === '1'; st.creative = c; st.meta.mode = c ? 'creative' : 'survival'; st.net?.gameMode?.(st.meta.mode); if (c) st.meta.cheats = true; P.fly = false; log(c ? '🎨 Творчество (достижения в этом мире больше не засчитываются)' : '⚔️ Выживание'); setWhere(st.meta.name + (c ? ' · 🎨' : '')); return; }
       case 'tp': { if (!cheat) break; const x = +a[0], y = +a[1], z = +a[2]; if ([x, y, z].every(Number.isFinite) && Math.abs(x) < V.LIMIT && Math.abs(z) < V.LIMIT) { P.x = x; P.y = clamp(y, 1, V.H + 20); P.z = z; P.vy = 0; P.fallTop = P.y; P.pk = P.hang = null; rebase(st, true); st.ready = false; log('✨ Телепорт'); } return; }
       case 'spawn': { const sp = st.meta.spawn; P.x = sp.x; P.y = sp.y; P.z = sp.z; P.vy = 0; P.pk = P.hang = null; rebase(st, true); st.ready = false; return; }
       case 'give': { if (!cheat) break; const it = V.item(a[0]) || V.items.find(i => i.title.toLowerCase() === (a.join(' ') || '').toLowerCase()); if (!it) { log('Нет такой вещи'); return; } const n = clamp(+a[1] || it.stack, 1, 640); give(st, { id: it.name, n }); log('🎁 ' + it.title + ' × ' + n); return; }
@@ -2222,7 +2424,7 @@
   }
 
   // ── связь с окнами и сущностями ──
-  function uiHooks(){ return { give: s => give(S, s), drop: s => S?.ents?.addItem(S.P.x, S.P.y + 1.4, S.P.z, s, false, (() => { const d = lookDir(S); return [d.x * 4, 2, d.z * 4]; })()), unlock, toast: (t, ok) => S?.H.toast(t, ok), sound: (n, o) => S?.AU?.play(n, o || {}) }; }
+  function uiHooks(){ return { give: s => give(S, s), drop: s => S && spawnItem(S, S.P.x, S.P.y + 1.4, S.P.z, s, false, (() => { const d = lookDir(S); return [d.x * 4, 2, d.z * 4]; })()), unlock, toast: (t, ok) => S?.H.toast(t, ok), sound: (n, o) => S?.AU?.play(n, o || {}) }; }
   function modHooks(){
     return {
       log, toast: (t, ok) => S?.H.toast(t, ok),
@@ -2241,6 +2443,8 @@
   window.GAME_IMPL[ID] = { mount, unmount, _test: { state: () => S, give: s => give(S, s), command: c => command(c), unlock, ACH, save: () => saveAll(S), stop: () => stopWorld(), aim, use: () => use(S, S.hit), dig: () => S?.hit && breakBlock(S, S.hit), menu: () => showMenu(),
     cam: m => cycleCam(m), hud: v => hideHud(v), pick: () => S?.hit && pickBlock(S, S.hit), drop: all => S && dropSel(S, all), lookDir: () => S && { ...lookDir(S) },
     hand: () => S?.hand?.state(), act: k => S?.hand?.act(k), eat: () => S?.eat && { ...S.eat },
+    // игра вместе и облако (scripts/kubomir-coop-e2e.cjs, scripts/cloud-test.cjs): открыть мир друзьям, сеть, облако
+    coopHost: async () => { if (!S) return null; await coopHost(S, true); return S.net?.code || null; }, coop: () => S?.net || coopG || null, coopStop: () => S && coopStop(S), joinCoop: code => joinCoop(code), cloudUpload: m => cloudUpload(m || S?.meta), cloudRows: f => cloudRows(f),
     // бой и две руки (scripts/kubomir-combat-test.cjs): шаг боя, удар, руки, поменять руки, моб бьёт, щит/лук по ПКМ
     combatStep: (st, dt) => combatStep(st, dt), attack: (st, m, dir) => attackStart(st, m, dir), hands: st => hands(st || S), swap: st => swapHands(st || S), mobHit: (st, n, m) => mobHit(st, n, m), offHands: (st, hit, rmb) => offHands(st, hit, rmb), weaponOf: id => weaponOf(id), useAt: (st, hit, tap) => use(st, hit, tap), wpnClear: () => WPN.clear(),
     // проверки в node (scripts/kubomir-move-test.cjs): шаг тела игрока на своём st, настройки, прицел, сломать — без мира в браузере

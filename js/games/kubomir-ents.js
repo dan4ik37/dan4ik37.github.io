@@ -15,6 +15,10 @@
 // у факелов — дымок и ореол, у лавы — угольки, ночью — светлячки, у листвы — падающие листья (только рядом с игроком).
 // Пулы постоянные (без мусора за кадр), на «низкой» графике частиц втрое меньше, на телефоне — 60 % (X.fxQ); случайность
 // украшений — своя (FR), игре она не мешает. X.room(вещь) (ставит игра) — есть ли место: только тогда вещь тянется к игроку.
+// Игра вместе (js/games/kubomir-coop.js): у хозяина X.others — другие игроки (постоянные объекты { x, y, z, dead, room(вещь) }):
+// мобы выбирают ближайшего, вещи тянутся к ближайшему, у кого есть место (X.hookGiveRemote), удар моба по гостю — X.hookHurtRemote,
+// мобы появляются вокруг каждого. У гостя X.client = true: мобы и вещи — из снимков хозяина (X.clientMob / clientItem / clientKill /
+// clientCollect), своё здесь не думает и не течёт; удар, выстрел — X.hookHit / X.hookShoot (хозяину), упавшее дерево — только картинка.
 (() => {
   const V = () => window.D37E.vox;
   const CBK = () => window.D37E.combat;   // ядро боя (js/engine/combat.js); нет — мобы без стойкости и оглушения
@@ -97,17 +101,18 @@
 
   function create(S){
     const T = S.R.T, R = S.R, VR = S.VR, W = S.W;
-    const X = { items: [], falling: [], mobs: [], dying: [], seq: 0, upd: new Map(), updQ: [], tickN: 0, furnaces: new Set(), spawnT: 0, frac: 1, rng: V().rng((V().hash(S.W.seed, 999) >>> 0) || 1) };
+    const X = { items: [], falling: [], mobs: [], dying: [], seq: 0, upd: new Map(), updQ: [], tickN: 0, furnaces: new Set(), spawnT: 0, frac: 1, rng: V().rng((V().hash(S.W.seed, 999) >>> 0) || 1), others: [], client: false };
     const BOX = { x: 0, y: 0, z: 0, w: .25, h: .25, hitX: false, hitY: false, hitZ: false };
     const FR = V().rng((V().hash(S.W.seed, 4242) >>> 0) || 7);   // случайность украшений (частицы) — своя: игре (X.rng) не мешает
     const lerpA = (a, b, k) => { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 
     // ═══ Выпавшие вещи: летят дугой, прыгают, скользят и встают, на воде — качаются, рядом с игроком (есть место) —
     // тянутся к нему и «влетают» (pickup). Свои (Q, после смерти) — подобрать можно через 2 с, остальные — через 0,5 с ═══
-    X.addItem = (x, y, z, stack, scatter, vel) => {
+    X.addItem = (x, y, z, stack, scatter, vel, own) => {
       if (!stack || !(stack.n > 0) || !V().item(stack.id)) return null;
+      if (X.client && !own) return null;   // у гостя вещи в мире — только хозяина (снимки)
       const r = X.rng;
-      const e = { x, y, z, px: x, py: y, pz: z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lit: Lit.make(null), ground: false, float: false, tilt: 0, delay: vel || scatter ? 2 : .5 };
+      const e = { id: (X.iseq = ((X.iseq | 0) % 65000) + 1), x, y, z, px: x, py: y, pz: z, vx: vel ? vel[0] : (r() - .5) * 2.4, vy: vel ? vel[1] : 3 + r() * 1.5, vz: vel ? vel[2] : (r() - .5) * 2.4, s: { id: stack.id, n: stack.n, d: stack.d | 0 }, age: 0, mesh: null, ph: r() * 6, lit: Lit.make(null), ground: false, float: false, tilt: 0, delay: vel || scatter ? 2 : .5 };
       if (scatter) { e.vx = (r() - .5) * 6; e.vz = (r() - .5) * 6; e.vy = 4; }
       e.mesh = VR.itemMesh(e.s.id, 15 << 12);
       const flat = e.mesh.geometry.userData.flat;
@@ -138,9 +143,10 @@
           e.vy += (dep * 34 - e.vy * 5) * dt;
           const f = Math.exp(-dt * 2.2); e.vx *= f; e.vz *= f;
         } else e.vy = Math.max(-30, e.vy - 20 * dt);
-        // магнит: игрок рядом и есть место — тянется к нему (сильнее ближе)
-        const dx = P.x - e.x, dy = P.y + .9 - e.y, dz = P.z - e.z, dd = Math.hypot(dx, dy, dz);
-        const pull = !P.dead && e.age > e.delay && dd < 2.6 && dd > .05 && (!X.room || X.room(e.s));
+        // магнит: игрок рядом и есть место — тянется к нему (сильнее ближе); игра вместе — к ближайшему из игроков, у кого место есть
+        const T = X.others.length ? pickFor(e) : P;
+        const dx = T.x - e.x, dy = T.y + .9 - e.y, dz = T.z - e.z, dd = Math.hypot(dx, dy, dz);
+        const pull = !T.dead && e.age > e.delay && dd < 2.6 && dd > .05 && (T === P ? !X.room || X.room(e.s) : !T.room || T.room(e.s));
         if (pull) { const k = (8 + 22 * (1 - dd / 2.6)) * dt / dd; e.vx += dx * k; e.vy += dy * k * .8; e.vz += dz * k; }
         BOX.x = e.x; BOX.y = e.y; BOX.z = e.z;
         const vy0 = e.vy;
@@ -155,7 +161,8 @@
         if (Vx.boxHits(W, BOX.x, BOX.y + .01, BOX.z, .2, .2)) BOX.y += 2 * dt * 5;
         e.x = BOX.x; e.y = BOX.y; e.z = BOX.z;
         // подобрать
-        if (!P.dead && e.age > e.delay && Math.abs(P.x - e.x) < 1.3 && Math.abs(P.z - e.z) < 1.3 && e.y > P.y - .6 && e.y < P.y + 2) {
+        if (!T.dead && e.age > e.delay && Math.abs(T.x - e.x) < 1.3 && Math.abs(T.z - e.z) < 1.3 && e.y > T.y - .6 && e.y < T.y + 2) {
+          if (T !== P) { const left = X.hookGiveRemote ? X.hookGiveRemote(T, e.s, e.id) : e.s.n; if (left <= 0) { dropItem(i); continue; } e.s.n = left; continue; }
           const left = X.give ? X.give(e.s) : e.s.n;
           if (left < e.s.n) { S.AU?.play('kb_pop', { vol: .35, rate: 1 + X.rng() * .3 }); if (e.s.id === 'iron_ingot') S.ents.hookUnlock?.('iron'); X.hookPickup?.(e.s.id, e.s.n - left); }
           if (left <= 0) { X.items.splice(i, 1); collect(e); continue; }
@@ -176,8 +183,8 @@
       fN++;
       const P = S.P;
       for (let i = 0; i < X.items.length; i++) {
-        const e = X.items[i], m = e.mesh;
-        const x = e.px + (e.x - e.px) * a, y = e.py + (e.y - e.py) * a, z = e.pz + (e.z - e.pz) * a;
+        const e = X.items[i], m = e.mesh, ai = X.client ? clientA(e) : a;
+        const x = e.px + (e.x - e.px) * ai, y = e.py + (e.y - e.py) * ai, z = e.pz + (e.z - e.pz) * ai;
         if (!e.ground && !e.float) e.tilt += dt * (5 + Math.hypot(e.vx, e.vz) * 1.5);
         else if (e.tilt) { e.tilt -= Math.round(e.tilt / 6.2832) * 6.2832; e.tilt *= Math.exp(-dt * 12); if (Math.abs(e.tilt) < .01) e.tilt = 0; }
         const bob = e.float ? Math.sin(t * 2.2 + e.ph) * .07 : e.ground ? Math.sin(t * 2.4 + e.ph) * .05 : 0;
@@ -671,9 +678,9 @@
           continue;
         }
         g.th = Math.max(0, nth);
-        // под деревом моб или игрок — толкнуть в сторону падения (урон — только «обычно» / «сложно»)
+        // под деревом моб или игрок — толкнуть в сторону падения (урон — только «обычно» / «сложно»); у гостя — только картинка
         const hurtK = S.meta?.diff === 'normal' || S.meta?.diff === 'hard' ? 2 : 0;
-        for (let k = 0; k < g.smp.length; k++) {
+        if (!g.o.visual) for (let k = 0; k < g.smp.length; k++) {
           const i = g.smp[k], p = rot(g, g.cells[i * 4] + .5 - g.px, g.cells[i * 4 + 1] + .5 - g.py, g.cells[i * 4 + 2] + .5 - g.pz, g.th);
           for (const m of X.mobs) {
             const M = MOBS[m.type]; if (g.hitIds.has(m.id) || Math.abs(m.x - p.x) > M.w / 2 + .5 || Math.abs(m.z - p.z) > M.w / 2 + .5 || p.y < m.y - .3 || p.y > m.y + M.h + .3) continue;
@@ -752,8 +759,9 @@
     const view = (window.KubomirEnts.mobView || boxMobView)({ T, R, VR, MOBS });
     X.view = view;
     X.spawn = (type, x, y, z, o = {}) => {
-      if (!MOBS[type] || X.mobs.length >= 60) return null;
-      const M = MOBS[type], id = ++X.seq;
+      if (!MOBS[type] || X.mobs.length >= (X.client ? 200 : 60)) return null;
+      if (X.client && !o.id) return null;   // у гостя мобы — только хозяина
+      const M = MOBS[type], id = o.id || (X.seq = (X.seq % 65000) + 1);
       const m = { id, type, x, y, z, vx: 0, vy: 0, vz: 0, yaw: o.yaw ?? X.rng() * 6.28, hp: o.hp ?? M.hp, ground: false, walk: 0, state: 'idle', stT: 0, tgtYaw: 0, hurtT: 0, atkT: 0, flee: 0, hopT: 0, lit: Lit.make(T), sndT: 4 + X.rng() * 10, rng: V().rng(V().hash(W.seed, id, now() | 0)), burnT: 0, age: 0, wind: 0, lunge: 0, dying: 0, quiet: !!o.quiet };
       m.px = m.rx = x; m.py = m.ry = y; m.pz = m.rz = z; m.pyaw = m.ryaw = m.yaw; m.pwalk = m.rwalk = 0;
       window.D37E?.combat?.init(m, M.cb || CB_DEF);   // поля боя прямо в мобе: неуязвимость, стойкость, оглушение
@@ -771,6 +779,7 @@
     // res — итог удара ядра боя (CB.hit / CB.receive): отброс по оружию и силе, замах сбивает только оглушение (сильный удар);
     // без него — как раньше (любой удар сбивает замах, отброс 6)
     X.damage = (m, dmg, nx, nz, by, res) => {
+      if (X.client) { if (by === 'player') X.hookHit?.(m, dmg, nx, nz, res); m.hurtT = .35; S.AU?.play(MOBS[m.type].snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .6, rate: 1.15 }); return; }
       if (m.hp <= 0) return;
       m.hp -= dmg; m.hurtT = .35;
       if (res) { if (res.stagger) m.wind = 0; m.vx += res.kx; m.vz += res.kz; m.vy = Math.max(m.vy, res.ky); }
@@ -822,9 +831,11 @@
     const AOUT = { dmg: 0, kb: 0, poise: 0, guardBreak: 0 }, AQ = new T.Quaternion(), AV = new T.Vector3(), AZ = new T.Vector3(0, 0, 1);
     const ARR_PICK = t => V().T.solid[t] === 1;
     // x, y, z — откуда (мир), v — скорость (блоков/с), dmg — урон, o: { pick — можно подобрать (выживание), crit — полная натяжка }
+    const AR = { x: 0, z: 0, s: { id: 'arrow', n: 1 } };
     X.shoot = (x, y, z, vx, vy, vz, dmg, o) => {
+      if (X.client && !o?.vis) X.hookShoot?.(x, y, z, vx, vy, vz, dmg, o);   // гость: стрела — у хозяина; здесь — только картинка
       if (arrows.length >= AN) { let k = arrows.findIndex(a => a.stuck); if (k < 0) k = 0; arrows.splice(k, 1); }
-      const a = { x, y, z, px: x, py: y, pz: z, vx, vy, vz, dx: 0, dy: 0, dz: 1, dmg, stuck: false, age: 0, pick: !!o?.pick, crit: !!o?.crit, r: 1, g: 1, b: 1 };
+      const a = { x, y, z, px: x, py: y, pz: z, vx, vy, vz, dx: 0, dy: 0, dz: 1, dmg, stuck: false, age: 0, pick: !!o?.pick && !X.client, crit: !!o?.crit, r: 1, g: 1, b: 1, vis: X.client || !!o?.vis };
       const l = Math.hypot(vx, vy, vz) || 1; a.dx = vx / l; a.dy = vy / l; a.dz = vz / l;
       arrows.push(a);
       return a;
@@ -837,6 +848,7 @@
         a.px = a.x; a.py = a.y; a.pz = a.z; a.age += dt;
         if (a.stuck) {
           if (a.age > 60 || !W.loaded(a.x, a.z)) { arrows.splice(i, 1); continue; }
+          if (a.pick && X.others.length) { AR.x = a.x; AR.z = a.z; const T = pickFor(AR); if (T !== P && !T.dead && Math.abs(T.x - a.x) < 1.3 && Math.abs(T.z - a.z) < 1.3 && a.y > T.y - .6 && a.y < T.y + 2.2 && a.age > .5) { if (!(X.hookGiveRemote ? X.hookGiveRemote(T, AR.s, 0) : 1)) { arrows.splice(i, 1); continue; } } }
           if (a.pick && !P.dead && Math.abs(P.x - a.x) < 1.3 && Math.abs(P.z - a.z) < 1.3 && a.y > P.y - .6 && a.y < P.y + 2.2 && a.age > .5) {
             const left = X.give ? X.give({ id: 'arrow', n: 1 }) : 1;
             if (!left) { S.AU?.play('kb_pop', { vol: .35, rate: 1.2 }); X.hookPickup?.('arrow', 1); arrows.splice(i, 1); continue; }
@@ -851,6 +863,7 @@
         a.dx = a.vx / sp; a.dy = a.vy / sp; a.dz = a.vz / sp;
         const h = Vx.raycast(W, a.x, a.y, a.z, a.dx, a.dy, a.dz, len, ARR_PICK), tB = h ? h.t : len;
         const m = X.rayMob(a.x, a.y, a.z, a.dx, a.dy, a.dz, tB);
+        if (m && a.vis) { X.glow('spark', a.x + a.dx * tB, a.y + a.dy * tB, a.z + a.dz * tB, a.crit ? 6 : 3); arrows.splice(i, 1); continue; }   // картинка: урон считает хозяин
         if (m) {
           const C = CBK(), M = MOBS[m.type];
           AOUT.dmg = a.dmg; AOUT.kb = 3 + 3 * Math.min(1, sp / 30); AOUT.poise = a.crit ? 1.2 : .6; AOUT.guardBreak = 0;
@@ -889,12 +902,20 @@
       if (k) { aMesh.instanceMatrix.needsUpdate = true; aMesh.instanceColor.needsUpdate = true; }
     }
     const MB = { x: 0, y: 0, z: 0, w: 1, h: 1, hitX: false, hitY: false, hitZ: false }, TC = {};
+    // игроки (игра вместе): свой и другие; ближайший живой к точке (нет живых — ближайший)
+    const PL = [];
+    function players(){ PL.length = 0; PL.push(S.P); for (let i = 0; i < X.others.length; i++) PL.push(X.others[i]); return PL; }
+    function nearestTo(x, z){ const L = players(); let best = L[0], bd = Infinity, alive = false; for (let i = 0; i < L.length; i++) { const p = L[i]; if (alive && p.dead) continue; const d = (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z); if ((!p.dead && !alive) || d < bd) { if (!p.dead) alive = true; bd = d; best = p; } } return best; }
+    // вещь — к ближайшему, у кого есть для неё место (свой — X.room, другой — его room)
+    function pickFor(e){ const L = players(); let best = L[0], bd = Infinity; for (let i = 0; i < L.length; i++) { const p = L[i]; if (p.dead) continue; const d = (p.x - e.x) * (p.x - e.x) + (p.z - e.z) * (p.z - e.z); if (d < bd && (p === S.P ? !X.room || X.room(e.s) : !p.room || p.room(e.s))) { bd = d; best = p; } } return best; }
+    X.players = players;
     function mobsTick(dt){
-      const P = S.P, Vx = V(), night = isNight();
+      const Vx = V(), night = isNight(), many = X.others.length > 0;
       for (let i = X.mobs.length - 1; i >= 0; i--) {
         const m = X.mobs[i], M = MOBS[m.type];
         m.px = m.x; m.py = m.y; m.pz = m.z; m.pyaw = m.yaw; m.pwalk = m.walk;   // откуда рисовать плавно до нового места
         m.age += dt; m.lunge = Math.max(0, m.lunge - dt);
+        const P = many ? nearestTo(m.x, m.z) : S.P;
         const dxp = P.x - m.x, dzp = P.z - m.z, dp = Math.hypot(dxp, dzp);
         // далеко — исчезает (враги) или замирает (звери)
         if (!M.passive && (dp > 72 || (S.meta.diff === 'peaceful'))) { removeMob(m); continue; }
@@ -920,7 +941,7 @@
             m.wind -= dt; wx *= .25; wz *= .25;
             if (m.wind <= 0) {
               m.wind = 0; m.lunge = .22;
-              if (dp < reach + .55 && near) { m.atkT = .6; const D = DIFF[S.meta.diff] || DIFF.easy; X.hits = (X.hits || 0) + 1; S.ents.hookHurt?.(Math.max(1, Math.round(M.dmg * D.dmg)), m); }
+              if (dp < reach + .55 && near) { m.atkT = .6; const D = DIFF[S.meta.diff] || DIFF.easy; X.hits = (X.hits || 0) + 1; const n = Math.max(1, Math.round(M.dmg * D.dmg)); if (P === S.P) S.ents.hookHurt?.(n, m); else X.hookHurtRemote?.(P, n, m); }
               else m.atkT = .45;
               const ux = dxp / (dp || 1), uz = dzp / (dp || 1);
               if (M.hop) { if (m.ground) { m.vy = 6.5; m.vx = ux * 4.2; m.vz = uz * 4.2; m.ground = false; m.hopT = .9; } }
@@ -965,7 +986,7 @@
         // зомби горят на солнце
         if (M.burns && !night) { const L = W.lightAt(m.x, m.y + M.h, m.z); if (V().lSky(L) >= 13) { m.burnT += dt; if (m.burnT > 1) { m.burnT = 0; X.glow('flame', m.x, m.y + .4, m.z, nq(5)); X.smoke(m.x, m.y + M.h, m.z, 2, .4, SOOT, .55, .5); X.damage(m, 2, 0, 0, 'sun'); if (m.hp <= 0) continue; } } }
         if (TC.lava > .1 || TC.hurt >= 4) X.damage(m, 4 * dt * 5, 0, 0, 'lava');
-        if (m.sndT <= 0) { m.sndT = 6 + m.rng() * 14; if (dp < 20) S.AU?.play(M.snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .5, rate: .9 + m.rng() * .2 }); }
+        if (m.sndT <= 0) { m.sndT = 6 + m.rng() * 14; if (Math.abs(S.P.x - m.x) + Math.abs(S.P.z - m.z) < 26) S.AU?.play(M.snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .5, rate: .9 + m.rng() * .2 }); }
       }
     }
     // свет моба — плавно, по месту груди (дальние, дальше 32 блоков, — раз в 4 кадра); место — между тактами (a = X.frac); рисует view
@@ -977,7 +998,7 @@
       for (let i = 0; i < X.mobs.length; i++) {
         const m = X.mobs[i], M = MOBS[m.type], far = Math.abs(m.x - P.x) > 32 || Math.abs(m.z - P.z) > 32;
         if (!far || !((mN + i) & 3)) Lit.update(m.lit, S, m.x, m.y + M.h * .6, m.z, far ? dt * 4 : dt);
-        place(m, a);
+        if (X.client) clientFrame(m, M, dt); else place(m, a);
         view.frame(m, dt, t, S);
       }
       for (let i = X.dying.length - 1; i >= 0; i--) {
@@ -993,10 +1014,15 @@
     X.isNight = isNight;
     // появление: звери — днём на траве при свете, враги — ночью и в темноте
     function spawnTick(){
-      const P = S.P, Vx = V(), night = isNight(), r = X.rng;
-      // считаем тех, кто рядом по высоте (зомби глубоко в пещерах не мешают появляться наверху)
+      const L = players();
+      for (let i = 0; i < L.length; i++) if (!L[i].dead || i === 0) spawnAround(L[i], i === 0 ? X : L[i], L.length > 1);
+    }
+    // вокруг игрока P (tm — где его таймер врагов: у своего — X, у другого — его объект)
+    function spawnAround(P, tm, many){
+      const Vx = V(), night = isNight(), r = X.rng;
+      // считаем тех, кто рядом по высоте (зомби глубоко в пещерах не мешают появляться наверху); игра вместе — и по горизонтали
       let passive = 0, hostile = 0;
-      for (const m of X.mobs) { if (Math.abs(m.y - P.y) > 20) continue; if (MOBS[m.type].passive) passive++; else hostile++; }
+      for (const m of X.mobs) { if (Math.abs(m.y - P.y) > 20 || (many && Math.abs(m.x - P.x) + Math.abs(m.z - P.z) > 96)) continue; if (MOBS[m.type].passive) passive++; else hostile++; }
       const tryAt = (minD, maxD) => {
         const a = r() * 6.283, d = minD + r() * (maxD - minD), x = Math.floor(P.x + Math.cos(a) * d), z = Math.floor(P.z + Math.sin(a) * d);
         if (!W.loaded(x, z)) return null;
@@ -1013,9 +1039,9 @@
         }
       }
       const D = DIFF[S.meta.diff] || DIFF.easy;
-      X.hostT = (X.hostT ?? D.every) - 2;   // spawnTick — раз в 2 с; врагам — раз в D.every с
-      if (X.hostT <= 0 && hostile < D.cap && !S.creative) {
-        X.hostT = D.every;
+      tm.hostT = (tm.hostT ?? D.every) - 2;   // spawnTick — раз в 2 с; врагам — раз в D.every с
+      if (tm.hostT <= 0 && hostile < D.cap && !S.creative) {
+        tm.hostT = D.every;
         const q = tryAt(16, 40);
         if (q) {
           // ищем пол со светом ≤ 6 (ночью — и под открытым небом)
@@ -1041,6 +1067,7 @@
       X.updQ.push([x, y, z, X.tickN + delay, k]);
     }
     X.onBlockChanged = (x, y, z, was, v) => {
+      if (X.client) return;
       const Vx = V(), T = Vx.T;
       for (const [dx, dy, dz] of N6) {
         const nx = x + dx, ny = y + dy, nz = z + dz, nv = W.raw(nx, ny, nz); if (nv <= 0) continue;
@@ -1174,6 +1201,7 @@
     // ═══ Такт (20 раз в секунду) и кадр ═══
     X.tick = dt => {
       X.tickN++;
+      if (X.client) { dyingTick(dt); groupsTick(dt); arrowsTick(dt); furnaceTick(dt); return; }
       itemsTick(dt);
       fallingTick(dt);
       groupsTick(dt);
@@ -1193,6 +1221,53 @@
       ambient(dt);
       poolFrame(PF, dt, t); poolFrame(GL, dt, t, S.KL?.recs?.size && FXQ >= .5 ? halos : null);
     };
+    // ═══ Игра вместе — гость: мобы и вещи из снимков хозяина (между снимками — плавно по времени: X.calpha) ═══
+    const byId = new Map(), MOB_LIST = Object.keys(MOBS);
+    const clientA = o => { const k = X.civ > 0 ? (now() - o.cT) / X.civ : 1; return k < 0 ? 0 : k > 1 ? 1 : k; };
+    function clientFrame(m, M, dt){
+      place(m, clientA(m));
+      m.hurtT = Math.max(0, m.hurtT - dt); m.lunge = Math.max(0, m.lunge - dt);
+      if ((m.sndT -= dt) <= 0) { m.sndT = 6 + m.rng() * 14; if (Math.abs(S.P.x - m.x) + Math.abs(S.P.z - m.z) < 26) S.AU?.play(M.snd, { x: m.x - S.ox, y: m.y + 1, z: m.z - S.oz, vol: .5, rate: .9 + m.rng() * .2 }); }
+      if (m.burnF && (m.burnT = (m.burnT || 0) - dt) <= 0) { m.burnT = 1; X.glow('flame', m.x, m.y + .4, m.z, nq(4)); }
+    }
+    X.civ = 100;   // мс между снимками (ставит kubomir-coop.js)
+    // fl: 1 ранен, 2 замах, 4 выпад, 8 оглушён, 16 гонится, 32 на земле, 64 горит
+    X.clientMob = (id, ti, x, y, z, yaw, fl, t) => {
+      const type = MOB_LIST[ti]; if (!type) return null;
+      let m = byId.get(id);
+      if (m && m.type !== type) { byId.delete(id); removeMob(m); m = null; }
+      if (!m) { m = X.spawn(type, x, y, z, { id, quiet: true, yaw }); if (!m) return null; byId.set(id, m); m.cT = t; m.seen = t; m.cfl = fl; return m; }
+      const iv = Math.max(30, t - m.cT) / 1000;
+      m.px = m.rx; m.py = m.ry; m.pz = m.rz; m.pyaw = m.ryaw; m.pwalk = m.rwalk;   // от того места, где нарисован, — к новому
+      m.vx = (x - m.x) / iv; m.vz = (z - m.z) / iv;
+      m.walk += Math.hypot(x - m.x, z - m.z) * 3.2;
+      m.x = x; m.y = y; m.z = z; m.yaw = yaw;
+      if (fl & 1 && !(m.cfl & 1)) m.hurtT = .35;
+      m.wind = fl & 2 ? (MOBS[type].wind || .35) : 0;
+      if (fl & 4 && !(m.cfl & 4)) m.lunge = .22;
+      m.stag = fl & 8 ? Math.max(m.stag || 0, .15) : 0;
+      m.state = fl & 16 ? 'chase' : 'idle'; m.ground = !!(fl & 32); m.burnF = !!(fl & 64);
+      m.cfl = fl; m.cT = t; m.seen = t;
+      return m;
+    };
+    X.clientMobById = id => byId.get(id) || null;
+    // кого в снимке давно нет — убрать (смерть приходит отдельно — X.clientKill — и тогда моб падает и «пуф»)
+    X.clientSweep = (t, ms = 450) => { for (let i = X.mobs.length - 1; i >= 0; i--) { const m = X.mobs[i]; if (t - m.seen > ms) { byId.delete(m.id); removeMob(m); } } };
+    X.clientKill = (id, kx, kz) => { const m = byId.get(id); if (!m) return; byId.delete(id); place(m, clientA(m)); m.x = m.rx; m.y = m.ry; m.z = m.rz; m.vx = kx || 0; m.vz = kz || 0; m.vy = 3; dieMob(m); };
+    const itemById = new Map();
+    X.clientItem = (eid, id, n, x, y, z, t) => {
+      let e = itemById.get(eid);
+      if (e && e.s.id !== id) { const i = X.items.indexOf(e); if (i >= 0) dropItem(i); itemById.delete(eid); e = null; }
+      if (!e) { e = X.addItem(x, y, z, { id, n }, false, [0, 0, 0], true); if (!e) return null; e.cid = eid; e.age = 1; e.ground = true; itemById.set(eid, e); e.cT = t; e.seen = t; return e; }
+      const ai = clientA(e);
+      e.px = e.px + (e.x - e.px) * ai; e.py = e.py + (e.y - e.py) * ai; e.pz = e.pz + (e.z - e.pz) * ai;
+      e.ground = Math.abs(y - e.y) < .01; e.x = x; e.y = y; e.z = z; e.s.n = n; e.cT = t; e.seen = t;
+      return e;
+    };
+    X.clientItemSweep = (t, ms = 900) => { for (let i = X.items.length - 1; i >= 0; i--) { const e = X.items[i]; if (e.cid && t - e.seen > ms) { itemById.delete(e.cid); dropItem(i); } } };
+    // подобрал (хозяин отдал): вещь «влетает» в грудь
+    X.clientCollect = eid => { const e = itemById.get(eid); if (!e) return; itemById.delete(eid); const i = X.items.indexOf(e); if (i >= 0) X.items.splice(i, 1); collect(e); S.AU?.play('kb_pop', { vol: .35, rate: 1 + X.rng() * .3 }); };
+    X.clientReset = () => { for (const m of [...X.mobs]) removeMob(m); byId.clear(); for (let i = X.items.length - 1; i >= 0; i--) dropItem(i); itemById.clear(); };
     X.fxStats = () => ({ shards: sLive, puffs: PF.live, glows: GL.live, items: X.items.length, falling: X.falling.length, dying: X.dying.length, pops: pops.length, flyers: flyers.length, trees: groups.length, arrows: arrows.length });
     X.fxObjects = () => ({ shards: shMesh, puffs: PF.o, glows: GL.o });   // для проверок
     // звери мира сохраняются (враги — нет)
@@ -1201,6 +1276,7 @@
     // чанк загрузился: печи с топливом — снова греются; сохранённое течение воды и лавы — снова течёт (или высыхает),
     // песок над пустотой — падает (запланированные обновления не хранятся — их создаём заново по правкам)
     X.onChunkTiles = c => {
+      if (X.client) return;
       if (c.tiles) for (const [i, t] of c.tiles) if (t && ('fuel' in t || 'in' in t)) { const x = c.cx * 16 + (i >> 11), z = c.cz * 16 + ((i >> 7) & 15), y = i & 127; X.furnaces.add(x + ',' + y + ',' + z); }
       if (c.edits) { const T = V().T; let n = 0; for (const [i, v] of c.edits) { const t = v & 0xfff; if ((T.liquid[t] && (v >>> 12)) || V().blocks[t]?.fall) { schedule(c.cx * 16 + (i >> 11), i & 127, c.cz * 16 + ((i >> 7) & 15), 10 + (n++ & 15)); } } }
     };

@@ -8,6 +8,8 @@
 // Правка блока → сетка этого чанка срочно; соседи — если правка у края (AO, грани) или у края поменялся свет (новая
 // волна света ушла к соседу) — тогда и соседа заново. Далеко (rd + 3) — чанк выгружается (onDrop: сохранить правки).
 // Нет потоков (старый браузер, ошибка) — то же самое прямо в кадре, по чуть-чуть (бюджет по времени).
+// S.extra — другие точки (игра вместе: где гости, [[x, z], …] в блоках): вокруг них чанки только генерируются (без сеток — их не
+// видно) в радиусе S.extraR (3) и не выгружаются, пока гость рядом — хозяину есть где считать мобов, вещи и проверять правки.
 (() => {
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
@@ -20,7 +22,7 @@
   V.streamer = (o = {}) => {
     const W = o.world, RCN = V.REGION * V.REGION * V.H;
     const S = { rd: Math.max(2, Math.min(32, o.rd | 0 || 8)), dead: false, workers: [], inline: false, stats: { gen: 0, mesh: 0, genMs: 0, meshMs: 0, uploads: 0, dropped: 0, errors: 0, pend: 0 },
-      pcx: 1e9, pcz: 1e9, budgetQuads: o.budgetQuads || 14000, budgetMs: o.budgetMs || 4, maxJobs: 0 };
+      pcx: 1e9, pcz: 1e9, budgetQuads: o.budgetQuads || 14000, budgetMs: o.budgetMs || 4, maxJobs: 0, extra: [], extraR: 3 };
     const jobs = new Map();      // id → задание
     const results = [];          // готовые ответы (применяются по бюджету)
     const regions = [];          // запасные буферы областей
@@ -180,13 +182,26 @@
           if (s[2] <= R * R + R && c.ready && !c.meshJob && (c.meshRev < 0 || c.dirty > c.meshRev) && !(c.thr && now() < c.thr) && neighborsReady(cx, cz)) { startMesh(c); free--; if (c.dirty > c.meshRev && c.meshedOnce && !c.urgent) c.thr = now() + 120; }
           if (S.inline && now() - t0 > S.budgetMs + 4) break;
         }
+        // вокруг гостей — только генерация (свои — раньше: они в кадре)
+        const XR = S.extraR * S.extraR;
+        for (let e = 0; e < S.extra.length && free > 0; e++) {
+          const ex = Math.floor(S.extra[e][0]) >> 4, ez = Math.floor(S.extra[e][1]) >> 4;
+          for (let i = 0; i < SPIRAL.length && free > 0; i++) {
+            const s = SPIRAL[i]; if (s[2] > XR) break;
+            const cx = ex + s[0], cz = ez + s[1];
+            if (Math.abs(cx * 16) > V.LIMIT || Math.abs(cz * 16) > V.LIMIT) continue;
+            const c = ensureChunk(cx, cz);
+            if (wantGen(c)) { startGen(c); free--; }
+          }
+        }
       }
       // 3) выгрузка далёких — раз в полсекунды
       if (t0 - dropT > 500) {
         dropT = t0;
-        const far = R + 3;
+        const far = R + 3, xf = S.extraR + 2;
         for (const c of [...W.chunks.values()]) {
           if (Math.abs(c.cx - pcx) <= far && Math.abs(c.cz - pcz) <= far) continue;
+          if (S.extra.length && S.extra.some(p => Math.abs(c.cx - (Math.floor(p[0]) >> 4)) <= xf && Math.abs(c.cz - (Math.floor(p[1]) >> 4)) <= xf)) continue;
           if (c.genJob || c.meshJob || c.loading) continue;
           try { o.onDrop?.(c); } catch (e) { o.log?.('выгрузка: ' + (e.message || e)); }
           W.remove(c); S.stats.dropped++;
