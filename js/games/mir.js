@@ -828,7 +828,7 @@
       if (S.menu) closeMenu();
       else if (S.zones?.esc?.()) {}   // зоны мира: своё окно (карта, действия, щит профессий)
       else if (!S.q('.wld-card').hidden || !S.q('.wld-panel').hidden) closePops();
-      else if (!S.base?.bm) openMenu();   // нажали Esc — клавиатура есть (и у ноутбука с сенсорным экраном)
+      else if (!S.base?.bm && !S.base?.war?.bm) openMenu();   // нажали Esc — клавиатура есть (и у ноутбука с сенсорным экраном); стройку Esc отменяет сам mir-base.js
     }
     if (C.any()) activity();
     P.first = rig.mode === 'first';
@@ -878,7 +878,7 @@
     if (S.me.emo && S.me.emo.t !== S.me._emoA) { S.me._emoA = S.me.emo.t; A.emote(S.key, S.me.emo.e, t); }
     for (const k of [...A.list.keys()]) if (k !== S.key && !S.players.has(k)) A.remove(k);
     const look = { dx: I.look.dx + C.look.dx, dy: I.look.dy + C.look.dy, zoom: I.zoom };
-    rig.update(dt, S.zones?.camTarget?.() || S.base?.cam || P, look, S.ph, C);   // в машине — за машиной; в стройке — на участок
+    rig.update(dt, S.zones?.camTarget?.() || S.base?.cam || S.base?.war?.cam || P, look, S.ph, C);   // в машине — за машиной; в стройке — на участок / базу
     S.base?.frame(dt, t);   // район участков: призрак, нажатия в стройке, подписи над шахтами
     I.wantLock = rig.mode === 'first' && !I.touch && !S.menu && !S.phoneOn;
     // от 1-го лица Esc сначала отпускает мышь (это делает браузер, игре клавиша не приходит) — тогда сразу меню
@@ -1029,7 +1029,7 @@
       else if (s === 'CLOSED') rejoinLater(ch);
     });
   }
-  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0, pl: S.playing ? { g: S.playing.g, c: S.playing.c } : null });
+  const presenceMeta = () => ({ id: S.key, uid: S.me.uid, nick: S.me.nick, look: S.me.look, pub: S.keys.pub, pass: S.pass, x: Math.round(S.P.ch.x * 10) / 10, z: Math.round(S.P.ch.z * 10) / 10, at: S.joinedAt, seat: S.mySeat ? { id: S.mySeat.id, c: S.mySeat.c, t: S.mySeat.t } : null, bs: S.base?.street ?? 0, ws: S.base?.war?.sector ?? 0, pl: S.playing ? { g: S.playing.g, c: S.playing.c } : null });
   // Presence у Supabase: не больше 5 обновлений (track/untrack) за 30 с на клиента, иначе сервер закрывает канал мира
   // («Client presence rate limit exceeded» — мир «вылетал»: сел-встал-сыграл подряд). Поэтому track — не чаще PRES_N раз
   // за PRES_WIN: лишнее ждёт и уходит одним, самым свежим состоянием, когда окно освободится.

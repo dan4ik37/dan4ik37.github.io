@@ -19,6 +19,67 @@
      метку своего входа ?oa=… и ошибки входа в адресе забрать и СРАЗУ стереть из адреса — до Метрики (url: location.href) и рекламы.
      Разбирают js/features/auth-guard.js и social-login.js -->
 <script>(function(){try{var h=location.hash,s=location.search,m=s.match(/[?&]oa=([\w-]{8,64})/),t=/(?:^#|&)(?:access_token|refresh_token|error_description|error_code|d37auth|d37auth_err|d37link|tgAuthResult)=/.test(h),e=!t&&/[?&]error_(?:description|code)=/.test(s);if(m)window.__d37OA=m[1];if(t)window.__d37AuthHash=h;if(e){window.__d37AuthHash='#'+s.slice(1);s=''}if(m)s=s.replace(/([?&])oa=[^&]*&?/,'$1').replace(/[?&]$/,'');if(m||t||e)history.replaceState(null,'',location.pathname+s+(t?'':h))}catch(x){}})()</script>
+<!-- errlog:begin — сборщик ошибок сайта, этап 1 (T-016): генерируется node scripts/make-errlog.mjs из api/_lib/errlog.js, руками не править -->
+<script>(function errHook(v) {
+var W = window;
+try {
+var L = W.location;
+if (W.__d37el || !L || !/^https?:$/.test(L.protocol) || !/(^|\.)dan4ik37\.vercel\.app$/i.test(L.hostname)) return;
+var S = W.__d37el = { v: 1, q: [], on: null }, seen = {}, nk = 0, total = 0, timer = 0;
+function load() {
+try {
+var s = document.createElement('script');
+s.async = true;
+s.src = '/js/core/errlog.js?v=' + v;
+(document.head || document.documentElement).appendChild(s);
+} catch (e) {}
+}
+function put(r) {
+try {
+if (++total > 50000) { off(); return; }
+r.p = L.pathname; r.h = L.hash;
+if (S.on) { S.on(r); return; }
+var k = r.t + '|' + r.m + '|' + r.f + '|' + r.u + '|' + r.l, e = seen[k];
+if (e) { e.n++; return; }
+if (nk >= 30) return;
+nk++; r.n = 1; seen[k] = r; S.q.push(r);
+if (!timer) timer = setTimeout(load, 300);
+} catch (x) {}
+}
+function own(u) {
+var m = /^(?:https?:)?\/\/([^\/?#]+)/i.exec(u), h = m ? m[1].toLowerCase() : '';
+return m ? h === String(L.host).toLowerCase() || h === 'cdn.jsdelivr.net' : !/^[a-z][a-z0-9+.-]*:/i.test(u);
+}
+function onErr(ev) {
+try {
+var t = ev.target;
+if (t && t !== W && t.nodeType === 1) {
+var g = String(t.tagName || '').toLowerCase(), u = String((g === 'script' ? t.src : t.href) || '');
+if ((g === 'script' || g === 'link') && own(u)) put({ t: 'r', m: 'load failed: ' + g, g: g, u: u });
+} else {
+var m = String(ev.message == null ? '' : ev.message).slice(0, 300), f = String(ev.filename || '');
+if (!/ResizeObserver loop/.test(m) && (f ? own(f) : !/^(?:Uncaught )?(?:Error: )?Script error\.?$/.test(m))) put({ t: 'e', m: m, f: f, l: ev.lineno | 0, c: ev.colno | 0, er: ev.error });
+}
+} catch (x) {}
+}
+function onRej(ev) {
+try {
+var r = ev.reason, m;
+try { m = r && typeof r === 'object' ? (typeof r.message === 'string' ? r.message : '[object]') : r; } catch (x) { m = ''; }
+put({ t: 'p', m: String(m).slice(0, 120), rr: r });
+} catch (x) {}
+}
+function off() {
+try { W.removeEventListener('error', onErr, true); W.removeEventListener('unhandledrejection', onRej); } catch (e) {}
+}
+W.addEventListener('error', onErr, true);
+W.addEventListener('unhandledrejection', onRej);
+W.d37Err = function (where, er) {
+try { put({ t: 'x', m: String(where).slice(0, 60) + (er && er.message ? ': ' + er.message : ''), er: er }); } catch (x) {}
+};
+} catch (e) {}
+})("bb0e96d4")</script>
+<!-- errlog:end -->
 <link rel="manifest" href="/manifest.json">
 <!-- Приложение 📲 (js/features/app.js): на iPhone «На экран «Домой»» открывает сайт своим окном с чёрной строкой состояния -->
 <meta name="mobile-web-app-capable" content="yes">
@@ -1831,6 +1892,7 @@ body.low .donation-alert-icon{animation:none}
         <button onclick="document.getElementById('roleSearchInput')?.focus();openSettingsAdmin()" class="profile-admin-btn">👥 Роли и VIP</button>
         <a href="/donate" class="profile-admin-btn" style="text-decoration:none;display:flex;align-items:center;justify-content:center">💝 Донаты и цель</a>
         <button onclick="openDonationLog()" class="profile-admin-btn">📋 Лог донатов/VIP</button>
+        <button onclick="openSiteErrors()" class="profile-admin-btn">🩺 Ошибки сайта</button>
       </div>
       </details>
     </div>
@@ -2536,6 +2598,8 @@ body.low .donation-alert-icon{animation:none}
       <p><strong style="color:var(--text)">Приглашения друзей:</strong> кто кого пригласил по ссылке, до какого уровня дошёл друг и какие награды выданы. Чтобы нельзя было «пригласить» самого себя или свой второй аккаунт, у тех, кто зовёт друзей, и у новичков по ссылке в первые 30 дней сайт хранит отпечаток IP-адреса и случайного ключа браузера — только в виде хеша (по нему нельзя узнать сам адрес), до 90 дней и только для этой проверки. Пригласивший видит у друга только ник и уровень (дату и профиль — если профиль открыт), но никогда — его покупки, возраст и почту.</p>
       <p><strong style="color:var(--text)">Возраст (по желанию):</strong> только год рождения, не дата. Он нужен, чтобы показывать подходящие по возрасту игры, ролики и рекламу и включать защиту детей. Год видит только сам человек — ни другие посетители, ни модераторы, ни администратор; он не публикуется, не попадает в адреса страниц и статистику и не передаётся третьим лицам. Рекламе Google уходит только признак «ребёнок» или «подросток» (без года) — чтобы реклама была без персонализации. У гостя год хранится в браузере, у аккаунта — в базе сайта; удалить его можно в любой момент: ⚙️ Настройки → Сайт → «Удалить», а вместе с аккаунтом он удаляется сам.</p>
       <p><strong style="color:var(--text)">Вход через другие сервисы (по желанию):</strong> при входе через VK ID, Яндекс ID или Telegram сайт получает от сервиса только номер аккаунта в этом сервисе, имя и аватарку — почту, телефон, друзей и переписку не запрашивает. Номер нужен, чтобы узнавать тебя при следующем входе; имя и аватарку видишь только ты (Профиль → «Способы входа»), их можно стереть кнопкой «Скрыть имя». Пароли и токены доступа сервисов сайт не получает и не хранит. Вход через Google, Discord, Twitch и GitHub проводит сервис аутентификации Supabase — он хранит то, что передал сервис (номер, имя, почту, аватарку). Модераторы видят только, какие сервисы привязаны к аккаунту, — без номеров, имён и почты. Чтобы защищаться от ботов, сайт считает новые аккаунты по отпечатку IP-адреса: сам адрес не хранится, отпечаток меняется каждый день и стирается через 2 дня. Если аккаунт заблокирован, привязанные к нему входы тоже блокируются (хранится отпечаток, а не номер). Во время входа ставится техническая cookie на 10 минут (защита от подделки входа). Проверка «я не робот» — Cloudflare Turnstile (<a href="https://www.cloudflare.com/privacypolicy/" target="_blank" style="color:var(--accent)">политика Cloudflare</a>). Отвязать вход — Профиль → «Способы входа»; вместе с аккаунтом всё это удаляется.</p>
+
+      <p><strong style="color:var(--text)">Сообщения об ошибках сайта:</strong> если на странице что-то ломается, браузер отправляет на сайт короткое обезличенное сообщение — текст ошибки, имя файла сайта и строку, раздел, версию сайта, тип браузера и устройства. Без ника, адреса с параметрами, текста сообщений и IP-адреса. Хранится 14 суток, видит только администратор сайта.</p>
 
       <h3>2. Google AdSense</h3>
       <p>Сайт использует Google AdSense для показа рекламы. Google может использовать cookies для персонализации рекламы. Подробнее: <a href="https://policies.google.com/privacy" target="_blank" style="color:var(--accent)">Политика конфиденциальности Google</a>. Вы можете отключить персонализированную рекламу в <a href="https://adssettings.google.com" target="_blank" style="color:var(--accent)">настройках рекламы Google</a>.</p>

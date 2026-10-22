@@ -121,3 +121,15 @@ async function setUserRole(userId, btn) {
     btn.textContent = oldText; btn.disabled = false;
   }
 }
+
+// 🩺 «Ошибки сайта» (мониторинг, T-016, docs/OPS.md): окно живёт в js/features/ops-admin.js и грузится при первом открытии —
+// остальным посетителям этот файл не нужен. Данные — RPC ops_err_admin из ops.sql (читает только админ)
+function openSiteErrors() {
+  if (currentRole !== 'admin') return;
+  if (window.D37Ops) return window.D37Ops.open();
+  const s = document.createElement('script');
+  s.src = 'js/features/ops-admin.js?v=' + (typeof GAMES_VER !== 'undefined' ? GAMES_VER : '1') + '.1';
+  s.onload = () => window.D37Ops && window.D37Ops.open();
+  s.onerror = () => alert('Не загрузился js/features/ops-admin.js — обнови страницу.');
+  document.head.appendChild(s);
+}
