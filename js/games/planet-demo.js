@@ -99,7 +99,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     help.textContent = I.touch ? 'Полёт: джойстик — лететь, палец — смотреть, ⬆ ⬇ — вверх и вниз, 🚀 — быстрее. «🛬 Сесть» — идти пешком.'
       : 'Полёт: W/S — вперёд/назад, A/D — вбок, Пробел/C — вверх/вниз, Shift — быстрее, мышь (тянуть) — смотреть. L — сесть/взлететь, T — время быстрее, M — карта системы.';
     wrap.appendChild(help);
-    setTimeout(() => { if (S === st) help.hidden = true; }, 9000);
+    st.helpT = setTimeout(() => { if (S === st) help.hidden = true; }, 9000);   // снимается в unmount: иначе 9 с держит весь прошлый мир (замыкание видит R)
     touchButtons(st);
     st.ro = window.ResizeObserver ? new ResizeObserver(() => { if (!R.dead) R.resize(); }) : null;
     st.ro?.observe(wrap);
@@ -356,6 +356,7 @@ body.game-on .pl-wrap{height:calc(100dvh - 210px);min-height:300px}
     const st = S; S = null;
     if (!st) return;
     st.dead = true;
+    clearTimeout(st.helpT);
     try { st.loop?.stop(); } catch (e) {}
     window.removeEventListener('keydown', st.keyT);
     try { st.ro?.disconnect(); } catch (e) {}

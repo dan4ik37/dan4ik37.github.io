@@ -124,8 +124,10 @@ void main(){
     const g = new T.InstancedBufferGeometry();
     g.setAttribute('position', new T.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
     g.setIndex([0, 1, 2, 0, 2, 3]);
-    const att = name => { const a = new T.InstancedBufferAttribute(new Float32Array(CAP * 4), 4); a.setUsage(T.DynamicDrawUsage); g.setAttribute(name, a); return a; };
-    const aCen = att('aCen'), aSun = att('aSun'), aFwd = att('aFwd'), aUp = att('aUp'), aCol = att('aCol'), aTru = att('aTru');
+    // все данные экземпляра — в ОДНОМ буфере (6 × vec4 подряд): за кадр — одна загрузка в видеокарту, а не шесть
+    const ST = 24, IB = new T.InstancedInterleavedBuffer(new Float32Array(CAP * ST), ST, 1), A6 = IB.array;
+    IB.setUsage(T.DynamicDrawUsage);
+    ['aCen', 'aSun', 'aFwd', 'aUp', 'aCol', 'aTru'].forEach((name, k) => g.setAttribute(name, new T.InterleavedBufferAttribute(IB, 4, k * 4)));
     g.instanceCount = 0;
     const uni = { ...V.U, uSunAng: { value: .0047 }, uPR: { value: P.SEAR }, uAirRed: { value: A ? 1 : 0 }, uSunW: { value: 1 } };
     const mat = new T.ShaderMaterial({ name: 'planet-bodies', uniforms: uni, vertexShader: vert(G), fragmentShader: frag(G), fog: false, lights: false });
@@ -174,34 +176,34 @@ void main(){
         }
         P.dirToL(fr, e.d[0], e.d[1], e.d[2], L3);
         const dd = min(e.dist, far * .9), ang = e.kind === 'sun' ? e.rad * 6 : max(e.rad, 2.2 * pxK), rd = dd * Math.tan(min(ang, 1.2));
-        const j = 4 * n;
-        aCen.array[j] = cam.position.x + L3[0] * dd; aCen.array[j + 1] = cam.position.y + L3[1] * dd; aCen.array[j + 2] = cam.position.z + L3[2] * dd; aCen.array[j + 3] = rd;
+        const j = ST * n;
+        A6[j] = cam.position.x + L3[0] * dd; A6[j + 1] = cam.position.y + L3[1] * dd; A6[j + 2] = cam.position.z + L3[2] * dd; A6[j + 3] = rd;
         P.dirToL(fr, e.sun[0], e.sun[1], e.sun[2], L3);
-        aSun.array[j] = L3[0]; aSun.array[j + 1] = L3[1]; aSun.array[j + 2] = L3[2]; aSun.array[j + 3] = e.light;
+        A6[j + 4] = L3[0]; A6[j + 5] = L3[1]; A6[j + 6] = L3[2]; A6[j + 7] = e.light;
         const c3 = colOf(e.b);
         if (e.kind === 'sun') {
-          aFwd.array[j] = 1; aFwd.array[j + 1] = 0; aFwd.array[j + 2] = 0; aFwd.array[j + 3] = 2;
-          aUp.array[j] = 0; aUp.array[j + 1] = 1; aUp.array[j + 2] = 0; aUp.array[j + 3] = 1;
-          aCol.array[j] = c3[0]; aCol.array[j + 1] = c3[1]; aCol.array[j + 2] = c3[2]; aCol.array[j + 3] = 1;
-          aTru.array[j] = aTru.array[j + 1] = aTru.array[j + 2] = aTru.array[j + 3] = 0;
+          A6[j + 8] = 1; A6[j + 9] = 0; A6[j + 10] = 0; A6[j + 11] = 2;
+          A6[j + 12] = 0; A6[j + 13] = 1; A6[j + 14] = 0; A6[j + 15] = 1;
+          A6[j + 16] = c3[0]; A6[j + 17] = c3[1]; A6[j + 18] = c3[2]; A6[j + 19] = 1;
+          A6[j + 20] = A6[j + 21] = A6[j + 22] = A6[j + 23] = 0;
         } else {
           P.dirToL(fr, e.fwd[0], e.fwd[1], e.fwd[2], L3);
-          aFwd.array[j] = L3[0]; aFwd.array[j + 1] = L3[1]; aFwd.array[j + 2] = L3[2]; aFwd.array[j + 3] = e.b.type === 'gas' ? 1 : 0;
+          A6[j + 8] = L3[0]; A6[j + 9] = L3[1]; A6[j + 10] = L3[2]; A6[j + 11] = e.b.type === 'gas' ? 1 : 0;
           P.dirToL(fr, e.up[0], e.up[1], e.up[2], L3);
           // разрешённость: настоящий радиус больше 3 пикселей — шар, меньше 1 — точка
-          aUp.array[j] = L3[0]; aUp.array[j + 1] = L3[1]; aUp.array[j + 2] = L3[2]; aUp.array[j + 3] = clamp((e.rad / pxK - 1) / 2, 0, 1);
+          A6[j + 12] = L3[0]; A6[j + 13] = L3[1]; A6[j + 14] = L3[2]; A6[j + 15] = clamp((e.rad / pxK - 1) / 2, 0, 1);
           // блеск точки: логарифм потока (как звёздная величина), ярче звёзд неба
           const br = clamp(.9 + .12 * (Math.log10(max(e.flux, 1e-30)) + 10), .25, 2.2);
-          aCol.array[j] = c3[0]; aCol.array[j + 1] = c3[1]; aCol.array[j + 2] = c3[2]; aCol.array[j + 3] = br;
+          A6[j + 16] = c3[0]; A6[j + 17] = c3[1]; A6[j + 18] = c3[2]; A6[j + 19] = br;
           // настоящий центр от центра планеты (оси куска) и радиус — для тени планеты на диске; далеко за тенью — без неё
           const near = e.dist < P.SEAR * 600;
           P.dirToL(fr, e.cen[0], e.cen[1], e.cen[2], L3);
-          aTru.array[j] = L3[0]; aTru.array[j + 1] = L3[1]; aTru.array[j + 2] = L3[2]; aTru.array[j + 3] = near ? e.b.R : 0;
+          A6[j + 20] = L3[0]; A6[j + 21] = L3[1]; A6[j + 22] = L3[2]; A6[j + 23] = near ? e.b.R : 0;
         }
         n++;
       }
       g.instanceCount = n;
-      aCen.needsUpdate = aSun.needsUpdate = aFwd.needsUpdate = aUp.needsUpdate = aCol.needsUpdate = aTru.needsUpdate = true;
+      IB.updateRange.offset = 0; IB.updateRange.count = n * ST; IB.needsUpdate = true;
       mesh.visible = n > 0;
       SV.cpu += now() - t0;
     };
