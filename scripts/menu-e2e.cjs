@@ -4,10 +4,14 @@
 //   shots — снимки «Мира Денчика»: панель, меню, ⚙️ Настройки (и поиск) на телефоне 390×844 и ПК 1440×900;
 //   games — «Кубомир» (меню миров), «Подземье» (пауза), обычная игра (шапка), «Студия 3D»: где ⚙️ ⛶ ❓ и сколько раз;
 //   perf  — телефон (ЦП ×4 медленнее): меню открывается (☰ и Esc), окно ⚙️ открывается, вкладка, поиск — медианы, мс;
-//   leak  — 20 раз меню → ⚙️ → вкладка → поиск → закрыть: слушатели window/document, узлы DOM, память после сборки мусора;
+//   leak  — 20 раз меню → ⚙️ → все вкладки → поиск → закрыть: слушатели window/document, узлы DOM, память после сборки мусора
+//           (T-090: память — целиком, без вычета «мир сам по себе»; каждая зона мира — одна постройка); «Мир Денчика» на ПК и на
+//           профиле телефона (412×915, ЦП ×4), окно ⚙️ на странице игр, «Кубомир» (мир) и «Подземье» (игра) — то же через их ☰;
 //   pad   — поддельный геймпад и клавиатура: ↑↓ по меню, Ⓐ / Ⓑ, LB/RB — вкладки, → / ← у ползунка, Esc в поиске;
 //   tour  — (не входит в all) снимок каждой вкладки окна ⚙️, подсказки в одну строку, несколько поисков — посмотреть глазами.
-// SITE_DIR — другая копия сайта (снимки «до»), TAG — подпись снимков (before / after), SHOTS — папка снимков (иначе D37_TMP).
+// SITE_DIR — другая копия сайта (снимки «до»), D37_OVERRIDE — папка со старыми файлами поверх сайта (только они, по тем же путям),
+// TAG — подпись снимков (before / after), SHOTS — папка снимков (иначе D37_TMP); LEAK_PARTS — части leak через запятую
+// (worldPc, worldPhone, settings, kubomir, podzem; по умолчанию все), LEAK_MB — предел роста памяти (6).
 // Запуск из корня сайта: node scripts/menu-e2e.cjs [shots|games|perf|leak|pad|all]   (CHROME — путь к Chrome)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
@@ -20,8 +24,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.txt': 'text/plain', '.wasm': 'application/wasm' };
 const server = http.createServer((req, res) => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname); if (p === '/' || p.startsWith('/play/') || p === '/games') p = '/index.html';
-  const f = path.join(SITE, p);
+  let f = path.join(SITE, p);
   if (!f.startsWith(SITE) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end('404'); return; }
+  if (process.env.D37_OVERRIDE) { const o = path.join(path.resolve(process.env.D37_OVERRIDE), p); if (o.startsWith(path.resolve(process.env.D37_OVERRIDE)) && fs.existsSync(o) && fs.statSync(o).isFile()) f = o; }
   res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
   fs.createReadStream(f).pipe(res);
 });
@@ -31,7 +36,9 @@ const med = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[s
 const r1 = v => Math.round(v * 10) / 10;
 
 // ═══ Chrome через протокол отладки ═══
-async function chrome(screen){
+// o.block — без чужих скриптов (Метрика, реклама): они вешают свои слушатели на window/document позже страницы — счётчики «плыли» (T-090)
+const THIRD = ['*mc.yandex.ru*', '*mc.yandex.com*', '*an.yandex.ru*', '*yandex.ru/ads*', '*googlesyndication.com*', '*googletagmanager.com*', '*google-analytics.com*', '*doubleclick.net*', '*adservice.google*', '*/_vercel/insights*'];
+async function chrome(screen, o = {}){
   const [kind, VW, VH] = screen;
   const port = 9300 + Math.floor(Math.random() * 600), profile = fs.mkdtempSync(path.join(TMP, 'd37-menu-'));
   const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader', '--js-flags=--expose-gc', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
@@ -45,6 +52,7 @@ async function chrome(screen){
   const send = (method, params = {}) => new Promise((a, b) => { const i = ++id; cb.set(i, [a, b]); ws.send(JSON.stringify({ id: i, method, params })); });
   const ev = async expr => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text); return r.result.value; };
   await send('Page.enable'); await send('Runtime.enable');
+  if (o.block) { await send('Network.enable'); await send('Network.setBlockedURLs', { urls: THIRD }); }
   if (kind === 'phone') {
     await send('Emulation.setDeviceMetricsOverride', { width: VW, height: VH, deviceScaleFactor: 2, mobile: true });
     await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
@@ -266,10 +274,14 @@ async function perf(){
   await B.close();
 }
 
-// ═══ Утечки: 20 раз меню → ⚙️ → вкладки → поиск → закрыть ═══
-// Мир сам растёт, пока подгружает зоны (подписи жителей, кусочки построек), — поэтому в мире считаем то, что от меню и окна:
-// слушатели window/document, узлы DOM без живых слоёв мира (подписи, журнал) и что окна после закрытия нет; память — с поправкой
-// на «мир сам по себе» (столько же времени без меню). Окно ⚙️ отдельно — на странице игр (там ничего не растёт само).
+// ═══ Утечки: 20 раз ☰ → ⚙️ → все вкладки → поиск → закрыть (T-043), память целиком (T-090) ═══
+// T-090 (владелец 22.10: «чтобы не вылетало и не лагало»): открытый «Мир Денчика» рос на +10 МБ/с — подгрузка начинала зону
+// заново, пока шли клетки/склейка/доделка (mir-zones.js beginBuild), на медленном кадре без конца, и все копии оставались в памяти.
+// Раньше здесь вычитался рост «мира самого по себе» — и пропускал это. Теперь: ждём, пока ближние зоны построятся; память — целиком
+// (после 20 кругов и ещё столько же времени без меню — не больше LEAK_MB к первому замеру, после сборки мусора); каждая зона — одна
+// постройка (разные zs.grp); то же на профиле телефона (412×915, ЦП ×4 — там пересборка шла всегда). Слушатели window/document и
+// узлы DOM без живых слоёв мира (подписи, журнал) не растут. Окно ⚙️ на странице игр, «Кубомир» (мир) и «Подземье» (игра) — так же.
+const LEAK_MB = +(process.env.LEAK_MB || 6);
 const COUNT_NODES = `(() => { let n = document.getElementsByTagName('*').length; for (const e of document.querySelectorAll('.wld-tags, .mz-tags, .wld-log, .mb-tags, .wb-names-tags, .wld-pop, .mz-hud > :not(.mz-tags)')) n -= e.getElementsByTagName('*').length; return n; })()`;
 async function counter(B){
   await B.send('HeapProfiler.collectGarbage'); await sleep(100); await B.send('HeapProfiler.collectGarbage');
@@ -285,43 +297,76 @@ async function counter(B){
   const heap = await B.send('Runtime.getHeapUsage');
   return { win: L.window, doc: L.document, nodes, all, own, heapMB: r1(heap.usedSize / 1048576) };
 }
+// все вкладки окна (какие есть в этом месте: Графика, Погода, Телефон, Кубомир, Подземье…), поиск — рисует все вкладки сразу
 const SET_CYCLE = `
-      for (const id of ['main', 'gfx', 'sound', 'controls', 'camera', 'ui', 'site']) { document.querySelector('.gs-set-tabs [data-tab="' + id + '"]')?.click(); await wait(10); }
+      for (const id of [...document.querySelectorAll('.gs-set-tabs [data-tab]')].map(b => b.dataset.tab)) { document.querySelector('.gs-set-tabs [data-tab="' + id + '"]')?.click(); await wait(10); }
       const f = document.querySelector('.gs-set-find'); if (f) { for (const w of ['кноп', 'тени', 'громк', 'zzz']) { f.value = w; f.dispatchEvent(new Event('input', { bubbles: true })); await wait(10); } f.value = ''; f.dispatchEvent(new Event('input', { bubbles: true })); }
       document.querySelector('.gs-set-x').click(); await wait(30);`;
-async function leak(){
-  const B = await chrome(['pc', 1440, 900]);
-  try {
-    console.log(`Утечки: ПК 1440×900, 20 открытий/закрытий (${TAG})`);
-    await openWorld(B);
-    await sleep(6000);   // мир догружает ближние зоны
-    const cycle = () => B.ev(`(async () => {
-      const S = GAME_IMPL.world._test.state(), wait = ms => new Promise(r => setTimeout(r, ms));
-      const btn = document.querySelector('.wld-menubtn');
-      if (btn) btn.click(); else { S.C.key('Escape', true); await wait(80); S.C.key('Escape', false); }
-      for (let i = 0; i < 40 && !document.querySelector('.gs-menu'); i++) await wait(25);
-      document.querySelector('.gs-menu [data-mi="settings"]').click(); await wait(30);
+// круг через меню паузы игры: open — как открыть ☰ (код в странице), set — пункт «⚙️ Настройки» (у «Подземья» — opts)
+const menuCycle = (open, set = 'settings') => `(async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      ${open}
+      for (let i = 0; i < 120 && !document.querySelector('.gs-menu [data-mi="${set}"]'); i++) await wait(25);
+      document.querySelector('.gs-menu [data-mi="${set}"]').click(); await wait(30);
       ${SET_CYCLE}
       document.querySelector('.gs-menu [data-mi="resume"]')?.click(); await wait(60);
       return !document.querySelector('.gs-menu') && !document.querySelector('.gs-set');
-    })()`);
-    ok(await cycle(), 'мир: первый круг — всё закрылось');
-    const a = await counter(B), t0 = Date.now();
-    let allClosed = true;
-    for (let i = 0; i < 20; i++) if (!(await cycle())) allClosed = false;
-    const b = await counter(B), dt = Date.now() - t0;
-    await sleep(dt);   // столько же времени — мир сам по себе
-    const c = await counter(B);
-    console.log('  мир, после 1-го круга:', JSON.stringify(a), ' после ещё 20:', JSON.stringify(b), ` и ещё ${Math.round(dt / 1000)} с без меню:`, JSON.stringify(c));
-    ok(allClosed, 'мир: 20 кругов — меню и окно каждый раз закрываются');
-    ok(b.win <= a.win && b.doc <= a.doc, `мир: слушатели window/document не растут: ${a.win}/${a.doc} → ${b.win}/${b.doc}`);
-    ok(b.nodes <= a.nodes + 10, `мир: узлы DOM (без живых слоёв мира) не растут: ${a.nodes} → ${b.nodes}`);
-    const heapMenu = r1((b.heapMB - a.heapMB) - Math.max(0, c.heapMB - b.heapMB));
-    ok(heapMenu <= 2, `мир: память за 20 кругов (за вычетом «мир сам по себе» ${r1(c.heapMB - b.heapMB)} МБ): ${heapMenu} МБ`);
-    // окно ⚙️ на странице игр
+    })()`;
+// 20 кругов, потом столько же времени без меню: a — после первого круга, b — после 20, c — после паузы
+async function rounds(B, label, cycle, o = {}){
+  ok(await cycle(), `${label}: первый круг — всё закрылось`);
+  const a = await counter(B), t0 = Date.now();
+  let allClosed = true;
+  for (let i = 0; i < 20; i++) if (!(await cycle())) allClosed = false;
+  const b = await counter(B), dt = Date.now() - t0;
+  await sleep(dt);   // столько же времени — игра сама по себе
+  const c = await counter(B);
+  console.log(`  ${label}, после 1-го круга:`, JSON.stringify(a), ' после ещё 20:', JSON.stringify(b), ` и ещё ${Math.round(dt / 1000)} с без меню:`, JSON.stringify(c));
+  ok(allClosed, `${label}: 20 кругов — меню и окно каждый раз закрываются`);
+  ok(b.win <= a.win && b.doc <= a.doc, `${label}: слушатели window/document не растут: ${a.win}/${a.doc} → ${b.win}/${b.doc}`);
+  if (o.nodes !== false) ok(b.nodes <= a.nodes + 10, `${label}: узлы DOM (без живых слоёв) не растут: ${a.nodes} → ${b.nodes}`);
+  const grow = r1(Math.max(b.heapMB, c.heapMB) - a.heapMB);
+  ok(grow <= LEAK_MB, `${label}: память после сборки мусора не растёт (20 кругов + ${Math.round(dt / 1000)} с без меню): ${a.heapMB} → ${b.heapMB} → ${c.heapMB} МБ (+${grow}, предел ${LEAK_MB})`);
+  return { first: a, after20: b, idle: c };
+}
+// счётчик построек зон мира: разные zs.grp у каждой зоны (заводится до загрузки страницы — пересборка в первые секунды тоже видна)
+const ZB = `window.__zb = { seen: new WeakSet(), n: {} }; setInterval(() => { try { const rt = window.GAME_IMPL?.world?._test?.state?.()?.zones; if (!rt?.zones) return;
+  for (const zs of rt.zones.values()) if (zs.grp && !__zb.seen.has(zs.grp)) { __zb.seen.add(zs.grp); __zb.n[zs.Z.id] = (__zb.n[zs.Z.id] || 0) + 1; } } catch (e) {} }, 50);`;
+const ZBUSY = `(() => { const rt = GAME_IMPL.world._test.state().zones; return rt ? [...rt.zones.values()].filter(z => rt.busy(z)).map(z => z.Z.id) : []; })()`;
+async function leakWorld(screen, cpu){
+  const B = await chrome(screen, { block: true });
+  const out = {};
+  try {
+    const name = `мир (${screen[0] === 'phone' ? 'телефон' : 'ПК'} ${screen[1]}×${screen[2]}${cpu ? ', ЦП ×' + cpu : ''})`;
+    console.log(`Утечки: ${name}, 20 кругов (${TAG})`);
+    await B.send('Page.addScriptToEvaluateOnNewDocument', { source: ZB });
+    if (cpu) await B.send('Emulation.setCPUThrottlingRate', { rate: cpu });
+    await openWorld(B);
+    // ближние зоны строятся по кусочку — дождаться (на ЦП ×4 до пары минут), потом мерить
+    let busy = []; const tz = Date.now();
+    for (let i = 0; i < 360; i++) { busy = await B.ev(ZBUSY); if (!busy.length) break; await sleep(500); }
+    ok(!busy.length, `${name}: ближние зоны построились за ${r1((Date.now() - tz) / 1000)} с`, busy);
+    await sleep(3000); await B.ev(CLEAN);
+    const zb = await B.ev(`window.__zb.n`);
+    ok(Object.keys(zb).length > 0 && Object.values(zb).every(n => n === 1), `${name}: каждая зона построена один раз (без пересборки по кругу)`, zb);
+    const cyc = () => B.ev(menuCycle(`const S = GAME_IMPL.world._test.state(), btn = document.querySelector('.wld-menubtn');
+      if (btn) btn.click(); else { S.C.key('Escape', true); await wait(80); S.C.key('Escape', false); }`));
+    Object.assign(out, await rounds(B, name, cyc));
+    const zb2 = await B.ev(`window.__zb.n`);
+    ok(Object.values(zb2).every(n => n === 1), `${name}: и после кругов меню — по одной постройке на зону`, zb2);
+    ok(!B.errs.length, 'без ошибок страницы', B.errs.slice(0, 3));
+  } catch (e) { ok(false, 'исключение: ' + e.message); }
+  await B.close();
+  return out;
+}
+async function leakSettingsPage(){
+  const B = await chrome(['pc', 1440, 900], { block: true });
+  const out = {};
+  try {
+    console.log(`Утечки: окно ⚙️ на странице игр, 20 открытий/закрытий (${TAG})`);
     await B.send('Page.navigate', { url: BASE() + '/#/games' });
     for (let i = 0; i < 60 && !(await B.ev(`!!window.D37Settings && !!document.querySelector('#gamesGrid > *')`)); i++) await sleep(250);
-    await sleep(2500); await B.ev(CLEAN);
+    await sleep(4000); await B.ev(CLEAN);
     const cyc2 = () => B.ev(`(async () => { const wait = ms => new Promise(r => setTimeout(r, ms));
       D37Settings.open({ ctx: 'site' }); await wait(30);
       ${SET_CYCLE}
@@ -335,10 +380,56 @@ async function leak(){
     console.log('  страница игр, после 1-го:', JSON.stringify(d), ' после ещё 20:', JSON.stringify(e));
     ok(closed2 && e.win <= d.win && e.doc <= d.doc && e.own <= d.own, `окно ⚙️: слушатели ${d.win}/${d.doc} → ${e.win}/${e.doc}, свои узлы ${d.own} → ${e.own} (вся страница ${d.all} → ${e.all} — сама догружает ролики)`);
     ok(e.heapMB <= d.heapMB + 1.5, `окно ⚙️: память ${d.heapMB} → ${e.heapMB} МБ`);
-    fs.writeFileSync(path.join(SHOTS, `${TAG}-leak.json`), JSON.stringify({ world: { first: a, after20: b, idle: c }, settings: { first: d, after20: e } }, null, 1));
+    Object.assign(out, { first: d, after20: e });
     ok(!B.errs.length, 'без ошибок страницы', B.errs.slice(0, 3));
   } catch (e) { ok(false, 'исключение: ' + e.message); }
   await B.close();
+  return out;
+}
+// «Кубомир» (новый мир «Творчество») и «Подземье» (быстрая игра): то же через их ☰ (общее меню паузы settings.js)
+async function leakGame(game){
+  const B = await chrome(['pc', 1440, 900], { block: true });
+  const out = {};
+  try {
+    const name = game === 'kubomir' ? 'Кубомир' : 'Подземье';
+    console.log(`Утечки: ${name}, 20 кругов ☰ → ⚙️ (${TAG})`);
+    let open;
+    if (game === 'kubomir') {
+      await B.send('Page.navigate', { url: BASE() + '/#/games/kubomir' });
+      for (let i = 0; i < 80 && !(await B.ev(`!!document.querySelector('.kb-menu .kb-worlds')`)); i++) await sleep(250);
+      await sleep(800); await B.ev(CLEAN);
+      await B.ev(`(() => { const b = [...document.querySelectorAll('.kb-mbtns button')].find(x => /Новый мир/.test(x.textContent)); b && b.click(); return !!b; })()`); await sleep(500);
+      await B.ev(`(() => { const c = document.querySelector('[data-f="mode"] [data-v="creative"]'); c && c.click(); document.querySelector('[data-n="go"]')?.click(); })()`);
+      let up = false; for (let i = 0; i < 240 && !up; i++) { await sleep(500); up = await B.ev(`!!GAME_IMPL.kubomir?._test?.state()?.ready`).catch(() => false); }
+      if (!up) throw new Error('Кубомир: мир не открылся');
+      // чанки вокруг догружаются потоками — дождаться
+      for (let i = 0; i < 240; i++) { if (!(await B.ev(`GAME_IMPL.kubomir._test.state().ST?.pending?.() || 0`))) break; await sleep(500); }
+      open = `document.querySelector('.kb-top [data-kb="menu"]').click();`;
+    } else {
+      await B.send('Page.navigate', { url: BASE() + '/#/games/podzem' });
+      for (let i = 0; i < 80 && !(await B.ev(`!!document.querySelector('.pz-start [data-a="quick"], .pz-start [data-a="play"]')`)); i++) await sleep(250);
+      await sleep(800); await B.ev(CLEAN);
+      await B.tapSel('.pz-start [data-a="quick"], .pz-start [data-a="play"]');
+      for (let i = 0; i < 160 && (await B.ev(`GAME_IMPL.podzem?._test?.state()?.state || ''`)) !== 'play'; i++) await sleep(250);
+      if ((await B.ev(`GAME_IMPL.podzem?._test?.state()?.state || ''`)) !== 'play') throw new Error('Подземье: игра не началась');
+      open = `document.querySelector('[data-a="pause"]').click();`;
+    }
+    await sleep(4000); await B.ev(CLEAN);
+    Object.assign(out, await rounds(B, name, () => B.ev(menuCycle(open, game === 'podzem' ? 'opts' : 'settings'))));
+    ok(!B.errs.length, 'без ошибок страницы', B.errs.slice(0, 3));
+  } catch (e) { ok(false, 'исключение: ' + e.message); }
+  await B.close();
+  return out;
+}
+async function leak(){
+  const R = {};
+  const part = k => !process.env.LEAK_PARTS || process.env.LEAK_PARTS.split(',').includes(k);
+  if (part('worldPc')) R.worldPc = await leakWorld(['pc', 1440, 900], 0);
+  if (part('worldPhone')) R.worldPhone = await leakWorld(['phone', 412, 915], 4);
+  if (part('settings')) R.settings = await leakSettingsPage();
+  if (part('kubomir') && process.env.KB_WORLD !== '0') R.kubomir = await leakGame('kubomir');
+  if (part('podzem')) R.podzem = await leakGame('podzem');
+  fs.writeFileSync(path.join(SHOTS, `${TAG}-leak.json`), JSON.stringify(R, null, 1));
 }
 
 // ═══ Геймпад и клавиатура в меню и окне ⚙️ (поддельный геймпад: navigator.getGamepads) ═══
