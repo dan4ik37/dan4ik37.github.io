@@ -21,7 +21,8 @@
   function start(room, hooks){
     const N = { pc: null, fast: null, rel: null, mode: 'connecting', sid: '', closed: false, queue: [], relayAt: 0, timer: 0, retry: 0, tries: 0 };
     const setMode = m => { if (N.mode !== m && !N.closed) { N.mode = m; hooks.onMode?.(m); } };
-    const deliver = m => { try { hooks.onMessage(m); } catch (e) { console.error(e); } };
+    // чужие строки без знаков разметки (GameRoom.clean, room.js): игры подставляют их в HTML (T-011)
+    const deliver = m => { try { hooks.onMessage(window.GameRoom?.clean ? window.GameRoom.clean(m) : m); } catch (e) { console.error(e); } };
     const deliverBin = b => { try { hooks.onBinary?.(b); } catch (e) { console.error(e); } };
 
     function dropPc(){

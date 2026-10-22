@@ -200,8 +200,8 @@
 
   function cardHtml(c, i, opts = {}){
     const col = colorOf(c), v = valOf(c);
-    const label = SYM[v] || v;
-    return `<button type="button" class="uc ${col ? 'c-' + col : 'c-w'}${opts.ok ? ' ok' : ''}${opts.dim ? ' dim' : ''}${opts.big ? ' big' : ''}${opts.sel ? ' sel' : ''}" ${i != null ? `data-act="play:${i}"` : ''} aria-label="${cardName(c)}"${opts.sel ? ' aria-pressed="true"' : ''}${opts.disabled ? ' disabled' : ''}>
+    const label = esc(SYM[v] || v);   // карта может прийти от хозяина стола — не доверяем (T-011)
+    return `<button type="button" class="uc ${col ? 'c-' + col : 'c-w'}${opts.ok ? ' ok' : ''}${opts.dim ? ' dim' : ''}${opts.big ? ' big' : ''}${opts.sel ? ' sel' : ''}" ${i != null ? `data-act="play:${i}"` : ''} aria-label="${esc(cardName(c))}"${opts.sel ? ' aria-pressed="true"' : ''}${opts.disabled ? ' disabled' : ''}>
       <span class="uc-c">${label}</span><span class="uc-t">${label}</span><span class="uc-b">${label}</span></button>`;
   }
 
@@ -325,11 +325,11 @@
     root.innerHTML = `<div class="un">
         <div class="un-opps">${others.map(o => `<div class="un-opp${P.turn === o.i ? ' turn' : ''}">
             ${o.bot ? '<span class="un-av">🤖</span>' : o.look && window.D37Char ? `<img class="un-av" alt="" src="${window.D37Char.img(o.look, 56)}">` : '<span class="un-av">🙂</span>'}
-            <b>${esc(o.nick)}</b><span class="un-cnt"><i class="un-mini"></i>×${o.n}</span>${o.n === 1 && o.said ? '<i class="un-said">Одна!</i>' : ''}</div>`).join('')}</div>
+            <b>${esc(o.nick)}</b><span class="un-cnt"><i class="un-mini"></i>×${esc(o.n)}</span>${o.n === 1 && o.said ? '<i class="un-said">Одна!</i>' : ''}</div>`).join('')}</div>
         <div class="un-table">
-          <button type="button" class="uc c-back un-deck${S.arm ? ' gk-armed' : ''}" data-act="draw"${myTurn && P.drew == null ? '' : ' disabled'} aria-label="${S.arm ? 'Точно взять карту?' : 'Взять карту'}"><span class="uc-c un-logo-t">${S.arm ? 'Взять?' : 'Одна!'}</span><small>${P.deckN}</small></button>
+          <button type="button" class="uc c-back un-deck${S.arm ? ' gk-armed' : ''}" data-act="draw"${myTurn && P.drew == null ? '' : ' disabled'} aria-label="${S.arm ? 'Точно взять карту?' : 'Взять карту'}"><span class="uc-c un-logo-t">${S.arm ? 'Взять?' : 'Одна!'}</span><small>${esc(P.deckN)}</small></button>
           <div class="un-top">${cardHtml(P.top, null, { big: true })}</div>
-          <div class="un-info"><span class="un-dot c-${P.color}" title="Цвет: ${CNAME[P.color]}"></span><span class="un-dir">${P.dir > 0 ? '↻' : '↺'}</span></div>
+          <div class="un-info"><span class="un-dot c-${esc(P.color)}" title="Цвет: ${esc(CNAME[P.color])}"></span><span class="un-dir">${P.dir > 0 ? '↻' : '↺'}</span></div>
         </div>
         <div class="un-log" aria-live="polite">${esc(P.log)}</div>
         <div class="un-status">${turnTxt ? (window.GameKit ? GameKit.turn(myTurn, turnTxt) : turnTxt) : ''}${online() && myTurn ? `<span class="gk-cd" data-gk-cd="${turnUntil}"></span>` : ''}</div>
@@ -353,7 +353,7 @@
     clearTimeout(botT); clearTimeout(tickT);
     const win = P.winner === meIdx;
     const res = root.querySelector('.un-status');
-    if (res) res.innerHTML = win ? `🏆 <b>Победа!</b> +${P.pts} очков` : `😔 Победил ${esc(P.order[P.winner].nick)}`;
+    if (res) res.innerHTML = win ? `🏆 <b>Победа!</b> +${esc(P.pts)} очков` : `😔 Победил ${esc(P.order[P.winner].nick)}`;
     api.sfx(win ? 'win' : 'bad');
     const box = root.querySelector('.un-acts');
     if (box) box.innerHTML = (isHost() ? '<button type="button" class="ct-start" data-act="again">↻ Ещё партия</button>' : '<span class="un-sub">Ждём, пока хозяин начнёт новую…</span>')

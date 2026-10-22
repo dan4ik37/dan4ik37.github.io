@@ -56,7 +56,7 @@ function renderLfgCard(p){
         <div style="min-width:0">
           <div style="font-weight:800;font-size:.92rem">🎮 ${esc(p.game)}</div>
           <div style="font-size:.72rem;color:var(--muted);margin-top:.25rem;display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
-            <div style="width:20px;height:20px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:800;color:#fff;flex-shrink:0;cursor:pointer" onclick="openMiniProfile('${p.author_id}',${jsAttr(nick)},this)">${p.profiles?.avatar_url ? '' : nick.substring(0,2).toUpperCase()}</div>
+            <div style="width:20px;height:20px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:inline-flex;align-items:center;justify-content:center;font-size:.55rem;font-weight:800;color:#fff;flex-shrink:0;cursor:pointer" onclick="openMiniProfile('${p.author_id}',${jsAttr(nick)},this)">${p.profiles?.avatar_url ? '' : esc(nick.substring(0,2).toUpperCase())}</div>
             <span onclick="openMiniProfile('${p.author_id}',${jsAttr(nick)},this)" style="cursor:pointer">${nickHtml}</span>
             · нужно ещё ${p.players_needed} · ${ago}
           </div>
@@ -149,7 +149,7 @@ async function findGameMatches(game){
     box.innerHTML = `<div style="font-size:.7rem;color:var(--muted);margin-top:.5rem;margin-bottom:.3rem">🎯 Уже играют в это:</div>
       <div style="display:flex;gap:.5rem;flex-wrap:wrap">${data.map(u => {
         const avatarStyle = u.avatar_url ? `background-image:url('${safeImgUrl(u.avatar_url)}')` : '';
-        return `<div onclick="openMiniProfile('${u.id}',${jsAttr((u.nick||'?'))},this)" title="${esc(u.nick||'?')}" style="width:28px;height:28px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#fff;cursor:pointer">${u.avatar_url ? '' : (u.nick||'?').substring(0,2).toUpperCase()}</div>`;
+        return `<div onclick="openMiniProfile('${u.id}',${jsAttr((u.nick||'?'))},this)" title="${esc(u.nick||'?')}" style="width:28px;height:28px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:800;color:#fff;cursor:pointer">${u.avatar_url ? '' : esc((u.nick||'?').substring(0,2).toUpperCase())}</div>`;
       }).join('')}</div>`;
   } catch(e) { box.innerHTML = ''; }
 }

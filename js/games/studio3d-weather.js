@@ -70,7 +70,7 @@
       <div class="s3w-now" data-now>${nowLine()}</div>
       <h4>Времена года</h4>
       <label><select data-k="mode">${opt('calendar', '🌍 Как в общем мире (у всех одинаково)', c.mode)}${opt('cycle', '🔁 По игровым дням', c.mode)}${opt('fixed', '📌 Один сезон', c.mode)}${opt('off', '⛔ Выкл (всегда ясно, лето)', c.mode)}</select></label>
-      ${c.mode === 'cycle' ? `<label>Игровых суток на сезон <b data-o="days">${c.days}</b><input type="range" min="1" max="30" step="1" value="${c.days}" data-k="days"></label>` : ''}
+      ${c.mode === 'cycle' ? `<label>Игровых суток на сезон <b data-o="days">${esc(c.days)}</b><input type="range" min="1" max="30" step="1" value="${esc(c.days)}" data-k="days"></label>` : ''}
       ${c.mode === 'fixed' ? `<label><select data-k="season">${C.SEASONS.map(s => opt(s, C.SEASON_ICONS[s] + ' ' + C.SEASON_NAMES[s], c.season)).join('')}</select></label>` : ''}
       <h4>Погода</h4>
       <label><select data-k="weather">${opt('auto', '🔄 Сама меняется', c.weather)}${C.STATES.map(s => opt(s, C.STATE_ICONS[s] + ' Всегда: ' + C.STATE_NAMES[s], c.weather)).join('')}</select></label>

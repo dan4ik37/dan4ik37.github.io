@@ -14,6 +14,8 @@
   const W = 2400, H = 1600, CELL = 20, GW = W / CELL, GH = H / CELL, CX = 1200, CY = 800, PLAZA = 300;
   const SPEED = 230, MAX_ROOM = 20, SHARDS = 6, IDLE_MS = 15 * 60e3, HIDDEN_MS = 10 * 60e3;
   const EMOS = ['👋', '😂', '❤️', '🔥', '🎉', '😎', '😭', '👍', '💃'];
+  // uid чужого игрока приходит из его присутствия (любая строка) и попадает в data-act="profile:…" — принимаем только вид uuid (T-011)
+  const UID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const PORTALS = [
     { id: 'games', e: '🎮', name: 'Все игры', color: '#ff2d55', a: -90 },
     { id: 'horde', e: '🧟', name: 'Орда', color: '#a855f7', a: -45 },
@@ -508,7 +510,7 @@
       if (key === S.key) continue;
       let p = S.players.get(key);
       if (!p || p.leaving) {
-        p = mkPlayer({ key, uid: typeof m.uid === 'string' ? m.uid : null, nick: String(m.nick || 'Гость').slice(0, 24), look: freeLook(m.look), x: Math.max(30, Math.min(W - 30, +m.x || CX)), y: Math.max(60, Math.min(H - 30, +m.y || CY + 200)), at: +m.at || 0 });
+        p = mkPlayer({ key, uid: typeof m.uid === 'string' && UID_RE.test(m.uid) ? m.uid : null, nick: String(m.nick || 'Гость').slice(0, 24), look: freeLook(m.look), x: Math.max(30, Math.min(W - 30, +m.x || CX)), y: Math.max(60, Math.min(H - 30, +m.y || CY + 200)), at: +m.at || 0 });
         p.lookRaw = JSON.stringify(m.look || {});
         S.players.set(key, p);
         if (typeof m.pub === 'string' && m.pub.length < 200) { p.pubRaw = m.pub; importPub(m.pub).then(k => { p.pub = k; flushPending(); }).catch(() => {}); }

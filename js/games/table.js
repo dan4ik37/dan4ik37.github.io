@@ -54,13 +54,13 @@
       if (room.closed || !m || m._by === myId) return;
       if (m.type === '_pm') {
         if (m.to !== myId) return;
-        if (m.plain) { h.onPrivate?.(m.plain, m._by, room); return; }
+        if (m.plain) { h.onPrivate?.(GameRoom.clean(m.plain), m._by, room); return; }
         const k = await sharedFor(m._by);
         if (!k) return;
-        try { h.onPrivate?.(JSON.parse(td.decode(await subtle.decrypt({ name: 'AES-GCM', iv: unb64(m.iv) }, k, unb64(m.ct)))), m._by, room); } catch (e) {}
+        try { h.onPrivate?.(GameRoom.clean(JSON.parse(td.decode(await subtle.decrypt({ name: 'AES-GCM', iv: unb64(m.iv) }, k, unb64(m.ct))))), m._by, room); } catch (e) {}
         return;
       }
-      h.onMessage?.(m, m._by, room);
+      h.onMessage?.(GameRoom.clean(m), m._by, room);
     });
     ch.on('presence', { event: 'sync' }, () => {
       if (room.closed) return;
