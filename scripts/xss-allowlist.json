@@ -43,20 +43,20 @@
    "f": "api/_lib/page.js",
    "fn": "page",
    "k": "markup:raw",
-   "c": "regex",
-   "n": "spa проверен регулярным выражением /^[\\w/-]+$/ в условии выше",
+   "c": "html-arg",
+   "n": "script передают routes: JSON.stringify(константы) и playerJs(id по регулярному выражению)",
    "xs": [
-    "JSON.stringify('/' + spa)"
+    "script"
    ]
   },
   {
    "f": "api/_lib/page.js",
    "fn": "page",
    "k": "markup:raw",
-   "c": "html-arg",
-   "n": "script передают routes: JSON.stringify(константы) и playerJs(id по регулярному выражению)",
+   "c": "regex",
+   "n": "spa проверен регулярным выражением /^[\\w/-]+$/ в условии выше",
    "xs": [
-    "script"
+    "JSON.stringify('/' + spa)"
    ]
   },
   {
@@ -301,21 +301,21 @@
    "f": "api/_lib/routes/videos.js",
    "fn": "handler",
    "k": "markup:url",
-   "c": "yt-data",
-   "n": "годы и номера страниц архива",
+   "c": "const",
    "xs": [
-    "href(info.page)",
-    "href(p + 1)",
-    "href(p - 1)"
+    "t.slug"
    ]
   },
   {
    "f": "api/_lib/routes/videos.js",
    "fn": "handler",
    "k": "markup:url",
-   "c": "const",
+   "c": "yt-data",
+   "n": "годы и номера страниц архива",
    "xs": [
-    "t.slug"
+    "href(info.page)",
+    "href(p + 1)",
+    "href(p - 1)"
    ]
   },
   {
@@ -459,21 +459,21 @@
    "f": "js/core/celebrate.js",
    "fn": "render",
    "k": "markup:text",
-   "c": "num-local",
-   "xs": [
-    "amt"
-   ]
-  },
-  {
-   "f": "js/core/celebrate.js",
-   "fn": "render",
-   "k": "markup:text",
    "c": "const",
    "n": "значки и названия праздников/погоды из таблиц climate.js",
    "xs": [
     "cal.icon",
     "nx ? ` Ближайший праздник: ${nx.h.icon} ${esc(nx.h.name)}${nxD > 0 ? `",
     "st ? ` · ${c.STATE_ICONS[st.state] || ''} ${esc(c.STATE_NAMES[st.state"
+   ]
+  },
+  {
+   "f": "js/core/celebrate.js",
+   "fn": "render",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "amt"
    ]
   },
   {
@@ -786,20 +786,20 @@
    "f": "js/engine/script.js",
    "fn": "onmessage",
    "k": "sink:new Function",
-   "c": "sandbox",
-   "n": "скрипты игрока: Worker внутри iframe sandbox=\"allow-scripts\" с CSP без сети",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
    "xs": [
-    "new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Co"
+    "new Function('throw new Error(\"x\")')"
    ]
   },
   {
    "f": "js/engine/script.js",
    "fn": "onmessage",
    "k": "sink:new Function",
-   "c": "not-html",
-   "n": "проба номера строки: константа",
+   "c": "sandbox",
+   "n": "скрипты игрока: Worker внутри iframe sandbox=\"allow-scripts\" с CSP без сети",
    "xs": [
-    "new Function('throw new Error(\"x\")')"
+    "new Function('script', 'game', 'workspace', 'Instance', 'Vector3', 'Co"
    ]
   },
   {
@@ -847,20 +847,20 @@
    "f": "js/engine/voxel-mods.js",
    "fn": "onmessage",
    "k": "sink:new Function",
-   "c": "sandbox",
-   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
    "xs": [
-    "new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game'"
+    "new Function('throw new Error(\"x\")')"
    ]
   },
   {
    "f": "js/engine/voxel-mods.js",
    "fn": "onmessage",
    "k": "sink:new Function",
-   "c": "not-html",
-   "n": "проба номера строки: константа",
+   "c": "sandbox",
+   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
    "xs": [
-    "new Function('throw new Error(\"x\")')"
+    "new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game'"
    ]
   },
   {
@@ -888,19 +888,19 @@
    "f": "js/features/achievements.js",
    "fn": "renderTitlePicker",
    "k": "markup:text",
-   "c": "num-db",
+   "c": "const",
+   "n": "значки и XP из ACHIEVEMENT_DEFS",
    "xs": [
-    "lv"
+    "ss.icon"
    ]
   },
   {
    "f": "js/features/achievements.js",
    "fn": "renderTitlePicker",
    "k": "markup:text",
-   "c": "const",
-   "n": "значки и XP из ACHIEVEMENT_DEFS",
+   "c": "num-db",
    "xs": [
-    "ss.icon"
+    "lv"
    ]
   },
   {
@@ -1404,20 +1404,20 @@
    "f": "js/features/community2.js",
    "fn": "evItem",
    "k": "markup:url",
-   "c": "url-checked",
-   "n": "MV.evPlace: «#/…» или https://www.twitch.tv/…",
+   "c": "id-db",
+   "n": "ссылки #/chat/… из номеров",
    "xs": [
-    "e(pl.href)"
+    "evHref(mode, ev.id)"
    ]
   },
   {
    "f": "js/features/community2.js",
    "fn": "evItem",
    "k": "markup:url",
-   "c": "id-db",
-   "n": "ссылки #/chat/… из номеров",
+   "c": "url-checked",
+   "n": "MV.evPlace: «#/…» или https://www.twitch.tv/…",
    "xs": [
-    "evHref(mode, ev.id)"
+    "e(pl.href)"
    ]
   },
   {
@@ -1617,20 +1617,20 @@
    "f": "js/features/donation-claims.js",
    "fn": "renderAdminDonationClaims",
    "k": "markup:text",
-   "c": "num-db",
+   "c": "id-db",
+   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
    "xs": [
-    "c.candidates"
+    "h.donation_id",
+    "x.donation_id"
    ]
   },
   {
    "f": "js/features/donation-claims.js",
    "fn": "renderAdminDonationClaims",
    "k": "markup:text",
-   "c": "id-db",
-   "n": "donation_claims.id и vip_donation_log.donation_id — bigint; user_id — uuid",
+   "c": "num-db",
    "xs": [
-    "h.donation_id",
-    "x.donation_id"
+    "c.candidates"
    ]
   },
   {
@@ -1830,22 +1830,22 @@
    "f": "js/features/games.js",
    "fn": "seasonHtml",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "сезон, задания недели, статистика, онлайн — числа",
+   "c": "const",
+   "n": "таблицы игр, сезонов и наград в коде",
    "xs": [
-    "lv >= top ? `⭐ ${pts} — весь путь пройден!` : `⭐ ${pts} · до ${lv + 1}",
-    "per"
+    "seasonRewardIcon(e, t)",
+    "t.icon"
    ]
   },
   {
    "f": "js/features/games.js",
    "fn": "seasonHtml",
    "k": "markup:text",
-   "c": "const",
-   "n": "таблицы игр, сезонов и наград в коде",
+   "c": "num-db",
+   "n": "сезон, задания недели, статистика, онлайн — числа",
    "xs": [
-    "seasonRewardIcon(e, t)",
-    "t.icon"
+    "lv >= top ? `⭐ ${pts} — весь путь пройден!` : `⭐ ${pts} · до ${lv + 1}",
+    "per"
    ]
   },
   {
@@ -1937,18 +1937,18 @@
    "f": "js/features/ideas.js",
    "fn": "ideaCardHtml",
    "k": "markup:text",
-   "c": "num-db",
+   "c": "const",
    "xs": [
-    "r.votes"
+    "v.label"
    ]
   },
   {
    "f": "js/features/ideas.js",
    "fn": "ideaCardHtml",
    "k": "markup:text",
-   "c": "const",
+   "c": "num-db",
    "xs": [
-    "v.label"
+    "r.votes"
    ]
   },
   {
@@ -2059,22 +2059,22 @@
    "f": "js/features/invite.js",
    "fn": "progressCard",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
+   "c": "const",
+   "n": "значок ступени из таблицы наград",
    "xs": [
-    "R().RULES.months",
-    "R().RULES.pct",
-    "done ? 'получено' : `${have} из ${t.n}`"
+    "done ? '✅' : t.frame ? '🖼️' : (partName(t.part).split(' ')[0] || '🎁'"
    ]
   },
   {
    "f": "js/features/invite.js",
    "fn": "progressCard",
    "k": "markup:text",
-   "c": "const",
-   "n": "значок ступени из таблицы наград",
+   "c": "num-db",
+   "n": "лестница и правила рефералов — ref_ladder()/ref_rule() (числа и тексты наград), счётчики друзей",
    "xs": [
-    "done ? '✅' : t.frame ? '🖼️' : (partName(t.part).split(' ')[0] || '🎁'"
+    "R().RULES.months",
+    "R().RULES.pct",
+    "done ? 'получено' : `${have} из ${t.n}`"
    ]
   },
   {
@@ -2467,19 +2467,19 @@
    "f": "js/features/phone-apps.js",
    "fn": "draw",
    "k": "markup:attr",
-   "c": "self-made",
-   "n": "снимок: blob:/data: из canvas; t — метка времени",
+   "c": "id-db",
    "xs": [
-    "last.t"
+    "n.id"
    ]
   },
   {
    "f": "js/features/phone-apps.js",
    "fn": "draw",
    "k": "markup:attr",
-   "c": "id-db",
+   "c": "self-made",
+   "n": "снимок: blob:/data: из canvas; t — метка времени",
    "xs": [
-    "n.id"
+    "last.t"
    ]
   },
   {
@@ -2586,19 +2586,19 @@
    "f": "js/features/phone.js",
    "fn": "avatar",
    "k": "markup:style",
-   "c": "url-checked",
-   "n": "фон: safeImgUrl(avatar_url) или градиент из числа; rgb — константа ROLE_RGB / VIP",
+   "c": "num-local",
    "xs": [
-    "bg"
+    "size"
    ]
   },
   {
    "f": "js/features/phone.js",
    "fn": "avatar",
    "k": "markup:style",
-   "c": "num-local",
+   "c": "url-checked",
+   "n": "фон: safeImgUrl(avatar_url) или градиент из числа; rgb — константа ROLE_RGB / VIP",
    "xs": [
-    "size"
+    "bg"
    ]
   },
   {
@@ -2770,20 +2770,20 @@
    "f": "js/features/profile.js",
    "fn": "renderProfilePage",
    "k": "markup:on",
-   "c": "regex",
-   "n": "safeId = id без знаков, кроме [0-9a-f-]",
+   "c": "id-db",
+   "n": "сначала профиль читается по id (uuid-колонка): не uuid — ошибка 22P02 и возврат; viewer_id — uuid",
    "xs": [
-    "safeId"
+    "targetId"
    ]
   },
   {
    "f": "js/features/profile.js",
    "fn": "renderProfilePage",
    "k": "markup:on",
-   "c": "id-db",
-   "n": "сначала профиль читается по id (uuid-колонка): не uuid — ошибка 22P02 и возврат; viewer_id — uuid",
+   "c": "regex",
+   "n": "safeId = id без знаков, кроме [0-9a-f-]",
    "xs": [
-    "targetId"
+    "safeId"
    ]
   },
   {
@@ -3157,19 +3157,19 @@
    "f": "js/games/balda.js",
    "fn": "build",
    "k": "markup:attr",
-   "c": "num-local",
+   "c": "const",
+   "n": "буквы экранной клавиатуры",
    "xs": [
-    "i"
+    "k"
    ]
   },
   {
    "f": "js/games/balda.js",
    "fn": "build",
    "k": "markup:attr",
-   "c": "const",
-   "n": "буквы экранной клавиатуры",
+   "c": "num-local",
    "xs": [
-    "k"
+    "i"
    ]
   },
   {
@@ -3180,6 +3180,16 @@
    "n": "буквы экранной клавиатуры",
    "xs": [
     "k"
+   ]
+  },
+  {
+   "f": "js/games/balda.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "const",
+   "n": "названия уровней сложности из таблицы LEVELS",
+   "xs": [
+    "v.name"
    ]
   },
   {
@@ -3192,16 +3202,6 @@
     "st.best",
     "st.plays",
     "st.wins || 0"
-   ]
-  },
-  {
-   "f": "js/games/balda.js",
-   "fn": "menu",
-   "k": "markup:text",
-   "c": "const",
-   "n": "названия уровней сложности из таблицы LEVELS",
-   "xs": [
-    "v.name"
    ]
   },
   {
@@ -3553,22 +3553,22 @@
    "f": "js/games/domino.js",
    "fn": "menu",
    "k": "markup:text",
-   "c": "peer-clean",
-   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
-   "xs": [
-    "opts.target"
-   ]
-  },
-  {
-   "f": "js/games/domino.js",
-   "fn": "menu",
-   "k": "markup:text",
    "c": "num-local",
    "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
    "xs": [
     "st.best",
     "st.plays",
     "st.wins || 0"
+   ]
+  },
+  {
+   "f": "js/games/domino.js",
+   "fn": "menu",
+   "k": "markup:text",
+   "c": "peer-clean",
+   "n": "состояние стола приходит от хозяина (GameRoom.clean при получении), числа; ники — E()",
+   "xs": [
+    "opts.target"
    ]
   },
   {
@@ -4298,16 +4298,6 @@
    "f": "js/games/memory.js",
    "fn": "render",
    "k": "markup:text",
-   "c": "num-local",
-   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
-   "xs": [
-    "best || '—'"
-   ]
-  },
-  {
-   "f": "js/games/memory.js",
-   "fn": "render",
-   "k": "markup:text",
    "c": "const",
    "n": "эмодзи карточек",
    "xs": [
@@ -4315,12 +4305,13 @@
    ]
   },
   {
-   "f": "js/games/miner.js",
-   "fn": "createBoard",
+   "f": "js/games/memory.js",
+   "fn": "render",
    "k": "markup:text",
    "c": "num-local",
+   "n": "числа из статистики этого браузера (localStorage) и счётчики партии",
    "xs": [
-    "G.m"
+    "best || '—'"
    ]
   },
   {
@@ -4331,6 +4322,15 @@
    "n": "названия уровней сложности из таблицы LEVELS",
    "xs": [
     "v.name"
+   ]
+  },
+  {
+   "f": "js/games/miner.js",
+   "fn": "createBoard",
+   "k": "markup:text",
+   "c": "num-local",
+   "xs": [
+    "G.m"
    ]
   },
   {
@@ -4376,20 +4376,20 @@
    "f": "js/games/mir-base.js",
    "fn": "infoPanel",
    "k": "markup:attr",
-   "c": "id-db",
-   "n": "файл агента баз: uid — user_id (uuid) из war_state/war_sector; id базы — число",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
    "xs": [
-    "i.uid"
+    "id"
    ]
   },
   {
    "f": "js/games/mir-base.js",
    "fn": "infoPanel",
    "k": "markup:attr",
-   "c": "const",
-   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "c": "id-db",
+   "n": "файл агента баз: uid — user_id (uuid) из war_state/war_sector; id базы — число",
    "xs": [
-    "id"
+    "i.uid"
    ]
   },
   {
@@ -4461,16 +4461,6 @@
    "f": "js/games/mir-base.js",
    "fn": "renderCat",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
-   "xs": [
-    "cnt"
-   ]
-  },
-  {
-   "f": "js/games/mir-base.js",
-   "fn": "renderCat",
-   "k": "markup:text",
    "c": "const",
    "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
    "xs": [
@@ -4479,12 +4469,12 @@
   },
   {
    "f": "js/games/mir-base.js",
-   "fn": "renderSel",
+   "fn": "renderCat",
    "k": "markup:text",
    "c": "num-db",
    "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
    "xs": [
-    "cap ? ' (' + cap + ')' : ''"
+    "cnt"
    ]
   },
   {
@@ -4496,6 +4486,16 @@
    "xs": [
     "head",
     "lines.join('<br>')"
+   ]
+  },
+  {
+   "f": "js/games/mir-base.js",
+   "fn": "renderSel",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "xs": [
+    "cap ? ' (' + cap + ')' : ''"
    ]
   },
   {
@@ -4583,20 +4583,20 @@
    "f": "js/games/mir-base.js",
    "fn": "vehPanel",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
+   "c": "const",
+   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
    "xs": [
-    "V.lv > lv ? ` (${D0.n.toLowerCase()} ${V.lv} ур.)` : ''"
+    "VD(id).icon"
    ]
   },
   {
    "f": "js/games/mir-base.js",
    "fn": "vehPanel",
    "k": "markup:text",
-   "c": "const",
-   "n": "файл агента баз: цвет флага — из таблицы COLORS по индексу; значки и подписи — таблицы кода; plot — буква A…D; id — ключ техники",
+   "c": "num-db",
+   "n": "файл агента баз: номера улиц и участков, уровни, лайки, кубки — числа из base_state",
    "xs": [
-    "VD(id).icon"
+    "V.lv > lv ? ` (${D0.n.toLowerCase()} ${V.lv} ур.)` : ''"
    ]
   },
   {
@@ -4657,20 +4657,20 @@
    "f": "js/games/mir-city.js",
    "fn": "familyBoard",
    "k": "markup:text",
-   "c": "esc-up",
-   "n": "файл агента мира: названия — esc()",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
    "xs": [
-    "esc(f[1])"
+    "f[0]"
    ]
   },
   {
    "f": "js/games/mir-city.js",
    "fn": "familyBoard",
    "k": "markup:text",
-   "c": "const",
-   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
    "xs": [
-    "f[0]"
+    "esc(f[1])"
    ]
   },
   {
@@ -4687,11 +4687,10 @@
    "f": "js/games/mir-city.js",
    "fn": "jobBoard",
    "k": "markup:text",
-   "c": "num-local",
-   "n": "файл агента мира: деньги города и цены — числа",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
    "xs": [
-    "MZ.PAY.day",
-    "MZ.payState().got"
+    "r.icon"
    ]
   },
   {
@@ -4710,10 +4709,11 @@
    "f": "js/games/mir-city.js",
    "fn": "jobBoard",
    "k": "markup:text",
-   "c": "const",
-   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "c": "num-local",
+   "n": "файл агента мира: деньги города и цены — числа",
    "xs": [
-    "r.icon"
+    "MZ.PAY.day",
+    "MZ.payState().got"
    ]
   },
   {
@@ -4730,20 +4730,20 @@
    "f": "js/games/mir-city.js",
    "fn": "petShop",
    "k": "markup:text",
-   "c": "esc-up",
-   "n": "файл агента мира: названия — esc()",
+   "c": "const",
+   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
    "xs": [
-    "esc(p[1])"
+    "p[0]"
    ]
   },
   {
    "f": "js/games/mir-city.js",
    "fn": "petShop",
    "k": "markup:text",
-   "c": "const",
-   "n": "файл агента мира: значки и ключи из таблиц ROLES/PETS/SHOP; случайный вердикт суда — из списка в коде",
+   "c": "esc-up",
+   "n": "файл агента мира: названия — esc()",
    "xs": [
-    "p[0]"
+    "esc(p[1])"
    ]
   },
   {
@@ -4810,6 +4810,16 @@
    ]
   },
   {
+   "f": "js/games/mir-econ.js",
+   "fn": "bankApp",
+   "k": "markup:text",
+   "c": "const",
+   "n": "D37Phone.head вставляет заголовок как есть — здесь константа «🏦 Банк»",
+   "xs": [
+    "P.head('🏦 Банк')"
+   ]
+  },
+  {
    "f": "js/games/mir-play.js",
    "fn": "build",
    "k": "sink:insertAdjacentHTML",
@@ -4843,6 +4853,16 @@
    "f": "js/games/mir-war.js",
    "fn": "board",
    "k": "markup:text",
+   "c": "const",
+   "n": "файл агента мира: значки режимов и точек",
+   "xs": [
+    "m[0]"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "board",
+   "k": "markup:text",
    "c": "esc-up",
    "n": "файл агента мира: ники/названия — esc()",
    "xs": [
@@ -4852,12 +4872,23 @@
   },
   {
    "f": "js/games/mir-war.js",
-   "fn": "board",
+   "fn": "drawScore",
    "k": "markup:text",
    "c": "const",
    "n": "файл агента мира: значки режимов и точек",
    "xs": [
-    "m[0]"
+    "W.pts.map(p => `🚩${p.id}${p.own === 1 ? '🟥' : p.own === 2 ? '🟦' : '"
+   ]
+  },
+  {
+   "f": "js/games/mir-war.js",
+   "fn": "drawScore",
+   "k": "markup:text",
+   "c": "esc-up",
+   "n": "файл агента мира: ники/названия — esc()",
+   "xs": [
+    "esc(M0[1])",
+    "esc(nickOf(k))"
    ]
   },
   {
@@ -4875,33 +4906,12 @@
    "f": "js/games/mir-war.js",
    "fn": "drawScore",
    "k": "markup:text",
-   "c": "const",
-   "n": "файл агента мира: значки режимов и точек",
-   "xs": [
-    "W.pts.map(p => `🚩${p.id}${p.own === 1 ? '🟥' : p.own === 2 ? '🟦' : '"
-   ]
-  },
-  {
-   "f": "js/games/mir-war.js",
-   "fn": "drawScore",
-   "k": "markup:text",
    "c": "num-local",
    "n": "файл агента мира: счёт боя — числа",
    "xs": [
     "W.robotKills ? ` · 🤖 ${W.robotKills}` : ''",
     "W.teams[1]",
     "W.teams[2]"
-   ]
-  },
-  {
-   "f": "js/games/mir-war.js",
-   "fn": "drawScore",
-   "k": "markup:text",
-   "c": "esc-up",
-   "n": "файл агента мира: ники/названия — esc()",
-   "xs": [
-    "esc(M0[1])",
-    "esc(nickOf(k))"
    ]
   },
   {
@@ -5125,20 +5135,20 @@
    "f": "js/games/podzem-mods.js",
    "fn": "onmessage",
    "k": "sink:new Function",
-   "c": "sandbox",
-   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
+   "c": "not-html",
+   "n": "проба номера строки: константа",
    "xs": [
-    "new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game'"
+    "new Function('throw new Error(\"x\")')"
    ]
   },
   {
    "f": "js/games/podzem-mods.js",
    "fn": "onmessage",
    "k": "sink:new Function",
-   "c": "not-html",
-   "n": "проба номера строки: константа",
+   "c": "sandbox",
+   "n": "моды игрока: Worker внутри iframe sandbox + CSP без сети",
    "xs": [
-    "new Function('throw new Error(\"x\")')"
+    "new Function('mod', 'world', 'fx', 'npc', 'commands', 'player', 'game'"
    ]
   },
   {
@@ -5216,31 +5226,10 @@
    "f": "js/games/podzem-ui.js",
    "fn": "hud",
    "k": "markup:text",
-   "c": "num-local",
-   "n": "числа стопок, рецептов, здоровья",
-   "xs": [
-    "gl.i + 1"
-   ]
-  },
-  {
-   "f": "js/games/podzem-ui.js",
-   "fn": "hud",
-   "k": "markup:text",
    "c": "const",
    "n": "цели, подписи кнопки (useLabel), достижения ACH — константы; title группы рецептов: станции мода проверены белым списком workbench/furnace/anvil (podzem-mods.js)",
    "xs": [
     "gl.icon"
-   ]
-  },
-  {
-   "f": "js/games/podzem-ui.js",
-   "fn": "hud",
-   "k": "markup:text",
-   "c": "num-local",
-   "n": "числа стопок, рецептов, здоровья",
-   "xs": [
-    "gl.n",
-    "s.n"
    ]
   },
   {
@@ -5252,6 +5241,27 @@
    "xs": [
     "ul[0]",
     "ul[1]"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "gl.i + 1"
+   ]
+  },
+  {
+   "f": "js/games/podzem-ui.js",
+   "fn": "hud",
+   "k": "markup:text",
+   "c": "num-local",
+   "n": "числа стопок, рецептов, здоровья",
+   "xs": [
+    "gl.n",
+    "s.n"
    ]
   },
   {
@@ -5372,20 +5382,20 @@
    "f": "js/games/raid.js",
    "fn": "enterBattle",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "c": "esc-up",
+   "n": "файл агента набегов: title собран из esc(ник) и чисел; ники в журнале — esc()",
    "xs": [
-    "bt.B.left[u]"
+    "title"
    ]
   },
   {
    "f": "js/games/raid.js",
    "fn": "enterBattle",
    "k": "markup:text",
-   "c": "esc-up",
-   "n": "файл агента набегов: title собран из esc(ник) и чисел; ники в журнале — esc()",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
    "xs": [
-    "title"
+    "bt.B.left[u]"
    ]
   },
   {
@@ -5540,18 +5550,6 @@
    "f": "js/games/raid.js",
    "fn": "showHub",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
-   "xs": [
-    "MBx.WRules.th(b)",
-    "R().chestWins",
-    "R().day.battles"
-   ]
-  },
-  {
-   "f": "js/games/raid.js",
-   "fn": "showHub",
-   "k": "markup:text",
    "c": "const",
    "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
    "xs": [
@@ -5567,6 +5565,18 @@
    "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
    "xs": [
     "cap || '—'"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showHub",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
+    "MBx.WRules.th(b)",
+    "R().chestWins",
+    "R().day.battles"
    ]
   },
   {
@@ -5598,17 +5608,6 @@
    "f": "js/games/raid.js",
    "fn": "showJoin",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
-   "xs": [
-    "info.n",
-    "info.th"
-   ]
-  },
-  {
-   "f": "js/games/raid.js",
-   "fn": "showJoin",
-   "k": "markup:text",
    "c": "const",
    "n": "файл агента набегов: цвет — из таблицы COLORS, значки лиг и обликов — таблицы кода",
    "xs": [
@@ -5617,13 +5616,13 @@
   },
   {
    "f": "js/games/raid.js",
-   "fn": "showLog",
+   "fn": "showJoin",
    "k": "markup:text",
    "c": "num-db",
    "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
    "xs": [
-    "S.st.stats.def_lost",
-    "S.st.stats.def_won"
+    "info.n",
+    "info.th"
    ]
   },
   {
@@ -5643,8 +5642,29 @@
    "c": "num-db",
    "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
    "xs": [
+    "S.st.stats.def_lost",
+    "S.st.stats.def_won"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showLog",
+   "k": "markup:text",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "xs": [
     "x.pct",
     "x.tr ? ` · 🏆 ${x.tr > 0 ? '+' : ''}${x.tr}` : ''"
+   ]
+  },
+  {
+   "f": "js/games/raid.js",
+   "fn": "showResult",
+   "k": "markup:text",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "xs": [
+    "st"
    ]
   },
   {
@@ -5656,16 +5676,6 @@
    "xs": [
     "r.pct",
     "srv.tr"
-   ]
-  },
-  {
-   "f": "js/games/raid.js",
-   "fn": "showResult",
-   "k": "markup:text",
-   "c": "const",
-   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
-   "xs": [
-    "st"
    ]
   },
   {
@@ -5692,22 +5702,22 @@
    "f": "js/games/raid.js",
    "fn": "showTop",
    "k": "markup:text",
-   "c": "num-db",
-   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
+   "c": "const",
+   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
    "xs": [
-    "Rr.bonus[i]",
-    "Rr.chestWins"
+    "e",
+    "n"
    ]
   },
   {
    "f": "js/games/raid.js",
    "fn": "showTop",
    "k": "markup:text",
-   "c": "const",
-   "n": "файл агента набегов: значки отрядов, лиг и обликов, причины отказа WHY, ключи магазина — таблицы кода",
+   "c": "num-db",
+   "n": "файл агента набегов: числа из raid_state / правил MBx (звёзды, кубки, добыча, время)",
    "xs": [
-    "e",
-    "n"
+    "Rr.bonus[i]",
+    "Rr.chestWins"
    ]
   },
   {
@@ -6053,20 +6063,20 @@
    "f": "js/games/studio3d-modes.js",
    "fn": "menuHtml",
    "k": "markup:text",
-   "c": "html-arg",
-   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu)",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
    "xs": [
-    "html"
+    "t.icon"
    ]
   },
   {
    "f": "js/games/studio3d-modes.js",
    "fn": "menuHtml",
    "k": "markup:text",
-   "c": "const",
-   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "c": "html-arg",
+   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu)",
    "xs": [
-    "t.icon"
+    "html"
    ]
   },
   {
@@ -6112,20 +6122,20 @@
    "f": "js/games/studio3d-modes.js",
    "fn": "propsHtml",
    "k": "markup:text",
-   "c": "html-arg",
-   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu)",
+   "c": "const",
+   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
    "xs": [
-    "h"
+    "t ? MD().TEAMS[t][0] + ' ' + MD().TEAMS[t][1] : 'Для всех'"
    ]
   },
   {
    "f": "js/games/studio3d-modes.js",
    "fn": "propsHtml",
    "k": "markup:text",
-   "c": "const",
-   "n": "режимы и камеры игры — таблицы modes.js/views.js; D.name в html уже esc()",
+   "c": "html-arg",
+   "n": "menuHtml/propsHtml(расширение студии): html передаёт ядро студии, оно экранирует (renderProps/openMenu)",
    "xs": [
-    "t ? MD().TEAMS[t][0] + ' ' + MD().TEAMS[t][1] : 'Для всех'"
+    "h"
    ]
   },
   {
@@ -6192,16 +6202,6 @@
    "f": "js/games/studio3d-touch.js",
    "fn": "menuHtml",
    "k": "markup:text",
-   "c": "html-arg",
-   "n": "menuHtml(расширение студии): html передаёт ядро студии",
-   "xs": [
-    "html"
-   ]
-  },
-  {
-   "f": "js/games/studio3d-touch.js",
-   "fn": "menuHtml",
-   "k": "markup:text",
    "c": "const",
    "n": "таблицы SC.MATS/PREFABS",
    "xs": [
@@ -6211,12 +6211,12 @@
   },
   {
    "f": "js/games/studio3d-touch.js",
-   "fn": "paintSheet",
-   "k": "markup:attr",
-   "c": "regex",
-   "n": "цвет — только ^#[0-9a-f]{6}$",
+   "fn": "menuHtml",
+   "k": "markup:text",
+   "c": "html-arg",
+   "n": "menuHtml(расширение студии): html передаёт ядро студии",
    "xs": [
-    "/^#[0-9a-f]{6}$/i.test(o.color || '') ? o.color : '#888888'"
+    "html"
    ]
   },
   {
@@ -6228,6 +6228,16 @@
    "xs": [
     "k",
     "n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d-touch.js",
+   "fn": "paintSheet",
+   "k": "markup:attr",
+   "c": "regex",
+   "n": "цвет — только ^#[0-9a-f]{6}$",
+   "xs": [
+    "/^#[0-9a-f]{6}$/i.test(o.color || '') ? o.color : '#888888'"
    ]
   },
   {
@@ -6440,21 +6450,21 @@
    "f": "js/games/studio3d.js",
    "fn": "renderProps",
    "k": "markup:attr",
-   "c": "num-local",
-   "xs": [
-    "ed.G.rsnap || 1"
-   ]
-  },
-  {
-   "f": "js/games/studio3d.js",
-   "fn": "renderProps",
-   "k": "markup:attr",
    "c": "const",
    "n": "таблицы SC.SHAPES/MATS/PREFABS, NPC LOOKS/ACTS, fx KINDS, языки — константы кода",
    "xs": [
     "k",
     "l.id",
     "n"
+   ]
+  },
+  {
+   "f": "js/games/studio3d.js",
+   "fn": "renderProps",
+   "k": "markup:attr",
+   "c": "num-local",
+   "xs": [
+    "ed.G.rsnap || 1"
    ]
   },
   {

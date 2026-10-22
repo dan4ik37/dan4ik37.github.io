@@ -152,6 +152,14 @@
    `/rest/v1/ops_err?select=k&limit=1` → 401, 42501 permission denied for table. До запуска сайт работает как раньше: браузеры шлют отчёты на
    /api/diag, сервер тихо отвечает «молчи» (stop), окно «🩺 Ошибки сайта» пишет «выполни ops.sql». PGlite: scripts/ops-sql-test.mjs (73).
    Ещё владельцу (не SQL): копии базы на ПК — docs/BACKUPS.md (строка подключения, pg_dump, расписание; ключи и пароль вводит только он).
+15. `city.sql` (НОВЫЙ, 22.10.2026, T-032 «Живой город» P1; нужны profiles, banned_nicks, age.sql — всё применено; от остальных не зависит) —
+   денки 💵 в городах «Мира Денчика»: city_cfg, city_bank, cities, city_people, city_ledger, city_contrib, city_marks, city_days;
+   city_defs / city_public (всем), city_state / city_act / city_admin (вошедшим). Проверка гостем (PGRST202 = не применён):
+   `/rpc/city_defs` → {"v":1,…,"profs":{…},"rate":{"min":10,"days":1},…}; `/rpc/city_public` {"p_city":"kids"} → {"ok":true,"city":"kids",
+   "treasury":5000,…,"rate":100} (в день запуска; со следующего дня + эмиссия); `/rpc/city_state` {} и `/rpc/city_act` {"p_act":"job"} → 401, 42501 permission
+   denied for function; `/rest/v1/city_people?select=cash&limit=1` → 401, 42501 permission denied for table. До запуска в городах — «🧪 пробные
+   денки» (в браузере) и «Банк города появится, когда сайт обновится». Числа — docs/CITY_ECONOMY.md, менять — «🏙️ Экономика города» (админ).
+   PGlite: scripts/city-sql-test.mjs (134).
 Проверено с сервера 15.10.2026 вечером: ПРИМЕНЕНЫ games-more.sql (horde 10, kubomir 4), coins.sql (coin_rule daily 20,
 kubomir 15), referrals2.sql (ref_rule pct 10), ads.sql (ad_prices, ad_live), auth-links.sql (auth_login_methods → auth).
 НЕ применён economy.sql (xp_rule — PGRST202, achievement_xp creator = 500) — владельцу запустить ещё раз и прислать ошибку.
@@ -1872,6 +1880,21 @@ js/features/games.js и хвост css/premium.css.
   глубже колена или в машине — плиты нет. Листва карты (worldmap.js: кроны, ели — needles, земля — grass) и трава площади — leaf.
   Замер (headless, площадь): ПК 1280×720 high — ЦП 2,8–3,0 мс, вызовов 235 → 235–238, кадр погоды 0,02–0,07 мс; телефон ×4 mid —
   22–23 мс (в пределах разброса), вызовов +1, погода 0,2–0,4 мс. Вдвоём и на настоящем телефоне не проверено.
+
+## «Живой город» P1 — денки 💵 и смены (T-032, 22.10.2026; docs/CITY_ECONOMY.md, план docs/plans/universe-step1.md)
+- Числа — ОДИН каталог js/games/mir-econ.js (MirEcon: CITIES, PROFS, GOODS, SKILL, CAPS, BUFF, BANK, RATE, SITE, KEEP, CFGK); SERVER →
+  city_defs0() в city.sql — только `node scripts/gen-city-defs.cjs` (--check — в CI). Админ меняет без кода: «🏙️ Экономика города» (CFGK).
+- Правила дважды: MirEcon.Rules (клиент, пробный режим, city-sim) = city_act / city_settle_ (решает сервер) — меняешь одно, меняй другое
+  (city-sql-test гоняет 520 одинаковых ходов). Зарплата в сотых (frac), ставка города (бедная казна — всем ниже, до rate.min), A7 — по браузерам.
+- Клиент: MirEcon.api (server | trial — гость или нет city.sql: d37_city_trial, в аккаунт не переносится), TaskRunner — «сдать работу» по
+  шагам логики 1/60 с (не раньше минимального времени; 30/60/144 FPS — одинаково), 📱 «🏦 Банк» (phone.js MODS.econ), окно админа
+  js/features/city-admin.js (D37CityAdm; openCityEconomy в role-management.js). Город — cityMod в js/games/mir-city.js (роль → prof@place,
+  roleFor / rememberRole); mir-zones.js не менялся (еда — действие 'food:<вид>': 'eat:' перехватывает mir-zones).
+- Сеть: Realtime почти не тратится — только 'z' {k:'cty'} при смене этапа стройки (≤ 1 в минуту); city_public — раз в 2 мин с p_rev
+  (без изменений — {same:true}); city_act ≈ 1,5–3 в минуту, пока работаешь.
+- Тесты: city-test, city-sql-test.mjs (PGlite), city-sim.cjs (пороги P1; --write — таблицы в docs/CITY_ECONOMY.md), world-zones-test,
+  city-e2e.cjs (Chrome + city.sql в PGlite за мостом /__rpc, сеть к Supabase закрыта; режимы perf / soak / errs; второй игрок — свой
+  процесс Chrome: вторая вкладка headless «в фоне», requestAnimationFrame стоит).
 
 ## «Игра поверх мира» (js/games/mir-play.js, MirPlay; агент 15.10.2026) — партия из «Мира Денчика» окном поверх мира
 - Владелец 15.10: «чтобы мир не вылетал, когда начинаешь партию, — возвращала обратно». Стол (отсчёт, «▶ Начать», «🤖 С ботом»),
