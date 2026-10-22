@@ -1,0 +1,27 @@
+# d37: HTTPS for the server (docs/SERVER.md) and a proxy to the realtime relay (rt, 127.0.0.1:8787).
+# RT_HOST (from .env) — the public IP now: Let's Encrypt issues IP-address certificates only with the «shortlived» profile
+# (160 hours; Caddy renews them itself, ports 80 and 443 must stay open). Later a domain (DuckDNS or bought) works the same:
+# change RT_HOST in .env and run `docker compose up -d`.
+{
+	# browsers send no SNI for https://<IP>, and on Oracle the VM only sees its private address — so connections without
+	# SNI get the certificate of RT_HOST
+	default_sni {$RT_HOST}
+	servers {
+		protocols h1 h2
+	}
+	# no access log: visitor addresses are not written anywhere
+}
+
+https://{$RT_HOST} {
+	tls {
+		issuer acme {
+			profile shortlived
+			disable_tlsalpn_challenge
+		}
+	}
+	header -Server
+	reverse_proxy 127.0.0.1:8787 {
+		# on a config reload keep open WebSockets for 5 minutes instead of cutting all games at once
+		stream_close_delay 5m
+	}
+}
