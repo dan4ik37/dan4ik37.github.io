@@ -305,7 +305,7 @@ float d37wl = dot( d37wt, vec3( 0.2126, 0.7152, 0.0722 ) );
 float d37mk = 1.0 - smoothstep( 0.4, 0.62, d37wt.b / max( d37wt.r + d37wt.g + d37wt.b, 0.001 ) );
 float d37dist = length( vViewPosition );
 float d37tx = ( dot( d37c.rgb, vec3( 0.3333 ) ) - uWP.w ) * ( 1.0 - smoothstep( 4.0, 14.0, d37dist ) );
-diffuseColor = vec4( max( mix( vec3( d37wl ), d37wt, 0.7 ) * mix( 0.18, 0.4, d37mk ), vec3( 0.003 ) ) * ( 1.0 + 0.5 * d37tx ), diffuseColor.a );
+diffuseColor = vec4( max( mix( vec3( d37wl ), d37wt, mix( 0.7, 0.85, d37mk ) ) * mix( 0.18, 0.5, d37mk ), vec3( 0.003 ) ) * ( 1.0 + 0.5 * d37tx ), diffuseColor.a );
 #endif
 #include <alphamap_fragment>`;
   // после света: волны, отражение, блик, прозрачность по глубине, пена
@@ -347,13 +347,13 @@ diffuseColor = vec4( max( mix( vec3( d37wl ), d37wt, 0.7 ) * mix( 0.18, 0.4, d37
   vec3 d37gl = d37dl * ( d37sp * vLt.x * ( 1.0 - 0.7 * d37IceK ) );
   // дно: свет гаснет по пути преломлённого луча; лёд — непрозрачный
   float d37ct = sqrt( max( 1.0 - ( 1.0 - d37cv * d37cv ) * 0.5653, 0.0 ) );
-  float d37T = mix( exp( - mix( 0.3, 1.1, d37mk ) * d37dep / max( d37ct, 0.25 ) ), 0.03, d37IceK );
+  float d37T = mix( exp( - mix( 0.3, 1.6, d37mk ) * d37dep / max( d37ct, 0.25 ) ), 0.03, d37IceK );
   // пена у берега (биты углов грани → билинейно), рваная по высоте волн, чуть «дышит»
   float d37k = floor( vWS + 0.5 );
   vec4 d37sb = vec4( mod( d37k, 2.0 ), mod( floor( d37k * 0.5 ), 2.0 ), mod( floor( d37k * 0.25 ), 2.0 ), floor( d37k * 0.125 ) );
   float d37sh = mix( mix( d37sb.x, d37sb.y, d37wq.x ), mix( d37sb.z, d37sb.w, d37wq.x ), d37wq.y );
   float d37fo = smoothstep( 0.6, 1.0, d37sh + ( d37hh - 0.5 ) * 0.8 + 0.08 * sin( uTime * 1.25664 + d37hh * 6.2832 ) ) * d37fl * ( 1.0 - d37IceK ) * uWP.z
-    * ( 1.0 - 0.7 * d37sb.x * d37sb.y * d37sb.z * d37sb.w );   // берег у всех углов (канал в блок, лужица) — пены меньше
+    * ( 1.0 - 0.7 * d37sb.x * d37sb.y * d37sb.z * d37sb.w ) * ( 1.0 - 0.6 * d37mk );   // канал в блок, лужица, болото — пены меньше
   // предумноженный цвет и покрытие (свет толщи — что посчитал Ламберт с нашим светом; облучённость — для пены)
   vec3 d37in = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse;
   vec3 d37pm = d37F * d37refl + ( 1.0 - d37F ) * ( 1.0 - d37T ) * d37in;
