@@ -379,16 +379,16 @@
   U.apB = U.apB || new Float32Array(4);
   U.apC = U.apC || new Float32Array(4);
   U.apD = U.apD || new Float32Array(4);
-  // T-075 на паузе: кусок дымки в тумане — только при localStorage d37_planet_v2 = '1' (читается один раз, при загрузке gfx.js);
-  // без него туман — ровно прежний кусок, E.aerialFog = false (planet-view.js дымку не ставит)
-  const AERIAL = (() => { try { return typeof localStorage !== 'undefined' && localStorage.getItem('d37_planet_v2') === '1'; } catch (e) { return false; } })();
-  E.aerialFog = AERIAL;
-  const AP_PARS = AERIAL ? `
+  // Кусок тумана с дымкой ставит сама планета, пока открыта (E.aerialPatch(T, true) — planet-view.js; закрыли — прежний кусок):
+  // у остального сайта туман — ровно прежний. E.aerialFog — кусок с дымкой сейчас стоит. Страж графики (post.js): ключ 'aerial' —
+  // кадр с дымкой «не числа» / днём чёрный → без дымки сразу (d37ApA.w = 0), не собралась программа с ней → прежний кусок
+  E.aerialFog = false;
+  const AP_PARS = `
 	uniform vec4 d37ApA;
 	uniform vec4 d37ApB;
 	uniform vec4 d37ApC;
 	uniform vec4 d37ApD;
-	float d37ApG( float x ){ return abs( x ) < 1e-3 ? 1.0 - 0.5 * x : ( 1.0 - exp( - x ) ) / x; }` : '';
+	float d37ApG( float x ){ return abs( x ) < 1e-3 ? 1.0 - 0.5 * x : ( 1.0 - exp( - x ) ) / x; }`;
 
   // ═══ Куски шейдеров three.js (один раз на всю страницу) ═══
   // Ветер (шейдеры-наборы, 16.10.2026): у материала с define D37_WAVE (R.wave / E.waveMaterial: 1 — трава, верх качается,
@@ -426,13 +426,13 @@
 	vFogDepth = - mvPosition.z;
 	vD37Fog = mvPosition.xyz;
 #endif`;
-  const FOG_PARS_F = `#ifdef USE_FOG
+  const fogParsF = ap => `#ifdef USE_FOG
 	uniform vec3 fogColor;
 	varying float vFogDepth;
 	varying vec3 vD37Fog;
 	uniform vec4 d37FogA;
 	uniform vec4 d37FogB;
-	uniform vec4 d37FogC;${AP_PARS}
+	uniform vec4 d37FogC;${ap ? AP_PARS : ''}
 	#ifdef FOG_EXP2
 		uniform float fogDensity;
 	#else
@@ -440,11 +440,12 @@
 		uniform float fogFar;
 	#endif
 #endif`;
+  const FOG_PARS_F = fogParsF(false), FOG_PARS_F_AP = fogParsF(true);
   // туман: обычный (по расстоянию) + высотный (плотнее у земли, интеграл по лучу) + к солнцу — тёплый (как небо у солнца).
-  // Дымка атмосферы (только с AERIAL; d37ApA.w > 0, планета): та же, что у земли планеты — пропускание по лучу (Рэлей по каналам
-  // + Ми, плотность у камеры × средняя по высоте луча) и свет, рассеянный солнцем (фазы Рэлея и Ми к солнцу); «бесконечная толща» —
-  // тональной кривой, как и остальное после неё
-  const AP_F = !AERIAL ? '' : `
+  // Дымка атмосферы (кусок с дымкой — только пока открыта планета; d37ApA.w > 0): та же, что у земли планеты — пропускание по лучу
+  // (Рэлей по каналам + Ми, плотность у камеры × средняя по высоте луча) и свет, рассеянный солнцем (фазы Рэлея и Ми к солнцу);
+  // «бесконечная толща» — тональной кривой, как и остальное после неё
+  const AP_F = `
 	if ( d37ApA.w > 0.0 ) {
 		vec3 d37Rel = vec3( dot( viewMatrix[ 0 ].xyz, vD37Fog ), dot( viewMatrix[ 1 ].xyz, vD37Fog ), dot( viewMatrix[ 2 ].xyz, vD37Fog ) );
 		float d37L = length( d37Rel ), d37C = dot( d37Rel, d37ApC.xyz ) / max( d37L, 1e-4 );
@@ -460,7 +461,7 @@
 		#endif
 		gl_FragColor.rgb = gl_FragColor.rgb * d37Tv + d37Inf * ( 1.0 - d37Tv );
 	} else {`;
-  const FOG_F = `#ifdef USE_FOG${AP_F}
+  const fogF = ap => `#ifdef USE_FOG${ap ? AP_F : ''}
 	#ifdef FOG_EXP2
 		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
 	#else
@@ -479,9 +480,10 @@
 			fogFactor = max( fogFactor, 1.0 - exp( - max( d37FogC.z * length( d37Rel ) * d37G, 0.0 ) ) );
 		}
 	}
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );${AERIAL ? `
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, d37Fc, fogFactor );${ap ? `
 	}` : ''}
 #endif`;
+  const FOG_F = fogF(false), FOG_F_AP = fogF(true);
   // Мягкие тени без шума и «ряби» (15.10.2026: на полу была рябь — шум поворота выборок по пикселям экрана ползал при
   // движении, на склонах к солнцу ядро затеняло само себя):
   // • каждая выборка — 2×2 текселя с весами по положению (как билинейная): край тени плавный и без поворота-шума;
@@ -704,7 +706,7 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
     const C = T && T.ShaderChunk;
     if (!C || !C.__d37 || !ORIG) return false;
     for (const k of PATCHED) if (k in ORIG) C[k] = ORIG[k];
-    C.__d37 = 0; E.climShaders = false;
+    C.__d37 = 0; E.climShaders = false; E.aerialFog = false; U.apA[3] = 0;
     return true;
   };
   E.climUnpatch = T => {
@@ -741,7 +743,7 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
     for (const k of LIT) {
       const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
       L.uniforms.d37FogA = { value: U.fogA }; L.uniforms.d37FogB = { value: U.fogB }; L.uniforms.d37FogC = { value: U.fogC };
-      if (AERIAL) { L.uniforms.d37ApA = { value: U.apA }; L.uniforms.d37ApB = { value: U.apB }; L.uniforms.d37ApC = { value: U.apC }; L.uniforms.d37ApD = { value: U.apD }; }
+      if (E.aerialFog) { L.uniforms.d37ApA = { value: U.apA }; L.uniforms.d37ApB = { value: U.apB }; L.uniforms.d37ApC = { value: U.apC }; L.uniforms.d37ApD = { value: U.apD }; }
       L.uniforms.d37Wind = { value: U.wind };
       if (k !== 'basic' && k !== 'matcap' && k !== 'points' && k !== 'sprite' && k !== 'dashed') L.uniforms.d37Sh = { value: U.sh };
       if (k === 'standard' || k === 'physical') L.uniforms.d37Rt = { value: U.rt };
@@ -751,6 +753,25 @@ vec3 d37Leaf( vec3 c, float n, float kind ){
       }
     }
     try { Object.defineProperty(C, '__d37', { value: 1, enumerable: false, writable: true, configurable: true }); } catch (e) { C.__d37 = 1; }
+    return true;
+  };
+  // дымка атмосферы в тумане (T-075): on — кусок с дымкой (только поверх своих кусков и если страж не запомнил 'aerial'), off —
+  // прежний кусок и d37ApA.w = 0. Ставить ДО сборки материалов сцены (программы three кэшируются по параметрам, не по тексту)
+  E.aerialPatch = (T, on) => {
+    const C = T && T.ShaderChunk;
+    if (!C) return false;
+    if (on) {
+      if (!C.__d37 || E.gfxSafe?.('aerial')) return false;
+      C.fog_pars_fragment = FOG_PARS_F_AP; C.fog_fragment = FOG_F_AP;
+      for (const k of LIT) {
+        const L = T.ShaderLib && T.ShaderLib[k]; if (!L || !L.uniforms) continue;
+        L.uniforms.d37ApA = { value: U.apA }; L.uniforms.d37ApB = { value: U.apB }; L.uniforms.d37ApC = { value: U.apC }; L.uniforms.d37ApD = { value: U.apD };
+      }
+      E.aerialFog = true;
+      return true;
+    }
+    if (C.fog_fragment === FOG_F_AP) { C.fog_pars_fragment = FOG_PARS_F; C.fog_fragment = FOG_F; }
+    E.aerialFog = false; U.apA[3] = 0;
     return true;
   };
 

@@ -159,8 +159,9 @@ const summary = f => {
         await ev(`${T}.time(null, ${k % 2 ? 300 : 1})`);
         await ev(`${T}.orbit()`); await sleep(3000);
         await ev('window.gc && window.gc()');
-        const s = await stats();
-        out.minutes.push({ t: +((Date.now() - t0) / 60000).toFixed(1), heap: s.heap, cached: s.cached, nodes: s.nodes, gpuKB: s.gpuKB, errors: s.errors, built: s.built, rebases: s.rebases, logs: logs.length });
+        const s = await stats(), ob = await countObjs();
+        out.minutes.push({ t: +((Date.now() - t0) / 60000).toFixed(1), heap: s.heap, cached: s.cached, nodes: s.nodes, gpuKB: s.gpuKB, errors: s.errors, built: s.built, rebases: s.rebases, logs: logs.length,
+          geo: ob.geometries, mat: ob.materials, tex: ob.textures, rnd: ob.renderers, workers: s.workers });
         console.log('  ', JSON.stringify(out.minutes[out.minutes.length - 1]));
       }
       out.workers = await workers();
