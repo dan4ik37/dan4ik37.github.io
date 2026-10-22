@@ -1,6 +1,7 @@
 // «Подземье» — обрушение (T-022a) в НАСТОЯЩЕМ Chrome (headless, DevTools Protocol, без npm), профиль телефона (390 × 844,
 // ЦП ×4 медленнее): мир «реализм», стена из 1000 плиток — пересчёт при ломании по плитке; мост ~80 плиток падает куском — время
-// кадра; 12 кругов «построил — подрубил — упало — убрал» — память; снимок падающего; ошибок в консоли нет.
+// кадра; 12 кругов «построил — подрубил — упало — убрал» — память; мир закрыть и открыть 20 раз — память; снимок падающего;
+// ошибок в консоли нет.
 // Запуск из корня сайта: node scripts/podzem-support-e2e.cjs [d3d11|swiftshader]   (снимки — <D37_TMP или E:\claude-tmp>\podzem-support)
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
@@ -50,7 +51,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     ok(up, '«Подземье» загрузилось');
     // мир «реализм» и герой — через api игры (как кнопки «Новый мир» / «Играть»)
     res.open = await ev(`(async () => { const A = GAME_IMPL.podzem.api, T = GAME_IMPL.podzem._test;
-      const w = A.newWorldRecord('Обрушение', 'обрушение', [], 'real'), c = A.newCharRecord('Герой'); await A.put('worlds', w); await A.put('chars', c);
+      const w = A.newWorldRecord('Обрушение', 'обрушение', [], 'real'), c = A.newCharRecord('Герой'); await A.put('worlds', w); await A.put('chars', c); window.__pzIds = [w.id, c.id];
       await A.play(w.id, c.id);
       for (let i = 0; i < 200 && T.G.state !== 'play'; i++) await new Promise(r => setTimeout(r, 100));
       T.god(true); T.G.U?.menu?.(null); T.tp(40, 516); await new Promise(r => setTimeout(r, 4000));   // меню поверх игры — убрать
@@ -97,6 +98,13 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     const h1 = await heap();
     res.heap = { h0, h1 }; console.log('память, МБ', JSON.stringify(res.heap));
     ok(h1 - h0 < 4, '12 кругов «построил — подрубил — упало — убрал»: память JS не растёт', res.heap);
+    // 20 раз закрыть и открыть мир «реализм»: открывается, обрушение на месте (переходник — с миром), память JS не растёт
+    const reo = n => ev(`(async () => { const A = GAME_IMPL.podzem.api, T = GAME_IMPL.podzem._test, [w, c] = window.__pzIds, wait = ms => new Promise(r => setTimeout(r, ms)); let bad = 0, ms = 0;
+      for (let k = 0; k < ${n}; k++) { const t0 = performance.now(); await A.stopWorld(true); await A.play(w, c); for (let i = 0; i < 300 && T.G.state !== 'play'; i++) await wait(100); ms = Math.max(ms, performance.now() - t0); T.G.U?.menu?.(null); if (T.G.state !== 'play' || T.G.sup?.mode !== 'real') bad++; await wait(300); }
+      return { bad, maxOpenMs: Math.round(ms) }; })()`, 900000);
+    const ra = await reo(2), r0 = await heap(), rb = await reo(18), r1 = await heap();
+    res.reopen = { n: 20, bad: ra.bad + rb.bad, maxOpenMs: Math.max(ra.maxOpenMs, rb.maxOpenMs), h0: r0, h1: r1 }; console.log('закрыть и открыть мир 20 раз', JSON.stringify(res.reopen));
+    ok(res.reopen.bad === 0 && r1 - r0 < 8, '20 раз закрыть и открыть мир «реализм»: открывается, обрушение на месте, память JS не растёт', res.reopen);
     const errs = logs.filter(l => !/X3595|DevTools|favicon/i.test(l));
     ok(!errs.length, 'в консоли — без ошибок и исключений', errs.slice(0, 6));
   } catch (e) { fail++; console.log('ОШИБКА', e.message); for (const l of logs.slice(-8)) console.log('  консоль:', l.slice(0, 240)); }
