@@ -106,7 +106,7 @@ async function shots(screen){
       const dup = bar.filter(t => /Персонаж|Настройки|Как играть|весь экран|^❓|^⚙️|^🎭/.test(t));
       ok(!dup.length, 'в панели мира нет пунктов меню (Персонаж, Настройки, ⛶, ❓)', dup);
       ok(bar.some(t => /Карта/.test(t)) && bar.some(t => /Участок/.test(t)) && bar.some(t => /Телефон/.test(t) || t === 'mir-phone') && bar.some(t => /Меню/.test(t)), 'в панели: 🗺 Карта, 🏘 Участок, 📱 Телефон, ☰ Меню', bar);
-      ok(['Продолжить', 'Настройки', 'Персонаж', 'весь экран', 'Как играть', 'Выйти'].every(w => items.some(t => t.includes(w))), 'в меню: продолжить, настройки, персонаж, во весь экран, как играть, выйти', items);
+      ok(['Продолжить', 'Настройки', 'Персонаж', /весь экран|Обычный экран/, 'Как играть', 'Выйти'].every(w => items.some(t => typeof w === 'string' ? t.includes(w) : w.test(t))), 'в меню: продолжить, настройки, персонаж, во весь экран, как играть, выйти', items);
     }
     await B.tapSel('.gs-menu [data-mi="settings"]');
     for (let i = 0; i < 40 && !(await B.ev(`!!document.querySelector('.gs-set')`)); i++) await sleep(50);

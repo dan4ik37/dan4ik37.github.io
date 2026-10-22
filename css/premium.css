@@ -2969,6 +2969,8 @@ body.high .profile-avatar-glow.lv-frame-5,body.high .profile-avatar-glow.lv-fram
 /* ☰ Меню (T-043) — одно на игру: настройки, персонаж, полный экран, как играть, выход; заметнее остальных, подпись видна и на телефоне */
 .wld-topbtns .wld-menubtn{background:var(--accent,#7c3aed);border-color:transparent;color:#fff}
 @media (pointer:coarse){.wld-topbtns button{min-height:40px;min-width:40px}}
+/* спрятанные кнопки панели (🎬 вне городов, 🏯 вне боевой зоны) — спрятаны и в узкой панели телефона лёжа (там у кнопок display:grid) */
+.wld-topbtns [hidden]{display:none!important}
 .wld-wrap{position:relative;height:min(68vh,640px);min-height:340px;border-radius:14px;overflow:hidden;background:#1d4428;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .wld-cv{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer}
 .wld-log{position:absolute;left:8px;bottom:8px;max-width:min(72%,400px);font-size:.74rem;line-height:1.35;pointer-events:none;z-index:2}
