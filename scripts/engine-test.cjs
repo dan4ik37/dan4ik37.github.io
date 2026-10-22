@@ -531,4 +531,93 @@ function pk(boxes, opts = {}){
   }, 950);
 }
 
+// ═══ «Бежит сам» (22.10.2026, владелец: «касаешься мышкой за экраном — он бежит»): отпускание, которое не дошло до игры ═══
+// Поддельные окно, документ и элемент игры; события идут как в браузере: перехват (окно → документ) → цель → всплытие.
+{
+  const mkT = name => { const L = []; return { name, L, addEventListener(type, f, o){ L.push({ type, f, cap: o === true || !!(o && o.capture) }); },
+    removeEventListener(type, f, o){ const cap = o === true || !!(o && o.capture), i = L.findIndex(x => x.type === type && x.f === f && x.cap === cap); if (i >= 0) L.splice(i, 1); } }; };
+  const mkEl = (tag, parent) => {
+    const t = mkT(tag); Object.assign(t, { tagName: tag.toUpperCase(), parent, children: [], hidden: false, style: { cssText: '' }, dataset: {}, innerHTML: '', textContent: '',
+      classList: { set: new Set(), add(c){ this.set.add(c); }, remove(c){ this.set.delete(c); }, toggle(c, v){ v = v === undefined ? !this.set.has(c) : !!v; if (v) this.set.add(c); else this.set.delete(c); return v; }, contains(c){ return this.set.has(c); } },
+      appendChild(c){ c.parent = t; t.children.push(c); return c; }, remove(){ if (t.parent) t.parent.children = t.parent.children.filter(x => x !== t); t.parent = null; },
+      contains(o){ for (let p = o; p; p = p.parent) if (p === t) return true; return false; }, closest(sel){ for (let p = t; p && p.tagName; p = p.parent) if (sel.split(',').some(s => p.tagName === s.trim().toUpperCase() || (s.trim().startsWith('.') && p.classList.contains(s.trim().slice(1))))) return p; return null; },
+      querySelector(){ return mkEl('div', t); }, setAttribute(){}, getBoundingClientRect: () => ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 }),
+      clientWidth: 800, clientHeight: 600, captured: new Set(), setPointerCapture(id){ t.captured.add(id); }, releasePointerCapture(id){ t.captured.delete(id); }, requestPointerLock: null });
+    Object.defineProperty(t, 'className', { get(){ return [...t.classList.set].join(' '); }, set(v){ t.classList.set = new Set(String(v).split(/\s+/).filter(Boolean)); } });
+    return t;
+  };
+  const win = mkT('window'), doc = mkT('document');
+  Object.assign(doc, { hidden: false, pointerLockElement: null, head: mkEl('head'), body: mkEl('body'), createElement: tag => mkEl(tag), getElementById: () => null, exitPointerLock(){} });
+  let now = 1000;
+  const ctx = { console, Math, Map, Set, JSON, Array, Object, String, Number, Boolean, Promise, Float64Array, Uint8Array, setTimeout: () => 0, clearTimeout(){},
+    localStorage: globalThis.localStorage, navigator: {}, performance: { now: () => now }, matchMedia: () => ({ matches: false }), document: doc };
+  ctx.addEventListener = win.addEventListener; ctx.removeEventListener = win.removeEventListener; ctx.window = ctx;
+  vm.createContext(ctx);
+  for (const f of ['core', 'controls', 'input', 'ui']) vm.runInContext(fs.readFileSync(path.join(SITE, 'js/engine', f + '.js'), 'utf8'), ctx, { filename: f + '.js' });
+  const X = ctx.D37E;
+  // событие по пути [окно, документ, …, цель]: перехват сверху вниз, на цели — все, всплытие снизу вверх
+  const fire = (pathT, type, props = {}) => {
+    const e = { type, defaultPrevented: false, stopped: false, preventDefault(){ this.defaultPrevented = true; }, stopPropagation(){ this.stopped = true; }, stopImmediatePropagation(){ this.stopped = true; }, target: pathT[pathT.length - 1], ...props };
+    const call = (T, cap) => { for (const l of [...T.L]) if (l.type === type && (cap === null || l.cap === cap)) l.f(e); };
+    for (let i = 0; i < pathT.length - 1 && !e.stopped; i++) call(pathT[i], true);
+    if (!e.stopped) call(pathT[pathT.length - 1], null);
+    for (let i = pathT.length - 2; i >= 0 && !e.stopped; i--) call(pathT[i], false);
+    return e;
+  };
+  const game = mkEl('div', doc.body), header = mkEl('header', doc.body), input = mkEl('input', doc.body);
+  const inGame = [win, doc, game], outside = [win, doc, header];
+  const C = X.controls({}), I = X.input(game, { controls: C }), H = X.ui(game, C);
+  const ptrN = () => -1;   // у старого input.js счётчика пальцев нет (проверка «до» — та же, тогда не проходит)
+  const st = () => { C.step(1 / 60); return { mx: C.move.x, mz: C.move.z, run: C.held('run'), jump: C.held('jump') }; };
+  const key = (code, down, o = {}) => fire([win, doc, o.target || doc.body], down ? 'keydown' : 'keyup', { code, key: code, repeat: false, ctrlKey: false, metaKey: false, shiftKey: !!o.shift, altKey: false, ...o });
+  const holdW = () => { key('KeyW', true); return st().mz === 1; };
+  // 1. клавиши: окно потеряло фокус / вкладку спрятали / страницу закрывают / меню правой кнопки мимо игры / фокус в поле ввода
+  for (const [why, act] of [['blur', () => fire([win], 'blur')], ['hidden', () => { doc.hidden = true; fire([doc], 'visibilitychange'); doc.hidden = false; }], ['pagehide', () => fire([win], 'pagehide')],
+    ['contextmenu', () => fire(outside, 'contextmenu', { button: 2 })], ['focus', () => fire([win, doc, input], 'focusin')]]) {
+    const was = holdW(); act(); const s = st();
+    ok(was && s.mz === 0 && C.up('forward') === true, `держал W, ${why} (keyup не придёт) — персонаж встал («отпустил» — в этом шаге)`, { was, s });
+    ok(C.lastRelease === why, `…и причина записана (${why})`, C.lastRelease);
+    key('KeyW', false); st();
+  }
+  // меню правой кнопки над игрой — его гасит игра (там правая кнопка своя): не отпускаем; фокус не в поле ввода — тоже
+  { holdW(); const r0 = C.released; const e = fire(inGame, 'contextmenu', { button: 2 }); fire([win, doc, header], 'focusin');
+    ok(e.defaultPrevented && C.released === r0 && st().mz === 1, 'правая кнопка над игрой (меню погашено) и фокус на кнопке — W держится дальше'); key('KeyW', false); st(); }
+  // Shift (бег) — keyup съели (Alt+Tab, меню): любое следующее событие клавиатуры или мыши без shiftKey — Shift отпущен
+  { key('ShiftLeft', true, { shift: true }); key('KeyW', true, { shift: true }); const s1 = st();
+    fire(outside, 'pointermove', { pointerType: 'mouse', pointerId: 1, buttons: 0, shiftKey: false, clientX: 5, clientY: 5 }); const s2 = st();
+    ok(s1.run && s1.mz === 1 && !s2.run && s2.mz === 1, 'Shift залип (keyup потерян) — первое движение мыши без Shift его отпускает, W держится', { s1, s2 }); key('KeyW', false); st(); }
+  // 2. кнопка мыши: нажал в игре, отпустил за окном (или над шапкой — до игры не дошло) — сверка по e.buttons / «отпустил» окна
+  { fire(inGame, 'pointerdown', { pointerType: 'mouse', pointerId: 1, button: 0, buttons: 1, clientX: 400, clientY: 300 }); st();
+    const held = C.heldRaw('mine'); fire(outside, 'pointermove', { pointerType: 'mouse', pointerId: 1, buttons: 0, clientX: 900, clientY: -20 }); st();
+    ok(held && !C.heldRaw('mine') && (I.pointers ? I.pointers() : ptrN(I)) === 0, 'ЛКМ отпустили за окном (события не было) — первое движение мыши: кнопка и «камера» отпущены', { held, ptr: I.pointers ? I.pointers() : -1 }); }
+  { fire(inGame, 'pointerdown', { pointerType: 'mouse', pointerId: 1, button: 2, buttons: 2, clientX: 400, clientY: 300 }); st();
+    fire(outside, 'pointerup', { pointerType: 'mouse', pointerId: 1, button: 2, buttons: 0, clientX: 10, clientY: 10 }); st();
+    ok(!C.heldRaw('place') && (I.pointers ? I.pointers() : ptrN(I)) === 0 && !I.taps.length, 'ПКМ отпустили над шапкой сайта — отпущена (окно ловит «отпустил»), нажатием по миру это не считается'); }
+  // 3. палец джойстика: начал на джойстике, отпустил мимо холста (захват не сработал / el убрали / вкладку спрятали)
+  const touch = (type, id, x, y, pathT = inGame) => fire(pathT, type, { pointerType: 'touch', pointerId: id, button: 0, buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1, clientX: x, clientY: y });
+  const joyRun = id => { touch('pointerdown', id, 100, 500); touch('pointermove', id, 100, 400); const s = st(); return s.mz > .5; };
+  for (const [why, end] of [['pointerup мимо холста', id => touch('pointerup', id, 900, 700, outside)], ['pointercancel окна', id => touch('pointercancel', id, 100, 400, [win])],
+    ['захват потерян (el убрали — событие документу)', id => fire([win, doc], 'lostpointercapture', { pointerType: 'touch', pointerId: id })],
+    ['вкладку спрятали', () => { doc.hidden = true; fire([doc], 'visibilitychange'); doc.hidden = false; }], ['окно без фокуса', () => fire([win], 'blur')]]) {
+    const id = 7 + Math.floor(Math.random() * 1000), was = joyRun(id); end(id); const s = st();
+    ok(was && s.mz === 0 && s.mx === 0 && !s.run && (I.pointers ? I.pointers() : ptrN(I)) === 0, `джойстик: ${why} — персонаж встал`, { was, s, ptrs: I.pointers ? I.pointers() : -1 });
+    const again = joyRun(id + 1); touch('pointerup', id + 1, 100, 400); st();
+    ok(again, `…и новый палец снова берёт джойстик (не «залип» старый) — ${why}`);
+  }
+  // 4. экранная кнопка (прыжок): палец увели с кнопки и отпустили где угодно; кнопки перерисовали, пока держал (вошёл в боевую зону)
+  H.buttons([{ action: 'jump', icon: '⤒', label: 'прыжок', big: true }]);
+  const btn = H.button('jump'), btnPath = [win, doc, game, btn];
+  fire(btnPath, 'pointerdown', { pointerType: 'touch', pointerId: 31, button: 0, buttons: 1 }); const j1 = st().jump;
+  touch('pointerup', 31, 700, 100, outside); const j2 = st().jump;
+  ok(j1 && !j2, 'кнопка «прыжок»: отпустил не над ней — отпущена', { j1, j2 });
+  fire(btnPath, 'pointerdown', { pointerType: 'touch', pointerId: 32, button: 0, buttons: 1 }); const j3 = st().jump;
+  H.buttons([{ action: 'crouch', icon: '⬇', label: 'присесть' }]); const j4 = st().jump;
+  ok(j3 && !j4, 'кнопки перерисовали, пока держал, — прыжок отпущен (раньше залипал)', { j3, j4 });
+  // 5. шаг управления — без мусора (проверка без JIT-сборщика: состояния — массив, без новых объектов на шаге)
+  const src = fs.readFileSync(path.join(SITE, 'js/engine/controls.js'), 'utf8'), i0 = src.indexOf('C.step = '), stepSrc = src.slice(i0, src.indexOf('C.frameEnd = ', i0)).replace(/\/\/[^\n]*/g, '');
+  ok(!/for \(const \[|\[\.\.\.|\.forEach\(|Math\.hypot|=> \(?\{ ?x:|= \{ x:/.test(stepSrc) && /if \(edgeDown\.size\) edgeDown\.clear\(\)/.test(stepSrc), 'C.step: без перебора Map с разбором, копий массивов, hypot и новых объектов; Set.clear — только непустого');
+  I.dispose(); C.dispose(); H.dispose();
+  ok(!win.L.length || win.L.every(l => !['keydown', 'blur', 'pointerup', 'contextmenu', 'focusin'].includes(l.type)), 'после dispose — слушателей окна не осталось', win.L.map(l => l.type));
+}
+
 setTimeout(() => { console.log(`\n${pass} ок, ${fail} ошибок`); process.exitCode = fail ? 1 : 0; }, 1000);   // после проверок в async (restore — до 0,8 с)

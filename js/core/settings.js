@@ -50,6 +50,7 @@
     lefty: { def: false, bool: 1 },
     // Камера
     view: { def: 'third', list: ['third', 'first'] },
+    zoomFirst: { def: true, bool: 1 },   // приблизил до упора — от 1-го лица (camera.js rig.autoFirst)
     fov: { def: 50, min: 40, max: 80 },
     motion: { def: 1, min: 0, max: 1 },
     shake: { def: true, bool: 1 },
@@ -135,7 +136,7 @@
   function apply(){
     const O = root.D37Opt || (root.D37Opt = { rev: 0 });
     Object.assign(O, {
-      sens: get('sens'), invertY: get('invertY'), motion: get('motion'), shake: get('shake'), fovAdd: get('fov') - 50, view: get('view'),
+      sens: get('sens'), invertY: get('invertY'), motion: get('motion'), shake: get('shake'), fovAdd: get('fov') - 50, view: get('view'), zoomFirst: get('zoomFirst'),
       fsr: get('fsr'), shadows: get('shadows'), fps: get('fps'),
       mute: get('mute'), vol: get('vol') / 100, volFx: get('volFx') / 100, volAmb: get('volAmb') / 100, volVoice: get('volVoice') / 100,
       lefty: get('lefty'), keysRev,
@@ -286,6 +287,7 @@
   }
   function tabCamera(){
     return row('Вид', seg('view', [['third', 'От 3-го лица'], ['first', 'От 1-го лица']]), 'Каким начинать в 3D-мире. В игре — клавиша V.')
+      + row('Приблизил до упора — от 1-го лица', sw('zoomFirst'), 'Как в Роблоксе: колесо мыши, щипок или крестовина ↑ до конца — вид глазами персонажа, обратно — отдали.')
       + row('Угол обзора', range('fov', 40, 80, 1), 'Шире — видно больше, но всё мельче.')
       + row('Покачивание при ходьбе', range('motion', 0, 100, 5, 100), 'Камера качается в такт шагам, на бегу шире обзор.')
       + row('Тряска камеры', sw('shake'), 'Удары, взрывы, жёсткое приземление.');

@@ -70,16 +70,19 @@
         clearTimeout(toastT); toastT = setTimeout(() => toast.classList.remove('on'), 2200);
       },
       crosshair(on){ cross.hidden = !on; },
-      // кнопки для пальца: нажал — как клавиша действия (C.press), отпустил — отпущена
+      // кнопки для пальца: нажал — как клавиша действия (C.press), отпустил — отпущена. «Отпустил» ловит и окно (палец увели
+      // с кнопки и отпустили где угодно), перерисовка кнопок (вошёл в боевую зону) отпускает нажатые — иначе кнопка «залипала»
       buttons(list){
+        releaseBtns();
         btns.innerHTML = ''; byId.clear(); actBtn = null;
         for (const b of list) {
           const d = document.createElement('button');
           d.type = 'button'; d.className = 'e-btn' + (b.big ? ' big' : ''); d.innerHTML = `${b.icon}<b>${b.label || ''}</b>`;
           if (b.toggle) d.onclick = () => { d.classList.toggle('on', b.toggle()); };
           else {
-            const set = v => { C?.press(b.action, v); d.classList.toggle('on', v); };
-            d.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch (er) {} set(true); });
+            const rec = { pid: null, set: null };
+            const set = rec.set = v => { if (!v) rec.pid = null; C?.press(b.action, v); d.classList.toggle('on', v); if (v) pressed.add(rec); else pressed.delete(rec); };
+            d.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch (er) {} rec.pid = e.pointerId; set(true); });
             for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) d.addEventListener(ev, () => set(false));
           }
           if (b.action === 'interact') { actBtn = d; d.hidden = !lastText; }
@@ -88,8 +91,15 @@
       },
       show(id, on){ const d = byId.get(id); if (d) d.hidden = !on; },
       button: id => byId.get(id),
-      dispose(){ clearTimeout(toastT); hud.remove(); },
+      dispose(){ clearTimeout(toastT); releaseBtns(); for (const f of offs) f(); offs.length = 0; hud.remove(); },
     };
+    // нажатые кнопки: отпустить, если палец отпустили не над ними, окно потеряло фокус, вкладку спрятали
+    const pressed = new Set(), offs = [];
+    function releaseBtns(){ for (const r of [...pressed]) r.set(false); }
+    const onWin = (t, ev, f, o) => { t.addEventListener(ev, f, o); offs.push(() => t.removeEventListener(ev, f, o)); };
+    const upAny = e => { for (const r of [...pressed]) if (r.pid === e.pointerId) r.set(false); };
+    onWin(window, 'pointerup', upAny, true); onWin(window, 'pointercancel', upAny, true);
+    onWin(window, 'blur', releaseBtns); onWin(document, 'visibilitychange', () => { if (document.hidden) releaseBtns(); });
     return H;
   };
 })();
