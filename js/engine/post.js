@@ -1315,6 +1315,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       else if (POSTK.includes(k)) { P?.disable(k); R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // через полсекунды — помогло ли
       else if (k === 'clim' && why !== 'link') { R.reapplyGfx?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // погода на поверхностях: данные шейдеров больше не ставятся (precip.js) — сразу
       else if (k === 'waves') { E.waves?.disable?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // волны (waves.js): вода без кусков волн, «блины» прочь, физика без волн
+      else if (k === 'kbtex') { E.vox?.texFxDisable?.(); G.testAt = Math.min(G.testAt, G.n + 30); }   // «живые» текстуры «Кубомира» (voxel-render.js D37_TEXFX / D37_POM): кубики как раньше
       else { if (k === 'patch') E.gfxUnpatch?.(T); if (k === 'clim') E.climUnpatch?.(T); G.wait = true; rebuild = true; }   // нужен новый рендерер: игра пересоберёт мир
       try { window.dispatchEvent(new CustomEvent('d37:gfxfallback', { detail: { k, why, prog, rebuild } })); } catch (e) {}
       return true;
@@ -1322,7 +1323,9 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
     // сцена: по ступеньке — коды в альфе → свои куски шейдеров → «низкая» (не собралось — коды не помогут: это не текст шейдера)
     function ladder(why, prog = ''){
       if (G.wait) return;
-      // волны (waves.js, D37_GW) — новее всего: кадр с ними «не числа» / чернеет — сначала без них
+      // «живые» текстуры «Кубомира» (рельеф, течение, блёстки; T-096a) — новее всего: сначала без них
+      if (why !== 'link' && E.vox?.texFxActive?.() && on('kbtex')) { off('kbtex', why, prog); return; }
+      // волны (waves.js, D37_GW): кадр с ними «не числа» / чернеет — потом без них
       if (why !== 'link' && E.waves?.active?.() && on('waves')) { off('waves', why, prog); return; }
       // погода на поверхностях (gfx.js D37_CLIM): кадр с ней чернеет / «не числа» — потом без неё
       if (why !== 'link' && R.wxOn && E.climShaders && on('clim')) { off('clim', why, prog); return; }
@@ -1355,6 +1358,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
         if (!lb.post && !lb.mat) { G.log.push('orphan:' + (p.name || '')); continue; }
         // глубина резкости и её автофокус — только они (набор остаётся: лучи, облака, тон работают)
         if (lb.post === 'dof' || lb.post === 'foc') { off('dof', 'link', lb.post); continue; }
+        if (!lb.post && lb.mat?.defines?.D37_TEXFX !== undefined && on('kbtex')) { off('kbtex', 'link', lb.scene); continue; }   // кубики с «живыми» текстурами — только они
         if (!lb.post && lb.mat?.defines?.D37_GW !== undefined && on('waves')) { off('waves', 'link', lb.scene); continue; }   // вода с волнами (waves.js) — только волны
         if (lb.post === 'rays' || (lb.post === 'comp' && P?.packX) || (!lb.post && pk && lb.mat && PACK_DEFS.some(k => lb.mat.defines?.[k] !== undefined))) {
           if (pk) off('pack:' + pk, 'link', lb.post || lb.scene);
@@ -1367,6 +1371,7 @@ void main(){ float e = abs(texture2D(tDepth, vec2(0.5)).x - ${D.toFixed(7)}); gl
       }
     }
     G.scan = scan;
+    G.off = (k, why = 'link', prog = '') => off(k, why, prog);   // игра сама нашла, что её кусок не собрался (voxel-render.js — 'kbtex')
     // ── разбор самопроверки (байты 16×12×4: rgb, a — 255 точка / ~128 небо / 0 «не число») ──
     const L8 = (b, i, hdr) => {
       let x = b[i] / 255, y = b[i + 1] / 255, z = b[i + 2] / 255;

@@ -282,6 +282,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       const s1 = await state();
       await key('Escape', 'Escape', 27, 120); await sleep(900);
       const s2 = await state();
+      if (win === 'inv') await shot('esc-inv');   // «до»: меню паузы поверх мира; «после»: снова мир
       runs.push({ win, s0, s1, s2 });
       console.log('ESC', win, JSON.stringify({ s0, s1, s2 }));
       ok((s1.inv || s1.x) && !s2.inv && !s2.x && !s2.menu, `Esc закрыл окно «${win}» — и меню паузы НЕ открылось`, { s1, s2 });

@@ -633,4 +633,23 @@
   V.texOverride = V.texOverride || new Map();
   V.specOf = name => V.texOverride.get(name) || V.tex[V.texIdx.get(name)]?.spec || S[name];
   V.paintAll = () => V.tex.map(t => V.paint(t.name, V.texOverride.get(t.name) || t.spec || S[t.name]));
+  // «Живые» текстуры (T-096a, владелец: «глубина блоков, плавное перемещение текстур или ещё что-то интересное») — по ИМЕНИ
+  // слоя (моды и новые блоки других задач добавляют слои — номера не годятся): rot — картинка в каждой клетке повёрнута на
+  // случайную четверть (от места клетки: у всех одинаково) — однотонные поверхности без «плитки»; flow — течёт (лава); glint —
+  // блёстки на ярких цветных пикселях (руды, драгоценные блоки); pom — сила рельефа в глубину (voxel-render.js D37_POM;
+  // 0 — плоско; по умолчанию у твёрдых блоков — 1). Мод может задать свои: spec.fx = { rot, glint, pom }. Листва не
+  // поворачивается: её тень (карта теней) рисуется без поворота — дырки в тени разошлись бы с дырками в кроне
+  V.TEX_FX = {
+    rot: new Set(['stone', 'dirt', 'grass_top', 'sand', 'gravel', 'bedrock', 'snow', 'clay', 'sandstone_top', 'obsidian']),
+    flow: new Set(['lava']),
+    inv: new Set(['bricks']),   // светлое — вглубь (светлый шов кирпичей)
+    glint: new Set(['ore_diamond', 'ore_gold', 'ore_iron', 'diamond_block', 'gold_block']),
+    pom: { lava: 0, water: 0, glass: 0, ice: 0, lamp: .25, iron_block: .3, gold_block: .3, diamond_block: .3, snow: .4, sand: .5, grass_top: .6, missing: 0, bouncer: .3, torch: 0, ladder: 0, door_top: 0, door_bottom: 0, bed_top: .4, bed_side: .4,
+      cobble: 1.25, mossy_cobble: 1.25, stone_bricks: 1.15, bricks: 1.15, bedrock: 1.3, gravel: 1.1 },
+  };
+  V.texFx = name => {
+    const F = V.TEX_FX, s = V.specOf?.(name), fx = s && s.fx || {};
+    const pom = fx.pom ?? (name in F.pom ? F.pom[name] : /^(destroy_|item_)/.test(name) ? 0 : 1);
+    return { rot: fx.rot ?? F.rot.has(name), flow: F.flow.has(name), glint: fx.glint ?? F.glint.has(name), inv: fx.inv ?? F.inv.has(name), pom: Math.max(0, Math.min(1.5, +pom || 0)) };
+  };
 })();

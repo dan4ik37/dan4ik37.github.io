@@ -145,6 +145,33 @@ function fakeWorld(sky, blk, walls = new Set()){
     ok(shs.vertexShader.includes('vUvL.xy = mod( vd.xy, 32.0 ) / 16.0;') && !shs.vertexShader.includes('vWD') && !shs.fragmentShader.includes('vWD') && !shs.fragmentShader.includes('uWN') && !shs.fragmentShader.includes('d37dl +='), 'простой режим воды: u, v из младших бит, без новых кусков');
     VRs.dispose();
   }
+  {   // «живые» текстуры и рельеф (T-096a): флаги слоёв по имени, define только где нужно, выключатель, страж графики
+    sec('«живые» текстуры и рельеф (T-096a)');
+    const fx = n => V.texFx(n), F = V.TEX_FX;
+    const miss = [...F.rot, ...F.flow, ...F.glint, ...F.inv, ...Object.keys(F.pom)].filter(n => !V.texIdx.has(n));
+    ok(!miss.length, 'имена в V.TEX_FX — настоящие слои текстур', miss);
+    ok(fx('stone').rot && !fx('cobble').rot && fx('lava').flow && fx('ore_diamond').glint && fx('bricks').inv && fx('item_pick_iron').pom === 0 && fx('lava').pom === 0 && fx('glass').pom === 0 && fx('stone').pom === 1, 'флаги: камень поворачивается, лава течёт, руда блестит, кирпичи «наоборот», вещи и лава — без рельефа');
+    const lf = VR.U.uLF.value, d = lf?.image?.data, li = n => V.texIdx.get(n) * 4;
+    ok(lf?.isDataTexture && lf.image.width === V.tex.length && lf.magFilter === T.NearestFilter && !lf.generateMipmaps, 'флаги слоёв — текстура L × 1 без сглаживания', lf?.image?.width);
+    ok(d[li('stone')] & 1 && d[li('lava')] & 2 && d[li('ore_gold')] & 4 && d[li('bricks')] & 8 && d[li('item_apple') + 1] === 0 && d[li('cobble') + 1] > d[li('stone') + 1] && d[li('cobble') + 3] > d[li('cobble') + 2], 'биты и сила рельефа в текстуре флагов (низ < верх яркости)');
+    ok(VR.U.uLFP.value.x === V.tex.length && VR.U.uLFP.value.y === V.TEX, 'uLFP: число слоёв и размер рисунка', VR.U.uLFP.value);
+    const m = VR.mats, defs = k => m[k].defines;
+    ok(defs('solid').D37_TEXFX && defs('cutout').D37_TEXFX && !defs('water').D37_TEXFX, 'D37_TEXFX — у кубиков, не у воды');
+    ok(defs('solid').D37_POM && defs('solid').D37_POMN >= 8 && !defs('cutout').D37_POM && !defs('foliage').D37_POM, 'рельеф — только твёрдые блоки («высокая», компьютер)');
+    const sh = shaderOf('lambert'); m.solid.onBeforeCompile(sh);
+    const fsh = sh.fragmentShader, vsh = sh.vertexShader;
+    ok(vsh.includes('vD37C = vD37W - d37N( vD37F ) * 0.5;') && /#ifdef D37_TEXFX\s*\nuniform sampler2D uLF;[\s\S]*varying vec3 vD37C;/.test(fsh) && fsh.includes('float d37Hq(') && fsh.indexOf('uniform highp sampler2DArray uTex;') < fsh.indexOf('float d37Hq('), 'шейдер: точка клетки в вершинах, высота клетки рисунка — после объявления uTex', { v: vsh.includes('vD37C = vD37W - d37N( vD37F ) * 0.5;'), f: fsh.includes('varying vec3 vD37C;'), h: fsh.indexOf('float d37Hq('), t: fsh.indexOf('uniform highp sampler2DArray uTex;') });
+    ok(fsh.includes('d37uv.xy += uTime * vec2( 0.017, 0.029 );') && fsh.includes('#if defined( D37_POM ) && !defined( D37_FP ) && !defined( D37_ACT )') && fsh.includes('for ( int i = 0; i < D37_POMN; i ++ )') && !/\bcontinue\b|texelFetch/.test(fsh), 'шейдер: лава течёт, рельеф не у вещей, в цикле — без continue и texelFetch');
+    ok(fsh.includes('totalEmissiveRadiance += diffuseColor.rgb * d37glint * 2.2;') && /float d37glint = 0\.0;/.test(fsh), 'блёстки — свечением (d37glint объявлен и без define)');
+    ok(!/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/.test(fsh.replace(/smoothstep\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,/g, (s, a, b) => +a < +b ? '' : s)) && incOk(fsh) && incOk(vsh), 'smoothstep — края по возрастанию; #include — своей строкой');
+    VR.setOrigin(300, -10); const o1 = [VR.U.uLFP.value.z, VR.U.uLFP.value.w]; VR.setOrigin(768, -768); const o2 = [VR.U.uLFP.value.z, VR.U.uLFP.value.w]; VR.setOrigin(0, 0);
+    ok(o1[0] === 44 && o1[1] === 246 && o2[0] === 0 && o2[1] === 0, 'поворот клетки не зависит от сдвига начала координат (по модулю 256)', { o1, o2 });
+    VR.setPom(false); const p0 = !!defs('solid').D37_POM; VR.setPom(null); const p1 = !!defs('solid').D37_POM;
+    VR.setTexFx(false); const off = (V.LAYERS || Object.keys(m)).filter(k => defs(k).D37_TEXFX || defs(k).D37_POM).length, offA = !VR.texFx().on;
+    VR.setTexFx(true); const on = !!defs('solid').D37_TEXFX && VR.texFx().on;
+    ok(!p0 && p1 && off === 0 && offA && on, 'выключатели: VR.setPom(false) — без рельефа; VR.setTexFx(false) — шейдер как был (страж: E.vox.texFxDisable)', { p0, p1, off, offA, on });
+    ok(/k === 'kbtex'/.test(fs.readFileSync(path.join(SITE, 'js/engine/post.js'), 'utf8')), 'страж графики знает ключ kbtex (post.js)');
+  }
   const wk = waved.map(([m, o]) => [Object.keys(VR.mats).find(k => VR.mats[k] === m), o.kind]);
   ok(wk.length === 2 && wk.some(w => w[0] === 'foliage' && w[1] === 'leaves') && wk.some(w => w[0] === 'cutout' && w[1] === 'leaves'), 'R.wave — листва и трава (слои foliage, cutout)', wk);
   ok(VR.mats.foliage.userData.wave && VR.mats.foliage.userData.wave.kind === 2, 'метка ветра движка на материале (E.waveMaterial)');
