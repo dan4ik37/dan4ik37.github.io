@@ -44,6 +44,31 @@ function forest(W, n = 6, x0 = 4, z0 = 4){
 }
 const count = (W, m) => { let n = 0; for (let i = 0; i < W.c.length; i++) if (W.c[i] === m) n++; return n; };
 
+// ═══ Без мусора: кадр пламени «Кубомира» (отдельный процесс, --fxalloc <three>; проверка — раздел 15) ═══
+if (process.argv.includes('--fxalloc')) {
+  const THREE = require(path.join(process.argv[process.argv.indexOf('--fxalloc') + 1], 'build/three.cjs'));
+  globalThis.self = globalThis; globalThis.THREE = THREE;
+  for (const f of ['js/engine/core.js', 'js/engine/voxel.js', 'js/engine/fx.js', 'js/games/kubomir-fire.js']) vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
+  const E = window.D37E, V = E.vox, T = THREE, ID = V.ID, key = (x, y, z) => x + ',' + y + ',' + z;
+  const cells = new Map(), chunks = new Map();
+  const W = { seed: 1, listeners: [], raw(x, y, z){ const v = cells.get(key(x, y, z)); return v === undefined ? (y < 10 ? ID.stone : 0) : v; }, get(x, y, z){ return this.raw(x, y, z) & 0xfff; },
+    chunk(cx, cz){ const k = cx + '|' + cz; let c = chunks.get(k); if (!c) chunks.set(k, c = { cx, cz, key: k, gen: true, edits: null }); return c; },
+    set(x, y, z, v){ const was = this.raw(x, y, z); cells.set(key(x, y, z), v); for (const f of this.listeners) f(x, y, z, was, v, {}); return true; }, lightAt(){ return 15 << 12; } };
+  const R = { T, q: 'high', scene: new T.Scene(), camera: new T.PerspectiveCamera(70, 1.7, .2, 500), r: {}, night: 0 };
+  const st = { R, W, P: { x: 0, y: 10, z: 0 }, ox: 0, oz: 0, meta: { seed: 1 }, coopGuest: true, net: {} };
+  const X = window.KubomirFire.attach(st);
+  W.listeners.push((x, y, z, was, v) => X.onEdit(x, y, z, was, v, {}));
+  for (let i = 0; i < 300; i++) W.set(10 + (i % 20), 11, 10 + ((i / 20) | 0), V.cell(ID.fire));
+  R.camera.position.set(20, 12, 18);
+  // кадры — из функции (как в игре: цикл движка), не с верхнего уровня файла (там всё — в интерпретаторе)
+  const frames = (n, k0) => { for (let k = 0; k < n; k++) X.frame(1 / 60, (k0 + k) / 60); };
+  frames(4000, 0);   // прогрев: в игре кадр через несколько секунд — оптимизированный код
+  let best = Infinity;
+  for (let r = 0; r < 5; r++) { global.gc(); const h0 = process.memoryUsage().heapUsed; frames(400, 5000 + r * 400); best = Math.min(best, (process.memoryUsage().heapUsed - h0) / 400); }
+  const t0 = now(); frames(300, 9000); const ms = (now() - t0) / 300;
+  console.log(JSON.stringify({ perFrame: best, ms, stats: X.FL.stats, smoke: X.FL.objects().smoke.n, embers: X.FL.objects().embers.n }));
+  process.exit(0);
+}
 // ═══ Без мусора: такты пожара (отдельный процесс, --alloc; проверка — раздел 13) ═══
 if (process.argv.includes('--alloc')) {
   const W = world(160, 4); for (let x = 0; x < 160; x++) for (let z = 0; z < 160; z++) W.set(x, 1, z, MAT.planks);
@@ -311,6 +336,40 @@ sec('10 минут случайной игры (20 тактов в секунд�
     } catch (e) { errors++; if (errors < 3) console.log(e); }
   }
   ok(errors === 0 && bad === 0, 'без ошибок, таблица цела', { errors, bad, stats: F.stats });
+}
+
+// ═══ 15. Пламя движка (fx.js FX.flames) и кадр «Кубомира» — нужен three r149 ═══
+const THREE_DIR = [process.argv.slice(2).find(a => a && !a.startsWith('--') && fs.existsSync(path.join(a, 'build/three.cjs'))), process.env.THREE_PATH].find(p => p && fs.existsSync(path.join(p, 'build/three.cjs')));
+if (!THREE_DIR) console.log('— пламя движка: нет three r149 (путь аргументом или THREE_PATH) — пропущено');
+else {
+  sec('пламя движка: языки, очередь, лампы, дрожь, убирается целиком');
+  const THREE = require(path.join(THREE_DIR, 'build/three.cjs'));
+  globalThis.THREE = THREE;
+  vm.runInThisContext(fs.readFileSync(path.join(SITE, 'js/engine/fx.js'), 'utf8'), { filename: 'js/engine/fx.js' });
+  const E = window.D37E, T = THREE;
+  const mkR = q => { const lamps = []; return { T, q, scene: new T.Scene(), camera: new T.PerspectiveCamera(70, 1.7, .2, 500), r: {}, lamps, lights: { add: src => { lamps.push(src); return src; }, remove: h => { const i = lamps.indexOf(h); if (i >= 0) lamps.splice(i, 1); } } }; };
+  for (const q of ['low', 'mid', 'high']) {
+    const R = mkR(q), FX = E.fx(R), FL = FX.flames({ lights: 3 });
+    FL.begin(R.camera.position);
+    for (let i = 0; i < 50; i++) FL.burn(i * 2, 0, -10, 1, 1, i / 50, .8);
+    FL.dt = 1 / 60; FL.t = 1; FL.windIn[0] = 6; FL.end(); FX.update(1 / 60);
+    const per = q === 'low' ? 1 : q === 'mid' ? 2 : 3, O = FL.objects();
+    ok(FL.stats.cells === 50 && FL.stats.tongues === 50 * per, q + ': 50 очагов — по ' + per + ' языка', FL.stats);
+    ok(!!O.shimmer === (q === 'high'), q + ': дрожь воздуха — только на «высокой»');
+    ok(FL.stats.lit === 3 && R.lamps.length === 3 && R.lamps.filter(l => l.intensity > 0).length === 3, q + ': 3 лампы у ближних очагов (не ближе 4 ед.)', FL.stats);
+    ok(O.mesh.geometry.instanceCount === 50 * per && O.mesh.visible, q + ': один вызов отрисовки на все языки');
+    FL.begin(); let pushed = 0; for (let i = 0; i < 5000; i++) if (FL.push() >= 0) pushed++; FL.end();
+    ok(pushed === FL.Q.length / 8 && FL.stats.tongues <= FL.max, q + ': очередь и буфер — с пределом', { pushed, tongues: FL.stats.tongues, max: FL.max });
+    FL.begin(); FL.end(); ok(!O.mesh.visible && FL.stats.lit === 0, q + ': нет огня — ничего не рисуется, лампы погасли');
+    FL.dispose(); FX.dispose();
+    ok(R.lamps.length === 0 && R.scene.children.length === 0, q + ': убрано целиком (сетки, эмиттеры, лампы)', R.scene.children.map(c => c.name));
+  }
+  sec('кадр пламени «Кубомира» (300 блоков огня): мусор и время (отдельный процесс)');
+  const r = cp.spawnSync(process.execPath, ['--expose-gc', '--max-semi-space-size=64', __filename, '--fxalloc', THREE_DIR], { encoding: 'utf8' });
+  let v = null; try { v = JSON.parse((r.stdout || '').trim().split('\n').pop()); } catch (e) {}
+  if (v) console.log(`  кадр пламени: ${v.perFrame.toFixed(0)} байт мусора, ${v.ms.toFixed(3)} мс (ПК; языков ${v.stats.tongues}, дым ${v.smoke}, угли ${v.embers})`);
+  ok(v && v.perFrame < 1024, 'кадр пламени почти без мусора (< 1 КБ на 300 очагов и сотни частиц)', v || r.stderr?.slice(0, 300));
+  ok(v && v.ms < 1.5, 'кадр пламени быстрый (< 1,5 мс на ПК)', v && v.ms);
 }
 
 console.log(`\nОгонь: ${pass} прошло, ${fail} не прошло`);

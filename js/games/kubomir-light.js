@@ -16,6 +16,7 @@
     lava: { c: '#ff7a2a', i: 1.8, d: 9, fl: .35 },
     lamp: { c: '#ffe4b5', i: 1.5, d: 9, fl: 0 },
     furnace: { c: '#ff9a52', i: 1.0, d: 6, fl: .7 },
+    fire: { c: '#ff8a3a', i: 1.6, d: 9, fl: 1.3 },   // огонь (T-022d): пожар мерцает сильнее факела
     other: { c: '', i: 1.3, d: 8, fl: .2 },
   };
   // туман по биому (днём, слегка): болото — зеленоватый, пустыня — жёлтая дымка, снег и горы — белёсый
@@ -32,6 +33,7 @@
       if (b.liquid === 'lava') return 'lava';
       if (b.name === 'lamp') return 'lamp';
       if (b.name === 'furnace_lit') return 'furnace';
+      if (b.name === 'fire') return 'fire';
       return 'other';
     };
     const colorOf = (t, k) => {
@@ -71,7 +73,7 @@
       for (const s of near) {
         const key = s.x + ',' + s.y + ',' + s.z; keep.add(key);
         const r0 = X.recs.get(key);
-        if (!r0) { const k = kindOf(s.t); add(key, s.x, s.y + (k === 'lava' ? .95 : k === 'torch' ? .62 : .5), s.z, k, s.t, false); }
+        if (!r0) { const k = kindOf(s.t); add(key, s.x, s.y + (k === 'lava' ? .95 : k === 'torch' ? .62 : k === 'fire' ? .35 : .5), s.z, k, s.t, false); }
         else r0.sky = V().lSky(W.lightAt(r0.x, r0.y + .5, r0.z)) / 15;   // крышу построили / сломали
       }
       for (const r of [...X.recs.values()]) if (!r.own && !keep.has(r.key)) drop(r);

@@ -12,9 +12,10 @@
 // события «загорелось здесь» с зерном. Чего не видно (чанк не загружен: read → −1) — замирает и ждёт.
 //   FI = D37E.fire; FI.MATS / FI.MAT / FI.mat(key) / FI.defineMat({ key, catch, burn: [от, до], heat, rain, char }) — материалы
 //   F = FI.grid({ dims: 3 | 2, down: −1 | +1, hz, cap, budget, seed, read(x, y, z) → материал (0 — не горит, −1 — не загружено;
-//       бит 64 — «мокрое», не загорится), open(x, y, z) → true под открытым небом (дождь), onIgnite / onBurnt / onOut / onChar
-//       (x, y, z, материал, слот) }) — клетки
-//   F = FI.parts({ hz, cap, parts, budget, seed, cell, reach, onIgnite / onBurnt / onOut / onChar (id, материал, слот) }) —
+//       бит 64 — «мокрое», не загорится), open(x, y, z) → true под открытым небом (дождь), onIgnite / onChar (x, y, z, материал,
+//       слот), onBurnt / onOut (x, y, z, материал, aux — слот к этому времени уже свободен) }) — клетки
+//   F = FI.parts({ hz, cap, parts, budget, seed, cell, reach, onIgnite / onChar (id, материал, слот), onBurnt / onOut (id,
+//       материал, aux) }) —
 //       детали: F.add(x, y, z, r, материал) → id, F.remove(id), F.move(id, x, y, z), F.restore(id) (сгоревшее — снова может гореть)
 //   Общее: F.tick() — один такт (1 / hz с); F.step(dt) — накопить время игры и сделать такты; F.ignite(…) → слот или −1;
 //   F.douse(x, y, z, r) — погасить вокруг (вода, ведро, водяная бомба) → сколько; F.setWind(м/с, куда дует — радианы по миру);
@@ -205,10 +206,10 @@
     F.find = (x, y, z = 0) => find(x | 0, y | 0, dims === 2 ? 0 : z | 0);
     F.has = (x, y, z = 0) => F.find(x, y, z) >= 0;
     function drop(s, why){
-      const x = X[s], y = Y[s], z = Z[s], m = F.M[s];
+      const x = X[s], y = Y[s], z = Z[s], m = F.M[s], aux = F.AUX[s];
       hdel(s); release(F, s);
       const cb = why === 2 ? F.onBurnt : why === 1 ? F.onOut : null;
-      if (cb) cb(x, y, z, m, s);
+      if (cb) cb(x, y, z, m, aux);   // слот уже свободен: данные игры (aux) — последним аргументом
     }
     // поджечь: m — материал (нет — какой есть в клетке); o.force — даже если «мокрое»; o.aux — данные игры
     F.ignite = (x, y, z = 0, m, io) => {
@@ -263,7 +264,7 @@
       if (m !== MAT_FLAME) {
         const c = read(x, y, z);
         if (c < 0) { F.LAST[s] = F.T; return false; }
-        if (c === 0 || c & 64) { F.stats.gone++; hdel(s); release(F, s); if (F.onOut) F.onOut(x, y, z, m, s); return true; }   // убрали или залили
+        if (c === 0 || c & 64) { const aux = F.AUX[s]; F.stats.gone++; hdel(s); release(F, s); if (F.onOut) F.onOut(x, y, z, m, aux); return true; }   // убрали или залили
       }
       F.LAST[s] = F.T;
       const op = F.rainQ ? (open ? !!open(x, y, z) : true) : false;
@@ -344,11 +345,11 @@
     F.burning = p => p >= 0 && p < NP && SLOT[p] >= 0;
     F.burnt = p => p >= 0 && p < NP && !!PB[p];
     function drop(s, why){
-      const p = F.X[s], m = F.M[s];
+      const p = F.X[s], m = F.M[s], aux = F.AUX[s];
       SLOT[p] = -1; release(F, s);
       if (why === 2) PB[p] = 1;
       const cb = why === 2 ? F.onBurnt : why === 1 ? F.onOut : null;
-      if (cb) cb(p, m, s);
+      if (cb) cb(p, m, aux);
     }
     F.ignite = (p, m, io) => {
       if (!(p >= 0 && p < NP) || !LIVE[p] || SLOT[p] >= 0 || (PB[p] && !(io && io.force))) return -1;

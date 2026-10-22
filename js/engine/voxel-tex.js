@@ -587,6 +587,8 @@
     item_parchment: { k: 'paper32' }, item_map_blank: { k: 'paper32', grid: true }, item_map_filled: { k: 'paper32', map: true }, item_recall: { k: 'scroll32' },
     item_bucket: { k: 'bucket32' }, item_bucket_water: { k: 'bucket32', fill: '#3b7fe0' }, item_bucket_lava: { k: 'bucket32', fill: '#ff7a1f', lava: true },
     bed_top: { k: 'bed', part: 'top' }, bed_side: { k: 'bed', part: 'side' },
+    // огонь (T-022d): обугленные доски, огниво
+    charred_planks: { k: 'planks', c: '#2b231e' }, item_flint_steel: { k: 'ingot', c: '#8e959e' },
   };
   for (let i = 0; i < 8; i++) S['destroy_' + i] = { k: 'destroy', st: i };
   for (const [m, M] of Object.entries(V.TOOL_MATS || {})) for (const k of ['pick', 'axe', 'shovel', 'sword']) S[`item_${k}_${m}`] = { k: 'tool32', tool: k, m, c: M.color };

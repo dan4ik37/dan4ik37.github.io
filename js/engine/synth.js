@@ -181,6 +181,14 @@
       return make(1.6, 73, (t, r) => { const w = N(r); hp += (w - hp) * .35; return (a.do(w) * 3 * exp(-t * 3.2) + b.do(w) * 1.6 * exp(-t * 5) + c.do(w) * .7 * exp(-t * 14) + (w - hp) * exp(-t * 60) * .9); }, .13, .3); },
     fw_crackle(){ const c = new Bp(3200, 2.5), lo = new Bp(1100, 2); const at = Array.from({ length: 28 }, (_, i) => .02 + i * .045 + ((i * 37) % 11) / 400);
       return make(1.4, 74, (t, r) => { const w = N(r); let s = 0; for (const a of at) if (t >= a && t < a + .03) s += exp(-(t - a) * 140); return (c.do(w) * 1.4 + lo.do(w) * .5) * s * exp(-t * 1.2); }, .06, .1); },
+    // огонь (T-022d, js/engine/fire.js): огниво — скрежет стали о кремень и щелчок; вспыхнуло — глухое «вуф» (наплыв гула);
+    // погас — шипение (вода, дождь)
+    flint_strike(){ const s = new Bp(4200, 2.2), s2 = new Bp(2400, 3), k = new Bp(1500, 4); let hp = 0;
+      return make(.22, 81, (t, r) => { const w = N(r); hp += (w - hp) * .5; const scr = t < .12 ? Math.sin(t / .12 * Math.PI) : 0; return (s.do(w) * 1.3 + s2.do(w) * .6) * scr + k.do(w) * exp(-Math.abs(t - .13) * 120) * 2 + (w - hp) * exp(-Math.abs(t - .13) * 300) * .8; }, .08, .04); },
+    fire_ignite(){ const lo = new Bp(120, .9), mid = new Bp(420, .8), hi = new Bp(2600, .7); let lp = 0;
+      return make(.9, 82, (t, r) => { const w = N(r); lp += (w - lp) * .04; const sw = Math.min(1, t / .12) * exp(-Math.max(0, t - .12) * 4.5); return (lo.do(w) * 2 + lp * 1.6 + mid.do(w) * .9) * sw + hi.do(w) * .25 * sw * sw; }, .1, .2); },
+    fire_out(){ const h = new Bp(5400, .6), h2 = new Bp(3100, .9); let hp = 0;
+      return make(.8, 83, (t, r) => { const w = N(r); hp += (w - hp) * .6; const e = Math.min(1, t / .03) * exp(-t * 4); return (h.do(w) * 1.2 + h2.do(w) * .6 + (w - hp) * .3) * e; }, .07, .15); },
   };
   // ── Звуки-петли окружения (A.loop): тот же шум через резонаторы; края сшиты наплывом — петля без щелчка ──
   function loopMake(sec, seed, fn, rms){
@@ -227,6 +235,11 @@
       const lo = new Bp(110, 2), hi = new Bp(220, 2), wh = new Bp(1600, 2.5);
       return loopMake(2, 79, (t, r) => { const w = N(r), pulse = .6 + .4 * Math.pow(Math.max(0, Math.sin(PI2 * 22 * t)), 2);
         return (lo.do(w) * 1.3 + hi.do(w) * .7) * pulse + wh.do(w) * .15; }, .07);
+    },
+    fire_roar(){   // большой пожар: низкий гул и рёв пламени, частый треск (поверх amb_fire у ближнего огня)
+      const deep = new Bp(85, .9), body = new Bp(220, .7), crack = new Bp(2800, 1.6); let lp = 0, ev = 0;
+      return loopMake(5, 84, (t, r) => { const w = N(r); lp += (w - lp) * .025; if (r() < .004) ev = .4 + r() * .7; ev *= .993; const sw = .75 + .25 * Math.sin(t * PI2 / 5 * 2) * Math.sin(t * PI2 / 5 + 1.3);
+        return (deep.do(w) * 1.4 + lp * 1.5 + body.do(w) * .6) * sw + crack.do(w) * ev * .9; }, .08);
     },
     amb_magic(){   // волшебство: тихий звон-переливы (полосы шума, не чистые тоны)
       const bells = [1900, 2530, 3170, 3800].map(f => new Bp(f, 40)); let ev = 0, k = 0;

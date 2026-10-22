@@ -380,6 +380,13 @@
           else if (hooks.iceAs(G, x, y, z)) toAll({ t: 'ice', x, y, z, at: Date.now() }, G);
           return;
         }
+        case 'fire': {   // огниво гостя (T-022d): поджечь блок — решает хозяин (дальность, частота); пламя гость увидит правками
+          const { x, y, z } = m; if (!ints(x, y, z)) return;
+          if (!reachOk(G, x, y, z) || fill(G, 'acts', 'actT', 5, 6) < 1) return;
+          G.acts -= 1; H.note(G, 'fire', [x, y, z]);
+          hooks.fireAs?.(G, x, y, z, clamp(m.nx | 0, -1, 1), clamp(m.ny | 0, -1, 1), clamp(m.nz | 0, -1, 1));
+          return;
+        }
         case 'drop': {
           const s = m.s, p = m.p, it = s && V.item(s.id);
           if (!it || !Number.isInteger(s.n) || s.n < 1 || s.n > it.stack || !Array.isArray(p) || !p.every(fin) || fill(G, 'drops', 'dropT', 4, 8) < 1) return;
@@ -804,6 +811,7 @@
     G.reqBreak = (x, y, z, tool) => toHost({ t: 'brk', x, y, z, tool: tool || '' });
     G.sleep = on => toHost({ t: 'zz', on: !!on });   // T-049: лёг на лежанку / встал (ночь проходит, когда спит половина — решает хозяин)
     G.reqPlace = (x, y, z, v, v2, it) => toHost({ t: 'put', x, y, z, v: pv(v), v2: v2 == null ? null : pv(v2), it: it || '' });
+    G.reqFire = (x, y, z, nx, ny, nz) => toHost({ t: 'fire', x, y, z, nx, ny, nz });   // огниво (T-022d)
     G.reqDoor = (x, y, z) => toHost({ t: 'door', x, y, z });
     G.reqIce = (x, y, z) => toHost({ t: 'ice', x, y, z });
     G.reqDrop = (s, p, vel) => { if (!s || !(s.n > 0)) return; toHost({ t: 'drop', s: { id: s.id, n: s.n, d: s.d | 0 }, p: p.map(v => +(+v).toFixed(2)), vel: vel ? vel.map(v => +(+v).toFixed(2)) : null }); };
