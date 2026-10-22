@@ -203,6 +203,7 @@ function selfCheck(){
     }
     ok(badClaims.length === 0, 'причины в списке подходят окружению (в onclick, ссылке, стиле — нельзя «после GameRoom.clean» и т. п.)', badClaims.slice(0, 6));
     const stale = A.stale.length;
+    console.log(`  разобрано: файлов ${R.files}, единиц разметки ${R.stats.units}, вставок в них ${R.stats.interps}, приёмников (innerHTML, href, onclick-строк, srcdoc, new Function…) ${R.stats.sinks}`);
     console.log(`  разбор: файлов ${R.files}, находок ${R.findings.length}, в списке проверенных ${A.allowed.length} (записей ${L.map.size}, устаревших ${stale}), ${((Date.now() - t0) / 1000).toFixed(1)} с`);
     if (stale > 0) console.log(`  (устаревшие записи ничего не скрывают; убрать: node scripts/xss-scan.cjs --prune)`);
     const byClaim = {};
@@ -340,7 +341,7 @@ function selfCheck(){
         return J([]);
       };
       const imp = async f => (await import(pathToFileURL(path.join(tmp, f)).href)).default;
-      const pages = await imp('api/pages.js'), game = await imp('api/game.js'), video = await imp('api/video.js');
+      const pages = await imp('api/pages.js'), game = await imp('api/game.js'), video = await imp('api/video.js'), sitemap = await imp('api/sitemap.js');
       const call = async (handler, q) => {
         const out = { code: 200, headers: {}, body: '' };
         const res = { status(c){ out.code = c; return res; }, setHeader(k, v){ out.headers[k] = String(v); return res; }, send(b){ out.body = String(b ?? ''); return res; }, end(b){ out.body = String(b ?? ''); return res; }, json(b){ out.body = JSON.stringify(b); return res; }, redirect(c, u){ out.code = u ? c : 302; out.headers.Location = u || c; return res; } };
@@ -381,7 +382,7 @@ function selfCheck(){
         ['/games/chess?n=&s=', game, p => ({ id: 'chess', s: '55', n: p })], ['/games/<id>', game, p => ({ id: p })], ['/tools/cps?n=&s=', pages, p => ({ page: 'cps', n: p, s: '7' })],
         ['/quiz/minecraft?r=', pages, p => ({ page: 'quiz', slug: 'minecraft', r: p })], ['/quiz/<slug>', pages, p => ({ page: 'quiz', slug: p })], ['/tools/wheel?o=', pages, p => ({ page: 'wheel', o: p + '|ещё|' + p })],
         ['/topic/<slug>', pages, p => ({ page: 'topic', slug: p })], ['/videos?p=', pages, p => ({ page: 'videos', p })], ['/shop/o/<заказ>', pages, p => ({ page: 'shop', o: p })], ['/terms', pages, p => ({ page: p })],
-        ['/forum/<id>', pages, p => ({ page: 'forum', id: p })], ['/ideas/<id>', pages, p => ({ page: 'ideas', id: p })], ['/v/<id>', video, p => ({ id: p })], ['/tools/typing?s=', pages, p => ({ page: 'typing', s: p })],
+        ['/forum/<id>', pages, p => ({ page: 'forum', id: p })], ['/ideas/<id>', pages, p => ({ page: 'ideas', id: p })], ['/v/<id>', video, p => ({ id: p })], ['/go/<id>', pages, p => ({ page: 'go', id: p, t: p })], ['/sitemap.xml?part=', sitemap, p => ({ part: p })], ['/tools/typing?s=', pages, p => ({ page: 'typing', s: p })],
       ];
       for (const p of PAYLOADS) for (const [name, h, mk] of Q) {
         let r; try { r = await call(h, mk(p)); } catch (e) { ok(false, `${name}: не падает на злой строке`, String(e.message || e).slice(0, 120)); continue; }

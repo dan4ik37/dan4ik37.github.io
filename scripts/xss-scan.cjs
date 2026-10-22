@@ -1255,17 +1255,20 @@ function createAnalyzer(opts) {
   }
 
   // ═══ Сбор находок по файлу ═══
+  const stats = { units: 0, interps: 0, sinks: 0 };   // сколько единиц разметки, вставок и приёмников разобрано (для отчёта)
   function scanFile(fi, out) {
     const find = (kind, node, extra) => out.push({ file: fi.file, line: node.loc.start.line, fn: fnNameOf(fi, node), kind, s: node.start, e: node.end, ...extra });
     walk(fi.ast, node => {
       if ((node.type === 'TemplateLiteral' || isPlus(node) || isJoinArrayUnit(node)) && (node.type === 'CallExpression' || unitRoot(node))) {
         const mu = isMarkupUnit(node, fi);
         if (mu) {
+          stats.units++;
           const js = isJsCode(node, fi);
           const m = new Machine(js ? 'raw' : mu === 'attrs' ? 'bef_attr' : 'data');
           if (js) m.rawTag = 'script';
           for (const p of unitPieces(node)) {
             if (p.s != null) { m.feed(p.s); continue; }
+            stats.interps++;
             const ctx = m.ctx();
             const g = grade(p.e, fi);
             const bad = checkCtx(ctx, g);
@@ -1281,11 +1284,13 @@ function createAnalyzer(opts) {
     const rhsSrc = r => snip(fi, r).slice(0, 80);
     const isMarkupish = r => (r.type === 'TemplateLiteral' || isPlus(r) || isJoinArrayUnit(r)) && !!isMarkupUnit(r, fi);
     const htmlSink = (kind, r) => {
+      stats.sinks++;
       if (isMarkupish(r)) return;
       const g = grade(r, fi);
       if (!g.h) find('sink', r, { sink: kind, x: rhsSrc(r), why: g.c.slice(0, 3), need: 'h' });
     };
     const urlSink = (kind, r, target) => {
+      stats.sinks++;
       if (!r || r.type === 'ArrowFunctionExpression' || r.type === 'FunctionExpression') return;   // PL.src = s => … — это функция, а не адрес
       const g = grade(r, fi);
       if (g.u || g.x) return;
@@ -1295,7 +1300,7 @@ function createAnalyzer(opts) {
       const low = (kind === 'src' || kind === 'setAttribute(src)' || kind === 'data') && !/frame|script|embed|object|worker|win|popup/i.test(tx);
       find('sink', r, { sink: kind + ' [' + tx + ']', x: rhsSrc(r), why: g.c.slice(0, 3), need: 'u', low: low ? 1 : 0 });
     };
-    const codeSink = (kind, r) => find('sink', r, { sink: kind, x: rhsSrc(r), why: [], need: 'x' });
+    const codeSink = (kind, r) => { stats.sinks++; return find('sink', r, { sink: kind, x: rhsSrc(r), why: [], need: 'x' }); };
     if (n.type === 'AssignmentExpression' && n.left.type === 'MemberExpression') {
       const nm = propName(n.left);
       if ((nm === 'innerHTML' || nm === 'outerHTML') && (n.operator === '=' || n.operator === '+=')) htmlSink(nm, n.right);
@@ -1343,7 +1348,7 @@ function createAnalyzer(opts) {
     if (n.type === 'ImportExpression') urlSink('import()', n.source, n);
   }
 
-  return { files, addFile, scanFile, grade, snip, globalsTable, dbg: { objectsOf, elemObjects, bindingsOf, lookup, fnsOfCallee, nsObjects, callSitesOf } };
+  return { files, addFile, scanFile, grade, snip, globalsTable, stats, dbg: { objectsOf, elemObjects, bindingsOf, lookup, fnsOfCallee, nsObjects, callSitesOf } };
 }
 
 // ═══ Список файлов ═══
@@ -1376,7 +1381,7 @@ function scan(root, opts = {}) {
   }
   const findings = [];
   for (const fi of A.files.values()) A.scanFile(fi, findings);
-  return { findings, errors, files: A.files.size, analyzer: A };
+  return { findings, errors, files: A.files.size, stats: A.stats, analyzer: A };
 }
 
 // Разбор файлов из памяти (для проверок самого разбора): { 'js/core/utils.js': текст, 'js/x.js': текст } → { findings, errors }
