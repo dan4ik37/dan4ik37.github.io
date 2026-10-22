@@ -20,8 +20,8 @@ const store = {};
 globalThis.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
 const run = f => vm.runInThisContext(fs.readFileSync(path.join(SITE, f), 'utf8'), { filename: f });
 for (const f of ['js/engine/core.js', 'js/engine/gfx.js', 'js/engine/voxel.js', 'js/engine/voxel-tex.js', 'js/engine/voxel-gen.js', 'js/engine/voxel-mesh.js', 'js/engine/voxel-render.js',
-  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js',
-  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir.js']) run(f);
+  'js/engine/physics.js', 'js/engine/controls.js', 'js/engine/player.js', 'js/engine/host.js', 'js/engine/accessories.js', 'js/engine/sheet.js', 'js/engine/info.js', 'js/engine/recipes.js',
+  'js/games/kubomir-ents.js', 'js/games/kubomir-weather.js', 'js/games/kubomir-x.js', 'js/games/kubomir-info.js', 'js/games/kubomir-recipes.js', 'js/games/kubomir.js']) run(f);
 const E = window.D37E, V = E.vox, ID = V.ID, KB = window.GAME_IMPL.kubomir._test, KX = window.KubomirX;
 
 // игрок и мир-заглушка для переходника помощников
@@ -298,6 +298,80 @@ function mkSt(o = {}){
     const txt = [];
     for (const fps of [30, 60, 144]) { hud.chips.clear(); for (let i = 0; i < fps; i++) FI.hud(1 / fps); txt.push(JSON.stringify([...hud.chips.entries()].map(([k, c]) => [k, c.t]).sort())); }
     ok(txt[0] === txt[1] && txt[1] === txt[2], 'строки одинаковые при 30 / 60 / 144 кадрах');
+  }
+
+  // ═══ 6. Книга рецептов ═══
+  sec('книга рецептов: ускоритель V.craft = старый перебор, указатель (как сделать / для чего / где взять), поиск, «Книга мастера»');
+  {
+    // ускоритель рецептов: на каждом рецепте (обе зеркальные) и 5000 случайных сетках — ответ как у старого перебора
+    let s = 7; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    const names = ['planks_oak', 'planks_birch', 'stick', 'cobble', 'iron_ingot', 'gold_ingot', 'coal', 'glass', 'fiber', 'parchment', 'flint', 'feather', 'diamond', 'compass', 'map_filled', 'sand', 'stone', 'slime_ball', 'log_oak', null, null, null, null];
+    let diff = 0, n = 0;
+    const same = (a, b) => (!a && !b) || (a && b && a.out === b.out && a.n === b.n && a.recipe === b.recipe);
+    for (const r of V.recipes) {
+      if (!r.pattern) continue;
+      const rh = r.pattern.length, rw = Math.max(...r.pattern.map(q => q.length));
+      for (const mir of [false, true]) for (const [w, ox, oy] of [[3, 0, 0], [3, 3 - rw, 3 - rh]]) {
+        if (rw > w || rh > w) continue;
+        const g = new Array(w * w).fill(null);
+        for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) { const ch = r.pattern[y][mir ? rw - 1 - x : x] || ' '; if (ch !== ' ') { const k = r.key[ch]; g[(y + oy) * w + x + ox] = k[0] === '#' ? V.TAGS[k.slice(1)][0] : k; } }
+        n++; if (!same(V.craft(g, w, w), V.craftLinear(g, w, w))) diff++;
+      }
+    }
+    for (let i = 0; i < 5000; i++) { const w = rnd() < .3 ? 2 : 3, g = []; for (let k = 0; k < w * w; k++) g.push(names[Math.floor(rnd() * names.length)]); n++; if (!same(V.craft(g, w, w), V.craftLinear(g, w, w))) diff++; }
+    ok(diff === 0 && n > 5000, 'ускоритель рецептов = старый перебор (все рецепты, зеркально, в углу сетки + 5000 случайных)', { n, diff });
+    let t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) V.craft(['planks_oak', 'planks_oak', null, 'planks_oak', 'planks_oak', null, null, null, null], 3, 3); const fast = Number(process.hrtime.bigint() - t0) / 1e6;
+    t0 = process.hrtime.bigint(); for (let i = 0; i < 20000; i++) V.craftLinear(['planks_oak', 'planks_oak', null, 'planks_oak', 'planks_oak', null, null, null, null], 3, 3); const slow = Number(process.hrtime.bigint() - t0) / 1e6;
+    console.log(`  V.craft 20 000 раз: с ускорителем ${fast.toFixed(1)} мс, перебором ${slow.toFixed(1)} мс`);
+    // моды: рецепт добавили — указатель перестроился сам
+    const r0 = V.addRecipe({ pattern: ['ff', 'ff'], key: { f: 'flint' }, out: 'gravel', n: 1 });
+    ok(V.craft(['flint', 'flint', 'flint', 'flint'], 2, 2)?.out === 'gravel', 'новый рецепт (мод) — виден сразу (указатель перестроился)');
+    V.recipes.pop(); ok(!V.craft(['flint', 'flint', 'flint', 'flint'], 2, 2), 'рецепт убрали — пропал'); void r0;
+    // указатель книги
+    const { st, g } = mkSt(); st.G = V.genInit(1, {});
+    const X = KX.attach(st, g), FR = X.feats.find(f => f.id === 'recipes');
+    t0 = process.hrtime.bigint(); const IX = FR._index(); const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    console.log(`  указатель рецептов: ${IX.stats.recipes} рецептов, ${IX.stats.items} вещей, ${ms.toFixed(2)} мс`);
+    ok(ms < 20, 'указатель строится быстро (< 20 мс в node)', ms);
+    const outs = new Set(V.recipes.map(r => r.out));
+    ok([...outs].every(o => IX.byOut(o).length > 0), 'каждый рецепт — под своей вещью («как сделать»)');
+    ok(IX.byOut('iron_ingot').some(r => r.st === 'furnace' && r.grid[0] === 'ore_iron') && IX.byOut('iron_ingot').some(r => r.grid.includes('iron_block')), 'железный слиток: печь (руда) и из блока');
+    ok(IX.byIn('planks_birch').some(r => r.out === 'crafting_table') && IX.byIn('planks_spruce').some(r => r.out === 'stick'), 'группы раскрыты: берёзовые доски — для верстака, еловые — для палок («для чего»)');
+    ok(IX.byIn('compass').some(r => r.out === 'atlas') && IX.byIn('compass').some(r => r.out === 'navigator') && IX.byIn('compass').some(r => r.out === 'ore_finder'), 'компас — для атласа, навигатора и рудоискателя');
+    const fl = IX.from('flint'), fb = IX.from('fiber'), ir = IX.from('ore_iron'), ft = IX.from('feather'), cl = IX.from('coal');
+    ok(fl.some(q => q.kind === 'block' && q.from === 'gravel' && q.p === .1) && fb.some(q => q.from === 'tall_grass'), 'где взять: кремень — гравий 10 %, волокно — трава');
+    ok(ir.some(q => q.kind === 'ore' && q.minY === 5 && q.maxY === 64), 'железная руда — на высоте 5…64');
+    ok(ft.some(q => q.kind === 'mob' && q.from === 'chicken') && cl.some(q => q.kind === 'block' && q.from === 'ore_coal') && cl.some(q => q.kind === 'smelt'), 'перо — курица; уголь — из руды и из печи');
+    ok(!IX.from('bricks').some(q => q.kind === 'world'), 'кирпичи «в мире» не встречаются (только рецепт)');
+    // что можно сделать: 4 доски → верстак (на руках), палки…; кирка — только с верстаком
+    const hv = IX.have([{ id: 'planks_oak', n: 4 }, { id: 'stick', n: 2 }, { id: 'pick_wood', n: 1 }], id => !!V.item(id)?.tool);
+    const can = IX.craftable(hv, {}).map(r => r.out);
+    ok(can.includes('crafting_table') && can.includes('stick') && can.includes('pick_wood') && !can.includes('furnace'), 'хватает: верстак, палки, деревянная кирка (на верстаке); печи — нет', can);
+    ok(IX.can(IX.byOut('crafting_table')[0], hv) === 1 && IX.can(IX.byOut('stick')[0], hv) === 2, 'сколько раз хватит: верстак ×1, палки ×2');
+    ok(!hv.has('pick_wood'), 'инструменты — не ингредиенты');
+    // поиск: по-русски, латиницей игры, синонимы, ё = е
+    const top = q => IX.search(q)[0];
+    ok(top('кирк') && /^pick_/.test(top('кирк')), 'поиск «кирк» → кирки', IX.search('кирк').slice(0, 3));
+    ok(IX.search('pick').every(id => /^pick_/.test(id)) && IX.search('pick').length === 5, '«pick» → все 5 кирок');
+    ok(top('факел') === 'torch' && top('torch') === 'torch', '«факел» и «torch» → факел');
+    ok(IX.search('железн').slice(0, 6).every(id => /iron/.test(id)), '«железн» — железные вещи сначала', IX.search('железн').slice(0, 6));
+    ok(IX.search('ёлка ель').length === 0 && IX.search('елов').length >= 3, 'ё = е; все слова запроса должны найтись', IX.search('елов'));
+    ok(top('кровать') === 'bed', 'синоним «кровать» → лежанка');
+    t0 = process.hrtime.bigint(); for (let i = 0; i < 200; i++) IX.search('жел' + (i % 3 ? 'е' : ''), null); const sMs = Number(process.hrtime.bigint() - t0) / 1e6 / 200;
+    ok(sMs < 1, 'поиск по ' + IX.items.length + ' вещам — меньше 1 мс', sMs);
+    // «Книга мастера»: до неё — книга закрыта; прочитал — открыта навсегда, книга ушла; второй раз — не тратится
+    ok(!FR.known(), 'сначала полная книга закрыта');
+    ok(KB.xMenu({ X }).some(i => i.id === 'x:recipes' && /🔒/.test(i.text)), 'в меню — «Книга рецептов 🔒»');
+    st.P.inv[0] = { id: 'master_book', n: 1 }; st.P.sel = 0;
+    ok(X.useItem(st.P.inv[0], V.item('master_book'), 'main', null) && FR.known() && !st.P.inv[0] && st.P.ext.flags.recipes === 1, 'прочитал — открыта, книга ушла, помнит в данных игрока');
+    st.P.inv[0] = { id: 'master_book', n: 1 };
+    ok(X.useItem(st.P.inv[0], V.item('master_book'), 'main', null) && st.P.inv[0]?.n === 1 && st.toasts.some(t => /уже знаешь/.test(t)), 'второй раз — «уже знаешь», книга не тратится');
+    ok(KB.xMenu({ X }).some(i => i.id === 'x:recipes' && !/🔒/.test(i.text)), 'в меню — «Книга рецептов» без замка');
+    const { st: st2, g: g2 } = mkSt({ creative: true }); const X2 = KX.attach(st2, g2);
+    ok(X2.recipesKnown(), 'в «Творчестве» книга открыта сразу');
+    // сохранение: прочитанная книга — в данных игрока
+    const P3 = mkPlayer(); P3.ext = E.host.cleanExt(JSON.parse(JSON.stringify(st.P.ext))); const { st: st3, g: g3 } = mkSt({ P: P3 }); const X3 = KX.attach(st3, g3);
+    ok(X3.recipesKnown(), 'после загрузки книга по-прежнему открыта');
   }
 
   console.log(`\nkubomir-qol-test: ${pass} ok, ${fail} fail`);

@@ -30,7 +30,7 @@
 .d37sh-tabs button{flex:none;min-height:36px;padding:4px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#dfe5ff;font:700 .84rem Montserrat,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
 .d37sh-tabs button.on{background:rgba(79,140,255,.38);border-color:#7aa6ff;color:#fff}
 .d37sh-find{flex:none;margin:0 10px 6px;min-height:38px;padding:6px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.32);color:#fff;font:600 .9rem Montserrat,system-ui,sans-serif}
-.d37sh-body{flex:1;min-height:0;overflow:auto;padding:4px 10px 12px;-webkit-overflow-scrolling:touch}
+.d37sh-body{position:relative;flex:1;min-height:0;overflow:auto;padding:4px 10px 12px;-webkit-overflow-scrolling:touch}
 .d37sh-body:focus{outline:none}
 .d37sh button{font-family:inherit}
 .d37sh.pad :focus{outline:3px solid #ffd23f;outline-offset:1px}

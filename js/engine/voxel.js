@@ -295,8 +295,38 @@
 
   const tagHas = (k, name) => k[0] === '#' ? (V.TAGS[k.slice(1)] || []).includes(name) : k === name;
   V.tagHas = tagHas;
+  // Ускоритель (T-049, план §4.2 H1): рецепты разложены по «форме» — размер и какие клетки заняты (и зеркально), списки — по числу
+  // вещей; V.craft проверяет только подходящие по форме — в том же порядке, что и раньше (первый подошедший — как был). Указатель
+  // строится заново, когда список рецептов поменялся (моды: другая длина или другой последний рецепт)
+  let CI = null;
+  const craftIndex = () => {
+    const L = V.recipes, last = L[L.length - 1];
+    if (CI && CI.n === L.length && CI.last === last) return CI;
+    const shape = new Map(), list = new Map(), add = (m, k, i) => { let a = m.get(k); if (!a) m.set(k, a = []); if (a[a.length - 1] !== i) a.push(i); };
+    L.forEach((r, i) => {
+      if (r.list) { add(list, r.list.length, i); return; }
+      const P = r.pattern, rh = P.length, rw = Math.max(...P.map(s => s.length));
+      for (const mir of r.mirror === false ? [false] : [false, true]) { let m = 0; for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) if ((P[y][mir ? rw - 1 - x : x] || ' ') !== ' ') m |= 1 << (y * rw + x); add(shape, rw + 'x' + rh + ':' + m, i); }
+    });
+    return (CI = { n: L.length, last, shape, list });
+  };
   // Сетка верстака (массив имён или null, w×h) → { out, n, recipe } или null
   V.craft = (grid, w, h) => {
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (grid[y * w + x]) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+    if (x1 < 0) return null;
+    const cw = x1 - x0 + 1, chh = y1 - y0 + 1;
+    let mask = 0, nf = 0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (grid[y * w + x]) { mask |= 1 << ((y - y0) * cw + (x - x0)); nf++; }
+    const I = craftIndex(), a = I.shape.get(cw + 'x' + chh + ':' + mask), b = I.list.get(nf);
+    if (!a && !b) return null;
+    // кандидаты — по порядку рецептов (слить два упорядоченных списка)
+    const cand = !a ? b : !b ? a : (() => { const out = []; let i = 0, j = 0; while (i < a.length || j < b.length) out.push(j >= b.length || (i < a.length && a[i] < b[j]) ? a[i++] : b[j++]); return out; })();
+    return craftScan(grid, w, h, cand);
+  };
+  // Старый перебор всех рецептов (для проверки ускорителя: scripts/kubomir-qol-test.cjs сравнивает оба на всех рецептах и 5000 сетках)
+  V.craftLinear = (grid, w, h) => craftScan(grid, w, h, null);
+  function craftScan(grid, w, h, only){
     // обрезать пустые края
     let x0 = w, y0 = h, x1 = -1, y1 = -1;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (grid[y * w + x]) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
@@ -304,7 +334,9 @@
     const cw = x1 - x0 + 1, chh = y1 - y0 + 1, cells = [];
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push(grid[y * w + x] || null);
     const filled = cells.filter(Boolean);
-    for (const r of V.recipes) {
+    const L = V.recipes, N = only ? only.length : L.length;
+    for (let ri = 0; ri < N; ri++) {
+      const r = only ? L[only[ri]] : L[ri];
       if (r.table && w < 3) continue;   // только на верстаке (рецепт мода: station workbench / больше 4 предметов)
       if (r.list) {
         if (r.list.length !== filled.length) continue;
@@ -326,7 +358,7 @@
       }
     }
     return null;
-  };
+  }
 
   // ═══ Таблицы для сетки и света (V.compile — после модов; их же получают потоки) ═══
   const LCOL0 = [1, .95, .84];   // свет без своего цвета — тёплый белый

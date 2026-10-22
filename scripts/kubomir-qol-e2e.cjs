@@ -89,6 +89,16 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
           await ev(`(() => { ${T}.state().ui.open('inv'); return 1; })()`); await sleep(700); await shot(P + '-inv');
           await ev(`(() => { ${T}.state().ui.close(); ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot(P + '-acc-sheet');
           await ev(`(() => { ${T}.state().X.closeSheet(); return 1; })()`); await sleep(1200); await shot(P + '-hud');
+          // 📖 книга рецептов: прочитать «Книгу мастера», открыть вещи + книгу рядом, карточку компаса
+          await give([['iron_ingot', 9], ['glass', 4], ['flint', 2], ['planks_oak', 12], ['stick', 4], ['coal', 6], ['fiber', 9]]);
+          const learned = await ev(`(() => { const S = ${T}.state(), V = D37E.vox, j = S.P.inv.findIndex(s => s && s.id === 'master_book'); if (j < 0) return false; S.P.sel = j < 9 ? j : 0; if (j >= 9) { const t = S.P.inv[0]; S.P.inv[0] = S.P.inv[j]; S.P.inv[j] = t; } return S.X.useItem(S.P.inv[S.P.sel], V.item('master_book'), 'main', null) && S.X.recipesKnown(); })()`);
+          ok(learned, P + ': «Книга мастера» прочитана — книга рецептов открыта');
+          await ev(`(() => { const S = ${T}.state(); S.X.closeSheet(); S.ui.open('craft', null); S.X.openRecipes(); return 1; })()`); await sleep(900); await shot(P + '-recipes-can');
+          await ev(`(() => { ${T}.state().X.openRecipes('compass'); return 1; })()`); await sleep(700); await shot(P + '-recipes-compass');
+          const filled = await ev(`(() => { const S = ${T}.state(), b = document.querySelector('[data-fill]:not([disabled])'); if (!b) return 'нет кнопки'; b.click(); return S.ui.craft.filter(Boolean).map(s => s.id).join(','); })()`);
+          ok(/iron_ingot/.test(filled || '') && /flint/.test(filled || ''), P + ': «Положить в сетку» — компас разложен на верстаке', filled);
+          await sleep(500); await shot(P + '-recipes-filled');
+          await ev(`(() => { const S = ${T}.state(); S.X.closeSheet(); S.ui.close(); return 1; })()`);
           if (phone) {
             await screen(390, 844, true); await shot('phone-portrait-hud');
             await ev(`(() => { ${T}.state().X.openAcc(); return 1; })()`); await sleep(700); await shot('phone-portrait-acc-sheet');

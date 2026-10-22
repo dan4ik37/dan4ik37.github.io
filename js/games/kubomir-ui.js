@@ -131,6 +131,8 @@
       cells.forEach((ci, j) => { const id = ids[j], got = take(id, sets); if (got > 0) U.craft[ci] = { id, n: got }; });
       return true;
     }
+    // книга рецептов (kubomir-recipes.js): «Положить в сетку» — то же, что нажать рецепт в «📖 Можно сделать»; верстачный — только на верстаке
+    U.fill = (r, many) => { if (!U.el || (U.kind !== 'inv' && U.kind !== 'craft')) return false; const w = craftSize(); if ((r.table && w < 3) || !fitsGrid(r, w)) return false; const ok = fill(r, many); render(); return ok; };
     // ── сортировка: стопки одинаковых — вместе, порядок — инструменты, блоки, природа, еда и прочее; панель (1–9) не трогаем ──
     const CAT_ORDER = { tools: 0, blocks: 1, nature: 2, food: 3, mods: 4 };
     U.sort = (k = 'inv') => {
@@ -345,7 +347,8 @@
       let main = '', hot = '';
       for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
       for (let i = 0; i < 9; i++) hot += slot('inv', i, p.inv[i], i === p.sel ? 'on' : '');
-      const sortBtn = U.kind === 'chest' ? '<button type="button" class="kb-x" data-sort="chest" title="Разложить сундук по порядку">⇅</button>' : '<button type="button" class="kb-x" data-sort="inv" title="Разложить вещи по порядку (панель 1–9 не трогаем)">⇅</button>';
+      const sortBtn = (XX?.recipesKnown?.() && U.kind !== 'chest' && U.kind !== 'furnace' ? '<button type="button" class="kb-x" data-rec="1" title="Книга рецептов (R): все рецепты, для чего нужно, где взять">📖</button>' : '')
+        + (U.kind === 'chest' ? '<button type="button" class="kb-x" data-sort="chest" title="Разложить сундук по порядку">⇅</button>' : '<button type="button" class="kb-x" data-sort="inv" title="Разложить вещи по порядку (панель 1–9 не трогаем)">⇅</button>');
       panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><span class="kb-pbtns">${sortBtn}<button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></span></div>${top}<div class="kb-grid">${main}</div><div class="kb-hotwrap"><div class="kb-offwrap" title="Левая рука: щит, факел, еда (F над ячейкой — поменять)">${slot('off', 0, p.off, 'offs')}<small>🫲 левая</small></div><div class="kb-grid kb-hotrow">${hot}</div></div>
         <p class="kb-hint">${S.I?.touch ? 'Нажми — взять/положить, подержи — половину или одну.' : 'Клик — взять/положить, ПКМ — половину или одну, Shift+клик — перекинуть, протянуть с вещью: ПКМ — по одной, ЛКМ — поровну; двойной клик — собрать; 1–9 над ячейкой — на панель, Q — выбросить. E или Esc — закрыть.'}</p>`;
       if (U.kind === 'inv' && creative) renderCat();
@@ -378,6 +381,7 @@
       const t = e.target;
       if (t.closest('[data-close]')) { U.close(); return; }
       const so = t.closest('[data-sort]'); if (so) { U.sort(so.dataset.sort); return; }
+      if (t.closest('[data-rec]')) { X()?.openRecipes?.(); return; }   // 📖 книга рецептов — листом рядом с окном вещей
       const cat = t.closest('[data-cat]'); if (cat) { U.cat = cat.dataset.cat; U.q = ''; catCache = null; render(); return; }
       if (t.closest('.kb-search')) return;
       const s = t.closest('[data-k]');

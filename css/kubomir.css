@@ -332,3 +332,33 @@ body.high .kb-food .g{animation:kbGhost .9s ease-in-out infinite alternate}
 .kb-touch .kx-info .d37in-cb small{font-size:11px}
 .kb-touch .kx-info .d37in-cb small:nth-of-type(n+2),.kb-touch .kx-info .d37in-dr{display:none}
 .kb-touch .kx-info .d37in-cb small.d37in-live:not([hidden]){display:block}
+/* T-049 📖 книга рецептов (kubomir-recipes.js): сетка значков, карточка вещи, рецепт, где взять */
+.kx-rrow{display:flex;gap:6px;align-items:center}
+.kx-ri{position:relative;flex:none;width:48px;height:48px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06) center/34px no-repeat;image-rendering:pixelated;cursor:pointer}
+.kx-ri:hover{border-color:#ffd23f;background-color:rgba(255,210,63,.14)}
+.kx-ri.bench::after{content:"🛠";position:absolute;right:1px;top:-2px;font-size:11px}
+.kx-ri.sm{width:40px;height:40px;background-size:28px}
+.kx-rhead{display:flex;align-items:center;gap:10px;margin:2px 0 6px}
+.kx-rhead>div{flex:1;min-width:0}
+.kx-rhead b{display:block;font-size:1.02rem}
+.kx-rhead small{display:block;color:#aab3d6;font-size:.8rem;line-height:1.35}
+.kx-rbig{flex:none;width:52px;height:52px;border-radius:12px;background:rgba(0,0,0,.28) center/40px no-repeat;image-rendering:pixelated}
+.kx-star{font-size:20px;min-width:44px}
+.kx-rh{margin:10px 0 6px;font-size:.88rem;color:#dfe5ff}
+.kx-rcard{display:flex;flex-direction:column;gap:6px;padding:8px;margin-bottom:8px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.kx-rst{font-size:.8rem;font-weight:800;color:#ffd23f}
+.kx-rrowc{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kx-rgrid{display:grid;gap:3px}
+.kx-rc{position:relative;width:34px;height:34px;border-radius:7px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.28) center/26px no-repeat;image-rendering:pixelated;cursor:pointer;padding:0}
+.kx-rc:disabled{cursor:default;opacity:.5}
+.kx-rc.tag{border-style:dashed}
+.kx-rc.out{width:42px;height:42px;background-size:32px;border-color:rgba(255,210,63,.55);cursor:default}
+.kx-rc.out b{position:absolute;right:2px;bottom:0;font-size:12px;font-weight:900;text-shadow:1px 1px 0 #000,-1px -1px 0 #000}
+.kx-rarr{font-size:18px;color:#aab3d6}
+.kx-rneed{display:flex;flex-wrap:wrap;gap:4px}
+.kx-rneed span{padding:2px 8px;border-radius:999px;font-size:.76rem;font-weight:700;background:rgba(255,255,255,.07)}
+.kx-rneed span.ok{color:#86efac}.kx-rneed span.no{color:#fca5a5}
+.kx-rcard .kx-btn{align-self:flex-start}
+.kx-rcard .kx-btn:disabled{opacity:.6;cursor:default;background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+.kx-ruses{display:flex;flex-wrap:wrap;gap:5px}
+.kx-rsrc{margin:0;padding-left:4px;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:.84rem;line-height:1.35;color:#dfe5ff}
