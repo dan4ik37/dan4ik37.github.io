@@ -7,7 +7,12 @@
 //           всех общих чанков), память не растёт
 //   leak  — гость входит и выходит KC_N раз (20): у хозяина гости, человечки, каналы и память не копятся; у гостя — тоже
 //   relay — гость без WebRTC (только через Supabase): сколько сообщений и байт в секунду
-//   perf  — хозяин в профиле телефона (412×915, ЦП ×4, «средняя»): кадр один и с тремя гостями
+//   perf  — хозяин в профиле телефона (412×915, ЦП ×4, «средняя»): кадр один и с тремя гостями (гости — на этом же компьютере, без
+//           картинки; их циклы и потоки делят процессор — замер с запасом), цена самой «игры вместе» у хозяина (шаг сети, кадр
+//           человечков других); KC_PROF=1 — профиль ЦП хозяина
+//   perfv — без других браузеров: три человечка других игроков в странице хозяина (сколько стоят их картинка и логика);
+//           KC_VARIANTS=1 — ещё и без их теней
+//   KC_TIMELINE=1 — ход входа гостя по секундам (ответ хозяина, ждёт чанков, мир готов)
 // Снимки и отчёт — E:\claude-tmp\coop\shots
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const SITE = path.resolve(process.env.SITE_DIR || path.join(__dirname, '..'));
@@ -30,14 +35,14 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
 const res = {};
 
 async function browser(tag, o = {}){
-  const port = 9400 + Math.floor(Math.random() * 500);
   const profile = path.join(TMP, `chrome-${tag}-` + Date.now().toString(36));
   fs.mkdirSync(profile, { recursive: true });
-  const args = ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist',
+  const args = ['--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist',
     '--enable-precise-memory-info', '--js-flags=--expose-gc', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows', `--use-angle=${o.angle || 'd3d11'}`, 'about:blank'];
   const proc = spawn(CHROME, args, { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
-  let page = null;
-  for (let i = 0; i < 80 && !page; i++) { try { page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }
+  // порт — свободный, его выбирает сам Chrome (файл DevToolsActivePort в профиле): чужие Chrome на этом компьютере не мешают
+  let page = null, port = 0;
+  for (let i = 0; i < 240 && !page; i++) { try { if (!port) port = +fs.readFileSync(path.join(profile, 'DevToolsActivePort'), 'utf8').split(/\r?\n/)[0] || 0; if (port) page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page'); } catch (e) {} if (!page) await sleep(250); }   // до 60 с: компьютер бывает занят
   if (!page) throw new Error('Chrome не запустился: ' + tag);
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });
@@ -74,10 +79,17 @@ async function newWorld(P, mode = 'creative', seed = 'вместе37'){
   if (!(await waitFor(P, `!!(${ST}?.ready)`, 120000, 500))) throw new Error(P.tag + ': мир не открылся');
 }
 async function join(P, code){
-  const t0 = Date.now();
+  const t0 = Date.now(), line = [];
   await P.send('Page.navigate', { url: BASE + '/play/kubomir/' + code });
-  const okJ = await waitFor(P, `(() => { const S = ${ST}; return !!(S && S.ready && S.coopGuest); })()`, 90000, 250);
-  return { ok: !!okJ, ms: Date.now() - t0 };
+  // ход входа (раз в секунду): ответ хозяина, сколько чанков с правками ждём, мир готов
+  let okJ = false, last = '';
+  while (Date.now() - t0 < 90000) {
+    const s = await P.ev(`(() => { const G = ${T}.coop?.(), S = ${ST}; return { wel: G?.stats?.joinMs || 0, started: !!G?.started, wait: G?.wait?.size ?? -1, ready: !!(S && S.ready && S.coopGuest), mode: G?.R ? G.R.mode(G.hostId) : '-' }; })()`, 10000).catch(() => null);
+    if (s) { const k = JSON.stringify(s); if (k !== last) { last = k; line.push([Math.round((Date.now() - t0) / 100) / 10, s]); } if (s.ready) { okJ = true; break; } }
+    await sleep(250);
+  }
+  if (process.env.KC_TIMELINE) console.log('  вход:', JSON.stringify(line));
+  return { ok: okJ, ms: Date.now() - t0, line };
 }
 let BASE = '';
 (async () => {
@@ -95,13 +107,16 @@ let BASE = '';
       const J = await join(B, code);
       res.joinMs = J.ms;
       ok(J.ok, 'гость вошёл в мир хозяина — можно играть', J);
-      if (!J.ok) { const s = await B.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 }); fs.writeFileSync(path.join(SHOTS, 'guest-fail.jpg'), Buffer.from(s.data, 'base64')); console.log('B:', JSON.stringify(await B.ev(`(() => { const G = ${T}.coop(); return { txt: document.querySelector('.kb-screen')?.innerText?.slice(0, 200), started: G?.started, hostId: G?.hostId, list: G?.R?.list?.map(p => [p.id, p.host]), stat: G?.R?.stats?.(), fake: G?.R ? [...G.R.fake] : null }; })()`).catch(e => e.message))); console.log('A:', JSON.stringify(await A.ev(`(() => { const H = ${T}.coop(); return { me: H?.R?.me, list: H?.R?.list?.map(p => [p.id, p.host]), guests: [...(H?.guests?.values() || [])].map(G => [G.id, G.ready, G.hello]), stat: H?.R?.stats?.(), journal: H?.journal }; })()`).catch(e => e.message))); console.log('логи B', B.logs.slice(-10)); console.log('логи A', A.logs.slice(-10)); throw new Error('нет входа'); }
+      if (!J.ok) { const s = await B.send('Page.captureScreenshot', { format: 'jpeg', quality: 80 }); fs.writeFileSync(path.join(SHOTS, 'guest-fail.jpg'), Buffer.from(s.data, 'base64'));
+        console.log('B чанки:', JSON.stringify(await B.ev(`(() => { const S = ${ST}, G = ${T}.coop(); if (!S) return null; const cx = Math.floor(S.P.x) >> 4, cz = Math.floor(S.P.z) >> 4, a = []; for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const c = S.W.chunk(cx + dx, cz + dz), k = (cx + dx) + '|' + (cz + dz); a.push([cx + dx, cz + dz, !!c, c && c.gen, c && c.ready, c && c.meshRev, c && c.loading, G?.edited?.has(k), G?.wait?.has(k), G?.stale?.has(k)]); } return { P: [S.P.x, S.P.y, S.P.z], around: a, st: S.ST.stats, pend: S.ST.pending?.(), wait: [...(G?.wait?.keys() || [])], ckQ: G?.ckQ?.length, steps: S.steps, net: !!S.net }; })()`).catch(e => e.message))); console.log('B:', JSON.stringify(await B.ev(`(() => { const G = ${T}.coop(); return { txt: document.querySelector('.kb-screen')?.innerText?.slice(0, 200), started: G?.started, hostId: G?.hostId, list: G?.R?.list?.map(p => [p.id, p.host]), stat: G?.R?.stats?.(), fake: G?.R ? [...G.R.fake] : null }; })()`).catch(e => e.message))); console.log('A:', JSON.stringify(await A.ev(`(() => { const H = ${T}.coop(); return { me: H?.R?.me, list: H?.R?.list?.map(p => [p.id, p.host]), guests: [...(H?.guests?.values() || [])].map(G => [G.id, G.ready, G.hello]), stat: H?.R?.stats?.(), journal: H?.journal }; })()`).catch(e => e.message))); console.log('логи B', B.logs.slice(-10)); console.log('логи A', A.logs.slice(-10)); throw new Error('нет входа'); }
       if (MODE === 'basic') await basic(A, B);
       if (MODE === 'relay') await relay(A, B);
       if (MODE === 'soak') await soak(A, B);
       if (MODE === 'leak') await leak(A, B, code);
     }
     if (MODE === 'perf') await perf(all);
+    if (MODE === 'perfv') await perfV(all);
+    if (MODE === 'cloud') await cloudUi(all);
   } catch (e) { fail++; console.log('ОШИБКА', e.stack || e.message); }
   finally {
     for (const P of all) { const errs = P.logs.filter(l => !/X3595|DevTools|favicon|GL Driver|GPU stall|WebGL-|Permissions policy|preload/i.test(l)); if (errs.length) console.log(`  консоль ${P.tag}:`, errs.slice(0, 8)); res['errors_' + P.tag] = errs.length; }
@@ -244,26 +259,128 @@ async function leak(A, B, code){
   const heap = P => P.ev(`(async () => { for (let i = 0; i < 3; i++) { window.gc?.(); await new Promise(r => setTimeout(r, 300)); } return performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null; })()`, 30000);
   const hostInfo = () => A.ev(`(() => { const S = ${ST}, N = S.net; return { guests: N.guests.size, actors: S.A.list.size, others: S.ents.others.length, tags: document.querySelectorAll('.kb-tag').length, channels: (typeof sbClient !== 'undefined' && sbClient.getChannels ? sbClient.getChannels().length : -1), locks: N.locks.size }; })()`);
   const guestInfo = () => B.ev(`({ channels: (typeof sbClient !== 'undefined' && sbClient.getChannels ? sbClient.getChannels().length : -1), tags: document.querySelectorAll('.kb-tag').length })`);
+  // гость входит и выходит в ОДНОЙ странице (меню миров → мир друга → «выйти» → меню): так видно, копится ли у него что-то
+  const leaveB = async () => { await B.ev(`(async () => { ${T}.coop()?.leave?.(); await new Promise(r => setTimeout(r, 1500)); ${T}.menu?.(); return 1; })()`).catch(() => {}); await waitFor(A, `${ST}.net.guests.size === 0`, 15000); await sleep(1000); };
+  const joinB = async () => { const t0 = Date.now(); await B.ev(`(${T}.joinCoop(${JSON.stringify(code)}), 1)`).catch(() => {}); const okJ = await waitFor(B, `(() => { const S = ${ST}; return !!(S && S.ready && S.coopGuest); })()`, 60000, 250); return { ok: !!okJ, ms: Date.now() - t0 }; };
+  await leaveB();
   const h0 = await heap(A), i0 = await hostInfo();
   const times = [];
   let hB0 = null, iB0 = null;
   for (let i = 0; i < N; i++) {
-    await B.ev(`(async () => { ${T}.coop()?.leave?.(); await new Promise(r => setTimeout(r, 300)); location.hash = '#/games/kubomir'; return 1; })()`).catch(() => {});
-    await waitFor(A, `${ST}.net.guests.size === 0`, 15000);
-    if (i === 2) { hB0 = await heap(B); iB0 = await guestInfo(); }
-    const J = await join(B, code);
+    const J = await joinB();
     times.push(J.ms);
-    if (!J.ok) { ok(false, 'вход ' + (i + 1) + ' не удался'); break; }
+    if (!J.ok) { ok(false, 'вход ' + (i + 1) + ' не удался', await B.ev(`document.querySelector('.kb-screen')?.innerText?.slice(0, 200)`).catch(() => '')); break; }
     await sleep(1500);
+    await leaveB();
+    if (i === 1) { hB0 = await heap(B); iB0 = await guestInfo(); }
   }
-  await B.ev(`${T}.coop()?.leave?.(), 1`).catch(() => {});
-  await waitFor(A, `${ST}.net.guests.size === 0`, 15000);
-  await sleep(1500);
   const h1 = await heap(A), i1 = await hostInfo(), hB1 = await heap(B), iB1 = await guestInfo();
   res.leak = { cycles: N, joinMs: { min: Math.min(...times), med: times.slice().sort((a, b) => a - b)[times.length >> 1], max: Math.max(...times) }, hostHeap: [h0, h1], hostInfo: [i0, i1], guestHeap: [hB0, hB1], guestInfo: [iB0, iB1] };
   ok(i1.guests === 0 && i1.actors === i0.actors && i1.others === 0 && i1.tags === 0 && i1.locks === 0, 'у хозяина после ' + N + ' входов/выходов ничего не копится (гости, человечки, имена, замки)', [i0, i1]);
+  ok(iB1.channels <= iB0.channels && iB1.tags === 0, 'у гостя каналы и имена над головами не копятся', [iB0, iB1]);
+  ok(hB1 - hB0 < 15, 'память гостя (та же страница): +' + (hB1 - hB0).toFixed(1) + ' МБ за ' + (N - 2) + ' входов', [hB0, hB1]);
   ok(i1.channels <= i0.channels + 1, 'каналы Supabase у хозяина не копятся', [i0.channels, i1.channels]);
   ok(h1 - h0 < 12, 'память хозяина: +' + (h1 - h0).toFixed(1) + ' МБ за ' + N + ' гостей', [h0, h1]);
+}
+// cloud — меню облака в настоящем браузере (без входа и без Supabase: «вошёл» подменой, хранилище — свой бэкенд в странице через
+// D37Cloud.setBackend): мир уходит в облако при выходе; не менялся — второй раз не уходит; поменялся — уходит; убрали мир из браузера —
+// он в «☁️ В облаке — с других устройств», «⬇ Скачать» возвращает его с теми же блоками
+async function cloudUi(all){
+  const A = await browser('cl'); all.push(A);
+  await A.send('Page.navigate', { url: BASE + '/#/games/kubomir' });
+  if (!(await waitFor(A, `!!window.D37Cloud && !!document.querySelector('.kb-menu [data-m="new"]')`, 60000))) throw new Error('меню миров не открылось');
+  await A.ev(`(() => {
+    currentUser = { id: '11111111-2222-3333-4444-555555555555' };
+    const files = new Map(), rows = new Map(), log = window.__cl = { put: 0, get: 0, list: 0 };
+    D37Cloud.setBackend({ name: 'test', ready: () => true,
+      async rpc(fn, a){
+        if (fn === 'cloud_list') { log.list++; return { ok: true, slots: 2, max_bytes: 2097152, plus: false, full: false, used: [...rows.values()].filter(r => r.path).length, list: [...rows.values()].filter(r => r.path).map(r => Object.assign({}, r)) }; }
+        if (fn === 'cloud_begin') { const r = rows.get(a.p_world); if (r && r.path && a.p_base !== r.ver && !a.p_force) return { ok: false, reason: 'conflict', ver: r.ver }; const v = r ? r.ver : 0; return { ok: true, path: currentUser.id + '/kubomir/' + a.p_world + '/' + (v + 1) + '-x' + Date.now() + '.kbw', ver: v }; }
+        if (fn === 'cloud_commit') { log.put++; const r = rows.get(a.p_world) || { world: a.p_world, ver: 0 }; const old = r.path; Object.assign(r, { name: a.p_name, ver: r.ver + 1, path: a.p_path, bytes: files.get(a.p_path).length, gt: a.p_gt, device: a.p_device, at: new Date().toISOString() }); rows.set(a.p_world, r); return { ok: true, ver: r.ver, old }; }
+        if (fn === 'cloud_delete') { const r = rows.get(a.p_world); rows.delete(a.p_world); return r ? { ok: true, path: r.path } : { ok: false, reason: 'not_found' }; }
+        return { ok: false, reason: 'off' };
+      },
+      async upload(p, u8){ files.set(p, u8.slice()); }, async download(p){ log.get++; const f = files.get(p); if (!f) throw new Error('нет'); return f; },
+      async remove(ps){ for (const p of ps) files.delete(p); }, async list(dir){ return [...files.keys()].filter(p => p.startsWith(dir + '/')).map(p => p.slice(dir.length + 1)); } });
+    return 1; })()`);
+  await A.ev(`(${T}.menu(), 1)`);
+  await sleep(800);
+  await A.ev(`document.querySelector('[data-m="new"]').click(), 1`);
+  await sleep(400);
+  await A.ev(`(() => { document.querySelector('[data-f="seed"]').value = 'облако37'; document.querySelector('[data-f="mode"] [data-v="creative"]').click(); document.querySelector('[data-n="go"]').click(); return 1; })()`);
+  if (!(await waitFor(A, `!!(${ST}?.ready)`, 120000, 500))) throw new Error('мир не открылся');
+  const w0 = await A.ev(`(() => { const S = ${ST}; return { on: !!S.meta.cloud?.on, id: S.meta.id }; })()`);
+  ok(w0.on, 'вошёл — новый мир сам «в облаке» (есть место)', w0);
+  const place = n => A.ev(`(() => { const S = ${ST}, V = D37E.vox, x = Math.floor(S.P.x) + 3, z = Math.floor(S.P.z); for (let i = 0; i < ${n}; i++) S.W.set(x + i, Math.floor(S.P.y) + 2, z, V.cell(V.ID.glass), { urgent: 2 }); return 1; })()`);
+  await place(4);
+  const exitToMenu = async () => { await A.ev(`(${T}.stop(), 1)`); await sleep(2500); await A.ev(`(${T}.menu(), 1)`); await sleep(1500); };
+  await exitToMenu();
+  let L = await A.ev(`({ put: __cl.put, line: document.querySelector('.kb-world .kb-cl')?.textContent || '', bar: document.querySelector('.kb-cloudbar')?.textContent || '' })`);
+  ok(L.put === 1 && /В облаке/.test(L.line) && /1 из 2 мест/.test(L.bar), 'вышел — мир в облаке (отметка у мира, строка облака)', L);
+  // ещё раз в мир и сразу выйти — не менялся: второй раз не отправляется
+  await A.ev(`(() => { const b = document.querySelector('.kb-world[data-id] [data-w="play"]') || document.querySelector('.kb-world[data-id]'); b?.click(); return 1; })()`);
+  await waitFor(A, `!!(${ST}?.ready)`, 60000, 500);
+  await sleep(1500);
+  await exitToMenu();
+  L = await A.ev(`({ put: __cl.put })`);
+  ok(L.put === 1, 'зашёл и вышел, ничего не меняя — в облако не отправлялось', L);
+  await A.ev(`(() => { const b = document.querySelector('.kb-world[data-id] [data-w="play"]') || document.querySelector('.kb-world[data-id]'); b?.click(); return 1; })()`);
+  await waitFor(A, `!!(${ST}?.ready)`, 60000, 500);
+  await place(2);
+  await sleep(21000);   // сервер облака принимает раз в 20 с
+  await exitToMenu();
+  L = await A.ev(`({ put: __cl.put })`);
+  ok(L.put === 2, 'поменял блоки — отправилось', L);
+  // «другое устройство»: мира в браузере нет — он в облаке, «⬇ Скачать» возвращает его
+  await A.ev(`(async () => { await D37E.vox.store.delWorld(${JSON.stringify(w0.id)}); ${T}.menu(); return 1; })()`);
+  await waitFor(A, `!!document.querySelector('.kb-cloudonly [data-c="get"]')`, 10000);
+  await A.ev(`(document.querySelector('.kb-cloudonly [data-c="get"]').click(), 1)`);
+  ok(await waitFor(A, `!!document.querySelector('.kb-world[data-id=${JSON.stringify(w0.id)}]')`, 15000), 'мир с другого устройства скачан — снова в списке');
+  await A.ev(`(() => { const b = document.querySelector('.kb-world[data-id] [data-w="play"]') || document.querySelector('.kb-world[data-id]'); b?.click(); return 1; })()`);
+  await waitFor(A, `!!(${ST}?.ready)`, 60000, 500);
+  const glass = await A.ev(`(() => { const S = ${ST}, V = D37E.vox; let n = 0; for (const c of S.W.chunks.values()) if (c.edits) for (const v of c.edits.values()) if ((v & 0xfff) === V.ID.glass) n++; return n; })()`);
+  ok(glass === 6, 'скачанный мир — с теми же правками (6 стёкол)', glass);
+  res.cloud = await A.ev(`Object.assign({}, __cl)`);
+  const s = await A.send('Page.captureScreenshot', { format: 'jpeg', quality: 85 }); fs.writeFileSync(path.join(SHOTS, 'cloud-world.jpg'), Buffer.from(s.data, 'base64'));
+}
+// perfv — то же без других браузеров: у хозяина три «гостя» внутри страницы (человечки других игроков ходят кругами, как по снимкам
+// сети) — сколько стоят их картинка и логика, без чужой видеокарты на этом же компьютере
+async function perfV(all){
+  const A = await browser('ph', { phone: true, q: 'mid', rd: 6 }); all.push(A);
+  await newWorld(A, 'survival');
+  await A.ev(`(() => { const S = ${ST}; S.R.lighting.time = 12; return 1; })()`);
+  await A.ev(`${T}.coopHost()`, 30000);
+  const measure = async label => {
+    await A.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const r = await A.ev(`(async () => {
+      const S = ${ST}, wait = ms => new Promise(r => setTimeout(r, ms));
+      await wait(3000);
+      const cpu = [], dts = []; let run = true;
+      const tick = () => { if (!run) return; const st = S.R.stats; cpu.push(st.cpuFrame); dts.push(st.dt); requestAnimationFrame(tick); };
+      requestAnimationFrame(tick); await wait(12000); run = false;
+      cpu.sort((a, b) => a - b);
+      const avg = a => a.reduce((s, v) => s + v, 0) / Math.max(1, a.length);
+      return { frames: cpu.length, cpu: +avg(cpu).toFixed(2), med: +cpu[cpu.length >> 1].toFixed(2), p95: +cpu[Math.floor(cpu.length * .95)].toFixed(2), fps: +(1000 / avg(dts)).toFixed(1), calls: S.R.stats.calls };
+    })()`, 90000);
+    await A.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+    console.log('ЗАМЕР', label, JSON.stringify(r));
+    return r;
+  };
+  const out = {};
+  out.solo1 = await measure('один');
+  await A.ev(`(() => { const S = ${ST}, H = S.net, P = S.P; window.__vg = setInterval(() => { const t = performance.now() / 1000; for (let i = 1; i <= 3; i++) { const a = t * .6 + i * 2.1; H.view.state(i, P.x + Math.cos(a) * (3 + i), P.y, P.z + Math.sin(a) * (3 + i), a + Math.PI / 2, 0, 1, i === 1 ? 'pick_iron' : i === 2 ? 'torch' : 'sword_wood', i === 3 ? 'shield' : '', 0, 20, 100); } }, 100); for (let i = 1; i <= 3; i++) H.view.add(i, 'Гость ' + i, null); return 1; })()`);
+  out.three = await measure('три человечка других рядом');
+  if (process.env.KC_VARIANTS) {   // из чего цена: тени человечков и подробная модель
+    await A.ev(`(() => { const S = ${ST}; for (let i = 1; i <= 3; i++) { const a = S.A.list.get('p' + i); a?.ch?.root.traverse(o => { if (o.isMesh) o.castShadow = false; }); } S.R.shadowDirty?.(); return 1; })()`);
+    out.threeNoShadow = await measure('три человечка, без их теней');
+    out.calls = await A.ev(`(() => { const S = ${ST}; let n = 0, m = 0; S.A.list.get('p1')?.ch?.root.traverse(o => { if (o.isMesh && o.visible) { n++; } }); return { meshesPerHuman: n, shadowUpd: S.R.stats.shadowUpd, shadow: S.R.stats.shadow }; })()`);
+    console.log('ЗАМЕР сетки человечка', JSON.stringify(out.calls));
+  }
+  await A.ev(`(() => { clearInterval(window.__vg); const H = ${ST}.net; for (let i = 1; i <= 3; i++) H.view.remove(i); return 1; })()`);
+  out.solo2 = await measure('снова один');
+  res.perfV = out;
+  const solo = (out.solo1.med + out.solo2.med) / 2;
+  ok(out.three.med - solo < 3, `три человечка других у хозяина (телефон, ×4): медиана кадра ${solo.toFixed(1)} → ${out.three.med} мс, вызовов ${out.solo1.calls} → ${out.three.calls}`, out);
 }
 async function perf(all){
   const A = await browser('ph', { phone: true, q: 'mid', rd: 6 }); all.push(A);
@@ -289,15 +406,51 @@ async function perf(all){
   const code = await A.ev(`${T}.coopHost()`, 30000);
   res.perfHosting = await measure('мир открыт, гостей нет');
   const G = [];
-  for (let i = 0; i < 3; i++) { const P = await browser('g' + i, { angle: 'swiftshader', w: 640, h: 400, q: 'low', rd: 4 }); all.push(P); G.push(P); }
-  const joins = await Promise.all(G.map(P => join(P, code)));
+  // гости — по одному (четыре Chrome на одном компьютере: разом — загрузка страниц мешает замеру и самим гостям)
+  const joins = [];
+  // гости на этом же компьютере не рисуют (иначе видеокарта одна на четверых и замер хозяина — про чужие кадры): цикл игры, сеть и
+  // мобы у них идут как обычно, нет только картинки
+  for (let i = 0; i < 3; i++) { const P = await browser('g' + i, { w: 640, h: 400, q: 'low', rd: 4 }); all.push(P); G.push(P); joins.push(await join(P, code)); await P.ev(`(() => { const S = ${ST}; if (S?.R) S.R.render = () => {}; return 1; })()`).catch(() => {}); }
   res.perfJoins = joins.map(j => j.ms);
   ok(joins.every(j => j.ok), 'три гостя вошли', joins);
+  // сколько стоит сама «игра вместе» у хозяина (его шаг сети и кадр человечков других), отдельно от картинки и от нагрузки компьютера
+  const coopT = () => A.ev(`(() => { const N = ${ST}.net; if (!N || N.__w) return 0; const W = window.__cw = { step: 0, frame: 0, n: 0, t0: performance.now() }; const s0 = N.step, f0 = N.frame; N.__w = 1;
+    N.step = function(dt){ const t = performance.now(); try { return s0.call(this, dt); } finally { W.step += performance.now() - t; } };
+    N.frame = function(dt, tt){ const t = performance.now(); try { return f0.call(this, dt, tt); } finally { W.frame += performance.now() - t; W.n++; } }; return 1; })()`);
+  const coopRead = () => A.ev(`(() => { const W = window.__cw; if (!W) return null; const s = (performance.now() - W.t0) / 1000, r = { stepMsPerSec: +(W.step / s).toFixed(2), frameMsPerFrame: +(W.frame / Math.max(1, W.n)).toFixed(3) }; W.step = 0; W.frame = 0; W.n = 0; W.t0 = performance.now(); return r; })()`);
+  await coopT();
+  await sleep(20000);   // у гостей догенерировались чанки вокруг (их потоки на этом же компьютере)
+  await coopRead();
+  res.perfGuests3 = await measure('три гостя рядом (стоят)');
+  res.coopCost = { idle: await coopRead() };
   // гости ходят (каждый своё), хозяин стоит
   const walk = G.map((P, i) => P.ev(`(async () => { const S = ${ST}, C = S.C; for (let k = 0; k < 40; k++) { S.rig.yaw += .5; C.press('forward', true); await new Promise(r => setTimeout(r, 900)); } C.press('forward', false); return 1; })()`, 60000).catch(() => {}));
-  res.perfGuests3 = await measure('три гостя');
+  res.perfGuests3walk = await measure('три гостя ходят');
+  res.coopCost.walk = await coopRead();
+  console.log('ЗАМЕР стоимость игры вместе у хозяина (×4):', JSON.stringify(res.coopCost));
+  if (process.env.KC_PROF) {   // где тратится время хозяина с тремя гостями (профиль ЦП, 8 с, без замедления — оно путает «(program)»)
+    await A.send('Profiler.enable'); await A.send('Profiler.setSamplingInterval', { interval: 200 });
+    await A.send('Profiler.start'); await sleep(8000);
+    const { profile } = await A.send('Profiler.stop');
+    const self = new Map(), byId = new Map(profile.nodes.map(n => [n.id, n])), dt = profile.timeDeltas, smp = profile.samples;
+    for (let i = 0; i < smp.length; i++) { const n = byId.get(smp[i]); const f = n.callFrame, k = (f.functionName || '(anon)') + ' ' + (f.url || '').split('/').pop() + ':' + f.lineNumber; self.set(k, (self.get(k) || 0) + (dt[i] || 0)); }
+    const tot = [...self.values()].reduce((a, b) => a + b, 0);
+    console.log('ПРОФИЛЬ хозяина (самое тяжёлое, % времени):'); for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log('   ', (v / tot * 100).toFixed(1) + '%', k);
+    // с вложенными вызовами — только наши файлы игры (что из логики тяжелее)
+    const parent = new Map(); for (const n of profile.nodes) for (const c of n.children || []) parent.set(c, n.id);
+    const incl = new Map();
+    for (let i = 0; i < smp.length; i++) { const seen = new Set(); for (let id = smp[i]; id != null; id = parent.get(id)) { const n = byId.get(id), f = n.callFrame; if (!/kubomir|coop|voxel|engine|world3d|actors/.test(f.url || '')) continue; const k = (f.functionName || '(anon)') + ' ' + (f.url || '').split('/').pop().replace(/\?.*/, '') + ':' + f.lineNumber; if (seen.has(k)) continue; seen.add(k); incl.set(k, (incl.get(k) || 0) + (dt[i] || 0)); } }
+    console.log('ПРОФИЛЬ хозяина, с вложенными (наши файлы, % времени):'); for (const [k, v] of [...incl].sort((a, b) => b[1] - a[1]).slice(0, 30)) console.log('   ', (v / tot * 100).toFixed(1) + '%', k);
+  }
   await Promise.all(walk);
   res.perfNet = await A.ev(`${T}.coop().stat()`);
-  const d = res.perfGuests3.cpu - res.perfSolo.cpu;
-  ok(d < 2.5, `хозяин с тремя гостями: ЦП кадра ${res.perfSolo.cpu} → ${res.perfGuests3.cpu} мс (телефон, ×4)`, { solo: res.perfSolo, three: res.perfGuests3 });
+  // гости ушли — ещё раз «один» (насколько шумит сам компьютер: на нём же идут другие проверки)
+  for (const P of G) await P.close();
+  all.length = 1;
+  await sleep(8000);
+  res.perfSolo2 = await measure('снова один');
+  const solo = Math.min(res.perfSolo.cpu, res.perfSolo2.cpu), c = res.coopCost.idle;
+  ok(c && c.frameMsPerFrame < 1 && c.stepMsPerSec < 30, `игра вместе у хозяина (×4): кадр человечков других ${c?.frameMsPerFrame} мс, сеть и снимки ${c?.stepMsPerSec} мс в секунду`, res.coopCost);
+  // четыре Chrome на одном компьютере делят процессор (у гостей — свои циклы игры и потоки чанков): запас больше, чем у perfv
+  ok(res.perfGuests3.cpu - solo < 12, `хозяин с тремя гостями рядом: ЦП кадра ${solo} → ${res.perfGuests3.cpu} мс (телефон, ×4; один — до и после: ${res.perfSolo.cpu} / ${res.perfSolo2.cpu})`, { solo: res.perfSolo, solo2: res.perfSolo2, three: res.perfGuests3, walk: res.perfGuests3walk });
 }

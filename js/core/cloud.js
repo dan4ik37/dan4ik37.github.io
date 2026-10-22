@@ -89,13 +89,23 @@
   const isGz = u8 => u8 && u8.length > 2 && u8[0] === 0x1f && u8[1] === 0x8b;
   const gunzip = (u8, max = MAX_RAW) => isGz(u8) ? pump(new root.DecompressionStream('gzip'), u8, max) : Promise.resolve(u8);
 
-  // ── подпись байтов: 2 × FNV-1a (32 бита) → 16 знаков; строка — по кодам знаков ──
-  function hash(src, from = 0, to){
+  // ── подпись: два 32-битных хеша (FNV-1a и перемешивание MurmurHash) → 16 знаков. Байты — словами по 4 (выровненная часть через
+  // Int32Array — вчетверо меньше шагов), строка — по кодам знаков ──
+  const hex = (a, b) => (a >>> 0).toString(16).padStart(8, '0') + (b >>> 0).toString(16).padStart(8, '0');
+  function hashStr(s){
     let h1 = 0x811c9dc5 | 0, h2 = 0x9e3779b9 | 0;
-    if (typeof src === 'string') { const n = src.length; for (let i = 0; i < n; i++) { const c = src.charCodeAt(i); h1 = Math.imul(h1 ^ c, 0x01000193); h2 = Math.imul(h2 ^ c, 0x5bd1e995); h2 ^= h2 >>> 15; } }
-    else { const e = to == null ? src.length : to; for (let i = from; i < e; i++) { const c = src[i]; h1 = Math.imul(h1 ^ c, 0x01000193); h2 = Math.imul(h2 ^ c, 0x5bd1e995); h2 ^= h2 >>> 15; } }
-    return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+    for (let i = 0, n = s.length; i < n; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 0x01000193); h2 = Math.imul(h2 ^ c, 0x5bd1e995); h2 ^= h2 >>> 15; }
+    return hex(h1, h2);
   }
+  function hashBytes(u8, from, to){
+    let h1 = 0x811c9dc5 | 0, h2 = 0x9e3779b9 | 0;
+    // слова считаются от начала куска (не от адреса в памяти): та же часть файла — та же подпись, где бы она ни лежала
+    const a = (u8.byteOffset + from) & 3 ? u8.slice(from, to) : u8.subarray(from, to), n = a.length, nw = n >> 2;
+    if (nw > 0) { const w = new Int32Array(a.buffer, a.byteOffset, nw); for (let k = 0; k < nw; k++) { const c = w[k]; h1 = Math.imul(h1 ^ c, 0x01000193); h2 = Math.imul(h2 ^ c, 0x5bd1e995); h2 ^= h2 >>> 15; } }
+    for (let i = nw << 2; i < n; i++) { const c = a[i]; h1 = Math.imul(h1 ^ c, 0x01000193); h2 = Math.imul(h2 ^ c, 0x5bd1e995); h2 ^= h2 >>> 15; }
+    return hex(h1 ^ n, h2);
+  }
+  const hash = (src, from = 0, to) => typeof src === 'string' ? hashStr(src) : hashBytes(src, from, to == null ? src.length : to);
 
   // ── это устройство: «pc:ab12cd» (кто сохранял — в вопросе «какую версию оставить») ──
   function device(){

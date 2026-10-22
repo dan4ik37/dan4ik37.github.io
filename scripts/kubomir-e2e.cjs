@@ -65,7 +65,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         const set = (x, y, z, n) => W.set(x, y, z, n ? V.cell(V.ID[n]) : 0, { urgent: 1 });
         for (let x = cx - 12; x <= cx + 12; x++) for (let z = cz - 12; z <= cz + 12; z++) { for (let y = gy - 6; y <= gy + 12; y++) set(x, y, z, y < gy ? 'stone' : null); set(x, gy - 1, z, 'grass'); }
         for (let x = cx - 8; x <= cx + 8; x++) for (let z = cz - 8; z <= cz + 8; z++) for (let y = gy - 6; y <= gy - 1; y++) set(x, y, z, 'water');
-        Object.assign(P, { x: cx + .5, y: gy - 2, z: cz + .5, vx: 0, vy: 0, vz: 0, fly: false });
+        Object.assign(P, { x: cx + .5, y: gy - 2, z: cz + .5, vx: 0, vy: 0, vz: 0, fly: false }); S._lake = { x: cx + .5, z: cz + .5 };
         S.paused = true; S.R.lighting.time = 12; await new Promise(r => setTimeout(r, 4000)); return 1; })()`, 60000);
       const W8 = Object.freeze({ seed: 'kb', mode: 'fixed', season: 'summer', weather: 'clear', lapse: 0, seaY: 52 });
       await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); try { S.WX.clim.setWorld(${JSON.stringify(W8)}); } catch (e) {} const st = document.createElement('style'); st.textContent = '.kb-lockhint,.e-toast,.kb-tip{display:none!important}'; document.head.appendChild(st); return 1; })()`);
@@ -82,11 +82,12 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       for (const [tod, time] of [['day', 12], ['night', 22.5]]) {
         await ev(`(() => { GAME_IMPL.kubomir._test.state().R.lighting.time = ${time}; return 1; })()`);
         for (const [name, o] of [['idle', {}], ['jump', { jump: true }], ['swim', { fwd: true }]]) {
-          if (name !== 'swim') await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), P = S.P; P.x = Math.floor(P.x) + .5; P.z = Math.floor(P.z) + .5; return 1; })()`);
-          await keys(o);
+          await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(), P = S.P; P.x = S._lake.x; P.z = S._lake.z; P.vx = P.vz = 0; return 1; })()`);   // каждый раз — с середины озера
+          await keys(Object.assign({ ms: name === 'swim' ? 1500 : 3000 }, o));
           const m = await measure();
           res.water[tod + '-' + name] = m;
           console.log('ВОДА', tod, name, JSON.stringify(m));
+          if (m.surface != null && m.shoulder != null) console.log(`  ${tod} ${name}: поза ${m.cat} (${m.swim ? m.dive ? 'нырок' : 'плывёт' : 'не плывёт'}), в воде ${(m.water / 1.8).toFixed(2)} тела, плечи ${(m.shoulder - m.surface).toFixed(2)} от глади, глаза ${(m.eye - m.surface).toFixed(2)}`);
           await view(.3 + Math.PI, .55, 1); await shot(`water-${tod}-${name}-back`);
           if (tod === 'day') { await view(.3, .25, 2); await shot(`water-${tod}-${name}-front`); }
           await ev(`(() => { const C = GAME_IMPL.kubomir._test.state().C; C.press('jump', false); C.press('forward', false); return 1; })()`);

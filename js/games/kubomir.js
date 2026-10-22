@@ -163,7 +163,7 @@
       const modIds = [...sc.querySelectorAll('[data-mod]:checked')].map(x => x.dataset.mod);
       const w = { id: 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, seed, mode, diff, created: Date.now(), played: Date.now(), time: 8, mods: modIds, palette: null, player: null, v: 1, genVer: 2 };
       await V.store.putWorld(w);
-      playWorld(w);
+      playById(w.id);   // через сверку с облаком: вошёл и есть место — новый мир сразу «в облаке»
     };
   }
   async function playById(id){
@@ -255,6 +255,7 @@
   // отметка у мира в меню
   function cloudLine(w, row){
     const C = CLOUD(), a = C.resolve(w.cloud, row), m = w.cloud || {};
+    if (m.big && m.on) return { t: `☁️ Мир великоват для облака (${C.fmtSize(m.big)}) — сохраняется в браузере`, cls: 'warn' };
     if (a === 'same') return { t: `☁️ В облаке · ${new Date(row.at).toLocaleDateString('ru')} · ${C.fmtSize(row.bytes)}`, cls: 'ok' };
     if (a === 'up') return { t: m.on ? '☁️ Сохранится в облако при следующей игре' : '', cls: 'wait' };
     if (a === 'down') return { t: `☁️ В облаке новее (${C.deviceName(row.device)}, ${new Date(row.at).toLocaleString('ru', { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}) — скачается перед игрой`, cls: 'new' };
@@ -348,7 +349,8 @@
       // не поменялся с прошлой отправки — не отправлять (место и трафик бесплатного тарифа общие на весь сайт)
       if (Number.isInteger(m.ver) && !o.force && !m.force && sigSame(m, pk.sig, o.exit)) { m.dirty = false; return { ok: true, same: true }; }
       const r = await C.put(ID, meta.id, { name: meta.name, data: pk.data, gt: meta.gt || 0, base: Number.isInteger(m.ver) ? m.ver : null, force: !!(o.force || m.force) });
-      if (r.ok) { m.ver = r.ver; m.dirty = false; m.at = Date.now(); m.conflict = null; m.force = false; m.full = false; m.bytes = r.bytes; if (pk.sig) { m.hb = pk.sig.b; m.hm = pk.sig.m; m.hx = pk.sig.x; } }
+      if (r.ok) { m.ver = r.ver; m.dirty = false; m.at = Date.now(); m.conflict = null; m.force = false; m.full = false; m.bytes = r.bytes; m.big = 0; if (pk.sig) { m.hb = pk.sig.b; m.hm = pk.sig.m; m.hx = pk.sig.x; } }
+      else if (r.reason === 'size') m.big = r.bytes || 1;   // великоват для облака — так и скажем в меню (в браузере сохраняется)
       else if (r.reason === 'conflict') m.conflict = { ver: r.ver, gt: r.gt, at: r.at, device: r.device };
       else if (r.reason === 'slots') { m.on = false; m.full = true; }
       await V.store.putWorld(meta).catch(() => {});
@@ -746,7 +748,8 @@
     C.step(dt);
     const K = st.K || NOK;
     K.step(dt);
-    if (!st.ready) { if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
+    // мир ещё строится — сеть всё равно идёт: гость спрашивает у хозяина чанки с правками (без них вокруг не достроится)
+    if (!st.ready) { st.net?.step(dt); if (st.ST.readyAt(P.x, P.z) && spawnReady(st)) { st.ready = true; placeSafe(st); } return; }
     st.steps++;
     // Esc: окно → закрыть; иначе меню
     if (C.down('pause') && !window.D37Settings?.isOpen?.()) { if (chatting) chatClose(); else if (uiOpen) st.ui.close(); else if (st.modWin) { if (st.modWin.close) st.modWin.close(); else st.modWin.querySelector('[data-x]')?.click(); } else if (menu) closeMenu(); else openMenu(); }

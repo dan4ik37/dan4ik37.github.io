@@ -257,6 +257,7 @@
     }
     function freePid(){ for (let i = 1; i < 250; i++) if (!H.pidOf.has(i)) return i; return 0; }
     async function hello(G, m){
+      if (G.ready && G.wel && m.nonce === G.nonce) { sendJ(G, G.wel); return; }   // ответ не дошёл (запасной канал теряет до подписки) — ещё раз
       if (G.ready || G.hello) return;
       G.hello = true;
       try {
@@ -273,10 +274,13 @@
         const keys = new Int16Array(H.edited.size * 2); let i = 0;
         for (const k of H.edited) { const [a, b] = k.split('|'); keys[i++] = +a; keys[i++] = +b; }
         const P = st.P, saved = meta.coopPlayers?.[pk] || null;
-        sendJ(G, { t: 'wel', v: PROTO, pid, proof, pub: meta.coop.key.pub, code: H.code,
+        G.nonce = m.nonce;
+        G.wel = { t: 'wel', v: PROTO, pid, proof, pub: meta.coop.key.pub, code: H.code,
           host: { pid: 0, nick: myNick(), look: myLook() }, players: ready().filter(o => o !== G).map(o => ({ pid: o.pid, nick: o.nick, look: o.look })),
           world: { name: meta.name, seed: meta.seed, genVer: meta.genVer || 1, mode: meta.mode, diff: meta.diff, gen: meta.gen || null, mc: meta.mc || null, palette: meta.palette, spawn: meta.spawn, time: st.R.lighting.time, day: meta.day || 1, seasons: st.seasons, ice: meta.ice || null, snow: meta.snow || null, wf: st.WX?.force ?? null, cheats: !!meta.cheats },
-          items: H.items, you: saved, at: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2) }, edited: b64(new Uint8Array(keys.buffer)) });
+          items: H.items, you: saved, at: { x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2) }, edited: b64(new Uint8Array(keys.buffer)) };
+        sendJ(G, G.wel);
+        setTimeout(() => { if (G.wel) G.wel = null; }, 60000);   // дольше минуты не ждём повтора — память
         G.ready = true; G.stT = now(); H.stats.joins++;
         toAll({ t: 'pj', pid, nick: G.nick, look: G.look }, G);
         H.view.add(pid, G.nick, G.look);
@@ -624,6 +628,8 @@
         onHost: hid => { G.hostId = hid; if (!hid) { if (G.started) end('host', '🏠 Хозяин вышел из мира'); else hooks.status?.('wait'); return; } hooks.status?.('connecting'); hi(); },
         onMsg: recv, onGap: () => toHost({ t: 'ck', k: [...G.edited].filter(k => G.st?.W.chunk(...k.split('|').map(Number))?.ready).slice(0, 128).map(k => k.split('|').map(Number)) }),
         onError: r => end(r, r === 'dup' ? 'Ты уже в этом мире в другой вкладке' : 'Нет связи с миром друга — проверь интернет и попробуй ещё раз') });
+      // пока мир не открыт, цикла игры нет: «hi» без ответа 3 с — ещё раз (через запасной канал первое сообщение может потеряться)
+      G.hiTimer = setInterval(() => { if (G.closed || G.started) { clearInterval(G.hiTimer); return; } if (G.hostId && now() - (G.hiT || 0) > 3000) hi(); }, 1000);
       return G;
     };
     function hi(){ G.hiT = now(); toHost({ t: 'hi', v: PROTO, nonce: G.nonce, nick: myNick(), look: myLook(), pkey: G.pkey, rd: hooks.rd?.() || 6 }); }
@@ -856,6 +862,7 @@
     G.close = quiet => {
       if (G.closed) return;
       G.closed = true;
+      clearInterval(G.hiTimer);
       for (const w of G.wait.values()) try { w.res(null); } catch (e) {}
       G.wait.clear();
       try { G.R?.close(); } catch (e) {}

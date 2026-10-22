@@ -21,6 +21,10 @@
   if (root.D37Coop) return;
   const RELAY_MS = 333, FRAG = 16000, BUNDLE = 46000, ANNOUNCE_MS = 800, P2P_WAIT = 3500, GAP_MS = 5000, KEEP_RELAY = 10000;
   const T_FRAG = 0xFE, T_SEQ = 0xFD;
+  // Присутствие Supabase: больше 5 «вошёл/вышел» (track/untrack) за 30 с от одной страницы — сервер закрывает канал (так мир
+  // оставался без связи). Вход в комнату ждёт, пока в окне 31 с не меньше 4 таких отметок (вышел-вошёл быстро — подождёт секунды)
+  const presOps = [];
+  const presWait = t => { while (presOps.length && t - presOps[0] > 31000) presOps.shift(); return presOps.length >= 4 ? presOps[0] + 31000 - t + 50 : 0; };
   const toB64 = u => { let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
   const fromB64 = b => { const s = atob(b), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; };
   const hash = s => { let h = 2166136261; s = String(s); for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
@@ -74,12 +78,14 @@
     const main = open(`${o.game}-co-${o.code}`, { config: { broadcast: { self: false }, presence: { key: o.me.key } } });
     main.on('presence', { event: 'sync' }, () => { st.syncs++; last = main.presenceState(); sync(last); });
     main.on('broadcast', { event: 'm' }, ({ payload }) => recvMain(payload));
-    main.subscribe(async s => {
+    const doTrack = async () => { if (R.closed || tracked) return; tracked = true; presOps.push(now()); try { await main.track(Object.assign({}, o.me.meta || {}, { n: cleanNick(o.me.nick), t: t0, h: R.isHost ? 1 : 0 })); } catch (e) {} };
+    let joinT = 0;
+    main.subscribe(s => {
       if (R.closed) return;
-      if (s === 'SUBSCRIBED') { if (!tracked) { tracked = true; try { await main.track(Object.assign({}, o.me.meta || {}, { n: cleanNick(o.me.nick), t: t0, h: R.isHost ? 1 : 0 })); } catch (e) {} } }
+      if (s === 'SUBSCRIBED') { if (!tracked) { const w = presWait(now()); if (w > 0) { clearT(joinT); joinT = setT(() => { if (!R.joined) fail('offline'); }, w + (o.joinMs || 15000)); R.presWait = w; setT(doTrack, w); } else doTrack(); } }
       else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') fail('offline');
     });
-    const joinT = setT(() => { if (!R.joined) fail('offline'); }, o.joinMs || 15000);
+    joinT = setT(() => { if (!R.joined) fail('offline'); }, o.joinMs || 15000);
     const tick = setInterval(() => R.flush(), RELAY_MS);
     const onHide = () => R.close();
     if (root.addEventListener) root.addEventListener('pagehide', onHide);
@@ -107,8 +113,8 @@
       const ids = new Set(R.list.map(p => p.id)), hid = host ? host.id : null;
       for (const [id, L] of links) if (!ids.has(id) || (!R.isHost && id !== hid)) forget(id);
       if (hid !== R.hostId || first) { R.hostId = hid; o.onHost?.(hid); }
-      if (R.isHost) { for (const p of R.list) if (p.id !== me && !links.has(p.id)) { const L = link(p.id); setT(() => { if (links.get(p.id) === L) L.offer(); }, ANNOUNCE_MS); } }
-      else if (hid && !links.has(hid)) link(hid);   // гость ждёт предложения хозяина (время знакомства — с этой минуты)
+      if (R.isHost) { for (const p of R.list) if (p.id !== me && !links.has(p.id)) { const L = link(p.id); relayFor(p.id); setT(() => { if (links.get(p.id) === L) L.offer(); }, ANNOUNCE_MS); } }
+      else if (hid && !links.has(hid)) { link(hid); relayFor(hid); }   // гость ждёт предложения хозяина (время знакомства — с этой минуты)
       o.onMembers?.(R.list.slice());
     }
     function forget(id){ const L = links.get(id); if (L) L.close(); links.delete(id); dropRelay(id, true); const S = inSeq.get(id); if (S?.gapT) clearT(S.gapT); inSeq.delete(id); frags.delete(id); outSeq.delete(id); }
@@ -142,16 +148,20 @@
       if (Q) return Q;
       const gid = R.isHost ? peer : me;
       const ch = open(`${o.game}-co-${o.code}-r${hash(gid)}`, { config: { broadcast: { self: false } } });
-      Q = { ch, q: [], qBytes: 0, fast: new Map(), last: -1e9, used: now() };
+      // seen — второй уже в канале (пришло хоть что-то от него): до того шлём только «я тут» раз в секунду, данные ждут — иначе
+      // первые сообщения теряются (Supabase не хранит рассылку, а подписка второго ещё не готова)
+      Q = { ch, q: [], qBytes: 0, fast: new Map(), last: -1e9, used: now(), seen: false, sub: false, pingT: -1e9 };
       ch.on('broadcast', { event: 'm' }, ({ payload: m }) => {
         if (R.closed || !m || m.k !== 'R' || m.to !== me || m._by !== peer || !Array.isArray(m.p)) return;
         st.relayMsgsIn++; Q.used = now();
+        if (!Q.seen) { Q.seen = true; if (m.ping && !m.pong) ping(Q, peer, true); }
         for (const b of m.p.slice(0, 400)) { if (typeof b !== 'string' || b.length > 70000) continue; let u; try { u = fromB64(b); } catch (e) { continue; } st.relayBytesIn += u.length; peerSt(peer).relayIn += u.length; recvBin(peer, u, 1); }
       });
-      ch.subscribe(() => {});
+      ch.subscribe(s => { if (s === 'SUBSCRIBED' && !Q.sub) { Q.sub = true; if (!Q.seen) ping(Q, peer, false); } });
       relays.set(peer, Q);
       return Q;
     }
+    function ping(Q, peer, pong){ if (R.closed) return; Q.pingT = now(); st.relayMsgsOut++; st.relayPings = (st.relayPings || 0) + 1; Q.ch.send({ type: 'broadcast', event: 'm', payload: { k: 'R', to: peer, _by: me, p: [], ping: 1, pong: pong ? 1 : 0 } }); }
     function dropRelay(peer, force){ const Q = relays.get(peer); if (!Q) return; if (!force && (Q.q.length || Q.fast.size)) return; try { Q.ch.close(); } catch (e) {} relays.delete(peer); }
     // связь появилась — всё, что ждало в очереди канала, уходит напрямую (порядок держат номера)
     function moveToP2P(peer){
@@ -195,6 +205,7 @@
       for (const [peer, Q] of relays) {
         const L = links.get(peer);
         if (L && L.p2p()) { moveToP2P(peer); if (!Q.q.length && t - Math.max(Q.used, L.p2pAt) > KEEP_RELAY) dropRelay(peer); continue; }
+        if (!Q.seen) { if (Q.sub && t - Q.pingT > 1000 && relayOk(peer)) ping(Q, peer, false); continue; }   // второго в канале ещё не слышно
         if (t - Q.last < RELAY_MS || (!Q.q.length && !Q.fast.size) || !relayOk(peer)) continue;
         const p = []; let n = 0;
         for (const u of Q.fast.values()) { const b = toB64(u); p.push(b); n += b.length; }
@@ -269,6 +280,7 @@
       for (const id of [...links.keys()]) forget(id);
       for (const Q of relays.values()) try { Q.ch.close(); } catch (e) {}
       links.clear(); relays.clear(); inSeq.clear(); frags.clear();
+      if (tracked) presOps.push(now());   // закрыть канал = «вышел» (untrack)
       try { main.close(); } catch (e) {}
     };
     return R;
