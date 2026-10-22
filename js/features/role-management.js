@@ -59,7 +59,7 @@ async function searchUsersByNick() {
           <input type="checkbox" class="role-result-vip-check" ${vipActive ? 'checked' : ''} style="width:16px;height:16px;accent-color:#ffd700">
           ✨ VIP (анимированные аватарки)
         </label>
-        <select class="role-result-vip-days" style="background:rgba(255,255,255,.06);border:1.5px solid var(--border);border-radius:8px;padding:.3rem .4rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.7rem">
+        <select class="role-result-vip-days" style="background:rgba(var(--fg-rgb),.06);border:1.5px solid var(--border);border-radius:8px;padding:.3rem .4rem;color:var(--text);font-family:'Montserrat',sans-serif;font-size:.7rem">
           <option value="30">30 дней</option>
           <option value="90">90 дней</option>
           <option value="365">Год</option>

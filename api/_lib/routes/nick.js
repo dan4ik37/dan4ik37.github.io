@@ -69,25 +69,25 @@ export default function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:760px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:760px}
 .nk{margin-top:1.4rem;padding:1.2rem;border-radius:18px;background:var(--card);border:1px solid var(--line)}
 .nk-row{display:flex;gap:.8rem;align-items:flex-start;flex-wrap:wrap;margin-bottom:.7rem}
 .nk-row>span{flex:none;width:96px;font-size:.75rem;font-weight:800;color:var(--muted);padding-top:.4rem;text-transform:uppercase;letter-spacing:.06em}
 .nk-row>div{display:flex;flex-wrap:wrap;gap:.35rem;flex:1;min-width:0}
-.nk-opt{border:1.5px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);border-radius:10px;padding:.4rem .75rem;font:700 .76rem Montserrat,sans-serif;cursor:pointer}
-.nk-opt.on{color:#fff;border-color:var(--accent);background:rgba(255,45,85,.14)}
+.nk-opt{border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.03);color:var(--muted);border-radius:10px;padding:.4rem .75rem;font:700 .76rem Montserrat,sans-serif;cursor:pointer}
+.nk-opt.on{color:var(--text-hi);border-color:var(--accent);background:rgba(255,45,85,.14)}
 .nk-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.5rem;margin-top:1rem}
-.nk-nick{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);border-radius:12px;padding:.75rem .6rem;font:700 .92rem Montserrat,sans-serif;cursor:pointer;transition:border-color .15s,background .15s;word-break:break-all}
+.nk-nick{border:1px solid var(--line);background:rgba(var(--fg-rgb),.04);color:var(--text);border-radius:12px;padding:.75rem .6rem;font:700 .92rem Montserrat,sans-serif;cursor:pointer;transition:border-color .15s,background .15s;word-break:break-all}
 .nk-nick:hover{border-color:var(--accent)}
 .nk-nick.ok{border-color:#22c55e;background:rgba(34,197,94,.12)}
 .nk-act{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-top:1rem;font-size:.8rem}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .box h3{font-size:.85rem;margin:.8rem 0 .3rem}
-.box ul{padding-left:1.2rem;display:flex;flex-direction:column;gap:.4rem;font-size:.9rem;color:rgba(240,240,248,.86)}
-.nk-ex{font-size:.88rem;color:rgba(240,240,248,.82)}
+.box ul{padding-left:1.2rem;display:flex;flex-direction:column;gap:.4rem;font-size:.9rem;color:rgba(var(--text-rgb),.86)}
+.nk-ex{font-size:.88rem;color:rgba(var(--text-rgb),.82)}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
-.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
+.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(var(--text-rgb),.8)}
 @media(max-width:600px){.nk-row>span{width:100%;padding:0}.nk-list{grid-template-columns:1fr 1fr}}
 `;

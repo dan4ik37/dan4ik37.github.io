@@ -35,9 +35,15 @@
   const clone = v => v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v;
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // Тема сайта (T-086): по умолчанию — та, что знает скрипт темы в <head> (data-theme-def); светлую выключает THEME_LIGHT (config.js)
+  const THEMES = ['auto', 'dark', 'light'];
+  const themeDef = () => { const v = doc?.documentElement?.getAttribute?.('data-theme-def'); return THEMES.includes(v) ? v : 'dark'; };
+  const themeOn = () => { try { return typeof THEME_LIGHT === 'undefined' || !!THEME_LIGHT; } catch (e) { return true; } };
 
   // ═══ Что есть (по умолчанию — как было до окна настроек) ═══
   const SCHEMA = {
+    // Сайт
+    theme: { def: themeDef(), list: THEMES },
     // Графика
     gfx: { def: 'auto', list: ['auto', 'low', 'mid', 'high'] },
     fsr: { def: 'auto', list: ['auto', 'native', 'quality', 'balanced', 'performance'] },
@@ -80,7 +86,11 @@
     keys: { k: 'd37_keys', read: v => { try { const o = JSON.parse(v); return o && typeof o === 'object' && !Array.isArray(o) ? o : undefined; } catch (e) { return undefined; } }, write: v => v && Object.keys(v).length ? JSON.stringify(v) : null },
     sens: { k: 'd37_cam_sens', read: num, write: v => v === 1 ? null : String(v) },
     motion: { k: 'd37_cam_motion', read: num, write: v => v === 1 ? null : String(v) },
+    // тему читает скрипт в <head> (index.html, серверные страницы) — до первого кадра, без вспышки
+    theme: { k: 'd37_theme', read: v => THEMES.includes(v) ? v : undefined, write: v => v === themeDef() ? null : v },
   };
+  // «↺ Сбросить всё» — про игры (графика, звук, клавиши…): тему сайта не трогает
+  const KEEP_ON_RESET = ['theme'];
   function clean(k, v){
     const s = SCHEMA[k];
     if (s.list) return s.list.includes(v) ? v : s.def;
@@ -132,8 +142,9 @@
     return true;
   }
   function reset(){
-    for (const L of Object.values(LEG)) lsSet(L.k, null);
-    data = { _v: 1 }; save(); keysRev++;
+    for (const [k, L] of Object.entries(LEG)) if (!KEEP_ON_RESET.includes(k)) lsSet(L.k, null);
+    const keep = {}; for (const k of KEEP_ON_RESET) if (k in data) keep[k] = data[k];
+    data = { _v: 1, ...keep }; save(); keysRev++;
     apply();
     const P = root.D37E?.perf; if (P?.on) P.toggle(false);
     emit({ key: '*' });
@@ -169,6 +180,23 @@
     h.classList.toggle('gs-lefty', get('lefty'));
     h.classList.toggle('gs-notags', !get('tags'));
     h.classList.toggle('gs-nobub', !get('bubbles'));
+    applyTheme();
+  }
+  // Тема: «Авто» — как в системе (и меняется вместе с ней); выключена светлая (THEME_LIGHT) — только тёмная
+  let sysLight = null, themeNow = null;
+  function themeEff(){
+    if (!themeOn()) return 'dark';
+    const t = get('theme');
+    return t === 'auto' ? (sysLight?.matches ? 'light' : 'dark') : t;
+  }
+  function applyTheme(){
+    const h = doc?.documentElement; if (!h) return;
+    if (!sysLight && root.matchMedia) { try { sysLight = root.matchMedia('(prefers-color-scheme: light)'); sysLight.addEventListener?.('change', () => { if (get('theme') === 'auto') applyTheme(); }); } catch (e) {} }
+    if (!themeOn()) lsSet(LEG.theme.k, null);
+    const eff = themeEff();
+    if (eff === 'light') h.setAttribute?.('data-theme', 'light'); else h.removeAttribute?.('data-theme');
+    if (themeNow !== null && themeNow !== eff) { try { root.dispatchEvent(new root.CustomEvent('d37:theme', { detail: eff })); } catch (e) {} }
+    themeNow = eff;
   }
   const subs = new Set();
   function emit(d){
@@ -392,6 +420,11 @@
     return row('Режим сайта', `<div class="gs-seg" role="radiogroup" aria-label="Режим сайта">${[['low', '🐢 Слабое'], ['high', '🚀 Мощное']].map(([v, t]) => `<button type="button" role="radio" class="${perf === v ? 'on' : ''}" aria-checked="${perf === v}" data-site="perf:${v}">${t}</button>`).join('')}</div>`,
       'Анимации сайта: «Слабое» — быстрее на старых телефонах.', { words: 'анимации эффекты медленно тормозит производительность' });
   }
+  // Тема сайта (T-086): «Авто» — как в системе; игры, телефон и студии остаются тёмными
+  const themeRow = () => themeOn() ? row('Тема сайта', seg('theme', [['auto', '🌓 Авто'], ['dark', '🌙 Тёмная'], ['light', '☀️ Светлая']], { label: 'Тема сайта' }),
+    get('theme') === 'auto' ? `Как в системе — сейчас ${themeEff() === 'light' ? 'светлая' : 'тёмная'}. Игры остаются тёмными.` : 'Цвет страниц сайта. Игры, телефон и студии остаются тёмными.',
+    { words: 'светлая темная ночная дневная оформление цвет белая черная фон' }) : '';
+  addMain({ id: 'theme', order: 55, ctx: ['site'], html: themeRow });
   addMain({ id: 'sens', order: 30, ctx: ['engine', 'site'], html: () => row('Чувствительность мыши и пальца', range('sens', 20, 300, 5, 100, { label: 'Чувствительность' }), 'Как быстро поворачивается камера.', { words: 'мышь мышка палец сенсор поворот обзор' }) });
   addMain({ id: 'vol', order: 40, html: volRow });
   addMain({ id: 'ui', order: 45, ctx: ['game'], html: () => row('Размер кнопок и надписей', range('uiScale', 80, 130, 5, 1, { label: 'Размер кнопок и надписей' }), 'Панели и подсказки игр крупнее или мельче.', { words: 'масштаб крупнее мельче шрифт' }) });
@@ -457,7 +490,7 @@
   function tabSite(){
     const hasPush = typeof togglePush === 'function', pushOn = typeof pushSubscribed !== 'undefined' && !!pushSubscribed;
     const authed = typeof currentUser !== 'undefined' && !!currentUser;
-    return perfRow()
+    return themeRow() + perfRow()
       + (hasPush ? row('Уведомления', `<button type="button" class="gs-btn${pushOn ? '' : ' primary'}" data-site="push">${pushOn ? '✅ Включены — выключить' : '🔔 Включить'}</button>`, 'О новом видео и начале стрима — даже когда сайт закрыт.', { words: 'push пуш оповещения' }) : '')
       + row('Профиль и приватность', authed ? '<button type="button" class="gs-btn" data-site="profile">👤 Открыть</button>' : '<button type="button" class="gs-btn primary" data-site="login">🔑 Войти</button>',
         authed ? 'Кто видит профиль, заявки в друзья, невидимка.' : 'Войди — и появятся настройки профиля.', { words: 'аккаунт друзья невидимка донат' })

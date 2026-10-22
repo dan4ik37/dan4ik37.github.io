@@ -786,7 +786,8 @@
     }
     V.ask = ask;
 
-    // ── Карточка человека: профиль, друзья, ЛС, звонок, блок, модерация ──
+    // ── Карточка человека: ОДНА на сайт — js/features/minicard.js (D37Mini, T-086): профиль, друзья, ЛС, звонок, 📍, блок, жалоба,
+    //    модерация — крючки этой ленты (адаптер: userMod / userModDo, report, своё «Заблокировать?»); бот — своя карточка здесь ──
     V.userCard = async (uid, nick, anchor, m) => {
       closeMenu();
       if (isBot(m)) {   // карточка бота: что он делает, без дружбы и жалоб
@@ -795,48 +796,15 @@
         over.classList.add('mv-over-user');
         return;
       }
-      const p = uid ? (await P.profiles([uid]))[uid] : null;
-      const me = P.me(), self = uid && uid === me;
-      const acts = [];
-      // чем занят сейчас (общее «кто онлайн») и «📍 К нему» — в его сервер мира или комнату игры
-      const onl = uid ? window.D37Chat?.online?.()?.users.find(u => u.id === uid) : null;
-      const act = onl ? P.actParse(onl.a) : null, join = act ? P.actJoin(act) : null;
-      if (uid) acts.push(`<a class="mv-ubtn" href="#/profile/${e(uid)}">👤 Профиль</a>`);
-      if (join && !self) acts.push(`<button type="button" class="mv-ubtn" data-u="join">${e(join.label)}</button>`);
-      if (uid && me && !self) acts.push('<button type="button" class="mv-ubtn" data-u="friend">…</button>');
-      if (uid && me && !self) acts.push(`<button type="button" class="mv-ubtn" data-u="block">${MV.blocked.has(uid) ? '✅ Разблокировать' : '🚫 Заблокировать'}</button>`);
-      if (m && V.A.caps.report && me && !self) acts.push('<button type="button" class="mv-ubtn" data-u="report">🚩 Пожаловаться</button>');
-      const mods = !self && V.A.userMod ? V.A.userMod(uid, nick) : [];
-      const bx = openOver('', `<div class="mv-user">${P.avatar(p, nick, 56)}<div><b>${P.nick(p, nick)}</b><span>${uid ? (p?.role === 'admin' ? 'Администратор сайта' : p?.role === 'moderator' ? 'Модератор сайта' : 'Игрок') : 'Гость (без аккаунта)'}${uid ? `<span class="dn-badge" data-dn-uid="${e(uid)}" hidden></span><span class="lv-badge" data-lv-uid="${e(uid)}"></span>` : ''}</span>${onl ? `<span>${e(P.actText(act))}</span>` : ''}</div></div>
-        <div class="mv-uacts">${acts.join('')}</div>${mods.length ? `<div class="mv-msep">Модерация</div><div class="mv-uacts">${mods.map(([k, t]) => `<button type="button" class="mv-ubtn warn" data-um="${e(k)}">${t}</button>`).join('')}</div>` : ''}${!me && uid ? '<div class="mv-dim">Войди, чтобы дружить, писать и звонить</div>' : ''}`);
-      over.classList.add('mv-over-user');
-      if (typeof xpQueueBadges === 'function') xpQueueBadges();
-      bx.addEventListener('click', async ev => {
-        const b = ev.target.closest('[data-u],[data-um]'); if (!b) return;
-        if (b.dataset.um) { const r = await V.A.userModDo(b.dataset.um, uid, nick); if (r?.msg) note(r.msg, !r.ok, 2600); closeOver(); return; }
-        const k = b.dataset.u;
-        if (k === 'join') { closeOver(); P.goJoin(uid, act); return; }
-        if (k === 'friend-add') { if (typeof sendFriendRequest === 'function') sendFriendRequest(uid); b.textContent = '⏳ Заявка отправлена'; b.dataset.u = ''; }
-        else if (k === 'friend-acc') { if (typeof acceptFriendRequest === 'function') await acceptFriendRequest(uid); b.textContent = '✅ Теперь друзья'; b.dataset.u = ''; P.dropFriends?.(); }
-        else if (k === 'dm') { closeOver(); P.open('msgs/' + uid); }
-        else if (k === 'call') { closeOver(); await P.need('calls'); window.D37Calls?.call(uid, nick); }
-        else if (k === 'block') { closeOver(); blockFlow(uid, nick); }
-        else if (k === 'report' && m) { closeOver(); reportFlow(m); }
-      });
-      if (uid && me && !self && typeof getFriendshipStatus === 'function') {
-        const A = window.D37Age;
-        // безопасность детей (js/core/age.js): ребёнку со взрослым / без возраста — ни личных каналов, ни «📍 К нему»; до 9 — ЛС и звонков нет
-        const [st, kb, kp] = await Promise.all([getFriendshipStatus(uid), A?.contact ? A.contact(uid).catch(() => null) : null, A?.friendBlock ? A.friendBlock(uid).catch(() => null) : null]);
-        const b = bx.querySelector('[data-u="…"],[data-u=""]') || bx.querySelector('.mv-ubtn:not([href]):not([data-u="block"]):not([data-u="report"])');
-        if (kp) bx.querySelector('[data-u="join"]')?.remove();
-        if (!b) return;
-        const kidNote = k => { b.textContent = '🔒 ' + (st === 'friends' ? 'Только дружба' : 'Нельзя'); b.dataset.u = ''; b.disabled = true; (b.closest('.mv-uacts') || b).insertAdjacentHTML('afterend', `<div class="mv-dim">${e(A.kidMsg(k))}</div>`); };
-        if (st === 'friends') { if (kb) kidNote(kb); else { b.textContent = '✉ Написать'; b.dataset.u = 'dm'; b.insertAdjacentHTML('afterend', '<button type="button" class="mv-ubtn" data-u="call">📞 Позвонить</button>'); } }
-        else if (st === 'pending_received') { if (kp) kidNote('agefriend'); else { b.textContent = '✅ Принять в друзья'; b.dataset.u = 'friend-acc'; } }
-        else if (st === 'pending_sent') { b.textContent = '⏳ Заявка отправлена'; b.dataset.u = ''; }
-        else if (kp) kidNote('agefriend');
-        else { b.textContent = '➕ В друзья'; b.dataset.u = 'friend-add'; }
-      }
+      const A = V.A;
+      const actions = {
+        report: m && A?.caps?.report ? () => reportFlow(m) : null,
+        mods: (u, n) => (A?.userMod ? A.userMod(u, n) || [] : []),
+        modDo: async (k, u, n) => { const r = await A.userModDo(k, u, n); if (r?.msg) note(r.msg, !r.ok, 2600); return r; },
+        block: (u, n) => blockFlow(u, n),
+      };
+      if (window.D37Mini?.open) return window.D37Mini.open(uid, { nick, anchor, actions, guest: !uid });
+      if (uid) location.hash = '#/profile/' + uid;   // карточка не загрузилась — сразу профиль
     };
 
     // ── Клики ──

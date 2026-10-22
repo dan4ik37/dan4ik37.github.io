@@ -103,18 +103,18 @@ export default function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:780px}
-.tp-chal{margin-top:.8rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:#ffd166;font-weight:800}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
+.tp-chal{margin-top:.8rem;padding:.7rem 1rem;border-radius:12px;background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.35);color:var(--gold-t);font-weight:800}
 .ty{margin-top:1.4rem;padding:1.2rem;border-radius:20px;background:var(--card);border:1px solid var(--line)}
 .ty-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;text-align:center;margin-bottom:1rem}
-.ty-stats div{padding:.6rem .3rem;border-radius:12px;background:rgba(255,255,255,.04)}
+.ty-stats div{padding:.6rem .3rem;border-radius:12px;background:rgba(var(--fg-rgb),.04)}
 .ty-stats b{display:block;font:800 1.4rem Montserrat,sans-serif}
 .ty-stats small{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .ty-text{padding:1rem 1.1rem;border-radius:14px;background:rgba(0,0,0,.25);border:1px solid var(--line);font-size:1.15rem;line-height:1.75;letter-spacing:.01em;cursor:text;user-select:none}
-.ty-text span.ok{color:#4ade80}
+.ty-text span.ok{color:var(--ok-hi)}
 .ty-text span.bad{color:#fff;background:rgba(255,45,85,.55);border-radius:3px}
 .ty-text span.cur{border-bottom:2px solid #ffd166}
-.ty-in{width:100%;margin-top:.8rem;padding:.8rem 1rem;border-radius:12px;border:1.5px solid var(--line);background:rgba(255,255,255,.05);color:var(--text);font:600 1rem Montserrat,sans-serif;resize:none}
+.ty-in{width:100%;margin-top:.8rem;padding:.8rem 1rem;border-radius:12px;border:1.5px solid var(--line);background:rgba(var(--fg-rgb),.05);color:var(--text);font:600 1rem Montserrat,sans-serif;resize:none}
 .ty-in:focus{outline:none;border-color:var(--accent)}
 .ty-res{margin-top:1rem;text-align:center;display:flex;flex-direction:column;gap:.35rem;align-items:center}
 .ty-res[hidden]{display:none}
@@ -122,11 +122,11 @@ const CSS = `
 .ty-act{display:flex;gap:.6rem;flex-wrap:wrap;justify-content:center;margin-top:.7rem}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .ty-ranks{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.5rem}
-.ty-ranks li{display:flex;justify-content:space-between;gap:.5rem;padding:.6rem .8rem;border-radius:10px;background:rgba(255,255,255,.04);font-size:.88rem}
+.ty-ranks li{display:flex;justify-content:space-between;gap:.5rem;padding:.6rem .8rem;border-radius:10px;background:rgba(var(--fg-rgb),.04);font-size:.88rem}
 .ty-ranks span{color:var(--muted)}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
-.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
+.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(var(--text-rgb),.8)}
 @media(max-width:600px){.ty-stats b{font-size:1.1rem}.ty-text{font-size:1rem}}
 `;

@@ -128,6 +128,69 @@ async function renderProfileChar(uid, isOwn){
   el.hidden = false;
 }
 
+// ═══ Профиль 2.0 (T-086; UI_V2 в js/core/config.js → html.ui2, стили — css/ui2.css) ═══
+// Те же данные, другая раскладка: шапка (фон, аватар с рамкой, персонаж, ник и значки, уровень, быстрые числа, кнопки дружбы),
+// дальше две колонки на компьютере (главное слева, свои панели справа) и одна на телефоне. Карточки двигаются в колонки ОДИН раз
+// (pf2Layout) — id и обработчики те же; без UI_V2 разметка не трогается (профиль как раньше).
+const PF2_MAIN = ['profileHiddenNote', 'profileAboutCard', 'profileGamesCard', 'pf2Showcase', 'profileGameStatsCard', 'profileAchievementsCard', 'profileXpCard', 'profileQuestsCard'];
+const PF2_SIDE = ['profileFriendsPanel', 'profileStatsRow', 'profileReferralPanel', 'profileGuestsPanel', 'donateLoginPanel', 'profileVipPerksPanel', 'profileVipPromo', 'profileThemePanel', 'profileStaffVipPanel', 'profileStaffPanel', 'profileAdminPanel', 'profileAccountSettings'];
+const pf2On = () => document.documentElement.classList.contains('ui2');
+function pf2Layout(){
+  const box = document.getElementById('profileContent');
+  if (!pf2On() || !box || box.querySelector(':scope > .pf2-cols')) return;
+  const head = box.querySelector('.pf-head'), fw = document.getElementById('profileAddFriendWrap');
+  if (head && fw) head.appendChild(fw);
+  const cols = document.createElement('div'); cols.className = 'pf2-cols';
+  const main = document.createElement('div'); main.className = 'pf2-main';
+  const side = document.createElement('div'); side.className = 'pf2-side';
+  for (const id of PF2_MAIN) { const el = document.getElementById(id); if (el) main.appendChild(el); }
+  for (const id of PF2_SIDE) { const el = document.getElementById(id); if (el) side.appendChild(el); }
+  cols.append(main, side);
+  const after = document.getElementById('profileUploadHint') || head;
+  after.after(cols);
+}
+const pf2Set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+function pf2Reset(isOwn){
+  document.getElementById('profileContent')?.classList.toggle('pf2-other', !isOwn);
+  for (const id of ['pf2Streak', 'pf2Xp', 'pf2Games', 'pf2Ach']) pf2Set(id, '—');
+  const lv = document.getElementById('pf2Lv'); if (lv) lv.hidden = true;
+  const sh = document.getElementById('pf2Showcase'); if (sh) sh.hidden = true;
+}
+const pf2Num = n => { n = +n || 0; return n >= 1e4 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace('.', ',') + 'K' : n.toLocaleString('ru-RU'); };
+// уровень и опыт: те же числа, что карточка «Уровень» (xp_summary → renderProfileXp)
+function pf2Xp(uid, d){
+  if (profileViewedId !== uid || !d) return;
+  pf2Set('pf2Xp', pf2Num(d.xp));
+  const span = Math.max(d.level_to - d.level_from, 1), pct = Math.min(100, Math.max(0, (d.xp - d.level_from) / span * 100));
+  const lv = document.getElementById('pf2Lv'); if (!lv) return;
+  pf2Set('pf2LvN', 'Lv ' + d.level);
+  document.getElementById('pf2LvN').className = (typeof xpTierClass === 'function' ? xpTierClass(d.level) : '').trim();
+  document.getElementById('pf2LvBar').style.width = pct.toFixed(1) + '%';
+  pf2Set('pf2LvT', `${pf2Num(d.xp)} XP · до ${d.level + 1} ур. ещё ${pf2Num(Math.max(0, d.level_to - d.xp))}`);
+  lv.hidden = false;
+}
+// серия, число ачивок и витрина (лучшие полученные: особые, потом по XP) — из ответа renderAchievements
+function pf2Ach(uid, r){
+  if (profileViewedId !== uid || !r) return;
+  if (r.streak != null) pf2Set('pf2Streak', pf2Num(r.streak));
+  const earned = r.earned instanceof Set ? r.earned : new Set(r.earned || []);
+  if (typeof ACHIEVEMENT_DEFS === 'undefined') return;
+  const got = ACHIEVEMENT_DEFS.filter(d => earned.has(d.code));
+  pf2Set('pf2Ach', String(got.filter(d => !d.special).length));
+  const vipTop = Math.max(0, ...got.filter(d => d.vip).map(d => d.vip));
+  const best = got.filter(d => !d.vip || d.vip === vipTop).sort((a, b) => (b.special ? 1 : 0) - (a.special ? 1 : 0) || (b.xp || 0) - (a.xp || 0)).slice(0, 6);
+  const box = document.getElementById('pf2Showcase'), grid = document.getElementById('pf2ShowGrid');
+  if (!box || !grid) return;
+  grid.innerHTML = best.map(d => `<div class="pf2-sh" title="${esc(d.title + ' — ' + d.desc)}"><span>${d.icon}</span><b>${esc(d.title)}</b>${d.xp ? `<small>+${d.xp} XP</small>` : ''}</div>`).join('');
+  box.hidden = !best.length;
+}
+// партии — то же число, что в «Играх на сайте» (game_stats → renderProfileGameStats)
+function pf2Games(uid){
+  if (profileViewedId !== uid) return;
+  const m = /^(\d[\d\s]*)/.exec(document.getElementById('profileGameStatsSum')?.textContent || '');
+  pf2Set('pf2Games', m ? pf2Num(m[1].replace(/\s/g, '')) : document.getElementById('profileGameStatsCard')?.hidden === false ? '0' : '—');
+}
+
 async function renderProfilePage(viewUserId){
   const loggedOutEl = document.getElementById('profileLoggedOut');
   const contentEl = document.getElementById('profileContent');
@@ -154,6 +217,8 @@ async function renderProfilePage(viewUserId){
   contentEl.style.display = 'block';
   profileViewedId = targetId;
   const isOwn = targetId === currentUser?.id;
+  pf2Layout();
+  pf2Reset(isOwn);
 
   let profile, loadErr = null;
   try {
@@ -256,11 +321,12 @@ async function renderProfilePage(viewUserId){
 
   if (!hidden || profile.staff_view) renderProfileStats(profile, targetId);
   renderReferralPanel(profile, isOwn);
-  if (!hidden && typeof renderAchievements === 'function') renderAchievements(targetId, isOwn);
-  if (typeof renderProfileGameStats === 'function') renderProfileGameStats(hidden ? null : targetId, isOwn);
+  if (!hidden && typeof renderAchievements === 'function') Promise.resolve(renderAchievements(targetId, isOwn)).then(r => pf2Ach(targetId, r)).catch(() => {});
+  if (typeof renderProfileGameStats === 'function') Promise.resolve(renderProfileGameStats(hidden ? null : targetId, isOwn)).then(() => pf2Games(targetId)).catch(() => {});
   if (typeof renderProfileQuests === 'function') renderProfileQuests(targetId, isOwn);   // сезон и задания недели (свой профиль)
   if (hidden) document.getElementById('profileXpCard').hidden = true;
-  else if (typeof renderProfileXp === 'function') renderProfileXp(targetId, isOwn);
+  else if (typeof renderProfileXp === 'function') Promise.resolve(renderProfileXp(targetId, isOwn)).then(d => pf2Xp(targetId, d)).catch(() => {});
+  document.querySelector('#profileContent .pf-head')?.classList.toggle('pf2-hid', hidden);
   if (isOwn) renderPrivacySettings(profile);
   if (isOwn && window.D37Login) window.D37Login.renderMethods().then(() => {   // «Способы входа»
     if (focusLogins) { const el = document.getElementById('profileLogins'); if (el && !el.hidden) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
@@ -286,24 +352,29 @@ async function renderProfilePage(viewUserId){
   const addFriendWrap = document.getElementById('profileAddFriendWrap');
   if (!isOwn && currentUser) {
     const status = await getFriendshipStatus(targetId);
+    if (profileViewedId !== targetId) return;
+    const note = t => `<span class="pf-fnote">${esc(t)}</span>`;
     const buttons = {
-      none: `<button onclick="sendFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--tw),#6d28d9);color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">➕ Добавить в друзья</button>`,
-      pending_sent: `<span style="color:var(--muted);font-size:.8rem">⏳ Заявка отправлена</span>`,
-      pending_received: `<button onclick="acceptFriendRequest('${targetId}')" style="padding:.6rem 1.2rem;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✅ Принять заявку в друзья</button>`,
-      friends: `<button onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})" style="padding:.6rem 1.2rem;border-radius:10px;border:1.5px solid var(--border);background:rgba(255,255,255,.04);color:var(--text);font-size:.82rem;cursor:pointer;font-family:'Montserrat',sans-serif">✉ Написать другу</button>`,
+      none: `<button type="button" class="pf-btn pf-btn-tw" onclick="sendFriendRequest('${targetId}')">➕ Добавить в друзья</button>`,
+      pending_sent: note('⏳ Заявка отправлена'),
+      pending_received: `<button type="button" class="pf-btn pf-btn-primary" onclick="acceptFriendRequest('${targetId}')">✅ Принять заявку в друзья</button>`,
+      friends: `<button type="button" class="pf-btn pf-btn-ghost" onclick="openDmWith('${targetId}',${jsAttr(profile.nick||'?')})">✉ Написать другу</button>`,
     };
     if (status === 'none' && profile.accepts_friend_requests === false) {
-      buttons.none = `<span style="color:var(--muted);font-size:.8rem">🚫 Не принимает заявки в друзья</span>`;
+      buttons.none = note('🚫 Не принимает заявки в друзья');
     } else if (status === 'none') {
       const why = (await window.D37Age?.friendBlock?.(targetId)) ? D37Age.kidMsg('agefriend') : await friendBlockReason();
-      if (why) buttons.none = `<span style="color:var(--muted);font-size:.8rem">${esc(why)}</span>`;
+      if (why) buttons.none = note(why);
     } else if (status === 'friends' || status === 'pending_received') {
       // ребёнку до 13 со взрослым / до 9 — личные каналы закрыты (сервер не пропустит; дружба остаётся)
       const kb = status === 'friends' ? await window.D37Age?.contact?.(targetId) : await window.D37Age?.friendBlock?.(targetId);
-      if (kb) buttons[status] = `<span style="color:var(--muted);font-size:.8rem">${esc(D37Age.kidMsg(status === 'friends' ? kb : 'agefriend'))}</span>`;
+      if (kb) buttons[status] = note(D37Age.kidMsg(status === 'friends' ? kb : 'agefriend'));
     }
+    if (profileViewedId !== targetId) return;
+    // «⋯» — общая мини-карточка: звонок, «📍 К нему», блокировка, модерация (те же правила, js/features/minicard.js)
     addFriendWrap.innerHTML = buttons[status] || '';
-    addFriendWrap.style.display = 'block';
+    if (window.D37Mini) addFriendWrap.insertAdjacentHTML('beforeend', `<button type="button" class="pf-btn pf-btn-ghost pf-more" data-mini-uid="${esc(targetId)}" data-mini-nick="${esc(profile.nick || '')}" title="Ещё: позвонить, к нему в игру, заблокировать" aria-label="Ещё действия">⋯</button>`);
+    addFriendWrap.style.display = '';
   } else {
     addFriendWrap.style.display = 'none';
   }
@@ -608,15 +679,31 @@ const THEME_PRESETS = [
   { key: 'green',   label: 'Зелёный',                 a1: '#16a34a', a2: '#4ade80' },
   { key: 'gold',    label: 'Золотой',                 a1: '#ffd700', a2: '#ff9500' },
 ];
+// Светлая тема (T-086): текст цветом акцента — темнее самого акцента, пока контраст с самым тёмным светлым фоном (--bg2 #e7e9f1,
+// яркость 0,816) не станет ≥ 4,5 (WCAG AA). Иначе «Золотой» (#ffd700) на светлом фоне не читается. → --accent-ink (index.html: --accent-t)
+function accentInk(hex){
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim()); if (!m) return '';
+  const n = parseInt(m[1], 16), c = [n >> 16 & 255, n >> 8 & 255, n & 255];
+  const lin = v => { v /= 255; return v <= .04045 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  for (let k = .72; k > .1; k -= .04) {
+    const d = c.map(v => Math.round(v * k)), L = .2126 * lin(d[0]) + .7152 * lin(d[1]) + .0722 * lin(d[2]);
+    if ((.816 + .05) / (L + .05) >= 4.5) return '#' + d.map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+  return '#000000';
+}
 function applyThemeAccent(profile){
+  const st = document.documentElement.style;
   if (!profile || !(isVipActive(profile) || donorLevelOf(profile) > 0) || !profile.theme_accent) {
-    document.documentElement.style.removeProperty('--accent');
-    document.documentElement.style.removeProperty('--accent2');
+    st.removeProperty('--accent');
+    st.removeProperty('--accent2');
+    st.removeProperty('--accent-ink');
     return;
   }
   const [a1, a2] = String(profile.theme_accent).split(',');
-  if (a1) document.documentElement.style.setProperty('--accent', a1.trim());
-  if (a2) document.documentElement.style.setProperty('--accent2', a2.trim());
+  if (a1) st.setProperty('--accent', a1.trim());
+  if (a2) st.setProperty('--accent2', a2.trim());
+  const ink = accentInk(a1);
+  if (ink) st.setProperty('--accent-ink', ink); else st.removeProperty('--accent-ink');
 }
 function renderThemePresets(currentValue){
   const wrap = document.getElementById('profileThemeSwatches');
@@ -624,7 +711,7 @@ function renderThemePresets(currentValue){
   wrap.innerHTML = THEME_PRESETS.map(p => {
     const active = currentValue === `${p.a1},${p.a2}` || (!currentValue && p.key === 'default');
     return `<button onclick="saveThemeAccent('${p.key === 'default' ? '' : p.a1}','${p.key === 'default' ? '' : p.a2}')" title="${p.label}"
-      style="width:34px;height:34px;border-radius:50%;cursor:pointer;background:linear-gradient(135deg,${p.a1},${p.a2});border:2px solid ${active ? '#fff' : 'transparent'};box-shadow:${active ? '0 0 0 2px rgba(255,255,255,.3)' : 'none'}"></button>`;
+      style="width:34px;height:34px;border-radius:50%;cursor:pointer;background:linear-gradient(135deg,${p.a1},${p.a2});border:2px solid ${active ? '#fff' : 'transparent'};box-shadow:${active ? '0 0 0 2px rgba(var(--fg-rgb),.3)' : 'none'}"></button>`;
   }).join('');
 }
 async function saveThemeAccent(a1, a2){
@@ -789,7 +876,7 @@ function renderVipMonthButtons(){
   const current = parseInt(document.getElementById('vipBuyMonths')?.value, 10) || 3;
   box.innerHTML = VIP_MONTH_OPTIONS.map(m => `
     <button type="button" class="vip-month-btn${m === current ? ' active' : ''}" data-months="${m}"
-      style="padding:.5rem .9rem;border-radius:8px;border:1.5px solid ${m === current ? 'var(--vip-gold,#ffd93d)' : 'var(--border)'};background:${m === current ? 'rgba(255,217,61,.14)' : 'rgba(255,255,255,.04)'};color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s">
+      style="padding:.5rem .9rem;border-radius:8px;border:1.5px solid ${m === current ? 'var(--vip-gold,#ffd93d)' : 'var(--border)'};background:${m === current ? 'rgba(255,217,61,.14)' : 'rgba(var(--fg-rgb),.04)'};color:var(--text);font-family:'Montserrat',sans-serif;font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s">
       ${m} мес${m===1?'':m<5?'яца':'яцев'}<br><span style="font-size:.66rem;font-weight:600;color:var(--muted)">${(m*VIP_RUB_PER_MONTH).toLocaleString('ru')}₽</span>
     </button>`).join('');
   box.querySelectorAll('.vip-month-btn').forEach(btn=>{
@@ -804,7 +891,7 @@ function selectVipMonths(months){
     const active = parseInt(b.dataset.months,10) === months;
     b.classList.toggle('active', active);
     b.style.borderColor = active ? 'var(--vip-gold,#ffd93d)' : 'var(--border)';
-    b.style.background = active ? 'rgba(255,217,61,.14)' : 'rgba(255,255,255,.04)';
+    b.style.background = active ? 'rgba(255,217,61,.14)' : 'rgba(var(--fg-rgb),.04)';
   });
   updateVipCalcTotal(months);
 }
@@ -864,7 +951,7 @@ function renderStaffVipPanel(profile, isOwn){
     <div style="font-size:.68rem;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:.6rem">🔒 Только для модерации: шкала VIP</div>
     <div style="font-size:.78rem;margin-bottom:.4rem">Уровень: <b>${tier ? tier.label : 'не активен'}</b> · всего задонатил: <b>${profile.donations_hidden ? '🔒 скрыто' : (Number(profile.total_donated)||0).toFixed(0) + '₽'}</b></div>
     <div style="font-size:.78rem;margin-bottom:.4rem">До следующего месяца: <b>${pending.toFixed(0)}/${VIP_RUB_PER_MONTH}₽</b>${missing > 0 ? ` (не хватает ${missing.toFixed(0)}₽)` : ' — набрано!'}</div>
-    <div style="background:rgba(255,255,255,.08);border-radius:6px;height:8px;overflow:hidden;margin:.5rem 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px"></div></div>
+    <div style="background:rgba(var(--fg-rgb),.08);border-radius:6px;height:8px;overflow:hidden;margin:.5rem 0"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:6px"></div></div>
     <div style="font-size:.72rem;color:var(--muted)">VIP активен до: ${untilStr}</div>`;
 }
 
@@ -1290,7 +1377,7 @@ async function openDonationLog(){
         ? (row.reward === 'status' ? `💛 статус${row.excluded ? ' (не в счёт)' : ''}` : row.gems_granted ? `✅ +${row.gems_granted} 💎` : `✅ +${row.months_granted} мес.`) + ` → <b>${esc(row.profiles?.nick || '?')}</b>`
         : `⚠ Не привязан${row.hold && HOLD[row.hold] ? ': ' + HOLD[row.hold] : ''}`;
       return `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(255,255,255,.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;background:rgba(var(--fg-rgb),.03);border-radius:10px;padding:.6rem .9rem;font-size:.78rem;flex-wrap:wrap">
           <div>
             <div style="font-weight:700">${esc(row.donor_username || '(без имени)')} — ${row.amount ?? '?'} ${esc(row.currency || 'RUB')}</div>
             <div style="color:var(--muted);font-size:.7rem">${date} · №${esc(String(row.donation_id))}</div>
@@ -1307,126 +1394,8 @@ function closeDonationLog(){
 }
 
 
-// ═══════════════════════════════════════
-//  МИНИ-ПРОФИЛЬ (клик на ник в чате — как в Discord)
-// ═══════════════════════════════════════
-async function openMiniProfile(userId, fallbackNick, anchorEl){
-  const pop = document.getElementById('miniProfilePopover');
-  if (!sbClient || !userId) return;
-
-  // Позиционируем рядом с кликом, с защитой от выхода за край экрана
-  const rect = anchorEl.getBoundingClientRect();
-  const popW = 260;
-  let left = rect.left;
-  if (left + popW > window.innerWidth - 16) left = window.innerWidth - popW - 16;
-  pop.style.left = Math.max(16, left) + 'px';
-  pop.style.display = 'block';
-  // По вертикали: не помещается под ником — над ним, и всегда целиком в экране (раньше у нижних сообщений
-  // чата карточка уезжала за край, и до «Открыть профиль →» было не достать). Повторяем, когда данные догрузились.
-  const placeMini = () => {
-    const h = pop.offsetHeight, vh = window.innerHeight;
-    let top = rect.bottom + 8;
-    if (top + h > vh - 12) top = rect.top - h - 8;
-    pop.style.top = Math.max(12, Math.min(top, vh - h - 12)) + 'px';
-  };
-
-  document.getElementById('miniProfileNick').textContent = fallbackNick;
-  document.getElementById('miniProfileBio').textContent = '';
-  document.getElementById('miniProfileStatus').textContent = '';
-  document.getElementById('miniProfileGames').innerHTML = '';
-  document.getElementById('miniProfileRoleBadge').innerHTML = '';
-  document.getElementById('miniProfileAvatar').classList.remove('profile-avatar-glow');
-  document.getElementById('miniProfileVip').style.display = 'none';
-  document.getElementById('miniProfileAvatar').textContent = (fallbackNick||'?').substring(0,2).toUpperCase();
-  document.getElementById('miniProfileAvatar').style.backgroundImage = '';
-  document.getElementById('miniProfileBanner').style.backgroundImage = '';
-  document.getElementById('miniProfileLink').href = `#/profile/${userId}`;
-  placeMini();
-
-  try {
-    const { data: p } = await (await sbProfiles()).select('*').eq('id', userId).single();
-    if (!p) return;
-    document.getElementById('miniProfileNick').textContent = p.nick || fallbackNick;
-    document.getElementById('miniProfileBio').textContent = p.profile_hidden && currentUser?.id !== userId
-      ? (p.profile_visibility === 'friends' ? '🔒 Профиль видят только друзья' : '🔒 Профиль скрыт')
-      : (p.bio || '');
-    document.getElementById('miniProfileStatus').textContent = p.status_text || '';
-    {
-      const games = p.favorite_games || [];
-      const myGames = new Set((currentProfile?.favorite_games) || []);
-      const gamesEl = document.getElementById('miniProfileGames');
-      if (games.length) {
-        gamesEl.innerHTML = games.map(g => {
-          const shared = currentUser && currentUser.id !== userId && myGames.has(g);
-          return `<span style="display:inline-block;background:${shared ? 'rgba(34,197,94,.18)' : 'rgba(145,71,255,.15)'};color:${shared ? '#22c55e' : 'var(--tw)'};border-radius:6px;padding:.15rem .5rem;font-size:.66rem;margin:0 .25rem .25rem 0">${shared ? '✓ ' : ''}🎮 ${esc(g)}</span>`;
-        }).join('');
-      } else {
-        gamesEl.innerHTML = '';
-      }
-    }
-    document.getElementById('miniProfileRoleBadge').innerHTML = ROLE_BADGE_HTML[p.role] || '';
-    // Раньше тут была одна ✨ на все уровни VIP — на самой странице профиля
-    // Bronze/Silver/Gold уже различаются иконкой и цветом (см. profileVipBadge
-    // выше), мини-профиль теперь показывает то же самое, а не «просто VIP».
-    {
-      // Лучшая ветка: «💛 Донатер N — до …» или VIP
-      if (window.D37Donor) await D37Donor.badges([userId]).catch(() => {});
-      const vipEl = document.getElementById('miniProfileVip');
-      const st = statusOf(p), tier = st?.tier;
-      if (st) {
-        vipEl.textContent = st.kind === 'donor' ? '💛 ' + D37Donor.roman(st.lv) : tier.key === 'gold' ? '✨' : tier.key === 'silver' ? '⭐' : '🔸';
-        vipEl.style.color = `rgb(${st.rgb})`;
-        vipEl.title = st.kind === 'donor' ? `Донатер ${D37Donor.roman(st.lv)}${st.until ? ' — ' + D37Donor.untilText(st.until) : ''} · статус за поддержку стрима` : tier.label;
-        vipEl.style.display = 'inline';
-      } else {
-        vipEl.style.display = 'none';
-      }
-    }
-    if (p.avatar_url && safeImgUrl(p.avatar_url)) { const av = document.getElementById('miniProfileAvatar'); av.style.backgroundImage = `url('${safeImgUrl(p.avatar_url)}')`; av.textContent = ''; }
-    if (p.banner_url) document.getElementById('miniProfileBanner').style.backgroundImage = `url('${safeImgUrl(p.banner_url)}')`;
-    applyProfileGlow(document.getElementById('miniProfileAvatar'), p);
-    if (typeof applyLevelFrame === 'function') applyLevelFrame(document.getElementById('miniProfileAvatar'), userId);
-    {
-      const tEl = document.getElementById('miniProfileTitle');
-      tEl.hidden = true;
-      if (typeof xpGetExtras === 'function') xpGetExtras(userId).then(ex => {
-        const d = ex?.title && typeof achTitleDef === 'function' && achTitleDef(ex.title);   // ачивка или титул сезона
-        if (d) { tEl.textContent = `${d.icon} ${d.title}`; tEl.hidden = false; }
-      });
-    }
-
-    const actionEl = document.getElementById('miniProfileFriendAction');
-    if (currentUser && currentUser.id !== userId) {
-      const status = await getFriendshipStatus(userId);
-      const small = 'padding:.4rem .8rem;border-radius:8px;font-size:.72rem;cursor:pointer;font-family:\'Montserrat\',sans-serif;border:none;width:100%';
-      const buttons = {
-        none: `<button onclick="sendFriendRequest('${userId}')" style="${small};background:var(--tw);color:#fff">➕ В друзья</button>`,
-        pending_sent: `<span style="font-size:.72rem;color:var(--muted)">⏳ Заявка отправлена</span>`,
-        pending_received: `<button onclick="acceptFriendRequest('${userId}')" style="${small};background:var(--accent);color:#fff">✅ Принять заявку</button>`,
-        friends: `<button onclick="openDmWith('${userId}',${jsAttr(p.nick||fallbackNick)})" style="${small};background:rgba(255,255,255,.1);color:var(--text)">✉ Написать</button>`,
-      };
-      if (status === 'none' && p.accepts_friend_requests === false) {
-        buttons.none = `<span style="font-size:.72rem;color:var(--muted)">🚫 Не принимает заявки</span>`;
-      } else if (status === 'none') {
-        const why = (await window.D37Age?.friendBlock?.(userId)) ? D37Age.kidMsg('agefriend') : await friendBlockReason();
-        if (why) buttons.none = `<span style="font-size:.68rem;color:var(--muted);line-height:1.4;display:block">${esc(why)}</span>`;
-      } else if (status === 'friends' || status === 'pending_received') {
-        const kb = status === 'friends' ? await window.D37Age?.contact?.(userId) : await window.D37Age?.friendBlock?.(userId);
-        if (kb) buttons[status] = `<span style="font-size:.68rem;color:var(--muted);line-height:1.4;display:block">${esc(D37Age.kidMsg(status === 'friends' ? kb : 'agefriend'))}</span>`;
-      }
-      actionEl.innerHTML = buttons[status] || '';
-    } else {
-      actionEl.innerHTML = '';
-    }
-    placeMini();
-  } catch(e) {}
-}
-document.addEventListener('click', e => {
-  const pop = document.getElementById('miniProfilePopover');
-  if (pop && pop.style.display === 'block' && !pop.contains(e.target) && !e.target.closest('.chat-avatar,.chat-user')) {
-    pop.style.display = 'none';
-  }
-});
+// Мини-профиль (нажатие на ник — как в Discord): ОДНА карточка на сайт — js/features/minicard.js (D37Mini, T-086);
+// openMiniProfile(id, ник, элемент) — её старое имя (тиммейты, гости профиля)
 
 // ☁️ «Облако» в панели администратора: сколько занято хранилища сайта (бесплатный тариф Supabase — 1 ГБ на ВСЁ: сохранения игр,
 // модели, эмодзи, реклама). cloud_usage() в ugc.sql (только админ); при 800 МБ новые сохранения в облако не принимаются (cloud_rule

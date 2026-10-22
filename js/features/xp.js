@@ -183,6 +183,7 @@ async function renderProfileXp(uid, isOwn){
       <span class="xp-reward-lv">${lv}</span><span>${icon}</span><span>${text}</span>${data.level >= lv ? '<b>✓</b>' : ''}
     </div>`).join('') + '<div class="xp-reward-note">VIP Silver и Gold — только за поддержку стрима: <a href="/vip">что даёт VIP</a></div>';
   xpLevelCache.set(uid, data.level);
+  return data;   // профиль 2.0: уровень в шапке и быстрые числа (profile.js pf2Xp)
 }
 
 // ── Учёт просмотра видео ──

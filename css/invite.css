@@ -18,7 +18,7 @@
   #inviteRoot>.rf-col-l{grid-column:1}
   #inviteRoot>.rf-col-r{grid-column:2}
 }
-#inviteRoot .pf-card{background:var(--card);border:1px solid var(--line,rgba(255,255,255,.08));min-width:0}
+#inviteRoot .pf-card{background:var(--card);border:1px solid var(--line,rgba(var(--fg-rgb),.08));min-width:0}
 /* у .pf-card «transition: all» — порядок карточек (order) при повороте телефона не анимируем */
 #inviteRoot .pf-card{transition-property:transform,box-shadow,border-color,background-color,opacity,filter}
 .rf-wait,.rf-empty{color:var(--muted);font-size:.82rem;padding:.6rem 0}
@@ -33,7 +33,7 @@
 .rf-hero h3{margin:0 0 .35rem;font-family:var(--font-display,'Oswald',sans-serif);font-size:1.35rem;letter-spacing:.02em;text-transform:uppercase}
 .rf-hero p{margin:0;color:var(--text);opacity:.88;font-size:.86rem;line-height:1.55}
 .rf-steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.5rem}
-.rf-steps li{display:flex;flex-direction:column;gap:.15rem;padding:.65rem .75rem;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07)}
+.rf-steps li{display:flex;flex-direction:column;gap:.15rem;padding:.65rem .75rem;border-radius:12px;background:rgba(var(--fg-rgb),.05);border:1px solid rgba(var(--fg-rgb),.07)}
 .rf-steps b{font-size:.78rem}
 .rf-steps span{font-size:.74rem;color:#ffd166;font-weight:700}
 @media(max-width:520px){.rf-steps{grid-template-columns:1fr}.rf-steps li{flex-direction:row;justify-content:space-between;align-items:center}}
@@ -41,21 +41,21 @@
 /* ── Ссылка и «Поделиться» ── */
 .rf-code{font-family:ui-monospace,Consolas,monospace;font-size:.85rem;letter-spacing:.12em;color:#ffd166;text-transform:none}
 .rf-url{display:flex;gap:.5rem;margin-top:.6rem;min-width:0}
-.rf-url input{flex:1;min-width:0;background:rgba(255,255,255,.05);border:1.5px solid var(--line-hi,rgba(255,255,255,.18));border-radius:10px;padding:.6rem .8rem;
+.rf-url input{flex:1;min-width:0;background:rgba(var(--fg-rgb),.05);border:1.5px solid var(--line-hi,rgba(var(--fg-rgb),.18));border-radius:10px;padding:.6rem .8rem;
   color:var(--text);font:600 .82rem ui-monospace,Consolas,monospace}
 @media(max-width:560px){.rf-url{flex-wrap:wrap}.rf-url input{flex-basis:100%;font-size:.86rem;padding:.7rem .8rem}.rf-url .pf-btn{flex:1;min-height:42px}}
 .rf-share{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.75rem}
 .rf-sh{border:0;cursor:pointer;min-height:40px;padding:.5rem .9rem;border-radius:999px;font:800 .76rem 'Montserrat',sans-serif;color:#fff;
-  background:rgba(255,255,255,.08);transition:transform .15s,filter .15s}
+  background:rgba(var(--fg-rgb),.08);transition:transform .15s,filter .15s}
 .rf-sh:hover{transform:translateY(-1px);filter:brightness(1.1)}
 .rf-sh-native{background:linear-gradient(135deg,var(--accent),var(--accent2))}
 .rf-sh-tg{background:#229ed9}
 .rf-sh-vk{background:#0077ff}
 .rf-sh-wa{background:#1fa855}
-.rf-sh-qr{background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.18)}
+.rf-sh-qr{background:rgba(var(--fg-rgb),.1);border:1.5px solid rgba(var(--fg-rgb),.18)}
 .rf-sh-qr.on{background:#fff;color:#111}
 .rf-place{display:flex;align-items:center;gap:.6rem;margin-top:.8rem;font-size:.76rem;color:var(--muted);flex-wrap:wrap}
-.rf-place select{flex:1;min-width:180px;max-width:100%;background:rgba(255,255,255,.05);color:var(--text);border:1.5px solid var(--line-hi,rgba(255,255,255,.18));
+.rf-place select{flex:1;min-width:180px;max-width:100%;background:rgba(var(--fg-rgb),.05);color:var(--text);border:1.5px solid var(--line-hi,rgba(var(--fg-rgb),.18));
   border-radius:10px;padding:.5rem .6rem;font:600 .8rem 'Montserrat',sans-serif}
 .rf-qr{display:flex;gap:1rem;align-items:center;margin-top:.9rem;flex-wrap:wrap}
 .rf-qr[hidden]{display:none}
@@ -72,13 +72,13 @@
 .rf-invited span a{color:var(--accent)}
 .rf-next{margin:.5rem 0 .8rem;font-size:.84rem;line-height:1.5}
 .rf-tiers{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.55rem}
-.rf-tiers li{display:flex;gap:.7rem;align-items:center;padding:.55rem .65rem;border-radius:12px;background:rgba(255,255,255,.035)}
+.rf-tiers li{display:flex;gap:.7rem;align-items:center;padding:.55rem .65rem;border-radius:12px;background:rgba(var(--fg-rgb),.035)}
 .rf-tiers li.done{background:rgba(74,222,128,.08);outline:1px solid rgba(74,222,128,.25)}
 .rf-ti{font-size:1.5rem;width:2rem;text-align:center;flex:none}
 .rf-tt{display:flex;flex-direction:column;gap:.2rem;min-width:0;flex:1}
 .rf-tt b{font-size:.8rem}
 .rf-tt small{font-size:.7rem;color:var(--muted)}
-.rf-bar{display:block;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:.25rem}
+.rf-bar{display:block;height:6px;border-radius:99px;background:rgba(var(--fg-rgb),.08);overflow:hidden;margin-top:.25rem}
 .rf-bar>i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),#ffd166)}
 .rf-aff{display:flex;flex-direction:column;gap:.2rem;margin-top:.9rem;padding:.7rem .8rem;border-radius:12px;background:rgba(145,71,255,.1);border:1px solid rgba(145,71,255,.25)}
 .rf-aff span{font-size:.76rem;color:var(--muted)}
@@ -89,7 +89,7 @@
 .rf-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.5rem}
 @media(max-width:480px){.rf-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .rf-adm .rf-stats{grid-template-columns:repeat(auto-fit,minmax(92px,1fr))}
-.rf-stat{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.6rem .4rem;border-radius:12px;background:rgba(255,255,255,.04);text-align:center}
+.rf-stat{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.6rem .4rem;border-radius:12px;background:rgba(var(--fg-rgb),.04);text-align:center}
 .rf-stat b{font-size:1.25rem;font-family:var(--font-display,'Oswald',sans-serif)}
 .rf-stat span{font-size:.64rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;line-height:1.3}
 .rf-earned{margin-top:.8rem;font-size:.8rem;line-height:1.6}
@@ -100,7 +100,7 @@
 
 /* ── Мои приглашения ── */
 .rf-list ul{list-style:none;margin:.6rem 0 0;padding:0;display:flex;flex-direction:column;gap:.4rem;max-height:520px;overflow-y:auto}
-.rf-list li{display:flex;align-items:center;gap:.6rem;padding:.5rem .55rem;border-radius:12px;background:rgba(255,255,255,.035);flex-wrap:wrap}
+.rf-list li{display:flex;align-items:center;gap:.6rem;padding:.5rem .55rem;border-radius:12px;background:rgba(var(--fg-rgb),.035);flex-wrap:wrap}
 .rf-ava{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-size:.7rem;font-weight:800;color:#fff;
   background:linear-gradient(135deg,var(--tw),var(--accent)) center/cover no-repeat}
 .rf-ava[style*="background-image"]{color:transparent}
@@ -112,19 +112,19 @@
 .rf-lv{font-size:.72rem;font-weight:800;color:#ffd166}
 .rf-ms{display:flex;gap:.2rem}
 .rf-m{font-style:normal;font-size:.62rem;font-weight:800;min-width:22px;height:22px;border-radius:7px;display:grid;place-items:center;
-  background:rgba(255,255,255,.06);color:var(--muted)}
+  background:rgba(var(--fg-rgb),.06);color:var(--muted)}
 .rf-m.on{background:rgba(74,222,128,.18);color:#4ade80}
-.rf-st{font-style:normal;font-size:.66rem;font-weight:800;padding:.2rem .5rem;border-radius:99px;background:rgba(255,255,255,.07)}
+.rf-st{font-style:normal;font-size:.66rem;font-weight:800;padding:.2rem .5rem;border-radius:99px;background:rgba(var(--fg-rgb),.07)}
 .rf-st.hold{color:#fbbf24}.rf-st.no,.rf-st.denied{color:#f87171}.rf-st.self{color:#fb923c}.rf-st.ok{color:#4ade80}
 
 /* ── Топ ── */
 .rf-top-h{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}
 .rf-tabs{display:flex;gap:.3rem;flex-wrap:wrap}
-.rf-tabs button{border:1.5px solid var(--line-hi,rgba(255,255,255,.18));background:none;color:var(--muted);border-radius:99px;padding:.35rem .8rem;
+.rf-tabs button{border:1.5px solid var(--line-hi,rgba(var(--fg-rgb),.18));background:none;color:var(--muted);border-radius:99px;padding:.35rem .8rem;
   font:800 .7rem 'Montserrat',sans-serif;cursor:pointer;min-height:32px}
 .rf-tabs button.on{background:var(--text);color:#111;border-color:var(--text)}
 .rf-toplist{list-style:none;margin:.7rem 0 0;padding:0;display:flex;flex-direction:column;gap:.3rem}
-.rf-toplist li{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border-radius:10px;background:rgba(255,255,255,.03)}
+.rf-toplist li{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border-radius:10px;background:rgba(var(--fg-rgb),.03)}
 .rf-toplist li.me{background:var(--ac-10,rgba(255,45,85,.1));outline:1px solid var(--ac-30,rgba(255,45,85,.3))}
 .rf-rk{width:1.8rem;text-align:center;font-weight:800;font-size:.8rem;flex:none}
 .rf-tn{flex:1;min-width:0;font-size:.82rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -135,7 +135,7 @@
 .rf-toplist b{font-family:var(--font-display,'Oswald',sans-serif);font-size:1rem}
 
 /* ── Как это работает ── */
-.rf-rules details{border-top:1px solid rgba(255,255,255,.06);padding:.6rem 0}
+.rf-rules details{border-top:1px solid rgba(var(--fg-rgb),.06);padding:.6rem 0}
 .rf-rules details:first-of-type{border-top:0}
 .rf-rules summary{cursor:pointer;font-weight:700;font-size:.84rem;min-height:28px;display:flex;align-items:center}
 .rf-rules p{margin:.45rem 0 0;color:var(--muted);font-size:.78rem;line-height:1.6}

@@ -89,8 +89,8 @@ export default async function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:720px}
-.years{position:sticky;top:69px;z-index:4;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:1.6rem;padding:.5rem 0;background:rgba(8,8,14,.85);backdrop-filter:blur(8px)}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:720px}
+.years{position:sticky;top:69px;z-index:4;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:1.6rem;padding:.5rem 0;background:rgba(var(--bg-rgb),.85);backdrop-filter:blur(8px)}
 .years a{padding:.35rem .8rem;border-radius:999px;border:1px solid var(--line);text-decoration:none;font-weight:800;font-size:.8rem}
 .years a:hover{border-color:var(--accent)}
 .years small{margin-left:.35rem;color:var(--muted);font-weight:600}

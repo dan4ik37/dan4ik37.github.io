@@ -18,27 +18,27 @@
 
   const CSS = `
 .cea-modal{position:fixed;inset:0;z-index:9550;background:rgba(0,0,0,.88);backdrop-filter:blur(14px);display:flex;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto}
-.cea-box{background:var(--card,#111119);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:18px;width:100%;max-width:1100px;padding:1.1rem 1.2rem 1.4rem;position:relative;margin:auto 0}
+.cea-box{background:var(--card,#111119);border:1px solid var(--border,rgba(var(--fg-rgb),.08));border-radius:18px;width:100%;max-width:1100px;padding:1.1rem 1.2rem 1.4rem;position:relative;margin:auto 0}
 .cea-head{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.8rem}.cea-head h3{font-size:1.1rem;font-weight:800;flex:1;min-width:10rem}
-.cea-btn{min-height:36px;padding:.35rem .8rem;border-radius:10px;border:1px solid var(--border,rgba(255,255,255,.1));background:rgba(255,255,255,.05);color:var(--text,#f0f0f8);font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}
+.cea-btn{min-height:36px;padding:.35rem .8rem;border-radius:10px;border:1px solid var(--border,rgba(var(--fg-rgb),.1));background:rgba(var(--fg-rgb),.05);color:var(--text,#f0f0f8);font:inherit;font-size:.75rem;font-weight:700;cursor:pointer}
 .cea-btn:hover{border-color:var(--accent,#ff2d55)}.cea-btn.on{background:var(--accent,#ff2d55);border-color:transparent;color:#fff}.cea-btn[disabled]{opacity:.5;cursor:default}
 .cea-bar{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin:.2rem 0 .8rem}
 .cea-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;margin-bottom:.8rem}
-.cea-card{background:rgba(255,255,255,.04);border:1px solid var(--border,rgba(255,255,255,.07));border-radius:12px;padding:.55rem .75rem}
+.cea-card{background:rgba(var(--fg-rgb),.04);border:1px solid var(--border,rgba(var(--fg-rgb),.07));border-radius:12px;padding:.55rem .75rem}
 .cea-card b{display:block;font-size:1.2rem}.cea-card span{font-size:.68rem;color:var(--muted,#8d8daa)}.cea-card.ok{border-color:rgba(74,222,128,.5)}.cea-card.bad{border-color:rgba(248,113,113,.7)}
 .cea-sec{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#8d8daa);margin:1rem 0 .4rem}
-.cea-wrap{overflow-x:auto;border:1px solid var(--border,rgba(255,255,255,.07));border-radius:12px}
-.cea-t{border-collapse:collapse;width:100%;font-size:.72rem;white-space:nowrap}.cea-t th,.cea-t td{padding:.35rem .5rem;border-bottom:1px solid rgba(255,255,255,.05);text-align:right}
+.cea-wrap{overflow-x:auto;border:1px solid var(--border,rgba(var(--fg-rgb),.07));border-radius:12px}
+.cea-t{border-collapse:collapse;width:100%;font-size:.72rem;white-space:nowrap}.cea-t th,.cea-t td{padding:.35rem .5rem;border-bottom:1px solid rgba(var(--fg-rgb),.05);text-align:right}
 .cea-t th{position:sticky;top:0;background:#16162a;font-weight:800;color:var(--muted,#8d8daa)}.cea-t td:first-child,.cea-t th:first-child,.cea-t td:nth-child(2),.cea-t th:nth-child(2){text-align:left}
 .cea-t tr.today td{background:rgba(250,204,21,.07)}
-.cea-note{font-size:.78rem;color:var(--muted,#8d8daa);line-height:1.55;padding:.8rem;background:rgba(255,255,255,.04);border-radius:12px;margin-bottom:.6rem}
+.cea-note{font-size:.78rem;color:var(--muted,#8d8daa);line-height:1.55;padding:.8rem;background:rgba(var(--fg-rgb),.04);border-radius:12px;margin-bottom:.6rem}
 .cea-note b{color:var(--text,#f0f0f8)}
 .cea-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.45rem}
-.cea-f{display:grid;grid-template-columns:1fr 90px auto;gap:.35rem;align-items:center;font-size:.74rem;background:rgba(255,255,255,.03);border-radius:10px;padding:.35rem .5rem}
-.cea-f input{width:100%;min-height:32px;border-radius:8px;border:1px solid var(--border,rgba(255,255,255,.12));background:rgba(0,0,0,.25);color:var(--text,#f0f0f8);padding:0 .45rem;font:inherit}
+.cea-f{display:grid;grid-template-columns:1fr 90px auto;gap:.35rem;align-items:center;font-size:.74rem;background:rgba(var(--fg-rgb),.03);border-radius:10px;padding:.35rem .5rem}
+.cea-f input{width:100%;min-height:32px;border-radius:8px;border:1px solid var(--border,rgba(var(--fg-rgb),.12));background:rgba(0,0,0,.25);color:var(--text,#f0f0f8);padding:0 .45rem;font:inherit}
 .cea-f.set input{border-color:#facc15}.cea-f small{display:block;color:var(--muted,#8d8daa);font-size:.62rem}
-.cea-tw{background:rgba(255,255,255,.035);border:1px solid var(--border,rgba(255,255,255,.07));border-radius:12px;padding:.5rem .7rem;margin-bottom:.4rem;font-size:.74rem}
-.cea-tw span{display:inline-block;background:rgba(255,255,255,.07);border-radius:6px;padding:.1rem .4rem;margin:.15rem .25rem 0 0}
+.cea-tw{background:rgba(var(--fg-rgb),.035);border:1px solid var(--border,rgba(var(--fg-rgb),.07));border-radius:12px;padding:.5rem .7rem;margin-bottom:.4rem;font-size:.74rem}
+.cea-tw span{display:inline-block;background:rgba(var(--fg-rgb),.07);border-radius:6px;padding:.1rem .4rem;margin:.15rem .25rem 0 0}
 .cea-msg{font-size:.78rem;margin:.4rem 0}.cea-msg.err{color:#ff8a8a}.cea-msg.ok{color:#4ade80}
 @media(max-width:560px){.cea-box{padding:.9rem .7rem 1.1rem}.cea-f{grid-template-columns:1fr 80px auto}}`;
   function h(tag, cls, text, kids) {
@@ -209,7 +209,7 @@
       const sel = h('select'); for (const c of ['kids', 'metro']) { const o = h('option', null, C_N[c]); o.value = c; sel.appendChild(o); }
       const amt = h('input'); amt.type = 'number'; amt.placeholder = '± денки'; amt.style.width = '110px';
       const rea = h('input'); rea.placeholder = 'причина'; rea.maxLength = 60;
-      for (const e of [sel, amt, rea]) Object.assign(e.style, { minHeight: '34px', borderRadius: '8px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(0,0,0,.25)', color: 'inherit', padding: '0 .45rem' });
+      for (const e of [sel, amt, rea]) Object.assign(e.style, { minHeight: '34px', borderRadius: '8px', border: '1px solid rgba(var(--fg-rgb),.12)', background: 'rgba(0,0,0,.25)', color: 'inherit', padding: '0 .45rem' });
       wrap.appendChild(h('div', 'cea-bar', null, [sel, amt, rea, btn('Поправить казну', '', async () => {
         const n = Math.round(+amt.value); if (!n) return;
         if (!confirm(`${n > 0 ? 'Выпустить' : 'Уничтожить'} ${fmt(Math.abs(n))} 💵 в казне «${C_N[sel.value]}»?`)) return;
@@ -233,7 +233,7 @@
     wrap.appendChild(cards);
     wrap.appendChild(h('div', 'cea-note', 'Денки не появляются из воздуха: всё, что в кошельках и казне, — это подарки новичкам, эмиссия и поправки админа минус уничтоженное. Дрейф не ноль — пиши разработчику (номер дня и этот экран).'));
     wrap.appendChild(h('div', 'cea-sec', 'Цепочка кошелька игрока'));
-    const inp = h('input'); inp.placeholder = 'id игрока (или первые 8 знаков)'; Object.assign(inp.style, { minHeight: '34px', borderRadius: '8px', border: '1px solid rgba(255,255,255,.12)', background: 'rgba(0,0,0,.25)', color: 'inherit', padding: '0 .45rem', minWidth: '260px' });
+    const inp = h('input'); inp.placeholder = 'id игрока (или первые 8 знаков)'; Object.assign(inp.style, { minHeight: '34px', borderRadius: '8px', border: '1px solid rgba(var(--fg-rgb),.12)', background: 'rgba(0,0,0,.25)', color: 'inherit', padding: '0 .45rem', minWidth: '260px' });
     const out = h('div', 'cea-msg');
     wrap.appendChild(h('div', 'cea-bar', null, [inp, btn('Проверить', '', async () => {
       const r = await rpc('city_admin', { p_act: 'audit', p_a: { uid: inp.value.trim() } });

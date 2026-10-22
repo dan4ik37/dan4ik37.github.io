@@ -65,19 +65,19 @@ export default function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:780px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
 .ph-cta{display:flex;align-items:center;flex-wrap:wrap;gap:.8rem 1rem;margin-top:1.2rem}
 .ph-open{font-size:1rem;padding:1rem 1.6rem}
 .ph-cta span{font-size:.8rem;color:var(--muted)}
 .box{margin-top:1.4rem;padding:1.2rem 1.4rem;border-radius:16px;background:var(--card);border:1px solid var(--line)}
 .ph-feat{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:.6rem}
-.ph-feat li{display:flex;flex-direction:column;gap:.25rem;padding:.75rem .9rem;border-radius:12px;background:rgba(255,255,255,.04)}
+.ph-feat li{display:flex;flex-direction:column;gap:.25rem;padding:.75rem .9rem;border-radius:12px;background:rgba(var(--fg-rgb),.04)}
 .ph-feat b{font-size:.95rem}
-.ph-feat span,.ph-steps span{font-size:.85rem;color:rgba(240,240,248,.78)}
+.ph-feat span,.ph-steps span{font-size:.85rem;color:rgba(var(--text-rgb),.78)}
 .ph-steps{padding-left:1.2rem;display:flex;flex-direction:column;gap:.6rem}
 .ph-steps li b{display:block}
 .faq details{border-top:1px solid var(--line);padding:.75rem 0}
 .faq details:first-of-type{border-top:0;padding-top:0}
 .faq summary{cursor:pointer;font-weight:700;font-size:.92rem}
-.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(240,240,248,.8)}
+.faq p{margin-top:.5rem;font-size:.9rem;color:rgba(var(--text-rgb),.8)}
 `;

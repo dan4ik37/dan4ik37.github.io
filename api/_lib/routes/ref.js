@@ -79,7 +79,7 @@ const CSS = `
 .rf-ic{width:96px;height:96px;border-radius:28px;display:grid;place-items:center;font-size:3.2rem;background:linear-gradient(135deg,rgba(255,209,102,.35),rgba(255,45,85,.3));box-shadow:0 14px 34px rgba(0,0,0,.35);margin-bottom:.4rem}
 .rf-lbl{font-size:.72rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .rf-card h1{margin:.1rem 0 .1rem;word-break:break-word;font-size:clamp(1.3rem,5vw,1.9rem);line-height:1.25}
-.rf-card h1 b{color:#ffd166}
+.rf-card h1 b{color:var(--gold-t)}
 .rf-where{color:var(--muted);font-size:.92rem;margin:0}
 .rf-go{margin-top:1rem;font-size:1.1rem;padding:.9rem 2.2rem}
 .rf-gift{margin:.9rem 0 0;font-size:.86rem;color:var(--text);opacity:.9;max-width:460px}

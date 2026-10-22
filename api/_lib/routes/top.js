@@ -55,9 +55,9 @@ export default async function handler(req, res) {
 const CSS = `
 .crumbs{font-size:.78rem;color:var(--muted);margin-bottom:1rem}
 .crumbs a{text-decoration:none}
-.lead{margin-top:.8rem;color:rgba(240,240,248,.85);max-width:780px}
+.lead{margin-top:.8rem;color:rgba(var(--text-rgb),.85);max-width:780px}
 .tp-tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin:1.2rem 0 .4rem}
-.tp-tabs a{display:inline-flex;align-items:center;min-height:40px;padding:.45rem .9rem;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.04);text-decoration:none;font-weight:700;font-size:.85rem}
+.tp-tabs a{display:inline-flex;align-items:center;min-height:40px;padding:.45rem .9rem;border-radius:10px;border:1px solid var(--line);background:rgba(var(--fg-rgb),.04);text-decoration:none;font-weight:700;font-size:.85rem}
 section{margin-top:1.6rem}
 .tp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.9rem}
 .tp-card{position:relative;display:flex;flex-direction:column;gap:.4rem;text-decoration:none;border-radius:14px;overflow:hidden;background:var(--card);border:1px solid var(--line);padding-bottom:.7rem;transition:transform .25s,border-color .25s}

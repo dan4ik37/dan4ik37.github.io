@@ -14,41 +14,43 @@ let dmUnreadCount = 0;
 // Безопасность детей (js/core/age.js → community.sql): ребёнку до 13 — не со взрослыми и не с теми, кто не указал возраст
 const kidSafeMsg = k => (window.D37Age?.kidMsg ? window.D37Age.kidMsg(k) : '🚫 Нельзя написать этому игроку');
 
-async function sendFriendRequest(targetId){
-  if (!currentUser) { openGlobalAuth(); return; }
-  if (targetId === currentUser.id) return;
+// → { ok, msg }. o.quiet — без alert (мини-карточка js/features/minicard.js пишет ответ сама); иначе — как раньше, окошком
+async function sendFriendRequest(targetId, o = {}){
+  const say = (ok, msg) => { if (!o.quiet && msg) alert(msg); return { ok, msg }; };
+  if (!currentUser) { openGlobalAuth(); return { ok: false, msg: '' }; }
+  if (targetId === currentUser.id) return { ok: false, msg: '' };
   try {
-    if (await window.D37Age?.friendBlock?.(targetId)) { alert(kidSafeMsg('agefriend')); return; }
+    if (await window.D37Age?.friendBlock?.(targetId)) return say(false, kidSafeMsg('agefriend'));
     const { error } = await sbClient.from('friendships').insert([{ requester_id: currentUser.id, addressee_id: targetId }]);
     if (error) {
       // Отказ базы (progression.sql): уровень, лимит друзей или человек не принимает заявки
       if (/row-level security/i.test(error.message || '') && typeof friendBlockReason === 'function') {
         const why = await friendBlockReason();
-        alert(why || '🚫 Этот человек не принимает заявки в друзья');
-        return;
+        return say(false, why || '🚫 Этот человек не принимает заявки в друзья');
       }
-      if (/[а-яё]/i.test(error.message || '')) { alert(error.message); return; }   // отказ сервера по-русски (возраст — community.sql)
+      if (/[а-яё]/i.test(error.message || '')) return say(false, error.message);   // отказ сервера по-русски (возраст — community.sql)
       throw error;
     }
-    alert('Заявка в друзья отправлена');
-    if (typeof openMiniProfile === 'function' && profileViewedId === targetId) renderProfilePage(targetId);
+    const r = say(true, 'Заявка в друзья отправлена');
+    if (typeof profileViewedId !== 'undefined' && profileViewedId === targetId && document.body.dataset.route === 'profile') renderProfilePage(targetId);
+    return r;
   } catch(e) {
-    if (String(e.message||'').includes('duplicate')) alert('Заявка уже отправлена или вы уже друзья');
-    else alert('Не удалось отправить заявку: ' + humanErr(e));
+    return say(false, String(e.message||'').includes('duplicate') ? 'Заявка уже отправлена или вы уже друзья' : 'Не удалось отправить заявку: ' + humanErr(e));
   }
 }
 
-async function acceptFriendRequest(requesterId){
+async function acceptFriendRequest(requesterId, o = {}){
+  const say = (ok, msg) => { if (!o.quiet && msg && !ok) alert(msg); return { ok, msg }; };
+  let r;
   try {
     const { error } = await sbClient.from('friendships').update({ status: 'accepted' }).eq('requester_id', requesterId).eq('addressee_id', currentUser.id);
-    if (error) {
-      alert(/row-level security/i.test(error.message || '')
+    r = error ? say(false, /row-level security/i.test(error.message || '')
         ? '👥 Не получилось: у тебя или у него уже максимум друзей (лимит растёт с уровнем и VIP) — или эту заявку принять нельзя'
-        : /[а-яё]/i.test(error.message || '') ? error.message : 'Не получилось: ' + humanErr(error));
-    }
+        : /[а-яё]/i.test(error.message || '') ? error.message : 'Не получилось: ' + humanErr(error)) : { ok: true, msg: '✅ Теперь друзья' };
     if (typeof myFriendStatusCache !== 'undefined') myFriendStatusCache = null;
     renderFriendsPanel();
-  } catch(e) { alert('Не получилось: ' + humanErr(e)); }
+  } catch(e) { r = say(false, 'Не получилось: ' + humanErr(e)); }
+  return r;
 }
 
 async function removeFriendship(otherId){
@@ -118,6 +120,15 @@ async function renderFriendsPanel(){
       return 0;
     };
     friends.sort((a, b) => rank(b.profile) - rank(a.profile) || (a.profile.nick||'').localeCompare(b.profile.nick||''));
+    // профиль 2.0: первые друзья кружками (нажал — мини-карточка); без UI_V2 блок скрыт стилями (css/ui2.css)
+    const prev = document.getElementById('pf2FriendsPrev');
+    if (prev) {
+      prev.innerHTML = friends.slice(0, 8).map(f => {
+        const p = f.profile, nick = p.nick || '?', url = p.avatar_url ? safeImgUrl(p.avatar_url) : '';
+        return `<button type="button" class="pf2-fr" data-mini-uid="${esc(f.id)}" data-mini-nick="${esc(nick)}" title="${esc(nick)}"><span class="pf2-fr-a"${url ? ` style="background-image:url('${url}')"` : ''}>${url ? '' : esc(nick.substring(0, 2).toUpperCase())}</span><small>${esc(nick)}</small></button>`;
+      }).join('') + (friends.length > 8 ? `<span class="pf2-fr-more">+${friends.length - 8}</span>` : '');
+      prev.hidden = !friends.length;
+    }
 
     listEl.innerHTML = friends.length ? friends.map(f => {
       const p = f.profile;
@@ -126,8 +137,8 @@ async function renderFriendsPanel(){
       const avatarStyle = p.avatar_url ? `background-image:url('${safeImgUrl(p.avatar_url)}')` : '';
       return `
       <div class="role-result-row card-fade-in" style="display:flex;align-items:center;gap:.6rem">
-        <div onclick="location.hash='#/profile/${f.id}'" style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0">${p.avatar_url ? '' : esc(nick.substring(0,2).toUpperCase())}</div>
-        <span class="role-result-nick" style="cursor:pointer;flex:1;min-width:0" onclick="location.hash='#/profile/${f.id}'">${nickHtml}</span>
+        <div data-mini-uid="${esc(f.id)}" data-mini-nick="${esc(nick)}" style="width:32px;height:32px;border-radius:50%;background:var(--tw) center/cover;${avatarStyle};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:800;color:#fff;cursor:pointer;flex-shrink:0">${p.avatar_url ? '' : esc(nick.substring(0,2).toUpperCase())}</div>
+        <span class="role-result-nick" style="cursor:pointer;flex:1;min-width:0" data-mini-uid="${esc(f.id)}" data-mini-nick="${esc(nick)}">${nickHtml}</span>
         <button class="role-result-save" onclick="openDmWith('${f.id}',${jsAttr(nick)})">✉</button>
         <button onclick="removeFriendship('${f.id}')" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:.4rem .6rem;font-size:.72rem;cursor:pointer">✕</button>
       </div>`;
@@ -183,7 +194,7 @@ function renderDmMessages(messages){
   listEl.innerHTML = messages.map(m => {
     const isOwn = m.sender_id === currentUser.id;
     return `<div style="display:flex;justify-content:${isOwn?'flex-end':'flex-start'};margin-bottom:.5rem">
-      <div style="max-width:75%;background:${isOwn?'linear-gradient(135deg,var(--accent),var(--accent2))':'rgba(255,255,255,.06)'};color:${isOwn?'#fff':'var(--text)'};padding:.5rem .8rem;border-radius:12px;font-size:.82rem;word-break:break-word">
+      <div style="max-width:75%;background:${isOwn?'linear-gradient(135deg,var(--accent),var(--accent2))':'rgba(var(--fg-rgb),.06)'};color:${isOwn?'#fff':'var(--text)'};padding:.5rem .8rem;border-radius:12px;font-size:.82rem;word-break:break-word">
         ${esc(m.text)}
         <div style="font-size:.6rem;opacity:.7;margin-top:.2rem">${new Date(m.created_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})}</div>
       </div>

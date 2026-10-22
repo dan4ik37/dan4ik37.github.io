@@ -128,13 +128,13 @@ export const CSS = `
 .crumbs a{text-decoration:none}
 .lg{max-width:820px}
 .lg h1{margin-top:0}
-.lg-body{margin-top:1rem;padding:1.3rem 1.5rem;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:.92rem;color:rgba(240,240,248,.86)}
+.lg-body{margin-top:1rem;padding:1.3rem 1.5rem;border-radius:16px;background:var(--card);border:1px solid var(--line);font-size:.92rem;color:rgba(var(--text-rgb),.86)}
 .lg-body h2{font-size:1.05rem;margin:1.4rem 0 .5rem;text-transform:none;letter-spacing:.02em}
 .lg-body h2:first-child{margin-top:0}
 .lg-body p{margin:.6rem 0}
 .lg-body ul,.lg-body ol{padding-left:1.3rem;display:flex;flex-direction:column;gap:.35rem}
-.lg-body a{color:#7cc4ff}
-.lg-draft{padding:.6rem .8rem;border-radius:10px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);color:#ffe08a;font-size:.84rem}
+.lg-body a{color:var(--link)}
+.lg-draft{padding:.6rem .8rem;border-radius:10px;background:rgba(255,209,102,.08);border:1px solid rgba(255,209,102,.3);color:var(--gold-hi);font-size:.84rem}
 .lg-ed{margin-top:1.4rem!important;font-size:.78rem;color:var(--muted)}
 .lg-tab{width:100%;border-collapse:collapse;margin:.6rem 0;font-size:.88rem}
 .lg-tab th,.lg-tab td{padding:.55rem .6rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}

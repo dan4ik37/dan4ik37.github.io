@@ -1947,6 +1947,16 @@
    ]
   },
   {
+   "f": "js/features/friends.js",
+   "fn": "renderFriendsPanel",
+   "k": "markup:style",
+   "c": "url-checked",
+   "n": "safeImgUrl() — только https://хост/путь или data:image/…;base64 (превью друзей профиля 2.0)",
+   "xs": [
+    "url"
+   ]
+  },
+  {
    "f": "js/features/fx.js",
    "fn": "render",
    "k": "markup:text",
@@ -2467,6 +2477,16 @@
    ]
   },
   {
+   "f": "js/features/minicard.js",
+   "fn": "paintChar",
+   "k": "sink:src [img]",
+   "c": "self-made",
+   "n": "картинка персонажа: D37Char.img → canvas.toDataURL; кэш IMG хранит только его результаты",
+   "xs": [
+    "src"
+   ]
+  },
+  {
    "f": "js/features/msgview.js",
    "fn": "ask",
    "k": "markup:attr",
@@ -2636,16 +2656,6 @@
    "n": "sitePath: только свои пути (не //), карточки — «#/…» или GAMES.href",
    "xs": [
     "e(hrefOf(path))"
-   ]
-  },
-  {
-   "f": "js/features/msgview.js",
-   "fn": "userCard",
-   "k": "markup:text",
-   "c": "const",
-   "n": "таблицы GAMES / VIP / набор реакций / подписи модерации",
-   "xs": [
-    "t"
    ]
   },
   {
@@ -2905,26 +2915,6 @@
    "xs": [
     "row.amount ?? '?'",
     "row.reward === 'status' ? `💛 статус${row.excluded ? ' (не в счёт)' :"
-   ]
-  },
-  {
-   "f": "js/features/profile.js",
-   "fn": "openMiniProfile",
-   "k": "markup:on",
-   "c": "id-db",
-   "n": "сначала профиль читается по id (uuid-колонка): не uuid — ошибка 22P02 и возврат; viewer_id — uuid",
-   "xs": [
-    "userId"
-   ]
-  },
-  {
-   "f": "js/features/profile.js",
-   "fn": "openMiniProfile",
-   "k": "sink:innerHTML",
-   "c": "html-helper",
-   "n": "кнопки из констант; ник — через jsAttr",
-   "xs": [
-    "buttons[status] || ''"
    ]
   },
   {

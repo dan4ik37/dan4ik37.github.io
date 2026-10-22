@@ -33,6 +33,7 @@ class El {
   set className(v){ this._c.clear(); String(v).split(/\s+/).filter(Boolean).forEach(x => this._c.add(x)); }
   setAttribute(k, v){ this.attrs[k] = String(v); if (k === 'id') this.id = String(v); if (k.startsWith('data-')) this.dataset[camel(k.slice(5))] = String(v); }
   getAttribute(k){ return k in this.attrs ? this.attrs[k] : null; }
+  removeAttribute(k){ delete this.attrs[k]; if (k.startsWith('data-')) delete this.dataset[camel(k.slice(5))]; }
   hasAttribute(k){ return k in this.attrs || (k.startsWith('data-') && camel(k.slice(5)) in this.dataset); }
   appendChild(ch){ ch.remove(); ch.parentElement = this; this.children.push(ch); return ch; }
   remove(){ const p = this.parentElement; if (p) { p.children = p.children.filter(x => x !== this); this.parentElement = null; } }
@@ -68,7 +69,8 @@ globalThis.addEventListener = (...a) => WET.addEventListener(...a); globalThis.r
 globalThis.window = globalThis;
 globalThis.innerWidth = 1280; globalThis.innerHeight = 800;
 let coarse = false;
-globalThis.matchMedia = q => ({ matches: /coarse/.test(q) ? coarse : false });
+const SYS = { matches: false, fns: [], addEventListener(t, f){ this.fns.push(f); } };   // T-086: светлая ли тема в системе («Авто»)
+globalThis.matchMedia = q => /prefers-color-scheme/.test(q) ? SYS : ({ matches: /coarse/.test(q) ? coarse : false });
 globalThis.requestAnimationFrame = f => setTimeout(() => f(Date.now()), 0);
 const H = { stack: [{ state: null }], i: 0, pushes: 0, backs: 0 };
 globalThis.history = {
@@ -211,7 +213,7 @@ const ST = globalThis.D37Settings;
   // «Главное»: самое нужное по месту (качество и шейдеры добавляет gfx-settings.js — здесь его нет)
   ok(T.mainFor('engine').join() === 'sens,vol,view', '«Главное» в 3D-мире: чувствительность, громкость, вид', T.mainFor('engine'));
   ok(T.mainFor('game').join() === 'vol,ui', '«Главное» в обычной игре: громкость, размер кнопок (3D-настроек нет)', T.mainFor('game'));
-  ok(T.mainFor('site').join() === 'sens,vol,view,perf', '«Главное» из меню сайта: + режим сайта', T.mainFor('site'));
+  ok(T.mainFor('site').join() === 'sens,vol,view,theme,perf', '«Главное» из меню сайта: + тема сайта (T-086) и режим сайта', T.mainFor('site'));
   ST.addMain({ id: 'x1', order: 5, ctx: ['engine'], html: () => '<div class="gs-row">x</div>' });
   ok(T.mainFor('engine')[0] === 'x1' && !T.mainFor('game').includes('x1'), 'addMain — своя строка по порядку и по месту');
   ST.addMain({ id: 'x2', order: 99, when: c => c === 'site', html: () => '' });
@@ -240,6 +242,39 @@ const ST = globalThis.D37Settings;
   ST.resetKeys(['fov', 'нет такого']); ok(ST.get('fov') === 50, 'resetKeys: неизвестное — пропускает');
   const ne = evs.length; ok(ST.resetKeys([]).length === 0 && evs.length === ne, 'пустой список — без события');
   off();
+}
+
+// ═══ T-086: тема сайта — тёмная / светлая / «Авто» (как в системе); d37_theme читает скрипт в <head> до первой отрисовки ═══
+{
+  const h = doc.documentElement, tev = [], sys = () => SYS.fns[SYS.fns.length - 1]?.();
+  const tl = e => tev.push(e.detail); globalThis.addEventListener('d37:theme', tl);
+  ok(ST.get('theme') === 'dark' && h.getAttribute('data-theme') === null && !('d37_theme' in store), 'тема по умолчанию — тёмная (нет data-theme-def → dark), атрибута нет');
+  ST.set('theme', 'light');
+  ok(h.getAttribute('data-theme') === 'light' && store.d37_theme === 'light', 'светлая → data-theme="light" и d37_theme');
+  ok(tev[tev.length - 1] === 'light', 'событие d37:theme (light)', tev);
+  ST.set('theme', 'dark');
+  ok(h.getAttribute('data-theme') === null && !('d37_theme' in store) && tev[tev.length - 1] === 'dark', 'тёмная (= по умолчанию) — атрибут и d37_theme убраны');
+  ST.set('theme', 'auto');
+  ok(store.d37_theme === 'auto' && h.getAttribute('data-theme') === null, '«Авто» при тёмной системе — тёмная');
+  ok(SYS.fns.length > 0, '«Авто» следит за системой (matchMedia change)');
+  SYS.matches = true; sys();
+  ok(h.getAttribute('data-theme') === 'light', '«Авто»: система стала светлой — сайт светлый сам');
+  SYS.matches = false; sys();
+  ok(h.getAttribute('data-theme') === null, '…и обратно тёмный');
+  ST.set('theme', 'dark'); SYS.matches = true; sys();
+  ok(h.getAttribute('data-theme') === null, 'выбрана «Тёмная» — системная светлая не мешает');
+  SYS.matches = false;
+  ST.set('theme', 'синяя'); ok(ST.get('theme') === 'dark', 'чужое значение — по умолчанию');
+  store.d37_theme = 'light'; ok(ST.get('theme') === 'light', 'd37_theme поменяли мимо окна (другая вкладка) — get видит');
+  store.d37_theme = 'мусор'; ok(['dark', 'light', 'auto'].includes(ST.get('theme')), 'мусор в d37_theme — не ломает');
+  ST.set('theme', 'light'); ST.reset();
+  ok(ST.get('theme') === 'light' && h.getAttribute('data-theme') === 'light' && store.d37_theme === 'light', '«↺ Сбросить всё» тему сайта не трогает (она не про игры)');
+  ok(!ST.resetKeys(ST._test.tabKeys('site')).includes('theme'), '«↺ Сбросить» вкладки «Сайт» — тема остаётся');
+  // THEME_LIGHT = false (config.js) — откат одной строкой: только тёмная, выбор стёрт
+  globalThis.THEME_LIGHT = false; ST.set('theme', 'light');
+  ok(h.getAttribute('data-theme') === null && !('d37_theme' in store), 'THEME_LIGHT = false — светлой нет, d37_theme стёрт');
+  delete globalThis.THEME_LIGHT; ST.set('theme', 'dark');
+  globalThis.removeEventListener('d37:theme', tl);
 }
 
 // ═══ Клавиши: controls.js + окно (конфликты, живые управления перечитывают) ═══

@@ -1,0 +1,223 @@
+/* ═══════════════════════════════════════════════════════════════════
+   UI 2 (T-086, 22.10.2026): светлая тема (то, что токенами не выразить без перемен в тёмной), общая мини-карточка игрока
+   (js/features/minicard.js — D37Mini) и профиль 2.0 (html.ui2, js/core/config.js UI_V2). Только токены из <style> index.html.
+   Порядок: подключается ПОСЛЕДНИМ из стилей — при равной специфичности главнее premium.css / ds.css.
+   Светлые правила для того, что бывает и в «тёмных островах» (игры, телефон, студии, Shorts), — с :not(:is(<острова>) *).
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ───────────── 1. СВЕТЛАЯ ТЕМА: шапка, герой, главная ───────────── */
+:root[data-theme="light"] .sec-title{text-shadow:none}
+:root[data-theme="light"] .nav-links a.nav-vip:hover{color:#6b4500}
+:root[data-theme="light"] :is(.nav-links a.nav-shop,.nav-gems){color:#8a5a00}
+:root[data-theme="light"] .hero-btn.is-tw{color:#4c1d95;background:linear-gradient(180deg,rgba(145,71,255,.16),rgba(145,71,255,.06))}
+:root[data-theme="light"] .hero-btn.is-tw .hb-ic{background:rgba(145,71,255,.22)}
+:root[data-theme="light"] .wordmark{--wm-hi:rgba(255,255,255,.55);--wm-mid:rgba(255,255,255,.12)}
+:root[data-theme="light"] .hf-card{--hf-bg:linear-gradient(180deg,#fff,#f6f7fb);box-shadow:var(--sh-2)}
+:root[data-theme="light"] .tw-block{--tw-status:#4c1d95;--tw-ghost:#6d28d9}
+:root[data-theme="light"] :is(.stat-lbl,.about-text,.hub-handle,.dc-desc){color:var(--muted)}
+:root[data-theme="light"] .day-live{color:#6d28d9}
+:root[data-theme="light"] .hub-grid>.hub-card:last-child{--card:color-mix(in srgb,var(--accent) 6%,#fff)}
+:root[data-theme="light"] .vthumb-ph{background:linear-gradient(135deg,#e6e8f0,#d9dce8)}
+:root[data-theme="light"] .vthumb{background:var(--bg2)}
+:root[data-theme="light"] .today-online b{color:var(--ok-t)}
+:root[data-theme="light"] :is(.xp-today,.xp-chip b,.xp-top-xp){color:var(--ok-t)}
+:root[data-theme="light"] .xp-lvl b.lv-t10{color:#6d28d9}
+:root[data-theme="light"] .xp-lvl b.lv-t20{color:var(--gold-t)}
+:root[data-theme="light"] .dc-box summary{color:#8a6d00}
+:root[data-theme="light"] .dc-warn{color:#92400e!important}
+:root[data-theme="light"] .lb-dn{color:#8a6d00}
+:root[data-theme="light"] .id-form{--in-bg:#fff}
+:root[data-theme="light"] .shorts-page{background:var(--bg)}
+/* значок «Lv N» и титул — бывают и в чате телефона (тёмный остров): там как в тёмной */
+:where(:root[data-theme="light"]) .lv-badge:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#4b4d60;background:rgba(23,25,50,.06);border-color:rgba(23,25,50,.14)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t5:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#0369a1;background:rgba(3,105,161,.08);border-color:rgba(3,105,161,.35)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t10:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#6d28d9;background:rgba(109,40,217,.08);border-color:rgba(109,40,217,.35)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t20:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:var(--gold-t);background:rgba(180,120,0,.1);border-color:rgba(180,120,0,.4)}
+:where(:root[data-theme="light"]) .lv-badge.lv-t30:not(:is(#gamesStage,.s3,.wld-edit,.ph,.pe,.shorts-page) *){color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+
+/* витрина игр (вне игры — сама игра остаётся тёмной) */
+:root[data-theme="light"] #gamesHub :is(.gm-rec,.gm-top-score){color:var(--gold-t)}
+:root[data-theme="light"] #gamesHub .gm-tab.active{color:var(--accent-t)}
+/* задание дня, сезон и задания недели — в «Играх» и на своём профиле */
+:root[data-theme="light"] .dq-body b{color:#8a5a00}
+:root[data-theme="light"] .dq-btn.ghost{color:#8a5a00;border-color:rgba(180,120,0,.5)}
+:root[data-theme="light"] .dq-done{color:var(--ok-t)}
+:root[data-theme="light"] .sq{background:linear-gradient(135deg,rgba(var(--fg-rgb),.03),rgba(155,109,255,.06))}
+:root[data-theme="light"] :is(.sq-t b,.sq-sub a,.sq-how a,.sq-more a){color:color-mix(in srgb,var(--sc) 55%,#000)}
+:root[data-theme="light"] :is(.sq-bar,.sq-pb){background:rgba(var(--fg-rgb),.08)}
+:root[data-theme="light"] .sq-c{background:rgba(var(--fg-rgb),.04);border-color:rgba(var(--fg-rgb),.1);opacity:.85}
+:root[data-theme="light"] .sq-c.big{border-color:rgba(var(--fg-rgb),.22)}
+:root[data-theme="light"] .sq-c small{color:#8a5a00}
+:root[data-theme="light"] .sq-c.got::before{color:var(--ok-t)}
+:root[data-theme="light"] .sq-pick{border-color:rgba(var(--fg-rgb),.18);background:rgba(var(--fg-rgb),.04)}
+:root[data-theme="light"] .sq-pick.on{background:rgba(var(--fg-rgb),.08)}
+:root[data-theme="light"] .sq-q{background:rgba(var(--fg-rgb),.035)}
+:root[data-theme="light"] .sq-path{scrollbar-color:rgba(var(--fg-rgb),.22) transparent}
+/* подвал: служебные ссылки и подпись — читаемо на светлом */
+:root[data-theme="light"] .footer-site{opacity:.92}
+:root[data-theme="light"] .footer-copy{color:rgba(var(--fg-rgb),.55)}
+:root[data-theme="light"] :is(.pf-card,#profileStaffVipPanel,#profileStaffPanel,#donateLoginPanel,#profileVipPromo,#profileVipPerksPanel,#profileAdminPanel,.profile-stat-card){box-shadow:var(--sh-1)}
+
+/* магазин 💎 */
+:root[data-theme="light"] :is(.shp-note,.shp-wait,.pg-mode button.on){color:#8a5a00}
+:root[data-theme="light"] .shp-wallet .shp-warn{color:#92400e}
+:root[data-theme="light"] :is(.shp-bal,.shp-pack-gems,.shp-don-table b,.shp-price,.pg-row b,.gm-gems){color:#0369a1}
+:root[data-theme="light"] .shp-row .plus{color:var(--ok-t)}
+:root[data-theme="light"] :is(.shp-row .minus,.shp-modal-err){color:#b91c1c}
+
+/* окно «⚙️ Настройки»: своя палитра окна — переменные (тёмные значения — в premium.css как запасные) */
+:root[data-theme="light"] .gs-set{--gs-scrim:rgba(14,15,30,.4);--gs-tx:#14141e;--gs-bg:#ffffff;--gs-mut:#5b5e73;--gs-sub:#3b3d50;--gs-acc:#6d28d9;--gs-acc2:#5b21b6;--gs-main:#92400e;--gs-inv:none;--gs-ok:#15803d;--gs-bad:#b91c1c}
+:root[data-theme="light"] .gs-set .gs-key.cap{color:#92400e}
+:root[data-theme="light"] .gs-set .gs-key.bad{color:#b91c1c}
+:root[data-theme="light"] .gs-set .gs-sw i::after{box-shadow:0 1px 4px rgba(23,25,50,.35)}
+
+/* ───────────── 2. МИНИ-КАРТОЧКА ИГРОКА (js/features/minicard.js — D37Mini; одна на сайт) ─────────────
+   Компьютер — всплывает рядом с ником (.pop), телефон — лист снизу (.sheet) с затемнением. Выше телефона 📱 (100300), ниже окна ⚙️ (100500) */
+.d37m{position:fixed;inset:0;z-index:100400;pointer-events:none}
+.d37m[hidden]{display:none}
+.d37m-back{position:absolute;inset:0;display:none}
+.d37m.sheet{pointer-events:auto}
+.d37m.sheet .d37m-back{display:block;background:var(--scrim)}
+.d37m-card{position:absolute;pointer-events:auto;width:320px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;
+  background:var(--panel);color:var(--text);border:1px solid var(--line-hi);border-radius:18px;box-shadow:var(--sh-2);outline:none;font-family:'Montserrat',sans-serif;text-align:left}
+.d37m.pop.in .d37m-card{animation:d37mIn .16s var(--ease-out,ease) both}
+@keyframes d37mIn{from{opacity:0;transform:translateY(-6px) scale(.97)}}
+.d37m.sheet .d37m-card{left:0;right:0;bottom:0;top:auto;width:auto;max-width:none;max-height:86vh;max-height:86dvh;border-radius:20px 20px 0 0;border-bottom:0;padding-bottom:env(safe-area-inset-bottom);box-shadow:none}
+.d37m.sheet.in .d37m-card{animation:d37mUp .22s var(--ease-out,ease) both}
+@keyframes d37mUp{from{transform:translateY(35%);opacity:.6}}
+.d37m.sheet .d37m-card::before{content:'';position:absolute;left:50%;top:7px;width:42px;height:4px;margin-left:-21px;border-radius:2px;background:rgba(255,255,255,.55);z-index:3}
+.d37m-ban{height:78px;background:var(--bg2) center/cover no-repeat}
+.d37m-ban.empty{background-image:linear-gradient(135deg,var(--ac-30),var(--tw-30))}
+.d37m-x{position:absolute;top:8px;right:8px;z-index:3;width:34px;height:34px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;font-size:.85rem;cursor:pointer}
+.d37m-x:hover{background:rgba(0,0,0,.65)}
+.d37m-top{position:relative;z-index:2;display:flex;align-items:flex-end;gap:10px;margin-top:-38px;padding:0 14px}
+.d37m-avw{position:relative;flex:none}
+.d37m-ava{display:grid;place-items:center;width:74px;height:74px;border-radius:50%;background:var(--tw) center/cover no-repeat;border:4px solid var(--panel);color:#fff;font-size:1.3rem;font-weight:800}
+.d37m-on{position:absolute;right:3px;bottom:5px;width:15px;height:15px;border-radius:50%;background:#22c55e;border:3px solid var(--panel)}
+.d37m-on[hidden]{display:none}
+.d37m-char{margin-left:auto;width:66px;height:80px;display:flex;align-items:flex-end;justify-content:center;filter:drop-shadow(0 3px 6px rgba(0,0,0,.35))}
+.d37m-char[hidden]{display:none}
+.d37m-char img,.d37m-char canvas{max-width:100%;max-height:100%;display:block}
+.d37m-body{padding:9px 14px 14px}
+.d37m-name{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.d37m-nick{font-size:1.1rem;font-weight:800;color:var(--text-hi);word-break:break-word}
+.d37m-badges{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.d37m-badges .role-badge{margin-left:0}
+.d37m-vip{display:inline-block;padding:.1rem .42rem;border-radius:6px;font-size:.62rem;font-weight:800;color:rgb(var(--vc));background:rgba(var(--vc),.15);border:1px solid rgba(var(--vc),.35);cursor:default}
+.d37m-sub{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:6px;font-size:.72rem;color:var(--muted)}
+.d37m-sub .lv-badge,.d37m-sub .nick-title{margin-left:0}
+.d37m-act{margin-top:9px;padding:6px 9px;border-radius:10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.22);color:var(--ok-t);font-size:.75rem;font-weight:700}
+.d37m-status{margin-top:8px;font-size:.78rem;font-style:italic;color:var(--muted);word-break:break-word}
+.d37m-bio{margin-top:7px;font-size:.8rem;line-height:1.5;color:rgba(var(--text-rgb),.86);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.d37m-games{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px}
+.d37m-game{padding:.18rem .5rem;border-radius:7px;font-size:.68rem;font-weight:700;background:var(--tw-18);color:var(--tw-t)}
+.d37m-game.shared{background:rgba(34,197,94,.15);color:var(--ok-t)}
+.d37m-lock{margin-top:9px;padding:8px 10px;border-radius:10px;background:rgba(var(--fg-rgb),.05);font-size:.76rem;color:var(--muted)}
+.d37m-body [hidden]{display:none}
+.d37m-acts{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:12px}
+.d37m-btn{display:flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:8px 10px;border-radius:11px;border:1px solid var(--line);background:rgba(var(--fg-rgb),.06);color:var(--text);font:700 .78rem 'Montserrat',sans-serif;cursor:pointer;text-decoration:none;text-align:center;line-height:1.25}
+.d37m-btn:hover:not(:disabled){background:rgba(var(--fg-rgb),.11)}
+.d37m-btn.pri{grid-column:1/-1;background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:var(--on-accent)}
+.d37m-btn.pri:hover{filter:brightness(1.07)}
+.d37m-btn.wide{grid-column:1/-1}
+.d37m-btn.ok{background:rgba(34,197,94,.13);border-color:rgba(34,197,94,.35);color:var(--ok-t)}
+.d37m-btn.warn{color:var(--bad-t)}
+.d37m-btn.ghost{opacity:.45;cursor:default}
+.d37m-btn:disabled{opacity:.62;cursor:default}
+.d37m-btn:focus-visible,.d37m-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.d37m-notes{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.d37m-notes:empty{display:none}
+.d37m-note{font-size:.72rem;line-height:1.45;color:var(--muted)}
+.d37m-note.d37m-res{color:var(--ok-t);font-weight:700}
+.d37m-note.d37m-res.bad{color:var(--bad-t)}
+.d37m-mods{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.d37m-msep{grid-column:1/-1;font-size:.62rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.d37m-ask{margin-top:10px;padding:10px;border-radius:12px;background:rgba(var(--fg-rgb),.05)}
+.d37m-ask p{font-size:.78rem;line-height:1.45;margin:0 0 8px}
+.d37m-ask div{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+@media (pointer:coarse){.d37m-btn{min-height:44px}.d37m-x{width:40px;height:40px}}
+:root[data-theme="light"] .d37m-vip{color:color-mix(in srgb,rgb(var(--vc)) 55%,#000)}
+:root[data-theme="light"] .d37m.sheet .d37m-card::before{background:rgba(255,255,255,.8);box-shadow:0 0 0 1px rgba(23,25,50,.12)}
+
+/* ───────────── 3. ПРОФИЛЬ 2.0 (html.ui2 — UI_V2 в js/core/config.js; раскладка — profile.js pf2Layout) ───────────── */
+html:not(.ui2) :is(.pf2-quick,.pf2-lv,.pf2-show,.pf2-fprev){display:none!important}
+.pf2-lv[hidden],.pf2-show[hidden],.pf2-fprev[hidden]{display:none!important}
+/* шапка — одна карточка: фон, аватар, персонаж, ник и значки, уровень, быстрые числа, кнопки дружбы */
+html.ui2 .pf-head{position:relative;padding-bottom:1.15rem;border-radius:22px;overflow:hidden;background:var(--card);border:1px solid var(--line-hi);box-shadow:var(--sh-1)}
+html.ui2 #profileBanner{height:clamp(130px,24vw,250px)!important;border:0;border-radius:0;box-shadow:none}
+html.ui2 .pf-hrow{margin:-54px 0 0;padding:0 1.25rem;gap:1rem}
+html.ui2 .pf-ava{width:112px;height:112px;border:5px solid var(--card);font-size:2rem}
+html.ui2 .pf-ava-edit,html.ui2 .pf-ava-del{border-color:var(--card)}
+html.ui2 .pf-info{padding:.55rem 0 0}
+html.ui2 .pf-nick{font-size:clamp(1.3rem,2.6vw,1.75rem);color:var(--text-hi);word-break:break-word}
+html.ui2 .pf-char{width:64px;right:-58px;bottom:-4px}
+@media (min-width:641px){html.ui2 .pf-hrow:has(>* > .pf-char:not([hidden])){gap:4.4rem}}   /* персонаж справа от аватарки не наезжает на ник и уровень */
+body.high .pf-char img{animation:pf2Breath 3.2s ease-in-out infinite;transform-origin:50% 100%}
+@keyframes pf2Breath{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.025)}}
+.pf2-lv{display:flex;align-items:center;gap:.6rem;margin-top:.6rem;max-width:560px}
+.pf2-lv b{flex:none;padding:.14rem .5rem;border-radius:7px;font-size:.72rem;font-weight:800;color:var(--accent-t);background:var(--ac-10);border:1px solid var(--ac-30)}
+.pf2-lv b.lv-t10{color:var(--tw-t);background:var(--tw-18);border-color:var(--tw-30)}
+.pf2-lv b.lv-t30{color:var(--on-accent);background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
+.pf2-bar{flex:1;min-width:60px;height:8px;border-radius:99px;background:rgba(var(--fg-rgb),.08);overflow:hidden}
+.pf2-bar i{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .8s var(--ease-out,ease)}
+.pf2-lv small{flex:none;font-size:.7rem;color:var(--muted);white-space:nowrap}
+.pf2-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem;padding:1.05rem 1.25rem 0}
+.pf2-q{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.15rem;min-height:68px;padding:.6rem .35rem;border-radius:14px;background:rgba(var(--fg-rgb),.04);border:1px solid var(--line);text-align:center}
+.pf2-q b{font-family:var(--font-display);font-size:1.35rem;font-weight:600;line-height:1.1;color:var(--text-hi)}
+.pf2-q span{font-size:.64rem;font-weight:700;color:var(--muted);line-height:1.25}
+.pf-head.pf2-hid :is(.pf2-quick,.pf2-lv){display:none!important}
+html.ui2 #profileAddFriendWrap{display:flex;flex-wrap:wrap;gap:.5rem;margin:0!important;padding:1rem 1.25rem 0}
+html.ui2 #profileAddFriendWrap[style*="none"]{display:none}
+.pf-fnote{align-self:center;font-size:.78rem;line-height:1.45;color:var(--muted)}
+.pf-more{min-width:46px;font-size:1.1rem;letter-spacing:.06em}
+/* колонки: главное и свои панели (компьютер — рядом, телефон — подряд) */
+html.ui2 .pf2-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:1rem;margin-top:1rem}
+@media (min-width:1000px){html.ui2 .pf2-cols{grid-template-columns:minmax(0,1fr) 340px;align-items:start}}
+html.ui2 .pf2-main,html.ui2 .pf2-side{display:flex;flex-direction:column;gap:1rem;min-width:0}
+html.ui2 :is(.pf2-main,.pf2-side)>*{margin-top:0!important}
+html.ui2 #profileUploadStatus:empty{min-height:0!important;margin:0!important}
+/* «Статистика» — компактной карточкой справа (серия — уже в быстрых числах; число друзей чужого профиля база не отдаёт — не показываем) */
+html.ui2 .pf-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem;margin:0;padding:.9rem;border-radius:18px;background:var(--card);border:1px solid var(--line-hi)}
+html.ui2 .pf-stats .profile-stat-card{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:.5rem;align-items:center;text-align:left;padding:.5rem .55rem;border-radius:12px;box-shadow:none;animation:none;opacity:1}
+html.ui2 .pf-stats .psc-i{grid-row:1/3;font-size:1.05rem}
+html.ui2 .pf-stats .psc-v{margin:0;font-size:.86rem}
+html.ui2 .pf-stats .psc-l{margin:0;font-size:.58rem}
+html.ui2 .pf-stats .profile-stat-card:has(#profileStatStreak){display:none}
+html.ui2 #profileContent.pf2-other .pf-stats .profile-stat-card:has(#profileStatFriends){display:none}
+/* витрина ачивок */
+.pf2-kick{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.7rem}
+.pf2-kick .pf-link{font-size:.68rem;letter-spacing:0;text-transform:none}
+.pf2-show-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}
+@media (min-width:700px){.pf2-show-grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.pf2-sh{display:flex;flex-direction:column;align-items:center;gap:.22rem;padding:.7rem .3rem .6rem;border-radius:14px;text-align:center;background:linear-gradient(160deg,rgba(255,217,61,.12),rgba(var(--fg-rgb),.02));border:1px solid rgba(255,217,61,.3)}
+.pf2-sh span{font-size:1.65rem;line-height:1}
+.pf2-sh b{font-size:.62rem;line-height:1.2;color:var(--text)}
+.pf2-sh small{font-size:.56rem;font-weight:800;color:var(--gold-t)}
+/* друзья кружками */
+.pf2-fprev{display:flex;flex-wrap:wrap;gap:.45rem .3rem;margin-bottom:1rem;padding-bottom:.9rem;border-bottom:1px solid var(--line)}
+.pf2-fr{display:flex;flex-direction:column;align-items:center;gap:.25rem;width:62px;padding:0;border:0;background:none;color:var(--text);cursor:pointer;font-family:inherit}
+.pf2-fr-a{display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--tw) center/cover no-repeat;color:#fff;font-size:.72rem;font-weight:800;box-shadow:0 0 0 2px var(--line-hi);transition:box-shadow .2s}
+.pf2-fr:hover .pf2-fr-a,.pf2-fr:focus-visible .pf2-fr-a{box-shadow:0 0 0 2px var(--accent)}
+.pf2-fr small{max-width:62px;font-size:.6rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pf2-fr-more{align-self:center;padding:0 .4rem;font-size:.8rem;font-weight:800;color:var(--muted)}
+/* телефон: шапка столбиком, заголовок раздела не занимает пол-экрана (остаётся для экранных дикторов) */
+@media (max-width:640px){
+  html.ui2 #profile-page>.sec-title{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  html.ui2 #profile-page{padding-top:4.6rem}
+  html.ui2 .pf-head{border-radius:18px;padding-bottom:1rem}
+  html.ui2 .pf-hrow{flex-direction:column;align-items:flex-start;gap:.35rem;margin-top:-46px;padding:0 1rem}
+  html.ui2 .pf-ava{width:92px;height:92px;border-width:4px;font-size:1.6rem}
+  html.ui2 .pf-info{padding-top:0;width:100%}
+  html.ui2 .pf2-lv small{display:none}
+  html.ui2 .pf2-quick{gap:.4rem;padding:.9rem 1rem 0}
+  html.ui2 .pf2-q{min-height:60px;padding:.5rem .2rem}
+  html.ui2 .pf2-q b{font-size:1.15rem}
+  html.ui2 .pf2-q span{font-size:.58rem}
+  html.ui2 #profileAddFriendWrap{padding:.9rem 1rem 0}
+  html.ui2 #profileAddFriendWrap .pf-btn:not(.pf-more){flex:1 1 auto}
+}
+@media (max-width:380px){html.ui2 .pf2-quick{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ═══ §4 Телефон 360–412 px (UI_V2): шапка не тесная — язык компактнее (≤ 380 px — без глобуса, «RU ▾»), логотип чуть меньше ═══ */
+@media (max-width:420px){html.ui2 .lang-btn{padding:.4rem .6rem;gap:.25rem;letter-spacing:.4px}}
+@media (max-width:380px){html.ui2 .lang-btn svg{display:none}html.ui2 .nav-logo{font-size:1.55rem;letter-spacing:.1em}}
