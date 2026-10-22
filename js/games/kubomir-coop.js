@@ -436,6 +436,7 @@
           return;
         }
         case 'inv': {
+          if (Number.isInteger(m.rd) && m.rd > 0) G.rd = clamp(m.rd, 2, 12);   // дальность гостя (мог поменять в настройках)
           const d = m.d; if (!d || typeof d !== 'object' || !G.pkey) return;
           const stack = s => s && V.item(s.id) && Number.isInteger(s.n) && s.n > 0 ? { id: s.id, n: Math.min(s.n, V.item(s.id).stack), d: clamp(s.d | 0, 0, 100000) } : null;
           const rec = { x: fin(d.x) ? d.x : null, y: fin(d.y) ? d.y : null, z: fin(d.z) ? d.z : null, yaw: fin(d.yaw) ? d.yaw : 0, pitch: fin(d.pitch) ? d.pitch : 0, hp: clamp(+d.hp || 20, 0, 20), food: clamp(+d.food || 20, 0, 20), sat: clamp(+d.sat || 5, 0, 20),
@@ -489,7 +490,7 @@
       if (!H.editN) return;
       for (const G of H.guests.values()) {
         if (!G.ready) continue;
-        const gcx = Math.floor(G.x) >> 4, gcz = Math.floor(G.z) >> 4, r = G.rd + 2;
+        const gcx = Math.floor(G.x) >> 4, gcz = Math.floor(G.z) >> 4, r = G.rd + 4;   // поток гостя держит чанки до rd + 3 (+1 — место гостя с запаздыванием); было rd + 2 — край оставался без правок, и мир расходился
         W8.reset(); W8.u8(T_EDITS); W8.u16(0); let n = 0;
         for (const [k, q] of H.editQ) {
           const i = k.indexOf('|'), cx = +k.slice(0, i), cz = +k.slice(i + 1);
@@ -835,7 +836,13 @@
           if (!st.ui?.isOpen()) { toHost({ t: 'close', x: G.lock[0], y: G.lock[1], z: G.lock[2], tile: tileNow() }); if (G.lockKind === 'furnace') st.ents?.furnaces?.delete(G.lock.join(',')); G.lock = null; G.tset = 0; }
           else if ((G.tset && t - G.tset > 150) || (G.lockKind === 'furnace' && t - (G.tsT || 0) > 1000)) { G.tset = 0; G.tsT = t; toHost({ t: 'tset', x: G.lock[0], y: G.lock[1], z: G.lock[2], tile: tileNow() }); }
         }
-        if (t - G.invT > INV_MS) { G.invT = t; const d = hooks.playerData?.(); if (d) toHost({ t: 'inv', d }); }
+        if (t - G.invT > INV_MS) { G.invT = t; const d = hooks.playerData?.(); if (d) toHost({ t: 'inv', d, rd: hooks.rd?.() | 0 }); }
+        // сверка: чанки с правками вокруг себя (3×3) — раз в 30 с заново у хозяина (что-то могло не дойти — запасной канал, обрыв)
+        if (t - (G.fixT || 0) > 30000 && st.ready) {
+          G.fixT = t;
+          const pcx = Math.floor(st.P.x) >> 4, pcz = Math.floor(st.P.z) >> 4;
+          for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) { const k = (pcx + dx) + '|' + (pcz + dz), c = st.W.chunk(pcx + dx, pcz + dz); if (G.edited.has(k) && c?.ready && !G.wait.has(k) && !G.ckQ.includes(k)) G.ckQ.push(k); }
+        }
         // есть ли место в вещах (хозяину — чтобы вещи тянулись ко мне)
         if (!(st.steps % 30)) { const r = roomHint(st); if (r.k !== G.roomK) { G.roomK = r.k; toHost({ t: 'room', e: r.e, p: r.p }); } }
         if (t - G.lastHost > HOST_SILENT_MS && !G.paused) end('silent', '📡 Связь с хозяином мира потеряна');
