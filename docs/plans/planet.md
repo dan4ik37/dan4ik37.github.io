@@ -303,7 +303,7 @@ PlanetProfile; air/vacuum, `g`).
 `js/engine/planet-view.js` (≈ 650 lines), `js/games/planet-demo.js` (hidden page `/play/planet`: orbit start over a desert coast at 29° N 81° E,
 «⬇ Вниз» auto-descent, «🛬 Сесть» / «✈ Взлететь», «🛰 Орбита», time ×1/×30/×300, phone joystick and buttons, HUD with altitude, speed, place, local
 time, chunks, draw calls, FPS, CPU), `scripts/planet-test.cjs` (83 checks, in `ci-run`), `scripts/planet-perf.cjs` (Chrome: `perf`, `soak N`,
-`reopen N`); `games.js` — one `GAMES_HIDDEN` entry, `GAMES_VER` 121; a CLAUDE.md note. Shaders checked on ANGLE D3D11 and SwiftShader.
+`reopen N`); `games.js` — one `GAMES_HIDDEN` entry, `GAMES_VER` 125 (after merging main); a CLAUDE.md note. Shaders checked on ANGLE D3D11 and SwiftShader.
 
 **Numbers — node** (PC core): height 1.9–2.8 µs; chunk 32 × 32 (with normals ring and skirts) 3.2–4.6 ms; selection + 2:1 + masks at ground level
 0.4–0.9 ms; physics ground sample 0.7–1.5 µs; precision 10 000 km out 1.3e-5 u vs 0.72 u naive; cube-face area ratio 1.41; Chapman error ≤ 12.6 %.
@@ -318,7 +318,8 @@ time, chunks, draw calls, FPS, CPU), `scripts/planet-test.cjs` (83 checks, in `c
 | Fresh descent elsewhere (30 s) | 119 | 2.6 / 4.4 / 16.1 ms | 0 | 42 / 57 | 74 k | 0.10 / 0.5 / 3.4 ms |
 Chunks: 189–226 shown, 238–254 cached (5.4–5.8 MB); Worker build 2.9–3.1 ms avg / 9 ms max (unthrottled, ≈ ×4 on a phone); integration
 0.14–0.17 ms avg; selection 1.2–1.3 ms avg / 6.4 ms max; whole-page JS heap 22–30 MB. Runs made while other agents loaded the machine showed
-3–42 frames > 50 ms in the running stage; quiet runs show none. **PC** (1280 × 720, high, `PC=1`): 0.3–1.3 ms CPU, 21 → 66 → 122–140 draw calls.
+3–42 frames > 50 ms in the running stage; quiet runs show none. After merging main (new camera/controls/input/post code) the page runs
+without errors; timings taken then were noisy from machine load — an A/B run of the pre-merge snapshot under the same load was just as noisy. **PC** (1280 × 720, high, `PC=1`): 0.3–1.3 ms CPU, 21 → 66 → 122–140 draw calls.
 **Soak** (`soak 20`: orbit → descent → landing → running → time ×300 → orbit at 8 places around the planet, ×4 CPU; final code): 20 minutes,
 0 errors, 0 console warnings, 12 470 chunks built, 51 region rebases, chunk cache 238–256, JS heap after GC 22.5 → 25.1 MB and flat at 24–25 MB
 from minute 3 (LOD node objects are pruned; their count oscillates 2 700–4 000). Two earlier 10-minute runs: the same picture.
