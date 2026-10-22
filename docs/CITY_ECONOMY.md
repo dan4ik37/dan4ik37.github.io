@@ -85,7 +85,7 @@ Every player has its own random stream, so the twins run changes only the econom
 `--write` refreshes the blocks below; exit code 1 means a P1 gate failed.
 
 <!-- sim:summary -->
-Simulation: 90 days, seed 37, 37063 ms (node scripts/city-sim.cjs). Numbers: MirEcon.SERVER (= city_defs0).
+Simulation: 90 days, seed 37 (node scripts/city-sim.cjs). Numbers: MirEcon.SERVER (= city_defs0).
 
 P1 gates: ✅ all pass (treasury ≥ 0, zero money drift, 400/day wage cap, k inside its corridor, top 1 % ≤ 30 × median, the reference player reaches Specialist by day 6 and Master by day 50, twins).
 

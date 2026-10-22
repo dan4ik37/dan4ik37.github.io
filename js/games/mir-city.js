@@ -1090,8 +1090,9 @@
     function drawWallet(){
       const R0 = ROLES[rt.zx.r];
       if (!A) { wEl.innerHTML = R0 ? `<span>${R0.icon} ${esc(R0.name)}</span>` : ''; return; }
-      const st = A.st, sk = R0?.prof ? E.ui.skill(A.D, st, R0.prof) : null, bf = E.Rules.buffP(A.D, st, A.clock());
-      wEl.innerHTML = `<button type="button" class="mz-wbank" data-mz="c:${city}:bank" title="🏦 Банк: денки, зарплаты, навыки">💵 ${fmt(st.cash)}${A.mode === 'server' ? '' : ' <em title="пробные — только в этом браузере">🧪</em>'}</button>${R0 ? `<span>${R0.icon} ${esc(R0.name)}${sk ? ` <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em>` : ''}</span>` : ''}${bf ? `<span>🍽 +${bf} %</span>` : ''}`;
+      const st = A.st, sk = R0?.prof ? E.ui.skill(A.D, st, R0.prof) : null, bf = E.Rules.buffP(A.D, st, A.clock()), rr = E.ui.rate(A.D, city, A.pub[city]);
+      C.rateShown = rr;
+      wEl.innerHTML = `<button type="button" class="mz-wbank" data-mz="c:${city}:bank" title="🏦 Банк: денки, зарплаты, навыки">💵 ${fmt(st.cash)}${A.mode === 'server' ? '' : ' <em title="пробные — только в этом браузере">🧪</em>'}</button>${R0 ? `<span>${R0.icon} ${esc(R0.name)}${sk ? ` <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em>` : ''}</span>` : ''}${bf ? `<span>🍽 +${bf} %</span>` : ''}${rr < 100 ? `<span title="Казна города бедная — зарплаты у всех ниже">📉 ставка ${rr} %</span>` : ''}`;
     }
     const inCity = () => MZ.inRect(Z, S.P.ch.x, S.P.ch.z, 2);
     // ── метка цели задания: светящееся кольцо + значок (один объект на город) ──
@@ -1301,6 +1302,7 @@
     function onPub(p, mine){
       if (!p || p.city !== city) return;
       C.hire = p.hire !== false && !p.frozen;
+      if (A && C.here && E.ui.rate(A.D, city, p) !== C.rateShown) drawWallet();   // ставка города поменялась — показать
       if (p.stage == null) return;
       const old = C.siteN;
       siteDraw(p.stage);
