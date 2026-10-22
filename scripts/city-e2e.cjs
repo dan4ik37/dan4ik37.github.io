@@ -74,14 +74,23 @@ const U1 = U('1'), U2 = U('2');
     res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' }); fs.createReadStream(f).pipe(res);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  const BASE = 'http://localhost:' + server.address().port, port = 9300 + Math.floor(Math.random() * 400);
+  const BASE = 'http://localhost:' + server.address().port, port0 = 9300 + Math.floor(Math.random() * 400);
   fs.mkdirSync(SHOTS, { recursive: true });
-  const profile = fs.mkdtempSync(path.join(TMP, 'city', 'chrome-'));
-  const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', '--ignore-gpu-blocklist', '--enable-precise-memory-info', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
+  // у каждого «игрока» — свой процесс Chrome: вторая вкладка того же окна в headless — «в фоне» (requestAnimationFrame стоит,
+  // таймеры раз в секунду) — игра у первой замерла бы
+  const browsers = [];
+  const launch = () => {
+    const port = port0 + browsers.length, profile = fs.mkdtempSync(path.join(TMP, 'city', 'chrome-'));
+    const proc = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--mute-audio', '--ignore-gpu-blocklist', '--enable-precise-memory-info', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMP, TEMP: TMP } });
+    const br = { port, profile, proc }; browsers.push(br); return br;
+  };
+  const B1 = launch();
   const logs = [];
-  async function page(uid, w = 1280, h = 720, mobile = false){
+  async function page(uid, w = 1280, h = 720, mobile = false, br = B1){
+    const port = br.port;
     let t = null;
-    for (let i = 0; i < 80 && !t; i++) { try { const L = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); t = L.find(x => x.type === 'page' && !x.__used && x.url === 'about:blank'); } catch (e) {} if (!t) await sleep(250); }
+    for (let i = 0; i < 80 && !t; i++) { try { const L = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); t = br.used ? null : L.find(x => x.type === 'page' && x.url === 'about:blank'); if (t || br.used) break; } catch (e) {} if (!t) await sleep(250); }
+    br.used = true;
     if (!t) { try { t = await (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })).json(); } catch (e) {} }
     const ws = new WebSocket(t.webSocketDebuggerUrl); await new Promise((a, b) => { ws.onopen = a; ws.onerror = b; });
     let id = 0; const cb = new Map();
@@ -180,7 +189,7 @@ const U1 = U('1'), U2 = U('2');
     await A.ev(`D37Phone.close?.()`); await sleep(400);
     await A.ev(`openCityEconomy()`); await sleep(2500);
     const adm = await A.ev(`document.querySelector('.cea-box')?.innerText || ''`);
-    ok(/Экономика города/.test(adm) && /казна/.test(adm) && /M \(средний кошелёк/.test(adm) && /По дням/.test(adm), '«🏙️ Экономика города»: казна, M/T, журнал по дням', adm.slice(0, 300));
+    ok(/Экономика города/.test(adm) && /казна/.test(adm) && /M \(средний кошелёк/.test(adm) && /по дням/i.test(adm), '«🏙️ Экономика города»: казна, M/T, журнал по дням', adm.slice(300, 700));
     await A.shot('pc-admin-log');
     await A.ev(`[...document.querySelectorAll('.cea-btn')].find(b => /Настройки/.test(b.textContent))?.click()`); await sleep(1500);
     const cfg = await A.ev(`document.querySelectorAll('.cea-f input').length`);
@@ -193,7 +202,7 @@ const U1 = U('1'), U2 = U('2');
     // ── 4. Общая стройка у двух игроков ──
     await rpc(null, 'x');   // очередь
     await one(() => db.exec(`update public.city_cfg set data = '{"profs.builder.min": 5, "site.units": 2}'::jsonb, rev = rev + 1 where id = 1; update public.cities set rev = rev + 1;`));
-    const B = await page(U2);
+    const B = await page(U2, 1280, 720, false, launch());
     ok(await openWorld(B), 'вторая вкладка: мир');
     ok((await B.ev(FAKE(U2))) === 'server/', 'вторая вкладка — второй игрок');
     for (const P of [A, B]) { await P.ev(`MirEcon.api.init(true).then(() => MirEcon.api.pubGet('kids', true))`); await sleep(300); await P.ev(`${Z}.city.kids.mod._.setJob('builder')`); }
@@ -231,7 +240,9 @@ const U1 = U('1'), U2 = U('2');
     const errs = logs.filter(l => !/supabase|ERR_BLOCKED|net::|Failed to fetch|WebSocket|realtime|favicon|yandex|google|adsbygoogle|status of 4\d\d|Failed to load resource/i.test(l) && !/weak map key[\s\S]*W\.compile/.test(l));
     if (MODE !== 'perf') ok(errs.length === 0, 'в консоли — без ошибок (кроме закрытой сети)', errs.slice(0, 8));
     for (const l of errs.slice(0, 8)) console.log('  консоль:', l.slice(0, 240));
-    try { proc.kill(); } catch (e) {} server.close(); await sleep(800); try { fs.rmSync(profile, { recursive: true, force: true }); } catch (e) {}
+    for (const b of browsers) { try { b.proc.kill(); } catch (e) {} }
+    server.close(); await sleep(800);
+    for (const b of browsers) { try { fs.rmSync(b.profile, { recursive: true, force: true }); } catch (e) {} }
     console.log(`city-e2e: ${pass} ok, ${fail} fail`);
     process.exit(fail ? 1 : 0);
   }
