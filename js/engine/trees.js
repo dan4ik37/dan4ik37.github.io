@@ -24,7 +24,10 @@
   const root = typeof self !== 'undefined' ? self : globalThis;
   const E = root.D37E = root.D37E || {};
   const TR = E.trees = E.trees || {};
-  TR.VERSION = 1;   // меняешь рост, кубики или сетку — подними (кэши игр, проверка trees-test)
+  // Форма — часть сохранённых миров («Кубомир» genVer 3, «Подземье» trees 3): несохранённые чанки строятся заново по зерну, и правка
+  // роста, кубиков, клеток сбоку или чисел пород дала бы полдерева на границе со старыми чанками. Менять — только новой версией
+  // мира (genVer 4 / trees 4: своя ветка, эта — как есть); trees-test сверяет контрольную сумму. Сетку (TR.mesh) — можно: не хранится.
+  TR.VERSION = 1;
   const imul = Math.imul, floor = Math.floor, sqrt = Math.sqrt, abs = Math.abs;
   const PI = 3.141592653589793, TAU = 6.283185307179586, HPI = 1.5707963267948966, DEG = PI / 180;
 

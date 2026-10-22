@@ -9,6 +9,8 @@
 //   mir-shots  — «Мир Денчика»: лес у озера, боевая зона (танк валит дерево — снимок), снимки
 //   mir-perf   — «Мир Денчика» в профиле телефона: лес — ЦП, FPS, вызовы отрисовки, треугольники, память; пролёт над лесом
 //   mir-tank   — «Мир Денчика»: удар по дереву в боевой зоне — ствол ломается по месту удара (пень, падает верх), обломки, назад
+//   mir-soak   — «Мир Денчика»: TR_MIN минут (10) — по лесам в разных краях карты, удар по ближнему дереву, зима ↔ лето, дождь —
+//                без ошибок в консоли, память не растёт
 //   studio     — «Студия 3D»: «🌳 Деревья» в ➕ Деталь, все породы — вставить, снимок
 //   pz-shots   — «Подземье», новый мир: деревья пород сбоку (лес, снега, джунгли) — снимки; срубил низ — падает всё дерево
 //   pz-perf    — «Подземье» в профиле телефона (ЦП ×4): лес — ЦП кадра, FPS
@@ -292,6 +294,33 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       res.heapMB = await heap();
       return;
     }
+    if (MODE === 'mir-soak') {
+      const MIN = +process.env.TR_MIN || 10, t0 = Date.now(), hs = [await heap()];
+      const PTS = [[-760, -560], [-300, -1500], [600, 400], [-1200, 800], [1500, -900], [200, 1600], [-1800, -300], [900, 1900]];
+      let k = 0, hits = 0, fallen = 0, km = 0;
+      while (Date.now() - t0 < MIN * 60000) {
+        const [x, z] = PTS[k % PTS.length]; k++;
+        await mirPlace(x, z, k * .9, 12);
+        const r = await ev(`(async () => { const S = GAME_IMPL.world._test.state(), DS = S.zones.destruct, W = MirZones.worldMap(), P = S.P;
+          // пролёт над лесом ~8 с (подгрузка и выгрузка деревьев)
+          const x0 = P.ch.x, z0 = P.ch.z; let d = 0, last = performance.now();
+          await new Promise(done => { const t = now => { const dt = Math.min(.1, (now - last) / 1000); last = now; d += 18 * dt; const x = x0 + d, zz = z0 + d * .5; P.place(x, W.height(x, zz) + .3, zz, 1.1); if (d < 140) requestAnimationFrame(t); else done(); }; requestAnimationFrame(n => { last = n; requestAnimationFrame(t); }); });
+          // удар по ближнему дереву (в природе — ломается по месту удара)
+          let t = null, best = 1e9; W.trees(P.ch.x - 40, P.ch.z - 40, P.ch.x + 40, P.ch.z + 40, (x, y, zz) => { const dd = Math.hypot(x - P.ch.x, zz - P.ch.z); if (dd < best) { best = dd; t = { x, y, z: zz }; } });
+          let n = 0; if (t && DS) { const zn = S.zones.zoneAt ? S.zones.zoneAt(t.x, t.z) : null; if (!zn || zn.id === 'war') n = DS.hit(t.x, t.z, .6, 9, { y: t.y + 1 + (${k} % 3) * .8, dx: 1, dz: 0 }); }
+          // зима ↔ лето, дождь
+          try { S.wx?.setWorld?.({ seed: 'mir', mode: 'fixed', season: ${k} % 2 ? 'winter' : 'summer', weather: ${k} % 3 ? 'clear' : 'rain' }); } catch (e) {}
+          await new Promise(r => setTimeout(r, 2500));
+          return { n, t: !!t, km: Math.round(d) }; })()`, 120000);
+        hits++; if (r.n) fallen++; km += r.km || 0;
+        if (k % 6 === 0) { hs.push(await heap()); console.log('  прогон', Math.round((Date.now() - t0) / 1000), 'с: ударов', hits, 'упало', fallen, 'память', hs[hs.length - 1], 'МБ'); }
+      }
+      hs.push(await heap());
+      res.soak = { min: MIN, hits, fallen, flown: km, heap: hs };
+      ok(fallen >= Math.min(3, hits >> 1), 'удары валят деревья', res.soak);
+      ok(hs[hs.length - 1] - Math.min(...hs.slice(1, 3)) < 40, 'память JS за прогон не растёт', hs);
+      return;
+    }
     if (MODE === 'mir-tank') {
       // боевая зона: дерево карты в зоне войны (или любое рядом) — удар на высоте 1,2 → пень и падающий верх
       const r = await ev(`(async () => { const S = GAME_IMPL.world._test.state(), z = S.zones, DS = z.destruct, W = MirZones.worldMap();
@@ -324,7 +353,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       for (let i = 0; i < 200 && T.G.state !== 'play'; i++) await new Promise(r => setTimeout(r, 100));
       T.god(true); T.G.U?.menu?.(null); T.time(.3);
       return { state: T.G.state, trees: w.trees || 0, gen: !!T.G.gen?.trees }; })()`, 120000);
-    ok(res.open?.state === 'play' && res.open.gen, 'новый мир «Подземья» — деревья пород', res.open);
+    ok(res.open?.state === 'play' && (res.open.gen || MODE === 'pz-perf'), 'новый мир «Подземья» — деревья пород', res.open);   // замер «до» — мир без них
     // деревья у старта и дальше (снега — x < 0 далеко, джунгли — далеко вправо): по одному каждой породы
     const spots = await ev(`(() => { const G = GAME_IMPL.podzem._test.G, out = {}; for (let q = 0; q <= 1000; q++) { const k = q & 1 ? -((q + 1) >> 1) : q >> 1, tr = G.gen.treeOf(k); if (tr && tr.cells && !out[tr.kind]) out[tr.kind] = [tr.xc, tr.y0]; } return out; })()`);
     res.spots = spots; console.log('породы', JSON.stringify(spots));
@@ -346,7 +375,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       return;
     }
     if (MODE === 'pz-perf') {
-      const [x, y] = spots.oak || Object.values(spots)[0];
+      // ближнее к началу мира дерево (то же место «до» и «после»: деревья пород стоят там же, где прежние)
+      const [x, y] = await ev(`(() => { const G = GAME_IMPL.podzem._test.G; for (let q = 0; q <= 400; q++) { const k = q & 1 ? -((q + 1) >> 1) : q >> 1, tr = G.gen.treeOf(k); if (tr && tr.kind !== 'cactus') return [tr.xc, tr.y0]; } return [0, 190]; })()`);
+      res.at = [x, y];
       await ev(`(async () => { const T = GAME_IMPL.podzem._test; T.tp(${x}, ${y} - 2); await new Promise(r => setTimeout(r, 3000)); return 1; })()`, 30000);
       await send('Emulation.setCPUThrottlingRate', { rate: 4 });
       await sleep(3000);

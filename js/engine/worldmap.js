@@ -16,6 +16,7 @@
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const E = root.D37E = root.D37E || {};
+  const TREES_3D = true;   // T-022b: деревья пород рядом с камерой (откат одной строкой — false: прежние ствол + шар / конус)
   const imul = Math.imul, floor = Math.floor, abs = Math.abs, min = Math.min, max = Math.max, sqrt = Math.sqrt, hypot = Math.hypot;
   const lerp = (a, b, t) => a + (b - a) * t;
   const sstep = (a, b, x) => { const t = max(0, min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };   // a < b
@@ -522,7 +523,7 @@
       }
     }
     V.eachTree = eachTree;
-    const T3 = vo.trees !== false && E.trees3d && E.trees ? E.trees3d : null;
+    const T3 = TREES_3D && vo.trees !== false && E.trees3d && E.trees ? E.trees3d : null;
     let plantTrees = null, offSrc = null, TM = null;
     if (T3) {
       const NEAR = low ? 46 : mob ? 80 : 130, NMAX = low ? 90 : mob ? 220 : 520, lodN = low || mob ? 1 : 0;

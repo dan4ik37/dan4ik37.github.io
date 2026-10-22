@@ -20,7 +20,8 @@ const ctx = load(['js/engine/voxel.js', 'js/engine/trees.js', 'js/engine/voxel-g
 const TR = ctx.D37E.trees, V = ctx.D37E.vox;
 const hashArr = (...arrs) => { let h = 2166136261; for (const a of arrs) for (let i = 0; i < a.length; i++) { h ^= (a[i] * 1000) | 0; h = Math.imul(h, 16777619); } return h >>> 0; };
 const SEEDS = FAST ? 6 : 16;
-const CHECK = -2103058338;   // контрольная сумма формы деревьев TR.VERSION 1 (см. «рост»)
+const CHECK = -2103058338;   // контрольная сумма формы деревьев TR.VERSION 1 (см. «рост»): кубики «Кубомира» v3
+const CHECK2D = 528860790;   // и клетки сбоку «Подземья» (trees 3) — форма в сохранённых мирах: менять только новой версией мира
 
 sec('числа: синус многочленом, одинаково везде');
 {
@@ -41,9 +42,11 @@ sec('рост: одно зерно — одно дерево; разные зё�
   }
   ok(same, 'скелет и кубики — одинаковые при повторе (все породы × ' + SEEDS + ' зёрен)');
   ok(diff >= TR.LIST.length * SEEDS * .95, 'соседние зёрна дают разные деревья', diff);
-  // контрольная сумма формы (поменял рост или кубики — подними TR.VERSION и перепиши число)
+  // контрольная сумма формы: деревья — часть миров v3 (несохранённые чанки строятся заново); поменять — только новой версией мира
   let h = 0; for (const sp of TR.LIST) for (const s of [3, 77]) { const v = TR.voxels(TR.grow(sp, s)); h = (Math.imul(h, 31) + hashArr(v.x, v.y, v.z, v.t, v.a)) | 0; }
-  ok(TR.VERSION === 1 && h === CHECK, 'форма деревьев версии ' + TR.VERSION + ' — контрольная сумма (менял рост — подними TR.VERSION)', h);
+  ok(TR.VERSION === 1 && h === CHECK, 'форма деревьев версии ' + TR.VERSION + ' — контрольная сумма кубиков (менял — только новой версией мира)', h);
+  let h2 = 0; for (const sp of ['oak', 'birch', 'giant_oak', 'dead', 'spruce', 'pine', 'giant_spruce', 'tropical']) for (const s of [3, 77]) { const c = TR.cells2d(TR.grow(sp, s), { style: 'side' }); h2 = (Math.imul(h2, 31) + hashArr(c.x, c.y, c.t)) | 0; }
+  ok(h2 === CHECK2D, 'деревья сбоку («Подземье») — контрольная сумма клеток', h2);
 }
 
 sec('породы похожи на себя (кубики)');
@@ -205,6 +208,11 @@ sec('«Подземье» (2D): новые миры — деревья поро�
   const src = PZ.workerSource();
   ok(src.indexOf('d37Trees') >= 0 && src.indexOf('d37Trees') < src.indexOf('PZ_CORE'), 'поток «Подземья» получает движок деревьев текстом (перед ядром)');
   delete pctx.window;
+  // скорость: чанки у поверхности (деревья) — старые миры и новые (новый генератор на каждый замер: и сборка клеток деревьев)
+  const pzT = o => { let best = 1e9; for (let k = 0; k < 3; k++) { const G = PZ.makeGen(777 + k, o); G.genChunk(50, 3, mk()); const t = performance.now(); let n = 0; for (let cx = -12; cx < 12; cx++) for (let cy = 2; cy <= 3; cy++) { G.genChunk(cx, cy, mk()); n++; } best = Math.min(best, (performance.now() - t) / n); } return best; };
+  pzT({ trees: true }); const p0 = pzT(), p1 = pzT({ trees: true });
+  console.log('  «Подземье», чанк у поверхности, мс: старые миры', p0.toFixed(2), '· новые', p1.toFixed(2));
+  ok(p1 < p0 * 1.8 + 1, '«Подземье»: чанк с деревьями пород не дороже старого больше чем в 1,8 раза (+1 мс)', [p0, p1]);
 }
 
 sec('скорость (node, ЦП компьютера; телефон ≈ ×4)');
