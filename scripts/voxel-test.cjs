@@ -188,6 +188,40 @@ const hashArr = a => { let h = 2166136261; for (let i = 0; i < a.length; i++) { 
   let r8 = mk(); for (let x = 0; x < 2; x++) for (let z = 0; z < 2; z++) { at(r8, x + 4, 30, z + 4, ID.stone); at(r8, x + 4, 31, z + 4, ID.water); }
   const m8 = mesh(r8);
   ok(q(m8, 'water') === 4 * 1 + 8, 'вода 2×2: верх 4 + бока 8 (внутри — нет)', q(m8, 'water'));
+  {   // вода (T-044): над u, v (5 бит) — глубина у 4 углов грани (трети блока, угол u + 2v), в vd.w биты 6…9 — «берег»; бока — сколько
+      // воды за гранью; у лавы — как было
+    const dec = (m, qi, k) => { const o = (qi * 4 + k) * 4, a = m.vd; return { u: a[o] & 31, v: a[o + 1] & 31, c: [(a[o] >> 5) & 31, (a[o] >> 10) & 31, (a[o + 1] >> 5) & 31, (a[o + 1] >> 10) & 31], sh: (a[o + 3] >> 6) & 15, fl: a[o + 3] >> 14, d: a[o + 2] >> 12 }; };
+    // бассейн 6×6: стенки из камня до глади (y 30), дно — y 26, вода y 27…30; ряд x = 5 — мелко (песок до y 29, вода только y 30)
+    let rp = mk();
+    for (let x = 4; x <= 11; x++) for (let z = 4; z <= 11; z++) for (let y = 20; y <= 30; y++) at(rp, x, y, z, ID.stone);
+    for (let x = 5; x <= 10; x++) for (let z = 5; z <= 10; z++) for (let y = 27; y <= 30; y++) at(rp, x, y, z, ID.water);
+    for (let z = 5; z <= 10; z++) for (let y = 27; y <= 29; y++) at(rp, 5, y, z, ID.sand);
+    const mp = mesh(rp), W = mp.water, tops = [];
+    for (let qi = 0; qi < (W ? W.n : 0); qi++) if (dec(W, qi, 0).d === 2) tops.push(qi);
+    const cellOf = qi => { const P = W.pos, o = qi * 12; return [Math.min(P[o], P[o + 3], P[o + 6], P[o + 9]) / 16, Math.min(P[o + 2], P[o + 5], P[o + 8], P[o + 11]) / 16]; };
+    const topAt = (x, z) => tops.find(qi => { const c = cellOf(qi); return c[0] === x && c[1] === z; });
+    const mid = topAt(8, 8), edge = topAt(10, 8), shal = topAt(5, 8);
+    const dm = dec(W, mid, 0), de = [0, 1, 2, 3].map(k => dec(W, edge, k)), ds = dec(W, shal, 0);
+    const deep = Math.round((3 + V.liquidHeight(ID.water)) * 3);
+    ok(tops.length === 36 && dm.c.every(v => v === deep) && dm.sh === 0 && dm.fl === 2, 'вода: середина бассейна — у всех углов глубина 4 блока (до глади), без берега', { n: tops.length, dm, deep });
+    ok(de.every(v => v.sh === 10 && v.c[1] === v.c[3] && v.c[0] === deep && v.c[1] > 0 && v.c[1] < deep), 'у стенки (x + 1) — берег у углов u = 1 (биты 1, 3), там глубина — среднее с берегом (0)', de[0]);
+    ok(ds.c[0] <= 2 && ds.c[2] <= 2 && ds.c[1] === ds.c[3] && ds.c[1] > ds.c[0] && ds.c[1] < deep && ds.sh === 5, 'мелко у берега: у углов берега (u = 0) глубина меньше блока, к глубине — растёт', ds);
+    ok(de.every(v => v.u <= 16 && v.v <= 16) && de.some(v => v.u === 16) && de.some(v => v.u === 0), 'u, v грани — в младших 5 битах (0…16)', de.map(v => [v.u, v.v]));
+    // бок: вода над пустотой (водопад шириной 3): у бока толщина 3 (все углы одинаково); у лавы — без глубин
+    let rf = mk(); for (let x = 4; x <= 6; x++) { at(rf, x, 30, 8, ID.stone); at(rf, x, 31, 8, ID.water); }
+    at(rf, 10, 30, 10, ID.stone); at(rf, 10, 31, 10, ID.lava);
+    const mf = mesh(rf), sides = [];
+    for (let qi = 0; qi < mf.water.n; qi++) { const d0 = dec(mf.water, qi, 0); if (d0.d === 0 || d0.d === 1) sides.push(d0); }
+    ok(sides.length === 2 && sides.every(s => s.c.every(v => v === 9) && s.sh === 0), 'бок воды (водопад 3 в длину): толщина 3 блока у всех углов', sides);
+    const LV = V.T.tex[ID.lava * 7 + 2]; let lavaN = 0, lavaHi = 0;
+    for (let i = 0; i < mf.solid.n * 4; i++) { const a = mf.solid.vd; if ((a[i * 4 + 2] & 4095) !== LV) continue; lavaN++; if (a[i * 4] > 16 || a[i * 4 + 1] > 16 || (a[i * 4 + 3] >> 6) & 15) lavaHi++; }
+    ok(lavaN === 20 && lavaHi === 0, 'лава (сетка solid) — u, v и флаги как раньше', { lavaN, lavaHi });
+    // скорость: чанк-океан (вода 30 в глубину) — сетка
+    let ro = mk(); for (let x = -16; x < 32; x++) for (let z = -16; z < 32; z++) { for (let y = 1; y < 22; y++) at(ro, x, y, z, ID.stone); for (let y = 22; y < 52; y++) at(ro, x, y, z, ID.water); }
+    const Lo = V.lightRegion(ro, V.T), to0 = performance.now(); let mo; for (let i = 0; i < 5; i++) mo = V.meshChunk(ro, Lo, V.T, null); const tO = (performance.now() - to0) / 5;
+    console.log('  чанк-океан: сетка', tO.toFixed(2), 'мс, граней воды', mo.water.n);
+    ok(mo.water.n === 256 && tO < 40, 'чанк-океан: 256 граней глади, сетка быстрая', { n: mo.water.n, ms: +tO.toFixed(2) });
+  }
   // склейка: две разных текстуры не склеиваются
   let r9 = mk(); at(r9, 2, 40, 2, ID.stone); at(r9, 3, 40, 2, ID.dirt);
   ok(q(mesh(r9), 'solid') === 10, 'камень + земля рядом: 10 граней (разные — не склеиваются)', q(mesh(r9), 'solid'));

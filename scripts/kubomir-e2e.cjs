@@ -296,7 +296,8 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
         for (let r = 64; r < 6000; r += 64) for (let a = 0; a < 48; a++) { const x = Math.round(x0 + r * Math.cos(a / 48 * 6.2832)), z = Math.round(z0 + r * Math.sin(a / 48 * 6.2832)); if (okAt(x, z)) return { x, z }; }
         return null;
       })()`, 120000);
-      res.ocean = await findBiome(0, 6); res.swamp = await findBiome(8, 1); res.river = await findBiome(9, 2);
+      const QUICK = process.env.KB_WATER === 'pool';   // только бассейн (быстрые пробы вида), без океана, болота, реки и замеров
+      if (!QUICK) { res.ocean = await findBiome(0, 6); res.swamp = await findBiome(8, 1); res.river = await findBiome(9, 2); }
       console.log('  места', JSON.stringify({ pool: res.place, ocean: res.ocean, swamp: res.swamp, river: res.river }));
       if (!res.place) throw new Error('нет места для бассейна');
       res.tp = await tpTo(res.place.x + .5, res.place.h + 2, res.place.z + .5);
@@ -364,9 +365,11 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       // ── бассейн: день, низкий взгляд, закат, ночь ──
       await sky(10.5, SUMMER, false);
       await view(-Math.PI / 2, .42, shore); await shot('pool-day');
-      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
-      res.perf.push(await measure('бассейн днём', 8));
-      if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      if (!QUICK) {
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 4 });
+        res.perf.push(await measure('бассейн днём', 8));
+        if (PHONE) await send('Emulation.setCPUThrottlingRate', { rate: 1 });
+      }
       await view(-Math.PI / 2, .1, shore); await shot('pool-day-low');
       await view(-Math.PI / 2 - .5, .3, { x: pool.cx + 12.5, y: pool.gy + 7, z: pool.cz - 15.5, fly: true }); await shot('pool-day-side');
       await sky(18.3, SUMMER, false);
