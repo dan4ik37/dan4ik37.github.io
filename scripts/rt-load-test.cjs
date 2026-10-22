@@ -42,10 +42,10 @@ function worker(){
         if (m.t === 'hi') {
           c.sid = m.sid;
           if (m.resumed) { c.joined = true; c.resumed = true; fin(now() - c.t0); }
-          else { c.resumed = false; ws.send(JSON.stringify({ t: 'j', i: 1, c: 'load-room-' + c.room, k: 'u' + c.id, p: 1 })); }
+          else { c.resumed = false; c.i = c.i || 1; ws.send(JSON.stringify({ t: 'j', i: c.i, c: 'load-room-' + c.room, k: 'u' + c.id, p: 1 })); }
         } else if (m.t === 'j') {
           if (m.home !== 'rt') { errors++; why['home-' + m.home + '-' + m.e] = (why['home-' + m.home + '-' + m.e] || 0) + 1; fin(-1); return; }
-          ws.send(JSON.stringify({ t: 'tr', i: 1, m: { nick: 'игрок ' + c.id, t: c.id, look: { c: 'x1a2b3c', h: 3 } }, r: 1 }));
+          ws.send(JSON.stringify({ t: 'tr', i: m.i, m: { nick: 'игрок ' + c.id, t: c.id, look: { c: 'x1a2b3c', h: 3 } }, r: 1 }));
         } else if (m.t === 'ok') { c.joined = true; fin(now() - c.t0); }
       });
       ws.on('close', code => { if (c.ws === ws && !c.dropping) closedUnexpected++; if (!done) { errors++; why['close' + code] = (why['close' + code] || 0) + 1; fin(-1); } });
@@ -69,7 +69,7 @@ function worker(){
       if (!c.joined || !c.ws || c.ws.readyState !== 1) continue;
       if (t < c.next) continue;
       c.next = t + 1000 / cfg.rate;
-      c.ws.send('{"t":"b","i":1,"e":"m","p":{"ts":' + now().toFixed(3) + ',"k":"in","x":' + (c.id % 97) + '.5,"y":12.25,"a":[1,0,1],"s":"' + PAD + '"}}');
+      c.ws.send('{"t":"b","i":' + (c.i || 1) + ',"e":"m","p":{"ts":' + now().toFixed(3) + ',"k":"in","x":' + (c.id % 97) + '.5,"y":12.25,"a":[1,0,1],"s":"' + PAD + '"}}');
       sent++;
     }
     setTimeout(loop, 5);
@@ -96,6 +96,32 @@ function worker(){
       const res = await Promise.all(victims.map(c => connectRetry(c, msg.resume).then(v => { c.dropping = false; return v; })));
       const okN = res.filter(x => x >= 0);
       process.send({ ev: 'storm', ms: now() - t0, n: victims.length, ok: okN.length, resumed: victims.filter(c => c.resumed).length, fail: res.length - okN.length, why: Object.assign({}, why), retried: victims.filter(c => c.tries > 0).length, p99: okN.sort((a, b) => a - b)[Math.floor(okN.length * .99)] || 0 });
+    } else if (msg.cmd === 'churn') {   // --soak: люди переходят из комнаты в комнату, часть связей рвётся и продолжается
+      const end = now() + msg.secs * 1000;
+      let moves = 0, drops = 0, dropFail = 0;
+      sending = true; lat = []; recv = 0; sent = 0; loop();
+      const pending = [];
+      while (now() < end) {
+        await new Promise(r => setTimeout(r, msg.period));
+        const c = conns[Math.floor(Math.random() * conns.length)];
+        if (c && c.joined && c.ws && c.ws.readyState === 1) {
+          c.ws.send(JSON.stringify({ t: 'l', i: c.i || 1 }));
+          c.i = (c.i || 1) + 1; c.room = (c.room + 1 + Math.floor(Math.random() * 7)) % msg.rooms;
+          c.ws.send(JSON.stringify({ t: 'j', i: c.i, c: 'load-room-' + c.room, k: 'u' + c.id, p: 1 }));
+          moves++;
+        }
+        if (Math.random() < msg.period / 30000) {
+          for (const v of conns.filter(() => Math.random() < .05)) {
+            if (!v.joined || v.dropping) continue;
+            v.dropping = true; v.joined = false; drops++;
+            try { v.ws.terminate(); } catch (e) {}
+            pending.push(connectRetry(v, true).then(x => { v.dropping = false; if (x < 0) dropFail++; }));
+          }
+        }
+      }
+      await Promise.all(pending);
+      sending = false;
+      process.send({ ev: 'churned', moves, drops, dropFail, recv, sent, errors, closedUnexpected, lat: lat.slice(-5000) });
     } else if (msg.cmd === 'exit') { for (const c of conns) { try { c.ws.close(1000); } catch (e) {} } setTimeout(() => process.exit(0), 300); }
   });
   process.send({ ev: 'ready' });
@@ -125,7 +151,7 @@ async function main(){
     const inbox = [];
     p.on('message', m => inbox.push(m));
     if (PRIO) prio(p.pid, os.constants.priority.PRIORITY_ABOVE_NORMAL);
-    workers.push({ p, inbox, next: ev => K.until(() => { const i = inbox.findIndex(m => m.ev === ev); return i >= 0 ? inbox.splice(i, 1)[0] : false; }, 120000, 10) });
+    workers.push({ p, inbox, next: (ev, ms = 120000) => K.until(() => { const i = inbox.findIndex(m => m.ev === ev); return i >= 0 ? inbox.splice(i, 1)[0] : false; }, ms, 10) });
   }
   for (const w of workers) await w.next('ready');
   // 1) соединения
@@ -136,6 +162,41 @@ async function main(){
   const connMs = Date.now() - t0, connOk = con.reduce((a, c) => a + c.ok, 0), connFail = con.reduce((a, c) => a + c.fail, 0);
   await K.sleep(2500);
   const idle = await M();
+  // --soak <с>: долгий прогон с «жизнью» (переходы между комнатами, обрывы связи с продолжением) — память и ошибки по времени
+  const SOAK = opt('soak', 0);
+  if (SOAK > 0) {
+    workers.forEach(w => w.p.send({ cmd: 'churn', secs: SOAK, period: 250, rooms: R }));
+    const series = [];
+    const t0s = Date.now();
+    const sampler = setInterval(async () => { try { const m = await M(); series.push({ s: Math.round((Date.now() - t0s) / 1000), rss: m.mem.rssMb, heap: m.mem.heapMb, conns: m.counts.conns, members: m.counts.members, rooms: m.counts.rooms, cpu: m.cpuPct, internal: m.stats.internal, zombies: m.counts.zombies, inS: m.perSec.msgIn, outS: m.perSec.msgOut }); } catch (e) {} }, 30000);
+    const ch = await Promise.all(workers.map(w => w.next('churned', (SOAK + 180) * 1000)));
+    clearInterval(sampler);
+    await K.sleep(6000);   // ушедшие без возврата — освобождены (GRACE_MS 4 с)
+    const fin = await M();
+    workers.forEach(w => w.p.send({ cmd: 'exit' }));
+    await K.sleep(800);
+    const exited = S.exited;
+    await S.kill(); await P.close();
+    const lat = ch.flatMap(c => c.lat).sort((a, b) => a - b), q = f => (lat.length ? Math.round(lat[Math.floor(lat.length * f)] * 10) / 10 : NaN);
+    const first = series.slice(0, 2), last = series.slice(-2);
+    const avg = (a, k) => a.reduce((x, y) => x + y[k], 0) / Math.max(1, a.length);
+    const out = {
+      soak: `${SOAK} с, ${N} соединений, ${R} комнат, ${RATE} сообщ./с, переход в другую комнату каждые 250 мс в каждом процессе, ~5 % обрывов каждые 30 с`,
+      moves: ch.reduce((a, c) => a + c.moves, 0), drops: ch.reduce((a, c) => a + c.drops, 0), dropFail: ch.reduce((a, c) => a + c.dropFail, 0),
+      sent: ch.reduce((a, c) => a + c.sent, 0), recv: ch.reduce((a, c) => a + c.recv, 0), errors: ch.reduce((a, c) => a + c.errors, 0), unexpectedClose: ch.reduce((a, c) => a + c.closedUnexpected, 0),
+      latencyMs: { p50: q(.5), p99: q(.99) }, rssFirstMb: Math.round(avg(first, 'rss')), rssLastMb: Math.round(avg(last, 'rss')), heapFirstMb: Math.round(avg(first, 'heap')), heapLastMb: Math.round(avg(last, 'heap')),
+      serverInternal: fin.stats.internal, serverExited: exited, end: fin.counts, series,
+    };
+    console.log(JSON.stringify(out, null, 1));
+    const bad = [];
+    if (exited) bad.push('сервер упал');
+    if (fin.stats.internal) bad.push('внутренние ошибки');
+    if (out.dropFail) bad.push('не вернулись после обрыва: ' + out.dropFail);
+    if (fin.counts.members !== N || fin.counts.zombies) bad.push('в конце мест ' + fin.counts.members + ' из ' + N + ', ждут ' + fin.counts.zombies);
+    if (out.heapLastMb > out.heapFirstMb * 1.5 + 10) bad.push('память кучи растёт: ' + out.heapFirstMb + ' → ' + out.heapLastMb + ' МБ');
+    console.log(`rt-load-test --soak: ${bad.length ? 'ПРОБЛЕМЫ: ' + bad.join('; ') : 'ok'} — ${out.moves} переходов, ${out.drops} обрывов, куча ${out.heapFirstMb} → ${out.heapLastMb} МБ, RSS ${out.rssFirstMb} → ${out.rssLastMb} МБ, p99 ${out.latencyMs.p99} мс`);
+    process.exit(bad.length ? 1 : 0);
+  }
   // 2) сообщения
   workers.forEach(w => w.p.send({ cmd: 'send' }));
   await K.sleep(Math.min(6000, SECS * 1000 / 3));

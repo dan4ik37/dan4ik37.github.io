@@ -249,6 +249,16 @@ async function protocol(){
       x.send(JSON.stringify(o).replace('"__proto__x"', '"__proto__"'));
     }
   }
+  // невозможная вложенность (30 000 скобок): разбор не падает, пересылка отказывает аккуратно
+  const deep = K.rawClient(D, S.ws, { xff: '100.64.99.1' }); await deep.hi();
+  deep.send({ t: 'j', i: 1, c: 'r2' });
+  await deep.wait(m => m.t === 'j');
+  const nest = '['.repeat(30000) + ']'.repeat(30000);
+  deep.send('{"t":"b","i":1,"e":"m","p":' + nest + '}');
+  deep.send('{"t":"tr","i":1,"r":9,"m":{"a":' + nest + '}}');
+  const dt = await deep.wait(m => m.t === 'ok' && m.r === 9, 2000);
+  ok(dt && (dt.e === 'meta' || dt.e === 'big'), 'вложенность 30 000: track — аккуратный отказ, сервер жив', dt);
+  deep.kill();
   await sleep(500);
   for (const x of fz) x.kill();
   j = await S.metrics(ADMIN);
@@ -735,10 +745,55 @@ async function leaks(P, S){
   ok(A.errs.length === 0 && B.errs.length === 0, 'ошибок в консоли вкладок нет', [...A.errs, ...B.errs].slice(0, 5));
 }
 
+// ═══ --soak <с>: долгий прогон клиента — 4 вкладки играют короткие партии одну за другой, сервер раз в 2 мин падает на 10 с ═══
+async function clientSoak(P, secs){
+  const port = await K.freePort();
+  const env = { ADMIN_TOKEN: ADMIN, WATCH: '1', SB_WS: P.ws, PEEK_MS: '800', GRACE_MS: '3000', ROOM_GC_MS: '0', RT_PORT: String(port), MAX_PER_IP: '500', IP_BURST: '500' };
+  let S = await K.startServer(D, env);
+  cleanup.push(() => S.kill());
+  const tabs = [0, 1, 2, 3].map(() => makeTab({ rtUrl: S.url, sbUrl: P.url }));
+  const t0 = Date.now();
+  let rounds = 0, got = 0, want = 0, kills = 0, lastKill = t0, base = null, stuck = 0;
+  const snaps = [], via = { rt: 0, sb: 0 };
+  while (Date.now() - t0 < secs * 1000) {
+    const ds = [[0, 1], [2, 3]].map(([x, y], k) => [duel(tabs[x], 'sk' + rounds + 'p' + k, 'a'), duel(tabs[y], 'sk' + rounds + 'p' + k, 'b')]);
+    if (!(await until(() => ds.every(([a, b]) => a.room.opp && b.room.opp), 9000))) stuck++;
+    for (const [x, y] of [[0, 1], [2, 3]]) for (const c of tabs[x].RT.stats().chans) via[c.via === 'rt' ? 'rt' : 'sb']++;
+    for (const [a, b] of ds) { for (let i = 0; i < 5; i++) { a.room.send({ x: i }); b.room.send({ x: 'b' + i }); } want += 10; }
+    await until(() => ds.every(([a, b]) => a.msgs().length >= 5 && b.msgs().length >= 5), 5000);
+    for (const [a, b] of ds) got += Math.min(5, a.msgs().length) + Math.min(5, b.msgs().length);
+    for (const [a, b] of ds) { a.room.leave(); b.room.leave(); }
+    rounds++;
+    if (rounds === 5) base = tabs.map(t => t.timers.size);
+    if (rounds % 25 === 0) snaps.push({ s: Math.round((Date.now() - t0) / 1000), heapMb: Math.round(process.memoryUsage().heapUsed / 1048576), timers: tabs.map(t => t.timers.size).join('/'), regs: tabs.map(t => t.RT._test.reg.size).join('/') });
+    if (Date.now() - lastKill > 120000) { await S.kill(); kills++; await sleep(10000); S = await K.startServer(D, env); cleanup.push(() => S.kill()); lastKill = Date.now(); }
+    await sleep(250);
+  }
+  await sleep(2500);
+  const errs = tabs.flatMap(t => t.errs);
+  const regs = tabs.map(t => t.RT._test.reg.size), timers = tabs.map(t => t.timers.size);
+  const j = await S.metrics(ADMIN).catch(() => null);
+  console.log(JSON.stringify({ secs, rounds, kills, stuck, delivered: `${got}/${want}`, via, snaps, regs, timers, base, server: j && j.counts, errs: errs.slice(0, 5) }));
+  ok(rounds > 50 && !stuck, `--soak: ${rounds} партий за ${secs} с, все собрались (${kills} падений сервера)`, { rounds, stuck });
+  ok(got === want, `--soak: все ходы дошли (${got}/${want})`);
+  ok(regs.every(n => n === 0), '--soak: у вкладок не осталось каналов', regs);
+  ok(timers.every((n, i) => n <= (base ? base[i] : n) + 4), `--soak: таймеры не копятся (${(base || []).join('/')} → ${timers.join('/')})`);
+  ok(!errs.length, '--soak: ошибок в консоли нет', errs.slice(0, 5));
+  ok(snaps.length < 3 || snaps.at(-1).heapMb < snaps[1].heapMb * 1.5 + 20, `--soak: память теста не растёт (${snaps.map(s => s.heapMb).join(' → ')} МБ)`);
+}
+
 (async () => {
   const t0 = Date.now();
   const P = await PH.start({ WS: D.WS, diffDelay: 250 });
   cleanup.push(() => P.close());
+  const soakI = process.argv.indexOf('--soak');
+  if (soakI > 0) {
+    try { await clientSoak(P, +process.argv[soakI + 1] || 600); } catch (e) { fail++; console.log('FAIL исключение', e && e.stack || e); }
+    for (const f of cleanup.reverse()) { try { await f(); } catch (e) {} }
+    finished = true;
+    console.log(`rt-test --soak: ${pass} ok, ${fail} fail (${((Date.now() - t0) / 1000).toFixed(0)} с)`);
+    process.exit(fail ? 1 : 0);
+  }
   try {
     await protocol();
     await resume();

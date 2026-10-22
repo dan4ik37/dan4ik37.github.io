@@ -361,7 +361,9 @@ class Hub {
     if (typeof e !== 'string' || !EVENT_RE.test(e)) return this.bad(conn, 'event');
     const room = mem.room;
     if (room.members.size < 2 && !mem.self) return;
-    const frame = Buffer.from('{"t":"b","r":' + room.no + ',"e":"' + e + '","p":' + (m.p === undefined ? 'null' : JSON.stringify(m.p)) + '}');
+    let pj;
+    try { pj = m.p === undefined ? 'null' : JSON.stringify(m.p); } catch (er) { return this.bad(conn, 'deep'); }   // absurd nesting
+    const frame = Buffer.from('{"t":"b","r":' + room.no + ',"e":"' + e + '","p":' + pj + '}');
     for (const o of room.members) if (o !== mem || o.self) o.conn.out(frame);
   }
 
@@ -372,7 +374,9 @@ class Hub {
     if (!mem.trackB.take()) { stats.drop.track++; return ack('rate'); }
     const meta = m.m;
     if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return ack('meta');
-    if (JSON.stringify(meta).length > C.MAX_META) return ack('big');
+    let size = 0;
+    try { size = JSON.stringify(meta).length; } catch (er) { return ack('meta'); }
+    if (size > C.MAX_META) return ack('big');
     if (!mem.meta && mem.room.presN >= C.MAX_ROOM_PRESENCE) return ack('full');
     stats.tracks++;
     this.setMeta(mem, meta);
