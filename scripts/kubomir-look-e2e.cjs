@@ -103,7 +103,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await ev(`(async () => { const st = document.createElement('style'); st.id = 'look-css'; st.textContent = '.kb-lockhint,.e-toast,.kb-tip,.kb-hud,.kb-tbar,.e-hud{visibility:hidden!important}'; document.head.appendChild(st);
       if (!${PHONE}) window.D37Full?.toggle(document.querySelector('#gamesStage'), { esc: false });
       const S = GAME_IMPL.kubomir._test.state(), R = S.R;
-      if (!R.__lookP) { R.__lookP = true; const r0 = R.render.bind(R); R.render = (...a) => { try { window.__pre?.(); } catch (e) {} return r0(...a); }; }
+      if (!R.__lookP) { R.__lookP = true; const r0 = R.render.bind(R); R.render = (...a) => { try { window.__pre?.(); } catch (e) {}
+        if (window.__side) { const P = S.P, y = S.rig.yaw, k = window.__side, rx = Math.cos(y) * k, rz = -Math.sin(y) * k; R.camera.position.set(P.x - S.ox + rx * 3 - Math.sin(y) * .7, P.y + 1.3, P.z - S.oz + rz * 3 - Math.cos(y) * .7); R.camera.lookAt(P.x - S.ox - Math.sin(y) * .35, P.y + .95, P.z - S.oz - Math.cos(y) * .35); R.camera.updateMatrixWorld(); }
+        return r0(...a); }; }
       await new Promise(r => setTimeout(r, 1500)); return true; })()`, 20000);
     // ровная площадка 40 × 40 (трава), игрок посередине, ходит (не летит)
     res.base = await ev(`(async () => { ${PRE}
@@ -112,6 +114,7 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
       for (let x = cx - 20; x <= cx + 20; x++) for (let z = cz - 20; z <= cz + 20; z++) { for (let y = gy; y <= gy + 18; y++) if (W.raw(x, y, z) > 0) set(x, y, z, null); set(x, gy - 1, z, 'grass'); for (let y = gy - 4; y < gy - 1; y++) set(x, y, z, 'dirt'); }
       Object.assign(P, { x: cx + .5, y: gy, z: cz + .5, vx: 0, vy: 0, vz: 0, fly: false });
       S.R.lighting.time = 12; S.paused = true; S.rig.yaw = 0; S.rig.fp = .1;
+      if (S.ents) { S.ents.spawnT = 1e9; for (const m of S.ents.mobs) { m.x += 900; m.z += 900; } }   // мобы не мешают снимкам
       window.__b = { cx, cz, gy };
       await wait(5000);
       return window.__b; })()`, 120000);
@@ -127,8 +130,9 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     const HS = [['empty', null, null], ['pick', 'pick_iron', null], ['sword-shield', 'sword_iron', 'shield'], ['pick-torchL', 'pick_iron', 'torch'], ['torch', 'torch', null],
       ['block', 'planks_oak', null], ['bow-draw', 'bow', null, { draw: 1 }], ['dig-mid', 'pick_iron', null, { sw: .3 }], ['guard', 'sword_iron', 'shield', { guard: 1 }], ['eat', 'apple', 'torch', { eat: 1 }]];
     for (const [n, m, o, x] of HS) { await hands(m, o, x || {}); await view(0, .08, 0); await shot('hands-fp-' + n); }
-    for (const [n, m, o, x] of HS.filter(h => ['pick', 'sword-shield', 'pick-torchL', 'bow-draw'].includes(h[0]))) { await hands(m, o, x || {}); await view(Math.PI, .25, 2); await shot('hands-front-' + n); await view(.6, .3, 1); await shot('hands-back-' + n); }
-    await ev(`(() => { window.__pre = null; return 1; })()`);
+    for (const [n, m, o, x] of HS.filter(h => ['pick', 'sword-shield', 'pick-torchL', 'bow-draw'].includes(h[0]))) { await hands(m, o, x || {}); await view(0, .25, 2); await shot('hands-front-' + n);
+      await ev(`(() => { window.__side = 1; return 1; })()`); await view(0, .1, 1); await shot('hands-side-' + n); await ev(`(() => { window.__side = -1; return 1; })()`); await view(0, .1, 1); await shot('hands-sideL-' + n); await ev(`(() => { window.__side = 0; return 1; })()`); }
+    await ev(`(() => { window.__pre = null; const S = GAME_IMPL.kubomir._test.state(); S.eat = null; GAME_IMPL.kubomir._test.cam(0); return 1; })()`);
     // ходьба (покачивание обеих рук): держит «вперёд», снимок на ходу
     await hands('pick_iron', 'torch'); await view(0, .08, 0, 300);
     await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.C.press('forward', true); await new Promise(r => setTimeout(r, 700)); return 1; })()`);
@@ -205,6 +209,25 @@ let fail = 0; const ok = (c, name, extra) => { if (!c) { fail++; console.log('FA
     await view(-Math.PI / 2, .3, 2, 900); await shot('crawl-front');
     await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.C.press('forward', false); await new Promise(r => setTimeout(r, 300)); await new Promise(r => setTimeout(r, 300)); return 1; })()`);
     await view(-Math.PI / 2 + 1.2, .2, 1, 900); await shot('crawl-tp-idle');
+    await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.K?.press?.('crawl', false); GAME_IMPL.kubomir._test.cam(0); await new Promise(r => setTimeout(r, 600)); return 1; })()`);
+    // вис на стене в 3 блока: обе руки на краю (от 1-го лица); бассейн: брасс
+    res.hang = await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b; window.__pre = null;
+      const x0 = cx + 2, z0 = cz + 14; fill(x0 - 4, gy, z0 - 3, x0 + 6, gy + 6, z0 + 3, null); fill(x0 + 2, gy, z0 - 3, x0 + 5, gy + 2, z0 + 3, 'stone');
+      P.inv[P.sel] = { id: 'pick_iron', n: 1 }; P.off = { id: 'torch', n: 4 };
+      Object.assign(P, { x: x0 + 1.65, y: gy, z: z0 + .5, vx: 0, vy: 0, vz: 0 }); S.rig.yaw = -Math.PI / 2; S.rig.fp = -.15; await wait(800);
+      let my = 0, pkN0 = S.pkN || 0;
+      S.C.press('forward', true); S.C.press('jump', true); await wait(40); P.y = gy + .45; P.vy = 5; P.onGround = false;   // уже в прыжке у стены — схватиться
+      for (let i = 0; i < 300 && !P.hang; i++) { await wait(5); my = Math.max(my, P.y - gy); if (P.pk && P.pk.move === 'hang') S.C.press('forward', false); } S.C.press('forward', false); S.C.press('jump', false); await wait(600);
+      return { hang: !!P.hang, y: +P.y.toFixed(2), x: +(P.x - x0).toFixed(2), maxUp: +my.toFixed(2), pk: (S.pkN || 0) - pkN0 }; })()`, 30000);
+    console.log('ВИС', JSON.stringify(res.hang));
+    await view(-Math.PI / 2, -.15, 0, 600); await shot('hands-fp-hang');
+    await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.C.press('sneak', true); S.K?.press?.('sneak', true); await new Promise(r => setTimeout(r, 200)); S.K?.press?.('sneak', false); await new Promise(r => setTimeout(r, 800)); return 1; })()`);
+    res.swim = await ev(`(async () => { ${PRE} const { cx, cz, gy } = window.__b;
+      const x0 = cx - 12, z0 = cz + 14; fill(x0 - 4, gy - 4, z0 - 4, x0 + 4, gy - 1, z0 + 4, 'water');
+      Object.assign(P, { x: x0 + .5, y: gy - 2.6, z: z0 + .5, vx: 0, vy: 0, vz: 0 }); S.rig.yaw = 0; S.rig.fp = .1; await wait(1500);
+      S.C.press('forward', true); await wait(700); return { water: +P.water.toFixed(2) }; })()`, 30000);
+    await shot('hands-fp-swim');
+    await ev(`(async () => { const S = GAME_IMPL.kubomir._test.state(); S.C.press('forward', false); return 1; })()`);
     await ev(`(() => { const S = GAME_IMPL.kubomir._test.state(); GAME_IMPL.kubomir._test.cam(0); S.K?.press?.('crawl', false); return 1; })()`);
     }
     if (only('pom')) {

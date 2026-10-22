@@ -284,6 +284,12 @@ gl_FragColor = vec4( gl_FragColor.rgb, ( uBloomK > 0.0 && vEm > 0.01 ) ? 1.0 + v
 gl_FragColor = vec4( gl_FragColor.rgb, ( uD37Act.y > 0.5 && gl_FragColor.a <= 1.0001 ) ? 0.5 : gl_FragColor.a );
 #endif`;
   const ACT0 = new Float32Array(4);
+  // руки и вещи «из глаз» (D37_FP): код травы движка в альфе (E.FOLIAGE_A), пока AO включён, — AO и контактные тени их не считают
+  // заслонкой: глубина «из глаз» сжата к камере, и вокруг руки у стены было тёмное кольцо (T-096a). Только альфа — цвет тот же
+  const FS_FPAO = u => `
+#ifdef OPAQUE
+gl_FragColor = vec4( gl_FragColor.rgb, ${u}.z > 0.5 ? ${(E.FOLIAGE_A || (1 + 4 / 1024)).toFixed(8)} : gl_FragColor.a );
+#endif`;
   // вырезное по альфе (листва, трава, цветы, факелы, стекло) — код травы движка (E.FOLIAGE_GLSL после output_fragment, uniform
   // d37Rt = E.GFXU.rt): AO и контактные тени его не учитывают — без тёмных пятен вокруг травинок; флаг ставит движок (post.js)
   const foliageGLSL = () => typeof E.FOLIAGE_GLSL === 'string' && E.GFXU?.rt ? E.FOLIAGE_GLSL : '';
@@ -536,8 +542,11 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
     };
     let hookSeq = 0;
     function patch(m, kind){
-      const simple = VR.safe, FOL = !simple && (LAYER_OPTS[kind] || {}).alphaTest ? foliageGLSL() : '';
+      const simple = VR.safe;
+      // код травы в альфе: вырезное по альфе — всегда; «из глаз» (D37_FP — define ставят после patch, поэтому — при сборке)
+      const folOf = () => !simple && ((LAYER_OPTS[kind] || {}).alphaTest || (!!m.defines?.D37_FP && !!E.GFXU?.rt)) ? foliageGLSL() : '';
       m.onBeforeCompile = sh => {
+        const FOL = folOf();
         Object.assign(sh.uniforms, U);
         if (FOL) sh.uniforms.d37Rt = { value: E.GFXU.rt };
         const ACT = !simple && !!m.defines?.D37_ACT;
@@ -565,7 +574,7 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           try { h.fn(sh, { layer: kind, gl2, material: m, fp: !!m.defines?.D37_FP }); } catch (e) { sh.vertexShader = v0; sh.fragmentShader = f0; console.warn('Кубомир: кусок шейдера «' + h.id + '» —', e); }
         }
       };
-      m.customProgramCacheKey = () => 'd37vox6-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (m.defines?.D37_ACT ? 'a' : '') + (FOL ? 'F' : '') + (simple ? '' : hookKey(kind));
+      m.customProgramCacheKey = () => 'd37vox7-' + kind + (gl2 ? '2' : '1') + (simple ? 's' : '') + (m.defines?.D37_FP ? 'f' : '') + (m.defines?.D37_ACT ? 'a' : '') + (folOf() ? 'F' : '') + (simple ? '' : hookKey(kind));
       return m;
     }
     const LAYER_OPTS = {
@@ -851,11 +860,11 @@ reflectedLight.indirectDiffuse *= clamp( vec3( max( uD37L.x * ( 0.3 + 0.7 * uDay
           .replace('#include <common>', '#include <common>\n' + ENT_FS_HEAD)
           .replace('#include <lights_fragment_begin>', lfbEnt())
           .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + ENT_FS_LIGHT)
-          .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_ACT);   // в отражениях существ нет
+          .replace('#include <dithering_fragment>', '#include <dithering_fragment>\n' + FS_ACT + (fp ? FS_FPAO('uD37Act') : ''));   // в отражениях существ нет; «из глаз» — не заслонка AO
         if (fp) sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', VS_FP);
       };
       const key0 = typeof src.customProgramCacheKey === 'function' ? String(src.customProgramCacheKey()) : '';
-      m.customProgramCacheKey = () => 'd37ent2' + (lit ? 'L' : 'B') + (fp ? 'f' : '') + key0;
+      m.customProgramCacheKey = () => 'd37ent3' + (lit ? 'L' : 'B') + (fp ? 'f' : '') + key0;
       m.userData.d37ent = { fp, kind: o.kind || '' };
       return m;
     };

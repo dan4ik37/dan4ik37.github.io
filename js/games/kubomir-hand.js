@@ -35,10 +35,35 @@
     torch: { fist: [.38, -.3, -.7], dir: [-.32, .7, -1], roll: -.45 },
     bowL: { fist: [.12, -.28, -.66], dir: [-.25, .5, -1], roll: -.25 }, bowR: { fist: [.07, -.36, -.56], dir: [-.45, .55, -1], roll: -.4 }, drawR: { fist: [.15, -.3, -.31], dir: [-.85, .35, -.4], roll: -.6 },
   };
-  // вещь от 1-го лица — над кулаком, в осях камеры (как в Bedrock): блок углом к нам, плоская вещь (инструмент, еда) — рукоятью
-  // в кулаке, головой вверх и к середине экрана (видна обратная сторона картинки); off — от кулака, rot — повороты (XYZ), s — размер
-  const ITEM = { block: { off: [-.06, .1, -.02], rot: [.42, .78, 0], s: .19 }, flat: { off: [-.09, .14, -.03], rot: [-.2, 2.55, -.25], s: .34 },
-    shield: { off: [-.03, .06, -.05], rot: [-.08, .3, .05], s: .5 }, bow: { off: [.02, .05, -.04], rot: [0, .35, -.32], s: .5 }, torch: { off: [-.04, .12, -.02], rot: [-.15, 2.6, -.05], s: .34 } };
+  // T-096a (владелец 22.10: «в руку плохо предметы держит… вещь висит рядом с кулаком»): вещь от 1-го лица — РЕБЁНОК кисти (копии
+  // кисти человечка): куда кисть, туда и вещь (замах, удар, еда, смена вещи), рукоять всегда в кулаке. Хват задан так, как вещь
+  // видна в покое (оси камеры, как в Bedrock; левая — зеркально): rot — повороты XYZ, s — размер, g — точка картинки (кубика),
+  // которая сидит в кулаке (рукоять инструмента — внизу слева картинки, низ факела, середина щита и лука), o — сдвиг от середины
+  // кулака (камера). Из этого при смене вещи считается место вещи в осях кисти (gripLocal) — дальше она просто едет с кистью
+  const GRIP_FP = {
+    tool: { rot: [-.2, 2.55, -.25], s: .34, g: [-.38, -.36, 0], o: [-.005, .015, .01] },     // кирка, топор, лопата, меч — рукоятью, головой вверх к середине
+    flat: { rot: [-.12, 2.7, -.08], s: .28, g: [0, -.32, 0], o: [-.01, .03, 0] },           // еда, слитки, палки — стоймя
+    block: { rot: [.42, .78, 0], s: .19, g: [0, -.36, 0], o: [-.02, .04, -.01] },          // блок — на кулаке, углом к нам
+    torch: { rot: [-.15, 2.6, -.05], s: .4, g: [0, -.36, 0], o: [0, .02, 0] },             // факел — за низ ручки, огонь вверх
+    // щит и лук — вещи левой руки: rotL — как видны в ЛЕВОЙ (правой — зеркально). Остальным левая — зеркало правой с поворотом
+    // картинки на 180° вокруг вертикали (иначе у картинки-диагонали в кулаке оказался бы пустой угол, а не рукоять)
+    shield: { rotL: [-.08, -.3, -.05], s: .5, g: [0, -.06, 0], o: [.01, .03, -.05] },        // щит — перед кулаком, лицом к нам
+    bow: { rotL: [0, -.35, .32], s: .5, g: [.12, 0, 0], o: [0, 0, -.01] },                   // лук — кулак на середине дуги
+  };
+  const gripKind = (k, flat) => k === 'pick' || k === 'axe' || k === 'shovel' || k === 'sword' || k === 'hoe' ? 'tool' : k === 'torch' ? 'torch' : k === 'shield' ? 'shield' : k === 'bow' ? 'bow' : k === 'block' && !flat ? 'block' : 'flat';
+  // руки «по делу» от 1-го лица (правая; левая — зеркально и в другой фазе): вис — кулаки вверху на краю; залезть — руки на край и
+  // толкают вниз; лестница — перекладины по очереди; плывёт — брасс (к груди → вперёд → в стороны); ползком — тянутся вперёд по очереди
+  const ACT_FP = {
+    hang: { fist: [.27, .2, -.5], dir: [-.12, 1, -.32], roll: -.2 },
+    push: { fist: [.3, -.38, -.58], dir: [-.16, -.22, -1], roll: -.3 },
+    ladder: { fist: [.24, .02, -.48], dir: [-.1, .85, -.45], roll: -.25 },
+    swimA: { fist: [.14, -.31, -.42], dir: [-.3, .15, -1], roll: -.6 },
+    swimB: { fist: [.07, -.2, -.86], dir: [-.1, .12, -1], roll: -.3 },
+    swimC: { fist: [.5, -.27, -.62], dir: [-.55, .1, -1], roll: -.2 },
+    crawl: { fist: [.3, -.46, -.6], dir: [-.3, .22, -1], roll: -.45 },
+  };
+  // левая пустая — ниже и в стороне (видна, не мешает смотреть; владелец: «рука есть, но её просто так не видно»)
+  const EMPTY_L = { fist: [.34, -.37, -.64], dir: [-.42, .5, -1], roll: -.35 };
   // движения от 1-го лица (правая; левая — зеркально): [замах, конец удара] × [dx, dy, dz кулака; повороты x, y, z]
   const MOT_FP = {
     jab: [[.02, -.02, .08, .25, 0, 0], [-.07, .05, -.24, -.2, .1, 0]],
@@ -51,13 +76,16 @@
     shoot: [[0, 0, 0, 0, 0, 0], [.07, .03, .12, .1, 0, 0]],
     bash: [[0, 0, .06, 0, 0, 0], [.09, .06, -.2, 0, 0, 0]],
   };
-  window.KubomirHand = { create, FP, EMPTY, EAT, ITEM, HOLD_FP, MOT_FP };   // числа позы — снаружи видны (подстройка на живую в консоли)
+  window.KubomirHand = { create, FP, EMPTY, EMPTY_L, EAT, GRIP_FP, HOLD_FP, ACT_FP, MOT_FP };   // числа позы — снаружи видны (подстройка на живую в консоли)
 
   function create(st){
     const R = st.R, T = R.T, VR = st.VR, Lit = window.KubomirEnts.Lit, V = () => window.D37E.vox, CB = () => window.D37E?.combat;
     const H = { sw: 1, push: 1, pushH: 0, eq: 1, eqL: 1, eatK: 0, mining: false, name: null, nameL: null, arm: null, armCh: null, elbow: null, hand: null, armL: null, elbowL: null, handL: null,
       fpItem: null, tpItem: null, fpOff: null, tpOff: null, fl: 0, eye: Lit.make(T), sway: { y: 0, p: 0, ok: false }, n: 0,
-      tp: { r: 0, l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 }, tpFP: { r: 0, l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 }, alpha: 0, layer: false };
+      tp: { r: 0, l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 }, tpFP: { r: 0, l: 0, m: 0, mh: 0, v: 0, g: 0, d: 0, p: 0 }, alpha: 0, layer: false,
+      // T-096a: хват вещи пересчитать (сменили вещь или руку), доля позы «по делу» у каждой руки (вис, лестница, брасс, ползком),
+      // фазы: брасс 0…1, ползком, лестница
+      gripDirty: [true, true], spk: [0, 0], actLast: '', swimC: 0, crawlPh: 0 };
     const HELD = [0, 0, 0], HELD2 = [0, 0, 0];
     const fp = new T.Group(); fp.name = 'kb:fp'; fp.visible = false;
     const pose = new T.Group(), poseL = new T.Group(); fp.add(pose); fp.add(poseL);   // плечи рук: место и поворот — каждый кадр
@@ -111,6 +139,7 @@
 
     // ── руки от 1-го лица: копии рук человечка (правая — правой, левая — левой) ──
     function dropArms(){
+      for (const it of [H.fpItem, H.fpOff]) if (it && it.parent !== fp) fp.add(it);   // вещи — из старых кистей (их материалы не трогаем)
       for (const [g, k] of [[pose, 'arm'], [poseL, 'armL']]) {
         const A = H[k]; if (!A) continue;
         g.remove(A);
@@ -157,6 +186,46 @@
       pose.add(H.arm);
       if (Ll) { const l = copyArm(ch, Ll.A, Ll.E, Ll.Hd); H.armL = l.A; H.elbowL = l.E; H.handL = l.Hd; H.LaL = (Ll.A.userData?.La || .62) * FP.scale; poseL.add(H.armL); }
       H.armCh = ch;
+      fpAttach(0); fpAttach(1);
+    }
+    // вещь от 1-го лица — в кисть руки (её копии); хват пересчитать (gripLocal) перед кадром
+    function fpAttach(side){
+      const it = side ? H.fpOff : H.fpItem; if (!it) return;
+      const hd = side ? H.handL : H.hand;
+      if (hd) { if (it.parent !== hd) hd.add(it); } else if (it.parent !== fp) fp.add(it);
+      H.gripDirty[side] = true;
+    }
+    // Хват: рука в покое (поза по тому, что держит, без движения) → где кисть в осях камеры → где должна быть вещь (GRIP_FP) → её
+    // место в осях кисти. Считается при смене вещи или руки, не каждый кадр (без мусора: свои векторы и матрицы)
+    const GM = new T.Matrix4(), GI = new T.Matrix4(), GQ = new T.Quaternion(), GQ2 = new T.Quaternion(), GE = new T.Euler(), GP = new T.Vector3(), GS = new T.Vector3(), GV = new T.Vector3(), GV2 = new T.Vector3(), GS2 = new T.Vector3();
+    const QY180 = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), PI), MV0 = [0, 0, 0, 0, 0, 0], SW0 = [0, 0, 0, 0, 0, 0], CH = [];
+    function gripLocal(side){
+      const it = side ? H.fpOff : H.fpItem, hand = side ? H.handL : H.hand, g = side ? poseL : pose, elb = side ? H.elbowL : H.elbow;
+      if (!it || !hand || it.parent !== hand) return false;
+      const G = GRIP_FP[it.userData.gk] || GRIP_FP.flat, m = side ? -1 : 1;
+      restBase(side, it.userData.kind);
+      const e0 = elb ? elb.rotation.x : 0;
+      if (elb) elb.rotation.x = -.12;
+      placeArm(side, g, BASE, MV0, R.camera, SW0);
+      g.updateMatrix(); GM.copy(g.matrix);
+      CH.length = 0; for (let o = hand; o && o !== g; o = o.parent) CH.push(o);
+      for (let i = CH.length - 1; i >= 0; i--) { CH[i].updateMatrix(); GM.multiply(CH[i].matrix); }
+      GM.decompose(GP, GQ, GS);   // GP — середина кулака (оси камеры), GS — размер кисти
+      // поворот вещи в осях камеры: правая — rot; левая — rotL или зеркало rot с поворотом картинки на 180° (рукоять — в кулак)
+      if (side && G.rotL) GE.set(G.rotL[0], G.rotL[1], G.rotL[2], 'XYZ');
+      else if (!side && G.rotL) GE.set(G.rotL[0], -G.rotL[1], -G.rotL[2], 'XYZ');
+      else GE.set(G.rot[0], G.rot[1] * m, G.rot[2] * m, 'XYZ');
+      GQ2.setFromEuler(GE);
+      if (side && !G.rotL) GQ2.multiply(QY180);
+      GV.set(G.g[0] * G.s, G.g[1] * G.s, G.g[2] * G.s).applyQuaternion(GQ2);
+      GV2.set(GP.x + G.o[0] * m - GV.x, GP.y + G.o[1] - GV.y, GP.z + G.o[2] - GV.z);
+      GI.compose(GV2, GQ2, GS2.setScalar(G.s));
+      GM.invert().multiply(GI);   // в осях кисти
+      GM.decompose(it.position, it.quaternion, it.scale);
+      it.userData.s0 = it.scale.x;
+      if (elb) elb.rotation.x = e0;
+      H.gripDirty[side] = false;
+      return true;
     }
     // вещь в кулаке: как у человечка (кость кисти); блок — повёрнут углом, инструмент — рукоятью в кулаке; левая — повороты зеркально
     // (сама картинка — нет: отрицательный размер переворачивает лицевую грань, и свет вещи выходит тёмным)
@@ -184,8 +253,9 @@
       if (name) {
         H[kF] = VR.itemMesh(name, 15 << 12, { fp: true }); H[kF].renderOrder = 31; H[kF].frustumCulled = false; H[kF].castShadow = false;
         H[kT] = VR.itemMesh(name, 15 << 12); H[kT].renderOrder = 20; H[kT].castShadow = true;
-        fp.add(H[kF]);
-        H[kT].userData.kind = kindOf(name);
+        const kd = kindOf(name);
+        H[kT].userData.kind = kd; H[kF].userData.kind = kd; H[kF].userData.gk = gripKind(kd, !!H[kF].geometry.userData.flat);
+        fpAttach(side);
       }
       if (old !== null) { if (side) H.eqL = 0; else H.eq = 0; }   // первая вещь при входе в мир — без анимации
     }
@@ -257,17 +327,43 @@
       v2.copy(v1).multiplyScalar(La).applyQuaternion(qb);
       g.position.set(F3[0] - v2.x, F3[1] - v2.y, F3[2] - v2.z);
     }
-    // вещь над кулаком (в осях камеры), поворачивается вместе с движением; левая — зеркально
-    function placeItem(it, s, O, k){
-      const m = s ? -1 : 1;
-      v2.set(O.off[0] * m, O.off[1], O.off[2]).applyQuaternion(qb);
-      it.position.set(F3[0] + v2.x, F3[1] + v2.y, F3[2] + v2.z);
-      ie.set(O.rot[0], O.rot[1] * m, O.rot[2] * m, 'XYZ'); it.quaternion.setFromEuler(ie).premultiply(qb);
-      it.scale.setScalar(O.s * (k || 1));   // без зеркала по размеру: свет вещи «из глаз» считается по лицевой грани
+    // поза руки «в покое» по тому, что в ней (для хвата — gripLocal): правая — факел повыше, пусто — выше и виднее; левая — щит, лук, факел
+    function restBase(s, k){
+      if (!s) return copyBase(k === 'torch' ? HOLD_FP.torch : k ? FP : EMPTY);
+      return copyBase(k === 'bow' ? HOLD_FP.bowL : k === 'shield' ? HOLD_FP.shield : k === 'torch' ? HOLD_FP.torch : k ? FP : EMPTY_L);
+    }
+    // руки «по делу» (T-096a, владелец: «рука почти бездействует»): вис, залезть, лестница, брасс, ползком — обе руки; правая и левая —
+    // в разной фазе (по очереди), брасс — вместе. Поза — в SPB (правая; левую зеркалит placeArm)
+    const SPB = { fist: [0, 0, 0], dir: [0, 0, 0], roll: 0 };
+    function setP(o, a){ for (let i = 0; i < 3; i++) { o.fist[i] = a.fist[i]; o.dir[i] = a.dir[i]; } o.roll = a.roll; return o; }
+    function lerpP(o, a, b, k){ for (let i = 0; i < 3; i++) { o.fist[i] = a.fist[i] + (b.fist[i] - a.fist[i]) * k; o.dir[i] = a.dir[i] + (b.dir[i] - a.dir[i]) * k; } o.roll = a.roll + (b.roll - a.roll) * k; return o; }
+    function actNow(P){
+      if (P.hang || (P.pk && P.pk.move === 'hang')) return 'hang';
+      if (P.pk) return 'pk';
+      if (P.climb && !P.onGround) return 'ladder';
+      if (P.water > 1 && !P.onGround && !P.fly && !(P.lava > .2)) return 'swim';
+      if (P.crawl) return 'crawl';
+      return '';
+    }
+    const ACT_ELB = { hang: -.06, pk: -.2, ladder: -.45, swim: -.32, crawl: -.55 };
+    function actPose(s, act){
+      const P = st.P, o = SPB, ph = s ? PI : 0;
+      if (act === 'hang') {
+        setP(o, ACT_FP.hang);
+        if (P.shimmyNow) { const q = Math.max(0, Math.sin((P.climbPh || 0) + ph)); o.fist[1] += .05 * q; o.fist[2] -= .02 * q; }   // по краю — перехват
+      } else if (act === 'pk') lerpP(o, ACT_FP.hang, ACT_FP.push, ease(((P.pk ? P.pk.k || 0 : 1) - .2) / .55));   // руки на край → толкают вниз
+      else if (act === 'ladder') { setP(o, ACT_FP.ladder); const q = Math.sin((P.climbPh || 0) + ph); o.fist[1] += .13 * q; o.fist[2] -= .04 * Math.max(0, q); }
+      else if (act === 'swim') {
+        const c = H.swimC;   // 0….45 — от груди вперёд, ….8 — в стороны, …1 — к груди
+        if (c < .45) lerpP(o, ACT_FP.swimA, ACT_FP.swimB, ease(c / .45));
+        else if (c < .8) lerpP(o, ACT_FP.swimB, ACT_FP.swimC, ease((c - .45) / .35));
+        else lerpP(o, ACT_FP.swimC, ACT_FP.swimA, ease((c - .8) / .2));
+      } else if (act === 'crawl') { setP(o, ACT_FP.crawl); const q = Math.sin(H.crawlPh + ph); o.fist[2] -= .1 * q; o.fist[1] += .05 * Math.max(0, q); }
+      return o;
     }
 
     // ── кадр ──
-    const SWY = [0, 0, 0, 0, 0, 0], SWY0 = [0, 0, 0, 0, 0, 0];
+    const SWY = [0, 0, 0, 0, 0, 0], SWL = [0, 0, 0, 0, 0, 0];
     const qw = new T.Quaternion(), qh = new T.Quaternion(), vw = new T.Vector3(), mh = new T.Matrix4(), ef = new T.Euler(0, 0, 0, 'YXZ');
     H.frame = (dt, t) => {
       const P = st.P, A = st.A, me = A?.get('me'); H.n++;
@@ -294,37 +390,52 @@
       const sp = H.sw < 1 && !cm ? H.sw : 0, a1 = Math.sin(PI * sp), b1 = Math.sin(PI * Math.sqrt(sp)), c1 = Math.sin(TAU * Math.sqrt(sp));
       const pa = H.push < 1 ? Math.sin(PI * H.push) : 0, eqd = 1 - ease(H.eq), eqdL = 1 - ease(H.eqL), ek = ease(H.eatK);
       const chew = eating && st.eat.t > .3 ? Math.abs(Math.sin(t * 14)) : 0;
-      // свет у глаз (руки и вещи от 1-го лица)
-      const ey = P.y + (P.sneak ? 1.27 : 1.62);
+      // свет у глаз (руки и вещи от 1-го лица): глаза — по телу (присел, ползком — ниже)
+      const ey = P.y + (P.crawl ? .42 : P.sneak || (P.h && P.h < 1.8 - 1e-6) ? 1.27 : 1.62);
       Lit.update(H.eye, st, P.x, ey, P.z, dt, heldLight());
       if (H.fpItem) VR.itemLightF(H.fpItem.geometry, H.eye.lv);
       if (H.fpOff) VR.itemLightF(H.fpOff.geometry, H.eye.lv);
       const body = actors.get('me')?.E;
       if (body) { if (H.tpItem) VR.itemLightF(H.tpItem.geometry, body.lv); if (H.tpOff) VR.itemLightF(H.tpOff.geometry, body.lv); }
       const kR = H.tpItem?.userData.kind || '', kL = H.tpOff?.userData.kind || '', two = kL === 'bow';
+      // руки «по делу» (вис, залезть, лестница, плывёт, ползком): доля позы — плавно (≈ 0,12 с), фазы движений
+      const act = actNow(P), vh = Math.hypot(P.vx || 0, P.vz || 0);
+      if (act) H.actLast = act;
+      if (act === 'swim') H.swimC = (H.swimC + dt * (vh > .6 ? .85 : .45)) % 1;
+      if (act === 'crawl') H.crawlPh += dt * (1.2 + vh * 4);
+      const kk = Math.min(1, dt / .12);
+      H.spk[0] += ((act ? 1 : 0) - H.spk[0]) * kk; H.spk[1] += ((act ? 1 : 0) - H.spk[1]) * kk;
+      const hk = ease(H.spk[0]), hkL = ease(H.spk[1]), aL = H.actLast || '', onEdge = act === 'hang' || act === 'pk';
 
-      // ── от 1-го лица ──
+      // ── от 1-го лица: обе руки видны всегда (левая пустая — ниже и в стороне), вещи — в кулаках (дети кистей) ──
       const first = !st.camMode;
-      fp.visible = first && !!H.arm && !P.dead && !(st.hudHidden) && !P.pk && !P.hang;   // залезает, висит — руки на краю
+      fp.visible = first && !!H.arm && !P.dead && !(st.hudHidden);
       if (fp.visible) {
         const cam = R.camera;
         if (fp.parent !== cam) { cam.add(fp); if (!cam.parent) R.scene.add(cam); }
-        // запаздывание при повороте (рука догоняет взгляд) и покачивание на ходу
+        if (H.gripDirty[0]) gripLocal(0);
+        if (H.gripDirty[1]) gripLocal(1);
+        // запаздывание при повороте (рука догоняет взгляд) и покачивание на ходу; руки — навстречу шагу (правая вперёд — левая назад),
+        // на месте — чуть дышат (каждая в своей фазе)
         const yaw = st.rig.yaw, pit = st.rig.fp || 0, S2 = H.sway;
         if (!S2.ok) { S2.y = yaw; S2.p = pit; S2.ok = true; }
         const ks = 1 - Math.exp(-dt * 13);
         S2.y += wrap(yaw - S2.y) * ks; S2.p += (pit - S2.p) * ks;
         const dy = Math.max(-.35, Math.min(.35, wrap(S2.y - yaw))), dp = Math.max(-.3, Math.min(.3, S2.p - pit));
         const Fe = st.rig.feel, mot = st.rig.motion ?? 1, bw = Fe ? Fe.bobW * mot : 0, bp = Fe ? Fe.bobPh : 0;
+        const stride = Math.sin(bp) * .022 * bw * (1 - hk), br = Math.sin(t * 1.7) * .005 * mot, brL = Math.sin(t * 1.7 + 1.3) * .005 * mot;
         SWY[0] = Math.cos(bp) * .012 * bw - dy * .12; SWY[1] = -Math.abs(Math.sin(bp)) * .016 * bw + dp * .1; SWY[2] = 0; SWY[3] = dp * .6; SWY[4] = dy * .7; SWY[5] = 0;
+        for (let i = 0; i < 6; i++) SWL[i] = SWY[i];
+        SWY[1] += br; SWY[2] += stride; SWL[1] += brL; SWL[2] -= stride;
 
-        // правая: обычная поза (пустая — своя; у тетивы лука), еда, копание и толчок (как раньше) или удар боя
+        // правая: обычная поза (пустая — своя; у тетивы лука), еда, копание и толчок (как раньше) или удар боя; «по делу» — поверх
         const mk = H.name ? 0 : 1;
         if (two) mix(HOLD_FP.bowR, HOLD_FP.drawR, ease(draw));
         else if (kR === 'torch') copyBase(HOLD_FP.torch);
         else mix(FP, EMPTY, mk);
         const er = eatOff ? 0 : ek;
         if (er > 0) mix(keep(), EAT, er);
+        if (hk > .001) { keep(); mix(B0, actPose(0, aL), hk); }
         let mv = MV;
         if (cm && MOT_FP[cm]) mv = motion(cm, cv);
         else if (two && shotK > 0) mv = motion('shoot', 1 + shotK);
@@ -333,32 +444,33 @@
           MV[0] = -.2 * b1; MV[1] = -.08 * a1 + .05 * c1 + .045 * pa - .5 * eqd + .025 * chew * er; MV[2] = -.13 * a1 - .12 * pa;
           MV[3] = -.85 * b1 + .2 * a1 + .18 * pa - .6 * eqd + .08 * chew * er; MV[4] = .42 * b1; MV[5] = -.22 * a1;
         }
+        if (hk > .001) for (let i = 0; i < 6; i++) mv[i] *= 1 - hk;   // висит, лезет, плывёт — без взмахов
         placeArm(0, pose, BASE, mv, cam, SWY);
-        if (H.elbow) H.elbow.rotation.x = -.12 - .35 * er - .25 * b1;
-        const it = H.fpItem;
-        if (it) placeItem(it, 0, kR === 'torch' ? ITEM.torch : it.geometry.userData.flat ? ITEM.flat : ITEM.block, 1);
+        if (H.elbow) { const e0 = -.12 - .35 * er - .25 * b1; H.elbow.rotation.x = e0 + ((ACT_ELB[aL] ?? e0) - e0) * hk; }
+        if (H.fpItem) H.fpItem.visible = !onEdge;   // на краю — руки держатся (вещь «в кармане»)
 
-        // левая: видна, когда в ней что-то есть (щит, факел, еда, лук)
-        poseL.visible = !!H.nameL && !!H.armL;
-        if (H.fpOff) H.fpOff.visible = poseL.visible;
+        // левая: видна всегда; держит щит, факел, лук, еду — своя поза, пустая — ниже и в стороне; правая бьёт — левая чуть назад
+        poseL.visible = !!H.armL;
         if (poseL.visible) {
           const el = eatOff ? ek : 0;
           if (two) copyBase(HOLD_FP.bowL);
           else if (kL === 'shield') mix(HOLD_FP.shield, HOLD_FP.guard, ease(guard));
           else if (kL === 'torch') copyBase(HOLD_FP.torch);
-          else copyBase(FP);
+          else copyBase(H.nameL ? FP : EMPTY_L);
           if (el > 0) mix(keep(), EAT, el);
           if (two) { F3[0] -= .04 * ease(draw); F3[1] += .05 * ease(draw); }
+          if (hkL > .001) { keep(); mix(B0, actPose(1, aL), hkL); }
           MV.fill(0);
           if (cm === 'bash') motion('bash', cv);
-          MV[1] += -.5 * eqdL + .025 * chew * el; MV[3] += -.6 * eqdL + .08 * chew * el;
+          MV[1] += -.5 * eqdL + .025 * chew * el - .02 * a1; MV[2] += .035 * a1; MV[3] += -.6 * eqdL + .08 * chew * el;
           if (H.pushH && H.push < 1) { MV[1] += .045 * pa; MV[2] -= .12 * pa; MV[3] += .18 * pa; }
           // натянутый лук чуть дрожит, когда долго держит
           if (two && draw >= 1) { MV[0] += Math.sin(t * 31) * .003; MV[1] += Math.sin(t * 27) * .003; }
-          placeArm(1, poseL, BASE, MV, cam, SWY);
-          if (H.elbowL) H.elbowL.rotation.x = -.12 - .35 * el - (kL === 'shield' ? .25 * ease(guard) : 0);
+          if (hkL > .001) for (let i = 0; i < 6; i++) MV[i] *= 1 - hkL;
+          placeArm(1, poseL, BASE, MV, cam, SWL);
+          if (H.elbowL) { const e0 = -.12 - .35 * el - (kL === 'shield' ? .25 * ease(guard) : 0); H.elbowL.rotation.x = e0 + ((ACT_ELB[aL] ?? e0) - e0) * hkL; }
           const io = H.fpOff;
-          if (io) placeItem(io, 1, kL === 'shield' ? ITEM.shield : kL === 'bow' ? ITEM.bow : kL === 'torch' ? ITEM.torch : io.geometry.userData.flat ? ITEM.flat : ITEM.block, kL === 'shield' ? 1 + .14 * Math.sin(PI * H.fl) : 1);
+          if (io) { io.visible = !onEdge; if (kL === 'shield' && io.userData.s0) io.scale.setScalar(io.userData.s0 * (1 + .14 * Math.sin(PI * H.fl))); }
         }
       }
       // ── от 3-го лица: вещи у человечка; позы рук — слой world3d (H.pose → a.hold), без него — правой рукой поверх позы ──
@@ -414,7 +526,17 @@
     H.state = () => ({ swing: +H.sw.toFixed(3), push: +H.push.toFixed(3), equip: +H.eq.toFixed(3), eat: +H.eatK.toFixed(3), mining: H.mining, item: H.name, off: H.nameL, fp: fp.visible, arm: !!H.arm, armL: !!H.armL, fpL: fp.visible && poseL.visible,
       eye: [...H.eye.lv].map(x => +x.toFixed(2)), body: actors.get('me') ? [...actors.get('me').E.lv].map(x => +x.toFixed(2)) : null, layer: H.layer, hold: { ...H.tp },
       fist: H.arm && fp.visible ? (() => { const p = new T.Vector3(); (H.hand || H.arm).getWorldPosition(p); R.camera.worldToLocal(p); return [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]; })() : null,
-      fistL: H.armL && fp.visible && poseL.visible ? (() => { const p = new T.Vector3(); (H.handL || H.armL).getWorldPosition(p); R.camera.worldToLocal(p); return [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]; })() : null });
+      fistL: H.armL && fp.visible && poseL.visible ? (() => { const p = new T.Vector3(); (H.handL || H.armL).getWorldPosition(p); R.camera.worldToLocal(p); return [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)]; })() : null,
+      // T-096a: вещь в кулаке — где её точка хвата (рукоять, низ факела) относительно середины кулака (ед. камеры) и в чьей она кисти
+      grip: gripErr(0), gripL: gripErr(1), inHand: !!(H.fpItem && H.hand && H.fpItem.parent === H.hand), inHandL: !!(H.fpOff && H.handL && H.fpOff.parent === H.handL), act: H.actLast, spk: [+H.spk[0].toFixed(3), +H.spk[1].toFixed(3)] });
+    function gripErr(side){
+      const it = side ? H.fpOff : H.fpItem, hd = side ? H.handL : H.hand;
+      if (!it || !hd || !fp.visible || it.parent !== hd) return null;
+      const G = GRIP_FP[it.userData.gk] || GRIP_FP.flat, a = new T.Vector3(G.g[0], G.g[1], G.g[2]), b = new T.Vector3();
+      it.updateWorldMatrix(true, false); a.applyMatrix4(it.matrixWorld); hd.getWorldPosition(b);
+      R.camera.worldToLocal(a); R.camera.worldToLocal(b);
+      return +a.distanceTo(b).toFixed(3);
+    }
     H.dispose = () => {
       dropArms();
       for (const k of ['fpItem', 'tpItem', 'fpOff', 'tpOff']) { const m = H[k]; if (m) { m.parent?.remove(m); m.geometry.dispose(); H[k] = null; } }
