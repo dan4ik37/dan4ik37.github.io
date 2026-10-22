@@ -13,6 +13,10 @@
 // Вершина: pos — Uint16 ×3 (1/16 блока; меш масштабирован 1/16), vd — Uint16 ×4: u, v (1/16 блока), слой | нормаль << 12,
 // AO | свечение грани (0…15) << 2 | флаги << 14 (1 — качается на ветру, 2 — вода); lt — Uint8 ×4: небо, R, G, B (×4 — 0…60,
 // плавно: среднее по 4 клеткам у угла); col — Uint8 ×3 (цвет биома).
+// Вода (T-044, 22.10.2026): у граней воды u, v — 0…16 в младших 5 битах, выше — глубина под гладью у 4 углов грани (по 5 бит,
+// трети блока, до 10⅓): u | угол(0,0) << 5 | угол(1,0) << 10, v | угол(0,1) << 5 | угол(1,1) << 10 (углы — по u, v грани); в
+// vd.w биты 6…9 — «берег» у этих углов (у глади блок: пена). Шейдер воды смешивает углы билинейно — прозрачность по глубине без
+// «треугольников» на склонах дна.
 // Индексы общие для всех (0 1 2 0 2 3 + 4k): тёмный угол AO — порядком вершин (диагональ через светлые углы).
 (() => {
   const root = typeof self !== 'undefined' ? self : globalThis;
@@ -306,6 +310,7 @@
           const c = lq === 1 ? tintOf(tint, x, z, 3, TC) : WHITE;
           // высоты четырёх углов: среднее по клеткам вокруг угла (источник весит больше, воздух тянет край вниз)
           for (let k = 0; k < 4; k++) HC[k] = full ? 1 : cornerH(reg, ri, t, y, k & 1, k >> 1, cv, opaque);
+          if (lq === 1 && !full) waterTop(reg, ri, t, y);   // глубина и берег у углов глади
           for (let d = 0; d < 6; d++) {
             const D = DIRS[d], ny = y + (d === 2 ? 1 : d === 3 ? -1 : 0);
             if (ny < 0) continue;
@@ -313,7 +318,12 @@
             if (nt === t) continue;
             if (opaque[nt] && d !== 2) continue;
             if (d === 2 && full) continue;
-            liquidFace(s, d, x, y, z, HC, lay, cellLt(ri, ny < H ? ri + D.n : -1), c, lq === 1 ? 2 : 0, gl(lay));
+            let wq = null, wsb = 0;
+            if (lq === 1) {
+              if (d === 2) { wq = WD; wsb = WSB; }
+              else { WS4.fill(Math.min(31, waterThick(reg, ri, t, y, d) * 3)); wq = WS4; }   // бок и низ: сколько воды за гранью
+            }
+            liquidFace(s, d, x, y, z, HC, lay, cellLt(ri, ny < H ? ri + D.n : -1), c, lq === 1 ? 2 : 0, gl(lay), wq, wsb);
           }
         }
       }
@@ -360,8 +370,39 @@
     return w ? h / w : V.liquidHeight(cv);
   }
   const putLt = (LT, o, L4) => { LT[o * 4] = L4[0]; LT[o * 4 + 1] = L4[1]; LT[o * 4 + 2] = L4[2]; LT[o * 4 + 3] = L4[3]; };
-  // Грань жидкости: как у куба, верхние вершины — на высоте своего угла
-  function liquidFace(s, d, x, y, z, Hc, layer, L4, c, flags, glow){
+  // ── вода: глубина под гладью у углов (трети блока, 0…31) и «берег» (биты углов). Угол k = u + 2v грани (у глади u = x, v = z) ──
+  const WD = new Uint8Array(4), WS4 = new Uint8Array(4);
+  let WSB = 0;
+  // глубина столба воды от клетки j (высота y) вниз: клетки воды подряд (с этой) — до дна; верхняя — до своей глади
+  function colDepth(reg, j, t, y){
+    let n = 0;
+    while (n <= y && n < 12 && (reg[j - n] & TYPE) === t) n++;
+    return n ? n - 1 + V.liquidHeight(reg[j]) : 0;
+  }
+  // гладь клетки ri: у каждого угла — 4 клетки вокруг него на высоте глади: вода — её глубина, блок — берег (0 в среднее и бит
+  // пены), под блоком вода (лёд, постройка на воде) — глубина воды под ним; воздух не считается
+  function waterTop(reg, ri, t, y){
+    WSB = 0;
+    for (let k = 0; k < 4; k++) {
+      const cx = k & 1, cz = k >> 1;
+      let s = 0, w = 0, shore = 0;
+      for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) {
+        const j = ri + (cx - 1 + a) * SX + (cz - 1 + b) * SZ, tt = reg[j] & TYPE;
+        if (tt === t) { s += colDepth(reg, j, t, y); w++; }
+        else if (tt !== 0) { shore = 1; w++; if (y > 0 && (reg[j - 1] & TYPE) === t) s += colDepth(reg, j - 1, t, y - 1) + 1; }
+      }
+      WD[k] = Math.min(31, Math.round((w ? s / w : 0) * 3));
+      if (shore) WSB |= 1 << k;
+    }
+  }
+  // бок и низ воды: сколько клеток воды за гранью (вглубь, до 8) — сквозь водопад видно, сквозь аквариум — нет
+  function waterThick(reg, ri, t, y, d){
+    const st = -DIRS[d].n; let n = 0;
+    for (let j = ri, yy = y; n < 8 && yy >= 0 && yy < H && (reg[j] & TYPE) === t; j += st, n++) if (d === 3) yy++;
+    return n;
+  }
+  // Грань жидкости: как у куба, верхние вершины — на высоте своего угла; wq — глубины углов воды (u + 2v), wsb — биты берега
+  function liquidFace(s, d, x, y, z, Hc, layer, L4, c, flags, glow, wq, wsb){
     grow(s, s.q + 1);
     const D = DIRS[d], q = s.q++, P = s.pos, VD = s.vd, C = s.col, LT = s.lt;
     for (let vi = 0; vi < 4; vi++) {
@@ -371,8 +412,12 @@
       let U, Vv;
       if (d === 2 || d === 3) { U = X; Vv = Z; } else if (d === 0) { U = 1 - Z; Vv = 1 - Y; } else if (d === 1) { U = Z; Vv = 1 - Y; } else if (d === 4) { U = X; Vv = 1 - Y; } else { U = 1 - X; Vv = 1 - Y; }
       P[o * 3] = (x + X) * 16; P[o * 3 + 1] = Math.round((y + Y) * 16); P[o * 3 + 2] = (z + Z) * 16;
-      VD[o * 4] = Math.round(U * 16); VD[o * 4 + 1] = Math.round(Vv * 16); VD[o * 4 + 2] = layer | (d << 12);
-      VD[o * 4 + 3] = 3 | (glow << 2) | (flags << 14);
+      const u16 = Math.round(U * 16), v16 = Math.round(Vv * 16);
+      if (wq) {   // вода: глубины углов — над u и v, берег — в vd.w
+        VD[o * 4] = u16 | (wq[0] << 5) | (wq[1] << 10); VD[o * 4 + 1] = v16 | (wq[2] << 5) | (wq[3] << 10);
+        VD[o * 4 + 3] = 3 | (glow << 2) | ((wsb & 15) << 6) | (flags << 14);
+      } else { VD[o * 4] = u16; VD[o * 4 + 1] = v16; VD[o * 4 + 3] = 3 | (glow << 2) | (flags << 14); }
+      VD[o * 4 + 2] = layer | (d << 12);
       putLt(LT, o, L4);
       C[o * 3] = c[0]; C[o * 3 + 1] = c[1]; C[o * 3 + 2] = c[2];
     }

@@ -16,7 +16,7 @@
   const RL = { J: 'В', Q: 'Д', K: 'К', A: 'Т' };
   const BOTS = ['Бот Федя', 'Бот Нина', 'Бот Гена'];
   const rank = c => c.slice(0, -1), suit = c => c.slice(-1), rv = c => RANKS.indexOf(rank(c));
-  const label = c => (RL[rank(c)] || rank(c)) + SCH[suit(c)];
+  const label = c => esc((RL[rank(c)] || rank(c)) + SCH[suit(c)]);   // карта может прийти от хозяина стола — не доверяем (T-011)
   const beats = (d, a, tr) => (suit(d) === suit(a) && rv(d) > rv(a)) || (suit(d) === tr && suit(a) !== tr);
   function shuffle(a, rand){ for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -233,7 +233,7 @@
   const red = c => suit(c) === 'h' || suit(c) === 'd';
   function cardHtml(c, i, o = {}){
     return `<button type="button" class="dk${red(c) ? ' red' : ''}${o.ok ? ' ok' : ''}${o.dim ? ' dim' : ''}${o.sel ? ' sel' : ''}${o.small ? ' sm' : ''}${o.cls ? ' ' + o.cls : ''}" ${o.act ? `data-act="${o.act}"` : i != null ? `data-act="card:${i}"` : ''} aria-label="${label(c)}"${o.sel ? ' aria-pressed="true"' : ''}${o.disabled ? ' disabled' : ''}>
-      <span class="dk-t">${RL[rank(c)] || rank(c)}<i>${SCH[suit(c)]}</i></span><span class="dk-m">${SCH[suit(c)]}</span></button>`;
+      <span class="dk-t">${esc(RL[rank(c)] || rank(c))}<i>${esc(SCH[suit(c)])}</i></span><span class="dk-m">${esc(SCH[suit(c)])}</span></button>`;
   }
 
   function menu(){
@@ -366,10 +366,10 @@
     root.innerHTML = `<div class="un dkg">
         <div class="un-opps">${others.map(o => `<div class="un-opp${(P.defender === o.i || (!P.table.length && P.attacker === o.i)) && !P.over ? ' turn' : ''}${o.out ? ' out' : ''}">
             ${o.bot ? '<span class="un-av">🤖</span>' : o.look && window.D37Char ? `<img class="un-av" alt="" src="${window.D37Char.img(o.look, 56)}">` : '<span class="un-av">🙂</span>'}
-            <b>${esc(o.nick)}</b><span class="un-cnt">${o.out ? '✅ вышел' : `<i class="un-mini"></i>×${o.n}`}</span>
+            <b>${esc(o.nick)}</b><span class="un-cnt">${o.out ? '✅ вышел' : `<i class="un-mini"></i>×${esc(o.n)}`}</span>
             <i class="dk-role">${P.defender === o.i ? '🛡️' : P.attacker === o.i ? '⚔️' : ''}</i></div>`).join('')}</div>
         <div class="dk-mid">
-          <div class="dk-deck">${P.deckN ? `<div class="dk-trump">${cardHtml(P.trumpCard, null, { small: true })}</div><div class="dk-back"><b>${P.deckN}</b></div>` : ''}<div class="dk-tr">козырь <b class="${P.trump === 'h' || P.trump === 'd' ? 'redt' : ''}">${SCH[P.trump]}</b></div></div>
+          <div class="dk-deck">${P.deckN ? `<div class="dk-trump">${cardHtml(P.trumpCard, null, { small: true })}</div><div class="dk-back"><b>${esc(P.deckN)}</b></div>` : ''}<div class="dk-tr">козырь <b class="${P.trump === 'h' || P.trump === 'd' ? 'redt' : ''}">${esc(SCH[P.trump])}</b></div></div>
           <div class="dk-table">${P.table.length ? P.table.map((t, j) => `<div class="dk-pair">${tableCard(t, j)}${t.d ? `<div class="dk-on">${cardHtml(t.d, null, { small: true })}</div>` : ''}</div>`).join('') : '<div class="dk-empty">Стол пуст</div>'}</div>
         </div>
         <div class="un-log" aria-live="polite">${esc(P.log)}</div>

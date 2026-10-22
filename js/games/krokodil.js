@@ -1052,6 +1052,7 @@
   }
   function fromHost(m){
     if (!ON) return;
+    m = root.GameRoom?.clean ? root.GameRoom.clean(m) : m;   // чужие строки без знаков разметки (T-011)
     const me = ON.R.me;
     if (m.t === 'st') onState(m.s);
     else if (m.t === 'opts') { if (ON.S && m.tn !== ON.S.tn && ON.S.tn > m.tn) return; ON.opts = m; renderOverlay(); }
@@ -1157,7 +1158,7 @@
   function sys(x){ addMsg(E(x), 'sys'); }
   function sysHit(id, p){
     const me = id === ON.R.me;
-    addMsg(me ? `✅ <b>Угадано!</b> <i>+${p}</i>` : `✅ <b>${E(nickOf(id))}</b> — угадано! <i>+${p}</i>`, 'hit');
+    addMsg(me ? `✅ <b>Угадано!</b> <i>+${E(p)}</i>` : `✅ <b>${E(nickOf(id))}</b> — угадано! <i>+${E(p)}</i>`, 'hit');
     api.sfx(me ? 'win' : 'ok');
   }
   // ── Отрисовка ──
@@ -1268,7 +1269,7 @@
       const why = { all: '🎉 Все угадали!', time: '⏱ Время вышло', none: '😶 Никто не угадал', left: '🚪 Художник вышел', vote: '🚩 Ход пропущен по жалобам', host: '🔌 Ход прерван — сменился ведущий' }[S.why] || '';
       const gains = Object.entries(S.gain || {}).sort((a, b) => b[1] - a[1]);
       h = `<div class="kr-ot">${why}</div><div class="kr-big">${E(S.word || '…')}</div>
-        ${gains.length ? `<div class="kr-gains">${gains.map(([id, p]) => `<span${id === me ? ' class="me"' : ''}>${id === S.dr ? '✏️' : '✅'} ${E(nickOf(id))} <b>+${p}</b></span>`).join('')}</div>` : ''}`;
+        ${gains.length ? `<div class="kr-gains">${gains.map(([id, p]) => `<span${id === me ? ' class="me"' : ''}>${id === S.dr ? '✏️' : '✅'} ${E(nickOf(id))} <b>+${E(p)}</b></span>`).join('')}</div>` : ''}`;
     } else if (S.ph === 'final') {
       const rk = ranking(S);
       h = `<div class="kr-ot">${S.why === 'few' ? '🚪 Игроки разошлись — итоги' : '🏁 Игра окончена!'}</div>

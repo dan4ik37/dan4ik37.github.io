@@ -26,6 +26,8 @@
   const now = () => performance.now();
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const gameInfo = id => (typeof GAMES !== 'undefined' && GAMES.find(g => g.id === id)) || { id, icon: '🎮', title: id, desc: '' };
+  // uid чужого игрока приходит из его присутствия (любая строка) и попадает в data-act="profile:…" — принимаем только вид uuid (T-011)
+  const UID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const newCode = () => window.GameRoom?.newCode?.() || Math.random().toString(36).slice(2, 8);
 
   // ═══ Карта (единицы движка ≈ метры × 1,17; человечек ≈ 2,3) ═══
@@ -958,7 +960,7 @@
   const MODES = ['move', 'sit', 'hang', 'ladder', 'roll', 'pk'];
   function mkRemote(key, m){
     const E = window.D37E;
-    const p = { key, uid: typeof m.uid === 'string' ? m.uid : null, nick: String(m.nick || 'Гость').slice(0, 24), look: freeLook(m.look), at: +m.at || 0,
+    const p = { key, uid: typeof m.uid === 'string' && UID_RE.test(m.uid) ? m.uid : null, nick: String(m.nick || 'Гость').slice(0, 24), look: freeLook(m.look), at: +m.at || 0,
       ch: S.ph.character({ x: +m.x || 0, y: 0, z: +m.z || 0 }), yaw: 0, wish: { x: 0, z: 0 }, spd: 0, mode: 'move', err: { x: 0, y: 0, z: 0 },
       pose: { moving: false, speed: 0, air: false, crouch: 0, sit: false, seatY: null, roll: -1, hang: false, ladder: false, pk: '', pkK: 0, x: +m.x || 0, y: 0, z: +m.z || 0, yaw: 0, phone: 0 },
       bubble: null, emo: null, v: undefined, pub: null, lastTs: 0, leaving: 0, rate: [], seat: null, modeT: 0, phone: 0 };

@@ -72,6 +72,7 @@
     let m = SITE_RE.exec(w);
     if (m) {
       let p = m[1] || '/'; if (p.startsWith('/#')) p = p.slice(1);
+      if (/^\/[\/\\]/.test(p)) return null;   // «dan4ik37.vercel.app//чужой.сайт» — это ссылка наружу (//host), а не путь на сайте
       // настоящий адрес раздела (/play/chess/abcd, /chat/ev/5 — js/ui/router.js) → как старая ссылка #/…: карточки и переход без перезагрузки
       const h = p[0] === '/' && p !== '/' && window.D37Route ? window.D37Route.toHash(p) : null;
       return h || p;

@@ -111,6 +111,7 @@
 
   function loadScript(src){
     return new Promise((ok, fail) => {
+      if (!/^https:\/\/[^\s"'<>]+$/.test(String(src || ''))) return fail(new Error('script'));   // адрес виджета отдаёт наш сервер; чужую схему и кавычки не берём (T-011)
       if (document.querySelector(`script[src="${src}"]`) && window.tiptop) return ok();
       const s = document.createElement('script'); s.src = src; s.async = true;
       s.onload = () => ok(); s.onerror = () => fail(new Error('script')); document.head.appendChild(s);
