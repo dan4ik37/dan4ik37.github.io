@@ -440,13 +440,17 @@
           const d = m.d; if (!d || typeof d !== 'object' || !G.pkey) return;
           const stack = s => s && V.item(s.id) && Number.isInteger(s.n) && s.n > 0 ? { id: s.id, n: Math.min(s.n, V.item(s.id).stack), d: clamp(s.d | 0, 0, 100000) } : null;
           const rec = { x: fin(d.x) ? d.x : null, y: fin(d.y) ? d.y : null, z: fin(d.z) ? d.z : null, yaw: fin(d.yaw) ? d.yaw : 0, pitch: fin(d.pitch) ? d.pitch : 0, hp: clamp(+d.hp || 20, 0, 20), food: clamp(+d.food || 20, 0, 20), sat: clamp(+d.sat || 5, 0, 20),
-            sel: clamp(d.sel | 0, 0, 8), inv: Array.isArray(d.inv) ? d.inv.slice(0, 36).map(stack) : [], off: stack(d.off), fly: !!d.fly, at: Date.now() };
+            sel: clamp(d.sel | 0, 0, 8), inv: Array.isArray(d.inv) ? d.inv.slice(0, 36).map(stack) : [], off: stack(d.off), fly: !!d.fly, at: Date.now(),
+            // T-049: аксессуары (только вещи-аксессуары, по одной) и данные помощников гостя (простые данные, ≤ 32 КБ) — его, хозяин только хранит
+            acc: Array.isArray(d.acc) ? d.acc.slice(0, 12).map(s => { const q = stack(s); return q && V.item(q.id)?.acc ? { id: q.id, n: 1, d: q.d } : null; }) : [],
+            ext: window.D37E?.host?.cleanExt ? window.D37E.host.cleanExt(d.ext, 32768) : {} };
           const all = meta.coopPlayers = meta.coopPlayers || {};
           all[G.pkey] = rec;
           const ks = Object.keys(all); if (ks.length > 32) { ks.sort((a, b) => (all[a].at || 0) - (all[b].at || 0)); for (const q of ks.slice(0, ks.length - 32)) delete all[q]; }
           return;
         }
         case 'room': { G.room.e = clamp(m.e | 0, 0, 36); G.room.p = new Set(Array.isArray(m.p) ? m.p.filter(s => typeof s === 'string').slice(0, 64) : []); return; }
+        case 'zz': { const t = now(); if (t - (G.zzT || 0) < 400) return; G.zzT = t; G.zz = !!m.on; hooks.sleepVote?.(); return; }   // T-049: гость спит / проснулся
         case 'chat': {
           const t = now(); if (t - G.chatT < 1000) return; G.chatT = t;
           const text = cleanText(m.text, 120); if (!text) return;
@@ -592,6 +596,7 @@
     H.weather = f => toAll({ t: 'wf', f: f ?? null });   // /weather у хозяина
     H.gameMode = m => toAll({ t: 'mode', m });   // /gamemode у хозяина
     H.players = () => [{ pid: 0, nick: nickOf(myNick()), host: true, me: true }].concat(ready().map(G => ({ pid: G.pid, nick: G.nick, mode: H.R?.mode(G.id) || 'relay', ko: !!(G.flags & 64) })));
+    H.sleepers = () => { let n = 0; for (const G of ready()) if (G.zz) n++; return n; };   // T-049: сколько гостей спит на лежанках
     H.link = () => linkFor(H.code);
     H.close = (why, quiet) => {
       if (H.done) return;
@@ -797,6 +802,7 @@
     }
     // ── действия гостя (kubomir.js показывает сразу, хозяин проверяет) ──
     G.reqBreak = (x, y, z, tool) => toHost({ t: 'brk', x, y, z, tool: tool || '' });
+    G.sleep = on => toHost({ t: 'zz', on: !!on });   // T-049: лёг на лежанку / встал (ночь проходит, когда спит половина — решает хозяин)
     G.reqPlace = (x, y, z, v, v2, it) => toHost({ t: 'put', x, y, z, v: pv(v), v2: v2 == null ? null : pv(v2), it: it || '' });
     G.reqDoor = (x, y, z) => toHost({ t: 'door', x, y, z });
     G.reqIce = (x, y, z) => toHost({ t: 'ice', x, y, z });

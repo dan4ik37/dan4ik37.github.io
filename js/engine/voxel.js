@@ -132,6 +132,8 @@
   B({ name: 'furnace_lit', title: 'Печь', tex: { top: 'furnace_top', side: 'furnace_side', front: 'furnace_front_lit', bottom: 'furnace_top' }, emit: 13, lcol: [1, .72, .45], glowTex: ['furnace_front_lit'], hard: 3.5, tool: 'pick', tier: 1, ui: 'furnace', drop: 'furnace', noItem: true });
   B({ name: 'bouncer', title: 'Батут', tex: 'bouncer', bounce: 15, hard: .3, sound: 'wool' });
   B({ name: 'missing', title: 'Неизвестный блок', tex: 'missing', hard: .5, drop: null, noItem: true });   // блок отключённого мода
+  // «Кубомир» удобнее (T-049): лежанка — дом (появляться тут) и сон ночью (kubomir-x.js; use — что делает ПКМ). Пока простой кубик
+  B({ name: 'bed', title: 'Лежанка', tex: { top: 'bed_top', side: 'bed_side', bottom: 'planks_oak' }, hard: .6, tool: 'axe', sound: 'wool', stack: 8, use: 'bed' });
   V.VANILLA_BLOCKS = V.blocks.length;
   // доп. текстуры (ломание блока, частицы)
   for (let i = 0; i < 8; i++) V.texture('destroy_' + i);
@@ -197,6 +199,27 @@
   I({ name: 'arrow', title: 'Стрела', tex: 'item_arrow' });
   I({ name: 'bow', title: 'Лук', tex: 'item_bow', stack: 1, fuel: 10, grip: 'two', tool: { kind: 'bow', tier: 0, speed: 1, dur: 384, dmg: 1 } });
   I({ name: 'shield', title: 'Щит', tex: 'item_shield', stack: 1, grip: 'off', tool: { kind: 'shield', tier: 0, speed: 1, dur: 336, dmg: 1 } });
+  // ── Помощники (T-049; владелец 22.10: «чтобы место не занимало и надо было потрудиться»): аксессуары надевают в отдельные ячейки
+  //    (не в сумку и не на панель) — действуют, пока надеты; acc — действия (D37E.accessories.FX). Сочетаются на верстаке: часы +
+  //    компас + глубиномер → навигатор (одна ячейка вместо трёх); атлас — компас и 8 листов карты из разных мест ──
+  I({ name: 'watch', title: 'Часы', tex: 'item_watch', stack: 1, acc: ['time'] });
+  I({ name: 'compass', title: 'Компас', tex: 'item_compass', stack: 1, acc: ['dir'] });
+  I({ name: 'depth_meter', title: 'Глубиномер', tex: 'item_depth_meter', stack: 1, acc: ['depth'] });
+  I({ name: 'lens', title: 'Лупа', tex: 'item_lens', stack: 1, acc: ['target'] });
+  I({ name: 'ore_finder', title: 'Рудоискатель', tex: 'item_ore_finder', stack: 1, acc: ['ore'] });
+  I({ name: 'navigator', title: 'Навигатор', tex: 'item_navigator', stack: 1, acc: ['time', 'dir', 'depth'] });
+  I({ name: 'atlas', title: 'Атлас', tex: 'item_atlas', stack: 1, acc: ['map', 'dir'] });
+  // бумага и карты: «Чистый лист карты» зарисовывают (ПКМ) — только в месте, где ещё не рисовал (так атлас — правда из разных мест)
+  I({ name: 'parchment', title: 'Пергамент', tex: 'item_parchment', fuel: 3 });
+  I({ name: 'map_blank', title: 'Чистый лист карты', tex: 'item_map_blank', stack: 16, use: 'map' });
+  I({ name: 'map_filled', title: 'Лист карты', tex: 'item_map_filled', stack: 16 });
+  // книга мастера — прочитать (ПКМ): навсегда открывает полную книгу рецептов; свиток возврата — расходный телепорт домой (делать каждый раз)
+  I({ name: 'master_book', title: 'Книга мастера', tex: 'item_master_book', stack: 1, use: 'learn' });
+  I({ name: 'recall', title: 'Свиток возврата', tex: 'item_recall', stack: 16, use: 'recall' });
+  // вёдра: черпнуть источник воды или лавы, вылить в другом месте
+  I({ name: 'bucket', title: 'Ведро', tex: 'item_bucket', stack: 16, use: 'bucket' });
+  I({ name: 'bucket_water', title: 'Ведро воды', tex: 'item_bucket_water', stack: 1, use: 'pour', liquid: 'water' });
+  I({ name: 'bucket_lava', title: 'Ведро лавы', tex: 'item_bucket_lava', stack: 1, use: 'pour', liquid: 'lava' });
   V.VANILLA_ITEMS = V.items.length;
 
   // ═══ Рецепты (верстак 3×3, в руках 2×2) и печь ═══
@@ -240,12 +263,76 @@
   V.addSmelt('ore_iron', 'iron_ingot'); V.addSmelt('ore_gold', 'gold_ingot'); V.addSmelt('sand', 'glass'); V.addSmelt('cobble', 'stone');
   V.addSmelt('clay_ball', 'brick'); V.addSmelt('meat_raw', 'meat_cooked'); V.addSmelt('chicken_raw', 'chicken_cooked');
   V.addSmelt('log_oak', 'coal'); V.addSmelt('log_birch', 'coal'); V.addSmelt('log_spruce', 'coal');
+  // помощники и удобства (T-049; рецепты свои): пергамент — из волокна (трава), карты, аксессуары, книга мастера, свиток, ведро, лежанка
+  R({ list: ['fiber', 'fiber', 'fiber'], out: 'parchment', n: 1 });
+  R({ list: ['parchment', 'coal'], out: 'map_blank', n: 1 });
+  R({ pattern: ['mmm', 'mcm', 'mmm'], key: { m: 'map_filled', c: 'compass' }, out: 'atlas', n: 1 });
+  R({ pattern: [' i ', 'igi', ' i '], key: { i: 'iron_ingot', g: 'glass' }, out: 'watch', n: 1 });
+  R({ pattern: [' i ', 'iki', ' i '], key: { i: 'iron_ingot', k: 'flint' }, out: 'compass', n: 1 });
+  R({ pattern: [' g ', 'gig', ' g '], key: { i: 'iron_ingot', g: 'glass' }, out: 'depth_meter', n: 1 });
+  R({ pattern: [' G ', 'GgG', ' | '], key: { G: 'gold_ingot', g: 'glass', '|': 'stick' }, out: 'lens', n: 1 });
+  R({ pattern: [' G ', 'GcG', 'i i'], key: { G: 'gold_ingot', c: 'compass', i: 'iron_ingot' }, out: 'ore_finder', n: 1 });
+  R({ list: ['watch', 'compass', 'depth_meter'], out: 'navigator', n: 1, table: true });
+  R({ list: ['parchment', 'parchment', 'parchment', 'iron_ingot', 'coal'], out: 'master_book', n: 1 });
+  R({ list: ['parchment', 'flint', 'feather'], out: 'recall', n: 1 });
+  R({ pattern: ['i i', ' i '], key: { i: 'iron_ingot' }, out: 'bucket', n: 1 });
+  R({ pattern: ['fff', 'ppp'], key: { f: 'fiber', p: '#planks' }, out: 'bed', n: 1 });
   V.VANILLA_RECIPES = V.recipes.length;
+  // Что выпадает сверх обычного «drop» блока (данные — их же читает книга рецептов «Где взять»): [вещь, шанс, сколько, вместо обычного]
+  // — каждая строка бросается отдельно. Кремень — из гравия (10 %, вместо гравия), волокно — из травы, ростки и яблоки — из листвы
+  V.DROPS = {
+    gravel: [['flint', .1, 1, true]], tall_grass: [['fiber', .15, 1]], clay: [['clay_ball', 1, 4, true]],
+    leaves_oak: [['sapling_oak', .05, 1], ['apple', .02, 1]], leaves_birch: [['sapling_birch', .05, 1]], leaves_spruce: [['sapling_spruce', .05, 1]],
+  };
+  // Что выпадает из блока b: [[имя, сколько]] (rnd — свой генератор, по умолчанию Math.random). Инструмент проверяет вызывающий
+  V.dropsOf = (b, rnd = Math.random) => {
+    const out = [], extra = b && V.DROPS[b.name];
+    let replaced = false;
+    if (extra) for (const [id, p, n, rep] of extra) if (V.item(id) && rnd() < p) { out.push([id, n || 1]); if (rep) replaced = true; }
+    if (!replaced && b && b.drop && V.item(b.drop)) out.push([b.drop, 1]);
+    return out;
+  };
 
   const tagHas = (k, name) => k[0] === '#' ? (V.TAGS[k.slice(1)] || []).includes(name) : k === name;
   V.tagHas = tagHas;
+  // Ускоритель (T-049, план §4.2 H1): рецепты разложены по «форме» — размер и какие клетки заняты (и зеркально) — и по вещи в первой
+  // занятой клетке (метка вроде #доски — общая корзина формы: её члены смотрим при проверке, моды могут их дописать); списки — по
+  // числу вещей. V.craft проверяет только подходящие — в том же порядке, что и раньше (первый подошедший — как был). Указатель
+  // строится заново, когда список рецептов поменялся (моды: другая длина или другой последний рецепт)
+  let CI = null;
+  const craftIndex = () => {
+    const L = V.recipes, last = L[L.length - 1];
+    if (CI && CI.n === L.length && CI.last === last) return CI;
+    const shape = new Map(), list = new Map(), add = (m, k, i) => { let a = m.get(k); if (!a) m.set(k, a = []); if (a[a.length - 1] !== i) a.push(i); };
+    L.forEach((r, i) => {
+      if (r.list) { add(list, r.list.length, i); return; }
+      const P = r.pattern, rh = P.length, rw = Math.max(...P.map(s => s.length));
+      for (const mir of r.mirror === false ? [false] : [false, true]) {
+        let m = 0, first = null;
+        for (let y = 0; y < rh; y++) for (let x = 0; x < rw; x++) { const ch = P[y][mir ? rw - 1 - x : x] || ' '; if (ch !== ' ') { m |= 1 << (y * rw + x); if (first === null) first = (r.key && r.key[ch]) || ''; } }
+        add(shape, rw + 'x' + rh + ':' + m + (first && first[0] !== '#' ? '|' + first : '|#'), i);
+      }
+    });
+    return (CI = { n: L.length, last, shape, list });
+  };
   // Сетка верстака (массив имён или null, w×h) → { out, n, recipe } или null
   V.craft = (grid, w, h) => {
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (grid[y * w + x]) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
+    if (x1 < 0) return null;
+    const cw = x1 - x0 + 1, chh = y1 - y0 + 1;
+    let mask = 0, nf = 0, first = null;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const v = grid[y * w + x]; if (v) { mask |= 1 << ((y - y0) * cw + (x - x0)); nf++; if (first === null) first = v; } }
+    const I = craftIndex(), k = cw + 'x' + chh + ':' + mask, a = I.shape.get(k + '|' + first), t = I.shape.get(k + '|#'), b = I.list.get(nf);
+    if (!a && !t && !b) return null;
+    // кандидаты — по порядку рецептов (слить упорядоченные списки, без повторов)
+    let cand = a || t || b;
+    if ((a ? 1 : 0) + (t ? 1 : 0) + (b ? 1 : 0) > 1) { cand = []; for (const q of [a, t, b]) if (q) for (const i of q) cand.push(i); cand.sort((p, q) => p - q); let n = 0; for (let i = 0; i < cand.length; i++) if (!i || cand[i] !== cand[i - 1]) cand[n++] = cand[i]; cand.length = n; }
+    return craftScan(grid, w, h, cand);
+  };
+  // Старый перебор всех рецептов (для проверки ускорителя: scripts/kubomir-qol-test.cjs сравнивает оба на всех рецептах и 5000 сетках)
+  V.craftLinear = (grid, w, h) => craftScan(grid, w, h, null);
+  function craftScan(grid, w, h, only){
     // обрезать пустые края
     let x0 = w, y0 = h, x1 = -1, y1 = -1;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (grid[y * w + x]) { if (x < x0) x0 = x; if (y < y0) y0 = y; if (x > x1) x1 = x; if (y > y1) y1 = y; }
@@ -253,7 +340,9 @@
     const cw = x1 - x0 + 1, chh = y1 - y0 + 1, cells = [];
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) cells.push(grid[y * w + x] || null);
     const filled = cells.filter(Boolean);
-    for (const r of V.recipes) {
+    const L = V.recipes, N = only ? only.length : L.length;
+    for (let ri = 0; ri < N; ri++) {
+      const r = only ? L[only[ri]] : L[ri];
       if (r.table && w < 3) continue;   // только на верстаке (рецепт мода: station workbench / больше 4 предметов)
       if (r.list) {
         if (r.list.length !== filled.length) continue;
@@ -275,7 +364,7 @@
       }
     }
     return null;
-  };
+  }
 
   // ═══ Таблицы для сетки и света (V.compile — после модов; их же получают потоки) ═══
   const LCOL0 = [1, .95, .84];   // свет без своего цвета — тёплый белый
