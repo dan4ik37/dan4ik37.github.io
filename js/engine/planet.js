@@ -330,7 +330,7 @@
       const k = key(f, L, i, j);
       let n = nodes.get(k);
       if (n) return n;
-      n = { key: k, f, L, i, j, c: new Float64Array(3), cp: new Float64Array(3), ang: 0, size: 0, hc: 0, hmin: P.renderMin, hmax: P.maxH, built: false,
+      n = { key: k, f, L, i, j, c: [0, 0, 0], cp: [0, 0, 0], ang: 0, size: 0, hc: 0, hmin: P.renderMin, hmax: P.maxH, built: false,
         split: false, leaf: 0, used: 0, mask: 0, par: null, kids: null, nb: null };
       const M = P2[L] * 2;   // решётка 2×2 на узел: центр — целая точка
       latK(f, i * 2 + 1, j * 2 + 1, M, tmpK); latDir(tmpK[0], tmpK[1], tmpK[2], M, n.c);
