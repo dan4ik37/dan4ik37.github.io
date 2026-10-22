@@ -36,6 +36,8 @@
   // ═══ Части клетки (данные; для «Вселенной») ═══
   // speed — множитель скорости, eat — во сколько раз надо быть больше, чтобы съесть, view — обзор, split — можно делиться,
   // diet — что ест (1 — точки, 2 — клетки, 3 — всё), spikes — колючки не разрывают. Свойства частей умножаются / складываются.
+  // На обычной арене у всех base. «Путь клетки» (js/games/kletochki-path.js, каталог — D37Evo.CELL в js/games/evo.js) передаёт свои
+  // свойства частей в мир (W.evo.cell): turn/sugar/prot — множители, dark/glow/leaf/adh/guard — складываются, def/toxin — есть или нет.
   const PARTS = {
     base: { name: 'Мембрана', speed: 1, eat: 1.25, view: 1, split: 1, diet: 3, spikes: 0 },
     flagellum: { name: 'Жгутик', speed: 1.12, view: 1 },
@@ -44,10 +46,11 @@
     jaw: { name: 'Хищный рот', eat: 1.18 / 1.25, diet: 2 },
     leaf: { name: 'Хлоропласт', speed: .9, diet: 1 },
   };
-  function bodyStats(parts){
-    const st = { speed: 1, eat: 1.25, view: 1, split: 1, diet: 3, spikes: 0 };
+  function bodyStats(parts, cat){
+    const st = { speed: 1, eat: 1.25, view: 1, split: 1, diet: 3, spikes: 0, turn: 1, sugar: 1, prot: 1, dark: 0, glow: 0, leaf: 0, adh: 0, guard: 0, def: 0, toxin: 0, colony: 1 };
+    const C = cat || PARTS;
     for (const id of parts || []) {
-      const p = PARTS[id];
+      const p = C[id];
       if (!p || id === 'base') continue;
       if (p.speed) st.speed *= p.speed;
       if (p.view) st.view *= p.view;
@@ -55,17 +58,36 @@
       if (p.diet) st.diet = p.diet;
       if (p.spikes) st.spikes = 1;
       if (p.split === 0) st.split = 0;
+      if (p.turn) st.turn *= p.turn;
+      if (p.sugar) st.sugar *= p.sugar;
+      if (p.prot) st.prot *= p.prot;
+      if (p.dark) st.dark += p.dark;
+      if (p.glow) st.glow += p.glow;
+      if (p.leaf) st.leaf += p.leaf;
+      if (p.adh) st.adh += p.adh;
+      if (p.guard) st.guard += p.guard;
+      if (p.def) st.def = 1;
+      if (p.toxin) st.toxin = 1;
     }
+    st.colony = Math.min(7, 1 + 2 * st.adh);
     return st;
+  }
+  // Части облика пути: из кода облика (D37Evo.designCode — 6 мест + форма колонии) — список частей и форма; плохой код — базовая клетка
+  const NOPARTS = ['base'];
+  function designOf(W, code){
+    const d = W.evo && typeof code === 'string' ? W.evo.codeOf(code) : null;
+    if (!d) return { parts: NOPARTS, form: 'chain', code: '' };
+    return { parts: d.s.filter(id => id && id !== '='), form: d.f, code };
   }
 
   // ═══ Раскраски (бесплатно): узор + 2 цвета ═══
   const PATTERNS = ['Однотонная', 'Ядро', 'Горошек', 'Половинки', 'Звезда', 'Глазки', 'Радуга', 'Мишень'];
+  const PATTERNS_X = [...PATTERNS, 'Перламутр', 'Неон'];   // путь: ещё два узора рода (часть «Пигмент», только вид)
   const PRESETS = [[5, '#4ade80', '#166534'], [1, '#60a5fa', '#1e3a8a'], [2, '#f472b6', '#ffffff'], [3, '#facc15', '#f97316'], [4, '#a78bfa', '#fde68a'],
     [7, '#f87171', '#ffffff'], [0, '#22d3ee', '#0e7490'], [6, '#ffffff', '#ffffff'], [5, '#fb923c', '#7c2d12'], [2, '#34d399', '#064e3b'], [1, '#e879f9', '#581c87'], [3, '#38bdf8', '#f472b6']];
-  function skinOk(s){
+  function skinOk(s, ext){
     if (!s || typeof s !== 'object') return null;
-    const p = clamp(s.p | 0, 0, PATTERNS.length - 1), a = K.okColor(s.a), b = K.okColor(s.b);
+    const p = clamp(s.p | 0, 0, (ext ? PATTERNS_X : PATTERNS).length - 1), a = K.okColor(s.a), b = K.okColor(s.b);
     return a && b ? { p, a, b } : null;
   }
   const presetSkin = i => { const q = PRESETS[((i % PRESETS.length) + PRESETS.length) % PRESETS.length]; return { p: q[0], a: q[1], b: q[2] }; };
@@ -73,15 +95,17 @@
     'Пончик', 'Карамелька', 'Клубничка', 'Лимончик', 'Шарик', 'Желешка', 'Пирожок', 'Облачко', 'Горошек', 'Чупик', 'Арбузик', 'Медузка'];
 
   // ═══════════════════ МИР ═══════════════════
-  function newWorld(seed){
+  // evo — настройки «Пути клетки» (D37Evo.worldCfg: биом, свет, свойства частей, формы колонии); без него — обычная арена
+  function newWorld(seed, evo){
     seed = (seed | 0) || 1;
-    const W = { v: 1, seed, rs: seed, step: 0, round: 1, phase: 0, left: ROUND, humans: 1, botWant: TOTAL - 1, ev: [], ver: 0, nextId: 1,
+    const W = { v: 1, seed, rs: seed, step: 0, round: 1, phase: 0, left: ROUND, humans: 1, botWant: TOTAL - 1, ev: [], ver: 0, nextId: 1, evo: evo || null, light: 1,
       owners: new Array(MAXO).fill(null), oc: new Int16Array(MAXO), maxR: 0,
       // клетки
       cN: 0, cL: new Int16Array(CCAP), cF: new Int16Array(CCAP), cFN: 0,
       cId: new Uint16Array(CCAP), cO: new Int8Array(CCAP), cX: new Float64Array(CCAP), cY: new Float64Array(CCAP), cPX: new Float64Array(CCAP), cPY: new Float64Array(CCAP),
       cVX: new Float64Array(CCAP), cVY: new Float64Array(CCAP), cBX: new Float64Array(CCAP), cBY: new Float64Array(CCAP), cM: new Float64Array(CCAP),
       cMg: new Int32Array(CCAP), cProt: new Int32Array(CCAP), cDead: new Uint8Array(CCAP),
+      cB: new Uint8Array(CCAP), cK: new Int8Array(CCAP),   // путь: клетка колонии (держится вместе), место в форме (0 — сердце)
       // колючки
       vN: 0, vL: new Int16Array(VCAP), vF: new Int16Array(VCAP), vFN: 0,
       vId: new Uint16Array(VCAP), vX: new Float64Array(VCAP), vY: new Float64Array(VCAP), vPX: new Float64Array(VCAP), vPY: new Float64Array(VCAP),
@@ -100,8 +124,13 @@
     W.pSeed = (rnd(W) * 2147483647) | 0;
     for (let p = 0; p < NP; p++) { W.pAl[p] = 1; W.pGen[p] = 0; pelletXY(W.pSeed, p, 0, W.pX, W.pY, p); }
     for (let i = 0; i < VIR_MIN; i++) placeVirus(W);
+    if (W.evo) W.light = lightOf(W);
     return W;
   }
+  // Свет в мире пути (0…1): от биома и времени у родины рода (часы мира: начало W.evo.t0 + шаги) — одинаково при любой частоте кадров
+  const lightOf = W => { const v = W.evo.lightAt(W.evo.t0 + W.step * DT * 1000); return v >= 0 && v <= 1 ? v : 1; };
+  // Минерал (Глубина): каждая ~25-я точка по зерну, номеру и поколению — у хозяина и гостей одинаково
+  const isMin = (W, p) => W.evo.min > 0 && hash3(W.pSeed, p, W.pGen[p] * 2 + 9) < W.evo.min;
   // Место точки еды: квадрат зоны + хеш (одинаково у хозяина и гостя)
   function pelletXY(pseed, p, gen, ax, ay, at){
     const z = (p / KS) | 0, zx = z % ZN, zy = (z / ZN) | 0;
@@ -114,7 +143,7 @@
     const s = W.cF[--W.cFN];
     W.cL[W.cN++] = s;
     W.cId[s] = nextId(W); W.cO[s] = o; W.cX[s] = W.cPX[s] = x; W.cY[s] = W.cPY[s] = y;
-    W.cVX[s] = W.cVY[s] = W.cBX[s] = W.cBY[s] = 0; W.cM[s] = m; W.cMg[s] = 0; W.cProt[s] = 0; W.cDead[s] = 0;
+    W.cVX[s] = W.cVY[s] = W.cBX[s] = W.cBY[s] = 0; W.cM[s] = m; W.cMg[s] = 0; W.cProt[s] = 0; W.cDead[s] = 0; W.cB[s] = 0; W.cK[s] = 0;
     W.oc[o]++;
     return s;
   }
@@ -153,7 +182,7 @@
   // ── Участники ──
   function newOwner(W, i, o){
     const bot = !!o.bot;
-    return { i, key: String(o.key || '').slice(0, 80), name: String(o.name || 'Игрок').slice(0, 24), skin: skinOk(o.skin) || presetSkin(((rnd(W) * 1000) | 0)), bot,
+    const ow = { i, key: String(o.key || '').slice(0, 80), name: String(o.name || 'Игрок').slice(0, 24), skin: skinOk(o.skin, !!W.evo) || presetSkin(((rnd(W) * 1000) | 0)), bot,
       parts: ['base'], st: bodyStats(['base']),
       alive: false, wantSpawn: !!o.spawn, spawnAt: 0, retire: 0, born: W.step,
       inX: 0, inY: 0, inS: 0, inE: 0, inEm: 0, inEmId: 0, ls: -1, le: -1, lem: -1, gotIn: bot,
@@ -161,6 +190,18 @@
       mass: 0, cx: 0, cy: 0, rt: 0, nC: 0, maxM: 0, minM: 0, maxR: 0,
       best: 0, eaten: 0, life: 0, lastBy: -1, deadX: 0, deadY: 0,
       brain: bot ? { aggr: .15 + rnd(W) * .7, caut: .7 + rnd(W) * .6, every: 3 + ((rnd(W) * 3) | 0), wx: 1, wy: 0, wt: 0, splitCd: 0 } : null };
+    if (W.evo) {
+      // путь: облик (части, форма колонии), вид бота (энциклопедия), ДНК жизни, колония, «видел»
+      const kit = o.kit || null;
+      Object.assign(ow, { design: '', next: '', form: 'chain', kind: kit ? kit.k : -1, giant: kit && kit.id === 'giant' ? 1 : 0,
+        dS: 0, dP: 0, dM: 0, pel: 0, colN: 0, colMax: 0, seen: 0, hx: 1, hy: 0, spdK: 1, eatK: 1, guardK: 0, protK: 1 });
+      if (kit) {
+        ow.parts = kit.parts.filter(id => id && id !== '='); ow.st = bodyStats(ow.parts, W.evo.cell); ow.brain.aggr *= W.evo.aggr;
+        if (ow.giant) { ow.st.split = 0; ow.st.speed *= W.evo.k.giant.speed; }
+      }
+      else if (typeof o.design === 'string') { ow.next = o.design; applyDesign(W, ow); }
+    }
+    return ow;
   }
   function addOwner(W, o){
     let i = -1;
@@ -171,10 +212,27 @@
       if (v >= 0) { dropOwner(W, v); i = v; }
     }
     if (i < 0) return -1;
+    if (W.evo && o.bot && !o.kit) { o = { ...o, kit: pickKit(W) }; o.name = kitName(W, o.kit.name); }
     W.owners[i] = newOwner(W, i, o);
     W.oc[i] = 0;
     W.ver++;
     return i;
+  }
+  // Путь: какой вид будет новый бот — гиганты (Глубина), пока их меньше нужного, иначе — житель биома по списку
+  function pickKit(W){
+    let g = 0;
+    for (let k = 0; k < MAXO; k++) { const q = W.owners[k]; if (q && q.bot && q.giant && !q.retire) g++; }
+    if (g < W.evo.giants) return W.evo.giantKit;
+    return W.evo.kits[(rnd(W) * W.evo.kits.length) | 0];
+  }
+  function kitName(W, base){
+    for (let n = 1; n < 40; n++) {
+      const nm = n === 1 ? base : base + ' ' + n;
+      let used = false;
+      for (let k = 0; k < MAXO; k++) if (W.owners[k] && W.owners[k].name === nm) { used = true; break; }
+      if (!used) return nm;
+    }
+    return base;
   }
   function dropOwner(W, i){
     const o = W.owners[i];
@@ -189,9 +247,16 @@
     const ow = W.owners[i];
     if (!ow) return;
     if (o.name) ow.name = String(o.name).slice(0, 24);
-    const sk = skinOk(o.skin);
+    const sk = skinOk(o.skin, !!W.evo);
     if (sk) ow.skin = sk;
+    if (W.evo && !ow.bot && typeof o.design === 'string') { ow.next = o.design; if (!ow.alive) applyDesign(W, ow); }   // путь: новый облик — со следующей жизни
     W.ver++;
+  }
+  // Путь: облик → части и свойства (при появлении: «между жизнями»)
+  function applyDesign(W, o){
+    const d = designOf(W, o.next);
+    if (d.code !== o.design) W.ver++;   // гостям — новый список участников (облик рисуется у всех)
+    o.design = d.code; o.parts = d.parts; o.form = d.form; o.st = bodyStats(d.parts, W.evo.cell);
   }
   function setInput(W, i, a){
     const o = W.owners[i];
@@ -258,12 +323,28 @@
       for (let k = 0; k < W.vN; k++) { const s = W.vL[k], dx = W.vX[s] - x, dy = W.vY[s] - y, d = Math.sqrt(dx * dx + dy * dy) - 90; if (d < dmin) dmin = d; }
       if (dmin > best) { best = dmin; bx = x; by = y; }
     }
-    const s = cNew(W, o.i, bx, by, START_M);
+    const m0 = W.evo && o.giant ? W.evo.k.giant.m : START_M;
+    const s = cNew(W, o.i, bx, by, m0);
     if (s < 0) return false;
     W.cProt[s] = W.step + PROT;
-    o.alive = true; o.wantSpawn = false; o.best = START_M; o.eaten = 0; o.life = W.step; o.lastBy = -1;
-    o.cx = bx; o.cy = by; o.mass = START_M; o.rt = radius(START_M); o.nC = 1; o.maxM = o.minM = START_M; o.maxR = o.rt;
+    o.alive = true; o.wantSpawn = false; o.best = m0; o.eaten = 0; o.life = W.step; o.lastBy = -1;
+    o.cx = bx; o.cy = by; o.mass = m0; o.rt = radius(m0); o.nC = 1; o.maxM = o.minM = m0; o.maxR = o.rt;
+    if (W.evo) {
+      if (!o.bot) applyDesign(W, o);
+      o.dS = o.dP = 0; o.dM = 0; o.pel = 0; o.seen = 0; o.colN = 1; o.colMax = 1;
+      const a = Math.atan2(-by, -bx); o.hx = Math.cos(a); o.hy = Math.sin(a);   // смотрит к середине арены
+      if (o.st.colony > 1) { W.cB[s] = 1; W.cK[s] = 0; }   // сердце будущей колонии
+      roleK(W, o);
+    }
     return true;
+  }
+  // Путь: сила ролей колонии (по числу клеток роли формы): гребцы — скорость, стражи — съесть труднее, едоки — едят легче и больше белка
+  function roleK(W, o){
+    const n = Math.max(0, (o.colN | 0) - 1), R = W.evo.roles, role = W.evo.forms[o.form]?.role || 'm';
+    o.spdK = 1 + (role === 'm' ? R.m.speed * n : 0);
+    o.guardK = o.st.guard + (role === 'g' ? R.g.guard * n : 0);
+    o.eatK = 1 - (role === 'e' ? R.e.eat * n : 0);
+    o.protK = 1 + (role === 'e' ? R.e.prot * n : 0);
   }
 
   // ═══ ШАГ МИРА ═══
@@ -279,6 +360,7 @@
       if (o && !o.alive && o.wantSpawn && !o.retire && W.step >= o.spawnAt) spawnOwner(W, o);
     }
     centers(W);
+    if (W.evo) pathPre(W);
     for (let i = 0; i < MAXO; i++) { const o = W.owners[i]; if (o && o.bot && o.alive && (W.step + i) % o.brain.every === 0) think(W, o); }
     for (let i = 0; i < MAXO; i++) { const o = W.owners[i]; if (o) actions(W, o); }
     moveCells(W);
@@ -298,11 +380,89 @@
       const o = W.owners[i];
       if (!o || !o.alive || W.oc[i] > 0) continue;
       o.alive = false; o.deadX = o.cx; o.deadY = o.cy;
-      W.ev.push({ k: 'ko', o: i, by: o.lastBy, best: Math.round(o.best), eaten: o.eaten, life: Math.round((W.step - o.life) / SPS), round: W.round });
+      const e = { k: 'ko', o: i, by: o.lastBy, best: Math.round(o.best), eaten: o.eaten, life: Math.round((W.step - o.life) / SPS), round: W.round };
+      if (W.evo) e.evo = evoOf(o);
+      W.ev.push(e);
       if (o.bot) { o.wantSpawn = true; o.spawnAt = W.step + 45 + ((rnd(W) * 90) | 0); } else o.wantSpawn = false;
     }
-    if (W.step % 15 === 0) leaderboard(W);
+    if (W.step % 15 === 0) { leaderboard(W); if (W.evo) seeScan(W); }
     if (--W.left <= 0) endRound(W);
+  }
+  // Путь: ДНК и счёт этой жизни для отчёта серверу (D37Evo: life {s, p, m, pel, col, seen, kills})
+  const evoOf = o => ({ s: Math.floor(o.dS), p: Math.floor(o.dP), m: o.dM, pel: o.pel, col: o.colMax, seen: o.seen, kills: o.eaten });
+
+  // ═══ Путь: свет, курс, колония, облачка, фотосинтез (до движения) ═══
+  // W.cn — клеток колонии у участника, W.hs — его «сердце» (номер клетки), W.tox — облачка [x, y, радиус] (без новых объектов)
+  const TURN = 5;   // рад/с — как быстро поворачивает «курс» (реснички — быстрее)
+  function pathPre(W){
+    const E = W.evo, K2 = E.k;
+    if (!W.cn) { W.cn = new Int8Array(MAXO); W.hs = new Int16Array(MAXO); W.hm = new Float64Array(MAXO); W.cm = new Float64Array(MAXO); W.tox = new Float64Array(MAXO * 3); W.toxO = new Int8Array(MAXO); W.toxN = 0; }
+    if (W.step % SPS === 0) W.light = lightOf(W);
+    W.cn.fill(0); W.hs.fill(-1); W.hm.fill(0); W.cm.fill(0);
+    for (let k = 0; k < W.cN; k++) {
+      const s = W.cL[k];
+      if (W.cDead[s] || !W.cB[s]) continue;
+      const i = W.cO[s];
+      W.cn[i]++; W.cm[i] += W.cM[s];
+      if (W.cK[s] === 0) W.hs[i] = s;
+      if (W.cM[s] > W.hm[i]) W.hm[i] = W.cM[s];
+    }
+    let n = 0;
+    for (let i = 0; i < MAXO; i++) {
+      const o = W.owners[i];
+      if (!o || !o.alive) continue;
+      // сердце съели — сердцем становится самая большая клетка колонии
+      if (W.cn[i] > 0 && W.hs[i] < 0) {
+        for (let k = 0; k < W.cN; k++) { const s = W.cL[k]; if (W.cO[s] === i && W.cB[s] && !W.cDead[s] && W.cM[s] >= W.hm[i]) { W.cK[s] = 0; W.hs[i] = s; break; } }
+      }
+      if (W.cn[i] !== o.colN) { o.colN = W.cn[i]; if (o.colN > o.colMax) o.colMax = o.colN; roleK(W, o); }
+      // курс: куда ведут, с конечной скоростью поворота
+      const im = Math.sqrt(o.inX * o.inX + o.inY * o.inY);
+      if (im > .05) {
+        const tx = o.inX / im, ty = o.inY / im, cr = o.hx * ty - o.hy * tx, dt = o.hx * tx + o.hy * ty;
+        const ang = Math.atan2(cr, dt), lim = TURN * o.st.turn * DT, a = ang > lim ? lim : ang < -lim ? -lim : ang, c = Math.cos(a), sn = Math.sin(a);
+        const hx = o.hx * c - o.hy * sn, hy = o.hx * sn + o.hy * c, hl = Math.sqrt(hx * hx + hy * hy) || 1;
+        o.hx = hx / hl; o.hy = hy / hl;
+      }
+      if (o.st.leaf && W.light > 0) o.dS += o.st.leaf * K2.leaf * W.light * DT / 60;
+      if (o.st.toxin) { W.tox[n * 3] = o.cx; W.tox[n * 3 + 1] = o.cy; W.tox[n * 3 + 2] = o.rt + K2.tox.r; W.toxO[n] = i; n++; }
+    }
+    W.toxN = n;
+    // колония делит массу: раз в 0,5 с каждая клетка чуть ближе к средней (масса не теряется)
+    if (W.step % 15 === 0) for (let k = 0; k < W.cN; k++) {
+      const s = W.cL[k];
+      if (W.cDead[s] || !W.cB[s]) continue;
+      const i = W.cO[s];
+      if (W.cn[i] < 2) continue;
+      W.cM[s] += (W.cm[i] / W.cn[i] - W.cM[s]) * K2.col.share;
+    }
+  }
+  // Путь: деление колонии — новая клетка держится рядом (своё место в форме), сердце и клетки колонии не сливаются
+  function colonySplit(W, o){
+    let n = 0, big = -1, bm = 0, used = 0;
+    for (let k = 0; k < W.cN; k++) {
+      const s = W.cL[k];
+      if (W.cO[s] !== o.i || W.cDead[s]) continue;
+      if (W.cB[s]) { n++; used |= 1 << W.cK[s]; }
+      if (W.cM[s] > bm) { bm = W.cM[s]; big = s; }
+    }
+    if (big < 0 || bm < SPLIT_MIN || W.oc[o.i] >= MAXC) return;
+    if (!W.cB[big]) {   // самая большая — свободный кусок (после колючки): она и вступает в колонию
+      if (n >= o.st.colony) return;
+      let k0 = used & 1 ? 1 : 0;
+      while (k0 && k0 < 7 && used & (1 << k0)) k0++;
+      if (k0 >= 7) return;
+      W.cB[big] = 1; W.cK[big] = k0; used |= 1 << k0; n++;
+    }
+    if (n >= o.st.colony) return;
+    let slot = 1;
+    while (slot < 7 && used & (1 << slot)) slot++;
+    if (slot >= 7) return;
+    const m = bm / 2, r = radius(m), P = W.evo.forms[o.form]?.pos?.[slot - 1] || [-1, 0];
+    const t = cNew(W, o.i, W.cX[big] + (o.hx * P[0] - o.hy * P[1]) * r * 1.2, W.cY[big] + (o.hy * P[0] + o.hx * P[1]) * r * 1.2, m);
+    if (t < 0) return;
+    W.cM[big] = m;
+    W.cB[t] = 1; W.cK[t] = slot; W.cMg[t] = W.step; W.cProt[t] = W.cProt[big]; W.cVX[t] = W.cVX[big]; W.cVY[t] = W.cVY[big];
   }
   // Центр, масса и размеры каждого участника
   function centers(W){
@@ -336,7 +496,7 @@
       if (o.inEmId >= 1 && o.inEmId <= K.EMOTES.length && W.step - o.emoteAt >= 45) { o.emote = o.inEmId; o.emoteUntil = W.step + 75; o.emoteAt = W.step; }
     }
     if (!o.alive) return;
-    for (let k = 0; k < ds; k++) split(W, o);
+    for (let k = 0; k < ds; k++) { if (W.evo && o.st.colony > 1) colonySplit(W, o); else split(W, o); }
     for (let k = 0; k < de; k++) eject(W, o);
   }
   function aimOf(W, o, s, out){
@@ -375,28 +535,48 @@
     }
   }
   function moveCells(W){
-    const ACC = .3, BK = Math.exp(-4.5 * DT);
+    const ACC = .3, BK = Math.exp(-4.5 * DT), EV = W.evo;
     for (let k = 0; k < W.cN; k++) {
       const s = W.cL[k], o = W.owners[W.cO[s]];
       const r = radius(W.cM[s]);
-      let wx = 0, wy = 0;
-      if (o) {
+      let wx = 0, wy = 0, acc = ACC;
+      if (o && EV && W.cB[s] && W.cK[s] > 0 && W.hs[o.i] >= 0 && W.hs[o.i] !== s) {
+        // клетка колонии: к своему месту в форме рядом с сердцем (пружина) + ход сердца
+        const h = W.hs[o.i], P = EV.forms[o.form]?.pos?.[W.cK[s] - 1] || DEFPOS, gap = radius(W.cM[h]) + r + EV.k.col.gap;
+        const tx = W.cX[h] + (o.hx * P[0] - o.hy * P[1]) * gap, ty = W.cY[h] + (o.hy * P[0] + o.hx * P[1]) * gap;
+        wx = W.cVX[h] + (tx - W.cX[s]) * EV.k.col.spring; wy = W.cVY[h] + (ty - W.cY[s]) * EV.k.col.spring;
+        const lim = 3 * speedOf(r), wl = Math.sqrt(wx * wx + wy * wy);
+        if (wl > lim) { wx *= lim / wl; wy *= lim / wl; }
+        acc = .5;
+      } else if (o) {
         const im = Math.sqrt(o.inX * o.inX + o.inY * o.inY);
         if (im > .02) {
           const R = reach(o), dx = o.cx + o.inX * R - W.cX[s], dy = o.cy + o.inY * R - W.cY[s], d = Math.sqrt(dx * dx + dy * dy);
           if (d > .5) {
-            const sp = speedOf(r) * o.st.speed * Math.min(1, im * 1.4) * Math.min(1, d / (r * .5 + 25));
+            let sp = speedOf(r) * o.st.speed * Math.min(1, im * 1.4) * Math.min(1, d / (r * .5 + 25));
+            if (EV) sp *= o.spdK * toxSlow(W, o.i, W.cX[s], W.cY[s]);
             wx = dx / d * sp; wy = dy / d * sp;
           }
         }
+        if (EV) acc = Math.min(.9, ACC * o.st.turn);
       }
-      W.cVX[s] += (wx - W.cVX[s]) * ACC; W.cVY[s] += (wy - W.cVY[s]) * ACC;
+      W.cVX[s] += (wx - W.cVX[s]) * acc; W.cVY[s] += (wy - W.cVY[s]) * acc;
       W.cX[s] += (W.cVX[s] + W.cBX[s]) * DT; W.cY[s] += (W.cVY[s] + W.cBY[s]) * DT;
       W.cBX[s] *= BK; W.cBY[s] *= BK;
       if (W.cBX[s] * W.cBX[s] + W.cBY[s] * W.cBY[s] < 4) { W.cBX[s] = 0; W.cBY[s] = 0; }
       edge(W.cX, W.cVX, W.cBX, s, H - r * .35);
       edge(W.cY, W.cVY, W.cBY, s, H - r * .35);
     }
+  }
+  const DEFPOS = [-1, 0];
+  // Путь: рядом с чужим ядовитым облачком — медленнее
+  function toxSlow(W, i, x, y){
+    for (let t = 0; t < W.toxN; t++) {
+      if (W.toxO[t] === i) continue;
+      const dx = W.tox[t * 3] - x, dy = W.tox[t * 3 + 1] - y, R = W.tox[t * 3 + 2];
+      if (dx * dx + dy * dy < R * R) return W.evo.k.tox.k;
+    }
+    return 1;
   }
   // Мягкий край: центр можно увести к краю, пока клетка видна наполовину, дальше — пружина назад
   function edge(X, V, B, s, lim){
@@ -454,7 +634,7 @@
       const x0 = GR[0], x1 = GR[1], y0 = GR[2], y1 = GR[3];
       for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) for (let b = W.gH[gy * GN + gx]; b !== -1; b = W.gN[b]) {
         if (b <= a || W.cO[b] !== oa) continue;
-        if (W.step >= W.cMg[a] && W.step >= W.cMg[b]) continue;
+        if (W.step >= W.cMg[a] && W.step >= W.cMg[b] && !(W.cB[a] && W.cB[b])) continue;   // клетки колонии (путь) не слипаются никогда
         const rb = radius(W.cM[b]);
         let dx = W.cX[b] - W.cX[a], dy = W.cY[b] - W.cY[a], d = Math.sqrt(dx * dx + dy * dy);
         const ov = ra + rb - d;
@@ -472,11 +652,13 @@
     }
   }
   function eatPellets(W){
+    const EV = W.evo;
     for (let k = 0; k < W.cN; k++) {
       const s = W.cL[k], o = W.owners[W.cO[s]];
       if (o && !(o.st.diet & 1)) continue;
       const x = W.cX[s], y = W.cY[s];
       let r = radius(W.cM[s]);
+      const lure = EV && o && o.st.glow ? o.st.glow * EV.k.lure * (1 - W.light) : 0;   // фотофор в темноте: еда «тянется» к свету
       let zx0 = Math.floor((x - r + H) / ZONE), zx1 = Math.floor((x + r + H) / ZONE), zy0 = Math.floor((y - r + H) / ZONE), zy1 = Math.floor((y + r + H) / ZONE);
       if (zx0 < 0) zx0 = 0; if (zy0 < 0) zy0 = 0; if (zx1 >= ZN) zx1 = ZN - 1; if (zy1 >= ZN) zy1 = ZN - 1;
       for (let zy = zy0; zy <= zy1; zy++) for (let zx = zx0; zx <= zx1; zx++) {
@@ -485,9 +667,14 @@
           const p = base + j;
           if (!W.pAl[p]) continue;
           const dx = W.pX[p] - x, dy = W.pY[p] - y;
-          if (dx * dx + dy * dy >= (r + 2) * (r + 2)) continue;
-          W.pAl[p] = 0; W.pGen[p] = (W.pGen[p] + 1) & 7; W.pAt[p] = W.step + 90 + ((rnd(W) * 150) | 0); W.zv[(p / KS) | 0]++;
-          W.cM[s] += PELLET_M; r = radius(W.cM[s]);
+          if (dx * dx + dy * dy >= (r + 2 + lure) * (r + 2 + lure)) continue;
+          let wait = 90;
+          if (EV) {   // путь: сахар → ДНК; минерал (Глубина) — масса больше и 🪨, новый — нескоро
+            if (isMin(W, p)) { W.cM[s] += EV.k.minM; if (o) o.dM++; wait = EV.k.minWait; }
+            else { W.cM[s] += PELLET_M; if (o) { o.pel++; o.dS += EV.k.sugar * EV.food * o.st.sugar; } wait = Math.round(90 / EV.food); }
+          } else W.cM[s] += PELLET_M;
+          W.pAl[p] = 0; W.pGen[p] = (W.pGen[p] + 1) & 7; W.pAt[p] = W.step + wait + ((rnd(W) * 150) | 0); W.zv[(p / KS) | 0]++;
+          r = radius(W.cM[s]);
         }
       }
     }
@@ -571,10 +758,13 @@
   }
   // Клетка ест клетку: больше в st.eat раз (1,25) и почти накрыла (центр ближе r − 0,35 r маленькой). Свои — сливаются, когда пора
   function eatCells(W){
+    const EV = W.evo;
     for (let k = 0; k < W.cN; k++) {
       const a = W.cL[k];
       if (W.cDead[a]) continue;
-      const oa = W.cO[a], owA = W.owners[oa], er = owA ? owA.st.eat : 1.25, carn = owA ? !!(owA.st.diet & 2) : true;
+      const oa = W.cO[a], owA = W.owners[oa], carn = owA ? !!(owA.st.diet & 2) : true;
+      let er = owA ? owA.st.eat : 1.25;
+      if (EV && owA) er = Math.max(1.05, er * owA.eatK);
       let ma = W.cM[a], ra = radius(ma);
       gRange(W.cX[a], W.cY[a], ra);
       const x0 = GR[0], x1 = GR[1], y0 = GR[2], y1 = GR[3];
@@ -587,12 +777,17 @@
         const dx = W.cX[b] - W.cX[a], dy = W.cY[b] - W.cY[a];
         if (dx * dx + dy * dy >= lim * lim) continue;
         const ob = W.cO[b];
-        if (ob === oa) { if (W.step < W.cMg[a] || W.step < W.cMg[b]) continue; }
-        else {
-          if (!carn || ma < mb * er || W.cProt[b] > W.step) continue;
+        if (ob === oa) {
+          if (W.step < W.cMg[a] || W.step < W.cMg[b]) continue;
+          if (EV && W.cB[b]) { if (W.cB[a]) continue; W.cB[a] = 1; W.cK[a] = W.cK[b]; }   // путь: клетки колонии не сливаются; свободный кусок встаёт на место съеденной
+        } else {
           const owB = W.owners[ob];
+          // путь: клетку колонии защищает вся колония (доля её массы), стражи и панцирь — ещё больше
+          const need = EV && owB ? (W.cB[b] && owB.colN > 1 ? mb + EV.k.col.k * (owB.mass - mb) : mb) * (1 + owB.guardK) : mb;
+          if (!carn || ma < need * er || W.cProt[b] > W.step) continue;
           if (owA && owA.bot && owB && !owB.bot && W.step - owB.life < MERCY) continue;   // бот новичка не ест (первые 20 с)
           if (owB) { owB.lastBy = oa; if (W.oc[ob] === 1 && owA) owA.eaten++; }
+          if (EV && owA) owA.dP += Math.min(EV.k.protMax, mb * EV.k.prot) * owA.st.prot * owA.protK;
         }
         W.cM[a] = ma = ma + mb; ra = radius(ma);
         cKill(W, b);
@@ -607,7 +802,9 @@
       if (m <= 300) continue;
       const o = W.owners[W.cO[s]];
       let rate = .0018;
-      if (o && o.bot && o.mass > 1000) rate += .005;
+      if (W.evo && o && o.giant) { if (m <= W.evo.k.giant.floor) continue; }   // гигант глубины не худеет ниже своего
+      else if (o && o.bot && o.mass > 1000) rate += .005;
+      if (W.evo && o && o.st.def) rate *= .5;   // панцирь
       W.cM[s] = Math.min(MAX_CM, m * (1 - rate * .5));
     }
   }
@@ -629,7 +826,9 @@
     rank.sort((a, b) => b[1] - a[1]);
     let n = 0; for (let i = 0; i < MAXO; i++) if (W.owners[i]) n++;
     const best = rank.map(r => { const o = W.owners[r[0]]; return [r[0], r[1], o ? Math.round(o.best) : r[1], o ? Math.round((W.step - o.life) / SPS) : 0]; });
-    W.ev.push({ k: 'end', n: W.round, rank: best, total: n, names: best.slice(0, 3).map(r => [W.owners[r[0]]?.name || '', W.owners[r[0]]?.bot ? 1 : 0, W.owners[r[0]]?.skin || null]) });
+    const e = { k: 'end', n: W.round, rank: best, total: n, names: best.slice(0, 3).map(r => [W.owners[r[0]]?.name || '', W.owners[r[0]]?.bot ? 1 : 0, W.owners[r[0]]?.skin || null]) };
+    if (W.evo) { e.evo = {}; for (let i = 0; i < MAXO; i++) { const o = W.owners[i]; if (o && o.alive && !o.bot) e.evo[i] = evoOf(o); } }
+    W.ev.push(e);
   }
   function startRound(W){
     for (let k = 0; k < W.cN; k++) cKill(W, W.cL[k]);
@@ -653,7 +852,7 @@
 
   // ═══ Бот: думает раз в 3–5 шагов; видит столько же, сколько игрок; новичков (первые 20 с) не гоняет ═══
   function think(W, o){
-    const B = o.brain, cx = o.cx, cy = o.cy, vr = (650 + o.rt * 2.2) * o.st.view;
+    const B = o.brain, cx = o.cx, cy = o.cy, vr = (650 + o.rt * 2.2) * o.st.view * (W.evo ? sight(W, o) : 1);
     let fx = 0, fy = 0, threat = 0, prey = -1, preyD = 1e9;
     for (let k = 0; k < W.cN; k++) {
       const s = W.cL[k];
@@ -721,6 +920,27 @@
     }
   }
 
+  // Путь: в темноте видно меньше — глазки и фотофоры помогают (0,35…1)
+  const sight = (W, o) => clamp(W.light + o.st.dark * (1 - W.light) * 1.6, .35, 1);
+  // Путь: кого игроки увидели (энциклопедия «Микромир»): раз в 0,5 с — ботов вида, колючки, минералы
+  function seeScan(W){
+    const E = W.evo;
+    if (E.iSpike == null) { E.iSpike = E.micro.indexOf('spike'); E.iMin = E.micro.indexOf('mineral'); }
+    for (let i = 0; i < MAXO; i++) {
+      const o = W.owners[i];
+      if (!o || o.bot || !o.alive) continue;
+      const R = Math.sqrt(viewArea(o.rt)) * .6 * sight(W, o), R2 = R * R;
+      for (let j = 0; j < MAXO; j++) {
+        const q = W.owners[j];
+        if (!q || !q.alive || q.kind < 0 || (o.seen >> q.kind) & 1) continue;
+        const dx = q.cx - o.cx, dy = q.cy - o.cy;
+        if (dx * dx + dy * dy < R2 + q.rt * q.rt * 4) o.seen |= 1 << q.kind;
+      }
+      if (E.iSpike >= 0 && !((o.seen >> E.iSpike) & 1)) for (let k = 0; k < W.vN; k++) { const v = W.vL[k], dx = W.vX[v] - o.cx, dy = W.vY[v] - o.cy; if (dx * dx + dy * dy < R2) { o.seen |= 1 << E.iSpike; break; } }
+      if (E.iMin >= 0 && o.dM > 0) o.seen |= 1 << E.iMin;
+    }
+  }
+
   // ═══════════════════ СЕТЬ: снимок для гостя ═══════════════════
   // u8 1 · u8 флаги (1 — лидеры, 2 — итоги раунда, 4 — эхо) · u32 шаг · u16 раунд · u16 осталось (0,1 с) · u8 я (255 — нет) · u32 моя масса
   // · u32 зерно еды · [u32 эхо, u16 задержка] · u16 клеток × 10 Б (id, хозяин, x·4, y·4, масса·2, флаги) · u8 колючек × 7 Б (id, x·4, y·4,
@@ -737,7 +957,7 @@
     const lb = W.step % 15 === 0 || !g.lbAt || W.step - g.lbAt >= 15;
     if (lb) g.lbAt = W.step;
     w.u8(1);
-    w.u8((lb ? 1 : 0) | (W.phase ? 2 : 0) | (echo ? 4 : 0));
+    w.u8((lb ? 1 : 0) | (W.phase ? 2 : 0) | (echo ? 4 : 0) | (W.evo ? 8 : 0));
     w.u32(W.step); w.u16(W.round); w.u16(Math.ceil(W.left / 3)); w.u8(o ? i : 255); w.u32(o && o.nC ? o.mass : 0); w.u32(W.pSeed >>> 0);
     if (echo) { w.u32(g.inTs); w.u16(Math.min(65535, Math.max(0, g.hold | 0))); }
     let at = w.at(), n = 0;
@@ -746,7 +966,7 @@
       const s = W.cL[k], r = radius(W.cM[s]);
       if (Math.abs(W.cX[s] - cx) > hw + r || Math.abs(W.cY[s] - cy) > hh + r) continue;
       w.u16(W.cId[s]); w.u8(W.cO[s]); w.i16(W.cX[s] * 4); w.i16(W.cY[s] * 4); w.u16(W.cM[s] * 2);
-      w.u8((W.cProt[s] > W.step ? 1 : 0) | (W.cMg[s] <= W.step ? 2 : 0));
+      w.u8((W.cProt[s] > W.step ? 1 : 0) | (W.cMg[s] <= W.step ? 2 : 0) | (W.cB[s] ? 4 : 0));
       n++;
     }
     w.put16(at, n);
@@ -791,12 +1011,17 @@
       for (let k = 0; k < MAXO; k++) { const q = W.owners[k]; if (!q || !q.alive) continue; tot++; if (o && o.alive && q.mass > o.mass) rank++; }
       w.u8(o && o.alive ? rank + 1 : 0); w.u8(tot);
     }
+    if (W.evo) {   // путь (флаг 8): моя ДНК жизни (сахар и белок ×10), минералы, точки, колония сейчас / лучшая, «видел», съел клеток
+      const q = o && o.alive ? o : null;
+      w.u16(q ? q.dS * 10 : 0); w.u16(q ? q.dP * 10 : 0); w.u16(q ? q.dM : 0); w.u16(q ? q.pel : 0);
+      w.u8(q ? q.colN : 0); w.u8(q ? q.colMax : 0); w.u16(q ? q.seen : 0); w.u8(q ? q.eaten : 0);
+    }
     return w.view();
   }
 
   // ── Зеркало гостя: то же, что у хозяина, но из снимков (без новых объектов на каждый снимок) ──
   const MC = 512, MV = 48, MB = 256;
-  function mirror(old){
+  function mirror(old, evo){
     const G = old && old.cMap ? old : {
       cMap: new Int16Array(65536).fill(-1), cL: new Int16Array(MC), cF: new Int16Array(MC), cFN: 0, cN: 0,
       cId: new Uint16Array(MC), cO: new Int8Array(MC), cFX: new Float64Array(MC), cFY: new Float64Array(MC), cTX: new Float64Array(MC), cTY: new Float64Array(MC),
@@ -816,6 +1041,7 @@
     for (let i = 0; i < MB; i++) G.bF[G.bFN++] = MB - 1 - i;
     G.ready = false; G.step = -1; G.snap = 0; G.me = -1; G.round = 1; G.phase = 0; G.left = ROUND; G.mass = 0; G.pSeed = -1; G.lbN = 0; G.rank = 0; G.total = 0;
     G.t1 = 0; G.span = 66; G.echoTs = -1; G.hold = 0; G.emo.fill(0);
+    G.evo = evo || null; G.light = 1; G.dS = G.dP = 0; G.dM = 0; G.pel = 0; G.colN = 0; G.colMax = 0; G.seen = 0; G.kills = 0;
     if (!old) G.owners.fill(null);
     return G;
   }
@@ -876,6 +1102,7 @@
       for (let k = 0; k < G.lbN; k++) { G.lbO[k] = r.u8(); G.lbS[k] = r.u32(); }
       G.rank = r.u8(); G.total = r.u8();
     }
+    if (fl & 8) { G.dS = r.u16() / 10; G.dP = r.u16() / 10; G.dM = r.u16(); G.pel = r.u16(); G.colN = r.u8(); G.colMax = r.u8(); G.seen = r.u16(); G.kills = r.u8(); }
     if (G.t1) G.span = clamp(G.span * .8 + (now - G.t1) * .2, 30, 400);
     G.t1 = now;
     G.ready = true;
@@ -885,10 +1112,16 @@
     if (G.pGen[p] !== gen) { G.pGen[p] = gen; pelletXY(G.pSeed, p, gen, G.pX, G.pY, p); }
     G.pAl[p] = alive;
   }
-  // Список участников для гостей: [номер, имя, узор, цвет 1, цвет 2, бот, ключ игрока]
+  // Список участников для гостей: [номер, имя, узор, цвет 1, цвет 2, бот, ключ игрока] (+ путь: код облика, вид микро-жизни)
   function ownersList(W){
     const l = [];
-    for (let i = 0; i < MAXO; i++) { const o = W.owners[i]; if (o) l.push([i, o.name, o.skin.p, o.skin.a, o.skin.b, o.bot ? 1 : 0, o.bot ? '' : o.key]); }
+    for (let i = 0; i < MAXO; i++) {
+      const o = W.owners[i];
+      if (!o) continue;
+      const e = [i, o.name, o.skin.p, o.skin.a, o.skin.b, o.bot ? 1 : 0, o.bot ? '' : o.key];
+      if (W.evo) e.push(o.design || '', o.kind);
+      l.push(e);
+    }
     return l;
   }
   function setOwners(G, l){
@@ -898,7 +1131,8 @@
       if (!Array.isArray(e)) continue;
       const i = e[0] | 0;
       if (i < 0 || i >= MAXO) continue;
-      G.owners[i] = { name: K.cleanName(e[1], i), skin: skinOk({ p: e[2], a: e[3], b: e[4] }) || presetSkin(i), bot: !!e[5], key: String(e[6] || '').slice(0, 80) };
+      G.owners[i] = { name: K.cleanName(e[1], i), skin: skinOk({ p: e[2], a: e[3], b: e[4] }, !!G.evo) || presetSkin(i), bot: !!e[5], key: String(e[6] || '').slice(0, 80),
+        design: typeof e[7] === 'string' ? e[7].slice(0, 8) : '', kind: Number.isInteger(e[8]) && e[8] >= 0 && e[8] < 16 ? e[8] : -1 };
     }
   }
   // Управление по сети: [x·1000, y·1000, деление, выброс, эмодзи, номер эмодзи]
@@ -913,7 +1147,7 @@
   function claim(G){
     if (G.me < 0) return null;
     const c = [];
-    for (let k = 0; k < G.cN && c.length < MAXC; k++) { const s = G.cL[k]; if (G.cO[s] === G.me) c.push([Math.round(G.cTX[s]), Math.round(G.cTY[s]), Math.round(G.cTM[s])]); }
+    for (let k = 0; k < G.cN && c.length < MAXC; k++) { const s = G.cL[k]; if (G.cO[s] === G.me) c.push([Math.round(G.cTX[s]), Math.round(G.cTY[s]), Math.round(G.cTM[s]), G.cFl[s] & 4 ? 1 : 0]); }
     return c.length ? { c } : null;
   }
   function capOf(G){
@@ -931,15 +1165,16 @@
     for (const e of list) tot += clamp(e[2], START_M, MAX_CM);
     if (!list.length || tot <= 0) { respawn(W, i); return; }
     const cap = caps ? (caps.get(o.key) ?? caps.def ?? 300) : 300, k = Math.min(1, cap / tot);
+    let slot = 0;
     for (const e of list) {
       const s = cNew(W, i, clamp(e[0], -H + 20, H - 20), clamp(e[1], -H + 20, H - 20), Math.max(START_M, clamp(e[2], START_M, MAX_CM) * k));
-      if (s >= 0) { W.cProt[s] = W.step + PROT; W.cMg[s] = W.step + 6 * SPS; }
+      if (s >= 0) { W.cProt[s] = W.step + PROT; W.cMg[s] = W.step + 6 * SPS; if (W.evo && e[3] === 1 && slot < 7 && slot < o.st.colony) { W.cB[s] = 1; W.cK[s] = slot++; } }
     }
     o.alive = W.oc[i] > 0; o.wantSpawn = false; o.life = W.step; o.best = tot * k;
     centers(W);
   }
-  function fromMirror(G, me){
-    const W = newWorld((Math.random() * 2147483646 + 1) | 0);
+  function fromMirror(G, me, evo){
+    const W = newWorld((Math.random() * 2147483646 + 1) | 0, evo || G.evo);
     if (G.pSeed >= 0 || G.pSeed < 0) {
       W.pSeed = G.pSeed;
       for (let p = 0; p < NP; p++) { W.pGen[p] = G.pGen[p]; W.pAl[p] = 1; pelletXY(W.pSeed, p, W.pGen[p], W.pX, W.pY, p); }
@@ -949,10 +1184,18 @@
     compact(W);
     for (let k = 0; k < G.vN; k++) { const s = G.vL[k]; vNew(W, G.vTX[s], G.vTY[s], G.vM[s]); }
     while (W.vN < VIR_MIN) placeVirus(W);
-    const i = addOwner(W, { key: me.key, name: me.name, skin: me.skin, bot: false, spawn: false });
-    let tot = 0;
-    for (let k = 0; k < G.cN; k++) { const s = G.cL[k]; if (G.cO[s] === G.me) { const t = cNew(W, i, G.cTX[s], G.cTY[s], Math.max(START_M, G.cTM[s])); if (t >= 0) { W.cMg[t] = W.step + 6 * SPS; tot += G.cTM[s]; } } }
+    const i = addOwner(W, { key: me.key, name: me.name, skin: me.skin, bot: false, spawn: false, design: me.design });
     const o = W.owners[i];
+    if (W.evo) applyDesign(W, o);
+    let tot = 0, slot = 0;
+    for (let k = 0; k < G.cN; k++) {
+      const s = G.cL[k];
+      if (G.cO[s] !== G.me) continue;
+      const t = cNew(W, i, G.cTX[s], G.cTY[s], Math.max(START_M, G.cTM[s]));
+      if (t < 0) continue;
+      W.cMg[t] = W.step + 6 * SPS; tot += G.cTM[s];
+      if (W.evo && G.cFl[s] & 4 && slot < 7 && slot < o.st.colony) { W.cB[t] = 1; W.cK[t] = slot++; }
+    }
     o.alive = W.oc[i] > 0; o.wantSpawn = !o.alive && W.phase === 0; o.best = tot; o.life = 0;
     centers(W);
     return { W, me: i };
@@ -960,12 +1203,16 @@
 
   const SIM = { DT, IN, newWorld, addOwner, dropOwner, setOwner, setInput, respawn, setHumans, step, encode, mirror, decode, claim, capOf, applyClaim, fromMirror,
     packIn, unpackIn, owners: ownersList, ownersVer: W => W.ver, setOwners };
+  // «Путь клетки»: тот же мир, но с настройками биома (cfg — D37Evo.worldCfg) — сеанс iokit их не знает, поэтому обёртка
+  SIM.forEvo = cfg => ({ ...SIM, newWorld: seed => newWorld(seed, cfg), mirror: old => mirror(old, cfg), fromMirror: (G, me) => fromMirror(G, me, cfg) });
 
   // ═══════════════════ ЭКРАН ═══════════════════
   const GAME = 'kletochki', TITLE = 'Клеточки', COLOR = '#22c55e';
   const LS = 'd37_io_kletochki';
   let host = null, api = null, ui = null, cv = null, ctx = null, S = null, mode = 'menu', dpr = 1, cssW = 0, cssH = 0, ro = null;
   let lastT = 0, hudAt = 0, koAt = 0, myIdx = -1, cfg = null, reported = new Set(), soundMass = 0, soundAt = 0;
+  // «Путь клетки» (js/games/kletochki-path.js): PATH — экраны рода, PV — сеанс пути (биом, рисунок частей, ДНК жизни); null — обычная арена
+  let PATH = null, PV = null;
   const cam = { x: 0, y: 0, z: 1, ok: false };
   const INP = new Float64Array(IN);
   const mouse = { on: false, x: 0, y: 0, t: 0 }, keys = { u: 0, d: 0, l: 0, r: 0 };
@@ -1007,6 +1254,7 @@
       sub: 'Ты — клетка. Ешь точки и тех, кто меньше, и расти! Делись (пробел / ✂️), чтобы догнать, выбрасывай массу (W / 💧). Колючки разрывают больших — маленьким за ними можно прятаться.' }));
     const inp = ui.ov.querySelector('.io-name input');
     inp.addEventListener('input', () => { cfg.name = inp.value.slice(0, 16); saveCfg(); });
+    PATH?.menuButton(ui.ov.querySelector('.io-btns'));
     paintSkins();
   }
   function paintSkins(){
@@ -1024,28 +1272,30 @@
   }
 
   // ── Сеанс ──
-  function stopSession(){ netWait?.(); netWait = null; if (S) { S.leave(); S = null; } myIdx = -1; }
-  function newSession(){
+  function stopSession(){ netWait?.(); netWait = null; if (S) { S.leave(); S = null; } myIdx = -1; if (PV) { PV.stop?.(); PV = null; } }
+  // pv — сеанс пути (kletochki-path.js): свой мир (sim), своё пространство комнат (game), облик и раскраска рода
+  function newSession(pv){
     stopSession();
-    S = K.session({ game: GAME, sim: SIM, max: 10, me: { key: K.myKey(), nick: myName(), skin: cfg.skin, aspect: (cssW || 400) / (cssH || 600) },
+    PV = pv || null;
+    S = K.session({ game: PV ? PV.game : GAME, sim: PV ? PV.sim : SIM, max: 10, me: { key: K.myKey(), nick: myName(), skin: PV ? PV.skin : cfg.skin, design: PV ? PV.design : undefined, aspect: (cssW || 400) / (cssH || 600) },
       onFrame: (s, t) => frame(t), onInput: t => readInput(t), onRole: () => onRole(), onYou: i => { myIdx = i; }, onKo: e => onKo(e), onRound: e => onRound(e),
       onPlayers: () => { namesVer = -1; }, onStatus: (k, v) => onStatus(k, v) });
     return S;
   }
-  function startBots(){ newSession(); enterGame(); hideOv(); S.offline(); }
+  function startBots(pv){ newSession(pv); enterGame(); hideOv(); S.offline(); }
   let netWait = null, lastOnline = null;
-  function startOnline(code, pub){
-    lastOnline = { code, pub };
-    newSession(); enterGame();
+  function startOnline(code, pub, pv){
+    lastOnline = { code, pub, pv };
+    newSession(pv); enterGame();
     showOv(K.connHtml(pub));
     const s0 = S;
     netWait?.();
     netWait = K.whenNet(ok => {
       netWait = null;
       if (S !== s0 || !S) return;
-      if (ok) S.online(code, { pub });
+      if (ok) S.online(code, { pub, prefix: PV ? PV.prefix : undefined });
       // общая арена («▶ Играть») без связи — с ботами, и так и сказано; по ссылке друга — честное «нет связи» и «Ещё раз»
-      else if (pub) { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(); }
+      else if (pub) { api.toast?.('📡 Онлайн сейчас недоступен — играем с ботами'); startBots(PV && PV.again()); }
       else showOv(K.errHtml('offline'));
     });
   }
@@ -1057,7 +1307,7 @@
   function onStatus(kind, v){
     if (!ui) return;
     if (kind === 'joining' && mode === 'play' && ui.ov.hidden) showOv(K.connHtml(false));
-    if (kind === 'error' && S?.pub && v === 'offline') { api.toast?.('📡 Не получилось подключиться — играем с ботами'); startBots(); }
+    if (kind === 'error' && S?.pub && v === 'offline') { api.toast?.('📡 Не получилось подключиться — играем с ботами'); startBots(PV && PV.again()); }
     else if (kind === 'error') showOv(K.errHtml(v));
     else if (kind === 'handover') api.toast?.('Ты свернул вкладку — арену ведёт другой игрок');
   }
@@ -1074,6 +1324,7 @@
     koAt = performance.now();
     api.sfx?.('bad');
     reportLife(e.best, false, e.life);
+    if (PV) { PV.onKo(e); return; }
     const by = e.by >= 0 ? names[e.by] : '';
     setTimeout(() => {
       if (!S || mode !== 'play' || !koAt) return;
@@ -1083,10 +1334,10 @@
   }
   function onRound(e){
     if (!S || !ui) return;
-    if (e.k === 'start') { hideOv(); koAt = 0; reported.clear(); lifeBest = 0; return; }
+    if (e.k === 'start') { if (!PV?.busy()) hideOv(); koAt = 0; reported.clear(); lifeBest = 0; PV?.onRound(e); return; }
     const mine = e.rank.findIndex(r => r[0] === S.me);
     if (mine >= 0 && !koAt) reportLife(e.rank[mine][2], mine === 0 && e.total >= 3 && e.rank[mine][3] >= 60, e.rank[mine][3]);
-    showOv(K.podiumHtml(e, S.me));
+    if (PV) PV.onRound(e, K.podiumHtml(e, S.me)); else showOv(K.podiumHtml(e, S.me));
     if (mine === 0) api.sfx?.('win');
     try { window.D37Ads?.interstitial?.(GAME); } catch (er) {}
   }
@@ -1094,6 +1345,7 @@
   let lifeBest = 0, lifeAt = 0;
   function flushLife(){
     if (S && mode === 'play' && !koAt && lifeBest >= 30) reportLife(lifeBest, false, (performance.now() - lifeAt) / 1000);
+    if (PV && mode === 'play') PV.leave();   // путь: ушёл посреди жизни — ДНК этой жизни всё равно в род
     lifeBest = 0;
   }
   function reportLife(best, win, life){
@@ -1148,14 +1400,15 @@
     if (!b || !host?.contains(b)) return;
     const a = b.dataset.io, t = e.timeStamp || performance.now();
     if (a === 'play') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); startOnline('', true); }
-    else if (a === 'bots') startBots();
-    else if (a === 'retry') { if (lastOnline) startOnline(lastOnline.code, lastOnline.pub); else menu(); }
+    else if (a === 'bots') startBots(PV && PV.again());
+    else if (a === 'retry') { if (lastOnline) startOnline(lastOnline.code, lastOnline.pub, lastOnline.pv && lastOnline.pv.again()); else menu(); }
     else if (a === 'friend') { cfg.name = ui.ov.querySelector('.io-name input')?.value.slice(0, 16) || cfg.name; saveCfg(); K.inviteNew(GAME, TITLE, api.toast); }
-    else if (a === 'menu') menu();
+    else if (a === 'menu') { const path = !!PV; menu(); if (path) PATH?.hub(); }   // из игры пути ☰ — в «Мой род»
+    else if (a.startsWith('ev') && PATH) PATH.click(a, b, e);
     else if (a === 'again') { hideOv(); koAt = 0; S?.respawn(); }
     else if (a === 'emo') ui.emos.hidden = !ui.emos.hidden;
     else if (/^e\d$/.test(a)) emote(+a.slice(1), t);
-    else if (a === 'invite') { if (S && S.code && S.role !== 'off') K.share(GAME, S.code, TITLE, api.toast); else K.inviteNew(GAME, TITLE, api.toast); }
+    else if (a === 'invite') { if (PV) PV.invite(); else if (S && S.code && S.role !== 'off') K.share(GAME, S.code, TITLE, api.toast); else K.inviteNew(GAME, TITLE, api.toast); }
     else if (a.startsWith('sk')) { cfg.skin = presetSkin(+a.slice(2)); cfg.mine = false; saveCfg(); paintSkins(); S?.setMe({ skin: cfg.skin }); }
     else if (a === 'mine') { const m = K.myColors(); if (m) { cfg.skin = { p: m.rainbow ? 6 : 5, a: m.c1, b: m.c2 }; cfg.mine = true; saveCfg(); paintSkins(); } }
   }
@@ -1201,7 +1454,7 @@
     const d0 = PERF ? performance.now() : 0;
     draw(t, V, guest);
     if (PERF && PERF.n < 4000) PERF.dr[PERF.n] = performance.now() - d0;
-    if (t - hudAt > 250) { hudAt = t; hud(V, guest); }
+    if (t - hudAt > 250) { hudAt = t; hud(V, guest); PV?.hud(V, guest, t); }
     sounds(t);
   }
   function prepHost(W, a){
@@ -1209,7 +1462,7 @@
     for (let k = 0; k < W.cN && R.n < RC; k++) {
       const s = W.cL[k], j = R.n++;
       R.x[j] = W.cPX[s] + (W.cX[s] - W.cPX[s]) * a; R.y[j] = W.cPY[s] + (W.cY[s] - W.cPY[s]) * a; R.r[j] = radius(W.cM[s]);
-      R.o[j] = W.cO[s]; R.id[j] = W.cId[s]; R.f[j] = W.cProt[s] > W.step ? 1 : 0;
+      R.o[j] = W.cO[s]; R.id[j] = W.cId[s]; R.f[j] = (W.cProt[s] > W.step ? 1 : 0) | (W.cB[s] ? (W.cK[s] === 0 ? 12 : 4) : 0);
       if (W.cO[s] === S.me) { const m = W.cM[s]; myMass += m; sx += R.x[j] * m; sy += R.y[j] * m; }
     }
     for (let k = 0; k < W.vN && R.vn < 64; k++) { const s = W.vL[k], j = R.vn++; R.vx[j] = W.vPX[s] + (W.vX[s] - W.vPX[s]) * a; R.vy[j] = W.vPY[s] + (W.vY[s] - W.vPY[s]) * a; R.vr[j] = radius(W.vM[s]); }
@@ -1236,7 +1489,7 @@
         x = G.cRX[s] + (px - G.cRX[s]) * ease; y = G.cRY[s] + (py - G.cRY[s]) * ease;
       }
       G.cRX[s] = x; G.cRY[s] = y; G.cRM[s] = m;
-      R.x[j] = x; R.y[j] = y; R.r[j] = radius(m); R.o[j] = G.cO[s]; R.id[j] = G.cId[s]; R.f[j] = G.cFl[s] & 1;
+      R.x[j] = x; R.y[j] = y; R.r[j] = radius(m); R.o[j] = G.cO[s]; R.id[j] = G.cId[s]; R.f[j] = G.cFl[s] & 5;
       if (G.cO[s] === G.me) { myMass += m; sx += x * m; sy += y * m; }
     }
     for (let k = 0; k < G.vN && R.vn < 64; k++) { const s = G.vL[k], j = R.vn++; G.vRX[s] = G.vFX[s] + (G.vTX[s] - G.vFX[s]) * al; G.vRY[s] = G.vFY[s] + (G.vTY[s] - G.vFY[s]) * al; R.vx[j] = G.vRX[s]; R.vy[j] = G.vRY[s]; R.vr[j] = radius(G.vM[s]); }
@@ -1276,6 +1529,15 @@
         c.lineWidth = r * .16;
         for (let i = 0; i < 6; i++) { c.strokeStyle = PCOL[i + 1 & 7]; c.beginPath(); c.arc(x, y, r * .72, rot + i * TAU / 6, rot + (i + 1) * TAU / 6); c.stroke(); }
       } else if (p === 7) { c.lineWidth = r * .14; c.beginPath(); c.arc(x, y, r * .62, 0, TAU); c.stroke(); c.beginPath(); c.arc(x, y, r * .22, 0, TAU); c.fill(); }
+      else if (p === 8) {   // путь, «Пигмент»: перламутр — кольца и блик
+        c.globalAlpha = alpha * .35; c.lineWidth = r * .1;
+        for (let i = 1; i <= 3; i++) { c.beginPath(); c.arc(x, y, r * (.25 * i), 0, TAU); c.stroke(); }
+        c.globalAlpha = alpha * .55; c.strokeStyle = '#ffffff'; c.lineWidth = r * .09; c.beginPath(); c.arc(x, y, r * .7, rot + 3.6, rot + 4.6); c.stroke();
+        c.globalAlpha = alpha;
+      } else if (p === 9) {   // путь, «Пигмент»: неон — светящийся край
+        c.globalAlpha = alpha * .4; c.lineWidth = r * .3; c.beginPath(); c.arc(x, y, r * .86, 0, TAU); c.stroke();
+        c.globalAlpha = alpha; c.lineWidth = r * .08; c.beginPath(); c.arc(x, y, r * .86, 0, TAU); c.stroke();
+      }
       c.lineWidth = Math.max(1, r * .07); c.strokeStyle = 'rgba(0,0,0,.28)';
       c.beginPath(); c.arc(x, y, r - c.lineWidth * .5, 0, TAU); c.stroke();
     }
@@ -1291,7 +1553,7 @@
     // поле арены и сетка
     const ax0 = Math.max(-H, vx0), ax1 = Math.min(H, vx1), ay0 = Math.max(-H, vy0), ay1 = Math.min(H, vy1);
     if (ax1 > ax0 && ay1 > ay0) {
-      c.fillStyle = '#0b1120'; c.fillRect(ox + ax0 * z, oy + ay0 * z, (ax1 - ax0) * z, (ay1 - ay0) * z);
+      c.fillStyle = PV ? PV.bg : '#0b1120'; c.fillRect(ox + ax0 * z, oy + ay0 * z, (ax1 - ax0) * z, (ay1 - ay0) * z);
       const gs = z > .5 ? 60 : z > .25 ? 120 : 240;
       c.strokeStyle = 'rgba(148,163,184,.08)'; c.lineWidth = 1;
       c.beginPath();
@@ -1305,7 +1567,8 @@
     // еда: по цвету — один путь на цвет
     let zx0 = Math.floor((vx0 + H) / ZONE), zx1 = Math.floor((vx1 + H) / ZONE), zy0 = Math.floor((vy0 + H) / ZONE), zy1 = Math.floor((vy1 + H) / ZONE);
     if (zx0 < 0) zx0 = 0; if (zy0 < 0) zy0 = 0; if (zx1 >= ZN) zx1 = ZN - 1; if (zy1 >= ZN) zy1 = ZN - 1;
-    const pr = Math.max(1.2, PELLET_R * z);
+    const pr = Math.max(1.2, PELLET_R * z), mins = PV && V.evo && V.evo.min > 0;
+    if (mins) PV.minerals(c, V, ox, oy, z, zx0, zx1, zy0, zy1, pr);
     for (let col = 0; col < 8; col++) {
       c.fillStyle = PCOL[col]; c.beginPath();
       for (let zy = zy0; zy <= zy1; zy++) for (let zx = zx0; zx <= zx1; zx++) {
@@ -1313,6 +1576,7 @@
         for (let j = 0; j < KS; j++) {
           const p = base + j;
           if (!V.pAl[p] || ((p * 7 + V.pGen[p]) & 7) !== col) continue;
+          if (mins && isMin(V, p)) continue;
           const px = ox + V.pX[p] * z, py = oy + V.pY[p] * z;
           c.moveTo(px + pr, py); c.arc(px, py, pr, 0, TAU);
         }
@@ -1330,6 +1594,7 @@
     for (let k = 0; k < n; k++) R.ord[k] = k;
     for (let k = 1; k < n; k++) { const v = R.ord[k], rv = R.r[v]; let j = k - 1; while (j >= 0 && R.r[R.ord[j]] > rv) { R.ord[j + 1] = R.ord[j]; j--; } R.ord[j + 1] = v; }
     let vDone = false;
+    if (PV) PV.bridges(c, ox, oy, z, n);
     for (let k = 0; k < n; k++) {
       const j = R.ord[k], r = R.r[j];
       if (!vDone && r >= 56) { drawViruses(c, ox, oy, z); vDone = true; }
@@ -1338,8 +1603,9 @@
       const sk = skins[R.o[j]] || PRESET0;
       const mine = R.o[j] === S.me;
       const eyeA = mine ? Math.atan2(INP[1], INP[0]) : (R.id[j] * 1.7) % TAU;
-      drawCell(c, ox + x * z, oy + y * z, r * z, sk, R.id[j], t, 1, eyeA, R.f[j] ? .55 + .25 * Math.sin(t * .012) : 1);
+      drawCell(c, ox + x * z, oy + y * z, r * z, sk, R.id[j], t, 1, eyeA, R.f[j] & 1 ? .55 + .25 * Math.sin(t * .012) : 1);
       const sr = r * z;
+      if (PV && sr > 5) PV.decor(c, ox + x * z, oy + y * z, sr, R.o[j], j, t, sk);
       if (sr > 13 * dpr) {
         const nm = names[R.o[j]];
         if (nm) {
@@ -1364,6 +1630,7 @@
       c.textAlign = 'center'; c.textBaseline = 'bottom';
       c.fillText(K.EMOTES[e - 1], ox + bx * z, oy + (by - br) * z - 4 * dpr);
     }
+    if (PV) PV.overlay(c, ox, oy, z, W2, H2, t, n);
     // мини-карта
     const ms = Math.min(96, cssW * .2) * dpr, mx = 10 * dpr, my = H2 - ms - 10 * dpr;
     c.fillStyle = 'rgba(8,10,20,.55)'; c.fillRect(mx, my, ms, ms);
@@ -1426,6 +1693,15 @@
     soundMass = myMass;
   }
 
+  // Для «Пути клетки» (js/games/kletochki-path.js): экран, сеанс, рисунок — через эти ручки (свой код пути — в своём файле)
+  const HOOK = {
+    get ui(){ return ui; }, get api(){ return api; }, get S(){ return S; }, get cfg(){ return cfg; }, get mode(){ return mode; }, get dpr(){ return dpr; },
+    get cssW(){ return cssW; }, get cssH(){ return cssH; }, get cv(){ return cv; }, get koAt(){ return koAt; }, set koAt(v){ koAt = v; },
+    get myX(){ return myCx; }, get myY(){ return myCy; }, get myRt(){ return myRt; }, get myMass(){ return myMass; }, get myIdx(){ return myIdx; },
+    showOv, hideOv, menu, saveCfg, startBots, startOnline, drawCell, radius, viewArea, isMin, fmtT, skinOk, presetSkin,
+    R, INP, cam, names, skins, bots, PATTERNS, PATTERNS_X, PRESETS, PCOL, K, SIM, GAME, TITLE, MAXO, DT, ROUND, SPS, ZN, KS, H,
+  };
+
   root.GAME_IMPL = root.GAME_IMPL || {};
   root.GAME_IMPL.kletochki = {
     mount(el, gameApi){
@@ -1448,21 +1724,25 @@
       on(window, 'd37:fullscreen', () => setTimeout(resize, 60));
       if (window.ResizeObserver) { ro = new ResizeObserver(() => resize()); ro.observe(ui.wrap); }
       resize();
+      PATH = root.KletochkiPath ? root.KletochkiPath(HOOK) : null;
       const p = gameApi.param;
       if (p === 'bots') startBots();
+      else if (PATH && typeof p === 'string' && /^evo(\/|$)/.test(p)) PATH.route(p.slice(4));
       else if (root.GameRoom?.validCode(p)) startOnline(p, false);
       else menu();
     },
     unmount(){
       try { flushLife(); } catch (e) {}
       stopSession();
+      try { PATH?.unmount(); } catch (e) {}
+      PATH = null;
       for (const [t, ev, fn, o] of listeners.splice(0)) t.removeEventListener(ev, fn, o);
       ro?.disconnect(); ro = null;
       stick?.off(); stick = null;
       host?.removeEventListener('click', onClick); host?.removeEventListener('change', onChange);
       host = null; ui = null; cv = null; ctx = null; mode = 'menu'; api = null;
     },
-    _test: { SIM, PARTS, bodyStats, radius, speedOf, viewArea, mergeSteps, pelletXY, skinOk, presetSkin, PRESETS, PATTERNS,
+    _test: { SIM, PARTS, bodyStats, radius, speedOf, viewArea, mergeSteps, pelletXY, skinOk, presetSkin, PRESETS, PATTERNS, PATTERNS_X, isMin, designOf, get PATH(){ return PATH; }, get PV(){ return PV; },
       C: { DT, H, ZONE, ZN, KS, NP, MAXO, MAXC, START_M, SPLIT_MIN, EJECT_MIN, EJECT_COST, BLOB_M, VIRUS_M, VIRUS_POP, VIRUS_FEEDS, VIR_MIN, PROT, ROUND, END, TOTAL, MINB, A0, MERCY },
       cNew, vNew, bNew, compact, centers, think, leaderboard, R, frame: t => frame(t), get S(){ return S; }, get cam(){ return cam; },
       // Замер «полная комната»: 16 участников (люди — на мозгах ботов) и хозяин шлёт снимки 9 гостям каждые 2 шага (scripts/iogames-e2e.cjs)

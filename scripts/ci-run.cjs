@@ -28,13 +28,13 @@ const opt = n => { const i = argv.indexOf('--' + n); return i >= 0 ? argv[i + 1]
 const TESTS = [
   // сначала самое дешёвое и самое важное: «собирается ли вообще» и свежесть сгенерированного
   { f: 'syntax-test.cjs', t: 120 },
-  { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 },
+  { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 }, { f: 'gen-evo-defs.cjs', args: ['--check'], t: 60 },
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
   { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
   { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
   { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'touch-layout-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },
-  { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'planet-test.cjs' }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },
+  { f: 'base-test.cjs' }, { f: 'climate-test.cjs' }, { f: 'planet-test.cjs' }, { f: 'orbit-test.cjs' }, { f: 'planet-sql-test.mjs', needs: 'pglite', t: 120 }, { f: 'net-test.cjs' }, { f: 'studio-net-test.cjs' }, { f: 'engine-test.cjs' },   // orbit, planet-sql — T-079: небесная механика, часы мира
   { f: 'physics-test.cjs', soft: 'rapier' }, { f: 'tiles-test.cjs' }, { f: 'mirplay-test.cjs' }, { f: 'kubomir-input-test.cjs' },
   { f: 'world-zones-test.cjs' }, { f: 'world-leak-test.cjs' }, { f: 'city-test.cjs' }, { f: 'city-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'city-sim.cjs', args: ['--days', '60', '--players', '20,100'], t: 180 },
   { f: 'vehicle-test.cjs' }, { f: 'waves-test.cjs', retry: 1 }, { f: 'mc-import-test.cjs' }, { f: 'model-test.cjs' }, { f: 'combat-test.cjs' }, { f: 'cloud-test.cjs' },
@@ -47,11 +47,14 @@ const TESTS = [
   // игры: бот против бота (число партий уменьшено — в CI достаточно)
   { f: 'domino-test.cjs' }, { f: 'fillword-test.cjs' }, { f: 'balda-test.cjs', args: ['300'] }, { f: 'krokodil-test.cjs' },
   { f: 'kletochki-test.cjs' }, { f: 'chervyachki-test.cjs' },
+  // «Путь клетки» (T-056): каталог и правила рода, мир пути, комнаты по биомам; evo.sql в PGlite (JS = SQL); время до «Готов к суше» у бота
+  { f: 'evo-test.cjs' }, { f: 'evo-sql-test.mjs', needs: 'pglite', t: 300 }, { f: 'evo-sim.cjs', args: ['--fast'], t: 300 },
   // свой сервер реального времени (T-045): настоящий server/rt отдельным процессом + настоящий supabase-js — по одной (замеры и сроки)
   { f: 'rt-test.cjs', needs: 'rt', t: 240, serial: true }, { f: 'rt-load-test.cjs', args: ['--quick'], needs: 'rt', t: 200, serial: true, optional: true },
   // нужен three@0.149.0
   { f: 'char-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'destruct-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'kubomir-hand-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'kubomir-move-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'kubomir-combat-test.cjs', args: ['{THREE}'], needs: 'three' },
+  { f: 'kubomir-qol-test.cjs', args: ['{THREE}'], needs: 'three' },   // T-049: помощники «Кубомира» — шов, аксессуары, рецепты, подсказки, лежанка, вёдра, карта, задания
   { f: 'render-test.cjs', args: ['{THREE}'], needs: 'three', t: 240 }, { f: 'sprite-test.cjs', args: ['{THREE}'], needs: 'three' },
   { f: 'studio-modes-test.cjs', args: ['{THREE}'], needs: 'three' }, { f: 'worldmap-test.cjs', args: ['{THREE}'], needs: 'three' },
   // в настоящем Chrome (--e2e)
@@ -59,6 +62,7 @@ const TESTS = [
   { f: 'war-hud-e2e.cjs', e2e: true, t: 600 },   // боевая зона: панель оружия отвечает (телефон, планшет, ПК)
   { f: 'waves-e2e.cjs', args: ['look'], e2e: true, t: 600 },   // волны (T-022c): видеокарта = JS, шейдеры собрались, катер качается
   { f: 'world-reopen-e2e.cjs', args: ['20'], e2e: true, t: 900 },   // T-085: 20 раз закрыть и открыть «Мир Денчика» — прошлые миры уходят из памяти, счётчики — как до
+  { f: 'evo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // «Путь клетки»: род, эволюция, Лужа и Глубина, колония, ДНК (ПК и телефон)
   { f: 'menu-e2e.cjs', args: ['all'], env: { KB_WORLD: '0' }, e2e: true, t: 900 },   // T-043: одно меню ☰ (мир, Кубомир, Подземье), окно ⚙️ (Главное, поиск), геймпад, скорость, утечки
   { f: 'touch-hud-e2e.cjs', e2e: true, t: 900, env: { TH_MODE: 'full', SCREENS: '[[844,390],[390,844]]' } },   // «Кубомир» на телефоне: кнопки компактно, каждая — своё действие, «Настроить кнопки»
   { f: 'photo-e2e.cjs', args: ['smoke'], e2e: true, t: 600 },   // фоторедактор: все команды, кнопки, отмена (fabric.js с jsDelivr)

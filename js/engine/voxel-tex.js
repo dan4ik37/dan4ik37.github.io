@@ -346,6 +346,98 @@
     // доски: тёмные швы по вертикали
     for (let y = 0; y < N; y++) for (const sx of [11.3, 16, 20.7]) { const x = Math.round(sx * sc), i = (y * N + x) * 4; if (M[y * N + x] === 1) { d[i] *= .72; d[i + 1] *= .7; d[i + 2] *= .66; } }
   };
+  // ── помощники (T-049): часы, компас, глубиномер, лупа, рудоискатель, навигатор, книги, бумага и карты, свиток, вёдра — 32×32,
+  //    тем же светом сверху слева и обводкой (рисунки свои) ──
+  function circ32(M, cx, cy, r, v){ const sc = N / 32; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const px = (x + .5) / sc - cx, py = (y + .5) / sc - cy; if (px * px + py * py <= r * r) M[y * N + x] = v; } }
+  function rect32(M, x0, y0, x1, y1, v){ const sc = N / 32; for (let y = Math.round(y0 * sc); y < Math.round(y1 * sc); y++) for (let x = Math.round(x0 * sc); x < Math.round(x1 * sc); x++) if (x >= 0 && y >= 0 && x < N && y < N) M[y * N + x] = v; }
+  function poly32(M, pts, v){ const sc = N / 32; for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const px = (x + .5) / sc, py = (y + .5) / sc; let inside = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside; } if (inside) M[y * N + x] = v; } }
+  const dot = (d, x, y, c) => { const sc = N / 32; for (let yy = 0; yy < sc; yy++) for (let xx = 0; xx < sc; xx++) put(d, Math.round(x * sc) + xx, Math.round(y * sc) + yy, c); };
+  const ln = (d, x0, y0, x1, y1, c) => { const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2 + 1; for (let i = 0; i <= n; i++) dot(d, Math.round(x0 + (x1 - x0) * i / n), Math.round(y0 + (y1 - y0) * i / n), c); };
+  const PALr = b => [b, shade(b, 1.25), shade(b, .7), shade(b, .35)], PAL = c => PALr(hx(c));
+  const GOLD4 = ['#f3c740', '#fff1a6', '#c18a1c', '#5a3806'].map(hx), IRON4 = ['#c9ccd2', '#f2f4f7', '#8c9099', '#33363c'].map(hx), LEATHER4 = PAL('#7a4a2a');
+  const GLASS4 = ['#a8d8f0', '#e6f7ff', '#6fa8c8', '#2e5a74'].map(hx), PAPER4 = ['#e9ddb8', '#fbf3da', '#bfae80', '#5e5032'].map(hx);
+  P.watch32 = d => {
+    const M = mask32(); rect32(M, 12, 1, 20, 9, 1); rect32(M, 12, 23, 20, 31, 1); circ32(M, 16, 16, 9, 2); circ32(M, 16, 16, 6.6, 3);
+    paint32(d, M, [LEATHER4, GOLD4, ['#f6efdc', '#ffffff', '#d8ccae', '#5e5032'].map(hx)]);
+    const k = hx('#2a2a33'); ln(d, 16, 16, 16, 11, k); ln(d, 16, 16, 20, 16, k); dot(d, 16, 16, hx('#c0392b'));
+    for (const [x, y] of [[16, 10], [22, 16], [16, 22], [10, 16]]) dot(d, x, y, shade(k, 1.6));
+  };
+  P.compass32 = d => {
+    const M = mask32(); circ32(M, 16, 16, 11, 1); circ32(M, 16, 16, 8, 2);
+    paint32(d, M, [IRON4, ['#2c3446', '#45506a', '#1c2230', '#0b0e16'].map(hx)]);
+    ln(d, 16, 16, 21, 10, hx('#e0402e')); ln(d, 17, 16, 22, 11, hx('#b22b1e')); ln(d, 16, 16, 11, 22, hx('#f2f2f2')); ln(d, 15, 16, 10, 21, hx('#c8c8c8'));
+    dot(d, 16, 16, hx('#ffd23f')); dot(d, 16, 9, hx('#ffd23f'));
+  };
+  P.depth32 = d => {
+    const M = mask32(); rect32(M, 10, 2, 22, 30, 1); rect32(M, 13, 5, 19, 27, 2);
+    paint32(d, M, [IRON4, ['#2a3240', '#3c4658', '#1a2030', '#0b0e16'].map(hx)]);
+    const sc = N / 32;
+    for (let y = Math.round(15 * sc); y < Math.round(27 * sc); y++) for (let x = Math.round(13 * sc); x < Math.round(19 * sc); x++) { const t = (y / sc - 15) / 12; put(d, x, y, mix(hx('#5fb4ff'), hx('#1c4fa8'), t)); }
+    for (let y = 7; y < 27; y += 4) ln(d, 13, y, 14, y, hx('#ffd23f'));
+    ln(d, 20, 13, 23, 13, hx('#e0402e')); dot(d, 19, 14, hx('#e0402e'));
+  };
+  P.lens32 = d => {
+    const M = mask32(); seg32(M, 5, 28, 13, 20, 3.6, 1); circ32(M, 19.5, 12.5, 9.5, 2); circ32(M, 19.5, 12.5, 6.8, 3);
+    paint32(d, M, [WOOD4, GOLD4, GLASS4]);
+    dot(d, 16, 9, hx('#ffffff')); dot(d, 17, 8, hx('#ffffff')); dot(d, 15, 10, hx('#e6f7ff'));
+  };
+  P.orefind32 = d => {
+    const M = mask32(); seg32(M, 21, 9, 26, 3, 2, 3); circ32(M, 26.5, 3, 2, 2); rect32(M, 7, 8, 25, 29, 1); rect32(M, 10, 11, 22, 21, 4);
+    paint32(d, M, [IRON4, GOLD4, PAL('#3a3f48'), ['#1f4a32', '#2f6b48', '#123020', '#06140c'].map(hx)]);
+    dot(d, 13, 14, hx('#5ff0e6')); dot(d, 18, 17, hx('#f5d33d')); dot(d, 15, 18, hx('#d8a985')); dot(d, 19, 13, hx('#7cff9a'));
+    for (const x of [10, 14, 18]) { dot(d, x, 25, hx('#e0402e')); dot(d, x + 1, 25, hx('#b22b1e')); }
+  };
+  P.nav32 = d => {
+    const M = mask32(); circ32(M, 16, 16, 12, 1); circ32(M, 16, 16, 9, 2);
+    paint32(d, M, [GOLD4, ['#1e2b4a', '#2c3d66', '#121a30', '#070b16'].map(hx)]);
+    ln(d, 16, 16, 21, 11, hx('#e0402e')); ln(d, 16, 16, 11, 21, hx('#f2f2f2')); ln(d, 16, 16, 16, 9, hx('#9fd0ff'));
+    for (const [x, y] of [[16, 8], [24, 16], [16, 24], [8, 16]]) dot(d, x, y, hx('#ffd23f'));
+    dot(d, 16, 16, hx('#ffd23f'));
+  };
+  P.book32 = (d, s) => {
+    const M = mask32(); rect32(M, 6, 3, 26, 29, 1); rect32(M, 6, 3, 10, 29, 2); rect32(M, 24, 5, 27, 28, 3);
+    const base = hx(s.c || '#6b3aa8'); paint32(d, M, [PALr(base), PALr(shade(base, .7)), PAPER4]);
+    const g = hx('#ffd23f');
+    for (const [x, y] of [[11, 4], [22, 4], [11, 27], [22, 27]]) dot(d, x, y, g);
+    if (s.emblem === 'grid') { for (let i = 0; i < 4; i++) { ln(d, 12 + i * 3, 11, 12 + i * 3, 20, g); ln(d, 12, 11 + i * 3, 21, 11 + i * 3, g); } }
+    else { for (const [x, y, cc] of [[13, 12, '#4caf50'], [14, 12, '#4caf50'], [13, 13, '#4caf50'], [17, 15, '#3b7fe0'], [18, 16, '#3b7fe0'], [19, 17, '#3b7fe0'], [15, 18, '#4caf50'], [16, 18, '#4caf50']]) dot(d, x, y, hx(cc)); ln(d, 18, 11, 21, 14, hx('#e0402e')); ln(d, 21, 11, 18, 14, hx('#e0402e')); }
+  };
+  P.paper32 = (d, s) => {
+    const M = mask32(); poly32(M, [[6, 5], [26, 5], [26, 22], [21, 27], [6, 27]], 1); poly32(M, [[21, 22], [26, 22], [21, 27]], 2);
+    paint32(d, M, [PAPER4, ['#cdbd92', '#e0d2a8', '#a8996c', '#5e5032'].map(hx)]);
+    const ink = hx('#7a6a48');
+    if (s.grid) { for (let x = 10; x < 24; x += 4) ln(d, x, 8, x, 24, shade(ink, 1.3)); for (let y = 9; y < 24; y += 4) ln(d, 8, y, 24, y, shade(ink, 1.3)); }
+    else if (s.map) {
+      const sc = N / 32;
+      for (let y = 7; y < 25; y++) for (let x = 8; x < 24; x++) { const v = Math.sin(x * .7) + Math.cos(y * .55 + x * .2); if (v > .6) put(d, Math.round(x * sc), Math.round(y * sc), hx('#5fa34a')); else if (v < -1.1) put(d, Math.round(x * sc), Math.round(y * sc), hx('#3b7fe0')); }
+      ln(d, 17, 10, 20, 13, hx('#e0402e')); ln(d, 20, 10, 17, 13, hx('#e0402e'));
+    } else for (const y of [10, 14, 18]) ln(d, 9, y, 22, y, shade(ink, 1.2));
+  };
+  P.scroll32 = d => {
+    const M = mask32(); rect32(M, 8, 8, 24, 25, 1); rect32(M, 6, 5, 26, 10, 2); rect32(M, 6, 23, 26, 28, 2); rect32(M, 15, 8, 18, 25, 3);
+    paint32(d, M, [PAPER4, ['#b98a52', '#d8a86c', '#8a6234', '#3e2810'].map(hx), ['#3b7fe0', '#7fb4ff', '#2257a8', '#0e2a5a'].map(hx)]);
+    for (const [x, y, c] of [[26, 2, '#ffffff'], [27, 3, '#ffd23f'], [25, 3, '#ffd23f'], [26, 4, '#ffd23f'], [26, 3, '#fff7c2']]) dot(d, x, y, hx(c));
+  };
+  P.bucket32 = (d, s) => {
+    const M = mask32(); seg32(M, 8, 12, 12, 5, 1.6, 2); seg32(M, 12, 5, 20, 5, 1.6, 2); seg32(M, 20, 5, 24, 12, 1.6, 2);
+    poly32(M, [[7, 11], [25, 11], [22.5, 28], [9.5, 28]], 1); rect32(M, 7, 11, 25, 14, 3);
+    paint32(d, M, [IRON4, PAL('#5a5e66'), ['#e2e5ea', '#ffffff', '#a6aab2', '#3b3f46'].map(hx)]);
+    if (s.fill) { const c = hx(s.fill); for (let y = 12; y < 16; y++) for (let x = 9 + (y > 13 ? 1 : 0); x < 23 - (y > 13 ? 1 : 0); x++) { dot(d, x, y, y === 12 ? shade(c, 1.3) : shade(c, 1.05 - (y - 12) * .08)); if (s.lava && (x * 7 + y * 3) % 5 === 0) dot(d, x, y, hx('#ffd257')); } }
+  };
+  // лежанка (блок): сверху — подушка и одеяло, сбоку — одеяло над деревянной рамой (рисунок свой)
+  P.bed = (d, s, nm) => {
+    const k = K, wood = hx('#8a6234'), red = hx('#c0392b'), white = hx('#f2efe6');
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const n = (nm.v(x, y) - .5) * .12;
+      if (s.part === 'top') {
+        const frame = x < k || x >= N - k || y < k || y >= N - k, pillow = y >= k * 2 && y < k * 6 && x >= k * 2 && x < N - k * 2, fold = y >= k * 7 && y < k * 8;
+        put(d, x, y, frame ? shade(wood, .8 + n) : pillow ? shade(white, .95 + n - (y === k * 5 ? .1 : 0)) : shade(red, (fold ? .78 : .95) + n + ((Math.floor(x / (k * 4)) + Math.floor(y / (k * 4))) & 1 ? .04 : 0)));
+      } else {
+        const blanket = y < k * 7, sheet = y >= k * 7 && y < k * 8, leg = y >= k * 12 && (x < k * 3 || x >= N - k * 3), gap = y >= k * 12 && !leg;
+        put(d, x, y, blanket ? shade(red, .9 + n + (y < k ? .12 : 0)) : sheet ? shade(white, .92 + n) : gap ? shade(wood, .42 + n) : shade(wood, (leg ? .7 : .85) + n + (y === k * 8 ? .12 : 0)));
+      }
+    }
+  };
   P.ingot = (d, s) => { const c = hx(s.c), lt = shade(c, 1.2), dk = shade(c, .7); for (let y = 6; y < 11; y++) for (let x = 2; x < 14; x++) { const top = y === 6, edge = x === 2 || x === 13 || y === 10; if ((x < 3 || x > 12) && (y === 6)) continue; put(d, x, y, top ? lt : edge ? dk : c); } put(d, 4, 7, shade(c, 1.45)); put(d, 5, 7, shade(c, 1.3)); outline(d); };
   P.gem = (d, s) => {
     const c = hx(s.c), lt = shade(c, 1.35), dk = shade(c, .65);
@@ -460,7 +552,7 @@
     }
   };
   const SPRITE = new Set(['stick', 'tool', 'ingot', 'gem', 'lump', 'food', 'feather', 'plant', 'torch', 'ladder']);
-  const SPRITE32 = new Set(['tool32', 'bow32', 'arrow32', 'shield32']);   // вещи, нарисованные сразу в полный размер (фон прозрачный)
+  const SPRITE32 = new Set(['tool32', 'bow32', 'arrow32', 'shield32', 'watch32', 'compass32', 'depth32', 'lens32', 'orefind32', 'nav32', 'book32', 'paper32', 'scroll32', 'bucket32']);   // вещи, нарисованные сразу в полный размер (фон прозрачный)
   // Ваниль: имя → рисунок (цвета — свои; никаких чужих картинок)
   const S = V.TEX_SPECS = {
     stone: { k: 'stone', c: '#7d7d80', a: .1 }, cobble: { k: 'cobble', c: '#808083', m: '#4e4e52' }, dirt: { k: 'dirt', c: '#7a5634', a: .15 },
@@ -489,6 +581,12 @@
     item_chicken_raw: { k: 'food', c: '#f0c2a8', bone: true }, item_chicken_cooked: { k: 'food', c: '#c8843a', bone: true }, item_feather: { k: 'feather' },
     item_slime_ball: { k: 'lump', c: '#7bd36a' }, item_door: { k: 'door' },
     item_flint: { k: 'gem', c: '#4a4a54' }, item_fiber: { k: 'plant', c: '#9ccf5c' }, item_bow: { k: 'bow32' }, item_arrow: { k: 'arrow32' }, item_shield: { k: 'shield32' },
+    // помощники (T-049)
+    item_watch: { k: 'watch32' }, item_compass: { k: 'compass32' }, item_depth_meter: { k: 'depth32' }, item_lens: { k: 'lens32' }, item_ore_finder: { k: 'orefind32' },
+    item_navigator: { k: 'nav32' }, item_atlas: { k: 'book32', c: '#2f7d6b', emblem: 'map' }, item_master_book: { k: 'book32', c: '#6b3aa8', emblem: 'grid' },
+    item_parchment: { k: 'paper32' }, item_map_blank: { k: 'paper32', grid: true }, item_map_filled: { k: 'paper32', map: true }, item_recall: { k: 'scroll32' },
+    item_bucket: { k: 'bucket32' }, item_bucket_water: { k: 'bucket32', fill: '#3b7fe0' }, item_bucket_lava: { k: 'bucket32', fill: '#ff7a1f', lava: true },
+    bed_top: { k: 'bed', part: 'top' }, bed_side: { k: 'bed', part: 'side' },
   };
   for (let i = 0; i < 8; i++) S['destroy_' + i] = { k: 'destroy', st: i };
   for (const [m, M] of Object.entries(V.TOOL_MATS || {})) for (const k of ['pick', 'axe', 'shovel', 'sword']) S[`item_${k}_${m}`] = { k: 'tool32', tool: k, m, c: M.color };
