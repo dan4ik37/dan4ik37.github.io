@@ -53,7 +53,7 @@ console.log('— клавиши');
   ok(ek.defaultPrevented && ek.stopped, 'Ctrl + K в мире — не открывает поиск сайта');
   up('KeyW'); up('ControlLeft'); K.step();
   ok(!K.ctrl && !K.held('sprint'), 'Ctrl отпущен');
-  for (const [code, id] of [['KeyE', 'inventory'], ['KeyQ', 'drop'], ['F5', 'camera'], ['F1', 'hud'], ['F3', 'debug'], ['KeyT', 'chat'], ['Slash', 'command']]) {
+  for (const [code, id] of [['KeyE', 'inventory'], ['KeyQ', 'drop'], ['F5', 'camera'], ['F1', 'hud'], ['F3', 'debug'], ['KeyT', 'chat'], ['Slash', 'command'], ['KeyF', 'swap']]) {
     const e = down(code); K.step();
     ok(K.down(id) && e.defaultPrevented, `${code} — ${id} (и браузер не трогает)`);
     up(code); K.step();
@@ -116,7 +116,7 @@ console.log('— геймпад');
   const btns = Array.from({ length: 17 }, () => ({ pressed: false, value: 0 }));
   E.setPads([{ connected: true, buttons: btns, axes: [0, 0, 0, 0] }]);
   const P = (i, v) => { btns[i] = { pressed: v, value: v ? 1 : 0 }; };
-  for (const [i, id] of [[7, 'mine'], [3, 'inventory'], [1, 'sneak'], [2, 'pick'], [10, 'sprint'], [11, 'camera'], [13, 'drop'], [8, 'chat'], [4, 'prev'], [5, 'next']]) {
+  for (const [i, id] of [[7, 'mine'], [3, 'inventory'], [1, 'sneak'], [2, 'pick'], [10, 'sprint'], [11, 'camera'], [13, 'drop'], [8, 'chat'], [4, 'prev'], [5, 'next'], [12, 'swap']]) {
     P(i, true); K.step(); ok(K.down(id) && K.pad, `кнопка ${i} — ${id}`); P(i, false); K.step(); ok(!K.held(id), `кнопка ${i} отпущена`);
   }
   // чем управляют сейчас: геймпад — прицел виден без захвата мыши и нет подсказки «нажми на мир»
@@ -138,6 +138,7 @@ console.log('— телефон');
   const E = env(), C = fakeC(), K = E.ctx.KubomirInput.create({ el: E.el, C });
   K.press('sneak', true); K.step(); ok(K.down('sneak') && K.held('sneak'), 'экранная кнопка — как клавиша');
   K.press('sneak', false); K.step(); ok(!K.held('sneak'), 'отпустили');
+  K.press('offuse', true); K.step(); ok(K.held('offuse'), 'кнопка «щит / лук» — держать (как ПКМ)'); K.press('offuse', false); K.step(); ok(!K.held('offuse'), 'отпустил — опустил щит / выстрелил');
   const canvas = { classList: { contains: c => c === 'kb-gl' } };
   const pe = (type, id, x, y) => E.el.fire(type, { type, pointerType: 'touch', pointerId: id, clientX: x, clientY: y, target: canvas });
   // палец слева внизу — джойстик (не наш)

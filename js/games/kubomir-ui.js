@@ -4,8 +4,9 @@
 // window.KubomirUI.create(S, hooks) → U: open('inv' | 'craft' | 'furnace' | 'chest', { x, y, z }), close(), isOpen(), give(вещь)
 // → сколько не влезло, dispose(). Как в Майнкрафте: клик — взять/положить/поменять; ПКМ (на телефоне — долгое нажатие) —
 // половину или одну; Shift+клик — перекинуть; ПКМ с протяжкой — по одной в каждую ячейку; ЛКМ с протяжкой — поровну;
-// двойной клик — собрать такие же в руку; цифра 1–9 над ячейкой — поменять с ячейкой панели; Q над ячейкой — выбросить одну
-// (Ctrl+Q — стопку). Вещь «в руке» мимо окна — выбросить. Закрыл — крафт вернулся в вещи.
+// двойной клик — собрать такие же в руку; цифра 1–9 над ячейкой — поменять с ячейкой панели; F над ячейкой — поменять с левой
+// рукой; Q над ячейкой — выбросить одну (Ctrl+Q — стопку). Вещь «в руке» мимо окна — выбросить. Закрыл — крафт вернулся в вещи.
+// Левая рука (щит, факел, еда — docs/COMBAT.md) — ячейка 'off' рядом с панелью: S.P.off.
 (() => {
   const V = () => window.D37E.vox;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -34,6 +35,7 @@
     // ── контейнеры: что лежит в ячейке и как туда положить ──
     function cont(k){
       if (k === 'inv') return P().inv;
+      if (k === 'off') return [P().off || null];
       if (k === 'craft') return U.craft;
       if (k === 'chest') return chestTile()?.items || null;
       if (k === 'furnace') { const f = furnaceTile(); return f ? [f.in, f.fuel, f.out] : null; }
@@ -41,6 +43,7 @@
     }
     function setSlot(k, i, v){
       if (k === 'inv') P().inv[i] = v;
+      else if (k === 'off') P().off = v || null;
       else if (k === 'craft') U.craft[i] = v;
       else if (k === 'chest') { const t = chestTile(); if (t) { t.items[i] = v; S.W.markTile(U.pos.x, U.pos.z); } }
       else if (k === 'furnace') { const f = furnaceTile(); if (f) { if (i === 0) f.in = v; else if (i === 1) f.fuel = v; else f.out = v; S.W.markTile(U.pos.x, U.pos.z); S.ents?.furnaces.add(U.pos.x + ',' + U.pos.y + ',' + U.pos.z); } }
@@ -198,6 +201,13 @@
       if (!U.el || !U.hover || e.target?.closest?.('input, textarea')) return;
       const [k, i] = U.hover, Cn = cont(k); if (!Cn) return;
       const m = /^Digit([1-9])$/.exec(e.code);
+      if (e.code === 'KeyF' && k !== 'off') {   // F над ячейкой — поменять её с левой рукой (как в Майнкрафте)
+        e.preventDefault(); e.stopPropagation();
+        const a = Cn[i], b = P().off || null;
+        if (b && !fits(k, i, b)) return;
+        setSlot(k, i, b); P().off = a || null; render();
+        return;
+      }
       if (m) {
         e.preventDefault(); e.stopPropagation();
         const h = +m[1] - 1; if (k === 'inv' && i === h) return;
@@ -214,11 +224,12 @@
     function quickMove(k, i, s){
       const inv = P().inv;
       const put = (C, from, to, kk) => { for (let pass = 0; pass < 2 && s.n > 0; pass++) for (let j = from; j < to && s.n > 0; j++) { const d = C[j]; if (pass === 0 && d && same(d, s) && d.n < max(d)) { const q = Math.min(s.n, max(d) - d.n); d.n += q; s.n -= q; setSlot(kk, j, d); } else if (pass === 1 && !d && fits(kk, j, s)) { setSlot(kk, j, { ...s }); s.n = 0; } } };
-      if (k === 'inv') {
+      if (k === 'off') { put(inv, 9, 36, 'inv'); put(inv, 0, 9, 'inv'); }
+      else if (k === 'inv') {
         if (U.kind === 'chest') put(cont('chest'), 0, 27, 'chest');
         else if (U.kind === 'furnace') { if (V().smelting.has(s.id)) put(cont('furnace'), 0, 1, 'furnace'); else if (it(s.id)?.fuel) put(cont('furnace'), 1, 2, 'furnace'); }
         else if (i < 9) put(inv, 9, 36, 'inv'); else put(inv, 0, 9, 'inv');
-      } else put(inv, 0, 36, 'inv');
+      } else if (k !== 'off') put(inv, 0, 36, 'inv');
       if (s.n <= 0) setSlot(k, i, null); else setSlot(k, i, s);
     }
 
@@ -306,7 +317,7 @@
       for (let i = 9; i < 36; i++) main += slot('inv', i, p.inv[i]);
       for (let i = 0; i < 9; i++) hot += slot('inv', i, p.inv[i], i === p.sel ? 'on' : '');
       const sortBtn = U.kind === 'chest' ? '<button type="button" class="kb-x" data-sort="chest" title="Разложить сундук по порядку">⇅</button>' : '<button type="button" class="kb-x" data-sort="inv" title="Разложить вещи по порядку (панель 1–9 не трогаем)">⇅</button>';
-      panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><span class="kb-pbtns">${sortBtn}<button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></span></div>${top}<div class="kb-grid">${main}</div><div class="kb-grid kb-hotrow">${hot}</div>
+      panel.innerHTML = `<div class="kb-ptitle"><b>${title}</b><span class="kb-pbtns">${sortBtn}<button type="button" class="kb-x" data-close="1" aria-label="Закрыть">✕</button></span></div>${top}<div class="kb-grid">${main}</div><div class="kb-hotwrap"><div class="kb-offwrap" title="Левая рука: щит, факел, еда (F над ячейкой — поменять)">${slot('off', 0, p.off, 'offs')}<small>🫲 левая</small></div><div class="kb-grid kb-hotrow">${hot}</div></div>
         <p class="kb-hint">${S.I?.touch ? 'Нажми — взять/положить, подержи — половину или одну.' : 'Клик — взять/положить, ПКМ — половину или одну, Shift+клик — перекинуть, протянуть с вещью: ПКМ — по одной, ЛКМ — поровну; двойной клик — собрать; 1–9 над ячейкой — на панель, Q — выбросить. E или Esc — закрыть.'}</p>`;
       if (U.kind === 'inv' && creative) renderCat();
       if (U.kind === 'furnace') renderFurnace();
@@ -333,7 +344,7 @@
     }
     // ── ввод: мышь и палец (долгое нажатие = правая кнопка) ──
     let press = null, drag = null;
-    const SLOT_K = { inv: 1, craft: 1, chest: 1, furnace: 1 };   // ячейки, куда можно «протянуть»
+    const SLOT_K = { inv: 1, off: 1, craft: 1, chest: 1, furnace: 1 };   // ячейки, куда можно «протянуть»
     function onDown(e){
       const t = e.target;
       if (t.closest('[data-close]')) { U.close(); return; }
