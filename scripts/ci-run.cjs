@@ -30,6 +30,7 @@ const TESTS = [
   { f: 'syntax-test.cjs', t: 120 },
   { f: 'make-errlog.mjs', args: ['--check'], t: 60 }, { f: 'gen-city-defs.cjs', args: ['--check'], t: 60 },
   { f: 'routes-test.cjs' }, { f: 'pwa-test.cjs' }, { f: 'games-test.cjs' }, { f: 'auth-test.cjs' }, { f: 'age-test.cjs' },
+  { f: 'xss-test.cjs', t: 300 },   // чужой текст не становится разметкой (T-011): разбор всех js/api + злые строки; ~30 с ЦП
   { f: 'errlog-test.cjs', serial: true }, { f: 'ops-test.cjs', t: 180 }, { f: 'backup-test.cjs', needs: 'pwsh', t: 420 }, { f: 'ops-sql-test.mjs', needs: 'pglite', t: 180 },
   { f: 'ads-test.cjs' }, { f: 'ad-direct-test.cjs' }, { f: 'pay-test.cjs' }, { f: 'referral-test.cjs' }, { f: 'economy-test.cjs' },
   { f: 'community-test.cjs' }, { f: 'settings-test.cjs' }, { f: 'room-net-test.cjs' }, { f: 'unity-test.cjs' }, { f: 'raid-test.cjs', args: ['--fast'] },

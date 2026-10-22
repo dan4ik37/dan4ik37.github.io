@@ -64,7 +64,7 @@ function applyScheduleToDOM(schedule){
     const card = document.querySelector(`.day-card[data-d="${day.d}"]`);
     if (!card) return;
     card.innerHTML = day.live
-      ? `<div class="day-name">${DAY_SHORT[day.d]}</div><div class="day-live">${day.time}</div>`
+      ? `<div class="day-name">${DAY_SHORT[day.d]}</div><div class="day-live">${esc(day.time)}</div>`
       : `<div class="day-name">${DAY_SHORT[day.d]}</div><div class="day-off">—</div>`;
     card.classList.toggle('today', day.d === new Date().getDay());
   });
@@ -104,7 +104,7 @@ function renderScheduleAdminRows(){
         <input type="checkbox" class="sched-admin-live" ${day.live?'checked':''} onchange="this.closest('.sched-admin-row').querySelector('.sched-admin-time').style.display=this.checked?'inline-block':'none'">
         Стрим
       </label>
-      <input type="time" class="sched-admin-time" aria-label="Время эфира в ${DAY_FULL[day.d]}" value="${day.time}" style="display:${day.live?'inline-block':'none'}">
+      <input type="time" class="sched-admin-time" aria-label="Время эфира в ${DAY_FULL[day.d]}" value="${esc(day.time)}" style="display:${day.live?'inline-block':'none'}">
     </div>
   `).join('');
 }

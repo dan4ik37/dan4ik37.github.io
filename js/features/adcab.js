@@ -795,7 +795,7 @@
     return `<article class="adc-adm pf-card ${x.status === 'review' ? 'pf-card-gold' : 'pf-card-muted'}">
       <div class="adc-adm-h"><b>${esc(x.title)}</b>${statusChip(x)}${ageChip(x.age_rating)}<small>${esc(x.owner_nick || '?')} · ${esc(priceLine(x))} · в копилке ${num(Math.max(0, x.budget - x.refunded))} 💎 · потрачено ${dec(x.spent)}</small></div>
       <div class="adc-adm-g"><div><small>Рекламодатель</small><b>${esc(x.advertiser || '—')}</b></div><div><small>ИНН/БИН</small><b>${esc(x.inn || '—')}</b></div>
-        <div><small>erid</small><b>${esc(x.erid || '—')}</b></div><div><small>Ссылка</small><a href="${esc(x.url)}" target="_blank" rel="noopener nofollow noreferrer">${esc(x.url)}</a></div></div>
+        <div><small>erid</small><b>${esc(x.erid || '—')}</b></div><div><small>Ссылка</small><a href="${/^https:\/\//i.test(x.url || '') ? esc(x.url) : '#'}" target="_blank" rel="noopener nofollow noreferrer">${esc(x.url)}</a></div></div>
       <p class="adc-small">${targeting(x)} · ${x.start_date ? `${ruDate(x.start_date)} — ${x.end_date ? ruDate(x.end_date) : 'без конца'}` : ''}</p>
       ${warn.length ? `<p class="adc-warn">⚠ ${esc(warn.join(' · '))}</p>` : ''}
       <div class="adc-adm-crs">${crs}</div>

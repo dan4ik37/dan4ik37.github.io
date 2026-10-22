@@ -19,7 +19,12 @@
 (() => {
   const root = typeof window !== 'undefined' ? window : globalThis;
   const MZ = root.MirZones; if (!MZ) return;
-  const PI = Math.PI, esc = MZ.esc;
+  const PI = Math.PI;
+  // свои экранировщик и числа (не MZ.esc / MirEcon.fmt) — scripts/xss-scan.cjs видит, что в разметку попадает безопасное
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const num = v => Number(v) || 0;
+  const fmtN = n => Math.floor(Number(n) || 0).toLocaleString('ru-RU');
+  const fmt100 = n => { const v = Math.floor(Number(n) || 0); return Math.floor(v / 100).toString() + (v % 100 ? ',' + (v % 100).toString().padStart(2, '0') : ''); };
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const now = () => (root.performance ? root.performance.now() : Date.now());
 
@@ -1082,7 +1087,7 @@
     rt.CARRY = Object.assign(rt.CARRY || {}, CARRY);
     Object.assign(rt.FOOD, MZ.FOOD_EXTRA);
     const C = { city, K, job: null, step: 0, task: null, srv: false, fin: null, fires: [], cust: null, wantedT: 0, prisonT: 0, here: false, pubT: 0, ctyT: 0, leftT: 0, siteN: null, stopped: false };
-    const fmt = n => (E ? E.fmt(n) : String(n | 0));
+    const fmt = fmtN;
     // «сдать работу»: не раньше минимального времени задания (MirEcon.TaskRunner, шаги логики 1/60 с)
     C.run = E ? E.TaskRunner({ clock: () => A.clock(), send: n => A.act('task', { n }), after: r => { if (!C.stopped) onTask(r); } }) : null;
     // кошелёк — слева сверху, пока ты в городе (💵 — открыть 🏦 Банк)
@@ -1090,7 +1095,7 @@
     function drawWallet(){
       const R0 = ROLES[rt.zx.r];
       if (!A) { wEl.innerHTML = R0 ? `<span>${R0.icon} ${esc(R0.name)}</span>` : ''; return; }
-      const st = A.st, sk = R0?.prof ? E.ui.skill(A.D, st, R0.prof) : null, bf = E.Rules.buffP(A.D, st, A.clock()), rr = E.ui.rate(A.D, city, A.pub[city]);
+      const st = A.st, sk = R0?.prof ? E.ui.skill(A.D, st, R0.prof) : null, bf = num(E.Rules.buffP(A.D, st, A.clock())), rr = num(E.ui.rate(A.D, city, A.pub[city]));
       C.rateShown = rr;
       wEl.innerHTML = `<button type="button" class="mz-wbank" data-mz="c:${city}:bank" title="🏦 Банк: денки, зарплаты, навыки">💵 ${fmt(st.cash)}${A.mode === 'server' ? '' : ' <em title="пробные — только в этом браузере">🧪</em>'}</button>${R0 ? `<span>${R0.icon} ${esc(R0.name)}${sk ? ` <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em>` : ''}</span>` : ''}${bf ? `<span>🍽 +${bf} %</span>` : ''}${rr < 100 ? `<span title="Казна города бедная — зарплаты у всех ниже">📉 ставка ${rr} %</span>` : ''}`;
     }
@@ -1328,21 +1333,21 @@
     function jobBoard(){
       const cur = rt.zx.r, D = A?.D, st = A?.st, now0 = A ? A.clock() : 0, pc = A?.pub[city];
       if (A) A.pubGet(city).then(p => { onPub(p); });
-      const hire = !pc || (pc.hire !== false && !pc.frozen), cRate = A ? E.ui.rate(D, city, pc) : 100;
+      const hire = !pc || (pc.hire !== false && !pc.frozen), cRate = A ? num(E.ui.rate(D, city, pc)) : 100;
       const rows = [], rp = [];
       for (const [id, r] of Object.entries(ROLES)) {
         const btn = cur === id ? `<button type="button" data-mz="c:${city}:job:">Уволиться</button>` : (r.car && !root.D37E?.vehicle) || r.soon ? '<button type="button" disabled>Скоро</button>' : `<button type="button" class="ct-start" data-mz="c:${city}:job:${id}">${r.rp ? 'Играть' : 'Работать'}</button>`;
         if (r.rp || r.soon || !A) { rp.push(`<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)}</b><small>${esc(r.desc)}</small></div>${btn}</div>`); continue; }
         const P = D.profs[r.prof]; if (!P || !(P.cities[city] || []).includes(r.place)) continue;
-        const sk = E.ui.skill(D, st, r.prof), min = E.Rules.minS(D, r.prof, sk.L), tired = sk.today >= D.caps.full, out = sk.today >= D.caps.half;
+        const sk = E.ui.skill(D, st, r.prof), min = num(E.Rules.minS(D, r.prof, sk.L)), tired = sk.today >= D.caps.full, out = sk.today >= D.caps.half;
         rows.push(`<div class="mz-job${cur === id ? ' on' : ''}"><i>${r.icon}</i><div><b>${esc(r.name)} <em class="mz-stars">${'★'.repeat(sk.L + 1)}</em></b><small>${esc(r.desc)}</small>`
-          + `<small class="mz-jobm">≈ ${w1(E.ui.wageNow(D, st, r.prof, city, now0, pc))} 💵 за задание · от ${min} с · ${esc(sk.name)}${sk.next ? ` ${sk.xp}/${sk.next}` : ''}${sk.today ? ` · сегодня ${sk.today}` : ''}${out ? ' · 😴 на сегодня всё' : tired ? ' · 😮‍💨 половина зарплаты' : ''}</small>`
-          + `<i class="mz-xpbar" style="--p:${sk.pct}%"></i></div>${btn}</div>`);
+          + `<small class="mz-jobm">≈ ${w1(E.ui.wageNow(D, st, r.prof, city, now0, pc))} 💵 за задание · от ${min} с · ${esc(sk.name)}${sk.next ? ` ${num(sk.xp)}/${num(sk.next)}` : ''}${sk.today ? ` · сегодня ${num(sk.today)}` : ''}${out ? ' · 😴 на сегодня всё' : tired ? ' · 😮‍💨 половина зарплаты' : ''}</small>`
+          + `<i class="mz-xpbar" style="--p:${num(sk.pct)}%"></i></div>${btn}</div>`);
       }
       const note = A ? E.ui.trialNote() : 'Работы с зарплатой появятся, когда сайт обновится.';
       const wd = A && st.day === E.Rules.day(now0) ? st.wd : 0;
       H.panel(`<span class="wld-pe">🧰</span><b>Работа · ${esc(Z.name)}</b>`,
-        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? (cRate < 100 ? `🏙️ Город нанимает · казна бедная: ставка ${cRate} %` : '🏙️ Город нанимает') : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${E.fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
+        `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash">${A ? `<span>💵 ${fmt(st.cash)}</span><span>${hire ? (cRate < 100 ? `🏙️ Город нанимает · казна бедная: ставка ${cRate} %` : '🏙️ Город нанимает') : pc?.frozen ? '⏸ Город на паузе' : '🔒 Касса пуста — завтра'}</span><span>Сегодня: ${fmt100(wd)} из ${fmt(D.caps.wageDay)} 💵</span>` : ''}<span>🪙 за работу: ${MZ.payState().got}/${MZ.PAY.day}</span></div>`
         + `<div class="mz-jobs">${rows.join('')}</div>${rp.length ? `<div class="mz-eco-sec">🎭 Роли без зарплаты</div><div class="mz-jobs">${rp.join('')}</div>` : ''}`
         + (A ? '<p><small>Зарплата — денки 💵 (один кошелёк на оба города). Навык ★ растёт с каждым заданием — платят больше. После 40 заданий одной работы — половина зарплаты, после 60 — смени работу. Еда в магазинах даёт бонус к зарплате.</small></p>' : ''));
     }
@@ -1358,12 +1363,12 @@
     function shop(place){
       if (!A) { toast('Магазины заработают, когда сайт обновится'); return; }
       const D = A.D, items = D.cities[city]?.shops?.[place] || [], st = A.st, T0 = SHOP_T[place] || ['🛍️', 'Магазин'];
-      const bf = E.Rules.buffP(D, st, A.clock()), note = E.ui.trialNote();
-      const pocket = Object.entries(st.food || {}).map(([k, n]) => `${E.GOODS[k]?.e || '🍽'}×${n}`).join(' ');
+      const bf = num(E.Rules.buffP(D, st, A.clock())), note = E.ui.trialNote();
+      const pocket = Object.entries(st.food || {}).map(([k, n]) => `${esc(E.GOODS[k]?.e || '🍽')}×${num(n)}`).join(' ');
       C.shopOpen = place;
       H.panel(`<span class="wld-pe">${T0[0]}</span><b>${esc(T0[1])}</b>`, `${note ? `<p class="mz-eco-note">${esc(note)}</p>` : ''}<div class="mz-cash"><span>💵 ${fmt(st.cash)}</span>${bf ? `<span>🍽 сыт: +${bf} %</span>` : ''}${pocket ? `<span>🎒 ${pocket}</span>` : ''}</div>`
-        + `<div class="wld-acts">${items.map(it => { const G = E.GOODS[it] || {}, g = D.goods[it] || {}; return `<button type="button" data-mz="c:${city}:buy:${place}:${it}">${G.e || '🍽'} ${esc(G.n || it)} — 💵${E.Rules.price(D, it)} <small>+${g.buff?.[0] || 0} % · ${g.buff?.[1] || 0} мин</small></button>`; }).join('')}</div>`
-        + `<p><small>Еда — в карман; съесть — 🎬 «Действия»: зарплата выше (бонусы складываются до +${D.buff.max} %).</small></p>`);
+        + `<div class="wld-acts">${items.map(it => { const G = E.GOODS[it] || {}, g = D.goods[it] || {}; return `<button type="button" data-mz="c:${city}:buy:${esc(place)}:${esc(it)}">${esc(G.e || '🍽')} ${esc(G.n || it)} — 💵${num(E.Rules.price(D, it))} <small>+${num(g.buff?.[0])} % · ${num(g.buff?.[1])} мин</small></button>`; }).join('')}</div>`
+        + `<p><small>Еда — в карман; съесть — 🎬 «Действия»: зарплата выше (бонусы складываются до +${num(D.buff.max)} %).</small></p>`);
     }
     async function buy(place, item){
       if (!A) return;

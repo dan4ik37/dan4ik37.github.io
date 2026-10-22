@@ -1121,7 +1121,7 @@ Players.PlayerAdded.Connect(player => {
     const rows = [`<div class="s3-row s3-root" data-id="" draggable="false">🌍 Workspace</div>`];
     const find = (ed.q('.s3-find')?.value || '').trim().toLowerCase(), show = find ? new Set() : null;
     if (show) for (const o of SC.all()) if (o.name.toLowerCase().includes(find)) for (let p = o; p; p = SC.get(p.parent)) show.add(p);
-    const walk = (list, depth) => { for (const o of list) { if (show && !show.has(o)) continue; rows.push(`<div class="s3-row${ed.selSet.has(o) ? ' sel' : ''}" data-id="${o.id}" draggable="true" style="padding-left:${8 + depth * 14}px">${ICON(o)} ${esc(o.name)}${o.locked ? ' 🔒' : ''}</div>`); walk(SC.children(o), depth + 1); } };
+    const walk = (list, depth) => { for (const o of list) { if (show && !show.has(o)) continue; rows.push(`<div class="s3-row${ed.selSet.has(o) ? ' sel' : ''}" data-id="${esc(o.id)}" draggable="true" style="padding-left:${8 + depth * 14}px">${ICON(o)} ${esc(o.name)}${o.locked ? ' 🔒' : ''}</div>`); walk(SC.children(o), depth + 1); } };
     walk(SC.children(null), 1);
     tree.innerHTML = rows.join('');
     if (!tree.dataset.wired) {
@@ -1153,21 +1153,21 @@ Players.PlayerAdded.Connect(player => {
         <div class="s3-lbl">Кисть — зажми и води по земле</div>
         <div class="s3-grid2">${[['raise', '⬆ Поднять'], ['lower', '⬇ Опустить'], ['smooth', '〰 Сгладить'], ['flatten', '▬ Выровнять']].map(([k, n]) => `<button type="button" data-a="btool:${k}" class="${b.tool === k ? 'on' : ''}">${n}</button>`).join('')}</div>
         <div class="s3-lbl">🎨 Покрасить</div><div class="s3-grid4">${mats.map(([i, n], k) => `<button type="button" data-a="bch:${k}" class="${b.tool === 'paint' && b.ch === k ? 'on' : ''}" title="${n}">${i}<small>${n}</small></button>`).join('')}</div>
-        <label class="s3-lbl">Размер кисти <b>${b.r.toFixed(0)}</b> (Shift + колесо)<input type="range" min="2" max="30" step="1" value="${b.r}" data-p="b:r"></label>
-        <label class="s3-lbl">Сила <b>${b.s.toFixed(1)}</b><input type="range" min="0.2" max="4" step="0.1" value="${b.s}" data-p="b:s"></label>
+        <label class="s3-lbl">Размер кисти <b>${b.r.toFixed(0)}</b> (Shift + колесо)<input type="range" min="2" max="30" step="1" value="${esc(b.r)}" data-p="b:r"></label>
+        <label class="s3-lbl">Сила <b>${b.s.toFixed(1)}</b><input type="range" min="0.2" max="4" step="0.1" value="${esc(b.s)}" data-p="b:s"></label>
         <label class="s3-chk"><input type="checkbox" data-p="t:water"${TR.water.on ? ' checked' : ''}> 🌊 Вода</label>
-        <label class="s3-lbl">Уровень воды <b>${TR.water.level.toFixed(1)}</b><input type="range" min="-10" max="20" step="0.1" value="${TR.water.level}" data-p="t:level"></label>
+        <label class="s3-lbl">Уровень воды <b>${TR.water.level.toFixed(1)}</b><input type="range" min="-10" max="20" step="0.1" value="${esc(TR.water.level)}" data-p="t:level"></label>
         <div class="s3-grid2"><button type="button" data-a="terrain:gen">🏝 Холмы</button><button type="button" data-a="terrain:flat">▭ Ровно</button></div>`;
     } else if (ed.panel === 'light') {
       const L = ed.R.lighting;
-      P.innerHTML = `<label class="s3-lbl">🕒 Время суток <b>${fmtTime(L.time)}</b><input type="range" min="0" max="24" step="0.1" value="${L.time}" data-p="l:time"></label>
+      P.innerHTML = `<label class="s3-lbl">🕒 Время суток <b>${fmtTime(L.time)}</b><input type="range" min="0" max="24" step="0.1" value="${esc(L.time)}" data-p="l:time"></label>
         <div class="s3-grid4"><button type="button" data-a="time:7">🌅</button><button type="button" data-a="time:13">☀</button><button type="button" data-a="time:18.6">🌇</button><button type="button" data-a="time:0">🌙</button></div>
-        <label class="s3-lbl">Солнце <b>${(+L.brightness).toFixed(1)}</b><input type="range" min="0" max="2.5" step="0.05" value="${L.brightness}" data-p="l:brightness"></label>
-        <label class="s3-lbl">Свет неба <b>${(+L.ambient).toFixed(1)}</b><input type="range" min="0" max="2.5" step="0.05" value="${L.ambient}" data-p="l:ambient"></label>
-        <label class="s3-lbl">Туман: видно на <b>${L.fogEnd | 0}</b><input type="range" min="40" max="800" step="10" value="${L.fogEnd}" data-p="l:fogEnd"></label>
+        <label class="s3-lbl">Солнце <b>${(+L.brightness).toFixed(1)}</b><input type="range" min="0" max="2.5" step="0.05" value="${esc(L.brightness)}" data-p="l:brightness"></label>
+        <label class="s3-lbl">Свет неба <b>${(+L.ambient).toFixed(1)}</b><input type="range" min="0" max="2.5" step="0.05" value="${esc(L.ambient)}" data-p="l:ambient"></label>
+        <label class="s3-lbl">Туман: видно на <b>${L.fogEnd | 0}</b><input type="range" min="40" max="800" step="10" value="${esc(L.fogEnd)}" data-p="l:fogEnd"></label>
         <label class="s3-chk"><input type="checkbox" data-p="l:shadows"${L.shadows !== false ? ' checked' : ''}> Тени</label>
         <label class="s3-chk"><input type="checkbox" data-p="cycle:on"${L.cycle > 0 ? ' checked' : ''}> 🔁 Смена дня и ночи в игре</label>
-        ${L.cycle > 0 ? `<label class="s3-lbl">Сутки длятся <b>${L.cycle} мин</b><input type="range" min="1" max="60" step="1" value="${L.cycle}" data-p="cycle:min"></label>` : ''}
+        ${L.cycle > 0 ? `<label class="s3-lbl">Сутки длятся <b>${esc(L.cycle)} мин</b><input type="range" min="1" max="60" step="1" value="${esc(L.cycle)}" data-p="cycle:min"></label>` : ''}
         <p class="s3-note">Ночью включай 💡 Свет (лампы) — они светятся.</p>`;
     } else if (o && ed.selSet.size > 1) {
       const list = selList(), tinted = list.filter(x => x.color !== undefined), matd = list.filter(x => x.mat !== undefined), has = k => list.filter(x => x[k] !== undefined);
@@ -1186,47 +1186,47 @@ Players.PlayerAdded.Connect(player => {
       if (o.cls === 'Part' || o.cls === 'Spawn') {
         h += `<label class="s3-lbl">Форма<select data-p="shape">${SC.SHAPES.map(([k, n]) => `<option value="${k}"${o.shape === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>`;
         h += v3('pos', 'Позиция', ed.G.snap || .1) + v3('size', 'Размер', ed.G.snap || .1) + v3('rot', 'Поворот (°)', ed.G.rsnap || 1);
-        h += `<div class="s3-lbl">Цвет</div><div class="s3-pal">${COLORS.map(c => `<button type="button" data-a="color:${c}" style="background:${c}" class="${o.color === c ? 'on' : ''}" title="${c}"></button>`).join('')}<label class="s3-cpick" title="Свой цвет"><input type="color" value="${o.color}" data-p="color">🎨</label></div>`;
+        h += `<div class="s3-lbl">Цвет</div><div class="s3-pal">${COLORS.map(c => `<button type="button" data-a="color:${c}" style="background:${c}" class="${o.color === c ? 'on' : ''}" title="${c}"></button>`).join('')}<label class="s3-cpick" title="Свой цвет"><input type="color" value="${esc(o.color)}" data-p="color">🎨</label></div>`;
         h += `<div class="s3-lbl">Материал</div><div class="s3-mats">${SC.MATS.map(([k, n, i]) => `<button type="button" data-a="mat:${k}" class="${o.mat === k ? 'on' : ''}" title="${n}">${i}<small>${n}</small></button>`).join('')}</div>`;
-        h += `<label class="s3-lbl">Прозрачность <b>${(+o.alpha).toFixed(2)}</b><input type="range" min="0" max="1" step="0.05" value="${o.alpha}" data-p="alpha"></label>`;
+        h += `<label class="s3-lbl">Прозрачность <b>${(+o.alpha).toFixed(2)}</b><input type="range" min="0" max="1" step="0.05" value="${esc(o.alpha)}" data-p="alpha"></label>`;
         h += `<label class="s3-chk"><input type="checkbox" data-p="collide"${o.collide !== false ? ' checked' : ''}> Сталкивается (CanCollide)</label>
           <label class="s3-chk"><input type="checkbox" data-p="anchored"${o.anchored !== false ? ' checked' : ''}> Закреплена (Anchored) — иначе падает</label>
           <label class="s3-chk"><input type="checkbox" data-p="shadow"${o.shadow !== false ? ' checked' : ''}> Тень</label>`;
         h += o.cls === 'Spawn' ? '<p class="s3-note">📍 Несколько точек появления — это чекпоинты: коснулся — дальше появляешься на ней.</p>' : touchSel(o);
       } else if (o.cls === 'Light') {
         h += v3('pos', 'Позиция', ed.G.snap || .1);
-        h += `<label class="s3-lbl">Цвет<input type="color" value="${o.color}" data-p="color"></label>
-          <label class="s3-lbl">Дальность <b>${o.range}</b><input type="range" min="2" max="60" step="1" value="${o.range}" data-p="range"></label>
-          <label class="s3-lbl">Яркость <b>${o.power}</b><input type="range" min="0" max="8" step="0.1" value="${o.power}" data-p="power"></label>`;
+        h += `<label class="s3-lbl">Цвет<input type="color" value="${esc(o.color)}" data-p="color"></label>
+          <label class="s3-lbl">Дальность <b>${esc(o.range)}</b><input type="range" min="2" max="60" step="1" value="${esc(o.range)}" data-p="range"></label>
+          <label class="s3-lbl">Яркость <b>${esc(o.power)}</b><input type="range" min="0" max="8" step="0.1" value="${esc(o.power)}" data-p="power"></label>`;
       } else if (o.cls === 'Prefab') {
         h += `<label class="s3-lbl">Вид<select data-p="kind">${SC.PREFABS.map(([k, n]) => `<option value="${k}"${o.kind === k ? ' selected' : ''}>${n}</option>`).join('')}</select></label>`;
         h += v3('pos', 'Позиция', ed.G.snap || .1);
-        h += `<label class="s3-lbl">Поворот (°)<input type="number" step="${ed.G.rsnap || 1}" value="${o.rot[1]}" data-p="rot:1"></label>`;
-        if (['tree', 'pine', 'bush', 'rock'].includes(o.kind)) h += `<label class="s3-lbl">Размер <b>${o.scale}</b><input type="range" min="0.4" max="3" step="0.1" value="${o.scale}" data-p="scale"></label>`;
-        if (o.kind === 'sign') h += `<label class="s3-lbl">Текст<input type="text" maxlength="40" value="${esc(o.text)}" data-p="text"></label><label class="s3-lbl">Цвет таблички<input type="color" value="${o.color}" data-p="color"></label>`;
+        h += `<label class="s3-lbl">Поворот (°)<input type="number" step="${ed.G.rsnap || 1}" value="${esc(o.rot[1])}" data-p="rot:1"></label>`;
+        if (['tree', 'pine', 'bush', 'rock'].includes(o.kind)) h += `<label class="s3-lbl">Размер <b>${esc(o.scale)}</b><input type="range" min="0.4" max="3" step="0.1" value="${esc(o.scale)}" data-p="scale"></label>`;
+        if (o.kind === 'sign') h += `<label class="s3-lbl">Текст<input type="text" maxlength="40" value="${esc(o.text)}" data-p="text"></label><label class="s3-lbl">Цвет таблички<input type="color" value="${esc(o.color)}" data-p="color"></label>`;
       } else if (o.cls === 'NPC') {
         const NP = window.D37E.npcs;
         h += `<div class="s3-lbl">Внешность</div><div class="s3-grid2"><select data-p="look">${Object.entries(NP.LOOKS).map(([k, [i, n]]) => `<option value="${k}"${o.look === k ? ' selected' : ''}>${i} ${n}</option>`).join('')}</select><button type="button" data-a="npc:reroll" title="Другой человечек">🎲 Другой</button></div>`;
         h += `<label class="s3-lbl">Что делает<select data-p="act">${Object.entries(NP.ACTS).map(([k, [i, n]]) => `<option value="${k}"${o.act === k ? ' selected' : ''}>${i} ${n}</option>`).join('')}</select></label>`;
-        if (o.act === 'wander') h += `<label class="s3-lbl">Бродит в радиусе <b>${o.radius}</b><input type="range" min="2" max="40" step="1" value="${o.radius}" data-p="radius"></label>`;
-        h += `<label class="s3-lbl">Скорость <b>×${(+o.speed).toFixed(1)}</b><input type="range" min="0.3" max="2.5" step="0.1" value="${o.speed}" data-p="speed"></label>`;
-        h += `<label class="s3-lbl">Урон при касании, в секунду <b>${o.damage}</b><input type="range" min="0" max="50" step="5" value="${o.damage}" data-p="damage"></label>`;
+        if (o.act === 'wander') h += `<label class="s3-lbl">Бродит в радиусе <b>${esc(o.radius)}</b><input type="range" min="2" max="40" step="1" value="${esc(o.radius)}" data-p="radius"></label>`;
+        h += `<label class="s3-lbl">Скорость <b>×${(+o.speed).toFixed(1)}</b><input type="range" min="0.3" max="2.5" step="0.1" value="${esc(o.speed)}" data-p="speed"></label>`;
+        h += `<label class="s3-lbl">Урон при касании, в секунду <b>${esc(o.damage)}</b><input type="range" min="0" max="50" step="5" value="${esc(o.damage)}" data-p="damage"></label>`;
         h += `<label class="s3-lbl">Говорит, когда подходишь<input type="text" maxlength="80" value="${esc(o.text || '')}" data-p="text" placeholder="Привет! 👋"></label>`;
-        h += v3('pos', 'Позиция', ed.G.snap || .1) + `<label class="s3-lbl">Смотрит (°)<input type="number" step="${ed.G.rsnap || 1}" value="${o.rot[1]}" data-p="rot:1"></label>`;
+        h += v3('pos', 'Позиция', ed.G.snap || .1) + `<label class="s3-lbl">Смотрит (°)<input type="number" step="${ed.G.rsnap || 1}" value="${esc(o.rot[1])}" data-p="rot:1"></label>`;
       } else if (o.cls === 'Effect') {
         const KS = window.D37E.fx.KINDS, K = KS[o.kind] || KS.fire, inPart = o.parent && SC.get(o.parent)?.pos && SC.get(o.parent).cls !== 'Model';
         h += `<label class="s3-lbl">Вид<select data-p="kind">${Object.entries(KS).map(([k, x]) => `<option value="${k}"${o.kind === k ? ' selected' : ''}>${x.icon} ${x.name}</option>`).join('')}</select></label>`;
         h += inPart ? '<p class="s3-note">Летит из детали, в которой лежит (перетащи в Проводнике в другую — или в Workspace).</p>' : v3('pos', 'Позиция', ed.G.snap || .1);
-        h += `<label class="s3-lbl">Сколько частиц <b>×${(+o.rate).toFixed(1)}</b><input type="range" min="0.1" max="4" step="0.1" value="${o.rate}" data-p="rate"></label>`;
-        h += `<label class="s3-lbl">Размер <b>×${(+o.scale).toFixed(1)}</b><input type="range" min="0.2" max="5" step="0.1" value="${o.scale}" data-p="scale"></label>`;
-        if (!K.palette) h += `<div class="s3-grid2"><label class="s3-lbl">Цвет<input type="color" value="${o.color || K.color}" data-p="color"></label><label class="s3-lbl">Цвет к концу<input type="color" value="${o.color2 || K.color2 || K.color}" data-p="color2"></label></div>`;
+        h += `<label class="s3-lbl">Сколько частиц <b>×${(+o.rate).toFixed(1)}</b><input type="range" min="0.1" max="4" step="0.1" value="${esc(o.rate)}" data-p="rate"></label>`;
+        h += `<label class="s3-lbl">Размер <b>×${(+o.scale).toFixed(1)}</b><input type="range" min="0.2" max="5" step="0.1" value="${esc(o.scale)}" data-p="scale"></label>`;
+        if (!K.palette) h += `<div class="s3-grid2"><label class="s3-lbl">Цвет<input type="color" value="${esc(o.color || K.color)}" data-p="color"></label><label class="s3-lbl">Цвет к концу<input type="color" value="${esc(o.color2 || K.color2 || K.color)}" data-p="color2"></label></div>`;
         h += `<label class="s3-chk"><input type="checkbox" data-p="enabled"${o.enabled !== false ? ' checked' : ''}> Включён</label>`;
       } else if (o.cls === 'Mesh') {
         const md = window.D37E.models.cached(o.model);
         h += `<p class="s3-note">${md ? `🧩 <b>${esc(md.name)}</b> · ${md.tris.toLocaleString('ru')} треугольников<br>🔒 Видно только тебе (модель в этом браузере)` : '⚠️ Модели нет в этом браузере — видна пустая коробка. Загрузи её снова или открой мир из файла.'}</p>`;
         h += v3('pos', 'Позиция', ed.G.snap || .1) + v3('size', 'Размер', ed.G.snap || .1) + v3('rot', 'Поворот (°)', ed.G.rsnap || 1);
         if (md) h += `<div class="s3-grid2"><button type="button" data-a="msize:1">↺ Исходный размер</button><button type="button" data-a="msize:2">× 2</button></div>`;
-        h += `<label class="s3-lbl">Прозрачность <b>${(+o.alpha).toFixed(2)}</b><input type="range" min="0" max="1" step="0.05" value="${o.alpha}" data-p="alpha"></label>`;
+        h += `<label class="s3-lbl">Прозрачность <b>${(+o.alpha).toFixed(2)}</b><input type="range" min="0" max="1" step="0.05" value="${esc(o.alpha)}" data-p="alpha"></label>`;
         h += `<label class="s3-chk"><input type="checkbox" data-p="collide"${o.collide !== false ? ' checked' : ''}> Сталкивается (CanCollide)</label>
           <label class="s3-lbl">Форма столкновений<select data-p="fit"><option value="precise"${o.fit !== 'box' ? ' selected' : ''}>🎯 Точно — по поверхности модели</option><option value="box"${o.fit === 'box' ? ' selected' : ''}>📦 Коробкой — быстрее</option></select></label>
           <label class="s3-chk"><input type="checkbox" data-p="anchored"${o.anchored !== false ? ' checked' : ''}> Закреплена (Anchored)</label>
